@@ -1156,3 +1156,25 @@ body[data-ds-dark-theme] .error-banner { background: #3a2020; }
 .sched-page-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .sched-page-sub { margin: -12px 0 18px; }
 .sched-row.on { background: var(--dsw-alias-interactive-bg-hover); color: var(--dsw-alias-label-primary); }
+
+/* ============ 侧栏项目头：悬停管理（Codex 式） ============ */
+.pj-group .pj-group-acts { display: none; align-items: center; gap: 1px; margin-left: auto; }
+.pj-group:hover .pj-group-acts { display: inline-flex; }
+.pj-group:hover .pj-group-count { display: none; }
+.pj-menu {
+  background: var(--dsw-alias-bg-layer-1); border: 1px solid var(--dsw-alias-border-l1);
+  border-radius: 10px; padding: 4px; min-width: 200px;
+  box-shadow: 0 8px 24px rgba(0,0,0,.25);
+}
+.pj-menu-item {
+  padding: 7px 12px; border-radius: 7px; cursor: pointer; font-size: 12.5px;
+  color: var(--dsw-alias-label-primary); transition: background .12s;
+}
+.pj-menu-item:hover { background: var(--dsw-alias-interactive-bg-hover); }
+.pj-menu-item.danger { color: var(--dsw-alias-label-critical, #e5484d); }
+.pj-add-inline { display: flex; gap: 6px; padding: 6px 8px; }
+.pj-add-inline input {
+  flex: 1; min-width: 0; font-size: 12px; padding: 6px 9px;
+  border: 1px solid var(--dsw-alias-border-l1); border-radius: 7px;
+  background: var(--dsw-alias-bg-base); color: var(--dsw-alias-label-primary);
+}

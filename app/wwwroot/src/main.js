@@ -250,6 +250,10 @@ window.__app.newSession = () => {
   const s = store.createSession();
   s.modelId = prev?.modelId || store.model?.id;
   s.lazy = true;
+  if (store._mdoNewSessionProject) {   // 去激活化：属主项目随占位记录，发送时落桶
+    s._projectSlug = store._mdoNewSessionProject;
+    store._mdoNewSessionProject = null;
+  }
   store.select(s.id);
   // 任何页面态（设置/定时任务）点新会话都回对话视图
   import('./chrome.js?v=42').then((m) => { m.closeSettings(store); store.notifier.markDirty(); });
@@ -322,13 +326,37 @@ window.__app.refreshAllSessions = async () => {
     store.notifier.markDirty();
   } catch { /* 瞬断忽略 */ }
 };
-/** 跨项目打开会话：同项目直接选中；跨项目先切换再选中 */
+/** 跨项目打开会话：同一水合策略——内存有则选中；无则加载该会话事件并入表。
+ *  去激活化：不再切换全局项目（后端路由按会话属主桶解析）。 */
 window.__app.openSessionInProject = async (slug, sid) => {
-  const active = store._mdoActiveProject || '_tasks';
-  if (slug === active) { store.select(sid); store.notifier.markDirty(); return; }
-  await window.__app.switchProject(slug);
-  // 切换重建后选中目标会话（若不存在则保持默认选择）
-  if (store.sessions.has(sid)) { store.select(sid); store.notifier.markDirty(); }
+  if (store.sessions.has(sid)) { store.select(sid); store.notifier.markDirty(); return; }
+  try {
+    const created = store.createSession({ id: sid, title: '' });
+    created.lazy = false;
+    created.modelId = (store._mdoAllSessions ?? []).find((x) => x.id === sid)?.model || store.defaultModelId;
+    const d = await host.fetchSessionEvents(sid);
+    for (const ev of d.events ?? []) {
+      const local = created.log.append(ev.type, ev.data);
+      local.time = ev.time ?? local.time;
+      created.assembler.apply(local);
+      if (ev.type === 'user/message') created.blank = false;
+    }
+    created.updatedAt = (d.events && d.events.length) ? d.events[d.events.length - 1].time : Date.now();
+    store.select(sid);
+  } catch (e) {
+    console.warn('[mdo] open session in project:', e);
+    if (store.sessions.has(sid)) store.removeSession(sid);
+  }
+  store.notifier.markDirty();
+};
+/** 在指定项目下新建会话（懒占位标记属主；发送时服务端按 project 落桶） */
+window.__app.newSessionInProject = (slug) => {
+  store._mdoNewSessionProject = slug;
+  window.__app.newSession();
+};
+/** 项目管理菜单（悬停 ··· 按钮）：重命名/默认模型/注销/彻底删除/设置页 */
+window.__app.projectMenu = (pj, anchor) => {
+  import('./chrome.js?v=42').then((m) => m.openProjectMenu(store, pj, anchor));
 };
 
 // 外壳（三列框架 / 侧栏 / 头部 / 详情列）

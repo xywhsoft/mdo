@@ -314,5 +314,11 @@
   "sched.sideTitle": "Задачи по расписанию",
   "sched.sideEmpty": "Нет задач по расписанию",
   "sched.sideManage": "Управлять расписаниями…",
-  "sched.sideOpen": "Открыть детали задачи"
+  "sched.sideOpen": "Открыть детали задачи",
+  "projects.openSettings": "Открыть настройки проектов",
+  "sidebar.newInProject": "Новый сеанс в проекте",
+  "sidebar.manageProject": "Управление проектом",
+  "sidebar.addProject": "Добавить проект",
+  "projects.inlinePh": "Абсолютный путь к каталогу, Enter — добавить",
+  "sidebar.projectsLabel": "Проекты"
 }

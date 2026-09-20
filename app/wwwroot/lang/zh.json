@@ -314,5 +314,11 @@
   "sched.sideTitle": "定时任务",
   "sched.sideEmpty": "暂无定时任务",
   "sched.sideManage": "管理计划任务…",
-  "sched.sideOpen": "查看任务详情"
+  "sched.sideOpen": "查看任务详情",
+  "projects.openSettings": "在设置中打开项目管理",
+  "sidebar.newInProject": "在此项目新建会话",
+  "sidebar.manageProject": "项目管理",
+  "sidebar.addProject": "添加项目",
+  "projects.inlinePh": "填入工作目录绝对路径，回车添加",
+  "sidebar.projectsLabel": "项目"
 }

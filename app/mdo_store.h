@@ -71,6 +71,7 @@ typedef struct MdoSession {
 	char aId[40];
 	char aTitle[128];
 	char aModelId[64];
+	char aProject[80];      /* 属主项目 slug（"_tasks"=任务桶；路由按此定位，不依赖激活态） */
 	uint64 uContextWindow; /* 建会话时的模型窗口（会话期固定） */
 	uint64 uCreatedAt;
 	uint64 uUpdatedAt;
@@ -769,18 +770,30 @@ static bool MdoProjectDeleteLocked(const char* sSlug, bool bPurge)
 
 static void MdoSessionSaveMetaLocked(const MdoSession* pS)
 {
-	MdoProject* pProj = MdoActiveProject();
+	MdoProject* pProj;
 	char aMeta[380];
 	char* sText;
 	xjsonwriter* pW;
 
+	/* 路径按会话属主桶解析（aProject 空=历史会话，退回激活桶——写入时会补字段） */
+	{
+		const char* sUse = pS->aProject[0] ? pS->aProject :
+			(g_activeProject[0] ? g_activeProject : MDO_TASKS_SLUG);
+		size_t i;
+		pProj = NULL;
+		for ( i = 0; i < g_nProjects; i++ )
+			if ( strcmp(g_projects[i].aSlug, sUse) == 0 ) { pProj = &g_projects[i]; break; }
+		/* 未注册项目（如 _tasks 伪项目）：pProj==NULL 时 MdoSessionPaths 落 _tasks 桶 */
+	}
 	MdoSessionPaths(pProj, pS->aId, aMeta, sizeof(aMeta), NULL, 0, NULL, 0, NULL, 0);
-	(void)pProj;
 	pW = JWOpen();
 	xrtJsonWriterObject(pW);
 	JWName(pW, "id");        JWStr(pW, pS->aId);
 	JWName(pW, "title");     JWStr(pW, pS->aTitle);
 	JWName(pW, "model");     JWStr(pW, pS->aModelId);
+	JWName(pW, "project");   JWStr(pW,
+		pS->aProject[0] ? pS->aProject :
+		(g_activeProject[0] ? g_activeProject : MDO_TASKS_SLUG));
 	JWName(pW, "contextWindow"); JWUInt(pW, pS->uContextWindow);
 	JWName(pW, "createdAt"); JWUInt(pW, pS->uCreatedAt);
 	JWName(pW, "updatedAt"); JWUInt(pW, pS->uUpdatedAt);
@@ -794,6 +807,59 @@ static void MdoSessionSaveMetaLocked(const MdoSession* pS)
 			XENCODING_UTF8, XUTF_REPLACE, false);
 		xrtFree(sText);
 	}
+}
+
+/* 按会话 ID 在所有项目桶定位（含 _tasks）；命中返回属主项目（NULL=_tasks/未注册）
+ * 并可选带回 meta 路径。找不到返回 NULL。 */
+static MdoProject* MdoSessionLocate(const char* sId, char* pMetaOut, size_t iMetaCap)
+{
+	size_t k;
+
+	if ( sId == NULL || sId[0] == 0 ) return NULL;
+	for ( k = 0; k < g_nProjects; k++ ) {
+		char aMeta[380];
+		char* pFile;
+		pFile = MdoPathJoin(g_projectsDir, g_projects[k].aSlug);
+		if ( pFile == NULL ) continue;
+		{
+			char* pSess = MdoPathJoin(pFile, "sessions");
+			xrtFree(pFile);
+			if ( pSess == NULL ) continue;
+			pFile = MdoPathJoin(pSess, sId);
+			xrtFree(pSess);
+			if ( pFile == NULL ) continue;
+			snprintf(aMeta, sizeof(aMeta), "%s.meta.json", pFile);
+			xrtFree(pFile);
+		}
+		if ( xrtFileExists(aMeta) ) {
+			if ( pMetaOut != NULL && iMetaCap > 0 )
+				snprintf(pMetaOut, iMetaCap, "%s", aMeta);
+			return &g_projects[k];
+		}
+	}
+	/* _tasks 桶兜底 */
+	{
+		char* pSlugDir = MdoPathJoin(g_projectsDir, MDO_TASKS_SLUG);
+		if ( pSlugDir != NULL ) {
+			char* pSess = MdoPathJoin(pSlugDir, "sessions");
+			char aMeta[380];
+			xrtFree(pSlugDir);
+			if ( pSess != NULL ) {
+				char* pFile = MdoPathJoin(pSess, sId);
+				xrtFree(pSess);
+				if ( pFile != NULL ) {
+					snprintf(aMeta, sizeof(aMeta), "%s.meta.json", pFile);
+					xrtFree(pFile);
+					if ( xrtFileExists(aMeta) ) {
+						if ( pMetaOut != NULL && iMetaCap > 0 )
+							snprintf(pMetaOut, iMetaCap, "%s", aMeta);
+						return NULL;   /* _tasks：无 MdoProject */
+					}
+				}
+			}
+		}
+	}
+	return NULL;
 }
 
 static MdoSession* MdoSessionFindLocked(const char* sId)
@@ -821,6 +887,12 @@ static MdoSession* MdoSessionCreateLocked(MdoProject* pProj, const char* sTitle,
 	snprintf(pS->aId, sizeof(pS->aId), "%s", aId);
 	snprintf(pS->aTitle, sizeof(pS->aTitle), "%s",
 		(sTitle && sTitle[0]) ? sTitle : "新的会话");
+	/* 属主项目：显式传入 > 激活态 > _tasks（写进 meta，路由从此不依赖激活态） */
+	if ( pProj != NULL )
+		snprintf(pS->aProject, sizeof(pS->aProject), "%s", pProj->aSlug);
+	else
+		snprintf(pS->aProject, sizeof(pS->aProject), "%s",
+			g_activeProject[0] ? g_activeProject : MDO_TASKS_SLUG);
 	/* 模型解析链：显式 > 项目默认 > 全局默认 */
 	{
 		const char* sFallback = g_defaultModel;
@@ -868,7 +940,17 @@ static bool MdoSessionDeleteLocked(const char* sId)
 
 	if ( pS == NULL ) return false;
 	if ( pS->pRun != NULL ) return false;    /* 运行中禁删 */
-	pProj = MdoActiveProject();   /* 任务态为 NULL：路径落到 _tasks 桶 */
+	/* 属主桶优先；历史会话无字段时按 ID 全桶定位（不依赖激活态） */
+	if ( pS->aProject[0] != 0 ) {
+		size_t k;
+		pProj = NULL;
+		for ( k = 0; k < g_nProjects; k++ )
+			if ( strcmp(g_projects[k].aSlug, pS->aProject) == 0 ) { pProj = &g_projects[k]; break; }
+	} else {
+		pProj = MdoSessionLocate(sId, NULL, 0);
+		snprintf(pS->aProject, sizeof(pS->aProject), "%s",
+			pProj ? pProj->aSlug : MDO_TASKS_SLUG);
+	}
 	MdoSessionCloseHandles(pS);
 	MdoSessionPaths(pProj, sId, aMeta, sizeof(aMeta), aJournal,
 		sizeof(aJournal), aSnap, sizeof(aSnap), aUi, sizeof(aUi));
@@ -887,25 +969,18 @@ static bool MdoSessionDeleteLocked(const char* sId)
 	return true;
 }
 
-/* 扫描活动项目的会话元数据进内存表（先清空非运行项） */
-/* sSlug==NULL → 活动项目（显式点名优先：项目切换路径避免与 activate 乱序竞态） */
+/* 扫描会话元数据进内存表（先清空非运行项）。
+ * 去激活化：默认加载**所有项目桶**（sSlug=NULL），每会话按 meta 的 project
+ * 字段（或所在桶）记属主；显式点名 sSlug 仅用于兼容旧 ?project= 参数。 */
 static void MdoSessionsScanProjectLocked(const char* sSlug)
 {
-	const char* sUse = (sSlug && sSlug[0]) ? sSlug :
-		(g_activeProject[0] ? g_activeProject : MDO_TASKS_SLUG);
 	char aSessDir[340];
 	xdir hDir;
 	xdirentry tEntry;
-
-	if ( sUse[0] == 0 ) { g_nSessions = 0; return; }
-	{
-		char* pSlugDir = MdoPathJoin(g_projectsDir, sUse);
-		char* pDir = pSlugDir ? MdoPathJoin(pSlugDir, "sessions") : NULL;
-		xrtFree(pSlugDir);
-		if ( pDir == NULL ) { g_nSessions = 0; return; }
-		snprintf(aSessDir, sizeof(aSessDir), "%s", pDir);
-		xrtFree(pDir);
-	}
+	char aSlugs[MDO_MAX_PROJECTS][80];
+	size_t nSlugs = 0, iSlug;
+	bool bSingle = false;
+	const char* sSingle = NULL;
 
 	/* 保留运行中的会话对象，其余释放后重扫 */
 	{
@@ -923,10 +998,37 @@ static void MdoSessionsScanProjectLocked(const char* sSlug)
 		g_nSessions = nKeep;
 	}
 
-	hDir = xrtDirOpen(aSessDir, 0);
-	if ( hDir == NULL ) return;
-	while ( xrtDirNext(hDir, &tEntry) == XDIR_NEXT_ITEM &&
-	        g_nSessions < MDO_MAX_SESSIONS ) {
+	if ( sSlug && sSlug[0] ) { bSingle = true; sSingle = sSlug; }
+	else if ( g_activeProject[0] && false ) { /* 激活态不再限制加载范围 */ }
+
+	if ( bSingle ) {
+		snprintf(aSlugs[0], sizeof(aSlugs[0]), "%s", sSingle);
+		nSlugs = 1;
+	} else {
+		/* 全桶：全部注册项目 + _tasks（后者常驻末位） */
+		for ( iSlug = 0; iSlug < g_nProjects && nSlugs < MDO_MAX_PROJECTS; iSlug++ )
+			snprintf(aSlugs[nSlugs++], sizeof(aSlugs[0]), "%s", g_projects[iSlug].aSlug);
+		{
+			bool bHaveTasks = false;
+			for ( iSlug = 0; iSlug < nSlugs; iSlug++ )
+				if ( strcmp(aSlugs[iSlug], MDO_TASKS_SLUG) == 0 ) bHaveTasks = true;
+			if ( !bHaveTasks && nSlugs < MDO_MAX_PROJECTS )
+				snprintf(aSlugs[nSlugs++], sizeof(aSlugs[0]), "%s", MDO_TASKS_SLUG);
+		}
+	}
+
+	for ( iSlug = 0; iSlug < nSlugs; iSlug++ ) {
+		char* pSlugDir = MdoPathJoin(g_projectsDir, aSlugs[iSlug]);
+		char* pDir = pSlugDir ? MdoPathJoin(pSlugDir, "sessions") : NULL;
+		xrtFree(pSlugDir);
+		if ( pDir == NULL ) continue;
+		snprintf(aSessDir, sizeof(aSessDir), "%s", pDir);
+		xrtFree(pDir);
+
+		hDir = xrtDirOpen(aSessDir, 0);
+		if ( hDir == NULL ) continue;
+		while ( xrtDirNext(hDir, &tEntry) == XDIR_NEXT_ITEM &&
+		        g_nSessions < MDO_MAX_SESSIONS ) {
 		char aMeta[420], aId[40];
 		char* pFile;
 		size_t iSize = 0;
@@ -946,16 +1048,53 @@ static void MdoSessionsScanProjectLocked(const char* sSlug)
 		{
 			MdoJson tJ;
 			if ( MdoJsonParse(&tJ, sText) ) {
-				MdoSession* pS = (MdoSession*)xrtRealloc(NULL, sizeof(MdoSession));
-				if ( pS == NULL ) { xrtFree(sText); continue; }
-				memset(pS, 0, sizeof(*pS));
-				snprintf(pS->aId, sizeof(pS->aId), "%s", aId);
-				JStr(&tJ, "title", pS->aTitle, sizeof(pS->aTitle));
-				JStr(&tJ, "model", pS->aModelId, sizeof(pS->aModelId));
-				pS->uContextWindow = (uint64)JInt(&tJ, "contextWindow", 128000);
-				pS->uCreatedAt = (uint64)JInt(&tJ, "createdAt", 0);
-				pS->uUpdatedAt = (uint64)JInt(&tJ, "updatedAt", 0);
-				pS->uTurns = (uint32)JInt(&tJ, "turns", 0);
+					MdoSession* pS = (MdoSession*)xrtRealloc(NULL, sizeof(MdoSession));
+					if ( pS == NULL ) { xrtFree(sText); continue; }
+					memset(pS, 0, sizeof(*pS));
+					snprintf(pS->aId, sizeof(pS->aId), "%s", aId);
+					JStr(&tJ, "title", pS->aTitle, sizeof(pS->aTitle));
+					JStr(&tJ, "model", pS->aModelId, sizeof(pS->aModelId));
+					/* 属主项目：meta 记录优先；历史会话按所在桶推断补记 */
+					JStr(&tJ, "project", pS->aProject, sizeof(pS->aProject));
+					if ( pS->aProject[0] == 0 ) {
+						snprintf(pS->aProject, sizeof(pS->aProject), "%s", aSlugs[iSlug]);
+						{
+							MdoProject* pOwner = NULL;
+							size_t k;
+							for ( k = 0; k < g_nProjects; k++ )
+								if ( strcmp(g_projects[k].aSlug, aSlugs[iSlug]) == 0 ) { pOwner = &g_projects[k]; break; }
+							MdoSessionPaths(pOwner, pS->aId, aMeta, sizeof(aMeta), NULL, 0, NULL, 0, NULL, 0);
+							/* 静默补写（幂等；仅当 meta 可写） */
+							{
+								char* sNew = NULL;
+								xjsonwriter* pW2 = JWOpen();
+								if ( pW2 != NULL ) {
+									xrtJsonWriterObject(pW2);
+									JWName(pW2, "id");        JWStr(pW2, pS->aId);
+									JWName(pW2, "title");     JWStr(pW2, pS->aTitle);
+									JWName(pW2, "model");     JWStr(pW2, pS->aModelId);
+									JWName(pW2, "project");   JWStr(pW2, aSlugs[iSlug]);
+									JWName(pW2, "contextWindow"); JWUInt(pW2, pS->uContextWindow);
+									JWName(pW2, "createdAt"); JWUInt(pW2, pS->uCreatedAt);
+									JWName(pW2, "updatedAt"); JWUInt(pW2, pS->uUpdatedAt);
+									JWName(pW2, "turns");     JWUInt(pW2, pS->uTurns);
+									JWName(pW2, "pinned");    JWBool(pW2, pS->bPinned);
+									JWName(pW2, "userPrompt"); JWStr(pW2, pS->aUserPrompt);
+									xrtJsonWriterEnd(pW2);
+									sNew = JWTake(pW2);
+								}
+								if ( sNew != NULL ) {
+									xrtFileWriteTextAtomic(aMeta, xrtStrView(sNew),
+										XENCODING_UTF8, XUTF_REPLACE, false);
+									xrtFree(sNew);
+								}
+							}
+						}
+					}
+					pS->uContextWindow = (uint64)JInt(&tJ, "contextWindow", 128000);
+					pS->uCreatedAt = (uint64)JInt(&tJ, "createdAt", 0);
+					pS->uUpdatedAt = (uint64)JInt(&tJ, "updatedAt", 0);
+					pS->uTurns = (uint32)JInt(&tJ, "turns", 0);
 				{
 					xvalue* pV = xrtValueObjectGet(tJ.pRoot, xrtStrView("pinned"));
 					bool b = false;
@@ -965,12 +1104,13 @@ static void MdoSessionsScanProjectLocked(const char* sSlug)
 				if ( pS->uUpdatedAt == 0 ) pS->uUpdatedAt = pS->uCreatedAt;
 				if ( pS->aTitle[0] ) g_sessions[g_nSessions++] = pS;
 				else xrtFree(pS);
-				MdoJsonFree(&tJ);
+					MdoJsonFree(&tJ);
+				}
 			}
+			xrtFree(sText);
 		}
-		xrtFree(sText);
-	}
-	xrtDirClose(hDir);
+		xrtDirClose(hDir);
+	}   /* per-bucket loop */
 }
 
 /* 全库轻量扫描（/api/sessions?all=1）：不动 g_sessions 运行态表，
@@ -1060,7 +1200,15 @@ static void MdoUiAppend(MdoSession* pS, const char* sLine)
 	char aUi[380];
 
 	if ( pS->fUi == NULL ) {
-		pProj = MdoActiveProject();   /* 任务态为 NULL：路径落到 _tasks 桶 */
+		/* 按会话属主桶解析（同 MdoUiReadAll；aProject 空=历史会话全桶定位） */
+		if ( pS->aProject[0] != 0 ) {
+			size_t k;
+			pProj = NULL;
+			for ( k = 0; k < g_nProjects; k++ )
+				if ( strcmp(g_projects[k].aSlug, pS->aProject) == 0 ) { pProj = &g_projects[k]; break; }
+		} else {
+			pProj = MdoSessionLocate(pS->aId, NULL, 0);
+		}
 		MdoSessionPaths(pProj, pS->aId, NULL, 0, NULL, 0, NULL, 0, aUi, sizeof(aUi));
 		pS->fUi = fopen(aUi, "ab");
 		if ( pS->fUi == NULL ) return;
@@ -1080,7 +1228,18 @@ static char* MdoUiReadAll(const MdoSession* pS, size_t* pCount)
 	size_t i, n = 0;
 
 	*pCount = 0;
-	pProj = MdoActiveProject();   /* 任务态为 NULL：路径落到 _tasks 桶 */
+	/* 按会话属主桶解析（aProject 空=历史会话：按 ID 全桶定位一次并补记） */
+	if ( pS->aProject[0] != 0 ) {
+		size_t k;
+		pProj = NULL;
+		for ( k = 0; k < g_nProjects; k++ )
+			if ( strcmp(g_projects[k].aSlug, pS->aProject) == 0 ) { pProj = &g_projects[k]; break; }
+	} else {
+		char aProjSlug[80];
+		pProj = MdoSessionLocate(pS->aId, NULL, 0);
+		snprintf(aProjSlug, sizeof(aProjSlug), "%s", pProj ? pProj->aSlug : MDO_TASKS_SLUG);
+		/* const 参数不能就地补字段；定位即用，字段由后续 SaveMeta 落盘 */
+	}
 	MdoSessionPaths(pProj, pS->aId, NULL, 0, NULL, 0, NULL, 0, aUi, sizeof(aUi));
 	pData = xrtFileReadAll(aUi, &iSize);
 	if ( pData == NULL || iSize == 0 ) { xrtFree(pData); return NULL; }

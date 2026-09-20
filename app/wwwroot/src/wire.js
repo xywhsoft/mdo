@@ -370,6 +370,15 @@ export class MdoHost {
     if (!d.ok) throw new Error(d.error ?? 'create session failed');
     return d;
   }
+  /** 指定项目下建会话（去激活化：服务端按 project 落桶，不改激活态） */
+  async createSessionInProject(project, title, modelId) {
+    const d = await this.#api('/api/sessions', {
+      method: 'POST',
+      body: JSON.stringify({ title, model: modelId, project }),
+    });
+    if (!d.ok) throw new Error(d.error ?? 'create session failed');
+    return d;
+  }
   /** 重置会话上下文（保留标题/模型/置顶；服务端日志与快照全清） */
   async clearSession(id) {
     return this.#api('/api/sessions/clear', { method: 'POST', body: JSON.stringify({ id }) });
@@ -411,8 +420,11 @@ export class MdoHost {
     // 懒会话升级（zcode 式）：首条消息才真正建服务端会话，本地占位 id 原位重挂
     const draft = this.store.sessions.get(sessionId);
     if (draft?.lazy) {
-      const meta = await this.createSession(null, draft.modelId || modelId,
-        this.store.settings.systemPrompt);
+      const proj = draft._projectSlug;   // 属主项目（去激活化：建桶由 project 决定）
+      const meta = proj
+        ? await this.createSessionInProject(proj, null, draft.modelId || modelId)
+        : await this.createSession(null, draft.modelId || modelId,
+            this.store.settings.systemPrompt);
       this.store.reattachId(sessionId, meta.id);
       sessionId = meta.id;
     }

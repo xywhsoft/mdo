@@ -423,34 +423,63 @@ function mountSidebar(root, store, frame, hooks) {
     }
 
     listEl.replaceChildren(
+      /* 顶部常驻：+ 添加项目（行内表单，Codex 式；无需进设置页） */
+      el('div', { class: 'group-label' },
+        el('span', { style: 'flex:1' }, t('sidebar.projectsLabel')),
+        el('button', {
+          class: 'icon-btn s-act', 'data-tip': t('sidebar.addProject'),
+          onclick: () => {
+            const exist = listEl.querySelector('.pj-add-inline');
+            if (exist) { exist.querySelector('input').focus(); return; }
+            const input = el('input', { placeholder: t('projects.inlinePh') });
+            const rowEl = el('div', { class: 'pj-add-inline' }, input,
+              el('button', { class: 'icon-btn s-act', 'data-tip': t('act.add'), onclick: async () => {
+                const v = input.value.trim();
+                if (!v) return;
+                try {
+                  await store.host.addProject(v);
+                  await window.__app.refreshProjects?.();
+                  await window.__app.refreshAllSessions?.();
+                  toast(t('act.ok'));
+                } catch (e) { toast(e.message.replace(/^.*→ /, '')); }
+              } }, icon('IconNewChatOutline16', { size: 13 })));
+            input.addEventListener('keydown', (e) => { if (e.key === 'Enter') rowEl.querySelector('button').click(); if (e.key === 'Escape') rowEl.remove(); });
+            listEl.prepend(el('div', { class: 'group-label' }, rowEl));
+            input.focus();
+          },
+        }, icon('IconNewChatOutline16', { size: 13 }))),
       ...(pinned.length ? [
         el('div', { class: 'group-label pin-label' },
           icon('IconPinTop14', { size: 12 }), t(' 置顶任务 · {n}', { n: pinned.length })),
         ...pinned.map((x) => {
-          const pjName = (projects.find((p) => p.slug === x.project) ?? {}).name ?? x.project;
-          const isCur = x.project === activeSlug;
           return row({
             id: x.id, title: x.title, modelId: x.model, updatedAt: x.updatedAt,
             running: !!x.running, done: false,
-            active: isCur && x.id === store.selectedId,
-            onclick: () => (isCur
-              ? (store.sessions.has(x.id) ? store.select(x.id) : null)
-              : window.__app.openSessionInProject?.(x.project, x.id)),
-            acts: isCur && store.sessions.has(x.id)
+            active: x.id === store.selectedId && store.sessions.has(x.id),
+            onclick: () => window.__app.openSessionInProject?.(x.project, x.id),
+            acts: store.sessions.has(x.id)
               ? liveActs(store.sessions.get(x.id))
-              : [el('span', { class: 's-proj-tag', 'data-tip': t('项目：{name}', { name: pjName }) }, pjName)],
+              : null,
           });
         }),
       ] : []),
       ...groups.flatMap((g) => [
         el('div', {
-          class: 'group-label pj-group' + (g.isActive ? ' cur' : ''),
-          onclick: () => { if (!g.isActive) window.__app.switchProject?.(g.pj.slug); },
+          class: 'group-label pj-group',
+          onclick: () => window.__app.newSessionInProject?.(g.pj.slug),
         },
-          icon(g.pj.tasks ? 'IconChecklistOutline14' : (g.isActive ? 'IconFolderOpen16' : 'IconFolderClose16'), { size: 13 }),
+          icon(g.pj.tasks ? 'IconChecklistOutline14' : 'IconFolderClose16', { size: 13 }),
           el('span', { class: 'pj-group-name' }, g.pj.tasks ? t('sidebar.tasks') : g.pj.name),
           el('span', { class: 'pj-group-count' }, String(g.items.length)),
-          g.isActive ? el('span', { class: 'pj-group-cur' }, t('sidebar.current')) : null),
+          el('span', { class: 'pj-group-acts' },
+            el('button', {
+              class: 'icon-btn s-act', 'data-tip': t('sidebar.newInProject'),
+              onclick: (e) => { e.stopPropagation(); window.__app.newSessionInProject?.(g.pj.slug); },
+            }, icon('IconNewChatOutline16', { size: 13 })),
+            g.pj.tasks ? null : el('button', {
+              class: 'icon-btn s-act', 'data-tip': t('sidebar.manageProject'),
+              onclick: (e) => { e.stopPropagation(); window.__app.projectMenu?.(g.pj, e.currentTarget); },
+            }, icon('IconSettingsOutline16', { size: 13 })))),
         ...g.items.map((it) => row(it)),
         ...(g.items.length === 0 ? [el('div', { class: 'no-hit sub' }, t('sidebar.noSession'))] : []),
       ]),
@@ -1195,6 +1224,42 @@ function mdoSchedulesSection(store) {
   refresh();
   return [page];
 }
+
+/** 项目管理弹出菜单（侧栏项目头 ··· 按钮；Codex 式悬停管理的入口） */
+export function openProjectMenu(store, pj, anchor) {
+  closeMenu();
+  const menu = el('div', { class: 'pj-menu' });
+  const item = (label, fn, cls) => el('div', { class: 'pj-menu-item' + (cls ? ' ' + cls : ''), onclick: () => { closeMenu(); fn(); } }, label);
+  menu.append(
+    item(t('projects.unreg'), async () => {
+      confirmModal({
+        title: t('projects.unregTitle'),
+        message: t('projects.unregBody', { name: pj.name }),
+        onOk: async () => {
+          try { await store.host.deleteProject(pj.slug, false); await window.__app.refreshProjects?.(); await window.__app.refreshAllSessions?.(); } catch (e) { toast(e.message); }
+        },
+      });
+    }, 'danger'),
+    item(t('projects.purge'), async () => {
+      confirmModal({
+        title: t('projects.purgeTitle'),
+        message: t('projects.purgeBody', { name: pj.name }),
+        onOk: async () => {
+          try { await store.host.deleteProject(pj.slug, true); await window.__app.refreshProjects?.(); await window.__app.refreshAllSessions?.(); } catch (e) { toast(e.message); }
+        },
+      });
+    }, 'danger'),
+    item(t('projects.openSettings'), () => openSettingsSection(store, '项目管理')),
+  );
+  const r = anchor.getBoundingClientRect();
+  menu.style.position = 'fixed';
+  menu.style.top = (r.bottom + 4) + 'px';
+  menu.style.left = Math.min(r.left, window.innerWidth - 220) + 'px';
+  menu.style.zIndex = '300';
+  document.body.append(menu);
+  setTimeout(() => document.addEventListener('click', closeMenu, { once: true }), 0);
+}
+function closeMenu() { document.querySelectorAll('.pj-menu').forEach((m) => m.remove()); }
 
 function mdoProjectsSection(store) {
   const host = store.host;

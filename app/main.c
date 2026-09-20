@@ -149,7 +149,17 @@ static bool MdoSessionEnsure(MdoSession* pSess, MdoProject* pProj, MdoModel* pMo
 	}
 
 	xllmErrorInit(&tErr);
-	if ( pProj == NULL ) pProj = MdoActiveProject();   /* 任务态为 NULL：路径落到 _tasks 桶 */
+	/* 属主桶优先（aProject 空=历史会话，按 ID 全桶定位一次并补记） */
+	if ( pProj == NULL ) {
+		size_t k;
+		for ( k = 0; k < g_nProjects; k++ )
+			if ( strcmp(g_projects[k].aSlug, pSess->aProject) == 0 ) { pProj = &g_projects[k]; break; }
+		if ( pProj == NULL && pSess->aProject[0] == 0 ) {
+			pProj = MdoSessionLocate(pSess->aId, NULL, 0);
+			snprintf(pSess->aProject, sizeof(pSess->aProject), "%s",
+				pProj ? pProj->aSlug : MDO_TASKS_SLUG);
+		}
+	}
 	MdoSessionPaths(pProj, pSess->aId, NULL, 0, aJournal, sizeof(aJournal),
 		aSnap, sizeof(aSnap), NULL, 0);
 	{
@@ -295,7 +305,7 @@ static bool MdoI18nDataReply(XS_HttpReq* pReq)
 	return bOk;
 }
 
-/* ---------------- GET /api/feedback —— 反馈记录聚合（当前项目桶） ---------------- */
+/* ---------------- GET /api/feedback —— 反馈记录聚合（内存表全部会话，跨桶） ---------------- */
 static char* MdoFeedbackCollect(void)
 {
 	xjsonwriter* pW = JWOpen();
@@ -306,6 +316,7 @@ static char* MdoFeedbackCollect(void)
 	JWName(pW, "items");
 	xrtJsonWriterArray(pW);
 	xrtMutexLock(g_lock);
+	/* 去激活化：聚合内存表所有会话（各桶会话随属主加载进内存表），不再按活动桶过滤 */
 	for ( i = 0; i < g_nSessions; i++ ) {
 		MdoSession* pS = g_sessions[i];
 		size_t nLines = 0;
@@ -1286,20 +1297,29 @@ int RequestProc(XS_HttpReq* pReq)
 			MdoSession* pNew;
 			char aModelId[64];
 			char aUserPrompt[2048];
+			char aProject[80];
+			MdoProject* pProj = NULL;
 			uint64 uWindow = 0;
 
 			NEED_BODY();
 			JStr(&tJ, "title", aTitle, sizeof(aTitle));
 			JStr(&tJ, "model", aModelId, sizeof(aModelId));
 			JStr(&tJ, "systemPrompt", aUserPrompt, sizeof(aUserPrompt));
+			JStr(&tJ, "project", aProject, sizeof(aProject));
 			xrtMutexLock(g_lock);
 			{
+				size_t k;
+				/* 去激活化：显式 project 参数优先，否则回退激活态（旧客户端兼容） */
+				const char* sUse = aProject[0] ? aProject :
+					(g_activeProject[0] ? g_activeProject : MDO_TASKS_SLUG);
+				for ( k = 0; k < g_nProjects; k++ )
+					if ( strcmp(g_projects[k].aSlug, sUse) == 0 ) { pProj = &g_projects[k]; break; }
 				MdoModel* pM = MdoModelFind(aModelId[0] ? aModelId : g_defaultModel);
 				if ( pM != NULL ) uWindow = pM->uContextWindow;
 				if ( !aModelId[0] && pM != NULL )
 					snprintf(aModelId, sizeof(aModelId), "%s", pM->aId);
 			}
-			pNew = MdoSessionCreateLocked(MdoActiveProject(), aTitle, aModelId, uWindow, aUserPrompt);
+			pNew = MdoSessionCreateLocked(pProj, aTitle, aModelId, uWindow, aUserPrompt);
 			xrtMutexUnlock(g_lock);
 			BODY_DONE();
 			if ( pNew == NULL )
@@ -1390,7 +1410,10 @@ int RequestProc(XS_HttpReq* pReq)
 		xrtMutexLock(g_lock);
 		pS = MdoSessionFindLocked(aId);
 		if ( pS != NULL && pS->pRun == NULL ) {
-			MdoProject* pProj = MdoActiveProject();   /* 任务态为 NULL：路径落到 _tasks 桶 */
+			MdoProject* pProj = NULL;                 /* 按会话属主桶定位，不依赖激活态 */
+			size_t k;
+			for ( k = 0; k < g_nProjects; k++ )
+				if ( strcmp(g_projects[k].aSlug, pS->aProject) == 0 ) { pProj = &g_projects[k]; break; }
 			char aMeta[380], aJournal[380], aSnap[380], aUi[380];
 			MdoSessionCloseHandles(pS);
 			{
@@ -1430,7 +1453,10 @@ int RequestProc(XS_HttpReq* pReq)
 		if ( pS != NULL && pS->pRun == NULL ) {
 			size_t nLines = 0;
 			char* sLog = MdoUiReadAll(pS, &nLines);
-			MdoProject* pProj = MdoActiveProject();
+			MdoProject* pProj = NULL;                 /* 按会话属主桶定位 */
+			size_t k;
+			for ( k = 0; k < g_nProjects; k++ )
+				if ( strcmp(g_projects[k].aSlug, pS->aProject) == 0 ) { pProj = &g_projects[k]; break; }
 			if ( sLog != NULL ) {
 				/* 保留 seq <= uptoSeq 的行重写 */
 				MdoBuf tKeep = {0};

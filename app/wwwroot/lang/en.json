@@ -314,5 +314,11 @@
   "sched.sideTitle": "Scheduled tasks",
   "sched.sideEmpty": "No scheduled tasks",
   "sched.sideManage": "Manage schedules…",
-  "sched.sideOpen": "Open task details"
+  "sched.sideOpen": "Open task details",
+  "projects.openSettings": "Open project settings",
+  "sidebar.newInProject": "New session in this project",
+  "sidebar.manageProject": "Manage project",
+  "sidebar.addProject": "Add project",
+  "projects.inlinePh": "Absolute workspace path, Enter to add",
+  "sidebar.projectsLabel": "Projects"
 }
