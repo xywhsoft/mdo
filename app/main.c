@@ -1559,7 +1559,7 @@ int RequestProc(XS_HttpReq* pReq)
 				snprintf(aErr, sizeof(aErr), "model unavailable: %s", pSrc->aModelId);
 				return ReplyErr(pReq, 400, aErr) ? XS_OK : XS_OK;
 			}
-			if ( !MdoSessionEnsure(pSrc, pModel, aErr, sizeof(aErr)) )
+			if ( !MdoSessionEnsure(pSrc, NULL, pModel, aErr, sizeof(aErr)) )
 				return ReplyErr(pReq, 500, aErr) ? XS_OK : XS_OK;
 		}
 

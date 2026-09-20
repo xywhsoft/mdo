@@ -13,6 +13,10 @@
 
 #include <time.h>
 
+/* main.c 后置定义（会话恢复；定义位于 include 块之后） */
+static bool MdoSessionEnsure(MdoSession* pSess, MdoProject* pProj, MdoModel* pModel,
+	char* pErr, size_t iCap);
+
 #define MDO_SCHED_MAX   64u
 #define MDO_SCHED_RUNS  50u     /* 任务内保留的运行记录条数 */
 
@@ -52,7 +56,7 @@ static xmutex* g_schedLock;
 static xcond* g_schedCond;
 
 /* ---------------- cron：5 字段（分 时 日 月 周），本地时区 ---------------- */
-/* 字段语法：* | a | a-b | a-b/n | */n | 逗号列表；周 7 视同 0（周日） */
+/* 字段语法：星号 | a | a-b | a-b/n | 星号/n | 逗号列表；周字段 7 视同 0（周日） */
 
 static bool MdoSchedCronField(const char* sField, int iMin, int iMax, int v)
 {
