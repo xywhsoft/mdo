@@ -7,7 +7,7 @@
 | 仓库 | 开发位置/分支 | 当前基线 | 说明 |
 | --- | --- | --- | --- |
 | mdo | `D:\GIT\mdo` / 当前分支 | `443e5e4f4a6b` | 产品、计划与集成账本 |
-| xrt | `codex/mdo-refactor-xrt` 独立工作树 | `5c0bd333ce5f` | 原工作树有既存未提交内容，隔离开发 |
+| xrt | `codex/mdo-refactor-xrt` 独立工作树 | `a38e949b812b` | 原工作树有既存未提交内容，隔离开发 |
 | xserver | 待阶段二建立 | `695988f7b8ee` | xrt 阶段门后开始 |
 
 ## 状态定义
@@ -28,6 +28,7 @@
 | XRT-201～207 VFS namespace/provider | DONE | xrt `029248ba` | Windows 模块化/单头、OOM、并发与重入通过；Linux 模块化/单头、ASan/UBSan/LSan、Clang TSan 通过；公开结构跨裁剪 ABI、API 文档、release maturity 与性能 smoke 通过 | 实现规范路径、不可变 mount snapshot、generation 生命周期、provider v1 ABI、普通 xfile/xdir 适配与目录合并；8 个 MISS mount 下 stat 约 384 ns/op、open/read/close 约 506 ns/op |
 | XRT-208 provider CaseMode 合同 | DONE | xrt `0a7b7a00` | Windows/Linux 模块化与单头、OOM、并发、公开 ABI 和文档检查通过 | Open、Stat、DirOpen 统一接收 mount 冻结的大小写策略，修复 prefix 与 provider 内相对路径语义不一致 |
 | XRT-209 VFS 原生文件打开能力 | DONE | xrt `5c0bd333` | Windows 模块化/单头、backend、OOM、并发和公开 ABI 通过；Linux GCC ASan/UBSan/LSan 模块化/单头及 Clang TSan 并发通过；API 文档、单头生成和 release maturity 通过 | 以兼容旧 v1 尺寸的尾扩展加入 OpenNative；原生 handle、map、lock 和 OS async 能力不再被 provider wrapper 降级，打开文件继续持有 generation |
+| XRT-210 根句柄目录枚举 | DONE | xrt `a38e949b` | Windows 模块化/单头与逐分配点 OOM 通过；Linux 原生文件系统上的模块化/单头 ASan/UBSan/LSan 通过；公开 ABI、API 文档、单头生成和 release maturity 通过 | POSIX 以 fdopendir/fstatat、Windows 以 NtQueryDirectoryFile 从已锚定句柄枚举；目录改名和根关闭后迭代器仍有效，点条目不暴露父目录能力 |
 | XRT-301 memory provider | DONE | xrt `83217171` | Windows 模块化/单头、穷举 OOM、四线程压力通过；Linux ASan/UBSan/LSan 与 Clang TSan 通过；API 文档和 release maturity 通过 | 支持 copy/owned buffer、空文件、原子 seal、大小写双索引、目录派生、只读文件能力和独立 blob 生命周期；旧打开文件不受 unmount/namespace 销毁影响 |
 | XS-101～109 | TODO | - | - | XRT-GATE 后实施 |
 | LIB-0～3 | TODO | - | - | XS-GATE 后实施 |
