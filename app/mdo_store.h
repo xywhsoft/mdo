@@ -111,7 +111,7 @@ static MdoSession* g_sessions[MDO_MAX_SESSIONS];   /* 指针稳定：pRun->pSess
 static void MdoMemoryDir(const MdoProject* pProj, bool bProject, char* pOut, size_t iCap);
 static MdoModel* MdoModelFind(const char* sId);
 static void MdoMemoryEnsure(const char* sDir);
-static void MdoMemoryReadIndex(const char* sDir, char* pOut, size_t iCap);
+static bool MdoMemoryReadIndex(const char* sDir, char* pOut, size_t iCap);
 
 /* 前置声明（定义在数据安全节，删除路径即需调用） */
 static void MdoAuditLog(const char* sAction, const char* sDetail);
@@ -1139,30 +1139,42 @@ static void MdoMemoryEnsure(const char* sDir)
 	}
 }
 
-/* 读索引（截断到 MDO_MEMORY_INDEX_MAX；无文件返回空串） */
-static void MdoMemoryReadIndex(const char* sDir, char* pOut, size_t iCap)
+/* 读索引：只取真实条目行（"- " 开头），模板注释不注入；无条目返回 false */
+static bool MdoMemoryReadIndex(const char* sDir, char* pOut, size_t iCap)
 {
 	char aIndex[380];
 	char* pFile;
 	size_t iSize = 0;
 	str sText;
+	size_t n = 0;
+	const char* p;
 
 	pOut[0] = 0;
-	if ( sDir == NULL || sDir[0] == 0 ) return;
+	if ( sDir == NULL || sDir[0] == 0 ) return false;
 	pFile = MdoPathJoin(sDir, "MEMORY.md");
-	if ( pFile == NULL ) return;
+	if ( pFile == NULL ) return false;
 	snprintf(aIndex, sizeof(aIndex), "%s", pFile);
 	xrtFree(pFile);
 	sText = xrtFileReadText(aIndex, XENCODING_UTF8, XUTF_REPLACE, &iSize);
-	if ( sText == NULL ) return;
-	{
-		size_t iLen = strlen(sText);
-		size_t iClip = Utf8Clip(sText, iLen, MDO_MEMORY_INDEX_MAX);
-		size_t n = iClip < iCap - 1 ? iClip : iCap - 1;
-		memcpy(pOut, sText, n);
-		pOut[n] = 0;
+	if ( sText == NULL ) return false;
+	p = sText;
+	while ( *p != 0 && n < iCap - 2 ) {
+		const char* pEnd = strchr(p, '\n');
+		size_t iLen = pEnd ? (size_t)(pEnd - p) : strlen(p);
+		if ( iLen >= 2 && p[0] == '-' && p[1] == ' ' ) {
+			size_t iCopy = iLen;
+			if ( iCopy > iCap - 2 - n ) iCopy = iCap - 2 - n;
+			memcpy(pOut + n, p, iCopy);
+			n += iCopy;
+			pOut[n++] = '\n';
+		}
+		p = pEnd ? pEnd + 1 : p + iLen;
 	}
+	pOut[n] = 0;
+	n = Utf8Clip(pOut, n, MDO_MEMORY_INDEX_MAX);
+	pOut[n] = 0;
 	xrtFree(sText);
+	return n > 0;
 }
 
 static void MdoBuildSystemPrompt(const MdoProject* pProj, const MdoSession* pSess,
@@ -1184,22 +1196,13 @@ static void MdoBuildSystemPrompt(const MdoProject* pProj, const MdoSession* pSes
 		xrtFree(pSlugDir);
 	}
 	const char* sWorkDir = aWorkDir;
-n += (size_t)snprintf(pOut + n, iCap - n,
-		"你是 mdo（墨斗）——运行在原生 C 栈上的 agent 工作台。\n\n"
-		"环境: Windows (win32)\n"
-		"Shell: 无 shell——exec/spawn 的 argv 是字符串数组且直生, 无管道/重定向/通配符; git/python 在 PATH\n"
-		"编码: 原生命令输出 GBK, 工具层已转 UTF-8\n"
-		"工作目录: %s\n"
-		"路径规则: 工具的相对路径基于上述工作目录; 勿假设 /workspace 等 Unix 惯例路径。\n"
-		"工具目录: %s （已在 PATH，exec 直接用程序名即可）\n"
-		"外部程序: curl ✓  git ✓  python ✓ (%s)\n"
-		"工具选择: 探索一律用内置 ls/glob/grep（进程内实现，比 exec 跑 dir/findstr 快且稳）\n"
-		"  计算或处理数据用 python 工具: 同步 REPL 变量跨调用保留（x=1 后下次调用仍可读 x）, reset=true 重置, background=true 转后台任务; 优于反复 exec python -c\n"
-		"  单次命令用 exec（同步等结果）; 长任务用 spawn 后台跑, 配合 poll/wait/stdin/stop 管理\n"
-		"  其余: 文件 read/write/edit; 需要用户决策 ask_user; 联网 web_search/get_search_content/fetch_content\n",
-		sWorkDir,
-		g_toolsDir,
-		g_bPythonBundled ? "内置 3.13" : "PATH 中的版本");
+	n += (size_t)snprintf(pOut + n, iCap - n,
+		"你是 mdo（墨斗），一个 agent 工作台。\n\n"
+		"环境: Windows\n"
+		"工作目录: %s（工具的相对路径以此为基准）\n"
+		"命令: exec/spawn 的参数是字符串数组、直接执行；没有 shell，不支持管道、重定向、通配符。已配置 curl、git、python，直接按程序名调用。\n"
+		"工具: 遍历目录用 ls；按文件名找文件用 glob；搜文件内容用 grep；读文件用 read；写文件用 write；改文件用 edit；跑命令用 exec（同步等待）或 spawn（后台任务）；跑 Python 代码用 python；搜索网络用 web_search；需要用户决定时用 ask_user。\n",
+		sWorkDir);
 
 	if ( pProj != NULL && pProj->aPath[0] ) {
 		char* pFile = MdoPathJoin(pProj->aPath, "AGENTS.md");
@@ -1218,22 +1221,17 @@ n += (size_t)snprintf(pOut + n, iCap - n,
 		xrtFree(sAgents);
 	}
 
-	/* 记忆块：双目录路径 + 约定 + 索引（§12.3：显式可审计，索引注入≠内容注入） */
+	/* 记忆块：只给目录事实；索引有真实条目才注入，模板注释不注入 */
 	MdoMemoryDir(pProj, false, aMemGlobal, sizeof(aMemGlobal));
 	MdoMemoryDir(pProj, true, aMemProject, sizeof(aMemProject));
-	MdoMemoryReadIndex(aMemGlobal, aIdxG, sizeof(aIdxG));
-	MdoMemoryReadIndex(aMemProject, aIdxP, sizeof(aIdxP));
 	n += (size_t)snprintf(pOut + n, iCap - n,
-		"\n记忆（零专用工具，用 read/write/edit 直接维护明文）:\n"
+		"\n记忆（明文文件，用文件工具直接维护；MEMORY.md 为索引，一条一事一文件）:\n"
 		"全局: %s\n"
-		"项目: %s\n"
-		"约定: 一条一事一文件; frontmatter 标 type[user|feedback|project|reference];\n"
-		"  MEMORY.md 为索引（一行一文件+钩子）; 更新优先新建文件而非改旧文;\n"
-		"  仓库/文档已记录的事实不存; 会话开始/结束时反思是否有值得记的。\n",
+		"项目: %s\n",
 		aMemGlobal, aMemProject);
-	if ( aIdxG[0] )
+	if ( MdoMemoryReadIndex(aMemGlobal, aIdxG, sizeof(aIdxG)) )
 		n += (size_t)snprintf(pOut + n, iCap - n, "\n全局记忆索引:\n%s\n", aIdxG);
-	if ( aIdxP[0] )
+	if ( MdoMemoryReadIndex(aMemProject, aIdxP, sizeof(aIdxP)) )
 		n += (size_t)snprintf(pOut + n, iCap - n, "\n项目记忆索引:\n%s\n", aIdxP);
 
 	/* 用户全局指令（建会话时快照，仅新会话生效） */
