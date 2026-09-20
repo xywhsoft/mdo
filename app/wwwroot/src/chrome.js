@@ -646,7 +646,6 @@ const NAV_LABEL = {
   '记忆管理': 'settings.nav.memory', '网络': 'settings.nav.network',
   '数据管理': 'settings.nav.data',
   '反馈': 'settings.nav.feedback',
-  '计划任务': 'settings.nav.schedules',
   '基础设置': 'settings.group.basic', '数据': 'settings.group.data',
 };
 export function openSettings(store) {
@@ -732,7 +731,6 @@ function stSection(store, id) {
         return ta;
       })()))];
   if (id === '反馈') return mdoFeedbackSection(store);
-  if (id === '计划任务') return mdoSchedulesSection(store);
   if (id === '数据管理') return [el('div', { class: 'st-card' },
     ST_ROW(t('settings.clearAll'), t('settings.clearAllDesc'),
       el('button', {
@@ -1020,6 +1018,124 @@ function mdoFeedbackSection(store) {
   return [card];
 }
 
+function mdoProjectsSection(store) {
+  const host = store.host;
+  if (host?.name !== 'mdo') {
+    return [el('div', { class: 'st-card' }, el('div', { class: 'st-row-desc' }, t('projects.offline')))];
+  }
+  const page = el('div', { class: 'mm-page' });
+  let lastData = null;
+
+  async function refresh() {
+    try { lastData = await host.listProjects(); } catch { lastData = lastData ?? { projects: [] }; }
+    render();
+  }
+
+  /** 打开记忆目录（无参=全局）；后端定位+建目录+系统文件管理器打开 */
+  function openMemoryDir(slug) {
+    const q = slug ? `?project=${encodeURIComponent(slug)}` : '';
+    fetch('/api/memory/dir' + q).then(async (r) => {
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      toast(t('memory.opened'));
+    }).catch((e) => toast(t('memory.openFail') + e.message));
+  }
+
+  function projectCard(p) {
+    const avatar = el('span', { class: 'pj-avatar' },
+      icon('IconFolderClose16', { size: 16 }));
+    avatar.style.background = 'hsl(' + mmHue(p.path || p.slug) + ' 42% 40%)';
+    const badges = [];
+    if (p.valid === false) badges.push(el('span', { class: 'mm-badge warn', 'data-tip': t('projects.pathInvalid') }, t('projects.pathInvalidBadge')));
+    const nameRow = el('div', { class: 'pj-name' }, p.name, ...badges);
+    const info = el('div', { class: 'pj-info' }, nameRow, el('div', { class: 'pj-path' }, p.path));
+    /* 记忆管理钮：打开该项目专属记忆目录 */
+    const memBtn = el('button', {
+      class: 'dsw-btn',
+      'data-tip': t('memory.projectTip'),
+      onclick: () => openMemoryDir(p.slug),
+    }, icon('IconDataOutline16', { size: 14 }), el('span', null, t('memory.projectBtn')));
+    const main = el('div', { class: 'pj-main' }, avatar, info, memBtn);
+
+    const modelSel = el('select', { class: 'modal-input pj-model' },
+      el('option', { value: '' }, t('projects.followGlobal')),
+      ...store.models.map((m) => el('option', {
+        value: m.id, selected: p.defaultModel === m.id ? '' : undefined,
+      }, m.name)));
+    modelSel.addEventListener('change', async () => {
+      try { await host.setProjectDefaultModel(p.slug, modelSel.value); toast(t('projects.defModelSaved')); }
+      catch (e) { toast(t('models.saveFail') + e.message); }
+    });
+    const unregBtn = el('button', {
+      class: 'icon-btn pj-icon', 'data-tip': t('projects.unregTip'),
+      onclick: () => confirmModal({
+        title: t('projects.unregTitle'),
+        message: t('projects.unregBody', { name: p.name }),
+        okLabel: t('projects.unreg'),
+        onOk: async () => {
+          try { await host.deleteProject(p.slug, false); await window.__app.refreshProjects(); refresh(); }
+          catch (e) { toast(t('projects.unregFail') + e.message); }
+        },
+      }),
+    }, icon('IconCloseOutline16', { size: 14 }));
+    const purgeBtn = el('button', {
+      class: 'icon-btn pj-icon danger', 'data-tip': t('projects.purgeTip'),
+      onclick: () => confirmModal({
+        title: t('projects.purgeTitle'),
+        message: t('projects.purgeBody', { name: p.name }),
+        okLabel: t('projects.purge'),
+        onOk: async () => {
+          try { await host.deleteProject(p.slug, true); await window.__app.refreshProjects(); refresh(); }
+          catch (e) { toast(t('models.delFail') + e.message); }
+        },
+      }),
+    }, icon('IconTrashOutline16', { size: 14 }));
+    const foot = el('div', { class: 'pj-foot' },
+      el('span', { class: 'pj-foot-label' }, t('projects.defModel')),
+      modelSel,
+      el('span', { class: 'pj-sp' }),
+      unregBtn,
+      purgeBtn);
+    return el('div', { class: 'pj-card' }, main, foot);
+  }
+
+  function render() {
+    const d = lastData ?? {};
+    const list = d.projects ?? [];
+    /* 头部：全局记忆管理（替代原「添加项目」位置——建项目已上侧栏行内） */
+    const head = el('div', { class: 'mm-head' },
+      el('div', { class: 'mm-desc' },
+        t('memory.desc')),
+      el('div', { class: 'mm-actions' },
+        el('button', {
+          class: 'dsw-btn primary',
+          'data-tip': t('memory.globalTip'),
+          onclick: () => openMemoryDir(null),
+        }, icon('IconDataOutline16', { size: 14 }), t('memory.globalBtn'))));
+    const cards = list.map((p) => projectCard(p));
+    if (list.length === 0) {
+      cards.push(el('div', { class: 'pj-empty' }, t('projects.empty')));
+    }
+    page.replaceChildren(head, el('div', { class: 'pj-list' }, ...cards));
+  }
+
+  refresh();
+  return [page];
+}
+const ST_SECTIONS = [
+  { group: '基础设置', items: [
+    { id: '外观', icon: 'IconDarkOutline16' },
+    { id: '常规', icon: 'IconSettingsOutline16' },
+    { id: '网络', icon: 'IconSettingsOutline16' },
+    { id: '模型设置', icon: 'IconSparkle16' },
+  ] },
+  { group: '数据', items: [
+    { id: '模型管理', icon: 'IconSparkle16' },
+    { id: '记忆管理', icon: 'IconDataOutline16' },
+    { id: '数据管理', icon: 'IconDataOutline16' },
+    { id: '反馈', icon: 'IconLikeOutline16' },
+  ] },
+];
+
 /* ============ 计划任务（闹钟）：任务列表 + 新建/编辑表单（API 五件已就绪） ============ */
 const CRON_PRESETS = [
   ['0 9 * * *', 'sched.preset.daily9'],
@@ -1261,125 +1377,6 @@ export function openProjectMenu(store, pj, anchor) {
 }
 function closeMenu() { document.querySelectorAll('.pj-menu').forEach((m) => m.remove()); }
 
-function mdoProjectsSection(store) {
-  const host = store.host;
-  if (host?.name !== 'mdo') {
-    return [el('div', { class: 'st-card' }, el('div', { class: 'st-row-desc' }, t('projects.offline')))];
-  }
-  const page = el('div', { class: 'mm-page' });
-  let lastData = null;
-
-  async function refresh() {
-    try { lastData = await host.listProjects(); } catch { lastData = lastData ?? { projects: [] }; }
-    render();
-  }
-
-  /** 打开记忆目录（无参=全局）；后端定位+建目录+系统文件管理器打开 */
-  function openMemoryDir(slug) {
-    const q = slug ? `?project=${encodeURIComponent(slug)}` : '';
-    fetch('/api/memory/dir' + q).then(async (r) => {
-      if (!r.ok) throw new Error('HTTP ' + r.status);
-      toast(t('memory.opened'));
-    }).catch((e) => toast(t('memory.openFail') + e.message));
-  }
-
-  function projectCard(p) {
-    const avatar = el('span', { class: 'pj-avatar' },
-      icon('IconFolderClose16', { size: 16 }));
-    avatar.style.background = 'hsl(' + mmHue(p.path || p.slug) + ' 42% 40%)';
-    const badges = [];
-    if (p.valid === false) badges.push(el('span', { class: 'mm-badge warn', 'data-tip': t('projects.pathInvalid') }, t('projects.pathInvalidBadge')));
-    const nameRow = el('div', { class: 'pj-name' }, p.name, ...badges);
-    const info = el('div', { class: 'pj-info' }, nameRow, el('div', { class: 'pj-path' }, p.path));
-    /* 记忆管理钮：打开该项目专属记忆目录 */
-    const memBtn = el('button', {
-      class: 'dsw-btn',
-      'data-tip': t('memory.projectTip'),
-      onclick: () => openMemoryDir(p.slug),
-    }, icon('IconDataOutline16', { size: 14 }), el('span', null, t('memory.projectBtn')));
-    const main = el('div', { class: 'pj-main' }, avatar, info, memBtn);
-
-    const modelSel = el('select', { class: 'modal-input pj-model' },
-      el('option', { value: '' }, t('projects.followGlobal')),
-      ...store.models.map((m) => el('option', {
-        value: m.id, selected: p.defaultModel === m.id ? '' : undefined,
-      }, m.name)));
-    modelSel.addEventListener('change', async () => {
-      try { await host.setProjectDefaultModel(p.slug, modelSel.value); toast(t('projects.defModelSaved')); }
-      catch (e) { toast(t('models.saveFail') + e.message); }
-    });
-    const unregBtn = el('button', {
-      class: 'icon-btn pj-icon', 'data-tip': t('projects.unregTip'),
-      onclick: () => confirmModal({
-        title: t('projects.unregTitle'),
-        message: t('projects.unregBody', { name: p.name }),
-        okLabel: t('projects.unreg'),
-        onOk: async () => {
-          try { await host.deleteProject(p.slug, false); await window.__app.refreshProjects(); refresh(); }
-          catch (e) { toast(t('projects.unregFail') + e.message); }
-        },
-      }),
-    }, icon('IconCloseOutline16', { size: 14 }));
-    const purgeBtn = el('button', {
-      class: 'icon-btn pj-icon danger', 'data-tip': t('projects.purgeTip'),
-      onclick: () => confirmModal({
-        title: t('projects.purgeTitle'),
-        message: t('projects.purgeBody', { name: p.name }),
-        okLabel: t('projects.purge'),
-        onOk: async () => {
-          try { await host.deleteProject(p.slug, true); await window.__app.refreshProjects(); refresh(); }
-          catch (e) { toast(t('models.delFail') + e.message); }
-        },
-      }),
-    }, icon('IconTrashOutline16', { size: 14 }));
-    const foot = el('div', { class: 'pj-foot' },
-      el('span', { class: 'pj-foot-label' }, t('projects.defModel')),
-      modelSel,
-      el('span', { class: 'pj-sp' }),
-      unregBtn,
-      purgeBtn);
-    return el('div', { class: 'pj-card' }, main, foot);
-  }
-
-  function render() {
-    const d = lastData ?? {};
-    const list = d.projects ?? [];
-    /* 头部：全局记忆管理（替代原「添加项目」位置——建项目已上侧栏行内） */
-    const head = el('div', { class: 'mm-head' },
-      el('div', { class: 'mm-desc' },
-        t('memory.desc')),
-      el('div', { class: 'mm-actions' },
-        el('button', {
-          class: 'dsw-btn primary',
-          'data-tip': t('memory.globalTip'),
-          onclick: () => openMemoryDir(null),
-        }, icon('IconDataOutline16', { size: 14 }), t('memory.globalBtn'))));
-    const cards = list.map((p) => projectCard(p));
-    if (list.length === 0) {
-      cards.push(el('div', { class: 'pj-empty' }, t('projects.empty')));
-    }
-    page.replaceChildren(head, el('div', { class: 'pj-list' }, ...cards));
-  }
-
-  refresh();
-  return [page];
-}
-const ST_SECTIONS = [
-  { group: '基础设置', items: [
-    { id: '外观', icon: 'IconDarkOutline16' },
-    { id: '常规', icon: 'IconSettingsOutline16' },
-    { id: '网络', icon: 'IconSettingsOutline16' },
-    { id: '计划任务', icon: 'IconChecklistOutline16' },
-    { id: '模型设置', icon: 'IconSparkle16' },
-  ] },
-  { group: '数据', items: [
-    { id: '模型管理', icon: 'IconSparkle16' },
-    { id: '记忆管理', icon: 'IconDataOutline16' },
-    { id: '数据管理', icon: 'IconDataOutline16' },
-    { id: '反馈', icon: 'IconLikeOutline16' },
-  ] },
-];
-
 function mountSettingsPage(root, store) {
   function render() {
     root.hidden = !(settingsState.active || schedViewState.active);
@@ -1395,7 +1392,7 @@ function mountSettingsPage(root, store) {
         ...mdoSchedulesSection(store)));
       return;
     }
-    root.replaceChildren(el('div', { class: 'st-wrap' + (['模型管理', '记忆管理', '计划任务'].includes(settingsState.section) ? ' wide' : '') },
+    root.replaceChildren(el('div', { class: 'st-wrap' + (['模型管理', '记忆管理'].includes(settingsState.section) ? ' wide' : '') },
       el('h1', { class: 'st-title' }, t(NAV_LABEL[settingsState.section] ?? settingsState.section, null, settingsState.section)),
       ...stSection(store, settingsState.section)));
   }

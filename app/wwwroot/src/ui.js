@@ -10,7 +10,7 @@ import { t } from './i18n.js?v=1';
 import { icon, appIcon, stateDot } from './icons.js?v=5';
 import {
   isSettingsView, isSchedulesView, closeSettings,
-  toast, confirmModal, closeModal, promptModal, openSettings, openSettingsSection, openHelp,
+  toast, confirmModal, closeModal, promptModal, openSettings, openSchedulesPage, openHelp,
   applySettings, exportSessionMarkdown, SLASH_COMMANDS, MOCK_FILES,
 } from './chrome.js?v=42';
 
@@ -775,7 +775,7 @@ function renderHero(listEl, store, host) {
         chip(t('hero.q2'), t('hero.q2sub'), ask(t('hero.q2prompt'))),
         chip(t('hero.q3'), t('hero.q3sub'), ask(t('hero.q3prompt'))),
         chip(t('hero.q4'), t('hero.q4sub'), ask(t('hero.q4prompt'))),
-        chip(t('hero.q5'), t('hero.q5sub'), () => openSettingsSection(store, '计划任务')))));
+        chip(t('hero.q5'), t('hero.q5sub'), () => openSchedulesPage(store)))));
 }
 
 // ============ 总装 ============
