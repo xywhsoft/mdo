@@ -1997,8 +1997,8 @@ void ServiceInit(XS_HostInfo* pHost)
 		snprintf(g_wwwRoot, sizeof(g_wwwRoot), "%s", pHost->Path);
 	MdoStoreInit();
 	MdoSchedInit();
-	printf("[mdo] backend ready (models=%zu projects=%zu home=%s)\n",
-		g_nModels, g_nProjects, g_mdoHome);
+	printf("[mdo] backend ready (models=%zu projects=%zu schedules=%zu home=%s)\n",
+		g_nModels, g_nProjects, g_nScheds, g_mdoHome);
 }
 
 void ServiceUnit(XS_HostInfo* pHost)
