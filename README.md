@@ -3,6 +3,9 @@
 极简 agent 工作台：xs C 后端进程内直调 [xllm / xllm-session / xwork](https://xrt.xywhsoft.com)
 三件套，webview 前端。工具调用、审批闸门、多模态、记忆、多项目会话分桶、三语界面。
 
+完整重构顺序、跨仓库 API 边界、阶段门和测试验收标准见
+[mdo 重构落地实施计划](docs/mdo-refactor-implementation-plan.md)。
+
 ## 运行
 
 ```
