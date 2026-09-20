@@ -310,5 +310,9 @@
   "sched.st.done": "done",
   "sched.st.failed": "failed",
   "sched.st.running": "running",
-  "sched.st.skipped": "skipped"
+  "sched.st.skipped": "skipped",
+  "sched.sideTitle": "Scheduled tasks",
+  "sched.sideEmpty": "No scheduled tasks",
+  "sched.sideManage": "Manage schedules…",
+  "sched.sideOpen": "Open task details"
 }

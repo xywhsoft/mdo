@@ -310,5 +310,9 @@
   "sched.st.done": "完成",
   "sched.st.failed": "失败",
   "sched.st.running": "运行中",
-  "sched.st.skipped": "跳过"
+  "sched.st.skipped": "跳过",
+  "sched.sideTitle": "定时任务",
+  "sched.sideEmpty": "暂无定时任务",
+  "sched.sideManage": "管理计划任务…",
+  "sched.sideOpen": "查看任务详情"
 }

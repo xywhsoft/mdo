@@ -1121,3 +1121,38 @@ body[data-ds-dark-theme] .error-banner { background: #3a2020; }
 .sched-cronrow input.modal-input { flex: 1; min-width: 120px; }
 .sched-meta { margin: 8px 0 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .sched-hist { max-height: 380px; overflow: auto; }
+
+/* ============ 侧栏：Codex 式定时任务行 + 可展开清单 ============ */
+.sched-box { margin: 10px 10px 2px; }
+.sched-row {
+  display: flex; align-items: center; gap: 8px; padding: 7px 9px;
+  border-radius: 8px; cursor: pointer; color: var(--dsw-alias-label-secondary);
+  transition: background .12s;
+}
+.sched-row:hover { background: var(--dsw-alias-interactive-bg-hover); color: var(--dsw-alias-label-primary); }
+.sched-row-text { flex: 1; font-size: 12.5px; font-weight: 600; }
+.sched-row-count {
+  font-size: 10.5px; color: var(--dsw-alias-label-tertiary);
+  background: color-mix(in srgb, currentColor 8%, transparent);
+  border-radius: 8px; padding: 1px 7px;
+}
+.sched-row-chev { display: inline-flex; transition: transform .15s; }
+.sched-list { overflow: hidden; }
+.sched-list.closed { display: none; }
+.sched-item {
+  display: flex; align-items: center; gap: 7px; padding: 5px 8px 5px 22px;
+  border-radius: 8px; cursor: pointer; transition: background .12s;
+}
+.sched-item:hover { background: var(--dsw-alias-interactive-bg-hover); }
+.sched-item .s-title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; }
+.sched-item .s-time { font-size: 10.5px; color: var(--dsw-alias-label-tertiary); flex-shrink: 0; }
+.sched-item .s-acts { display: none; align-items: center; gap: 1px; flex-shrink: 0; }
+.sched-item:hover .s-acts { display: inline-flex; }
+.sched-manage {
+  padding: 6px 22px; font-size: 11px; color: var(--dsw-alias-label-tertiary);
+  cursor: pointer; border-radius: 8px; transition: background .12s, color .12s;
+}
+.sched-manage:hover { background: var(--dsw-alias-interactive-bg-hover); color: var(--dsw-alias-label-primary); }
+.sched-page-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.sched-page-sub { margin: -12px 0 18px; }
+.sched-row.on { background: var(--dsw-alias-interactive-bg-hover); color: var(--dsw-alias-label-primary); }

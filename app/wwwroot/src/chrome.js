@@ -296,6 +296,7 @@ function mountSidebar(root, store, frame, hooks) {
 
   // —— 展开态骨架（旧版布局；搜索框常驻，不再做展开动画）——
   const listEl = el('div', { class: 'session-list' });
+  const schedBox = el('div', { class: 'sched-box' });   // Codex 式：定时任务行 + 可展开清单
   const wide = el('div', { class: 'sidebar-wide' },
     el('div', { class: 'sidebar-head' },
       el('span', { class: 'logo-mark' }, appIcon({ size: 22 })),
@@ -306,6 +307,7 @@ function mountSidebar(root, store, frame, hooks) {
         icon('IconPanelLeftOutline16', { size: 16 }))),
     el('button', { class: 'new-session', onclick: hooks.newSession },
       icon('IconNewChatOutline16', { size: 14 }), el('span', null, t('sidebar.newSession'))),
+    schedBox,
     el('div', { class: 'session-search' }, searchInput),
     listEl,
     el('div', { class: 'sidebar-foot' },
@@ -337,6 +339,24 @@ function mountSidebar(root, store, frame, hooks) {
     sessionFilter = searchInput.value;
     renderList();
   });
+
+  /* —— Codex 式侧栏功能行：定时任务（页面入口 → 右侧主区管理界面）—— */
+  let schedItems = [];
+  function refreshSched() { store.host.listSchedules().then((x) => { schedItems = x; renderSchedBox(); }).catch(() => {}); }
+  function renderSchedBox() {
+    const active = schedViewState.active;
+    const head = el('div', { class: 'sched-row' + (active ? ' on' : ''), onclick: () => {
+      openSchedulesPage(store);
+      refreshSched();
+    } },
+      icon('IconChecklistOutline14', { size: 15 }),
+      el('span', { class: 'sched-row-text' }, t('sched.sideTitle')),
+      el('span', { class: 'sched-row-count' }, String(schedItems.filter((s) => s.enabled).length)));
+    schedBox.replaceChildren(head);
+  }
+  renderSchedBox();
+  refreshSched();
+  setInterval(refreshSched, 30000);
 
   /* 侧栏会话列表（zcode 式）：顶部跨项目置顶区 + 项目分组（会话=项目二级分类），
    * 末位是「任务」默认分类（不属于任何项目的会话）。 */
@@ -590,6 +610,7 @@ const fmtK = (n) => n >= 1000 ? (n / 1000).toFixed(1).replace(/\.0$/, '') + 'K' 
 
 // ============ 设置：ZCode 式整页视图（侧栏导航 + 主区卡片页） ============
 const settingsState = { active: false, section: '外观', prevCollapsed: false };
+const schedViewState = { active: false };   // Codex 式：侧栏「定时任务」= 独立页面入口（右侧主区）
 const NAV_LABEL = {
   '外观': 'settings.nav.appearance', '常规': 'settings.nav.general',
   '模型设置': 'settings.nav.modelCfg', '模型管理': 'settings.nav.models',
@@ -601,6 +622,7 @@ const NAV_LABEL = {
 };
 export function openSettings(store) {
   const frame = window.__app && window.__app.frame;
+  schedViewState.active = false;             // 页面入口互斥
   settingsState.prevCollapsed = frame ? frame.collapsed() : false;
   settingsState.active = true;
   if (frame) frame.expandSidebar();          // 设置导航需要宽度：强制展开
@@ -608,13 +630,24 @@ export function openSettings(store) {
 }
 /** 直达指定设置节（hero 第五卡 → 计划任务） */
 export function openSettingsSection(store, sectionId) {
+  schedViewState.active = false;             // 页面入口互斥
   openSettings(store);
   settingsState.section = sectionId;
   store.notifier.markDirty();
 }
+/** 打开定时任务页面（右侧主区管理界面；设置态互斥） */
+export function openSchedulesPage(store) {
+  settingsState.active = false;
+  schedViewState.active = true;
+  const frame = window.__app && window.__app.frame;
+  if (frame) frame.expandSidebar();
+  store.notifier.markDirty();
+}
+export function isSchedulesView() { return schedViewState.active; }
 export function closeSettings(store) {
   const frame = window.__app && window.__app.frame;
   settingsState.active = false;
+  schedViewState.active = false;             // 任何退出路径都回对话视图
   if (frame) {
     if (settingsState.prevCollapsed) frame.collapseSidebar();   // 还原进入前的收起态
     else frame.expandSidebar();
@@ -1295,8 +1328,19 @@ const ST_SECTIONS = [
 
 function mountSettingsPage(root, store) {
   function render() {
-    root.hidden = !settingsState.active;
-    if (!settingsState.active) return;
+    root.hidden = !(settingsState.active || schedViewState.active);
+    if (root.hidden) return;
+    if (schedViewState.active) {
+      // Codex 式：定时任务 = 独立页面（右侧主区，复用管理节）
+      root.replaceChildren(el('div', { class: 'st-wrap wide sched-page' },
+        el('div', { class: 'sched-page-head' },
+          el('h1', { class: 'st-title' }, t('sched.title')),
+          el('button', { class: 'dsw-btn', onclick: () => { schedViewState.active = false; store.notifier.markDirty(); } },
+            icon('IconChevronLeftOutline14', { size: 14 }), el('span', null, t('sidebar.backToWork')))),
+        el('div', { class: 'st-row-desc sched-page-sub' }, t('sched.subtitle')),
+        ...mdoSchedulesSection(store)));
+      return;
+    }
     root.replaceChildren(el('div', { class: 'st-wrap' + (['模型管理', '项目管理', '计划任务'].includes(settingsState.section) ? ' wide' : '') },
       el('h1', { class: 'st-title' }, t(NAV_LABEL[settingsState.section] ?? settingsState.section, null, settingsState.section)),
       ...stSection(store, settingsState.section)));

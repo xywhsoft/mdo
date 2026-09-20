@@ -251,7 +251,8 @@ window.__app.newSession = () => {
   s.modelId = prev?.modelId || store.model?.id;
   s.lazy = true;
   store.select(s.id);
-  store.notifier.markDirty();
+  // 任何页面态（设置/定时任务）点新会话都回对话视图
+  import('./chrome.js?v=42').then((m) => { m.closeSettings(store); store.notifier.markDirty(); });
   import('./ui.js?v=30').then((m) => m.focusComposer());
 };
 window.__app.deleteSessionRemote = async (id) => {

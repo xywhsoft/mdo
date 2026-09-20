@@ -310,5 +310,9 @@
   "sched.st.done": "готово",
   "sched.st.failed": "ошибка",
   "sched.st.running": "выполняется",
-  "sched.st.skipped": "пропущено"
+  "sched.st.skipped": "пропущено",
+  "sched.sideTitle": "Задачи по расписанию",
+  "sched.sideEmpty": "Нет задач по расписанию",
+  "sched.sideManage": "Управлять расписаниями…",
+  "sched.sideOpen": "Открыть детали задачи"
 }

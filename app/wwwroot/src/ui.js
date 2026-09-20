@@ -9,7 +9,7 @@ import { el } from './dom.js';
 import { t } from './i18n.js?v=1';
 import { icon, appIcon, stateDot } from './icons.js?v=5';
 import {
-  isSettingsView, closeSettings,
+  isSettingsView, isSchedulesView, closeSettings,
   toast, confirmModal, closeModal, promptModal, openSettings, openSettingsSection, openHelp,
   applySettings, exportSessionMarkdown, SLASH_COMMANDS, MOCK_FILES,
 } from './chrome.js?v=42';
@@ -929,9 +929,9 @@ export function mountApp(store, host, refs) {
 
   let lastSid = null;
   function render() {
-    const settingsOn = isSettingsView();
-    cvRoot.hidden = settingsOn;
-    if (settingsOn) return;
+    const pageOn = isSettingsView() || isSchedulesView();   // 设置页 / 定时任务页共用主区
+    cvRoot.hidden = pageOn;
+    if (pageOn) return;
     composerWrap._sync?.();
     const s = store.snapshot().selected;
     if (!s) return;
