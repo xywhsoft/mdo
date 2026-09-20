@@ -244,6 +244,17 @@ static uint64 MdoNowMs(void)
 	return (uint64)(xrtTimeUnixMs(xrtNow()) );
 }
 
+/* 单条工具结果的字节预算：窗口的 1/8（按 ~3 字节/token 折算），夹 32KB~160KB。
+ * 同源注入两处——xwork iMaxInlineToolBytes（截断线）与本值 +1KB 的会话拒绝线，
+ * 保证「截断产物（截断线+约 150B 标记）」恒小于拒绝线，超限永不炸回合。 */
+static uint64 MdoToolBudgetBytes(uint64 uContextWindowTokens)
+{
+	uint64 uBudget = uContextWindowTokens * 3u / 8u;
+	if ( uBudget < 32u * 1024u ) uBudget = 32u * 1024u;
+	if ( uBudget > 160u * 1024u ) uBudget = 160u * 1024u;
+	return uBudget;
+}
+
 static uint64 MdoRandHex(void)
 {
 	static uint64 uState = 0;

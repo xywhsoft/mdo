@@ -735,6 +735,8 @@ static int32 MdoRunThread(void* pArg)
 	tCfg.OnEvent = MdoOnXworkEvent;
 	tCfg.pEventUserData = pRun;
 	tCfg.bRegisterBuiltinTools = true;
+	/* 工具输出内联截断线 = 动态预算（与会话拒绝线同源：预算+1KB），大结果落 artifact 续读 */
+	tCfg.iMaxInlineToolBytes = (size_t)MdoToolBudgetBytes(pSess->uContextWindow);
 	/* 探索三件（ls/glob/grep 进程内实现）：不依赖外部程序 */
 	tCfg.bRegisterExploreTools = true;
 	/* python 三态：优先用随程序分发的 tools/python313，否则回退 PATH */

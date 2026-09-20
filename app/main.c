@@ -156,7 +156,8 @@ static bool MdoSessionEnsure(MdoSession* pSess, MdoModel* pModel, char* pErr, si
 		xllm_session_config tCfg;
 		xllmSessionConfigInit(&tCfg);
 		tCfg.uContextWindowTokens = pSess->uContextWindow;
-		tCfg.uToolResultCapBytes = 64u * 1024u;   /* 搜索/网页工具结果可达数十 KB（默认 2KB 会整回合炸） */
+		/* 拒绝线 = 动态预算 +1KB：恒大于 xwork 截断产物（预算+约150B 标记），超限不再炸回合 */
+		tCfg.uToolResultCapBytes = (uint32_t)(MdoToolBudgetBytes(pSess->uContextWindow) + 1024u);
 		tCfg.uMaxOutputTokens = pModel->uMaxOutput
 			? pModel->uMaxOutput
 			: (uint32_t)(pSess->uContextWindow / 4u);
