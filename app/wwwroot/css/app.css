@@ -1114,3 +1114,10 @@ body[data-ds-dark-theme] .error-banner { background: #3a2020; }
   .mm-list { width: auto; border-right: none; border-bottom: 1px solid var(--dsw-alias-border-l1); max-height: 200px; }
   .mm-grid { grid-template-columns: 1fr; }
 }
+
+/* ============ 计划任务（闹钟） ============ */
+.sched-cronrow { display: flex; gap: 8px; align-items: center; min-width: 320px; }
+.sched-cronrow select.modal-input { width: auto; flex: 0 0 auto; }
+.sched-cronrow input.modal-input { flex: 1; min-width: 120px; }
+.sched-meta { margin: 8px 0 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sched-hist { max-height: 380px; overflow: auto; }

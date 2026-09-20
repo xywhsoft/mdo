@@ -32,6 +32,11 @@ export class FixtureHost {
   }
 
   async listSessions() { return []; }
+  async listSchedules() { return []; }   // 离线演示：计划任务空表
+  async createSchedule() { throw new Error('offline demo'); }
+  async updateSchedule() { throw new Error('offline demo'); }
+  async deleteSchedule() { throw new Error('offline demo'); }
+  async runSchedule() { throw new Error('offline demo'); }
 
   /** 用户提交输入：宿主记账 user/message（宿主是日志权威），再跑一轮脚本化回合。 */
   async prompt(sessionId, parts) { /* 由 fixture.js 注入实现 */ }
@@ -323,6 +328,39 @@ export class MdoHost {
   async listAllSessions() {
     const d = await this.#api('/api/sessions?all=1');
     return d.ok ? d.sessions : [];
+  }
+  /** 计划任务（闹钟）五件 */
+  async listSchedules() {
+    const d = await this.#api('/api/schedules');
+    return d.ok ? d.schedules : [];
+  }
+  async createSchedule(payload) {
+    const d = await this.#api('/api/schedules', {
+      method: 'POST', body: JSON.stringify(payload),
+    });
+    if (!d.ok) throw new Error(d.error ?? 'create schedule failed');
+    return d;
+  }
+  async updateSchedule(payload) {
+    const d = await this.#api('/api/schedules/update', {
+      method: 'POST', body: JSON.stringify(payload),
+    });
+    if (!d.ok) throw new Error(d.error ?? 'update schedule failed');
+    return d;
+  }
+  async deleteSchedule(id) {
+    const d = await this.#api('/api/schedules/delete', {
+      method: 'POST', body: JSON.stringify({ id }),
+    });
+    if (!d.ok) throw new Error(d.error ?? 'delete schedule failed');
+    return d;
+  }
+  async runSchedule(id) {
+    const d = await this.#api('/api/schedules/run', {
+      method: 'POST', body: JSON.stringify({ id }),
+    });
+    if (!d.ok) throw new Error(d.error ?? 'run schedule failed');
+    return d;
   }
   async createSession(title, modelId, systemPrompt) {
     const d = await this.#api('/api/sessions', {

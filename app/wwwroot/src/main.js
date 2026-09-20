@@ -6,10 +6,10 @@
 //       ?reset=1 忽略本地存档冷启动
 
 import { Store } from './core.js';
-import { FixtureHost, MdoHost } from './wire.js?v=6';
+import { FixtureHost, MdoHost } from './wire.js?v=7';
 import { installScripts } from './fixture.js';
-import { mountApp } from './ui.js?v=29';
-import { applySettings, mountChrome, toast } from './chrome.js?v=41';
+import { mountApp } from './ui.js?v=30';
+import { applySettings, mountChrome, toast } from './chrome.js?v=42';
 import { t, loadLang } from './i18n.js?v=1';
 
 const params = new URLSearchParams(location.search);
@@ -252,7 +252,7 @@ window.__app.newSession = () => {
   s.lazy = true;
   store.select(s.id);
   store.notifier.markDirty();
-  import('./ui.js?v=29').then((m) => m.focusComposer());
+  import('./ui.js?v=30').then((m) => m.focusComposer());
 };
 window.__app.deleteSessionRemote = async (id) => {
   if (host.name !== 'mdo') return;
@@ -337,8 +337,8 @@ mountChrome(store, host, {
   details: document.getElementById('details-col'),
   hooks: {
     newSession: () => window.__app.newSession(),
-    openSettings: () => import('./chrome.js?v=41').then((m) => m.openSettings(store)),
-    openHelp: () => import('./chrome.js?v=41').then((m) => m.openHelp()),
+    openSettings: () => import('./chrome.js?v=42').then((m) => m.openSettings(store)),
+    openHelp: () => import('./chrome.js?v=42').then((m) => m.openHelp()),
   },
 });
 

@@ -10,9 +10,9 @@ import { t } from './i18n.js?v=1';
 import { icon, appIcon, stateDot } from './icons.js?v=5';
 import {
   isSettingsView, closeSettings,
-  toast, confirmModal, closeModal, promptModal, openSettings, openHelp,
+  toast, confirmModal, closeModal, promptModal, openSettings, openSettingsSection, openHelp,
   applySettings, exportSessionMarkdown, SLASH_COMMANDS, MOCK_FILES,
-} from './chrome.js?v=41';
+} from './chrome.js?v=42';
 
 const fmtClock = (t) => new Date(t).toTimeString().slice(0, 5);
 const fmtK = (n) => n >= 1000 ? (n / 1000).toFixed(1).replace(/\.0$/, '') + 'K' : String(n);
@@ -774,7 +774,8 @@ function renderHero(listEl, store, host) {
         chip(t('hero.q1'), t('hero.q1sub'), ask(t('hero.q1prompt'))),
         chip(t('hero.q2'), t('hero.q2sub'), ask(t('hero.q2prompt'))),
         chip(t('hero.q3'), t('hero.q3sub'), ask(t('hero.q3prompt'))),
-        chip(t('hero.q4'), t('hero.q4sub'), ask(t('hero.q4prompt'))))));
+        chip(t('hero.q4'), t('hero.q4sub'), ask(t('hero.q4prompt'))),
+        chip(t('hero.q5'), t('hero.q5sub'), () => openSettingsSection(store, '计划任务')))));
 }
 
 // ============ 总装 ============

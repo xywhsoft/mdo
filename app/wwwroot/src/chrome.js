@@ -596,6 +596,7 @@ const NAV_LABEL = {
   '项目管理': 'settings.nav.projects', '网络': 'settings.nav.network',
   '数据管理': 'settings.nav.data',
   '反馈': 'settings.nav.feedback',
+  '计划任务': 'settings.nav.schedules',
   '基础设置': 'settings.group.basic', '数据': 'settings.group.data',
 };
 export function openSettings(store) {
@@ -603,6 +604,12 @@ export function openSettings(store) {
   settingsState.prevCollapsed = frame ? frame.collapsed() : false;
   settingsState.active = true;
   if (frame) frame.expandSidebar();          // 设置导航需要宽度：强制展开
+  store.notifier.markDirty();
+}
+/** 直达指定设置节（hero 第五卡 → 计划任务） */
+export function openSettingsSection(store, sectionId) {
+  openSettings(store);
+  settingsState.section = sectionId;
   store.notifier.markDirty();
 }
 export function closeSettings(store) {
@@ -663,6 +670,7 @@ function stSection(store, id) {
         return ta;
       })()))];
   if (id === '反馈') return mdoFeedbackSection(store);
+  if (id === '计划任务') return mdoSchedulesSection(store);
   if (id === '数据管理') return [el('div', { class: 'st-card' },
     ST_ROW(t('settings.clearAll'), t('settings.clearAllDesc'),
       el('button', {
@@ -950,6 +958,211 @@ function mdoFeedbackSection(store) {
   return [card];
 }
 
+/* ============ 计划任务（闹钟）：任务列表 + 新建/编辑表单（API 五件已就绪） ============ */
+const CRON_PRESETS = [
+  ['0 9 * * *', 'sched.preset.daily9'],
+  ['0 9 * * 1-5', 'sched.preset.weekday9'],
+  ['0 9 * * 1', 'sched.preset.monday9'],
+  ['*/30 * * * *', 'sched.preset.every30'],
+];
+
+function schedText(s) {
+  if (s.kind === 'interval') return t('sched.everyMin', { n: s.intervalMin });
+  if (s.kind === 'once') return t('sched.onceIn', { n: s.delayMin });
+  const hit = CRON_PRESETS.find((p) => p[0] === s.cron);
+  return hit ? t(hit[1]) : t('sched.cronPrefix') + ' ' + s.cron;
+}
+
+function schedNextText(s) {
+  if (!s.enabled) return t('sched.paused');
+  if (!s.nextDue) return '';
+  const d = s.nextDue - Date.now();
+  if (d <= 0) return t('sched.dueNow');
+  const m = Math.round(d / 60000);
+  if (m < 60) return t('sched.inMin', { n: m });
+  const h = Math.round(m / 60);
+  if (h < 48) return t('sched.inHour', { n: h });
+  return t('sched.inDay', { n: Math.round(h / 24) });
+}
+
+function mdoSchedulesSection(store) {
+  const host = store.host;
+  if (host?.name !== 'mdo') {
+    return [el('div', { class: 'st-card' }, el('div', { class: 'st-row-desc' }, t('projects.offline')))];
+  }
+  const page = el('div', { class: 'mm-page' });
+  let items = [];
+  let projects = [];
+  let editing = null;
+  const form = { title: '', prompt: '', kind: 'once', delayMin: 10, intervalMin: 30, cron: '0 9 * * *', project: '', miss: 'skip' };
+
+  async function refresh() {
+    try {
+      items = await host.listSchedules();
+      if (!projects.length) {
+        const d = await host.listProjects().catch(() => null);
+        if (d?.projects) projects = d.projects;
+      }
+    } catch { /* 瞬断：保留旧表 */ }
+    render();
+  }
+
+  function taskCard(s) {
+    const badges = [];
+    if (s.running) badges.push(el('span', { class: 'mm-badge' }, t('sched.runningBadge')));
+    if (!s.enabled && !s.running) badges.push(el('span', { class: 'mm-badge warn' }, t('sched.paused')));
+    const titleRow = el('div', { class: 'pj-name' }, s.title, ...badges);
+    const info = el('div', { class: 'pj-info' },
+      titleRow,
+      el('div', { class: 'pj-path' }, schedText(s) + ' · ' + schedNextText(s)));
+    const metaBits = [t('sched.ranCount', { n: s.runCount })];
+    if (s.lastResult) metaBits.push(s.lastResult);
+    const meta = el('div', { class: 'st-row-desc sched-meta' }, metaBits.join(' — '));
+    const histBtn = (s.runs && s.runs.length)
+      ? el('button', { class: 'dsw-btn', onclick: () => showHistory(s) }, t('sched.history', { n: s.runs.length }))
+      : null;
+    const toggle = el('button', {
+      class: 'dsw-btn',
+      onclick: async () => { try { await host.updateSchedule({ id: s.id, enabled: !s.enabled }); refresh(); } catch (e) { toast(e.message); } },
+    }, s.enabled ? t('sched.pause') : t('sched.resume'));
+    const runBtn = el('button', {
+      class: 'dsw-btn',
+      onclick: async () => { try { await host.runSchedule(s.id); toast(t('sched.runNowOk')); refresh(); } catch (e) { toast(e.message); } },
+    }, t('sched.runNow'));
+    const editBtn = el('button', {
+      class: 'dsw-btn',
+      onclick: () => {
+        editing = s;
+        form.title = s.title; form.prompt = s.prompt; form.kind = s.kind;
+        form.delayMin = s.delayMin || 10; form.intervalMin = s.intervalMin || 30; form.cron = s.cron || '0 9 * * *';
+        form.project = s.project || ''; form.miss = s.miss || 'skip';
+        render();
+      },
+    }, t('act.edit'));
+    const delBtn = el('button', {
+      class: 'dsw-btn danger',
+      onclick: () => confirmModal({
+        title: t('sched.deleteTitle', { title: s.title }),
+        message: t('sched.deleteDesc'),
+        onOk: async () => {
+          try { await host.deleteSchedule(s.id); refresh(); } catch (e) { toast(e.message); }
+        },
+      }),
+    }, t('act.delete'));
+    const bar = el('div', { class: 'pj-bar' }, toggle, runBtn, histBtn, editBtn, delBtn);
+    return el('div', { class: 'pj-card' }, info, meta, bar);
+  }
+
+  function showHistory(s) {
+    const rows = (s.runs || []).slice().reverse().map((r) =>
+      el('div', { class: 'st-row' },
+        el('div', { class: 'st-row-text' },
+          el('div', { class: 'st-row-title' }, new Date(r.time).toLocaleString()),
+          el('div', { class: 'st-row-desc' }, r.sessionId)),
+        el('span', { class: 'mm-badge ' + (r.status === 'done' ? '' : 'warn') }, t('sched.st.' + r.status))));
+    openModal({
+      title: t('sched.historyTitle', { title: s.title }),
+      body: el('div', { class: 'st-card sched-hist' }, ...rows),
+    });
+  }
+
+  function formCard() {
+    const isEdit = !!editing;
+    const titleIn = el('input', { class: 'modal-input', placeholder: t('sched.titlePh') });
+    titleIn.value = form.title;
+    const promptTa = el('textarea', { class: 'modal-input', rows: '3', placeholder: t('sched.promptPh') });
+    promptTa.value = form.prompt;
+    const cronSel = el('select', { class: 'modal-input' });
+    for (const [c, key] of CRON_PRESETS) cronSel.append(el('option', { value: c }, t(key)));
+    cronSel.append(el('option', { value: 'custom' }, t('sched.preset.custom')));
+    cronSel.value = CRON_PRESETS.some((p) => p[0] === form.cron) ? form.cron : 'custom';
+    const cronIn = el('input', { class: 'modal-input', placeholder: '0 9 * * 1-5' });
+    cronIn.value = form.cron;
+    const cronCtl = el('div', { class: 'sched-cronrow' }, cronSel, cronIn);
+    const syncKind = () => {
+      cronCtl.style.display = form.kind === 'cron' ? '' : 'none';
+      cronRow.style.display = form.kind === 'cron' ? '' : 'none';
+      delayRow.style.display = form.kind === 'once' ? '' : 'none';
+      intRow.style.display = form.kind === 'interval' ? '' : 'none';
+    };
+    const delayIn = el('input', { class: 'modal-input', type: 'number', min: '1', max: '525600' });
+    delayIn.value = form.delayMin;
+    const intIn = el('input', { class: 'modal-input', type: 'number', min: '1', max: '525600' });
+    intIn.value = form.intervalMin;
+    const projSel = el('select', { class: 'modal-input' });
+    projSel.append(el('option', { value: '' }, t('sidebar.tasks')));
+    for (const p of projects) projSel.append(el('option', { value: p.slug }, p.name));
+    projSel.value = form.project;
+    const kindSeg = SEG([
+      ['once', t('sched.kind.once')],
+      ['interval', t('sched.kind.interval')],
+      ['cron', t('sched.kind.cron')],
+    ], form.kind, (v) => { form.kind = v; syncKind(); });
+    const missSeg = SEG([
+      ['skip', t('sched.miss.skip')],
+      ['catchup', t('sched.miss.catchup')],
+    ], form.miss, (v) => { form.miss = v; });
+    const delayRow = ST_ROW(t('sched.delayTitle'), t('sched.delayDesc'), delayIn);
+    const intRow = ST_ROW(t('sched.intervalTitle'), t('sched.intervalDesc'), intIn);
+    const cronRow = ST_ROW(t('sched.cronLabel'), t('sched.cronDesc'), cronCtl);
+    const saveBtn = el('button', {
+      class: 'dsw-btn primary',
+      onclick: async () => {
+        const payload = {
+          title: titleIn.value.trim(),
+          prompt: promptTa.value.trim(),
+          kind: form.kind,
+          miss: form.miss,
+          project: projSel.value,
+          cron: cronSel.value === 'custom' ? cronIn.value.trim() : cronSel.value,
+          delayMin: Math.max(0, parseInt(delayIn.value, 10) || 0),
+          intervalMin: Math.max(1, parseInt(intIn.value, 10) || 1),
+        };
+        if (!payload.title || !payload.prompt) { toast(t('sched.needTitlePrompt')); return; }
+        try {
+          if (isEdit) await host.updateSchedule({ id: editing.id, ...payload });
+          else await host.createSchedule(payload);
+          editing = null;
+          form.title = ''; form.prompt = '';
+          toast(isEdit ? t('sched.updated') : t('sched.created'));
+          refresh();
+        } catch (e) { toast(e.message); }
+      },
+    }, isEdit ? t('sched.saveEdit') : t('sched.create'));
+    const cancelBtn = isEdit
+      ? el('button', { class: 'dsw-btn', onclick: () => { editing = null; form.title = ''; form.prompt = ''; render(); } }, t('act.cancel'))
+      : null;
+    const card = el('div', { class: 'st-card pj-add' },
+      el('div', { class: 'mm-d-badges' }, el('span', { class: 'st-row-title' }, isEdit ? t('sched.editTitle', { title: editing.title }) : t('sched.newTitle'))),
+      ST_ROW(t('sched.titleLabel'), null, titleIn),
+      el('div', { class: 'st-row col' },
+        el('div', { class: 'st-row-title' }, t('sched.promptLabel')),
+        promptTa),
+      ST_ROW(t('sched.kindLabel'), t('sched.kindDesc'), kindSeg),
+      cronRow, delayRow, intRow,
+      ST_ROW(t('sched.projectLabel'), t('sched.projectDesc'), projSel),
+      ST_ROW(t('sched.missLabel'), t('sched.missDesc'), missSeg),
+      el('div', { class: 'pj-bar' }, saveBtn, cancelBtn));
+    syncKind();
+    return card;
+  }
+
+  function render() {
+    const head = el('div', { class: 'mm-head' },
+      el('div', { class: 'mm-head-text' },
+        el('div', { class: 'mm-head-title' }, t('sched.title')),
+        el('div', { class: 'mm-head-sub' }, t('sched.subtitle'))));
+    const listCard = items.length
+      ? el('div', { class: 'pj-list' }, ...items.map(taskCard))
+      : el('div', { class: 'st-card pj-add' }, el('div', { class: 'st-row-desc' }, t('sched.empty')));
+    page.replaceChildren(head, formCard(), listCard);
+  }
+
+  render();
+  refresh();
+  return [page];
+}
+
 function mdoProjectsSection(store) {
   const host = store.host;
   if (host?.name !== 'mdo') {
@@ -1069,6 +1282,7 @@ const ST_SECTIONS = [
     { id: '外观', icon: 'IconDarkOutline16' },
     { id: '常规', icon: 'IconSettingsOutline16' },
     { id: '网络', icon: 'IconSettingsOutline16' },
+    { id: '计划任务', icon: 'IconChecklistOutline16' },
     { id: '模型设置', icon: 'IconSparkle16' },
   ] },
   { group: '数据', items: [
@@ -1083,7 +1297,7 @@ function mountSettingsPage(root, store) {
   function render() {
     root.hidden = !settingsState.active;
     if (!settingsState.active) return;
-    root.replaceChildren(el('div', { class: 'st-wrap' + (settingsState.section === '模型管理' || settingsState.section === '项目管理' ? ' wide' : '') },
+    root.replaceChildren(el('div', { class: 'st-wrap' + (['模型管理', '项目管理', '计划任务'].includes(settingsState.section) ? ' wide' : '') },
       el('h1', { class: 'st-title' }, t(NAV_LABEL[settingsState.section] ?? settingsState.section, null, settingsState.section)),
       ...stSection(store, settingsState.section)));
   }
