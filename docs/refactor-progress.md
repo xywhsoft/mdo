@@ -7,7 +7,7 @@
 | 仓库 | 开发位置/分支 | 当前基线 | 说明 |
 | --- | --- | --- | --- |
 | mdo | `D:\GIT\mdo` / 当前分支 | `443e5e4f4a6b` | 产品、计划与集成账本 |
-| xrt | `codex/mdo-refactor-xrt` 独立工作树 | `83217171a9d7` | 原工作树有既存未提交内容，隔离开发 |
+| xrt | `codex/mdo-refactor-xrt` 独立工作树 | `5c0bd333ce5f` | 原工作树有既存未提交内容，隔离开发 |
 | xserver | 待阶段二建立 | `695988f7b8ee` | xrt 阶段门后开始 |
 
 ## 状态定义
@@ -27,6 +27,7 @@
 | XRT-101～105 native xfile backend | DONE | xrt `087a645c` | Windows 模块化/单头及全部直接 xfile 消费者通过；Linux 模块化/单头、ASan/UBSan/LSan 通过；dispatch 约 3.16 ns/op，native read-at 约 1.59 us/op | native 状态已抽离，全部文件操作经版本化 ops/capability 分派；非 native map/lock/async 明确拒绝；close-once、OOM 与性能基准已覆盖 |
 | XRT-201～207 VFS namespace/provider | DONE | xrt `029248ba` | Windows 模块化/单头、OOM、并发与重入通过；Linux 模块化/单头、ASan/UBSan/LSan、Clang TSan 通过；公开结构跨裁剪 ABI、API 文档、release maturity 与性能 smoke 通过 | 实现规范路径、不可变 mount snapshot、generation 生命周期、provider v1 ABI、普通 xfile/xdir 适配与目录合并；8 个 MISS mount 下 stat 约 384 ns/op、open/read/close 约 506 ns/op |
 | XRT-208 provider CaseMode 合同 | DONE | xrt `0a7b7a00` | Windows/Linux 模块化与单头、OOM、并发、公开 ABI 和文档检查通过 | Open、Stat、DirOpen 统一接收 mount 冻结的大小写策略，修复 prefix 与 provider 内相对路径语义不一致 |
+| XRT-209 VFS 原生文件打开能力 | DONE | xrt `5c0bd333` | Windows 模块化/单头、backend、OOM、并发和公开 ABI 通过；Linux GCC ASan/UBSan/LSan 模块化/单头及 Clang TSan 并发通过；API 文档、单头生成和 release maturity 通过 | 以兼容旧 v1 尺寸的尾扩展加入 OpenNative；原生 handle、map、lock 和 OS async 能力不再被 provider wrapper 降级，打开文件继续持有 generation |
 | XRT-301 memory provider | DONE | xrt `83217171` | Windows 模块化/单头、穷举 OOM、四线程压力通过；Linux ASan/UBSan/LSan 与 Clang TSan 通过；API 文档和 release maturity 通过 | 支持 copy/owned buffer、空文件、原子 seal、大小写双索引、目录派生、只读文件能力和独立 blob 生命周期；旧打开文件不受 unmount/namespace 销毁影响 |
 | XS-101～109 | TODO | - | - | XRT-GATE 后实施 |
 | LIB-0～3 | TODO | - | - | XS-GATE 后实施 |
@@ -41,11 +42,11 @@
 4. TCP/TLS Dial Future 的完成回调可能早于构造 API 返回；读取构造线程发布的 `Dial` 字段前必须先经过 `xrtFutureBridgeWait()` 的 acquire 边界。
 5. xllm 的 transport 状态机必须与 watchdog、取消和销毁串行化，连接指针不能在工作线程与调用线程之间裸读写。
 6. `xfile` backend 表采用 `Size + Version + Capabilities`；backend state 的所有权在创建入口转移，失败和正常关闭都必须恰好消费一次。
-7. file map、file lock、native handle 和 OS async 只对声明相应能力的 native backend 开放；普通 provider backend 返回 `XERR_UNSUPPORTED`。
+7. file map、file lock、native handle 和 OS async 只对声明相应能力的 native backend 开放；callback provider backend 返回 `XERR_UNSUPPORTED`，声明 `XVFS_PROVIDER_NATIVE_OPEN` 的 provider 直接转移原生 `xfile` 并保持这些能力。
 
 ## 下一步
 
-1. 实施 XRT-3：memory、disk、pack 标准 provider；
+1. 实施 XRT-3：disk、pack 标准 provider；
 2. 实施 XRT-4：overlay policy、观测、故障注入与模糊测试；
 3. 完成标准 provider 的模块化、单头、并发、OOM、sanitizer 和跨平台门禁；
 4. 在 mdo 集成节点执行打包版 100 次启动/退出回归，关闭 XRT-0；
