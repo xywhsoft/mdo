@@ -7,7 +7,7 @@
 | 仓库 | 开发位置/分支 | 当前基线 | 说明 |
 | --- | --- | --- | --- |
 | mdo | `D:\GIT\mdo` / 当前分支 | `443e5e4f4a6b` | 产品、计划与集成账本 |
-| xrt | `codex/mdo-refactor-xrt` 独立工作树 | `029248baf6f1` | 原工作树有既存未提交内容，隔离开发 |
+| xrt | `codex/mdo-refactor-xrt` 独立工作树 | `83217171a9d7` | 原工作树有既存未提交内容，隔离开发 |
 | xserver | 待阶段二建立 | `695988f7b8ee` | xrt 阶段门后开始 |
 
 ## 状态定义
@@ -26,6 +26,8 @@
 | XRT VFS RFC | DONE | xrt `d4ffb8a9` | API、路径、挂载顺序、snapshot/generation 生命周期、provider ABI、失败原子性与测试矩阵已冻结 | 阶段一设计合同 |
 | XRT-101～105 native xfile backend | DONE | xrt `087a645c` | Windows 模块化/单头及全部直接 xfile 消费者通过；Linux 模块化/单头、ASan/UBSan/LSan 通过；dispatch 约 3.16 ns/op，native read-at 约 1.59 us/op | native 状态已抽离，全部文件操作经版本化 ops/capability 分派；非 native map/lock/async 明确拒绝；close-once、OOM 与性能基准已覆盖 |
 | XRT-201～207 VFS namespace/provider | DONE | xrt `029248ba` | Windows 模块化/单头、OOM、并发与重入通过；Linux 模块化/单头、ASan/UBSan/LSan、Clang TSan 通过；公开结构跨裁剪 ABI、API 文档、release maturity 与性能 smoke 通过 | 实现规范路径、不可变 mount snapshot、generation 生命周期、provider v1 ABI、普通 xfile/xdir 适配与目录合并；8 个 MISS mount 下 stat 约 384 ns/op、open/read/close 约 506 ns/op |
+| XRT-208 provider CaseMode 合同 | DONE | xrt `0a7b7a00` | Windows/Linux 模块化与单头、OOM、并发、公开 ABI 和文档检查通过 | Open、Stat、DirOpen 统一接收 mount 冻结的大小写策略，修复 prefix 与 provider 内相对路径语义不一致 |
+| XRT-301 memory provider | DONE | xrt `83217171` | Windows 模块化/单头、穷举 OOM、四线程压力通过；Linux ASan/UBSan/LSan 与 Clang TSan 通过；API 文档和 release maturity 通过 | 支持 copy/owned buffer、空文件、原子 seal、大小写双索引、目录派生、只读文件能力和独立 blob 生命周期；旧打开文件不受 unmount/namespace 销毁影响 |
 | XS-101～109 | TODO | - | - | XRT-GATE 后实施 |
 | LIB-0～3 | TODO | - | - | XS-GATE 后实施 |
 | MDO-0～10 | TODO | - | - | LIB-GATE 后实施 |
