@@ -6,8 +6,8 @@
 
 | 仓库 | 开发位置/分支 | 当前基线 | 说明 |
 | --- | --- | --- | --- |
-| mdo | `D:\GIT\mdo` / 当前分支 | `37f95cf6c033` | 产品、计划与集成账本 |
-| xrt | `codex/mdo-refactor-xrt` 独立工作树 | `2a4f6811dfaa` | 原工作树有既存未提交内容，隔离开发 |
+| mdo | `D:\GIT\mdo` / 当前分支 | `443e5e4f4a6b` | 产品、计划与集成账本 |
+| xrt | `codex/mdo-refactor-xrt` 独立工作树 | `63ba83d6acca` | 原工作树有既存未提交内容，隔离开发 |
 | xserver | 待阶段二建立 | `695988f7b8ee` | xrt 阶段门后开始 |
 
 ## 状态定义
@@ -21,9 +21,9 @@
 
 | 工作包 | 状态 | 仓库提交 | 验证 | 说明 |
 | --- | --- | --- | --- | --- |
-| BASE-001 重构计划与旧 app 归档 | DONE | 本提交（`BASE-001`） | 31 个旧文件逐字节一致；文档结构、UTF-8、Git diff 检查通过 | 建立长期任务基线 |
-| XRT-0 Future 生命周期阻断 | DOING | 待提交 | 待建立定向竞态测试 | 当前发现 xllm 操作槽存在无锁竞争，需先形成可复现证据 |
-| XRT VFS RFC | DOING | 待提交 | 文档评审与 API 一致性检查 | 阶段一首批产物 |
+| BASE-001 重构计划与旧 app 归档 | DONE | `443e5e4` | 31 个旧文件逐字节一致；文档结构、UTF-8、Git diff 检查通过 | 建立长期任务基线 |
+| XRT-0 Future 生命周期阻断 | DOING | xrt `e94a5d9b`、`63ba83d6` | xrt TCP/TLS Dial Future 的 Windows 模块化、IOCP、单头轨通过；xllm Windows、Linux ASan、Linux TSan 完整通过 | 核心竞态与 xllm operation/transport 所有权已修复；打包版 100 次启动回归留在集成门执行 |
+| XRT VFS RFC | DONE | xrt `d4ffb8a9` | API、路径、挂载顺序、snapshot/generation 生命周期、provider ABI、失败原子性与测试矩阵已冻结 | 阶段一设计合同 |
 | XRT-101～105 native xfile backend | TODO | - | - | VFS RFC 冻结后实施 |
 | XS-101～109 | TODO | - | - | XRT-GATE 后实施 |
 | LIB-0～3 | TODO | - | - | XS-GATE 后实施 |
@@ -34,12 +34,14 @@
 
 1. 三库权威源码位于 `xrt/extlibs`，`xserver/lib` 是零分叉 vendored 副本。
 2. `xrtFutureWatchRemove()` 要求调用期间传入的 Future 仍然有效；对已经释放的指针在入口调用 `xrtFutureRef()` 不能恢复生命周期。
-3. 当前 xllm 的 `pOpFuture` 与 `pOpWatchNode` 在完成回调和 `xllmCallDestroy()` 之间无同步访问，正在为此建立回归测试与所有权修复。
+3. xllm 原有 `pOpFuture` 与 `pOpWatchNode` 的分离裸指针设计会在完成回调和 `xllmCallDestroy()` 之间形成 UAF；现已改成 slot/Watch 双引用 node，并用 `OpMutex` 管理发布与摘除。
+4. TCP/TLS Dial Future 的完成回调可能早于构造 API 返回；读取构造线程发布的 `Dial` 字段前必须先经过 `xrtFutureBridgeWait()` 的 acquire 边界。
+5. xllm 的 transport 状态机必须与 watchdog、取消和销毁串行化，连接指针不能在工作线程与调用线程之间裸读写。
 
 ## 下一步
 
-1. 提交 BASE-001；
-2. 建立隔离的 xrt 工作树；
-3. 完成 xllm Future/watch 竞态复现与修复；
-4. 完成 `xrt/docs/design/VFS.md`；
-5. 进入 xfile native backend 无行为变化重构。
+1. 实施 XRT-101～105，将现有 xfile 行为迁移为 native backend；
+2. 接入 namespace、mount table、disk/memory/pack provider；
+3. 完成 VFS 模块化、单头、并发、OOM 和跨平台门禁；
+4. 在 mdo 集成节点执行打包版 100 次启动/退出回归，关闭 XRT-0；
+5. 通过 XRT-GATE 后建立隔离的 xserver 阶段分支。
