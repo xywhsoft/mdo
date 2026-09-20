@@ -7,7 +7,7 @@
 | 仓库 | 开发位置/分支 | 当前基线 | 说明 |
 | --- | --- | --- | --- |
 | mdo | `D:\GIT\mdo` / 当前分支 | `56f1fbb48a59` | 产品、计划与集成账本 |
-| xrt | `codex/mdo-refactor-xrt` 独立工作树 | `2c3e9914a4d3` | 原工作树有既存未提交内容，隔离开发 |
+| xrt | `codex/mdo-refactor-xrt` 独立工作树 | `604f754432c6` | 原工作树有既存未提交内容，隔离开发 |
 | xserver | 待阶段二建立 | `695988f7b8ee` | xrt 阶段门后开始 |
 
 ## 状态定义
@@ -32,6 +32,7 @@
 | XRT-211 根内精确无链接解析 | DONE | xrt `0233e4db` | Windows 模块化/单头、完整 root 回归与逐分配点 OOM 通过；Linux 新增 policy 模块化/单头 ASan/UBSan/LSan 通过；公开 ABI、API 文档、单头生成和 release maturity 通过 | 公共 root 行为保持兼容；内部策略逐 segment 以锚定目录枚举确认精确名称、探测创建时的大小写别名，并在重写前拒绝符号链接/reparse point，为 disk provider 提供统一安全底座 |
 | XRT-301 memory provider | DONE | xrt `83217171` | Windows 模块化/单头、穷举 OOM、四线程压力通过；Linux ASan/UBSan/LSan 与 Clang TSan 通过；API 文档和 release maturity 通过 | 支持 copy/owned buffer、空文件、原子 seal、大小写双索引、目录派生、只读文件能力和独立 blob 生命周期；旧打开文件不受 unmount/namespace 销毁影响 |
 | XRT-302 disk provider | DONE | xrt `2c3e9914` | Windows 模块化/单头、穷举 OOM、四线程压力通过；Linux 原生文件系统上的模块化/单头 ASan/UBSan/LSan、OOM 与 Clang TSan 通过；公开 ABI、API 文档、单头生成和 release maturity 通过 | 以 `xroot` 锚定物理根并冻结读写授权；逐 segment 处理敏感/ASCII 折叠查找，拒绝折叠冲突、链接/reparse point 和特殊文件；保留原生文件能力与 generation 生命周期；目录改名后仍可访问；修复 Windows 复制目录句柄共享枚举游标导致的并发失败 |
+| XRT-303A pack 格式与所有权合同 | DONE | xrt `604f7544` | `git diff --check` 与设计文档复核通过 | 冻结范围内相对偏移的新格式、严格 `XSVPACK` v1 迁移解析、解析预算、缓存状态机与统计；Create 成功接管任意 ReadAt source，失败保留调用方所有权 |
 | XS-101～109 | TODO | - | - | XRT-GATE 后实施 |
 | LIB-0～3 | TODO | - | - | XS-GATE 后实施 |
 | MDO-0～10 | TODO | - | - | LIB-GATE 后实施 |
@@ -47,11 +48,13 @@
 6. `xfile` backend 表采用 `Size + Version + Capabilities`；backend state 的所有权在创建入口转移，失败和正常关闭都必须恰好消费一次。
 7. file map、file lock、native handle 和 OS async 只对声明相应能力的 native backend 开放；callback provider backend 返回 `XERR_UNSUPPORTED`，声明 `XVFS_PROVIDER_NATIVE_OPEN` 的 provider 直接转移原生 `xfile` 并保持这些能力。
 8. Windows `DuplicateHandle` 复制目录句柄时共享 `NtQueryDirectoryFile` 的枚举游标；并发根目录枚举必须以空相对名重新打开独立 file object。POSIX 的 disk open 必须在 `fstat` 验证普通文件前使用 `O_NONBLOCK`，避免末级文件被竞态替换为 FIFO 后阻塞。
+9. `xfile` 没有可公开增加的共享引用；pack provider 对任意 backend 的正确所有权语义是 Create 成功时接管 Source、失败时由调用方继续持有，而不是只对原生文件复制平台句柄。
 
 ## 下一步
 
-1. 实施 XRT-303 pack 标准 provider；
-2. 实施 XRT-4：overlay policy、观测、故障注入与模糊测试；
-3. 完成标准 provider 的模块化、单头、并发、OOM、sanitizer 和跨平台门禁；
-4. 在 mdo 集成节点执行打包版 100 次启动/退出回归，关闭 XRT-0；
-5. 通过 XRT-GATE 后建立隔离的 xserver 阶段分支。
+1. 实施 XRT-303B pack parser、只读文件与目录 provider；
+2. 实施 XRT-303C LZMA 解码、并发缓存、预算与统计；
+3. 实施 XRT-4：overlay policy、观测、故障注入与模糊测试；
+4. 完成标准 provider 的模块化、单头、并发、OOM、sanitizer 和跨平台门禁；
+5. 在 mdo 集成节点执行打包版 100 次启动/退出回归，关闭 XRT-0；
+6. 通过 XRT-GATE 后建立隔离的 xserver 阶段分支。
