@@ -226,7 +226,10 @@ export class Store {
     const ev = s.log.append(type, data, extra);
     s.assembler.apply(ev);
     s.updatedAt = ev.time;
-    if (type === 'session/running' && data.value === false) s.turns++;
+    if (type === 'session/running') {
+      s.running = data.value !== false;
+      if (data.value === false) s.turns++;
+    }
     this.notifier.markFrameDirty();
     return ev;
   }

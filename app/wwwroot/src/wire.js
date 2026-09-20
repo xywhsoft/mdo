@@ -126,6 +126,8 @@ export class XsHttpHost {
       body: JSON.stringify({ sessionId, text }),
     });
     if (!data.ok) throw new Error(data.error ?? 'prompt failed');
+    const s = this.store.sessions.get(sessionId);
+    if (s) s.running = true;
     this.#turns.set(sessionId, { turnId: data.turnId, since: 0, done: false });
     this.#startPolling();
   }
@@ -445,6 +447,8 @@ export class MdoHost {
   }
   /** D2：刷新恢复——接管服务端仍在跑的回合（水合时已知 turnId 与已见 seq） */
   resumeTurn(sessionId, turnId, since) {
+    const s = this.store.sessions.get(sessionId);
+    if (s) s.running = true;
     this.#turns.set(sessionId, { turnId, since: since || 0, done: false });
     this.#startPolling();
   }
@@ -553,6 +557,8 @@ export class MdoHost {
         }
         if (data.done) {
           entry.done = true;
+          const s = this.store.sessions.get(sessionId);
+          if (s) s.running = false;
           this.clearCancel(sessionId);
         }
       } catch { /* 网络瞬断：下一轮再试 */ }

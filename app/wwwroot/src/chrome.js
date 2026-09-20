@@ -414,9 +414,29 @@ function mountSidebar(root, store, frame, hooks) {
           .sort((a, b) => (b.updatedAt ?? 0) - (a.updatedAt ?? 0))
           .map((x) => ({
             id: x.id, title: x.title, modelId: x.model, updatedAt: x.updatedAt,
-            running: !!x.running, done: false, active: false,
+            running: !!x.running, done: false,
+            active: x.id === store.selectedId && store.sessions.has(x.id),
             onclick: () => window.__app.openSessionInProject?.(pj.slug, x.id),
-            acts: null,
+            acts: [
+              el('button', { class: 'icon-btn s-act', 'data-tip': t('sidebar.pin'), onclick: (e) => {
+                e.stopPropagation();
+                window.__app.pinSessionRemote?.(x.id, !x.pinned);   // 传目标值
+                x.pinned = !x.pinned;
+                setTimeout(() => window.__app.refreshAllSessions?.(), 300);
+              } }, icon('IconPinTop14', { size: 14 })),
+              el('button', { class: 'icon-btn s-act danger', 'data-tip': t('sidebar.delSession'), onclick: (e) => {
+                e.stopPropagation();
+                confirmModal({
+                  title: t('sidebar.delSession'), message: t('session.delBody', { title: x.title }),
+                  onOk: async () => {
+                    try { await window.__app.deleteSessionRemote?.(x.id); } catch (err) { /* 桶内不存在 */ }
+                    store.removeSession(x.id);
+                    window.__app.refreshAllSessions?.();
+                    toast(t('session.deleted'));
+                  },
+                });
+              } }, icon('IconTrashOutline16', { size: 14 })),
+            ],
           }));
       }
       groups.push({ pj, isActive, items });
