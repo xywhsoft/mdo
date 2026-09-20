@@ -71,6 +71,10 @@ typedef struct MdoRun {
 	char* sPrompt;          /* 拥有 */
 	char aModelId[64];
 	MdoModel* pModel;       /* 借用（客户端已就绪） */
+	MdoProject* pProj;      /* 借用：工作区/快照桶归属（NULL=活动项目；计划任务=绑定项目） */
+	bool bHeadless;         /* 计划任务触发：无人在场——只读工具面 + 审批自动放行 */
+	bool bHeadlessOk;       /* headless 回合终态（finish 时回写计划任务） */
+	char aHeadlessResult[240];  /* 末条助手消息剪辑（计划任务列表展示用） */
 
 	/* 工具耗时表（callId → 开始 ms；仅回合线程访问） */
 	struct { char aId[64]; uint64 uStartMs; } aTools[64];
@@ -116,6 +120,9 @@ typedef struct MdoRun {
 static MdoRun* g_runs[MDO_MAX_RUNS];
 static size_t g_nRuns = 0;
 static uint64 g_uTurnSeq = 0;
+
+/* mdo_sched.h 后置定义：headless 回合终态回写计划任务 */
+static void MdoSchedNotifyRunEnd(const char* sSessionId, bool bOk, const char* sResult);
 
 static void MdoRunFreeShallow(MdoRun* pRun);
 
@@ -625,6 +632,8 @@ static xwork_permission_decision MdoOnPermission(void* pUserData,
 	const char* sArgs = pRequest->sArgumentsJson ? pRequest->sArgumentsJson : "";
 	if ( pRequest->sToolName != NULL && strcmp(pRequest->sToolName, "ask_user") == 0 )
 		return XWORK_PERMISSION_ALLOW;   /* ask_user 自身即与用户交互，不二次审批 */
+	if ( pRun->bHeadless )
+		return XWORK_PERMISSION_ALLOW;   /* 无人在场：注册面已限只读，审批无人应答 */
 
 	snprintf(aId, sizeof(aId), "ap%u", ++pRun->uApSeq);
 	snprintf(aTitle, sizeof(aTitle), "%s%s%s",
@@ -675,13 +684,22 @@ static xwork_permission_decision MdoOnPermission(void* pUserData,
  * 资源释放由 MdoRunRelease 在最后一个引用持有者处统一执行。 */
 static void MdoRunFinish(MdoRun* pRun)
 {
+	char aSessId[24];
+	snprintf(aSessId, sizeof(aSessId), "%s", pRun->pSess ? pRun->pSess->aId : "");
+
 	xrtMutexLock(g_lock);
 	if ( pRun->pSess != NULL ) pRun->pSess->pRun = NULL;
 	xrtMutexUnlock(g_lock);
 
 	xrtMutexLock(pRun->pQ->pLock);
 	pRun->pQ->bDone = true;
+	/* headless 无前端轮询：直接置已排空，让满表回收可 reclaim */
+	if ( pRun->bHeadless ) pRun->bDrained = true;
 	xrtMutexUnlock(pRun->pQ->pLock);
+
+	/* 计划任务回写（定义在 mdo_sched.h，含任务状态/结果剪辑/会话摘表） */
+	if ( pRun->bHeadless && aSessId[0] )
+		MdoSchedNotifyRunEnd(aSessId, pRun->bHeadlessOk, pRun->aHeadlessResult);
 }
 
 static int32 MdoRunThread(void* pArg)
@@ -704,7 +722,7 @@ static int32 MdoRunThread(void* pArg)
 
 	xllmErrorInit(&tErr);
 	xllmRunSummaryUnit(&tSummary);
-	pProj = MdoActiveProject();
+	pProj = pRun->pProj != NULL ? pRun->pProj : MdoActiveProject();
 
 	MdoEmitRunning(pRun, true);
 
@@ -734,7 +752,13 @@ static int32 MdoRunThread(void* pArg)
 	tCfg.pPermissionUserData = pRun;
 	tCfg.OnEvent = MdoOnXworkEvent;
 	tCfg.pEventUserData = pRun;
-	tCfg.bRegisterBuiltinTools = true;
+	if ( pRun->bHeadless ) {
+		/* 无人在场（计划任务）：不注册写/进程工具面，创建后另挂只读件——
+		 * 模型看到的是「工具不存在」而非「被拒绝」，小模型更不易卡死 */
+		tCfg.bRegisterBuiltinTools = false;
+	} else {
+		tCfg.bRegisterBuiltinTools = true;
+	}
 	/* 工具输出内联截断线 = 动态预算（与会话拒绝线同源：预算+1KB），大结果落 artifact 续读 */
 	tCfg.iMaxInlineToolBytes = (size_t)MdoToolBudgetBytes(pSess->uContextWindow);
 	/* 探索三件（ls/glob/grep 进程内实现）：不依赖外部程序 */
@@ -745,10 +769,15 @@ static int32 MdoRunThread(void* pArg)
 	tCfg.bRegisterPythonTool = false;
 	tCfg.eEolPolicy = XWORK_EOL_AUTO;
 	pAgent = xworkAgentCreate(&tCfg, &tWErr);
+	if ( pAgent != NULL && pRun->bHeadless &&
+	     !xworkAgentRegisterBuiltinReadOnlyTools(pAgent, &tWErr) ) {
+		xworkAgentDestroy(pAgent);       /* 只读面是 headless 的全部工具，挂载失败=会话失败 */
+		pAgent = NULL;
+	}
 	if ( pAgent != NULL && !MdoWebRegisterTools(pAgent, &tWErr) )
 		{ xworkErrorInit(&tWErr); }   /* 搜索三件注册失败不阻断会话（非核心件） */
-	if ( pAgent != NULL && !MdoAskRegisterTool(pAgent, pRun, &tWErr) )
-		{ xworkErrorInit(&tWErr); }   /* ask_user 注册失败不阻断会话 */
+	if ( pAgent != NULL && !pRun->bHeadless && !MdoAskRegisterTool(pAgent, pRun, &tWErr) )
+		{ xworkErrorInit(&tWErr); }   /* ask_user 注册失败不阻断会话（headless 不注册） */
 	bBound = pAgent != NULL && xworkExecutorBind(&tExec, pAgent, &tWErr);
 	if ( bBound ) xworkAgentRunBegin(pAgent, &tWErr), bBound = (tWErr.eCode == 0 ||
 		tWErr.sMessage[0] == 0);
@@ -847,6 +876,14 @@ static int32 MdoRunThread(void* pArg)
 			(pRun->sReasonBuf && pRun->iReasonLen > 0) ? pRun->sReasonBuf : "",
 			&tSummary.tLastUsage };
 		MdoEmitFn(pRun, "assistant/message", MdoWriteFinalMessage, &tFin);
+		if ( pRun->bHeadless ) {
+			/* 计划任务：记录终态与结果剪辑（MdoRunFinish 回写任务表） */
+			const char* sFinal = tSummary.sFinalText ? tSummary.sFinalText : "";
+			size_t nClip = Utf8Clip(sFinal, strlen(sFinal), sizeof(pRun->aHeadlessResult) - 1);
+			memcpy(pRun->aHeadlessResult, sFinal, nClip);
+			pRun->aHeadlessResult[nClip] = 0;
+			pRun->bHeadlessOk = true;
+		}
 		{
 			xllm_session_stats tStats2;
 			if ( xllmSessionGetStats(pSess->pSession, &tStats2) ) {
@@ -929,7 +966,8 @@ static void MdoRunFreeShallow(MdoRun* pRun)
 }
 
 static uint64 MdoRunStart(MdoSession* pSess, const char* sPrompt,
-	MdoModel* pModel, const MdoImage* aImages, size_t nImages,
+	MdoModel* pModel, MdoProject* pProj, bool bHeadless,
+	const MdoImage* aImages, size_t nImages,
 	char* pErrOut, size_t iErrCap)
 {
 	MdoRun* pRun;
@@ -986,6 +1024,8 @@ static uint64 MdoRunStart(MdoSession* pSess, const char* sPrompt,
 	pRun->uRefs = 1;        /* 表引用 */
 	pRun->pSess = pSess;
 	pRun->pModel = pModel;
+	pRun->pProj = pProj;
+	pRun->bHeadless = bHeadless;
 	snprintf(pRun->aModelId, sizeof(pRun->aModelId), "%s", pModel->aId);
 	/* 多模态附件深拷贝（dataUrl + 解码字节都归 run） */
 	for ( i = 0; i < nImages && i < MDO_MAX_IMAGES; i++ ) {

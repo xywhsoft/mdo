@@ -40,6 +40,7 @@
 #include "mdo_web.h"
 #include "mdo_store.h"
 #include "mdo_engine.h"
+#include "mdo_sched.h"
 
 /* ================================================================== */
 /* 工作区文件枚举（@ 补全数据源；Codex 式相对路径列表）                    */
@@ -137,10 +138,9 @@ static void MdoWsWalkDir(MdoWsWalk* pW, const char* sAbsDir, char* sRel,
 /* 会话的 xllm 载入（惰性 Recover；含模型客户端绑定）                      */
 /* ================================================================== */
 
-static bool MdoSessionEnsure(MdoSession* pSess, MdoModel* pModel, char* pErr, size_t iCap)
+static bool MdoSessionEnsure(MdoSession* pSess, MdoProject* pProj, MdoModel* pModel, char* pErr, size_t iCap)
 {
 	xllm_error tErr;
-	MdoProject* pProj;
 	char aJournal[380], aSnap[380];
 
 	if ( pSess->bLoaded && pSess->pSession != NULL ) {
@@ -149,7 +149,7 @@ static bool MdoSessionEnsure(MdoSession* pSess, MdoModel* pModel, char* pErr, si
 	}
 
 	xllmErrorInit(&tErr);
-	pProj = MdoActiveProject();   /* 任务态为 NULL：路径落到 _tasks 桶 */
+	if ( pProj == NULL ) pProj = MdoActiveProject();   /* 任务态为 NULL：路径落到 _tasks 桶 */
 	MdoSessionPaths(pProj, pSess->aId, NULL, 0, aJournal, sizeof(aJournal),
 		aSnap, sizeof(aSnap), NULL, 0);
 	{
@@ -739,6 +739,242 @@ int RequestProc(XS_HttpReq* pReq)
 			: (ReplyErr(pReq, 404, "model not found") ? XS_OK : XS_OK);
 	}
 
+	/* ---------------- 计划任务（闹钟） ---------------- */
+	if ( strcmp(aSeg[0], "schedules") == 0 && aSeg[1] == NULL ) {
+		if ( MDO_METHOD(GET) ) {
+			xjsonwriter* pW = JWOpen();
+			char* sJson = NULL;
+			if ( pW != NULL ) {
+				size_t i, k;
+				xrtJsonWriterObject(pW);
+				JWName(pW, "ok"); JWBool(pW, true);
+				JWName(pW, "schedules");
+				xrtJsonWriterArray(pW);
+				xrtMutexLock(g_schedLock);
+				for ( i = 0u; i < g_nScheds; i++ ) {
+					const MdoSchedule* pT = g_scheds[i];
+					xrtJsonWriterObject(pW);
+					JWName(pW, "id"); JWStr(pW, pT->aId);
+					JWName(pW, "title"); JWStr(pW, pT->aTitle);
+					JWName(pW, "prompt"); JWStr(pW, pT->aPrompt);
+					JWName(pW, "project"); JWStr(pW, pT->aProject);
+					JWName(pW, "model"); JWStr(pW, pT->aModel);
+					JWName(pW, "kind"); JWStr(pW, pT->aKind);
+					JWName(pW, "cron"); JWStr(pW, pT->aCron);
+					JWName(pW, "intervalMin"); xrtJsonWriterUInt(pW, pT->uIntervalMin);
+					JWName(pW, "delayMin"); xrtJsonWriterUInt(pW, pT->uDelayMin);
+					JWName(pW, "miss"); JWStr(pW, pT->aMiss);
+					JWName(pW, "enabled"); JWBool(pW, pT->bEnabled);
+					JWName(pW, "maxRuns"); xrtJsonWriterUInt(pW, pT->uMaxRuns);
+					JWName(pW, "created"); xrtJsonWriterUInt(pW, pT->uCreated);
+					JWName(pW, "lastRun"); xrtJsonWriterUInt(pW, pT->uLastRun);
+					JWName(pW, "nextDue"); xrtJsonWriterUInt(pW, pT->uNextDue);
+					JWName(pW, "runCount"); xrtJsonWriterUInt(pW, pT->uRunCount);
+					JWName(pW, "lastResult"); JWStr(pW, pT->aLastResult);
+					JWName(pW, "running"); JWBool(pW, pT->bRunning);
+					JWName(pW, "runs");
+					xrtJsonWriterArray(pW);
+					for ( k = 0u; k < pT->nRuns; k++ ) {
+						xrtJsonWriterObject(pW);
+						JWName(pW, "sessionId"); JWStr(pW, pT->aRuns[k].aSessionId);
+						JWName(pW, "time"); xrtJsonWriterUInt(pW, pT->aRuns[k].uTime);
+						JWName(pW, "status"); JWStr(pW, pT->aRuns[k].aStatus);
+						xrtJsonWriterEnd(pW);
+					}
+					xrtJsonWriterEnd(pW);
+					xrtJsonWriterEnd(pW);
+				}
+				xrtMutexUnlock(g_schedLock);
+				xrtJsonWriterEnd(pW);
+				xrtJsonWriterEnd(pW);
+				sJson = JWTake(pW);
+			}
+			if ( sJson == NULL )
+				return ReplyErr(pReq, 500, "encode failed") ? XS_OK : XS_OK;
+			{
+				bool bOk = ReplyJSON(pReq, 200, sJson);
+				xrtFree(sJson);
+				return bOk ? XS_OK : XS_OK;
+			}
+		}
+		if ( MDO_METHOD(POST) ) {
+			MdoSchedule* pT;
+			char aKind[12] = "", aCron[64] = "", aMiss[12] = "";
+
+			NEED_BODY();
+			if ( g_nScheds >= MDO_SCHED_MAX ) { BODY_DONE();
+				return ReplyErr(pReq, 400, "schedule limit reached") ? XS_OK : XS_OK; }
+			JStr(&tJ, "kind", aKind, sizeof(aKind));
+			JStr(&tJ, "cron", aCron, sizeof(aCron));
+			JStr(&tJ, "miss", aMiss, sizeof(aMiss));
+			if ( aKind[0] == 0 ) snprintf(aKind, sizeof(aKind), "once");
+			if ( strcmp(aKind, "cron") != 0 && strcmp(aKind, "interval") != 0 &&
+			     strcmp(aKind, "once") != 0 ) { BODY_DONE();
+				return ReplyErr(pReq, 400, "kind must be cron|interval|once") ? XS_OK : XS_OK; }
+			if ( strcmp(aKind, "cron") == 0 && aCron[0] == 0 ) { BODY_DONE();
+				return ReplyErr(pReq, 400, "cron schedule requires a cron expression") ? XS_OK : XS_OK; }
+			pT = (MdoSchedule*)xrtRealloc(NULL, sizeof(MdoSchedule));
+			if ( pT == NULL ) { BODY_DONE();
+				return ReplyErr(pReq, 500, "oom") ? XS_OK : XS_OK; }
+			memset(pT, 0, sizeof(*pT));
+			snprintf(pT->aId, sizeof(pT->aId), "sc%08x%04x",
+				(unsigned)(MdoNowMs() & 0xFFFFFFFFu), (unsigned)(MdoRandHex() & 0xFFFFu));
+			JStr(&tJ, "title", pT->aTitle, sizeof(pT->aTitle));
+			JStr(&tJ, "prompt", pT->aPrompt, sizeof(pT->aPrompt));
+			JStr(&tJ, "project", pT->aProject, sizeof(pT->aProject));
+			JStr(&tJ, "model", pT->aModel, sizeof(pT->aModel));
+			snprintf(pT->aKind, sizeof(pT->aKind), "%s", aKind);
+			snprintf(pT->aCron, sizeof(pT->aCron), "%s", aCron);
+			pT->uIntervalMin = (uint32)JInt(&tJ, "intervalMin", 0);
+			pT->uDelayMin = (uint32)JInt(&tJ, "delayMin", 0);
+			snprintf(pT->aMiss, sizeof(pT->aMiss), "%s",
+				(aMiss[0] != 0 && strcmp(aMiss, "catchup") == 0) ? "catchup" : "skip");
+			{
+				xvalue* pV = xrtValueObjectGet(tJ.pRoot, xrtStrView("enabled"));
+				bool b = true;
+				pT->bEnabled = (pV == NULL || !xrtValueGetBool(pV, &b)) ? true : b;
+			}
+			pT->uMaxRuns = (uint32)JInt(&tJ, "maxRuns", 0);
+			pT->uCreated = MdoNowMs();
+			if ( pT->aTitle[0] == 0 || pT->aPrompt[0] == 0 ) {
+				xrtFree(pT); BODY_DONE();
+				return ReplyErr(pReq, 400, "missing title/prompt") ? XS_OK : XS_OK;
+			}
+			if ( strcmp(aKind, "interval") == 0 && pT->uIntervalMin == 0 ) {
+				xrtFree(pT); BODY_DONE();
+				return ReplyErr(pReq, 400, "interval schedule requires intervalMin >= 1") ? XS_OK : XS_OK;
+			}
+			{
+				uint64 uNow = MdoNowMs();
+				if ( strcmp(aKind, "cron") == 0 ) {
+					if ( !MdoSchedCronNext(pT->aCron, uNow, &pT->uNextDue) ) {
+						xrtFree(pT); BODY_DONE();
+						return ReplyErr(pReq, 400, "cron expression has no future match") ? XS_OK : XS_OK;
+					}
+				} else if ( strcmp(aKind, "interval") == 0 ) {
+					pT->uNextDue = uNow + (uint64)pT->uIntervalMin * 60000u;
+				} else {
+					pT->uNextDue = uNow + (uint64)pT->uDelayMin * 60000u;
+				}
+			}
+			BODY_DONE();
+			xrtMutexLock(g_schedLock);
+			g_scheds[g_nScheds++] = pT;
+			MdoSchedSaveLocked(pT);
+			xrtMutexUnlock(g_schedLock);
+			MdoSchedWake();
+			MdoAuditLog("schedule-created", pT->aId);
+			{
+				char aOut[96];
+				snprintf(aOut, sizeof(aOut), "{\"ok\":true,\"id\":\"%s\"}", pT->aId);
+				return ReplyJSON(pReq, 200, aOut) ? XS_OK : XS_OK;
+			}
+		}
+	}
+
+	/* ---- POST /api/schedules/<update|delete|run> {id, ...} ---- */
+	if ( strcmp(aSeg[0], "schedules") == 0 && aSeg[1] != NULL &&
+	     (strcmp(aSeg[1], "update") == 0 || strcmp(aSeg[1], "delete") == 0 ||
+	      strcmp(aSeg[1], "run") == 0) ) {
+		char aId[24];
+		MdoSchedule* pT;
+
+		NEED_BODY();
+		JStr(&tJ, "id", aId, sizeof(aId));
+		if ( aId[0] == 0 ) { BODY_DONE();
+			return ReplyErr(pReq, 400, "missing id") ? XS_OK : XS_OK; }
+		xrtMutexLock(g_schedLock);
+		pT = MdoSchedFindLocked(aId);
+		if ( pT == NULL ) { xrtMutexUnlock(g_schedLock); BODY_DONE();
+			return ReplyErr(pReq, 404, "schedule not found") ? XS_OK : XS_OK; }
+		if ( strcmp(aSeg[1], "delete") == 0 ) {
+			size_t i;
+			char aPath[420], aDetail[64];
+			if ( pT->bRunning ) { xrtMutexUnlock(g_schedLock); BODY_DONE();
+				return ReplyErr(pReq, 409, "schedule is running") ? XS_OK : XS_OK; }
+			for ( i = 0u; i < g_nScheds; i++ )
+				if ( g_scheds[i] == pT ) {
+					memmove(&g_scheds[i], &g_scheds[i + 1],
+						(g_nScheds - i - 1u) * sizeof(MdoSchedule*));
+					g_nScheds--;
+					break;
+				}
+			xrtMutexUnlock(g_schedLock);
+			BODY_DONE();
+			MdoSchedPath(pT, aPath, sizeof(aPath));
+			MdoTrashFile(aPath, "schedule-delete");
+			snprintf(aDetail, sizeof(aDetail), "%s", pT->aId);
+			xrtFree(pT);
+			MdoAuditLog("schedule-deleted", aDetail);
+			MdoSchedWake();
+			return ReplyJSON(pReq, 200, "{\"ok\":true}") ? XS_OK : XS_OK;
+		}
+		if ( strcmp(aSeg[1], "run") == 0 ) {
+			pT->uNextDue = MdoNowMs();
+			MdoSchedSaveLocked(pT);
+			xrtMutexUnlock(g_schedLock);
+			BODY_DONE();
+			MdoAuditLog("schedule-run-now", pT->aId);
+			MdoSchedWake();
+			return ReplyJSON(pReq, 200, "{\"ok\":true}") ? XS_OK : XS_OK;
+		}
+		/* update */
+		{
+			char aTitle[120], aPrompt[4000], aProject[80], aModel[64];
+			char aKind[12], aCron[64], aMiss[12];
+			bool bChanged = false, bScheduleChanged = false;
+			if ( JStr(&tJ, "title", aTitle, sizeof(aTitle)) && strcmp(aTitle, pT->aTitle) != 0 )
+				{ snprintf(pT->aTitle, sizeof(pT->aTitle), "%s", aTitle); bChanged = true; }
+			if ( JStr(&tJ, "prompt", aPrompt, sizeof(aPrompt)) && strcmp(aPrompt, pT->aPrompt) != 0 )
+				{ snprintf(pT->aPrompt, sizeof(pT->aPrompt), "%s", aPrompt); bChanged = true; }
+			if ( JStr(&tJ, "project", aProject, sizeof(aProject)) && strcmp(aProject, pT->aProject) != 0 )
+				{ snprintf(pT->aProject, sizeof(pT->aProject), "%s", aProject); bChanged = true; }
+			if ( JStr(&tJ, "model", aModel, sizeof(aModel)) && strcmp(aModel, pT->aModel) != 0 )
+				{ snprintf(pT->aModel, sizeof(pT->aModel), "%s", aModel); bChanged = true; }
+			if ( JStr(&tJ, "kind", aKind, sizeof(aKind)) && strcmp(aKind, pT->aKind) != 0 )
+				{ snprintf(pT->aKind, sizeof(pT->aKind), "%s", aKind); bChanged = bScheduleChanged = true; }
+			if ( JStr(&tJ, "cron", aCron, sizeof(aCron)) && strcmp(aCron, pT->aCron) != 0 )
+				{ snprintf(pT->aCron, sizeof(pT->aCron), "%s", aCron); bChanged = bScheduleChanged = true; }
+			if ( JStr(&tJ, "miss", aMiss, sizeof(aMiss)) && strcmp(aMiss, pT->aMiss) != 0 )
+				{ snprintf(pT->aMiss, sizeof(pT->aMiss), "%s", aMiss); bChanged = true; }
+			{
+				uint32 uInterval = (uint32)JInt(&tJ, "intervalMin", (int64)pT->uIntervalMin);
+				uint32 uDelay = (uint32)JInt(&tJ, "delayMin", (int64)pT->uDelayMin);
+				uint32 uMax = (uint32)JInt(&tJ, "maxRuns", (int64)pT->uMaxRuns);
+				if ( uInterval != pT->uIntervalMin ) { pT->uIntervalMin = uInterval; bChanged = bScheduleChanged = true; }
+				if ( uDelay != pT->uDelayMin ) { pT->uDelayMin = uDelay; bChanged = bScheduleChanged = true; }
+				if ( uMax != pT->uMaxRuns ) { pT->uMaxRuns = uMax; bChanged = true; }
+			}
+			{
+				xvalue* pV = xrtValueObjectGet(tJ.pRoot, xrtStrView("enabled"));
+				bool b = false;
+				if ( pV != NULL && xrtValueGetBool(pV, &b) && b != pT->bEnabled ) {
+					pT->bEnabled = b;
+					bChanged = bScheduleChanged = true;   /* 重新启用需重算 nextDue */
+				}
+			}
+			if ( bScheduleChanged && pT->bEnabled ) {
+				uint64 uNow = MdoNowMs();
+				if ( strcmp(pT->aKind, "cron") == 0 ) {
+					if ( !MdoSchedCronNext(pT->aCron, uNow, &pT->uNextDue) ) {
+						pT->bEnabled = false; pT->uNextDue = 0;
+					}
+				} else if ( strcmp(pT->aKind, "interval") == 0 ) {
+					pT->uNextDue = pT->uIntervalMin ? uNow + (uint64)pT->uIntervalMin * 60000u : 0;
+					if ( pT->uNextDue == 0 ) pT->bEnabled = false;
+				} else {
+					pT->uNextDue = uNow + (uint64)pT->uDelayMin * 60000u;
+				}
+				bChanged = true;
+			}
+			if ( bChanged ) MdoSchedSaveLocked(pT);
+			xrtMutexUnlock(g_schedLock);
+			BODY_DONE();
+			if ( bChanged ) MdoSchedWake();
+			return ReplyJSON(pReq, 200, "{\"ok\":true}") ? XS_OK : XS_OK;
+		}
+	}
+
 	/* ---------------- 项目管理 ---------------- */
 	if ( strcmp(aSeg[0], "projects") == 0 && aSeg[1] == NULL ) {
 		if ( MDO_METHOD(GET) ) {
@@ -1063,7 +1299,7 @@ int RequestProc(XS_HttpReq* pReq)
 				if ( !aModelId[0] && pM != NULL )
 					snprintf(aModelId, sizeof(aModelId), "%s", pM->aId);
 			}
-			pNew = MdoSessionCreateLocked(aTitle, aModelId, uWindow, aUserPrompt);
+			pNew = MdoSessionCreateLocked(MdoActiveProject(), aTitle, aModelId, uWindow, aUserPrompt);
 			xrtMutexUnlock(g_lock);
 			BODY_DONE();
 			if ( pNew == NULL )
@@ -1329,7 +1565,7 @@ int RequestProc(XS_HttpReq* pReq)
 
 		/* 新会话注册（锁内） */
 		xrtMutexLock(g_lock);
-		pNew = MdoSessionCreateLocked(NULL, pSrc->aModelId,
+		pNew = MdoSessionCreateLocked(MdoActiveProject(), NULL, pSrc->aModelId,
 			pSrc->uContextWindow, pSrc->aUserPrompt);
 		xrtMutexUnlock(g_lock);
 		if ( pNew == NULL )
@@ -1598,7 +1834,7 @@ int RequestProc(XS_HttpReq* pReq)
 		}
 
 		/* 会话恢复 + 绑定客户端（锁外：磁盘 IO + Recover） */
-		if ( !MdoSessionEnsure(pS, pModel, aErr, sizeof(aErr)) ) {
+		if ( !MdoSessionEnsure(pS, NULL, pModel, aErr, sizeof(aErr)) ) {
 			PROMPT_FREE_IMAGES();
 			xrtMutexLock(g_lock);
 			pS->pRun = NULL;
@@ -1606,7 +1842,7 @@ int RequestProc(XS_HttpReq* pReq)
 			return ReplyErr(pReq, 500, aErr) ? XS_OK : XS_OK;
 		}
 
-		uTurnId = MdoRunStart(pS, aText, pModel, aImages, nImages,
+		uTurnId = MdoRunStart(pS, aText, pModel, NULL, false, aImages, nImages,
 			aErr, sizeof(aErr));
 		PROMPT_FREE_IMAGES();     /* RunStart 已深拷贝 */
 		if ( uTurnId == 0 ) {
@@ -1760,6 +1996,7 @@ void ServiceInit(XS_HostInfo* pHost)
 	if ( pHost != NULL && pHost->Path != NULL )
 		snprintf(g_wwwRoot, sizeof(g_wwwRoot), "%s", pHost->Path);
 	MdoStoreInit();
+	MdoSchedInit();
 	printf("[mdo] backend ready (models=%zu projects=%zu home=%s)\n",
 		g_nModels, g_nProjects, g_mdoHome);
 }

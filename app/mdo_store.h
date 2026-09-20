@@ -804,12 +804,11 @@ static MdoSession* MdoSessionFindLocked(const char* sId)
 	return NULL;
 }
 
-static MdoSession* MdoSessionCreateLocked(const char* sTitle, const char* sModelId,
+static MdoSession* MdoSessionCreateLocked(MdoProject* pProj, const char* sTitle, const char* sModelId,
 	uint64 uWindow, const char* sUserPrompt)
 {
 	MdoSession* pS;
 	char aId[40];
-	MdoProject* pProj = MdoActiveProject();
 	char aMeta[380], aJournal[380], aUi[380];
 
 	if ( g_nSessions >= MDO_MAX_SESSIONS ) return NULL;
