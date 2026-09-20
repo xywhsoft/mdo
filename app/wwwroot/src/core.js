@@ -193,6 +193,7 @@ export class Store {
     const s = this.settings;
     const body = {
       theme: s.theme, fontSize: s.fontSize, lang: s.lang, sound: s.sound, autoApprove: s.autoApprove, interactMode: s.interactMode,
+      memoryEnabled: s.memoryEnabled !== false, schedulesEnabled: s.schedulesEnabled !== false, webSearchEnabled: s.webSearchEnabled !== false,
       systemPrompt: s.systemPrompt,
       proxyEnabled: s.proxyEnabled, proxyHost: s.proxyHost, proxyPort: s.proxyPort,
       proxyUser: s.proxyUser, proxyPass: s.proxyPass, proxyBypass: s.proxyBypass,

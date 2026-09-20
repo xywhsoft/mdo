@@ -128,6 +128,9 @@ typedef struct {
 	char aInteractMode[8];  /* queue | guide */
 	bool bSound;            /* 完成提示音 */
 	bool bAutoApprove;      /* 审批自动放行 */
+	bool bMemoryEnabled;    /* 记忆功能：提示词记忆块+记忆目录 */
+	bool bSchedulesEnabled; /* 计划任务：调度线程+侧栏入口 */
+	bool bWebSearchEnabled; /* 联网搜索：web_search 工具注册+提示词 */
 	char aSystemPrompt[2048];
 	/* 网络 */
 	bool bProxyEnabled;
@@ -232,6 +235,9 @@ static void MdoConfigSaveLocked(void)
 	JWName(pW, "fontSize");     JWStr(pW, g_settings.aFontSize);
 	JWName(pW, "sound");        JWBool(pW, g_settings.bSound);
 	JWName(pW, "autoApprove");  JWBool(pW, g_settings.bAutoApprove);
+	JWName(pW, "memoryEnabled");    JWBool(pW, g_settings.bMemoryEnabled);
+	JWName(pW, "schedulesEnabled"); JWBool(pW, g_settings.bSchedulesEnabled);
+	JWName(pW, "webSearchEnabled"); JWBool(pW, g_settings.bWebSearchEnabled);
 	JWName(pW, "systemPrompt"); JWStr(pW, g_settings.aSystemPrompt);
 	JWName(pW, "proxyEnabled"); JWBool(pW, g_settings.bProxyEnabled);
 	JWName(pW, "proxyHost");    JWStr(pW, g_settings.aProxyHost);
@@ -373,6 +379,9 @@ static void MdoConfigLoadLocked(void)
 				if ( xrtValueGetBool(xrtValueObjectGet(pS, xrtStrView("sound")), &b) ) g_settings.bSound = b;
 				b = false;
 				if ( xrtValueGetBool(xrtValueObjectGet(pS, xrtStrView("autoApprove")), &b) ) g_settings.bAutoApprove = b;
+				if ( xrtValueGetBool(xrtValueObjectGet(pS, xrtStrView("memoryEnabled")), &b) ) g_settings.bMemoryEnabled = b;
+				if ( xrtValueGetBool(xrtValueObjectGet(pS, xrtStrView("schedulesEnabled")), &b) ) g_settings.bSchedulesEnabled = b;
+				if ( xrtValueGetBool(xrtValueObjectGet(pS, xrtStrView("webSearchEnabled")), &b) ) g_settings.bWebSearchEnabled = b;
 				b = false;
 				if ( xrtValueGetBool(xrtValueObjectGet(pS, xrtStrView("proxyEnabled")), &b) ) g_settings.bProxyEnabled = b;
 				b = false;
@@ -1353,14 +1362,23 @@ static void MdoBuildSystemPrompt(const MdoProject* pProj, const MdoSession* pSes
 		snprintf(aWorkDir, sizeof(aWorkDir), "%s", pSlugDir ? pSlugDir : ".");
 		xrtFree(pSlugDir);
 	}
-	const char* sWorkDir = aWorkDir;
-	n += (size_t)snprintf(pOut + n, iCap - n,
-		"你是 mdo（墨斗），一个 agent 工作台。\n\n"
-		"环境: Windows\n"
-		"工作目录: %s（工具的相对路径以此为基准）\n"
-		"命令: exec/spawn 的参数是字符串数组、直接执行；没有 shell，不支持管道、重定向、通配符。已配置 curl、git、python，直接按程序名调用。\n"
-		"工具: 遍历目录用 ls；按文件名找文件用 glob；搜文件内容用 grep；读文件用 read；写文件用 write；改文件用 edit；跑命令用 exec（同步等待）或 spawn（后台任务）；搜索网络用 web_search；需要用户决定时用 ask_user。\n",
-		sWorkDir);
+		const char* sWorkDir = aWorkDir;
+	{
+		char aTools[400];
+		size_t nT = 0;
+		nT += (size_t)snprintf(aTools + nT, sizeof(aTools) - nT,
+			"工具: 遍历目录用 ls；按文件名找文件用 glob；搜文件内容用 grep；读文件用 read；写文件用 write；改文件用 edit；跑命令用 exec（同步等待）或 spawn（后台任务）");
+		if ( g_settings.bWebSearchEnabled )
+			nT += (size_t)snprintf(aTools + nT, sizeof(aTools) - nT, "；搜索网络用 web_search");
+		nT += (size_t)snprintf(aTools + nT, sizeof(aTools) - nT, "；需要用户决定时用 ask_user。\n");
+		n += (size_t)snprintf(pOut + n, iCap - n,
+			"你是 mdo（墨斗），一个 agent 工作台。\n\n"
+			"环境: Windows\n"
+			"工作目录: %s（工具的相对路径以此为基准）\n"
+			"命令: exec/spawn 的参数是字符串数组、直接执行；没有 shell，不支持管道、重定向、通配符。已配置 curl、git、python，直接按程序名调用。\n"
+			"%s",
+			sWorkDir, aTools);
+	}
 
 	if ( pProj != NULL && pProj->aPath[0] ) {
 		char* pFile = MdoPathJoin(pProj->aPath, "AGENTS.md");
@@ -1379,18 +1397,20 @@ static void MdoBuildSystemPrompt(const MdoProject* pProj, const MdoSession* pSes
 		xrtFree(sAgents);
 	}
 
-	/* 记忆块：只给目录事实；索引有真实条目才注入，模板注释不注入 */
-	MdoMemoryDir(pProj, false, aMemGlobal, sizeof(aMemGlobal));
-	MdoMemoryDir(pProj, true, aMemProject, sizeof(aMemProject));
-	n += (size_t)snprintf(pOut + n, iCap - n,
-		"\n记忆（明文文件，用文件工具直接维护；MEMORY.md 为索引，一条一事一文件）:\n"
-		"全局: %s\n"
-		"项目: %s\n",
-		aMemGlobal, aMemProject);
-	if ( MdoMemoryReadIndex(aMemGlobal, aIdxG, sizeof(aIdxG)) )
-		n += (size_t)snprintf(pOut + n, iCap - n, "\n全局记忆索引:\n%s\n", aIdxG);
-	if ( MdoMemoryReadIndex(aMemProject, aIdxP, sizeof(aIdxP)) )
-		n += (size_t)snprintf(pOut + n, iCap - n, "\n项目记忆索引:\n%s\n", aIdxP);
+	/* 记忆块：bMemoryEnabled 开关——关闭则目录/索引整块不注入 */
+	if ( g_settings.bMemoryEnabled ) {
+		MdoMemoryDir(pProj, false, aMemGlobal, sizeof(aMemGlobal));
+		MdoMemoryDir(pProj, true, aMemProject, sizeof(aMemProject));
+		n += (size_t)snprintf(pOut + n, iCap - n,
+			"\n记忆（明文文件，用文件工具直接维护；MEMORY.md 为索引，一条一事一文件）:\n"
+			"全局: %s\n"
+			"项目: %s\n",
+			aMemGlobal, aMemProject);
+		if ( MdoMemoryReadIndex(aMemGlobal, aIdxG, sizeof(aIdxG)) )
+			n += (size_t)snprintf(pOut + n, iCap - n, "\n全局记忆索引:\n%s\n", aIdxG);
+		if ( MdoMemoryReadIndex(aMemProject, aIdxP, sizeof(aIdxP)) )
+			n += (size_t)snprintf(pOut + n, iCap - n, "\n项目记忆索引:\n%s\n", aIdxP);
+	}
 
 	/* 用户全局指令（建会话时快照，仅新会话生效） */
 	if ( pSess != NULL && pSess->aUserPrompt[0] ) {
@@ -1486,6 +1506,11 @@ static void MdoStoreInit(void)
 	char* pJoin = NULL;
 
 	g_lock = xrtMutexCreate();
+
+	/* 功能开关默认值：全开（配置加载可覆盖） */
+	g_settings.bMemoryEnabled = true;
+	g_settings.bSchedulesEnabled = true;
+	g_settings.bWebSearchEnabled = true;
 
 	/* 工具目录：<exe>/tools，注入本进程 PATH（子进程 exec/spawn 直接可用） */
 	{

@@ -328,5 +328,11 @@
   "memory.projectBtn": "Memory",
   "memory.projectTip": "Open this project's memory directory",
   "memory.opened": "Opened in file manager",
-  "memory.openFail": "Open failed: "
+  "memory.openFail": "Open failed: ",
+  "settings.memoryFeature": "Memory",
+  "settings.memoryFeatureDesc": "When on, the prompt includes memory directories and index so the agent can keep long-term memory; off removes the whole block",
+  "settings.schedulesFeature": "Scheduled tasks",
+  "settings.schedulesFeatureDesc": "When on, the sidebar shows the schedules entry and the scheduler fires turns on time; off stops firing",
+  "settings.webSearchFeature": "Web search",
+  "settings.webSearchFeatureDesc": "When on, the agent can search the web with web_search; off removes the tool and its description"
 }

@@ -465,6 +465,9 @@ int RequestProc(XS_HttpReq* pReq)
 				JWName(pW, "fontSize"); JWStr(pW, g_settings.aFontSize);
 				JWName(pW, "sound"); JWBool(pW, g_settings.bSound);
 				JWName(pW, "autoApprove"); JWBool(pW, g_settings.bAutoApprove);
+				JWName(pW, "memoryEnabled"); JWBool(pW, g_settings.bMemoryEnabled);
+				JWName(pW, "schedulesEnabled"); JWBool(pW, g_settings.bSchedulesEnabled);
+				JWName(pW, "webSearchEnabled"); JWBool(pW, g_settings.bWebSearchEnabled);
 				JWName(pW, "systemPrompt"); JWStr(pW, g_settings.aSystemPrompt);
 				JWName(pW, "proxyEnabled"); JWBool(pW, g_settings.bProxyEnabled);
 				JWName(pW, "proxyHost"); JWStr(pW, g_settings.aProxyHost);
@@ -497,7 +500,9 @@ int RequestProc(XS_HttpReq* pReq)
 			char aProxyHost[200] = {0}, aProxyUser[120] = {0}, aProxyPass[120] = {0};
 			char aBypass[600] = {0}, aCa[280] = {0};
 			bool bSound = false, bApprove = false, bProxy = false, bSleep = false, bWinMax = false;
+			bool bMemory = false, bSched = false, bWeb = false;
 			bool bHasSound = false, bHasApprove = false, bHasProxy = false, bHasSleep = false;
+			bool bHasMemory = false, bHasSched = false, bHasWeb = false;
 			int64 iPort = 0, iX = 0, iY = 0, iW = 0, iH = 0;
 			bool bCaChanged = false, bSleepChanged = false;
 
@@ -524,6 +529,12 @@ int RequestProc(XS_HttpReq* pReq)
 					{ bApprove = b; bHasApprove = true; }
 				if ( xrtValueGetBool(xrtValueObjectGet(pS, xrtStrView("proxyEnabled")), &b) )
 					{ bProxy = b; bHasProxy = true; }
+				if ( xrtValueGetBool(xrtValueObjectGet(pS, xrtStrView("memoryEnabled")), &b) )
+					{ bMemory = b; bHasMemory = true; }
+				if ( xrtValueGetBool(xrtValueObjectGet(pS, xrtStrView("schedulesEnabled")), &b) )
+					{ bSched = b; bHasSched = true; }
+				if ( xrtValueGetBool(xrtValueObjectGet(pS, xrtStrView("webSearchEnabled")), &b) )
+					{ bWeb = b; bHasWeb = true; }
 				if ( xrtValueGetBool(xrtValueObjectGet(pS, xrtStrView("preventSleep")), &b) )
 					{ bSleep = b; bHasSleep = true; }
 				if ( xrtValueGetBool(xrtValueObjectGet(pS, xrtStrView("winMax")), &b) )
@@ -553,6 +564,9 @@ int RequestProc(XS_HttpReq* pReq)
 			if ( bHasSound ) g_settings.bSound = bSound;
 			if ( bHasApprove ) g_settings.bAutoApprove = bApprove;
 			if ( bHasProxy ) g_settings.bProxyEnabled = bProxy;
+			if ( bHasMemory ) g_settings.bMemoryEnabled = bMemory;
+			if ( bHasSched ) g_settings.bSchedulesEnabled = bSched;
+			if ( bHasWeb ) g_settings.bWebSearchEnabled = bWeb;
 			if ( bHasSleep ) {
 				if ( g_settings.bPreventSleep != bSleep ) bSleepChanged = true;
 				g_settings.bPreventSleep = bSleep;
@@ -2065,7 +2079,7 @@ void ServiceInit(XS_HostInfo* pHost)
 	if ( pHost != NULL && pHost->Path != NULL )
 		snprintf(g_wwwRoot, sizeof(g_wwwRoot), "%s", pHost->Path);
 	MdoStoreInit();
-	MdoSchedInit();
+	if ( g_settings.bSchedulesEnabled ) MdoSchedInit();
 	/* GUI 进程无控制台：printf 写无效 stdout 会崩（2026-09-20 打包崩溃根因）——
 	 * 诊断信息改走 data/audit.log（MdoAuditLog 已覆盖关键事件） */
 }

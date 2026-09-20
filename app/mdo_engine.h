@@ -774,7 +774,7 @@ static int32 MdoRunThread(void* pArg)
 		xworkAgentDestroy(pAgent);       /* 只读面是 headless 的全部工具，挂载失败=会话失败 */
 		pAgent = NULL;
 	}
-	if ( pAgent != NULL && !MdoWebRegisterTools(pAgent, &tWErr) )
+	if ( pAgent != NULL && g_settings.bWebSearchEnabled && !MdoWebRegisterTools(pAgent, &tWErr) )
 		{ xworkErrorInit(&tWErr); }   /* 搜索三件注册失败不阻断会话（非核心件） */
 	if ( pAgent != NULL && !pRun->bHeadless && !MdoAskRegisterTool(pAgent, pRun, &tWErr) )
 		{ xworkErrorInit(&tWErr); }   /* ask_user 注册失败不阻断会话（headless 不注册） */

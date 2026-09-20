@@ -185,6 +185,7 @@ if (host.name === 'mdo') {
     const sd = await host.getSettings();
     const s = sd.settings ?? {};
     for (const k of ['theme', 'fontSize', 'lang', 'interactMode', 'sound', 'autoApprove', 'systemPrompt',
+      'memoryEnabled', 'schedulesEnabled', 'webSearchEnabled',
       'proxyEnabled', 'proxyHost', 'proxyPort', 'proxyUser', 'proxyPass',
       'proxyBypass', 'caCertPath', 'preventSleep']) {
       if (s[k] !== undefined) store.settings[k] = s[k];
@@ -206,6 +207,7 @@ if (host.name === 'mdo') {
   setInterval(() => {
     const s = store.settings;
     const sig = JSON.stringify([s.theme, s.fontSize, s.sound, s.autoApprove, s.systemPrompt,
+      s.memoryEnabled, s.schedulesEnabled, s.webSearchEnabled,
       s.proxyEnabled, s.proxyHost, s.proxyPort, s.proxyUser, s.proxyPass, s.proxyBypass,
       s.caCertPath, s.preventSleep]);
     if (lastSig !== null && sig !== lastSig) store.scheduleSettingsSync();

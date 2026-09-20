@@ -328,5 +328,11 @@
   "memory.projectBtn": "Память",
   "memory.projectTip": "Открыть каталог памяти проекта",
   "memory.opened": "Открыто в проводнике",
-  "memory.openFail": "Не удалось открыть: "
+  "memory.openFail": "Не удалось открыть: ",
+  "settings.memoryFeature": "Память",
+  "settings.memoryFeatureDesc": "Когда включено, промпт содержит каталоги памяти и индекс — агент ведёт долгую память; выключено — блок удаляется",
+  "settings.schedulesFeature": "Задачи по расписанию",
+  "settings.schedulesFeatureDesc": "Когда включено, в боковой панели есть вход к расписаниям и планировщик запускает ходы; выключено — запуски прекращаются",
+  "settings.webSearchFeature": "Поиск в интернете",
+  "settings.webSearchFeatureDesc": "Когда включено, агент может искать через web_search; выключено — инструмент и описание удаляются"
 }

@@ -328,5 +328,11 @@
   "memory.projectBtn": "记忆",
   "memory.projectTip": "打开该项目的记忆目录",
   "memory.opened": "已在文件管理器中打开",
-  "memory.openFail": "打开失败："
+  "memory.openFail": "打开失败：",
+  "settings.memoryFeature": "记忆功能",
+  "settings.memoryFeatureDesc": "启用后提示词包含记忆目录与索引，agent 可读写长期记忆；关闭则整块移除",
+  "settings.schedulesFeature": "计划任务",
+  "settings.schedulesFeatureDesc": "启用后侧栏显示定时任务入口，调度器按时触发回合；关闭则停止触发",
+  "settings.webSearchFeature": "联网搜索",
+  "settings.webSearchFeatureDesc": "启用后 agent 可用 web_search 搜索网络；关闭则移除该工具与相关描述"
 }
