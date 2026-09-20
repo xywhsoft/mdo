@@ -1997,8 +1997,8 @@ void ServiceInit(XS_HostInfo* pHost)
 		snprintf(g_wwwRoot, sizeof(g_wwwRoot), "%s", pHost->Path);
 	MdoStoreInit();
 	MdoSchedInit();
-	printf("[mdo] backend ready (models=%zu projects=%zu schedules=%zu home=%s)\n",
-		g_nModels, g_nProjects, g_nScheds, g_mdoHome);
+	/* GUI 进程无控制台：printf 写无效 stdout 会崩（2026-09-20 打包崩溃根因）——
+	 * 诊断信息改走 data/audit.log（MdoAuditLog 已覆盖关键事件） */
 }
 
 void ServiceUnit(XS_HostInfo* pHost)
