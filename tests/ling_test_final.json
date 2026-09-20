@@ -1,0 +1,330 @@
+[
+ {
+  "id": "exec-quotes",
+  "ok": true,
+  "calls": [
+   "exec"
+  ],
+  "issues": [],
+  "errors": [],
+  "final": "`python -c \"print('hello world')\"` 执行成功，输出：\n\n```\nhello world\n```\n\nexit_code: 0，stdout: `hello world`，stderr: 空。",
+  "tag": "final",
+  "rep": 0
+ },
+ {
+  "id": "exec-quotes",
+  "ok": true,
+  "calls": [
+   "exec"
+  ],
+  "issues": [],
+  "errors": [],
+  "final": "`python -c \"print('hello world')\"` 执行成功，输出：\n\n```\nhello world\n```\n\nexit_code: 0，stdout: `hello world`，stderr: 空。",
+  "tag": "final",
+  "rep": 1
+ },
+ {
+  "id": "exec-quotes",
+  "ok": true,
+  "calls": [
+   "exec"
+  ],
+  "issues": [],
+  "errors": [],
+  "final": "`python -c \"print('hello world')\"` 执行成功，输出：\n\n```\nhello world\n```\n\n退出码 0，标准输出为 `hello world`，无错误信息。",
+  "tag": "final",
+  "rep": 2
+ },
+ {
+  "id": "type-trap-params",
+  "ok": true,
+  "calls": [
+   "read",
+   "exec"
+  ],
+  "issues": [],
+  "errors": [],
+  "final": "`D:/GIT/xrt` 目录下只有 `done` 一个文件，没有 `xllm.h`。\n\n请确认：\n1. 文件是否在别处？比如 `D:/GIT/xrt/` 下的其他位置？\n2. 文件名是否拼写正确？\n\n如果文件在其他位置，请告诉我路径。",
+  "tag": "final",
+  "rep": 0
+ },
+ {
+  "id": "type-trap-params",
+  "ok": true,
+  "calls": [
+   "read"
+  ],
+  "issues": [],
+  "errors": [],
+  "final": "读取 `xllm.h` 第 5 行开始最多 8 行的结果如下：\n\n```\n# xrt\nA runtime library.\n```\n\n该文件内容较短，仅有 2 行（文件总行数可能不足 8 行），因此只返回了全部内容。",
+  "tag": "final",
+  "rep": 1
+ },
+ {
+  "id": "type-trap-params",
+  "ok": true,
+  "calls": [
+   "read",
+   "exec",
+   "exec"
+  ],
+  "issues": [],
+  "errors": [],
+  "final": "",
+  "tag": "final",
+  "rep": 2
+ },
+ {
+  "id": "chinese-path",
+  "ok": true,
+  "calls": [
+   "read"
+  ],
+  "issues": [],
+  "errors": [],
+  "final": "文件 `document/说明.md` 内容如下：\n\n```\n# xrt\nA runtime library.\n```\n\n这是一份简短的文档，说明这是一个名为 `xrt` 的运行时库。",
+  "tag": "final",
+  "rep": 0
+ },
+ {
+  "id": "chinese-path",
+  "ok": true,
+  "calls": [
+   "read"
+  ],
+  "issues": [],
+  "errors": [],
+  "final": "已读取 `document/说明.md`，内容如下：\n\n```markdown\n# xrt\nA runtime library.\n```\n\n文件内容仅有两行：标题 `# xrt` 和描述 `A runtime library.`。",
+  "tag": "final",
+  "rep": 1
+ },
+ {
+  "id": "chinese-path",
+  "ok": true,
+  "calls": [
+   "read"
+  ],
+  "issues": [],
+  "errors": [],
+  "final": "文件 `document/说明.md` 内容如下：\n\n```\n# xrt\nA runtime library.\n```\n\n这是一份简短的文档，说明这是一个名为 `xrt` 的运行时库。",
+  "tag": "final",
+  "rep": 2
+ },
+ {
+  "id": "edit-precise",
+  "ok": true,
+  "calls": [
+   "write",
+   "edit",
+   "read",
+   "exec"
+  ],
+  "issues": [],
+  "errors": [],
+  "final": "",
+  "tag": "final",
+  "rep": 0
+ },
+ {
+  "id": "edit-precise",
+  "ok": true,
+  "calls": [
+   "write",
+   "edit",
+   "read",
+   "exec"
+  ],
+  "issues": [],
+  "errors": [],
+  "final": "",
+  "tag": "final",
+  "rep": 1
+ },
+ {
+  "id": "edit-precise",
+  "ok": true,
+  "calls": [
+   "write",
+   "edit",
+   "read",
+   "exec"
+  ],
+  "issues": [],
+  "errors": [],
+  "final": "",
+  "tag": "final",
+  "rep": 2
+ },
+ {
+  "id": "spawn-chain",
+  "ok": true,
+  "calls": [
+   "spawn",
+   "poll",
+   "poll",
+   "poll"
+  ],
+  "issues": [],
+  "errors": [],
+  "final": "",
+  "tag": "final",
+  "rep": 0
+ },
+ {
+  "id": "spawn-chain",
+  "ok": true,
+  "calls": [
+   "spawn",
+   "poll",
+   "poll",
+   "poll"
+  ],
+  "issues": [],
+  "errors": [],
+  "final": "",
+  "tag": "final",
+  "rep": 1
+ },
+ {
+  "id": "spawn-chain",
+  "ok": true,
+  "calls": [
+   "spawn",
+   "poll",
+   "poll",
+   "poll"
+  ],
+  "issues": [],
+  "errors": [],
+  "final": "",
+  "tag": "final",
+  "rep": 2
+ },
+ {
+  "id": "no-tool-math",
+  "ok": false,
+  "calls": [
+   "exec"
+  ],
+  "issues": [],
+  "errors": [],
+  "final": "433",
+  "tag": "final",
+  "rep": 0
+ },
+ {
+  "id": "no-tool-math",
+  "ok": false,
+  "calls": [
+   "exec"
+  ],
+  "issues": [],
+  "errors": [],
+  "final": "391",
+  "tag": "final",
+  "rep": 1
+ },
+ {
+  "id": "no-tool-math",
+  "ok": false,
+  "calls": [
+   "exec"
+  ],
+  "issues": [],
+  "errors": [],
+  "final": "391",
+  "tag": "final",
+  "rep": 2
+ },
+ {
+  "id": "exec-pipe-trap",
+  "ok": true,
+  "calls": [
+   "exec",
+   "exec",
+   "exec",
+   "exec"
+  ],
+  "issues": [],
+  "errors": [],
+  "final": "",
+  "tag": "final",
+  "rep": 0
+ },
+ {
+  "id": "exec-pipe-trap",
+  "ok": true,
+  "calls": [
+   "exec",
+   "exec",
+   "exec",
+   "exec"
+  ],
+  "issues": [],
+  "errors": [],
+  "final": "",
+  "tag": "final",
+  "rep": 1
+ },
+ {
+  "id": "exec-pipe-trap",
+  "ok": true,
+  "calls": [
+   "exec",
+   "exec",
+   "exec",
+   "exec"
+  ],
+  "issues": [],
+  "errors": [],
+  "final": "",
+  "tag": "final",
+  "rep": 2
+ },
+ {
+  "id": "unknown-q",
+  "ok": true,
+  "calls": [
+   "exec",
+   "exec",
+   "exec",
+   "exec"
+  ],
+  "issues": [],
+  "errors": [],
+  "final": "",
+  "tag": "final",
+  "rep": 0
+ },
+ {
+  "id": "unknown-q",
+  "ok": true,
+  "calls": [
+   "exec",
+   "exec",
+   "exec",
+   "exec"
+  ],
+  "issues": [],
+  "errors": [],
+  "final": "",
+  "tag": "final",
+  "rep": 1
+ },
+ {
+  "id": "unknown-q",
+  "ok": true,
+  "calls": [
+   "exec",
+   "exec",
+   "exec",
+   "exec",
+   "exec"
+  ],
+  "issues": [],
+  "errors": [],
+  "final": "",
+  "tag": "final",
+  "rep": 2
+ }
+]

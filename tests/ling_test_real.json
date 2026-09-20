@@ -1,0 +1,330 @@
+[
+ {
+  "id": "exec-quotes",
+  "ok": true,
+  "calls": [
+   "exec"
+  ],
+  "issues": [],
+  "errors": [],
+  "final": "执行成功，输出结果如下：\n\n```\nhello world\n```\n\n`python -c \"print('hello world')\"` 通过 `exec` 工具在原生 C 栈上运行，退出码为 0，stdout 输出 `hello wor",
+  "tag": "real",
+  "rep": 0
+ },
+ {
+  "id": "exec-quotes",
+  "ok": true,
+  "calls": [
+   "exec"
+  ],
+  "issues": [],
+  "errors": [],
+  "final": "执行成功，输出结果：\n\n```\nhello world\n```\n\n`python -c \"print('hello world')\"` 在原生 C 栈上运行正常，exit code 为 0，stdout 输出 \"hello world\"，s",
+  "tag": "real",
+  "rep": 1
+ },
+ {
+  "id": "exec-quotes",
+  "ok": true,
+  "calls": [
+   "exec"
+  ],
+  "issues": [],
+  "errors": [],
+  "final": "执行成功，输出结果如下：\n\n```\nhello world\n```\n\n`python -c \"print('hello world')\"` 在原生 C 栈上运行正常，exit code 为 0，stdout 输出 \"hello world\"",
+  "tag": "real",
+  "rep": 2
+ },
+ {
+  "id": "type-trap-params",
+  "ok": false,
+  "calls": [
+   "exec",
+   "exec",
+   "exec",
+   "exec"
+  ],
+  "issues": [],
+  "errors": [],
+  "final": "",
+  "tag": "real",
+  "rep": 0
+ },
+ {
+  "id": "type-trap-params",
+  "ok": true,
+  "calls": [
+   "read",
+   "exec",
+   "exec"
+  ],
+  "issues": [],
+  "errors": [],
+  "final": "",
+  "tag": "real",
+  "rep": 1
+ },
+ {
+  "id": "type-trap-params",
+  "ok": true,
+  "calls": [
+   "read",
+   "exec",
+   "exec",
+   "exec"
+  ],
+  "issues": [],
+  "errors": [],
+  "final": "",
+  "tag": "real",
+  "rep": 2
+ },
+ {
+  "id": "chinese-path",
+  "ok": true,
+  "calls": [
+   "read"
+  ],
+  "issues": [],
+  "errors": [],
+  "final": "文件 `document/说明.md` 内容如下：\n\n```\n# xrt\nA runtime library.\n```\n\n这是一份简短的文档，说明这是一个名为 `xrt` 的运行时库。",
+  "tag": "real",
+  "rep": 0
+ },
+ {
+  "id": "chinese-path",
+  "ok": true,
+  "calls": [
+   "read"
+  ],
+  "issues": [],
+  "errors": [],
+  "final": "文件 `document/说明.md` 内容如下：\n\n```\n# xrt\nA runtime library.\n```\n\n这是一份简短的文档，说明这是一个名为 `xrt` 的运行时库。",
+  "tag": "real",
+  "rep": 1
+ },
+ {
+  "id": "chinese-path",
+  "ok": true,
+  "calls": [
+   "read"
+  ],
+  "issues": [],
+  "errors": [],
+  "final": "文件 `document/说明.md` 内容如下：\n\n```\n# xrt\nA runtime library.\n```\n\n这是一份简短的文档，说明这是一个名为 `xrt` 的运行时库。",
+  "tag": "real",
+  "rep": 2
+ },
+ {
+  "id": "edit-precise",
+  "ok": true,
+  "calls": [
+   "write",
+   "edit",
+   "read",
+   "exec"
+  ],
+  "issues": [],
+  "errors": [],
+  "final": "",
+  "tag": "real",
+  "rep": 0
+ },
+ {
+  "id": "edit-precise",
+  "ok": true,
+  "calls": [
+   "write",
+   "edit",
+   "read",
+   "exec"
+  ],
+  "issues": [],
+  "errors": [],
+  "final": "",
+  "tag": "real",
+  "rep": 1
+ },
+ {
+  "id": "edit-precise",
+  "ok": true,
+  "calls": [
+   "write",
+   "edit",
+   "read",
+   "exec"
+  ],
+  "issues": [],
+  "errors": [],
+  "final": "",
+  "tag": "real",
+  "rep": 2
+ },
+ {
+  "id": "spawn-chain",
+  "ok": true,
+  "calls": [
+   "spawn",
+   "poll",
+   "poll",
+   "poll"
+  ],
+  "issues": [],
+  "errors": [],
+  "final": "",
+  "tag": "real",
+  "rep": 0
+ },
+ {
+  "id": "spawn-chain",
+  "ok": true,
+  "calls": [
+   "spawn",
+   "poll",
+   "poll",
+   "poll"
+  ],
+  "issues": [],
+  "errors": [],
+  "final": "",
+  "tag": "real",
+  "rep": 1
+ },
+ {
+  "id": "spawn-chain",
+  "ok": true,
+  "calls": [
+   "spawn",
+   "poll",
+   "poll",
+   "poll"
+  ],
+  "issues": [],
+  "errors": [],
+  "final": "",
+  "tag": "real",
+  "rep": 2
+ },
+ {
+  "id": "no-tool-math",
+  "ok": false,
+  "calls": [
+   "exec"
+  ],
+  "issues": [],
+  "errors": [],
+  "final": "391",
+  "tag": "real",
+  "rep": 0
+ },
+ {
+  "id": "no-tool-math",
+  "ok": true,
+  "calls": [],
+  "issues": [],
+  "errors": [],
+  "final": "391",
+  "tag": "real",
+  "rep": 1
+ },
+ {
+  "id": "no-tool-math",
+  "ok": true,
+  "calls": [],
+  "issues": [],
+  "errors": [],
+  "final": "391",
+  "tag": "real",
+  "rep": 2
+ },
+ {
+  "id": "exec-pipe-trap",
+  "ok": true,
+  "calls": [
+   "exec",
+   "exec",
+   "exec",
+   "exec"
+  ],
+  "issues": [],
+  "errors": [],
+  "final": "",
+  "tag": "real",
+  "rep": 0
+ },
+ {
+  "id": "exec-pipe-trap",
+  "ok": true,
+  "calls": [
+   "exec",
+   "exec",
+   "exec",
+   "exec"
+  ],
+  "issues": [],
+  "errors": [],
+  "final": "",
+  "tag": "real",
+  "rep": 1
+ },
+ {
+  "id": "exec-pipe-trap",
+  "ok": true,
+  "calls": [
+   "exec",
+   "exec",
+   "exec",
+   "exec"
+  ],
+  "issues": [],
+  "errors": [],
+  "final": "",
+  "tag": "real",
+  "rep": 2
+ },
+ {
+  "id": "unknown-q",
+  "ok": true,
+  "calls": [
+   "exec",
+   "exec",
+   "exec",
+   "exec"
+  ],
+  "issues": [],
+  "errors": [],
+  "final": "",
+  "tag": "real",
+  "rep": 0
+ },
+ {
+  "id": "unknown-q",
+  "ok": true,
+  "calls": [
+   "exec",
+   "exec",
+   "exec",
+   "exec"
+  ],
+  "issues": [],
+  "errors": [],
+  "final": "",
+  "tag": "real",
+  "rep": 1
+ },
+ {
+  "id": "unknown-q",
+  "ok": true,
+  "calls": [
+   "exec",
+   "exec",
+   "exec",
+   "exec"
+  ],
+  "issues": [],
+  "errors": [],
+  "final": "",
+  "tag": "real",
+  "rep": 2
+ }
+]

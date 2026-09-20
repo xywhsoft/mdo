@@ -1,0 +1,121 @@
+[
+ {
+  "id": "exec-basic",
+  "ok": true,
+  "calls": [
+   "exec"
+  ],
+  "issues": [],
+  "errors": [],
+  "final": "运行结果如下：\n\n```\non branch master\n2 files changed\n```\n\n当前在 `master` 分支下，有 2 个文件被修改。",
+  "tag": "base1"
+ },
+ {
+  "id": "exec-argv-format",
+  "ok": true,
+  "calls": [
+   "exec"
+  ],
+  "issues": [],
+  "errors": [],
+  "final": "执行结果如下：\n\n```\non branch master\n2 files changed\n```\n\n最近一次提交位于 `master` 分支，涉及 2 个文件的变更。",
+  "tag": "base1"
+ },
+ {
+  "id": "exec-python",
+  "ok": true,
+  "calls": [
+   "exec",
+   "exec",
+   "exec",
+   "exec"
+  ],
+  "issues": [],
+  "errors": [],
+  "final": "",
+  "tag": "base1"
+ },
+ {
+  "id": "read-file",
+  "ok": true,
+  "calls": [
+   "read"
+  ],
+  "issues": [],
+  "errors": [],
+  "final": "根据读取的 README.md 前 20 行，内容如下：\n\n- **标题**：`# xrt`\n- **简介**：`A runtime library.`（一个运行时库）\n\n文件似乎非常简短，仅包含标题和一句话的简介，未包含更多项目描述、目录",
+  "tag": "base1"
+ },
+ {
+  "id": "read-missing",
+  "ok": true,
+  "calls": [
+   "read"
+  ],
+  "issues": [],
+  "errors": [],
+  "final": "# `docs/build-notes.md` 总结\n\n该文件内容非常简短，仅包含以下信息：\n\n| 字段 | 内容 |\n|------|------|\n| **标题** | `xrt` |\n| **描述** | `A runtime lib",
+  "tag": "base1"
+ },
+ {
+  "id": "edit-file",
+  "ok": true,
+  "calls": [
+   "write",
+   "edit",
+   "read"
+  ],
+  "issues": [],
+  "errors": [],
+  "final": "文件已创建并编辑完成：\n\n1. **hello_test.txt** 已创建，内容为 `Hello from mdo`\n2. 使用 `edit` 工具将 `Hello` 改为 `Hi`，文件内容变为 `Hi from mdo`\n\n确认内容：",
+  "tag": "base1"
+ },
+ {
+  "id": "multi-step",
+  "ok": true,
+  "calls": [
+   "exec",
+   "exec",
+   "exec",
+   "exec"
+  ],
+  "issues": [],
+  "errors": [],
+  "final": "",
+  "tag": "base1"
+ },
+ {
+  "id": "no-tool",
+  "ok": true,
+  "calls": [],
+  "issues": [],
+  "errors": [],
+  "final": "事件溯源是一种将应用状态变化记录为一系列不可变事件的技术，通过重放这些事件来重建系统状态。\n\n它将数据库视为事件的存储，事件本身即事实来源，从而保证数据的历史完整性和可追溯性。",
+  "tag": "base1"
+ },
+ {
+  "id": "rg-search",
+  "ok": true,
+  "calls": [
+   "exec",
+   "exec",
+   "exec",
+   "exec"
+  ],
+  "issues": [],
+  "errors": [],
+  "final": "",
+  "tag": "base1"
+ },
+ {
+  "id": "stop-not-exist",
+  "ok": true,
+  "calls": [
+   "stop"
+  ],
+  "issues": [],
+  "errors": [],
+  "final": "任务号 999 未在当前会话中运行。请确认任务号是否正确，或检查是否有其他任务在运行。",
+  "tag": "base1"
+ }
+]

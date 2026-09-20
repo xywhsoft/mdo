@@ -1,0 +1,350 @@
+[
+ {
+  "id": "exec-quotes",
+  "ok": true,
+  "calls": [
+   "exec",
+   "exec",
+   "exec",
+   "exec"
+  ],
+  "issues": [],
+  "errors": [],
+  "final": "",
+  "tag": "base2",
+  "rep": 0
+ },
+ {
+  "id": "exec-quotes",
+  "ok": true,
+  "calls": [
+   "exec",
+   "exec",
+   "exec",
+   "exec"
+  ],
+  "issues": [],
+  "errors": [],
+  "final": "",
+  "tag": "base2",
+  "rep": 1
+ },
+ {
+  "id": "exec-quotes",
+  "ok": true,
+  "calls": [
+   "exec",
+   "exec",
+   "exec",
+   "exec"
+  ],
+  "issues": [],
+  "errors": [],
+  "final": "",
+  "tag": "base2",
+  "rep": 2
+ },
+ {
+  "id": "type-trap-params",
+  "ok": true,
+  "calls": [
+   "read"
+  ],
+  "issues": [],
+  "errors": [],
+  "final": "当前目录 `D:/GIT/xrt` 下没有 `xllm.h` 文件。请确认文件路径是否正确，或者告诉我文件所在位置。",
+  "tag": "base2",
+  "rep": 0
+ },
+ {
+  "id": "type-trap-params",
+  "ok": true,
+  "calls": [
+   "read",
+   "exec",
+   "exec",
+   "exec"
+  ],
+  "issues": [],
+  "errors": [],
+  "final": "",
+  "tag": "base2",
+  "rep": 1
+ },
+ {
+  "id": "type-trap-params",
+  "ok": true,
+  "calls": [
+   "read"
+  ],
+  "issues": [],
+  "errors": [],
+  "final": "文件 `xllm.h` 在当前工作目录 `D:/GIT/xrt` 下不存在。读取结果如下：\n\n```\n# xrt\n\nA runtime library.\n```\n\n这似乎是 `xrt` 目录下的某个文件（可能是 `xrt.h` 或类似文件）",
+  "tag": "base2",
+  "rep": 2
+ },
+ {
+  "id": "chinese-path",
+  "ok": true,
+  "calls": [
+   "read"
+  ],
+  "issues": [],
+  "errors": [],
+  "final": "文件 `document/说明.md` 内容如下：\n\n```markdown\n# xrt\n\nA runtime library.\n```\n\n这是一份简短的文档，说明这是一个名为 `xrt` 的运行时库。",
+  "tag": "base2",
+  "rep": 0
+ },
+ {
+  "id": "chinese-path",
+  "ok": true,
+  "calls": [
+   "read"
+  ],
+  "issues": [],
+  "errors": [],
+  "final": "文件 `document/说明.md` 内容如下：\n\n```markdown\n# xrt\n\nA runtime library.\n```\n\n这是一份简短的文档，说明这是一个名为 `xrt` 的运行时库。",
+  "tag": "base2",
+  "rep": 1
+ },
+ {
+  "id": "chinese-path",
+  "ok": true,
+  "calls": [
+   "read"
+  ],
+  "issues": [],
+  "errors": [],
+  "final": "文件 `document/说明.md` 已读取完毕，内容如下：\n\n```markdown\n# xrt\n\nA runtime library.\n```\n\n文件内容仅有两行：标题为 `xrt`，描述为 `A runtime library.`。",
+  "tag": "base2",
+  "rep": 2
+ },
+ {
+  "id": "edit-precise",
+  "ok": true,
+  "calls": [
+   "write",
+   "edit",
+   "read",
+   "exec"
+  ],
+  "issues": [],
+  "errors": [],
+  "final": "",
+  "tag": "base2",
+  "rep": 0
+ },
+ {
+  "id": "edit-precise",
+  "ok": true,
+  "calls": [
+   "write",
+   "edit",
+   "read",
+   "exec"
+  ],
+  "issues": [],
+  "errors": [],
+  "final": "",
+  "tag": "base2",
+  "rep": 1
+ },
+ {
+  "id": "edit-precise",
+  "ok": true,
+  "calls": [
+   "write",
+   "edit",
+   "read",
+   "exec"
+  ],
+  "issues": [],
+  "errors": [],
+  "final": "",
+  "tag": "base2",
+  "rep": 2
+ },
+ {
+  "id": "spawn-chain",
+  "ok": false,
+  "calls": [
+   "spawn",
+   "poll",
+   "poll",
+   "poll"
+  ],
+  "issues": [
+   "未知参数:max_capture_bytes",
+   "未知参数:notify"
+  ],
+  "errors": [],
+  "final": "",
+  "tag": "base2",
+  "rep": 0
+ },
+ {
+  "id": "spawn-chain",
+  "ok": false,
+  "calls": [
+   "spawn",
+   "poll",
+   "poll",
+   "poll"
+  ],
+  "issues": [
+   "未知参数:max_capture_bytes",
+   "未知参数:notify"
+  ],
+  "errors": [],
+  "final": "",
+  "tag": "base2",
+  "rep": 1
+ },
+ {
+  "id": "spawn-chain",
+  "ok": false,
+  "calls": [
+   "spawn",
+   "poll",
+   "poll",
+   "poll"
+  ],
+  "issues": [
+   "未知参数:notify"
+  ],
+  "errors": [],
+  "final": "",
+  "tag": "base2",
+  "rep": 2
+ },
+ {
+  "id": "no-tool-math",
+  "ok": false,
+  "calls": [
+   "exec",
+   "exec",
+   "exec",
+   "exec"
+  ],
+  "issues": [],
+  "errors": [],
+  "final": "",
+  "tag": "base2",
+  "rep": 0
+ },
+ {
+  "id": "no-tool-math",
+  "ok": false,
+  "calls": [
+   "exec",
+   "exec",
+   "exec",
+   "exec"
+  ],
+  "issues": [],
+  "errors": [],
+  "final": "",
+  "tag": "base2",
+  "rep": 1
+ },
+ {
+  "id": "no-tool-math",
+  "ok": true,
+  "calls": [],
+  "issues": [],
+  "errors": [],
+  "final": "391",
+  "tag": "base2",
+  "rep": 2
+ },
+ {
+  "id": "exec-pipe-trap",
+  "ok": true,
+  "calls": [
+   "exec",
+   "exec",
+   "exec",
+   "exec"
+  ],
+  "issues": [],
+  "errors": [],
+  "final": "",
+  "tag": "base2",
+  "rep": 0
+ },
+ {
+  "id": "exec-pipe-trap",
+  "ok": true,
+  "calls": [
+   "exec",
+   "exec",
+   "exec",
+   "exec"
+  ],
+  "issues": [],
+  "errors": [],
+  "final": "",
+  "tag": "base2",
+  "rep": 1
+ },
+ {
+  "id": "exec-pipe-trap",
+  "ok": true,
+  "calls": [
+   "exec",
+   "exec",
+   "exec",
+   "exec"
+  ],
+  "issues": [],
+  "errors": [],
+  "final": "",
+  "tag": "base2",
+  "rep": 2
+ },
+ {
+  "id": "unknown-q",
+  "ok": true,
+  "calls": [
+   "exec",
+   "exec",
+   "exec",
+   "exec"
+  ],
+  "issues": [],
+  "errors": [],
+  "final": "",
+  "tag": "base2",
+  "rep": 0
+ },
+ {
+  "id": "unknown-q",
+  "ok": true,
+  "calls": [
+   "exec",
+   "exec",
+   "exec",
+   "exec"
+  ],
+  "issues": [],
+  "errors": [],
+  "final": "",
+  "tag": "base2",
+  "rep": 1
+ },
+ {
+  "id": "unknown-q",
+  "ok": true,
+  "calls": [
+   "exec",
+   "exec",
+   "exec",
+   "exec"
+  ],
+  "issues": [],
+  "errors": [],
+  "final": "",
+  "tag": "base2",
+  "rep": 2
+ }
+]

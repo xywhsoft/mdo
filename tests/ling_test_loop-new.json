@@ -1,0 +1,215 @@
+[
+ {
+  "id": "exec-quotes",
+  "ok": true,
+  "calls": [
+   "exec",
+   "exec",
+   "exec",
+   "exec"
+  ],
+  "issues": [],
+  "errors": [],
+  "final": "",
+  "tag": "loop-new",
+  "rep": 0
+ },
+ {
+  "id": "exec-quotes",
+  "ok": true,
+  "calls": [
+   "exec",
+   "exec",
+   "exec",
+   "exec"
+  ],
+  "issues": [],
+  "errors": [],
+  "final": "",
+  "tag": "loop-new",
+  "rep": 1
+ },
+ {
+  "id": "exec-quotes",
+  "ok": true,
+  "calls": [
+   "exec",
+   "exec",
+   "exec",
+   "exec"
+  ],
+  "issues": [],
+  "errors": [],
+  "final": "",
+  "tag": "loop-new",
+  "rep": 2
+ },
+ {
+  "id": "exec-quotes",
+  "ok": true,
+  "calls": [
+   "exec",
+   "exec",
+   "exec",
+   "exec"
+  ],
+  "issues": [],
+  "errors": [],
+  "final": "",
+  "tag": "loop-new",
+  "rep": 3
+ },
+ {
+  "id": "type-trap-params",
+  "ok": true,
+  "calls": [
+   "read",
+   "exec",
+   "exec"
+  ],
+  "issues": [],
+  "errors": [],
+  "final": "",
+  "tag": "loop-new",
+  "rep": 0
+ },
+ {
+  "id": "type-trap-params",
+  "ok": true,
+  "calls": [
+   "read",
+   "exec",
+   "exec",
+   "exec"
+  ],
+  "issues": [],
+  "errors": [],
+  "final": "",
+  "tag": "loop-new",
+  "rep": 1
+ },
+ {
+  "id": "type-trap-params",
+  "ok": true,
+  "calls": [
+   "read"
+  ],
+  "issues": [],
+  "errors": [],
+  "final": "抱歉，文件 `xllm.h` 在当前工作目录中不存在。我尝试读取了 `D:/GIT/xrt/xllm.h`，但没有找到。\n\n请确认文件路径是否正确，或者告诉我您希望我在哪里查找该文件？",
+  "tag": "loop-new",
+  "rep": 2
+ },
+ {
+  "id": "type-trap-params",
+  "ok": true,
+  "calls": [
+   "read"
+  ],
+  "issues": [],
+  "errors": [],
+  "final": "抱歉，文件 `xllm.h` 在当前工作目录 `D:/GIT/xrt` 中不存在。我尝试读取该文件，但未找到。\n\n请确认文件路径是否正确，或者告诉我您希望我查找其他文件？",
+  "tag": "loop-new",
+  "rep": 3
+ },
+ {
+  "id": "no-tool-math",
+  "ok": true,
+  "calls": [],
+  "issues": [],
+  "errors": [],
+  "final": "391",
+  "tag": "loop-new",
+  "rep": 0
+ },
+ {
+  "id": "no-tool-math",
+  "ok": true,
+  "calls": [],
+  "issues": [],
+  "errors": [],
+  "final": "391",
+  "tag": "loop-new",
+  "rep": 1
+ },
+ {
+  "id": "no-tool-math",
+  "ok": true,
+  "calls": [],
+  "issues": [],
+  "errors": [],
+  "final": "391",
+  "tag": "loop-new",
+  "rep": 2
+ },
+ {
+  "id": "no-tool-math",
+  "ok": true,
+  "calls": [],
+  "issues": [],
+  "errors": [],
+  "final": "391",
+  "tag": "loop-new",
+  "rep": 3
+ },
+ {
+  "id": "exec-pipe-trap",
+  "ok": true,
+  "calls": [
+   "exec",
+   "exec",
+   "exec",
+   "exec"
+  ],
+  "issues": [],
+  "errors": [],
+  "final": "",
+  "tag": "loop-new",
+  "rep": 0
+ },
+ {
+  "id": "exec-pipe-trap",
+  "ok": true,
+  "calls": [
+   "exec",
+   "exec",
+   "exec",
+   "exec"
+  ],
+  "issues": [],
+  "errors": [],
+  "final": "",
+  "tag": "loop-new",
+  "rep": 1
+ },
+ {
+  "id": "exec-pipe-trap",
+  "ok": true,
+  "calls": [
+   "exec",
+   "exec",
+   "exec",
+   "exec"
+  ],
+  "issues": [],
+  "errors": [],
+  "final": "",
+  "tag": "loop-new",
+  "rep": 2
+ },
+ {
+  "id": "exec-pipe-trap",
+  "ok": true,
+  "calls": [
+   "exec",
+   "exec",
+   "exec",
+   "exec"
+  ],
+  "issues": [],
+  "errors": [],
+  "final": "",
+  "tag": "loop-new",
+  "rep": 3
+ }
+]

@@ -1,0 +1,341 @@
+[
+ {
+  "id": "exec-quotes",
+  "ok": true,
+  "calls": [
+   "exec",
+   "exec",
+   "exec",
+   "exec"
+  ],
+  "issues": [],
+  "errors": [],
+  "final": "",
+  "tag": "base3",
+  "rep": 0
+ },
+ {
+  "id": "exec-quotes",
+  "ok": true,
+  "calls": [
+   "exec",
+   "exec",
+   "exec",
+   "exec"
+  ],
+  "issues": [],
+  "errors": [],
+  "final": "",
+  "tag": "base3",
+  "rep": 1
+ },
+ {
+  "id": "exec-quotes",
+  "ok": true,
+  "calls": [
+   "exec",
+   "exec",
+   "exec",
+   "exec"
+  ],
+  "issues": [],
+  "errors": [],
+  "final": "",
+  "tag": "base3",
+  "rep": 2
+ },
+ {
+  "id": "type-trap-params",
+  "ok": true,
+  "calls": [
+   "read",
+   "exec",
+   "exec",
+   "exec"
+  ],
+  "issues": [],
+  "errors": [],
+  "final": "",
+  "tag": "base3",
+  "rep": 0
+ },
+ {
+  "id": "type-trap-params",
+  "ok": true,
+  "calls": [
+   "read",
+   "exec",
+   "exec"
+  ],
+  "issues": [],
+  "errors": [],
+  "final": "",
+  "tag": "base3",
+  "rep": 1
+ },
+ {
+  "id": "type-trap-params",
+  "ok": true,
+  "calls": [
+   "read",
+   "exec",
+   "exec"
+  ],
+  "issues": [],
+  "errors": [],
+  "final": "",
+  "tag": "base3",
+  "rep": 2
+ },
+ {
+  "id": "chinese-path",
+  "ok": true,
+  "calls": [
+   "read"
+  ],
+  "issues": [],
+  "errors": [],
+  "final": "已读取 `document/说明.md`，文件内容为：\n\n```\n# xrt\n\nA runtime library.\n```\n\n这是一份关于 `xrt` 运行时库的说明文档。",
+  "tag": "base3",
+  "rep": 0
+ },
+ {
+  "id": "chinese-path",
+  "ok": true,
+  "calls": [
+   "read"
+  ],
+  "issues": [],
+  "errors": [],
+  "final": "文件 `document/说明.md` 内容如下：\n\n```\n# xrt\n\nA runtime library.\n```\n\n这是一份简短的文档，说明这是一个名为 `xrt` 的运行时库。",
+  "tag": "base3",
+  "rep": 1
+ },
+ {
+  "id": "chinese-path",
+  "ok": true,
+  "calls": [
+   "read"
+  ],
+  "issues": [],
+  "errors": [],
+  "final": "文件 `document/说明.md` 内容如下：\n\n```markdown\n# xrt\n\nA runtime library.\n```\n\n这是一份简短的文档，说明这是一个名为 `xrt` 的运行时库。",
+  "tag": "base3",
+  "rep": 2
+ },
+ {
+  "id": "edit-precise",
+  "ok": true,
+  "calls": [
+   "write",
+   "edit",
+   "read",
+   "exec"
+  ],
+  "issues": [],
+  "errors": [],
+  "final": "",
+  "tag": "base3",
+  "rep": 0
+ },
+ {
+  "id": "edit-precise",
+  "ok": true,
+  "calls": [
+   "write",
+   "edit",
+   "read",
+   "exec"
+  ],
+  "issues": [],
+  "errors": [],
+  "final": "",
+  "tag": "base3",
+  "rep": 1
+ },
+ {
+  "id": "edit-precise",
+  "ok": true,
+  "calls": [
+   "write",
+   "edit",
+   "read",
+   "exec"
+  ],
+  "issues": [],
+  "errors": [],
+  "final": "",
+  "tag": "base3",
+  "rep": 2
+ },
+ {
+  "id": "spawn-chain",
+  "ok": true,
+  "calls": [
+   "spawn",
+   "poll",
+   "poll",
+   "poll"
+  ],
+  "issues": [],
+  "errors": [],
+  "final": "",
+  "tag": "base3",
+  "rep": 0
+ },
+ {
+  "id": "spawn-chain",
+  "ok": true,
+  "calls": [
+   "spawn",
+   "poll",
+   "poll",
+   "poll"
+  ],
+  "issues": [],
+  "errors": [],
+  "final": "",
+  "tag": "base3",
+  "rep": 1
+ },
+ {
+  "id": "spawn-chain",
+  "ok": true,
+  "calls": [
+   "spawn",
+   "poll",
+   "poll",
+   "poll"
+  ],
+  "issues": [],
+  "errors": [],
+  "final": "",
+  "tag": "base3",
+  "rep": 2
+ },
+ {
+  "id": "no-tool-math",
+  "ok": false,
+  "calls": [
+   "exec",
+   "exec",
+   "exec",
+   "exec"
+  ],
+  "issues": [],
+  "errors": [],
+  "final": "",
+  "tag": "base3",
+  "rep": 0
+ },
+ {
+  "id": "no-tool-math",
+  "ok": true,
+  "calls": [],
+  "issues": [],
+  "errors": [],
+  "final": "391",
+  "tag": "base3",
+  "rep": 1
+ },
+ {
+  "id": "no-tool-math",
+  "ok": true,
+  "calls": [],
+  "issues": [],
+  "errors": [],
+  "final": "391",
+  "tag": "base3",
+  "rep": 2
+ },
+ {
+  "id": "exec-pipe-trap",
+  "ok": true,
+  "calls": [
+   "exec",
+   "exec",
+   "exec",
+   "exec"
+  ],
+  "issues": [],
+  "errors": [],
+  "final": "",
+  "tag": "base3",
+  "rep": 0
+ },
+ {
+  "id": "exec-pipe-trap",
+  "ok": true,
+  "calls": [
+   "exec",
+   "exec",
+   "exec",
+   "exec"
+  ],
+  "issues": [],
+  "errors": [],
+  "final": "",
+  "tag": "base3",
+  "rep": 1
+ },
+ {
+  "id": "exec-pipe-trap",
+  "ok": true,
+  "calls": [
+   "exec",
+   "exec",
+   "exec",
+   "exec"
+  ],
+  "issues": [],
+  "errors": [],
+  "final": "",
+  "tag": "base3",
+  "rep": 2
+ },
+ {
+  "id": "unknown-q",
+  "ok": true,
+  "calls": [
+   "exec",
+   "exec",
+   "exec",
+   "exec"
+  ],
+  "issues": [],
+  "errors": [],
+  "final": "",
+  "tag": "base3",
+  "rep": 0
+ },
+ {
+  "id": "unknown-q",
+  "ok": true,
+  "calls": [
+   "exec",
+   "exec",
+   "exec",
+   "exec"
+  ],
+  "issues": [],
+  "errors": [],
+  "final": "",
+  "tag": "base3",
+  "rep": 1
+ },
+ {
+  "id": "unknown-q",
+  "ok": true,
+  "calls": [
+   "exec",
+   "exec",
+   "exec",
+   "exec"
+  ],
+  "issues": [],
+  "errors": [],
+  "final": "",
+  "tag": "base3",
+  "rep": 2
+ }
+]

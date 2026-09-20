@@ -1,0 +1,18 @@
+{
+  "services": [
+    {
+      "enabled": true,
+      "class": "http",
+      "name": "mdo",
+      "ip": "127.0.0.1",
+      "port": 9091,
+      "host_default": {
+        "enabled": true,
+        "name": "mdo",
+        "path": "app/wwwroot",
+        "devlang": "c",
+        "devfile": "app/main.c"
+      }
+    }
+  ]
+}

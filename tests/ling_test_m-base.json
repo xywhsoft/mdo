@@ -1,0 +1,165 @@
+[
+ {
+  "id": "no-tool-math",
+  "ok": true,
+  "calls": [],
+  "issues": [],
+  "errors": [],
+  "final": "391",
+  "tag": "m-base",
+  "rep": 0
+ },
+ {
+  "id": "no-tool-math",
+  "ok": false,
+  "calls": [
+   "exec",
+   "exec",
+   "exec",
+   "exec"
+  ],
+  "issues": [],
+  "errors": [],
+  "final": "",
+  "tag": "m-base",
+  "rep": 1
+ },
+ {
+  "id": "no-tool-math",
+  "ok": true,
+  "calls": [],
+  "issues": [],
+  "errors": [],
+  "final": "17 * 23 = **391**",
+  "tag": "m-base",
+  "rep": 2
+ },
+ {
+  "id": "no-tool-math",
+  "ok": false,
+  "calls": [
+   "exec",
+   "exec",
+   "exec",
+   "exec"
+  ],
+  "issues": [],
+  "errors": [],
+  "final": "",
+  "tag": "m-base",
+  "rep": 3
+ },
+ {
+  "id": "no-tool-math",
+  "ok": true,
+  "calls": [],
+  "issues": [],
+  "errors": [],
+  "final": "391",
+  "tag": "m-base",
+  "rep": 4
+ },
+ {
+  "id": "no-tool-math",
+  "ok": false,
+  "calls": [
+   "exec"
+  ],
+  "issues": [],
+  "errors": [],
+  "final": "391",
+  "tag": "m-base",
+  "rep": 5
+ },
+ {
+  "id": "unknown-q",
+  "ok": true,
+  "calls": [
+   "exec",
+   "exec",
+   "exec",
+   "exec",
+   "exec"
+  ],
+  "issues": [],
+  "errors": [],
+  "final": "",
+  "tag": "m-base",
+  "rep": 0
+ },
+ {
+  "id": "unknown-q",
+  "ok": true,
+  "calls": [
+   "exec",
+   "exec",
+   "exec",
+   "exec"
+  ],
+  "issues": [],
+  "errors": [],
+  "final": "",
+  "tag": "m-base",
+  "rep": 1
+ },
+ {
+  "id": "unknown-q",
+  "ok": true,
+  "calls": [
+   "exec",
+   "exec",
+   "exec",
+   "exec"
+  ],
+  "issues": [],
+  "errors": [],
+  "final": "",
+  "tag": "m-base",
+  "rep": 2
+ },
+ {
+  "id": "unknown-q",
+  "ok": true,
+  "calls": [
+   "exec",
+   "exec",
+   "exec",
+   "exec"
+  ],
+  "issues": [],
+  "errors": [],
+  "final": "",
+  "tag": "m-base",
+  "rep": 3
+ },
+ {
+  "id": "unknown-q",
+  "ok": true,
+  "calls": [
+   "exec",
+   "exec",
+   "exec",
+   "exec"
+  ],
+  "issues": [],
+  "errors": [],
+  "final": "",
+  "tag": "m-base",
+  "rep": 4
+ },
+ {
+  "id": "unknown-q",
+  "ok": true,
+  "calls": [
+   "exec",
+   "exec",
+   "exec",
+   "exec"
+  ],
+  "issues": [],
+  "errors": [],
+  "final": "",
+  "tag": "m-base",
+  "rep": 5
+ }
+]

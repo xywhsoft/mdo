@@ -1,0 +1,15 @@
+# 运行数据：模型配置（含 API key）、会话账本、记忆、审计与回收站——永不入库
+data/
+
+# 构建产物与二进制
+*.exe
+*.log
+
+# 运行时状态与临时文件
+window-state-*.txt
+.xrt-write-*.tmp
+*.tmp
+
+# 随程序分发的第三方工具（约 112M，重建方法见 tools/README.md）
+tools/*
+!tools/README.md
