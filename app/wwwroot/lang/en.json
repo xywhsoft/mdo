@@ -320,5 +320,13 @@
   "sidebar.manageProject": "Manage project",
   "sidebar.addProject": "Add project",
   "projects.inlinePh": "Absolute workspace path, Enter to add",
-  "sidebar.projectsLabel": "Projects"
+  "sidebar.projectsLabel": "Projects",
+  "settings.nav.memory": "Memory",
+  "memory.desc": "Each project and the global scope have a separate memory directory (plain-text MEMORY.md index + fact files); click to open in your file manager.",
+  "memory.globalBtn": "Global memory",
+  "memory.globalTip": "Open the global memory directory",
+  "memory.projectBtn": "Memory",
+  "memory.projectTip": "Open this project's memory directory",
+  "memory.opened": "Opened in file manager",
+  "memory.openFail": "Open failed: "
 }

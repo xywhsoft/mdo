@@ -320,5 +320,13 @@
   "sidebar.manageProject": "项目管理",
   "sidebar.addProject": "添加项目",
   "projects.inlinePh": "填入工作目录绝对路径，回车添加",
-  "sidebar.projectsLabel": "项目"
+  "sidebar.projectsLabel": "项目",
+  "settings.nav.memory": "记忆管理",
+  "memory.desc": "每个项目与全局各有独立记忆目录（明文 MEMORY.md 索引 + 事实文件）；点击直接在文件管理器中打开。",
+  "memory.globalBtn": "全局记忆",
+  "memory.globalTip": "打开全局记忆目录",
+  "memory.projectBtn": "记忆",
+  "memory.projectTip": "打开该项目的记忆目录",
+  "memory.opened": "已在文件管理器中打开",
+  "memory.openFail": "打开失败："
 }

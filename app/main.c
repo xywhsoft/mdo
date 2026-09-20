@@ -1167,6 +1167,49 @@ int RequestProc(XS_HttpReq* pReq)
 			: (ReplyErr(pReq, 404, "project not found") ? XS_OK : XS_OK);
 	}
 
+	/* ---- GET /api/memory/dir?project=slug —— 记忆目录定位（shell open）----
+	 * 无 project 参数=全局记忆目录；有=该项目记忆目录。目录不存在时先建
+	 * （与 MdoMemoryEnsure 同幂等语义），再交系统默认文件管理器打开。 */
+	if ( strcmp(aSeg[0], "memory") == 0 && aSeg[1] != NULL &&
+	     strcmp(aSeg[1], "dir") == 0 && MDO_METHOD(GET) ) {
+		char aSlug[80] = {0};
+		MdoProject* pProj = NULL;
+		char aDir[380];
+		{
+			xstrview tQS = pReq->head->Target;
+			const char* pQM = memchr(tQS.Data, '?', tQS.Size);
+			if ( pQM != NULL ) {
+				const char* pP = MdoFindBounded(pQM, tQS.Data + tQS.Size, "project=");
+				if ( pP != NULL ) {
+					size_t nS = 0;
+					pP += 8;
+					while ( pP + nS < tQS.Data + tQS.Size && pP[nS] != '&' &&
+					        nS < sizeof(aSlug) - 1 ) { aSlug[nS] = pP[nS]; nS++; }
+					aSlug[nS] = 0;
+				}
+			}
+		}
+		xrtMutexLock(g_lock);
+		if ( aSlug[0] != 0 ) {
+			size_t k;
+			for ( k = 0; k < g_nProjects; k++ )
+				if ( strcmp(g_projects[k].aSlug, aSlug) == 0 ) { pProj = &g_projects[k]; break; }
+		}
+		MdoMemoryDir(pProj, aSlug[0] != 0, aDir, sizeof(aDir));
+		xrtMutexUnlock(g_lock);
+		if ( aDir[0] == 0 )
+			return ReplyErr(pReq, 400, "no memory directory") ? XS_OK : XS_OK;
+		xrtDirCreateAll(aDir);   /* 幂等：首访即建（含种子 MEMORY.md 由 Ensure 语义） */
+		MdoMemoryEnsure(aDir);
+		{
+			char aCmd[900];
+			snprintf(aCmd, sizeof(aCmd), "explorer \"%s\"", aDir);
+			system(aCmd);
+		}
+		MdoAuditLog("memory-open", aSlug[0] ? aSlug : "_global");
+		return ReplyJSON(pReq, 200, "{\"ok\":true}") ? XS_OK : XS_OK;
+	}
+
 	/* ---- GET /api/workspace/files?q= —— @ 补全数据源 ---- */
 	if ( strcmp(aSeg[0], "workspace") == 0 && aSeg[1] != NULL &&
 	     strcmp(aSeg[1], "files") == 0 && MDO_METHOD(GET) ) {

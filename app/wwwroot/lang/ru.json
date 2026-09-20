@@ -320,5 +320,13 @@
   "sidebar.manageProject": "Управление проектом",
   "sidebar.addProject": "Добавить проект",
   "projects.inlinePh": "Абсолютный путь к каталогу, Enter — добавить",
-  "sidebar.projectsLabel": "Проекты"
+  "sidebar.projectsLabel": "Проекты",
+  "settings.nav.memory": "Память",
+  "memory.desc": "У каждого проекта и глобальной области — отдельный каталог памяти (текстовый MEMORY.md + файлы фактов); нажмите, чтобы открыть в проводнике.",
+  "memory.globalBtn": "Глобальная память",
+  "memory.globalTip": "Открыть каталог глобальной памяти",
+  "memory.projectBtn": "Память",
+  "memory.projectTip": "Открыть каталог памяти проекта",
+  "memory.opened": "Открыто в проводнике",
+  "memory.openFail": "Не удалось открыть: "
 }
