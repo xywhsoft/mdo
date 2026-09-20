@@ -1201,7 +1201,7 @@ static void MdoBuildSystemPrompt(const MdoProject* pProj, const MdoSession* pSes
 		"环境: Windows\n"
 		"工作目录: %s（工具的相对路径以此为基准）\n"
 		"命令: exec/spawn 的参数是字符串数组、直接执行；没有 shell，不支持管道、重定向、通配符。已配置 curl、git、python，直接按程序名调用。\n"
-		"工具: 遍历目录用 ls；按文件名找文件用 glob；搜文件内容用 grep；读文件用 read；写文件用 write；改文件用 edit；跑命令用 exec（同步等待）或 spawn（后台任务）；跑 Python 代码用 python；搜索网络用 web_search；需要用户决定时用 ask_user。\n",
+		"工具: 遍历目录用 ls；按文件名找文件用 glob；搜文件内容用 grep；读文件用 read；写文件用 write；改文件用 edit；跑命令用 exec（同步等待）或 spawn（后台任务）；搜索网络用 web_search；需要用户决定时用 ask_user。\n",
 		sWorkDir);
 
 	if ( pProj != NULL && pProj->aPath[0] ) {

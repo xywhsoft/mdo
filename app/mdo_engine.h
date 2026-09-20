@@ -739,17 +739,10 @@ static int32 MdoRunThread(void* pArg)
 	tCfg.iMaxInlineToolBytes = (size_t)MdoToolBudgetBytes(pSess->uContextWindow);
 	/* 探索三件（ls/glob/grep 进程内实现）：不依赖外部程序 */
 	tCfg.bRegisterExploreTools = true;
-	/* python 三态：优先用随程序分发的 tools/python313，否则回退 PATH */
-	{
-		char* pExe = xrtPathExecutable();          /* 调用方 xrtFree */
-		char* pPy = pExe ? MdoPathJoin(pExe, "tools\\python313\\python.exe") : NULL;
-		if ( pPy != NULL && xrtFileExists((str)pPy) )
-			tCfg.sPythonPath = pPy;                /* 仅创建期间借用；agent 内部 strdup */
-		else
-			xrtFree(pPy);
-		xrtFree(pExe);
-	}
-	tCfg.bRegisterPythonTool = true;
+	/* python 走外部程序路线（2026-09-20 用户定案）：不注册内部 REPL 工具——
+	 * 实测小模型偏好单发 exec python -c 探针、常绕开内部工具，状态保持的
+	 * O(n²)→O(n) 收益吃不到；python 经 PATH 注入（含 python3.exe shim）即可用 */
+	tCfg.bRegisterPythonTool = false;
 	tCfg.eEolPolicy = XWORK_EOL_AUTO;
 	pAgent = xworkAgentCreate(&tCfg, &tWErr);
 	if ( pAgent != NULL && !MdoWebRegisterTools(pAgent, &tWErr) )
