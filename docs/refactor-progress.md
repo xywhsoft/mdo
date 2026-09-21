@@ -6,8 +6,8 @@
 
 | 仓库 | 开发位置/分支 | 当前基线 | 说明 |
 | --- | --- | --- | --- |
-| mdo | `D:\GIT\mdo` / 当前分支 | `91ef031` | 产品、计划与集成账本 |
-| xrt | `codex/mdo-refactor-xrt` 独立工作树 | `692f97da` | 原工作树有既存未提交内容，隔离开发 |
+| mdo | `D:\GIT\mdo` / 当前分支 | `d36eaea` | 产品、计划与集成账本 |
+| xrt | `codex/mdo-refactor-xrt` 独立工作树 | `80184be3` | 原工作树有既存未提交内容，隔离开发 |
 | xserver | `D:\GIT\xserver-mdo-refactor` / `codex/mdo-refactor-xs` | `6d5485e` | 原工作树有既存未提交内容，隔离开发 |
 
 ## 状态定义
@@ -86,6 +86,7 @@
 | WORK-104 原生跨平台文件搜索/列举 | DONE | xrt `bddd95d7` | Windows/GCC 与 Linux/Clang warning-as-error 有界全回归通过；Linux Clang ASan/UBSan/LSan 与 GCC TSan 有界全回归通过；新增确定性目录排序、跨平台大小写、UTF-8 `?`、隐藏路径、长行、二进制跳过、结果上限、非法正则、越界路径、取消和 deadline 契约回归；未运行压力或高负载测试 | `ls`、`glob`、`grep` 作为无外部程序依赖的只读内置工具接入默认 Agent 和只读子 Agent；输出统一 `/` 与 raw UTF-8 排序，默认大小写敏感；物理路径复核、链接不跟随、固定扫描/深度/文件/字节/预览上限和分项诊断收紧跨平台边界 |
 | WORK-105 统一 task manager | DONE | xrt `736c0a89` | Windows/GCC 与 Linux/Clang warning-as-error 有界全回归通过；Linux Clang ASan/UBSan/LSan 与 GCC TSan 有界全回归通过；C11/C++17 公共头独立编译及新增符号导出检查通过；process、subagent、scheduled 三类状态、非法过渡、快照深拷贝、独立输出游标、revision 事件、wait/cancel/release、通知隔离和重启恢复回归通过；未运行压力或高负载测试 | 三类异步工作共享稳定 ID 与显式状态机；不可变快照暴露 owner session/agent/run、父任务、时间和退出元数据；每任务固定事件窗口和输出绝对游标支持增量读取；进程/子 Agent/执行中计划恢复为 `LOST`，pending 计划与终态元数据可恢复；完整 recurrence/misfire/timezone 执行仍由 WORK-109 负责 |
 | WORK-106 并行工具调度与资源冲突控制 | DONE | xrt `692f97da` | Windows/GCC 的 xllm 构建、xllm-session 与 xwork 有界全回归通过；Linux/Clang warning-as-error、Clang ASan/UBSan/LSan 与 GCC TSan 有界全回归通过；C11/C++17 公共头独立编译及 10 个新增/相关 ABI 符号导出检查通过；固定波次、描述器单次调用、同组串行、真实乱序完成、结果原序提交和描述器失败关闭回归通过；未运行压力或高负载测试 | xllm executor 以版本和尺寸探测可选 batch seam，旧 executor 保持串行兼容；xwork 对每批调用生成稳定 sequence 和最早合法 wave，只让显式 parallel-safe 且资源无冲突的调用并行；重叠写路径、进程/计划/委派全局 effect 和相同 serial group 严格有序；回调串行化，session 始终按模型原调用顺序提交结果 |
+| WORK-107 可配置子 Agent 与委派边界 | DONE | xrt `80184be3` | Windows/GCC 的 xllm-session 与 xwork 有界全回归通过；Linux/Clang warning-as-error、Clang ASan/UBSan/LSan 与 GCC TSan 有界全回归通过；C11/C++17 公共头独立编译及新增 ABI 符号导出检查通过；目录换代、模型和预算传播、effect 收窄、深度/并发、前后台、事件谱系、取消及输出硬上限回归通过；未运行压力或高负载测试 | 子 Agent 定义以引用计数不可变 generation 原子发布并深拷贝字符串、工具与 skill；子会话复用绑定模型驱动但拥有独立 ledger，预算只能收窄；默认定义只读且仅前台，嵌套委派同时受工具白名单、effect、定义深度和共享 tree scope 限制；后台任务保有取消令牌并只向父级返回最终报告 |
 | LIB-3 xwork 3.0 | DOING | - | - | 拆分 runtime/definition/agent/run/task，修复生命周期、并发、后台任务、工具和子 Agent 边界，再同步 xserver 零分叉副本 |
 | MDO-0～10 | TODO | - | - | LIB-GATE 后实施 |
 | QA-RELEASE | TODO | - | - | MDO-GATE 后实施 |
@@ -122,8 +123,9 @@
 28. 原生 `ls`、`glob`、`grep` 是 xwork 的可移植只读契约，不根据宿主是否安装 `ls`/`fd`/`rg` 改变语义。目录与结果按 raw UTF-8 字节排序，路径统一为 `/`，glob 默认大小写敏感且 `?` 消费一个 UTF-8 标量；递归不跟随链接并受固定资源上限约束。现有路径的物理解析能拒绝已经越出 workspace 的目标，但它不是防御并发恶意文件系统改名的 OS sandbox。
 29. xwork 的 process、subagent、scheduled task 共用一个显式状态机和 runtime ID 空间；UI/宿主通过引用计数不可变 snapshot 读取所有权、父任务、时间和退出元数据，通过 revision 事件窗口与 stdout/stderr/result 绝对游标增量消费且不抢占模型 `poll` 游标。重启只恢复定义与元数据：pending schedule 保持 pending，终态保持终态，失去 OS 句柄或原生 callback 的活动任务必须变为 `LOST`。模型完成通知和 watchdog 只面向原 owner agent，runtime 查询与显式管理仍可跨 agent 执行。
 30. 工具批调度先固定目录 generation、Run ID、原始 sequence 和每项权限资源，再计算确定性 wave；只读资源彼此不冲突，任一写访问与同一路径或祖先/后代路径冲突，进程、计划和委派 effect 按类别形成全局屏障，相同 serial group 形成显式模块屏障。无法规范化的路径只收紧为保守串行，资源描述器自身失败则在任何权限回调和工具执行前关闭；工作线程可以乱序完成，但 executor 所有权边界和 session 落账都保持输入顺序。
+31. 子 Agent roster 与工具目录一样按不可变 generation 发布；运行中的委派同时固定 roster 和父工具目录，换代不会改写既有调用。子定义可收窄工具、skill、effect、模型、推理等级、context/input/output、turn、timeout、最终输出、深度与后台能力；共享 delegation scope 对整棵任务树执行并发上限。子会话通过 session 的借用模型驱动边界执行，但 ledger、预算和最终报告所有权独立；后台任务拥有取消令牌，worker 只在 join 前借用。
 
 ## 下一步
 
-1. 实施 WORK-107 可配置子 Agent，固定类型定义、工具白名单、模型与预算覆盖、前后台执行、深度与并发边界及动态换代；随后继续 WORK-108～109，并在 LIB-3 收口时同步 xserver 零分叉副本；运行环境提供三条显式 URL 和 runtime key 时再执行 Ling 3.0 Tiny 的 Chat Completions、Responses 与 Anthropic Messages 真实探针；
+1. 实施 WORK-108 MCP 生命周期与按需工具暴露，再继续 WORK-109 计划任务；在 LIB-3 收口时同步 xserver 零分叉副本；运行环境提供三条显式 URL 和 runtime key 时再执行 Ling 3.0 Tiny 的 Chat Completions、Responses 与 Anthropic Messages 真实探针；
 2. 全部后续验收继续使用有界功能、故障注入和确定性交错，略过压力与高负载测试。
