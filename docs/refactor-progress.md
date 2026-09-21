@@ -6,8 +6,8 @@
 
 | 仓库 | 开发位置/分支 | 当前基线 | 说明 |
 | --- | --- | --- | --- |
-| mdo | `D:\GIT\mdo` / 当前分支 | `b371cf6f6ffb` | 产品、计划与集成账本 |
-| xrt | `codex/mdo-refactor-xrt` 独立工作树 | `fa6c082d4562` | 原工作树有既存未提交内容，隔离开发 |
+| mdo | `D:\GIT\mdo` / 当前分支 | `82ace7d6a51b` | 产品、计划与集成账本 |
+| xrt | `codex/mdo-refactor-xrt` 独立工作树 | `32d755624813` | 原工作树有既存未提交内容，隔离开发 |
 | xserver | `D:\GIT\xserver-mdo-refactor` / `codex/mdo-refactor-xs` | `6e69a8c6da93` | 原工作树有既存未提交内容，隔离开发 |
 
 ## 状态定义
@@ -56,6 +56,7 @@
 | XS-109 发布资料闭环 | DONE | xserver `f122322` | 2 项发布 ZIP 元数据测试、28 项扩展/结构门禁、生成器 dry-run、真实默认宿主重建、per-state TCC 文件系统、VFS 生命周期和版本启动检查通过；未运行压力或高负载测试 | 补齐 `THIRD_PARTY_NOTICES.md`、xrt 内嵌依赖许可副本、各扩展来源/许可和 TCC 修改索引；发布 ZIP 固定携带 NOTICE、许可与精确 revision 的 `SOURCE.md`；发布目录改为可移植的 `release/dist/`；生成的 `tcc_sdk_resources.c` 只存在于 `.build/`，删除源码树内 4.5 MB 陈旧快照 |
 | XS-GATE 宿主集成门禁 | DONE | xserver `6e69a8c`、mdo `e9ae004` | Windows/Linux 全 15 扩展构建和嵌套 TCC 通过；30 项结构检查、2 项发布元数据、per-state TCC、VFS 生命周期、Windows 31 项与 Linux 34 项站点/pack 用例通过；确定性 generation/reload、旧 mdo 静态/设置/中文资源/优雅退出、打包 webview 20 秒启动冒烟通过；未运行压力或高负载测试 | 修复 Linux libtcc 标准界限头、严格 VFS 下的 compact hosted C SDK、内存输出宿主 libc 解析与 POSIX pack 执行位；私有 hosted 模式仅用于普通 Linux `libtcc.c`，显式 sysroot 保留目标 libc 链接；阶段二完成 |
 | LIB-0 三库 API 与实现审计 | DONE | xrt `fa6c082d` | 公开 API、所有权/线程/回调、可变全局、生命周期、错误、持久化、测试缺口、mdo 依赖、vendored 漂移与构建入口逐项复核；`git diff --check` 通过；未运行压力或高负载测试 | 冻结 xllm 3.1 兼容加固、xllm-session 显式状态机与 persistence v3、xwork 3.0 runtime/agent/run/task 分层及兼容迁移边界 |
+| LIB-101 三库独立构建链 | DONE | xrt `32d75562` | Windows xllm-session 与 xwork warning-as-error 构建/功能套件通过；Linux 三库 warning-as-error 编译链接通过；`git diff --check` 通过；未运行压力或高负载测试 | session bridge 继承 xllm 完整传输模块，xwork 恢复原生 explore/regex，修正 xllm/xwork 默认 XRT 路径与跨 ABI `uint64_t` 测试格式 |
 | LIB-1～3 | TODO | - | - | 按 xllm、xllm-session、xwork 顺序实施 |
 | MDO-0～10 | TODO | - | - | LIB-GATE 后实施 |
 | QA-RELEASE | TODO | - | - | MDO-GATE 后实施 |
@@ -83,10 +84,10 @@
 19. xllm 的一次调用边界可以保留，但生产实现仍有进程级可变分配器、overlong UTF-8 漏检、错误名缺项和 client hooks/profile 运行中无锁突变；`xllm_history` 与 session 职责重复，只保留迁移兼容。
 20. xllm-session 当前是严格 single-writer 对象，读取 API也会更新 lazy cache；它没有显式状态机，snapshot/journal v2 没有 checksum 与 durability policy，磁盘错误还会丢失 path/operation/xrt cause。下一版必须提供不可变只读 snapshot 和可故障注入的 persistence v3。
 21. xwork 的 task、tool registry、subagent 和 MCP proxy 全部随短命 `xwork_agent` 生存，无法支撑跨轮后台任务。v3 固定拆成进程级 runtime、不可变 agent definition、会话级 agent、单请求 run 和统一 task；Python REPL 不进入 core，原生 explore 提升为正式工具 backend。
-22. 三库独立构建不能由 xs all-module 宿主替代：`xllm-session-xrt.h` 缺失代理 dial/HTTP CONNECT/SOCKS5 模块，导致代理符号链接失败；xwork 默认 XRT 相对路径也错误。xserver 的 xwork 另有 Python/config 分叉，因此当前 `UPSTREAM.txt` 的零分叉声明尚不成立。
+22. 三库独立构建不能由 xs all-module 宿主替代。session 已改为继承 xllm 的规范 XRT module root；xllm/xwork 默认依赖路径、xwork unity 的 explore/regex 和 LP64 测试格式均已修复。xserver 的 xwork 仍有 Python/config 分叉，当前 `UPSTREAM.txt` 的零分叉声明要到 LIB-3 同步后才重新成立。
 
 ## 下一步
 
-1. 执行 LIB-1 xllm 3.1 兼容加固，先修复三库独立构建的 XRT module bridge，再处理 UTF-8、错误、全局分配器、client/call 合同、parser/golden/OOM 与发布资料；
+1. 继续 LIB-1 xllm 3.1 兼容加固，处理 UTF-8、错误、全局分配器、client/call 合同、parser/golden/OOM 与发布资料；
 2. 依次实施 LIB-2 xllm-session、LIB-3 xwork，并从权威源码同步零分叉副本；
 3. 全部后续验收继续使用有界功能、故障注入和确定性交错，略过压力与高负载测试。
