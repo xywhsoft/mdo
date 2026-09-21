@@ -6,8 +6,8 @@
 
 | 仓库 | 开发位置/分支 | 当前基线 | 说明 |
 | --- | --- | --- | --- |
-| mdo | `D:\GIT\mdo` / 当前分支 | `7d29c1c` | 产品、计划与集成账本 |
-| xrt | `codex/mdo-refactor-xrt` 独立工作树 | `de8a9fcd589a` | 原工作树有既存未提交内容，隔离开发 |
+| mdo | `D:\GIT\mdo` / 当前分支 | `a057342` | 产品、计划与集成账本 |
+| xrt | `codex/mdo-refactor-xrt` 独立工作树 | `8da4ec710ed8` | 原工作树有既存未提交内容，隔离开发 |
 | xserver | `D:\GIT\xserver-mdo-refactor` / `codex/mdo-refactor-xs` | `8745be1` | 原工作树有既存未提交内容，隔离开发 |
 
 ## 状态定义
@@ -76,7 +76,8 @@
 | SES-103 工具调用/结果配对不变量 | DONE | xrt `cd9b2521` | Windows/GCC warning-as-error 有界全回归与 pair 定向门通过；Linux/Clang pair 门、Clang ASan/UBSan pair 门通过；覆盖空/重复/未知 ID、通用入口绕过、跨 turn ID 复用、snapshot 未完成 pair、自定义压缩切割和 render hook 串配；未运行压力或高负载测试 | `(turn, tool_call_id)` 是唯一关联键；通用 AddMessage、typed helper、恢复、压缩与 render hook 统一执行一调用一结果合同；未完成 pair 只能留在 tail，恶意自定义计划在生成摘要前拒绝 |
 | SES-104 压缩事务与崩溃恢复 | DONE | xrt `de8a9fcd` | Windows/GCC warning-as-error 有界全回归与 compaction 定向门通过；Linux/Clang compaction 门、Clang ASan/UBSan compaction 门通过；覆盖 prepare/in-flight/质量失败回滚、显式 abort、commit record 后崩溃 redo、正常提交后立即退出、失联句柄和伪造 split-pair redo 拒绝；未运行压力或高负载测试 | 新增显式 `xllmCompactionAbort`；prepare/in-flight 不落可重放事实，完整 compact record 是唯一 redo 点；提交后事务与 session 断开，replay 重新验证代数、计数、质量与 pair 边界后才发布 checkpoint |
 | SES-105 journal/snapshot vNext 与迁移 | DONE | xrt `d5aacaff` | Windows/GCC、Linux/Clang warning-as-error 有界全回归通过；Linux/Clang ASan/UBSan/LSan 有界全回归通过；19 项 persistence 定向门覆盖 v1/v2 固定 fixture、v2→v3 混合前缀、checksum 损坏、checkpoint 水位和显式 flush；未运行压力或高负载测试 | 新写 journal/snapshot 统一为 v3 CRC32；journal 使用 `sequence + type`，snapshot 使用 `checkpoint_sequence`；默认逐记录 flush，append 策略提供显式 barrier；v1/v2 继续迁移读取。全门禁同时修复 meta routing key 的栈越作用域和测试 compaction 句柄泄漏 |
-| LIB-2 其余工作与 LIB-3 | TODO | - | - | 继续 SES-106～108，再实施 xwork 3.0 |
+| SES-106 不可变只读 snapshot 与并发读取 | DONE | xrt `8da4ec71` | Windows/GCC、Linux/Clang warning-as-error 有界全回归通过；4 个 reader、每个 9 次固定读取的定向交错在 Windows/Linux、Linux Clang TSan 与 ASan/UBSan/LSan 下通过；sanitizer 有界全回归通过；未运行压力或高负载测试 | session 保持严格单写者；稳定点深拷贝配置、预算、状态、stats、summary、pending calls、文件 ledger 和 hook 完成后的 owned request。引用计数快照不回指 session/client/hook/journal/runtime，源继续变更或销毁后仍可并发读取；超预算快照保留诊断但拒绝构建模型请求 |
+| LIB-2 其余工作与 LIB-3 | TODO | - | - | 继续 SES-107～108，再实施 xwork 3.0 |
 | MDO-0～10 | TODO | - | - | LIB-GATE 后实施 |
 | QA-RELEASE | TODO | - | - | MDO-GATE 后实施 |
 
@@ -101,14 +102,14 @@
 17. TCC SDK 资源 C 文件是纯构建产物，正式构建按平台/扩展组合生成到 `.build/`；源码目录不保留可漂移快照。二进制发布包必须携带适用第三方声明、许可副本和精确源码 revision/重新链接入口。
 18. 严格双 VFS 下的 Linux TCC 不能借 `/usr/include` 或目标 libc 链接文件补齐 SDK。普通动态宿主必须内置 compact hosted C 头，并只在 `libtcc.c` 启用宿主符号解析；显式 sysroot/static 发布继续链接目标 libc，二者由构建计划明确分流。
 19. xllm 保留单次调用边界；生产分配器已移除进程级可变 selector，UTF-8、错误枚举、profile/hooks/prefix cache 快照与锁、资源上限、provider golden、流式分片、结构化错误、幂等重试、连接池与公开入口失败原子性均已收紧。请求字节写出后的网络失败不能仅凭“尚未交付模型事件”自动重放，必须由非空 `Idempotency-Key` 显式声明调用方意图；空闲连接必须以 READ 哨兵观测对端关闭并在复用前撤销哨兵，不能只读取 stream 状态；分配型 setter 必须先准备后提交，批量追加失败必须回滚本次前缀，client/call 及三种 provider 的 SSE/JSON 组装失败必须清理到调用前所有权边界；离线 replay 也必须发布正式终态；`xllm_history` 与 session 职责重复，只保留迁移兼容。
-20. xllm-session 是严格 single-writer 对象；`3.0.0-dev` 已用公开状态机固定 user/model/tool/turn 和 compaction prepare/execute/commit/abort 边界，并保留 v1/v2 相邻 turn 迁移兼容。token budget 由版本化 snapshot 暴露：shared 窗口按总窗口保留输出与安全空间，split 模式按独立输入上限保留安全空间，provider profile 只能被收窄，所有极值加法和阈值计算饱和而不回绕。工具关联键按 `(turn, tool_call_id)` 唯一：同 turn 不得复用，跨 turn 允许复用；所有写入/恢复入口和压缩、render 边界均禁止孤立或拆分 pair。压缩的 prepare/in-flight 阶段是可丢弃的进程内状态，只有完整 compact record 是 redo 点；恢复发布前必须重验代数、计数、质量与 pair 边界。persistence v3 已用 CRC32 覆盖 journal/snapshot 规范字节，checkpoint 只重放更高 sequence，默认逐记录 flush，并保留 append+显式 barrier；v1/v2 固定 fixture 和混合前缀均可迁移。读取 API 仍会更新 lazy cache，磁盘错误还会丢失 path/operation/xrt cause；后续必须提供不可变只读 snapshot、fork/truncate/clear 合同和可注入存储错误。
+20. xllm-session 是严格 single-writer 对象；`3.0.0-dev` 已用公开状态机固定 user/model/tool/turn 和 compaction prepare/execute/commit/abort 边界，并保留 v1/v2 相邻 turn 迁移兼容。token budget 由版本化 snapshot 暴露：shared 窗口按总窗口保留输出与安全空间，split 模式按独立输入上限保留安全空间，provider profile 只能被收窄，所有极值加法和阈值计算饱和而不回绕。工具关联键按 `(turn, tool_call_id)` 唯一：同 turn 不得复用，跨 turn 允许复用；所有写入/恢复入口和压缩、render 边界均禁止孤立或拆分 pair。压缩的 prepare/in-flight 阶段是可丢弃的进程内状态，只有完整 compact record 是 redo 点；恢复发布前必须重验代数、计数、质量与 pair 边界。persistence v3 已用 CRC32 覆盖 journal/snapshot 规范字节，checkpoint 只重放更高 sequence，默认逐记录 flush，并保留 append+显式 barrier；v1/v2 固定 fixture 和混合前缀均可迁移。普通 session getter 仍属于写者路径；跨线程读取必须先在稳定状态创建深拷贝的引用计数 snapshot，发布后不再访问源 session，超预算状态也能被 UI 安全检查。后续仍需固定 fork/truncate/clear 合同，并让磁盘错误保留 path/operation/xrt cause。
 21. xwork 的 task、tool registry、subagent 和 MCP proxy 全部随短命 `xwork_agent` 生存，无法支撑跨轮后台任务。v3 固定拆成进程级 runtime、不可变 agent definition、会话级 agent、单请求 run 和统一 task；Python REPL 不进入 core，原生 explore 提升为正式工具 backend。
 22. 三库独立构建不能由 xs all-module 宿主替代。session 已改为继承 xllm 的规范 XRT module root；xllm/xwork 默认依赖路径、xwork unity 的 explore/regex 和 LP64 测试格式均已修复。xserver 的 xwork 仍有 Python/config 分叉，当前 `UPSTREAM.txt` 的零分叉声明要到 LIB-3 同步后才重新成立。
-23. xllm 3.1 的发布真值由 `VERSION`、公开头版本宏和 `manifest.json` 共同约束；默认 CI 只跑有界合同集。Ling 3.0 Tiny 的三方言线上探针必须同时获得三条显式 URL 和 runtime key，缺配置时在联网前失败，离线 fixture 不得代替线上结论。
+23. xllm 3.1 的发布真值由 `VERSION`、公开头版本宏和 `manifest.json` 共同约束；默认 CI 只跑有界合同集。Ling 3.0 Tiny 线上专门开放 OpenAI Chat Completions、OpenAI Responses 与 Anthropic Messages 三种接口；严格探针必须同时获得三条显式 URL 和 runtime key，缺配置时在联网前失败，离线 fixture 不得代替线上结论。
 24. xserver 的 xrt extlib 副本以 `UPSTREAM.txt` 中完整 40 位提交为来源锚；`verify_vendored_xrt_lib.py` 同时验证工作树 HEAD 和每个已收录生产文件的 SHA-256。WSL 不能读取 Windows linked-worktree `.git` 路径时，发布构建必须显式传入经过格式校验的 `XS_BUILD_COMMIT`，不能接受 `unknown` 横幅。
 
 ## 下一步
 
-1. 继续 LIB-2 xllm-session：SES-106 不可变只读 snapshot 与并发读取，SES-107 fork/truncate/clear，SES-108 可注入存储错误和故障门禁；
+1. 继续 LIB-2 xllm-session：SES-107 fork/truncate/clear，SES-108 可注入存储错误和故障门禁；
 2. 实施 LIB-3 xwork，并从权威源码同步零分叉副本；运行环境提供凭据时再执行 Ling 3.0 Tiny 三接口真实探针；
 3. 全部后续验收继续使用有界功能、故障注入和确定性交错，略过压力与高负载测试。
