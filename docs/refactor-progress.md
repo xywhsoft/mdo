@@ -6,8 +6,8 @@
 
 | 仓库 | 开发位置/分支 | 当前基线 | 说明 |
 | --- | --- | --- | --- |
-| mdo | `D:\GIT\mdo` / 当前分支 | `5968756` | 产品、计划与集成账本 |
-| xrt | `codex/mdo-refactor-xrt` 独立工作树 | `c6b902848f68` | 原工作树有既存未提交内容，隔离开发 |
+| mdo | `D:\GIT\mdo` / 当前分支 | `af06648` | 产品、计划与集成账本 |
+| xrt | `codex/mdo-refactor-xrt` 独立工作树 | `d6895e956ef4` | 原工作树有既存未提交内容，隔离开发 |
 | xserver | `D:\GIT\xserver-mdo-refactor` / `codex/mdo-refactor-xs` | `6d5485e` | 原工作树有既存未提交内容，隔离开发 |
 
 ## 状态定义
@@ -80,6 +80,7 @@
 | SES-107 fork、truncate、clear 语义 | DONE | xrt `fad7e764` | Windows/GCC 与 Linux/Clang 的 25 项 branch 定向门及有界全回归通过；Linux Clang ASan/UBSan/LSan 定向与全回归、固定规模 snapshot TSan 通过；未运行压力或高负载测试 | `ForkAt` 在精确保留序列创建独立 runtime/journal epoch，完成的 tool pair 不得跨边界；rewind/clear 先写审计记录再无失败发布，恢复严格核对旧 `next_sequence`；文件 ledger 持久化首次 note 序列，配置字符串由 session 独立持有；空 turn、hook 重入和父销毁后子分支生命周期已覆盖 |
 | SES-108 持久化故障原子性 | DONE | xrt `c6b90284` | Windows/GCC、Linux/Clang 的 faults 定向门和有界全回归通过；Linux Clang ASan/UBSan/LSan 的 faults 与有界全回归通过；xllm Windows/Linux 有界门及 Linux sanitizer 门通过；仅执行有限逐分配点、短写、磁盘满和不确定确认故障，未运行压力或高负载测试 | session 自有分配统一走无生产开关的内部适配层，测试编译可逐点注入 OOM；snapshot/journal I/O 冻结 operation/path/XRT cause；短写精确回滚，flush/close 不确定结果进入 `RECOVERY_REQUIRED`；checkpoint 删除失败由水位线去重；本地 RESOURCE 读写错误不会触发 provider 自动重试 |
 | LIB-2 xllm/xllm-session vendored 同步与总门禁 | DONE | xserver `6d5485e` | xllm 17 个、xllm-session 14 个生产文件与 xrt `c6b90284` 双向逐字节一致；31 项扩展结构检查、2 项发布元数据检查、Windows/Linux 的 session 单扩展与全 15 扩展宿主构建、运行及嵌套 TCC 探测通过；未运行压力或高负载测试 | 来源锚升级为完整 40 位提交；同步 persistence v3、不可变 snapshot 与存储故障原子性；导入表覆盖 87 个 session 公开函数；校验器同时拒绝遗漏的上游新文件和意外 vendored 文件 |
+| WORK-101 runtime/agent/run 对象拆分 | DONE | xrt `d6895e95` | Windows/GCC 与 Linux/Clang warning-as-error 有界全回归通过；Linux Clang ASan/UBSan/LSan 与 TSan 有界全回归通过；C/C++ 公共头独立编译及 v3 ABI 符号导出检查通过；未运行压力或高负载测试 | 发布 xwork `3.0.0` lifetime spine：进程级 runtime、不可变 definition、会话 agent 和单请求异步 run 各自引用计数；取消幂等、等待超时不取消；runtime 统一持有稳定 task entry，后台进程跨 agent 替换仍可管理，半初始化任务不对查询发布，回收不在全局锁内执行 |
 | LIB-3 xwork 3.0 | DOING | - | - | 拆分 runtime/definition/agent/run/task，修复生命周期、并发、后台任务、工具和子 Agent 边界，再同步 xserver 零分叉副本 |
 | MDO-0～10 | TODO | - | - | LIB-GATE 后实施 |
 | QA-RELEASE | TODO | - | - | MDO-GATE 后实施 |
@@ -110,8 +111,9 @@
 22. 三库独立构建不能由 xs all-module 宿主替代。session 已改为继承 xllm 的规范 XRT module root；xllm/xwork 默认依赖路径、xwork unity 的 explore/regex 和 LP64 测试格式均已修复。xserver 的 xwork 仍有 Python/config 分叉，当前 `UPSTREAM.txt` 的零分叉声明要到 LIB-3 同步后才重新成立。
 23. xllm 3.1 的发布真值由 `VERSION`、公开头版本宏和 `manifest.json` 共同约束；默认 CI 只跑有界合同集。Ling 3.0 Tiny 线上专门开放 OpenAI Chat Completions、OpenAI Responses 与 Anthropic Messages 三种接口；严格探针必须同时获得三条显式 URL 和 runtime key，缺配置时在联网前失败，离线 fixture 不得代替线上结论。
 24. xserver 的 xrt extlib 副本以 `UPSTREAM.txt` 中完整 40 位提交为来源锚；`verify_vendored_xrt_lib.py` 同时验证工作树 HEAD 和每个已收录生产文件的 SHA-256。WSL 不能读取 Windows linked-worktree `.git` 路径时，发布构建必须显式传入经过格式校验的 `XS_BUILD_COMMIT`，不能接受 `unknown` 横幅。
+25. xwork v3 的对象生命周期不能继续由短命 session agent 代理：runtime 持有统一任务表，definition 是可共享的不可变策略代，run 独立持有取消、deadline、事件覆盖和 owned result，并反向保活 agent。任务条目以稳定独立分配和引用计数跨 agent 轮换存在，构造完成前不可查找，表摘除只释放表引用，潜在阻塞清理必须在 runtime 锁外执行。
 
 ## 下一步
 
-1. 实施 LIB-3 xwork 3.0 runtime/definition/agent/run/task 拆分，并从权威源码同步零分叉副本；运行环境提供凭据时再执行 Ling 3.0 Tiny 三接口真实探针；
+1. 实施 WORK-102 generation tool catalog：运行期间固定不可变目录 generation，更新原子发布且旧代按引用安全回收；随后继续 WORK-103～109，并在 LIB-3 收口时同步 xserver 零分叉副本；运行环境提供凭据时再执行 Ling 3.0 Tiny 三接口真实探针；
 2. 全部后续验收继续使用有界功能、故障注入和确定性交错，略过压力与高负载测试。
