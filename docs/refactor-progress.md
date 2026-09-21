@@ -6,8 +6,8 @@
 
 | 仓库 | 开发位置/分支 | 当前基线 | 说明 |
 | --- | --- | --- | --- |
-| mdo | `D:\GIT\mdo` / 当前分支 | `3cdfd8903d6c` | 产品、计划与集成账本 |
-| xrt | `codex/mdo-refactor-xrt` 独立工作树 | `d64cb745dfe6` | 原工作树有既存未提交内容，隔离开发 |
+| mdo | `D:\GIT\mdo` / 当前分支 | `5fb69a2dbfe3` | 产品、计划与集成账本 |
+| xrt | `codex/mdo-refactor-xrt` 独立工作树 | `2fc7988db1d3` | 原工作树有既存未提交内容，隔离开发 |
 | xserver | 待阶段二建立 | `695988f7b8ee` | xrt 阶段门后开始 |
 
 ## 状态定义
@@ -35,6 +35,7 @@
 | XRT-303A pack 格式与所有权合同 | DONE | xrt `604f7544` | `git diff --check` 与设计文档复核通过 | 冻结范围内相对偏移的新格式、严格 `XSVPACK` v1 迁移解析、解析预算、缓存状态机与统计；Create 成功接管任意 ReadAt source，失败保留调用方所有权 |
 | XRT-303B pack provider 核心实现 | DONE | xrt `48ac36df` | Windows 模块化/单头、公开 ABI、API 文档、单头一致性与 release maturity 通过 | 实现新格式与严格 XSVPACK v1 parser、STORE/LZMA1、不可变文件和目录、大小写双索引、条件变量单 loader、稳定失败、硬缓存预算、LRU 淘汰与统计；打开文件独立持有 blob |
 | XRT-304 pack provider 压实 | DONE | xrt `d64cb745` | Windows 模块化/单头、逐分配点 OOM、100 个同步首开线程和 1000 轮确定性 fuzz 通过；Linux Clang libFuzzer 10000 轮及模块化/单头 ASan/UBSan 冒烟通过；API/ABI、单头一致性、fuzz 闭包和 release maturity 通过 | 覆盖 Create 所有权失败、LZMA 分配失败、单 loader 成功/永久校验失败广播、缓存统计、双格式畸形输入和持久语料；强制干净重编译发现上一提交的 `7zTypes.h` 被误截断，本提交恢复完整上游源码并验证其实际参与编译。后续按用户要求略过压力与高负载测试 |
+| XRT-401 overlay 示例与 API 文档闭环 | DONE | xrt `2fc7988d` | Windows memory VFS 模块化、单头与示例运行通过；VFS API 文档 31 个函数、39 个常量、24 个类型 `missing=0`；single 与 release maturity 通过 | 官方示例演示内置资源、高优先级覆盖、MISS 回退、卸载恢复和 ERROR 阻断语义；不扩张 VFS ABI |
 | XS-101～109 | TODO | - | - | XRT-GATE 后实施 |
 | LIB-0～3 | TODO | - | - | XS-GATE 后实施 |
 | MDO-0～10 | TODO | - | - | LIB-GATE 后实施 |
@@ -55,7 +56,7 @@
 
 ## 下一步
 
-1. 实施 XRT-4：overlay policy、观测和可控故障注入；
+1. 审计 VFS 可观测性与可控故障注入是否已满足 xs 消费和 XRT-GATE；
 2. 以低负载功能回归、OOM、sanitizer 冒烟、静态检查和干净重编译完成 XRT-GATE；按用户要求不再执行压力或高负载测试；
 3. 在 mdo 集成节点复现并验证打包启动崩溃修复，关闭 XRT-0；
 4. 通过 XRT-GATE 后建立隔离的 xserver 阶段分支。
