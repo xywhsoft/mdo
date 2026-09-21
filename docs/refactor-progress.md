@@ -6,8 +6,8 @@
 
 | 仓库 | 开发位置/分支 | 当前基线 | 说明 |
 | --- | --- | --- | --- |
-| mdo | `D:\GIT\mdo` / 当前分支 | `601ee1f23c46` | 产品、计划与集成账本 |
-| xrt | `codex/mdo-refactor-xrt` 独立工作树 | `0022168baa7e` | 原工作树有既存未提交内容，隔离开发 |
+| mdo | `D:\GIT\mdo` / 当前分支 | `bbec7acd964c` | 产品、计划与集成账本 |
+| xrt | `codex/mdo-refactor-xrt` 独立工作树 | `72be40309e42` | 原工作树有既存未提交内容，隔离开发 |
 | xserver | `D:\GIT\xserver-mdo-refactor` / `codex/mdo-refactor-xs` | `6e69a8c6da93` | 原工作树有既存未提交内容，隔离开发 |
 
 ## 状态定义
@@ -61,7 +61,8 @@
 | LLM-102 provider adapter golden | DONE | xrt `0022168b` | Windows xllm 完整功能套件、Linux warning-as-error 构建、四种 provider 请求逐字节 fixture 和三类响应归一化 fixture 通过；未运行压力或高负载测试 | 固化 completions/GLM、Responses、Anthropic 的 adapter 名称、路径、请求 wire bytes 与统一响应语义；补齐 Responses `completed` 和 `max_output_tokens` 的 finish reason 归一化 |
 | LLM-108A 分配器状态隔离 | DONE | xrt `ff074576` | Windows xllm 完整功能套件与 96 个确定性 OOM 注入点、Linux warning-as-error 构建、正式对象符号扫描和 `git diff --check` 通过；未运行压力或高负载测试 | 生产分配路径直接使用 CRT，不再携带进程级 allocator selector/counter；故障分配器只在显式测试编译单元存在 |
 | LLM-104 client/call 配置快照 | DONE | xrt `5eb72335` | Windows xllm 完整功能套件、Linux warning-as-error 构建、session/xwork 消费端严格编译、两线程单次共享 prefix cache 与活跃 call hook 更新回归通过；未运行压力或高负载测试 | profile 首次使用后冻结且 provider 不得切换 wire dialect；hooks 在 client/call 两级按值快照；profile、hooks 和 prefix cache 由配置锁保护，回调不持锁 |
-| LLM-103 解析与传输资源上限 | DONE | xrt `847860be` | Windows xllm 完整功能套件、Linux warning-as-error 构建、配置拒绝和 SSE 行/事件确定性边界用例、`git diff --check` 通过；未运行压力或高负载测试 | client 显式配置 HTTP 头、响应体、SSE 行和事件上限；零值保持兼容默认，上限只能收紧；每个 call 冻结快照，越界统一返回 `XLLM_ERROR_LIMIT` 并使用溢出安全计算；同步修正文档中的构建产物、多模态和测试分配器说明 |
+| LLM-103A 解析与传输资源上限 | DONE | xrt `847860be` | Windows xllm 完整功能套件、Linux warning-as-error 构建、配置拒绝和 SSE 行/事件确定性边界用例、`git diff --check` 通过；未运行压力或高负载测试 | client 显式配置 HTTP 头、响应体、SSE 行和事件上限；零值保持兼容默认，上限只能收紧；每个 call 冻结快照，越界统一返回 `XLLM_ERROR_LIMIT` 并使用溢出安全计算；同步修正文档中的构建产物、多模态和测试分配器说明 |
+| LLM-103B 流式解析分片语料 | DONE | xrt `72be4030` | Windows xllm 完整功能套件、Linux warning-as-error 构建；三类 dialect 的整块、逐字节和固定变长分片结果一致，CRLF/LF、注释、空事件、中文 UTF-8、末行无换行及截断 UTF-8 用例通过；未运行压力或高负载测试 | 使用小型确定性 corpus 验证同一 SSE 状态机不受传输分片影响，截断 UTF-8 在任何模型数据交付前返回 parse error |
 | LIB-1～3 | TODO | - | - | 按 xllm、xllm-session、xwork 顺序实施 |
 | MDO-0～10 | TODO | - | - | LIB-GATE 后实施 |
 | QA-RELEASE | TODO | - | - | MDO-GATE 后实施 |
