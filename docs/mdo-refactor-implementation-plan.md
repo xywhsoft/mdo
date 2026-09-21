@@ -256,8 +256,8 @@ XRT-0 Future 生命周期阻断问题
 2. 明确 `xrtFutureWatchRemove` 调用期间 Future 的保活责任；
 3. 修复不能只在入口盲目加引用，必须证明引用获取本身不会访问已释放对象；
 4. 审计 watcher 是否拥有 Future、Future 是否拥有 watcher、detach 是否幂等；
-5. Windows 和 POSIX 分别运行高次数竞态测试；
-6. 用原始打包复现路径验证至少 100 次启动无崩溃；
+5. Windows 和 POSIX 分别运行低负载、确定性竞态回归，优先用可控调度和诊断断言覆盖关键排列；
+6. 用原始打包复现路径执行少量、带生命周期诊断的启动回归，确认原崩点不再出现；
 7. 为修复写生命周期说明，避免以后同类 API 重复出错。
 
 退出条件：
@@ -695,9 +695,9 @@ TCCState* xsCreateTCCEx(const xs_tcc_config* Config, xerror** Error);
 - 中文、空格、长路径；
 - pack/dev 语义等价；
 - reload 期间旧 TCC 函数仍在执行；
-- 打包 webview 启动 100 次；
+- 打包 webview 执行少量、带生命周期诊断的启动回归；
 - Windows/Linux 全量，macOS/其他目标至少完成编译门；
-- ASan/UBSan、长时间 reload 压力和故障注入。
+- ASan/UBSan 冒烟、受控 reload 生命周期回归和低负载故障注入。
 
 ## 21. XS 阶段门
 
@@ -723,7 +723,7 @@ TCCState* xsCreateTCCEx(const xs_tcc_config* Config, xerror** Error);
 - mock 测试不依赖公网和真实 key；
 - 持久化格式有版本、兼容与崩溃恢复测试；
 - Windows/Linux 是强制运行平台；
-- sanitizer、故障注入、压力和长时间测试有固定入口；
+- sanitizer 冒烟、低负载故障注入和确定性生命周期回归有固定入口；
 - 头文件、模块化对象和单 TU 发布形态一致；
 - README 中能力描述与实现、测试一致；
 - 三库版本和依赖范围由机器可读清单记录。
@@ -769,7 +769,7 @@ xllm 只负责一次模型调用：
 | LLM-103 | 统一流式与非流式解析器状态机 | 任意分片属性测试 |
 | LLM-104 | 审计 client/call/future/watch 所有权 | cancel/destroy 竞态通过 |
 | LLM-105 | 明确重试资格与幂等边界 | 已交付事件后绝不自动重试 |
-| LLM-106 | 连接池线程安全和关闭流程 | 并发 call、服务端断连压力 |
+| LLM-106 | 连接池线程安全和关闭流程 | 小样本并发 call、服务端断连恢复 |
 | LLM-107 | 密钥和敏感信息擦除/脱敏 | 日志与错误扫描测试 |
 | LLM-108 | 分配器与 OOM 穷举 | 每个公开入口可安全失败 |
 | LLM-109 | 文档、示例、兼容迁移 | README 与测试一致 |
@@ -1026,7 +1026,7 @@ xllm
 
 - API/ABI 审计问题全部有结论；
 - Windows/Linux warning-as-error 构建通过；
-- 单元、mock protocol、故障注入、sanitizer、压力测试通过；
+- 单元、mock protocol、低负载故障注入、sanitizer 冒烟和确定性生命周期回归通过；
 - 持久化迁移 fixture 通过；
 - xwork 长生命周期 runtime 集成测试通过；
 - xs vendored 文件与 xrt/extlibs 权威源码字节一致；
@@ -1486,6 +1486,8 @@ web/js/
 
 # 阶段五：完善测试和压实
 
+> 执行约束（2026-09-21）：后续略过压力测试和高负载测试。验收采用低负载、可复现、可诊断的功能测试、确定性并发交错、有限语料、OOM/故障注入、sanitizer 冒烟、静态检查和干净重编译。本文较早章节中的“全量”只表示对应功能集合，不表示扩大并发数、循环次数或持续时间。
+
 ## 42. 测试分层
 
 ### 42.1 单元测试
@@ -1548,7 +1550,7 @@ web/js/
 
 ### 42.6 并发与生命周期
 
-固定压力场景：
+使用确定性调度、状态屏障和小样本交错覆盖以下场景，不运行压力或高负载测试：
 
 - open/unmount；
 - Future watch/remove/destroy；
@@ -1559,16 +1561,16 @@ web/js/
 - task completion 与 shutdown；
 - Web client disconnect/reconnect。
 
-### 42.7 soak 与演练
+### 42.7 受控恢复演练
 
-- 高频 xs reload；
-- mdo 多会话持续运行；
-- provider 慢流和断流；
-- 大量短任务与少量长任务混合；
-- 周期性模块 reload；
-- 定时任务跨日期/时区边界；
-- 缓存持续 eviction；
-- graceful stop 和强制崩溃后的恢复。
+- 少量 xs reload 与旧 generation 退场；
+- 少量会话的保存、恢复和切换；
+- provider 慢流、断流与取消；
+- 少量短任务和单个长任务的交错；
+- 单次模块 reload；
+- 用模拟时钟验证定时任务跨日期/时区边界；
+- 用小容量预算触发确定性缓存 eviction；
+- graceful stop 和单次强制崩溃后的恢复。
 
 ## 43. 平台矩阵
 
@@ -1602,8 +1604,8 @@ web/js/
 
 - 全仓 Windows/Linux；
 - 全 sanitizer；
-- fuzz 固定时间预算；
-- 并发压力；
+- 小规模固定语料与有界确定性 fuzz；
+- 并发与生命周期确定性回归；
 - packed/dev E2E；
 - UI E2E；
 - vendored byte equality；
@@ -1612,7 +1614,7 @@ web/js/
 ### Release 门
 
 - Nightly 全部通过；
-- 长时间 soak/演练；
+- 受控短时恢复演练；
 - 旧数据与旧 pack fixture；
 - 单文件 clean-room 测试；
 - 可选真实 provider probe；
@@ -1701,7 +1703,7 @@ mdo 1.0/本轮重构版本只有满足以下条件才能发布：
 - [ ] disk provider
 - [ ] directory enumeration
 - [ ] pack provider 与旧 XSVPACK reader
-- [ ] OOM、竞态、fuzz、sanitizer、benchmark
+- [ ] OOM、确定性竞态、有限语料 fuzz、sanitizer 冒烟、benchmark
 - [ ] 单头生成、文档、示例
 - [ ] XRT-GATE 评审
 
@@ -1732,7 +1734,7 @@ mdo 1.0/本轮重构版本只有满足以下条件才能发布：
 - [ ] 并行工具冲突调度
 - [ ] 可配置子 Agent
 - [ ] MCP 惰性连接与 conformance
-- [ ] 三库 sanitizer/stress/docs/release
+- [ ] 三库 sanitizer 冒烟、确定性生命周期回归、docs/release
 - [ ] 同步 xserver vendored 副本及生成物
 - [ ] LIB-GATE 评审
 
@@ -1761,8 +1763,8 @@ mdo 1.0/本轮重构版本只有满足以下条件才能发布：
 
 - [ ] 单元/契约/集成/UI E2E
 - [ ] fuzz/OOM/短读写/磁盘满
-- [ ] 并发和生命周期压力
-- [ ] nightly 与 release soak
+- [ ] 并发和生命周期确定性回归
+- [ ] nightly 与 release 受控恢复演练
 - [ ] Windows/Linux Tier 1
 - [ ] Tier 2 构建与定期真机
 - [ ] 单文件 clean-room
