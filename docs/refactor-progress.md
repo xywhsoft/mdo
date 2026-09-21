@@ -6,8 +6,8 @@
 
 | 仓库 | 开发位置/分支 | 当前基线 | 说明 |
 | --- | --- | --- | --- |
-| mdo | `D:\GIT\mdo` / 当前分支 | `05c3651` | 产品、计划与集成账本 |
-| xrt | `codex/mdo-refactor-xrt` 独立工作树 | `752ee602` | 原工作树有既存未提交内容，隔离开发 |
+| mdo | `D:\GIT\mdo` / 当前分支 | `d380433` | 产品、计划与集成账本 |
+| xrt | `codex/mdo-refactor-xrt` 独立工作树 | `2fc7dac2` | 原工作树有既存未提交内容，隔离开发 |
 | xserver | `D:\GIT\xserver-mdo-refactor` / `codex/mdo-refactor-xs` | `6d5485e` | 原工作树有既存未提交内容，隔离开发 |
 
 ## 状态定义
@@ -88,6 +88,7 @@
 | WORK-106 并行工具调度与资源冲突控制 | DONE | xrt `692f97da` | Windows/GCC 的 xllm 构建、xllm-session 与 xwork 有界全回归通过；Linux/Clang warning-as-error、Clang ASan/UBSan/LSan 与 GCC TSan 有界全回归通过；C11/C++17 公共头独立编译及 10 个新增/相关 ABI 符号导出检查通过；固定波次、描述器单次调用、同组串行、真实乱序完成、结果原序提交和描述器失败关闭回归通过；未运行压力或高负载测试 | xllm executor 以版本和尺寸探测可选 batch seam，旧 executor 保持串行兼容；xwork 对每批调用生成稳定 sequence 和最早合法 wave，只让显式 parallel-safe 且资源无冲突的调用并行；重叠写路径、进程/计划/委派全局 effect 和相同 serial group 严格有序；回调串行化，session 始终按模型原调用顺序提交结果 |
 | WORK-107 可配置子 Agent 与委派边界 | DONE | xrt `80184be3` | Windows/GCC 的 xllm-session 与 xwork 有界全回归通过；Linux/Clang warning-as-error、Clang ASan/UBSan/LSan 与 GCC TSan 有界全回归通过；C11/C++17 公共头独立编译及新增 ABI 符号导出检查通过；目录换代、模型和预算传播、effect 收窄、深度/并发、前后台、事件谱系、取消及输出硬上限回归通过；未运行压力或高负载测试 | 子 Agent 定义以引用计数不可变 generation 原子发布并深拷贝字符串、工具与 skill；子会话复用绑定模型驱动但拥有独立 ledger，预算只能收窄；默认定义只读且仅前台，嵌套委派同时受工具白名单、effect、定义深度和共享 tree scope 限制；后台任务保有取消令牌并只向父级返回最终报告 |
 | WORK-108 MCP 生命周期与惰性工具加载 | DONE | xrt `752ee602` | Windows/GCC、Linux/Clang warning-as-error 有界全回归通过；Clang ASan/UBSan/LSan 与 GCC TSan 有界全回归通过，TSan 构建仅将 xrt 既有 `atomic_thread_fence` 和 TLS 保守未初始化告警从 error 降为 warning；C11/C++17 公共头及 10 个新增 ABI 符号通过；现代/旧版 codec、冷注册、环境传递、摘要搜索、单 schema 加载、allowlist、重连、停用/注销、畸形 JSON、重复 cursor 和异常退出回归通过；未运行压力或高负载测试 | runtime 拥有稳定 MCP server 记录和进程；默认 `2026-07-28` 使用 `server/discover` 与逐请求 metadata，兼容 API 默认 `2025-11-25` 初始化握手；Agent 初始只注入 `tool_search`/`tool_load`，完整 schema 按选择逐个发布；未发布缓存代及时释放，已发布 proxy 保留到 runtime 销毁并在停用/注销后关闭失败 |
+| WORK-109 可恢复 runtime scheduler | DONE | xrt `2fc7dac2` | Windows/GCC 与 Linux/Clang warning-as-error 有界全回归通过；Clang ASan/UBSan/LSan 与 GCC TSan 有界全回归通过；C11/C++17 公共头独立编译及 12 个新增 ABI 符号通过；到期、固定偏移/系统本地时区、weekday mask、skip/run-once/catch-up misfire、skip/queue-one overlap、稳定同刻排序、无效 ABI/血缘、容量和重启恢复回归通过；未运行压力或高负载测试 | runtime 冷注册并深拷贝 schedule 定义，宿主以显式 Unix 微秒时间单次 claim；每次 claim 原子推进持久化 cursor 并创建统一 RUNNING scheduled task；分钟/小时使用绝对间隔，日/周保持 wall-clock，DST gap 跳过、fold 可选；恢复定义一次锁内发布，不暴露初始 cursor；稳定借用字符串使容量成为 runtime 生命周期注册上限 |
 | LIB-3 xwork 3.0 | DOING | - | - | 拆分 runtime/definition/agent/run/task，修复生命周期、并发、后台任务、工具和子 Agent 边界，再同步 xserver 零分叉副本 |
 | MDO-0～10 | TODO | - | - | LIB-GATE 后实施 |
 | QA-RELEASE | TODO | - | - | MDO-GATE 后实施 |
@@ -126,8 +127,9 @@
 30. 工具批调度先固定目录 generation、Run ID、原始 sequence 和每项权限资源，再计算确定性 wave；只读资源彼此不冲突，任一写访问与同一路径或祖先/后代路径冲突，进程、计划和委派 effect 按类别形成全局屏障，相同 serial group 形成显式模块屏障。无法规范化的路径只收紧为保守串行，资源描述器自身失败则在任何权限回调和工具执行前关闭；工作线程可以乱序完成，但 executor 所有权边界和 session 落账都保持输入顺序。
 31. 子 Agent roster 与工具目录一样按不可变 generation 发布；运行中的委派同时固定 roster 和父工具目录，换代不会改写既有调用。子定义可收窄工具、skill、effect、模型、推理等级、context/input/output、turn、timeout、最终输出、深度与后台能力；共享 delegation scope 对整棵任务树执行并发上限。子会话通过 session 的借用模型驱动边界执行，但 ledger、预算和最终报告所有权独立；后台任务拥有取消令牌，worker 只在 join 前借用。
 32. MCP server 属于长生命周期 runtime，配置注册必须是冷操作，摘要枚举不得启动进程；server-specific 搜索只缓存受 allow/deny 过滤的名称和描述，`tool_load` 才把一个完整 schema 发布到 Agent 的下一轮模型请求。`2026-07-28` 与 `2025-11-25` 是两套显式 wire codec，不做静默降级；截至 2026-09-22，发布前核对的当前 final 版本是 `2026-07-28`。runtime server 地址保持到销毁，停用和注销只改变可用性并停止进程，因此旧工具目录的 callback 不悬空且稳定关闭失败；纯搜索缓存换代不保留，从而避免 TTL 刷新无界积累。
+33. xwork scheduler 不拥有隐式时钟线程：宿主传入显式 Unix 微秒时间并每次最多 claim 一个 occurrence，claim 成功才同时推进 definition cursor 并把执行发布到统一 task 表。分钟/小时是绝对时间间隔，日/周在 UTC、固定偏移或系统本地时区保持 anchor wall-clock；本地 DST gap 跳过，fold 按定义选择。misfire 与 overlap 都有明确有界策略；definition restore 必须先完整验证和构造，再在一次 scheduler 锁内原子发布，不能让并发 claim 看到注册初值。claim/info 的字符串借用稳定 definition 存储，因此 unregister 使用 tombstone，`uMaxSchedules` 约束 runtime 生命周期内注册总量。
 
 ## 下一步
 
-1. 实施 WORK-109 scheduler 接口、recurrence/misfire/timezone 与恢复语义，再继续 WORK-110 artifacts/audit/event 统一；在 LIB-3 收口时同步 xserver 零分叉副本；运行环境提供三条显式 URL 和 runtime key 时再执行 Ling 3.0 Tiny 的 Chat Completions、Responses 与 Anthropic Messages 真实探针；
+1. 实施 WORK-110 artifacts/audit/event 统一，再完成 WORK-111 与 LIB-3 收口并同步 xserver 零分叉副本；运行环境提供三条显式 URL 和 runtime key 时再执行 Ling 3.0 Tiny 的 Chat Completions、Responses 与 Anthropic Messages 真实探针；
 2. 全部后续验收继续使用有界功能、故障注入和确定性交错，略过压力与高负载测试。
