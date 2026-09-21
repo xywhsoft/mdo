@@ -11,6 +11,8 @@ window-state-*.txt
 *.tmp
 *.dmp
 crash_*.txt
+__pycache__/
+*.pyc
 
 # 随程序分发的第三方工具（约 112M，重建方法见 tools/README.md）
 tools/*
