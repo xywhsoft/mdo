@@ -6,9 +6,9 @@
 
 | 仓库 | 开发位置/分支 | 当前基线 | 说明 |
 | --- | --- | --- | --- |
-| mdo | `D:\GIT\mdo` / 当前分支 | `f96aa12fc681` | 产品、计划与集成账本 |
-| xrt | `codex/mdo-refactor-xrt` 独立工作树 | `d3dc726ea71d` | 原工作树有既存未提交内容，隔离开发 |
-| xserver | 待阶段二建立 | `695988f7b8ee` | xrt 阶段门后开始 |
+| mdo | `D:\GIT\mdo` / 当前分支 | `fe1a6e3c3326` | 产品、计划与集成账本 |
+| xrt | `codex/mdo-refactor-xrt` 独立工作树 | `391f4858df8b` | 原工作树有既存未提交内容，隔离开发 |
+| xserver | `D:\GIT\xserver-mdo-refactor` / `codex/mdo-refactor-xs` | `695988f7b8ee` | 原工作树有既存未提交内容，隔离开发 |
 
 ## 状态定义
 
@@ -38,6 +38,7 @@
 | XRT-401 overlay 示例与 API 文档闭环 | DONE | xrt `2fc7988d` | Windows memory VFS 模块化、单头与示例运行通过；VFS API 文档 31 个函数、39 个常量、24 个类型 `missing=0`；single 与 release maturity 通过 | 官方示例演示内置资源、高优先级覆盖、MISS 回退、卸载恢复和 ERROR 阻断语义；不扩张 VFS ABI |
 | XRT-402 可观测性与故障注入边界 | DONE | xrt `93410a17` | Windows、Linux Clang ASan/UBSan 的模块化和单头用例通过；API/ABI、单头一致性和 release maturity 通过 | 以 MountId 和 provider 自有统计支撑诊断，不在 lookup 热路径加入全局计数；用普通 source backend 验证合法短读、提前 EOF、结构化 I/O 错误、缺少 ReadAt 和 Source close-once，不增加生产全局故障开关 |
 | XRT-403 pack fixture 隔离 | DONE | xrt `d3dc726e` | VFS 组合功能门通过；OOM/并发目标仅编译模块化与单头轨，未执行高负载用例；单头一致性与 diff 检查通过 | 临时文件 helper 改为测试显式 opt-in，避免组合 suite 因全局 FILE_TEMP 特性暴露未使用静态函数；遵循后续略过压力和高负载测试的约束 |
+| XRT-GATE VFS 库门禁 | DONE | xrt `391f4858` | 组合功能门、可选高负载测试编译门、API 文档、公开 ABI、release maturity、单头一致性和 diff 检查通过 | 库内实现允许进入宿主集成；真实打包路径仍是 XRT-0 的必要宿主验收，不能用库测试替代 |
 | XS-101～109 | TODO | - | - | XRT-GATE 后实施 |
 | LIB-0～3 | TODO | - | - | XS-GATE 后实施 |
 | MDO-0～10 | TODO | - | - | LIB-GATE 后实施 |
@@ -58,6 +59,6 @@
 
 ## 下一步
 
-1. 以低负载功能回归、OOM、sanitizer 冒烟、静态检查和干净重编译形成 XRT-GATE 审计报告；按用户要求不再执行压力或高负载测试；
-2. 在 mdo 集成节点复现并验证打包启动崩溃修复，关闭 XRT-0；
-3. 通过 XRT-GATE 后建立隔离的 xserver 阶段分支。
+1. 在隔离 xserver 工作树同步并锁定 xrt `391f4858`；
+2. 在 mdo 集成节点执行少量、带生命周期诊断的打包启动回归，关闭 XRT-0；
+3. XRT-0 关闭后实施 xs application VFS、SDK VFS 与 TCC per-state filesystem vtable。
