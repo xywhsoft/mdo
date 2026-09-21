@@ -6,9 +6,9 @@
 
 | 仓库 | 开发位置/分支 | 当前基线 | 说明 |
 | --- | --- | --- | --- |
-| mdo | `D:\GIT\mdo` / 当前分支 | `6dcabd9` | 产品、计划与集成账本 |
+| mdo | `D:\GIT\mdo` / 当前分支 | `5968756` | 产品、计划与集成账本 |
 | xrt | `codex/mdo-refactor-xrt` 独立工作树 | `c6b902848f68` | 原工作树有既存未提交内容，隔离开发 |
-| xserver | `D:\GIT\xserver-mdo-refactor` / `codex/mdo-refactor-xs` | `8745be1` | 原工作树有既存未提交内容，隔离开发 |
+| xserver | `D:\GIT\xserver-mdo-refactor` / `codex/mdo-refactor-xs` | `6d5485e` | 原工作树有既存未提交内容，隔离开发 |
 
 ## 状态定义
 
@@ -79,7 +79,8 @@
 | SES-106 不可变只读 snapshot 与并发读取 | DONE | xrt `8da4ec71` | Windows/GCC、Linux/Clang warning-as-error 有界全回归通过；4 个 reader、每个 9 次固定读取的定向交错在 Windows/Linux、Linux Clang TSan 与 ASan/UBSan/LSan 下通过；sanitizer 有界全回归通过；未运行压力或高负载测试 | session 保持严格单写者；稳定点深拷贝配置、预算、状态、stats、summary、pending calls、文件 ledger 和 hook 完成后的 owned request。引用计数快照不回指 session/client/hook/journal/runtime，源继续变更或销毁后仍可并发读取；超预算快照保留诊断但拒绝构建模型请求 |
 | SES-107 fork、truncate、clear 语义 | DONE | xrt `fad7e764` | Windows/GCC 与 Linux/Clang 的 25 项 branch 定向门及有界全回归通过；Linux Clang ASan/UBSan/LSan 定向与全回归、固定规模 snapshot TSan 通过；未运行压力或高负载测试 | `ForkAt` 在精确保留序列创建独立 runtime/journal epoch，完成的 tool pair 不得跨边界；rewind/clear 先写审计记录再无失败发布，恢复严格核对旧 `next_sequence`；文件 ledger 持久化首次 note 序列，配置字符串由 session 独立持有；空 turn、hook 重入和父销毁后子分支生命周期已覆盖 |
 | SES-108 持久化故障原子性 | DONE | xrt `c6b90284` | Windows/GCC、Linux/Clang 的 faults 定向门和有界全回归通过；Linux Clang ASan/UBSan/LSan 的 faults 与有界全回归通过；xllm Windows/Linux 有界门及 Linux sanitizer 门通过；仅执行有限逐分配点、短写、磁盘满和不确定确认故障，未运行压力或高负载测试 | session 自有分配统一走无生产开关的内部适配层，测试编译可逐点注入 OOM；snapshot/journal I/O 冻结 operation/path/XRT cause；短写精确回滚，flush/close 不确定结果进入 `RECOVERY_REQUIRED`；checkpoint 删除失败由水位线去重；本地 RESOURCE 读写错误不会触发 provider 自动重试 |
-| LIB-2 vendored 同步与总门禁、LIB-3 | DOING | - | - | 同步 xllm-session/xllm 到 xserver 并验证零分叉，再实施 xwork 3.0 |
+| LIB-2 xllm/xllm-session vendored 同步与总门禁 | DONE | xserver `6d5485e` | xllm 17 个、xllm-session 14 个生产文件与 xrt `c6b90284` 双向逐字节一致；31 项扩展结构检查、2 项发布元数据检查、Windows/Linux 的 session 单扩展与全 15 扩展宿主构建、运行及嵌套 TCC 探测通过；未运行压力或高负载测试 | 来源锚升级为完整 40 位提交；同步 persistence v3、不可变 snapshot 与存储故障原子性；导入表覆盖 87 个 session 公开函数；校验器同时拒绝遗漏的上游新文件和意外 vendored 文件 |
+| LIB-3 xwork 3.0 | DOING | - | - | 拆分 runtime/definition/agent/run/task，修复生命周期、并发、后台任务、工具和子 Agent 边界，再同步 xserver 零分叉副本 |
 | MDO-0～10 | TODO | - | - | LIB-GATE 后实施 |
 | QA-RELEASE | TODO | - | - | MDO-GATE 后实施 |
 
@@ -112,6 +113,5 @@
 
 ## 下一步
 
-1. 完成 LIB-2 总门禁：把权威 xllm-session/xllm 变更同步到 xserver，验证来源哈希、TCC 导入、宿主和嵌套消费路径零分叉；
-2. 实施 LIB-3 xwork 3.0 runtime/definition/agent/run/task 拆分，并从权威源码同步零分叉副本；运行环境提供凭据时再执行 Ling 3.0 Tiny 三接口真实探针；
-3. 全部后续验收继续使用有界功能、故障注入和确定性交错，略过压力与高负载测试。
+1. 实施 LIB-3 xwork 3.0 runtime/definition/agent/run/task 拆分，并从权威源码同步零分叉副本；运行环境提供凭据时再执行 Ling 3.0 Tiny 三接口真实探针；
+2. 全部后续验收继续使用有界功能、故障注入和确定性交错，略过压力与高负载测试。
