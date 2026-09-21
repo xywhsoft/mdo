@@ -6,9 +6,9 @@
 
 | 仓库 | 开发位置/分支 | 当前基线 | 说明 |
 | --- | --- | --- | --- |
-| mdo | `D:\GIT\mdo` / 当前分支 | `1491591` | 产品、计划与集成账本 |
+| mdo | `D:\GIT\mdo` / 当前分支 | `611e8b0` | 产品、计划与集成账本 |
 | xrt | `codex/mdo-refactor-xrt` 独立工作树 | `a90e616c41fb` | 原工作树有既存未提交内容，隔离开发 |
-| xserver | `D:\GIT\xserver-mdo-refactor` / `codex/mdo-refactor-xs` | `daa889a533c8` | 原工作树有既存未提交内容，隔离开发 |
+| xserver | `D:\GIT\xserver-mdo-refactor` / `codex/mdo-refactor-xs` | `f12232220da7` | 原工作树有既存未提交内容，隔离开发 |
 
 ## 状态定义
 
@@ -53,7 +53,7 @@
 | XS-106 TCC 双 VFS | DONE | xserver `259f579` | 默认和 xllm/xllm-session/xwork/md4c/webview 完整宿主构建、per-state ABI、VFS 生命周期、26 项结构门禁、31 项磁盘/打包站点门禁、完整扩展嵌套 TCC 探测通过；未运行压力或高负载测试 | `xsCreateTCCEx` 为每个 state 持有 Application/SDK VFS；SDK provider 按需解压 `/include`、`/xs`、`/lib`；quoted include 与 angle include 隔离，应用同名 `stdio.h` 无法覆盖系统头；重载入口源码使用 state 私有 overlay，结构化错误以 owned `xerror` 返回 |
 | XS-107 删除全局 TCC VFS | DONE | xserver `9824564` | 默认与五扩展宿主完整重建、31 项站点/VFS、per-state ABI、VFS 生命周期、26 项结构门禁和完整扩展嵌套 TCC 通过；源码与资源对象旧符号扫描零命中；未运行压力或高负载测试 | 删除动态资源表、固定范围伪 fd、宏重映射、全局清理和脚本旧符号导出；只读存储改名 `tcc_resource_store`，按 open 解压且无全局可变状态；未绑定 state 经 UTF-8 原生路径读取宿主文件系统 |
 | XS-108 generation/reload 集成 | DONE | xserver `daa889a` | 默认与 xllm/xllm-session/xwork/md4c/webview 宿主完整重建；27 项结构门禁、VFS 生命周期、31 项站点/pack、per-state TCC、完整扩展嵌套 TCC 通过；一条保留 keep-alive 连接的确定性换代回归验证旧/新静态根隔离和 reaper 精确终结；未运行压力或高负载测试 | 每个 server generation 创建独立 Application VFS namespace，按原顺序 retained disk/memory/pack provider 并复制 Root；脚本编译、TLS、HTTP 静态文件显式绑定 generation，脚本回调中的默认 VFS 随线程局部 generation 切换；最后一个 generation 引用归零后才销毁旧 TCC、driver、VFS 和配置 revision |
-| XS-109 发布资料闭环 | TODO | - | - | 更新许可修改说明、扩展生成器资料和阶段发布门 |
+| XS-109 发布资料闭环 | DONE | xserver `f122322` | 2 项发布 ZIP 元数据测试、28 项扩展/结构门禁、生成器 dry-run、真实默认宿主重建、per-state TCC 文件系统、VFS 生命周期和版本启动检查通过；未运行压力或高负载测试 | 补齐 `THIRD_PARTY_NOTICES.md`、xrt 内嵌依赖许可副本、各扩展来源/许可和 TCC 修改索引；发布 ZIP 固定携带 NOTICE、许可与精确 revision 的 `SOURCE.md`；发布目录改为可移植的 `release/dist/`；生成的 `tcc_sdk_resources.c` 只存在于 `.build/`，删除源码树内 4.5 MB 陈旧快照 |
 | LIB-0～3 | TODO | - | - | XS-GATE 后实施 |
 | MDO-0～10 | TODO | - | - | LIB-GATE 后实施 |
 | QA-RELEASE | TODO | - | - | MDO-GATE 后实施 |
@@ -76,9 +76,10 @@
 14. Application 与 SDK 搜索路径必须在 libtcc 层区分：quoted include 才能搜索当前源码目录和 Application 路径，angle include 只搜索 SDK 路径。SDK 内置资源由只读 xrt provider 按打开粒度解压，不再为 XS 编译分配进程级伪 fd；候选入口源码由当前 state 的私有 overlay 固化。
 15. TCC 内置 SDK 字节只是不可变资源存储，不是第二套文件系统。路径路由只存在于 state 绑定的 Application/SDK filesystem；未绑定 state 只走宿主文件系统，Windows 由 UTF-8 宽字符桥处理原生路径。
 16. `xrtVfsRef` 只能保活同一个可变 namespace，不能作为 app generation snapshot。xs generation 必须新建独立 namespace，并按当时的挂载顺序 retained provider；磁盘 provider 冻结的是根句柄和 provider 组合，不复制文件内容，因此外部资源发布仍采用不可变版本目录后原子切换配置。
+17. TCC SDK 资源 C 文件是纯构建产物，正式构建按平台/扩展组合生成到 `.build/`；源码目录不保留可漂移快照。二进制发布包必须携带适用第三方声明、许可副本和精确源码 revision/重新链接入口。
 
 ## 下一步
 
-1. 实施 XS-109：完成许可修改说明、扩展生成器资料和发布资料；
-2. 执行 XS-GATE 的有界兼容、打包与生命周期门禁；
-3. XS-GATE 通过后开始三个上层库的生产级重构。全部后续验收继续使用有界功能、故障注入和确定性交错，略过压力与高负载测试。
+1. 执行 XS-GATE 的有界兼容、打包与生命周期门禁；
+2. XS-GATE 通过后开始三个上层库的生产级重构；
+3. 全部后续验收继续使用有界功能、故障注入和确定性交错，略过压力与高负载测试。
