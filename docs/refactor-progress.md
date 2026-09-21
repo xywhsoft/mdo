@@ -6,9 +6,9 @@
 
 | 仓库 | 开发位置/分支 | 当前基线 | 说明 |
 | --- | --- | --- | --- |
-| mdo | `D:\GIT\mdo` / 当前分支 | `b282b52` | 产品、计划与集成账本 |
+| mdo | `D:\GIT\mdo` / 当前分支 | `f6c6dd4` | 产品、计划与集成账本 |
 | xrt | `codex/mdo-refactor-xrt` 独立工作树 | `a90e616c41fb` | 原工作树有既存未提交内容，隔离开发 |
-| xserver | `D:\GIT\xserver-mdo-refactor` / `codex/mdo-refactor-xs` | `248df088459a` | 原工作树有既存未提交内容，隔离开发 |
+| xserver | `D:\GIT\xserver-mdo-refactor` / `codex/mdo-refactor-xs` | `de3fd9416f12` | 原工作树有既存未提交内容，隔离开发 |
 
 ## 状态定义
 
@@ -46,7 +46,8 @@
 | XS-101 同步并锁定 xrt | DONE | xserver `32e7a23` | xrt 单头/声明头逐字节匹配 `36955ba1`；3114 个 TCC 导入符号再生；Windows 默认宿主和 26 项扩展/VFS 单元测试通过 | 首次集成发现的宏与符号隔离问题均回到权威 xrt 修复 |
 | XS-101B 同步代理 Future 与 xllm | DONE | xserver `aa27aca` | xrt 单头/声明头及 xllm 已收录文件逐字节匹配 `a90e616c`；3115 个 XRT 导入符号再生；26 项扩展/VFS 单元测试、xllm 宿主构建和版本启动冒烟通过 | xserver 不再保留本地代理桥接分叉；宿主只消费权威 XRT/xllm 实现 |
 | XS-101C SDK 头自包含 | DONE | xserver `248df08` | 五扩展 webview 宿主重建、26 项扩展/VFS 检查和最小 pack 启动冒烟通过 | `xsbase.h` 自行包含其内联 `strcmp` 所需的标准声明，TCC 应用不再依赖使用方碰巧先包含 `string.h` |
-| XS-102～109 | TODO | - | - | XRT-0 宿主验收后实施 |
+| XS-102 Application/SDK VFS 对象 | DONE | xserver `de3fd94` | 双命名空间生命周期与隔离测试、26 项扩展测试、默认宿主完整构建和版本启动检查通过 | 建立进程级 Application/SDK VFS；公开接口仅返回 Application 借用句柄，SDK 命名空间保持宿主内部可见 |
+| XS-103～109 | TODO | - | - | 继续迁移应用资源、pack 与 TCC 文件系统 |
 | LIB-0～3 | TODO | - | - | XS-GATE 后实施 |
 | MDO-0～10 | TODO | - | - | LIB-GATE 后实施 |
 | QA-RELEASE | TODO | - | - | MDO-GATE 后实施 |
@@ -66,6 +67,6 @@
 
 ## 下一步
 
-1. 实施 xs application VFS 与 SDK VFS 对象，迁移配置、证书、静态文件和脚本读取；
+1. 将配置、证书、静态文件和脚本读取迁移到 Application VFS，消除 `XS_AppFree(data, fromVfs)` 双所有权接口；
 2. 为 TCC 建立 per-state filesystem vtable，消除进程级站点挂载；
-3. 为旧 xs pack fixture 和新的 XRT pack provider 建立有界兼容迁移验证。
+3. 为旧 xs pack fixture 和新的 XRT pack provider 建立有界兼容迁移验证；全部后续验收继续略过压力和高负载测试。
