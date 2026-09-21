@@ -6,8 +6,8 @@
 
 | 仓库 | 开发位置/分支 | 当前基线 | 说明 |
 | --- | --- | --- | --- |
-| mdo | `D:\GIT\mdo` / 当前分支 | `56f1fbb48a59` | 产品、计划与集成账本 |
-| xrt | `codex/mdo-refactor-xrt` 独立工作树 | `48ac36df5ae8` | 原工作树有既存未提交内容，隔离开发 |
+| mdo | `D:\GIT\mdo` / 当前分支 | `3cdfd8903d6c` | 产品、计划与集成账本 |
+| xrt | `codex/mdo-refactor-xrt` 独立工作树 | `d64cb745dfe6` | 原工作树有既存未提交内容，隔离开发 |
 | xserver | 待阶段二建立 | `695988f7b8ee` | xrt 阶段门后开始 |
 
 ## 状态定义
@@ -34,6 +34,7 @@
 | XRT-302 disk provider | DONE | xrt `2c3e9914` | Windows 模块化/单头、穷举 OOM、四线程压力通过；Linux 原生文件系统上的模块化/单头 ASan/UBSan/LSan、OOM 与 Clang TSan 通过；公开 ABI、API 文档、单头生成和 release maturity 通过 | 以 `xroot` 锚定物理根并冻结读写授权；逐 segment 处理敏感/ASCII 折叠查找，拒绝折叠冲突、链接/reparse point 和特殊文件；保留原生文件能力与 generation 生命周期；目录改名后仍可访问；修复 Windows 复制目录句柄共享枚举游标导致的并发失败 |
 | XRT-303A pack 格式与所有权合同 | DONE | xrt `604f7544` | `git diff --check` 与设计文档复核通过 | 冻结范围内相对偏移的新格式、严格 `XSVPACK` v1 迁移解析、解析预算、缓存状态机与统计；Create 成功接管任意 ReadAt source，失败保留调用方所有权 |
 | XRT-303B pack provider 核心实现 | DONE | xrt `48ac36df` | Windows 模块化/单头、公开 ABI、API 文档、单头一致性与 release maturity 通过 | 实现新格式与严格 XSVPACK v1 parser、STORE/LZMA1、不可变文件和目录、大小写双索引、条件变量单 loader、稳定失败、硬缓存预算、LRU 淘汰与统计；打开文件独立持有 blob |
+| XRT-304 pack provider 压实 | DONE | xrt `d64cb745` | Windows 模块化/单头、逐分配点 OOM、100 个同步首开线程和 1000 轮确定性 fuzz 通过；Linux Clang libFuzzer 10000 轮及模块化/单头 ASan/UBSan 冒烟通过；API/ABI、单头一致性、fuzz 闭包和 release maturity 通过 | 覆盖 Create 所有权失败、LZMA 分配失败、单 loader 成功/永久校验失败广播、缓存统计、双格式畸形输入和持久语料；强制干净重编译发现上一提交的 `7zTypes.h` 被误截断，本提交恢复完整上游源码并验证其实际参与编译。后续按用户要求略过压力与高负载测试 |
 | XS-101～109 | TODO | - | - | XRT-GATE 后实施 |
 | LIB-0～3 | TODO | - | - | XS-GATE 后实施 |
 | MDO-0～10 | TODO | - | - | LIB-GATE 后实施 |
@@ -50,12 +51,11 @@
 7. file map、file lock、native handle 和 OS async 只对声明相应能力的 native backend 开放；callback provider backend 返回 `XERR_UNSUPPORTED`，声明 `XVFS_PROVIDER_NATIVE_OPEN` 的 provider 直接转移原生 `xfile` 并保持这些能力。
 8. Windows `DuplicateHandle` 复制目录句柄时共享 `NtQueryDirectoryFile` 的枚举游标；并发根目录枚举必须以空相对名重新打开独立 file object。POSIX 的 disk open 必须在 `fstat` 验证普通文件前使用 `O_NONBLOCK`，避免末级文件被竞态替换为 FIFO 后阻塞。
 9. `xfile` 没有可公开增加的共享引用；pack provider 对任意 backend 的正确所有权语义是 Create 成功时接管 Source、失败时由调用方继续持有，而不是只对原生文件复制平台句柄。
+10. 构建缓存不能作为第三方源码完整性的证据；pack 的 OOM 强制重编译曾发现已缓存对象掩盖 `7zTypes.h` 截断，发布门必须包含干净重编译和生成单头一致性检查。
 
 ## 下一步
 
-1. 实施 XRT-303B pack parser、只读文件与目录 provider；
-2. 实施 XRT-303C LZMA 解码、并发缓存、预算与统计；
-3. 实施 XRT-4：overlay policy、观测、故障注入与模糊测试；
-4. 完成标准 provider 的模块化、单头、并发、OOM、sanitizer 和跨平台门禁；
-5. 在 mdo 集成节点执行打包版 100 次启动/退出回归，关闭 XRT-0；
-6. 通过 XRT-GATE 后建立隔离的 xserver 阶段分支。
+1. 实施 XRT-4：overlay policy、观测和可控故障注入；
+2. 以低负载功能回归、OOM、sanitizer 冒烟、静态检查和干净重编译完成 XRT-GATE；按用户要求不再执行压力或高负载测试；
+3. 在 mdo 集成节点复现并验证打包启动崩溃修复，关闭 XRT-0；
+4. 通过 XRT-GATE 后建立隔离的 xserver 阶段分支。
