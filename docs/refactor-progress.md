@@ -6,9 +6,9 @@
 
 | 仓库 | 开发位置/分支 | 当前基线 | 说明 |
 | --- | --- | --- | --- |
-| mdo | `D:\GIT\mdo` / 当前分支 | `52b0f86` | 产品、计划与集成账本 |
+| mdo | `D:\GIT\mdo` / 当前分支 | `d1972b4` | 产品、计划与集成账本 |
 | xrt | `codex/mdo-refactor-xrt` 独立工作树 | `a90e616c41fb` | 原工作树有既存未提交内容，隔离开发 |
-| xserver | `D:\GIT\xserver-mdo-refactor` / `codex/mdo-refactor-xs` | `1a0d907cbe5f` | 原工作树有既存未提交内容，隔离开发 |
+| xserver | `D:\GIT\xserver-mdo-refactor` / `codex/mdo-refactor-xs` | `259f579b2680` | 原工作树有既存未提交内容，隔离开发 |
 
 ## 状态定义
 
@@ -50,7 +50,8 @@
 | XS-103 应用资源统一读取 | DONE | xserver `6362acc` | Application VFS 路径/overlay 契约、双 VFS 生命周期、26 项结构测试、22 项 pack/HTTP 端到端、默认与五扩展宿主构建、提交号版本启动和 5 秒打包启动冒烟通过 | 配置、TLS 证书、HTTP 静态文件、脚本主文件和 reload 快照统一经 `xsAppOpen`/`xsAppReadAll`；ReadAll 始终 owned；disk provider 保留 sendfile，普通 provider 使用有界分块泵；旧包仅由 XS-104 前的 memory bridge 兼容 |
 | XS-104 XRT pack provider 接入 | DONE | xserver `bfb87af` | 31 项小型 pack/VFS/HTTP 门禁、26 项结构门禁、VFS 生命周期、默认与五扩展构建、精确提交号版本启动、mdo 5 秒打包启动冒烟通过；未运行压力或高负载测试 | 新 writer 固定输出 XRT v1；运行时及 list/extract 全部经 xrt provider；严格兼容旧 XSVPACK v1；删除旧 parser 和 memory bridge；覆盖中文路径、损坏拒绝、原地覆盖拒绝、失败保留输出、包内 C/头文件编译、磁盘覆盖与 `--no-vfs` |
 | XS-105 TCC per-state filesystem | DONE | xserver `1a0d907` | 专用 per-state ABI 自测、31 项 pack/VFS/HTTP、26 项结构门禁、VFS 生命周期、五扩展宿主重建、精确提交号版本启动和 mdo 5 秒打包启动冒烟通过；未运行压力或高负载测试 | v1 回调表绑定到单个 `TCCState`，虚拟文件保持不透明指针；表复制、context retain/release、文件 close-once、not-found/I/O failure 分离；两个 state 同路径隔离并覆盖 UTF-8、空格和长路径；Windows TCCDIR 改用宽字符动态路径，pack 可执行文件在中文目录也能完成 relocation |
-| XS-106～109 | TODO | - | - | 继续实现 xs 双 VFS 绑定、删除旧全局 TCC VFS、generation/reload 与发布资料 |
+| XS-106 TCC 双 VFS | DONE | xserver `259f579` | 默认和 xllm/xllm-session/xwork/md4c/webview 完整宿主构建、per-state ABI、VFS 生命周期、26 项结构门禁、31 项磁盘/打包站点门禁、完整扩展嵌套 TCC 探测通过；未运行压力或高负载测试 | `xsCreateTCCEx` 为每个 state 持有 Application/SDK VFS；SDK provider 按需解压 `/include`、`/xs`、`/lib`；quoted include 与 angle include 隔离，应用同名 `stdio.h` 无法覆盖系统头；重载入口源码使用 state 私有 overlay，结构化错误以 owned `xerror` 返回 |
+| XS-107～109 | TODO | - | - | 删除旧全局 TCC VFS，再完成 generation/reload 与发布资料 |
 | LIB-0～3 | TODO | - | - | XS-GATE 后实施 |
 | MDO-0～10 | TODO | - | - | LIB-GATE 后实施 |
 | QA-RELEASE | TODO | - | - | MDO-GATE 后实施 |
@@ -70,9 +71,10 @@
 11. xs Application Root 由显式配置文件父目录或可执行文件目录确定；`/app` 外的物理绝对路径会被统一入口拒绝。配置、证书、静态文件和脚本读取不再根据来源返回借用缓存，`xsAppReadAll` 只返回调用方拥有的缓冲。
 12. xs 只负责从可执行文件 EOF 发现 pack 的精确范围；header/index/entry 校验、LZMA 解压、缓存和打开文件生命周期全部由 xrt pack provider 管理。新包写 XRT v1，旧 XSVPACK v1 仅保留严格读取兼容；Application disk provider 高优先级覆盖 pack provider。
 13. libtcc 的虚拟输入文件不能继续伪装成 OS fd；`TCCState` 复制 filesystem v1 表并跟踪不透明文件，销毁前 close 全部遗留文件再 release context。Windows 模块目录必须由 `GetModuleFileNameW` 转成 UTF-8，ANSI 路径损坏会把有效后备搜索错误升级为 I/O failure。
+14. Application 与 SDK 搜索路径必须在 libtcc 层区分：quoted include 才能搜索当前源码目录和 Application 路径，angle include 只搜索 SDK 路径。SDK 内置资源由只读 xrt provider 按打开粒度解压，不再为 XS 编译分配进程级伪 fd；候选入口源码由当前 state 的私有 overlay 固化。
 
 ## 下一步
 
-1. 实施 XS-106：增加 `xsCreateTCCEx()`，把 Application VFS 与 SDK VFS 分别绑定到编译状态并验证 include 隔离；
-2. XS-107 删除动态全局 TCC VFS 与伪 fd 路径；
-3. XS-108/109 完成 generation/reload 生命周期和发布资料。全部后续验收继续使用有界功能、故障注入和确定性交错，略过压力与高负载测试。
+1. 实施 XS-107：删除动态全局 TCC VFS、固定范围伪 fd 和旧符号导出，保留 per-state filesystem 与 SDK 资源句柄；
+2. XS-108/109 完成 generation/reload 生命周期和发布资料；
+3. 进入 XS-GATE 后再开始三个上层库的生产级重构。全部后续验收继续使用有界功能、故障注入和确定性交错，略过压力与高负载测试。
