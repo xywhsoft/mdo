@@ -791,6 +791,9 @@ xllm 只负责一次模型调用：
 - 本地 mock server 断流、慢流、重置连接、错误 Content-Length。
 
 真实 provider 测试是可选发布探针，凭据只从运行环境读取，不属于必需 CI。
+Ling 3.0 Tiny 线上同时提供 Completions、Responses 与 Anthropic 三种主要接口；
+LLM-109 和发布候选验证使用同一模型对拍三种方言，但缺少 live URL/key 时明确
+记录为未执行，不能以离线 fixture 冒充线上通过。
 
 ## 25. LIB-2：xllm-session
 
