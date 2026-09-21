@@ -6,8 +6,8 @@
 
 | 仓库 | 开发位置/分支 | 当前基线 | 说明 |
 | --- | --- | --- | --- |
-| mdo | `D:\GIT\mdo` / 当前分支 | `90b530a097be` | 产品、计划与集成账本 |
-| xrt | `codex/mdo-refactor-xrt` 独立工作树 | `61e5aa0de0de` | 原工作树有既存未提交内容，隔离开发 |
+| mdo | `D:\GIT\mdo` / 当前分支 | `b3fbdae09867` | 产品、计划与集成账本 |
+| xrt | `codex/mdo-refactor-xrt` 独立工作树 | `e89d07b11df6` | 原工作树有既存未提交内容，隔离开发 |
 | xserver | `D:\GIT\xserver-mdo-refactor` / `codex/mdo-refactor-xs` | `6e69a8c6da93` | 原工作树有既存未提交内容，隔离开发 |
 
 ## 状态定义
@@ -67,6 +67,7 @@
 | LLM-105 重试资格与幂等边界 | DONE | xrt `e27ae006` | Windows/Linux warning-as-error 完整编译，Windows/Linux 各 8 项定向重试回归，Linux session/xwork 消费端严格编译通过；只执行 3 次本地 HTTP 请求规模的确定性用例，未运行压力或高负载测试 | 已交付任一模型事件后所有公共/provider 特例均禁止重试；请求字节写出后的网络失败和传输超时仅在存在非空 `Idempotency-Key` 时允许重放，明确瞬态 HTTP 状态保持有限重试；诊断暴露幂等键事实，Windows 构建可用 `RUN_TESTS=0` 只编译 |
 | LLM-106 连接池关闭与断连恢复 | DONE | xrt `e1f680ea` | Windows/Linux warning-as-error 完整编译，各 17 项连接池定向检查与 8 项重试边界检查通过，Linux session/xwork 消费端严格编译通过；仅执行固定的低负载本地请求和两调用并发交错，未运行压力或高负载测试 | 空闲连接入池即挂 READ 哨兵，复用前取消并确认未由对端关闭/可读事件抢先完成；同时执行精确 stream 状态、池龄淘汰和池外关闭，client 销毁先排空池；取消 watch 在 transport 锁外注册，预取消不会同步回调死锁或发起拨号；修复网络引擎启动失败所有权与请求头/定时器失败时的连接泄漏窗口 |
 | LLM-108B 公开值模型失败原子性 | DONE | xrt `61e5aa0d` | Windows warning-as-error 构建与 5 组逐分配点 mutator 检查通过；Linux Clang ASan/UBSan 同 selector、session/xwork 消费端严格编译通过；仅运行有限确定性 OOM 点，未运行压力或高负载测试 | Part 数据/URL/native setter 先准备后提交，空数据替换不再泄漏旧 buffer；Message 内容替换在清理 parts 前完成分配；ToolsView 双数组一次提交，消除 OOM 后旧计数指向已释放工具的双重释放；History 批量追加失败回滚本次前缀；测试分配器核对每笔分配恰好释放。LLM-108 的 client/call/transport 入口覆盖仍待 LLM-108C |
+| LLM-108C client/call 逐分配点失败 | DONE | xrt `e89d07b1` | Windows warning-as-error 完整编译，6 组 client/profile/Start/Wait/hook/分配平衡检查通过；Linux Clang ASan/UBSan 同 selector，Windows 连接池与重试定向回归、Linux session/xwork 消费端严格编译通过；未运行压力或高负载测试 | 穷举通用 client 创建（含代理快照）、profile 替换、带 request hook 的 call Start 和离线 SSE Wait 分配点；修复 Call 分配失败遗留 request clone、request-body hook 拒绝遗留序列化正文、SSE 字段 OOM 误报协议错误、serializer 漏设错误以及 finish reason OOM 被静默当成功。adapter 特有复杂块的 OOM 继续由 LLM-108D 收口 |
 | LIB-1～3 | TODO | - | - | 按 xllm、xllm-session、xwork 顺序实施 |
 | MDO-0～10 | TODO | - | - | LIB-GATE 后实施 |
 | QA-RELEASE | TODO | - | - | MDO-GATE 后实施 |
@@ -91,7 +92,7 @@
 16. `xrtVfsRef` 只能保活同一个可变 namespace，不能作为 app generation snapshot。xs generation 必须新建独立 namespace，并按当时的挂载顺序 retained provider；磁盘 provider 冻结的是根句柄和 provider 组合，不复制文件内容，因此外部资源发布仍采用不可变版本目录后原子切换配置。
 17. TCC SDK 资源 C 文件是纯构建产物，正式构建按平台/扩展组合生成到 `.build/`；源码目录不保留可漂移快照。二进制发布包必须携带适用第三方声明、许可副本和精确源码 revision/重新链接入口。
 18. 严格双 VFS 下的 Linux TCC 不能借 `/usr/include` 或目标 libc 链接文件补齐 SDK。普通动态宿主必须内置 compact hosted C 头，并只在 `libtcc.c` 启用宿主符号解析；显式 sysroot/static 发布继续链接目标 libc，二者由构建计划明确分流。
-19. xllm 保留单次调用边界；生产分配器已移除进程级可变 selector，UTF-8、错误枚举、profile/hooks/prefix cache 快照与锁、资源上限、provider golden、流式分片、结构化错误、幂等重试、连接池与公开值模型失败原子性均已收紧。请求字节写出后的网络失败不能仅凭“尚未交付模型事件”自动重放，必须由非空 `Idempotency-Key` 显式声明调用方意图；空闲连接必须以 READ 哨兵观测对端关闭并在复用前撤销哨兵，不能只读取 stream 状态；分配型 setter 必须先准备后提交，批量追加失败必须回滚本次前缀；`xllm_history` 与 session 职责重复，只保留迁移兼容。
+19. xllm 保留单次调用边界；生产分配器已移除进程级可变 selector，UTF-8、错误枚举、profile/hooks/prefix cache 快照与锁、资源上限、provider golden、流式分片、结构化错误、幂等重试、连接池与公开入口失败原子性均已收紧。请求字节写出后的网络失败不能仅凭“尚未交付模型事件”自动重放，必须由非空 `Idempotency-Key` 显式声明调用方意图；空闲连接必须以 READ 哨兵观测对端关闭并在复用前撤销哨兵，不能只读取 stream 状态；分配型 setter 必须先准备后提交，批量追加失败必须回滚本次前缀，client/call 的通用构造、快照、解析和 hook 失败必须清理到调用前所有权边界；`xllm_history` 与 session 职责重复，只保留迁移兼容。
 20. xllm-session 当前是严格 single-writer 对象，读取 API也会更新 lazy cache；它没有显式状态机，snapshot/journal v2 没有 checksum 与 durability policy，磁盘错误还会丢失 path/operation/xrt cause。下一版必须提供不可变只读 snapshot 和可故障注入的 persistence v3。
 21. xwork 的 task、tool registry、subagent 和 MCP proxy 全部随短命 `xwork_agent` 生存，无法支撑跨轮后台任务。v3 固定拆成进程级 runtime、不可变 agent definition、会话级 agent、单请求 run 和统一 task；Python REPL 不进入 core，原生 explore 提升为正式工具 backend。
 22. 三库独立构建不能由 xs all-module 宿主替代。session 已改为继承 xllm 的规范 XRT module root；xllm/xwork 默认依赖路径、xwork unity 的 explore/regex 和 LP64 测试格式均已修复。xserver 的 xwork 仍有 Python/config 分叉，当前 `UPSTREAM.txt` 的零分叉声明要到 LIB-3 同步后才重新成立。
