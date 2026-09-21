@@ -6,8 +6,8 @@
 
 | 仓库 | 开发位置/分支 | 当前基线 | 说明 |
 | --- | --- | --- | --- |
-| mdo | `D:\GIT\mdo` / 当前分支 | `14edbe04cb3c` | 产品、计划与集成账本 |
-| xrt | `codex/mdo-refactor-xrt` 独立工作树 | `5eb72335a7f5` | 原工作树有既存未提交内容，隔离开发 |
+| mdo | `D:\GIT\mdo` / 当前分支 | `0abdc91fdd95` | 产品、计划与集成账本 |
+| xrt | `codex/mdo-refactor-xrt` 独立工作树 | `847860be006a` | 原工作树有既存未提交内容，隔离开发 |
 | xserver | `D:\GIT\xserver-mdo-refactor` / `codex/mdo-refactor-xs` | `6e69a8c6da93` | 原工作树有既存未提交内容，隔离开发 |
 
 ## 状态定义
@@ -60,6 +60,7 @@
 | LLM-101 UTF-8 与错误枚举 | DONE | xrt `df806881` | Windows xllm 完整功能套件、Linux warning-as-error 构建和精确编译检查通过；新增 3/4 字节 overlong 边界与公开错误码全枚举回归；未运行压力或高负载测试 | 保存 UTF-8 continuation 原始长度后校验最短标量；补齐 limit/hook 稳定名称，移除重复 hooks 声明并校正测试版本输出 |
 | LLM-108A 分配器状态隔离 | DONE | xrt `ff074576` | Windows xllm 完整功能套件与 96 个确定性 OOM 注入点、Linux warning-as-error 构建、正式对象符号扫描和 `git diff --check` 通过；未运行压力或高负载测试 | 生产分配路径直接使用 CRT，不再携带进程级 allocator selector/counter；故障分配器只在显式测试编译单元存在 |
 | LLM-104 client/call 配置快照 | DONE | xrt `5eb72335` | Windows xllm 完整功能套件、Linux warning-as-error 构建、session/xwork 消费端严格编译、两线程单次共享 prefix cache 与活跃 call hook 更新回归通过；未运行压力或高负载测试 | profile 首次使用后冻结且 provider 不得切换 wire dialect；hooks 在 client/call 两级按值快照；profile、hooks 和 prefix cache 由配置锁保护，回调不持锁 |
+| LLM-103 解析与传输资源上限 | DONE | xrt `847860be` | Windows xllm 完整功能套件、Linux warning-as-error 构建、配置拒绝和 SSE 行/事件确定性边界用例、`git diff --check` 通过；未运行压力或高负载测试 | client 显式配置 HTTP 头、响应体、SSE 行和事件上限；零值保持兼容默认，上限只能收紧；每个 call 冻结快照，越界统一返回 `XLLM_ERROR_LIMIT` 并使用溢出安全计算；同步修正文档中的构建产物、多模态和测试分配器说明 |
 | LIB-1～3 | TODO | - | - | 按 xllm、xllm-session、xwork 顺序实施 |
 | MDO-0～10 | TODO | - | - | LIB-GATE 后实施 |
 | QA-RELEASE | TODO | - | - | MDO-GATE 后实施 |
