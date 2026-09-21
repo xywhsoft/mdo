@@ -6,9 +6,9 @@
 
 | 仓库 | 开发位置/分支 | 当前基线 | 说明 |
 | --- | --- | --- | --- |
-| mdo | `D:\GIT\mdo` / 当前分支 | `8079b5dc5922` | 产品、计划与集成账本 |
-| xrt | `codex/mdo-refactor-xrt` 独立工作树 | `d37bca64b3d2` | 原工作树有既存未提交内容，隔离开发 |
-| xserver | `D:\GIT\xserver-mdo-refactor` / `codex/mdo-refactor-xs` | `32e7a23d4251` | 原工作树有既存未提交内容，隔离开发 |
+| mdo | `D:\GIT\mdo` / 当前分支 | `bf1f6729a7ed` | 产品、计划与集成账本 |
+| xrt | `codex/mdo-refactor-xrt` 独立工作树 | `a90e616c41fb` | 原工作树有既存未提交内容，隔离开发 |
+| xserver | `D:\GIT\xserver-mdo-refactor` / `codex/mdo-refactor-xs` | `aa27aca33dc3` | 原工作树有既存未提交内容，隔离开发 |
 
 ## 状态定义
 
@@ -40,8 +40,11 @@
 | XRT-403 pack fixture 隔离 | DONE | xrt `d3dc726e` | VFS 组合功能门通过；OOM/并发目标仅编译模块化与单头轨，未执行高负载用例；单头一致性与 diff 检查通过 | 临时文件 helper 改为测试显式 opt-in，避免组合 suite 因全局 FILE_TEMP 特性暴露未使用静态函数；遵循后续略过压力和高负载测试的约束 |
 | XRT-404 单头 LZMA 宏卫生 | DONE | xrt `a769dadf` | Windows `single_all_tests` 的完整与排除 memory debug 变体均以 warning-as-error 编译、链接、运行；pack 模块化/单头低负载功能门通过 | xs 首次同步编译发现 SDK 的 `Align`、`Literal` 等内部宏污染后续 logger/regex；权威 xrt 已统一清理 92 个实现宏并增加泄漏断言，未在 xs 打本地补丁 |
 | XRT-405 LZMA 符号隔离 | DONE | xrt `36955ba1` | decoder 对象只导出 `__xrtLzma*`；xs 默认宿主与自身 LZMA decoder 共存链接通过 | 将 SDK 源码私有 helper `LzmaDec_InitDicAndState` 收紧为 static，消除单头与宿主 pack decoder 的重复符号 |
+| XRT-406 代理 TLS Future 拨号 | DONE | xrt `96197cc5` | Windows 模块化与单头的代理取消、超时用例通过；既有 callback 取消、超时回归通过；公开 ABI、API 文档、单头一致性和 release maturity 通过 | `xrtTlsDialProxyAsync` 与直连 Future 复用同一发布桥，统一覆盖回调早于构造返回、取消转发、错误和 Stream 所有权 |
+| XLLM-101 上收安全代理传输 | DONE | xrt `a90e616c` | 专用 13 项低负载代理配置/匹配/快照测试通过；原有完整测试严格编译链接通过但未执行其中的并发压力段 | 权威 xllm 提供显式代理类型、无固定缓冲的 bypass 匹配、凭据深拷贝与清零，并调用官方 `xrtTlsDialProxyAsync`；不完整代理和明文 HTTP 代理配置明确失败 |
 | XRT-GATE VFS 库门禁 | DONE | xrt `d37bca64` | 组合功能门、可选高负载测试编译门、API 文档、公开 ABI、release maturity、单头一致性和 diff 检查通过 | 库内实现允许进入宿主集成；真实打包路径仍是 XRT-0 的必要宿主验收，不能用库测试替代 |
 | XS-101 同步并锁定 xrt | DONE | xserver `32e7a23` | xrt 单头/声明头逐字节匹配 `36955ba1`；3114 个 TCC 导入符号再生；Windows 默认宿主和 26 项扩展/VFS 单元测试通过 | 首次集成发现的宏与符号隔离问题均回到权威 xrt 修复 |
+| XS-101B 同步代理 Future 与 xllm | DONE | xserver `aa27aca` | xrt 单头/声明头及 xllm 已收录文件逐字节匹配 `a90e616c`；3115 个 XRT 导入符号再生；26 项扩展/VFS 单元测试、xllm 宿主构建和版本启动冒烟通过 | xserver 不再保留本地代理桥接分叉；宿主只消费权威 XRT/xllm 实现 |
 | XS-102～109 | TODO | - | - | XRT-0 宿主验收后实施 |
 | LIB-0～3 | TODO | - | - | XS-GATE 后实施 |
 | MDO-0～10 | TODO | - | - | LIB-GATE 后实施 |
@@ -62,6 +65,6 @@
 
 ## 下一步
 
-1. 同步权威 `xrt/extlibs/xllm` 的 XRT-0 生命周期修复到 xserver vendored 副本并验证扩展构建；
-2. 在 mdo 集成节点执行少量、带生命周期诊断的打包启动回归，关闭 XRT-0；
-3. XRT-0 关闭后实施 xs application VFS、SDK VFS 与 TCC per-state filesystem vtable。
+1. 在 mdo 集成节点执行少量、带生命周期诊断的打包启动回归，关闭 XRT-0；
+2. XRT-0 关闭后实施 xs application VFS、SDK VFS 与 TCC per-state filesystem vtable；
+3. 为旧 xs pack fixture 和新的 XRT pack provider 建立有界兼容迁移验证。
