@@ -6,8 +6,8 @@
 
 | 仓库 | 开发位置/分支 | 当前基线 | 说明 |
 | --- | --- | --- | --- |
-| mdo | `D:\GIT\mdo` / 当前分支 | `bbec7acd964c` | 产品、计划与集成账本 |
-| xrt | `codex/mdo-refactor-xrt` 独立工作树 | `72be40309e42` | 原工作树有既存未提交内容，隔离开发 |
+| mdo | `D:\GIT\mdo` / 当前分支 | `e00f5ddbd936` | 产品、计划与集成账本 |
+| xrt | `codex/mdo-refactor-xrt` 独立工作树 | `5b64706a6fc9` | 原工作树有既存未提交内容，隔离开发 |
 | xserver | `D:\GIT\xserver-mdo-refactor` / `codex/mdo-refactor-xs` | `6e69a8c6da93` | 原工作树有既存未提交内容，隔离开发 |
 
 ## 状态定义
@@ -63,6 +63,7 @@
 | LLM-104 client/call 配置快照 | DONE | xrt `5eb72335` | Windows xllm 完整功能套件、Linux warning-as-error 构建、session/xwork 消费端严格编译、两线程单次共享 prefix cache 与活跃 call hook 更新回归通过；未运行压力或高负载测试 | profile 首次使用后冻结且 provider 不得切换 wire dialect；hooks 在 client/call 两级按值快照；profile、hooks 和 prefix cache 由配置锁保护，回调不持锁 |
 | LLM-103A 解析与传输资源上限 | DONE | xrt `847860be` | Windows xllm 完整功能套件、Linux warning-as-error 构建、配置拒绝和 SSE 行/事件确定性边界用例、`git diff --check` 通过；未运行压力或高负载测试 | client 显式配置 HTTP 头、响应体、SSE 行和事件上限；零值保持兼容默认，上限只能收紧；每个 call 冻结快照，越界统一返回 `XLLM_ERROR_LIMIT` 并使用溢出安全计算；同步修正文档中的构建产物、多模态和测试分配器说明 |
 | LLM-103B 流式解析分片语料 | DONE | xrt `72be4030` | Windows xllm 完整功能套件、Linux warning-as-error 构建；三类 dialect 的整块、逐字节和固定变长分片结果一致，CRLF/LF、注释、空事件、中文 UTF-8、末行无换行及截断 UTF-8 用例通过；未运行压力或高负载测试 | 使用小型确定性 corpus 验证同一 SSE 状态机不受传输分片影响，截断 UTF-8 在任何模型数据交付前返回 parse error |
+| LLM-107 结构化错误与脱敏边界 | DONE | xrt `5b64706a` | Windows xllm 完整功能套件、Windows session/xwork 消费端套件、Linux warning-as-error 构建、TLS/provider/parser cause 与敏感值扫描用例通过；未运行压力或高负载测试 | `xllm_error` 以版本化尾扩展保留 domain、stage、operation、xrt kind/code、system code 和有界短消息；不复制请求、凭据或 error data，且 parser/limit/hook 主因不会被二次 transport cancellation 覆盖 |
 | LIB-1～3 | TODO | - | - | 按 xllm、xllm-session、xwork 顺序实施 |
 | MDO-0～10 | TODO | - | - | LIB-GATE 后实施 |
 | QA-RELEASE | TODO | - | - | MDO-GATE 后实施 |
