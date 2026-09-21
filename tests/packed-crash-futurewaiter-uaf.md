@@ -1,4 +1,24 @@
-# 崩溃呈报：打包版 mdo.exe 启动即崩——xrt future use-after-free（核心侧）
+# 崩溃呈报复核：打包版 mdo.exe 启动崩溃并非 Future use-after-free
+
+> **2026-09-21 复核结论**：原报告通过相同机器码片段在优化目标文件中
+> 反查符号，误把崩点归到 `__xrtOwnershipBody_FutureWaiterDetach`。使用保留
+> 符号的同对象重链接宿主、相同 app pack 和 GDB 单次捕获后，实际崩点是
+> `xrtValueRelease+65`。本文件保留原始调查过程，以下“核心侧”结论已被推翻。
+
+## 已确认根因
+
+`app_bak/main.c` 的 `MdoI18nDataReply` 声明未初始化的
+`MdoJson tJ, tRoot`。打包模式下语言包的物理路径不存在，
+`xrtFileReadText` 返回 `NULL`；表达式
+`sPack == NULL || !MdoJsonParse(&tJ, ...)` 因短路没有初始化 `tJ`，错误分支却
+立即调用 `MdoJsonFree(&tJ)`，于是把栈上残留的 HTTP 头字节当成 `xvalue*`
+传给 `xrtValueRelease`。捕获时 `rbx=0x776f6c6c412d6c6f`，对应的就是文本残片，
+进程以 `0xC0000005` 退出。
+
+因此，这个打包崩溃不能作为 xrt Future 缺陷的证据。xrt/xllm 中已经独立确认
+并修复的 Future 发布与 Watch 生命周期问题仍然有效，但它们与本次旧 mdo
+启动崩溃是两件事。`app_bak` 作为历史参考保持不改；宿主回归改用
+`tests/fixtures/packed-startup-app` 的最小 fixture。
 
 **日期**：2026-09-20 晚　**状态**：根因已定位到函数级，按「禁改 xrt 核心」约束呈报
 **影响**：`mdo.exe`（`xsw pack` 打包版）双击/无控制台启动后约 10 秒崩溃，100% 复现（连续 3 次全新打包均崩）

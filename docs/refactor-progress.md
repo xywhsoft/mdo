@@ -6,9 +6,9 @@
 
 | 仓库 | 开发位置/分支 | 当前基线 | 说明 |
 | --- | --- | --- | --- |
-| mdo | `D:\GIT\mdo` / 当前分支 | `bf1f6729a7ed` | 产品、计划与集成账本 |
+| mdo | `D:\GIT\mdo` / 当前分支 | `b282b52` | 产品、计划与集成账本 |
 | xrt | `codex/mdo-refactor-xrt` 独立工作树 | `a90e616c41fb` | 原工作树有既存未提交内容，隔离开发 |
-| xserver | `D:\GIT\xserver-mdo-refactor` / `codex/mdo-refactor-xs` | `aa27aca33dc3` | 原工作树有既存未提交内容，隔离开发 |
+| xserver | `D:\GIT\xserver-mdo-refactor` / `codex/mdo-refactor-xs` | `248df088459a` | 原工作树有既存未提交内容，隔离开发 |
 
 ## 状态定义
 
@@ -22,7 +22,7 @@
 | 工作包 | 状态 | 仓库提交 | 验证 | 说明 |
 | --- | --- | --- | --- | --- |
 | BASE-001 重构计划与旧 app 归档 | DONE | `443e5e4` | 31 个旧文件逐字节一致；文档结构、UTF-8、Git diff 检查通过 | 建立长期任务基线 |
-| XRT-0 Future 生命周期阻断 | DOING | xrt `e94a5d9b`、`63ba83d6` | xrt TCP/TLS Dial Future 的 Windows 模块化、IOCP、单头轨通过；xllm Windows、Linux ASan、Linux TSan 完整通过 | 核心竞态与 xllm operation/transport 所有权已修复；打包版低负载、带生命周期诊断的启动回归留在集成门执行 |
+| XRT-0 Future 生命周期阻断 | DONE | xrt `e94a5d9b`、`63ba83d6` | xrt TCP/TLS Dial Future 的 Windows 模块化、IOCP、单头轨通过；xllm Windows、Linux ASan、Linux TSan 完整通过；符号保留宿主的单次 GDB 捕获与最小 pack 启动回归完成 | Future 发布与 xllm operation/transport 所有权已修复；旧报告的 mdo 崩点实际为 `xrtValueRelease`，根因是 `app_bak` 对未初始化 `MdoJson` 的释放，不是 Future UAF |
 | XRT VFS RFC | DONE | xrt `d4ffb8a9` | API、路径、挂载顺序、snapshot/generation 生命周期、provider ABI、失败原子性与测试矩阵已冻结 | 阶段一设计合同 |
 | XRT-101～105 native xfile backend | DONE | xrt `087a645c` | Windows 模块化/单头及全部直接 xfile 消费者通过；Linux 模块化/单头、ASan/UBSan/LSan 通过；dispatch 约 3.16 ns/op，native read-at 约 1.59 us/op | native 状态已抽离，全部文件操作经版本化 ops/capability 分派；非 native map/lock/async 明确拒绝；close-once、OOM 与性能基准已覆盖 |
 | XRT-201～207 VFS namespace/provider | DONE | xrt `029248ba` | Windows 模块化/单头、OOM、并发与重入通过；Linux 模块化/单头、ASan/UBSan/LSan、Clang TSan 通过；公开结构跨裁剪 ABI、API 文档、release maturity 与性能 smoke 通过 | 实现规范路径、不可变 mount snapshot、generation 生命周期、provider v1 ABI、普通 xfile/xdir 适配与目录合并；8 个 MISS mount 下 stat 约 384 ns/op、open/read/close 约 506 ns/op |
@@ -45,6 +45,7 @@
 | XRT-GATE VFS 库门禁 | DONE | xrt `d37bca64` | 组合功能门、可选高负载测试编译门、API 文档、公开 ABI、release maturity、单头一致性和 diff 检查通过 | 库内实现允许进入宿主集成；真实打包路径仍是 XRT-0 的必要宿主验收，不能用库测试替代 |
 | XS-101 同步并锁定 xrt | DONE | xserver `32e7a23` | xrt 单头/声明头逐字节匹配 `36955ba1`；3114 个 TCC 导入符号再生；Windows 默认宿主和 26 项扩展/VFS 单元测试通过 | 首次集成发现的宏与符号隔离问题均回到权威 xrt 修复 |
 | XS-101B 同步代理 Future 与 xllm | DONE | xserver `aa27aca` | xrt 单头/声明头及 xllm 已收录文件逐字节匹配 `a90e616c`；3115 个 XRT 导入符号再生；26 项扩展/VFS 单元测试、xllm 宿主构建和版本启动冒烟通过 | xserver 不再保留本地代理桥接分叉；宿主只消费权威 XRT/xllm 实现 |
+| XS-101C SDK 头自包含 | DONE | xserver `248df08` | 五扩展 webview 宿主重建、26 项扩展/VFS 检查和最小 pack 启动冒烟通过 | `xsbase.h` 自行包含其内联 `strcmp` 所需的标准声明，TCC 应用不再依赖使用方碰巧先包含 `string.h` |
 | XS-102～109 | TODO | - | - | XRT-0 宿主验收后实施 |
 | LIB-0～3 | TODO | - | - | XS-GATE 后实施 |
 | MDO-0～10 | TODO | - | - | LIB-GATE 后实施 |
@@ -65,6 +66,6 @@
 
 ## 下一步
 
-1. 在 mdo 集成节点执行少量、带生命周期诊断的打包启动回归，关闭 XRT-0；
-2. XRT-0 关闭后实施 xs application VFS、SDK VFS 与 TCC per-state filesystem vtable；
+1. 实施 xs application VFS 与 SDK VFS 对象，迁移配置、证书、静态文件和脚本读取；
+2. 为 TCC 建立 per-state filesystem vtable，消除进程级站点挂载；
 3. 为旧 xs pack fixture 和新的 XRT pack provider 建立有界兼容迁移验证。

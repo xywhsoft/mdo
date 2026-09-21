@@ -1,0 +1,29 @@
+{
+  "services": [
+    {
+      "enabled": true,
+      "class": "app",
+      "name": "packed-startup-smoke",
+      "ip": "127.0.0.1",
+      "port": 0,
+      "host_default": {
+        "enabled": true,
+        "name": "packed-startup-smoke",
+        "path": "wwwroot",
+        "devlang": "c",
+        "devfile": "main.c"
+      },
+      "window": {
+        "title": "mdo packed startup smoke",
+        "width": 640,
+        "height": 480,
+        "min_width": 320,
+        "min_height": 240,
+        "url": "/",
+        "devtools": false,
+        "close": "stop",
+        "install_fallback": "fail"
+      }
+    }
+  ]
+}
