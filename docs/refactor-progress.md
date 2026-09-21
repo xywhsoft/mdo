@@ -6,8 +6,8 @@
 
 | 仓库 | 开发位置/分支 | 当前基线 | 说明 |
 | --- | --- | --- | --- |
-| mdo | `D:\GIT\mdo` / 当前分支 | `0abdc91fdd95` | 产品、计划与集成账本 |
-| xrt | `codex/mdo-refactor-xrt` 独立工作树 | `847860be006a` | 原工作树有既存未提交内容，隔离开发 |
+| mdo | `D:\GIT\mdo` / 当前分支 | `601ee1f23c46` | 产品、计划与集成账本 |
+| xrt | `codex/mdo-refactor-xrt` 独立工作树 | `0022168baa7e` | 原工作树有既存未提交内容，隔离开发 |
 | xserver | `D:\GIT\xserver-mdo-refactor` / `codex/mdo-refactor-xs` | `6e69a8c6da93` | 原工作树有既存未提交内容，隔离开发 |
 
 ## 状态定义
@@ -58,6 +58,7 @@
 | LIB-0 三库 API 与实现审计 | DONE | xrt `fa6c082d` | 公开 API、所有权/线程/回调、可变全局、生命周期、错误、持久化、测试缺口、mdo 依赖、vendored 漂移与构建入口逐项复核；`git diff --check` 通过；未运行压力或高负载测试 | 冻结 xllm 3.1 兼容加固、xllm-session 显式状态机与 persistence v3、xwork 3.0 runtime/agent/run/task 分层及兼容迁移边界 |
 | LIB-101 三库独立构建链 | DONE | xrt `32d75562` | Windows xllm-session 与 xwork warning-as-error 构建/功能套件通过；Linux 三库 warning-as-error 编译链接通过；`git diff --check` 通过；未运行压力或高负载测试 | session bridge 继承 xllm 完整传输模块，xwork 恢复原生 explore/regex，修正 xllm/xwork 默认 XRT 路径与跨 ABI `uint64_t` 测试格式 |
 | LLM-101 UTF-8 与错误枚举 | DONE | xrt `df806881` | Windows xllm 完整功能套件、Linux warning-as-error 构建和精确编译检查通过；新增 3/4 字节 overlong 边界与公开错误码全枚举回归；未运行压力或高负载测试 | 保存 UTF-8 continuation 原始长度后校验最短标量；补齐 limit/hook 稳定名称，移除重复 hooks 声明并校正测试版本输出 |
+| LLM-102 provider adapter golden | DONE | xrt `0022168b` | Windows xllm 完整功能套件、Linux warning-as-error 构建、四种 provider 请求逐字节 fixture 和三类响应归一化 fixture 通过；未运行压力或高负载测试 | 固化 completions/GLM、Responses、Anthropic 的 adapter 名称、路径、请求 wire bytes 与统一响应语义；补齐 Responses `completed` 和 `max_output_tokens` 的 finish reason 归一化 |
 | LLM-108A 分配器状态隔离 | DONE | xrt `ff074576` | Windows xllm 完整功能套件与 96 个确定性 OOM 注入点、Linux warning-as-error 构建、正式对象符号扫描和 `git diff --check` 通过；未运行压力或高负载测试 | 生产分配路径直接使用 CRT，不再携带进程级 allocator selector/counter；故障分配器只在显式测试编译单元存在 |
 | LLM-104 client/call 配置快照 | DONE | xrt `5eb72335` | Windows xllm 完整功能套件、Linux warning-as-error 构建、session/xwork 消费端严格编译、两线程单次共享 prefix cache 与活跃 call hook 更新回归通过；未运行压力或高负载测试 | profile 首次使用后冻结且 provider 不得切换 wire dialect；hooks 在 client/call 两级按值快照；profile、hooks 和 prefix cache 由配置锁保护，回调不持锁 |
 | LLM-103 解析与传输资源上限 | DONE | xrt `847860be` | Windows xllm 完整功能套件、Linux warning-as-error 构建、配置拒绝和 SSE 行/事件确定性边界用例、`git diff --check` 通过；未运行压力或高负载测试 | client 显式配置 HTTP 头、响应体、SSE 行和事件上限；零值保持兼容默认，上限只能收紧；每个 call 冻结快照，越界统一返回 `XLLM_ERROR_LIMIT` 并使用溢出安全计算；同步修正文档中的构建产物、多模态和测试分配器说明 |
