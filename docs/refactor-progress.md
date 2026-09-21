@@ -6,8 +6,8 @@
 
 | 仓库 | 开发位置/分支 | 当前基线 | 说明 |
 | --- | --- | --- | --- |
-| mdo | `D:\GIT\mdo` / 当前分支 | `e9ae004f6048` | 产品、计划与集成账本 |
-| xrt | `codex/mdo-refactor-xrt` 独立工作树 | `a90e616c41fb` | 原工作树有既存未提交内容，隔离开发 |
+| mdo | `D:\GIT\mdo` / 当前分支 | `b371cf6f6ffb` | 产品、计划与集成账本 |
+| xrt | `codex/mdo-refactor-xrt` 独立工作树 | `fa6c082d4562` | 原工作树有既存未提交内容，隔离开发 |
 | xserver | `D:\GIT\xserver-mdo-refactor` / `codex/mdo-refactor-xs` | `6e69a8c6da93` | 原工作树有既存未提交内容，隔离开发 |
 
 ## 状态定义
@@ -55,7 +55,8 @@
 | XS-108 generation/reload 集成 | DONE | xserver `daa889a` | 默认与 xllm/xllm-session/xwork/md4c/webview 宿主完整重建；27 项结构门禁、VFS 生命周期、31 项站点/pack、per-state TCC、完整扩展嵌套 TCC 通过；一条保留 keep-alive 连接的确定性换代回归验证旧/新静态根隔离和 reaper 精确终结；未运行压力或高负载测试 | 每个 server generation 创建独立 Application VFS namespace，按原顺序 retained disk/memory/pack provider 并复制 Root；脚本编译、TLS、HTTP 静态文件显式绑定 generation，脚本回调中的默认 VFS 随线程局部 generation 切换；最后一个 generation 引用归零后才销毁旧 TCC、driver、VFS 和配置 revision |
 | XS-109 发布资料闭环 | DONE | xserver `f122322` | 2 项发布 ZIP 元数据测试、28 项扩展/结构门禁、生成器 dry-run、真实默认宿主重建、per-state TCC 文件系统、VFS 生命周期和版本启动检查通过；未运行压力或高负载测试 | 补齐 `THIRD_PARTY_NOTICES.md`、xrt 内嵌依赖许可副本、各扩展来源/许可和 TCC 修改索引；发布 ZIP 固定携带 NOTICE、许可与精确 revision 的 `SOURCE.md`；发布目录改为可移植的 `release/dist/`；生成的 `tcc_sdk_resources.c` 只存在于 `.build/`，删除源码树内 4.5 MB 陈旧快照 |
 | XS-GATE 宿主集成门禁 | DONE | xserver `6e69a8c`、mdo `e9ae004` | Windows/Linux 全 15 扩展构建和嵌套 TCC 通过；30 项结构检查、2 项发布元数据、per-state TCC、VFS 生命周期、Windows 31 项与 Linux 34 项站点/pack 用例通过；确定性 generation/reload、旧 mdo 静态/设置/中文资源/优雅退出、打包 webview 20 秒启动冒烟通过；未运行压力或高负载测试 | 修复 Linux libtcc 标准界限头、严格 VFS 下的 compact hosted C SDK、内存输出宿主 libc 解析与 POSIX pack 执行位；私有 hosted 模式仅用于普通 Linux `libtcc.c`，显式 sysroot 保留目标 libc 链接；阶段二完成 |
-| LIB-0～3 | TODO | - | - | XS-GATE 后实施 |
+| LIB-0 三库 API 与实现审计 | DONE | xrt `fa6c082d` | 公开 API、所有权/线程/回调、可变全局、生命周期、错误、持久化、测试缺口、mdo 依赖、vendored 漂移与构建入口逐项复核；`git diff --check` 通过；未运行压力或高负载测试 | 冻结 xllm 3.1 兼容加固、xllm-session 显式状态机与 persistence v3、xwork 3.0 runtime/agent/run/task 分层及兼容迁移边界 |
+| LIB-1～3 | TODO | - | - | 按 xllm、xllm-session、xwork 顺序实施 |
 | MDO-0～10 | TODO | - | - | LIB-GATE 后实施 |
 | QA-RELEASE | TODO | - | - | MDO-GATE 后实施 |
 
@@ -79,9 +80,13 @@
 16. `xrtVfsRef` 只能保活同一个可变 namespace，不能作为 app generation snapshot。xs generation 必须新建独立 namespace，并按当时的挂载顺序 retained provider；磁盘 provider 冻结的是根句柄和 provider 组合，不复制文件内容，因此外部资源发布仍采用不可变版本目录后原子切换配置。
 17. TCC SDK 资源 C 文件是纯构建产物，正式构建按平台/扩展组合生成到 `.build/`；源码目录不保留可漂移快照。二进制发布包必须携带适用第三方声明、许可副本和精确源码 revision/重新链接入口。
 18. 严格双 VFS 下的 Linux TCC 不能借 `/usr/include` 或目标 libc 链接文件补齐 SDK。普通动态宿主必须内置 compact hosted C 头，并只在 `libtcc.c` 启用宿主符号解析；显式 sysroot/static 发布继续链接目标 libc，二者由构建计划明确分流。
+19. xllm 的一次调用边界可以保留，但生产实现仍有进程级可变分配器、overlong UTF-8 漏检、错误名缺项和 client hooks/profile 运行中无锁突变；`xllm_history` 与 session 职责重复，只保留迁移兼容。
+20. xllm-session 当前是严格 single-writer 对象，读取 API也会更新 lazy cache；它没有显式状态机，snapshot/journal v2 没有 checksum 与 durability policy，磁盘错误还会丢失 path/operation/xrt cause。下一版必须提供不可变只读 snapshot 和可故障注入的 persistence v3。
+21. xwork 的 task、tool registry、subagent 和 MCP proxy 全部随短命 `xwork_agent` 生存，无法支撑跨轮后台任务。v3 固定拆成进程级 runtime、不可变 agent definition、会话级 agent、单请求 run 和统一 task；Python REPL 不进入 core，原生 explore 提升为正式工具 backend。
+22. 三库独立构建不能由 xs all-module 宿主替代：`xllm-session-xrt.h` 缺失代理 dial/HTTP CONNECT/SOCKS5 模块，导致代理符号链接失败；xwork 默认 XRT 相对路径也错误。xserver 的 xwork 另有 Python/config 分叉，因此当前 `UPSTREAM.txt` 的零分叉声明尚不成立。
 
 ## 下一步
 
-1. 执行 LIB-0，冻结 xllm、xllm-session、xwork 的公共 API、生命周期、持久化和迁移缺口清单；
-2. 依次实施 LIB-1 xllm、LIB-2 xllm-session、LIB-3 xwork，并从权威源码同步零分叉副本；
+1. 执行 LIB-1 xllm 3.1 兼容加固，先修复三库独立构建的 XRT module bridge，再处理 UTF-8、错误、全局分配器、client/call 合同、parser/golden/OOM 与发布资料；
+2. 依次实施 LIB-2 xllm-session、LIB-3 xwork，并从权威源码同步零分叉副本；
 3. 全部后续验收继续使用有界功能、故障注入和确定性交错，略过压力与高负载测试。
