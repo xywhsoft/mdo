@@ -6,8 +6,8 @@
 
 | 仓库 | 开发位置/分支 | 当前基线 | 说明 |
 | --- | --- | --- | --- |
-| mdo | `D:\GIT\mdo` / 当前分支 | `e00f5ddbd936` | 产品、计划与集成账本 |
-| xrt | `codex/mdo-refactor-xrt` 独立工作树 | `5b64706a6fc9` | 原工作树有既存未提交内容，隔离开发 |
+| mdo | `D:\GIT\mdo` / 当前分支 | `07cb402cc4e` | 产品、计划与集成账本 |
+| xrt | `codex/mdo-refactor-xrt` 独立工作树 | `e27ae0069b61` | 原工作树有既存未提交内容，隔离开发 |
 | xserver | `D:\GIT\xserver-mdo-refactor` / `codex/mdo-refactor-xs` | `6e69a8c6da93` | 原工作树有既存未提交内容，隔离开发 |
 
 ## 状态定义
@@ -64,6 +64,7 @@
 | LLM-103A 解析与传输资源上限 | DONE | xrt `847860be` | Windows xllm 完整功能套件、Linux warning-as-error 构建、配置拒绝和 SSE 行/事件确定性边界用例、`git diff --check` 通过；未运行压力或高负载测试 | client 显式配置 HTTP 头、响应体、SSE 行和事件上限；零值保持兼容默认，上限只能收紧；每个 call 冻结快照，越界统一返回 `XLLM_ERROR_LIMIT` 并使用溢出安全计算；同步修正文档中的构建产物、多模态和测试分配器说明 |
 | LLM-103B 流式解析分片语料 | DONE | xrt `72be4030` | Windows xllm 完整功能套件、Linux warning-as-error 构建；三类 dialect 的整块、逐字节和固定变长分片结果一致，CRLF/LF、注释、空事件、中文 UTF-8、末行无换行及截断 UTF-8 用例通过；未运行压力或高负载测试 | 使用小型确定性 corpus 验证同一 SSE 状态机不受传输分片影响，截断 UTF-8 在任何模型数据交付前返回 parse error |
 | LLM-107 结构化错误与脱敏边界 | DONE | xrt `5b64706a` | Windows xllm 完整功能套件、Windows session/xwork 消费端套件、Linux warning-as-error 构建、TLS/provider/parser cause 与敏感值扫描用例通过；未运行压力或高负载测试 | `xllm_error` 以版本化尾扩展保留 domain、stage、operation、xrt kind/code、system code 和有界短消息；不复制请求、凭据或 error data，且 parser/limit/hook 主因不会被二次 transport cancellation 覆盖 |
+| LLM-105 重试资格与幂等边界 | DONE | xrt `e27ae006` | Windows/Linux warning-as-error 完整编译，Windows/Linux 各 8 项定向重试回归，Linux session/xwork 消费端严格编译通过；只执行 3 次本地 HTTP 请求规模的确定性用例，未运行压力或高负载测试 | 已交付任一模型事件后所有公共/provider 特例均禁止重试；请求字节写出后的网络失败和传输超时仅在存在非空 `Idempotency-Key` 时允许重放，明确瞬态 HTTP 状态保持有限重试；诊断暴露幂等键事实，Windows 构建可用 `RUN_TESTS=0` 只编译 |
 | LIB-1～3 | TODO | - | - | 按 xllm、xllm-session、xwork 顺序实施 |
 | MDO-0～10 | TODO | - | - | LIB-GATE 后实施 |
 | QA-RELEASE | TODO | - | - | MDO-GATE 后实施 |
@@ -88,7 +89,7 @@
 16. `xrtVfsRef` 只能保活同一个可变 namespace，不能作为 app generation snapshot。xs generation 必须新建独立 namespace，并按当时的挂载顺序 retained provider；磁盘 provider 冻结的是根句柄和 provider 组合，不复制文件内容，因此外部资源发布仍采用不可变版本目录后原子切换配置。
 17. TCC SDK 资源 C 文件是纯构建产物，正式构建按平台/扩展组合生成到 `.build/`；源码目录不保留可漂移快照。二进制发布包必须携带适用第三方声明、许可副本和精确源码 revision/重新链接入口。
 18. 严格双 VFS 下的 Linux TCC 不能借 `/usr/include` 或目标 libc 链接文件补齐 SDK。普通动态宿主必须内置 compact hosted C 头，并只在 `libtcc.c` 启用宿主符号解析；显式 sysroot/static 发布继续链接目标 libc，二者由构建计划明确分流。
-19. xllm 的一次调用边界可以保留，但生产实现仍有进程级可变分配器、overlong UTF-8 漏检、错误名缺项和 client hooks/profile 运行中无锁突变；`xllm_history` 与 session 职责重复，只保留迁移兼容。
+19. xllm 保留单次调用边界；生产分配器已移除进程级可变 selector，UTF-8、错误枚举、profile/hooks/prefix cache 快照与锁、资源上限、provider golden、流式分片、结构化错误和幂等重试边界均已收紧。请求字节写出后的网络失败不能仅凭“尚未交付模型事件”自动重放，必须由非空 `Idempotency-Key` 显式声明调用方意图；`xllm_history` 与 session 职责重复，只保留迁移兼容。
 20. xllm-session 当前是严格 single-writer 对象，读取 API也会更新 lazy cache；它没有显式状态机，snapshot/journal v2 没有 checksum 与 durability policy，磁盘错误还会丢失 path/operation/xrt cause。下一版必须提供不可变只读 snapshot 和可故障注入的 persistence v3。
 21. xwork 的 task、tool registry、subagent 和 MCP proxy 全部随短命 `xwork_agent` 生存，无法支撑跨轮后台任务。v3 固定拆成进程级 runtime、不可变 agent definition、会话级 agent、单请求 run 和统一 task；Python REPL 不进入 core，原生 explore 提升为正式工具 backend。
 22. 三库独立构建不能由 xs all-module 宿主替代。session 已改为继承 xllm 的规范 XRT module root；xllm/xwork 默认依赖路径、xwork unity 的 explore/regex 和 LP64 测试格式均已修复。xserver 的 xwork 仍有 Python/config 分叉，当前 `UPSTREAM.txt` 的零分叉声明要到 LIB-3 同步后才重新成立。
