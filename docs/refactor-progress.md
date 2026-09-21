@@ -6,9 +6,9 @@
 
 | 仓库 | 开发位置/分支 | 当前基线 | 说明 |
 | --- | --- | --- | --- |
-| mdo | `D:\GIT\mdo` / 当前分支 | `f6c6dd4` | 产品、计划与集成账本 |
+| mdo | `D:\GIT\mdo` / 当前分支 | `899083c` | 产品、计划与集成账本 |
 | xrt | `codex/mdo-refactor-xrt` 独立工作树 | `a90e616c41fb` | 原工作树有既存未提交内容，隔离开发 |
-| xserver | `D:\GIT\xserver-mdo-refactor` / `codex/mdo-refactor-xs` | `de3fd9416f12` | 原工作树有既存未提交内容，隔离开发 |
+| xserver | `D:\GIT\xserver-mdo-refactor` / `codex/mdo-refactor-xs` | `6362acc3bef2` | 原工作树有既存未提交内容，隔离开发 |
 
 ## 状态定义
 
@@ -47,7 +47,8 @@
 | XS-101B 同步代理 Future 与 xllm | DONE | xserver `aa27aca` | xrt 单头/声明头及 xllm 已收录文件逐字节匹配 `a90e616c`；3115 个 XRT 导入符号再生；26 项扩展/VFS 单元测试、xllm 宿主构建和版本启动冒烟通过 | xserver 不再保留本地代理桥接分叉；宿主只消费权威 XRT/xllm 实现 |
 | XS-101C SDK 头自包含 | DONE | xserver `248df08` | 五扩展 webview 宿主重建、26 项扩展/VFS 检查和最小 pack 启动冒烟通过 | `xsbase.h` 自行包含其内联 `strcmp` 所需的标准声明，TCC 应用不再依赖使用方碰巧先包含 `string.h` |
 | XS-102 Application/SDK VFS 对象 | DONE | xserver `de3fd94` | 双命名空间生命周期与隔离测试、26 项扩展测试、默认宿主完整构建和版本启动检查通过 | 建立进程级 Application/SDK VFS；公开接口仅返回 Application 借用句柄，SDK 命名空间保持宿主内部可见 |
-| XS-103～109 | TODO | - | - | 继续迁移应用资源、pack 与 TCC 文件系统 |
+| XS-103 应用资源统一读取 | DONE | xserver `6362acc` | Application VFS 路径/overlay 契约、双 VFS 生命周期、26 项结构测试、22 项 pack/HTTP 端到端、默认与五扩展宿主构建、提交号版本启动和 5 秒打包启动冒烟通过 | 配置、TLS 证书、HTTP 静态文件、脚本主文件和 reload 快照统一经 `xsAppOpen`/`xsAppReadAll`；ReadAll 始终 owned；disk provider 保留 sendfile，普通 provider 使用有界分块泵；旧包仅由 XS-104 前的 memory bridge 兼容 |
+| XS-104～109 | TODO | - | - | 继续迁移 pack 与 TCC 文件系统 |
 | LIB-0～3 | TODO | - | - | XS-GATE 后实施 |
 | MDO-0～10 | TODO | - | - | LIB-GATE 后实施 |
 | QA-RELEASE | TODO | - | - | MDO-GATE 后实施 |
@@ -64,9 +65,10 @@
 8. Windows `DuplicateHandle` 复制目录句柄时共享 `NtQueryDirectoryFile` 的枚举游标；并发根目录枚举必须以空相对名重新打开独立 file object。POSIX 的 disk open 必须在 `fstat` 验证普通文件前使用 `O_NONBLOCK`，避免末级文件被竞态替换为 FIFO 后阻塞。
 9. `xfile` 没有可公开增加的共享引用；pack provider 对任意 backend 的正确所有权语义是 Create 成功时接管 Source、失败时由调用方继续持有，而不是只对原生文件复制平台句柄。
 10. 构建缓存不能作为第三方源码完整性的证据；pack 的 OOM 强制重编译曾发现已缓存对象掩盖 `7zTypes.h` 截断，发布门必须包含干净重编译和生成单头一致性检查。
+11. xs Application Root 由显式配置文件父目录或可执行文件目录确定；`/app` 外的物理绝对路径会被统一入口拒绝。配置、证书、静态文件和脚本读取不再根据来源返回借用缓存，`xsAppReadAll` 只返回调用方拥有的缓冲。
 
 ## 下一步
 
-1. 将配置、证书、静态文件和脚本读取迁移到 Application VFS，消除 `XS_AppFree(data, fromVfs)` 双所有权接口；
+1. 实施 XS-104：以 XRT pack provider 替换旧解析器和 memory bridge，迁移 pack/list/extract/strip，并把旧 pack 工具的 Windows 中文源目录失败加入回归；
 2. 为 TCC 建立 per-state filesystem vtable，消除进程级站点挂载；
 3. 为旧 xs pack fixture 和新的 XRT pack provider 建立有界兼容迁移验证；全部后续验收继续略过压力和高负载测试。
