@@ -6,9 +6,9 @@
 
 | 仓库 | 开发位置/分支 | 当前基线 | 说明 |
 | --- | --- | --- | --- |
-| mdo | `D:\GIT\mdo` / 当前分支 | `7d3687484aae` | 产品、计划与集成账本 |
+| mdo | `D:\GIT\mdo` / 当前分支 | `8fa03eb` | 产品、计划与集成账本 |
 | xrt | `codex/mdo-refactor-xrt` 独立工作树 | `0d32b4d31a58` | 原工作树有既存未提交内容，隔离开发 |
-| xserver | `D:\GIT\xserver-mdo-refactor` / `codex/mdo-refactor-xs` | `6e69a8c6da93` | 原工作树有既存未提交内容，隔离开发 |
+| xserver | `D:\GIT\xserver-mdo-refactor` / `codex/mdo-refactor-xs` | `8745be1` | 原工作树有既存未提交内容，隔离开发 |
 
 ## 状态定义
 
@@ -70,7 +70,7 @@
 | LLM-108C client/call 逐分配点失败 | DONE | xrt `e89d07b1` | Windows warning-as-error 完整编译，6 组 client/profile/Start/Wait/hook/分配平衡检查通过；Linux Clang ASan/UBSan 同 selector，Windows 连接池与重试定向回归、Linux session/xwork 消费端严格编译通过；未运行压力或高负载测试 | 穷举通用 client 创建（含代理快照）、profile 替换、带 request hook 的 call Start 和离线 SSE Wait 分配点；修复 Call 分配失败遗留 request clone、request-body hook 拒绝遗留序列化正文、SSE 字段 OOM 误报协议错误、serializer 漏设错误以及 finish reason OOM 被静默当成功。adapter 特有复杂块的 OOM 继续由 LLM-108D 收口 |
 | LLM-108D provider 复杂组装逐分配点失败 | DONE | xrt `37d7b121` | Windows warning-as-error 构建，Completions/Anthropic/Responses 各自 SSE 与 JSON 共 6 套复杂 fixture、容量溢出、公开 client/mutator OOM selector 通过；Linux Clang ASan/UBSan 同 selector，Windows/Linux session/xwork 消费端严格编译通过；只运行有限离线故障点，未运行压力或高负载测试 | block/item map、usage、provider 元数据、text/reasoning/tool/native/finalize 的分配失败统一映射 OOM 并清理到基线；离线 replay 使用正式终态路径，不再在销毁时空等 3 秒；Anthropic 非流式 `tool_use.input` 保真为工具参数 JSON。Ling 3.0 Tiny 三接口真实探针留给 LLM-109，当前环境未注入 live URL/key，未宣称线上通过 |
 | LLM-109 xllm 3.1 发布与迁移合同 | DONE | xrt `0d32b4d3` | Windows/GCC 与 Linux/Clang warning-as-error 的 `RUN_TESTS=bounded` 全门禁通过；Linux Clang ASan/UBSan 离线合同通过；live/example 编译、兼容示例运行、弃用提示 opt-in 与 Ling 三接口缺配置联网前拒绝通过；未运行压力或高负载测试 | 发布 `3.1.0` 的 VERSION/header/manifest 三重版本与 xrt 依赖范围、源码 revision 策略；README、release notes、迁移指南、三方言示例和 CI 与实际构建一致；Ling 3.0 Tiny 严格模式要求 Completions/Responses/Anthropic 三条 URL、runtime key 及强制工具调用。当前环境未注入 URL/key，真实线上探针明确未执行 |
-| LIB-1 xllm 3.1 总门禁 | DOING | xrt `0d32b4d3` | 权威库门禁完成，待 xserver vendored 零分叉同步和消费端门禁 | 不扩张 xllm 的单次调用边界 |
+| LIB-1 xllm 3.1 总门禁 | DONE | xrt `0d32b4d3`；xserver `56cbe61`、`8745be1` | 17 个 vendored 生产文件逐字节匹配完整上游 revision；70 个公开符号与 TCC 导入集合相等；Windows/Linux xllm 宿主构建、嵌套 TCC 运行探针与精确提交号横幅通过；Windows GCC/Linux Clang xllm 消费端 warning-as-error 编译、31 项扩展清单与 2 项发布元数据通过；未运行压力或高负载测试 | xserver 来源声明固定 xrt 完整提交并提供可复用零分叉校验器；同步发现并补入 error domain/stage 两个新增导入；跨 Windows 工作树的 WSL 构建可用格式校验后的 `XS_BUILD_COMMIT` 注入 revision，不再降级为 unknown |
 | LIB-2～3 | TODO | - | - | 按 xllm-session、xwork 顺序实施 |
 | MDO-0～10 | TODO | - | - | LIB-GATE 后实施 |
 | QA-RELEASE | TODO | - | - | MDO-GATE 后实施 |
@@ -100,9 +100,10 @@
 21. xwork 的 task、tool registry、subagent 和 MCP proxy 全部随短命 `xwork_agent` 生存，无法支撑跨轮后台任务。v3 固定拆成进程级 runtime、不可变 agent definition、会话级 agent、单请求 run 和统一 task；Python REPL 不进入 core，原生 explore 提升为正式工具 backend。
 22. 三库独立构建不能由 xs all-module 宿主替代。session 已改为继承 xllm 的规范 XRT module root；xllm/xwork 默认依赖路径、xwork unity 的 explore/regex 和 LP64 测试格式均已修复。xserver 的 xwork 仍有 Python/config 分叉，当前 `UPSTREAM.txt` 的零分叉声明要到 LIB-3 同步后才重新成立。
 23. xllm 3.1 的发布真值由 `VERSION`、公开头版本宏和 `manifest.json` 共同约束；默认 CI 只跑有界合同集。Ling 3.0 Tiny 的三方言线上探针必须同时获得三条显式 URL 和 runtime key，缺配置时在联网前失败，离线 fixture 不得代替线上结论。
+24. xserver 的 xrt extlib 副本以 `UPSTREAM.txt` 中完整 40 位提交为来源锚；`verify_vendored_xrt_lib.py` 同时验证工作树 HEAD 和每个已收录生产文件的 SHA-256。WSL 不能读取 Windows linked-worktree `.git` 路径时，发布构建必须显式传入经过格式校验的 `XS_BUILD_COMMIT`，不能接受 `unknown` 横幅。
 
 ## 下一步
 
-1. 完成 LIB-1 总门禁：将权威 xllm 3.1 逐字节同步到 xserver vendored 副本，验证 xs 消费端与来源声明；运行环境提供凭据时再执行 Ling 3.0 Tiny 三接口真实探针；
-2. 依次实施 LIB-2 xllm-session、LIB-3 xwork，并从权威源码同步零分叉副本；
+1. 实施 LIB-2 xllm-session：显式状态机、不可变只读 snapshot、外部 summarizer、persistence v3、可注入存储和迁移/故障门禁；
+2. 实施 LIB-3 xwork，并从权威源码同步零分叉副本；运行环境提供凭据时再执行 Ling 3.0 Tiny 三接口真实探针；
 3. 全部后续验收继续使用有界功能、故障注入和确定性交错，略过压力与高负载测试。
