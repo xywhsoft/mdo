@@ -6,8 +6,8 @@
 
 | 仓库 | 开发位置/分支 | 当前基线 | 说明 |
 | --- | --- | --- | --- |
-| mdo | `D:\GIT\mdo` / 当前分支 | `088c718` | 产品、计划与集成账本 |
-| xrt | `codex/mdo-refactor-xrt` 独立工作树 | `2c384072` | 原工作树有既存未提交内容，隔离开发 |
+| mdo | `D:\GIT\mdo` / 当前分支 | `3aa6fe1` | 产品、计划与集成账本 |
+| xrt | `codex/mdo-refactor-xrt` 独立工作树 | `fc124574` | 原工作树有既存未提交内容，隔离开发 |
 | xserver | `D:\GIT\xserver-mdo-refactor` / `codex/mdo-refactor-xs` | `6d5485e` | 原工作树有既存未提交内容，隔离开发 |
 
 ## 状态定义
@@ -82,6 +82,7 @@
 | LIB-2 xllm/xllm-session vendored 同步与总门禁 | DONE | xserver `6d5485e` | xllm 17 个、xllm-session 14 个生产文件与 xrt `c6b90284` 双向逐字节一致；31 项扩展结构检查、2 项发布元数据检查、Windows/Linux 的 session 单扩展与全 15 扩展宿主构建、运行及嵌套 TCC 探测通过；未运行压力或高负载测试 | 来源锚升级为完整 40 位提交；同步 persistence v3、不可变 snapshot 与存储故障原子性；导入表覆盖 87 个 session 公开函数；校验器同时拒绝遗漏的上游新文件和意外 vendored 文件 |
 | WORK-101 runtime/agent/run 对象拆分 | DONE | xrt `d6895e95` | Windows/GCC 与 Linux/Clang warning-as-error 有界全回归通过；Linux Clang ASan/UBSan/LSan 与 TSan 有界全回归通过；C/C++ 公共头独立编译及 v3 ABI 符号导出检查通过；未运行压力或高负载测试 | 发布 xwork `3.0.0` lifetime spine：进程级 runtime、不可变 definition、会话 agent 和单请求异步 run 各自引用计数；取消幂等、等待超时不取消；runtime 统一持有稳定 task entry，后台进程跨 agent 替换仍可管理，半初始化任务不对查询发布，回收不在全局锁内执行 |
 | WORK-102 generation tool catalog | DONE | xrt `2c384072` | Windows/GCC 与 Linux/Clang warning-as-error 有界全回归通过；Linux Clang ASan/UBSan/LSan 与 GCC TSan 有界全回归通过；C/C++ 公共头独立编译及新增 ABI 符号导出检查通过；固定单 reader/单 publisher 换代交错、活动 run 拒绝换代和 MCP 旧代调用通过；未运行压力或高负载测试 | runtime 与 agent 发布引用计数不可变工具目录；按 source 整批替换失败原子，现有 agent 显式采用 runtime 新代；默认 4096 项上限在深拷贝前拒绝明显超限输入；MCP 刷新一次发布完整代并保留旧 proxy 到 client 销毁，旧 snapshot 可继续安全读取和调用 |
+| WORK-103 effect、permission、result writer vNext | DONE | xrt `fc124574` | Windows/GCC 与 Linux/Clang warning-as-error 有界全回归通过；Linux Clang ASan/UBSan/LSan 与 GCC TSan 有界全回归通过；C11/C++17 公共头独立编译和 5 个新增 writer 符号导出检查通过；多 effect、允许/拒绝/非法决定、资源发现失败、结果上限、旧 MCP generation 与 deadline 回归通过；未运行压力或高负载测试 | ABI v2 使用可组合 effect 位集；非只读工具必须声明无副作用的结构化资源发现回调；审批请求携带单调 ID、Agent/Run/目录代/调用身份和执行 scope；TCC/native 工具通过宿主 writer 复制文本、图片与成功状态，不跨模块传递堆指针；旧 executor 仅保留给内置和兼容适配器 |
 | LIB-3 xwork 3.0 | DOING | - | - | 拆分 runtime/definition/agent/run/task，修复生命周期、并发、后台任务、工具和子 Agent 边界，再同步 xserver 零分叉副本 |
 | MDO-0～10 | TODO | - | - | LIB-GATE 后实施 |
 | QA-RELEASE | TODO | - | - | MDO-GATE 后实施 |
@@ -114,8 +115,9 @@
 24. xserver 的 xrt extlib 副本以 `UPSTREAM.txt` 中完整 40 位提交为来源锚；`verify_vendored_xrt_lib.py` 同时验证工作树 HEAD 和每个已收录生产文件的 SHA-256。WSL 不能读取 Windows linked-worktree `.git` 路径时，发布构建必须显式传入经过格式校验的 `XS_BUILD_COMMIT`，不能接受 `unknown` 横幅。
 25. xwork v3 的对象生命周期不能继续由短命 session agent 代理：runtime 持有统一任务表，definition 是可共享的不可变策略代，run 独立持有取消、deadline、事件覆盖和 owned result，并反向保活 agent。任务条目以稳定独立分配和引用计数跨 agent 轮换存在，构造完成前不可查找，表摘除只释放表引用，潜在阻塞清理必须在 runtime 锁外执行。
 26. xwork 工具目录以不可变 generation 发布：runtime 更新只替换当前目录，既有 agent 在两次 run 之间显式 adopt；agent 的换代与 run claim 共用状态锁，活动 run 始终固定一代。目录深拷贝描述字符串，callback 与 userdata 仍由来源所有者管理；按 source 的批量替换先构造完整候选再一次发布，失败保留旧代。MCP 为旧代保留 retired proxy 到 client 销毁，保留 snapshot 因而不会在 refresh 后悬空。
+27. 工具 effect 是可组合能力位集，不是单一严重度；非只读 descriptor 必须在审批前通过 host-owned writer 提交完整类型化资源，发现失败和未知审批值一律拒绝。权限请求与执行上下文共同携带 Agent、Run、tool call、目录代、取消和绝对 deadline；零 deadline 是手工零初始化上下文的兼容“未设置”值。动态模块使用 result writer 即时复制输出，不能让宿主接管模块分配器产生的指针。
 
 ## 下一步
 
-1. 实施 WORK-103 effect/permission/result writer vNext：统一工具副作用分类、结构化授权请求与结果落盘边界；随后继续 WORK-104～109，并在 LIB-3 收口时同步 xserver 零分叉副本；运行环境提供凭据时再执行 Ling 3.0 Tiny 三接口真实探针；
+1. 实施 WORK-104 原生跨平台文件搜索/列举工具，固定 Windows/Linux 结果契约；随后继续 WORK-105～109，并在 LIB-3 收口时同步 xserver 零分叉副本；运行环境提供凭据时再执行 Ling 3.0 Tiny 三接口真实探针；
 2. 全部后续验收继续使用有界功能、故障注入和确定性交错，略过压力与高负载测试。
