@@ -6,8 +6,8 @@
 
 | 仓库 | 开发位置/分支 | 当前基线 | 说明 |
 | --- | --- | --- | --- |
-| mdo | `D:\GIT\mdo` / 当前分支 | `e485829` | 产品、计划与集成账本 |
-| xrt | `codex/mdo-refactor-xrt` 独立工作树 | `bdb39b03d57b` | 原工作树有既存未提交内容，隔离开发 |
+| mdo | `D:\GIT\mdo` / 当前分支 | `072d501` | 产品、计划与集成账本 |
+| xrt | `codex/mdo-refactor-xrt` 独立工作树 | `7a33dbbc1e03` | 原工作树有既存未提交内容，隔离开发 |
 | xserver | `D:\GIT\xserver-mdo-refactor` / `codex/mdo-refactor-xs` | `8745be1` | 原工作树有既存未提交内容，隔离开发 |
 
 ## 状态定义
@@ -72,6 +72,7 @@
 | LLM-109 xllm 3.1 发布与迁移合同 | DONE | xrt `0d32b4d3` | Windows/GCC 与 Linux/Clang warning-as-error 的 `RUN_TESTS=bounded` 全门禁通过；Linux Clang ASan/UBSan 离线合同通过；live/example 编译、兼容示例运行、弃用提示 opt-in 与 Ling 三接口缺配置联网前拒绝通过；未运行压力或高负载测试 | 发布 `3.1.0` 的 VERSION/header/manifest 三重版本与 xrt 依赖范围、源码 revision 策略；README、release notes、迁移指南、三方言示例和 CI 与实际构建一致；Ling 3.0 Tiny 严格模式要求 Completions/Responses/Anthropic 三条 URL、runtime key 及强制工具调用。当前环境未注入 URL/key，真实线上探针明确未执行 |
 | LIB-1 xllm 3.1 总门禁 | DONE | xrt `0d32b4d3`；xserver `56cbe61`、`8745be1` | 17 个 vendored 生产文件逐字节匹配完整上游 revision；70 个公开符号与 TCC 导入集合相等；Windows/Linux xllm 宿主构建、嵌套 TCC 运行探针与精确提交号横幅通过；Windows GCC/Linux Clang xllm 消费端 warning-as-error 编译、31 项扩展清单与 2 项发布元数据通过；未运行压力或高负载测试 | xserver 来源声明固定 xrt 完整提交并提供可复用零分叉校验器；同步发现并补入 error domain/stage 两个新增导入；跨 Windows 工作树的 WSL 构建可用格式校验后的 `XS_BUILD_COMMIT` 注入 revision，不再降级为 unknown |
 | SES-101 xllm-session 显式状态机 | DONE | xrt `bdb39b03` | Windows/GCC warning-as-error 有界全回归通过；Linux/Clang 状态门通过；Linux Clang ASan/UBSan 状态门通过；v1/v2 snapshot/journal 回放与未完成工具 pair 压缩隔离继续通过；未运行压力或高负载测试 | 发布 `3.0.0-dev` 版本宏与完整转移表；模型调用和压缩具有显式 begin/abort/commit 边界；未知/重复工具结果、活动模型/压缩期间的变更、并行压缩事务均被拒绝；session 先销毁会使活动 compaction 安全失联 |
+| SES-102 xllm-session 预算与 profile 边界 | DONE | xrt `7a33dbbc` | Windows/GCC warning-as-error 有界全回归与预算定向门通过；Linux/Clang 预算门、Clang ASan/UBSan 预算门通过；shared/split 公式、小窗口、零预算、profile 越权及 `UINT64_MAX` 饱和用例通过；未运行压力或高负载测试 | 新增版本化 budget snapshot、profile 初始化/创建入口；shared context 与 split input/output 使用各自明确公式，兼容 bound-client 复用同一路径；provider 上限只能收窄，usage、阈值与账本合计不再整数回绕；新预算字段随 v2 快照兼容保存并由旧快照安全派生 |
 | LIB-2 其余工作与 LIB-3 | TODO | - | - | 继续 SES-102～108，再实施 xwork 3.0 |
 | MDO-0～10 | TODO | - | - | LIB-GATE 后实施 |
 | QA-RELEASE | TODO | - | - | MDO-GATE 后实施 |
@@ -97,7 +98,7 @@
 17. TCC SDK 资源 C 文件是纯构建产物，正式构建按平台/扩展组合生成到 `.build/`；源码目录不保留可漂移快照。二进制发布包必须携带适用第三方声明、许可副本和精确源码 revision/重新链接入口。
 18. 严格双 VFS 下的 Linux TCC 不能借 `/usr/include` 或目标 libc 链接文件补齐 SDK。普通动态宿主必须内置 compact hosted C 头，并只在 `libtcc.c` 启用宿主符号解析；显式 sysroot/static 发布继续链接目标 libc，二者由构建计划明确分流。
 19. xllm 保留单次调用边界；生产分配器已移除进程级可变 selector，UTF-8、错误枚举、profile/hooks/prefix cache 快照与锁、资源上限、provider golden、流式分片、结构化错误、幂等重试、连接池与公开入口失败原子性均已收紧。请求字节写出后的网络失败不能仅凭“尚未交付模型事件”自动重放，必须由非空 `Idempotency-Key` 显式声明调用方意图；空闲连接必须以 READ 哨兵观测对端关闭并在复用前撤销哨兵，不能只读取 stream 状态；分配型 setter 必须先准备后提交，批量追加失败必须回滚本次前缀，client/call 及三种 provider 的 SSE/JSON 组装失败必须清理到调用前所有权边界；离线 replay 也必须发布正式终态；`xllm_history` 与 session 职责重复，只保留迁移兼容。
-20. xllm-session 是严格 single-writer 对象；`3.0.0-dev` 已用公开状态机固定 user/model/tool/turn 和 compaction prepare/execute/commit/abort 边界，并保留 v1/v2 相邻 turn 迁移兼容。读取 API 仍会更新 lazy cache，snapshot/journal v2 仍没有 checksum 与 durability policy，磁盘错误还会丢失 path/operation/xrt cause；后续必须提供不可变只读 snapshot 和可故障注入的 persistence v3。
+20. xllm-session 是严格 single-writer 对象；`3.0.0-dev` 已用公开状态机固定 user/model/tool/turn 和 compaction prepare/execute/commit/abort 边界，并保留 v1/v2 相邻 turn 迁移兼容。token budget 由版本化 snapshot 暴露：shared 窗口按总窗口保留输出与安全空间，split 模式按独立输入上限保留安全空间，provider profile 只能被收窄，所有极值加法和阈值计算饱和而不回绕。读取 API 仍会更新 lazy cache，snapshot/journal v2 仍没有 checksum 与 durability policy，磁盘错误还会丢失 path/operation/xrt cause；后续必须提供不可变只读 snapshot 和可故障注入的 persistence v3。
 21. xwork 的 task、tool registry、subagent 和 MCP proxy 全部随短命 `xwork_agent` 生存，无法支撑跨轮后台任务。v3 固定拆成进程级 runtime、不可变 agent definition、会话级 agent、单请求 run 和统一 task；Python REPL 不进入 core，原生 explore 提升为正式工具 backend。
 22. 三库独立构建不能由 xs all-module 宿主替代。session 已改为继承 xllm 的规范 XRT module root；xllm/xwork 默认依赖路径、xwork unity 的 explore/regex 和 LP64 测试格式均已修复。xserver 的 xwork 仍有 Python/config 分叉，当前 `UPSTREAM.txt` 的零分叉声明要到 LIB-3 同步后才重新成立。
 23. xllm 3.1 的发布真值由 `VERSION`、公开头版本宏和 `manifest.json` 共同约束；默认 CI 只跑有界合同集。Ling 3.0 Tiny 的三方言线上探针必须同时获得三条显式 URL 和 runtime key，缺配置时在联网前失败，离线 fixture 不得代替线上结论。
@@ -105,6 +106,6 @@
 
 ## 下一步
 
-1. 继续 LIB-2 xllm-session：统一预算、tool pair 不变量、不可变只读 snapshot、外部 summarizer、persistence v3、可注入存储和迁移/故障门禁；
+1. 继续 LIB-2 xllm-session：tool pair 不变量、不可变只读 snapshot、外部 summarizer、persistence v3、可注入存储和迁移/故障门禁；
 2. 实施 LIB-3 xwork，并从权威源码同步零分叉副本；运行环境提供凭据时再执行 Ling 3.0 Tiny 三接口真实探针；
 3. 全部后续验收继续使用有界功能、故障注入和确定性交错，略过压力与高负载测试。
