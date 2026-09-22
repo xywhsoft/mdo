@@ -59,6 +59,13 @@ typedef struct MdoSessionRuntimeOptions {
     xwork_agent_owner_release_fn OnOwnerRelease;
 } MdoSessionRuntimeOptions;
 
+typedef struct MdoSessionForkOptions {
+    uint32 Size;
+    const char* Title;           /* NULL inherits the source title. */
+    uint64 ThroughSequence;      /* UINT64_MAX selects the retained tail. */
+    MdoSessionRuntimeOptions Runtime;
+} MdoSessionForkOptions;
+
 typedef struct MdoSessionInfo {
     uint32 Size;
     uint64 Revision;
@@ -74,8 +81,10 @@ typedef struct MdoSessionInfo {
     uint64 ModelGeneration;
     uint64 ModuleGeneration;
     uint64 SkillGeneration;
+    uint64 ForkedThroughSequence;
     char Id[MDO_SESSION_ID_CAPACITY];
     char ProjectId[MDO_PROJECT_ID_CAPACITY];
+    char ParentSessionId[MDO_SESSION_ID_CAPACITY];
     char Title[MDO_SESSION_TITLE_CAPACITY];
     char AgentId[MDO_SESSION_IDENTITY_CAPACITY];
     char ModelId[MDO_SESSION_IDENTITY_CAPACITY];
@@ -132,12 +141,15 @@ uint64 MdoSessionManagerGeneration(void);
 
 void MdoSessionCreateOptionsInit(MdoSessionCreateOptions* Options);
 void MdoSessionRuntimeOptionsInit(MdoSessionRuntimeOptions* Options);
+void MdoSessionForkOptionsInit(MdoSessionForkOptions* Options);
 void MdoSessionQueryInit(MdoSessionQuery* Query);
 
 MdoSession* MdoSessionCreate(const MdoSessionCreateOptions* Options,
     xwork_error* Error);
 MdoSession* MdoSessionOpen(const char* ProjectId, const char* SessionId,
     const MdoSessionRuntimeOptions* Options, xwork_error* Error);
+MdoSession* MdoSessionFork(MdoSession* Source,
+    const MdoSessionForkOptions* Options, xwork_error* Error);
 /* Loads metadata for archived/trash administration without creating an
  * Agent. MdoSessionAgentRef returns NULL for this handle. */
 MdoSession* MdoSessionLoad(const char* ProjectId, const char* SessionId,

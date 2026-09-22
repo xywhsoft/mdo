@@ -1283,12 +1283,14 @@ bool MdoAgentSessionTruncateAfter(MdoAgentSession* Session,
 }
 
 bool MdoAgentSessionSaveFork(MdoAgentSession* Session,
-    uint64 ThroughSequence, const char* SnapshotPath, xwork_error* Error)
+    uint64 ThroughSequence, const char* SnapshotPath, uint64* SavedThrough,
+    xwork_error* Error)
 {
     xllm_session* Fork = NULL;
     xllm_error ModelError;
     bool Ok = false;
     xworkErrorInit(Error);
+    if ( SavedThrough != NULL ) *SavedThrough = 0u;
     if ( SnapshotPath == NULL || SnapshotPath[0] == '\0' ) {
         MdoAgentsError(Error, XWORK_ERROR_INVALID_ARGUMENT,
             "fork snapshot path is required");
@@ -1300,6 +1302,7 @@ bool MdoAgentSessionSaveFork(MdoAgentSession* Session,
     Fork = xllmSessionForkAt(Session->Owner->LlmSession,
         ThroughSequence, &ModelError);
     if ( Fork != NULL ) Ok = xllmSessionSave(Fork, SnapshotPath, &ModelError);
+    if ( Ok && SavedThrough != NULL ) *SavedThrough = ThroughSequence;
     xllmSessionDestroy(Fork);
     xworkAgentRunEnd(Session->Agent);
     if ( !Ok ) MdoAgentsModelError(Error, &ModelError,

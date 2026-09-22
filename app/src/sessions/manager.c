@@ -5,7 +5,6 @@
 #include "../../include/mdo/sessions.h"
 #include "internal.h"
 
-#define MDO_SESSION_SCHEMA_VERSION 1u
 #define MDO_SESSION_META_LIMIT (64u * 1024u)
 #define MDO_SESSION_EXPORT_SNAPSHOT_LIMIT (32u * 1024u * 1024u)
 #define MDO_SESSION_SEARCH_DEFAULT 100u
@@ -51,6 +50,9 @@ struct MdoSessionCatalog {
 };
 
 static MdoSessionManagerState g_MdoSessions;
+
+static bool MdoSessionsValidateCurrent(MdoSession* Session,
+    xwork_error* Error);
 
 static void MdoSessionsError(xwork_error* Error, xwork_error_code Code,
     const char* Message)
@@ -145,6 +147,27 @@ static bool MdoSessionsDirectory(char Output[MDO_SESSION_PATH_CAPACITY],
     return Written > 0 && (size_t)Written < MDO_SESSION_PATH_CAPACITY;
 }
 
+static void MdoSessionsRollbackDirectory(const char* ProjectId,
+    const char* SessionId, const char* DirectoryPath)
+{
+    static const char* const Files[] = {
+        "journal.jsonl", "snapshot.json", "meta.json", "ui-events.jsonl",
+        ".runtime.lock"
+    };
+    char Relative[MDO_SESSION_PATH_CAPACITY];
+    size_t i;
+    for ( i = 0u; i < sizeof(Files) / sizeof(Files[0]); ++i ) {
+        if ( MdoSessionsPath(Relative, ProjectId, SessionId, Files[i]) )
+            (void)MdoHomeRemove(Relative, false);
+        xrtClearError();
+    }
+    if ( MdoSessionsPath(Relative, ProjectId, SessionId, "artifacts") )
+        (void)MdoHomeRemoveEmptyDirectory(Relative);
+    xrtClearError();
+    (void)MdoHomeRemoveEmptyDirectory(DirectoryPath);
+    xrtClearError();
+}
+
 static const char* MdoSessionsStatusName(MdoSessionStatus Status)
 {
     if ( Status == MDO_SESSION_ACTIVE ) return "active";
@@ -232,7 +255,11 @@ static str MdoSessionsMetaJson(const MdoSessionInfo* Info, size_t* Size)
          !MdoSessionsObjectTake(Object, "module_generation",
             xrtValueUInt(Info->ModuleGeneration)) ||
          !MdoSessionsObjectTake(Object, "skill_generation",
-            xrtValueUInt(Info->SkillGeneration)) ) goto done;
+            xrtValueUInt(Info->SkillGeneration)) ||
+         !MdoSessionsObjectString(Object, "parent_session_id",
+            Info->ParentSessionId) ||
+         !MdoSessionsObjectTake(Object, "forked_through_sequence",
+            xrtValueUInt(Info->ForkedThroughSequence)) ) goto done;
     Json = xrtJsonStringify(Object, true, Size);
 done:
     xrtValueRelease(Object);
@@ -310,6 +337,7 @@ static bool MdoSessionsMetaParse(const char* ExpectedProject,
     xstrview Workspace;
     xstrview Status;
     xstrview Previous;
+    xstrview Parent;
     uint64 Schema;
     uint64 Revision;
     uint64 MaxOutput;
@@ -319,6 +347,7 @@ static bool MdoSessionsMetaParse(const char* ExpectedProject,
     uint64 ModelGeneration;
     uint64 ModuleGeneration;
     uint64 SkillGeneration;
+    uint64 ForkedThrough;
     bool Pinned;
     const xvalue* PinnedValue;
     bool Ok = false;
@@ -334,9 +363,11 @@ static bool MdoSessionsMetaParse(const char* ExpectedProject,
     PinnedValue = Root != NULL ? xrtValueObjectGet(Root,
         xrtStrView("pinned")) : NULL;
     if ( Root == NULL || xrtValueType(Root) != XVALUE_OBJECT ||
-         xrtValueCount(Root) != 20u ||
          !MdoSessionsValueUInt(Root, "schema_version", &Schema) ||
-         Schema != MDO_SESSION_SCHEMA_VERSION ||
+         (Schema != 1u && Schema != MDO_SESSION_SCHEMA_VERSION) ||
+         ((Schema == 1u && xrtValueCount(Root) != 20u) ||
+          (Schema == MDO_SESSION_SCHEMA_VERSION &&
+           xrtValueCount(Root) != 22u)) ||
          !MdoSessionsValueUInt(Root, "revision", &Revision) ||
          Revision == 0u ||
          !MdoSessionsValueString(Root, "id", &Id) ||
@@ -371,6 +402,18 @@ static bool MdoSessionsMetaParse(const char* ExpectedProject,
             sizeof(Info->ReasoningEffort), Reasoning, false) ||
          !MdoSessionsCopy(Info->WorkspaceRoot,
             sizeof(Info->WorkspaceRoot), Workspace, false) ) goto done;
+    if ( Schema == MDO_SESSION_SCHEMA_VERSION ) {
+        if ( !MdoSessionsValueString(Root, "parent_session_id", &Parent) ||
+             !MdoSessionsValueUInt(Root, "forked_through_sequence",
+                &ForkedThrough) ||
+             !MdoSessionsCopy(Info->ParentSessionId,
+                sizeof(Info->ParentSessionId), Parent, true) ||
+             (Info->ParentSessionId[0] == '\0' && ForkedThrough != 0u) ||
+             (Info->ParentSessionId[0] != '\0' &&
+              !MdoSessionsIdValid(Info->ParentSessionId,
+                sizeof(Info->ParentSessionId))) ) goto done;
+        Info->ForkedThroughSequence = ForkedThrough;
+    }
     Info->Status = MdoSessionsStatusParse(Status);
     Info->PreviousStatus = MdoSessionsStatusParse(Previous);
     Info->Protocol = MdoSessionsProtocolParse(Protocol);
@@ -412,7 +455,7 @@ static bool MdoSessionsMetaRead(const char* ProjectId, const char* SessionId,
     xrtFree(Data);
     if ( !Ok ) {
         xerror* Error = xrtErrorCreate(XERR_PROTOCOL, "mdo.sessions", 1,
-            "session meta.json does not satisfy schema version 1");
+            "session meta.json does not satisfy schema version 1 or 2");
         if ( Error != NULL ) xrtSetErrorTake(Error);
     }
     return Ok;
@@ -550,6 +593,15 @@ void MdoSessionRuntimeOptionsInit(MdoSessionRuntimeOptions* Options)
     memset(Options, 0, sizeof(*Options));
     Options->Size = sizeof(*Options);
     Options->Deadline = XRT_DEADLINE_NEVER;
+}
+
+void MdoSessionForkOptionsInit(MdoSessionForkOptions* Options)
+{
+    if ( Options == NULL ) return;
+    memset(Options, 0, sizeof(*Options));
+    Options->Size = sizeof(*Options);
+    Options->ThroughSequence = UINT64_MAX;
+    MdoSessionRuntimeOptionsInit(&Options->Runtime);
 }
 
 void MdoSessionQueryInit(MdoSessionQuery* Query)
@@ -732,32 +784,8 @@ done:
     MdoSessionEventBridgeRelease(Bridge);
     if ( Session == NULL && DirectoryCreated ) {
         xerror* Saved = xrtTakeError();
-        if ( MdoSessionsPath(Relative, Options->ProjectId, SessionId,
-                "journal.jsonl") )
-            (void)MdoHomeRemove(Relative, false);
-        xrtClearError();
-        if ( MdoSessionsPath(Relative, Options->ProjectId, SessionId,
-                "snapshot.json") )
-            (void)MdoHomeRemove(Relative, false);
-        xrtClearError();
-        if ( MdoSessionsPath(Relative, Options->ProjectId, SessionId,
-                "meta.json") )
-            (void)MdoHomeRemove(Relative, false);
-        xrtClearError();
-        if ( MdoSessionsPath(Relative, Options->ProjectId, SessionId,
-                "ui-events.jsonl") )
-            (void)MdoHomeRemove(Relative, false);
-        xrtClearError();
-        if ( MdoSessionsPath(Relative, Options->ProjectId, SessionId,
-                ".runtime.lock") )
-            (void)MdoHomeRemove(Relative, false);
-        xrtClearError();
-        if ( MdoSessionsPath(Relative, Options->ProjectId, SessionId,
-                "artifacts") )
-            (void)MdoHomeRemoveEmptyDirectory(Relative);
-        xrtClearError();
-        (void)MdoHomeRemoveEmptyDirectory(DirectoryPath);
-        xrtClearError();
+        MdoSessionsRollbackDirectory(Options->ProjectId, SessionId,
+            DirectoryPath);
         if ( Saved != NULL ) xrtSetErrorTake(Saved);
     }
     xrtFree(SessionId);
@@ -886,6 +914,199 @@ memory:
 done:
     MdoAgentSessionRelease(Agent);
     MdoSessionEventBridgeRelease(Bridge);
+    xrtFree(SnapshotPath);
+    xrtFree(JournalPath);
+    xrtFree(ArtifactPath);
+    return Session;
+}
+
+MdoSession* MdoSessionFork(MdoSession* Source,
+    const MdoSessionForkOptions* Options, xwork_error* Error)
+{
+    MdoSessionForkOptions Defaults;
+    MdoAgentSessionOptions AgentOptions;
+    MdoAgentSessionInfo AgentInfo;
+    MdoAgentSession* Agent = NULL;
+    MdoSessionEventBridge* Bridge = NULL;
+    MdoSession* Session = NULL;
+    MdoSessionInfo SourceInfo;
+    MdoSessionInfo Info;
+    char* SessionId = NULL;
+    char* SnapshotPath = NULL;
+    char* JournalPath = NULL;
+    char* ArtifactPath = NULL;
+    char Relative[MDO_SESSION_PATH_CAPACITY];
+    char DirectoryPath[MDO_SESSION_PATH_CAPACITY];
+    char MetaPath[MDO_SESSION_PATH_CAPACITY];
+    char ProjectId[MDO_PROJECT_ID_CAPACITY];
+    char Title[MDO_SESSION_TITLE_CAPACITY];
+    uint64 SavedThrough = 0u;
+    bool DirectoryCreated = false;
+    bool SourceLocked = false;
+    bool ManagerLocked = false;
+
+    xworkErrorInit(Error);
+    if ( Options == NULL ) {
+        MdoSessionForkOptionsInit(&Defaults);
+        Options = &Defaults;
+    }
+    if ( !g_MdoSessions.Initialized || Source == NULL ||
+         Options->Size < sizeof(*Options) ||
+         Options->Runtime.Size < sizeof(Options->Runtime) ||
+         (Options->Title != NULL &&
+          !MdoSessionsTextValid(Options->Title,
+            MDO_SESSION_TITLE_CAPACITY, true)) ||
+         ((Options->Runtime.OnOwnerRetain != NULL) !=
+          (Options->Runtime.OnOwnerRelease != NULL)) ) {
+        MdoSessionsError(Error, XWORK_ERROR_INVALID_ARGUMENT,
+            "invalid managed session fork request");
+        return NULL;
+    }
+    xrtMutexLock(Source->Lock);
+    SourceLocked = true;
+    if ( Source->Agent == NULL || Source->Info.Status != MDO_SESSION_ACTIVE ) {
+        MdoSessionsError(Error, XWORK_ERROR_CONTEXT,
+            "an open active session is required as a fork source");
+        goto done;
+    }
+    snprintf(ProjectId, sizeof(ProjectId), "%s", Source->Info.ProjectId);
+    snprintf(Title, sizeof(Title), "%s", Options->Title != NULL ?
+        Options->Title : Source->Info.Title);
+    SessionId = xrtXidMakeString();
+    if ( SessionId == NULL ||
+         !MdoSessionsIdValid(SessionId, MDO_SESSION_ID_CAPACITY) ||
+         !MdoSessionsDirectory(DirectoryPath, ProjectId, SessionId) ||
+         !MdoSessionsPath(MetaPath, ProjectId, SessionId, "meta.json") ||
+         !MdoSessionsPath(Relative, ProjectId, SessionId, "snapshot.json") )
+        goto memory;
+    SnapshotPath = MdoHomeExternalPath(Relative);
+    if ( !MdoSessionsPath(Relative, ProjectId, SessionId, "journal.jsonl") )
+        goto memory;
+    JournalPath = MdoHomeExternalPath(Relative);
+    if ( !MdoSessionsPath(Relative, ProjectId, SessionId, "artifacts") )
+        goto memory;
+    ArtifactPath = MdoHomeExternalPath(Relative);
+    if ( SnapshotPath == NULL || JournalPath == NULL || ArtifactPath == NULL )
+        goto memory;
+    if ( !MdoHomeCreateDirectory(DirectoryPath) ) {
+        MdoSessionsXrtError(Error, XWORK_ERROR_IO,
+            "cannot create the fork session directory");
+        goto done;
+    }
+    DirectoryCreated = true;
+    Bridge = MdoSessionEventBridgeCreate(ProjectId, SessionId,
+        Options->Runtime.OnEvent, Options->Runtime.EventUserData,
+        Options->Runtime.OwnerUserData, Options->Runtime.OnOwnerRetain,
+        Options->Runtime.OnOwnerRelease, Error);
+    if ( Bridge == NULL ) goto done;
+    xrtMutexLock(g_MdoSessions.Lock);
+    ManagerLocked = true;
+    if ( !MdoSessionsValidateCurrent(Source, Error) ||
+         MdoSessionsActiveFind(ProjectId, Source->Info.Id) == SIZE_MAX ) {
+        if ( Error != NULL && Error->eCode == XWORK_ERROR_NONE )
+            MdoSessionsError(Error, XWORK_ERROR_CONTEXT,
+                "fork source no longer owns an active runtime");
+        goto done;
+    }
+    if ( !MdoSessionsActiveAdd(ProjectId, SessionId) ) {
+        MdoSessionsError(Error, XWORK_ERROR_OUT_OF_MEMORY,
+            "cannot reserve the fork session runtime");
+        goto done;
+    }
+    MdoSessionEventBridgeSetRegistered(Bridge);
+    SourceInfo = Source->Info;
+    xrtMutexUnlock(g_MdoSessions.Lock);
+    ManagerLocked = false;
+    if ( !MdoAgentSessionSaveFork(Source->Agent, Options->ThroughSequence,
+            SnapshotPath, &SavedThrough, Error) ) goto done;
+    xrtMutexUnlock(Source->Lock);
+    SourceLocked = false;
+
+    MdoAgentSessionOptionsInit(&AgentOptions);
+    AgentOptions.AgentId = SourceInfo.AgentId;
+    AgentOptions.ModelId = SourceInfo.ModelId;
+    AgentOptions.Protocol = SourceInfo.Protocol;
+    AgentOptions.ReasoningEffort = SourceInfo.ReasoningEffort;
+    AgentOptions.MaxOutputTokens = SourceInfo.MaxOutputTokens;
+    AgentOptions.WorkspaceRoot = SourceInfo.WorkspaceRoot;
+    AgentOptions.SessionPath = SnapshotPath;
+    AgentOptions.JournalPath = JournalPath;
+    AgentOptions.ArtifactDirectory = ArtifactPath;
+    AgentOptions.Recover = true;
+    MdoSessionsRuntimeApply(&AgentOptions, &Options->Runtime);
+    AgentOptions.OnEvent = MdoSessionEventBridgeOnEvent;
+    AgentOptions.EventUserData = Bridge;
+    AgentOptions.OwnerUserData = Bridge;
+    AgentOptions.OnOwnerRetain = MdoSessionEventBridgeRef;
+    AgentOptions.OnOwnerRelease = MdoSessionEventBridgeRelease;
+    Agent = MdoAgentSessionCreateWithRuntime(g_MdoSessions.Runtime,
+        &AgentOptions, Error);
+    if ( Agent == NULL ) goto done;
+    memset(&AgentInfo, 0, sizeof(AgentInfo));
+    AgentInfo.Size = sizeof(AgentInfo);
+    if ( !MdoAgentSessionGetInfo(Agent, &AgentInfo) ) {
+        MdoSessionsError(Error, XWORK_ERROR_CONTEXT,
+            "cannot inspect the forked Agent session");
+        goto done;
+    }
+    memset(&Info, 0, sizeof(Info));
+    Info.Size = sizeof(Info);
+    Info.Revision = 1u;
+    Info.CreatedAt = xrtNow();
+    Info.UpdatedAt = Info.CreatedAt;
+    Info.Status = MDO_SESSION_ACTIVE;
+    Info.PreviousStatus = MDO_SESSION_ACTIVE;
+    Info.RuntimeOpen = true;
+    Info.Protocol = AgentInfo.Protocol;
+    Info.MaxOutputTokens = AgentInfo.MaxOutputTokens;
+    Info.ConfigRevision = AgentInfo.ConfigRevision;
+    Info.ModelGeneration = AgentInfo.ModelGeneration;
+    Info.ModuleGeneration = AgentInfo.ModuleGeneration;
+    Info.SkillGeneration = AgentInfo.SkillGeneration;
+    Info.ForkedThroughSequence = SavedThrough;
+    snprintf(Info.Id, sizeof(Info.Id), "%s", SessionId);
+    snprintf(Info.ProjectId, sizeof(Info.ProjectId), "%s", ProjectId);
+    snprintf(Info.ParentSessionId, sizeof(Info.ParentSessionId), "%s",
+        SourceInfo.Id);
+    snprintf(Info.Title, sizeof(Info.Title), "%s", Title);
+    snprintf(Info.AgentId, sizeof(Info.AgentId), "%s", AgentInfo.AgentId);
+    snprintf(Info.ModelId, sizeof(Info.ModelId), "%s", AgentInfo.ModelId);
+    snprintf(Info.ReasoningEffort, sizeof(Info.ReasoningEffort), "%s",
+        AgentInfo.ReasoningEffort);
+    snprintf(Info.WorkspaceRoot, sizeof(Info.WorkspaceRoot), "%s",
+        SourceInfo.WorkspaceRoot);
+    Session = MdoSessionsHandleCreate(Agent, &Info, MetaPath);
+    if ( Session == NULL ) goto memory;
+    Agent = NULL;
+    xrtMutexLock(g_MdoSessions.Lock);
+    ManagerLocked = true;
+    if ( !MdoSessionsMetaWrite(MetaPath, &Info) ) {
+        xrtMutexUnlock(g_MdoSessions.Lock);
+        ManagerLocked = false;
+        MdoSessionsXrtError(Error, XWORK_ERROR_IO,
+            "cannot publish fork session metadata");
+        MdoSessionRelease(Session);
+        Session = NULL;
+        goto done;
+    }
+    MdoSessionsGenerationAdvance();
+    xrtMutexUnlock(g_MdoSessions.Lock);
+    ManagerLocked = false;
+    goto done;
+memory:
+    MdoSessionsError(Error, XWORK_ERROR_OUT_OF_MEMORY,
+        "cannot allocate fork session state");
+done:
+    if ( ManagerLocked ) xrtMutexUnlock(g_MdoSessions.Lock);
+    if ( SourceLocked ) xrtMutexUnlock(Source->Lock);
+    MdoAgentSessionRelease(Agent);
+    MdoSessionEventBridgeRelease(Bridge);
+    if ( Session == NULL && DirectoryCreated ) {
+        xerror* Saved = xrtTakeError();
+        MdoSessionsRollbackDirectory(ProjectId, SessionId, DirectoryPath);
+        if ( Saved != NULL ) xrtSetErrorTake(Saved);
+    }
+    xrtFree(SessionId);
     xrtFree(SnapshotPath);
     xrtFree(JournalPath);
     xrtFree(ArtifactPath);
@@ -1524,6 +1745,7 @@ static bool MdoSessionsQueryMatch(const MdoSessionInfo* Info,
     return MdoSessionsContains(Info->Title, Query->Text) ||
         MdoSessionsContains(Info->Id, Query->Text) ||
         MdoSessionsContains(Info->ProjectId, Query->Text) ||
+        MdoSessionsContains(Info->ParentSessionId, Query->Text) ||
         MdoSessionsContains(Info->AgentId, Query->Text) ||
         MdoSessionsContains(Info->ModelId, Query->Text) ||
         MdoSessionsContains(Info->WorkspaceRoot, Query->Text);

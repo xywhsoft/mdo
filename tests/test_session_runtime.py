@@ -218,14 +218,37 @@ static bool CorruptEventTail(const char *project, const char *session) {
     return ok;
 }
 
+static bool LegacyMeta(void) {
+    static const char json[] =
+        "{\"schema_version\":1,\"revision\":4,\"id\":\"legacy-session\","
+        "\"project_id\":\"legacy-project\",\"title\":\"Legacy\","
+        "\"agent_id\":\"mdo.default\",\"model_id\":\"ling.tiny\","
+        "\"protocol\":\"openai-chat-completions\","
+        "\"reasoning_effort\":\"medium\",\"max_output_tokens\":1024,"
+        "\"workspace_root\":\".\",\"created_at_us\":1,"
+        "\"updated_at_us\":2,\"status\":\"active\","
+        "\"previous_status\":\"active\",\"pinned\":false,"
+        "\"config_revision\":1,\"model_generation\":1,"
+        "\"module_generation\":1,\"skill_generation\":1}";
+    MdoSessionInfo info;
+    bool ok = MdoSessionsMetaParse("legacy-project", "legacy-session",
+        xrtStrView(json), &info);
+    printf("legacy_meta=ok:%d parent:%s through:%llu\n", ok ? 1 : 0,
+        ok ? info.ParentSessionId : "invalid",
+        (unsigned long long)(ok ? info.ForkedThroughSequence : UINT64_MAX));
+    return ok;
+}
+
 void ServiceInit(XS_HostInfo *host) {
     xwork_runtime_config runtime_config;
     xwork_runtime *runtime = NULL;
     xwork_error error;
     MdoSessionCreateOptions create;
     MdoSessionRuntimeOptions open;
+    MdoSessionForkOptions fork_options;
     MdoSessionInfo info;
     MdoSession *session = NULL;
+    MdoSession *forked = NULL;
     MdoSession *blocked = NULL;
     MdoSession *stale = NULL;
     bool stale_update;
@@ -236,12 +259,15 @@ void ServiceInit(XS_HostInfo *host) {
     char *export_json = NULL;
     size_t export_size = 0u;
     Probe probe;
+    Probe fork_probe;
     char session_id[MDO_SESSION_ID_CAPACITY] = {0};
     static const char invalid[] = "{}";
     (void)host;
     memset(&probe, 0, sizeof(probe));
+    memset(&fork_probe, 0, sizeof(fork_probe));
     if (!MdoHomeInit() || !MdoConfigInit() || !MdoModelManagerInit() ||
         !MdoSkillManagerInit()) { printf("init_error=pre-runtime\n"); goto done; }
+    if (!LegacyMeta()) goto done;
     xworkRuntimeConfigInit(&runtime_config);
     runtime = xworkRuntimeCreate(&runtime_config, &error);
     if (runtime == NULL || !MdoModuleManagerInit(runtime) ||
@@ -291,6 +317,29 @@ void ServiceInit(XS_HostInfo *host) {
         export_json != NULL && strstr(export_json, "\"meta\":{") != NULL,
         export_json != NULL && strstr(export_json, "\"snapshot\":{") != NULL);
     xrtFree(export_json); export_json = NULL;
+    MdoSessionForkOptionsInit(&fork_options);
+    fork_options.Title = "Forked durable session";
+    fork_options.ThroughSequence = rewind_to;
+    fork_options.Runtime.OnModelComplete = Complete;
+    fork_options.Runtime.ModelUserData = &fork_probe;
+    forked = MdoSessionFork(session, &fork_options, &error);
+    if (forked == NULL) {
+        printf("fork_error=%s\n", error.sMessage); goto done;
+    }
+    memset(&info, 0, sizeof(info)); info.Size = sizeof(info);
+    if (!MdoSessionGetInfo(forked, &info) || !Run(forked, "fork prompt"))
+        goto done;
+    printf("fork=id:%s parent:%s through:%llu title:%s calls:%u history:%d\n",
+        info.Id, info.ParentSessionId,
+        (unsigned long long)info.ForkedThroughSequence, info.Title,
+        fork_probe.Calls,
+        fork_probe.SawPriorPrompt && fork_probe.SawPriorAnswer ? 1 : 0);
+    MdoSessionRelease(forked); forked = NULL;
+    fork_options.ThroughSequence = rewind_to + UINT64_C(1000000);
+    blocked = MdoSessionFork(session, &fork_options, &error);
+    printf("invalid_fork=%d code:%d\n", blocked != NULL ? 1 : 0,
+        (int)error.eCode);
+    MdoSessionRelease(blocked); blocked = NULL;
     if (!Run(session, "third transient prompt") ||
         !MdoSessionLastSequence(session, &transient_tail, &error) ||
         transient_tail <= rewind_to ||
@@ -371,6 +420,7 @@ void ServiceInit(XS_HostInfo *host) {
 done:
     MdoSessionRelease(stale);
     MdoSessionRelease(blocked);
+    MdoSessionRelease(forked);
     MdoSessionRelease(session);
     xrtFree(export_json);
     MdoSessionManagerUnit();
@@ -496,7 +546,9 @@ def main() -> int:
         assert "init_error=" not in output, output
         assert "create_error=" not in output, output
         assert "recover_error=" not in output, output
+        assert "fork_error=" not in output, output
         assert "catalog_empty=count:0 diagnostics:0 generation:1" in output, output
+        assert "legacy_meta=ok:1 parent: through:0" in output, output
         assert "created=id:" in output and "project:project-alpha" in output, output
         assert "duplicate_open=0 code:7" in output, output
         assert "run=0 text:durable-answer-one" in output, output
@@ -506,6 +558,13 @@ def main() -> int:
         assert "run=0 text:durable-answer-five" in output, output
         assert "run=0 text:durable-answer-six" in output, output
         assert re.search(r"export=ok:1 size:[1-9]\d* schema:1 meta:1 snapshot:1", output), output
+        created = re.search(r"created=id:([^ ]+) project:project-alpha", output)
+        fork = re.search(
+            r"fork=id:([^ ]+) parent:([^ ]+) through:([1-9]\d*) "
+            r"title:Forked durable session calls:1 history:1", output)
+        assert created and fork and fork.group(1) != created.group(1), output
+        assert fork.group(2) == created.group(1), output
+        assert re.search(r"invalid_fork=0 code:[1-9]\d*", output), output
         assert re.search(r"truncate=boundary:[1-9]\d* tail:[1-9]\d* removed:1", output), output
         assert re.search(r"clear=tail:[1-9]\d* old:0 system:1", output), output
         assert "clear_recovery=prompt:1 answer:1" in output, output
@@ -516,12 +575,12 @@ def main() -> int:
         assert "archived_open=0" in output, output
         assert "stale_update=0 code:7" in output, output
         assert "search_active=count:1 diagnostics:0 code:0" in output, output
-        assert "catalog_trash=count:1 diagnostics:0" in output, output
+        assert "catalog_trash=count:2 diagnostics:0" in output, output
         assert "search_trash=count:1 diagnostics:0 code:0" in output, output
         assert "status:3 pinned:0" in output, output
         assert "failed_create=0 code:1" in output, output
-        assert "catalog_after_failed_create=count:1 diagnostics:0" in output, output
-        assert "catalog_diagnostic=count:1 diagnostics:1" in output, output
+        assert "catalog_after_failed_create=count:2 diagnostics:0" in output, output
+        assert "catalog_diagnostic=count:2 diagnostics:1" in output, output
         assert "recovery=calls:6 prior_prompt:1 prior_answer:1" in output, output
         first = re.search(r"events_first=count:(\d+) next:(\d+) latest:(\d+) lost:0", output)
         reopened = re.search(r"events_after_reopen=count:(\d+) next:(\d+) latest:(\d+) lost:1", output)
@@ -531,11 +590,27 @@ def main() -> int:
         assert "probe_done=1" in output, output
         meta_files = list(home.glob("sessions/project-alpha/*/meta.json"))
         valid_meta = [path for path in meta_files if path.parent.name != "bad"]
-        assert len(valid_meta) == 1, meta_files
-        document = json.loads(valid_meta[0].read_text(encoding="utf-8"))
+        assert len(valid_meta) == 2, meta_files
+        documents = {
+            path.parent.name: json.loads(path.read_text(encoding="utf-8"))
+            for path in valid_meta
+        }
+        source_path = next(path for path in valid_meta
+            if documents[path.parent.name]["parent_session_id"] == "")
+        child_path = next(path for path in valid_meta
+            if documents[path.parent.name]["parent_session_id"] != "")
+        document = documents[source_path.parent.name]
+        child = documents[child_path.parent.name]
+        assert document["schema_version"] == 2
         assert document["status"] == "active" and document["title"] == "Renamed durable session"
-        assert (valid_meta[0].parent / "snapshot.json").is_file()
-        event_path = valid_meta[0].parent / "ui-events.jsonl"
+        assert child["schema_version"] == 2
+        assert child["parent_session_id"] == source_path.parent.name
+        assert child["forked_through_sequence"] > 0
+        assert child["title"] == "Forked durable session"
+        assert source_path.parent.name == created.group(1)
+        assert child_path.parent.name == fork.group(1)
+        assert all((path.parent / "snapshot.json").is_file() for path in valid_meta)
+        event_path = source_path.parent / "ui-events.jsonl"
         events = []
         invalid_events = 0
         for line in event_path.read_text(encoding="utf-8").splitlines():
@@ -546,7 +621,7 @@ def main() -> int:
         assert events and [event["event_id"] for event in events] == list(
             range(1, len(events) + 1))
         assert invalid_events == 1
-        assert all(event["session_id"] == valid_meta[0].parent.name for event in events)
+        assert all(event["session_id"] == source_path.parent.name for event in events)
     print("session runtime probe: PASS")
     return 0
 

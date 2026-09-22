@@ -114,7 +114,8 @@ bool MdoAgentSessionTruncateAfter(MdoAgentSession* Session,
 /* UINT64_MAX selects the current retained tail. The target is a new snapshot;
  * the fork has no journal attachment or runtime callbacks. */
 bool MdoAgentSessionSaveFork(MdoAgentSession* Session,
-    uint64 ThroughSequence, const char* SnapshotPath, xwork_error* Error);
+    uint64 ThroughSequence, const char* SnapshotPath, uint64* SavedThrough,
+    xwork_error* Error);
 
 void MdoAgentRunOptionsInit(MdoAgentRunOptions* Options);
 MdoAgentRun* MdoAgentRunCreate(MdoAgentSession* Session,

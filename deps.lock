@@ -40,7 +40,7 @@
   },
   "mdo": {
     "module_abi_version": 1,
-    "session_schema_version": 1,
+    "session_schema_version": 2,
     "config_schema_version": 1
   }
 }

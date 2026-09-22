@@ -71,6 +71,7 @@ class SessionContractTests(unittest.TestCase):
             "MdoSessionTruncateAfter",
             "MdoSessionExportJson",
             "MdoSessionCatalogSearch",
+            "MdoSessionFork",
         ):
             self.assertIn(symbol, header)
         self.assertIn("xllmSessionClear", agents)
@@ -78,6 +79,9 @@ class SessionContractTests(unittest.TestCase):
         self.assertIn("xllmSessionSetSystemPrompt", agents)
         self.assertIn("MDO_SESSION_CATALOG_MAX", manager)
         self.assertIn("MDO_SESSION_SEARCH_MAX", manager)
+        self.assertIn("parent_session_id", manager)
+        self.assertIn("forked_through_sequence", manager)
+        self.assertIn("Schema != 1u", manager)
         self.assertNotIn('"messages"', manager)
 
 
