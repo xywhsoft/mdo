@@ -118,6 +118,7 @@ def probe_source(valid: str, changed: str, missing: str, invalid_http: str,
 #include <xwork.h>
 
 #include "src/storage/home.c"
+#include "src/security/secrets.c"
 #include "src/mcp/manager.c"
 
 static const char sValid[] = {c_literal(valid)};
@@ -349,15 +350,15 @@ def write_site(site: Path, base: Path) -> tuple[Path, Path]:
 
     for relative in (
         "web", "default-home/config", "default-home/mcp",
-        "src/storage", "src/mcp", "include/mdo",
+        "src/storage", "src/security", "src/mcp", "include/mdo",
     ):
         (site / relative).mkdir(parents=True, exist_ok=True)
     (site / "web/index.html").write_text("probe", encoding="utf-8")
     shutil.copy2(ROOT / "app/default-home/config/defaults.json",
                  site / "default-home/config/defaults.json")
     for relative in (
-        "src/storage/home.c", "src/mcp/manager.c",
-        "include/mdo/home.h", "include/mdo/mcp.h",
+        "src/storage/home.c", "src/security/secrets.c", "src/mcp/manager.c",
+        "include/mdo/home.h", "include/mdo/secrets.h", "include/mdo/mcp.h",
     ):
         shutil.copy2(ROOT / "app" / relative, site / relative)
     (site / "probe.c").write_text(probe_source(

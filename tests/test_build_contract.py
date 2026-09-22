@@ -55,6 +55,7 @@ class BuildContractTests(unittest.TestCase):
         self.assertEqual(sources, [
             "src/storage/home.c",
             "src/config/config.c",
+            "src/security/secrets.c",
             "src/models/catalog.c",
             "src/skills/manager.c",
             "src/mcp/manager.c",
@@ -72,6 +73,7 @@ class BuildContractTests(unittest.TestCase):
         second = BUILD.generated_unity(self.lock, BUILD.source_list())
         self.assertEqual(first, second)
         self.assertEqual(first.count('#include "../src/storage/home.c"'), 1)
+        self.assertEqual(first.count('#include "../src/security/secrets.c"'), 1)
         self.assertEqual(first.count('#include "../src/models/catalog.c"'), 1)
         self.assertEqual(first.count('#include "../src/bootstrap/bootstrap.c"'), 1)
         self.assertEqual(first.count('#include "../src/modules/manager.c"'), 1)

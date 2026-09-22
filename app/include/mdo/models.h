@@ -65,6 +65,25 @@ typedef struct MdoModelInfo {
     MdoModelAttachmentFlags Attachments;
 } MdoModelInfo;
 
+typedef struct MdoModelClientOptions {
+    uint32 Size;
+    const char* ModelId;          /* NULL or empty selects the catalog default. */
+    MdoModelProtocol Protocol;    /* zero selects the model default. */
+    const char* ReasoningEffort;  /* NULL or empty selects the model default. */
+    uint32 MaxOutputTokens;       /* zero selects the model maximum. */
+} MdoModelClientOptions;
+
+typedef struct MdoModelClientInfo {
+    uint32 Size;
+    uint64 ModelGeneration;
+    MdoModelProtocol Protocol;
+    const char* ModelId;
+    const char* ProviderId;
+    const char* WireModel;
+    const char* ReasoningEffort;
+    uint32 MaxOutputTokens;
+} MdoModelClientInfo;
+
 bool MdoModelManagerInit(void);
 void MdoModelManagerUnit(void);
 bool MdoModelManagerReload(void);
@@ -91,6 +110,11 @@ bool MdoModelCatalogDefault(const MdoModelCatalog* pCatalog,
 bool MdoModelCatalogProfile(const MdoModelCatalog* pCatalog,
     const char* ModelId, MdoModelProtocol Protocol,
     xllm_model_profile* pProfile, xllm_error* pError);
+
+void MdoModelClientOptionsInit(MdoModelClientOptions* pOptions);
+xllm_client* MdoModelClientCreate(const MdoModelCatalog* pCatalog,
+    const MdoModelClientOptions* pOptions, MdoModelClientInfo* pInfo,
+    xllm_error* pError);
 
 const char* MdoModelProtocolName(MdoModelProtocol Protocol);
 xllm_provider MdoModelProtocolProvider(MdoModelProtocol Protocol);

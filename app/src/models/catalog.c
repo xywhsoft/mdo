@@ -4,6 +4,8 @@
 
 #include "../../include/mdo/config.h"
 #include "../../include/mdo/models.h"
+#include "../../include/mdo/secrets.h"
+#include "../../include/mdo/version.h"
 
 #define MDO_MODELS_ERROR_DOMAIN "mdo.models"
 #define MDO_MODELS_MAX_CONFIG_BYTES (1024u * 1024u)
@@ -827,4 +829,229 @@ bool MdoModelCatalogProfile(const MdoModelCatalog* pCatalog,
         pModel->OutputReserveTokens;
     pProfile->uRecommendedSummaryTokens = pModel->SummaryTokens;
     return xllmModelProfileValidate(pProfile, pError);
+}
+
+void MdoModelClientOptionsInit(MdoModelClientOptions* pOptions)
+{
+    if ( pOptions == NULL ) return;
+    memset(pOptions, 0, sizeof(*pOptions));
+    pOptions->Size = sizeof(*pOptions);
+}
+
+static bool MdoModelsReasoningSupported(const MdoModelEntry* pModel,
+    cstr Effort)
+{
+    size_t i;
+    for ( i = 0u; i < pModel->ReasoningEffortCount; ++i )
+        if ( strcmp(pModel->ReasoningEfforts[i], Effort) == 0 ) return true;
+    return false;
+}
+
+static bool MdoModelsEndpointIndex(MdoModelProtocol Protocol, size_t* pIndex)
+{
+    switch ( Protocol ) {
+    case MDO_MODEL_PROTOCOL_OPENAI_CHAT_COMPLETIONS:
+        *pIndex = 0u;
+        return true;
+    case MDO_MODEL_PROTOCOL_OPENAI_RESPONSES:
+        *pIndex = 1u;
+        return true;
+    case MDO_MODEL_PROTOCOL_ANTHROPIC_MESSAGES:
+        *pIndex = 2u;
+        return true;
+    default:
+        return false;
+    }
+}
+
+static char* MdoModelsResolveEndpoint(cstr Endpoint,
+    MdoModelProtocol Protocol, xllm_error* pError)
+{
+    static const char* const BuiltinEndpoints[] = {
+        "builtin:ling/openai/chat-completions",
+        "builtin:ling/openai/responses",
+        "builtin:ling/anthropic/messages"
+    };
+    static const char* const EnvironmentNames[] = {
+        "MDO_LING_CHAT_COMPLETIONS_URL",
+        "MDO_LING_RESPONSES_URL",
+        "MDO_LING_ANTHROPIC_URL"
+    };
+    size_t Index;
+    char* Result = NULL;
+    size_t Length;
+    if ( Endpoint == NULL || !MdoModelsEndpointIndex(Protocol, &Index) ) {
+        MdoModelsProfileError(pError, "model endpoint is unavailable");
+        return NULL;
+    }
+    if ( strncmp(Endpoint, "builtin:", 8u) == 0 ) {
+        if ( strcmp(Endpoint, BuiltinEndpoints[Index]) != 0 ||
+             !xrtEnvLookup(EnvironmentNames[Index], &Result) ||
+             Result == NULL || Result[0] == '\0' ) {
+            xrtFree(Result);
+            MdoModelsProfileError(pError,
+                "built-in model endpoint is not configured in this environment");
+            return NULL;
+        }
+    } else {
+        Result = xrtStrDup(Endpoint);
+        if ( Result == NULL ) {
+            MdoModelsProfileError(pError, "cannot allocate model endpoint");
+            if ( pError != NULL ) pError->eCode = XLLM_ERROR_OUT_OF_MEMORY;
+            return NULL;
+        }
+    }
+    Length = strlen(Result);
+    if ( Length == 0u || Length > 2048u || strchr(Result, '\r') != NULL ||
+         strchr(Result, '\n') != NULL ) {
+        xrtFree(Result);
+        MdoModelsProfileError(pError, "model endpoint is invalid");
+        return NULL;
+    }
+    return Result;
+}
+
+static char* MdoModelsResolveCredential(const MdoProviderEntry* pProvider,
+    xllm_error* pError)
+{
+    char* Secret = NULL;
+    const xerror* pRuntimeError;
+    cstr Message;
+    if ( pProvider->CredentialReference == NULL ) {
+        Secret = xrtStrDup("");
+        if ( Secret == NULL ) {
+            MdoModelsProfileError(pError, "cannot allocate model credential");
+            if ( pError != NULL ) pError->eCode = XLLM_ERROR_OUT_OF_MEMORY;
+        }
+        return Secret;
+    }
+    if ( MdoSecretResolve(xrtStrView(pProvider->CredentialReference),
+            64u * 1024u, &Secret) ) return Secret;
+    pRuntimeError = xrtGetError();
+    Message = pRuntimeError != NULL ? xrtErrorMessage(pRuntimeError) : NULL;
+    MdoModelsProfileError(pError, Message != NULL ? Message :
+        "model credential is unavailable");
+    if ( pError != NULL ) pError->eCode = XLLM_ERROR_AUTH;
+    xrtClearError();
+    return NULL;
+}
+
+xllm_client* MdoModelClientCreate(const MdoModelCatalog* pCatalog,
+    const MdoModelClientOptions* pOptions, MdoModelClientInfo* pInfo,
+    xllm_error* pError)
+{
+    MdoModelClientOptions Defaults;
+    const MdoModelEntry* pModel = NULL;
+    const MdoProviderEntry* pProvider;
+    MdoModelProtocol Protocol;
+    MdoModelProtocolFlags ProtocolFlag;
+    const char* ReasoningEffort;
+    uint32 MaxOutputTokens;
+    size_t EndpointIndex;
+    char* Endpoint = NULL;
+    char* Secret = NULL;
+    xllm_model_profile Profile;
+    xllm_client_config Config;
+    xllm_client* pClient = NULL;
+    size_t i;
+
+    if ( pError != NULL ) xllmErrorInit(pError);
+    if ( pOptions == NULL ) {
+        MdoModelClientOptionsInit(&Defaults);
+        pOptions = &Defaults;
+    }
+    if ( pCatalog == NULL || pOptions->Size < sizeof(*pOptions) ||
+         (pInfo != NULL && pInfo->Size < sizeof(*pInfo)) ) {
+        MdoModelsProfileError(pError, "invalid model client request");
+        return NULL;
+    }
+    if ( pInfo != NULL ) {
+        uint32 Size = pInfo->Size;
+        memset(pInfo, 0, sizeof(*pInfo));
+        pInfo->Size = Size;
+    }
+    if ( pOptions->ModelId == NULL || pOptions->ModelId[0] == '\0' ) {
+        if ( pCatalog->DefaultModelIndex < pCatalog->ModelCount )
+            pModel = &pCatalog->Models[pCatalog->DefaultModelIndex];
+    } else {
+        for ( i = 0u; i < pCatalog->ModelCount; ++i )
+            if ( strcmp(pCatalog->Models[i].Id, pOptions->ModelId) == 0 ) {
+                pModel = &pCatalog->Models[i];
+                break;
+            }
+    }
+    if ( pModel == NULL ) {
+        MdoModelsProfileError(pError, "model was not found");
+        return NULL;
+    }
+    pProvider = NULL;
+    for ( i = 0u; i < pCatalog->ProviderCount; ++i )
+        if ( strcmp(pCatalog->Providers[i].Id, pModel->ProviderId) == 0 ) {
+            pProvider = &pCatalog->Providers[i];
+            break;
+        }
+    if ( pProvider == NULL ) {
+        MdoModelsProfileError(pError, "model provider was not found");
+        return NULL;
+    }
+    Protocol = pOptions->Protocol != 0 ? pOptions->Protocol :
+        pModel->DefaultProtocol;
+    ProtocolFlag = MdoModelsProtocolFlag(Protocol);
+    if ( ProtocolFlag == 0u ||
+         (pModel->Protocols & ProtocolFlag) == 0u ||
+         (pProvider->Protocols & ProtocolFlag) == 0u ||
+         !MdoModelsEndpointIndex(Protocol, &EndpointIndex) ) {
+        MdoModelsProfileError(pError,
+            "model or provider does not support the selected protocol");
+        return NULL;
+    }
+    ReasoningEffort = pOptions->ReasoningEffort != NULL &&
+        pOptions->ReasoningEffort[0] != '\0' ? pOptions->ReasoningEffort :
+        pModel->DefaultReasoningEffort;
+    if ( !MdoModelsReasoningSupported(pModel, ReasoningEffort) ) {
+        MdoModelsProfileError(pError,
+            "model does not support the selected reasoning effort");
+        return NULL;
+    }
+    MaxOutputTokens = pOptions->MaxOutputTokens != 0u ?
+        pOptions->MaxOutputTokens : pModel->MaxOutputTokens;
+    if ( MaxOutputTokens == 0u ||
+         MaxOutputTokens > pModel->MaxOutputTokens ) {
+        MdoModelsProfileError(pError,
+            "model output override exceeds the profile limit");
+        return NULL;
+    }
+    if ( !MdoModelCatalogProfile(pCatalog, pModel->Id, Protocol,
+            &Profile, pError) ) return NULL;
+    Endpoint = MdoModelsResolveEndpoint(pProvider->Endpoints[EndpointIndex],
+        Protocol, pError);
+    if ( Endpoint == NULL ) goto done;
+    Secret = MdoModelsResolveCredential(pProvider, pError);
+    if ( Secret == NULL ) goto done;
+    xllmClientConfigInit(&Config);
+    Config.sBaseUrl = Endpoint;
+    Config.sApiKey = Secret;
+    Config.sModel = pModel->WireModel;
+    Config.sReasoningEffort = ReasoningEffort;
+    Config.sUserAgent = "mdo/" MDO_VERSION_TEXT;
+    Config.uMaxOutputTokens = MaxOutputTokens;
+    Config.uTimeoutMs = pProvider->TimeoutMilliseconds;
+    Config.bVerifyPeer = pProvider->VerifyPeer;
+    Config.eProvider = MdoModelProtocolProvider(Protocol);
+    Config.pModelProfile = &Profile;
+    pClient = xllmClientCreate(&Config, pError);
+    if ( pClient != NULL && pInfo != NULL ) {
+        pInfo->ModelGeneration = pCatalog->Generation;
+        pInfo->Protocol = Protocol;
+        pInfo->ModelId = pModel->Id;
+        pInfo->ProviderId = pProvider->Id;
+        pInfo->WireModel = pModel->WireModel;
+        pInfo->ReasoningEffort = ReasoningEffort;
+        pInfo->MaxOutputTokens = MaxOutputTokens;
+    }
+
+done:
+    MdoSecretRelease(&Secret);
+    xrtFree(Endpoint);
+    return pClient;
 }

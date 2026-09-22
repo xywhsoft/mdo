@@ -22,6 +22,7 @@ PROBE_SOURCE = r'''
 
 #include "src/storage/home.c"
 #include "src/config/config.c"
+#include "src/security/secrets.c"
 #include "src/models/catalog.c"
 
 static void PrintError(const char* label)
@@ -40,6 +41,8 @@ void ServiceInit(XS_HostInfo* host)
     MdoModelInfo model;
     xllm_model_profile profile;
     xllm_error error;
+    MdoModelClientOptions client_options;
+    MdoModelClientInfo client_info;
     unsigned protocol;
     (void)host;
 
@@ -79,6 +82,41 @@ void ServiceInit(XS_HostInfo* host)
     memset(&error, 0, sizeof(error));
     printf("profile_bad=%d\n", MdoModelCatalogProfile(first, model.Id,
         (MdoModelProtocol)99, &profile, &error) ? 1 : 0);
+    MdoModelClientOptionsInit(&client_options);
+    for ( protocol = MDO_MODEL_PROTOCOL_OPENAI_CHAT_COMPLETIONS;
+          protocol <= MDO_MODEL_PROTOCOL_ANTHROPIC_MESSAGES; ++protocol ) {
+        xllm_client* client;
+        memset(&client_info, 0, sizeof(client_info));
+        client_info.Size = sizeof(client_info);
+        client_options.Protocol = (MdoModelProtocol)protocol;
+        memset(&error, 0, sizeof(error));
+        client = MdoModelClientCreate(first, &client_options, &client_info,
+            &error);
+        printf("client_%u=%d generation=%llu output=%u error=%s\n",
+            protocol, client != NULL ? 1 : 0,
+            (unsigned long long)client_info.ModelGeneration,
+            (unsigned)client_info.MaxOutputTokens,
+            error.sMessage[0] != '\0' ? error.sMessage : "none");
+        if ( client != NULL ) xllmClientDestroy(client);
+    }
+    client_options.Protocol = MDO_MODEL_PROTOCOL_OPENAI_RESPONSES;
+    client_options.ReasoningEffort = "unsupported";
+    memset(&error, 0, sizeof(error));
+    {
+        xllm_client* client = MdoModelClientCreate(first, &client_options,
+            NULL, &error);
+        printf("client_bad_reasoning=%d\n", client != NULL ? 1 : 0);
+        if ( client != NULL ) xllmClientDestroy(client);
+    }
+    client_options.ReasoningEffort = NULL;
+    client_options.MaxOutputTokens = 16385u;
+    memset(&error, 0, sizeof(error));
+    {
+        xllm_client* client = MdoModelClientCreate(first, &client_options,
+            NULL, &error);
+        printf("client_bad_output=%d\n", client != NULL ? 1 : 0);
+        if ( client != NULL ) xllmClientDestroy(client);
+    }
     printf("reload=%d\n", MdoModelManagerReload() ? 1 : 0);
     second = MdoModelCatalogSnapshot();
     memset(&model, 0, sizeof(model));
@@ -110,13 +148,16 @@ def write_site(site: Path) -> int:
     (site / "default-home/config").mkdir(parents=True)
     (site / "src/storage").mkdir(parents=True)
     (site / "src/config").mkdir(parents=True)
+    (site / "src/security").mkdir(parents=True)
     (site / "src/models").mkdir(parents=True)
     (site / "include/mdo").mkdir(parents=True)
     (site / "web/index.html").write_text("probe", encoding="utf-8")
     for relative in (
         "default-home/config/defaults.json",
-        "src/storage/home.c", "src/config/config.c", "src/models/catalog.c",
+        "src/storage/home.c", "src/config/config.c",
+        "src/security/secrets.c", "src/models/catalog.c",
         "include/mdo/home.h", "include/mdo/config.h", "include/mdo/models.h",
+        "include/mdo/secrets.h", "include/mdo/version.h",
     ):
         shutil.copy2(ROOT / "app" / relative, site / relative)
     (site / "probe.c").write_text(PROBE_SOURCE, encoding="utf-8")
@@ -142,11 +183,21 @@ def write_site(site: Path) -> int:
     return port
 
 
-def run_probe(host: Path, site: Path, home: Path) -> str:
+def run_probe(host: Path, site: Path, home: Path,
+              environment: dict[str, str] | None = None) -> str:
     command = [str(host), "xs.json", "--", "--home", str(home)]
+    process_environment = os.environ.copy()
+    for name in (
+        "MDO_LING_CHAT_COMPLETIONS_URL", "MDO_LING_RESPONSES_URL",
+        "MDO_LING_ANTHROPIC_URL", "MDO_LING_API_KEY",
+    ):
+        process_environment.pop(name, None)
+    if environment is not None:
+        process_environment.update(environment)
     process = subprocess.Popen(
         command, cwd=site, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
         text=True, encoding="utf-8", errors="replace",
+        env=process_environment,
         creationflags=subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0,
     )
     lines: list[str] = []
@@ -191,7 +242,15 @@ def main() -> int:
         base = Path(raw)
         site = base / "site"
         write_site(site)
-        output = run_probe(host, site, base / "state")
+        missing = run_probe(host, site, base / "missing")
+        assert "client_1=0" in missing, missing
+        assert "built-in model endpoint is not configured" in missing, missing
+        output = run_probe(host, site, base / "state", {
+            "MDO_LING_CHAT_COMPLETIONS_URL": "https://example.invalid/v1",
+            "MDO_LING_RESPONSES_URL": "https://example.invalid/v1",
+            "MDO_LING_ANTHROPIC_URL": "https://example.invalid",
+            "MDO_LING_API_KEY": "bounded-runtime-probe-key",
+        })
         assert "probe_init_error=" not in output, output
         assert "catalog_one=1 providers=1 models=1" in output, output
         assert "provider_ok=1" in output, output
@@ -203,6 +262,11 @@ def main() -> int:
         assert "profile_2=1 provider=2" in output, output
         assert "profile_3=1 provider=3" in output, output
         assert "profile_bad=0" in output, output
+        assert "client_1=1 generation=1 output=16384 error=none" in output, output
+        assert "client_2=1 generation=1 output=16384 error=none" in output, output
+        assert "client_3=1 generation=1 output=16384 error=none" in output, output
+        assert "client_bad_reasoning=0" in output, output
+        assert "client_bad_output=0" in output, output
         assert "reload=1" in output, output
         assert "catalog_two=2 old_default=1 new_default=1" in output, output
         assert "probe_done=1" in output, output

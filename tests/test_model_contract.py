@@ -48,7 +48,7 @@ class ModelContractTests(unittest.TestCase):
         for symbol in (
             "MdoModelCatalogSnapshot", "MdoModelCatalogRef",
             "MdoModelCatalogRelease", "MdoModelCatalogDefault",
-            "MdoModelCatalogProfile",
+            "MdoModelCatalogProfile", "MdoModelClientCreate",
         ):
             self.assertIn(symbol, self.header)
         self.assertIn("HasCredentialReference", self.header)
@@ -63,6 +63,15 @@ class ModelContractTests(unittest.TestCase):
         self.assertIn("XLLM_PROVIDER_OPENAI_RESPONSES", self.source)
         self.assertIn("XLLM_PROVIDER_ANTHROPIC", self.source)
         self.assertIn("xllmModelProfileValidate", self.source)
+
+    def test_client_factory_resolves_late_and_clears_temporary_key(self) -> None:
+        secrets = (ROOT / "app/src/security/secrets.c").read_text(
+            encoding="utf-8")
+        self.assertIn("MdoSecretResolve", self.source)
+        self.assertIn("MdoSecretRelease(&Secret)", self.source)
+        self.assertIn("xllmClientCreate(&Config", self.source)
+        self.assertIn("MDO_LING_RESPONSES_URL", self.source)
+        self.assertIn("xrtSecureZero", secrets)
 
     def test_bootstrap_owns_model_manager_before_runtime(self) -> None:
         text = BOOTSTRAP.read_text(encoding="utf-8")

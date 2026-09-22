@@ -5,6 +5,7 @@
 
 #include "../../include/mdo/home.h"
 #include "../../include/mdo/mcp.h"
+#include "../../include/mdo/secrets.h"
 
 #define MDO_MCP_SOURCE "mdo.mcp.config"
 #define MDO_MCP_DIRECTORY "/app/default-home/mcp"
@@ -757,111 +758,19 @@ static bool MdoMcpParseStringArray(const xvalue* pValue, size_t Limit,
     return true;
 }
 
-static bool MdoMcpReadSecretFile(cstr Path, char** pValue,
-    char Error[MDO_MCP_ERROR_LIMIT])
-{
-    xfile File;
-    xfileinfo Info;
-    char* Value;
-    size_t Size;
-    size_t Utf8Error = 0u;
-    bool Ok = false;
-
-    if ( !MdoMcpPortablePathValid(Path) ) {
-        MdoMcpFormatError(Error, MDO_MCP_ERROR_LIMIT,
-            "file secret reference must be a portable Home-relative path");
-        return false;
-    }
-    File = MdoHomeOpenRead(Path);
-    if ( File == NULL ) {
-        MdoMcpFormatError(Error, MDO_MCP_ERROR_LIMIT,
-            "file secret reference is unavailable");
-        xrtClearError();
-        return false;
-    }
-    memset(&Info, 0, sizeof(Info));
-    if ( !xrtFileStat(File, &Info) ||
-         (Info.Available & XFILE_INFO_SIZE) == 0u ||
-         Info.Size > MDO_MCP_SECRET_LIMIT || Info.Size > SIZE_MAX - 1u ) {
-        MdoMcpFormatError(Error, MDO_MCP_ERROR_LIMIT,
-            "file secret exceeds its size limit");
-        goto done;
-    }
-    Size = (size_t)Info.Size;
-    Value = (char*)xrtMalloc(Size + 1u);
-    if ( Value == NULL ) goto done;
-    if ( Size != 0u && !xrtReadFull(File, Value, Size, NULL) ) {
-        xrtFree(Value);
-        MdoMcpFormatError(Error, MDO_MCP_ERROR_LIMIT,
-            "file secret cannot be read completely");
-        goto done;
-    }
-    if ( Size != 0u && Value[Size - 1u] == '\n' ) {
-        --Size;
-        if ( Size != 0u && Value[Size - 1u] == '\r' ) --Size;
-    }
-    Value[Size] = '\0';
-    if ( Size == 0u || MdoMcpBytesContainZero(Value, Size) ||
-         !xrtUtf8Valid((xstrview){ Value, Size }, &Utf8Error) ) {
-        xrtSecureZero(Value, (size_t)Info.Size);
-        xrtFree(Value);
-        MdoMcpFormatError(Error, MDO_MCP_ERROR_LIMIT,
-            "file secret must contain nonempty UTF-8 text without NUL bytes");
-        goto done;
-    }
-    *pValue = Value;
-    Ok = true;
-
-done:
-    if ( !xrtClose(File) ) Ok = false;
-    if ( !Ok && *pValue != NULL ) {
-        xrtSecureZero(*pValue, strlen(*pValue));
-        xrtFree(*pValue);
-        *pValue = NULL;
-    }
-    return Ok;
-}
-
 static bool MdoMcpResolveSecret(xstrview Reference, char** pValue,
     char Error[MDO_MCP_ERROR_LIMIT])
 {
-    char* Text = NULL;
-    char* Value = NULL;
-    *pValue = NULL;
-    if ( Reference.Size == 0u || Reference.Size > MDO_MCP_STRING_LIMIT ||
-         MdoMcpBytesContainZero(Reference.Data, Reference.Size) ) {
-        MdoMcpFormatError(Error, MDO_MCP_ERROR_LIMIT,
-            "secret_ref is invalid");
-        return false;
-    }
-    Text = xrtStrDupN(Reference.Data, Reference.Size);
-    if ( Text == NULL ) return false;
-    if ( strncmp(Text, "env:", 4u) == 0 ) {
-        cstr Name = Text + 4u;
-        if ( Name[0] == '\0' || strlen(Name) > 256u || strchr(Name, '=') ||
-             !xrtEnvLookup(Name, &Value) || Value == NULL ||
-             Value[0] == '\0' || strlen(Value) > MDO_MCP_SECRET_LIMIT ) {
-            xrtFree(Value);
-            Value = NULL;
-            MdoMcpFormatError(Error, MDO_MCP_ERROR_LIMIT,
-                "environment secret reference is unavailable");
-        }
-    } else if ( strncmp(Text, "file:", 5u) == 0 ) {
-        if ( !MdoMcpReadSecretFile(Text + 5u, &Value, Error) ) Value = NULL;
-    } else if ( strncmp(Text, "keychain:", 9u) == 0 ) {
-        MdoMcpFormatError(Error, MDO_MCP_ERROR_LIMIT,
-            "keychain secret references are unavailable on this build");
-    } else if ( strncmp(Text, "prompt:", 7u) == 0 ) {
-        MdoMcpFormatError(Error, MDO_MCP_ERROR_LIMIT,
-            "prompt secret references require an interactive resolver");
-    } else {
-        MdoMcpFormatError(Error, MDO_MCP_ERROR_LIMIT,
-            "secret_ref must use env:, file:, keychain:, or prompt:");
-    }
-    xrtFree(Text);
-    if ( Value == NULL ) return false;
-    *pValue = Value;
-    return true;
+    const xerror* pError;
+    cstr Message;
+    if ( MdoSecretResolve(Reference, MDO_MCP_SECRET_LIMIT, pValue) )
+        return true;
+    pError = xrtGetError();
+    Message = pError != NULL ? xrtErrorMessage(pError) : NULL;
+    MdoMcpFormatError(Error, MDO_MCP_ERROR_LIMIT, "%s",
+        Message != NULL ? Message : "secret_ref cannot be resolved");
+    xrtClearError();
+    return false;
 }
 
 static bool MdoMcpEnvironmentNameValid(cstr Name)
