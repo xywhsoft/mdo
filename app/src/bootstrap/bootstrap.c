@@ -2,6 +2,7 @@
 #include <string.h>
 
 #include "../../include/mdo/bootstrap.h"
+#include "../../include/mdo/mcp.h"
 #include "../../include/mdo/modules.h"
 #include "../../include/mdo/skills.h"
 #include "../../include/mdo/version.h"
@@ -76,6 +77,11 @@ bool MdoBootstrapInit(XS_HostInfo* pHost)
         return false;
     }
     g_MdoBootstrap.Stage = MDO_BOOTSTRAP_SKILLS_READY;
+    if ( !MdoMcpManagerInit(g_MdoBootstrap.Runtime) ) {
+        MdoBootstrapFail("MCP manager initialization failed");
+        return false;
+    }
+    g_MdoBootstrap.Stage = MDO_BOOTSTRAP_MCP_READY;
     if ( !MdoModuleManagerInit(g_MdoBootstrap.Runtime) ) {
         MdoBootstrapFail("module manager initialization failed");
         return false;
@@ -93,9 +99,12 @@ bool MdoBootstrapInit(XS_HostInfo* pHost)
         size_t iTools = MdoModuleCatalogToolCount(pModules);
         MdoSkillCatalog* pSkills = MdoSkillCatalogSnapshot();
         size_t iSkills = MdoSkillCatalogCount(pSkills);
-        printf("[mdo] bootstrap ready: version=%s home=%s mode=%s defaults=%zu skills=%zu modules=%zu tools=%zu\n",
+        MdoMcpCatalog* pMcp = MdoMcpCatalogSnapshot();
+        size_t iMcp = MdoMcpCatalogCount(pMcp);
+        printf("[mdo] bootstrap ready: version=%s home=%s mode=%s defaults=%zu skills=%zu mcp=%zu modules=%zu tools=%zu\n",
             MDO_VERSION_TEXT, Home.Path, sMode, g_MdoBootstrap.DefaultsBytes,
-            iSkills, iModules, iTools);
+            iSkills, iMcp, iModules, iTools);
+        MdoMcpCatalogRelease(pMcp);
         MdoSkillCatalogRelease(pSkills);
         MdoModuleCatalogRelease(pModules);
     }
@@ -105,6 +114,7 @@ bool MdoBootstrapInit(XS_HostInfo* pHost)
 void MdoBootstrapUnit(void)
 {
     MdoModuleManagerUnit();
+    MdoMcpManagerUnit();
     MdoSkillManagerUnit();
     if ( g_MdoBootstrap.Runtime != NULL )
         xworkRuntimeRelease(g_MdoBootstrap.Runtime);
@@ -125,6 +135,9 @@ bool MdoBootstrapGetSnapshot(MdoBootstrapSnapshot* pSnapshot)
     pSnapshot->SkillGeneration = 0u;
     pSnapshot->SkillCount = 0u;
     pSnapshot->SkillDiagnosticCount = 0u;
+    pSnapshot->McpGeneration = 0u;
+    pSnapshot->McpServerCount = 0u;
+    pSnapshot->McpDiagnosticCount = 0u;
     pSnapshot->ModuleGeneration = 0u;
     pSnapshot->ModuleCount = 0u;
     pSnapshot->ModuleToolCount = 0u;
@@ -141,6 +154,18 @@ bool MdoBootstrapGetSnapshot(MdoBootstrapSnapshot* pSnapshot)
             MdoSkillDiagnosticsCount(pDiagnostics);
         MdoSkillCatalogRelease(pCatalog);
         MdoSkillDiagnosticsRelease(pDiagnostics);
+    }
+    {
+        MdoMcpCatalog* pCatalog = MdoMcpCatalogSnapshot();
+        MdoMcpDiagnostics* pDiagnostics = MdoMcpDiagnosticsSnapshot();
+        if ( pCatalog != NULL ) {
+            pSnapshot->McpGeneration = MdoMcpManagerGeneration();
+            pSnapshot->McpServerCount = MdoMcpCatalogCount(pCatalog);
+        }
+        pSnapshot->McpDiagnosticCount =
+            MdoMcpDiagnosticsCount(pDiagnostics);
+        MdoMcpCatalogRelease(pCatalog);
+        MdoMcpDiagnosticsRelease(pDiagnostics);
     }
     {
         MdoModuleCatalog* pCatalog = MdoModuleCatalogSnapshot();

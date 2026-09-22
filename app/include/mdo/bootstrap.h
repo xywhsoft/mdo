@@ -13,6 +13,7 @@ typedef enum MdoBootstrapStage {
     MDO_BOOTSTRAP_CONFIG_READY,
     MDO_BOOTSTRAP_RUNTIME_READY,
     MDO_BOOTSTRAP_SKILLS_READY,
+    MDO_BOOTSTRAP_MCP_READY,
     MDO_BOOTSTRAP_MODULES_READY,
     MDO_BOOTSTRAP_FAILED
 } MdoBootstrapStage;
@@ -25,6 +26,9 @@ typedef struct MdoBootstrapSnapshot {
     uint64 SkillGeneration;
     size_t SkillCount;
     size_t SkillDiagnosticCount;
+    uint64 McpGeneration;
+    size_t McpServerCount;
+    size_t McpDiagnosticCount;
     uint64 ModuleGeneration;
     size_t ModuleCount;
     size_t ModuleToolCount;

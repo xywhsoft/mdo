@@ -75,6 +75,8 @@ typedef struct MdoMcpDiagnosticInfo {
     const char* Message;
 } MdoMcpDiagnosticInfo;
 
+/* Init/Unit belong to the serialized process lifecycle. All snapshot objects
+ * remain valid until released, including across a concurrent Reload. */
 bool MdoMcpManagerInit(xwork_runtime* pRuntime);
 void MdoMcpManagerUnit(void);
 bool MdoMcpManagerReload(void);

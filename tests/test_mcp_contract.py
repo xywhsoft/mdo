@@ -9,6 +9,9 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 HEADER = ROOT / "app/include/mdo/mcp.h"
 FORMAT = ROOT / "docs/mcp-format.md"
+SOURCE = ROOT / "app/src/mcp/manager.c"
+SOURCES = ROOT / "app/sources.json"
+BOOTSTRAP = ROOT / "app/src/bootstrap/bootstrap.c"
 
 
 class McpContractTests(unittest.TestCase):
@@ -40,6 +43,16 @@ class McpContractTests(unittest.TestCase):
         self.assertIn("streamable-http", text)
         self.assertIn("never silently treated as stdio", text)
         self.assertIn("does not\nsilently downgrade", text)
+
+    def test_manager_is_in_the_runtime_bootstrap(self) -> None:
+        source = SOURCE.read_text(encoding="utf-8")
+        manifest = SOURCES.read_text(encoding="utf-8")
+        bootstrap = BOOTSTRAP.read_text(encoding="utf-8")
+        self.assertIn('"src/mcp/manager.c"', manifest)
+        self.assertIn("MdoMcpManagerInit(g_MdoBootstrap.Runtime)", bootstrap)
+        self.assertIn("xworkRuntimeReplaceMcpServersBySource", source)
+        self.assertIn("xworkRuntimeDisconnectMcpServer", source)
+        self.assertIn("MdoMcpResolveSecret", source)
 
 
 if __name__ == "__main__":

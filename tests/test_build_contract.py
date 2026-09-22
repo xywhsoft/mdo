@@ -56,6 +56,7 @@ class BuildContractTests(unittest.TestCase):
             "src/storage/home.c",
             "src/config/config.c",
             "src/skills/manager.c",
+            "src/mcp/manager.c",
             "src/modules/manager.c",
             "src/bootstrap/bootstrap.c",
             "src/bootstrap/service.c",

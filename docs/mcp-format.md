@@ -58,7 +58,9 @@ remote names that are not denied. Effects are selected from `read`,
 
 Schema v1 implements `stdio`. `streamable-http` is a reserved transport value
 for the MDO-5 HTTP substage and is never silently treated as stdio. Its shape is
-`{"type":"streamable-http","endpoint":"https://...","headers":[...]}`;
+`{"type":"streamable-http","endpoint":"https://...","headers":[{"name":"Authorization","secret_ref":"env:API_TOKEN"}]}`.
+Endpoints must use HTTPS. Header names use the HTTP token grammar, are unique
+without regard to ASCII case, and header values are secret references only;
 publishing it before the matching xwork transport is available produces an
 explicit unsupported-transport diagnostic.
 
@@ -68,6 +70,11 @@ the selected root, and contain no empty, `.` or `..` segment.
 
 Environment entries contain a name and exactly one of `secret_ref` or
 `remove:true`. Secret references use `env:`, `file:`, `keychain:`, or `prompt:`.
+`file:` paths are portable paths relative to MDO Home. A file secret is at most
+64 KiB, must be nonempty UTF-8 without NUL bytes, and has one trailing LF or
+CRLF removed. This stage implements `env:` and `file:`; `keychain:` and
+`prompt:` return an explicit unavailable diagnostic until their resolvers are
+installed.
 The manager resolves them only for runtime registration, never returns their
 values through catalog or status APIs, and never writes resolved values back to
 the configuration. Missing or unavailable secrets produce a diagnostic and do
@@ -89,6 +96,18 @@ enabled while closing its current transport. Disable also closes the transport.
 Schema generation, expiry, negotiated protocol, connection state, discovered
 tool count, and request count are live status rather than immutable catalog
 metadata.
+
+The parser accepts at most 128 server files. Each document is at most 256 KiB;
+arguments, environment entries, HTTP headers, allow entries, and deny entries
+are each limited to 256. General strings are at most 4096 bytes and descriptions
+are single-line text of at most 2048 bytes. A server can advertise at most 4096
+tools, messages are limited to 16 MiB, and startup/request timeouts are 100 to
+300000 milliseconds. Diagnostics are bounded to 256 entries.
+
+`MdoMcpManagerInit` and `MdoMcpManagerUnit` run in the serialized process
+lifecycle. Reload and operational calls may run concurrently after init.
+Catalog and diagnostic snapshots are immutable, reference counted, and remain
+valid until released even when a reload publishes a later generation.
 
 MDO accepts `2026-07-28` and `2025-11-25` as separate wire codecs. It does not
 silently downgrade one to the other. The modern codec uses server-provided
