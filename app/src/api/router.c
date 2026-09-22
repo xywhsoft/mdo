@@ -48,6 +48,8 @@ static const MdoApiRoute g_MdoApiRoutes[] = {
       "GET, HEAD, OPTIONS", MdoApiStorageRoute },
     { "/api/v1/events", XHTTP_METHOD_GET | XHTTP_METHOD_HEAD,
       "GET, HEAD, OPTIONS", MdoApiEventsRoute },
+    { "/api/v1/settings/{domain}/preview", XHTTP_METHOD_POST,
+      "POST, OPTIONS", MdoApiSettingsPreviewRoute },
     { "/api/v1/projects/{project}/sessions/{session}/events",
       XHTTP_METHOD_GET | XHTTP_METHOD_HEAD, "GET, HEAD, OPTIONS",
       MdoApiSessionEventsRoute },

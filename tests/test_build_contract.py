@@ -70,6 +70,7 @@ class BuildContractTests(unittest.TestCase):
             "src/sessions/manager.c",
             "src/bootstrap/bootstrap.c",
             "src/api/http.c",
+            "src/api/body.c",
             "src/api/value.c",
             "src/api/resources.c",
             "src/api/catalogs.c",
@@ -77,6 +78,7 @@ class BuildContractTests(unittest.TestCase):
             "src/api/inventory.c",
             "src/api/diagnostics.c",
             "src/api/events.c",
+            "src/api/mutations.c",
             "src/api/router.c",
             "src/bootstrap/service.c",
         ])

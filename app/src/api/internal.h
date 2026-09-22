@@ -6,6 +6,7 @@
 #include "../../include/mdo/api.h"
 
 #define MDO_API_RESPONSE_MAX_BYTES (256u * 1024u)
+#define MDO_API_REQUEST_MAX_BYTES (256u * 1024u)
 #define MDO_API_REQUEST_ID_CAPACITY 40u
 #define MDO_API_ROUTE_PARAM_MAX 4u
 
@@ -18,6 +19,21 @@ typedef struct MdoApiContext {
 } MdoApiContext;
 
 typedef bool (*MdoApiRouteProc)(MdoApiContext* pContext);
+
+typedef enum MdoApiBodyStatus {
+    MDO_API_BODY_OK = 0,
+    MDO_API_BODY_MISSING,
+    MDO_API_BODY_UNSUPPORTED_TYPE,
+    MDO_API_BODY_TOO_LARGE,
+    MDO_API_BODY_INVALID,
+    MDO_API_BODY_READ_FAILED
+} MdoApiBodyStatus;
+
+typedef struct MdoApiJsonBody {
+    char* Document;
+    size_t Size;
+    xvalue* Value;
+} MdoApiJsonBody;
 
 bool MdoApiValueSetString(xvalue* Object, cstr Key, cstr Value);
 bool MdoApiValueSetStringView(xvalue* Object, cstr Key, xstrview Value);
@@ -35,6 +51,10 @@ bool MdoApiReplySuccessTake(MdoApiContext* pContext, uint16 Status,
 bool MdoApiReplyError(MdoApiContext* pContext, uint16 Status, cstr Code,
     cstr Message, cstr Allow);
 bool MdoApiReplyOptions(MdoApiContext* pContext, cstr Allow);
+MdoApiBodyStatus MdoApiJsonBodyRead(MdoApiContext* pContext,
+    MdoApiJsonBody* pBody);
+void MdoApiJsonBodyUnit(MdoApiJsonBody* pBody);
+bool MdoApiReplyBodyError(MdoApiContext* pContext, MdoApiBodyStatus Status);
 
 bool MdoApiBootstrapRoute(MdoApiContext* pContext);
 bool MdoApiSettingsRoute(MdoApiContext* pContext);
@@ -54,5 +74,6 @@ bool MdoApiDiagnosticsRoute(MdoApiContext* pContext);
 bool MdoApiStorageRoute(MdoApiContext* pContext);
 bool MdoApiEventsRoute(MdoApiContext* pContext);
 bool MdoApiSessionEventsRoute(MdoApiContext* pContext);
+bool MdoApiSettingsPreviewRoute(MdoApiContext* pContext);
 
 #endif

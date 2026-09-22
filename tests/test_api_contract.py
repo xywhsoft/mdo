@@ -24,6 +24,7 @@ class ApiContractTests(unittest.TestCase):
         self.assertIn("MDO_API_SCHEMA_VERSION 1u", self.public)
         self.assertIn('"/api/v1/bootstrap"', self.router)
         self.assertIn("MDO_API_RESPONSE_MAX_BYTES", self.internal)
+        self.assertIn("MDO_API_REQUEST_MAX_BYTES", self.internal)
         self.assertIn("JsonSize > MDO_API_RESPONSE_MAX_BYTES", self.http)
         for resource in (
             "bootstrap", "settings", "models", "agents", "modules",
@@ -64,6 +65,18 @@ class ApiContractTests(unittest.TestCase):
         self.assertIn("MdoSessionEventReplay", events)
         self.assertIn("xworkRuntimeEventSnapshot", events)
         self.assertIn("MdoApiRouteMatch", self.router)
+
+    def test_json_mutations_have_a_bounded_strict_body_reader(self) -> None:
+        body = (ROOT / "app/src/api/body.c").read_text(encoding="utf-8")
+        mutations = (ROOT / "app/src/api/mutations.c").read_text(encoding="utf-8")
+        self.assertIn("xrtHttpFieldGetUnique", body)
+        self.assertIn("application/json", body)
+        self.assertIn("xrtHttp1BodyRead", body)
+        self.assertIn("MDO_API_REQUEST_MAX_BYTES - OutputSize", body)
+        self.assertIn("xrtJsonParse", body)
+        self.assertIn('"/api/v1/settings/{domain}/preview"', self.router)
+        self.assertIn("MdoConfigPreviewImport", mutations)
+        self.assertNotIn("MdoConfigImport", mutations)
 
     def test_every_json_response_has_identity_and_hardening_headers(self) -> None:
         for text in (

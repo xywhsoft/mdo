@@ -53,10 +53,14 @@ def write_site(base: Path, port: int) -> Path:
     return config_path
 
 
-def request(port: int, method: str, target: str) -> tuple[int, dict[str, str], bytes]:
+def request(port: int, method: str, target: str, *,
+            body: bytes | list[bytes] | None = None,
+            headers: dict[str, str] | None = None,
+            encode_chunked: bool = False) -> tuple[int, dict[str, str], bytes]:
     connection = http.client.HTTPConnection("127.0.0.1", port, timeout=4)
     try:
-        connection.request(method, target)
+        connection.request(method, target, body=body, headers=headers or {},
+                           encode_chunked=encode_chunked)
         response = connection.getresponse()
         headers = {name.lower(): value for name, value in response.getheaders()}
         return response.status, headers, response.read()
@@ -205,6 +209,74 @@ def run_probe(host: Path) -> None:
                 status, headers, body = request(port, "GET", "/")
                 assert status == 200 and b"<!doctype html" in body.lower(), (status, body[:120])
                 assert "x-request-id" not in headers, headers
+
+                preview_document = json.dumps({
+                    "schema_version": 1,
+                    "patch": {"appearance": {"theme": "dark"}},
+                }).encode()
+                status, headers, body = request(
+                    port, "POST", "/api/v1/settings/settings/preview",
+                    body=preview_document,
+                    headers={"Content-Type": "application/json; charset=UTF-8"})
+                document = json.loads(body)
+                assert status == 200, (status, body)
+                assert_common(headers, document)
+                assert document["data"]["domain"] == "settings", document
+                assert document["data"]["valid"] is True, document
+                assert document["data"]["changes"] is True, document
+                assert document["data"]["patch_bytes"] > 0, document
+
+                status, headers, body = request(
+                    port, "POST", "/api/v1/settings/settings/preview",
+                    body=[preview_document[:11], preview_document[11:]],
+                    headers={"Content-Type": "application/json"},
+                    encode_chunked=True)
+                document = json.loads(body)
+                assert status == 200, (status, body)
+                assert_common(headers, document)
+
+                body_errors = (
+                    (None, {}, 415, "unsupported_media_type"),
+                    (b"", {"Content-Type": "application/json"}, 400,
+                     "body_required"),
+                    (b"{", {"Content-Type": "application/json"}, 400,
+                     "invalid_json"),
+                    (b"{}", {"Content-Type": "text/plain"}, 415,
+                     "unsupported_media_type"),
+                    (b"{}", {"Content-Type": "application/json"}, 422,
+                     "configuration_invalid"),
+                    (b" " * (256 * 1024 + 1),
+                     {"Content-Type": "application/json"}, 413,
+                     "body_too_large"),
+                )
+                for request_body, request_headers, expected_status, code in body_errors:
+                    status, headers, body = request(
+                        port, "POST", "/api/v1/settings/settings/preview",
+                        body=request_body, headers=request_headers)
+                    document = json.loads(body)
+                    assert status == expected_status, (code, status, body[:200])
+                    assert_common(headers, document)
+                    assert document["error"]["code"] == code, document
+
+                status, headers, body = request(
+                    port, "POST", "/api/v1/settings/unknown/preview",
+                    body=preview_document,
+                    headers={"Content-Type": "application/json"})
+                document = json.loads(body)
+                assert status == 404, (status, body)
+                assert document["error"]["code"] == "config_domain_not_found"
+
+                status, headers, body = request(
+                    port, "OPTIONS", "/api/v1/settings/settings/preview")
+                document = json.loads(body)
+                assert status == 200 and headers["allow"] == "POST, OPTIONS"
+                assert document["data"]["allow"] == "POST, OPTIONS"
+
+                status, headers, body = request(
+                    port, "GET", "/api/v1/settings/settings/preview")
+                document = json.loads(body)
+                assert status == 405 and headers["allow"] == "POST, OPTIONS"
+                assert document["error"]["code"] == "method_not_allowed"
 
                 assert not home.exists(), list(base.iterdir())
                 assert not (base / "wrong-environment-home").exists(), list(base.iterdir())
