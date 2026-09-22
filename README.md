@@ -56,3 +56,11 @@ tools/build_mdo.py   验证、生成、宿主构建与打包入口
 ```powershell
 mdo.exe -- --home D:\Portable\mdo-home
 ```
+
+## 配置
+
+内置 `config/defaults.json` 与外部 Home 中的 `settings.json`、`models.json`
+和 `permissions.json` 按键合并。外部文件只保存用户差异，使用 schema v1、
+原子替换和 `.bak` 备份；敏感值只允许保存 `secret_ref`。完整格式、运行时
+覆盖、导入预览和 Ling 3.0 Tiny 保护规则见
+[配置合同](docs/configuration.md)。

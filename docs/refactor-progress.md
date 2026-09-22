@@ -6,7 +6,7 @@
 
 | 仓库 | 开发位置/分支 | 当前基线 | 说明 |
 | --- | --- | --- | --- |
-| mdo | `D:\GIT\mdo` / 当前分支 | `22c0a33` | 产品、计划与集成账本 |
+| mdo | `D:\GIT\mdo` / 当前分支 | `aa32d3a` | 产品、计划与集成账本 |
 | xrt | `codex/mdo-refactor-xrt` 独立工作树 | `9a094b3f` | 原工作树有既存未提交内容，隔离开发 |
 | xserver | `D:\GIT\xserver-mdo-refactor` / `codex/mdo-refactor-xs` | `fe3b627` | 原工作树有既存未提交内容，隔离开发 |
 
@@ -95,8 +95,9 @@
 | LIB-3 xwork 3.0 | DONE | xrt `9a094b3f`；xserver `57c9164` | xllm 17 个、xllm-session 14 个、xwork 19 个生产文件与同一 xrt revision 双向逐字节一致；TCC 导入分别覆盖 70、89、163 个公开符号；Windows/Linux 全 15 扩展宿主构建、运行与嵌套 TCC 探针通过，32 项扩展结构检查和 2 项发布元数据检查通过；未运行压力或高负载测试 | xserver 删除旧 Python/config 分叉并同步完整 xwork v3 runtime/catalog/task/scheduler/MCP/artifact/recovery 实现；构建门发现只升级 xwork 会缺少 batch executor 与 session driver API，因此三个库统一固定到 `9a094b3f`，避免跨 revision 的伪零分叉组合 |
 | LIB-GATE 三库生产门禁 | DONE | xrt `9a094b3f`；xserver `57c9164` | Windows/Linux warning-as-error、有界功能回归、确定性交错、故障注入与 sanitizer 门已在各工作包通过；最终零分叉、公开符号、15 扩展宿主和双层 TCC 闭包通过；未运行压力或高负载测试 | 阶段三完成，允许进入 mdo 新架构实施；Ling 3.0 Tiny 三接口真实线上探针仍要求运行时提供三条显式 URL 与 key，不以离线 fixture 冒充线上结论 |
 | MDO-0 新源码组织与依赖锁 | DONE | mdo `22c0a33` | 6 项构建契约、锁定依赖完整性、Windows 全新宿主构建、17 项 XRT v1 包清单和隔离目录 8 秒启动通过；空启动未创建 `mdo-home`；未运行压力或高负载测试 | 新 `app/` 与只读 `app_bak/` 分离；以 `deps.lock` 固定跨仓 revision、源码树哈希、ABI/schema/pack 版本；清单生成 unity，统一 Python 构建入口不依赖根目录陈旧宿主 |
-| MDO-1 bootstrap 与双层 Home | DONE | mdo 当前提交；xserver `b00f68f`、`fe3b627` | 12 项源码/构建契约；Windows/Linux 真实 xs/TCC Home 探针覆盖 lazy create、锚定写入、materialize、损坏覆盖阻断、ephemeral、CLI 优先于环境变量；两平台精确锁定宿主构建、21 项 pack 和短时启动通过；Windows 空目录发布启动只保留 `mdo.exe`；未运行压力或高负载测试 | 外部 Home 以高优先级只读 disk provider 覆盖包内 `default-home`，写入独占锚定 `xroot`；`MDO_HOME` 和 `-- --home` 可覆盖；启动创建单个长生命周期 xwork runtime，空启动不创建 Home 或旁路日志 |
-| MDO-2～10 | TODO | - | - | 从分层配置系统开始实施 |
+| MDO-1 bootstrap 与双层 Home | DONE | mdo `aa32d3a`；xserver `b00f68f`、`fe3b627` | 12 项源码/构建契约；Windows/Linux 真实 xs/TCC Home 探针覆盖 lazy create、锚定写入、materialize、损坏覆盖阻断、ephemeral、CLI 优先于环境变量；两平台精确锁定宿主构建、21 项 pack 和短时启动通过；Windows 空目录发布启动只保留 `mdo.exe`；未运行压力或高负载测试 | 外部 Home 以高优先级只读 disk provider 覆盖包内 `default-home`，写入独占锚定 `xroot`；`MDO_HOME` 和 `-- --home` 可覆盖；启动创建单个长生命周期 xwork runtime，空启动不创建 Home 或旁路日志 |
+| MDO-2 分层配置系统 | DONE | mdo 本提交 | 17 项源码/构建合同；Windows/Linux 真实 xs/TCC 配置探针覆盖 defaults 隔离、三类用户 patch、未知键保留、环境/CLI 覆盖顺序、明文 secret 拒绝、Ling 保护、预览/导入/导出/恢复、原子保存、备份、损坏输入与受阻临时文件故障注入；GCC warning-as-error；两平台 23 项 pack 短时启动与 lazy Home 通过；Windows GUI 空目录只保留 `mdo.exe`；未运行压力或高负载测试 | 内置基线在 Home overlay 前冻结；对象递归合并、数组/标量替换，只持久化相对 defaults 的差异；状态只在磁盘提交成功后发布；Ling 3.0 Tiny 服务端逐字段保护并声明三种线上协议 |
+| MDO-3～10 | TODO | - | - | 从 Module ABI 开始实施 |
 | QA-RELEASE | TODO | - | - | MDO-GATE 后实施 |
 
 ## 已确认的工程事实
@@ -141,8 +142,13 @@
 38. xs 的宿主参数和应用参数必须以显式 `--` 分隔；应用只通过 `xsAppArgumentCount`/`xsAppArgument` 读取进程期稳定的 UTF-8 借用值。mdo 的 `--home` 优先于 `MDO_HOME`，两者都只计算路径，不触发目录创建。
 39. mdo 双层 Home 的读写边界不能只依赖 overlay 的普通 MISS 语义：外部路径必须先经锚定 root 打开，只有明确 `NOT_FOUND` 才可回退内置资源；目录、链接、权限、损坏和 I/O 错误必须阻断回退。资源 VFS 只读，所有写入和父目录创建都经外部 `xroot`。
 40. Windows 开发宿主名 `xsw.exe` 可以保留 `xsw.log`，重命名后的打包 GUI 默认不得创建该旁路文件；否则“单个 mdo.exe 零写启动”即使没有 `mdo-home` 也不成立。
+41. 内置配置基线必须在外部 Home overlay 挂载前读取并冻结；否则已存在的 `mdo-home/config/defaults.json` 会改变产品默认值，破坏恢复默认值和用户 patch 的比较基线。
+42. 用户配置是按 domain 保存的 schema v1 patch：对象递归合并，数组与标量整体替换，envelope 未知键拒绝、patch 内未知键保留。保存前相对内置 domain 做递归 diff，环境覆盖先于命令行覆盖且两者不持久化。
+43. 配置持久化必须先完成候选解析、secret/Ling/schema 校验和所有可能分配，再写同目录临时文件、flush、备份并原子替换；内存 generation 只在磁盘成功后无失败发布，避免磁盘新值与进程旧值分叉。
+44. Ling 3.0 Tiny 的不可编辑/不可删除约束是服务端对完整 descriptor 的逐字段等值检查。普通配置只保存 `secret_ref`，不接收 API key、token、password、client secret、private key 或 Authorization 明文。
 
 ## 下一步
 
-1. 开始 MDO-2：实现 defaults、用户 patch、secret reference、校验与原子保存组成的分层配置系统，并固定不可编辑的 Ling 3.0 Tiny 默认模型；运行环境提供三条显式 URL 和 runtime key 时再执行 Ling 3.0 Tiny 的 Chat Completions、Responses 与 Anthropic Messages 真实探针；
-2. 全部后续验收继续使用有界功能、故障注入和确定性交错，略过压力与高负载测试。
+1. 开始 MDO-3：冻结 `include/mdo/module.h` 的 Module/Agent/Subagent/Tool ABI、host service capability 表、注册事务与 generation 卸载合同，再实现 TCC 模块发现、编译、诊断和原子 catalog 发布；
+2. 运行环境提供三条显式 URL 和 runtime key 时，再执行 Ling 3.0 Tiny 的 Chat Completions、Responses 与 Anthropic Messages 真实线上探针；
+3. 全部后续验收继续使用有界功能、故障注入和确定性交错，略过压力与高负载测试。

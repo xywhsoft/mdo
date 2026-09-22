@@ -43,6 +43,7 @@ class BuildContractTests(unittest.TestCase):
         sources = BUILD.source_list()
         self.assertEqual(sources, [
             "src/storage/home.c",
+            "src/config/config.c",
             "src/bootstrap/bootstrap.c",
             "src/bootstrap/service.c",
         ])
@@ -77,7 +78,10 @@ class BuildContractTests(unittest.TestCase):
             self.assertTrue((home / relative).is_file(), relative)
         defaults = json.loads((home / "config" / "defaults.json").read_text(encoding="utf-8"))
         self.assertEqual(defaults["schema_version"], 1)
-        self.assertEqual(defaults["default_model"], "ling-3.0-tiny")
+        self.assertEqual(defaults["models"]["default_model"], "ling-3.0-tiny")
+        ling = defaults["models"]["items"][0]
+        self.assertEqual(ling["id"], "ling-3.0-tiny")
+        self.assertFalse(ling["editable"])
         self.assertTrue((ROOT / "app" / "web" / "index.html").is_file())
         self.assertIn("mdo-home/", (ROOT / ".gitignore").read_text(encoding="utf-8"))
         self.assertIn("app/generated/", (ROOT / ".gitignore").read_text(encoding="utf-8"))

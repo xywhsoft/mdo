@@ -8,6 +8,7 @@ typedef struct MdoBootstrapState {
     MdoBootstrapStage Stage;
     xwork_runtime* Runtime;
     size_t DefaultsBytes;
+    bool ConfigReady;
     char Message[256];
 } MdoBootstrapState;
 
@@ -26,8 +27,6 @@ static void MdoBootstrapFail(cstr Fallback)
 
 bool MdoBootstrapInit(XS_HostInfo* pHost)
 {
-    xfile Defaults = NULL;
-    xfileinfo Info;
     xwork_runtime_config RuntimeConfig;
     xwork_error WorkError;
     MdoHomeSnapshot Home;
@@ -41,25 +40,28 @@ bool MdoBootstrapInit(XS_HostInfo* pHost)
     }
     g_MdoBootstrap.Stage = MDO_BOOTSTRAP_HOME_READY;
 
-    Defaults = MdoResourceOpenRead("config/defaults.json");
-    if ( Defaults == NULL || !xrtFileStat(Defaults, &Info) ||
-         (Info.Available & XFILE_INFO_SIZE) == 0u ) {
-        if ( Defaults != NULL ) (void)xrtClose(Defaults);
-        MdoBootstrapFail("built-in defaults are unavailable");
+    if ( !MdoConfigInit() ) {
+        MdoBootstrapFail("configuration initialization failed");
         return false;
     }
-    g_MdoBootstrap.DefaultsBytes = (size_t)Info.Size;
-    if ( !xrtClose(Defaults) ) {
-        MdoBootstrapFail("cannot close built-in defaults");
-        return false;
+    g_MdoBootstrap.ConfigReady = true;
+    {
+        MdoConfigSnapshot Config;
+        memset(&Config, 0, sizeof(Config));
+        Config.Size = sizeof(Config);
+        if ( !MdoConfigGetSnapshot(&Config) ) {
+            MdoBootstrapFail("configuration snapshot failed");
+            return false;
+        }
+        g_MdoBootstrap.DefaultsBytes = Config.EffectiveBytes;
     }
-    g_MdoBootstrap.Stage = MDO_BOOTSTRAP_DEFAULTS_READY;
+    g_MdoBootstrap.Stage = MDO_BOOTSTRAP_CONFIG_READY;
 
     xworkRuntimeConfigInit(&RuntimeConfig);
     memset(&WorkError, 0, sizeof(WorkError));
     g_MdoBootstrap.Runtime = xworkRuntimeCreate(&RuntimeConfig, &WorkError);
     if ( g_MdoBootstrap.Runtime == NULL ) {
-        snprintf(g_MdoBootstrap.Message, sizeof(g_MdoBootstrap.Message), "%s",
+        snprintf(g_MdoBootstrap.Message, sizeof(g_MdoBootstrap.Message), "%.255s",
             WorkError.sMessage[0] != '\0' ? WorkError.sMessage :
             "xwork runtime initialization failed");
         g_MdoBootstrap.Stage = MDO_BOOTSTRAP_FAILED;
@@ -85,6 +87,7 @@ void MdoBootstrapUnit(void)
     if ( g_MdoBootstrap.Runtime != NULL )
         xworkRuntimeRelease(g_MdoBootstrap.Runtime);
     g_MdoBootstrap.Runtime = NULL;
+    MdoConfigUnit();
     MdoHomeUnit();
     memset(&g_MdoBootstrap, 0, sizeof(g_MdoBootstrap));
 }
@@ -97,6 +100,10 @@ bool MdoBootstrapGetSnapshot(MdoBootstrapSnapshot* pSnapshot)
     pSnapshot->Ready = g_MdoBootstrap.Stage == MDO_BOOTSTRAP_RUNTIME_READY;
     pSnapshot->DefaultsBytes = g_MdoBootstrap.DefaultsBytes;
     pSnapshot->Message = g_MdoBootstrap.Message;
+    memset(&pSnapshot->Config, 0, sizeof(pSnapshot->Config));
+    pSnapshot->Config.Size = sizeof(pSnapshot->Config);
+    if ( g_MdoBootstrap.ConfigReady &&
+         !MdoConfigGetSnapshot(&pSnapshot->Config) ) return false;
     memset(&pSnapshot->Home, 0, sizeof(pSnapshot->Home));
     pSnapshot->Home.Size = sizeof(pSnapshot->Home);
     return MdoHomeGetSnapshot(&pSnapshot->Home);

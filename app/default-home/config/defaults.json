@@ -1,5 +1,74 @@
 {
   "schema_version": 1,
-  "locale": "zh-CN",
-  "default_model": "ling-3.0-tiny"
+  "settings": {
+    "locale": "zh-CN",
+    "appearance": {
+      "theme": "system",
+      "font_size": "normal",
+      "density": "comfortable"
+    },
+    "agent": {
+      "interaction_mode": "agent",
+      "reasoning_effort": "medium",
+      "web_search": true,
+      "memory": true,
+      "schedules": true,
+      "max_parallel_tools": 4,
+      "max_parallel_subagents": 2
+    },
+    "workspace": {
+      "open_mode": "last",
+      "confirm_external_write": true
+    }
+  },
+  "models": {
+    "default_model": "ling-3.0-tiny",
+    "items": [
+      {
+        "id": "ling-3.0-tiny",
+        "name": "Ling 3.0 Tiny",
+        "provider": "ling",
+        "builtin": true,
+        "free": true,
+        "editable": false,
+        "removable": false,
+        "protocols": [
+          "openai-chat-completions",
+          "openai-responses",
+          "anthropic-messages"
+        ],
+        "endpoints": {
+          "chat_completions": "builtin:ling/openai/chat-completions",
+          "responses": "builtin:ling/openai/responses",
+          "anthropic_messages": "builtin:ling/anthropic/messages"
+        },
+        "credential": {
+          "secret_ref": "env:MDO_LING_API_KEY"
+        }
+      }
+    ]
+  },
+  "permissions": {
+    "default_profile": "balanced",
+    "profiles": {
+      "read-only": {
+        "workspace_read": true,
+        "workspace_write": false,
+        "process": "ask",
+        "network": "ask"
+      },
+      "balanced": {
+        "workspace_read": true,
+        "workspace_write": "ask",
+        "process": "ask",
+        "network": "ask"
+      },
+      "full-access": {
+        "workspace_read": true,
+        "workspace_write": true,
+        "process": true,
+        "network": true
+      }
+    }
+  }
 }

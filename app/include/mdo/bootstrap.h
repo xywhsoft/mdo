@@ -4,12 +4,13 @@
 #include <xsbase.h>
 #include <xwork.h>
 
+#include "config.h"
 #include "home.h"
 
 typedef enum MdoBootstrapStage {
     MDO_BOOTSTRAP_EMPTY = 0,
     MDO_BOOTSTRAP_HOME_READY,
-    MDO_BOOTSTRAP_DEFAULTS_READY,
+    MDO_BOOTSTRAP_CONFIG_READY,
     MDO_BOOTSTRAP_RUNTIME_READY,
     MDO_BOOTSTRAP_FAILED
 } MdoBootstrapStage;
@@ -19,6 +20,7 @@ typedef struct MdoBootstrapSnapshot {
     MdoBootstrapStage Stage;
     bool Ready;
     size_t DefaultsBytes;
+    MdoConfigSnapshot Config;
     MdoHomeSnapshot Home;
     const char* Message;
 } MdoBootstrapSnapshot;

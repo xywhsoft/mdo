@@ -20,6 +20,8 @@ typedef struct MdoHomeState {
     xvfsmount OverlayMount;
     xroot Root;
     char* Path;
+    char* BuiltinDefaults;
+    size_t BuiltinDefaultsSize;
     MdoPersistenceMode Persistence;
     bool ExternalOverlay;
     bool Initialized;
@@ -125,6 +127,54 @@ static char* MdoResourcePath(cstr Path)
     memcpy(sResult, MDO_RESOURCE_PREFIX, iPrefix);
     memcpy(sResult + iPrefix, Path, iPath + 1u);
     return sResult;
+}
+
+static bool MdoHomeReadFileBounded(xfile File, size_t iLimit,
+    char** ppData, size_t* pSize)
+{
+    xfileinfo Info;
+    char* pData = NULL;
+    size_t iSize;
+
+    if ( File == NULL || ppData == NULL || pSize == NULL ||
+         !xrtFileStat(File, &Info) ||
+         (Info.Available & XFILE_INFO_SIZE) == 0u || Info.Size > iLimit ||
+         Info.Size > SIZE_MAX - 1u ) return false;
+    iSize = (size_t)Info.Size;
+    pData = (char*)xrtMalloc(iSize + 1u);
+    if ( pData == NULL ) return false;
+    if ( iSize != 0u && !xrtReadFull(File, pData, iSize, NULL) ) {
+        xrtFree(pData);
+        return false;
+    }
+    pData[iSize] = '\0';
+    *ppData = pData;
+    *pSize = iSize;
+    return true;
+}
+
+static bool MdoHomeCaptureBuiltinDefaults(void)
+{
+    xfileoptions Options;
+    xfile File;
+    char* sPath = MdoResourcePath("config/defaults.json");
+    bool bOk;
+
+    if ( sPath == NULL ) return false;
+    xrtFileOptionsInit(&Options);
+    Options.Flags = XFILE_READ;
+    File = xrtVfsOpen(g_MdoHome.ApplicationVfs, sPath, &Options);
+    xrtFree(sPath);
+    if ( File == NULL ) return false;
+    bOk = MdoHomeReadFileBounded(File, 1024u * 1024u,
+        &g_MdoHome.BuiltinDefaults, &g_MdoHome.BuiltinDefaultsSize);
+    if ( !xrtClose(File) ) bOk = false;
+    if ( !bOk ) {
+        xrtFree(g_MdoHome.BuiltinDefaults);
+        g_MdoHome.BuiltinDefaults = NULL;
+        g_MdoHome.BuiltinDefaultsSize = 0u;
+    }
+    return bOk;
 }
 
 static void MdoHomeRememberFailure(cstr Fallback)
@@ -246,6 +296,8 @@ bool MdoHomeInit(void)
     xrtVfsRef(ApplicationVfs);
     g_MdoHome.ApplicationVfs = ApplicationVfs;
 
+    if ( !MdoHomeCaptureBuiltinDefaults() ) goto fail;
+
     sPath = MdoHomeResolvePath();
     if ( sPath == NULL ) goto fail;
     g_MdoHome.Path = sPath;
@@ -291,8 +343,22 @@ void MdoHomeUnit(void)
     if ( g_MdoHome.ApplicationVfs != NULL )
         xrtVfsDestroy(g_MdoHome.ApplicationVfs);
     xrtFree(g_MdoHome.Path);
+    xrtFree(g_MdoHome.BuiltinDefaults);
     if ( g_MdoHome.Lock != NULL ) xrtMutexDestroy(g_MdoHome.Lock);
     memset(&g_MdoHome, 0, sizeof(g_MdoHome));
+}
+
+bool MdoBuiltinDefaults(xstrview* pText)
+{
+    if ( pText == NULL || !g_MdoHome.Initialized ||
+         g_MdoHome.BuiltinDefaults == NULL ) {
+        MdoHomeErrorSet(XERR_STATE, MDO_HOME_ERROR_STATE,
+            "built-in defaults are unavailable");
+        return false;
+    }
+    pText->Data = g_MdoHome.BuiltinDefaults;
+    pText->Size = g_MdoHome.BuiltinDefaultsSize;
+    return true;
 }
 
 bool MdoHomeGetSnapshot(MdoHomeSnapshot* pSnapshot)
@@ -350,6 +416,30 @@ xfile MdoResourceOpenRead(cstr Path)
     return File;
 }
 
+xfile MdoHomeOpenRead(cstr Path)
+{
+    xfileoptions Options;
+    xfile File;
+
+    if ( !MdoHomePathValid(Path) || !g_MdoHome.Initialized ) {
+        MdoHomeErrorSet(XERR_ARGUMENT, MDO_HOME_ERROR_ARGUMENT,
+            "invalid external Home read request");
+        return NULL;
+    }
+    xrtMutexLock(g_MdoHome.Lock);
+    if ( g_MdoHome.Root == NULL ) {
+        xrtMutexUnlock(g_MdoHome.Lock);
+        MdoHomeErrorSet(XERR_NOT_FOUND, MDO_HOME_ERROR_STORAGE,
+            "external Home does not exist");
+        return NULL;
+    }
+    xrtFileOptionsInit(&Options);
+    Options.Flags = XFILE_READ | XFILE_NOFOLLOW;
+    File = xrtRootFileOpen(g_MdoHome.Root, Path, &Options);
+    xrtMutexUnlock(g_MdoHome.Lock);
+    return File;
+}
+
 xfile MdoHomeOpenWrite(cstr Path, uint32 Flags)
 {
     const uint32 Known = XFILE_READ | XFILE_WRITE | XFILE_CREATE |
@@ -384,6 +474,220 @@ xfile MdoHomeOpenWrite(cstr Path, uint32 Flags)
     File = xrtRootFileOpen(Root, Path, &Options);
     xrtMutexUnlock(g_MdoHome.Lock);
     return File;
+}
+
+static char* MdoHomeSiblingPath(cstr Path, cstr Suffix)
+{
+    size_t iPath = strlen(Path);
+    size_t iSuffix = strlen(Suffix);
+    char* sResult;
+
+    if ( iPath > SIZE_MAX - iSuffix - 1u ) {
+        MdoHomeErrorSet(XERR_RANGE, MDO_HOME_ERROR_PATH,
+            "Home path is too long");
+        return NULL;
+    }
+    sResult = (char*)xrtMalloc(iPath + iSuffix + 1u);
+    if ( sResult == NULL ) return NULL;
+    memcpy(sResult, Path, iPath);
+    memcpy(sResult + iPath, Suffix, iSuffix + 1u);
+    return sResult;
+}
+
+static bool MdoHomeRootFileExistsLocked(cstr Path, bool* pExists)
+{
+    xfileinfo Info;
+
+    if ( xrtRootStat(g_MdoHome.Root, Path, false, &Info) ) {
+        if ( Info.Type != XFILE_TYPE_FILE ) {
+            MdoHomeErrorSet(XERR_TYPE, MDO_HOME_ERROR_PATH,
+                "Home configuration path is not a regular file");
+            return false;
+        }
+        *pExists = true;
+        return true;
+    }
+    if ( xrtGetError() != NULL &&
+         xrtErrorKind(xrtGetError()) == XERR_NOT_FOUND ) {
+        xrtClearError();
+        *pExists = false;
+        return true;
+    }
+    return false;
+}
+
+static bool MdoHomeWriteTempLocked(cstr Path, const void* pData, size_t iSize)
+{
+    xfileoptions Options;
+    xfile File;
+    bool bOk;
+
+    (void)xrtRootRemove(g_MdoHome.Root, Path);
+    xrtClearError();
+    xrtFileOptionsInit(&Options);
+    Options.Flags = XFILE_WRITE | XFILE_CREATE | XFILE_EXCLUSIVE |
+        XFILE_SYNC | XFILE_NOFOLLOW;
+    File = xrtRootFileOpen(g_MdoHome.Root, Path, &Options);
+    if ( File == NULL ) return false;
+    bOk = (iSize == 0u || xrtWriteFull(File, pData, iSize, NULL)) &&
+        xrtFlush(File);
+    if ( !xrtClose(File) ) bOk = false;
+    if ( !bOk ) {
+        xerror* pSaved = xrtTakeError();
+        (void)xrtRootRemove(g_MdoHome.Root, Path);
+        xrtClearError();
+        if ( pSaved != NULL ) xrtSetErrorTake(pSaved);
+    }
+    return bOk;
+}
+
+static bool MdoHomeCopyFileLocked(cstr Source, cstr Target)
+{
+    unsigned char arrBuffer[64u * 1024u];
+    xfileoptions Options;
+    xfile Input = NULL;
+    xfile Output = NULL;
+    bool bOk = false;
+
+    xrtFileOptionsInit(&Options);
+    Options.Flags = XFILE_READ | XFILE_NOFOLLOW;
+    Input = xrtRootFileOpen(g_MdoHome.Root, Source, &Options);
+    if ( Input == NULL ) goto done;
+    (void)xrtRootRemove(g_MdoHome.Root, Target);
+    xrtClearError();
+    xrtFileOptionsInit(&Options);
+    Options.Flags = XFILE_WRITE | XFILE_CREATE | XFILE_EXCLUSIVE |
+        XFILE_SYNC | XFILE_NOFOLLOW;
+    Output = xrtRootFileOpen(g_MdoHome.Root, Target, &Options);
+    if ( Output == NULL ) goto done;
+    for ( ; ; ) {
+        size_t iRead = 0u;
+        if ( !xrtRead(Input, arrBuffer, sizeof(arrBuffer), &iRead) ) goto done;
+        if ( iRead == 0u ) break;
+        if ( !xrtWriteFull(Output, arrBuffer, iRead, NULL) ) goto done;
+    }
+    if ( !xrtFlush(Output) ) goto done;
+    bOk = true;
+
+done:
+    {
+        xerror* pSaved = !bOk ? xrtTakeError() : NULL;
+        if ( Input != NULL && !xrtClose(Input) && bOk ) {
+            bOk = false;
+            pSaved = xrtTakeError();
+        }
+        if ( Output != NULL && !xrtClose(Output) && bOk ) {
+            bOk = false;
+            pSaved = xrtTakeError();
+        }
+        if ( !bOk ) {
+            (void)xrtRootRemove(g_MdoHome.Root, Target);
+            xrtClearError();
+            if ( pSaved != NULL ) xrtSetErrorTake(pSaved);
+        }
+    }
+    return bOk;
+}
+
+static bool MdoHomePublishTempLocked(cstr Temporary, cstr Target)
+{
+    char* sTemporary = xrtPathJoin(g_MdoHome.Path, Temporary);
+    char* sTarget = xrtPathJoin(g_MdoHome.Path, Target);
+    bool bOk = false;
+
+    if ( sTemporary != NULL && sTarget != NULL )
+        bOk = xrtPathRename(sTemporary, sTarget, true);
+    xrtFree(sTemporary);
+    xrtFree(sTarget);
+    return bOk;
+}
+
+static bool MdoHomeBackupLocked(cstr Path)
+{
+    char* sBackup = MdoHomeSiblingPath(Path, ".bak");
+    char* sTemporary = MdoHomeSiblingPath(Path, ".bak.tmp");
+    bool bOk = false;
+
+    if ( sBackup == NULL || sTemporary == NULL ) goto done;
+    if ( !MdoHomeCopyFileLocked(Path, sTemporary) ) goto done;
+    if ( !MdoHomePublishTempLocked(sTemporary, sBackup) ) goto done;
+    bOk = true;
+
+done:
+    if ( !bOk && sTemporary != NULL ) {
+        xerror* pSaved = xrtTakeError();
+        (void)xrtRootRemove(g_MdoHome.Root, sTemporary);
+        xrtClearError();
+        if ( pSaved != NULL ) xrtSetErrorTake(pSaved);
+    }
+    xrtFree(sBackup);
+    xrtFree(sTemporary);
+    return bOk;
+}
+
+bool MdoHomeAtomicWrite(cstr Path, const void* pData, size_t iSize,
+    bool Backup)
+{
+    char* sTemporary = NULL;
+    bool bExists = false;
+    bool bOk = false;
+
+    if ( !MdoHomePathValid(Path) || (pData == NULL && iSize != 0u) ||
+         !g_MdoHome.Initialized ) {
+        MdoHomeErrorSet(XERR_ARGUMENT, MDO_HOME_ERROR_ARGUMENT,
+            "invalid atomic Home write request");
+        return false;
+    }
+    sTemporary = MdoHomeSiblingPath(Path, ".tmp");
+    if ( sTemporary == NULL ) return false;
+    xrtMutexLock(g_MdoHome.Lock);
+    if ( !MdoHomeEnsureLocked() ||
+         !MdoHomeEnsureParents(g_MdoHome.Root, Path) ||
+         !MdoHomeRootFileExistsLocked(Path, &bExists) ||
+         !MdoHomeWriteTempLocked(sTemporary, pData, iSize) ) goto done;
+    if ( Backup && bExists && !MdoHomeBackupLocked(Path) ) goto done;
+    if ( !MdoHomePublishTempLocked(sTemporary, Path) ) goto done;
+    bOk = true;
+
+done:
+    if ( !bOk ) {
+        xerror* pSaved = xrtTakeError();
+        if ( g_MdoHome.Root != NULL )
+            (void)xrtRootRemove(g_MdoHome.Root, sTemporary);
+        xrtClearError();
+        if ( pSaved != NULL ) xrtSetErrorTake(pSaved);
+    }
+    xrtMutexUnlock(g_MdoHome.Lock);
+    xrtFree(sTemporary);
+    return bOk;
+}
+
+bool MdoHomeRemove(cstr Path, bool Backup)
+{
+    bool bExists = false;
+    bool bOk = false;
+
+    if ( !MdoHomePathValid(Path) || !g_MdoHome.Initialized ) {
+        MdoHomeErrorSet(XERR_ARGUMENT, MDO_HOME_ERROR_ARGUMENT,
+            "invalid Home remove request");
+        return false;
+    }
+    xrtMutexLock(g_MdoHome.Lock);
+    if ( g_MdoHome.Root == NULL ) {
+        bOk = true;
+        goto done;
+    }
+    if ( !MdoHomeRootFileExistsLocked(Path, &bExists) ) goto done;
+    if ( !bExists ) {
+        bOk = true;
+        goto done;
+    }
+    if ( Backup && !MdoHomeBackupLocked(Path) ) goto done;
+    bOk = xrtRootRemove(g_MdoHome.Root, Path);
+
+done:
+    xrtMutexUnlock(g_MdoHome.Lock);
+    return bOk;
 }
 
 bool MdoResourceMaterialize(cstr Path)

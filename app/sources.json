@@ -2,6 +2,7 @@
   "schema_version": 1,
   "sources": [
     "src/storage/home.c",
+    "src/config/config.c",
     "src/bootstrap/bootstrap.c",
     "src/bootstrap/service.c"
   ]
