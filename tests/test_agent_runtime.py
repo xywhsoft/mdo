@@ -471,6 +471,9 @@ def write_site(site: Path, memory_enabled: bool = True) -> None:
         shutil.copy2(ROOT / "app" / relative, site / relative)
     for header in (ROOT / "app/include/mdo").glob("*.h"):
         shutil.copy2(header, site / "include/mdo" / header.name)
+    shutil.copy2(
+        ROOT / "app/src/memory/internal.h", site / "src/memory/internal.h"
+    )
     if not memory_enabled:
         defaults_path = site / "default-home/config/defaults.json"
         defaults = json.loads(defaults_path.read_text(encoding="utf-8"))
