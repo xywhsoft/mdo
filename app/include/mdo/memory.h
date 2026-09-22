@@ -101,7 +101,7 @@ bool MdoMemoryRemove(const MdoMemoryRemoveOptions* Options,
     xwork_error* Error);
 
 /* Directory exports use a readable manifest/global/projects layout and require
- * a destination that does not exist. Preview fully validates an import without
+ * a destination that does not exist. Preview fully validates the source without
  * writing. Import refuses to overwrite any existing global or project store. */
 bool MdoMemoryExportDirectory(const char* Directory,
     MdoMemoryTransferSummary* Summary, xwork_error* Error);
