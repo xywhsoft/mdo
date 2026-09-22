@@ -68,3 +68,7 @@ mdo.exe -- --home D:\Portable\mdo-home
 内建联网能力由 `web_search`、`web_open` 和 `web_find` 三个有界工具组成；
 配置、权限、DNS 重绑定防护与进程内文档缓存见
 [Web 工具合同](docs/web-tools.md)。
+
+会话使用 `meta.json` 与 xllm-session 的 snapshot/journal 分层持久化；创建、
+恢复、目录快照、重命名、置顶、归档、回收站和并发更新规则见
+[会话存储合同](docs/session-storage.md)。

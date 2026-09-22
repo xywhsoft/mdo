@@ -91,11 +91,12 @@ permission、hook 和 event 状态作为一个 owner 固定到最后一个物理
 bootstrap 顺序保持为：
 
 ```text
-Home -> Config -> Models -> xwork runtime -> Skills -> MCP -> Modules
+Home -> Config -> Models -> xwork runtime -> Skills -> Web -> MCP -> Modules -> Sessions
 ```
 
 创建 session 前以上组件必须全部就绪。关闭时先停止并释放所有 run/session，
-再按相反顺序卸载 Modules、MCP、Skills、runtime、Models、Config 和 Home。
+再按相反顺序卸载 Sessions、Modules、MCP、Web、Skills、runtime、Models、
+Config 和 Home。
 
 ## 当前验证范围
 
