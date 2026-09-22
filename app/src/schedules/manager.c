@@ -1346,18 +1346,105 @@ static bool MdoSchedulesCopyClaim(const MdoScheduleEntry* Entry,
     return true;
 }
 
+static bool MdoSchedulesClaimPreflight(int64 Now, bool* Due,
+    int64* NextWake, xwork_error* Error)
+{
+    size_t i;
+    *Due = false;
+    *NextWake = 0;
+    for ( i = 0u; i < g_MdoSchedules.Count; ++i ) {
+        MdoScheduleEntry* Entry = &g_MdoSchedules.Entries[i];
+        xwork_schedule_info RuntimeInfo;
+        if ( !Entry->Registered || !Entry->Info.Enabled ) continue;
+        xworkScheduleInfoInit(&RuntimeInfo);
+        if ( !xworkRuntimeScheduleGetInfo(g_MdoSchedules.Runtime,
+                Entry->Info.Id, &RuntimeInfo) ) {
+            MdoSchedulesError(Error, XWORK_ERROR_CONTEXT,
+                "cannot inspect schedule readiness");
+            return false;
+        }
+        if ( RuntimeInfo.iNextOccurrenceAtUs == 0 ) continue;
+        if ( *NextWake == 0 ||
+             RuntimeInfo.iNextOccurrenceAtUs < *NextWake )
+            *NextWake = RuntimeInfo.iNextOccurrenceAtUs;
+        if ( RuntimeInfo.iNextOccurrenceAtUs <= Now ) *Due = true;
+    }
+    return true;
+}
+
+static bool MdoSchedulesRuntimeChanged(const MdoScheduleInfo* Info,
+    const xwork_schedule_info* RuntimeInfo)
+{
+    return Info->RuntimeGeneration != RuntimeInfo->uGeneration ||
+        Info->NextOccurrenceAt != RuntimeInfo->iNextOccurrenceAtUs ||
+        Info->LastClaimedAt != RuntimeInfo->iLastClaimedAtUs ||
+        Info->ClaimCount != RuntimeInfo->uClaimCount ||
+        Info->MisfireCount != RuntimeInfo->uMisfireCount;
+}
+
+static bool MdoSchedulesSyncRuntime(const xwork_schedule_claim* Claim,
+    bool Claimed, xwork_error* Error)
+{
+    size_t i;
+    bool Changed = false;
+    bool Ok = true;
+    for ( i = 0u; i < g_MdoSchedules.Count; ++i ) {
+        MdoScheduleEntry* Entry = &g_MdoSchedules.Entries[i];
+        xwork_schedule_info RuntimeInfo;
+        uint64 Previous;
+        bool IsClaim;
+        if ( !Entry->Registered ) continue;
+        xworkScheduleInfoInit(&RuntimeInfo);
+        if ( !xworkRuntimeScheduleGetInfo(g_MdoSchedules.Runtime,
+                Entry->Info.Id, &RuntimeInfo) ) {
+            MdoSchedulesError(Error, XWORK_ERROR_CONTEXT,
+                "cannot synchronize schedule runtime state");
+            Ok = false;
+            break;
+        }
+        Entry->Info.ActiveRuns = RuntimeInfo.iActiveRuns;
+        if ( !MdoSchedulesRuntimeChanged(&Entry->Info, &RuntimeInfo) )
+            continue;
+        Previous = Entry->Info.Revision;
+        if ( Previous == UINT64_MAX ) {
+            MdoSchedulesError(Error, XWORK_ERROR_LIMIT,
+                "schedule revision is exhausted");
+            Ok = false;
+            break;
+        }
+        MdoSchedulesRuntimeInfo(&Entry->Info, &RuntimeInfo);
+        ++Entry->Info.Revision;
+        Entry->Info.UpdatedAt = xrtNow();
+        IsClaim = Claimed && Claim != NULL && Claim->sScheduleId != NULL &&
+            strcmp(Entry->Info.Id, Claim->sScheduleId) == 0;
+        if ( !MdoSchedulesAudit(IsClaim ? "claim" : "advance", &Entry->Info,
+                Previous, Entry->Info.Revision,
+                IsClaim ? Claim->uTaskId : 0u,
+                IsClaim ? Claim->iOccurrenceAtUs : 0, Error) ||
+             !MdoSchedulesWriteStore(&Entry->Info, Error) ) {
+            g_MdoSchedules.PersistenceFault = true;
+            Ok = false;
+            break;
+        }
+        Changed = true;
+    }
+    if ( Changed && g_MdoSchedules.Generation != UINT64_MAX )
+        ++g_MdoSchedules.Generation;
+    return Ok;
+}
+
 bool MdoScheduleClaimDue(int64 Now, MdoScheduleClaim* Claim,
     xwork_error* Error)
 {
     xwork_schedule_claim RuntimeClaim;
-    xwork_schedule_info RuntimeInfo;
     MdoScheduleEntry* Entry;
     bool Claimed = false;
+    bool Due = false;
     int64 NextWake = 0;
     uint32 ClaimSize;
     bool Ok = false;
     xworkErrorInit(Error);
-    if ( !g_MdoSchedules.Initialized || Now < 0 || Claim == NULL ||
+    if ( !g_MdoSchedules.Initialized || Now <= 0 || Claim == NULL ||
          Claim->Size < sizeof(*Claim) ) {
         MdoSchedulesError(Error, XWORK_ERROR_INVALID_ARGUMENT,
             "invalid schedule claim request");
@@ -1373,41 +1460,34 @@ bool MdoScheduleClaimDue(int64 Now, MdoScheduleClaim* Claim,
             "schedule persistence is faulted; restart after repairing storage");
         goto done;
     }
+    if ( !MdoSchedulesClaimPreflight(Now, &Due, &NextWake, Error) ) goto done;
+    Claim->NextWakeAt = NextWake;
+    if ( !Due ) { Ok = true; goto done; }
     if ( !MdoSchedulesWriterLock(Error) ) goto done;
     xworkScheduleClaimInit(&RuntimeClaim);
     if ( !xworkRuntimeClaimDueSchedule(g_MdoSchedules.Runtime, Now,
-            &RuntimeClaim, &Claimed, &NextWake, Error) ) goto done;
+            &RuntimeClaim, &Claimed, &NextWake, Error) ) {
+        xwork_error RuntimeError = Error != NULL ? *Error : (xwork_error){0};
+        xwork_error SyncError;
+        if ( !MdoSchedulesSyncRuntime(NULL, false, &SyncError) ) {
+            if ( Error != NULL ) *Error = SyncError;
+        } else if ( Error != NULL ) {
+            *Error = RuntimeError;
+        }
+        goto done;
+    }
     Claim->NextWakeAt = NextWake;
+    if ( !MdoSchedulesSyncRuntime(&RuntimeClaim, Claimed, Error) ) {
+        if ( Claimed ) goto fail_task;
+        goto done;
+    }
     if ( !Claimed ) { Ok = true; goto done; }
     Entry = MdoSchedulesFind(RuntimeClaim.sScheduleId);
-    xworkScheduleInfoInit(&RuntimeInfo);
-    if ( Entry == NULL || !Entry->Registered ||
-         !xworkRuntimeScheduleGetInfo(g_MdoSchedules.Runtime,
-            RuntimeClaim.sScheduleId, &RuntimeInfo) ) {
+    if ( Entry == NULL || !Entry->Registered ) {
         MdoSchedulesError(Error, XWORK_ERROR_CONTEXT,
             "claimed schedule is missing from the product catalog");
         goto fail_task;
     }
-    {
-        uint64 Previous = Entry->Info.Revision;
-        if ( Previous == UINT64_MAX ) {
-            MdoSchedulesError(Error, XWORK_ERROR_LIMIT,
-                "schedule revision is exhausted");
-            goto fail_task;
-        }
-        ++Entry->Info.Revision;
-        Entry->Info.UpdatedAt = xrtNow();
-        MdoSchedulesRuntimeInfo(&Entry->Info, &RuntimeInfo);
-        if ( !MdoSchedulesAudit("claim", &Entry->Info, Previous,
-                Entry->Info.Revision, RuntimeClaim.uTaskId,
-                RuntimeClaim.iOccurrenceAtUs, Error) ||
-             !MdoSchedulesWriteStore(&Entry->Info, Error) ) {
-            g_MdoSchedules.PersistenceFault = true;
-            goto fail_task;
-        }
-    }
-    if ( g_MdoSchedules.Generation != UINT64_MAX )
-        ++g_MdoSchedules.Generation;
     MdoSchedulesCopyClaim(Entry, &RuntimeClaim, NextWake, Claim);
     Ok = true;
     goto done;

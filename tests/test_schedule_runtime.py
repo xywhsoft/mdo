@@ -153,6 +153,41 @@ void ServiceInit(XS_HostInfo *host) {
     printf("finished=1\n");
     PrintCatalog("catalog_claimed");
 
+    MdoScheduleCreateOptionsInit(&options);
+    options.Id = "skip-missed";
+    options.Label = "Skip missed";
+    options.ProjectId = "project-alpha";
+    options.AgentId = "reviewer";
+    options.Input = "skip this missed occurrence";
+    options.Frequency = XWORK_SCHEDULE_MINUTELY;
+    options.StartAt = start;
+    options.MisfirePolicy = XWORK_SCHEDULE_MISFIRE_SKIP;
+    options.MisfireGraceSeconds = 1u;
+    if (!MdoScheduleCreate(&options, NULL, &error)) {
+        printf("skip_create_error=%s\n", error.sMessage); goto done;
+    }
+    MdoScheduleClaimInit(&claim);
+    if (!MdoScheduleClaimDue(start + 300000000LL, &claim, &error)) {
+        printf("skip_claim_error=%s\n", error.sMessage); goto done;
+    }
+    {
+        MdoScheduleCatalog *catalog = MdoScheduleCatalogSnapshot(&error);
+        memset(&info, 0, sizeof(info)); info.Size = sizeof(info);
+        if (catalog == NULL ||
+            !MdoScheduleCatalogFind(catalog, "skip-missed", &info)) {
+            MdoScheduleCatalogRelease(catalog);
+            printf("skip_catalog_error=1\n"); goto done;
+        }
+        printf("skip_advanced=claimed:%d revision:%llu next:%lld misfires:%llu\n",
+            claim.Claimed ? 1 : 0, (unsigned long long)info.Revision,
+            (long long)info.NextOccurrenceAt,
+            (unsigned long long)info.MisfireCount);
+        MdoScheduleCatalogRelease(catalog);
+    }
+    if (!MdoScheduleRemove("skip-missed", 2u, &error)) {
+        printf("skip_remove_error=%s\n", error.sMessage); goto done;
+    }
+
     MdoScheduleManagerUnit();
     xworkRuntimeRelease(runtime); runtime = NULL;
     if (!MdoHomeAtomicWrite("schedules/broken.json", invalid,
@@ -284,6 +319,7 @@ def main() -> int:
         assert "claimed=id:daily-review" in output and "occurrence:1700000000000000 revision:4" in output, output
         assert "agent:reviewer model:ling-3.0-tiny input:review the private release notes" in output, output
         assert "finished=1" in output, output
+        assert "skip_advanced=claimed:0 revision:2 next:1700000360000000 misfires:1" in output, output
         assert "catalog_claimed=count:1 diagnostics:0" in output, output
         assert "revision:4" in output and "next:0 claims:1 active:0 runnable:1" in output, output
         assert "catalog_recovered=count:1 diagnostics:1 generation:1 enabled:1 code:0" in output, output
@@ -306,7 +342,8 @@ def main() -> int:
             encoding="utf-8").splitlines()
         audit = [json.loads(line) for line in audit_lines]
         assert [item["operation"] for item in audit] == [
-            "create", "create", "remove", "set-enabled", "set-enabled", "claim"]
+            "create", "create", "remove", "set-enabled", "set-enabled", "claim",
+            "create", "advance", "remove"]
         assert all(item["phase"] == "prepared" for item in audit)
         assert all("input" not in item for item in audit)
         assert audit[0]["input_sha256"] == hashlib.sha256(
