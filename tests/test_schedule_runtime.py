@@ -93,6 +93,27 @@ void ServiceInit(XS_HostInfo *host) {
     printf("created=id:%s revision:%llu next:%lld protocol:%d\n", info.Id,
         (unsigned long long)info.Revision, (long long)info.NextOccurrenceAt,
         (int)info.Protocol);
+    if (getenv("MDO_SCHEDULE_DISABLED_ONLY") != NULL) {
+        PrintCatalog("catalog_disabled");
+        MdoScheduleClaimInit(&claim);
+        if (!MdoScheduleClaimDue(start, &claim, &error)) {
+            printf("disabled_claim_error=%s\n", error.sMessage); goto done;
+        }
+        printf("disabled_claim=claimed:%d wake:%lld\n",
+            claim.Claimed ? 1 : 0, (long long)claim.NextWakeAt);
+        printf("probe_done=1\n"); goto done;
+    }
+
+    options.Id = "remove-me"; options.Label = "Remove me";
+    if (!MdoScheduleCreate(&options, NULL, &error)) {
+        printf("remove_create_error=%s\n", error.sMessage); goto done;
+    }
+    result = MdoScheduleRemove("remove-me", 0u, &error);
+    printf("stale_remove=%d code:%d\n", result ? 1 : 0, (int)error.eCode);
+    if (!MdoScheduleRemove("remove-me", 1u, &error)) {
+        printf("remove_error=%s\n", error.sMessage); goto done;
+    }
+    printf("removed=1\n");
 
     memset(long_label, 'x', sizeof(long_label)); long_label[sizeof(long_label)-1u] = '\0';
     options.Id = "truncated-label"; options.Label = long_label;
@@ -188,10 +209,12 @@ def write_site(site: Path) -> None:
     }]}), encoding="utf-8")
 
 
-def run_probe(host: Path, site: Path, home: Path, empty_only: bool = False) -> str:
+def run_probe(host: Path, site: Path, home: Path, mode: str = "") -> str:
     env = os.environ.copy()
-    if empty_only:
+    if mode == "empty":
         env["MDO_SCHEDULE_EMPTY_ONLY"] = "1"
+    elif mode == "disabled":
+        env["MDO_SCHEDULE_DISABLED_ONLY"] = "1"
     process = subprocess.Popen(
         [str(host), "xs.json", "--", "--home", str(home)], cwd=site,
         stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
@@ -239,7 +262,7 @@ def main() -> int:
         empty_home = base / "empty-home"
         home = base / "home"
         write_site(site)
-        empty_output = run_probe(host, site, empty_home, empty_only=True)
+        empty_output = run_probe(host, site, empty_home, mode="empty")
         assert "catalog_empty=count:0 diagnostics:0 generation:1 enabled:1 code:0" in empty_output, empty_output
         assert "probe_done=1" in empty_output, empty_output
         assert not empty_home.exists(), list(empty_home.rglob("*")) if empty_home.exists() else ""
@@ -253,6 +276,7 @@ def main() -> int:
         assert "recover_error=" not in output, output
         assert "catalog_empty=count:0 diagnostics:0 generation:1 enabled:1 code:0" in output, output
         assert "created=id:daily-review revision:1 next:1700000000000000 protocol:2" in output, output
+        assert "stale_remove=0 code:7" in output and "removed=1" in output, output
         assert "overlong_create=0 code:1" in output, output
         assert "stale_update=0 code:7" in output, output
         assert "enabled=revision:3 value:1 runnable:1" in output, output
@@ -282,12 +306,27 @@ def main() -> int:
             encoding="utf-8").splitlines()
         audit = [json.loads(line) for line in audit_lines]
         assert [item["operation"] for item in audit] == [
-            "create", "set-enabled", "set-enabled", "claim"]
+            "create", "create", "remove", "set-enabled", "set-enabled", "claim"]
         assert all(item["phase"] == "prepared" for item in audit)
         assert all("input" not in item for item in audit)
         assert audit[0]["input_sha256"] == hashlib.sha256(
             b"review the private release notes").hexdigest()
         assert "review the private release notes" not in "\n".join(audit_lines)
+
+        disabled_site = base / "disabled-site"
+        disabled_home = base / "disabled-home"
+        write_site(disabled_site)
+        defaults_path = disabled_site / "default-home/config/defaults.json"
+        defaults = json.loads(defaults_path.read_text(encoding="utf-8"))
+        defaults["settings"]["agent"]["schedules"] = False
+        defaults_path.write_text(json.dumps(defaults), encoding="utf-8")
+        disabled = run_probe(host, disabled_site, disabled_home, mode="disabled")
+        assert "init_error=" not in disabled and "create_error=" not in disabled, disabled
+        assert "catalog_empty=count:0 diagnostics:0 generation:1 enabled:0 code:0" in disabled, disabled
+        assert "catalog_disabled=count:1 diagnostics:0" in disabled, disabled
+        assert "active:0 runnable:0" in disabled, disabled
+        assert "disabled_claim=claimed:0 wake:0" in disabled, disabled
+        assert "probe_done=1" in disabled, disabled
     print("schedule runtime probe: PASS")
     return 0
 

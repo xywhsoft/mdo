@@ -1239,6 +1239,82 @@ done:
     return Ok;
 }
 
+bool MdoScheduleRemove(const char* ScheduleId, uint64 ExpectedRevision,
+    xwork_error* Error)
+{
+    MdoScheduleEntry* Entry;
+    MdoScheduleInfo Previous;
+    xwork_schedule_info RuntimeInfo;
+    char Path[MDO_SCHEDULE_PATH_CAPACITY];
+    char Backup[MDO_SCHEDULE_PATH_CAPACITY + 5u];
+    size_t Index;
+    bool Ok = false;
+    xworkErrorInit(Error);
+    if ( !g_MdoSchedules.Initialized ||
+         !MdoSchedulesId(ScheduleId, MDO_SCHEDULE_ID_CAPACITY) ||
+         !MdoSchedulesPath(Path, ScheduleId) ||
+         snprintf(Backup, sizeof(Backup), "%s.bak", Path) <= 0 ) {
+        MdoSchedulesError(Error, XWORK_ERROR_INVALID_ARGUMENT,
+            "invalid schedule remove request");
+        return false;
+    }
+    xrtMutexLock(g_MdoSchedules.Lock);
+    Entry = MdoSchedulesFind(ScheduleId);
+    if ( Entry == NULL || !Entry->Registered ) {
+        MdoSchedulesError(Error, XWORK_ERROR_INVALID_ARGUMENT,
+            "schedule was not found or restored");
+        goto done;
+    }
+    if ( g_MdoSchedules.PersistenceFault ) {
+        MdoSchedulesError(Error, XWORK_ERROR_IO,
+            "schedule persistence is faulted; restart after repairing storage");
+        goto done;
+    }
+    if ( ExpectedRevision != UINT64_MAX &&
+         Entry->Info.Revision != ExpectedRevision ) {
+        MdoSchedulesError(Error, XWORK_ERROR_CONTEXT,
+            "schedule revision changed; reload before removing");
+        goto done;
+    }
+    xworkScheduleInfoInit(&RuntimeInfo);
+    if ( !xworkRuntimeScheduleGetInfo(g_MdoSchedules.Runtime, ScheduleId,
+            &RuntimeInfo) ) {
+        MdoSchedulesError(Error, XWORK_ERROR_CONTEXT,
+            "cannot inspect the schedule before removing it");
+        goto done;
+    }
+    if ( RuntimeInfo.iActiveRuns != 0u ) {
+        MdoSchedulesError(Error, XWORK_ERROR_CONTEXT,
+            "cannot remove a schedule while one of its runs is active");
+        goto done;
+    }
+    if ( !MdoSchedulesWriterLock(Error) ) goto done;
+    Previous = Entry->Info;
+    if ( !MdoSchedulesAudit("remove", &Previous, Previous.Revision, 0u,
+            0u, 0, Error) || !MdoHomeRemove(Path, false) ) {
+        if ( Error == NULL || Error->eCode == XWORK_ERROR_NONE )
+            MdoSchedulesXrtError(Error, "cannot remove schedule definition");
+        goto done;
+    }
+    if ( !xworkRuntimeUnregisterSchedule(g_MdoSchedules.Runtime, ScheduleId,
+            Error) ) {
+        if ( !MdoSchedulesWriteStore(&Previous, NULL) )
+            g_MdoSchedules.PersistenceFault = true;
+        goto done;
+    }
+    (void)MdoHomeRemove(Backup, false);
+    Index = (size_t)(Entry - g_MdoSchedules.Entries);
+    g_MdoSchedules.Entries[Index] =
+        g_MdoSchedules.Entries[g_MdoSchedules.Count - 1u];
+    --g_MdoSchedules.Count;
+    if ( g_MdoSchedules.Generation != UINT64_MAX )
+        ++g_MdoSchedules.Generation;
+    Ok = true;
+done:
+    xrtMutexUnlock(g_MdoSchedules.Lock);
+    return Ok;
+}
+
 static bool MdoSchedulesCopyClaim(const MdoScheduleEntry* Entry,
     const xwork_schedule_claim* Source, int64 NextWake,
     MdoScheduleClaim* Claim)

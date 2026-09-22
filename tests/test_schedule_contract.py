@@ -18,6 +18,7 @@ class ScheduleContractTests(unittest.TestCase):
             "MdoScheduleManagerInit",
             "MdoScheduleCreate",
             "MdoScheduleSetEnabled",
+            "MdoScheduleRemove",
             "MdoScheduleClaimDue",
             "MdoScheduleFinishTask",
             "MdoScheduleExecutorInit",

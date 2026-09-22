@@ -154,6 +154,8 @@ bool MdoScheduleCreate(const MdoScheduleCreateOptions* Options,
     MdoScheduleInfo* Info, xwork_error* Error);
 bool MdoScheduleSetEnabled(const char* ScheduleId, uint64 ExpectedRevision,
     bool Enabled, MdoScheduleInfo* Info, xwork_error* Error);
+bool MdoScheduleRemove(const char* ScheduleId, uint64 ExpectedRevision,
+    xwork_error* Error);
 bool MdoScheduleClaimDue(int64 Now, MdoScheduleClaim* Claim,
     xwork_error* Error);
 bool MdoScheduleFinishTask(uint64 TaskId, xwork_result Result,
