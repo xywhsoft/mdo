@@ -409,12 +409,140 @@ static bool MdoConfigModelProtocol(xstrview Protocol, cstr* pEndpoint)
     return false;
 }
 
-static bool MdoConfigModelItemValidate(const xvalue* pItem, xstrview* pId)
+static bool MdoConfigArrayContainsString(const xvalue* pArray,
+    xstrview Expected)
 {
-    const xvalue* pProtocols;
+    size_t i;
+    if ( xrtValueType(pArray) != XVALUE_ARRAY ) return false;
+    for ( i = 0u; i < xrtValueCount(pArray); ++i ) {
+        xstrview Text;
+        if ( MdoConfigString(xrtValueArrayGet(pArray, i), &Text) &&
+             Text.Size == Expected.Size &&
+             memcmp(Text.Data, Expected.Data, Text.Size) == 0 ) return true;
+    }
+    return false;
+}
+
+static bool MdoConfigStringListValidate(const xvalue* pArray,
+    const char* const* ppChoices, size_t iChoices, size_t iMinimum,
+    size_t iMaximum, uint64* pMask)
+{
+    uint64 Mask = 0u;
+    size_t i;
+    size_t j;
+    if ( xrtValueType(pArray) != XVALUE_ARRAY ||
+         xrtValueCount(pArray) < iMinimum ||
+         xrtValueCount(pArray) > iMaximum || iChoices > 64u ) return false;
+    for ( i = 0u; i < xrtValueCount(pArray); ++i ) {
+        xstrview Text;
+        bool Found = false;
+        if ( !MdoConfigString(xrtValueArrayGet(pArray, i), &Text) )
+            return false;
+        for ( j = 0u; j < iChoices; ++j ) {
+            uint64 Bit = (uint64)1u << j;
+            if ( !MdoConfigViewEqual(Text, ppChoices[j]) ) continue;
+            if ( (Mask & Bit) != 0u ) return false;
+            Mask |= Bit;
+            Found = true;
+            break;
+        }
+        if ( !Found ) return false;
+    }
+    if ( pMask != NULL ) *pMask = Mask;
+    return true;
+}
+
+static const xvalue* MdoConfigFindById(const xvalue* pArray,
+    xstrview Expected)
+{
+    size_t i;
+    if ( xrtValueType(pArray) != XVALUE_ARRAY ) return NULL;
+    for ( i = 0u; i < xrtValueCount(pArray); ++i ) {
+        const xvalue* pItem = xrtValueArrayGet(pArray, i);
+        xstrview Id;
+        if ( xrtValueType(pItem) == XVALUE_OBJECT &&
+             MdoConfigString(xrtValueObjectGet(pItem, MdoConfigKey("id")),
+                &Id) && Id.Size == Expected.Size &&
+             memcmp(Id.Data, Expected.Data, Id.Size) == 0 ) return pItem;
+    }
+    return NULL;
+}
+
+static bool MdoConfigProviderValidate(const xvalue* pProvider,
+    xstrview* pId)
+{
+    static const char* const EndpointNames[] = {
+        "chat_completions", "responses", "anthropic_messages"
+    };
     const xvalue* pEndpoints;
     const xvalue* pCredential;
     xstrview Text;
+    uint64 Timeout;
+    size_t i;
+    size_t iEndpoints = 0u;
+
+    if ( xrtValueType(pProvider) != XVALUE_OBJECT ||
+         !MdoConfigString(xrtValueObjectGet(pProvider, MdoConfigKey("id")),
+            pId) || pId->Size == 0u || pId->Size > 128u ||
+         !MdoConfigString(xrtValueObjectGet(pProvider, MdoConfigKey("name")),
+            &Text) || Text.Size == 0u || Text.Size > 256u ||
+         !MdoConfigBool(pProvider, "builtin") ||
+         !MdoConfigBool(pProvider, "editable") ||
+         !MdoConfigBool(pProvider, "removable") ||
+         !MdoConfigBool(pProvider, "verify_peer") ||
+         !MdoConfigUnsigned(xrtValueObjectGet(pProvider,
+            MdoConfigKey("timeout_ms")), &Timeout) ||
+         Timeout == 0u || Timeout > 600000u ) return false;
+    pEndpoints = xrtValueObjectGet(pProvider, MdoConfigKey("endpoints"));
+    if ( xrtValueType(pEndpoints) != XVALUE_OBJECT ) return false;
+    for ( i = 0u; i < sizeof(EndpointNames) / sizeof(EndpointNames[0]); ++i ) {
+        const xvalue* pEndpoint = xrtValueObjectGet(pEndpoints,
+            MdoConfigKey(EndpointNames[i]));
+        if ( pEndpoint == NULL ) continue;
+        if ( !MdoConfigString(pEndpoint, &Text) || Text.Size == 0u ||
+             Text.Size > 2048u ) return false;
+        ++iEndpoints;
+    }
+    if ( iEndpoints == 0u || xrtValueCount(pEndpoints) != iEndpoints )
+        return false;
+    pCredential = xrtValueObjectGet(pProvider, MdoConfigKey("credential"));
+    if ( pCredential != NULL &&
+         (xrtValueType(pCredential) != XVALUE_OBJECT ||
+          !MdoConfigSecretReferenceValid(xrtValueObjectGet(pCredential,
+            MdoConfigKey("secret_ref")))) ) return false;
+    return true;
+}
+
+static bool MdoConfigModelItemValidate(const xvalue* pItem,
+    const xvalue* pProviders, xstrview* pId)
+{
+    static const char* const Capabilities[] = {
+        "text-input", "tool-result-input", "text-output", "json-output",
+        "tool-call-output", "reasoning-output", "streaming",
+        "reasoning-control", "parallel-tool-calls",
+        "max-completion-tokens", "developer-role", "media-input"
+    };
+    static const char* const Efforts[] = {
+        "none", "minimal", "low", "medium", "high", "xhigh", "max"
+    };
+    static const char* const Attachments[] = { "image", "audio", "file" };
+    const xvalue* pProtocols;
+    const xvalue* pCapabilities;
+    const xvalue* pWindow;
+    const xvalue* pEfforts;
+    const xvalue* pAttachments;
+    const xvalue* pProvider;
+    const xvalue* pEndpoints;
+    xstrview ProviderId;
+    xstrview DefaultProtocol;
+    xstrview DefaultEffort;
+    xstrview Text;
+    uint64 CapabilityMask;
+    uint64 Context;
+    uint64 MaxInput;
+    uint64 MaxOutput;
+    uint64 Reserve;
+    uint64 Summary;
     size_t i;
     size_t j;
 
@@ -424,76 +552,145 @@ static bool MdoConfigModelItemValidate(const xvalue* pItem, xstrview* pId)
          !MdoConfigString(xrtValueObjectGet(pItem, MdoConfigKey("name")),
             &Text) || Text.Size == 0u || Text.Size > 256u ||
          !MdoConfigString(xrtValueObjectGet(pItem, MdoConfigKey("provider")),
-            &Text) || Text.Size == 0u || Text.Size > 128u ) return false;
+            &ProviderId) || ProviderId.Size == 0u || ProviderId.Size > 128u ||
+         !MdoConfigString(xrtValueObjectGet(pItem,
+            MdoConfigKey("wire_model")), &Text) ||
+         Text.Size == 0u || Text.Size > 256u ||
+         !MdoConfigBool(pItem, "builtin") ||
+         !MdoConfigBool(pItem, "free") ||
+         !MdoConfigBool(pItem, "editable") ||
+         !MdoConfigBool(pItem, "removable") ) return false;
+    pProvider = MdoConfigFindById(pProviders, ProviderId);
+    if ( pProvider == NULL ) return false;
+    pEndpoints = xrtValueObjectGet(pProvider, MdoConfigKey("endpoints"));
     pProtocols = xrtValueObjectGet(pItem, MdoConfigKey("protocols"));
-    pEndpoints = xrtValueObjectGet(pItem, MdoConfigKey("endpoints"));
     if ( xrtValueType(pProtocols) != XVALUE_ARRAY ||
          xrtValueCount(pProtocols) == 0u || xrtValueCount(pProtocols) > 3u ||
-         xrtValueType(pEndpoints) != XVALUE_OBJECT ) return false;
-    for ( i = 0u; i < xrtValueCount(pProtocols); i++ ) {
+         !MdoConfigString(xrtValueObjectGet(pItem,
+            MdoConfigKey("default_protocol")), &DefaultProtocol) ||
+         !MdoConfigArrayContainsString(pProtocols, DefaultProtocol) ) return false;
+    for ( i = 0u; i < xrtValueCount(pProtocols); ++i ) {
         const xvalue* pProtocol = xrtValueArrayGet(pProtocols, i);
         cstr sEndpoint;
         if ( !MdoConfigString(pProtocol, &Text) ||
              !MdoConfigModelProtocol(Text, &sEndpoint) ||
              !MdoConfigString(xrtValueObjectGet(pEndpoints,
                 MdoConfigKey(sEndpoint)), &Text) || Text.Size == 0u ) return false;
-        for ( j = 0u; j < i; j++ )
+        for ( j = 0u; j < i; ++j )
             if ( xrtValueEqual(pProtocol, xrtValueArrayGet(pProtocols, j)) )
                 return false;
     }
-    pCredential = xrtValueObjectGet(pItem, MdoConfigKey("credential"));
-    if ( pCredential != NULL && xrtValueType(pCredential) != XVALUE_OBJECT )
-        return false;
+    pCapabilities = xrtValueObjectGet(pItem, MdoConfigKey("capabilities"));
+    if ( !MdoConfigStringListValidate(pCapabilities, Capabilities,
+            sizeof(Capabilities) / sizeof(Capabilities[0]), 3u,
+            sizeof(Capabilities) / sizeof(Capabilities[0]),
+            &CapabilityMask) ||
+         (CapabilityMask & ((uint64)1u << 0)) == 0u ||
+         (CapabilityMask & ((uint64)1u << 2)) == 0u ||
+         (CapabilityMask & ((uint64)1u << 6)) == 0u ||
+         ((CapabilityMask & ((uint64)1u << 8)) != 0u &&
+          (CapabilityMask & ((uint64)1u << 4)) == 0u) ) return false;
+    pWindow = xrtValueObjectGet(pItem, MdoConfigKey("window"));
+    if ( xrtValueType(pWindow) != XVALUE_OBJECT ||
+         !MdoConfigString(xrtValueObjectGet(pWindow, MdoConfigKey("mode")),
+            &Text) ||
+         (!MdoConfigViewEqual(Text, "shared-context") &&
+          !MdoConfigViewEqual(Text, "split-input-output")) ||
+         !MdoConfigUnsigned(xrtValueObjectGet(pWindow,
+            MdoConfigKey("context_tokens")), &Context) || Context == 0u ||
+         !MdoConfigUnsigned(xrtValueObjectGet(pWindow,
+            MdoConfigKey("max_input_tokens")), &MaxInput) ||
+         MaxInput == 0u || MaxInput > Context ||
+         !MdoConfigUnsigned(xrtValueObjectGet(pWindow,
+            MdoConfigKey("max_output_tokens")), &MaxOutput) ||
+         MaxOutput == 0u || MaxOutput > Context || MaxOutput > UINT32_MAX ||
+         !MdoConfigUnsigned(xrtValueObjectGet(pWindow,
+            MdoConfigKey("output_reserve_tokens")), &Reserve) ||
+         Reserve > MaxOutput || Reserve > UINT32_MAX ||
+         !MdoConfigUnsigned(xrtValueObjectGet(pWindow,
+            MdoConfigKey("summary_tokens")), &Summary) ||
+         Summary > MaxOutput || Summary > UINT32_MAX ) return false;
+    pEfforts = xrtValueObjectGet(pItem, MdoConfigKey("reasoning_efforts"));
+    if ( !MdoConfigStringListValidate(pEfforts, Efforts,
+            sizeof(Efforts) / sizeof(Efforts[0]), 1u,
+            sizeof(Efforts) / sizeof(Efforts[0]), NULL) ||
+         !MdoConfigString(xrtValueObjectGet(pItem,
+            MdoConfigKey("default_reasoning_effort")), &DefaultEffort) ||
+         !MdoConfigArrayContainsString(pEfforts, DefaultEffort) ) return false;
+    pAttachments = xrtValueObjectGet(pItem, MdoConfigKey("attachments"));
+    if ( !MdoConfigStringListValidate(pAttachments, Attachments,
+            sizeof(Attachments) / sizeof(Attachments[0]), 0u,
+            sizeof(Attachments) / sizeof(Attachments[0]), NULL) ) return false;
     return true;
 }
 
 static bool MdoConfigModelsValidate(const xvalue* pModels,
     const xvalue* pDefaultModels)
 {
+    const xvalue* pProviders;
     const xvalue* pItems;
+    const xvalue* pDefaultProviders;
     const xvalue* pDefaultItems;
-    const xvalue* pProtected = NULL;
+    const xvalue* pProtectedProvider;
+    const xvalue* pProtectedModel;
     xstrview DefaultId;
     size_t i;
     size_t j;
     bool bDefaultFound = false;
-    bool bProtectedFound = false;
+    bool bProtectedProviderFound = false;
+    bool bProtectedModelFound = false;
 
     if ( xrtValueType(pModels) != XVALUE_OBJECT ||
          xrtValueType(pDefaultModels) != XVALUE_OBJECT ||
          !MdoConfigString(xrtValueObjectGet(pModels,
-            MdoConfigKey("default_model")), &DefaultId) ) goto invalid;
+            MdoConfigKey("default_model")), &DefaultId) ||
+         DefaultId.Size == 0u || DefaultId.Size > 128u ) goto invalid;
+    pProviders = xrtValueObjectGet(pModels, MdoConfigKey("providers"));
     pItems = xrtValueObjectGet(pModels, MdoConfigKey("items"));
+    pDefaultProviders = xrtValueObjectGet(pDefaultModels,
+        MdoConfigKey("providers"));
     pDefaultItems = xrtValueObjectGet(pDefaultModels, MdoConfigKey("items"));
-    if ( xrtValueType(pItems) != XVALUE_ARRAY ||
+    if ( xrtValueType(pProviders) != XVALUE_ARRAY ||
+         xrtValueCount(pProviders) > 128u ||
+         xrtValueType(pItems) != XVALUE_ARRAY ||
+         xrtValueCount(pItems) > 512u ||
+         xrtValueType(pDefaultProviders) != XVALUE_ARRAY ||
          xrtValueType(pDefaultItems) != XVALUE_ARRAY ) goto invalid;
-    for ( i = 0u; i < xrtValueCount(pDefaultItems); i++ ) {
-        const xvalue* pItem = xrtValueArrayGet(pDefaultItems, i);
+    pProtectedProvider = MdoConfigFindById(pDefaultProviders,
+        xrtStrView("ling"));
+    pProtectedModel = MdoConfigFindById(pDefaultItems,
+        xrtStrView("ling-3.0-tiny"));
+    if ( pProtectedProvider == NULL || pProtectedModel == NULL ) goto invalid;
+    for ( i = 0u; i < xrtValueCount(pProviders); ++i ) {
+        const xvalue* pProvider = xrtValueArrayGet(pProviders, i);
         xstrview Id;
-        if ( xrtValueType(pItem) == XVALUE_OBJECT &&
-             MdoConfigString(xrtValueObjectGet(pItem, MdoConfigKey("id")),
-                &Id) && MdoConfigViewEqual(Id, "ling-3.0-tiny") ) {
-            pProtected = pItem;
-            break;
+        if ( !MdoConfigProviderValidate(pProvider, &Id) ) goto invalid;
+        if ( MdoConfigViewEqual(Id, "ling") ) {
+            if ( bProtectedProviderFound ||
+                 !xrtValueEqual(pProvider, pProtectedProvider) ) goto protected;
+            bProtectedProviderFound = true;
+        }
+        for ( j = 0u; j < i; ++j ) {
+            const xvalue* pEarlier = xrtValueArrayGet(pProviders, j);
+            xstrview EarlierId;
+            if ( MdoConfigString(xrtValueObjectGet(pEarlier,
+                    MdoConfigKey("id")), &EarlierId) &&
+                 EarlierId.Size == Id.Size &&
+                 memcmp(EarlierId.Data, Id.Data, Id.Size) == 0 ) goto invalid;
         }
     }
-    if ( pProtected == NULL ) goto invalid;
-    for ( i = 0u; i < xrtValueCount(pItems); i++ ) {
+    for ( i = 0u; i < xrtValueCount(pItems); ++i ) {
         const xvalue* pItem = xrtValueArrayGet(pItems, i);
         xstrview Id;
-        if ( !MdoConfigModelItemValidate(pItem, &Id) ) goto invalid;
+        if ( !MdoConfigModelItemValidate(pItem, pProviders, &Id) ) goto invalid;
         if ( Id.Size == DefaultId.Size &&
              memcmp(Id.Data, DefaultId.Data, Id.Size) == 0 ) bDefaultFound = true;
         if ( MdoConfigViewEqual(Id, "ling-3.0-tiny") ) {
-            if ( bProtectedFound || !xrtValueEqual(pItem, pProtected) ) {
-                MdoConfigErrorSet(XERR_PERMISSION,
-                    MDO_CONFIG_ERROR_PROTECTED,
-                    "Ling 3.0 Tiny is built-in and cannot be edited or removed");
-                return false;
-            }
-            bProtectedFound = true;
+            if ( bProtectedModelFound ||
+                 !xrtValueEqual(pItem, pProtectedModel) ) goto protected;
+            bProtectedModelFound = true;
         }
-        for ( j = 0u; j < i; j++ ) {
+        for ( j = 0u; j < i; ++j ) {
             const xvalue* pEarlier = xrtValueArrayGet(pItems, j);
             xstrview EarlierId;
             if ( MdoConfigString(xrtValueObjectGet(pEarlier,
@@ -502,13 +699,14 @@ static bool MdoConfigModelsValidate(const xvalue* pModels,
                  memcmp(EarlierId.Data, Id.Data, Id.Size) == 0 ) goto invalid;
         }
     }
-    if ( !bProtectedFound ) {
-        MdoConfigErrorSet(XERR_PERMISSION, MDO_CONFIG_ERROR_PROTECTED,
-            "Ling 3.0 Tiny is built-in and cannot be edited or removed");
-        return false;
-    }
+    if ( !bProtectedProviderFound || !bProtectedModelFound ) goto protected;
     if ( !bDefaultFound ) goto invalid;
     return true;
+
+protected:
+    MdoConfigErrorSet(XERR_PERMISSION, MDO_CONFIG_ERROR_PROTECTED,
+        "Ling 3.0 Tiny is built-in; its provider and model cannot be edited or removed");
+    return false;
 
 invalid:
     MdoConfigErrorSet(XERR_ARGUMENT, MDO_CONFIG_ERROR_SCHEMA,

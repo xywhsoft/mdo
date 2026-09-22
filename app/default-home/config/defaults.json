@@ -23,11 +23,31 @@
   },
   "models": {
     "default_model": "ling-3.0-tiny",
+    "providers": [
+      {
+        "id": "ling",
+        "name": "Ling",
+        "builtin": true,
+        "editable": false,
+        "removable": false,
+        "verify_peer": true,
+        "timeout_ms": 120000,
+        "endpoints": {
+          "chat_completions": "builtin:ling/openai/chat-completions",
+          "responses": "builtin:ling/openai/responses",
+          "anthropic_messages": "builtin:ling/anthropic/messages"
+        },
+        "credential": {
+          "secret_ref": "env:MDO_LING_API_KEY"
+        }
+      }
+    ],
     "items": [
       {
         "id": "ling-3.0-tiny",
         "name": "Ling 3.0 Tiny",
         "provider": "ling",
+        "wire_model": "ling-3.0-tiny",
         "builtin": true,
         "free": true,
         "editable": false,
@@ -37,14 +57,29 @@
           "openai-responses",
           "anthropic-messages"
         ],
-        "endpoints": {
-          "chat_completions": "builtin:ling/openai/chat-completions",
-          "responses": "builtin:ling/openai/responses",
-          "anthropic_messages": "builtin:ling/anthropic/messages"
+        "default_protocol": "openai-responses",
+        "capabilities": [
+          "text-input",
+          "tool-result-input",
+          "text-output",
+          "json-output",
+          "tool-call-output",
+          "reasoning-output",
+          "streaming",
+          "reasoning-control",
+          "parallel-tool-calls"
+        ],
+        "window": {
+          "mode": "shared-context",
+          "context_tokens": 131072,
+          "max_input_tokens": 131071,
+          "max_output_tokens": 16384,
+          "output_reserve_tokens": 8192,
+          "summary_tokens": 4096
         },
-        "credential": {
-          "secret_ref": "env:MDO_LING_API_KEY"
-        }
+        "reasoning_efforts": ["none", "low", "medium", "high"],
+        "default_reasoning_effort": "medium",
+        "attachments": []
       }
     ]
   },
