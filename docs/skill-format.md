@@ -46,10 +46,12 @@ must use `/`, remain below its matching directory, and contain no empty, `.`,
 or `..` segment. A resource not listed in front matter cannot be opened through
 the Skill API.
 
-Startup reads only the front matter and file metadata. The catalog keeps the
-opened `SKILL.md` and declared resource files alive, so an old catalog still
-refers to the exact files it discovered after a later atomic replacement.
-Body and resource bytes are copied only on explicit load and remain bounded.
+Startup reads only the front matter and file metadata, then closes every file
+so a Windows handle cannot block atomic replacement. On the first explicit
+load, the catalog reopens the file, verifies size, identity, timestamps, and
+the front matter hash, and stores an owned bounded cache. A mismatch reports a
+stale catalog and requires reload instead of mixing generations. Once loaded,
+an old catalog continues to return its cached generation after replacement.
 
 The merged VFS discovers built-in and external directories by ID. An external
 directory completely shadows the same built-in ID. If its `SKILL.md` or a

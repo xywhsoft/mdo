@@ -17,6 +17,7 @@ class HomeContractTests(unittest.TestCase):
     def test_public_operations_are_distinct(self) -> None:
         for symbol in (
             "MdoResourceOpenRead",
+            "MdoHomeExternalStat",
             "MdoHomeOpenWrite",
             "MdoResourceMaterialize",
         ):

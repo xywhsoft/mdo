@@ -32,6 +32,10 @@ xfile MdoResourceOpenRead(cstr Path);
  * Home and never falls back to a built-in resource. */
 xfile MdoHomeOpenRead(cstr Path);
 
+/* Queries only the external Home without creating it or falling back to a
+ * built-in resource. Missing paths return true with Exists=false. */
+bool MdoHomeExternalStat(cstr Path, bool* pExists, xfileinfo* pInfo);
+
 /* Writes only below the external Home. The Home and required parent
  * directories are created lazily on the first call that needs them. */
 xfile MdoHomeOpenWrite(cstr Path, uint32 Flags);

@@ -44,6 +44,7 @@ class BuildContractTests(unittest.TestCase):
         self.assertEqual(sources, [
             "src/storage/home.c",
             "src/config/config.c",
+            "src/skills/manager.c",
             "src/modules/manager.c",
             "src/bootstrap/bootstrap.c",
             "src/bootstrap/service.c",
@@ -60,6 +61,7 @@ class BuildContractTests(unittest.TestCase):
         self.assertEqual(first.count('#include "../src/storage/home.c"'), 1)
         self.assertEqual(first.count('#include "../src/bootstrap/bootstrap.c"'), 1)
         self.assertEqual(first.count('#include "../src/modules/manager.c"'), 1)
+        self.assertEqual(first.count('#include "../src/skills/manager.c"'), 1)
         self.assertEqual(first.count('#include "../src/bootstrap/service.c"'), 1)
         self.assertIn(self.lock["xrt"]["commit"], first)
         self.assertIn(self.lock["xserver"]["commit"], first)

@@ -3,6 +3,7 @@
 
 #include "../../include/mdo/bootstrap.h"
 #include "../../include/mdo/modules.h"
+#include "../../include/mdo/skills.h"
 #include "../../include/mdo/version.h"
 
 typedef struct MdoBootstrapState {
@@ -70,6 +71,11 @@ bool MdoBootstrapInit(XS_HostInfo* pHost)
         return false;
     }
     g_MdoBootstrap.Stage = MDO_BOOTSTRAP_RUNTIME_READY;
+    if ( !MdoSkillManagerInit() ) {
+        MdoBootstrapFail("Skill manager initialization failed");
+        return false;
+    }
+    g_MdoBootstrap.Stage = MDO_BOOTSTRAP_SKILLS_READY;
     if ( !MdoModuleManagerInit(g_MdoBootstrap.Runtime) ) {
         MdoBootstrapFail("module manager initialization failed");
         return false;
@@ -85,9 +91,12 @@ bool MdoBootstrapInit(XS_HostInfo* pHost)
         MdoModuleCatalog* pModules = MdoModuleCatalogSnapshot();
         size_t iModules = MdoModuleCatalogModuleCount(pModules);
         size_t iTools = MdoModuleCatalogToolCount(pModules);
-        printf("[mdo] bootstrap ready: version=%s home=%s mode=%s defaults=%zu modules=%zu tools=%zu\n",
+        MdoSkillCatalog* pSkills = MdoSkillCatalogSnapshot();
+        size_t iSkills = MdoSkillCatalogCount(pSkills);
+        printf("[mdo] bootstrap ready: version=%s home=%s mode=%s defaults=%zu skills=%zu modules=%zu tools=%zu\n",
             MDO_VERSION_TEXT, Home.Path, sMode, g_MdoBootstrap.DefaultsBytes,
-            iModules, iTools);
+            iSkills, iModules, iTools);
+        MdoSkillCatalogRelease(pSkills);
         MdoModuleCatalogRelease(pModules);
     }
     return true;
@@ -96,6 +105,7 @@ bool MdoBootstrapInit(XS_HostInfo* pHost)
 void MdoBootstrapUnit(void)
 {
     MdoModuleManagerUnit();
+    MdoSkillManagerUnit();
     if ( g_MdoBootstrap.Runtime != NULL )
         xworkRuntimeRelease(g_MdoBootstrap.Runtime);
     g_MdoBootstrap.Runtime = NULL;
@@ -112,11 +122,26 @@ bool MdoBootstrapGetSnapshot(MdoBootstrapSnapshot* pSnapshot)
     pSnapshot->Ready = g_MdoBootstrap.Stage == MDO_BOOTSTRAP_MODULES_READY;
     pSnapshot->DefaultsBytes = g_MdoBootstrap.DefaultsBytes;
     pSnapshot->Message = g_MdoBootstrap.Message;
+    pSnapshot->SkillGeneration = 0u;
+    pSnapshot->SkillCount = 0u;
+    pSnapshot->SkillDiagnosticCount = 0u;
     pSnapshot->ModuleGeneration = 0u;
     pSnapshot->ModuleCount = 0u;
     pSnapshot->ModuleToolCount = 0u;
     pSnapshot->ModuleAgentCount = 0u;
     pSnapshot->ModuleDiagnosticCount = 0u;
+    {
+        MdoSkillCatalog* pCatalog = MdoSkillCatalogSnapshot();
+        MdoSkillDiagnostics* pDiagnostics = MdoSkillDiagnosticsSnapshot();
+        if ( pCatalog != NULL ) {
+            pSnapshot->SkillGeneration = MdoSkillManagerGeneration();
+            pSnapshot->SkillCount = MdoSkillCatalogCount(pCatalog);
+        }
+        pSnapshot->SkillDiagnosticCount =
+            MdoSkillDiagnosticsCount(pDiagnostics);
+        MdoSkillCatalogRelease(pCatalog);
+        MdoSkillDiagnosticsRelease(pDiagnostics);
+    }
     {
         MdoModuleCatalog* pCatalog = MdoModuleCatalogSnapshot();
         MdoModuleDiagnostics* pDiagnostics = MdoModuleDiagnosticsSnapshot();

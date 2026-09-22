@@ -9,6 +9,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 HEADER = ROOT / "app/include/mdo/skills.h"
 FORMAT = ROOT / "docs/skill-format.md"
+MANAGER = ROOT / "app/src/skills/manager.c"
 
 
 class SkillContractTests(unittest.TestCase):
@@ -31,6 +32,18 @@ class SkillContractTests(unittest.TestCase):
         self.assertIn("never falls back", text)
         self.assertIn("Startup reads only the front matter", text)
         self.assertIn("EXTERNAL_REFERENCE", text)
+
+    def test_manager_validates_and_caches_content_lazily(self) -> None:
+        text = MANAGER.read_text(encoding="utf-8")
+        self.assertIn("MdoHomeExternalStat", text)
+        self.assertIn("MdoHomeOpenRead", text)
+        self.assertIn("xrtReadAtFull", text)
+        self.assertIn("MdoSkillCatalogLoadBody", text)
+        self.assertIn("MdoSkillCatalogLoadResource", text)
+        self.assertIn("MdoSkillsSameFile", text)
+        self.assertIn("CachedBody", text)
+        self.assertIn("MDO_SKILL_DIAGNOSTIC_FRONTMATTER", text)
+        self.assertNotIn("xrtVfsReadAll", text)
 
 
 if __name__ == "__main__":

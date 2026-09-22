@@ -440,6 +440,41 @@ xfile MdoHomeOpenRead(cstr Path)
     return File;
 }
 
+bool MdoHomeExternalStat(cstr Path, bool* pExists, xfileinfo* pInfo)
+{
+    xfileinfo Info;
+
+    if ( !MdoHomePathValid(Path) || pExists == NULL ||
+         !g_MdoHome.Initialized ) {
+        MdoHomeErrorSet(XERR_ARGUMENT, MDO_HOME_ERROR_ARGUMENT,
+            "invalid external Home stat request");
+        return false;
+    }
+    *pExists = false;
+    memset(&Info, 0, sizeof(Info));
+    xrtMutexLock(g_MdoHome.Lock);
+    if ( g_MdoHome.Root == NULL ) {
+        xrtMutexUnlock(g_MdoHome.Lock);
+        if ( pInfo != NULL ) memset(pInfo, 0, sizeof(*pInfo));
+        return true;
+    }
+    if ( xrtRootStat(g_MdoHome.Root, Path, false, &Info) ) {
+        xrtMutexUnlock(g_MdoHome.Lock);
+        *pExists = true;
+        if ( pInfo != NULL ) *pInfo = Info;
+        return true;
+    }
+    if ( xrtGetError() != NULL &&
+         xrtErrorKind(xrtGetError()) == XERR_NOT_FOUND ) {
+        xrtClearError();
+        xrtMutexUnlock(g_MdoHome.Lock);
+        if ( pInfo != NULL ) memset(pInfo, 0, sizeof(*pInfo));
+        return true;
+    }
+    xrtMutexUnlock(g_MdoHome.Lock);
+    return false;
+}
+
 xfile MdoHomeOpenWrite(cstr Path, uint32 Flags)
 {
     const uint32 Known = XFILE_READ | XFILE_WRITE | XFILE_CREATE |
