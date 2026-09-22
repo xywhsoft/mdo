@@ -115,7 +115,8 @@
 | MDO-7B 持久 UI event replay | DONE | mdo `d6e6d5d` | 50 项源码/构建合同；Windows 严格 GCC unity 编译；9 个真实 xs/TCC 有界探针；Session 探针覆盖活动 lease、重复打开拒绝、事件分页 cursor、重开续号和坏尾隔离；单文件重打包与隔离目录 5 秒零写启动通过；未运行压力或高负载测试 | xwork 事件先写入独立的有界 JSONL，再交给用户 callback；session-local 单调 ID 与 owned replay snapshot 支持 cursor/history gap；16 MiB 文件原子保留最近窗口；模型 journal 与 UI replay 分离；进程内 lease 加跨进程文件锁保证同一会话只有一个活动 writer，生命周期由 Agent owner 固定到最后一个 run 释放 |
 | MDO-7C 高级会话操作 | DONE | mdo `84ede43`、`18b0fcb` | 51 项源码/构建合同；Windows 严格 GCC unity 编译；9 个真实 xs/TCC 有界探针；Session 探针覆盖搜索、导出、合法/非法分叉及回滚、v1 兼容/v2 来源、截断后重开、清空后系统提示词重建与再次恢复；完整单文件重建和隔离目录 5 秒零写启动通过；未运行压力或高负载测试 | catalog 搜索按项目、状态、置顶和多字段文本过滤并有总量/页大小硬上限；clear/truncate/checkpoint/fork 与 run 共用排他窗口；清空后恢复组合系统提示词；分叉获得独立 snapshot/journal/event/artifact 和 runtime lease，meta v2 记录父会话与精确边界；导出在 checkpoint 后返回有界 meta+snapshot envelope |
 | MDO-7D 可审计记忆与目录迁移 | DONE | mdo `0e3046f`、`8182029`、`64a87e7`、`e1fe066` | 55 项源码/构建合同；Windows 严格 GCC unity 编译；10 个真实 xs/TCC 有界探针；Memory 探针覆盖全局/项目隔离、revision、secret 拒绝、Agent prompt、读写工具与权限、审计、完整导出/预览/导入、未知条目与哈希篡改、陈旧 generation、空目标和二次导入拒绝；锁定依赖完整单文件重建及隔离目录 5 秒零写启动通过；未运行压力或高负载测试 | 普通 JSON store 分开保存全局和项目记忆，跨进程单 writer、写前审计、原子替换和 owned snapshot 固定并发语义；Agent 以有界不可信 JSONL 注入并用实例 binding 固定 project/session，三个标准工具复用 xwork effect/permission；目录迁移使用 manifest 完成标记、逐文件 SHA-256、严格无链接枚举、预览 generation 和只导入空目标策略 |
-| MDO-7E～10 | TODO | - | - | 下一步完成计划任务与数据层，再继续 Web API、前端交互、迁移和发布压实阶段 |
+| MDO-7E 可恢复计划任务与 Agent 执行 | DONE | mdo `b876043`、`e348168`、`2336e1a`、`d5fa352` | 60 项源码/构建合同；Windows 严格 GCC C11 unity 编译；12 个真实 xs/TCC 有界探针；Schedule 探针覆盖创建、revision 启停/删除、零写空启动、全局禁用、claim/finish、结果历史、审计脱敏、损坏隔离、重启恢复和无 claim 的 misfire cursor 持久化；Executor 探针覆盖普通 Agent run、异步收割、owner 生命周期和 task/run 对齐；锁定依赖完整宿主与单文件重建、隔离目录 5 秒零写启动通过；未运行压力或高负载测试 | 每定义严格 JSON 与跨进程单 writer，xwork 权威执行 recurrence/timezone/misfire/overlap；只在存在到期项时进入持久化事务，skip/overlap 造成的无 claim 推进也写回；轻量宿主 timer 显式传时钟并将 claim 运行成普通 Agent session/run，复用模型、工具、权限、审计与统一 task，完成结果以 task ID 和 Agent run ID 写入有界历史 |
+| MDO-8～10 Web API、前端与发布压实 | TODO | - | - | 下一步实现版本化 Web API、可重放事件传输和服务层资源路由，再接入前端交互、迁移与发布门禁 |
 | QA-RELEASE | TODO | - | - | MDO-GATE 后实施 |
 
 ## 已确认的工程事实
@@ -181,9 +182,11 @@
 59. UI replay 与模型账本必须使用不同文件和失败边界：xwork event 先写入 session-local 单调 JSONL 再调用产品 callback，单条文本、记录、replay 页和总文件都有硬上限；窗口裁剪保留原 ID，使 cursor 明示 history gap。坏 UI 尾不能阻止 xllm-session 恢复。一个会话的 journal writer 同时由进程内 active lease 和跨进程文件锁排他，lease 进入 Agent callback owner 生命周期，调用方释放外层 session 但 run 仍活动时也不能打开第二个 writer。
 60. 会话历史编辑必须复用 xllm-session 的 sequence 与合法边界，不能在 mdo 复制或拼接消息。clear/truncate/fork/checkpoint 与 Agent run 使用同一个排他窗口；clear 后由 mdo 重新注入当前组合系统提示词。分叉必须创建完整独立的持久化和 runtime 边界，并在 meta 中记录直接父会话及实际 sequence，失败时不留下可见半成品。
 61. 记忆 store 的 scope revision 是磁盘乐观并发令牌，manager generation 是当前进程的可观察发布代；写入必须先追加不含正文的 prepared audit，再原子替换 JSON store。Agent 只在创建 session 时捕获一代全局/项目 owned snapshot，用有界不可信 JSONL 注入；工具按 Agent 实例绑定项目身份并继续经过 xwork effect/permission 裁剪。目录导入必须重新校验严格布局、schema、计数和逐文件 SHA-256，核对 preview generation 且只允许空目标，不能隐式 merge 或覆盖本地记忆。
+62. mdo 计划任务只持久化产品定义和 xwork 恢复 cursor，不复制 recurrence 算法。claim 前必须只读判断是否存在到期项，空 catalog/未来 occurrence 不得为了轮询而创建 Home 或 writer lock；一旦调用 xwork claim，无论是否返回 task，都必须比较并持久化所有被 skip/overlap 推进的 runtime cursor，否则重启会重复处理已跳过 occurrence。
+63. 自动计划执行属于 mdo 宿主驱动而不是 xwork 隐式时钟：轻量 timer 把显式 Unix 微秒时间交给同一个 claim API，随后创建普通 MdoAgentSession/MdoAgentRun，复用 Agent、模型、Skill、Memory、工具、permission/effect 和审计边界。scheduled task ID 与 Agent run ID 必须共同写入完成历史；shutdown 在底层 manager 退场前取消并回收活动 run。
 
 ## 下一步
 
-1. 进入 MDO-7E：实现可恢复的计划任务定义、misfire/overlap 策略、运行记录和数据层；
+1. 进入 MDO-8：实现 `/api/v1/` 版本化 Web API、统一错误 envelope、资源 service 路由，以及按 cursor 重放的实时事件传输；
 2. 运行环境提供三条显式 URL 和 runtime key 时，再执行 Ling 3.0 Tiny 的 Chat Completions、Responses 与 Anthropic Messages 真实线上探针；
 3. 全部后续验收继续使用有界功能、故障注入和确定性交错，略过压力与高负载测试。
