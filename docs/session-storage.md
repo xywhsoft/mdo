@@ -1,6 +1,6 @@
 # mdo 会话存储合同
 
-本文记录 MDO-7A 的持久会话基础。mdo 负责产品身份、生命周期和目录索引；
+本文记录 MDO-7A～7C 的持久会话、事件回放和高级操作。mdo 负责产品身份、生命周期和目录索引；
 xllm-session 继续拥有模型上下文账本、snapshot、journal 与恢复语义。两层不得
 各自保存一份消息历史。
 
@@ -56,7 +56,7 @@ ID、Unix 微秒时间、project/session、kind、Agent/run/task/artifact 血缘
 当前文件 latest ID 和 history-lost 标志。这样 Web API 可以按 cursor 重连，
 无需让前端读取文件或依赖进程内数组。
 
-## meta.json schema v1
+## meta.json schema v2
 
 `meta.json` 是严格的 UTF-8 JSON 对象，最大 64 KiB，必须恰好包含以下字段：
 
@@ -67,7 +67,13 @@ ID、Unix 微秒时间、project/session、kind、Agent/run/task/artifact 血缘
 - 时间与状态：`created_at_us`、`updated_at_us`、`status`、
   `previous_status`、`pinned`；
 - 追溯信息：`config_revision`、`model_generation`、`module_generation`、
-  `skill_generation`。
+  `skill_generation`；
+- 分叉来源：`parent_session_id`、`forked_through_sequence`。普通新建会话的
+  parent 为空且分叉序号为零。
+
+读取器继续接受字段数严格固定的 schema v1，并把分叉来源解释为空；任何后续
+元数据更新都会写成 schema v2。未知字段、字段缺失、非法来源 ID，以及无 parent
+却带有非零分叉序号的记录都会被拒绝。
 
 文件不保存 endpoint、credential reference、API key、回调地址或任意 secret。
 workspace 在创建时转成绝对路径。模型 completion、审批、权限、hook 和 event
@@ -102,6 +108,31 @@ catalog 与 info 的 `RuntimeOpen` 是瞬时字段，不进入 meta。归档和�
 已有活动 Agent 句柄的生命周期由引用计数保证；状态修改控制后续打开，不会在
 任意线程中强制销毁调用方仍持有的 run。
 
+## 搜索、账本维护、分叉与导出
+
+`MdoSessionCatalogSearch()` 在不可变 catalog snapshot 上过滤 project、状态、
+置顶和文本。文本覆盖 title、会话/项目/父会话 ID、Agent、model 与 workspace；
+ASCII 字母忽略大小写，其他 UTF-8 字节精确匹配。默认最多返回 100 条，公开上限
+1000 条。底层 catalog 最多载入 10000 个有效会话和 1024 条诊断，达到上限时
+保留明确诊断，避免损坏或超大目录形成无界内存增长。
+
+清空、截断、检查点、读取末尾 sequence 和分叉都会占用与 Agent run 相同的
+排他运行窗口，运行中调用会失败。`MdoSessionTruncateAfter()` 只接受
+xllm-session 判定合法的 message sequence，不能切开 tool call/result 对；成功
+后立即 checkpoint。`MdoSessionClear()` 清理旧上下文后重新写入当前组合系统
+提示词，再 checkpoint，因此下一轮不会丢失 Agent 身份和 Skill 指令。
+
+`MdoSessionFork()` 只接受打开且 active 的源会话。调用方可指定合法 sequence，
+也可用 `UINT64_MAX` 选择当前保留尾部。子会话获得新的 session ID、snapshot、
+journal、UI event、artifact 根和 runtime lease；模型历史是深拷贝的合法前缀，
+后续写入与父会话相互独立。子 meta 记录直接父会话和实际分叉序号。非法边界、
+Agent 恢复或元数据发布失败都会关闭 lease，并删除已知半成品目录。
+
+`MdoSessionExportJson()` 先占用排他窗口并 checkpoint，再返回 owned 的 export
+schema v1 JSON envelope，其中嵌入当前 `meta` 和 xllm `snapshot`。snapshot 读取
+上限为 32 MiB。artifact 与 `ui-events.jsonl` 具有独立的大小、隐私和回放语义，
+不混入该 envelope；调用方需要时应分别导出。
+
 ## Catalog 与故障边界
 
 catalog 是引用计数的不可变 owned snapshot。它扫描 `sessions/` 下的项目与会话
@@ -118,11 +149,11 @@ snapshot 失败，因为此时无法保证列表完整。
 
 ## 当前验证范围
 
-Windows 真实 xs/TCC 探针覆盖空 catalog、新建、两轮模型调用、checkpoint、
-进程内释放后恢复、历史 prompt/answer 可见、重命名、置顶、归档阻止打开、
-回收站、还原、陈旧 revision 拒绝、失败创建回滚、损坏 meta 隔离、重复 runtime
-拒绝、事件 cursor、重开续号和损坏尾部隔离。另有 50 项
-静态合同、严格 GCC C11 unity 编译、完整单文件重建及隔离目录 5 秒零写启动。
-测试全部有界，没有运行压力或高负载测试。
-
-会话搜索、分叉、清空、截断和导出属于 MDO-7C，尚未由本合同宣称完成。
+Windows 真实 xs/TCC 探针覆盖空 catalog、新建、多轮模型调用、checkpoint、
+进程内释放后恢复、历史 prompt/answer 可见、搜索、导出、合法与非法分叉、
+分叉来源、截断后重开、清空后系统提示词重建、清空后再次恢复、重命名、置顶、
+归档阻止打开、回收站、还原、陈旧 revision 拒绝、失败创建/分叉回滚、schema v1
+兼容、schema v2 写入、损坏 meta 隔离、重复 runtime 拒绝、事件 cursor、重开续号
+和损坏尾部隔离。另有 51 项静态合同、严格 GCC C11 unity 编译、9 个真实
+xs/TCC 有界探针、完整单文件重建及隔离目录 5 秒零写启动。测试全部有界，
+没有运行压力或高负载测试。

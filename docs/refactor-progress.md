@@ -113,7 +113,8 @@
 | MDO-6E 联机搜索工具 | DONE | mdo `f3bf909`；xserver `69a79c5` | 46 项源码/构建合同；Windows 严格 GCC unity 编译；Home/Config/Model/Agent/Skill/MCP/Module/Web 8 个真实 xs/TCC 有界探针；单文件重建和 5 秒有界启动通过；未运行压力或高负载测试 | `web_search`、`web_open`、`web_find` 按单一职责拆分并作为标准 xwork 工具发布；网络、外部服务和 secret effect 独立审批；结果、响应、提取文本和进程内文档缓存均有硬上限并标记为不可信；默认只允许 HTTPS 和公网解析结果，重定向复用同一地址策略；普通网络/参数/内容错误作为模型可见的工具失败返回，不中止 Agent 运行 |
 | MDO-7A 持久会话基础 | DONE | mdo `d9b08b0` | 49 项源码/构建合同；Windows 严格 GCC unity 编译；Home/Config/Model/Agent/Skill/MCP/Module/Web/Session 9 个真实 xs/TCC 有界探针；完整单文件重建和隔离目录 5 秒零写启动通过；未运行压力或高负载测试 | `meta.json` 保存严格有界的产品索引，xllm-session snapshot/journal 保存权威上下文；支持创建、恢复、目录快照、重命名、置顶、归档、回收站与还原；外部 Home 目录独占创建并在失败时清理；revision 检查拒绝陈旧句柄覆盖；损坏条目形成诊断且不隐藏有效会话 |
 | MDO-7B 持久 UI event replay | DONE | mdo `d6e6d5d` | 50 项源码/构建合同；Windows 严格 GCC unity 编译；9 个真实 xs/TCC 有界探针；Session 探针覆盖活动 lease、重复打开拒绝、事件分页 cursor、重开续号和坏尾隔离；单文件重打包与隔离目录 5 秒零写启动通过；未运行压力或高负载测试 | xwork 事件先写入独立的有界 JSONL，再交给用户 callback；session-local 单调 ID 与 owned replay snapshot 支持 cursor/history gap；16 MiB 文件原子保留最近窗口；模型 journal 与 UI replay 分离；进程内 lease 加跨进程文件锁保证同一会话只有一个活动 writer，生命周期由 Agent owner 固定到最后一个 run 释放 |
-| MDO-7C～10 | TODO | - | - | 下一步完成会话搜索、分叉、清空、截断与导出，再继续记忆、计划任务与数据层、Web API、前端交互、迁移和发布压实阶段 |
+| MDO-7C 高级会话操作 | DONE | mdo `84ede43`、`18b0fcb` | 51 项源码/构建合同；Windows 严格 GCC unity 编译；9 个真实 xs/TCC 有界探针；Session 探针覆盖搜索、导出、合法/非法分叉及回滚、v1 兼容/v2 来源、截断后重开、清空后系统提示词重建与再次恢复；完整单文件重建和隔离目录 5 秒零写启动通过；未运行压力或高负载测试 | catalog 搜索按项目、状态、置顶和多字段文本过滤并有总量/页大小硬上限；clear/truncate/checkpoint/fork 与 run 共用排他窗口；清空后恢复组合系统提示词；分叉获得独立 snapshot/journal/event/artifact 和 runtime lease，meta v2 记录父会话与精确边界；导出在 checkpoint 后返回有界 meta+snapshot envelope |
+| MDO-7D～10 | TODO | - | - | 下一步完成全局/项目记忆、计划任务与数据层，再继续 Web API、前端交互、迁移和发布压实阶段 |
 | QA-RELEASE | TODO | - | - | MDO-GATE 后实施 |
 
 ## 已确认的工程事实
@@ -177,9 +178,10 @@
 57. xwork 工具的参数、策略、远端状态和普通网络失败属于可呈现的工具失败，应返回成功的执行器调用和 `success:false` 内容，使 Agent 可以继续推理；取消、deadline、内存不足和结果 writer 越界才是运行级故障。联网能力拆为 search/open/find 后，只有前两者联网，find 只读取有界的进程内不可信文档快照。
 58. mdo 会话不得复制 xllm-session 的消息账本：产品层 `meta.json` 只保存稳定身份、选择、排序和生命周期状态，模型上下文由 snapshot/journal 权威恢复。新会话目录必须在首条 system journal 写入前通过 Home 锚定根独占创建，失败删除已知半成品；元数据更新在同一进程锁内先核对磁盘 revision 再原子替换，陈旧句柄必须显式 reload，不能静默覆盖较新变更。目录枚举把单个损坏条目转为结构化诊断并继续返回其他有效会话。
 59. UI replay 与模型账本必须使用不同文件和失败边界：xwork event 先写入 session-local 单调 JSONL 再调用产品 callback，单条文本、记录、replay 页和总文件都有硬上限；窗口裁剪保留原 ID，使 cursor 明示 history gap。坏 UI 尾不能阻止 xllm-session 恢复。一个会话的 journal writer 同时由进程内 active lease 和跨进程文件锁排他，lease 进入 Agent callback owner 生命周期，调用方释放外层 session 但 run 仍活动时也不能打开第二个 writer。
+60. 会话历史编辑必须复用 xllm-session 的 sequence 与合法边界，不能在 mdo 复制或拼接消息。clear/truncate/fork/checkpoint 与 Agent run 使用同一个排他窗口；clear 后由 mdo 重新注入当前组合系统提示词。分叉必须创建完整独立的持久化和 runtime 边界，并在 meta 中记录直接父会话及实际 sequence，失败时不留下可见半成品。
 
 ## 下一步
 
-1. 继续 MDO-7C：实现会话搜索、分叉、清空、截断和导出；
+1. 继续 MDO-7D：实现全局/项目记忆、可审计写入、检索注入和目录导入导出；
 2. 运行环境提供三条显式 URL 和 runtime key 时，再执行 Ling 3.0 Tiny 的 Chat Completions、Responses 与 Anthropic Messages 真实线上探针；
 3. 全部后续验收继续使用有界功能、故障注入和确定性交错，略过压力与高负载测试。

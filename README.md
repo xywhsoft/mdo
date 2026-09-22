@@ -70,5 +70,5 @@ mdo.exe -- --home D:\Portable\mdo-home
 [Web 工具合同](docs/web-tools.md)。
 
 会话使用 `meta.json` 与 xllm-session 的 snapshot/journal 分层持久化；创建、
-恢复、目录快照、重命名、置顶、归档、回收站和并发更新规则见
+恢复、搜索、分叉、清空、截断、导出、置顶、归档、回收站和并发更新规则见
 [会话存储合同](docs/session-storage.md)。
