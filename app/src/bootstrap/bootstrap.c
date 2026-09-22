@@ -3,6 +3,7 @@
 
 #include "../../include/mdo/bootstrap.h"
 #include "../../include/mdo/mcp.h"
+#include "../../include/mdo/models.h"
 #include "../../include/mdo/modules.h"
 #include "../../include/mdo/skills.h"
 #include "../../include/mdo/version.h"
@@ -60,6 +61,12 @@ bool MdoBootstrapInit(XS_HostInfo* pHost)
     }
     g_MdoBootstrap.Stage = MDO_BOOTSTRAP_CONFIG_READY;
 
+    if ( !MdoModelManagerInit() ) {
+        MdoBootstrapFail("model manager initialization failed");
+        return false;
+    }
+    g_MdoBootstrap.Stage = MDO_BOOTSTRAP_MODELS_READY;
+
     xworkRuntimeConfigInit(&RuntimeConfig);
     memset(&WorkError, 0, sizeof(WorkError));
     g_MdoBootstrap.Runtime = xworkRuntimeCreate(&RuntimeConfig, &WorkError);
@@ -101,9 +108,13 @@ bool MdoBootstrapInit(XS_HostInfo* pHost)
         size_t iSkills = MdoSkillCatalogCount(pSkills);
         MdoMcpCatalog* pMcp = MdoMcpCatalogSnapshot();
         size_t iMcp = MdoMcpCatalogCount(pMcp);
-        printf("[mdo] bootstrap ready: version=%s home=%s mode=%s defaults=%zu skills=%zu mcp=%zu modules=%zu tools=%zu\n",
+        MdoModelCatalog* pModels = MdoModelCatalogSnapshot();
+        size_t iProviders = MdoModelCatalogProviderCount(pModels);
+        size_t iModels = MdoModelCatalogModelCount(pModels);
+        printf("[mdo] bootstrap ready: version=%s home=%s mode=%s defaults=%zu providers=%zu models=%zu skills=%zu mcp=%zu modules=%zu tools=%zu\n",
             MDO_VERSION_TEXT, Home.Path, sMode, g_MdoBootstrap.DefaultsBytes,
-            iSkills, iMcp, iModules, iTools);
+            iProviders, iModels, iSkills, iMcp, iModules, iTools);
+        MdoModelCatalogRelease(pModels);
         MdoMcpCatalogRelease(pMcp);
         MdoSkillCatalogRelease(pSkills);
         MdoModuleCatalogRelease(pModules);
@@ -119,6 +130,7 @@ void MdoBootstrapUnit(void)
     if ( g_MdoBootstrap.Runtime != NULL )
         xworkRuntimeRelease(g_MdoBootstrap.Runtime);
     g_MdoBootstrap.Runtime = NULL;
+    MdoModelManagerUnit();
     MdoConfigUnit();
     MdoHomeUnit();
     memset(&g_MdoBootstrap, 0, sizeof(g_MdoBootstrap));
@@ -132,6 +144,9 @@ bool MdoBootstrapGetSnapshot(MdoBootstrapSnapshot* pSnapshot)
     pSnapshot->Ready = g_MdoBootstrap.Stage == MDO_BOOTSTRAP_MODULES_READY;
     pSnapshot->DefaultsBytes = g_MdoBootstrap.DefaultsBytes;
     pSnapshot->Message = g_MdoBootstrap.Message;
+    pSnapshot->ModelGeneration = 0u;
+    pSnapshot->ModelProviderCount = 0u;
+    pSnapshot->ModelCount = 0u;
     pSnapshot->SkillGeneration = 0u;
     pSnapshot->SkillCount = 0u;
     pSnapshot->SkillDiagnosticCount = 0u;
@@ -143,6 +158,16 @@ bool MdoBootstrapGetSnapshot(MdoBootstrapSnapshot* pSnapshot)
     pSnapshot->ModuleToolCount = 0u;
     pSnapshot->ModuleAgentCount = 0u;
     pSnapshot->ModuleDiagnosticCount = 0u;
+    {
+        MdoModelCatalog* pCatalog = MdoModelCatalogSnapshot();
+        if ( pCatalog != NULL ) {
+            pSnapshot->ModelGeneration = MdoModelManagerGeneration();
+            pSnapshot->ModelProviderCount =
+                MdoModelCatalogProviderCount(pCatalog);
+            pSnapshot->ModelCount = MdoModelCatalogModelCount(pCatalog);
+        }
+        MdoModelCatalogRelease(pCatalog);
+    }
     {
         MdoSkillCatalog* pCatalog = MdoSkillCatalogSnapshot();
         MdoSkillDiagnostics* pDiagnostics = MdoSkillDiagnosticsSnapshot();

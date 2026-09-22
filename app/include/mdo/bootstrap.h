@@ -11,6 +11,7 @@ typedef enum MdoBootstrapStage {
     MDO_BOOTSTRAP_EMPTY = 0,
     MDO_BOOTSTRAP_HOME_READY,
     MDO_BOOTSTRAP_CONFIG_READY,
+    MDO_BOOTSTRAP_MODELS_READY,
     MDO_BOOTSTRAP_RUNTIME_READY,
     MDO_BOOTSTRAP_SKILLS_READY,
     MDO_BOOTSTRAP_MCP_READY,
@@ -23,6 +24,9 @@ typedef struct MdoBootstrapSnapshot {
     MdoBootstrapStage Stage;
     bool Ready;
     size_t DefaultsBytes;
+    uint64 ModelGeneration;
+    size_t ModelProviderCount;
+    size_t ModelCount;
     uint64 SkillGeneration;
     size_t SkillCount;
     size_t SkillDiagnosticCount;
