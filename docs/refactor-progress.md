@@ -6,7 +6,7 @@
 
 | 仓库 | 开发位置/分支 | 当前基线 | 说明 |
 | --- | --- | --- | --- |
-| mdo | `D:\GIT\mdo` / 当前分支 | `b297f83` | 产品、计划与集成账本 |
+| mdo | `D:\GIT\mdo` / 当前分支 | `2a4b17d` | 产品、计划与集成账本 |
 | xrt | `codex/mdo-refactor-xrt` 独立工作树 | `9a094b3f` | 原工作树有既存未提交内容，隔离开发 |
 | xserver | `D:\GIT\xserver-mdo-refactor` / `codex/mdo-refactor-xs` | `57c9164` | 原工作树有既存未提交内容，隔离开发 |
 
@@ -93,7 +93,8 @@
 | WORK-111 interruption/resume 语义 | DONE | xrt `9a094b3f` | Windows/GCC 与 Linux/Clang warning-as-error 有界全回归通过；Clang ASan/UBSan/LSan 与 GCC TSan 有界全回归通过，TSan 构建仅将 xrt 既有 `atomic_thread_fence` 和 TLS 保守未初始化告警从 error 降为 warning；C11/C++17 公共头及 9 个新增 ABI 符号通过；崩溃恢复、整批预检、陈旧决策、只读自动重试、显式副作用重试、记为不确定、异步 run 决策深拷贝、事件审计与快照跨 Agent 生命周期回归通过；未运行压力或高负载测试 | 未落账工具结果不再被默认视为“未执行”；恢复快照深拷贝 call ID、参数、目录代和 effect，默认只自动重试当前已知的纯读取工具；未知或有副作用的调用在任何前缀执行前返回 `RECOVERY_REQUIRED`，宿主按 call ID 显式选择 at-least-once 重试或不执行并写入 uncertainty 结果；同步和异步 run 共用策略，审计 schema v2 记录自动、显式和不确定决策 |
 | LIB-3 xwork 3.0 | DONE | xrt `9a094b3f`；xserver `57c9164` | xllm 17 个、xllm-session 14 个、xwork 19 个生产文件与同一 xrt revision 双向逐字节一致；TCC 导入分别覆盖 70、89、163 个公开符号；Windows/Linux 全 15 扩展宿主构建、运行与嵌套 TCC 探针通过，32 项扩展结构检查和 2 项发布元数据检查通过；未运行压力或高负载测试 | xserver 删除旧 Python/config 分叉并同步完整 xwork v3 runtime/catalog/task/scheduler/MCP/artifact/recovery 实现；构建门发现只升级 xwork 会缺少 batch executor 与 session driver API，因此三个库统一固定到 `9a094b3f`，避免跨 revision 的伪零分叉组合 |
 | LIB-GATE 三库生产门禁 | DONE | xrt `9a094b3f`；xserver `57c9164` | Windows/Linux warning-as-error、有界功能回归、确定性交错、故障注入与 sanitizer 门已在各工作包通过；最终零分叉、公开符号、15 扩展宿主和双层 TCC 闭包通过；未运行压力或高负载测试 | 阶段三完成，允许进入 mdo 新架构实施；Ling 3.0 Tiny 三接口真实线上探针仍要求运行时提供三条显式 URL 与 key，不以离线 fixture 冒充线上结论 |
-| MDO-0～10 | TODO | - | - | 从源码根、依赖锁与 bootstrap 开始实施 |
+| MDO-0 新源码组织与依赖锁 | DONE | mdo 当前提交 | 6 项构建契约、锁定依赖完整性、Windows 全新宿主构建、17 项 XRT v1 包清单和隔离目录 8 秒启动通过；空启动未创建 `mdo-home`；未运行压力或高负载测试 | 新 `app/` 与只读 `app_bak/` 分离；以 `deps.lock` 固定跨仓 revision、源码树哈希、ABI/schema/pack 版本；清单生成 unity，统一 Python 构建入口不依赖根目录陈旧宿主 |
+| MDO-1～10 | TODO | - | - | 从 bootstrap 与双层 Home 开始实施 |
 | QA-RELEASE | TODO | - | - | MDO-GATE 后实施 |
 
 ## 已确认的工程事实
@@ -134,8 +135,9 @@
 34. xwork runtime 的 observability 服务统一管理 artifact 元数据与 event/audit replay：artifact 文件使用原子写、单调 ID、SHA-256 和 workspace 相对路径，注册表只保留稳定元数据且 runtime 销毁不删除普通文件；事件在 callback 前分配 schema version、全局 ID、Unix 时间和 agent/run/task 血缘，artifact 创建与 task revision 进入同一 ID 空间。replay 深拷贝字符串并受记录数、总字节和单事件文本上限约束，淘汰或 OOM 留存失败会消耗 ID、增加 dropped counter 并通过 cursor gap 明示，引用计数快照可安全跨 runtime 销毁。
 35. 工具结果尚未进入持久化 ledger 只能证明“结果缺失”，不能证明外部副作用未发生；跨文件系统、进程、网络或外部服务无法由本地 journal 提供 exactly-once。xwork 恢复必须先固定完整 pending 批次并校验全部 call-ID 决策，再允许任何调用执行；当前已知且 effect 仅为 READ 的工具可自动重试，其他工具默认停在显式恢复边界。`RETRY` 明确接受 at-least-once 并重新经过权限与 hook，`RECORD_UNCERTAIN` 不调用工具而向 session 写入可追溯的不确定结果。直接使用 `xllmSessionRunWithTools(NULL, ...)` 的宿主没有 xwork effect 元数据，必须自行实现同等预检，不能把底层 continuation 当作安全崩溃恢复。
 36. vendored 零分叉是依赖闭包属性，不能只逐库比较文件。xwork `9a094b3f` 依赖同 revision 的 xllm batch executor 和 xllm-session driver API；把它与 `c6b90284` 依赖组合会在宿主编译期失败。xserver 因而必须让 xllm、xllm-session、xwork 三个来源锚指向同一权威提交，并在同一门禁中检查文件集、符号集、完整宿主链接和嵌套 TCC 调用。
+37. mdo 构建真值由 `deps.lock` 与 `app/sources.json` 共同确定：构建前必须核对 xserver HEAD、xrt 单头哈希、三库生产树哈希和版本/ABI/schema/pack 格式，再生成确定性 unity 并从锁定源码重建宿主。`app_bak/` 不得参与新应用编译；根目录既存 `xs.exe`、`xsw.exe` 和 `mdo.exe` 也不得成为输入。
 
 ## 下一步
 
-1. 开始 MDO-0：确认新 `app` 源码根，建立可维护的模块化目录、`deps.lock`、统一构建入口和最小 bootstrap 骨架；运行环境提供三条显式 URL 和 runtime key 时再执行 Ling 3.0 Tiny 的 Chat Completions、Responses 与 Anthropic Messages 真实探针；
+1. 开始 MDO-1：实现固定启动顺序、内置只读资源与外部 `mdo-home` 高优先级覆盖、首次写入按需创建和只读介质 ephemeral 语义；运行环境提供三条显式 URL 和 runtime key 时再执行 Ling 3.0 Tiny 的 Chat Completions、Responses 与 Anthropic Messages 真实探针；
 2. 全部后续验收继续使用有界功能、故障注入和确定性交错，略过压力与高负载测试。

@@ -1,0 +1,46 @@
+{
+  "schema_version": 1,
+  "hash_algorithm": "sha256-path-nul-content-nul-v1",
+  "xrt": {
+    "commit": "9a094b3f270c319d69a9df4450b6d77e32e70e6a",
+    "version": "2.0.0-dev",
+    "single_header_sha256": "4117e104f24b66fc224eca91de66167797dc3823165d46be2c406f18e0f1f13f"
+  },
+  "xserver": {
+    "commit": "57c916463d8fcfda8af22928b8fe34b05b6b35d1",
+    "version": "1.0.0",
+    "required_extensions": [
+      "xwork",
+      "webview"
+    ]
+  },
+  "libraries": {
+    "xllm": {
+      "version": "3.1.0",
+      "source_commit": "9a094b3f270c319d69a9df4450b6d77e32e70e6a",
+      "production_tree_sha256": "6dead6bb6d07c346dc24b9fec01f5e6131ebc669379a88356eb0fc7e5284ecef"
+    },
+    "xllm-session": {
+      "version": "3.0.0-dev",
+      "source_commit": "9a094b3f270c319d69a9df4450b6d77e32e70e6a",
+      "production_tree_sha256": "9336016ceb9489ea0b40188135655ba4c5b5796f1c050e953da0c4c5c9ffda0e",
+      "persistence_schema_version": 3
+    },
+    "xwork": {
+      "version": "3.0.0",
+      "source_commit": "9a094b3f270c319d69a9df4450b6d77e32e70e6a",
+      "production_tree_sha256": "b3e428871604c8efb450a2ce7f0bc6a8cb7f61f966a59dc90fcaebe32ae73a88",
+      "abi_version": 3,
+      "event_schema_version": 2
+    }
+  },
+  "pack": {
+    "format": "XRTPACK",
+    "version": 1
+  },
+  "mdo": {
+    "module_abi_version": 1,
+    "session_schema_version": 1,
+    "config_schema_version": 1
+  }
+}

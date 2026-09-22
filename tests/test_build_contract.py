@@ -1,0 +1,94 @@
+"""MDO-0 source layout, dependency lock, and unity generation contracts."""
+
+from __future__ import annotations
+
+import importlib.util
+import json
+import re
+import unittest
+from pathlib import Path
+
+
+ROOT = Path(__file__).resolve().parent.parent
+SPEC = importlib.util.spec_from_file_location("mdo_build", ROOT / "tools" / "build_mdo.py")
+assert SPEC is not None and SPEC.loader is not None
+BUILD = importlib.util.module_from_spec(SPEC)
+SPEC.loader.exec_module(BUILD)
+
+
+class BuildContractTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.lock = json.loads((ROOT / "deps.lock").read_text(encoding="utf-8"))
+
+    def test_dependency_lock_is_complete_and_exact(self) -> None:
+        self.assertEqual(self.lock["schema_version"], 1)
+        self.assertEqual(self.lock["hash_algorithm"],
+                         "sha256-path-nul-content-nul-v1")
+        self.assertRegex(self.lock["xrt"]["commit"], r"^[0-9a-f]{40}$")
+        self.assertRegex(self.lock["xserver"]["commit"], r"^[0-9a-f]{40}$")
+        self.assertEqual(self.lock["xserver"]["required_extensions"],
+                         ["xwork", "webview"])
+        for name in ("xllm", "xllm-session", "xwork"):
+            record = self.lock["libraries"][name]
+            self.assertEqual(record["source_commit"], self.lock["xrt"]["commit"])
+            self.assertRegex(record["production_tree_sha256"], r"^[0-9a-f]{64}$")
+        self.assertEqual(self.lock["pack"], {"format": "XRTPACK", "version": 1})
+        self.assertEqual(self.lock["mdo"], {
+            "module_abi_version": 1,
+            "session_schema_version": 1,
+            "config_schema_version": 1,
+        })
+
+    def test_new_source_root_is_independent_from_legacy_app(self) -> None:
+        sources = BUILD.source_list()
+        self.assertEqual(sources, ["src/bootstrap/service.c"])
+        for path in (ROOT / "app").rglob("*"):
+            if path.is_file() and path.suffix.lower() in {".c", ".h", ".json", ".js"}:
+                self.assertNotIn("app_bak", path.read_text(encoding="utf-8"))
+        self.assertTrue((ROOT / "app_bak" / "main.c").is_file())
+
+    def test_unity_generation_is_manifest_ordered_and_deterministic(self) -> None:
+        first = BUILD.generated_unity(self.lock, BUILD.source_list())
+        second = BUILD.generated_unity(self.lock, BUILD.source_list())
+        self.assertEqual(first, second)
+        self.assertEqual(first.count('#include "../src/bootstrap/service.c"'), 1)
+        self.assertIn(self.lock["xrt"]["commit"], first)
+        self.assertIn(self.lock["xserver"]["commit"], first)
+
+    def test_dev_and_pack_configs_use_the_same_generated_entry(self) -> None:
+        dev = json.loads((ROOT / "dev.json").read_text(encoding="utf-8"))
+        packed = json.loads((ROOT / "app" / "xs.json").read_text(encoding="utf-8"))
+        dev_host = dev["services"][0]["host_default"]
+        packed_host = packed["services"][0]["host_default"]
+        self.assertEqual(dev_host["devfile"], "app/" + packed_host["devfile"])
+        self.assertEqual(dev_host["path"], "app/" + packed_host["path"])
+        self.assertEqual(packed_host["devfile"], "generated/mdo_unity.c")
+
+    def test_built_in_home_and_web_roots_are_explicit(self) -> None:
+        home = ROOT / "app" / "default-home"
+        for relative in ("config/defaults.json", "modules/README.md",
+                         "skills/README.md", "mcp/README.md"):
+            self.assertTrue((home / relative).is_file(), relative)
+        defaults = json.loads((home / "config" / "defaults.json").read_text(encoding="utf-8"))
+        self.assertEqual(defaults["schema_version"], 1)
+        self.assertEqual(defaults["default_model"], "ling-3.0-tiny")
+        self.assertTrue((ROOT / "app" / "web" / "index.html").is_file())
+        self.assertIn("mdo-home/", (ROOT / ".gitignore").read_text(encoding="utf-8"))
+        self.assertIn("app/generated/", (ROOT / ".gitignore").read_text(encoding="utf-8"))
+
+    def test_version_header_matches_locked_mdo_schemas(self) -> None:
+        header = (ROOT / "app" / "include" / "mdo" / "version.h").read_text(
+            encoding="utf-8")
+        names = {
+            "MDO_CONFIG_SCHEMA_VERSION": "config_schema_version",
+            "MDO_SESSION_SCHEMA_VERSION": "session_schema_version",
+            "MDO_MODULE_ABI_VERSION": "module_abi_version",
+        }
+        for macro_name, lock_name in names.items():
+            match = re.search(rf"#define\s+{macro_name}\s+(\d+)u", header)
+            self.assertIsNotNone(match, macro_name)
+            self.assertEqual(int(match.group(1)), self.lock["mdo"][lock_name])
+
+
+if __name__ == "__main__":
+    unittest.main(verbosity=2)

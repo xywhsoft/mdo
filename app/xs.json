@@ -1,0 +1,29 @@
+{
+  "services": [
+    {
+      "enabled": true,
+      "class": "app",
+      "name": "mdo",
+      "ip": "127.0.0.1",
+      "port": 0,
+      "host_default": {
+        "enabled": true,
+        "name": "mdo",
+        "path": "web",
+        "devlang": "c",
+        "devfile": "generated/mdo_unity.c"
+      },
+      "window": {
+        "title": "墨斗 mdo",
+        "width": 1440,
+        "height": 900,
+        "min_width": 360,
+        "min_height": 320,
+        "url": "/",
+        "devtools": false,
+        "close": "stop",
+        "install_fallback": "ask"
+      }
+    }
+  ]
+}

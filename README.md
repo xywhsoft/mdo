@@ -1,37 +1,53 @@
 # mdo 墨斗 — 原生 C 栈 Agent 工作台
 
-极简 agent 工作台：xs C 后端进程内直调 [xllm / xllm-session / xwork](https://xrt.xywhsoft.com)
-三件套，webview 前端。工具调用、审批闸门、多模态、记忆、多项目会话分桶、三语界面。
+mdo 是基于 xrt、xs、xllm、xllm-session 与 xwork 的便携式 Agent 工作台。
+当前仓库正在按 [重构实施计划](docs/mdo-refactor-implementation-plan.md) 重建；
+`app_bak/` 只保留旧产品实现作为行为参考，新代码全部位于 `app/`。
 
-完整重构顺序、跨仓库 API 边界、阶段门和测试验收标准见
-[mdo 重构落地实施计划](docs/mdo-refactor-implementation-plan.md)。
+## 构建
 
-## 运行
+`deps.lock` 固定 xrt、xserver 和三库的完整提交、版本与生产源码树哈希。
+构建器会先验证依赖，再从 `app/sources.json` 生成单个 TCC unity 入口，构建
+匹配的 xs 宿主并打包应用：
 
-```
-# 开发模式（HTTP 9091，改 app/ 下 C 源重启即重编）
-./xsw.exe dev.json
-
-# 打包便携单文件（数据落 exe 旁 data\，整目录拷贝即迁移）
-./xsw.exe pack app -o mdo.exe
+```powershell
+python tools/build_mdo.py
 ```
 
-`xs.exe` / `xsw.exe` 为宿主（从 xserver 构建拷入）；首次运行零配置——内置
-Ling 模型开箱即用，其他模型在设置页添加。`tools/` 为随程序分发的
-curl/git/python（gitignore，重建见 [tools/README.md](tools/README.md)）。
+默认在仓库同级目录中寻找与锁文件提交完全匹配的 `xserver` 工作树。也可以
+显式指定：
 
-## 布局
-
-```
-app/        后端源（main.c + mdo_*.h 单 TU）+ wwwroot 前端
-data/       运行数据（配置/会话/记忆/审计，gitignore）
-tests/      测试与验证脚本（ling 工具调用测试、mock LLM、UI 走查记录）
-dev.json    开发服务配置（9091）
-生成程序.bat  打包 mdo.exe
+```powershell
+python tools/build_mdo.py --xserver-root D:\GIT\xserver-mdo-refactor
 ```
 
-## 依赖
+Windows 可直接运行 `生成程序.bat`。Linux 使用同一个 Python 入口，输出文件名
+自动为 `mdo`。首次构建需要 xserver 支持的 Python、GCC/Clang 和平台链接工具；
+构建不依赖仓库根目录中预先存在的 `xs.exe` 或 `xsw.exe`。
 
-上游三件套 vendored 在 xserver 仓 `lib/`；本仓只含应用层。工具表 17 件：
-read/write/edit + ls/glob/grep + exec/spawn/poll/wait/stdin/stop + python 三态
-+ ask_user + 搜索三件。
+开发前先生成入口，再启动构建出的宿主：
+
+```powershell
+python tools/build_mdo.py --prepare-only
+.build\host\xs.exe dev.json
+```
+
+## 源码布局
+
+```text
+app/
+  include/mdo/       应用私有公共头
+  src/               按产品边界拆分的 C 模块
+  default-home/      mdo.exe 内置的只读默认资源树
+  web/               原生 HTML/CSS/JavaScript 前端
+  sources.json       unity 源清单
+  xs.json            单文件应用配置
+include/mdo/         版本化外接模块 ABI（MDO-3）
+app_bak/             旧代码，只读参考
+deps.lock            跨仓库依赖与格式版本锁
+tools/build_mdo.py   验证、生成、宿主构建与打包入口
+```
+
+发布物可以只有 `mdo.exe`。运行时持久化数据只允许进入可执行文件旁的
+`mdo-home/`；单纯启动和退出不得创建该目录。该行为将在 MDO-1 bootstrap 中
+实现并由端到端测试固定。

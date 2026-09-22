@@ -9,9 +9,9 @@
       "host_default": {
         "enabled": true,
         "name": "mdo",
-        "path": "app/wwwroot",
+        "path": "app/web",
         "devlang": "c",
-        "devfile": "app/main.c"
+        "devfile": "app/generated/mdo_unity.c"
       }
     }
   ]

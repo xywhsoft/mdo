@@ -1,0 +1,299 @@
+#!/usr/bin/env python3
+"""Verify locked dependencies, generate the unity source, and build mdo."""
+
+from __future__ import annotations
+
+import argparse
+import hashlib
+import json
+import os
+import re
+import shlex
+import subprocess
+import sys
+from pathlib import Path
+
+
+ROOT = Path(__file__).resolve().parent.parent
+APP = ROOT / "app"
+LOCK_PATH = ROOT / "deps.lock"
+SOURCES_PATH = APP / "sources.json"
+GENERATED = APP / "generated"
+UNITY_PATH = GENERATED / "mdo_unity.c"
+GENERATED_LOCK_PATH = GENERATED / "deps.lock"
+HEX40 = re.compile(r"[0-9a-f]{40}\Z")
+
+
+class BuildError(RuntimeError):
+    pass
+
+
+def load_object(path: Path) -> dict:
+    try:
+        value = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as error:
+        raise BuildError(f"cannot read {path.relative_to(ROOT)}: {error}") from error
+    if not isinstance(value, dict):
+        raise BuildError(f"{path.relative_to(ROOT)} must contain a JSON object")
+    return value
+
+
+def locked_commit(record: dict, label: str) -> str:
+    value = record.get("commit")
+    if not isinstance(value, str) or HEX40.fullmatch(value) is None:
+        raise BuildError(f"deps.lock {label}.commit must be 40 lowercase hexadecimal characters")
+    return value
+
+
+def git_head(root: Path) -> str | None:
+    try:
+        return subprocess.check_output(
+            ["git", "rev-parse", "HEAD"], cwd=root, text=True,
+            stderr=subprocess.DEVNULL,
+        ).strip().lower()
+    except (OSError, subprocess.CalledProcessError):
+        return None
+
+
+def find_xserver(explicit: Path | None, lock: dict) -> Path:
+    expected = locked_commit(lock["xserver"], "xserver")
+    if explicit is not None:
+        candidates = [explicit]
+    else:
+        candidates = []
+        configured = os.environ.get("MDO_XSERVER_ROOT", "").strip()
+        if configured:
+            candidates.append(Path(configured))
+        candidates.extend((ROOT.parent / "xserver", ROOT.parent / "xserver-mdo-refactor"))
+    checked: list[str] = []
+    seen: set[Path] = set()
+    for candidate in candidates:
+        root = candidate.expanduser().resolve()
+        if root in seen:
+            continue
+        seen.add(root)
+        head = git_head(root) if root.is_dir() else None
+        checked.append(f"{root} @ {head or 'unavailable'}")
+        if head == expected:
+            return root
+        if explicit is not None:
+            break
+    detail = "; ".join(checked) if checked else "no candidates"
+    raise BuildError(f"locked xserver {expected} was not found ({detail})")
+
+
+def file_sha256(path: Path) -> str:
+    return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def production_files(root: Path) -> list[Path]:
+    files = [
+        path for path in root.iterdir()
+        if path.is_file() and path.suffix in (".c", ".h")
+        and not path.name.endswith("-xrt.c")
+    ]
+    source = root / "src"
+    if source.is_dir():
+        files.extend(path for path in source.rglob("*") if path.is_file())
+    return sorted(files, key=lambda path: path.relative_to(root).as_posix())
+
+
+def production_tree_sha256(root: Path) -> str:
+    digest = hashlib.sha256()
+    for path in production_files(root):
+        digest.update(path.relative_to(root).as_posix().encode("utf-8"))
+        digest.update(b"\0")
+        digest.update(path.read_bytes())
+        digest.update(b"\0")
+    return digest.hexdigest()
+
+
+def macro(header: str, name: str) -> str:
+    match = re.search(rf"^\s*#define\s+{re.escape(name)}\s+([^\s/]+)", header, re.MULTILINE)
+    if match is None:
+        raise BuildError(f"required macro {name} is missing")
+    return match.group(1).strip('"')
+
+
+def verify_version(header_path: Path, names: tuple[str, str, str], expected: str) -> None:
+    header = header_path.read_text(encoding="utf-8")
+    actual = ".".join(macro(header, name).rstrip("uU") for name in names)
+    if expected.endswith("-dev"):
+        actual += "-dev"
+    if actual != expected:
+        raise BuildError(f"{header_path.name} version {actual} does not match {expected}")
+
+
+def verify_dependencies(xserver: Path, lock: dict) -> None:
+    xrt = lock.get("xrt")
+    libraries = lock.get("libraries")
+    if not isinstance(xrt, dict) or not isinstance(libraries, dict):
+        raise BuildError("deps.lock must define xrt and libraries objects")
+    xrt_commit = locked_commit(xrt, "xrt")
+    header = xserver / "lib" / "xrt.h"
+    if file_sha256(header) != xrt.get("single_header_sha256"):
+        raise BuildError("xserver lib/xrt.h does not match the locked xrt single header")
+    if macro(header.read_text(encoding="utf-8"), "XRT_VERSION_TEXT") != xrt.get("version"):
+        raise BuildError("xserver lib/xrt.h version does not match deps.lock")
+
+    expected_versions = {
+        "xllm": ("xllm.h", ("XLLM_VERSION_MAJOR", "XLLM_VERSION_MINOR", "XLLM_VERSION_PATCH")),
+        "xllm-session": ("xllm-session.h", ("XLLM_SESSION_VERSION_MAJOR", "XLLM_SESSION_VERSION_MINOR", "XLLM_SESSION_VERSION_PATCH")),
+        "xwork": ("xwork.h", ("XWORK_VERSION_MAJOR", "XWORK_VERSION_MINOR", "XWORK_VERSION_PATCH")),
+    }
+    for name, (header_name, version_macros) in expected_versions.items():
+        record = libraries.get(name)
+        if not isinstance(record, dict):
+            raise BuildError(f"deps.lock libraries.{name} is missing")
+        if record.get("source_commit") != xrt_commit:
+            raise BuildError(f"libraries.{name}.source_commit must match xrt.commit")
+        root = xserver / "lib" / name
+        upstream = (root / "UPSTREAM.txt").read_text(encoding="utf-8")
+        if f"基线: xrt@{xrt_commit}" not in upstream:
+            raise BuildError(f"{name}/UPSTREAM.txt does not pin {xrt_commit}")
+        actual_hash = production_tree_sha256(root)
+        if actual_hash != record.get("production_tree_sha256"):
+            raise BuildError(f"{name} production tree hash mismatch: {actual_hash}")
+        verify_version(root / header_name, version_macros, record.get("version", ""))
+
+    xwork_header = (xserver / "lib" / "xwork" / "xwork.h").read_text(encoding="utf-8")
+    if int(macro(xwork_header, "XWORK_ABI_VERSION").rstrip("uU")) != libraries["xwork"].get("abi_version"):
+        raise BuildError("xwork ABI version does not match deps.lock")
+    if int(macro(xwork_header, "XWORK_EVENT_SCHEMA_VERSION").rstrip("uU")) != libraries["xwork"].get("event_schema_version"):
+        raise BuildError("xwork event schema version does not match deps.lock")
+
+    xs_version = (xserver / "src" / "core" / "xs_version.h").read_text(encoding="utf-8")
+    if macro(xs_version, "XS_VERSION_STRING") != lock["xserver"].get("version"):
+        raise BuildError("xserver version does not match deps.lock")
+    pack = (xserver / "src" / "core" / "xs_pack.h").read_text(encoding="utf-8")
+    pack_lock = lock.get("pack", {})
+    if 'memcpy(arrHeader, "XRTPACK\\0", 8u);' not in pack:
+        raise BuildError("xserver does not emit the locked XRTPACK format")
+    version = pack_lock.get("version")
+    if not isinstance(version, int) or f"XS_PackWriteU16(arrHeader + 8u, {version}u);" not in pack:
+        raise BuildError("xserver pack version does not match deps.lock")
+
+
+def source_list() -> list[str]:
+    manifest = load_object(SOURCES_PATH)
+    if manifest.get("schema_version") != 1:
+        raise BuildError("app/sources.json has an unsupported schema_version")
+    values = manifest.get("sources")
+    if not isinstance(values, list) or not values:
+        raise BuildError("app/sources.json sources must be a nonempty array")
+    result: list[str] = []
+    seen: set[str] = set()
+    for value in values:
+        if not isinstance(value, str):
+            raise BuildError("every unity source must be a string")
+        normalized = value.replace("\\", "/")
+        parts = normalized.split("/")
+        if normalized.startswith("/") or parts[0] != "src" or any(part in ("", ".", "..") for part in parts):
+            raise BuildError(f"invalid application source path: {value}")
+        if not normalized.endswith(".c"):
+            raise BuildError(f"unity source must be a .c file: {value}")
+        key = normalized.casefold()
+        if key in seen:
+            raise BuildError(f"duplicate application source: {value}")
+        path = (APP / normalized).resolve()
+        if not path.is_relative_to(APP.resolve()) or not path.is_file():
+            raise BuildError(f"missing application source: {value}")
+        seen.add(key)
+        result.append(normalized)
+    return result
+
+
+def generated_unity(lock: dict, sources: list[str]) -> str:
+    lines = [
+        "/* Generated by tools/build_mdo.py from app/sources.json. Do not edit. */",
+        f'#define MDO_BUILD_XRT_COMMIT "{lock["xrt"]["commit"]}"',
+        f'#define MDO_BUILD_XSERVER_COMMIT "{lock["xserver"]["commit"]}"',
+        "",
+    ]
+    lines.extend(f'#include "../{source}"' for source in sources)
+    lines.append("")
+    return "\n".join(lines)
+
+
+def write_if_changed(path: Path, content: bytes) -> None:
+    if path.is_file() and path.read_bytes() == content:
+        return
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary = path.with_suffix(path.suffix + ".tmp")
+    temporary.write_bytes(content)
+    os.replace(temporary, path)
+
+
+def prepare(lock: dict) -> None:
+    write_if_changed(UNITY_PATH, generated_unity(lock, source_list()).encode("utf-8"))
+    write_if_changed(GENERATED_LOCK_PATH, LOCK_PATH.read_bytes())
+
+
+def command_text(command: list[str]) -> str:
+    return subprocess.list2cmdline(command) if os.name == "nt" else shlex.join(command)
+
+
+def run(command: list[str], cwd: Path, dry_run: bool) -> None:
+    print(command_text(command), flush=True)
+    if not dry_run:
+        subprocess.run(command, cwd=cwd, check=True)
+
+
+def build(args: argparse.Namespace, xserver: Path, lock: dict) -> None:
+    suffix = ".exe" if os.name == "nt" else ""
+    output = (args.output or ROOT / ("mdo" + suffix)).resolve()
+    if not args.dry_run:
+        output.parent.mkdir(parents=True, exist_ok=True)
+    host = ROOT / ".build" / "host" / ("xs" + suffix)
+    extensions = lock["xserver"].get("required_extensions")
+    if not isinstance(extensions, list) or not all(isinstance(item, str) for item in extensions):
+        raise BuildError("xserver.required_extensions must be a string array")
+    if not args.skip_host_build:
+        run([
+            sys.executable, "tools/build.py", *extensions,
+            "--build-dir", str(ROOT / ".build" / "xserver"),
+            "--output", str(host),
+            "--cc", args.cc,
+        ], xserver, args.dry_run)
+    elif not args.dry_run and not host.is_file():
+        raise BuildError(f"--skip-host-build requested but {host} does not exist")
+
+    packer = host.with_name("xsw.exe") if os.name == "nt" else host
+    if not args.dry_run and not packer.is_file():
+        raise BuildError(f"pack host was not built: {packer}")
+    run([str(packer), "pack", str(APP), "-o", str(output)], ROOT, args.dry_run)
+    print(f"[mdo] {'would build' if args.dry_run else 'built'} {output}", flush=True)
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--xserver-root", type=Path,
+                        help="xserver checkout at the exact revision in deps.lock")
+    parser.add_argument("--output", type=Path, help="mdo executable path")
+    parser.add_argument("--cc", default="gcc", help="C/C++ compiler used by xserver")
+    parser.add_argument("--prepare-only", action="store_true",
+                        help="verify dependencies and generate the unity source only")
+    parser.add_argument("--skip-host-build", action="store_true",
+                        help="reuse .build/host after dependency verification")
+    parser.add_argument("--dry-run", action="store_true",
+                        help="print host and pack commands without executing them")
+    args = parser.parse_args(argv)
+    try:
+        lock = load_object(LOCK_PATH)
+        if lock.get("schema_version") != 1:
+            raise BuildError("deps.lock has an unsupported schema_version")
+        xserver = find_xserver(args.xserver_root, lock)
+        verify_dependencies(xserver, lock)
+        prepare(lock)
+        print(f"[mdo] dependencies verified at {lock['xserver']['commit'][:12]}", flush=True)
+        print(f"[mdo] generated {UNITY_PATH.relative_to(ROOT)}", flush=True)
+        if not args.prepare_only:
+            build(args, xserver, lock)
+    except (BuildError, KeyError, OSError, subprocess.CalledProcessError, ValueError) as error:
+        print(f"[mdo] failed: {error}", file=sys.stderr)
+        return 1
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

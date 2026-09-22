@@ -1,0 +1,5 @@
+{
+  "schema_version": 1,
+  "locale": "zh-CN",
+  "default_model": "ling-3.0-tiny"
+}
