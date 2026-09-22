@@ -14,6 +14,7 @@ typedef enum MdoBootstrapStage {
     MDO_BOOTSTRAP_MODELS_READY,
     MDO_BOOTSTRAP_RUNTIME_READY,
     MDO_BOOTSTRAP_SKILLS_READY,
+    MDO_BOOTSTRAP_MEMORY_READY,
     MDO_BOOTSTRAP_WEB_READY,
     MDO_BOOTSTRAP_MCP_READY,
     MDO_BOOTSTRAP_MODULES_READY,
@@ -32,6 +33,8 @@ typedef struct MdoBootstrapSnapshot {
     uint64 SkillGeneration;
     size_t SkillCount;
     size_t SkillDiagnosticCount;
+    uint64 MemoryGeneration;
+    size_t GlobalMemoryCount;
     bool WebEnabled;
     size_t WebDocumentCount;
     size_t WebMaxDocuments;

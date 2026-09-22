@@ -3,6 +3,7 @@
 
 #include "../../include/mdo/bootstrap.h"
 #include "../../include/mdo/mcp.h"
+#include "../../include/mdo/memory.h"
 #include "../../include/mdo/models.h"
 #include "../../include/mdo/modules.h"
 #include "../../include/mdo/sessions.h"
@@ -86,6 +87,11 @@ bool MdoBootstrapInit(XS_HostInfo* pHost)
         return false;
     }
     g_MdoBootstrap.Stage = MDO_BOOTSTRAP_SKILLS_READY;
+    if ( !MdoMemoryManagerInit(g_MdoBootstrap.Runtime) ) {
+        MdoBootstrapFail("memory manager initialization failed");
+        return false;
+    }
+    g_MdoBootstrap.Stage = MDO_BOOTSTRAP_MEMORY_READY;
     if ( !MdoWebManagerInit(g_MdoBootstrap.Runtime) ) {
         MdoBootstrapFail("Web tool manager initialization failed");
         return false;
@@ -127,10 +133,14 @@ bool MdoBootstrapInit(XS_HostInfo* pHost)
         memset(&Web, 0, sizeof(Web));
         Web.Size = sizeof(Web);
         (void)MdoWebManagerGetSnapshot(&Web);
-        printf("[mdo] bootstrap ready: version=%s home=%s mode=%s defaults=%zu providers=%zu models=%zu skills=%zu web=%d mcp=%zu modules=%zu tools=%zu\n",
+        MdoMemorySnapshot* pMemory = MdoMemorySnapshotCreate(
+            MDO_MEMORY_GLOBAL, NULL, NULL);
+        size_t iMemory = MdoMemorySnapshotCount(pMemory);
+        printf("[mdo] bootstrap ready: version=%s home=%s mode=%s defaults=%zu providers=%zu models=%zu skills=%zu memory=%zu web=%d mcp=%zu modules=%zu tools=%zu\n",
             MDO_VERSION_TEXT, Home.Path, sMode, g_MdoBootstrap.DefaultsBytes,
-            iProviders, iModels, iSkills, Web.Enabled ? 1 : 0,
+            iProviders, iModels, iSkills, iMemory, Web.Enabled ? 1 : 0,
             iMcp, iModules, iTools);
+        MdoMemorySnapshotRelease(pMemory);
         MdoModelCatalogRelease(pModels);
         MdoMcpCatalogRelease(pMcp);
         MdoSkillCatalogRelease(pSkills);
@@ -145,6 +155,7 @@ void MdoBootstrapUnit(void)
     MdoModuleManagerUnit();
     MdoMcpManagerUnit();
     MdoWebManagerUnit();
+    MdoMemoryManagerUnit();
     MdoSkillManagerUnit();
     if ( g_MdoBootstrap.Runtime != NULL )
         xworkRuntimeRelease(g_MdoBootstrap.Runtime);
@@ -169,6 +180,8 @@ bool MdoBootstrapGetSnapshot(MdoBootstrapSnapshot* pSnapshot)
     pSnapshot->SkillGeneration = 0u;
     pSnapshot->SkillCount = 0u;
     pSnapshot->SkillDiagnosticCount = 0u;
+    pSnapshot->MemoryGeneration = 0u;
+    pSnapshot->GlobalMemoryCount = 0u;
     pSnapshot->WebEnabled = false;
     pSnapshot->WebDocumentCount = 0u;
     pSnapshot->WebMaxDocuments = 0u;
@@ -194,6 +207,15 @@ bool MdoBootstrapGetSnapshot(MdoBootstrapSnapshot* pSnapshot)
             pSnapshot->ModelCount = MdoModelCatalogModelCount(pCatalog);
         }
         MdoModelCatalogRelease(pCatalog);
+    }
+    {
+        MdoMemorySnapshot* pMemory = MdoMemorySnapshotCreate(
+            MDO_MEMORY_GLOBAL, NULL, NULL);
+        if ( pMemory != NULL ) {
+            pSnapshot->MemoryGeneration = MdoMemoryManagerGeneration();
+            pSnapshot->GlobalMemoryCount = MdoMemorySnapshotCount(pMemory);
+        }
+        MdoMemorySnapshotRelease(pMemory);
     }
     {
         MdoWebSnapshot Web;
