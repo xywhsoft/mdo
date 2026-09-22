@@ -29,8 +29,12 @@ mdo 配置 schema v1 由一份内置基线、三份可选用户 patch 和一层�
 
 所有读取、预览和提交经过同一 schema v1 验证器。保存使用同目录临时文件、flush 和原子替换；已有文件在替换或恢复之前复制为 `.bak`。写入失败时继续使用已发布的内存配置，原文件保持不变。只读介质上的导入失败，不会把 ephemeral 配置伪装成已保存。
 
-普通 JSON 配置不能保存 `api_key`、token、password、client secret、private key 或 Authorization 等敏感值。模型凭据只能保存为 `secret_ref`，v1 接受 `env:`、`file:`、`keychain:` 和 `prompt:` 引用。secret resolver 在使用模型时解析引用，配置导入和导出始终只处理引用文本。
+普通 JSON 配置不能保存 `api_key`、token、password、client secret、private key 或 Authorization 等敏感值。模型凭据只能保存为 provider 的 `credential.secret_ref`，v1 接受 `env:`、`file:`、`keychain:` 和 `prompt:` 引用。secret resolver 在使用模型时解析引用，配置导入和导出始终只处理引用文本。
 
-`ling-3.0-tiny` 是内置、免费、不可编辑且不可删除的模型。服务端验证器逐字段核对其完整 descriptor，并确认默认模型仍存在；前端禁用控件只是交互提示，不承担保护职责。内置 descriptor 声明 OpenAI Chat Completions、OpenAI Responses 和 Anthropic Messages 三种线上协议。真实线上验证只有在运行环境同时提供三条显式 URL 和临时 key 时执行，离线 fixture 不作为线上成功证据。
+`models.providers` 与 `models.items` 分开。provider 保存 endpoint、TLS 校验、超时和凭据引用；model 保存 provider ID、wire model、可选协议、默认协议、xllm 能力、上下文/输入/输出窗口、推理档位和附件类型。模型引用的每种协议必须在 provider 上有对应 endpoint，默认协议必须属于模型协议集。
+
+`ling-3.0-tiny` 是内置、免费、不可编辑且不可删除的模型，其 `ling` provider 同样受保护。服务端验证器逐字段核对两个完整 descriptor，并确认默认模型仍存在；前端禁用控件只是交互提示，不承担保护职责。内置 provider 声明 OpenAI Chat Completions、OpenAI Responses 和 Anthropic Messages 三种线上接口，模型默认选择 Responses。真实线上验证只有在运行环境同时提供三条显式 URL 和临时 key 时执行，离线 fixture 不作为线上成功证据。
+
+模型目录是引用计数的不可变 generation。reload 构造完整候选后一次发布，已有运行可继续读取旧 generation。公开 provider 信息只返回 `HasCredentialReference`，不会返回 reference 文本或解析后的 key；`MdoModelCatalogProfile` 把选定协议映射为相应的 xllm provider，并生成经过 xllm 自身校验的非敏感 profile。
 
 `MdoConfigPreviewImport`、`MdoConfigImport`、`MdoConfigPreviewRestore` 和 `MdoConfigRestore` 为设置页提供预览后提交流程。预览不创建 Home；导出结果仍是可导入 envelope。`MdoConfigEffectiveJson` 返回当前完整有效配置的拥有式快照，调用方用 `xrtFree` 释放。

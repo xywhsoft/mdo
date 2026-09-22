@@ -106,7 +106,8 @@
 | MDO-4 Skills catalog | DONE | mdo `974158c`、`edce68f` | 26 项源码/构建合同；Windows/Linux 真实 xs/TCC 探针覆盖内置读取、外部完整遮蔽、资源白名单、原子 reload、旧代缓存、首次读取前替换拒绝、无效 front matter 和缺失资源诊断；两平台精确锁定宿主与 33 项单文件包完成，Linux packed 可执行文件直接启动并发布 1 个 Skill、模块和工具；未运行压力或高负载测试 | 固定小型 YAML 子集和 `skills/<id>/SKILL.md` 可读格式；启动只解析 front matter 与元数据，正文和显式资源首次选择时有界加载；引用计数 catalog 与逐代缓存保持旧读者，文件代不一致要求 reload；外部目录存在即完整遮蔽内置同名 Skill，损坏时发布结构化诊断且不回退 |
 | MDO-5A MCP stdio manager | DONE | mdo `5f6ec5a`、`45fddc5`、`5e3dbd2` | 31 项源码/构建合同；Windows/Linux 真实 xs/TCC 探针覆盖冷注册、发现、惰性连接、同配置连接复用、断开/重连、定义换代、外部遮蔽、无效配置、缺失 secret、当时的 HTTP 能力诊断和跨来源冲突回滚；两平台 35 项单文件包及最终 15 秒启动通过；未运行压力或高负载测试 | 每服务器一个严格 JSON；外部文件完整遮蔽内置同名定义；`env:`/Home-relative `file:` secret 仅在候选注册时解析且发布后清零；引用计数 catalog/diagnostics 与 source 原子批量发布保持失败原子性；初始 Agent 只需 MCP 发现工具，完整 schema 按选择加载 |
 | MDO-5B MCP Streamable HTTP 接入 | DONE | mdo `e0d8ea3`；xrt `c88a425`；xserver `2e1a918` | 31 项源码/构建合同；Windows/Linux 真实 xs/TCC manager 探针覆盖 HTTPS/authority/port/header 边界、鉴权 secret 解析、HTTP 冷注册、catalog 脱敏及原有 stdio 换代回归；精确依赖锁验证、Windows 单文件重建与隔离目录 15 秒零写启动通过；底层 HTTP wire 已由 WORK-115 的两平台确定性 loopback 与 sanitizer 覆盖；未运行压力或高负载测试 | MDO 严格接收 HTTPS endpoint 和 secret-only 自定义头，拒绝 userinfo、fragment、非法端口、控制字节及 transport-owned/Mcp-* 头；xwork 原子深拷贝后 manager 立即清零值，catalog 只暴露 header 数量；stdio/HTTP 统一进入 source transaction，注册保持冷操作 |
-| MDO-6～10 | TODO | - | - | 下一步实现模型、Agent 与运行时产品层，再继续会话/数据、Web API、前端交互和迁移阶段 |
+| MDO-6A 模型 provider/profile catalog | DONE | mdo `2838996`、`99caf70` | 18 项源码/构建合同；Windows/Linux 真实 xs/TCC 探针覆盖三种 wire provider 映射、profile 校验、引用计数旧快照和 generation reload；两平台 GCC warning-as-error unity 编译、Windows 单文件重建及隔离目录 15 秒启动通过；未运行压力或高负载测试 | provider 独立拥有 endpoint、TLS/timeout 与 credential reference，model 独立拥有 wire model、协议集、能力位、窗口、推理档位和附件能力；Ling provider/model 都逐字段保护，默认使用 Responses，同时声明 Completions/Responses/Anthropic 三接口；公开 catalog 只暴露是否配置凭据，不暴露引用或解析值 |
+| MDO-6B～10 | TODO | - | - | 下一步实现 model client factory、Agent definition 组合、默认 Agent、run 生命周期和联机搜索，再继续会话/数据、Web API、前端交互和迁移阶段 |
 | QA-RELEASE | TODO | - | - | MDO-GATE 后实施 |
 
 ## 已确认的工程事实
@@ -165,9 +166,10 @@
 52. MCP catalog 只发布非敏感元数据。`env:` 和 `file:` 值只在 runtime 注册候选内短暂存在，xwork 同步深拷贝返回后立即清零释放，不能被 catalog/status API 观察。
 53. streamable HTTP 配置必须在联网前完成严格 schema 与 secret 解析；MDO 只接受 HTTPS，拒绝 userinfo、fragment、非法端口、控制字节和 transport-owned/Mcp-* 头。xwork 的权威 URL parser 在 source transaction 内再次验证，任一 server 失败都不得形成部分发布。
 54. HTTP 鉴权值与 stdio 环境 secret 共用短生命周期候选所有权：xwork 同步深拷贝成功或失败返回后，MDO 都必须清零并释放候选值；catalog/status/diagnostics 只能暴露 endpoint、transport 和 header 数量，不能暴露 header 值。
+55. 模型 provider 与 model profile 必须分离：provider 管理连接、TLS、超时和 secret reference，model 管理 wire 名称、方言集合、能力与 token 窗口。同一模型可选择不同 xllm wire provider；catalog 以引用计数不可变 generation 发布，旧读者在 reload 后继续有效。公开元数据只声明是否存在凭据引用，不能返回引用文本或解析后的 key。
 
 ## 下一步
 
-1. 开始 MDO-6：实现模型 catalog/client factory、Agent definition 组合、默认 Agent、运行时 run 生命周期和内置联机搜索工具的产品接线；
+1. 继续 MDO-6B：实现 model client factory、Agent definition 组合、默认 Agent、运行时 run 生命周期和内置联机搜索工具的产品接线；
 2. 运行环境提供三条显式 URL 和 runtime key 时，再执行 Ling 3.0 Tiny 的 Chat Completions、Responses 与 Anthropic Messages 真实线上探针；
 3. 全部后续验收继续使用有界功能、故障注入和确定性交错，略过压力与高负载测试。
