@@ -29,9 +29,11 @@ class ApiContractTests(unittest.TestCase):
             "bootstrap", "settings", "models", "agents", "modules",
             "skills", "mcp", "sessions", "schedules", "tasks",
             "projects", "runs", "artifacts", "permissions", "diagnostics",
-            "storage",
+            "storage", "events",
         ):
             self.assertIn(f'"/api/v1/{resource}"', self.router)
+        self.assertIn('"/api/v1/projects/{project}/sessions/{session}/events"',
+                      self.router)
 
     def test_request_entry_is_owned_by_the_api_layer(self) -> None:
         self.assertIn("MdoApiInit", self.service)
@@ -50,6 +52,18 @@ class ApiContractTests(unittest.TestCase):
         self.assertIn('"GET, HEAD, OPTIONS"', self.router)
         self.assertIn('405u, "method_not_allowed"', self.router)
         self.assertIn("MethodCode != XHTTP_METHOD_HEAD", self.http)
+
+    def test_event_replay_is_cursor_based_and_bounded(self) -> None:
+        events = (ROOT / "app/src/api/events.c").read_text(encoding="utf-8")
+        self.assertIn("MDO_API_EVENT_MAX_LIMIT 32u", events)
+        self.assertIn("MDO_API_EVENT_TEXT_BYTES 4096u", events)
+        self.assertIn('"next_cursor"', events)
+        self.assertIn('"latest_event_id"', events)
+        self.assertIn('"history_lost"', events)
+        self.assertIn('"terminal"', events)
+        self.assertIn("MdoSessionEventReplay", events)
+        self.assertIn("xworkRuntimeEventSnapshot", events)
+        self.assertIn("MdoApiRouteMatch", self.router)
 
     def test_every_json_response_has_identity_and_hardening_headers(self) -> None:
         for text in (

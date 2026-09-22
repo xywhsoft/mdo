@@ -145,6 +145,37 @@ def run_probe(host: Path) -> None:
                 assert json.loads(request(port, "GET", "/api/v1/models")[2])[
                     "data"]["models"][0]["id"] == "ling-3.0-tiny"
 
+                status, headers, body = request(
+                    port, "GET", "/api/v1/events?after=0&limit=1")
+                document = json.loads(body)
+                assert status == 200, (status, body)
+                assert_common(headers, document)
+                assert document["data"]["after"] == 0, document
+                assert isinstance(document["data"]["items"], list), document
+                for query in (
+                    "limit=0", "limit=33", "after=x", "after=0&after=1",
+                    "unknown=1", "after=0&",
+                ):
+                    status, headers, body = request(
+                        port, "GET", f"/api/v1/events?{query}")
+                    document = json.loads(body)
+                    assert status == 400, (query, status, body)
+                    assert_common(headers, document)
+                    assert document["error"]["code"] == "invalid_query", (
+                        query, document)
+
+                status, headers, body = request(
+                    port, "GET",
+                    "/api/v1/projects/project-1/sessions/session-1/events")
+                document = json.loads(body)
+                assert status == 404, (status, body)
+                assert_common(headers, document)
+                assert document["error"]["code"] == "session_not_found", document
+                status, _, body = request(
+                    port, "GET",
+                    "/api/v1/projects/bad%20id/sessions/session-1/events")
+                assert status == 400 and json.loads(body)["error"]["code"] == "invalid_path"
+
                 status, headers, body = request(port, "HEAD", "/api/v1/bootstrap")
                 assert status == 200 and body == b"", (status, body)
                 assert int(headers["content-length"]) > 0, headers

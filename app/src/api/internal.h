@@ -7,16 +7,20 @@
 
 #define MDO_API_RESPONSE_MAX_BYTES (256u * 1024u)
 #define MDO_API_REQUEST_ID_CAPACITY 40u
+#define MDO_API_ROUTE_PARAM_MAX 4u
 
 typedef struct MdoApiContext {
     XS_HttpReq* Request;
     xhttptarget Target;
     char RequestId[MDO_API_REQUEST_ID_CAPACITY];
+    xstrview Params[MDO_API_ROUTE_PARAM_MAX];
+    size_t ParamCount;
 } MdoApiContext;
 
 typedef bool (*MdoApiRouteProc)(MdoApiContext* pContext);
 
 bool MdoApiValueSetString(xvalue* Object, cstr Key, cstr Value);
+bool MdoApiValueSetStringView(xvalue* Object, cstr Key, xstrview Value);
 bool MdoApiValueSetUInt(xvalue* Object, cstr Key, uint64 Value);
 bool MdoApiValueSetInt(xvalue* Object, cstr Key, int64 Value);
 bool MdoApiValueSetBool(xvalue* Object, cstr Key, bool Value);
@@ -48,5 +52,7 @@ bool MdoApiTasksRoute(MdoApiContext* pContext);
 bool MdoApiArtifactsRoute(MdoApiContext* pContext);
 bool MdoApiDiagnosticsRoute(MdoApiContext* pContext);
 bool MdoApiStorageRoute(MdoApiContext* pContext);
+bool MdoApiEventsRoute(MdoApiContext* pContext);
+bool MdoApiSessionEventsRoute(MdoApiContext* pContext);
 
 #endif

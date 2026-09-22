@@ -9,6 +9,14 @@ bool MdoApiValueSetString(xvalue* Object, cstr Key, cstr Value)
             xrtValueString(xrtStrView(Value != NULL ? Value : "")));
 }
 
+bool MdoApiValueSetStringView(xvalue* Object, cstr Key, xstrview Value)
+{
+    if ( Object == NULL || Key == NULL ||
+         (Value.Data == NULL && Value.Size != 0u) ) return false;
+    if ( Value.Data == NULL ) Value = XRT_STR_LITERAL("");
+    return xrtValueObjectSetNew(Object, xrtStrView(Key), xrtValueString(Value));
+}
+
 bool MdoApiValueSetUInt(xvalue* Object, cstr Key, uint64 Value)
 {
     return Object != NULL && Key != NULL &&

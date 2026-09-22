@@ -76,6 +76,7 @@ class BuildContractTests(unittest.TestCase):
             "src/api/state.c",
             "src/api/inventory.c",
             "src/api/diagnostics.c",
+            "src/api/events.c",
             "src/api/router.c",
             "src/bootstrap/service.c",
         ])

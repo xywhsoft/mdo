@@ -46,6 +46,11 @@ static const MdoApiRoute g_MdoApiRoutes[] = {
       "GET, HEAD, OPTIONS", MdoApiDiagnosticsRoute },
     { "/api/v1/storage", XHTTP_METHOD_GET | XHTTP_METHOD_HEAD,
       "GET, HEAD, OPTIONS", MdoApiStorageRoute },
+    { "/api/v1/events", XHTTP_METHOD_GET | XHTTP_METHOD_HEAD,
+      "GET, HEAD, OPTIONS", MdoApiEventsRoute },
+    { "/api/v1/projects/{project}/sessions/{session}/events",
+      XHTTP_METHOD_GET | XHTTP_METHOD_HEAD, "GET, HEAD, OPTIONS",
+      MdoApiSessionEventsRoute },
 };
 
 static bool MdoApiViewEqualText(xstrview View, cstr Text)
@@ -60,6 +65,36 @@ static bool MdoApiPath(xstrview Path)
     return (Path.Size == 4u && memcmp(Path.Data, "/api", 4u) == 0) ||
         (Path.Size >= sizeof(Prefix) - 1u &&
          memcmp(Path.Data, Prefix, sizeof(Prefix) - 1u) == 0);
+}
+
+static bool MdoApiRouteMatch(MdoApiContext* Context, cstr Pattern)
+{
+    size_t PatternIndex = 0u;
+    size_t PathIndex = 0u;
+
+    Context->ParamCount = 0u;
+    while ( Pattern[PatternIndex] != '\0' ) {
+        if ( Pattern[PatternIndex] == '{' ) {
+            size_t Close = PatternIndex + 1u;
+            size_t Start = PathIndex;
+            while ( Pattern[Close] != '\0' && Pattern[Close] != '}' ) Close++;
+            if ( Pattern[Close] != '}' || Context->ParamCount ==
+                    MDO_API_ROUTE_PARAM_MAX ) return false;
+            while ( PathIndex < Context->Target.Path.Size &&
+                    Context->Target.Path.Data[PathIndex] != '/' ) PathIndex++;
+            if ( PathIndex == Start ) return false;
+            Context->Params[Context->ParamCount++] = xrtStrViewN(
+                Context->Target.Path.Data + Start, PathIndex - Start);
+            PatternIndex = Close + 1u;
+            continue;
+        }
+        if ( PathIndex >= Context->Target.Path.Size ||
+             Pattern[PatternIndex] != Context->Target.Path.Data[PathIndex] )
+            return false;
+        PatternIndex++;
+        PathIndex++;
+    }
+    return PathIndex == Context->Target.Path.Size;
 }
 
 static void MdoApiRequestId(char Output[MDO_API_REQUEST_ID_CAPACITY])
@@ -113,7 +148,11 @@ XS_RequestResult MdoApiRequest(XS_HttpReq* pRequest)
           Index < sizeof(g_MdoApiRoutes) / sizeof(g_MdoApiRoutes[0]);
           Index++ ) {
         const MdoApiRoute* Route = &g_MdoApiRoutes[Index];
-        if ( !MdoApiViewEqualText(Context.Target.Path, Route->Path) ) continue;
+        if ( strchr(Route->Path, '{') == NULL ) {
+            Context.ParamCount = 0u;
+            if ( !MdoApiViewEqualText(Context.Target.Path, Route->Path) )
+                continue;
+        } else if ( !MdoApiRouteMatch(&Context, Route->Path) ) continue;
         if ( pRequest->head->MethodCode == XHTTP_METHOD_OPTIONS ) {
             (void)MdoApiReplyOptions(&Context, Route->Allow);
         } else if ( (pRequest->head->MethodCode & Route->Methods) != 0u ) {
