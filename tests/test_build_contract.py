@@ -69,6 +69,9 @@ class BuildContractTests(unittest.TestCase):
             "src/sessions/events.c",
             "src/sessions/manager.c",
             "src/bootstrap/bootstrap.c",
+            "src/api/http.c",
+            "src/api/resources.c",
+            "src/api/router.c",
             "src/bootstrap/service.c",
         ])
         for path in (ROOT / "app").rglob("*"):
@@ -88,6 +91,7 @@ class BuildContractTests(unittest.TestCase):
         self.assertEqual(first.count('#include "../src/skills/manager.c"'), 1)
         self.assertEqual(first.count('#include "../src/schedules/manager.c"'), 1)
         self.assertEqual(first.count('#include "../src/schedules/executor.c"'), 1)
+        self.assertEqual(first.count('#include "../src/api/router.c"'), 1)
         self.assertEqual(first.count('#include "../src/bootstrap/service.c"'), 1)
         self.assertIn(self.lock["xrt"]["commit"], first)
         self.assertIn(self.lock["xserver"]["commit"], first)

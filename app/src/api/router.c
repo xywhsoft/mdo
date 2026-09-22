@@ -1,0 +1,101 @@
+#include <stdio.h>
+#include <string.h>
+
+#include "internal.h"
+
+typedef struct MdoApiRoute {
+    cstr Path;
+    xhttpmethod Methods;
+    cstr Allow;
+    MdoApiRouteProc Proc;
+} MdoApiRoute;
+
+static xatomic64 g_MdoApiFallbackId;
+static bool g_MdoApiInitialized;
+
+static const MdoApiRoute g_MdoApiRoutes[] = {
+    { "/api/v1/bootstrap", XHTTP_METHOD_GET | XHTTP_METHOD_HEAD,
+      "GET, HEAD, OPTIONS", MdoApiBootstrapRoute },
+};
+
+static bool MdoApiViewEqualText(xstrview View, cstr Text)
+{
+    size_t Size = strlen(Text);
+    return View.Size == Size && memcmp(View.Data, Text, Size) == 0;
+}
+
+static bool MdoApiPath(xstrview Path)
+{
+    static const char Prefix[] = "/api/";
+    return (Path.Size == 4u && memcmp(Path.Data, "/api", 4u) == 0) ||
+        (Path.Size >= sizeof(Prefix) - 1u &&
+         memcmp(Path.Data, Prefix, sizeof(Prefix) - 1u) == 0);
+}
+
+static void MdoApiRequestId(char Output[MDO_API_REQUEST_ID_CAPACITY])
+{
+    static const char Hex[] = "0123456789abcdef";
+    uint8 Random[12];
+    size_t Index;
+
+    if ( xrtSecureRandom(Random, sizeof(Random)) ) {
+        memcpy(Output, "mdo-", 4u);
+        for ( Index = 0u; Index < sizeof(Random); Index++ ) {
+            Output[4u + Index * 2u] = Hex[Random[Index] >> 4u];
+            Output[5u + Index * 2u] = Hex[Random[Index] & 15u];
+        }
+        Output[4u + sizeof(Random) * 2u] = '\0';
+        return;
+    }
+    (void)snprintf(Output, MDO_API_REQUEST_ID_CAPACITY, "mdo-%016llx",
+        (unsigned long long)(xrtAtomic64FetchAdd(&g_MdoApiFallbackId, 1u,
+            XMEMORY_RELAXED) + 1u));
+}
+
+bool MdoApiInit(void)
+{
+    if ( g_MdoApiInitialized ) return true;
+    xrtAtomic64Init(&g_MdoApiFallbackId, 0u);
+    g_MdoApiInitialized = true;
+    return true;
+}
+
+void MdoApiUnit(void)
+{
+    g_MdoApiInitialized = false;
+}
+
+XS_RequestResult MdoApiRequest(XS_HttpReq* pRequest)
+{
+    MdoApiContext Context;
+    size_t Index;
+
+    if ( pRequest == NULL || pRequest->head == NULL ||
+         !g_MdoApiInitialized ) return XS_FALLBACK;
+    memset(&Context, 0, sizeof(Context));
+    Context.Request = pRequest;
+    if ( !xrtHttpTargetParse(pRequest->head->Method, pRequest->head->Target,
+            &Context.Target) || !MdoApiPath(Context.Target.Path) ) {
+        return XS_FALLBACK;
+    }
+    MdoApiRequestId(Context.RequestId);
+    for ( Index = 0u;
+          Index < sizeof(g_MdoApiRoutes) / sizeof(g_MdoApiRoutes[0]);
+          Index++ ) {
+        const MdoApiRoute* Route = &g_MdoApiRoutes[Index];
+        if ( !MdoApiViewEqualText(Context.Target.Path, Route->Path) ) continue;
+        if ( pRequest->head->MethodCode == XHTTP_METHOD_OPTIONS ) {
+            (void)MdoApiReplyOptions(&Context, Route->Allow);
+        } else if ( (pRequest->head->MethodCode & Route->Methods) != 0u ) {
+            (void)Route->Proc(&Context);
+        } else {
+            (void)MdoApiReplyError(&Context, 405u, "method_not_allowed",
+                "The request method is not allowed for this resource",
+                Route->Allow);
+        }
+        return XS_OK;
+    }
+    (void)MdoApiReplyError(&Context, 404u, "route_not_found",
+        "The requested API resource does not exist", NULL);
+    return XS_OK;
+}

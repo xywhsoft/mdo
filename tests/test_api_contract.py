@@ -1,0 +1,85 @@
+"""MDO-8 versioned HTTP API source and protocol contracts."""
+
+from __future__ import annotations
+
+import json
+import unittest
+from pathlib import Path
+
+
+ROOT = Path(__file__).resolve().parent.parent
+
+
+class ApiContractTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.public = (ROOT / "app/include/mdo/api.h").read_text(encoding="utf-8")
+        cls.internal = (ROOT / "app/src/api/internal.h").read_text(encoding="utf-8")
+        cls.http = (ROOT / "app/src/api/http.c").read_text(encoding="utf-8")
+        cls.router = (ROOT / "app/src/api/router.c").read_text(encoding="utf-8")
+        cls.resources = (ROOT / "app/src/api/resources.c").read_text(encoding="utf-8")
+        cls.service = (ROOT / "app/src/bootstrap/service.c").read_text(encoding="utf-8")
+
+    def test_api_is_versioned_and_has_a_bounded_response(self) -> None:
+        self.assertIn("MDO_API_SCHEMA_VERSION 1u", self.public)
+        self.assertIn('"/api/v1/bootstrap"', self.router)
+        self.assertIn("MDO_API_RESPONSE_MAX_BYTES", self.internal)
+        self.assertIn("JsonSize > MDO_API_RESPONSE_MAX_BYTES", self.http)
+
+    def test_request_entry_is_owned_by_the_api_layer(self) -> None:
+        self.assertIn("MdoApiInit", self.service)
+        self.assertIn("MdoApiUnit", self.service)
+        self.assertIn("XS_RequestResult RequestProc", self.service)
+        self.assertIn("return MdoApiRequest(pRequest);", self.service)
+
+    def test_non_api_requests_fall_through_to_static_files(self) -> None:
+        self.assertIn("!MdoApiPath(Context.Target.Path)", self.router)
+        self.assertIn("return XS_FALLBACK;", self.router)
+        self.assertIn('"route_not_found"', self.router)
+
+    def test_method_contract_covers_head_options_and_405(self) -> None:
+        self.assertIn("XHTTP_METHOD_GET | XHTTP_METHOD_HEAD", self.router)
+        self.assertIn("XHTTP_METHOD_OPTIONS", self.router)
+        self.assertIn('"GET, HEAD, OPTIONS"', self.router)
+        self.assertIn('405u, "method_not_allowed"', self.router)
+        self.assertIn("MethodCode != XHTTP_METHOD_HEAD", self.http)
+
+    def test_every_json_response_has_identity_and_hardening_headers(self) -> None:
+        for text in (
+            'XRT_STR_LITERAL("schema_version")',
+            'XRT_STR_LITERAL("ok")',
+            'XRT_STR_LITERAL("request_id")',
+            'XRT_STR_LITERAL("X-Request-Id")',
+            'XRT_STR_LITERAL("Cache-Control")',
+            'XRT_STR_LITERAL("X-Content-Type-Options")',
+            'XRT_STR_LITERAL("Referrer-Policy")',
+        ):
+            self.assertIn(text, self.http)
+
+    def test_bootstrap_resource_uses_public_snapshots(self) -> None:
+        self.assertIn("MdoBootstrapGetSnapshot", self.resources)
+        self.assertNotIn("g_MdoBootstrap", self.resources)
+        self.assertNotIn("g_MdoConfig", self.resources)
+        self.assertNotIn("g_MdoHome", self.resources)
+
+    def test_bootstrap_resource_contains_ui_startup_domains(self) -> None:
+        for name in (
+            "version", "ready", "stage", "home", "config", "models",
+            "skills", "memory", "web", "mcp", "modules", "schedules",
+            "sessions",
+        ):
+            self.assertIn(f'"{name}"', self.resources)
+
+    def test_api_sources_precede_the_service_entry(self) -> None:
+        manifest = json.loads((ROOT / "app/sources.json").read_text(encoding="utf-8"))
+        sources = manifest["sources"]
+        self.assertLess(sources.index("src/api/http.c"),
+                        sources.index("src/api/resources.c"))
+        self.assertLess(sources.index("src/api/resources.c"),
+                        sources.index("src/api/router.c"))
+        self.assertLess(sources.index("src/api/router.c"),
+                        sources.index("src/bootstrap/service.c"))
+
+
+if __name__ == "__main__":
+    unittest.main(verbosity=2)
