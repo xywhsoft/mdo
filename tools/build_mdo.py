@@ -84,8 +84,13 @@ def find_xserver(explicit: Path | None, lock: dict) -> Path:
     raise BuildError(f"locked xserver {expected} was not found ({detail})")
 
 
-def file_sha256(path: Path) -> str:
-    return hashlib.sha256(path.read_bytes()).hexdigest()
+def normalized_source_bytes(path: Path) -> bytes:
+    """Return source bytes in the line-ending form used by deps.lock."""
+    return path.read_bytes().replace(b"\r\n", b"\n")
+
+
+def source_file_sha256(path: Path) -> str:
+    return hashlib.sha256(normalized_source_bytes(path)).hexdigest()
 
 
 def production_files(root: Path) -> list[Path]:
@@ -105,7 +110,7 @@ def production_tree_sha256(root: Path) -> str:
     for path in production_files(root):
         digest.update(path.relative_to(root).as_posix().encode("utf-8"))
         digest.update(b"\0")
-        digest.update(path.read_bytes())
+        digest.update(normalized_source_bytes(path))
         digest.update(b"\0")
     return digest.hexdigest()
 
@@ -133,7 +138,7 @@ def verify_dependencies(xserver: Path, lock: dict) -> None:
         raise BuildError("deps.lock must define xrt and libraries objects")
     xrt_commit = locked_commit(xrt, "xrt")
     header = xserver / "lib" / "xrt.h"
-    if file_sha256(header) != xrt.get("single_header_sha256"):
+    if source_file_sha256(header) != xrt.get("single_header_sha256"):
         raise BuildError("xserver lib/xrt.h does not match the locked xrt single header")
     if macro(header.read_text(encoding="utf-8"), "XRT_VERSION_TEXT") != xrt.get("version"):
         raise BuildError("xserver lib/xrt.h version does not match deps.lock")

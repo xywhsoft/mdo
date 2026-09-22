@@ -5,6 +5,7 @@ from __future__ import annotations
 import importlib.util
 import json
 import re
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -23,7 +24,7 @@ class BuildContractTests(unittest.TestCase):
     def test_dependency_lock_is_complete_and_exact(self) -> None:
         self.assertEqual(self.lock["schema_version"], 1)
         self.assertEqual(self.lock["hash_algorithm"],
-                         "sha256-path-nul-content-nul-v1")
+                         "sha256-path-nul-lf-normalized-content-nul-v1")
         self.assertRegex(self.lock["xrt"]["commit"], r"^[0-9a-f]{40}$")
         self.assertRegex(self.lock["xserver"]["commit"], r"^[0-9a-f]{40}$")
         self.assertEqual(self.lock["xserver"]["required_extensions"],
@@ -38,6 +39,16 @@ class BuildContractTests(unittest.TestCase):
             "session_schema_version": 1,
             "config_schema_version": 1,
         })
+
+    def test_dependency_source_hash_is_checkout_line_ending_independent(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            lf = root / "lf.h"
+            crlf = root / "crlf.h"
+            lf.write_bytes(b"one\ntwo\n")
+            crlf.write_bytes(b"one\r\ntwo\r\n")
+            self.assertEqual(BUILD.source_file_sha256(lf),
+                             BUILD.source_file_sha256(crlf))
 
     def test_new_source_root_is_independent_from_legacy_app(self) -> None:
         sources = BUILD.source_list()

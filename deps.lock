@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "hash_algorithm": "sha256-path-nul-content-nul-v1",
+  "hash_algorithm": "sha256-path-nul-lf-normalized-content-nul-v1",
   "xrt": {
     "commit": "84f618b7816610cfa44e6ad94415052aa2264df7",
     "version": "2.0.0-dev",
@@ -23,13 +23,13 @@
     "xllm-session": {
       "version": "3.0.0-dev",
       "source_commit": "84f618b7816610cfa44e6ad94415052aa2264df7",
-      "production_tree_sha256": "9336016ceb9489ea0b40188135655ba4c5b5796f1c050e953da0c4c5c9ffda0e",
+      "production_tree_sha256": "01034a129f6fefefb48737bfeef6f5f4584391f4c8465a7558838c580d901798",
       "persistence_schema_version": 3
     },
     "xwork": {
       "version": "3.3.0",
       "source_commit": "84f618b7816610cfa44e6ad94415052aa2264df7",
-      "production_tree_sha256": "3107366e9560ad4f9ce6143fc5f037bbd35ffe0fcfee8d923b096a82bd6f8ad6",
+      "production_tree_sha256": "44fed9f95c02025604a2f180608a9981665dca1d4d240473eeec0f4dd8a21bd9",
       "abi_version": 3,
       "event_schema_version": 2
     }
