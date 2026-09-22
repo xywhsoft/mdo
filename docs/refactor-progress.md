@@ -6,9 +6,9 @@
 
 | 仓库 | 开发位置/分支 | 当前基线 | 说明 |
 | --- | --- | --- | --- |
-| mdo | `D:\GIT\mdo` / 当前分支 | `cedce4f` | 产品、计划与集成账本 |
+| mdo | `D:\GIT\mdo` / 当前分支 | `b297f83` | 产品、计划与集成账本 |
 | xrt | `codex/mdo-refactor-xrt` 独立工作树 | `9a094b3f` | 原工作树有既存未提交内容，隔离开发 |
-| xserver | `D:\GIT\xserver-mdo-refactor` / `codex/mdo-refactor-xs` | `6d5485e` | 原工作树有既存未提交内容，隔离开发 |
+| xserver | `D:\GIT\xserver-mdo-refactor` / `codex/mdo-refactor-xs` | `57c9164` | 原工作树有既存未提交内容，隔离开发 |
 
 ## 状态定义
 
@@ -91,8 +91,9 @@
 | WORK-109 可恢复 runtime scheduler | DONE | xrt `2fc7dac2` | Windows/GCC 与 Linux/Clang warning-as-error 有界全回归通过；Clang ASan/UBSan/LSan 与 GCC TSan 有界全回归通过；C11/C++17 公共头独立编译及 12 个新增 ABI 符号通过；到期、固定偏移/系统本地时区、weekday mask、skip/run-once/catch-up misfire、skip/queue-one overlap、稳定同刻排序、无效 ABI/血缘、容量和重启恢复回归通过；未运行压力或高负载测试 | runtime 冷注册并深拷贝 schedule 定义，宿主以显式 Unix 微秒时间单次 claim；每次 claim 原子推进持久化 cursor 并创建统一 RUNNING scheduled task；分钟/小时使用绝对间隔，日/周保持 wall-clock，DST gap 跳过、fold 可选；恢复定义一次锁内发布，不暴露初始 cursor；稳定借用字符串使容量成为 runtime 生命周期注册上限 |
 | WORK-110 artifacts/audit/event 统一 | DONE | xrt `de37b493` | Windows/GCC 与 Linux/Clang warning-as-error 有界全回归通过；Clang ASan/UBSan/LSan 与 GCC TSan 有界全回归通过，TSan 构建仅将 xrt 既有 `atomic_thread_fence` 和 TLS 保守未初始化告警从 error 降为 warning；C11/C++17 公共头及 16 个新增 ABI 符号通过；artifact 容量、SHA-256、分块读取、复用、EOF、篡改、event 淘汰/分页/断层、快照跨 runtime 生命周期和 task 统一事件回归通过；未运行压力或高负载测试 | runtime 以单调 ID、Unix 时间和独立 observability 锁统一 artifact 元数据与 event/audit replay；大工具输出原子落盘，模型只接收有界 head/tail、artifact ID 和相对路径；宿主按游标读取有界 chunk；agent callback、artifact 创建和 task revision 共享事件 ID 空间，字符串深拷贝且按记录数、总字节和单事件文本三重限额保留，淘汰或留存失败显式形成 cursor gap |
 | WORK-111 interruption/resume 语义 | DONE | xrt `9a094b3f` | Windows/GCC 与 Linux/Clang warning-as-error 有界全回归通过；Clang ASan/UBSan/LSan 与 GCC TSan 有界全回归通过，TSan 构建仅将 xrt 既有 `atomic_thread_fence` 和 TLS 保守未初始化告警从 error 降为 warning；C11/C++17 公共头及 9 个新增 ABI 符号通过；崩溃恢复、整批预检、陈旧决策、只读自动重试、显式副作用重试、记为不确定、异步 run 决策深拷贝、事件审计与快照跨 Agent 生命周期回归通过；未运行压力或高负载测试 | 未落账工具结果不再被默认视为“未执行”；恢复快照深拷贝 call ID、参数、目录代和 effect，默认只自动重试当前已知的纯读取工具；未知或有副作用的调用在任何前缀执行前返回 `RECOVERY_REQUIRED`，宿主按 call ID 显式选择 at-least-once 重试或不执行并写入 uncertainty 结果；同步和异步 run 共用策略，审计 schema v2 记录自动、显式和不确定决策 |
-| LIB-3 xwork 3.0 | DOING | - | - | 拆分 runtime/definition/agent/run/task，修复生命周期、并发、后台任务、工具和子 Agent 边界，再同步 xserver 零分叉副本 |
-| MDO-0～10 | TODO | - | - | LIB-GATE 后实施 |
+| LIB-3 xwork 3.0 | DONE | xrt `9a094b3f`；xserver `57c9164` | xllm 17 个、xllm-session 14 个、xwork 19 个生产文件与同一 xrt revision 双向逐字节一致；TCC 导入分别覆盖 70、89、163 个公开符号；Windows/Linux 全 15 扩展宿主构建、运行与嵌套 TCC 探针通过，32 项扩展结构检查和 2 项发布元数据检查通过；未运行压力或高负载测试 | xserver 删除旧 Python/config 分叉并同步完整 xwork v3 runtime/catalog/task/scheduler/MCP/artifact/recovery 实现；构建门发现只升级 xwork 会缺少 batch executor 与 session driver API，因此三个库统一固定到 `9a094b3f`，避免跨 revision 的伪零分叉组合 |
+| LIB-GATE 三库生产门禁 | DONE | xrt `9a094b3f`；xserver `57c9164` | Windows/Linux warning-as-error、有界功能回归、确定性交错、故障注入与 sanitizer 门已在各工作包通过；最终零分叉、公开符号、15 扩展宿主和双层 TCC 闭包通过；未运行压力或高负载测试 | 阶段三完成，允许进入 mdo 新架构实施；Ling 3.0 Tiny 三接口真实线上探针仍要求运行时提供三条显式 URL 与 key，不以离线 fixture 冒充线上结论 |
+| MDO-0～10 | TODO | - | - | 从源码根、依赖锁与 bootstrap 开始实施 |
 | QA-RELEASE | TODO | - | - | MDO-GATE 后实施 |
 
 ## 已确认的工程事实
@@ -118,7 +119,7 @@
 19. xllm 保留单次调用边界；生产分配器已移除进程级可变 selector，UTF-8、错误枚举、profile/hooks/prefix cache 快照与锁、资源上限、provider golden、流式分片、结构化错误、幂等重试、连接池与公开入口失败原子性均已收紧。请求字节写出后的网络失败不能仅凭“尚未交付模型事件”自动重放，必须由非空 `Idempotency-Key` 显式声明调用方意图；空闲连接必须以 READ 哨兵观测对端关闭并在复用前撤销哨兵，不能只读取 stream 状态；分配型 setter 必须先准备后提交，批量追加失败必须回滚本次前缀，client/call 及三种 provider 的 SSE/JSON 组装失败必须清理到调用前所有权边界；离线 replay 也必须发布正式终态；`xllm_history` 与 session 职责重复，只保留迁移兼容。
 20. xllm-session 是严格 single-writer 对象；`3.0.0-dev` 已用公开状态机固定 user/model/tool/turn 和 compaction prepare/execute/commit/abort 边界，并保留 v1/v2 相邻 turn 迁移兼容。token budget 由版本化 snapshot 暴露：shared 窗口按总窗口保留输出与安全空间，split 模式按独立输入上限保留安全空间，provider profile 只能被收窄，所有极值加法和阈值计算饱和而不回绕。工具关联键按 `(turn, tool_call_id)` 唯一：同 turn 不得复用，跨 turn 允许复用；所有写入/恢复入口和压缩、render 边界均禁止孤立或拆分 pair。压缩的 prepare/in-flight 阶段是可丢弃的进程内状态，只有完整 compact record 是 redo 点；恢复发布前必须重验代数、计数、质量与 pair 边界。persistence v3 已用 CRC32 覆盖 journal/snapshot 规范字节，checkpoint 只重放更高 sequence，默认逐记录 flush，并保留 append+显式 barrier；v1/v2 固定 fixture 和混合前缀均可迁移。普通 session getter 仍属于写者路径；跨线程读取必须先在稳定状态创建深拷贝的引用计数 snapshot，发布后不再访问源 session，超预算状态也能被 UI 安全检查。历史分支和编辑使用 message sequence：`ForkAt` 深拷贝合法前缀并开启独立 journal epoch，rewind/clear 先记录后发布，恢复核对旧 `next_sequence`；完成的 tool pair 不得被切开，文件 ledger 以首次 note 序列随边界裁剪。session 自有 OOM、snapshot 原子写、journal 短写回滚和 flush/close 不确定结果已有确定性注入；结构化存储 cause 保留 operation/path/XRT 数值，失败后的继续或恢复条件由状态机明确决定。
 21. xwork 的 task、tool registry、subagent 和 MCP proxy 全部随短命 `xwork_agent` 生存，无法支撑跨轮后台任务。v3 固定拆成进程级 runtime、不可变 agent definition、会话级 agent、单请求 run 和统一 task；Python REPL 不进入 core，原生 explore 提升为正式工具 backend。
-22. 三库独立构建不能由 xs all-module 宿主替代。session 已改为继承 xllm 的规范 XRT module root；xllm/xwork 默认依赖路径、xwork unity 的 explore/regex 和 LP64 测试格式均已修复。xserver 的 xwork 仍有 Python/config 分叉，当前 `UPSTREAM.txt` 的零分叉声明要到 LIB-3 同步后才重新成立。
+22. 三库独立构建不能由 xs all-module 宿主替代。session 已改为继承 xllm 的规范 XRT module root；xllm/xwork 默认依赖路径、xwork unity 的 explore/regex 和 LP64 测试格式均已修复。xserver 已删除旧 xwork Python/config 分叉，三个生产子集都以完整 revision 锚和逐字节门禁保持零分叉。
 23. xllm 3.1 的发布真值由 `VERSION`、公开头版本宏和 `manifest.json` 共同约束；默认 CI 只跑有界合同集。Ling 3.0 Tiny 线上专门开放 OpenAI Chat Completions、OpenAI Responses 与 Anthropic Messages 三种接口；严格探针必须同时获得三条显式 URL 和 runtime key，缺配置时在联网前失败，离线 fixture 不得代替线上结论。
 24. xserver 的 xrt extlib 副本以 `UPSTREAM.txt` 中完整 40 位提交为来源锚；`verify_vendored_xrt_lib.py` 同时验证工作树 HEAD 和每个已收录生产文件的 SHA-256。WSL 不能读取 Windows linked-worktree `.git` 路径时，发布构建必须显式传入经过格式校验的 `XS_BUILD_COMMIT`，不能接受 `unknown` 横幅。
 25. xwork v3 的对象生命周期不能继续由短命 session agent 代理：runtime 持有统一任务表，definition 是可共享的不可变策略代，run 独立持有取消、deadline、事件覆盖和 owned result，并反向保活 agent。任务条目以稳定独立分配和引用计数跨 agent 轮换存在，构造完成前不可查找，表摘除只释放表引用，潜在阻塞清理必须在 runtime 锁外执行。
@@ -132,8 +133,9 @@
 33. xwork scheduler 不拥有隐式时钟线程：宿主传入显式 Unix 微秒时间并每次最多 claim 一个 occurrence，claim 成功才同时推进 definition cursor 并把执行发布到统一 task 表。分钟/小时是绝对时间间隔，日/周在 UTC、固定偏移或系统本地时区保持 anchor wall-clock；本地 DST gap 跳过，fold 按定义选择。misfire 与 overlap 都有明确有界策略；definition restore 必须先完整验证和构造，再在一次 scheduler 锁内原子发布，不能让并发 claim 看到注册初值。claim/info 的字符串借用稳定 definition 存储，因此 unregister 使用 tombstone，`uMaxSchedules` 约束 runtime 生命周期内注册总量。
 34. xwork runtime 的 observability 服务统一管理 artifact 元数据与 event/audit replay：artifact 文件使用原子写、单调 ID、SHA-256 和 workspace 相对路径，注册表只保留稳定元数据且 runtime 销毁不删除普通文件；事件在 callback 前分配 schema version、全局 ID、Unix 时间和 agent/run/task 血缘，artifact 创建与 task revision 进入同一 ID 空间。replay 深拷贝字符串并受记录数、总字节和单事件文本上限约束，淘汰或 OOM 留存失败会消耗 ID、增加 dropped counter 并通过 cursor gap 明示，引用计数快照可安全跨 runtime 销毁。
 35. 工具结果尚未进入持久化 ledger 只能证明“结果缺失”，不能证明外部副作用未发生；跨文件系统、进程、网络或外部服务无法由本地 journal 提供 exactly-once。xwork 恢复必须先固定完整 pending 批次并校验全部 call-ID 决策，再允许任何调用执行；当前已知且 effect 仅为 READ 的工具可自动重试，其他工具默认停在显式恢复边界。`RETRY` 明确接受 at-least-once 并重新经过权限与 hook，`RECORD_UNCERTAIN` 不调用工具而向 session 写入可追溯的不确定结果。直接使用 `xllmSessionRunWithTools(NULL, ...)` 的宿主没有 xwork effect 元数据，必须自行实现同等预检，不能把底层 continuation 当作安全崩溃恢复。
+36. vendored 零分叉是依赖闭包属性，不能只逐库比较文件。xwork `9a094b3f` 依赖同 revision 的 xllm batch executor 和 xllm-session driver API；把它与 `c6b90284` 依赖组合会在宿主编译期失败。xserver 因而必须让 xllm、xllm-session、xwork 三个来源锚指向同一权威提交，并在同一门禁中检查文件集、符号集、完整宿主链接和嵌套 TCC 调用。
 
 ## 下一步
 
-1. 完成 LIB-3 收口并同步 xserver 零分叉副本，运行宿主集成门禁；运行环境提供三条显式 URL 和 runtime key 时再执行 Ling 3.0 Tiny 的 Chat Completions、Responses 与 Anthropic Messages 真实探针；
+1. 开始 MDO-0：确认新 `app` 源码根，建立可维护的模块化目录、`deps.lock`、统一构建入口和最小 bootstrap 骨架；运行环境提供三条显式 URL 和 runtime key 时再执行 Ling 3.0 Tiny 的 Chat Completions、Responses 与 Anthropic Messages 真实探针；
 2. 全部后续验收继续使用有界功能、故障注入和确定性交错，略过压力与高负载测试。
