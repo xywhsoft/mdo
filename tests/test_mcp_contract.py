@@ -53,6 +53,9 @@ class McpContractTests(unittest.TestCase):
         self.assertIn("xworkRuntimeReplaceMcpServersBySource", source)
         self.assertIn("xworkRuntimeDisconnectMcpServer", source)
         self.assertIn("MdoMcpResolveSecret", source)
+        self.assertIn("XWORK_MCP_TRANSPORT_STREAMABLE_HTTP", source)
+        self.assertIn("pHttpHeaders", source)
+        self.assertIn("MdoMcpCatalogForgetSecrets", source)
 
 
 if __name__ == "__main__":

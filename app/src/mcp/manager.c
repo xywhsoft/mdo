@@ -25,6 +25,11 @@ typedef struct MdoMcpEnvironmentEntry {
     char* Value;
 } MdoMcpEnvironmentEntry;
 
+typedef struct MdoMcpHttpHeaderEntry {
+    char* Name;
+    char* Value;
+} MdoMcpHttpHeaderEntry;
+
 typedef struct MdoMcpServerEntry {
     bool External;
     bool Enabled;
@@ -46,6 +51,8 @@ typedef struct MdoMcpServerEntry {
     size_t ArgumentCount;
     MdoMcpEnvironmentEntry* Environment;
     size_t EnvironmentCount;
+    MdoMcpHttpHeaderEntry* HttpHeaders;
+    size_t HttpHeaderCount;
     char** AllowedTools;
     size_t AllowedToolCount;
     char** DeniedTools;
@@ -264,6 +271,15 @@ static void MdoMcpServerUnit(MdoMcpServerEntry* pEntry)
         }
     }
     xrtFree(pEntry->Environment);
+    for ( i = 0u; i < pEntry->HttpHeaderCount; ++i ) {
+        xrtFree(pEntry->HttpHeaders[i].Name);
+        if ( pEntry->HttpHeaders[i].Value != NULL ) {
+            xrtSecureZero(pEntry->HttpHeaders[i].Value,
+                strlen(pEntry->HttpHeaders[i].Value));
+            xrtFree(pEntry->HttpHeaders[i].Value);
+        }
+    }
+    xrtFree(pEntry->HttpHeaders);
     MdoMcpStringArrayUnit(pEntry->AllowedTools, pEntry->AllowedToolCount);
     MdoMcpStringArrayUnit(pEntry->DeniedTools, pEntry->DeniedToolCount);
     memset(pEntry, 0, sizeof(*pEntry));
@@ -282,6 +298,13 @@ static void MdoMcpCatalogForgetSecrets(MdoMcpCatalog* pCatalog)
             xrtSecureZero(Value, strlen(Value));
             xrtFree(Value);
             pEntry->Environment[j].Value = NULL;
+        }
+        for ( j = 0u; j < pEntry->HttpHeaderCount; ++j ) {
+            char* Value = pEntry->HttpHeaders[j].Value;
+            if ( Value == NULL ) continue;
+            xrtSecureZero(Value, strlen(Value));
+            xrtFree(Value);
+            pEntry->HttpHeaders[j].Value = NULL;
         }
     }
 }
@@ -871,6 +894,122 @@ static bool MdoMcpHeaderNameValid(xstrview Name)
     return true;
 }
 
+static unsigned char MdoMcpAsciiLower(unsigned char Ch)
+{
+    return Ch >= 'A' && Ch <= 'Z' ? (unsigned char)(Ch + ('a' - 'A')) : Ch;
+}
+
+static bool MdoMcpHeaderNameEqual(xstrview Left, xstrview Right)
+{
+    size_t i;
+    if ( Left.Size != Right.Size ) return false;
+    for ( i = 0u; i < Left.Size; ++i ) {
+        if ( MdoMcpAsciiLower((unsigned char)Left.Data[i]) !=
+             MdoMcpAsciiLower((unsigned char)Right.Data[i]) ) return false;
+    }
+    return true;
+}
+
+static bool MdoMcpHeaderNameEqualsText(xstrview Name, cstr Text)
+{
+    return MdoMcpHeaderNameEqual(Name,
+        (xstrview){ Text, Text != NULL ? strlen(Text) : 0u });
+}
+
+static bool MdoMcpHeaderNameReserved(xstrview Name)
+{
+    bool Mcp = Name.Size >= 4u &&
+        MdoMcpAsciiLower((unsigned char)Name.Data[0]) == 'm' &&
+        MdoMcpAsciiLower((unsigned char)Name.Data[1]) == 'c' &&
+        MdoMcpAsciiLower((unsigned char)Name.Data[2]) == 'p' &&
+        Name.Data[3] == '-';
+    return Mcp || MdoMcpHeaderNameEqualsText(Name, "accept") ||
+        MdoMcpHeaderNameEqualsText(Name, "content-type") ||
+        MdoMcpHeaderNameEqualsText(Name, "content-length") ||
+        MdoMcpHeaderNameEqualsText(Name, "transfer-encoding") ||
+        MdoMcpHeaderNameEqualsText(Name, "connection") ||
+        MdoMcpHeaderNameEqualsText(Name, "host");
+}
+
+static bool MdoMcpHeaderValueValid(cstr Value)
+{
+    const unsigned char* p = (const unsigned char*)Value;
+    if ( p == NULL || p[0] == 0u || strlen(Value) > MDO_MCP_SECRET_LIMIT )
+        return false;
+    for ( ; *p != 0u; ++p ) {
+        if ( *p == '\r' || *p == '\n' || (*p < 0x20u && *p != '\t') ||
+             *p == 0x7fu ) return false;
+    }
+    return true;
+}
+
+static bool MdoMcpHttpEndpointValid(cstr Endpoint)
+{
+    const unsigned char* p = (const unsigned char*)Endpoint;
+    const unsigned char* Authority;
+    const unsigned char* AuthorityEnd;
+    const unsigned char* HostEnd;
+    const unsigned char* Port = NULL;
+    uint32 PortValue = 0u;
+    size_t Size = Endpoint != NULL ? strlen(Endpoint) : 0u;
+    size_t i;
+    if ( Size == 0u || Size > MDO_MCP_STRING_LIMIT ||
+         strchr(Endpoint, '\r') != NULL || strchr(Endpoint, '\n') != NULL )
+        return false;
+    if ( Size < 9u || MdoMcpAsciiLower(p[0]) != 'h' ||
+         MdoMcpAsciiLower(p[1]) != 't' || MdoMcpAsciiLower(p[2]) != 't' ||
+         MdoMcpAsciiLower(p[3]) != 'p' || MdoMcpAsciiLower(p[4]) != 's' ||
+         p[5] != ':' || p[6] != '/' || p[7] != '/' ||
+         strchr(Endpoint, '#') != NULL ) return false;
+    Authority = p + 8u;
+    AuthorityEnd = Authority;
+    while ( *AuthorityEnd != 0u && *AuthorityEnd != '/' &&
+            *AuthorityEnd != '?' ) ++AuthorityEnd;
+    if ( Authority == AuthorityEnd ||
+         memchr(Authority, '@', (size_t)(AuthorityEnd - Authority)) != NULL )
+        return false;
+    for ( i = 0u; i < (size_t)(AuthorityEnd - Authority); ++i ) {
+        unsigned char Ch = Authority[i];
+        if ( Ch <= 0x20u || Ch >= 0x7fu || Ch == '\\' ) return false;
+    }
+    if ( Authority[0] == '[' ) {
+        const unsigned char* Close = (const unsigned char*)memchr(Authority,
+            ']', (size_t)(AuthorityEnd - Authority));
+        if ( Close == NULL || Close == Authority + 1u ) return false;
+        HostEnd = Close + 1u;
+        if ( HostEnd != AuthorityEnd ) {
+            if ( *HostEnd != ':' ) return false;
+            Port = HostEnd + 1u;
+        }
+    } else {
+        const unsigned char* Cursor;
+        HostEnd = AuthorityEnd;
+        for ( Cursor = Authority; Cursor != AuthorityEnd; ++Cursor ) {
+            unsigned char Ch = *Cursor;
+            if ( Ch == ':' ) {
+                if ( Port != NULL ) return false;
+                HostEnd = Cursor;
+                Port = Cursor + 1u;
+            } else if ( !((Ch >= 'a' && Ch <= 'z') ||
+                          (Ch >= 'A' && Ch <= 'Z') ||
+                          (Ch >= '0' && Ch <= '9') || Ch == '-' ||
+                          Ch == '.') ) return false;
+        }
+        if ( HostEnd == Authority ) return false;
+    }
+    if ( Port != NULL ) {
+        const unsigned char* Cursor;
+        if ( Port == AuthorityEnd ) return false;
+        for ( Cursor = Port; Cursor != AuthorityEnd; ++Cursor ) {
+            if ( *Cursor < '0' || *Cursor > '9' ) return false;
+            PortValue = PortValue * 10u + (uint32)(*Cursor - '0');
+            if ( PortValue > 65535u ) return false;
+        }
+        if ( PortValue == 0u ) return false;
+    }
+    return true;
+}
+
 static bool MdoMcpSecretReferenceSyntaxValid(xstrview Reference)
 {
     static const char* const Prefixes[] = {
@@ -1090,20 +1229,18 @@ static bool MdoMcpParseStdio(const xvalue* pTransport,
 }
 
 static bool MdoMcpParseHttp(const xvalue* pTransport,
-    MdoMcpServerEntry* pEntry, bool* pValidated,
-    char Error[MDO_MCP_ERROR_LIMIT])
+    MdoMcpServerEntry* pEntry, char Error[MDO_MCP_ERROR_LIMIT])
 {
     static const char* const Keys[] = { "type", "endpoint", "headers" };
     static const char* const HeaderKeys[] = { "name", "secret_ref" };
     const xvalue* pHeaders = MdoMcpObjectGet(pTransport, "headers");
     size_t Count;
     size_t i;
-    *pValidated = false;
     if ( !MdoMcpObjectKeys(pTransport, Keys,
             sizeof(Keys) / sizeof(Keys[0]), "transport", Error) ||
          !MdoMcpCopyRequiredString(pTransport, "endpoint",
             MDO_MCP_STRING_LIMIT, &pEntry->Endpoint, Error) ||
-         strncmp(pEntry->Endpoint, "https://", 8u) != 0 ||
+         !MdoMcpHttpEndpointValid(pEntry->Endpoint) ||
          pHeaders == NULL || xrtValueType(pHeaders) != XVALUE_ARRAY ||
          xrtValueCount(pHeaders) > MDO_MCP_ENVIRONMENT_LIMIT ) {
         if ( Error[0] == '\0' ) MdoMcpFormatError(Error,
@@ -1112,6 +1249,11 @@ static bool MdoMcpParseHttp(const xvalue* pTransport,
         return false;
     }
     Count = xrtValueCount(pHeaders);
+    if ( Count != 0u ) {
+        pEntry->HttpHeaders = (MdoMcpHttpHeaderEntry*)xrtCalloc(Count,
+            sizeof(*pEntry->HttpHeaders));
+        if ( pEntry->HttpHeaders == NULL ) return false;
+    }
     for ( i = 0u; i < Count; ++i ) {
         const xvalue* pHeader = xrtValueArrayGet(pHeaders, i);
         xstrview Name;
@@ -1122,6 +1264,7 @@ static bool MdoMcpParseHttp(const xvalue* pTransport,
                 "streamable-http header", Error) ||
              !MdoMcpValueString(MdoMcpObjectGet(pHeader, "name"), &Name) ||
              !MdoMcpHeaderNameValid(Name) ||
+             MdoMcpHeaderNameReserved(Name) ||
              !MdoMcpValueString(MdoMcpObjectGet(pHeader, "secret_ref"),
                 &Reference) ||
              !MdoMcpSecretReferenceSyntaxValid(Reference) ) {
@@ -1130,33 +1273,30 @@ static bool MdoMcpParseHttp(const xvalue* pTransport,
                 "streamable-http header needs a token name and secret_ref");
             return false;
         }
+        if ( !MdoMcpStringCopy(&pEntry->HttpHeaders[i].Name, Name, 256u,
+                true) ) return false;
+        pEntry->HttpHeaderCount = i + 1u;
         for ( j = 0u; j < i; ++j ) {
-            const xvalue* pPrevious = xrtValueArrayGet(pHeaders, j);
-            xstrview Previous;
-            size_t k;
-            bool Same;
-            if ( !MdoMcpValueString(MdoMcpObjectGet(pPrevious, "name"),
-                    &Previous) || Previous.Size != Name.Size ) continue;
-            Same = true;
-            for ( k = 0u; k < Name.Size; ++k ) {
-                unsigned char A = (unsigned char)Name.Data[k];
-                unsigned char B = (unsigned char)Previous.Data[k];
-                if ( A >= 'A' && A <= 'Z' ) A = (unsigned char)(A + 32u);
-                if ( B >= 'A' && B <= 'Z' ) B = (unsigned char)(B + 32u);
-                if ( A != B ) { Same = false; break; }
-            }
-            if ( Same ) {
+            xstrview Previous = {
+                pEntry->HttpHeaders[j].Name,
+                strlen(pEntry->HttpHeaders[j].Name)
+            };
+            if ( MdoMcpHeaderNameEqual(Name, Previous) ) {
                 MdoMcpFormatError(Error, MDO_MCP_ERROR_LIMIT,
                     "streamable-http headers contain a duplicate name");
                 return false;
             }
         }
+        if ( !MdoMcpResolveSecret(Reference,
+                &pEntry->HttpHeaders[i].Value, Error) ) return false;
+        if ( !MdoMcpHeaderValueValid(pEntry->HttpHeaders[i].Value) ) {
+            MdoMcpFormatError(Error, MDO_MCP_ERROR_LIMIT,
+                "streamable-http header secret contains unsafe bytes");
+            return false;
+        }
     }
     pEntry->Transport = MDO_MCP_TRANSPORT_STREAMABLE_HTTP;
-    *pValidated = true;
-    MdoMcpFormatError(Error, MDO_MCP_ERROR_LIMIT,
-        "streamable-http is reserved until the xwork HTTP transport is available");
-    return false;
+    return true;
 }
 
 static bool MdoMcpParseServer(const MdoMcpSource* pSource,
@@ -1320,11 +1460,12 @@ static bool MdoMcpParseServer(const MdoMcpSource* pSource,
             goto done;
         }
     } else if ( MdoMcpViewEqual(View, "streamable-http") ) {
-        bool Validated = false;
-        (void)MdoMcpParseHttp(pTransport, pEntry, &Validated, Error);
-        *pStage = Validated ? MDO_MCP_DIAGNOSTIC_RUNTIME :
-            MDO_MCP_DIAGNOSTIC_PARSE;
-        goto done;
+        if ( !MdoMcpParseHttp(pTransport, pEntry, Error) ) {
+            *pStage = MdoMcpMemoryError() ? MDO_MCP_DIAGNOSTIC_PARSE :
+                (strstr(Error, "secret") != NULL ?
+                    MDO_MCP_DIAGNOSTIC_SECRET : MDO_MCP_DIAGNOSTIC_PARSE);
+            goto done;
+        }
     } else {
         MdoMcpFormatError(Error, MDO_MCP_ERROR_LIMIT,
             "transport.type is unsupported");
@@ -1432,6 +1573,7 @@ static bool MdoMcpPublishCandidate(MdoMcpCatalog* pCatalog,
 {
     xwork_mcp_server_config* Configs = NULL;
     xwork_mcp_environment** Environment = NULL;
+    xwork_mcp_http_header** HttpHeaders = NULL;
     xwork_error Error;
     MdoMcpCatalog* pOldCatalog;
     MdoMcpDiagnostics* pOldDiagnostics;
@@ -1445,7 +1587,10 @@ static bool MdoMcpPublishCandidate(MdoMcpCatalog* pCatalog,
             sizeof(*Configs));
         Environment = (xwork_mcp_environment**)xrtCalloc(pCatalog->Count,
             sizeof(*Environment));
-        if ( Configs == NULL || Environment == NULL ) goto done;
+        HttpHeaders = (xwork_mcp_http_header**)xrtCalloc(pCatalog->Count,
+            sizeof(*HttpHeaders));
+        if ( Configs == NULL || Environment == NULL || HttpHeaders == NULL )
+            goto done;
     }
     for ( i = 0u; i < pCatalog->Count; ++i ) {
         MdoMcpServerEntry* pEntry = &pCatalog->Entries[i];
@@ -1458,6 +1603,15 @@ static bool MdoMcpPublishCandidate(MdoMcpCatalog* pCatalog,
             for ( j = 0u; j < pEntry->EnvironmentCount; ++j ) {
                 Environment[i][j].sName = pEntry->Environment[j].Name;
                 Environment[i][j].sValue = pEntry->Environment[j].Value;
+            }
+        }
+        if ( pEntry->HttpHeaderCount != 0u ) {
+            HttpHeaders[i] = (xwork_mcp_http_header*)xrtCalloc(
+                pEntry->HttpHeaderCount, sizeof(*HttpHeaders[i]));
+            if ( HttpHeaders[i] == NULL ) goto done;
+            for ( j = 0u; j < pEntry->HttpHeaderCount; ++j ) {
+                HttpHeaders[i][j].sName = pEntry->HttpHeaders[j].Name;
+                HttpHeaders[i][j].sValue = pEntry->HttpHeaders[j].Value;
             }
         }
         Configs[i].sServerId = pEntry->Id;
@@ -1485,6 +1639,13 @@ static bool MdoMcpPublishCandidate(MdoMcpCatalog* pCatalog,
         Configs[i].iDeniedToolCount = pEntry->DeniedToolCount;
         Configs[i].bEnabled = pEntry->Enabled;
         Configs[i].bAutoReconnect = pEntry->AutoReconnect;
+        Configs[i].eTransport = pEntry->Transport ==
+                MDO_MCP_TRANSPORT_STREAMABLE_HTTP
+            ? XWORK_MCP_TRANSPORT_STREAMABLE_HTTP
+            : XWORK_MCP_TRANSPORT_STDIO;
+        Configs[i].sEndpoint = pEntry->Endpoint;
+        Configs[i].pHttpHeaders = HttpHeaders[i];
+        Configs[i].iHttpHeaderCount = pEntry->HttpHeaderCount;
     }
     memset(&Error, 0, sizeof(Error));
     if ( !xrtMutexLock(g_MdoMcp.Lock) ) goto done;
@@ -1519,6 +1680,10 @@ done:
     if ( Environment != NULL ) {
         for ( i = 0u; i < pCatalog->Count; ++i ) xrtFree(Environment[i]);
     }
+    if ( HttpHeaders != NULL ) {
+        for ( i = 0u; i < pCatalog->Count; ++i ) xrtFree(HttpHeaders[i]);
+    }
+    xrtFree(HttpHeaders);
     xrtFree(Environment);
     xrtFree(Configs);
     return Ok;
@@ -1646,6 +1811,7 @@ static bool MdoMcpServerInfoCopy(const MdoMcpCatalog* pCatalog,
     pInfo->SourceHash = pEntry->SourceHash;
     pInfo->ArgumentCount = pEntry->ArgumentCount;
     pInfo->EnvironmentCount = pEntry->EnvironmentCount;
+    pInfo->HttpHeaderCount = pEntry->HttpHeaderCount;
     pInfo->AllowedToolCount = pEntry->AllowedToolCount;
     pInfo->DeniedToolCount = pEntry->DeniedToolCount;
     pInfo->StartupTimeoutMilliseconds =

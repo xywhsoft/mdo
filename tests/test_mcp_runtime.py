@@ -160,9 +160,10 @@ static void PrintCatalog(const char *label) {{
         (unsigned long long)MdoMcpManagerGeneration(),
         MdoMcpCatalogCount(catalog));
     if (MdoMcpCatalogAt(catalog, 0u, &info))
-        printf(" id:%s external:%d args:%zu env:%zu hash:%zu",
+        printf(" id:%s external:%d args:%zu env:%zu hash:%zu headers:%zu transport:%d",
             info.Id, info.External ? 1 : 0, info.ArgumentCount,
-            info.EnvironmentCount, strlen(info.SourceHash));
+            info.EnvironmentCount, strlen(info.SourceHash),
+            info.HttpHeaderCount, (int)info.Transport);
     printf("\n");
     MdoMcpCatalogRelease(catalog);
 }}
@@ -194,6 +195,19 @@ void ServiceInit(XS_HostInfo *host) {{
     const char *manual_args[2];
     uint64 generation;
     (void)host;
+    printf("endpoint_validation=valid:%d http:%d userinfo:%d fragment:%d port0:%d overflow:%d\n",
+        MdoMcpHttpEndpointValid("HTTPS://example.com:443/mcp?mode=1") ? 1 : 0,
+        MdoMcpHttpEndpointValid("http://example.com/mcp") ? 1 : 0,
+        MdoMcpHttpEndpointValid("https://user@example.com/mcp") ? 1 : 0,
+        MdoMcpHttpEndpointValid("https://example.com/mcp#fragment") ? 1 : 0,
+        MdoMcpHttpEndpointValid("https://example.com:0/mcp") ? 1 : 0,
+        MdoMcpHttpEndpointValid("https://example.com:65536/mcp") ? 1 : 0);
+    printf("header_validation=authorization:%d accept:%d mcp:%d safe:%d newline:%d\n",
+        MdoMcpHeaderNameReserved((xstrview){{"Authorization", 13u}}) ? 1 : 0,
+        MdoMcpHeaderNameReserved((xstrview){{"Accept", 6u}}) ? 1 : 0,
+        MdoMcpHeaderNameReserved((xstrview){{"mCp-Name", 8u}}) ? 1 : 0,
+        MdoMcpHeaderValueValid("Bearer secret-v1") ? 1 : 0,
+        MdoMcpHeaderValueValid("unsafe\nvalue") ? 1 : 0);
     xworkRuntimeConfigInit(&runtime_config);
     memset(&error, 0, sizeof(error));
     if (!MdoHomeInit() || !Write("mcp/mock.json", sValid)) {{
@@ -303,12 +317,15 @@ def write_site(site: Path, base: Path) -> tuple[Path, Path]:
         "schema_version": 1,
         "id": "mock",
         "name": "HTTP mock",
-        "description": "Reserved transport.",
+        "description": "HTTP mock tools.",
         "enabled": True,
         "transport": {
             "type": "streamable-http",
             "endpoint": "https://example.invalid/mcp",
-            "headers": [],
+            "headers": [{
+                "name": "Authorization",
+                "secret_ref": "env:MDO_MCP_TEST_SECRET",
+            }],
         },
         "protocol_version": "2026-07-28",
         "startup_timeout_ms": 5000,
@@ -414,6 +431,8 @@ def main() -> int:
         write_site(site, base)
         output = run_probe(host, site, base / "home")
         assert "manager_init_failed=" not in output, output
+        assert "endpoint_validation=valid:1 http:0 userinfo:0 fragment:0 port0:0 overflow:0" in output, output
+        assert "header_validation=authorization:0 accept:1 mcp:1 safe:1 newline:0" in output, output
         assert "initial_catalog=generation:1 count:1 id:mock external:1 args:2 env:1 hash:64" in output, output
         assert "initial_status=state:0 enabled:1 connected:0 discovered:0 tools:0 requests:0" in output, output
         assert "cold_marker=0 runtime_count=1" in output, output
@@ -441,8 +460,8 @@ def main() -> int:
         assert "invalid_http_catalog=generation:6 count:0" in output, output
         assert "invalid_http_diagnostic=stage:3 id:mock" in output, output
         assert "http_reload=1" in output, output
-        assert "http_catalog=generation:7 count:0" in output, output
-        assert "http_diagnostic=stage:5 id:mock" in output, output
+        assert "http_catalog=generation:7 count:1 id:mock external:1 args:0 env:0 hash:64 headers:1 transport:2" in output, output
+        assert "http_diagnostic_count=0" in output, output
         assert "manual_other=1" in output, output
         assert "collision_reload=0" in output, output
         assert "collision_generation=8 expected:8" in output, output

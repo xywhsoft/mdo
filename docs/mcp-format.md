@@ -56,13 +56,15 @@ remote names that are not denied. Effects are selected from `read`,
 `workspace-write`, `process`, `network`, `external-service`, `secrets`,
 `schedule`, and `agent-delegation`.
 
-Schema v1 implements `stdio`. `streamable-http` is a reserved transport value
-for the MDO-5 HTTP substage and is never silently treated as stdio. Its shape is
+Schema v1 implements `stdio` and `streamable-http`; `streamable-http` is never silently treated as stdio,
+and stdio is never treated as HTTP. The HTTP shape is
 `{"type":"streamable-http","endpoint":"https://...","headers":[{"name":"Authorization","secret_ref":"env:API_TOKEN"}]}`.
 Endpoints must use HTTPS. Header names use the HTTP token grammar, are unique
 without regard to ASCII case, and header values are secret references only;
-publishing it before the matching xwork transport is available produces an
-explicit unsupported-transport diagnostic.
+transport-owned headers (`Host`, framing headers, `Accept`, `Content-Type`, and
+the `Mcp-*` namespace) are rejected. Header values containing control bytes are
+rejected after secret resolution. xwork synchronously deep-copies accepted
+headers, then MDO clears the resolved values from its candidate catalog.
 
 `working_directory` is either null, an absolute platform path, or a portable
 `mdo-home:<relative-path>` reference. Relative components use `/`, remain below
@@ -85,6 +87,9 @@ not start the server.
 Registration is cold: startup copies validated definitions into the
 process-wide xwork runtime without launching a server. The first explicit
 test, refresh, server-specific search, schema load, or tool call connects it.
+For HTTP servers, connection uses the configured HTTPS endpoint and injects the
+resolved headers only into requests; catalog, status, diagnostics, and source
+files retain no resolved header value.
 Agent prompts initially receive only the compact `tool_search` and `tool_load`
 discovery pair. A selected remote tool publishes one complete schema into the
 next Agent catalog generation.

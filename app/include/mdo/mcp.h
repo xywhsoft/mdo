@@ -43,6 +43,7 @@ typedef struct MdoMcpServerInfo {
     const char* SourceHash;
     size_t ArgumentCount;
     size_t EnvironmentCount;
+    size_t HttpHeaderCount;
     size_t AllowedToolCount;
     size_t DeniedToolCount;
     uint32 StartupTimeoutMilliseconds;
