@@ -16,6 +16,7 @@
 
 typedef struct MdoSession MdoSession;
 typedef struct MdoSessionCatalog MdoSessionCatalog;
+typedef struct MdoSessionEventSnapshot MdoSessionEventSnapshot;
 
 typedef enum MdoSessionStatus {
     MDO_SESSION_ACTIVE = 1,
@@ -57,6 +58,7 @@ typedef struct MdoSessionInfo {
     int64 CreatedAt;
     int64 UpdatedAt;
     bool Pinned;
+    bool RuntimeOpen;            /* transient; never persisted to meta.json. */
     MdoSessionStatus Status;
     MdoSessionStatus PreviousStatus;
     MdoModelProtocol Protocol;
@@ -79,6 +81,34 @@ typedef struct MdoSessionDiagnostic {
     char Path[MDO_SESSION_PATH_CAPACITY];
     char Message[256];
 } MdoSessionDiagnostic;
+
+/* Borrowed string views returned by an owned event snapshot. */
+typedef struct MdoSessionEventInfo {
+    uint32 Size;
+    uint32 SchemaVersion;
+    uint64 EventId;
+    uint64 SourceEventId;
+    int64 OccurredAt;
+    xwork_event_kind Kind;
+    uint64 AgentTurn;
+    uint32 AgentDepth;
+    uint64 AgentId;
+    uint64 RunId;
+    uint64 TaskId;
+    uint64 ArtifactId;
+    uint64 ParentRunId;
+    xwork_tool_effects Effects;
+    uint32 TaskState;
+    uint64 TaskRevision;
+    bool Success;
+    bool EffectApplied;
+    bool TextTruncated;
+    const char* Text;
+    const char* ToolName;
+    const char* ToolCallId;
+    const char* ArtifactPath;
+    const char* Model;
+} MdoSessionEventInfo;
 
 bool MdoSessionManagerInit(xwork_runtime* Runtime);
 void MdoSessionManagerUnit(void);
@@ -119,5 +149,23 @@ bool MdoSessionCatalogAt(const MdoSessionCatalog* Catalog, size_t Index,
 size_t MdoSessionCatalogDiagnosticCount(const MdoSessionCatalog* Catalog);
 bool MdoSessionCatalogDiagnosticAt(const MdoSessionCatalog* Catalog,
     size_t Index, MdoSessionDiagnostic* Diagnostic);
+
+/* Replays up to Limit events strictly after AfterEventId. Limit zero selects
+ * the default; values above the public maximum are rejected. */
+MdoSessionEventSnapshot* MdoSessionEventReplay(const char* ProjectId,
+    const char* SessionId, uint64 AfterEventId, size_t Limit,
+    xwork_error* Error);
+MdoSessionEventSnapshot* MdoSessionEventSnapshotRef(
+    MdoSessionEventSnapshot* Snapshot);
+void MdoSessionEventSnapshotRelease(MdoSessionEventSnapshot* Snapshot);
+size_t MdoSessionEventSnapshotCount(const MdoSessionEventSnapshot* Snapshot);
+bool MdoSessionEventSnapshotAt(const MdoSessionEventSnapshot* Snapshot,
+    size_t Index, MdoSessionEventInfo* Info);
+uint64 MdoSessionEventSnapshotNextCursor(
+    const MdoSessionEventSnapshot* Snapshot);
+uint64 MdoSessionEventSnapshotLatestId(
+    const MdoSessionEventSnapshot* Snapshot);
+bool MdoSessionEventSnapshotHistoryLost(
+    const MdoSessionEventSnapshot* Snapshot);
 
 #endif

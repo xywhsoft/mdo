@@ -3,15 +3,24 @@
 
 #include "../../include/mdo/home.h"
 #include "../../include/mdo/sessions.h"
+#include "internal.h"
 
 #define MDO_SESSION_SCHEMA_VERSION 1u
 #define MDO_SESSION_META_LIMIT (64u * 1024u)
 #define MDO_SESSION_SOURCE_ROOT "sessions"
 
+typedef struct MdoSessionActive {
+    char ProjectId[MDO_PROJECT_ID_CAPACITY];
+    char SessionId[MDO_SESSION_ID_CAPACITY];
+} MdoSessionActive;
+
 typedef struct MdoSessionManagerState {
     xmutex* Lock;
     xwork_runtime* Runtime;
     uint64 Generation;
+    MdoSessionActive* Active;
+    size_t ActiveCount;
+    size_t ActiveCapacity;
     bool Initialized;
 } MdoSessionManagerState;
 
@@ -437,6 +446,52 @@ static void MdoSessionsGenerationAdvance(void)
         ++g_MdoSessions.Generation;
 }
 
+static size_t MdoSessionsActiveFind(const char* ProjectId,
+    const char* SessionId)
+{
+    size_t i;
+    for ( i = 0u; i < g_MdoSessions.ActiveCount; ++i ) {
+        MdoSessionActive* Active = &g_MdoSessions.Active[i];
+        if ( strcmp(Active->ProjectId, ProjectId) == 0 &&
+             strcmp(Active->SessionId, SessionId) == 0 ) return i;
+    }
+    return SIZE_MAX;
+}
+
+static bool MdoSessionsActiveAdd(const char* ProjectId,
+    const char* SessionId)
+{
+    MdoSessionActive* Active;
+    if ( MdoSessionsActiveFind(ProjectId, SessionId) != SIZE_MAX )
+        return false;
+    if ( !MdoSessionsGrow((void**)&g_MdoSessions.Active,
+            &g_MdoSessions.ActiveCapacity, g_MdoSessions.ActiveCount + 1u,
+            sizeof(*g_MdoSessions.Active)) ) return false;
+    Active = &g_MdoSessions.Active[g_MdoSessions.ActiveCount++];
+    memset(Active, 0, sizeof(*Active));
+    snprintf(Active->ProjectId, sizeof(Active->ProjectId), "%s", ProjectId);
+    snprintf(Active->SessionId, sizeof(Active->SessionId), "%s", SessionId);
+    MdoSessionsGenerationAdvance();
+    return true;
+}
+
+void MdoSessionsInternalActiveRelease(const char* ProjectId,
+    const char* SessionId)
+{
+    size_t Index;
+    if ( !g_MdoSessions.Initialized || g_MdoSessions.Lock == NULL ) return;
+    xrtMutexLock(g_MdoSessions.Lock);
+    Index = MdoSessionsActiveFind(ProjectId, SessionId);
+    if ( Index != SIZE_MAX ) {
+        --g_MdoSessions.ActiveCount;
+        if ( Index != g_MdoSessions.ActiveCount )
+            g_MdoSessions.Active[Index] =
+                g_MdoSessions.Active[g_MdoSessions.ActiveCount];
+        MdoSessionsGenerationAdvance();
+    }
+    xrtMutexUnlock(g_MdoSessions.Lock);
+}
+
 bool MdoSessionManagerInit(xwork_runtime* Runtime)
 {
     if ( g_MdoSessions.Initialized ) return true;
@@ -455,9 +510,11 @@ bool MdoSessionManagerInit(xwork_runtime* Runtime)
 
 void MdoSessionManagerUnit(void)
 {
+    g_MdoSessions.Initialized = false;
     if ( g_MdoSessions.Runtime != NULL )
         xworkRuntimeRelease(g_MdoSessions.Runtime);
     if ( g_MdoSessions.Lock != NULL ) xrtMutexDestroy(g_MdoSessions.Lock);
+    xrtFree(g_MdoSessions.Active);
     memset(&g_MdoSessions, 0, sizeof(g_MdoSessions));
 }
 
@@ -514,6 +571,7 @@ MdoSession* MdoSessionCreate(const MdoSessionCreateOptions* Options,
     MdoAgentSessionOptions AgentOptions;
     MdoAgentSessionInfo AgentInfo;
     MdoAgentSession* Agent = NULL;
+    MdoSessionEventBridge* Bridge = NULL;
     MdoSession* Session = NULL;
     MdoSessionInfo Info;
     char* SessionId = NULL;
@@ -538,7 +596,9 @@ MdoSession* MdoSessionCreate(const MdoSessionCreateOptions* Options,
             MDO_PROJECT_ID_CAPACITY) ||
          Options->Agent.SessionPath != NULL ||
          Options->Agent.JournalPath != NULL || Options->Agent.Recover ||
-         Options->Agent.ArtifactDirectory != NULL ) {
+         Options->Agent.ArtifactDirectory != NULL ||
+         ((Options->Agent.OnOwnerRetain != NULL) !=
+          (Options->Agent.OnOwnerRelease != NULL)) ) {
         MdoSessionsError(Error, XWORK_ERROR_INVALID_ARGUMENT,
             "invalid managed session create request");
         return NULL;
@@ -577,12 +637,31 @@ MdoSession* MdoSessionCreate(const MdoSessionCreateOptions* Options,
         goto done;
     }
     DirectoryCreated = true;
+    Bridge = MdoSessionEventBridgeCreate(Options->ProjectId, SessionId,
+        Options->Agent.OnEvent, Options->Agent.EventUserData,
+        Options->Agent.OwnerUserData, Options->Agent.OnOwnerRetain,
+        Options->Agent.OnOwnerRelease, Error);
+    if ( Bridge == NULL ) goto done;
+    xrtMutexLock(g_MdoSessions.Lock);
+    if ( !MdoSessionsActiveAdd(Options->ProjectId, SessionId) ) {
+        xrtMutexUnlock(g_MdoSessions.Lock);
+        MdoSessionsError(Error, XWORK_ERROR_OUT_OF_MEMORY,
+            "cannot reserve the managed session runtime");
+        goto done;
+    }
+    MdoSessionEventBridgeSetRegistered(Bridge);
+    xrtMutexUnlock(g_MdoSessions.Lock);
     AgentOptions = Options->Agent;
     AgentOptions.WorkspaceRoot = Workspace;
     AgentOptions.SessionPath = SnapshotPath;
     AgentOptions.JournalPath = JournalPath;
     AgentOptions.ArtifactDirectory = ArtifactPath;
     AgentOptions.Recover = false;
+    AgentOptions.OnEvent = MdoSessionEventBridgeOnEvent;
+    AgentOptions.EventUserData = Bridge;
+    AgentOptions.OwnerUserData = Bridge;
+    AgentOptions.OnOwnerRetain = MdoSessionEventBridgeRef;
+    AgentOptions.OnOwnerRelease = MdoSessionEventBridgeRelease;
     Agent = MdoAgentSessionCreateWithRuntime(g_MdoSessions.Runtime,
         &AgentOptions, Error);
     if ( Agent == NULL ) goto done;
@@ -600,6 +679,7 @@ MdoSession* MdoSessionCreate(const MdoSessionCreateOptions* Options,
     Info.UpdatedAt = Info.CreatedAt;
     Info.Status = MDO_SESSION_ACTIVE;
     Info.PreviousStatus = MDO_SESSION_ACTIVE;
+    Info.RuntimeOpen = true;
     Info.Protocol = AgentInfo.Protocol;
     Info.MaxOutputTokens = AgentInfo.MaxOutputTokens;
     Info.ConfigRevision = AgentInfo.ConfigRevision;
@@ -634,6 +714,7 @@ memory:
         "cannot allocate managed session state");
 done:
     MdoAgentSessionRelease(Agent);
+    MdoSessionEventBridgeRelease(Bridge);
     if ( Session == NULL && DirectoryCreated ) {
         xerror* Saved = xrtTakeError();
         if ( MdoSessionsPath(Relative, Options->ProjectId, SessionId,
@@ -646,6 +727,14 @@ done:
         xrtClearError();
         if ( MdoSessionsPath(Relative, Options->ProjectId, SessionId,
                 "meta.json") )
+            (void)MdoHomeRemove(Relative, false);
+        xrtClearError();
+        if ( MdoSessionsPath(Relative, Options->ProjectId, SessionId,
+                "ui-events.jsonl") )
+            (void)MdoHomeRemove(Relative, false);
+        xrtClearError();
+        if ( MdoSessionsPath(Relative, Options->ProjectId, SessionId,
+                ".runtime.lock") )
             (void)MdoHomeRemove(Relative, false);
         xrtClearError();
         if ( MdoSessionsPath(Relative, Options->ProjectId, SessionId,
@@ -671,6 +760,7 @@ MdoSession* MdoSessionOpen(const char* ProjectId, const char* SessionId,
     MdoSessionInfo Info;
     MdoAgentSessionOptions AgentOptions;
     MdoAgentSession* Agent = NULL;
+    MdoSessionEventBridge* Bridge = NULL;
     MdoSession* Session = NULL;
     char Relative[MDO_SESSION_PATH_CAPACITY];
     char MetaPath[MDO_SESSION_PATH_CAPACITY];
@@ -706,17 +796,50 @@ MdoSession* MdoSessionOpen(const char* ProjectId, const char* SessionId,
             "archived or trashed sessions must be restored before opening");
         return NULL;
     }
+    if ( MdoSessionsActiveFind(ProjectId, SessionId) != SIZE_MAX ) {
+        xrtMutexUnlock(g_MdoSessions.Lock);
+        MdoSessionsError(Error, XWORK_ERROR_CONTEXT,
+            "session already has an active runtime");
+        return NULL;
+    }
+    xrtMutexUnlock(g_MdoSessions.Lock);
     if ( !MdoSessionsPath(Relative, ProjectId, SessionId, "snapshot.json") )
-        goto memory_locked;
+        goto memory;
     SnapshotPath = MdoHomeExternalPath(Relative);
     if ( !MdoSessionsPath(Relative, ProjectId, SessionId, "journal.jsonl") )
-        goto memory_locked;
+        goto memory;
     JournalPath = MdoHomeExternalPath(Relative);
     if ( !MdoSessionsPath(Relative, ProjectId, SessionId,
-            "artifacts") ) goto memory_locked;
+            "artifacts") ) goto memory;
     ArtifactPath = MdoHomeExternalPath(Relative);
     if ( SnapshotPath == NULL || JournalPath == NULL || ArtifactPath == NULL )
-        goto memory_locked;
+        goto memory;
+    Bridge = MdoSessionEventBridgeCreate(ProjectId, SessionId,
+        Options->OnEvent, Options->EventUserData, Options->OwnerUserData,
+        Options->OnOwnerRetain, Options->OnOwnerRelease, Error);
+    if ( Bridge == NULL ) goto done;
+    xrtMutexLock(g_MdoSessions.Lock);
+    if ( !MdoSessionsMetaRead(ProjectId, SessionId, &Info) ) {
+        xrtMutexUnlock(g_MdoSessions.Lock);
+        MdoSessionsXrtError(Error, XWORK_ERROR_IO,
+            "cannot revalidate session metadata");
+        goto done;
+    }
+    if ( Info.Status != MDO_SESSION_ACTIVE ||
+         MdoSessionsActiveFind(ProjectId, SessionId) != SIZE_MAX ) {
+        xrtMutexUnlock(g_MdoSessions.Lock);
+        MdoSessionsError(Error, XWORK_ERROR_CONTEXT,
+            "session changed or acquired another runtime while opening");
+        goto done;
+    }
+    if ( !MdoSessionsActiveAdd(ProjectId, SessionId) ) {
+        xrtMutexUnlock(g_MdoSessions.Lock);
+        MdoSessionsError(Error, XWORK_ERROR_OUT_OF_MEMORY,
+            "cannot reserve the recovered session runtime");
+        goto done;
+    }
+    MdoSessionEventBridgeSetRegistered(Bridge);
+    xrtMutexUnlock(g_MdoSessions.Lock);
     MdoAgentSessionOptionsInit(&AgentOptions);
     AgentOptions.AgentId = Info.AgentId;
     AgentOptions.ModelId = Info.ModelId;
@@ -729,23 +852,25 @@ MdoSession* MdoSessionOpen(const char* ProjectId, const char* SessionId,
     AgentOptions.ArtifactDirectory = ArtifactPath;
     AgentOptions.Recover = true;
     MdoSessionsRuntimeApply(&AgentOptions, Options);
+    AgentOptions.OnEvent = MdoSessionEventBridgeOnEvent;
+    AgentOptions.EventUserData = Bridge;
+    AgentOptions.OwnerUserData = Bridge;
+    AgentOptions.OnOwnerRetain = MdoSessionEventBridgeRef;
+    AgentOptions.OnOwnerRelease = MdoSessionEventBridgeRelease;
     Agent = MdoAgentSessionCreateWithRuntime(g_MdoSessions.Runtime,
         &AgentOptions, Error);
-    if ( Agent == NULL ) {
-        xrtMutexUnlock(g_MdoSessions.Lock);
-        goto done;
-    }
+    if ( Agent == NULL ) goto done;
+    Info.RuntimeOpen = true;
     Session = MdoSessionsHandleCreate(Agent, &Info, MetaPath);
-    if ( Session == NULL ) goto memory_locked;
+    if ( Session == NULL ) goto memory;
     Agent = NULL;
-    xrtMutexUnlock(g_MdoSessions.Lock);
     goto done;
-memory_locked:
-    xrtMutexUnlock(g_MdoSessions.Lock);
+memory:
     MdoSessionsError(Error, XWORK_ERROR_OUT_OF_MEMORY,
         "cannot allocate recovered session state");
 done:
     MdoAgentSessionRelease(Agent);
+    MdoSessionEventBridgeRelease(Bridge);
     xrtFree(SnapshotPath);
     xrtFree(JournalPath);
     xrtFree(ArtifactPath);
@@ -789,6 +914,9 @@ MdoSession* MdoSessionLoad(const char* ProjectId, const char* SessionId,
         return NULL;
     }
     Session = MdoSessionsHandleCreate(NULL, &Info, MetaPath);
+    if ( Session != NULL )
+        Session->Info.RuntimeOpen =
+            MdoSessionsActiveFind(ProjectId, SessionId) != SIZE_MAX;
     xrtMutexUnlock(g_MdoSessions.Lock);
     if ( Session == NULL )
         MdoSessionsError(Error, XWORK_ERROR_OUT_OF_MEMORY,
@@ -944,7 +1072,12 @@ bool MdoSessionSetArchived(MdoSession* Session, bool Archived,
     xrtMutexLock(Session->Lock);
     xrtMutexLock(g_MdoSessions.Lock);
     if ( !MdoSessionsValidateCurrent(Session, Error) ) Ok = false;
-    else if ( Session->Info.Status == MDO_SESSION_TRASH ) {
+    else if ( Archived && MdoSessionsActiveFind(Session->Info.ProjectId,
+            Session->Info.Id) != SIZE_MAX ) {
+        MdoSessionsError(Error, XWORK_ERROR_CONTEXT,
+            "release the active session runtime before archiving");
+        Ok = false;
+    } else if ( Session->Info.Status == MDO_SESSION_TRASH ) {
         MdoSessionsError(Error, XWORK_ERROR_POLICY,
             "restore a trashed session before changing archive state");
         Ok = false;
@@ -972,7 +1105,12 @@ bool MdoSessionMoveToTrash(MdoSession* Session, xwork_error* Error)
     xrtMutexLock(Session->Lock);
     xrtMutexLock(g_MdoSessions.Lock);
     if ( !MdoSessionsValidateCurrent(Session, Error) ) Ok = false;
-    else if ( Session->Info.Status == MDO_SESSION_TRASH ) Ok = true;
+    else if ( MdoSessionsActiveFind(Session->Info.ProjectId,
+            Session->Info.Id) != SIZE_MAX ) {
+        MdoSessionsError(Error, XWORK_ERROR_CONTEXT,
+            "release the active session runtime before moving it to trash");
+        Ok = false;
+    } else if ( Session->Info.Status == MDO_SESSION_TRASH ) Ok = true;
     else if ( MdoSessionsCandidate(Session, &Candidate, Error) ) {
         Candidate.PreviousStatus = Candidate.Status;
         Candidate.Status = MDO_SESSION_TRASH;
@@ -1085,6 +1223,8 @@ static bool MdoSessionsScanProject(MdoSessionCatalog* Catalog,
             xrtClearError();
             continue;
         }
+        Info.RuntimeOpen =
+            MdoSessionsActiveFind(ProjectId, SessionId) != SIZE_MAX;
         if ( !MdoSessionsCatalogItem(Catalog, &Info) ) goto fail;
     }
     if ( Next == XDIR_NEXT_ERROR || !xrtDirClose(Directory) ) return false;

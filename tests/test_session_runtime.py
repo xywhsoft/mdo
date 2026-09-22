@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import shutil
 import socket
 import subprocess
@@ -28,6 +29,7 @@ PROBE_SOURCE = r'''
 #include "src/skills/manager.c"
 #include "src/modules/manager.c"
 #include "src/agents/runtime.c"
+#include "src/sessions/events.c"
 #include "src/sessions/manager.c"
 
 xwork_runtime *MdoBootstrapRuntime(void) { return NULL; }
@@ -119,11 +121,48 @@ static void Catalog(const char *label) {
     for (i = 0u; i < MdoSessionCatalogCount(catalog); ++i) {
         memset(&info, 0, sizeof(info)); info.Size = sizeof(info);
         if (MdoSessionCatalogAt(catalog, i, &info))
-            printf("catalog_item=id:%s project:%s title:%s status:%d pinned:%d revision:%llu\n",
+            printf("catalog_item=id:%s project:%s title:%s status:%d pinned:%d open:%d revision:%llu\n",
                 info.Id, info.ProjectId, info.Title, (int)info.Status,
-                info.Pinned ? 1 : 0, (unsigned long long)info.Revision);
+                info.Pinned ? 1 : 0, info.RuntimeOpen ? 1 : 0,
+                (unsigned long long)info.Revision);
     }
     MdoSessionCatalogRelease(catalog);
+}
+
+static uint64 Events(const char *label, const char *project,
+    const char *session, uint64 after, size_t limit) {
+    xwork_error error;
+    MdoSessionEventSnapshot *snapshot = MdoSessionEventReplay(project,
+        session, after, limit, &error);
+    MdoSessionEventInfo info;
+    uint64 cursor = MdoSessionEventSnapshotNextCursor(snapshot);
+    printf("%s=count:%zu next:%llu latest:%llu lost:%d\n", label,
+        MdoSessionEventSnapshotCount(snapshot),
+        (unsigned long long)cursor,
+        (unsigned long long)MdoSessionEventSnapshotLatestId(snapshot),
+        MdoSessionEventSnapshotHistoryLost(snapshot) ? 1 : 0);
+    memset(&info, 0, sizeof(info)); info.Size = sizeof(info);
+    if (MdoSessionEventSnapshotAt(snapshot, 0u, &info))
+        printf("event_item=id:%llu source:%llu kind:%d run:%llu text:%s\n",
+            (unsigned long long)info.EventId,
+            (unsigned long long)info.SourceEventId, (int)info.Kind,
+            (unsigned long long)info.RunId,
+            info.Text != NULL ? info.Text : "");
+    MdoSessionEventSnapshotRelease(snapshot);
+    return cursor;
+}
+
+static bool CorruptEventTail(const char *project, const char *session) {
+    char path[MDO_SESSION_PATH_CAPACITY];
+    xfile file;
+    bool ok;
+    if (snprintf(path, sizeof(path), "sessions/%s/%s/ui-events.jsonl",
+            project, session) <= 0) return false;
+    file = MdoHomeOpenWrite(path, XFILE_CREATE | XFILE_APPEND | XFILE_SYNC);
+    if (file == NULL) return false;
+    ok = xrtWriteFull(file, "{", 1u, NULL) && xrtFlush(file);
+    if (!xrtClose(file)) ok = false;
+    return ok;
 }
 
 void ServiceInit(XS_HostInfo *host) {
@@ -137,6 +176,7 @@ void ServiceInit(XS_HostInfo *host) {
     MdoSession *blocked = NULL;
     MdoSession *stale = NULL;
     bool stale_update;
+    uint64 event_cursor = 0u;
     Probe probe;
     char session_id[MDO_SESSION_ID_CAPACITY] = {0};
     static const char invalid[] = "{}";
@@ -165,16 +205,26 @@ void ServiceInit(XS_HostInfo *host) {
     printf("created=id:%s project:%s title:%s status:%d revision:%llu\n",
         info.Id, info.ProjectId, info.Title, (int)info.Status,
         (unsigned long long)info.Revision);
-    if (!Run(session, "first durable prompt")) goto done;
-    MdoSessionRelease(session); session = NULL;
-    Catalog("catalog_after_create");
-
     MdoSessionRuntimeOptionsInit(&open);
     open.OnModelComplete = Complete;
     open.ModelUserData = &probe;
+    blocked = MdoSessionOpen("project-alpha", session_id, &open, &error);
+    printf("duplicate_open=%d code:%d\n", blocked != NULL ? 1 : 0,
+        (int)error.eCode);
+    MdoSessionRelease(blocked); blocked = NULL;
+    Catalog("catalog_active");
+    if (!Run(session, "first durable prompt")) goto done;
+    event_cursor = Events("events_first", "project-alpha", session_id,
+        0u, 2u);
+    MdoSessionRelease(session); session = NULL;
+    Catalog("catalog_after_create");
+    if (!CorruptEventTail("project-alpha", session_id)) goto done;
+
     session = MdoSessionOpen("project-alpha", session_id, &open, &error);
     if (session == NULL) { printf("recover_error=%s\n", error.sMessage); goto done; }
     if (!Run(session, "second prompt")) goto done;
+    (void)Events("events_after_reopen", "project-alpha", session_id,
+        event_cursor, 100u);
     stale = MdoSessionLoad("project-alpha", session_id, &error);
     if (stale == NULL) goto done;
     if (!MdoSessionRename(session, "Renamed durable session", &error) ||
@@ -268,6 +318,8 @@ def write_site(site: Path) -> None:
         "src/skills/manager.c",
         "src/modules/manager.c",
         "src/agents/runtime.c",
+        "src/sessions/events.c",
+        "src/sessions/internal.h",
         "src/sessions/manager.c",
     ):
         shutil.copy2(ROOT / "app" / relative, site / relative)
@@ -344,9 +396,13 @@ def main() -> int:
         assert "recover_error=" not in output, output
         assert "catalog_empty=count:0 diagnostics:0 generation:1" in output, output
         assert "created=id:" in output and "project:project-alpha" in output, output
+        assert "duplicate_open=0 code:7" in output, output
         assert "run=0 text:durable-answer-one" in output, output
         assert "run=0 text:durable-answer-two" in output, output
+        assert "catalog_active=count:1 diagnostics:0" in output, output
+        assert "open:1" in output, output
         assert "catalog_after_create=count:1 diagnostics:0" in output, output
+        assert "open:0" in output, output
         assert "archived_open=0" in output, output
         assert "stale_update=0 code:7" in output, output
         assert "catalog_trash=count:1 diagnostics:0" in output, output
@@ -355,6 +411,11 @@ def main() -> int:
         assert "catalog_after_failed_create=count:1 diagnostics:0" in output, output
         assert "catalog_diagnostic=count:1 diagnostics:1" in output, output
         assert "recovery=calls:2 prior_prompt:1 prior_answer:1" in output, output
+        first = re.search(r"events_first=count:(\d+) next:(\d+) latest:(\d+) lost:0", output)
+        reopened = re.search(r"events_after_reopen=count:(\d+) next:(\d+) latest:(\d+) lost:1", output)
+        assert first and int(first.group(1)) == 2 and int(first.group(3)) >= 2, output
+        assert reopened and int(reopened.group(1)) > 0, output
+        assert int(reopened.group(3)) > int(first.group(3)), output
         assert "probe_done=1" in output, output
         meta_files = list(home.glob("sessions/project-alpha/*/meta.json"))
         valid_meta = [path for path in meta_files if path.parent.name != "bad"]
@@ -362,6 +423,18 @@ def main() -> int:
         document = json.loads(valid_meta[0].read_text(encoding="utf-8"))
         assert document["status"] == "active" and document["title"] == "Renamed durable session"
         assert (valid_meta[0].parent / "snapshot.json").is_file()
+        event_path = valid_meta[0].parent / "ui-events.jsonl"
+        events = []
+        invalid_events = 0
+        for line in event_path.read_text(encoding="utf-8").splitlines():
+            try:
+                events.append(json.loads(line))
+            except json.JSONDecodeError:
+                invalid_events += 1
+        assert events and [event["event_id"] for event in events] == list(
+            range(1, len(events) + 1))
+        assert invalid_events == 1
+        assert all(event["session_id"] == valid_meta[0].parent.name for event in events)
     print("session runtime probe: PASS")
     return 0
 

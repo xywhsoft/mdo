@@ -43,6 +43,24 @@ class SessionContractTests(unittest.TestCase):
         self.assertIn("MDO_SESSION_TRASH", header)
         self.assertIn("PreviousStatus", header)
 
+    def test_ui_event_replay_is_bounded_and_separate_from_model_ledger(self) -> None:
+        header = (ROOT / "app/include/mdo/sessions.h").read_text(encoding="utf-8")
+        events = (ROOT / "app/src/sessions/events.c").read_text(encoding="utf-8")
+        manager = (ROOT / "app/src/sessions/manager.c").read_text(encoding="utf-8")
+        for symbol in (
+            "MdoSessionEventReplay",
+            "MdoSessionEventSnapshotRelease",
+            "MdoSessionEventSnapshotNextCursor",
+            "MdoSessionEventSnapshotHistoryLost",
+        ):
+            self.assertIn(symbol, header)
+        self.assertIn("ui-events.jsonl", events)
+        self.assertIn("MDO_SESSION_EVENT_FILE_LIMIT", events)
+        self.assertIn("MDO_SESSION_EVENT_REPLAY_MAX", events)
+        self.assertIn("MdoSessionEventBridgeOnEvent", manager)
+        self.assertIn("session already has an active runtime", manager)
+        self.assertNotIn("journal.jsonl", events)
+
 
 if __name__ == "__main__":
     unittest.main()
