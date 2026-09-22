@@ -6,7 +6,7 @@
 
 | 仓库 | 开发位置/分支 | 当前基线 | 说明 |
 | --- | --- | --- | --- |
-| mdo | `D:\GIT\mdo` / 当前分支 | `99026f6` | 产品、计划与集成账本 |
+| mdo | `D:\GIT\mdo` / 当前分支 | `75e0796` | 产品、计划与集成账本 |
 | xrt | `codex/mdo-refactor-xrt` 独立工作树 | `6a8fe19b` | 原工作树有既存未提交内容，隔离开发 |
 | xserver | `D:\GIT\xserver-mdo-refactor` / `codex/mdo-refactor-xs` | `547a6d6` | 原工作树有既存未提交内容，隔离开发 |
 
@@ -99,7 +99,8 @@
 | MDO-0 新源码组织与依赖锁 | DONE | mdo `22c0a33` | 6 项构建契约、锁定依赖完整性、Windows 全新宿主构建、17 项 XRT v1 包清单和隔离目录 8 秒启动通过；空启动未创建 `mdo-home`；未运行压力或高负载测试 | 新 `app/` 与只读 `app_bak/` 分离；以 `deps.lock` 固定跨仓 revision、源码树哈希、ABI/schema/pack 版本；清单生成 unity，统一 Python 构建入口不依赖根目录陈旧宿主 |
 | MDO-1 bootstrap 与双层 Home | DONE | mdo `aa32d3a`；xserver `b00f68f`、`fe3b627` | 12 项源码/构建契约；Windows/Linux 真实 xs/TCC Home 探针覆盖 lazy create、锚定写入、materialize、损坏覆盖阻断、ephemeral、CLI 优先于环境变量；两平台精确锁定宿主构建、21 项 pack 和短时启动通过；Windows 空目录发布启动只保留 `mdo.exe`；未运行压力或高负载测试 | 外部 Home 以高优先级只读 disk provider 覆盖包内 `default-home`，写入独占锚定 `xroot`；`MDO_HOME` 和 `-- --home` 可覆盖；启动创建单个长生命周期 xwork runtime，空启动不创建 Home 或旁路日志 |
 | MDO-2 分层配置系统 | DONE | mdo `31890b4` | 17 项源码/构建合同；Windows/Linux 真实 xs/TCC 配置探针覆盖 defaults 隔离、三类用户 patch、未知键保留、环境/CLI 覆盖顺序、明文 secret 拒绝、Ling 保护、预览/导入/导出/恢复、原子保存、备份、损坏输入与受阻临时文件故障注入；GCC warning-as-error；两平台 23 项 pack 短时启动与 lazy Home 通过；Windows GUI 空目录只保留 `mdo.exe`；未运行压力或高负载测试 | 内置基线在 Home overlay 前冻结；对象递归合并、数组/标量替换，只持久化相对 defaults 的差异；状态只在磁盘提交成功后发布；Ling 3.0 Tiny 服务端逐字段保护并声明三种线上协议 |
-| MDO-3～10 | TODO | - | - | 从 Module ABI 开始实施 |
+| MDO-3 Module ABI 与 generation loader | DONE | mdo `64afc0f`、`75e0796` | 23 项源码/ABI/构建合同；公共头 C11/C++17 严格编译；Windows/Linux 真实 xs/TCC 探针覆盖内置与外部模块、工具调用、旧 catalog 保活、reload、ABI 错误、缺失依赖、编译错误和失败原子性；两平台精确锁定宿主与 29 项单文件包完成，Linux packed 可执行文件直接启动并发布 1 个模块/工具；未运行压力或高负载测试 | 独立公共 C ABI 只依赖标准类型；按来源、源码、SDK 头和编译策略计算 SHA-256，restricted TCC 编译后深拷贝 descriptor；依赖拓扑注册、权限/effect/Agent 引用校验和 xwork 按 source 整代发布；owner hook 与引用计数把 TCC generation 保活到最后一个 catalog/调用释放，失败保留旧代并发布结构化诊断 |
+| MDO-4～10 | TODO | - | - | 从 Skills loader 开始实施 |
 | QA-RELEASE | TODO | - | - | MDO-GATE 后实施 |
 
 ## 已确认的工程事实
@@ -148,9 +149,12 @@
 42. 用户配置是按 domain 保存的 schema v1 patch：对象递归合并，数组与标量整体替换，envelope 未知键拒绝、patch 内未知键保留。保存前相对内置 domain 做递归 diff，环境覆盖先于命令行覆盖且两者不持久化。
 43. 配置持久化必须先完成候选解析、secret/Ling/schema 校验和所有可能分配，再写同目录临时文件、flush、备份并原子替换；内存 generation 只在磁盘成功后无失败发布，避免磁盘新值与进程旧值分叉。
 44. Ling 3.0 Tiny 的不可编辑/不可删除约束是服务端对完整 descriptor 的逐字段等值检查。普通配置只保存 `secret_ref`，不接收 API key、token、password、client secret、private key 或 Authorization 明文。
+45. mdo 模块公共 ABI 必须只存在于 `include/mdo/module.h` 并只依赖 C 标准类型；构建时逐字节复制到 app 内置 SDK，开发目录和单文件 pack 因而使用同一份头，应用私有结构不能泄漏给模块。
+46. 模块候选必须读取一次源码后对同一字节计算 hash 并调用 `tcc_compile_string`，hash 同时覆盖虚拟路径、SDK 头和编译策略。restricted TCC 不注入 xrt/xs/libtcc 符号；模块只能通过申请到的 host service table 与 host-owned writer 交互，但可信原生模块仍不构成安全沙箱。
+47. 模块 reload 是 catalog 事务：全部源码编译、descriptor 深拷贝、依赖拓扑注册及 tool/Agent/schema/effect/权限校验通过后，才用固定 source 一次替换 xwork 工具代。xwork owner hook、catalog snapshot 和模块引用共同保活旧 TCC；任何 discovery、compile、ABI、dependency 或 publish 失败只换诊断快照，不改变已发布 generation。
 
 ## 下一步
 
-1. 开始 MDO-3：冻结 `include/mdo/module.h` 的 Module/Agent/Subagent/Tool ABI、host service capability 表、注册事务与 generation 卸载合同，再实现 TCC 模块发现、编译、诊断和原子 catalog 发布；
+1. 开始 MDO-4：实现 `skills/<id>/SKILL.md` 的可读目录规范、front matter/内容解析、渐进式加载、脚本与资源路径约束、内置/外部覆盖和不可变 skill catalog；
 2. 运行环境提供三条显式 URL 和 runtime key 时，再执行 Ling 3.0 Tiny 的 Chat Completions、Responses 与 Anthropic Messages 真实线上探针；
 3. 全部后续验收继续使用有界功能、故障注入和确定性交错，略过压力与高负载测试。
