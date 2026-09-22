@@ -6,9 +6,9 @@
 
 | 仓库 | 开发位置/分支 | 当前基线 | 说明 |
 | --- | --- | --- | --- |
-| mdo | `D:\GIT\mdo` / 当前分支 | `5e3dbd2` | 产品、计划与集成账本 |
-| xrt | `D:\GIT\xrt-mdo-refactor` / `codex/mdo-refactor-xrt` | `84f618b7` | 原工作树有既存未提交内容，隔离开发 |
-| xserver | `D:\GIT\xserver-mdo-refactor` / `codex/mdo-refactor-xs` | `c851ff4` | 原工作树有既存未提交内容，隔离开发 |
+| mdo | `D:\GIT\mdo` / 当前分支 | `e0d8ea3` | 产品、计划与集成账本 |
+| xrt | `D:\GIT\xrt-mdo-refactor` / `codex/mdo-refactor-xrt` | `c88a425` | 原工作树有既存未提交内容，隔离开发 |
+| xserver | `D:\GIT\xserver-mdo-refactor` / `codex/mdo-refactor-xs` | `2e1a918` | 原工作树有既存未提交内容，隔离开发 |
 
 ## 状态定义
 
@@ -95,6 +95,7 @@
 | WORK-112 动态工具所有者生命周期 | DONE | xrt `f514162b`；xserver `c6eb743` | xwork Windows/Linux 有界全回归与 Linux ASan/UBSan 通过；固定目录发布、retain 失败回滚、旧快照持有、子 Agent userdata 重绑定和最终 release 用例通过；三库 50 个生产文件同 revision 逐字节门禁、35 项 xs 结构检查及 Windows/Linux xwork 宿主与嵌套 TCC 探针通过；未运行压力或高负载测试 | xwork 3.1.0 为每个不可变工具目录条目持有可选 callback owner 引用；目录复制独立 retain、销毁精确 release，任一 retain 失败即丢弃候选且不改变已发布代；mdo 可用宿主侧 owner hook 把 TCC generation 保活到最后一个运行或快照结束 |
 | WORK-113 工具调度元数据原子发布 | DONE | xrt `6a8fe19b`；xserver `547a6d6` | xwork Windows/Linux 有界全回归和 Linux ASan/UBSan 通过；固定 reader/publisher 交错验证 replacement 同代发布并发安全与串行组；三库 50 个生产文件同 revision 逐字节门禁、35 项 xs 结构检查及 Windows/Linux xwork 宿主与嵌套 TCC 探针通过；未运行压力或高负载测试 | xwork 3.2.0 将 `parallel-safe` 与 `serial-group` 纳入工具 descriptor，按 source 整批替换可在同一不可变目录代发布 callback、权限、owner 与调度策略；兼容配置 API 继续用于显式单工具换代 |
 | WORK-114 MCP registry 原子替换与断开 | DONE | xrt `84f618b7`；xserver `c851ff4` | xwork Windows/Linux 有界全回归、Linux ASan/UBSan、C11/C++17 公共头通过；三库 50 个生产文件零分叉、35 项 xs 结构检查及 Windows/Linux xwork 宿主与嵌套 TCC 探针通过；未运行压力或高负载测试 | xwork 3.3.0 按 source 原子替换 MCP server 定义；相同定义保留连接和 schema cache，变化或移除时 fail-closed 退役，跨来源冲突及活跃请求拒绝整批发布；启动超时与请求超时分离，宿主可显式断开但保留启用状态 |
+| WORK-115 MCP Streamable HTTP transport | DONE | xrt `c88a425`；xserver `2e1a918` | xwork Windows/Linux 有界全回归与确定性 loopback 协议探针、Linux ASan/UBSan、C11/C++17 公共头通过；xs 四个 vendored 子集逐字节门禁、35 项结构检查、Windows 全扩展与 Windows/Linux xwork 宿主和嵌套 TCC 探针通过；未运行压力或高负载测试 | xwork 3.4.0 支持现代 `2026-07-28` 与旧版 `2025-11-25` Streamable HTTP；严格 URL/保留头校验、鉴权头深拷贝清零、JSON/SSE、现代路由头、旧版 session/initialized/cancelled/GET resume/DELETE termination、HeaderMismatch 单次安全重试均在 runtime 内收口；xhttp 只作为宿主私有实现依赖，不扩张 TCC SDK |
 | LIB-3 xwork 3.0 | DONE | xrt `9a094b3f`；xserver `57c9164` | xllm 17 个、xllm-session 14 个、xwork 19 个生产文件与同一 xrt revision 双向逐字节一致；TCC 导入分别覆盖 70、89、163 个公开符号；Windows/Linux 全 15 扩展宿主构建、运行与嵌套 TCC 探针通过，32 项扩展结构检查和 2 项发布元数据检查通过；未运行压力或高负载测试 | xserver 删除旧 Python/config 分叉并同步完整 xwork v3 runtime/catalog/task/scheduler/MCP/artifact/recovery 实现；构建门发现只升级 xwork 会缺少 batch executor 与 session driver API，因此三个库统一固定到 `9a094b3f`，避免跨 revision 的伪零分叉组合 |
 | LIB-GATE 三库生产门禁 | DONE | xrt `9a094b3f`；xserver `57c9164` | Windows/Linux warning-as-error、有界功能回归、确定性交错、故障注入与 sanitizer 门已在各工作包通过；最终零分叉、公开符号、15 扩展宿主和双层 TCC 闭包通过；未运行压力或高负载测试 | 阶段三完成，允许进入 mdo 新架构实施；Ling 3.0 Tiny 三接口真实线上探针仍要求运行时提供三条显式 URL 与 key，不以离线 fixture 冒充线上结论 |
 | MDO-0 新源码组织与依赖锁 | DONE | mdo `22c0a33` | 6 项构建契约、锁定依赖完整性、Windows 全新宿主构建、17 项 XRT v1 包清单和隔离目录 8 秒启动通过；空启动未创建 `mdo-home`；未运行压力或高负载测试 | 新 `app/` 与只读 `app_bak/` 分离；以 `deps.lock` 固定跨仓 revision、源码树哈希、ABI/schema/pack 版本；清单生成 unity，统一 Python 构建入口不依赖根目录陈旧宿主 |
@@ -103,8 +104,9 @@
 | MDO-2 分层配置系统 | DONE | mdo `31890b4` | 17 项源码/构建合同；Windows/Linux 真实 xs/TCC 配置探针覆盖 defaults 隔离、三类用户 patch、未知键保留、环境/CLI 覆盖顺序、明文 secret 拒绝、Ling 保护、预览/导入/导出/恢复、原子保存、备份、损坏输入与受阻临时文件故障注入；GCC warning-as-error；两平台 23 项 pack 短时启动与 lazy Home 通过；Windows GUI 空目录只保留 `mdo.exe`；未运行压力或高负载测试 | 内置基线在 Home overlay 前冻结；对象递归合并、数组/标量替换，只持久化相对 defaults 的差异；状态只在磁盘提交成功后发布；Ling 3.0 Tiny 服务端逐字段保护并声明三种线上协议 |
 | MDO-3 Module ABI 与 generation loader | DONE | mdo `64afc0f`、`75e0796` | 23 项源码/ABI/构建合同；公共头 C11/C++17 严格编译；Windows/Linux 真实 xs/TCC 探针覆盖内置与外部模块、工具调用、旧 catalog 保活、reload、ABI 错误、缺失依赖、编译错误和失败原子性；两平台精确锁定宿主与 29 项单文件包完成，Linux packed 可执行文件直接启动并发布 1 个模块/工具；未运行压力或高负载测试 | 独立公共 C ABI 只依赖标准类型；按来源、源码、SDK 头和编译策略计算 SHA-256，restricted TCC 编译后深拷贝 descriptor；依赖拓扑注册、权限/effect/Agent 引用校验和 xwork 按 source 整代发布；owner hook 与引用计数把 TCC generation 保活到最后一个 catalog/调用释放，失败保留旧代并发布结构化诊断 |
 | MDO-4 Skills catalog | DONE | mdo `974158c`、`edce68f` | 26 项源码/构建合同；Windows/Linux 真实 xs/TCC 探针覆盖内置读取、外部完整遮蔽、资源白名单、原子 reload、旧代缓存、首次读取前替换拒绝、无效 front matter 和缺失资源诊断；两平台精确锁定宿主与 33 项单文件包完成，Linux packed 可执行文件直接启动并发布 1 个 Skill、模块和工具；未运行压力或高负载测试 | 固定小型 YAML 子集和 `skills/<id>/SKILL.md` 可读格式；启动只解析 front matter 与元数据，正文和显式资源首次选择时有界加载；引用计数 catalog 与逐代缓存保持旧读者，文件代不一致要求 reload；外部目录存在即完整遮蔽内置同名 Skill，损坏时发布结构化诊断且不回退 |
-| MDO-5A MCP stdio manager | DONE | mdo `5f6ec5a`、`45fddc5`、`5e3dbd2` | 31 项源码/构建合同；Windows/Linux 真实 xs/TCC 探针覆盖冷注册、发现、惰性连接、同配置连接复用、断开/重连、定义换代、外部遮蔽、无效配置、缺失 secret、HTTP 能力诊断和跨来源冲突回滚；两平台 35 项单文件包及最终 15 秒启动通过；未运行压力或高负载测试 | 每服务器一个严格 JSON；外部文件完整遮蔽内置同名定义；`env:`/Home-relative `file:` secret 仅在候选注册时解析且发布后清零；引用计数 catalog/diagnostics 与 source 原子批量发布保持失败原子性；初始 Agent 只需 MCP 发现工具，完整 schema 按选择加载；streamable HTTP 格式已严格校验但传输仍属 MDO-5B |
-| MDO-5B～10 | TODO | - | - | 下一步实现 xwork streamable HTTP transport，再接入 MDO；随后继续 Agent/工具/会话、前端和发布阶段 |
+| MDO-5A MCP stdio manager | DONE | mdo `5f6ec5a`、`45fddc5`、`5e3dbd2` | 31 项源码/构建合同；Windows/Linux 真实 xs/TCC 探针覆盖冷注册、发现、惰性连接、同配置连接复用、断开/重连、定义换代、外部遮蔽、无效配置、缺失 secret、当时的 HTTP 能力诊断和跨来源冲突回滚；两平台 35 项单文件包及最终 15 秒启动通过；未运行压力或高负载测试 | 每服务器一个严格 JSON；外部文件完整遮蔽内置同名定义；`env:`/Home-relative `file:` secret 仅在候选注册时解析且发布后清零；引用计数 catalog/diagnostics 与 source 原子批量发布保持失败原子性；初始 Agent 只需 MCP 发现工具，完整 schema 按选择加载 |
+| MDO-5B MCP Streamable HTTP 接入 | DONE | mdo `e0d8ea3`；xrt `c88a425`；xserver `2e1a918` | 31 项源码/构建合同；Windows/Linux 真实 xs/TCC manager 探针覆盖 HTTPS/authority/port/header 边界、鉴权 secret 解析、HTTP 冷注册、catalog 脱敏及原有 stdio 换代回归；精确依赖锁验证、Windows 单文件重建与隔离目录 15 秒零写启动通过；底层 HTTP wire 已由 WORK-115 的两平台确定性 loopback 与 sanitizer 覆盖；未运行压力或高负载测试 | MDO 严格接收 HTTPS endpoint 和 secret-only 自定义头，拒绝 userinfo、fragment、非法端口、控制字节及 transport-owned/Mcp-* 头；xwork 原子深拷贝后 manager 立即清零值，catalog 只暴露 header 数量；stdio/HTTP 统一进入 source transaction，注册保持冷操作 |
+| MDO-6～10 | TODO | - | - | 下一步实现模型、Agent 与运行时产品层，再继续会话/数据、Web API、前端交互和迁移阶段 |
 | QA-RELEASE | TODO | - | - | MDO-GATE 后实施 |
 
 ## 已确认的工程事实
@@ -161,10 +163,11 @@
 50. Git 的干净工作树不保证 C 源文件的工作区换行字节跨平台一致；依赖锁必须对 CRLF 做 LF 规范化后再哈希，同时继续把相对路径纳入摘要。
 51. MCP reload 必须先构建完整候选，再由 xwork 按 source 一次替换。相同定义可保留现有连接和 schema cache；变化、移除、来源冲突或活跃请求不能形成新旧定义混合代。
 52. MCP catalog 只发布非敏感元数据。`env:` 和 `file:` 值只在 runtime 注册候选内短暂存在，xwork 同步深拷贝返回后立即清零释放，不能被 catalog/status API 观察。
-53. streamable HTTP 配置即使在传输尚未实现时也必须完整执行严格 schema 校验；格式错误属于 parse 诊断，格式合法但能力缺失才属于 runtime 诊断。
+53. streamable HTTP 配置必须在联网前完成严格 schema 与 secret 解析；MDO 只接受 HTTPS，拒绝 userinfo、fragment、非法端口、控制字节和 transport-owned/Mcp-* 头。xwork 的权威 URL parser 在 source transaction 内再次验证，任一 server 失败都不得形成部分发布。
+54. HTTP 鉴权值与 stdio 环境 secret 共用短生命周期候选所有权：xwork 同步深拷贝成功或失败返回后，MDO 都必须清零并释放候选值；catalog/status/diagnostics 只能暴露 endpoint、transport 和 header 数量，不能暴露 header 值。
 
 ## 下一步
 
-1. 继续 MDO-5B：在权威 xwork 实现生产级 MCP streamable HTTP transport、连接/会话恢复、鉴权头 secret 注入和确定性本地协议探针，同步到 xs 后接入现有 MDO manager；
+1. 开始 MDO-6：实现模型 catalog/client factory、Agent definition 组合、默认 Agent、运行时 run 生命周期和内置联机搜索工具的产品接线；
 2. 运行环境提供三条显式 URL 和 runtime key 时，再执行 Ling 3.0 Tiny 的 Chat Completions、Responses 与 Anthropic Messages 真实线上探针；
 3. 全部后续验收继续使用有界功能、故障注入和确定性交错，略过压力与高负载测试。
