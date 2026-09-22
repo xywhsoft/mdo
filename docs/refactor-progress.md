@@ -110,7 +110,8 @@
 | MDO-6B 安全 model client factory | DONE | mdo `3695229` | Windows 真实 xs/TCC 离线探针覆盖三种协议、延迟 endpoint/key 解析、缺配置拒绝、reasoning/output 上限和 reload 旧快照；严格源码合同通过；未运行压力或高负载测试 | client factory 只接收 model ID 与显式覆盖，从固定 catalog 生成 profile；endpoint 和 `env:`/`file:` credential 在创建时解析，临时 key 随即清零；公开 info 不返回 secret；可注入 completion 边界供离线测试使用 |
 | MDO-6C 默认 Agent module | DONE | mdo `f66575e` | 6 项 module 合同与真实 xs/TCC probe 通过，内置 module 同时发布工具和 `mdo.default` Agent；旧 catalog 生命周期 acquire/release 可跨 reload 保活；未运行压力或高负载测试 | 默认 Agent 继承 model/reasoning，使用 balanced 权限、128 turns、120 秒命令超时、64 KiB 最终输出和深度 4；Module catalog 提供按 Agent ID 的生命周期固定 API |
 | MDO-6D Agent session/run 运行时 | DONE | mdo `24b4b17`；xrt `779a7808`；xserver `1429ad6` | 43 项静态合同；Windows 严格 GCC unity 编译；Config/Model/Skill/Module/Agent 5 个真实 xs/TCC 有界探针；单文件重建及隔离目录 10 秒启动通过且未创建 Home；未运行压力或高负载测试 | session 固定 config/model/module/Skill/tool generations，组合显式 Skill、有效工具和子 Agent roster，profile/permission/effect/budget 全部失败关闭；每个 prompt 使用独立异步 run 并持有 session；xwork ABI 5 的 aggregate owner pin 保证调用方释放句柄后 model/session/TCC 回调状态仍存活；依赖锁允许三库独立来源 revision |
-| MDO-6E～10 | TODO | - | - | 下一步实现标准联机搜索工具，然后继续会话/记忆/计划任务与数据层、Web API、前端交互、迁移和发布压实阶段 |
+| MDO-6E 联机搜索工具 | DONE | mdo `f3bf909`；xserver `69a79c5` | 46 项源码/构建合同；Windows 严格 GCC unity 编译；Home/Config/Model/Agent/Skill/MCP/Module/Web 8 个真实 xs/TCC 有界探针；单文件重建和 5 秒有界启动通过；未运行压力或高负载测试 | `web_search`、`web_open`、`web_find` 按单一职责拆分并作为标准 xwork 工具发布；网络、外部服务和 secret effect 独立审批；结果、响应、提取文本和进程内文档缓存均有硬上限并标记为不可信；默认只允许 HTTPS 和公网解析结果，重定向复用同一地址策略；普通网络/参数/内容错误作为模型可见的工具失败返回，不中止 Agent 运行 |
+| MDO-7～10 | TODO | - | - | 下一步实现会话持久化与管理，然后继续记忆、计划任务与数据层、Web API、前端交互、迁移和发布压实阶段 |
 | QA-RELEASE | TODO | - | - | MDO-GATE 后实施 |
 
 ## 已确认的工程事实
@@ -170,9 +171,11 @@
 53. streamable HTTP 配置必须在联网前完成严格 schema 与 secret 解析；MDO 只接受 HTTPS，拒绝 userinfo、fragment、非法端口、控制字节和 transport-owned/Mcp-* 头。xwork 的权威 URL parser 在 source transaction 内再次验证，任一 server 失败都不得形成部分发布。
 54. HTTP 鉴权值与 stdio 环境 secret 共用短生命周期候选所有权：xwork 同步深拷贝成功或失败返回后，MDO 都必须清零并释放候选值；catalog/status/diagnostics 只能暴露 endpoint、transport 和 header 数量，不能暴露 header 值。
 55. 模型 provider 与 model profile 必须分离：provider 管理连接、TLS、超时和 secret reference，model 管理 wire 名称、方言集合、能力与 token 窗口。同一模型可选择不同 xllm wire provider；catalog 以引用计数不可变 generation 发布，旧读者在 reload 后继续有效。公开元数据只声明是否存在凭据引用，不能返回引用文本或解析后的 key。
+56. 面向模型的 HTTP 工具不能只检查 URL 字面量来阻止内网访问；公网限制必须在实际拨号使用的解析器内过滤解析后的每个地址，重定向也必须复用同一解析器，才能覆盖 DNS 重绑定和多地址回退。
+57. xwork 工具的参数、策略、远端状态和普通网络失败属于可呈现的工具失败，应返回成功的执行器调用和 `success:false` 内容，使 Agent 可以继续推理；取消、deadline、内存不足和结果 writer 越界才是运行级故障。联网能力拆为 search/open/find 后，只有前两者联网，find 只读取有界的进程内不可信文档快照。
 
 ## 下一步
 
-1. 继续 MDO-6B：实现 model client factory、Agent definition 组合、默认 Agent、运行时 run 生命周期和内置联机搜索工具的产品接线；
+1. 继续 MDO-7A：实现可移植的会话持久化与管理，固定 project/session 标识、meta、权威 journal、UI event replay、归档/trash 和恢复边界；
 2. 运行环境提供三条显式 URL 和 runtime key 时，再执行 Ling 3.0 Tiny 的 Chat Completions、Responses 与 Anthropic Messages 真实线上探针；
 3. 全部后续验收继续使用有界功能、故障注入和确定性交错，略过压力与高负载测试。
