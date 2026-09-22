@@ -102,6 +102,20 @@ void MdoAgentSessionRelease(MdoAgentSession* Session);
 bool MdoAgentSessionGetInfo(const MdoAgentSession* Session,
     MdoAgentSessionInfo* Info);
 
+/* Ledger maintenance claims the same exclusive run window as an Agent run.
+ * It therefore fails while another run is active. Successful mutations are
+ * checkpointed to the managed snapshot before returning. */
+bool MdoAgentSessionCheckpoint(MdoAgentSession* Session, xwork_error* Error);
+bool MdoAgentSessionLastSequence(MdoAgentSession* Session,
+    uint64* LastSequence, xwork_error* Error);
+bool MdoAgentSessionClear(MdoAgentSession* Session, xwork_error* Error);
+bool MdoAgentSessionTruncateAfter(MdoAgentSession* Session,
+    uint64 ThroughSequence, xwork_error* Error);
+/* UINT64_MAX selects the current retained tail. The target is a new snapshot;
+ * the fork has no journal attachment or runtime callbacks. */
+bool MdoAgentSessionSaveFork(MdoAgentSession* Session,
+    uint64 ThroughSequence, const char* SnapshotPath, xwork_error* Error);
+
 void MdoAgentRunOptionsInit(MdoAgentRunOptions* Options);
 MdoAgentRun* MdoAgentRunCreate(MdoAgentSession* Session,
     const MdoAgentRunOptions* Options, xwork_error* Error);

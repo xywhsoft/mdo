@@ -52,6 +52,8 @@ struct MdoAgentSession {
     char* WireModel;
     char* ReasoningEffort;
     char* PermissionProfile;
+    char* SystemPrompt;
+    char* SnapshotPath;
     uint64 ConfigRevision;
     uint64 ModelGeneration;
     uint64 ModuleGeneration;
@@ -815,6 +817,8 @@ static void MdoAgentSessionFree(MdoAgentSession* Session)
     xrtFree(Session->WireModel);
     xrtFree(Session->ReasoningEffort);
     xrtFree(Session->PermissionProfile);
+    xrtFree(Session->SystemPrompt);
+    xrtFree(Session->SnapshotPath);
     memset(Session, 0, sizeof(*Session));
     xrtFree(Session);
 }
@@ -1084,10 +1088,14 @@ MdoAgentSession* MdoAgentSessionCreateWithRuntime(xwork_runtime* Runtime,
     Session->WireModel = xrtStrDup(Model.Info.WireModel);
     Session->ReasoningEffort = xrtStrDup(Model.ReasoningEffort);
     Session->PermissionProfile = xrtStrDup(Permission);
+    Session->SystemPrompt = xrtStrDup(Prompt);
+    Session->SnapshotPath = Options->SessionPath != NULL ?
+        xrtStrDup(Options->SessionPath) : NULL;
     if ( Session->AgentId == NULL || Session->ModuleId == NULL ||
          Session->ModelId == NULL || Session->ProviderId == NULL ||
          Session->WireModel == NULL || Session->ReasoningEffort == NULL ||
-         Session->PermissionProfile == NULL ) {
+         Session->PermissionProfile == NULL || Session->SystemPrompt == NULL ||
+         (Options->SessionPath != NULL && Session->SnapshotPath == NULL) ) {
         MdoAgentsError(Error, XWORK_ERROR_OUT_OF_MEMORY,
             "cannot copy Agent session metadata");
         goto fail;
@@ -1182,6 +1190,121 @@ bool MdoAgentSessionGetInfo(const MdoAgentSession* Session,
     Info->SkillCount = Session->SkillCount;
     Info->SubagentCount = Session->SubagentCount;
     return true;
+}
+
+static bool MdoAgentLedgerBegin(MdoAgentSession* Session,
+    xwork_error* Error)
+{
+    if ( Session == NULL || Session->Agent == NULL ||
+         Session->Owner == NULL || Session->Owner->LlmSession == NULL ) {
+        MdoAgentsError(Error, XWORK_ERROR_INVALID_ARGUMENT,
+            "an active Agent session is required");
+        return false;
+    }
+    return xworkAgentRunBegin(Session->Agent, Error);
+}
+
+static bool MdoAgentLedgerCheckpoint(MdoAgentSession* Session,
+    xllm_error* ModelError)
+{
+    if ( Session->SnapshotPath == NULL || Session->SnapshotPath[0] == '\0' ) {
+        xllmErrorInit(ModelError);
+        ModelError->eCode = XLLM_ERROR_INVALID_ARGUMENT;
+        snprintf(ModelError->sMessage, sizeof(ModelError->sMessage), "%s",
+            "managed Agent session snapshot path is unavailable");
+        return false;
+    }
+    return xllmSessionCheckpoint(Session->Owner->LlmSession,
+        Session->SnapshotPath, ModelError);
+}
+
+bool MdoAgentSessionCheckpoint(MdoAgentSession* Session, xwork_error* Error)
+{
+    xllm_error ModelError;
+    bool Ok;
+    xworkErrorInit(Error);
+    if ( !MdoAgentLedgerBegin(Session, Error) ) return false;
+    Ok = MdoAgentLedgerCheckpoint(Session, &ModelError);
+    xworkAgentRunEnd(Session->Agent);
+    if ( !Ok ) MdoAgentsModelError(Error, &ModelError,
+        "cannot checkpoint the Agent session");
+    return Ok;
+}
+
+bool MdoAgentSessionLastSequence(MdoAgentSession* Session,
+    uint64* LastSequence, xwork_error* Error)
+{
+    xworkErrorInit(Error);
+    if ( LastSequence == NULL ) {
+        MdoAgentsError(Error, XWORK_ERROR_INVALID_ARGUMENT,
+            "last sequence output is required");
+        return false;
+    }
+    *LastSequence = 0u;
+    if ( !MdoAgentLedgerBegin(Session, Error) ) return false;
+    *LastSequence = xllmSessionLastSequence(Session->Owner->LlmSession);
+    xworkAgentRunEnd(Session->Agent);
+    return true;
+}
+
+bool MdoAgentSessionClear(MdoAgentSession* Session, xwork_error* Error)
+{
+    xllm_error ModelError;
+    bool Ok;
+    xworkErrorInit(Error);
+    if ( !MdoAgentLedgerBegin(Session, Error) ) return false;
+    Ok = xllmSessionClear(Session->Owner->LlmSession, &ModelError);
+    if ( Ok ) Ok = xllmSessionSetSystemPrompt(Session->Owner->LlmSession,
+        Session->SystemPrompt, &ModelError);
+    if ( Ok ) Ok = MdoAgentLedgerCheckpoint(Session, &ModelError);
+    xworkAgentRunEnd(Session->Agent);
+    if ( !Ok ) MdoAgentsModelError(Error, &ModelError,
+        "cannot clear the Agent session ledger");
+    return Ok;
+}
+
+bool MdoAgentSessionTruncateAfter(MdoAgentSession* Session,
+    uint64 ThroughSequence, xwork_error* Error)
+{
+    xllm_error ModelError;
+    bool Ok;
+    xworkErrorInit(Error);
+    if ( !MdoAgentLedgerBegin(Session, Error) ) return false;
+    Ok = xllmSessionTruncateAfter(Session->Owner->LlmSession,
+        ThroughSequence, &ModelError);
+    if ( Ok && ThroughSequence == 0u )
+        Ok = xllmSessionSetSystemPrompt(Session->Owner->LlmSession,
+            Session->SystemPrompt, &ModelError);
+    if ( Ok ) Ok = MdoAgentLedgerCheckpoint(Session, &ModelError);
+    xworkAgentRunEnd(Session->Agent);
+    if ( !Ok ) MdoAgentsModelError(Error, &ModelError,
+        "cannot truncate the Agent session ledger");
+    return Ok;
+}
+
+bool MdoAgentSessionSaveFork(MdoAgentSession* Session,
+    uint64 ThroughSequence, const char* SnapshotPath, xwork_error* Error)
+{
+    xllm_session* Fork = NULL;
+    xllm_error ModelError;
+    bool Ok = false;
+    xworkErrorInit(Error);
+    if ( SnapshotPath == NULL || SnapshotPath[0] == '\0' ) {
+        MdoAgentsError(Error, XWORK_ERROR_INVALID_ARGUMENT,
+            "fork snapshot path is required");
+        return false;
+    }
+    if ( !MdoAgentLedgerBegin(Session, Error) ) return false;
+    if ( ThroughSequence == UINT64_MAX )
+        ThroughSequence = xllmSessionLastSequence(Session->Owner->LlmSession);
+    Fork = xllmSessionForkAt(Session->Owner->LlmSession,
+        ThroughSequence, &ModelError);
+    if ( Fork != NULL ) Ok = xllmSessionSave(Fork, SnapshotPath, &ModelError);
+    xllmSessionDestroy(Fork);
+    xworkAgentRunEnd(Session->Agent);
+    if ( !Ok ) MdoAgentsModelError(Error, &ModelError,
+        "cannot save the Agent session fork");
+    return Ok;
 }
 
 void MdoAgentRunOptionsInit(MdoAgentRunOptions* Options)

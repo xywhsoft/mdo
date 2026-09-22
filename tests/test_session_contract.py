@@ -61,6 +61,25 @@ class SessionContractTests(unittest.TestCase):
         self.assertIn("session already has an active runtime", manager)
         self.assertNotIn("journal.jsonl", events)
 
+    def test_advanced_session_operations_keep_one_authoritative_ledger(self) -> None:
+        header = (ROOT / "app/include/mdo/sessions.h").read_text(encoding="utf-8")
+        agents = (ROOT / "app/src/agents/runtime.c").read_text(encoding="utf-8")
+        manager = (ROOT / "app/src/sessions/manager.c").read_text(encoding="utf-8")
+        for symbol in (
+            "MdoSessionLastSequence",
+            "MdoSessionClear",
+            "MdoSessionTruncateAfter",
+            "MdoSessionExportJson",
+            "MdoSessionCatalogSearch",
+        ):
+            self.assertIn(symbol, header)
+        self.assertIn("xllmSessionClear", agents)
+        self.assertIn("xllmSessionTruncateAfter", agents)
+        self.assertIn("xllmSessionSetSystemPrompt", agents)
+        self.assertIn("MDO_SESSION_CATALOG_MAX", manager)
+        self.assertIn("MDO_SESSION_SEARCH_MAX", manager)
+        self.assertNotIn('"messages"', manager)
+
 
 if __name__ == "__main__":
     unittest.main()

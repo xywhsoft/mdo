@@ -24,6 +24,13 @@ typedef enum MdoSessionStatus {
     MDO_SESSION_TRASH
 } MdoSessionStatus;
 
+#define MDO_SESSION_STATUS_ACTIVE_FLAG (1u << 0)
+#define MDO_SESSION_STATUS_ARCHIVED_FLAG (1u << 1)
+#define MDO_SESSION_STATUS_TRASH_FLAG (1u << 2)
+#define MDO_SESSION_STATUS_ALL_FLAGS \
+    (MDO_SESSION_STATUS_ACTIVE_FLAG | MDO_SESSION_STATUS_ARCHIVED_FLAG | \
+     MDO_SESSION_STATUS_TRASH_FLAG)
+
 typedef struct MdoSessionCreateOptions {
     uint32 Size;
     const char* ProjectId;       /* required portable identifier. */
@@ -82,6 +89,15 @@ typedef struct MdoSessionDiagnostic {
     char Message[256];
 } MdoSessionDiagnostic;
 
+typedef struct MdoSessionQuery {
+    uint32 Size;
+    const char* ProjectId;       /* NULL searches every project. */
+    const char* Text;            /* NULL/empty matches every session. */
+    uint32 StatusFlags;          /* zero selects all states. */
+    bool PinnedOnly;
+    size_t Limit;                /* zero selects the bounded default. */
+} MdoSessionQuery;
+
 /* Borrowed string views returned by an owned event snapshot. */
 typedef struct MdoSessionEventInfo {
     uint32 Size;
@@ -116,6 +132,7 @@ uint64 MdoSessionManagerGeneration(void);
 
 void MdoSessionCreateOptionsInit(MdoSessionCreateOptions* Options);
 void MdoSessionRuntimeOptionsInit(MdoSessionRuntimeOptions* Options);
+void MdoSessionQueryInit(MdoSessionQuery* Query);
 
 MdoSession* MdoSessionCreate(const MdoSessionCreateOptions* Options,
     xwork_error* Error);
@@ -138,8 +155,19 @@ bool MdoSessionSetArchived(MdoSession* Session, bool Archived,
     xwork_error* Error);
 bool MdoSessionMoveToTrash(MdoSession* Session, xwork_error* Error);
 bool MdoSessionRestore(MdoSession* Session, xwork_error* Error);
+bool MdoSessionLastSequence(MdoSession* Session, uint64* LastSequence,
+    xwork_error* Error);
+bool MdoSessionClear(MdoSession* Session, xwork_error* Error);
+bool MdoSessionTruncateAfter(MdoSession* Session, uint64 ThroughSequence,
+    xwork_error* Error);
+/* Returns owned UTF-8 JSON containing meta and a checkpointed xllm snapshot.
+ * Release with xrtFree. Artifacts and UI events remain separate exports. */
+str MdoSessionExportJson(MdoSession* Session, size_t* Size,
+    xwork_error* Error);
 
 MdoSessionCatalog* MdoSessionCatalogSnapshot(xwork_error* Error);
+MdoSessionCatalog* MdoSessionCatalogSearch(const MdoSessionQuery* Query,
+    xwork_error* Error);
 MdoSessionCatalog* MdoSessionCatalogRef(MdoSessionCatalog* Catalog);
 void MdoSessionCatalogRelease(MdoSessionCatalog* Catalog);
 uint64 MdoSessionCatalogGeneration(const MdoSessionCatalog* Catalog);

@@ -7,6 +7,12 @@
 
 #define MDO_SESSION_SCHEMA_VERSION 1u
 #define MDO_SESSION_META_LIMIT (64u * 1024u)
+#define MDO_SESSION_EXPORT_SNAPSHOT_LIMIT (32u * 1024u * 1024u)
+#define MDO_SESSION_SEARCH_DEFAULT 100u
+#define MDO_SESSION_SEARCH_MAX 1000u
+#define MDO_SESSION_SEARCH_TEXT_LIMIT 1024u
+#define MDO_SESSION_CATALOG_MAX 10000u
+#define MDO_SESSION_DIAGNOSTIC_MAX 1024u
 #define MDO_SESSION_SOURCE_ROOT "sessions"
 
 typedef struct MdoSessionActive {
@@ -41,6 +47,7 @@ struct MdoSessionCatalog {
     MdoSessionDiagnostic* Diagnostics;
     size_t DiagnosticCount;
     size_t DiagnosticCapacity;
+    bool Truncated;
 };
 
 static MdoSessionManagerState g_MdoSessions;
@@ -254,8 +261,8 @@ static bool MdoSessionsValueUInt(const xvalue* Object, const char* Key,
     return true;
 }
 
-static bool MdoSessionsReadBounded(const char* Path, char** Data,
-    size_t* Size)
+static bool MdoSessionsReadBounded(const char* Path, size_t Limit,
+    char** Data, size_t* Size)
 {
     xfile File = NULL;
     xfileinfo Info;
@@ -266,7 +273,7 @@ static bool MdoSessionsReadBounded(const char* Path, char** Data,
     File = MdoHomeOpenRead(Path);
     if ( File == NULL || !xrtFileStat(File, &Info) ||
          (Info.Available & XFILE_INFO_SIZE) == 0u ||
-         Info.Size > MDO_SESSION_META_LIMIT || Info.Size > SIZE_MAX - 1u )
+         Info.Size > Limit || Info.Size > SIZE_MAX - 1u )
         goto done;
     Bytes = (char*)xrtMalloc((size_t)Info.Size + 1u);
     if ( Bytes == NULL ||
@@ -398,7 +405,8 @@ static bool MdoSessionsMetaRead(const char* ProjectId, const char* SessionId,
     size_t Size = 0u;
     bool Ok;
     if ( !MdoSessionsPath(Path, ProjectId, SessionId, "meta.json") ||
-         !MdoSessionsReadBounded(Path, &Data, &Size) ) return false;
+         !MdoSessionsReadBounded(Path, MDO_SESSION_META_LIMIT,
+            &Data, &Size) ) return false;
     Ok = MdoSessionsMetaParse(ProjectId, SessionId,
         xrtStrViewN(Data, Size), Info);
     xrtFree(Data);
@@ -542,6 +550,13 @@ void MdoSessionRuntimeOptionsInit(MdoSessionRuntimeOptions* Options)
     memset(Options, 0, sizeof(*Options));
     Options->Size = sizeof(*Options);
     Options->Deadline = XRT_DEADLINE_NEVER;
+}
+
+void MdoSessionQueryInit(MdoSessionQuery* Query)
+{
+    if ( Query == NULL ) return;
+    memset(Query, 0, sizeof(*Query));
+    Query->Size = sizeof(*Query);
 }
 
 static void MdoSessionsRuntimeApply(MdoAgentSessionOptions* Agent,
@@ -1145,10 +1160,148 @@ bool MdoSessionRestore(MdoSession* Session, xwork_error* Error)
     return Ok;
 }
 
+bool MdoSessionLastSequence(MdoSession* Session, uint64* LastSequence,
+    xwork_error* Error)
+{
+    bool Ok;
+    xworkErrorInit(Error);
+    if ( Session == NULL || LastSequence == NULL ) {
+        MdoSessionsError(Error, XWORK_ERROR_INVALID_ARGUMENT,
+            "session and last sequence output are required");
+        return false;
+    }
+    *LastSequence = 0u;
+    xrtMutexLock(Session->Lock);
+    if ( Session->Agent == NULL || Session->Info.Status != MDO_SESSION_ACTIVE ) {
+        MdoSessionsError(Error, XWORK_ERROR_CONTEXT,
+            "an open active session is required to inspect the ledger");
+        Ok = false;
+    } else Ok = MdoAgentSessionLastSequence(Session->Agent,
+        LastSequence, Error);
+    xrtMutexUnlock(Session->Lock);
+    return Ok;
+}
+
+static bool MdoSessionsLedgerMutation(MdoSession* Session,
+    bool Clear, uint64 ThroughSequence, xwork_error* Error)
+{
+    MdoSessionInfo Candidate;
+    bool Ok = false;
+    xworkErrorInit(Error);
+    if ( Session == NULL ) {
+        MdoSessionsError(Error, XWORK_ERROR_INVALID_ARGUMENT,
+            "session is required");
+        return false;
+    }
+    xrtMutexLock(Session->Lock);
+    xrtMutexLock(g_MdoSessions.Lock);
+    if ( Session->Agent == NULL ||
+         Session->Info.Status != MDO_SESSION_ACTIVE ||
+         !MdoSessionsValidateCurrent(Session, Error) ) {
+        if ( Error != NULL && Error->eCode == XWORK_ERROR_NONE )
+            MdoSessionsError(Error, XWORK_ERROR_CONTEXT,
+                "an open active session is required for ledger maintenance");
+        goto done;
+    }
+    Ok = Clear ? MdoAgentSessionClear(Session->Agent, Error) :
+        MdoAgentSessionTruncateAfter(Session->Agent, ThroughSequence, Error);
+    if ( !Ok ) goto done;
+    if ( !MdoSessionsCandidate(Session, &Candidate, Error) ||
+         !MdoSessionsCommit(Session, &Candidate, Error) ) Ok = false;
+done:
+    xrtMutexUnlock(g_MdoSessions.Lock);
+    xrtMutexUnlock(Session->Lock);
+    return Ok;
+}
+
+bool MdoSessionClear(MdoSession* Session, xwork_error* Error)
+{
+    return MdoSessionsLedgerMutation(Session, true, 0u, Error);
+}
+
+bool MdoSessionTruncateAfter(MdoSession* Session, uint64 ThroughSequence,
+    xwork_error* Error)
+{
+    return MdoSessionsLedgerMutation(Session, false, ThroughSequence, Error);
+}
+
+str MdoSessionExportJson(MdoSession* Session, size_t* Size,
+    xwork_error* Error)
+{
+    static const char Middle[] = ",\"snapshot\":";
+    static const char Suffix[] = "}\n";
+    char SnapshotPath[MDO_SESSION_PATH_CAPACITY];
+    char Header[96];
+    char* Meta = NULL;
+    char* Snapshot = NULL;
+    char* Result = NULL;
+    size_t MetaSize = 0u;
+    size_t SnapshotSize = 0u;
+    size_t HeaderSize;
+    size_t Total;
+    int Written;
+    xworkErrorInit(Error);
+    if ( Size != NULL ) *Size = 0u;
+    if ( Session == NULL || Size == NULL ) {
+        MdoSessionsError(Error, XWORK_ERROR_INVALID_ARGUMENT,
+            "session and export size are required");
+        return NULL;
+    }
+    xrtMutexLock(Session->Lock);
+    if ( Session->Agent == NULL || Session->Info.Status != MDO_SESSION_ACTIVE ||
+         !MdoAgentSessionCheckpoint(Session->Agent, Error) ) goto done;
+    if ( !MdoSessionsPath(SnapshotPath, Session->Info.ProjectId,
+            Session->Info.Id, "snapshot.json") ||
+         !MdoSessionsReadBounded(Session->MetaPath, MDO_SESSION_META_LIMIT,
+            &Meta, &MetaSize) ||
+         !MdoSessionsReadBounded(SnapshotPath,
+            MDO_SESSION_EXPORT_SNAPSHOT_LIMIT, &Snapshot, &SnapshotSize) ) {
+        MdoSessionsXrtError(Error, XWORK_ERROR_IO,
+            "cannot read the checkpointed session export");
+        goto done;
+    }
+    Written = snprintf(Header, sizeof(Header),
+        "{\"export_schema\":1,\"exported_at_us\":%lld,\"meta\":",
+        (long long)xrtNow());
+    if ( Written <= 0 || (size_t)Written >= sizeof(Header) ) goto memory;
+    HeaderSize = (size_t)Written;
+    if ( HeaderSize > SIZE_MAX - MetaSize ||
+         HeaderSize + MetaSize > SIZE_MAX - (sizeof(Middle) - 1u) ||
+         HeaderSize + MetaSize + sizeof(Middle) - 1u >
+            SIZE_MAX - SnapshotSize ||
+         HeaderSize + MetaSize + sizeof(Middle) - 1u + SnapshotSize >
+            SIZE_MAX - sizeof(Suffix) ) goto memory;
+    Total = HeaderSize + MetaSize + sizeof(Middle) - 1u + SnapshotSize +
+        sizeof(Suffix) - 1u;
+    Result = (char*)xrtMalloc(Total + 1u);
+    if ( Result == NULL ) goto memory;
+    memcpy(Result, Header, HeaderSize);
+    memcpy(Result + HeaderSize, Meta, MetaSize);
+    memcpy(Result + HeaderSize + MetaSize, Middle, sizeof(Middle) - 1u);
+    memcpy(Result + HeaderSize + MetaSize + sizeof(Middle) - 1u,
+        Snapshot, SnapshotSize);
+    memcpy(Result + Total - (sizeof(Suffix) - 1u), Suffix,
+        sizeof(Suffix) - 1u);
+    Result[Total] = '\0';
+    *Size = Total;
+    goto done;
+memory:
+    MdoSessionsError(Error, XWORK_ERROR_OUT_OF_MEMORY,
+        "cannot allocate the session export");
+    xrtFree(Result);
+    Result = NULL;
+done:
+    xrtFree(Meta);
+    xrtFree(Snapshot);
+    xrtMutexUnlock(Session->Lock);
+    return Result;
+}
+
 static bool MdoSessionsCatalogDiagnostic(MdoSessionCatalog* Catalog,
     const char* Path, const char* Message)
 {
     MdoSessionDiagnostic* Item;
+    if ( Catalog->DiagnosticCount >= MDO_SESSION_DIAGNOSTIC_MAX ) return true;
     if ( !MdoSessionsGrow((void**)&Catalog->Diagnostics,
             &Catalog->DiagnosticCapacity, Catalog->DiagnosticCount + 1u,
             sizeof(*Catalog->Diagnostics)) ) return false;
@@ -1164,6 +1317,10 @@ static bool MdoSessionsCatalogDiagnostic(MdoSessionCatalog* Catalog,
 static bool MdoSessionsCatalogItem(MdoSessionCatalog* Catalog,
     const MdoSessionInfo* Info)
 {
+    if ( Catalog->Count >= MDO_SESSION_CATALOG_MAX ) {
+        Catalog->Truncated = true;
+        return true;
+    }
     if ( !MdoSessionsGrow((void**)&Catalog->Items, &Catalog->Capacity,
             Catalog->Count + 1u, sizeof(*Catalog->Items)) ) return false;
     Catalog->Items[Catalog->Count++] = *Info;
@@ -1226,6 +1383,7 @@ static bool MdoSessionsScanProject(MdoSessionCatalog* Catalog,
         Info.RuntimeOpen =
             MdoSessionsActiveFind(ProjectId, SessionId) != SIZE_MAX;
         if ( !MdoSessionsCatalogItem(Catalog, &Info) ) goto fail;
+        if ( Catalog->Truncated ) break;
     }
     if ( Next == XDIR_NEXT_ERROR || !xrtDirClose(Directory) ) return false;
     return true;
@@ -1289,6 +1447,13 @@ MdoSessionCatalog* MdoSessionCatalogSnapshot(xwork_error* Error)
             continue;
         }
         if ( !MdoSessionsScanProject(Catalog, ProjectId) ) goto io_locked;
+        if ( Catalog->Truncated ) {
+            if ( !MdoSessionsCatalogDiagnostic(Catalog,
+                    MDO_SESSION_SOURCE_ROOT,
+                    "session catalog limit reached; remaining entries omitted") )
+                goto memory_locked;
+            break;
+        }
     }
     if ( Next == XDIR_NEXT_ERROR || !xrtDirClose(Directory) ) {
         Directory = NULL;
@@ -1313,6 +1478,107 @@ io_locked:
     MdoSessionCatalogRelease(Catalog);
     MdoSessionsXrtError(Error, XWORK_ERROR_IO,
         "cannot scan the session catalog");
+    return NULL;
+}
+
+static unsigned char MdoSessionsAsciiFold(unsigned char Byte)
+{
+    return Byte >= 'A' && Byte <= 'Z' ?
+        (unsigned char)(Byte + ('a' - 'A')) : Byte;
+}
+
+static bool MdoSessionsContains(const char* Text, const char* Needle)
+{
+    const unsigned char* Start = (const unsigned char*)Text;
+    size_t NeedleSize = strlen(Needle);
+    if ( NeedleSize == 0u ) return true;
+    for ( ; *Start != '\0'; ++Start ) {
+        size_t i;
+        for ( i = 0u; i < NeedleSize && Start[i] != '\0'; ++i ) {
+            if ( MdoSessionsAsciiFold(Start[i]) !=
+                 MdoSessionsAsciiFold((unsigned char)Needle[i]) ) break;
+        }
+        if ( i == NeedleSize ) return true;
+    }
+    return false;
+}
+
+static uint32 MdoSessionsStatusFlag(MdoSessionStatus Status)
+{
+    switch ( Status ) {
+    case MDO_SESSION_ACTIVE: return MDO_SESSION_STATUS_ACTIVE_FLAG;
+    case MDO_SESSION_ARCHIVED: return MDO_SESSION_STATUS_ARCHIVED_FLAG;
+    case MDO_SESSION_TRASH: return MDO_SESSION_STATUS_TRASH_FLAG;
+    default: return 0u;
+    }
+}
+
+static bool MdoSessionsQueryMatch(const MdoSessionInfo* Info,
+    const MdoSessionQuery* Query, uint32 StatusFlags)
+{
+    if ( Query->ProjectId != NULL &&
+         strcmp(Info->ProjectId, Query->ProjectId) != 0 ) return false;
+    if ( (MdoSessionsStatusFlag(Info->Status) & StatusFlags) == 0u ||
+         (Query->PinnedOnly && !Info->Pinned) ) return false;
+    if ( Query->Text == NULL || Query->Text[0] == '\0' ) return true;
+    return MdoSessionsContains(Info->Title, Query->Text) ||
+        MdoSessionsContains(Info->Id, Query->Text) ||
+        MdoSessionsContains(Info->ProjectId, Query->Text) ||
+        MdoSessionsContains(Info->AgentId, Query->Text) ||
+        MdoSessionsContains(Info->ModelId, Query->Text) ||
+        MdoSessionsContains(Info->WorkspaceRoot, Query->Text);
+}
+
+MdoSessionCatalog* MdoSessionCatalogSearch(const MdoSessionQuery* Query,
+    xwork_error* Error)
+{
+    MdoSessionCatalog* Source = NULL;
+    MdoSessionCatalog* Result = NULL;
+    uint32 StatusFlags;
+    size_t Limit;
+    size_t i;
+    xworkErrorInit(Error);
+    if ( Query == NULL || Query->Size < sizeof(*Query) ||
+         (Query->ProjectId != NULL &&
+          !MdoSessionsIdValid(Query->ProjectId, MDO_PROJECT_ID_CAPACITY)) ||
+         (Query->Text != NULL &&
+          !MdoSessionsTextValid(Query->Text, MDO_SESSION_SEARCH_TEXT_LIMIT,
+            true)) ||
+         (Query->StatusFlags & ~MDO_SESSION_STATUS_ALL_FLAGS) != 0u ||
+         Query->Limit > MDO_SESSION_SEARCH_MAX ) {
+        MdoSessionsError(Error, XWORK_ERROR_INVALID_ARGUMENT,
+            "invalid session search query");
+        return NULL;
+    }
+    StatusFlags = Query->StatusFlags != 0u ? Query->StatusFlags :
+        MDO_SESSION_STATUS_ALL_FLAGS;
+    Limit = Query->Limit != 0u ? Query->Limit : MDO_SESSION_SEARCH_DEFAULT;
+    Source = MdoSessionCatalogSnapshot(Error);
+    if ( Source == NULL ) return NULL;
+    Result = (MdoSessionCatalog*)xrtCalloc(1u, sizeof(*Result));
+    if ( Result == NULL ) goto memory;
+    xrtAtomic32Init(&Result->Refs, 1u);
+    Result->Generation = Source->Generation;
+    if ( Source->DiagnosticCount != 0u ) {
+        if ( !MdoSessionsGrow((void**)&Result->Diagnostics,
+                &Result->DiagnosticCapacity, Source->DiagnosticCount,
+                sizeof(*Result->Diagnostics)) ) goto memory;
+        memcpy(Result->Diagnostics, Source->Diagnostics,
+            Source->DiagnosticCount * sizeof(*Result->Diagnostics));
+        Result->DiagnosticCount = Source->DiagnosticCount;
+    }
+    Result->Truncated = Source->Truncated;
+    for ( i = 0u; i < Source->Count && Result->Count < Limit; ++i ) {
+        if ( MdoSessionsQueryMatch(&Source->Items[i], Query, StatusFlags) &&
+             !MdoSessionsCatalogItem(Result, &Source->Items[i]) ) goto memory;
+    }
+    MdoSessionCatalogRelease(Source);
+    return Result;
+memory:
+    MdoSessionCatalogRelease(Source);
+    MdoSessionCatalogRelease(Result);
+    MdoSessionsError(Error, XWORK_ERROR_OUT_OF_MEMORY,
+        "cannot allocate the session search result");
     return NULL;
 }
 

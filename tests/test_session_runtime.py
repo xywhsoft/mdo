@@ -38,6 +38,14 @@ typedef struct Probe {
     unsigned Calls;
     bool SawPriorPrompt;
     bool SawPriorAnswer;
+    bool CheckTruncated;
+    bool SawTruncatedPrompt;
+    bool CheckCleared;
+    bool SawOldAfterClear;
+    bool SawSystemAfterClear;
+    bool CheckClearRecovery;
+    bool SawClearPrompt;
+    bool SawClearAnswer;
 } Probe;
 
 static char *Copy(const char *text) {
@@ -67,6 +75,7 @@ static xllm_result Complete(void *data, const xllm_request *request,
     const xllm_stream_callbacks *callbacks, xllm_response **response,
     xllm_error *error) {
     Probe *probe = (Probe*)data;
+    const char *answer = "durable-answer-extra";
     size_t i;
     (void)callbacks; (void)error;
     ++probe->Calls;
@@ -77,9 +86,36 @@ static xllm_result Complete(void *data, const xllm_request *request,
             probe->SawPriorPrompt = true;
         if (strstr(text, "durable-answer-one") != NULL)
             probe->SawPriorAnswer = true;
+        if (probe->CheckTruncated &&
+            strstr(text, "third transient prompt") != NULL)
+            probe->SawTruncatedPrompt = true;
+        if (probe->CheckCleared) {
+            if (request->pMessages[i].eRole == XLLM_ROLE_SYSTEM)
+                probe->SawSystemAfterClear = true;
+            if (strstr(text, "first durable prompt") != NULL ||
+                strstr(text, "durable-answer-one") != NULL ||
+                strstr(text, "second prompt") != NULL ||
+                strstr(text, "durable-answer-two") != NULL ||
+                strstr(text, "third transient prompt") != NULL ||
+                strstr(text, "durable-answer-three") != NULL ||
+                strstr(text, "after truncation prompt") != NULL ||
+                strstr(text, "durable-answer-four") != NULL)
+                probe->SawOldAfterClear = true;
+        }
+        if (probe->CheckClearRecovery) {
+            if (strstr(text, "after clear prompt") != NULL)
+                probe->SawClearPrompt = true;
+            if (strstr(text, "durable-answer-five") != NULL)
+                probe->SawClearAnswer = true;
+        }
     }
-    *response = Response(probe->Calls == 1u ?
-        "durable-answer-one" : "durable-answer-two");
+    if (probe->Calls == 1u) answer = "durable-answer-one";
+    else if (probe->Calls == 2u) answer = "durable-answer-two";
+    else if (probe->Calls == 3u) answer = "durable-answer-three";
+    else if (probe->Calls == 4u) answer = "durable-answer-four";
+    else if (probe->Calls == 5u) answer = "durable-answer-five";
+    else if (probe->Calls == 6u) answer = "durable-answer-six";
+    *response = Response(answer);
     return *response != NULL ? XLLM_RESULT_OK : XLLM_RESULT_ERROR;
 }
 
@@ -126,6 +162,23 @@ static void Catalog(const char *label) {
                 info.Pinned ? 1 : 0, info.RuntimeOpen ? 1 : 0,
                 (unsigned long long)info.Revision);
     }
+    MdoSessionCatalogRelease(catalog);
+}
+
+static void Search(const char *label, const char *text, uint32 statuses,
+    bool pinned) {
+    xwork_error error;
+    MdoSessionQuery query;
+    MdoSessionCatalog *catalog;
+    MdoSessionQueryInit(&query);
+    query.ProjectId = "project-alpha";
+    query.Text = text;
+    query.StatusFlags = statuses;
+    query.PinnedOnly = pinned;
+    catalog = MdoSessionCatalogSearch(&query, &error);
+    printf("%s=count:%zu diagnostics:%zu code:%d\n", label,
+        MdoSessionCatalogCount(catalog),
+        MdoSessionCatalogDiagnosticCount(catalog), (int)error.eCode);
     MdoSessionCatalogRelease(catalog);
 }
 
@@ -177,6 +230,11 @@ void ServiceInit(XS_HostInfo *host) {
     MdoSession *stale = NULL;
     bool stale_update;
     uint64 event_cursor = 0u;
+    uint64 rewind_to = 0u;
+    uint64 transient_tail = 0u;
+    uint64 cleared_tail = 0u;
+    char *export_json = NULL;
+    size_t export_size = 0u;
     Probe probe;
     char session_id[MDO_SESSION_ID_CAPACITY] = {0};
     static const char invalid[] = "{}";
@@ -225,10 +283,51 @@ void ServiceInit(XS_HostInfo *host) {
     if (!Run(session, "second prompt")) goto done;
     (void)Events("events_after_reopen", "project-alpha", session_id,
         event_cursor, 100u);
+    if (!MdoSessionLastSequence(session, &rewind_to, &error)) goto done;
+    export_json = MdoSessionExportJson(session, &export_size, &error);
+    printf("export=ok:%d size:%zu schema:%d meta:%d snapshot:%d\n",
+        export_json != NULL ? 1 : 0, export_size,
+        export_json != NULL && strstr(export_json, "\"export_schema\":1") != NULL,
+        export_json != NULL && strstr(export_json, "\"meta\":{") != NULL,
+        export_json != NULL && strstr(export_json, "\"snapshot\":{") != NULL);
+    xrtFree(export_json); export_json = NULL;
+    if (!Run(session, "third transient prompt") ||
+        !MdoSessionLastSequence(session, &transient_tail, &error) ||
+        transient_tail <= rewind_to ||
+        !MdoSessionTruncateAfter(session, rewind_to, &error)) goto done;
+    MdoSessionRelease(session); session = NULL;
+    session = MdoSessionOpen("project-alpha", session_id, &open, &error);
+    if (session == NULL) goto done;
+    probe.CheckTruncated = true;
+    if (!Run(session, "after truncation prompt")) goto done;
+    probe.CheckTruncated = false;
+    printf("truncate=boundary:%llu tail:%llu removed:%d\n",
+        (unsigned long long)rewind_to,
+        (unsigned long long)transient_tail,
+        probe.SawTruncatedPrompt ? 0 : 1);
+    if (!MdoSessionClear(session, &error) ||
+        !MdoSessionLastSequence(session, &cleared_tail, &error)) goto done;
+    probe.CheckCleared = true;
+    if (!Run(session, "after clear prompt")) goto done;
+    probe.CheckCleared = false;
+    printf("clear=tail:%llu old:%d system:%d\n",
+        (unsigned long long)cleared_tail,
+        probe.SawOldAfterClear ? 1 : 0,
+        probe.SawSystemAfterClear ? 1 : 0);
+    MdoSessionRelease(session); session = NULL;
+    session = MdoSessionOpen("project-alpha", session_id, &open, &error);
+    if (session == NULL) goto done;
+    probe.CheckClearRecovery = true;
+    if (!Run(session, "after clear recovery prompt")) goto done;
+    probe.CheckClearRecovery = false;
+    printf("clear_recovery=prompt:%d answer:%d\n",
+        probe.SawClearPrompt ? 1 : 0, probe.SawClearAnswer ? 1 : 0);
     stale = MdoSessionLoad("project-alpha", session_id, &error);
     if (stale == NULL) goto done;
     if (!MdoSessionRename(session, "Renamed durable session", &error) ||
         !MdoSessionSetPinned(session, true, &error)) goto done;
+    Search("search_active", "RENAMED durable",
+        MDO_SESSION_STATUS_ACTIVE_FLAG, true);
     stale_update = MdoSessionRename(stale, "Lost update", &error);
     printf("stale_update=%d code:%d\n", stale_update ? 1 : 0,
         (int)error.eCode);
@@ -247,6 +346,8 @@ void ServiceInit(XS_HostInfo *host) {
         !MdoSessionMoveToTrash(session, &error)) goto done;
     MdoSessionRelease(session); session = NULL;
     Catalog("catalog_trash");
+    Search("search_trash", "renamed",
+        MDO_SESSION_STATUS_TRASH_FLAG, false);
     session = MdoSessionLoad("project-alpha", session_id, &error);
     if (session == NULL || !MdoSessionRestore(session, &error)) goto done;
     MdoSessionRelease(session); session = NULL;
@@ -271,6 +372,7 @@ done:
     MdoSessionRelease(stale);
     MdoSessionRelease(blocked);
     MdoSessionRelease(session);
+    xrtFree(export_json);
     MdoSessionManagerUnit();
     MdoModuleManagerUnit();
     MdoSkillManagerUnit();
@@ -399,18 +501,28 @@ def main() -> int:
         assert "duplicate_open=0 code:7" in output, output
         assert "run=0 text:durable-answer-one" in output, output
         assert "run=0 text:durable-answer-two" in output, output
+        assert "run=0 text:durable-answer-three" in output, output
+        assert "run=0 text:durable-answer-four" in output, output
+        assert "run=0 text:durable-answer-five" in output, output
+        assert "run=0 text:durable-answer-six" in output, output
+        assert re.search(r"export=ok:1 size:[1-9]\d* schema:1 meta:1 snapshot:1", output), output
+        assert re.search(r"truncate=boundary:[1-9]\d* tail:[1-9]\d* removed:1", output), output
+        assert re.search(r"clear=tail:[1-9]\d* old:0 system:1", output), output
+        assert "clear_recovery=prompt:1 answer:1" in output, output
         assert "catalog_active=count:1 diagnostics:0" in output, output
         assert "open:1" in output, output
         assert "catalog_after_create=count:1 diagnostics:0" in output, output
         assert "open:0" in output, output
         assert "archived_open=0" in output, output
         assert "stale_update=0 code:7" in output, output
+        assert "search_active=count:1 diagnostics:0 code:0" in output, output
         assert "catalog_trash=count:1 diagnostics:0" in output, output
+        assert "search_trash=count:1 diagnostics:0 code:0" in output, output
         assert "status:3 pinned:0" in output, output
         assert "failed_create=0 code:1" in output, output
         assert "catalog_after_failed_create=count:1 diagnostics:0" in output, output
         assert "catalog_diagnostic=count:1 diagnostics:1" in output, output
-        assert "recovery=calls:2 prior_prompt:1 prior_answer:1" in output, output
+        assert "recovery=calls:6 prior_prompt:1 prior_answer:1" in output, output
         first = re.search(r"events_first=count:(\d+) next:(\d+) latest:(\d+) lost:0", output)
         reopened = re.search(r"events_after_reopen=count:(\d+) next:(\d+) latest:(\d+) lost:1", output)
         assert first and int(first.group(1)) == 2 and int(first.group(3)) >= 2, output
