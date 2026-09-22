@@ -14,6 +14,7 @@
 #define MDO_SCHEDULE_REASONING_CAPACITY 33u
 #define MDO_SCHEDULE_WORKSPACE_CAPACITY 2049u
 #define MDO_SCHEDULE_INPUT_CAPACITY (64u * 1024u + 1u)
+#define MDO_SCHEDULE_RESULT_CAPACITY (64u * 1024u + 1u)
 #define MDO_SCHEDULE_PATH_CAPACITY 256u
 #define MDO_SCHEDULE_PROTOCOL_DEFAULT ((MdoModelProtocol)0)
 
@@ -109,6 +110,38 @@ typedef struct MdoScheduleDiagnostic {
     char Message[256];
 } MdoScheduleDiagnostic;
 
+typedef struct MdoScheduleExecutorOptions {
+    uint32 Size;
+    bool Automatic;
+    uint32 PollMilliseconds;
+    size_t MaxClaimsPerPump;
+    xwork_approval_fn OnApproval;
+    void* ApprovalUserData;
+    xwork_permission_fn OnPermission;
+    void* PermissionUserData;
+    xwork_hook_fn OnHook;
+    void* HookUserData;
+    xwork_event_fn OnEvent;
+    void* EventUserData;
+    xwork_model_complete_fn OnModelComplete;
+    void* ModelUserData;
+    void* OwnerUserData;
+    xwork_agent_owner_retain_fn OnOwnerRetain;
+    xwork_agent_owner_release_fn OnOwnerRelease;
+} MdoScheduleExecutorOptions;
+
+typedef struct MdoScheduleExecutorSnapshot {
+    uint32 Size;
+    bool Automatic;
+    bool PersistenceFault;
+    uint32 PollMilliseconds;
+    size_t ActiveRuns;
+    uint64 ClaimsStarted;
+    uint64 RunsCompleted;
+    uint64 RunsFailed;
+    char LastError[256];
+} MdoScheduleExecutorSnapshot;
+
 bool MdoScheduleManagerInit(xwork_runtime* Runtime);
 void MdoScheduleManagerUnit(void);
 uint64 MdoScheduleManagerGeneration(void);
@@ -125,6 +158,19 @@ bool MdoScheduleClaimDue(int64 Now, MdoScheduleClaim* Claim,
     xwork_error* Error);
 bool MdoScheduleFinishTask(uint64 TaskId, xwork_result Result,
     const char* ResultText, xwork_error* Error);
+bool MdoScheduleFinishTaskWithRun(uint64 TaskId, uint64 AgentRunId,
+    xwork_result Result, const char* ResultText, xwork_error* Error);
+
+/* The product executor owns ordinary Agent runs for claimed occurrences.
+ * Automatic mode uses one lightweight host timer thread; manual mode lets
+ * tests and embedders supply an explicit Unix-microsecond clock. */
+void MdoScheduleExecutorOptionsInit(MdoScheduleExecutorOptions* Options);
+bool MdoScheduleExecutorInit(xwork_runtime* Runtime,
+    const MdoScheduleExecutorOptions* Options, xwork_error* Error);
+void MdoScheduleExecutorUnit(void);
+bool MdoScheduleExecutorPump(int64 Now, size_t* Started, size_t* Completed,
+    xwork_error* Error);
+bool MdoScheduleExecutorGetSnapshot(MdoScheduleExecutorSnapshot* Snapshot);
 
 MdoScheduleCatalog* MdoScheduleCatalogSnapshot(xwork_error* Error);
 MdoScheduleCatalog* MdoScheduleCatalogRef(MdoScheduleCatalog* Catalog);

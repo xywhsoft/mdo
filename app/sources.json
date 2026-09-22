@@ -13,6 +13,7 @@
     "src/modules/manager.c",
     "src/agents/runtime.c",
     "src/schedules/manager.c",
+    "src/schedules/executor.c",
     "src/sessions/events.c",
     "src/sessions/manager.c",
     "src/bootstrap/bootstrap.c",

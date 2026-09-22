@@ -41,7 +41,7 @@ bool MdoBootstrapInit(XS_HostInfo* pHost)
 
     (void)pHost;
     if ( g_MdoBootstrap.Stage != MDO_BOOTSTRAP_EMPTY )
-        return g_MdoBootstrap.Stage == MDO_BOOTSTRAP_SESSIONS_READY;
+        return g_MdoBootstrap.Stage == MDO_BOOTSTRAP_EXECUTOR_READY;
     if ( !MdoHomeInit() ) {
         MdoBootstrapFail("Home initialization failed");
         return false;
@@ -118,6 +118,15 @@ bool MdoBootstrapInit(XS_HostInfo* pHost)
         return false;
     }
     g_MdoBootstrap.Stage = MDO_BOOTSTRAP_SESSIONS_READY;
+    if ( !MdoScheduleExecutorInit(g_MdoBootstrap.Runtime, NULL, &WorkError) ) {
+        snprintf(g_MdoBootstrap.Message, sizeof(g_MdoBootstrap.Message), "%.255s",
+            WorkError.sMessage[0] != '\0' ? WorkError.sMessage :
+            "schedule executor initialization failed");
+        g_MdoBootstrap.Stage = MDO_BOOTSTRAP_FAILED;
+        printf("[mdo] bootstrap failed: %s\n", g_MdoBootstrap.Message);
+        return false;
+    }
+    g_MdoBootstrap.Stage = MDO_BOOTSTRAP_EXECUTOR_READY;
 
     memset(&Home, 0, sizeof(Home));
     Home.Size = sizeof(Home);
@@ -162,6 +171,7 @@ bool MdoBootstrapInit(XS_HostInfo* pHost)
 
 void MdoBootstrapUnit(void)
 {
+    MdoScheduleExecutorUnit();
     MdoSessionManagerUnit();
     MdoScheduleManagerUnit();
     MdoModuleManagerUnit();
@@ -183,7 +193,7 @@ bool MdoBootstrapGetSnapshot(MdoBootstrapSnapshot* pSnapshot)
     if ( pSnapshot == NULL || pSnapshot->Size < sizeof(*pSnapshot) )
         return false;
     pSnapshot->Stage = g_MdoBootstrap.Stage;
-    pSnapshot->Ready = g_MdoBootstrap.Stage == MDO_BOOTSTRAP_SESSIONS_READY;
+    pSnapshot->Ready = g_MdoBootstrap.Stage == MDO_BOOTSTRAP_EXECUTOR_READY;
     pSnapshot->DefaultsBytes = g_MdoBootstrap.DefaultsBytes;
     pSnapshot->Message = g_MdoBootstrap.Message;
     pSnapshot->ModelGeneration = 0u;
@@ -211,6 +221,10 @@ bool MdoBootstrapGetSnapshot(MdoBootstrapSnapshot* pSnapshot)
     pSnapshot->ScheduleCount = 0u;
     pSnapshot->ScheduleDiagnosticCount = 0u;
     pSnapshot->SchedulesEnabled = false;
+    pSnapshot->ScheduleExecutorAutomatic = false;
+    pSnapshot->ScheduleActiveRuns = 0u;
+    pSnapshot->ScheduleRunsCompleted = 0u;
+    pSnapshot->ScheduleRunsFailed = 0u;
     pSnapshot->SessionGeneration = 0u;
     pSnapshot->SessionCount = 0u;
     pSnapshot->SessionDiagnosticCount = 0u;
@@ -295,6 +309,17 @@ bool MdoBootstrapGetSnapshot(MdoBootstrapSnapshot* pSnapshot)
             pSnapshot->SchedulesEnabled = MdoScheduleManagerEnabled();
         }
         MdoScheduleCatalogRelease(pCatalog);
+    }
+    {
+        MdoScheduleExecutorSnapshot Executor;
+        memset(&Executor, 0, sizeof(Executor));
+        Executor.Size = sizeof(Executor);
+        if ( MdoScheduleExecutorGetSnapshot(&Executor) ) {
+            pSnapshot->ScheduleExecutorAutomatic = Executor.Automatic;
+            pSnapshot->ScheduleActiveRuns = Executor.ActiveRuns;
+            pSnapshot->ScheduleRunsCompleted = Executor.RunsCompleted;
+            pSnapshot->ScheduleRunsFailed = Executor.RunsFailed;
+        }
     }
     {
         xwork_error Error;

@@ -1,0 +1,436 @@
+#include <stdlib.h>
+#include <string.h>
+
+#include "../../include/mdo/agents.h"
+#include "../../include/mdo/schedules.h"
+
+#define MDO_SCHEDULE_EXECUTOR_ACTIVE_MAX 64u
+#define MDO_SCHEDULE_EXECUTOR_CLAIM_MAX 16u
+#define MDO_SCHEDULE_EXECUTOR_POLL_DEFAULT 250u
+#define MDO_SCHEDULE_EXECUTOR_POLL_MIN 50u
+#define MDO_SCHEDULE_EXECUTOR_POLL_MAX 5000u
+
+typedef struct MdoScheduleExecution {
+    uint64 TaskId;
+    uint64 AgentRunId;
+    MdoAgentRun* Run;
+} MdoScheduleExecution;
+
+typedef struct MdoScheduleExecutorState {
+    xmutex* Lock;
+    xthread* Thread;
+    xwork_runtime* Runtime;
+    MdoScheduleExecution* Active;
+    size_t ActiveCount;
+    size_t ActiveCapacity;
+    MdoScheduleExecutorOptions Options;
+    uint64 ClaimsStarted;
+    uint64 RunsCompleted;
+    uint64 RunsFailed;
+    bool Stopping;
+    bool PersistenceFault;
+    bool Initialized;
+    char LastError[256];
+} MdoScheduleExecutorState;
+
+static MdoScheduleExecutorState g_MdoScheduleExecutor;
+
+static void MdoScheduleExecutorError(xwork_error* Error,
+    xwork_error_code Code, const char* Message)
+{
+    if ( Error == NULL ) return;
+    xworkErrorInit(Error);
+    Error->eCode = Code;
+    snprintf(Error->sMessage, sizeof(Error->sMessage), "%s",
+        Message != NULL ? Message : "schedule executor operation failed");
+}
+
+static void MdoScheduleExecutorRemember(const xwork_error* Error,
+    const char* Fallback)
+{
+    const char* Message = Error != NULL && Error->sMessage[0] != '\0' ?
+        Error->sMessage : Fallback;
+    snprintf(g_MdoScheduleExecutor.LastError,
+        sizeof(g_MdoScheduleExecutor.LastError), "%s",
+        Message != NULL ? Message : "schedule execution failed");
+    if ( Error != NULL && Error->eCode == XWORK_ERROR_IO )
+        g_MdoScheduleExecutor.PersistenceFault = true;
+}
+
+static bool MdoScheduleExecutorGrow(void)
+{
+    size_t Next;
+    MdoScheduleExecution* Value;
+    if ( g_MdoScheduleExecutor.ActiveCount <
+         g_MdoScheduleExecutor.ActiveCapacity ) return true;
+    if ( g_MdoScheduleExecutor.ActiveCapacity >=
+         MDO_SCHEDULE_EXECUTOR_ACTIVE_MAX ) return false;
+    Next = g_MdoScheduleExecutor.ActiveCapacity != 0u ?
+        g_MdoScheduleExecutor.ActiveCapacity * 2u : 8u;
+    if ( Next > MDO_SCHEDULE_EXECUTOR_ACTIVE_MAX )
+        Next = MDO_SCHEDULE_EXECUTOR_ACTIVE_MAX;
+    Value = (MdoScheduleExecution*)xrtRealloc(g_MdoScheduleExecutor.Active,
+        Next * sizeof(*Value));
+    if ( Value == NULL ) return false;
+    g_MdoScheduleExecutor.Active = Value;
+    g_MdoScheduleExecutor.ActiveCapacity = Next;
+    return true;
+}
+
+static char* MdoScheduleExecutorResultText(const char* Text)
+{
+    size_t Size = Text != NULL ? strlen(Text) : 0u;
+    char* Result;
+    if ( Size >= MDO_SCHEDULE_RESULT_CAPACITY ) {
+        Size = MDO_SCHEDULE_RESULT_CAPACITY - 1u;
+        while ( Size != 0u &&
+                (((unsigned char)Text[Size] & 0xc0u) == 0x80u) ) --Size;
+    }
+    Result = (char*)xrtMalloc(Size + 1u);
+    if ( Result == NULL ) return NULL;
+    if ( Size != 0u ) memcpy(Result, Text, Size);
+    Result[Size] = '\0';
+    return Result;
+}
+
+static bool MdoScheduleExecutorFinishAt(size_t Index, size_t* Completed,
+    xwork_error* Error)
+{
+    MdoScheduleExecution Execution = g_MdoScheduleExecutor.Active[Index];
+    MdoAgentRunInfo Info;
+    xwork_run_result Result;
+    xwork_error WaitError;
+    xwork_result Code;
+    char* Text;
+    bool Stored;
+    memset(&Info, 0, sizeof(Info));
+    Info.Size = sizeof(Info);
+    if ( !MdoAgentRunGetInfo(Execution.Run, &Info) ) {
+        MdoScheduleExecutorError(Error, XWORK_ERROR_CONTEXT,
+            "cannot inspect a scheduled Agent run");
+        return false;
+    }
+    if ( Info.Run.eState == XWORK_RUN_CREATED ||
+         Info.Run.eState == XWORK_RUN_RUNNING ) return true;
+    memset(&Result, 0, sizeof(Result));
+    xworkErrorInit(&WaitError);
+    Code = MdoAgentRunWait(Execution.Run, XRT_DEADLINE_NEVER, &Result,
+        &WaitError);
+    Text = MdoScheduleExecutorResultText(Result.sFinalText != NULL ?
+        Result.sFinalText : (WaitError.sMessage[0] != '\0' ?
+        WaitError.sMessage : "scheduled Agent run completed without text"));
+    if ( Text == NULL ) {
+        xworkRunResultUnit(&Result);
+        MdoScheduleExecutorError(Error, XWORK_ERROR_OUT_OF_MEMORY,
+            "cannot allocate a scheduled Agent result");
+        return false;
+    }
+    Stored = MdoScheduleFinishTaskWithRun(Execution.TaskId,
+        Execution.AgentRunId, Code, Text, Error);
+    xrtFree(Text);
+    xworkRunResultUnit(&Result);
+    MdoAgentRunDestroy(Execution.Run);
+    g_MdoScheduleExecutor.Active[Index] =
+        g_MdoScheduleExecutor.Active[g_MdoScheduleExecutor.ActiveCount - 1u];
+    --g_MdoScheduleExecutor.ActiveCount;
+    if ( g_MdoScheduleExecutor.RunsCompleted != UINT64_MAX )
+        ++g_MdoScheduleExecutor.RunsCompleted;
+    if ( Code != XWORK_RESULT_OK &&
+         g_MdoScheduleExecutor.RunsFailed != UINT64_MAX )
+        ++g_MdoScheduleExecutor.RunsFailed;
+    if ( Completed != NULL ) ++*Completed;
+    if ( !Stored ) MdoScheduleExecutorRemember(Error,
+        "cannot persist a scheduled Agent result");
+    return Stored;
+}
+
+static bool MdoScheduleExecutorHarvest(size_t* Completed, xwork_error* Error)
+{
+    size_t i = 0u;
+    while ( i < g_MdoScheduleExecutor.ActiveCount ) {
+        size_t Before = g_MdoScheduleExecutor.ActiveCount;
+        if ( !MdoScheduleExecutorFinishAt(i, Completed, Error) ) return false;
+        if ( g_MdoScheduleExecutor.ActiveCount == Before ) ++i;
+    }
+    return true;
+}
+
+static bool MdoScheduleExecutorFailClaim(uint64 TaskId, const char* Message,
+    xwork_error* Error)
+{
+    xwork_error FinishError;
+    const char* Text = Message != NULL && Message[0] != '\0' ? Message :
+        "scheduled Agent run could not start";
+    if ( MdoScheduleFinishTaskWithRun(TaskId, 0u, XWORK_RESULT_ERROR,
+            Text, &FinishError) ) return true;
+    if ( Error != NULL ) *Error = FinishError;
+    MdoScheduleExecutorRemember(&FinishError,
+        "cannot persist a failed schedule claim");
+    return false;
+}
+
+static bool MdoScheduleExecutorStart(const MdoScheduleClaim* Claim,
+    xwork_error* Error)
+{
+    MdoAgentSessionOptions SessionOptions;
+    MdoAgentRunOptions RunOptions;
+    MdoAgentSession* Session = NULL;
+    MdoAgentRun* Run = NULL;
+    MdoAgentRunInfo Info;
+    MdoScheduleExecution* Active;
+    char Failure[256];
+    MdoAgentSessionOptionsInit(&SessionOptions);
+    SessionOptions.AgentId = Claim->AgentId;
+    SessionOptions.ModelId = Claim->ModelId[0] != '\0' ? Claim->ModelId : NULL;
+    SessionOptions.Protocol = Claim->Protocol;
+    SessionOptions.ReasoningEffort = Claim->ReasoningEffort[0] != '\0' ?
+        Claim->ReasoningEffort : NULL;
+    SessionOptions.MaxOutputTokens = Claim->MaxOutputTokens;
+    SessionOptions.WorkspaceRoot = Claim->WorkspaceRoot[0] != '\0' ?
+        Claim->WorkspaceRoot : NULL;
+    SessionOptions.ProjectId = Claim->ProjectId;
+    SessionOptions.ProductSessionId = Claim->ScheduleId;
+    SessionOptions.OnApproval = g_MdoScheduleExecutor.Options.OnApproval;
+    SessionOptions.ApprovalUserData =
+        g_MdoScheduleExecutor.Options.ApprovalUserData;
+    SessionOptions.OnPermission = g_MdoScheduleExecutor.Options.OnPermission;
+    SessionOptions.PermissionUserData =
+        g_MdoScheduleExecutor.Options.PermissionUserData;
+    SessionOptions.OnHook = g_MdoScheduleExecutor.Options.OnHook;
+    SessionOptions.HookUserData = g_MdoScheduleExecutor.Options.HookUserData;
+    SessionOptions.OnEvent = g_MdoScheduleExecutor.Options.OnEvent;
+    SessionOptions.EventUserData = g_MdoScheduleExecutor.Options.EventUserData;
+    SessionOptions.OnModelComplete =
+        g_MdoScheduleExecutor.Options.OnModelComplete;
+    SessionOptions.ModelUserData = g_MdoScheduleExecutor.Options.ModelUserData;
+    SessionOptions.OwnerUserData = g_MdoScheduleExecutor.Options.OwnerUserData;
+    SessionOptions.OnOwnerRetain =
+        g_MdoScheduleExecutor.Options.OnOwnerRetain;
+    SessionOptions.OnOwnerRelease =
+        g_MdoScheduleExecutor.Options.OnOwnerRelease;
+    Session = MdoAgentSessionCreateWithRuntime(g_MdoScheduleExecutor.Runtime,
+        &SessionOptions, Error);
+    if ( Session == NULL ) goto fail;
+    MdoAgentRunOptionsInit(&RunOptions);
+    RunOptions.Prompt = Claim->Input;
+    Run = MdoAgentRunCreate(Session, &RunOptions, Error);
+    if ( Run == NULL || !MdoAgentRunStart(Run, Error) ) goto fail;
+    memset(&Info, 0, sizeof(Info));
+    Info.Size = sizeof(Info);
+    if ( !MdoAgentRunGetInfo(Run, &Info) ) {
+        MdoScheduleExecutorError(Error, XWORK_ERROR_CONTEXT,
+            "cannot inspect a newly started scheduled Agent run");
+        goto fail;
+    }
+    Active = &g_MdoScheduleExecutor.Active[g_MdoScheduleExecutor.ActiveCount++];
+    memset(Active, 0, sizeof(*Active));
+    Active->TaskId = Claim->TaskId;
+    Active->AgentRunId = Info.Run.uRunId;
+    Active->Run = Run;
+    Run = NULL;
+    MdoAgentSessionRelease(Session);
+    if ( g_MdoScheduleExecutor.ClaimsStarted != UINT64_MAX )
+        ++g_MdoScheduleExecutor.ClaimsStarted;
+    return true;
+fail:
+    snprintf(Failure, sizeof(Failure), "%s",
+        Error != NULL && Error->sMessage[0] != '\0' ? Error->sMessage :
+        "scheduled Agent run could not start");
+    MdoAgentRunDestroy(Run);
+    MdoAgentSessionRelease(Session);
+    if ( g_MdoScheduleExecutor.RunsFailed != UINT64_MAX )
+        ++g_MdoScheduleExecutor.RunsFailed;
+    MdoScheduleExecutorRemember(Error, Failure);
+    (void)MdoScheduleExecutorFailClaim(Claim->TaskId, Failure, Error);
+    return false;
+}
+
+void MdoScheduleExecutorOptionsInit(MdoScheduleExecutorOptions* Options)
+{
+    if ( Options == NULL ) return;
+    memset(Options, 0, sizeof(*Options));
+    Options->Size = sizeof(*Options);
+    Options->Automatic = true;
+    Options->PollMilliseconds = MDO_SCHEDULE_EXECUTOR_POLL_DEFAULT;
+    Options->MaxClaimsPerPump = 4u;
+}
+
+bool MdoScheduleExecutorPump(int64 Now, size_t* Started, size_t* Completed,
+    xwork_error* Error)
+{
+    size_t StartedValue = 0u;
+    size_t CompletedValue = 0u;
+    size_t i;
+    bool Ok = false;
+    xworkErrorInit(Error);
+    if ( !g_MdoScheduleExecutor.Initialized || Now < 0 ) {
+        MdoScheduleExecutorError(Error, XWORK_ERROR_INVALID_ARGUMENT,
+            "invalid schedule executor pump request");
+        return false;
+    }
+    xrtMutexLock(g_MdoScheduleExecutor.Lock);
+    if ( g_MdoScheduleExecutor.Stopping ) {
+        MdoScheduleExecutorError(Error, XWORK_ERROR_CANCELLED,
+            "schedule executor is stopping");
+        goto done;
+    }
+    if ( !MdoScheduleExecutorHarvest(&CompletedValue, Error) ) goto done;
+    for ( i = 0u; i < g_MdoScheduleExecutor.Options.MaxClaimsPerPump; ++i ) {
+        MdoScheduleClaim Claim;
+        if ( !MdoScheduleExecutorGrow() ) {
+            MdoScheduleExecutorError(Error, XWORK_ERROR_LIMIT,
+                "schedule executor active run limit was exceeded");
+            goto done;
+        }
+        MdoScheduleClaimInit(&Claim);
+        if ( !MdoScheduleClaimDue(Now, &Claim, Error) ) goto done;
+        if ( !Claim.Claimed ) break;
+        if ( !MdoScheduleExecutorStart(&Claim, Error) ) goto done;
+        ++StartedValue;
+    }
+    Ok = true;
+done:
+    if ( !Ok ) MdoScheduleExecutorRemember(Error,
+        "schedule executor pump failed");
+    xrtMutexUnlock(g_MdoScheduleExecutor.Lock);
+    if ( Started != NULL ) *Started = StartedValue;
+    if ( Completed != NULL ) *Completed = CompletedValue;
+    return Ok;
+}
+
+static int32 MdoScheduleExecutorThread(ptr Data)
+{
+    (void)Data;
+    for ( ; ; ) {
+        bool Stop;
+        uint32 Poll;
+        xwork_error Error;
+        xrtMutexLock(g_MdoScheduleExecutor.Lock);
+        Stop = g_MdoScheduleExecutor.Stopping;
+        Poll = g_MdoScheduleExecutor.Options.PollMilliseconds;
+        xrtMutexUnlock(g_MdoScheduleExecutor.Lock);
+        if ( Stop ) break;
+        (void)MdoScheduleExecutorPump(xrtNow(), NULL, NULL, &Error);
+        xrtSleep(Poll);
+    }
+    return 0;
+}
+
+bool MdoScheduleExecutorInit(xwork_runtime* Runtime,
+    const MdoScheduleExecutorOptions* Options, xwork_error* Error)
+{
+    MdoScheduleExecutorOptions Defaults;
+    xworkErrorInit(Error);
+    if ( g_MdoScheduleExecutor.Initialized ) return true;
+    if ( Options == NULL ) {
+        MdoScheduleExecutorOptionsInit(&Defaults);
+        Options = &Defaults;
+    }
+    if ( Runtime == NULL || MdoScheduleManagerGeneration() == 0u ||
+         Options->Size < sizeof(*Options) ||
+         Options->PollMilliseconds < MDO_SCHEDULE_EXECUTOR_POLL_MIN ||
+         Options->PollMilliseconds > MDO_SCHEDULE_EXECUTOR_POLL_MAX ||
+         Options->MaxClaimsPerPump == 0u ||
+         Options->MaxClaimsPerPump > MDO_SCHEDULE_EXECUTOR_CLAIM_MAX ||
+         ((Options->OnOwnerRetain != NULL) !=
+          (Options->OnOwnerRelease != NULL)) ) {
+        MdoScheduleExecutorError(Error, XWORK_ERROR_INVALID_ARGUMENT,
+            "invalid schedule executor configuration");
+        return false;
+    }
+    memset(&g_MdoScheduleExecutor, 0, sizeof(g_MdoScheduleExecutor));
+    g_MdoScheduleExecutor.Lock = xrtMutexCreate();
+    g_MdoScheduleExecutor.Runtime = xworkRuntimeRef(Runtime);
+    g_MdoScheduleExecutor.Options = *Options;
+    if ( g_MdoScheduleExecutor.Lock == NULL ||
+         g_MdoScheduleExecutor.Runtime == NULL ) {
+        MdoScheduleExecutorUnit();
+        MdoScheduleExecutorError(Error, XWORK_ERROR_OUT_OF_MEMORY,
+            "cannot allocate schedule executor state");
+        return false;
+    }
+    g_MdoScheduleExecutor.Initialized = true;
+    if ( Options->Automatic ) {
+        g_MdoScheduleExecutor.Thread = xrtThreadCreate(
+            MdoScheduleExecutorThread, NULL, 0u);
+        if ( g_MdoScheduleExecutor.Thread == NULL ) {
+            MdoScheduleExecutorUnit();
+            MdoScheduleExecutorError(Error, XWORK_ERROR_CONTEXT,
+                "cannot start the schedule executor timer");
+            return false;
+        }
+    }
+    return true;
+}
+
+void MdoScheduleExecutorUnit(void)
+{
+    size_t i;
+    xthread* Thread;
+    MdoScheduleExecution* Active;
+    size_t ActiveCount;
+    if ( g_MdoScheduleExecutor.Lock != NULL ) {
+        xrtMutexLock(g_MdoScheduleExecutor.Lock);
+        g_MdoScheduleExecutor.Stopping = true;
+        Thread = g_MdoScheduleExecutor.Thread;
+        g_MdoScheduleExecutor.Thread = NULL;
+        xrtMutexUnlock(g_MdoScheduleExecutor.Lock);
+    } else {
+        Thread = g_MdoScheduleExecutor.Thread;
+    }
+    if ( Thread != NULL ) {
+        (void)xrtThreadWait(Thread);
+        xrtThreadDestroy(Thread);
+    }
+    if ( g_MdoScheduleExecutor.Lock != NULL ) {
+        xrtMutexLock(g_MdoScheduleExecutor.Lock);
+        Active = g_MdoScheduleExecutor.Active;
+        ActiveCount = g_MdoScheduleExecutor.ActiveCount;
+        g_MdoScheduleExecutor.Active = NULL;
+        g_MdoScheduleExecutor.ActiveCount = 0u;
+        g_MdoScheduleExecutor.ActiveCapacity = 0u;
+        xrtMutexUnlock(g_MdoScheduleExecutor.Lock);
+    } else {
+        Active = g_MdoScheduleExecutor.Active;
+        ActiveCount = g_MdoScheduleExecutor.ActiveCount;
+    }
+    for ( i = 0u; i < ActiveCount; ++i ) {
+        xwork_error Error;
+        (void)MdoAgentRunCancel(Active[i].Run);
+        MdoAgentRunDestroy(Active[i].Run);
+        (void)MdoScheduleFinishTaskWithRun(
+            Active[i].TaskId, Active[i].AgentRunId,
+            XWORK_RESULT_CANCELLED, "mdo stopped before the scheduled run completed",
+            &Error);
+    }
+    xrtFree(Active);
+    if ( g_MdoScheduleExecutor.Lock != NULL ) {
+        xrtMutexDestroy(g_MdoScheduleExecutor.Lock);
+    }
+    if ( g_MdoScheduleExecutor.Runtime != NULL )
+        xworkRuntimeRelease(g_MdoScheduleExecutor.Runtime);
+    memset(&g_MdoScheduleExecutor, 0, sizeof(g_MdoScheduleExecutor));
+}
+
+bool MdoScheduleExecutorGetSnapshot(MdoScheduleExecutorSnapshot* Snapshot)
+{
+    uint32 Size;
+    if ( !g_MdoScheduleExecutor.Initialized || Snapshot == NULL ||
+         Snapshot->Size < sizeof(*Snapshot) ) return false;
+    Size = Snapshot->Size;
+    xrtMutexLock(g_MdoScheduleExecutor.Lock);
+    memset(Snapshot, 0, sizeof(*Snapshot));
+    Snapshot->Size = Size;
+    Snapshot->Automatic = g_MdoScheduleExecutor.Options.Automatic;
+    Snapshot->PersistenceFault = g_MdoScheduleExecutor.PersistenceFault;
+    Snapshot->PollMilliseconds =
+        g_MdoScheduleExecutor.Options.PollMilliseconds;
+    Snapshot->ActiveRuns = g_MdoScheduleExecutor.ActiveCount;
+    Snapshot->ClaimsStarted = g_MdoScheduleExecutor.ClaimsStarted;
+    Snapshot->RunsCompleted = g_MdoScheduleExecutor.RunsCompleted;
+    Snapshot->RunsFailed = g_MdoScheduleExecutor.RunsFailed;
+    snprintf(Snapshot->LastError, sizeof(Snapshot->LastError), "%s",
+        g_MdoScheduleExecutor.LastError);
+    xrtMutexUnlock(g_MdoScheduleExecutor.Lock);
+    return true;
+}

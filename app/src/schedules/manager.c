@@ -11,7 +11,7 @@
 #define MDO_SCHEDULE_STORE_LIMIT (128u * 1024u)
 #define MDO_SCHEDULE_AUDIT_LIMIT (8u * 1024u * 1024u)
 #define MDO_SCHEDULE_AUDIT_RETAIN (4u * 1024u * 1024u)
-#define MDO_SCHEDULE_RESULT_LIMIT (64u * 1024u)
+#define MDO_SCHEDULE_RESULT_LIMIT (MDO_SCHEDULE_RESULT_CAPACITY - 1u)
 
 typedef struct MdoScheduleEntry {
     MdoScheduleInfo Info;
@@ -1186,6 +1186,11 @@ bool MdoScheduleSetEnabled(const char* ScheduleId, uint64 ExpectedRevision,
             "schedule was not found or restored");
         goto done;
     }
+    if ( g_MdoSchedules.PersistenceFault ) {
+        MdoSchedulesError(Error, XWORK_ERROR_IO,
+            "schedule persistence is faulted; restart after repairing storage");
+        goto done;
+    }
     if ( ExpectedRevision != UINT64_MAX &&
          Entry->Info.Revision != ExpectedRevision ) {
         MdoSchedulesError(Error, XWORK_ERROR_CONTEXT,
@@ -1339,8 +1344,9 @@ done:
     return Ok;
 }
 
-static bool MdoSchedulesHistory(uint64 TaskId, const xwork_task_info* Task,
-    xwork_result Result, const char* ResultText, xwork_error* Error)
+static bool MdoSchedulesHistory(uint64 TaskId, uint64 AgentRunId,
+    const xwork_task_info* Task, xwork_result Result, const char* ResultText,
+    xwork_error* Error)
 {
     xvalue* Root = xrtValueObject();
     char Path[MDO_SCHEDULE_PATH_CAPACITY];
@@ -1350,6 +1356,8 @@ static bool MdoSchedulesHistory(uint64 TaskId, const xwork_task_info* Task,
     if ( Root == NULL || !MdoSchedulesHistoryPath(Path, Task->sScheduleId) ||
          !MdoSchedulesObjectTake(Root, "schema_version", xrtValueUInt(1u)) ||
          !MdoSchedulesObjectTake(Root, "task_id", xrtValueUInt(TaskId)) ||
+         !MdoSchedulesObjectTake(Root, "agent_run_id",
+            xrtValueUInt(AgentRunId)) ||
          !MdoSchedulesObjectString(Root, "schedule_id", Task->sScheduleId) ||
          !MdoSchedulesObjectTake(Root, "scheduled_at_us",
             xrtValueInt(Task->iScheduledAtUs)) ||
@@ -1370,8 +1378,8 @@ done:
     return Ok;
 }
 
-bool MdoScheduleFinishTask(uint64 TaskId, xwork_result Result,
-    const char* ResultText, xwork_error* Error)
+bool MdoScheduleFinishTaskWithRun(uint64 TaskId, uint64 AgentRunId,
+    xwork_result Result, const char* ResultText, xwork_error* Error)
 {
     xwork_task_snapshot* Snapshot = NULL;
     xwork_task_info Task;
@@ -1399,7 +1407,8 @@ bool MdoScheduleFinishTask(uint64 TaskId, xwork_result Result,
     }
     if ( !xworkRuntimeFinishScheduledTask(g_MdoSchedules.Runtime, TaskId,
             Result, ResultText, Error) ) goto done;
-    if ( !MdoSchedulesHistory(TaskId, &Task, Result, ResultText, Error) ) {
+    if ( !MdoSchedulesHistory(TaskId, AgentRunId, &Task, Result, ResultText,
+            Error) ) {
         g_MdoSchedules.PersistenceFault = true;
         goto done;
     }
@@ -1410,6 +1419,13 @@ done:
     xworkTaskSnapshotRelease(Snapshot);
     xrtMutexUnlock(g_MdoSchedules.Lock);
     return Ok;
+}
+
+bool MdoScheduleFinishTask(uint64 TaskId, xwork_result Result,
+    const char* ResultText, xwork_error* Error)
+{
+    return MdoScheduleFinishTaskWithRun(TaskId, 0u, Result, ResultText,
+        Error);
 }
 
 static int MdoSchedulesCatalogCompare(const void* LeftValue,

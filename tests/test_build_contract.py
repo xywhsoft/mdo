@@ -65,6 +65,7 @@ class BuildContractTests(unittest.TestCase):
             "src/modules/manager.c",
             "src/agents/runtime.c",
             "src/schedules/manager.c",
+            "src/schedules/executor.c",
             "src/sessions/events.c",
             "src/sessions/manager.c",
             "src/bootstrap/bootstrap.c",
@@ -86,6 +87,7 @@ class BuildContractTests(unittest.TestCase):
         self.assertEqual(first.count('#include "../src/modules/manager.c"'), 1)
         self.assertEqual(first.count('#include "../src/skills/manager.c"'), 1)
         self.assertEqual(first.count('#include "../src/schedules/manager.c"'), 1)
+        self.assertEqual(first.count('#include "../src/schedules/executor.c"'), 1)
         self.assertEqual(first.count('#include "../src/bootstrap/service.c"'), 1)
         self.assertIn(self.lock["xrt"]["commit"], first)
         self.assertIn(self.lock["xserver"]["commit"], first)

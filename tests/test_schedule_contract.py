@@ -20,6 +20,9 @@ class ScheduleContractTests(unittest.TestCase):
             "MdoScheduleSetEnabled",
             "MdoScheduleClaimDue",
             "MdoScheduleFinishTask",
+            "MdoScheduleExecutorInit",
+            "MdoScheduleExecutorPump",
+            "MdoScheduleExecutorGetSnapshot",
             "MdoScheduleCatalogSnapshot",
             "MDO_SCHEDULE_INPUT_CAPACITY",
         ):
@@ -40,6 +43,12 @@ class ScheduleContractTests(unittest.TestCase):
             self.assertIn(call, source)
         self.assertNotIn("xrtThreadCreate", source)
         self.assertIn("bool MdoScheduleClaimDue(int64 Now", source)
+        executor = (ROOT / "app/src/schedules/executor.c").read_text(
+            encoding="utf-8")
+        self.assertIn("MdoAgentSessionCreateWithRuntime", executor)
+        self.assertIn("MdoAgentRunStart", executor)
+        self.assertIn("MdoScheduleFinishTaskWithRun", executor)
+        self.assertIn("MdoScheduleExecutorPump(xrtNow()", executor)
 
     def test_store_is_revisioned_locked_and_audited(self) -> None:
         source = (ROOT / "app/src/schedules/manager.c").read_text(encoding="utf-8")
