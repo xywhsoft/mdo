@@ -33,6 +33,7 @@ typedef struct MdoConfigAgentSettings {
     uint32 Size;
     uint64 Revision;
     bool MemoryEnabled;
+    bool SchedulesEnabled;
     uint32 MaxParallelTools;
     uint32 MaxParallelSubagents;
     char ReasoningEffort[32];

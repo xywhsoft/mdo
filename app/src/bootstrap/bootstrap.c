@@ -6,6 +6,7 @@
 #include "../../include/mdo/memory.h"
 #include "../../include/mdo/models.h"
 #include "../../include/mdo/modules.h"
+#include "../../include/mdo/schedules.h"
 #include "../../include/mdo/sessions.h"
 #include "../../include/mdo/skills.h"
 #include "../../include/mdo/version.h"
@@ -107,6 +108,11 @@ bool MdoBootstrapInit(XS_HostInfo* pHost)
         return false;
     }
     g_MdoBootstrap.Stage = MDO_BOOTSTRAP_MODULES_READY;
+    if ( !MdoScheduleManagerInit(g_MdoBootstrap.Runtime) ) {
+        MdoBootstrapFail("schedule manager initialization failed");
+        return false;
+    }
+    g_MdoBootstrap.Stage = MDO_BOOTSTRAP_SCHEDULES_READY;
     if ( !MdoSessionManagerInit(g_MdoBootstrap.Runtime) ) {
         MdoBootstrapFail("session manager initialization failed");
         return false;
@@ -136,10 +142,15 @@ bool MdoBootstrapInit(XS_HostInfo* pHost)
         MdoMemorySnapshot* pMemory = MdoMemorySnapshotCreate(
             MDO_MEMORY_GLOBAL, NULL, NULL);
         size_t iMemory = MdoMemorySnapshotCount(pMemory);
-        printf("[mdo] bootstrap ready: version=%s home=%s mode=%s defaults=%zu providers=%zu models=%zu skills=%zu memory=%zu web=%d mcp=%zu modules=%zu tools=%zu\n",
+        xwork_error ScheduleError;
+        MdoScheduleCatalog* pSchedules =
+            MdoScheduleCatalogSnapshot(&ScheduleError);
+        size_t iSchedules = MdoScheduleCatalogCount(pSchedules);
+        printf("[mdo] bootstrap ready: version=%s home=%s mode=%s defaults=%zu providers=%zu models=%zu skills=%zu memory=%zu web=%d mcp=%zu modules=%zu tools=%zu schedules=%zu\n",
             MDO_VERSION_TEXT, Home.Path, sMode, g_MdoBootstrap.DefaultsBytes,
             iProviders, iModels, iSkills, iMemory, Web.Enabled ? 1 : 0,
-            iMcp, iModules, iTools);
+            iMcp, iModules, iTools, iSchedules);
+        MdoScheduleCatalogRelease(pSchedules);
         MdoMemorySnapshotRelease(pMemory);
         MdoModelCatalogRelease(pModels);
         MdoMcpCatalogRelease(pMcp);
@@ -152,6 +163,7 @@ bool MdoBootstrapInit(XS_HostInfo* pHost)
 void MdoBootstrapUnit(void)
 {
     MdoSessionManagerUnit();
+    MdoScheduleManagerUnit();
     MdoModuleManagerUnit();
     MdoMcpManagerUnit();
     MdoWebManagerUnit();
@@ -195,6 +207,10 @@ bool MdoBootstrapGetSnapshot(MdoBootstrapSnapshot* pSnapshot)
     pSnapshot->ModuleToolCount = 0u;
     pSnapshot->ModuleAgentCount = 0u;
     pSnapshot->ModuleDiagnosticCount = 0u;
+    pSnapshot->ScheduleGeneration = 0u;
+    pSnapshot->ScheduleCount = 0u;
+    pSnapshot->ScheduleDiagnosticCount = 0u;
+    pSnapshot->SchedulesEnabled = false;
     pSnapshot->SessionGeneration = 0u;
     pSnapshot->SessionCount = 0u;
     pSnapshot->SessionDiagnosticCount = 0u;
@@ -266,6 +282,19 @@ bool MdoBootstrapGetSnapshot(MdoBootstrapSnapshot* pSnapshot)
             MdoModuleDiagnosticsCount(pDiagnostics);
         MdoModuleCatalogRelease(pCatalog);
         MdoModuleDiagnosticsRelease(pDiagnostics);
+    }
+    {
+        xwork_error Error;
+        MdoScheduleCatalog* pCatalog = MdoScheduleCatalogSnapshot(&Error);
+        if ( pCatalog != NULL ) {
+            pSnapshot->ScheduleGeneration =
+                MdoScheduleCatalogGeneration(pCatalog);
+            pSnapshot->ScheduleCount = MdoScheduleCatalogCount(pCatalog);
+            pSnapshot->ScheduleDiagnosticCount =
+                MdoScheduleCatalogDiagnosticCount(pCatalog);
+            pSnapshot->SchedulesEnabled = MdoScheduleManagerEnabled();
+        }
+        MdoScheduleCatalogRelease(pCatalog);
     }
     {
         xwork_error Error;

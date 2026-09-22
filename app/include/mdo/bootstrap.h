@@ -18,6 +18,7 @@ typedef enum MdoBootstrapStage {
     MDO_BOOTSTRAP_WEB_READY,
     MDO_BOOTSTRAP_MCP_READY,
     MDO_BOOTSTRAP_MODULES_READY,
+    MDO_BOOTSTRAP_SCHEDULES_READY,
     MDO_BOOTSTRAP_SESSIONS_READY,
     MDO_BOOTSTRAP_FAILED
 } MdoBootstrapStage;
@@ -48,6 +49,10 @@ typedef struct MdoBootstrapSnapshot {
     size_t ModuleToolCount;
     size_t ModuleAgentCount;
     size_t ModuleDiagnosticCount;
+    uint64 ScheduleGeneration;
+    size_t ScheduleCount;
+    size_t ScheduleDiagnosticCount;
+    bool SchedulesEnabled;
     uint64 SessionGeneration;
     size_t SessionCount;
     size_t SessionDiagnosticCount;

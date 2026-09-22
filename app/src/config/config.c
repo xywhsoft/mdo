@@ -1218,6 +1218,7 @@ bool MdoConfigGetAgentSettings(MdoConfigAgentSettings* pSettings)
     uint64 MaxTools;
     uint64 MaxSubagents;
     bool MemoryEnabled;
+    bool SchedulesEnabled;
     uint32 Size;
     bool Ok = false;
 
@@ -1242,6 +1243,8 @@ bool MdoConfigGetAgentSettings(MdoConfigAgentSettings* pSettings)
             MdoConfigKey("default_profile")), &Permission) &&
          xrtValueGetBool(xrtValueObjectGet(pAgent,
             MdoConfigKey("memory")), &MemoryEnabled) &&
+         xrtValueGetBool(xrtValueObjectGet(pAgent,
+            MdoConfigKey("schedules")), &SchedulesEnabled) &&
          MdoConfigUnsigned(xrtValueObjectGet(pAgent,
             MdoConfigKey("max_parallel_tools")), &MaxTools) &&
          MdoConfigUnsigned(xrtValueObjectGet(pAgent,
@@ -1253,6 +1256,7 @@ bool MdoConfigGetAgentSettings(MdoConfigAgentSettings* pSettings)
         pSettings->Size = Size;
         pSettings->Revision = g_MdoConfig.Revision;
         pSettings->MemoryEnabled = MemoryEnabled;
+        pSettings->SchedulesEnabled = SchedulesEnabled;
         pSettings->MaxParallelTools = (uint32)MaxTools;
         pSettings->MaxParallelSubagents = (uint32)MaxSubagents;
         memcpy(pSettings->ReasoningEffort, Reasoning.Data, Reasoning.Size);
