@@ -720,6 +720,8 @@ MdoSession* MdoSessionCreate(const MdoSessionCreateOptions* Options,
     xrtMutexUnlock(g_MdoSessions.Lock);
     AgentOptions = Options->Agent;
     AgentOptions.WorkspaceRoot = Workspace;
+    AgentOptions.ProjectId = Options->ProjectId;
+    AgentOptions.ProductSessionId = SessionId;
     AgentOptions.SessionPath = SnapshotPath;
     AgentOptions.JournalPath = JournalPath;
     AgentOptions.ArtifactDirectory = ArtifactPath;
@@ -890,6 +892,8 @@ MdoSession* MdoSessionOpen(const char* ProjectId, const char* SessionId,
     AgentOptions.ReasoningEffort = Info.ReasoningEffort;
     AgentOptions.MaxOutputTokens = Info.MaxOutputTokens;
     AgentOptions.WorkspaceRoot = Info.WorkspaceRoot;
+    AgentOptions.ProjectId = Info.ProjectId;
+    AgentOptions.ProductSessionId = Info.Id;
     AgentOptions.SessionPath = SnapshotPath;
     AgentOptions.JournalPath = JournalPath;
     AgentOptions.ArtifactDirectory = ArtifactPath;
@@ -1029,6 +1033,8 @@ MdoSession* MdoSessionFork(MdoSession* Source,
     AgentOptions.ReasoningEffort = SourceInfo.ReasoningEffort;
     AgentOptions.MaxOutputTokens = SourceInfo.MaxOutputTokens;
     AgentOptions.WorkspaceRoot = SourceInfo.WorkspaceRoot;
+    AgentOptions.ProjectId = ProjectId;
+    AgentOptions.ProductSessionId = SessionId;
     AgentOptions.SessionPath = SnapshotPath;
     AgentOptions.JournalPath = JournalPath;
     AgentOptions.ArtifactDirectory = ArtifactPath;

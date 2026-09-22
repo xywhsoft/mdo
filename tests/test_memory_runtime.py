@@ -45,16 +45,69 @@ static void PrintSnapshot(const char *label, MdoMemoryScope scope,
     MdoMemorySnapshotRelease(snapshot);
 }
 
+typedef struct ToolProbe {
+    unsigned Permissions;
+    unsigned Resources;
+} ToolProbe;
+
+static xwork_permission_decision AllowMemory(void *data,
+    const xwork_permission_request *request) {
+    ToolProbe *probe = (ToolProbe*)data;
+    ++probe->Permissions;
+    probe->Resources += (unsigned)request->iResourceCount;
+    return XWORK_PERMISSION_ALLOW;
+}
+
+static bool ExecuteMemory(xwork_agent *agent, const char *name,
+    const char *arguments, bool expect_success) {
+    xllm_executor executor;
+    xllm_executor_ctx context;
+    xllm_executor_result result;
+    xllm_tool_call call;
+    xwork_error error;
+    bool infrastructure;
+    memset(&executor, 0, sizeof(executor));
+    if (!xworkExecutorBind(&executor, agent, &error)) return false;
+    memset(&context, 0, sizeof(context));
+    context.uRound = 1u;
+    context.uDeadline = xrtDeadlineAfter(5000000u);
+    memset(&call, 0, sizeof(call));
+    call.sId = (char*)"memory-probe-call";
+    call.sName = (char*)name;
+    call.sArgumentsJson = (char*)arguments;
+    memset(&result, 0, sizeof(result));
+    infrastructure = executor.pExecute != NULL &&
+        executor.pExecute(executor.pUserData, &call, &context, &result);
+    printf("tool_%s=infra:%d success:%d text:%s\n", name,
+        infrastructure ? 1 : 0, result.bSuccess ? 1 : 0,
+        result.sContent != NULL ? result.sContent : "null");
+    xworkExecutorUnbind(&executor);
+    return infrastructure && result.bSuccess == expect_success;
+}
+
 void ServiceInit(XS_HostInfo *host) {
     static const char *tags[] = {"preference", "editor"};
     static const char invalid[] = "{}";
     xwork_runtime_config runtime_config;
     xwork_runtime *runtime = NULL;
+    xwork_agent_definition_config definition_config;
+    xwork_agent_definition *definition = NULL;
+    xllm_session_config session_config;
+    xllm_session *llm_session = NULL;
+    xllm_session *isolated_session = NULL;
+    xwork_agent_options agent_options;
+    xwork_agent *agent = NULL;
+    xwork_agent *isolated = NULL;
     MdoMemoryWriteOptions write;
     MdoMemoryRemoveOptions remove;
     xwork_error error;
+    ToolProbe tool_probe;
+    char *prompt = NULL;
+    size_t prompt_bytes = 0u;
+    uint64 prompt_generation = 0u;
     bool result;
     (void)host;
+    memset(&tool_probe, 0, sizeof(tool_probe));
 
     if (!MdoHomeInit() || !MdoConfigInit()) {
         printf("init_error=pre-runtime\n"); goto done;
@@ -102,9 +155,57 @@ void ServiceInit(XS_HostInfo *host) {
     if (!MdoMemoryUpsert(&write, &error)) goto done;
     PrintSnapshot("project_written", MDO_MEMORY_PROJECT, "project-alpha");
 
+    prompt = MdoMemoryBuildPrompt("project-alpha", &prompt_bytes,
+        &prompt_generation, &error);
+    printf("prompt=ok:%d bytes:%zu generation:%llu global:%d project:%d untrusted:%d\n",
+        prompt != NULL ? 1 : 0, prompt_bytes,
+        (unsigned long long)prompt_generation,
+        prompt != NULL && strstr(prompt, "editor-style") != NULL,
+        prompt != NULL && strstr(prompt, "build-command") != NULL,
+        prompt != NULL && strstr(prompt, "untrusted reference data") != NULL);
+    xrtFree(prompt); prompt = NULL;
+
     MdoMemoryManagerUnit();
     if (!MdoMemoryManagerInit(runtime)) goto done;
     PrintSnapshot("project_recovered", MDO_MEMORY_PROJECT, "project-alpha");
+
+    xworkAgentDefinitionConfigInit(&definition_config);
+    definition_config.sId = "memory.probe.agent";
+    definition_config.eApprovalMode = XWORK_APPROVAL_CALLBACK;
+    definition_config.bRegisterBuiltinTools = false;
+    definition = xworkAgentDefinitionCreate(&definition_config, &error);
+    xllmSessionConfigInit(&session_config);
+    llm_session = xllmSessionCreate(&session_config, NULL);
+    isolated_session = xllmSessionCreate(&session_config, NULL);
+    xworkAgentOptionsInit(&agent_options);
+    agent_options.pSession = llm_session;
+    agent_options.sWorkspaceRoot = ".";
+    agent_options.OnPermission = AllowMemory;
+    agent_options.pPermissionUserData = &tool_probe;
+    agent = xworkAgentCreateWithRuntime(runtime, definition, &agent_options,
+        &error);
+    agent_options.pSession = isolated_session;
+    isolated = xworkAgentCreateWithRuntime(runtime, definition, &agent_options,
+        &error);
+    if (definition == NULL || llm_session == NULL || isolated_session == NULL ||
+        agent == NULL ||
+        isolated == NULL ||
+        !MdoMemoryAgentBind(agent, "project-alpha", "session-a", &error) ||
+        !MdoMemoryAgentBind(isolated, "project-beta", "session-b", &error))
+        goto done;
+    if (!ExecuteMemory(agent, "memory_search",
+            "{\"query\":\"build\",\"scope\":\"project\",\"limit\":4}", true) ||
+        !ExecuteMemory(isolated, "memory_search",
+            "{\"query\":\"build\",\"scope\":\"project\",\"limit\":4}", true) ||
+        !ExecuteMemory(agent, "memory_write",
+            "{\"scope\":\"project\",\"id\":\"tool-note\",\"title\":\"Tool\",\"content\":\"Written through the memory tool.\",\"expected_revision\":1,\"reason\":\"probe\"}", true) ||
+        !ExecuteMemory(agent, "memory_write",
+            "{\"scope\":\"project\",\"id\":\"stale-note\",\"title\":\"Stale\",\"content\":\"Must not commit.\",\"expected_revision\":1}", false) ||
+        !ExecuteMemory(agent, "memory_delete",
+            "{\"scope\":\"project\",\"id\":\"tool-note\",\"expected_revision\":2,\"reason\":\"probe cleanup\"}", true))
+        goto done;
+    printf("tool_permissions=%u resources:%u\n", tool_probe.Permissions,
+        tool_probe.Resources);
 
     MdoMemoryRemoveOptionsInit(&remove);
     remove.Scope = MDO_MEMORY_GLOBAL;
@@ -121,6 +222,14 @@ void ServiceInit(XS_HostInfo *host) {
     PrintSnapshot("project_intact", MDO_MEMORY_PROJECT, "project-alpha");
     printf("probe_done=1\n");
 done:
+    xrtFree(prompt);
+    MdoMemoryAgentUnbind(isolated);
+    MdoMemoryAgentUnbind(agent);
+    xworkAgentDestroy(isolated);
+    xworkAgentDestroy(agent);
+    xllmSessionDestroy(isolated_session);
+    xllmSessionDestroy(llm_session);
+    xworkAgentDefinitionRelease(definition);
     MdoMemoryManagerUnit();
     xworkRuntimeRelease(runtime);
     MdoConfigUnit();
@@ -234,27 +343,39 @@ def main() -> int:
         assert "stale_write=0 code:7" in output, output
         assert "sensitive_write=0 code:1" in output, output
         assert "project_written=ok:1 revision:1 count:1 generation:3 code:0" in output, output
+        assert "prompt=ok:1" in output and "global:1 project:1 untrusted:1" in output, output
         assert "project_recovered=ok:1 revision:1 count:1 generation:1 code:0" in output, output
-        assert "global_removed=ok:1 revision:2 count:0 generation:2 code:0" in output, output
+        assert "tool_memory_search=infra:1 success:1" in output, output
+        assert '{"success":true,"untrusted":true' in output, output
+        assert '"count":1,"results":[{"scope":"project"' in output, output
+        assert '"count":0,"results":[]' in output, output
+        assert 'tool_memory_write=infra:1 success:1' in output, output
+        assert 'tool_memory_write=infra:1 success:0' in output, output
+        assert 'tool_memory_delete=infra:1 success:1' in output, output
+        assert "tool_permissions=5 resources:3" in output, output
+        assert "global_removed=ok:1 revision:2 count:0 generation:4 code:0" in output, output
         assert "broken_project=ok:0 revision:0 count:0 generation:0" in output, output
-        assert "project_intact=ok:1 revision:1 count:1 generation:2 code:0" in output, output
+        assert "project_intact=ok:1 revision:3 count:1 generation:4 code:0" in output, output
         assert "probe_done=1" in output, output
 
         global_store = json.loads((home / "memory/global.json").read_text(encoding="utf-8"))
         project_store = json.loads((home / "memory/projects/project-alpha.json").read_text(encoding="utf-8"))
         assert global_store["schema_version"] == 1 and global_store["revision"] == 2
         assert global_store["entries"] == []
-        assert project_store["revision"] == 1
+        assert project_store["revision"] == 3
         assert project_store["entries"][0]["id"] == "build-command"
         audit_lines = (home / "memory/audit.jsonl").read_text(encoding="utf-8").splitlines()
         audit = [json.loads(line) for line in audit_lines]
-        assert len(audit) == 3
-        assert [item["operation"] for item in audit] == ["create", "create", "remove"]
+        assert len(audit) == 5
+        assert [item["operation"] for item in audit] == [
+            "create", "create", "create", "remove", "remove"
+        ]
         assert all(item["phase"] == "prepared" for item in audit)
         assert all("content" not in item for item in audit)
         assert audit[0]["content_sha256"] == hashlib.sha256(
             b"Prefer compact diffs and explicit validation.").hexdigest()
-        assert audit[2]["content_sha256"] == ""
+        assert audit[3]["content_sha256"] == ""
+        assert audit[4]["content_sha256"] == ""
         serialized = "\n".join(audit_lines).lower()
         assert "password" not in serialized and "should-not-persist" not in serialized
     print("memory runtime probe: PASS")

@@ -6,6 +6,7 @@
 #include "../../include/mdo/bootstrap.h"
 #include "../../include/mdo/config.h"
 #include "../../include/mdo/home.h"
+#include "../../include/mdo/memory.h"
 #include "../../include/mdo/models.h"
 #include "../../include/mdo/modules.h"
 #include "../../include/mdo/skills.h"
@@ -58,6 +59,7 @@ struct MdoAgentSession {
     uint64 ModelGeneration;
     uint64 ModuleGeneration;
     uint64 SkillGeneration;
+    uint64 MemoryGeneration;
     uint64 ToolCatalogGeneration;
     MdoModelProtocol Protocol;
     uint64 ContextWindowTokens;
@@ -523,6 +525,32 @@ done:
     return Result;
 }
 
+static bool MdoAgentsAppendPrompt(char** Prompt, const char* Fragment,
+    size_t FragmentBytes, xwork_error* Error)
+{
+    size_t BaseBytes;
+    char* Result;
+    if ( Prompt == NULL || *Prompt == NULL || Fragment == NULL ) return false;
+    if ( FragmentBytes == 0u ) return true;
+    BaseBytes = strlen(*Prompt);
+    if ( FragmentBytes > MDO_AGENT_PROMPT_LIMIT - 1u ||
+         BaseBytes > MDO_AGENT_PROMPT_LIMIT - FragmentBytes - 1u ) {
+        MdoAgentsError(Error, XWORK_ERROR_LIMIT,
+            "memory references exceed the Agent context injection limit");
+        return false;
+    }
+    Result = (char*)xrtRealloc(*Prompt, BaseBytes + FragmentBytes + 1u);
+    if ( Result == NULL ) {
+        MdoAgentsError(Error, XWORK_ERROR_OUT_OF_MEMORY,
+            "cannot append Agent memory references");
+        return false;
+    }
+    memcpy(Result + BaseBytes, Fragment, FragmentBytes);
+    Result[BaseBytes + FragmentBytes] = '\0';
+    *Prompt = Result;
+    return true;
+}
+
 static xwork_approval_mode MdoAgentsApproval(const char* Profile,
     bool ReadOnly, bool* Valid)
 {
@@ -808,6 +836,7 @@ void MdoAgentSessionOptionsInit(MdoAgentSessionOptions* Options)
 static void MdoAgentSessionFree(MdoAgentSession* Session)
 {
     if ( Session == NULL ) return;
+    MdoMemoryAgentUnbind(Session->Agent);
     xworkAgentDestroy(Session->Agent);
     MdoAgentOwnerRelease(Session->Owner);
     xrtFree(Session->AgentId);
@@ -848,6 +877,9 @@ MdoAgentSession* MdoAgentSessionCreateWithRuntime(xwork_runtime* Runtime,
     uint32 MaxOutput;
     bool ValidApproval;
     char* Prompt = NULL;
+    char* MemoryPrompt = NULL;
+    size_t MemoryPromptBytes = 0u;
+    uint64 MemoryGeneration = 0u;
     char* DefaultArtifacts = NULL;
     const char* Artifacts;
     MdoHomeSnapshot Home;
@@ -1000,6 +1032,13 @@ MdoAgentSession* MdoAgentSessionCreateWithRuntime(xwork_runtime* Runtime,
     }
     Prompt = MdoAgentsComposePrompt(&AgentInfo, Owner->Skills, Error);
     if ( Prompt == NULL ) goto fail;
+    if ( Settings.MemoryEnabled ) {
+        MemoryPrompt = MdoMemoryBuildPrompt(Options->ProjectId,
+            &MemoryPromptBytes, &MemoryGeneration, Error);
+        if ( MemoryPrompt == NULL ||
+             !MdoAgentsAppendPrompt(&Prompt, MemoryPrompt,
+                MemoryPromptBytes, Error) ) goto fail;
+    }
     Permission = AgentInfo.PermissionProfile != NULL &&
         AgentInfo.PermissionProfile[0] != '\0' ? AgentInfo.PermissionProfile :
         Settings.PermissionProfile;
@@ -1072,7 +1111,9 @@ MdoAgentSession* MdoAgentSessionCreateWithRuntime(xwork_runtime* Runtime,
     Session->Agent = xworkAgentCreateWithRuntime(Runtime, Definition,
         &AgentOptions, Error);
     if ( Session->Agent == NULL ) goto fail;
-    if ( !MdoAgentsPublishSubagents(Owner, Session->Agent, &AgentInfo, &Model,
+    if ( !MdoMemoryAgentBind(Session->Agent, Options->ProjectId,
+            Options->ProductSessionId, Error) ||
+         !MdoAgentsPublishSubagents(Owner, Session->Agent, &AgentInfo, &Model,
             &Session->SubagentCount, Error) ||
          !MdoAgentsApplyToolPolicy(Session->Agent, &AgentInfo, AllowedEffects,
             &Session->ToolCount, &Session->ToolCatalogGeneration, Error) ||
@@ -1104,6 +1145,7 @@ MdoAgentSession* MdoAgentSessionCreateWithRuntime(xwork_runtime* Runtime,
     Session->ModelGeneration = Model.Info.Generation;
     Session->ModuleGeneration = AgentInfo.Generation;
     Session->SkillGeneration = MdoSkillCatalogGeneration(Session->Owner->Skills);
+    Session->MemoryGeneration = MemoryGeneration;
     Session->Protocol = Model.Protocol;
     Session->ContextWindowTokens = AgentInfo.ContextWindowTokens != 0u ?
         AgentInfo.ContextWindowTokens : Model.Info.ContextWindowTokens;
@@ -1113,12 +1155,14 @@ MdoAgentSession* MdoAgentSessionCreateWithRuntime(xwork_runtime* Runtime,
     Session->SkillCount = AgentInfo.SkillCount;
     xworkAgentDefinitionRelease(Definition);
     xrtFree(Prompt);
+    xrtFree(MemoryPrompt);
     xrtFree(DefaultArtifacts);
     return Session;
 
 fail:
     xworkAgentDefinitionRelease(Definition);
     xrtFree(Prompt);
+    xrtFree(MemoryPrompt);
     xrtFree(DefaultArtifacts);
     if ( Session != NULL ) {
         if ( Session->Owner == NULL ) Session->Owner = Owner;
@@ -1174,6 +1218,7 @@ bool MdoAgentSessionGetInfo(const MdoAgentSession* Session,
     Info->ModelGeneration = Session->ModelGeneration;
     Info->ModuleGeneration = Session->ModuleGeneration;
     Info->SkillGeneration = Session->SkillGeneration;
+    Info->MemoryGeneration = Session->MemoryGeneration;
     Info->ToolCatalogGeneration = Session->ToolCatalogGeneration;
     Info->AgentId = Session->AgentId;
     Info->ModuleId = Session->ModuleId;
@@ -1398,6 +1443,7 @@ bool MdoAgentRunGetInfo(const MdoAgentRun* Run, MdoAgentRunInfo* Info)
     Info->ModelGeneration = Run->Session->ModelGeneration;
     Info->ModuleGeneration = Run->Session->ModuleGeneration;
     Info->SkillGeneration = Run->Session->SkillGeneration;
+    Info->MemoryGeneration = Run->Session->MemoryGeneration;
     Info->AgentId = Run->Session->AgentId;
     Info->ModelId = Run->Session->ModelId;
     Info->WireModel = Run->Session->WireModel;

@@ -82,4 +82,15 @@ bool MdoMemoryUpsert(const MdoMemoryWriteOptions* Options,
 bool MdoMemoryRemove(const MdoMemoryRemoveOptions* Options,
     xwork_error* Error);
 
+/* Builds a bounded owned prompt fragment from one atomic global/project view.
+ * The caller releases it with xrtFree. Empty memory returns an empty string. */
+str MdoMemoryBuildPrompt(const char* ProjectId, size_t* Bytes,
+    uint64* Generation, xwork_error* Error);
+
+/* Agent bindings provide project isolation and audit correlation to runtime
+ * memory tools. Bind owns copies; Unbind is an idempotent lifecycle action. */
+bool MdoMemoryAgentBind(xwork_agent* Agent, const char* ProjectId,
+    const char* SessionId, xwork_error* Error);
+void MdoMemoryAgentUnbind(xwork_agent* Agent);
+
 #endif

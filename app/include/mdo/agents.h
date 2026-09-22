@@ -17,6 +17,8 @@ typedef struct MdoAgentSessionOptions {
     const char* ReasoningEffort;  /* NULL inherits Agent/global/model policy. */
     uint32 MaxOutputTokens;       /* zero inherits the selected profile. */
     const char* WorkspaceRoot;    /* NULL selects the current directory. */
+    const char* ProjectId;        /* optional memory isolation identity. */
+    const char* ProductSessionId; /* optional memory audit correlation. */
     const char* SessionPath;      /* optional xllm-session snapshot path. */
     const char* JournalPath;      /* optional write-ahead journal path. */
     bool Recover;                 /* recover snapshot + journal as one unit. */
@@ -47,6 +49,7 @@ typedef struct MdoAgentSessionInfo {
     uint64 ModelGeneration;
     uint64 ModuleGeneration;
     uint64 SkillGeneration;
+    uint64 MemoryGeneration;
     uint64 ToolCatalogGeneration;
     const char* AgentId;
     const char* ModuleId;
@@ -84,6 +87,7 @@ typedef struct MdoAgentRunInfo {
     uint64 ModelGeneration;
     uint64 ModuleGeneration;
     uint64 SkillGeneration;
+    uint64 MemoryGeneration;
     const char* AgentId;
     const char* ModelId;
     const char* WireModel;

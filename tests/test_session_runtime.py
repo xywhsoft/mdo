@@ -27,6 +27,7 @@ PROBE_SOURCE = r'''
 #include "src/security/secrets.c"
 #include "src/models/catalog.c"
 #include "src/skills/manager.c"
+#include "src/memory/manager.c"
 #include "src/modules/manager.c"
 #include "src/agents/runtime.c"
 #include "src/sessions/events.c"
@@ -270,7 +271,8 @@ void ServiceInit(XS_HostInfo *host) {
     if (!LegacyMeta()) goto done;
     xworkRuntimeConfigInit(&runtime_config);
     runtime = xworkRuntimeCreate(&runtime_config, &error);
-    if (runtime == NULL || !MdoModuleManagerInit(runtime) ||
+    if (runtime == NULL || !MdoMemoryManagerInit(runtime) ||
+        !MdoModuleManagerInit(runtime) ||
         !MdoSessionManagerInit(runtime)) {
         printf("init_error=runtime message:%s\n", error.sMessage); goto done;
     }
@@ -425,6 +427,7 @@ done:
     xrtFree(export_json);
     MdoSessionManagerUnit();
     MdoModuleManagerUnit();
+    MdoMemoryManagerUnit();
     MdoSkillManagerUnit();
     xworkRuntimeRelease(runtime);
     MdoModelManagerUnit();
@@ -450,6 +453,7 @@ def write_site(site: Path) -> None:
         "src/security",
         "src/models",
         "src/skills",
+        "src/memory",
         "src/modules",
         "src/agents",
         "src/sessions",
@@ -468,6 +472,7 @@ def write_site(site: Path) -> None:
         "src/security/secrets.c",
         "src/models/catalog.c",
         "src/skills/manager.c",
+        "src/memory/manager.c",
         "src/modules/manager.c",
         "src/agents/runtime.c",
         "src/sessions/events.c",

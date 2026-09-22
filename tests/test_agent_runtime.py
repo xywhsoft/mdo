@@ -38,7 +38,8 @@ MODULE_V1 = r'''
 #include "mdo/module.h"
 
 static const mdo_host_services_v1 *g_Host;
-static const char *MainTools[] = {"read", "ls", "glob", "grep", "agent"};
+static const char *MainTools[] = {"read", "ls", "glob", "grep", "agent",
+    "memory_search", "memory_write", "memory_delete"};
 static const char *ChildTools[] = {"read", "grep"};
 static const char *Skills[] = {"probe-skill"};
 
@@ -62,11 +63,12 @@ static const mdo_agent_v1 Main = {
     .Id = "probe.main", .Name = "Probe Main",
     .Description = "Bounded main Agent fixture.",
     .SystemPrompt = "probe-system-v1", .PermissionProfile = "read-only",
-    .Tools = MainTools, .ToolCount = 5u,
+    .Tools = MainTools, .ToolCount = 8u,
     .Skills = Skills, .SkillCount = 1u,
     .MaxOutputTokens = 4096u, .MaxTurns = 4u,
     .TimeoutMilliseconds = 5000u, .MaxFinalBytes = 4096u,
-    .AllowedEffects = MDO_TOOL_EFFECT_READ | MDO_TOOL_EFFECT_AGENT_DELEGATION,
+    .AllowedEffects = MDO_TOOL_EFFECT_READ | MDO_TOOL_EFFECT_WORKSPACE_WRITE |
+        MDO_TOOL_EFFECT_AGENT_DELEGATION,
     .MaxDepth = 2u, .Flags = MDO_AGENT_MAIN | MDO_AGENT_ALLOW_DELEGATION,
     .UserData = (void*)"probe-main-acquire-v1",
     .Acquire = AgentAcquire, .Release = AgentRelease
@@ -127,6 +129,31 @@ MODULE_V2 = (
     .replace('"1.0.0"', '"2.0.0"')
 )
 
+MODULE_V1_NO_MEMORY = (
+    MODULE_V1.replace(
+        ',\n    "memory_search", "memory_write", "memory_delete"', ""
+    )
+    .replace(".Tools = MainTools, .ToolCount = 8u,",
+             ".Tools = MainTools, .ToolCount = 5u,")
+    .replace(
+        "MDO_TOOL_EFFECT_READ | MDO_TOOL_EFFECT_WORKSPACE_WRITE |\n"
+        "        MDO_TOOL_EFFECT_AGENT_DELEGATION",
+        "MDO_TOOL_EFFECT_READ | MDO_TOOL_EFFECT_AGENT_DELEGATION",
+    )
+)
+MODULE_V2_NO_MEMORY = (
+    MODULE_V2.replace(
+        ',\n    "memory_search", "memory_write", "memory_delete"', ""
+    )
+    .replace(".Tools = MainTools, .ToolCount = 8u,",
+             ".Tools = MainTools, .ToolCount = 5u,")
+    .replace(
+        "MDO_TOOL_EFFECT_READ | MDO_TOOL_EFFECT_WORKSPACE_WRITE |\n"
+        "        MDO_TOOL_EFFECT_AGENT_DELEGATION",
+        "MDO_TOOL_EFFECT_READ | MDO_TOOL_EFFECT_AGENT_DELEGATION",
+    )
+)
+
 
 def c_literal(value: str) -> str:
     return json.dumps(value)
@@ -142,6 +169,7 @@ PROBE_SOURCE = rf'''
 #include "src/security/secrets.c"
 #include "src/models/catalog.c"
 #include "src/skills/manager.c"
+#include "src/memory/manager.c"
 #include "src/modules/manager.c"
 #include "src/agents/runtime.c"
 
@@ -162,6 +190,7 @@ typedef struct ProbeOwner {{
     bool SawSystemV1;
     bool SawSkillV1;
     bool SawSkillV2;
+    bool SawMemory;
 }} ProbeOwner;
 
 static bool OwnerRetain(void *data) {{
@@ -214,6 +243,9 @@ static xllm_result Complete(void *data, const xllm_request *request,
         if (strstr(text, "probe-system-v1") != NULL) owner->SawSystemV1 = true;
         if (strstr(text, "probe-skill-v1") != NULL) owner->SawSkillV1 = true;
         if (strstr(text, "probe-skill-v2") != NULL) owner->SawSkillV2 = true;
+        if (strstr(text, "agent-memory-probe") != NULL &&
+            strstr(text, "untrusted reference data") != NULL)
+            owner->SawMemory = true;
     }}
     *response = Response("agent-runtime-ok");
     return *response != NULL ? XLLM_RESULT_OK : XLLM_RESULT_ERROR;
@@ -223,6 +255,25 @@ static void PrintRuntimeError(const char *label, const xwork_error *error) {{
     printf("%s=code:%d message:%s\n", label,
         error != NULL ? (int)error->eCode : -1,
         error != NULL && error->sMessage[0] != '\0' ? error->sMessage : "none");
+}}
+
+static bool AgentHasTool(const MdoAgentSession *session, const char *name) {{
+    xwork_tool_catalog *catalog;
+    xwork_tool_info info;
+    size_t i;
+    if (session == NULL || session->Agent == NULL || name == NULL) return false;
+    catalog = xworkAgentToolCatalogSnapshot(session->Agent);
+    if (catalog == NULL) return false;
+    for (i = 0u; i < xworkToolCatalogCount(catalog); ++i) {{
+        memset(&info, 0, sizeof(info));
+        if (xworkToolCatalogToolAt(catalog, i, &info) &&
+            info.sName != NULL && strcmp(info.sName, name) == 0) {{
+            xworkToolCatalogRelease(catalog);
+            return true;
+        }}
+    }}
+    xworkToolCatalogRelease(catalog);
+    return false;
 }}
 
 void ServiceInit(XS_HostInfo *host) {{
@@ -236,6 +287,7 @@ void ServiceInit(XS_HostInfo *host) {{
     MdoAgentSession *session = NULL;
     MdoAgentSession *invalid = NULL;
     MdoAgentRun *run = NULL;
+    MdoMemoryWriteOptions memory_write;
     xwork_run_result result;
     xwork_result run_result;
     ProbeOwner owner;
@@ -251,11 +303,24 @@ void ServiceInit(XS_HostInfo *host) {{
     }}
     xworkRuntimeConfigInit(&runtime_config);
     runtime = xworkRuntimeCreate(&runtime_config, &error);
-    if (runtime == NULL || !MdoModuleManagerInit(runtime)) {{
+    if (runtime == NULL || !MdoMemoryManagerInit(runtime) ||
+        !MdoModuleManagerInit(runtime)) {{
         PrintRuntimeError("init_error", &error); goto done;
+    }}
+    MdoMemoryWriteOptionsInit(&memory_write);
+    memory_write.Scope = MDO_MEMORY_PROJECT;
+    memory_write.ProjectId = "project-alpha";
+    memory_write.Id = "agent-memory-probe";
+    memory_write.Title = "Agent memory";
+    memory_write.Content = "agent-memory-probe";
+    memory_write.Actor = "agent-runtime-probe";
+    if (!MdoMemoryUpsert(&memory_write, &error)) {{
+        PrintRuntimeError("memory_error", &error); goto done;
     }}
     MdoAgentSessionOptionsInit(&options);
     options.AgentId = "probe.main";
+    options.ProjectId = "project-alpha";
+    options.ProductSessionId = "agent-runtime";
     options.WorkspaceRoot = ".";
     options.OnModelComplete = Complete;
     options.ModelUserData = &owner;
@@ -267,7 +332,7 @@ void ServiceInit(XS_HostInfo *host) {{
     memset(&session_info, 0, sizeof(session_info));
     session_info.Size = sizeof(session_info);
     if (!MdoAgentSessionGetInfo(session, &session_info)) goto done;
-    printf("session=agent:%s module:%s model:%s provider:%s wire:%s reasoning:%s permission:%s protocol:%d output:%u tools:%zu skills:%zu subagents:%zu generations:%llu/%llu/%llu\n",
+    printf("session=agent:%s module:%s model:%s provider:%s wire:%s reasoning:%s permission:%s protocol:%d output:%u tools:%zu skills:%zu subagents:%zu generations:%llu/%llu/%llu/%llu\n",
         session_info.AgentId, session_info.ModuleId, session_info.ModelId,
         session_info.ProviderId, session_info.WireModel,
         session_info.ReasoningEffort, session_info.PermissionProfile,
@@ -275,9 +340,14 @@ void ServiceInit(XS_HostInfo *host) {{
         session_info.ToolCount, session_info.SkillCount, session_info.SubagentCount,
         (unsigned long long)session_info.ModelGeneration,
         (unsigned long long)session_info.ModuleGeneration,
-        (unsigned long long)session_info.SkillGeneration);
+        (unsigned long long)session_info.SkillGeneration,
+        (unsigned long long)session_info.MemoryGeneration);
     printf("owner_after_create=refs:%u retains:%u releases:%u\n",
         owner.Refs, owner.Retains, owner.Releases);
+    printf("memory_tools=search:%d write:%d delete:%d\n",
+        AgentHasTool(session, "memory_search") ? 1 : 0,
+        AgentHasTool(session, "memory_write") ? 1 : 0,
+        AgentHasTool(session, "memory_delete") ? 1 : 0);
 
     if (!MdoHomeAtomicWrite("skills/probe-skill/SKILL.md", sSkillV2,
             strlen(sSkillV2), false) || !MdoSkillManagerReload() ||
@@ -329,16 +399,17 @@ void ServiceInit(XS_HostInfo *host) {{
         (unsigned long long)result.uModelCalls);
     memset(&run_info, 0, sizeof(run_info)); run_info.Size = sizeof(run_info);
     if (MdoAgentRunGetInfo(run, &run_info))
-        printf("run_info=agent:%s model:%s reasoning:%s state:%d result:%d generations:%llu/%llu/%llu\n",
+        printf("run_info=agent:%s model:%s reasoning:%s state:%d result:%d generations:%llu/%llu/%llu/%llu\n",
             run_info.AgentId, run_info.ModelId, run_info.ReasoningEffort,
             (int)run_info.Run.eState, (int)run_info.Run.eResult,
             (unsigned long long)run_info.ModelGeneration,
             (unsigned long long)run_info.ModuleGeneration,
-            (unsigned long long)run_info.SkillGeneration);
-    printf("callback=calls:%u model:%d reasoning:%d system_v1:%d skill_v1:%d skill_v2:%d\n",
+            (unsigned long long)run_info.SkillGeneration,
+            (unsigned long long)run_info.MemoryGeneration);
+    printf("callback=calls:%u model:%d reasoning:%d system_v1:%d skill_v1:%d skill_v2:%d memory:%d\n",
         owner.Calls, owner.SawModel ? 1 : 0, owner.SawReasoning ? 1 : 0,
         owner.SawSystemV1 ? 1 : 0, owner.SawSkillV1 ? 1 : 0,
-        owner.SawSkillV2 ? 1 : 0);
+        owner.SawSkillV2 ? 1 : 0, owner.SawMemory ? 1 : 0);
     xworkRunResultUnit(&result);
     MdoAgentRunDestroy(run); run = NULL;
     printf("owner_after_run_destroy=refs:%u retains:%u releases:%u\n",
@@ -348,6 +419,7 @@ done:
     MdoAgentSessionRelease(invalid);
     MdoAgentSessionRelease(session);
     MdoModuleManagerUnit();
+    MdoMemoryManagerUnit();
     MdoSkillManagerUnit();
     xworkRuntimeRelease(runtime);
     MdoModelManagerUnit();
@@ -360,7 +432,7 @@ void ServiceUnit(XS_HostInfo *host) {{ (void)host; }}
 '''
 
 
-def write_site(site: Path) -> None:
+def write_site(site: Path, memory_enabled: bool = True) -> None:
     for relative in (
         "web",
         "default-home/config",
@@ -374,6 +446,7 @@ def write_site(site: Path) -> None:
         "src/security",
         "src/models",
         "src/skills",
+        "src/memory",
         "src/modules",
         "src/agents",
         "include/mdo",
@@ -391,17 +464,28 @@ def write_site(site: Path) -> None:
         "src/security/secrets.c",
         "src/models/catalog.c",
         "src/skills/manager.c",
+        "src/memory/manager.c",
         "src/modules/manager.c",
         "src/agents/runtime.c",
     ):
         shutil.copy2(ROOT / "app" / relative, site / relative)
     for header in (ROOT / "app/include/mdo").glob("*.h"):
         shutil.copy2(header, site / "include/mdo" / header.name)
+    if not memory_enabled:
+        defaults_path = site / "default-home/config/defaults.json"
+        defaults = json.loads(defaults_path.read_text(encoding="utf-8"))
+        defaults["settings"]["agent"]["memory"] = False
+        defaults_path.write_text(json.dumps(defaults), encoding="utf-8")
     shutil.copy2(
         ROOT / "include/mdo/module.h",
         site / "generated/module-sdk/mdo/module.h",
     )
-    (site / "probe.c").write_text(PROBE_SOURCE, encoding="utf-8")
+    probe_source = PROBE_SOURCE
+    if not memory_enabled:
+        probe_source = probe_source.replace(
+            c_literal(MODULE_V1), c_literal(MODULE_V1_NO_MEMORY)
+        ).replace(c_literal(MODULE_V2), c_literal(MODULE_V2_NO_MEMORY))
+    (site / "probe.c").write_text(probe_source, encoding="utf-8")
     with socket.socket() as listener:
         listener.bind(("127.0.0.1", 0))
         port = listener.getsockname()[1]
@@ -493,19 +577,27 @@ def main() -> int:
         assert "session=agent:probe.main module:probe.agents model:ling-3.0-tiny" in output, output
         assert "wire:ling-3.0-tiny reasoning:medium permission:read-only" in output, output
         assert "output:4096" in output, output
-        assert "skills:1 subagents:1 generations:1/1/1" in output, output
+        assert "skills:1 subagents:1 generations:1/1/1/2" in output, output
         assert "owner_after_create=refs:2 retains:1 releases:0" in output, output
+        assert "memory_tools=search:1 write:0 delete:0" in output, output
         assert "reloaded=modules:2 skills:2 pinned:1/1" in output, output
         assert "invalid_reasoning=0" in output, output
         assert "invalid_skill_tools=0" in output, output
         assert "selected Skill requires a tool unavailable to its Agent" in output, output
         assert "owner_after_session_release=refs:2 releases:0" in output, output
         assert "run=result:0 text:agent-runtime-ok" in output, output
-        assert "run_info=agent:probe.main model:ling-3.0-tiny reasoning:medium state:2 result:0 generations:1/1/1" in output, output
-        assert "callback=calls:1 model:1 reasoning:1 system_v1:1 skill_v1:1 skill_v2:0" in output, output
+        assert "run_info=agent:probe.main model:ling-3.0-tiny reasoning:medium state:2 result:0 generations:1/1/1/2" in output, output
+        assert "callback=calls:1 model:1 reasoning:1 system_v1:1 skill_v1:1 skill_v2:0 memory:1" in output, output
         assert "probe-agent-release-v1" in output, output
         assert "owner_after_run_destroy=refs:1 retains:1 releases:1" in output, output
         assert "probe_done=1" in output, output
+        disabled_site = base / "site-memory-disabled"
+        write_site(disabled_site, memory_enabled=False)
+        disabled = run_probe(host, disabled_site, base / "home-memory-disabled")
+        assert "init_error=" not in disabled, disabled
+        assert "generations:1/1/1/0" in disabled, disabled
+        assert "callback=calls:1 model:1 reasoning:1 system_v1:1 skill_v1:1 skill_v2:0 memory:0" in disabled, disabled
+        assert "probe_done=1" in disabled, disabled
     print("agent runtime probe: PASS")
     return 0
 

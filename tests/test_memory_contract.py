@@ -40,6 +40,24 @@ class MemoryContractTests(unittest.TestCase):
         self.assertNotIn("MdoHomeOpenWrite", init_body)
         self.assertNotIn("MdoHomeAtomicWrite", init_body)
 
+    def test_agent_memory_is_configurable_scoped_and_permissioned(self) -> None:
+        config_header = (ROOT / "app/include/mdo/config.h").read_text(encoding="utf-8")
+        agent_header = (ROOT / "app/include/mdo/agents.h").read_text(encoding="utf-8")
+        agent_source = (ROOT / "app/src/agents/runtime.c").read_text(encoding="utf-8")
+        memory_source = (ROOT / "app/src/memory/manager.c").read_text(encoding="utf-8")
+        self.assertIn("bool MemoryEnabled;", config_header)
+        self.assertIn("const char* ProjectId;", agent_header)
+        self.assertIn("uint64 MemoryGeneration;", agent_header)
+        self.assertIn("MdoMemoryBuildPrompt(Options->ProjectId", agent_source)
+        self.assertIn("MdoMemoryAgentBind(Session->Agent", agent_source)
+        self.assertIn('Definitions[0].sName = "memory_search"', memory_source)
+        self.assertIn('Definitions[1].sName = "memory_write"', memory_source)
+        self.assertIn('Definitions[2].sName = "memory_delete"', memory_source)
+        self.assertIn("XWORK_TOOL_EFFECT_WORKSPACE_WRITE", memory_source)
+        self.assertIn("MdoMemoryDescribeMutation", memory_source)
+        self.assertIn("MEMORY_REFERENCE_DATA_JSONL_BEGIN", memory_source)
+        self.assertIn("untrusted reference data", memory_source)
+
 
 if __name__ == "__main__":
     unittest.main()
