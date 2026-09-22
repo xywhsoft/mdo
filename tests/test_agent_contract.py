@@ -27,6 +27,7 @@ class AgentContractTests(unittest.TestCase):
             "MdoAgentRunOptions",
             "MdoAgentRunInfo",
             "MdoAgentSessionCreateWithRuntime",
+            "Recover",
             "MdoAgentSessionRef",
             "MdoAgentSessionRelease",
             "MdoAgentRunCreate",

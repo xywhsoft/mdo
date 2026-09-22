@@ -62,6 +62,7 @@ class BuildContractTests(unittest.TestCase):
             "src/mcp/manager.c",
             "src/modules/manager.c",
             "src/agents/runtime.c",
+            "src/sessions/manager.c",
             "src/bootstrap/bootstrap.c",
             "src/bootstrap/service.c",
         ])

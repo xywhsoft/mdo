@@ -36,6 +36,23 @@ xfile MdoHomeOpenRead(cstr Path);
  * built-in resource. Missing paths return true with Exists=false. */
 bool MdoHomeExternalStat(cstr Path, bool* pExists, xfileinfo* pInfo);
 
+/* Opens an already-existing external Home directory through the anchored
+ * root. It never creates Home and never falls back to packaged resources. */
+xdir MdoHomeOpenDirectory(cstr Path, uint32 Flags);
+
+/* Creates a new directory and its missing parents below the anchored external
+ * Home. The leaf is exclusive: an existing object makes the call fail. */
+bool MdoHomeCreateDirectory(cstr Path);
+
+/* Removes one empty directory below the anchored external Home. Missing
+ * directories are a successful no-op. */
+bool MdoHomeRemoveEmptyDirectory(cstr Path);
+
+/* Returns an owned native path below the configured external Home. This does
+ * not create Home or any parent. It exists for libraries whose persistence
+ * API accepts native paths rather than xfile handles. */
+str MdoHomeExternalPath(cstr Path);
+
 /* Writes only below the external Home. The Home and required parent
  * directories are created lazily on the first call that needs them. */
 xfile MdoHomeOpenWrite(cstr Path, uint32 Flags);

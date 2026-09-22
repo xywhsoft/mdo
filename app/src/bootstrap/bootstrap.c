@@ -5,6 +5,7 @@
 #include "../../include/mdo/mcp.h"
 #include "../../include/mdo/models.h"
 #include "../../include/mdo/modules.h"
+#include "../../include/mdo/sessions.h"
 #include "../../include/mdo/skills.h"
 #include "../../include/mdo/version.h"
 #include "../../include/mdo/web.h"
@@ -38,7 +39,7 @@ bool MdoBootstrapInit(XS_HostInfo* pHost)
 
     (void)pHost;
     if ( g_MdoBootstrap.Stage != MDO_BOOTSTRAP_EMPTY )
-        return g_MdoBootstrap.Stage == MDO_BOOTSTRAP_MODULES_READY;
+        return g_MdoBootstrap.Stage == MDO_BOOTSTRAP_SESSIONS_READY;
     if ( !MdoHomeInit() ) {
         MdoBootstrapFail("Home initialization failed");
         return false;
@@ -100,6 +101,11 @@ bool MdoBootstrapInit(XS_HostInfo* pHost)
         return false;
     }
     g_MdoBootstrap.Stage = MDO_BOOTSTRAP_MODULES_READY;
+    if ( !MdoSessionManagerInit(g_MdoBootstrap.Runtime) ) {
+        MdoBootstrapFail("session manager initialization failed");
+        return false;
+    }
+    g_MdoBootstrap.Stage = MDO_BOOTSTRAP_SESSIONS_READY;
 
     memset(&Home, 0, sizeof(Home));
     Home.Size = sizeof(Home);
@@ -135,6 +141,7 @@ bool MdoBootstrapInit(XS_HostInfo* pHost)
 
 void MdoBootstrapUnit(void)
 {
+    MdoSessionManagerUnit();
     MdoModuleManagerUnit();
     MdoMcpManagerUnit();
     MdoWebManagerUnit();
@@ -153,7 +160,7 @@ bool MdoBootstrapGetSnapshot(MdoBootstrapSnapshot* pSnapshot)
     if ( pSnapshot == NULL || pSnapshot->Size < sizeof(*pSnapshot) )
         return false;
     pSnapshot->Stage = g_MdoBootstrap.Stage;
-    pSnapshot->Ready = g_MdoBootstrap.Stage == MDO_BOOTSTRAP_MODULES_READY;
+    pSnapshot->Ready = g_MdoBootstrap.Stage == MDO_BOOTSTRAP_SESSIONS_READY;
     pSnapshot->DefaultsBytes = g_MdoBootstrap.DefaultsBytes;
     pSnapshot->Message = g_MdoBootstrap.Message;
     pSnapshot->ModelGeneration = 0u;
@@ -175,6 +182,9 @@ bool MdoBootstrapGetSnapshot(MdoBootstrapSnapshot* pSnapshot)
     pSnapshot->ModuleToolCount = 0u;
     pSnapshot->ModuleAgentCount = 0u;
     pSnapshot->ModuleDiagnosticCount = 0u;
+    pSnapshot->SessionGeneration = 0u;
+    pSnapshot->SessionCount = 0u;
+    pSnapshot->SessionDiagnosticCount = 0u;
     {
         MdoModelCatalog* pCatalog = MdoModelCatalogSnapshot();
         if ( pCatalog != NULL ) {
@@ -234,6 +244,18 @@ bool MdoBootstrapGetSnapshot(MdoBootstrapSnapshot* pSnapshot)
             MdoModuleDiagnosticsCount(pDiagnostics);
         MdoModuleCatalogRelease(pCatalog);
         MdoModuleDiagnosticsRelease(pDiagnostics);
+    }
+    {
+        xwork_error Error;
+        MdoSessionCatalog* pCatalog = MdoSessionCatalogSnapshot(&Error);
+        if ( pCatalog != NULL ) {
+            pSnapshot->SessionGeneration =
+                MdoSessionCatalogGeneration(pCatalog);
+            pSnapshot->SessionCount = MdoSessionCatalogCount(pCatalog);
+            pSnapshot->SessionDiagnosticCount =
+                MdoSessionCatalogDiagnosticCount(pCatalog);
+        }
+        MdoSessionCatalogRelease(pCatalog);
     }
     memset(&pSnapshot->Config, 0, sizeof(pSnapshot->Config));
     pSnapshot->Config.Size = sizeof(pSnapshot->Config);

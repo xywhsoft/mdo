@@ -1,0 +1,48 @@
+"""Static contracts for durable MDO session management."""
+
+from __future__ import annotations
+
+import json
+import unittest
+from pathlib import Path
+
+
+ROOT = Path(__file__).resolve().parent.parent
+
+
+class SessionContractTests(unittest.TestCase):
+    def test_session_manager_is_after_agent_runtime_in_bootstrap(self) -> None:
+        manifest = json.loads((ROOT / "app/sources.json").read_text(encoding="utf-8"))
+        sources = manifest["sources"]
+        self.assertIn("src/sessions/manager.c", sources)
+        self.assertLess(sources.index("src/agents/runtime.c"), sources.index("src/sessions/manager.c"))
+        bootstrap = (ROOT / "app/src/bootstrap/bootstrap.c").read_text(encoding="utf-8")
+        self.assertIn("MdoSessionManagerInit(g_MdoBootstrap.Runtime)", bootstrap)
+        self.assertLess(bootstrap.index("MdoModuleManagerInit"), bootstrap.index("MdoSessionManagerInit"))
+
+    def test_managed_layout_uses_one_readable_meta_and_xllm_ledger(self) -> None:
+        source = (ROOT / "app/src/sessions/manager.c").read_text(encoding="utf-8")
+        for name in ("meta.json", "snapshot.json", "journal.jsonl", "artifacts"):
+            self.assertIn(name, source)
+        self.assertIn("MdoHomeAtomicWrite(Path, Json, Size, true)", source)
+        self.assertIn("xllmSessionRecover", (ROOT / "app/src/agents/runtime.c").read_text(encoding="utf-8"))
+        self.assertNotIn("api_key", source.lower())
+
+    def test_catalog_is_owned_and_trash_is_reversible(self) -> None:
+        header = (ROOT / "app/include/mdo/sessions.h").read_text(encoding="utf-8")
+        for symbol in (
+            "MdoSessionCatalogSnapshot",
+            "MdoSessionCatalogRelease",
+            "MdoSessionLoad",
+            "MdoSessionSetArchived",
+            "MdoSessionMoveToTrash",
+            "MdoSessionRestore",
+            "MdoSessionDiagnostic",
+        ):
+            self.assertIn(symbol, header)
+        self.assertIn("MDO_SESSION_TRASH", header)
+        self.assertIn("PreviousStatus", header)
+
+
+if __name__ == "__main__":
+    unittest.main()

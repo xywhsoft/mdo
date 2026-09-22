@@ -830,6 +830,7 @@ MdoAgentSession* MdoAgentSessionCreateWithRuntime(xwork_runtime* Runtime,
     MdoAgentSession* Session = NULL;
     xllm_model_profile Profile;
     xllm_session_config SessionConfig;
+    xllm_session_config RecoveredConfig;
     xllm_error ModelError;
     xwork_agent_definition_config DefinitionConfig;
     xwork_agent_definition* Definition = NULL;
@@ -853,6 +854,9 @@ MdoAgentSession* MdoAgentSessionCreateWithRuntime(xwork_runtime* Runtime,
         Options = &Defaults;
     }
     if ( Runtime == NULL || Options->Size < sizeof(*Options) ||
+         (Options->Recover &&
+          (Options->SessionPath == NULL || Options->SessionPath[0] == '\0' ||
+           Options->JournalPath == NULL || Options->JournalPath[0] == '\0')) ||
          ((Options->OnOwnerRetain != NULL) !=
           (Options->OnOwnerRelease != NULL)) ) {
         MdoAgentsError(Error, XWORK_ERROR_INVALID_ARGUMENT,
@@ -936,19 +940,54 @@ MdoAgentSession* MdoAgentSessionCreateWithRuntime(xwork_runtime* Runtime,
             "cannot build the Agent session profile");
         goto fail;
     }
-    xllmSessionConfigInit(&SessionConfig);
-    SessionConfig.uContextWindowTokens = AgentInfo.ContextWindowTokens;
-    SessionConfig.uMaxInputTokens = AgentInfo.MaxInputTokens;
-    SessionConfig.uMaxOutputTokens = Model.MaxOutputTokens;
-    SessionConfig.sSnapshotPath = Options->SessionPath;
-    Owner->LlmSession = xllmSessionCreateForProfile(&SessionConfig, &Profile,
-        &ModelError);
+    if ( Options->Recover ) {
+        if ( !xllmSessionConfigInitFromProfile(&SessionConfig, &Profile,
+                &ModelError) ) {
+            MdoAgentsModelError(Error, &ModelError,
+                "cannot prepare the Agent recovery profile");
+            goto fail;
+        }
+        if ( AgentInfo.ContextWindowTokens != 0u )
+            SessionConfig.uContextWindowTokens =
+                AgentInfo.ContextWindowTokens;
+        if ( AgentInfo.MaxInputTokens != 0u )
+            SessionConfig.uMaxInputTokens = AgentInfo.MaxInputTokens;
+        SessionConfig.uMaxOutputTokens = Model.MaxOutputTokens;
+        SessionConfig.sSnapshotPath = Options->SessionPath;
+        Owner->LlmSession = xllmSessionRecover(Options->SessionPath,
+            Options->JournalPath, &SessionConfig, &ModelError);
+        if ( Owner->LlmSession != NULL &&
+             (!xllmSessionGetConfig(Owner->LlmSession, &RecoveredConfig) ||
+              RecoveredConfig.eWindowMode != SessionConfig.eWindowMode ||
+              RecoveredConfig.uContextWindowTokens >
+                SessionConfig.uContextWindowTokens ||
+              RecoveredConfig.uMaxInputTokens >
+                SessionConfig.uMaxInputTokens ||
+              RecoveredConfig.uMaxOutputTokens >
+                SessionConfig.uMaxOutputTokens) ) {
+            xllmSessionDestroy(Owner->LlmSession);
+            Owner->LlmSession = NULL;
+            xllmErrorInit(&ModelError);
+            ModelError.eCode = XLLM_ERROR_INVALID_ARGUMENT;
+            snprintf(ModelError.sMessage, sizeof(ModelError.sMessage), "%s",
+                "recovered session exceeds the selected model profile");
+        }
+    } else {
+        xllmSessionConfigInit(&SessionConfig);
+        SessionConfig.uContextWindowTokens = AgentInfo.ContextWindowTokens;
+        SessionConfig.uMaxInputTokens = AgentInfo.MaxInputTokens;
+        SessionConfig.uMaxOutputTokens = Model.MaxOutputTokens;
+        SessionConfig.sSnapshotPath = Options->SessionPath;
+        Owner->LlmSession = xllmSessionCreateForProfile(&SessionConfig,
+            &Profile, &ModelError);
+    }
     if ( Owner->LlmSession == NULL ) {
         MdoAgentsModelError(Error, &ModelError,
             "cannot create the Agent context session");
         goto fail;
     }
-    if ( Options->JournalPath != NULL && Options->JournalPath[0] != '\0' &&
+    if ( !Options->Recover && Options->JournalPath != NULL &&
+         Options->JournalPath[0] != '\0' &&
          !xllmSessionEnableJournal(Owner->LlmSession, Options->JournalPath,
             &ModelError) ) {
         MdoAgentsModelError(Error, &ModelError,

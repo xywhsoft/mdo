@@ -475,6 +475,95 @@ bool MdoHomeExternalStat(cstr Path, bool* pExists, xfileinfo* pInfo)
     return false;
 }
 
+xdir MdoHomeOpenDirectory(cstr Path, uint32 Flags)
+{
+    const uint32 Known = XDIR_STAT | XDIR_FOLLOW_LINKS | XDIR_INCLUDE_DOTS;
+    xdir Directory;
+
+    if ( !MdoHomePathValid(Path) || (Flags & ~Known) != 0u ||
+         !g_MdoHome.Initialized ) {
+        MdoHomeErrorSet(XERR_ARGUMENT, MDO_HOME_ERROR_ARGUMENT,
+            "invalid external Home directory request");
+        return NULL;
+    }
+    xrtMutexLock(g_MdoHome.Lock);
+    if ( g_MdoHome.Root == NULL ) {
+        xrtMutexUnlock(g_MdoHome.Lock);
+        MdoHomeErrorSet(XERR_NOT_FOUND, MDO_HOME_ERROR_STORAGE,
+            "external Home does not exist");
+        return NULL;
+    }
+    Directory = xrtRootDirOpen(g_MdoHome.Root, Path, Flags);
+    xrtMutexUnlock(g_MdoHome.Lock);
+    return Directory;
+}
+
+bool MdoHomeCreateDirectory(cstr Path)
+{
+    bool bOk = false;
+
+    if ( !MdoHomePathValid(Path) || !g_MdoHome.Initialized ) {
+        MdoHomeErrorSet(XERR_ARGUMENT, MDO_HOME_ERROR_ARGUMENT,
+            "invalid external Home directory create request");
+        return false;
+    }
+    xrtMutexLock(g_MdoHome.Lock);
+    if ( !MdoHomeEnsureLocked() ||
+         !MdoHomeEnsureParents(g_MdoHome.Root, Path) ) goto done;
+    bOk = xrtRootDirCreate(g_MdoHome.Root, Path, 0700u);
+done:
+    xrtMutexUnlock(g_MdoHome.Lock);
+    return bOk;
+}
+
+bool MdoHomeRemoveEmptyDirectory(cstr Path)
+{
+    xfileinfo Info;
+    bool bOk = false;
+
+    if ( !MdoHomePathValid(Path) || !g_MdoHome.Initialized ) {
+        MdoHomeErrorSet(XERR_ARGUMENT, MDO_HOME_ERROR_ARGUMENT,
+            "invalid external Home directory remove request");
+        return false;
+    }
+    xrtMutexLock(g_MdoHome.Lock);
+    if ( g_MdoHome.Root == NULL ) {
+        bOk = true;
+        goto done;
+    }
+    if ( !xrtRootStat(g_MdoHome.Root, Path, false, &Info) ) {
+        if ( xrtGetError() != NULL &&
+             xrtErrorKind(xrtGetError()) == XERR_NOT_FOUND ) {
+            xrtClearError();
+            bOk = true;
+        }
+        goto done;
+    }
+    if ( Info.Type != XFILE_TYPE_DIRECTORY ) {
+        MdoHomeErrorSet(XERR_TYPE, MDO_HOME_ERROR_PATH,
+            "Home directory remove target is not a directory");
+        goto done;
+    }
+    bOk = xrtRootRemove(g_MdoHome.Root, Path);
+done:
+    xrtMutexUnlock(g_MdoHome.Lock);
+    return bOk;
+}
+
+str MdoHomeExternalPath(cstr Path)
+{
+    str Result;
+    if ( !MdoHomePathValid(Path) || !g_MdoHome.Initialized ) {
+        MdoHomeErrorSet(XERR_ARGUMENT, MDO_HOME_ERROR_ARGUMENT,
+            "invalid external Home path request");
+        return NULL;
+    }
+    xrtMutexLock(g_MdoHome.Lock);
+    Result = xrtPathJoin(g_MdoHome.Path, Path);
+    xrtMutexUnlock(g_MdoHome.Lock);
+    return Result;
+}
+
 xfile MdoHomeOpenWrite(cstr Path, uint32 Flags)
 {
     const uint32 Known = XFILE_READ | XFILE_WRITE | XFILE_CREATE |
