@@ -6,8 +6,8 @@
 
 | 仓库 | 开发位置/分支 | 当前基线 | 说明 |
 | --- | --- | --- | --- |
-| mdo | `D:\GIT\mdo` / 当前分支 | `d380433` | 产品、计划与集成账本 |
-| xrt | `codex/mdo-refactor-xrt` 独立工作树 | `2fc7dac2` | 原工作树有既存未提交内容，隔离开发 |
+| mdo | `D:\GIT\mdo` / 当前分支 | `cedce4f` | 产品、计划与集成账本 |
+| xrt | `codex/mdo-refactor-xrt` 独立工作树 | `9a094b3f` | 原工作树有既存未提交内容，隔离开发 |
 | xserver | `D:\GIT\xserver-mdo-refactor` / `codex/mdo-refactor-xs` | `6d5485e` | 原工作树有既存未提交内容，隔离开发 |
 
 ## 状态定义
@@ -90,6 +90,7 @@
 | WORK-108 MCP 生命周期与惰性工具加载 | DONE | xrt `752ee602` | Windows/GCC、Linux/Clang warning-as-error 有界全回归通过；Clang ASan/UBSan/LSan 与 GCC TSan 有界全回归通过，TSan 构建仅将 xrt 既有 `atomic_thread_fence` 和 TLS 保守未初始化告警从 error 降为 warning；C11/C++17 公共头及 10 个新增 ABI 符号通过；现代/旧版 codec、冷注册、环境传递、摘要搜索、单 schema 加载、allowlist、重连、停用/注销、畸形 JSON、重复 cursor 和异常退出回归通过；未运行压力或高负载测试 | runtime 拥有稳定 MCP server 记录和进程；默认 `2026-07-28` 使用 `server/discover` 与逐请求 metadata，兼容 API 默认 `2025-11-25` 初始化握手；Agent 初始只注入 `tool_search`/`tool_load`，完整 schema 按选择逐个发布；未发布缓存代及时释放，已发布 proxy 保留到 runtime 销毁并在停用/注销后关闭失败 |
 | WORK-109 可恢复 runtime scheduler | DONE | xrt `2fc7dac2` | Windows/GCC 与 Linux/Clang warning-as-error 有界全回归通过；Clang ASan/UBSan/LSan 与 GCC TSan 有界全回归通过；C11/C++17 公共头独立编译及 12 个新增 ABI 符号通过；到期、固定偏移/系统本地时区、weekday mask、skip/run-once/catch-up misfire、skip/queue-one overlap、稳定同刻排序、无效 ABI/血缘、容量和重启恢复回归通过；未运行压力或高负载测试 | runtime 冷注册并深拷贝 schedule 定义，宿主以显式 Unix 微秒时间单次 claim；每次 claim 原子推进持久化 cursor 并创建统一 RUNNING scheduled task；分钟/小时使用绝对间隔，日/周保持 wall-clock，DST gap 跳过、fold 可选；恢复定义一次锁内发布，不暴露初始 cursor；稳定借用字符串使容量成为 runtime 生命周期注册上限 |
 | WORK-110 artifacts/audit/event 统一 | DONE | xrt `de37b493` | Windows/GCC 与 Linux/Clang warning-as-error 有界全回归通过；Clang ASan/UBSan/LSan 与 GCC TSan 有界全回归通过，TSan 构建仅将 xrt 既有 `atomic_thread_fence` 和 TLS 保守未初始化告警从 error 降为 warning；C11/C++17 公共头及 16 个新增 ABI 符号通过；artifact 容量、SHA-256、分块读取、复用、EOF、篡改、event 淘汰/分页/断层、快照跨 runtime 生命周期和 task 统一事件回归通过；未运行压力或高负载测试 | runtime 以单调 ID、Unix 时间和独立 observability 锁统一 artifact 元数据与 event/audit replay；大工具输出原子落盘，模型只接收有界 head/tail、artifact ID 和相对路径；宿主按游标读取有界 chunk；agent callback、artifact 创建和 task revision 共享事件 ID 空间，字符串深拷贝且按记录数、总字节和单事件文本三重限额保留，淘汰或留存失败显式形成 cursor gap |
+| WORK-111 interruption/resume 语义 | DONE | xrt `9a094b3f` | Windows/GCC 与 Linux/Clang warning-as-error 有界全回归通过；Clang ASan/UBSan/LSan 与 GCC TSan 有界全回归通过，TSan 构建仅将 xrt 既有 `atomic_thread_fence` 和 TLS 保守未初始化告警从 error 降为 warning；C11/C++17 公共头及 9 个新增 ABI 符号通过；崩溃恢复、整批预检、陈旧决策、只读自动重试、显式副作用重试、记为不确定、异步 run 决策深拷贝、事件审计与快照跨 Agent 生命周期回归通过；未运行压力或高负载测试 | 未落账工具结果不再被默认视为“未执行”；恢复快照深拷贝 call ID、参数、目录代和 effect，默认只自动重试当前已知的纯读取工具；未知或有副作用的调用在任何前缀执行前返回 `RECOVERY_REQUIRED`，宿主按 call ID 显式选择 at-least-once 重试或不执行并写入 uncertainty 结果；同步和异步 run 共用策略，审计 schema v2 记录自动、显式和不确定决策 |
 | LIB-3 xwork 3.0 | DOING | - | - | 拆分 runtime/definition/agent/run/task，修复生命周期、并发、后台任务、工具和子 Agent 边界，再同步 xserver 零分叉副本 |
 | MDO-0～10 | TODO | - | - | LIB-GATE 后实施 |
 | QA-RELEASE | TODO | - | - | MDO-GATE 后实施 |
@@ -130,8 +131,9 @@
 32. MCP server 属于长生命周期 runtime，配置注册必须是冷操作，摘要枚举不得启动进程；server-specific 搜索只缓存受 allow/deny 过滤的名称和描述，`tool_load` 才把一个完整 schema 发布到 Agent 的下一轮模型请求。`2026-07-28` 与 `2025-11-25` 是两套显式 wire codec，不做静默降级；截至 2026-09-22，发布前核对的当前 final 版本是 `2026-07-28`。runtime server 地址保持到销毁，停用和注销只改变可用性并停止进程，因此旧工具目录的 callback 不悬空且稳定关闭失败；纯搜索缓存换代不保留，从而避免 TTL 刷新无界积累。
 33. xwork scheduler 不拥有隐式时钟线程：宿主传入显式 Unix 微秒时间并每次最多 claim 一个 occurrence，claim 成功才同时推进 definition cursor 并把执行发布到统一 task 表。分钟/小时是绝对时间间隔，日/周在 UTC、固定偏移或系统本地时区保持 anchor wall-clock；本地 DST gap 跳过，fold 按定义选择。misfire 与 overlap 都有明确有界策略；definition restore 必须先完整验证和构造，再在一次 scheduler 锁内原子发布，不能让并发 claim 看到注册初值。claim/info 的字符串借用稳定 definition 存储，因此 unregister 使用 tombstone，`uMaxSchedules` 约束 runtime 生命周期内注册总量。
 34. xwork runtime 的 observability 服务统一管理 artifact 元数据与 event/audit replay：artifact 文件使用原子写、单调 ID、SHA-256 和 workspace 相对路径，注册表只保留稳定元数据且 runtime 销毁不删除普通文件；事件在 callback 前分配 schema version、全局 ID、Unix 时间和 agent/run/task 血缘，artifact 创建与 task revision 进入同一 ID 空间。replay 深拷贝字符串并受记录数、总字节和单事件文本上限约束，淘汰或 OOM 留存失败会消耗 ID、增加 dropped counter 并通过 cursor gap 明示，引用计数快照可安全跨 runtime 销毁。
+35. 工具结果尚未进入持久化 ledger 只能证明“结果缺失”，不能证明外部副作用未发生；跨文件系统、进程、网络或外部服务无法由本地 journal 提供 exactly-once。xwork 恢复必须先固定完整 pending 批次并校验全部 call-ID 决策，再允许任何调用执行；当前已知且 effect 仅为 READ 的工具可自动重试，其他工具默认停在显式恢复边界。`RETRY` 明确接受 at-least-once 并重新经过权限与 hook，`RECORD_UNCERTAIN` 不调用工具而向 session 写入可追溯的不确定结果。直接使用 `xllmSessionRunWithTools(NULL, ...)` 的宿主没有 xwork effect 元数据，必须自行实现同等预检，不能把底层 continuation 当作安全崩溃恢复。
 
 ## 下一步
 
-1. 实施 WORK-111 interruption/resume 语义，完成 LIB-3 收口并同步 xserver 零分叉副本；运行环境提供三条显式 URL 和 runtime key 时再执行 Ling 3.0 Tiny 的 Chat Completions、Responses 与 Anthropic Messages 真实探针；
+1. 完成 LIB-3 收口并同步 xserver 零分叉副本，运行宿主集成门禁；运行环境提供三条显式 URL 和 runtime key 时再执行 Ling 3.0 Tiny 的 Chat Completions、Responses 与 Anthropic Messages 真实探针；
 2. 全部后续验收继续使用有界功能、故障注入和确定性交错，略过压力与高负载测试。
