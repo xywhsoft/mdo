@@ -31,6 +31,11 @@ mdo 配置 schema v1 由一份内置基线、三份可选用户 patch 和一层�
 
 普通 JSON 配置不能保存 `api_key`、token、password、client secret、private key 或 Authorization 等敏感值。模型凭据只能保存为 provider 的 `credential.secret_ref`，v1 接受 `env:`、`file:`、`keychain:` 和 `prompt:` 引用。secret resolver 在使用模型时解析引用，配置导入和导出始终只处理引用文本。
 
+`settings.web` 配置联机搜索 provider、HTTPS endpoint、凭据引用、超时、响应/
+文本/缓存上限以及是否允许 HTTP 或私网。默认 Brave 凭据使用
+`env:MDO_BRAVE_SEARCH_API_KEY`，只在调用 `web_search` 时解析。URL、地址解析和
+权限边界见 [Web 工具合同](web-tools.md)。
+
 `models.providers` 与 `models.items` 分开。provider 保存 endpoint、TLS 校验、超时和凭据引用；model 保存 provider ID、wire model、可选协议、默认协议、xllm 能力、上下文/输入/输出窗口、推理档位和附件类型。模型引用的每种协议必须在 provider 上有对应 endpoint，默认协议必须属于模型协议集。
 
 `ling-3.0-tiny` 是内置、免费、不可编辑且不可删除的模型，其 `ling` provider 同样受保护。服务端验证器逐字段核对两个完整 descriptor，并确认默认模型仍存在；前端禁用控件只是交互提示，不承担保护职责。内置 provider 声明 OpenAI Chat Completions、OpenAI Responses 和 Anthropic Messages 三种线上接口，模型默认选择 Responses。真实线上验证只有在运行环境同时提供三条显式 URL 和临时 key 时执行，离线 fixture 不作为线上成功证据。

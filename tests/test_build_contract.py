@@ -58,6 +58,7 @@ class BuildContractTests(unittest.TestCase):
             "src/security/secrets.c",
             "src/models/catalog.c",
             "src/skills/manager.c",
+            "src/web/manager.c",
             "src/mcp/manager.c",
             "src/modules/manager.c",
             "src/agents/runtime.c",

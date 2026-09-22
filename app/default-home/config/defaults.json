@@ -16,6 +16,22 @@
       "max_parallel_tools": 4,
       "max_parallel_subagents": 2
     },
+    "web": {
+      "enabled": true,
+      "allow_http": false,
+      "allow_private_networks": false,
+      "timeout_ms": 30000,
+      "idle_timeout_ms": 10000,
+      "max_response_bytes": 1048576,
+      "max_text_bytes": 262144,
+      "max_documents": 16,
+      "search": {
+        "provider": "brave",
+        "endpoint": "https://api.search.brave.com/res/v1/web/search",
+        "secret_ref": "env:MDO_BRAVE_SEARCH_API_KEY",
+        "max_results": 8
+      }
+    },
     "workspace": {
       "open_mode": "last",
       "confirm_external_write": true

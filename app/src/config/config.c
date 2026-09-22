@@ -339,12 +339,22 @@ static bool MdoConfigSettingsValidate(const xvalue* pSettings)
     static const char* const Efforts[] = {
         "none", "minimal", "low", "medium", "high", "xhigh", "max"
     };
+    static const char* const SearchProviders[] = { "brave" };
     static const char* const OpenModes[] = { "last", "new", "ask" };
     const xvalue* pAppearance;
     const xvalue* pAgent;
+    const xvalue* pWeb;
+    const xvalue* pSearch;
     const xvalue* pWorkspace;
     xstrview Locale;
+    xstrview Text;
     uint64 iValue;
+    uint64 WebTimeout;
+    uint64 WebIdleTimeout;
+    uint64 WebMaxResponse;
+    uint64 WebMaxText;
+    uint64 WebMaxDocuments;
+    uint64 WebMaxResults;
 
     if ( xrtValueType(pSettings) != XVALUE_OBJECT ||
          !MdoConfigString(xrtValueObjectGet(pSettings,
@@ -352,6 +362,9 @@ static bool MdoConfigSettingsValidate(const xvalue* pSettings)
          Locale.Size < 2u || Locale.Size > 32u ) goto invalid;
     pAppearance = xrtValueObjectGet(pSettings, MdoConfigKey("appearance"));
     pAgent = xrtValueObjectGet(pSettings, MdoConfigKey("agent"));
+    pWeb = xrtValueObjectGet(pSettings, MdoConfigKey("web"));
+    pSearch = pWeb != NULL ?
+        xrtValueObjectGet(pWeb, MdoConfigKey("search")) : NULL;
     pWorkspace = xrtValueObjectGet(pSettings, MdoConfigKey("workspace"));
     if ( xrtValueType(pAppearance) != XVALUE_OBJECT ||
          !MdoConfigStringOneOf(xrtValueObjectGet(pAppearance,
@@ -379,6 +392,39 @@ static bool MdoConfigSettingsValidate(const xvalue* pSettings)
          !MdoConfigUnsigned(xrtValueObjectGet(pAgent,
             MdoConfigKey("max_parallel_subagents")), &iValue) ||
          iValue > 16u ||
+         xrtValueType(pWeb) != XVALUE_OBJECT ||
+         !MdoConfigBool(pWeb, "enabled") ||
+         !MdoConfigBool(pWeb, "allow_http") ||
+         !MdoConfigBool(pWeb, "allow_private_networks") ||
+         !MdoConfigUnsigned(xrtValueObjectGet(pWeb,
+            MdoConfigKey("timeout_ms")), &WebTimeout) ||
+         WebTimeout < 1000u || WebTimeout > 300000u ||
+         !MdoConfigUnsigned(xrtValueObjectGet(pWeb,
+            MdoConfigKey("idle_timeout_ms")), &WebIdleTimeout) ||
+         WebIdleTimeout < 1000u || WebIdleTimeout > WebTimeout ||
+         !MdoConfigUnsigned(xrtValueObjectGet(pWeb,
+            MdoConfigKey("max_response_bytes")), &WebMaxResponse) ||
+         WebMaxResponse < 16384u || WebMaxResponse > 16777216u ||
+         !MdoConfigUnsigned(xrtValueObjectGet(pWeb,
+            MdoConfigKey("max_text_bytes")), &WebMaxText) ||
+         WebMaxText < 4096u || WebMaxText > 1048576u ||
+         WebMaxText > WebMaxResponse ||
+         !MdoConfigUnsigned(xrtValueObjectGet(pWeb,
+            MdoConfigKey("max_documents")), &WebMaxDocuments) ||
+         WebMaxDocuments == 0u || WebMaxDocuments > 128u ||
+         xrtValueType(pSearch) != XVALUE_OBJECT ||
+         !MdoConfigStringOneOf(xrtValueObjectGet(pSearch,
+            MdoConfigKey("provider")), SearchProviders,
+            sizeof(SearchProviders) / sizeof(SearchProviders[0])) ||
+         !MdoConfigString(xrtValueObjectGet(pSearch,
+            MdoConfigKey("endpoint")), &Text) ||
+         Text.Size == 0u || Text.Size >= 2048u ||
+         !MdoConfigString(xrtValueObjectGet(pSearch,
+            MdoConfigKey("secret_ref")), &Text) ||
+         Text.Size == 0u || Text.Size >= 2049u ||
+         !MdoConfigUnsigned(xrtValueObjectGet(pSearch,
+            MdoConfigKey("max_results")), &WebMaxResults) ||
+         WebMaxResults == 0u || WebMaxResults > 20u ||
          xrtValueType(pWorkspace) != XVALUE_OBJECT ||
          !MdoConfigStringOneOf(xrtValueObjectGet(pWorkspace,
             MdoConfigKey("open_mode")), OpenModes,
@@ -1212,6 +1258,100 @@ bool MdoConfigGetAgentSettings(MdoConfigAgentSettings* pSettings)
     xrtMutexUnlock(g_MdoConfig.Lock);
     if ( !Ok ) MdoConfigErrorSet(XERR_STATE, MDO_CONFIG_ERROR_STATE,
         "effective Agent settings are unavailable");
+    return Ok;
+}
+
+bool MdoConfigGetWebSettings(MdoConfigWebSettings* pSettings)
+{
+    const xvalue* pSettingsValue;
+    const xvalue* pAgent;
+    const xvalue* pWeb;
+    const xvalue* pSearch;
+    xstrview Provider;
+    xstrview Endpoint;
+    xstrview SecretRef;
+    uint64 Timeout;
+    uint64 IdleTimeout;
+    uint64 MaxResponse;
+    uint64 MaxText;
+    uint64 MaxDocuments;
+    uint64 MaxResults;
+    uint32 Size;
+    bool AgentEnabled;
+    bool Enabled;
+    bool AllowHttp;
+    bool AllowPrivate;
+    bool Ok = false;
+
+    if ( pSettings == NULL || pSettings->Size < sizeof(*pSettings) ||
+         !g_MdoConfig.Initialized ) {
+        MdoConfigErrorSet(XERR_ARGUMENT, MDO_CONFIG_ERROR_ARGUMENT,
+            "invalid Web settings request");
+        return false;
+    }
+    Size = pSettings->Size;
+    xrtMutexLock(g_MdoConfig.Lock);
+    pSettingsValue = xrtValueObjectGet(g_MdoConfig.Effective,
+        MdoConfigKey("settings"));
+    pAgent = pSettingsValue != NULL ?
+        xrtValueObjectGet(pSettingsValue, MdoConfigKey("agent")) : NULL;
+    pWeb = pSettingsValue != NULL ?
+        xrtValueObjectGet(pSettingsValue, MdoConfigKey("web")) : NULL;
+    pSearch = pWeb != NULL ?
+        xrtValueObjectGet(pWeb, MdoConfigKey("search")) : NULL;
+    if ( pAgent != NULL && pWeb != NULL && pSearch != NULL &&
+         xrtValueGetBool(xrtValueObjectGet(pAgent,
+            MdoConfigKey("web_search")), &AgentEnabled) &&
+         xrtValueGetBool(xrtValueObjectGet(pWeb,
+            MdoConfigKey("enabled")), &Enabled) &&
+         xrtValueGetBool(xrtValueObjectGet(pWeb,
+            MdoConfigKey("allow_http")), &AllowHttp) &&
+         xrtValueGetBool(xrtValueObjectGet(pWeb,
+            MdoConfigKey("allow_private_networks")), &AllowPrivate) &&
+         MdoConfigUnsigned(xrtValueObjectGet(pWeb,
+            MdoConfigKey("timeout_ms")), &Timeout) &&
+         MdoConfigUnsigned(xrtValueObjectGet(pWeb,
+            MdoConfigKey("idle_timeout_ms")), &IdleTimeout) &&
+         MdoConfigUnsigned(xrtValueObjectGet(pWeb,
+            MdoConfigKey("max_response_bytes")), &MaxResponse) &&
+         MdoConfigUnsigned(xrtValueObjectGet(pWeb,
+            MdoConfigKey("max_text_bytes")), &MaxText) &&
+         MdoConfigUnsigned(xrtValueObjectGet(pWeb,
+            MdoConfigKey("max_documents")), &MaxDocuments) &&
+         MdoConfigUnsigned(xrtValueObjectGet(pSearch,
+            MdoConfigKey("max_results")), &MaxResults) &&
+         MdoConfigString(xrtValueObjectGet(pSearch,
+            MdoConfigKey("provider")), &Provider) &&
+         MdoConfigString(xrtValueObjectGet(pSearch,
+            MdoConfigKey("endpoint")), &Endpoint) &&
+         MdoConfigString(xrtValueObjectGet(pSearch,
+            MdoConfigKey("secret_ref")), &SecretRef) &&
+         Provider.Size < sizeof(pSettings->Provider) &&
+         Endpoint.Size < sizeof(pSettings->Endpoint) &&
+         SecretRef.Size < sizeof(pSettings->SecretRef) &&
+         Timeout <= UINT32_MAX && IdleTimeout <= UINT32_MAX &&
+         MaxResponse <= SIZE_MAX && MaxText <= SIZE_MAX &&
+         MaxDocuments <= SIZE_MAX && MaxResults <= UINT32_MAX ) {
+        memset(pSettings, 0, sizeof(*pSettings));
+        pSettings->Size = Size;
+        pSettings->Revision = g_MdoConfig.Revision;
+        pSettings->Enabled = AgentEnabled && Enabled;
+        pSettings->AllowHttp = AllowHttp;
+        pSettings->AllowPrivateNetworks = AllowPrivate;
+        pSettings->TimeoutMilliseconds = (uint32)Timeout;
+        pSettings->IdleTimeoutMilliseconds = (uint32)IdleTimeout;
+        pSettings->MaxResponseBytes = (size_t)MaxResponse;
+        pSettings->MaxTextBytes = (size_t)MaxText;
+        pSettings->MaxDocuments = (size_t)MaxDocuments;
+        pSettings->MaxResults = (uint32)MaxResults;
+        memcpy(pSettings->Provider, Provider.Data, Provider.Size);
+        memcpy(pSettings->Endpoint, Endpoint.Data, Endpoint.Size);
+        memcpy(pSettings->SecretRef, SecretRef.Data, SecretRef.Size);
+        Ok = true;
+    }
+    xrtMutexUnlock(g_MdoConfig.Lock);
+    if ( !Ok ) MdoConfigErrorSet(XERR_STATE, MDO_CONFIG_ERROR_STATE,
+        "effective Web settings are unavailable");
     return Ok;
 }
 

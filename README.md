@@ -64,3 +64,7 @@ mdo.exe -- --home D:\Portable\mdo-home
 原子替换和 `.bak` 备份；敏感值只允许保存 `secret_ref`。完整格式、运行时
 覆盖、导入预览和 Ling 3.0 Tiny 保护规则见
 [配置合同](docs/configuration.md)。
+
+内建联网能力由 `web_search`、`web_open` 和 `web_find` 三个有界工具组成；
+配置、权限、DNS 重绑定防护与进程内文档缓存见
+[Web 工具合同](docs/web-tools.md)。

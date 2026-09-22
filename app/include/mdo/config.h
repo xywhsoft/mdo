@@ -38,10 +38,28 @@ typedef struct MdoConfigAgentSettings {
     char PermissionProfile[64];
 } MdoConfigAgentSettings;
 
+typedef struct MdoConfigWebSettings {
+    uint32 Size;
+    uint64 Revision;
+    bool Enabled;
+    bool AllowHttp;
+    bool AllowPrivateNetworks;
+    uint32 TimeoutMilliseconds;
+    uint32 IdleTimeoutMilliseconds;
+    size_t MaxResponseBytes;
+    size_t MaxTextBytes;
+    size_t MaxDocuments;
+    uint32 MaxResults;
+    char Provider[32];
+    char Endpoint[2048];
+    char SecretRef[2049];
+} MdoConfigWebSettings;
+
 bool MdoConfigInit(void);
 void MdoConfigUnit(void);
 bool MdoConfigGetSnapshot(MdoConfigSnapshot* pSnapshot);
 bool MdoConfigGetAgentSettings(MdoConfigAgentSettings* pSettings);
+bool MdoConfigGetWebSettings(MdoConfigWebSettings* pSettings);
 
 /* Returned strings are owned by the caller and released with xrtFree. */
 str MdoConfigEffectiveJson(size_t* pSize);
