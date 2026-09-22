@@ -41,7 +41,11 @@ class BuildContractTests(unittest.TestCase):
 
     def test_new_source_root_is_independent_from_legacy_app(self) -> None:
         sources = BUILD.source_list()
-        self.assertEqual(sources, ["src/bootstrap/service.c"])
+        self.assertEqual(sources, [
+            "src/storage/home.c",
+            "src/bootstrap/bootstrap.c",
+            "src/bootstrap/service.c",
+        ])
         for path in (ROOT / "app").rglob("*"):
             if path.is_file() and path.suffix.lower() in {".c", ".h", ".json", ".js"}:
                 self.assertNotIn("app_bak", path.read_text(encoding="utf-8"))
@@ -51,6 +55,8 @@ class BuildContractTests(unittest.TestCase):
         first = BUILD.generated_unity(self.lock, BUILD.source_list())
         second = BUILD.generated_unity(self.lock, BUILD.source_list())
         self.assertEqual(first, second)
+        self.assertEqual(first.count('#include "../src/storage/home.c"'), 1)
+        self.assertEqual(first.count('#include "../src/bootstrap/bootstrap.c"'), 1)
         self.assertEqual(first.count('#include "../src/bootstrap/service.c"'), 1)
         self.assertIn(self.lock["xrt"]["commit"], first)
         self.assertIn(self.lock["xserver"]["commit"], first)

@@ -49,5 +49,10 @@ tools/build_mdo.py   验证、生成、宿主构建与打包入口
 ```
 
 发布物可以只有 `mdo.exe`。运行时持久化数据只允许进入可执行文件旁的
-`mdo-home/`；单纯启动和退出不得创建该目录。该行为将在 MDO-1 bootstrap 中
-实现并由端到端测试固定。
+`mdo-home/`；单纯启动和退出不得创建该目录。该行为由 MDO-1 bootstrap 和
+端到端测试固定。可以用 `MDO_HOME` 环境变量覆盖，也可以把应用参数
+放在 xs 的 `--` 分隔符之后：
+
+```powershell
+mdo.exe -- --home D:\Portable\mdo-home
+```
