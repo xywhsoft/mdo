@@ -6,9 +6,9 @@
 
 | 仓库 | 开发位置/分支 | 当前基线 | 说明 |
 | --- | --- | --- | --- |
-| mdo | `D:\GIT\mdo` / 当前分支 | `31890b4` | 产品、计划与集成账本 |
-| xrt | `codex/mdo-refactor-xrt` 独立工作树 | `f514162b` | 原工作树有既存未提交内容，隔离开发 |
-| xserver | `D:\GIT\xserver-mdo-refactor` / `codex/mdo-refactor-xs` | `c6eb743` | 原工作树有既存未提交内容，隔离开发 |
+| mdo | `D:\GIT\mdo` / 当前分支 | `99026f6` | 产品、计划与集成账本 |
+| xrt | `codex/mdo-refactor-xrt` 独立工作树 | `6a8fe19b` | 原工作树有既存未提交内容，隔离开发 |
+| xserver | `D:\GIT\xserver-mdo-refactor` / `codex/mdo-refactor-xs` | `547a6d6` | 原工作树有既存未提交内容，隔离开发 |
 
 ## 状态定义
 
@@ -93,6 +93,7 @@
 | WORK-110 artifacts/audit/event 统一 | DONE | xrt `de37b493` | Windows/GCC 与 Linux/Clang warning-as-error 有界全回归通过；Clang ASan/UBSan/LSan 与 GCC TSan 有界全回归通过，TSan 构建仅将 xrt 既有 `atomic_thread_fence` 和 TLS 保守未初始化告警从 error 降为 warning；C11/C++17 公共头及 16 个新增 ABI 符号通过；artifact 容量、SHA-256、分块读取、复用、EOF、篡改、event 淘汰/分页/断层、快照跨 runtime 生命周期和 task 统一事件回归通过；未运行压力或高负载测试 | runtime 以单调 ID、Unix 时间和独立 observability 锁统一 artifact 元数据与 event/audit replay；大工具输出原子落盘，模型只接收有界 head/tail、artifact ID 和相对路径；宿主按游标读取有界 chunk；agent callback、artifact 创建和 task revision 共享事件 ID 空间，字符串深拷贝且按记录数、总字节和单事件文本三重限额保留，淘汰或留存失败显式形成 cursor gap |
 | WORK-111 interruption/resume 语义 | DONE | xrt `9a094b3f` | Windows/GCC 与 Linux/Clang warning-as-error 有界全回归通过；Clang ASan/UBSan/LSan 与 GCC TSan 有界全回归通过，TSan 构建仅将 xrt 既有 `atomic_thread_fence` 和 TLS 保守未初始化告警从 error 降为 warning；C11/C++17 公共头及 9 个新增 ABI 符号通过；崩溃恢复、整批预检、陈旧决策、只读自动重试、显式副作用重试、记为不确定、异步 run 决策深拷贝、事件审计与快照跨 Agent 生命周期回归通过；未运行压力或高负载测试 | 未落账工具结果不再被默认视为“未执行”；恢复快照深拷贝 call ID、参数、目录代和 effect，默认只自动重试当前已知的纯读取工具；未知或有副作用的调用在任何前缀执行前返回 `RECOVERY_REQUIRED`，宿主按 call ID 显式选择 at-least-once 重试或不执行并写入 uncertainty 结果；同步和异步 run 共用策略，审计 schema v2 记录自动、显式和不确定决策 |
 | WORK-112 动态工具所有者生命周期 | DONE | xrt `f514162b`；xserver `c6eb743` | xwork Windows/Linux 有界全回归与 Linux ASan/UBSan 通过；固定目录发布、retain 失败回滚、旧快照持有、子 Agent userdata 重绑定和最终 release 用例通过；三库 50 个生产文件同 revision 逐字节门禁、35 项 xs 结构检查及 Windows/Linux xwork 宿主与嵌套 TCC 探针通过；未运行压力或高负载测试 | xwork 3.1.0 为每个不可变工具目录条目持有可选 callback owner 引用；目录复制独立 retain、销毁精确 release，任一 retain 失败即丢弃候选且不改变已发布代；mdo 可用宿主侧 owner hook 把 TCC generation 保活到最后一个运行或快照结束 |
+| WORK-113 工具调度元数据原子发布 | DONE | xrt `6a8fe19b`；xserver `547a6d6` | xwork Windows/Linux 有界全回归和 Linux ASan/UBSan 通过；固定 reader/publisher 交错验证 replacement 同代发布并发安全与串行组；三库 50 个生产文件同 revision 逐字节门禁、35 项 xs 结构检查及 Windows/Linux xwork 宿主与嵌套 TCC 探针通过；未运行压力或高负载测试 | xwork 3.2.0 将 `parallel-safe` 与 `serial-group` 纳入工具 descriptor，按 source 整批替换可在同一不可变目录代发布 callback、权限、owner 与调度策略；兼容配置 API 继续用于显式单工具换代 |
 | LIB-3 xwork 3.0 | DONE | xrt `9a094b3f`；xserver `57c9164` | xllm 17 个、xllm-session 14 个、xwork 19 个生产文件与同一 xrt revision 双向逐字节一致；TCC 导入分别覆盖 70、89、163 个公开符号；Windows/Linux 全 15 扩展宿主构建、运行与嵌套 TCC 探针通过，32 项扩展结构检查和 2 项发布元数据检查通过；未运行压力或高负载测试 | xserver 删除旧 Python/config 分叉并同步完整 xwork v3 runtime/catalog/task/scheduler/MCP/artifact/recovery 实现；构建门发现只升级 xwork 会缺少 batch executor 与 session driver API，因此三个库统一固定到 `9a094b3f`，避免跨 revision 的伪零分叉组合 |
 | LIB-GATE 三库生产门禁 | DONE | xrt `9a094b3f`；xserver `57c9164` | Windows/Linux warning-as-error、有界功能回归、确定性交错、故障注入与 sanitizer 门已在各工作包通过；最终零分叉、公开符号、15 扩展宿主和双层 TCC 闭包通过；未运行压力或高负载测试 | 阶段三完成，允许进入 mdo 新架构实施；Ling 3.0 Tiny 三接口真实线上探针仍要求运行时提供三条显式 URL 与 key，不以离线 fixture 冒充线上结论 |
 | MDO-0 新源码组织与依赖锁 | DONE | mdo `22c0a33` | 6 项构建契约、锁定依赖完整性、Windows 全新宿主构建、17 项 XRT v1 包清单和隔离目录 8 秒启动通过；空启动未创建 `mdo-home`；未运行压力或高负载测试 | 新 `app/` 与只读 `app_bak/` 分离；以 `deps.lock` 固定跨仓 revision、源码树哈希、ABI/schema/pack 版本；清单生成 unity，统一 Python 构建入口不依赖根目录陈旧宿主 |
