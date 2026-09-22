@@ -6,9 +6,9 @@
 
 | 仓库 | 开发位置/分支 | 当前基线 | 说明 |
 | --- | --- | --- | --- |
-| mdo | `D:\GIT\mdo` / 当前分支 | `aa32d3a` | 产品、计划与集成账本 |
-| xrt | `codex/mdo-refactor-xrt` 独立工作树 | `9a094b3f` | 原工作树有既存未提交内容，隔离开发 |
-| xserver | `D:\GIT\xserver-mdo-refactor` / `codex/mdo-refactor-xs` | `fe3b627` | 原工作树有既存未提交内容，隔离开发 |
+| mdo | `D:\GIT\mdo` / 当前分支 | `31890b4` | 产品、计划与集成账本 |
+| xrt | `codex/mdo-refactor-xrt` 独立工作树 | `f514162b` | 原工作树有既存未提交内容，隔离开发 |
+| xserver | `D:\GIT\xserver-mdo-refactor` / `codex/mdo-refactor-xs` | `c6eb743` | 原工作树有既存未提交内容，隔离开发 |
 
 ## 状态定义
 
@@ -92,11 +92,12 @@
 | WORK-109 可恢复 runtime scheduler | DONE | xrt `2fc7dac2` | Windows/GCC 与 Linux/Clang warning-as-error 有界全回归通过；Clang ASan/UBSan/LSan 与 GCC TSan 有界全回归通过；C11/C++17 公共头独立编译及 12 个新增 ABI 符号通过；到期、固定偏移/系统本地时区、weekday mask、skip/run-once/catch-up misfire、skip/queue-one overlap、稳定同刻排序、无效 ABI/血缘、容量和重启恢复回归通过；未运行压力或高负载测试 | runtime 冷注册并深拷贝 schedule 定义，宿主以显式 Unix 微秒时间单次 claim；每次 claim 原子推进持久化 cursor 并创建统一 RUNNING scheduled task；分钟/小时使用绝对间隔，日/周保持 wall-clock，DST gap 跳过、fold 可选；恢复定义一次锁内发布，不暴露初始 cursor；稳定借用字符串使容量成为 runtime 生命周期注册上限 |
 | WORK-110 artifacts/audit/event 统一 | DONE | xrt `de37b493` | Windows/GCC 与 Linux/Clang warning-as-error 有界全回归通过；Clang ASan/UBSan/LSan 与 GCC TSan 有界全回归通过，TSan 构建仅将 xrt 既有 `atomic_thread_fence` 和 TLS 保守未初始化告警从 error 降为 warning；C11/C++17 公共头及 16 个新增 ABI 符号通过；artifact 容量、SHA-256、分块读取、复用、EOF、篡改、event 淘汰/分页/断层、快照跨 runtime 生命周期和 task 统一事件回归通过；未运行压力或高负载测试 | runtime 以单调 ID、Unix 时间和独立 observability 锁统一 artifact 元数据与 event/audit replay；大工具输出原子落盘，模型只接收有界 head/tail、artifact ID 和相对路径；宿主按游标读取有界 chunk；agent callback、artifact 创建和 task revision 共享事件 ID 空间，字符串深拷贝且按记录数、总字节和单事件文本三重限额保留，淘汰或留存失败显式形成 cursor gap |
 | WORK-111 interruption/resume 语义 | DONE | xrt `9a094b3f` | Windows/GCC 与 Linux/Clang warning-as-error 有界全回归通过；Clang ASan/UBSan/LSan 与 GCC TSan 有界全回归通过，TSan 构建仅将 xrt 既有 `atomic_thread_fence` 和 TLS 保守未初始化告警从 error 降为 warning；C11/C++17 公共头及 9 个新增 ABI 符号通过；崩溃恢复、整批预检、陈旧决策、只读自动重试、显式副作用重试、记为不确定、异步 run 决策深拷贝、事件审计与快照跨 Agent 生命周期回归通过；未运行压力或高负载测试 | 未落账工具结果不再被默认视为“未执行”；恢复快照深拷贝 call ID、参数、目录代和 effect，默认只自动重试当前已知的纯读取工具；未知或有副作用的调用在任何前缀执行前返回 `RECOVERY_REQUIRED`，宿主按 call ID 显式选择 at-least-once 重试或不执行并写入 uncertainty 结果；同步和异步 run 共用策略，审计 schema v2 记录自动、显式和不确定决策 |
+| WORK-112 动态工具所有者生命周期 | DONE | xrt `f514162b`；xserver `c6eb743` | xwork Windows/Linux 有界全回归与 Linux ASan/UBSan 通过；固定目录发布、retain 失败回滚、旧快照持有、子 Agent userdata 重绑定和最终 release 用例通过；三库 50 个生产文件同 revision 逐字节门禁、35 项 xs 结构检查及 Windows/Linux xwork 宿主与嵌套 TCC 探针通过；未运行压力或高负载测试 | xwork 3.1.0 为每个不可变工具目录条目持有可选 callback owner 引用；目录复制独立 retain、销毁精确 release，任一 retain 失败即丢弃候选且不改变已发布代；mdo 可用宿主侧 owner hook 把 TCC generation 保活到最后一个运行或快照结束 |
 | LIB-3 xwork 3.0 | DONE | xrt `9a094b3f`；xserver `57c9164` | xllm 17 个、xllm-session 14 个、xwork 19 个生产文件与同一 xrt revision 双向逐字节一致；TCC 导入分别覆盖 70、89、163 个公开符号；Windows/Linux 全 15 扩展宿主构建、运行与嵌套 TCC 探针通过，32 项扩展结构检查和 2 项发布元数据检查通过；未运行压力或高负载测试 | xserver 删除旧 Python/config 分叉并同步完整 xwork v3 runtime/catalog/task/scheduler/MCP/artifact/recovery 实现；构建门发现只升级 xwork 会缺少 batch executor 与 session driver API，因此三个库统一固定到 `9a094b3f`，避免跨 revision 的伪零分叉组合 |
 | LIB-GATE 三库生产门禁 | DONE | xrt `9a094b3f`；xserver `57c9164` | Windows/Linux warning-as-error、有界功能回归、确定性交错、故障注入与 sanitizer 门已在各工作包通过；最终零分叉、公开符号、15 扩展宿主和双层 TCC 闭包通过；未运行压力或高负载测试 | 阶段三完成，允许进入 mdo 新架构实施；Ling 3.0 Tiny 三接口真实线上探针仍要求运行时提供三条显式 URL 与 key，不以离线 fixture 冒充线上结论 |
 | MDO-0 新源码组织与依赖锁 | DONE | mdo `22c0a33` | 6 项构建契约、锁定依赖完整性、Windows 全新宿主构建、17 项 XRT v1 包清单和隔离目录 8 秒启动通过；空启动未创建 `mdo-home`；未运行压力或高负载测试 | 新 `app/` 与只读 `app_bak/` 分离；以 `deps.lock` 固定跨仓 revision、源码树哈希、ABI/schema/pack 版本；清单生成 unity，统一 Python 构建入口不依赖根目录陈旧宿主 |
 | MDO-1 bootstrap 与双层 Home | DONE | mdo `aa32d3a`；xserver `b00f68f`、`fe3b627` | 12 项源码/构建契约；Windows/Linux 真实 xs/TCC Home 探针覆盖 lazy create、锚定写入、materialize、损坏覆盖阻断、ephemeral、CLI 优先于环境变量；两平台精确锁定宿主构建、21 项 pack 和短时启动通过；Windows 空目录发布启动只保留 `mdo.exe`；未运行压力或高负载测试 | 外部 Home 以高优先级只读 disk provider 覆盖包内 `default-home`，写入独占锚定 `xroot`；`MDO_HOME` 和 `-- --home` 可覆盖；启动创建单个长生命周期 xwork runtime，空启动不创建 Home 或旁路日志 |
-| MDO-2 分层配置系统 | DONE | mdo 本提交 | 17 项源码/构建合同；Windows/Linux 真实 xs/TCC 配置探针覆盖 defaults 隔离、三类用户 patch、未知键保留、环境/CLI 覆盖顺序、明文 secret 拒绝、Ling 保护、预览/导入/导出/恢复、原子保存、备份、损坏输入与受阻临时文件故障注入；GCC warning-as-error；两平台 23 项 pack 短时启动与 lazy Home 通过；Windows GUI 空目录只保留 `mdo.exe`；未运行压力或高负载测试 | 内置基线在 Home overlay 前冻结；对象递归合并、数组/标量替换，只持久化相对 defaults 的差异；状态只在磁盘提交成功后发布；Ling 3.0 Tiny 服务端逐字段保护并声明三种线上协议 |
+| MDO-2 分层配置系统 | DONE | mdo `31890b4` | 17 项源码/构建合同；Windows/Linux 真实 xs/TCC 配置探针覆盖 defaults 隔离、三类用户 patch、未知键保留、环境/CLI 覆盖顺序、明文 secret 拒绝、Ling 保护、预览/导入/导出/恢复、原子保存、备份、损坏输入与受阻临时文件故障注入；GCC warning-as-error；两平台 23 项 pack 短时启动与 lazy Home 通过；Windows GUI 空目录只保留 `mdo.exe`；未运行压力或高负载测试 | 内置基线在 Home overlay 前冻结；对象递归合并、数组/标量替换，只持久化相对 defaults 的差异；状态只在磁盘提交成功后发布；Ling 3.0 Tiny 服务端逐字段保护并声明三种线上协议 |
 | MDO-3～10 | TODO | - | - | 从 Module ABI 开始实施 |
 | QA-RELEASE | TODO | - | - | MDO-GATE 后实施 |
 
@@ -127,7 +128,7 @@
 23. xllm 3.1 的发布真值由 `VERSION`、公开头版本宏和 `manifest.json` 共同约束；默认 CI 只跑有界合同集。Ling 3.0 Tiny 线上专门开放 OpenAI Chat Completions、OpenAI Responses 与 Anthropic Messages 三种接口；严格探针必须同时获得三条显式 URL 和 runtime key，缺配置时在联网前失败，离线 fixture 不得代替线上结论。
 24. xserver 的 xrt extlib 副本以 `UPSTREAM.txt` 中完整 40 位提交为来源锚；`verify_vendored_xrt_lib.py` 同时验证工作树 HEAD 和每个已收录生产文件的 SHA-256。WSL 不能读取 Windows linked-worktree `.git` 路径时，发布构建必须显式传入经过格式校验的 `XS_BUILD_COMMIT`，不能接受 `unknown` 横幅。
 25. xwork v3 的对象生命周期不能继续由短命 session agent 代理：runtime 持有统一任务表，definition 是可共享的不可变策略代，run 独立持有取消、deadline、事件覆盖和 owned result，并反向保活 agent。任务条目以稳定独立分配和引用计数跨 agent 轮换存在，构造完成前不可查找，表摘除只释放表引用，潜在阻塞清理必须在 runtime 锁外执行。
-26. xwork 工具目录以不可变 generation 发布：runtime 更新只替换当前目录，既有 agent 在两次 run 之间显式 adopt；agent 的换代与 run claim 共用状态锁，活动 run 始终固定一代。目录深拷贝描述字符串，callback 与 userdata 仍由来源所有者管理；按 source 的批量替换先构造完整候选再一次发布，失败保留旧代。MCP 为旧代保留 retired proxy 到 client 销毁，保留 snapshot 因而不会在 refresh 后悬空。
+26. xwork 工具目录以不可变 generation 发布：runtime 更新只替换当前目录，既有 agent 在两次 run 之间显式 adopt；agent 的换代与 run claim 共用状态锁，活动 run 始终固定一代。目录深拷贝描述字符串；动态 callback 与 userdata 可通过成对 owner hook 为每个目录条目持有来源 generation，目录复制独立 retain、销毁精确 release。按 source 的批量替换先构造完整候选再一次发布，任一 owner retain 或构造失败都保留旧代。MCP 为旧代保留 retired proxy 到 client 销毁，保留 snapshot 因而不会在 refresh 后悬空。
 27. 工具 effect 是可组合能力位集，不是单一严重度；非只读 descriptor 必须在审批前通过 host-owned writer 提交完整类型化资源，发现失败和未知审批值一律拒绝。权限请求与执行上下文共同携带 Agent、Run、tool call、目录代、取消和绝对 deadline；零 deadline 是手工零初始化上下文的兼容“未设置”值。动态模块使用 result writer 即时复制输出，不能让宿主接管模块分配器产生的指针。
 28. 原生 `ls`、`glob`、`grep` 是 xwork 的可移植只读契约，不根据宿主是否安装 `ls`/`fd`/`rg` 改变语义。目录与结果按 raw UTF-8 字节排序，路径统一为 `/`，glob 默认大小写敏感且 `?` 消费一个 UTF-8 标量；递归不跟随链接并受固定资源上限约束。现有路径的物理解析能拒绝已经越出 workspace 的目标，但它不是防御并发恶意文件系统改名的 OS sandbox。
 29. xwork 的 process、subagent、scheduled task 共用一个显式状态机和 runtime ID 空间；UI/宿主通过引用计数不可变 snapshot 读取所有权、父任务、时间和退出元数据，通过 revision 事件窗口与 stdout/stderr/result 绝对游标增量消费且不抢占模型 `poll` 游标。重启只恢复定义与元数据：pending schedule 保持 pending，终态保持终态，失去 OS 句柄或原生 callback 的活动任务必须变为 `LOST`。模型完成通知和 watchdog 只面向原 owner agent，runtime 查询与显式管理仍可跨 agent 执行。
