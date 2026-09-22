@@ -62,6 +62,11 @@ class BuildContractTests(unittest.TestCase):
         self.assertIn(self.lock["xrt"]["commit"], first)
         self.assertIn(self.lock["xserver"]["commit"], first)
 
+    def test_module_sdk_header_is_generated_byte_for_byte(self) -> None:
+        BUILD.prepare(self.lock)
+        self.assertEqual(BUILD.GENERATED_MODULE_HEADER_PATH.read_bytes(),
+                         BUILD.MODULE_HEADER_PATH.read_bytes())
+
     def test_dev_and_pack_configs_use_the_same_generated_entry(self) -> None:
         dev = json.loads((ROOT / "dev.json").read_text(encoding="utf-8"))
         packed = json.loads((ROOT / "app" / "xs.json").read_text(encoding="utf-8"))

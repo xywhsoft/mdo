@@ -21,6 +21,8 @@ SOURCES_PATH = APP / "sources.json"
 GENERATED = APP / "generated"
 UNITY_PATH = GENERATED / "mdo_unity.c"
 GENERATED_LOCK_PATH = GENERATED / "deps.lock"
+MODULE_HEADER_PATH = ROOT / "include" / "mdo" / "module.h"
+GENERATED_MODULE_HEADER_PATH = GENERATED / "module-sdk" / "mdo" / "module.h"
 HEX40 = re.compile(r"[0-9a-f]{40}\Z")
 
 
@@ -227,6 +229,7 @@ def write_if_changed(path: Path, content: bytes) -> None:
 def prepare(lock: dict) -> None:
     write_if_changed(UNITY_PATH, generated_unity(lock, source_list()).encode("utf-8"))
     write_if_changed(GENERATED_LOCK_PATH, LOCK_PATH.read_bytes())
+    write_if_changed(GENERATED_MODULE_HEADER_PATH, MODULE_HEADER_PATH.read_bytes())
 
 
 def command_text(command: list[str]) -> str:
