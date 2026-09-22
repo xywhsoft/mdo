@@ -1333,6 +1333,11 @@ size_t MdoSkillCatalogCount(const MdoSkillCatalog* pCatalog)
     return pCatalog != NULL ? pCatalog->Count : 0u;
 }
 
+uint64 MdoSkillCatalogGeneration(const MdoSkillCatalog* pCatalog)
+{
+    return pCatalog != NULL ? pCatalog->Generation : 0u;
+}
+
 bool MdoSkillCatalogAt(const MdoSkillCatalog* pCatalog, size_t iIndex,
     MdoSkillInfo* pInfo)
 {

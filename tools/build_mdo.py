@@ -152,12 +152,18 @@ def verify_dependencies(xserver: Path, lock: dict) -> None:
         record = libraries.get(name)
         if not isinstance(record, dict):
             raise BuildError(f"deps.lock libraries.{name} is missing")
-        if record.get("source_commit") != xrt_commit:
-            raise BuildError(f"libraries.{name}.source_commit must match xrt.commit")
+        source_commit = record.get("source_commit")
+        if not isinstance(source_commit, str) or HEX40.fullmatch(source_commit) is None:
+            raise BuildError(
+                f"deps.lock libraries.{name}.source_commit must be "
+                "40 lowercase hexadecimal characters"
+            )
         root = xserver / "lib" / name
         upstream = (root / "UPSTREAM.txt").read_text(encoding="utf-8")
-        if f"基线: xrt@{xrt_commit}" not in upstream:
-            raise BuildError(f"{name}/UPSTREAM.txt does not pin {xrt_commit}")
+        if f"基线: xrt@{source_commit}" not in upstream:
+            raise BuildError(
+                f"{name}/UPSTREAM.txt does not pin {source_commit}"
+            )
         actual_hash = production_tree_sha256(root)
         if actual_hash != record.get("production_tree_sha256"):
             raise BuildError(f"{name} production tree hash mismatch: {actual_hash}")

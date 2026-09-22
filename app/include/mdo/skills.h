@@ -96,6 +96,7 @@ uint64 MdoSkillManagerGeneration(void);
 MdoSkillCatalog* MdoSkillCatalogSnapshot(void);
 MdoSkillCatalog* MdoSkillCatalogRef(MdoSkillCatalog* pCatalog);
 void MdoSkillCatalogRelease(MdoSkillCatalog* pCatalog);
+uint64 MdoSkillCatalogGeneration(const MdoSkillCatalog* pCatalog);
 size_t MdoSkillCatalogCount(const MdoSkillCatalog* pCatalog);
 bool MdoSkillCatalogAt(const MdoSkillCatalog* pCatalog, size_t iIndex,
     MdoSkillInfo* pInfo);

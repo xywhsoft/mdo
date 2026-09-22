@@ -1162,6 +1162,59 @@ bool MdoConfigGetSnapshot(MdoConfigSnapshot* pSnapshot)
     return true;
 }
 
+bool MdoConfigGetAgentSettings(MdoConfigAgentSettings* pSettings)
+{
+    const xvalue* pSettingsValue;
+    const xvalue* pAgent;
+    const xvalue* pPermissions;
+    xstrview Reasoning;
+    xstrview Permission;
+    uint64 MaxTools;
+    uint64 MaxSubagents;
+    uint32 Size;
+    bool Ok = false;
+
+    if ( pSettings == NULL || pSettings->Size < sizeof(*pSettings) ||
+         !g_MdoConfig.Initialized ) {
+        MdoConfigErrorSet(XERR_ARGUMENT, MDO_CONFIG_ERROR_ARGUMENT,
+            "invalid Agent settings request");
+        return false;
+    }
+    Size = pSettings->Size;
+    xrtMutexLock(g_MdoConfig.Lock);
+    pSettingsValue = xrtValueObjectGet(g_MdoConfig.Effective,
+        MdoConfigKey("settings"));
+    pAgent = pSettingsValue != NULL ?
+        xrtValueObjectGet(pSettingsValue, MdoConfigKey("agent")) : NULL;
+    pPermissions = xrtValueObjectGet(g_MdoConfig.Effective,
+        MdoConfigKey("permissions"));
+    if ( pAgent != NULL && pPermissions != NULL &&
+         MdoConfigString(xrtValueObjectGet(pAgent,
+            MdoConfigKey("reasoning_effort")), &Reasoning) &&
+         MdoConfigString(xrtValueObjectGet(pPermissions,
+            MdoConfigKey("default_profile")), &Permission) &&
+         MdoConfigUnsigned(xrtValueObjectGet(pAgent,
+            MdoConfigKey("max_parallel_tools")), &MaxTools) &&
+         MdoConfigUnsigned(xrtValueObjectGet(pAgent,
+            MdoConfigKey("max_parallel_subagents")), &MaxSubagents) &&
+         Reasoning.Size < sizeof(pSettings->ReasoningEffort) &&
+         Permission.Size < sizeof(pSettings->PermissionProfile) &&
+         MaxTools <= UINT32_MAX && MaxSubagents <= UINT32_MAX ) {
+        memset(pSettings, 0, sizeof(*pSettings));
+        pSettings->Size = Size;
+        pSettings->Revision = g_MdoConfig.Revision;
+        pSettings->MaxParallelTools = (uint32)MaxTools;
+        pSettings->MaxParallelSubagents = (uint32)MaxSubagents;
+        memcpy(pSettings->ReasoningEffort, Reasoning.Data, Reasoning.Size);
+        memcpy(pSettings->PermissionProfile, Permission.Data, Permission.Size);
+        Ok = true;
+    }
+    xrtMutexUnlock(g_MdoConfig.Lock);
+    if ( !Ok ) MdoConfigErrorSet(XERR_STATE, MDO_CONFIG_ERROR_STATE,
+        "effective Agent settings are unavailable");
+    return Ok;
+}
+
 str MdoConfigEffectiveJson(size_t* pSize)
 {
     str sJson;

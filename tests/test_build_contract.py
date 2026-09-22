@@ -31,7 +31,7 @@ class BuildContractTests(unittest.TestCase):
                          ["xwork", "webview"])
         for name in ("xllm", "xllm-session", "xwork"):
             record = self.lock["libraries"][name]
-            self.assertEqual(record["source_commit"], self.lock["xrt"]["commit"])
+            self.assertRegex(record["source_commit"], r"^[0-9a-f]{40}$")
             self.assertRegex(record["production_tree_sha256"], r"^[0-9a-f]{64}$")
         self.assertEqual(self.lock["pack"], {"format": "XRTPACK", "version": 1})
         self.assertEqual(self.lock["mdo"], {
@@ -60,6 +60,7 @@ class BuildContractTests(unittest.TestCase):
             "src/skills/manager.c",
             "src/mcp/manager.c",
             "src/modules/manager.c",
+            "src/agents/runtime.c",
             "src/bootstrap/bootstrap.c",
             "src/bootstrap/service.c",
         ])

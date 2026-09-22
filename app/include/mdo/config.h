@@ -29,9 +29,19 @@ typedef struct MdoConfigPreview {
     char Message[256];
 } MdoConfigPreview;
 
+typedef struct MdoConfigAgentSettings {
+    uint32 Size;
+    uint64 Revision;
+    uint32 MaxParallelTools;
+    uint32 MaxParallelSubagents;
+    char ReasoningEffort[32];
+    char PermissionProfile[64];
+} MdoConfigAgentSettings;
+
 bool MdoConfigInit(void);
 void MdoConfigUnit(void);
 bool MdoConfigGetSnapshot(MdoConfigSnapshot* pSnapshot);
+bool MdoConfigGetAgentSettings(MdoConfigAgentSettings* pSettings);
 
 /* Returned strings are owned by the caller and released with xrtFree. */
 str MdoConfigEffectiveJson(size_t* pSize);

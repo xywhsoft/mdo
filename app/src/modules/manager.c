@@ -1325,12 +1325,39 @@ static MdoModuleToolBinding* MdoModulesFindTool(
 
 static bool MdoModulesRuntimeTool(cstr Id, xwork_tool_effects* pEffects)
 {
+    static const struct {
+        const char* Id;
+        xwork_tool_effects Effects;
+    } Builtins[] = {
+        { "read", XWORK_TOOL_EFFECT_READ },
+        { "ls", XWORK_TOOL_EFFECT_READ },
+        { "glob", XWORK_TOOL_EFFECT_READ },
+        { "grep", XWORK_TOOL_EFFECT_READ },
+        { "write", XWORK_TOOL_EFFECT_WORKSPACE_WRITE },
+        { "edit", XWORK_TOOL_EFFECT_WORKSPACE_WRITE },
+        { "spawn", XWORK_TOOL_EFFECT_PROCESS },
+        { "poll", XWORK_TOOL_EFFECT_READ },
+        { "wait", XWORK_TOOL_EFFECT_READ },
+        { "stdin", XWORK_TOOL_EFFECT_PROCESS },
+        { "stop", XWORK_TOOL_EFFECT_PROCESS },
+        { "exec", XWORK_TOOL_EFFECT_PROCESS },
+        { "tool_search", XWORK_TOOL_EFFECT_EXTERNAL_SERVICE },
+        { "tool_load", XWORK_TOOL_EFFECT_EXTERNAL_SERVICE },
+        { "agent", XWORK_TOOL_EFFECT_AGENT_DELEGATION }
+    };
     xwork_tool_catalog* pCatalog =
         xworkRuntimeToolCatalogSnapshot(g_MdoModules.Runtime);
     xwork_tool_info Info;
     bool bFound = false;
     size_t i;
 
+    for ( i = 0u; i < sizeof(Builtins) / sizeof(Builtins[0]); ++i ) {
+        if ( strcmp(Builtins[i].Id, Id) == 0 ) {
+            *pEffects = Builtins[i].Effects;
+            xworkToolCatalogRelease(pCatalog);
+            return true;
+        }
+    }
     if ( pCatalog == NULL ) return false;
     for ( i = 0u; i < xworkToolCatalogCount(pCatalog); ++i ) {
         memset(&Info, 0, sizeof(Info));

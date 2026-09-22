@@ -8,6 +8,7 @@
     "src/skills/manager.c",
     "src/mcp/manager.c",
     "src/modules/manager.c",
+    "src/agents/runtime.c",
     "src/bootstrap/bootstrap.c",
     "src/bootstrap/service.c"
   ]
