@@ -25,6 +25,7 @@ PROBE_SOURCE = r'''
 #include "src/storage/home.c"
 #include "src/config/config.c"
 #include "src/memory/manager.c"
+#include "src/memory/transfer.c"
 
 static void PrintSnapshot(const char *label, MdoMemoryScope scope,
     const char *project) {
@@ -100,6 +101,10 @@ void ServiceInit(XS_HostInfo *host) {
     xwork_agent *isolated = NULL;
     MdoMemoryWriteOptions write;
     MdoMemoryRemoveOptions remove;
+    MdoMemoryImportOptions import_options;
+    MdoMemoryTransferSummary export_summary;
+    MdoMemoryTransferSummary preview_summary;
+    MdoMemoryTransferSummary import_summary;
     xwork_error error;
     ToolProbe tool_probe;
     char *prompt = NULL;
@@ -216,6 +221,105 @@ void ServiceInit(XS_HostInfo *host) {
     if (!MdoMemoryRemove(&remove, &error)) goto done;
     PrintSnapshot("global_removed", MDO_MEMORY_GLOBAL, NULL);
 
+    memset(&export_summary, 0, sizeof(export_summary));
+    export_summary.Size = sizeof(export_summary);
+    if (!MdoMemoryExportDirectory("memory-export", &export_summary, &error)) {
+        printf("export_error=%s\n", error.sMessage); goto done;
+    }
+    printf("directory_export=stores:%zu projects:%zu entries:%zu generation:%llu bytes:%llu\n",
+        export_summary.StoreCount, export_summary.ProjectCount,
+        export_summary.EntryCount,
+        (unsigned long long)export_summary.Generation,
+        (unsigned long long)export_summary.TotalBytes);
+    result = MdoMemoryExportDirectory("memory-export", &export_summary, &error);
+    printf("directory_existing=%d code:%d\n", result ? 1 : 0,
+        (int)error.eCode);
+    memset(&preview_summary, 0, sizeof(preview_summary));
+    preview_summary.Size = sizeof(preview_summary);
+    if (!MdoMemoryPreviewImportDirectory("memory-export", &preview_summary,
+            &error)) {
+        printf("preview_error=%s\n", error.sMessage); goto done;
+    }
+    printf("directory_preview=stores:%zu projects:%zu entries:%zu generation:%llu\n",
+        preview_summary.StoreCount, preview_summary.ProjectCount,
+        preview_summary.EntryCount,
+        (unsigned long long)preview_summary.Generation);
+    {
+        xfile unknown = xrtOpen("memory-export/unknown.txt",
+            XFILE_WRITE | XFILE_CREATE | XFILE_EXCLUSIVE | XFILE_NOFOLLOW);
+        bool invalid_preview;
+        if (unknown == NULL || !xrtWriteFull(unknown, "x", 1u, NULL) ||
+            !xrtClose(unknown)) goto done;
+        unknown = NULL;
+        memset(&import_summary, 0, sizeof(import_summary));
+        import_summary.Size = sizeof(import_summary);
+        invalid_preview = MdoMemoryPreviewImportDirectory("memory-export",
+            &import_summary, &error);
+        printf("directory_unknown=%d code:%d\n", invalid_preview ? 1 : 0,
+            (int)error.eCode);
+        if (!xrtFileDelete("memory-export/unknown.txt")) goto done;
+    }
+    {
+        size_t saved_size = 0u;
+        bytes saved = xrtFileReadAllLimit(
+            "memory-export/projects/project-alpha.json", 5u * 1024u * 1024u,
+            &saved_size);
+        bytes tampered = saved != NULL ? (bytes)xrtMalloc(saved_size + 1u) : NULL;
+        bool invalid_hash;
+        if (saved == NULL || tampered == NULL) {
+            xrtFree(tampered); xrtFree(saved); goto done;
+        }
+        memcpy(tampered, saved, saved_size);
+        tampered[saved_size] = '\n';
+        if (!xrtFileWriteAll(
+                "memory-export/projects/project-alpha.json",
+                (xbytesview){tampered, saved_size + 1u})) {
+            xrtFree(tampered); xrtFree(saved); goto done;
+        }
+        xrtFree(tampered);
+        memset(&import_summary, 0, sizeof(import_summary));
+        import_summary.Size = sizeof(import_summary);
+        invalid_hash = MdoMemoryPreviewImportDirectory("memory-export",
+            &import_summary, &error);
+        printf("directory_hash=%d code:%d\n", invalid_hash ? 1 : 0,
+            (int)error.eCode);
+        if (!xrtFileWriteAll("memory-export/projects/project-alpha.json",
+                (xbytesview){saved, saved_size})) {
+            xrtFree(saved); goto done;
+        }
+        xrtFree(saved);
+    }
+    MdoMemoryImportOptionsInit(&import_options);
+    import_options.Directory = "memory-export";
+    import_options.ExpectedGeneration = preview_summary.Generation - 1u;
+    import_options.Actor = "runtime-probe";
+    import_options.Reason = "portable memory restore";
+    memset(&import_summary, 0, sizeof(import_summary));
+    import_summary.Size = sizeof(import_summary);
+    result = MdoMemoryImportDirectory(&import_options, &import_summary, &error);
+    printf("directory_stale=%d code:%d\n", result ? 1 : 0,
+        (int)error.eCode);
+    if (!MdoHomeRemove("memory/global.json", false) ||
+        !MdoHomeRemove("memory/global.json.bak", false) ||
+        !MdoHomeRemove("memory/projects/project-alpha.json", false) ||
+        !MdoHomeRemove("memory/projects/project-alpha.json.bak", false))
+        goto done;
+    import_options.ExpectedGeneration = preview_summary.Generation;
+    memset(&import_summary, 0, sizeof(import_summary));
+    import_summary.Size = sizeof(import_summary);
+    if (!MdoMemoryImportDirectory(&import_options, &import_summary, &error)) {
+        printf("import_error=%s\n", error.sMessage); goto done;
+    }
+    printf("directory_import=stores:%zu projects:%zu entries:%zu generation:%llu\n",
+        import_summary.StoreCount, import_summary.ProjectCount,
+        import_summary.EntryCount,
+        (unsigned long long)import_summary.Generation);
+    PrintSnapshot("global_imported", MDO_MEMORY_GLOBAL, NULL);
+    PrintSnapshot("project_imported", MDO_MEMORY_PROJECT, "project-alpha");
+    result = MdoMemoryImportDirectory(&import_options, &import_summary, &error);
+    printf("directory_nonempty=%d code:%d\n", result ? 1 : 0,
+        (int)error.eCode);
+
     if (!MdoHomeAtomicWrite("memory/projects/broken.json", invalid,
             sizeof(invalid) - 1u, false)) goto done;
     PrintSnapshot("broken_project", MDO_MEMORY_PROJECT, "broken");
@@ -256,8 +360,12 @@ def write_site(site: Path) -> None:
         "src/storage/home.c",
         "src/config/config.c",
         "src/memory/manager.c",
+        "src/memory/transfer.c",
     ):
         shutil.copy2(ROOT / "app" / relative, site / relative)
+    shutil.copy2(
+        ROOT / "app/src/memory/internal.h", site / "src/memory/internal.h"
+    )
     for name in ("home.h", "config.h", "memory.h"):
         shutil.copy2(ROOT / "app/include/mdo" / name, site / "include/mdo" / name)
     (site / "probe.c").write_text(PROBE_SOURCE, encoding="utf-8")
@@ -354,8 +462,18 @@ def main() -> int:
         assert 'tool_memory_delete=infra:1 success:1' in output, output
         assert "tool_permissions=5 resources:3" in output, output
         assert "global_removed=ok:1 revision:2 count:0 generation:4 code:0" in output, output
+        assert "directory_export=stores:2 projects:1 entries:1 generation:4" in output, output
+        assert "directory_existing=0 code:7" in output, output
+        assert "directory_preview=stores:2 projects:1 entries:1 generation:4" in output, output
+        assert "directory_unknown=0 code:1" in output, output
+        assert "directory_hash=0 code:1" in output, output
+        assert "directory_stale=0 code:7" in output, output
+        assert "directory_import=stores:2 projects:1 entries:1 generation:5" in output, output
+        assert "global_imported=ok:1 revision:2 count:0 generation:5 code:0" in output, output
+        assert "project_imported=ok:1 revision:3 count:1 generation:5 code:0" in output, output
+        assert "directory_nonempty=0 code:7" in output, output
         assert "broken_project=ok:0 revision:0 count:0 generation:0" in output, output
-        assert "project_intact=ok:1 revision:3 count:1 generation:4 code:0" in output, output
+        assert "project_intact=ok:1 revision:3 count:1 generation:5 code:0" in output, output
         assert "probe_done=1" in output, output
 
         global_store = json.loads((home / "memory/global.json").read_text(encoding="utf-8"))
@@ -366,9 +484,10 @@ def main() -> int:
         assert project_store["entries"][0]["id"] == "build-command"
         audit_lines = (home / "memory/audit.jsonl").read_text(encoding="utf-8").splitlines()
         audit = [json.loads(line) for line in audit_lines]
-        assert len(audit) == 5
+        assert len(audit) == 7
         assert [item["operation"] for item in audit] == [
-            "create", "create", "create", "remove", "remove"
+            "create", "create", "create", "remove", "remove",
+            "import", "import"
         ]
         assert all(item["phase"] == "prepared" for item in audit)
         assert all("content" not in item for item in audit)
@@ -376,8 +495,22 @@ def main() -> int:
             b"Prefer compact diffs and explicit validation.").hexdigest()
         assert audit[3]["content_sha256"] == ""
         assert audit[4]["content_sha256"] == ""
+        assert audit[5]["content_sha256"] and audit[6]["content_sha256"]
         serialized = "\n".join(audit_lines).lower()
         assert "password" not in serialized and "should-not-persist" not in serialized
+        export_root = site / "memory-export"
+        export_manifest = json.loads((export_root / "manifest.json").read_text(
+            encoding="utf-8"
+        ))
+        assert export_manifest["kind"] == "mdo-memory-directory"
+        assert export_manifest["store_count"] == 2
+        assert [item["path"] for item in export_manifest["files"]] == [
+            "global.json", "projects/project-alpha.json"
+        ]
+        for item in export_manifest["files"]:
+            data = (export_root / item["path"]).read_bytes()
+            assert len(data) == item["bytes"]
+            assert hashlib.sha256(data).hexdigest() == item["sha256"]
     print("memory runtime probe: PASS")
     return 0
 

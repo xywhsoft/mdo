@@ -58,6 +58,25 @@ class MemoryContractTests(unittest.TestCase):
         self.assertIn("MEMORY_REFERENCE_DATA_JSONL_BEGIN", memory_source)
         self.assertIn("untrusted reference data", memory_source)
 
+    def test_directory_transfer_is_manifested_validated_and_non_destructive(self) -> None:
+        header = (ROOT / "app/include/mdo/memory.h").read_text(encoding="utf-8")
+        source = (ROOT / "app/src/memory/transfer.c").read_text(encoding="utf-8")
+        manifest = (ROOT / "app/sources.json").read_text(encoding="utf-8")
+        for symbol in (
+            "MdoMemoryExportDirectory",
+            "MdoMemoryPreviewImportDirectory",
+            "MdoMemoryImportDirectory",
+            "MdoMemoryTransferSummary",
+        ):
+            self.assertIn(symbol, header)
+        self.assertIn('"src/memory/transfer.c"', manifest)
+        self.assertIn('"mdo-memory-directory"', source)
+        self.assertIn("manifest.json", source)
+        self.assertIn("sha256", source)
+        self.assertIn("XFILE_NOFOLLOW", source)
+        self.assertIn("destination already exists", source)
+        self.assertIn("MdoMemoryInternalImportEmpty", source)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -59,6 +59,7 @@ class BuildContractTests(unittest.TestCase):
             "src/models/catalog.c",
             "src/skills/manager.c",
             "src/memory/manager.c",
+            "src/memory/transfer.c",
             "src/web/manager.c",
             "src/mcp/manager.c",
             "src/modules/manager.c",

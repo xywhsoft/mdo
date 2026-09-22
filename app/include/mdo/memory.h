@@ -58,12 +58,30 @@ typedef struct MdoMemoryRemoveOptions {
     const char* Reason;
 } MdoMemoryRemoveOptions;
 
+typedef struct MdoMemoryTransferSummary {
+    uint32 Size;
+    uint64 Generation;  /* target generation for preview/import consistency. */
+    size_t StoreCount;
+    size_t ProjectCount;
+    size_t EntryCount;
+    uint64 TotalBytes;
+} MdoMemoryTransferSummary;
+
+typedef struct MdoMemoryImportOptions {
+    uint32 Size;
+    const char* Directory;
+    uint64 ExpectedGeneration; /* UINT64_MAX skips the preview generation. */
+    const char* Actor;
+    const char* Reason;
+} MdoMemoryImportOptions;
+
 bool MdoMemoryManagerInit(xwork_runtime* Runtime);
 void MdoMemoryManagerUnit(void);
 uint64 MdoMemoryManagerGeneration(void);
 
 void MdoMemoryWriteOptionsInit(MdoMemoryWriteOptions* Options);
 void MdoMemoryRemoveOptionsInit(MdoMemoryRemoveOptions* Options);
+void MdoMemoryImportOptionsInit(MdoMemoryImportOptions* Options);
 
 MdoMemorySnapshot* MdoMemorySnapshotCreate(MdoMemoryScope Scope,
     const char* ProjectId, xwork_error* Error);
@@ -81,6 +99,16 @@ bool MdoMemoryUpsert(const MdoMemoryWriteOptions* Options,
     xwork_error* Error);
 bool MdoMemoryRemove(const MdoMemoryRemoveOptions* Options,
     xwork_error* Error);
+
+/* Directory exports use a readable manifest/global/projects layout and require
+ * a destination that does not exist. Preview fully validates an import without
+ * writing. Import refuses to overwrite any existing global or project store. */
+bool MdoMemoryExportDirectory(const char* Directory,
+    MdoMemoryTransferSummary* Summary, xwork_error* Error);
+bool MdoMemoryPreviewImportDirectory(const char* Directory,
+    MdoMemoryTransferSummary* Summary, xwork_error* Error);
+bool MdoMemoryImportDirectory(const MdoMemoryImportOptions* Options,
+    MdoMemoryTransferSummary* Summary, xwork_error* Error);
 
 /* Builds a bounded owned prompt fragment from one atomic global/project view.
  * The caller releases it with xrtFree. Empty memory returns an empty string. */

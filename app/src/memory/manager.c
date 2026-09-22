@@ -4,6 +4,7 @@
 #include "../../include/mdo/home.h"
 #include "../../include/mdo/config.h"
 #include "../../include/mdo/memory.h"
+#include "internal.h"
 
 #define MDO_MEMORY_SCHEMA_VERSION 1u
 #define MDO_MEMORY_MAX_ENTRIES 256u
@@ -88,7 +89,7 @@ static bool MdoMemoryText(const char* Text, size_t Capacity,
         xrtUtf8Valid(xrtStrViewN(Text, Size), NULL);
 }
 
-static bool MdoMemoryId(const char* Text, size_t Capacity)
+bool MdoMemoryInternalId(const char* Text, size_t Capacity)
 {
     size_t i = 0u;
     if ( !MdoMemoryText(Text, Capacity, false) ) return false;
@@ -150,7 +151,8 @@ static bool MdoMemoryRequest(MdoMemoryScope Scope, const char* ProjectId,
         Written = snprintf(Path, MDO_MEMORY_PATH_CAPACITY,
             "memory/global.json");
     } else if ( Scope == MDO_MEMORY_PROJECT &&
-               MdoMemoryId(ProjectId, MDO_MEMORY_PROJECT_CAPACITY) ) {
+               MdoMemoryInternalId(ProjectId,
+                   MDO_MEMORY_PROJECT_CAPACITY) ) {
         Written = snprintf(Path, MDO_MEMORY_PATH_CAPACITY,
             "memory/projects/%s.json", ProjectId);
     } else return false;
@@ -307,7 +309,7 @@ static bool MdoMemoryParseEntry(const xvalue* Value, MdoMemoryEntry* Entry)
             MDO_MEMORY_TITLE_CAPACITY, true) ||
          !MdoMemoryCopyView(&Entry->Content, Content,
             MDO_MEMORY_CONTENT_LIMIT + 1u, false) ||
-         !MdoMemoryId(Entry->Id, MDO_MEMORY_ID_CAPACITY) ||
+         !MdoMemoryInternalId(Entry->Id, MDO_MEMORY_ID_CAPACITY) ||
          MdoMemorySensitive(Entry->Title) ||
          MdoMemorySensitive(Entry->Content) ) return false;
     Entry->TagCount = xrtValueCount(Tags);
@@ -345,7 +347,7 @@ static int MdoMemoryEntryCompare(const void* LeftValue,
     return strcmp(Left->Id, Right->Id);
 }
 
-static MdoMemorySnapshot* MdoMemoryParse(MdoMemoryScope Scope,
+MdoMemorySnapshot* MdoMemoryInternalParse(MdoMemoryScope Scope,
     const char* ProjectId, xstrview Json)
 {
     xjsonreadconfig Config;
@@ -425,14 +427,15 @@ static MdoMemorySnapshot* MdoMemoryLoad(MdoMemoryScope Scope,
         MdoMemoryXrtError(Error, "cannot read the memory store");
         return NULL;
     }
-    Snapshot = MdoMemoryParse(Scope, ProjectId, xrtStrViewN(Data, Size));
+    Snapshot = MdoMemoryInternalParse(Scope, ProjectId,
+        xrtStrViewN(Data, Size));
     xrtFree(Data);
     if ( Snapshot == NULL ) MdoMemoryError(Error, XWORK_ERROR_IO,
         "memory store does not satisfy schema version 1");
     return Snapshot;
 }
 
-static char* MdoMemoryJson(const MdoMemorySnapshot* Snapshot, size_t* Size)
+char* MdoMemoryInternalJson(const MdoMemorySnapshot* Snapshot, size_t* Size)
 {
     xvalue* Root = xrtValueObject();
     xvalue* Entries = xrtValueArray();
@@ -620,7 +623,7 @@ static bool MdoMemoryWriteStore(const char* Path,
     char* Json;
     size_t Size = 0u;
     bool Ok;
-    Json = MdoMemoryJson(Snapshot, &Size);
+    Json = MdoMemoryInternalJson(Snapshot, &Size);
     if ( Json == NULL ) {
         MdoMemoryError(Error, XWORK_ERROR_LIMIT,
             "memory store exceeds its size or allocation limit");
@@ -645,6 +648,180 @@ static bool MdoMemoryAuditTextValid(const char* Text, bool EmptyAllowed)
 {
     return Text == NULL || MdoMemoryText(Text, MDO_MEMORY_AUDIT_TEXT_LIMIT,
         EmptyAllowed);
+}
+
+bool MdoMemoryInternalTransferBegin(uint64* Generation, xwork_error* Error)
+{
+    xworkErrorInit(Error);
+    if ( !g_MdoMemory.Initialized ) {
+        MdoMemoryError(Error, XWORK_ERROR_CONTEXT,
+            "memory manager is not initialized");
+        return false;
+    }
+    xrtMutexLock(g_MdoMemory.Lock);
+    if ( !MdoMemoryWriterLock(Error) ) {
+        xrtMutexUnlock(g_MdoMemory.Lock);
+        return false;
+    }
+    if ( Generation != NULL ) *Generation = g_MdoMemory.Generation;
+    return true;
+}
+
+void MdoMemoryInternalTransferEnd(void)
+{
+    if ( g_MdoMemory.Lock != NULL ) xrtMutexUnlock(g_MdoMemory.Lock);
+}
+
+static bool MdoMemoryImportTargetEmpty(xwork_error* Error)
+{
+    static const char* const Paths[] = {
+        "memory/global.json", "memory/global.json.bak"
+    };
+    xfileinfo Info;
+    xdir Directory = NULL;
+    xdirentry Entry;
+    xdirnext Next;
+    bool Exists;
+    size_t i;
+    for ( i = 0u; i < sizeof(Paths) / sizeof(Paths[0]); ++i ) {
+        if ( !MdoHomeExternalStat(Paths[i], &Exists, &Info) ) {
+            MdoMemoryXrtError(Error, "cannot inspect the memory import target");
+            return false;
+        }
+        if ( Exists ) {
+            MdoMemoryError(Error, XWORK_ERROR_CONTEXT,
+                "memory import requires an empty target store");
+            return false;
+        }
+    }
+    if ( !MdoHomeExternalStat("memory/projects", &Exists, &Info) ) {
+        MdoMemoryXrtError(Error, "cannot inspect project memory storage");
+        return false;
+    }
+    if ( !Exists ) return true;
+    if ( Info.Type != XFILE_TYPE_DIRECTORY ) {
+        MdoMemoryError(Error, XWORK_ERROR_IO,
+            "project memory storage is not a directory");
+        return false;
+    }
+    Directory = MdoHomeOpenDirectory("memory/projects", XDIR_STAT);
+    if ( Directory == NULL ) {
+        MdoMemoryXrtError(Error, "cannot enumerate project memory storage");
+        return false;
+    }
+    memset(&Entry, 0, sizeof(Entry));
+    while ( (Next = xrtDirNext(Directory, &Entry)) == XDIR_NEXT_ITEM ) {
+        MdoMemoryError(Error, XWORK_ERROR_CONTEXT,
+            "memory import requires an empty project store directory");
+        (void)xrtDirClose(Directory);
+        return false;
+    }
+    if ( Next == XDIR_NEXT_ERROR ) {
+        (void)xrtDirClose(Directory);
+        MdoMemoryXrtError(Error, "cannot enumerate project memory storage");
+        return false;
+    }
+    if ( !xrtDirClose(Directory) ) {
+        MdoMemoryXrtError(Error, "cannot enumerate project memory storage");
+        return false;
+    }
+    return true;
+}
+
+static bool MdoMemoryImportCandidatesValid(
+    const MdoMemoryImportCandidate* Stores, size_t StoreCount)
+{
+    size_t i;
+    size_t j;
+    bool Global = false;
+    if ( StoreCount > MDO_MEMORY_MAX_ENTRIES + 1u ||
+         (StoreCount != 0u && Stores == NULL) ) return false;
+    for ( i = 0u; i < StoreCount; ++i ) {
+        char Expected[MDO_MEMORY_PATH_CAPACITY];
+        if ( Stores[i].Snapshot == NULL || Stores[i].Path == NULL ||
+             !MdoMemoryRequest(Stores[i].Scope, Stores[i].ProjectId,
+                Expected) || strcmp(Expected, Stores[i].Path) != 0 ||
+             Stores[i].Snapshot->Scope != Stores[i].Scope ||
+             Stores[i].Snapshot->Revision == 0u ||
+             strcmp(Stores[i].Snapshot->ProjectId,
+                Stores[i].ProjectId != NULL ? Stores[i].ProjectId : "") != 0 )
+            return false;
+        if ( Stores[i].Scope == MDO_MEMORY_GLOBAL ) {
+            if ( Global ) return false;
+            Global = true;
+        }
+        for ( j = 0u; j < i; ++j )
+            if ( strcmp(Stores[j].Path, Stores[i].Path) == 0 ) return false;
+    }
+    return true;
+}
+
+bool MdoMemoryInternalImportEmpty(
+    const MdoMemoryImportCandidate* Stores, size_t StoreCount,
+    uint64 ExpectedGeneration, const char* Actor, const char* Reason,
+    uint64* Generation, xwork_error* Error)
+{
+    size_t i;
+    size_t Published = 0u;
+    uint64 Current = 0u;
+    bool Ok = false;
+    xworkErrorInit(Error);
+    if ( !MdoMemoryImportCandidatesValid(Stores, StoreCount) ||
+         !MdoMemoryAuditTextValid(Actor, false) ||
+         !MdoMemoryAuditTextValid(Reason, true) ||
+         (Actor != NULL && MdoMemorySensitive(Actor)) ||
+         (Reason != NULL && MdoMemorySensitive(Reason)) ) {
+        MdoMemoryError(Error, XWORK_ERROR_INVALID_ARGUMENT,
+            "invalid memory directory import request");
+        return false;
+    }
+    if ( !MdoMemoryInternalTransferBegin(&Current, Error) ) return false;
+    if ( ExpectedGeneration != UINT64_MAX &&
+         ExpectedGeneration != Current ) {
+        MdoMemoryError(Error, XWORK_ERROR_CONTEXT,
+            "memory changed after import preview");
+        goto done;
+    }
+    if ( !MdoMemoryImportTargetEmpty(Error) ) goto done;
+    for ( i = 0u; i < StoreCount; ++i ) {
+        const MdoMemorySnapshot* Snapshot = Stores[i].Snapshot;
+        char* Json;
+        size_t JsonSize = 0u;
+        Json = MdoMemoryInternalJson(Snapshot, &JsonSize);
+        if ( Json == NULL ) {
+            MdoMemoryError(Error, XWORK_ERROR_OUT_OF_MEMORY,
+                "cannot serialize imported memory store");
+            goto rollback;
+        }
+        if ( !MdoMemoryAudit("import", Stores[i].Scope,
+                Stores[i].ProjectId, "", 0u,
+                MdoMemorySnapshotRevision(Snapshot), Actor, NULL, Reason,
+                Json, JsonSize, Error) ) {
+            xrtFree(Json);
+            goto rollback;
+        }
+        xrtFree(Json);
+        if ( !MdoMemoryWriteStore(Stores[i].Path, Snapshot, Error) )
+            goto rollback;
+        ++Published;
+    }
+    if ( StoreCount != 0u && g_MdoMemory.Generation != UINT64_MAX )
+        ++g_MdoMemory.Generation;
+    Current = g_MdoMemory.Generation;
+    Ok = true;
+    goto done;
+rollback:
+    {
+        bool RolledBack = true;
+        for ( i = 0u; i < Published; ++i )
+            if ( !MdoHomeRemove(Stores[i].Path, false) ) RolledBack = false;
+        if ( !RolledBack ) MdoMemoryError(Error, XWORK_ERROR_IO,
+            "memory import failed and could not fully roll back");
+    }
+done:
+    if ( Generation != NULL ) *Generation = Current;
+    MdoMemoryInternalTransferEnd();
+    return Ok;
 }
 
 static bool MdoMemoryToolArguments(const char* Json, xvalue** Root)
@@ -1477,9 +1654,9 @@ bool MdoMemoryAgentBind(xwork_agent* Agent, const char* ProjectId,
     xworkErrorInit(Error);
     if ( !g_MdoMemory.Initialized || Agent == NULL ||
          (ProjectId != NULL && ProjectId[0] != '\0' &&
-          !MdoMemoryId(ProjectId, MDO_MEMORY_PROJECT_CAPACITY)) ||
+          !MdoMemoryInternalId(ProjectId, MDO_MEMORY_PROJECT_CAPACITY)) ||
          (SessionId != NULL && SessionId[0] != '\0' &&
-          !MdoMemoryId(SessionId, MDO_MEMORY_PROJECT_CAPACITY)) ) {
+          !MdoMemoryInternalId(SessionId, MDO_MEMORY_PROJECT_CAPACITY)) ) {
         MdoMemoryError(Error, XWORK_ERROR_INVALID_ARGUMENT,
             "invalid Agent memory binding");
         return false;
@@ -1784,7 +1961,7 @@ static bool MdoMemoryWriteValid(const MdoMemoryWriteOptions* Options,
     size_t i;
     if ( Options == NULL || Options->Size < sizeof(*Options) ||
          !MdoMemoryRequest(Options->Scope, Options->ProjectId, Path) ||
-         !MdoMemoryId(Options->Id, MDO_MEMORY_ID_CAPACITY) ||
+         !MdoMemoryInternalId(Options->Id, MDO_MEMORY_ID_CAPACITY) ||
          !MdoMemoryText(Options->Title, MDO_MEMORY_TITLE_CAPACITY, true) ||
          !MdoMemoryText(Options->Content, MDO_MEMORY_CONTENT_LIMIT + 1u,
             false) || Options->TagCount > MDO_MEMORY_MAX_TAGS ||
@@ -1943,7 +2120,7 @@ bool MdoMemoryRemove(const MdoMemoryRemoveOptions* Options,
     if ( !g_MdoMemory.Initialized || Options == NULL ||
          Options->Size < sizeof(*Options) ||
          !MdoMemoryRequest(Options->Scope, Options->ProjectId, Path) ||
-         !MdoMemoryId(Options->Id, MDO_MEMORY_ID_CAPACITY) ||
+         !MdoMemoryInternalId(Options->Id, MDO_MEMORY_ID_CAPACITY) ||
          !MdoMemoryAuditTextValid(Options->Actor, false) ||
          !MdoMemoryAuditTextValid(Options->SessionId, true) ||
          !MdoMemoryAuditTextValid(Options->Reason, true) ||
