@@ -4,32 +4,6 @@
 #include "../../include/mdo/bootstrap.h"
 #include "../../include/mdo/version.h"
 
-static bool MdoApiSetString(xvalue* Object, cstr Key, cstr Value)
-{
-    return xrtValueObjectSetNew(Object, xrtStrView(Key),
-        xrtValueString(xrtStrView(Value != NULL ? Value : "")));
-}
-
-static bool MdoApiSetUInt(xvalue* Object, cstr Key, uint64 Value)
-{
-    return xrtValueObjectSetNew(Object, xrtStrView(Key), xrtValueUInt(Value));
-}
-
-static bool MdoApiSetBool(xvalue* Object, cstr Key, bool Value)
-{
-    return xrtValueObjectSetNew(Object, xrtStrView(Key), xrtValueBool(Value));
-}
-
-static bool MdoApiSetObjectTake(xvalue* Object, cstr Key, xvalue** pChild)
-{
-    xvalue* Child;
-
-    if ( pChild == NULL || *pChild == NULL ) return false;
-    Child = *pChild;
-    *pChild = NULL;
-    return xrtValueObjectSetNew(Object, xrtStrView(Key), Child);
-}
-
 static cstr MdoApiBootstrapStageText(MdoBootstrapStage Stage)
 {
     switch ( Stage ) {
@@ -82,79 +56,79 @@ static xvalue* MdoApiBootstrapData(const MdoBootstrapSnapshot* Snapshot)
         Modules != NULL && Schedules != NULL && Sessions != NULL;
 
     if ( Ok ) Ok =
-        MdoApiSetString(Data, "version", MDO_VERSION_TEXT) &&
-        MdoApiSetBool(Data, "ready", Snapshot->Ready) &&
-        MdoApiSetString(Data, "stage", MdoApiBootstrapStageText(Snapshot->Stage)) &&
-        MdoApiSetUInt(Data, "stage_code", (uint64)Snapshot->Stage) &&
-        MdoApiSetString(Data, "message", Snapshot->Message) &&
-        MdoApiSetUInt(Data, "defaults_bytes", Snapshot->DefaultsBytes);
+        MdoApiValueSetString(Data, "version", MDO_VERSION_TEXT) &&
+        MdoApiValueSetBool(Data, "ready", Snapshot->Ready) &&
+        MdoApiValueSetString(Data, "stage", MdoApiBootstrapStageText(Snapshot->Stage)) &&
+        MdoApiValueSetUInt(Data, "stage_code", (uint64)Snapshot->Stage) &&
+        MdoApiValueSetString(Data, "message", Snapshot->Message) &&
+        MdoApiValueSetUInt(Data, "defaults_bytes", Snapshot->DefaultsBytes);
     if ( Ok ) Ok =
-        MdoApiSetString(Home, "mode",
+        MdoApiValueSetString(Home, "mode",
             MdoApiPersistenceText(Snapshot->Home.Persistence)) &&
-        MdoApiSetBool(Home, "external_overlay", Snapshot->Home.ExternalOverlay) &&
-        MdoApiSetString(Home, "path", Snapshot->Home.Path) &&
-        MdoApiSetString(Home, "message", Snapshot->Home.Message) &&
-        MdoApiSetObjectTake(Data, "home", &Home);
+        MdoApiValueSetBool(Home, "external_overlay", Snapshot->Home.ExternalOverlay) &&
+        MdoApiValueSetString(Home, "path", Snapshot->Home.Path) &&
+        MdoApiValueSetString(Home, "message", Snapshot->Home.Message) &&
+        MdoApiValueSetTake(Data, "home", &Home);
     if ( Ok ) Ok =
-        MdoApiSetBool(Patches, "settings",
+        MdoApiValueSetBool(Patches, "settings",
             Snapshot->Config.UserPatch[MDO_CONFIG_SETTINGS]) &&
-        MdoApiSetBool(Patches, "models",
+        MdoApiValueSetBool(Patches, "models",
             Snapshot->Config.UserPatch[MDO_CONFIG_MODELS]) &&
-        MdoApiSetBool(Patches, "permissions",
+        MdoApiValueSetBool(Patches, "permissions",
             Snapshot->Config.UserPatch[MDO_CONFIG_PERMISSIONS]) &&
-        MdoApiSetUInt(Config, "schema_version", Snapshot->Config.SchemaVersion) &&
-        MdoApiSetUInt(Config, "revision", Snapshot->Config.Revision) &&
-        MdoApiSetBool(Config, "runtime_override", Snapshot->Config.RuntimeOverride) &&
-        MdoApiSetUInt(Config, "effective_bytes", Snapshot->Config.EffectiveBytes) &&
-        MdoApiSetObjectTake(Config, "user_patches", &Patches);
-    if ( Ok ) Ok = MdoApiSetObjectTake(Data, "config", &Config);
+        MdoApiValueSetUInt(Config, "schema_version", Snapshot->Config.SchemaVersion) &&
+        MdoApiValueSetUInt(Config, "revision", Snapshot->Config.Revision) &&
+        MdoApiValueSetBool(Config, "runtime_override", Snapshot->Config.RuntimeOverride) &&
+        MdoApiValueSetUInt(Config, "effective_bytes", Snapshot->Config.EffectiveBytes) &&
+        MdoApiValueSetTake(Config, "user_patches", &Patches);
+    if ( Ok ) Ok = MdoApiValueSetTake(Data, "config", &Config);
     if ( Ok ) Ok =
-        MdoApiSetUInt(Models, "generation", Snapshot->ModelGeneration) &&
-        MdoApiSetUInt(Models, "providers", Snapshot->ModelProviderCount) &&
-        MdoApiSetUInt(Models, "models", Snapshot->ModelCount) &&
-        MdoApiSetUInt(Skills, "generation", Snapshot->SkillGeneration) &&
-        MdoApiSetUInt(Skills, "items", Snapshot->SkillCount) &&
-        MdoApiSetUInt(Skills, "diagnostics", Snapshot->SkillDiagnosticCount) &&
-        MdoApiSetUInt(Memory, "generation", Snapshot->MemoryGeneration) &&
-        MdoApiSetUInt(Memory, "global_items", Snapshot->GlobalMemoryCount) &&
-        MdoApiSetBool(Web, "enabled", Snapshot->WebEnabled) &&
-        MdoApiSetUInt(Web, "documents", Snapshot->WebDocumentCount) &&
-        MdoApiSetUInt(Web, "max_documents", Snapshot->WebMaxDocuments) &&
-        MdoApiSetUInt(Web, "requests_completed", Snapshot->WebRequestsCompleted) &&
-        MdoApiSetUInt(Web, "requests_failed", Snapshot->WebRequestsFailed) &&
-        MdoApiSetUInt(Mcp, "generation", Snapshot->McpGeneration) &&
-        MdoApiSetUInt(Mcp, "servers", Snapshot->McpServerCount) &&
-        MdoApiSetUInt(Mcp, "diagnostics", Snapshot->McpDiagnosticCount) &&
-        MdoApiSetUInt(Modules, "generation", Snapshot->ModuleGeneration) &&
-        MdoApiSetUInt(Modules, "modules", Snapshot->ModuleCount) &&
-        MdoApiSetUInt(Modules, "tools", Snapshot->ModuleToolCount) &&
-        MdoApiSetUInt(Modules, "agents", Snapshot->ModuleAgentCount) &&
-        MdoApiSetUInt(Modules, "diagnostics", Snapshot->ModuleDiagnosticCount) &&
-        MdoApiSetUInt(Schedules, "generation", Snapshot->ScheduleGeneration) &&
-        MdoApiSetUInt(Schedules, "items", Snapshot->ScheduleCount) &&
-        MdoApiSetUInt(Schedules, "diagnostics",
+        MdoApiValueSetUInt(Models, "generation", Snapshot->ModelGeneration) &&
+        MdoApiValueSetUInt(Models, "providers", Snapshot->ModelProviderCount) &&
+        MdoApiValueSetUInt(Models, "models", Snapshot->ModelCount) &&
+        MdoApiValueSetUInt(Skills, "generation", Snapshot->SkillGeneration) &&
+        MdoApiValueSetUInt(Skills, "items", Snapshot->SkillCount) &&
+        MdoApiValueSetUInt(Skills, "diagnostics", Snapshot->SkillDiagnosticCount) &&
+        MdoApiValueSetUInt(Memory, "generation", Snapshot->MemoryGeneration) &&
+        MdoApiValueSetUInt(Memory, "global_items", Snapshot->GlobalMemoryCount) &&
+        MdoApiValueSetBool(Web, "enabled", Snapshot->WebEnabled) &&
+        MdoApiValueSetUInt(Web, "documents", Snapshot->WebDocumentCount) &&
+        MdoApiValueSetUInt(Web, "max_documents", Snapshot->WebMaxDocuments) &&
+        MdoApiValueSetUInt(Web, "requests_completed", Snapshot->WebRequestsCompleted) &&
+        MdoApiValueSetUInt(Web, "requests_failed", Snapshot->WebRequestsFailed) &&
+        MdoApiValueSetUInt(Mcp, "generation", Snapshot->McpGeneration) &&
+        MdoApiValueSetUInt(Mcp, "servers", Snapshot->McpServerCount) &&
+        MdoApiValueSetUInt(Mcp, "diagnostics", Snapshot->McpDiagnosticCount) &&
+        MdoApiValueSetUInt(Modules, "generation", Snapshot->ModuleGeneration) &&
+        MdoApiValueSetUInt(Modules, "modules", Snapshot->ModuleCount) &&
+        MdoApiValueSetUInt(Modules, "tools", Snapshot->ModuleToolCount) &&
+        MdoApiValueSetUInt(Modules, "agents", Snapshot->ModuleAgentCount) &&
+        MdoApiValueSetUInt(Modules, "diagnostics", Snapshot->ModuleDiagnosticCount) &&
+        MdoApiValueSetUInt(Schedules, "generation", Snapshot->ScheduleGeneration) &&
+        MdoApiValueSetUInt(Schedules, "items", Snapshot->ScheduleCount) &&
+        MdoApiValueSetUInt(Schedules, "diagnostics",
             Snapshot->ScheduleDiagnosticCount) &&
-        MdoApiSetBool(Schedules, "enabled", Snapshot->SchedulesEnabled) &&
-        MdoApiSetBool(Schedules, "automatic",
+        MdoApiValueSetBool(Schedules, "enabled", Snapshot->SchedulesEnabled) &&
+        MdoApiValueSetBool(Schedules, "automatic",
             Snapshot->ScheduleExecutorAutomatic) &&
-        MdoApiSetUInt(Schedules, "active_runs", Snapshot->ScheduleActiveRuns) &&
-        MdoApiSetUInt(Schedules, "runs_completed",
+        MdoApiValueSetUInt(Schedules, "active_runs", Snapshot->ScheduleActiveRuns) &&
+        MdoApiValueSetUInt(Schedules, "runs_completed",
             Snapshot->ScheduleRunsCompleted) &&
-        MdoApiSetUInt(Schedules, "runs_failed", Snapshot->ScheduleRunsFailed) &&
-        MdoApiSetUInt(Sessions, "generation", Snapshot->SessionGeneration) &&
-        MdoApiSetUInt(Sessions, "items", Snapshot->SessionCount) &&
-        MdoApiSetUInt(Sessions, "diagnostics",
+        MdoApiValueSetUInt(Schedules, "runs_failed", Snapshot->ScheduleRunsFailed) &&
+        MdoApiValueSetUInt(Sessions, "generation", Snapshot->SessionGeneration) &&
+        MdoApiValueSetUInt(Sessions, "items", Snapshot->SessionCount) &&
+        MdoApiValueSetUInt(Sessions, "diagnostics",
             Snapshot->SessionDiagnosticCount);
     if ( Ok ) Ok =
-        MdoApiSetObjectTake(Resources, "models", &Models) &&
-        MdoApiSetObjectTake(Resources, "skills", &Skills) &&
-        MdoApiSetObjectTake(Resources, "memory", &Memory) &&
-        MdoApiSetObjectTake(Resources, "web", &Web) &&
-        MdoApiSetObjectTake(Resources, "mcp", &Mcp) &&
-        MdoApiSetObjectTake(Resources, "modules", &Modules) &&
-        MdoApiSetObjectTake(Resources, "schedules", &Schedules) &&
-        MdoApiSetObjectTake(Resources, "sessions", &Sessions);
-    if ( Ok ) Ok = MdoApiSetObjectTake(Data, "resources", &Resources);
+        MdoApiValueSetTake(Resources, "models", &Models) &&
+        MdoApiValueSetTake(Resources, "skills", &Skills) &&
+        MdoApiValueSetTake(Resources, "memory", &Memory) &&
+        MdoApiValueSetTake(Resources, "web", &Web) &&
+        MdoApiValueSetTake(Resources, "mcp", &Mcp) &&
+        MdoApiValueSetTake(Resources, "modules", &Modules) &&
+        MdoApiValueSetTake(Resources, "schedules", &Schedules) &&
+        MdoApiValueSetTake(Resources, "sessions", &Sessions);
+    if ( Ok ) Ok = MdoApiValueSetTake(Data, "resources", &Resources);
 
     xrtValueRelease(Home);
     xrtValueRelease(Config);

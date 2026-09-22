@@ -16,6 +16,16 @@ typedef struct MdoApiContext {
 
 typedef bool (*MdoApiRouteProc)(MdoApiContext* pContext);
 
+bool MdoApiValueSetString(xvalue* Object, cstr Key, cstr Value);
+bool MdoApiValueSetUInt(xvalue* Object, cstr Key, uint64 Value);
+bool MdoApiValueSetInt(xvalue* Object, cstr Key, int64 Value);
+bool MdoApiValueSetBool(xvalue* Object, cstr Key, bool Value);
+bool MdoApiValueSetTake(xvalue* Object, cstr Key, xvalue** pChild);
+bool MdoApiValueAppendTake(xvalue* Array, xvalue** pItem);
+bool MdoApiValueAppendString(xvalue* Array, cstr Value);
+bool MdoApiValueSetStrings(xvalue* Object, cstr Key,
+    const char* const* Values, size_t Count);
+
 bool MdoApiReplySuccessTake(MdoApiContext* pContext, uint16 Status,
     xvalue* pData, cstr Allow);
 bool MdoApiReplyError(MdoApiContext* pContext, uint16 Status, cstr Code,
@@ -23,5 +33,20 @@ bool MdoApiReplyError(MdoApiContext* pContext, uint16 Status, cstr Code,
 bool MdoApiReplyOptions(MdoApiContext* pContext, cstr Allow);
 
 bool MdoApiBootstrapRoute(MdoApiContext* pContext);
+bool MdoApiSettingsRoute(MdoApiContext* pContext);
+bool MdoApiModelsRoute(MdoApiContext* pContext);
+bool MdoApiAgentsRoute(MdoApiContext* pContext);
+bool MdoApiModulesRoute(MdoApiContext* pContext);
+bool MdoApiSkillsRoute(MdoApiContext* pContext);
+bool MdoApiMcpRoute(MdoApiContext* pContext);
+bool MdoApiProjectsRoute(MdoApiContext* pContext);
+bool MdoApiSessionsRoute(MdoApiContext* pContext);
+bool MdoApiRunsRoute(MdoApiContext* pContext);
+bool MdoApiSchedulesRoute(MdoApiContext* pContext);
+bool MdoApiPermissionsRoute(MdoApiContext* pContext);
+bool MdoApiTasksRoute(MdoApiContext* pContext);
+bool MdoApiArtifactsRoute(MdoApiContext* pContext);
+bool MdoApiDiagnosticsRoute(MdoApiContext* pContext);
+bool MdoApiStorageRoute(MdoApiContext* pContext);
 
 #endif

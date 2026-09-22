@@ -70,7 +70,12 @@ class BuildContractTests(unittest.TestCase):
             "src/sessions/manager.c",
             "src/bootstrap/bootstrap.c",
             "src/api/http.c",
+            "src/api/value.c",
             "src/api/resources.c",
+            "src/api/catalogs.c",
+            "src/api/state.c",
+            "src/api/inventory.c",
+            "src/api/diagnostics.c",
             "src/api/router.c",
             "src/bootstrap/service.c",
         ])

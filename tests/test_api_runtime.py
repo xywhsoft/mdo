@@ -123,6 +123,28 @@ def run_probe(host: Path) -> None:
                 assert data["config"]["schema_version"] == 1, data
                 assert data["resources"]["models"]["models"] >= 1, data
 
+                resources = (
+                    "settings", "models", "agents", "modules", "skills",
+                    "mcp", "projects", "sessions", "runs", "schedules",
+                    "tasks", "artifacts", "permissions", "diagnostics",
+                    "storage",
+                )
+                for resource in resources:
+                    status, resource_headers, resource_body = request(
+                        port, "GET", f"/api/v1/{resource}")
+                    resource_document = json.loads(resource_body)
+                    assert status == 200, (resource, status, resource_body)
+                    assert_common(resource_headers, resource_document)
+                    assert resource_document["ok"] is True, (
+                        resource, resource_document)
+                    assert isinstance(resource_document["data"], dict), (
+                        resource, resource_document)
+                    lowered = resource_body.lower()
+                    assert b'"secret_ref"' not in lowered, (resource, lowered)
+                    assert b'"authorization"' not in lowered, (resource, lowered)
+                assert json.loads(request(port, "GET", "/api/v1/models")[2])[
+                    "data"]["models"][0]["id"] == "ling-3.0-tiny"
+
                 status, headers, body = request(port, "HEAD", "/api/v1/bootstrap")
                 assert status == 200 and body == b"", (status, body)
                 assert int(headers["content-length"]) > 0, headers

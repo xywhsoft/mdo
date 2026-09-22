@@ -25,6 +25,13 @@ class ApiContractTests(unittest.TestCase):
         self.assertIn('"/api/v1/bootstrap"', self.router)
         self.assertIn("MDO_API_RESPONSE_MAX_BYTES", self.internal)
         self.assertIn("JsonSize > MDO_API_RESPONSE_MAX_BYTES", self.http)
+        for resource in (
+            "bootstrap", "settings", "models", "agents", "modules",
+            "skills", "mcp", "sessions", "schedules", "tasks",
+            "projects", "runs", "artifacts", "permissions", "diagnostics",
+            "storage",
+        ):
+            self.assertIn(f'"/api/v1/{resource}"', self.router)
 
     def test_request_entry_is_owned_by_the_api_layer(self) -> None:
         self.assertIn("MdoApiInit", self.service)
@@ -61,6 +68,17 @@ class ApiContractTests(unittest.TestCase):
         self.assertNotIn("g_MdoBootstrap", self.resources)
         self.assertNotIn("g_MdoConfig", self.resources)
         self.assertNotIn("g_MdoHome", self.resources)
+
+    def test_catalog_handlers_do_not_expose_secret_values_or_large_bodies(self) -> None:
+        catalogs = (ROOT / "app/src/api/catalogs.c").read_text(encoding="utf-8")
+        state = (ROOT / "app/src/api/state.c").read_text(encoding="utf-8")
+        self.assertNotIn('"secret_ref"', catalogs + state)
+        self.assertNotIn('"authorization"', catalogs.lower())
+        self.assertNotIn('"environment"', catalogs)
+        self.assertNotIn('"http_headers"', catalogs)
+        self.assertNotIn('Info.SystemPrompt)', catalogs)
+        self.assertNotIn('"input", Info.Input', state)
+        self.assertIn('"input_bytes"', state)
 
     def test_bootstrap_resource_contains_ui_startup_domains(self) -> None:
         for name in (
