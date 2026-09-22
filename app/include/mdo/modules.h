@@ -107,6 +107,16 @@ bool MdoModuleCatalogToolAt(const MdoModuleCatalog* pCatalog,
     size_t iIndex, MdoModuleToolInfo* pInfo);
 bool MdoModuleCatalogAgentAt(const MdoModuleCatalog* pCatalog,
     size_t iIndex, MdoModuleAgentInfo* pInfo);
+bool MdoModuleCatalogAgentFind(const MdoModuleCatalog* pCatalog,
+    const char* AgentId, MdoModuleAgentInfo* pInfo);
+
+/* A successful Acquire must be paired with exactly one Release while the
+ * catalog snapshot remains retained.  This pins both the descriptor storage
+ * and its TCC code generation across a concurrent module reload. */
+bool MdoModuleCatalogAgentAcquire(const MdoModuleCatalog* pCatalog,
+    const char* AgentId, char* ErrorMessage, size_t ErrorCapacity);
+void MdoModuleCatalogAgentRelease(const MdoModuleCatalog* pCatalog,
+    const char* AgentId);
 
 MdoModuleDiagnostics* MdoModuleDiagnosticsSnapshot(void);
 MdoModuleDiagnostics* MdoModuleDiagnosticsRef(

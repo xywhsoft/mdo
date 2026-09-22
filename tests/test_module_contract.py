@@ -53,12 +53,25 @@ class ModuleContractTests(unittest.TestCase):
         bootstrap = BOOTSTRAP_C.read_text(encoding="utf-8")
         module = (ROOT / "app/default-home/modules/tools/builtin_echo.c").read_text(
             encoding="utf-8")
+        agent = (ROOT / "app/default-home/modules/agents/builtin_default.c").read_text(
+            encoding="utf-8")
         self.assertIn("MdoModuleManagerInit", bootstrap)
         self.assertIn("MdoModuleManagerUnit", bootstrap)
         self.assertIn("MDO_BOOTSTRAP_MODULES_READY", bootstrap)
         self.assertIn('#include "mdo/module.h"', module)
         self.assertIn("mdoModuleEntry", module)
         self.assertIn('"mdo.echo"', module)
+        self.assertIn("mdoModuleEntry", agent)
+        self.assertIn('"mdo.default"', agent)
+        self.assertIn("MDO_AGENT_MAIN", agent)
+
+    def test_agent_lifecycle_is_catalog_scoped(self) -> None:
+        header = MANAGER.read_text(encoding="utf-8")
+        source = MANAGER_C.read_text(encoding="utf-8")
+        self.assertIn("MdoModuleCatalogAgentFind", header)
+        self.assertIn("MdoModuleCatalogAgentAcquire", header)
+        self.assertIn("MdoModuleCatalogAgentRelease", header)
+        self.assertIn("pAgent->Owner->HostServices", source)
 
     def test_header_compiles_as_c11_and_cpp17(self) -> None:
         c = shutil.which("gcc")

@@ -1996,6 +1996,63 @@ bool MdoModuleCatalogAgentAt(const MdoModuleCatalog* pCatalog,
     return true;
 }
 
+static MdoModuleAgentBinding* MdoModulesFindAgent(
+    const MdoModuleCatalog* pCatalog, cstr AgentId)
+{
+    size_t i;
+    if ( pCatalog == NULL || AgentId == NULL || AgentId[0] == '\0' )
+        return NULL;
+    for ( i = 0u; i < pCatalog->AgentCount; ++i )
+        if ( strcmp(pCatalog->Agents[i]->Id, AgentId) == 0 )
+            return pCatalog->Agents[i];
+    return NULL;
+}
+
+bool MdoModuleCatalogAgentFind(const MdoModuleCatalog* pCatalog,
+    const char* AgentId, MdoModuleAgentInfo* pInfo)
+{
+    MdoModuleAgentBinding* pAgent = MdoModulesFindAgent(pCatalog, AgentId);
+    size_t i;
+    if ( pAgent == NULL || pInfo == NULL ||
+         pInfo->Size < sizeof(*pInfo) ) return false;
+    for ( i = 0u; i < pCatalog->AgentCount; ++i )
+        if ( pCatalog->Agents[i] == pAgent )
+            return MdoModuleCatalogAgentAt(pCatalog, i, pInfo);
+    return false;
+}
+
+bool MdoModuleCatalogAgentAcquire(const MdoModuleCatalog* pCatalog,
+    const char* AgentId, char* ErrorMessage, size_t ErrorCapacity)
+{
+    MdoModuleAgentBinding* pAgent = MdoModulesFindAgent(pCatalog, AgentId);
+    char LocalError[MDO_MODULE_ERROR_LIMIT];
+    mdo_result Result;
+    if ( ErrorMessage != NULL && ErrorCapacity != 0u ) ErrorMessage[0] = '\0';
+    if ( pAgent == NULL ) {
+        MdoModulesCopyError(ErrorMessage, ErrorCapacity, "Agent was not found");
+        MdoModulesSetError("Agent was not found");
+        return false;
+    }
+    if ( pAgent->Acquire == NULL ) return true;
+    memset(LocalError, 0, sizeof(LocalError));
+    Result = pAgent->Acquire(pAgent->UserData, &pAgent->Owner->HostServices,
+        LocalError, sizeof(LocalError));
+    if ( Result == MDO_RESULT_OK ) return true;
+    MdoModulesCopyError(ErrorMessage, ErrorCapacity,
+        LocalError[0] != '\0' ? LocalError : "Agent lifecycle acquire failed");
+    MdoModulesSetError(LocalError[0] != '\0' ? LocalError :
+        "Agent lifecycle acquire failed");
+    return false;
+}
+
+void MdoModuleCatalogAgentRelease(const MdoModuleCatalog* pCatalog,
+    const char* AgentId)
+{
+    MdoModuleAgentBinding* pAgent = MdoModulesFindAgent(pCatalog, AgentId);
+    if ( pAgent != NULL && pAgent->Release != NULL )
+        pAgent->Release(pAgent->UserData);
+}
+
 size_t MdoModuleDiagnosticsCount(const MdoModuleDiagnostics* pDiagnostics)
 {
     return pDiagnostics != NULL ? pDiagnostics->Count : 0u;

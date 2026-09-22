@@ -155,6 +155,7 @@ void ServiceInit(XS_HostInfo *host) {{
     MdoModuleDiagnostics *diagnostics = NULL;
     MdoModuleInfo module_info;
     MdoModuleToolInfo tool_info;
+    MdoModuleAgentInfo agent_info;
     MdoModuleDiagnosticInfo diagnostic_info;
     xwork_tool_catalog *work_catalog = NULL;
     xwork_tool_info work_info;
@@ -175,13 +176,20 @@ void ServiceInit(XS_HostInfo *host) {{
         (unsigned long long)MdoModuleManagerGeneration(),
         MdoModuleCatalogModuleCount(catalog), MdoModuleCatalogToolCount(catalog),
         MdoModuleCatalogAgentCount(catalog));
-    memset(&module_info, 0, sizeof(module_info)); module_info.Size = sizeof(module_info);
+    for (i = 0u; i < MdoModuleCatalogModuleCount(catalog); ++i) {{
+        memset(&module_info, 0, sizeof(module_info)); module_info.Size = sizeof(module_info);
+        if (MdoModuleCatalogModuleAt(catalog, i, &module_info) &&
+            strcmp(module_info.Id, "mdo.core.echo") == 0)
+            printf("initial_module=%s external=%d hash=%s\n",
+                module_info.Id, module_info.External ? 1 : 0,
+                module_info.SourceHash);
+    }}
     memset(&tool_info, 0, sizeof(tool_info)); tool_info.Size = sizeof(tool_info);
-    if (MdoModuleCatalogModuleAt(catalog, 0u, &module_info) &&
-        MdoModuleCatalogToolAt(catalog, 0u, &tool_info))
-        printf("initial_module=%s external=%d hash=%s tool=%s\n",
-            module_info.Id, module_info.External ? 1 : 0,
-            module_info.SourceHash, tool_info.Id);
+    memset(&agent_info, 0, sizeof(agent_info)); agent_info.Size = sizeof(agent_info);
+    if (MdoModuleCatalogToolAt(catalog, 0u, &tool_info) &&
+        MdoModuleCatalogAgentFind(catalog, "mdo.default", &agent_info))
+        printf("initial_tool=%s agent=%s permission=%s\n", tool_info.Id,
+            agent_info.Id, agent_info.PermissionProfile);
     if (!ExecuteOne(runtime, "mdo.echo", "{{\"text\":\"hello\"}}",
             &agent, &session, &definition)) goto done;
     old_catalog = catalog; catalog = NULL;
@@ -286,6 +294,8 @@ def write_site(site: Path) -> None:
                  site / "default-home/config/defaults.json")
     shutil.copy2(ROOT / "app/default-home/modules/tools/builtin_echo.c",
                  site / "default-home/modules/tools/builtin_echo.c")
+    shutil.copy2(ROOT / "app/default-home/modules/agents/builtin_default.c",
+                 site / "default-home/modules/agents/builtin_default.c")
     for relative in (
         "src/storage/home.c", "src/modules/manager.c",
         "include/mdo/home.h", "include/mdo/modules.h",
@@ -359,10 +369,11 @@ def main() -> int:
         write_site(site)
         output = run_probe(host, site, base / "home")
         assert "module_init_error=" not in output, output
-        assert "initial_generation=1 modules=1 tools=1 agents=0" in output, output
+        assert "initial_generation=1 modules=2 tools=1 agents=1" in output, output
         assert "initial_module=mdo.core.echo external=0" in output, output
+        assert "initial_tool=mdo.echo agent=mdo.default permission=balanced" in output, output
         assert "execute_mdo.echo=infra:1 success:1" in output, output
-        assert "reloaded_generation=2 modules=2 tools=2 old_modules=1" in output, output
+        assert "reloaded_generation=2 modules=3 tools=2 old_modules=2" in output, output
         assert "external_module=1 external=1" in output, output
         assert "schedule_parallel=1 group=probe.group source=mdo.modules" in output, output
         assert "execute_probe.external=infra:1 success:1" in output, output
