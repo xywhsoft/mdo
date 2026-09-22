@@ -4,7 +4,7 @@
 #include <xsbase.h>
 #include <xwork.h>
 
-#include "../../../include/mdo/module.h"
+#include "../../generated/module-sdk/mdo/module.h"
 
 typedef struct MdoModuleCatalog MdoModuleCatalog;
 typedef struct MdoModuleDiagnostics MdoModuleDiagnostics;

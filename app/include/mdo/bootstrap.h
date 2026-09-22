@@ -12,6 +12,7 @@ typedef enum MdoBootstrapStage {
     MDO_BOOTSTRAP_HOME_READY,
     MDO_BOOTSTRAP_CONFIG_READY,
     MDO_BOOTSTRAP_RUNTIME_READY,
+    MDO_BOOTSTRAP_MODULES_READY,
     MDO_BOOTSTRAP_FAILED
 } MdoBootstrapStage;
 
@@ -20,6 +21,11 @@ typedef struct MdoBootstrapSnapshot {
     MdoBootstrapStage Stage;
     bool Ready;
     size_t DefaultsBytes;
+    uint64 ModuleGeneration;
+    size_t ModuleCount;
+    size_t ModuleToolCount;
+    size_t ModuleAgentCount;
+    size_t ModuleDiagnosticCount;
     MdoConfigSnapshot Config;
     MdoHomeSnapshot Home;
     const char* Message;

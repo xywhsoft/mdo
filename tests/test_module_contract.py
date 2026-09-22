@@ -12,6 +12,8 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 HEADER = ROOT / "include" / "mdo" / "module.h"
 MANAGER = ROOT / "app" / "include" / "mdo" / "modules.h"
+MANAGER_C = ROOT / "app" / "src" / "modules" / "manager.c"
+BOOTSTRAP_C = ROOT / "app" / "src" / "bootstrap" / "bootstrap.c"
 
 
 class ModuleContractTests(unittest.TestCase):
@@ -34,6 +36,29 @@ class ModuleContractTests(unittest.TestCase):
         self.assertIn("MdoModuleCatalogRelease", text)
         self.assertIn("MdoModuleDiagnosticsSnapshot(void)", text)
         self.assertNotIn("TCCState", text)
+        self.assertIn('../../generated/module-sdk/mdo/module.h', text)
+
+    def test_manager_uses_restricted_atomic_generations(self) -> None:
+        text = MANAGER_C.read_text(encoding="utf-8")
+        self.assertIn("XS_TCC_RESTRICT_HOST_SYMBOLS", text)
+        self.assertIn('"/app/generated/module-sdk"', text)
+        self.assertIn("tcc_compile_string", text)
+        self.assertIn("xworkRuntimeReplaceToolsBySource", text)
+        self.assertIn("MdoModulesToolOwnerRetain", text)
+        self.assertIn("MdoModulesToolOwnerRelease", text)
+        self.assertIn("MdoModulesGenerationRelease", text)
+        self.assertNotIn("xworkRuntimeConfigureToolConcurrency", text)
+
+    def test_bootstrap_and_default_module_use_the_manager(self) -> None:
+        bootstrap = BOOTSTRAP_C.read_text(encoding="utf-8")
+        module = (ROOT / "app/default-home/modules/tools/builtin_echo.c").read_text(
+            encoding="utf-8")
+        self.assertIn("MdoModuleManagerInit", bootstrap)
+        self.assertIn("MdoModuleManagerUnit", bootstrap)
+        self.assertIn("MDO_BOOTSTRAP_MODULES_READY", bootstrap)
+        self.assertIn('#include "mdo/module.h"', module)
+        self.assertIn("mdoModuleEntry", module)
+        self.assertIn('"mdo.echo"', module)
 
     def test_header_compiles_as_c11_and_cpp17(self) -> None:
         c = shutil.which("gcc")

@@ -2,6 +2,7 @@
 #include <string.h>
 
 #include "../../include/mdo/bootstrap.h"
+#include "../../include/mdo/modules.h"
 #include "../../include/mdo/version.h"
 
 typedef struct MdoBootstrapState {
@@ -33,7 +34,7 @@ bool MdoBootstrapInit(XS_HostInfo* pHost)
 
     (void)pHost;
     if ( g_MdoBootstrap.Stage != MDO_BOOTSTRAP_EMPTY )
-        return g_MdoBootstrap.Stage == MDO_BOOTSTRAP_RUNTIME_READY;
+        return g_MdoBootstrap.Stage == MDO_BOOTSTRAP_MODULES_READY;
     if ( !MdoHomeInit() ) {
         MdoBootstrapFail("Home initialization failed");
         return false;
@@ -69,6 +70,11 @@ bool MdoBootstrapInit(XS_HostInfo* pHost)
         return false;
     }
     g_MdoBootstrap.Stage = MDO_BOOTSTRAP_RUNTIME_READY;
+    if ( !MdoModuleManagerInit(g_MdoBootstrap.Runtime) ) {
+        MdoBootstrapFail("module manager initialization failed");
+        return false;
+    }
+    g_MdoBootstrap.Stage = MDO_BOOTSTRAP_MODULES_READY;
 
     memset(&Home, 0, sizeof(Home));
     Home.Size = sizeof(Home);
@@ -76,14 +82,20 @@ bool MdoBootstrapInit(XS_HostInfo* pHost)
         const char* sMode = Home.Persistence == MDO_PERSISTENCE_EXTERNAL ?
             "external" : (Home.Persistence == MDO_PERSISTENCE_EPHEMERAL ?
             "ephemeral" : "lazy");
-        printf("[mdo] bootstrap ready: version=%s home=%s mode=%s defaults=%zu\n",
-            MDO_VERSION_TEXT, Home.Path, sMode, g_MdoBootstrap.DefaultsBytes);
+        MdoModuleCatalog* pModules = MdoModuleCatalogSnapshot();
+        size_t iModules = MdoModuleCatalogModuleCount(pModules);
+        size_t iTools = MdoModuleCatalogToolCount(pModules);
+        printf("[mdo] bootstrap ready: version=%s home=%s mode=%s defaults=%zu modules=%zu tools=%zu\n",
+            MDO_VERSION_TEXT, Home.Path, sMode, g_MdoBootstrap.DefaultsBytes,
+            iModules, iTools);
+        MdoModuleCatalogRelease(pModules);
     }
     return true;
 }
 
 void MdoBootstrapUnit(void)
 {
+    MdoModuleManagerUnit();
     if ( g_MdoBootstrap.Runtime != NULL )
         xworkRuntimeRelease(g_MdoBootstrap.Runtime);
     g_MdoBootstrap.Runtime = NULL;
@@ -97,9 +109,28 @@ bool MdoBootstrapGetSnapshot(MdoBootstrapSnapshot* pSnapshot)
     if ( pSnapshot == NULL || pSnapshot->Size < sizeof(*pSnapshot) )
         return false;
     pSnapshot->Stage = g_MdoBootstrap.Stage;
-    pSnapshot->Ready = g_MdoBootstrap.Stage == MDO_BOOTSTRAP_RUNTIME_READY;
+    pSnapshot->Ready = g_MdoBootstrap.Stage == MDO_BOOTSTRAP_MODULES_READY;
     pSnapshot->DefaultsBytes = g_MdoBootstrap.DefaultsBytes;
     pSnapshot->Message = g_MdoBootstrap.Message;
+    pSnapshot->ModuleGeneration = 0u;
+    pSnapshot->ModuleCount = 0u;
+    pSnapshot->ModuleToolCount = 0u;
+    pSnapshot->ModuleAgentCount = 0u;
+    pSnapshot->ModuleDiagnosticCount = 0u;
+    {
+        MdoModuleCatalog* pCatalog = MdoModuleCatalogSnapshot();
+        MdoModuleDiagnostics* pDiagnostics = MdoModuleDiagnosticsSnapshot();
+        if ( pCatalog != NULL ) {
+            pSnapshot->ModuleGeneration = MdoModuleManagerGeneration();
+            pSnapshot->ModuleCount = MdoModuleCatalogModuleCount(pCatalog);
+            pSnapshot->ModuleToolCount = MdoModuleCatalogToolCount(pCatalog);
+            pSnapshot->ModuleAgentCount = MdoModuleCatalogAgentCount(pCatalog);
+        }
+        pSnapshot->ModuleDiagnosticCount =
+            MdoModuleDiagnosticsCount(pDiagnostics);
+        MdoModuleCatalogRelease(pCatalog);
+        MdoModuleDiagnosticsRelease(pDiagnostics);
+    }
     memset(&pSnapshot->Config, 0, sizeof(pSnapshot->Config));
     pSnapshot->Config.Size = sizeof(pSnapshot->Config);
     if ( g_MdoBootstrap.ConfigReady &&
