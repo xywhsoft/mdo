@@ -23,18 +23,25 @@ PROBE_SOURCE = r'''
 #include <xsbase.h>
 
 #include "include/mdo/modules.h"
+#include "include/mdo/mcp.h"
 #include "include/mdo/operations.h"
 
 struct MdoModuleCatalog { int Value; };
 struct MdoModuleDiagnostics { int Value; };
+struct MdoMcpCatalog { int Value; };
 
 static struct MdoModuleCatalog Catalog;
 static struct MdoModuleDiagnostics Diagnostics;
+static struct MdoMcpCatalog McpCatalog;
 static xatomic32 BlockReload;
 static xatomic32 ReloadEntered;
 static xatomic32 FailReload;
 static xatomic32 ReloadCalls;
+static xatomic32 FailMcp;
+static xatomic32 McpCalls;
 static uint64 Generation = 1u;
+static uint64 McpSchema;
+static uint64 McpRequests;
 
 bool MdoModuleManagerReload(void) {
     xrtAtomic32FetchAdd(&ReloadCalls, 1u, XMEMORY_RELAXED);
@@ -69,6 +76,45 @@ size_t MdoModuleDiagnosticsCount(const MdoModuleDiagnostics* value) {
     (void)value; return 0u;
 }
 
+MdoMcpCatalog* MdoMcpCatalogSnapshot(void) { return &McpCatalog; }
+void MdoMcpCatalogRelease(MdoMcpCatalog* value) { (void)value; }
+bool MdoMcpCatalogFind(const MdoMcpCatalog* catalog, const char* id,
+    MdoMcpServerInfo* info) {
+    (void)catalog;
+    if (strcmp(id, "mock") != 0 || info == NULL ||
+        info->Size < sizeof(*info)) return false;
+    info->Id = "mock";
+    info->RequestTimeoutMilliseconds = 1000u;
+    return true;
+}
+bool MdoMcpManagerGetStatus(const char* id, MdoMcpServerStatus* status) {
+    if (strcmp(id, "mock") != 0 || status == NULL ||
+        status->Size < sizeof(*status)) return false;
+    status->CatalogGeneration = 7u;
+    status->State = McpSchema != 0u ? XWORK_MCP_SERVER_READY :
+        XWORK_MCP_SERVER_DISCONNECTED;
+    status->SchemaGeneration = McpSchema;
+    status->DiscoveredToolCount = McpSchema != 0u ? 4u : 0u;
+    status->RequestsCompleted = McpRequests;
+    status->Enabled = true;
+    status->Connected = McpSchema != 0u;
+    status->ToolsDiscovered = McpSchema != 0u;
+    return true;
+}
+bool MdoMcpManagerRefresh(const char* id, xcancel* cancel, uint64 deadline,
+    xwork_error* error) {
+    (void)deadline; (void)error;
+    if (strcmp(id, "mock") != 0 || xrtCancelRequested(cancel)) return false;
+    xrtAtomic32FetchAdd(&McpCalls, 1u, XMEMORY_RELAXED);
+    if (xrtAtomic32Load(&FailMcp, XMEMORY_ACQUIRE) != 0u) {
+        xrtAtomic32Store(&FailMcp, 0u, XMEMORY_RELEASE);
+        return false;
+    }
+    ++McpSchema;
+    McpRequests += 2u;
+    return true;
+}
+
 #include "src/operations/manager.c"
 
 static bool WaitTerminal(const char* id, MdoOperationInfo* info) {
@@ -89,12 +135,15 @@ void ServiceInit(XS_HostInfo* host) {
     MdoOperationInfo failure;
     MdoOperationInfo blocker;
     MdoOperationInfo queued;
+    MdoOperationInfo mcp_success;
+    MdoOperationInfo mcp_failure;
     MdoOperationInfo current;
     MdoOperationInfo items[8];
     char success_id[MDO_OPERATION_ID_CAPACITY];
     char failure_id[MDO_OPERATION_ID_CAPACITY];
     char blocker_id[MDO_OPERATION_ID_CAPACITY];
     char queued_id[MDO_OPERATION_ID_CAPACITY];
+    char mcp_id[MDO_OPERATION_ID_CAPACITY];
     size_t count;
     unsigned i;
     (void)host;
@@ -103,6 +152,8 @@ void ServiceInit(XS_HostInfo* host) {
     xrtAtomic32Init(&ReloadEntered, 0u);
     xrtAtomic32Init(&FailReload, 0u);
     xrtAtomic32Init(&ReloadCalls, 0u);
+    xrtAtomic32Init(&FailMcp, 0u);
+    xrtAtomic32Init(&McpCalls, 0u);
     if (!MdoOperationManagerInit()) { printf("init_error=1\n"); goto done; }
 
     memset(&success, 0, sizeof(success)); success.Size = sizeof(success);
@@ -129,6 +180,35 @@ void ServiceInit(XS_HostInfo* host) {
         printf("wait_error=failure\n"); goto done;
     }
     printf("failure=state:%d message:%s\n", (int)current.State,
+        current.Message);
+
+    memset(&mcp_success, 0, sizeof(mcp_success));
+    mcp_success.Size = sizeof(mcp_success);
+    if (!MdoOperationStartMcpRefresh("mock", &mcp_success)) {
+        printf("start_error=mcp_success\n"); goto done;
+    }
+    snprintf(mcp_id, sizeof(mcp_id), "%s", mcp_success.Id);
+    if (!WaitTerminal(mcp_id, &current)) {
+        printf("wait_error=mcp_success\n"); goto done;
+    }
+    printf("mcp_success=state:%d target:%s catalog:%llu schema:%llu tools:%llu connected:%d\n",
+        (int)current.State, current.Target,
+        (unsigned long long)current.Generation,
+        (unsigned long long)current.AuxiliaryGeneration,
+        (unsigned long long)current.ItemCount,
+        current.Connected ? 1 : 0);
+
+    xrtAtomic32Store(&FailMcp, 1u, XMEMORY_RELEASE);
+    memset(&mcp_failure, 0, sizeof(mcp_failure));
+    mcp_failure.Size = sizeof(mcp_failure);
+    if (!MdoOperationStartMcpRefresh("mock", &mcp_failure)) {
+        printf("start_error=mcp_failure\n"); goto done;
+    }
+    snprintf(mcp_id, sizeof(mcp_id), "%s", mcp_failure.Id);
+    if (!WaitTerminal(mcp_id, &current)) {
+        printf("wait_error=mcp_failure\n"); goto done;
+    }
+    printf("mcp_failure=state:%d message:%s\n", (int)current.State,
         current.Message);
 
     xrtAtomic32Store(&ReloadEntered, 0u, XMEMORY_RELEASE);
@@ -168,7 +248,9 @@ void ServiceInit(XS_HostInfo* host) {
         (unsigned long long)count,
         (unsigned long long)(count != 0u ? items[0].Sequence : 0u),
         (unsigned long long)(count != 0u ? items[count - 1u].Sequence : 0u));
-    printf("calls=%u\n", xrtAtomic32Load(&ReloadCalls, XMEMORY_ACQUIRE));
+    printf("calls=module:%u mcp:%u\n",
+        xrtAtomic32Load(&ReloadCalls, XMEMORY_ACQUIRE),
+        xrtAtomic32Load(&McpCalls, XMEMORY_ACQUIRE));
 done:
     xrtAtomic32Store(&BlockReload, 0u, XMEMORY_RELEASE);
     MdoOperationManagerUnit();
@@ -186,7 +268,7 @@ def write_site(site: Path) -> None:
     (site / "web/index.html").write_text("probe", encoding="utf-8")
     shutil.copy2(ROOT / "app/src/operations/manager.c",
                  site / "src/operations/manager.c")
-    for name in ("modules.h", "operations.h"):
+    for name in ("mcp.h", "modules.h", "operations.h"):
         shutil.copy2(ROOT / "app/include/mdo" / name,
                      site / "include/mdo" / name)
     shutil.copy2(ROOT / "app/generated/module-sdk/mdo/module.h",
@@ -257,8 +339,10 @@ def main() -> int:
         assert "success=state:2 generation:2 modules:2 tools:3 agents:1" in output, output
         assert "failure=state:3 message:Module reload failed" in output, output
         assert "cancel=state:4 requested:1" in output, output
-        assert "list=count:4 first_sequence:4 last_sequence:1" in output, output
-        assert "calls=3" in output, output
+        assert "mcp_success=state:2 target:mock catalog:7 schema:1 tools:4 connected:1" in output, output
+        assert "mcp_failure=state:3 message:MCP refresh failed" in output, output
+        assert "list=count:6 first_sequence:6 last_sequence:1" in output, output
+        assert "calls=module:3 mcp:2" in output, output
         assert "probe_done=1" in output, output
     print("operation runtime probe: PASS")
     return 0

@@ -7,7 +7,8 @@
 #define MDO_OPERATION_MESSAGE_CAPACITY 256u
 
 typedef enum MdoOperationKind {
-    MDO_OPERATION_MODULE_RELOAD = 0
+    MDO_OPERATION_MODULE_RELOAD = 0,
+    MDO_OPERATION_MCP_REFRESH
 } MdoOperationKind;
 
 typedef enum MdoOperationState {
@@ -28,11 +29,18 @@ typedef struct MdoOperationInfo {
     xtime EndedAt;
     bool CancelRequested;
     uint64 Generation;
+    uint64 AuxiliaryGeneration;
+    uint64 CompletedCount;
     size_t ItemCount;
     size_t SecondaryCount;
     size_t TertiaryCount;
     size_t DiagnosticCount;
+    uint32 RuntimeState;
+    bool Enabled;
+    bool Connected;
+    bool ToolsDiscovered;
     char Id[MDO_OPERATION_ID_CAPACITY];
+    char Target[128];
     char Message[MDO_OPERATION_MESSAGE_CAPACITY];
 } MdoOperationInfo;
 
@@ -41,6 +49,7 @@ typedef struct MdoOperationInfo {
 bool MdoOperationManagerInit(void);
 void MdoOperationManagerUnit(void);
 bool MdoOperationStartModuleReload(MdoOperationInfo* Info);
+bool MdoOperationStartMcpRefresh(const char* ServerId, MdoOperationInfo* Info);
 bool MdoOperationGet(const char* Id, MdoOperationInfo* Info);
 size_t MdoOperationList(MdoOperationInfo* Items, size_t Capacity);
 bool MdoOperationCancel(const char* Id, MdoOperationInfo* Info);

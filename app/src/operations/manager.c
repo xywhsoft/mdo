@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <string.h>
 
+#include "../../include/mdo/mcp.h"
 #include "../../include/mdo/modules.h"
 #include "../../include/mdo/operations.h"
 
@@ -15,6 +16,7 @@ typedef struct MdoOperationEntry {
 
 typedef struct MdoOperationJob {
     char Id[MDO_OPERATION_ID_CAPACITY];
+    char Target[128];
 } MdoOperationJob;
 
 typedef struct MdoOperationStateData {
@@ -138,6 +140,31 @@ static void MdoOperationFinish(cstr Id, MdoOperationState State,
     (void)xrtMutexUnlock(g_MdoOperations.Lock);
 }
 
+static void MdoOperationFinishMcp(cstr Id, MdoOperationState State,
+    const MdoMcpServerStatus* Status, cstr Message)
+{
+    MdoOperationEntry* Entry;
+    if ( !xrtMutexLock(g_MdoOperations.Lock) ) return;
+    Entry = MdoOperationFindLocked(Id);
+    if ( Entry != NULL && !MdoOperationTerminal(Entry->Info.State) ) {
+        Entry->Info.State = State;
+        Entry->Info.EndedAt = xrtNow();
+        if ( Status != NULL ) {
+            Entry->Info.Generation = Status->CatalogGeneration;
+            Entry->Info.AuxiliaryGeneration = Status->SchemaGeneration;
+            Entry->Info.CompletedCount = Status->RequestsCompleted;
+            Entry->Info.ItemCount = Status->DiscoveredToolCount;
+            Entry->Info.RuntimeState = (uint32)Status->State;
+            Entry->Info.Enabled = Status->Enabled;
+            Entry->Info.Connected = Status->Connected;
+            Entry->Info.ToolsDiscovered = Status->ToolsDiscovered;
+        }
+        snprintf(Entry->Info.Message, sizeof(Entry->Info.Message), "%s",
+            Message != NULL ? Message : "");
+    }
+    (void)xrtMutexUnlock(g_MdoOperations.Lock);
+}
+
 static xtaskoutcome MdoOperationRun(xcancel* Cancel, ptr Data,
     xtaskvalue* Result)
 {
@@ -211,6 +238,51 @@ static xtaskoutcome MdoOperationRun(xcancel* Cancel, ptr Data,
             "Module catalog reloaded");
         return XTASK_SUCCESS;
     }
+    if ( Kind == MDO_OPERATION_MCP_REFRESH ) {
+        MdoMcpCatalog* Catalog = MdoMcpCatalogSnapshot();
+        MdoMcpServerInfo Server;
+        MdoMcpServerStatus Status;
+        xwork_error Error;
+        uint64 Timeout;
+        bool Ok;
+        memset(&Server, 0, sizeof(Server)); Server.Size = sizeof(Server);
+        memset(&Status, 0, sizeof(Status)); Status.Size = sizeof(Status);
+        memset(&Error, 0, sizeof(Error));
+        if ( Catalog == NULL ||
+             !MdoMcpCatalogFind(Catalog, Job->Target, &Server) ) {
+            MdoMcpCatalogRelease(Catalog);
+            MdoOperationFinishMcp(Job->Id, MDO_OPERATION_FAILED, NULL,
+                "MCP server does not exist in the active catalog");
+            MdoOperationError("MCP refresh target does not exist");
+            return XTASK_FAILED;
+        }
+        Timeout = (uint64)Server.RequestTimeoutMilliseconds * 1000u;
+        MdoMcpCatalogRelease(Catalog);
+        Ok = MdoMcpManagerRefresh(Job->Target, Cancel,
+            xrtDeadlineAfter(Timeout), &Error);
+        if ( !Ok ) {
+            if ( xrtCancelRequested(Cancel) ) {
+                MdoOperationFinishMcp(Job->Id, MDO_OPERATION_CANCELLED,
+                    NULL, "MCP refresh was cancelled");
+                return XTASK_CANCELLED;
+            }
+            Ok = MdoMcpManagerGetStatus(Job->Target, &Status);
+            MdoOperationFinishMcp(Job->Id, MDO_OPERATION_FAILED,
+                Ok ? &Status : NULL,
+                "MCP refresh failed; the server remains available for retry");
+            MdoOperationError("MCP refresh operation failed");
+            return XTASK_FAILED;
+        }
+        if ( !MdoMcpManagerGetStatus(Job->Target, &Status) ) {
+            MdoOperationFinishMcp(Job->Id, MDO_OPERATION_FAILED, NULL,
+                "MCP refresh completed but its status is unavailable");
+            MdoOperationError("MCP refresh status unavailable");
+            return XTASK_FAILED;
+        }
+        MdoOperationFinishMcp(Job->Id, MDO_OPERATION_SUCCEEDED, &Status,
+            "MCP server connected and tool discovery completed");
+        return XTASK_SUCCESS;
+    }
     MdoOperationFinish(Job->Id, MDO_OPERATION_FAILED, 0u, 0u, 0u, 0u, 0u,
         "Unsupported operation kind");
     MdoOperationError("Unsupported operation kind");
@@ -264,7 +336,8 @@ void MdoOperationManagerUnit(void)
     (void)xrtMutexDestroy(Lock);
 }
 
-bool MdoOperationStartModuleReload(MdoOperationInfo* Info)
+static bool MdoOperationStart(MdoOperationKind Kind, cstr Target,
+    MdoOperationInfo* Info)
 {
     MdoOperationEntry* Entry;
     MdoOperationJob* Job;
@@ -302,12 +375,18 @@ bool MdoOperationStartModuleReload(MdoOperationInfo* Info)
     Entry->Occupied = true;
     Entry->Info.Size = sizeof(Entry->Info);
     Entry->Info.Sequence = ++g_MdoOperations.NextSequence;
-    Entry->Info.Kind = MDO_OPERATION_MODULE_RELOAD;
+    Entry->Info.Kind = Kind;
     Entry->Info.State = MDO_OPERATION_PENDING;
     Entry->Info.CreatedAt = xrtNow();
     snprintf(Entry->Info.Id, sizeof(Entry->Info.Id), "%s", Job->Id);
-    snprintf(Entry->Info.Message, sizeof(Entry->Info.Message),
-        "Module reload is queued");
+    if ( Target != NULL ) {
+        snprintf(Job->Target, sizeof(Job->Target), "%s", Target);
+        snprintf(Entry->Info.Target, sizeof(Entry->Info.Target), "%s",
+            Target);
+    }
+    snprintf(Entry->Info.Message, sizeof(Entry->Info.Message), "%s",
+        Kind == MDO_OPERATION_MODULE_RELOAD ? "Module reload is queued" :
+        "MCP refresh is queued");
     memset(&Arguments, 0, sizeof(Arguments));
     Arguments.Destroy = MdoOperationJobFree;
     Future = xrtTaskSubmit(g_MdoOperations.Pool, MdoOperationRun, Job,
@@ -322,6 +401,22 @@ bool MdoOperationStartModuleReload(MdoOperationInfo* Info)
     Copied = MdoOperationCopyInfo(Info, &Entry->Info);
     (void)xrtMutexUnlock(g_MdoOperations.Lock);
     return Copied;
+}
+
+bool MdoOperationStartModuleReload(MdoOperationInfo* Info)
+{
+    return MdoOperationStart(MDO_OPERATION_MODULE_RELOAD, NULL, Info);
+}
+
+bool MdoOperationStartMcpRefresh(cstr ServerId, MdoOperationInfo* Info)
+{
+    MdoMcpServerStatus Status;
+    if ( ServerId == NULL || ServerId[0] == '\0' ||
+         strlen(ServerId) >= sizeof(((MdoOperationInfo*)0)->Target) )
+        return false;
+    memset(&Status, 0, sizeof(Status)); Status.Size = sizeof(Status);
+    if ( !MdoMcpManagerGetStatus(ServerId, &Status) ) return false;
+    return MdoOperationStart(MDO_OPERATION_MCP_REFRESH, ServerId, Info);
 }
 
 bool MdoOperationGet(const char* Id, MdoOperationInfo* Info)

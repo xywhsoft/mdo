@@ -19,6 +19,42 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 
+MCP_MOCK_SERVER = r'''import json
+import sys
+
+for line in sys.stdin:
+    request = json.loads(line)
+    method = request.get("method")
+    if method == "server/discover":
+        result = {
+            "resultType": "complete",
+            "supportedVersions": ["2026-07-28"],
+            "capabilities": {"tools": {}},
+            "ttlMs": 60000,
+            "cacheScope": "private",
+        }
+    elif method == "tools/list":
+        result = {
+            "resultType": "complete",
+            "tools": [{
+                "name": "echo",
+                "description": "Echo fixture text.",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {"text": {"type": "string"}},
+                    "required": ["text"],
+                    "additionalProperties": False,
+                },
+            }],
+            "ttlMs": 60000,
+            "cacheScope": "private",
+        }
+    else:
+        continue
+    print(json.dumps({"jsonrpc": "2.0", "id": request.get("id"),
+                      "result": result}, separators=(",", ":")), flush=True)
+'''
+
 
 def free_port() -> int:
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as probe:
@@ -31,6 +67,36 @@ def write_site(base: Path, port: int) -> Path:
     # application layout directly so /app/default-home has identical meaning
     # in the development and single-file paths.
     shutil.copytree(ROOT / "app", base, dirs_exist_ok=True)
+    mock_server = base / "mcp_mock_server.py"
+    mock_server.write_text(MCP_MOCK_SERVER, encoding="utf-8")
+    mcp_document = {
+        "schema_version": 1,
+        "id": "api-mock",
+        "name": "API mock tools",
+        "description": "Local bounded API fixture.",
+        "enabled": True,
+        "transport": {
+            "type": "stdio",
+            "program": sys.executable,
+            "arguments": [str(mock_server)],
+            "working_directory": None,
+            "inherit_environment": True,
+            "environment": [],
+        },
+        "protocol_version": "2026-07-28",
+        "startup_timeout_ms": 5000,
+        "request_timeout_ms": 5000,
+        "limits": {"message_bytes": 1048576, "tools": 16},
+        "tools": {"allow": ["echo"], "deny": []},
+        "security": {
+            "default_effects": ["external-service"],
+            "permission_profile": "balanced",
+            "trust_read_only_annotations": False,
+        },
+        "auto_reconnect": True,
+    }
+    (base / "default-home/mcp/api-mock.json").write_text(
+        json.dumps(mcp_document), encoding="utf-8")
     config = {
         "engine": {"workers": 1},
         "services": [{
@@ -293,6 +359,112 @@ def run_probe(host: Path) -> None:
                         port, "OPTIONS", f"/api/v1/{resource}/reload")
                     assert status == 200 and headers["allow"] == "POST, OPTIONS"
 
+                mcp_data = json.loads(request(port, "GET", "/api/v1/mcp")[2])[
+                    "data"]
+                assert len(mcp_data["items"]) == 1, mcp_data
+                assert mcp_data["items"][0]["id"] == "api-mock", mcp_data
+                assert mcp_data["items"][0]["enabled"] is True, mcp_data
+                assert mcp_data["items"][0]["connected"] is False, mcp_data
+
+                status, headers, body = request(
+                    port, "PUT", "/api/v1/mcp/api-mock/enabled",
+                    body=json.dumps({"enabled": False, "extra": True}).encode(),
+                    headers={"Content-Type": "application/json"})
+                document = json.loads(body)
+                assert status == 422, (status, body)
+                assert document["error"]["code"] == "mcp_state_invalid", document
+
+                status, headers, body = request(
+                    port, "PUT", "/api/v1/mcp/api-mock/enabled",
+                    body=b'{"enabled":false}',
+                    headers={"Content-Type": "application/json"})
+                document = json.loads(body)
+                assert status == 200, (status, body)
+                assert_common(headers, document)
+                assert document["data"]["enabled"] is False, document
+                assert document["data"]["state"] == "disabled", document
+
+                status, headers, body = request(
+                    port, "POST", "/api/v1/mcp/api-mock/refresh")
+                document = json.loads(body)
+                assert status == 409, (status, body)
+                assert document["error"]["code"] == "mcp_server_disabled", document
+
+                status, headers, body = request(
+                    port, "PUT", "/api/v1/mcp/api-mock/enabled",
+                    body=b'{"enabled":true}',
+                    headers={"Content-Type": "application/json"})
+                document = json.loads(body)
+                assert status == 200 and document["data"]["enabled"] is True, (
+                    status, body)
+
+                status, headers, body = request(
+                    port, "POST", "/api/v1/mcp/api-mock/refresh",
+                    body=b"{}", headers={"Content-Type": "application/json"})
+                document = json.loads(body)
+                assert status == 400, (status, body)
+                assert document["error"]["code"] == "body_not_allowed", document
+
+                status, headers, body = request(
+                    port, "POST", "/api/v1/mcp/api-mock/refresh")
+                mcp_operation_document = json.loads(body)
+                assert status == 202, (status, body)
+                assert_common(headers, mcp_operation_document)
+                mcp_operation = mcp_operation_document["data"]
+                assert mcp_operation["kind"] == "mcp_refresh", mcp_operation
+                assert mcp_operation["target"] == "api-mock", mcp_operation
+                mcp_operation_id = mcp_operation["id"]
+                deadline = time.monotonic() + 5.0
+                while (not mcp_operation["terminal"] and
+                       time.monotonic() < deadline):
+                    time.sleep(0.01)
+                    status, headers, body = request(
+                        port, "GET", f"/api/v1/operations/{mcp_operation_id}")
+                    mcp_operation = json.loads(body)["data"]
+                    assert status == 200, (status, body)
+                assert mcp_operation["state"] == "succeeded", mcp_operation
+                assert mcp_operation["result"]["connected"] is True, mcp_operation
+                assert mcp_operation["result"]["tools_discovered"] is True, (
+                    mcp_operation)
+                assert mcp_operation["result"]["discovered_tools"] == 1, (
+                    mcp_operation)
+
+                mcp_data = json.loads(request(port, "GET", "/api/v1/mcp")[2])[
+                    "data"]
+                assert mcp_data["items"][0]["connected"] is True, mcp_data
+                assert mcp_data["items"][0]["discovered_tool_count"] == 1, (
+                    mcp_data)
+
+                status, headers, body = request(
+                    port, "POST", "/api/v1/mcp/api-mock/disconnect",
+                    body=b"{}", headers={"Content-Type": "application/json"})
+                document = json.loads(body)
+                assert status == 400 and document["error"]["code"] == (
+                    "body_not_allowed"), (status, body)
+                status, headers, body = request(
+                    port, "POST", "/api/v1/mcp/api-mock/disconnect")
+                document = json.loads(body)
+                assert status == 200, (status, body)
+                assert document["data"]["connected"] is False, document
+                assert document["data"]["enabled"] is True, document
+
+                status, headers, body = request(
+                    port, "PUT", "/api/v1/mcp/missing/enabled",
+                    body=b'{"enabled":true}',
+                    headers={"Content-Type": "application/json"})
+                document = json.loads(body)
+                assert status == 404 and document["error"]["code"] == (
+                    "mcp_server_not_found"), (status, body)
+                for path, allow in (
+                    ("enabled", "PUT, OPTIONS"),
+                    ("disconnect", "POST, OPTIONS"),
+                    ("refresh", "POST, OPTIONS"),
+                ):
+                    status, headers, body = request(
+                        port, "OPTIONS", f"/api/v1/mcp/api-mock/{path}")
+                    assert status == 200 and headers["allow"] == allow, (
+                        path, status, headers, body)
+
                 module_generation = json.loads(request(
                     port, "GET", "/api/v1/modules")[2])["data"]["generation"]
                 status, headers, body = request(
@@ -322,7 +494,7 @@ def run_probe(host: Path) -> None:
                 assert terminal_operation["state"] == "succeeded", (
                     terminal_operation)
                 assert terminal_operation["terminal"] is True, terminal_operation
-                assert terminal_operation["result"]["generation"] > (
+                assert terminal_operation["result"]["catalog_generation"] > (
                     module_generation), terminal_operation
                 assert terminal_operation["result"]["modules"] >= 1, (
                     terminal_operation)

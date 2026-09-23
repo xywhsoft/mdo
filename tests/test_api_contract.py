@@ -116,6 +116,12 @@ class ApiContractTests(unittest.TestCase):
         self.assertIn("xrtTaskPoolCreate", manager)
         self.assertIn("MDO_OPERATION_LIMIT 64u", manager)
         self.assertIn("xrtTaskPoolCancel", manager)
+        self.assertIn("MdoOperationStartMcpRefresh", manager)
+        self.assertIn("MdoMcpManagerRefresh", manager)
+        for suffix in ("enabled", "disconnect", "refresh"):
+            self.assertIn(f'"/api/v1/mcp/{{server}}/{suffix}"', self.router)
+        self.assertIn('"mcp_refresh"', operations)
+        self.assertIn('"tools_discovered"', operations)
 
     def test_every_json_response_has_identity_and_hardening_headers(self) -> None:
         for text in (

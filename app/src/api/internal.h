@@ -84,5 +84,8 @@ bool MdoApiModelsReloadRoute(MdoApiContext* pContext);
 bool MdoApiSkillsReloadRoute(MdoApiContext* pContext);
 bool MdoApiModulesReloadRoute(MdoApiContext* pContext);
 bool MdoApiMcpReloadRoute(MdoApiContext* pContext);
+bool MdoApiMcpEnabledRoute(MdoApiContext* pContext);
+bool MdoApiMcpDisconnectRoute(MdoApiContext* pContext);
+bool MdoApiMcpRefreshRoute(MdoApiContext* pContext);
 
 #endif
