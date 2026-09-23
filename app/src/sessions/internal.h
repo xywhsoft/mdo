@@ -20,4 +20,9 @@ void MdoSessionEventBridgeSetRegistered(MdoSessionEventBridge* Bridge);
 void MdoSessionsInternalActiveRelease(const char* ProjectId,
     const char* SessionId);
 
+/* Schema bridge used by the offline legacy migration staging pipeline. */
+char* MdoSessionsInternalMetaJson(const MdoSessionInfo* Info, size_t* Size);
+bool MdoSessionsInternalMetaParse(const char* ExpectedProject,
+    const char* ExpectedId, xstrview Json, MdoSessionInfo* Info);
+
 #endif

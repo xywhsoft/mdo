@@ -38,6 +38,90 @@ static xvalue* MdoApiMigrationPreviewValue(
     return Item;
 }
 
+static bool MdoApiMigrationText(const xvalue* Object, const char* Key,
+    char* Output, size_t Capacity)
+{
+    const xvalue* Value = Object != NULL &&
+        xrtValueType(Object) == XVALUE_OBJECT ?
+        xrtValueObjectGet(Object, xrtStrView(Key)) : NULL;
+    xstrview Text;
+    if ( Value == NULL || xrtValueType(Value) != XVALUE_STRING ||
+         !xrtValueGetString(Value, &Text) || Text.Size == 0u ||
+         Text.Size >= Capacity || memchr(Text.Data, '\0', Text.Size) != NULL ||
+         !xrtUtf8Valid(Text, NULL) ) return false;
+    memcpy(Output, Text.Data, Text.Size);
+    Output[Text.Size] = '\0';
+    return true;
+}
+
+static bool MdoApiLegacyMigrationApplyRoute(MdoApiContext* Context)
+{
+    MdoApiJsonBody Body;
+    MdoApiBodyStatus BodyStatus;
+    MdoMigrationApplyOptions Options;
+    MdoMigrationApplyResult Result;
+    xwork_error Error;
+    char SourceId[MDO_MIGRATION_SOURCE_ID_CAPACITY];
+    char Token[MDO_MIGRATION_TOKEN_CAPACITY];
+    xvalue* Data;
+    bool Ok;
+    BodyStatus = MdoApiJsonBodyRead(Context, &Body);
+    if ( BodyStatus != MDO_API_BODY_OK )
+        return MdoApiReplyBodyError(Context, BodyStatus);
+    Ok = xrtValueType(Body.Value) == XVALUE_OBJECT &&
+        xrtValueCount(Body.Value) == 2u &&
+        MdoApiMigrationText(Body.Value, "source_id", SourceId,
+            sizeof(SourceId)) &&
+        MdoApiMigrationText(Body.Value, "preview_token", Token,
+            sizeof(Token));
+    MdoApiJsonBodyUnit(&Body);
+    if ( !Ok ) return MdoApiReplyError(Context, 422u,
+        "migration_request_invalid",
+        "Migration requires exactly source_id and preview_token", NULL);
+    MdoMigrationApplyOptionsInit(&Options);
+    Options.SourceId = SourceId;
+    Options.PreviewToken = Token;
+    memset(&Result, 0, sizeof(Result));
+    Result.Size = sizeof(Result);
+    memset(&Error, 0, sizeof(Error));
+    if ( !MdoLegacyMigrationApply(&Options, &Result, &Error) ) {
+        uint16 Status = Error.eCode == XWORK_ERROR_CONTEXT ? 409u :
+            (Error.eCode == XWORK_ERROR_INVALID_ARGUMENT ? 422u : 500u);
+        return MdoApiReplyError(Context, Status,
+            Status == 409u ? "migration_conflict" :
+            (Status == 422u ? "migration_invalid" : "migration_failed"),
+            Error.sMessage[0] != '\0' ? Error.sMessage :
+                "Legacy migration could not be completed", NULL);
+    }
+    Data = xrtValueObject();
+    Ok = Data != NULL &&
+        MdoApiValueSetBool(Data, "restart_required",
+            Result.RestartRequired) &&
+        MdoApiValueSetString(Data, "target_path", Result.TargetPath) &&
+        MdoApiValueSetString(Data, "report_path", Result.ReportPath) &&
+        MdoApiValueSetUInt(Data, "imported_models",
+            Result.ImportedModels) &&
+        MdoApiValueSetUInt(Data, "imported_projects",
+            Result.ImportedProjects) &&
+        MdoApiValueSetUInt(Data, "imported_sessions",
+            Result.ImportedSessions) &&
+        MdoApiValueSetUInt(Data, "imported_schedules",
+            Result.ImportedSchedules) &&
+        MdoApiValueSetUInt(Data, "imported_memory_entries",
+            Result.ImportedMemoryEntries) &&
+        MdoApiValueSetUInt(Data, "skipped_items", Result.SkippedItems) &&
+        MdoApiValueSetUInt(Data, "written_files", Result.WrittenFiles) &&
+        MdoApiValueSetUInt(Data, "written_bytes", Result.WrittenBytes);
+    if ( !Ok ) {
+        xrtValueRelease(Data);
+        return MdoApiReplyError(Context, 500u,
+            "migration_result_unavailable",
+            "Migration completed but its result could not be serialized",
+            NULL);
+    }
+    return MdoApiReplySuccessTake(Context, 201u, Data, NULL);
+}
+
 bool MdoApiLegacyMigrationsRoute(MdoApiContext* Context)
 {
     MdoMigrationPreview Previews[2];
@@ -47,6 +131,8 @@ bool MdoApiLegacyMigrationsRoute(MdoApiContext* Context)
     size_t Count = 0u;
     size_t Index;
     bool Ok;
+    if ( Context->Request->head->MethodCode == XHTTP_METHOD_POST )
+        return MdoApiLegacyMigrationApplyRoute(Context);
     memset(Previews, 0, sizeof(Previews));
     Previews[0].Size = sizeof(Previews[0]);
     Previews[1].Size = sizeof(Previews[1]);

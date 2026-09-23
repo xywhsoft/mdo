@@ -4,6 +4,7 @@
 #include "../../include/mdo/config.h"
 #include "../../include/mdo/home.h"
 #include "../../include/mdo/schedules.h"
+#include "internal.h"
 
 #define MDO_SCHEDULE_SCHEMA_VERSION 1u
 #define MDO_SCHEDULE_MAX 128u
@@ -361,7 +362,7 @@ static void MdoSchedulesRuntimeInfo(MdoScheduleInfo* Target,
     Target->ActiveRuns = Source->iActiveRuns;
 }
 
-static bool MdoSchedulesDefinitionValid(const MdoScheduleInfo* Info,
+bool MdoSchedulesInternalValidate(const MdoScheduleInfo* Info,
     xwork_error* Error)
 {
     xwork_schedule_config Config;
@@ -396,7 +397,7 @@ static bool MdoSchedulesDefinitionValid(const MdoScheduleInfo* Info,
         &Next, &Has, Error) && Has;
 }
 
-static char* MdoSchedulesJson(const MdoScheduleInfo* Info, size_t* Size)
+char* MdoSchedulesInternalJson(const MdoScheduleInfo* Info, size_t* Size)
 {
     xvalue* Root = xrtValueObject();
     char* Json = NULL;
@@ -501,7 +502,7 @@ done:
     return Ok;
 }
 
-static bool MdoSchedulesParse(const char* ExpectedId, xstrview Json,
+bool MdoSchedulesInternalParse(const char* ExpectedId, xstrview Json,
     MdoScheduleInfo* Info)
 {
     xjsonreadconfig Config;
@@ -601,7 +602,7 @@ static bool MdoSchedulesParse(const char* ExpectedId, xstrview Json,
             sizeof(Info->WorkspaceRoot), Workspace, true) ||
          !MdoSchedulesCopyView(Info->Input, sizeof(Info->Input), Input, false) ||
          strcmp(Info->Id, ExpectedId) != 0 ||
-         !MdoSchedulesDefinitionValid(Info, NULL) ) goto done;
+         !MdoSchedulesInternalValidate(Info, NULL) ) goto done;
     Ok = true;
 done:
     xrtValueRelease(Root);
@@ -616,7 +617,7 @@ static bool MdoSchedulesWriteStore(const MdoScheduleInfo* Info,
     size_t Size = 0u;
     bool Ok;
     if ( !MdoSchedulesPath(Path, Info->Id) ) return false;
-    Json = MdoSchedulesJson(Info, &Size);
+    Json = MdoSchedulesInternalJson(Info, &Size);
     if ( Json == NULL ) {
         MdoSchedulesError(Error, XWORK_ERROR_OUT_OF_MEMORY,
             "cannot serialize schedule definition");
@@ -830,7 +831,7 @@ static bool MdoSchedulesRestoreOne(const char* Id, const char* Path)
     xwork_error Error;
     bool Registered = false;
     if ( !MdoSchedulesRead(Path, &Json, &Size) ||
-         !MdoSchedulesParse(Id, xrtStrViewN(Json, Size), &Info) ) {
+         !MdoSchedulesInternalParse(Id, xrtStrViewN(Json, Size), &Info) ) {
         xrtFree(Json);
         MdoSchedulesDiagnostic(Path,
             "schedule definition does not satisfy schema version 1");
@@ -1151,7 +1152,7 @@ static bool MdoSchedulesInfoFromOptions(const MdoScheduleCreateOptions* Options,
         Workspace);
     snprintf(Info->Input, sizeof(Info->Input), "%s",
         Options->Input);
-    return MdoSchedulesDefinitionValid(Info, Error);
+    return MdoSchedulesInternalValidate(Info, Error);
 }
 
 static bool MdoSchedulesReturnInfo(const MdoScheduleInfo* Source,

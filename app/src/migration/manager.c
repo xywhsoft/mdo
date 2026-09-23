@@ -3,43 +3,11 @@
 
 #include "../../include/mdo/home.h"
 #include "../../include/mdo/migration.h"
+#include "internal.h"
 
-#define MDO_MIGRATION_MAX_FILES 4096u
-#define MDO_MIGRATION_MAX_ENTRIES 8192u
-#define MDO_MIGRATION_MAX_DEPTH 8u
-#define MDO_MIGRATION_MAX_PATH 1024u
-#define MDO_MIGRATION_MAX_TOTAL (UINT64_C(256) * 1024u * 1024u)
-#define MDO_MIGRATION_MAX_FILE (UINT64_C(64) * 1024u * 1024u)
-#define MDO_MIGRATION_MAX_JSON (1024u * 1024u)
 #define MDO_MIGRATION_READ_CHUNK (64u * 1024u)
 
-typedef enum MdoMigrationFileKind {
-    MDO_MIGRATION_FILE_OTHER = 0,
-    MDO_MIGRATION_FILE_CONFIG,
-    MDO_MIGRATION_FILE_PROJECT,
-    MDO_MIGRATION_FILE_SESSION_META,
-    MDO_MIGRATION_FILE_SESSION_JOURNAL,
-    MDO_MIGRATION_FILE_SESSION_SNAPSHOT,
-    MDO_MIGRATION_FILE_SESSION_UI,
-    MDO_MIGRATION_FILE_MEMORY,
-    MDO_MIGRATION_FILE_SCHEDULE,
-    MDO_MIGRATION_FILE_AUDIT
-} MdoMigrationFileKind;
-
-typedef struct MdoMigrationFile {
-    char* Path;
-    uint64 Size;
-    MdoMigrationFileKind Kind;
-} MdoMigrationFile;
-
-typedef struct MdoMigrationScan {
-    MdoMigrationFile* Files;
-    size_t Count;
-    size_t EntryCount;
-    uint64 TotalBytes;
-} MdoMigrationScan;
-
-static void MdoMigrationError(xwork_error* Error, xwork_error_code Code,
+void MdoMigrationError(xwork_error* Error, xwork_error_code Code,
     const char* Message)
 {
     if ( Error == NULL ) return;
@@ -48,7 +16,7 @@ static void MdoMigrationError(xwork_error* Error, xwork_error_code Code,
     snprintf(Error->sMessage, sizeof(Error->sMessage), "%s", Message);
 }
 
-static void MdoMigrationXrtError(xwork_error* Error, const char* Fallback)
+void MdoMigrationXrtError(xwork_error* Error, const char* Fallback)
 {
     const xerror* Cause = xrtGetError();
     MdoMigrationError(Error, XWORK_ERROR_IO,
@@ -56,7 +24,7 @@ static void MdoMigrationXrtError(xwork_error* Error, const char* Fallback)
         xrtErrorMessage(Cause) : Fallback);
 }
 
-static bool MdoMigrationCopy(char* Output, size_t Capacity,
+bool MdoMigrationCopy(char* Output, size_t Capacity,
     const char* Text)
 {
     size_t Size;
@@ -67,7 +35,7 @@ static bool MdoMigrationCopy(char* Output, size_t Capacity,
     return true;
 }
 
-static bool MdoMigrationEndsWith(const char* Text, const char* Suffix)
+bool MdoMigrationEndsWith(const char* Text, const char* Suffix)
 {
     size_t TextSize = strlen(Text);
     size_t SuffixSize = strlen(Suffix);
@@ -146,7 +114,7 @@ static char* MdoMigrationChildPath(const char* Parent, xstrview Name)
     return Result;
 }
 
-static void MdoMigrationScanUnit(MdoMigrationScan* Scan)
+void MdoMigrationScanUnit(MdoMigrationScan* Scan)
 {
     size_t i;
     if ( Scan == NULL ) return;
@@ -182,7 +150,7 @@ static bool MdoMigrationScanPush(MdoMigrationScan* Scan, char* Path,
     return true;
 }
 
-static bool MdoMigrationScanDirectory(xroot Root, const char* Path,
+bool MdoMigrationScanDirectory(xroot Root, const char* Path,
     size_t Depth, MdoMigrationScan* Scan, xwork_error* Error)
 {
     xdir Directory = NULL;
@@ -250,7 +218,7 @@ done:
     return Ok;
 }
 
-static int MdoMigrationFileCompare(const void* LeftValue,
+int MdoMigrationFileCompare(const void* LeftValue,
     const void* RightValue)
 {
     const MdoMigrationFile* Left = (const MdoMigrationFile*)LeftValue;
@@ -258,7 +226,7 @@ static int MdoMigrationFileCompare(const void* LeftValue,
     return strcmp(Left->Path, Right->Path);
 }
 
-static MdoMigrationFile* MdoMigrationFind(MdoMigrationScan* Scan,
+MdoMigrationFile* MdoMigrationFind(MdoMigrationScan* Scan,
     const char* Path)
 {
     size_t i;
@@ -267,7 +235,7 @@ static MdoMigrationFile* MdoMigrationFind(MdoMigrationScan* Scan,
     return NULL;
 }
 
-static bool MdoMigrationRead(xroot Root, const MdoMigrationFile* Item,
+bool MdoMigrationRead(xroot Root, const MdoMigrationFile* Item,
     size_t Limit, char** Data, size_t* Size, xwork_error* Error)
 {
     xfileoptions Options;
@@ -336,7 +304,7 @@ static bool MdoMigrationString(const xvalue* Object, const char* Key,
         xrtUtf8Valid(Text, NULL);
 }
 
-static xvalue* MdoMigrationParseJson(xroot Root,
+xvalue* MdoMigrationParseJson(xroot Root,
     const MdoMigrationFile* Item, xwork_error* Error)
 {
     xjsonreadconfig Config;

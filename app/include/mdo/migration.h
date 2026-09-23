@@ -34,6 +34,27 @@ typedef struct MdoMigrationPreview {
     char Message[256];
 } MdoMigrationPreview;
 
+typedef struct MdoMigrationApplyOptions {
+    uint32 Size;
+    const char* SourceId;
+    const char* PreviewToken;
+} MdoMigrationApplyOptions;
+
+typedef struct MdoMigrationApplyResult {
+    uint32 Size;
+    bool RestartRequired;
+    size_t ImportedModels;
+    size_t ImportedProjects;
+    size_t ImportedSessions;
+    size_t ImportedSchedules;
+    size_t ImportedMemoryEntries;
+    size_t SkippedItems;
+    size_t WrittenFiles;
+    uint64 WrittenBytes;
+    char TargetPath[MDO_MIGRATION_PATH_CAPACITY];
+    char ReportPath[MDO_MIGRATION_PATH_CAPACITY];
+} MdoMigrationApplyResult;
+
 /* Resolves and inspects one known legacy source without creating Home or
  * changing the source. A missing or ineligible source is a successful preview
  * with Found/Importable false and an explanatory Message. */
@@ -44,5 +65,13 @@ bool MdoLegacyMigrationPreview(const char* SourceId,
  * physical paths are represented once; Count is always set on success. */
 bool MdoLegacyMigrationDiscover(MdoMigrationPreview* Previews,
     size_t Capacity, size_t* Count, xwork_error* Error);
+
+void MdoMigrationApplyOptionsInit(MdoMigrationApplyOptions* Options);
+
+/* Re-runs the complete preview and requires an exact content-bound token.
+ * Conversion happens in a sibling staging directory and the target is
+ * published once without replacement. The source is never modified. */
+bool MdoLegacyMigrationApply(const MdoMigrationApplyOptions* Options,
+    MdoMigrationApplyResult* Result, xwork_error* Error);
 
 #endif

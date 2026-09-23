@@ -9,6 +9,11 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 HEADER = (ROOT / "app/include/mdo/migration.h").read_text(encoding="utf-8")
 SOURCE = (ROOT / "app/src/migration/manager.c").read_text(encoding="utf-8")
+APPLY = (ROOT / "app/src/migration/apply.c").read_text(encoding="utf-8")
+SESSIONS = (ROOT / "app/src/migration/sessions.c").read_text(encoding="utf-8")
+MEMORY = (ROOT / "app/src/migration/memory.c").read_text(encoding="utf-8")
+SCHEDULES = (ROOT / "app/src/migration/schedules.c").read_text(encoding="utf-8")
+REPORT = (ROOT / "app/src/migration/report.c").read_text(encoding="utf-8")
 SOURCES = (ROOT / "app/sources.json").read_text(encoding="utf-8")
 API = (ROOT / "app/src/api/migration.c").read_text(encoding="utf-8")
 ROUTER = (ROOT / "app/src/api/router.c").read_text(encoding="utf-8")
@@ -70,6 +75,39 @@ class MigrationContractTests(unittest.TestCase):
             "unsupported_count", "preview_token",
         ):
             self.assertIn(f'"{field}"', API)
+
+    def test_apply_is_token_bound_staged_and_atomically_published(self) -> None:
+        for symbol in (
+            "MdoMigrationApplyOptions", "MdoMigrationApplyResult",
+            "MdoLegacyMigrationApply", "RestartRequired", "ReportPath",
+        ):
+            self.assertIn(symbol, HEADER)
+        for token in (
+            "MdoLegacyMigrationPreview", "PreviewToken",
+            "MdoMigrationPrepareStage", "MdoMigrationWriteReport",
+            "xrtPathRename", "xrtDirRemoveAll",
+        ):
+            self.assertIn(token, APPLY)
+        self.assertIn("strcmp(FinalPreview.PreviewToken", APPLY)
+        self.assertIn("!Published", APPLY)
+
+    def test_apply_revalidates_current_schemas_and_preserves_source(self) -> None:
+        self.assertIn("xllmSessionRecover", SESSIONS)
+        self.assertIn("xllmSessionCheckpoint", SESSIONS)
+        self.assertIn("MdoSessionsInternalMetaParse", SESSIONS)
+        self.assertIn("MdoMemoryInternalParse", MEMORY)
+        self.assertIn("MdoSchedulesInternalValidate", SCHEDULES)
+        self.assertIn("MdoSchedulesInternalParse", SCHEDULES)
+        self.assertIn('"source_preserved"', REPORT)
+        self.assertIn('"restart_required"', REPORT)
+
+    def test_apply_api_requires_exact_explicit_confirmation(self) -> None:
+        self.assertIn("XHTTP_METHOD_POST", ROUTER)
+        self.assertIn("xrtValueCount(Body.Value) == 2u", API)
+        self.assertIn('"source_id"', API)
+        self.assertIn('"preview_token"', API)
+        self.assertIn("MdoLegacyMigrationApply", API)
+        self.assertIn("201u", API)
 
 
 if __name__ == "__main__":

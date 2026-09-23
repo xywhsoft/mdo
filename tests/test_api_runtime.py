@@ -429,6 +429,7 @@ def run_probe(host: Path) -> None:
         home = base / "home"
         legacy = base / ".mdo"
         (legacy / "projects/api-legacy").mkdir(parents=True)
+        (legacy / "projects/api-legacy/sessions").mkdir()
         (legacy / "memory").mkdir()
         (legacy / "schedules").mkdir()
         (legacy / "config.json").write_text(json.dumps({
@@ -439,6 +440,7 @@ def run_probe(host: Path) -> None:
                 "model": "legacy-wire-model",
                 "dialect": "responses",
                 "reasoning": "medium",
+                "apiKey": "legacy-migration-secret",
             }],
             "defaultModel": "legacy-model",
             "activeProject": "api-legacy",
@@ -449,6 +451,19 @@ def run_probe(host: Path) -> None:
             "path": str(base / "workspace"),
             "defaultModel": "legacy-model",
         }), encoding="utf-8")
+        (legacy / "projects/api-legacy/sessions/s123456789abc.meta.json").write_text(
+            json.dumps({
+                "id": "s123456789abc",
+                "title": "Legacy API session",
+                "model": "legacy-model",
+                "project": "api-legacy",
+                "contextWindow": 131072,
+                "createdAt": 1700000000000,
+                "updatedAt": 1700000001000,
+                "turns": 0,
+                "pinned": True,
+                "userPrompt": "Preserve this legacy session prompt.",
+            }), encoding="utf-8")
         (legacy / "memory/preference.md").write_text(
             "# Preference\n\nKeep migration explicit.\n", encoding="utf-8")
         (legacy / "schedules/once.json").write_text(json.dumps({
@@ -514,8 +529,9 @@ def run_probe(host: Path) -> None:
                 assert user_home["valid"] is True, user_home
                 assert user_home["importable"] is True, user_home
                 assert user_home["target_available"] is True, user_home
-                assert user_home["file_count"] == 4, user_home
+                assert user_home["file_count"] == 5, user_home
                 assert user_home["project_count"] == 1, user_home
+                assert user_home["session_count"] == 1, user_home
                 assert user_home["model_count"] == 1, user_home
                 assert user_home["schedule_count"] == 1, user_home
                 assert user_home["memory_file_count"] == 1, user_home
@@ -523,6 +539,59 @@ def run_probe(host: Path) -> None:
                 assert re.fullmatch(r"[0-9a-f]{64}",
                                     user_home["preview_token"]), user_home
                 assert not home.exists(), home
+
+                stale_token = ("0" if user_home["preview_token"][0] != "0"
+                               else "1") + user_home["preview_token"][1:]
+                status, _, body = request(
+                    port, "POST", "/api/v1/migrations/legacy",
+                    body=json.dumps({
+                        "source_id": "user-home",
+                        "preview_token": stale_token,
+                    }).encode(), headers={"Content-Type": "application/json"})
+                assert status == 409, (status, body)
+                assert not home.exists(), home
+
+                status, headers, body = request(
+                    port, "POST", "/api/v1/migrations/legacy",
+                    body=json.dumps({
+                        "source_id": "user-home",
+                        "preview_token": user_home["preview_token"],
+                    }).encode(), headers={"Content-Type": "application/json"})
+                document = json.loads(body)
+                assert status == 201, (status, body)
+                assert_common(headers, document)
+                applied = document["data"]
+                assert applied["restart_required"] is True, applied
+                assert applied["imported_models"] == 1, applied
+                assert applied["imported_projects"] == 2, applied
+                assert applied["imported_sessions"] == 1, applied
+                assert applied["imported_schedules"] == 1, applied
+                assert applied["imported_memory_entries"] == 1, applied
+                assert home.is_dir(), home
+                report_path = Path(applied["report_path"])
+                assert report_path.is_file(), report_path
+                report = json.loads(report_path.read_text(encoding="utf-8"))
+                assert report["source_preserved"] is True, report
+                assert report["restart_required"] is True, report
+                assert report["preview_token"] == user_home["preview_token"], report
+                assert "legacy-migration-secret" not in report_path.read_text(
+                    encoding="utf-8"), report
+                assert (home / "config/settings.json").is_file(), home
+                assert (home / "config/models.json").is_file(), home
+                model_config = (home / "config/models.json").read_text(
+                    encoding="utf-8")
+                assert "legacy-migration-secret" not in model_config, model_config
+                secret_path = next((home / "secrets").glob("legacy-*.key"))
+                assert secret_path.read_text(encoding="utf-8") == (
+                    "legacy-migration-secret"), secret_path
+                assert (home / "memory/global.json").is_file(), home
+                assert (home / "schedules/once.json").is_file(), home
+                migrated_session = home / "sessions/api-legacy/s123456789abc"
+                assert (migrated_session / "meta.json").is_file(), migrated_session
+                assert (migrated_session / "snapshot.json").is_file(), migrated_session
+                assert (home / "migration/session-prompts/api-legacy/"
+                        "s123456789abc.txt").is_file(), home
+                assert legacy.is_dir(), legacy
 
                 resources = (
                     "settings", "models", "agents", "modules", "skills",
@@ -1097,7 +1166,7 @@ def run_probe(host: Path) -> None:
                 assert status == 200 and headers["allow"] == (
                     "GET, HEAD, DELETE, OPTIONS")
 
-                assert not home.exists(), list(base.iterdir())
+                assert home.is_dir(), list(base.iterdir())
                 assert not (base / "wrong-environment-home").exists(), list(base.iterdir())
 
                 status, headers, body = request(port, "GET", "/api/v1/settings")
@@ -1302,8 +1371,8 @@ def run_probe(host: Path) -> None:
 
                 sessions_document = json.loads(request(
                     port, "GET", "/api/v1/sessions")[2])
-                assert sessions_document["data"]["items"][0]["id"] == (
-                    session_id), sessions_document
+                assert any(item["id"] == session_id for item in
+                           sessions_document["data"]["items"]), sessions_document
                 status, headers, body = request(
                     port, "GET",
                     "/api/v1/projects/api-project/sessions/missing")

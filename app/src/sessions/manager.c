@@ -216,7 +216,7 @@ static bool MdoSessionsObjectString(xvalue* Object, const char* Key,
         xrtValueString(xrtStrView(Text != NULL ? Text : "")));
 }
 
-static str MdoSessionsMetaJson(const MdoSessionInfo* Info, size_t* Size)
+char* MdoSessionsInternalMetaJson(const MdoSessionInfo* Info, size_t* Size)
 {
     xvalue* Object = xrtValueObject();
     const char* Status = MdoSessionsStatusName(Info->Status);
@@ -322,7 +322,7 @@ done:
     return Ok;
 }
 
-static bool MdoSessionsMetaParse(const char* ExpectedProject,
+bool MdoSessionsInternalMetaParse(const char* ExpectedProject,
     const char* ExpectedId, xstrview Json, MdoSessionInfo* Info)
 {
     xjsonreadconfig Config;
@@ -450,7 +450,7 @@ static bool MdoSessionsMetaRead(const char* ProjectId, const char* SessionId,
     if ( !MdoSessionsPath(Path, ProjectId, SessionId, "meta.json") ||
          !MdoSessionsReadBounded(Path, MDO_SESSION_META_LIMIT,
             &Data, &Size) ) return false;
-    Ok = MdoSessionsMetaParse(ProjectId, SessionId,
+    Ok = MdoSessionsInternalMetaParse(ProjectId, SessionId,
         xrtStrViewN(Data, Size), Info);
     xrtFree(Data);
     if ( !Ok ) {
@@ -467,7 +467,7 @@ static bool MdoSessionsMetaWrite(const char* Path,
     char* Json;
     size_t Size = 0u;
     bool Ok;
-    Json = MdoSessionsMetaJson(Info, &Size);
+    Json = MdoSessionsInternalMetaJson(Info, &Size);
     if ( Json == NULL ) return false;
     Ok = MdoHomeAtomicWrite(Path, Json, Size, true);
     xrtFree(Json);
