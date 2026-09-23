@@ -28,14 +28,6 @@ function Format-ProcessArgument([string]$Value) {
     return '"' + $Value.Replace('"', '\"') + '"'
 }
 
-function Read-RunLog([string]$Root) {
-    $logPath = Join-Path $Root 'xsw.log'
-    if (-not (Test-Path -LiteralPath $logPath -PathType Leaf)) {
-        return '<xsw.log missing>'
-    }
-    return (Get-Content -LiteralPath $logPath -Tail 80) -join [Environment]::NewLine
-}
-
 function Remove-TestDirectory([string]$Path) {
     $resolvedTemp = [IO.Path]::GetFullPath($env:TEMP).TrimEnd('\', '/') + [IO.Path]::DirectorySeparatorChar
     $resolvedPath = [IO.Path]::GetFullPath($Path)
@@ -69,8 +61,7 @@ try {
     $run = Start-Process -FilePath $packedPath -WorkingDirectory $runRoot `
         -WindowStyle Hidden -PassThru
     if ($run.WaitForExit($ObserveSeconds * 1000)) {
-        $log = Read-RunLog $runRoot
-        throw "packed process exited during the observation window: exit=$($run.ExitCode)`n$log"
+        throw "packed process exited during the observation window: exit=$($run.ExitCode)"
     }
 
     Stop-Process -Id $run.Id -Force
@@ -82,15 +73,16 @@ try {
         throw "packed process produced crash artifacts: $($crashes.Name -join ', ')"
     }
 
-    $logText = Read-RunLog $runRoot
-    foreach ($marker in @('script loaded:', '[packed-startup-smoke] service initialized',
-            'frontend ready ->', '[xs] running')) {
-        if ($logText.IndexOf($marker, [StringComparison]::Ordinal) -lt 0) {
-            throw "startup log is missing marker '$marker'`n$logText"
-        }
+    $markerPath = Join-Path $runRoot 'startup-ready.marker'
+    if (-not (Test-Path -LiteralPath $markerPath -PathType Leaf) -or
+        (Get-Content -LiteralPath $markerPath -Raw) -ne "service-initialized`n") {
+        throw 'packed service did not publish its startup marker'
+    }
+    if (Test-Path -LiteralPath (Join-Path $runRoot 'xsw.log')) {
+        throw 'packed GUI process created the deprecated xsw.log side file'
     }
 
-    Write-Host "PASS: packed app reached frontend-ready and survived ${ObserveSeconds}s"
+    Write-Host "PASS: packed service initialized and survived ${ObserveSeconds}s"
     Write-Host "host: $xswPath"
     if ($KeepArtifacts) {
         Write-Host "artifacts: $runRoot"
