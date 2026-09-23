@@ -4,6 +4,19 @@
 #include "internal.h"
 #include "../../include/mdo/sessions.h"
 
+typedef enum MdoApiSessionPreconditionStatus {
+    MDO_API_SESSION_PRECONDITION_OK = 0,
+    MDO_API_SESSION_PRECONDITION_MISSING,
+    MDO_API_SESSION_PRECONDITION_INVALID
+} MdoApiSessionPreconditionStatus;
+
+typedef enum MdoApiSessionPatchKind {
+    MDO_API_SESSION_PATCH_NONE = 0,
+    MDO_API_SESSION_PATCH_TITLE,
+    MDO_API_SESSION_PATCH_PINNED,
+    MDO_API_SESSION_PATCH_ARCHIVED
+} MdoApiSessionPatchKind;
+
 static bool MdoApiSessionString(const xvalue* Object, cstr Name,
     char* Output, size_t Capacity, bool Required, size_t* Present)
 {
@@ -53,6 +66,87 @@ static bool MdoApiSessionProtocol(cstr Text, MdoModelProtocol* Protocol)
         *Protocol = MDO_MODEL_PROTOCOL_ANTHROPIC_MESSAGES;
     else return false;
     return true;
+}
+
+static bool MdoApiSessionPath(const MdoApiContext* Context,
+    char Project[MDO_PROJECT_ID_CAPACITY],
+    char SessionId[MDO_SESSION_ID_CAPACITY])
+{
+    if ( Context->ParamCount != 2u || Context->Params[0].Size == 0u ||
+         Context->Params[0].Size >= MDO_PROJECT_ID_CAPACITY ||
+         Context->Params[1].Size == 0u ||
+         Context->Params[1].Size >= MDO_SESSION_ID_CAPACITY ) return false;
+    memcpy(Project, Context->Params[0].Data, Context->Params[0].Size);
+    Project[Context->Params[0].Size] = '\0';
+    memcpy(SessionId, Context->Params[1].Data, Context->Params[1].Size);
+    SessionId[Context->Params[1].Size] = '\0';
+    return true;
+}
+
+static bool MdoApiSessionNoBody(const MdoApiContext* Context)
+{
+    const xhttp1head* Head = Context->Request->head;
+    return !(((Head->Flags & (uint32)XHTTP1_CONTENT_LENGTH) != 0u &&
+              Head->ContentLength != 0u) ||
+             (Head->Flags & (uint32)XHTTP1_TRANSFER_ENCODING) != 0u);
+}
+
+static MdoApiSessionPreconditionStatus MdoApiSessionExpectedRevision(
+    const MdoApiContext* Context, const char* SessionId, uint64* Revision,
+    bool* MatchesSession)
+{
+    static const char Prefix[] = "\"mdo-session-";
+    const xhttpfield* Field = NULL;
+    xhttpnext Next;
+    xstrview Value;
+    uint64 Number = 0u;
+    size_t PrefixSize = sizeof(Prefix) - 1u;
+    size_t Dash;
+    size_t Index;
+    size_t SessionSize = strlen(SessionId);
+
+    *MatchesSession = false;
+    Next = xrtHttpFieldGetUnique(Context->Request->head->Fields,
+        Context->Request->head->FieldCount, XRT_STR_LITERAL("If-Match"),
+        &Field);
+    if ( Next == XHTTP_NEXT_END )
+        return MDO_API_SESSION_PRECONDITION_MISSING;
+    if ( Next != XHTTP_NEXT_ITEM || Field == NULL )
+        return MDO_API_SESSION_PRECONDITION_INVALID;
+    Value = xrtStrTrim(Field->Value);
+    if ( Value.Size < PrefixSize + 4u ||
+         memcmp(Value.Data, Prefix, PrefixSize) != 0 ||
+         Value.Data[Value.Size - 1u] != '"' )
+        return MDO_API_SESSION_PRECONDITION_INVALID;
+    Dash = Value.Size - 2u;
+    while ( Dash > PrefixSize && Value.Data[Dash] != '-' ) Dash--;
+    if ( Dash == PrefixSize || Value.Data[Dash] != '-' )
+        return MDO_API_SESSION_PRECONDITION_INVALID;
+    for ( Index = PrefixSize; Index < Dash; Index++ ) {
+        unsigned char Byte = (unsigned char)Value.Data[Index];
+        size_t IdIndex = Index - PrefixSize;
+        if ( (Byte >= 'a' && Byte <= 'z') ||
+             (Byte >= 'A' && Byte <= 'Z') ||
+             (Byte >= '0' && Byte <= '9') || Byte == '-' || Byte == '_' ||
+             (Byte == '.' && IdIndex != 0u) ) continue;
+        return MDO_API_SESSION_PRECONDITION_INVALID;
+    }
+    if ( Dash + 1u >= Value.Size - 1u )
+        return MDO_API_SESSION_PRECONDITION_INVALID;
+    for ( Index = Dash + 1u; Index + 1u < Value.Size; Index++ ) {
+        uint64 Digit;
+        if ( Value.Data[Index] < '0' || Value.Data[Index] > '9' )
+            return MDO_API_SESSION_PRECONDITION_INVALID;
+        Digit = (uint64)(Value.Data[Index] - '0');
+        if ( Number > (UINT64_MAX - Digit) / 10u )
+            return MDO_API_SESSION_PRECONDITION_INVALID;
+        Number = Number * 10u + Digit;
+    }
+    if ( Number == 0u ) return MDO_API_SESSION_PRECONDITION_INVALID;
+    *MatchesSession = Dash - PrefixSize == SessionSize &&
+        memcmp(Value.Data + PrefixSize, SessionId, SessionSize) == 0;
+    *Revision = Number;
+    return MDO_API_SESSION_PRECONDITION_OK;
 }
 
 static bool MdoApiSessionInfoValue(const MdoSessionInfo* Info,
@@ -141,6 +235,64 @@ static bool MdoApiSessionCreateFailure(MdoApiContext* Context,
         "The session could not be created", NULL);
 }
 
+static bool MdoApiSessionLoadFailure(MdoApiContext* Context,
+    const xwork_error* Error)
+{
+    const xerror* Cause = xrtGetError();
+    xerrkind Kind = Cause != NULL ? xrtErrorKind(Cause) : XERR_NONE;
+    xrtClearError();
+    if ( Error != NULL && Error->eCode == XWORK_ERROR_INVALID_ARGUMENT )
+        return MdoApiReplyError(Context, 400u, "invalid_session_path",
+            "The project or session ID is invalid", NULL);
+    if ( Kind == XERR_NOT_FOUND )
+        return MdoApiReplyError(Context, 404u, "session_not_found",
+            "The requested session does not exist", NULL);
+    return MdoApiReplyError(Context, 500u, "session_read_failed",
+        "The session metadata could not be read", NULL);
+}
+
+static bool MdoApiSessionMutationFailure(MdoApiContext* Context,
+    const char* Project, const char* SessionId, uint64 ExpectedRevision,
+    const xwork_error* Error)
+{
+    MdoSession* Fresh;
+    MdoSessionInfo Info;
+    xwork_error LoadError;
+    bool Stale = false;
+
+    memset(&LoadError, 0, sizeof(LoadError));
+    xrtClearError();
+    Fresh = MdoSessionLoad(Project, SessionId, &LoadError);
+    if ( Fresh != NULL ) {
+        memset(&Info, 0, sizeof(Info)); Info.Size = sizeof(Info);
+        Stale = MdoSessionGetInfo(Fresh, &Info) &&
+            Info.Revision != ExpectedRevision;
+        MdoSessionRelease(Fresh);
+    }
+    xrtClearError();
+    if ( Stale )
+        return MdoApiReplyError(Context, 412u, "revision_conflict",
+            "The session changed; reload it before updating", NULL);
+    if ( Error != NULL && Error->eCode == XWORK_ERROR_INVALID_ARGUMENT )
+        return MdoApiReplyError(Context, 422u, "session_update_invalid",
+            "The session update is invalid", NULL);
+    if ( Error != NULL &&
+         (Error->eCode == XWORK_ERROR_CONTEXT ||
+          Error->eCode == XWORK_ERROR_POLICY ||
+          Error->eCode == XWORK_ERROR_LIMIT) )
+        return MdoApiReplyError(Context, 409u, "session_state_conflict",
+            "The session state does not allow this update", NULL);
+    if ( Error != NULL && Error->eCode == XWORK_ERROR_OUT_OF_MEMORY )
+        return MdoApiReplyError(Context, 503u, "session_service_unavailable",
+            "The session service could not complete this update", NULL);
+    if ( Error != NULL && Error->eCode == XWORK_ERROR_IO )
+        return MdoApiReplyError(Context, 500u,
+            "session_persistence_failed",
+            "The session update could not be persisted", NULL);
+    return MdoApiReplyError(Context, 500u, "session_update_failed",
+        "The session could not be updated", NULL);
+}
+
 bool MdoApiSessionCreateRoute(MdoApiContext* Context)
 {
     MdoApiJsonBody Body;
@@ -220,6 +372,142 @@ bool MdoApiSessionCreateRoute(MdoApiContext* Context)
     return MdoApiSessionReply(Context, 201u, &Info);
 }
 
+static bool MdoApiSessionPatch(MdoApiContext* Context, MdoSession* Session,
+    xwork_error* Error, bool* Attempted)
+{
+    MdoApiJsonBody Body;
+    MdoApiBodyStatus BodyStatus;
+    const xvalue* TitleValue;
+    const xvalue* PinnedValue;
+    const xvalue* ArchivedValue;
+    MdoApiSessionPatchKind Kind = MDO_API_SESSION_PATCH_NONE;
+    char Title[MDO_SESSION_TITLE_CAPACITY];
+    bool BooleanValue = false;
+    xstrview Text;
+    bool Valid = false;
+    bool Ok;
+
+    *Attempted = false;
+    BodyStatus = MdoApiJsonBodyRead(Context, &Body);
+    if ( BodyStatus != MDO_API_BODY_OK )
+        return MdoApiReplyBodyError(Context, BodyStatus);
+    TitleValue = xrtValueType(Body.Value) == XVALUE_OBJECT ?
+        xrtValueObjectGet(Body.Value, XRT_STR_LITERAL("title")) : NULL;
+    PinnedValue = xrtValueType(Body.Value) == XVALUE_OBJECT ?
+        xrtValueObjectGet(Body.Value, XRT_STR_LITERAL("pinned")) : NULL;
+    ArchivedValue = xrtValueType(Body.Value) == XVALUE_OBJECT ?
+        xrtValueObjectGet(Body.Value, XRT_STR_LITERAL("archived")) : NULL;
+    if ( xrtValueType(Body.Value) == XVALUE_OBJECT &&
+         xrtValueCount(Body.Value) == 1u && TitleValue != NULL &&
+         xrtValueType(TitleValue) == XVALUE_STRING &&
+         xrtValueGetString(TitleValue, &Text) &&
+         Text.Size < sizeof(Title) &&
+         memchr(Text.Data, 0, Text.Size) == NULL &&
+         xrtUtf8Valid(Text, NULL) ) {
+        if ( Text.Size != 0u ) memcpy(Title, Text.Data, Text.Size);
+        Title[Text.Size] = '\0';
+        Kind = MDO_API_SESSION_PATCH_TITLE;
+        Valid = true;
+    } else if ( xrtValueType(Body.Value) == XVALUE_OBJECT &&
+                xrtValueCount(Body.Value) == 1u && PinnedValue != NULL &&
+                xrtValueType(PinnedValue) == XVALUE_BOOL &&
+                xrtValueGetBool(PinnedValue, &BooleanValue) ) {
+        Kind = MDO_API_SESSION_PATCH_PINNED;
+        Valid = true;
+    } else if ( xrtValueType(Body.Value) == XVALUE_OBJECT &&
+                xrtValueCount(Body.Value) == 1u && ArchivedValue != NULL &&
+                xrtValueType(ArchivedValue) == XVALUE_BOOL &&
+                xrtValueGetBool(ArchivedValue, &BooleanValue) ) {
+        Kind = MDO_API_SESSION_PATCH_ARCHIVED;
+        Valid = true;
+    }
+    MdoApiJsonBodyUnit(&Body);
+    if ( !Valid )
+        return MdoApiReplyError(Context, 422u, "session_patch_invalid",
+            "PATCH must contain exactly one valid title, pinned, or archived field",
+            NULL);
+    *Attempted = true;
+    if ( Kind == MDO_API_SESSION_PATCH_TITLE )
+        Ok = MdoSessionRename(Session, Title, Error);
+    else if ( Kind == MDO_API_SESSION_PATCH_PINNED )
+        Ok = MdoSessionSetPinned(Session, BooleanValue, Error);
+    else Ok = MdoSessionSetArchived(Session, BooleanValue, Error);
+    return Ok;
+}
+
+static bool MdoApiSessionMutate(MdoApiContext* Context, bool Restore)
+{
+    char Project[MDO_PROJECT_ID_CAPACITY];
+    char SessionId[MDO_SESSION_ID_CAPACITY];
+    MdoApiSessionPreconditionStatus Precondition;
+    MdoSession* Session;
+    MdoSessionInfo Info;
+    xwork_error Error;
+    uint64 ExpectedRevision = 0u;
+    bool MatchesSession = false;
+    bool Attempted = true;
+    bool Ok;
+
+    if ( !MdoApiSessionPath(Context, Project, SessionId) )
+        return MdoApiReplyError(Context, 400u, "invalid_session_path",
+            "The project or session ID is invalid", NULL);
+    Precondition = MdoApiSessionExpectedRevision(Context, SessionId,
+        &ExpectedRevision, &MatchesSession);
+    if ( Precondition == MDO_API_SESSION_PRECONDITION_MISSING )
+        return MdoApiReplyError(Context, 428u, "precondition_required",
+            "If-Match must contain the current session ETag", NULL);
+    if ( Precondition != MDO_API_SESSION_PRECONDITION_OK )
+        return MdoApiReplyError(Context, 400u, "invalid_precondition",
+            "If-Match must use the form \"mdo-session-ID-N\"", NULL);
+    if ( (Restore || Context->Request->head->MethodCode ==
+            XHTTP_METHOD_DELETE) && !MdoApiSessionNoBody(Context) ) {
+        return MdoApiReplyError(Context, 400u, "body_not_allowed",
+            "This session operation does not accept a body", NULL);
+    }
+    memset(&Error, 0, sizeof(Error));
+    xrtClearError();
+    Session = MdoSessionLoad(Project, SessionId, &Error);
+    if ( Session == NULL ) return MdoApiSessionLoadFailure(Context, &Error);
+    memset(&Info, 0, sizeof(Info)); Info.Size = sizeof(Info);
+    if ( !MdoSessionGetInfo(Session, &Info) ) {
+        MdoSessionRelease(Session);
+        return MdoApiReplyError(Context, 500u, "session_result_unavailable",
+            "The session metadata is unavailable", NULL);
+    }
+    if ( !MatchesSession || Info.Revision != ExpectedRevision ) {
+        MdoSessionRelease(Session);
+        return MdoApiReplyError(Context, 412u, "revision_conflict",
+            "The session changed; reload it before updating", NULL);
+    }
+    memset(&Error, 0, sizeof(Error));
+    if ( Restore ) Ok = MdoSessionRestore(Session, &Error);
+    else if ( Context->Request->head->MethodCode == XHTTP_METHOD_DELETE )
+        Ok = MdoSessionMoveToTrash(Session, &Error);
+    else Ok = MdoApiSessionPatch(Context, Session, &Error, &Attempted);
+    if ( !Attempted ) {
+        MdoSessionRelease(Session);
+        return Ok;
+    }
+    if ( !Ok ) {
+        MdoSessionRelease(Session);
+        return MdoApiSessionMutationFailure(Context, Project, SessionId,
+            ExpectedRevision, &Error);
+    }
+    memset(&Info, 0, sizeof(Info)); Info.Size = sizeof(Info);
+    if ( !MdoSessionGetInfo(Session, &Info) ) {
+        MdoSessionRelease(Session);
+        return MdoApiReplyError(Context, 500u, "session_result_unavailable",
+            "The session was updated but its metadata is unavailable", NULL);
+    }
+    MdoSessionRelease(Session);
+    return MdoApiSessionReply(Context, 200u, &Info);
+}
+
+bool MdoApiSessionRestoreRoute(MdoApiContext* Context)
+{
+    return MdoApiSessionMutate(Context, true);
+}
+
 bool MdoApiSessionRoute(MdoApiContext* Context)
 {
     char Project[MDO_PROJECT_ID_CAPACITY];
@@ -228,33 +516,17 @@ bool MdoApiSessionRoute(MdoApiContext* Context)
     MdoSessionInfo Info;
     xwork_error Error;
 
-    if ( Context->ParamCount != 2u || Context->Params[0].Size == 0u ||
-         Context->Params[0].Size >= sizeof(Project) ||
-         Context->Params[1].Size == 0u ||
-         Context->Params[1].Size >= sizeof(SessionId) ) {
+    if ( Context->Request->head->MethodCode == XHTTP_METHOD_PATCH ||
+         Context->Request->head->MethodCode == XHTTP_METHOD_DELETE )
+        return MdoApiSessionMutate(Context, false);
+    if ( !MdoApiSessionPath(Context, Project, SessionId) ) {
         return MdoApiReplyError(Context, 400u, "invalid_session_path",
             "The project or session ID is invalid", NULL);
     }
-    memcpy(Project, Context->Params[0].Data, Context->Params[0].Size);
-    Project[Context->Params[0].Size] = '\0';
-    memcpy(SessionId, Context->Params[1].Data, Context->Params[1].Size);
-    SessionId[Context->Params[1].Size] = '\0';
     memset(&Error, 0, sizeof(Error));
     xrtClearError();
     Session = MdoSessionLoad(Project, SessionId, &Error);
-    if ( Session == NULL ) {
-        const xerror* Cause = xrtGetError();
-        xerrkind Kind = Cause != NULL ? xrtErrorKind(Cause) : XERR_NONE;
-        xrtClearError();
-        if ( Error.eCode == XWORK_ERROR_INVALID_ARGUMENT )
-            return MdoApiReplyError(Context, 400u, "invalid_session_path",
-                "The project or session ID is invalid", NULL);
-        if ( Kind == XERR_NOT_FOUND )
-            return MdoApiReplyError(Context, 404u, "session_not_found",
-                "The requested session does not exist", NULL);
-        return MdoApiReplyError(Context, 500u, "session_read_failed",
-            "The session metadata could not be read", NULL);
-    }
+    if ( Session == NULL ) return MdoApiSessionLoadFailure(Context, &Error);
     memset(&Info, 0, sizeof(Info)); Info.Size = sizeof(Info);
     if ( !MdoSessionGetInfo(Session, &Info) ) {
         MdoSessionRelease(Session);

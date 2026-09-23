@@ -127,6 +127,9 @@ class ApiContractTests(unittest.TestCase):
         sessions = (ROOT / "app/src/api/sessions.c").read_text(encoding="utf-8")
         self.assertIn('"/api/v1/projects/{project}/sessions/{session}"',
                       self.router)
+        self.assertIn(
+            '"/api/v1/projects/{project}/sessions/{session}/restore"',
+            self.router)
         self.assertIn("MdoApiSessionCreateRoute", sessions)
         self.assertIn("Present == xrtValueCount(Body.Value)", sessions)
         self.assertIn("MdoSessionCreate", sessions)
@@ -136,6 +139,13 @@ class ApiContractTests(unittest.TestCase):
         self.assertIn("session_persistence_failed", sessions)
         self.assertIn("session_service_unavailable", sessions)
         self.assertIn("session_read_failed", sessions)
+        self.assertIn("MdoApiSessionExpectedRevision", sessions)
+        self.assertIn("MdoSessionRename", sessions)
+        self.assertIn("MdoSessionSetPinned", sessions)
+        self.assertIn("MdoSessionSetArchived", sessions)
+        self.assertIn("MdoSessionMoveToTrash", sessions)
+        self.assertIn("MdoSessionRestore", sessions)
+        self.assertIn("revision_conflict", sessions)
         self.assertNotIn("credential", sessions.lower())
 
     def test_every_json_response_has_identity_and_hardening_headers(self) -> None:

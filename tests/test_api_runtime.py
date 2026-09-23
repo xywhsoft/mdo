@@ -704,6 +704,146 @@ def run_probe(host: Path) -> None:
                 assert status == 404, (status, body)
                 assert document["error"]["code"] == "session_not_found", document
 
+                session_path = (
+                    f"/api/v1/projects/api-project/sessions/{session_id}")
+                status, headers, body = request(
+                    port, "PATCH", session_path,
+                    body=b'{"title":"Renamed session"}',
+                    headers={"Content-Type": "application/json"})
+                document = json.loads(body)
+                assert status == 428, (status, body)
+                assert document["error"]["code"] == "precondition_required", (
+                    document)
+                status, headers, body = request(
+                    port, "PATCH", session_path,
+                    body=b'{"title":"Renamed session"}',
+                    headers={"Content-Type": "application/json",
+                             "If-Match": 'W/"mdo-session-invalid-1"'})
+                document = json.loads(body)
+                assert status == 400, (status, body)
+                assert document["error"]["code"] == "invalid_precondition", (
+                    document)
+                status, headers, body = request(
+                    port, "PATCH", session_path,
+                    body=b'{"title":"Renamed session"}',
+                    headers={"Content-Type": "application/json",
+                             "If-Match": '"mdo-session-other-1"'})
+                document = json.loads(body)
+                assert status == 412, (status, body)
+                assert document["error"]["code"] == "revision_conflict", (
+                    document)
+                status, headers, body = request(
+                    port, "PATCH", session_path,
+                    body=b'{"title":"Renamed session","pinned":true}',
+                    headers={"Content-Type": "application/json",
+                             "If-Match": session_etag})
+                document = json.loads(body)
+                assert status == 422, (status, body)
+                assert document["error"]["code"] == "session_patch_invalid", (
+                    document)
+
+                status, headers, body = request(
+                    port, "PATCH", session_path,
+                    body=b'{"title":"Renamed session"}',
+                    headers={"Content-Type": "application/json",
+                             "If-Match": session_etag})
+                document = json.loads(body)
+                assert status == 200, (status, body)
+                session = document["data"]
+                assert session["title"] == "Renamed session", session
+                assert session["revision"] == 2, session
+                renamed_etag = headers["etag"]
+                assert renamed_etag == (
+                    f'"mdo-session-{session_id}-2"'), headers
+
+                status, headers, body = request(
+                    port, "PATCH", session_path, body=b'{"pinned":true}',
+                    headers={"Content-Type": "application/json",
+                             "If-Match": session_etag})
+                document = json.loads(body)
+                assert status == 412, (status, body)
+                assert document["error"]["code"] == "revision_conflict", (
+                    document)
+
+                status, headers, body = request(
+                    port, "PATCH", session_path, body=b'{"pinned":true}',
+                    headers={"Content-Type": "application/json",
+                             "If-Match": renamed_etag})
+                document = json.loads(body)
+                assert status == 200, (status, body)
+                assert document["data"]["pinned"] is True, document
+                assert document["data"]["revision"] == 3, document
+                current_etag = headers["etag"]
+
+                status, headers, body = request(
+                    port, "PATCH", session_path, body=b'{"archived":true}',
+                    headers={"Content-Type": "application/json",
+                             "If-Match": current_etag})
+                document = json.loads(body)
+                assert status == 200, (status, body)
+                assert document["data"]["status"] == "archived", document
+                assert document["data"]["revision"] == 4, document
+                current_etag = headers["etag"]
+
+                status, headers, body = request(
+                    port, "DELETE", session_path, body=b"{}",
+                    headers={"Content-Type": "application/json",
+                             "If-Match": current_etag})
+                document = json.loads(body)
+                assert status == 400, (status, body)
+                assert document["error"]["code"] == "body_not_allowed", document
+                status, headers, body = request(
+                    port, "DELETE", session_path,
+                    headers={"If-Match": current_etag})
+                document = json.loads(body)
+                assert status == 200, (status, body)
+                assert document["data"]["status"] == "trash", document
+                assert document["data"]["pinned"] is False, document
+                assert document["data"]["revision"] == 5, document
+                current_etag = headers["etag"]
+
+                status, headers, body = request(
+                    port, "PATCH", session_path, body=b'{"archived":false}',
+                    headers={"Content-Type": "application/json",
+                             "If-Match": current_etag})
+                document = json.loads(body)
+                assert status == 409, (status, body)
+                assert document["error"]["code"] == "session_state_conflict", (
+                    document)
+
+                restore_path = session_path + "/restore"
+                status, headers, body = request(
+                    port, "POST", restore_path, body=b"{}",
+                    headers={"Content-Type": "application/json",
+                             "If-Match": current_etag})
+                document = json.loads(body)
+                assert status == 400, (status, body)
+                assert document["error"]["code"] == "body_not_allowed", document
+                status, headers, body = request(
+                    port, "POST", restore_path,
+                    headers={"If-Match": current_etag})
+                document = json.loads(body)
+                assert status == 200, (status, body)
+                assert document["data"]["status"] == "archived", document
+                assert document["data"]["revision"] == 6, document
+                current_etag = headers["etag"]
+
+                status, headers, body = request(
+                    port, "PATCH", session_path, body=b'{"archived":false}',
+                    headers={"Content-Type": "application/json",
+                             "If-Match": current_etag})
+                document = json.loads(body)
+                assert status == 200, (status, body)
+                assert document["data"]["status"] == "active", document
+                assert document["data"]["revision"] == 7, document
+                current_etag = headers["etag"]
+
+                status, headers, body = request(port, "GET", session_path)
+                document = json.loads(body)
+                assert status == 200, (status, body)
+                assert document["data"]["revision"] == 7, document
+                assert headers["etag"] == current_etag, headers
+
                 meta_path.write_text("{broken", encoding="utf-8")
                 status, headers, body = request(
                     port, "GET",
@@ -722,7 +862,13 @@ def run_probe(host: Path) -> None:
                     port, "OPTIONS",
                     f"/api/v1/projects/api-project/sessions/{session_id}")
                 assert status == 200 and headers["allow"] == (
-                    "GET, HEAD, OPTIONS"), (status, headers, body)
+                    "GET, HEAD, PATCH, DELETE, OPTIONS"), (
+                    status, headers, body)
+                status, headers, body = request(
+                    port, "OPTIONS",
+                    f"/api/v1/projects/api-project/sessions/{session_id}/restore")
+                assert status == 200 and headers["allow"] == (
+                    "POST, OPTIONS"), (status, headers, body)
 
                 status, headers, body = request(
                     port, "OPTIONS", "/api/v1/settings/settings")
