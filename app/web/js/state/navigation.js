@@ -1,23 +1,31 @@
 import { resourceId } from "../api/client.js";
 
 const listeners = new Set();
-let current = Object.freeze({ projectId: "", sessionId: "" });
+let current = Object.freeze({ view: "workspace", projectId: "", sessionId: "", settingsSection: "" });
+let lastSession = Object.freeze({ projectId: "", sessionId: "" });
 
 function parseHash() {
+  const settings = /^#\/settings\/([a-z][a-z0-9-]*)$/.exec(location.hash);
+  if (settings) return { view: "settings", projectId: "", sessionId: "", settingsSection: settings[1] };
   const match = /^#\/projects\/([^/]+)\/sessions\/([^/]+)$/.exec(location.hash);
-  if (!match) return { projectId: "", sessionId: "" };
+  if (!match) return { view: "workspace", projectId: "", sessionId: "", settingsSection: "" };
   try {
     return {
+      view: "workspace",
       projectId: resourceId(match[1], "project"),
       sessionId: resourceId(match[2], "session"),
+      settingsSection: "",
     };
   } catch {
-    return { projectId: "", sessionId: "" };
+    return { view: "workspace", projectId: "", sessionId: "", settingsSection: "" };
   }
 }
 
 function publish() {
   current = Object.freeze(parseHash());
+  if (current.view === "workspace" && current.sessionId) {
+    lastSession = Object.freeze({ projectId: current.projectId, sessionId: current.sessionId });
+  }
   for (const listener of listeners) listener(current);
 }
 
@@ -36,6 +44,14 @@ export const navigation = Object.freeze({
     if (options.replace) history.replaceState(null, "", hash);
     else location.hash = hash;
     publish();
+  },
+  openSettings(section = "general") {
+    location.hash = `#/settings/${resourceId(section, "settings section")}`;
+    publish();
+  },
+  backToWorkspace() {
+    if (lastSession.sessionId) navigation.select(lastSession.projectId, lastSession.sessionId);
+    else navigation.clear();
   },
   clear() {
     history.replaceState(null, "", `${location.pathname}${location.search}#/`);

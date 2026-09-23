@@ -11,6 +11,7 @@ const ICONS = Object.freeze({
   folder: '<path d="M3 6h7l2 2h9v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"/>',
   brain: '<path d="M9.5 4A3.5 3.5 0 0 0 6 7.5v.3A3 3 0 0 0 4.5 13 3.5 3.5 0 0 0 8 18.5c.5 1 1.4 1.5 2.5 1.5V4Zm5 0A3.5 3.5 0 0 1 18 7.5v.3a3 3 0 0 1 1.5 5.2 3.5 3.5 0 0 1-3.5 5.5c-.5 1-1.4 1.5-2.5 1.5V4Z"/><path d="M7 9h3.5M14 13h4M8 16h2.5M13.5 8H17"/>',
   "arrow-up": '<path d="m12 19V5M6 11l6-6 6 6"/>',
+  "arrow-left": '<path d="m19 12H5M11 18l-6-6 6-6"/>',
 });
 
 export function mountIcons(root = document) {

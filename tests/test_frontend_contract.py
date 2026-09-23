@@ -109,6 +109,35 @@ class FrontendContractTests(unittest.TestCase):
         self.assertIn("if (!text || activeRun) return", app)
         self.assertIn("/runs/${run}", runs)
 
+    def test_settings_use_preview_etag_and_server_side_merge(self) -> None:
+        state = self.scripts["js/state/settings.js"]
+        view = self.scripts["js/features/settings/settings-view.js"]
+        navigation = self.scripts["js/state/navigation.js"]
+        self.assertIn('api.patch("/settings/settings/preview"', state)
+        self.assertIn('api.patch("/settings/settings"', state)
+        self.assertIn("{ ifMatch: etag }", state)
+        self.assertIn("previewFingerprint", view)
+        self.assertIn("form.reportValidity()", view)
+        self.assertNotIn("secret_ref", view)
+        self.assertIn('#/settings/${resourceId(section', navigation)
+        for marker in (
+            'id="settings-workspace"', 'id="preview-settings"',
+            'id="apply-settings"', 'id="restore-confirm"',
+        ):
+            self.assertIn(marker, self.index)
+
+    def test_resource_management_is_split_into_bounded_stores(self) -> None:
+        resources = self.scripts["js/state/resources.js"]
+        panels = self.scripts["js/features/settings/resource-panels.js"]
+        for name in ("modules", "skills", "mcp", "permissions", "storage",
+                     "diagnostics"):
+            self.assertIn(f"{name}Store", resources)
+        self.assertIn('api.post(`/${name}/reload`)', resources)
+        self.assertIn("attempt < 100", resources)
+        self.assertNotIn("innerHTML", panels)
+        self.assertIn("setMcpEnabled", panels)
+        self.assertIn("refreshMcp", panels)
+
     def test_responsive_and_accessibility_modes_are_explicit(self) -> None:
         self.assertIn("grid-template-columns: var(--sidebar-width) minmax(0, 1fr) var(--inspector-width)", self.css)
         self.assertIn("@media (max-width: 1180px)", self.css)

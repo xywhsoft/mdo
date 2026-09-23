@@ -139,6 +139,122 @@
           </div>
         </form>
       </section>
+
+      <section class="settings-workspace" id="settings-workspace" aria-labelledby="settings-title" hidden>
+        <header class="settings-header">
+          <button class="icon-button" id="close-settings" type="button" aria-label="返回 Agent 工作区">
+            <span class="icon" data-icon="arrow-left" aria-hidden="true"></span>
+          </button>
+          <div>
+            <h1 id="settings-title">设置</h1>
+            <p id="settings-revision">正在读取当前配置…</p>
+          </div>
+        </header>
+        <div class="settings-layout">
+          <nav class="settings-navigation" aria-label="设置分类">
+            <p>偏好设置</p>
+            <button type="button" data-settings-section="general" aria-current="page">常规</button>
+            <button type="button" data-settings-section="agent">Agent</button>
+            <button type="button" data-settings-section="web">联网与搜索</button>
+            <p>资源</p>
+            <button type="button" data-settings-section="models">模型</button>
+            <button type="button" data-settings-section="extensions">扩展与 MCP</button>
+            <button type="button" data-settings-section="permissions">权限</button>
+            <button type="button" data-settings-section="diagnostics">诊断与存储</button>
+          </nav>
+
+          <div class="settings-content" id="settings-content" tabindex="-1">
+            <form id="settings-form">
+              <section class="settings-section" data-settings-panel="general" aria-labelledby="settings-general-title">
+                <div class="settings-section-heading">
+                  <h2 id="settings-general-title">常规</h2>
+                  <p>界面外观和工作区打开方式。</p>
+                </div>
+                <div class="setting-row">
+                  <div><label for="setting-theme">主题</label><p>跟随系统，或固定使用浅色和深色外观。</p></div>
+                  <select id="setting-theme" name="theme"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select>
+                </div>
+                <div class="setting-row">
+                  <div><label for="setting-font-size">文字大小</label><p>调整工作台的基础字号。</p></div>
+                  <select id="setting-font-size" name="font_size"><option value="small">小</option><option value="normal">标准</option><option value="large">大</option></select>
+                </div>
+                <div class="setting-row">
+                  <div><label for="setting-density">界面密度</label><p>控制列表和控件的纵向间距。</p></div>
+                  <select id="setting-density" name="density"><option value="comfortable">舒适</option><option value="compact">紧凑</option></select>
+                </div>
+                <div class="setting-row">
+                  <div><label for="setting-open-mode">启动时打开</label><p>选择启动后的默认工作区行为。</p></div>
+                  <select id="setting-open-mode" name="open_mode"><option value="last">上次会话</option><option value="new">新任务</option><option value="ask">每次询问</option></select>
+                </div>
+                <label class="setting-switch"><span><strong>外部写入前确认</strong><small>工作区之外的文件写入始终要求确认。</small></span><input name="confirm_external_write" type="checkbox"><span class="switch-control" aria-hidden="true"></span></label>
+              </section>
+
+              <section class="settings-section" data-settings-panel="agent" aria-labelledby="settings-agent-title" hidden>
+                <div class="settings-section-heading"><h2 id="settings-agent-title">Agent</h2><p>默认交互、推理和并行执行策略。</p></div>
+                <div class="setting-row">
+                  <div><label for="setting-interaction">交互模式</label><p>Agent 直接执行，先计划，或每步询问。</p></div>
+                  <select id="setting-interaction" name="interaction_mode"><option value="agent">Agent</option><option value="plan">计划</option><option value="ask">询问</option></select>
+                </div>
+                <div class="setting-row">
+                  <div><label for="setting-reasoning">默认推理强度</label><p>新会话可单独覆盖这个值。</p></div>
+                  <select id="setting-reasoning" name="reasoning_effort"><option value="none">无</option><option value="minimal">极低</option><option value="low">低</option><option value="medium">中</option><option value="high">高</option><option value="xhigh">极高</option><option value="max">最大</option></select>
+                </div>
+                <div class="setting-row">
+                  <div><label for="setting-parallel-tools">并行工具数</label><p>同一 Agent 最多同时运行 1–64 个工具。</p></div>
+                  <input id="setting-parallel-tools" name="max_parallel_tools" type="number" min="1" max="64" required>
+                </div>
+                <div class="setting-row">
+                  <div><label for="setting-parallel-subagents">并行子 Agent 数</label><p>设为 0 可关闭并行子 Agent。</p></div>
+                  <input id="setting-parallel-subagents" name="max_parallel_subagents" type="number" min="0" max="16" required>
+                </div>
+                <label class="setting-switch"><span><strong>允许联机搜索</strong><small>Agent 可按权限策略调用联网搜索工具。</small></span><input name="web_search" type="checkbox"><span class="switch-control" aria-hidden="true"></span></label>
+                <label class="setting-switch"><span><strong>启用记忆</strong><small>新会话固定当前全局和项目记忆快照。</small></span><input name="memory" type="checkbox"><span class="switch-control" aria-hidden="true"></span></label>
+                <label class="setting-switch"><span><strong>启用计划任务</strong><small>允许宿主恢复并执行已配置的计划。</small></span><input name="schedules" type="checkbox"><span class="switch-control" aria-hidden="true"></span></label>
+              </section>
+
+              <section class="settings-section" data-settings-panel="web" aria-labelledby="settings-web-title" hidden>
+                <div class="settings-section-heading"><h2 id="settings-web-title">联网与搜索</h2><p>限制网页访问范围、超时与响应预算。</p></div>
+                <label class="setting-switch"><span><strong>启用 Web 工具</strong><small>统一控制搜索、打开和查找工具。</small></span><input name="web_enabled" type="checkbox"><span class="switch-control" aria-hidden="true"></span></label>
+                <label class="setting-switch"><span><strong>允许 HTTP</strong><small>允许未加密的 HTTP 地址；默认关闭。</small></span><input name="allow_http" type="checkbox"><span class="switch-control" aria-hidden="true"></span></label>
+                <label class="setting-switch"><span><strong>允许私有网络</strong><small>允许访问回环、局域网和私有地址；默认关闭。</small></span><input name="allow_private_networks" type="checkbox"><span class="switch-control" aria-hidden="true"></span></label>
+                <div class="settings-grid">
+                  <label>请求超时（毫秒）<input name="timeout_ms" type="number" min="1000" max="300000" required></label>
+                  <label>空闲超时（毫秒）<input name="idle_timeout_ms" type="number" min="1000" max="300000" required></label>
+                  <label>最大响应（字节）<input name="max_response_bytes" type="number" min="16384" max="16777216" required></label>
+                  <label>最大文本（字节）<input name="max_text_bytes" type="number" min="4096" max="1048576" required></label>
+                  <label>缓存文档数<input name="max_documents" type="number" min="1" max="128" required></label>
+                  <label>搜索结果数<input name="max_results" type="number" min="1" max="32" required></label>
+                </div>
+                <div class="setting-row setting-row-wide">
+                  <div><label for="setting-search-endpoint">搜索服务地址</label><p>凭据仅通过 Home 文件或环境变量配置，页面不会读取 secret 引用。</p></div>
+                  <input id="setting-search-endpoint" name="endpoint" type="url" maxlength="2047" required>
+                </div>
+                <div class="credential-state" id="search-credential-state" role="status"></div>
+              </section>
+
+              <section class="settings-section resource-section" data-settings-panel="models" hidden><div class="settings-section-heading"><h2>模型</h2><p>查看 Provider 与模型能力，刷新配置目录。</p></div><div id="settings-models-list"></div></section>
+              <section class="settings-section resource-section" data-settings-panel="extensions" hidden><div class="settings-section-heading"><h2>扩展与 MCP</h2><p>查看 Agent、Skill、Module 和 MCP 连接。</p></div><div id="settings-extensions-list"></div></section>
+              <section class="settings-section resource-section" data-settings-panel="permissions" hidden><div class="settings-section-heading"><h2>权限</h2><p>查看服务端生效的权限 profile；运行时审批仍由 Agent 策略执行。</p></div><div id="settings-permissions-list"></div></section>
+              <section class="settings-section resource-section" data-settings-panel="diagnostics" hidden><div class="settings-section-heading"><h2>诊断与存储</h2><p>检查便携 Home、运行状态和可操作诊断。</p></div><div id="settings-diagnostics-list"></div></section>
+            </form>
+          </div>
+        </div>
+
+        <footer class="settings-actions" id="settings-actions">
+          <div class="settings-feedback" id="settings-feedback" role="status">配置与本地服务保持同步。</div>
+          <div>
+            <button class="danger-link" id="restore-settings" type="button">恢复默认</button>
+            <button class="secondary-button" id="discard-settings" type="button" disabled>放弃更改</button>
+            <button class="secondary-button" id="preview-settings" type="button" disabled>预览更改</button>
+            <button class="primary-button" id="apply-settings" type="button" disabled>应用更改</button>
+          </div>
+          <div class="restore-confirm" id="restore-confirm" hidden>
+            <span>将删除当前 settings 用户 patch，并恢复内置默认值。</span>
+            <button class="secondary-button" id="cancel-restore" type="button">取消</button>
+            <button class="danger-button" id="confirm-restore" type="button">确认恢复</button>
+          </div>
+        </footer>
+      </section>
     </main>
 
     <aside class="inspector" id="inspector" aria-label="任务与上下文">

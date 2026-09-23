@@ -1,7 +1,12 @@
 import { mountIcons } from "./components/icons.js";
 import { bootstrapStore, loadBootstrap } from "./state/bootstrap.js";
 import { sessionsStore, sessionDetailStore, loadSessions, loadSession, createSession } from "./state/sessions.js";
-import { modelsStore, agentsStore, loadCatalogs } from "./state/catalogs.js";
+import { modelsStore, agentsStore, loadCatalogs, loadModels, loadAgents } from "./state/catalogs.js";
+import { settingsStore, loadSettings } from "./state/settings.js";
+import {
+  modulesStore, skillsStore, mcpStore, permissionsStore, storageStore,
+  diagnosticsStore, loadResource, loadManagementResources,
+} from "./state/resources.js";
 import { tasksStore, loadTasks } from "./state/tasks.js";
 import { runsStore, loadRuns, startRun, readRun, cancelRun } from "./state/runs.js";
 import { navigation } from "./state/navigation.js";
@@ -9,6 +14,8 @@ import { createSessionList } from "./features/sessions/session-list.js";
 import { timelineStore, selectTimeline, clearTimeline, refreshSelectedTimeline } from "./features/chat/timeline-store.js";
 import { createTimelineView } from "./features/chat/timeline.js";
 import { createTaskPanel } from "./features/tasks/task-panel.js";
+import { createSettingsView } from "./features/settings/settings-view.js";
+import { createResourcePanels } from "./features/settings/resource-panels.js";
 import { clear, element, errorMessage, toast } from "./utils/dom.js";
 
 const $ = (selector) => {
@@ -37,6 +44,7 @@ export async function boot() {
 
   const shell = $("#app-shell");
   const wideLayout = window.matchMedia("(min-width: 1181px)");
+  const mobileLayout = window.matchMedia("(max-width: 760px)");
   shell.dataset.inspector = wideLayout.matches ? "open" : "closed";
   const prompt = $("#prompt");
   const composer = $("#composer");
@@ -54,6 +62,11 @@ export async function boot() {
   const workspaceLabel = $("#workspace-label");
   const reasoningLabel = $("#reasoning-label");
   const mobileActivity = $("#mobile-activity-dot");
+  const settingsWorkspace = $("#settings-workspace");
+  const skipLink = $(".skip-link");
+  const agentWorkspaceRegions = [$(".workspace-header"), $(".conversation"), $(".composer-region")];
+  let settingsActive = false;
+  let inspectorBeforeSettings = shell.dataset.inspector;
   let activeRun = null;
   let runMonitor = 0;
   let selectedKey = "";
@@ -77,6 +90,27 @@ export async function boot() {
     summary: $("#task-summary"),
     store: tasksStore,
     onChanged: () => void loadRuns(),
+  });
+  const settingsView = createSettingsView({
+    form: $("#settings-form"),
+    store: settingsStore,
+    navigation,
+    onApplied: () => Promise.all([loadBootstrap(), loadCatalogs()]),
+  });
+  createResourcePanels({
+    modelsStore,
+    agentsStore,
+    stores: {
+      modules: modulesStore,
+      skills: skillsStore,
+      mcp: mcpStore,
+      permissions: permissionsStore,
+      storage: storageStore,
+      diagnostics: diagnosticsStore,
+    },
+    reload: (name) => name === "models" ? loadModels()
+      : name === "modules" ? Promise.all([loadResource("modules"), loadAgents()])
+        : loadResource(name),
   });
 
   function setRun(run) {
@@ -178,7 +212,27 @@ export async function boot() {
     scheduleRunPoll(300);
   }
 
-  navigation.subscribe(async ({ projectId, sessionId }) => {
+  navigation.subscribe(async ({ view, projectId, sessionId, settingsSection }) => {
+    if (view === "settings") {
+      if (!settingsActive) inspectorBeforeSettings = shell.dataset.inspector;
+      settingsActive = true;
+      settingsWorkspace.hidden = false;
+      for (const region of agentWorkspaceRegions) region.hidden = true;
+      skipLink.href = "#settings-content";
+      skipLink.textContent = "跳到设置内容";
+      settingsView.selectSection(settingsSection);
+      closeDrawers();
+      if (!settingsStore.get().data) await loadSettings();
+      return;
+    }
+    settingsWorkspace.hidden = true;
+    for (const region of agentWorkspaceRegions) region.hidden = false;
+    skipLink.href = "#timeline";
+    skipLink.textContent = "跳到对话";
+    if (settingsActive) {
+      settingsActive = false;
+      setDrawer("inspector", inspectorBeforeSettings === "open" && wideLayout.matches);
+    }
     const key = projectId && sessionId ? `${projectId}/${sessionId}` : "";
     if (key === selectedKey) return;
     selectedKey = key;
@@ -331,6 +385,10 @@ export async function boot() {
   function setDrawer(name, open) {
     shell.dataset[name] = open ? "open" : "closed";
     const button = name === "sidebar" ? $("#open-sidebar") : $("#open-inspector");
+    const panel = name === "sidebar" ? $("#sidebar") : $("#inspector");
+    const inactive = name === "sidebar" ? mobileLayout.matches && !open : !open;
+    if (inactive && panel.contains(document.activeElement)) button.focus();
+    panel.inert = inactive;
     button.setAttribute("aria-expanded", String(open));
     if (name === "inspector") $("#toggle-inspector").setAttribute("aria-expanded", String(open));
   }
@@ -341,8 +399,10 @@ export async function boot() {
   $("#close-inspector").addEventListener("click", () => setDrawer("inspector", false));
   $("#toggle-inspector").addEventListener("click", () => setDrawer("inspector", shell.dataset.inspector !== "open"));
   $("#scrim").addEventListener("click", closeDrawers);
-  wideLayout.addEventListener("change", (event) => setDrawer("inspector", event.matches));
-  setDrawer("inspector", wideLayout.matches);
+  wideLayout.addEventListener("change", (event) => setDrawer("inspector", !settingsActive && event.matches));
+  mobileLayout.addEventListener("change", () => setDrawer("sidebar", shell.dataset.sidebar === "open"));
+  setDrawer("sidebar", false);
+  setDrawer("inspector", !settingsActive && wideLayout.matches);
 
   function selectInspectorTab(tabName) {
     const tasks = tabName === "tasks";
@@ -353,10 +413,13 @@ export async function boot() {
   }
   $("#tasks-tab").addEventListener("click", () => selectInspectorTab("tasks"));
   $("#context-tab").addEventListener("click", () => selectInspectorTab("context"));
-  $("#open-settings").addEventListener("click", () => {
-    selectInspectorTab("context");
-    setDrawer("inspector", true);
-    toast("当前显示会话配置；完整设置中心将在下一阶段接入。", "neutral");
+  $("#open-settings").addEventListener("click", () => navigation.openSettings("general"));
+  $("#close-settings").addEventListener("click", () => {
+    navigation.backToWorkspace();
+    if (!navigation.get().sessionId) {
+      const first = sessionsStore.get().data?.items?.[0];
+      if (first) navigation.select(first.project_id, first.id, { replace: true });
+    }
   });
   $("#workspace-chip").addEventListener("click", () => { selectInspectorTab("context"); setDrawer("inspector", true); });
   $("#reasoning-chip").addEventListener("click", () => { selectInspectorTab("context"); setDrawer("inspector", true); });
@@ -398,6 +461,8 @@ export async function boot() {
     loadBootstrap(),
     loadSessions(),
     loadCatalogs(),
+    loadSettings(),
+    loadManagementResources(),
     loadTasks(),
     loadRuns(),
   ]);
@@ -406,7 +471,7 @@ export async function boot() {
   }
 
   const selected = navigation.get();
-  if (!selected.sessionId) {
+  if (selected.view === "workspace" && !selected.sessionId) {
     const first = sessionsStore.get().data?.items?.[0];
     if (first) navigation.select(first.project_id, first.id, { replace: true });
   }
