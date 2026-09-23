@@ -80,6 +80,7 @@ class BuildContractTests(unittest.TestCase):
             "src/api/state.c",
             "src/api/inventory.c",
             "src/api/runs.c",
+            "src/api/schedules.c",
             "src/api/diagnostics.c",
             "src/api/events.c",
             "src/api/operations.c",

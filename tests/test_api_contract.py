@@ -164,6 +164,21 @@ class ApiContractTests(unittest.TestCase):
         self.assertIn('"run_limit_reached"', runs)
         self.assertNotIn("xworkRuntimeEventSnapshot", runs)
 
+    def test_schedule_resources_are_strict_and_revision_tagged(self) -> None:
+        schedules = (ROOT / "app/src/api/schedules.c").read_text(
+            encoding="utf-8")
+        self.assertIn('"/api/v1/schedules/{schedule}"', self.router)
+        self.assertIn('"/api/v1/schedules/{schedule}/enabled"', self.router)
+        self.assertIn("MdoScheduleCreate", schedules)
+        self.assertIn("MdoScheduleSetEnabled", schedules)
+        self.assertIn("MdoScheduleRemove", schedules)
+        self.assertIn("MdoApiScheduleExpectedRevision", schedules)
+        self.assertIn('\\"mdo-schedule-%s-%llu\\"', schedules)
+        self.assertIn("Present == xrtValueCount(Body.Value)", schedules)
+        self.assertIn('"body_not_allowed"', schedules)
+        self.assertIn('"revision_conflict"', schedules)
+        self.assertNotIn("xworkSchedule", schedules)
+
     def test_every_json_response_has_identity_and_hardening_headers(self) -> None:
         for text in (
             'XRT_STR_LITERAL("schema_version")',
@@ -185,13 +200,15 @@ class ApiContractTests(unittest.TestCase):
     def test_catalog_handlers_do_not_expose_secret_values_or_large_bodies(self) -> None:
         catalogs = (ROOT / "app/src/api/catalogs.c").read_text(encoding="utf-8")
         state = (ROOT / "app/src/api/state.c").read_text(encoding="utf-8")
-        self.assertNotIn('"secret_ref"', catalogs + state)
+        schedules = (ROOT / "app/src/api/schedules.c").read_text(
+            encoding="utf-8")
+        self.assertNotIn('"secret_ref"', catalogs + state + schedules)
         self.assertNotIn('"authorization"', catalogs.lower())
         self.assertNotIn('"environment"', catalogs)
         self.assertNotIn('"http_headers"', catalogs)
         self.assertNotIn('Info.SystemPrompt)', catalogs)
-        self.assertNotIn('"input", Info.Input', state)
-        self.assertIn('"input_bytes"', state)
+        self.assertIn("MdoApiScheduleInfoValue(&Info, false", schedules)
+        self.assertIn('"input_bytes"', schedules)
 
     def test_bootstrap_resource_contains_ui_startup_domains(self) -> None:
         for name in (

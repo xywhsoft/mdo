@@ -3,7 +3,6 @@
 #include "internal.h"
 #include "../../include/mdo/bootstrap.h"
 #include "../../include/mdo/config.h"
-#include "../../include/mdo/schedules.h"
 #include "../../include/mdo/sessions.h"
 #include "../../include/mdo/settings.h"
 
@@ -24,47 +23,6 @@ static cstr MdoApiSessionStatusText(MdoSessionStatus Status)
     case MDO_SESSION_ACTIVE: return "active";
     case MDO_SESSION_ARCHIVED: return "archived";
     case MDO_SESSION_TRASH: return "trash";
-    default: return "unknown";
-    }
-}
-
-static cstr MdoApiScheduleFrequencyText(xwork_schedule_frequency Frequency)
-{
-    switch ( Frequency ) {
-    case XWORK_SCHEDULE_ONCE: return "once";
-    case XWORK_SCHEDULE_MINUTELY: return "minutely";
-    case XWORK_SCHEDULE_HOURLY: return "hourly";
-    case XWORK_SCHEDULE_DAILY: return "daily";
-    case XWORK_SCHEDULE_WEEKLY: return "weekly";
-    default: return "unknown";
-    }
-}
-
-static cstr MdoApiScheduleTimezoneText(xwork_schedule_timezone Timezone)
-{
-    switch ( Timezone ) {
-    case XWORK_SCHEDULE_TIMEZONE_UTC: return "utc";
-    case XWORK_SCHEDULE_TIMEZONE_FIXED_OFFSET: return "fixed_offset";
-    case XWORK_SCHEDULE_TIMEZONE_SYSTEM_LOCAL: return "system_local";
-    default: return "unknown";
-    }
-}
-
-static cstr MdoApiScheduleMisfireText(xwork_schedule_misfire_policy Policy)
-{
-    switch ( Policy ) {
-    case XWORK_SCHEDULE_MISFIRE_SKIP: return "skip";
-    case XWORK_SCHEDULE_MISFIRE_RUN_ONCE: return "run_once";
-    case XWORK_SCHEDULE_MISFIRE_CATCH_UP: return "catch_up";
-    default: return "unknown";
-    }
-}
-
-static cstr MdoApiScheduleOverlapText(xwork_schedule_overlap_policy Policy)
-{
-    switch ( Policy ) {
-    case XWORK_SCHEDULE_OVERLAP_SKIP: return "skip";
-    case XWORK_SCHEDULE_OVERLAP_QUEUE_ONE: return "queue_one";
     default: return "unknown";
     }
 }
@@ -229,101 +187,6 @@ bool MdoApiSessionsRoute(MdoApiContext* Context)
         MdoApiValueSetTake(Data, "items", &Items);
     xrtValueRelease(Items);
     MdoSessionCatalogRelease(Catalog);
-    if ( !Ok ) { xrtValueRelease(Data); Data = NULL; }
-    return MdoApiStateReply(Context, Data);
-}
-
-bool MdoApiSchedulesRoute(MdoApiContext* Context)
-{
-    xwork_error Error;
-    MdoScheduleCatalog* Catalog;
-    MdoScheduleExecutorSnapshot Executor;
-    xvalue* Data = xrtValueObject();
-    xvalue* Items = xrtValueArray();
-    size_t Count;
-    size_t Index;
-    bool Ok;
-
-    memset(&Error, 0, sizeof(Error));
-    memset(&Executor, 0, sizeof(Executor)); Executor.Size = sizeof(Executor);
-    Catalog = MdoScheduleCatalogSnapshot(&Error);
-    Count = Catalog != NULL ? MdoScheduleCatalogCount(Catalog) : 0u;
-    Ok = Catalog != NULL && Data != NULL && Items != NULL &&
-        MdoScheduleExecutorGetSnapshot(&Executor);
-    if ( Count > MDO_API_LIST_LIMIT ) Count = MDO_API_LIST_LIMIT;
-    for ( Index = 0u; Ok && Index < Count; Index++ ) {
-        MdoScheduleInfo Info;
-        xvalue* Item = xrtValueObject();
-        memset(&Info, 0, sizeof(Info)); Info.Size = sizeof(Info);
-        Ok = Item != NULL && MdoScheduleCatalogAt(Catalog, Index, &Info) &&
-            MdoApiValueSetString(Item, "id", Info.Id) &&
-            MdoApiValueSetString(Item, "label", Info.Label) &&
-            MdoApiValueSetString(Item, "notify", Info.Notify) &&
-            MdoApiValueSetString(Item, "project_id", Info.ProjectId) &&
-            MdoApiValueSetString(Item, "agent_id", Info.AgentId) &&
-            MdoApiValueSetString(Item, "model_id", Info.ModelId) &&
-            MdoApiValueSetString(Item, "protocol",
-                Info.Protocol == MDO_SCHEDULE_PROTOCOL_DEFAULT ? "default" :
-                MdoModelProtocolName(Info.Protocol)) &&
-            MdoApiValueSetString(Item, "reasoning_effort",
-                Info.ReasoningEffort) &&
-            MdoApiValueSetString(Item, "workspace_root", Info.WorkspaceRoot) &&
-            MdoApiValueSetString(Item, "frequency",
-                MdoApiScheduleFrequencyText(Info.Frequency)) &&
-            MdoApiValueSetString(Item, "timezone",
-                MdoApiScheduleTimezoneText(Info.Timezone)) &&
-            MdoApiValueSetString(Item, "fold_policy",
-                Info.FoldPolicy == XWORK_SCHEDULE_FOLD_LATER ? "later" :
-                "earlier") &&
-            MdoApiValueSetString(Item, "misfire_policy",
-                MdoApiScheduleMisfireText(Info.MisfirePolicy)) &&
-            MdoApiValueSetString(Item, "overlap_policy",
-                MdoApiScheduleOverlapText(Info.OverlapPolicy)) &&
-            MdoApiValueSetUInt(Item, "revision", Info.Revision) &&
-            MdoApiValueSetInt(Item, "updated_at", Info.UpdatedAt) &&
-            MdoApiValueSetUInt(Item, "runtime_generation",
-                Info.RuntimeGeneration) &&
-            MdoApiValueSetInt(Item, "next_occurrence_at",
-                Info.NextOccurrenceAt) &&
-            MdoApiValueSetInt(Item, "last_claimed_at", Info.LastClaimedAt) &&
-            MdoApiValueSetUInt(Item, "claim_count", Info.ClaimCount) &&
-            MdoApiValueSetUInt(Item, "misfire_count", Info.MisfireCount) &&
-            MdoApiValueSetUInt(Item, "active_runs", Info.ActiveRuns) &&
-            MdoApiValueSetUInt(Item, "interval", Info.Interval) &&
-            MdoApiValueSetInt(Item, "start_at", Info.StartAt) &&
-            MdoApiValueSetUInt(Item, "weekday_mask", Info.WeekdayMask) &&
-            MdoApiValueSetInt(Item, "utc_offset_seconds",
-                Info.UtcOffsetSeconds) &&
-            MdoApiValueSetUInt(Item, "misfire_grace_seconds",
-                Info.MisfireGraceSeconds) &&
-            MdoApiValueSetUInt(Item, "max_catch_up", Info.MaxCatchUp) &&
-            MdoApiValueSetUInt(Item, "max_concurrent_runs",
-                Info.MaxConcurrentRuns) &&
-            MdoApiValueSetUInt(Item, "max_output_tokens",
-                Info.MaxOutputTokens) &&
-            MdoApiValueSetUInt(Item, "input_bytes", strlen(Info.Input)) &&
-            MdoApiValueSetBool(Item, "enabled", Info.Enabled) &&
-            MdoApiValueSetBool(Item, "runnable", Info.Runnable) &&
-            MdoApiValueAppendTake(Items, &Item);
-        xrtValueRelease(Item);
-    }
-    if ( Ok ) Ok =
-        MdoApiValueSetUInt(Data, "generation",
-            MdoScheduleCatalogGeneration(Catalog)) &&
-        MdoApiValueSetBool(Data, "enabled", MdoScheduleManagerEnabled()) &&
-        MdoApiValueSetBool(Data, "automatic", Executor.Automatic) &&
-        MdoApiValueSetBool(Data, "persistence_fault",
-            Executor.PersistenceFault) &&
-        MdoApiValueSetUInt(Data, "active_runs", Executor.ActiveRuns) &&
-        MdoApiValueSetUInt(Data, "claims_started", Executor.ClaimsStarted) &&
-        MdoApiValueSetUInt(Data, "runs_completed", Executor.RunsCompleted) &&
-        MdoApiValueSetUInt(Data, "runs_failed", Executor.RunsFailed) &&
-        MdoApiValueSetUInt(Data, "total", MdoScheduleCatalogCount(Catalog)) &&
-        MdoApiValueSetBool(Data, "truncated",
-            MdoScheduleCatalogCount(Catalog) > MDO_API_LIST_LIMIT) &&
-        MdoApiValueSetTake(Data, "items", &Items);
-    xrtValueRelease(Items);
-    MdoScheduleCatalogRelease(Catalog);
     if ( !Ok ) { xrtValueRelease(Data); Data = NULL; }
     return MdoApiStateReply(Context, Data);
 }

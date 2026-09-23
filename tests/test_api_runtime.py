@@ -858,6 +858,155 @@ def run_probe(host: Path) -> None:
                 assert any(item["terminal"] for item in
                            event_document["data"]["items"]), event_document
 
+                schedule_path = "/api/v1/schedules/api-schedule"
+                status, headers, body = request(
+                    port, "POST", "/api/v1/schedules",
+                    body=b'{"label":"missing fields","unknown":true}',
+                    headers={"Content-Type": "application/json"})
+                document = json.loads(body)
+                assert status == 422, (status, body)
+                assert document["error"]["code"] == "schedule_invalid", (
+                    document)
+
+                schedule_input = "Scheduled API prompt"
+                schedule_start = 4102444800000000
+                status, headers, body = request(
+                    port, "POST", "/api/v1/schedules",
+                    body=json.dumps({
+                        "id": "api-schedule",
+                        "label": "API schedule",
+                        "notify": "desktop",
+                        "project_id": "api-project",
+                        "agent_id": "mdo.default",
+                        "model_id": "ling-3.0-tiny",
+                        "protocol": "openai-responses",
+                        "reasoning_effort": "medium",
+                        "max_output_tokens": 1024,
+                        "workspace_root": str(base),
+                        "input": schedule_input,
+                        "frequency": "daily",
+                        "interval": 1,
+                        "start_at": schedule_start,
+                        "weekday_mask": 0,
+                        "timezone": "utc",
+                        "utc_offset_seconds": 0,
+                        "fold_policy": "earlier",
+                        "misfire_policy": "run_once",
+                        "misfire_grace_seconds": 60,
+                        "max_catch_up": 1,
+                        "overlap_policy": "skip",
+                        "max_concurrent_runs": 1,
+                        "enabled": True,
+                    }).encode(),
+                    headers={"Content-Type": "application/json"})
+                document = json.loads(body)
+                assert status == 201, (status, body)
+                assert_common(headers, document)
+                schedule = document["data"]
+                assert schedule["id"] == "api-schedule", schedule
+                assert schedule["input"] == schedule_input, schedule
+                assert schedule["input_bytes"] == len(schedule_input), schedule
+                assert schedule["next_occurrence_at"] == schedule_start, schedule
+                assert schedule["enabled"] is True, schedule
+                assert schedule["runnable"] is True, schedule
+                assert schedule["revision"] == 1, schedule
+                schedule_etag = headers["etag"]
+                assert schedule_etag == '"mdo-schedule-api-schedule-1"', (
+                    headers)
+                definition_path = home / "schedules/api-schedule.json"
+                assert definition_path.is_file(), list(home.rglob("*"))
+                definition_text = definition_path.read_text(encoding="utf-8")
+                assert "bounded-api-test-key" not in definition_text, (
+                    definition_text)
+
+                status, headers, body = request(port, "GET", schedule_path)
+                detail_document = json.loads(body)
+                assert status == 200, (status, body)
+                assert_common(headers, detail_document)
+                assert detail_document["data"] == schedule, detail_document
+                assert headers["etag"] == schedule_etag, headers
+                schedule_list = json.loads(request(
+                    port, "GET", "/api/v1/schedules")[2])["data"]
+                listed_schedule = next(
+                    item for item in schedule_list["items"]
+                    if item["id"] == "api-schedule")
+                assert listed_schedule["input_bytes"] == len(schedule_input), (
+                    listed_schedule)
+                assert "input" not in listed_schedule, listed_schedule
+
+                status, headers, body = request(
+                    port, "PUT", schedule_path + "/enabled",
+                    body=b'{"enabled":false}',
+                    headers={"Content-Type": "application/json"})
+                document = json.loads(body)
+                assert status == 428, (status, body)
+                assert document["error"]["code"] == "precondition_required", (
+                    document)
+                status, headers, body = request(
+                    port, "PUT", schedule_path + "/enabled",
+                    body=b'{"enabled":false}',
+                    headers={"Content-Type": "application/json",
+                             "If-Match": '"mdo-schedule-api-schedule-99"'})
+                document = json.loads(body)
+                assert status == 412, (status, body)
+                assert document["error"]["code"] == "revision_conflict", (
+                    document)
+                status, headers, body = request(
+                    port, "PUT", schedule_path + "/enabled",
+                    body=b'{"enabled":false}',
+                    headers={"Content-Type": "application/json",
+                             "If-Match": schedule_etag})
+                document = json.loads(body)
+                assert status == 200, (status, body)
+                schedule = document["data"]
+                assert schedule["enabled"] is False, schedule
+                assert schedule["runnable"] is False, schedule
+                assert schedule["revision"] == 2, schedule
+                disabled_etag = headers["etag"]
+                assert disabled_etag == '"mdo-schedule-api-schedule-2"', (
+                    headers)
+
+                status, headers, body = request(
+                    port, "DELETE", schedule_path, body=b"{}",
+                    headers={"Content-Type": "application/json",
+                             "If-Match": disabled_etag})
+                document = json.loads(body)
+                assert status == 400, (status, body)
+                assert document["error"]["code"] == "body_not_allowed", (
+                    document)
+                status, headers, body = request(
+                    port, "DELETE", schedule_path,
+                    headers={"If-Match": schedule_etag})
+                document = json.loads(body)
+                assert status == 412, (status, body)
+                assert document["error"]["code"] == "revision_conflict", (
+                    document)
+                status, headers, body = request(
+                    port, "DELETE", schedule_path,
+                    headers={"If-Match": disabled_etag})
+                document = json.loads(body)
+                assert status == 200, (status, body)
+                assert document["data"]["removed"] is True, document
+                assert document["data"]["revision"] == 2, document
+                assert not definition_path.exists(), definition_path
+                status, headers, body = request(port, "GET", schedule_path)
+                document = json.loads(body)
+                assert status == 404, (status, body)
+                assert document["error"]["code"] == "schedule_not_found", (
+                    document)
+                status, headers, body = request(
+                    port, "OPTIONS", "/api/v1/schedules")
+                assert status == 200 and headers["allow"] == (
+                    "GET, HEAD, POST, OPTIONS"), (status, headers, body)
+                status, headers, body = request(
+                    port, "OPTIONS", schedule_path)
+                assert status == 200 and headers["allow"] == (
+                    "GET, HEAD, DELETE, OPTIONS"), (status, headers, body)
+                status, headers, body = request(
+                    port, "OPTIONS", schedule_path + "/enabled")
+                assert status == 200 and headers["allow"] == (
+                    "PUT, OPTIONS"), (status, headers, body)
+
                 status, headers, body = request(
                     port, "PATCH", session_path,
                     body=b'{"title":"Renamed session"}',
