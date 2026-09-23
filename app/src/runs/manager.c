@@ -104,6 +104,29 @@ static bool MdoRunsPromptValid(const char* Prompt)
         xrtUtf8Valid(xrtStrViewN(Prompt, Size), NULL);
 }
 
+static bool MdoRunsRecoveryTokenValid(MdoAgentSession* Agent,
+    const char* ExpectedToken, xwork_error* Error)
+{
+    xwork_recovery_snapshot* Snapshot;
+    char CurrentToken[MDO_AGENT_RECOVERY_TOKEN_CAPACITY];
+
+    Snapshot = MdoAgentSessionRecoverySnapshot(Agent, Error);
+    if ( Snapshot == NULL ) return false;
+    if ( !MdoAgentRecoverySnapshotToken(Snapshot, CurrentToken) ) {
+        xworkRecoverySnapshotRelease(Snapshot);
+        MdoRunsError(Error, XWORK_ERROR_CONTEXT,
+            "cannot fingerprint the current recovery state");
+        return false;
+    }
+    xworkRecoverySnapshotRelease(Snapshot);
+    if ( ExpectedToken == NULL || strcmp(CurrentToken, ExpectedToken) != 0 ) {
+        MdoRunsError(Error, XWORK_ERROR_POLICY,
+            "recovery state changed after it was inspected");
+        return false;
+    }
+    return true;
+}
+
 static size_t MdoRunsFindLocked(const char* RunId)
 {
     size_t i;
@@ -484,7 +507,13 @@ bool MdoRunStart(const MdoRunStartOptions* Options, MdoRunInfo* Info,
     if ( Options == NULL || Options->Size < sizeof(*Options) ||
          !MdoRunsIdValid(Options->ProjectId, MDO_PROJECT_ID_CAPACITY) ||
          !MdoRunsIdValid(Options->SessionId, MDO_SESSION_ID_CAPACITY) ||
-         !MdoRunsPromptValid(Options->Prompt) ||
+         ((!Options->Resume && (!MdoRunsPromptValid(Options->Prompt) ||
+             Options->ResumeOptions != NULL ||
+             Options->RecoveryToken != NULL)) ||
+          (Options->Resume && (Options->Prompt != NULL ||
+             Options->RecoveryToken == NULL ||
+             strlen(Options->RecoveryToken) !=
+                MDO_AGENT_RECOVERY_TOKEN_CAPACITY - 1u))) ||
          Options->TimeoutMilliseconds > MDO_RUN_TIMEOUT_MAX ||
          (Info != NULL && Info->Size < sizeof(*Info)) ) {
         MdoRunsError(Error, XWORK_ERROR_INVALID_ARGUMENT,
@@ -508,6 +537,7 @@ bool MdoRunStart(const MdoRunStartOptions* Options, MdoRunInfo* Info,
     Reserved.Result = XWORK_RESULT_ERROR;
     Reserved.CreatedAt = xrtNow();
     Reserved.CreatedMicroseconds = xrtClock();
+    Reserved.Resume = Options->Resume;
     snprintf(Reserved.ProjectId, sizeof(Reserved.ProjectId), "%s",
         Options->ProjectId);
     snprintf(Reserved.SessionId, sizeof(Reserved.SessionId), "%s",
@@ -584,10 +614,14 @@ bool MdoRunStart(const MdoRunStartOptions* Options, MdoRunInfo* Info,
             "managed session has no active Agent runtime");
         goto publish;
     }
+    if ( Options->Resume && !MdoRunsRecoveryTokenValid(Agent,
+            Options->RecoveryToken, Error) ) goto publish;
     MdoAgentRunOptionsInit(&RunOptions);
     RunOptions.Prompt = Options->Prompt;
+    RunOptions.Resume = Options->Resume;
     RunOptions.Cancel = StartCancel;
     RunOptions.Deadline = Deadline;
+    RunOptions.ResumeOptions = Options->ResumeOptions;
     Run = MdoAgentRunCreate(Agent, &RunOptions, Error);
     if ( Run == NULL || !MdoAgentRunStart(Run, Error) ) goto publish;
     memset(&AgentInfo, 0, sizeof(AgentInfo));
@@ -631,6 +665,7 @@ publish:
         Entry->Info.State = AgentInfo.Run.eState;
         Entry->Info.Result = AgentInfo.Run.eResult;
         Entry->Info.Protocol = AgentInfo.Protocol;
+        Entry->Info.Resume = AgentInfo.Run.bResume;
         Entry->Info.CancelRequested = CancelRequested;
         snprintf(Entry->Info.AgentId, sizeof(Entry->Info.AgentId), "%s",
             AgentInfo.AgentId != NULL ? AgentInfo.AgentId : "");

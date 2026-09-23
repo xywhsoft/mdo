@@ -50,6 +50,7 @@ static bool MdoApiRunValue(const MdoRunInfo* Info, const char* FinalText,
             xworkErrorCodeName(Info->ErrorCode)) &&
         MdoApiValueSetBool(Item, "terminal", Info->Terminal) &&
         MdoApiValueSetBool(Item, "cancel_requested", Info->CancelRequested) &&
+        MdoApiValueSetBool(Item, "resume", Info->Resume) &&
         MdoApiValueSetInt(Item, "created_at", Info->CreatedAt) &&
         MdoApiValueSetInt(Item, "started_at", Info->StartedAt) &&
         MdoApiValueSetInt(Item, "ended_at", Info->EndedAt) &&

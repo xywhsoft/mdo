@@ -9,6 +9,8 @@
 typedef struct MdoAgentSession MdoAgentSession;
 typedef struct MdoAgentRun MdoAgentRun;
 
+#define MDO_AGENT_RECOVERY_TOKEN_CAPACITY 65u
+
 typedef struct MdoAgentSessionOptions {
     uint32 Size;
     const char* AgentId;          /* NULL selects mdo.default. */
@@ -105,6 +107,16 @@ MdoAgentSession* MdoAgentSessionRef(MdoAgentSession* Session);
 void MdoAgentSessionRelease(MdoAgentSession* Session);
 bool MdoAgentSessionGetInfo(const MdoAgentSession* Session,
     MdoAgentSessionInfo* Info);
+/* Capture unresolved durable tool calls while the Agent is idle. The caller
+ * owns the returned snapshot and releases it with
+ * xworkRecoverySnapshotRelease. */
+xwork_recovery_snapshot* MdoAgentSessionRecoverySnapshot(
+    MdoAgentSession* Session, xwork_error* Error);
+/* Stable SHA-256 token over pending call identity, arguments, and current
+ * tool descriptors. Catalog generations are intentionally excluded because
+ * an equivalent catalog receives a new runtime-local generation on reopen. */
+bool MdoAgentRecoverySnapshotToken(const xwork_recovery_snapshot* Snapshot,
+    char Token[MDO_AGENT_RECOVERY_TOKEN_CAPACITY]);
 
 /* Ledger maintenance claims the same exclusive run window as an Agent run.
  * It therefore fails while another run is active. Successful mutations are

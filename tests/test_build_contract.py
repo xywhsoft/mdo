@@ -83,6 +83,7 @@ class BuildContractTests(unittest.TestCase):
             "src/api/tasks.c",
             "src/api/approvals.c",
             "src/api/runs.c",
+            "src/api/recovery.c",
             "src/api/schedules.c",
             "src/api/diagnostics.c",
             "src/api/events.c",

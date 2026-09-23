@@ -95,6 +95,8 @@ bool MdoApiSessionCreateRoute(MdoApiContext* pContext);
 bool MdoApiSessionRoute(MdoApiContext* pContext);
 bool MdoApiSessionRestoreRoute(MdoApiContext* pContext);
 bool MdoApiSessionHistoryRoute(MdoApiContext* pContext);
+bool MdoApiSessionRecoveryRoute(MdoApiContext* pContext);
+bool MdoApiSessionResumeRoute(MdoApiContext* pContext);
 bool MdoApiSessionForkRoute(MdoApiContext* pContext);
 bool MdoApiSessionTruncateRoute(MdoApiContext* pContext);
 bool MdoApiSessionClearRoute(MdoApiContext* pContext);

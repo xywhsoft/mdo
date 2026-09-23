@@ -40,8 +40,13 @@ typedef struct MdoRunStartOptions {
     uint32 Size;
     const char* ProjectId;
     const char* SessionId;
-    const char* Prompt;
+    const char* Prompt; /* required unless Resume is true. */
     uint32 TimeoutMilliseconds; /* zero means no run deadline. */
+    bool Resume;
+    /* Opaque recovery view token accepted by the user. Recomputed against
+     * the exact Agent instance immediately before the resume starts. */
+    const char* RecoveryToken;
+    const xwork_resume_options* ResumeOptions;
 } MdoRunStartOptions;
 
 typedef struct MdoRunInfo {
@@ -69,6 +74,7 @@ typedef struct MdoRunInfo {
     MdoModelProtocol Protocol;
     bool Terminal;
     bool CancelRequested;
+    bool Resume;
     bool FinalTextAvailable;
     bool FinalTextTruncated;
     char Id[MDO_RUN_ID_CAPACITY];

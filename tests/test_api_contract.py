@@ -188,6 +188,33 @@ class ApiContractTests(unittest.TestCase):
         self.assertIn("Present == xrtValueCount(Body.Value)", runs)
         self.assertIn('"final_text_truncated"', runs)
         self.assertIn('"run_limit_reached"', runs)
+
+    def test_durable_recovery_is_bounded_token_checked_and_explicit(self) -> None:
+        recovery = (ROOT / "app/src/api/recovery.c").read_text(
+            encoding="utf-8")
+        runs = (ROOT / "app/src/runs/manager.c").read_text(
+            encoding="utf-8")
+        agents = (ROOT / "app/src/agents/runtime.c").read_text(
+            encoding="utf-8")
+        self.assertIn(
+            '"/api/v1/projects/{project}/sessions/{session}/recovery"',
+            self.router,
+        )
+        self.assertIn(
+            '"/api/v1/projects/{project}/sessions/{session}/resume"',
+            self.router,
+        )
+        self.assertIn("MDO_API_RECOVERY_CALL_MAX 32u", recovery)
+        self.assertIn("MDO_API_RECOVERY_ARGUMENT_MAX (16u * 1024u)", recovery)
+        self.assertIn("MDO_API_RECOVERY_ARGUMENT_TOTAL_MAX", recovery)
+        self.assertIn("XWORK_RECOVERY_RETRY", recovery)
+        self.assertIn("XWORK_RECOVERY_RECORD_UNCERTAIN", recovery)
+        self.assertIn('"recovery_view_too_large"', recovery)
+        self.assertIn("MdoAgentSessionRecoverySnapshot", agents)
+        self.assertIn("MdoRunsRecoveryTokenValid", runs)
+        self.assertIn("MdoAgentRecoverySnapshotToken", runs)
+        self.assertIn("recovery_token", recovery)
+        self.assertIn("RunOptions.ResumeOptions = Options->ResumeOptions", runs)
         self.assertNotIn("xworkRuntimeEventSnapshot", runs)
 
     def test_schedule_resources_are_strict_and_revision_tagged(self) -> None:

@@ -78,17 +78,29 @@ class ModelHandler(BaseHTTPRequestHandler):
             payload = json.loads(self.rfile.read(length))
             ModelHandler.calls += 1
             ModelHandler.saw_prompt = "API interactive prompt" in json.dumps(payload)
+            output = [{
+                "type": "message",
+                "content": [{
+                    "type": "output_text",
+                    "text": "API interactive result",
+                }],
+            }]
+            if ModelHandler.calls == 2:
+                output = [{
+                    "type": "function_call",
+                    "call_id": "recovery-verify-call",
+                    "name": "exec",
+                    "arguments": json.dumps({
+                        "argv": [sys.executable, "-c",
+                                 "print('recovery verified')"],
+                        "timeout_ms": 5000,
+                    }, separators=(",", ":")),
+                }]
             response = json.dumps({
                 "id": "resp_api_probe",
                 "model": "ling-3.0-tiny",
                 "status": "completed",
-                "output": [{
-                    "type": "message",
-                    "content": [{
-                        "type": "output_text",
-                        "text": "API interactive result",
-                    }],
-                }],
+                "output": output,
                 "usage": {
                     "input_tokens": 7,
                     "output_tokens": 3,
@@ -124,6 +136,9 @@ def write_site(base: Path, port: int) -> Path:
     service_text = service_path.read_text(encoding="utf-8")
     fixture = r'''
 #include "../../include/mdo/approvals.h"
+#include "../../include/mdo/home.h"
+#include "../../include/mdo/sessions.h"
+#include <xllm-session.h>
 
 static xthread* g_MdoApiProbeApprovalThread;
 
@@ -184,6 +199,79 @@ static void MdoApiProbeCreateTasks(void)
     (void)xworkRuntimeCreateScheduledTask(Runtime, &Config, &TaskId, &Error);
 }
 
+static void MdoApiProbeCreateRecoverySession(void)
+{
+    static bool Created;
+    MdoSessionCreateOptions Options;
+    MdoSessionInfo Info;
+    MdoSession* Session;
+    xllm_session* Ledger = NULL;
+    xllm_response Response;
+    xllm_tool_call ToolCall;
+    xllm_session_config SessionConfig;
+    xllm_error ModelError;
+    xwork_error Error;
+    uint64 Turn;
+    char Relative[MDO_SESSION_PATH_CAPACITY];
+    char* SnapshotPath = NULL;
+    char* JournalPath = NULL;
+
+    if ( Created ) return;
+    Created = true;
+    MdoSessionCreateOptionsInit(&Options);
+    Options.ProjectId = "recovery-probe";
+    Options.Title = "Recovery probe";
+    Options.Agent.AgentId = "mdo.default";
+    Options.Agent.ModelId = "ling-3.0-tiny";
+    Options.Agent.Protocol = MDO_MODEL_PROTOCOL_OPENAI_RESPONSES;
+    Session = MdoSessionCreate(&Options, &Error);
+    if ( Session == NULL ) return;
+    memset(&Info, 0, sizeof(Info));
+    Info.Size = sizeof(Info);
+    if ( !MdoSessionGetInfo(Session, &Info) ) {
+        MdoSessionRelease(Session);
+        return;
+    }
+    MdoSessionRelease(Session);
+    Session = NULL;
+    if ( snprintf(Relative, sizeof(Relative), "sessions/%s/%s/snapshot.json",
+            Info.ProjectId, Info.Id) <= 0 ) return;
+    SnapshotPath = MdoHomeExternalPath(Relative);
+    if ( snprintf(Relative, sizeof(Relative), "sessions/%s/%s/journal.jsonl",
+            Info.ProjectId, Info.Id) <= 0 ) goto done;
+    JournalPath = MdoHomeExternalPath(Relative);
+    if ( SnapshotPath == NULL || JournalPath == NULL ) goto done;
+    xllmSessionConfigInit(&SessionConfig);
+    SessionConfig.eWindowMode = XLLM_WINDOW_SHARED_CONTEXT;
+    SessionConfig.uContextWindowTokens = 131072u;
+    SessionConfig.uMaxInputTokens = 131071u;
+    SessionConfig.uMaxOutputTokens = 16384u;
+    SessionConfig.uOutputReserveTokens = 8192u;
+    SessionConfig.uSummaryMaxTokens = 4096u;
+    Ledger = xllmSessionRecover(SnapshotPath, JournalPath, &SessionConfig,
+        &ModelError);
+    if ( Ledger == NULL ) goto done;
+    Turn = xllmSessionBeginTurn(Ledger);
+    if ( Turn == 0u || !xllmSessionAddText(Ledger, Turn, XLLM_ROLE_USER,
+            "Continue after checking the uncertain edit.", 0u) ||
+         !xllmSessionBeginModelCall(Ledger, &ModelError) ) goto done;
+    memset(&ToolCall, 0, sizeof(ToolCall));
+    ToolCall.sId = "recovery-edit-call";
+    ToolCall.sName = "edit";
+    ToolCall.sArgumentsJson =
+        "{\"path\":\"recovery-probe.txt\",\"edits\":[{\"old_text\":\"before\",\"new_text\":\"after\"}]}";
+    memset(&Response, 0, sizeof(Response));
+    Response.eFinish = XLLM_FINISH_TOOL_CALLS;
+    Response.pToolCalls = &ToolCall;
+    Response.iToolCallCount = 1u;
+    if ( !xllmSessionAddAssistantResponse(Ledger, Turn, &Response) ) goto done;
+    (void)xllmSessionCheckpoint(Ledger, SnapshotPath, &ModelError);
+done:
+    xllmSessionDestroy(Ledger);
+    xrtFree(SnapshotPath);
+    xrtFree(JournalPath);
+}
+
 '''
     needle = "void ServiceInit(XS_HostInfo* pHost)\n{\n    (void)MdoBootstrapInit(pHost);\n"
     replacement = (
@@ -211,8 +299,32 @@ static void MdoApiProbeCreateTasks(void)
         "}\n\nXS_RequestResult RequestProc")
     if unit_needle not in service_text:
         raise RuntimeError("API approval fixture could not patch ServiceUnit")
+    service_text = service_text.replace(unit_needle, unit_replacement, 1)
+    request_needle = (
+        "XS_RequestResult RequestProc(XS_HttpReq* pRequest)\n"
+        "{\n"
+        "    return MdoApiRequest(pRequest);\n"
+        "}")
+    request_replacement = (
+        "XS_RequestResult RequestProc(XS_HttpReq* pRequest)\n"
+        "{\n"
+        "    static const char Marker[] = \"fixture=recovery\";\n"
+        "    size_t Index;\n"
+        "    if ( pRequest != NULL && pRequest->head != NULL ) {\n"
+        "        xstrview Target = pRequest->head->Target;\n"
+        "        for ( Index = 0u; Index + sizeof(Marker) - 1u <= Target.Size; ++Index ) {\n"
+        "            if ( memcmp(Target.Data + Index, Marker, sizeof(Marker) - 1u) == 0 ) {\n"
+        "                MdoApiProbeCreateRecoverySession();\n"
+        "                break;\n"
+        "            }\n"
+        "        }\n"
+        "    }\n"
+        "    return MdoApiRequest(pRequest);\n"
+        "}")
+    if request_needle not in service_text:
+        raise RuntimeError("API recovery fixture could not patch RequestProc")
     service_path.write_text(service_text.replace(
-        unit_needle, unit_replacement, 1), encoding="utf-8", newline="\n")
+        request_needle, request_replacement, 1), encoding="utf-8", newline="\n")
     mock_server = base / "mcp_mock_server.py"
     mock_server.write_text(MCP_MOCK_SERVER, encoding="utf-8")
     mcp_document = {
@@ -1231,6 +1343,129 @@ def run_probe(host: Path) -> None:
                     port, "GET", session_path + "/events?after=0&limit=32")[2])
                 assert any(item["terminal"] for item in
                            event_document["data"]["items"]), event_document
+
+                status, _, body = request(
+                    port, "GET", "/api/v1/diagnostics?fixture=recovery")
+                assert status == 200, (status, body)
+                all_sessions = json.loads(request(
+                    port, "GET", "/api/v1/sessions")[2])["data"]["items"]
+                recovery_session = next(item for item in all_sessions
+                                        if item["project_id"] == "recovery-probe")
+                recovery_path = (
+                    "/api/v1/projects/recovery-probe/sessions/"
+                    f"{recovery_session['id']}/recovery")
+                resume_path = recovery_path.removesuffix("/recovery") + "/resume"
+                status, headers, body = request(port, "GET", recovery_path)
+                recovery_document = json.loads(body)
+                assert status == 200, (status, body)
+                assert_common(headers, recovery_document)
+                recovery = recovery_document["data"]
+                assert recovery["project_id"] == "recovery-probe", recovery
+                assert recovery["session_id"] == recovery_session["id"], recovery
+                assert recovery["total"] == 1, recovery
+                assert recovery["catalog_generation"] > 0, recovery
+                assert re.fullmatch(r"[0-9a-f]{64}",
+                                    recovery["recovery_token"]), recovery
+                pending = recovery["items"][0]
+                assert pending["tool_call_id"] == "recovery-edit-call", pending
+                assert pending["tool"] == "edit", pending
+                assert pending["effects"] == ["workspace_write"], pending
+                assert pending["tool_available"] is True, pending
+                assert pending["automatic_retry_safe"] is False, pending
+                assert json.loads(pending["arguments_json"])["path"] == (
+                    "recovery-probe.txt"), pending
+                status, _, body = request(port, "HEAD", recovery_path)
+                assert status == 200 and body == b"", (status, body)
+                status, headers, body = request(port, "OPTIONS", recovery_path)
+                assert status == 200 and headers["allow"] == (
+                    "GET, HEAD, OPTIONS"), (status, headers, body)
+                status, headers, body = request(port, "OPTIONS", resume_path)
+                assert status == 200 and headers["allow"] == "POST, OPTIONS", (
+                    status, headers, body)
+
+                resume_headers = {"Content-Type": "application/json"}
+                invalid_resume = json.dumps({
+                    "recovery_token": recovery["recovery_token"],
+                    "decisions": [
+                        {"tool_call_id": "recovery-edit-call",
+                         "action": "retry"},
+                        {"tool_call_id": "recovery-edit-call",
+                         "action": "record_uncertain"},
+                    ],
+                }).encode()
+                status, _, body = request(port, "POST", resume_path,
+                                          body=invalid_resume,
+                                          headers=resume_headers)
+                assert status == 422, (status, body)
+                assert json.loads(body)["error"]["code"] == (
+                    "recovery_resume_invalid")
+                stale_resume = json.dumps({
+                    "recovery_token": "0" * 64,
+                    "decisions": [{
+                        "tool_call_id": "recovery-edit-call",
+                        "action": "record_uncertain",
+                    }],
+                }).encode()
+                status, _, body = request(port, "POST", resume_path,
+                                          body=stale_resume,
+                                          headers=resume_headers)
+                assert status == 409, (status, body)
+                assert json.loads(body)["error"]["code"] == (
+                    "recovery_state_conflict")
+
+                status, _, body = request(port, "GET", recovery_path)
+                assert status == 200, (status, body)
+                recovery = json.loads(body)["data"]
+                assert recovery["total"] == 1, recovery
+
+                resume_document = json.dumps({
+                    "recovery_token": recovery["recovery_token"],
+                    "decisions": [{
+                        "tool_call_id": "recovery-edit-call",
+                        "action": "record_uncertain",
+                    }],
+                }).encode()
+                status, headers, body = request(port, "POST", resume_path,
+                                                body=resume_document,
+                                                headers=resume_headers)
+                resumed_document = json.loads(body)
+                assert status == 202, (status, body)
+                assert_common(headers, resumed_document)
+                resumed = resumed_document["data"]
+                assert resumed["resume"] is True, resumed
+                resumed_path = f"/api/v1/runs/{resumed['id']}"
+                approval_deadline = time.monotonic() + 3.0
+                verification_approval = None
+                while time.monotonic() < approval_deadline:
+                    approval_data = json.loads(request(
+                        port, "GET", "/api/v1/approvals")[2])["data"]
+                    verification_approval = next((item for item in
+                        approval_data["items"] if item["tool"] == "exec" and
+                        item["tool_call_id"] == "recovery-verify-call"), None)
+                    if verification_approval is not None:
+                        break
+                    time.sleep(0.01)
+                assert verification_approval is not None, approval_data
+                status, _, body = request(
+                    port, "PUT",
+                    f"/api/v1/approvals/{verification_approval['id']}",
+                    body=b'{"decision":"allow"}', headers=resume_headers)
+                assert status == 200, (status, body)
+                deadline = time.monotonic() + 5.0
+                while not resumed["terminal"] and time.monotonic() < deadline:
+                    time.sleep(0.01)
+                    status, headers, body = request(port, "GET", resumed_path)
+                    resumed = json.loads(body)["data"]
+                    assert status == 200, (status, body)
+                assert resumed["terminal"] is True, resumed
+                assert resumed["state"] == "succeeded", resumed
+                assert resumed["resume"] is True, resumed
+                assert resumed["tool_calls"] == 1, resumed
+                assert not (base / "recovery-probe.txt").exists(), list(
+                    base.iterdir())
+                status, _, body = request(port, "GET", recovery_path)
+                assert status == 200, (status, body)
+                assert json.loads(body)["data"]["total"] == 0, body
 
                 schedule_path = "/api/v1/schedules/api-schedule"
                 status, headers, body = request(

@@ -36,6 +36,17 @@ class RunManagerContractTests(unittest.TestCase):
         self.assertIn("while ( g_MdoRuns.StartingCount != 0u", self.source)
         self.assertIn("xrtCondBroadcast(g_MdoRuns.Changed)", self.source)
 
+    def test_resume_rechecks_the_recovery_view_before_start(self) -> None:
+        self.assertIn("RecoveryToken", self.header)
+        self.assertIn("const xwork_resume_options* ResumeOptions", self.header)
+        self.assertIn("MdoAgentSessionRecoverySnapshot", self.source)
+        self.assertIn("MdoAgentRecoverySnapshotToken", self.source)
+        self.assertIn("strcmp(CurrentToken, ExpectedToken)", self.source)
+        self.assertLess(
+            self.source.index("MdoRunsRecoveryTokenValid(Agent"),
+            self.source.index("MdoAgentRunCreate(Agent"),
+        )
+
     def test_callbacks_are_pinned_and_shutdown_precedes_session_manager(self) -> None:
         self.assertIn("Options->OnOwnerRetain(Options->OwnerUserData)", self.source)
         self.assertIn("Options.OnOwnerRelease(Options.OwnerUserData)", self.source)

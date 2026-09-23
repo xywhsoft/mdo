@@ -1252,6 +1252,75 @@ bool MdoAgentSessionGetInfo(const MdoAgentSession* Session,
     return true;
 }
 
+xwork_recovery_snapshot* MdoAgentSessionRecoverySnapshot(
+    MdoAgentSession* Session, xwork_error* Error)
+{
+    xworkErrorInit(Error);
+    if ( Session == NULL || Session->Agent == NULL ) {
+        MdoAgentsError(Error, XWORK_ERROR_INVALID_ARGUMENT,
+            "Agent session is required to inspect recovery state");
+        return NULL;
+    }
+    return xworkAgentRecoverySnapshot(Session->Agent, Error);
+}
+
+static bool MdoAgentRecoveryHashUInt64(xsha256* Hash, uint64 Value)
+{
+    uint8 Bytes[8];
+    size_t Index;
+    for ( Index = 0u; Index < sizeof(Bytes); ++Index )
+        Bytes[sizeof(Bytes) - Index - 1u] = (uint8)(Value >> (Index * 8u));
+    return xrtSha256Update(Hash, Bytes, sizeof(Bytes));
+}
+
+static bool MdoAgentRecoveryHashString(xsha256* Hash, const char* Text)
+{
+    size_t Size;
+    if ( Text == NULL ) return false;
+    Size = strlen(Text);
+    return MdoAgentRecoveryHashUInt64(Hash, (uint64)Size) &&
+        xrtSha256Update(Hash, Text, Size);
+}
+
+bool MdoAgentRecoverySnapshotToken(const xwork_recovery_snapshot* Snapshot,
+    char Token[MDO_AGENT_RECOVERY_TOKEN_CAPACITY])
+{
+    static const char Domain[] = "mdo-recovery-view-v1";
+    static const char Hex[] = "0123456789abcdef";
+    xsha256 Hash;
+    uint8 Digest[XRT_SHA256_SIZE];
+    size_t Count;
+    size_t Index;
+    if ( Snapshot == NULL || Token == NULL ) return false;
+    Count = xworkRecoverySnapshotCount(Snapshot);
+    xrtSha256Init(&Hash);
+    if ( !xrtSha256Update(&Hash, Domain, sizeof(Domain) - 1u) ||
+         !MdoAgentRecoveryHashUInt64(&Hash, (uint64)Count) ) return false;
+    for ( Index = 0u; Index < Count; ++Index ) {
+        xwork_recovery_call_info Info;
+        uint8 Flags[2];
+        memset(&Info, 0, sizeof(Info));
+        Info.uSize = sizeof(Info);
+        Info.uAbiVersion = XWORK_ABI_VERSION;
+        if ( !xworkRecoverySnapshotAt(Snapshot, Index, &Info) ) return false;
+        Flags[0] = Info.bToolAvailable ? 1u : 0u;
+        Flags[1] = Info.bAutomaticRetrySafe ? 1u : 0u;
+        if ( !MdoAgentRecoveryHashUInt64(&Hash, Info.uTurn) ||
+             !MdoAgentRecoveryHashString(&Hash, Info.sToolCallId) ||
+             !MdoAgentRecoveryHashString(&Hash, Info.sToolName) ||
+             !MdoAgentRecoveryHashString(&Hash, Info.sArgumentsJson) ||
+             !MdoAgentRecoveryHashUInt64(&Hash, Info.uEffects) ||
+             !xrtSha256Update(&Hash, Flags, sizeof(Flags)) ) return false;
+    }
+    if ( !xrtSha256Final(&Hash, Digest) ) return false;
+    for ( Index = 0u; Index < sizeof(Digest); ++Index ) {
+        Token[Index * 2u] = Hex[Digest[Index] >> 4u];
+        Token[Index * 2u + 1u] = Hex[Digest[Index] & 15u];
+    }
+    Token[sizeof(Digest) * 2u] = '\0';
+    return true;
+}
+
 static bool MdoAgentLedgerBegin(MdoAgentSession* Session,
     xwork_error* Error)
 {
