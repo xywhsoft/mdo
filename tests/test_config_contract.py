@@ -7,6 +7,17 @@ ROOT = Path(__file__).resolve().parent.parent
 
 
 class ConfigContractTests(unittest.TestCase):
+    def test_runtime_updates_are_revisioned_transactions(self) -> None:
+        public = (ROOT / "app/include/mdo/settings.h").read_text(encoding="utf-8")
+        service = (ROOT / "app/src/config/service.c").read_text(encoding="utf-8")
+        self.assertIn("ExpectedRevision", public)
+        self.assertIn("MDO_SETTINGS_STATUS_CONFLICT", public)
+        self.assertIn("MDO_SETTINGS_STATUS_ROLLBACK_FAILED", public)
+        self.assertIn("MdoConfigExport", service)
+        self.assertIn("MdoConfigImport(Domain", service)
+        self.assertIn("MdoSettingsRollbackRuntime", service)
+        self.assertIn("g_MdoSettings.Degraded = true", service)
+
     def setUp(self) -> None:
         self.defaults = json.loads(
             (ROOT / "app/default-home/config/defaults.json").read_text(

@@ -8,6 +8,7 @@
 #include "../../include/mdo/modules.h"
 #include "../../include/mdo/schedules.h"
 #include "../../include/mdo/sessions.h"
+#include "../../include/mdo/settings.h"
 #include "../../include/mdo/skills.h"
 #include "../../include/mdo/version.h"
 #include "../../include/mdo/web.h"
@@ -64,6 +65,11 @@ bool MdoBootstrapInit(XS_HostInfo* pHost)
         g_MdoBootstrap.DefaultsBytes = Config.EffectiveBytes;
     }
     g_MdoBootstrap.Stage = MDO_BOOTSTRAP_CONFIG_READY;
+
+    if ( !MdoSettingsServiceInit() ) {
+        MdoBootstrapFail("settings transaction service initialization failed");
+        return false;
+    }
 
     if ( !MdoModelManagerInit() ) {
         MdoBootstrapFail("model manager initialization failed");
@@ -183,6 +189,7 @@ void MdoBootstrapUnit(void)
         xworkRuntimeRelease(g_MdoBootstrap.Runtime);
     g_MdoBootstrap.Runtime = NULL;
     MdoModelManagerUnit();
+    MdoSettingsServiceUnit();
     MdoConfigUnit();
     MdoHomeUnit();
     memset(&g_MdoBootstrap, 0, sizeof(g_MdoBootstrap));

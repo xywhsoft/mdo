@@ -55,6 +55,7 @@ class BuildContractTests(unittest.TestCase):
         self.assertEqual(sources, [
             "src/storage/home.c",
             "src/config/config.c",
+            "src/config/service.c",
             "src/security/secrets.c",
             "src/models/catalog.c",
             "src/skills/manager.c",
