@@ -57,3 +57,36 @@ export async function trashSession(session) {
 export async function restoreSession(session) {
   return refreshAfter(await api.post(`${endpoint(session)}/restore`, undefined, { ifMatch: etag(session) }));
 }
+
+export async function loadSessionHistory(session) {
+  const response = await api.get(`${endpoint(session)}/history`);
+  return { ...response.data, etag: response.etag };
+}
+
+function sequence(value) {
+  const number = Number(value);
+  if (!Number.isSafeInteger(number) || number < 0) throw new TypeError("session sequence is invalid");
+  return number;
+}
+
+export async function forkSession(session, input) {
+  const body = { through_sequence: sequence(input.through_sequence) };
+  if (input.title) body.title = input.title;
+  const response = await api.post(`${endpoint(session)}/fork`, body, { ifMatch: etag(session) });
+  await loadSessions();
+  return { ...response.data, etag: response.etag };
+}
+
+export async function truncateSession(session, throughSequence) {
+  return refreshAfter(await api.post(`${endpoint(session)}/truncate`, {
+    through_sequence: sequence(throughSequence),
+  }, { ifMatch: etag(session) }));
+}
+
+export async function clearSession(session) {
+  return refreshAfter(await api.post(`${endpoint(session)}/clear`, undefined, { ifMatch: etag(session) }));
+}
+
+export function exportSession(session) {
+  return api.download(`${endpoint(session)}/export`);
+}

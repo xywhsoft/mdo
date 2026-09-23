@@ -2,7 +2,8 @@ import { mountIcons } from "./components/icons.js";
 import { bootstrapStore, loadBootstrap } from "./state/bootstrap.js";
 import {
   sessionsStore, sessionDetailStore, loadSessions, loadSession, createSession,
-  patchSession, trashSession, restoreSession,
+  patchSession, trashSession, restoreSession, loadSessionHistory, forkSession,
+  truncateSession, clearSession, exportSession,
 } from "./state/sessions.js";
 import { modelsStore, agentsStore, loadCatalogs, loadModels, loadAgents } from "./state/catalogs.js";
 import { settingsStore, loadSettings } from "./state/settings.js";
@@ -353,6 +354,8 @@ export async function boot() {
   const actionDialog = $("#session-action-dialog");
   const actionForm = $("#session-action-form");
   const actionFields = $("#session-action-fields");
+  const actionTitleField = $("#session-title-field");
+  const actionSequenceField = $("#session-sequence-field");
   const actionTitle = $("#session-action-title");
   const actionDescription = $("#session-action-description");
   const actionError = $("#session-action-error");
@@ -374,26 +377,57 @@ export async function boot() {
     else if (action === "unarchive") updated = await patchSession(session, { archived: false });
     else if (action === "trash") updated = await trashSession(session);
     else if (action === "restore") updated = await restoreSession(session);
+    else if (action === "fork") {
+      updated = await forkSession(session, { title, through_sequence: actionForm.elements.through_sequence.value });
+      navigation.select(updated.project_id, updated.id);
+    } else if (action === "truncate") updated = await truncateSession(session, actionForm.elements.through_sequence.value);
+    else if (action === "clear") updated = await clearSession(session);
     else throw new TypeError("unknown session action");
     await refreshSelectedSession(updated);
-    toast({ rename: "会话已重命名", pin: updated.pinned ? "会话已置顶" : "已取消置顶", archive: "会话已归档", unarchive: "会话已移回进行中", trash: "会话已移到回收站", restore: "会话已恢复" }[action]);
+    toast({ rename: "会话已重命名", pin: updated.pinned ? "会话已置顶" : "已取消置顶", archive: "会话已归档", unarchive: "会话已移回进行中", trash: "会话已移到回收站", restore: "会话已恢复", fork: "已创建会话分支", truncate: "会话历史已截断", clear: "会话历史已清空" }[action]);
     return updated;
   }
 
   async function handleSessionAction(action, session) {
-    if (action !== "rename" && action !== "trash") return applySessionAction(action, session);
-    pendingSessionAction = { action, session };
-    const rename = action === "rename";
-    actionTitle.textContent = rename ? "重命名会话" : "移到回收站";
-    actionDescription.textContent = rename ? "新标题会同步写入会话元数据。" : `“${session.title || "未命名任务"}”可从回收站恢复。`;
-    actionFields.hidden = !rename;
-    actionForm.elements.title.required = rename;
-    actionForm.elements.title.value = rename ? session.title || "" : "";
-    actionConfirm.textContent = rename ? "保存" : "移到回收站";
-    actionConfirm.className = rename ? "primary-button" : "danger-button";
+    if (action === "export") {
+      const file = await exportSession(session);
+      const url = URL.createObjectURL(file.blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = file.filename;
+      link.click();
+      window.setTimeout(() => URL.revokeObjectURL(url), 0);
+      toast("会话导出已开始下载");
+      return;
+    }
+    if (!["rename", "trash", "fork", "truncate", "clear"].includes(action)) return applySessionAction(action, session);
+    let history = null;
+    if (action === "fork" || action === "truncate") history = await loadSessionHistory(session);
+    pendingSessionAction = { action, session: history ? { ...session, etag: history.etag, revision: history.revision } : session };
+    const hasTitle = action === "rename" || action === "fork";
+    const hasSequence = action === "fork" || action === "truncate";
+    const content = {
+      rename: ["重命名会话", "新标题会同步写入会话元数据。", "保存"],
+      trash: ["移到回收站", `“${session.title || "未命名任务"}”可从回收站恢复。`, "移到回收站"],
+      fork: ["创建会话分支", "从指定消息序列创建独立会话。原会话不会改变。", "创建分支"],
+      truncate: ["截断会话历史", "指定序列之后的模型账本将被永久移除。", "截断历史"],
+      clear: ["清空会话历史", "模型账本将被永久清空，并重新注入当前系统提示词。", "清空历史"],
+    }[action];
+    actionTitle.textContent = content[0];
+    actionDescription.textContent = content[1];
+    actionFields.hidden = !hasTitle && !hasSequence;
+    actionTitleField.hidden = !hasTitle;
+    actionSequenceField.hidden = !hasSequence;
+    actionForm.elements.title.required = hasTitle;
+    actionForm.elements.title.value = action === "rename" ? session.title || "" : action === "fork" ? `${session.title || "未命名任务"}（分支）` : "";
+    actionForm.elements.through_sequence.required = hasSequence;
+    actionForm.elements.through_sequence.value = hasSequence ? String(history.last_sequence) : "";
+    actionForm.elements.through_sequence.max = hasSequence ? String(history.last_sequence) : "";
+    actionConfirm.textContent = content[2];
+    actionConfirm.className = ["trash", "truncate", "clear"].includes(action) ? "danger-button" : "primary-button";
     actionError.hidden = true;
     if (!actionDialog.open) actionDialog.showModal();
-    if (rename) window.setTimeout(() => actionForm.elements.title.select(), 0);
+    if (action === "rename") window.setTimeout(() => actionForm.elements.title.select(), 0);
   }
 
   $("#close-session-action").addEventListener("click", () => actionDialog.close());

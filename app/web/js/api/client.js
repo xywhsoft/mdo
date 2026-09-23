@@ -74,10 +74,38 @@ export async function apiRequest(path, options = {}) {
   };
 }
 
+async function download(path) {
+  let response;
+  try {
+    response = await fetch(requestPath(path), {
+      cache: "no-store",
+      credentials: "same-origin",
+    });
+  } catch {
+    throw new ApiError("无法连接本地 mdo 服务", { code: "network_error" });
+  }
+  if (!response.ok) {
+    let envelope = null;
+    try { envelope = await response.json(); } catch { /* handled below */ }
+    throw new ApiError(envelope?.error?.message || `下载失败 (${response.status})`, {
+      status: response.status,
+      code: envelope?.error?.code ?? "download_failed",
+      requestId: envelope?.request_id,
+    });
+  }
+  const disposition = response.headers.get("Content-Disposition") ?? "";
+  const match = /filename="([A-Za-z0-9._-]+)"/.exec(disposition);
+  return {
+    blob: await response.blob(),
+    filename: match?.[1] ?? "mdo-session-export.json",
+  };
+}
+
 export const api = Object.freeze({
   get: (path, options = {}) => apiRequest(path, options),
   post: (path, body, options = {}) => apiRequest(path, { ...options, method: "POST", body }),
   put: (path, body, options = {}) => apiRequest(path, { ...options, method: "PUT", body }),
   patch: (path, body, options = {}) => apiRequest(path, { ...options, method: "PATCH", body }),
   delete: (path, options = {}) => apiRequest(path, { ...options, method: "DELETE" }),
+  download,
 });

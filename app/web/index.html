@@ -343,7 +343,8 @@
         </button>
       </header>
       <div class="dialog-fields session-action-fields" id="session-action-fields">
-        <label>标题 <input name="title" maxlength="256" required></label>
+        <label id="session-title-field">标题 <input name="title" maxlength="256"></label>
+        <label id="session-sequence-field" hidden>保留到序列 <input name="through_sequence" type="number" min="0" step="1"></label>
       </div>
       <div class="dialog-error" id="session-action-error" role="alert" hidden></div>
       <footer>

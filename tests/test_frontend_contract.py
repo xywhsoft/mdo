@@ -153,6 +153,24 @@ class FrontendContractTests(unittest.TestCase):
         ):
             self.assertIn(marker, self.index)
 
+    def test_advanced_session_actions_are_bounded_and_explicit(self) -> None:
+        sessions = self.scripts["js/state/sessions.js"]
+        listing = self.scripts["js/features/sessions/session-list.js"]
+        client = self.scripts["js/api/client.js"]
+        for marker in (
+            "loadSessionHistory", "forkSession", "truncateSession",
+            "clearSession", "exportSession",
+        ):
+            self.assertIn(marker, sessions)
+        for action in ("fork", "truncate", "clear", "export"):
+            self.assertIn(f'"{action}"', listing)
+        self.assertIn("Number.isSafeInteger", sessions)
+        self.assertIn('credentials: "same-origin"', client)
+        self.assertIn('response.headers.get("Content-Disposition")', client)
+        self.assertIn('id="session-sequence-field"', self.index)
+        self.assertIn('if (action === "rename")', self.scripts["js/app.js"])
+        self.assertIn("max-height: min(320px, 70vh)", self.css)
+
     def test_responsive_and_accessibility_modes_are_explicit(self) -> None:
         self.assertIn("grid-template-columns: var(--sidebar-width) minmax(0, 1fr) var(--inspector-width)", self.css)
         self.assertIn("@media (max-width: 1180px)", self.css)
