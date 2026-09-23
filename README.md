@@ -72,3 +72,7 @@ mdo.exe -- --home D:\Portable\mdo-home
 会话使用 `meta.json` 与 xllm-session 的 snapshot/journal 分层持久化；创建、
 恢复、搜索、分叉、清空、截断、导出、置顶、归档、回收站和并发更新规则见
 [会话存储合同](docs/session-storage.md)。
+
+旧版可执行文件旁 `data/` 与用户目录 `.mdo/` 只能通过设置页中的显式预览、
+二次确认和原子导入迁移；目标 Home 不允许已存在，旧目录始终保留。转换规则、
+不支持项、失败清理和回退方式见[旧数据迁移说明](docs/legacy-migration.md)。
