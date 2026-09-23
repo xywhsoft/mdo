@@ -44,6 +44,31 @@ Module reload and MCP refresh use retained operation IDs. The caller polls the
 operation resource and can request cancellation without depending on an HTTP
 connection remaining open.
 
+## Settings transactions
+
+`GET /settings` returns the effective, typed UI settings and the current
+configuration ETag. It exposes credential status as a boolean; secret
+references and resolved values are omitted.
+
+The configuration domains are `settings`, `models`, and `permissions`. Each
+write document uses `{"schema_version":1,"patch":{...}}`:
+
+- `POST /settings/{domain}/preview` validates a complete replacement patch;
+- `PATCH /settings/{domain}/preview` recursively merges the supplied object
+  into the current user patch, then validates the resulting document;
+- `PUT /settings/{domain}` applies a complete replacement patch;
+- `PATCH /settings/{domain}` applies the same server-side recursive merge;
+- `DELETE /settings/{domain}` restores the built-in domain defaults and does
+  not accept a request body.
+
+Object members merge recursively. Arrays and scalar values replace the current
+value. Preview is read-only and reports `changes`, `patch_bytes`, and
+`current_revision`. PUT, PATCH, and DELETE require the current configuration
+ETag in `If-Match`; successful mutations return the new revision and ETag.
+Unknown patch fields remain round-trippable on the server, so a browser editing
+safe typed fields cannot erase newer settings or secret references it did not
+receive.
+
 ## Event replay
 
 `/events?after={event-id}&limit={count}` replays the bounded process event
