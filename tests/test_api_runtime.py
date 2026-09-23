@@ -172,6 +172,12 @@ def run_probe(host: Path) -> None:
         log_path = base / "xs.log"
         environment = os.environ.copy()
         environment["MDO_HOME"] = str(base / "wrong-environment-home")
+        environment["MDO_LING_CHAT_COMPLETIONS_URL"] = (
+            "https://example.invalid/v1")
+        environment["MDO_LING_RESPONSES_URL"] = (
+            "https://example.invalid/v1")
+        environment["MDO_LING_ANTHROPIC_URL"] = "https://example.invalid"
+        environment["MDO_LING_API_KEY"] = "bounded-api-test-key"
         with log_path.open("wb") as log:
             process = subprocess.Popen(
                 [str(host), str(config_path), "--", "--home", str(home)],
@@ -627,6 +633,96 @@ def run_probe(host: Path) -> None:
                     "transactions"] == 2, settings_document
                 assert settings_document["data"]["transaction_service"][
                     "runtime_consistent"] is True, settings_document
+
+                invalid_session = json.dumps({
+                    "project_id": "api-project",
+                    "unknown": True,
+                }).encode()
+                status, headers, body = request(
+                    port, "POST", "/api/v1/sessions", body=invalid_session,
+                    headers={"Content-Type": "application/json"})
+                document = json.loads(body)
+                assert status == 422, (status, body)
+                assert document["error"]["code"] == "session_create_invalid", (
+                    document)
+
+                create_session = json.dumps({
+                    "project_id": "api-project",
+                    "title": "API session",
+                    "agent_id": "mdo.default",
+                    "model_id": "ling-3.0-tiny",
+                    "protocol": "openai-responses",
+                    "reasoning_effort": "medium",
+                    "max_output_tokens": 1024,
+                    "workspace_root": str(base),
+                }).encode()
+                status, headers, body = request(
+                    port, "POST", "/api/v1/sessions", body=create_session,
+                    headers={"Content-Type": "application/json"})
+                session_document = json.loads(body)
+                assert status == 201, (status, body)
+                assert_common(headers, session_document)
+                session = session_document["data"]
+                session_id = session["id"]
+                assert session["project_id"] == "api-project", session
+                assert session["title"] == "API session", session
+                assert session["agent_id"] == "mdo.default", session
+                assert session["model_id"] == "ling-3.0-tiny", session
+                assert session["protocol"] == "openai-responses", session
+                assert session["revision"] == 1, session
+                assert session["runtime_open"] is False, session
+                session_etag = headers["etag"]
+                assert session_etag == (
+                    f'"mdo-session-{session_id}-1"'), headers
+
+                meta_path = home / f"sessions/api-project/{session_id}/meta.json"
+                assert meta_path.is_file(), list(home.rglob("*"))
+                meta_text = meta_path.read_text(encoding="utf-8")
+                assert "bounded-api-test-key" not in meta_text, meta_text
+                meta = json.loads(meta_text)
+                assert meta["id"] == session_id, meta
+                assert meta["project_id"] == "api-project", meta
+
+                status, headers, body = request(
+                    port, "GET",
+                    f"/api/v1/projects/api-project/sessions/{session_id}")
+                detail_document = json.loads(body)
+                assert status == 200, (status, body)
+                assert_common(headers, detail_document)
+                assert detail_document["data"] == session, (
+                    detail_document, session_document)
+                assert headers["etag"] == session_etag, headers
+
+                sessions_document = json.loads(request(
+                    port, "GET", "/api/v1/sessions")[2])
+                assert sessions_document["data"]["items"][0]["id"] == (
+                    session_id), sessions_document
+                status, headers, body = request(
+                    port, "GET",
+                    "/api/v1/projects/api-project/sessions/missing")
+                document = json.loads(body)
+                assert status == 404, (status, body)
+                assert document["error"]["code"] == "session_not_found", document
+
+                meta_path.write_text("{broken", encoding="utf-8")
+                status, headers, body = request(
+                    port, "GET",
+                    f"/api/v1/projects/api-project/sessions/{session_id}")
+                document = json.loads(body)
+                assert status == 500, (status, body)
+                assert document["error"]["code"] == "session_read_failed", (
+                    document)
+
+                status, headers, body = request(
+                    port, "OPTIONS", "/api/v1/sessions")
+                document = json.loads(body)
+                assert status == 200 and headers["allow"] == (
+                    "GET, HEAD, POST, OPTIONS"), (status, headers, body)
+                status, headers, body = request(
+                    port, "OPTIONS",
+                    f"/api/v1/projects/api-project/sessions/{session_id}")
+                assert status == 200 and headers["allow"] == (
+                    "GET, HEAD, OPTIONS"), (status, headers, body)
 
                 status, headers, body = request(
                     port, "OPTIONS", "/api/v1/settings/settings")

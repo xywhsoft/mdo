@@ -81,6 +81,7 @@ class BuildContractTests(unittest.TestCase):
             "src/api/diagnostics.c",
             "src/api/events.c",
             "src/api/operations.c",
+            "src/api/sessions.c",
             "src/api/mutations.c",
             "src/api/router.c",
             "src/bootstrap/service.c",

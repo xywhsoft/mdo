@@ -123,6 +123,21 @@ class ApiContractTests(unittest.TestCase):
         self.assertIn('"mcp_refresh"', operations)
         self.assertIn('"tools_discovered"', operations)
 
+    def test_session_resources_are_strict_and_revision_tagged(self) -> None:
+        sessions = (ROOT / "app/src/api/sessions.c").read_text(encoding="utf-8")
+        self.assertIn('"/api/v1/projects/{project}/sessions/{session}"',
+                      self.router)
+        self.assertIn("MdoApiSessionCreateRoute", sessions)
+        self.assertIn("Present == xrtValueCount(Body.Value)", sessions)
+        self.assertIn("MdoSessionCreate", sessions)
+        self.assertIn("MdoSessionLoad", sessions)
+        self.assertIn("mdo-session-%s-%llu", sessions)
+        self.assertIn("MdoApiReplySuccessTakeEntityTag", sessions)
+        self.assertIn("session_persistence_failed", sessions)
+        self.assertIn("session_service_unavailable", sessions)
+        self.assertIn("session_read_failed", sessions)
+        self.assertNotIn("credential", sessions.lower())
+
     def test_every_json_response_has_identity_and_hardening_headers(self) -> None:
         for text in (
             'XRT_STR_LITERAL("schema_version")',

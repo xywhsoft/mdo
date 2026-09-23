@@ -182,6 +182,8 @@ bool MdoApiSessionsRoute(MdoApiContext* Context)
     size_t Index;
     bool Ok;
 
+    if ( Context->Request->head->MethodCode == XHTTP_METHOD_POST )
+        return MdoApiSessionCreateRoute(Context);
     MdoSessionQueryInit(&Query);
     Query.Limit = MDO_API_LIST_LIMIT;
     memset(&Error, 0, sizeof(Error));

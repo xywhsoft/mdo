@@ -132,15 +132,11 @@ bool MdoApiReplySuccessTake(MdoApiContext* pContext, uint16 Status,
     return MdoApiReplyValue(pContext, Status, Envelope, Allow, NULL);
 }
 
-bool MdoApiReplySuccessTakeRevision(MdoApiContext* pContext, uint16 Status,
-    xvalue* pData, uint64 Revision)
+bool MdoApiReplySuccessTakeEntityTag(MdoApiContext* pContext, uint16 Status,
+    xvalue* pData, cstr EntityTag)
 {
-    char EntityTag[64];
     xvalue* Envelope = xrtValueObject();
-    int Count = snprintf(EntityTag, sizeof(EntityTag),
-        "\"mdo-config-%llu\"", (unsigned long long)Revision);
-
-    if ( Count <= 0 || (size_t)Count >= sizeof(EntityTag) || pData == NULL ||
+    if ( pData == NULL || EntityTag == NULL || EntityTag[0] == '\0' ||
          Envelope == NULL || !MdoApiEnvelopeBase(Envelope, pContext, true) ) {
         xrtValueRelease(pData);
         xrtValueRelease(Envelope);
@@ -151,6 +147,21 @@ bool MdoApiReplySuccessTakeRevision(MdoApiContext* pContext, uint16 Status,
         return MdoApiReplySerializationFailure(pContext, 500u);
     }
     return MdoApiReplyValue(pContext, Status, Envelope, NULL, EntityTag);
+}
+
+bool MdoApiReplySuccessTakeRevision(MdoApiContext* pContext, uint16 Status,
+    xvalue* pData, uint64 Revision)
+{
+    char EntityTag[64];
+    int Count = snprintf(EntityTag, sizeof(EntityTag),
+        "\"mdo-config-%llu\"", (unsigned long long)Revision);
+
+    if ( Count <= 0 || (size_t)Count >= sizeof(EntityTag) ) {
+        xrtValueRelease(pData);
+        return MdoApiReplySerializationFailure(pContext, 500u);
+    }
+    return MdoApiReplySuccessTakeEntityTag(pContext, Status, pData,
+        EntityTag);
 }
 
 bool MdoApiReplyError(MdoApiContext* pContext, uint16 Status, cstr Code,

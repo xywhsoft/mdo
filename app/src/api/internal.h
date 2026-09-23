@@ -48,6 +48,8 @@ bool MdoApiValueSetStrings(xvalue* Object, cstr Key,
 
 bool MdoApiReplySuccessTake(MdoApiContext* pContext, uint16 Status,
     xvalue* pData, cstr Allow);
+bool MdoApiReplySuccessTakeEntityTag(MdoApiContext* pContext, uint16 Status,
+    xvalue* pData, cstr EntityTag);
 bool MdoApiReplySuccessTakeRevision(MdoApiContext* pContext, uint16 Status,
     xvalue* pData, uint64 Revision);
 bool MdoApiReplyError(MdoApiContext* pContext, uint16 Status, cstr Code,
@@ -80,6 +82,8 @@ bool MdoApiOperationsRoute(MdoApiContext* pContext);
 bool MdoApiOperationRoute(MdoApiContext* pContext);
 bool MdoApiSettingsPreviewRoute(MdoApiContext* pContext);
 bool MdoApiSettingsMutationRoute(MdoApiContext* pContext);
+bool MdoApiSessionCreateRoute(MdoApiContext* pContext);
+bool MdoApiSessionRoute(MdoApiContext* pContext);
 bool MdoApiModelsReloadRoute(MdoApiContext* pContext);
 bool MdoApiSkillsReloadRoute(MdoApiContext* pContext);
 bool MdoApiModulesReloadRoute(MdoApiContext* pContext);
