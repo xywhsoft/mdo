@@ -6,9 +6,9 @@
 
 | 仓库 | 开发位置/分支 | 当前基线 | 说明 |
 | --- | --- | --- | --- |
-| mdo | `D:\GIT\mdo` / 当前分支 | `e1fe066` | 产品、计划与集成账本 |
-| xrt | `D:\GIT\xrt-mdo-refactor` / `codex/mdo-refactor-xrt` | `779a7808` | 原工作树有既存未提交内容，隔离开发 |
-| xserver | `D:\GIT\xserver-mdo-refactor` / `codex/mdo-refactor-xs` | `69a79c5` | 原工作树有既存未提交内容，隔离开发 |
+| mdo | `D:\GIT\mdo` / 当前分支 | `2d97fa7` | 产品、计划与集成账本 |
+| xrt | `D:\GIT\xrt-mdo-refactor` / `codex/mdo-refactor-xrt` | `5c4fbdc0` | 原工作树有既存未提交内容，隔离开发 |
+| xserver | `D:\GIT\xserver-mdo-refactor` / `codex/mdo-refactor-xs` | `a35e013` | 原工作树有既存未提交内容，隔离开发 |
 
 ## 状态定义
 
@@ -116,7 +116,10 @@
 | MDO-7C 高级会话操作 | DONE | mdo `84ede43`、`18b0fcb` | 51 项源码/构建合同；Windows 严格 GCC unity 编译；9 个真实 xs/TCC 有界探针；Session 探针覆盖搜索、导出、合法/非法分叉及回滚、v1 兼容/v2 来源、截断后重开、清空后系统提示词重建与再次恢复；完整单文件重建和隔离目录 5 秒零写启动通过；未运行压力或高负载测试 | catalog 搜索按项目、状态、置顶和多字段文本过滤并有总量/页大小硬上限；clear/truncate/checkpoint/fork 与 run 共用排他窗口；清空后恢复组合系统提示词；分叉获得独立 snapshot/journal/event/artifact 和 runtime lease，meta v2 记录父会话与精确边界；导出在 checkpoint 后返回有界 meta+snapshot envelope |
 | MDO-7D 可审计记忆与目录迁移 | DONE | mdo `0e3046f`、`8182029`、`64a87e7`、`e1fe066` | 55 项源码/构建合同；Windows 严格 GCC unity 编译；10 个真实 xs/TCC 有界探针；Memory 探针覆盖全局/项目隔离、revision、secret 拒绝、Agent prompt、读写工具与权限、审计、完整导出/预览/导入、未知条目与哈希篡改、陈旧 generation、空目标和二次导入拒绝；锁定依赖完整单文件重建及隔离目录 5 秒零写启动通过；未运行压力或高负载测试 | 普通 JSON store 分开保存全局和项目记忆，跨进程单 writer、写前审计、原子替换和 owned snapshot 固定并发语义；Agent 以有界不可信 JSONL 注入并用实例 binding 固定 project/session，三个标准工具复用 xwork effect/permission；目录迁移使用 manifest 完成标记、逐文件 SHA-256、严格无链接枚举、预览 generation 和只导入空目标策略 |
 | MDO-7E 可恢复计划任务与 Agent 执行 | DONE | mdo `b876043`、`e348168`、`2336e1a`、`d5fa352` | 60 项源码/构建合同；Windows 严格 GCC C11 unity 编译；12 个真实 xs/TCC 有界探针；Schedule 探针覆盖创建、revision 启停/删除、零写空启动、全局禁用、claim/finish、结果历史、审计脱敏、损坏隔离、重启恢复和无 claim 的 misfire cursor 持久化；Executor 探针覆盖普通 Agent run、异步收割、owner 生命周期和 task/run 对齐；锁定依赖完整宿主与单文件重建、隔离目录 5 秒零写启动通过；未运行压力或高负载测试 | 每定义严格 JSON 与跨进程单 writer，xwork 权威执行 recurrence/timezone/misfire/overlap；只在存在到期项时进入持久化事务，skip/overlap 造成的无 claim 推进也写回；轻量宿主 timer 显式传时钟并将 claim 运行成普通 Agent session/run，复用模型、工具、权限、审计与统一 task，完成结果以 task ID 和 Agent run ID 写入有界历史 |
-| MDO-8～10 Web API、前端与发布压实 | TODO | - | - | 下一步实现版本化 Web API、可重放事件传输和服务层资源路由，再接入前端交互、迁移与发布门禁 |
+| WORK-117～118 Schedule 定义原子替换与回滚 | DONE | xrt `9dbd4e2f`、`97918208`、`5c4fbdc0`；xserver `7b76872`、`a35e013` | xwork Windows 有界完整套件覆盖替换、活动定义拒绝和精确 generation 回滚；xserver 35 项扩展检查除预期 Linux-only skip 外通过，20 个 vendored 生产文件与权威 xrt 逐字节一致；未运行压力或高负载测试 | xwork 3.5.0 在 scheduler 锁内发布完整候选并保留旧借用字符串；宿主持久化失败可按新旧 generation 恢复原 cursor/counter；同时消除 xserver 中两项 HTTP module root 的既存来源漂移 |
+| MDO-8 版本化 Web API | DONE | mdo `c090aaf`～`2d97fa7`；xrt `5c4fbdc0`；xserver `a35e013` | 83 项源码/构建合同；Windows 严格 GCC C11 unity 编译；真实 xs/TCC API 探针覆盖统一 envelope、HEAD/OPTIONS、严格 JSON、ETag、catalog reload、长操作、MCP、session/run/schedule/task 全生命周期、cursor replay 与 Base64 增量输出；锁定依赖重新打包及隔离目录 5 秒单文件零写启动通过；未运行压力或高负载测试 | `/api/v1` 通过服务 snapshot 管理全部产品资源；session 与 runtime event 可按 cursor 重放，长操作使用稳定 ID；设置、会话与计划用强 ETag 事务更新；统一 task 暴露详情、revision 事件、三通道绝对游标输出和幂等取消，任意输出字节使用 Base64；拉取式有界 replay 不创建慢客户端队列 |
+| MDO-9 原生 Web 前端与交互 | TODO | - | - | 下一步按资源域 ES Modules store 建立 Codex 类三栏、响应式抽屉、会话 timeline/composer、任务详情和完整设置导航 |
+| MDO-10 旧数据迁移 | TODO | - | - | MDO-9 主交互稳定后实现只读检测、预览、临时导入、校验和原子发布 |
 | QA-RELEASE | TODO | - | - | MDO-GATE 后实施 |
 
 ## 已确认的工程事实
@@ -187,6 +190,6 @@
 
 ## 下一步
 
-1. 进入 MDO-8：实现 `/api/v1/` 版本化 Web API、统一错误 envelope、资源 service 路由，以及按 cursor 重放的实时事件传输；
+1. 进入 MDO-9：以原生 HTML/CSS/ES Modules 实现资源域 store、Codex 类主界面、session timeline/composer、任务详情、设置导航和 PC/窄屏/移动端交互；
 2. 运行环境提供三条显式 URL 和 runtime key 时，再执行 Ling 3.0 Tiny 的 Chat Completions、Responses 与 Anthropic Messages 真实线上探针；
 3. 全部后续验收继续使用有界功能、故障注入和确定性交错，略过压力与高负载测试。
