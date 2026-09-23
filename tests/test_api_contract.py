@@ -78,6 +78,18 @@ class ApiContractTests(unittest.TestCase):
         self.assertIn("MdoConfigPreviewImport", mutations)
         self.assertNotIn("MdoConfigImport", mutations)
 
+    def test_catalog_reload_routes_use_candidate_publish_managers(self) -> None:
+        mutations = (ROOT / "app/src/api/mutations.c").read_text(encoding="utf-8")
+        for resource, manager in (
+            ("models", "MdoModelManagerReload"),
+            ("skills", "MdoSkillManagerReload"),
+            ("modules", "MdoModuleManagerReload"),
+            ("mcp", "MdoMcpManagerReload"),
+        ):
+            self.assertIn(f'"/api/v1/{resource}/reload"', self.router)
+            self.assertIn(manager, mutations)
+        self.assertIn("previous generation remains active", mutations)
+
     def test_every_json_response_has_identity_and_hardening_headers(self) -> None:
         for text in (
             'XRT_STR_LITERAL("schema_version")',

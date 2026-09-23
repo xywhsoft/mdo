@@ -278,6 +278,21 @@ def run_probe(host: Path) -> None:
                 assert status == 405 and headers["allow"] == "POST, OPTIONS"
                 assert document["error"]["code"] == "method_not_allowed"
 
+                for resource in ("models", "skills", "modules", "mcp"):
+                    before = json.loads(request(
+                        port, "GET", f"/api/v1/{resource}")[2])["data"][
+                            "generation"]
+                    status, headers, body = request(
+                        port, "POST", f"/api/v1/{resource}/reload")
+                    document = json.loads(body)
+                    assert status == 200, (resource, status, body)
+                    assert_common(headers, document)
+                    assert document["data"]["resource"] == resource, document
+                    assert document["data"]["generation"] > before, document
+                    status, headers, body = request(
+                        port, "OPTIONS", f"/api/v1/{resource}/reload")
+                    assert status == 200 and headers["allow"] == "POST, OPTIONS"
+
                 assert not home.exists(), list(base.iterdir())
                 assert not (base / "wrong-environment-home").exists(), list(base.iterdir())
             except BaseException as error:
