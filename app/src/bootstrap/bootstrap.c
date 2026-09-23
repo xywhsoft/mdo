@@ -7,6 +7,7 @@
 #include "../../include/mdo/models.h"
 #include "../../include/mdo/modules.h"
 #include "../../include/mdo/operations.h"
+#include "../../include/mdo/runs.h"
 #include "../../include/mdo/schedules.h"
 #include "../../include/mdo/sessions.h"
 #include "../../include/mdo/settings.h"
@@ -129,6 +130,14 @@ bool MdoBootstrapInit(XS_HostInfo* pHost)
         return false;
     }
     g_MdoBootstrap.Stage = MDO_BOOTSTRAP_SESSIONS_READY;
+    if ( !MdoRunManagerInit(g_MdoBootstrap.Runtime, NULL, &WorkError) ) {
+        snprintf(g_MdoBootstrap.Message, sizeof(g_MdoBootstrap.Message), "%.255s",
+            WorkError.sMessage[0] != '\0' ? WorkError.sMessage :
+            "interactive run manager initialization failed");
+        g_MdoBootstrap.Stage = MDO_BOOTSTRAP_FAILED;
+        printf("[mdo] bootstrap failed: %s\n", g_MdoBootstrap.Message);
+        return false;
+    }
     if ( !MdoScheduleExecutorInit(g_MdoBootstrap.Runtime, NULL, &WorkError) ) {
         snprintf(g_MdoBootstrap.Message, sizeof(g_MdoBootstrap.Message), "%.255s",
             WorkError.sMessage[0] != '\0' ? WorkError.sMessage :
@@ -183,6 +192,7 @@ bool MdoBootstrapInit(XS_HostInfo* pHost)
 void MdoBootstrapUnit(void)
 {
     MdoScheduleExecutorUnit();
+    MdoRunManagerUnit();
     MdoSessionManagerUnit();
     MdoScheduleManagerUnit();
     MdoOperationManagerUnit();

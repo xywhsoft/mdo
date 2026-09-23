@@ -18,6 +18,7 @@
     "src/schedules/executor.c",
     "src/sessions/events.c",
     "src/sessions/manager.c",
+    "src/runs/manager.c",
     "src/bootstrap/bootstrap.c",
     "src/api/http.c",
     "src/api/body.c",
