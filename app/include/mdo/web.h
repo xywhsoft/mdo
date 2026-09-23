@@ -23,6 +23,7 @@ typedef struct MdoWebTransport {
 
 typedef struct MdoWebSnapshot {
     uint32 Size;
+    uint64 Generation;
     bool Enabled;
     size_t DocumentCount;
     size_t MaxDocuments;
@@ -34,6 +35,7 @@ bool MdoWebManagerInit(xwork_runtime* pRuntime);
 bool MdoWebManagerInitWithTransport(xwork_runtime* pRuntime,
     const MdoWebTransport* pTransport);
 void MdoWebManagerUnit(void);
+bool MdoWebManagerReload(void);
 bool MdoWebManagerGetSnapshot(MdoWebSnapshot* pSnapshot);
 
 #endif

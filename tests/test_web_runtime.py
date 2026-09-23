@@ -152,6 +152,7 @@ void ServiceInit(XS_HostInfo *host) {
     char *search = NULL;
     char *open = NULL;
     char *find = NULL;
+    char *find_after = NULL;
     char *failed = NULL;
     char *invalid = NULL;
     size_t i;
@@ -208,9 +209,13 @@ void ServiceInit(XS_HostInfo *host) {
         &failed);
     (void)Execute(agent, "web_open", "{\"url\":\"http://127.0.0.1/private\"}",
         &invalid);
+    printf("reload=%d\n", MdoWebManagerReload() ? 1 : 0);
+    if (!Execute(agent, "web_find", "{\"document_id\":\"doc-0000000000000001\",\"query\":\"Omega\"}",
+            &find_after)) goto done;
     memset(&snapshot, 0, sizeof(snapshot)); snapshot.Size = sizeof(snapshot);
     if (MdoWebManagerGetSnapshot(&snapshot))
-        printf("snapshot=enabled:%d docs:%zu/%zu completed:%llu failed:%llu\n",
+        printf("snapshot=generation:%llu enabled:%d docs:%zu/%zu completed:%llu failed:%llu\n",
+            (unsigned long long)snapshot.Generation,
             snapshot.Enabled ? 1 : 0, snapshot.DocumentCount,
             snapshot.MaxDocuments,
             (unsigned long long)snapshot.RequestsCompleted,
@@ -220,7 +225,8 @@ void ServiceInit(XS_HostInfo *host) {
         probe.Permissions, probe.PermissionResources);
     printf("probe_done=1\n");
 done:
-    xrtFree(search); xrtFree(open); xrtFree(find); xrtFree(failed);
+    xrtFree(search); xrtFree(open); xrtFree(find); xrtFree(find_after);
+    xrtFree(failed);
     xrtFree(invalid);
     xworkAgentDestroy(agent);
     xllmSessionDestroy(session);
@@ -338,8 +344,9 @@ def main() -> int:
         assert '"matches":[{"offset":' in output, output
         assert "execute_web_open=infra:1 success:0" in output, output
         assert "deterministic transport failure" in output, output
-        assert "snapshot=enabled:1 docs:1/16 completed:2 failed:1" in output, output
-        assert "probe=fetches:3 public:3 secret:1 permissions:4 resources:5" in output, output
+        assert "reload=1" in output, output
+        assert "snapshot=generation:2 enabled:1 docs:1/16 completed:2 failed:1" in output, output
+        assert "probe=fetches:3 public:3 secret:1 permissions:5 resources:5" in output, output
         assert "probe_done=1" in output, output
     print("PASS bounded Web search/open/find runtime")
     return 0

@@ -38,6 +38,15 @@ class WebContractTests(unittest.TestCase):
         self.assertNotIn("browser_click", source)
         self.assertNotIn("browser_screenshot", source)
 
+    def test_reload_publishes_an_owned_generation(self) -> None:
+        public = (ROOT / "app/include/mdo/web.h").read_text(encoding="utf-8")
+        source = (ROOT / "app/src/web/manager.c").read_text(encoding="utf-8")
+        self.assertIn("bool MdoWebManagerReload(void);", public)
+        self.assertIn("uint64 Generation;", public)
+        self.assertIn("MdoWebStateMigrate", source)
+        self.assertIn("MdoWebPublishTools(Candidate)", source)
+        self.assertIn("MdoWebStateRelease(ManagerPrevious)", source)
+
 
 if __name__ == "__main__":
     unittest.main()

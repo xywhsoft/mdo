@@ -29,6 +29,7 @@ typedef struct MdoWebDocument {
 
 typedef struct MdoWebState {
     xatomic32 Refs;
+    uint64 Generation;
     xwork_runtime* Runtime;
     xmutex* Lock;
     MdoConfigWebSettings Settings;
@@ -48,7 +49,14 @@ typedef struct MdoWebBuffer {
     bool Truncated;
 } MdoWebBuffer;
 
-static MdoWebState* g_MdoWeb;
+typedef struct MdoWebManager {
+    xmutex* Lock;
+    xmutex* ReloadLock;
+    MdoWebState* Current;
+    bool Initialized;
+} MdoWebManager;
+
+static MdoWebManager g_MdoWeb;
 
 static void MdoWebError(xwork_error* pError, xwork_error_code Code,
     const char* Message)
@@ -1369,21 +1377,15 @@ static void MdoWebDefinitions(MdoWebState* pState,
     Definitions[2].bParallelSafe = true;
 }
 
-bool MdoWebManagerInitWithTransport(xwork_runtime* pRuntime,
-    const MdoWebTransport* pTransport)
+static MdoWebState* MdoWebStateCreate(xwork_runtime* pRuntime,
+    const MdoWebTransport* pTransport, uint64 Generation)
 {
     MdoWebState* pState;
-    xwork_tool_definition Definitions[3];
-    xwork_error Error;
-    size_t ToolCount;
-    if ( pRuntime == NULL || pTransport == NULL ||
-         pTransport->Size < sizeof(*pTransport) ||
-         pTransport->Version != MDO_WEB_TRANSPORT_VERSION ||
-         pTransport->Fetch == NULL || pTransport->ResponseUnit == NULL ||
-         g_MdoWeb != NULL ) return false;
+    if ( Generation == 0u ) return NULL;
     pState = (MdoWebState*)xrtCalloc(1u, sizeof(*pState));
-    if ( pState == NULL ) return false;
+    if ( pState == NULL ) return NULL;
     xrtAtomic32Init(&pState->Refs, 1u);
+    pState->Generation = Generation;
     pState->Runtime = xworkRuntimeRef(pRuntime);
     pState->Lock = xrtMutexCreate();
     pState->Settings.Size = sizeof(pState->Settings);
@@ -1394,16 +1396,106 @@ bool MdoWebManagerInitWithTransport(xwork_runtime* pRuntime,
     pState->Documents = (MdoWebDocument*)xrtCalloc(
         pState->Settings.MaxDocuments, sizeof(*pState->Documents));
     if ( pState->Documents == NULL ) goto failed;
-    MdoWebDefinitions(pState, Definitions);
-    ToolCount = pState->Settings.Enabled ? 3u : 0u;
-    xworkErrorInit(&Error);
-    if ( !xworkRuntimeReplaceToolsBySource(pRuntime, MDO_WEB_SOURCE,
-            ToolCount != 0u ? Definitions : NULL, ToolCount, NULL, &Error) )
-        goto failed;
-    g_MdoWeb = pState;
-    return true;
+    return pState;
 failed:
     MdoWebStateRelease(pState);
+    return NULL;
+}
+
+static bool MdoWebDocumentClone(MdoWebDocument* Target,
+    const MdoWebDocument* Source)
+{
+    *Target = *Source;
+    Target->Url = NULL;
+    Target->Title = NULL;
+    Target->ContentType = NULL;
+    Target->Content = NULL;
+    Target->Url = xrtStrDup(Source->Url);
+    Target->Title = xrtStrDup(Source->Title);
+    Target->ContentType = xrtStrDup(Source->ContentType);
+    Target->Content = (char*)xrtMalloc(Source->ContentBytes + 1u);
+    if ( Target->Url == NULL || Target->Title == NULL ||
+         Target->ContentType == NULL || Target->Content == NULL ) {
+        MdoWebDocumentUnit(Target);
+        return false;
+    }
+    memcpy(Target->Content, Source->Content, Source->ContentBytes);
+    Target->Content[Source->ContentBytes] = '\0';
+    return true;
+}
+
+static bool MdoWebStateMigrate(MdoWebState* Target, MdoWebState* Source)
+{
+    size_t Keep;
+    size_t Start;
+    size_t Index;
+
+    if ( !xrtMutexLock(Source->Lock) ) return false;
+    Keep = Source->DocumentCount;
+    if ( Keep > Target->Settings.MaxDocuments )
+        Keep = Target->Settings.MaxDocuments;
+    Start = Source->DocumentCount - Keep;
+    Target->NextDocumentId = Source->NextDocumentId;
+    Target->RequestsCompleted = Source->RequestsCompleted;
+    Target->RequestsFailed = Source->RequestsFailed;
+    for ( Index = 0u; Index < Keep; Index++ ) {
+        if ( !MdoWebDocumentClone(&Target->Documents[Index],
+                &Source->Documents[Start + Index]) ) {
+            (void)xrtMutexUnlock(Source->Lock);
+            return false;
+        }
+        Target->DocumentCount++;
+    }
+    (void)xrtMutexUnlock(Source->Lock);
+    return true;
+}
+
+static MdoWebState* MdoWebCurrentRef(void)
+{
+    MdoWebState* State = NULL;
+    if ( g_MdoWeb.Lock != NULL && xrtMutexLock(g_MdoWeb.Lock) ) {
+        if ( g_MdoWeb.Initialized && g_MdoWeb.Current != NULL &&
+             MdoWebStateRef(g_MdoWeb.Current) ) State = g_MdoWeb.Current;
+        (void)xrtMutexUnlock(g_MdoWeb.Lock);
+    }
+    return State;
+}
+
+static bool MdoWebPublishTools(MdoWebState* State)
+{
+    xwork_tool_definition Definitions[3];
+    xwork_error Error;
+    size_t ToolCount = State->Settings.Enabled ? 3u : 0u;
+    MdoWebDefinitions(State, Definitions);
+    xworkErrorInit(&Error);
+    return xworkRuntimeReplaceToolsBySource(State->Runtime, MDO_WEB_SOURCE,
+        ToolCount != 0u ? Definitions : NULL, ToolCount, NULL, &Error);
+}
+
+bool MdoWebManagerInitWithTransport(xwork_runtime* pRuntime,
+    const MdoWebTransport* pTransport)
+{
+    MdoWebState* State = NULL;
+    if ( pRuntime == NULL || pTransport == NULL ||
+         pTransport->Size < sizeof(*pTransport) ||
+         pTransport->Version != MDO_WEB_TRANSPORT_VERSION ||
+         pTransport->Fetch == NULL || pTransport->ResponseUnit == NULL ||
+         g_MdoWeb.Initialized ) return false;
+    memset(&g_MdoWeb, 0, sizeof(g_MdoWeb));
+    g_MdoWeb.Lock = xrtMutexCreate();
+    g_MdoWeb.ReloadLock = xrtMutexCreate();
+    if ( g_MdoWeb.Lock == NULL || g_MdoWeb.ReloadLock == NULL ) goto failed;
+    State = MdoWebStateCreate(pRuntime, pTransport, 1u);
+    if ( State == NULL || !MdoWebPublishTools(State) ) goto failed;
+    g_MdoWeb.Current = State;
+    g_MdoWeb.Initialized = true;
+    return true;
+failed:
+    MdoWebStateRelease(State);
+    if ( g_MdoWeb.Lock != NULL ) (void)xrtMutexDestroy(g_MdoWeb.Lock);
+    if ( g_MdoWeb.ReloadLock != NULL )
+        (void)xrtMutexDestroy(g_MdoWeb.ReloadLock);
+    memset(&g_MdoWeb, 0, sizeof(g_MdoWeb));
     return false;
 }
 
@@ -1420,24 +1512,77 @@ bool MdoWebManagerInit(xwork_runtime* pRuntime)
 
 void MdoWebManagerUnit(void)
 {
-    MdoWebState* pState = g_MdoWeb;
-    if ( pState == NULL ) return;
-    g_MdoWeb = NULL;
-    if ( pState->Runtime != NULL ) {
+    MdoWebState* State;
+    xmutex* Lock;
+    xmutex* ReloadLock;
+    if ( g_MdoWeb.ReloadLock == NULL ||
+         !xrtMutexLock(g_MdoWeb.ReloadLock) ) return;
+    if ( g_MdoWeb.Lock == NULL || !xrtMutexLock(g_MdoWeb.Lock) ) {
+        (void)xrtMutexUnlock(g_MdoWeb.ReloadLock);
+        return;
+    }
+    State = g_MdoWeb.Current;
+    g_MdoWeb.Current = NULL;
+    g_MdoWeb.Initialized = false;
+    (void)xrtMutexUnlock(g_MdoWeb.Lock);
+    if ( State != NULL && State->Runtime != NULL ) {
         xwork_error Error;
         xworkErrorInit(&Error);
-        (void)xworkRuntimeReplaceToolsBySource(pState->Runtime,
+        (void)xworkRuntimeReplaceToolsBySource(State->Runtime,
             MDO_WEB_SOURCE, NULL, 0u, NULL, &Error);
     }
-    MdoWebStateRelease(pState);
+    MdoWebStateRelease(State);
+    Lock = g_MdoWeb.Lock;
+    ReloadLock = g_MdoWeb.ReloadLock;
+    (void)xrtMutexUnlock(ReloadLock);
+    (void)xrtMutexDestroy(Lock);
+    (void)xrtMutexDestroy(ReloadLock);
+    memset(&g_MdoWeb, 0, sizeof(g_MdoWeb));
+}
+
+bool MdoWebManagerReload(void)
+{
+    MdoWebState* Previous;
+    MdoWebState* Candidate = NULL;
+    MdoWebState* ManagerPrevious;
+    uint64 Generation;
+    bool Ok = false;
+
+    if ( g_MdoWeb.ReloadLock == NULL ||
+         !xrtMutexLock(g_MdoWeb.ReloadLock) ) return false;
+    Previous = MdoWebCurrentRef();
+    if ( Previous == NULL || Previous->Generation == UINT64_MAX ) goto done;
+    Generation = Previous->Generation + 1u;
+    Candidate = MdoWebStateCreate(Previous->Runtime,
+        &Previous->Transport, Generation);
+    if ( Candidate == NULL || !MdoWebStateMigrate(Candidate, Previous) )
+        goto done;
+    if ( !xrtMutexLock(g_MdoWeb.Lock) ) goto done;
+    if ( g_MdoWeb.Current != Previous || !MdoWebPublishTools(Candidate) ) {
+        (void)xrtMutexUnlock(g_MdoWeb.Lock);
+        goto done;
+    }
+    ManagerPrevious = g_MdoWeb.Current;
+    g_MdoWeb.Current = Candidate;
+    Candidate = NULL;
+    (void)xrtMutexUnlock(g_MdoWeb.Lock);
+    MdoWebStateRelease(ManagerPrevious);
+    Ok = true;
+done:
+    MdoWebStateRelease(Candidate);
+    MdoWebStateRelease(Previous);
+    (void)xrtMutexUnlock(g_MdoWeb.ReloadLock);
+    return Ok;
 }
 
 bool MdoWebManagerGetSnapshot(MdoWebSnapshot* pSnapshot)
 {
-    MdoWebState* pState = g_MdoWeb;
+    MdoWebState* pState;
     uint32 Size;
-    if ( pSnapshot == NULL || pSnapshot->Size < sizeof(*pSnapshot) ||
-         pState == NULL || !MdoWebStateRef(pState) ) return false;
+    if ( pSnapshot == NULL || pSnapshot->Size < sizeof(*pSnapshot) )
+        return false;
+    pState = MdoWebCurrentRef();
+    if ( pState == NULL ) return false;
     Size = pSnapshot->Size;
     if ( !xrtMutexLock(pState->Lock) ) {
         MdoWebStateRelease(pState);
@@ -1445,6 +1590,7 @@ bool MdoWebManagerGetSnapshot(MdoWebSnapshot* pSnapshot)
     }
     memset(pSnapshot, 0, sizeof(*pSnapshot));
     pSnapshot->Size = Size;
+    pSnapshot->Generation = pState->Generation;
     pSnapshot->Enabled = pState->Settings.Enabled;
     pSnapshot->DocumentCount = pState->DocumentCount;
     pSnapshot->MaxDocuments = pState->Settings.MaxDocuments;
