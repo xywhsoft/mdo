@@ -434,6 +434,31 @@ def run_probe(host: Path) -> None:
                     assert status == 404, (path, status, body)
                     assert json.loads(body)["error"]["code"] == "task_not_found"
 
+                for path in (
+                    "/api/v1/artifacts/0", "/api/v1/artifacts/not-a-number",
+                    "/api/v1/artifacts/18446744073709551616",
+                ):
+                    status, _, body = request(port, "GET", path)
+                    assert status == 400, (path, status, body)
+                    assert json.loads(body)["error"]["code"] == "invalid_path"
+                for query in (
+                    "limit=0", "limit=65537", "offset=x",
+                    "offset=0&offset=1", "unknown=1", "offset=0&",
+                ):
+                    status, _, body = request(
+                        port, "GET", f"/api/v1/artifacts/999999999?{query}")
+                    assert status == 400, (query, status, body)
+                    assert json.loads(body)["error"]["code"] == "invalid_query"
+                artifact_path = "/api/v1/artifacts/999999999"
+                status, _, body = request(port, "GET", artifact_path)
+                assert status == 404, (status, body)
+                assert json.loads(body)["error"]["code"] == "artifact_not_found"
+                status, _, body = request(port, "HEAD", artifact_path)
+                assert status == 404 and body == b"", (status, body)
+                status, headers, body = request(port, "OPTIONS", artifact_path)
+                assert status == 200 and headers["allow"] == (
+                    "GET, HEAD, OPTIONS"), (status, headers, body)
+
                 status, headers, body = request(
                     port, "GET", "/api/v1/events?after=0&limit=1")
                 document = json.loads(body)

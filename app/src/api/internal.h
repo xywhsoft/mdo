@@ -80,6 +80,7 @@ bool MdoApiTaskRoute(MdoApiContext* pContext);
 bool MdoApiTaskOutputRoute(MdoApiContext* pContext);
 bool MdoApiTaskEventsRoute(MdoApiContext* pContext);
 bool MdoApiArtifactsRoute(MdoApiContext* pContext);
+bool MdoApiArtifactRoute(MdoApiContext* pContext);
 bool MdoApiDiagnosticsRoute(MdoApiContext* pContext);
 bool MdoApiStorageRoute(MdoApiContext* pContext);
 bool MdoApiEventsRoute(MdoApiContext* pContext);

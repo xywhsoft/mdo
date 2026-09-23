@@ -226,6 +226,18 @@ class ApiContractTests(unittest.TestCase):
         self.assertIn('"body_not_allowed"', tasks)
         self.assertNotIn("xworkRuntimeReleaseTask", tasks)
 
+    def test_artifact_reads_are_bounded_and_offset_addressed(self) -> None:
+        state = (ROOT / "app/src/api/state.c").read_text(encoding="utf-8")
+        self.assertIn('"/api/v1/artifacts/{artifact}"', self.router)
+        self.assertIn("MDO_API_ARTIFACT_MAX_BYTES (64u * 1024u)", state)
+        self.assertIn("xworkRuntimeArtifactGetInfo", state)
+        self.assertIn("xworkRuntimeReadArtifact", state)
+        self.assertIn("xrtBase64EncodeNew", state)
+        for field in ("offset", "next", "total_size", "bytes", "eof",
+                      "sha256", "media_type", "data"):
+            self.assertIn(f'"{field}"', state)
+        self.assertIn('"artifact_offset_out_of_range"', state)
+
     def test_every_json_response_has_identity_and_hardening_headers(self) -> None:
         for text in (
             'XRT_STR_LITERAL("schema_version")',
