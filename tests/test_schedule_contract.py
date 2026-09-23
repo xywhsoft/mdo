@@ -16,6 +16,7 @@ class ScheduleContractTests(unittest.TestCase):
             "MdoScheduleCreateOptions",
             "MdoScheduleClaim",
             "MdoScheduleManagerInit",
+            "MdoScheduleManagerReloadSettings",
             "MdoScheduleCreate",
             "MdoScheduleSetEnabled",
             "MdoScheduleRemove",
@@ -44,6 +45,8 @@ class ScheduleContractTests(unittest.TestCase):
             self.assertIn(call, source)
         self.assertNotIn("xrtThreadCreate", source)
         self.assertIn("bool MdoScheduleClaimDue(int64 Now", source)
+        self.assertIn("schedule settings rollback failed; scheduling was disabled",
+                      source)
         executor = (ROOT / "app/src/schedules/executor.c").read_text(
             encoding="utf-8")
         self.assertIn("MdoAgentSessionCreateWithRuntime", executor)

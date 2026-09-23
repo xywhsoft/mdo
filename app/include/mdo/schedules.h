@@ -144,6 +144,7 @@ typedef struct MdoScheduleExecutorSnapshot {
 
 bool MdoScheduleManagerInit(xwork_runtime* Runtime);
 void MdoScheduleManagerUnit(void);
+bool MdoScheduleManagerReloadSettings(xwork_error* Error);
 uint64 MdoScheduleManagerGeneration(void);
 bool MdoScheduleManagerEnabled(void);
 

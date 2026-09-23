@@ -969,9 +969,97 @@ uint64 MdoScheduleManagerGeneration(void)
     return Generation;
 }
 
+bool MdoScheduleManagerReloadSettings(xwork_error* Error)
+{
+    MdoConfigAgentSettings Settings;
+    bool PreviousEnabled;
+    size_t Index;
+    size_t Updated = 0u;
+    bool RollbackOk = true;
+
+    xworkErrorInit(Error);
+    memset(&Settings, 0, sizeof(Settings));
+    Settings.Size = sizeof(Settings);
+    if ( !g_MdoSchedules.Initialized ||
+         !MdoConfigGetAgentSettings(&Settings) ) {
+        MdoSchedulesError(Error, XWORK_ERROR_CONTEXT,
+            "schedule settings are unavailable");
+        return false;
+    }
+    if ( !xrtMutexLock(g_MdoSchedules.Lock) ) {
+        MdoSchedulesError(Error, XWORK_ERROR_CONTEXT,
+            "schedule manager is unavailable");
+        return false;
+    }
+    PreviousEnabled = g_MdoSchedules.Enabled;
+    if ( PreviousEnabled == Settings.SchedulesEnabled ) {
+        (void)xrtMutexUnlock(g_MdoSchedules.Lock);
+        return true;
+    }
+    if ( g_MdoSchedules.Generation == UINT64_MAX ) {
+        (void)xrtMutexUnlock(g_MdoSchedules.Lock);
+        MdoSchedulesError(Error, XWORK_ERROR_LIMIT,
+            "schedule generation is exhausted");
+        return false;
+    }
+    for ( Index = 0u; Index < g_MdoSchedules.Count; Index++ ) {
+        MdoScheduleEntry* Entry = &g_MdoSchedules.Entries[Index];
+        if ( !Entry->Registered ) continue;
+        if ( !xworkRuntimeSetScheduleEnabled(g_MdoSchedules.Runtime,
+                Entry->Info.Id,
+                Entry->Info.Enabled && Settings.SchedulesEnabled, Error) )
+            break;
+        Updated = Index + 1u;
+    }
+    if ( Index != g_MdoSchedules.Count ) {
+        for ( Index = 0u; Index < Updated; Index++ ) {
+            MdoScheduleEntry* Entry = &g_MdoSchedules.Entries[Index];
+            xwork_error RollbackError;
+            if ( !Entry->Registered ) continue;
+            xworkErrorInit(&RollbackError);
+            if ( !xworkRuntimeSetScheduleEnabled(g_MdoSchedules.Runtime,
+                    Entry->Info.Id,
+                    Entry->Info.Enabled && PreviousEnabled, &RollbackError) )
+                RollbackOk = false;
+        }
+        if ( !RollbackOk ) {
+            for ( Index = 0u; Index < g_MdoSchedules.Count; Index++ ) {
+                MdoScheduleEntry* Entry = &g_MdoSchedules.Entries[Index];
+                xwork_error DisableError;
+                if ( !Entry->Registered ) continue;
+                xworkErrorInit(&DisableError);
+                (void)xworkRuntimeSetScheduleEnabled(g_MdoSchedules.Runtime,
+                    Entry->Info.Id, false, &DisableError);
+                Entry->Info.Runnable = false;
+            }
+            g_MdoSchedules.Enabled = false;
+            g_MdoSchedules.Generation++;
+            MdoSchedulesError(Error, XWORK_ERROR_CONTEXT,
+                "schedule settings rollback failed; scheduling was disabled");
+        }
+        (void)xrtMutexUnlock(g_MdoSchedules.Lock);
+        return false;
+    }
+    g_MdoSchedules.Enabled = Settings.SchedulesEnabled;
+    g_MdoSchedules.Generation++;
+    for ( Index = 0u; Index < g_MdoSchedules.Count; Index++ )
+        g_MdoSchedules.Entries[Index].Info.Runnable =
+            g_MdoSchedules.Entries[Index].Registered &&
+            g_MdoSchedules.Entries[Index].Info.Enabled &&
+            g_MdoSchedules.Enabled;
+    (void)xrtMutexUnlock(g_MdoSchedules.Lock);
+    return true;
+}
+
 bool MdoScheduleManagerEnabled(void)
 {
-    return g_MdoSchedules.Initialized && g_MdoSchedules.Enabled;
+    bool Enabled = false;
+    if ( g_MdoSchedules.Initialized && g_MdoSchedules.Lock != NULL &&
+         xrtMutexLock(g_MdoSchedules.Lock) ) {
+        Enabled = g_MdoSchedules.Enabled;
+        (void)xrtMutexUnlock(g_MdoSchedules.Lock);
+    }
+    return Enabled;
 }
 
 void MdoScheduleCreateOptionsInit(MdoScheduleCreateOptions* Options)

@@ -57,6 +57,10 @@ void ServiceInit(XS_HostInfo *host) {
     xwork_error error;
     char long_label[300];
     static const char invalid[] = "{}";
+    static const char disable_schedules[] =
+        "{\"schema_version\":1,\"patch\":{\"agent\":{\"schedules\":false}}}";
+    static const char restore_settings[] =
+        "{\"schema_version\":1,\"patch\":{}}";
     bool result;
     (void)host;
 
@@ -93,6 +97,18 @@ void ServiceInit(XS_HostInfo *host) {
     printf("created=id:%s revision:%llu next:%lld protocol:%d\n", info.Id,
         (unsigned long long)info.Revision, (long long)info.NextOccurrenceAt,
         (int)info.Protocol);
+    if (!MdoConfigImport(MDO_CONFIG_SETTINGS,
+            xrtStrView(disable_schedules)) ||
+        !MdoScheduleManagerReloadSettings(&error)) {
+        printf("settings_disable_error=%s\n", error.sMessage); goto done;
+    }
+    PrintCatalog("catalog_runtime_disabled");
+    if (!MdoConfigImport(MDO_CONFIG_SETTINGS,
+            xrtStrView(restore_settings)) ||
+        !MdoScheduleManagerReloadSettings(&error)) {
+        printf("settings_restore_error=%s\n", error.sMessage); goto done;
+    }
+    PrintCatalog("catalog_runtime_restored");
     if (getenv("MDO_SCHEDULE_DISABLED_ONLY") != NULL) {
         PrintCatalog("catalog_disabled");
         MdoScheduleClaimInit(&claim);
@@ -311,6 +327,8 @@ def main() -> int:
         assert "recover_error=" not in output, output
         assert "catalog_empty=count:0 diagnostics:0 generation:1 enabled:1 code:0" in output, output
         assert "created=id:daily-review revision:1 next:1700000000000000 protocol:2" in output, output
+        assert "catalog_runtime_disabled=count:1 diagnostics:0 generation:3 enabled:0 code:0" in output, output
+        assert "catalog_runtime_restored=count:1 diagnostics:0 generation:4 enabled:1 code:0" in output, output
         assert "stale_remove=0 code:7" in output and "removed=1" in output, output
         assert "overlong_create=0 code:1" in output, output
         assert "stale_update=0 code:7" in output, output
