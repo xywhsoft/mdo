@@ -31,7 +31,7 @@ class ApiContractTests(unittest.TestCase):
             "skills", "mcp", "sessions", "schedules", "tasks",
             "projects", "runs", "artifacts", "approvals", "permissions", "diagnostics",
             "storage", "events",
-            "operations",
+            "operations", "migrations/legacy",
         ):
             self.assertIn(f'"/api/v1/{resource}"', self.router)
         self.assertIn('"/api/v1/projects/{project}/sessions/{session}/events"',

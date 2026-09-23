@@ -50,6 +50,8 @@ static const MdoApiRoute g_MdoApiRoutes[] = {
       "GET, HEAD, OPTIONS", MdoApiDiagnosticsRoute },
     { "/api/v1/storage", XHTTP_METHOD_GET | XHTTP_METHOD_HEAD,
       "GET, HEAD, OPTIONS", MdoApiStorageRoute },
+    { "/api/v1/migrations/legacy", XHTTP_METHOD_GET | XHTTP_METHOD_HEAD,
+      "GET, HEAD, OPTIONS", MdoApiLegacyMigrationsRoute },
     { "/api/v1/events", XHTTP_METHOD_GET | XHTTP_METHOD_HEAD,
       "GET, HEAD, OPTIONS", MdoApiEventsRoute },
     { "/api/v1/operations", XHTTP_METHOD_GET | XHTTP_METHOD_HEAD,

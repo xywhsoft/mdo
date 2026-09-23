@@ -427,6 +427,36 @@ def run_probe(host: Path) -> None:
         port = free_port()
         config_path = write_site(base, port)
         home = base / "home"
+        legacy = base / ".mdo"
+        (legacy / "projects/api-legacy").mkdir(parents=True)
+        (legacy / "memory").mkdir()
+        (legacy / "schedules").mkdir()
+        (legacy / "config.json").write_text(json.dumps({
+            "models": [{
+                "id": "legacy-model",
+                "name": "Legacy model",
+                "baseUrl": "https://example.invalid/v1",
+                "model": "legacy-wire-model",
+                "dialect": "responses",
+                "reasoning": "medium",
+            }],
+            "defaultModel": "legacy-model",
+            "activeProject": "api-legacy",
+            "settings": {"theme": "auto", "fontSize": "md"},
+        }), encoding="utf-8")
+        (legacy / "projects/api-legacy/project.json").write_text(json.dumps({
+            "name": "API legacy project",
+            "path": str(base / "workspace"),
+            "defaultModel": "legacy-model",
+        }), encoding="utf-8")
+        (legacy / "memory/preference.md").write_text(
+            "# Preference\n\nKeep migration explicit.\n", encoding="utf-8")
+        (legacy / "schedules/once.json").write_text(json.dumps({
+            "id": "once",
+            "title": "Legacy reminder",
+            "prompt": "Review migration",
+            "kind": "once",
+        }), encoding="utf-8")
         log_path = base / "xs.log"
         model_server = ModelServer(("127.0.0.1", 0), ModelHandler)
         model_port = int(model_server.server_address[1])
@@ -436,6 +466,8 @@ def run_probe(host: Path) -> None:
         ModelHandler.saw_prompt = False
         model_thread.start()
         environment = os.environ.copy()
+        environment["USERPROFILE"] = str(base)
+        environment["HOME"] = str(base)
         environment["MDO_HOME"] = str(base / "wrong-environment-home")
         environment["MDO_LING_CHAT_COMPLETIONS_URL"] = (
             "https://example.invalid/v1")
@@ -463,12 +495,41 @@ def run_probe(host: Path) -> None:
                 assert data["ready"] is True and data["stage"] == "ready", data
                 assert data["config"]["schema_version"] == 1, data
                 assert data["resources"]["models"]["models"] >= 1, data
+                assert not home.exists(), home
+
+                status, headers, body = request(
+                    port, "GET", "/api/v1/migrations/legacy")
+                document = json.loads(body)
+                assert status == 200, (status, body)
+                assert_common(headers, document)
+                migrations = document["data"]
+                assert migrations["count"] == 2, migrations
+                assert migrations["requires_confirmation"] is True, migrations
+                sources = {item["source_id"]: item
+                           for item in migrations["items"]}
+                portable = sources["portable-data"]
+                assert portable["found"] is False, portable
+                user_home = sources["user-home"]
+                assert user_home["found"] is True, user_home
+                assert user_home["valid"] is True, user_home
+                assert user_home["importable"] is True, user_home
+                assert user_home["target_available"] is True, user_home
+                assert user_home["file_count"] == 4, user_home
+                assert user_home["project_count"] == 1, user_home
+                assert user_home["model_count"] == 1, user_home
+                assert user_home["schedule_count"] == 1, user_home
+                assert user_home["memory_file_count"] == 1, user_home
+                assert user_home["unsupported_count"] == 0, user_home
+                assert re.fullmatch(r"[0-9a-f]{64}",
+                                    user_home["preview_token"]), user_home
+                assert not home.exists(), home
 
                 resources = (
                     "settings", "models", "agents", "modules", "skills",
                     "mcp", "projects", "sessions", "runs", "schedules",
                     "tasks", "artifacts", "approvals", "permissions", "diagnostics",
                     "storage", "operations",
+                    "migrations/legacy",
                 )
                 for resource in resources:
                     status, resource_headers, resource_body = request(
