@@ -171,6 +171,26 @@ class FrontendContractTests(unittest.TestCase):
         self.assertIn('if (action === "rename")', self.scripts["js/app.js"])
         self.assertIn("max-height: min(320px, 70vh)", self.css)
 
+    def test_task_inspector_incrementally_replays_output_and_artifacts(self) -> None:
+        tasks = self.scripts["js/state/tasks.js"]
+        panel = self.scripts["js/features/tasks/task-panel.js"]
+        for marker in (
+            "taskDetailStore", "artifactPreviewStore", "selectTask",
+            "refreshSelectedTask", "readArtifactPreview",
+        ):
+            self.assertIn(marker, tasks)
+        self.assertIn("OUTPUT_PAGE_BYTES = 32 * 1024", tasks)
+        self.assertIn("OUTPUT_RETAINED_BYTES = 256 * 1024", tasks)
+        self.assertIn("EVENT_RETAINED_ITEMS = 128", tasks)
+        self.assertIn("stdout=${stdout}&stderr=${stderr}&result=${result}", tasks)
+        self.assertIn("window.atob", tasks)
+        self.assertIn("new TextDecoder()", tasks)
+        self.assertIn("/artifacts/${id}?offset=0&limit=", tasks)
+        self.assertIn('id="task-detail"', self.index)
+        for label in ("标准输出", "错误输出", "任务结果", "事件", "产物"):
+            self.assertIn(label, panel)
+        self.assertNotIn("innerHTML", panel)
+
     def test_responsive_and_accessibility_modes_are_explicit(self) -> None:
         self.assertIn("grid-template-columns: var(--sidebar-width) minmax(0, 1fr) var(--inspector-width)", self.css)
         self.assertIn("@media (max-width: 1180px)", self.css)

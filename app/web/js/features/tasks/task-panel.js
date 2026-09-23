@@ -1,9 +1,42 @@
 import { element, clear, formatRelativeTime, errorMessage, toast } from "../../utils/dom.js";
-import { cancelTask } from "../../state/tasks.js";
+import {
+  cancelTask, clearSelectedTask, readArtifactPreview, selectTask, selectedTask,
+} from "../../state/tasks.js";
 
 const ACTIVE_STATES = new Set(["pending", "running"]);
+const STATE_LABELS = Object.freeze({
+  pending: "等待中", running: "运行中", succeeded: "已完成", failed: "失败",
+  cancelled: "已停止", timed_out: "已超时", lost: "已丢失",
+});
+const KIND_LABELS = Object.freeze({ process: "Shell", agent: "子 Agent", scheduled: "计划任务" });
+const EVENT_LABELS = Object.freeze({
+  created: "已创建", state_changed: "状态变化", cancel_requested: "请求停止",
+  restored: "已恢复", notice_taken: "已查看通知",
+});
 
-export function createTaskPanel({ container, summary, store, onChanged }) {
+function formatBytes(value) {
+  const bytes = Number(value);
+  if (!Number.isFinite(bytes) || bytes < 0) return "—";
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(bytes < 10 * 1024 ? 1 : 0)} KiB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MiB`;
+}
+
+function detailPair(label, value) {
+  return [element("dt", { text: label }), element("dd", { text: value || "—" })];
+}
+
+export function createTaskPanel({ container, detailContainer, summary, store, detailStore, previewStore, onChanged }) {
+  let listState = store.get();
+  let detailState = detailStore.get();
+  let previewState = previewStore.get();
+  const expandedOutputs = new Set(["result"]);
+
+  function closeDetail() {
+    clearSelectedTask();
+    renderList();
+  }
+
   async function cancel(item, button) {
     button.disabled = true;
     try {
@@ -16,8 +49,124 @@ export function createTaskPanel({ container, summary, store, onChanged }) {
     }
   }
 
-  function render(state) {
-    const items = [...(state.data?.items ?? [])].reverse();
+  function outputSection(name, label, stream) {
+    const notes = [];
+    if (stream.dropped) notes.push("服务端较早输出已被淘汰");
+    if (stream.clientDropped) notes.push("界面仅保留最近 256 KiB");
+    const section = element("details", { className: "task-output-section", attrs: { open: expandedOutputs.has(name) ? "" : null } }, [
+      element("summary", {}, [
+        element("span", { text: label }),
+        element("span", { className: "task-output-size", text: formatBytes(stream.bytes.length) }),
+      ]),
+      notes.length ? element("p", { className: "task-output-note", text: notes.join("；") }) : null,
+      element("pre", { className: `task-output task-output-${name}`, text: stream.text || "暂无输出" }),
+    ]);
+    section.addEventListener("toggle", () => {
+      if (section.open) expandedOutputs.add(name);
+      else expandedOutputs.delete(name);
+    });
+    return section;
+  }
+
+  function renderPreview(artifact) {
+    if (previewState.status === "loading" || previewState.status === "refreshing") {
+      return element("div", { className: "artifact-preview", text: "正在读取产物…" });
+    }
+    if (previewState.status === "error") {
+      return element("div", { className: "resource-error", text: errorMessage(previewState.error) });
+    }
+    const preview = previewState.data;
+    if (!preview || String(preview.artifact.id) !== String(artifact.id)) return null;
+    const body = preview.text
+      ? element("pre", { className: "task-output", text: preview.text })
+      : element("p", { className: "task-output-note", text: `二进制产物 ${preview.mediaType}，已读取 ${formatBytes(preview.bytes.length)}。` });
+    return element("div", { className: "artifact-preview" }, [
+      body,
+      element("p", { className: "task-output-note", text: `${preview.eof ? "完整预览" : "仅预览前 64 KiB"} · SHA-256 ${preview.sha256 || "—"}` }),
+    ]);
+  }
+
+  function renderDetail() {
+    clear(detailContainer);
+    const selected = selectedTask();
+    detailContainer.hidden = !selected;
+    if (!selected) return;
+    if (detailState.status === "error") {
+      detailContainer.append(
+        element("button", { className: "task-detail-close", text: "返回任务列表", attrs: { type: "button" } }),
+        element("div", { className: "resource-error", text: errorMessage(detailState.error) }),
+      );
+      detailContainer.firstElementChild.addEventListener("click", closeDetail);
+      return;
+    }
+    if (!detailState.data) {
+      detailContainer.append(element("div", { className: "empty-state", text: "正在载入任务详情…" }));
+      return;
+    }
+    const { detail: task, output, events, artifacts } = detailState.data;
+    const close = element("button", { className: "task-detail-close", text: "返回任务列表", attrs: { type: "button" } });
+    close.addEventListener("click", closeDetail);
+    const headerActions = [close];
+    if (ACTIVE_STATES.has(task.state)) {
+      const stop = element("button", { className: "task-cancel", text: "停止", attrs: { type: "button", "aria-label": `停止任务 ${task.label || task.id}` } });
+      stop.addEventListener("click", () => cancel(task, stop));
+      headerActions.push(stop);
+    }
+    const metadata = element("dl", { className: "task-detail-meta" });
+    metadata.append(
+      ...detailPair("任务 ID", `#${task.id}`),
+      ...detailPair("类型", KIND_LABELS[task.kind] || task.kind),
+      ...detailPair("状态", STATE_LABELS[task.state] || task.state),
+      ...detailPair("会话", task.owner_session),
+      ...detailPair("Run", task.owner_run_id ? `#${task.owner_run_id}` : "—"),
+      ...detailPair("父任务", task.parent_task_id ? `#${task.parent_task_id}` : "—"),
+      ...detailPair("开始", formatRelativeTime(task.started_at || task.created_at)),
+      ...detailPair("退出码", task.exit_status_valid ? String(task.exit_code) : "—"),
+      ...detailPair("修订", String(task.revision)),
+    );
+    const outputBody = element("div", { className: "task-output-list" });
+    outputBody.append(
+      outputSection("stdout", "标准输出", output.streams.stdout),
+      outputSection("stderr", "错误输出", output.streams.stderr),
+      outputSection("result", "任务结果", output.streams.result),
+    );
+    const eventList = element("ol", { className: "task-event-list" });
+    if (events.historyLost) eventList.append(element("li", { className: "task-history-gap", text: "较早的任务事件已被淘汰" }));
+    for (const event of events.items) {
+      eventList.append(element("li", {}, [
+        element("span", { text: EVENT_LABELS[event.kind] || event.kind }),
+        element("span", { className: "task-event-state", text: STATE_LABELS[event.state] || event.state }),
+        element("time", { text: formatRelativeTime(event.time) }),
+      ]));
+    }
+    if (!eventList.children.length) eventList.append(element("li", { text: "暂无事件" }));
+    const artifactList = element("div", { className: "task-artifact-list" });
+    for (const artifact of artifacts) {
+      const open = element("button", { className: "task-artifact", attrs: { type: "button" } }, [
+        element("span", { text: artifact.path || `产物 #${artifact.id}` }),
+        element("span", { text: `${artifact.media_type || "binary"} · ${formatBytes(artifact.size_bytes)}` }),
+      ]);
+      open.addEventListener("click", () => void readArtifactPreview(artifact));
+      artifactList.append(open);
+      const preview = renderPreview(artifact);
+      if (preview) artifactList.append(preview);
+    }
+    if (!artifacts.length) artifactList.append(element("p", { className: "task-output-note", text: "该任务没有产物。" }));
+    detailContainer.append(
+      element("div", { className: "task-detail-actions" }, headerActions),
+      element("header", { className: "task-detail-heading" }, [
+        element("h3", { text: task.label || `任务 #${task.id}` }),
+        element("p", { text: `${KIND_LABELS[task.kind] || task.kind} · ${STATE_LABELS[task.state] || task.state}` }),
+      ]),
+      metadata,
+      element("section", { className: "task-detail-section" }, [element("h4", { text: "输出" }), outputBody]),
+      element("section", { className: "task-detail-section" }, [element("h4", { text: "事件" }), eventList]),
+      element("section", { className: "task-detail-section" }, [element("h4", { text: `产物 ${artifacts.length}` }), artifactList]),
+    );
+  }
+
+  function renderList() {
+    const items = [...(listState.data?.items ?? [])].reverse();
     const active = items.filter((item) => ACTIVE_STATES.has(item.state)).length;
     const failed = items.filter((item) => ["failed", "timed_out", "lost"].includes(item.state)).length;
     clear(summary);
@@ -27,34 +176,49 @@ export function createTaskPanel({ container, summary, store, onChanged }) {
       element("span", { className: "summary-pill" }, [element("strong", { text: failed }), document.createTextNode("异常")]),
     );
     clear(container);
-    if (state.status === "error") {
-      container.append(element("div", { className: "resource-error", text: errorMessage(state.error) }));
+    if (listState.status === "error") {
+      container.append(element("div", { className: "resource-error", text: errorMessage(listState.error) }));
       return;
     }
     if (!items.length) {
-      container.append(element("div", { className: "empty-state", text: state.status === "loading" ? "正在载入任务…" : "暂无后台任务" }));
+      container.append(element("div", { className: "empty-state", text: listState.status === "loading" ? "正在载入任务…" : "暂无后台任务" }));
       return;
     }
     for (const item of items.slice(0, 30)) {
-      const headerChildren = [
+      const open = element("button", { className: "task-open", attrs: { type: "button", "aria-expanded": String(selectedTask() === String(item.id)), "aria-controls": "task-detail" } }, [
         element("span", { className: "status-dot", attrs: { "aria-hidden": "true" } }),
         element("span", { className: "task-name", text: item.label || `任务 #${item.id}` }),
-        element("span", { className: "task-kind", text: item.kind }),
-      ];
+        element("span", { className: "task-kind", text: KIND_LABELS[item.kind] || item.kind }),
+      ]);
+      open.addEventListener("click", () => {
+        if (selectedTask() === String(item.id)) closeDetail();
+        else {
+          expandedOutputs.clear();
+          expandedOutputs.add("result");
+          void selectTask(item.id);
+          renderList();
+        }
+      });
+      const headerChildren = [open];
       if (ACTIVE_STATES.has(item.state)) {
         const cancelButton = element("button", { className: "task-cancel", text: "停止", attrs: { type: "button", "aria-label": `停止任务 ${item.label || item.id}` } });
         cancelButton.addEventListener("click", () => cancel(item, cancelButton));
         headerChildren.push(cancelButton);
       }
-      container.append(element("article", { className: "task-card", attrs: { "data-state": item.state } }, [
+      container.append(element("article", { className: "task-card", attrs: { "data-state": item.state, "data-selected": String(selectedTask() === String(item.id)) } }, [
         element("div", { className: "task-card-header" }, headerChildren),
         element("div", { className: "task-meta" }, [
-          element("span", { text: item.state }),
+          element("span", { text: STATE_LABELS[item.state] || item.state }),
           element("time", { className: "task-time", text: formatRelativeTime(item.started_at || item.created_at) }),
         ]),
       ]));
     }
   }
 
-  return store.subscribe(render);
+  const unsubscribers = [
+    store.subscribe((state) => { listState = state; renderList(); }),
+    detailStore.subscribe((state) => { detailState = state; renderDetail(); renderList(); }),
+    previewStore.subscribe((state) => { previewState = state; renderDetail(); }),
+  ];
+  return () => unsubscribers.forEach((unsubscribe) => unsubscribe());
 }

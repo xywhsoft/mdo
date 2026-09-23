@@ -11,7 +11,10 @@ import {
   modulesStore, skillsStore, mcpStore, permissionsStore, storageStore,
   diagnosticsStore, loadResource, loadManagementResources,
 } from "./state/resources.js";
-import { tasksStore, loadTasks } from "./state/tasks.js";
+import {
+  tasksStore, taskDetailStore, artifactPreviewStore, loadTasks,
+  refreshSelectedTask,
+} from "./state/tasks.js";
 import { runsStore, loadRuns, startRun, readRun, cancelRun } from "./state/runs.js";
 import { navigation } from "./state/navigation.js";
 import { createSessionList } from "./features/sessions/session-list.js";
@@ -98,8 +101,11 @@ export async function boot() {
   createTimelineView({ container: $("#timeline"), welcome: $("#welcome"), store: timelineStore });
   createTaskPanel({
     container: $("#task-list"),
+    detailContainer: $("#task-detail"),
     summary: $("#task-summary"),
     store: tasksStore,
+    detailStore: taskDetailStore,
+    previewStore: artifactPreviewStore,
     onChanged: () => void loadRuns(),
   });
   const settingsView = createSettingsView({
@@ -559,6 +565,7 @@ export async function boot() {
     const active = (tasksStore.get().data?.items ?? []).some((item) => !item.terminal);
     tasksTimer = window.setTimeout(async () => {
       await loadTasks();
+      await refreshSelectedTask();
       scheduleTaskRefresh();
     }, active ? 1400 : 5000);
   }
