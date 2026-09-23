@@ -88,8 +88,13 @@ class ApiContractTests(unittest.TestCase):
         self.assertIn("Number == UINT64_MAX", mutations)
         self.assertIn("MdoSettingsApply", mutations)
         self.assertIn("MdoSettingsRestore", mutations)
+        self.assertIn("MdoApiConfigMergeDocument", mutations)
+        self.assertIn("XHTTP_METHOD_PATCH", self.router)
         self.assertIn("MdoApiReplySuccessTakeRevision", state)
         self.assertIn('"runtime_consistent"', state)
+        for field in ("appearance", "interaction_mode", "web_search",
+                      "workspace", "confirm_external_write"):
+            self.assertIn(f'"{field}"', state)
 
     def test_catalog_reload_routes_use_candidate_publish_managers(self) -> None:
         mutations = (ROOT / "app/src/api/mutations.c").read_text(encoding="utf-8")

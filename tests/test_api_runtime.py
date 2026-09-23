@@ -564,13 +564,16 @@ def run_probe(host: Path) -> None:
                 status, headers, body = request(
                     port, "OPTIONS", "/api/v1/settings/settings/preview")
                 document = json.loads(body)
-                assert status == 200 and headers["allow"] == "POST, OPTIONS"
-                assert document["data"]["allow"] == "POST, OPTIONS"
+                assert status == 200 and headers["allow"] == (
+                    "POST, PATCH, OPTIONS")
+                assert document["data"]["allow"] == (
+                    "POST, PATCH, OPTIONS")
 
                 status, headers, body = request(
                     port, "GET", "/api/v1/settings/settings/preview")
                 document = json.loads(body)
-                assert status == 405 and headers["allow"] == "POST, OPTIONS"
+                assert status == 405 and headers["allow"] == (
+                    "POST, PATCH, OPTIONS")
                 assert document["error"]["code"] == "method_not_allowed"
 
                 for resource in ("models", "skills", "mcp"):
@@ -764,6 +767,19 @@ def run_probe(host: Path) -> None:
                 initial_revision = settings_document["data"]["revision"]
                 initial_etag = headers["etag"]
                 assert initial_etag == f'"mdo-config-{initial_revision}"', headers
+                assert settings_document["data"]["appearance"] == {
+                    "theme": "system",
+                    "font_size": "normal",
+                    "density": "comfortable",
+                }, settings_document
+                assert settings_document["data"]["agent"][
+                    "interaction_mode"] == "agent", settings_document
+                assert settings_document["data"]["agent"][
+                    "web_search"] is True, settings_document
+                assert settings_document["data"]["workspace"] == {
+                    "open_mode": "last",
+                    "confirm_external_write": True,
+                }, settings_document
                 assert settings_document["data"]["transaction_service"] == {
                     "runtime_consistent": True,
                     "transactions": 0,
@@ -810,6 +826,34 @@ def run_probe(host: Path) -> None:
                     encoding="utf-8"))
                 assert stored["patch"]["appearance"]["theme"] == "dark", stored
 
+                merge_document = json.dumps({
+                    "schema_version": 1,
+                    "patch": {"agent": {"memory": False}},
+                }).encode()
+                status, headers, body = request(
+                    port, "PATCH", "/api/v1/settings/settings/preview",
+                    body=merge_document,
+                    headers={"Content-Type": "application/json"})
+                document = json.loads(body)
+                assert status == 200 and document["data"]["changes"] is True, (
+                    status, body)
+                assert document["data"]["current_revision"] == (
+                    initial_revision + 1), document
+                status, headers, body = request(
+                    port, "PATCH", "/api/v1/settings/settings",
+                    body=merge_document,
+                    headers={"Content-Type": "application/json",
+                             "If-Match": current_etag})
+                document = json.loads(body)
+                assert status == 200, (status, body)
+                mutation = document["data"]
+                assert mutation["revision"] == initial_revision + 2, mutation
+                current_etag = headers["etag"]
+                stored = json.loads((home / "config/settings.json").read_text(
+                    encoding="utf-8"))
+                assert stored["patch"]["appearance"]["theme"] == "dark", stored
+                assert stored["patch"]["agent"]["memory"] is False, stored
+
                 stale_document = json.dumps({
                     "schema_version": 1,
                     "patch": {"appearance": {"theme": "light"}},
@@ -841,7 +885,7 @@ def run_probe(host: Path) -> None:
                 mutation = document["data"]
                 assert mutation["changed"] is True, mutation
                 assert mutation["restored"] is True, mutation
-                assert mutation["revision"] == initial_revision + 2, mutation
+                assert mutation["revision"] == initial_revision + 3, mutation
                 assert headers["etag"] == (
                     f'"mdo-config-{mutation["revision"]}"'), headers
                 assert not (home / "config/settings.json").exists(), list(
@@ -851,9 +895,9 @@ def run_probe(host: Path) -> None:
                 settings_document = json.loads(body)
                 assert status == 200, (status, body)
                 assert settings_document["data"]["revision"] == (
-                    initial_revision + 2), settings_document
+                    initial_revision + 3), settings_document
                 assert settings_document["data"]["transaction_service"][
-                    "transactions"] == 2, settings_document
+                    "transactions"] == 3, settings_document
                 assert settings_document["data"]["transaction_service"][
                     "runtime_consistent"] is True, settings_document
 
@@ -1377,7 +1421,8 @@ def run_probe(host: Path) -> None:
                     port, "OPTIONS", "/api/v1/settings/settings")
                 document = json.loads(body)
                 assert status == 200, (status, body)
-                assert headers["allow"] == "PUT, DELETE, OPTIONS", headers
+                assert headers["allow"] == (
+                    "PUT, PATCH, DELETE, OPTIONS"), headers
                 assert document["data"]["allow"] == headers["allow"], document
             except BaseException as error:
                 failure = error

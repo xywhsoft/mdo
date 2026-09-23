@@ -29,6 +29,114 @@ static bool MdoApiConfigDomain(xstrview Name, MdoConfigDomain* Domain,
     return false;
 }
 
+static bool MdoApiConfigMergeObject(xvalue* Target, const xvalue* Patch)
+{
+    xvalueiter Iterator;
+    xvaluekey Key;
+    xvalue* Value;
+    xvalueiterresult Result;
+
+    if ( Target == NULL || Patch == NULL ||
+         xrtValueType(Target) != XVALUE_OBJECT ||
+         xrtValueType(Patch) != XVALUE_OBJECT ) return false;
+    memset(&Iterator, 0, sizeof(Iterator));
+    if ( !xrtValueIterBegin(Patch, &Iterator) ) return false;
+    for ( ; ; ) {
+        xvalue* Copy = NULL;
+        xvalue* Current;
+        Result = xrtValueIterAdvance(&Iterator, &Key, &Value);
+        if ( Result == XVALUE_ITER_END ) break;
+        if ( Result == XVALUE_ITER_ERROR ) {
+            xrtValueIterEnd(&Iterator);
+            return false;
+        }
+        Current = xrtValueObjectGet(Target, Key.String);
+        if ( Current != NULL && xrtValueType(Current) == XVALUE_OBJECT &&
+             xrtValueType(Value) == XVALUE_OBJECT ) {
+            Copy = xrtValueDeepClone(Current);
+            if ( Copy == NULL || !MdoApiConfigMergeObject(Copy, Value) ) {
+                xrtValueRelease(Copy);
+                xrtValueIterEnd(&Iterator);
+                return false;
+            }
+        } else {
+            Copy = xrtValueDeepClone(Value);
+            if ( Copy == NULL ) {
+                xrtValueIterEnd(&Iterator);
+                return false;
+            }
+        }
+        if ( !xrtValueObjectSetTake(Target, Key.String, &Copy) ) {
+            xrtValueRelease(Copy);
+            xrtValueIterEnd(&Iterator);
+            return false;
+        }
+    }
+    xrtValueIterEnd(&Iterator);
+    return true;
+}
+
+static str MdoApiConfigMergeDocument(MdoConfigDomain Domain,
+    const xvalue* Incoming, size_t* Size)
+{
+    str ExistingText = NULL;
+    size_t ExistingSize = 0u;
+    xvalue* Existing = NULL;
+    xvalue* Patch = NULL;
+    xvalue* Document = NULL;
+    const xvalue* ExistingPatch;
+    const xvalue* IncomingPatch;
+    str Merged = NULL;
+
+    ExistingText = MdoConfigExport(Domain, false, &ExistingSize);
+    if ( ExistingText == NULL ) goto done;
+    Existing = xrtJsonParse(xrtStrViewN(ExistingText, ExistingSize));
+    ExistingPatch = Existing != NULL ? xrtValueObjectGet(Existing,
+        XRT_STR_LITERAL("patch")) : NULL;
+    IncomingPatch = Incoming != NULL ? xrtValueObjectGet(Incoming,
+        XRT_STR_LITERAL("patch")) : NULL;
+    if ( xrtValueType(ExistingPatch) != XVALUE_OBJECT ||
+         xrtValueType(IncomingPatch) != XVALUE_OBJECT ) goto done;
+    Patch = xrtValueDeepClone(ExistingPatch);
+    Document = xrtValueObject();
+    if ( Patch == NULL || Document == NULL ||
+         !MdoApiConfigMergeObject(Patch, IncomingPatch) ||
+         !xrtValueObjectSetNew(Document, XRT_STR_LITERAL("schema_version"),
+            xrtValueUInt(MDO_CONFIG_SCHEMA_VERSION)) ||
+         !xrtValueObjectSetTake(Document, XRT_STR_LITERAL("patch"), &Patch) )
+        goto done;
+    Merged = xrtJsonStringify(Document, true, Size);
+
+done:
+    xrtValueRelease(Document);
+    xrtValueRelease(Patch);
+    xrtValueRelease(Existing);
+    xrtFree(ExistingText);
+    return Merged;
+}
+
+static bool MdoApiConfigInputPreview(MdoConfigDomain Domain,
+    const MdoApiJsonBody* Body, bool Merge, MdoConfigPreview* Preview,
+    str* Document, size_t* DocumentSize)
+{
+    MdoConfigPreview Input;
+    *Document = NULL;
+    *DocumentSize = 0u;
+    if ( !Merge ) return MdoConfigPreviewImport(Domain,
+        xrtStrViewN(Body->Document, Body->Size), Preview);
+    memset(&Input, 0, sizeof(Input));
+    Input.Size = sizeof(Input);
+    if ( !MdoConfigPreviewImport(Domain,
+            xrtStrViewN(Body->Document, Body->Size), &Input) ) {
+        *Preview = Input;
+        return false;
+    }
+    *Document = MdoApiConfigMergeDocument(Domain, Body->Value,
+        DocumentSize);
+    return *Document != NULL && MdoConfigPreviewImport(Domain,
+        xrtStrViewN(*Document, *DocumentSize), Preview);
+}
+
 bool MdoApiSettingsPreviewRoute(MdoApiContext* Context)
 {
     MdoApiJsonBody Body;
@@ -37,8 +145,11 @@ bool MdoApiSettingsPreviewRoute(MdoApiContext* Context)
     MdoConfigPreview Preview;
     MdoConfigSnapshot Snapshot;
     cstr DomainName;
+    str Document = NULL;
+    size_t DocumentSize = 0u;
     xvalue* Data;
     bool Ok;
+    bool Merge = Context->Request->head->MethodCode == XHTTP_METHOD_PATCH;
 
     if ( Context->ParamCount != 1u ||
          !MdoApiConfigDomain(Context->Params[0], &Domain, &DomainName) ) {
@@ -50,13 +161,20 @@ bool MdoApiSettingsPreviewRoute(MdoApiContext* Context)
         return MdoApiReplyBodyError(Context, BodyStatus);
     memset(&Preview, 0, sizeof(Preview));
     Preview.Size = sizeof(Preview);
-    if ( !MdoConfigPreviewImport(Domain,
-            xrtStrViewN(Body.Document, Body.Size), &Preview) ) {
+    if ( !MdoApiConfigInputPreview(Domain, &Body, Merge, &Preview,
+            &Document, &DocumentSize) ) {
+        bool MergeUnavailable = Merge && Document == NULL &&
+            Preview.Message[0] == '\0';
+        xrtFree(Document);
         MdoApiJsonBodyUnit(&Body);
-        return MdoApiReplyError(Context, 422u, "configuration_invalid",
-            Preview.Message[0] != '\0' ? Preview.Message :
-                "The configuration document is invalid", NULL);
+        return MdoApiReplyError(Context, MergeUnavailable ? 503u : 422u,
+            MergeUnavailable ? "configuration_merge_unavailable" :
+                "configuration_invalid", MergeUnavailable ?
+                "The current configuration could not be merged" :
+                (Preview.Message[0] != '\0' ? Preview.Message :
+                    "The configuration document is invalid"), NULL);
     }
+    xrtFree(Document);
     MdoApiJsonBodyUnit(&Body);
     memset(&Snapshot, 0, sizeof(Snapshot));
     Snapshot.Size = sizeof(Snapshot);
@@ -181,6 +299,8 @@ bool MdoApiSettingsMutationRoute(MdoApiContext* Context)
     MdoApiJsonBody Body;
     MdoApiBodyStatus BodyStatus;
     cstr DomainName;
+    str Document = NULL;
+    size_t DocumentSize = 0u;
     uint64 ExpectedRevision = 0u;
     bool Ok;
 
@@ -210,11 +330,32 @@ bool MdoApiSettingsMutationRoute(MdoApiContext* Context)
         }
         Ok = MdoSettingsRestore(Domain, ExpectedRevision, &Result);
     } else {
+        MdoConfigPreview Preview;
+        bool Merge = Context->Request->head->MethodCode ==
+            XHTTP_METHOD_PATCH;
         BodyStatus = MdoApiJsonBodyRead(Context, &Body);
         if ( BodyStatus != MDO_API_BODY_OK )
             return MdoApiReplyBodyError(Context, BodyStatus);
-        Ok = MdoSettingsApply(Domain,
+        memset(&Preview, 0, sizeof(Preview));
+        Preview.Size = sizeof(Preview);
+        if ( !MdoApiConfigInputPreview(Domain, &Body, Merge, &Preview,
+                &Document, &DocumentSize) ) {
+            bool MergeUnavailable = Merge && Document == NULL &&
+                Preview.Message[0] == '\0';
+            xrtFree(Document);
+            MdoApiJsonBodyUnit(&Body);
+            return MdoApiReplyError(Context,
+                MergeUnavailable ? 503u : 422u,
+                MergeUnavailable ? "configuration_merge_unavailable" :
+                    "configuration_invalid", MergeUnavailable ?
+                    "The current configuration could not be merged" :
+                    (Preview.Message[0] != '\0' ? Preview.Message :
+                        "The configuration document is invalid"), NULL);
+        }
+        Ok = MdoSettingsApply(Domain, Merge ?
+            xrtStrViewN(Document, DocumentSize) :
             xrtStrViewN(Body.Document, Body.Size), ExpectedRevision, &Result);
+        xrtFree(Document);
         MdoApiJsonBodyUnit(&Body);
     }
     if ( !Ok ) return MdoApiSettingsFailure(Context, &Result);

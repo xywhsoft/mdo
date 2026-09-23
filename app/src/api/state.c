@@ -27,19 +27,63 @@ static cstr MdoApiSessionStatusText(MdoSessionStatus Status)
     }
 }
 
+static bool MdoApiSettingsStringField(xvalue* Target, cstr TargetName,
+    const xvalue* Source, cstr SourceName)
+{
+    const xvalue* Value = Source != NULL ? xrtValueObjectGet(Source,
+        xrtStrView(SourceName)) : NULL;
+    xstrview Text;
+    return Value != NULL && xrtValueGetString(Value, &Text) &&
+        MdoApiValueSetStringView(Target, TargetName, Text);
+}
+
+static bool MdoApiSettingsBoolField(xvalue* Target, cstr TargetName,
+    const xvalue* Source, cstr SourceName)
+{
+    const xvalue* Value = Source != NULL ? xrtValueObjectGet(Source,
+        xrtStrView(SourceName)) : NULL;
+    bool Boolean;
+    return Value != NULL && xrtValueGetBool(Value, &Boolean) &&
+        MdoApiValueSetBool(Target, TargetName, Boolean);
+}
+
 bool MdoApiSettingsRoute(MdoApiContext* Context)
 {
     MdoSettingsServiceSnapshot Service;
+    str EffectiveJson;
+    size_t EffectiveSize = 0u;
+    xvalue* Effective;
+    const xvalue* EffectiveSettings;
+    const xvalue* EffectiveAppearance;
+    const xvalue* EffectiveAgent;
+    const xvalue* EffectiveWorkspace;
     xvalue* Data = xrtValueObject();
     xvalue* Patches = xrtValueObject();
+    xvalue* AppearanceValue = xrtValueObject();
     xvalue* AgentValue = xrtValueObject();
     xvalue* WebValue = xrtValueObject();
+    xvalue* WorkspaceValue = xrtValueObject();
     xvalue* ServiceValue = xrtValueObject();
     bool Ok;
 
     memset(&Service, 0, sizeof(Service)); Service.Size = sizeof(Service);
-    Ok = Data != NULL && Patches != NULL && AgentValue != NULL &&
-        WebValue != NULL && ServiceValue != NULL &&
+    EffectiveJson = MdoConfigEffectiveJson(&EffectiveSize);
+    Effective = EffectiveJson != NULL ?
+        xrtJsonParse(xrtStrViewN(EffectiveJson, EffectiveSize)) : NULL;
+    xrtFree(EffectiveJson);
+    EffectiveSettings = Effective != NULL ? xrtValueObjectGet(Effective,
+        XRT_STR_LITERAL("settings")) : NULL;
+    EffectiveAppearance = EffectiveSettings != NULL ?
+        xrtValueObjectGet(EffectiveSettings,
+            XRT_STR_LITERAL("appearance")) : NULL;
+    EffectiveAgent = EffectiveSettings != NULL ?
+        xrtValueObjectGet(EffectiveSettings, XRT_STR_LITERAL("agent")) : NULL;
+    EffectiveWorkspace = EffectiveSettings != NULL ?
+        xrtValueObjectGet(EffectiveSettings,
+            XRT_STR_LITERAL("workspace")) : NULL;
+    Ok = Data != NULL && Patches != NULL && AppearanceValue != NULL &&
+        AgentValue != NULL && WebValue != NULL && WorkspaceValue != NULL &&
+        ServiceValue != NULL && EffectiveSettings != NULL &&
         MdoSettingsServiceGetSnapshot(&Service);
     if ( Ok ) Ok =
         MdoApiValueSetBool(Patches, "settings",
@@ -55,8 +99,21 @@ bool MdoApiSettingsRoute(MdoApiContext* Context)
             Service.Config.RuntimeOverride) &&
         MdoApiValueSetUInt(Data, "effective_bytes",
             Service.Config.EffectiveBytes) &&
-        MdoApiValueSetTake(Data, "user_patches", &Patches);
+        MdoApiValueSetTake(Data, "user_patches", &Patches) &&
+        MdoApiSettingsStringField(Data, "locale", EffectiveSettings,
+            "locale") &&
+        MdoApiSettingsStringField(AppearanceValue, "theme",
+            EffectiveAppearance, "theme") &&
+        MdoApiSettingsStringField(AppearanceValue, "font_size",
+            EffectiveAppearance, "font_size") &&
+        MdoApiSettingsStringField(AppearanceValue, "density",
+            EffectiveAppearance, "density") &&
+        MdoApiValueSetTake(Data, "appearance", &AppearanceValue);
     if ( Ok ) Ok =
+        MdoApiSettingsStringField(AgentValue, "interaction_mode",
+            EffectiveAgent, "interaction_mode") &&
+        MdoApiSettingsBoolField(AgentValue, "web_search", EffectiveAgent,
+            "web_search") &&
         MdoApiValueSetBool(AgentValue, "memory", Service.Agent.MemoryEnabled) &&
         MdoApiValueSetBool(AgentValue, "schedules",
             Service.Agent.SchedulesEnabled) &&
@@ -91,6 +148,12 @@ bool MdoApiSettingsRoute(MdoApiContext* Context)
             Service.Web.SecretRef[0] != '\0') &&
         MdoApiValueSetTake(Data, "web", &WebValue);
     if ( Ok ) Ok =
+        MdoApiSettingsStringField(WorkspaceValue, "open_mode",
+            EffectiveWorkspace, "open_mode") &&
+        MdoApiSettingsBoolField(WorkspaceValue, "confirm_external_write",
+            EffectiveWorkspace, "confirm_external_write") &&
+        MdoApiValueSetTake(Data, "workspace", &WorkspaceValue);
+    if ( Ok ) Ok =
         MdoApiValueSetBool(ServiceValue, "runtime_consistent",
             !Service.Degraded) &&
         MdoApiValueSetUInt(ServiceValue, "transactions",
@@ -98,8 +161,10 @@ bool MdoApiSettingsRoute(MdoApiContext* Context)
         MdoApiValueSetUInt(ServiceValue, "rollbacks", Service.Rollbacks) &&
         MdoApiValueSetString(ServiceValue, "last_error", Service.LastError) &&
         MdoApiValueSetTake(Data, "transaction_service", &ServiceValue);
-    xrtValueRelease(Patches); xrtValueRelease(AgentValue);
-    xrtValueRelease(WebValue); xrtValueRelease(ServiceValue);
+    xrtValueRelease(Patches); xrtValueRelease(AppearanceValue);
+    xrtValueRelease(AgentValue); xrtValueRelease(WebValue);
+    xrtValueRelease(WorkspaceValue); xrtValueRelease(ServiceValue);
+    xrtValueRelease(Effective);
     if ( !Ok ) { xrtValueRelease(Data); Data = NULL; }
     if ( Data == NULL ) return MdoApiStateReply(Context, NULL);
     return MdoApiReplySuccessTakeRevision(Context, 200u, Data,
