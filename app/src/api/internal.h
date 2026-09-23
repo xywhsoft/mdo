@@ -7,6 +7,7 @@
 
 #define MDO_API_RESPONSE_MAX_BYTES (256u * 1024u)
 #define MDO_API_REQUEST_MAX_BYTES (256u * 1024u)
+#define MDO_API_DOWNLOAD_MAX_BYTES (33u * 1024u * 1024u)
 #define MDO_API_REQUEST_ID_CAPACITY 40u
 #define MDO_API_ROUTE_PARAM_MAX 4u
 
@@ -59,6 +60,8 @@ MdoApiBodyStatus MdoApiJsonBodyRead(MdoApiContext* pContext,
     MdoApiJsonBody* pBody);
 void MdoApiJsonBodyUnit(MdoApiJsonBody* pBody);
 bool MdoApiReplyBodyError(MdoApiContext* pContext, MdoApiBodyStatus Status);
+bool MdoApiReplyDownload(MdoApiContext* pContext, const void* pBody,
+    size_t BodySize, cstr ContentDisposition, cstr EntityTag);
 
 bool MdoApiBootstrapRoute(MdoApiContext* pContext);
 bool MdoApiSettingsRoute(MdoApiContext* pContext);
@@ -88,6 +91,11 @@ bool MdoApiSettingsMutationRoute(MdoApiContext* pContext);
 bool MdoApiSessionCreateRoute(MdoApiContext* pContext);
 bool MdoApiSessionRoute(MdoApiContext* pContext);
 bool MdoApiSessionRestoreRoute(MdoApiContext* pContext);
+bool MdoApiSessionHistoryRoute(MdoApiContext* pContext);
+bool MdoApiSessionForkRoute(MdoApiContext* pContext);
+bool MdoApiSessionTruncateRoute(MdoApiContext* pContext);
+bool MdoApiSessionClearRoute(MdoApiContext* pContext);
+bool MdoApiSessionExportRoute(MdoApiContext* pContext);
 bool MdoApiRunStartRoute(MdoApiContext* pContext);
 bool MdoApiRunRoute(MdoApiContext* pContext);
 bool MdoApiScheduleRoute(MdoApiContext* pContext);

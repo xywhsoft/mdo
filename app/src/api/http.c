@@ -19,11 +19,12 @@ static bool MdoApiConnectionSend(XS_HttpReq* pRequest, const void* pData,
 }
 
 static bool MdoApiReplyRaw(MdoApiContext* pContext, uint16 Status,
-    const void* pBody, size_t BodySize, cstr Allow, cstr EntityTag)
+    const void* pBody, size_t BodySize, cstr Allow, cstr EntityTag,
+    cstr ContentType, cstr ContentDisposition)
 {
     char Head[1536];
     char Length[32];
-    xhttpfield Fields[8];
+    xhttpfield Fields[9];
     size_t FieldCount = 0u;
     size_t HeadSize = 0u;
     xstrview Reason;
@@ -37,7 +38,8 @@ static bool MdoApiReplyRaw(MdoApiContext* pContext, uint16 Status,
         XRT_STR_LITERAL("Content-Length"), xrtStrView(Length) };
     Fields[FieldCount++] = (xhttpfield){
         XRT_STR_LITERAL("Content-Type"),
-        XRT_STR_LITERAL("application/json; charset=utf-8") };
+        xrtStrView(ContentType != NULL ? ContentType :
+            "application/json; charset=utf-8") };
     Fields[FieldCount++] = (xhttpfield){
         XRT_STR_LITERAL("Cache-Control"), XRT_STR_LITERAL("no-store") };
     Fields[FieldCount++] = (xhttpfield){
@@ -53,6 +55,11 @@ static bool MdoApiReplyRaw(MdoApiContext* pContext, uint16 Status,
     if ( EntityTag != NULL ) {
         Fields[FieldCount++] = (xhttpfield){
             XRT_STR_LITERAL("ETag"), xrtStrView(EntityTag) };
+    }
+    if ( ContentDisposition != NULL ) {
+        Fields[FieldCount++] = (xhttpfield){
+            XRT_STR_LITERAL("Content-Disposition"),
+            xrtStrView(ContentDisposition) };
     }
     Reason = xrtHttpStatusText(Status);
     if ( !xrtHttp1ResponseWrite(XHTTP_VERSION_1_1, Status, Reason,
@@ -90,7 +97,8 @@ static bool MdoApiReplySerializationFailure(MdoApiContext* pContext,
         pContext != NULL ? pContext->RequestId : "unavailable");
 
     if ( Count < 0 || (size_t)Count >= sizeof(Body) ) return false;
-    return MdoApiReplyRaw(pContext, Status, Body, (size_t)Count, NULL, NULL);
+    return MdoApiReplyRaw(pContext, Status, Body, (size_t)Count, NULL, NULL,
+        NULL, NULL);
 }
 
 static bool MdoApiReplyValue(MdoApiContext* pContext, uint16 Status,
@@ -109,9 +117,20 @@ static bool MdoApiReplyValue(MdoApiContext* pContext, uint16 Status,
         return MdoApiReplySerializationFailure(pContext, 500u);
     }
     Result = MdoApiReplyRaw(pContext, Status, Json, JsonSize, Allow,
-        EntityTag);
+        EntityTag, NULL, NULL);
     xrtFree(Json);
     return Result;
+}
+
+bool MdoApiReplyDownload(MdoApiContext* pContext, const void* pBody,
+    size_t BodySize, cstr ContentDisposition, cstr EntityTag)
+{
+    if ( pBody == NULL || BodySize == 0u ||
+         BodySize > MDO_API_DOWNLOAD_MAX_BYTES ||
+         ContentDisposition == NULL || ContentDisposition[0] == '\0' ||
+         EntityTag == NULL || EntityTag[0] == '\0' ) return false;
+    return MdoApiReplyRaw(pContext, 200u, pBody, BodySize, NULL, EntityTag,
+        "application/octet-stream", ContentDisposition);
 }
 
 bool MdoApiReplySuccessTake(MdoApiContext* pContext, uint16 Status,

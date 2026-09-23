@@ -1391,6 +1391,102 @@ def run_probe(host: Path) -> None:
                 assert document["data"]["revision"] == 7, document
                 assert headers["etag"] == current_etag, headers
 
+                history_path = session_path + "/history"
+                status, headers, body = request(port, "GET", history_path)
+                document = json.loads(body)
+                assert status == 200, (status, body)
+                history = document["data"]
+                assert history["session_id"] == session_id, history
+                assert history["revision"] == 7, history
+                assert isinstance(history["last_sequence"], int), history
+                assert headers["etag"] == current_etag, headers
+
+                export_path = session_path + "/export"
+                status, headers, body = request(port, "GET", export_path)
+                assert status == 200, (status, body)
+                exported = json.loads(body)
+                assert exported["export_schema"] == 1, exported
+                assert exported["meta"]["id"] == session_id, exported
+                assert isinstance(exported["snapshot"], dict), exported
+                assert headers["etag"] == current_etag, headers
+                assert headers["content-type"] == (
+                    "application/octet-stream"), headers
+                assert headers["content-disposition"] == (
+                    f'attachment; filename="mdo-session-{session_id}.json"'), (
+                    headers)
+                assert headers["cache-control"] == "no-store", headers
+
+                fork_path = session_path + "/fork"
+                status, headers, body = request(
+                    port, "POST", fork_path,
+                    body=b'{"title":"Forked API session"}',
+                    headers={"Content-Type": "application/json",
+                             "If-Match": current_etag})
+                document = json.loads(body)
+                assert status == 201, (status, body)
+                forked = document["data"]
+                assert forked["id"] != session_id, forked
+                assert forked["parent_session_id"] == session_id, forked
+                assert forked["title"] == "Forked API session", forked
+                assert forked["revision"] == 1, forked
+                assert headers["etag"] == (
+                    f'"mdo-session-{forked["id"]}-1"'), headers
+
+                truncate_path = session_path + "/truncate"
+                status, headers, body = request(
+                    port, "POST", truncate_path, body=b"{}",
+                    headers={"Content-Type": "application/json",
+                             "If-Match": current_etag})
+                document = json.loads(body)
+                assert status == 422, (status, body)
+                assert document["error"]["code"] == (
+                    "session_truncate_invalid"), document
+
+                clear_path = session_path + "/clear"
+                status, headers, body = request(port, "POST", clear_path)
+                document = json.loads(body)
+                assert status == 428, (status, body)
+                assert document["error"]["code"] == (
+                    "precondition_required"), document
+                status, headers, body = request(
+                    port, "POST", clear_path,
+                    headers={"If-Match": current_etag})
+                document = json.loads(body)
+                assert status == 200, (status, body)
+                assert document["data"]["revision"] == 8, document
+                current_etag = headers["etag"]
+
+                status, headers, body = request(port, "GET", history_path)
+                document = json.loads(body)
+                assert status == 200, (status, body)
+                last_sequence = document["data"]["last_sequence"]
+                assert last_sequence > 0, document
+                assert headers["etag"] == current_etag, headers
+
+                status, headers, body = request(
+                    port, "POST", truncate_path,
+                    body=json.dumps({
+                        "through_sequence": last_sequence,
+                    }).encode(),
+                    headers={"Content-Type": "application/json",
+                             "If-Match": current_etag})
+                document = json.loads(body)
+                assert status == 200, (status, body)
+                assert document["data"]["revision"] == 9, document
+                current_etag = headers["etag"]
+
+                for suffix, allow in (
+                    ("history", "GET, HEAD, OPTIONS"),
+                    ("export", "GET, HEAD, OPTIONS"),
+                    ("fork", "POST, OPTIONS"),
+                    ("truncate", "POST, OPTIONS"),
+                    ("clear", "POST, OPTIONS"),
+                ):
+                    status, option_headers, body = request(
+                        port, "OPTIONS", session_path + "/" + suffix)
+                    assert status == 200 and option_headers["allow"] == allow, (
+                        suffix, status, option_headers, body)
+
                 meta_path.write_text("{broken", encoding="utf-8")
                 status, headers, body = request(
                     port, "GET",

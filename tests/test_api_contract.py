@@ -153,6 +153,27 @@ class ApiContractTests(unittest.TestCase):
         self.assertIn("revision_conflict", sessions)
         self.assertNotIn("credential", sessions.lower())
 
+    def test_advanced_session_routes_use_the_authoritative_ledger(self) -> None:
+        sessions = (ROOT / "app/src/api/sessions.c").read_text(encoding="utf-8")
+        for suffix in ("history", "fork", "truncate", "clear", "export"):
+            self.assertIn(
+                f'"/api/v1/projects/{{project}}/sessions/{{session}}/{suffix}"',
+                self.router,
+            )
+        for call in (
+            "MdoSessionLastSequence", "MdoSessionFork",
+            "MdoSessionTruncateAfter", "MdoSessionClear",
+            "MdoSessionExportJson",
+        ):
+            self.assertIn(call, sessions)
+        self.assertIn("MdoApiSessionOpenActive", sessions)
+        self.assertIn("MdoApiSessionExpectedRevision", sessions)
+        self.assertIn('"session_state_conflict"', sessions)
+        self.assertIn("MdoApiReplyDownload", sessions)
+        self.assertIn("MDO_API_DOWNLOAD_MAX_BYTES", self.internal)
+        self.assertIn('"application/octet-stream"', self.http)
+        self.assertIn('XRT_STR_LITERAL("Content-Disposition")', self.http)
+
     def test_interactive_runs_have_owned_start_detail_and_cancel_routes(self) -> None:
         runs = (ROOT / "app/src/api/runs.c").read_text(encoding="utf-8")
         self.assertIn(

@@ -52,6 +52,24 @@ static bool MdoApiSessionUnsigned(const xvalue* Object, cstr Name,
     return true;
 }
 
+static bool MdoApiSessionUInt64(const xvalue* Object, cstr Name,
+    uint64* Output, size_t* Present)
+{
+    const xvalue* Value = xrtValueObjectGet(Object, xrtStrView(Name));
+    uint64 Number;
+    int64 Signed;
+    if ( Value == NULL ) return true;
+    (*Present)++;
+    if ( xrtValueType(Value) == XVALUE_UINT ) {
+        if ( !xrtValueGetUInt(Value, &Number) ) return false;
+    } else if ( xrtValueType(Value) == XVALUE_INT ) {
+        if ( !xrtValueGetInt(Value, &Signed) || Signed < 0 ) return false;
+        Number = (uint64)Signed;
+    } else return false;
+    *Output = Number;
+    return true;
+}
+
 static bool MdoApiSessionProtocol(cstr Text, MdoModelProtocol* Protocol)
 {
     if ( Text[0] == '\0' || strcmp(Text, "default") == 0 ) {
@@ -206,6 +224,111 @@ static bool MdoApiSessionReply(MdoApiContext* Context, uint16 Status,
             "The session result could not be created", NULL);
     }
     return MdoApiReplySuccessTakeEntityTag(Context, Status, Data, EntityTag);
+}
+
+static bool MdoApiSessionActiveFailure(MdoApiContext* Context,
+    const xwork_error* Error)
+{
+    const xerror* Cause = xrtGetError();
+    xerrkind Kind = Cause != NULL ? xrtErrorKind(Cause) : XERR_NONE;
+    xrtClearError();
+    if ( Error != NULL && Error->eCode == XWORK_ERROR_INVALID_ARGUMENT )
+        return MdoApiReplyError(Context, 400u, "invalid_session_path",
+            "The project or session ID is invalid", NULL);
+    if ( Kind == XERR_NOT_FOUND )
+        return MdoApiReplyError(Context, 404u, "session_not_found",
+            "The requested session does not exist", NULL);
+    if ( Error != NULL &&
+         (Error->eCode == XWORK_ERROR_CONTEXT ||
+          Error->eCode == XWORK_ERROR_POLICY ||
+          Error->eCode == XWORK_ERROR_LIMIT) )
+        return MdoApiReplyError(Context, 409u, "session_state_conflict",
+            "The session must be active and idle for this operation", NULL);
+    if ( Error != NULL &&
+         (Error->eCode == XWORK_ERROR_OUT_OF_MEMORY ||
+          Error->eCode == XWORK_ERROR_MODEL) )
+        return MdoApiReplyError(Context, 503u,
+            "session_service_unavailable",
+            "The session service is not ready for this operation", NULL);
+    return MdoApiReplyError(Context, 500u, "session_operation_failed",
+        "The session operation could not be completed", NULL);
+}
+
+static MdoSession* MdoApiSessionOpenActive(MdoApiContext* Context,
+    bool RequireRevision, MdoSessionInfo* Info, uint64* ExpectedRevision,
+    bool* ReplyResult)
+{
+    char Project[MDO_PROJECT_ID_CAPACITY];
+    char SessionId[MDO_SESSION_ID_CAPACITY];
+    MdoApiSessionPreconditionStatus Precondition;
+    MdoSession* Session;
+    xwork_error Error;
+    bool MatchesSession = false;
+
+    *ReplyResult = false;
+    *ExpectedRevision = 0u;
+    if ( !MdoApiSessionPath(Context, Project, SessionId) ) {
+        *ReplyResult = MdoApiReplyError(Context, 400u,
+            "invalid_session_path", "The project or session ID is invalid",
+            NULL);
+        return NULL;
+    }
+    if ( RequireRevision ) {
+        Precondition = MdoApiSessionExpectedRevision(Context, SessionId,
+            ExpectedRevision, &MatchesSession);
+        if ( Precondition == MDO_API_SESSION_PRECONDITION_MISSING ) {
+            *ReplyResult = MdoApiReplyError(Context, 428u,
+                "precondition_required",
+                "If-Match must contain the current session ETag", NULL);
+            return NULL;
+        }
+        if ( Precondition != MDO_API_SESSION_PRECONDITION_OK ) {
+            *ReplyResult = MdoApiReplyError(Context, 400u,
+                "invalid_precondition",
+                "If-Match must use the form \"mdo-session-ID-N\"", NULL);
+            return NULL;
+        }
+    }
+    memset(&Error, 0, sizeof(Error));
+    xrtClearError();
+    Session = MdoSessionOpen(Project, SessionId, NULL, &Error);
+    if ( Session == NULL ) {
+        *ReplyResult = MdoApiSessionActiveFailure(Context, &Error);
+        return NULL;
+    }
+    memset(Info, 0, sizeof(*Info)); Info->Size = sizeof(*Info);
+    if ( !MdoSessionGetInfo(Session, Info) ) {
+        MdoSessionRelease(Session);
+        *ReplyResult = MdoApiReplyError(Context, 500u,
+            "session_result_unavailable",
+            "The session metadata is unavailable", NULL);
+        return NULL;
+    }
+    if ( RequireRevision &&
+         (!MatchesSession || Info->Revision != *ExpectedRevision) ) {
+        MdoSessionRelease(Session);
+        *ReplyResult = MdoApiReplyError(Context, 412u,
+            "revision_conflict",
+            "The session changed; reload it before updating", NULL);
+        return NULL;
+    }
+    return Session;
+}
+
+static bool MdoApiSessionReplyData(MdoApiContext* Context, xvalue* Data,
+    const MdoSessionInfo* Info)
+{
+    char EntityTag[96];
+    int Count = snprintf(EntityTag, sizeof(EntityTag),
+        "\"mdo-session-%s-%llu\"", Info->Id,
+        (unsigned long long)Info->Revision);
+    if ( Count <= 0 || (size_t)Count >= sizeof(EntityTag) ) {
+        xrtValueRelease(Data);
+        return MdoApiReplyError(Context, 500u,
+            "session_result_unavailable",
+            "The session result could not be created", NULL);
+    }
+    return MdoApiReplySuccessTakeEntityTag(Context, 200u, Data, EntityTag);
 }
 
 static bool MdoApiSessionCreateFailure(MdoApiContext* Context,
@@ -501,6 +624,208 @@ static bool MdoApiSessionMutate(MdoApiContext* Context, bool Restore)
     }
     MdoSessionRelease(Session);
     return MdoApiSessionReply(Context, 200u, &Info);
+}
+
+bool MdoApiSessionHistoryRoute(MdoApiContext* Context)
+{
+    MdoSessionInfo Info;
+    MdoSession* Session;
+    xwork_error Error;
+    xvalue* Data;
+    uint64 ExpectedRevision;
+    uint64 LastSequence = 0u;
+    bool ReplyResult;
+
+    Session = MdoApiSessionOpenActive(Context, false, &Info,
+        &ExpectedRevision, &ReplyResult);
+    if ( Session == NULL ) return ReplyResult;
+    memset(&Error, 0, sizeof(Error));
+    if ( !MdoSessionLastSequence(Session, &LastSequence, &Error) ) {
+        MdoSessionRelease(Session);
+        return MdoApiSessionActiveFailure(Context, &Error);
+    }
+    Data = xrtValueObject();
+    if ( Data == NULL ||
+         !MdoApiValueSetString(Data, "project_id", Info.ProjectId) ||
+         !MdoApiValueSetString(Data, "session_id", Info.Id) ||
+         !MdoApiValueSetUInt(Data, "revision", Info.Revision) ||
+         !MdoApiValueSetUInt(Data, "last_sequence", LastSequence) ) {
+        xrtValueRelease(Data);
+        MdoSessionRelease(Session);
+        return MdoApiReplyError(Context, 500u,
+            "session_history_unavailable",
+            "The session history boundary could not be read", NULL);
+    }
+    MdoSessionRelease(Session);
+    return MdoApiSessionReplyData(Context, Data, &Info);
+}
+
+bool MdoApiSessionExportRoute(MdoApiContext* Context)
+{
+    MdoSessionInfo Info;
+    MdoSession* Session;
+    xwork_error Error;
+    str Document;
+    char EntityTag[96];
+    char Disposition[128];
+    size_t DocumentSize = 0u;
+    int EntityTagSize;
+    int DispositionSize;
+    uint64 ExpectedRevision;
+    bool ReplyResult;
+    bool Result;
+
+    Session = MdoApiSessionOpenActive(Context, false, &Info,
+        &ExpectedRevision, &ReplyResult);
+    if ( Session == NULL ) return ReplyResult;
+    memset(&Error, 0, sizeof(Error));
+    Document = MdoSessionExportJson(Session, &DocumentSize, &Error);
+    MdoSessionRelease(Session);
+    if ( Document == NULL ) return MdoApiSessionActiveFailure(Context, &Error);
+    EntityTagSize = snprintf(EntityTag, sizeof(EntityTag),
+        "\"mdo-session-%s-%llu\"", Info.Id,
+        (unsigned long long)Info.Revision);
+    DispositionSize = snprintf(Disposition, sizeof(Disposition),
+        "attachment; filename=\"mdo-session-%s.json\"", Info.Id);
+    if ( EntityTagSize <= 0 || (size_t)EntityTagSize >= sizeof(EntityTag) ||
+         DispositionSize <= 0 ||
+         (size_t)DispositionSize >= sizeof(Disposition) ||
+         DocumentSize > MDO_API_DOWNLOAD_MAX_BYTES ) {
+        xrtFree(Document);
+        return MdoApiReplyError(Context, 500u,
+            "session_export_unavailable",
+            "The session export exceeds the bounded download limit", NULL);
+    }
+    Result = MdoApiReplyDownload(Context, Document, DocumentSize,
+        Disposition, EntityTag);
+    xrtFree(Document);
+    return Result;
+}
+
+static bool MdoApiSessionLedgerMutation(MdoApiContext* Context,
+    bool Clear)
+{
+    MdoApiJsonBody Body;
+    MdoApiBodyStatus BodyStatus;
+    MdoSessionInfo Info;
+    MdoSession* Session;
+    xwork_error Error;
+    uint64 ExpectedRevision;
+    uint64 ThroughSequence = 0u;
+    size_t Present = 0u;
+    bool ReplyResult;
+    bool Ok;
+
+    Session = MdoApiSessionOpenActive(Context, true, &Info,
+        &ExpectedRevision, &ReplyResult);
+    if ( Session == NULL ) return ReplyResult;
+    if ( Clear ) {
+        if ( !MdoApiSessionNoBody(Context) ) {
+            MdoSessionRelease(Session);
+            return MdoApiReplyError(Context, 400u, "body_not_allowed",
+                "This session operation does not accept a body", NULL);
+        }
+    } else {
+        BodyStatus = MdoApiJsonBodyRead(Context, &Body);
+        if ( BodyStatus != MDO_API_BODY_OK ) {
+            MdoSessionRelease(Session);
+            return MdoApiReplyBodyError(Context, BodyStatus);
+        }
+        Ok = xrtValueType(Body.Value) == XVALUE_OBJECT &&
+            MdoApiSessionUInt64(Body.Value, "through_sequence",
+                &ThroughSequence, &Present) && Present == 1u &&
+            Present == xrtValueCount(Body.Value);
+        MdoApiJsonBodyUnit(&Body);
+        if ( !Ok ) {
+            MdoSessionRelease(Session);
+            return MdoApiReplyError(Context, 422u,
+                "session_truncate_invalid",
+                "Truncate requires exactly one non-negative through_sequence",
+                NULL);
+        }
+    }
+    memset(&Error, 0, sizeof(Error));
+    Ok = Clear ? MdoSessionClear(Session, &Error) :
+        MdoSessionTruncateAfter(Session, ThroughSequence, &Error);
+    if ( !Ok ) {
+        MdoSessionRelease(Session);
+        return MdoApiSessionMutationFailure(Context, Info.ProjectId,
+            Info.Id, ExpectedRevision, &Error);
+    }
+    memset(&Info, 0, sizeof(Info)); Info.Size = sizeof(Info);
+    if ( !MdoSessionGetInfo(Session, &Info) ) {
+        MdoSessionRelease(Session);
+        return MdoApiReplyError(Context, 500u,
+            "session_result_unavailable",
+            "The session was updated but its metadata is unavailable", NULL);
+    }
+    MdoSessionRelease(Session);
+    return MdoApiSessionReply(Context, 200u, &Info);
+}
+
+bool MdoApiSessionClearRoute(MdoApiContext* Context)
+{
+    return MdoApiSessionLedgerMutation(Context, true);
+}
+
+bool MdoApiSessionTruncateRoute(MdoApiContext* Context)
+{
+    return MdoApiSessionLedgerMutation(Context, false);
+}
+
+bool MdoApiSessionForkRoute(MdoApiContext* Context)
+{
+    MdoApiJsonBody Body;
+    MdoApiBodyStatus BodyStatus;
+    MdoSessionForkOptions Options;
+    MdoSessionInfo SourceInfo;
+    MdoSessionInfo ForkInfo;
+    MdoSession* Source;
+    MdoSession* Fork;
+    xwork_error Error;
+    char Title[MDO_SESSION_TITLE_CAPACITY] = { 0 };
+    uint64 ExpectedRevision;
+    size_t Present = 0u;
+    bool ReplyResult;
+    bool Valid;
+
+    Source = MdoApiSessionOpenActive(Context, true, &SourceInfo,
+        &ExpectedRevision, &ReplyResult);
+    if ( Source == NULL ) return ReplyResult;
+    BodyStatus = MdoApiJsonBodyRead(Context, &Body);
+    if ( BodyStatus != MDO_API_BODY_OK ) {
+        MdoSessionRelease(Source);
+        return MdoApiReplyBodyError(Context, BodyStatus);
+    }
+    MdoSessionForkOptionsInit(&Options);
+    Valid = xrtValueType(Body.Value) == XVALUE_OBJECT &&
+        MdoApiSessionString(Body.Value, "title", Title,
+            sizeof(Title), false, &Present) &&
+        MdoApiSessionUInt64(Body.Value, "through_sequence",
+            &Options.ThroughSequence, &Present) &&
+        Present == xrtValueCount(Body.Value);
+    MdoApiJsonBodyUnit(&Body);
+    if ( !Valid ) {
+        MdoSessionRelease(Source);
+        return MdoApiReplyError(Context, 422u, "session_fork_invalid",
+            "Fork accepts only a valid title and through_sequence", NULL);
+    }
+    Options.Title = Title[0] != '\0' ? Title : NULL;
+    memset(&Error, 0, sizeof(Error));
+    Fork = MdoSessionFork(Source, &Options, &Error);
+    MdoSessionRelease(Source);
+    if ( Fork == NULL )
+        return MdoApiSessionMutationFailure(Context, SourceInfo.ProjectId,
+            SourceInfo.Id, ExpectedRevision, &Error);
+    memset(&ForkInfo, 0, sizeof(ForkInfo)); ForkInfo.Size = sizeof(ForkInfo);
+    if ( !MdoSessionGetInfo(Fork, &ForkInfo) ) {
+        MdoSessionRelease(Fork);
+        return MdoApiReplyError(Context, 500u,
+            "session_result_unavailable",
+            "The fork was created but its metadata is unavailable", NULL);
+    }
+    MdoSessionRelease(Fork);
+    return MdoApiSessionReply(Context, 201u, &ForkInfo);
 }
 
 bool MdoApiSessionRestoreRoute(MdoApiContext* Context)
