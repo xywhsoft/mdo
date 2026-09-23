@@ -126,7 +126,8 @@ static bool MdoApiRecoveryItemValue(const xwork_recovery_call_info* Info,
 }
 
 static bool MdoApiRecoveryReply(MdoApiContext* Context,
-    const MdoSessionInfo* SessionInfo, xwork_recovery_snapshot* Snapshot)
+    const MdoSessionInfo* SessionInfo, xwork_recovery_snapshot* Snapshot,
+    bool ResumeRequired)
 {
     xvalue* Data = xrtValueObject();
     xvalue* Items = xrtValueArray();
@@ -137,7 +138,8 @@ static bool MdoApiRecoveryReply(MdoApiContext* Context,
     size_t Index;
     bool Ok = Data != NULL && Items != NULL &&
         Count <= MDO_API_RECOVERY_CALL_MAX &&
-        MdoAgentRecoverySnapshotToken(Snapshot, RecoveryToken);
+        MdoAgentRecoverySnapshotToken(Snapshot, ResumeRequired,
+            RecoveryToken);
 
     for ( Index = 0u; Ok && Index < Count; ++Index ) {
         xwork_recovery_call_info Info;
@@ -178,6 +180,7 @@ static bool MdoApiRecoveryReply(MdoApiContext* Context,
         MdoApiValueSetUInt(Data, "revision", SessionInfo->Revision) &&
         MdoApiValueSetUInt(Data, "catalog_generation", CatalogGeneration) &&
         MdoApiValueSetString(Data, "recovery_token", RecoveryToken) &&
+        MdoApiValueSetBool(Data, "resume_required", ResumeRequired) &&
         MdoApiValueSetUInt(Data, "total", Count) &&
         MdoApiValueSetTake(Data, "items", &Items);
     xrtValueRelease(Items);
@@ -213,6 +216,7 @@ bool MdoApiSessionRecoveryRoute(MdoApiContext* Context)
     xwork_recovery_snapshot* Snapshot;
     xwork_error Error;
     bool Result;
+    bool ResumeRequired = false;
 
     if ( !MdoApiRecoveryPath(Context, Project, SessionId) )
         return MdoApiReplyError(Context, 400u, "invalid_session_path",
@@ -234,13 +238,18 @@ bool MdoApiSessionRecoveryRoute(MdoApiContext* Context)
             "The recovery state could not be inspected", NULL);
     }
     Snapshot = MdoAgentSessionRecoverySnapshot(Agent, &Error);
+    if ( Snapshot != NULL && !MdoAgentSessionRecoveryRequired(Agent,
+            &ResumeRequired, &Error) ) {
+        xworkRecoverySnapshotRelease(Snapshot);
+        Snapshot = NULL;
+    }
     MdoAgentSessionRelease(Agent);
     if ( Snapshot == NULL ) {
         MdoSessionRelease(Session);
         return MdoApiRecoveryFailure(Context, &Error,
             "recovery_state_conflict");
     }
-    Result = MdoApiRecoveryReply(Context, &Info, Snapshot);
+    Result = MdoApiRecoveryReply(Context, &Info, Snapshot, ResumeRequired);
     xworkRecoverySnapshotRelease(Snapshot);
     MdoSessionRelease(Session);
     return Result;

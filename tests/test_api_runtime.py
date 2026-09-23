@@ -777,6 +777,7 @@ def run_probe(host: Path) -> None:
                     ("/js/main.js", b'import { boot }'),
                     ("/js/app.js", b"export async function boot"),
                     ("/js/state/store.js", b"createResourceStore"),
+                    ("/js/state/recovery.js", b"resumeRecovery"),
                 ):
                     status, asset_headers, asset_body = request(port, "GET", asset)
                     assert status == 200 and marker in asset_body, (
@@ -1362,6 +1363,7 @@ def run_probe(host: Path) -> None:
                 recovery = recovery_document["data"]
                 assert recovery["project_id"] == "recovery-probe", recovery
                 assert recovery["session_id"] == recovery_session["id"], recovery
+                assert recovery["resume_required"] is True, recovery
                 assert recovery["total"] == 1, recovery
                 assert recovery["catalog_generation"] > 0, recovery
                 assert re.fullmatch(r"[0-9a-f]{64}",
@@ -1465,7 +1467,10 @@ def run_probe(host: Path) -> None:
                     base.iterdir())
                 status, _, body = request(port, "GET", recovery_path)
                 assert status == 200, (status, body)
-                assert json.loads(body)["data"]["total"] == 0, body
+                resolved_recovery = json.loads(body)["data"]
+                assert resolved_recovery["total"] == 0, resolved_recovery
+                assert resolved_recovery["resume_required"] is False, (
+                    resolved_recovery)
 
                 schedule_path = "/api/v1/schedules/api-schedule"
                 status, headers, body = request(

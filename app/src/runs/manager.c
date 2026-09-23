@@ -109,13 +109,21 @@ static bool MdoRunsRecoveryTokenValid(MdoAgentSession* Agent,
 {
     xwork_recovery_snapshot* Snapshot;
     char CurrentToken[MDO_AGENT_RECOVERY_TOKEN_CAPACITY];
+    bool ResumeRequired = false;
 
     Snapshot = MdoAgentSessionRecoverySnapshot(Agent, Error);
     if ( Snapshot == NULL ) return false;
-    if ( !MdoAgentRecoverySnapshotToken(Snapshot, CurrentToken) ) {
+    if ( !MdoAgentSessionRecoveryRequired(Agent, &ResumeRequired, Error) ) {
         xworkRecoverySnapshotRelease(Snapshot);
-        MdoRunsError(Error, XWORK_ERROR_CONTEXT,
-            "cannot fingerprint the current recovery state");
+        return false;
+    }
+    if ( !ResumeRequired || !MdoAgentRecoverySnapshotToken(Snapshot,
+            ResumeRequired, CurrentToken) ) {
+        xworkRecoverySnapshotRelease(Snapshot);
+        MdoRunsError(Error, ResumeRequired ? XWORK_ERROR_CONTEXT :
+            XWORK_ERROR_POLICY, ResumeRequired ?
+            "cannot fingerprint the current recovery state" :
+            "durable session has no interrupted run to resume");
         return false;
     }
     xworkRecoverySnapshotRelease(Snapshot);

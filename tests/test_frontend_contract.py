@@ -206,6 +206,25 @@ class FrontendContractTests(unittest.TestCase):
         self.assertIn(".approval-card", self.css)
         self.assertNotIn("innerHTML", panel)
 
+    def test_interrupted_calls_require_explicit_recovery_decisions(self) -> None:
+        state = self.scripts["js/state/recovery.js"]
+        panel = self.scripts["js/features/approvals/recovery-panel.js"]
+        app = self.scripts["js/app.js"]
+        self.assertIn('id="recovery-summary"', self.index)
+        self.assertIn('id="recovery-list"', self.index)
+        self.assertIn("recoveryStore", state)
+        self.assertIn("recovery_token", state)
+        self.assertIn('new Set(["retry", "record_uncertain"])', state)
+        self.assertIn("every pending call needs a recovery decision", state)
+        self.assertIn('"记录为不确定"', panel)
+        self.assertIn('"重新执行"', panel)
+        self.assertIn("!item.tool_available", panel)
+        self.assertIn("至少一次语义", panel)
+        self.assertIn("loadRecovery()", app)
+        self.assertIn("monitorRun(run)", app)
+        self.assertIn(".recovery-option.selected", self.css)
+        self.assertNotIn("innerHTML", panel)
+
     def test_responsive_and_accessibility_modes_are_explicit(self) -> None:
         self.assertIn("grid-template-columns: var(--sidebar-width) minmax(0, 1fr) var(--inspector-width)", self.css)
         self.assertIn("@media (max-width: 1180px)", self.css)

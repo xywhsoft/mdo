@@ -291,10 +291,16 @@
       <section class="inspector-panel" id="decisions-panel" role="tabpanel" aria-labelledby="decisions-tab" hidden>
         <div class="panel-intro">
           <h2>操作决策</h2>
-          <p>工具执行敏感操作前会在这里等待。请核对影响范围、资源和参数。</p>
+          <p>核对新操作的权限请求，也处理进程中断后尚未确认的持久化调用。</p>
         </div>
+        <h3 class="decision-section-title">等待执行</h3>
         <div class="approval-summary" id="approval-summary" aria-live="polite"></div>
         <div class="approval-list" id="approval-list" aria-live="polite"></div>
+        <section class="recovery-section" aria-labelledby="recovery-title">
+          <h3 class="decision-section-title" id="recovery-title">中断恢复</h3>
+          <div class="approval-summary" id="recovery-summary" aria-live="polite"></div>
+          <div class="approval-list" id="recovery-list" aria-live="polite"></div>
+        </section>
       </section>
 
       <section class="inspector-panel" id="context-panel" role="tabpanel" aria-labelledby="context-tab" hidden>

@@ -20,7 +20,7 @@ function resourceText(resource) {
   return `${access || "访问"} · ${resource.resource}`;
 }
 
-export function createDecisionPanel({ container, summary, count, store, onChanged }) {
+export function createDecisionPanel({ container, summary, store, onChanged }) {
   let state = store.get();
   const deciding = new Set();
   const seen = new Set();
@@ -80,8 +80,6 @@ export function createDecisionPanel({ container, summary, count, store, onChange
   function render() {
     const items = state.data?.items ?? [];
     const total = Number(state.data?.total ?? items.length);
-    count.textContent = String(total);
-    count.hidden = total === 0;
     clear(summary);
     summary.append(
       element("strong", { text: total }),

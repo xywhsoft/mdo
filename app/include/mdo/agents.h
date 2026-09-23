@@ -112,10 +112,13 @@ bool MdoAgentSessionGetInfo(const MdoAgentSession* Session,
  * xworkRecoverySnapshotRelease. */
 xwork_recovery_snapshot* MdoAgentSessionRecoverySnapshot(
     MdoAgentSession* Session, xwork_error* Error);
+bool MdoAgentSessionRecoveryRequired(MdoAgentSession* Session,
+    bool* Required, xwork_error* Error);
 /* Stable SHA-256 token over pending call identity, arguments, and current
  * tool descriptors. Catalog generations are intentionally excluded because
  * an equivalent catalog receives a new runtime-local generation on reopen. */
 bool MdoAgentRecoverySnapshotToken(const xwork_recovery_snapshot* Snapshot,
+    bool ResumeRequired,
     char Token[MDO_AGENT_RECOVERY_TOKEN_CAPACITY]);
 
 /* Ledger maintenance claims the same exclusive run window as an Agent run.

@@ -633,6 +633,15 @@ select:focus-visible,
 .approval-arguments pre { max-height: 220px; margin: 0; overflow: auto; padding: 8px; border-top: 1px solid var(--border); background: var(--surface-hover); font: 9px/1.5 ui-monospace, "Cascadia Code", Consolas, monospace; overflow-wrap: anywhere; white-space: pre-wrap; }
 .approval-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; margin-top: 10px; }
 .approval-actions button { min-height: 30px; padding: 0 9px; font-size: 10px; }
+.decision-section-title { margin: 15px 2px 0; color: var(--faint); font-size: 9px; font-weight: 650; letter-spacing: .06em; text-transform: uppercase; }
+.recovery-section { margin-top: 20px; padding-top: 1px; border-top: 1px solid var(--border); }
+.recovery-warning { margin: 10px 0 0; color: var(--warning); font-size: 10px; line-height: 1.5; }
+.recovery-options { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; margin-top: 10px; }
+.recovery-option { min-height: 34px; padding: 0 8px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface); color: var(--muted); font-size: 10px; cursor: pointer; }
+.recovery-option:hover:not(:disabled) { border-color: var(--border-strong); background: var(--surface-hover); }
+.recovery-option.selected { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 10%, var(--surface)); color: var(--ink); }
+.recovery-option:disabled { opacity: .45; cursor: not-allowed; }
+.recovery-submit { width: 100%; min-height: 36px; margin-top: 11px; font-size: 10px; }
 .context-list { display: grid; grid-template-columns: minmax(70px, auto) minmax(0, 1fr); gap: 10px 12px; margin: 16px 3px; font-size: 11px; }
 .context-list dt { color: var(--muted); }
 .context-list dd { margin: 0; overflow-wrap: anywhere; }

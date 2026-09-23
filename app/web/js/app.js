@@ -17,12 +17,14 @@ import {
 } from "./state/tasks.js";
 import { runsStore, loadRuns, startRun, readRun, cancelRun } from "./state/runs.js";
 import { approvalsStore, loadApprovals } from "./state/approvals.js";
+import { recoveryStore, selectRecovery, loadRecovery } from "./state/recovery.js";
 import { navigation } from "./state/navigation.js";
 import { createSessionList } from "./features/sessions/session-list.js";
 import { timelineStore, selectTimeline, clearTimeline, refreshSelectedTimeline } from "./features/chat/timeline-store.js";
 import { createTimelineView } from "./features/chat/timeline.js";
 import { createTaskPanel } from "./features/tasks/task-panel.js";
 import { createDecisionPanel } from "./features/approvals/decision-panel.js";
+import { createRecoveryPanel } from "./features/approvals/recovery-panel.js";
 import { createSettingsView } from "./features/settings/settings-view.js";
 import { createResourcePanels } from "./features/settings/resource-panels.js";
 import { clear, element, errorMessage, toast } from "./utils/dom.js";
@@ -114,10 +116,31 @@ export async function boot() {
   createDecisionPanel({
     container: $("#approval-list"),
     summary: $("#approval-summary"),
-    count: $("#approval-count"),
     store: approvalsStore,
     onChanged: () => Promise.all([loadTasks(), loadRuns()]),
   });
+  createRecoveryPanel({
+    container: $("#recovery-list"),
+    summary: $("#recovery-summary"),
+    store: recoveryStore,
+    onResume: (run) => {
+      monitorRun(run);
+      void Promise.all([loadRuns(), loadTasks(), refreshSelectedTimeline()]);
+    },
+  });
+
+  function updateDecisionCount() {
+    const approvals = Number(approvalsStore.get().data?.total ?? 0);
+    const recovery = recoveryStore.get().data;
+    const interrupted = recovery?.resume_required
+      ? Math.max(1, Number(recovery.total ?? recovery.items?.length ?? 0)) : 0;
+    const total = approvals + interrupted;
+    const count = $("#approval-count");
+    count.textContent = String(total);
+    count.hidden = total === 0;
+  }
+  approvalsStore.subscribe(updateDecisionCount);
+  recoveryStore.subscribe(updateDecisionCount);
   const settingsView = createSettingsView({
     form: $("#settings-form"),
     store: settingsStore,
@@ -225,7 +248,7 @@ export async function boot() {
         setRun(run);
         await refreshSelectedTimeline();
         if (terminalState(run)) {
-          await Promise.all([loadSessions(), loadRuns(), loadTasks()]);
+          await Promise.all([loadSessions(), loadRuns(), loadTasks(), loadRecovery()]);
           prompt.disabled = false;
           prompt.focus();
           return;
@@ -275,6 +298,7 @@ export async function boot() {
     setRun(null);
     hideComposerError();
     if (!key) {
+      selectRecovery("", "");
       clearTimeline();
       sessionDetailStore.reset();
       sessionTitle.textContent = "新任务";
@@ -283,9 +307,10 @@ export async function boot() {
       mobileMeta.textContent = "Agent 工作台";
       return;
     }
+    selectRecovery(projectId, sessionId);
     sessionDetailStore.reset();
     selectTimeline(projectId, sessionId);
-    await Promise.all([loadSession(projectId, sessionId), loadRuns()]);
+    await Promise.all([loadSession(projectId, sessionId), loadRuns(), loadRecovery()]);
     findActiveRun();
   });
 
@@ -320,7 +345,7 @@ export async function boot() {
       prompt.value = "";
       resizePrompt();
       monitorRun(run);
-      await Promise.all([refreshSelectedTimeline(), loadTasks(), loadRuns()]);
+      await Promise.all([refreshSelectedTimeline(), loadTasks(), loadRuns(), loadRecovery()]);
     } catch (error) {
       showComposerError(error);
       prompt.focus();
@@ -586,11 +611,12 @@ export async function boot() {
     if (document.hidden) return;
     const pending = Number(approvalsStore.get().data?.total ?? 0);
     approvalsTimer = window.setTimeout(async () => {
-      await loadApprovals();
+      await Promise.all([loadApprovals(), loadRecovery()]);
       scheduleApprovalRefresh();
-    }, pending ? 1000 : 3000);
+    }, pending || recoveryStore.get().data?.resume_required ? 1000 : 3000);
   }
   approvalsStore.subscribe(scheduleApprovalRefresh);
+  recoveryStore.subscribe(scheduleApprovalRefresh);
   document.addEventListener("visibilitychange", () => {
     if (document.hidden) {
       window.clearTimeout(tasksTimer);
@@ -611,6 +637,7 @@ export async function boot() {
     loadManagementResources(),
     loadTasks(),
     loadApprovals(),
+    loadRecovery(),
     loadRuns(),
   ]);
   if (initial.some((result) => result.status === "rejected")) {

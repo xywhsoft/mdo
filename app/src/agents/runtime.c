@@ -1264,6 +1264,37 @@ xwork_recovery_snapshot* MdoAgentSessionRecoverySnapshot(
     return xworkAgentRecoverySnapshot(Session->Agent, Error);
 }
 
+bool MdoAgentSessionRecoveryRequired(MdoAgentSession* Session,
+    bool* Required, xwork_error* Error)
+{
+    xllm_session_tail Tail;
+    xworkErrorInit(Error);
+    if ( Required == NULL ) {
+        MdoAgentsError(Error, XWORK_ERROR_INVALID_ARGUMENT,
+            "recovery requirement output is required");
+        return false;
+    }
+    *Required = false;
+    if ( Session == NULL || Session->Agent == NULL ||
+         Session->Owner == NULL || Session->Owner->LlmSession == NULL ) {
+        MdoAgentsError(Error, XWORK_ERROR_INVALID_ARGUMENT,
+            "Agent session is required to inspect recovery state");
+        return false;
+    }
+    if ( xllmSessionPendingToolCallCount(Session->Owner->LlmSession) != 0u ) {
+        *Required = true;
+        return true;
+    }
+    if ( !xllmSessionGetTail(Session->Owner->LlmSession, &Tail) ) {
+        MdoAgentsError(Error, XWORK_ERROR_CONTEXT,
+            "cannot inspect the durable Agent session tail");
+        return false;
+    }
+    *Required = Tail.bHasMessage &&
+        (Tail.eRole == XLLM_ROLE_USER || Tail.eRole == XLLM_ROLE_TOOL);
+    return true;
+}
+
 static bool MdoAgentRecoveryHashUInt64(xsha256* Hash, uint64 Value)
 {
     uint8 Bytes[8];
@@ -1283,6 +1314,7 @@ static bool MdoAgentRecoveryHashString(xsha256* Hash, const char* Text)
 }
 
 bool MdoAgentRecoverySnapshotToken(const xwork_recovery_snapshot* Snapshot,
+    bool ResumeRequired,
     char Token[MDO_AGENT_RECOVERY_TOKEN_CAPACITY])
 {
     static const char Domain[] = "mdo-recovery-view-v1";
@@ -1295,6 +1327,7 @@ bool MdoAgentRecoverySnapshotToken(const xwork_recovery_snapshot* Snapshot,
     Count = xworkRecoverySnapshotCount(Snapshot);
     xrtSha256Init(&Hash);
     if ( !xrtSha256Update(&Hash, Domain, sizeof(Domain) - 1u) ||
+         !MdoAgentRecoveryHashUInt64(&Hash, ResumeRequired ? 1u : 0u) ||
          !MdoAgentRecoveryHashUInt64(&Hash, (uint64)Count) ) return false;
     for ( Index = 0u; Index < Count; ++Index ) {
         xwork_recovery_call_info Info;
