@@ -87,8 +87,9 @@ static const MdoApiRoute g_MdoApiRoutes[] = {
       XHTTP_METHOD_GET | XHTTP_METHOD_HEAD | XHTTP_METHOD_DELETE,
       "GET, HEAD, DELETE, OPTIONS", MdoApiRunRoute },
     { "/api/v1/schedules/{schedule}",
-      XHTTP_METHOD_GET | XHTTP_METHOD_HEAD | XHTTP_METHOD_DELETE,
-      "GET, HEAD, DELETE, OPTIONS", MdoApiScheduleRoute },
+      XHTTP_METHOD_GET | XHTTP_METHOD_HEAD | XHTTP_METHOD_PUT |
+        XHTTP_METHOD_DELETE,
+      "GET, HEAD, PUT, DELETE, OPTIONS", MdoApiScheduleRoute },
     { "/api/v1/schedules/{schedule}/enabled", XHTTP_METHOD_PUT,
       "PUT, OPTIONS", MdoApiScheduleEnabledRoute },
     { "/api/v1/projects/{project}/sessions/{session}/events",

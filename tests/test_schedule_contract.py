@@ -18,6 +18,7 @@ class ScheduleContractTests(unittest.TestCase):
             "MdoScheduleManagerInit",
             "MdoScheduleManagerReloadSettings",
             "MdoScheduleCreate",
+            "MdoScheduleReplace",
             "MdoScheduleSetEnabled",
             "MdoScheduleRemove",
             "MdoScheduleClaimDue",
@@ -37,6 +38,8 @@ class ScheduleContractTests(unittest.TestCase):
         for call in (
             "xworkRuntimeRegisterSchedule",
             "xworkRuntimeRestoreSchedule",
+            "xworkRuntimeReplaceSchedule",
+            "xworkRuntimeRevertScheduleReplacement",
             "xworkRuntimeSetScheduleEnabled",
             "xworkRuntimeClaimDueSchedule",
             "xworkRuntimeFinishScheduledTask",

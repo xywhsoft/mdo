@@ -1327,6 +1327,96 @@ done:
     return Ok;
 }
 
+bool MdoScheduleReplace(const char* ScheduleId, uint64 ExpectedRevision,
+    const MdoScheduleCreateOptions* Options, MdoScheduleInfo* Info,
+    xwork_error* Error)
+{
+    MdoScheduleCreateOptions Normalized;
+    MdoScheduleEntry* Entry;
+    MdoScheduleInfo Candidate;
+    MdoScheduleInfo Previous;
+    xwork_schedule_config Config;
+    xwork_schedule_info RuntimeInfo;
+    bool StoreAttempted = false;
+    bool RuntimeReplaced = false;
+    bool Ok = false;
+    xworkErrorInit(Error);
+    if ( !g_MdoSchedules.Initialized || Options == NULL ||
+         Options->Size < sizeof(*Options) ||
+         !MdoSchedulesId(ScheduleId, MDO_SCHEDULE_ID_CAPACITY) ||
+         (Options->Id != NULL && strcmp(Options->Id, ScheduleId) != 0) ||
+         (Info != NULL && Info->Size < sizeof(*Info)) ) {
+        MdoSchedulesError(Error, XWORK_ERROR_INVALID_ARGUMENT,
+            "invalid schedule replacement request");
+        return false;
+    }
+    Normalized = *Options;
+    Normalized.Id = ScheduleId;
+    if ( !MdoSchedulesInfoFromOptions(&Normalized, NULL, &Candidate,
+            Error) ) return false;
+    xrtMutexLock(g_MdoSchedules.Lock);
+    Entry = MdoSchedulesFind(ScheduleId);
+    if ( Entry == NULL || !Entry->Registered ) {
+        MdoSchedulesError(Error, XWORK_ERROR_INVALID_ARGUMENT,
+            "schedule was not found or restored");
+        goto done;
+    }
+    if ( g_MdoSchedules.PersistenceFault ) {
+        MdoSchedulesError(Error, XWORK_ERROR_IO,
+            "schedule persistence is faulted; restart after repairing storage");
+        goto done;
+    }
+    if ( ExpectedRevision != UINT64_MAX &&
+         Entry->Info.Revision != ExpectedRevision ) {
+        MdoSchedulesError(Error, XWORK_ERROR_CONTEXT,
+            "schedule revision changed; reload before replacing");
+        goto done;
+    }
+    if ( Entry->Info.Revision == UINT64_MAX ) {
+        MdoSchedulesError(Error, XWORK_ERROR_LIMIT,
+            "schedule revision is exhausted");
+        goto done;
+    }
+    if ( !MdoSchedulesWriterLock(Error) ) goto done;
+    Previous = Entry->Info;
+    Candidate.Revision = Previous.Revision + 1u;
+    Candidate.UpdatedAt = xrtNow();
+    MdoSchedulesConfig(&Candidate,
+        Candidate.Enabled && g_MdoSchedules.Enabled, &Config);
+    if ( !xworkRuntimeReplaceSchedule(g_MdoSchedules.Runtime, &Config,
+            Error) ) goto done;
+    RuntimeReplaced = true;
+    xworkScheduleInfoInit(&RuntimeInfo);
+    if ( !xworkRuntimeScheduleGetInfo(g_MdoSchedules.Runtime, ScheduleId,
+            &RuntimeInfo) ) {
+        MdoSchedulesError(Error, XWORK_ERROR_CONTEXT,
+            "cannot inspect replaced schedule");
+        goto rollback;
+    }
+    MdoSchedulesRuntimeInfo(&Candidate, &RuntimeInfo);
+    if ( !MdoSchedulesAudit("replace", &Candidate, Previous.Revision,
+            Candidate.Revision, 0u, 0, Error) ) goto rollback;
+    StoreAttempted = true;
+    if ( !MdoSchedulesWriteStore(&Candidate, Error) ) goto rollback;
+    Entry->Info = Candidate;
+    if ( g_MdoSchedules.Generation != UINT64_MAX )
+        ++g_MdoSchedules.Generation;
+    Candidate.Runnable = Candidate.Enabled && g_MdoSchedules.Enabled;
+    Ok = MdoSchedulesReturnInfo(&Candidate, Info);
+    goto done;
+rollback:
+    if ( StoreAttempted && !MdoSchedulesWriteStore(&Previous, NULL) )
+        g_MdoSchedules.PersistenceFault = true;
+    if ( RuntimeReplaced &&
+         !xworkRuntimeRevertScheduleReplacement(g_MdoSchedules.Runtime,
+            ScheduleId, Candidate.RuntimeGeneration,
+            Previous.RuntimeGeneration, NULL) )
+        g_MdoSchedules.PersistenceFault = true;
+done:
+    xrtMutexUnlock(g_MdoSchedules.Lock);
+    return Ok;
+}
+
 bool MdoScheduleRemove(const char* ScheduleId, uint64 ExpectedRevision,
     xwork_error* Error)
 {

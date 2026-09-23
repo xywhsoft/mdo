@@ -170,6 +170,7 @@ class ApiContractTests(unittest.TestCase):
         self.assertIn('"/api/v1/schedules/{schedule}"', self.router)
         self.assertIn('"/api/v1/schedules/{schedule}/enabled"', self.router)
         self.assertIn("MdoScheduleCreate", schedules)
+        self.assertIn("MdoScheduleReplace", schedules)
         self.assertIn("MdoScheduleSetEnabled", schedules)
         self.assertIn("MdoScheduleRemove", schedules)
         self.assertIn("MdoApiScheduleExpectedRevision", schedules)

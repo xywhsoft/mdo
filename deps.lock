@@ -2,12 +2,12 @@
   "schema_version": 1,
   "hash_algorithm": "sha256-path-nul-lf-normalized-content-nul-v1",
   "xrt": {
-    "commit": "779a78089f40da767db675ad4551dcf07487654d",
+    "commit": "5c4fbdc076017c3ed2955858cac35195bb60680c",
     "version": "2.0.0-dev",
     "single_header_sha256": "4117e104f24b66fc224eca91de66167797dc3823165d46be2c406f18e0f1f13f"
   },
   "xserver": {
-    "commit": "69a79c5b9d72a3b9e9b0bd13c8f7cea485d4e382",
+    "commit": "a35e013dbac42e7f1747798286e45d827a95aa73",
     "version": "1.0.0",
     "required_extensions": [
       "xwork",
@@ -27,9 +27,9 @@
       "persistence_schema_version": 3
     },
     "xwork": {
-      "version": "3.4.1",
-      "source_commit": "779a78089f40da767db675ad4551dcf07487654d",
-      "production_tree_sha256": "32062eaae1eb578c4c22aaf17ee7f3709cb75b5911f18aaaf7e37b3b90ae21a7",
+      "version": "3.5.0",
+      "source_commit": "5c4fbdc076017c3ed2955858cac35195bb60680c",
+      "production_tree_sha256": "ff139803329b567a9ce67f91df0a7423e82f21afb565df28112c06fb43c636d8",
       "abi_version": 5,
       "event_schema_version": 2
     }

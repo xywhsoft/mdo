@@ -870,34 +870,35 @@ def run_probe(host: Path) -> None:
 
                 schedule_input = "Scheduled API prompt"
                 schedule_start = 4102444800000000
+                schedule_definition = {
+                    "id": "api-schedule",
+                    "label": "API schedule",
+                    "notify": "desktop",
+                    "project_id": "api-project",
+                    "agent_id": "mdo.default",
+                    "model_id": "ling-3.0-tiny",
+                    "protocol": "openai-responses",
+                    "reasoning_effort": "medium",
+                    "max_output_tokens": 1024,
+                    "workspace_root": str(base),
+                    "input": schedule_input,
+                    "frequency": "daily",
+                    "interval": 1,
+                    "start_at": schedule_start,
+                    "weekday_mask": 0,
+                    "timezone": "utc",
+                    "utc_offset_seconds": 0,
+                    "fold_policy": "earlier",
+                    "misfire_policy": "run_once",
+                    "misfire_grace_seconds": 60,
+                    "max_catch_up": 1,
+                    "overlap_policy": "skip",
+                    "max_concurrent_runs": 1,
+                    "enabled": True,
+                }
                 status, headers, body = request(
                     port, "POST", "/api/v1/schedules",
-                    body=json.dumps({
-                        "id": "api-schedule",
-                        "label": "API schedule",
-                        "notify": "desktop",
-                        "project_id": "api-project",
-                        "agent_id": "mdo.default",
-                        "model_id": "ling-3.0-tiny",
-                        "protocol": "openai-responses",
-                        "reasoning_effort": "medium",
-                        "max_output_tokens": 1024,
-                        "workspace_root": str(base),
-                        "input": schedule_input,
-                        "frequency": "daily",
-                        "interval": 1,
-                        "start_at": schedule_start,
-                        "weekday_mask": 0,
-                        "timezone": "utc",
-                        "utc_offset_seconds": 0,
-                        "fold_policy": "earlier",
-                        "misfire_policy": "run_once",
-                        "misfire_grace_seconds": 60,
-                        "max_catch_up": 1,
-                        "overlap_policy": "skip",
-                        "max_concurrent_runs": 1,
-                        "enabled": True,
-                    }).encode(),
+                    body=json.dumps(schedule_definition).encode(),
                     headers={"Content-Type": "application/json"})
                 document = json.loads(body)
                 assert status == 201, (status, body)
@@ -934,6 +935,42 @@ def run_probe(host: Path) -> None:
                     listed_schedule)
                 assert "input" not in listed_schedule, listed_schedule
 
+                replacement = dict(schedule_definition)
+                replacement["label"] = "Updated API schedule"
+                replacement["input"] = "Updated scheduled API prompt"
+                mismatched_replacement = dict(replacement)
+                mismatched_replacement["id"] = "other-schedule"
+                status, headers, body = request(
+                    port, "PUT", schedule_path,
+                    body=json.dumps(mismatched_replacement).encode(),
+                    headers={"Content-Type": "application/json",
+                             "If-Match": schedule_etag})
+                document = json.loads(body)
+                assert status == 422, (status, body)
+                assert document["error"]["code"] == "schedule_invalid", (
+                    document)
+                status, headers, body = request(
+                    port, "PUT", schedule_path,
+                    body=json.dumps(replacement).encode(),
+                    headers={"Content-Type": "application/json",
+                             "If-Match": schedule_etag})
+                document = json.loads(body)
+                assert status == 200, (status, body)
+                schedule = document["data"]
+                assert schedule["label"] == "Updated API schedule", schedule
+                assert schedule["input"] == replacement["input"], schedule
+                assert schedule["revision"] == 2, schedule
+                assert schedule["runtime_generation"] > 0, schedule
+                schedule_etag = headers["etag"]
+                assert schedule_etag == '"mdo-schedule-api-schedule-2"', (
+                    headers)
+                persisted_replacement = json.loads(
+                    definition_path.read_text(encoding="utf-8"))
+                assert persisted_replacement["revision"] == 2, (
+                    persisted_replacement)
+                assert persisted_replacement["input"] == replacement["input"], (
+                    persisted_replacement)
+
                 status, headers, body = request(
                     port, "PUT", schedule_path + "/enabled",
                     body=b'{"enabled":false}',
@@ -961,9 +998,9 @@ def run_probe(host: Path) -> None:
                 schedule = document["data"]
                 assert schedule["enabled"] is False, schedule
                 assert schedule["runnable"] is False, schedule
-                assert schedule["revision"] == 2, schedule
+                assert schedule["revision"] == 3, schedule
                 disabled_etag = headers["etag"]
-                assert disabled_etag == '"mdo-schedule-api-schedule-2"', (
+                assert disabled_etag == '"mdo-schedule-api-schedule-3"', (
                     headers)
 
                 status, headers, body = request(
@@ -987,7 +1024,7 @@ def run_probe(host: Path) -> None:
                 document = json.loads(body)
                 assert status == 200, (status, body)
                 assert document["data"]["removed"] is True, document
-                assert document["data"]["revision"] == 2, document
+                assert document["data"]["revision"] == 3, document
                 assert not definition_path.exists(), definition_path
                 status, headers, body = request(port, "GET", schedule_path)
                 document = json.loads(body)
@@ -1001,7 +1038,8 @@ def run_probe(host: Path) -> None:
                 status, headers, body = request(
                     port, "OPTIONS", schedule_path)
                 assert status == 200 and headers["allow"] == (
-                    "GET, HEAD, DELETE, OPTIONS"), (status, headers, body)
+                    "GET, HEAD, PUT, DELETE, OPTIONS"), (
+                    status, headers, body)
                 status, headers, body = request(
                     port, "OPTIONS", schedule_path + "/enabled")
                 assert status == 200 and headers["allow"] == (

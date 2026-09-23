@@ -147,6 +147,24 @@ void ServiceInit(XS_HostInfo *host) {
         (unsigned long long)info.Revision, info.Enabled ? 1 : 0,
         info.Runnable ? 1 : 0);
 
+    options.Id = "other-id";
+    options.Label = "Updated review";
+    options.Input = "review the updated private release notes";
+    result = MdoScheduleReplace("daily-review", 3u, &options, &info, &error);
+    printf("mismatched_replace=%d code:%d\n", result ? 1 : 0,
+        (int)error.eCode);
+    options.Id = "daily-review";
+    result = MdoScheduleReplace("daily-review", 2u, &options, &info, &error);
+    printf("stale_replace=%d code:%d\n", result ? 1 : 0,
+        (int)error.eCode);
+    if (!MdoScheduleReplace("daily-review", 3u, &options, &info, &error)) {
+        printf("replace_error=%s\n", error.sMessage); goto done;
+    }
+    printf("replaced=revision:%llu runtime:%llu label:%s input:%s\n",
+        (unsigned long long)info.Revision,
+        (unsigned long long)info.RuntimeGeneration,
+        info.Label, info.Input);
+
     MdoScheduleClaimInit(&claim);
     if (!MdoScheduleClaimDue(start - 1, &claim, &error)) {
         printf("early_claim_error=%s\n", error.sMessage); goto done;
@@ -333,13 +351,17 @@ def main() -> int:
         assert "overlong_create=0 code:1" in output, output
         assert "stale_update=0 code:7" in output, output
         assert "enabled=revision:3 value:1 runnable:1" in output, output
+        assert "mismatched_replace=0 code:1" in output, output
+        assert "stale_replace=0 code:7" in output, output
+        assert "replaced=revision:4" in output and "label:Updated review" in output, output
+        assert "input:review the updated private release notes" in output, output
         assert "early_claim=claimed:0 wake:1700000000000000" in output, output
-        assert "claimed=id:daily-review" in output and "occurrence:1700000000000000 revision:4" in output, output
-        assert "agent:reviewer model:ling-3.0-tiny input:review the private release notes" in output, output
+        assert "claimed=id:daily-review" in output and "occurrence:1700000000000000 revision:5" in output, output
+        assert "agent:reviewer model:ling-3.0-tiny input:review the updated private release notes" in output, output
         assert "finished=1" in output, output
         assert "skip_advanced=claimed:0 revision:2 next:1700000360000000 misfires:1" in output, output
         assert "catalog_claimed=count:1 diagnostics:0" in output, output
-        assert "revision:4" in output and "next:0 claims:1 active:0 runnable:1" in output, output
+        assert "revision:5" in output and "next:0 claims:1 active:0 runnable:1" in output, output
         assert "catalog_recovered=count:1 diagnostics:1 generation:1 enabled:1 code:0" in output, output
         assert "exhausted=claimed:0 wake:0" in output, output
         assert "probe_done=1" in output, output
@@ -347,11 +369,11 @@ def main() -> int:
         definition = json.loads((home / "schedules/daily-review.json").read_text(
             encoding="utf-8"))
         assert definition["schema_version"] == 1
-        assert definition["revision"] == 4
+        assert definition["revision"] == 5
         assert definition["claim_count"] == 1
         assert definition["next_occurrence_at_us"] == 0
         assert definition["protocol"] == "openai-responses"
-        assert definition["input"] == "review the private release notes"
+        assert definition["input"] == "review the updated private release notes"
         history = [json.loads(line) for line in
                    (home / "schedules/history/daily-review.jsonl").read_text(
                        encoding="utf-8").splitlines()]
@@ -360,7 +382,8 @@ def main() -> int:
             encoding="utf-8").splitlines()
         audit = [json.loads(line) for line in audit_lines]
         assert [item["operation"] for item in audit] == [
-            "create", "create", "remove", "set-enabled", "set-enabled", "claim",
+            "create", "create", "remove", "set-enabled", "set-enabled",
+            "replace", "claim",
             "create", "advance", "remove"]
         assert all(item["phase"] == "prepared" for item in audit)
         assert all("input" not in item for item in audit)

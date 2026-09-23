@@ -414,6 +414,9 @@ static bool MdoApiScheduleMutationFailure(MdoApiContext* Context,
         return MdoApiReplyError(Context, 503u,
             "schedule_service_unavailable",
             "The schedule service could not complete the request", NULL);
+    if ( Error != NULL && Error->eCode == XWORK_ERROR_INVALID_ARGUMENT )
+        return MdoApiReplyError(Context, 422u, "schedule_invalid",
+            "The schedule definition is invalid", NULL);
     if ( Error != NULL && Error->eCode == XWORK_ERROR_LIMIT )
         return MdoApiReplyError(Context, 409u,
             "schedule_revision_exhausted",
@@ -448,7 +451,8 @@ static bool MdoApiScheduleCreateFailure(MdoApiContext* Context,
         "The schedule service is unavailable", NULL);
 }
 
-static bool MdoApiScheduleCreateRoute(MdoApiContext* Context)
+static bool MdoApiScheduleWriteRoute(MdoApiContext* Context,
+    const char* ScheduleId, uint64 ExpectedRevision)
 {
     MdoApiJsonBody Body;
     MdoApiBodyStatus BodyStatus;
@@ -482,7 +486,10 @@ static bool MdoApiScheduleCreateRoute(MdoApiContext* Context)
     Valid = xrtValueType(Body.Value) == XVALUE_OBJECT;
     Valid = Valid && MdoApiScheduleString(Body.Value, "id", Id,
         sizeof(Id), false, false, &Present, &Supplied);
-    if ( Valid && Supplied ) Options.Id = Id;
+    if ( Valid && ScheduleId != NULL && Supplied &&
+         strcmp(Id, ScheduleId) != 0 ) Valid = false;
+    if ( Valid ) Options.Id = ScheduleId != NULL ? ScheduleId :
+        (Supplied ? Id : NULL);
     Valid = Valid && MdoApiScheduleString(Body.Value, "label", Label,
         sizeof(Label), true, false, &Present, &Supplied);
     if ( Valid ) Options.Label = Label;
@@ -564,10 +571,19 @@ static bool MdoApiScheduleCreateRoute(MdoApiContext* Context)
     }
     memset(&Info, 0, sizeof(Info)); Info.Size = sizeof(Info);
     memset(&Error, 0, sizeof(Error));
-    Valid = MdoScheduleCreate(&Options, &Info, &Error);
+    Valid = ScheduleId != NULL ?
+        MdoScheduleReplace(ScheduleId, ExpectedRevision, &Options, &Info,
+            &Error) :
+        MdoScheduleCreate(&Options, &Info, &Error);
     MdoApiJsonBodyUnit(&Body);
-    if ( !Valid ) return MdoApiScheduleCreateFailure(Context, &Error);
-    return MdoApiScheduleReply(Context, 201u, &Info);
+    if ( !Valid ) {
+        if ( ScheduleId != NULL )
+            return MdoApiScheduleMutationFailure(Context, ScheduleId,
+                ExpectedRevision, &Error, false);
+        return MdoApiScheduleCreateFailure(Context, &Error);
+    }
+    return MdoApiScheduleReply(Context,
+        ScheduleId != NULL ? 200u : 201u, &Info);
 }
 
 bool MdoApiSchedulesRoute(MdoApiContext* Context)
@@ -581,7 +597,7 @@ bool MdoApiSchedulesRoute(MdoApiContext* Context)
     size_t Index;
     bool Ok;
     if ( Context->Request->head->MethodCode == XHTTP_METHOD_POST )
-        return MdoApiScheduleCreateRoute(Context);
+        return MdoApiScheduleWriteRoute(Context, NULL, 0u);
     Data = xrtValueObject();
     Items = xrtValueArray();
     memset(&Error, 0, sizeof(Error));
@@ -641,12 +657,14 @@ bool MdoApiScheduleRoute(MdoApiContext* Context)
         return MdoApiReplyError(Context, 400u, "invalid_schedule_path",
             "The schedule ID is invalid", NULL);
     memset(&Info, 0, sizeof(Info)); Info.Size = sizeof(Info);
-    if ( Context->Request->head->MethodCode != XHTTP_METHOD_DELETE ) {
+    if ( Context->Request->head->MethodCode == XHTTP_METHOD_GET ||
+         Context->Request->head->MethodCode == XHTTP_METHOD_HEAD ) {
         if ( !MdoApiScheduleFind(ScheduleId, &Info, NULL, &Available) )
             return MdoApiScheduleLookupFailure(Context, Available);
         return MdoApiScheduleReply(Context, 200u, &Info);
     }
-    if ( !MdoApiScheduleNoBody(Context) )
+    if ( Context->Request->head->MethodCode == XHTTP_METHOD_DELETE &&
+         !MdoApiScheduleNoBody(Context) )
         return MdoApiReplyError(Context, 400u, "body_not_allowed",
             "This operation does not accept a request body", NULL);
     Precondition = MdoApiScheduleExpectedRevision(Context, ScheduleId,
@@ -661,7 +679,13 @@ bool MdoApiScheduleRoute(MdoApiContext* Context)
         return MdoApiScheduleLookupFailure(Context, Available);
     if ( !MatchesSchedule || Info.Revision != ExpectedRevision )
         return MdoApiReplyError(Context, 412u, "revision_conflict",
-            "The schedule changed; reload it before deleting", NULL);
+            Context->Request->head->MethodCode == XHTTP_METHOD_DELETE ?
+                "The schedule changed; reload it before deleting" :
+                "The schedule changed; reload it before updating",
+            NULL);
+    if ( Context->Request->head->MethodCode == XHTTP_METHOD_PUT )
+        return MdoApiScheduleWriteRoute(Context, ScheduleId,
+            ExpectedRevision);
     memset(&Error, 0, sizeof(Error));
     if ( !MdoScheduleRemove(ScheduleId, ExpectedRevision, &Error) )
         return MdoApiScheduleMutationFailure(Context, ScheduleId,
