@@ -494,6 +494,16 @@ def run_probe(host: Path) -> None:
                 status, headers, body = request(port, "GET", "/")
                 assert status == 200 and b"<!doctype html" in body.lower(), (status, body[:120])
                 assert "x-request-id" not in headers, headers
+                for asset, marker in (
+                    ("/css/app.css", b".app-shell"),
+                    ("/js/main.js", b'import { boot }'),
+                    ("/js/app.js", b"export async function boot"),
+                    ("/js/state/store.js", b"createResourceStore"),
+                ):
+                    status, asset_headers, asset_body = request(port, "GET", asset)
+                    assert status == 200 and marker in asset_body, (
+                        asset, status, asset_body[:120])
+                    assert "x-request-id" not in asset_headers, asset_headers
 
                 preview_document = json.dumps({
                     "schema_version": 1,

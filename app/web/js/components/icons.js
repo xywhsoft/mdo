@@ -1,0 +1,22 @@
+const ICONS = Object.freeze({
+  menu: '<path d="M4 7h16M4 12h16M4 17h16"/>',
+  close: '<path d="m6 6 12 12M18 6 6 18"/>',
+  "panel-right": '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M15 4v16"/>',
+  compose: '<path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L8 18l-4 1 1-4Z"/>',
+  search: '<circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/>',
+  settings: '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .34 1.88l.06.06-2.83 2.83-.06-.06a1.7 1.7 0 0 0-1.88-.34 1.7 1.7 0 0 0-1.03 1.56V21h-4v-.08A1.7 1.7 0 0 0 8.94 19.4a1.7 1.7 0 0 0-1.88.34l-.06.06-2.83-2.83.06-.06A1.7 1.7 0 0 0 4.57 15 1.7 1.7 0 0 0 3 14H3v-4h.08A1.7 1.7 0 0 0 4.6 8.94a1.7 1.7 0 0 0-.34-1.88L4.2 7l2.83-2.83.06.06A1.7 1.7 0 0 0 9 4.57 1.7 1.7 0 0 0 10 3h4v.08A1.7 1.7 0 0 0 15.06 4.6a1.7 1.7 0 0 0 1.88-.34L17 4.2 19.83 7l-.06.06A1.7 1.7 0 0 0 19.43 9 1.7 1.7 0 0 0 21 10h.08v4H21a1.7 1.7 0 0 0-1.6 1Z"/>',
+  code: '<path d="m8 9-4 3 4 3M16 9l4 3-4 3M14 5l-4 14"/>',
+  review: '<path d="M4 5h16v12H8l-4 3Z"/><path d="M8 9h8M8 13h5"/>',
+  spark: '<path d="m12 3 1.5 4.5L18 9l-4.5 1.5L12 15l-1.5-4.5L6 9l4.5-1.5ZM5 15l.7 2.3L8 18l-2.3.7L5 21l-.7-2.3L2 18l2.3-.7Z"/>',
+  folder: '<path d="M3 6h7l2 2h9v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"/>',
+  brain: '<path d="M9.5 4A3.5 3.5 0 0 0 6 7.5v.3A3 3 0 0 0 4.5 13 3.5 3.5 0 0 0 8 18.5c.5 1 1.4 1.5 2.5 1.5V4Zm5 0A3.5 3.5 0 0 1 18 7.5v.3a3 3 0 0 1 1.5 5.2 3.5 3.5 0 0 1-3.5 5.5c-.5 1-1.4 1.5-2.5 1.5V4Z"/><path d="M7 9h3.5M14 13h4M8 16h2.5M13.5 8H17"/>',
+  "arrow-up": '<path d="m12 19V5M6 11l6-6 6 6"/>',
+});
+
+export function mountIcons(root = document) {
+  for (const target of root.querySelectorAll("[data-icon]")) {
+    const body = ICONS[target.dataset.icon];
+    if (!body) continue;
+    target.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${body}</svg>`;
+  }
+}

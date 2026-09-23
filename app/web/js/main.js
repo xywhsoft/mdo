@@ -1,5 +1,6 @@
-const status = document.querySelector("#status");
+import { boot } from "./app.js";
 
-if (status) {
-  status.textContent = "基础运行时已加载。";
-}
+boot().catch((error) => {
+  document.body.textContent = "墨斗界面初始化失败。请重新启动应用。";
+  console.error(error);
+});

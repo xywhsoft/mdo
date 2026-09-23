@@ -2,15 +2,211 @@
 <html lang="zh-CN">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>mdo</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="color-scheme" content="light dark">
+  <meta name="theme-color" content="#f7f7f5">
+  <title>墨斗</title>
   <link rel="stylesheet" href="/css/app.css">
 </head>
 <body>
-  <main class="startup" aria-live="polite">
-    <h1>mdo</h1>
-    <p id="status">正在初始化 Agent 工作台…</p>
-  </main>
+  <a class="skip-link" href="#timeline">跳到对话</a>
+
+  <div class="app-shell" id="app-shell" data-sidebar="closed" data-inspector="closed">
+    <header class="mobile-bar">
+      <button class="icon-button" id="open-sidebar" type="button" aria-label="打开会话导航" aria-controls="sidebar" aria-expanded="false">
+        <span class="icon" data-icon="menu" aria-hidden="true"></span>
+      </button>
+      <div class="mobile-title">
+        <strong id="mobile-session-title">墨斗</strong>
+        <span id="mobile-session-meta">Agent 工作台</span>
+      </div>
+      <button class="icon-button" id="open-inspector" type="button" aria-label="打开任务面板" aria-controls="inspector" aria-expanded="false">
+        <span class="icon" data-icon="panel-right" aria-hidden="true"></span>
+        <span class="activity-dot" id="mobile-activity-dot" hidden></span>
+      </button>
+    </header>
+
+    <aside class="sidebar" id="sidebar" aria-label="会话导航">
+      <div class="brand-row">
+        <a class="brand" href="#/" aria-label="墨斗主页">
+          <span class="brand-mark" aria-hidden="true">墨</span>
+          <span>墨斗</span>
+        </a>
+        <button class="icon-button sidebar-close" id="close-sidebar" type="button" aria-label="关闭会话导航">
+          <span class="icon" data-icon="close" aria-hidden="true"></span>
+        </button>
+      </div>
+
+      <button class="new-task-button" id="new-session" type="button">
+        <span class="icon" data-icon="compose" aria-hidden="true"></span>
+        <span>新建任务</span>
+        <kbd>Ctrl N</kbd>
+      </button>
+
+      <label class="search-box" for="session-search">
+        <span class="icon" data-icon="search" aria-hidden="true"></span>
+        <input id="session-search" type="search" autocomplete="off" placeholder="搜索会话" aria-label="搜索会话">
+        <kbd>/</kbd>
+      </label>
+
+      <nav class="session-navigation" aria-label="会话列表">
+        <div class="nav-section-heading">
+          <span>会话</span>
+          <span class="count" id="session-count">0</span>
+        </div>
+        <div class="session-list" id="session-list" aria-live="polite" aria-busy="true"></div>
+      </nav>
+
+      <div class="sidebar-footer">
+        <button class="sidebar-link" id="open-settings" type="button">
+          <span class="icon" data-icon="settings" aria-hidden="true"></span>
+          <span>设置</span>
+        </button>
+        <div class="runtime-state" id="runtime-state" role="status">
+          <span class="status-dot" aria-hidden="true"></span>
+          <span id="runtime-label">正在连接本地服务…</span>
+        </div>
+      </div>
+    </aside>
+
+    <main class="workspace" aria-label="Agent 工作区">
+      <header class="workspace-header">
+        <div class="session-heading">
+          <h1 id="session-title">新任务</h1>
+          <p id="session-subtitle">选择会话，或向默认 Agent 发起任务</p>
+        </div>
+        <div class="header-actions">
+          <span class="run-status" id="run-status" data-state="idle">
+            <span class="status-dot" aria-hidden="true"></span>
+            <span>就绪</span>
+          </span>
+          <button class="icon-button desktop-inspector-toggle" id="toggle-inspector" type="button" aria-label="切换任务面板" aria-controls="inspector" aria-expanded="false">
+            <span class="icon" data-icon="panel-right" aria-hidden="true"></span>
+          </button>
+        </div>
+      </header>
+
+      <section class="conversation" aria-label="当前会话">
+        <div class="welcome" id="welcome">
+          <div class="welcome-mark" aria-hidden="true">墨</div>
+          <h2>今天要做什么？</h2>
+          <p>描述一个目标。墨斗会分析代码、调用工具，并把过程留在可恢复的会话中。</p>
+          <div class="starter-grid" aria-label="任务示例">
+            <button class="starter" type="button" data-prompt="分析当前项目的结构、关键依赖和主要风险">
+              <span class="icon" data-icon="code" aria-hidden="true"></span>
+              <span><strong>分析项目</strong><small>梳理架构、依赖与风险</small></span>
+            </button>
+            <button class="starter" type="button" data-prompt="检查当前工作区的改动，指出缺陷并给出可执行的修复建议">
+              <span class="icon" data-icon="review" aria-hidden="true"></span>
+              <span><strong>审查改动</strong><small>检查正确性与可维护性</small></span>
+            </button>
+            <button class="starter" type="button" data-prompt="定位并修复当前项目中最影响使用的问题，完成必要验证">
+              <span class="icon" data-icon="spark" aria-hidden="true"></span>
+              <span><strong>解决问题</strong><small>从定位到验证完整处理</small></span>
+            </button>
+          </div>
+        </div>
+
+        <ol class="timeline" id="timeline" aria-live="polite" aria-relevant="additions text" tabindex="-1"></ol>
+        <div class="timeline-sentinel" id="timeline-sentinel" aria-hidden="true"></div>
+      </section>
+
+      <section class="composer-region" aria-label="发送消息">
+        <div class="composer-error" id="composer-error" role="alert" hidden></div>
+        <form class="composer" id="composer">
+          <label class="sr-only" for="prompt">向 Agent 描述任务</label>
+          <textarea id="prompt" name="prompt" rows="1" maxlength="65536" placeholder="向墨斗描述任务…" autocomplete="off"></textarea>
+          <div class="composer-toolbar">
+            <div class="composer-options">
+              <button class="option-chip" id="workspace-chip" type="button" title="当前工作目录">
+                <span class="icon" data-icon="folder" aria-hidden="true"></span>
+                <span id="workspace-label">本地工作区</span>
+              </button>
+              <button class="option-chip" id="reasoning-chip" type="button" title="推理强度">
+                <span class="icon" data-icon="brain" aria-hidden="true"></span>
+                <span id="reasoning-label">自动</span>
+              </button>
+            </div>
+            <div class="composer-actions">
+              <span class="composer-hint">Enter 发送 · Shift Enter 换行</span>
+              <button class="send-button" id="send" type="submit" aria-label="发送任务">
+                <span class="icon" data-icon="arrow-up" aria-hidden="true"></span>
+              </button>
+              <button class="stop-button" id="stop" type="button" aria-label="停止当前任务" hidden>
+                <span aria-hidden="true"></span>
+              </button>
+            </div>
+          </div>
+        </form>
+      </section>
+    </main>
+
+    <aside class="inspector" id="inspector" aria-label="任务与上下文">
+      <div class="inspector-header">
+        <div class="tab-list" role="tablist" aria-label="检查器视图">
+          <button class="inspector-tab" id="tasks-tab" type="button" role="tab" aria-selected="true" aria-controls="tasks-panel">任务</button>
+          <button class="inspector-tab" id="context-tab" type="button" role="tab" aria-selected="false" aria-controls="context-panel">上下文</button>
+        </div>
+        <button class="icon-button inspector-close" id="close-inspector" type="button" aria-label="关闭任务面板">
+          <span class="icon" data-icon="close" aria-hidden="true"></span>
+        </button>
+      </div>
+
+      <section class="inspector-panel" id="tasks-panel" role="tabpanel" aria-labelledby="tasks-tab">
+        <div class="panel-intro">
+          <h2>运行与任务</h2>
+          <p>Shell、子 Agent 和计划任务共享同一状态视图。</p>
+        </div>
+        <div class="task-summary" id="task-summary"></div>
+        <div class="task-list" id="task-list" aria-live="polite"></div>
+      </section>
+
+      <section class="inspector-panel" id="context-panel" role="tabpanel" aria-labelledby="context-tab" hidden>
+        <div class="panel-intro">
+          <h2>会话上下文</h2>
+          <p>会话固定模型、Agent 与资源代次，运行中不会静默切换。</p>
+        </div>
+        <dl class="context-list" id="context-list"></dl>
+      </section>
+    </aside>
+
+    <button class="scrim" id="scrim" type="button" aria-label="关闭侧栏" tabindex="-1"></button>
+  </div>
+
+  <dialog class="new-session-dialog" id="new-session-dialog" aria-labelledby="new-session-title">
+    <form method="dialog" class="dialog-card" id="new-session-form">
+      <header>
+        <div>
+          <h2 id="new-session-title">新建任务</h2>
+          <p>选择 Agent 和模型。创建后即可发送第一条指令。</p>
+        </div>
+        <button class="icon-button" type="button" id="close-new-session" aria-label="关闭">
+          <span class="icon" data-icon="close" aria-hidden="true"></span>
+        </button>
+      </header>
+      <div class="dialog-fields">
+        <label>标题 <input name="title" maxlength="160" placeholder="可选，稍后也可修改"></label>
+        <label>项目标识 <input name="project_id" required maxlength="63" value="default" pattern="[A-Za-z0-9_-][A-Za-z0-9._-]*"></label>
+        <label>Agent <select name="agent_id" id="agent-select"></select></label>
+        <label>模型 <select name="model_id" id="model-select"></select></label>
+        <label>推理强度
+          <select name="reasoning_effort">
+            <option value="">自动</option>
+            <option value="low">低</option>
+            <option value="medium">中</option>
+            <option value="high">高</option>
+          </select>
+        </label>
+      </div>
+      <div class="dialog-error" id="new-session-error" role="alert" hidden></div>
+      <footer>
+        <button class="secondary-button" value="cancel">取消</button>
+        <button class="primary-button" id="create-session" value="default">创建会话</button>
+      </footer>
+    </form>
+  </dialog>
+
+  <div class="toast-region" id="toast-region" aria-live="polite" aria-atomic="true"></div>
   <script type="module" src="/js/main.js"></script>
 </body>
 </html>
