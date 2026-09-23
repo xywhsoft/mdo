@@ -56,7 +56,7 @@ $env:XLLM_LIVE_REQUIRE_THREE = "1"
 D:\GIT\xrt-mdo-refactor\extlibs\xllm\build\test_xllm_live.exe
 ```
 
-Linux 执行同名的 `test_xllm_live`。当前发布压实环境没有提供三条 URL 和 key，因此不得把线上探针记为通过；具备运行时凭据后再把结果附到发布记录。
+Linux 执行同名的 `test_xllm_live`。上面的严格 xllm 测试仍要求显式环境变量，适合测试部署覆盖和工具调用。产品默认接入已于 2026-09-23 另做有界线上验证：在隔离的 mdo 实例中清除全部 `MDO_LING_*` 变量，分别使用 Responses、Chat Completions、Anthropic Messages 创建会话并完成一轮真实对话；三条路径均成功且返回非空文本。此验证没有运行压力或高负载测试。
 
 ## 发布前人工检查
 

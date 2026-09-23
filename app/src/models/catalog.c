@@ -13,6 +13,12 @@
 #define MDO_MODELS_MAX_MODELS 512u
 #define MDO_MODELS_MAX_REASONING_EFFORTS 7u
 
+/* The bundled Ling service is a public product entitlement.  Keep these
+ * values outside the editable provider descriptor; deployment overrides may
+ * still replace them through MDO_LING_* environment variables. */
+static const char g_MdoLingEndpoint[] = "https://ai.xywhsoft.com:8444/v1";
+static const char g_MdoLingAccessToken[] = "a59048aa00184acc7a7d9540c95c84f8259ff21fc35110a7";
+
 typedef struct MdoProviderEntry {
     char* Id;
     char* Name;
@@ -885,13 +891,21 @@ static char* MdoModelsResolveEndpoint(cstr Endpoint,
         return NULL;
     }
     if ( strncmp(Endpoint, "builtin:", 8u) == 0 ) {
-        if ( strcmp(Endpoint, BuiltinEndpoints[Index]) != 0 ||
-             !xrtEnvLookup(EnvironmentNames[Index], &Result) ||
+        if ( strcmp(Endpoint, BuiltinEndpoints[Index]) != 0 ) {
+            MdoModelsProfileError(pError, "built-in model endpoint is invalid");
+            return NULL;
+        }
+        if ( !xrtEnvLookup(EnvironmentNames[Index], &Result) ||
              Result == NULL || Result[0] == '\0' ) {
             xrtFree(Result);
-            MdoModelsProfileError(pError,
-                "built-in model endpoint is not configured in this environment");
-            return NULL;
+            xrtClearError();
+            Result = xrtStrDup(g_MdoLingEndpoint);
+            if ( Result == NULL ) {
+                MdoModelsProfileError(pError,
+                    "cannot allocate built-in model endpoint");
+                if ( pError != NULL ) pError->eCode = XLLM_ERROR_OUT_OF_MEMORY;
+                return NULL;
+            }
         }
     } else {
         Result = xrtStrDup(Endpoint);
@@ -921,6 +935,21 @@ static char* MdoModelsResolveCredential(const MdoProviderEntry* pProvider,
         Secret = xrtStrDup("");
         if ( Secret == NULL ) {
             MdoModelsProfileError(pError, "cannot allocate model credential");
+            if ( pError != NULL ) pError->eCode = XLLM_ERROR_OUT_OF_MEMORY;
+        }
+        return Secret;
+    }
+    if ( pProvider->Id != NULL && strcmp(pProvider->Id, "ling") == 0 &&
+         strcmp(pProvider->CredentialReference,
+            "env:MDO_LING_API_KEY") == 0 ) {
+        if ( xrtEnvLookup("MDO_LING_API_KEY", &Secret) && Secret != NULL &&
+             Secret[0] != '\0' ) return Secret;
+        xrtFree(Secret);
+        xrtClearError();
+        Secret = xrtStrDup(g_MdoLingAccessToken);
+        if ( Secret == NULL ) {
+            MdoModelsProfileError(pError,
+                "cannot allocate built-in model credential");
             if ( pError != NULL ) pError->eCode = XLLM_ERROR_OUT_OF_MEMORY;
         }
         return Secret;

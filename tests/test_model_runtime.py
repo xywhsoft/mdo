@@ -243,8 +243,10 @@ def main() -> int:
         site = base / "site"
         write_site(site)
         missing = run_probe(host, site, base / "missing")
-        assert "client_1=0" in missing, missing
-        assert "built-in model endpoint is not configured" in missing, missing
+        assert "probe_init_error=" not in missing, missing
+        for protocol in (1, 2, 3):
+            assert f"client_{protocol}=1" in missing, missing
+        assert "error=none" in missing, missing
         output = run_probe(host, site, base / "state", {
             "MDO_LING_CHAT_COMPLETIONS_URL": "https://example.invalid/v1",
             "MDO_LING_RESPONSES_URL": "https://example.invalid/v1",

@@ -38,7 +38,7 @@ mdo 配置 schema v1 由一份内置基线、三份可选用户 patch 和一层�
 
 `models.providers` 与 `models.items` 分开。provider 保存 endpoint、TLS 校验、超时和凭据引用；model 保存 provider ID、wire model、可选协议、默认协议、xllm 能力、上下文/输入/输出窗口、推理档位和附件类型。模型引用的每种协议必须在 provider 上有对应 endpoint，默认协议必须属于模型协议集。
 
-`ling-3.0-tiny` 是内置、免费、不可编辑且不可删除的模型，其 `ling` provider 同样受保护。服务端验证器逐字段核对两个完整 descriptor，并确认默认模型仍存在；前端禁用控件只是交互提示，不承担保护职责。内置 provider 声明 OpenAI Chat Completions、OpenAI Responses 和 Anthropic Messages 三种线上接口，模型默认选择 Responses。真实线上验证只有在运行环境同时提供三条显式 URL 和临时 key 时执行，离线 fixture 不作为线上成功证据。
+`ling-3.0-tiny` 是内置、免费、不可编辑且不可删除的模型，其 `ling` provider 同样受保护。服务端验证器逐字段核对两个完整 descriptor，并确认默认模型仍存在；前端禁用控件只是交互提示，不承担保护职责。内置 provider 声明 OpenAI Chat Completions、OpenAI Responses 和 Anthropic Messages 三种线上接口，模型默认选择 Responses。程序内置服务地址和随程序分发的公共访问令牌，因此普通用户无需配置；部署环境仍可分别用 `MDO_LING_CHAT_COMPLETIONS_URL`、`MDO_LING_RESPONSES_URL`、`MDO_LING_ANTHROPIC_URL` 和 `MDO_LING_API_KEY` 覆盖。该令牌可从客户端程序中提取，服务端必须独立实施配额、滥用防护与轮换。三种协议的真实线上探针仍需明确记录实际测试结果，离线 fixture 不作为线上成功证据。
 
 模型目录是引用计数的不可变 generation。reload 构造完整候选后一次发布，已有运行可继续读取旧 generation。公开 provider 信息只返回 `HasCredentialReference`，不会返回 reference 文本或解析后的 key；`MdoModelCatalogProfile` 把选定协议映射为相应的 xllm provider，并生成经过 xllm 自身校验的非敏感 profile。
 

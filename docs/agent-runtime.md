@@ -109,6 +109,8 @@ Skill 工具、调用方提前释放 session、异步 run、实际选择信息�
 平衡。另有严格 GCC 编译、全量静态合同、相关 manager 回归与隔离目录单文件
 启动。测试全部是有界功能测试，没有运行压力或高负载测试。
 
-Ling 3.0 Tiny 的三种线上协议已由 catalog 和 client factory 支持，但真实联网
-探针仍需要运行时提供三条显式 URL 与 `MDO_LING_API_KEY`；当前结果不代表线上
-接口已经执行。
+Ling 3.0 Tiny 的三种线上协议已由 catalog 和 client factory 支持。内置地址和
+随程序分发的公共访问令牌让默认模型无需用户配置；部署环境可以用
+`MDO_LING_*` 变量覆盖。2026-09-23 的隔离 mdo 实例在不设置这些变量时，
+分别经 Responses、Chat Completions、Anthropic Messages 完成了真实对话，
+每条路径均得到非空模型回复。
