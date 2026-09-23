@@ -131,7 +131,7 @@ def run_probe(host: Path) -> None:
                     "settings", "models", "agents", "modules", "skills",
                     "mcp", "projects", "sessions", "runs", "schedules",
                     "tasks", "artifacts", "permissions", "diagnostics",
-                    "storage",
+                    "storage", "operations",
                 )
                 for resource in resources:
                     status, resource_headers, resource_body = request(
@@ -278,7 +278,7 @@ def run_probe(host: Path) -> None:
                 assert status == 405 and headers["allow"] == "POST, OPTIONS"
                 assert document["error"]["code"] == "method_not_allowed"
 
-                for resource in ("models", "skills", "modules", "mcp"):
+                for resource in ("models", "skills", "mcp"):
                     before = json.loads(request(
                         port, "GET", f"/api/v1/{resource}")[2])["data"][
                             "generation"]
@@ -292,6 +292,66 @@ def run_probe(host: Path) -> None:
                     status, headers, body = request(
                         port, "OPTIONS", f"/api/v1/{resource}/reload")
                     assert status == 200 and headers["allow"] == "POST, OPTIONS"
+
+                module_generation = json.loads(request(
+                    port, "GET", "/api/v1/modules")[2])["data"]["generation"]
+                status, headers, body = request(
+                    port, "POST", "/api/v1/modules/reload")
+                operation_document = json.loads(body)
+                assert status == 202, (status, body)
+                assert_common(headers, operation_document)
+                operation = operation_document["data"]
+                operation_id = operation["id"]
+                assert re.fullmatch(r"op-[0-9a-f]{24}|op-[0-9a-f]{16}",
+                                    operation_id), operation
+                assert operation["kind"] == "module_reload", operation
+                assert operation["state"] in (
+                    "pending", "running", "succeeded"), operation
+
+                terminal_operation = operation
+                deadline = time.monotonic() + 5.0
+                while (not terminal_operation["terminal"] and
+                       time.monotonic() < deadline):
+                    time.sleep(0.01)
+                    status, headers, body = request(
+                        port, "GET", f"/api/v1/operations/{operation_id}")
+                    operation_document = json.loads(body)
+                    assert status == 200, (status, body)
+                    assert_common(headers, operation_document)
+                    terminal_operation = operation_document["data"]
+                assert terminal_operation["state"] == "succeeded", (
+                    terminal_operation)
+                assert terminal_operation["terminal"] is True, terminal_operation
+                assert terminal_operation["result"]["generation"] > (
+                    module_generation), terminal_operation
+                assert terminal_operation["result"]["modules"] >= 1, (
+                    terminal_operation)
+
+                status, headers, body = request(
+                    port, "GET", "/api/v1/operations")
+                operations_document = json.loads(body)
+                assert status == 200, (status, body)
+                assert_common(headers, operations_document)
+                assert operations_document["data"]["items"][0]["id"] == (
+                    operation_id), operations_document
+
+                status, headers, body = request(
+                    port, "DELETE", f"/api/v1/operations/{operation_id}")
+                document = json.loads(body)
+                assert status == 200, (status, body)
+                assert document["data"]["state"] == "succeeded", document
+                status, headers, body = request(
+                    port, "GET", "/api/v1/operations/op-does-not-exist")
+                document = json.loads(body)
+                assert status == 404, (status, body)
+                assert document["error"]["code"] == "operation_not_found", document
+                status, headers, body = request(
+                    port, "OPTIONS", "/api/v1/modules/reload")
+                assert status == 200 and headers["allow"] == "POST, OPTIONS"
+                status, headers, body = request(
+                    port, "OPTIONS", f"/api/v1/operations/{operation_id}")
+                assert status == 200 and headers["allow"] == (
+                    "GET, HEAD, DELETE, OPTIONS")
 
                 assert not home.exists(), list(base.iterdir())
                 assert not (base / "wrong-environment-home").exists(), list(base.iterdir())

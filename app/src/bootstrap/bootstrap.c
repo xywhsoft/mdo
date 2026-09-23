@@ -6,6 +6,7 @@
 #include "../../include/mdo/memory.h"
 #include "../../include/mdo/models.h"
 #include "../../include/mdo/modules.h"
+#include "../../include/mdo/operations.h"
 #include "../../include/mdo/schedules.h"
 #include "../../include/mdo/sessions.h"
 #include "../../include/mdo/settings.h"
@@ -114,6 +115,10 @@ bool MdoBootstrapInit(XS_HostInfo* pHost)
         return false;
     }
     g_MdoBootstrap.Stage = MDO_BOOTSTRAP_MODULES_READY;
+    if ( !MdoOperationManagerInit() ) {
+        MdoBootstrapFail("operation manager initialization failed");
+        return false;
+    }
     if ( !MdoScheduleManagerInit(g_MdoBootstrap.Runtime) ) {
         MdoBootstrapFail("schedule manager initialization failed");
         return false;
@@ -180,6 +185,7 @@ void MdoBootstrapUnit(void)
     MdoScheduleExecutorUnit();
     MdoSessionManagerUnit();
     MdoScheduleManagerUnit();
+    MdoOperationManagerUnit();
     MdoModuleManagerUnit();
     MdoMcpManagerUnit();
     MdoWebManagerUnit();

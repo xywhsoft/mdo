@@ -76,6 +76,8 @@ bool MdoApiDiagnosticsRoute(MdoApiContext* pContext);
 bool MdoApiStorageRoute(MdoApiContext* pContext);
 bool MdoApiEventsRoute(MdoApiContext* pContext);
 bool MdoApiSessionEventsRoute(MdoApiContext* pContext);
+bool MdoApiOperationsRoute(MdoApiContext* pContext);
+bool MdoApiOperationRoute(MdoApiContext* pContext);
 bool MdoApiSettingsPreviewRoute(MdoApiContext* pContext);
 bool MdoApiSettingsMutationRoute(MdoApiContext* pContext);
 bool MdoApiModelsReloadRoute(MdoApiContext* pContext);

@@ -31,6 +31,7 @@ class ApiContractTests(unittest.TestCase):
             "skills", "mcp", "sessions", "schedules", "tasks",
             "projects", "runs", "artifacts", "permissions", "diagnostics",
             "storage", "events",
+            "operations",
         ):
             self.assertIn(f'"/api/v1/{resource}"', self.router)
         self.assertIn('"/api/v1/projects/{project}/sessions/{session}/events"',
@@ -92,15 +93,29 @@ class ApiContractTests(unittest.TestCase):
 
     def test_catalog_reload_routes_use_candidate_publish_managers(self) -> None:
         mutations = (ROOT / "app/src/api/mutations.c").read_text(encoding="utf-8")
+        operations = (ROOT / "app/src/api/operations.c").read_text(encoding="utf-8")
         for resource, manager in (
             ("models", "MdoModelManagerReload"),
             ("skills", "MdoSkillManagerReload"),
-            ("modules", "MdoModuleManagerReload"),
             ("mcp", "MdoMcpManagerReload"),
         ):
             self.assertIn(f'"/api/v1/{resource}/reload"', self.router)
             self.assertIn(manager, mutations)
         self.assertIn("previous generation remains active", mutations)
+        self.assertIn('"/api/v1/modules/reload"', self.router)
+        self.assertIn("MdoOperationStartModuleReload", operations)
+        self.assertIn("202u", operations)
+
+    def test_long_operations_have_stable_pollable_ids(self) -> None:
+        operations = (ROOT / "app/src/api/operations.c").read_text(encoding="utf-8")
+        manager = (ROOT / "app/src/operations/manager.c").read_text(
+            encoding="utf-8")
+        self.assertIn('"/api/v1/operations/{operation}"', self.router)
+        self.assertIn('MdoApiValueSetString(Item, "id"', operations)
+        self.assertIn('MdoApiValueSetBool(Item, "terminal"', operations)
+        self.assertIn("xrtTaskPoolCreate", manager)
+        self.assertIn("MDO_OPERATION_LIMIT 64u", manager)
+        self.assertIn("xrtTaskPoolCancel", manager)
 
     def test_every_json_response_has_identity_and_hardening_headers(self) -> None:
         for text in (

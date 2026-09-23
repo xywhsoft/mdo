@@ -5,7 +5,6 @@
 #include "../../include/mdo/config.h"
 #include "../../include/mdo/mcp.h"
 #include "../../include/mdo/models.h"
-#include "../../include/mdo/modules.h"
 #include "../../include/mdo/settings.h"
 #include "../../include/mdo/skills.h"
 
@@ -283,39 +282,6 @@ bool MdoApiSkillsReloadRoute(MdoApiContext* Context)
         xrtValueRelease(Data);
         return MdoApiReplyError(Context, 500u, "reload_result_unavailable",
             "The Skill catalog reloaded but its result is unavailable", NULL);
-    }
-    return MdoApiReplySuccessTake(Context, 200u, Data, NULL);
-}
-
-bool MdoApiModulesReloadRoute(MdoApiContext* Context)
-{
-    MdoModuleCatalog* Catalog;
-    MdoModuleDiagnostics* Diagnostics;
-    xvalue* Data;
-    bool Ok;
-
-    if ( !MdoModuleManagerReload() )
-        return MdoApiReloadFailure(Context, "module");
-    Catalog = MdoModuleCatalogSnapshot();
-    Diagnostics = MdoModuleDiagnosticsSnapshot();
-    Data = xrtValueObject();
-    Ok = Catalog != NULL && Diagnostics != NULL && Data != NULL &&
-        MdoApiValueSetString(Data, "resource", "modules") &&
-        MdoApiValueSetUInt(Data, "generation", MdoModuleManagerGeneration()) &&
-        MdoApiValueSetUInt(Data, "modules",
-            MdoModuleCatalogModuleCount(Catalog)) &&
-        MdoApiValueSetUInt(Data, "tools",
-            MdoModuleCatalogToolCount(Catalog)) &&
-        MdoApiValueSetUInt(Data, "agents",
-            MdoModuleCatalogAgentCount(Catalog)) &&
-        MdoApiValueSetUInt(Data, "diagnostics",
-            MdoModuleDiagnosticsCount(Diagnostics));
-    MdoModuleDiagnosticsRelease(Diagnostics);
-    MdoModuleCatalogRelease(Catalog);
-    if ( !Ok ) {
-        xrtValueRelease(Data);
-        return MdoApiReplyError(Context, 500u, "reload_result_unavailable",
-            "The module catalog reloaded but its result is unavailable", NULL);
     }
     return MdoApiReplySuccessTake(Context, 200u, Data, NULL);
 }
