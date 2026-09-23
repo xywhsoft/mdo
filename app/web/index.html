@@ -270,6 +270,7 @@
       <div class="inspector-header">
         <div class="tab-list" role="tablist" aria-label="检查器视图">
           <button class="inspector-tab" id="tasks-tab" type="button" role="tab" aria-selected="true" aria-controls="tasks-panel">任务</button>
+          <button class="inspector-tab" id="decisions-tab" type="button" role="tab" aria-selected="false" aria-controls="decisions-panel">决策 <span class="tab-count" id="approval-count" hidden>0</span></button>
           <button class="inspector-tab" id="context-tab" type="button" role="tab" aria-selected="false" aria-controls="context-panel">上下文</button>
         </div>
         <button class="icon-button inspector-close" id="close-inspector" type="button" aria-label="关闭任务面板">
@@ -285,6 +286,15 @@
         <div class="task-summary" id="task-summary"></div>
         <div class="task-list" id="task-list" aria-live="polite"></div>
         <section class="task-detail" id="task-detail" aria-live="polite" hidden></section>
+      </section>
+
+      <section class="inspector-panel" id="decisions-panel" role="tabpanel" aria-labelledby="decisions-tab" hidden>
+        <div class="panel-intro">
+          <h2>操作决策</h2>
+          <p>工具执行敏感操作前会在这里等待。请核对影响范围、资源和参数。</p>
+        </div>
+        <div class="approval-summary" id="approval-summary" aria-live="polite"></div>
+        <div class="approval-list" id="approval-list" aria-live="polite"></div>
       </section>
 
       <section class="inspector-panel" id="context-panel" role="tabpanel" aria-labelledby="context-tab" hidden>

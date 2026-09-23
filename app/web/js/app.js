@@ -16,11 +16,13 @@ import {
   refreshSelectedTask,
 } from "./state/tasks.js";
 import { runsStore, loadRuns, startRun, readRun, cancelRun } from "./state/runs.js";
+import { approvalsStore, loadApprovals } from "./state/approvals.js";
 import { navigation } from "./state/navigation.js";
 import { createSessionList } from "./features/sessions/session-list.js";
 import { timelineStore, selectTimeline, clearTimeline, refreshSelectedTimeline } from "./features/chat/timeline-store.js";
 import { createTimelineView } from "./features/chat/timeline.js";
 import { createTaskPanel } from "./features/tasks/task-panel.js";
+import { createDecisionPanel } from "./features/approvals/decision-panel.js";
 import { createSettingsView } from "./features/settings/settings-view.js";
 import { createResourcePanels } from "./features/settings/resource-panels.js";
 import { clear, element, errorMessage, toast } from "./utils/dom.js";
@@ -83,6 +85,7 @@ export async function boot() {
   let runMonitor = 0;
   let selectedKey = "";
   let tasksTimer = 0;
+  let approvalsTimer = 0;
 
   const sessionList = createSessionList({
     container: $("#session-list"),
@@ -107,6 +110,13 @@ export async function boot() {
     detailStore: taskDetailStore,
     previewStore: artifactPreviewStore,
     onChanged: () => void loadRuns(),
+  });
+  createDecisionPanel({
+    container: $("#approval-list"),
+    summary: $("#approval-summary"),
+    count: $("#approval-count"),
+    store: approvalsStore,
+    onChanged: () => Promise.all([loadTasks(), loadRuns()]),
   });
   const settingsView = createSettingsView({
     form: $("#settings-form"),
@@ -525,13 +535,14 @@ export async function boot() {
   setDrawer("inspector", !settingsActive && wideLayout.matches);
 
   function selectInspectorTab(tabName) {
-    const tasks = tabName === "tasks";
-    $("#tasks-tab").setAttribute("aria-selected", String(tasks));
-    $("#context-tab").setAttribute("aria-selected", String(!tasks));
-    $("#tasks-panel").hidden = !tasks;
-    $("#context-panel").hidden = tasks;
+    for (const name of ["tasks", "decisions", "context"]) {
+      const selected = tabName === name;
+      $(`#${name}-tab`).setAttribute("aria-selected", String(selected));
+      $(`#${name}-panel`).hidden = !selected;
+    }
   }
   $("#tasks-tab").addEventListener("click", () => selectInspectorTab("tasks"));
+  $("#decisions-tab").addEventListener("click", () => selectInspectorTab("decisions"));
   $("#context-tab").addEventListener("click", () => selectInspectorTab("context"));
   $("#open-settings").addEventListener("click", () => navigation.openSettings("general"));
   $("#close-settings").addEventListener("click", () => {
@@ -570,10 +581,24 @@ export async function boot() {
     }, active ? 1400 : 5000);
   }
   tasksStore.subscribe(scheduleTaskRefresh);
+  function scheduleApprovalRefresh() {
+    window.clearTimeout(approvalsTimer);
+    if (document.hidden) return;
+    const pending = Number(approvalsStore.get().data?.total ?? 0);
+    approvalsTimer = window.setTimeout(async () => {
+      await loadApprovals();
+      scheduleApprovalRefresh();
+    }, pending ? 1000 : 3000);
+  }
+  approvalsStore.subscribe(scheduleApprovalRefresh);
   document.addEventListener("visibilitychange", () => {
-    if (document.hidden) window.clearTimeout(tasksTimer);
+    if (document.hidden) {
+      window.clearTimeout(tasksTimer);
+      window.clearTimeout(approvalsTimer);
+    }
     else {
       scheduleTaskRefresh();
+      scheduleApprovalRefresh();
       if (activeRun) scheduleRunPoll(100);
     }
   });
@@ -585,6 +610,7 @@ export async function boot() {
     loadSettings(),
     loadManagementResources(),
     loadTasks(),
+    loadApprovals(),
     loadRuns(),
   ]);
   if (initial.some((result) => result.status === "rejected")) {
@@ -597,4 +623,5 @@ export async function boot() {
     if (first) navigation.select(first.project_id, first.id, { replace: true });
   }
   scheduleTaskRefresh();
+  scheduleApprovalRefresh();
 }

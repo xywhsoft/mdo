@@ -70,6 +70,7 @@ class BuildContractTests(unittest.TestCase):
             "src/schedules/executor.c",
             "src/sessions/events.c",
             "src/sessions/manager.c",
+            "src/approvals/manager.c",
             "src/runs/manager.c",
             "src/bootstrap/bootstrap.c",
             "src/api/http.c",
@@ -80,6 +81,7 @@ class BuildContractTests(unittest.TestCase):
             "src/api/state.c",
             "src/api/inventory.c",
             "src/api/tasks.c",
+            "src/api/approvals.c",
             "src/api/runs.c",
             "src/api/schedules.c",
             "src/api/diagnostics.c",
@@ -108,6 +110,8 @@ class BuildContractTests(unittest.TestCase):
         self.assertEqual(first.count('#include "../src/schedules/manager.c"'), 1)
         self.assertEqual(first.count('#include "../src/schedules/executor.c"'), 1)
         self.assertEqual(first.count('#include "../src/runs/manager.c"'), 1)
+        self.assertEqual(first.count('#include "../src/approvals/manager.c"'), 1)
+        self.assertEqual(first.count('#include "../src/api/approvals.c"'), 1)
         self.assertEqual(first.count('#include "../src/api/router.c"'), 1)
         self.assertEqual(first.count('#include "../src/bootstrap/service.c"'), 1)
         self.assertIn(self.lock["xrt"]["commit"], first)

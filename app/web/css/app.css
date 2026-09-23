@@ -555,8 +555,10 @@ select:focus-visible,
 .inspector { display: flex; min-height: 0; flex-direction: column; border-left: 1px solid var(--border); }
 .inspector-header { min-height: var(--header-height); padding: 0 13px; border-bottom: 1px solid var(--border); }
 .tab-list { display: flex; gap: 3px; padding: 3px; border-radius: 9px; background: var(--surface-hover); }
-.inspector-tab { min-width: 72px; height: 28px; padding: 0 10px; border: 0; border-radius: 7px; background: transparent; color: var(--muted); font-size: 12px; cursor: pointer; }
+.inspector-tab { min-width: 64px; height: 28px; padding: 0 8px; border: 0; border-radius: 7px; background: transparent; color: var(--muted); font-size: 12px; cursor: pointer; }
 .inspector-tab[aria-selected="true"] { background: var(--surface-raised); color: var(--ink); box-shadow: 0 1px 3px rgb(0 0 0 / 8%); }
+.tab-count { display: inline-grid; min-width: 16px; height: 16px; margin-left: 3px; place-items: center; border-radius: 999px; background: var(--danger); color: #fff; font-size: 9px; font-weight: 700; }
+.tab-count[hidden] { display: none; }
 .inspector-panel { min-height: 0; overflow: auto; padding: 18px 14px; }
 .panel-intro { padding: 0 3px 15px; border-bottom: 1px solid var(--border); }
 .panel-intro h2 { margin: 0; font-size: 13px; }
@@ -612,6 +614,25 @@ select:focus-visible,
 .task-artifact:hover { border-color: var(--border-strong); background: var(--surface-hover); }
 .artifact-preview { overflow: hidden; border: 1px solid var(--border); border-radius: var(--radius-sm); }
 .artifact-preview .task-output { border-top: 0; }
+.approval-summary { display: flex; align-items: baseline; gap: 5px; margin: 13px 2px; color: var(--muted); font-size: 10px; }
+.approval-summary strong { color: var(--ink); font-size: 16px; }
+.approval-summary span { margin-left: auto; color: var(--warning); }
+.approval-list { display: grid; gap: 10px; }
+.approval-card { padding: 12px; border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--surface-raised); }
+.approval-card[data-risk="high"] { border-color: color-mix(in srgb, var(--danger) 55%, var(--border)); }
+.approval-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 9px; }
+.approval-heading h3 { margin: 0; overflow-wrap: anywhere; font-size: 13px; }
+.approval-heading p { margin: 4px 0 0; color: var(--muted); font-size: 9px; line-height: 1.45; }
+.approval-timeout { flex: none; padding: 2px 5px; border-radius: 999px; background: var(--surface-hover); color: var(--muted); font-size: 9px; }
+.approval-workspace { margin: 10px 0 0; overflow-wrap: anywhere; color: var(--faint); font: 9px/1.45 ui-monospace, "Cascadia Code", Consolas, monospace; }
+.approval-resources { display: grid; gap: 5px; margin: 10px 0 0; padding: 0; list-style: none; }
+.approval-resources li { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 7px; overflow-wrap: anywhere; font-size: 10px; }
+.approval-resource-kind { align-self: start; padding: 1px 4px; border-radius: 4px; background: var(--surface-hover); color: var(--muted); font-size: 8px; text-transform: uppercase; }
+.approval-arguments { margin-top: 10px; border: 1px solid var(--border); border-radius: var(--radius-sm); }
+.approval-arguments summary { padding: 7px 8px; color: var(--muted); font-size: 9px; cursor: pointer; }
+.approval-arguments pre { max-height: 220px; margin: 0; overflow: auto; padding: 8px; border-top: 1px solid var(--border); background: var(--surface-hover); font: 9px/1.5 ui-monospace, "Cascadia Code", Consolas, monospace; overflow-wrap: anywhere; white-space: pre-wrap; }
+.approval-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; margin-top: 10px; }
+.approval-actions button { min-height: 30px; padding: 0 9px; font-size: 10px; }
 .context-list { display: grid; grid-template-columns: minmax(70px, auto) minmax(0, 1fr); gap: 10px 12px; margin: 16px 3px; font-size: 11px; }
 .context-list dt { color: var(--muted); }
 .context-list dd { margin: 0; overflow-wrap: anywhere; }

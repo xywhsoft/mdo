@@ -191,6 +191,21 @@ class FrontendContractTests(unittest.TestCase):
             self.assertIn(label, panel)
         self.assertNotIn("innerHTML", panel)
 
+    def test_permission_decisions_are_visible_bounded_and_one_shot(self) -> None:
+        state = self.scripts["js/state/approvals.js"]
+        panel = self.scripts["js/features/approvals/decision-panel.js"]
+        self.assertIn('id="decisions-tab"', self.index)
+        self.assertIn('id="decisions-panel"', self.index)
+        self.assertIn('api.get("/approvals")', state)
+        self.assertIn('api.put(`/approvals/${id}`, { decision })', state)
+        self.assertIn('new Set(["allow", "deny"])', state)
+        self.assertIn("deciding = new Set()", panel)
+        self.assertIn("text: formatArguments(item.arguments_json)", panel)
+        self.assertIn('text: "允许一次"', panel)
+        self.assertIn('text: "拒绝"', panel)
+        self.assertIn(".approval-card", self.css)
+        self.assertNotIn("innerHTML", panel)
+
     def test_responsive_and_accessibility_modes_are_explicit(self) -> None:
         self.assertIn("grid-template-columns: var(--sidebar-width) minmax(0, 1fr) var(--inspector-width)", self.css)
         self.assertIn("@media (max-width: 1180px)", self.css)

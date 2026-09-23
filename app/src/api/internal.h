@@ -76,6 +76,8 @@ bool MdoApiRunsRoute(MdoApiContext* pContext);
 bool MdoApiSchedulesRoute(MdoApiContext* pContext);
 bool MdoApiPermissionsRoute(MdoApiContext* pContext);
 bool MdoApiTasksRoute(MdoApiContext* pContext);
+bool MdoApiApprovalsRoute(MdoApiContext* pContext);
+bool MdoApiApprovalRoute(MdoApiContext* pContext);
 bool MdoApiTaskRoute(MdoApiContext* pContext);
 bool MdoApiTaskOutputRoute(MdoApiContext* pContext);
 bool MdoApiTaskEventsRoute(MdoApiContext* pContext);

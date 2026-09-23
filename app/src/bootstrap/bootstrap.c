@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <string.h>
 
+#include "../../include/mdo/approvals.h"
 #include "../../include/mdo/bootstrap.h"
 #include "../../include/mdo/mcp.h"
 #include "../../include/mdo/memory.h"
@@ -41,6 +42,8 @@ bool MdoBootstrapInit(XS_HostInfo* pHost)
     xwork_runtime_config RuntimeConfig;
     xwork_error WorkError;
     MdoHomeSnapshot Home;
+    MdoRunManagerOptions RunOptions;
+    MdoScheduleExecutorOptions ExecutorOptions;
 
     (void)pHost;
     if ( g_MdoBootstrap.Stage != MDO_BOOTSTRAP_EMPTY )
@@ -130,7 +133,13 @@ bool MdoBootstrapInit(XS_HostInfo* pHost)
         return false;
     }
     g_MdoBootstrap.Stage = MDO_BOOTSTRAP_SESSIONS_READY;
-    if ( !MdoRunManagerInit(g_MdoBootstrap.Runtime, NULL, &WorkError) ) {
+    if ( !MdoApprovalManagerInit() ) {
+        MdoBootstrapFail("approval manager initialization failed");
+        return false;
+    }
+    MdoRunManagerOptionsInit(&RunOptions);
+    RunOptions.OnPermission = MdoApprovalOnPermission;
+    if ( !MdoRunManagerInit(g_MdoBootstrap.Runtime, &RunOptions, &WorkError) ) {
         snprintf(g_MdoBootstrap.Message, sizeof(g_MdoBootstrap.Message), "%.255s",
             WorkError.sMessage[0] != '\0' ? WorkError.sMessage :
             "interactive run manager initialization failed");
@@ -138,7 +147,10 @@ bool MdoBootstrapInit(XS_HostInfo* pHost)
         printf("[mdo] bootstrap failed: %s\n", g_MdoBootstrap.Message);
         return false;
     }
-    if ( !MdoScheduleExecutorInit(g_MdoBootstrap.Runtime, NULL, &WorkError) ) {
+    MdoScheduleExecutorOptionsInit(&ExecutorOptions);
+    ExecutorOptions.OnPermission = MdoApprovalOnPermission;
+    if ( !MdoScheduleExecutorInit(g_MdoBootstrap.Runtime, &ExecutorOptions,
+            &WorkError) ) {
         snprintf(g_MdoBootstrap.Message, sizeof(g_MdoBootstrap.Message), "%.255s",
             WorkError.sMessage[0] != '\0' ? WorkError.sMessage :
             "schedule executor initialization failed");
@@ -193,6 +205,7 @@ void MdoBootstrapUnit(void)
 {
     MdoScheduleExecutorUnit();
     MdoRunManagerUnit();
+    MdoApprovalManagerUnit();
     MdoSessionManagerUnit();
     MdoScheduleManagerUnit();
     MdoOperationManagerUnit();

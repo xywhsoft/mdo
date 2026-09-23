@@ -123,6 +123,45 @@ def write_site(base: Path, port: int) -> Path:
     service_path = base / "src/bootstrap/service.c"
     service_text = service_path.read_text(encoding="utf-8")
     fixture = r'''
+#include "../../include/mdo/approvals.h"
+
+static xthread* g_MdoApiProbeApprovalThread;
+
+static xwork_permission_decision MdoApiProbeRequestApproval(uint64 RequestId,
+    const char* CallId, const char* ResourceText)
+{
+    xwork_permission_resource Resource;
+    xwork_permission_request Request;
+    memset(&Resource, 0, sizeof(Resource));
+    Resource.eKind = XWORK_RESOURCE_PATH;
+    Resource.uAccess = XWORK_RESOURCE_ACCESS_WRITE;
+    Resource.sResource = ResourceText;
+    memset(&Request, 0, sizeof(Request));
+    Request.uRequestId = RequestId;
+    Request.uAgentId = 41u;
+    Request.uRunId = 73u;
+    Request.uCatalogGeneration = 5u;
+    Request.sToolName = "edit";
+    Request.sToolCallId = CallId;
+    Request.uEffects = XWORK_TOOL_EFFECT_WORKSPACE_WRITE;
+    Request.eRisk = XWORK_RISK_MEDIUM;
+    Request.pResources = &Resource;
+    Request.iResourceCount = 1u;
+    Request.sArgumentsJson = "{\"path\":\"notes.txt\"}";
+    Request.sWorkspaceRoot = "api-probe-workspace";
+    Request.uAgentTurn = 9u;
+    Request.uDeadline = xrtDeadlineAfter(UINT64_C(120) * 1000000u);
+    return MdoApprovalOnPermission(NULL, &Request);
+}
+
+static int32 MdoApiProbeApprovals(ptr Data)
+{
+    (void)Data;
+    (void)MdoApiProbeRequestApproval(7001u, "call-allow", "notes.txt");
+    (void)MdoApiProbeRequestApproval(7002u, "call-deny", "blocked.txt");
+    return 0;
+}
+
 static void MdoApiProbeCreateTasks(void)
 {
     xwork_runtime* Runtime = MdoBootstrapRuntime();
@@ -149,11 +188,31 @@ static void MdoApiProbeCreateTasks(void)
     needle = "void ServiceInit(XS_HostInfo* pHost)\n{\n    (void)MdoBootstrapInit(pHost);\n"
     replacement = (
         fixture + "void ServiceInit(XS_HostInfo* pHost)\n{\n"
-        "    if ( MdoBootstrapInit(pHost) ) MdoApiProbeCreateTasks();\n")
+        "    if ( MdoBootstrapInit(pHost) ) {\n"
+        "        MdoApiProbeCreateTasks();\n"
+        "        g_MdoApiProbeApprovalThread = xrtThreadCreate(\n"
+        "            MdoApiProbeApprovals, NULL, 0u);\n"
+        "    }\n")
     if needle not in service_text:
         raise RuntimeError("API task fixture could not patch ServiceInit")
-    service_path.write_text(service_text.replace(needle, replacement, 1),
-                            encoding="utf-8", newline="\n")
+    service_text = service_text.replace(needle, replacement, 1)
+    unit_needle = (
+        "    MdoApiUnit();\n"
+        "    MdoBootstrapUnit();\n"
+        "}\n\nXS_RequestResult RequestProc")
+    unit_replacement = (
+        "    MdoApiUnit();\n"
+        "    MdoBootstrapUnit();\n"
+        "    if ( g_MdoApiProbeApprovalThread != NULL ) {\n"
+        "        (void)xrtThreadWait(g_MdoApiProbeApprovalThread);\n"
+        "        xrtThreadDestroy(g_MdoApiProbeApprovalThread);\n"
+        "        g_MdoApiProbeApprovalThread = NULL;\n"
+        "    }\n"
+        "}\n\nXS_RequestResult RequestProc")
+    if unit_needle not in service_text:
+        raise RuntimeError("API approval fixture could not patch ServiceUnit")
+    service_path.write_text(service_text.replace(
+        unit_needle, unit_replacement, 1), encoding="utf-8", newline="\n")
     mock_server = base / "mcp_mock_server.py"
     mock_server.write_text(MCP_MOCK_SERVER, encoding="utf-8")
     mcp_document = {
@@ -296,7 +355,7 @@ def run_probe(host: Path) -> None:
                 resources = (
                     "settings", "models", "agents", "modules", "skills",
                     "mcp", "projects", "sessions", "runs", "schedules",
-                    "tasks", "artifacts", "permissions", "diagnostics",
+                    "tasks", "artifacts", "approvals", "permissions", "diagnostics",
                     "storage", "operations",
                 )
                 for resource in resources:
@@ -314,6 +373,88 @@ def run_probe(host: Path) -> None:
                     assert b'"authorization"' not in lowered, (resource, lowered)
                 assert json.loads(request(port, "GET", "/api/v1/models")[2])[
                     "data"]["models"][0]["id"] == "ling-3.0-tiny"
+
+                approval_deadline = time.monotonic() + 3.0
+                approvals = {"items": []}
+                while time.monotonic() < approval_deadline:
+                    status, headers, body = request(port, "GET", "/api/v1/approvals")
+                    approval_document = json.loads(body)
+                    assert status == 200, (status, body)
+                    assert_common(headers, approval_document)
+                    approvals = approval_document["data"]
+                    if approvals["items"]:
+                        break
+                    time.sleep(0.01)
+                assert approvals["total"] == 1, approvals
+                assert approvals["limit"] == 4, approvals
+                assert approvals["truncated"] is False, approvals
+                approval = approvals["items"][0]
+                assert approval["id"] == 7001, approval
+                assert approval["agent_id"] == 41 and approval["run_id"] == 73, approval
+                assert approval["catalog_generation"] == 5, approval
+                assert approval["agent_turn"] == 9, approval
+                assert approval["tool"] == "edit", approval
+                assert approval["tool_call_id"] == "call-allow", approval
+                assert approval["risk"] == "medium", approval
+                assert approval["effects"] == ["workspace_write"], approval
+                assert approval["resources"] == [{
+                    "kind": "path", "resource": "notes.txt",
+                    "access_code": 2, "access": ["write"],
+                }], approval
+                assert approval["expires_in_ms"] > 0, approval
+                status, headers, body = request(port, "HEAD", "/api/v1/approvals")
+                assert status == 200 and body == b"", (status, body)
+                status, headers, body = request(port, "OPTIONS", "/api/v1/approvals")
+                assert status == 200 and headers["allow"] == "GET, HEAD, OPTIONS", (
+                    status, headers, body)
+                decision_headers = {"Content-Type": "application/json"}
+                status, headers, body = request(
+                    port, "PUT", "/api/v1/approvals/7001",
+                    body=b'{"decision":"allow"}', headers=decision_headers)
+                decision_document = json.loads(body)
+                assert status == 200, (status, body)
+                assert_common(headers, decision_document)
+                assert decision_document["data"] == {
+                    "id": 7001, "decision": "allow"}, decision_document
+                status, _, body = request(
+                    port, "PUT", "/api/v1/approvals/7001",
+                    body=b'{"decision":"allow"}', headers=decision_headers)
+                assert status == 404, (status, body)
+                assert json.loads(body)["error"]["code"] == "approval_not_found"
+
+                approval_deadline = time.monotonic() + 3.0
+                approval = None
+                while time.monotonic() < approval_deadline:
+                    approvals = json.loads(request(
+                        port, "GET", "/api/v1/approvals")[2])["data"]
+                    if approvals["items"] and approvals["items"][0]["id"] == 7002:
+                        approval = approvals["items"][0]
+                        break
+                    time.sleep(0.01)
+                assert approval is not None and approval["tool_call_id"] == "call-deny", (
+                    approvals)
+                status, _, body = request(
+                    port, "PUT", "/api/v1/approvals/7002",
+                    body=b'{"decision":"later"}', headers=decision_headers)
+                assert status == 422, (status, body)
+                assert json.loads(body)["error"]["code"] == (
+                    "approval_decision_invalid")
+                status, _, body = request(
+                    port, "PUT", "/api/v1/approvals/7002",
+                    body=b'{"decision":"deny"}', headers=decision_headers)
+                assert status == 200, (status, body)
+                assert json.loads(body)["data"]["decision"] == "deny"
+                for approval_id in ("0", "bad", "18446744073709551616"):
+                    status, _, body = request(
+                        port, "PUT", f"/api/v1/approvals/{approval_id}",
+                        body=b'{"decision":"deny"}', headers=decision_headers)
+                    assert status == 400, (approval_id, status, body)
+                    assert json.loads(body)["error"]["code"] == (
+                        "invalid_approval_id")
+                status, headers, body = request(
+                    port, "OPTIONS", "/api/v1/approvals/7002")
+                assert status == 200 and headers["allow"] == "PUT, OPTIONS", (
+                    status, headers, body)
 
                 tasks_document = json.loads(request(
                     port, "GET", "/api/v1/tasks")[2])

@@ -29,7 +29,7 @@ class ApiContractTests(unittest.TestCase):
         for resource in (
             "bootstrap", "settings", "models", "agents", "modules",
             "skills", "mcp", "sessions", "schedules", "tasks",
-            "projects", "runs", "artifacts", "permissions", "diagnostics",
+            "projects", "runs", "artifacts", "approvals", "permissions", "diagnostics",
             "storage", "events",
             "operations",
         ):
@@ -237,6 +237,30 @@ class ApiContractTests(unittest.TestCase):
                       "sha256", "media_type", "data"):
             self.assertIn(f'"{field}"', state)
         self.assertIn('"artifact_offset_out_of_range"', state)
+
+    def test_approvals_are_bounded_synchronous_and_fail_closed(self) -> None:
+        approvals = (ROOT / "app/src/api/approvals.c").read_text(
+            encoding="utf-8")
+        manager = (ROOT / "app/src/approvals/manager.c").read_text(
+            encoding="utf-8")
+        bootstrap = (ROOT / "app/src/bootstrap/bootstrap.c").read_text(
+            encoding="utf-8")
+        self.assertIn('"/api/v1/approvals"', self.router)
+        self.assertIn('"/api/v1/approvals/{approval}"', self.router)
+        self.assertIn("MDO_APPROVAL_API_LIMIT", approvals)
+        self.assertIn("xrtValueCount(Body.Value) != 1u", approvals)
+        self.assertIn("MdoApprovalSnapshotCreate", approvals)
+        self.assertIn("MdoApprovalDecide", approvals)
+        self.assertIn("MDO_APPROVAL_PENDING_MAX", manager)
+        self.assertIn("MDO_APPROVAL_MAX_WAIT_MICROSECONDS", manager)
+        self.assertIn("xrtCancelRequested", manager)
+        self.assertIn("xrtCondWaitUntil", manager)
+        self.assertIn("XWORK_PERMISSION_DENY", manager)
+        self.assertIn("MdoApprovalManagerInit", bootstrap)
+        self.assertIn("RunOptions.OnPermission = MdoApprovalOnPermission", bootstrap)
+        self.assertIn("ExecutorOptions.OnPermission = MdoApprovalOnPermission", bootstrap)
+        self.assertLess(bootstrap.index("MdoRunManagerUnit();"),
+                        bootstrap.index("MdoApprovalManagerUnit();"))
 
     def test_every_json_response_has_identity_and_hardening_headers(self) -> None:
         for text in (
