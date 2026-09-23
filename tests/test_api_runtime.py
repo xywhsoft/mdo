@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import base64
 import http.client
 import json
 import os
@@ -119,6 +120,40 @@ def write_site(base: Path, port: int) -> Path:
     # application layout directly so /app/default-home has identical meaning
     # in the development and single-file paths.
     shutil.copytree(ROOT / "app", base, dirs_exist_ok=True)
+    service_path = base / "src/bootstrap/service.c"
+    service_text = service_path.read_text(encoding="utf-8")
+    fixture = r'''
+static void MdoApiProbeCreateTasks(void)
+{
+    xwork_runtime* Runtime = MdoBootstrapRuntime();
+    xwork_scheduled_task_config Config;
+    xwork_error Error;
+    uint64 TaskId;
+    if ( Runtime == NULL ) return;
+    xworkScheduledTaskConfigInit(&Config);
+    Config.sOwnerSession = "api-probe-session";
+    Config.sLabel = "api-probe-finished";
+    Config.sNotify = "none";
+    Config.iScheduledAtUs = xrtNow();
+    if ( xworkRuntimeCreateScheduledTask(Runtime, &Config, &TaskId, &Error) ) {
+        (void)xworkRuntimeStartScheduledTask(Runtime, TaskId, &Error);
+        (void)xworkRuntimeFinishScheduledTask(Runtime, TaskId, XWORK_RESULT_OK,
+            "task-result", &Error);
+    }
+    Config.sLabel = "api-probe-cancellable";
+    Config.iScheduledAtUs = xrtNow() + 60000000;
+    (void)xworkRuntimeCreateScheduledTask(Runtime, &Config, &TaskId, &Error);
+}
+
+'''
+    needle = "void ServiceInit(XS_HostInfo* pHost)\n{\n    (void)MdoBootstrapInit(pHost);\n"
+    replacement = (
+        fixture + "void ServiceInit(XS_HostInfo* pHost)\n{\n"
+        "    if ( MdoBootstrapInit(pHost) ) MdoApiProbeCreateTasks();\n")
+    if needle not in service_text:
+        raise RuntimeError("API task fixture could not patch ServiceInit")
+    service_path.write_text(service_text.replace(needle, replacement, 1),
+                            encoding="utf-8", newline="\n")
     mock_server = base / "mcp_mock_server.py"
     mock_server.write_text(MCP_MOCK_SERVER, encoding="utf-8")
     mcp_document = {
@@ -279,6 +314,125 @@ def run_probe(host: Path) -> None:
                     assert b'"authorization"' not in lowered, (resource, lowered)
                 assert json.loads(request(port, "GET", "/api/v1/models")[2])[
                     "data"]["models"][0]["id"] == "ling-3.0-tiny"
+
+                tasks_document = json.loads(request(
+                    port, "GET", "/api/v1/tasks")[2])
+                tasks = tasks_document["data"]["items"]
+                finished_task = next(
+                    item for item in tasks
+                    if item["label"] == "api-probe-finished")
+                cancellable_task = next(
+                    item for item in tasks
+                    if item["label"] == "api-probe-cancellable")
+                assert finished_task["state"] == "succeeded", finished_task
+                assert finished_task["terminal"] is True, finished_task
+                assert cancellable_task["state"] == "pending", cancellable_task
+                finished_id = finished_task["id"]
+                cancellable_id = cancellable_task["id"]
+                task_path = f"/api/v1/tasks/{finished_id}"
+
+                status, headers, body = request(port, "GET", task_path)
+                document = json.loads(body)
+                assert status == 200, (status, body)
+                assert_common(headers, document)
+                assert document["data"] == finished_task, document
+                assert headers["etag"] == (
+                    f'"mdo-task-{finished_id}-{finished_task["revision"]}"')
+
+                output_path = task_path + "/output"
+                status, headers, body = request(
+                    port, "GET", output_path + "?result=0&limit=4")
+                output_document = json.loads(body)
+                assert status == 200, (status, body)
+                assert_common(headers, output_document)
+                output = output_document["data"]
+                assert output["encoding"] == "base64", output
+                assert output["complete"] is True, output
+                assert output["stdout"]["data"] == "", output
+                assert output["stderr"]["data"] == "", output
+                assert base64.b64decode(output["result"]["data"]) == b"task", output
+                assert output["result"]["start"] == 0, output
+                assert output["result"]["next"] == 4, output
+                status, _, body = request(
+                    port, "GET", output_path + "?result=4&limit=64")
+                output = json.loads(body)["data"]
+                assert status == 200, (status, body)
+                assert base64.b64decode(output["result"]["data"]) == b"-result", output
+                assert output["result"]["next"] == len(b"task-result"), output
+                for query in (
+                    "limit=0", "limit=65537", "stdout=x", "result=0&result=1",
+                    "unknown=1", "limit=4&",
+                ):
+                    status, _, body = request(
+                        port, "GET", output_path + "?" + query)
+                    assert status == 400, (query, status, body)
+                    assert json.loads(body)["error"]["code"] == "invalid_query"
+
+                events_path = task_path + "/events"
+                status, headers, body = request(
+                    port, "GET", events_path + "?after=0&limit=1")
+                events_document = json.loads(body)
+                assert status == 200, (status, body)
+                assert_common(headers, events_document)
+                events = events_document["data"]
+                assert len(events["items"]) == 1, events
+                assert events["items"][0]["kind"] == "created", events
+                assert events["next_revision"] == events["items"][0]["revision"]
+                status, _, body = request(
+                    port, "GET",
+                    events_path + f'?after={events["next_revision"]}&limit=64')
+                later_events = json.loads(body)["data"]
+                assert status == 200, (status, body)
+                assert later_events["items"][-1]["state"] == "succeeded", (
+                    later_events)
+                assert later_events["items"][-1]["terminal"] is True, later_events
+
+                cancel_path = f"/api/v1/tasks/{cancellable_id}"
+                status, _, body = request(
+                    port, "DELETE", cancel_path, body=b"{}",
+                    headers={"Content-Type": "application/json"})
+                assert status == 400, (status, body)
+                assert json.loads(body)["error"]["code"] == "body_not_allowed"
+                status, headers, body = request(port, "DELETE", cancel_path)
+                cancelled = json.loads(body)
+                assert status == 200, (status, body)
+                assert_common(headers, cancelled)
+                assert cancelled["data"]["state"] == "cancelled", cancelled
+                assert cancelled["data"]["terminal"] is True, cancelled
+                status, _, body = request(port, "DELETE", cancel_path)
+                assert status == 200, (status, body)
+                assert json.loads(body)["data"]["state"] == "cancelled"
+                status, _, body = request(
+                    port, "GET", cancel_path + "/events?after=0&limit=64")
+                cancel_events = json.loads(body)["data"]["items"]
+                assert status == 200, (status, body)
+                assert any(item["kind"] == "cancel_requested"
+                           for item in cancel_events), cancel_events
+                assert cancel_events[-1]["state"] == "cancelled", cancel_events
+
+                for path in (task_path, output_path, events_path):
+                    status, headers, body = request(port, "HEAD", path)
+                    assert status == 200 and body == b"", (path, status, body)
+                    status, headers, body = request(port, "OPTIONS", path)
+                    expected = ("GET, HEAD, DELETE, OPTIONS"
+                                if path == task_path else "GET, HEAD, OPTIONS")
+                    assert status == 200 and headers["allow"] == expected, (
+                        path, status, headers, body)
+                for path in (
+                    "/api/v1/tasks/0", "/api/v1/tasks/not-a-number",
+                    "/api/v1/tasks/18446744073709551616",
+                ):
+                    status, _, body = request(port, "GET", path)
+                    assert status == 400, (path, status, body)
+                    assert json.loads(body)["error"]["code"] == "invalid_path"
+                for path in (
+                    "/api/v1/tasks/999999999",
+                    "/api/v1/tasks/999999999/output",
+                    "/api/v1/tasks/999999999/events",
+                ):
+                    status, _, body = request(port, "GET", path)
+                    assert status == 404, (path, status, body)
+                    assert json.loads(body)["error"]["code"] == "task_not_found"
 
                 status, headers, body = request(
                     port, "GET", "/api/v1/events?after=0&limit=1")

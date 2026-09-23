@@ -180,6 +180,26 @@ class ApiContractTests(unittest.TestCase):
         self.assertIn('"revision_conflict"', schedules)
         self.assertNotIn("xworkSchedule", schedules)
 
+    def test_unified_tasks_have_detail_output_events_and_cancel_routes(self) -> None:
+        tasks = (ROOT / "app/src/api/tasks.c").read_text(encoding="utf-8")
+        for path in (
+            '"/api/v1/tasks/{task}"',
+            '"/api/v1/tasks/{task}/output"',
+            '"/api/v1/tasks/{task}/events"',
+        ):
+            self.assertIn(path, self.router)
+        self.assertIn("xworkRuntimeTaskSnapshot", tasks)
+        self.assertIn("xworkRuntimeReadTaskOutput", tasks)
+        self.assertIn("xworkRuntimeReadTaskEvents", tasks)
+        self.assertIn("xworkRuntimeCancelTask", tasks)
+        self.assertIn("MDO_API_TASK_OUTPUT_MAX_BYTES (64u * 1024u)", tasks)
+        self.assertIn("MDO_API_TASK_EVENT_MAX_LIMIT 64u", tasks)
+        self.assertIn("xrtBase64EncodeNew", tasks)
+        self.assertIn('"encoding", "base64"', tasks)
+        self.assertIn('"history_lost"', tasks)
+        self.assertIn('"body_not_allowed"', tasks)
+        self.assertNotIn("xworkRuntimeReleaseTask", tasks)
+
     def test_every_json_response_has_identity_and_hardening_headers(self) -> None:
         for text in (
             'XRT_STR_LITERAL("schema_version")',

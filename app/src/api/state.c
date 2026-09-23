@@ -27,30 +27,6 @@ static cstr MdoApiSessionStatusText(MdoSessionStatus Status)
     }
 }
 
-static cstr MdoApiTaskKindText(xwork_task_kind Kind)
-{
-    switch ( Kind ) {
-    case XWORK_TASK_PROCESS: return "process";
-    case XWORK_TASK_AGENT: return "agent";
-    case XWORK_TASK_SCHEDULED: return "scheduled";
-    default: return "unknown";
-    }
-}
-
-static cstr MdoApiTaskStateText(xwork_task_state State)
-{
-    switch ( State ) {
-    case XWORK_TASK_PENDING: return "pending";
-    case XWORK_TASK_RUNNING: return "running";
-    case XWORK_TASK_SUCCEEDED: return "succeeded";
-    case XWORK_TASK_FAILED: return "failed";
-    case XWORK_TASK_CANCELLED: return "cancelled";
-    case XWORK_TASK_TIMED_OUT: return "timed_out";
-    case XWORK_TASK_LOST: return "lost";
-    default: return "unknown";
-    }
-}
-
 bool MdoApiSettingsRoute(MdoApiContext* Context)
 {
     MdoSettingsServiceSnapshot Service;
@@ -187,67 +163,6 @@ bool MdoApiSessionsRoute(MdoApiContext* Context)
         MdoApiValueSetTake(Data, "items", &Items);
     xrtValueRelease(Items);
     MdoSessionCatalogRelease(Catalog);
-    if ( !Ok ) { xrtValueRelease(Data); Data = NULL; }
-    return MdoApiStateReply(Context, Data);
-}
-
-bool MdoApiTasksRoute(MdoApiContext* Context)
-{
-    xwork_runtime* Runtime = MdoBootstrapRuntime();
-    xwork_error Error;
-    xwork_task_snapshot* Snapshot;
-    xvalue* Data = xrtValueObject();
-    xvalue* Items = xrtValueArray();
-    size_t Total;
-    size_t Start;
-    size_t Index;
-    bool Ok;
-
-    if ( Runtime == NULL ) return MdoApiReplyError(Context, 503u,
-        "runtime_unavailable", "The task runtime is unavailable", NULL);
-    memset(&Error, 0, sizeof(Error));
-    Snapshot = xworkRuntimeTaskSnapshot(Runtime, 0u, &Error);
-    Total = Snapshot != NULL ? xworkTaskSnapshotCount(Snapshot) : 0u;
-    Start = Total > MDO_API_LIST_LIMIT ? Total - MDO_API_LIST_LIMIT : 0u;
-    Ok = Snapshot != NULL && Data != NULL && Items != NULL;
-    for ( Index = Start; Ok && Index < Total; Index++ ) {
-        xwork_task_info Info;
-        xvalue* Item = xrtValueObject();
-        xworkTaskInfoInit(&Info);
-        Ok = Item != NULL && xworkTaskSnapshotTaskAt(Snapshot, Index, &Info) &&
-            MdoApiValueSetUInt(Item, "id", Info.uTaskId) &&
-            MdoApiValueSetUInt(Item, "owner_agent_id", Info.uOwnerAgentId) &&
-            MdoApiValueSetUInt(Item, "owner_run_id", Info.uOwnerRunId) &&
-            MdoApiValueSetUInt(Item, "parent_task_id", Info.uParentTaskId) &&
-            MdoApiValueSetString(Item, "kind", MdoApiTaskKindText(Info.eKind)) &&
-            MdoApiValueSetString(Item, "state",
-                MdoApiTaskStateText(Info.eState)) &&
-            MdoApiValueSetUInt(Item, "revision", Info.uRevision) &&
-            MdoApiValueSetInt(Item, "created_at", Info.iCreatedAtUs) &&
-            MdoApiValueSetInt(Item, "started_at", Info.iStartedAtUs) &&
-            MdoApiValueSetInt(Item, "ended_at", Info.iEndedAtUs) &&
-            MdoApiValueSetInt(Item, "scheduled_at", Info.iScheduledAtUs) &&
-            MdoApiValueSetBool(Item, "exit_status_valid",
-                Info.bExitStatusValid) &&
-            MdoApiValueSetInt(Item, "exit_code", Info.iExitCode) &&
-            MdoApiValueSetInt(Item, "exit_signal", Info.iExitSignal) &&
-            MdoApiValueSetInt(Item, "stop_reason", Info.iStopReason) &&
-            MdoApiValueSetBool(Item, "notice_taken", Info.bNoticeTaken) &&
-            MdoApiValueSetString(Item, "owner_session", Info.sOwnerSession) &&
-            MdoApiValueSetString(Item, "label", Info.sLabel) &&
-            MdoApiValueSetString(Item, "notify", Info.sNotify) &&
-            MdoApiValueSetString(Item, "schedule_id", Info.sScheduleId) &&
-            MdoApiValueSetUInt(Item, "schedule_generation",
-                Info.uScheduleGeneration) &&
-            MdoApiValueAppendTake(Items, &Item);
-        xrtValueRelease(Item);
-    }
-    if ( Ok ) Ok =
-        MdoApiValueSetUInt(Data, "total", Total) &&
-        MdoApiValueSetBool(Data, "truncated", Start != 0u) &&
-        MdoApiValueSetTake(Data, "items", &Items);
-    xrtValueRelease(Items);
-    xworkTaskSnapshotRelease(Snapshot);
     if ( !Ok ) { xrtValueRelease(Data); Data = NULL; }
     return MdoApiStateReply(Context, Data);
 }
