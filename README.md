@@ -25,6 +25,17 @@ Windows 可直接运行 `生成程序.bat`。Linux 使用同一个 Python 入口
 自动为 `mdo`。首次构建需要 xserver 支持的 Python、GCC/Clang 和平台链接工具；
 构建不依赖仓库根目录中预先存在的 `xs.exe` 或 `xsw.exe`。
 
+发布候选使用统一的低负载门禁：
+
+```powershell
+python tools/qa_release.py --xserver-root D:\GIT\xserver-mdo-refactor
+```
+
+它会验证依赖锁、113 项合同检查、严格 C11 编译、16 个真实 TCC
+运行时探针、两次确定性 pack，以及 Windows 单文件零写和打包启动回归。
+门禁范围、Linux 文件系统要求与 Ling 线上探针见[发布门禁](docs/release-gate.md)，
+当前功能和限制见[0.1.0-dev 发布说明](docs/release-notes-0.1.0-dev.md)。
+
 开发前先生成入口，再启动构建出的宿主：
 
 ```powershell

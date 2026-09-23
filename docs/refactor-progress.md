@@ -6,7 +6,7 @@
 
 | 仓库 | 开发位置/分支 | 当前基线 | 说明 |
 | --- | --- | --- | --- |
-| mdo | `D:\GIT\mdo` / 当前分支 | `f4a99bd` | 产品、计划与集成账本 |
+| mdo | `D:\GIT\mdo` / 当前分支 | `8edfcbb` | 产品、计划与集成账本 |
 | xrt | `D:\GIT\xrt-mdo-refactor` / `codex/mdo-refactor-xrt` | `5c4fbdc0` | 原工作树有既存未提交内容，隔离开发 |
 | xserver | `D:\GIT\xserver-mdo-refactor` / `codex/mdo-refactor-xs` | `dbd86c7` | 原工作树有既存未提交内容，隔离开发 |
 
@@ -122,8 +122,9 @@
 | MDO-9A 原生 Agent 工作台 | DONE | mdo `09a6422` | 92 项源码/构建合同；真实 xs/TCC API 探针覆盖 HTML/CSS/ES Module 静态资源；浏览器实测 1440×900 三栏、平板双栏与 390×844 移动布局、抽屉键盘关闭、新建会话和 hash 恢复，控制台零 error/warning；锁定依赖重新打包及隔离目录 5 秒单文件零写启动通过；未运行压力或高负载测试 | 不引入 Node/npm；按 bootstrap/session/catalog/task/run/navigation 资源域拆分 store；会话 timeline 通过 32 条 cursor 页有界回放并用 `requestAnimationFrame` 合并绘制，未知事件保序、history gap 显式呈现；composer、run 恢复/停止、统一任务面板、上下文面板及桌面/移动导航均接真实 API |
 | MDO-9B 设置与资源管理界面 | DONE | mdo `accfaac`、`22fc189` | 94 项源码/构建合同；严格 GCC C11 warning-as-error unity 编译；真实 xs/TCC API 探针覆盖连续 settings merge、未知字段/secret reference 保留与 ETag；浏览器实测 1440×900 和 390×844 设置深链路、修改门控、预览/提交/revision、主题切换、模型刷新和 Agent/Skill/Module/MCP 资源页，控制台零 error/warning；锁定依赖重新打包及隔离目录 5 秒单文件零写启动通过；未运行压力或高负载测试 | 服务端 PATCH 对现有用户 patch 做递归对象合并，PUT 保持完整替换，DELETE 恢复内置值；前端只接收安全类型字段和凭据状态，以预览指纹和强 ETag 阻止未确认或陈旧提交；设置路由独占工作区并保留原会话/检查器状态，收起抽屉退出键盘和无障碍树；模型、Agent、Skill、Module、MCP、权限、存储和诊断按独立 store 管理，长操作有界轮询 |
 | MDO-9C 高级会话与任务交互 | DONE | mdo `307f250`～`629878a` | 104 项源码/构建合同；严格 GCC C11 warning-as-error unity 编译；真实 xs/TCC API 探针覆盖 session 生命周期、强 ETag、分叉/截断/清空/导出、任务三通道增量输出、产物分块读取、一次性审批、持久调用恢复 token、重复/陈旧决策拒绝、record-uncertain 与恢复后验证；浏览器实测桌面和 390×844 移动恢复抽屉、显式决定门控，控制台零 error/warning；两次 pack SHA-256 一致，隔离目录 5 秒单文件零写启动通过；未运行压力或高负载测试 | 会话菜单与状态过滤覆盖完整生命周期，高级历史操作复用服务端合法 sequence 和 revision；任务检查器按绝对游标有界增量读取 stdout/stderr/result、事件和产物；权限请求与中断恢复统一进入决策面板，恢复视图以持久调用事实计算稳定 token，副作用调用只能显式选择 at-least-once 重试或记为不确定，模型中断也可无工具决定继续；阶段 MDO-9 完成 |
-| MDO-10 旧数据迁移 | DONE | mdo `7a755de`、`80e7f00`、`5519e78`、`2a20bcb` | 113 项源码/构建/前端合同；严格 GCC C11 warning-as-error unity 编译；真实 xs/TCC API 探针覆盖两来源预览、内容绑定令牌、陈旧令牌拒绝、转换期非法数据回滚、配置/secret/项目/会话/记忆/计划转换、当前 schema 复验、源保留、报告和原子发布；浏览器实测桌面与 390×844 移动迁移预览和二次确认；锁定依赖重新打包通过；未运行压力或高负载测试 | 锚定无链接扫描受文件数、目录深度、单文件和总字节上限约束；导入只写同级唯一临时目录，发布前重新预览并以不覆盖 rename 一次提交，失败删除临时目录并返回类型化错误；当前 Home 已存在时拒绝 merge；旧目录保持不变，secret 只写 0600 文件且报告不含正文；旧 UI event、cron、audit 和不兼容记忆明确跳过并报告；阶段 MDO-10 完成 |
-| QA-RELEASE | TODO | - | - | MDO-GATE 后实施 |
+| MDO-10 旧数据迁移 | DONE | mdo `7a755de`、`80e7f00`、`5519e78`、`2a20bcb`、`49b0fe1` | 113 项源码/构建/前端合同；严格 GCC C11 warning-as-error unity 编译；真实 xs/TCC API 探针覆盖两来源预览、内容绑定令牌、陈旧令牌拒绝、转换期非法数据回滚、配置/secret/项目/会话/记忆/计划转换、当前 schema 复验、源保留、报告和原子发布；浏览器实测桌面与 390×844 移动迁移预览和二次确认；锁定依赖重新打包通过；未运行压力或高负载测试 | 锚定无链接扫描受文件数、目录深度、单文件和总字节上限约束；导入只写同级唯一临时目录，发布前重新预览并以不覆盖 rename 一次提交，失败删除临时目录并返回类型化错误；当前 Home 已存在时拒绝 merge；旧目录保持不变，secret 只写 0600 文件且报告不含正文；旧 UI event、cron、audit 和不兼容记忆明确跳过并报告；Linux compact hosted C 不依赖未保证提供的 `limits.h`；阶段 MDO-10 完成 |
+| MDO-GATE 产品集成门禁 | DONE | mdo `2a20bcb`、`49b0fe1`；xserver `dbd86c7` | Windows/Linux 原生文件系统各 113 项检查、严格 GCC C11 warning-as-error、16 个真实 xs/TCC 有界运行时探针和两次确定性 pack 通过；迁移转换失败清理、源保留与无目标发布通过；未运行压力或高负载测试 | 收口 MDO-0～10；Linux compact hosted C 补齐 ctype/memchr，迁移源码移除非保证头依赖；阶段四完成 |
+| QA-RELEASE 发布压实 | DONE | mdo `8edfcbb` | Windows 单文件隔离目录 5 秒零写启动、打包 TCC 服务初始化后 20 秒存活且无 crash/dump/旁路日志；Windows/Linux pack 哈希分别稳定一致；发布门禁、release notes、迁移说明和已知限制齐全；未运行压力或高负载测试 | 提供统一 `tools/qa_release.py`；Ling 三协议真实线上探针因当前环境缺少三条 URL/key 未执行，属于可选发布项；移动原生宿主需在对应 runner 单独验收 |
 
 ## 已确认的工程事实
 
@@ -197,6 +198,6 @@
 
 ## 下一步
 
-1. 进入最终压实：执行 Windows/Linux 构建、开发/打包语义、单文件零写、迁移失败清理与回退演练，并整理 release notes；
-2. 运行环境提供三条显式 URL 和 runtime key 时，执行 Ling 3.0 Tiny 的 Chat Completions、Responses 与 Anthropic Messages 真实线上探针；
-3. 全部后续验收继续使用有界功能、故障注入和确定性交错，略过压力与高负载测试。
+1. 运行环境提供三条显式 URL 和 runtime key 时，执行 Ling 3.0 Tiny 的 Chat Completions、Responses 与 Anthropic Messages 真实线上探针；
+2. Android、iOS 或其他 Tier 2 平台 runner 可用时，补充原生宿主、文件系统和系统 WebView 验收；
+3. 后续发布统一运行 `tools/qa_release.py`，继续使用有界功能、故障恢复和确定性检查，略过压力与高负载测试。
