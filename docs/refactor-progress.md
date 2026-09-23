@@ -6,7 +6,7 @@
 
 | 仓库 | 开发位置/分支 | 当前基线 | 说明 |
 | --- | --- | --- | --- |
-| mdo | `D:\GIT\mdo` / 当前分支 | `2d97fa7` | 产品、计划与集成账本 |
+| mdo | `D:\GIT\mdo` / 当前分支 | `09a6422` | 产品、计划与集成账本 |
 | xrt | `D:\GIT\xrt-mdo-refactor` / `codex/mdo-refactor-xrt` | `5c4fbdc0` | 原工作树有既存未提交内容，隔离开发 |
 | xserver | `D:\GIT\xserver-mdo-refactor` / `codex/mdo-refactor-xs` | `a35e013` | 原工作树有既存未提交内容，隔离开发 |
 
@@ -118,7 +118,9 @@
 | MDO-7E 可恢复计划任务与 Agent 执行 | DONE | mdo `b876043`、`e348168`、`2336e1a`、`d5fa352` | 60 项源码/构建合同；Windows 严格 GCC C11 unity 编译；12 个真实 xs/TCC 有界探针；Schedule 探针覆盖创建、revision 启停/删除、零写空启动、全局禁用、claim/finish、结果历史、审计脱敏、损坏隔离、重启恢复和无 claim 的 misfire cursor 持久化；Executor 探针覆盖普通 Agent run、异步收割、owner 生命周期和 task/run 对齐；锁定依赖完整宿主与单文件重建、隔离目录 5 秒零写启动通过；未运行压力或高负载测试 | 每定义严格 JSON 与跨进程单 writer，xwork 权威执行 recurrence/timezone/misfire/overlap；只在存在到期项时进入持久化事务，skip/overlap 造成的无 claim 推进也写回；轻量宿主 timer 显式传时钟并将 claim 运行成普通 Agent session/run，复用模型、工具、权限、审计与统一 task，完成结果以 task ID 和 Agent run ID 写入有界历史 |
 | WORK-117～118 Schedule 定义原子替换与回滚 | DONE | xrt `9dbd4e2f`、`97918208`、`5c4fbdc0`；xserver `7b76872`、`a35e013` | xwork Windows 有界完整套件覆盖替换、活动定义拒绝和精确 generation 回滚；xserver 35 项扩展检查除预期 Linux-only skip 外通过，20 个 vendored 生产文件与权威 xrt 逐字节一致；未运行压力或高负载测试 | xwork 3.5.0 在 scheduler 锁内发布完整候选并保留旧借用字符串；宿主持久化失败可按新旧 generation 恢复原 cursor/counter；同时消除 xserver 中两项 HTTP module root 的既存来源漂移 |
 | MDO-8 版本化 Web API | DONE | mdo `c090aaf`～`2d97fa7`；xrt `5c4fbdc0`；xserver `a35e013` | 83 项源码/构建合同；Windows 严格 GCC C11 unity 编译；真实 xs/TCC API 探针覆盖统一 envelope、HEAD/OPTIONS、严格 JSON、ETag、catalog reload、长操作、MCP、session/run/schedule/task 全生命周期、cursor replay 与 Base64 增量输出；锁定依赖重新打包及隔离目录 5 秒单文件零写启动通过；未运行压力或高负载测试 | `/api/v1` 通过服务 snapshot 管理全部产品资源；session 与 runtime event 可按 cursor 重放，长操作使用稳定 ID；设置、会话与计划用强 ETag 事务更新；统一 task 暴露详情、revision 事件、三通道绝对游标输出和幂等取消，任意输出字节使用 Base64；拉取式有界 replay 不创建慢客户端队列 |
-| MDO-9 原生 Web 前端与交互 | TODO | - | - | 下一步按资源域 ES Modules store 建立 Codex 类三栏、响应式抽屉、会话 timeline/composer、任务详情和完整设置导航 |
+| MDO-9A 原生 Agent 工作台 | DONE | mdo `09a6422` | 92 项源码/构建合同；真实 xs/TCC API 探针覆盖 HTML/CSS/ES Module 静态资源；浏览器实测 1440×900 三栏、平板双栏与 390×844 移动布局、抽屉键盘关闭、新建会话和 hash 恢复，控制台零 error/warning；锁定依赖重新打包及隔离目录 5 秒单文件零写启动通过；未运行压力或高负载测试 | 不引入 Node/npm；按 bootstrap/session/catalog/task/run/navigation 资源域拆分 store；会话 timeline 通过 32 条 cursor 页有界回放并用 `requestAnimationFrame` 合并绘制，未知事件保序、history gap 显式呈现；composer、run 恢复/停止、统一任务面板、上下文面板及桌面/移动导航均接真实 API |
+| MDO-9B 设置与资源管理界面 | TODO | - | - | 实现完整设置导航、domain patch 预览与 ETag 提交，以及模型、Agent、Skill、Module、MCP、权限、存储和诊断页面 |
+| MDO-9C 高级会话与任务交互 | TODO | - | - | 接入会话重命名/置顶/归档/回收站/恢复/分叉/截断/导出，任务输出增量查看、产物与审批的上下文交互 |
 | MDO-10 旧数据迁移 | TODO | - | - | MDO-9 主交互稳定后实现只读检测、预览、临时导入、校验和原子发布 |
 | QA-RELEASE | TODO | - | - | MDO-GATE 后实施 |
 
@@ -187,9 +189,10 @@
 61. 记忆 store 的 scope revision 是磁盘乐观并发令牌，manager generation 是当前进程的可观察发布代；写入必须先追加不含正文的 prepared audit，再原子替换 JSON store。Agent 只在创建 session 时捕获一代全局/项目 owned snapshot，用有界不可信 JSONL 注入；工具按 Agent 实例绑定项目身份并继续经过 xwork effect/permission 裁剪。目录导入必须重新校验严格布局、schema、计数和逐文件 SHA-256，核对 preview generation 且只允许空目标，不能隐式 merge 或覆盖本地记忆。
 62. mdo 计划任务只持久化产品定义和 xwork 恢复 cursor，不复制 recurrence 算法。claim 前必须只读判断是否存在到期项，空 catalog/未来 occurrence 不得为了轮询而创建 Home 或 writer lock；一旦调用 xwork claim，无论是否返回 task，都必须比较并持久化所有被 skip/overlap 推进的 runtime cursor，否则重启会重复处理已跳过 occurrence。
 63. 自动计划执行属于 mdo 宿主驱动而不是 xwork 隐式时钟：轻量 timer 把显式 Unix 微秒时间交给同一个 claim API，随后创建普通 MdoAgentSession/MdoAgentRun，复用 Agent、模型、Skill、Memory、工具、permission/effect 和审计边界。scheduled task ID 与 Agent run ID 必须共同写入完成历史；shutdown 在底层 manager 退场前取消并回收活动 run。
+64. 浏览器 UI 不复制服务端运行状态机：资源域 store 只保存 API snapshot、请求状态和 replay cursor；会话切换与页面重载都从服务端恢复。模型增量、推理、工具、任务、产物与恢复事件统一映射到 timeline，游标缺口必须显式显示，不能用浏览器本地历史掩盖。
 
 ## 下一步
 
-1. 进入 MDO-9：以原生 HTML/CSS/ES Modules 实现资源域 store、Codex 类主界面、session timeline/composer、任务详情、设置导航和 PC/窄屏/移动端交互；
+1. 进入 MDO-9B：在现有原生工作台内实现设置与资源管理路由，优先完成设置 domain 的预览、差异确认和 ETag 提交，再接模型、Agent、Skill、Module、MCP、权限、存储与诊断只读/操作视图；
 2. 运行环境提供三条显式 URL 和 runtime key 时，再执行 Ling 3.0 Tiny 的 Chat Completions、Responses 与 Anthropic Messages 真实线上探针；
 3. 全部后续验收继续使用有界功能、故障注入和确定性交错，略过压力与高负载测试。
