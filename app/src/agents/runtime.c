@@ -20,6 +20,7 @@ typedef struct MdoAgentRoute {
     const char* WireModel;
     char* ReasoningEffort;
     MdoModelProtocol Protocol;
+    uint32 MaxOutputTokens;
     xllm_client* Client;
 } MdoAgentRoute;
 
@@ -29,6 +30,7 @@ typedef struct MdoAgentOwner {
     MdoModuleCatalog* Modules;
     MdoSkillCatalog* Skills;
     xllm_session* LlmSession;
+    xmutex* RouteLock;
     MdoAgentRoute* Routes;
     size_t RouteCount;
     size_t RouteCapacity;
@@ -240,6 +242,7 @@ static void MdoAgentOwnerRelease(MdoAgentOwner* Owner)
         xllmClientDestroy(Owner->Routes[i].Client);
         xrtFree(Owner->Routes[i].ReasoningEffort);
     }
+    if ( Owner->RouteLock != NULL ) xrtMutexDestroy(Owner->RouteLock);
     for ( i = Owner->AcquiredAgentCount; i != 0u; --i ) {
         MdoModuleCatalogAgentRelease(Owner->Modules,
             Owner->AcquiredAgents[i - 1u]);
@@ -272,6 +275,8 @@ static xllm_result MdoAgentsComplete(void* UserData,
 {
     MdoAgentOwner* Owner = (MdoAgentOwner*)UserData;
     MdoAgentRoute* Match = NULL;
+    MdoModelClientOptions Options;
+    xllm_client* Client;
     size_t Matches = 0u;
     size_t i;
     if ( Owner == NULL || Request == NULL || Response == NULL ) {
@@ -297,7 +302,7 @@ static xllm_result MdoAgentsComplete(void* UserData,
         Match = Route;
         ++Matches;
     }
-    if ( Match == NULL || Matches != 1u || Match->Client == NULL ) {
+    if ( Match == NULL || Matches != 1u ) {
         if ( Error != NULL ) {
             xllmErrorInit(Error);
             Error->eCode = XLLM_ERROR_INVALID_ARGUMENT;
@@ -307,8 +312,31 @@ static xllm_result MdoAgentsComplete(void* UserData,
         }
         return XLLM_RESULT_ERROR;
     }
-    return xllmClientComplete(Match->Client, Request, Callbacks, Response,
-        Error);
+    if ( Owner->RouteLock == NULL || !xrtMutexLock(Owner->RouteLock) ) {
+        if ( Error != NULL ) {
+            xllmErrorInit(Error);
+            Error->eCode = XLLM_ERROR_HOOK;
+            snprintf(Error->sMessage, sizeof(Error->sMessage), "%s",
+                "model route is unavailable");
+        }
+        return XLLM_RESULT_ERROR;
+    }
+    /* Routes are published before runs start.  A model client can therefore
+     * be initialized on first use without changing the catalog generation;
+     * the lock allows concurrent main/subagent calls to share one client. */
+    if ( Match->Client == NULL ) {
+        MdoModelClientOptionsInit(&Options);
+        Options.ModelId = Match->ModelId;
+        Options.Protocol = Match->Protocol;
+        Options.ReasoningEffort = Match->ReasoningEffort;
+        Options.MaxOutputTokens = Match->MaxOutputTokens;
+        Match->Client = MdoModelClientCreate(Owner->Models, &Options, NULL,
+            Error);
+    }
+    Client = Match->Client;
+    (void)xrtMutexUnlock(Owner->RouteLock);
+    if ( Client == NULL ) return XLLM_RESULT_ERROR;
+    return xllmClientComplete(Client, Request, Callbacks, Response, Error);
 }
 
 static bool MdoAgentOwnerAcquireAgent(MdoAgentOwner* Owner,
@@ -348,9 +376,6 @@ static bool MdoAgentOwnerEnsureRoute(MdoAgentOwner* Owner,
     const MdoAgentResolvedModel* Model, xwork_error* Error)
 {
     MdoAgentRoute* Route;
-    MdoModelClientOptions Options;
-    MdoModelClientInfo Info;
-    xllm_error ModelError;
     size_t i;
     for ( i = 0u; i < Owner->RouteCount; ++i ) {
         Route = &Owner->Routes[i];
@@ -377,30 +402,12 @@ static bool MdoAgentOwnerEnsureRoute(MdoAgentOwner* Owner,
     Route->ProviderId = Model->Info.ProviderId;
     Route->WireModel = Model->Info.WireModel;
     Route->Protocol = Model->Protocol;
+    Route->MaxOutputTokens = Model->Info.MaxOutputTokens;
     Route->ReasoningEffort = xrtStrDup(Model->ReasoningEffort);
     if ( Route->ReasoningEffort == NULL ) {
         MdoAgentsError(Error, XWORK_ERROR_OUT_OF_MEMORY,
             "cannot copy Agent model route");
         return false;
-    }
-    if ( Owner->ExternalComplete == NULL ) {
-        MdoModelClientOptionsInit(&Options);
-        Options.ModelId = Model->Info.Id;
-        Options.Protocol = Model->Protocol;
-        Options.ReasoningEffort = Model->ReasoningEffort;
-        Options.MaxOutputTokens = Model->Info.MaxOutputTokens;
-        memset(&Info, 0, sizeof(Info));
-        Info.Size = sizeof(Info);
-        xllmErrorInit(&ModelError);
-        Route->Client = MdoModelClientCreate(Owner->Models, &Options, &Info,
-            &ModelError);
-        if ( Route->Client == NULL ) {
-            xrtFree(Route->ReasoningEffort);
-            memset(Route, 0, sizeof(*Route));
-            MdoAgentsModelError(Error, &ModelError,
-                "cannot create Agent model client");
-            return false;
-        }
     }
     ++Owner->RouteCount;
     return true;
@@ -938,6 +945,12 @@ MdoAgentSession* MdoAgentSessionCreateWithRuntime(xwork_runtime* Runtime,
         goto fail;
     }
     xrtAtomic32Init(&Owner->Refs, 1u);
+    Owner->RouteLock = xrtMutexCreate();
+    if ( Owner->RouteLock == NULL ) {
+        MdoAgentsError(Error, XWORK_ERROR_OUT_OF_MEMORY,
+            "cannot allocate Agent model route lock");
+        goto fail;
+    }
     Session = (MdoAgentSession*)xrtCalloc(1u, sizeof(*Session));
     if ( Session == NULL ) {
         MdoAgentsError(Error, XWORK_ERROR_OUT_OF_MEMORY,

@@ -2102,6 +2102,69 @@ def run_probe(host: Path) -> None:
                 raise RuntimeError(f"{failure}\n--- xs log ---\n{output[-6000:]}") from failure
 
 
+def run_unconfigured_model_probe(host: Path) -> None:
+    """A saved task must not require a live model endpoint at creation."""
+    with tempfile.TemporaryDirectory(prefix="api-unconfigured-", dir=ROOT / ".build") as raw:
+        base = Path(raw)
+        site = base / "site"
+        shutil.copytree(ROOT / "app", site)
+        config_path = site / "xs.json"
+        config = json.loads(config_path.read_text(encoding="utf-8"))
+        port = free_port()
+        config["services"][0]["port"] = port
+        config_path.write_text(json.dumps(config), encoding="utf-8")
+        environment = os.environ.copy()
+        for name in (
+            "MDO_LING_CHAT_COMPLETIONS_URL", "MDO_LING_RESPONSES_URL",
+            "MDO_LING_ANTHROPIC_URL", "MDO_LING_API_KEY",
+        ):
+            environment.pop(name, None)
+        log_path = base / "xs.log"
+        with log_path.open("wb") as log:
+            process = subprocess.Popen(
+                [str(host), str(config_path), "--", "--home", str(base / "home")],
+                cwd=site, env=environment, stdout=log, stderr=subprocess.STDOUT,
+                creationflags=subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0,
+            )
+            failure: BaseException | None = None
+            try:
+                wait_ready(port, process)
+                for body in (
+                    {"project_id": "default", "title": "Unconfigured default model"},
+                    {"project_id": "default", "model_id": "ling-3.0-tiny",
+                     "title": "Unconfigured selected model"},
+                ):
+                    status, _, response = request(
+                        port, "POST", "/api/v1/sessions",
+                        body=json.dumps(body).encode(),
+                        headers={"Content-Type": "application/json"})
+                    document = json.loads(response)
+                    assert status == 201, (status, document)
+                    assert document["data"]["model_id"] == "ling-3.0-tiny", document
+                    assert (base / "home/sessions/default" /
+                            document["data"]["id"] / "meta.json").is_file()
+                status, _, response = request(
+                    port, "POST", "/api/v1/sessions",
+                    body=b'{"project_id":"default","model_id":"unknown"}',
+                    headers={"Content-Type": "application/json"})
+                document = json.loads(response)
+                assert status == 422, (status, document)
+                assert document["error"]["code"] == "session_profile_invalid", document
+            except BaseException as error:
+                failure = error
+            finally:
+                if process.poll() is None:
+                    process.terminate()
+                    try:
+                        process.wait(timeout=5.0)
+                    except subprocess.TimeoutExpired:
+                        process.kill()
+                        process.wait(timeout=3.0)
+            if failure is not None:
+                output = log_path.read_text(encoding="utf-8", errors="replace")
+                raise RuntimeError(f"{failure}\n--- xs log ---\n{output[-6000:]}") from failure
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--host", type=Path,
@@ -2111,6 +2174,7 @@ def main() -> int:
     if not host.is_file():
         print(f"missing xs host: {host}", file=sys.stderr)
         return 2
+    run_unconfigured_model_probe(host)
     run_probe(host)
     print("API runtime probe: PASS")
     return 0

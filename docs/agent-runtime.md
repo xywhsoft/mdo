@@ -73,9 +73,12 @@ Skill 会附加不可信 reference 提示。Skill 声明的每个必需工具必
 
 ## 回调所有权
 
-生产路径通过 model catalog 延迟解析 endpoint 与 credential reference，并为
-每条 route 创建 `xllm_client`。secret 只在 client factory 内短暂出现并立即
-清零，不进入公开 catalog、session info、日志或持久化数据。
+生产路径在创建 session 时固定 model catalog、校验 profile 和 route。首次
+实际模型调用时才解析 endpoint 与 credential reference，并为对应 route 创建
+共享的 `xllm_client`；并发调用由 route 锁串行初始化。因此，即使运行环境尚未
+配置模型服务，也可以创建和持久化任务；模型调用仍会准确报告配置失败。
+secret 只在 client factory 内短暂出现并立即清零，不进入公开 catalog、
+session info、日志或持久化数据。
 
 `OnModelComplete` 是离线测试和受控宿主的可注入边界。使用它时仍会完整验证
 model profile，但跳过 endpoint 和 credential 解析。调用方若传入任何回调状态，
