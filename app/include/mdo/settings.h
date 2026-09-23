@@ -36,6 +36,9 @@ typedef struct MdoSettingsServiceSnapshot {
     bool Degraded;
     uint64 Transactions;
     uint64 Rollbacks;
+    MdoConfigSnapshot Config;
+    MdoConfigAgentSettings Agent;
+    MdoConfigWebSettings Web;
     char LastError[256];
 } MdoSettingsServiceSnapshot;
 

@@ -5,6 +5,7 @@
 #include "../../include/mdo/config.h"
 #include "../../include/mdo/schedules.h"
 #include "../../include/mdo/sessions.h"
+#include "../../include/mdo/settings.h"
 
 #define MDO_API_LIST_LIMIT 100u
 
@@ -94,67 +95,81 @@ static cstr MdoApiTaskStateText(xwork_task_state State)
 
 bool MdoApiSettingsRoute(MdoApiContext* Context)
 {
-    MdoConfigSnapshot Snapshot;
-    MdoConfigAgentSettings Agent;
-    MdoConfigWebSettings Web;
+    MdoSettingsServiceSnapshot Service;
     xvalue* Data = xrtValueObject();
     xvalue* Patches = xrtValueObject();
     xvalue* AgentValue = xrtValueObject();
     xvalue* WebValue = xrtValueObject();
+    xvalue* ServiceValue = xrtValueObject();
     bool Ok;
 
-    memset(&Snapshot, 0, sizeof(Snapshot)); Snapshot.Size = sizeof(Snapshot);
-    memset(&Agent, 0, sizeof(Agent)); Agent.Size = sizeof(Agent);
-    memset(&Web, 0, sizeof(Web)); Web.Size = sizeof(Web);
+    memset(&Service, 0, sizeof(Service)); Service.Size = sizeof(Service);
     Ok = Data != NULL && Patches != NULL && AgentValue != NULL &&
-        WebValue != NULL && MdoConfigGetSnapshot(&Snapshot) &&
-        MdoConfigGetAgentSettings(&Agent) && MdoConfigGetWebSettings(&Web);
+        WebValue != NULL && ServiceValue != NULL &&
+        MdoSettingsServiceGetSnapshot(&Service);
     if ( Ok ) Ok =
         MdoApiValueSetBool(Patches, "settings",
-            Snapshot.UserPatch[MDO_CONFIG_SETTINGS]) &&
+            Service.Config.UserPatch[MDO_CONFIG_SETTINGS]) &&
         MdoApiValueSetBool(Patches, "models",
-            Snapshot.UserPatch[MDO_CONFIG_MODELS]) &&
+            Service.Config.UserPatch[MDO_CONFIG_MODELS]) &&
         MdoApiValueSetBool(Patches, "permissions",
-            Snapshot.UserPatch[MDO_CONFIG_PERMISSIONS]) &&
-        MdoApiValueSetUInt(Data, "schema_version", Snapshot.SchemaVersion) &&
-        MdoApiValueSetUInt(Data, "revision", Snapshot.Revision) &&
-        MdoApiValueSetBool(Data, "runtime_override", Snapshot.RuntimeOverride) &&
-        MdoApiValueSetUInt(Data, "effective_bytes", Snapshot.EffectiveBytes) &&
+            Service.Config.UserPatch[MDO_CONFIG_PERMISSIONS]) &&
+        MdoApiValueSetUInt(Data, "schema_version",
+            Service.Config.SchemaVersion) &&
+        MdoApiValueSetUInt(Data, "revision", Service.Config.Revision) &&
+        MdoApiValueSetBool(Data, "runtime_override",
+            Service.Config.RuntimeOverride) &&
+        MdoApiValueSetUInt(Data, "effective_bytes",
+            Service.Config.EffectiveBytes) &&
         MdoApiValueSetTake(Data, "user_patches", &Patches);
     if ( Ok ) Ok =
-        MdoApiValueSetBool(AgentValue, "memory", Agent.MemoryEnabled) &&
-        MdoApiValueSetBool(AgentValue, "schedules", Agent.SchedulesEnabled) &&
+        MdoApiValueSetBool(AgentValue, "memory", Service.Agent.MemoryEnabled) &&
+        MdoApiValueSetBool(AgentValue, "schedules",
+            Service.Agent.SchedulesEnabled) &&
         MdoApiValueSetUInt(AgentValue, "max_parallel_tools",
-            Agent.MaxParallelTools) &&
+            Service.Agent.MaxParallelTools) &&
         MdoApiValueSetUInt(AgentValue, "max_parallel_subagents",
-            Agent.MaxParallelSubagents) &&
+            Service.Agent.MaxParallelSubagents) &&
         MdoApiValueSetString(AgentValue, "reasoning_effort",
-            Agent.ReasoningEffort) &&
+            Service.Agent.ReasoningEffort) &&
         MdoApiValueSetString(AgentValue, "permission_profile",
-            Agent.PermissionProfile) &&
+            Service.Agent.PermissionProfile) &&
         MdoApiValueSetTake(Data, "agent", &AgentValue);
     if ( Ok ) Ok =
-        MdoApiValueSetBool(WebValue, "enabled", Web.Enabled) &&
-        MdoApiValueSetBool(WebValue, "allow_http", Web.AllowHttp) &&
+        MdoApiValueSetBool(WebValue, "enabled", Service.Web.Enabled) &&
+        MdoApiValueSetBool(WebValue, "allow_http", Service.Web.AllowHttp) &&
         MdoApiValueSetBool(WebValue, "allow_private_networks",
-            Web.AllowPrivateNetworks) &&
-        MdoApiValueSetUInt(WebValue, "timeout_ms", Web.TimeoutMilliseconds) &&
+            Service.Web.AllowPrivateNetworks) &&
+        MdoApiValueSetUInt(WebValue, "timeout_ms",
+            Service.Web.TimeoutMilliseconds) &&
         MdoApiValueSetUInt(WebValue, "idle_timeout_ms",
-            Web.IdleTimeoutMilliseconds) &&
+            Service.Web.IdleTimeoutMilliseconds) &&
         MdoApiValueSetUInt(WebValue, "max_response_bytes",
-            Web.MaxResponseBytes) &&
-        MdoApiValueSetUInt(WebValue, "max_text_bytes", Web.MaxTextBytes) &&
-        MdoApiValueSetUInt(WebValue, "max_documents", Web.MaxDocuments) &&
-        MdoApiValueSetUInt(WebValue, "max_results", Web.MaxResults) &&
-        MdoApiValueSetString(WebValue, "provider", Web.Provider) &&
-        MdoApiValueSetString(WebValue, "endpoint", Web.Endpoint) &&
+            Service.Web.MaxResponseBytes) &&
+        MdoApiValueSetUInt(WebValue, "max_text_bytes",
+            Service.Web.MaxTextBytes) &&
+        MdoApiValueSetUInt(WebValue, "max_documents",
+            Service.Web.MaxDocuments) &&
+        MdoApiValueSetUInt(WebValue, "max_results", Service.Web.MaxResults) &&
+        MdoApiValueSetString(WebValue, "provider", Service.Web.Provider) &&
+        MdoApiValueSetString(WebValue, "endpoint", Service.Web.Endpoint) &&
         MdoApiValueSetBool(WebValue, "credential_configured",
-            Web.SecretRef[0] != '\0') &&
+            Service.Web.SecretRef[0] != '\0') &&
         MdoApiValueSetTake(Data, "web", &WebValue);
+    if ( Ok ) Ok =
+        MdoApiValueSetBool(ServiceValue, "runtime_consistent",
+            !Service.Degraded) &&
+        MdoApiValueSetUInt(ServiceValue, "transactions",
+            Service.Transactions) &&
+        MdoApiValueSetUInt(ServiceValue, "rollbacks", Service.Rollbacks) &&
+        MdoApiValueSetString(ServiceValue, "last_error", Service.LastError) &&
+        MdoApiValueSetTake(Data, "transaction_service", &ServiceValue);
     xrtValueRelease(Patches); xrtValueRelease(AgentValue);
-    xrtValueRelease(WebValue);
+    xrtValueRelease(WebValue); xrtValueRelease(ServiceValue);
     if ( !Ok ) { xrtValueRelease(Data); Data = NULL; }
-    return MdoApiStateReply(Context, Data);
+    if ( Data == NULL ) return MdoApiStateReply(Context, NULL);
+    return MdoApiReplySuccessTakeRevision(Context, 200u, Data,
+        Service.Config.Revision);
 }
 
 bool MdoApiSessionsRoute(MdoApiContext* Context)

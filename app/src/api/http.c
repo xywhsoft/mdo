@@ -19,11 +19,11 @@ static bool MdoApiConnectionSend(XS_HttpReq* pRequest, const void* pData,
 }
 
 static bool MdoApiReplyRaw(MdoApiContext* pContext, uint16 Status,
-    const void* pBody, size_t BodySize, cstr Allow)
+    const void* pBody, size_t BodySize, cstr Allow, cstr EntityTag)
 {
     char Head[1536];
     char Length[32];
-    xhttpfield Fields[7];
+    xhttpfield Fields[8];
     size_t FieldCount = 0u;
     size_t HeadSize = 0u;
     xstrview Reason;
@@ -49,6 +49,10 @@ static bool MdoApiReplyRaw(MdoApiContext* pContext, uint16 Status,
     if ( Allow != NULL ) {
         Fields[FieldCount++] = (xhttpfield){
             XRT_STR_LITERAL("Allow"), xrtStrView(Allow) };
+    }
+    if ( EntityTag != NULL ) {
+        Fields[FieldCount++] = (xhttpfield){
+            XRT_STR_LITERAL("ETag"), xrtStrView(EntityTag) };
     }
     Reason = xrtHttpStatusText(Status);
     if ( !xrtHttp1ResponseWrite(XHTTP_VERSION_1_1, Status, Reason,
@@ -86,11 +90,11 @@ static bool MdoApiReplySerializationFailure(MdoApiContext* pContext,
         pContext != NULL ? pContext->RequestId : "unavailable");
 
     if ( Count < 0 || (size_t)Count >= sizeof(Body) ) return false;
-    return MdoApiReplyRaw(pContext, Status, Body, (size_t)Count, NULL);
+    return MdoApiReplyRaw(pContext, Status, Body, (size_t)Count, NULL, NULL);
 }
 
 static bool MdoApiReplyValue(MdoApiContext* pContext, uint16 Status,
-    xvalue* pEnvelope, cstr Allow)
+    xvalue* pEnvelope, cstr Allow, cstr EntityTag)
 {
     str Json;
     size_t JsonSize = 0u;
@@ -104,7 +108,8 @@ static bool MdoApiReplyValue(MdoApiContext* pContext, uint16 Status,
         xrtFree(Json);
         return MdoApiReplySerializationFailure(pContext, 500u);
     }
-    Result = MdoApiReplyRaw(pContext, Status, Json, JsonSize, Allow);
+    Result = MdoApiReplyRaw(pContext, Status, Json, JsonSize, Allow,
+        EntityTag);
     xrtFree(Json);
     return Result;
 }
@@ -124,7 +129,28 @@ bool MdoApiReplySuccessTake(MdoApiContext* pContext, uint16 Status,
         xrtValueRelease(Envelope);
         return MdoApiReplySerializationFailure(pContext, 500u);
     }
-    return MdoApiReplyValue(pContext, Status, Envelope, Allow);
+    return MdoApiReplyValue(pContext, Status, Envelope, Allow, NULL);
+}
+
+bool MdoApiReplySuccessTakeRevision(MdoApiContext* pContext, uint16 Status,
+    xvalue* pData, uint64 Revision)
+{
+    char EntityTag[64];
+    xvalue* Envelope = xrtValueObject();
+    int Count = snprintf(EntityTag, sizeof(EntityTag),
+        "\"mdo-config-%llu\"", (unsigned long long)Revision);
+
+    if ( Count <= 0 || (size_t)Count >= sizeof(EntityTag) || pData == NULL ||
+         Envelope == NULL || !MdoApiEnvelopeBase(Envelope, pContext, true) ) {
+        xrtValueRelease(pData);
+        xrtValueRelease(Envelope);
+        return MdoApiReplySerializationFailure(pContext, 500u);
+    }
+    if ( !xrtValueObjectSetNew(Envelope, XRT_STR_LITERAL("data"), pData) ) {
+        xrtValueRelease(Envelope);
+        return MdoApiReplySerializationFailure(pContext, 500u);
+    }
+    return MdoApiReplyValue(pContext, Status, Envelope, NULL, EntityTag);
 }
 
 bool MdoApiReplyError(MdoApiContext* pContext, uint16 Status, cstr Code,
@@ -152,7 +178,7 @@ bool MdoApiReplyError(MdoApiContext* pContext, uint16 Status, cstr Code,
         xrtValueRelease(Envelope);
         return MdoApiReplySerializationFailure(pContext, 500u);
     }
-    return MdoApiReplyValue(pContext, Status, Envelope, Allow);
+    return MdoApiReplyValue(pContext, Status, Envelope, Allow, NULL);
 }
 
 bool MdoApiReplyOptions(MdoApiContext* pContext, cstr Allow)

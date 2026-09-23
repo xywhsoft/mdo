@@ -48,6 +48,8 @@ bool MdoApiValueSetStrings(xvalue* Object, cstr Key,
 
 bool MdoApiReplySuccessTake(MdoApiContext* pContext, uint16 Status,
     xvalue* pData, cstr Allow);
+bool MdoApiReplySuccessTakeRevision(MdoApiContext* pContext, uint16 Status,
+    xvalue* pData, uint64 Revision);
 bool MdoApiReplyError(MdoApiContext* pContext, uint16 Status, cstr Code,
     cstr Message, cstr Allow);
 bool MdoApiReplyOptions(MdoApiContext* pContext, cstr Allow);
@@ -75,6 +77,7 @@ bool MdoApiStorageRoute(MdoApiContext* pContext);
 bool MdoApiEventsRoute(MdoApiContext* pContext);
 bool MdoApiSessionEventsRoute(MdoApiContext* pContext);
 bool MdoApiSettingsPreviewRoute(MdoApiContext* pContext);
+bool MdoApiSettingsMutationRoute(MdoApiContext* pContext);
 bool MdoApiModelsReloadRoute(MdoApiContext* pContext);
 bool MdoApiSkillsReloadRoute(MdoApiContext* pContext);
 bool MdoApiModulesReloadRoute(MdoApiContext* pContext);

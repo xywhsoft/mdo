@@ -165,6 +165,15 @@ bool MdoSettingsServiceGetSnapshot(MdoSettingsServiceSnapshot* Snapshot)
     Size = Snapshot->Size;
     memset(Snapshot, 0, sizeof(*Snapshot));
     Snapshot->Size = Size;
+    Snapshot->Config.Size = sizeof(Snapshot->Config);
+    Snapshot->Agent.Size = sizeof(Snapshot->Agent);
+    Snapshot->Web.Size = sizeof(Snapshot->Web);
+    if ( !MdoConfigGetSnapshot(&Snapshot->Config) ||
+         !MdoConfigGetAgentSettings(&Snapshot->Agent) ||
+         !MdoConfigGetWebSettings(&Snapshot->Web) ) {
+        (void)xrtMutexUnlock(g_MdoSettings.Lock);
+        return false;
+    }
     Snapshot->Initialized = g_MdoSettings.Initialized;
     Snapshot->Degraded = g_MdoSettings.Degraded;
     Snapshot->Transactions = g_MdoSettings.Transactions;

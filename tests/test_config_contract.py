@@ -17,6 +17,9 @@ class ConfigContractTests(unittest.TestCase):
         self.assertIn("MdoConfigImport(Domain", service)
         self.assertIn("MdoSettingsRollbackRuntime", service)
         self.assertIn("g_MdoSettings.Degraded = true", service)
+        self.assertIn("MdoConfigGetSnapshot(&Snapshot->Config)", service)
+        self.assertIn("MdoConfigGetAgentSettings(&Snapshot->Agent)", service)
+        self.assertIn("MdoConfigGetWebSettings(&Snapshot->Web)", service)
 
     def setUp(self) -> None:
         self.defaults = json.loads(

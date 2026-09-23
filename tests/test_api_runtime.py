@@ -295,6 +295,113 @@ def run_probe(host: Path) -> None:
 
                 assert not home.exists(), list(base.iterdir())
                 assert not (base / "wrong-environment-home").exists(), list(base.iterdir())
+
+                status, headers, body = request(port, "GET", "/api/v1/settings")
+                settings_document = json.loads(body)
+                assert status == 200, (status, body)
+                assert_common(headers, settings_document)
+                initial_revision = settings_document["data"]["revision"]
+                initial_etag = headers["etag"]
+                assert initial_etag == f'"mdo-config-{initial_revision}"', headers
+                assert settings_document["data"]["transaction_service"] == {
+                    "runtime_consistent": True,
+                    "transactions": 0,
+                    "rollbacks": 0,
+                    "last_error": "",
+                }, settings_document
+
+                for supplied_headers, expected_status, code in (
+                    ({"Content-Type": "application/json"}, 428,
+                     "precondition_required"),
+                    ({"Content-Type": "application/json",
+                      "If-Match": str(initial_revision)}, 400,
+                     "invalid_precondition"),
+                    ({"Content-Type": "application/json",
+                      "If-Match": 'W/"mdo-config-1"'}, 400,
+                     "invalid_precondition"),
+                ):
+                    status, headers, body = request(
+                        port, "PUT", "/api/v1/settings/settings",
+                        body=preview_document, headers=supplied_headers)
+                    document = json.loads(body)
+                    assert status == expected_status, (status, body)
+                    assert_common(headers, document)
+                    assert document["error"]["code"] == code, document
+
+                status, headers, body = request(
+                    port, "PUT", "/api/v1/settings/settings",
+                    body=preview_document,
+                    headers={"Content-Type": "application/json",
+                             "If-Match": initial_etag})
+                document = json.loads(body)
+                assert status == 200, (status, body)
+                assert_common(headers, document)
+                mutation = document["data"]
+                assert mutation["domain"] == "settings", mutation
+                assert mutation["changed"] is True, mutation
+                assert mutation["restored"] is False, mutation
+                assert mutation["previous_revision"] == initial_revision, mutation
+                assert mutation["revision"] == initial_revision + 1, mutation
+                current_etag = headers["etag"]
+                assert current_etag == (
+                    f'"mdo-config-{mutation["revision"]}"'), headers
+                stored = json.loads((home / "config/settings.json").read_text(
+                    encoding="utf-8"))
+                assert stored["patch"]["appearance"]["theme"] == "dark", stored
+
+                stale_document = json.dumps({
+                    "schema_version": 1,
+                    "patch": {"appearance": {"theme": "light"}},
+                }).encode()
+                status, headers, body = request(
+                    port, "PUT", "/api/v1/settings/settings",
+                    body=stale_document,
+                    headers={"Content-Type": "application/json",
+                             "If-Match": initial_etag})
+                document = json.loads(body)
+                assert status == 412, (status, body)
+                assert_common(headers, document)
+                assert document["error"]["code"] == "revision_conflict", document
+
+                status, headers, body = request(
+                    port, "DELETE", "/api/v1/settings/settings",
+                    body=b"{}", headers={"Content-Type": "application/json",
+                                          "If-Match": current_etag})
+                document = json.loads(body)
+                assert status == 400, (status, body)
+                assert document["error"]["code"] == "body_not_allowed", document
+
+                status, headers, body = request(
+                    port, "DELETE", "/api/v1/settings/settings",
+                    headers={"If-Match": current_etag})
+                document = json.loads(body)
+                assert status == 200, (status, body)
+                assert_common(headers, document)
+                mutation = document["data"]
+                assert mutation["changed"] is True, mutation
+                assert mutation["restored"] is True, mutation
+                assert mutation["revision"] == initial_revision + 2, mutation
+                assert headers["etag"] == (
+                    f'"mdo-config-{mutation["revision"]}"'), headers
+                assert not (home / "config/settings.json").exists(), list(
+                    (home / "config").iterdir())
+
+                status, headers, body = request(port, "GET", "/api/v1/settings")
+                settings_document = json.loads(body)
+                assert status == 200, (status, body)
+                assert settings_document["data"]["revision"] == (
+                    initial_revision + 2), settings_document
+                assert settings_document["data"]["transaction_service"][
+                    "transactions"] == 2, settings_document
+                assert settings_document["data"]["transaction_service"][
+                    "runtime_consistent"] is True, settings_document
+
+                status, headers, body = request(
+                    port, "OPTIONS", "/api/v1/settings/settings")
+                document = json.loads(body)
+                assert status == 200, (status, body)
+                assert headers["allow"] == "PUT, DELETE, OPTIONS", headers
+                assert document["data"]["allow"] == headers["allow"], document
             except BaseException as error:
                 failure = error
             finally:

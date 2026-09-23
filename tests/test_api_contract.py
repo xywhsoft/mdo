@@ -78,6 +78,18 @@ class ApiContractTests(unittest.TestCase):
         self.assertIn("MdoConfigPreviewImport", mutations)
         self.assertNotIn("MdoConfigImport", mutations)
 
+    def test_settings_writes_require_a_revision_etag(self) -> None:
+        mutations = (ROOT / "app/src/api/mutations.c").read_text(encoding="utf-8")
+        state = (ROOT / "app/src/api/state.c").read_text(encoding="utf-8")
+        self.assertIn('"/api/v1/settings/{domain}"', self.router)
+        self.assertIn('XRT_STR_LITERAL("If-Match")', mutations)
+        self.assertIn('"mdo-config-', mutations)
+        self.assertIn("Number == UINT64_MAX", mutations)
+        self.assertIn("MdoSettingsApply", mutations)
+        self.assertIn("MdoSettingsRestore", mutations)
+        self.assertIn("MdoApiReplySuccessTakeRevision", state)
+        self.assertIn('"runtime_consistent"', state)
+
     def test_catalog_reload_routes_use_candidate_publish_managers(self) -> None:
         mutations = (ROOT / "app/src/api/mutations.c").read_text(encoding="utf-8")
         for resource, manager in (
