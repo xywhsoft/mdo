@@ -26,9 +26,11 @@ Read snapshots:
 
 - `/bootstrap`, `/settings`, `/models`, `/agents`, `/modules`, `/skills`,
   `/mcp`, `/projects`, `/sessions`, `/runs`, `/schedules`, `/tasks`,
-  `/artifacts`, `/permissions`, `/diagnostics`, `/storage`, and `/operations`;
+  `/artifacts`, `/approvals`, `/permissions`, `/diagnostics`, `/storage`, and
+  `/operations`;
 - `/projects/{project}/sessions/{session}`, `/runs/{run}`,
-  `/schedules/{schedule}`, `/tasks/{task}`, and `/operations/{operation}`.
+  `/schedules/{schedule}`, `/tasks/{task}`, `/operations/{operation}`, and
+  `/projects/{project}/sessions/{session}/recovery`.
 
 Mutations:
 
@@ -36,7 +38,9 @@ Mutations:
 - reload model, Skill, module, and MCP catalogs;
 - enable, disconnect, or refresh an MCP server;
 - create, edit, archive, trash, and restore sessions;
-- start and cancel interactive Agent runs;
+- fork, truncate, clear, export, and resume durable sessions;
+- start and cancel interactive Agent runs, and resolve one-shot approval
+  requests;
 - create, replace, enable, disable, and remove schedules;
 - cancel a process, Subagent, or scheduled task through its unified task ID.
 
@@ -100,6 +104,55 @@ length.
 state window. The maximum page is 64 events. Cancellation through
 `DELETE /tasks/{task}` is idempotent and returns the current task snapshot, including
 its new revision and ETag.
+
+## Approvals and interrupted-run recovery
+
+`GET /approvals` returns the current bounded set of unresolved permission
+requests. Each item contains its one-shot approval ID, tool and call identity,
+risk, effects, resources, arguments, workspace, and deadline. A caller resolves
+one item with `PUT /approvals/{approval}` and exactly one decision: `allow` or
+`deny`. A decision is consumed once; a stale or already-resolved ID is not
+silently applied to a later request.
+
+`GET /projects/{project}/sessions/{session}/recovery` inspects a durable idle
+session. It returns:
+
+- `resume_required`, which is true for a pending tool batch or an interrupted
+  model continuation;
+- a stable `recovery_token` for the exact current recovery state;
+- at most 32 pending calls, each with the original call ID, tool, arguments,
+  effects, tool availability, and whether automatic retry would be safe;
+- the session revision and the current diagnostic catalog generation.
+
+The recovery view limits each argument document to 16 KiB and the whole batch
+to 128 KiB. It fails closed when the durable state cannot be represented within
+those limits. Catalog generation is diagnostic only: a reopened equivalent
+catalog may receive a new process-local generation, while the token is derived
+from the durable call identities, arguments, effects, availability, retry
+safety, and continuation state.
+
+`POST /projects/{project}/sessions/{session}/resume` accepts the current token
+and one explicit decision for every pending call:
+
+```json
+{
+  "recovery_token": "64 lowercase hexadecimal characters",
+  "decisions": [
+    {"tool_call_id": "call-id", "action": "record_uncertain"}
+  ]
+}
+```
+
+`retry` executes the call again through normal permission and hook processing
+and therefore has at-least-once semantics. `record_uncertain` does not execute
+the tool; it records an uncertainty result so the model can continue. An
+unavailable tool cannot be retried. A model-only interruption has an empty
+decision array. The server validates the token again on the exact reopened
+Agent immediately before starting the run. A changed state returns
+`409 recovery_state_conflict`; invalid, duplicate, missing, or extra decisions
+return `422 recovery_resume_invalid`. Success returns `202` with the ordinary
+run resource and `resume: true`, so clients monitor it through `/runs/{run}` and
+the existing event replay routes.
 
 ## Secret boundary
 
