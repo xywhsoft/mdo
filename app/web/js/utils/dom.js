@@ -42,6 +42,8 @@ export function errorMessage(error) {
   if (error?.code === "session_not_found") return "会话已经不存在，请刷新列表。";
   if (error?.code === "revision_conflict") return "内容已在其他窗口更新，请刷新后重试。";
   if (error?.code === "recovery_state_conflict") return "中断状态已经变化，请核对刷新后的调用再决定。";
+  if (error?.code === "migration_conflict") return "迁移来源、目标或预览令牌已经变化，请重新检测后确认。";
+  if (error?.code === "migration_invalid") return "旧数据未通过当前版本的迁移校验。";
   return error?.message || "操作未完成，请重试。";
 }
 

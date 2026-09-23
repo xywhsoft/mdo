@@ -801,6 +801,15 @@ select:focus-visible,
 .resource-meta span { padding: 3px 7px; border-radius: 20px; background: var(--surface-hover); color: var(--muted); font-size: 10px; }
 .resource-actions { justify-content: flex-end; }
 .resource-actions .secondary-button { min-height: 30px; padding: 0 9px; font-size: 10px; }
+.resource-actions .primary-button,
+.resource-actions .task-cancel { min-height: 30px; padding: 0 9px; font-size: 10px; }
+.migration-paths { display: grid; gap: 5px; margin: 10px 0 0; }
+.migration-paths > div { display: grid; min-width: 0; grid-template-columns: 34px minmax(0, 1fr); gap: 7px; }
+.migration-paths dt { color: var(--faint); font-size: 10px; }
+.migration-paths dd { overflow: hidden; margin: 0; color: var(--muted); font-family: var(--font-mono); font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
+.migration-confirm { margin-top: 11px; padding: 10px; border: 1px solid color-mix(in srgb, var(--warning) 44%, var(--border)); border-radius: var(--radius-sm); background: color-mix(in srgb, var(--warning) 6%, var(--surface)); }
+.migration-confirm strong { font-size: 11px; }
+.migration-confirm p { margin-top: 4px; }
 
 :root[data-density="compact"] .session-item { padding-top: 5px; padding-bottom: 5px; }
 :root[data-density="compact"] .setting-row,

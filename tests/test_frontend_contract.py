@@ -130,13 +130,24 @@ class FrontendContractTests(unittest.TestCase):
         resources = self.scripts["js/state/resources.js"]
         panels = self.scripts["js/features/settings/resource-panels.js"]
         for name in ("modules", "skills", "mcp", "permissions", "storage",
-                     "diagnostics"):
+                     "diagnostics", "migrations"):
             self.assertIn(f"{name}Store", resources)
         self.assertIn('api.post(`/${name}/reload`)', resources)
         self.assertIn("attempt < 100", resources)
         self.assertNotIn("innerHTML", panels)
         self.assertIn("setMcpEnabled", panels)
         self.assertIn("refreshMcp", panels)
+
+    def test_legacy_migration_requires_preview_and_second_confirmation(self) -> None:
+        resources = self.scripts["js/state/resources.js"]
+        panels = self.scripts["js/features/settings/resource-panels.js"]
+        self.assertIn('"/migrations/legacy"', resources)
+        self.assertIn("applyLegacyMigration", resources)
+        self.assertIn("preview_token", resources)
+        self.assertIn("requires_confirmation", panels)
+        self.assertIn("confirmingSource", panels)
+        self.assertIn("旧目录会原样保留", panels)
+        self.assertIn("restart_required", panels)
 
     def test_session_lifecycle_uses_revisioned_server_mutations(self) -> None:
         sessions = self.scripts["js/state/sessions.js"]

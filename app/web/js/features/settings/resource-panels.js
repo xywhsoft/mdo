@@ -1,5 +1,8 @@
 import { element, clear, errorMessage, toast } from "../../utils/dom.js";
-import { reloadCatalog, setMcpEnabled, disconnectMcp, refreshMcp } from "../../state/resources.js";
+import {
+  reloadCatalog, setMcpEnabled, disconnectMcp, refreshMcp,
+  applyLegacyMigration,
+} from "../../state/resources.js";
 
 function card(title, description, meta = [], actions = []) {
   const body = [element("h3", { text: title }), element("p", { text: description || "暂无说明" })];
@@ -9,7 +12,9 @@ function card(title, description, meta = [], actions = []) {
 }
 
 function action(label, handler, tone = "neutral") {
-  const button = element("button", { className: tone === "danger" ? "task-cancel" : "secondary-button", text: label, attrs: { type: "button" } });
+  const className = tone === "danger" ? "task-cancel"
+    : tone === "primary" ? "primary-button" : "secondary-button";
+  const button = element("button", { className, text: label, attrs: { type: "button" } });
   button.addEventListener("click", async () => {
     button.disabled = true;
     try { await handler(); }
@@ -36,6 +41,9 @@ export function createResourcePanels({ modelsStore, agentsStore, stores, reload 
   const permissionsContainer = document.querySelector("#settings-permissions-list");
   const diagnosticsContainer = document.querySelector("#settings-diagnostics-list");
   const unsubscribers = [];
+  let confirmingSource = "";
+  let migrationResult = null;
+  let migrationBusy = false;
 
   async function refreshCatalog(name) {
     await reloadCatalog(name);
@@ -111,11 +119,76 @@ export function createResourcePanels({ modelsStore, agentsStore, stores, reload 
     clear(diagnosticsContainer);
     const storage = stores.storage.get();
     const diagnostics = stores.diagnostics.get();
+    const migrations = stores.migrations.get();
     if (storage.status === "error" || diagnostics.status === "error") {
       diagnosticsContainer.append(empty(errorMessage(storage.error || diagnostics.error)));
       return;
     }
     if (storage.data) diagnosticsContainer.append(card("便携存储", storage.data.home_path || "内置只读资源", [storage.data.persistence, `${storage.data.session_count} sessions`, `${storage.data.artifact_count} artifacts`]));
+    diagnosticsContainer.append(heading("旧版数据迁移", action("重新检测", () => reload("migrations"))));
+    if (migrationResult?.restart_required) {
+      diagnosticsContainer.append(card("迁移已完成，需要重启 mdo",
+        "数据已原子发布；当前进程仍使用启动时的运行配置。关闭并重新启动 mdo 后再继续工作。",
+        [migrationResult.target_path, `${migrationResult.imported_sessions} sessions`, `${migrationResult.imported_memory_entries} memories`, `${migrationResult.skipped_items} skipped`],
+        []));
+    }
+    if (migrations.status === "error") {
+      diagnosticsContainer.append(empty(errorMessage(migrations.error)));
+    } else if (!(migrations.data?.items ?? []).length) {
+      diagnosticsContainer.append(empty("尚未完成旧数据检测"));
+    } else {
+      for (const source of migrations.data.items) {
+        const label = source.source_id === "portable-data" ? "程序旁 data" : "用户目录 .mdo";
+        const description = !source.found ? "未发现这个旧数据目录。"
+          : !source.valid ? source.message || "旧数据未通过只读校验。"
+            : !source.target_available ? "目标 mdo Home 已存在，迁移不会覆盖现有数据。"
+              : "只读预览已通过，可以导入到新的便携 Home。";
+        const actions = [];
+        if (source.importable && migrations.data.requires_confirmation) {
+          actions.push(action(confirmingSource === source.source_id ? "等待确认" : "查看导入确认", () => {
+            confirmingSource = source.source_id;
+            renderDiagnostics();
+          }, "primary"));
+        }
+        const item = card(label, description, [
+          `${source.file_count} files`, `${source.project_count} projects`,
+          `${source.session_count} sessions`, `${source.model_count} models`,
+          `${source.schedule_count} schedules`, `${source.memory_file_count} memories`,
+          `${source.unsupported_count} unsupported`, `${source.conflict_count} conflicts`,
+        ], actions);
+        item.append(element("dl", { className: "migration-paths" }, [
+          element("div", {}, [element("dt", { text: "来源" }), element("dd", { text: source.source_path })]),
+          element("div", {}, [element("dt", { text: "目标" }), element("dd", { text: source.target_path })]),
+        ]));
+        if (confirmingSource === source.source_id && source.importable) {
+          const cancel = action("取消", () => { confirmingSource = ""; renderDiagnostics(); });
+          const confirm = action("确认导入", async () => {
+            migrationBusy = true;
+            renderDiagnostics();
+            try {
+              migrationResult = await applyLegacyMigration(source.source_id, source.preview_token);
+              confirmingSource = "";
+              await reload("migrations");
+              toast("旧数据已导入，请重启 mdo");
+            } catch (error) {
+              toast(errorMessage(error), "error");
+              await reload("migrations");
+            } finally {
+              migrationBusy = false;
+              renderDiagnostics();
+            }
+          }, "danger");
+          cancel.disabled = migrationBusy;
+          confirm.disabled = migrationBusy;
+          item.append(element("div", { className: "migration-confirm", attrs: { role: "alert" } }, [
+            element("strong", { text: "确认从此预览导入？" }),
+            element("p", { text: "mdo 将创建目标 Home，旧目录会原样保留；目标已存在、内容变化或令牌过期都会中止。成功后必须重启 mdo。" }),
+            element("div", { className: "resource-actions" }, [cancel, confirm]),
+          ]));
+        }
+        diagnosticsContainer.append(item);
+      }
+    }
     diagnosticsContainer.append(heading(`诊断 (${diagnostics.data?.total ?? 0})`));
     if (!(diagnostics.data?.items ?? []).length) diagnosticsContainer.append(empty("没有检测到诊断问题"));
     for (const item of diagnostics.data?.items ?? []) {
@@ -131,6 +204,7 @@ export function createResourcePanels({ modelsStore, agentsStore, stores, reload 
   unsubscribers.push(stores.permissions.subscribe(renderPermissions));
   unsubscribers.push(stores.storage.subscribe(renderDiagnostics));
   unsubscribers.push(stores.diagnostics.subscribe(renderDiagnostics));
+  unsubscribers.push(stores.migrations.subscribe(renderDiagnostics));
 
   return () => unsubscribers.forEach((unsubscribe) => unsubscribe());
 }

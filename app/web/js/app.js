@@ -9,7 +9,7 @@ import { modelsStore, agentsStore, loadCatalogs, loadModels, loadAgents } from "
 import { settingsStore, loadSettings } from "./state/settings.js";
 import {
   modulesStore, skillsStore, mcpStore, permissionsStore, storageStore,
-  diagnosticsStore, loadResource, loadManagementResources,
+  diagnosticsStore, migrationsStore, loadResource, loadManagementResources,
 } from "./state/resources.js";
 import {
   tasksStore, taskDetailStore, artifactPreviewStore, loadTasks,
@@ -157,6 +157,7 @@ export async function boot() {
       permissions: permissionsStore,
       storage: storageStore,
       diagnostics: diagnosticsStore,
+      migrations: migrationsStore,
     },
     reload: (name) => name === "models" ? loadModels()
       : name === "modules" ? Promise.all([loadResource("modules"), loadAgents()])

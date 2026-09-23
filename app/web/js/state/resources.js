@@ -7,6 +7,7 @@ export const mcpStore = createResourceStore({ items: [] });
 export const permissionsStore = createResourceStore();
 export const storageStore = createResourceStore();
 export const diagnosticsStore = createResourceStore({ total: 0, items: [] });
+export const migrationsStore = createResourceStore({ count: 0, items: [] });
 
 const STORES = Object.freeze({
   modules: modulesStore,
@@ -15,12 +16,14 @@ const STORES = Object.freeze({
   permissions: permissionsStore,
   storage: storageStore,
   diagnostics: diagnosticsStore,
+  migrations: migrationsStore,
 });
 
 export function loadResource(name) {
   const store = STORES[name];
   if (!store) throw new TypeError("unknown resource store");
-  return store.load(async () => (await api.get(`/${name}`)).data);
+  const path = name === "migrations" ? "/migrations/legacy" : `/${name}`;
+  return store.load(async () => (await api.get(path)).data);
 }
 
 export function loadManagementResources() {
@@ -59,4 +62,15 @@ export async function refreshMcp(serverId) {
   const server = resourceId(serverId, "MCP server");
   const operation = (await api.post(`/mcp/${server}/refresh`)).data;
   return operation?.id && !operation.terminal ? awaitOperation(operation) : operation;
+}
+
+export async function applyLegacyMigration(sourceId, previewToken) {
+  const source = resourceId(sourceId, "migration source");
+  if (!/^[0-9a-f]{64}$/.test(String(previewToken ?? ""))) {
+    throw new TypeError("migration preview token is invalid");
+  }
+  return (await api.post("/migrations/legacy", {
+    source_id: source,
+    preview_token: previewToken,
+  })).data;
 }
