@@ -466,9 +466,10 @@ def run_probe(host: Path) -> None:
             }), encoding="utf-8")
         (legacy / "memory/preference.md").write_text(
             "# Preference\n\nKeep migration explicit.\n", encoding="utf-8")
-        (legacy / "schedules/once.json").write_text(json.dumps({
+        legacy_schedule = legacy / "schedules/once.json"
+        legacy_schedule.write_text(json.dumps({
             "id": "once",
-            "title": "Legacy reminder",
+            "title": "L" * 300,
             "prompt": "Review migration",
             "kind": "once",
         }), encoding="utf-8")
@@ -550,6 +551,33 @@ def run_probe(host: Path) -> None:
                     }).encode(), headers={"Content-Type": "application/json"})
                 assert status == 409, (status, body)
                 assert not home.exists(), home
+
+                status, _, body = request(
+                    port, "POST", "/api/v1/migrations/legacy",
+                    body=json.dumps({
+                        "source_id": "user-home",
+                        "preview_token": user_home["preview_token"],
+                    }).encode(), headers={"Content-Type": "application/json"})
+                assert status == 422, (status, body)
+                assert json.loads(body)["error"]["code"] == "migration_invalid", body
+                assert not home.exists(), home
+                assert not list(home.parent.glob(f"{home.name}.migrate-*")), list(
+                    home.parent.iterdir())
+                assert legacy.is_dir(), legacy
+
+                legacy_schedule.write_text(json.dumps({
+                    "id": "once",
+                    "title": "Legacy reminder",
+                    "prompt": "Review migration",
+                    "kind": "once",
+                }), encoding="utf-8")
+                status, _, body = request(
+                    port, "GET", "/api/v1/migrations/legacy")
+                assert status == 200, (status, body)
+                refreshed = json.loads(body)["data"]
+                user_home = {item["source_id"]: item
+                             for item in refreshed["items"]}["user-home"]
+                assert user_home["importable"] is True, user_home
 
                 status, headers, body = request(
                     port, "POST", "/api/v1/migrations/legacy",

@@ -232,7 +232,7 @@ static bool LegacyMeta(void) {
         "\"config_revision\":1,\"model_generation\":1,"
         "\"module_generation\":1,\"skill_generation\":1}";
     MdoSessionInfo info;
-    bool ok = MdoSessionsMetaParse("legacy-project", "legacy-session",
+    bool ok = MdoSessionsInternalMetaParse("legacy-project", "legacy-session",
         xrtStrView(json), &info);
     printf("legacy_meta=ok:%d parent:%s through:%llu\n", ok ? 1 : 0,
         ok ? info.ParentSessionId : "invalid",

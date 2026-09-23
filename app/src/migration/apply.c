@@ -13,6 +13,13 @@ static bool MdoMigrationTokenValid(const char* Token)
     return true;
 }
 
+static void MdoMigrationApplyFailure(xwork_error* Error,
+    xwork_error_code Code, const char* Message)
+{
+    if ( Error == NULL || Error->eCode == XWORK_ERROR_NONE )
+        MdoMigrationError(Error, Code, Message);
+}
+
 static char* MdoMigrationStagePath(const char* Target)
 {
     char* Id = xrtXidMakeString();
@@ -134,14 +141,46 @@ bool MdoLegacyMigrationApply(const MdoMigrationApplyOptions* Options,
     if ( Context.Scan.Count > 1u ) qsort(Context.Scan.Files,
         Context.Scan.Count, sizeof(*Context.Scan.Files),
         MdoMigrationFileCompare);
-    if ( !MdoMigrationPrepareStage(&Context, Error) ||
-         !MdoMigrationConvertConfig(&Context, Error) ||
-         !MdoMigrationConvertProjects(&Context, Error) ||
-         !MdoMigrationConvertSessions(&Context, Error) ||
-         !MdoMigrationConvertMemory(&Context, Error) ||
-         !MdoMigrationConvertSchedules(&Context, Error) ||
-         !MdoMigrationMeasureStage(&Context, Error) ||
-         !MdoMigrationWriteReport(&Context, Error) ) goto done;
+    if ( !MdoMigrationPrepareStage(&Context, Error) ) {
+        MdoMigrationApplyFailure(Error, XWORK_ERROR_IO,
+            "cannot prepare migration staging directory");
+        goto done;
+    }
+    if ( !MdoMigrationConvertConfig(&Context, Error) ) {
+        MdoMigrationApplyFailure(Error, XWORK_ERROR_INVALID_ARGUMENT,
+            "legacy configuration cannot be converted");
+        goto done;
+    }
+    if ( !MdoMigrationConvertProjects(&Context, Error) ) {
+        MdoMigrationApplyFailure(Error, XWORK_ERROR_INVALID_ARGUMENT,
+            "legacy projects cannot be converted");
+        goto done;
+    }
+    if ( !MdoMigrationConvertSessions(&Context, Error) ) {
+        MdoMigrationApplyFailure(Error, XWORK_ERROR_INVALID_ARGUMENT,
+            "legacy sessions cannot be converted");
+        goto done;
+    }
+    if ( !MdoMigrationConvertMemory(&Context, Error) ) {
+        MdoMigrationApplyFailure(Error, XWORK_ERROR_INVALID_ARGUMENT,
+            "legacy memory cannot be converted");
+        goto done;
+    }
+    if ( !MdoMigrationConvertSchedules(&Context, Error) ) {
+        MdoMigrationApplyFailure(Error, XWORK_ERROR_INVALID_ARGUMENT,
+            "legacy schedules cannot be converted");
+        goto done;
+    }
+    if ( !MdoMigrationMeasureStage(&Context, Error) ) {
+        MdoMigrationApplyFailure(Error, XWORK_ERROR_IO,
+            "cannot verify migration staging directory");
+        goto done;
+    }
+    if ( !MdoMigrationWriteReport(&Context, Error) ) {
+        MdoMigrationApplyFailure(Error, XWORK_ERROR_IO,
+            "cannot write migration report");
+        goto done;
+    }
     if ( Context.StageRoot != NULL ) {
         if ( !xrtRootClose(Context.StageRoot) ) {
             Context.StageRoot = NULL;

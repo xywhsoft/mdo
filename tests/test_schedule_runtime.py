@@ -264,6 +264,8 @@ def write_site(site: Path) -> None:
         "src/schedules/manager.c",
     ):
         shutil.copy2(ROOT / "app" / relative, site / relative)
+    shutil.copy2(ROOT / "app/src/schedules/internal.h",
+                 site / "src/schedules/internal.h")
     for name in ("home.h", "config.h", "models.h", "schedules.h"):
         shutil.copy2(ROOT / "app/include/mdo" / name, site / "include/mdo" / name)
     (site / "probe.c").write_text(PROBE_SOURCE, encoding="utf-8")

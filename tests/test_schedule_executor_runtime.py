@@ -207,6 +207,8 @@ def write_site(site: Path) -> None:
     for header in (ROOT / "app/include/mdo").glob("*.h"):
         shutil.copy2(header, site / "include/mdo" / header.name)
     shutil.copy2(ROOT / "app/src/memory/internal.h", site / "src/memory/internal.h")
+    shutil.copy2(ROOT / "app/src/schedules/internal.h",
+                 site / "src/schedules/internal.h")
     shutil.copy2(ROOT / "include/mdo/module.h",
                  site / "generated/module-sdk/mdo/module.h")
     (site / "probe.c").write_text(PROBE_SOURCE, encoding="utf-8")
