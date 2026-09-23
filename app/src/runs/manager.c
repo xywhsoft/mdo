@@ -277,6 +277,7 @@ bool MdoRunManagerPump(size_t* Completed, xwork_error* Error)
         Entry->Info.StartedMicroseconds = AgentInfo.Run.uStartedUs;
         Entry->Info.EndedMicroseconds = AgentInfo.Run.uEndedUs;
         if ( !MdoRunsTerminal(AgentInfo.Run.eState) ) continue;
+        Entry->Info.EndedAt = xrtNow();
         memset(&Result, 0, sizeof(Result));
         xworkErrorInit(&WaitError);
         WaitResult = MdoAgentRunWait(Entry->Run, XRT_DEADLINE_NEVER,
@@ -505,6 +506,7 @@ bool MdoRunStart(const MdoRunStartOptions* Options, MdoRunInfo* Info,
     Reserved.Size = sizeof(Reserved);
     Reserved.State = XWORK_RUN_CREATED;
     Reserved.Result = XWORK_RESULT_ERROR;
+    Reserved.CreatedAt = xrtNow();
     Reserved.CreatedMicroseconds = xrtClock();
     snprintf(Reserved.ProjectId, sizeof(Reserved.ProjectId), "%s",
         Options->ProjectId);
@@ -625,6 +627,7 @@ publish:
         Entry->Info.CreatedMicroseconds = AgentInfo.Run.uCreatedUs;
         Entry->Info.StartedMicroseconds = AgentInfo.Run.uStartedUs;
         Entry->Info.EndedMicroseconds = AgentInfo.Run.uEndedUs;
+        Entry->Info.StartedAt = xrtNow();
         Entry->Info.State = AgentInfo.Run.eState;
         Entry->Info.Result = AgentInfo.Run.eResult;
         Entry->Info.Protocol = AgentInfo.Protocol;

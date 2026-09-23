@@ -52,6 +52,9 @@ typedef struct MdoRunInfo {
     uint64 ModuleGeneration;
     uint64 SkillGeneration;
     uint64 MemoryGeneration;
+    int64 CreatedAt;
+    int64 StartedAt;
+    int64 EndedAt;
     uint64 CreatedMicroseconds;
     uint64 StartedMicroseconds;
     uint64 EndedMicroseconds;

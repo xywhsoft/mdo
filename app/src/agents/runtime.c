@@ -185,6 +185,31 @@ static bool MdoAgentsResolveModel(const MdoModelCatalog* Catalog,
     return true;
 }
 
+static bool MdoAgentsSessionConfig(const xllm_model_profile* Profile,
+    const MdoModuleAgentInfo* Agent, uint32 MaxOutputTokens,
+    xllm_session_config* Config, xllm_error* Error)
+{
+    if ( !xllmSessionConfigInitFromProfile(Config, Profile, Error) )
+        return false;
+    if ( Agent->ContextWindowTokens != 0u )
+        Config->uContextWindowTokens = Agent->ContextWindowTokens;
+    if ( Agent->MaxInputTokens != 0u ) {
+        Config->uMaxInputTokens = Agent->MaxInputTokens;
+    } else if ( Config->uMaxInputTokens > Config->uContextWindowTokens ) {
+        Config->uMaxInputTokens = Config->uContextWindowTokens;
+    }
+    Config->uMaxOutputTokens = MaxOutputTokens;
+    /* A narrower Agent window needs reserves derived from that same window;
+     * retaining the provider recommendation can make recovery impossible. */
+    if ( Config->uContextWindowTokens != Profile->uContextWindowTokens ||
+         Config->uMaxOutputTokens != Profile->uMaxOutputTokens )
+        Config->uOutputReserveTokens = xllmSessionComputeOutputReserve(
+            Config->uContextWindowTokens, Config->uMaxOutputTokens);
+    if ( Config->uSummaryMaxTokens > Config->uMaxOutputTokens )
+        Config->uSummaryMaxTokens = Config->uMaxOutputTokens;
+    return true;
+}
+
 static MdoAgentOwner* MdoAgentOwnerRef(MdoAgentOwner* Owner)
 {
     uint32 Refs;
@@ -976,19 +1001,13 @@ MdoAgentSession* MdoAgentSessionCreateWithRuntime(xwork_runtime* Runtime,
             "cannot build the Agent session profile");
         goto fail;
     }
+    if ( !MdoAgentsSessionConfig(&Profile, &AgentInfo,
+            Model.MaxOutputTokens, &SessionConfig, &ModelError) ) {
+        MdoAgentsModelError(Error, &ModelError,
+            "cannot prepare the Agent session profile");
+        goto fail;
+    }
     if ( Options->Recover ) {
-        if ( !xllmSessionConfigInitFromProfile(&SessionConfig, &Profile,
-                &ModelError) ) {
-            MdoAgentsModelError(Error, &ModelError,
-                "cannot prepare the Agent recovery profile");
-            goto fail;
-        }
-        if ( AgentInfo.ContextWindowTokens != 0u )
-            SessionConfig.uContextWindowTokens =
-                AgentInfo.ContextWindowTokens;
-        if ( AgentInfo.MaxInputTokens != 0u )
-            SessionConfig.uMaxInputTokens = AgentInfo.MaxInputTokens;
-        SessionConfig.uMaxOutputTokens = Model.MaxOutputTokens;
         SessionConfig.sSnapshotPath = Options->SessionPath;
         Owner->LlmSession = xllmSessionRecover(Options->SessionPath,
             Options->JournalPath, &SessionConfig, &ModelError);
@@ -1009,10 +1028,6 @@ MdoAgentSession* MdoAgentSessionCreateWithRuntime(xwork_runtime* Runtime,
                 "recovered session exceeds the selected model profile");
         }
     } else {
-        xllmSessionConfigInit(&SessionConfig);
-        SessionConfig.uContextWindowTokens = AgentInfo.ContextWindowTokens;
-        SessionConfig.uMaxInputTokens = AgentInfo.MaxInputTokens;
-        SessionConfig.uMaxOutputTokens = Model.MaxOutputTokens;
         SessionConfig.sSnapshotPath = Options->SessionPath;
         Owner->LlmSession = xllmSessionCreateForProfile(&SessionConfig,
             &Profile, &ModelError);

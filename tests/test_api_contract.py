@@ -148,6 +148,22 @@ class ApiContractTests(unittest.TestCase):
         self.assertIn("revision_conflict", sessions)
         self.assertNotIn("credential", sessions.lower())
 
+    def test_interactive_runs_have_owned_start_detail_and_cancel_routes(self) -> None:
+        runs = (ROOT / "app/src/api/runs.c").read_text(encoding="utf-8")
+        self.assertIn(
+            '"/api/v1/projects/{project}/sessions/{session}/runs"',
+            self.router,
+        )
+        self.assertIn('"/api/v1/runs/{run}"', self.router)
+        self.assertIn("MdoRunStart", runs)
+        self.assertIn("MdoRunCancel", runs)
+        self.assertIn("MdoRunSnapshotCreate", runs)
+        self.assertIn("MdoRunSnapshotResult", runs)
+        self.assertIn("Present == xrtValueCount(Body.Value)", runs)
+        self.assertIn('"final_text_truncated"', runs)
+        self.assertIn('"run_limit_reached"', runs)
+        self.assertNotIn("xworkRuntimeEventSnapshot", runs)
+
     def test_every_json_response_has_identity_and_hardening_headers(self) -> None:
         for text in (
             'XRT_STR_LITERAL("schema_version")',

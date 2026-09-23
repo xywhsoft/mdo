@@ -13,7 +13,9 @@ import socket
 import subprocess
 import sys
 import tempfile
+import threading
 import time
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
 
@@ -54,6 +56,56 @@ for line in sys.stdin:
     print(json.dumps({"jsonrpc": "2.0", "id": request.get("id"),
                       "result": result}, separators=(",", ":")), flush=True)
 '''
+
+
+class ModelHandler(BaseHTTPRequestHandler):
+    protocol_version = "HTTP/1.1"
+    calls = 0
+    saw_prompt = False
+
+    def log_message(self, format: str, *args: object) -> None:
+        del format, args
+
+    def do_POST(self) -> None:  # noqa: N802 - stdlib callback name
+        if self.path != "/v1/responses":
+            self.send_error(404)
+            return
+        try:
+            length = int(self.headers.get("Content-Length", "0"))
+            if length <= 0 or length > 1024 * 1024:
+                raise ValueError("invalid request length")
+            payload = json.loads(self.rfile.read(length))
+            ModelHandler.calls += 1
+            ModelHandler.saw_prompt = "API interactive prompt" in json.dumps(payload)
+            response = json.dumps({
+                "id": "resp_api_probe",
+                "model": "ling-3.0-tiny",
+                "status": "completed",
+                "output": [{
+                    "type": "message",
+                    "content": [{
+                        "type": "output_text",
+                        "text": "API interactive result",
+                    }],
+                }],
+                "usage": {
+                    "input_tokens": 7,
+                    "output_tokens": 3,
+                    "total_tokens": 10,
+                },
+            }, separators=(",", ":")).encode()
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(response)))
+            self.end_headers()
+            self.wfile.write(response)
+        except (ValueError, json.JSONDecodeError):
+            self.send_error(400)
+
+
+class ModelServer(ThreadingHTTPServer):
+    def handle_error(self, request: object, client_address: object) -> None:
+        del request, client_address
 
 
 def free_port() -> int:
@@ -170,12 +222,19 @@ def run_probe(host: Path) -> None:
         config_path = write_site(base, port)
         home = base / "home"
         log_path = base / "xs.log"
+        model_server = ModelServer(("127.0.0.1", 0), ModelHandler)
+        model_port = int(model_server.server_address[1])
+        model_thread = threading.Thread(target=model_server.serve_forever,
+                                        daemon=True)
+        ModelHandler.calls = 0
+        ModelHandler.saw_prompt = False
+        model_thread.start()
         environment = os.environ.copy()
         environment["MDO_HOME"] = str(base / "wrong-environment-home")
         environment["MDO_LING_CHAT_COMPLETIONS_URL"] = (
             "https://example.invalid/v1")
         environment["MDO_LING_RESPONSES_URL"] = (
-            "https://example.invalid/v1")
+            f"http://127.0.0.1:{model_port}/v1")
         environment["MDO_LING_ANTHROPIC_URL"] = "https://example.invalid"
         environment["MDO_LING_API_KEY"] = "bounded-api-test-key"
         with log_path.open("wb") as log:
@@ -706,6 +765,99 @@ def run_probe(host: Path) -> None:
 
                 session_path = (
                     f"/api/v1/projects/api-project/sessions/{session_id}")
+                run_path = session_path + "/runs"
+                status, headers, body = request(
+                    port, "POST", run_path,
+                    body=b'{"prompt":"","unknown":true}',
+                    headers={"Content-Type": "application/json"})
+                document = json.loads(body)
+                assert status == 422, (status, body)
+                assert document["error"]["code"] == "run_start_invalid", (
+                    document)
+                status, headers, body = request(
+                    port, "POST",
+                    "/api/v1/projects/api-project/sessions/missing/runs",
+                    body=b'{"prompt":"missing session"}',
+                    headers={"Content-Type": "application/json"})
+                document = json.loads(body)
+                assert status == 404, (status, body)
+                assert document["error"]["code"] == "session_not_found", (
+                    document)
+
+                status, headers, body = request(
+                    port, "POST", run_path,
+                    body=json.dumps({
+                        "prompt": "API interactive prompt",
+                        "timeout_ms": 5000,
+                    }).encode(),
+                    headers={"Content-Type": "application/json"})
+                run_document = json.loads(body)
+                assert status == 202, (status, body)
+                assert_common(headers, run_document)
+                run = run_document["data"]
+                run_id = run["id"]
+                assert run_id.startswith("run-"), run
+                assert run["project_id"] == "api-project", run
+                assert run["session_id"] == session_id, run
+                assert run["state"] in ("running", "succeeded"), run
+                assert run["terminal"] is False, run
+                assert run["created_at"] > 0, run
+                assert run["started_at"] >= run["created_at"], run
+                assert run["ended_at"] == 0, run
+                detail_path = f"/api/v1/runs/{run_id}"
+                deadline = time.monotonic() + 5.0
+                while not run["terminal"] and time.monotonic() < deadline:
+                    time.sleep(0.01)
+                    status, headers, body = request(port, "GET", detail_path)
+                    run_document = json.loads(body)
+                    assert status == 200, (status, body)
+                    assert_common(headers, run_document)
+                    run = run_document["data"]
+                assert run["terminal"] is True, run
+                assert run["state"] == "succeeded", run
+                assert run["result"] == "ok", run
+                assert run["ended_at"] >= run["started_at"], run
+                assert run["final_text"] == "API interactive result", run
+                assert run["final_text_bytes"] == 22, run
+                assert run["model_calls"] == 1, run
+                assert ModelHandler.calls == 1 and ModelHandler.saw_prompt, (
+                    ModelHandler.calls, ModelHandler.saw_prompt)
+
+                runs_document = json.loads(request(
+                    port, "GET", "/api/v1/runs")[2])
+                assert runs_document["data"]["active_runs"] == 0, runs_document
+                assert runs_document["data"]["runs_completed"] == 1, (
+                    runs_document)
+                listed = runs_document["data"]["items"][0]
+                assert listed["id"] == run_id and listed["terminal"] is True, (
+                    listed)
+                assert "final_text" not in listed, listed
+
+                status, headers, body = request(
+                    port, "DELETE", detail_path, body=b"{}",
+                    headers={"Content-Type": "application/json"})
+                document = json.loads(body)
+                assert status == 400, (status, body)
+                assert document["error"]["code"] == "body_not_allowed", document
+                status, headers, body = request(port, "DELETE", detail_path)
+                document = json.loads(body)
+                assert status == 200, (status, body)
+                assert document["data"]["terminal"] is True, document
+                assert document["data"]["state"] == "succeeded", document
+
+                status, headers, body = request(port, "HEAD", detail_path)
+                assert status == 200 and body == b"", (status, body)
+                status, headers, body = request(port, "OPTIONS", run_path)
+                assert status == 200 and headers["allow"] == "POST, OPTIONS", (
+                    status, headers, body)
+                status, headers, body = request(port, "OPTIONS", detail_path)
+                assert status == 200 and headers["allow"] == (
+                    "GET, HEAD, DELETE, OPTIONS"), (status, headers, body)
+                event_document = json.loads(request(
+                    port, "GET", session_path + "/events?after=0&limit=32")[2])
+                assert any(item["terminal"] for item in
+                           event_document["data"]["items"]), event_document
+
                 status, headers, body = request(
                     port, "PATCH", session_path,
                     body=b'{"title":"Renamed session"}',
@@ -886,6 +1038,9 @@ def run_probe(host: Path) -> None:
                     except subprocess.TimeoutExpired:
                         process.kill()
                         process.wait(timeout=3.0)
+                model_server.shutdown()
+                model_server.server_close()
+                model_thread.join(timeout=3.0)
             if failure is not None:
                 output = log_path.read_text(encoding="utf-8", errors="replace")
                 raise RuntimeError(f"{failure}\n--- xs log ---\n{output[-6000:]}") from failure
