@@ -6,7 +6,7 @@
 
 | 仓库 | 开发位置/分支 | 当前基线 | 说明 |
 | --- | --- | --- | --- |
-| mdo | `D:\GIT\mdo` / 当前分支 | `8edfcbb` | 产品、计划与集成账本 |
+| mdo | `D:\GIT\mdo` / 当前分支 | `3ab7165` | 产品、计划与集成账本 |
 | xrt | `D:\GIT\xrt-mdo-refactor` / `codex/mdo-refactor-xrt` | `5c4fbdc0` | 原工作树有既存未提交内容，隔离开发 |
 | xserver | `D:\GIT\xserver-mdo-refactor` / `codex/mdo-refactor-xs` | `dbd86c7` | 原工作树有既存未提交内容，隔离开发 |
 
@@ -125,6 +125,7 @@
 | MDO-10 旧数据迁移 | DONE | mdo `7a755de`、`80e7f00`、`5519e78`、`2a20bcb`、`49b0fe1` | 113 项源码/构建/前端合同；严格 GCC C11 warning-as-error unity 编译；真实 xs/TCC API 探针覆盖两来源预览、内容绑定令牌、陈旧令牌拒绝、转换期非法数据回滚、配置/secret/项目/会话/记忆/计划转换、当前 schema 复验、源保留、报告和原子发布；浏览器实测桌面与 390×844 移动迁移预览和二次确认；锁定依赖重新打包通过；未运行压力或高负载测试 | 锚定无链接扫描受文件数、目录深度、单文件和总字节上限约束；导入只写同级唯一临时目录，发布前重新预览并以不覆盖 rename 一次提交，失败删除临时目录并返回类型化错误；当前 Home 已存在时拒绝 merge；旧目录保持不变，secret 只写 0600 文件且报告不含正文；旧 UI event、cron、audit 和不兼容记忆明确跳过并报告；Linux compact hosted C 不依赖未保证提供的 `limits.h`；阶段 MDO-10 完成 |
 | MDO-GATE 产品集成门禁 | DONE | mdo `2a20bcb`、`49b0fe1`；xserver `dbd86c7` | Windows/Linux 原生文件系统各 113 项检查、严格 GCC C11 warning-as-error、16 个真实 xs/TCC 有界运行时探针和两次确定性 pack 通过；迁移转换失败清理、源保留与无目标发布通过；未运行压力或高负载测试 | 收口 MDO-0～10；Linux compact hosted C 补齐 ctype/memchr，迁移源码移除非保证头依赖；阶段四完成 |
 | QA-RELEASE 发布压实 | DONE | mdo `8edfcbb` | Windows 单文件隔离目录 5 秒零写启动、打包 TCC 服务初始化后 20 秒存活且无 crash/dump/旁路日志；Windows/Linux pack 哈希分别稳定一致；发布门禁、release notes、迁移说明和已知限制齐全；未运行压力或高负载测试 | 提供统一 `tools/qa_release.py`；Ling 三协议真实线上探针因当前环境缺少三条 URL/key 未执行，属于可选发布项；移动原生宿主需在对应 runner 单独验收 |
+| POST-RELEASE Ling 默认对话修复 | DONE | mdo `4559967`、`3ab7165` | 无环境变量的新建会话与持久化、无效模型拒绝通过；隔离 mdo 实例的 Responses/Completions/Anthropic 三条真实对话和打包单文件默认对话通过；Windows 113 项检查、严格 C11、16 个运行时探针及确定性 pack/启动门禁通过；未运行压力或高负载测试 | session 创建不再提前要求联网客户端；首次实际模型调用按固定 catalog 初始化 route；恢复旧版随程序分发的 Ling 服务接入，同时保留环境覆盖；公共令牌须由服务端执行配额与轮换 |
 
 ## 已确认的工程事实
 
@@ -198,6 +199,6 @@
 
 ## 下一步
 
-1. 运行环境提供三条显式 URL 和 runtime key 时，执行 Ling 3.0 Tiny 的 Chat Completions、Responses 与 Anthropic Messages 真实线上探针；
-2. Android、iOS 或其他 Tier 2 平台 runner 可用时，补充原生宿主、文件系统和系统 WebView 验收；
+1. Android、iOS 或其他 Tier 2 平台 runner 可用时，补充原生宿主、文件系统和系统 WebView 验收；
+2. 如需验证部署覆盖与强制工具调用，给 xllm 严格线上探针提供三条显式 URL 和临时 key；默认产品三协议真实对话已完成；
 3. 后续发布统一运行 `tools/qa_release.py`，继续使用有界功能、故障恢复和确定性检查，略过压力与高负载测试。
