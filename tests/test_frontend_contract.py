@@ -138,6 +138,21 @@ class FrontendContractTests(unittest.TestCase):
         self.assertIn("setMcpEnabled", panels)
         self.assertIn("refreshMcp", panels)
 
+    def test_session_lifecycle_uses_revisioned_server_mutations(self) -> None:
+        sessions = self.scripts["js/state/sessions.js"]
+        listing = self.scripts["js/features/sessions/session-list.js"]
+        for marker in ("patchSession", "trashSession", "restoreSession"):
+            self.assertIn(marker, sessions)
+        self.assertIn("ifMatch: etag(session)", sessions)
+        self.assertIn('role: "menu"', listing)
+        self.assertIn('session.status === "trash"', listing)
+        self.assertNotIn("innerHTML", listing)
+        for marker in (
+            'id="session-status-filter"', 'id="session-action-dialog"',
+            'id="confirm-session-action"',
+        ):
+            self.assertIn(marker, self.index)
+
     def test_responsive_and_accessibility_modes_are_explicit(self) -> None:
         self.assertIn("grid-template-columns: var(--sidebar-width) minmax(0, 1fr) var(--inspector-width)", self.css)
         self.assertIn("@media (max-width: 1180px)", self.css)

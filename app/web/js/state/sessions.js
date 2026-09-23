@@ -26,3 +26,34 @@ export async function createSession(input) {
   await loadSessions();
   return response.data;
 }
+
+function endpoint(session) {
+  const project = resourceId(session.project_id, "project");
+  const id = resourceId(session.id, "session");
+  return `/projects/${project}/sessions/${id}`;
+}
+
+function etag(session) {
+  if (session.etag) return session.etag;
+  const id = resourceId(session.id, "session");
+  const revision = Number(session.revision);
+  if (!Number.isSafeInteger(revision) || revision < 1) throw new TypeError("session revision is invalid");
+  return `"mdo-session-${id}-${revision}"`;
+}
+
+async function refreshAfter(response) {
+  await loadSessions();
+  return { ...response.data, etag: response.etag };
+}
+
+export async function patchSession(session, patch) {
+  return refreshAfter(await api.patch(endpoint(session), patch, { ifMatch: etag(session) }));
+}
+
+export async function trashSession(session) {
+  return refreshAfter(await api.delete(endpoint(session), { ifMatch: etag(session) }));
+}
+
+export async function restoreSession(session) {
+  return refreshAfter(await api.post(`${endpoint(session)}/restore`, undefined, { ifMatch: etag(session) }));
+}

@@ -273,6 +273,16 @@ select:focus-visible,
   font-weight: 600;
 }
 
+.session-list-controls { display: flex; align-items: center; gap: 6px; }
+.session-list-controls select {
+  max-width: 76px;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--muted);
+  font-size: 11px;
+}
+
 .count {
   min-width: 20px;
   padding: 1px 6px;
@@ -304,6 +314,40 @@ select:focus-visible,
   text-align: left;
   cursor: pointer;
 }
+
+.session-item-row { position: relative; display: grid; grid-template-columns: minmax(0, 1fr) 30px; align-items: center; }
+.session-item-row .session-item { min-width: 0; }
+.session-item-row[data-status="archived"] .session-item-title,
+.session-item-row[data-status="trash"] .session-item-title { color: var(--muted); }
+.session-more {
+  display: grid;
+  width: 28px;
+  height: 28px;
+  place-items: center;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+}
+.session-more:hover, .session-more[aria-expanded="true"] { background: var(--surface-hover); color: var(--ink); }
+.session-menu {
+  position: absolute;
+  z-index: 25;
+  top: calc(100% - 3px);
+  right: 3px;
+  display: grid;
+  min-width: 148px;
+  padding: 5px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface-raised);
+  box-shadow: 0 12px 32px rgb(0 0 0 / 16%);
+}
+.session-menu button { min-height: 32px; padding: 0 9px; border: 0; border-radius: 6px; background: transparent; text-align: left; cursor: pointer; }
+.session-menu button:hover { background: var(--surface-hover); }
+.session-menu button[data-tone="danger"] { color: var(--danger); }
+.session-pin { color: var(--muted); font-size: 10px; }
 
 .session-item:hover { background: var(--surface-hover); }
 .session-item[aria-current="page"] { background: var(--surface-active); }
@@ -565,6 +609,8 @@ select:focus-visible,
   color: var(--ink);
 }
 .dialog-fields input:focus, .dialog-fields select:focus { border-color: var(--focus); }
+.session-action-fields { grid-template-columns: 1fr; }
+.session-action-fields label { grid-column: 1 / -1; }
 .dialog-error { margin: 0 20px 12px; color: var(--danger); font-size: 12px; }
 .dialog-card > footer { display: flex; justify-content: flex-end; gap: 8px; padding: 13px 20px; border-top: 1px solid var(--border); }
 .primary-button, .secondary-button { min-height: 35px; padding: 0 14px; border: 1px solid var(--border-strong); border-radius: var(--radius-sm); cursor: pointer; }

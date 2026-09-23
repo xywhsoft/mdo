@@ -52,7 +52,16 @@
       <nav class="session-navigation" aria-label="会话列表">
         <div class="nav-section-heading">
           <span>会话</span>
-          <span class="count" id="session-count">0</span>
+          <div class="session-list-controls">
+            <label class="sr-only" for="session-status-filter">会话状态</label>
+            <select id="session-status-filter" aria-label="会话状态">
+              <option value="active">进行中</option>
+              <option value="archived">已归档</option>
+              <option value="trash">回收站</option>
+              <option value="all">全部</option>
+            </select>
+            <span class="count" id="session-count">0</span>
+          </div>
         </div>
         <div class="session-list" id="session-list" aria-live="polite" aria-busy="true"></div>
       </nav>
@@ -318,6 +327,28 @@
       <footer>
         <button class="secondary-button" value="cancel">取消</button>
         <button class="primary-button" id="create-session" value="default">创建会话</button>
+      </footer>
+    </form>
+  </dialog>
+
+  <dialog class="new-session-dialog" id="session-action-dialog" aria-labelledby="session-action-title">
+    <form class="dialog-card" id="session-action-form">
+      <header>
+        <div>
+          <h2 id="session-action-title">编辑会话</h2>
+          <p id="session-action-description"></p>
+        </div>
+        <button class="icon-button" type="button" id="close-session-action" aria-label="关闭">
+          <span class="icon" data-icon="close" aria-hidden="true"></span>
+        </button>
+      </header>
+      <div class="dialog-fields session-action-fields" id="session-action-fields">
+        <label>标题 <input name="title" maxlength="256" required></label>
+      </div>
+      <div class="dialog-error" id="session-action-error" role="alert" hidden></div>
+      <footer>
+        <button class="secondary-button" id="cancel-session-action" type="button">取消</button>
+        <button class="primary-button" id="confirm-session-action" type="submit">保存</button>
       </footer>
     </form>
   </dialog>

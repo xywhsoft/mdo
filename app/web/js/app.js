@@ -1,6 +1,9 @@
 import { mountIcons } from "./components/icons.js";
 import { bootstrapStore, loadBootstrap } from "./state/bootstrap.js";
-import { sessionsStore, sessionDetailStore, loadSessions, loadSession, createSession } from "./state/sessions.js";
+import {
+  sessionsStore, sessionDetailStore, loadSessions, loadSession, createSession,
+  patchSession, trashSession, restoreSession,
+} from "./state/sessions.js";
 import { modelsStore, agentsStore, loadCatalogs, loadModels, loadAgents } from "./state/catalogs.js";
 import { settingsStore, loadSettings } from "./state/settings.js";
 import {
@@ -36,6 +39,9 @@ function runStateText(state) {
     failed: "运行失败",
     cancelled: "已停止",
     timed_out: "已超时",
+    archived: "已归档",
+    trash: "回收站",
+    loading: "载入中",
   })[state] ?? "就绪";
 }
 
@@ -67,6 +73,8 @@ export async function boot() {
   const agentWorkspaceRegions = [$(".workspace-header"), $(".conversation"), $(".composer-region")];
   let settingsActive = false;
   let inspectorBeforeSettings = shell.dataset.inspector;
+  let sessionWritable = true;
+  let selectedSessionStatus = "active";
   let activeRun = null;
   let runMonitor = 0;
   let selectedKey = "";
@@ -76,11 +84,13 @@ export async function boot() {
     container: $("#session-list"),
     count: $("#session-count"),
     store: sessionsStore,
+    filter: $("#session-status-filter"),
     navigation,
     onSelect(session) {
       navigation.select(session.project_id, session.id);
       closeDrawers();
     },
+    onAction: handleSessionAction,
   });
   $("#session-search").addEventListener("input", (event) => sessionList.setQuery(event.target.value));
 
@@ -115,12 +125,13 @@ export async function boot() {
 
   function setRun(run) {
     activeRun = run && !terminalState(run) ? run : null;
-    const shown = run ?? { state: "idle" };
+    const shown = run ?? { state: sessionWritable ? "idle" : selectedSessionStatus };
     runStatus.dataset.state = shown.state;
     runStatus.lastElementChild.textContent = runStateText(shown.state);
     send.hidden = Boolean(activeRun);
     stop.hidden = !activeRun;
-    prompt.disabled = Boolean(activeRun);
+    prompt.disabled = Boolean(activeRun) || !sessionWritable;
+    send.disabled = !sessionWritable;
     mobileActivity.hidden = !activeRun;
   }
 
@@ -150,12 +161,17 @@ export async function boot() {
 
   sessionDetailStore.subscribe((state) => {
     const session = state.data;
+    sessionWritable = session ? session.status === "active" : !navigation.get().sessionId;
+    selectedSessionStatus = session?.status ?? (navigation.get().sessionId ? "loading" : "active");
+    prompt.placeholder = sessionWritable ? "向墨斗描述任务…" : "该会话不可运行；请先恢复到进行中";
+    setRun(activeRun);
     if (session) {
       const title = session.title || "未命名任务";
       sessionTitle.textContent = title;
-      sessionSubtitle.textContent = `${session.project_id} · ${session.agent_id} · ${session.model_id}`;
+      const statusText = session.status === "archived" ? " · 已归档" : session.status === "trash" ? " · 回收站" : "";
+      sessionSubtitle.textContent = `${session.project_id} · ${session.agent_id} · ${session.model_id}${statusText}`;
       mobileTitle.textContent = title;
-      mobileMeta.textContent = session.model_id || session.agent_id;
+      mobileMeta.textContent = `${session.model_id || session.agent_id}${statusText}`;
       workspaceLabel.textContent = session.workspace_root ? session.workspace_root.split(/[\\/]/).filter(Boolean).at(-1) || session.workspace_root : "本地工作区";
       reasoningLabel.textContent = session.reasoning_effort || "自动";
     }
@@ -292,7 +308,7 @@ export async function boot() {
       showComposerError(error);
       prompt.focus();
     } finally {
-      send.disabled = false;
+      send.disabled = !sessionWritable;
     }
   });
 
@@ -334,6 +350,70 @@ export async function boot() {
   const dialogForm = $("#new-session-form");
   const dialogError = $("#new-session-error");
   const createButton = $("#create-session");
+  const actionDialog = $("#session-action-dialog");
+  const actionForm = $("#session-action-form");
+  const actionFields = $("#session-action-fields");
+  const actionTitle = $("#session-action-title");
+  const actionDescription = $("#session-action-description");
+  const actionError = $("#session-action-error");
+  const actionConfirm = $("#confirm-session-action");
+  let pendingSessionAction = null;
+
+  async function refreshSelectedSession(session) {
+    const selected = navigation.get();
+    if (selected.projectId === session.project_id && selected.sessionId === session.id) {
+      await loadSession(session.project_id, session.id);
+    }
+  }
+
+  async function applySessionAction(action, session, title = "") {
+    let updated;
+    if (action === "rename") updated = await patchSession(session, { title });
+    else if (action === "pin") updated = await patchSession(session, { pinned: !session.pinned });
+    else if (action === "archive") updated = await patchSession(session, { archived: true });
+    else if (action === "unarchive") updated = await patchSession(session, { archived: false });
+    else if (action === "trash") updated = await trashSession(session);
+    else if (action === "restore") updated = await restoreSession(session);
+    else throw new TypeError("unknown session action");
+    await refreshSelectedSession(updated);
+    toast({ rename: "会话已重命名", pin: updated.pinned ? "会话已置顶" : "已取消置顶", archive: "会话已归档", unarchive: "会话已移回进行中", trash: "会话已移到回收站", restore: "会话已恢复" }[action]);
+    return updated;
+  }
+
+  async function handleSessionAction(action, session) {
+    if (action !== "rename" && action !== "trash") return applySessionAction(action, session);
+    pendingSessionAction = { action, session };
+    const rename = action === "rename";
+    actionTitle.textContent = rename ? "重命名会话" : "移到回收站";
+    actionDescription.textContent = rename ? "新标题会同步写入会话元数据。" : `“${session.title || "未命名任务"}”可从回收站恢复。`;
+    actionFields.hidden = !rename;
+    actionForm.elements.title.required = rename;
+    actionForm.elements.title.value = rename ? session.title || "" : "";
+    actionConfirm.textContent = rename ? "保存" : "移到回收站";
+    actionConfirm.className = rename ? "primary-button" : "danger-button";
+    actionError.hidden = true;
+    if (!actionDialog.open) actionDialog.showModal();
+    if (rename) window.setTimeout(() => actionForm.elements.title.select(), 0);
+  }
+
+  $("#close-session-action").addEventListener("click", () => actionDialog.close());
+  $("#cancel-session-action").addEventListener("click", () => actionDialog.close());
+  actionForm.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    if (!pendingSessionAction || !actionForm.reportValidity()) return;
+    actionError.hidden = true;
+    actionConfirm.disabled = true;
+    try {
+      await applySessionAction(pendingSessionAction.action, pendingSessionAction.session, actionForm.elements.title.value.trim());
+      actionDialog.close();
+      pendingSessionAction = null;
+    } catch (error) {
+      actionError.textContent = errorMessage(error);
+      actionError.hidden = false;
+    } finally {
+      actionConfirm.disabled = false;
+    }
+  });
 
   function fillCatalogSelects() {
     const agentSelect = $("#agent-select");
