@@ -64,7 +64,7 @@ static MdoApiBodyStatus MdoApiBodyType(const MdoApiContext* Context)
 }
 
 static bool MdoApiBodyReserve(char** pBuffer, size_t* pCapacity,
-    size_t Required)
+    size_t Required, size_t Limit)
 {
     size_t Capacity = *pCapacity;
     char* Buffer;
@@ -72,10 +72,10 @@ static bool MdoApiBodyReserve(char** pBuffer, size_t* pCapacity,
     if ( Required <= Capacity ) return true;
     if ( Capacity == 0u ) Capacity = 4096u;
     while ( Capacity < Required ) {
-        size_t Next = Capacity < MDO_API_REQUEST_MAX_BYTES / 2u ?
-            Capacity * 2u : MDO_API_REQUEST_MAX_BYTES + 1u;
-        if ( Next <= Capacity || Next > MDO_API_REQUEST_MAX_BYTES + 1u )
-            Next = MDO_API_REQUEST_MAX_BYTES + 1u;
+        size_t Next = Capacity < Limit / 2u ?
+            Capacity * 2u : Limit + 1u;
+        if ( Next <= Capacity || Next > Limit + 1u )
+            Next = Limit + 1u;
         Capacity = Next;
     }
     Buffer = (char*)xrtRealloc(*pBuffer, Capacity);
@@ -86,7 +86,7 @@ static bool MdoApiBodyReserve(char** pBuffer, size_t* pCapacity,
 }
 
 static MdoApiBodyStatus MdoApiBodyDecode(MdoApiContext* Context,
-    char** pDocument, size_t* pSize)
+    size_t Limit, char** pDocument, size_t* pSize)
 {
     const xhttp1head* Head = Context->Request->head;
     const xnetbuf* Network;
@@ -98,7 +98,7 @@ static MdoApiBodyStatus MdoApiBodyDecode(MdoApiContext* Context,
     size_t Available;
 
     if ( (Head->Flags & (uint32)XHTTP1_CONTENT_LENGTH) != 0u &&
-         Head->ContentLength > MDO_API_REQUEST_MAX_BYTES )
+         Head->ContentLength > Limit )
         return MDO_API_BODY_TOO_LARGE;
     if ( Context->Request->body == NULL ||
          ((Head->Flags & ((uint32)XHTTP1_CONTENT_LENGTH |
@@ -136,13 +136,13 @@ static MdoApiBodyStatus MdoApiBodyDecode(MdoApiContext* Context,
             return MDO_API_BODY_READ_FAILED;
         }
         Offset += Consumed;
-        if ( Data.Size > MDO_API_REQUEST_MAX_BYTES - OutputSize ) {
+        if ( Data.Size > Limit - OutputSize ) {
             xrtFree(Output);
             return MDO_API_BODY_TOO_LARGE;
         }
         if ( Data.Size != 0u ) {
             if ( !MdoApiBodyReserve(&Output, &Capacity,
-                    OutputSize + Data.Size + 1u) ) {
+                    OutputSize + Data.Size + 1u, Limit) ) {
                 xrtFree(Output);
                 return MDO_API_BODY_READ_FAILED;
             }
@@ -160,7 +160,8 @@ static MdoApiBodyStatus MdoApiBodyDecode(MdoApiContext* Context,
         xrtFree(Output);
         return MDO_API_BODY_MISSING;
     }
-    if ( !MdoApiBodyReserve(&Output, &Capacity, OutputSize + 1u) ) {
+    if ( !MdoApiBodyReserve(&Output, &Capacity, OutputSize + 1u,
+            Limit) ) {
         xrtFree(Output);
         return MDO_API_BODY_READ_FAILED;
     }
@@ -180,7 +181,8 @@ MdoApiBodyStatus MdoApiJsonBodyRead(MdoApiContext* Context,
     memset(Body, 0, sizeof(*Body));
     Status = MdoApiBodyType(Context);
     if ( Status != MDO_API_BODY_OK ) return Status;
-    Status = MdoApiBodyDecode(Context, &Body->Document, &Body->Size);
+    Status = MdoApiBodyDecode(Context, MDO_API_REQUEST_MAX_BYTES,
+        &Body->Document, &Body->Size);
     if ( Status != MDO_API_BODY_OK ) return Status;
     Body->Value = xrtJsonParse(xrtStrViewN(Body->Document, Body->Size));
     if ( Body->Value == NULL ) {
@@ -188,6 +190,18 @@ MdoApiBodyStatus MdoApiJsonBodyRead(MdoApiContext* Context,
         return MDO_API_BODY_INVALID;
     }
     return MDO_API_BODY_OK;
+}
+
+MdoApiBodyStatus MdoApiBinaryBodyRead(MdoApiContext* Context,
+    size_t Limit, char** Data, size_t* Size)
+{
+    if ( Context == NULL || Context->Request == NULL ||
+         Context->Request->head == NULL || Data == NULL || Size == NULL ||
+         Limit == 0u || Limit > MDO_API_IMAGE_MAX_BYTES )
+        return MDO_API_BODY_READ_FAILED;
+    *Data = NULL;
+    *Size = 0u;
+    return MdoApiBodyDecode(Context, Limit, Data, Size);
 }
 
 void MdoApiJsonBodyUnit(MdoApiJsonBody* Body)

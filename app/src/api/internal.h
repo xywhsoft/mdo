@@ -7,6 +7,7 @@
 
 #define MDO_API_RESPONSE_MAX_BYTES (256u * 1024u)
 #define MDO_API_REQUEST_MAX_BYTES (256u * 1024u)
+#define MDO_API_IMAGE_MAX_BYTES (8u * 1024u * 1024u)
 #define MDO_API_DOWNLOAD_MAX_BYTES (33u * 1024u * 1024u)
 #define MDO_API_REQUEST_ID_CAPACITY 40u
 #define MDO_API_ROUTE_PARAM_MAX 4u
@@ -58,6 +59,8 @@ bool MdoApiReplyError(MdoApiContext* pContext, uint16 Status, cstr Code,
 bool MdoApiReplyOptions(MdoApiContext* pContext, cstr Allow);
 MdoApiBodyStatus MdoApiJsonBodyRead(MdoApiContext* pContext,
     MdoApiJsonBody* pBody);
+MdoApiBodyStatus MdoApiBinaryBodyRead(MdoApiContext* pContext,
+    size_t Limit, char** pData, size_t* pSize);
 void MdoApiJsonBodyUnit(MdoApiJsonBody* pBody);
 bool MdoApiReplyBodyError(MdoApiContext* pContext, MdoApiBodyStatus Status);
 bool MdoApiReplyDownload(MdoApiContext* pContext, const void* pBody,
@@ -118,6 +121,12 @@ bool MdoApiSessionTruncateRoute(MdoApiContext* pContext);
 bool MdoApiSessionClearRoute(MdoApiContext* pContext);
 bool MdoApiSessionExportRoute(MdoApiContext* pContext);
 bool MdoApiRunStartRoute(MdoApiContext* pContext);
+bool MdoApiAttachmentsRoute(MdoApiContext* pContext);
+bool MdoApiAttachmentRoute(MdoApiContext* pContext);
+bool MdoApiAttachmentsInit(void);
+void MdoApiAttachmentsUnit(void);
+bool MdoApiReplyImage(MdoApiContext* pContext, const void* pBody,
+    size_t BodySize, cstr ContentType);
 bool MdoApiRunRoute(MdoApiContext* pContext);
 bool MdoApiScheduleRoute(MdoApiContext* pContext);
 bool MdoApiScheduleEnabledRoute(MdoApiContext* pContext);

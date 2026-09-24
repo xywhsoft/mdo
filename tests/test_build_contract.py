@@ -85,6 +85,7 @@ class BuildContractTests(unittest.TestCase):
             "src/bootstrap/bootstrap.c",
             "src/api/http.c",
             "src/api/body.c",
+            "src/api/attachments.c",
             "src/api/value.c",
             "src/api/resources.c",
             "src/api/catalogs.c",

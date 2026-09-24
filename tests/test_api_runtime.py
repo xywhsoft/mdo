@@ -1471,6 +1471,41 @@ def run_probe(host: Path) -> None:
 
                 session_path = (
                     f"/api/v1/projects/api-project/sessions/{session_id}")
+                attachments_path = session_path + "/attachments"
+                png_bytes = b"\x89PNG\r\n\x1a\n" + b"bounded-image" * 28000
+                status, headers, response = request(
+                    port, "POST", attachments_path, body=png_bytes,
+                    headers={"Content-Type": "image/png"})
+                uploaded = json.loads(response)
+                assert status == 201, (status, uploaded)
+                assert_common(headers, uploaded)
+                image = uploaded["data"]
+                assert re.fullmatch(r"[0-9a-f]{32}", image["id"]), image
+                assert image["size"] == len(png_bytes), image
+                assert image["mime_type"] == "image/png", image
+                assert image["url"] == attachments_path + "/" + image["id"]
+                assert (home / f"sessions/api-project/{session_id}/attachments/"
+                        f"{image['id']}.bin").read_bytes() == png_bytes
+                status, image_headers, downloaded = request(
+                    port, "GET", image["url"])
+                assert status == 200 and downloaded == png_bytes, (
+                    status, len(downloaded))
+                assert image_headers["content-type"] == "image/png", image_headers
+                assert image_headers["cache-control"] == "no-store", image_headers
+                status, _, downloaded = request(port, "HEAD", image["url"])
+                assert status == 200 and downloaded == b"", (status, downloaded)
+                status, _, response = request(
+                    port, "POST", attachments_path, body=b"not an image",
+                    headers={"Content-Type": "image/png"})
+                assert status == 415, (status, response)
+                status, _, response = request(
+                    port, "POST", attachments_path, body=png_bytes[:16],
+                    headers={"Content-Type": "image/jpeg"})
+                assert status == 415, (status, response)
+                status, _, response = request(
+                    port, "GET", image["url"].replace(
+                        f"sessions/{session_id}/", "sessions/missing/"))
+                assert status == 404, (status, response)
                 (base / "mention-ref.c").write_text("// fixture", encoding="utf-8")
                 (base / "mention-fixture").mkdir()
                 (base / "mention-fixture/mention-ref nested.c").write_text(

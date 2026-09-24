@@ -101,6 +101,11 @@ static const MdoApiRoute g_MdoApiRoutes[] = {
     { "/api/v1/projects/{project}/sessions/{session}/history",
       XHTTP_METHOD_GET | XHTTP_METHOD_HEAD, "GET, HEAD, OPTIONS",
       MdoApiSessionHistoryRoute },
+    { "/api/v1/projects/{project}/sessions/{session}/attachments",
+      XHTTP_METHOD_POST, "POST, OPTIONS", MdoApiAttachmentsRoute },
+    { "/api/v1/projects/{project}/sessions/{session}/attachments/{attachment}",
+      XHTTP_METHOD_GET | XHTTP_METHOD_HEAD, "GET, HEAD, OPTIONS",
+      MdoApiAttachmentRoute },
     { "/api/v1/projects/{project}/sessions/{session}/recovery",
       XHTTP_METHOD_GET | XHTTP_METHOD_HEAD, "GET, HEAD, OPTIONS",
       MdoApiSessionRecoveryRoute },
@@ -237,6 +242,12 @@ bool MdoApiInit(void)
         MdoApiFeedbackUnit();
         return false;
     }
+    if ( !MdoApiAttachmentsInit() ) {
+        MdoApiQueueUnit();
+        MdoApiDraftUnit();
+        MdoApiFeedbackUnit();
+        return false;
+    }
     xrtAtomic64Init(&g_MdoApiFallbackId, 0u);
     g_MdoApiInitialized = true;
     return true;
@@ -248,6 +259,7 @@ void MdoApiUnit(void)
     MdoApiFeedbackUnit();
     MdoApiDraftUnit();
     MdoApiQueueUnit();
+    MdoApiAttachmentsUnit();
 }
 
 XS_RequestResult MdoApiRequest(XS_HttpReq* pRequest)

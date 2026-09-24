@@ -6,6 +6,8 @@
       "name": "mdo",
       "ip": "127.0.0.1",
       "port": 0,
+      "recv_limit": 8454144,
+      "body_limit": 8388608,
       "host_default": {
         "enabled": true,
         "name": "mdo",

@@ -133,6 +133,16 @@ bool MdoApiReplyDownload(MdoApiContext* pContext, const void* pBody,
         "application/octet-stream", ContentDisposition);
 }
 
+bool MdoApiReplyImage(MdoApiContext* pContext, const void* pBody,
+    size_t BodySize, cstr ContentType)
+{
+    if ( pBody == NULL || BodySize == 0u ||
+         BodySize > MDO_API_IMAGE_MAX_BYTES || ContentType == NULL )
+        return false;
+    return MdoApiReplyRaw(pContext, 200u, pBody, BodySize, NULL, NULL,
+        ContentType, NULL);
+}
+
 bool MdoApiReplySuccessTake(MdoApiContext* pContext, uint16 Status,
     xvalue* pData, cstr Allow)
 {
