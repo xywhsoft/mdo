@@ -22,7 +22,7 @@ export function eventsToTimeline(events, historyLost = false) {
   const modelStarts = new Map();
   const promptsByRun = new Map();
   if (historyLost) {
-    items.push({ key: "history-gap", kind: "system", role: "记录提示", text: "更早的实时事件已超出保留窗口。持久会话上下文仍然完整。", state: "done", time: 0 });
+    items.push({ key: "history-gap", kind: "system", role: "记录提示", text: "更早的事件已不在当前记录中。", state: "done", time: 0 });
   }
   for (const event of events) {
     const runKey = String(event.run_id || event.agent_id || event.event_id);
@@ -171,21 +171,24 @@ function timelineNode(item, handlers, feedback, projectId, sessionId) {
     if (images.childElementCount) children.push(images);
   }
   if (item.meta) children.push(element("div", { className: "timeline-meta", text: item.meta }));
-  if (["user", "assistant"].includes(item.kind) && item.text) {
+  if ((item.kind === "assistant" && item.text) ||
+      (item.kind === "user" && (item.text || item.attachments?.length))) {
     const actions = element("div", { className: "timeline-actions" });
-    const copy = element("button", { text: "复制", attrs: { type: "button", "aria-label": "复制消息" } });
-    copy.addEventListener("click", async () => {
-      try { await copyText(item.text); toast("消息已复制"); }
-      catch { toast("无法复制消息", "error"); }
-    });
-    actions.append(copy);
-    if (item.kind === "user" && !item.attachments?.length &&
+    if (item.text) {
+      const copy = element("button", { text: "复制", attrs: { type: "button", "aria-label": "复制消息" } });
+      copy.addEventListener("click", async () => {
+        try { await copyText(item.text); toast("消息已复制"); }
+        catch { toast("无法复制消息", "error"); }
+      });
+      actions.append(copy);
+    }
+    if (item.kind === "user" &&
         Number.isSafeInteger(item.userMessageSequence) &&
         item.userMessageSequence > 0 && !item.textTruncated) {
-      const edit = element("button", { text: "编辑并分叉", attrs: { type: "button", "aria-label": "编辑此消息并创建会话分支" } });
+      const edit = element("button", { text: "编辑", attrs: { type: "button", "aria-label": "编辑此消息并重新发送" } });
       edit.addEventListener("click", async () => {
         edit.disabled = true;
-        try { await handlers.onEdit(item.userMessageSequence, item.text); }
+        try { await handlers.onEdit(item.userMessageSequence, item.text, item.attachments ?? []); }
         catch (error) { toast(errorMessage(error), "error"); }
         finally { edit.disabled = false; }
       });
@@ -202,12 +205,12 @@ function timelineNode(item, handlers, feedback, projectId, sessionId) {
       actions.append(fork);
       const retryPrompt = item.retryPrompt;
       if (retryPrompt && Number.isSafeInteger(retryPrompt.sequence) &&
-          retryPrompt.sequence > 0 && retryPrompt.text &&
-          !retryPrompt.attachments?.length && !retryPrompt.truncated) {
-        const retry = element("button", { text: "重试并分叉", attrs: { type: "button", "aria-label": "重试此回合并创建会话分支" } });
+          retryPrompt.sequence > 0 && (retryPrompt.text || retryPrompt.attachments?.length) &&
+          !retryPrompt.truncated) {
+        const retry = element("button", { text: "重试", attrs: { type: "button", "aria-label": "重试此回合" } });
         retry.addEventListener("click", async () => {
           retry.disabled = true;
-          try { await handlers.onRetry(retryPrompt.sequence, retryPrompt.text); }
+          try { await handlers.onRetry(retryPrompt.sequence, retryPrompt.text, retryPrompt.attachments ?? []); }
           catch (error) { toast(errorMessage(error), "error"); }
           finally { retry.disabled = false; }
         });

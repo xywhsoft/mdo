@@ -405,8 +405,8 @@
     <form class="dialog-card" id="message-edit-form">
       <header>
         <div>
-          <h2 id="message-edit-title">编辑并分叉</h2>
-          <p>从这条消息之前创建分支，并用修改后的内容继续。原会话保持不变。</p>
+          <h2 id="message-edit-title">编辑消息</h2>
+          <p>会撤回此消息及之后的对话，然后在当前会话重新发送。原消息中的图片会保留。</p>
         </div>
       </header>
       <div class="dialog-fields message-edit-fields">
@@ -414,7 +414,7 @@
       </div>
       <footer>
         <button class="secondary-button" id="cancel-message-edit" type="button">取消</button>
-        <button class="primary-button" type="submit">创建分支并发送</button>
+          <button class="primary-button" type="submit">保存并重新发送</button>
       </footer>
     </form>
   </dialog>

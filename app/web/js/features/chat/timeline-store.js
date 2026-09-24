@@ -83,17 +83,27 @@ export function selectTimeline(projectId, sessionId) {
   const session = resourceId(sessionId, "session");
   const current = timelineStore.get().data;
   if (current?.projectId === project && current?.sessionId === session) return;
+  void reloadTimeline(project, session);
+}
+
+function reloadTimeline(projectId, sessionId) {
   generation += 1;
   pollDelay = 700;
   timelineStore.setData({
-    projectId: project,
-    sessionId: session,
+    projectId,
+    sessionId,
     cursor: 0,
     latestEventId: 0,
     historyLost: false,
     events: [],
   });
-  void refreshTimeline(generation);
+  return refreshTimeline(generation);
+}
+
+export function reloadSelectedTimeline() {
+  const current = timelineStore.get().data;
+  if (!current?.sessionId) return Promise.resolve();
+  return reloadTimeline(current.projectId, current.sessionId);
 }
 
 export function refreshSelectedTimeline() {

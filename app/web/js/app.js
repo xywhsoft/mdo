@@ -21,7 +21,7 @@ import { asksStore, selectAsks, clearAsks, refreshSelectedAsks } from "./state/a
 import { recoveryStore, selectRecovery, loadRecovery } from "./state/recovery.js";
 import { navigation } from "./state/navigation.js";
 import { createSessionList } from "./features/sessions/session-list.js";
-import { timelineStore, selectTimeline, clearTimeline, refreshSelectedTimeline } from "./features/chat/timeline-store.js";
+import { timelineStore, selectTimeline, clearTimeline, refreshSelectedTimeline, reloadSelectedTimeline } from "./features/chat/timeline-store.js";
 import { todoStore, selectTodo, clearTodo } from "./state/todo.js";
 import { createTimelineView } from "./features/chat/timeline.js";
 import { createMessageEditDialog } from "./features/chat/message-edit-dialog.js";
@@ -128,16 +128,21 @@ export async function boot() {
     input: $("#message-edit-input"), cancel: $("#cancel-message-edit"),
   });
 
-  async function forkAndRunMessage(sequence, text, label) {
+  async function replaceAndRunMessage(sequence, text, attachments, label) {
     if (messageActionBusy) throw new Error("请等待当前消息操作完成");
-    if (!Number.isSafeInteger(sequence) || sequence < 1 || !text.trim())
+    if (!Number.isSafeInteger(sequence) || sequence < 1 ||
+        (!text.trim() && !attachments.length))
       throw new Error("这条消息没有可用的编辑边界或完整文本");
     const session = sessionDetailStore.get().data;
     const selected = navigation.get();
     if (!session || session.project_id !== selected.projectId ||
         session.id !== selected.sessionId)
       throw new Error("请先选择会话");
-    if (activeRun || submitting) throw new Error("请在当前运行结束后操作消息");
+    if (activeRun || submitting || composerImages?.isUploading())
+      throw new Error("请在当前运行结束后操作消息");
+    if (promptQueue.peek(selected.projectId, selected.sessionId) ||
+        prompt.value.trim() || composerAttachments.length)
+      throw new Error("请先处理草稿和待发送队列，再编辑历史消息");
     messageActionBusy = true;
     try {
       const history = await loadSessionHistory(session);
@@ -146,25 +151,26 @@ export async function boot() {
         throw new Error("会话已切换，请重新选择消息");
       if (sequence > history.last_sequence)
         throw new Error("消息已不在当前会话历史中，请刷新会话");
-      const fork = await forkSession({ ...session, etag: history.etag,
-        revision: history.revision }, {
-        title: `${session.title || "未命名任务"}（${label}）`,
-        through_sequence: sequence - 1,
-      });
+      const updated = await truncateSession({ ...session, etag: history.etag,
+        revision: history.revision }, sequence - 1);
+      sessionDetailStore.setData(updated);
+      await reloadSelectedTimeline();
       let run;
-      try { run = await startRun(fork.project_id, fork.id, text); }
+      try { run = await startRun(updated.project_id, updated.id, text.trim(), attachments); }
       catch (error) {
-        navigation.select(fork.project_id, fork.id);
+        const key = `${updated.project_id}/${updated.id}`;
         prompt.value = text;
+        composerAttachments = [...attachments];
+        composerImages.set(attachments);
+        draftStore.edit(key, text, attachments, true);
         prompt.dispatchEvent(new Event("input", { bubbles: true }));
         showComposerError(error);
         throw error;
       }
-      navigation.select(fork.project_id, fork.id);
       monitorRun(run);
       void Promise.allSettled([refreshSelectedTimeline(), loadTasks(),
         loadRuns(), loadRecovery()]);
-      toast(`已创建分支并${label === "重试" ? "重新发送" : "发送编辑后的消息"}`);
+      toast(label === "重试" ? "已在当前会话重试" : "已在当前会话发送编辑后的消息");
     } finally { messageActionBusy = false; }
   }
 
@@ -190,11 +196,12 @@ export async function boot() {
       navigation.select(fork.project_id, fork.id);
       toast("已创建会话分支");
     },
-    onEdit: async (sequence, text) => {
-      const edited = await messageEditDialog.open(text);
-      if (edited !== null) await forkAndRunMessage(sequence, edited, "编辑");
+    onEdit: async (sequence, text, attachments) => {
+      const edited = await messageEditDialog.open(text, attachments);
+      if (edited !== null) await replaceAndRunMessage(sequence, edited, attachments, "编辑");
     },
-    onRetry: (sequence, text) => forkAndRunMessage(sequence, text, "重试"),
+    onRetry: (sequence, text, attachments) =>
+      replaceAndRunMessage(sequence, text, attachments, "重试"),
   });
   conversationSearch = createConversationSearch({
     bar: $("#conversation-find"), input: $("#conversation-find-input"),
@@ -730,6 +737,7 @@ export async function boot() {
     else if (action === "clear") updated = await clearSession(session);
     else throw new TypeError("unknown session action");
     await refreshSelectedSession(updated);
+    if (["truncate", "clear"].includes(action)) await reloadSelectedTimeline();
     toast({ rename: "会话已重命名", pin: updated.pinned ? "会话已置顶" : "已取消置顶", archive: "会话已归档", unarchive: "会话已移回进行中", trash: "会话已移到回收站", restore: "会话已恢复", fork: "已创建会话分支", truncate: "会话历史已截断", clear: "会话历史已清空" }[action]);
     return updated;
   }

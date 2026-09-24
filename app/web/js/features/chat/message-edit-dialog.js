@@ -1,5 +1,6 @@
 export function createMessageEditDialog({ dialog, form, input, cancel }) {
   let pending = null;
+  let hasAttachments = false;
 
   function finish(value) {
     const resolve = pending;
@@ -12,7 +13,7 @@ export function createMessageEditDialog({ dialog, form, input, cancel }) {
     event.preventDefault();
     if (!pending || !form.reportValidity()) return;
     const value = input.value.trim();
-    if (value) finish(value);
+    if (value || hasAttachments) finish(value);
     else {
       input.setCustomValidity("请输入消息内容");
       input.reportValidity();
@@ -25,9 +26,11 @@ export function createMessageEditDialog({ dialog, form, input, cancel }) {
   });
 
   return Object.freeze({
-    open(text) {
+    open(text, attachments = []) {
       if (pending) return Promise.reject(new Error("已有消息正在编辑"));
+      hasAttachments = attachments.length > 0;
       input.value = text;
+      input.required = !hasAttachments;
       input.setCustomValidity("");
       dialog.showModal();
       input.focus();
