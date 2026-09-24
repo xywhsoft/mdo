@@ -88,26 +88,54 @@ function askCard(item, projectId, sessionId, deciding, drafts, onChanged) {
   const key = String(item.id);
   const card = element("section", { className: "conversation-dock ask-dock" });
   const actions = element("div", { className: "ask-dock-options" });
+  const hint = element("p", { className: "ask-dock-validation",
+    attrs: { id: `ask-answer-hint-${key}`, "aria-live": "polite" } });
   const input = element("input", { className: "ask-dock-input",
     attrs: { type: "text", maxlength: "1024", placeholder: "也可以输入自己的回答",
-      "aria-label": "回答问题" } });
+      "aria-label": "回答问题", "aria-describedby": hint.id } });
   input.value = drafts.get(key) ?? "";
-  input.addEventListener("input", () => drafts.set(key, input.value));
   const submit = element("button", { text: "提交回答",
     attrs: { type: "button" } });
   const buttons = [submit];
+  const encoder = new TextEncoder();
+  function updateValidity() {
+    const answer = input.value.trim();
+    const tooLong = encoder.encode(answer).length > 1024;
+    input.setAttribute("aria-invalid", String(tooLong));
+    hint.textContent = tooLong ? "回答不能超过 1024 字节" : "";
+    hint.dataset.state = tooLong ? "error" : "";
+    submit.disabled = !answer || tooLong || deciding.has(key);
+  }
+  input.addEventListener("input", () => {
+    drafts.set(key, input.value);
+    updateValidity();
+  });
   async function respond(value) {
     if (deciding.has(key)) return;
     deciding.add(key);
+    let answered = false;
     for (const button of buttons) button.disabled = true;
+    input.disabled = true;
+    hint.textContent = "正在提交回答…";
+    hint.dataset.state = "pending";
     try {
       await answerAsk(projectId, sessionId, item.id, value);
+      answered = true;
       drafts.delete(key);
       await onChanged();
     } catch (error) {
-      toast(errorMessage(error), "error");
-      for (const button of buttons) button.disabled = false;
-    } finally { deciding.delete(key); }
+      toast(answered ? "回答已提交，但状态刷新未完成" : errorMessage(error), "error");
+      if (!answered) {
+        input.disabled = false;
+        for (const button of buttons) button.disabled = false;
+      }
+    } finally {
+      deciding.delete(key);
+      if (input.isConnected) {
+        if (answered) hint.textContent = "已提交，等待模型继续…";
+        else updateValidity();
+      }
+    }
   }
   for (const option of item.options ?? []) {
     const button = element("button", { text: option,
@@ -116,16 +144,20 @@ function askCard(item, projectId, sessionId, deciding, drafts, onChanged) {
     buttons.push(button);
     actions.append(button);
   }
-  submit.addEventListener("click", () => void respond(input.value));
+  submit.addEventListener("click", () => {
+    if (!submit.disabled) void respond(input.value);
+  });
   input.addEventListener("keydown", (event) => {
     if (event.key === "Enter" && !event.isComposing) {
       event.preventDefault();
-      void respond(input.value);
+      if (!submit.disabled) void respond(input.value);
     }
   });
+  updateValidity();
   card.append(element("h3", { text: "需要你回答" }),
     element("p", { className: "ask-dock-question", text: item.question }),
-    actions, element("div", { className: "ask-dock-free" }, [input, submit]));
+    actions, element("div", { className: "ask-dock-free" }, [input, submit]),
+    hint);
   return card;
 }
 

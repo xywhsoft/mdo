@@ -576,9 +576,14 @@ select:focus-visible,
 .ask-dock-options { margin-bottom: 9px; }
 .ask-dock-options button, .ask-dock-free button { padding: 7px 10px; border: 1px solid var(--border-strong); border-radius: 7px; background: var(--surface-raised); color: var(--ink); cursor: pointer; }
 .ask-dock-options button:hover, .ask-dock-free button:hover { border-color: var(--accent); }
+.ask-dock-options button:disabled, .ask-dock-free button:disabled { opacity: .5; cursor: default; }
 .ask-dock-free { flex-wrap: nowrap; }
 .ask-dock-input { min-width: 0; flex: 1; padding: 7px 9px; border: 1px solid var(--border-strong); border-radius: 7px; background: var(--surface-raised); color: var(--ink); font: inherit; }
 .ask-dock-input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.ask-dock-input[aria-invalid="true"] { border-color: var(--danger); }
+.ask-dock-validation { margin: 6px 0 0; color: var(--danger); font-size: 12px; }
+.ask-dock-validation:empty { display: none; }
+.ask-dock-validation[data-state="pending"] { color: var(--muted); }
 .todo-dock-list li.current { color: var(--ink); }
 .todo-dock-list li.done { text-decoration: line-through; }
 .todo-dock-mark { flex: none; width: 14px; color: var(--accent); }
