@@ -157,11 +157,15 @@ export async function boot() {
   });
   const promptQueue = createPromptQueue({
     container: $("#prompt-queue"), navigation,
-    onRetry: () => {
+    onRetry: async () => {
       const selected = navigation.get();
+      const first = promptQueue.peek(selected.projectId, selected.sessionId);
+      if (first?.state === "sending")
+        await promptQueue.retry(selected.projectId, selected.sessionId, first.id);
       queueBlocked.delete(`${selected.projectId}/${selected.sessionId}`);
-      void dispatchQueued();
+      await dispatchQueued();
     },
+    onRemoved: () => dispatchQueued(),
   });
   const slashCommands = createSlashCommands({
     composer, input: prompt,
@@ -383,21 +387,25 @@ export async function boot() {
     const session = sessionDetailStore.get().data;
     if (!selected.sessionId || !session || session.project_id !== selected.projectId ||
         session.id !== selected.sessionId || session.status !== "active" || activeRun ||
-        queueBlocked.has(key) || !promptQueue.peek(selected.projectId, selected.sessionId)) return;
+        queueBlocked.has(key) ||
+        promptQueue.peek(selected.projectId, selected.sessionId)?.state !== "pending") return;
     if ((runsStore.get().data?.items ?? []).some((run) =>
       run.project_id === selected.projectId && run.session_id === selected.sessionId && !terminalState(run))) return;
     await promptQueue.exclusive(async () => {
       const entry = promptQueue.peek(selected.projectId, selected.sessionId);
-      if (!entry) return;
+      if (!entry || entry.state !== "pending") return;
       try {
+        await promptQueue.markSending(selected.projectId, selected.sessionId, entry.id);
         const run = await startRun(selected.projectId, selected.sessionId, entry.text);
-        promptQueue.remove(selected.projectId, selected.sessionId, entry.id);
-        hideComposerError();
         if (navigation.get().projectId === selected.projectId &&
             navigation.get().sessionId === selected.sessionId) monitorRun(run);
+        await promptQueue.remove(selected.projectId, selected.sessionId, entry.id);
+        hideComposerError();
         await Promise.all([refreshSelectedTimeline(), loadTasks(), loadRuns(), loadRecovery()]);
       } catch (error) {
         queueBlocked.add(key);
+        try { await promptQueue.select(selected.projectId, selected.sessionId); }
+        catch { /* Preserve the original dispatch error. */ }
         showComposerError(error);
       }
     });
@@ -425,7 +433,17 @@ export async function boot() {
       setDrawer("inspector", inspectorBeforeSettings === "open" && wideLayout.matches);
     }
     const key = projectId && sessionId ? `${projectId}/${sessionId}` : "";
-    if (key === selectedKey) return;
+    if (key === selectedKey) {
+      if (key) {
+        queueBlocked.add(key);
+        try {
+          await promptQueue.select(projectId, sessionId);
+          queueBlocked.delete(key);
+          void dispatchQueued();
+        } catch (error) { showComposerError(error); }
+      }
+      return;
+    }
     draftStore.capture(selectedKey, prompt.value);
     selectedKey = key;
     draftStore.select(key);
@@ -449,7 +467,12 @@ export async function boot() {
     sessionDetailStore.reset();
     selectTimeline(projectId, sessionId);
     void selectFeedback(projectId, sessionId);
-    await Promise.all([loadSession(projectId, sessionId), loadRuns(), loadRecovery()]);
+    queueBlocked.add(key);
+    try {
+      await Promise.all([loadSession(projectId, sessionId), loadRuns(), loadRecovery(),
+        promptQueue.select(projectId, sessionId)]);
+    } catch (error) { showComposerError(error); return; }
+    queueBlocked.delete(key);
     findActiveRun();
     void dispatchQueued();
   });
@@ -493,7 +516,7 @@ export async function boot() {
     try {
       const selected = await ensureSession(text);
       if (activeRun) {
-        if (!promptQueue.enqueue(selected.projectId, selected.sessionId, text, { first: interrupt }))
+        if (!await promptQueue.enqueue(selected.projectId, selected.sessionId, text, { first: interrupt }))
           throw new Error("待发送队列已满（最多 20 条）");
         queueBlocked.delete(`${selected.projectId}/${selected.sessionId}`);
         prompt.value = "";

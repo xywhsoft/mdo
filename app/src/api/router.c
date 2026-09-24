@@ -141,6 +141,12 @@ static const MdoApiRoute g_MdoApiRoutes[] = {
     { "/api/v1/projects/{project}/sessions/{session}/draft",
       XHTTP_METHOD_GET | XHTTP_METHOD_HEAD | XHTTP_METHOD_PUT,
       "GET, HEAD, PUT, OPTIONS", MdoApiDraftRoute },
+    { "/api/v1/projects/{project}/sessions/{session}/queue",
+      XHTTP_METHOD_GET | XHTTP_METHOD_HEAD | XHTTP_METHOD_POST,
+      "GET, HEAD, POST, OPTIONS", MdoApiQueueRoute },
+    { "/api/v1/projects/{project}/sessions/{session}/queue/{item}",
+      XHTTP_METHOD_PUT | XHTTP_METHOD_DELETE,
+      "PUT, DELETE, OPTIONS", MdoApiQueueItemRoute },
 };
 
 static bool MdoApiViewEqualText(xstrview View, cstr Text)
@@ -215,6 +221,11 @@ bool MdoApiInit(void)
         MdoApiFeedbackUnit();
         return false;
     }
+    if ( !MdoApiQueueInit() ) {
+        MdoApiDraftUnit();
+        MdoApiFeedbackUnit();
+        return false;
+    }
     xrtAtomic64Init(&g_MdoApiFallbackId, 0u);
     g_MdoApiInitialized = true;
     return true;
@@ -225,6 +236,7 @@ void MdoApiUnit(void)
     g_MdoApiInitialized = false;
     MdoApiFeedbackUnit();
     MdoApiDraftUnit();
+    MdoApiQueueUnit();
 }
 
 XS_RequestResult MdoApiRequest(XS_HttpReq* pRequest)

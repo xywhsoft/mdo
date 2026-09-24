@@ -1440,6 +1440,72 @@ def run_probe(host: Path) -> None:
                     "revision": 1, "text": "session draft"}, (status, body)
                 assert json.loads(request(port, "GET", draft_path)[2])[
                     "data"]["text"] == "session draft"
+                queue_path = session_path + "/queue"
+                queue_file = home / "sessions/api-project" / session_id / "queue.json"
+                status, _, body = request(port, "GET", queue_path)
+                assert status == 200 and json.loads(body)["data"] == {
+                    "items": []}, (status, body)
+                assert not queue_file.exists(), queue_file
+                first_id = "a" * 32
+                second_id = "b" * 32
+                priority_id = "c" * 32
+
+                def queue_request(method, target, payload):
+                    return request(port, method, target,
+                                   body=json.dumps(payload).encode("utf-8"),
+                                   headers={"Content-Type": "application/json"})
+
+                first = {"id": first_id, "text": "first prompt", "first": False}
+                status, _, body = queue_request("POST", queue_path, first)
+                assert status == 201 and json.loads(body)["data"]["items"] == [
+                    {"id": first_id, "text": "first prompt", "state": "pending"}], (
+                    status, body)
+                status, _, body = queue_request("POST", queue_path, first)
+                assert status == 200 and len(json.loads(body)["data"]["items"]) == 1, (
+                    status, body)
+                status, _, body = queue_request("POST", queue_path,
+                    {"id": first_id, "text": "different", "first": False})
+                assert status == 409 and json.loads(body)["error"][
+                    "code"] == "queue_id_conflict", (status, body)
+                status, _, body = queue_request("POST", queue_path,
+                    {"id": second_id, "text": "second prompt", "first": False})
+                assert status == 201, (status, body)
+                first_path = queue_path + "/" + first_id
+                status, _, body = queue_request("PUT", first_path,
+                    {"state": "sending"})
+                assert status == 200 and json.loads(body)["data"]["items"][0][
+                    "state"] == "sending", (status, body)
+                status, _, body = queue_request("PUT", first_path,
+                    {"state": "sending"})
+                assert status == 409 and json.loads(body)["error"][
+                    "code"] == "queue_state_conflict", (status, body)
+                status, _, body = queue_request("POST", queue_path,
+                    {"id": priority_id, "text": "interrupt prompt", "first": True})
+                assert status == 201 and [item["id"] for item in json.loads(body)[
+                    "data"]["items"]] == [first_id, priority_id, second_id], (
+                    status, body)
+                assert json.loads(queue_file.read_text(encoding="utf-8"))[
+                    "items"][0]["state"] == "sending"
+                status, _, body = queue_request("PUT", first_path,
+                    {"state": "pending"})
+                assert status == 200 and json.loads(body)["data"]["items"][0][
+                    "state"] == "pending", (status, body)
+                status, _, body = request(port, "DELETE", first_path)
+                assert status == 200 and [item["id"] for item in json.loads(body)[
+                    "data"]["items"]] == [priority_id, second_id], (status, body)
+                status, _, body = request(port, "DELETE", first_path)
+                assert status == 200 and len(json.loads(body)["data"]["items"]) == 2, (
+                    status, body)
+                status, _, body = queue_request("POST", queue_path,
+                    {"id": "invalid", "text": "bad", "first": False})
+                assert status == 422 and json.loads(body)["error"][
+                    "code"] == "queue_item_invalid", (status, body)
+                for item_id in (priority_id, second_id):
+                    status, _, body = request(port, "DELETE",
+                                              queue_path + "/" + item_id)
+                    assert status == 200, (status, body)
+                assert json.loads(request(port, "GET", queue_path)[2])[
+                    "data"]["items"] == []
                 run_path = session_path + "/runs"
                 status, headers, body = request(
                     port, "POST", run_path,
