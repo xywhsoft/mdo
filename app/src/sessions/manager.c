@@ -1654,6 +1654,13 @@ static bool MdoSessionsLedgerMutation(MdoSession* Session,
         Ok = false;
         goto done;
     }
+    if ( !MdoSessionAttachmentPruneRemoved(Session->Info.ProjectId,
+            Session->Info.Id) ) {
+        MdoSessionsError(Error, XWORK_ERROR_IO,
+            "cannot reconcile removed image references");
+        Ok = false;
+        goto done;
+    }
     if ( !MdoSessionsCandidate(Session, &Candidate, Error) ||
          !MdoSessionsCommit(Session, &Candidate, Error) ) Ok = false;
 done:

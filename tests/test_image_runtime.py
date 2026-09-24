@@ -181,8 +181,13 @@ def probe(host: Path) -> None:
                         route + "/attachments/" + image_id)
                     assert status == 409 and json.loads(body)["error"][
                         "code"] == "attachment_in_use", (status, body)
+                    status, _, body = request(port, "POST",
+                        route + "/attachments", body=image_bytes,
+                        headers={"Content-Type": "image/png"})
+                    trimmed_id = json.loads(body)["data"]["id"]
+                    assert status == 201 and trimmed_id != image_id, body
                     for prompt, refs in (("text after restart", []),
-                                         ("image after restart", [image_id])):
+                                         ("image after restart", [trimmed_id])):
                         ModelHandler.calls = 0
                         ModelHandler.last_payload = None
                         run_input = ({"prompt": prompt, "attachments": refs}
@@ -246,6 +251,27 @@ def probe(host: Path) -> None:
                     child_root = home / "sessions/image-probe" / child_id
                     assert (child_root / "attachments" / f"{image_id}.bin").read_bytes() == (
                         image_bytes)
+                    trimmed_start = starts[-1]
+                    assert trimmed_start["attachments"] == [trimmed_id], starts
+                    trimmed_record = (attachment_root / "events" /
+                                      f"{trimmed_start['event_id']}.json")
+                    record_bytes = trimmed_record.read_bytes()
+                    status, headers, body = request(port, "GET", route)
+                    assert status == 200, (status, body)
+                    status, _, body = request(port, "POST", route + "/truncate",
+                        body=json.dumps({"through_sequence":
+                            trimmed_start["user_message_sequence"] - 1}).encode(),
+                        headers={"Content-Type": "application/json",
+                                 "If-Match": headers["etag"]})
+                    assert status == 200 and not trimmed_record.exists(), (
+                        status, body)
+                    # A stale reference left by an interrupted cleanup is
+                    # pruned again before deciding whether the image is used.
+                    trimmed_record.write_bytes(record_bytes)
+                    status, _, body = request(port, "DELETE",
+                        route + "/attachments/" + trimmed_id)
+                    assert status == 200 and not trimmed_record.exists(), (
+                        status, body)
                     (attachment_root / f"{image_id}.bin").unlink()
                     status, _, copied = request(port, "GET",
                         child_route + "/attachments/" + image_id)

@@ -541,9 +541,15 @@ static MdoAttachmentDiscardResult MdoAttachmentDiscardLocked(
     if ( Ok && !Referenced )
         Ok = MdoApiQueueAttachmentReferenced(Project, Session,
             Id, &Referenced);
-    if ( Ok && !Referenced )
+    if ( Ok && !Referenced ) {
         Ok = MdoSessionAttachmentRecordReferenced(Project, Session,
             Id, &Referenced);
+        if ( Ok && Referenced ) {
+            Ok = MdoSessionAttachmentPruneRemoved(Project, Session);
+            if ( Ok ) Ok = MdoSessionAttachmentRecordReferenced(Project,
+                Session, Id, &Referenced);
+        }
+    }
     if ( !Ok ) return MDO_ATTACHMENT_DISCARD_ERROR;
     if ( Referenced ) return MDO_ATTACHMENT_DISCARD_IN_USE;
     if ( DataExists && !MdoHomeRemove(DataPath, false) )
@@ -569,7 +575,8 @@ static bool MdoAttachmentCollectExpired(const char* Project,
     bool Ok = true;
     xtime Cutoff = xrtNow() - MDO_ATTACHMENT_GRACE_US;
     size_t i;
-    if ( !MdoHomeExternalStat(Directory, &Exists, &Info) ) return false;
+    if ( !MdoSessionAttachmentPruneRemoved(Project, Session) ||
+         !MdoHomeExternalStat(Directory, &Exists, &Info) ) return false;
     if ( !Exists ) return true;
     if ( Info.Type != XFILE_TYPE_DIRECTORY ) return false;
     Dir = MdoHomeOpenDirectory(Directory, XDIR_STAT);

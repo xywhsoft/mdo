@@ -8,6 +8,12 @@
 #define MDO_IMAGE_RUN_RECORD_MAX 320u
 #define MDO_IMAGE_FILE_MAX (8u * 1024u * 1024u)
 #define MDO_IMAGE_META_MAX 512u
+#define MDO_IMAGE_TRIM_LIMIT 65536u
+
+typedef struct MdoImageRemovedRange {
+    uint64 First;
+    uint64 End;
+} MdoImageRemovedRange;
 
 static bool MdoImageRunId(xstrview Value, char Output[33])
 {
@@ -257,6 +263,142 @@ bool MdoSessionAttachmentRecordReferenced(const char* ProjectId,
         "events", Id, Referenced) &&
         (*Referenced || MdoImageRecordDirectoryReferences(ProjectId,
             SessionId, "runs", Id, Referenced));
+}
+
+/* Event reference files survive journal retention. Remove only IDs covered
+ * by durable history markers; a retry can repair a crash after journal write. */
+bool MdoSessionAttachmentPruneRemoved(const char* ProjectId,
+    const char* SessionId)
+{
+    MdoImageRemovedRange* Ranges = NULL;
+    uint64* Removed = NULL;
+    size_t RangeCount = 0u;
+    size_t RangeCapacity = 0u;
+    size_t RemovedCount = 0u;
+    size_t RemovedCapacity = 0u;
+    uint64 Cursor = 0u;
+    char Directory[MDO_SESSION_PATH_CAPACITY];
+    bool Exists = false;
+    xfileinfo Info;
+    xdir Dir = NULL;
+    xdirentry Entry;
+    xdirnext Next = XDIR_NEXT_END;
+    size_t Visited = 0u;
+    size_t i;
+    bool Ok = false;
+    int Written;
+    for ( ; ; ) {
+        MdoSessionEventSnapshot* Snapshot;
+        xwork_error Error;
+        size_t PageCount;
+        uint64 NextCursor, Latest;
+        memset(&Error, 0, sizeof(Error));
+        Snapshot = MdoSessionEventReplay(ProjectId, SessionId, Cursor,
+            1000u, &Error);
+        if ( Snapshot == NULL ) goto done;
+        PageCount = MdoSessionEventSnapshotCount(Snapshot);
+        for ( i = 0u; i < PageCount; ++i ) {
+            MdoSessionEventInfo Event;
+            MdoImageRemovedRange* Grown;
+            memset(&Event, 0, sizeof(Event)); Event.Size = sizeof(Event);
+            if ( !MdoSessionEventSnapshotAt(Snapshot, i, &Event) ) {
+                MdoSessionEventSnapshotRelease(Snapshot);
+                goto done;
+            }
+            if ( Event.Kind != MDO_SESSION_EVENT_HISTORY_TRUNCATED ||
+                 Event.SourceEventId == 0u ||
+                 Event.SourceEventId >= Event.EventId ) continue;
+            if ( RangeCount == MDO_IMAGE_TRIM_LIMIT ) {
+                MdoSessionEventSnapshotRelease(Snapshot);
+                goto done;
+            }
+            if ( RangeCount == RangeCapacity ) {
+                size_t Capacity = RangeCapacity != 0u ?
+                    RangeCapacity * 2u : 16u;
+                if ( Capacity > MDO_IMAGE_TRIM_LIMIT )
+                    Capacity = MDO_IMAGE_TRIM_LIMIT;
+                Grown = (MdoImageRemovedRange*)xrtRealloc(Ranges,
+                    Capacity * sizeof(*Ranges));
+                if ( Grown == NULL ) {
+                    MdoSessionEventSnapshotRelease(Snapshot);
+                    goto done;
+                }
+                Ranges = Grown;
+                RangeCapacity = Capacity;
+            }
+            Ranges[RangeCount].First = Event.SourceEventId;
+            Ranges[RangeCount].End = Event.EventId;
+            ++RangeCount;
+        }
+        NextCursor = MdoSessionEventSnapshotNextCursor(Snapshot);
+        Latest = MdoSessionEventSnapshotLatestId(Snapshot);
+        MdoSessionEventSnapshotRelease(Snapshot);
+        if ( PageCount < 1000u || NextCursor >= Latest ) break;
+        if ( NextCursor <= Cursor ) goto done;
+        Cursor = NextCursor;
+    }
+    if ( RangeCount == 0u ) { Ok = true; goto done; }
+    Written = snprintf(Directory, sizeof(Directory),
+        "sessions/%s/%s/attachments/events", ProjectId, SessionId);
+    if ( Written <= 0 || (size_t)Written >= sizeof(Directory) ||
+         !MdoHomeExternalStat(Directory, &Exists, &Info) ) goto done;
+    if ( !Exists ) { Ok = true; goto done; }
+    if ( Info.Type != XFILE_TYPE_DIRECTORY ) goto done;
+    Dir = MdoHomeOpenDirectory(Directory, XDIR_STAT);
+    if ( Dir == NULL ) goto done;
+    memset(&Entry, 0, sizeof(Entry));
+    while ( (Next = xrtDirNext(Dir, &Entry)) == XDIR_NEXT_ITEM ) {
+        uint64 EventId = 0u;
+        size_t Length;
+        if ( ++Visited > MDO_IMAGE_TRIM_LIMIT ) goto done;
+        if ( Entry.Info.Type != XFILE_TYPE_FILE ||
+             Entry.Name.Size < 6u || Entry.Name.Size > 25u ||
+             memcmp(Entry.Name.Data + Entry.Name.Size - 5u,
+                ".json", 5u) != 0 ) continue;
+        Length = Entry.Name.Size - 5u;
+        if ( Length > 1u && Entry.Name.Data[0] == '0' ) continue;
+        for ( i = 0u; i < Length; ++i ) {
+            unsigned char Digit = (unsigned char)Entry.Name.Data[i];
+            if ( Digit < '0' || Digit > '9' ||
+                 EventId > (UINT64_MAX - (Digit - '0')) / 10u ) break;
+            EventId = EventId * 10u + (Digit - '0');
+        }
+        if ( i != Length || EventId == 0u ) continue;
+        for ( i = 0u; i < RangeCount; ++i )
+            if ( EventId >= Ranges[i].First &&
+                 EventId < Ranges[i].End ) break;
+        if ( i == RangeCount ) continue;
+        if ( RemovedCount == MDO_IMAGE_TRIM_LIMIT ) goto done;
+        if ( RemovedCount == RemovedCapacity ) {
+            size_t Capacity = RemovedCapacity != 0u ?
+                RemovedCapacity * 2u : 16u;
+            uint64* Grown;
+            if ( Capacity > MDO_IMAGE_TRIM_LIMIT )
+                Capacity = MDO_IMAGE_TRIM_LIMIT;
+            Grown = (uint64*)xrtRealloc(Removed,
+                Capacity * sizeof(*Removed));
+            if ( Grown == NULL ) goto done;
+            Removed = Grown;
+            RemovedCapacity = Capacity;
+        }
+        Removed[RemovedCount++] = EventId;
+    }
+    if ( Next == XDIR_NEXT_ERROR ) goto done;
+    if ( !xrtDirClose(Dir) ) { Dir = NULL; goto done; }
+    Dir = NULL;
+    for ( i = 0u; i < RemovedCount; ++i ) {
+        char Path[MDO_SESSION_PATH_CAPACITY];
+        Written = snprintf(Path, sizeof(Path), "%s/%llu.json", Directory,
+            (unsigned long long)Removed[i]);
+        if ( Written <= 0 || (size_t)Written >= sizeof(Path) ||
+             !MdoHomeRemove(Path, false) ) goto done;
+    }
+    Ok = true;
+done:
+    if ( Dir != NULL ) (void)xrtDirClose(Dir);
+    xrtFree(Removed);
+    xrtFree(Ranges);
+    return Ok;
 }
 
 static bool MdoImageFilePath(char Path[MDO_SESSION_PATH_CAPACITY],
