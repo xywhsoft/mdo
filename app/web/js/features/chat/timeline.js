@@ -186,12 +186,17 @@ function timelineNode(item, onFork, onFeedback, feedback) {
   }, children);
 }
 
-export function createTimelineView({ container, welcome, store, feedbackStore, onFork, onFeedback, onSearchCount }) {
+export function createTimelineView({ container, welcome, toBottom, store, feedbackStore, onFork, onFeedback, onSearchCount }) {
   let pendingState = store.get();
   let frame = 0;
   let followTail = true;
   let searchQuery = "";
   const scroller = container.closest(".conversation");
+
+  function updateBottomButton() {
+    toBottom.hidden = scroller.scrollHeight - scroller.scrollTop -
+      scroller.clientHeight <= 120;
+  }
 
   function render() {
     frame = 0;
@@ -214,6 +219,7 @@ export function createTimelineView({ container, welcome, store, feedbackStore, o
           feedback.get(item.feedbackEventId) ?? ""));
     }
     if (followTail && !searchQuery) scroller.scrollTop = scroller.scrollHeight;
+    updateBottomButton();
   }
 
   function queueRender(state) {
@@ -223,7 +229,12 @@ export function createTimelineView({ container, welcome, store, feedbackStore, o
 
   scroller.addEventListener("scroll", () => {
     followTail = scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight < 100;
+    updateBottomButton();
   }, { passive: true });
+  toBottom.addEventListener("click", () => {
+    followTail = true;
+    scroller.scrollTo({ top: scroller.scrollHeight, behavior: "smooth" });
+  });
 
   const unsubscribe = store.subscribe(queueRender);
   const unsubscribeFeedback = feedbackStore.subscribe(() => queueRender(store.get()));

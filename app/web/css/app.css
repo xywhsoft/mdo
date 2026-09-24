@@ -417,6 +417,9 @@ select:focus-visible,
 .conversation-find input { min-width: 0; flex: 1 1 auto; border: 0; outline: 0; background: transparent; color: var(--ink); font: inherit; font-size: 12px; }
 .conversation-find span { flex: 0 0 auto; color: var(--muted); font-size: 10px; white-space: nowrap; }
 .conversation-find .icon-button { width: 28px; height: 28px; flex: 0 0 auto; font-size: 18px; }
+.to-bottom { position: sticky; z-index: 10; bottom: 12px; display: flex; align-items: center; gap: 6px; min-height: 32px; margin: 0 max(20px, calc((100% - 760px) / 2)) 12px auto; padding: 4px 11px; border: 1px solid var(--border-strong); border-radius: 999px; background: var(--surface-raised); box-shadow: 0 6px 18px rgb(0 0 0 / 12%); color: var(--ink); font: inherit; font-size: 11px; cursor: pointer; }
+.to-bottom[hidden] { display: none; }
+.to-bottom:hover, .to-bottom:focus-visible { background: var(--surface-hover); }
 
 .welcome {
   width: min(680px, calc(100% - 40px));

@@ -120,7 +120,8 @@ export async function boot() {
 
   let conversationSearch;
   const timelineView = createTimelineView({
-    container: $("#timeline"), welcome: $("#welcome"), store: timelineStore,
+    container: $("#timeline"), welcome: $("#welcome"),
+    toBottom: $("#to-bottom"), store: timelineStore,
     feedbackStore,
     onSearchCount: (count, historyLost) => conversationSearch?.setCount(count, historyLost),
     onFeedback: async (eventId, value) => {
