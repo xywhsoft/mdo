@@ -21,4 +21,12 @@ bool MdoSessionAttachmentPendingSet(MdoSession* Session, uint64 AgentRunId,
     const char Ids[4][33], size_t Count);
 void MdoSessionAttachmentPendingClear(MdoSession* Session, uint64 AgentRunId);
 
+/* Copy retained event images into a new fork before it is published. */
+bool MdoSessionAttachmentEventClone(const char* SourceProjectId,
+    const char* SourceSessionId, uint64 SourceEventId,
+    const char* TargetProjectId, const char* TargetSessionId,
+    uint64 TargetEventId, uint64 AgentRunId);
+void MdoSessionAttachmentForkRollback(const char* ProjectId,
+    const char* SessionId);
+
 #endif

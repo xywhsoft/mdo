@@ -158,6 +158,7 @@ static void MdoSessionsRollbackDirectory(const char* ProjectId,
     };
     char Relative[MDO_SESSION_PATH_CAPACITY];
     size_t i;
+    MdoSessionAttachmentForkRollback(ProjectId, SessionId);
     for ( i = 0u; i < sizeof(Files) / sizeof(Files[0]); ++i ) {
         if ( MdoSessionsPath(Relative, ProjectId, SessionId, Files[i]) )
             (void)MdoHomeRemove(Relative, false);

@@ -704,6 +704,17 @@ bool MdoSessionEventBridgeClonePrefix(MdoSessionEventBridge* Bridge,
                 "fork event identity space is exhausted");
             goto done;
         }
+        if ( Entry.Info.Kind == XWORK_EVENT_AGENT_START &&
+             Entry.Info.AgentDepth == 0u &&
+             !MdoSessionAttachmentEventClone(SourceProjectId,
+                SourceSessionId, Entry.Info.EventId, Bridge->ProjectId,
+                Bridge->SessionId, Bridge->NextEventId,
+                Entry.Info.RunId) ) {
+            MdoEventsOwnedUnit(&Entry);
+            MdoEventsXrtError(Error,
+                "cannot copy retained images into the fork session");
+            goto done;
+        }
         memset(&Event, 0, sizeof(Event));
         Event.eKind = Entry.Info.Kind;
         Event.uAgentTurn = Entry.Info.AgentTurn;

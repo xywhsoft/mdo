@@ -199,6 +199,50 @@ def probe(host: Path) -> None:
                             marker = (attachment_root / "events" /
                                       f"{starts[-1]['event_id']}.json")
                             assert marker.is_file(), marker
+                    status, headers, body = request(port, "GET", route)
+                    assert status == 200, (status, body)
+                    first_sequence = starts[0]["user_message_sequence"]
+                    source_file = attachment_root / f"{image_id}.bin"
+                    hidden_file = attachment_root / f"{image_id}.held"
+                    session_directories = home / "sessions/image-probe"
+                    before = {path.name for path in session_directories.iterdir()}
+                    source_file.rename(hidden_file)
+                    try:
+                        status, _, body = request(port, "POST", route + "/fork",
+                            body=json.dumps({"title": "Broken image fork",
+                                             "through_sequence": first_sequence}).encode(),
+                            headers={"Content-Type": "application/json",
+                                     "If-Match": headers["etag"]})
+                        assert status >= 500, (status, body)
+                        assert {path.name for path in session_directories.iterdir()} == (
+                            before), list(session_directories.iterdir())
+                    finally:
+                        hidden_file.rename(source_file)
+                    status, _, body = request(port, "POST", route + "/fork",
+                        body=json.dumps({"title": "Image fork",
+                                         "through_sequence": first_sequence}).encode(),
+                        headers={"Content-Type": "application/json",
+                                 "If-Match": headers["etag"]})
+                    document = json.loads(body)
+                    assert status == 201, (status, document)
+                    child_id = document["data"]["id"]
+                    child_route = ("/api/v1/projects/image-probe/sessions/" +
+                                   child_id)
+                    status, _, body = request(port, "GET",
+                        child_route + "/events?after=0&limit=32")
+                    assert status == 200, (status, body)
+                    child_starts = [item for item in json.loads(body)["data"]["items"]
+                                    if item["kind"] == "agent_start"]
+                    assert len(child_starts) == 1 and (
+                        child_starts[0]["attachments"] == [image_id]), child_starts
+                    child_root = home / "sessions/image-probe" / child_id
+                    assert (child_root / "attachments" / f"{image_id}.bin").read_bytes() == (
+                        image_bytes)
+                    (attachment_root / f"{image_id}.bin").unlink()
+                    status, _, copied = request(port, "GET",
+                        child_route + "/attachments/" + image_id)
+                    assert status == 200 and copied == image_bytes, (
+                        status, copied[:100])
                 finally:
                     if process.poll() is None:
                         process.terminate()

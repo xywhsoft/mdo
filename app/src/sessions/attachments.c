@@ -6,6 +6,8 @@
 #include "../../include/mdo/sessions.h"
 
 #define MDO_IMAGE_RUN_RECORD_MAX 320u
+#define MDO_IMAGE_FILE_MAX (8u * 1024u * 1024u)
+#define MDO_IMAGE_META_MAX 512u
 
 static bool MdoImageRunId(xstrview Value, char Output[33])
 {
@@ -188,4 +190,138 @@ bool MdoSessionAttachmentEventRead(const char* ProjectId,
     return Exists ? MdoImageRecordRead(Path, AgentRunId, Ids, Count) :
         MdoSessionAttachmentRunRead(ProjectId, SessionId, AgentRunId,
             Ids, Count);
+}
+
+static bool MdoImageFilePath(char Path[MDO_SESSION_PATH_CAPACITY],
+    const char* ProjectId, const char* SessionId, const char* Id,
+    const char* Extension)
+{
+    int Written = snprintf(Path, MDO_SESSION_PATH_CAPACITY,
+        "sessions/%s/%s/attachments/%s.%s", ProjectId, SessionId,
+        Id, Extension);
+    return Written > 0 && (size_t)Written < MDO_SESSION_PATH_CAPACITY;
+}
+
+static bool MdoImageCopyFile(const char* SourcePath, const char* TargetPath,
+    size_t Limit)
+{
+    xfileinfo Info;
+    bool Exists;
+    xfile File = NULL;
+    char* Data = NULL;
+    bool Ok = false;
+    if ( !MdoHomeExternalStat(SourcePath, &Exists, &Info) || !Exists ||
+         Info.Type != XFILE_TYPE_FILE ||
+         (Info.Available & XFILE_INFO_SIZE) == 0u ||
+         Info.Size == 0u || Info.Size > Limit ) return false;
+    Data = (char*)xrtMalloc((size_t)Info.Size);
+    if ( Data == NULL ) return false;
+    File = MdoHomeOpenRead(SourcePath);
+    if ( File == NULL ||
+         !xrtReadFull(File, Data, (size_t)Info.Size, NULL) ) goto done;
+    if ( !xrtClose(File) ) { File = NULL; goto done; }
+    File = NULL;
+    Ok = MdoHomeAtomicWrite(TargetPath, Data, (size_t)Info.Size, false);
+done:
+    if ( File != NULL ) (void)xrtClose(File);
+    xrtFree(Data);
+    return Ok;
+}
+
+bool MdoSessionAttachmentEventClone(const char* SourceProjectId,
+    const char* SourceSessionId, uint64 SourceEventId,
+    const char* TargetProjectId, const char* TargetSessionId,
+    uint64 TargetEventId, uint64 AgentRunId)
+{
+    char Ids[4][33] = {{ 0 }};
+    size_t Count = 0u;
+    size_t i;
+    /* Older UI journals may contain a synthetic top-level start without a
+     * runtime run identity. Such events could never own uploaded images. */
+    if ( AgentRunId == 0u ) return true;
+    if ( !MdoSessionAttachmentEventRead(SourceProjectId, SourceSessionId,
+            SourceEventId, AgentRunId, Ids, &Count) ) return false;
+    for ( i = 0u; i < Count; ++i ) {
+        char SourceData[MDO_SESSION_PATH_CAPACITY];
+        char SourceMeta[MDO_SESSION_PATH_CAPACITY];
+        char TargetData[MDO_SESSION_PATH_CAPACITY];
+        char TargetMeta[MDO_SESSION_PATH_CAPACITY];
+        bool DataExists;
+        bool MetaExists;
+        xfileinfo Info;
+        if ( !MdoImageFilePath(SourceData, SourceProjectId,
+                SourceSessionId, Ids[i], "bin") ||
+             !MdoImageFilePath(SourceMeta, SourceProjectId,
+                SourceSessionId, Ids[i], "json") ||
+             !MdoImageFilePath(TargetData, TargetProjectId,
+                TargetSessionId, Ids[i], "bin") ||
+             !MdoImageFilePath(TargetMeta, TargetProjectId,
+                TargetSessionId, Ids[i], "json") ||
+             !MdoHomeExternalStat(TargetData, &DataExists, &Info) ||
+             !MdoHomeExternalStat(TargetMeta, &MetaExists, &Info) ||
+             DataExists != MetaExists ) return false;
+        if ( DataExists ) continue;
+        if ( !MdoImageCopyFile(SourceData, TargetData,
+                MDO_IMAGE_FILE_MAX) ||
+             !MdoImageCopyFile(SourceMeta, TargetMeta,
+                MDO_IMAGE_META_MAX) ) return false;
+    }
+    return Count == 0u || MdoSessionAttachmentEventWrite(TargetProjectId,
+        TargetSessionId, TargetEventId, AgentRunId, Ids, Count);
+}
+
+static void MdoImageRollbackFiles(const char* Directory)
+{
+    xfileinfo Info;
+    bool Exists;
+    xdir Dir;
+    xdirentry Entry;
+    xdirnext Next;
+    size_t Visited = 0u;
+    if ( !MdoHomeExternalStat(Directory, &Exists, &Info) || !Exists ||
+         Info.Type != XFILE_TYPE_DIRECTORY ) return;
+    Dir = MdoHomeOpenDirectory(Directory, XDIR_STAT);
+    if ( Dir == NULL ) return;
+    memset(&Entry, 0, sizeof(Entry));
+    while ( Visited++ < 8192u &&
+            (Next = xrtDirNext(Dir, &Entry)) == XDIR_NEXT_ITEM ) {
+        char Path[MDO_SESSION_PATH_CAPACITY];
+        size_t i;
+        int Written;
+        if ( Entry.Info.Type != XFILE_TYPE_FILE ||
+             Entry.Name.Size == 0u || Entry.Name.Size > 64u ) continue;
+        for ( i = 0u; i < Entry.Name.Size; ++i )
+            if ( Entry.Name.Data[i] == '/' ||
+                 Entry.Name.Data[i] == '\\' ) break;
+        if ( i != Entry.Name.Size ) continue;
+        Written = snprintf(Path, sizeof(Path), "%s/%.*s", Directory,
+            (int)Entry.Name.Size, Entry.Name.Data);
+        if ( Written > 0 && (size_t)Written < sizeof(Path) )
+            (void)MdoHomeRemove(Path, false);
+        xrtClearError();
+    }
+    (void)xrtDirClose(Dir);
+    xrtClearError();
+    (void)MdoHomeRemoveEmptyDirectory(Directory);
+    xrtClearError();
+}
+
+void MdoSessionAttachmentForkRollback(const char* ProjectId,
+    const char* SessionId)
+{
+    char Directory[MDO_SESSION_PATH_CAPACITY];
+    int Written;
+    if ( ProjectId == NULL || SessionId == NULL ) return;
+    Written = snprintf(Directory, sizeof(Directory),
+        "sessions/%s/%s/attachments/events", ProjectId, SessionId);
+    if ( Written > 0 && (size_t)Written < sizeof(Directory) )
+        MdoImageRollbackFiles(Directory);
+    Written = snprintf(Directory, sizeof(Directory),
+        "sessions/%s/%s/attachments/runs", ProjectId, SessionId);
+    if ( Written > 0 && (size_t)Written < sizeof(Directory) )
+        MdoImageRollbackFiles(Directory);
+    Written = snprintf(Directory, sizeof(Directory),
+        "sessions/%s/%s/attachments", ProjectId, SessionId);
+    if ( Written > 0 && (size_t)Written < sizeof(Directory) )
+        MdoImageRollbackFiles(Directory);
 }
