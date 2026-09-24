@@ -672,8 +672,7 @@ export async function boot() {
       skipLink.href = "#settings-content";
       skipLink.textContent = "跳到设置内容";
       settingsView.selectSection(settingsSection);
-      const standalonePage = settingsSection === "schedules" ||
-        settingsSection === "projects";
+      const standalonePage = !["general", "agent", "web"].includes(settingsSection);
       $("#settings-title").textContent = settingsSection === "projects"
         ? "项目" : settingsSection === "schedules" ? "计划任务" : "设置";
       $("#settings-revision").hidden = standalonePage;
