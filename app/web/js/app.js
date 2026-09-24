@@ -24,6 +24,7 @@ import { createSessionList } from "./features/sessions/session-list.js";
 import { timelineStore, selectTimeline, clearTimeline, refreshSelectedTimeline } from "./features/chat/timeline-store.js";
 import { todoStore, selectTodo, clearTodo } from "./state/todo.js";
 import { createTimelineView } from "./features/chat/timeline.js";
+import { createConversationSearch } from "./features/chat/conversation-search.js";
 import { feedbackStore, selectFeedback, clearFeedback, setFeedback } from "./features/chat/feedback-store.js";
 import { createConversationDocks } from "./features/chat/conversation-docks.js";
 import { createPromptQueue } from "./features/chat/prompt-queue.js";
@@ -117,9 +118,11 @@ export async function boot() {
   });
   $("#session-search").addEventListener("input", (event) => sessionList.setQuery(event.target.value));
 
-  createTimelineView({
+  let conversationSearch;
+  const timelineView = createTimelineView({
     container: $("#timeline"), welcome: $("#welcome"), store: timelineStore,
     feedbackStore,
+    onSearchCount: (count, historyLost) => conversationSearch?.setCount(count, historyLost),
     onFeedback: async (eventId, value) => {
       const selected = navigation.get();
       if (!selected.projectId || !selected.sessionId) throw new Error("请先选择会话");
@@ -136,6 +139,12 @@ export async function boot() {
       navigation.select(fork.project_id, fork.id);
       toast("已创建会话分支");
     },
+  });
+  conversationSearch = createConversationSearch({
+    bar: $("#conversation-find"), input: $("#conversation-find-input"),
+    count: $("#conversation-find-count"), closeButton: $("#close-find"),
+    openButtons: [$("#open-find"), $("#open-find-mobile")],
+    navigation, prompt, onQuery: (query) => timelineView.search(query),
   });
   createTaskPanel({
     container: $("#task-list"),
@@ -813,8 +822,14 @@ export async function boot() {
 
   document.addEventListener("keydown", (event) => {
     if (event.key === "Escape") {
-      if (dialog.open) dialog.close();
+      if (conversationSearch.isOpen()) conversationSearch.close(true);
+      else if (dialog.open) dialog.close();
       else closeDrawers();
+    }
+    if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "f" &&
+        navigation.get().view === "workspace" && navigation.get().sessionId) {
+      event.preventDefault();
+      conversationSearch.open();
     }
     if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "n") {
       event.preventDefault();

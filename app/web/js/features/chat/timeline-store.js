@@ -51,7 +51,10 @@ async function refreshTimeline(token = generation) {
       } else if (additions.length) {
         events = events.concat(additions);
       }
-      if (events.length > RETAINED_EVENTS) events = events.slice(-RETAINED_EVENTS);
+      if (events.length > RETAINED_EVENTS) {
+        events = events.slice(-RETAINED_EVENTS);
+        historyLost = true;
+      }
       latestEventId = Number(replay.latest_event_id ?? latestEventId);
       const next = Number(replay.next_cursor ?? cursor);
       changed ||= additions.length > 0 || next !== cursor || replay.history_lost;

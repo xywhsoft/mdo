@@ -186,10 +186,11 @@ function timelineNode(item, onFork, onFeedback, feedback) {
   }, children);
 }
 
-export function createTimelineView({ container, welcome, store, feedbackStore, onFork, onFeedback }) {
+export function createTimelineView({ container, welcome, store, feedbackStore, onFork, onFeedback, onSearchCount }) {
   let pendingState = store.get();
   let frame = 0;
   let followTail = true;
+  let searchQuery = "";
   const scroller = container.closest(".conversation");
 
   function render() {
@@ -197,6 +198,9 @@ export function createTimelineView({ container, welcome, store, feedbackStore, o
     const state = pendingState;
     const data = state.data;
     const items = eventsToTimeline(data?.events ?? [], data?.historyLost);
+    const visible = searchQuery ? items.filter((item) =>
+      `${item.role} ${item.text} ${item.meta ?? ""}`.toLocaleLowerCase().includes(searchQuery)) : items;
+    onSearchCount?.(searchQuery ? visible.length : 0, Boolean(data?.historyLost));
     welcome.hidden = Boolean(data?.sessionId && items.length > 0);
     clear(container);
     if (state.status === "error") {
@@ -205,11 +209,11 @@ export function createTimelineView({ container, welcome, store, feedbackStore, o
       const selected = feedbackStore.get().data;
       const feedback = selected?.projectId === data?.projectId &&
         selected?.sessionId === data?.sessionId ? selected.items : new Map();
-      for (const item of items)
+      for (const item of visible)
         container.append(timelineNode(item, onFork, onFeedback,
           feedback.get(item.feedbackEventId) ?? ""));
     }
-    if (followTail) scroller.scrollTop = scroller.scrollHeight;
+    if (followTail && !searchQuery) scroller.scrollTop = scroller.scrollHeight;
   }
 
   function queueRender(state) {
@@ -225,6 +229,10 @@ export function createTimelineView({ container, welcome, store, feedbackStore, o
   const unsubscribeFeedback = feedbackStore.subscribe(() => queueRender(store.get()));
   return Object.freeze({
     follow() { followTail = true; },
+    search(query) {
+      searchQuery = query.trim().toLocaleLowerCase();
+      queueRender(store.get());
+    },
     destroy() { unsubscribe(); unsubscribeFeedback(); if (frame) cancelAnimationFrame(frame); },
   });
 }

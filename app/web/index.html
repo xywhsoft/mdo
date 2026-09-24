@@ -20,6 +20,9 @@
         <strong id="mobile-session-title">墨斗</strong>
         <span id="mobile-session-meta">Agent 工作台</span>
       </div>
+      <button class="icon-button" id="open-find-mobile" type="button" aria-label="搜索当前会话" aria-controls="conversation-find" aria-expanded="false">
+        <span class="icon" data-icon="search" aria-hidden="true"></span>
+      </button>
       <button class="icon-button" id="open-inspector" type="button" aria-label="打开任务面板" aria-controls="inspector" aria-expanded="false">
         <span class="icon" data-icon="panel-right" aria-hidden="true"></span>
         <span class="activity-dot" id="mobile-activity-dot" hidden></span>
@@ -89,6 +92,9 @@
             <span class="status-dot" aria-hidden="true"></span>
             <span>就绪</span>
           </span>
+          <button class="icon-button" id="open-find" type="button" aria-label="搜索当前会话" aria-controls="conversation-find" aria-expanded="false">
+            <span class="icon" data-icon="search" aria-hidden="true"></span>
+          </button>
           <button class="icon-button desktop-inspector-toggle" id="toggle-inspector" type="button" aria-label="切换任务面板" aria-controls="inspector" aria-expanded="false">
             <span class="icon" data-icon="panel-right" aria-hidden="true"></span>
           </button>
@@ -96,6 +102,12 @@
       </header>
 
       <section class="conversation" aria-label="当前会话">
+        <div class="conversation-find" id="conversation-find" role="search" hidden>
+          <label class="sr-only" for="conversation-find-input">搜索已加载的会话记录</label>
+          <input id="conversation-find-input" type="search" autocomplete="off" placeholder="搜索已加载的记录">
+          <span id="conversation-find-count" role="status"></span>
+          <button class="icon-button" id="close-find" type="button" aria-label="关闭会话搜索">×</button>
+        </div>
         <div class="welcome" id="welcome">
           <div class="welcome-mark" aria-hidden="true">墨</div>
           <h2>今天要做什么？</h2>
