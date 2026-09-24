@@ -78,6 +78,7 @@ class BuildContractTests(unittest.TestCase):
             "src/schedules/manager.c",
             "src/schedules/executor.c",
             "src/sessions/events.c",
+            "src/sessions/attachments.c",
             "src/sessions/todo.c",
             "src/sessions/manager.c",
             "src/approvals/manager.c",

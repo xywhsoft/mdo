@@ -33,6 +33,7 @@ PROBE_SOURCE = r'''
 #include "src/asks/manager.c"
 #include "src/sessions/events.c"
 #include "src/sessions/todo.c"
+#include "src/sessions/attachments.c"
 #include "src/sessions/manager.c"
 #include "src/runs/manager.c"
 
@@ -267,7 +268,7 @@ def write_site(site: Path) -> None:
         "src/models/catalog.c", "src/skills/manager.c", "src/memory/manager.c",
         "src/modules/manager.c", "src/agents/runtime.c", "src/sessions/events.c",
         "src/asks/manager.c",
-        "src/sessions/todo.c",
+        "src/sessions/todo.c", "src/sessions/attachments.c",
         "src/sessions/internal.h", "src/sessions/manager.c", "src/runs/manager.c",
     ):
         shutil.copy2(ROOT / "app" / relative, site / relative)

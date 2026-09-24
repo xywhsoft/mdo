@@ -398,6 +398,8 @@ bool MdoApiRunStartRoute(MdoApiContext* Context)
                 NULL);
         }
         Options.UserMessage = &UserMessage;
+        Options.AttachmentIds = AttachmentIds;
+        Options.AttachmentCount = AttachmentCount;
     }
     Options.ProjectId = Project;
     Options.SessionId = SessionId;

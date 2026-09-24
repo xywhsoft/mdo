@@ -1,6 +1,7 @@
 #include <string.h>
 
 #include "internal.h"
+#include "../../include/mdo/attachments.h"
 #include "../../include/mdo/bootstrap.h"
 #include "../../include/mdo/sessions.h"
 
@@ -224,9 +225,11 @@ static bool MdoApiCaptureId(MdoApiContext* Context, size_t Index,
 }
 
 static bool MdoApiSessionEventValue(const MdoSessionEventInfo* Event,
-    xvalue** pValue)
+    const char* ProjectId, const char* SessionId, xvalue** pValue)
 {
     xvalue* Item = xrtValueObject();
+    char Attachments[4][33] = {{ 0 }};
+    size_t AttachmentCount = 0u;
     size_t TextSize = Event->Text != NULL ? strlen(Event->Text) : 0u;
     bool Truncated = Event->TextTruncated;
     xstrview Text = MdoApiEventText(Event->Text, TextSize, &Truncated);
@@ -262,6 +265,11 @@ static bool MdoApiSessionEventValue(const MdoSessionEventInfo* Event,
     if (Ok) Ok = MdoApiValueSetUInt(Item, "input_tokens", Event->InputTokens) &&
         MdoApiValueSetUInt(Item, "output_tokens", Event->OutputTokens) &&
         MdoApiValueSetUInt(Item, "total_tokens", Event->TotalTokens);
+    if ( Ok && Event->Kind == XWORK_EVENT_AGENT_START &&
+         Event->AgentDepth == 0u )
+        Ok = MdoSessionAttachmentRunRead(ProjectId, SessionId,
+            Event->RunId, Attachments, &AttachmentCount) &&
+            MdoAttachmentIdsWriteValue(Item, Attachments, AttachmentCount);
     if ( !Ok ) { xrtValueRelease(Item); return false; }
     *pValue = Item;
     return true;
@@ -308,7 +316,7 @@ bool MdoApiSessionEventsRoute(MdoApiContext* Context)
         xvalue* Item = NULL;
         memset(&Event, 0, sizeof(Event)); Event.Size = sizeof(Event);
         Ok = MdoSessionEventSnapshotAt(Snapshot, Index, &Event) &&
-            MdoApiSessionEventValue(&Event, &Item) &&
+            MdoApiSessionEventValue(&Event, ProjectId, SessionId, &Item) &&
             MdoApiValueAppendTake(Items, &Item);
         xrtValueRelease(Item);
     }

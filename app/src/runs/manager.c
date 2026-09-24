@@ -2,6 +2,7 @@
 #include <string.h>
 
 #include "../../include/mdo/runs.h"
+#include "../../include/mdo/attachments.h"
 
 #define MDO_RUN_POLL_DEFAULT 50u
 #define MDO_RUN_POLL_MIN 25u
@@ -511,16 +512,23 @@ bool MdoRunStart(const MdoRunStartOptions* Options, MdoRunInfo* Info,
     bool Ready = false;
     bool Published = false;
     bool Stopping = false;
+    bool ImageRefsPublished = false;
+    uint64 ImageRunId = 0u;
     xworkErrorInit(Error);
     if ( Options == NULL || Options->Size < sizeof(*Options) ||
          !MdoRunsIdValid(Options->ProjectId, MDO_PROJECT_ID_CAPACITY) ||
          !MdoRunsIdValid(Options->SessionId, MDO_SESSION_ID_CAPACITY) ||
          ((!Options->Resume && (!MdoRunsPromptValid(Options->Prompt,
                 Options->UserMessage != NULL) ||
+             (Options->AttachmentCount != 0u &&
+              (Options->UserMessage == NULL ||
+               Options->AttachmentIds == NULL ||
+               Options->AttachmentCount > 4u)) ||
              Options->ResumeOptions != NULL ||
              Options->RecoveryToken != NULL)) ||
           (Options->Resume && (Options->Prompt != NULL ||
              Options->UserMessage != NULL ||
+             Options->AttachmentCount != 0u ||
              Options->RecoveryToken == NULL ||
              strlen(Options->RecoveryToken) !=
                 MDO_AGENT_RECOVERY_TOKEN_CAPACITY - 1u))) ||
@@ -634,7 +642,32 @@ bool MdoRunStart(const MdoRunStartOptions* Options, MdoRunInfo* Info,
     RunOptions.Deadline = Deadline;
     RunOptions.ResumeOptions = Options->ResumeOptions;
     Run = MdoAgentRunCreate(Agent, &RunOptions, Error);
-    if ( Run == NULL || !MdoAgentRunStart(Run, Error) ) goto publish;
+    if ( Run == NULL ) goto publish;
+    memset(&AgentInfo, 0, sizeof(AgentInfo));
+    AgentInfo.Size = sizeof(AgentInfo);
+    if ( !MdoAgentRunGetInfo(Run, &AgentInfo) ) {
+        MdoRunsError(Error, XWORK_ERROR_CONTEXT,
+            "cannot inspect the created interactive Agent run");
+        goto publish;
+    }
+    ImageRunId = AgentInfo.Run.uRunId;
+    if ( Options->AttachmentCount != 0u ) {
+        if ( !MdoSessionAttachmentRunWrite(Options->ProjectId,
+                Options->SessionId, ImageRunId, Options->AttachmentIds,
+                Options->AttachmentCount) ) {
+            MdoRunsError(Error, XWORK_ERROR_IO,
+                "cannot persist image references before starting the run");
+            goto publish;
+        }
+        ImageRefsPublished = true;
+    }
+    if ( !MdoAgentRunStart(Run, Error) ) {
+        if ( ImageRefsPublished )
+            (void)MdoSessionAttachmentRunRemove(Options->ProjectId,
+                Options->SessionId, ImageRunId);
+        ImageRefsPublished = false;
+        goto publish;
+    }
     memset(&AgentInfo, 0, sizeof(AgentInfo));
     AgentInfo.Size = sizeof(AgentInfo);
     if ( !MdoAgentRunGetInfo(Run, &AgentInfo) ) {

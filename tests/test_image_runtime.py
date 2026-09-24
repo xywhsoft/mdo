@@ -121,10 +121,48 @@ def probe(host: Path) -> None:
                         assert status == 202, (status, document)
                         run = wait_run(port, document["data"]["id"])
                         assert run["state"] == "succeeded", run
+                        status, _, body = request(port, "GET",
+                            route + "/events?after=0&limit=32")
+                        assert status == 200, (status, body)
+                        starts = [item for item in json.loads(body)["data"]["items"]
+                                  if item["kind"] == "agent_start" and
+                                  item["run_id"] == run["agent_run_id"]]
+                        assert len(starts) == 1 and starts[0]["attachments"] == (
+                            [image_id]), starts
+                        record = (home / "sessions/image-probe" / session_id /
+                                  "attachments/runs" /
+                                  f"{run['agent_run_id']}.json")
+                        assert record.is_file(), record
                         wire = json.dumps(ModelHandler.last_payload)
                         assert "image/png" in wire and encoded in wire, wire[:1000]
                         if prompt:
                             assert prompt in wire, wire[:1000]
+                finally:
+                    if process.poll() is None:
+                        process.terminate()
+                        try:
+                            process.wait(timeout=5)
+                        except subprocess.TimeoutExpired:
+                            process.kill()
+                            process.wait(timeout=3)
+            with log_path.open("ab") as log:
+                process = subprocess.Popen(
+                    [str(host), str(config), "--", "--home", str(home)],
+                    cwd=base, env=environment, stdout=log,
+                    stderr=subprocess.STDOUT,
+                    creationflags=(subprocess.CREATE_NO_WINDOW
+                                   if os.name == "nt" else 0),
+                )
+                try:
+                    wait_ready(port, process)
+                    status, _, body = request(port, "GET",
+                        route + "/events?after=0&limit=32")
+                    assert status == 200, (status, body)
+                    restored = [item for item in json.loads(body)["data"]["items"]
+                                if item["kind"] == "agent_start"]
+                    assert len(restored) == 2 and all(
+                        item["attachments"] == [image_id] for item in restored), (
+                        restored)
                 finally:
                     if process.poll() is None:
                         process.terminate()
