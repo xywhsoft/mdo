@@ -694,6 +694,7 @@ export async function boot() {
         inspectorBeforeSettings === "open") && wideLayout.matches,
         { persist: false });
     }
+    composer.toggleAttribute("data-new-task", !sessionId);
     const key = projectId && sessionId ? `${projectId}/${sessionId}` : "";
     if (!key) {
       const project = projectId || "default";

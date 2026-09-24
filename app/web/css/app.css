@@ -706,6 +706,7 @@ select:focus-visible,
   color: var(--ink);
   line-height: 1.5;
 }
+.composer[data-new-task] textarea { min-height: 52px; }
 .composer textarea::placeholder { color: var(--faint); }
 .composer-images { display: flex; min-height: 0; flex-wrap: wrap; gap: 7px; padding: 3px 12px 6px; }
 .composer-images[hidden] { display: none; }
