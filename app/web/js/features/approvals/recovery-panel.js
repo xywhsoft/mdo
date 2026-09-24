@@ -1,4 +1,4 @@
-import { loadRecovery, resumeRecovery } from "../../state/recovery.js";
+import { abandonRecovery, loadRecovery, resumeRecovery } from "../../state/recovery.js";
 import { clear, element, errorMessage, toast } from "../../utils/dom.js";
 
 const EFFECT_LABELS = Object.freeze({
@@ -11,7 +11,7 @@ function formatArguments(source) {
   try { return JSON.stringify(JSON.parse(source), null, 2); } catch { return source; }
 }
 
-export function createRecoveryPanel({ container, summary, store, onResume }) {
+export function createRecoveryPanel({ container, summary, store, onResume, onAbandon }) {
   let state = store.get();
   let submitting = false;
   const choices = new Map();
@@ -31,6 +31,25 @@ export function createRecoveryPanel({ container, summary, store, onResume }) {
       toast("恢复决定已提交，正在继续会话");
       onResume?.(run);
       await loadRecovery();
+    } catch (error) {
+      toast(errorMessage(error), "error");
+      if (error?.code === "recovery_state_conflict") await loadRecovery();
+    } finally {
+      submitting = false;
+      render();
+    }
+  }
+
+  async function submitAbandon(data) {
+    if (submitting) return;
+    submitting = true;
+    render();
+    try {
+      await abandonRecovery(data);
+      choices.clear();
+      toast("已结束中断的轮次");
+      await loadRecovery();
+      await onAbandon?.();
     } catch (error) {
       toast(errorMessage(error), "error");
       if (error?.code === "recovery_state_conflict") await loadRecovery();
@@ -114,7 +133,22 @@ export function createRecoveryPanel({ container, summary, store, onResume }) {
     });
     submitButton.disabled = submitting || !ready;
     submitButton.addEventListener("click", () => void submitRecovery(data));
-    container.append(submitButton);
+    if (items.length) container.append(submitButton);
+    else {
+      container.append(element("p", { className: "recovery-warning",
+        text: "上一轮没有待决工具调用。可以继续请求模型，也可以结束该轮并发送后续消息。",
+      }));
+      const abandonButton = element("button", {
+        className: "recovery-abandon",
+        text: "结束中断轮次",
+        attrs: { type: "button" },
+      });
+      abandonButton.disabled = submitting;
+      abandonButton.addEventListener("click", () => void submitAbandon(data));
+      container.append(element("div", { className: "recovery-actions" }, [
+        submitButton, abandonButton,
+      ]));
+    }
   }
 
   return store.subscribe((next) => {

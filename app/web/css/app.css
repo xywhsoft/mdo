@@ -782,6 +782,8 @@ select:focus-visible,
 .approval-summary strong { color: var(--ink); font-size: 16px; }
 .approval-summary span { margin-left: auto; color: var(--warning); }
 .approval-list { display: grid; gap: 10px; }
+.recovery-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 11px; }
+.recovery-actions button { min-height: 36px; flex: 1 1 128px; }
 .approval-card { padding: 12px; border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--surface-raised); }
 .approval-card[data-risk="high"] { border-color: color-mix(in srgb, var(--danger) 55%, var(--border)); }
 .approval-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 9px; }
@@ -806,6 +808,10 @@ select:focus-visible,
 .recovery-option.selected { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 10%, var(--surface)); color: var(--ink); }
 .recovery-option:disabled { opacity: .45; cursor: not-allowed; }
 .recovery-submit { width: 100%; min-height: 36px; margin-top: 11px; font-size: 10px; }
+.recovery-actions .recovery-submit { width: auto; margin-top: 0; }
+.recovery-abandon { padding: 0 8px; border: 1px solid var(--border-strong); border-radius: var(--radius-sm); background: var(--surface); color: var(--ink); font-size: 10px; cursor: pointer; }
+.recovery-abandon:hover:not(:disabled) { background: var(--surface-hover); }
+.recovery-abandon:disabled { opacity: .45; cursor: not-allowed; }
 .context-list { display: grid; grid-template-columns: minmax(70px, auto) minmax(0, 1fr); gap: 10px 12px; margin: 16px 3px; font-size: 11px; }
 .context-list dt { color: var(--muted); }
 .context-list dd { margin: 0; overflow-wrap: anywhere; }

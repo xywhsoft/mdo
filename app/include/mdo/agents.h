@@ -129,6 +129,12 @@ bool MdoAgentRecoverySnapshotToken(const xwork_recovery_snapshot* Snapshot,
 bool MdoAgentSessionCheckpoint(MdoAgentSession* Session, xwork_error* Error);
 bool MdoAgentSessionLastSequence(MdoAgentSession* Session,
     uint64* LastSequence, xwork_error* Error);
+/* Close a cancelled model turn without repeating it. Requires an exact ledger
+ * tail and no unresolved tool calls; the synthetic assistant marker is
+ * journaled and checkpointed under the exclusive Agent run claim. */
+bool MdoAgentSessionFinishInterrupted(MdoAgentSession* Session,
+    uint64 ExpectedLastSequence, uint64* FinishedSequence,
+    xwork_error* Error);
 bool MdoAgentSessionClear(MdoAgentSession* Session, xwork_error* Error);
 bool MdoAgentSessionTruncateAfter(MdoAgentSession* Session,
     uint64 ThroughSequence, xwork_error* Error);

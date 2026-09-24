@@ -127,7 +127,7 @@ static bool MdoApiRecoveryItemValue(const xwork_recovery_call_info* Info,
 
 static bool MdoApiRecoveryReply(MdoApiContext* Context,
     const MdoSessionInfo* SessionInfo, xwork_recovery_snapshot* Snapshot,
-    bool ResumeRequired)
+    bool ResumeRequired, uint64 LastSequence)
 {
     xvalue* Data = xrtValueObject();
     xvalue* Items = xrtValueArray();
@@ -178,6 +178,7 @@ static bool MdoApiRecoveryReply(MdoApiContext* Context,
         MdoApiValueSetString(Data, "project_id", SessionInfo->ProjectId) &&
         MdoApiValueSetString(Data, "session_id", SessionInfo->Id) &&
         MdoApiValueSetUInt(Data, "revision", SessionInfo->Revision) &&
+        MdoApiValueSetUInt(Data, "last_sequence", LastSequence) &&
         MdoApiValueSetUInt(Data, "catalog_generation", CatalogGeneration) &&
         MdoApiValueSetString(Data, "recovery_token", RecoveryToken) &&
         MdoApiValueSetBool(Data, "resume_required", ResumeRequired) &&
@@ -217,6 +218,7 @@ bool MdoApiSessionRecoveryRoute(MdoApiContext* Context)
     xwork_error Error;
     bool Result;
     bool ResumeRequired = false;
+    uint64 LastSequence = 0u;
 
     if ( !MdoApiRecoveryPath(Context, Project, SessionId) )
         return MdoApiReplyError(Context, 400u, "invalid_session_path",
@@ -243,13 +245,19 @@ bool MdoApiSessionRecoveryRoute(MdoApiContext* Context)
         xworkRecoverySnapshotRelease(Snapshot);
         Snapshot = NULL;
     }
+    if ( Snapshot != NULL && !MdoAgentSessionLastSequence(Agent,
+            &LastSequence, &Error) ) {
+        xworkRecoverySnapshotRelease(Snapshot);
+        Snapshot = NULL;
+    }
     MdoAgentSessionRelease(Agent);
     if ( Snapshot == NULL ) {
         MdoSessionRelease(Session);
         return MdoApiRecoveryFailure(Context, &Error,
             "recovery_state_conflict");
     }
-    Result = MdoApiRecoveryReply(Context, &Info, Snapshot, ResumeRequired);
+    Result = MdoApiRecoveryReply(Context, &Info, Snapshot, ResumeRequired,
+        LastSequence);
     xworkRecoverySnapshotRelease(Snapshot);
     MdoSessionRelease(Session);
     return Result;
@@ -306,6 +314,18 @@ static bool MdoApiRecoveryToken(const xvalue* Object,
     }
     memcpy(Token, Text.Data, Text.Size);
     Token[Text.Size] = '\0';
+    return true;
+}
+
+static bool MdoApiRecoveryUnsigned(const xvalue* Value, uint64* Output)
+{
+    int64 Signed;
+    if ( Value == NULL || Output == NULL ) return false;
+    if ( xrtValueType(Value) == XVALUE_UINT )
+        return xrtValueGetUInt(Value, Output);
+    if ( xrtValueType(Value) != XVALUE_INT ||
+         !xrtValueGetInt(Value, &Signed) || Signed < 0 ) return false;
+    *Output = (uint64)Signed;
     return true;
 }
 
@@ -400,4 +420,68 @@ bool MdoApiSessionResumeRoute(MdoApiContext* Context)
         }
         return MdoApiReplySuccessTake(Context, 202u, Data, NULL);
     }
+}
+
+bool MdoApiSessionAbandonRoute(MdoApiContext* Context)
+{
+    char Project[MDO_PROJECT_ID_CAPACITY];
+    char SessionId[MDO_SESSION_ID_CAPACITY];
+    MdoApiJsonBody Body;
+    MdoApiBodyStatus BodyStatus;
+    const xvalue* RevisionValue;
+    const xvalue* SequenceValue;
+    MdoSession* Session;
+    MdoSessionInfo Info;
+    xwork_error Error;
+    uint64 Revision;
+    uint64 Sequence;
+    uint64 FinishedSequence = 0u;
+    xvalue* Data;
+    bool Ok;
+    if ( !MdoApiRecoveryPath(Context, Project, SessionId) )
+        return MdoApiReplyError(Context, 400u, "invalid_session_path",
+            "The project or session ID is invalid", NULL);
+    BodyStatus = MdoApiJsonBodyRead(Context, &Body);
+    if ( BodyStatus != MDO_API_BODY_OK )
+        return MdoApiReplyBodyError(Context, BodyStatus);
+    RevisionValue = xrtValueType(Body.Value) == XVALUE_OBJECT ?
+        xrtValueObjectGet(Body.Value, XRT_STR_LITERAL("revision")) : NULL;
+    SequenceValue = xrtValueType(Body.Value) == XVALUE_OBJECT ?
+        xrtValueObjectGet(Body.Value, XRT_STR_LITERAL("last_sequence")) : NULL;
+    Ok = xrtValueType(Body.Value) == XVALUE_OBJECT &&
+        xrtValueCount(Body.Value) == 2u && RevisionValue != NULL &&
+        SequenceValue != NULL &&
+        MdoApiRecoveryUnsigned(RevisionValue, &Revision) &&
+        MdoApiRecoveryUnsigned(SequenceValue, &Sequence) &&
+        Revision != 0u && Sequence != 0u;
+    MdoApiJsonBodyUnit(&Body);
+    if ( !Ok ) return MdoApiReplyError(Context, 422u,
+        "recovery_abandon_invalid",
+        "Abandon requires the exact session revision and ledger sequence",
+        NULL);
+    memset(&Error, 0, sizeof(Error));
+    xrtClearError();
+    Session = MdoSessionOpen(Project, SessionId, NULL, &Error);
+    if ( Session == NULL ) return MdoApiRecoveryFailure(Context, &Error,
+        "recovery_state_conflict");
+    Ok = MdoSessionFinishInterrupted(Session, Revision, Sequence,
+        &FinishedSequence, &Error);
+    memset(&Info, 0, sizeof(Info));
+    Info.Size = sizeof(Info);
+    if ( Ok ) Ok = MdoSessionGetInfo(Session, &Info);
+    MdoSessionRelease(Session);
+    if ( !Ok ) return MdoApiRecoveryFailure(Context, &Error,
+        "recovery_state_conflict");
+    Data = xrtValueObject();
+    if ( Data == NULL ||
+         !MdoApiValueSetBool(Data, "resume_required", false) ||
+         !MdoApiValueSetUInt(Data, "revision", Info.Revision) ||
+         !MdoApiValueSetUInt(Data, "last_sequence", FinishedSequence) ) {
+        xrtValueRelease(Data);
+        return MdoApiReplyError(Context, 500u,
+            "recovery_result_unavailable",
+            "The interrupted turn was closed but its result is unavailable",
+            NULL);
+    }
+    return MdoApiReplySuccessTakeRevision(Context, 200u, Data, Info.Revision);
 }

@@ -1621,6 +1621,39 @@ bool MdoSessionLastSequence(MdoSession* Session, uint64* LastSequence,
     return Ok;
 }
 
+bool MdoSessionFinishInterrupted(MdoSession* Session,
+    uint64 ExpectedRevision, uint64 ExpectedLastSequence,
+    uint64* FinishedSequence, xwork_error* Error)
+{
+    MdoSessionInfo Candidate;
+    bool Ok = false;
+    xworkErrorInit(Error);
+    if ( FinishedSequence != NULL ) *FinishedSequence = 0u;
+    if ( Session == NULL || FinishedSequence == NULL ||
+         ExpectedRevision == 0u || ExpectedLastSequence == 0u ) {
+        MdoSessionsError(Error, XWORK_ERROR_INVALID_ARGUMENT,
+            "session revision and interrupted sequence are required");
+        return false;
+    }
+    xrtMutexLock(Session->Lock);
+    xrtMutexLock(g_MdoSessions.Lock);
+    if ( Session->Agent == NULL ||
+         Session->Info.Status != MDO_SESSION_ACTIVE ||
+         Session->Info.Revision != ExpectedRevision ||
+         !MdoSessionsValidateCurrent(Session, Error) ) {
+        if ( Error != NULL && Error->eCode == XWORK_ERROR_NONE )
+            MdoSessionsError(Error, XWORK_ERROR_CONTEXT,
+                "the interrupted session revision changed");
+    } else if ( MdoSessionsCandidate(Session, &Candidate, Error) &&
+                MdoAgentSessionFinishInterrupted(Session->Agent,
+                    ExpectedLastSequence, FinishedSequence, Error) ) {
+        Ok = MdoSessionsCommit(Session, &Candidate, Error);
+    }
+    xrtMutexUnlock(g_MdoSessions.Lock);
+    xrtMutexUnlock(Session->Lock);
+    return Ok;
+}
+
 static bool MdoSessionsLedgerMutation(MdoSession* Session,
     bool Clear, uint64 ThroughSequence, xwork_error* Error)
 {

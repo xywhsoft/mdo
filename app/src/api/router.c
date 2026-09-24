@@ -112,6 +112,8 @@ static const MdoApiRoute g_MdoApiRoutes[] = {
       MdoApiSessionRecoveryRoute },
     { "/api/v1/projects/{project}/sessions/{session}/resume",
       XHTTP_METHOD_POST, "POST, OPTIONS", MdoApiSessionResumeRoute },
+    { "/api/v1/projects/{project}/sessions/{session}/abandon",
+      XHTTP_METHOD_POST, "POST, OPTIONS", MdoApiSessionAbandonRoute },
     { "/api/v1/projects/{project}/sessions/{session}/fork",
       XHTTP_METHOD_POST, "POST, OPTIONS", MdoApiSessionForkRoute },
     { "/api/v1/projects/{project}/sessions/{session}/truncate",

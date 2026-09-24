@@ -1431,6 +1431,47 @@ bool MdoAgentSessionLastSequence(MdoAgentSession* Session,
     return true;
 }
 
+bool MdoAgentSessionFinishInterrupted(MdoAgentSession* Session,
+    uint64 ExpectedLastSequence, uint64* FinishedSequence,
+    xwork_error* Error)
+{
+    xllm_session* Ledger;
+    xllm_session_tail Tail;
+    xllm_error ModelError;
+    bool Ok = false;
+    xworkErrorInit(Error);
+    if ( FinishedSequence != NULL ) *FinishedSequence = 0u;
+    if ( ExpectedLastSequence == 0u || FinishedSequence == NULL ) {
+        MdoAgentsError(Error, XWORK_ERROR_INVALID_ARGUMENT,
+            "an exact interrupted ledger sequence is required");
+        return false;
+    }
+    if ( !MdoAgentLedgerBegin(Session, Error) ) return false;
+    Ledger = Session->Owner->LlmSession;
+    if ( xllmSessionLastSequence(Ledger) != ExpectedLastSequence ||
+         xllmSessionPendingToolCallCount(Ledger) != 0u ||
+         !xllmSessionGetTail(Ledger, &Tail) || !Tail.bHasMessage ||
+         (Tail.eRole != XLLM_ROLE_USER && Tail.eRole != XLLM_ROLE_TOOL) ) {
+        MdoAgentsError(Error, XWORK_ERROR_CONTEXT,
+            "the interrupted turn changed or has unresolved tool calls");
+    } else if ( !xllmSessionAddText(Ledger, Tail.uTurn,
+            XLLM_ROLE_ASSISTANT, "[Response interrupted by user.]",
+            XLLM_SESSION_ENTRY_SYNTHETIC) ) {
+        xllmErrorInit(&ModelError);
+        (void)xllmSessionGetLastPersistenceError(Ledger, &ModelError);
+        MdoAgentsModelError(Error, &ModelError,
+            "cannot close the interrupted Agent turn");
+    } else if ( !MdoAgentLedgerCheckpoint(Session, &ModelError) ) {
+        MdoAgentsModelError(Error, &ModelError,
+            "cannot checkpoint the interrupted Agent turn");
+    } else {
+        *FinishedSequence = xllmSessionLastSequence(Ledger);
+        Ok = true;
+    }
+    xworkAgentRunEnd(Session->Agent);
+    return Ok;
+}
+
 bool MdoAgentSessionClear(MdoAgentSession* Session, xwork_error* Error)
 {
     xllm_error ModelError;

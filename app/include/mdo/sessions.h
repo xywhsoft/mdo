@@ -183,6 +183,11 @@ bool MdoSessionMoveToTrash(MdoSession* Session, xwork_error* Error);
 bool MdoSessionRestore(MdoSession* Session, xwork_error* Error);
 bool MdoSessionLastSequence(MdoSession* Session, uint64* LastSequence,
     xwork_error* Error);
+/* The caller must present the recovery view's revision and ledger sequence.
+ * Fails if a run is active, the state changed, or tool decisions are pending. */
+bool MdoSessionFinishInterrupted(MdoSession* Session,
+    uint64 ExpectedRevision, uint64 ExpectedLastSequence,
+    uint64* FinishedSequence, xwork_error* Error);
 bool MdoSessionClear(MdoSession* Session, xwork_error* Error);
 bool MdoSessionTruncateAfter(MdoSession* Session, uint64 ThroughSequence,
     xwork_error* Error);

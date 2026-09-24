@@ -1968,6 +1968,7 @@ def run_probe(host: Path) -> None:
                 assert recovery["session_id"] == recovery_session["id"], recovery
                 assert recovery["resume_required"] is True, recovery
                 assert recovery["total"] == 1, recovery
+                assert recovery["last_sequence"] > 0, recovery
                 assert recovery["catalog_generation"] > 0, recovery
                 assert re.fullmatch(r"[0-9a-f]{64}",
                                     recovery["recovery_token"]), recovery
@@ -1987,6 +1988,18 @@ def run_probe(host: Path) -> None:
                 status, headers, body = request(port, "OPTIONS", resume_path)
                 assert status == 200 and headers["allow"] == "POST, OPTIONS", (
                     status, headers, body)
+                abandon_path = recovery_path.removesuffix("/recovery") + "/abandon"
+                status, headers, body = request(port, "OPTIONS", abandon_path)
+                assert status == 200 and headers["allow"] == "POST, OPTIONS", (
+                    status, headers, body)
+                status, _, body = request(
+                    port, "POST", abandon_path,
+                    body=json.dumps({"revision": recovery["revision"],
+                                     "last_sequence": recovery["last_sequence"]}).encode(),
+                    headers={"Content-Type": "application/json"})
+                assert status == 409, (status, body)
+                assert json.loads(body)["error"]["code"] == (
+                    "recovery_state_conflict")
 
                 resume_headers = {"Content-Type": "application/json"}
                 invalid_resume = json.dumps({

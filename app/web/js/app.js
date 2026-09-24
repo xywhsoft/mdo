@@ -18,7 +18,7 @@ import {
 import { runsStore, loadRuns, startRun, readRun, cancelRun } from "./state/runs.js";
 import { approvalsStore, loadApprovals } from "./state/approvals.js";
 import { asksStore, selectAsks, clearAsks, refreshSelectedAsks } from "./state/asks.js";
-import { recoveryStore, selectRecovery, loadRecovery } from "./state/recovery.js";
+import { recoveryStore, selectRecovery, loadRecovery, abandonRecovery } from "./state/recovery.js";
 import { navigation } from "./state/navigation.js";
 import { createSessionList } from "./features/sessions/session-list.js";
 import { timelineStore, selectTimeline, clearTimeline, refreshSelectedTimeline, reloadSelectedTimeline } from "./features/chat/timeline-store.js";
@@ -112,6 +112,7 @@ export async function boot() {
   let composerImages = null;
   let shortcuts;
   const queueBlocked = new Set();
+  const priorityInterrupts = new Set();
 
   const sessionList = createSessionList({
     container: $("#session-list"),
@@ -346,6 +347,11 @@ export async function boot() {
       monitorRun(run);
       void Promise.all([loadRuns(), loadTasks(), refreshSelectedTimeline()]);
     },
+    onAbandon: async () => {
+      const selected = navigation.get();
+      queueBlocked.delete(`${selected.projectId}/${selected.sessionId}`);
+      await dispatchQueued();
+    },
   });
 
   function updateDecisionCount() {
@@ -507,7 +513,18 @@ export async function boot() {
 
   async function ensurePromptReady(projectId, sessionId) {
     const response = await api.get(`/projects/${projectId}/sessions/${sessionId}/recovery`);
-    if (!response.data?.resume_required) return;
+    const key = `${projectId}/${sessionId}`;
+    if (!response.data?.resume_required) {
+      priorityInterrupts.delete(key);
+      return;
+    }
+    if (priorityInterrupts.has(key) && response.data.total === 0) {
+      await abandonRecovery(response.data);
+      priorityInterrupts.delete(key);
+      await loadRecovery();
+      return;
+    }
+    priorityInterrupts.delete(key);
     void loadRecovery();
     const error = new Error("上轮运行尚未恢复，请先在“决策”中处理；输入和待发送消息会保留。");
     error.code = "recovery_required";
@@ -687,12 +704,19 @@ export async function boot() {
         resizePrompt();
         tokenMeter.refresh();
         if (interrupt) {
-          const run = await cancelRun(activeRun.id);
-          if (terminalState(run)) {
-            setRun(run);
-            await Promise.all([refreshSelectedTimeline(), loadTasks(), loadRuns()]);
-            await dispatchQueued();
-          } else monitorRun(run);
+          const key = `${selected.projectId}/${selected.sessionId}`;
+          priorityInterrupts.add(key);
+          try {
+            const run = await cancelRun(activeRun.id);
+            if (terminalState(run)) {
+              setRun(run);
+              await Promise.all([refreshSelectedTimeline(), loadTasks(), loadRuns()]);
+              await dispatchQueued();
+            } else monitorRun(run);
+          } catch (error) {
+            priorityInterrupts.delete(key);
+            throw error;
+          }
         }
         return;
       }

@@ -53,3 +53,17 @@ export async function resumeRecovery(data, choices) {
     decisions,
   })).data;
 }
+
+export async function abandonRecovery(data) {
+  const project = resourceId(data?.project_id, "project");
+  const session = resourceId(data?.session_id, "session");
+  const revision = Number(data?.revision);
+  const lastSequence = Number(data?.last_sequence);
+  if (!Number.isSafeInteger(revision) || revision < 1 ||
+      !Number.isSafeInteger(lastSequence) || lastSequence < 1 ||
+      data?.resume_required !== true || (data?.items ?? []).length !== 0)
+    throw new TypeError("only an unchanged interrupted model turn can be ended");
+  return (await api.post(`/projects/${project}/sessions/${session}/abandon`, {
+    revision, last_sequence: lastSequence,
+  })).data;
+}
