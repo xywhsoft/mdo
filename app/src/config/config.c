@@ -344,6 +344,7 @@ static bool MdoConfigSettingsValidate(const xvalue* pSettings)
     static const char* const OpenModes[] = { "last", "new", "ask" };
     const xvalue* pAppearance;
     const xvalue* pComposer;
+    const xvalue* pNotifications;
     const xvalue* pAgent;
     const xvalue* pWeb;
     const xvalue* pSearch;
@@ -364,6 +365,8 @@ static bool MdoConfigSettingsValidate(const xvalue* pSettings)
          Locale.Size < 2u || Locale.Size > 32u ) goto invalid;
     pAppearance = xrtValueObjectGet(pSettings, MdoConfigKey("appearance"));
     pComposer = xrtValueObjectGet(pSettings, MdoConfigKey("composer"));
+    pNotifications = xrtValueObjectGet(pSettings,
+        MdoConfigKey("notifications"));
     pAgent = xrtValueObjectGet(pSettings, MdoConfigKey("agent"));
     pWeb = xrtValueObjectGet(pSettings, MdoConfigKey("web"));
     pSearch = pWeb != NULL ?
@@ -383,6 +386,9 @@ static bool MdoConfigSettingsValidate(const xvalue* pSettings)
          !MdoConfigStringOneOf(xrtValueObjectGet(pComposer,
             MdoConfigKey("submit_mode")), SubmitModes,
             sizeof(SubmitModes) / sizeof(SubmitModes[0])) ||
+         (pNotifications != NULL &&
+          (xrtValueType(pNotifications) != XVALUE_OBJECT ||
+           !MdoConfigBool(pNotifications, "sound"))) ||
          xrtValueType(pAgent) != XVALUE_OBJECT ||
          !MdoConfigStringOneOf(xrtValueObjectGet(pAgent,
             MdoConfigKey("interaction_mode")), InteractionModes,

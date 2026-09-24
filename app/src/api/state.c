@@ -58,12 +58,14 @@ bool MdoApiSettingsRoute(MdoApiContext* Context)
     const xvalue* EffectiveSettings;
     const xvalue* EffectiveAppearance;
     const xvalue* EffectiveComposer;
+    const xvalue* EffectiveNotifications;
     const xvalue* EffectiveAgent;
     const xvalue* EffectiveWorkspace;
     xvalue* Data = xrtValueObject();
     xvalue* Patches = xrtValueObject();
     xvalue* AppearanceValue = xrtValueObject();
     xvalue* ComposerValue = xrtValueObject();
+    xvalue* NotificationsValue = xrtValueObject();
     xvalue* AgentValue = xrtValueObject();
     xvalue* WebValue = xrtValueObject();
     xvalue* WorkspaceValue = xrtValueObject();
@@ -83,13 +85,16 @@ bool MdoApiSettingsRoute(MdoApiContext* Context)
     EffectiveComposer = EffectiveSettings != NULL ?
         xrtValueObjectGet(EffectiveSettings,
             XRT_STR_LITERAL("composer")) : NULL;
+    EffectiveNotifications = EffectiveSettings != NULL ?
+        xrtValueObjectGet(EffectiveSettings,
+            XRT_STR_LITERAL("notifications")) : NULL;
     EffectiveAgent = EffectiveSettings != NULL ?
         xrtValueObjectGet(EffectiveSettings, XRT_STR_LITERAL("agent")) : NULL;
     EffectiveWorkspace = EffectiveSettings != NULL ?
         xrtValueObjectGet(EffectiveSettings,
             XRT_STR_LITERAL("workspace")) : NULL;
     Ok = Data != NULL && Patches != NULL && AppearanceValue != NULL &&
-        ComposerValue != NULL &&
+        ComposerValue != NULL && NotificationsValue != NULL &&
         AgentValue != NULL && WebValue != NULL && WorkspaceValue != NULL &&
         ServiceValue != NULL && EffectiveSettings != NULL &&
         MdoSettingsServiceGetSnapshot(&Service);
@@ -121,6 +126,12 @@ bool MdoApiSettingsRoute(MdoApiContext* Context)
         MdoApiSettingsStringField(ComposerValue, "submit_mode",
             EffectiveComposer, "submit_mode") &&
         MdoApiValueSetTake(Data, "composer", &ComposerValue);
+    if ( Ok ) Ok =
+        (EffectiveNotifications != NULL ?
+            MdoApiSettingsBoolField(NotificationsValue, "sound",
+                EffectiveNotifications, "sound") :
+            MdoApiValueSetBool(NotificationsValue, "sound", false)) &&
+        MdoApiValueSetTake(Data, "notifications", &NotificationsValue);
     if ( Ok ) Ok =
         MdoApiSettingsStringField(AgentValue, "interaction_mode",
             EffectiveAgent, "interaction_mode") &&
@@ -174,7 +185,7 @@ bool MdoApiSettingsRoute(MdoApiContext* Context)
         MdoApiValueSetString(ServiceValue, "last_error", Service.LastError) &&
         MdoApiValueSetTake(Data, "transaction_service", &ServiceValue);
     xrtValueRelease(Patches); xrtValueRelease(AppearanceValue);
-    xrtValueRelease(ComposerValue);
+    xrtValueRelease(ComposerValue); xrtValueRelease(NotificationsValue);
     xrtValueRelease(AgentValue); xrtValueRelease(WebValue);
     xrtValueRelease(WorkspaceValue); xrtValueRelease(ServiceValue);
     xrtValueRelease(Effective);

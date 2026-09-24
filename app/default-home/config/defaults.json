@@ -10,6 +10,9 @@
     "composer": {
       "submit_mode": "queue"
     },
+    "notifications": {
+      "sound": false
+    },
     "agent": {
       "interaction_mode": "agent",
       "reasoning_effort": "medium",

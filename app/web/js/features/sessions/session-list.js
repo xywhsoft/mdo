@@ -6,6 +6,7 @@ export function createSessionList({ container, count, filter, store, navigation,
   let openMenu = "";
   let focusMenuButton = "";
   let state = store.get();
+  let unread = new Set();
 
   function menuAction(label, name, session, tone = "neutral") {
     const button = element("button", { text: label, attrs: { type: "button", role: "menuitem", "data-tone": tone } });
@@ -65,6 +66,7 @@ export function createSessionList({ container, count, filter, store, navigation,
     }
 
     for (const session of visible) {
+      const hasUnread = unread.has(`${session.project_id}/${session.id}`);
       const button = element("button", {
         className: "session-item",
         attrs: {
@@ -75,7 +77,7 @@ export function createSessionList({ container, count, filter, store, navigation,
       }, [
         element("span", { className: "session-item-title", text: session.title || "未命名任务" }),
         element("time", { className: "session-item-time", text: formatRelativeTime(session.updated_at) }),
-        element("span", { className: "session-item-meta", text: `${session.project_id} · ${session.model_id || session.agent_id}${session.pinned ? " · 已置顶" : ""}` }),
+        element("span", { className: "session-item-meta", text: `${session.project_id} · ${session.model_id || session.agent_id}${session.pinned ? " · 已置顶" : ""}${hasUnread ? " · 有新结果" : ""}` }),
       ]);
       button.addEventListener("click", () => onSelect(session));
       const more = element("button", { className: "session-more", text: "•••", attrs: { type: "button", "aria-label": `${session.title || "未命名任务"} 的操作`, "aria-haspopup": "menu", "aria-expanded": String(openMenu === session.id) } });
@@ -87,7 +89,9 @@ export function createSessionList({ container, count, filter, store, navigation,
       });
       const menu = element("div", { className: "session-menu", attrs: { role: "menu" } }, menuFor(session));
       menu.hidden = openMenu !== session.id;
-      container.append(element("div", { className: "session-item-row", attrs: { "data-status": session.status } }, [button, more, menu]));
+      container.append(element("div", { className: "session-item-row", attrs: {
+        "data-status": session.status, "data-unread": hasUnread ? "true" : null,
+      } }, [button, more, menu]));
       if (focusTarget === session.id) {
         more.focus();
       }
@@ -118,6 +122,7 @@ export function createSessionList({ container, count, filter, store, navigation,
 
   return Object.freeze({
     setQuery(value) { query = value; render(); },
+    setUnread(keys) { unread = keys; render(); },
     destroy() {
       unsubscribeStore();
       unsubscribeNavigation();

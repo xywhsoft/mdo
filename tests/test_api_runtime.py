@@ -520,7 +520,7 @@ def run_probe(host: Path) -> None:
             "defaultModel": "legacy-model",
             "activeProject": "api-legacy",
             "settings": {"theme": "auto", "fontSize": "md",
-                         "interactMode": "guide"},
+                         "interactMode": "guide", "sound": True},
         }), encoding="utf-8")
         (legacy / "projects/api-legacy/project.json").write_text(json.dumps({
             "name": "API legacy project",
@@ -688,6 +688,7 @@ def run_probe(host: Path) -> None:
                 migrated_settings = json.loads((home / "config/settings.json")
                                                .read_text(encoding="utf-8"))
                 assert migrated_settings["patch"]["composer"]["submit_mode"] == "guide", migrated_settings
+                assert migrated_settings["patch"]["notifications"]["sound"] is True, migrated_settings
                 assert migrated_settings["patch"]["agent"]["interaction_mode"] == "agent", migrated_settings
                 assert (home / "config/models.json").is_file(), home
                 model_config = (home / "config/models.json").read_text(
@@ -1029,7 +1030,8 @@ def run_probe(host: Path) -> None:
                 preview_document = json.dumps({
                     "schema_version": 1,
                     "patch": {"appearance": {"theme": "dark"},
-                              "composer": {"submit_mode": "guide"}},
+                              "composer": {"submit_mode": "guide"},
+                              "notifications": {"sound": True}},
                 }).encode()
                 status, headers, body = request(
                     port, "POST", "/api/v1/settings/settings/preview",
@@ -1297,6 +1299,9 @@ def run_probe(host: Path) -> None:
                 assert settings_document["data"]["composer"] == {
                     "submit_mode": "queue",
                 }, settings_document
+                assert settings_document["data"]["notifications"] == {
+                    "sound": False,
+                }, settings_document
                 assert settings_document["data"]["agent"][
                     "interaction_mode"] == "agent", settings_document
                 assert settings_document["data"]["agent"][
@@ -1351,6 +1356,11 @@ def run_probe(host: Path) -> None:
                     encoding="utf-8"))
                 assert stored["patch"]["appearance"]["theme"] == "dark", stored
                 assert stored["patch"]["composer"]["submit_mode"] == "guide", stored
+                assert stored["patch"]["notifications"]["sound"] is True, stored
+                status, _, body = request(port, "GET", "/api/v1/settings")
+                assert status == 200 and json.loads(body)["data"]["notifications"] == {
+                    "sound": True,
+                }, body
 
                 merge_document = json.dumps({
                     "schema_version": 1,

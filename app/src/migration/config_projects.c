@@ -437,6 +437,7 @@ bool MdoMigrationConvertConfig(MdoMigrationContext* Context,
     xvalue* Models = NULL;
     xvalue* Appearance;
     xvalue* Composer;
+    xvalue* Notifications;
     xvalue* Agent;
     xvalue* Providers;
     xvalue* Items;
@@ -457,9 +458,12 @@ bool MdoMigrationConvertConfig(MdoMigrationContext* Context,
     LegacySettings = MdoMigrationObjectGet(Legacy, "settings");
     Appearance = xrtValueObjectGet(Settings, xrtStrView("appearance"));
     Composer = xrtValueObjectGet(Settings, xrtStrView("composer"));
+    Notifications = xrtValueObjectGet(Settings,
+        xrtStrView("notifications"));
     Agent = xrtValueObjectGet(Settings, xrtStrView("agent"));
     if ( xrtValueType(Appearance) != XVALUE_OBJECT ||
          xrtValueType(Composer) != XVALUE_OBJECT ||
+         xrtValueType(Notifications) != XVALUE_OBJECT ||
          xrtValueType(Agent) != XVALUE_OBJECT ) goto invalid;
     if ( LegacySettings != NULL ) {
         if ( !MdoMigrationSetStringMapped(Appearance, "theme", LegacySettings,
@@ -470,6 +474,8 @@ bool MdoMigrationConvertConfig(MdoMigrationContext* Context,
                 LegacySettings, "interactMode", ModeFrom, ModeTo, 2u) ||
              !MdoMigrationSetStringMapped(Settings, "locale", LegacySettings,
                 "lang", LangFrom, LangTo, 3u) ||
+             !MdoMigrationObjectTake(Notifications, "sound", xrtValueBool(
+                MdoMigrationBool(LegacySettings, "sound", false))) ||
              !MdoMigrationObjectTake(Agent, "web_search", xrtValueBool(
                 MdoMigrationBool(LegacySettings, "webSearchEnabled", true))) ||
              !MdoMigrationObjectTake(Agent, "memory", xrtValueBool(

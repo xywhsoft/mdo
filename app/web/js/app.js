@@ -42,6 +42,7 @@ import { createRecoveryPanel } from "./features/approvals/recovery-panel.js";
 import { createSettingsView } from "./features/settings/settings-view.js";
 import { createResourcePanels } from "./features/settings/resource-panels.js";
 import { createKeyboardShortcuts } from "./features/shell/keyboard-shortcuts.js";
+import { createRunNotifications } from "./features/shell/run-notifications.js";
 import { api } from "./api/client.js";
 import { clear, element, errorMessage, toast } from "./utils/dom.js";
 
@@ -104,6 +105,7 @@ export async function boot() {
   let runMonitor = 0;
   let selectedKey = "";
   let tasksTimer = 0;
+  let runsTimer = 0;
   let approvalsTimer = 0;
   let submitting = false;
   let messageActionBusy = false;
@@ -132,6 +134,8 @@ export async function boot() {
     dialog: $("#message-edit-dialog"), form: $("#message-edit-form"),
     input: $("#message-edit-input"), cancel: $("#cancel-message-edit"),
   });
+  createRunNotifications({ runsStore, navigation, settingsStore,
+    onUnreadChange: (keys) => sessionList.setUnread(keys) });
 
   async function replaceAndRunMessage(sequence, text, attachments, label) {
     if (messageActionBusy) throw new Error("请等待当前消息操作完成");
@@ -1034,6 +1038,15 @@ export async function boot() {
     }, active ? 1400 : 5000);
   }
   tasksStore.subscribe(scheduleTaskRefresh);
+  function scheduleRunsRefresh() {
+    window.clearTimeout(runsTimer);
+    if (document.hidden) return;
+    const snapshot = runsStore.get();
+    if (snapshot.status === "loading" || snapshot.status === "refreshing") return;
+    runsTimer = window.setTimeout(() => void loadRuns(),
+      Number(snapshot.data?.active_runs ?? 0) > 0 ? 1500 : 8000);
+  }
+  runsStore.subscribe(scheduleRunsRefresh);
   function scheduleApprovalRefresh() {
     window.clearTimeout(approvalsTimer);
     if (document.hidden) return;
@@ -1050,10 +1063,12 @@ export async function boot() {
   document.addEventListener("visibilitychange", () => {
     if (document.hidden) {
       window.clearTimeout(tasksTimer);
+      window.clearTimeout(runsTimer);
       window.clearTimeout(approvalsTimer);
     }
     else {
       scheduleTaskRefresh();
+      void loadRuns();
       scheduleApprovalRefresh();
       if (activeRun) scheduleRunPoll(100);
     }
