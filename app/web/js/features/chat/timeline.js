@@ -114,6 +114,11 @@ export function eventsToTimeline(events, historyLost = false) {
           retryPrompt: promptsByRun.get(runKey) });
         break;
       }
+      case "history_truncated":
+        items.push({ key: `history-${event.event_id}`, kind: "system",
+          role: "历史", text: event.text || "会话历史已截断",
+          state: "done", time: event.time });
+        break;
       case "model_start":
         modelStarts.set(modelKey(event), event.time);
         break;

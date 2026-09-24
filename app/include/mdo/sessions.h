@@ -108,6 +108,10 @@ typedef struct MdoSessionQuery {
     size_t Limit;                /* zero selects the bounded default. */
 } MdoSessionQuery;
 
+/* UI journal event outside xwork's live callback vocabulary. */
+#define MDO_SESSION_EVENT_HISTORY_TRUNCATED \
+    ((xwork_event_kind)(XWORK_EVENT_RECOVERY_RESOLVED + 1))
+
 /* Borrowed string views returned by an owned event snapshot. */
 typedef struct MdoSessionEventInfo {
     uint32 Size;

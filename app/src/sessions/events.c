@@ -53,6 +53,15 @@ struct MdoSessionEventBridge {
     size_t PendingCount;
 };
 
+struct MdoSessionEventTrimPlan {
+    MdoSessionEventBridge* Bridge;
+    char* Data;
+    size_t Keep;
+    uint64 NextEventId;
+    bool Clear;
+    bool Changed;
+};
+
 static void MdoEventsError(xwork_error* Error, xwork_error_code Code,
     const char* Message)
 {
@@ -450,7 +459,7 @@ static bool MdoEventsParse(const char* ProjectId, const char* SessionId,
          Session.Size != strlen(SessionId) ||
          memcmp(Session.Data, SessionId, Session.Size) != 0 ||
          !MdoEventsValueUInt(Root, "kind", &Kind) ||
-         Kind > XWORK_EVENT_RECOVERY_RESOLVED ||
+         Kind > (uint64)MDO_SESSION_EVENT_HISTORY_TRUNCATED ||
          !MdoEventsValueUInt(Root, "agent_turn", &Result->Info.AgentTurn) ||
          (Schema >= 3u && !MdoEventsValueUInt(Root,
             "user_message_sequence", &Result->Info.UserMessageSequence)) ||
@@ -796,6 +805,182 @@ done:
     xrtFree(Output);
     xrtFree(Source);
     return Ok;
+}
+
+MdoSessionEventTrimPlan* MdoSessionEventTrimPrepare(
+    MdoSessionEventBridge* Bridge, uint64 ThroughSequence, bool Clear,
+    xwork_error* Error)
+{
+    MdoSessionEventTrimPlan* Plan = NULL;
+    char* Data = NULL;
+    size_t Size = 0u;
+    size_t Start = 0u;
+    size_t Keep = 0u;
+    uint64 LastEventId = 0u;
+    bool SawUnsequencedStart = false;
+    bool HaveRunBoundary = false;
+    bool Exists = false;
+    xfileinfo Info;
+    xworkErrorInit(Error);
+    if ( Bridge == NULL ) {
+        MdoEventsError(Error, XWORK_ERROR_INVALID_ARGUMENT,
+            "an active event bridge is required to trim history");
+        return NULL;
+    }
+    Plan = (MdoSessionEventTrimPlan*)xrtCalloc(1u, sizeof(*Plan));
+    if ( Plan == NULL || !MdoSessionEventBridgeRef(Bridge) ) goto memory;
+    Plan->Bridge = Bridge;
+    Plan->Clear = Clear || ThroughSequence == 0u;
+    xrtMutexLock(Bridge->Lock);
+    Plan->NextEventId = Bridge->NextEventId;
+    if ( !MdoHomeExternalStat(Bridge->Path, &Exists, &Info) ||
+         (Exists && (Info.Type != XFILE_TYPE_FILE ||
+          (Info.Available & XFILE_INFO_SIZE) == 0u ||
+          !MdoEventsRead(Bridge->Path, &Data, &Size))) ) goto io;
+    while ( !Plan->Clear && Start < Size ) {
+        const char* End = (const char*)memchr(Data + Start, '\n',
+            Size - Start);
+        MdoSessionEventOwned Entry;
+        size_t Length;
+        if ( End == NULL ) break;
+        Length = (size_t)(End - (Data + Start));
+        if ( Length == 0u || Length > MDO_SESSION_EVENT_RECORD_LIMIT ||
+             !MdoEventsParse(Bridge->ProjectId, Bridge->SessionId,
+                xrtStrViewN(Data + Start, Length), &Entry) ) {
+            xrtClearError();
+            Start += Length + 1u;
+            continue;
+        }
+        if ( Entry.Info.EventId <= LastEventId ) {
+            MdoEventsOwnedUnit(&Entry);
+            Start += Length + 1u;
+            continue;
+        }
+        LastEventId = Entry.Info.EventId;
+        if ( Entry.Info.Kind == XWORK_EVENT_AGENT_START &&
+             Entry.Info.AgentDepth == 0u ) {
+            HaveRunBoundary = true;
+            if ( Entry.Info.UserMessageSequence == 0u )
+                SawUnsequencedStart = true;
+            if ( Entry.Info.UserMessageSequence > ThroughSequence ) {
+                MdoEventsOwnedUnit(&Entry);
+                break;
+            }
+        }
+        if ( Entry.Info.Kind == MDO_SESSION_EVENT_HISTORY_TRUNCATED )
+            HaveRunBoundary = true;
+        /* A bounded journal may start halfway through a removed run. Events
+         * before the first top-level start have no reliable ledger boundary. */
+        if ( !HaveRunBoundary ) {
+            MdoEventsOwnedUnit(&Entry);
+            Start += Length + 1u;
+            continue;
+        }
+        MdoEventsOwnedUnit(&Entry);
+        memmove(Data + Keep, Data + Start, Length + 1u);
+        Keep += Length + 1u;
+        Start += Length + 1u;
+    }
+    /* Old journals cannot identify an exact message boundary. Hiding their
+     * projection is safer than showing messages removed from the ledger. */
+    if ( Plan->Clear || SawUnsequencedStart ) Keep = 0u;
+    Plan->Data = Data;
+    Plan->Keep = Keep;
+    Plan->Changed = Plan->Clear || Keep != Size;
+    xrtMutexUnlock(Bridge->Lock);
+    return Plan;
+io:
+    MdoEventsXrtError(Error, "cannot read the session event journal");
+    goto fail;
+memory:
+    MdoEventsError(Error, XWORK_ERROR_OUT_OF_MEMORY,
+        "cannot allocate the event trim plan");
+    MdoSessionEventTrimPlanRelease(Plan);
+    return NULL;
+fail:
+    xrtMutexUnlock(Bridge->Lock);
+    xrtFree(Data);
+    MdoSessionEventTrimPlanRelease(Plan);
+    return NULL;
+}
+
+bool MdoSessionEventTrimApply(MdoSessionEventTrimPlan* Plan,
+    xwork_error* Error)
+{
+    MdoSessionEventBridge* Bridge;
+    xwork_event Marker;
+    char* Json = NULL;
+    char* Output = NULL;
+    size_t JsonSize = 0u;
+    size_t Keep;
+    size_t Total;
+    bool Ok = false;
+    xworkErrorInit(Error);
+    if ( Plan == NULL || Plan->Bridge == NULL ) {
+        MdoEventsError(Error, XWORK_ERROR_INVALID_ARGUMENT,
+            "an event trim plan is required");
+        return false;
+    }
+    Bridge = Plan->Bridge;
+    if ( !Plan->Changed ) return true;
+    xrtMutexLock(Bridge->Lock);
+    if ( Bridge->NextEventId != Plan->NextEventId ||
+         Bridge->NextEventId == UINT64_MAX ) {
+        MdoEventsError(Error, XWORK_ERROR_CONTEXT,
+            "the event journal changed during history maintenance");
+        goto done;
+    }
+    memset(&Marker, 0, sizeof(Marker));
+    Marker.eKind = MDO_SESSION_EVENT_HISTORY_TRUNCATED;
+    Marker.iOccurredAtUs = xrtNow();
+    Marker.bSuccess = true;
+    Marker.sText = Plan->Clear ? "会话历史已清空" : "会话历史已截断";
+    Marker.iTextLength = strlen(Marker.sText);
+    Json = MdoEventsRecord(Bridge, Bridge->NextEventId,
+        &Marker, &JsonSize);
+    if ( Json == NULL || JsonSize >= MDO_SESSION_EVENT_FILE_LIMIT ) {
+        MdoEventsError(Error, XWORK_ERROR_OUT_OF_MEMORY,
+            "cannot serialize the history boundary");
+        goto done;
+    }
+    Keep = Plan->Keep;
+    if ( Keep > MDO_SESSION_EVENT_FILE_LIMIT - JsonSize - 1u ) {
+        size_t Offset = Keep - MDO_SESSION_EVENT_RETAIN_BYTES;
+        while ( Offset < Keep && Plan->Data[Offset] != '\n' ) ++Offset;
+        if ( Offset < Keep ) ++Offset;
+        Keep -= Offset;
+        /* The allocation base stays in Plan for release after publication. */
+        if ( Keep != 0u ) memmove(Plan->Data, Plan->Data + Offset, Keep);
+    }
+    Total = Keep + JsonSize + 1u;
+    Output = (char*)xrtMalloc(Total);
+    if ( Output == NULL ) {
+        MdoEventsError(Error, XWORK_ERROR_OUT_OF_MEMORY,
+            "cannot allocate the trimmed event journal");
+        goto done;
+    }
+    if ( Keep != 0u ) memcpy(Output, Plan->Data, Keep);
+    memcpy(Output + Keep, Json, JsonSize);
+    Output[Keep + JsonSize] = '\n';
+    if ( !MdoHomeAtomicWrite(Bridge->Path, Output, Total, false) ) {
+        MdoEventsXrtError(Error, "cannot publish the trimmed event journal");
+        goto done;
+    }
+    ++Bridge->NextEventId;
+    Ok = true;
+done:
+    xrtFree(Output);
+    xrtFree(Json);
+    xrtMutexUnlock(Bridge->Lock);
+    return Ok;
+}
+
+void MdoSessionEventTrimPlanRelease(MdoSessionEventTrimPlan* Plan)
+{
+    if ( Plan == NULL ) return;
+    xrtFree(Plan->Data);
+    MdoSessionEventBridgeRelease(Plan->Bridge);
+    xrtFree(Plan);
 }
 
 bool MdoSessionEventBridgeRef(void* Value)

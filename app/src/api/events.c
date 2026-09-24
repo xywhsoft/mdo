@@ -11,7 +11,7 @@
 
 static cstr MdoApiEventKindText(xwork_event_kind Kind)
 {
-    switch ( Kind ) {
+    switch ( (uint32)Kind ) {
     case XWORK_EVENT_AGENT_START: return "agent_start";
     case XWORK_EVENT_MODEL_START: return "model_start";
     case XWORK_EVENT_MODEL_TEXT_DELTA: return "model_text_delta";
@@ -28,6 +28,7 @@ static cstr MdoApiEventKindText(xwork_event_kind Kind)
     case XWORK_EVENT_TASK_UPDATED: return "task_updated";
     case XWORK_EVENT_RECOVERY_REQUIRED: return "recovery_required";
     case XWORK_EVENT_RECOVERY_RESOLVED: return "recovery_resolved";
+    case MDO_SESSION_EVENT_HISTORY_TRUNCATED: return "history_truncated";
     default: return "unknown";
     }
 }

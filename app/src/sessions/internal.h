@@ -4,6 +4,7 @@
 #include "../../include/mdo/sessions.h"
 
 typedef struct MdoSessionEventBridge MdoSessionEventBridge;
+typedef struct MdoSessionEventTrimPlan MdoSessionEventTrimPlan;
 
 MdoSessionEventBridge* MdoSessionEventBridgeCreate(
     const char* ProjectId, const char* SessionId,
@@ -17,6 +18,12 @@ bool MdoSessionEventBridgePendingSet(MdoSessionEventBridge* Bridge,
     uint64 RunId, const char Ids[4][33], size_t Count);
 void MdoSessionEventBridgePendingClear(MdoSessionEventBridge* Bridge,
     uint64 RunId);
+MdoSessionEventTrimPlan* MdoSessionEventTrimPrepare(
+    MdoSessionEventBridge* Bridge, uint64 ThroughSequence, bool Clear,
+    xwork_error* Error);
+bool MdoSessionEventTrimApply(MdoSessionEventTrimPlan* Plan,
+    xwork_error* Error);
+void MdoSessionEventTrimPlanRelease(MdoSessionEventTrimPlan* Plan);
 void MdoSessionEventBridgeSetRegistered(MdoSessionEventBridge* Bridge);
 bool MdoSessionEventBridgeClonePrefix(MdoSessionEventBridge* Bridge,
     const char* SourceProjectId, const char* SourceSessionId,

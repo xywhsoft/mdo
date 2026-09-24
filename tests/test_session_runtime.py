@@ -467,6 +467,9 @@ void ServiceInit(XS_HostInfo *host) {
         !MdoSessionLastSequence(session, &transient_tail, &error) ||
         transient_tail <= rewind_to ||
         !MdoSessionTruncateAfter(session, rewind_to, &error)) goto done;
+    printf("visible_truncate=removed:%d\n",
+        UserSequence("project-alpha", session_id,
+            "third transient prompt") == 0u ? 1 : 0);
     MdoSessionRelease(session); session = NULL;
     session = MdoSessionOpen("project-alpha", session_id, &open, &error);
     if (session == NULL) goto done;
@@ -479,6 +482,9 @@ void ServiceInit(XS_HostInfo *host) {
         probe.SawTruncatedPrompt ? 0 : 1);
     if (!MdoSessionClear(session, &error) ||
         !MdoSessionLastSequence(session, &cleared_tail, &error)) goto done;
+    printf("visible_clear=removed:%d\n",
+        UserSequence("project-alpha", session_id,
+            "after truncation prompt") == 0u ? 1 : 0);
     probe.CheckCleared = true;
     if (!Run(session, "after clear prompt")) goto done;
     probe.CheckCleared = false;
@@ -703,7 +709,9 @@ def main() -> int:
         assert prefix_fork, output
         assert re.search(r"invalid_fork=0 code:[1-9]\d*", output), output
         assert re.search(r"truncate=boundary:[1-9]\d* tail:[1-9]\d* removed:1", output), output
+        assert "visible_truncate=removed:1" in output, output
         assert re.search(r"clear=tail:[1-9]\d* old:0 system:1", output), output
+        assert "visible_clear=removed:1" in output, output
         assert "clear_recovery=prompt:1 answer:1" in output, output
         assert "catalog_active=count:1 diagnostics:0" in output, output
         assert "open:1" in output, output
@@ -784,15 +792,17 @@ def main() -> int:
                 events.append(json.loads(line))
             except json.JSONDecodeError:
                 invalid_events += 1
-        assert events and [event["event_id"] for event in events] == list(
-            range(1, len(events) + 1))
-        assert invalid_events == 1
+        event_ids = [event["event_id"] for event in events]
+        assert events and event_ids == sorted(set(event_ids)), event_ids
+        assert invalid_events == 0
         assert all(event["session_id"] == source_path.parent.name for event in events)
         model_events = [event for event in events if event.get("input_tokens")]
         assert model_events and all(event["schema_version"] == 3 for event in model_events)
         assert any(event["user_message_sequence"] > 0 for event in events)
-        assert any(event["schema_version"] == 2 and
-                   event["text"] == "legacy message" for event in events)
+        assert not any(event["text"] in ("legacy message", "first durable prompt",
+                                          "second prompt", "third transient prompt")
+                       for event in events)
+        assert any(event["kind"] == 16 for event in events)
         assert all((event["input_tokens"], event["output_tokens"],
                     event["total_tokens"]) == (40, 8, 48)
                    for event in model_events)

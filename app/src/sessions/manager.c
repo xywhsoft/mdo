@@ -1624,6 +1624,7 @@ static bool MdoSessionsLedgerMutation(MdoSession* Session,
     bool Clear, uint64 ThroughSequence, xwork_error* Error)
 {
     MdoSessionInfo Candidate;
+    MdoSessionEventTrimPlan* Trim = NULL;
     bool Ok = false;
     xworkErrorInit(Error);
     if ( Session == NULL ) {
@@ -1641,12 +1642,20 @@ static bool MdoSessionsLedgerMutation(MdoSession* Session,
                 "an open active session is required for ledger maintenance");
         goto done;
     }
+    Trim = MdoSessionEventTrimPrepare(Session->Bridge,
+        ThroughSequence, Clear, Error);
+    if ( Trim == NULL ) goto done;
     Ok = Clear ? MdoAgentSessionClear(Session->Agent, Error) :
         MdoAgentSessionTruncateAfter(Session->Agent, ThroughSequence, Error);
     if ( !Ok ) goto done;
+    if ( Trim != NULL && !MdoSessionEventTrimApply(Trim, Error) ) {
+        Ok = false;
+        goto done;
+    }
     if ( !MdoSessionsCandidate(Session, &Candidate, Error) ||
          !MdoSessionsCommit(Session, &Candidate, Error) ) Ok = false;
 done:
+    MdoSessionEventTrimPlanRelease(Trim);
     xrtMutexUnlock(g_MdoSessions.Lock);
     xrtMutexUnlock(Session->Lock);
     return Ok;
