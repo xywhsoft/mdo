@@ -385,6 +385,7 @@ export async function boot() {
 
   function setRun(run) {
     activeRun = run && !terminalState(run) ? run : null;
+    const guide = settingsStore.get().data?.composer?.submit_mode === "guide";
     const shown = run ?? { state: sessionWritable ? "idle" : selectedSessionStatus };
     runStatus.dataset.state = shown.state;
     runStatus.lastElementChild.textContent = runStateText(shown.state);
@@ -397,10 +398,17 @@ export async function boot() {
     composerProfile.setRunActive(Boolean(activeRun));
     send.setAttribute("aria-label", activeRun ? "加入待发送队列" : "发送任务");
     composerHint.textContent = activeRun
-      ? "Enter 排队 · Ctrl Enter 中断并发送"
+      ? (guide
+        ? "Enter 中断并发送 · Ctrl Enter 排队"
+        : "Enter 排队 · Ctrl Enter 中断并发送")
       : "Enter 发送 · Shift Enter 换行";
+    $("#shortcut-enter-description").textContent = guide
+      ? "发送；运行中中断并优先发送" : "发送；运行中加入待发送队列";
+    $("#shortcut-control-enter-description").textContent = guide
+      ? "运行中加入待发送队列" : "中断当前运行，优先发送输入";
     mobileActivity.hidden = !activeRun;
   }
+  settingsStore.subscribe(() => setRun(activeRun));
 
   function updateContext(state) {
     clear(contextList);
@@ -708,7 +716,9 @@ export async function boot() {
     if (fileMentions.onKeyDown(event)) return;
     if (event.key === "Enter" && !event.shiftKey && !event.isComposing) {
       event.preventDefault();
-      interruptRequested = Boolean(activeRun && (event.ctrlKey || event.metaKey));
+      const modified = event.ctrlKey || event.metaKey;
+      const guide = settingsStore.get().data?.composer?.submit_mode === "guide";
+      interruptRequested = Boolean(activeRun && (guide ? !modified : modified));
       composer.requestSubmit();
     }
   });

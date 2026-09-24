@@ -426,7 +426,7 @@ bool MdoMigrationConvertConfig(MdoMigrationContext* Context,
     static const char* const FontFrom[] = { "sm", "md", "lg" };
     static const char* const FontTo[] = { "small", "normal", "large" };
     static const char* const ModeFrom[] = { "queue", "guide" };
-    static const char* const ModeTo[] = { "agent", "ask" };
+    static const char* const ModeTo[] = { "queue", "guide" };
     static const char* const LangFrom[] = { "zh", "en", "ru" };
     static const char* const LangTo[] = { "zh-CN", "en-US", "ru-RU" };
     MdoMigrationFile* File = MdoMigrationFind(&Context->Scan, "config.json");
@@ -436,6 +436,7 @@ bool MdoMigrationConvertConfig(MdoMigrationContext* Context,
     xvalue* Settings = NULL;
     xvalue* Models = NULL;
     xvalue* Appearance;
+    xvalue* Composer;
     xvalue* Agent;
     xvalue* Providers;
     xvalue* Items;
@@ -455,15 +456,17 @@ bool MdoMigrationConvertConfig(MdoMigrationContext* Context,
     if ( Settings == NULL || Models == NULL ) goto memory;
     LegacySettings = MdoMigrationObjectGet(Legacy, "settings");
     Appearance = xrtValueObjectGet(Settings, xrtStrView("appearance"));
+    Composer = xrtValueObjectGet(Settings, xrtStrView("composer"));
     Agent = xrtValueObjectGet(Settings, xrtStrView("agent"));
     if ( xrtValueType(Appearance) != XVALUE_OBJECT ||
+         xrtValueType(Composer) != XVALUE_OBJECT ||
          xrtValueType(Agent) != XVALUE_OBJECT ) goto invalid;
     if ( LegacySettings != NULL ) {
         if ( !MdoMigrationSetStringMapped(Appearance, "theme", LegacySettings,
                 "theme", ThemeFrom, ThemeTo, 3u) ||
              !MdoMigrationSetStringMapped(Appearance, "font_size",
                 LegacySettings, "fontSize", FontFrom, FontTo, 3u) ||
-             !MdoMigrationSetStringMapped(Agent, "interaction_mode",
+             !MdoMigrationSetStringMapped(Composer, "submit_mode",
                 LegacySettings, "interactMode", ModeFrom, ModeTo, 2u) ||
              !MdoMigrationSetStringMapped(Settings, "locale", LegacySettings,
                 "lang", LangFrom, LangTo, 3u) ||

@@ -209,7 +209,7 @@
               <section class="settings-section" data-settings-panel="general" aria-labelledby="settings-general-title">
                 <div class="settings-section-heading">
                   <h2 id="settings-general-title">常规</h2>
-                  <p>界面外观和工作区打开方式。</p>
+                  <p>界面外观、输入方式和工作区打开方式。</p>
                 </div>
                 <div class="setting-row">
                   <div><label for="setting-theme">主题</label><p>跟随系统，或固定使用浅色和深色外观。</p></div>
@@ -222,6 +222,10 @@
                 <div class="setting-row">
                   <div><label for="setting-density">界面密度</label><p>控制列表和控件的纵向间距。</p></div>
                   <select id="setting-density" name="density"><option value="comfortable">舒适</option><option value="compact">紧凑</option></select>
+                </div>
+                <div class="setting-row">
+                  <div><label for="setting-submit-mode">运行中输入</label><p>排队模式：Enter 排队，Ctrl/⌘+Enter 中断并优先发送；引导模式：两者对调。</p></div>
+                  <select id="setting-submit-mode" name="submit_mode"><option value="queue">排队</option><option value="guide">引导</option></select>
                 </div>
                 <div class="setting-row">
                   <div><label for="setting-open-mode">启动时打开</label><p>选择启动后的默认工作区行为。</p></div>
@@ -433,9 +437,9 @@
       <div class="shortcuts-content">
         <h3>键盘操作</h3>
         <dl>
-          <div><dt><kbd>Enter</kbd></dt><dd>发送；运行中加入待发送队列</dd></div>
+          <div><dt><kbd>Enter</kbd></dt><dd id="shortcut-enter-description">发送；运行中加入待发送队列</dd></div>
           <div><dt><kbd>Shift</kbd> + <kbd>Enter</kbd></dt><dd>输入换行</dd></div>
-          <div><dt><kbd>Ctrl</kbd> + <kbd>Enter</kbd></dt><dd>中断当前运行，优先发送输入</dd></div>
+          <div><dt><kbd>Ctrl</kbd> + <kbd>Enter</kbd></dt><dd id="shortcut-control-enter-description">中断当前运行，优先发送输入</dd></div>
           <div><dt><kbd>Esc</kbd></dt><dd>关闭弹层；无弹层时中断运行</dd></div>
           <div><dt><kbd>Ctrl</kbd> + <kbd>K</kbd> / <kbd>N</kbd></dt><dd>新建任务</dd></div>
           <div><dt><kbd>Ctrl</kbd> + <kbd>F</kbd></dt><dd>搜索当前会话</dd></div>

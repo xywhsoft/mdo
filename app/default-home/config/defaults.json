@@ -7,6 +7,9 @@
       "font_size": "normal",
       "density": "comfortable"
     },
+    "composer": {
+      "submit_mode": "queue"
+    },
     "agent": {
       "interaction_mode": "agent",
       "reasoning_effort": "medium",

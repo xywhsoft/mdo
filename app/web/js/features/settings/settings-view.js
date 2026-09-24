@@ -13,6 +13,7 @@ function settingsPatch(form, snapshot) {
       font_size: form.elements.font_size.value,
       density: form.elements.density.value,
     },
+    composer: { submit_mode: form.elements.submit_mode.value },
     agent: {
       interaction_mode: form.elements.interaction_mode.value,
       reasoning_effort: form.elements.reasoning_effort.value,
@@ -91,6 +92,7 @@ export function createSettingsView({ form, store, navigation, onApplied }) {
     form.elements.theme.value = settings.appearance.theme;
     form.elements.font_size.value = settings.appearance.font_size;
     form.elements.density.value = settings.appearance.density;
+    form.elements.submit_mode.value = settings.composer.submit_mode;
     form.elements.open_mode.value = settings.workspace.open_mode;
     form.elements.confirm_external_write.checked = settings.workspace.confirm_external_write;
     form.elements.interaction_mode.value = settings.agent.interaction_mode;

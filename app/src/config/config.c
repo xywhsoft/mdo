@@ -335,6 +335,7 @@ static bool MdoConfigSettingsValidate(const xvalue* pSettings)
     static const char* const Themes[] = { "system", "light", "dark" };
     static const char* const FontSizes[] = { "small", "normal", "large" };
     static const char* const Densities[] = { "compact", "comfortable" };
+    static const char* const SubmitModes[] = { "queue", "guide" };
     static const char* const InteractionModes[] = { "ask", "agent", "plan" };
     static const char* const Efforts[] = {
         "none", "minimal", "low", "medium", "high", "xhigh", "max"
@@ -342,6 +343,7 @@ static bool MdoConfigSettingsValidate(const xvalue* pSettings)
     static const char* const SearchProviders[] = { "brave" };
     static const char* const OpenModes[] = { "last", "new", "ask" };
     const xvalue* pAppearance;
+    const xvalue* pComposer;
     const xvalue* pAgent;
     const xvalue* pWeb;
     const xvalue* pSearch;
@@ -361,6 +363,7 @@ static bool MdoConfigSettingsValidate(const xvalue* pSettings)
             MdoConfigKey("locale")), &Locale) ||
          Locale.Size < 2u || Locale.Size > 32u ) goto invalid;
     pAppearance = xrtValueObjectGet(pSettings, MdoConfigKey("appearance"));
+    pComposer = xrtValueObjectGet(pSettings, MdoConfigKey("composer"));
     pAgent = xrtValueObjectGet(pSettings, MdoConfigKey("agent"));
     pWeb = xrtValueObjectGet(pSettings, MdoConfigKey("web"));
     pSearch = pWeb != NULL ?
@@ -376,6 +379,10 @@ static bool MdoConfigSettingsValidate(const xvalue* pSettings)
          !MdoConfigStringOneOf(xrtValueObjectGet(pAppearance,
             MdoConfigKey("density")), Densities,
             sizeof(Densities) / sizeof(Densities[0])) ||
+         xrtValueType(pComposer) != XVALUE_OBJECT ||
+         !MdoConfigStringOneOf(xrtValueObjectGet(pComposer,
+            MdoConfigKey("submit_mode")), SubmitModes,
+            sizeof(SubmitModes) / sizeof(SubmitModes[0])) ||
          xrtValueType(pAgent) != XVALUE_OBJECT ||
          !MdoConfigStringOneOf(xrtValueObjectGet(pAgent,
             MdoConfigKey("interaction_mode")), InteractionModes,
