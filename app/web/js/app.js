@@ -317,6 +317,17 @@ export async function boot() {
       composerAttachments = attachments;
       draftStore.edit(selectedKey, prompt.value, attachments);
     },
+    async onRemove(owner, id) {
+      const key = `${owner.projectId}/${owner.sessionId}`;
+      if (await draftStore.flush(key)) {
+        try { await api.deleteImage(owner.projectId, owner.sessionId, id); }
+        catch (error) {
+          if (error?.code !== "attachment_in_use" &&
+              error?.code !== "attachment_not_found" && selectedKey === key)
+            showComposerError(error);
+        }
+      }
+    },
     onUploading: () => setRun(activeRun),
     onError: showComposerError,
   });

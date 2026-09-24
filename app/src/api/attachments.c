@@ -2,6 +2,7 @@
 #include <string.h>
 
 #include "internal.h"
+#include "../../include/mdo/attachments.h"
 #include "../../include/mdo/home.h"
 #include "../../include/mdo/sessions.h"
 
@@ -23,6 +24,18 @@ void MdoApiAttachmentsUnit(void)
 {
     if ( g_MdoAttachmentLock != NULL ) xrtMutexDestroy(g_MdoAttachmentLock);
     g_MdoAttachmentLock = NULL;
+}
+
+bool MdoApiAttachmentLock(void)
+{
+    return g_MdoAttachmentLock != NULL &&
+        xrtMutexLock(g_MdoAttachmentLock);
+}
+
+void MdoApiAttachmentUnlock(void)
+{
+    if ( g_MdoAttachmentLock != NULL )
+        (void)xrtMutexUnlock(g_MdoAttachmentLock);
 }
 
 static bool MdoAttachmentCaptureId(xstrview View, char* Output,
@@ -421,6 +434,86 @@ bool MdoApiAttachmentRoute(MdoApiContext* Context)
     size_t Size = 0u;
     cstr Mime = NULL;
     bool Ok;
+    if ( Context->Request->head->MethodCode == XHTTP_METHOD_DELETE ) {
+        const xhttp1head* Head = Context->Request->head;
+        char Name[MDO_ATTACHMENT_ID_LENGTH + 6u];
+        char DataPath[MDO_SESSION_PATH_CAPACITY];
+        char MetaPath[MDO_SESSION_PATH_CAPACITY];
+        MdoSession* Handle;
+        MdoSessionInfo Info;
+        xwork_error Error;
+        bool DataExists = false;
+        bool MetaExists = false;
+        bool Referenced = false;
+        xfileinfo FileInfo;
+        xvalue* Reply;
+        if ( ((Head->Flags & (uint32)XHTTP1_CONTENT_LENGTH) != 0u &&
+              Head->ContentLength != 0u) ||
+             (Head->Flags & (uint32)XHTTP1_TRANSFER_ENCODING) != 0u )
+            return MdoApiReplyError(Context, 400u, "body_not_allowed",
+                "This operation does not accept a request body", NULL);
+        if ( !MdoAttachmentSession(Context, Project, Session, false) ||
+             !MdoAttachmentHexId(Context->Params[2], Id) )
+            return MdoApiReplyError(Context, 404u, "attachment_not_found",
+                "The image does not exist in this session", NULL);
+        snprintf(Name, sizeof(Name), "%s.bin", Id);
+        if ( !MdoAttachmentPath(DataPath, sizeof(DataPath), Project,
+                Session, Name) )
+            return MdoApiReplyError(Context, 400u, "invalid_path",
+                "The attachment path is invalid", NULL);
+        snprintf(Name, sizeof(Name), "%s.json", Id);
+        if ( !MdoAttachmentPath(MetaPath, sizeof(MetaPath), Project,
+                Session, Name) )
+            return MdoApiReplyError(Context, 400u, "invalid_path",
+                "The attachment path is invalid", NULL);
+        if ( !MdoApiAttachmentLock() )
+            return MdoApiReplyError(Context, 503u, "attachment_unavailable",
+                "Image storage is unavailable", NULL);
+        memset(&Error, 0, sizeof(Error));
+        Handle = MdoSessionLoad(Project, Session, &Error);
+        memset(&Info, 0, sizeof(Info)); Info.Size = sizeof(Info);
+        Ok = Handle != NULL && MdoSessionGetInfo(Handle, &Info);
+        if ( Handle != NULL ) MdoSessionRelease(Handle);
+        if ( !Ok || Info.RuntimeOpen ) {
+            MdoApiAttachmentUnlock();
+            return MdoApiReplyError(Context, Ok ? 409u : 503u,
+                Ok ? "attachment_in_use" : "attachment_unavailable",
+                Ok ? "Wait until the active run finishes before removing an image" :
+                    "Image storage is unavailable", NULL);
+        }
+        Ok = MdoHomeExternalStat(DataPath, &DataExists, &FileInfo) &&
+            (!DataExists || FileInfo.Type == XFILE_TYPE_FILE) &&
+            MdoHomeExternalStat(MetaPath, &MetaExists, &FileInfo) &&
+            (!MetaExists || FileInfo.Type == XFILE_TYPE_FILE);
+        if ( Ok && (DataExists || MetaExists) ) {
+            Ok = MdoApiDraftAttachmentReferenced(Project, Session,
+                Id, &Referenced);
+            if ( Ok && !Referenced )
+                Ok = MdoApiQueueAttachmentReferenced(Project, Session,
+                    Id, &Referenced);
+            if ( Ok && !Referenced )
+                Ok = MdoSessionAttachmentRecordReferenced(Project, Session,
+                    Id, &Referenced);
+        }
+        if ( Ok && !Referenced ) {
+            if ( DataExists ) Ok = MdoHomeRemove(DataPath, false);
+            if ( Ok && MetaExists ) Ok = MdoHomeRemove(MetaPath, false);
+        }
+        MdoApiAttachmentUnlock();
+        if ( !Ok ) return MdoApiReplyError(Context, 503u,
+            "attachment_unavailable",
+            "The image could not be checked or removed", NULL);
+        if ( !DataExists && !MetaExists )
+            return MdoApiReplyError(Context, 404u, "attachment_not_found",
+                "The image does not exist in this session", NULL);
+        if ( Referenced ) return MdoApiReplyError(Context, 409u,
+            "attachment_in_use", "The image is still used by this session",
+            NULL);
+        Reply = xrtValueObject();
+        if ( Reply == NULL ) return MdoApiReplyError(Context, 503u,
+            "attachment_unavailable", "The image was removed", NULL);
+        return MdoApiReplySuccessTake(Context, 200u, Reply, NULL);
+    }
     if ( !MdoAttachmentSession(Context, Project, Session, false) ||
          !MdoAttachmentHexId(Context->Params[2], Id) ||
          !MdoAttachmentReadForRun(Project, Session, Id,

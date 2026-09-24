@@ -26,6 +26,8 @@ bool MdoSessionAttachmentEventClone(const char* SourceProjectId,
     const char* SourceSessionId, uint64 SourceEventId,
     const char* TargetProjectId, const char* TargetSessionId,
     uint64 TargetEventId, uint64 AgentRunId);
+bool MdoSessionAttachmentRecordReferenced(const char* ProjectId,
+    const char* SessionId, const char* Id, bool* Referenced);
 void MdoSessionAttachmentForkRollback(const char* ProjectId,
     const char* SessionId);
 

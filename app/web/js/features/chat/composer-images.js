@@ -5,7 +5,7 @@ const TYPES = new Set(["image/png", "image/jpeg", "image/webp"]);
 const MAX_IMAGE_BYTES = 8 * 1024 * 1024;
 
 export function createComposerImages({ composer, prompt, button, input, strip,
-  navigation, modelsStore, sessionStore, ensureSession, onChange,
+  navigation, modelsStore, sessionStore, ensureSession, onChange, onRemove,
   onUploading, onError }) {
   let ids = [];
   let uploading = false;
@@ -30,6 +30,7 @@ export function createComposerImages({ composer, prompt, button, input, strip,
         ids = ids.filter((_, position) => position !== index);
         render();
         onChange([...ids]);
+        void Promise.resolve(onRemove?.(selected, id)).catch(onError);
       });
       strip.append(element("div", { className: "composer-image" }, [
         element("img", { attrs: { src: attachmentUrl(selected.projectId,
@@ -83,8 +84,11 @@ export function createComposerImages({ composer, prompt, button, input, strip,
         const stored = await api.uploadImage(selected.projectId,
           selected.sessionId, file);
         const current = owner();
-        if (`${current?.projectId}/${current?.sessionId}` !== key)
+        if (`${current?.projectId}/${current?.sessionId}` !== key) {
+          void api.deleteImage(selected.projectId, selected.sessionId,
+            stored.id).catch(() => {});
           throw new Error("会话已切换，图片未加入当前草稿");
+        }
         ids = [...ids, stored.id];
         onChange([...ids]);
         render();

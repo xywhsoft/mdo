@@ -101,10 +101,14 @@ bool MdoApiFeedbackReconcile(const char* ProjectId, const char* SessionId);
 bool MdoApiDraftRoute(MdoApiContext* pContext);
 bool MdoApiDraftInit(void);
 void MdoApiDraftUnit(void);
+bool MdoApiDraftAttachmentReferenced(const char* ProjectId,
+    const char* SessionId, const char* Id, bool* Referenced);
 bool MdoApiQueueRoute(MdoApiContext* pContext);
 bool MdoApiQueueItemRoute(MdoApiContext* pContext);
 bool MdoApiQueueInit(void);
 void MdoApiQueueUnit(void);
+bool MdoApiQueueAttachmentReferenced(const char* ProjectId,
+    const char* SessionId, const char* Id, bool* Referenced);
 bool MdoApiTodoRoute(MdoApiContext* pContext);
 bool MdoApiOperationsRoute(MdoApiContext* pContext);
 bool MdoApiOperationRoute(MdoApiContext* pContext);
@@ -126,6 +130,8 @@ bool MdoApiAttachmentsRoute(MdoApiContext* pContext);
 bool MdoApiAttachmentRoute(MdoApiContext* pContext);
 bool MdoApiAttachmentsInit(void);
 void MdoApiAttachmentsUnit(void);
+bool MdoApiAttachmentLock(void);
+void MdoApiAttachmentUnlock(void);
 bool MdoApiReplyImage(MdoApiContext* pContext, const void* pBody,
     size_t BodySize, cstr ContentType);
 bool MdoAttachmentReadForRun(const char* Project, const char* Session,

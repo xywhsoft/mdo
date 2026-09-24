@@ -99,6 +99,14 @@ async function uploadImage(projectId, sessionId, file) {
   return (await readEnvelope(response)).data;
 }
 
+function deleteImage(projectId, sessionId, id) {
+  if (!/^[0-9a-f]{32}$/.test(id))
+    throw new TypeError("Attachment ID is invalid");
+  return apiRequest(`/projects/${resourceId(projectId, "project")}` +
+    `/sessions/${resourceId(sessionId, "session")}/attachments/${id}`,
+    { method: "DELETE" });
+}
+
 async function download(path) {
   let response;
   try {
@@ -134,4 +142,5 @@ export const api = Object.freeze({
   delete: (path, options = {}) => apiRequest(path, { ...options, method: "DELETE" }),
   download,
   uploadImage,
+  deleteImage,
 });

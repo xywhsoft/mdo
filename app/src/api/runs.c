@@ -310,6 +310,7 @@ bool MdoApiRunStartRoute(MdoApiContext* Context)
     char* PromptText = NULL;
     size_t Present = 0u;
     bool Valid;
+    bool AttachmentLocked = false;
     if ( !MdoApiRunSessionPath(Context, Project, SessionId) )
         return MdoApiReplyError(Context, 400u, "invalid_run_path",
             "The project or session ID is invalid", NULL);
@@ -388,8 +389,17 @@ bool MdoApiRunStartRoute(MdoApiContext* Context)
                 "image_model_unsupported",
                 "The selected model does not support image input", NULL);
         }
+        AttachmentLocked = MdoApiAttachmentLock();
+        if ( !AttachmentLocked ) {
+            xrtFree(PromptText);
+            MdoApiJsonBodyUnit(&Body);
+            return MdoApiReplyError(Context, 503u,
+                "attachment_unavailable", "Image storage is unavailable",
+                NULL);
+        }
         if ( !MdoApiRunBuildMessage(Project, SessionId, PromptText,
                 AttachmentIds, AttachmentCount, &UserMessage) ) {
+            MdoApiAttachmentUnlock();
             xrtFree(PromptText);
             MdoApiJsonBodyUnit(&Body);
             return MdoApiReplyError(Context, 422u,
@@ -408,6 +418,7 @@ bool MdoApiRunStartRoute(MdoApiContext* Context)
     memset(&Error, 0, sizeof(Error));
     xrtClearError();
     Valid = MdoRunStart(&Options, &Info, &Error);
+    if ( AttachmentLocked ) MdoApiAttachmentUnlock();
     if ( AttachmentCount != 0u ) xllmMessageUnit(&UserMessage);
     xrtFree(PromptText);
     MdoApiJsonBodyUnit(&Body);

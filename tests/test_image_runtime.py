@@ -140,6 +140,10 @@ def probe(host: Path) -> None:
                         assert "image/png" in wire and encoded in wire, wire[:1000]
                         if prompt:
                             assert prompt in wire, wire[:1000]
+                    status, _, body = request(port, "DELETE",
+                        route + "/attachments/" + image_id)
+                    assert status == 409 and json.loads(body)["error"][
+                        "code"] == "attachment_in_use", (status, body)
                 finally:
                     if process.poll() is None:
                         process.terminate()
@@ -173,6 +177,10 @@ def probe(host: Path) -> None:
                     assert len(restored) == 2 and all(
                         item["attachments"] == [image_id] for item in restored), (
                         restored)
+                    status, _, body = request(port, "DELETE",
+                        route + "/attachments/" + image_id)
+                    assert status == 409 and json.loads(body)["error"][
+                        "code"] == "attachment_in_use", (status, body)
                     for prompt, refs in (("text after restart", []),
                                          ("image after restart", [image_id])):
                         ModelHandler.calls = 0

@@ -104,7 +104,7 @@ static bool MdoImageRecordRead(const char* Path, uint64 AgentRunId,
     uint64 Number;
     size_t i;
     bool Ok = false;
-    if ( Path == NULL || AgentRunId == 0u || Ids == NULL || Count == NULL )
+    if ( Path == NULL || Ids == NULL || Count == NULL )
         return false;
     *Count = 0u;
     if ( !MdoHomeExternalStat(Path, &Exists, &Info) ) return false;
@@ -128,7 +128,8 @@ static bool MdoImageRecordRead(const char* Path, uint64 AgentRunId,
     Value = xrtValueObjectGet(Root, XRT_STR_LITERAL("schema_version"));
     if ( !MdoImageRunUnsigned(Value, &Number) || Number != 1u ) goto done;
     Value = xrtValueObjectGet(Root, XRT_STR_LITERAL("run_id"));
-    if ( !MdoImageRunUnsigned(Value, &Number) || Number != AgentRunId ) goto done;
+    if ( !MdoImageRunUnsigned(Value, &Number) || Number == 0u ||
+         (AgentRunId != 0u && Number != AgentRunId) ) goto done;
     Array = xrtValueObjectGet(Root, XRT_STR_LITERAL("attachments"));
     if ( xrtValueType(Array) != XVALUE_ARRAY ||
          xrtValueCount(Array) > 4u )
@@ -190,6 +191,72 @@ bool MdoSessionAttachmentEventRead(const char* ProjectId,
     return Exists ? MdoImageRecordRead(Path, AgentRunId, Ids, Count) :
         MdoSessionAttachmentRunRead(ProjectId, SessionId, AgentRunId,
             Ids, Count);
+}
+
+static bool MdoImageRecordDirectoryReferences(const char* ProjectId,
+    const char* SessionId, const char* Subdirectory, const char* Id,
+    bool* Referenced)
+{
+    char Directory[MDO_SESSION_PATH_CAPACITY];
+    bool Exists = false;
+    xfileinfo Info;
+    xdir Dir = NULL;
+    xdirentry Entry;
+    xdirnext Next = XDIR_NEXT_END;
+    size_t Visited = 0u;
+    bool Ok = true;
+    int Written = snprintf(Directory, sizeof(Directory),
+        "sessions/%s/%s/attachments/%s", ProjectId, SessionId,
+        Subdirectory);
+    if ( Written <= 0 || (size_t)Written >= sizeof(Directory) ||
+         !MdoHomeExternalStat(Directory, &Exists, &Info) ) return false;
+    if ( !Exists ) return true;
+    if ( Info.Type != XFILE_TYPE_DIRECTORY ) return false;
+    Dir = MdoHomeOpenDirectory(Directory, XDIR_STAT);
+    if ( Dir == NULL ) return false;
+    memset(&Entry, 0, sizeof(Entry));
+    while ( (Next = xrtDirNext(Dir, &Entry)) == XDIR_NEXT_ITEM ) {
+        char Path[MDO_SESSION_PATH_CAPACITY];
+        char Ids[4][33] = {{ 0 }};
+        size_t Count = 0u;
+        size_t i;
+        if ( ++Visited > 65536u ) { Ok = false; break; }
+        if ( Entry.Info.Type != XFILE_TYPE_FILE ||
+             Entry.Name.Size < 6u || Entry.Name.Size > 25u ||
+             memcmp(Entry.Name.Data + Entry.Name.Size - 5u,
+                ".json", 5u) != 0 ) continue;
+        for ( i = 0u; i < Entry.Name.Size - 5u; ++i )
+            if ( Entry.Name.Data[i] < '0' ||
+                 Entry.Name.Data[i] > '9' ) break;
+        if ( i != Entry.Name.Size - 5u ) continue;
+        Written = snprintf(Path, sizeof(Path), "%s/%.*s", Directory,
+            (int)Entry.Name.Size, Entry.Name.Data);
+        if ( Written <= 0 || (size_t)Written >= sizeof(Path) ||
+             !MdoImageRecordRead(Path, 0u, Ids, &Count) ) {
+            Ok = false;
+            break;
+        }
+        for ( i = 0u; i < Count; ++i )
+            if ( strcmp(Ids[i], Id) == 0 ) { *Referenced = true; break; }
+        if ( *Referenced ) break;
+    }
+    if ( Next == XDIR_NEXT_ERROR ) Ok = false;
+    if ( !xrtDirClose(Dir) ) Ok = false;
+    return Ok;
+}
+
+/* Check both current event references and legacy run references. The latter
+ * may retain extra images, but never discards an older conversation image. */
+bool MdoSessionAttachmentRecordReferenced(const char* ProjectId,
+    const char* SessionId, const char* Id, bool* Referenced)
+{
+    if ( ProjectId == NULL || SessionId == NULL || Id == NULL ||
+         Referenced == NULL ) return false;
+    *Referenced = false;
+    return MdoImageRecordDirectoryReferences(ProjectId, SessionId,
+        "events", Id, Referenced) &&
+        (*Referenced || MdoImageRecordDirectoryReferences(ProjectId,
+            SessionId, "runs", Id, Referenced));
 }
 
 static bool MdoImageFilePath(char Path[MDO_SESSION_PATH_CAPACITY],

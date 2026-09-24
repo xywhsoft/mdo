@@ -17,6 +17,7 @@ typedef struct MdoDraft {
 } MdoDraft;
 
 static xmutex* g_MdoDraftLock;
+static bool MdoDraftRead(const char* Path, MdoDraft* Draft);
 
 bool MdoApiDraftInit(void)
 {
@@ -29,6 +30,34 @@ void MdoApiDraftUnit(void)
 {
     if ( g_MdoDraftLock != NULL ) xrtMutexDestroy(g_MdoDraftLock);
     g_MdoDraftLock = NULL;
+}
+
+bool MdoApiDraftAttachmentReferenced(const char* ProjectId,
+    const char* SessionId, const char* Id, bool* Referenced)
+{
+    char Path[MDO_SESSION_PATH_CAPACITY];
+    MdoDraft* Draft;
+    size_t i;
+    bool Ok;
+    int Written;
+    if ( ProjectId == NULL || SessionId == NULL || Id == NULL ||
+         Referenced == NULL ) return false;
+    *Referenced = false;
+    Written = snprintf(Path, sizeof(Path), "sessions/%s/%s/draft.json",
+        ProjectId, SessionId);
+    if ( Written <= 0 || (size_t)Written >= sizeof(Path) ) return false;
+    Draft = (MdoDraft*)xrtMalloc(sizeof(*Draft));
+    if ( Draft == NULL ) return false;
+    xrtMutexLock(g_MdoDraftLock);
+    Ok = MdoDraftRead(Path, Draft);
+    if ( Ok ) for ( i = 0u; i < Draft->AttachmentCount; ++i )
+        if ( strcmp(Draft->Attachments[i], Id) == 0 ) {
+            *Referenced = true;
+            break;
+        }
+    xrtMutexUnlock(g_MdoDraftLock);
+    xrtFree(Draft);
+    return Ok;
 }
 
 static bool MdoDraftCaptureId(xstrview View, char* Output,
@@ -185,6 +214,7 @@ bool MdoApiDraftRoute(MdoApiContext* Context)
     size_t IncomingCount = 0u;
     bool Ok;
     bool Conflict = false;
+    bool AttachmentLocked = false;
     xvalue* Data;
 
     if ( Context->ParamCount == 0u ) {
@@ -214,6 +244,16 @@ bool MdoApiDraftRoute(MdoApiContext* Context)
             xrtFree(Draft);
             return MdoApiReplyBodyError(Context, BodyStatus);
         }
+        if ( Context->ParamCount == 2u ) {
+            AttachmentLocked = MdoApiAttachmentLock();
+            if ( !AttachmentLocked ) {
+                MdoApiJsonBodyUnit(&Body);
+                xrtFree(Draft);
+                return MdoApiReplyError(Context, 503u,
+                    "attachment_unavailable",
+                    "Image storage is unavailable", NULL);
+            }
+        }
         const xvalue* Attachments = xrtValueObjectGet(Body.Value,
             XRT_STR_LITERAL("attachments"));
         Ok = xrtValueType(Body.Value) == XVALUE_OBJECT &&
@@ -228,6 +268,7 @@ bool MdoApiDraftRoute(MdoApiContext* Context)
               MdoAttachmentIdsExist(ProjectId, SessionId,
                 IncomingAttachments, IncomingCount)));
         if ( !Ok ) {
+            if ( AttachmentLocked ) MdoApiAttachmentUnlock();
             MdoApiJsonBodyUnit(&Body);
             xrtFree(Draft);
             return MdoApiReplyError(Context, 422u, "draft_invalid",
@@ -253,6 +294,7 @@ bool MdoApiDraftRoute(MdoApiContext* Context)
     }
     Data = Ok && !Conflict ? MdoDraftResponse(Draft) : NULL;
     xrtMutexUnlock(g_MdoDraftLock);
+    if ( AttachmentLocked ) MdoApiAttachmentUnlock();
     if ( Context->Request->head->MethodCode == XHTTP_METHOD_PUT )
         MdoApiJsonBodyUnit(&Body);
     xrtFree(Draft);

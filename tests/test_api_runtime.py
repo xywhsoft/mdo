@@ -1512,6 +1512,30 @@ def run_probe(host: Path) -> None:
                 assert image_headers["cache-control"] == "no-store", image_headers
                 status, _, downloaded = request(port, "HEAD", image["url"])
                 assert status == 200 and downloaded == b"", (status, downloaded)
+                status, _, body = request(port, "DELETE", image["url"],
+                    body=b"{}", headers={"Content-Type": "application/json"})
+                assert status == 400 and json.loads(body)["error"][
+                    "code"] == "body_not_allowed", (status, body)
+                status, _, body = request(port, "POST", attachments_path,
+                    body=png_bytes, headers={"Content-Type": "image/png"})
+                orphan = json.loads(body)["data"]
+                assert status == 201 and orphan["id"] != image["id"], body
+                status, _, body = request(port, "DELETE", orphan["url"])
+                assert status == 200, (status, body)
+                assert request(port, "GET", orphan["url"])[0] == 404
+                assert request(port, "DELETE", orphan["url"])[0] == 404
+                status, _, body = request(port, "POST", attachments_path,
+                    body=png_bytes, headers={"Content-Type": "image/png"})
+                half_orphan = json.loads(body)["data"]
+                assert status == 201, (status, body)
+                (home / f"sessions/api-project/{session_id}/attachments/"
+                 f"{half_orphan['id']}.json").unlink()
+                assert request(port, "DELETE", half_orphan["url"])[0] == 200
+                assert not (home / f"sessions/api-project/{session_id}/"
+                            f"attachments/{half_orphan['id']}.bin").exists()
+                status, headers, body = request(port, "OPTIONS", image["url"])
+                assert status == 200 and headers["allow"] == (
+                    "GET, HEAD, DELETE, OPTIONS"), (status, headers, body)
                 status, _, response = request(
                     port, "POST", attachments_path, body=b"not an image",
                     headers={"Content-Type": "image/png"})
@@ -1602,6 +1626,14 @@ def run_probe(host: Path) -> None:
                     status, body)
                 assert json.loads(request(port, "GET", draft_path)[2])[
                     "data"]["attachments"] == [image["id"]]
+                status, _, body = request(port, "DELETE", image["url"])
+                assert status == 409 and json.loads(body)["error"][
+                    "code"] == "attachment_in_use", (status, body)
+                status, _, body = request(port, "PUT", draft_path,
+                    body=b'{"revision":2,"text":"","attachments":[]}',
+                    headers={"Content-Type": "application/json"})
+                assert status == 200 and json.loads(body)["data"][
+                    "attachments"] == [], (status, body)
                 assert json.loads((home / f"sessions/api-project/{session_id}/"
                                    "draft.json").read_text(encoding="utf-8"))[
                     "schema_version"] == 2
@@ -1689,6 +1721,9 @@ def run_probe(host: Path) -> None:
                 }], (status, body)
                 assert json.loads(queue_file.read_text(encoding="utf-8"))[
                     "schema_version"] == 2
+                status, _, body = request(port, "DELETE", image["url"])
+                assert status == 409 and json.loads(body)["error"][
+                    "code"] == "attachment_in_use", (status, body)
                 status, _, body = queue_request("PUT",
                     queue_path + "/" + image_item_id, {"state": "sending"})
                 assert status == 200 and json.loads(body)["data"]["items"][0][
@@ -1702,6 +1737,9 @@ def run_probe(host: Path) -> None:
                     queue_path + "/" + image_item_id)
                 assert status == 200 and json.loads(body)["data"]["items"] == [], (
                     status, body)
+                status, _, body = request(port, "DELETE", image["url"])
+                assert status == 200 and request(port, "GET", image["url"])[0] == (
+                    404), (status, body)
                 todo_path = session_path + "/todo"
                 todo_file = home / "sessions/api-project" / session_id / "todo.json"
                 status, _, body = request(port, "GET", todo_path)

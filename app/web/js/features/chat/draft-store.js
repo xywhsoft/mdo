@@ -70,7 +70,10 @@ export function createDraftStore({ onRestore, onError, onSaved }) {
     const current = entry(key);
     window.clearTimeout(current.timer);
     current.timer = 0;
-    if (current.saving) return current.saving;
+    if (current.saving) {
+      await current.saving;
+      return current.loaded && !current.dirty && !current.conflict;
+    }
     current.saving = (async () => {
       if (!current.loaded) await load(key);
       if (!current.loaded || current.conflict) return;
@@ -106,6 +109,7 @@ export function createDraftStore({ onRestore, onError, onSaved }) {
       if (current.dirty && !current.conflict && current.loaded)
         schedule(key);
     }
+    return current.loaded && !current.dirty && !current.conflict;
   }
 
   function edit(key, text, attachments = entry(key).attachments, immediate = false) {

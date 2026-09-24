@@ -33,6 +33,12 @@ export function createPromptQueue({ container, navigation, onRetry, onRemoved })
     render();
   }
 
+  async function discardUnusedImages(key, attachments = []) {
+    const [projectId, sessionId] = key.split("/");
+    await Promise.allSettled(attachments.map((id) =>
+      api.deleteImage(projectId, sessionId, id)));
+  }
+
   async function load(key, force = false) {
     if (!key) return;
     if (!force && queues.has(key)) return;
@@ -102,7 +108,9 @@ export function createPromptQueue({ container, navigation, onRetry, onRemoved })
   async function removeItem(id) {
     const key = selectedKey();
     if (!key) return;
+    const removed = queues.get(key)?.find((entry) => entry.id === id);
     update(key, await api.delete(path(key, id)));
+    void discardUnusedImages(key, removed?.attachments);
     await onRemoved?.();
   }
 
@@ -137,7 +145,9 @@ export function createPromptQueue({ container, navigation, onRetry, onRemoved })
     },
     async remove(projectId, sessionId, id) {
       const key = sessionKey(projectId, sessionId);
+      const removed = queues.get(key)?.find((entry) => entry.id === id);
       update(key, await api.delete(path(key, id)));
+      void discardUnusedImages(key, removed?.attachments);
     },
     async exclusive(callback) {
       if (busy) return false;

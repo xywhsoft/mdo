@@ -240,6 +240,35 @@ done:
     return Ok;
 }
 
+bool MdoApiQueueAttachmentReferenced(const char* ProjectId,
+    const char* SessionId, const char* Id, bool* Referenced)
+{
+    char Path[MDO_SESSION_PATH_CAPACITY];
+    MdoQueue Queue;
+    size_t i, j;
+    bool Ok;
+    int Written;
+    if ( ProjectId == NULL || SessionId == NULL || Id == NULL ||
+         Referenced == NULL ) return false;
+    *Referenced = false;
+    Written = snprintf(Path, sizeof(Path), "sessions/%s/%s/queue.json",
+        ProjectId, SessionId);
+    if ( Written <= 0 || (size_t)Written >= sizeof(Path) ) return false;
+    xrtMutexLock(g_MdoQueueLock);
+    Ok = MdoQueueRead(Path, &Queue);
+    if ( Ok ) {
+        for ( i = 0u; i < Queue.Count && !*Referenced; ++i )
+            for ( j = 0u; j < Queue.Items[i].AttachmentCount; ++j )
+                if ( strcmp(Queue.Items[i].Attachments[j], Id) == 0 ) {
+                    *Referenced = true;
+                    break;
+                }
+        MdoQueueRelease(&Queue);
+    }
+    xrtMutexUnlock(g_MdoQueueLock);
+    return Ok;
+}
+
 static xvalue* MdoQueueValue(const MdoQueue* Queue)
 {
     xvalue* Root = xrtValueObject();
@@ -342,6 +371,7 @@ bool MdoApiQueueRoute(MdoApiContext* Context)
     bool First = false;
     bool Add = Context->Request->head->MethodCode == XHTTP_METHOD_POST;
     bool Ok;
+    bool AttachmentLocked = false;
     bool Duplicate = false;
     bool Full = false;
     size_t Index = SIZE_MAX;
@@ -357,6 +387,13 @@ bool MdoApiQueueRoute(MdoApiContext* Context)
         BodyStatus = MdoApiJsonBodyRead(Context, &Body);
         if ( BodyStatus != MDO_API_BODY_OK )
             return MdoApiReplyBodyError(Context, BodyStatus);
+        AttachmentLocked = MdoApiAttachmentLock();
+        if ( !AttachmentLocked ) {
+            MdoApiJsonBodyUnit(&Body);
+            return MdoApiReplyError(Context, 503u,
+                "attachment_unavailable", "Image storage is unavailable",
+                NULL);
+        }
         {
             const xvalue* References = xrtValueObjectGet(Body.Value,
                 XRT_STR_LITERAL("attachments"));
@@ -374,6 +411,7 @@ bool MdoApiQueueRoute(MdoApiContext* Context)
                     AttachmentCount);
         }
         if ( !Ok ) {
+            MdoApiAttachmentUnlock();
             MdoApiJsonBodyUnit(&Body);
             return MdoApiReplyError(Context, 422u, "queue_item_invalid",
                 "Expected a bounded prompt, item ID and first flag", NULL);
@@ -399,6 +437,7 @@ bool MdoApiQueueRoute(MdoApiContext* Context)
         }
     }
     xrtMutexUnlock(g_MdoQueueLock);
+    if ( AttachmentLocked ) MdoApiAttachmentUnlock();
     if ( Add ) MdoApiJsonBodyUnit(&Body);
     if ( !Ok ) { MdoQueueRelease(&Queue); return MdoApiReplyError(Context,
         503u, "queue_unavailable", "The queue could not be read or saved", NULL); }
