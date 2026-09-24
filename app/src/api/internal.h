@@ -97,6 +97,7 @@ bool MdoApiSessionEventsRoute(MdoApiContext* pContext);
 bool MdoApiFeedbackRoute(MdoApiContext* pContext);
 bool MdoApiFeedbackInit(void);
 void MdoApiFeedbackUnit(void);
+bool MdoApiFeedbackReconcile(const char* ProjectId, const char* SessionId);
 bool MdoApiDraftRoute(MdoApiContext* pContext);
 bool MdoApiDraftInit(void);
 void MdoApiDraftUnit(void);

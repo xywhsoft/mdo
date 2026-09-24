@@ -1848,6 +1848,10 @@ def run_probe(host: Path) -> None:
                 assert status == 200 and json.loads(body)["data"]["items"] == [], (
                     status, body)
                 status, _, body = request(
+                    port, "PUT", feedback_path, body=feedback_body,
+                    headers={"Content-Type": "application/json"})
+                assert status == 200, (status, body)
+                status, _, body = request(
                     port, "PUT", feedback_path,
                     body=b'{"event_id":999999999,"value":"bad"}',
                     headers={"Content-Type": "application/json"})
@@ -2536,6 +2540,15 @@ def run_probe(host: Path) -> None:
                     event["agent_depth"] == 0 and
                     event["text"] == "ASK probe")
                 assert cutoff_start["user_message_sequence"] > 1
+                removed_done_id = next(event["event_id"] for event in
+                    journal_before_trim if event["kind"] == "model_done" and
+                    event["success"] and
+                    event["event_id"] > cutoff_start["event_id"])
+                status, _, body = request(port, "PUT", feedback_path,
+                    body=json.dumps({"event_id": removed_done_id,
+                                     "value": "bad"}).encode(),
+                    headers={"Content-Type": "application/json"})
+                assert status == 200, (status, body)
                 # Simulate a newer projection belonging to a turn that the
                 # next truncate removes, while retaining the earlier TODO.
                 todo_file.write_text(json.dumps({
@@ -2566,6 +2579,20 @@ def run_probe(host: Path) -> None:
                 assert retained_events[-1]["kind"] == "history_truncated" and (
                     retained_events[-1]["source_event_id"] ==
                     cutoff_start["event_id"]), retained_events[-1]
+                expected_feedback = [{"event_id": done_id, "value": "good"}]
+                assert json.loads(request(port, "GET", feedback_path)[2])[
+                    "data"]["items"] == expected_feedback
+                assert json.loads(sidecar.read_text(encoding="utf-8"))[
+                    "items"] == expected_feedback
+                # A GET repairs a stale sidecar left by an interrupted write.
+                sidecar.write_text(json.dumps({"schema_version": 1,
+                    "items": expected_feedback + [{"event_id": removed_done_id,
+                                                   "value": "bad"}]}),
+                    encoding="utf-8")
+                assert json.loads(request(port, "GET", feedback_path)[2])[
+                    "data"]["items"] == expected_feedback
+                assert json.loads(sidecar.read_text(encoding="utf-8"))[
+                    "items"] == expected_feedback
                 todo_file.write_text(json.dumps({
                     "schema_version": 1,
                     "event_id": cutoff_start["event_id"],
@@ -2612,6 +2639,10 @@ def run_probe(host: Path) -> None:
                 assert status == 200 and json.loads(body)["data"] == {
                     "schema_version": 1, "event_id": 0, "items": [],
                 }, (status, body)
+                assert json.loads(request(port, "GET", feedback_path)[2])[
+                    "data"]["items"] == []
+                assert json.loads(sidecar.read_text(encoding="utf-8"))[
+                    "items"] == []
                 cleared_events = json.loads(request(port, "GET",
                     session_path + "/events?after=0&limit=32")[2])[
                         "data"]["items"]

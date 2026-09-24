@@ -8,6 +8,7 @@
 /* Feedback is UI state, separate from the agent's checkpoint and event log. */
 #define MDO_FEEDBACK_MAX_ITEMS 512u
 #define MDO_FEEDBACK_MAX_BYTES (32u * 1024u)
+#define MDO_FEEDBACK_REPLAY_PAGE 1000u
 
 typedef struct MdoFeedbackItem {
     uint64 EventId;
@@ -195,6 +196,80 @@ static bool MdoFeedbackIsCompletedModel(const char* ProjectId,
     return Found;
 }
 
+/* History markers describe the exact range removed from the UI journal.
+ * Keep votes for older events that merely fell out of the bounded journal. */
+static bool MdoFeedbackPruneRemoved(const char* ProjectId,
+    const char* SessionId, MdoFeedbackItem* Items, size_t* Count,
+    bool* Changed)
+{
+    MdoSessionEventSnapshot* Snapshot;
+    MdoSessionEventInfo Event;
+    xwork_error Error;
+    uint64 Cursor = UINT64_MAX;
+    size_t i;
+    *Changed = false;
+    if ( *Count == 0u ) return true;
+    for ( i = 0u; i < *Count; ++i )
+        if ( Items[i].EventId < Cursor ) Cursor = Items[i].EventId;
+    --Cursor;
+    for ( ; ; ) {
+        uint64 Next;
+        uint64 Latest;
+        size_t PageCount;
+        memset(&Error, 0, sizeof(Error));
+        Snapshot = MdoSessionEventReplay(ProjectId, SessionId, Cursor,
+            MDO_FEEDBACK_REPLAY_PAGE, &Error);
+        if ( Snapshot == NULL ) return false;
+        PageCount = MdoSessionEventSnapshotCount(Snapshot);
+        for ( i = 0u; i < PageCount; ++i ) {
+            size_t ItemIndex = 0u;
+            memset(&Event, 0, sizeof(Event));
+            Event.Size = sizeof(Event);
+            if ( !MdoSessionEventSnapshotAt(Snapshot, i, &Event) ) {
+                MdoSessionEventSnapshotRelease(Snapshot);
+                return false;
+            }
+            if ( Event.Kind != MDO_SESSION_EVENT_HISTORY_TRUNCATED ||
+                 Event.SourceEventId == 0u ) continue;
+            while ( ItemIndex < *Count ) {
+                if ( Items[ItemIndex].EventId >= Event.SourceEventId &&
+                     Items[ItemIndex].EventId < Event.EventId ) {
+                    if ( ItemIndex + 1u < *Count )
+                        memmove(&Items[ItemIndex], &Items[ItemIndex + 1u],
+                            (*Count - ItemIndex - 1u) * sizeof(Items[0]));
+                    --*Count;
+                    *Changed = true;
+                } else ++ItemIndex;
+            }
+        }
+        Next = MdoSessionEventSnapshotNextCursor(Snapshot);
+        Latest = MdoSessionEventSnapshotLatestId(Snapshot);
+        MdoSessionEventSnapshotRelease(Snapshot);
+        if ( PageCount < MDO_FEEDBACK_REPLAY_PAGE || Next >= Latest )
+            return true;
+        if ( Next <= Cursor ) return false;
+        Cursor = Next;
+    }
+}
+
+/* Called after history mutation; GET/PUT also repair an interrupted cleanup. */
+bool MdoApiFeedbackReconcile(const char* ProjectId, const char* SessionId)
+{
+    char Path[MDO_SESSION_PATH_CAPACITY];
+    MdoFeedbackItem Items[MDO_FEEDBACK_MAX_ITEMS];
+    size_t Count = 0u;
+    bool Changed = false;
+    bool Ok;
+    if ( !MdoFeedbackPath(Path, ProjectId, SessionId) ) return false;
+    xrtMutexLock(g_MdoFeedbackLock);
+    Ok = MdoFeedbackRead(Path, Items, &Count);
+    if ( Ok ) Ok = MdoFeedbackPruneRemoved(ProjectId, SessionId,
+        Items, &Count, &Changed);
+    if ( Ok && Changed ) Ok = MdoFeedbackWrite(Path, Items, Count);
+    xrtMutexUnlock(g_MdoFeedbackLock);
+    return Ok;
+}
+
 static xvalue* MdoFeedbackResponse(const MdoFeedbackItem* Items,
     size_t Count)
 {
@@ -233,6 +308,7 @@ bool MdoApiFeedbackRoute(MdoApiContext* Context)
     uint64 EventId = 0u;
     bool Good = false;
     bool Remove = false;
+    bool Changed = false;
     size_t i;
     bool Ok;
     xvalue* Data;
@@ -279,6 +355,8 @@ bool MdoApiFeedbackRoute(MdoApiContext* Context)
     }
     xrtMutexLock(g_MdoFeedbackLock);
     Ok = MdoFeedbackRead(Path, Items, &Count);
+    if ( Ok ) Ok = MdoFeedbackPruneRemoved(ProjectId, SessionId,
+        Items, &Count, &Changed);
     if ( Ok && Context->Request->head->MethodCode == XHTTP_METHOD_PUT ) {
         for ( i = 0u; i < Count && Items[i].EventId != EventId; ++i ) {}
         if ( i < Count && Remove ) {
@@ -293,8 +371,10 @@ bool MdoApiFeedbackRoute(MdoApiContext* Context)
                 if ( i == Count ) ++Count;
             }
         }
-        if ( Ok ) Ok = MdoFeedbackWrite(Path, Items, Count);
     }
+    if ( Ok && (Changed ||
+         Context->Request->head->MethodCode == XHTTP_METHOD_PUT) )
+        Ok = MdoFeedbackWrite(Path, Items, Count);
     Data = Ok ? MdoFeedbackResponse(Items, Count) : NULL;
     xrtMutexUnlock(g_MdoFeedbackLock);
     if ( Data == NULL ) return MdoApiReplyError(Context, 503u,

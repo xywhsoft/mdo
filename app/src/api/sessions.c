@@ -851,6 +851,13 @@ static bool MdoApiSessionLedgerMutation(MdoApiContext* Context,
             "session_result_unavailable",
             "The session was updated but its metadata is unavailable", NULL);
     }
+    if ( !MdoApiFeedbackReconcile(Info.ProjectId, Info.Id) ) {
+        MdoSessionRelease(Session);
+        return MdoApiReplyError(Context, 503u,
+            "session_feedback_unavailable",
+            "The session was updated but its feedback could not be reconciled",
+            NULL);
+    }
     MdoSessionRelease(Session);
     return MdoApiSessionReply(Context, 200u, &Info);
 }
