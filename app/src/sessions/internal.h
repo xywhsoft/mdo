@@ -13,6 +13,10 @@ MdoSessionEventBridge* MdoSessionEventBridgeCreate(
 bool MdoSessionEventBridgeRef(void* Value);
 void MdoSessionEventBridgeRelease(void* Value);
 bool MdoSessionEventBridgeOnEvent(void* Value, const xwork_event* Event);
+bool MdoSessionEventBridgePendingSet(MdoSessionEventBridge* Bridge,
+    uint64 RunId, const char Ids[4][33], size_t Count);
+void MdoSessionEventBridgePendingClear(MdoSessionEventBridge* Bridge,
+    uint64 RunId);
 void MdoSessionEventBridgeSetRegistered(MdoSessionEventBridge* Bridge);
 bool MdoSessionEventBridgeClonePrefix(MdoSessionEventBridge* Bridge,
     const char* SourceProjectId, const char* SourceSessionId,

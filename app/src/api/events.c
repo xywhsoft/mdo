@@ -267,8 +267,8 @@ static bool MdoApiSessionEventValue(const MdoSessionEventInfo* Event,
         MdoApiValueSetUInt(Item, "total_tokens", Event->TotalTokens);
     if ( Ok && Event->Kind == XWORK_EVENT_AGENT_START &&
          Event->AgentDepth == 0u )
-        Ok = MdoSessionAttachmentRunRead(ProjectId, SessionId,
-            Event->RunId, Attachments, &AttachmentCount) &&
+        Ok = MdoSessionAttachmentEventRead(ProjectId, SessionId,
+            Event->EventId, Event->RunId, Attachments, &AttachmentCount) &&
             MdoAttachmentIdsWriteValue(Item, Attachments, AttachmentCount);
     if ( !Ok ) { xrtValueRelease(Item); return false; }
     *pValue = Item;

@@ -33,6 +33,7 @@ PROBE_SOURCE = r'''
 #include "src/asks/manager.c"
 #include "src/sessions/events.c"
 #include "src/sessions/todo.c"
+#include "src/sessions/attachments.c"
 #include "src/sessions/manager.c"
 
 xwork_runtime *MdoBootstrapRuntime(void) { return NULL; }
@@ -598,7 +599,7 @@ def write_site(site: Path) -> None:
         "src/agents/runtime.c",
         "src/asks/manager.c",
         "src/sessions/events.c",
-        "src/sessions/todo.c",
+        "src/sessions/todo.c", "src/sessions/attachments.c",
         "src/sessions/internal.h",
         "src/sessions/manager.c",
     ):

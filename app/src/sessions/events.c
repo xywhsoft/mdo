@@ -3,6 +3,7 @@
 #include <string.h>
 
 #include "internal.h"
+#include "../../include/mdo/attachments.h"
 #include "../../include/mdo/home.h"
 
 #define MDO_SESSION_EVENT_SCHEMA 3u
@@ -47,6 +48,9 @@ struct MdoSessionEventBridge {
     xwork_agent_owner_release_fn UserOwnerRelease;
     bool UserOwnerRetained;
     bool Registered;
+    uint64 PendingRunId;
+    char PendingIds[4][33];
+    size_t PendingCount;
 };
 
 static void MdoEventsError(xwork_error* Error, xwork_error_code Code,
@@ -824,13 +828,59 @@ void MdoSessionEventBridgeSetRegistered(MdoSessionEventBridge* Bridge)
     if ( Bridge != NULL ) Bridge->Registered = true;
 }
 
+bool MdoSessionEventBridgePendingSet(MdoSessionEventBridge* Bridge,
+    uint64 RunId, const char Ids[4][33], size_t Count)
+{
+    bool Ok;
+    if ( Bridge == NULL || RunId == 0u || Count > 4u ||
+         (Count != 0u && Ids == NULL) ) return false;
+    xrtMutexLock(Bridge->Lock);
+    Ok = true;
+    Bridge->PendingRunId = RunId;
+    Bridge->PendingCount = Count;
+    memset(Bridge->PendingIds, 0, sizeof(Bridge->PendingIds));
+    if ( Count != 0u )
+        memcpy(Bridge->PendingIds, Ids, Count * sizeof(Ids[0]));
+    xrtMutexUnlock(Bridge->Lock);
+    return Ok;
+}
+
+void MdoSessionEventBridgePendingClear(MdoSessionEventBridge* Bridge,
+    uint64 RunId)
+{
+    if ( Bridge == NULL || RunId == 0u ) return;
+    xrtMutexLock(Bridge->Lock);
+    if ( Bridge->PendingRunId == RunId ) {
+        Bridge->PendingRunId = 0u;
+        Bridge->PendingCount = 0u;
+        memset(Bridge->PendingIds, 0, sizeof(Bridge->PendingIds));
+    }
+    xrtMutexUnlock(Bridge->Lock);
+}
+
 bool MdoSessionEventBridgeOnEvent(void* Value, const xwork_event* Event)
 {
     MdoSessionEventBridge* Bridge = (MdoSessionEventBridge*)Value;
     bool Ok;
     if ( Bridge == NULL || Event == NULL ) return false;
     xrtMutexLock(Bridge->Lock);
-    Ok = MdoEventsAppend(Bridge, Event);
+    Ok = true;
+    if ( Event->eKind == XWORK_EVENT_AGENT_START &&
+         Event->uAgentDepth == 0u ) {
+        const size_t Count = Bridge->PendingRunId == Event->uRunId ?
+            Bridge->PendingCount : 0u;
+        Ok = MdoSessionAttachmentEventWrite(Bridge->ProjectId,
+            Bridge->SessionId, Bridge->NextEventId, Event->uRunId,
+            Bridge->PendingIds, Count);
+    }
+    if ( Ok ) Ok = MdoEventsAppend(Bridge, Event);
+    if ( Ok && Event->eKind == XWORK_EVENT_AGENT_START &&
+         Event->uAgentDepth == 0u &&
+         Bridge->PendingRunId == Event->uRunId ) {
+        Bridge->PendingRunId = 0u;
+        Bridge->PendingCount = 0u;
+        memset(Bridge->PendingIds, 0, sizeof(Bridge->PendingIds));
+    }
     /* A UI projection failure must not cancel a successful Agent tool call.
      * The journal remains authoritative for the completed tool event. */
     if ( Ok && !MdoSessionTodoProject(Bridge->ProjectId,

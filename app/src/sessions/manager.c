@@ -2,6 +2,7 @@
 #include <string.h>
 
 #include "../../include/mdo/home.h"
+#include "../../include/mdo/attachments.h"
 #include "../../include/mdo/sessions.h"
 #include "internal.h"
 
@@ -33,6 +34,7 @@ struct MdoSession {
     xatomic32 Refs;
     xmutex* Lock;
     MdoAgentSession* Agent;
+    MdoSessionEventBridge* Bridge;
     MdoSessionInfo Info;
     char MetaPath[MDO_SESSION_PATH_CAPACITY];
 };
@@ -485,7 +487,8 @@ static bool MdoSessionsMetaWrite(const char* Path,
 }
 
 static MdoSession* MdoSessionsHandleCreate(MdoAgentSession* Agent,
-    const MdoSessionInfo* Info, const char* MetaPath)
+    MdoSessionEventBridge* Bridge, const MdoSessionInfo* Info,
+    const char* MetaPath)
 {
     MdoSession* Session = (MdoSession*)xrtCalloc(1u, sizeof(*Session));
     if ( Session == NULL ) return NULL;
@@ -495,7 +498,13 @@ static MdoSession* MdoSessionsHandleCreate(MdoAgentSession* Agent,
         xrtFree(Session);
         return NULL;
     }
+    if ( Bridge != NULL && !MdoSessionEventBridgeRef(Bridge) ) {
+        xrtMutexDestroy(Session->Lock);
+        xrtFree(Session);
+        return NULL;
+    }
     Session->Agent = Agent;
+    Session->Bridge = Bridge;
     Session->Info = *Info;
     snprintf(Session->MetaPath, sizeof(Session->MetaPath), "%s", MetaPath);
     return Session;
@@ -775,7 +784,7 @@ MdoSession* MdoSessionCreate(const MdoSessionCreateOptions* Options,
     snprintf(Info.PermissionProfile, sizeof(Info.PermissionProfile), "%s",
         AgentInfo.PermissionProfile);
     snprintf(Info.WorkspaceRoot, sizeof(Info.WorkspaceRoot), "%s", Workspace);
-    Session = MdoSessionsHandleCreate(Agent, &Info, MetaPath);
+    Session = MdoSessionsHandleCreate(Agent, Bridge, &Info, MetaPath);
     if ( Session == NULL ) goto memory;
     Agent = NULL;
     xrtMutexLock(g_MdoSessions.Lock);
@@ -921,7 +930,7 @@ MdoSession* MdoSessionOpen(const char* ProjectId, const char* SessionId,
         &AgentOptions, Error);
     if ( Agent == NULL ) goto done;
     Info.RuntimeOpen = true;
-    Session = MdoSessionsHandleCreate(Agent, &Info, MetaPath);
+    Session = MdoSessionsHandleCreate(Agent, Bridge, &Info, MetaPath);
     if ( Session == NULL ) goto memory;
     Agent = NULL;
     goto done;
@@ -1099,7 +1108,7 @@ MdoSession* MdoSessionFork(MdoSession* Source,
         AgentInfo.PermissionProfile);
     snprintf(Info.WorkspaceRoot, sizeof(Info.WorkspaceRoot), "%s",
         SourceInfo.WorkspaceRoot);
-    Session = MdoSessionsHandleCreate(Agent, &Info, MetaPath);
+    Session = MdoSessionsHandleCreate(Agent, Bridge, &Info, MetaPath);
     if ( Session == NULL ) goto memory;
     Agent = NULL;
     xrtMutexLock(g_MdoSessions.Lock);
@@ -1173,7 +1182,7 @@ MdoSession* MdoSessionLoad(const char* ProjectId, const char* SessionId,
             "cannot read session metadata");
         return NULL;
     }
-    Session = MdoSessionsHandleCreate(NULL, &Info, MetaPath);
+    Session = MdoSessionsHandleCreate(NULL, NULL, &Info, MetaPath);
     if ( Session != NULL )
         Session->Info.RuntimeOpen =
             MdoSessionsActiveFind(ProjectId, SessionId) != SIZE_MAX;
@@ -1192,6 +1201,7 @@ void MdoSessionRelease(MdoSession* Session)
     if ( Previous > 1u ) return;
     if ( Previous == 0u ) abort();
     MdoAgentSessionRelease(Session->Agent);
+    MdoSessionEventBridgeRelease(Session->Bridge);
     xrtMutexDestroy(Session->Lock);
     memset(Session, 0, sizeof(*Session));
     xrtFree(Session);
@@ -1208,6 +1218,27 @@ bool MdoSessionGetInfo(MdoSession* Session, MdoSessionInfo* Info)
     xrtMutexUnlock(Session->Lock);
     Info->Size = Size;
     return true;
+}
+
+bool MdoSessionAttachmentPendingSet(MdoSession* Session, uint64 AgentRunId,
+    const char Ids[4][33], size_t Count)
+{
+    bool Ok;
+    if ( Session == NULL ) return false;
+    xrtMutexLock(Session->Lock);
+    Ok = MdoSessionEventBridgePendingSet(Session->Bridge,
+        AgentRunId, Ids, Count);
+    xrtMutexUnlock(Session->Lock);
+    return Ok;
+}
+
+void MdoSessionAttachmentPendingClear(MdoSession* Session,
+    uint64 AgentRunId)
+{
+    if ( Session == NULL ) return;
+    xrtMutexLock(Session->Lock);
+    MdoSessionEventBridgePendingClear(Session->Bridge, AgentRunId);
+    xrtMutexUnlock(Session->Lock);
 }
 
 MdoAgentSession* MdoSessionAgentRef(MdoSession* Session)

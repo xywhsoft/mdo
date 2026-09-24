@@ -10,8 +10,9 @@ export function loadRuns() {
 export async function startRun(projectId, sessionId, prompt, attachments = []) {
   const project = resourceId(projectId, "project");
   const session = resourceId(sessionId, "session");
+  const body = attachments.length ? { prompt, attachments } : { prompt };
   return (await api.post(`/projects/${project}/sessions/${session}/runs`,
-    { prompt, attachments })).data;
+    body)).data;
 }
 
 export async function readRun(runId) {

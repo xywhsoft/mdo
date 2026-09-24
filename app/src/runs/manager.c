@@ -512,7 +512,6 @@ bool MdoRunStart(const MdoRunStartOptions* Options, MdoRunInfo* Info,
     bool Ready = false;
     bool Published = false;
     bool Stopping = false;
-    bool ImageRefsPublished = false;
     uint64 ImageRunId = 0u;
     xworkErrorInit(Error);
     if ( Options == NULL || Options->Size < sizeof(*Options) ||
@@ -651,21 +650,14 @@ bool MdoRunStart(const MdoRunStartOptions* Options, MdoRunInfo* Info,
         goto publish;
     }
     ImageRunId = AgentInfo.Run.uRunId;
-    if ( Options->AttachmentCount != 0u ) {
-        if ( !MdoSessionAttachmentRunWrite(Options->ProjectId,
-                Options->SessionId, ImageRunId, Options->AttachmentIds,
-                Options->AttachmentCount) ) {
-            MdoRunsError(Error, XWORK_ERROR_IO,
-                "cannot persist image references before starting the run");
-            goto publish;
-        }
-        ImageRefsPublished = true;
+    if ( !MdoSessionAttachmentPendingSet(Session, ImageRunId,
+            Options->AttachmentIds, Options->AttachmentCount) ) {
+        MdoRunsError(Error, XWORK_ERROR_CONTEXT,
+            "cannot register image references before starting the run");
+        goto publish;
     }
     if ( !MdoAgentRunStart(Run, Error) ) {
-        if ( ImageRefsPublished )
-            (void)MdoSessionAttachmentRunRemove(Options->ProjectId,
-                Options->SessionId, ImageRunId);
-        ImageRefsPublished = false;
+        MdoSessionAttachmentPendingClear(Session, ImageRunId);
         goto publish;
     }
     memset(&AgentInfo, 0, sizeof(AgentInfo));

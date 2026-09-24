@@ -98,6 +98,7 @@ def probe(host: Path) -> None:
                     document = json.loads(body)
                     assert status == 201, (status, document)
                     image_id = document["data"]["id"]
+                    completed: list[tuple[int, int]] = []
                     for refs, expected in (
                         (["0" * 32], "attachment_invalid"),
                         ([image_id, image_id], "run_start_invalid"),
@@ -129,9 +130,11 @@ def probe(host: Path) -> None:
                                   item["run_id"] == run["agent_run_id"]]
                         assert len(starts) == 1 and starts[0]["attachments"] == (
                             [image_id]), starts
+                        completed.append((starts[0]["event_id"],
+                                          run["agent_run_id"]))
                         record = (home / "sessions/image-probe" / session_id /
-                                  "attachments/runs" /
-                                  f"{run['agent_run_id']}.json")
+                                  "attachments/events" /
+                                  f"{starts[0]['event_id']}.json")
                         assert record.is_file(), record
                         wire = json.dumps(ModelHandler.last_payload)
                         assert "image/png" in wire and encoded in wire, wire[:1000]
@@ -145,6 +148,13 @@ def probe(host: Path) -> None:
                         except subprocess.TimeoutExpired:
                             process.kill()
                             process.wait(timeout=3)
+            # Simulate the two legacy run-ID records left by an older build.
+            # New text and image runs reuse these IDs after host restart.
+            attachment_root = home / "sessions/image-probe" / session_id / "attachments"
+            (attachment_root / "runs").mkdir(exist_ok=True)
+            for event_id, agent_run_id in completed:
+                (attachment_root / "events" / f"{event_id}.json").replace(
+                    attachment_root / "runs" / f"{agent_run_id}.json")
             with log_path.open("ab") as log:
                 process = subprocess.Popen(
                     [str(host), str(config), "--", "--home", str(home)],
@@ -163,6 +173,32 @@ def probe(host: Path) -> None:
                     assert len(restored) == 2 and all(
                         item["attachments"] == [image_id] for item in restored), (
                         restored)
+                    for prompt, refs in (("text after restart", []),
+                                         ("image after restart", [image_id])):
+                        ModelHandler.calls = 0
+                        ModelHandler.last_payload = None
+                        run_input = ({"prompt": prompt, "attachments": refs}
+                                     if refs else {"prompt": prompt})
+                        status, _, body = request(port, "POST", route + "/runs",
+                            body=json.dumps(run_input).encode(),
+                            headers={"Content-Type": "application/json"})
+                        document = json.loads(body)
+                        assert status == 202, (status, document)
+                        run = wait_run(port, document["data"]["id"])
+                        assert run["state"] == "succeeded", run
+                        status, _, body = request(port, "GET",
+                            route + "/events?after=0&limit=32")
+                        assert status == 200, (status, body)
+                        starts = [item for item in json.loads(body)["data"]["items"]
+                                  if item["kind"] == "agent_start"]
+                        assert len(starts) == 2 + (1 if not refs else 2), starts
+                        assert [item["attachments"] for item in starts[:2]] == (
+                            [[image_id], [image_id]]), starts
+                        assert starts[-1]["attachments"] == refs, starts
+                        if run["agent_run_id"] in [old[1] for old in completed]:
+                            marker = (attachment_root / "events" /
+                                      f"{starts[-1]['event_id']}.json")
+                            assert marker.is_file(), marker
                 finally:
                     if process.poll() is None:
                         process.terminate()

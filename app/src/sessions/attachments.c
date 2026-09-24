@@ -33,6 +33,18 @@ static bool MdoImageRunPath(char Output[MDO_SESSION_PATH_CAPACITY],
     return Written > 0 && (size_t)Written < MDO_SESSION_PATH_CAPACITY;
 }
 
+static bool MdoImageEventPath(char Output[MDO_SESSION_PATH_CAPACITY],
+    const char* ProjectId, const char* SessionId, uint64 EventId)
+{
+    int Written;
+    if ( ProjectId == NULL || SessionId == NULL || EventId == 0u )
+        return false;
+    Written = snprintf(Output, MDO_SESSION_PATH_CAPACITY,
+        "sessions/%s/%s/attachments/events/%llu.json",
+        ProjectId, SessionId, (unsigned long long)EventId);
+    return Written > 0 && (size_t)Written < MDO_SESSION_PATH_CAPACITY;
+}
+
 static bool MdoImageRunUnsigned(const xvalue* Value, uint64* Number)
 {
     int64 Signed;
@@ -44,17 +56,15 @@ static bool MdoImageRunUnsigned(const xvalue* Value, uint64* Number)
     return true;
 }
 
-bool MdoSessionAttachmentRunWrite(const char* ProjectId,
-    const char* SessionId, uint64 AgentRunId,
+static bool MdoImageRecordWrite(const char* Path, uint64 AgentRunId,
     const char Ids[4][33], size_t Count)
 {
-    char Path[MDO_SESSION_PATH_CAPACITY];
     char Document[MDO_IMAGE_RUN_RECORD_MAX];
     size_t Used;
     size_t i;
     int Written;
-    if ( !MdoImageRunPath(Path, ProjectId, SessionId, AgentRunId) ||
-         Ids == NULL || Count == 0u || Count > 4u ) return false;
+    if ( Path == NULL || AgentRunId == 0u ||
+         (Count != 0u && Ids == NULL) || Count > 4u ) return false;
     Written = snprintf(Document, sizeof(Document),
         "{\"schema_version\":1,\"run_id\":%llu,\"attachments\":[",
         (unsigned long long)AgentRunId);
@@ -78,11 +88,9 @@ bool MdoSessionAttachmentRunWrite(const char* ProjectId,
     return MdoHomeAtomicWrite(Path, Document, Used, false);
 }
 
-bool MdoSessionAttachmentRunRead(const char* ProjectId,
-    const char* SessionId, uint64 AgentRunId,
+static bool MdoImageRecordRead(const char* Path, uint64 AgentRunId,
     char Ids[4][33], size_t* Count)
 {
-    char Path[MDO_SESSION_PATH_CAPACITY];
     char Document[MDO_IMAGE_RUN_RECORD_MAX + 1u];
     bool Exists = false;
     xfileinfo Info;
@@ -94,8 +102,7 @@ bool MdoSessionAttachmentRunRead(const char* ProjectId,
     uint64 Number;
     size_t i;
     bool Ok = false;
-    if ( Ids == NULL || Count == NULL ||
-         !MdoImageRunPath(Path, ProjectId, SessionId, AgentRunId) )
+    if ( Path == NULL || AgentRunId == 0u || Ids == NULL || Count == NULL )
         return false;
     *Count = 0u;
     if ( !MdoHomeExternalStat(Path, &Exists, &Info) ) return false;
@@ -122,7 +129,7 @@ bool MdoSessionAttachmentRunRead(const char* ProjectId,
     if ( !MdoImageRunUnsigned(Value, &Number) || Number != AgentRunId ) goto done;
     Array = xrtValueObjectGet(Root, XRT_STR_LITERAL("attachments"));
     if ( xrtValueType(Array) != XVALUE_ARRAY ||
-         xrtValueCount(Array) == 0u || xrtValueCount(Array) > 4u )
+         xrtValueCount(Array) > 4u )
         goto done;
     for ( i = 0u; i < xrtValueCount(Array); ++i ) {
         const xvalue* Item = xrtValueArrayGet(Array, i);
@@ -142,10 +149,43 @@ done:
     return Ok;
 }
 
-bool MdoSessionAttachmentRunRemove(const char* ProjectId,
-    const char* SessionId, uint64 AgentRunId)
+bool MdoSessionAttachmentRunRead(const char* ProjectId,
+    const char* SessionId, uint64 AgentRunId,
+    char Ids[4][33], size_t* Count)
 {
     char Path[MDO_SESSION_PATH_CAPACITY];
     return MdoImageRunPath(Path, ProjectId, SessionId, AgentRunId) &&
-        MdoHomeRemove(Path, false);
+        MdoImageRecordRead(Path, AgentRunId, Ids, Count);
+}
+
+bool MdoSessionAttachmentEventWrite(const char* ProjectId,
+    const char* SessionId, uint64 EventId, uint64 AgentRunId,
+    const char Ids[4][33], size_t Count)
+{
+    char EventPath[MDO_SESSION_PATH_CAPACITY];
+    char LegacyPath[MDO_SESSION_PATH_CAPACITY];
+    bool Exists;
+    xfileinfo Info;
+    if ( !MdoImageEventPath(EventPath, ProjectId, SessionId, EventId) ||
+         !MdoImageRunPath(LegacyPath, ProjectId, SessionId, AgentRunId) )
+        return false;
+    if ( Count == 0u ) {
+        if ( !MdoHomeExternalStat(LegacyPath, &Exists, &Info) ) return false;
+        if ( !Exists ) return true;
+    }
+    return MdoImageRecordWrite(EventPath, AgentRunId, Ids, Count);
+}
+
+bool MdoSessionAttachmentEventRead(const char* ProjectId,
+    const char* SessionId, uint64 EventId, uint64 AgentRunId,
+    char Ids[4][33], size_t* Count)
+{
+    char Path[MDO_SESSION_PATH_CAPACITY];
+    bool Exists;
+    xfileinfo Info;
+    if ( !MdoImageEventPath(Path, ProjectId, SessionId, EventId) ||
+         !MdoHomeExternalStat(Path, &Exists, &Info) ) return false;
+    return Exists ? MdoImageRecordRead(Path, AgentRunId, Ids, Count) :
+        MdoSessionAttachmentRunRead(ProjectId, SessionId, AgentRunId,
+            Ids, Count);
 }
