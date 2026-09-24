@@ -255,6 +255,9 @@ static bool MdoApiSessionEventValue(const MdoSessionEventInfo* Event,
         MdoApiValueSetString(Item, "model", Event->Model) &&
         MdoApiValueSetUInt(Item, "task_state", Event->TaskState) &&
         MdoApiValueSetUInt(Item, "task_revision", Event->TaskRevision);
+    if (Ok) Ok = MdoApiValueSetUInt(Item, "input_tokens", Event->InputTokens) &&
+        MdoApiValueSetUInt(Item, "output_tokens", Event->OutputTokens) &&
+        MdoApiValueSetUInt(Item, "total_tokens", Event->TotalTokens);
     if ( !Ok ) { xrtValueRelease(Item); return false; }
     *pValue = Item;
     return true;

@@ -125,6 +125,9 @@ typedef struct MdoSessionEventInfo {
     xwork_tool_effects Effects;
     uint32 TaskState;
     uint64 TaskRevision;
+    uint64 InputTokens;
+    uint64 OutputTokens;
+    uint64 TotalTokens;
     bool Success;
     bool EffectApplied;
     bool TextTruncated;

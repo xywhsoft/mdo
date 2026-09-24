@@ -5,7 +5,7 @@
 #include "internal.h"
 #include "../../include/mdo/home.h"
 
-#define MDO_SESSION_EVENT_SCHEMA 1u
+#define MDO_SESSION_EVENT_SCHEMA 2u
 #define MDO_SESSION_EVENT_FILE_LIMIT (16u * 1024u * 1024u)
 #define MDO_SESSION_EVENT_RETAIN_BYTES (8u * 1024u * 1024u)
 #define MDO_SESSION_EVENT_RECORD_LIMIT (96u * 1024u)
@@ -230,6 +230,12 @@ static char* MdoEventsRecord(const MdoSessionEventBridge* Bridge,
             xrtValueUInt(Event->eTaskState)) ||
          !MdoEventsObjectTake(Object, "task_revision",
             xrtValueUInt(Event->uTaskRevision)) ||
+         !MdoEventsObjectTake(Object, "input_tokens",
+            xrtValueUInt(Event->tUsage.uInputTokens)) ||
+         !MdoEventsObjectTake(Object, "output_tokens",
+            xrtValueUInt(Event->tUsage.uOutputTokens)) ||
+         !MdoEventsObjectTake(Object, "total_tokens",
+            xrtValueUInt(Event->tUsage.uTotalTokens)) ||
          !MdoEventsObjectTake(Object, "success",
             xrtValueBool(Event->bSuccess)) ||
          !MdoEventsObjectTake(Object, "effect_applied",
@@ -419,9 +425,11 @@ static bool MdoEventsParse(const char* ProjectId, const char* SessionId,
     Config.MaxContainerItems = 32u;
     Root = xrtJsonRead(Json, &Config);
     if ( Root == NULL || xrtValueType(Root) != XVALUE_OBJECT ||
-         xrtValueCount(Root) != 25u ||
+         (xrtValueCount(Root) != 25u && xrtValueCount(Root) != 28u) ||
          !MdoEventsValueUInt(Root, "schema_version", &Schema) ||
-         Schema != MDO_SESSION_EVENT_SCHEMA ||
+         !((Schema == 1u && xrtValueCount(Root) == 25u) ||
+           (Schema == MDO_SESSION_EVENT_SCHEMA &&
+            xrtValueCount(Root) == 28u)) ||
          !MdoEventsValueUInt(Root, "event_id", &Result->Info.EventId) ||
          Result->Info.EventId == 0u ||
          !MdoEventsValueUInt(Root, "source_event_id",
@@ -449,6 +457,13 @@ static bool MdoEventsParse(const char* ProjectId, const char* SessionId,
          TaskState > UINT32_MAX ||
          !MdoEventsValueUInt(Root, "task_revision",
             &Result->Info.TaskRevision) ||
+         (Schema == MDO_SESSION_EVENT_SCHEMA &&
+          (!MdoEventsValueUInt(Root, "input_tokens",
+             &Result->Info.InputTokens) ||
+           !MdoEventsValueUInt(Root, "output_tokens",
+             &Result->Info.OutputTokens) ||
+           !MdoEventsValueUInt(Root, "total_tokens",
+             &Result->Info.TotalTokens))) ||
          !MdoEventsValueBool(Root, "success", &Result->Info.Success) ||
          !MdoEventsValueBool(Root, "effect_applied",
             &Result->Info.EffectApplied) ||

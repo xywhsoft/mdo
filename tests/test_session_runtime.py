@@ -65,6 +65,9 @@ static xllm_response *Response(const char *text) {
     response->sFinishReason = Copy("stop");
     response->eFinish = XLLM_FINISH_STOP;
     response->uHttpStatus = 200u;
+    response->tUsage.uInputTokens = 40u;
+    response->tUsage.uOutputTokens = 8u;
+    response->tUsage.uTotalTokens = 48u;
     if (response->sContent == NULL || response->sModel == NULL ||
         response->sRequestId == NULL || response->sFinishReason == NULL) {
         xllmResponseDestroy(response); return NULL;
@@ -630,6 +633,11 @@ def main() -> int:
             range(1, len(events) + 1))
         assert invalid_events == 1
         assert all(event["session_id"] == source_path.parent.name for event in events)
+        model_events = [event for event in events if event.get("input_tokens")]
+        assert model_events and all(event["schema_version"] == 2 for event in model_events)
+        assert all((event["input_tokens"], event["output_tokens"],
+                    event["total_tokens"]) == (40, 8, 48)
+                   for event in model_events)
     print("session runtime probe: PASS")
     return 0
 
