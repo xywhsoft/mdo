@@ -22,6 +22,8 @@ import { navigation } from "./state/navigation.js";
 import { createSessionList } from "./features/sessions/session-list.js";
 import { timelineStore, selectTimeline, clearTimeline, refreshSelectedTimeline } from "./features/chat/timeline-store.js";
 import { createTimelineView } from "./features/chat/timeline.js";
+import { createConversationDocks } from "./features/chat/conversation-docks.js";
+import { createTokenMeter } from "./features/chat/token-meter.js";
 import { createTaskPanel } from "./features/tasks/task-panel.js";
 import { createDecisionPanel } from "./features/approvals/decision-panel.js";
 import { createRecoveryPanel } from "./features/approvals/recovery-panel.js";
@@ -103,7 +105,20 @@ export async function boot() {
   });
   $("#session-search").addEventListener("input", (event) => sessionList.setQuery(event.target.value));
 
-  createTimelineView({ container: $("#timeline"), welcome: $("#welcome"), store: timelineStore });
+  createTimelineView({
+    container: $("#timeline"), welcome: $("#welcome"), store: timelineStore,
+    onFork: async () => {
+      const session = sessionDetailStore.get().data;
+      if (!session || activeRun) throw new Error("请在当前运行结束后分叉会话");
+      const history = await loadSessionHistory(session);
+      const fork = await forkSession({ ...session, etag: history.etag, revision: history.revision }, {
+        title: `${session.title || "未命名任务"}（分支）`,
+        through_sequence: history.last_sequence,
+      });
+      navigation.select(fork.project_id, fork.id);
+      toast("已创建会话分支");
+    },
+  });
   createTaskPanel({
     container: $("#task-list"),
     detailContainer: $("#task-detail"),
@@ -118,6 +133,18 @@ export async function boot() {
     summary: $("#approval-summary"),
     store: approvalsStore,
     onChanged: () => Promise.all([loadTasks(), loadRuns()]),
+  });
+  createConversationDocks({
+    container: $("#conversation-docks"), navigation, tasksStore, approvalsStore,
+    runsStore,
+    onOpenTasks: () => { selectInspectorTab("tasks"); setDrawer("inspector", true); },
+    onChanged: () => Promise.all([loadTasks(), loadRuns()]),
+  });
+  const tokenMeter = createTokenMeter({
+    root: $("#context-meter"), trigger: $("#context-meter-trigger"),
+    ring: $("#context-meter-ring"), panel: $("#context-meter-panel"),
+    estimate: $("#composer-input-estimate"), prompt,
+    sessionStore: sessionDetailStore, timelineStore, modelsStore, agentsStore,
   });
   createRecoveryPanel({
     container: $("#recovery-list"),
@@ -345,6 +372,7 @@ export async function boot() {
       const run = await startRun(selected.projectId, selected.sessionId, text);
       prompt.value = "";
       resizePrompt();
+      tokenMeter.refresh();
       monitorRun(run);
       await Promise.all([refreshSelectedTimeline(), loadTasks(), loadRuns(), loadRecovery()]);
     } catch (error) {

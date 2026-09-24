@@ -117,6 +117,7 @@
         </div>
 
         <ol class="timeline" id="timeline" aria-live="polite" aria-relevant="additions text" tabindex="-1"></ol>
+        <div class="conversation-docks" id="conversation-docks" aria-live="polite" hidden></div>
         <div class="timeline-sentinel" id="timeline-sentinel" aria-hidden="true"></div>
       </section>
 
@@ -137,6 +138,13 @@
               </button>
             </div>
             <div class="composer-actions">
+              <span class="composer-input-estimate" id="composer-input-estimate" title="按输入文本粗略估算">输入 ~0 tok</span>
+              <div class="context-meter" id="context-meter">
+                <button type="button" id="context-meter-trigger" aria-label="查看 token 用量" aria-expanded="false" aria-controls="context-meter-panel">
+                  <span class="context-meter-ring" id="context-meter-ring" aria-hidden="true"></span>
+                </button>
+                <div class="context-meter-panel" id="context-meter-panel" hidden></div>
+              </div>
               <span class="composer-hint">Enter 发送 · Shift Enter 换行</span>
               <button class="send-button" id="send" type="submit" aria-label="发送任务">
                 <span class="icon" data-icon="arrow-up" aria-hidden="true"></span>
