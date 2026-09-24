@@ -229,5 +229,7 @@ bool MdoSessionTodoProject(const char* ProjectId, const char* SessionId,
     uint64 EventId, const xwork_event* Event);
 bool MdoSessionTodoLoad(const char* ProjectId, const char* SessionId,
     xvalue** Output);
+/* Replace a stale plan with an explicit empty projection. */
+bool MdoSessionTodoReset(const char* ProjectId, const char* SessionId);
 
 #endif

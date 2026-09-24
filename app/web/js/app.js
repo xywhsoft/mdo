@@ -154,7 +154,8 @@ export async function boot() {
       const updated = await truncateSession({ ...session, etag: history.etag,
         revision: history.revision }, sequence - 1);
       sessionDetailStore.setData(updated);
-      await reloadSelectedTimeline();
+      await Promise.all([reloadSelectedTimeline(),
+        selectTodo(updated.project_id, updated.id)]);
       let run;
       try { run = await startRun(updated.project_id, updated.id, text.trim(), attachments); }
       catch (error) {
@@ -741,7 +742,12 @@ export async function boot() {
     else if (action === "clear") updated = await clearSession(session);
     else throw new TypeError("unknown session action");
     await refreshSelectedSession(updated);
-    if (["truncate", "clear"].includes(action)) await reloadSelectedTimeline();
+    if (["truncate", "clear"].includes(action)) {
+      const selected = navigation.get();
+      if (selected.projectId === updated.project_id && selected.sessionId === updated.id)
+        await Promise.all([reloadSelectedTimeline(),
+          selectTodo(updated.project_id, updated.id)]);
+    }
     toast({ rename: "会话已重命名", pin: updated.pinned ? "会话已置顶" : "已取消置顶", archive: "会话已归档", unarchive: "会话已移回进行中", trash: "会话已移到回收站", restore: "会话已恢复", fork: "已创建会话分支", truncate: "会话历史已截断", clear: "会话历史已清空" }[action]);
     return updated;
   }

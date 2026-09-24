@@ -738,8 +738,9 @@ def main() -> int:
         meta_files = list(home.glob("sessions/project-alpha/*/meta.json"))
         todo_files = list(home.glob("sessions/project-alpha/*/todo.json"))
         assert len(todo_files) == 1, todo_files
-        assert json.loads(todo_files[0].read_text(encoding="utf-8"))[
-            "items"][0]["text"] == "Inspect code"
+        assert json.loads(todo_files[0].read_text(encoding="utf-8")) == {
+            "schema_version": 1, "event_id": 0, "items": [],
+        }, todo_files[0]
         valid_meta = [path for path in meta_files if path.parent.name != "bad"]
         assert len(valid_meta) == 3, meta_files
         documents = {

@@ -451,6 +451,22 @@ def request(port: int, method: str, target: str, *,
         connection.close()
 
 
+def session_events(port: int, session_path: str) -> list[dict]:
+    items: list[dict] = []
+    cursor = 0
+    for _ in range(64):
+        status, _, body = request(port, "GET",
+            f"{session_path}/events?after={cursor}&limit=32")
+        document = json.loads(body)
+        assert status == 200, (status, document)
+        data = document["data"]
+        items.extend(data["items"])
+        cursor = data["next_cursor"]
+        if cursor >= data["latest_event_id"]:
+            return items
+    raise AssertionError("session event probe exceeded its bounded pages")
+
+
 def wait_ready(port: int, process: subprocess.Popen[bytes]) -> None:
     deadline = time.monotonic() + 20.0
     while time.monotonic() < deadline:
@@ -2507,7 +2523,62 @@ def run_probe(host: Path) -> None:
                            event["user_message_sequence"] > 0
                            for event in fork_events), fork_events
 
+                journal_before_trim = session_events(port, session_path)
+                cutoff_start = next(event for event in journal_before_trim
+                    if event["kind"] == "agent_start" and
+                    event["agent_depth"] == 0 and
+                    event["text"] == "ASK probe")
+                assert cutoff_start["user_message_sequence"] > 1
+                # Simulate a newer projection belonging to a turn that the
+                # next truncate removes, while retaining the earlier TODO.
+                todo_file.write_text(json.dumps({
+                    "schema_version": 1,
+                    "event_id": cutoff_start["event_id"],
+                    "items": [{"text": "Removed plan", "done": False}],
+                }), encoding="utf-8")
+
                 truncate_path = session_path + "/truncate"
+                status, headers, body = request(port, "POST", truncate_path,
+                    body=json.dumps({"through_sequence":
+                        cutoff_start["user_message_sequence"] - 1}).encode(),
+                    headers={"Content-Type": "application/json",
+                             "If-Match": current_etag})
+                document = json.loads(body)
+                assert status == 200 and document["data"]["revision"] == 8, (
+                    status, body)
+                current_etag = headers["etag"]
+                restored_todo = json.loads(request(port, "GET", todo_path)[2])[
+                    "data"]
+                assert restored_todo["items"] == [
+                    {"text": "Inspect repository", "done": True},
+                    {"text": "Verify result", "done": False},
+                ], restored_todo
+                retained_events = session_events(port, session_path)
+                assert not any(event["kind"] == "agent_start" and
+                    event["text"] == "ASK probe" for event in retained_events)
+                assert retained_events[-1]["kind"] == "history_truncated" and (
+                    retained_events[-1]["source_event_id"] ==
+                    cutoff_start["event_id"]), retained_events[-1]
+                todo_file.write_text(json.dumps({
+                    "schema_version": 1,
+                    "event_id": cutoff_start["event_id"],
+                    "items": [{"text": "Interrupted repair", "done": False}],
+                }), encoding="utf-8")
+                status, headers, body = request(port, "POST", truncate_path,
+                    body=json.dumps({"through_sequence":
+                        cutoff_start["user_message_sequence"] - 1}).encode(),
+                    headers={"Content-Type": "application/json",
+                             "If-Match": current_etag})
+                document = json.loads(body)
+                assert status == 200 and document["data"]["revision"] == 9, (
+                    status, body)
+                current_etag = headers["etag"]
+                repaired_todo = json.loads(request(port, "GET", todo_path)[2])[
+                    "data"]
+                assert repaired_todo["items"] == [
+                    {"text": "Inspect repository", "done": True},
+                    {"text": "Verify result", "done": False},
+                ], repaired_todo
                 status, headers, body = request(
                     port, "POST", truncate_path, body=b"{}",
                     headers={"Content-Type": "application/json",
@@ -2528,8 +2599,18 @@ def run_probe(host: Path) -> None:
                     headers={"If-Match": current_etag})
                 document = json.loads(body)
                 assert status == 200, (status, body)
-                assert document["data"]["revision"] == 8, document
+                assert document["data"]["revision"] == 10, document
                 current_etag = headers["etag"]
+                status, _, body = request(port, "GET", todo_path)
+                assert status == 200 and json.loads(body)["data"] == {
+                    "schema_version": 1, "event_id": 0, "items": [],
+                }, (status, body)
+                cleared_events = json.loads(request(port, "GET",
+                    session_path + "/events?after=0&limit=32")[2])[
+                        "data"]["items"]
+                assert len(cleared_events) == 1 and (
+                    cleared_events[0]["kind"] == "history_truncated" and
+                    cleared_events[0]["source_event_id"] == 1), cleared_events
 
                 status, headers, body = request(port, "GET", history_path)
                 document = json.loads(body)
@@ -2547,7 +2628,7 @@ def run_probe(host: Path) -> None:
                              "If-Match": current_etag})
                 document = json.loads(body)
                 assert status == 200, (status, body)
-                assert document["data"]["revision"] == 9, document
+                assert document["data"]["revision"] == 11, document
                 current_etag = headers["etag"]
 
                 for suffix, allow in (

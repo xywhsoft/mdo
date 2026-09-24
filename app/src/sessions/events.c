@@ -58,6 +58,7 @@ struct MdoSessionEventTrimPlan {
     char* Data;
     size_t Keep;
     uint64 NextEventId;
+    uint64 RemovedFromEventId;
     bool Clear;
     bool Changed;
 };
@@ -831,6 +832,7 @@ MdoSessionEventTrimPlan* MdoSessionEventTrimPrepare(
     if ( Plan == NULL || !MdoSessionEventBridgeRef(Bridge) ) goto memory;
     Plan->Bridge = Bridge;
     Plan->Clear = Clear || ThroughSequence == 0u;
+    if ( Plan->Clear ) Plan->RemovedFromEventId = 1u;
     xrtMutexLock(Bridge->Lock);
     Plan->NextEventId = Bridge->NextEventId;
     if ( !MdoHomeExternalStat(Bridge->Path, &Exists, &Info) ||
@@ -848,11 +850,13 @@ MdoSessionEventTrimPlan* MdoSessionEventTrimPrepare(
              !MdoEventsParse(Bridge->ProjectId, Bridge->SessionId,
                 xrtStrViewN(Data + Start, Length), &Entry) ) {
             xrtClearError();
+            HaveRunBoundary = false;
             Start += Length + 1u;
             continue;
         }
         if ( Entry.Info.EventId <= LastEventId ) {
             MdoEventsOwnedUnit(&Entry);
+            HaveRunBoundary = false;
             Start += Length + 1u;
             continue;
         }
@@ -863,6 +867,7 @@ MdoSessionEventTrimPlan* MdoSessionEventTrimPrepare(
             if ( Entry.Info.UserMessageSequence == 0u )
                 SawUnsequencedStart = true;
             if ( Entry.Info.UserMessageSequence > ThroughSequence ) {
+                Plan->RemovedFromEventId = Entry.Info.EventId;
                 MdoEventsOwnedUnit(&Entry);
                 break;
             }
@@ -883,10 +888,15 @@ MdoSessionEventTrimPlan* MdoSessionEventTrimPrepare(
     }
     /* Old journals cannot identify an exact message boundary. Hiding their
      * projection is safer than showing messages removed from the ledger. */
-    if ( Plan->Clear || SawUnsequencedStart ) Keep = 0u;
+    if ( Plan->Clear || SawUnsequencedStart ) {
+        Keep = 0u;
+        Plan->RemovedFromEventId = 1u;
+    }
     Plan->Data = Data;
     Plan->Keep = Keep;
     Plan->Changed = Plan->Clear || Keep != Size;
+    if ( Plan->Changed && Plan->RemovedFromEventId == 0u )
+        Plan->RemovedFromEventId = 1u;
     xrtMutexUnlock(Bridge->Lock);
     return Plan;
 io:
@@ -932,6 +942,9 @@ bool MdoSessionEventTrimApply(MdoSessionEventTrimPlan* Plan,
     }
     memset(&Marker, 0, sizeof(Marker));
     Marker.eKind = MDO_SESSION_EVENT_HISTORY_TRUNCATED;
+    /* Synthetic markers use source_event_id as the first discarded UI ID.
+     * This lets sidecar repair recognize a prior partial mutation on retry. */
+    Marker.uEventId = Plan->RemovedFromEventId;
     Marker.iOccurredAtUs = xrtNow();
     Marker.bSuccess = true;
     Marker.sText = Plan->Clear ? "会话历史已清空" : "会话历史已截断";
@@ -966,12 +979,117 @@ bool MdoSessionEventTrimApply(MdoSessionEventTrimPlan* Plan,
         MdoEventsXrtError(Error, "cannot publish the trimmed event journal");
         goto done;
     }
+    Plan->Keep = Keep;
     ++Bridge->NextEventId;
     Ok = true;
 done:
     xrtFree(Output);
     xrtFree(Json);
     xrtMutexUnlock(Bridge->Lock);
+    return Ok;
+}
+
+/* The todo sidecar is a projection of a successful main-Agent tool event.
+ * Rebuild it from the retained journal when its source event was removed.
+ * A bounded journal may have evicted an older valid source; preserve that
+ * sidecar unless a history marker explicitly invalidates its event ID. */
+bool MdoSessionEventTrimReconcileTodo(MdoSessionEventTrimPlan* Plan,
+    xwork_error* Error)
+{
+    xvalue* Stored = NULL;
+    uint64 StoredId = 0u;
+    uint64 FirstId = 0u;
+    uint64 LatestTodoId = 0u;
+    char* LatestTodoText = NULL;
+    size_t LatestTodoSize = 0u;
+    size_t Start = 0u;
+    bool StoredFound = false;
+    bool Stale;
+    bool Ok = false;
+    xworkErrorInit(Error);
+    if ( Plan == NULL || Plan->Bridge == NULL ) {
+        MdoEventsError(Error, XWORK_ERROR_INVALID_ARGUMENT,
+            "an event trim plan is required to reconcile the plan");
+        return false;
+    }
+    if ( !MdoSessionTodoLoad(Plan->Bridge->ProjectId,
+            Plan->Bridge->SessionId, &Stored) ||
+         !MdoEventsValueUInt(Stored, "event_id", &StoredId) ) {
+        MdoEventsError(Error, XWORK_ERROR_IO,
+            "cannot read the session plan projection");
+        goto done;
+    }
+    Stale = Plan->Clear ||
+        (Plan->RemovedFromEventId != 0u &&
+         StoredId >= Plan->RemovedFromEventId &&
+         StoredId < Plan->NextEventId);
+    while ( Start < Plan->Keep ) {
+        const char* End = (const char*)memchr(Plan->Data + Start, '\n',
+            Plan->Keep - Start);
+        MdoSessionEventOwned Entry;
+        size_t Length;
+        if ( End == NULL ) goto malformed;
+        Length = (size_t)(End - (Plan->Data + Start));
+        if ( Length == 0u || Length > MDO_SESSION_EVENT_RECORD_LIMIT ||
+             !MdoEventsParse(Plan->Bridge->ProjectId,
+                Plan->Bridge->SessionId,
+                xrtStrViewN(Plan->Data + Start, Length), &Entry) )
+            goto malformed;
+        if ( FirstId == 0u ) FirstId = Entry.Info.EventId;
+        if ( StoredId != 0u && Entry.Info.EventId == StoredId )
+            StoredFound = true;
+        if ( StoredId != 0u &&
+             Entry.Info.Kind == MDO_SESSION_EVENT_HISTORY_TRUNCATED &&
+             StoredId < Entry.Info.EventId &&
+             StoredId >= (Entry.Info.SourceEventId != 0u ?
+                Entry.Info.SourceEventId : 1u) ) Stale = true;
+        if ( Entry.Info.Kind == XWORK_EVENT_TOOL_DONE &&
+             Entry.Info.Success && Entry.Info.AgentDepth == 0u &&
+             strcmp(Entry.ToolName, "mdo.todo") == 0 &&
+             !Entry.Info.TextTruncated ) {
+            size_t TextSize = strlen(Entry.Text);
+            char* Copy = (char*)xrtMalloc(TextSize + 1u);
+            if ( Copy == NULL ) {
+                MdoEventsOwnedUnit(&Entry);
+                MdoEventsError(Error, XWORK_ERROR_OUT_OF_MEMORY,
+                    "cannot retain the previous session plan");
+                goto done;
+            }
+            memcpy(Copy, Entry.Text, TextSize + 1u);
+            xrtFree(LatestTodoText);
+            LatestTodoText = Copy;
+            LatestTodoSize = TextSize;
+            LatestTodoId = Entry.Info.EventId;
+        }
+        MdoEventsOwnedUnit(&Entry);
+        Start += Length + 1u;
+    }
+    if ( StoredId != 0u && !StoredFound &&
+         (FirstId == 0u || StoredId >= FirstId) ) Stale = true;
+    if ( Stale || LatestTodoId > StoredId ) {
+        if ( LatestTodoId != 0u ) {
+            xwork_event Event;
+            memset(&Event, 0, sizeof(Event));
+            Event.eKind = XWORK_EVENT_TOOL_DONE;
+            Event.bSuccess = true;
+            Event.sToolName = "mdo.todo";
+            Event.sText = LatestTodoText;
+            Event.iTextLength = LatestTodoSize;
+            Ok = MdoSessionTodoProject(Plan->Bridge->ProjectId,
+                Plan->Bridge->SessionId, LatestTodoId, &Event);
+        } else Ok = StoredId == 0u ||
+            MdoSessionTodoReset(Plan->Bridge->ProjectId,
+                Plan->Bridge->SessionId);
+        if ( !Ok ) MdoEventsError(Error, XWORK_ERROR_IO,
+            "cannot publish the reconciled session plan");
+    } else Ok = true;
+    goto done;
+malformed:
+    MdoEventsError(Error, XWORK_ERROR_IO,
+        "the retained event journal is malformed");
+done:
+    xrtFree(LatestTodoText);
+    xrtValueRelease(Stored);
     return Ok;
 }
 

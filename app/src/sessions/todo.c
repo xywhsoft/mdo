@@ -196,3 +196,22 @@ done:
     else xrtValueRelease(Root);
     return Ok;
 }
+
+bool MdoSessionTodoReset(const char* ProjectId, const char* SessionId)
+{
+    char Path[MDO_SESSION_PATH_CAPACITY];
+    xvalue* Root = NULL;
+    char* Json = NULL;
+    size_t Size = 0u;
+    bool Ok = false;
+    if ( !MdoTodoPath(Path, ProjectId, SessionId) ) return false;
+    Root = MdoTodoEmpty();
+    if ( Root == NULL ) goto done;
+    Json = xrtJsonStringify(Root, false, &Size);
+    Ok = Json != NULL && Size <= MDO_TODO_FILE_MAX &&
+        MdoHomeAtomicWrite(Path, Json, Size, false);
+done:
+    xrtFree(Json);
+    xrtValueRelease(Root);
+    return Ok;
+}

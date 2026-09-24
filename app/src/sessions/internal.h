@@ -23,6 +23,8 @@ MdoSessionEventTrimPlan* MdoSessionEventTrimPrepare(
     xwork_error* Error);
 bool MdoSessionEventTrimApply(MdoSessionEventTrimPlan* Plan,
     xwork_error* Error);
+bool MdoSessionEventTrimReconcileTodo(MdoSessionEventTrimPlan* Plan,
+    xwork_error* Error);
 void MdoSessionEventTrimPlanRelease(MdoSessionEventTrimPlan* Plan);
 void MdoSessionEventBridgeSetRegistered(MdoSessionEventBridge* Bridge);
 bool MdoSessionEventBridgeClonePrefix(MdoSessionEventBridge* Bridge,

@@ -1648,7 +1648,8 @@ static bool MdoSessionsLedgerMutation(MdoSession* Session,
     Ok = Clear ? MdoAgentSessionClear(Session->Agent, Error) :
         MdoAgentSessionTruncateAfter(Session->Agent, ThroughSequence, Error);
     if ( !Ok ) goto done;
-    if ( Trim != NULL && !MdoSessionEventTrimApply(Trim, Error) ) {
+    if ( !MdoSessionEventTrimApply(Trim, Error) ||
+         !MdoSessionEventTrimReconcileTodo(Trim, Error) ) {
         Ok = false;
         goto done;
     }
