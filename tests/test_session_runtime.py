@@ -451,7 +451,8 @@ void ServiceInit(XS_HostInfo *host) {
             printf("prefix_fork_error=%s\n", error.sMessage); goto done;
         }
         memset(&info, 0, sizeof(info)); info.Size = sizeof(info);
-        if (!MdoSessionGetInfo(forked, &info)) goto done;
+        if (!MdoSessionGetInfo(forked, &info) ||
+            !Run(forked, "edited second prompt")) goto done;
         printf("prefix_fork=id:%s through:%llu\n", info.Id,
             (unsigned long long)info.ForkedThroughSequence);
         MdoSessionRelease(forked); forked = NULL;
@@ -773,6 +774,8 @@ def main() -> int:
                    for event in prefix_fork_events)
         assert not any(event["text"] == "second prompt"
                        for event in prefix_fork_events)
+        assert any(event["text"] == "edited second prompt"
+                   for event in prefix_fork_events)
         events = []
         invalid_events = 0
         for line in event_path.read_text(encoding="utf-8").splitlines():

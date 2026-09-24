@@ -19,6 +19,7 @@ export function eventsToTimeline(events, historyLost = false) {
   const items = [];
   const tools = new Map();
   const modelStarts = new Map();
+  const promptsByRun = new Map();
   if (historyLost) {
     items.push({ key: "history-gap", kind: "system", role: "记录提示", text: "更早的实时事件已超出保留窗口。持久会话上下文仍然完整。", state: "done", time: 0 });
   }
@@ -26,16 +27,27 @@ export function eventsToTimeline(events, historyLost = false) {
     const runKey = String(event.run_id || event.agent_id || event.event_id);
     switch (event.kind) {
       case "agent_start":
+        if (event.agent_depth === 0 && Number(event.user_message_sequence) > 0)
+          promptsByRun.set(runKey, {
+            sequence: Number(event.user_message_sequence),
+            text: event.text || "",
+            truncated: Boolean(event.text_truncated),
+          });
         items.push(event.agent_depth > 0
           ? { key: `subagent-${event.event_id}`, kind: "task", role: "子 Agent", text: event.text || "子 Agent 已启动", state: "running", time: event.time, meta: `depth ${event.agent_depth}` }
           : { key: `user-${event.event_id}`, kind: "user", role: "你", text: event.text || "", state: "done", time: event.time,
-            userMessageSequence: Number(event.user_message_sequence || 0) });
+            userMessageSequence: Number(event.user_message_sequence || 0),
+            textTruncated: Boolean(event.text_truncated) });
         break;
       case "model_reasoning_delta":
         appendOrCreate(items, event, "reasoning", "思考", `reasoning-${modelKey(event)}`);
         break;
       case "model_text_delta":
-        appendOrCreate(items, event, "assistant", event.model || "Agent", `assistant-${modelKey(event)}`).runKey = runKey;
+        {
+          const answer = appendOrCreate(items, event, "assistant", event.model || "Agent", `assistant-${modelKey(event)}`);
+          answer.runKey = runKey;
+          answer.retryPrompt = promptsByRun.get(runKey);
+        }
         break;
       case "model_done": {
         const answer = [...items].reverse().find((item) => item.key === `assistant-${modelKey(event)}`);
@@ -95,7 +107,8 @@ export function eventsToTimeline(events, historyLost = false) {
       case "agent_done": {
         const answer = [...items].reverse().find((item) => item.kind === "assistant" && item.runKey === runKey);
         if (answer) answer.state = event.success ? "done" : "failed";
-        else if (event.text) items.push({ key: `done-${event.event_id}`, kind: "assistant", role: event.model || "Agent", text: event.text, state: event.success ? "done" : "failed", time: event.time });
+        else if (event.text) items.push({ key: `done-${event.event_id}`, kind: "assistant", role: event.model || "Agent", text: event.text, state: event.success ? "done" : "failed", time: event.time,
+          retryPrompt: promptsByRun.get(runKey) });
         break;
       }
       case "model_start":
@@ -121,7 +134,7 @@ async function copyText(value) {
   if (!copied) throw new Error("clipboard unavailable");
 }
 
-function timelineNode(item, onFork, onFeedback, feedback) {
+function timelineNode(item, handlers, feedback) {
   const time = element("time", { className: "timeline-time", text: formatClock(item.time) });
   if (item.time) {
     const date = new Date(Number(item.time) / 1000);
@@ -146,15 +159,38 @@ function timelineNode(item, onFork, onFeedback, feedback) {
       catch { toast("无法复制消息", "error"); }
     });
     actions.append(copy);
+    if (item.kind === "user" && Number.isSafeInteger(item.userMessageSequence) &&
+        item.userMessageSequence > 0 && !item.textTruncated) {
+      const edit = element("button", { text: "编辑并分叉", attrs: { type: "button", "aria-label": "编辑此消息并创建会话分支" } });
+      edit.addEventListener("click", async () => {
+        edit.disabled = true;
+        try { await handlers.onEdit(item.userMessageSequence, item.text); }
+        catch (error) { toast(errorMessage(error), "error"); }
+        finally { edit.disabled = false; }
+      });
+      actions.append(edit);
+    }
     if (item.kind === "assistant") {
       const fork = element("button", { text: "分叉", attrs: { type: "button", "aria-label": "分叉当前会话" } });
       fork.addEventListener("click", async () => {
         fork.disabled = true;
-        try { await onFork(); }
+        try { await handlers.onFork(); }
         catch (error) { toast(errorMessage(error), "error"); }
         finally { fork.disabled = false; }
       });
       actions.append(fork);
+      const retryPrompt = item.retryPrompt;
+      if (retryPrompt && Number.isSafeInteger(retryPrompt.sequence) &&
+          retryPrompt.sequence > 0 && retryPrompt.text && !retryPrompt.truncated) {
+        const retry = element("button", { text: "重试并分叉", attrs: { type: "button", "aria-label": "重试此回合并创建会话分支" } });
+        retry.addEventListener("click", async () => {
+          retry.disabled = true;
+          try { await handlers.onRetry(retryPrompt.sequence, retryPrompt.text); }
+          catch (error) { toast(errorMessage(error), "error"); }
+          finally { retry.disabled = false; }
+        });
+        actions.append(retry);
+      }
       if (item.feedbackEventId && item.state === "done") {
         for (const [value, label] of [["good", "点赞"], ["bad", "点踩"]]) {
           const button = element("button", {
@@ -165,7 +201,7 @@ function timelineNode(item, onFork, onFeedback, feedback) {
           button.addEventListener("click", async () => {
             button.disabled = true;
             try {
-              await onFeedback(item.feedbackEventId,
+              await handlers.onFeedback(item.feedbackEventId,
                 feedback === value ? "none" : value);
             } catch (error) { toast(errorMessage(error), "error"); }
             finally { button.disabled = false; }
@@ -187,7 +223,8 @@ function timelineNode(item, onFork, onFeedback, feedback) {
   }, children);
 }
 
-export function createTimelineView({ container, welcome, toBottom, store, feedbackStore, onFork, onFeedback, onSearchCount }) {
+export function createTimelineView({ container, welcome, toBottom, store, feedbackStore, onFork, onFeedback, onEdit, onRetry, onSearchCount }) {
+  const handlers = { onFork, onFeedback, onEdit, onRetry };
   let pendingState = store.get();
   let frame = 0;
   let followTail = true;
@@ -210,13 +247,13 @@ export function createTimelineView({ container, welcome, toBottom, store, feedba
     welcome.hidden = Boolean(data?.sessionId && items.length > 0);
     clear(container);
     if (state.status === "error") {
-      container.append(timelineNode({ key: "load-error", kind: "error", role: "无法读取时间线", text: errorMessage(state.error), state: "failed", time: 0 }, onFork, onFeedback, ""));
+      container.append(timelineNode({ key: "load-error", kind: "error", role: "无法读取时间线", text: errorMessage(state.error), state: "failed", time: 0 }, handlers, ""));
     } else {
       const selected = feedbackStore.get().data;
       const feedback = selected?.projectId === data?.projectId &&
         selected?.sessionId === data?.sessionId ? selected.items : new Map();
       for (const item of visible)
-        container.append(timelineNode(item, onFork, onFeedback,
+        container.append(timelineNode(item, handlers,
           feedback.get(item.feedbackEventId) ?? ""));
     }
     if (followTail && !searchQuery) scroller.scrollTop = scroller.scrollHeight;

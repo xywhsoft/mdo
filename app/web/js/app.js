@@ -24,6 +24,7 @@ import { createSessionList } from "./features/sessions/session-list.js";
 import { timelineStore, selectTimeline, clearTimeline, refreshSelectedTimeline } from "./features/chat/timeline-store.js";
 import { todoStore, selectTodo, clearTodo } from "./state/todo.js";
 import { createTimelineView } from "./features/chat/timeline.js";
+import { createMessageEditDialog } from "./features/chat/message-edit-dialog.js";
 import { createConversationSearch } from "./features/chat/conversation-search.js";
 import { feedbackStore, selectFeedback, clearFeedback, setFeedback } from "./features/chat/feedback-store.js";
 import { createConversationDocks } from "./features/chat/conversation-docks.js";
@@ -101,6 +102,7 @@ export async function boot() {
   let tasksTimer = 0;
   let approvalsTimer = 0;
   let submitting = false;
+  let messageActionBusy = false;
   let interruptRequested = false;
   const queueBlocked = new Set();
 
@@ -117,6 +119,51 @@ export async function boot() {
     onAction: handleSessionAction,
   });
   $("#session-search").addEventListener("input", (event) => sessionList.setQuery(event.target.value));
+
+  const messageEditDialog = createMessageEditDialog({
+    dialog: $("#message-edit-dialog"), form: $("#message-edit-form"),
+    input: $("#message-edit-input"), cancel: $("#cancel-message-edit"),
+  });
+
+  async function forkAndRunMessage(sequence, text, label) {
+    if (messageActionBusy) throw new Error("请等待当前消息操作完成");
+    if (!Number.isSafeInteger(sequence) || sequence < 1 || !text.trim())
+      throw new Error("这条消息没有可用的编辑边界或完整文本");
+    const session = sessionDetailStore.get().data;
+    const selected = navigation.get();
+    if (!session || session.project_id !== selected.projectId ||
+        session.id !== selected.sessionId)
+      throw new Error("请先选择会话");
+    if (activeRun || submitting) throw new Error("请在当前运行结束后操作消息");
+    messageActionBusy = true;
+    try {
+      const history = await loadSessionHistory(session);
+      const current = navigation.get();
+      if (current.projectId !== selected.projectId || current.sessionId !== selected.sessionId)
+        throw new Error("会话已切换，请重新选择消息");
+      if (sequence > history.last_sequence)
+        throw new Error("消息已不在当前会话历史中，请刷新会话");
+      const fork = await forkSession({ ...session, etag: history.etag,
+        revision: history.revision }, {
+        title: `${session.title || "未命名任务"}（${label}）`,
+        through_sequence: sequence - 1,
+      });
+      let run;
+      try { run = await startRun(fork.project_id, fork.id, text); }
+      catch (error) {
+        navigation.select(fork.project_id, fork.id);
+        prompt.value = text;
+        prompt.dispatchEvent(new Event("input", { bubbles: true }));
+        showComposerError(error);
+        throw error;
+      }
+      navigation.select(fork.project_id, fork.id);
+      monitorRun(run);
+      void Promise.allSettled([refreshSelectedTimeline(), loadTasks(),
+        loadRuns(), loadRecovery()]);
+      toast(`已创建分支并${label === "重试" ? "重新发送" : "发送编辑后的消息"}`);
+    } finally { messageActionBusy = false; }
+  }
 
   let conversationSearch;
   const timelineView = createTimelineView({
@@ -140,6 +187,11 @@ export async function boot() {
       navigation.select(fork.project_id, fork.id);
       toast("已创建会话分支");
     },
+    onEdit: async (sequence, text) => {
+      const edited = await messageEditDialog.open(text);
+      if (edited !== null) await forkAndRunMessage(sequence, edited, "编辑");
+    },
+    onRetry: (sequence, text) => forkAndRunMessage(sequence, text, "重试"),
   });
   conversationSearch = createConversationSearch({
     bar: $("#conversation-find"), input: $("#conversation-find-input"),
