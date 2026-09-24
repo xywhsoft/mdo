@@ -41,6 +41,7 @@ import { createDecisionPanel } from "./features/approvals/decision-panel.js";
 import { createRecoveryPanel } from "./features/approvals/recovery-panel.js";
 import { createSettingsView } from "./features/settings/settings-view.js";
 import { createResourcePanels } from "./features/settings/resource-panels.js";
+import { createKeyboardShortcuts } from "./features/shell/keyboard-shortcuts.js";
 import { api } from "./api/client.js";
 import { clear, element, errorMessage, toast } from "./utils/dom.js";
 
@@ -109,6 +110,7 @@ export async function boot() {
   let interruptRequested = false;
   let composerAttachments = [];
   let composerImages = null;
+  let shortcuts;
   const queueBlocked = new Set();
 
   const sessionList = createSessionList({
@@ -266,9 +268,7 @@ export async function boot() {
         navigation.openSettings("general");
         window.setTimeout(() => $("#setting-theme").focus(), 0);
       } else if (command === "/help") {
-        prompt.value = "/";
-        prompt.dispatchEvent(new Event("input", { bubbles: true }));
-        prompt.focus();
+        shortcuts.openHelp();
       } else if (command === "/stop") {
         if (!activeRun) throw new Error("当前没有运行中的任务");
         stop.click();
@@ -935,22 +935,26 @@ export async function boot() {
   });
   $("#workspace-chip").addEventListener("click", () => { selectInspectorTab("context"); setDrawer("inspector", true); });
 
+  shortcuts = createKeyboardShortcuts({
+    dialog: $("#shortcuts-dialog"), navigation, search: conversationSearch,
+    onNew: openNewSession,
+    onExport: async () => {
+      const session = sessionDetailStore.get().data;
+      if (!session) return;
+      try { await handleSessionAction("export", session); }
+      catch (error) { toast(errorMessage(error), "error"); }
+    },
+    onSettings: (open) => open ? navigation.openSettings("general")
+      : $("#close-settings").click(),
+    onStop: () => stop.click(), isRunning: () => Boolean(activeRun),
+    isDrawerOpen: () => shell.dataset.sidebar === "open" ||
+      (mobileLayout.matches && shell.dataset.inspector === "open"),
+    closeDrawers,
+  });
   document.addEventListener("keydown", (event) => {
-    if (event.key === "Escape") {
-      if (conversationSearch.isOpen()) conversationSearch.close(true);
-      else if (dialog.open) dialog.close();
-      else closeDrawers();
-    }
-    if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "f" &&
-        navigation.get().view === "workspace" && navigation.get().sessionId) {
-      event.preventDefault();
-      conversationSearch.open();
-    }
-    if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "n") {
-      event.preventDefault();
-      openNewSession();
-    }
-    if (event.key === "/" && document.activeElement?.tagName !== "INPUT" && document.activeElement?.tagName !== "TEXTAREA") {
+    if (event.key === "/" && !document.querySelector("dialog[open]") &&
+        document.activeElement?.tagName !== "INPUT" &&
+        document.activeElement?.tagName !== "TEXTAREA") {
       event.preventDefault();
       $("#session-search").focus();
     }

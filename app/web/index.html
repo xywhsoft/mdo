@@ -424,6 +424,31 @@
     <img id="image-preview-content" alt="">
   </dialog>
 
+  <dialog class="new-session-dialog shortcuts-dialog" id="shortcuts-dialog" aria-labelledby="shortcuts-title">
+    <form method="dialog" class="dialog-card">
+      <header>
+        <div><h2 id="shortcuts-title">快捷键与命令</h2><p>输入框外按 ? 打开，Esc 关闭；macOS 用 ⌘ 代替 Ctrl。</p></div>
+        <button class="icon-button" value="close" aria-label="关闭快捷键帮助" type="submit"><span class="icon" data-icon="close" aria-hidden="true"></span></button>
+      </header>
+      <div class="shortcuts-content">
+        <h3>键盘操作</h3>
+        <dl>
+          <div><dt><kbd>Enter</kbd></dt><dd>发送；运行中加入待发送队列</dd></div>
+          <div><dt><kbd>Shift</kbd> + <kbd>Enter</kbd></dt><dd>输入换行</dd></div>
+          <div><dt><kbd>Ctrl</kbd> + <kbd>Enter</kbd></dt><dd>中断当前运行，优先发送输入</dd></div>
+          <div><dt><kbd>Esc</kbd></dt><dd>关闭弹层；无弹层时中断运行</dd></div>
+          <div><dt><kbd>Ctrl</kbd> + <kbd>K</kbd> / <kbd>N</kbd></dt><dd>新建任务</dd></div>
+          <div><dt><kbd>Ctrl</kbd> + <kbd>F</kbd></dt><dd>搜索当前会话</dd></div>
+          <div><dt><kbd>Ctrl</kbd> + <kbd>E</kbd></dt><dd>导出当前会话</dd></div>
+          <div><dt><kbd>Ctrl</kbd> + <kbd>,</kbd></dt><dd>打开设置</dd></div>
+        </dl>
+        <h3>输入增强</h3>
+        <p>输入 <code>/</code> 查看命令，输入 <code>@</code> 补全工作区文件；图片可通过附件按钮、粘贴或拖入添加。</p>
+      </div>
+      <footer><button class="primary-button" value="close" type="submit">知道了</button></footer>
+    </form>
+  </dialog>
+
   <div class="toast-region" id="toast-region" aria-live="polite" aria-atomic="true"></div>
   <script type="module" src="/js/main.js"></script>
 </body>

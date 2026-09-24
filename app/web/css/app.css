@@ -848,6 +848,16 @@ select:focus-visible,
 .message-edit-fields textarea { min-height: 170px; max-height: min(50vh, 360px); resize: vertical; font: inherit; line-height: 1.5; }
 .dialog-error { margin: 0 20px 12px; color: var(--danger); font-size: 12px; }
 .dialog-card > footer { display: flex; justify-content: flex-end; gap: 8px; padding: 13px 20px; border-top: 1px solid var(--border); }
+.shortcuts-dialog { width: min(540px, calc(100vw - 24px)); }
+.shortcuts-content { max-height: min(66dvh, 560px); overflow-y: auto; padding: 14px 20px 18px; }
+.shortcuts-content h3 { margin: 12px 0 8px; font-size: 12px; }
+.shortcuts-content h3:first-child { margin-top: 0; }
+.shortcuts-content dl { margin: 0; }
+.shortcuts-content dl > div { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; padding: 7px 0; border-bottom: 1px solid var(--border); font-size: 11px; }
+.shortcuts-content dt { flex: none; min-width: 130px; }
+.shortcuts-content dd { margin: 0; color: var(--muted); text-align: right; }
+.shortcuts-content kbd { display: inline-block; min-width: 20px; padding: 2px 5px; border: 1px solid var(--border-strong); border-radius: 4px; background: var(--surface-hover); font: inherit; text-align: center; }
+.shortcuts-content p { margin: 0; color: var(--muted); font-size: 11px; line-height: 1.6; }
 .primary-button, .secondary-button { min-height: 35px; padding: 0 14px; border: 1px solid var(--border-strong); border-radius: var(--radius-sm); cursor: pointer; }
 .primary-button { border-color: var(--accent); background: var(--accent); color: var(--accent-ink); }
 .secondary-button { background: transparent; }
@@ -1060,6 +1070,8 @@ select:focus-visible,
   .scrim { position: fixed; z-index: 35; inset: 0; border: 0; background: rgb(0 0 0 / 28%); }
   .dialog-fields { grid-template-columns: 1fr; }
   .dialog-fields label { grid-column: 1 / -1; }
+  .shortcuts-content dl > div { align-items: flex-start; flex-direction: column; gap: 4px; }
+  .shortcuts-content dd { text-align: left; }
   .settings-workspace { grid-row: 1 / -1; }
   .settings-layout { display: block; overflow: auto; }
   .settings-navigation { display: flex; min-height: 48px; overflow-x: auto; padding: 7px 10px; border-right: 0; border-bottom: 1px solid var(--border); }
