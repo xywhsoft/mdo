@@ -22,6 +22,7 @@ import { navigation } from "./state/navigation.js";
 import { createSessionList } from "./features/sessions/session-list.js";
 import { timelineStore, selectTimeline, clearTimeline, refreshSelectedTimeline } from "./features/chat/timeline-store.js";
 import { createTimelineView } from "./features/chat/timeline.js";
+import { feedbackStore, selectFeedback, clearFeedback, setFeedback } from "./features/chat/feedback-store.js";
 import { createConversationDocks } from "./features/chat/conversation-docks.js";
 import { createPromptQueue } from "./features/chat/prompt-queue.js";
 import { createComposerProfile, fillReasoningOptions } from "./features/chat/composer-profile.js";
@@ -113,6 +114,12 @@ export async function boot() {
 
   createTimelineView({
     container: $("#timeline"), welcome: $("#welcome"), store: timelineStore,
+    feedbackStore,
+    onFeedback: async (eventId, value) => {
+      const selected = navigation.get();
+      if (!selected.projectId || !selected.sessionId) throw new Error("请先选择会话");
+      await setFeedback(selected.projectId, selected.sessionId, eventId, value);
+    },
     onFork: async () => {
       const session = sessionDetailStore.get().data;
       if (!session || activeRun) throw new Error("请在当前运行结束后分叉会话");
@@ -386,6 +393,7 @@ export async function boot() {
     if (!key) {
       selectRecovery("", "");
       clearTimeline();
+      clearFeedback();
       sessionDetailStore.reset();
       sessionTitle.textContent = "新任务";
       sessionSubtitle.textContent = "选择会话，或向默认 Agent 发起任务";
@@ -396,6 +404,7 @@ export async function boot() {
     selectRecovery(projectId, sessionId);
     sessionDetailStore.reset();
     selectTimeline(projectId, sessionId);
+    void selectFeedback(projectId, sessionId);
     await Promise.all([loadSession(projectId, sessionId), loadRuns(), loadRecovery()]);
     findActiveRun();
     void dispatchQueued();

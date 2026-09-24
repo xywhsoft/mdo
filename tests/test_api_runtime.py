@@ -1503,6 +1503,46 @@ def run_probe(host: Path) -> None:
                 assert any(item["terminal"] for item in
                            event_document["data"]["items"]), event_document
 
+                # Feedback belongs to a completed model reply and survives a
+                # fresh read from the portable session sidecar.
+                feedback_path = session_path + "/feedback"
+                done_event = next(item for item in
+                                  event_document["data"]["items"]
+                                  if item["kind"] == "model_done" and
+                                  item["success"])
+                done_id = done_event["event_id"]
+                status, _, body = request(port, "GET", feedback_path)
+                assert status == 200 and json.loads(body)["data"]["items"] == [], (
+                    status, body)
+                feedback_body = json.dumps({"event_id": done_id,
+                                            "value": "good"}).encode()
+                status, _, body = request(
+                    port, "PUT", feedback_path, body=feedback_body,
+                    headers={"Content-Type": "application/json"})
+                assert status == 200, (status, body)
+                assert json.loads(body)["data"]["items"] == [
+                    {"event_id": done_id, "value": "good"}], body
+                sidecar = home / f"sessions/api-project/{session_id}/feedback.json"
+                assert json.loads(sidecar.read_text(encoding="utf-8")) == {
+                    "schema_version": 1,
+                    "items": [{"event_id": done_id, "value": "good"}],
+                }
+                assert json.loads(request(port, "GET", feedback_path)[2])[
+                    "data"]["items"][0]["value"] == "good"
+                status, _, body = request(
+                    port, "PUT", feedback_path,
+                    body=json.dumps({"event_id": done_id,
+                                     "value": "none"}).encode(),
+                    headers={"Content-Type": "application/json"})
+                assert status == 200 and json.loads(body)["data"]["items"] == [], (
+                    status, body)
+                status, _, body = request(
+                    port, "PUT", feedback_path,
+                    body=b'{"event_id":999999999,"value":"bad"}',
+                    headers={"Content-Type": "application/json"})
+                assert status == 422 and json.loads(body)["error"][
+                    "code"] == "feedback_event_invalid", (status, body)
+
                 status, _, body = request(
                     port, "GET", "/api/v1/diagnostics?fixture=recovery")
                 assert status == 200, (status, body)

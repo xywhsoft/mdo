@@ -40,6 +40,8 @@ export function eventsToTimeline(events, historyLost = false) {
         const answer = [...items].reverse().find((item) => item.key === `assistant-${modelKey(event)}`);
         if (answer) {
           answer.state = event.success ? "done" : "failed";
+          if (event.success && Number.isSafeInteger(Number(event.event_id)))
+            answer.feedbackEventId = Number(event.event_id);
           answer.inputTokens = Number(event.input_tokens || 0);
           answer.outputTokens = Number(event.output_tokens || 0);
           const elapsed = (Number(event.time) - Number(modelStarts.get(modelKey(event)) || answer.time)) / 1e6;
@@ -118,7 +120,7 @@ async function copyText(value) {
   if (!copied) throw new Error("clipboard unavailable");
 }
 
-function timelineNode(item, onFork) {
+function timelineNode(item, onFork, onFeedback, feedback) {
   const time = element("time", { className: "timeline-time", text: formatClock(item.time) });
   if (item.time) {
     const date = new Date(Number(item.time) / 1000);
@@ -152,6 +154,24 @@ function timelineNode(item, onFork) {
         finally { fork.disabled = false; }
       });
       actions.append(fork);
+      if (item.feedbackEventId && item.state === "done") {
+        for (const [value, label] of [["good", "点赞"], ["bad", "点踩"]]) {
+          const button = element("button", {
+            text: label,
+            attrs: { type: "button", "aria-label": label,
+              "aria-pressed": String(feedback === value) },
+          });
+          button.addEventListener("click", async () => {
+            button.disabled = true;
+            try {
+              await onFeedback(item.feedbackEventId,
+                feedback === value ? "none" : value);
+            } catch (error) { toast(errorMessage(error), "error"); }
+            finally { button.disabled = false; }
+          });
+          actions.append(button);
+        }
+      }
       const stats = [];
       if (item.inputTokens || item.outputTokens)
         stats.push(`${item.inputTokens || 0} 输入 / ${item.outputTokens || 0} 输出 tokens`);
@@ -166,7 +186,7 @@ function timelineNode(item, onFork) {
   }, children);
 }
 
-export function createTimelineView({ container, welcome, store, onFork }) {
+export function createTimelineView({ container, welcome, store, feedbackStore, onFork, onFeedback }) {
   let pendingState = store.get();
   let frame = 0;
   let followTail = true;
@@ -180,9 +200,14 @@ export function createTimelineView({ container, welcome, store, onFork }) {
     welcome.hidden = Boolean(data?.sessionId && items.length > 0);
     clear(container);
     if (state.status === "error") {
-      container.append(timelineNode({ key: "load-error", kind: "error", role: "无法读取时间线", text: errorMessage(state.error), state: "failed", time: 0 }, onFork));
+      container.append(timelineNode({ key: "load-error", kind: "error", role: "无法读取时间线", text: errorMessage(state.error), state: "failed", time: 0 }, onFork, onFeedback, ""));
     } else {
-      for (const item of items) container.append(timelineNode(item, onFork));
+      const selected = feedbackStore.get().data;
+      const feedback = selected?.projectId === data?.projectId &&
+        selected?.sessionId === data?.sessionId ? selected.items : new Map();
+      for (const item of items)
+        container.append(timelineNode(item, onFork, onFeedback,
+          feedback.get(item.feedbackEventId) ?? ""));
     }
     if (followTail) scroller.scrollTop = scroller.scrollHeight;
   }
@@ -197,8 +222,9 @@ export function createTimelineView({ container, welcome, store, onFork }) {
   }, { passive: true });
 
   const unsubscribe = store.subscribe(queueRender);
+  const unsubscribeFeedback = feedbackStore.subscribe(() => queueRender(store.get()));
   return Object.freeze({
     follow() { followTail = true; },
-    destroy() { unsubscribe(); if (frame) cancelAnimationFrame(frame); },
+    destroy() { unsubscribe(); unsubscribeFeedback(); if (frame) cancelAnimationFrame(frame); },
   });
 }

@@ -132,6 +132,9 @@ static const MdoApiRoute g_MdoApiRoutes[] = {
     { "/api/v1/projects/{project}/sessions/{session}/events",
       XHTTP_METHOD_GET | XHTTP_METHOD_HEAD, "GET, HEAD, OPTIONS",
       MdoApiSessionEventsRoute },
+    { "/api/v1/projects/{project}/sessions/{session}/feedback",
+      XHTTP_METHOD_GET | XHTTP_METHOD_HEAD | XHTTP_METHOD_PUT,
+      "GET, HEAD, PUT, OPTIONS", MdoApiFeedbackRoute },
 };
 
 static bool MdoApiViewEqualText(xstrview View, cstr Text)
@@ -201,6 +204,7 @@ static void MdoApiRequestId(char Output[MDO_API_REQUEST_ID_CAPACITY])
 bool MdoApiInit(void)
 {
     if ( g_MdoApiInitialized ) return true;
+    if ( !MdoApiFeedbackInit() ) return false;
     xrtAtomic64Init(&g_MdoApiFallbackId, 0u);
     g_MdoApiInitialized = true;
     return true;
@@ -209,6 +213,7 @@ bool MdoApiInit(void)
 void MdoApiUnit(void)
 {
     g_MdoApiInitialized = false;
+    MdoApiFeedbackUnit();
 }
 
 XS_RequestResult MdoApiRequest(XS_HttpReq* pRequest)

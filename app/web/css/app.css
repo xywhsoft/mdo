@@ -505,6 +505,7 @@ select:focus-visible,
 .timeline-actions button { min-height: 26px; padding: 3px 7px; border: 0; border-radius: 6px; background: transparent; color: var(--muted); font-size: 11px; cursor: pointer; }
 .timeline-actions button:hover, .timeline-actions button:focus-visible { background: var(--surface-hover); color: var(--ink); }
 .timeline-actions button:disabled { opacity: .55; cursor: wait; }
+.timeline-actions button[aria-pressed="true"] { background: var(--surface-hover); color: var(--ink); font-weight: 700; }
 .timeline-stats { margin-left: auto; color: var(--faint); font-size: 10px; white-space: nowrap; }
 @media (hover: hover) {
   .timeline-item .timeline-actions button { opacity: 0; }
