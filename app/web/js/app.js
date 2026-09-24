@@ -25,6 +25,7 @@ import { createTimelineView } from "./features/chat/timeline.js";
 import { feedbackStore, selectFeedback, clearFeedback, setFeedback } from "./features/chat/feedback-store.js";
 import { createConversationDocks } from "./features/chat/conversation-docks.js";
 import { createPromptQueue } from "./features/chat/prompt-queue.js";
+import { createDraftStore } from "./features/chat/draft-store.js";
 import { createSlashCommands } from "./features/chat/slash-commands.js";
 import { createComposerProfile, fillReasoningOptions } from "./features/chat/composer-profile.js";
 import { createTokenMeter } from "./features/chat/token-meter.js";
@@ -72,6 +73,7 @@ export async function boot() {
   const stop = $("#stop");
   const composerError = $("#composer-error");
   const composerHint = $("#composer-hint");
+  const draftStatus = $("#draft-status");
   const runStatus = $("#run-status");
   const runtimeState = $("#runtime-state");
   const runtimeLabel = $("#runtime-label");
@@ -96,7 +98,6 @@ export async function boot() {
   let approvalsTimer = 0;
   let submitting = false;
   let interruptRequested = false;
-  const drafts = new Map();
   const queueBlocked = new Set();
 
   const sessionList = createSessionList({
@@ -196,6 +197,22 @@ export async function boot() {
     estimate: $("#composer-input-estimate"), prompt,
     sessionStore: sessionDetailStore, timelineStore, modelsStore, agentsStore,
   });
+  const draftStore = createDraftStore({
+    onRestore(text) {
+      prompt.value = text;
+      resizePrompt();
+      tokenMeter.refresh();
+    },
+    onError(error) {
+      draftStatus.textContent = `草稿未保存：${errorMessage(error)}`;
+      draftStatus.hidden = false;
+    },
+    onSaved() {
+      draftStatus.hidden = true;
+      draftStatus.textContent = "";
+    },
+  });
+  draftStore.select("");
   const composerProfile = createComposerProfile({
     modelSelect: $("#composer-model"), reasoningSelect: $("#composer-reasoning"),
     permissionSelect: $("#composer-permission"), navigation,
@@ -409,11 +426,9 @@ export async function boot() {
     }
     const key = projectId && sessionId ? `${projectId}/${sessionId}` : "";
     if (key === selectedKey) return;
-    drafts.set(selectedKey, prompt.value);
+    draftStore.capture(selectedKey, prompt.value);
     selectedKey = key;
-    prompt.value = drafts.get(key) ?? "";
-    resizePrompt();
-    tokenMeter.refresh();
+    draftStore.select(key);
     window.clearTimeout(runMonitor);
     runMonitor = 0;
     activeRun = null;
@@ -454,8 +469,8 @@ export async function boot() {
     const title = text.trim().split(/\r?\n/, 1)[0].slice(0, 80);
     const session = await createSession({ project_id: "default", title,
       ...composerProfile.selection() });
+    draftStore.edit(`${session.project_id}/${session.id}`, text, true);
     navigation.select(session.project_id, session.id);
-    drafts.delete("");
     selectTimeline(session.project_id, session.id);
     return { projectId: session.project_id, sessionId: session.id };
   }
@@ -474,6 +489,7 @@ export async function boot() {
     hideComposerError();
     submitting = true;
     send.disabled = true;
+    const originatingKey = selectedKey;
     try {
       const selected = await ensureSession(text);
       if (activeRun) {
@@ -481,7 +497,7 @@ export async function boot() {
           throw new Error("待发送队列已满（最多 20 条）");
         queueBlocked.delete(`${selected.projectId}/${selected.sessionId}`);
         prompt.value = "";
-        drafts.delete(`${selected.projectId}/${selected.sessionId}`);
+        draftStore.clear(`${selected.projectId}/${selected.sessionId}`);
         resizePrompt();
         tokenMeter.refresh();
         if (interrupt) {
@@ -496,7 +512,8 @@ export async function boot() {
       }
       const run = await startRun(selected.projectId, selected.sessionId, text);
       prompt.value = "";
-      drafts.delete(`${selected.projectId}/${selected.sessionId}`);
+      draftStore.clear(`${selected.projectId}/${selected.sessionId}`);
+      if (!originatingKey) draftStore.clear("");
       resizePrompt();
       tokenMeter.refresh();
       monitorRun(run);
@@ -531,7 +548,8 @@ export async function boot() {
   }
   prompt.addEventListener("input", () => {
     resizePrompt();
-    drafts.set(selectedKey, prompt.value);
+    draftStore.edit(selectedKey, prompt.value);
+    tokenMeter.refresh();
   });
   prompt.addEventListener("keydown", (event) => {
     if (slashCommands.onKeyDown(event)) return;
@@ -545,6 +563,7 @@ export async function boot() {
   for (const starter of document.querySelectorAll("[data-prompt]")) {
     starter.addEventListener("click", () => {
       prompt.value = starter.dataset.prompt;
+      prompt.dispatchEvent(new Event("input", { bubbles: true }));
       resizePrompt();
       prompt.focus();
     });

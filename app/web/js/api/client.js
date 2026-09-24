@@ -40,6 +40,7 @@ export async function apiRequest(path, options = {}) {
       body: options.body === undefined ? undefined : JSON.stringify(options.body),
       cache: "no-store",
       credentials: "same-origin",
+      keepalive: options.keepalive ?? false,
       signal: options.signal,
     });
   } catch (error) {

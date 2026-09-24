@@ -1410,6 +1410,36 @@ def run_probe(host: Path) -> None:
 
                 session_path = (
                     f"/api/v1/projects/api-project/sessions/{session_id}")
+                status, _, body = request(port, "GET", "/api/v1/draft")
+                assert status == 200 and json.loads(body)["data"] == {
+                    "revision": 0, "text": ""}, (status, body)
+                assert not (home / "data/draft.json").exists()
+                status, _, body = request(
+                    port, "PUT", "/api/v1/draft",
+                    body=json.dumps({"revision": 0, "text": "未发送的草稿"}).encode(),
+                    headers={"Content-Type": "application/json"})
+                assert status == 200 and json.loads(body)["data"] == {
+                    "revision": 1, "text": "未发送的草稿"}, (status, body)
+                status, _, body = request(
+                    port, "PUT", "/api/v1/draft",
+                    body=b'{"revision":0,"text":"stale"}',
+                    headers={"Content-Type": "application/json"})
+                assert status == 409 and json.loads(body)["error"][
+                    "code"] == "draft_conflict", (status, body)
+                assert json.loads((home / "data/draft.json").read_text(
+                    encoding="utf-8"))["text"] == "未发送的草稿"
+                draft_path = session_path + "/draft"
+                status, _, body = request(port, "GET", draft_path)
+                assert status == 200 and json.loads(body)["data"] == {
+                    "revision": 0, "text": ""}, (status, body)
+                status, _, body = request(
+                    port, "PUT", draft_path,
+                    body=b'{"revision":0,"text":"session draft"}',
+                    headers={"Content-Type": "application/json"})
+                assert status == 200 and json.loads(body)["data"] == {
+                    "revision": 1, "text": "session draft"}, (status, body)
+                assert json.loads(request(port, "GET", draft_path)[2])[
+                    "data"]["text"] == "session draft"
                 run_path = session_path + "/runs"
                 status, headers, body = request(
                     port, "POST", run_path,

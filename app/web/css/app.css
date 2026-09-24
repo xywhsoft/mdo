@@ -615,6 +615,8 @@ select:focus-visible,
 .option-chip:hover { background: var(--surface-hover); color: var(--ink); }
 .option-chip .icon { width: 15px; height: 15px; }
 .composer-hint { color: var(--faint); font-size: 10px; }
+.composer-draft-status { color: var(--danger); font-size: 10px; }
+.composer-draft-status[hidden] { display: none; }
 .send-button, .stop-button {
   display: grid;
   width: 31px;
