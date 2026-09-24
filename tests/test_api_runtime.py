@@ -601,6 +601,12 @@ def run_probe(host: Path) -> None:
                     "sidebar_width": 272, "inspector_width": 336,
                     "sidebar_open": True, "inspector_open": True,
                 }, layout_defaults
+                status, headers, body = request(port, "GET", "/api/v1/models/config")
+                assert status == 200, (status, body)
+                model_config = json.loads(body)["data"]
+                assert model_config["default_model"] == "ling-3.0-tiny", model_config
+                assert model_config["items"][0]["editable"] is False, model_config
+                assert headers["etag"].startswith('"mdo-config-'), headers
                 assert not home.exists(), home
 
                 status, headers, body = request(
@@ -3304,6 +3310,98 @@ def run_unconfigured_model_probe(host: Path) -> None:
                 document = json.loads(response)
                 assert status == 422, (status, document)
                 assert document["error"]["code"] == "session_profile_invalid", document
+
+                # The model editor uses a complete, versioned configuration
+                # document; built-in Ling stays protected by the transaction.
+                model_path = "/api/v1/models/config"
+                status, headers, response = request(port, "GET", model_path)
+                assert status == 200, (status, response)
+                original_models = json.loads(response)["data"]
+                original_tag = headers["etag"]
+                changed = {key: value for key, value in original_models.items()
+                    if key != "runtime_override"}
+                changed = json.loads(json.dumps(changed))
+                changed["providers"].append({
+                    "id": "test-provider", "name": "Test Provider",
+                    "builtin": False, "editable": True, "removable": True,
+                    "verify_peer": True, "timeout_ms": 30000,
+                    "endpoints": {"responses": "https://example.com/v1/responses"},
+                    "credential": {"secret_ref": "env:MDO_TEST_MODEL_KEY"},
+                })
+                changed["items"].append({
+                    "id": "test-model", "name": "Test Model",
+                    "provider": "test-provider", "wire_model": "test-model",
+                    "builtin": False, "free": False,
+                    "editable": True, "removable": True,
+                    "protocols": ["openai-responses"],
+                    "default_protocol": "openai-responses",
+                    "capabilities": ["text-input", "text-output", "streaming"],
+                    "window": {"mode": "shared-context", "context_tokens": 32000,
+                        "max_input_tokens": 30000, "max_output_tokens": 2000,
+                        "output_reserve_tokens": 1000, "summary_tokens": 500},
+                    "reasoning_efforts": ["none", "medium"],
+                    "default_reasoning_effort": "medium", "attachments": [],
+                })
+                model_document = json.dumps({"schema_version": 1,
+                    "patch": changed}).encode()
+                status, _, response = request(port, "POST",
+                    "/api/v1/settings/models/preview", body=model_document,
+                    headers={"Content-Type": "application/json"})
+                assert status == 200 and json.loads(response)["data"]["changes"], response
+                status, _, response = request(port, "PUT", "/api/v1/settings/models",
+                    body=model_document, headers={"Content-Type": "application/json",
+                        "If-Match": original_tag})
+                assert status == 200, (status, response)
+                status, _, response = request(port, "PUT", "/api/v1/settings/models",
+                    body=model_document, headers={"Content-Type": "application/json",
+                        "If-Match": original_tag})
+                assert status == 412, (status, response)
+                status, _, response = request(port, "GET", model_path)
+                assert status == 200, (status, response)
+                saved_models = json.loads(response)["data"]
+                assert any(item["id"] == "test-model" for item in saved_models["items"])
+                assert any(item["id"] == "test-provider" for item in saved_models["providers"])
+                assert any(item["id"] == "test-model" for item in
+                    json.loads(request(port, "GET", "/api/v1/models")[2])["data"]["models"])
+                protected = json.loads(json.dumps(changed))
+                protected["items"][0]["name"] = "Altered Ling"
+                status, _, response = request(port, "POST",
+                    "/api/v1/settings/models/preview",
+                    body=json.dumps({"schema_version": 1, "patch": protected}).encode(),
+                    headers={"Content-Type": "application/json"})
+                assert status == 422, (status, response)
+                status, headers, response = request(port, "GET", model_path)
+                assert status == 200, (status, response)
+                changed["default_model"] = "test-model"
+                status, _, response = request(port, "PUT", "/api/v1/settings/models",
+                    body=json.dumps({"schema_version": 1, "patch": changed}).encode(),
+                    headers={"Content-Type": "application/json",
+                        "If-Match": headers["etag"]})
+                assert status == 200, (status, response)
+                status, headers, response = request(port, "GET", model_path)
+                assert status == 200 and json.loads(response)["data"][
+                    "default_model"] == "test-model", response
+                changed["items"] = [item for item in changed["items"]
+                    if item["id"] != "test-model"]
+                status, _, response = request(port, "POST",
+                    "/api/v1/settings/models/preview",
+                    body=json.dumps({"schema_version": 1, "patch": changed}).encode(),
+                    headers={"Content-Type": "application/json"})
+                assert status == 422, (status, response)
+                changed["default_model"] = "ling-3.0-tiny"
+                changed["providers"] = [provider for provider in changed["providers"]
+                    if provider["id"] != "test-provider"]
+                status, _, response = request(port, "PUT", "/api/v1/settings/models",
+                    body=json.dumps({"schema_version": 1, "patch": changed}).encode(),
+                    headers={"Content-Type": "application/json",
+                        "If-Match": headers["etag"]})
+                assert status == 200, (status, response)
+                status, _, response = request(port, "GET", model_path)
+                assert status == 200, (status, response)
+                remaining = json.loads(response)["data"]
+                assert remaining["default_model"] == "ling-3.0-tiny", remaining
+                assert [item["id"] for item in remaining["items"]] == [
+                    "ling-3.0-tiny"], remaining
             except BaseException as error:
                 failure = error
             finally:

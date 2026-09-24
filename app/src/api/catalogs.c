@@ -1,6 +1,7 @@
 #include <string.h>
 
 #include "internal.h"
+#include "../../include/mdo/config.h"
 #include "../../include/mdo/mcp.h"
 #include "../../include/mdo/models.h"
 #include "../../include/mdo/modules.h"
@@ -127,6 +128,47 @@ bool MdoApiModelsRoute(MdoApiContext* Context)
     MdoModelCatalogRelease(Catalog);
     if ( !Ok ) { xrtValueRelease(Data); Data = NULL; }
     return MdoApiCatalogReply(Context, Data);
+}
+
+/* The editor receives references, never resolved credential values.  The
+ * config transaction still validates protected built-ins and all changes. */
+bool MdoApiModelConfigRoute(MdoApiContext* Context)
+{
+    str Json = NULL;
+    size_t Size = 0u;
+    xvalue* Root = NULL;
+    xvalue* Data = NULL;
+    const xvalue* Models;
+    MdoConfigSnapshot Before = { 0 }, After = { 0 };
+    size_t Attempt;
+
+    Before.Size = sizeof(Before);
+    After.Size = sizeof(After);
+    for ( Attempt = 0u; Attempt < 3u; ++Attempt ) {
+        if ( !MdoConfigGetSnapshot(&Before) ) break;
+        Json = MdoConfigEffectiveJson(&Size);
+        if ( Json == NULL ) break;
+        Root = xrtJsonParse(xrtStrViewN(Json, Size));
+        xrtFree(Json); Json = NULL;
+        Models = Root != NULL ? xrtValueObjectGet(Root,
+            XRT_STR_LITERAL("models")) : NULL;
+        if ( xrtValueType(Models) != XVALUE_OBJECT ) break;
+        Data = xrtValueDeepClone(Models);
+        xrtValueRelease(Root); Root = NULL;
+        if ( Data == NULL || !MdoConfigGetSnapshot(&After) ) break;
+        if ( Before.Revision == After.Revision ) {
+            if ( !MdoApiValueSetBool(Data, "runtime_override",
+                    After.RuntimeOverride) ) break;
+            return MdoApiReplySuccessTakeRevision(Context, 200u, Data,
+                After.Revision);
+        }
+        xrtValueRelease(Data); Data = NULL;
+    }
+    xrtFree(Json);
+    xrtValueRelease(Root);
+    xrtValueRelease(Data);
+    return MdoApiReplyError(Context, 503u, "model_config_unavailable",
+        "Model configuration could not be read consistently", NULL);
 }
 
 static bool MdoApiModuleAgentValue(const MdoModuleAgentInfo* Info,

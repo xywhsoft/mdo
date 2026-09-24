@@ -26,6 +26,8 @@ static const MdoApiRoute g_MdoApiRoutes[] = {
       "GET, HEAD, PUT, OPTIONS", MdoApiPaneLayoutRoute },
     { "/api/v1/models", XHTTP_METHOD_GET | XHTTP_METHOD_HEAD,
       "GET, HEAD, OPTIONS", MdoApiModelsRoute },
+    { "/api/v1/models/config", XHTTP_METHOD_GET | XHTTP_METHOD_HEAD,
+      "GET, HEAD, OPTIONS", MdoApiModelConfigRoute },
     { "/api/v1/agents", XHTTP_METHOD_GET | XHTTP_METHOD_HEAD,
       "GET, HEAD, OPTIONS", MdoApiAgentsRoute },
     { "/api/v1/modules", XHTTP_METHOD_GET | XHTTP_METHOD_HEAD,

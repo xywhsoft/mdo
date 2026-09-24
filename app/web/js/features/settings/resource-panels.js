@@ -3,6 +3,7 @@ import {
   reloadCatalog, setMcpEnabled, disconnectMcp, refreshMcp,
   applyLegacyMigration,
 } from "../../state/resources.js";
+import { createModelConfigPanel } from "./model-config-panel.js";
 
 function card(title, description, meta = [], actions = []) {
   const body = [element("h3", { text: title }), element("p", { text: description || "暂无说明" })];
@@ -35,7 +36,7 @@ function empty(text) {
   return element("div", { className: "empty-state", text });
 }
 
-export function createResourcePanels({ modelsStore, agentsStore, stores, reload }) {
+export function createResourcePanels({ agentsStore, stores, reload }) {
   const modelsContainer = document.querySelector("#settings-models-list");
   const extensionsContainer = document.querySelector("#settings-extensions-list");
   const permissionsContainer = document.querySelector("#settings-permissions-list");
@@ -51,23 +52,7 @@ export function createResourcePanels({ modelsStore, agentsStore, stores, reload 
     toast(`${name} 目录已刷新`);
   }
 
-  function renderModels() {
-    const state = modelsStore.get();
-    clear(modelsContainer);
-    if (state.status === "error") { modelsContainer.append(empty(errorMessage(state.error))); return; }
-    modelsContainer.append(heading("Provider", action("刷新", () => refreshCatalog("models"))));
-    for (const provider of state.data?.providers ?? []) {
-      modelsContainer.append(card(provider.name || provider.id,
-        provider.builtin ? "内置 Provider" : "用户 Provider",
-        [provider.id, provider.credential_configured ? "凭据已配置" : "缺少凭据", `${provider.timeout_ms} ms`]));
-    }
-    modelsContainer.append(heading("模型"));
-    for (const model of state.data?.models ?? []) {
-      modelsContainer.append(card(model.name || model.id,
-        `${model.provider_id} · ${model.default_protocol}`,
-        [model.free ? "免费" : "计费", `${model.context_window_tokens} context`, `${model.max_output_tokens} output`]));
-    }
-  }
+  createModelConfigPanel(modelsContainer);
 
   function renderExtensions() {
     clear(extensionsContainer);
@@ -196,7 +181,6 @@ export function createResourcePanels({ modelsStore, agentsStore, stores, reload 
     }
   }
 
-  unsubscribers.push(modelsStore.subscribe(renderModels));
   unsubscribers.push(agentsStore.subscribe(renderExtensions));
   unsubscribers.push(stores.modules.subscribe(renderExtensions));
   unsubscribers.push(stores.skills.subscribe(renderExtensions));
