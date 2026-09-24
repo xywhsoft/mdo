@@ -100,3 +100,41 @@ export async function clearSession(session) {
 export function exportSession(session) {
   return api.download(`${endpoint(session)}/export`);
 }
+
+// Session events are durable but served in small pages. Keep a one-click
+// transcript export bounded, and report when its source cannot be complete.
+const TRANSCRIPT_PAGE_SIZE = 32;
+const TRANSCRIPT_MAX_EVENTS = 4096;
+
+export async function loadSessionTranscript(session) {
+  let cursor = 0;
+  let latestEventId = null;
+  let historyLost = false;
+  let textTruncated = false;
+  const events = [];
+  const path = `${endpoint(session)}/events`;
+  while (events.length < TRANSCRIPT_MAX_EVENTS) {
+    const replay = (await api.get(`${path}?after=${cursor}&limit=${TRANSCRIPT_PAGE_SIZE}`)).data;
+    const latest = Number(replay.latest_event_id);
+    const next = Number(replay.next_cursor);
+    if (!Number.isSafeInteger(latest) || !Number.isSafeInteger(next) ||
+        latest < 0 || next < cursor) throw new Error("会话事件游标无效，无法导出 Markdown");
+    if (latestEventId === null) latestEventId = latest;
+    historyLost ||= Boolean(replay.history_lost);
+    for (const event of replay.items ?? []) {
+      const id = Number(event.event_id);
+      if (!Number.isSafeInteger(id) || id <= cursor || id > latestEventId) continue;
+      events.push(event);
+      textTruncated ||= Boolean(event.text_truncated);
+    }
+    const previous = cursor;
+    cursor = next;
+    if (cursor >= latestEventId) break;
+    if (next === previous || !(replay.items?.length)) {
+      historyLost = true;
+      break;
+    }
+  }
+  return { events, historyLost, textTruncated,
+    limitReached: events.length >= TRANSCRIPT_MAX_EVENTS && cursor < latestEventId };
+}

@@ -33,7 +33,8 @@ export function createSessionList({ container, count, filter, store, projectsSto
       actions.push(menuAction("创建分支", "fork", session));
       actions.push(menuAction("截断历史", "truncate", session, "danger"));
       actions.push(menuAction("清空历史", "clear", session, "danger"));
-      actions.push(menuAction("导出", "export", session));
+      actions.push(menuAction("导出 Markdown", "export", session));
+      actions.push(menuAction("导出 JSON 备份", "export_json", session));
     } else actions.push(menuAction("移回进行中", "unarchive", session));
     actions.push(menuAction("移到回收站", "trash", session, "danger"));
     return actions;

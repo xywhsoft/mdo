@@ -4,7 +4,7 @@ const COMMANDS = Object.freeze([
   { name: "/new", description: "新建任务" },
   { name: "/model", description: "选择模型" },
   { name: "/fork", description: "分叉当前会话" },
-  { name: "/export", description: "导出当前会话" },
+  { name: "/export", description: "导出当前会话 Markdown" },
   { name: "/clear", description: "清空当前会话历史" },
   { name: "/stop", description: "停止当前任务" },
   { name: "/settings", description: "打开设置" },

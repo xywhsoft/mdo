@@ -3,7 +3,7 @@ import { bootstrapStore, loadBootstrap } from "./state/bootstrap.js";
 import {
   sessionsStore, sessionDetailStore, loadSessions, loadSession, createSession,
   patchSession, trashSession, restoreSession, loadSessionHistory, forkSession,
-  truncateSession, clearSession, exportSession,
+  truncateSession, clearSession, exportSession, loadSessionTranscript,
 } from "./state/sessions.js";
 import { modelsStore, agentsStore, projectsStore, loadCatalogs, loadModels, loadAgents } from "./state/catalogs.js";
 import {
@@ -23,6 +23,7 @@ import { asksStore, selectAsks, clearAsks, refreshSelectedAsks } from "./state/a
 import { recoveryStore, selectRecovery, loadRecovery, abandonRecovery } from "./state/recovery.js";
 import { navigation } from "./state/navigation.js";
 import { createSessionList } from "./features/sessions/session-list.js";
+import { formatSessionMarkdown, sessionMarkdownFilename } from "./features/sessions/session-export.js";
 import { createProjectDialog } from "./features/sessions/project-dialog.js";
 import { timelineStore, selectTimeline, clearTimeline, refreshSelectedTimeline, reloadSelectedTimeline } from "./features/chat/timeline-store.js";
 import { todoStore, selectTodo, clearTodo } from "./state/todo.js";
@@ -934,15 +935,20 @@ export async function boot() {
   }
 
   async function handleSessionAction(action, session) {
-    if (action === "export") {
-      const file = await exportSession(session);
+    if (action === "export" || action === "export_json") {
+      if (action === "export") toast("正在整理 Markdown 会话记录…");
+      const file = action === "export_json" ? await exportSession(session) : {
+        blob: new Blob([formatSessionMarkdown(session, await loadSessionTranscript(session))],
+          { type: "text/markdown;charset=utf-8" }),
+        filename: sessionMarkdownFilename(session),
+      };
       const url = URL.createObjectURL(file.blob);
       const link = document.createElement("a");
       link.href = url;
       link.download = file.filename;
       link.click();
       window.setTimeout(() => URL.revokeObjectURL(url), 0);
-      toast("会话导出已开始下载");
+      toast(action === "export_json" ? "JSON 备份已开始下载" : "Markdown 已开始下载");
       return;
     }
     if (!["rename", "trash", "fork", "truncate", "clear"].includes(action)) return applySessionAction(action, session);
