@@ -2,6 +2,7 @@
 #include <string.h>
 
 #include "internal.h"
+#include "../../include/mdo/projects.h"
 #include "../../include/mdo/sessions.h"
 
 typedef enum MdoApiSessionPreconditionStatus {
@@ -509,6 +510,7 @@ bool MdoApiSessionCreateRoute(MdoApiContext* Context)
     MdoApiBodyStatus BodyStatus;
     MdoSessionCreateOptions Options;
     MdoSessionInfo Info;
+    MdoProjectInfo ProjectInfo;
     MdoSession* Session;
     xwork_error Error;
     char Project[MDO_PROJECT_ID_CAPACITY] = { 0 };
@@ -519,8 +521,10 @@ bool MdoApiSessionCreateRoute(MdoApiContext* Context)
     char Reasoning[MDO_SESSION_REASONING_CAPACITY] = { 0 };
     char Permission[MDO_SESSION_REASONING_CAPACITY] = { 0 };
     char Workspace[MDO_SESSION_WORKSPACE_CAPACITY] = { 0 };
+    str ProjectWorkspace = NULL;
     size_t Present = 0u;
     bool Valid;
+    bool ProjectFound = false;
 
     BodyStatus = MdoApiJsonBodyRead(Context, &Body);
     if ( BodyStatus != MDO_API_BODY_OK )
@@ -561,7 +565,38 @@ bool MdoApiSessionCreateRoute(MdoApiContext* Context)
         Permission : NULL;
     Options.Agent.WorkspaceRoot = Workspace[0] != '\0' ? Workspace : NULL;
     memset(&Error, 0, sizeof(Error));
+    memset(&ProjectInfo, 0, sizeof(ProjectInfo));
+    ProjectInfo.Size = sizeof(ProjectInfo);
+    if ( !MdoProjectGet(Project, &ProjectInfo, &ProjectFound, &Error) ) {
+        MdoApiJsonBodyUnit(&Body);
+        if ( Error.eCode == XWORK_ERROR_INVALID_ARGUMENT )
+            return MdoApiReplyError(Context, 422u,
+                "session_create_invalid",
+                "The session create document is invalid", NULL);
+        return MdoApiReplyError(Context, 503u, "project_unavailable",
+            "The project definition is invalid or unavailable", NULL);
+    }
+    if ( ProjectFound ) {
+        if ( Options.Agent.WorkspaceRoot == NULL ) {
+            if ( xrtPathIsAbs(ProjectInfo.WorkspaceRoot) )
+                Options.Agent.WorkspaceRoot = ProjectInfo.WorkspaceRoot;
+            else {
+                ProjectWorkspace = xrtPathJoin(xsAppPath(),
+                    ProjectInfo.WorkspaceRoot);
+                if ( ProjectWorkspace == NULL ) {
+                    MdoApiJsonBodyUnit(&Body);
+                    return MdoApiReplyError(Context, 500u,
+                        "project_unavailable",
+                        "The project workspace could not be resolved", NULL);
+                }
+                Options.Agent.WorkspaceRoot = ProjectWorkspace;
+            }
+        }
+        if ( Options.Agent.ModelId == NULL && ProjectInfo.DefaultModelId[0] != '\0' )
+            Options.Agent.ModelId = ProjectInfo.DefaultModelId;
+    }
     Session = MdoSessionCreate(&Options, &Error);
+    xrtFree(ProjectWorkspace);
     MdoApiJsonBodyUnit(&Body);
     if ( Session == NULL )
         return MdoApiSessionCreateFailure(Context, &Error);

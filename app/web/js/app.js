@@ -23,6 +23,7 @@ import { asksStore, selectAsks, clearAsks, refreshSelectedAsks } from "./state/a
 import { recoveryStore, selectRecovery, loadRecovery, abandonRecovery } from "./state/recovery.js";
 import { navigation } from "./state/navigation.js";
 import { createSessionList } from "./features/sessions/session-list.js";
+import { createProjectDialog } from "./features/sessions/project-dialog.js";
 import { timelineStore, selectTimeline, clearTimeline, refreshSelectedTimeline, reloadSelectedTimeline } from "./features/chat/timeline-store.js";
 import { todoStore, selectTodo, clearTodo } from "./state/todo.js";
 import { createTimelineView } from "./features/chat/timeline.js";
@@ -125,6 +126,19 @@ export async function boot() {
   // repeating DELETE while its persisted priority queue item is still waiting.
   const priorityCancelAttempts = new Set();
 
+  const projectDialog = createProjectDialog({
+    dialog: $("#project-dialog"), form: $("#project-form"),
+    error: $("#project-error"), submit: $("#create-project"), modelsStore,
+    onCreated(project) {
+      showActiveSessions();
+      navigation.newTask(project.id);
+      closeDrawers();
+      prompt.focus();
+    },
+  });
+  $("#close-project-dialog").addEventListener("click", () => $("#project-dialog").close());
+  $("#cancel-project").addEventListener("click", () => $("#project-dialog").close());
+
   const sessionList = createSessionList({
     container: $("#session-list"),
     count: $("#session-count"),
@@ -137,6 +151,7 @@ export async function boot() {
       closeDrawers();
     },
     onAction: handleSessionAction,
+    onAddProject: () => projectDialog.open(),
     onNewInProject(projectId) {
       showActiveSessions();
       navigation.newTask(projectId);

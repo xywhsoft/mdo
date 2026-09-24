@@ -42,6 +42,7 @@ Mutations:
 - reload model, Skill, module, and MCP catalogs;
 - enable, disconnect, or refresh an MCP server;
 - create, edit, archive, trash, and restore sessions;
+- add a persistent project with its workspace and optional default model;
 - fork, truncate, clear, export, and resume durable sessions;
 - start and cancel interactive Agent runs, resolve one-shot approval requests,
   and answer session-bound user questions;
@@ -51,6 +52,21 @@ Mutations:
 Module reload and MCP refresh use retained operation IDs. The caller polls the
 operation resource and can request cancellation without depending on an HTTP
 connection remaining open.
+
+`GET /projects` merges persisted project definitions with projects inferred
+from session and schedule catalogs. Every item has `id`, `name`,
+`workspace_root`, `default_model_id`, `managed`, `revision`, and session and
+schedule counts. Definitions without sessions remain visible. The list also
+reports invalid definition count and truncation. `POST /projects` accepts
+`{"id":"work","name":"Work","workspace_root":"D:\\work",
+"default_model_id":"ling-3.0-tiny"}`; the last two fields are optional. It
+returns `201` and a project ETag. Duplicate IDs return `409`; unknown fields,
+invalid IDs, and empty supplied fields return `422`. Definitions are stored as
+readable `projects/<id>.json` in the portable Home. Reads never materialize
+Home. Session creation inherits a managed project's workspace and default
+model when the request does not provide them.
+Relative project workspace paths resolve from the executable's directory,
+so a project placed beside `mdo.exe` remains portable when the folder moves.
 
 `GET /schedules/{schedule}/history` reads the retained completion sidecar
 without creating Home. It returns the newest 32 records first, with task and

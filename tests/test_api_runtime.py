@@ -729,6 +729,62 @@ def run_probe(host: Path) -> None:
                 assert json.loads(request(port, "GET", "/api/v1/models")[2])[
                     "data"]["models"][0]["id"] == "ling-3.0-tiny"
 
+                project_workspace = base / "project-workspace"
+                project_workspace.mkdir()
+                project_relative = os.path.relpath(project_workspace, host.parent)
+                project_input = {
+                    "id": "ui-workspace", "name": "UI Workspace",
+                    "workspace_root": project_relative,
+                    "default_model_id": "ling-3.0-tiny",
+                }
+                status, headers, body = request(
+                    port, "POST", "/api/v1/projects",
+                    body=json.dumps(project_input).encode(),
+                    headers={"Content-Type": "application/json"})
+                created_project = json.loads(body)
+                assert status == 201, (status, body)
+                assert_common(headers, created_project)
+                assert created_project["data"]["managed"] is True, created_project
+                assert created_project["data"]["revision"] == 1, created_project
+                assert headers["etag"] == '"mdo-project-ui-workspace-1"', headers
+                stored_project = json.loads((home / "projects/ui-workspace.json")
+                                            .read_text(encoding="utf-8"))
+                assert stored_project["schema_version"] == 1, stored_project
+                assert stored_project["workspace_root"] == project_relative
+                listed_projects = json.loads(request(
+                    port, "GET", "/api/v1/projects")[2])["data"]["items"]
+                assert any(item["id"] == "ui-workspace" and item["managed"] and
+                           item["session_count"] == 0 for item in listed_projects), (
+                               listed_projects)
+                status, _, body = request(
+                    port, "POST", "/api/v1/projects",
+                    body=json.dumps(project_input).encode(),
+                    headers={"Content-Type": "application/json"})
+                assert status == 409 and json.loads(body)["error"]["code"] == (
+                    "project_exists"), (status, body)
+                for invalid in (
+                    {**project_input, "id": "../escape"},
+                    {**project_input, "extra": True},
+                    {**project_input, "workspace_root": ""},
+                ):
+                    status, _, body = request(
+                        port, "POST", "/api/v1/projects",
+                        body=json.dumps(invalid).encode(),
+                        headers={"Content-Type": "application/json"})
+                    assert status == 422 and json.loads(body)["error"]["code"] == (
+                        "project_invalid"), (status, body)
+                status, _, body = request(
+                    port, "POST", "/api/v1/sessions",
+                    body=json.dumps({"project_id": "ui-workspace",
+                                     "title": "Project default probe"}).encode(),
+                    headers={"Content-Type": "application/json"})
+                assert status == 201, (status, body)
+                project_session = json.loads(body)["data"]
+                assert project_session["project_id"] == "ui-workspace"
+                assert project_session["model_id"] == "ling-3.0-tiny"
+                assert (Path(project_session["workspace_root"]).resolve() ==
+                        project_workspace.resolve()), project_session
+
                 approval_deadline = time.monotonic() + 3.0
                 approvals = {"items": []}
                 while time.monotonic() < approval_deadline:

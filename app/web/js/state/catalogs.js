@@ -17,6 +17,12 @@ export function loadProjects() {
   return projectsStore.load(async () => (await api.get("/projects")).data);
 }
 
+export async function createProject(input) {
+  const response = await api.post("/projects", input);
+  await loadProjects();
+  return response.data;
+}
+
 export function loadCatalogs() {
   return Promise.all([loadModels(), loadAgents(), loadProjects()]);
 }

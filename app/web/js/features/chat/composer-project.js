@@ -21,12 +21,14 @@ export function createComposerProject({ select, navigation, projectsStore,
       addId(ids, project.id);
     for (const session of sessionsStore.get().data?.items ?? [])
       addId(ids, session.project_id);
+    const projects = new Map((projectsStore.get().data?.items ?? [])
+      .map((project) => [project.id, project]));
     const ordered = ["default", ...[...ids].filter((id) => id !== "default")
       .sort((a, b) => a.localeCompare(b, "zh-CN"))];
-    const nextKey = ordered.join("\n");
+    const nextKey = ordered.map((id) => `${id}:${projects.get(id)?.name ?? ""}`).join("\n");
     if (nextKey !== optionKey) {
       select.replaceChildren(...ordered.map((id) => element("option", {
-        text: id === "default" ? "默认项目" : id,
+        text: id === "default" ? "默认项目" : projects.get(id)?.name || id,
         attrs: { value: id },
       })));
       optionKey = nextKey;

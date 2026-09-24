@@ -31,8 +31,8 @@ static const MdoApiRoute g_MdoApiRoutes[] = {
       "GET, HEAD, OPTIONS", MdoApiSkillsRoute },
     { "/api/v1/mcp", XHTTP_METHOD_GET | XHTTP_METHOD_HEAD,
       "GET, HEAD, OPTIONS", MdoApiMcpRoute },
-    { "/api/v1/projects", XHTTP_METHOD_GET | XHTTP_METHOD_HEAD,
-      "GET, HEAD, OPTIONS", MdoApiProjectsRoute },
+    { "/api/v1/projects", XHTTP_METHOD_GET | XHTTP_METHOD_HEAD |
+      XHTTP_METHOD_POST, "GET, HEAD, POST, OPTIONS", MdoApiProjectsRoute },
     { "/api/v1/sessions",
       XHTTP_METHOD_GET | XHTTP_METHOD_HEAD | XHTTP_METHOD_POST,
       "GET, HEAD, POST, OPTIONS", MdoApiSessionsRoute },

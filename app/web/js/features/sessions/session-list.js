@@ -1,7 +1,7 @@
 import { element, clear, formatRelativeTime, errorMessage, toast } from "../../utils/dom.js";
 
 export function createSessionList({ container, count, filter, store, projectsStore,
-  navigation, onSelect, onAction, onNewInProject }) {
+  navigation, onSelect, onAction, onNewInProject, onAddProject }) {
   let query = "";
   let status = filter.value;
   let openMenu = "";
@@ -67,6 +67,8 @@ export function createSessionList({ container, count, filter, store, projectsSto
     }
     const orderedGroups = [...groupIds].filter(Boolean).sort((a, b) =>
       a === "default" ? -1 : b === "default" ? 1 : a.localeCompare(b, "zh-CN"));
+    const projects = new Map((projectsStore.get().data?.items ?? [])
+      .map((project) => [project.id, project]));
     count.textContent = String(visible.length);
     container.setAttribute("aria-busy", String(state.status === "loading"));
     clear(container);
@@ -99,6 +101,15 @@ export function createSessionList({ container, count, filter, store, projectsSto
         children.push(create);
       }
       container.append(element("div", { className: "session-group-heading" }, children));
+    }
+
+    if (status === "active" && !needle) {
+      const add = element("button", { className: "session-group-new", text: "+",
+        attrs: { type: "button", "aria-label": "添加项目", title: "添加项目" } });
+      add.addEventListener("click", onAddProject);
+      container.append(element("div", { className: "session-group-heading project-list-heading" }, [
+        element("span", { className: "session-group-name", text: "项目" }), add,
+      ]));
     }
 
     function appendSession(session, showProject = false) {
@@ -152,7 +163,8 @@ export function createSessionList({ container, count, filter, store, projectsSto
     }
     for (const projectId of orderedGroups) {
       const sessions = unpinned.filter((item) => item.project_id === projectId);
-      appendHeading(projectId === "default" ? "默认项目" : projectId,
+      appendHeading(projectId === "default" ? "默认项目" :
+        projects.get(projectId)?.name || projectId,
         sessions.length, projectId);
       if (!sessions.length) container.append(element("div", {
         className: "session-group-empty", text: "暂无会话",

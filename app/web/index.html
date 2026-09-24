@@ -422,6 +422,31 @@
     </div>
   </dialog>
 
+  <dialog class="new-session-dialog" id="project-dialog" aria-labelledby="project-dialog-title">
+    <form class="dialog-card" id="project-form">
+      <header>
+        <div>
+          <h2 id="project-dialog-title">添加项目</h2>
+          <p>指定工作区目录；项目会保留在侧栏，新任务将使用该目录。</p>
+        </div>
+        <button class="icon-button" type="button" id="close-project-dialog" aria-label="关闭">
+          <span class="icon" data-icon="close" aria-hidden="true"></span>
+        </button>
+      </header>
+      <div class="dialog-fields project-fields">
+        <label>工作区目录 <input name="workspace_root" required maxlength="2048" autocomplete="off" placeholder="例如 /work/project 或 D:\work\project"></label>
+        <label>项目名称 <input name="name" required maxlength="256" autocomplete="off"></label>
+        <label>项目标识 <input name="id" required maxlength="64" pattern="[A-Za-z0-9_-][A-Za-z0-9._-]*" autocomplete="off"></label>
+        <label>默认模型 <select name="default_model_id"><option value="">跟随全局默认</option></select></label>
+      </div>
+      <div class="dialog-error" id="project-error" role="alert" hidden></div>
+      <footer>
+        <button class="secondary-button" id="cancel-project" type="button">取消</button>
+        <button class="primary-button" id="create-project" type="submit">添加项目</button>
+      </footer>
+    </form>
+  </dialog>
+
   <dialog class="new-session-dialog" id="new-session-dialog" aria-labelledby="new-session-title">
     <form method="dialog" class="dialog-card" id="new-session-form">
       <header>
