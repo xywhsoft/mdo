@@ -17,6 +17,12 @@ export function createComposerImages({ composer, prompt, button, input, strip,
   }
 
   function render() {
+    const focused = strip.contains(document.activeElement)
+      ? document.activeElement : null;
+    const focusedId = focused?.dataset.imageId;
+    const focusedIndex = Number(focused?.dataset.imageIndex ?? 0);
+    const focusedKind = focused?.classList.contains("composer-image-remove")
+      ? "remove" : focused?.matches("[data-image-preview]") ? "preview" : "";
     clear(strip);
     const selected = owner();
     strip.hidden = ids.length === 0 && !uploading;
@@ -24,7 +30,8 @@ export function createComposerImages({ composer, prompt, button, input, strip,
       if (!/^[0-9a-f]{32}$/.test(id)) continue;
       const remove = element("button", {
         className: "composer-image-remove", text: "×",
-        attrs: { type: "button", "aria-label": `移除图片 ${index + 1}` },
+        attrs: { type: "button", "aria-label": `移除图片 ${index + 1}`,
+          "data-image-id": id, "data-image-index": String(index) },
       });
       remove.disabled = uploading || !writable;
       remove.addEventListener("click", () => {
@@ -37,6 +44,7 @@ export function createComposerImages({ composer, prompt, button, input, strip,
         element("button", { className: "composer-image-preview", attrs: {
           type: "button", "aria-label": `查看图片 ${index + 1}`,
           "data-image-preview": "",
+          "data-image-id": id, "data-image-index": String(index),
           "data-image-ref": `draft:${selected.projectId}/${selected.sessionId}/${id}/${index}`,
         } }, [element("img", { attrs: { src: attachmentUrl(selected.projectId,
           selected.sessionId, id), alt: `图片 ${index + 1}` } })]),
@@ -47,6 +55,14 @@ export function createComposerImages({ composer, prompt, button, input, strip,
       className: "composer-image-uploading", text: "正在保存图片…",
     }));
     button.disabled = !writable || uploading;
+    if (focusedKind) {
+      const candidates = [...strip.querySelectorAll(focusedKind === "remove"
+        ? ".composer-image-remove" : "[data-image-preview]")];
+      const next = candidates.find((item) =>
+        item.dataset.imageId === focusedId) ??
+        candidates[Math.min(focusedIndex, candidates.length - 1)];
+      (next ?? button).focus({ preventScroll: true });
+    }
   }
 
   function imageCapable() {

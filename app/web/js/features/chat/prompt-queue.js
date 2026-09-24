@@ -58,21 +58,30 @@ export function createPromptQueue({ container, navigation, onRetry, onRemoved })
 
   function render() {
     const key = selectedKey();
-    const entries = loads.has(key) ? [] : (queues.get(key) ?? []);
+    const entries = queues.get(key) ?? [];
+    const focused = container.dataset.queueKey === key &&
+      container.contains(document.activeElement) ? document.activeElement : null;
+    const focusKey = focused?.dataset.queueFocus;
+    const imageRef = focused?.dataset.imageRef;
+    const focusIndex = Number(focused?.dataset.queueIndex ?? 0);
     clear(container);
+    container.dataset.queueKey = key;
     container.hidden = entries.length === 0;
-    if (!entries.length) return;
+    if (!entries.length) {
+      if (focused) document.querySelector("#prompt")?.focus({ preventScroll: true });
+      return;
+    }
     const uncertain = entries[0].state === "sending";
     const [projectId, sessionId] = key.split("/");
     let open = expanded.get(key) ?? true;
     const toggle = element("button", { className: "prompt-queue-toggle",
       text: `待发送 · ${entries.length}`,
       attrs: { type: "button", "aria-expanded": String(open),
-        "aria-controls": "prompt-queue-list" },
+        "aria-controls": "prompt-queue-list", "data-queue-focus": "toggle" },
     });
     const retry = element("button", {
       text: uncertain ? "确认未发送后重试" : "发送下一条",
-      attrs: { type: "button" },
+      attrs: { type: "button", "data-queue-focus": "retry" },
     });
     retry.disabled = busy;
     retry.addEventListener("click", async () => {
@@ -100,7 +109,8 @@ export function createPromptQueue({ container, navigation, onRetry, onRemoved })
     for (const [index, entry] of entries.entries()) {
       const remove = element("button", {
         text: "移除",
-        attrs: { type: "button", "aria-label": `移除待发送消息 ${index + 1}` },
+        attrs: { type: "button", "aria-label": `移除待发送消息 ${index + 1}`,
+          "data-queue-focus": entry.id, "data-queue-index": String(index) },
       });
       remove.disabled = busy;
       remove.addEventListener("click", async () => {
@@ -141,6 +151,17 @@ export function createPromptQueue({ container, navigation, onRetry, onRemoved })
       ]));
     }
     container.append(list);
+    if (focused) {
+      const removes = [...list.querySelectorAll("button[data-queue-index]")];
+      const target = focusKey === "toggle" ? toggle :
+        focusKey === "retry" ? retry :
+        imageRef ? [...list.querySelectorAll("button[data-image-ref]")]
+          .find((item) => item.dataset.imageRef === imageRef) :
+        removes.find((item) => item.dataset.queueFocus === focusKey) ??
+          removes[Math.min(focusIndex, removes.length - 1)];
+      (target?.disabled ? toggle : target ?? toggle)
+        .focus({ preventScroll: true });
+    }
   }
 
   async function removeItem(id) {
