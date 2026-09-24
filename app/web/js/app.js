@@ -185,13 +185,17 @@ export async function boot() {
       if (!selected.projectId || !selected.sessionId) throw new Error("请先选择会话");
       await setFeedback(selected.projectId, selected.sessionId, eventId, value);
     },
-    onFork: async () => {
+    onFork: async (throughSequence) => {
       const session = sessionDetailStore.get().data;
       if (!session || activeRun) throw new Error("请在当前运行结束后分叉会话");
       const history = await loadSessionHistory(session);
+      const boundary = throughSequence ?? history.last_sequence;
+      if (!Number.isSafeInteger(boundary) || boundary < 0 ||
+          boundary > history.last_sequence)
+        throw new Error("此回复已不在当前会话历史中，请刷新会话");
       const fork = await forkSession({ ...session, etag: history.etag, revision: history.revision }, {
         title: `${session.title || "未命名任务"}（分支）`,
-        through_sequence: history.last_sequence,
+        through_sequence: boundary,
       });
       navigation.select(fork.project_id, fork.id);
       toast("已创建会话分支");

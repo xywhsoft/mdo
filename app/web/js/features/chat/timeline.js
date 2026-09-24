@@ -126,6 +126,17 @@ export function eventsToTimeline(events, historyLost = false) {
         items.push({ key: `event-${event.event_id}`, kind: "system", role: "事件", text: event.text || event.kind || "未知事件", state: event.terminal ? "done" : "running", time: event.time });
     }
   }
+  let nextUserSequence = null;
+  for (let index = items.length - 1; index >= 0; index -= 1) {
+    const item = items[index];
+    if (item.kind === "user" && Number.isSafeInteger(item.userMessageSequence) &&
+        item.userMessageSequence > 0) nextUserSequence = item.userMessageSequence;
+    if (item.kind === "assistant" && item.retryPrompt &&
+        Number.isSafeInteger(item.retryPrompt.sequence) &&
+        item.retryPrompt.sequence > 0 &&
+        (nextUserSequence === null || nextUserSequence > item.retryPrompt.sequence))
+      item.forkThroughSequence = nextUserSequence === null ? null : nextUserSequence - 1;
+  }
   return items;
 }
 
@@ -195,14 +206,16 @@ function timelineNode(item, handlers, feedback, projectId, sessionId) {
       actions.append(edit);
     }
     if (item.kind === "assistant") {
-      const fork = element("button", { text: "分叉", attrs: { type: "button", "aria-label": "分叉当前会话" } });
-      fork.addEventListener("click", async () => {
-        fork.disabled = true;
-        try { await handlers.onFork(); }
-        catch (error) { toast(errorMessage(error), "error"); }
-        finally { fork.disabled = false; }
-      });
-      actions.append(fork);
+      if ("forkThroughSequence" in item) {
+        const fork = element("button", { text: "分叉", attrs: { type: "button", "aria-label": "从此回复分叉会话" } });
+        fork.addEventListener("click", async () => {
+          fork.disabled = true;
+          try { await handlers.onFork(item.forkThroughSequence); }
+          catch (error) { toast(errorMessage(error), "error"); }
+          finally { fork.disabled = false; }
+        });
+        actions.append(fork);
+      }
       const retryPrompt = item.retryPrompt;
       if (retryPrompt && Number.isSafeInteger(retryPrompt.sequence) &&
           retryPrompt.sequence > 0 && (retryPrompt.text || retryPrompt.attachments?.length) &&
