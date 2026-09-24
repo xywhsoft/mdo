@@ -96,6 +96,8 @@ class FrontendContractTests(unittest.TestCase):
         ):
             self.assertNotIn("innerHTML", self.scripts[path], path)
         self.assertIn("node.textContent", self.scripts["js/utils/dom.js"])
+        self.assertNotIn("innerHTML", self.scripts["js/features/chat/markdown.js"])
+        self.assertIn("renderMarkdown(item.text)", self.scripts["js/features/chat/timeline.js"])
         for source in self.scripts.values():
             self.assertNotIn("eval(", source)
             self.assertNotIn("new Function", source)

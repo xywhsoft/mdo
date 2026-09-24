@@ -1,4 +1,5 @@
 import { element, clear, formatClock, errorMessage, toast } from "../../utils/dom.js";
+import { renderMarkdown } from "./markdown.js";
 
 function modelKey(event) {
   return `${event.run_id || event.agent_id || event.event_id}-${event.agent_turn || 0}`;
@@ -128,7 +129,11 @@ function timelineNode(item, onFork) {
     element("span", { className: "timeline-role", text: item.role }),
     time,
   ]);
-  const children = [header, element("div", { className: "timeline-body", text: item.text })];
+  const body = element("div", { className: "timeline-body" +
+    (item.kind === "assistant" ? " markdown-body" : "") });
+  if (item.kind === "assistant") body.append(renderMarkdown(item.text));
+  else body.textContent = item.text;
+  const children = [header, body];
   if (item.meta) children.push(element("div", { className: "timeline-meta", text: item.meta }));
   if (["user", "assistant"].includes(item.kind) && item.text) {
     const actions = element("div", { className: "timeline-actions" });
