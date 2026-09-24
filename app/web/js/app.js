@@ -116,7 +116,9 @@ export async function boot() {
   let composerImages = null;
   let shortcuts;
   const queueBlocked = new Set();
-  const priorityInterrupts = new Set();
+  // A cancelled run can remain nonterminal through several polls. Avoid
+  // repeating DELETE while its persisted priority queue item is still waiting.
+  const priorityCancelAttempts = new Set();
 
   const sessionList = createSessionList({
     container: $("#session-list"),
@@ -260,9 +262,13 @@ export async function boot() {
       if (first?.state === "sending")
         await promptQueue.retry(selected.projectId, selected.sessionId, first.id);
       queueBlocked.delete(`${selected.projectId}/${selected.sessionId}`);
+      await maybeCancelPriorityRun();
       await dispatchQueued();
     },
-    onRemoved: () => dispatchQueued(),
+    onRemoved: async () => {
+      await maybeCancelPriorityRun();
+      await dispatchQueued();
+    },
   });
   const slashCommands = createSlashCommands({
     composer, input: prompt,
@@ -480,7 +486,10 @@ export async function boot() {
     const selected = navigation.get();
     const run = [...(runsStore.get().data?.items ?? [])].reverse().find((item) =>
       item.project_id === selected.projectId && item.session_id === selected.sessionId && !terminalState(item));
-    if (run) monitorRun(run);
+    if (run) {
+      monitorRun(run);
+      void maybeCancelPriorityRun();
+    }
     else if (!activeRun) {
       setRun(null);
       void dispatchQueued();
@@ -517,24 +526,56 @@ export async function boot() {
     scheduleRunPoll(300);
   }
 
-  async function ensurePromptReady(projectId, sessionId) {
-    const response = await api.get(`/projects/${projectId}/sessions/${sessionId}/recovery`);
-    const key = `${projectId}/${sessionId}`;
-    if (!response.data?.resume_required) {
-      priorityInterrupts.delete(key);
-      return;
+  async function maybeCancelPriorityRun() {
+    const selected = navigation.get();
+    const run = activeRun;
+    const key = `${selected.projectId}/${selected.sessionId}`;
+    const entry = promptQueue.peek(selected.projectId, selected.sessionId);
+    if (!run || terminalState(run) || run.project_id !== selected.projectId ||
+        run.session_id !== selected.sessionId || queueBlocked.has(key) ||
+        entry?.state !== "pending" || !entry.priority ||
+        priorityCancelAttempts.has(run.id)) return;
+    priorityCancelAttempts.add(run.id);
+    try {
+      const cancelled = await cancelRun(run.id);
+      if (navigation.get().projectId !== selected.projectId ||
+          navigation.get().sessionId !== selected.sessionId) return;
+      if (terminalState(cancelled)) {
+        setRun(cancelled);
+        await Promise.all([refreshSelectedTimeline(), loadTasks(), loadRuns()]);
+        await dispatchQueued();
+      } else monitorRun(cancelled);
+    } catch (error) {
+      // Keep the attempt recorded so polling does not hammer a failed request.
+      // The normal Stop action remains available for an explicit retry.
+      showComposerError(error);
     }
-    if (priorityInterrupts.has(key) && response.data.total === 0) {
-      await abandonRecovery(response.data);
-      priorityInterrupts.delete(key);
-      await loadRecovery();
-      return;
+  }
+
+  async function ensurePromptReady(projectId, sessionId, priority = false) {
+    const path = `/projects/${projectId}/sessions/${sessionId}/recovery`;
+    for (let attempt = 0; attempt < 4; attempt += 1) {
+      try {
+        const response = await api.get(path);
+        if (!response.data?.resume_required) return;
+        if (priority && response.data.total === 0) {
+          await abandonRecovery(response.data);
+          await loadRecovery();
+          return;
+        }
+        void loadRecovery();
+        const error = new Error("上轮运行尚未恢复，请先在“决策”中处理；输入和待发送消息会保留。");
+        error.code = "recovery_required";
+        throw error;
+      } catch (error) {
+        if (!priority || attempt === 3 ||
+            !["recovery_state_conflict", "session_busy"].includes(error?.code))
+          throw error;
+        // Cancellation can become terminal just before agent_done reaches the
+        // ledger. Re-read its revision and sequence; never reuse a stale one.
+        await new Promise((resolve) => window.setTimeout(resolve, 150));
+      }
     }
-    priorityInterrupts.delete(key);
-    void loadRecovery();
-    const error = new Error("上轮运行尚未恢复，请先在“决策”中处理；输入和待发送消息会保留。");
-    error.code = "recovery_required";
-    throw error;
   }
 
   async function dispatchQueued() {
@@ -551,7 +592,8 @@ export async function boot() {
       const entry = promptQueue.peek(selected.projectId, selected.sessionId);
       if (!entry || entry.state !== "pending") return;
       try {
-        await ensurePromptReady(selected.projectId, selected.sessionId);
+        await ensurePromptReady(selected.projectId, selected.sessionId,
+          Boolean(entry.priority));
         if (navigation.get().projectId !== selected.projectId ||
             navigation.get().sessionId !== selected.sessionId) return;
         await promptQueue.markSending(selected.projectId, selected.sessionId, entry.id);
@@ -599,6 +641,7 @@ export async function boot() {
         try {
           await promptQueue.select(projectId, sessionId);
           queueBlocked.delete(key);
+          void maybeCancelPriorityRun();
           void dispatchQueued();
         } catch (error) { showComposerError(error); }
       }
@@ -638,6 +681,7 @@ export async function boot() {
     } catch (error) { showComposerError(error); return; }
     queueBlocked.delete(key);
     findActiveRun();
+    void maybeCancelPriorityRun();
     void dispatchQueued();
   });
 
@@ -700,7 +744,7 @@ export async function boot() {
       const selected = await ensureSession(text);
       if (activeRun) {
         if (!await promptQueue.enqueue(selected.projectId, selected.sessionId, text,
-          { first: interrupt, attachments }))
+          { first: interrupt, priority: interrupt, attachments }))
           throw new Error("待发送队列已满（最多 20 条）");
         queueBlocked.delete(`${selected.projectId}/${selected.sessionId}`);
         prompt.value = "";
@@ -710,19 +754,7 @@ export async function boot() {
         resizePrompt();
         tokenMeter.refresh();
         if (interrupt) {
-          const key = `${selected.projectId}/${selected.sessionId}`;
-          priorityInterrupts.add(key);
-          try {
-            const run = await cancelRun(activeRun.id);
-            if (terminalState(run)) {
-              setRun(run);
-              await Promise.all([refreshSelectedTimeline(), loadTasks(), loadRuns()]);
-              await dispatchQueued();
-            } else monitorRun(run);
-          } catch (error) {
-            priorityInterrupts.delete(key);
-            throw error;
-          }
+          await maybeCancelPriorityRun();
         }
         return;
       }

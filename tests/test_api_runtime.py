@@ -1770,7 +1770,7 @@ def run_probe(host: Path) -> None:
                 status, _, body = queue_request("POST", queue_path, first)
                 assert status == 201 and json.loads(body)["data"]["items"] == [
                     {"id": first_id, "text": "first prompt", "state": "pending",
-                     "attachments": []}], (
+                     "attachments": [], "priority": False}], (
                     status, body)
                 status, _, body = queue_request("POST", queue_path, first)
                 assert status == 200 and len(json.loads(body)["data"]["items"]) == 1, (
@@ -1792,12 +1792,18 @@ def run_probe(host: Path) -> None:
                 assert status == 409 and json.loads(body)["error"][
                     "code"] == "queue_state_conflict", (status, body)
                 status, _, body = queue_request("POST", queue_path,
-                    {"id": priority_id, "text": "interrupt prompt", "first": True})
+                    {"id": priority_id, "text": "interrupt prompt",
+                     "first": True, "priority": True})
                 assert status == 201 and [item["id"] for item in json.loads(body)[
                     "data"]["items"]] == [first_id, priority_id, second_id], (
                     status, body)
+                assert json.loads(body)["data"]["items"][1]["priority"] is True
+                status, _, body = queue_request("POST", queue_path,
+                    {"id": priority_id, "text": "interrupt prompt", "first": True})
+                assert status == 409 and json.loads(body)["error"][
+                    "code"] == "queue_id_conflict", (status, body)
                 assert json.loads(queue_file.read_text(encoding="utf-8"))[
-                    "items"][0]["state"] == "sending"
+                    "items"][1]["priority"] is True
                 status, _, body = queue_request("PUT", first_path,
                     {"state": "pending"})
                 assert status == 200 and json.loads(body)["data"]["items"][0][
@@ -1826,10 +1832,10 @@ def run_probe(host: Path) -> None:
                 image_queue = json.loads(body)["data"]["items"]
                 assert status == 201 and image_queue == [{
                     "id": image_item_id, "text": "", "state": "pending",
-                    "attachments": [image["id"]],
+                    "attachments": [image["id"]], "priority": False,
                 }], (status, body)
                 assert json.loads(queue_file.read_text(encoding="utf-8"))[
-                    "schema_version"] == 2
+                    "schema_version"] == 3
                 status, _, body = request(port, "DELETE", image["url"])
                 assert status == 409 and json.loads(body)["error"][
                     "code"] == "attachment_in_use", (status, body)
@@ -1849,6 +1855,20 @@ def run_probe(host: Path) -> None:
                 status, _, body = request(port, "DELETE", image["url"])
                 assert status == 200 and request(port, "GET", image["url"])[0] == (
                     404), (status, body)
+                legacy_id = "f" * 32
+                queue_file.write_text(json.dumps({"schema_version": 2,
+                    "items": [{"id": legacy_id, "text": "legacy prompt",
+                               "state": "pending", "attachments": []}]}),
+                    encoding="utf-8")
+                status, _, body = request(port, "GET", queue_path)
+                assert status == 200 and json.loads(body)["data"]["items"][0][
+                    "priority"] is False, (status, body)
+                status, _, body = queue_request("POST", queue_path,
+                    {"id": "1" * 32, "text": "new prompt", "first": False})
+                assert status == 201 and json.loads(queue_file.read_text(
+                    encoding="utf-8"))["schema_version"] == 3, (status, body)
+                for item_id in (legacy_id, "1" * 32):
+                    assert request(port, "DELETE", queue_path + "/" + item_id)[0] == 200
                 todo_path = session_path + "/todo"
                 todo_file = home / "sessions/api-project" / session_id / "todo.json"
                 status, _, body = request(port, "GET", todo_path)

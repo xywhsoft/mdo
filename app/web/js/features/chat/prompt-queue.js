@@ -115,6 +115,9 @@ export function createPromptQueue({ container, navigation, onRetry, onRemoved })
       if (entry.state === "sending") body.append(element("span", {
         className: "prompt-queue-state", text: "发送状态待确认",
       }));
+      if (entry.priority) body.append(element("span", {
+        className: "prompt-queue-state", text: "中断后优先发送",
+      }));
       if (entry.attachments?.length) {
         const images = element("div", { className: "prompt-queue-images" });
         for (const [imageIndex, id] of entry.attachments.entries()) {
@@ -155,13 +158,14 @@ export function createPromptQueue({ container, navigation, onRetry, onRemoved })
       await load(key, true);
       render();
     },
-    async enqueue(projectId, sessionId, text, { first = false, attachments = [] } = {}) {
+    async enqueue(projectId, sessionId, text,
+      { first = false, priority = false, attachments = [] } = {}) {
       const key = sessionKey(projectId, sessionId);
       if (!key || (!text.trim() && !attachments.length)) return false;
       await load(key);
       if ((queues.get(key) ?? []).length >= 20) return false;
       const response = await api.post(path(key),
-        { id: newId(), text: text.trim(), attachments, first });
+        { id: newId(), text: text.trim(), attachments, first, priority });
       update(key, response);
       return true;
     },
