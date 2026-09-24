@@ -624,6 +624,22 @@ export async function boot() {
   }
   function showComposerError(error) {
     composerError.textContent = errorMessage(error);
+    if (error?.code === "recovery_required") {
+      const openDecisions = element("button", {
+        className: "composer-error-action",
+        text: "打开恢复决策",
+        attrs: { type: "button" },
+      });
+      openDecisions.addEventListener("click", () => {
+        selectInspectorTab("decisions");
+        setDrawer("inspector", true);
+        const target = document.querySelector("#recovery-list .recovery-submit") ??
+          $("#decisions-tab");
+        target.focus();
+        target.scrollIntoView({ block: "nearest" });
+      });
+      composerError.append(openDecisions);
+    }
     composerError.hidden = false;
   }
 
