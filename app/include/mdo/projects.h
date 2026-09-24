@@ -31,6 +31,14 @@ typedef struct MdoProjectCreateOptions {
     const char* DefaultModelId;
 } MdoProjectCreateOptions;
 
+typedef enum MdoProjectMutationResult {
+    MDO_PROJECT_MUTATION_OK = 0,
+    MDO_PROJECT_MUTATION_INVALID,
+    MDO_PROJECT_MUTATION_NOT_FOUND,
+    MDO_PROJECT_MUTATION_REVISION_CONFLICT,
+    MDO_PROJECT_MUTATION_UNAVAILABLE
+} MdoProjectMutationResult;
+
 void MdoProjectCreateOptionsInit(MdoProjectCreateOptions* Options);
 /* A missing definition is a successful read with Found=false. All reads are
  * external-only and leave a single-file Home untouched. */
@@ -40,5 +48,12 @@ bool MdoProjectList(MdoProjectInfo* Items, size_t Capacity, size_t* Count,
     size_t* InvalidCount, bool* Truncated, xwork_error* Error);
 bool MdoProjectCreate(const MdoProjectCreateOptions* Options,
     MdoProjectInfo* Info, xwork_error* Error);
+/* Replace and unregister require a revision read by the caller. Both hold the
+ * project writer lock while re-reading the definition and publishing a backup. */
+MdoProjectMutationResult MdoProjectReplace(
+    const MdoProjectCreateOptions* Options, uint64 ExpectedRevision,
+    MdoProjectInfo* Info, xwork_error* Error);
+MdoProjectMutationResult MdoProjectUnregister(const char* Id,
+    uint64 ExpectedRevision, xwork_error* Error);
 
 #endif

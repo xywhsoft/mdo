@@ -1,7 +1,8 @@
 import { element, clear, formatRelativeTime, errorMessage, toast } from "../../utils/dom.js";
 
 export function createSessionList({ container, count, filter, store, projectsStore,
-  navigation, onSelect, onAction, onNewInProject, onAddProject }) {
+  navigation, onSelect, onAction, onNewInProject, onAddProject,
+  onManageProject }) {
   let query = "";
   let status = filter.value;
   let openMenu = "";
@@ -94,6 +95,13 @@ export function createSessionList({ container, count, filter, store, projectsSto
       const children = [element("span", { className: "session-group-name", text: label }),
         element("span", { className: "session-group-count", text: String(size) })];
       if (projectId) {
+        if (projectId !== "default") {
+          const manage = element("button", { className: "session-group-manage",
+            text: "•••", attrs: { type: "button",
+              "aria-label": `管理 ${label} 项目`, title: `管理 ${label} 项目` } });
+          manage.addEventListener("click", () => onManageProject(projectId));
+          children.push(manage);
+        }
         const create = element("button", { className: "session-group-new", text: "+",
           attrs: { type: "button", "aria-label": `在 ${projectId} 项目新建任务`,
             title: `在 ${projectId} 项目新建任务` } });

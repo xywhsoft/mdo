@@ -1,4 +1,4 @@
-import { api } from "../api/client.js";
+import { api, resourceId } from "../api/client.js";
 import { createResourceStore } from "./store.js";
 
 export const modelsStore = createResourceStore({ providers: [], models: [] });
@@ -19,6 +19,25 @@ export function loadProjects() {
 
 export async function createProject(input) {
   const response = await api.post("/projects", input);
+  await loadProjects();
+  return response.data;
+}
+
+export async function readProject(id) {
+  const response = await api.get(`/projects/${resourceId(id, "project")}`);
+  return { ...response.data, etag: response.etag };
+}
+
+export async function updateProject(id, input, etag) {
+  const response = await api.put(`/projects/${resourceId(id, "project")}`,
+    input, { ifMatch: etag });
+  await loadProjects();
+  return { ...response.data, etag: response.etag };
+}
+
+export async function unregisterProject(id, etag) {
+  const response = await api.delete(`/projects/${resourceId(id, "project")}`,
+    { ifMatch: etag });
   await loadProjects();
   return response.data;
 }

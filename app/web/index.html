@@ -212,6 +212,7 @@
             <button type="button" data-settings-section="agent">Agent</button>
             <button type="button" data-settings-section="web">联网与搜索</button>
             <p>资源</p>
+            <button type="button" data-settings-section="projects">项目</button>
             <button type="button" data-settings-section="schedules">计划任务</button>
             <button type="button" data-settings-section="models">模型</button>
             <button type="button" data-settings-section="extensions">扩展与 MCP</button>
@@ -298,6 +299,15 @@
               <section class="settings-section resource-section" data-settings-panel="permissions" hidden><div class="settings-section-heading"><h2>权限</h2><p>查看服务端生效的权限 profile；运行时审批仍由 Agent 策略执行。</p></div><div id="settings-permissions-list"></div></section>
               <section class="settings-section resource-section" data-settings-panel="diagnostics" hidden><div class="settings-section-heading"><h2>诊断与存储</h2><p>检查便携 Home、运行状态和可操作诊断。</p></div><div id="settings-diagnostics-list"></div></section>
             </form>
+
+            <section class="settings-section resource-section project-section" data-settings-panel="projects" aria-labelledby="settings-projects-title" hidden>
+              <div class="settings-section-heading">
+                <h2 id="settings-projects-title">项目</h2>
+                <p>管理工作区目录和默认模型。取消注册会保留已有会话与计划。</p>
+              </div>
+              <div class="project-panel-toolbar"><button class="secondary-button" id="projects-add" type="button">添加项目</button><button class="secondary-button" id="projects-refresh" type="button">刷新</button></div>
+              <div id="settings-projects-list" class="project-settings-list" aria-live="polite"></div>
+            </section>
 
             <section class="settings-section schedule-section" data-settings-panel="schedules" aria-labelledby="schedules-title" hidden>
               <div class="settings-section-heading schedule-heading">
@@ -427,7 +437,7 @@
       <header>
         <div>
           <h2 id="project-dialog-title">添加项目</h2>
-          <p>指定工作区目录；项目会保留在侧栏，新任务将使用该目录。</p>
+          <p id="project-dialog-description">指定工作区目录；项目会保留在侧栏，新任务将使用该目录。</p>
         </div>
         <button class="icon-button" type="button" id="close-project-dialog" aria-label="关闭">
           <span class="icon" data-icon="close" aria-hidden="true"></span>
@@ -444,6 +454,15 @@
         <button class="secondary-button" id="cancel-project" type="button">取消</button>
         <button class="primary-button" id="create-project" type="submit">添加项目</button>
       </footer>
+    </form>
+  </dialog>
+
+  <dialog class="confirm-dialog" id="project-unregister-dialog" aria-labelledby="project-unregister-title">
+    <form method="dialog">
+      <h3 id="project-unregister-title">取消注册项目？</h3>
+      <p id="project-unregister-description"></p>
+      <div class="dialog-error" id="project-unregister-error" role="alert" hidden></div>
+      <div class="dialog-actions"><button class="secondary-button" value="cancel">取消</button><button class="danger-button" value="unregister">取消注册</button></div>
     </form>
   </dialog>
 

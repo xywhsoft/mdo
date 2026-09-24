@@ -45,6 +45,7 @@ import { createDecisionPanel } from "./features/approvals/decision-panel.js";
 import { createRecoveryPanel } from "./features/approvals/recovery-panel.js";
 import { createSettingsView } from "./features/settings/settings-view.js";
 import { createSchedulePanel } from "./features/settings/schedule-panel.js";
+import { createProjectPanel } from "./features/settings/project-panel.js";
 import { createResourcePanels } from "./features/settings/resource-panels.js";
 import { createKeyboardShortcuts } from "./features/shell/keyboard-shortcuts.js";
 import { createRunNotifications } from "./features/shell/run-notifications.js";
@@ -135,6 +136,7 @@ export async function boot() {
       closeDrawers();
       prompt.focus();
     },
+    onUpdated(project) { projectPanel.focusProject(project.id); },
   });
   $("#close-project-dialog").addEventListener("click", () => $("#project-dialog").close());
   $("#cancel-project").addEventListener("click", () => $("#project-dialog").close());
@@ -152,6 +154,11 @@ export async function boot() {
     },
     onAction: handleSessionAction,
     onAddProject: () => projectDialog.open(),
+    onManageProject(projectId) {
+      navigation.openSettings("projects");
+      closeDrawers();
+      projectPanel.focusProject(projectId);
+    },
     onNewInProject(projectId) {
       showActiveSessions();
       navigation.newTask(projectId);
@@ -417,6 +424,10 @@ export async function boot() {
     navigation,
     onApplied: () => Promise.all([loadBootstrap(), loadCatalogs()]),
   });
+  const projectPanel = createProjectPanel({
+    panel: $('[data-settings-panel="projects"]'), projectsStore,
+    modelsStore, projectDialog, navigation,
+  });
   const schedulePanel = createSchedulePanel({
     panel: $('[data-settings-panel="schedules"]'),
     projectsStore, agentsStore, modelsStore,
@@ -659,11 +670,13 @@ export async function boot() {
       skipLink.href = "#settings-content";
       skipLink.textContent = "跳到设置内容";
       settingsView.selectSection(settingsSection);
-      const schedulesPage = settingsSection === "schedules";
-      $("#settings-title").textContent = schedulesPage ? "计划任务" : "设置";
-      $("#settings-revision").hidden = schedulesPage;
-      $("#settings-actions").hidden = schedulesPage;
-      if (schedulesPage) void schedulePanel.refresh();
+      const standalonePage = settingsSection === "schedules" ||
+        settingsSection === "projects";
+      $("#settings-title").textContent = settingsSection === "projects"
+        ? "项目" : settingsSection === "schedules" ? "计划任务" : "设置";
+      $("#settings-revision").hidden = standalonePage;
+      $("#settings-actions").hidden = standalonePage;
+      if (settingsSection === "schedules") void schedulePanel.refresh();
       closeDrawers();
       if (!settingsStore.get().data) await loadSettings();
       return;

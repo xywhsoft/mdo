@@ -784,6 +784,70 @@ def run_probe(host: Path) -> None:
                 assert project_session["model_id"] == "ling-3.0-tiny"
                 assert (Path(project_session["workspace_root"]).resolve() ==
                         project_workspace.resolve()), project_session
+                project_path = "/api/v1/projects/ui-workspace"
+                status, headers, body = request(port, "GET", project_path)
+                assert status == 200 and json.loads(body)["data"]["revision"] == 1
+                assert headers["etag"] == '"mdo-project-ui-workspace-1"'
+                status, _, body = request(port, "GET", "/api/v1/projects/.bad")
+                assert status == 400 and json.loads(body)["error"]["code"] == (
+                    "invalid_project_path"), (status, body)
+                second_workspace = base / "second-project-workspace"
+                second_workspace.mkdir()
+                second_relative = os.path.relpath(second_workspace, host.parent)
+                replacement = {
+                    "name": "Renamed Workspace",
+                    "workspace_root": second_relative,
+                    "default_model_id": "",
+                }
+                status, _, body = request(
+                    port, "PUT", project_path,
+                    body=json.dumps(replacement).encode(),
+                    headers={"Content-Type": "application/json"})
+                assert status == 428, (status, body)
+                status, headers, body = request(
+                    port, "PUT", project_path,
+                    body=json.dumps(replacement).encode(),
+                    headers={"Content-Type": "application/json",
+                             "If-Match": '"mdo-project-ui-workspace-1"'})
+                updated_project = json.loads(body)["data"]
+                assert status == 200 and updated_project["revision"] == 2, (
+                    status, body)
+                assert updated_project["name"] == "Renamed Workspace"
+                assert headers["etag"] == '"mdo-project-ui-workspace-2"'
+                backup_project = json.loads((home / "projects/ui-workspace.json.bak")
+                                            .read_text(encoding="utf-8"))
+                assert backup_project["revision"] == 1, backup_project
+                status, _, body = request(
+                    port, "PUT", project_path,
+                    body=json.dumps(replacement).encode(),
+                    headers={"Content-Type": "application/json",
+                             "If-Match": '"mdo-project-ui-workspace-1"'})
+                assert status == 412, (status, body)
+                status, _, body = request(
+                    port, "POST", "/api/v1/sessions",
+                    body=json.dumps({"project_id": "ui-workspace",
+                                     "title": "Updated workspace probe"}).encode(),
+                    headers={"Content-Type": "application/json"})
+                assert status == 201, (status, body)
+                assert (Path(json.loads(body)["data"]["workspace_root"]).resolve()
+                        == second_workspace.resolve()), body
+                status, _, body = request(
+                    port, "DELETE", project_path,
+                    headers={"If-Match": '"mdo-project-ui-workspace-1"'})
+                assert status == 412, (status, body)
+                status, _, body = request(
+                    port, "DELETE", project_path,
+                    headers={"If-Match": '"mdo-project-ui-workspace-2"'})
+                assert status == 200 and json.loads(body)["data"]["removed"], (
+                    status, body)
+                assert not (home / "projects/ui-workspace.json").exists()
+                status, _, body = request(port, "GET", project_path)
+                assert status == 404, (status, body)
+                listed_projects = json.loads(request(
+                    port, "GET", "/api/v1/projects")[2])["data"]["items"]
+                assert any(item["id"] == "ui-workspace" and not item["managed"]
+                           and item["session_count"] == 2 for item in
+                           listed_projects), listed_projects
 
                 approval_deadline = time.monotonic() + 3.0
                 approvals = {"items": []}

@@ -67,6 +67,13 @@ Home. Session creation inherits a managed project's workspace and default
 model when the request does not provide them.
 Relative project workspace paths resolve from the executable's directory,
 so a project placed beside `mdo.exe` remains portable when the folder moves.
+`GET /projects/{id}` returns one managed definition and its strong ETag.
+`PUT /projects/{id}` replaces `name`, `workspace_root`, and
+`default_model_id` (all required; the model may be empty). `DELETE` unregisters
+the definition only; existing sessions and schedules are retained and still
+make the project visible as a derived entry. Both mutations require the
+current `If-Match` ETag, returning `428` when missing and `412` when stale.
+Writes preserve a readable `.bak` of the prior definition.
 
 `GET /schedules/{schedule}/history` reads the retained completion sidecar
 without creating Home. It returns the newest 32 records first, with task and

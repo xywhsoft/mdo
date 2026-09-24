@@ -138,14 +138,16 @@ static bool MdoApiProjectListRoute(MdoApiContext* Context)
 }
 
 static bool MdoApiProjectString(const xvalue* Object, cstr Key,
-    char* Output, size_t Capacity, bool Required, size_t* Present)
+    char* Output, size_t Capacity, bool Required, bool AllowEmpty,
+    size_t* Present)
 {
     const xvalue* Value = xrtValueObjectGet(Object, xrtStrView(Key));
     xstrview Text;
     if ( Value == NULL ) return !Required;
     ++*Present;
     if ( xrtValueType(Value) != XVALUE_STRING ||
-         !xrtValueGetString(Value, &Text) || Text.Size == 0u ||
+         !xrtValueGetString(Value, &Text) ||
+         (!AllowEmpty && Text.Size == 0u) ||
          Text.Size >= Capacity || memchr(Text.Data, 0, Text.Size) != NULL )
         return false;
     memcpy(Output, Text.Data, Text.Size);
@@ -173,14 +175,15 @@ static bool MdoApiProjectCreateRoute(MdoApiContext* Context)
     if ( BodyStatus != MDO_API_BODY_OK )
         return MdoApiReplyBodyError(Context, BodyStatus);
     Valid = xrtValueType(Body.Value) == XVALUE_OBJECT &&
-        MdoApiProjectString(Body.Value, "id", Id, sizeof(Id), true,
+        MdoApiProjectString(Body.Value, "id", Id, sizeof(Id), true, false,
             &Present) &&
         MdoApiProjectString(Body.Value, "name", Name, sizeof(Name), true,
+            false,
             &Present) &&
         MdoApiProjectString(Body.Value, "workspace_root", Workspace,
-            sizeof(Workspace), false, &Present) &&
+            sizeof(Workspace), false, false, &Present) &&
         MdoApiProjectString(Body.Value, "default_model_id", Model,
-            sizeof(Model), false, &Present) &&
+            sizeof(Model), false, true, &Present) &&
         Present == xrtValueCount(Body.Value);
     MdoApiJsonBodyUnit(&Body);
     if ( !Valid ) return MdoApiReplyError(Context, 422u,
@@ -226,6 +229,204 @@ bool MdoApiProjectsRoute(MdoApiContext* Context)
     if ( Context->Request->head->MethodCode == XHTTP_METHOD_POST )
         return MdoApiProjectCreateRoute(Context);
     return MdoApiProjectListRoute(Context);
+}
+
+static bool MdoApiProjectReply(MdoApiContext* Context, uint16 Status,
+    const MdoProjectInfo* Info)
+{
+    xvalue* Data = xrtValueObject();
+    char Tag[128];
+    bool Ok = Data != NULL &&
+        MdoApiValueSetString(Data, "id", Info->Id) &&
+        MdoApiValueSetString(Data, "name", Info->Name) &&
+        MdoApiValueSetString(Data, "workspace_root", Info->WorkspaceRoot) &&
+        MdoApiValueSetString(Data, "default_model_id",
+            Info->DefaultModelId) &&
+        MdoApiValueSetBool(Data, "managed", true) &&
+        MdoApiValueSetUInt(Data, "revision", Info->Revision) &&
+        MdoApiValueSetInt(Data, "created_at", Info->CreatedAt) &&
+        MdoApiValueSetInt(Data, "updated_at", Info->UpdatedAt);
+    if ( !Ok ) {
+        xrtValueRelease(Data);
+        return MdoApiReplyError(Context, 500u, "project_result_unavailable",
+            "The project metadata is unavailable", NULL);
+    }
+    snprintf(Tag, sizeof(Tag), "\"mdo-project-%s-%llu\"", Info->Id,
+        (unsigned long long)Info->Revision);
+    return MdoApiReplySuccessTakeEntityTag(Context, Status, Data, Tag);
+}
+
+static bool MdoApiProjectNoBody(const MdoApiContext* Context)
+{
+    const xhttp1head* Head = Context->Request->head;
+    return !(((Head->Flags & (uint32)XHTTP1_CONTENT_LENGTH) != 0u &&
+              Head->ContentLength != 0u) ||
+             (Head->Flags & (uint32)XHTTP1_TRANSFER_ENCODING) != 0u);
+}
+
+static int MdoApiProjectExpectedRevision(const MdoApiContext* Context,
+    const char* Id, uint64* Revision, bool* MatchesProject)
+{
+    static const char Prefix[] = "\"mdo-project-";
+    const xhttpfield* Field = NULL;
+    xhttpnext Next;
+    xstrview Value;
+    size_t Dash, Index;
+    uint64 Number = 0u;
+    size_t PrefixSize = sizeof(Prefix) - 1u;
+    *MatchesProject = false;
+    Next = xrtHttpFieldGetUnique(Context->Request->head->Fields,
+        Context->Request->head->FieldCount, XRT_STR_LITERAL("If-Match"),
+        &Field);
+    if ( Next == XHTTP_NEXT_END ) return 0;
+    if ( Next != XHTTP_NEXT_ITEM || Field == NULL ) return -1;
+    Value = xrtStrTrim(Field->Value);
+    if ( Value.Size < PrefixSize + 4u ||
+         memcmp(Value.Data, Prefix, PrefixSize) != 0 ||
+         Value.Data[Value.Size - 1u] != '"' ) return -1;
+    Dash = Value.Size - 2u;
+    while ( Dash > PrefixSize && Value.Data[Dash] != '-' ) --Dash;
+    if ( Dash == PrefixSize || Value.Data[Dash] != '-' ||
+         Dash + 1u >= Value.Size - 1u ) return -1;
+    for ( Index = Dash + 1u; Index + 1u < Value.Size; ++Index ) {
+        uint64 Digit;
+        if ( Value.Data[Index] < '0' || Value.Data[Index] > '9' ) return -1;
+        Digit = (uint64)(Value.Data[Index] - '0');
+        if ( Number > (UINT64_MAX - Digit) / 10u ) return -1;
+        Number = Number * 10u + Digit;
+    }
+    if ( Number == 0u ) return -1;
+    *MatchesProject = Dash - PrefixSize == strlen(Id) &&
+        memcmp(Value.Data + PrefixSize, Id, Dash - PrefixSize) == 0;
+    *Revision = Number;
+    return 1;
+}
+
+static bool MdoApiProjectMutationFailure(MdoApiContext* Context,
+    MdoProjectMutationResult Result)
+{
+    switch ( Result ) {
+    case MDO_PROJECT_MUTATION_INVALID:
+        return MdoApiReplyError(Context, 422u, "project_invalid",
+            "The project fields are invalid", NULL);
+    case MDO_PROJECT_MUTATION_NOT_FOUND:
+        return MdoApiReplyError(Context, 404u, "project_not_found",
+            "The project definition was not found", NULL);
+    case MDO_PROJECT_MUTATION_REVISION_CONFLICT:
+        return MdoApiReplyError(Context, 412u, "revision_conflict",
+            "The project changed; reload it before updating", NULL);
+    default:
+        return MdoApiReplyError(Context, 503u, "project_unavailable",
+            "The project definition could not be changed", NULL);
+    }
+}
+
+static bool MdoApiProjectReadFailure(MdoApiContext* Context,
+    const xwork_error* Error)
+{
+    if ( Error->eCode == XWORK_ERROR_INVALID_ARGUMENT )
+        return MdoApiReplyError(Context, 400u, "invalid_project_path",
+            "The project ID is invalid", NULL);
+    return MdoApiReplyError(Context, 503u, "project_unavailable",
+        "The project definition could not be read", NULL);
+}
+
+bool MdoApiProjectRoute(MdoApiContext* Context)
+{
+    char Id[MDO_PROJECT_ID_CAPACITY] = { 0 };
+    char Name[MDO_PROJECT_NAME_CAPACITY] = { 0 };
+    char Workspace[MDO_PROJECT_WORKSPACE_CAPACITY] = { 0 };
+    char Model[MDO_PROJECT_MODEL_CAPACITY] = { 0 };
+    MdoProjectInfo Info;
+    MdoProjectCreateOptions Options;
+    MdoApiJsonBody Body;
+    MdoApiBodyStatus BodyStatus;
+    MdoProjectMutationResult Result;
+    xwork_error Error;
+    xvalue* Data;
+    uint64 ExpectedRevision = 0u;
+    size_t Present = 0u;
+    bool Found = false;
+    bool MatchesProject = false;
+    bool Valid;
+    int Precondition;
+    if ( Context->ParamCount != 1u || Context->Params[0].Size == 0u ||
+         Context->Params[0].Size >= sizeof(Id) )
+        return MdoApiReplyError(Context, 400u, "invalid_project_path",
+            "The project ID is invalid", NULL);
+    memcpy(Id, Context->Params[0].Data, Context->Params[0].Size);
+    Id[Context->Params[0].Size] = '\0';
+    memset(&Info, 0, sizeof(Info)); Info.Size = sizeof(Info);
+    memset(&Error, 0, sizeof(Error));
+    if ( Context->Request->head->MethodCode == XHTTP_METHOD_GET ||
+         Context->Request->head->MethodCode == XHTTP_METHOD_HEAD ) {
+        if ( !MdoProjectGet(Id, &Info, &Found, &Error) )
+            return MdoApiProjectReadFailure(Context, &Error);
+        if ( !Found ) return MdoApiReplyError(Context, 404u,
+            "project_not_found", "The project definition was not found",
+            NULL);
+        return MdoApiProjectReply(Context, 200u, &Info);
+    }
+    if ( Context->Request->head->MethodCode == XHTTP_METHOD_DELETE &&
+         !MdoApiProjectNoBody(Context) )
+        return MdoApiReplyError(Context, 400u, "body_not_allowed",
+            "This operation does not accept a request body", NULL);
+    Precondition = MdoApiProjectExpectedRevision(Context, Id,
+        &ExpectedRevision, &MatchesProject);
+    if ( Precondition == 0 ) return MdoApiReplyError(Context, 428u,
+        "precondition_required",
+        "If-Match must contain the current project ETag", NULL);
+    if ( Precondition < 0 ) return MdoApiReplyError(Context, 400u,
+        "invalid_precondition",
+        "If-Match must use the form \"mdo-project-ID-N\"", NULL);
+    if ( !MdoProjectGet(Id, &Info, &Found, &Error) )
+        return MdoApiProjectReadFailure(Context, &Error);
+    if ( !Found ) return MdoApiReplyError(Context, 404u,
+        "project_not_found", "The project definition was not found", NULL);
+    if ( !MatchesProject || Info.Revision != ExpectedRevision )
+        return MdoApiReplyError(Context, 412u, "revision_conflict",
+            "The project changed; reload it before updating", NULL);
+    if ( Context->Request->head->MethodCode == XHTTP_METHOD_DELETE ) {
+        Result = MdoProjectUnregister(Id, ExpectedRevision, &Error);
+        if ( Result != MDO_PROJECT_MUTATION_OK )
+            return MdoApiProjectMutationFailure(Context, Result);
+        Data = xrtValueObject();
+        Valid = Data != NULL &&
+            MdoApiValueSetString(Data, "id", Id) &&
+            MdoApiValueSetUInt(Data, "revision", ExpectedRevision) &&
+            MdoApiValueSetBool(Data, "removed", true);
+        if ( !Valid ) {
+            xrtValueRelease(Data);
+            return MdoApiReplyError(Context, 500u,
+                "project_result_unavailable",
+                "The project was removed but its result is unavailable",
+                NULL);
+        }
+        return MdoApiReplySuccessTake(Context, 200u, Data, NULL);
+    }
+    BodyStatus = MdoApiJsonBodyRead(Context, &Body);
+    if ( BodyStatus != MDO_API_BODY_OK )
+        return MdoApiReplyBodyError(Context, BodyStatus);
+    Valid = xrtValueType(Body.Value) == XVALUE_OBJECT &&
+        MdoApiProjectString(Body.Value, "name", Name, sizeof(Name),
+            true, false, &Present) &&
+        MdoApiProjectString(Body.Value, "workspace_root", Workspace,
+            sizeof(Workspace), true, false, &Present) &&
+        MdoApiProjectString(Body.Value, "default_model_id", Model,
+            sizeof(Model), true, true, &Present) &&
+        Present == xrtValueCount(Body.Value);
+    MdoApiJsonBodyUnit(&Body);
+    if ( !Valid ) return MdoApiReplyError(Context, 422u,
+        "project_invalid", "The project definition is invalid", NULL);
+    MdoProjectCreateOptionsInit(&Options);
+    Options.Id = Id;
+    Options.Name = Name;
+    Options.WorkspaceRoot = Workspace;
+    Options.DefaultModelId = Model;
+    Result = MdoProjectReplace(&Options, ExpectedRevision, &Info, &Error);
+    if ( Result != MDO_PROJECT_MUTATION_OK )
+        return MdoApiProjectMutationFailure(Context, Result);
+    return MdoApiProjectReply(Context, 200u, &Info);
 }
 
 bool MdoApiPermissionsRoute(MdoApiContext* Context)

@@ -323,6 +323,29 @@ done:
     return Ok;
 }
 
+static bool MdoProjectsFields(const MdoProjectCreateOptions* Options,
+    MdoProjectInfo* Candidate, char Path[96])
+{
+    const char* Workspace;
+    const char* Model;
+    Workspace = Options->WorkspaceRoot != NULL &&
+        Options->WorkspaceRoot[0] != '\0' ? Options->WorkspaceRoot : ".";
+    Model = Options->DefaultModelId != NULL ? Options->DefaultModelId : "";
+    if ( !MdoProjectsId(Options->Id) ||
+         !MdoProjectsText(Options->Name, MDO_PROJECT_NAME_CAPACITY, false) ||
+         !MdoProjectsText(Workspace, MDO_PROJECT_WORKSPACE_CAPACITY, false) ||
+         !MdoProjectsText(Model, MDO_PROJECT_MODEL_CAPACITY, true) ||
+         (Model[0] != '\0' && !MdoProjectsId(Model)) ||
+         !MdoProjectsPath(Options->Id, Path) ) return false;
+    snprintf(Candidate->Id, sizeof(Candidate->Id), "%s", Options->Id);
+    snprintf(Candidate->Name, sizeof(Candidate->Name), "%s", Options->Name);
+    snprintf(Candidate->WorkspaceRoot, sizeof(Candidate->WorkspaceRoot),
+        "%s", Workspace);
+    snprintf(Candidate->DefaultModelId, sizeof(Candidate->DefaultModelId),
+        "%s", Model);
+    return true;
+}
+
 bool MdoProjectCreate(const MdoProjectCreateOptions* Options,
     MdoProjectInfo* Info, xwork_error* Error)
 {
@@ -334,8 +357,6 @@ bool MdoProjectCreate(const MdoProjectCreateOptions* Options,
     size_t Size = 0u;
     bool Exists = false;
     bool Ok = false;
-    const char* Workspace;
-    const char* Model;
     xworkErrorInit(Error);
     if ( Options == NULL || Options->Size < sizeof(*Options) ||
          (Info != NULL && Info->Size < sizeof(*Info)) ) {
@@ -343,27 +364,13 @@ bool MdoProjectCreate(const MdoProjectCreateOptions* Options,
             "invalid project create request");
         return false;
     }
-    Workspace = Options->WorkspaceRoot != NULL &&
-        Options->WorkspaceRoot[0] != '\0' ? Options->WorkspaceRoot : ".";
-    Model = Options->DefaultModelId != NULL ? Options->DefaultModelId : "";
-    if ( !MdoProjectsId(Options->Id) ||
-         !MdoProjectsText(Options->Name, MDO_PROJECT_NAME_CAPACITY, false) ||
-         !MdoProjectsText(Workspace, MDO_PROJECT_WORKSPACE_CAPACITY, false) ||
-         !MdoProjectsText(Model, MDO_PROJECT_MODEL_CAPACITY, true) ||
-         (Model[0] != '\0' && !MdoProjectsId(Model)) ||
-         !MdoProjectsPath(Options->Id, Path) ) {
+    memset(&Candidate, 0, sizeof(Candidate));
+    Candidate.Size = sizeof(Candidate);
+    if ( !MdoProjectsFields(Options, &Candidate, Path) ) {
         MdoProjectsError(Error, XWORK_ERROR_INVALID_ARGUMENT,
             "project fields are invalid or exceed their bounds");
         return false;
     }
-    memset(&Candidate, 0, sizeof(Candidate));
-    Candidate.Size = sizeof(Candidate);
-    snprintf(Candidate.Id, sizeof(Candidate.Id), "%s", Options->Id);
-    snprintf(Candidate.Name, sizeof(Candidate.Name), "%s", Options->Name);
-    snprintf(Candidate.WorkspaceRoot, sizeof(Candidate.WorkspaceRoot),
-        "%s", Workspace);
-    snprintf(Candidate.DefaultModelId, sizeof(Candidate.DefaultModelId),
-        "%s", Model);
     Candidate.Revision = 1u;
     Candidate.CreatedAt = xrtNow();
     Candidate.UpdatedAt = Candidate.CreatedAt;
@@ -405,4 +412,95 @@ done:
     if ( Lock != NULL ) (void)xrtClose(Lock);
     xrtFree(Json);
     return Ok;
+}
+
+static MdoProjectMutationResult MdoProjectsMutationBegin(const char* Id,
+    uint64 ExpectedRevision, char Path[96], xfile* Lock,
+    MdoProjectInfo* Current, xwork_error* Error)
+{
+    xfileinfo Stat;
+    bool Exists;
+    bool Found;
+    Current->Size = sizeof(*Current);
+    if ( !MdoProjectsId(Id) || ExpectedRevision == 0u ||
+         !MdoProjectsPath(Id, Path) ) return MDO_PROJECT_MUTATION_INVALID;
+    if ( !MdoProjectGet(Id, Current, &Found, Error) )
+        return MDO_PROJECT_MUTATION_UNAVAILABLE;
+    if ( !Found ) return MDO_PROJECT_MUTATION_NOT_FOUND;
+    *Lock = MdoHomeOpenWrite("projects/.writer.lock",
+        XFILE_READ | XFILE_CREATE | XFILE_SYNC);
+    if ( *Lock == NULL || !xrtFileLock(*Lock, XFILE_LOCK_EXCLUSIVE, false) )
+        return MDO_PROJECT_MUTATION_UNAVAILABLE;
+    if ( !MdoHomeExternalStat(Path, &Exists, &Stat) )
+        return MDO_PROJECT_MUTATION_UNAVAILABLE;
+    if ( !Exists ) return MDO_PROJECT_MUTATION_NOT_FOUND;
+    if ( !MdoProjectsRead(Id, Current, Error) )
+        return MDO_PROJECT_MUTATION_UNAVAILABLE;
+    return Current->Revision == ExpectedRevision ? MDO_PROJECT_MUTATION_OK :
+        MDO_PROJECT_MUTATION_REVISION_CONFLICT;
+}
+
+MdoProjectMutationResult MdoProjectReplace(
+    const MdoProjectCreateOptions* Options, uint64 ExpectedRevision,
+    MdoProjectInfo* Info, xwork_error* Error)
+{
+    MdoProjectInfo Current;
+    MdoProjectInfo Candidate;
+    char Path[96];
+    char CheckPath[96];
+    xfile Lock = NULL;
+    char* Json = NULL;
+    size_t Size = 0u;
+    MdoProjectMutationResult Result;
+    xworkErrorInit(Error);
+    if ( Options == NULL || Options->Size < sizeof(*Options) ||
+         (Info != NULL && Info->Size < sizeof(*Info)) )
+        return MDO_PROJECT_MUTATION_INVALID;
+    memset(&Candidate, 0, sizeof(Candidate));
+    Candidate.Size = sizeof(Candidate);
+    if ( !MdoProjectsFields(Options, &Candidate, CheckPath) )
+        return MDO_PROJECT_MUTATION_INVALID;
+    Result = MdoProjectsMutationBegin(Options->Id, ExpectedRevision,
+        Path, &Lock, &Current, Error);
+    if ( Result != MDO_PROJECT_MUTATION_OK ) goto done;
+    if ( Current.Revision == UINT64_MAX ) {
+        Result = MDO_PROJECT_MUTATION_UNAVAILABLE;
+        goto done;
+    }
+    Candidate.Revision = Current.Revision + 1u;
+    Candidate.CreatedAt = Current.CreatedAt;
+    Candidate.UpdatedAt = xrtNow();
+    if ( Candidate.UpdatedAt < Candidate.CreatedAt )
+        Candidate.UpdatedAt = Candidate.CreatedAt;
+    Json = MdoProjectsJson(&Candidate, &Size);
+    if ( Json == NULL || !MdoHomeAtomicWrite(Path, Json, Size, true) ) {
+        Result = MDO_PROJECT_MUTATION_UNAVAILABLE;
+        goto done;
+    }
+    if ( Info != NULL ) {
+        uint32 OutputSize = Info->Size;
+        *Info = Candidate;
+        Info->Size = OutputSize;
+    }
+done:
+    if ( Lock != NULL ) (void)xrtClose(Lock);
+    xrtFree(Json);
+    return Result;
+}
+
+MdoProjectMutationResult MdoProjectUnregister(const char* Id,
+    uint64 ExpectedRevision, xwork_error* Error)
+{
+    MdoProjectInfo Current;
+    char Path[96];
+    xfile Lock = NULL;
+    MdoProjectMutationResult Result;
+    xworkErrorInit(Error);
+    Result = MdoProjectsMutationBegin(Id, ExpectedRevision, Path,
+        &Lock, &Current, Error);
+    if ( Result == MDO_PROJECT_MUTATION_OK &&
+         !MdoHomeRemove(Path, true) )
+        Result = MDO_PROJECT_MUTATION_UNAVAILABLE;
+    if ( Lock != NULL ) (void)xrtClose(Lock);
+    return Result;
 }
