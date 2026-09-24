@@ -128,6 +128,8 @@ static bool MdoApiRuntimeEventValue(const xwork_event* Event, xvalue** pValue)
         MdoApiValueSetUInt(Item, "task_id", Event->uTaskId) &&
         MdoApiValueSetUInt(Item, "artifact_id", Event->uArtifactId) &&
         MdoApiValueSetUInt(Item, "agent_turn", Event->uAgentTurn) &&
+        MdoApiValueSetUInt(Item, "user_message_sequence",
+            Event->uUserMessageSequence) &&
         MdoApiValueSetUInt(Item, "agent_depth", Event->uAgentDepth) &&
         MdoApiValueSetUInt(Item, "effects", Event->uEffects) &&
         MdoApiValueSetBool(Item, "effect_applied", Event->bEffectApplied) &&
@@ -243,6 +245,8 @@ static bool MdoApiSessionEventValue(const MdoSessionEventInfo* Event,
         MdoApiValueSetUInt(Item, "task_id", Event->TaskId) &&
         MdoApiValueSetUInt(Item, "artifact_id", Event->ArtifactId) &&
         MdoApiValueSetUInt(Item, "agent_turn", Event->AgentTurn) &&
+        MdoApiValueSetUInt(Item, "user_message_sequence",
+            Event->UserMessageSequence) &&
         MdoApiValueSetUInt(Item, "agent_depth", Event->AgentDepth) &&
         MdoApiValueSetUInt(Item, "effects", Event->Effects) &&
         MdoApiValueSetBool(Item, "effect_applied", Event->EffectApplied) &&

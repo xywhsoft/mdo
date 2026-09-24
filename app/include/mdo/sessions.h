@@ -117,6 +117,7 @@ typedef struct MdoSessionEventInfo {
     int64 OccurredAt;
     xwork_event_kind Kind;
     uint64 AgentTurn;
+    uint64 UserMessageSequence;
     uint32 AgentDepth;
     uint64 AgentId;
     uint64 RunId;

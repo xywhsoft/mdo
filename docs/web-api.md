@@ -93,6 +93,10 @@ window. `/projects/{project}/sessions/{session}/events` replays the durable
 session UI journal. Every event identifies its schema, time, kind, terminal
 state, and available session/run/task lineage. Responses return a next cursor
 and `history_lost` when the requested prefix is no longer retained.
+For a new `agent_start` event, schema 3 includes `user_message_sequence`,
+the exact durable ledger entry written for that user prompt. Other events and
+resumed runs report zero. Existing schema 1 and 2 journal records still replay
+with zero, so clients must not infer an edit boundary for those records.
 
 The v1 transport deliberately uses bounded pull replay instead of holding an
 SSE connection. This gives desktop, mobile, reload, and suspended-webview

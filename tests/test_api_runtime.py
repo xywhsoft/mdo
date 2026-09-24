@@ -1962,6 +1962,9 @@ def run_probe(host: Path) -> None:
                 todo_events = json.loads(request(port, "GET",
                     session_path + "/events?after=0&limit=32")[2])[
                         "data"]["items"]
+                assert any(event["kind"] == "agent_start" and
+                           event["user_message_sequence"] > 0
+                           for event in todo_events), todo_events
                 assert any(event["kind"] == "tool_done" and
                            event["tool_name"] == "mdo.todo" and
                            event["success"] for event in todo_events), todo_events

@@ -5,7 +5,7 @@
 #include "internal.h"
 #include "../../include/mdo/home.h"
 
-#define MDO_SESSION_EVENT_SCHEMA 2u
+#define MDO_SESSION_EVENT_SCHEMA 3u
 #define MDO_SESSION_EVENT_FILE_LIMIT (16u * 1024u * 1024u)
 #define MDO_SESSION_EVENT_RETAIN_BYTES (8u * 1024u * 1024u)
 #define MDO_SESSION_EVENT_RECORD_LIMIT (96u * 1024u)
@@ -213,6 +213,8 @@ static char* MdoEventsRecord(const MdoSessionEventBridge* Bridge,
          !MdoEventsObjectTake(Object, "kind", xrtValueUInt(Event->eKind)) ||
          !MdoEventsObjectTake(Object, "agent_turn",
             xrtValueUInt(Event->uAgentTurn)) ||
+         !MdoEventsObjectTake(Object, "user_message_sequence",
+            xrtValueUInt(Event->uUserMessageSequence)) ||
          !MdoEventsObjectTake(Object, "agent_depth",
             xrtValueUInt(Event->uAgentDepth)) ||
          !MdoEventsObjectTake(Object, "agent_id",
@@ -425,11 +427,13 @@ static bool MdoEventsParse(const char* ProjectId, const char* SessionId,
     Config.MaxContainerItems = 32u;
     Root = xrtJsonRead(Json, &Config);
     if ( Root == NULL || xrtValueType(Root) != XVALUE_OBJECT ||
-         (xrtValueCount(Root) != 25u && xrtValueCount(Root) != 28u) ||
+         (xrtValueCount(Root) != 25u && xrtValueCount(Root) != 28u &&
+          xrtValueCount(Root) != 29u) ||
          !MdoEventsValueUInt(Root, "schema_version", &Schema) ||
          !((Schema == 1u && xrtValueCount(Root) == 25u) ||
+           (Schema == 2u && xrtValueCount(Root) == 28u) ||
            (Schema == MDO_SESSION_EVENT_SCHEMA &&
-            xrtValueCount(Root) == 28u)) ||
+            xrtValueCount(Root) == 29u)) ||
          !MdoEventsValueUInt(Root, "event_id", &Result->Info.EventId) ||
          Result->Info.EventId == 0u ||
          !MdoEventsValueUInt(Root, "source_event_id",
@@ -444,6 +448,8 @@ static bool MdoEventsParse(const char* ProjectId, const char* SessionId,
          !MdoEventsValueUInt(Root, "kind", &Kind) ||
          Kind > XWORK_EVENT_RECOVERY_RESOLVED ||
          !MdoEventsValueUInt(Root, "agent_turn", &Result->Info.AgentTurn) ||
+         (Schema >= 3u && !MdoEventsValueUInt(Root,
+            "user_message_sequence", &Result->Info.UserMessageSequence)) ||
          !MdoEventsValueUInt(Root, "agent_depth", &AgentDepth) ||
          AgentDepth > UINT32_MAX ||
          !MdoEventsValueUInt(Root, "agent_id", &Result->Info.AgentId) ||
@@ -457,7 +463,7 @@ static bool MdoEventsParse(const char* ProjectId, const char* SessionId,
          TaskState > UINT32_MAX ||
          !MdoEventsValueUInt(Root, "task_revision",
             &Result->Info.TaskRevision) ||
-         (Schema == MDO_SESSION_EVENT_SCHEMA &&
+         (Schema >= 2u &&
           (!MdoEventsValueUInt(Root, "input_tokens",
              &Result->Info.InputTokens) ||
            !MdoEventsValueUInt(Root, "output_tokens",

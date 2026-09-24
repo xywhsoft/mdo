@@ -224,6 +224,41 @@ static bool CorruptEventTail(const char *project, const char *session) {
     return ok;
 }
 
+static bool AppendLegacySchema2Event(const char *project, const char *session) {
+    char path[MDO_SESSION_PATH_CAPACITY];
+    char json[2048];
+    xwork_error error;
+    MdoSessionEventSnapshot *snapshot = MdoSessionEventReplay(project,
+        session, 0u, 1u, &error);
+    xfile file;
+    uint64 latest;
+    int written;
+    bool ok;
+    if (snapshot == NULL) return false;
+    latest = MdoSessionEventSnapshotLatestId(snapshot);
+    MdoSessionEventSnapshotRelease(snapshot);
+    written = snprintf(json, sizeof(json),
+        "{\"schema_version\":2,\"event_id\":%llu,\"source_event_id\":0,"
+        "\"occurred_at_us\":1,\"project_id\":\"%s\",\"session_id\":\"%s\","
+        "\"kind\":%u,\"agent_turn\":1,\"agent_depth\":0,\"agent_id\":0,"
+        "\"run_id\":0,\"task_id\":0,\"artifact_id\":0,\"parent_run_id\":0,"
+        "\"effects\":0,\"task_state\":0,\"task_revision\":0,"
+        "\"input_tokens\":0,\"output_tokens\":0,\"total_tokens\":0,"
+        "\"success\":true,\"effect_applied\":false,\"text_truncated\":false,"
+        "\"text\":\"legacy message\",\"tool_name\":\"\",\"tool_call_id\":\"\","
+        "\"artifact_path\":\"\",\"model\":\"\"}\n",
+        (unsigned long long)(latest + 1u), project, session,
+        (unsigned)XWORK_EVENT_AGENT_START);
+    if (written <= 0 || (size_t)written >= sizeof(json) ||
+        snprintf(path, sizeof(path), "sessions/%s/%s/ui-events.jsonl",
+            project, session) <= 0) return false;
+    file = MdoHomeOpenWrite(path, XFILE_CREATE | XFILE_APPEND | XFILE_SYNC);
+    if (file == NULL) return false;
+    ok = xrtWriteFull(file, json, (size_t)written, NULL) && xrtFlush(file);
+    if (!xrtClose(file)) ok = false;
+    return ok;
+}
+
 static bool LegacyMeta(void) {
     static const char json[] =
         "{\"schema_version\":1,\"revision\":4,\"id\":\"legacy-session\","
@@ -347,6 +382,7 @@ void ServiceInit(XS_HostInfo *host) {
         (unsigned long long)info.Revision);
     MdoSessionRelease(session); session = NULL;
     Catalog("catalog_after_create");
+    if (!AppendLegacySchema2Event("project-alpha", session_id)) goto done;
     if (!CorruptEventTail("project-alpha", session_id)) goto done;
 
     session = MdoSessionOpen("project-alpha", session_id, &open, &error);
@@ -687,7 +723,10 @@ def main() -> int:
         assert invalid_events == 1
         assert all(event["session_id"] == source_path.parent.name for event in events)
         model_events = [event for event in events if event.get("input_tokens")]
-        assert model_events and all(event["schema_version"] == 2 for event in model_events)
+        assert model_events and all(event["schema_version"] == 3 for event in model_events)
+        assert any(event["user_message_sequence"] > 0 for event in events)
+        assert any(event["schema_version"] == 2 and
+                   event["text"] == "legacy message" for event in events)
         assert all((event["input_tokens"], event["output_tokens"],
                     event["total_tokens"]) == (40, 8, 48)
                    for event in model_events)

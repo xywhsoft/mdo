@@ -28,7 +28,8 @@ export function eventsToTimeline(events, historyLost = false) {
       case "agent_start":
         items.push(event.agent_depth > 0
           ? { key: `subagent-${event.event_id}`, kind: "task", role: "子 Agent", text: event.text || "子 Agent 已启动", state: "running", time: event.time, meta: `depth ${event.agent_depth}` }
-          : { key: `user-${event.event_id}`, kind: "user", role: "你", text: event.text || "", state: "done", time: event.time });
+          : { key: `user-${event.event_id}`, kind: "user", role: "你", text: event.text || "", state: "done", time: event.time,
+            userMessageSequence: Number(event.user_message_sequence || 0) });
         break;
       case "model_reasoning_delta":
         appendOrCreate(items, event, "reasoning", "思考", `reasoning-${modelKey(event)}`);
