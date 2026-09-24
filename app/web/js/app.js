@@ -6,7 +6,9 @@ import {
   truncateSession, clearSession, exportSession,
 } from "./state/sessions.js";
 import { modelsStore, agentsStore, loadCatalogs, loadModels, loadAgents } from "./state/catalogs.js";
-import { settingsStore, loadSettings } from "./state/settings.js";
+import {
+  settingsStore, loadSettings, previewSettings, applySettings,
+} from "./state/settings.js";
 import {
   modulesStore, skillsStore, mcpStore, permissionsStore, storageStore,
   diagnosticsStore, migrationsStore, loadResource, loadManagementResources,
@@ -112,6 +114,7 @@ export async function boot() {
   let submitting = false;
   let messageActionBusy = false;
   let interruptRequested = false;
+  let themeToggleBusy = false;
   let composerAttachments = [];
   let composerImages = null;
   let shortcuts;
@@ -1049,6 +1052,25 @@ export async function boot() {
     },
     onSettings: (open) => open ? navigation.openSettings("general")
       : $("#close-settings").click(),
+    onToggleTheme: async () => {
+      if (themeToggleBusy) return;
+      if (settingsView.hasPendingChanges()) {
+        toast("先预览、应用或放弃尚未保存的设置", "error");
+        return;
+      }
+      themeToggleBusy = true;
+      try {
+        const settings = settingsStore.get().data ?? (await loadSettings()).data;
+        if (!settings?.appearance || !settings.etag)
+          throw new Error("当前设置尚未载入");
+        const theme = settings.appearance.theme === "dark" ? "light" : "dark";
+        const patch = { appearance: { theme } };
+        await previewSettings(patch);
+        await applySettings(patch, settings.etag);
+        toast(theme === "dark" ? "已切换为深色主题" : "已切换为浅色主题");
+      } catch (error) { toast(errorMessage(error), "error"); }
+      finally { themeToggleBusy = false; }
+    },
     onStop: () => stop.click(), isRunning: () => Boolean(activeRun),
     isDrawerOpen: () => shell.dataset.sidebar === "open" ||
       (mobileLayout.matches && shell.dataset.inspector === "open"),

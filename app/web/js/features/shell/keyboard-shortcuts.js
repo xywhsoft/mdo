@@ -1,5 +1,6 @@
 export function createKeyboardShortcuts({ dialog, navigation, search, onNew,
-  onExport, onSettings, onStop, isRunning, isDrawerOpen, closeDrawers }) {
+  onExport, onSettings, onToggleTheme, onStop, isRunning, isDrawerOpen,
+  closeDrawers }) {
   let previousFocus = null;
 
   function openHelp() {
@@ -42,6 +43,9 @@ export function createKeyboardShortcuts({ dialog, navigation, search, onNew,
       } else if (event.key === ",") {
         event.preventDefault();
         onSettings(true);
+      } else if (key === "j") {
+        event.preventDefault();
+        void onToggleTheme();
       }
       return;
     }

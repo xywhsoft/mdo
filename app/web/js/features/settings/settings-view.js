@@ -215,6 +215,9 @@ export function createSettingsView({ form, store, navigation, onApplied }) {
   });
 
   return Object.freeze({
+    hasPendingChanges() {
+      return busy || (Boolean(snapshot) && fingerprint() !== baselineFingerprint);
+    },
     selectSection(section) {
       const available = [...document.querySelectorAll("[data-settings-panel]")];
       const selected = available.some((panel) => panel.dataset.settingsPanel === section) ? section : "general";
