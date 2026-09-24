@@ -23,7 +23,8 @@ export function createComposerImages({ composer, prompt, button, input, strip,
     if (selected) for (const [index, id] of ids.entries()) {
       if (!/^[0-9a-f]{32}$/.test(id)) continue;
       const remove = element("button", {
-        text: "×", attrs: { type: "button", "aria-label": `移除图片 ${index + 1}` },
+        className: "composer-image-remove", text: "×",
+        attrs: { type: "button", "aria-label": `移除图片 ${index + 1}` },
       });
       remove.disabled = uploading || !writable;
       remove.addEventListener("click", () => {
@@ -33,8 +34,11 @@ export function createComposerImages({ composer, prompt, button, input, strip,
         void Promise.resolve(onRemove?.(selected, id)).catch(onError);
       });
       strip.append(element("div", { className: "composer-image" }, [
-        element("img", { attrs: { src: attachmentUrl(selected.projectId,
-          selected.sessionId, id), alt: `图片 ${index + 1}` } }),
+        element("button", { className: "composer-image-preview", attrs: {
+          type: "button", "aria-label": `查看图片 ${index + 1}`,
+          "data-image-preview": "",
+        } }, [element("img", { attrs: { src: attachmentUrl(selected.projectId,
+          selected.sessionId, id), alt: `图片 ${index + 1}` } })]),
         remove,
       ]));
     }

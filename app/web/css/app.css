@@ -473,6 +473,7 @@ select:focus-visible,
 }
 .timeline-item[data-kind="user"] .timeline-body:empty { display: none; }
 .timeline-images { display: flex; max-width: 86%; justify-content: flex-end; flex-wrap: wrap; gap: 6px; margin: 6px 0 0 auto; }
+.timeline-image-preview { display: block; max-width: 100%; padding: 0; border: 0; border-radius: 9px; background: transparent; cursor: zoom-in; }
 .timeline-images img { display: block; width: auto; max-width: min(240px, 100%); max-height: 240px; border: 1px solid var(--border); border-radius: 9px; object-fit: contain; background: var(--surface-raised); }
 .timeline-item[data-kind="assistant"] .timeline-body { font-size: 14px; line-height: 1.65; }
 .markdown-body { white-space: normal; }
@@ -618,7 +619,8 @@ select:focus-visible,
 .composer-images[hidden] { display: none; }
 .composer-image { position: relative; width: 68px; height: 68px; }
 .composer-image img { width: 100%; height: 100%; border: 1px solid var(--border); border-radius: 8px; object-fit: cover; }
-.composer-image button { position: absolute; top: -5px; right: -5px; display: grid; width: 19px; height: 19px; place-items: center; padding: 0; border: 0; border-radius: 50%; background: var(--ink); color: var(--surface-raised); cursor: pointer; }
+.composer-image-preview { display: block; width: 100%; height: 100%; padding: 0; border: 0; border-radius: 8px; background: transparent; cursor: zoom-in; }
+.composer-image-remove { position: absolute; top: -5px; right: -5px; display: grid; width: 19px; height: 19px; place-items: center; padding: 0; border: 0; border-radius: 50%; background: var(--ink); color: var(--surface-raised); cursor: pointer; }
 .composer-image-uploading { align-self: center; color: var(--muted); font-size: 11px; }
 .composer-toolbar { display: flex; min-height: 42px; align-items: center; justify-content: space-between; gap: 10px; padding: 5px 7px 7px 9px; }
 .composer-options, .composer-actions { display: flex; min-width: 0; align-items: center; gap: 6px; }
@@ -789,6 +791,10 @@ select:focus-visible,
   box-shadow: var(--shadow-dialog);
 }
 .new-session-dialog::backdrop { background: rgb(0 0 0 / 34%); backdrop-filter: blur(2px); }
+.image-preview-dialog { position: fixed; min-width: 48px; max-width: calc(100vw - 24px); max-height: calc(100dvh - 24px); margin: auto; padding: 8px; border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--surface-raised); box-shadow: var(--shadow-dialog); }
+.image-preview-dialog::backdrop { background: rgb(0 0 0 / 72%); }
+.image-preview-dialog img { display: block; width: auto; height: auto; max-width: calc(100vw - 42px); max-height: calc(100dvh - 42px); object-fit: contain; }
+.image-preview-close { position: absolute; top: 8px; right: 8px; display: grid; width: 32px; height: 32px; place-items: center; padding: 0; border: 1px solid var(--border-strong); border-radius: 50%; background: var(--surface-raised); color: var(--ink); font-size: 22px; line-height: 1; cursor: pointer; }
 .dialog-card > header { display: flex; align-items: flex-start; justify-content: space-between; padding: 20px 20px 15px; border-bottom: 1px solid var(--border); }
 .dialog-card h2 { margin: 0; font-size: 17px; }
 .dialog-card header p { margin: 4px 0 0; color: var(--muted); font-size: 11px; }

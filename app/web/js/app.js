@@ -31,6 +31,7 @@ import { createConversationDocks } from "./features/chat/conversation-docks.js";
 import { createPromptQueue } from "./features/chat/prompt-queue.js";
 import { createDraftStore } from "./features/chat/draft-store.js";
 import { createComposerImages } from "./features/chat/composer-images.js";
+import { createImagePreview } from "./features/chat/image-preview.js";
 import { createSlashCommands } from "./features/chat/slash-commands.js";
 import { createFileMentions } from "./features/chat/file-mentions.js";
 import { createComposerProfile, fillReasoningOptions } from "./features/chat/composer-profile.js";
@@ -214,6 +215,10 @@ export async function boot() {
     count: $("#conversation-find-count"), closeButton: $("#close-find"),
     openButtons: [$("#open-find"), $("#open-find-mobile")],
     navigation, prompt, onQuery: (query) => timelineView.search(query),
+  });
+  createImagePreview({
+    dialog: $("#image-preview"), image: $("#image-preview-content"),
+    closeButton: $("#close-image-preview"), navigation,
   });
   createTaskPanel({
     container: $("#task-list"),

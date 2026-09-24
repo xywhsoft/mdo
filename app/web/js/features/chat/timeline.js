@@ -174,10 +174,13 @@ function timelineNode(item, handlers, feedback, projectId, sessionId) {
     const images = element("div", { className: "timeline-images" });
     for (const [index, id] of item.attachments.entries()) {
       if (typeof id === "string" && /^[0-9a-f]{32}$/.test(id))
-        images.append(element("img", {
+        images.append(element("button", { className: "timeline-image-preview",
+          attrs: { type: "button", "aria-label": `查看用户图片 ${index + 1}`,
+            "data-image-preview": "" },
+        }, [element("img", {
           attrs: { src: attachmentUrl(projectId, sessionId, id),
             alt: `用户图片 ${index + 1}`, loading: "lazy" },
-        }));
+        })]));
     }
     if (images.childElementCount) children.push(images);
   }
