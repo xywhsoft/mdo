@@ -40,11 +40,17 @@
         </button>
       </div>
 
-      <button class="new-task-button" id="new-session" type="button">
-        <span class="icon" data-icon="compose" aria-hidden="true"></span>
-        <span>新建任务</span>
-        <kbd>Ctrl N</kbd>
-      </button>
+      <div class="new-task-actions">
+        <button class="new-task-button" id="new-session" type="button">
+          <span class="icon" data-icon="compose" aria-hidden="true"></span>
+          <span>新建任务</span>
+          <kbd>Ctrl N</kbd>
+        </button>
+        <button class="icon-button new-task-configure" id="new-session-configure" type="button"
+          aria-label="配置后创建任务" title="配置 Agent、项目和模型后创建任务">
+          <span class="icon" data-icon="settings" aria-hidden="true"></span>
+        </button>
+      </div>
 
       <label class="search-box" for="session-search">
         <span class="icon" data-icon="search" aria-hidden="true"></span>

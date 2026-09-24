@@ -266,7 +266,7 @@ export async function boot() {
     composer, input: prompt,
     onExecute: async (command) => {
       const session = sessionDetailStore.get().data;
-      if (command === "/new") openNewSession();
+      if (command === "/new") openNewTask();
       else if (command === "/model") $("#composer-model").focus();
       else if (command === "/settings") navigation.openSettings("general");
       else if (command === "/theme") {
@@ -939,7 +939,13 @@ export async function boot() {
     if (!dialog.open) dialog.showModal();
     window.setTimeout(() => dialogForm.elements.title.focus(), 0);
   }
-  $("#new-session").addEventListener("click", openNewSession);
+  function openNewTask() {
+    navigation.clear();
+    if (mobileLayout.matches) setDrawer("sidebar", false);
+    prompt.focus();
+  }
+  $("#new-session").addEventListener("click", openNewTask);
+  $("#new-session-configure").addEventListener("click", openNewSession);
   $("#close-new-session").addEventListener("click", () => dialog.close());
   dialogForm.addEventListener("submit", async (event) => {
     event.preventDefault();
@@ -1004,7 +1010,7 @@ export async function boot() {
 
   shortcuts = createKeyboardShortcuts({
     dialog: $("#shortcuts-dialog"), navigation, search: conversationSearch,
-    onNew: openNewSession,
+    onNew: openNewTask,
     onExport: async () => {
       const session = sessionDetailStore.get().data;
       if (!session) return;
