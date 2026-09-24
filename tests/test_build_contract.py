@@ -36,7 +36,7 @@ class BuildContractTests(unittest.TestCase):
         self.assertEqual(self.lock["pack"], {"format": "XRTPACK", "version": 1})
         self.assertEqual(self.lock["mdo"], {
             "module_abi_version": 1,
-            "session_schema_version": 2,
+            "session_schema_version": 3,
             "config_schema_version": 1,
         })
 
