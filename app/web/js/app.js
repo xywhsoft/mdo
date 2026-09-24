@@ -43,6 +43,7 @@ import { createSettingsView } from "./features/settings/settings-view.js";
 import { createResourcePanels } from "./features/settings/resource-panels.js";
 import { createKeyboardShortcuts } from "./features/shell/keyboard-shortcuts.js";
 import { createRunNotifications } from "./features/shell/run-notifications.js";
+import { startWorkspaceNavigation } from "./features/shell/workspace-startup.js";
 import { api } from "./api/client.js";
 import { clear, element, errorMessage, toast } from "./utils/dom.js";
 
@@ -72,6 +73,7 @@ function runStateText(state) {
 
 export async function boot() {
   mountIcons();
+  const entryHash = location.hash;
 
   const shell = $("#app-shell");
   const wideLayout = window.matchMedia("(min-width: 1181px)");
@@ -1001,10 +1003,6 @@ export async function boot() {
   $("#open-settings").addEventListener("click", () => navigation.openSettings("general"));
   $("#close-settings").addEventListener("click", () => {
     navigation.backToWorkspace();
-    if (!navigation.get().sessionId) {
-      const first = sessionsStore.get().data?.items?.[0];
-      if (first) navigation.select(first.project_id, first.id, { replace: true });
-    }
   });
   $("#workspace-chip").addEventListener("click", () => { selectInspectorTab("context"); setDrawer("inspector", true); });
 
@@ -1095,11 +1093,11 @@ export async function boot() {
     toast("部分资源暂时无法载入，可继续重试。", "error");
   }
 
-  const selected = navigation.get();
-  if (selected.view === "workspace" && !selected.sessionId) {
-    const first = sessionsStore.get().data?.items?.[0];
-    if (first) navigation.select(first.project_id, first.id, { replace: true });
-  }
+  await startWorkspaceNavigation({ navigation, settingsStore, sessionsStore,
+    dialog: $("#startup-choice-dialog"),
+    title: $("#startup-last-title"),
+    continueButton: $("#startup-continue"),
+    newButton: $("#startup-new"), prompt, entryHash });
   scheduleTaskRefresh();
   scheduleApprovalRefresh();
 }

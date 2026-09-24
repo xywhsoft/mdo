@@ -1310,6 +1310,11 @@ def run_probe(host: Path) -> None:
                     "open_mode": "last",
                     "confirm_external_write": True,
                 }, settings_document
+                status, _, body = request(port, "GET", "/api/v1/workspace-state")
+                assert status == 200 and json.loads(body)["data"] == {
+                    "project_id": "", "session_id": "",
+                }, body
+                assert not (home / "data/workspace-state.json").exists()
                 assert settings_document["data"]["transaction_service"] == {
                     "runtime_consistent": True,
                     "transactions": 0,
@@ -1485,6 +1490,48 @@ def run_probe(host: Path) -> None:
                 meta = json.loads(meta_text)
                 assert meta["id"] == session_id, meta
                 assert meta["project_id"] == "api-project", meta
+
+                selected_workspace = json.dumps({
+                    "project_id": "api-project", "session_id": session_id,
+                }).encode()
+                status, _, body = request(
+                    port, "PUT", "/api/v1/workspace-state",
+                    body=selected_workspace,
+                    headers={"Content-Type": "application/json"})
+                assert status == 200 and json.loads(body)["data"] == {
+                    "project_id": "api-project", "session_id": session_id,
+                }, body
+                stored_workspace = json.loads((home / "data/workspace-state.json")
+                                              .read_text(encoding="utf-8"))
+                assert stored_workspace == {
+                    "schema_version": 1, "project_id": "api-project",
+                    "session_id": session_id,
+                }, stored_workspace
+                status, _, body = request(port, "GET", "/api/v1/workspace-state")
+                assert status == 200 and json.loads(body)["data"] == {
+                    "project_id": "api-project", "session_id": session_id,
+                }, body
+                for invalid in (
+                    {"project_id": "../outside", "session_id": session_id},
+                    {"project_id": "api-project", "session_id": ""},
+                    {"project_id": "api-project", "session_id": session_id,
+                     "extra": True},
+                ):
+                    status, _, body = request(
+                        port, "PUT", "/api/v1/workspace-state",
+                        body=json.dumps(invalid).encode(),
+                        headers={"Content-Type": "application/json"})
+                    assert status == 422 and json.loads(body)["error"]["code"] == (
+                        "workspace_state_invalid"), (status, body)
+                status, _, body = request(
+                    port, "PUT", "/api/v1/workspace-state",
+                    body=json.dumps({"project_id": "api-project",
+                                     "session_id": "missing"}).encode(),
+                    headers={"Content-Type": "application/json"})
+                assert status == 404 and json.loads(body)["error"]["code"] == (
+                    "session_not_found"), (status, body)
+                assert json.loads((home / "data/workspace-state.json")
+                                  .read_text(encoding="utf-8")) == stored_workspace
 
                 status, headers, body = request(
                     port, "GET",

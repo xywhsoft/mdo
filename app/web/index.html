@@ -358,6 +358,21 @@
     <button class="scrim" id="scrim" type="button" aria-label="关闭侧栏" tabindex="-1"></button>
   </div>
 
+  <dialog class="new-session-dialog" id="startup-choice-dialog" aria-labelledby="startup-choice-title">
+    <div class="dialog-card">
+      <header>
+        <div>
+          <h2 id="startup-choice-title">继续上次任务？</h2>
+          <p>上次打开的是 <strong id="startup-last-title"></strong>。</p>
+        </div>
+      </header>
+      <footer>
+        <button class="secondary-button" id="startup-new" type="button">新任务</button>
+        <button class="primary-button" id="startup-continue" type="button">继续上次任务</button>
+      </footer>
+    </div>
+  </dialog>
+
   <dialog class="new-session-dialog" id="new-session-dialog" aria-labelledby="new-session-title">
     <form method="dialog" class="dialog-card" id="new-session-form">
       <header>
