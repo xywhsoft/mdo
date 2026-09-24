@@ -251,6 +251,17 @@ def probe(host: Path) -> None:
                     child_root = home / "sessions/image-probe" / child_id
                     assert (child_root / "attachments" / f"{image_id}.bin").read_bytes() == (
                         image_bytes)
+                    # Forking must not leave the source runtime unable to
+                    # accept another turn while the child remains open.
+                    ModelHandler.calls = 0
+                    status, _, body = request(port, "POST", route + "/runs",
+                        body=json.dumps({"prompt": "continue source after fork"}).encode(),
+                        headers={"Content-Type": "application/json"})
+                    document = json.loads(body)
+                    assert status == 202, (status, document)
+                    continued = wait_run(port, document["data"]["id"])
+                    assert continued["state"] == "succeeded" and (
+                        ModelHandler.calls >= 1), continued
                     trimmed_start = starts[-1]
                     assert trimmed_start["attachments"] == [trimmed_id], starts
                     trimmed_record = (attachment_root / "events" /
