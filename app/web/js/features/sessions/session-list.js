@@ -4,7 +4,7 @@ export function createSessionList({ container, count, filter, store, navigation,
   let query = "";
   let status = filter.value;
   let openMenu = "";
-  let focusMenuButton = "";
+  let focusRequest = null;
   let state = store.get();
   let unread = new Set();
 
@@ -12,6 +12,7 @@ export function createSessionList({ container, count, filter, store, navigation,
     const button = element("button", { text: label, attrs: { type: "button", role: "menuitem", "data-tone": tone } });
     button.addEventListener("click", async (event) => {
       event.stopPropagation();
+      focusRequest = { sessionId: session.id, index: -1 };
       openMenu = "";
       render();
       try { await onAction(name, session); }
@@ -36,8 +37,17 @@ export function createSessionList({ container, count, filter, store, navigation,
   }
 
   function render() {
-    const focusTarget = focusMenuButton;
-    focusMenuButton = "";
+    const requestedFocus = focusRequest;
+    focusRequest = null;
+    const focused = document.activeElement;
+    const focusedMenu = focused?.closest?.(".session-menu");
+    const retainedFocus = focusedMenu?.dataset.sessionId === openMenu
+      ? { sessionId: openMenu, index: Number(focused.dataset.menuIndex) }
+      : focused?.classList?.contains("session-more")
+        ? { sessionId: focused.dataset.sessionId, index: -1 }
+        : focused?.classList?.contains("session-item")
+          ? { sessionId: focused.dataset.sessionId, index: -2 } : null;
+    let restoredFocus = false;
     const selected = navigation.get().sessionId;
     const items = state.data?.items ?? [];
     const needle = query.trim().toLocaleLowerCase("zh-CN");
@@ -62,6 +72,7 @@ export function createSessionList({ container, count, filter, store, navigation,
         className: "empty-state",
         text: needle ? "没有匹配的会话" : "还没有会话，创建一个任务开始使用。",
       }));
+      if (requestedFocus || retainedFocus) filter.focus();
       return;
     }
 
@@ -71,6 +82,7 @@ export function createSessionList({ container, count, filter, store, navigation,
         className: "session-item",
         attrs: {
           type: "button",
+          "data-session-id": session.id,
           "aria-current": session.id === selected ? "page" : null,
           title: session.title || session.id,
         },
@@ -80,44 +92,93 @@ export function createSessionList({ container, count, filter, store, navigation,
         element("span", { className: "session-item-meta", text: `${session.project_id} · ${session.model_id || session.agent_id}${session.pinned ? " · 已置顶" : ""}${hasUnread ? " · 有新结果" : ""}` }),
       ]);
       button.addEventListener("click", () => onSelect(session));
-      const more = element("button", { className: "session-more", text: "•••", attrs: { type: "button", "aria-label": `${session.title || "未命名任务"} 的操作`, "aria-haspopup": "menu", "aria-expanded": String(openMenu === session.id) } });
+      const more = element("button", { className: "session-more", text: "•••", attrs: { type: "button", "data-session-id": session.id, "aria-label": `${session.title || "未命名任务"} 的操作`, "aria-haspopup": "menu", "aria-expanded": String(openMenu === session.id) } });
       more.addEventListener("click", (event) => {
         event.stopPropagation();
         openMenu = openMenu === session.id ? "" : session.id;
-        focusMenuButton = session.id;
+        focusRequest = { sessionId: session.id,
+          index: openMenu && event.detail === 0 ? 0 : -1 };
         render();
       });
-      const menu = element("div", { className: "session-menu", attrs: { role: "menu" } }, menuFor(session));
+      const menu = element("div", { className: "session-menu", attrs: {
+        role: "menu", "data-session-id": session.id,
+      } }, menuFor(session));
+      [...menu.children].forEach((item, index) => {
+        item.dataset.menuIndex = String(index);
+      });
       menu.hidden = openMenu !== session.id;
       container.append(element("div", { className: "session-item-row", attrs: {
         "data-status": session.status, "data-unread": hasUnread ? "true" : null,
       } }, [button, more, menu]));
-      if (focusTarget === session.id) {
-        more.focus();
+      const target = requestedFocus?.sessionId === session.id
+        ? requestedFocus : retainedFocus?.sessionId === session.id
+          ? retainedFocus : null;
+      if (target) {
+        if (target.index === -2) button.focus();
+        else if (target.index < 0) more.focus();
+        else menu.children[target.index]?.focus();
+        restoredFocus = true;
       }
     }
+    if (!restoredFocus && (requestedFocus || retainedFocus))
+      container.querySelector(".session-item")?.focus();
   }
 
   const unsubscribeStore = store.subscribe((next) => { state = next; render(); });
   const unsubscribeNavigation = navigation.subscribe(() => { openMenu = ""; render(); });
   filter.addEventListener("change", () => { status = filter.value; openMenu = ""; render(); });
   document.addEventListener("pointerdown", onOutsidePointerDown);
+  document.addEventListener("focusin", onFocusIn);
   document.addEventListener("keydown", onDismissKeyDown);
 
-  function onOutsidePointerDown(event) {
-    if (openMenu && !container.contains(event.target)) {
-      openMenu = "";
-      render();
+  function currentMenu() {
+    return [...container.querySelectorAll(".session-menu")].find((menu) =>
+      !menu.hidden && menu.dataset.sessionId === openMenu) ?? null;
+  }
+
+  function closeMenu(restoreFocus = false) {
+    const menu = currentMenu();
+    const more = menu?.previousElementSibling;
+    openMenu = "";
+    if (menu) menu.hidden = true;
+    if (more) {
+      more.setAttribute("aria-expanded", "false");
+      if (restoreFocus) more.focus();
     }
   }
 
+  function onOutsidePointerDown(event) {
+    const menu = currentMenu();
+    if (menu && !menu.parentElement.contains(event.target)) closeMenu();
+  }
+
+  function onFocusIn(event) {
+    const menu = currentMenu();
+    if (menu && !menu.parentElement.contains(event.target)) closeMenu();
+  }
+
   function onDismissKeyDown(event) {
-    if (openMenu && event.key === "Escape") {
+    const menu = currentMenu();
+    if (!menu) return;
+    if (event.key === "Escape") {
       event.preventDefault();
-      focusMenuButton = openMenu;
-      openMenu = "";
-      render();
+      event.stopImmediatePropagation();
+      closeMenu(true);
+      return;
     }
+    if (!menu.contains(event.target) && event.target !== menu.previousElementSibling)
+      return;
+    const items = [...menu.querySelectorAll('[role="menuitem"]')];
+    const index = items.indexOf(document.activeElement);
+    let next = index;
+    if (event.key === "ArrowDown") next = index < 0 ? 0 : (index + 1) % items.length;
+    else if (event.key === "ArrowUp") next = index < 0 ? items.length - 1
+      : (index - 1 + items.length) % items.length;
+    else if (event.key === "Home") next = 0;
+    else if (event.key === "End") next = items.length - 1;
+    else return;
+    event.preventDefault();
+    items[next]?.focus();
   }
 
   return Object.freeze({
@@ -127,6 +188,7 @@ export function createSessionList({ container, count, filter, store, navigation,
       unsubscribeStore();
       unsubscribeNavigation();
       document.removeEventListener("pointerdown", onOutsidePointerDown);
+      document.removeEventListener("focusin", onFocusIn);
       document.removeEventListener("keydown", onDismissKeyDown);
     },
   });
