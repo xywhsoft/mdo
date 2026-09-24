@@ -2522,6 +2522,13 @@ def run_probe(host: Path) -> None:
                 assert any(event["kind"] == "agent_start" and
                            event["user_message_sequence"] > 0
                            for event in fork_events), fork_events
+                fork_todo = json.loads(request(port, "GET",
+                    f'/api/v1/projects/api-project/sessions/{forked["id"]}'
+                    '/todo')[2])["data"]
+                assert fork_todo["items"] == [
+                    {"text": "Inspect repository", "done": True},
+                    {"text": "Verify result", "done": False},
+                ], fork_todo
 
                 journal_before_trim = session_events(port, session_path)
                 cutoff_start = next(event for event in journal_before_trim

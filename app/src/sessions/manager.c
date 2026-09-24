@@ -154,6 +154,7 @@ static void MdoSessionsRollbackDirectory(const char* ProjectId,
 {
     static const char* const Files[] = {
         "journal.jsonl", "snapshot.json", "meta.json", "ui-events.jsonl",
+        "todo.json",
         ".runtime.lock"
     };
     char Relative[MDO_SESSION_PATH_CAPACITY];

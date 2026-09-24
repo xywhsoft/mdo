@@ -798,6 +798,16 @@ bool MdoSessionEventBridgeClonePrefix(MdoSessionEventBridge* Bridge,
     if ( OutputSize != 0u &&
          !MdoHomeAtomicWrite(Bridge->Path, Output, OutputSize, false) )
         goto io;
+    if ( OutputSize != 0u ) {
+        MdoSessionEventTrimPlan Projection;
+        memset(&Projection, 0, sizeof(Projection));
+        Projection.Bridge = Bridge;
+        Projection.Data = Output;
+        Projection.Keep = OutputSize;
+        Projection.NextEventId = Bridge->NextEventId;
+        if ( !MdoSessionEventTrimReconcileTodo(&Projection, Error) )
+            goto done;
+    }
     Ok = true;
     goto done;
 io:
