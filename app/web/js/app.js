@@ -128,6 +128,7 @@ export async function boot() {
     container: $("#session-list"),
     count: $("#session-count"),
     store: sessionsStore,
+    projectsStore,
     filter: $("#session-status-filter"),
     navigation,
     onSelect(session) {
@@ -135,7 +136,17 @@ export async function boot() {
       closeDrawers();
     },
     onAction: handleSessionAction,
+    onNewInProject(projectId) {
+      showActiveSessions();
+      navigation.newTask(projectId);
+      closeDrawers();
+      prompt.focus();
+    },
   });
+  function showActiveSessions() {
+    $("#session-search").value = "";
+    sessionList.showActive();
+  }
   $("#session-search").addEventListener("input", (event) => sessionList.setQuery(event.target.value));
   createComposerProject({ select: $("#composer-project"), navigation,
     projectsStore, sessionsStore });
@@ -725,6 +736,7 @@ export async function boot() {
     const title = text.trim().split(/\r?\n/, 1)[0].slice(0, 80) || "图片任务";
     const session = await createSession({ project_id: selected.projectId || "default", title,
       ...composerProfile.selection() });
+    showActiveSessions();
     draftStore.edit(`${session.project_id}/${session.id}`, text, [], true);
     navigation.select(session.project_id, session.id);
     selectTimeline(session.project_id, session.id);
@@ -984,6 +996,7 @@ export async function boot() {
     window.setTimeout(() => dialogForm.elements.title.focus(), 0);
   }
   function openNewTask() {
+    showActiveSessions();
     navigation.newTask(navigation.get().projectId || navigation.preferredProject());
     if (mobileLayout.matches) setDrawer("sidebar", false);
     prompt.focus();
@@ -999,6 +1012,7 @@ export async function boot() {
     const values = Object.fromEntries(new FormData(dialogForm));
     try {
       const session = await createSession(values);
+      showActiveSessions();
       dialog.close();
       dialogForm.elements.title.value = "";
       navigation.select(session.project_id, session.id);

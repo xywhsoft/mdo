@@ -1,18 +1,20 @@
 import { element, clear, formatRelativeTime, errorMessage, toast } from "../../utils/dom.js";
 
-export function createSessionList({ container, count, filter, store, navigation, onSelect, onAction }) {
+export function createSessionList({ container, count, filter, store, projectsStore,
+  navigation, onSelect, onAction, onNewInProject }) {
   let query = "";
   let status = filter.value;
   let openMenu = "";
   let focusRequest = null;
   let state = store.get();
   let unread = new Set();
+  const sessionKey = (session) => `${session.project_id}/${session.id}`;
 
   function menuAction(label, name, session, tone = "neutral") {
     const button = element("button", { text: label, attrs: { type: "button", role: "menuitem", "data-tone": tone } });
     button.addEventListener("click", async (event) => {
       event.stopPropagation();
-      focusRequest = { sessionId: session.id, index: -1 };
+      focusRequest = { key: sessionKey(session), index: -1 };
       openMenu = "";
       render();
       try { await onAction(name, session); }
@@ -41,20 +43,30 @@ export function createSessionList({ container, count, filter, store, navigation,
     focusRequest = null;
     const focused = document.activeElement;
     const focusedMenu = focused?.closest?.(".session-menu");
-    const retainedFocus = focusedMenu?.dataset.sessionId === openMenu
-      ? { sessionId: openMenu, index: Number(focused.dataset.menuIndex) }
+    const retainedFocus = focusedMenu?.dataset.sessionKey === openMenu
+      ? { key: openMenu, index: Number(focused.dataset.menuIndex) }
       : focused?.classList?.contains("session-more")
-        ? { sessionId: focused.dataset.sessionId, index: -1 }
+        ? { key: focused.dataset.sessionKey, index: -1 }
         : focused?.classList?.contains("session-item")
-          ? { sessionId: focused.dataset.sessionId, index: -2 } : null;
+          ? { key: focused.dataset.sessionKey, index: -2 } : null;
     let restoredFocus = false;
-    const selected = navigation.get().sessionId;
+    const selected = navigation.get();
     const items = state.data?.items ?? [];
     const needle = query.trim().toLocaleLowerCase("zh-CN");
     const matchingStatus = status === "all" ? items : items.filter((item) => item.status === status);
     const visible = needle
       ? matchingStatus.filter((item) => `${item.title} ${item.project_id} ${item.agent_id}`.toLocaleLowerCase("zh-CN").includes(needle))
       : matchingStatus;
+    const pinned = visible.filter((item) => item.status === "active" && item.pinned);
+    const unpinned = visible.filter((item) => item.status !== "active" || !item.pinned);
+    const groupIds = new Set(unpinned.map((item) => item.project_id));
+    if (status === "active" && !needle) {
+      groupIds.add("default");
+      for (const project of projectsStore.get().data?.items ?? [])
+        groupIds.add(project.id);
+    }
+    const orderedGroups = [...groupIds].filter(Boolean).sort((a, b) =>
+      a === "default" ? -1 : b === "default" ? 1 : a.localeCompare(b, "zh-CN"));
     count.textContent = String(visible.length);
     container.setAttribute("aria-busy", String(state.status === "loading"));
     clear(container);
@@ -67,7 +79,7 @@ export function createSessionList({ container, count, filter, store, navigation,
       container.append(element("div", { className: "empty-state", text: "正在载入会话…" }));
       return;
     }
-    if (visible.length === 0) {
+    if (visible.length === 0 && orderedGroups.length === 0) {
       container.append(element("div", {
         className: "empty-state",
         text: needle ? "没有匹配的会话" : "还没有会话，创建一个任务开始使用。",
@@ -76,42 +88,56 @@ export function createSessionList({ container, count, filter, store, navigation,
       return;
     }
 
-    for (const session of visible) {
+    function appendHeading(label, size, projectId = "") {
+      const children = [element("span", { className: "session-group-name", text: label }),
+        element("span", { className: "session-group-count", text: String(size) })];
+      if (projectId) {
+        const create = element("button", { className: "session-group-new", text: "+",
+          attrs: { type: "button", "aria-label": `在 ${projectId} 项目新建任务`,
+            title: `在 ${projectId} 项目新建任务` } });
+        create.addEventListener("click", () => onNewInProject(projectId));
+        children.push(create);
+      }
+      container.append(element("div", { className: "session-group-heading" }, children));
+    }
+
+    function appendSession(session, showProject = false) {
+      const key = sessionKey(session);
       const hasUnread = unread.has(`${session.project_id}/${session.id}`);
       const button = element("button", {
         className: "session-item",
         attrs: {
           type: "button",
-          "data-session-id": session.id,
-          "aria-current": session.id === selected ? "page" : null,
+          "data-session-key": key,
+          "aria-current": key === `${selected.projectId}/${selected.sessionId}` ? "page" : null,
           title: session.title || session.id,
         },
       }, [
         element("span", { className: "session-item-title", text: session.title || "未命名任务" }),
         element("time", { className: "session-item-time", text: formatRelativeTime(session.updated_at) }),
-        element("span", { className: "session-item-meta", text: `${session.project_id} · ${session.model_id || session.agent_id}${session.pinned ? " · 已置顶" : ""}${hasUnread ? " · 有新结果" : ""}` }),
+        element("span", { className: "session-item-meta", text: `${showProject ? `${session.project_id} · ` : ""}${session.model_id || session.agent_id}${hasUnread ? " · 有新结果" : ""}` }),
       ]);
       button.addEventListener("click", () => onSelect(session));
-      const more = element("button", { className: "session-more", text: "•••", attrs: { type: "button", "data-session-id": session.id, "aria-label": `${session.title || "未命名任务"} 的操作`, "aria-haspopup": "menu", "aria-expanded": String(openMenu === session.id) } });
+      const more = element("button", { className: "session-more", text: "•••", attrs: { type: "button", "data-session-key": key, "aria-label": `${session.title || "未命名任务"} 的操作`, "aria-haspopup": "menu", "aria-expanded": String(openMenu === key) } });
       more.addEventListener("click", (event) => {
         event.stopPropagation();
-        openMenu = openMenu === session.id ? "" : session.id;
-        focusRequest = { sessionId: session.id,
+        openMenu = openMenu === key ? "" : key;
+        focusRequest = { key,
           index: openMenu && event.detail === 0 ? 0 : -1 };
         render();
       });
       const menu = element("div", { className: "session-menu", attrs: {
-        role: "menu", "data-session-id": session.id,
+        role: "menu", "data-session-key": key,
       } }, menuFor(session));
       [...menu.children].forEach((item, index) => {
         item.dataset.menuIndex = String(index);
       });
-      menu.hidden = openMenu !== session.id;
+      menu.hidden = openMenu !== key;
       container.append(element("div", { className: "session-item-row", attrs: {
         "data-status": session.status, "data-unread": hasUnread ? "true" : null,
       } }, [button, more, menu]));
-      const target = requestedFocus?.sessionId === session.id
-        ? requestedFocus : retainedFocus?.sessionId === session.id
+      const target = requestedFocus?.key === key
+        ? requestedFocus : retainedFocus?.key === key
           ? retainedFocus : null;
       if (target) {
         if (target.index === -2) button.focus();
@@ -120,11 +146,25 @@ export function createSessionList({ container, count, filter, store, navigation,
         restoredFocus = true;
       }
     }
+    if (pinned.length) {
+      appendHeading("置顶", pinned.length);
+      for (const session of pinned) appendSession(session, true);
+    }
+    for (const projectId of orderedGroups) {
+      const sessions = unpinned.filter((item) => item.project_id === projectId);
+      appendHeading(projectId === "default" ? "默认项目" : projectId,
+        sessions.length, projectId);
+      if (!sessions.length) container.append(element("div", {
+        className: "session-group-empty", text: "暂无会话",
+      }));
+      for (const session of sessions) appendSession(session);
+    }
     if (!restoredFocus && (requestedFocus || retainedFocus))
-      container.querySelector(".session-item")?.focus();
+      (container.querySelector(".session-item, .session-group-new") ?? filter).focus();
   }
 
   const unsubscribeStore = store.subscribe((next) => { state = next; render(); });
+  const unsubscribeProjects = projectsStore.subscribe(render);
   const unsubscribeNavigation = navigation.subscribe(() => { openMenu = ""; render(); });
   filter.addEventListener("change", () => { status = filter.value; openMenu = ""; render(); });
   document.addEventListener("pointerdown", onOutsidePointerDown);
@@ -133,7 +173,7 @@ export function createSessionList({ container, count, filter, store, navigation,
 
   function currentMenu() {
     return [...container.querySelectorAll(".session-menu")].find((menu) =>
-      !menu.hidden && menu.dataset.sessionId === openMenu) ?? null;
+      !menu.hidden && menu.dataset.sessionKey === openMenu) ?? null;
   }
 
   function closeMenu(restoreFocus = false) {
@@ -184,8 +224,10 @@ export function createSessionList({ container, count, filter, store, navigation,
   return Object.freeze({
     setQuery(value) { query = value; render(); },
     setUnread(keys) { unread = keys; render(); },
+    showActive() { status = "active"; query = ""; filter.value = status; openMenu = ""; render(); },
     destroy() {
       unsubscribeStore();
+      unsubscribeProjects();
       unsubscribeNavigation();
       document.removeEventListener("pointerdown", onOutsidePointerDown);
       document.removeEventListener("focusin", onFocusIn);
