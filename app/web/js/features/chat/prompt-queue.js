@@ -1,4 +1,4 @@
-import { api, resourceId } from "../../api/client.js";
+import { api, attachmentUrl, resourceId } from "../../api/client.js";
 import { clear, element, errorMessage, toast } from "../../utils/dom.js";
 
 function sessionKey(projectId, sessionId) {
@@ -20,6 +20,7 @@ export function createPromptQueue({ container, navigation, onRetry, onRemoved })
   const queues = new Map();
   const loads = new Map();
   const versions = new Map();
+  const expanded = new Map();
   let busy = false;
 
   function selectedKey() {
@@ -29,7 +30,9 @@ export function createPromptQueue({ container, navigation, onRetry, onRemoved })
 
   function update(key, response) {
     versions.set(key, (versions.get(key) ?? 0) + 1);
-    queues.set(key, response.data?.items ?? []);
+    const items = response.data?.items ?? [];
+    if (!(queues.get(key)?.length) && items.length) expanded.set(key, true);
+    queues.set(key, items);
     render();
   }
 
@@ -60,6 +63,13 @@ export function createPromptQueue({ container, navigation, onRetry, onRemoved })
     container.hidden = entries.length === 0;
     if (!entries.length) return;
     const uncertain = entries[0].state === "sending";
+    const [projectId, sessionId] = key.split("/");
+    let open = expanded.get(key) ?? true;
+    const toggle = element("button", { className: "prompt-queue-toggle",
+      text: `待发送 · ${entries.length}`,
+      attrs: { type: "button", "aria-expanded": String(open),
+        "aria-controls": "prompt-queue-list" },
+    });
     const retry = element("button", {
       text: uncertain ? "确认未发送后重试" : "发送下一条",
       attrs: { type: "button" },
@@ -72,17 +82,25 @@ export function createPromptQueue({ container, navigation, onRetry, onRemoved })
       finally { retry.disabled = false; }
     });
     container.append(element("div", { className: "prompt-queue-header" }, [
-      element("h3", { text: `待发送 · ${entries.length}` }), retry,
+      toggle, retry,
     ]));
     if (uncertain) container.append(element("p", {
       className: "prompt-queue-warning",
       text: "首条消息可能已被服务端接收。请先核对对话和运行记录，再决定移除或重试。",
     }));
-    const list = element("ol", { className: "prompt-queue-list" });
-    for (const entry of entries) {
+    const list = element("ol", { className: "prompt-queue-list",
+      attrs: { id: "prompt-queue-list" } });
+    list.hidden = !open;
+    toggle.addEventListener("click", () => {
+      open = !open;
+      expanded.set(key, open);
+      toggle.setAttribute("aria-expanded", String(open));
+      list.hidden = !open;
+    });
+    for (const [index, entry] of entries.entries()) {
       const remove = element("button", {
         text: "移除",
-        attrs: { type: "button", "aria-label": "移除待发送消息" },
+        attrs: { type: "button", "aria-label": `移除待发送消息 ${index + 1}` },
       });
       remove.disabled = busy;
       remove.addEventListener("click", async () => {
@@ -90,17 +108,33 @@ export function createPromptQueue({ container, navigation, onRetry, onRemoved })
         try { await removeItem(entry.id); }
         catch (error) { toast(errorMessage(error), "error"); remove.disabled = false; }
       });
+      const body = element("div", { className: "prompt-queue-item-body" }, [
+        element("span", { className: "prompt-queue-text",
+          text: entry.text || "图片消息" }),
+      ]);
+      if (entry.state === "sending") body.append(element("span", {
+        className: "prompt-queue-state", text: "发送状态待确认",
+      }));
+      if (entry.attachments?.length) {
+        const images = element("div", { className: "prompt-queue-images" });
+        for (const [imageIndex, id] of entry.attachments.entries()) {
+          if (typeof id !== "string" || !/^[0-9a-f]{32}$/.test(id)) continue;
+          images.append(element("button", { attrs: {
+            type: "button", "aria-label": `查看待发送图片 ${imageIndex + 1}`,
+            "data-image-preview": "",
+          } }, [element("img", { attrs: {
+            src: attachmentUrl(projectId, sessionId, id),
+            alt: `待发送图片 ${imageIndex + 1}`, loading: "lazy",
+          } })]));
+        }
+        body.append(images);
+      }
       list.append(element("li", {}, [
-        element("span", { text: entry.text || "图片消息" }),
-        entry.attachments?.length ? element("span", {
-          className: "prompt-queue-images",
-          text: `${entry.attachments.length} 张图片`,
-        }) : null,
-        entry.state === "sending" ? element("span", {
-          className: "prompt-queue-state", text: "发送状态待确认",
-        }) : null,
+        element("span", { className: "prompt-queue-index",
+          text: String(index + 1) }),
+        body,
         remove,
-      ].filter(Boolean)));
+      ]));
     }
     container.append(list);
   }
