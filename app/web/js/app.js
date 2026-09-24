@@ -25,6 +25,7 @@ import { createTimelineView } from "./features/chat/timeline.js";
 import { feedbackStore, selectFeedback, clearFeedback, setFeedback } from "./features/chat/feedback-store.js";
 import { createConversationDocks } from "./features/chat/conversation-docks.js";
 import { createPromptQueue } from "./features/chat/prompt-queue.js";
+import { createSlashCommands } from "./features/chat/slash-commands.js";
 import { createComposerProfile, fillReasoningOptions } from "./features/chat/composer-profile.js";
 import { createTokenMeter } from "./features/chat/token-meter.js";
 import { createTaskPanel } from "./features/tasks/task-panel.js";
@@ -159,6 +160,34 @@ export async function boot() {
       const selected = navigation.get();
       queueBlocked.delete(`${selected.projectId}/${selected.sessionId}`);
       void dispatchQueued();
+    },
+  });
+  const slashCommands = createSlashCommands({
+    composer, input: prompt,
+    onExecute: async (command) => {
+      const session = sessionDetailStore.get().data;
+      if (command === "/new") openNewSession();
+      else if (command === "/model") $("#composer-model").focus();
+      else if (command === "/settings") navigation.openSettings("general");
+      else if (command === "/theme") {
+        navigation.openSettings("general");
+        window.setTimeout(() => $("#setting-theme").focus(), 0);
+      } else if (command === "/help") {
+        prompt.value = "/";
+        prompt.dispatchEvent(new Event("input", { bubbles: true }));
+        prompt.focus();
+      } else if (command === "/stop") {
+        if (!activeRun) throw new Error("当前没有运行中的任务");
+        stop.click();
+      } else {
+        if (!session) throw new Error("请先选择会话");
+        if (command === "/export") await handleSessionAction("export", session);
+        else {
+          if (activeRun) throw new Error("请在当前运行结束后修改会话历史");
+          if (command === "/fork") await handleSessionAction("fork", session);
+          else if (command === "/clear") await handleSessionAction("clear", session);
+        }
+      }
     },
   });
   const tokenMeter = createTokenMeter({
@@ -437,6 +466,7 @@ export async function boot() {
     const interrupt = interruptRequested;
     interruptRequested = false;
     if (!text || submitting) return;
+    if (await slashCommands.consumeExact(text)) return;
     if (composerProfile.isBusy()) {
       showComposerError(new Error("请等待会话配置更新完成"));
       return;
@@ -504,6 +534,7 @@ export async function boot() {
     drafts.set(selectedKey, prompt.value);
   });
   prompt.addEventListener("keydown", (event) => {
+    if (slashCommands.onKeyDown(event)) return;
     if (event.key === "Enter" && !event.shiftKey && !event.isComposing) {
       event.preventDefault();
       interruptRequested = Boolean(activeRun && (event.ctrlKey || event.metaKey));
