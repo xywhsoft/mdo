@@ -85,7 +85,11 @@ export function createPromptQueue({ container, navigation, onRetry, onRemoved })
         catch (error) { toast(errorMessage(error), "error"); remove.disabled = false; }
       });
       list.append(element("li", {}, [
-        element("span", { text: entry.text }),
+        element("span", { text: entry.text || "图片消息" }),
+        entry.attachments?.length ? element("span", {
+          className: "prompt-queue-images",
+          text: `${entry.attachments.length} 张图片`,
+        }) : null,
         entry.state === "sending" ? element("span", {
           className: "prompt-queue-state", text: "发送状态待确认",
         }) : null,
@@ -109,13 +113,13 @@ export function createPromptQueue({ container, navigation, onRetry, onRemoved })
       await load(key, true);
       render();
     },
-    async enqueue(projectId, sessionId, text, { first = false } = {}) {
+    async enqueue(projectId, sessionId, text, { first = false, attachments = [] } = {}) {
       const key = sessionKey(projectId, sessionId);
-      if (!key || !text.trim()) return false;
+      if (!key || (!text.trim() && !attachments.length)) return false;
       await load(key);
       if ((queues.get(key) ?? []).length >= 20) return false;
       const response = await api.post(path(key),
-        { id: newId(), text: text.trim(), first });
+        { id: newId(), text: text.trim(), attachments, first });
       update(key, response);
       return true;
     },

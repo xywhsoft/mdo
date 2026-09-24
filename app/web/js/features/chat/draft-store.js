@@ -3,6 +3,15 @@ import { api, resourceId } from "../../api/client.js";
 const SAVE_DELAY_MS = 300;
 const MAX_DRAFT_BYTES = 65536;
 
+function imageIds(value) {
+  return Array.isArray(value) ? value.filter((id) =>
+    typeof id === "string" && /^[0-9a-f]{32}$/.test(id)).slice(0, 4) : [];
+}
+
+function sameIds(a, b) {
+  return a.length === b.length && a.every((id, index) => id === b[index]);
+}
+
 function endpoint(key) {
   if (!key) return "/draft";
   const [projectId, sessionId, extra] = key.split("/");
@@ -18,7 +27,7 @@ export function createDraftStore({ onRestore, onError, onSaved }) {
   function entry(key) {
     let value = entries.get(key);
     if (!value) {
-      value = { text: "", revision: 0, loaded: false, dirty: false,
+      value = { text: "", attachments: [], revision: 0, loaded: false, dirty: false,
         conflict: false, error: null, loading: null, saving: null, timer: 0 };
       entries.set(key, value);
     }
@@ -45,7 +54,8 @@ export function createDraftStore({ onRestore, onError, onSaved }) {
         current.error = null;
         if (!current.dirty) {
           current.text = response.data.text ?? "";
-          if (selected === key) onRestore(current.text);
+          current.attachments = imageIds(response.data.attachments);
+          if (selected === key) onRestore(current.text, [...current.attachments]);
         } else schedule(key, true);
         if (selected === key && !current.dirty) onSaved();
       } catch (error) {
@@ -66,18 +76,20 @@ export function createDraftStore({ onRestore, onError, onSaved }) {
       if (!current.loaded || current.conflict) return;
       while (current.dirty) {
         const text = current.text;
+        const attachments = [...current.attachments];
         if (encoder.encode(text).length > MAX_DRAFT_BYTES) {
           if (selected === key) onError(new Error("草稿超过 64 KiB 保存上限"));
           return;
         }
         current.dirty = false;
         try {
-          const body = { revision: current.revision, text };
+          const body = { revision: current.revision, text, attachments };
           const keepalive = encoder.encode(JSON.stringify(body)).length <= 60 * 1024;
           const response = await api.put(endpoint(key), body, { keepalive });
           current.revision = Number(response.data.revision);
           current.error = null;
-          if (current.text !== text) current.dirty = true;
+          if (current.text !== text || !sameIds(current.attachments, attachments))
+            current.dirty = true;
           if (selected === key && !current.dirty) onSaved();
         } catch (error) {
           current.dirty = true;
@@ -96,10 +108,13 @@ export function createDraftStore({ onRestore, onError, onSaved }) {
     }
   }
 
-  function edit(key, text, immediate = false) {
+  function edit(key, text, attachments = entry(key).attachments, immediate = false) {
     const current = entry(key);
-    if (current.text === text && !current.dirty) return;
+    const ids = key ? imageIds(attachments) : [];
+    if (current.text === text && sameIds(current.attachments, ids) &&
+        !current.dirty) return;
     current.text = text;
+    current.attachments = ids;
     current.dirty = true;
     schedule(key, immediate);
   }
@@ -107,7 +122,7 @@ export function createDraftStore({ onRestore, onError, onSaved }) {
   function select(key) {
     selected = key;
     const current = entry(key);
-    onRestore(current.text);
+    onRestore(current.text, [...current.attachments]);
     if (current.error) onError(current.error);
     else onSaved();
     if (!current.loaded) void load(key);
@@ -122,8 +137,12 @@ export function createDraftStore({ onRestore, onError, onSaved }) {
   return Object.freeze({
     select,
     edit,
-    capture(key, text) { if (entry(key).text !== text) edit(key, text, true); },
-    clear(key) { edit(key, "", true); },
+    capture(key, text, attachments = []) {
+      if (entry(key).text !== text ||
+          !sameIds(entry(key).attachments, attachments))
+        edit(key, text, attachments, true);
+    },
+    clear(key) { edit(key, "", [], true); },
     flush,
   });
 }

@@ -30,6 +30,7 @@ import { feedbackStore, selectFeedback, clearFeedback, setFeedback } from "./fea
 import { createConversationDocks } from "./features/chat/conversation-docks.js";
 import { createPromptQueue } from "./features/chat/prompt-queue.js";
 import { createDraftStore } from "./features/chat/draft-store.js";
+import { createComposerImages } from "./features/chat/composer-images.js";
 import { createSlashCommands } from "./features/chat/slash-commands.js";
 import { createFileMentions } from "./features/chat/file-mentions.js";
 import { createComposerProfile, fillReasoningOptions } from "./features/chat/composer-profile.js";
@@ -104,6 +105,8 @@ export async function boot() {
   let submitting = false;
   let messageActionBusy = false;
   let interruptRequested = false;
+  let composerAttachments = [];
+  let composerImages = null;
   const queueBlocked = new Set();
 
   const sessionList = createSessionList({
@@ -270,8 +273,10 @@ export async function boot() {
     sessionStore: sessionDetailStore, timelineStore, modelsStore, agentsStore,
   });
   const draftStore = createDraftStore({
-    onRestore(text) {
+    onRestore(text, attachments) {
       prompt.value = text;
+      composerAttachments = attachments;
+      composerImages?.set(attachments);
       resizePrompt();
       tokenMeter.refresh();
     },
@@ -292,6 +297,18 @@ export async function boot() {
     isRunActive: () => Boolean(activeRun),
     onBusyChange: () => setRun(activeRun),
   });
+  composerImages = createComposerImages({
+    composer, prompt, button: $("#composer-attach"), input: $("#composer-file"),
+    strip: $("#composer-images"), navigation, modelsStore,
+    sessionStore: sessionDetailStore, ensureSession,
+    onChange(attachments) {
+      composerAttachments = attachments;
+      draftStore.edit(selectedKey, prompt.value, attachments);
+    },
+    onUploading: () => setRun(activeRun),
+    onError: showComposerError,
+  });
+  composerImages.set(composerAttachments);
   createRecoveryPanel({
     container: $("#recovery-list"),
     summary: $("#recovery-summary"),
@@ -345,7 +362,9 @@ export async function boot() {
     send.hidden = false;
     stop.hidden = !activeRun;
     prompt.disabled = !sessionWritable;
-    send.disabled = !sessionWritable || submitting || composerProfile.isBusy();
+    send.disabled = !sessionWritable || submitting ||
+      composerImages?.isUploading() || composerProfile.isBusy();
+    composerImages?.setWritable(sessionWritable && !submitting);
     composerProfile.setRunActive(Boolean(activeRun));
     send.setAttribute("aria-label", activeRun ? "加入待发送队列" : "发送任务");
     composerHint.textContent = activeRun
@@ -464,7 +483,8 @@ export async function boot() {
       if (!entry || entry.state !== "pending") return;
       try {
         await promptQueue.markSending(selected.projectId, selected.sessionId, entry.id);
-        const run = await startRun(selected.projectId, selected.sessionId, entry.text);
+        const run = await startRun(selected.projectId, selected.sessionId,
+          entry.text, entry.attachments ?? []);
         if (navigation.get().projectId === selected.projectId &&
             navigation.get().sessionId === selected.sessionId) monitorRun(run);
         await promptQueue.remove(selected.projectId, selected.sessionId, entry.id);
@@ -512,7 +532,7 @@ export async function boot() {
       }
       return;
     }
-    draftStore.capture(selectedKey, prompt.value);
+    draftStore.capture(selectedKey, prompt.value, composerAttachments);
     selectedKey = key;
     draftStore.select(key);
     window.clearTimeout(runMonitor);
@@ -561,10 +581,10 @@ export async function boot() {
   async function ensureSession(text) {
     const selected = navigation.get();
     if (selected.sessionId) return selected;
-    const title = text.trim().split(/\r?\n/, 1)[0].slice(0, 80);
+    const title = text.trim().split(/\r?\n/, 1)[0].slice(0, 80) || "图片任务";
     const session = await createSession({ project_id: "default", title,
       ...composerProfile.selection() });
-    draftStore.edit(`${session.project_id}/${session.id}`, text, true);
+    draftStore.edit(`${session.project_id}/${session.id}`, text, [], true);
     navigation.select(session.project_id, session.id);
     selectTimeline(session.project_id, session.id);
     return { projectId: session.project_id, sessionId: session.id };
@@ -574,10 +594,12 @@ export async function boot() {
     event.preventDefault();
     fileMentions.hide();
     const text = prompt.value.trim();
+    const attachments = [...composerAttachments];
     const interrupt = interruptRequested;
     interruptRequested = false;
-    if (!text || submitting) return;
-    if (await slashCommands.consumeExact(text)) return;
+    if ((!text && !attachments.length) || submitting ||
+        composerImages.isUploading()) return;
+    if (!attachments.length && await slashCommands.consumeExact(text)) return;
     if (composerProfile.isBusy()) {
       showComposerError(new Error("请等待会话配置更新完成"));
       return;
@@ -589,10 +611,13 @@ export async function boot() {
     try {
       const selected = await ensureSession(text);
       if (activeRun) {
-        if (!await promptQueue.enqueue(selected.projectId, selected.sessionId, text, { first: interrupt }))
+        if (!await promptQueue.enqueue(selected.projectId, selected.sessionId, text,
+          { first: interrupt, attachments }))
           throw new Error("待发送队列已满（最多 20 条）");
         queueBlocked.delete(`${selected.projectId}/${selected.sessionId}`);
         prompt.value = "";
+        composerAttachments = [];
+        composerImages.clear();
         draftStore.clear(`${selected.projectId}/${selected.sessionId}`);
         resizePrompt();
         tokenMeter.refresh();
@@ -606,8 +631,10 @@ export async function boot() {
         }
         return;
       }
-      const run = await startRun(selected.projectId, selected.sessionId, text);
+      const run = await startRun(selected.projectId, selected.sessionId, text, attachments);
       prompt.value = "";
+      composerAttachments = [];
+      composerImages.clear();
       draftStore.clear(`${selected.projectId}/${selected.sessionId}`);
       if (!originatingKey) draftStore.clear("");
       resizePrompt();
@@ -619,7 +646,7 @@ export async function boot() {
       prompt.focus();
     } finally {
       submitting = false;
-      send.disabled = !sessionWritable;
+      setRun(activeRun);
     }
   });
 
@@ -644,7 +671,7 @@ export async function boot() {
   }
   prompt.addEventListener("input", () => {
     resizePrompt();
-    draftStore.edit(selectedKey, prompt.value);
+    draftStore.edit(selectedKey, prompt.value, composerAttachments);
     tokenMeter.refresh();
   });
   prompt.addEventListener("keydown", (event) => {

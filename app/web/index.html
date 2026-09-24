@@ -140,8 +140,11 @@
         <form class="composer" id="composer">
           <label class="sr-only" for="prompt">向 Agent 描述任务</label>
           <textarea id="prompt" name="prompt" rows="1" maxlength="65536" placeholder="向墨斗描述任务…" autocomplete="off"></textarea>
+          <div class="composer-images" id="composer-images" aria-live="polite" hidden></div>
           <div class="composer-toolbar">
             <div class="composer-options">
+              <button class="composer-attach" id="composer-attach" type="button" aria-label="添加图片" title="添加图片（PNG、JPEG、WebP）">＋</button>
+              <input id="composer-file" type="file" accept="image/png,image/jpeg,image/webp" multiple hidden>
               <button class="option-chip" id="workspace-chip" type="button" title="当前工作目录">
                 <span class="icon" data-icon="folder" aria-hidden="true"></span>
                 <span id="workspace-label">本地工作区</span>

@@ -26,6 +26,36 @@ export function resourceId(value, label = "resource") {
   return text;
 }
 
+export function attachmentUrl(projectId, sessionId, id) {
+  if (!/^[0-9a-f]{32}$/.test(id)) throw new TypeError("Attachment ID is invalid");
+  return requestPath(`/projects/${resourceId(projectId, "project")}` +
+    `/sessions/${resourceId(sessionId, "session")}/attachments/${id}`);
+}
+
+async function readEnvelope(response) {
+  let envelope = null;
+  try { envelope = await response.json(); }
+  catch {
+    throw new ApiError("服务返回了无效响应", {
+      status: response.status, code: "invalid_response",
+    });
+  }
+  if (!response.ok || envelope?.ok !== true) {
+    throw new ApiError(envelope?.error?.message || `请求失败 (${response.status})`, {
+      status: response.status,
+      code: envelope?.error?.code,
+      requestId: envelope?.request_id,
+      details: envelope?.error?.details,
+    });
+  }
+  return {
+    data: envelope.data,
+    requestId: envelope.request_id ?? "",
+    schemaVersion: envelope.schema_version,
+    etag: response.headers.get("ETag") ?? "",
+  };
+}
+
 export async function apiRequest(path, options = {}) {
   const method = options.method ?? "GET";
   const headers = new Headers({ Accept: "application/json" });
@@ -48,31 +78,25 @@ export async function apiRequest(path, options = {}) {
     throw new ApiError("无法连接本地 mdo 服务", { code: "network_error" });
   }
 
-  let envelope = null;
+  return readEnvelope(response);
+}
+
+async function uploadImage(projectId, sessionId, file) {
+  const url = requestPath(`/projects/${resourceId(projectId, "project")}` +
+    `/sessions/${resourceId(sessionId, "session")}/attachments`);
+  let response;
   try {
-    envelope = await response.json();
+    response = await fetch(url, {
+      method: "POST",
+      headers: { Accept: "application/json", "Content-Type": file.type },
+      body: file,
+      cache: "no-store",
+      credentials: "same-origin",
+    });
   } catch {
-    throw new ApiError("服务返回了无效响应", {
-      status: response.status,
-      code: "invalid_response",
-    });
+    throw new ApiError("无法连接本地 mdo 服务", { code: "network_error" });
   }
-
-  if (!response.ok || envelope?.ok !== true) {
-    throw new ApiError(envelope?.error?.message || `请求失败 (${response.status})`, {
-      status: response.status,
-      code: envelope?.error?.code,
-      requestId: envelope?.request_id,
-      details: envelope?.error?.details,
-    });
-  }
-
-  return {
-    data: envelope.data,
-    requestId: envelope.request_id ?? "",
-    schemaVersion: envelope.schema_version,
-    etag: response.headers.get("ETag") ?? "",
-  };
+  return (await readEnvelope(response)).data;
 }
 
 async function download(path) {
@@ -109,4 +133,5 @@ export const api = Object.freeze({
   patch: (path, body, options = {}) => apiRequest(path, { ...options, method: "PATCH", body }),
   delete: (path, options = {}) => apiRequest(path, { ...options, method: "DELETE" }),
   download,
+  uploadImage,
 });

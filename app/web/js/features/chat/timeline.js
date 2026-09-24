@@ -1,4 +1,5 @@
 import { element, clear, formatClock, errorMessage, toast } from "../../utils/dom.js";
+import { attachmentUrl } from "../../api/client.js";
 import { renderMarkdown } from "./markdown.js";
 
 function modelKey(event) {
@@ -32,10 +33,12 @@ export function eventsToTimeline(events, historyLost = false) {
             sequence: Number(event.user_message_sequence),
             text: event.text || "",
             truncated: Boolean(event.text_truncated),
+            attachments: event.attachments || [],
           });
         items.push(event.agent_depth > 0
           ? { key: `subagent-${event.event_id}`, kind: "task", role: "子 Agent", text: event.text || "子 Agent 已启动", state: "running", time: event.time, meta: `depth ${event.agent_depth}` }
           : { key: `user-${event.event_id}`, kind: "user", role: "你", text: event.text || "", state: "done", time: event.time,
+            attachments: Array.isArray(event.attachments) ? event.attachments : [],
             userMessageSequence: Number(event.user_message_sequence || 0),
             textTruncated: Boolean(event.text_truncated) });
         break;
@@ -134,7 +137,7 @@ async function copyText(value) {
   if (!copied) throw new Error("clipboard unavailable");
 }
 
-function timelineNode(item, handlers, feedback) {
+function timelineNode(item, handlers, feedback, projectId, sessionId) {
   const time = element("time", { className: "timeline-time", text: formatClock(item.time) });
   if (item.time) {
     const date = new Date(Number(item.time) / 1000);
@@ -150,6 +153,18 @@ function timelineNode(item, handlers, feedback) {
   if (item.kind === "assistant") body.append(renderMarkdown(item.text));
   else body.textContent = item.text;
   const children = [header, body];
+  if (item.kind === "user" && projectId && sessionId &&
+      item.attachments?.length) {
+    const images = element("div", { className: "timeline-images" });
+    for (const [index, id] of item.attachments.entries()) {
+      if (typeof id === "string" && /^[0-9a-f]{32}$/.test(id))
+        images.append(element("img", {
+          attrs: { src: attachmentUrl(projectId, sessionId, id),
+            alt: `用户图片 ${index + 1}`, loading: "lazy" },
+        }));
+    }
+    if (images.childElementCount) children.push(images);
+  }
   if (item.meta) children.push(element("div", { className: "timeline-meta", text: item.meta }));
   if (["user", "assistant"].includes(item.kind) && item.text) {
     const actions = element("div", { className: "timeline-actions" });
@@ -159,7 +174,8 @@ function timelineNode(item, handlers, feedback) {
       catch { toast("无法复制消息", "error"); }
     });
     actions.append(copy);
-    if (item.kind === "user" && Number.isSafeInteger(item.userMessageSequence) &&
+    if (item.kind === "user" && !item.attachments?.length &&
+        Number.isSafeInteger(item.userMessageSequence) &&
         item.userMessageSequence > 0 && !item.textTruncated) {
       const edit = element("button", { text: "编辑并分叉", attrs: { type: "button", "aria-label": "编辑此消息并创建会话分支" } });
       edit.addEventListener("click", async () => {
@@ -181,7 +197,8 @@ function timelineNode(item, handlers, feedback) {
       actions.append(fork);
       const retryPrompt = item.retryPrompt;
       if (retryPrompt && Number.isSafeInteger(retryPrompt.sequence) &&
-          retryPrompt.sequence > 0 && retryPrompt.text && !retryPrompt.truncated) {
+          retryPrompt.sequence > 0 && retryPrompt.text &&
+          !retryPrompt.attachments?.length && !retryPrompt.truncated) {
         const retry = element("button", { text: "重试并分叉", attrs: { type: "button", "aria-label": "重试此回合并创建会话分支" } });
         retry.addEventListener("click", async () => {
           retry.disabled = true;
@@ -247,14 +264,15 @@ export function createTimelineView({ container, welcome, toBottom, store, feedba
     welcome.hidden = Boolean(data?.sessionId && items.length > 0);
     clear(container);
     if (state.status === "error") {
-      container.append(timelineNode({ key: "load-error", kind: "error", role: "无法读取时间线", text: errorMessage(state.error), state: "failed", time: 0 }, handlers, ""));
+      container.append(timelineNode({ key: "load-error", kind: "error", role: "无法读取时间线", text: errorMessage(state.error), state: "failed", time: 0 }, handlers, "", data?.projectId, data?.sessionId));
     } else {
       const selected = feedbackStore.get().data;
       const feedback = selected?.projectId === data?.projectId &&
         selected?.sessionId === data?.sessionId ? selected.items : new Map();
       for (const item of visible)
         container.append(timelineNode(item, handlers,
-          feedback.get(item.feedbackEventId) ?? ""));
+          feedback.get(item.feedbackEventId) ?? "", data?.projectId,
+          data?.sessionId));
     }
     if (followTail && !searchQuery) scroller.scrollTop = scroller.scrollHeight;
     updateBottomButton();
