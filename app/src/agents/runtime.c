@@ -1507,6 +1507,7 @@ MdoAgentRun* MdoAgentRunCreate(MdoAgentSession* Session,
 {
     MdoAgentRunOptions Defaults;
     xwork_run_config Config;
+    MdoModelInfo Model;
     MdoAgentRun* Result;
     if ( Options == NULL ) {
         MdoAgentRunOptionsInit(&Defaults);
@@ -1514,10 +1515,24 @@ MdoAgentRun* MdoAgentRunCreate(MdoAgentSession* Session,
     }
     if ( Session == NULL || Options->Size < sizeof(*Options) ||
          (!Options->Resume &&
-          (Options->Prompt == NULL || Options->Prompt[0] == '\0')) ) {
+          (Options->Prompt == NULL ||
+           (Options->Prompt[0] == '\0' && Options->UserMessage == NULL))) ||
+         (Options->Resume && Options->UserMessage != NULL) ) {
         MdoAgentsError(Error, XWORK_ERROR_INVALID_ARGUMENT,
             "invalid Agent run request");
         return NULL;
+    }
+    if ( Options->UserMessage != NULL ) {
+        memset(&Model, 0, sizeof(Model));
+        Model.Size = sizeof(Model);
+        if ( !MdoModelCatalogModelFind(Session->Owner->Models,
+                Session->ModelId, &Model) ||
+             (Model.Capabilities & XLLM_CAP_IMAGE_IN) == 0u ||
+             (Model.Attachments & MDO_MODEL_ATTACHMENT_IMAGE) == 0u ) {
+            MdoAgentsError(Error, XWORK_ERROR_MODEL,
+                "the selected model does not support image input");
+            return NULL;
+        }
     }
     Result = (MdoAgentRun*)xrtCalloc(1u, sizeof(*Result));
     if ( Result == NULL ) {
@@ -1540,7 +1555,10 @@ MdoAgentRun* MdoAgentRunCreate(MdoAgentSession* Session,
     Config.OnEvent = Options->OnEvent;
     Config.pEventUserData = Options->EventUserData;
     Config.pResumeOptions = Options->ResumeOptions;
-    Result->Run = xworkRunCreate(Session->Agent, &Config, Error);
+    Result->Run = Options->UserMessage != NULL ?
+        xworkRunCreateWithUserMessage(Session->Agent, &Config,
+            Options->UserMessage, Error) :
+        xworkRunCreate(Session->Agent, &Config, Error);
     if ( Result->Run == NULL ) {
         MdoAgentSessionRelease(Result->Session);
         xrtFree(Result);

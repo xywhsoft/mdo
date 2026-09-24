@@ -76,6 +76,7 @@ typedef struct MdoAgentSessionInfo {
 typedef struct MdoAgentRunOptions {
     uint32 Size;
     const char* Prompt;           /* required unless Resume is true. */
+    const xllm_message* UserMessage; /* borrowed through run creation */
     bool Resume;
     xcancel* Cancel;
     uint64 Deadline;

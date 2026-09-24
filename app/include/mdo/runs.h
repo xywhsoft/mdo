@@ -41,6 +41,7 @@ typedef struct MdoRunStartOptions {
     const char* ProjectId;
     const char* SessionId;
     const char* Prompt; /* required unless Resume is true. */
+    const xllm_message* UserMessage; /* borrowed through run creation */
     uint32 TimeoutMilliseconds; /* zero means no run deadline. */
     bool Resume;
     /* Opaque recovery view token accepted by the user. Recomputed against

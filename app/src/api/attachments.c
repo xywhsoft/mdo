@@ -293,39 +293,37 @@ bool MdoApiAttachmentsRoute(MdoApiContext* Context)
     return MdoApiReplySuccessTake(Context, 201u, Reply, NULL);
 }
 
-bool MdoApiAttachmentRoute(MdoApiContext* Context)
+bool MdoAttachmentReadForRun(const char* Project, const char* Session,
+    const char* Id, char** Output, size_t* Size, cstr* Mime)
 {
-    char Project[MDO_PROJECT_ID_CAPACITY];
-    char Session[MDO_SESSION_ID_CAPACITY];
-    char Id[MDO_ATTACHMENT_ID_LENGTH + 1u];
     char Name[MDO_ATTACHMENT_ID_LENGTH + 6u];
+    char Checked[MDO_ATTACHMENT_ID_LENGTH + 1u];
     char Path[MDO_SESSION_PATH_CAPACITY];
     char MetaPath[MDO_SESSION_PATH_CAPACITY];
     bool Exists = false;
     xfileinfo Info;
     xfile File = NULL;
     char* Data = NULL;
-    cstr Mime;
     bool Ok;
-    if ( !MdoAttachmentSession(Context, Project, Session, false) ||
-         !MdoAttachmentHexId(Context->Params[2], Id) )
-        return MdoApiReplyError(Context, 404u, "attachment_not_found",
-            "The image does not exist in this session", NULL);
+    if ( Project == NULL || Session == NULL || Id == NULL ||
+         Output == NULL || Size == NULL || Mime == NULL ||
+         !MdoAttachmentHexId(xrtStrView(Id), Checked) ) return false;
+    *Output = NULL;
+    *Size = 0u;
+    *Mime = NULL;
     snprintf(Name, sizeof(Name), "%s.json", Id);
     if ( !MdoAttachmentPath(MetaPath, sizeof(MetaPath), Project, Session,
             Name) ||
          !MdoHomeExternalStat(MetaPath, &Exists, &Info) || !Exists ||
          Info.Type != XFILE_TYPE_FILE )
-        return MdoApiReplyError(Context, 404u, "attachment_not_found",
-            "The image does not exist in this session", NULL);
+        return false;
     snprintf(Name, sizeof(Name), "%s.bin", Id);
     if ( !MdoAttachmentPath(Path, sizeof(Path), Project, Session, Name) ||
          !MdoHomeExternalStat(Path, &Exists, &Info) || !Exists ||
          Info.Type != XFILE_TYPE_FILE ||
          (Info.Available & XFILE_INFO_SIZE) == 0u || Info.Size == 0u ||
          Info.Size > MDO_API_IMAGE_MAX_BYTES )
-        return MdoApiReplyError(Context, 404u, "attachment_not_found",
-            "The image does not exist in this session", NULL);
+        return false;
     File = MdoHomeOpenRead(Path);
     Data = (char*)xrtMalloc((size_t)Info.Size);
     Ok = File != NULL && Data != NULL &&
@@ -333,17 +331,35 @@ bool MdoApiAttachmentRoute(MdoApiContext* Context)
     if ( File != NULL && !xrtClose(File) ) Ok = false;
     if ( !Ok ) {
         xrtFree(Data);
-        return MdoApiReplyError(Context, 503u, "attachment_read_failed",
-            "The image could not be read", NULL);
+        return false;
     }
-    Mime = MdoAttachmentMime((xstrview){0},
+    *Mime = MdoAttachmentMime((xstrview){0},
         (const unsigned char*)Data, (size_t)Info.Size);
-    if ( Mime == NULL ) {
+    if ( *Mime == NULL ) {
         xrtFree(Data);
-        return MdoApiReplyError(Context, 422u, "attachment_corrupt",
-            "The stored image signature is invalid", NULL);
+        return false;
     }
-    Ok = MdoApiReplyImage(Context, Data, (size_t)Info.Size, Mime);
+    *Output = Data;
+    *Size = (size_t)Info.Size;
+    return true;
+}
+
+bool MdoApiAttachmentRoute(MdoApiContext* Context)
+{
+    char Project[MDO_PROJECT_ID_CAPACITY];
+    char Session[MDO_SESSION_ID_CAPACITY];
+    char Id[MDO_ATTACHMENT_ID_LENGTH + 1u];
+    char* Data = NULL;
+    size_t Size = 0u;
+    cstr Mime = NULL;
+    bool Ok;
+    if ( !MdoAttachmentSession(Context, Project, Session, false) ||
+         !MdoAttachmentHexId(Context->Params[2], Id) ||
+         !MdoAttachmentReadForRun(Project, Session, Id,
+            &Data, &Size, &Mime) )
+        return MdoApiReplyError(Context, 404u, "attachment_not_found",
+            "The image does not exist in this session", NULL);
+    Ok = MdoApiReplyImage(Context, Data, Size, Mime);
     xrtFree(Data);
     return Ok;
 }

@@ -63,6 +63,7 @@ class ModelHandler(BaseHTTPRequestHandler):
     protocol_version = "HTTP/1.1"
     calls = 0
     saw_prompt = False
+    last_payload: dict | None = None
     todo_sent = False
     ask_sent = False
     ask_cancel_sent = False
@@ -80,6 +81,7 @@ class ModelHandler(BaseHTTPRequestHandler):
             if length <= 0 or length > 1024 * 1024:
                 raise ValueError("invalid request length")
             payload = json.loads(self.rfile.read(length))
+            ModelHandler.last_payload = payload
             ModelHandler.calls += 1
             ModelHandler.saw_prompt = "API interactive prompt" in json.dumps(payload)
             output = [{
@@ -1506,6 +1508,14 @@ def run_probe(host: Path) -> None:
                     port, "GET", image["url"].replace(
                         f"sessions/{session_id}/", "sessions/missing/"))
                 assert status == 404, (status, response)
+                status, _, response = request(
+                    port, "POST", session_path + "/runs",
+                    body=json.dumps({"prompt": "", "attachments": [image["id"]]}).encode(),
+                    headers={"Content-Type": "application/json"})
+                rejected = json.loads(response)
+                assert status == 422, (status, rejected)
+                assert rejected["error"]["code"] == (
+                    "image_model_unsupported"), rejected
                 (base / "mention-ref.c").write_text("// fixture", encoding="utf-8")
                 (base / "mention-fixture").mkdir()
                 (base / "mention-fixture/mention-ref nested.c").write_text(

@@ -127,6 +127,8 @@ bool MdoApiAttachmentsInit(void);
 void MdoApiAttachmentsUnit(void);
 bool MdoApiReplyImage(MdoApiContext* pContext, const void* pBody,
     size_t BodySize, cstr ContentType);
+bool MdoAttachmentReadForRun(const char* Project, const char* Session,
+    const char* Id, char** pData, size_t* pSize, cstr* pMime);
 bool MdoApiRunRoute(MdoApiContext* pContext);
 bool MdoApiScheduleRoute(MdoApiContext* pContext);
 bool MdoApiScheduleEnabledRoute(MdoApiContext* pContext);

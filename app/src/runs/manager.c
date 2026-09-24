@@ -95,10 +95,10 @@ static bool MdoRunsIdValid(const char* Text, size_t Capacity)
     return true;
 }
 
-static bool MdoRunsPromptValid(const char* Prompt)
+static bool MdoRunsPromptValid(const char* Prompt, bool AllowEmpty)
 {
     size_t Size;
-    if ( Prompt == NULL || Prompt[0] == '\0' ) return false;
+    if ( Prompt == NULL || (!AllowEmpty && Prompt[0] == '\0') ) return false;
     Size = strlen(Prompt);
     return Size < MDO_RUN_PROMPT_CAPACITY &&
         xrtUtf8Valid(xrtStrViewN(Prompt, Size), NULL);
@@ -515,10 +515,12 @@ bool MdoRunStart(const MdoRunStartOptions* Options, MdoRunInfo* Info,
     if ( Options == NULL || Options->Size < sizeof(*Options) ||
          !MdoRunsIdValid(Options->ProjectId, MDO_PROJECT_ID_CAPACITY) ||
          !MdoRunsIdValid(Options->SessionId, MDO_SESSION_ID_CAPACITY) ||
-         ((!Options->Resume && (!MdoRunsPromptValid(Options->Prompt) ||
+         ((!Options->Resume && (!MdoRunsPromptValid(Options->Prompt,
+                Options->UserMessage != NULL) ||
              Options->ResumeOptions != NULL ||
              Options->RecoveryToken != NULL)) ||
           (Options->Resume && (Options->Prompt != NULL ||
+             Options->UserMessage != NULL ||
              Options->RecoveryToken == NULL ||
              strlen(Options->RecoveryToken) !=
                 MDO_AGENT_RECOVERY_TOKEN_CAPACITY - 1u))) ||
@@ -626,6 +628,7 @@ bool MdoRunStart(const MdoRunStartOptions* Options, MdoRunInfo* Info,
             Options->RecoveryToken, Error) ) goto publish;
     MdoAgentRunOptionsInit(&RunOptions);
     RunOptions.Prompt = Options->Prompt;
+    RunOptions.UserMessage = Options->UserMessage;
     RunOptions.Resume = Options->Resume;
     RunOptions.Cancel = StartCancel;
     RunOptions.Deadline = Deadline;

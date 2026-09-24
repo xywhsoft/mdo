@@ -161,6 +161,71 @@ static bool MdoApiRunReadUInt32(const xvalue* Object, cstr Name,
     return true;
 }
 
+static bool MdoApiRunAttachmentIds(const xvalue* Object,
+    char Ids[4][33], size_t* Count, size_t* Present)
+{
+    const xvalue* Array = xrtValueObjectGet(Object,
+        XRT_STR_LITERAL("attachments"));
+    size_t i;
+    if ( Array == NULL ) { *Count = 0u; return true; }
+    (*Present)++;
+    if ( xrtValueType(Array) != XVALUE_ARRAY ||
+         xrtValueCount(Array) == 0u || xrtValueCount(Array) > 4u )
+        return false;
+    *Count = xrtValueCount(Array);
+    for ( i = 0u; i < *Count; ++i ) {
+        const xvalue* Item = xrtValueArrayGet(Array, i);
+        xstrview Text;
+        size_t j;
+        if ( xrtValueType(Item) != XVALUE_STRING ||
+             !xrtValueGetString(Item, &Text) || Text.Size != 32u )
+            return false;
+        for ( j = 0u; j < 32u; ++j ) {
+            unsigned char Byte = (unsigned char)Text.Data[j];
+            if ( !((Byte >= '0' && Byte <= '9') ||
+                   (Byte >= 'a' && Byte <= 'f')) ) return false;
+        }
+        memcpy(Ids[i], Text.Data, 32u);
+        Ids[i][32] = '\0';
+        for ( j = 0u; j < i; ++j )
+            if ( strcmp(Ids[i], Ids[j]) == 0 ) return false;
+    }
+    return true;
+}
+
+static bool MdoApiRunBuildMessage(const char* Project, const char* Session,
+    const char* Prompt, char Ids[4][33], size_t Count,
+    xllm_message* Message)
+{
+    xllm_part Part;
+    size_t Total = 0u;
+    size_t i;
+    bool Ok;
+    xllmMessageInit(Message, XLLM_ROLE_USER);
+    xllmPartInit(&Part, XLLM_PART_TEXT);
+    Ok = xllmPartSetText(&Part, Prompt) &&
+        xllmMessageAddPart(Message, &Part);
+    xllmPartUnit(&Part);
+    for ( i = 0u; Ok && i < Count; ++i ) {
+        char* Bytes = NULL;
+        size_t Size = 0u;
+        cstr Mime = NULL;
+        Ok = MdoAttachmentReadForRun(Project, Session, Ids[i],
+            &Bytes, &Size, &Mime) &&
+            Size <= 16u * 1024u * 1024u - Total;
+        if ( Ok ) {
+            xllmPartInit(&Part, XLLM_PART_IMAGE);
+            Ok = xllmPartSetImageData(&Part, Bytes, Size, Mime) &&
+                xllmMessageAddPart(Message, &Part);
+            xllmPartUnit(&Part);
+            Total += Size;
+        }
+        xrtFree(Bytes);
+    }
+    if ( !Ok ) xllmMessageUnit(Message);
+    return Ok;
+}
+
 static bool MdoApiRunStartFailure(MdoApiContext* Context,
     const xwork_error* Error)
 {
@@ -257,6 +322,11 @@ bool MdoApiRunStartRoute(MdoApiContext* Context)
     xwork_error Error;
     const xvalue* PromptValue;
     xstrview Prompt;
+    MdoModelCatalog* Catalog;
+    MdoModelInfo Model;
+    xllm_message UserMessage;
+    char AttachmentIds[4][33];
+    size_t AttachmentCount = 0u;
     char Project[MDO_PROJECT_ID_CAPACITY];
     char SessionId[MDO_SESSION_ID_CAPACITY];
     char* PromptText = NULL;
@@ -273,12 +343,15 @@ bool MdoApiRunStartRoute(MdoApiContext* Context)
         xrtValueObjectGet(Body.Value, XRT_STR_LITERAL("prompt")) : NULL;
     Valid = xrtValueType(Body.Value) == XVALUE_OBJECT &&
         PromptValue != NULL && xrtValueType(PromptValue) == XVALUE_STRING &&
-        xrtValueGetString(PromptValue, &Prompt) && Prompt.Size != 0u &&
+        xrtValueGetString(PromptValue, &Prompt) &&
         Prompt.Size < MDO_RUN_PROMPT_CAPACITY &&
         memchr(Prompt.Data, 0, Prompt.Size) == NULL &&
         xrtUtf8Valid(Prompt, NULL);
     if ( PromptValue != NULL ) Present++;
-    Valid = Valid && MdoApiRunReadUInt32(Body.Value, "timeout_ms",
+    Valid = Valid && MdoApiRunAttachmentIds(Body.Value, AttachmentIds,
+        &AttachmentCount, &Present) &&
+        (Prompt.Size != 0u || AttachmentCount != 0u) &&
+        MdoApiRunReadUInt32(Body.Value, "timeout_ms",
         &Options.TimeoutMilliseconds, &Present) &&
         Present == xrtValueCount(Body.Value);
     if ( !Valid ) {
@@ -322,6 +395,32 @@ bool MdoApiRunStartRoute(MdoApiContext* Context)
                 "The session already has an active runtime" :
                 "The session must be active before starting a run", NULL);
     }
+    if ( AttachmentCount != 0u ) {
+        Catalog = MdoModelCatalogSnapshot();
+        memset(&Model, 0, sizeof(Model)); Model.Size = sizeof(Model);
+        Valid = Catalog != NULL &&
+            MdoModelCatalogModelFind(Catalog, SessionInfo.ModelId, &Model) &&
+            (Model.Capabilities & XLLM_CAP_IMAGE_IN) != 0u &&
+            (Model.Attachments & MDO_MODEL_ATTACHMENT_IMAGE) != 0u;
+        MdoModelCatalogRelease(Catalog);
+        if ( !Valid ) {
+            xrtFree(PromptText);
+            MdoApiJsonBodyUnit(&Body);
+            return MdoApiReplyError(Context, 422u,
+                "image_model_unsupported",
+                "The selected model does not support image input", NULL);
+        }
+        if ( !MdoApiRunBuildMessage(Project, SessionId, PromptText,
+                AttachmentIds, AttachmentCount, &UserMessage) ) {
+            xrtFree(PromptText);
+            MdoApiJsonBodyUnit(&Body);
+            return MdoApiReplyError(Context, 422u,
+                "attachment_invalid",
+                "An image reference is missing, corrupt, or exceeds the limit",
+                NULL);
+        }
+        Options.UserMessage = &UserMessage;
+    }
     Options.ProjectId = Project;
     Options.SessionId = SessionId;
     Options.Prompt = PromptText;
@@ -329,6 +428,7 @@ bool MdoApiRunStartRoute(MdoApiContext* Context)
     memset(&Error, 0, sizeof(Error));
     xrtClearError();
     Valid = MdoRunStart(&Options, &Info, &Error);
+    if ( AttachmentCount != 0u ) xllmMessageUnit(&UserMessage);
     xrtFree(PromptText);
     MdoApiJsonBodyUnit(&Body);
     if ( !Valid ) return MdoApiRunStartFailure(Context, &Error);
