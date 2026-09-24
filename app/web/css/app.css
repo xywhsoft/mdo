@@ -667,11 +667,14 @@ select:focus-visible,
 .composer-options, .composer-actions { display: flex; min-width: 0; align-items: center; gap: 6px; }
 .composer-options { flex: 1 1 auto; overflow-x: auto; scrollbar-width: none; }
 .composer-options::-webkit-scrollbar { display: none; }
+.composer-options > .composer-select { flex: 0 0 auto; }
 .composer-actions { flex: 0 0 auto; }
 .composer-attach { width: 30px; height: 30px; flex: 0 0 auto; padding: 0; border: 0; border-radius: 7px; background: transparent; color: var(--muted); font-size: 22px; line-height: 1; cursor: pointer; }
 .composer-attach:hover { background: var(--surface-hover); color: var(--ink); }
 .composer-attach:disabled { opacity: .4; cursor: default; }
 .composer-select { min-width: 0; max-width: 145px; height: 30px; padding: 0 6px; border: 0; border-radius: var(--radius-sm); background: transparent; color: var(--muted); font: inherit; font-size: 11px; cursor: pointer; }
+.composer-project { flex: 0 0 auto; min-width: 96px; max-width: 130px; color: var(--ink); }
+.composer-project[hidden] { display: none; }
 .composer-select-short { max-width: 84px; }
 .composer-select:hover, .composer-select:focus-visible { background: var(--surface-hover); color: var(--ink); }
 .composer-select:disabled { opacity: .55; cursor: default; }
@@ -1080,6 +1083,12 @@ select:focus-visible,
   .conversation-docks { width: calc(100% - 26px); }
   .prompt-queue { width: calc(100% - 26px); }
   .composer-hint { display: none; }
+  .composer-toolbar { flex-wrap: wrap; gap: 2px; }
+  .composer-options { flex: 1 1 100%; gap: 3px; }
+  .composer-project { min-width: 88px; max-width: 95px; }
+  #composer-model { max-width: 110px; }
+  .composer-select-short { max-width: 56px; }
+  .composer-actions { flex: 1 1 100%; justify-content: flex-end; }
   .composer-input-estimate { font-size: 9px; }
   .option-chip { max-width: 130px; padding: 0 6px; }
   #workspace-chip { display: none; }

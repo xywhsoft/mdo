@@ -2,11 +2,18 @@ import { resourceId } from "../api/client.js";
 
 const listeners = new Set();
 let current = Object.freeze({ view: "workspace", projectId: "", sessionId: "", settingsSection: "" });
-let lastSession = Object.freeze({ projectId: "", sessionId: "" });
+let lastWorkspace = Object.freeze({ projectId: "", sessionId: "" });
 
 function parseHash() {
   const settings = /^#\/settings\/([a-z][a-z0-9-]*)$/.exec(location.hash);
   if (settings) return { view: "settings", projectId: "", sessionId: "", settingsSection: settings[1] };
+  const newTask = /^#\/projects\/([^/]+)\/new$/.exec(location.hash);
+  if (newTask) {
+    try {
+      return { view: "workspace", projectId: resourceId(newTask[1], "project"),
+        sessionId: "", settingsSection: "" };
+    } catch { /* An invalid project route falls back to a blank task. */ }
+  }
   const match = /^#\/projects\/([^/]+)\/sessions\/([^/]+)$/.exec(location.hash);
   if (!match) return { view: "workspace", projectId: "", sessionId: "", settingsSection: "" };
   try {
@@ -23,9 +30,8 @@ function parseHash() {
 
 function publish() {
   current = Object.freeze(parseHash());
-  if (current.view === "workspace" && current.sessionId) {
-    lastSession = Object.freeze({ projectId: current.projectId, sessionId: current.sessionId });
-  }
+  if (current.view === "workspace")
+    lastWorkspace = Object.freeze({ projectId: current.projectId, sessionId: current.sessionId });
   for (const listener of listeners) listener(current);
 }
 
@@ -34,6 +40,7 @@ publish();
 
 export const navigation = Object.freeze({
   get: () => current,
+  preferredProject: () => lastWorkspace.projectId || "default",
   subscribe(listener) {
     listeners.add(listener);
     listener(current);
@@ -45,12 +52,20 @@ export const navigation = Object.freeze({
     else location.hash = hash;
     publish();
   },
+  newTask(projectId = lastWorkspace.projectId || "default", options = {}) {
+    const hash = `#/projects/${resourceId(projectId, "project")}/new`;
+    if (options.replace) history.replaceState(null, "", hash);
+    else location.hash = hash;
+    publish();
+  },
   openSettings(section = "general") {
     location.hash = `#/settings/${resourceId(section, "settings section")}`;
     publish();
   },
   backToWorkspace() {
-    if (lastSession.sessionId) navigation.select(lastSession.projectId, lastSession.sessionId);
+    if (lastWorkspace.sessionId)
+      navigation.select(lastWorkspace.projectId, lastWorkspace.sessionId);
+    else if (lastWorkspace.projectId) navigation.newTask(lastWorkspace.projectId);
     else navigation.clear();
   },
   clear() {

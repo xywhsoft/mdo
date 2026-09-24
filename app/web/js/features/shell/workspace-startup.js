@@ -52,7 +52,10 @@ export async function startWorkspaceNavigation({ navigation, settingsStore,
   // Hash routes are explicit user choices, including #/ for a blank task.
   if (entryHash || location.hash) return;
   const mode = settingsStore.get().data?.workspace?.open_mode ?? "last";
-  if (mode === "new") { navigation.clear(); return; }
+  if (mode === "new") {
+    navigation.newTask(saved?.project_id || "default", { replace: true });
+    return;
+  }
   const candidate = await lastSessionCandidate(saved,
     sessionsStore.get().data?.items);
   if (location.hash) return;
@@ -65,7 +68,7 @@ export async function startWorkspaceNavigation({ navigation, settingsStore,
   title.textContent = candidate.title || "未命名任务";
   function openNew() {
     dialog.close();
-    navigation.clear();
+    navigation.newTask(candidate.project_id, { replace: true });
     prompt.focus();
   }
   continueButton.addEventListener("click", () => {

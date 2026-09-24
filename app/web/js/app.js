@@ -5,7 +5,7 @@ import {
   patchSession, trashSession, restoreSession, loadSessionHistory, forkSession,
   truncateSession, clearSession, exportSession,
 } from "./state/sessions.js";
-import { modelsStore, agentsStore, loadCatalogs, loadModels, loadAgents } from "./state/catalogs.js";
+import { modelsStore, agentsStore, projectsStore, loadCatalogs, loadModels, loadAgents } from "./state/catalogs.js";
 import {
   settingsStore, loadSettings, previewSettings, applySettings,
 } from "./state/settings.js";
@@ -33,6 +33,7 @@ import { createConversationDocks } from "./features/chat/conversation-docks.js";
 import { createPromptQueue } from "./features/chat/prompt-queue.js";
 import { createDraftStore } from "./features/chat/draft-store.js";
 import { createComposerImages } from "./features/chat/composer-images.js";
+import { createComposerProject } from "./features/chat/composer-project.js";
 import { createImagePreview } from "./features/chat/image-preview.js";
 import { createSlashCommands } from "./features/chat/slash-commands.js";
 import { createFileMentions } from "./features/chat/file-mentions.js";
@@ -136,6 +137,8 @@ export async function boot() {
     onAction: handleSessionAction,
   });
   $("#session-search").addEventListener("input", (event) => sessionList.setQuery(event.target.value));
+  createComposerProject({ select: $("#composer-project"), navigation,
+    projectsStore, sessionsStore });
 
   const messageEditDialog = createMessageEditDialog({
     dialog: $("#message-edit-dialog"), form: $("#message-edit-form"),
@@ -638,6 +641,13 @@ export async function boot() {
       setDrawer("inspector", inspectorBeforeSettings === "open" && wideLayout.matches);
     }
     const key = projectId && sessionId ? `${projectId}/${sessionId}` : "";
+    if (!key) {
+      const project = projectId || "default";
+      sessionTitle.textContent = "新任务";
+      sessionSubtitle.textContent = `将在 ${project} 项目中创建任务`;
+      mobileTitle.textContent = "新任务";
+      mobileMeta.textContent = project;
+    }
     if (key === selectedKey) {
       if (key) {
         queueBlocked.add(key);
@@ -665,10 +675,6 @@ export async function boot() {
       clearAsks();
       clearFeedback();
       sessionDetailStore.reset();
-      sessionTitle.textContent = "新任务";
-      sessionSubtitle.textContent = "选择会话，或向默认 Agent 发起任务";
-      mobileTitle.textContent = "墨斗";
-      mobileMeta.textContent = "Agent 工作台";
       return;
     }
     selectRecovery(projectId, sessionId);
@@ -717,7 +723,7 @@ export async function boot() {
     const selected = navigation.get();
     if (selected.sessionId) return selected;
     const title = text.trim().split(/\r?\n/, 1)[0].slice(0, 80) || "图片任务";
-    const session = await createSession({ project_id: "default", title,
+    const session = await createSession({ project_id: selected.projectId || "default", title,
       ...composerProfile.selection() });
     draftStore.edit(`${session.project_id}/${session.id}`, text, [], true);
     navigation.select(session.project_id, session.id);
@@ -967,6 +973,7 @@ export async function boot() {
     dialogError.hidden = true;
     dialogError.textContent = "";
     const profile = composerProfile.selection();
+    dialogForm.elements.project_id.value = navigation.get().projectId || navigation.preferredProject();
     $("#model-select").value = profile.model_id;
     const model = modelsStore.get().data?.models?.find((item) =>
       item.id === profile.model_id);
@@ -977,7 +984,7 @@ export async function boot() {
     window.setTimeout(() => dialogForm.elements.title.focus(), 0);
   }
   function openNewTask() {
-    navigation.clear();
+    navigation.newTask(navigation.get().projectId || navigation.preferredProject());
     if (mobileLayout.matches) setDrawer("sidebar", false);
     prompt.focus();
   }
