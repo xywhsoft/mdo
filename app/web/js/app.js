@@ -505,6 +505,15 @@ export async function boot() {
     scheduleRunPoll(300);
   }
 
+  async function ensurePromptReady(projectId, sessionId) {
+    const response = await api.get(`/projects/${projectId}/sessions/${sessionId}/recovery`);
+    if (!response.data?.resume_required) return;
+    void loadRecovery();
+    const error = new Error("上轮运行尚未恢复，请先在“决策”中处理；输入和待发送消息会保留。");
+    error.code = "recovery_required";
+    throw error;
+  }
+
   async function dispatchQueued() {
     const selected = navigation.get();
     const key = `${selected.projectId}/${selected.sessionId}`;
@@ -519,6 +528,9 @@ export async function boot() {
       const entry = promptQueue.peek(selected.projectId, selected.sessionId);
       if (!entry || entry.state !== "pending") return;
       try {
+        await ensurePromptReady(selected.projectId, selected.sessionId);
+        if (navigation.get().projectId !== selected.projectId ||
+            navigation.get().sessionId !== selected.sessionId) return;
         await promptQueue.markSending(selected.projectId, selected.sessionId, entry.id);
         const run = await startRun(selected.projectId, selected.sessionId,
           entry.text, entry.attachments ?? []);
@@ -528,7 +540,7 @@ export async function boot() {
         hideComposerError();
         await Promise.all([refreshSelectedTimeline(), loadTasks(), loadRuns(), loadRecovery()]);
       } catch (error) {
-        queueBlocked.add(key);
+        if (error?.code !== "recovery_required") queueBlocked.add(key);
         try { await promptQueue.select(selected.projectId, selected.sessionId); }
         catch { /* Preserve the original dispatch error. */ }
         showComposerError(error);
@@ -668,6 +680,7 @@ export async function boot() {
         }
         return;
       }
+      await ensurePromptReady(selected.projectId, selected.sessionId);
       const run = await startRun(selected.projectId, selected.sessionId, text, attachments);
       prompt.value = "";
       composerAttachments = [];
