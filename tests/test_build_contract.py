@@ -74,6 +74,7 @@ class BuildContractTests(unittest.TestCase):
             "src/modules/manager.c",
             "src/operations/manager.c",
             "src/agents/runtime.c",
+            "src/asks/manager.c",
             "src/schedules/manager.c",
             "src/schedules/executor.c",
             "src/sessions/events.c",
@@ -91,6 +92,7 @@ class BuildContractTests(unittest.TestCase):
             "src/api/inventory.c",
             "src/api/tasks.c",
             "src/api/approvals.c",
+            "src/api/asks.c",
             "src/api/runs.c",
             "src/api/recovery.c",
             "src/api/schedules.c",
@@ -126,7 +128,9 @@ class BuildContractTests(unittest.TestCase):
         self.assertEqual(first.count('#include "../src/schedules/executor.c"'), 1)
         self.assertEqual(first.count('#include "../src/runs/manager.c"'), 1)
         self.assertEqual(first.count('#include "../src/approvals/manager.c"'), 1)
+        self.assertEqual(first.count('#include "../src/asks/manager.c"'), 1)
         self.assertEqual(first.count('#include "../src/api/approvals.c"'), 1)
+        self.assertEqual(first.count('#include "../src/api/asks.c"'), 1)
         self.assertEqual(first.count('#include "../src/api/router.c"'), 1)
         self.assertEqual(first.count('#include "../src/bootstrap/service.c"'), 1)
         self.assertIn(self.lock["xrt"]["commit"], first)

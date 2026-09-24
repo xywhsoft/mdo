@@ -3,6 +3,7 @@
 #include <string.h>
 
 #include "../../include/mdo/agents.h"
+#include "../../include/mdo/asks.h"
 #include "../../include/mdo/bootstrap.h"
 #include "../../include/mdo/config.h"
 #include "../../include/mdo/home.h"
@@ -47,6 +48,7 @@ typedef struct MdoAgentOwner {
 struct MdoAgentSession {
     xatomic32 Refs;
     xwork_agent* Agent;
+    MdoAskBinding* AskBinding;
     MdoAgentOwner* Owner;
     char* AgentId;
     char* ModuleId;
@@ -870,6 +872,7 @@ static void MdoAgentSessionFree(MdoAgentSession* Session)
     if ( Session == NULL ) return;
     MdoMemoryAgentUnbind(Session->Agent);
     xworkAgentDestroy(Session->Agent);
+    MdoAskBindingDestroy(Session->AskBinding);
     MdoAgentOwnerRelease(Session->Owner);
     xrtFree(Session->AgentId);
     xrtFree(Session->ModuleId);
@@ -1143,7 +1146,9 @@ MdoAgentSession* MdoAgentSessionCreateWithRuntime(xwork_runtime* Runtime,
     Session->Agent = xworkAgentCreateWithRuntime(Runtime, Definition,
         &AgentOptions, Error);
     if ( Session->Agent == NULL ) goto fail;
-    if ( !MdoMemoryAgentBind(Session->Agent, Options->ProjectId,
+    if ( !MdoAskRegisterTool(Session->Agent, Options->ProjectId,
+            Options->ProductSessionId, &Session->AskBinding, Error) ||
+         !MdoMemoryAgentBind(Session->Agent, Options->ProjectId,
             Options->ProductSessionId, Error) ||
          !MdoAgentsPublishSubagents(Owner, Session->Agent, &AgentInfo, &Model,
             &Session->SubagentCount, Error) ||

@@ -30,6 +30,7 @@ PROBE_SOURCE = r'''
 #include "src/memory/manager.c"
 #include "src/modules/manager.c"
 #include "src/agents/runtime.c"
+#include "src/asks/manager.c"
 #include "src/sessions/events.c"
 #include "src/sessions/todo.c"
 #include "src/sessions/manager.c"
@@ -251,7 +252,7 @@ def write_site(site: Path) -> None:
         "web", "default-home/config", "default-home/modules/tools",
         "default-home/modules/agents", "default-home/skills/project-explorer/templates",
         "generated/module-sdk/mdo", "src/storage", "src/config", "src/security",
-        "src/models", "src/skills", "src/memory", "src/modules", "src/agents",
+        "src/models", "src/skills", "src/memory", "src/modules", "src/agents", "src/asks",
         "src/sessions", "src/runs", "include/mdo",
     ):
         (site / relative).mkdir(parents=True, exist_ok=True)
@@ -265,6 +266,7 @@ def write_site(site: Path) -> None:
         "src/storage/home.c", "src/config/config.c", "src/security/secrets.c",
         "src/models/catalog.c", "src/skills/manager.c", "src/memory/manager.c",
         "src/modules/manager.c", "src/agents/runtime.c", "src/sessions/events.c",
+        "src/asks/manager.c",
         "src/sessions/todo.c",
         "src/sessions/internal.h", "src/sessions/manager.c", "src/runs/manager.c",
     ):

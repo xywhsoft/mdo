@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="zh-CN">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>mdo ask dock probe</title>
+<link rel="stylesheet" href="/app/web/css/app.css">
+<style>
+  body { margin: 0; padding: 28px 0; background: var(--surface); color: var(--ink); }
+  .conversation-docks { margin-top: 24px; }
+  #qa-status { margin: 0 auto; width: min(760px, calc(100% - 40px)); font: 12px/1.5 sans-serif; }
+</style>
+<p id="qa-status">等待询问</p>
+<div id="conversation-docks" class="conversation-docks"></div>
+<script type="module">
+import { createConversationDocks } from "/app/web/js/features/chat/conversation-docks.js";
+import { createResourceStore } from "/app/web/js/state/store.js";
+import { asksStore } from "/app/web/js/state/asks.js";
+
+let pending = [{ id: 7, run_id: 8, question: "请选择下一步，并说明原因。",
+  options: ["继续检查", "先调整方案"] }];
+window.fetch = async (url, options = {}) => {
+  if (options.method === "PUT") {
+    const answer = JSON.parse(options.body).answer;
+    document.querySelector("#qa-status").textContent = `已提交：${answer}`;
+    pending = [];
+    return new Response(JSON.stringify({ ok: true, data: { id: 7, answer } }),
+      { status: 200, headers: { "Content-Type": "application/json" } });
+  }
+  return new Response(JSON.stringify({ ok: true, data: {
+    total: pending.length, items: pending } }),
+    { status: 200, headers: { "Content-Type": "application/json" } });
+};
+function navigation() {
+  const value = { view: "workspace", projectId: "qa", sessionId: "ask" };
+  return { get: () => value, subscribe(listener) { listener(value); return () => {}; } };
+}
+const tasksStore = createResourceStore({ items: [] });
+const approvalsStore = createResourceStore({ items: [] });
+const todoStore = createResourceStore({ projectId: "qa", sessionId: "ask", items: [] });
+const runsStore = createResourceStore({ items: [] });
+asksStore.setData({ projectId: "qa", sessionId: "ask", total: 1, items: pending });
+createConversationDocks({ container: document.querySelector("#conversation-docks"),
+  navigation: navigation(), tasksStore, approvalsStore, asksStore, todoStore,
+  runsStore, onOpenTasks() {}, onChanged: async () => {} });
+window.setInterval(() => runsStore.setData({ items: [] }), 300);
+</script>
+</html>

@@ -30,6 +30,7 @@ PROBE_SOURCE = r'''
 #include "src/memory/manager.c"
 #include "src/modules/manager.c"
 #include "src/agents/runtime.c"
+#include "src/asks/manager.c"
 #include "src/sessions/events.c"
 #include "src/sessions/todo.c"
 #include "src/sessions/manager.c"
@@ -498,6 +499,7 @@ def write_site(site: Path) -> None:
         "src/memory",
         "src/modules",
         "src/agents",
+        "src/asks",
         "src/sessions",
         "include/mdo",
     ):
@@ -517,6 +519,7 @@ def write_site(site: Path) -> None:
         "src/memory/manager.c",
         "src/modules/manager.c",
         "src/agents/runtime.c",
+        "src/asks/manager.c",
         "src/sessions/events.c",
         "src/sessions/todo.c",
         "src/sessions/internal.h",

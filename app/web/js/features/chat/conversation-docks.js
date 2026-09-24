@@ -1,4 +1,5 @@
 import { decideApproval } from "../../state/approvals.js";
+import { answerAsk } from "../../state/asks.js";
 import { clear, element, errorMessage, toast } from "../../utils/dom.js";
 
 const STATE_TEXT = Object.freeze({ pending: "等待中", running: "进行中" });
@@ -83,10 +84,60 @@ function approvalCard(item, deciding, onChanged) {
   return card;
 }
 
+function askCard(item, projectId, sessionId, deciding, drafts, onChanged) {
+  const key = String(item.id);
+  const card = element("section", { className: "conversation-dock ask-dock" });
+  const actions = element("div", { className: "ask-dock-options" });
+  const input = element("input", { className: "ask-dock-input",
+    attrs: { type: "text", maxlength: "1024", placeholder: "也可以输入自己的回答",
+      "aria-label": "回答问题" } });
+  input.value = drafts.get(key) ?? "";
+  input.addEventListener("input", () => drafts.set(key, input.value));
+  const submit = element("button", { text: "提交回答",
+    attrs: { type: "button" } });
+  const buttons = [submit];
+  async function respond(value) {
+    if (deciding.has(key)) return;
+    deciding.add(key);
+    for (const button of buttons) button.disabled = true;
+    try {
+      await answerAsk(projectId, sessionId, item.id, value);
+      drafts.delete(key);
+      await onChanged();
+    } catch (error) {
+      toast(errorMessage(error), "error");
+      for (const button of buttons) button.disabled = false;
+    } finally { deciding.delete(key); }
+  }
+  for (const option of item.options ?? []) {
+    const button = element("button", { text: option,
+      attrs: { type: "button" } });
+    button.addEventListener("click", () => void respond(option));
+    buttons.push(button);
+    actions.append(button);
+  }
+  submit.addEventListener("click", () => void respond(input.value));
+  input.addEventListener("keydown", (event) => {
+    if (event.key === "Enter" && !event.isComposing) {
+      event.preventDefault();
+      void respond(input.value);
+    }
+  });
+  card.append(element("h3", { text: "需要你回答" }),
+    element("p", { className: "ask-dock-question", text: item.question }),
+    actions, element("div", { className: "ask-dock-free" }, [input, submit]));
+  return card;
+}
+
 export function createConversationDocks({ container, navigation, tasksStore, approvalsStore,
-  todoStore, runsStore, onOpenTasks, onChanged }) {
+  asksStore, todoStore, runsStore, onOpenTasks, onChanged }) {
   const deciding = new Set();
   const expanded = new Map();
+  const drafts = new Map();
+  const askNodes = new Map();
+  const otherRoot = element("div", { className: "conversation-dock-stack" });
+  const askRoot = element("div", { className: "conversation-dock-stack" });
+  container.append(otherRoot, askRoot);
 
   function render() {
     const selected = navigation.get();
@@ -98,33 +149,54 @@ export function createConversationDocks({ container, navigation, tasksStore, app
       .map((run) => String(run.agent_run_id)));
     const approvals = sessionId ? (approvalsStore.get().data?.items ?? []).filter((item) =>
       runIds.has(String(item.run_id))) : [];
+    const askData = asksStore.get().data;
+    const asks = askData?.projectId === selected.projectId &&
+      askData?.sessionId === sessionId ? askData.items : [];
     const todo = todoStore.get().data;
     const todoError = todoStore.get().status === "error" &&
       todo?.projectId === selected.projectId && todo?.sessionId === sessionId;
     const todoItems = todo?.projectId === selected.projectId &&
       todo?.sessionId === sessionId ? todo.items : [];
-    clear(container);
+    clear(otherRoot);
     if (todoItems.length) {
       const key = `${selected.projectId}/${sessionId}`;
       const open = expanded.get(key) !== false;
-      container.append(todoCard(todoItems, open, () => {
+      otherRoot.append(todoCard(todoItems, open, () => {
         expanded.set(key, !open);
         render();
       }));
     }
-    if (todoError) container.append(element("p", {
+    if (todoError) otherRoot.append(element("p", {
       className: "todo-dock-error",
       text: `计划读取失败：${errorMessage(todoStore.get().error)}`,
     }));
-    if (tasks.length) container.append(taskCard(tasks, onOpenTasks));
-    for (const item of approvals) container.append(approvalCard(item, deciding, onChanged));
+    if (tasks.length) otherRoot.append(taskCard(tasks, onOpenTasks));
+    for (const item of approvals) otherRoot.append(approvalCard(item, deciding, onChanged));
+    const live = new Set();
+    for (const item of asks) {
+      const key = `${selected.projectId}/${sessionId}/${item.id}`;
+      live.add(key);
+      if (!askNodes.has(key)) {
+        const node = askCard(item, selected.projectId, sessionId,
+          deciding, drafts, onChanged);
+        askNodes.set(key, node);
+        askRoot.append(node);
+      }
+    }
+    for (const [key, node] of askNodes) {
+      if (live.has(key)) continue;
+      node.remove();
+      askNodes.delete(key);
+      drafts.delete(key.split("/").at(-1));
+    }
     container.hidden = !todoItems.length && !todoError && !tasks.length &&
-      !approvals.length;
+      !approvals.length && !asks.length;
   }
 
   const unsubscribers = [
     navigation.subscribe(render), tasksStore.subscribe(render),
     approvalsStore.subscribe(render), runsStore.subscribe(render),
+    asksStore.subscribe(render),
     todoStore.subscribe(render),
   ];
   return () => unsubscribers.forEach((unsubscribe) => unsubscribe());

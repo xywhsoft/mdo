@@ -17,6 +17,7 @@ import {
 } from "./state/tasks.js";
 import { runsStore, loadRuns, startRun, readRun, cancelRun } from "./state/runs.js";
 import { approvalsStore, loadApprovals } from "./state/approvals.js";
+import { asksStore, selectAsks, clearAsks, refreshSelectedAsks } from "./state/asks.js";
 import { recoveryStore, selectRecovery, loadRecovery } from "./state/recovery.js";
 import { navigation } from "./state/navigation.js";
 import { createSessionList } from "./features/sessions/session-list.js";
@@ -152,10 +153,11 @@ export async function boot() {
   });
   createConversationDocks({
     container: $("#conversation-docks"), navigation, tasksStore, approvalsStore,
+    asksStore,
     todoStore,
     runsStore,
     onOpenTasks: () => { selectInspectorTab("tasks"); setDrawer("inspector", true); },
-    onChanged: () => Promise.all([loadTasks(), loadRuns()]),
+    onChanged: () => Promise.all([loadTasks(), loadRuns(), refreshSelectedAsks()]),
   });
   const promptQueue = createPromptQueue({
     container: $("#prompt-queue"), navigation,
@@ -361,7 +363,7 @@ export async function boot() {
       try {
         const run = await readRun(activeRun.id);
         setRun(run);
-        await refreshSelectedTimeline();
+        await Promise.all([refreshSelectedTimeline(), refreshSelectedAsks()]);
         if (terminalState(run)) {
           await Promise.all([loadSessions(), loadRuns(), loadTasks(), loadRecovery()]);
           await dispatchQueued();
@@ -458,6 +460,7 @@ export async function boot() {
       selectRecovery("", "");
       clearTimeline();
       clearTodo();
+      clearAsks();
       clearFeedback();
       sessionDetailStore.reset();
       sessionTitle.textContent = "新任务";
@@ -470,6 +473,7 @@ export async function boot() {
     sessionDetailStore.reset();
     selectTimeline(projectId, sessionId);
     void selectTodo(projectId, sessionId);
+    void selectAsks(projectId, sessionId);
     void selectFeedback(projectId, sessionId);
     queueBlocked.add(key);
     try {
@@ -834,11 +838,13 @@ export async function boot() {
     if (document.hidden) return;
     const pending = Number(approvalsStore.get().data?.total ?? 0);
     approvalsTimer = window.setTimeout(async () => {
-      await Promise.all([loadApprovals(), loadRecovery()]);
+      await Promise.all([loadApprovals(), loadRecovery(), refreshSelectedAsks()]);
       scheduleApprovalRefresh();
-    }, pending || recoveryStore.get().data?.resume_required ? 1000 : 3000);
+    }, pending || asksStore.get().data?.items?.length ||
+      recoveryStore.get().data?.resume_required ? 1000 : 3000);
   }
   approvalsStore.subscribe(scheduleApprovalRefresh);
+  asksStore.subscribe(scheduleApprovalRefresh);
   recoveryStore.subscribe(scheduleApprovalRefresh);
   document.addEventListener("visibilitychange", () => {
     if (document.hidden) {

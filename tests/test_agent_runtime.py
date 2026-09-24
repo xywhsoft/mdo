@@ -172,6 +172,7 @@ PROBE_SOURCE = rf'''
 #include "src/memory/manager.c"
 #include "src/modules/manager.c"
 #include "src/agents/runtime.c"
+#include "src/asks/manager.c"
 
 xwork_runtime *MdoBootstrapRuntime(void) {{ return NULL; }}
 
@@ -449,6 +450,7 @@ def write_site(site: Path, memory_enabled: bool = True) -> None:
         "src/memory",
         "src/modules",
         "src/agents",
+        "src/asks",
         "include/mdo",
     ):
         (site / relative).mkdir(parents=True, exist_ok=True)
@@ -467,6 +469,7 @@ def write_site(site: Path, memory_enabled: bool = True) -> None:
         "src/memory/manager.c",
         "src/modules/manager.c",
         "src/agents/runtime.c",
+        "src/asks/manager.c",
     ):
         shutil.copy2(ROOT / "app" / relative, site / relative)
     for header in (ROOT / "app/include/mdo").glob("*.h"):

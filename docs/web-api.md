@@ -31,7 +31,8 @@ Read snapshots:
 - `/projects/{project}/sessions/{session}`, `/runs/{run}`,
   `/schedules/{schedule}`, `/tasks/{task}`, `/operations/{operation}`, and
   `/projects/{project}/sessions/{session}/recovery` and
-  `/projects/{project}/sessions/{session}/todo`.
+  `/projects/{project}/sessions/{session}/todo` and
+  `/projects/{project}/sessions/{session}/asks`.
 
 Mutations:
 
@@ -40,8 +41,8 @@ Mutations:
 - enable, disconnect, or refresh an MCP server;
 - create, edit, archive, trash, and restore sessions;
 - fork, truncate, clear, export, and resume durable sessions;
-- start and cancel interactive Agent runs, and resolve one-shot approval
-  requests;
+- start and cancel interactive Agent runs, resolve one-shot approval requests,
+  and answer session-bound user questions;
 - create, replace, enable, disable, and remove schedules;
 - cancel a process, Subagent, or scheduled task through its unified task ID.
 
@@ -99,6 +100,24 @@ The journal records the original tool event, while the bounded `todo.json`
 sidecar serves quick reads.
 Pure read tools, including this plan emitter, follow the configured automatic
 read permission; effectful tools still use one-shot approval.
+
+## User questions
+
+The built-in `ask_user` tool suspends its tool call while the user answers a
+structured question. `GET /projects/{project}/sessions/{session}/asks` lists
+only live questions for that session, with `id`, `run_id`, `created_at`,
+`question`, and up to eight `options`. The UI also accepts free text. A page
+reload reads the same pending question without restarting the Agent.
+
+`PUT /projects/{project}/sessions/{session}/asks/{ask}` accepts exactly
+`{"answer":"..."}` with 1–1024 UTF-8 bytes. The answer is consumed once and
+becomes the tool result; a stale ID or another session's ID returns 404.
+Cancellation, the tool or run deadline, and shutdown release the waiting call. A
+question waits at most four hours if no shorter deadline applies. Pending
+questions are in process memory: after a process interruption, xwork retains
+the pending read-only tool call in the durable session. The existing recovery
+flow retries it and presents the question again; it does not silently reuse an
+answer from a stopped process.
 
 ## Unified task output
 

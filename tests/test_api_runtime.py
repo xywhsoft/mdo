@@ -64,6 +64,9 @@ class ModelHandler(BaseHTTPRequestHandler):
     calls = 0
     saw_prompt = False
     todo_sent = False
+    ask_sent = False
+    ask_cancel_sent = False
+    ask_verify_sent = False
 
     def log_message(self, format: str, *args: object) -> None:
         del format, args
@@ -107,6 +110,37 @@ class ModelHandler(BaseHTTPRequestHandler):
                         {"text": "Inspect repository", "done": True},
                         {"text": "Verify result", "done": False},
                     ]}, separators=(",", ":")),
+                }]
+            if "ASK probe" in json.dumps(payload) and not ModelHandler.ask_sent:
+                ModelHandler.ask_sent = True
+                output = [{
+                    "type": "function_call",
+                    "call_id": "ask-probe-call",
+                    "name": "ask_user",
+                    "arguments": json.dumps({
+                        "question": "Which route should I take?",
+                        "options": ["Fast", "Careful"],
+                    }, separators=(",", ":")),
+                }]
+            if "ASK cancel probe" in json.dumps(payload) and not ModelHandler.ask_cancel_sent:
+                ModelHandler.ask_cancel_sent = True
+                output = [{
+                    "type": "function_call",
+                    "call_id": "ask-cancel-call",
+                    "name": "ask_user",
+                    "arguments": '{"question":"Cancel this question?"}',
+                }]
+            if "Answer the pending question." in json.dumps(payload) and not ModelHandler.ask_verify_sent:
+                ModelHandler.ask_verify_sent = True
+                output = [{
+                    "type": "function_call",
+                    "call_id": "ask-recovery-verify-call",
+                    "name": "exec",
+                    "arguments": json.dumps({
+                        "argv": [sys.executable, "-c",
+                                 "print('ask recovery verified')"],
+                        "timeout_ms": 5000,
+                    }, separators=(",", ":")),
                 }]
             response = json.dumps({
                 "id": "resp_api_probe",
@@ -211,9 +245,11 @@ static void MdoApiProbeCreateTasks(void)
     (void)xworkRuntimeCreateScheduledTask(Runtime, &Config, &TaskId, &Error);
 }
 
-static void MdoApiProbeCreateRecoverySession(void)
+static void MdoApiProbeCreateRecoverySession(bool* Created,
+    const char* ProjectId, const char* Title, const char* Prompt,
+    char* ToolCallId, char* ToolName,
+    char* ArgumentsJson)
 {
-    static bool Created;
     MdoSessionCreateOptions Options;
     MdoSessionInfo Info;
     MdoSession* Session;
@@ -228,11 +264,11 @@ static void MdoApiProbeCreateRecoverySession(void)
     char* SnapshotPath = NULL;
     char* JournalPath = NULL;
 
-    if ( Created ) return;
-    Created = true;
+    if ( *Created ) return;
+    *Created = true;
     MdoSessionCreateOptionsInit(&Options);
-    Options.ProjectId = "recovery-probe";
-    Options.Title = "Recovery probe";
+    Options.ProjectId = ProjectId;
+    Options.Title = Title;
     Options.Agent.AgentId = "mdo.default";
     Options.Agent.ModelId = "ling-3.0-tiny";
     Options.Agent.Protocol = MDO_MODEL_PROTOCOL_OPENAI_RESPONSES;
@@ -265,13 +301,12 @@ static void MdoApiProbeCreateRecoverySession(void)
     if ( Ledger == NULL ) goto done;
     Turn = xllmSessionBeginTurn(Ledger);
     if ( Turn == 0u || !xllmSessionAddText(Ledger, Turn, XLLM_ROLE_USER,
-            "Continue after checking the uncertain edit.", 0u) ||
+            Prompt, 0u) ||
          !xllmSessionBeginModelCall(Ledger, &ModelError) ) goto done;
     memset(&ToolCall, 0, sizeof(ToolCall));
-    ToolCall.sId = "recovery-edit-call";
-    ToolCall.sName = "edit";
-    ToolCall.sArgumentsJson =
-        "{\"path\":\"recovery-probe.txt\",\"edits\":[{\"old_text\":\"before\",\"new_text\":\"after\"}]}";
+    ToolCall.sId = ToolCallId;
+    ToolCall.sName = ToolName;
+    ToolCall.sArgumentsJson = ArgumentsJson;
     memset(&Response, 0, sizeof(Response));
     Response.eFinish = XLLM_FINISH_TOOL_CALLS;
     Response.pToolCalls = &ToolCall;
@@ -321,12 +356,22 @@ done:
         "XS_RequestResult RequestProc(XS_HttpReq* pRequest)\n"
         "{\n"
         "    static const char Marker[] = \"fixture=recovery\";\n"
+        "    static bool CreatedEdit, CreatedAsk;\n"
         "    size_t Index;\n"
         "    if ( pRequest != NULL && pRequest->head != NULL ) {\n"
         "        xstrview Target = pRequest->head->Target;\n"
         "        for ( Index = 0u; Index + sizeof(Marker) - 1u <= Target.Size; ++Index ) {\n"
         "            if ( memcmp(Target.Data + Index, Marker, sizeof(Marker) - 1u) == 0 ) {\n"
-        "                MdoApiProbeCreateRecoverySession();\n"
+        "                MdoApiProbeCreateRecoverySession(&CreatedEdit,\n"
+        "                    \"recovery-probe\", \"Recovery probe\",\n"
+        "                    \"Continue after checking the uncertain edit.\",\n"
+        "                    \"recovery-edit-call\", \"edit\",\n"
+        "                    \"{\\\"path\\\":\\\"recovery-probe.txt\\\",\\\"edits\\\":[{\\\"old_text\\\":\\\"before\\\",\\\"new_text\\\":\\\"after\\\"}]}\");\n"
+        "                MdoApiProbeCreateRecoverySession(&CreatedAsk,\n"
+        "                    \"ask-recovery-probe\", \"Ask recovery probe\",\n"
+        "                    \"Answer the pending question.\",\n"
+        "                    \"recovery-ask-call\", \"ask_user\",\n"
+        "                    \"{\\\"question\\\":\\\"Should I continue?\\\",\\\"options\\\":[\\\"Yes\\\",\\\"No\\\"]}\");\n"
         "                break;\n"
         "            }\n"
         "        }\n"
@@ -493,6 +538,9 @@ def run_probe(host: Path) -> None:
         ModelHandler.calls = 0
         ModelHandler.saw_prompt = False
         ModelHandler.todo_sent = False
+        ModelHandler.ask_sent = False
+        ModelHandler.ask_cancel_sent = False
+        ModelHandler.ask_verify_sent = False
         model_thread.start()
         environment = os.environ.copy()
         environment["USERPROFILE"] = str(base)
@@ -1798,6 +1846,67 @@ def run_probe(host: Path) -> None:
                 assert resolved_recovery["resume_required"] is False, (
                     resolved_recovery)
 
+                ask_recovery_session = next(item for item in
+                    json.loads(request(port, "GET", "/api/v1/sessions")[2])[
+                        "data"]["items"] if item["project_id"] ==
+                            "ask-recovery-probe")
+                ask_recovery_base = (
+                    "/api/v1/projects/ask-recovery-probe/sessions/"
+                    f"{ask_recovery_session['id']}")
+                status, _, body = request(port, "GET",
+                    ask_recovery_base + "/recovery")
+                assert status == 200, (status, body)
+                ask_recovery = json.loads(body)["data"]
+                assert ask_recovery["resume_required"] is True, ask_recovery
+                assert ask_recovery["total"] == 1, ask_recovery
+                pending_ask = ask_recovery["items"][0]
+                assert pending_ask["tool"] == "ask_user" and pending_ask[
+                    "automatic_retry_safe"] is True, pending_ask
+                status, _, body = request(port, "POST",
+                    ask_recovery_base + "/resume",
+                    body=json.dumps({
+                        "recovery_token": ask_recovery["recovery_token"],
+                        "decisions": [],
+                    }).encode(), headers=resume_headers)
+                assert status == 202, (status, body)
+                ask_recovered_run = json.loads(body)["data"]
+                ask_recovery_asks = ask_recovery_base + "/asks"
+                deadline = time.monotonic() + 5.0
+                asks = []
+                while not asks and time.monotonic() < deadline:
+                    asks = json.loads(request(port, "GET",
+                        ask_recovery_asks)[2])["data"]["items"]
+                    if not asks: time.sleep(0.02)
+                assert asks and asks[0]["question"] == "Should I continue?", asks
+                status, _, body = request(port, "PUT",
+                    ask_recovery_asks + "/" + str(asks[0]["id"]),
+                    body=b'{"answer":"Yes"}', headers=resume_headers)
+                assert status == 200, (status, body)
+                deadline = time.monotonic() + 3.0
+                ask_verification = None
+                while time.monotonic() < deadline:
+                    approval_data = json.loads(request(port, "GET",
+                        "/api/v1/approvals")[2])["data"]
+                    ask_verification = next((item for item in
+                        approval_data["items"] if item["tool_call_id"] ==
+                        "ask-recovery-verify-call"), None)
+                    if ask_verification is not None: break
+                    time.sleep(0.02)
+                assert ask_verification is not None, approval_data
+                status, _, body = request(port, "PUT",
+                    f'/api/v1/approvals/{ask_verification["id"]}',
+                    body=b'{"decision":"allow"}', headers=resume_headers)
+                assert status == 200, (status, body)
+                ask_recovered_path = f'/api/v1/runs/{ask_recovered_run["id"]}'
+                deadline = time.monotonic() + 5.0
+                while not ask_recovered_run["terminal"] and time.monotonic() < deadline:
+                    time.sleep(0.02)
+                    ask_recovered_run = json.loads(request(port, "GET",
+                        ask_recovered_path)[2])["data"]
+                assert ask_recovered_run["state"] == "succeeded", (
+                    ask_recovered_run)
+                assert ask_recovered_run["resume"] is True, ask_recovered_run
+
                 status, _, body = request(port, "POST", run_path,
                     body=b'{"prompt":"TODO probe","timeout_ms":10000}',
                     headers={"Content-Type": "application/json"})
@@ -1825,6 +1934,84 @@ def run_probe(host: Path) -> None:
                 assert any(event["kind"] == "tool_done" and
                            event["tool_name"] == "mdo.todo" and
                            event["success"] for event in todo_events), todo_events
+
+                asks_path = session_path + "/asks"
+                assert json.loads(request(port, "GET", asks_path)[2])[
+                    "data"]["items"] == []
+                status, _, body = request(port, "POST", run_path,
+                    body=b'{"prompt":"ASK probe","timeout_ms":10000}',
+                    headers={"Content-Type": "application/json"})
+                assert status == 202, (status, body)
+                ask_run = json.loads(body)["data"]
+                ask_run_path = f'/api/v1/runs/{ask_run["id"]}'
+                deadline = time.monotonic() + 5.0
+                asks = []
+                while not asks and time.monotonic() < deadline:
+                    time.sleep(0.02)
+                    asks = json.loads(request(port, "GET", asks_path)[2])[
+                        "data"]["items"]
+                assert len(asks) == 1, (asks, ModelHandler.calls)
+                ask = asks[0]
+                assert ask["question"] == "Which route should I take?", ask
+                assert ask["options"] == ["Fast", "Careful"], ask
+                assert json.loads(request(port, "GET", asks_path)[2])[
+                    "data"]["items"][0]["id"] == ask["id"]
+                ask_item_path = asks_path + "/" + str(ask["id"])
+                status, _, body = request(port, "PUT", ask_item_path,
+                    body=b'{"answer":""}',
+                    headers={"Content-Type": "application/json"})
+                assert status == 422, (status, body)
+                status, _, body = request(port, "PUT", asks_path + "/999999",
+                    body=b'{"answer":"Fast"}',
+                    headers={"Content-Type": "application/json"})
+                assert status == 404, (status, body)
+                status, _, body = request(port, "PUT",
+                    ask_recovery_asks + "/" + str(ask["id"]),
+                    body=b'{"answer":"Wrong session"}',
+                    headers={"Content-Type": "application/json"})
+                assert status == 404, (status, body)
+                status, _, body = request(port, "PUT", ask_item_path,
+                    body=b'{"answer":"My own route"}',
+                    headers={"Content-Type": "application/json"})
+                assert status == 200, (status, body)
+                assert json.loads(request(port, "GET", asks_path)[2])[
+                    "data"]["items"] == []
+                deadline = time.monotonic() + 6.0
+                while not ask_run["terminal"] and time.monotonic() < deadline:
+                    time.sleep(0.02)
+                    ask_run = json.loads(request(port, "GET",
+                        ask_run_path)[2])["data"]
+                assert ask_run["state"] == "succeeded", ask_run
+                ask_events = json.loads(request(port, "GET",
+                    session_path + f'/events?after={projected["event_id"]}&limit=32')[2])[
+                        "data"]["items"]
+                assert any(event["kind"] == "tool_done" and
+                           event["tool_name"] == "ask_user" and
+                           event["success"] and "My own route" in event["text"]
+                           for event in ask_events), ask_events
+
+                status, _, body = request(port, "POST", run_path,
+                    body=b'{"prompt":"ASK cancel probe","timeout_ms":10000}',
+                    headers={"Content-Type": "application/json"})
+                assert status == 202, (status, body)
+                cancel_ask_run = json.loads(body)["data"]
+                deadline = time.monotonic() + 5.0
+                while time.monotonic() < deadline:
+                    asks = json.loads(request(port, "GET", asks_path)[2])[
+                        "data"]["items"]
+                    if asks: break
+                    time.sleep(0.02)
+                assert asks and asks[0]["question"] == "Cancel this question?", asks
+                status, _, body = request(port, "DELETE",
+                    f'/api/v1/runs/{cancel_ask_run["id"]}')
+                assert status == 200, (status, body)
+                deadline = time.monotonic() + 5.0
+                while time.monotonic() < deadline:
+                    asks = json.loads(request(port, "GET", asks_path)[2])[
+                        "data"]["items"]
+                    if not asks: break
+                    time.sleep(0.02)
+                assert asks == [], asks
 
                 schedule_path = "/api/v1/schedules/api-schedule"
                 status, headers, body = request(

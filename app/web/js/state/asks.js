@@ -1,0 +1,61 @@
+import { api, resourceId } from "../api/client.js";
+import { createResourceStore } from "./store.js";
+
+export const asksStore = createResourceStore({
+  projectId: "", sessionId: "", total: 0, items: [],
+});
+
+let generation = 0;
+let signature = "";
+
+export function clearAsks() {
+  generation += 1;
+  signature = "";
+  asksStore.setData({ projectId: "", sessionId: "", total: 0, items: [] });
+}
+
+export async function selectAsks(projectId, sessionId) {
+  const project = resourceId(projectId, "project");
+  const session = resourceId(sessionId, "session");
+  generation += 1;
+  signature = "";
+  asksStore.setData({ projectId: project, sessionId: session,
+    total: 0, items: [] });
+  await refreshSelectedAsks();
+}
+
+export async function refreshSelectedAsks() {
+  const token = generation;
+  const selected = asksStore.get().data;
+  if (!selected?.projectId || !selected?.sessionId) return;
+  try {
+    const response = await api.get(
+      `/projects/${selected.projectId}/sessions/${selected.sessionId}/asks`);
+    if (token !== generation) return;
+    const data = response.data;
+    if (!Array.isArray(data.items)) throw new Error("询问响应无效");
+    const next = JSON.stringify(data.items);
+    if (next !== signature) {
+      signature = next;
+      asksStore.setData({ projectId: selected.projectId,
+        sessionId: selected.sessionId, total: data.total,
+        items: data.items });
+    }
+  } catch (error) {
+    if (token === generation) asksStore.setError(error);
+  }
+}
+
+export async function answerAsk(projectId, sessionId, id, answer) {
+  const project = resourceId(projectId, "project");
+  const session = resourceId(sessionId, "session");
+  const number = String(id);
+  if (!/^[1-9][0-9]*$/.test(number)) throw new TypeError("询问 ID 无效");
+  const text = String(answer).trim();
+  if (!text) throw new TypeError("请填写回答");
+  if (new TextEncoder().encode(text).length > 1024)
+    throw new TypeError("回答不能超过 1024 字节");
+  await api.put(`/projects/${project}/sessions/${session}/asks/${number}`,
+    { answer: text });
+  await refreshSelectedAsks();
+}

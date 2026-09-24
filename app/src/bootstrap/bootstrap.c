@@ -2,6 +2,7 @@
 #include <string.h>
 
 #include "../../include/mdo/approvals.h"
+#include "../../include/mdo/asks.h"
 #include "../../include/mdo/bootstrap.h"
 #include "../../include/mdo/mcp.h"
 #include "../../include/mdo/memory.h"
@@ -137,6 +138,10 @@ bool MdoBootstrapInit(XS_HostInfo* pHost)
         MdoBootstrapFail("approval manager initialization failed");
         return false;
     }
+    if ( !MdoAskManagerInit() ) {
+        MdoBootstrapFail("ask manager initialization failed");
+        return false;
+    }
     MdoRunManagerOptionsInit(&RunOptions);
     RunOptions.OnPermission = MdoApprovalOnPermission;
     if ( !MdoRunManagerInit(g_MdoBootstrap.Runtime, &RunOptions, &WorkError) ) {
@@ -205,6 +210,7 @@ void MdoBootstrapUnit(void)
 {
     MdoScheduleExecutorUnit();
     MdoRunManagerUnit();
+    MdoAskManagerUnit();
     MdoApprovalManagerUnit();
     MdoSessionManagerUnit();
     MdoScheduleManagerUnit();
