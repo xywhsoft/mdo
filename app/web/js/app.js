@@ -40,6 +40,7 @@ import { createDecisionPanel } from "./features/approvals/decision-panel.js";
 import { createRecoveryPanel } from "./features/approvals/recovery-panel.js";
 import { createSettingsView } from "./features/settings/settings-view.js";
 import { createResourcePanels } from "./features/settings/resource-panels.js";
+import { api } from "./api/client.js";
 import { clear, element, errorMessage, toast } from "./utils/dom.js";
 
 const $ = (selector) => {
