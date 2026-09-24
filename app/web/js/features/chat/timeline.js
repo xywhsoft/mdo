@@ -38,12 +38,24 @@ export function eventsToTimeline(events, historyLost = false) {
             truncated: Boolean(event.text_truncated),
             attachments: event.attachments || [],
           });
-        items.push(event.agent_depth > 0
-          ? { key: `subagent-${event.event_id}`, kind: "task", role: "子 Agent", text: event.text || "子 Agent 已启动", state: "running", time: event.time, meta: `depth ${event.agent_depth}` }
-          : { key: `user-${event.event_id}`, kind: "user", role: "你", text: event.text || "", state: "done", time: event.time,
+        if (event.agent_depth > 0) {
+          items.push({ key: `subagent-${event.event_id}`, kind: "task",
+            role: "子 Agent", text: event.text || "子 Agent 已启动",
+            state: "running", time: event.time, meta: `depth ${event.agent_depth}` });
+        } else if (Number(event.schema_version) >= 3 &&
+                   Number(event.user_message_sequence || 0) === 0) {
+          // A resumed run has no new user message. Older event schemas did not
+          // carry a durable message sequence, so keep their original projection.
+          items.push({ key: `resume-${event.event_id}`, kind: "system",
+            role: "恢复", text: "从上次中断处继续运行", state: "done",
+            time: event.time });
+        } else {
+          items.push({ key: `user-${event.event_id}`, kind: "user", role: "你",
+            text: event.text || "", state: "done", time: event.time,
             attachments: Array.isArray(event.attachments) ? event.attachments : [],
             userMessageSequence: Number(event.user_message_sequence || 0),
             textTruncated: Boolean(event.text_truncated) });
+        }
         break;
       case "model_reasoning_delta": {
         const thought = appendOrCreate(items, event, "reasoning", "思考",
