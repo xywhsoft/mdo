@@ -22,6 +22,28 @@ function taskCard(tasks, onOpenTasks) {
   ]);
 }
 
+function todoCard(items, expanded, onToggle) {
+  const done = items.filter((item) => item.done).length;
+  const toggle = element("button", {
+    className: "todo-toggle", text: `计划 · ${done}/${items.length}`,
+    attrs: { type: "button", "aria-expanded": String(expanded) },
+  });
+  toggle.addEventListener("click", onToggle);
+  const card = element("section", { className: "conversation-dock todo-dock" }, [toggle]);
+  if (expanded) {
+    const list = element("ol", { className: "todo-dock-list" });
+    const current = items.findIndex((item) => !item.done);
+    for (const [index, item] of items.entries()) list.append(element("li", {
+      className: item.done ? "done" : (index === current ? "current" : ""),
+    }, [
+      element("span", { className: "todo-dock-mark", text: item.done ? "✓" : "○" }),
+      element("span", { text: item.text }),
+    ]));
+    card.append(list);
+  }
+  return card;
+}
+
 function approvalCard(item, deciding, onChanged) {
   const card = element("section", { className: "conversation-dock" });
   const resources = element("ul", { className: "conversation-dock-list" });
@@ -62,8 +84,9 @@ function approvalCard(item, deciding, onChanged) {
 }
 
 export function createConversationDocks({ container, navigation, tasksStore, approvalsStore,
-  runsStore, onOpenTasks, onChanged }) {
+  todoStore, runsStore, onOpenTasks, onChanged }) {
   const deciding = new Set();
+  const expanded = new Map();
 
   function render() {
     const selected = navigation.get();
@@ -75,15 +98,34 @@ export function createConversationDocks({ container, navigation, tasksStore, app
       .map((run) => String(run.agent_run_id)));
     const approvals = sessionId ? (approvalsStore.get().data?.items ?? []).filter((item) =>
       runIds.has(String(item.run_id))) : [];
+    const todo = todoStore.get().data;
+    const todoError = todoStore.get().status === "error" &&
+      todo?.projectId === selected.projectId && todo?.sessionId === sessionId;
+    const todoItems = todo?.projectId === selected.projectId &&
+      todo?.sessionId === sessionId ? todo.items : [];
     clear(container);
+    if (todoItems.length) {
+      const key = `${selected.projectId}/${sessionId}`;
+      const open = expanded.get(key) !== false;
+      container.append(todoCard(todoItems, open, () => {
+        expanded.set(key, !open);
+        render();
+      }));
+    }
+    if (todoError) container.append(element("p", {
+      className: "todo-dock-error",
+      text: `计划读取失败：${errorMessage(todoStore.get().error)}`,
+    }));
     if (tasks.length) container.append(taskCard(tasks, onOpenTasks));
     for (const item of approvals) container.append(approvalCard(item, deciding, onChanged));
-    container.hidden = !tasks.length && !approvals.length;
+    container.hidden = !todoItems.length && !todoError && !tasks.length &&
+      !approvals.length;
   }
 
   const unsubscribers = [
     navigation.subscribe(render), tasksStore.subscribe(render),
     approvalsStore.subscribe(render), runsStore.subscribe(render),
+    todoStore.subscribe(render),
   ];
   return () => unsubscribers.forEach((unsubscribe) => unsubscribe());
 }

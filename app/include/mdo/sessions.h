@@ -217,4 +217,12 @@ uint64 MdoSessionEventSnapshotLatestId(
 bool MdoSessionEventSnapshotHistoryLost(
     const MdoSessionEventSnapshot* Snapshot);
 
+/* The built-in mdo.todo tool projects its latest successful main-Agent
+ * snapshot into a bounded Home sidecar. A missing sidecar loads as empty and
+ * never creates Home. The returned value is caller-owned. */
+bool MdoSessionTodoProject(const char* ProjectId, const char* SessionId,
+    uint64 EventId, const xwork_event* Event);
+bool MdoSessionTodoLoad(const char* ProjectId, const char* SessionId,
+    xvalue** Output);
+
 #endif

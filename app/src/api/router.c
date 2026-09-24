@@ -147,6 +147,9 @@ static const MdoApiRoute g_MdoApiRoutes[] = {
     { "/api/v1/projects/{project}/sessions/{session}/queue/{item}",
       XHTTP_METHOD_PUT | XHTTP_METHOD_DELETE,
       "PUT, DELETE, OPTIONS", MdoApiQueueItemRoute },
+    { "/api/v1/projects/{project}/sessions/{session}/todo",
+      XHTTP_METHOD_GET | XHTTP_METHOD_HEAD,
+      "GET, HEAD, OPTIONS", MdoApiTodoRoute },
 };
 
 static bool MdoApiViewEqualText(xstrview View, cstr Text)

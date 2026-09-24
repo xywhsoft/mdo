@@ -63,6 +63,7 @@ class ModelHandler(BaseHTTPRequestHandler):
     protocol_version = "HTTP/1.1"
     calls = 0
     saw_prompt = False
+    todo_sent = False
 
     def log_message(self, format: str, *args: object) -> None:
         del format, args
@@ -95,6 +96,17 @@ class ModelHandler(BaseHTTPRequestHandler):
                                  "print('recovery verified')"],
                         "timeout_ms": 5000,
                     }, separators=(",", ":")),
+                }]
+            if "TODO probe" in json.dumps(payload) and not ModelHandler.todo_sent:
+                ModelHandler.todo_sent = True
+                output = [{
+                    "type": "function_call",
+                    "call_id": "todo-probe-call",
+                    "name": "mdo.todo",
+                    "arguments": json.dumps({"items": [
+                        {"text": "Inspect repository", "done": True},
+                        {"text": "Verify result", "done": False},
+                    ]}, separators=(",", ":")),
                 }]
             response = json.dumps({
                 "id": "resp_api_probe",
@@ -480,6 +492,7 @@ def run_probe(host: Path) -> None:
                                         daemon=True)
         ModelHandler.calls = 0
         ModelHandler.saw_prompt = False
+        ModelHandler.todo_sent = False
         model_thread.start()
         environment = os.environ.copy()
         environment["USERPROFILE"] = str(base)
@@ -1506,6 +1519,25 @@ def run_probe(host: Path) -> None:
                     assert status == 200, (status, body)
                 assert json.loads(request(port, "GET", queue_path)[2])[
                     "data"]["items"] == []
+                todo_path = session_path + "/todo"
+                todo_file = home / "sessions/api-project" / session_id / "todo.json"
+                status, _, body = request(port, "GET", todo_path)
+                assert status == 200 and json.loads(body)["data"] == {
+                    "schema_version": 1, "event_id": 0, "items": []}, (status, body)
+                assert not todo_file.exists(), todo_file
+                todo_file.write_text(json.dumps({
+                    "schema_version": 1, "event_id": 8,
+                    "items": [{"text": "Inspect code", "done": False},
+                              {"text": "Verify change", "done": True}],
+                }), encoding="utf-8")
+                status, _, body = request(port, "GET", todo_path)
+                assert status == 200 and json.loads(body)["data"]["items"] == [
+                    {"text": "Inspect code", "done": False},
+                    {"text": "Verify change", "done": True}], (status, body)
+                status, _, body = request(port, "GET",
+                    "/api/v1/projects/api-project/sessions/missing/todo")
+                assert status == 404 and json.loads(body)["error"][
+                    "code"] == "session_not_found", (status, body)
                 run_path = session_path + "/runs"
                 status, headers, body = request(
                     port, "POST", run_path,
@@ -1765,6 +1797,34 @@ def run_probe(host: Path) -> None:
                 assert resolved_recovery["total"] == 0, resolved_recovery
                 assert resolved_recovery["resume_required"] is False, (
                     resolved_recovery)
+
+                status, _, body = request(port, "POST", run_path,
+                    body=b'{"prompt":"TODO probe","timeout_ms":10000}',
+                    headers={"Content-Type": "application/json"})
+                assert status == 202, (status, body)
+                todo_run = json.loads(body)["data"]
+                todo_run_path = f'/api/v1/runs/{todo_run["id"]}'
+                deadline = time.monotonic() + 12.0
+                while not todo_run["terminal"] and time.monotonic() < deadline:
+                    time.sleep(0.01)
+                    todo_run = json.loads(request(
+                        port, "GET", todo_run_path)[2])["data"]
+                assert todo_run["state"] == "succeeded", (
+                    todo_run, ModelHandler.calls, ModelHandler.todo_sent)
+                assert ModelHandler.todo_sent, ModelHandler.calls
+                assert json.loads(request(port, "GET", "/api/v1/approvals")[2])[
+                    "data"]["total"] == 0
+                projected = json.loads(request(port, "GET", todo_path)[2])[
+                    "data"]
+                assert projected["event_id"] > 8 and projected["items"] == [
+                    {"text": "Inspect repository", "done": True},
+                    {"text": "Verify result", "done": False}], projected
+                todo_events = json.loads(request(port, "GET",
+                    session_path + "/events?after=0&limit=32")[2])[
+                        "data"]["items"]
+                assert any(event["kind"] == "tool_done" and
+                           event["tool_name"] == "mdo.todo" and
+                           event["success"] for event in todo_events), todo_events
 
                 schedule_path = "/api/v1/schedules/api-schedule"
                 status, headers, body = request(

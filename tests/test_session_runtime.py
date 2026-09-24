@@ -31,6 +31,7 @@ PROBE_SOURCE = r'''
 #include "src/modules/manager.c"
 #include "src/agents/runtime.c"
 #include "src/sessions/events.c"
+#include "src/sessions/todo.c"
 #include "src/sessions/manager.c"
 
 xwork_runtime *MdoBootstrapRuntime(void) { return NULL; }
@@ -260,6 +261,10 @@ void ServiceInit(XS_HostInfo *host) {
     uint64 rewind_to = 0u;
     uint64 transient_tail = 0u;
     uint64 cleared_tail = 0u;
+    xwork_event todo_event;
+    xvalue *todo_value = NULL;
+    char *todo_json = NULL;
+    size_t todo_size = 0u;
     char *export_json = NULL;
     size_t export_size = 0u;
     Probe probe;
@@ -294,6 +299,24 @@ void ServiceInit(XS_HostInfo *host) {
     printf("created=id:%s project:%s title:%s status:%d revision:%llu\n",
         info.Id, info.ProjectId, info.Title, (int)info.Status,
         (unsigned long long)info.Revision);
+    memset(&todo_event, 0, sizeof(todo_event));
+    todo_event.eKind = XWORK_EVENT_TOOL_DONE;
+    todo_event.bSuccess = true;
+    todo_event.sToolName = "mdo.todo";
+    todo_event.sText = "{\"items\":[{\"text\":\"Inspect code\",\"done\":false}]}";
+    todo_event.iTextLength = strlen(todo_event.sText);
+    if (!MdoSessionTodoProject("project-alpha", session_id, 777u,
+            &todo_event) ||
+        !MdoSessionTodoLoad("project-alpha", session_id, &todo_value))
+        goto done;
+    todo_json = xrtJsonStringify(todo_value, false, &todo_size);
+    printf("todo_snapshot=%s\n", todo_json != NULL ? todo_json : "missing");
+    xrtFree(todo_json); todo_json = NULL;
+    xrtValueRelease(todo_value); todo_value = NULL;
+    todo_event.sText = "{\"items\":[{\"text\":\"\",\"done\":false}]}";
+    todo_event.iTextLength = strlen(todo_event.sText);
+    printf("todo_invalid=%d\n", MdoSessionTodoProject(
+        "project-alpha", session_id, 778u, &todo_event) ? 1 : 0);
     MdoSessionRuntimeOptionsInit(&open);
     open.OnModelComplete = Complete;
     open.ModelUserData = &probe;
@@ -495,6 +518,7 @@ def write_site(site: Path) -> None:
         "src/modules/manager.c",
         "src/agents/runtime.c",
         "src/sessions/events.c",
+        "src/sessions/todo.c",
         "src/sessions/internal.h",
         "src/sessions/manager.c",
     ):
@@ -612,6 +636,8 @@ def main() -> int:
         assert "catalog_after_failed_create=count:2 diagnostics:0" in output, output
         assert "catalog_diagnostic=count:2 diagnostics:1" in output, output
         assert "recovery=calls:6 prior_prompt:1 prior_answer:1" in output, output
+        assert 'todo_snapshot={"items":[{"text":"Inspect code","done":false}],"schema_version":1,"event_id":777}' in output, output
+        assert "todo_invalid=0" in output, output
         first = re.search(r"events_first=count:(\d+) next:(\d+) latest:(\d+) lost:0", output)
         reopened = re.search(r"events_after_reopen=count:(\d+) next:(\d+) latest:(\d+) lost:1", output)
         assert first and int(first.group(1)) == 2 and int(first.group(3)) >= 2, output
@@ -619,6 +645,10 @@ def main() -> int:
         assert int(reopened.group(3)) > int(first.group(3)), output
         assert "probe_done=1" in output, output
         meta_files = list(home.glob("sessions/project-alpha/*/meta.json"))
+        todo_files = list(home.glob("sessions/project-alpha/*/todo.json"))
+        assert len(todo_files) == 1, todo_files
+        assert json.loads(todo_files[0].read_text(encoding="utf-8"))[
+            "items"][0]["text"] == "Inspect code"
         valid_meta = [path for path in meta_files if path.parent.name != "bad"]
         assert len(valid_meta) == 2, meta_files
         documents = {

@@ -98,6 +98,7 @@ bool MdoApiQueueRoute(MdoApiContext* pContext);
 bool MdoApiQueueItemRoute(MdoApiContext* pContext);
 bool MdoApiQueueInit(void);
 void MdoApiQueueUnit(void);
+bool MdoApiTodoRoute(MdoApiContext* pContext);
 bool MdoApiOperationsRoute(MdoApiContext* pContext);
 bool MdoApiOperationRoute(MdoApiContext* pContext);
 bool MdoApiSettingsPreviewRoute(MdoApiContext* pContext);

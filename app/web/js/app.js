@@ -21,6 +21,7 @@ import { recoveryStore, selectRecovery, loadRecovery } from "./state/recovery.js
 import { navigation } from "./state/navigation.js";
 import { createSessionList } from "./features/sessions/session-list.js";
 import { timelineStore, selectTimeline, clearTimeline, refreshSelectedTimeline } from "./features/chat/timeline-store.js";
+import { todoStore, selectTodo, clearTodo } from "./state/todo.js";
 import { createTimelineView } from "./features/chat/timeline.js";
 import { feedbackStore, selectFeedback, clearFeedback, setFeedback } from "./features/chat/feedback-store.js";
 import { createConversationDocks } from "./features/chat/conversation-docks.js";
@@ -151,6 +152,7 @@ export async function boot() {
   });
   createConversationDocks({
     container: $("#conversation-docks"), navigation, tasksStore, approvalsStore,
+    todoStore,
     runsStore,
     onOpenTasks: () => { selectInspectorTab("tasks"); setDrawer("inspector", true); },
     onChanged: () => Promise.all([loadTasks(), loadRuns()]),
@@ -455,6 +457,7 @@ export async function boot() {
     if (!key) {
       selectRecovery("", "");
       clearTimeline();
+      clearTodo();
       clearFeedback();
       sessionDetailStore.reset();
       sessionTitle.textContent = "新任务";
@@ -466,6 +469,7 @@ export async function boot() {
     selectRecovery(projectId, sessionId);
     sessionDetailStore.reset();
     selectTimeline(projectId, sessionId);
+    void selectTodo(projectId, sessionId);
     void selectFeedback(projectId, sessionId);
     queueBlocked.add(key);
     try {

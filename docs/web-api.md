@@ -30,7 +30,8 @@ Read snapshots:
   `/operations`;
 - `/projects/{project}/sessions/{session}`, `/runs/{run}`,
   `/schedules/{schedule}`, `/tasks/{task}`, `/operations/{operation}`, and
-  `/projects/{project}/sessions/{session}/recovery`.
+  `/projects/{project}/sessions/{session}/recovery` and
+  `/projects/{project}/sessions/{session}/todo`.
 
 Mutations:
 
@@ -87,6 +88,17 @@ clients the same recovery rule and creates no per-client server queue. The UI
 fetches a resource snapshot, replays after its last cursor, and backs off while
 the cursor is unchanged. Unknown event kinds remain ordered records and must
 not stop replay.
+
+`GET /projects/{project}/sessions/{session}/todo` returns the most recent
+successful main-Agent `mdo.todo` tool snapshot as `schema_version`, `event_id`,
+and an `items` array of `{text, done}` objects. A missing sidecar returns an
+empty list without creating Home. The tool submits a complete snapshot on each
+call, including an empty list to clear it; the event bridge validates and
+stores at most 24 items, 1024 UTF-8 bytes per item, and 12 KiB per snapshot.
+The journal records the original tool event, while the bounded `todo.json`
+sidecar serves quick reads.
+Pure read tools, including this plan emitter, follow the configured automatic
+read permission; effectful tools still use one-shot approval.
 
 ## Unified task output
 

@@ -524,6 +524,17 @@ select:focus-visible,
 .conversation-dock-actions button { min-height: 31px; padding: 0 10px; border: 1px solid var(--border-strong); border-radius: 7px; background: var(--surface); color: var(--ink); cursor: pointer; }
 .conversation-dock-actions button:last-child { border-color: var(--accent); background: var(--accent); color: var(--accent-ink); }
 .conversation-dock-actions button:disabled { opacity: .5; cursor: wait; }
+.todo-dock { padding: 9px 12px; }
+.todo-toggle { width: 100%; padding: 4px 2px; border: 0; background: transparent; color: var(--ink); text-align: left; font-family: inherit; font-size: 12px; font-weight: 650; cursor: pointer; }
+.todo-toggle::after { content: "⌄"; float: right; color: var(--muted); transform: rotate(-90deg); }
+.todo-toggle[aria-expanded="true"]::after { transform: none; }
+.todo-dock-list { display: grid; gap: 7px; margin: 8px 0 2px; padding: 0; list-style: none; }
+.todo-dock-list li { display: flex; gap: 9px; align-items: baseline; color: var(--muted); font-size: 12px; line-height: 1.4; }
+.todo-dock-list li span:last-child { min-width: 0; overflow-wrap: anywhere; }
+.todo-dock-list li.current { color: var(--ink); }
+.todo-dock-list li.done { text-decoration: line-through; }
+.todo-dock-mark { flex: none; width: 14px; color: var(--accent); }
+.todo-dock-error { margin: 0; padding: 8px 12px; border: 1px solid var(--danger); border-radius: var(--radius-sm); color: var(--danger); font-size: 11px; }
 .prompt-queue { width: min(760px, calc(100% - 40px)); margin: 0 auto 20px; padding: 10px 12px; border: 1px solid var(--border-strong); border-radius: var(--radius-md); background: var(--surface-raised); }
 .prompt-queue[hidden] { display: none; }
 .prompt-queue-header { display: flex; align-items: center; justify-content: space-between; gap: 10px; }

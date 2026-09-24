@@ -174,6 +174,12 @@ xwork_permission_decision MdoApprovalOnPermission(void* UserData,
     xwork_permission_decision Result = XWORK_PERMISSION_DENY;
     size_t Index;
     (void)UserData;
+    /* The configured profiles permit ordinary reads without a prompt.
+     * Returning DEFAULT lets xwork apply its read-only fallback policy. */
+    if ( Request != NULL &&
+         (Request->uEffects &
+          ~((xwork_tool_effects)XWORK_TOOL_EFFECT_READ)) == 0u )
+        return XWORK_PERMISSION_DEFAULT;
     if ( !MdoApprovalCapture(&Captured, Request) ||
          !g_MdoApprovals.Initialized || g_MdoApprovals.Lock == NULL ||
          !xrtMutexLock(g_MdoApprovals.Lock) ) return XWORK_PERMISSION_DENY;

@@ -670,6 +670,11 @@ bool MdoSessionEventBridgeOnEvent(void* Value, const xwork_event* Event)
     if ( Bridge == NULL || Event == NULL ) return false;
     xrtMutexLock(Bridge->Lock);
     Ok = MdoEventsAppend(Bridge, Event);
+    /* A UI projection failure must not cancel a successful Agent tool call.
+     * The journal remains authoritative for the completed tool event. */
+    if ( Ok && !MdoSessionTodoProject(Bridge->ProjectId,
+            Bridge->SessionId, Bridge->NextEventId - 1u, Event) )
+        xrtClearError();
     xrtMutexUnlock(Bridge->Lock);
     if ( !Ok ) return false;
     return Bridge->UserEvent == NULL ||
