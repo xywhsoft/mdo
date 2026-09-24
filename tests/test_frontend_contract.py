@@ -106,7 +106,10 @@ class FrontendContractTests(unittest.TestCase):
         self.assertIn("await startRun", app)
         self.assertIn("await cancelRun", app)
         self.assertIn("await readRun", app)
-        self.assertIn("if (!text || activeRun) return", app)
+        self.assertIn("if (!text || submitting) return", app)
+        self.assertIn("await dispatchQueued()", app)
+        self.assertIn("promptQueue.enqueue", app)
+        self.assertIn("if (terminalState(run))", app)
         self.assertIn("/runs/${run}", runs)
 
     def test_settings_use_preview_etag_and_server_side_merge(self) -> None:

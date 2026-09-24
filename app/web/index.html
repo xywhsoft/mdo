@@ -118,6 +118,7 @@
 
         <ol class="timeline" id="timeline" aria-live="polite" aria-relevant="additions text" tabindex="-1"></ol>
         <div class="conversation-docks" id="conversation-docks" aria-live="polite" hidden></div>
+        <div class="prompt-queue" id="prompt-queue" aria-live="polite" hidden></div>
         <div class="timeline-sentinel" id="timeline-sentinel" aria-hidden="true"></div>
       </section>
 
@@ -145,7 +146,7 @@
                 </button>
                 <div class="context-meter-panel" id="context-meter-panel" hidden></div>
               </div>
-              <span class="composer-hint">Enter 发送 · Shift Enter 换行</span>
+              <span class="composer-hint" id="composer-hint">Enter 发送 · Shift Enter 换行</span>
               <button class="send-button" id="send" type="submit" aria-label="发送任务">
                 <span class="icon" data-icon="arrow-up" aria-hidden="true"></span>
               </button>

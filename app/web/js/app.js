@@ -23,6 +23,7 @@ import { createSessionList } from "./features/sessions/session-list.js";
 import { timelineStore, selectTimeline, clearTimeline, refreshSelectedTimeline } from "./features/chat/timeline-store.js";
 import { createTimelineView } from "./features/chat/timeline.js";
 import { createConversationDocks } from "./features/chat/conversation-docks.js";
+import { createPromptQueue } from "./features/chat/prompt-queue.js";
 import { createTokenMeter } from "./features/chat/token-meter.js";
 import { createTaskPanel } from "./features/tasks/task-panel.js";
 import { createDecisionPanel } from "./features/approvals/decision-panel.js";
@@ -67,6 +68,7 @@ export async function boot() {
   const send = $("#send");
   const stop = $("#stop");
   const composerError = $("#composer-error");
+  const composerHint = $("#composer-hint");
   const runStatus = $("#run-status");
   const runtimeState = $("#runtime-state");
   const runtimeLabel = $("#runtime-label");
@@ -90,6 +92,10 @@ export async function boot() {
   let selectedKey = "";
   let tasksTimer = 0;
   let approvalsTimer = 0;
+  let submitting = false;
+  let interruptRequested = false;
+  const drafts = new Map();
+  const queueBlocked = new Set();
 
   const sessionList = createSessionList({
     container: $("#session-list"),
@@ -139,6 +145,14 @@ export async function boot() {
     runsStore,
     onOpenTasks: () => { selectInspectorTab("tasks"); setDrawer("inspector", true); },
     onChanged: () => Promise.all([loadTasks(), loadRuns()]),
+  });
+  const promptQueue = createPromptQueue({
+    container: $("#prompt-queue"), navigation,
+    onRetry: () => {
+      const selected = navigation.get();
+      queueBlocked.delete(`${selected.projectId}/${selected.sessionId}`);
+      void dispatchQueued();
+    },
   });
   const tokenMeter = createTokenMeter({
     root: $("#context-meter"), trigger: $("#context-meter-trigger"),
@@ -196,10 +210,14 @@ export async function boot() {
     const shown = run ?? { state: sessionWritable ? "idle" : selectedSessionStatus };
     runStatus.dataset.state = shown.state;
     runStatus.lastElementChild.textContent = runStateText(shown.state);
-    send.hidden = Boolean(activeRun);
+    send.hidden = false;
     stop.hidden = !activeRun;
-    prompt.disabled = Boolean(activeRun) || !sessionWritable;
-    send.disabled = !sessionWritable;
+    prompt.disabled = !sessionWritable;
+    send.disabled = !sessionWritable || submitting;
+    send.setAttribute("aria-label", activeRun ? "加入待发送队列" : "发送任务");
+    composerHint.textContent = activeRun
+      ? "Enter 排队 · Ctrl Enter 中断并发送"
+      : "Enter 发送 · Shift Enter 换行";
     mobileActivity.hidden = !activeRun;
   }
 
@@ -263,7 +281,10 @@ export async function boot() {
     const run = [...(runsStore.get().data?.items ?? [])].reverse().find((item) =>
       item.project_id === selected.projectId && item.session_id === selected.sessionId && !terminalState(item));
     if (run) monitorRun(run);
-    else if (!activeRun) setRun(null);
+    else if (!activeRun) {
+      setRun(null);
+      void dispatchQueued();
+    }
   }
   runsStore.subscribe(findActiveRun);
 
@@ -277,7 +298,7 @@ export async function boot() {
         await refreshSelectedTimeline();
         if (terminalState(run)) {
           await Promise.all([loadSessions(), loadRuns(), loadTasks(), loadRecovery()]);
-          prompt.disabled = false;
+          await dispatchQueued();
           prompt.focus();
           return;
         }
@@ -294,6 +315,32 @@ export async function boot() {
     if (activeRun?.id === run.id && runMonitor) return;
     setRun(run);
     scheduleRunPoll(300);
+  }
+
+  async function dispatchQueued() {
+    const selected = navigation.get();
+    const key = `${selected.projectId}/${selected.sessionId}`;
+    const session = sessionDetailStore.get().data;
+    if (!selected.sessionId || !session || session.project_id !== selected.projectId ||
+        session.id !== selected.sessionId || session.status !== "active" || activeRun ||
+        queueBlocked.has(key) || !promptQueue.peek(selected.projectId, selected.sessionId)) return;
+    if ((runsStore.get().data?.items ?? []).some((run) =>
+      run.project_id === selected.projectId && run.session_id === selected.sessionId && !terminalState(run))) return;
+    await promptQueue.exclusive(async () => {
+      const entry = promptQueue.peek(selected.projectId, selected.sessionId);
+      if (!entry) return;
+      try {
+        const run = await startRun(selected.projectId, selected.sessionId, entry.text);
+        promptQueue.remove(selected.projectId, selected.sessionId, entry.id);
+        hideComposerError();
+        if (navigation.get().projectId === selected.projectId &&
+            navigation.get().sessionId === selected.sessionId) monitorRun(run);
+        await Promise.all([refreshSelectedTimeline(), loadTasks(), loadRuns(), loadRecovery()]);
+      } catch (error) {
+        queueBlocked.add(key);
+        showComposerError(error);
+      }
+    });
   }
 
   navigation.subscribe(async ({ view, projectId, sessionId, settingsSection }) => {
@@ -319,7 +366,11 @@ export async function boot() {
     }
     const key = projectId && sessionId ? `${projectId}/${sessionId}` : "";
     if (key === selectedKey) return;
+    drafts.set(selectedKey, prompt.value);
     selectedKey = key;
+    prompt.value = drafts.get(key) ?? "";
+    resizePrompt();
+    tokenMeter.refresh();
     window.clearTimeout(runMonitor);
     runMonitor = 0;
     activeRun = null;
@@ -340,6 +391,7 @@ export async function boot() {
     selectTimeline(projectId, sessionId);
     await Promise.all([loadSession(projectId, sessionId), loadRuns(), loadRecovery()]);
     findActiveRun();
+    void dispatchQueued();
   });
 
   function hideComposerError() {
@@ -357,6 +409,7 @@ export async function boot() {
     const title = text.trim().split(/\r?\n/, 1)[0].slice(0, 80);
     const session = await createSession({ project_id: "default", title });
     navigation.select(session.project_id, session.id);
+    drafts.delete("");
     selectTimeline(session.project_id, session.id);
     return { projectId: session.project_id, sessionId: session.id };
   }
@@ -364,13 +417,35 @@ export async function boot() {
   composer.addEventListener("submit", async (event) => {
     event.preventDefault();
     const text = prompt.value.trim();
-    if (!text || activeRun) return;
+    const interrupt = interruptRequested;
+    interruptRequested = false;
+    if (!text || submitting) return;
     hideComposerError();
+    submitting = true;
     send.disabled = true;
     try {
       const selected = await ensureSession(text);
+      if (activeRun) {
+        if (!promptQueue.enqueue(selected.projectId, selected.sessionId, text, { first: interrupt }))
+          throw new Error("待发送队列已满（最多 20 条）");
+        queueBlocked.delete(`${selected.projectId}/${selected.sessionId}`);
+        prompt.value = "";
+        drafts.delete(`${selected.projectId}/${selected.sessionId}`);
+        resizePrompt();
+        tokenMeter.refresh();
+        if (interrupt) {
+          const run = await cancelRun(activeRun.id);
+          if (terminalState(run)) {
+            setRun(run);
+            await Promise.all([refreshSelectedTimeline(), loadTasks(), loadRuns()]);
+            await dispatchQueued();
+          } else monitorRun(run);
+        }
+        return;
+      }
       const run = await startRun(selected.projectId, selected.sessionId, text);
       prompt.value = "";
+      drafts.delete(`${selected.projectId}/${selected.sessionId}`);
       resizePrompt();
       tokenMeter.refresh();
       monitorRun(run);
@@ -379,6 +454,7 @@ export async function boot() {
       showComposerError(error);
       prompt.focus();
     } finally {
+      submitting = false;
       send.disabled = !sessionWritable;
     }
   });
@@ -390,6 +466,7 @@ export async function boot() {
       const run = await cancelRun(activeRun.id);
       setRun(run);
       await Promise.all([refreshSelectedTimeline(), loadTasks(), loadRuns()]);
+      if (terminalState(run)) await dispatchQueued();
     } catch (error) {
       showComposerError(error);
     } finally {
@@ -401,10 +478,14 @@ export async function boot() {
     prompt.style.height = "auto";
     prompt.style.height = `${Math.min(prompt.scrollHeight, 220)}px`;
   }
-  prompt.addEventListener("input", resizePrompt);
+  prompt.addEventListener("input", () => {
+    resizePrompt();
+    drafts.set(selectedKey, prompt.value);
+  });
   prompt.addEventListener("keydown", (event) => {
     if (event.key === "Enter" && !event.shiftKey && !event.isComposing) {
       event.preventDefault();
+      interruptRequested = Boolean(activeRun && (event.ctrlKey || event.metaKey));
       composer.requestSubmit();
     }
   });

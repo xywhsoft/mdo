@@ -500,6 +500,15 @@ select:focus-visible,
 .conversation-dock-actions button { min-height: 31px; padding: 0 10px; border: 1px solid var(--border-strong); border-radius: 7px; background: var(--surface); color: var(--ink); cursor: pointer; }
 .conversation-dock-actions button:last-child { border-color: var(--accent); background: var(--accent); color: var(--accent-ink); }
 .conversation-dock-actions button:disabled { opacity: .5; cursor: wait; }
+.prompt-queue { width: min(760px, calc(100% - 40px)); margin: 0 auto 20px; padding: 10px 12px; border: 1px solid var(--border-strong); border-radius: var(--radius-md); background: var(--surface-raised); }
+.prompt-queue[hidden] { display: none; }
+.prompt-queue-header { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.prompt-queue h3 { margin: 0; font-size: 12px; }
+.prompt-queue button { padding: 3px 7px; border: 0; border-radius: 6px; background: transparent; color: var(--accent); font-size: 11px; cursor: pointer; }
+.prompt-queue button:hover { background: var(--surface-hover); }
+.prompt-queue-list { display: grid; gap: 4px; margin: 7px 0 0; padding: 0; list-style: none; counter-reset: queued; }
+.prompt-queue-list li { display: flex; align-items: center; justify-content: space-between; gap: 10px; min-width: 0; padding: 6px 8px; border-radius: 6px; background: var(--surface-hover); font-size: 11px; }
+.prompt-queue-list li span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .timeline-sentinel { height: 1px; }
 
 .composer-region {
@@ -913,6 +922,7 @@ select:focus-visible,
   .starter { min-height: 62px; }
   .timeline { width: calc(100% - 26px); padding-top: 20px; }
   .conversation-docks { width: calc(100% - 26px); }
+  .prompt-queue { width: calc(100% - 26px); }
   .composer-hint { display: none; }
   .composer-input-estimate { font-size: 9px; }
   .option-chip { max-width: 130px; padding: 0 6px; }
