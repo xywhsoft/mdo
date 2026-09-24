@@ -50,6 +50,7 @@ import { createResourcePanels } from "./features/settings/resource-panels.js";
 import { createKeyboardShortcuts } from "./features/shell/keyboard-shortcuts.js";
 import { createRunNotifications } from "./features/shell/run-notifications.js";
 import { startWorkspaceNavigation } from "./features/shell/workspace-startup.js";
+import { createPaneLayout } from "./features/shell/pane-layout.js";
 import { api } from "./api/client.js";
 import { clear, element, errorMessage, toast } from "./utils/dom.js";
 
@@ -82,7 +83,7 @@ export async function boot() {
   const entryHash = location.hash;
 
   const shell = $("#app-shell");
-  const wideLayout = window.matchMedia("(min-width: 1181px)");
+  const wideLayout = window.matchMedia("(min-width: 1204px)");
   const mobileLayout = window.matchMedia("(max-width: 760px)");
   shell.dataset.inspector = wideLayout.matches ? "open" : "closed";
   const prompt = $("#prompt");
@@ -107,6 +108,7 @@ export async function boot() {
   const agentWorkspaceRegions = [$(".workspace-header"), $(".conversation"), $(".composer-region")];
   let settingsActive = false;
   let inspectorBeforeSettings = shell.dataset.inspector;
+  let paneLayout = null;
   let sessionWritable = true;
   let selectedSessionStatus = "active";
   let activeRun = null;
@@ -678,6 +680,7 @@ export async function boot() {
       $("#settings-actions").hidden = standalonePage;
       if (settingsSection === "schedules") void schedulePanel.refresh();
       closeDrawers();
+      setDrawer("inspector", false, { persist: false });
       if (!settingsStore.get().data) await loadSettings();
       return;
     }
@@ -687,7 +690,9 @@ export async function boot() {
     skipLink.textContent = "跳到对话";
     if (settingsActive) {
       settingsActive = false;
-      setDrawer("inspector", inspectorBeforeSettings === "open" && wideLayout.matches);
+      setDrawer("inspector", (paneLayout?.inspectorOpen() ??
+        inspectorBeforeSettings === "open") && wideLayout.matches,
+        { persist: false });
     }
     const key = projectId && sessionId ? `${projectId}/${sessionId}` : "";
     if (!key) {
@@ -1062,27 +1067,50 @@ export async function boot() {
     }
   });
 
-  function setDrawer(name, open) {
+  function setDrawer(name, open, options = {}) {
     shell.dataset[name] = open ? "open" : "closed";
-    const button = name === "sidebar" ? $("#open-sidebar") : $("#open-inspector");
+    const button = name === "sidebar" ?
+      (mobileLayout.matches ? $("#open-sidebar") : $("#desktop-sidebar-toggle"))
+      : $("#open-inspector");
     const panel = name === "sidebar" ? $("#sidebar") : $("#inspector");
-    const inactive = name === "sidebar" ? mobileLayout.matches && !open : !open;
+    const inactive = !open;
     if (inactive && panel.contains(document.activeElement)) button.focus();
     panel.inert = inactive;
     button.setAttribute("aria-expanded", String(open));
+    if (name === "sidebar")
+      $("#desktop-sidebar-toggle").setAttribute("aria-expanded", String(open));
     if (name === "inspector") $("#toggle-inspector").setAttribute("aria-expanded", String(open));
+    if (options.persist === false) paneLayout?.apply();
+    else paneLayout?.remember(name, open);
   }
-  function closeDrawers() { setDrawer("sidebar", false); setDrawer("inspector", false); }
+  function closeDrawers() {
+    if (mobileLayout.matches) setDrawer("sidebar", false, { persist: false });
+    if (!wideLayout.matches) setDrawer("inspector", false, { persist: false });
+  }
   $("#open-sidebar").addEventListener("click", () => setDrawer("sidebar", true));
   $("#close-sidebar").addEventListener("click", () => setDrawer("sidebar", false));
+  $("#desktop-sidebar-toggle").addEventListener("click", () => setDrawer("sidebar", true));
   $("#open-inspector").addEventListener("click", () => setDrawer("inspector", true));
   $("#close-inspector").addEventListener("click", () => setDrawer("inspector", false));
   $("#toggle-inspector").addEventListener("click", () => setDrawer("inspector", shell.dataset.inspector !== "open"));
   $("#scrim").addEventListener("click", closeDrawers);
-  wideLayout.addEventListener("change", (event) => setDrawer("inspector", !settingsActive && event.matches));
-  mobileLayout.addEventListener("change", () => setDrawer("sidebar", shell.dataset.sidebar === "open"));
-  setDrawer("sidebar", false);
-  setDrawer("inspector", !settingsActive && wideLayout.matches);
+  wideLayout.addEventListener("change", (event) => setDrawer("inspector",
+    !settingsActive && event.matches && (paneLayout?.inspectorOpen() ?? true),
+    { persist: false }));
+  mobileLayout.addEventListener("change", (event) => setDrawer("sidebar",
+    !event.matches && (paneLayout?.sidebarOpen() ?? true), { persist: false }));
+  setDrawer("sidebar", !mobileLayout.matches, { persist: false });
+  setDrawer("inspector", !settingsActive && wideLayout.matches, { persist: false });
+  paneLayout = createPaneLayout({ shell, mobileLayout, wideLayout,
+    sidebarHandle: $("#sidebar-resize"), inspectorHandle: $("#inspector-resize"),
+    onLoaded(saved) {
+      setDrawer("sidebar", !mobileLayout.matches && saved.sidebar_open,
+        { persist: false });
+      setDrawer("inspector", !settingsActive && wideLayout.matches &&
+        saved.inspector_open, { persist: false });
+    },
+  });
+  void paneLayout.load();
 
   function selectInspectorTab(tabName) {
     for (const name of ["tasks", "decisions", "context"]) {

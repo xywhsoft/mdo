@@ -594,6 +594,13 @@ def run_probe(host: Path) -> None:
                 assert not home.exists(), home
                 status, _, body = request(port, "GET", "/api/v1/memory/global")
                 assert status == 200 and json.loads(body)["data"]["items"] == [], body
+                status, _, body = request(port, "GET", "/api/v1/pane-layout")
+                assert status == 200, (status, body)
+                layout_defaults = json.loads(body)["data"]
+                assert layout_defaults == {
+                    "sidebar_width": 272, "inspector_width": 336,
+                    "sidebar_open": True, "inspector_open": True,
+                }, layout_defaults
                 assert not home.exists(), home
 
                 status, headers, body = request(
@@ -744,6 +751,26 @@ def run_probe(host: Path) -> None:
                 assert status == 200, (status, body)
                 status, _, body = request(port, "GET", memory_path + "/style")
                 assert status == 404, (status, body)
+
+                layout_path = "/api/v1/pane-layout"
+                layout = {
+                    "sidebar_width": 354, "inspector_width": 412,
+                    "sidebar_open": False, "inspector_open": True,
+                }
+                status, _, body = request(port, "PUT", layout_path,
+                    body=json.dumps({**layout, "sidebar_width": 600}).encode(),
+                    headers={"Content-Type": "application/json"})
+                assert status == 422, (status, body)
+                status, _, body = request(port, "PUT", layout_path,
+                    body=json.dumps(layout).encode(),
+                    headers={"Content-Type": "application/json"})
+                assert status == 200 and json.loads(body)["data"] == layout, body
+                status, _, body = request(port, "GET", layout_path)
+                assert status == 200 and json.loads(body)["data"] == layout, body
+                saved_layout = json.loads((home / "data/pane-layout.json")
+                    .read_text(encoding="utf-8"))
+                assert saved_layout["schema_version"] == 1, saved_layout
+                assert all(saved_layout[key] == value for key, value in layout.items()), saved_layout
 
                 resources = (
                     "settings", "models", "agents", "modules", "skills",

@@ -253,8 +253,10 @@ class FrontendContractTests(unittest.TestCase):
         self.assertNotIn("innerHTML", panel)
 
     def test_responsive_and_accessibility_modes_are_explicit(self) -> None:
-        self.assertIn("grid-template-columns: var(--sidebar-width) minmax(0, 1fr) var(--inspector-width)", self.css)
-        self.assertIn("@media (max-width: 1180px)", self.css)
+        self.assertIn("grid-template-columns: var(--sidebar-column, var(--sidebar-width)) minmax(0, 1fr) var(--inspector-column, var(--inspector-width))", self.css)
+        self.assertIn('id="sidebar-resize" role="separator"', self.index)
+        self.assertIn('id="inspector-resize" role="separator"', self.index)
+        self.assertIn("@media (max-width: 1203px)", self.css)
         self.assertIn("@media (max-width: 760px)", self.css)
         self.assertIn("@media (prefers-reduced-motion: reduce)", self.css)
         self.assertIn("[hidden] { display: none !important; }", self.css)

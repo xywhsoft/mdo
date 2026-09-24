@@ -69,6 +69,7 @@ bool MdoApiReplyDownload(MdoApiContext* pContext, const void* pBody,
 bool MdoApiBootstrapRoute(MdoApiContext* pContext);
 bool MdoApiSettingsRoute(MdoApiContext* pContext);
 bool MdoApiWorkspaceStateRoute(MdoApiContext* pContext);
+bool MdoApiPaneLayoutRoute(MdoApiContext* pContext);
 bool MdoApiModelsRoute(MdoApiContext* pContext);
 bool MdoApiAgentsRoute(MdoApiContext* pContext);
 bool MdoApiModulesRoute(MdoApiContext* pContext);

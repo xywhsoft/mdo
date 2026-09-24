@@ -93,6 +93,9 @@
 
     <main class="workspace" aria-label="Agent 工作区">
       <header class="workspace-header">
+        <button class="icon-button desktop-sidebar-toggle" id="desktop-sidebar-toggle" type="button" aria-label="展开会话导航" aria-controls="sidebar" aria-expanded="false">
+          <span class="icon" data-icon="menu" aria-hidden="true"></span>
+        </button>
         <div class="session-heading">
           <h1 id="session-title">新任务</h1>
           <p id="session-subtitle">选择会话，或向默认 Agent 发起任务</p>
@@ -367,6 +370,9 @@
         </footer>
       </section>
     </main>
+
+    <div class="pane-resize-handle sidebar-resize-handle" id="sidebar-resize" role="separator" aria-label="调整会话导航宽度" aria-orientation="vertical" aria-valuemin="264" aria-valuemax="420" aria-valuenow="272" tabindex="0"></div>
+    <div class="pane-resize-handle inspector-resize-handle" id="inspector-resize" role="separator" aria-label="调整任务面板宽度" aria-orientation="vertical" aria-valuemin="300" aria-valuemax="520" aria-valuenow="336" tabindex="0"></div>
 
     <aside class="inspector" id="inspector" aria-label="任务与上下文">
       <div class="inspector-header">

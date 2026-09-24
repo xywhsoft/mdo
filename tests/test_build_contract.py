@@ -93,6 +93,7 @@ class BuildContractTests(unittest.TestCase):
             "src/api/catalogs.c",
             "src/api/state.c",
             "src/api/workspace_state.c",
+            "src/api/pane_layout.c",
             "src/api/inventory.c",
             "src/api/memory.c",
             "src/api/tasks.c",

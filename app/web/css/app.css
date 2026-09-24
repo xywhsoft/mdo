@@ -131,8 +131,9 @@ select:focus-visible,
 .skip-link:focus { transform: translateY(0); }
 
 .app-shell {
+  position: relative;
   display: grid;
-  grid-template-columns: var(--sidebar-width) minmax(0, 1fr) var(--inspector-width);
+  grid-template-columns: var(--sidebar-column, var(--sidebar-width)) minmax(0, 1fr) var(--inspector-column, var(--inspector-width));
   height: 100dvh;
   min-width: 0;
 }
@@ -144,8 +145,10 @@ select:focus-visible,
   min-width: 0;
   background: var(--surface);
 }
+.inspector { grid-column: 3; }
 
 .sidebar {
+  grid-column: 1;
   display: flex;
   flex-direction: column;
   border-right: 1px solid var(--border);
@@ -203,6 +206,14 @@ select:focus-visible,
 .icon { display: inline-flex; width: 18px; height: 18px; }
 .icon svg { width: 100%; height: 100%; stroke: currentColor; }
 .sidebar-close, .inspector-close { display: none; }
+.desktop-sidebar-toggle { display: none; }
+
+.pane-resize-handle { position: absolute; z-index: 12; top: 0; bottom: 0; width: 8px; transform: translateX(-50%); cursor: col-resize; touch-action: none; }
+.pane-resize-handle::after { position: absolute; top: 0; bottom: 0; left: 3px; width: 2px; content: ""; background: transparent; }
+.pane-resize-handle:hover::after, .pane-resize-handle:focus-visible::after, .pane-resize-handle[data-dragging]::after { background: var(--focus); }
+.sidebar-resize-handle { left: var(--sidebar-column, var(--sidebar-width)); }
+.inspector-resize-handle { left: calc(100% - var(--inspector-column, var(--inspector-width))); }
+.app-shell[data-dragging] { user-select: none; }
 
 .new-task-actions { display: flex; align-items: center; gap: 2px; }
 .new-task-actions .new-task-button { flex: 1; width: auto; }
@@ -405,6 +416,7 @@ select:focus-visible,
 .run-status[data-state="running"] .status-dot { background: var(--warning); animation: pulse 1.5s ease-in-out infinite; }
 
 .workspace {
+  grid-column: 2;
   position: relative;
   display: grid;
   min-width: 0;
@@ -1114,13 +1126,24 @@ select:focus-visible,
 @keyframes pulse { 50% { opacity: .35; transform: scale(.82); } }
 @keyframes toast-in { from { opacity: 0; transform: translateY(8px); } }
 
-@media (min-width: 1181px) {
-  .app-shell[data-inspector="closed"] { grid-template-columns: var(--sidebar-width) minmax(0, 1fr); }
+@media (min-width: 1204px) {
+  .app-shell[data-inspector="closed"] { grid-template-columns: var(--sidebar-column, var(--sidebar-width)) minmax(0, 1fr); }
   .app-shell[data-inspector="closed"] .inspector { display: none; }
+  .app-shell[data-inspector="closed"] .inspector-resize-handle { display: none; }
 }
 
-@media (max-width: 1180px) {
-  .app-shell { grid-template-columns: var(--sidebar-width) minmax(0, 1fr); }
+@media (min-width: 761px) {
+  .app-shell[data-sidebar="closed"] { grid-template-columns: 0 minmax(0, 1fr) var(--inspector-column, var(--inspector-width)); }
+  .app-shell[data-sidebar="closed"][data-inspector="closed"] { grid-template-columns: 0 minmax(0, 1fr); }
+  .app-shell[data-sidebar="closed"] .sidebar, .app-shell[data-sidebar="closed"] .sidebar-resize-handle { display: none; }
+  .app-shell[data-sidebar="closed"] .desktop-sidebar-toggle { display: inline-grid; }
+  .app-shell[data-sidebar="open"] .sidebar-close { display: inline-grid; }
+}
+
+@media (max-width: 1203px) {
+  .app-shell { grid-template-columns: var(--sidebar-column, var(--sidebar-width)) minmax(0, 1fr); }
+  .app-shell[data-sidebar="closed"] { grid-template-columns: 0 minmax(0, 1fr); }
+  .inspector-resize-handle { display: none; }
   .inspector {
     position: fixed;
     z-index: 30;
@@ -1140,6 +1163,8 @@ select:focus-visible,
 @media (max-width: 760px) {
   :root { --header-height: 52px; }
   .app-shell { grid-template-columns: minmax(0, 1fr); grid-template-rows: 52px minmax(0, 1fr); }
+  .app-shell[data-sidebar="closed"] { grid-template-columns: minmax(0, 1fr); }
+  .pane-resize-handle { display: none; }
   .mobile-bar {
     display: flex;
     min-width: 0;
@@ -1165,7 +1190,7 @@ select:focus-visible,
   }
   .app-shell[data-sidebar="open"] .sidebar { transform: translateX(0); }
   .sidebar-close { display: inline-grid; }
-  .workspace { grid-row: 2; min-height: 0; }
+  .workspace { grid-column: 1; grid-row: 2; min-height: 0; }
   .workspace-header { display: none; }
   .workspace { grid-template-rows: minmax(0, 1fr) auto; }
   .conversation { grid-row: 1; }
