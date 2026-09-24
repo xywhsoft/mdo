@@ -32,7 +32,8 @@ Read snapshots:
   `/schedules/{schedule}`, `/tasks/{task}`, `/operations/{operation}`, and
   `/projects/{project}/sessions/{session}/recovery` and
   `/projects/{project}/sessions/{session}/todo` and
-  `/projects/{project}/sessions/{session}/asks`.
+  `/projects/{project}/sessions/{session}/asks` and
+  `/projects/{project}/sessions/{session}/workspace/files?q={query}`.
 
 Mutations:
 
@@ -49,6 +50,16 @@ Mutations:
 Module reload and MCP refresh use retained operation IDs. The caller polls the
 operation resource and can request cancellation without depending on an HTTP
 connection remaining open.
+
+The workspace file route lists relative file names for composer `@` completion;
+it never reads file content. `q` is required, UTF-8, and at most 128 bytes.
+Matching is case insensitive for ASCII and ranks basename prefixes first.
+The server follows the session's workspace root, skips child symlinks and
+hidden/build directories, scans at most 5000 entries in 128 directories and
+five levels, and returns at most 12 names. `truncated` indicates that a scan
+limit or result limit was reached; `scanned` reports entries visited. The UI
+debounces requests and shows the first eight candidates. A selected name is
+inserted into the prompt as a text reference, with quotes for spaces.
 
 ## Settings transactions
 

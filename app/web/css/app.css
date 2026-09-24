@@ -585,6 +585,11 @@ select:focus-visible,
 .slash-option { display: flex; align-items: center; gap: 16px; min-height: 34px; padding: 6px 10px; border-radius: var(--radius-sm); color: var(--muted); cursor: pointer; }
 .slash-option code { min-width: 80px; color: var(--ink); font: inherit; font-weight: 650; }
 .slash-option[aria-selected="true"], .slash-option:hover { background: var(--surface-hover); }
+.file-mention-menu { position: absolute; z-index: 16; left: 0; right: 0; bottom: calc(100% + 8px); max-height: min(320px, 40vh); overflow-y: auto; padding: 5px; border: 1px solid var(--border-strong); border-radius: var(--radius-md); background: var(--surface-raised); box-shadow: 0 12px 30px rgb(0 0 0 / 14%); }
+.file-mention-menu[hidden] { display: none; }
+.file-mention-option { display: flex; align-items: center; min-height: 34px; padding: 6px 10px; border-radius: var(--radius-sm); color: var(--ink); cursor: pointer; }
+.file-mention-option span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.file-mention-option[aria-selected="true"], .file-mention-option:hover { background: var(--surface-hover); }
 .composer textarea {
   display: block;
   width: 100%;

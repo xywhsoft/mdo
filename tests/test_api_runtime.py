@@ -1471,6 +1471,37 @@ def run_probe(host: Path) -> None:
 
                 session_path = (
                     f"/api/v1/projects/api-project/sessions/{session_id}")
+                (base / "mention-ref.c").write_text("// fixture", encoding="utf-8")
+                (base / "mention-fixture").mkdir()
+                (base / "mention-fixture/mention-ref nested.c").write_text(
+                    "// fixture", encoding="utf-8")
+                (base / ".hidden").mkdir()
+                (base / ".hidden/mention-ref-secret.c").write_text(
+                    "// fixture", encoding="utf-8")
+                files_path = session_path + "/workspace/files"
+                status, headers, body = request(
+                    port, "GET", files_path + "?q=mention-ref")
+                files = json.loads(body)
+                assert status == 200, (status, body)
+                assert_common(headers, files)
+                assert files["data"]["items"] == [
+                    "mention-ref.c", "mention-fixture/mention-ref nested.c"], files
+                assert files["data"]["query"] == "mention-ref", files
+                assert isinstance(files["data"]["truncated"], bool), files
+                status, _, body = request(
+                    port, "GET", files_path + "?q=MENTION-REF")
+                assert status == 200 and json.loads(body)["data"]["items"] == [
+                    "mention-ref.c", "mention-fixture/mention-ref nested.c"], body
+                status, _, _ = request(port, "HEAD", files_path + "?q=mention-ref")
+                assert status == 200, status
+                status, _, body = request(port, "GET", files_path + "?q=%00")
+                assert status == 400 and json.loads(body)["error"][
+                    "code"] == "invalid_query", (status, body)
+                status, _, body = request(
+                    port, "GET", session_path.replace(session_id, "missing") +
+                    "/workspace/files?q=mention-ref")
+                assert status == 404 and json.loads(body)["error"][
+                    "code"] == "session_not_found", (status, body)
                 status, _, body = request(port, "GET", "/api/v1/draft")
                 assert status == 200 and json.loads(body)["data"] == {
                     "revision": 0, "text": ""}, (status, body)

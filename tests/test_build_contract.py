@@ -93,6 +93,7 @@ class BuildContractTests(unittest.TestCase):
             "src/api/tasks.c",
             "src/api/approvals.c",
             "src/api/asks.c",
+            "src/api/workspace_files.c",
             "src/api/runs.c",
             "src/api/recovery.c",
             "src/api/schedules.c",
@@ -131,6 +132,7 @@ class BuildContractTests(unittest.TestCase):
         self.assertEqual(first.count('#include "../src/asks/manager.c"'), 1)
         self.assertEqual(first.count('#include "../src/api/approvals.c"'), 1)
         self.assertEqual(first.count('#include "../src/api/asks.c"'), 1)
+        self.assertEqual(first.count('#include "../src/api/workspace_files.c"'), 1)
         self.assertEqual(first.count('#include "../src/api/router.c"'), 1)
         self.assertEqual(first.count('#include "../src/bootstrap/service.c"'), 1)
         self.assertIn(self.lock["xrt"]["commit"], first)

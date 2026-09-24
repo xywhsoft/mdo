@@ -29,6 +29,7 @@ import { createConversationDocks } from "./features/chat/conversation-docks.js";
 import { createPromptQueue } from "./features/chat/prompt-queue.js";
 import { createDraftStore } from "./features/chat/draft-store.js";
 import { createSlashCommands } from "./features/chat/slash-commands.js";
+import { createFileMentions } from "./features/chat/file-mentions.js";
 import { createComposerProfile, fillReasoningOptions } from "./features/chat/composer-profile.js";
 import { createTokenMeter } from "./features/chat/token-meter.js";
 import { createTaskPanel } from "./features/tasks/task-panel.js";
@@ -199,6 +200,7 @@ export async function boot() {
       }
     },
   });
+  const fileMentions = createFileMentions({ composer, input: prompt, navigation });
   const tokenMeter = createTokenMeter({
     root: $("#context-meter"), trigger: $("#context-meter-trigger"),
     ring: $("#context-meter-ring"), panel: $("#context-meter-panel"),
@@ -508,6 +510,7 @@ export async function boot() {
 
   composer.addEventListener("submit", async (event) => {
     event.preventDefault();
+    fileMentions.hide();
     const text = prompt.value.trim();
     const interrupt = interruptRequested;
     interruptRequested = false;
@@ -584,6 +587,7 @@ export async function boot() {
   });
   prompt.addEventListener("keydown", (event) => {
     if (slashCommands.onKeyDown(event)) return;
+    if (fileMentions.onKeyDown(event)) return;
     if (event.key === "Enter" && !event.shiftKey && !event.isComposing) {
       event.preventDefault();
       interruptRequested = Boolean(activeRun && (event.ctrlKey || event.metaKey));
