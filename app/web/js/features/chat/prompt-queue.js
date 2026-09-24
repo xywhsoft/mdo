@@ -22,6 +22,7 @@ export function createPromptQueue({ container, navigation, onRetry, onRemoved })
   const versions = new Map();
   const expanded = new Map();
   let busy = false;
+  let actionBusy = false;
 
   function selectedKey() {
     const { projectId, sessionId } = navigation.get();
@@ -83,12 +84,14 @@ export function createPromptQueue({ container, navigation, onRetry, onRemoved })
       text: uncertain ? "确认未发送后重试" : "发送下一条",
       attrs: { type: "button", "data-queue-focus": "retry" },
     });
-    retry.disabled = busy;
+    retry.disabled = busy || actionBusy;
     retry.addEventListener("click", async () => {
-      retry.disabled = true;
+      if (busy || actionBusy) return;
+      actionBusy = true;
+      render();
       try { await onRetry(); }
       catch (error) { toast(errorMessage(error), "error"); }
-      finally { retry.disabled = false; }
+      finally { actionBusy = false; render(); }
     });
     container.append(element("div", { className: "prompt-queue-header" }, [
       toggle, retry,
@@ -112,11 +115,14 @@ export function createPromptQueue({ container, navigation, onRetry, onRemoved })
         attrs: { type: "button", "aria-label": `移除待发送消息 ${index + 1}`,
           "data-queue-focus": entry.id, "data-queue-index": String(index) },
       });
-      remove.disabled = busy;
+      remove.disabled = busy || actionBusy;
       remove.addEventListener("click", async () => {
-        remove.disabled = true;
+        if (busy || actionBusy) return;
+        actionBusy = true;
+        render();
         try { await removeItem(entry.id); }
-        catch (error) { toast(errorMessage(error), "error"); remove.disabled = false; }
+        catch (error) { toast(errorMessage(error), "error"); }
+        finally { actionBusy = false; render(); }
       });
       const body = element("div", { className: "prompt-queue-item-body" }, [
         element("span", { className: "prompt-queue-text",
