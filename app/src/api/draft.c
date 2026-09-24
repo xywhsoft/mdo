@@ -12,6 +12,8 @@ typedef struct MdoDraft {
     uint64 Revision;
     char Text[MDO_DRAFT_TEXT_MAX + 1u];
     size_t TextSize;
+    char Attachments[4][33];
+    size_t AttachmentCount;
 } MdoDraft;
 
 static xmutex* g_MdoDraftLock;
@@ -109,16 +111,21 @@ static bool MdoDraftRead(const char* Path, MdoDraft* Draft)
     Bytes[Info.Size] = '\0';
     xrtJsonReadConfigInit(&Config);
     Config.MaxInputBytes = MDO_DRAFT_FILE_MAX;
-    Config.MaxDepth = 2u;
-    Config.MaxValues = 8u;
-    Config.MaxContainerItems = 3u;
+    Config.MaxDepth = 4u;
+    Config.MaxValues = 16u;
+    Config.MaxContainerItems = 8u;
     Root = xrtJsonRead(xrtStrViewN(Bytes, (size_t)Info.Size), &Config);
     if ( xrtValueType(Root) != XVALUE_OBJECT ||
-         xrtValueCount(Root) != 3u ||
-         !MdoDraftUInt(Root, "schema_version", &Schema) || Schema != 1u ||
+         !MdoDraftUInt(Root, "schema_version", &Schema) ||
+         (Schema != 1u && Schema != 2u) ||
+         xrtValueCount(Root) != (Schema == 1u ? 3u : 4u) ||
          !MdoDraftUInt(Root, "revision", &Draft->Revision) ||
          Draft->Revision == 0u ||
-         !MdoDraftText(Root, "text", Draft->Text, &Draft->TextSize) )
+         !MdoDraftText(Root, "text", Draft->Text, &Draft->TextSize) ||
+         (Schema == 2u &&
+          !MdoAttachmentIdsRead(xrtValueObjectGet(Root,
+                XRT_STR_LITERAL("attachments")), Draft->Attachments,
+                &Draft->AttachmentCount)) )
         goto done;
     Ok = true;
 done:
@@ -134,10 +141,12 @@ static bool MdoDraftWrite(const char* Path, const MdoDraft* Draft)
     char* Json = NULL;
     size_t Size = 0u;
     bool Ok = Root != NULL &&
-        MdoApiValueSetUInt(Root, "schema_version", 1u) &&
+        MdoApiValueSetUInt(Root, "schema_version", 2u) &&
         MdoApiValueSetUInt(Root, "revision", Draft->Revision) &&
         MdoApiValueSetStringView(Root, "text",
-            xrtStrViewN(Draft->Text, Draft->TextSize));
+            xrtStrViewN(Draft->Text, Draft->TextSize)) &&
+        MdoAttachmentIdsWriteValue(Root, Draft->Attachments,
+            Draft->AttachmentCount);
     if ( Ok ) Json = xrtJsonStringify(Root, false, &Size);
     if ( Json != NULL && Size <= MDO_DRAFT_FILE_MAX )
         Ok = MdoHomeAtomicWrite(Path, Json, Size, false);
@@ -153,7 +162,9 @@ static xvalue* MdoDraftResponse(const MdoDraft* Draft)
     if ( Data != NULL &&
          MdoApiValueSetUInt(Data, "revision", Draft->Revision) &&
          MdoApiValueSetStringView(Data, "text",
-            xrtStrViewN(Draft->Text, Draft->TextSize)) ) return Data;
+            xrtStrViewN(Draft->Text, Draft->TextSize)) &&
+         MdoAttachmentIdsWriteValue(Data, Draft->Attachments,
+            Draft->AttachmentCount) ) return Data;
     xrtValueRelease(Data);
     return NULL;
 }
@@ -161,8 +172,8 @@ static xvalue* MdoDraftResponse(const MdoDraft* Draft)
 bool MdoApiDraftRoute(MdoApiContext* Context)
 {
     char Path[MDO_SESSION_PATH_CAPACITY];
-    char ProjectId[MDO_PROJECT_ID_CAPACITY];
-    char SessionId[MDO_SESSION_ID_CAPACITY];
+    char ProjectId[MDO_PROJECT_ID_CAPACITY] = { 0 };
+    char SessionId[MDO_SESSION_ID_CAPACITY] = { 0 };
     MdoSession* Session;
     xwork_error Error;
     MdoDraft* Draft;
@@ -170,6 +181,8 @@ bool MdoApiDraftRoute(MdoApiContext* Context)
     MdoApiBodyStatus BodyStatus;
     uint64 ExpectedRevision;
     xstrview IncomingText = { 0 };
+    char IncomingAttachments[4][33] = {{ 0 }};
+    size_t IncomingCount = 0u;
     bool Ok;
     bool Conflict = false;
     xvalue* Data;
@@ -201,10 +214,19 @@ bool MdoApiDraftRoute(MdoApiContext* Context)
             xrtFree(Draft);
             return MdoApiReplyBodyError(Context, BodyStatus);
         }
+        const xvalue* Attachments = xrtValueObjectGet(Body.Value,
+            XRT_STR_LITERAL("attachments"));
         Ok = xrtValueType(Body.Value) == XVALUE_OBJECT &&
-            xrtValueCount(Body.Value) == 2u &&
+            xrtValueCount(Body.Value) == (Attachments == NULL ? 2u : 3u) &&
             MdoDraftUInt(Body.Value, "revision", &ExpectedRevision) &&
-            MdoDraftTextView(Body.Value, "text", &IncomingText);
+            MdoDraftTextView(Body.Value, "text", &IncomingText) &&
+            (Attachments == NULL ||
+             MdoAttachmentIdsRead(Attachments, IncomingAttachments,
+                &IncomingCount)) &&
+            (IncomingCount == 0u ||
+             (Context->ParamCount == 2u &&
+              MdoAttachmentIdsExist(ProjectId, SessionId,
+                IncomingAttachments, IncomingCount)));
         if ( !Ok ) {
             MdoApiJsonBodyUnit(&Body);
             xrtFree(Draft);
@@ -223,6 +245,9 @@ bool MdoApiDraftRoute(MdoApiContext* Context)
                 memcpy(Draft->Text, IncomingText.Data, IncomingText.Size);
             Draft->Text[IncomingText.Size] = '\0';
             Draft->TextSize = IncomingText.Size;
+            memcpy(Draft->Attachments, IncomingAttachments,
+                sizeof(Draft->Attachments));
+            Draft->AttachmentCount = IncomingCount;
             Ok = MdoDraftWrite(Path, Draft);
         }
     }

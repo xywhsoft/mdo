@@ -1549,14 +1549,14 @@ def run_probe(host: Path) -> None:
                     "code"] == "session_not_found", (status, body)
                 status, _, body = request(port, "GET", "/api/v1/draft")
                 assert status == 200 and json.loads(body)["data"] == {
-                    "revision": 0, "text": ""}, (status, body)
+                    "revision": 0, "text": "", "attachments": []}, (status, body)
                 assert not (home / "data/draft.json").exists()
                 status, _, body = request(
                     port, "PUT", "/api/v1/draft",
                     body=json.dumps({"revision": 0, "text": "未发送的草稿"}).encode(),
                     headers={"Content-Type": "application/json"})
                 assert status == 200 and json.loads(body)["data"] == {
-                    "revision": 1, "text": "未发送的草稿"}, (status, body)
+                    "revision": 1, "text": "未发送的草稿", "attachments": []}, (status, body)
                 status, _, body = request(
                     port, "PUT", "/api/v1/draft",
                     body=b'{"revision":0,"text":"stale"}',
@@ -1568,15 +1568,32 @@ def run_probe(host: Path) -> None:
                 draft_path = session_path + "/draft"
                 status, _, body = request(port, "GET", draft_path)
                 assert status == 200 and json.loads(body)["data"] == {
-                    "revision": 0, "text": ""}, (status, body)
+                    "revision": 0, "text": "", "attachments": []}, (status, body)
                 status, _, body = request(
                     port, "PUT", draft_path,
                     body=b'{"revision":0,"text":"session draft"}',
                     headers={"Content-Type": "application/json"})
                 assert status == 200 and json.loads(body)["data"] == {
-                    "revision": 1, "text": "session draft"}, (status, body)
+                    "revision": 1, "text": "session draft", "attachments": []}, (status, body)
                 assert json.loads(request(port, "GET", draft_path)[2])[
                     "data"]["text"] == "session draft"
+                status, _, body = request(port, "PUT", draft_path,
+                    body=json.dumps({"revision": 1, "text": "",
+                                     "attachments": [image["id"]]}).encode(),
+                    headers={"Content-Type": "application/json"})
+                assert status == 200 and json.loads(body)["data"] == {
+                    "revision": 2, "text": "", "attachments": [image["id"]]}, (
+                    status, body)
+                assert json.loads(request(port, "GET", draft_path)[2])[
+                    "data"]["attachments"] == [image["id"]]
+                assert json.loads((home / f"sessions/api-project/{session_id}/"
+                                   "draft.json").read_text(encoding="utf-8"))[
+                    "schema_version"] == 2
+                status, _, body = request(port, "PUT", "/api/v1/draft",
+                    body=json.dumps({"revision": 1, "text": "global",
+                                     "attachments": [image["id"]]}).encode(),
+                    headers={"Content-Type": "application/json"})
+                assert status == 422, (status, body)
                 queue_path = session_path + "/queue"
                 queue_file = home / "sessions/api-project" / session_id / "queue.json"
                 status, _, body = request(port, "GET", queue_path)
@@ -1595,7 +1612,8 @@ def run_probe(host: Path) -> None:
                 first = {"id": first_id, "text": "first prompt", "first": False}
                 status, _, body = queue_request("POST", queue_path, first)
                 assert status == 201 and json.loads(body)["data"]["items"] == [
-                    {"id": first_id, "text": "first prompt", "state": "pending"}], (
+                    {"id": first_id, "text": "first prompt", "state": "pending",
+                     "attachments": []}], (
                     status, body)
                 status, _, body = queue_request("POST", queue_path, first)
                 assert status == 200 and len(json.loads(body)["data"]["items"]) == 1, (
@@ -1643,6 +1661,31 @@ def run_probe(host: Path) -> None:
                     assert status == 200, (status, body)
                 assert json.loads(request(port, "GET", queue_path)[2])[
                     "data"]["items"] == []
+                image_item_id = "d" * 32
+                status, _, body = queue_request("POST", queue_path, {
+                    "id": image_item_id, "text": "", "first": False,
+                    "attachments": [image["id"]],
+                })
+                image_queue = json.loads(body)["data"]["items"]
+                assert status == 201 and image_queue == [{
+                    "id": image_item_id, "text": "", "state": "pending",
+                    "attachments": [image["id"]],
+                }], (status, body)
+                assert json.loads(queue_file.read_text(encoding="utf-8"))[
+                    "schema_version"] == 2
+                status, _, body = queue_request("PUT",
+                    queue_path + "/" + image_item_id, {"state": "sending"})
+                assert status == 200 and json.loads(body)["data"]["items"][0][
+                    "attachments"] == [image["id"]], (status, body)
+                status, _, body = queue_request("POST", queue_path, {
+                    "id": "e" * 32, "text": "", "first": False,
+                    "attachments": ["0" * 32],
+                })
+                assert status == 422, (status, body)
+                status, _, body = request(port, "DELETE",
+                    queue_path + "/" + image_item_id)
+                assert status == 200 and json.loads(body)["data"]["items"] == [], (
+                    status, body)
                 todo_path = session_path + "/todo"
                 todo_file = home / "sessions/api-project" / session_id / "todo.json"
                 status, _, body = request(port, "GET", todo_path)

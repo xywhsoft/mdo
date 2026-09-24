@@ -166,31 +166,9 @@ static bool MdoApiRunAttachmentIds(const xvalue* Object,
 {
     const xvalue* Array = xrtValueObjectGet(Object,
         XRT_STR_LITERAL("attachments"));
-    size_t i;
     if ( Array == NULL ) { *Count = 0u; return true; }
     (*Present)++;
-    if ( xrtValueType(Array) != XVALUE_ARRAY ||
-         xrtValueCount(Array) == 0u || xrtValueCount(Array) > 4u )
-        return false;
-    *Count = xrtValueCount(Array);
-    for ( i = 0u; i < *Count; ++i ) {
-        const xvalue* Item = xrtValueArrayGet(Array, i);
-        xstrview Text;
-        size_t j;
-        if ( xrtValueType(Item) != XVALUE_STRING ||
-             !xrtValueGetString(Item, &Text) || Text.Size != 32u )
-            return false;
-        for ( j = 0u; j < 32u; ++j ) {
-            unsigned char Byte = (unsigned char)Text.Data[j];
-            if ( !((Byte >= '0' && Byte <= '9') ||
-                   (Byte >= 'a' && Byte <= 'f')) ) return false;
-        }
-        memcpy(Ids[i], Text.Data, 32u);
-        Ids[i][32] = '\0';
-        for ( j = 0u; j < i; ++j )
-            if ( strcmp(Ids[i], Ids[j]) == 0 ) return false;
-    }
-    return true;
+    return MdoAttachmentIdsRead(Array, Ids, Count) && *Count != 0u;
 }
 
 static bool MdoApiRunBuildMessage(const char* Project, const char* Session,

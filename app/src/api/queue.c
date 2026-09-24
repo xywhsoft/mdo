@@ -15,6 +15,8 @@ typedef struct MdoQueueItem {
     char Id[MDO_QUEUE_ID_SIZE + 1u];
     char* Text;
     size_t TextSize;
+    char Attachments[4][33];
+    size_t AttachmentCount;
     bool Sending;
 } MdoQueueItem;
 
@@ -88,9 +90,10 @@ static bool MdoQueueString(const xvalue* Object, cstr Key,
         xrtValueGetString(Value, Text);
 }
 
-static bool MdoQueueText(xstrview Text)
+static bool MdoQueueText(xstrview Text, bool AllowEmpty)
 {
-    return Text.Size > 0u && Text.Size <= MDO_QUEUE_MAX_TEXT &&
+    return (AllowEmpty || Text.Size > 0u) &&
+        Text.Size <= MDO_QUEUE_MAX_TEXT &&
         memchr(Text.Data, 0, Text.Size) == NULL &&
         xrtUtf8Valid(Text, NULL);
 }
@@ -124,7 +127,8 @@ static size_t MdoQueueFind(const MdoQueue* Queue, const char* Id)
 }
 
 static bool MdoQueueInsert(MdoQueue* Queue, const char* Id,
-    xstrview Text, bool First)
+    xstrview Text, const char Attachments[4][33],
+    size_t AttachmentCount, bool First)
 {
     MdoQueueItem* Item;
     char* Copy;
@@ -135,7 +139,7 @@ static bool MdoQueueInsert(MdoQueue* Queue, const char* Id,
         return false;
     Copy = (char*)xrtMalloc(Text.Size + 1u);
     if ( Copy == NULL ) return false;
-    memcpy(Copy, Text.Data, Text.Size);
+    if ( Text.Size != 0u ) memcpy(Copy, Text.Data, Text.Size);
     Copy[Text.Size] = '\0';
     if ( Position < Queue->Count )
         memmove(&Queue->Items[Position + 1u], &Queue->Items[Position],
@@ -145,6 +149,8 @@ static bool MdoQueueInsert(MdoQueue* Queue, const char* Id,
     memcpy(Item->Id, Id, MDO_QUEUE_ID_SIZE + 1u);
     Item->Text = Copy;
     Item->TextSize = Text.Size;
+    memcpy(Item->Attachments, Attachments, sizeof(Item->Attachments));
+    Item->AttachmentCount = AttachmentCount;
     Queue->TextBytes += Text.Size;
     Queue->Count++;
     return true;
@@ -177,8 +183,8 @@ static bool MdoQueueRead(const char* Path, MdoQueue* Queue)
     Bytes[Info.Size] = '\0';
     xrtJsonReadConfigInit(&Config);
     Config.MaxInputBytes = MDO_QUEUE_FILE_MAX;
-    Config.MaxDepth = 4u;
-    Config.MaxValues = 128u;
+    Config.MaxDepth = 5u;
+    Config.MaxValues = 256u;
     Config.MaxContainerItems = MDO_QUEUE_MAX_ITEMS;
     Root = xrtJsonRead(xrtStrViewN(Bytes, (size_t)Info.Size), &Config);
     Items = Root != NULL ? xrtValueObjectGet(Root,
@@ -197,7 +203,7 @@ static bool MdoQueueRead(const char* Path, MdoQueue* Queue)
             if ( !xrtValueGetInt(Version, &Signed) || Signed < 0 ) goto done;
             Schema = (uint64)Signed;
         } else goto done;
-        if ( Schema != 1u ) goto done;
+        if ( Schema != 1u && Schema != 2u ) goto done;
     }
     for ( i = 0u; i < xrtValueCount(Items); ++i ) {
         const xvalue* Entry = xrtValueArrayGet(Items, i);
@@ -205,16 +211,24 @@ static bool MdoQueueRead(const char* Path, MdoQueue* Queue)
         xstrview Text;
         xstrview State;
         char IdText[MDO_QUEUE_ID_SIZE + 1u];
+        char Attachments[4][33] = {{ 0 }};
+        size_t AttachmentCount = 0u;
         bool Sending;
         if ( xrtValueType(Entry) != XVALUE_OBJECT ||
-             xrtValueCount(Entry) != 3u ||
+             xrtValueCount(Entry) != (Schema == 1u ? 3u : 4u) ||
              !MdoQueueString(Entry, "id", &Id) ||
              !MdoQueueString(Entry, "text", &Text) ||
              !MdoQueueString(Entry, "state", &State) ||
-             !MdoQueueId(Id, IdText) || !MdoQueueText(Text) ||
+             !MdoQueueId(Id, IdText) ||
+             (Schema == 2u &&
+              !MdoAttachmentIdsRead(xrtValueObjectGet(Entry,
+                XRT_STR_LITERAL("attachments")), Attachments,
+                &AttachmentCount)) ||
+             !MdoQueueText(Text, AttachmentCount != 0u) ||
              !MdoQueueState(State, &Sending) ||
              MdoQueueFind(Queue, IdText) != SIZE_MAX ||
-             !MdoQueueInsert(Queue, IdText, Text, false) ) goto done;
+             !MdoQueueInsert(Queue, IdText, Text, Attachments,
+                AttachmentCount, false) ) goto done;
         Queue->Items[Queue->Count - 1u].Sending = Sending;
     }
     Ok = true;
@@ -241,6 +255,8 @@ static xvalue* MdoQueueValue(const MdoQueue* Queue)
                 xrtStrViewN(Source->Text, Source->TextSize)) &&
             MdoApiValueSetString(Item, "state",
                 Source->Sending ? "sending" : "pending") &&
+            MdoAttachmentIdsWriteValue(Item, Source->Attachments,
+                Source->AttachmentCount) &&
             MdoApiValueAppendTake(Items, &Item);
         xrtValueRelease(Item);
     }
@@ -256,7 +272,7 @@ static bool MdoQueueWrite(const char* Path, const MdoQueue* Queue)
     char* Json;
     size_t Size = 0u;
     bool Ok;
-    if ( Data == NULL || !MdoApiValueSetUInt(Data, "schema_version", 1u) ) {
+    if ( Data == NULL || !MdoApiValueSetUInt(Data, "schema_version", 2u) ) {
         xrtValueRelease(Data);
         return false;
     }
@@ -269,19 +285,19 @@ static bool MdoQueueWrite(const char* Path, const MdoQueue* Queue)
 }
 
 static bool MdoQueuePath(MdoApiContext* Context,
-    char Path[MDO_SESSION_PATH_CAPACITY], MdoSessionStatus* Status)
+    char Path[MDO_SESSION_PATH_CAPACITY], MdoSessionStatus* Status,
+    char ProjectId[MDO_PROJECT_ID_CAPACITY],
+    char SessionId[MDO_SESSION_ID_CAPACITY])
 {
-    char ProjectId[MDO_PROJECT_ID_CAPACITY];
-    char SessionId[MDO_SESSION_ID_CAPACITY];
     MdoSession* Session;
     MdoSessionInfo Info;
     xwork_error Error;
     int Written;
     if ( (Context->ParamCount != 2u && Context->ParamCount != 3u) ||
          !MdoQueueCaptureId(Context->Params[0], ProjectId,
-            sizeof(ProjectId)) ||
+            MDO_PROJECT_ID_CAPACITY) ||
          !MdoQueueCaptureId(Context->Params[1], SessionId,
-            sizeof(SessionId)) ) return false;
+            MDO_SESSION_ID_CAPACITY) ) return false;
     Written = snprintf(Path, MDO_SESSION_PATH_CAPACITY,
         "sessions/%s/%s/queue.json", ProjectId, SessionId);
     if ( Written <= 0 || (size_t)Written >= MDO_SESSION_PATH_CAPACITY )
@@ -312,6 +328,8 @@ static bool MdoQueueReply(MdoApiContext* Context, uint16 Status,
 bool MdoApiQueueRoute(MdoApiContext* Context)
 {
     char Path[MDO_SESSION_PATH_CAPACITY];
+    char ProjectId[MDO_PROJECT_ID_CAPACITY];
+    char SessionId[MDO_SESSION_ID_CAPACITY];
     char Id[MDO_QUEUE_ID_SIZE + 1u];
     MdoSessionStatus SessionStatus;
     MdoQueue Queue;
@@ -319,6 +337,8 @@ bool MdoApiQueueRoute(MdoApiContext* Context)
     MdoApiBodyStatus BodyStatus;
     xstrview IdView = { 0 };
     xstrview Text = { 0 };
+    char Attachments[4][33] = {{ 0 }};
+    size_t AttachmentCount = 0u;
     bool First = false;
     bool Add = Context->Request->head->MethodCode == XHTTP_METHOD_POST;
     bool Ok;
@@ -326,7 +346,8 @@ bool MdoApiQueueRoute(MdoApiContext* Context)
     bool Full = false;
     size_t Index = SIZE_MAX;
 
-    if ( !MdoQueuePath(Context, Path, &SessionStatus) )
+    if ( !MdoQueuePath(Context, Path, &SessionStatus,
+            ProjectId, SessionId) )
         return MdoApiReplyError(Context, 404u, "session_not_found",
             "The requested session does not exist", NULL);
     if ( Add ) {
@@ -336,12 +357,22 @@ bool MdoApiQueueRoute(MdoApiContext* Context)
         BodyStatus = MdoApiJsonBodyRead(Context, &Body);
         if ( BodyStatus != MDO_API_BODY_OK )
             return MdoApiReplyBodyError(Context, BodyStatus);
-        Ok = xrtValueType(Body.Value) == XVALUE_OBJECT &&
-            xrtValueCount(Body.Value) == 3u &&
-            MdoQueueString(Body.Value, "id", &IdView) &&
-            MdoQueueString(Body.Value, "text", &Text) &&
-            MdoQueueBool(Body.Value, "first", &First) &&
-            MdoQueueId(IdView, Id) && MdoQueueText(Text);
+        {
+            const xvalue* References = xrtValueObjectGet(Body.Value,
+                XRT_STR_LITERAL("attachments"));
+            Ok = xrtValueType(Body.Value) == XVALUE_OBJECT &&
+                xrtValueCount(Body.Value) == (References == NULL ? 3u : 4u) &&
+                MdoQueueString(Body.Value, "id", &IdView) &&
+                MdoQueueString(Body.Value, "text", &Text) &&
+                MdoQueueBool(Body.Value, "first", &First) &&
+                MdoQueueId(IdView, Id) &&
+                (References == NULL ||
+                 MdoAttachmentIdsRead(References, Attachments,
+                    &AttachmentCount)) &&
+                MdoQueueText(Text, AttachmentCount != 0u) &&
+                MdoAttachmentIdsExist(ProjectId, SessionId, Attachments,
+                    AttachmentCount);
+        }
         if ( !Ok ) {
             MdoApiJsonBodyUnit(&Body);
             return MdoApiReplyError(Context, 422u, "queue_item_invalid",
@@ -354,11 +385,16 @@ bool MdoApiQueueRoute(MdoApiContext* Context)
         Index = MdoQueueFind(&Queue, Id);
         if ( Index != SIZE_MAX ) {
             Duplicate = Queue.Items[Index].TextSize != Text.Size ||
-                memcmp(Queue.Items[Index].Text, Text.Data, Text.Size) != 0;
+                (Text.Size != 0u &&
+                 memcmp(Queue.Items[Index].Text, Text.Data, Text.Size) != 0) ||
+                Queue.Items[Index].AttachmentCount != AttachmentCount ||
+                memcmp(Queue.Items[Index].Attachments, Attachments,
+                    sizeof(Attachments)) != 0;
         } else {
             Full = Queue.Count >= MDO_QUEUE_MAX_ITEMS ||
                 Text.Size > MDO_QUEUE_MAX_TOTAL_TEXT - Queue.TextBytes;
-            if ( !Full ) Ok = MdoQueueInsert(&Queue, Id, Text, First) &&
+            if ( !Full ) Ok = MdoQueueInsert(&Queue, Id, Text,
+                Attachments, AttachmentCount, First) &&
                 MdoQueueWrite(Path, &Queue);
         }
     }
@@ -380,6 +416,8 @@ bool MdoApiQueueRoute(MdoApiContext* Context)
 bool MdoApiQueueItemRoute(MdoApiContext* Context)
 {
     char Path[MDO_SESSION_PATH_CAPACITY];
+    char ProjectId[MDO_PROJECT_ID_CAPACITY];
+    char SessionId[MDO_SESSION_ID_CAPACITY];
     char Id[MDO_QUEUE_ID_SIZE + 1u];
     MdoSessionStatus SessionStatus;
     MdoQueue Queue;
@@ -392,7 +430,8 @@ bool MdoApiQueueItemRoute(MdoApiContext* Context)
     bool Conflict = false;
     size_t Index;
 
-    if ( !MdoQueuePath(Context, Path, &SessionStatus) ||
+    if ( !MdoQueuePath(Context, Path, &SessionStatus,
+            ProjectId, SessionId) ||
          Context->ParamCount != 3u ||
          !MdoQueueId(Context->Params[2], Id) )
         return MdoApiReplyError(Context, 404u, "queue_item_not_found",

@@ -129,6 +129,12 @@ bool MdoApiReplyImage(MdoApiContext* pContext, const void* pBody,
     size_t BodySize, cstr ContentType);
 bool MdoAttachmentReadForRun(const char* Project, const char* Session,
     const char* Id, char** pData, size_t* pSize, cstr* pMime);
+bool MdoAttachmentIdsRead(const xvalue* Array, char Ids[4][33],
+    size_t* pCount);
+bool MdoAttachmentIdsExist(const char* Project, const char* Session,
+    const char Ids[4][33], size_t Count);
+bool MdoAttachmentIdsWriteValue(xvalue* Object, const char Ids[4][33],
+    size_t Count);
 bool MdoApiRunRoute(MdoApiContext* pContext);
 bool MdoApiScheduleRoute(MdoApiContext* pContext);
 bool MdoApiScheduleEnabledRoute(MdoApiContext* pContext);

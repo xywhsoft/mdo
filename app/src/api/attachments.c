@@ -174,6 +174,74 @@ static bool MdoAttachmentHexId(xstrview View,
     return true;
 }
 
+bool MdoAttachmentIdsRead(const xvalue* Array, char Ids[4][33],
+    size_t* Count)
+{
+    size_t i;
+    if ( Count == NULL || Ids == NULL ||
+         xrtValueType(Array) != XVALUE_ARRAY ||
+         xrtValueCount(Array) > 4u ) return false;
+    *Count = xrtValueCount(Array);
+    for ( i = 0u; i < *Count; ++i ) {
+        const xvalue* Item = xrtValueArrayGet(Array, i);
+        xstrview Text;
+        size_t j;
+        if ( xrtValueType(Item) != XVALUE_STRING ||
+             !xrtValueGetString(Item, &Text) ||
+             !MdoAttachmentHexId(Text, Ids[i]) ) return false;
+        for ( j = 0u; j < i; ++j )
+            if ( strcmp(Ids[i], Ids[j]) == 0 ) return false;
+    }
+    return true;
+}
+
+bool MdoAttachmentIdsExist(const char* Project, const char* Session,
+    const char Ids[4][33], size_t Count)
+{
+    size_t i;
+    size_t Total = 0u;
+    if ( Project == NULL || Session == NULL || Ids == NULL || Count > 4u )
+        return false;
+    for ( i = 0u; i < Count; ++i ) {
+        char Name[MDO_ATTACHMENT_ID_LENGTH + 6u];
+        char Path[MDO_SESSION_PATH_CAPACITY];
+        char Checked[MDO_ATTACHMENT_ID_LENGTH + 1u];
+        bool Exists = false;
+        xfileinfo Info;
+        if ( !MdoAttachmentHexId(xrtStrView(Ids[i]), Checked) )
+            return false;
+        snprintf(Name, sizeof(Name), "%s.json", Ids[i]);
+        if ( !MdoAttachmentPath(Path, sizeof(Path), Project, Session,
+                Name) ||
+             !MdoHomeExternalStat(Path, &Exists, &Info) || !Exists ||
+             Info.Type != XFILE_TYPE_FILE ) return false;
+        snprintf(Name, sizeof(Name), "%s.bin", Ids[i]);
+        if ( !MdoAttachmentPath(Path, sizeof(Path), Project, Session,
+                Name) ||
+             !MdoHomeExternalStat(Path, &Exists, &Info) || !Exists ||
+             Info.Type != XFILE_TYPE_FILE ||
+             (Info.Available & XFILE_INFO_SIZE) == 0u ||
+             Info.Size == 0u || Info.Size > MDO_API_IMAGE_MAX_BYTES ||
+             Info.Size > 16u * 1024u * 1024u - Total )
+            return false;
+        Total += (size_t)Info.Size;
+    }
+    return true;
+}
+
+bool MdoAttachmentIdsWriteValue(xvalue* Object, const char Ids[4][33],
+    size_t Count)
+{
+    xvalue* Array = xrtValueArray();
+    size_t i;
+    bool Ok = Array != NULL && Object != NULL && Count <= 4u;
+    for ( i = 0u; Ok && i < Count; ++i )
+        Ok = MdoApiValueAppendString(Array, Ids[i]);
+    if ( Ok ) Ok = MdoApiValueSetTake(Object, "attachments", &Array);
+    xrtValueRelease(Array);
+    return Ok;
+}
+
 bool MdoApiAttachmentsRoute(MdoApiContext* Context)
 {
     char Project[MDO_PROJECT_ID_CAPACITY];
