@@ -1,9 +1,10 @@
 import { resourceId } from "../../api/client.js";
 import { createSchedule, loadSchedules, readSchedule, removeSchedule,
-  replaceSchedule, schedulesStore, setScheduleEnabled } from "../../state/schedules.js";
+  readScheduleHistory, replaceSchedule, schedulesStore, setScheduleEnabled } from "../../state/schedules.js";
 import { clear, element, errorMessage, toast } from "../../utils/dom.js";
 
 const FREQUENCY = { once: "仅一次", minutely: "分钟", hourly: "小时", daily: "天", weekly: "周" };
+const RESULT = { succeeded: "已完成", failed: "失败", cancelled: "已取消", limit: "达到上限", timed_out: "超时" };
 const pad = (value) => String(value).padStart(2, "0");
 
 function localInput(microseconds) {
@@ -37,11 +38,16 @@ export function createSchedulePanel({ panel, projectsStore, agentsStore, modelsS
   const intervalRow = panel.querySelector("#schedule-interval-row");
   const offsetRow = panel.querySelector("#schedule-offset-row");
   const deleteDialog = panel.querySelector("#schedule-delete-dialog");
+  const historyDialog = panel.querySelector("#schedule-history-dialog");
+  const historyTitle = panel.querySelector("#schedule-history-title");
+  const historyStatus = panel.querySelector("#schedule-history-status");
+  const historyList = panel.querySelector("#schedule-history-list");
   let original = null;
   let etag = "";
   let busy = false;
   let loadGeneration = 0;
   let deleteTarget = null;
+  let historyGeneration = 0;
 
   function setFeedback(message, error = false) {
     formStatus.textContent = message;
@@ -154,12 +160,14 @@ export function createSchedulePanel({ panel, projectsStore, agentsStore, modelsS
       const heading = element("div", { className: "schedule-card-heading" });
       heading.append(element("strong", { text: item.label }),
         element("span", { className: "schedule-badge", text: item.enabled ? "已启用" : "已暂停" }));
+      if (item.active_runs) heading.append(element("span", { className: "schedule-badge", text: "运行中" }));
       card.append(heading, element("p", { text: `${FREQUENCY[item.frequency] || item.frequency} · ${item.project_id} · ${item.agent_id}` }),
-        element("p", { text: `下次：${clockText(item.next_occurrence_at)}` }));
+        element("p", { text: `下次：${clockText(item.next_occurrence_at)} · 已触发 ${item.claim_count} 次` }));
       const actions = element("div", { className: "schedule-card-actions" });
       for (const [action, text, className] of [
         ["edit", "编辑", "secondary-button"],
         ["enabled", item.enabled ? "暂停" : "启用", "secondary-button"],
+        ["history", "历史", "secondary-button"],
         ["delete", "删除", "danger-link"],
       ]) {
         const button = element("button", { className, text, attrs: { type: "button" } });
@@ -253,12 +261,43 @@ export function createSchedulePanel({ panel, projectsStore, agentsStore, modelsS
     }
   }
 
+  async function openHistory(item) {
+    const generation = ++historyGeneration;
+    historyTitle.textContent = `${item.label} · 执行历史`;
+    historyStatus.textContent = "正在读取执行历史…";
+    clear(historyList);
+    historyDialog.showModal();
+    try {
+      const { data } = await readScheduleHistory(item.id);
+      if (generation !== historyGeneration || !historyDialog.open) return;
+      historyStatus.textContent = data.items.length
+        ? `${data.items.length} 条记录${data.has_more ? " · 仅显示最近记录" : ""}`
+        : "尚无已完成的运行。";
+      for (const entry of data.items) {
+        const card = element("article", { className: "schedule-history-item" });
+        const header = element("header");
+        const finished = clockText(entry.finished_at);
+        header.append(element("strong", { text: RESULT[entry.result] || entry.result }),
+          element("time", { text: finished }));
+        card.append(header,
+          element("p", { text: `任务 #${entry.task_id}${entry.agent_run_id ? ` · 运行 #${entry.agent_run_id}` : ""}` }));
+        if (entry.text) card.append(element("p", { text: entry.text +
+          (entry.text_truncated ? "…" : "") }));
+        historyList.append(card);
+      }
+    } catch (error) {
+      if (generation === historyGeneration && historyDialog.open)
+        historyStatus.textContent = `读取失败：${errorMessage(error)}`;
+    }
+  }
+
   list.addEventListener("click", (event) => {
     const button = event.target.closest("button[data-schedule-action]");
     if (!button || busy) return;
     const item = schedulesStore.get().data?.items?.find((value) => value.id === button.dataset.scheduleId);
     if (!item) return;
     if (button.dataset.scheduleAction === "edit") void openEditor(item.id);
+    if (button.dataset.scheduleAction === "history") void openHistory(item);
     if (button.dataset.scheduleAction === "enabled")
       void mutate(() => setScheduleEnabled(item.id, item.revision, !item.enabled),
         item.enabled ? "计划已暂停" : "计划已启用");
@@ -275,6 +314,8 @@ export function createSchedulePanel({ panel, projectsStore, agentsStore, modelsS
     if (deleteDialog.returnValue === "delete" && target)
       void mutate(() => removeSchedule(target.id, target.revision), "计划已删除");
   });
+  historyDialog.addEventListener("close", () => { ++historyGeneration; });
+  panel.querySelector("#schedule-history-close").addEventListener("click", () => historyDialog.close());
   form.addEventListener("submit", (event) => {
     event.preventDefault();
     if (busy || !form.reportValidity()) return;

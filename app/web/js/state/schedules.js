@@ -10,6 +10,7 @@ export function loadSchedules() {
 function path(id) { return `/schedules/${resourceId(id, "schedule")}`; }
 
 export function readSchedule(id) { return api.get(path(id)); }
+export function readScheduleHistory(id) { return api.get(`${path(id)}/history`); }
 export function createSchedule(body) { return api.post("/schedules", body); }
 export function replaceSchedule(id, etag, body) {
   return api.put(path(id), body, { ifMatch: etag });

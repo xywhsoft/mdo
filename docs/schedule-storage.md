@@ -51,7 +51,8 @@ bootstrap 创建一个长生命周期 schedule executor。生产默认使用一�
 - `MdoScheduleRemove` 使用 revision 删除没有活动 run 的定义；历史和审计保留。
 - `MdoScheduleClaimDue` 提供确定性单次认领，供 executor 或嵌入宿主使用。
 - `MdoScheduleFinishTaskWithRun` 对齐 scheduled task 与 Agent run 历史。
+- `MdoScheduleHistoryRecent` 有界读取最近 32 条持久完成记录；文本以 UTF-8 边界截断为预览，无历史时不创建 Home。
 - `MdoScheduleCatalogSnapshot` 返回引用计数不可变快照和恢复 diagnostics。
 - `MdoScheduleExecutorGetSnapshot` 返回活动数、累计 claim/completion/failure 和最近错误。
 
-计划任务的 HTTP 资源、UI 编辑器、运行历史分页和实时事件在 MDO-8/MDO-9 通过这些 service API 接入。
+计划任务的 HTTP 资源和 UI 编辑器已接入；执行历史以有界最近记录页展示。手动立即运行与更早历史的分页仍需在后续阶段实现。

@@ -147,6 +147,7 @@ bool MdoAttachmentIdsWriteValue(xvalue* Object, const char Ids[4][33],
 bool MdoApiRunRoute(MdoApiContext* pContext);
 bool MdoApiScheduleRoute(MdoApiContext* pContext);
 bool MdoApiScheduleEnabledRoute(MdoApiContext* pContext);
+bool MdoApiScheduleHistoryRoute(MdoApiContext* pContext);
 bool MdoApiModelsReloadRoute(MdoApiContext* pContext);
 bool MdoApiSkillsReloadRoute(MdoApiContext* pContext);
 bool MdoApiModulesReloadRoute(MdoApiContext* pContext);

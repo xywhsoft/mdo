@@ -332,6 +332,11 @@
                 <div class="schedule-form-actions"><span id="schedule-form-status" role="status"></span><button class="primary-button" id="schedule-save" type="submit">创建计划</button></div>
               </form>
               <dialog id="schedule-delete-dialog" class="confirm-dialog"><form method="dialog"><h3>删除计划任务？</h3><p id="schedule-delete-label"></p><div class="dialog-actions"><button class="secondary-button" value="cancel">取消</button><button class="danger-button" value="delete">删除计划</button></div></form></dialog>
+              <dialog id="schedule-history-dialog" class="schedule-history-dialog" aria-labelledby="schedule-history-title">
+                <div class="schedule-history-heading"><h3 id="schedule-history-title">执行历史</h3><button class="icon-button" id="schedule-history-close" type="button" aria-label="关闭执行历史"><span class="icon" data-icon="close" aria-hidden="true"></span></button></div>
+                <p id="schedule-history-status" role="status"></p>
+                <div id="schedule-history-list" class="schedule-history-list"></div>
+              </dialog>
             </section>
           </div>
         </div>

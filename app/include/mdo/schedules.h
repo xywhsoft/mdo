@@ -16,6 +16,8 @@
 #define MDO_SCHEDULE_INPUT_CAPACITY (64u * 1024u + 1u)
 #define MDO_SCHEDULE_RESULT_CAPACITY (64u * 1024u + 1u)
 #define MDO_SCHEDULE_PATH_CAPACITY 256u
+#define MDO_SCHEDULE_HISTORY_PAGE_MAX 32u
+#define MDO_SCHEDULE_HISTORY_PREVIEW_CAPACITY 1025u
 #define MDO_SCHEDULE_PROTOCOL_DEFAULT ((MdoModelProtocol)0)
 
 typedef struct MdoScheduleCatalog MdoScheduleCatalog;
@@ -110,6 +112,19 @@ typedef struct MdoScheduleDiagnostic {
     char Message[256];
 } MdoScheduleDiagnostic;
 
+/* Newest retained completions first. Text is a UTF-8 prefix of the durable
+ * JSONL record; the sidecar itself remains the full, portable history. */
+typedef struct MdoScheduleHistoryEntry {
+    uint32 Size;
+    uint64 TaskId;
+    uint64 AgentRunId;
+    int64 ScheduledAt;
+    int64 FinishedAt;
+    xwork_result Result;
+    bool TextTruncated;
+    char Text[MDO_SCHEDULE_HISTORY_PREVIEW_CAPACITY];
+} MdoScheduleHistoryEntry;
+
 typedef struct MdoScheduleExecutorOptions {
     uint32 Size;
     bool Automatic;
@@ -166,6 +181,9 @@ bool MdoScheduleFinishTask(uint64 TaskId, xwork_result Result,
     const char* ResultText, xwork_error* Error);
 bool MdoScheduleFinishTaskWithRun(uint64 TaskId, uint64 AgentRunId,
     xwork_result Result, const char* ResultText, xwork_error* Error);
+bool MdoScheduleHistoryRecent(const char* ScheduleId,
+    MdoScheduleHistoryEntry* Items, size_t Capacity, size_t* Count,
+    bool* HasMore, xwork_error* Error);
 
 /* The product executor owns ordinary Agent runs for claimed occurrences.
  * Automatic mode uses one lightweight host timer thread; manual mode lets

@@ -29,7 +29,8 @@ Read snapshots:
   `/artifacts`, `/approvals`, `/permissions`, `/diagnostics`, `/storage`, and
   `/operations`;
 - `/projects/{project}/sessions/{session}`, `/runs/{run}`,
-  `/schedules/{schedule}`, `/tasks/{task}`, `/operations/{operation}`, and
+  `/schedules/{schedule}`, `/schedules/{schedule}/history`,
+  `/tasks/{task}`, `/operations/{operation}`, and
   `/projects/{project}/sessions/{session}/recovery` and
   `/projects/{project}/sessions/{session}/todo` and
   `/projects/{project}/sessions/{session}/asks` and
@@ -50,6 +51,13 @@ Mutations:
 Module reload and MCP refresh use retained operation IDs. The caller polls the
 operation resource and can request cancellation without depending on an HTTP
 connection remaining open.
+
+`GET /schedules/{schedule}/history` reads the retained completion sidecar
+without creating Home. It returns the newest 32 records first, with task and
+Agent run IDs, scheduled and finished times, result state, and a UTF-8-safe
+text preview of at most 1024 bytes. `has_more` indicates earlier retained
+records beyond this page; the portable JSONL sidecar keeps the full bounded
+result text. A damaged record returns an error instead of a partial success.
 
 The workspace file route lists relative file names for composer `@` completion;
 it never reads file content. `q` is required, UTF-8, and at most 128 bytes.

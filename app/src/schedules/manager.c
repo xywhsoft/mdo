@@ -1763,6 +1763,130 @@ bool MdoScheduleFinishTask(uint64 TaskId, xwork_result Result,
         Error);
 }
 
+static bool MdoSchedulesHistoryParse(const char* ScheduleId, xstrview Line,
+    MdoScheduleHistoryEntry* Entry)
+{
+    xvalue* Root = xrtJsonParse(Line);
+    xstrview Id;
+    xstrview Text;
+    uint64 Schema;
+    int64 Result;
+    size_t Preview;
+    bool Ok = Root != NULL && xrtValueType(Root) == XVALUE_OBJECT &&
+        MdoSchedulesValueUInt(Root, "schema_version", &Schema) &&
+        Schema == MDO_SCHEDULE_SCHEMA_VERSION &&
+        MdoSchedulesValueUInt(Root, "task_id", &Entry->TaskId) &&
+        Entry->TaskId != 0u &&
+        MdoSchedulesValueUInt(Root, "agent_run_id", &Entry->AgentRunId) &&
+        MdoSchedulesValueString(Root, "schedule_id", &Id) &&
+        Id.Size == strlen(ScheduleId) &&
+        memcmp(Id.Data, ScheduleId, Id.Size) == 0 &&
+        MdoSchedulesValueInt(Root, "scheduled_at_us", &Entry->ScheduledAt) &&
+        MdoSchedulesValueInt(Root, "finished_at_us", &Entry->FinishedAt) &&
+        Entry->ScheduledAt > 0 && Entry->FinishedAt > 0 &&
+        MdoSchedulesValueInt(Root, "result", &Result) &&
+        (Result == XWORK_RESULT_OK || Result == XWORK_RESULT_ERROR ||
+         Result == XWORK_RESULT_CANCELLED || Result == XWORK_RESULT_LIMIT ||
+         Result == XWORK_RESULT_TIMEOUT) &&
+        MdoSchedulesValueString(Root, "text", &Text) &&
+        Text.Size <= MDO_SCHEDULE_RESULT_LIMIT &&
+        xrtUtf8Valid(Text, NULL);
+    if ( Ok ) {
+        Preview = Text.Size < sizeof(Entry->Text) ? Text.Size :
+            sizeof(Entry->Text) - 1u;
+        while ( Preview != 0u &&
+                !xrtUtf8Valid(xrtStrViewN(Text.Data, Preview), NULL) )
+            --Preview;
+        memcpy(Entry->Text, Text.Data, Preview);
+        Entry->Text[Preview] = '\0';
+        Entry->TextTruncated = Preview != Text.Size;
+        Entry->Result = (xwork_result)Result;
+        Entry->Size = sizeof(*Entry);
+    }
+    xrtValueRelease(Root);
+    return Ok;
+}
+
+bool MdoScheduleHistoryRecent(const char* ScheduleId,
+    MdoScheduleHistoryEntry* Items, size_t Capacity, size_t* Count,
+    bool* HasMore, xwork_error* Error)
+{
+    char Path[MDO_SCHEDULE_PATH_CAPACITY];
+    xfileinfo Info;
+    xfile File = NULL;
+    char* Data = NULL;
+    size_t End;
+    size_t Taken = 0u;
+    bool Exists = false;
+    bool Ok = false;
+    xworkErrorInit(Error);
+    if ( !g_MdoSchedules.Initialized ||
+         !MdoSchedulesId(ScheduleId, MDO_SCHEDULE_ID_CAPACITY) ||
+         !MdoSchedulesHistoryPath(Path, ScheduleId) || Items == NULL ||
+         Capacity == 0u || Capacity > MDO_SCHEDULE_HISTORY_PAGE_MAX ||
+         Count == NULL || HasMore == NULL ) {
+        MdoSchedulesError(Error, XWORK_ERROR_INVALID_ARGUMENT,
+            "invalid schedule history request");
+        return false;
+    }
+    *Count = 0u;
+    *HasMore = false;
+    xrtMutexLock(g_MdoSchedules.Lock);
+    if ( !MdoHomeExternalStat(Path, &Exists, &Info) ) goto io;
+    if ( !Exists ) { Ok = true; goto done; }
+    if ( Info.Type != XFILE_TYPE_FILE ||
+         (Info.Available & XFILE_INFO_SIZE) == 0u ||
+         Info.Size > MDO_SCHEDULE_AUDIT_LIMIT || Info.Size > SIZE_MAX - 1u )
+        goto limit;
+    File = MdoHomeOpenRead(Path);
+    if ( File == NULL || !xrtFileStat(File, &Info) ||
+         Info.Type != XFILE_TYPE_FILE ||
+         (Info.Available & XFILE_INFO_SIZE) == 0u ||
+         Info.Size > MDO_SCHEDULE_AUDIT_LIMIT || Info.Size > SIZE_MAX - 1u )
+        goto io;
+    Data = (char*)xrtMalloc((size_t)Info.Size + 1u);
+    if ( Data == NULL ) goto memory;
+    if ( Info.Size != 0u &&
+         !xrtReadFull(File, Data, (size_t)Info.Size, NULL) ) goto io;
+    End = (size_t)Info.Size;
+    Data[End] = '\0';
+    if ( !xrtClose(File) ) { File = NULL; goto io; }
+    File = NULL;
+    while ( End != 0u && Data[End - 1u] == '\n' ) --End;
+    while ( End != 0u && Taken < Capacity ) {
+        size_t Start = End;
+        while ( Start != 0u && Data[Start - 1u] != '\n' ) --Start;
+        memset(&Items[Taken], 0, sizeof(Items[Taken]));
+        if ( !MdoSchedulesHistoryParse(ScheduleId,
+                xrtStrViewN(Data + Start, End - Start), &Items[Taken]) ) {
+            MdoSchedulesError(Error, XWORK_ERROR_IO,
+                "schedule history contains an invalid record");
+            goto done;
+        }
+        ++Taken;
+        End = Start != 0u ? Start - 1u : 0u;
+    }
+    *Count = Taken;
+    *HasMore = End != 0u;
+    Ok = true;
+    goto done;
+memory:
+    MdoSchedulesError(Error, XWORK_ERROR_OUT_OF_MEMORY,
+        "cannot allocate schedule history snapshot");
+    goto done;
+limit:
+    MdoSchedulesError(Error, XWORK_ERROR_LIMIT,
+        "schedule history exceeds its bounded limit");
+    goto done;
+io:
+    MdoSchedulesXrtError(Error, "cannot read schedule history");
+done:
+    if ( File != NULL ) (void)xrtClose(File);
+    xrtFree(Data);
+    xrtMutexUnlock(g_MdoSchedules.Lock);
+    return Ok;
+}
+
 static int MdoSchedulesCatalogCompare(const void* LeftValue,
     const void* RightValue)
 {

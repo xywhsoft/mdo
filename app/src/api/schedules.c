@@ -753,3 +753,73 @@ bool MdoApiScheduleEnabledRoute(MdoApiContext* Context)
             ExpectedRevision, &Error, false);
     return MdoApiScheduleReply(Context, 200u, &Info);
 }
+
+static cstr MdoApiScheduleResultText(xwork_result Result)
+{
+    switch ( Result ) {
+    case XWORK_RESULT_OK: return "succeeded";
+    case XWORK_RESULT_ERROR: return "failed";
+    case XWORK_RESULT_CANCELLED: return "cancelled";
+    case XWORK_RESULT_LIMIT: return "limit";
+    case XWORK_RESULT_TIMEOUT: return "timed_out";
+    default: return "unknown";
+    }
+}
+
+bool MdoApiScheduleHistoryRoute(MdoApiContext* Context)
+{
+    char ScheduleId[MDO_SCHEDULE_ID_CAPACITY];
+    MdoScheduleHistoryEntry History[MDO_SCHEDULE_HISTORY_PAGE_MAX];
+    MdoScheduleInfo Info;
+    xwork_error Error;
+    xvalue* Data = NULL;
+    xvalue* Items = NULL;
+    size_t Count = 0u;
+    size_t Index;
+    bool HasMore = false;
+    bool Available = false;
+    bool Ok;
+    if ( !MdoApiSchedulePath(Context, ScheduleId) )
+        return MdoApiReplyError(Context, 400u, "invalid_schedule_path",
+            "The schedule ID is invalid", NULL);
+    memset(&Info, 0, sizeof(Info)); Info.Size = sizeof(Info);
+    if ( !MdoApiScheduleFind(ScheduleId, &Info, NULL, &Available) )
+        return MdoApiScheduleLookupFailure(Context, Available);
+    memset(&Error, 0, sizeof(Error));
+    if ( !MdoScheduleHistoryRecent(ScheduleId, History,
+            MDO_SCHEDULE_HISTORY_PAGE_MAX, &Count, &HasMore, &Error) )
+        return MdoApiReplyError(Context, 500u, "schedule_history_unavailable",
+            "The schedule history could not be read", NULL);
+    Data = xrtValueObject();
+    Items = xrtValueArray();
+    Ok = Data != NULL && Items != NULL;
+    for ( Index = 0u; Ok && Index < Count; ++Index ) {
+        const MdoScheduleHistoryEntry* Entry = &History[Index];
+        xvalue* Item = xrtValueObject();
+        Ok = Item != NULL &&
+            MdoApiValueSetUInt(Item, "task_id", Entry->TaskId) &&
+            MdoApiValueSetUInt(Item, "agent_run_id", Entry->AgentRunId) &&
+            MdoApiValueSetInt(Item, "scheduled_at", Entry->ScheduledAt) &&
+            MdoApiValueSetInt(Item, "finished_at", Entry->FinishedAt) &&
+            MdoApiValueSetString(Item, "result",
+                MdoApiScheduleResultText(Entry->Result)) &&
+            MdoApiValueSetString(Item, "text", Entry->Text) &&
+            MdoApiValueSetBool(Item, "text_truncated", Entry->TextTruncated) &&
+            MdoApiValueAppendTake(Items, &Item);
+        xrtValueRelease(Item);
+    }
+    if ( Ok ) Ok =
+        MdoApiValueSetString(Data, "schedule_id", ScheduleId) &&
+        MdoApiValueSetUInt(Data, "count", Count) &&
+        MdoApiValueSetUInt(Data, "limit", MDO_SCHEDULE_HISTORY_PAGE_MAX) &&
+        MdoApiValueSetBool(Data, "has_more", HasMore) &&
+        MdoApiValueSetTake(Data, "items", &Items);
+    xrtValueRelease(Items);
+    if ( !Ok ) {
+        xrtValueRelease(Data);
+        return MdoApiReplyError(Context, 500u,
+            "schedule_history_unavailable",
+            "The schedule history result could not be created", NULL);
+    }
+    return MdoApiReplySuccessTake(Context, 200u, Data, NULL);
+}

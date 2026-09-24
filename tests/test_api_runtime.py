@@ -2403,6 +2403,41 @@ def run_probe(host: Path) -> None:
                 assert_common(headers, detail_document)
                 assert detail_document["data"] == schedule, detail_document
                 assert headers["etag"] == schedule_etag, headers
+                history_path = home / "schedules/history/api-schedule.jsonl"
+                assert not history_path.exists(), history_path
+                status, headers, body = request(
+                    port, "GET", schedule_path + "/history")
+                empty_history = json.loads(body)["data"]
+                assert status == 200 and empty_history["items"] == [], (
+                    status, body)
+                assert not history_path.exists(), history_path
+                history_path.parent.mkdir(parents=True, exist_ok=True)
+                history_records = [{
+                    "schema_version": 1, "task_id": number,
+                    "agent_run_id": number + 100,
+                    "schedule_id": "api-schedule",
+                    "scheduled_at_us": schedule_start + number * 1000000,
+                    "finished_at_us": schedule_start + number * 1000000 + 1,
+                    "result": 0 if number % 2 else -1,
+                    "text": "中文" * 400 if number == 35 else f"result {number}",
+                } for number in range(1, 36)]
+                history_path.write_text("".join(
+                    json.dumps(row, ensure_ascii=False) + "\n"
+                    for row in history_records), encoding="utf-8")
+                status, headers, body = request(
+                    port, "GET", schedule_path + "/history")
+                history_data = json.loads(body)["data"]
+                assert status == 200, (status, body)
+                assert history_data["count"] == 32, history_data
+                assert history_data["has_more"] is True, history_data
+                assert history_data["items"][0]["task_id"] == 35, history_data
+                assert history_data["items"][-1]["task_id"] == 4, history_data
+                assert history_data["items"][0]["result"] == "succeeded", (
+                    history_data)
+                assert history_data["items"][0]["text_truncated"] is True, (
+                    history_data)
+                assert len(history_data["items"][0]["text"].encode()) <= 1024, (
+                    history_data)
                 schedule_list = json.loads(request(
                     port, "GET", "/api/v1/schedules")[2])["data"]
                 listed_schedule = next(
@@ -2521,6 +2556,10 @@ def run_probe(host: Path) -> None:
                     port, "OPTIONS", schedule_path + "/enabled")
                 assert status == 200 and headers["allow"] == (
                     "PUT, OPTIONS"), (status, headers, body)
+                status, headers, body = request(
+                    port, "OPTIONS", schedule_path + "/history")
+                assert status == 200 and headers["allow"] == (
+                    "GET, HEAD, OPTIONS"), (status, headers, body)
 
                 status, headers, body = request(
                     port, "PATCH", session_path,

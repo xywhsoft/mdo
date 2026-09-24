@@ -1037,6 +1037,16 @@ select:focus-visible,
 .schedule-section .confirm-dialog h3 { margin: 0; font-size: 16px; }
 .schedule-section .confirm-dialog p { font-size: 12px; }
 .schedule-section .dialog-actions { display: flex; justify-content: flex-end; gap: 8px; }
+.schedule-history-dialog { width: min(600px, calc(100vw - 28px)); max-height: min(680px, calc(100dvh - 48px)); padding: 0; border: 1px solid var(--border-strong); border-radius: var(--radius-md); background: var(--surface-raised); color: var(--ink); box-shadow: var(--shadow-dialog); }
+.schedule-history-dialog::backdrop { background: rgb(0 0 0 / 35%); }
+.schedule-history-heading { position: sticky; top: 0; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 13px 16px; border-bottom: 1px solid var(--border); background: var(--surface-raised); }
+.schedule-history-heading h3 { margin: 0; font-size: 15px; }
+#schedule-history-status { margin: 12px 16px; color: var(--muted); font-size: 11px; }
+.schedule-history-list { display: grid; gap: 8px; padding: 0 16px 16px; }
+.schedule-history-item { padding: 10px 12px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface); }
+.schedule-history-item header { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 5px; font-size: 11px; }
+.schedule-history-item time, .schedule-history-item p { color: var(--muted); font-size: 11px; }
+.schedule-history-item p { margin: 8px 0 0; overflow-wrap: anywhere; white-space: pre-wrap; }
 .resource-card { padding: 13px; border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--surface); }
 .resource-card h3 { margin: 0; font-size: 13px; }
 .resource-card p { margin: 5px 0 0; color: var(--muted); font-size: 11px; }
