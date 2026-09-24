@@ -27,7 +27,11 @@ export function createImagePreview({ dialog, image, closeButton, navigation }) {
   dialog.addEventListener("close", () => {
     image.removeAttribute("src");
     image.alt = "";
-    if (origin?.isConnected) origin.focus();
+    const reference = origin?.dataset.imageRef;
+    const target = origin?.isConnected ? origin :
+      reference ? [...document.querySelectorAll("button[data-image-ref]")]
+        .find((button) => button.dataset.imageRef === reference) : null;
+    target?.focus({ preventScroll: true });
     origin = null;
   });
   navigation.subscribe(close);

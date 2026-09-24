@@ -37,6 +37,7 @@ export function createComposerImages({ composer, prompt, button, input, strip,
         element("button", { className: "composer-image-preview", attrs: {
           type: "button", "aria-label": `查看图片 ${index + 1}`,
           "data-image-preview": "",
+          "data-image-ref": `draft:${selected.projectId}/${selected.sessionId}/${id}/${index}`,
         } }, [element("img", { attrs: { src: attachmentUrl(selected.projectId,
           selected.sessionId, id), alt: `图片 ${index + 1}` } })]),
         remove,

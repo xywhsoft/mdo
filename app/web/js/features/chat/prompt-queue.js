@@ -125,6 +125,7 @@ export function createPromptQueue({ container, navigation, onRetry, onRemoved })
           images.append(element("button", { attrs: {
             type: "button", "aria-label": `查看待发送图片 ${imageIndex + 1}`,
             "data-image-preview": "",
+            "data-image-ref": `queue:${key}/${entry.id}/${id}/${imageIndex}`,
           } }, [element("img", { attrs: {
             src: attachmentUrl(projectId, sessionId, id),
             alt: `待发送图片 ${imageIndex + 1}`, loading: "lazy",
