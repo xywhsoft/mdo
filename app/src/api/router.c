@@ -43,11 +43,15 @@ static const MdoApiRoute g_MdoApiRoutes[] = {
       "GET, HEAD, PUT, DELETE, OPTIONS", MdoApiProjectRoute },
     { "/api/v1/memory/global", XHTTP_METHOD_GET | XHTTP_METHOD_HEAD |
       XHTTP_METHOD_PUT, "GET, HEAD, PUT, OPTIONS", MdoApiMemoryCollectionRoute },
+    { "/api/v1/memory/global/open-directory", XHTTP_METHOD_POST,
+      "POST, OPTIONS", MdoApiMemoryOpenDirectoryRoute },
     { "/api/v1/memory/global/{entry}", XHTTP_METHOD_GET | XHTTP_METHOD_HEAD |
       XHTTP_METHOD_DELETE, "GET, HEAD, DELETE, OPTIONS", MdoApiMemoryEntryRoute },
     { "/api/v1/memory/projects/{project}", XHTTP_METHOD_GET |
       XHTTP_METHOD_HEAD | XHTTP_METHOD_PUT,
       "GET, HEAD, PUT, OPTIONS", MdoApiMemoryCollectionRoute },
+    { "/api/v1/memory/projects/{project}/open-directory", XHTTP_METHOD_POST,
+      "POST, OPTIONS", MdoApiMemoryOpenDirectoryRoute },
     { "/api/v1/memory/projects/{project}/{entry}", XHTTP_METHOD_GET |
       XHTTP_METHOD_HEAD | XHTTP_METHOD_DELETE,
       "GET, HEAD, DELETE, OPTIONS", MdoApiMemoryEntryRoute },

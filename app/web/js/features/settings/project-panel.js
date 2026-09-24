@@ -1,6 +1,6 @@
 import { loadProjects, readProject, unregisterProject, updateProject } from "../../state/catalogs.js";
 import { clear, element, errorMessage, toast } from "../../utils/dom.js";
-import { openMemoryPanel } from "./memory-panel.js";
+import { openMemoryPanel, openMemoryDirectory } from "./memory-panel.js";
 
 export function createProjectPanel({ panel, projectsStore, modelsStore,
   projectDialog, navigation }) {
@@ -55,6 +55,11 @@ export function createProjectPanel({ panel, projectsStore, modelsStore,
         attrs: { type: "button" } });
       memory.addEventListener("click", () => openMemoryPanel(project));
       actions.append(memory);
+      const memoryDirectory = element("button", { className: "secondary-button",
+        text: "打开记忆目录", attrs: { type: "button",
+          "aria-label": `打开 ${project.name || project.id} 的记忆目录` } });
+      memoryDirectory.addEventListener("click", () => { void openMemoryDirectory(project); });
+      actions.append(memoryDirectory);
       if (project.managed) {
         const label = element("label", { text: "默认模型" });
         const select = element("select", { attrs: { "aria-label": `${project.name} 的默认模型` } });
@@ -130,6 +135,9 @@ export function createProjectPanel({ panel, projectsStore, modelsStore,
     void loadProjects();
   });
   panel.querySelector("#global-memory").addEventListener("click", () => openMemoryPanel());
+  panel.querySelector("#global-memory-directory").addEventListener("click", () => {
+    void openMemoryDirectory();
+  });
   projectsStore.subscribe(render);
   modelsStore.subscribe(render);
 

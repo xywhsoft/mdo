@@ -80,6 +80,7 @@ bool MdoApiProjectsRoute(MdoApiContext* pContext);
 bool MdoApiProjectRoute(MdoApiContext* pContext);
 bool MdoApiMemoryCollectionRoute(MdoApiContext* pContext);
 bool MdoApiMemoryEntryRoute(MdoApiContext* pContext);
+bool MdoApiMemoryOpenDirectoryRoute(MdoApiContext* pContext);
 bool MdoApiSessionsRoute(MdoApiContext* pContext);
 bool MdoApiRunsRoute(MdoApiContext* pContext);
 bool MdoApiSchedulesRoute(MdoApiContext* pContext);

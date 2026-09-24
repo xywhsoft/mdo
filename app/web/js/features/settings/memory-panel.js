@@ -19,6 +19,16 @@ let baseline = "";
 let busy = false;
 let requestSerial = 0;
 let returnFocus = null;
+let activeProject = null;
+
+export async function openMemoryDirectory(project = null) {
+  const path = project ? `/memory/projects/${resourceId(project.id, "project")}`
+    : "/memory/global";
+  try {
+    await api.post(`${path}/open-directory`, {});
+    toast("已在运行 mdo 的设备上打开记忆目录");
+  } catch (cause) { toast(errorMessage(cause), "error"); }
+}
 
 function setStatus(message, tone = "neutral") {
   status.textContent = message;
@@ -157,6 +167,9 @@ function close() {
 }
 
 dialog.querySelector("#memory-close").addEventListener("click", close);
+dialog.querySelector("#memory-open-directory").addEventListener("click", () => {
+  void openMemoryDirectory(activeProject);
+});
 discard.addEventListener("click", () => { baseline = fingerprint(); dialog.close(); });
 dialog.addEventListener("cancel", (event) => {
   if (!dirty()) return;
@@ -218,6 +231,7 @@ dialog.querySelector("#memory-delete-apply").addEventListener("click", async () 
 
 export function openMemoryPanel(project = null) {
   if (dialog.open) return;
+  activeProject = project;
   collectionPath = project ? `/memory/projects/${resourceId(project.id, "project")}`
     : "/memory/global";
   collection = null;
@@ -230,5 +244,6 @@ export function openMemoryPanel(project = null) {
   fill();
   clear(list);
   dialog.showModal();
+  dialog.querySelector("#memory-close").focus();
   void refresh({ discardDraft: true, selectId: "" });
 }

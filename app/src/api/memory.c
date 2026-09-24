@@ -2,6 +2,7 @@
 #include <string.h>
 
 #include "internal.h"
+#include "../../include/mdo/home.h"
 #include "../memory/internal.h"
 
 #define MDO_API_MEMORY_CONTENT_CAPACITY (16u * 1024u + 1u)
@@ -308,4 +309,76 @@ bool MdoApiMemoryCollectionRoute(MdoApiContext* Context)
 bool MdoApiMemoryEntryRoute(MdoApiContext* Context)
 {
     return MdoApiMemoryRoute(Context, true);
+}
+
+/* A user gesture explicitly materializes the containing Home directory. The
+ * route accepts no filesystem path from the browser; project IDs are checked
+ * by the same parser used for memory reads and writes. */
+bool MdoApiMemoryOpenDirectoryRoute(MdoApiContext* Context)
+{
+    MdoMemoryScope Scope;
+    char Project[MDO_MEMORY_PROJECT_CAPACITY];
+    char Id[MDO_MEMORY_ID_CAPACITY];
+    const char* Directory;
+    MdoApiJsonBody Body;
+    MdoApiBodyStatus BodyStatus;
+    xfileinfo Info;
+    bool Exists = false;
+    str NativePath;
+    bool Opened;
+    xvalue* Data;
+
+    if ( !MdoApiMemoryPath(Context, false, &Scope, Project, Id) )
+        return MdoApiReplyError(Context, 400u, "invalid_memory_path",
+            "Memory path is invalid", NULL);
+    BodyStatus = MdoApiJsonBodyRead(Context, &Body);
+    if ( BodyStatus != MDO_API_BODY_OK )
+        return MdoApiReplyBodyError(Context, BodyStatus);
+    Opened = Body.Value != NULL &&
+        xrtValueType(Body.Value) == XVALUE_OBJECT &&
+        xrtValueCount(Body.Value) == 0u;
+    MdoApiJsonBodyUnit(&Body);
+    if ( !Opened ) return MdoApiReplyError(Context, 400u,
+        "invalid_request", "An empty JSON object is required", NULL);
+
+    Directory = Scope == MDO_MEMORY_GLOBAL ? "memory" : "memory/projects";
+    if ( !MdoHomeExternalStat(Directory, &Exists, &Info) )
+        return MdoApiReplyError(Context, 503u, "memory_directory_unavailable",
+            "Memory directory could not be inspected", NULL);
+    if ( Exists && Info.Type != XFILE_TYPE_DIRECTORY )
+        return MdoApiReplyError(Context, 409u, "memory_directory_conflict",
+            "Memory directory path is occupied by another object", NULL);
+    if ( !Exists && !MdoHomeCreateDirectory(Directory) ) {
+        /* Another local writer may have created the same directory. */
+        xrtClearError();
+        if ( !MdoHomeExternalStat(Directory, &Exists, &Info) ||
+             !Exists || Info.Type != XFILE_TYPE_DIRECTORY )
+            return MdoApiReplyError(Context, 503u,
+                "memory_directory_unavailable",
+                "Memory directory could not be created", NULL);
+    }
+
+    Data = xrtValueObject();
+    if ( Data == NULL ||
+         !MdoApiValueSetBool(Data, "opened", true) ) {
+        xrtValueRelease(Data);
+        return MdoApiReplyError(Context, 500u,
+            "memory_response_unavailable", "Cannot prepare directory response",
+            NULL);
+    }
+    NativePath = MdoHomeExternalPath(Directory);
+    if ( NativePath == NULL ) {
+        xrtValueRelease(Data);
+        return MdoApiReplyError(Context, 503u,
+            "memory_directory_unavailable", "Memory directory path is unavailable",
+            NULL);
+    }
+    Opened = xrtProcessOpen(NativePath);
+    xrtFree(NativePath);
+    if ( !Opened ) {
+        xrtValueRelease(Data);
+        return MdoApiReplyError(Context, 503u, "desktop_unavailable",
+            "Could not open the directory on this device", NULL);
+    }
+    return MdoApiReplySuccessTake(Context, 200u, Data, NULL);
 }

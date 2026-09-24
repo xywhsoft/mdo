@@ -307,7 +307,7 @@
                 <h2 id="settings-projects-title">项目</h2>
                 <p>管理工作区目录和默认模型。取消注册会保留已有会话与计划。</p>
               </div>
-              <div class="project-panel-toolbar"><button class="secondary-button" id="projects-add" type="button">添加项目</button><button class="secondary-button" id="projects-refresh" type="button">刷新</button><button class="secondary-button" id="global-memory" type="button">全局记忆</button></div>
+              <div class="project-panel-toolbar"><button class="secondary-button" id="projects-add" type="button">添加项目</button><button class="secondary-button" id="projects-refresh" type="button">刷新</button><button class="secondary-button" id="global-memory" type="button">全局记忆</button><button class="secondary-button" id="global-memory-directory" type="button">打开记忆目录</button></div>
               <div id="settings-projects-list" class="project-settings-list" aria-live="polite"></div>
             </section>
 
@@ -473,7 +473,7 @@
 
   <dialog class="memory-dialog" id="memory-dialog" aria-labelledby="memory-title">
     <div class="memory-dialog-shell">
-      <header class="memory-dialog-heading"><div><h2 id="memory-title">项目记忆</h2><p id="memory-path"></p></div><div class="memory-heading-actions"><button class="secondary-button" id="memory-discard" type="button" hidden>放弃并关闭</button><button class="secondary-button" id="memory-close" type="button">关闭</button></div></header>
+      <header class="memory-dialog-heading"><div><h2 id="memory-title">项目记忆</h2><p id="memory-path"></p></div><div class="memory-heading-actions"><button class="secondary-button" id="memory-open-directory" type="button">打开文件夹</button><button class="secondary-button" id="memory-discard" type="button" hidden>放弃并关闭</button><button class="secondary-button" id="memory-close" type="button">关闭</button></div></header>
       <p class="memory-status" id="memory-status" role="status"></p>
       <div class="memory-dialog-body">
         <div class="memory-list-pane"><div class="memory-list-heading"><strong>条目</strong><div><button class="secondary-button" id="memory-refresh" type="button">刷新</button><button class="secondary-button" id="memory-new" type="button">新建</button></div></div><div id="memory-list" class="memory-list"></div></div>
