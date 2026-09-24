@@ -148,17 +148,22 @@ export function eventsToTimeline(events, historyLost = false) {
         items.push({ key: `error-${event.event_id}`, kind: "error", role: "运行错误", text: event.text || "Agent 运行失败", state: "failed", time: event.time });
         break;
       case "agent_done": {
+        const terminalState = event.success ? "done" : "cancelled";
         for (const item of items) {
           if (item.runKey !== runKey || item.runEpoch !== epoch ||
               item.state !== "running" ||
               (item.kind !== "reasoning" && item.kind !== "tool")) continue;
-          item.state = event.success ? "done" : "failed";
+          item.state = terminalState;
         }
         const answer = [...items].reverse().find((item) => item.kind === "assistant" &&
           item.runKey === runKey && item.runEpoch === epoch);
-        if (answer) answer.state = event.success ? "done" : "failed";
-        else if (event.text) items.push({ key: `done-${event.event_id}`, kind: "assistant", role: event.model || "Agent", text: event.text, state: event.success ? "done" : "failed", time: event.time,
-          retryPrompt: promptsByRun.get(runKey) });
+        if (answer) answer.state = terminalState;
+        else if (event.text || !event.success) items.push({
+          key: `done-${event.event_id}`, kind: "assistant",
+          role: event.model || "Agent", text: event.text || "",
+          state: terminalState, time: event.time,
+          runKey, runEpoch: epoch, retryPrompt: promptsByRun.get(runKey),
+        });
         break;
       }
       case "history_truncated":
@@ -254,7 +259,8 @@ function foldSection(label, value, copy = false) {
 
 function foldableNode(item, openState) {
   const running = item.state === "running";
-  const status = running ? "运行中" : item.state === "failed" ? "失败" : "完成";
+  const status = running ? "运行中" : item.state === "failed" ? "失败" :
+    item.state === "cancelled" ? "已停止" : "完成";
   const lastLine = item.text?.trimEnd().split("\n").at(-1) || "";
   const preview = item.kind === "reasoning"
     ? (running ? shortLine(lastLine) : "")
@@ -300,6 +306,8 @@ function timelineNode(item, handlers, feedback, projectId, sessionId, openState)
     element("span", { className: "timeline-role", text: item.role }),
     time,
   ]);
+  if (item.kind === "assistant" && item.state === "cancelled")
+    header.insertBefore(element("span", { className: "timeline-stopped", text: "已停止" }), time);
   const body = element("div", { className: "timeline-body" +
     (item.kind === "assistant" ? " markdown-body" : "") });
   if (item.kind === "assistant") body.append(renderMarkdown(item.text));

@@ -198,6 +198,14 @@ def run_probe(host: Path) -> None:
             status, body = request(port, "DELETE", run_path)
             assert status == 200, (status, body)
             until(lambda: request(port, "GET", run_path)[1]["data"]["terminal"])
+            status, body = request(port, "GET", path +
+                                   "/events?after=0&limit=32")
+            assert status == 200, (status, body)
+            stopped = [event for event in body["data"]["items"]
+                       if event["kind"] == "agent_done" and
+                       not event["success"] and event["terminal"]]
+            assert len(stopped) == 1, body
+            stopped_event_id = stopped[0]["event_id"]
             status, body = request(port, "GET", path + "/recovery")
             assert status == 200, (status, body)
             recovery = body["data"]
@@ -222,6 +230,12 @@ def run_probe(host: Path) -> None:
 
             stop_host(process)
             process = start_host(host, config, home, environment, log, port)
+            status, body = request(port, "GET", path +
+                                   "/events?after=0&limit=32")
+            assert status == 200 and any(
+                event["event_id"] == stopped_event_id and
+                event["kind"] == "agent_done" and not event["success"]
+                for event in body["data"]["items"]), body
             status, body = request(port, "GET", path + "/recovery")
             assert status == 200 and not body["data"]["resume_required"], body
             status, body = request(port, "POST", path + "/runs", {
