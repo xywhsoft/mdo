@@ -2,8 +2,8 @@ import { element, clear, formatClock, errorMessage, toast } from "../../utils/do
 import { attachmentUrl } from "../../api/client.js";
 import { renderMarkdown } from "./markdown.js";
 
-function modelKey(event) {
-  return `${event.run_id || event.agent_id || event.event_id}-${event.agent_turn || 0}`;
+function modelKey(event, epoch) {
+  return `${event.run_id || event.agent_id || event.event_id}-${epoch}-${event.agent_turn || 0}`;
 }
 
 function appendOrCreate(items, event, kind, role, key) {
@@ -21,13 +21,16 @@ export function eventsToTimeline(events, historyLost = false) {
   const tools = new Map();
   const modelStarts = new Map();
   const promptsByRun = new Map();
+  const runEpochs = new Map();
   if (historyLost) {
     items.push({ key: "history-gap", kind: "system", role: "记录提示", text: "更早的事件已不在当前记录中。", state: "done", time: 0 });
   }
   for (const event of events) {
     const runKey = String(event.run_id || event.agent_id || event.event_id);
+    const epoch = runEpochs.get(runKey) ?? 0;
     switch (event.kind) {
       case "agent_start":
+        runEpochs.set(runKey, Number(event.event_id) || 0);
         if (event.agent_depth === 0 && Number(event.user_message_sequence) > 0)
           promptsByRun.set(runKey, {
             sequence: Number(event.user_message_sequence),
@@ -42,50 +45,75 @@ export function eventsToTimeline(events, historyLost = false) {
             userMessageSequence: Number(event.user_message_sequence || 0),
             textTruncated: Boolean(event.text_truncated) });
         break;
-      case "model_reasoning_delta":
-        appendOrCreate(items, event, "reasoning", "思考", `reasoning-${modelKey(event)}`);
+      case "model_reasoning_delta": {
+        const thought = appendOrCreate(items, event, "reasoning", "思考",
+          `reasoning-${modelKey(event, epoch)}`);
+        thought.runKey = runKey;
+        thought.runEpoch = epoch;
         break;
+      }
       case "model_text_delta":
         {
-          const answer = appendOrCreate(items, event, "assistant", event.model || "Agent", `assistant-${modelKey(event)}`);
+          const answer = appendOrCreate(items, event, "assistant", event.model || "Agent", `assistant-${modelKey(event, epoch)}`);
           answer.runKey = runKey;
+          answer.runEpoch = epoch;
           answer.retryPrompt = promptsByRun.get(runKey);
         }
         break;
       case "model_done": {
-        const answer = [...items].reverse().find((item) => item.key === `assistant-${modelKey(event)}`);
+        for (const thought of items) {
+          if (thought.kind !== "reasoning" ||
+              thought.key !== `reasoning-${modelKey(event, epoch)}`) continue;
+          thought.state = event.success ? "done" : "failed";
+          thought.durationSeconds = Math.max(0,
+            (Number(event.time) - Number(thought.time)) / 1e6);
+        }
+        const answer = [...items].reverse().find((item) => item.key === `assistant-${modelKey(event, epoch)}`);
         if (answer) {
           answer.state = event.success ? "done" : "failed";
           if (event.success && Number.isSafeInteger(Number(event.event_id)))
             answer.feedbackEventId = Number(event.event_id);
           answer.inputTokens = Number(event.input_tokens || 0);
           answer.outputTokens = Number(event.output_tokens || 0);
-          const elapsed = (Number(event.time) - Number(modelStarts.get(modelKey(event)) || answer.time)) / 1e6;
+          const elapsed = (Number(event.time) - Number(modelStarts.get(modelKey(event, epoch)) || answer.time)) / 1e6;
           if (elapsed > 0 && answer.outputTokens > 0) answer.tokensPerSecond = answer.outputTokens / elapsed;
         }
         break;
       }
       case "tool_start": {
         const item = {
-          key: `tool-${event.tool_call_id || event.event_id}`,
+          key: `tool-${event.event_id}`,
           kind: "tool",
           role: event.tool_name || "工具",
           text: event.text || "正在执行…",
+          inputText: event.text || "",
+          outputText: "",
+          runKey,
+          runEpoch: epoch,
           state: "running",
           time: event.time,
           meta: event.tool_call_id || "",
         };
-        tools.set(event.tool_call_id, item);
+        if (event.tool_call_id)
+          tools.set(`${runKey}:${epoch}:${event.tool_call_id}`, item);
         items.push(item);
         break;
       }
       case "tool_done": {
-        const tool = tools.get(event.tool_call_id);
+        const tool = event.tool_call_id
+          ? tools.get(`${runKey}:${epoch}:${event.tool_call_id}`) : null;
         if (tool) {
-          tool.text = event.text || (event.success ? "执行完成" : "执行失败");
+          tool.outputText = event.text || (event.success ? "执行完成" : "执行失败");
+          tool.text = tool.outputText;
           tool.state = event.success ? "done" : "failed";
+          tool.durationSeconds = Math.max(0,
+            (Number(event.time) - Number(tool.time)) / 1e6);
         } else {
-          items.push({ key: `tool-${event.event_id}`, kind: "tool", role: event.tool_name || "工具", text: event.text || "执行完成", state: event.success ? "done" : "failed", time: event.time });
+          const outputText = event.text || (event.success ? "执行完成" : "执行失败");
+          items.push({ key: `tool-${event.event_id}`, kind: "tool",
+            role: event.tool_name || "工具", text: outputText,
+            inputText: "", outputText,
+            state: event.success ? "done" : "failed", time: event.time });
         }
         break;
       }
@@ -108,7 +136,14 @@ export function eventsToTimeline(events, historyLost = false) {
         items.push({ key: `error-${event.event_id}`, kind: "error", role: "运行错误", text: event.text || "Agent 运行失败", state: "failed", time: event.time });
         break;
       case "agent_done": {
-        const answer = [...items].reverse().find((item) => item.kind === "assistant" && item.runKey === runKey);
+        for (const item of items) {
+          if (item.runKey !== runKey || item.runEpoch !== epoch ||
+              item.state !== "running" ||
+              (item.kind !== "reasoning" && item.kind !== "tool")) continue;
+          item.state = event.success ? "done" : "failed";
+        }
+        const answer = [...items].reverse().find((item) => item.kind === "assistant" &&
+          item.runKey === runKey && item.runEpoch === epoch);
         if (answer) answer.state = event.success ? "done" : "failed";
         else if (event.text) items.push({ key: `done-${event.event_id}`, kind: "assistant", role: event.model || "Agent", text: event.text, state: event.success ? "done" : "failed", time: event.time,
           retryPrompt: promptsByRun.get(runKey) });
@@ -120,7 +155,7 @@ export function eventsToTimeline(events, historyLost = false) {
           state: "done", time: event.time });
         break;
       case "model_start":
-        modelStarts.set(modelKey(event), event.time);
+        modelStarts.set(modelKey(event, epoch), event.time);
         break;
       default:
         items.push({ key: `event-${event.event_id}`, kind: "system", role: "事件", text: event.text || event.kind || "未知事件", state: event.terminal ? "done" : "running", time: event.time });
@@ -153,13 +188,102 @@ async function copyText(value) {
   if (!copied) throw new Error("clipboard unavailable");
 }
 
-function timelineNode(item, handlers, feedback, projectId, sessionId) {
-  const time = element("time", { className: "timeline-time", text: formatClock(item.time) });
-  if (item.time) {
-    const date = new Date(Number(item.time) / 1000);
+function timeNode(value) {
+  const time = element("time", { className: "timeline-time", text: formatClock(value) });
+  if (value) {
+    const date = new Date(Number(value) / 1000);
     time.dateTime = date.toISOString();
     time.title = date.toLocaleString("zh-CN");
   }
+  return time;
+}
+
+function shortLine(value) {
+  const line = String(value ?? "").replace(/\s+/g, " ").trim();
+  return line.length > 110 ? `${line.slice(0, 110)}…` : line;
+}
+
+function toolSummaryText(value) {
+  const raw = String(value ?? "");
+  try {
+    const args = JSON.parse(raw);
+    if (args && typeof args === "object" && !Array.isArray(args)) {
+      for (const name of ["command", "path", "file_path", "pattern",
+        "url", "query", "goal", "argv"]) {
+        const candidate = args[name];
+        if (typeof candidate === "string" && candidate.trim())
+          return shortLine(candidate);
+        if (Array.isArray(candidate) && candidate.every((part) =>
+          typeof part === "string")) return shortLine(candidate.join(" "));
+      }
+    }
+  } catch { /* tool start may already be a human-readable summary */ }
+  return shortLine(raw);
+}
+
+function foldSection(label, value, copy = false) {
+  const heading = element("div", { className: "timeline-fold-section-heading" }, [
+    element("span", { text: label }),
+  ]);
+  if (copy) {
+    const button = element("button", { text: "复制", attrs: {
+      type: "button", "aria-label": `复制${label}`,
+    } });
+    button.addEventListener("click", async () => {
+      try { await copyText(value); toast("已复制"); }
+      catch { toast("无法复制", "error"); }
+    });
+    heading.append(button);
+  }
+  return element("div", { className: "timeline-fold-section" }, [
+    heading, element("pre", { text: value }),
+  ]);
+}
+
+function foldableNode(item, openState) {
+  const running = item.state === "running";
+  const status = running ? "运行中" : item.state === "failed" ? "失败" : "完成";
+  const lastLine = item.text?.trimEnd().split("\n").at(-1) || "";
+  const preview = item.kind === "reasoning"
+    ? (running ? shortLine(lastLine) : "")
+    : toolSummaryText(item.inputText || item.outputText || item.text);
+  const duration = Number.isFinite(item.durationSeconds) && item.durationSeconds > 0
+    ? `${item.durationSeconds.toFixed(1)} 秒` : "";
+  const details = element("details", { className: "timeline-fold",
+    attrs: { "data-timeline-key": item.key } });
+  details.open = openState ?? running;
+  details.append(element("summary", { className: "timeline-fold-summary" }, [
+    element("span", { className: "timeline-fold-marker", attrs: { "aria-hidden": "true" } }),
+    element("span", { className: "timeline-role", text: item.role }),
+    element("span", { className: "timeline-fold-preview", text: preview }),
+    element("span", { className: "timeline-fold-status", text: duration || status }),
+    timeNode(item.time),
+  ]));
+  function updateBody() {
+    details.querySelector(".timeline-fold-body")?.remove();
+    if (!details.open) return;
+    const body = element("div", { className: "timeline-fold-body" });
+    if (item.kind === "reasoning") {
+      body.append(foldSection("思考过程", item.text || "正在思考…"));
+    } else {
+      if (item.inputText) body.append(foldSection("调用", item.inputText, true));
+      if (item.outputText) body.append(foldSection(
+        item.state === "failed" ? "错误输出" : "结果", item.outputText, true));
+      if (!item.inputText && !item.outputText)
+        body.append(foldSection("执行中", item.text || "正在执行…"));
+    }
+    details.append(body);
+  }
+  details.addEventListener("toggle", updateBody);
+  updateBody();
+  return element("li", { className: "timeline-item",
+    attrs: { "data-kind": item.kind, "data-state": item.state } }, [details]);
+}
+
+function timelineNode(item, handlers, feedback, projectId, sessionId, openState) {
+  if (item.kind === "reasoning" || item.kind === "tool")
+    return foldableNode(item, openState);
+  const time = timeNode(item.time);
   const header = element("div", { className: "timeline-item-header" }, [
     element("span", { className: "timeline-role", text: item.role }),
     time,
@@ -270,6 +394,8 @@ export function createTimelineView({ container, welcome, toBottom, store, feedba
   let frame = 0;
   let followTail = true;
   let searchQuery = "";
+  let renderedSession = "";
+  const expanded = new Map();
   const scroller = container.closest(".conversation");
 
   function updateBottomButton() {
@@ -281,9 +407,26 @@ export function createTimelineView({ container, welcome, toBottom, store, feedba
     frame = 0;
     const state = pendingState;
     const data = state.data;
+    const sessionKey = `${data?.projectId ?? ""}/${data?.sessionId ?? ""}`;
+    let focusedKey = "";
+    if (sessionKey === renderedSession) {
+      const focusedFold = document.activeElement?.closest?.(
+        "details[data-timeline-key]");
+      if (focusedFold && container.contains(focusedFold))
+        focusedKey = focusedFold.getAttribute("data-timeline-key") || "";
+      for (const details of container.querySelectorAll("details[data-timeline-key]"))
+        expanded.set(details.getAttribute("data-timeline-key"), details.open);
+    } else {
+      expanded.clear();
+      renderedSession = sessionKey;
+    }
     const items = eventsToTimeline(data?.events ?? [], data?.historyLost);
+    const foldKeys = new Set(items.filter((item) =>
+      item.kind === "reasoning" || item.kind === "tool").map((item) => item.key));
+    for (const key of expanded.keys()) if (!foldKeys.has(key)) expanded.delete(key);
     const visible = searchQuery ? items.filter((item) =>
-      `${item.role} ${item.text} ${item.meta ?? ""}`.toLocaleLowerCase().includes(searchQuery)) : items;
+      `${item.role} ${item.inputText ?? ""} ${item.text} ${item.meta ?? ""}`
+        .toLocaleLowerCase().includes(searchQuery)) : items;
     onSearchCount?.(searchQuery ? visible.length : 0, Boolean(data?.historyLost));
     welcome.hidden = Boolean(data?.sessionId && items.length > 0);
     clear(container);
@@ -296,7 +439,12 @@ export function createTimelineView({ container, welcome, toBottom, store, feedba
       for (const item of visible)
         container.append(timelineNode(item, handlers,
           feedback.get(item.feedbackEventId) ?? "", data?.projectId,
-          data?.sessionId));
+          data?.sessionId, expanded.get(item.key)));
+    }
+    if (focusedKey) {
+      const replacement = [...container.querySelectorAll("details[data-timeline-key]")]
+        .find((node) => node.getAttribute("data-timeline-key") === focusedKey);
+      replacement?.querySelector("summary")?.focus({ preventScroll: true });
     }
     if (followTail && !searchQuery) scroller.scrollTop = scroller.scrollHeight;
     updateBottomButton();

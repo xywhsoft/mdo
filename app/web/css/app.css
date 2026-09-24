@@ -511,6 +511,26 @@ select:focus-visible,
 }
 .timeline-item[data-kind="error"] { border-color: color-mix(in srgb, var(--danger) 42%, var(--border)); }
 .timeline-item[data-kind="error"] .timeline-role { color: var(--danger); }
+.timeline-item[data-kind="reasoning"], .timeline-item[data-kind="tool"] { padding: 0; border: 0; background: transparent; }
+.timeline-fold { border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--surface); }
+.timeline-item[data-kind="reasoning"] .timeline-fold { border-left: 2px solid var(--border-strong); }
+.timeline-fold-summary { display: grid; grid-template-columns: auto auto minmax(0, 1fr) auto auto auto; align-items: center; gap: 8px; min-height: 36px; padding: 7px 11px; list-style: none; cursor: pointer; }
+.timeline-fold-summary::-webkit-details-marker { display: none; }
+.timeline-fold-summary::after { content: "›"; color: var(--muted); font-size: 17px; line-height: 1; transform: rotate(0); }
+.timeline-fold[open] .timeline-fold-summary::after { transform: rotate(90deg); }
+.timeline-fold-marker { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); }
+.timeline-item[data-state="running"] .timeline-fold-marker { background: var(--warning); }
+.timeline-item[data-state="failed"] .timeline-fold-marker { background: var(--danger); }
+.timeline-fold-summary .timeline-role { white-space: nowrap; }
+.timeline-fold-preview { min-width: 0; overflow: hidden; color: var(--muted); font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
+.timeline-fold-status { color: var(--faint); font-size: 10px; white-space: nowrap; }
+.timeline-fold-summary .timeline-time { white-space: nowrap; }
+.timeline-fold-body { display: grid; gap: 9px; padding: 0 11px 11px; border-top: 1px solid var(--border); }
+.timeline-fold-section { min-width: 0; }
+.timeline-fold-section-heading { display: flex; align-items: center; justify-content: space-between; min-height: 30px; color: var(--muted); font-size: 10px; }
+.timeline-fold-section-heading button { border: 0; border-radius: 5px; background: transparent; color: var(--muted); font: inherit; cursor: pointer; }
+.timeline-fold-section-heading button:hover { color: var(--ink); }
+.timeline-fold-section pre { max-height: 320px; margin: 0; overflow: auto; padding: 9px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface-raised); color: var(--ink); font: 11px/1.5 ui-monospace, SFMono-Regular, Consolas, monospace; overflow-wrap: anywhere; white-space: pre-wrap; }
 .timeline-item[data-state="running"] .timeline-role::after { content: ""; display: inline-block; width: 5px; height: 5px; margin-left: 7px; border-radius: 50%; background: var(--warning); animation: pulse 1.5s infinite; }
 .timeline-meta { margin-top: 7px; color: var(--faint); font: 11px ui-monospace, SFMono-Regular, Consolas, monospace; }
 .timeline-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; min-height: 28px; margin-top: 6px; }
