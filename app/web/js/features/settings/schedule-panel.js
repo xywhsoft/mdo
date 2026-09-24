@@ -1,6 +1,7 @@
 import { resourceId } from "../../api/client.js";
 import { createSchedule, loadSchedules, readSchedule, removeSchedule,
-  readScheduleHistory, replaceSchedule, schedulesStore, setScheduleEnabled } from "../../state/schedules.js";
+  readScheduleHistory, replaceSchedule, runSchedule, schedulesStore,
+  setScheduleEnabled } from "../../state/schedules.js";
 import { clear, element, errorMessage, toast } from "../../utils/dom.js";
 
 const FREQUENCY = { once: "仅一次", minutely: "分钟", hourly: "小时", daily: "天", weekly: "周" };
@@ -48,10 +49,15 @@ export function createSchedulePanel({ panel, projectsStore, agentsStore, modelsS
   let loadGeneration = 0;
   let deleteTarget = null;
   let historyGeneration = 0;
+  let activeRefresh = 0;
 
   function setFeedback(message, error = false) {
     formStatus.textContent = message;
     formStatus.dataset.tone = error ? "error" : "neutral";
+  }
+
+  function visible() {
+    return !document.hidden && panel.getClientRects().length > 0;
   }
 
   function syncConditionalFields() {
@@ -132,6 +138,7 @@ export function createSchedulePanel({ panel, projectsStore, agentsStore, modelsS
   }
 
   function render(state) {
+    if (activeRefresh) { clearTimeout(activeRefresh); activeRefresh = 0; }
     if (state.status === "loading") {
       status.textContent = "正在读取计划任务…";
       return;
@@ -143,6 +150,11 @@ export function createSchedulePanel({ panel, projectsStore, agentsStore, modelsS
     const data = state.data;
     if (!data) return;
     const items = data.items ?? [];
+    if (visible() && items.some((item) => item.active_runs > 0))
+      activeRefresh = setTimeout(() => {
+        activeRefresh = 0;
+        if (visible()) void loadSchedules();
+      }, 1000);
     status.textContent = `${data.total ?? items.length} 项计划` +
       (!data.enabled ? " · 全局执行已关闭，可在 Agent 设置中开启" : "") +
       (data.truncated ? " · 仅显示前 100 项" : "") +
@@ -167,13 +179,19 @@ export function createSchedulePanel({ panel, projectsStore, agentsStore, modelsS
       for (const [action, text, className] of [
         ["edit", "编辑", "secondary-button"],
         ["enabled", item.enabled ? "暂停" : "启用", "secondary-button"],
+        ["run", "立即运行", "secondary-button"],
         ["history", "历史", "secondary-button"],
         ["delete", "删除", "danger-link"],
       ]) {
         const button = element("button", { className, text, attrs: { type: "button" } });
         button.dataset.scheduleId = item.id;
         button.dataset.scheduleAction = action;
-        button.disabled = busy;
+        button.disabled = busy || (action === "run" &&
+          (!data.enabled || data.persistence_fault ||
+            item.active_runs >= item.max_concurrent_runs));
+        if (action === "run" && button.disabled && !busy)
+          button.title = !data.enabled ? "请先在 Agent 设置中启用计划任务" :
+            data.persistence_fault ? "计划任务存储不可用" : "已达到并发运行上限";
         actions.append(button);
       }
       card.append(actions);
@@ -298,6 +316,8 @@ export function createSchedulePanel({ panel, projectsStore, agentsStore, modelsS
     if (!item) return;
     if (button.dataset.scheduleAction === "edit") void openEditor(item.id);
     if (button.dataset.scheduleAction === "history") void openHistory(item);
+    if (button.dataset.scheduleAction === "run")
+      void mutate(() => runSchedule(item.id, item.revision), "计划已开始运行");
     if (button.dataset.scheduleAction === "enabled")
       void mutate(() => setScheduleEnabled(item.id, item.revision, !item.enabled),
         item.enabled ? "计划已暂停" : "计划已启用");
@@ -335,6 +355,9 @@ export function createSchedulePanel({ panel, projectsStore, agentsStore, modelsS
     fields.label.focus();
   });
   panel.querySelector("#schedules-refresh").addEventListener("click", () => { void loadSchedules(); });
+  document.addEventListener("visibilitychange", () => {
+    if (visible()) void loadSchedules();
+  });
   projectsStore.subscribe(fillCatalogs);
   agentsStore.subscribe(fillCatalogs);
   modelsStore.subscribe(fillCatalogs);

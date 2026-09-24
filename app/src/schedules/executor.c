@@ -170,7 +170,7 @@ static bool MdoScheduleExecutorFailClaim(uint64 TaskId, const char* Message,
 }
 
 static bool MdoScheduleExecutorStart(const MdoScheduleClaim* Claim,
-    xwork_error* Error)
+    uint64* AgentRunId, xwork_error* Error)
 {
     MdoAgentSessionOptions SessionOptions;
     MdoAgentRunOptions RunOptions;
@@ -231,6 +231,7 @@ static bool MdoScheduleExecutorStart(const MdoScheduleClaim* Claim,
     MdoAgentSessionRelease(Session);
     if ( g_MdoScheduleExecutor.ClaimsStarted != UINT64_MAX )
         ++g_MdoScheduleExecutor.ClaimsStarted;
+    if ( AgentRunId != NULL ) *AgentRunId = Info.Run.uRunId;
     return true;
 fail:
     snprintf(Failure, sizeof(Failure), "%s",
@@ -285,7 +286,7 @@ bool MdoScheduleExecutorPump(int64 Now, size_t* Started, size_t* Completed,
         MdoScheduleClaimInit(&Claim);
         if ( !MdoScheduleClaimDue(Now, &Claim, Error) ) goto done;
         if ( !Claim.Claimed ) break;
-        if ( !MdoScheduleExecutorStart(&Claim, Error) ) goto done;
+        if ( !MdoScheduleExecutorStart(&Claim, NULL, Error) ) goto done;
         ++StartedValue;
     }
     Ok = true;
@@ -295,6 +296,43 @@ done:
     xrtMutexUnlock(g_MdoScheduleExecutor.Lock);
     if ( Started != NULL ) *Started = StartedValue;
     if ( Completed != NULL ) *Completed = CompletedValue;
+    return Ok;
+}
+
+bool MdoScheduleExecutorRunNow(const char* ScheduleId,
+    uint64 ExpectedRevision, int64 Now, uint64* TaskId,
+    uint64* AgentRunId, xwork_error* Error)
+{
+    MdoScheduleClaim Claim;
+    bool Ok = false;
+    xworkErrorInit(Error);
+    if ( TaskId != NULL ) *TaskId = 0u;
+    if ( AgentRunId != NULL ) *AgentRunId = 0u;
+    if ( !g_MdoScheduleExecutor.Initialized || ScheduleId == NULL ||
+         ExpectedRevision == 0u || Now <= 0 ) {
+        MdoScheduleExecutorError(Error, XWORK_ERROR_INVALID_ARGUMENT,
+            "invalid explicit schedule run request");
+        return false;
+    }
+    xrtMutexLock(g_MdoScheduleExecutor.Lock);
+    if ( g_MdoScheduleExecutor.Stopping ) {
+        MdoScheduleExecutorError(Error, XWORK_ERROR_CANCELLED,
+            "schedule executor is stopping");
+        goto done;
+    }
+    if ( !MdoScheduleExecutorGrow() ) {
+        MdoScheduleExecutorError(Error, XWORK_ERROR_LIMIT,
+            "schedule executor active run limit was exceeded");
+        goto done;
+    }
+    MdoScheduleClaimInit(&Claim);
+    if ( !MdoScheduleTrigger(ScheduleId, ExpectedRevision, Now,
+            &Claim, Error) ) goto done;
+    if ( !MdoScheduleExecutorStart(&Claim, AgentRunId, Error) ) goto done;
+    if ( TaskId != NULL ) *TaskId = Claim.TaskId;
+    Ok = true;
+done:
+    xrtMutexUnlock(g_MdoScheduleExecutor.Lock);
     return Ok;
 }
 

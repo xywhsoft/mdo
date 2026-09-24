@@ -36,6 +36,8 @@ mdo-home/
 
 全局 `settings.agent.schedules=false` 会保留并展示定义，但将它们以 disabled 状态恢复到 xwork。此时 catalog 的 `Runnable` 为 false，claim 保持空闲。
 
+显式“立即运行”要求全局执行开关开启、定义已恢复且调用方持有当前 revision。它使用 xwork 的统一 scheduled task 和并发上限；暂停或周期已结束的定义也可执行。此操作更新最近认领时间、认领计数和 revision，写入 `run-now` audit，却不推进下一次 occurrence 或 catch-up 游标。执行失败仍通过常规 task/历史链记录。
+
 ## Agent 执行
 
 bootstrap 创建一个长生命周期 schedule executor。生产默认使用一个轻量 timer thread，每 250 ms 把 `xrtNow()` 显式传给 manager；嵌入端和测试可关闭自动模式并调用 `MdoScheduleExecutorPump()` 注入模拟时钟。每次 pump 最多认领 4 个 occurrence，公开上限为 16，活动 Agent run 总量上限为 64。
@@ -50,9 +52,10 @@ bootstrap 创建一个长生命周期 schedule executor。生产默认使用一�
 - `MdoScheduleSetEnabled` 使用 revision 启停定义。
 - `MdoScheduleRemove` 使用 revision 删除没有活动 run 的定义；历史和审计保留。
 - `MdoScheduleClaimDue` 提供确定性单次认领，供 executor 或嵌入宿主使用。
+- `MdoScheduleTrigger` 和 `MdoScheduleExecutorRunNow` 按 revision 显式启动一个普通 Agent run，并返回 task/run ID。
 - `MdoScheduleFinishTaskWithRun` 对齐 scheduled task 与 Agent run 历史。
 - `MdoScheduleHistoryRecent` 有界读取最近 32 条持久完成记录；文本以 UTF-8 边界截断为预览，无历史时不创建 Home。
 - `MdoScheduleCatalogSnapshot` 返回引用计数不可变快照和恢复 diagnostics。
 - `MdoScheduleExecutorGetSnapshot` 返回活动数、累计 claim/completion/failure 和最近错误。
 
-计划任务的 HTTP 资源和 UI 编辑器已接入；执行历史以有界最近记录页展示。手动立即运行与更早历史的分页仍需在后续阶段实现。
+计划任务的 HTTP 资源和 UI 编辑器已接入；执行历史以有界最近记录页展示。更早历史的分页仍需在后续阶段实现。

@@ -823,3 +823,65 @@ bool MdoApiScheduleHistoryRoute(MdoApiContext* Context)
     }
     return MdoApiReplySuccessTake(Context, 200u, Data, NULL);
 }
+
+bool MdoApiScheduleRunRoute(MdoApiContext* Context)
+{
+    char ScheduleId[MDO_SCHEDULE_ID_CAPACITY];
+    MdoApiSchedulePreconditionStatus Precondition;
+    MdoScheduleInfo Info;
+    xwork_error Error;
+    xvalue* Data;
+    uint64 ExpectedRevision = 0u;
+    uint64 TaskId = 0u;
+    uint64 AgentRunId = 0u;
+    bool Available = false;
+    bool MatchesSchedule = false;
+    if ( !MdoApiSchedulePath(Context, ScheduleId) )
+        return MdoApiReplyError(Context, 400u, "invalid_schedule_path",
+            "The schedule ID is invalid", NULL);
+    if ( !MdoApiScheduleNoBody(Context) )
+        return MdoApiReplyError(Context, 400u, "body_not_allowed",
+            "This operation does not accept a request body", NULL);
+    Precondition = MdoApiScheduleExpectedRevision(Context, ScheduleId,
+        &ExpectedRevision, &MatchesSchedule);
+    if ( Precondition == MDO_API_SCHEDULE_PRECONDITION_MISSING )
+        return MdoApiReplyError(Context, 428u, "precondition_required",
+            "If-Match must contain the current schedule ETag", NULL);
+    if ( Precondition != MDO_API_SCHEDULE_PRECONDITION_OK )
+        return MdoApiReplyError(Context, 400u, "invalid_precondition",
+            "If-Match must use the form \"mdo-schedule-ID-N\"", NULL);
+    memset(&Info, 0, sizeof(Info)); Info.Size = sizeof(Info);
+    if ( !MdoApiScheduleFind(ScheduleId, &Info, NULL, &Available) )
+        return MdoApiScheduleLookupFailure(Context, Available);
+    if ( !MatchesSchedule || Info.Revision != ExpectedRevision )
+        return MdoApiReplyError(Context, 412u, "revision_conflict",
+            "The schedule changed; reload it before running", NULL);
+    memset(&Error, 0, sizeof(Error));
+    if ( !MdoScheduleExecutorRunNow(ScheduleId, ExpectedRevision, xrtNow(),
+            &TaskId, &AgentRunId, &Error) ) {
+        if ( Error.eCode == XWORK_ERROR_CONTEXT )
+            return MdoApiScheduleMutationFailure(Context, ScheduleId,
+                ExpectedRevision, &Error, false);
+        if ( Error.eCode == XWORK_ERROR_IO )
+            return MdoApiReplyError(Context, 500u,
+                "schedule_persistence_failed",
+                "The schedule run could not be persisted", NULL);
+        if ( Error.eCode == XWORK_ERROR_LIMIT )
+            return MdoApiReplyError(Context, 409u, "schedule_run_limit",
+                "The schedule cannot start another run", NULL);
+        return MdoApiReplyError(Context, 503u, "schedule_run_unavailable",
+            "The schedule run could not be started", NULL);
+    }
+    Data = xrtValueObject();
+    if ( Data == NULL ||
+         !MdoApiValueSetString(Data, "schedule_id", ScheduleId) ||
+         !MdoApiValueSetUInt(Data, "task_id", TaskId) ||
+         !MdoApiValueSetUInt(Data, "agent_run_id", AgentRunId) ||
+         !MdoApiValueSetString(Data, "state", "running") ) {
+        xrtValueRelease(Data);
+        return MdoApiReplyError(Context, 500u, "schedule_result_unavailable",
+            "The schedule run started but its result could not be created",
+            NULL);
+    }
+    return MdoApiReplySuccessTake(Context, 202u, Data, NULL);
+}

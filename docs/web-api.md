@@ -45,7 +45,7 @@ Mutations:
 - fork, truncate, clear, export, and resume durable sessions;
 - start and cancel interactive Agent runs, resolve one-shot approval requests,
   and answer session-bound user questions;
-- create, replace, enable, disable, and remove schedules;
+- create, replace, enable, disable, remove, and explicitly run schedules;
 - cancel a process, Subagent, or scheduled task through its unified task ID.
 
 Module reload and MCP refresh use retained operation IDs. The caller polls the
@@ -58,6 +58,13 @@ Agent run IDs, scheduled and finished times, result state, and a UTF-8-safe
 text preview of at most 1024 bytes. `has_more` indicates earlier retained
 records beyond this page; the portable JSONL sidecar keeps the full bounded
 result text. A damaged record returns an error instead of a partial success.
+
+`POST /schedules/{schedule}/run` accepts no body and requires the current
+schedule ETag in `If-Match`. It returns `202` with the unified task ID and Agent
+run ID. A stale revision returns `412`; a concurrent-run limit returns `409`.
+This action can run a paused or exhausted definition, but requires the global
+schedule execution setting to be enabled. It records a `run-now` audit entry
+and leaves the definition's recurrence cursor unchanged.
 
 The workspace file route lists relative file names for composer `@` completion;
 it never reads file content. `q` is required, UTF-8, and at most 128 bytes.

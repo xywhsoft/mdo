@@ -140,6 +140,8 @@ static const MdoApiRoute g_MdoApiRoutes[] = {
     { "/api/v1/schedules/{schedule}/history",
       XHTTP_METHOD_GET | XHTTP_METHOD_HEAD,
       "GET, HEAD, OPTIONS", MdoApiScheduleHistoryRoute },
+    { "/api/v1/schedules/{schedule}/run", XHTTP_METHOD_POST,
+      "POST, OPTIONS", MdoApiScheduleRunRoute },
     { "/api/v1/tasks/{task}/output", XHTTP_METHOD_GET | XHTTP_METHOD_HEAD,
       "GET, HEAD, OPTIONS", MdoApiTaskOutputRoute },
     { "/api/v1/approvals/{approval}", XHTTP_METHOD_PUT,

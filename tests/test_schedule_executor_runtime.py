@@ -102,9 +102,12 @@ void ServiceInit(XS_HostInfo *host) {
     MdoScheduleCreateOptions create;
     MdoScheduleExecutorOptions executor_options;
     MdoScheduleExecutorSnapshot snapshot;
+    MdoScheduleCatalog *catalog = NULL;
+    MdoScheduleInfo manual_info;
     xwork_error error;
     Owner owner;
     size_t started = 0u, completed = 0u;
+    uint64 manual_task = 0u, manual_run = 0u;
     unsigned i;
     (void)host;
     memset(&owner, 0, sizeof(owner)); owner.Refs = 1u;
@@ -154,6 +157,43 @@ void ServiceInit(XS_HostInfo *host) {
             printf("harvest_error=%s\n", error.sMessage); goto done;
         }
     }
+    MdoScheduleCreateOptionsInit(&create);
+    create.Id = "manual-review";
+    create.Label = "Manual review";
+    create.ProjectId = "project-alpha";
+    create.AgentId = "mdo.default";
+    create.ModelId = "ling-3.0-tiny";
+    create.Protocol = MDO_MODEL_PROTOCOL_OPENAI_RESPONSES;
+    create.WorkspaceRoot = ".";
+    create.Input = "execute scheduled review";
+    create.StartAt = start + 60000000LL;
+    create.Enabled = false;
+    if (!MdoScheduleCreate(&create, NULL, &error) ||
+        !MdoScheduleExecutorRunNow("manual-review", 1u, start,
+            &manual_task, &manual_run, &error)) {
+        printf("manual_error=%s\n", error.sMessage); goto done;
+    }
+    catalog = MdoScheduleCatalogSnapshot(&error);
+    memset(&manual_info, 0, sizeof(manual_info));
+    manual_info.Size = sizeof(manual_info);
+    if (catalog == NULL || !MdoScheduleCatalogFind(catalog,
+            "manual-review", &manual_info)) {
+        printf("manual_catalog_error=1\n"); goto done;
+    }
+    MdoScheduleCatalogRelease(catalog); catalog = NULL;
+    printf("manual=task:%llu run:%llu revision:%llu next:%lld enabled:%d\n",
+        (unsigned long long)manual_task, (unsigned long long)manual_run,
+        (unsigned long long)manual_info.Revision,
+        (long long)manual_info.NextOccurrenceAt,
+        manual_info.Enabled ? 1 : 0);
+    completed = 0u;
+    for (i = 0u; i < 100u && completed == 0u; ++i) {
+        xrtSleep(5u);
+        started = 0u;
+        if (!MdoScheduleExecutorPump(start, &started, &completed, &error)) {
+            printf("manual_harvest_error=%s\n", error.sMessage); goto done;
+        }
+    }
     memset(&snapshot, 0, sizeof(snapshot)); snapshot.Size = sizeof(snapshot);
     if (!MdoScheduleExecutorGetSnapshot(&snapshot)) {
         printf("snapshot_error=1\n"); goto done;
@@ -168,6 +208,7 @@ void ServiceInit(XS_HostInfo *host) {
         owner.Retains, owner.Releases);
     printf("probe_done=1\n");
 done:
+    MdoScheduleCatalogRelease(catalog);
     MdoScheduleExecutorUnit();
     MdoScheduleManagerUnit();
     MdoModuleManagerUnit();
@@ -277,9 +318,12 @@ def main() -> int:
         assert "create_error=" not in output, output
         assert "executor_error=" not in output, output
         assert "pump_error=" not in output and "harvest_error=" not in output, output
+        assert "manual_error=" not in output and "manual_catalog_error=" not in output, output
+        assert "manual_harvest_error=" not in output, output
         assert "first_pump=started:1 completed:0 refs:2" in output, output
-        assert "executor=automatic:0 active:0 claims:1 completed:1 failed:0" in output, output
-        assert "callback=calls:1 prompt:1 refs:1 retains:1 releases:1" in output, output
+        assert "manual=task:" in output and " revision:2 next:1700000060000000 enabled:0" in output, output
+        assert "executor=automatic:0 active:0 claims:2 completed:2 failed:0" in output, output
+        assert "callback=calls:2 prompt:1 refs:1 retains:2 releases:2" in output, output
         assert "probe_done=1" in output, output
         history = [json.loads(line) for line in
                    (home / "schedules/history/agent-review.jsonl").read_text(
@@ -288,6 +332,15 @@ def main() -> int:
         assert history[0]["agent_run_id"] > 0
         assert history[0]["result"] == 0
         assert history[0]["text"] == "scheduled-agent-result"
+        manual_history = [json.loads(line) for line in
+                          (home / "schedules/history/manual-review.jsonl").read_text(
+                              encoding="utf-8").splitlines()]
+        assert len(manual_history) == 1, manual_history
+        assert manual_history[0]["task_id"] > 0, manual_history
+        assert manual_history[0]["agent_run_id"] > 0, manual_history
+        assert manual_history[0]["result"] == 0, manual_history
+        audit = (home / "schedules/audit.jsonl").read_text(encoding="utf-8")
+        assert '"operation":"run-now"' in audit, audit
     print("schedule executor runtime probe: PASS")
     return 0
 

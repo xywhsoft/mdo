@@ -177,6 +177,8 @@ bool MdoScheduleRemove(const char* ScheduleId, uint64 ExpectedRevision,
     xwork_error* Error);
 bool MdoScheduleClaimDue(int64 Now, MdoScheduleClaim* Claim,
     xwork_error* Error);
+bool MdoScheduleTrigger(const char* ScheduleId, uint64 ExpectedRevision,
+    int64 Now, MdoScheduleClaim* Claim, xwork_error* Error);
 bool MdoScheduleFinishTask(uint64 TaskId, xwork_result Result,
     const char* ResultText, xwork_error* Error);
 bool MdoScheduleFinishTaskWithRun(uint64 TaskId, uint64 AgentRunId,
@@ -194,6 +196,9 @@ bool MdoScheduleExecutorInit(xwork_runtime* Runtime,
 void MdoScheduleExecutorUnit(void);
 bool MdoScheduleExecutorPump(int64 Now, size_t* Started, size_t* Completed,
     xwork_error* Error);
+bool MdoScheduleExecutorRunNow(const char* ScheduleId,
+    uint64 ExpectedRevision, int64 Now, uint64* TaskId,
+    uint64* AgentRunId, xwork_error* Error);
 bool MdoScheduleExecutorGetSnapshot(MdoScheduleExecutorSnapshot* Snapshot);
 
 MdoScheduleCatalog* MdoScheduleCatalogSnapshot(xwork_error* Error);

@@ -2516,6 +2516,28 @@ def run_probe(host: Path) -> None:
                     headers)
 
                 status, headers, body = request(
+                    port, "POST", schedule_path + "/run")
+                document = json.loads(body)
+                assert status == 428, (status, body)
+                assert document["error"]["code"] == "precondition_required", (
+                    document)
+                status, headers, body = request(
+                    port, "POST", schedule_path + "/run", body=b"{}",
+                    headers={"Content-Type": "application/json",
+                             "If-Match": disabled_etag})
+                document = json.loads(body)
+                assert status == 400, (status, body)
+                assert document["error"]["code"] == "body_not_allowed", (
+                    document)
+                status, headers, body = request(
+                    port, "POST", schedule_path + "/run",
+                    headers={"If-Match": schedule_etag})
+                document = json.loads(body)
+                assert status == 412, (status, body)
+                assert document["error"]["code"] == "revision_conflict", (
+                    document)
+
+                status, headers, body = request(
                     port, "DELETE", schedule_path, body=b"{}",
                     headers={"Content-Type": "application/json",
                              "If-Match": disabled_etag})
@@ -2560,6 +2582,63 @@ def run_probe(host: Path) -> None:
                     port, "OPTIONS", schedule_path + "/history")
                 assert status == 200 and headers["allow"] == (
                     "GET, HEAD, OPTIONS"), (status, headers, body)
+                status, headers, body = request(
+                    port, "OPTIONS", schedule_path + "/run")
+                assert status == 200 and headers["allow"] == (
+                    "POST, OPTIONS"), (status, headers, body)
+
+                manual_definition = dict(schedule_definition)
+                manual_definition.update({
+                    "id": "manual-api", "label": "Manual API schedule",
+                    "enabled": False, "frequency": "once",
+                })
+                manual_path = "/api/v1/schedules/manual-api"
+                status, headers, body = request(
+                    port, "POST", "/api/v1/schedules",
+                    body=json.dumps(manual_definition).encode(),
+                    headers={"Content-Type": "application/json"})
+                assert status == 201, (status, body)
+                manual_etag = headers["etag"]
+                status, headers, body = request(
+                    port, "POST", manual_path + "/run",
+                    headers={"If-Match": manual_etag})
+                assert status == 202, (status, body)
+                manual_run = json.loads(body)["data"]
+                assert manual_run["state"] == "running", manual_run
+                assert manual_run["task_id"] > 0 and manual_run["agent_run_id"] > 0, (
+                    manual_run)
+                status, headers, body = request(port, "GET", manual_path)
+                manual_after_etag = headers["etag"]
+                manual_after = json.loads(body)["data"]
+                assert status == 200 and manual_after["revision"] == 2, (
+                    status, body)
+                assert manual_after["enabled"] is False, manual_after
+                assert manual_after["next_occurrence_at"] == schedule_start, (
+                    manual_after)
+                status, _, body = request(
+                    port, "POST", manual_path + "/run",
+                    headers={"If-Match": manual_etag})
+                assert status == 412, (status, body)
+                manual_history = []
+                deadline = time.monotonic() + 5.0
+                while time.monotonic() < deadline:
+                    status, _, body = request(
+                        port, "GET", manual_path + "/history")
+                    manual_history = json.loads(body)["data"]["items"]
+                    if manual_history: break
+                    time.sleep(0.02)
+                assert status == 200 and len(manual_history) == 1, (
+                    status, body)
+                assert manual_history[0]["task_id"] == manual_run["task_id"], (
+                    manual_history)
+                assert manual_history[0]["agent_run_id"] == manual_run["agent_run_id"], (
+                    manual_history)
+                assert manual_history[0]["result"] == "succeeded", (
+                    manual_history)
+                status, _, body = request(
+                    port, "DELETE", manual_path,
+                    headers={"If-Match": manual_after_etag})
+                assert status == 200, (status, body)
 
                 status, headers, body = request(
                     port, "PATCH", session_path,

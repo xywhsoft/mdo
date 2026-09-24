@@ -148,6 +148,7 @@ bool MdoApiRunRoute(MdoApiContext* pContext);
 bool MdoApiScheduleRoute(MdoApiContext* pContext);
 bool MdoApiScheduleEnabledRoute(MdoApiContext* pContext);
 bool MdoApiScheduleHistoryRoute(MdoApiContext* pContext);
+bool MdoApiScheduleRunRoute(MdoApiContext* pContext);
 bool MdoApiModelsReloadRoute(MdoApiContext* pContext);
 bool MdoApiSkillsReloadRoute(MdoApiContext* pContext);
 bool MdoApiModulesReloadRoute(MdoApiContext* pContext);

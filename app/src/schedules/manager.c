@@ -1562,7 +1562,7 @@ static bool MdoSchedulesRuntimeChanged(const MdoScheduleInfo* Info,
 }
 
 static bool MdoSchedulesSyncRuntime(const xwork_schedule_claim* Claim,
-    bool Claimed, xwork_error* Error)
+    bool Claimed, const char* ClaimOperation, xwork_error* Error)
 {
     size_t i;
     bool Changed = false;
@@ -1596,7 +1596,7 @@ static bool MdoSchedulesSyncRuntime(const xwork_schedule_claim* Claim,
         Entry->Info.UpdatedAt = xrtNow();
         IsClaim = Claimed && Claim != NULL && Claim->sScheduleId != NULL &&
             strcmp(Entry->Info.Id, Claim->sScheduleId) == 0;
-        if ( !MdoSchedulesAudit(IsClaim ? "claim" : "advance", &Entry->Info,
+        if ( !MdoSchedulesAudit(IsClaim ? ClaimOperation : "advance", &Entry->Info,
                 Previous, Entry->Info.Revision,
                 IsClaim ? Claim->uTaskId : 0u,
                 IsClaim ? Claim->iOccurrenceAtUs : 0, Error) ||
@@ -1648,7 +1648,7 @@ bool MdoScheduleClaimDue(int64 Now, MdoScheduleClaim* Claim,
             &RuntimeClaim, &Claimed, &NextWake, Error) ) {
         xwork_error RuntimeError = Error != NULL ? *Error : (xwork_error){0};
         xwork_error SyncError;
-        if ( !MdoSchedulesSyncRuntime(NULL, false, &SyncError) ) {
+        if ( !MdoSchedulesSyncRuntime(NULL, false, "claim", &SyncError) ) {
             if ( Error != NULL ) *Error = SyncError;
         } else if ( Error != NULL ) {
             *Error = RuntimeError;
@@ -1656,7 +1656,7 @@ bool MdoScheduleClaimDue(int64 Now, MdoScheduleClaim* Claim,
         goto done;
     }
     Claim->NextWakeAt = NextWake;
-    if ( !MdoSchedulesSyncRuntime(&RuntimeClaim, Claimed, Error) ) {
+    if ( !MdoSchedulesSyncRuntime(&RuntimeClaim, Claimed, "claim", Error) ) {
         if ( Claimed ) goto fail_task;
         goto done;
     }
@@ -1674,6 +1674,70 @@ fail_task:
     (void)xworkRuntimeFinishScheduledTask(g_MdoSchedules.Runtime,
         RuntimeClaim.uTaskId, XWORK_RESULT_ERROR,
         "schedule claim was not durably recorded", NULL);
+done:
+    xrtMutexUnlock(g_MdoSchedules.Lock);
+    return Ok;
+}
+
+bool MdoScheduleTrigger(const char* ScheduleId, uint64 ExpectedRevision,
+    int64 Now, MdoScheduleClaim* Claim, xwork_error* Error)
+{
+    xwork_schedule_claim RuntimeClaim;
+    MdoScheduleEntry* Entry;
+    uint32 ClaimSize;
+    bool Ok = false;
+    xworkErrorInit(Error);
+    if ( !g_MdoSchedules.Initialized ||
+         !MdoSchedulesId(ScheduleId, MDO_SCHEDULE_ID_CAPACITY) ||
+         ExpectedRevision == 0u || Now <= 0 || Claim == NULL ||
+         Claim->Size < sizeof(*Claim) ) {
+        MdoSchedulesError(Error, XWORK_ERROR_INVALID_ARGUMENT,
+            "invalid explicit schedule trigger");
+        return false;
+    }
+    ClaimSize = Claim->Size;
+    memset(Claim, 0, sizeof(*Claim));
+    Claim->Size = ClaimSize;
+    xrtMutexLock(g_MdoSchedules.Lock);
+    Entry = MdoSchedulesFind(ScheduleId);
+    if ( Entry == NULL || !Entry->Registered ) {
+        MdoSchedulesError(Error, XWORK_ERROR_INVALID_ARGUMENT,
+            "schedule was not found or restored");
+        goto done;
+    }
+    if ( !g_MdoSchedules.Enabled ) {
+        MdoSchedulesError(Error, XWORK_ERROR_CONTEXT,
+            "schedule execution is disabled in settings");
+        goto done;
+    }
+    if ( g_MdoSchedules.PersistenceFault ) {
+        MdoSchedulesError(Error, XWORK_ERROR_IO,
+            "schedule persistence is faulted; restart after repairing storage");
+        goto done;
+    }
+    if ( Entry->Info.Revision != ExpectedRevision ) {
+        MdoSchedulesError(Error, XWORK_ERROR_CONTEXT,
+            "schedule revision changed; reload before triggering");
+        goto done;
+    }
+    if ( Entry->Info.Revision == UINT64_MAX ) {
+        MdoSchedulesError(Error, XWORK_ERROR_LIMIT,
+            "schedule revision is exhausted");
+        goto done;
+    }
+    if ( !MdoSchedulesWriterLock(Error) ) goto done;
+    xworkScheduleClaimInit(&RuntimeClaim);
+    if ( !xworkRuntimeTriggerSchedule(g_MdoSchedules.Runtime,
+            ScheduleId, Now, &RuntimeClaim, Error) ) goto done;
+    if ( !MdoSchedulesSyncRuntime(&RuntimeClaim, true, "run-now", Error) )
+        goto fail_task;
+    MdoSchedulesCopyClaim(Entry, &RuntimeClaim, 0, Claim);
+    Ok = true;
+    goto done;
+fail_task:
+    (void)xworkRuntimeFinishScheduledTask(g_MdoSchedules.Runtime,
+        RuntimeClaim.uTaskId, XWORK_RESULT_ERROR,
+        "explicit schedule trigger was not durably recorded", NULL);
 done:
     xrtMutexUnlock(g_MdoSchedules.Lock);
     return Ok;
