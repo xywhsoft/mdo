@@ -76,6 +76,8 @@ bool MdoApiSkillsRoute(MdoApiContext* pContext);
 bool MdoApiMcpRoute(MdoApiContext* pContext);
 bool MdoApiProjectsRoute(MdoApiContext* pContext);
 bool MdoApiProjectRoute(MdoApiContext* pContext);
+bool MdoApiMemoryCollectionRoute(MdoApiContext* pContext);
+bool MdoApiMemoryEntryRoute(MdoApiContext* pContext);
 bool MdoApiSessionsRoute(MdoApiContext* pContext);
 bool MdoApiRunsRoute(MdoApiContext* pContext);
 bool MdoApiSchedulesRoute(MdoApiContext* pContext);

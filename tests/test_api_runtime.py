@@ -592,6 +592,9 @@ def run_probe(host: Path) -> None:
                 assert data["config"]["schema_version"] == 1, data
                 assert data["resources"]["models"]["models"] >= 1, data
                 assert not home.exists(), home
+                status, _, body = request(port, "GET", "/api/v1/memory/global")
+                assert status == 200 and json.loads(body)["data"]["items"] == [], body
+                assert not home.exists(), home
 
                 status, headers, body = request(
                     port, "GET", "/api/v1/migrations/legacy")
@@ -705,6 +708,42 @@ def run_probe(host: Path) -> None:
                 assert (home / "migration/session-prompts/api-legacy/"
                         "s123456789abc.txt").is_file(), home
                 assert legacy.is_dir(), legacy
+
+                # The UI reads bounded summaries and edits through store-wide
+                # ETags, so concurrent agent writes cannot be overwritten.
+                memory_path = "/api/v1/memory/projects/api-project"
+                status, headers, body = request(port, "GET", memory_path)
+                assert status == 200 and json.loads(body)["data"]["items"] == [], body
+                initial_tag = headers["etag"]
+                payload = json.dumps({
+                    "id": "style", "title": "Style", "content": "Keep code readable.",
+                    "tags": ["code"], "pinned": True,
+                }).encode()
+                status, _, body = request(port, "PUT", memory_path,
+                    body=payload, headers={"Content-Type": "application/json"})
+                assert status == 428, (status, body)
+                status, headers, body = request(port, "PUT", memory_path,
+                    body=payload, headers={"Content-Type": "application/json",
+                                           "If-Match": initial_tag})
+                assert status == 200, (status, body)
+                saved_tag = headers["etag"]
+                status, _, body = request(port, "GET", memory_path)
+                listing = json.loads(body)["data"]
+                assert status == 200 and len(listing["items"]) == 1, listing
+                assert "content" not in listing["items"][0], listing
+                status, _, body = request(port, "GET", memory_path + "/style")
+                entry = json.loads(body)["data"]
+                assert status == 200 and entry["content"] == "Keep code readable.", entry
+                assert entry["tags"] == ["code"] and entry["pinned"], entry
+                status, _, body = request(port, "PUT", memory_path,
+                    body=payload, headers={"Content-Type": "application/json",
+                                           "If-Match": initial_tag})
+                assert status == 412, (status, body)
+                status, _, body = request(port, "DELETE", memory_path + "/style",
+                    headers={"If-Match": saved_tag})
+                assert status == 200, (status, body)
+                status, _, body = request(port, "GET", memory_path + "/style")
+                assert status == 404, (status, body)
 
                 resources = (
                     "settings", "models", "agents", "modules", "skills",
