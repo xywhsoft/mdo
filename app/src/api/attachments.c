@@ -10,8 +10,20 @@
 #define MDO_ATTACHMENT_ID_LENGTH (MDO_ATTACHMENT_ID_BYTES * 2u)
 #define MDO_ATTACHMENT_SESSION_MAX 16u
 #define MDO_ATTACHMENT_SESSION_BYTES (32u * 1024u * 1024u)
+#define MDO_ATTACHMENT_META_MAX 256u
+#define MDO_ATTACHMENT_GRACE_US (24LL * 60LL * 60LL * 1000000LL)
+#define MDO_ATTACHMENT_SWEEP_MAX 128u
+
+typedef enum MdoAttachmentDiscardResult {
+    MDO_ATTACHMENT_DISCARD_ERROR = 0,
+    MDO_ATTACHMENT_DISCARD_MISSING,
+    MDO_ATTACHMENT_DISCARD_IN_USE,
+    MDO_ATTACHMENT_DISCARD_REMOVED
+} MdoAttachmentDiscardResult;
 
 static xmutex* g_MdoAttachmentLock;
+static bool MdoAttachmentCollectExpired(const char* Project,
+    const char* Session, const char* Directory);
 
 bool MdoApiAttachmentsInit(void)
 {
@@ -187,6 +199,68 @@ static bool MdoAttachmentHexId(xstrview View,
     return true;
 }
 
+static bool MdoAttachmentCreatedAt(const char* Project,
+    const char* Session, const char* Id, xtime* CreatedAt)
+{
+    char Name[MDO_ATTACHMENT_ID_LENGTH + 6u];
+    char Path[MDO_SESSION_PATH_CAPACITY];
+    char Bytes[MDO_ATTACHMENT_META_MAX + 1u];
+    bool Exists = false;
+    xfileinfo Info;
+    xfile File = NULL;
+    xjsonreadconfig Config;
+    xvalue* Root = NULL;
+    const xvalue* Value;
+    xstrview StoredId;
+    uint64 Unsigned;
+    int64 Signed;
+    bool Ok = false;
+    snprintf(Name, sizeof(Name), "%s.json", Id);
+    if ( !MdoAttachmentPath(Path, sizeof(Path), Project, Session, Name) ||
+         !MdoHomeExternalStat(Path, &Exists, &Info) || !Exists ||
+         Info.Type != XFILE_TYPE_FILE ||
+         (Info.Available & XFILE_INFO_SIZE) == 0u ||
+         Info.Size == 0u || Info.Size > MDO_ATTACHMENT_META_MAX )
+        return false;
+    File = MdoHomeOpenRead(Path);
+    if ( File == NULL ||
+         !xrtReadFull(File, Bytes, (size_t)Info.Size, NULL) ) goto done;
+    Bytes[Info.Size] = '\0';
+    xrtJsonReadConfigInit(&Config);
+    Config.MaxInputBytes = MDO_ATTACHMENT_META_MAX;
+    Config.MaxDepth = 3u;
+    Config.MaxValues = 8u;
+    Root = xrtJsonRead(xrtStrViewN(Bytes, (size_t)Info.Size), &Config);
+    if ( xrtValueType(Root) != XVALUE_OBJECT ||
+         xrtValueCount(Root) != 5u ) goto done;
+    Value = xrtValueObjectGet(Root, XRT_STR_LITERAL("schema_version"));
+    if ( xrtValueType(Value) == XVALUE_UINT ) {
+        if ( !xrtValueGetUInt(Value, &Unsigned) || Unsigned != 1u )
+            goto done;
+    } else if ( xrtValueType(Value) == XVALUE_INT ) {
+        if ( !xrtValueGetInt(Value, &Signed) || Signed != 1 ) goto done;
+    } else goto done;
+    Value = xrtValueObjectGet(Root, XRT_STR_LITERAL("id"));
+    if ( !xrtValueGetString(Value, &StoredId) ||
+         StoredId.Size != MDO_ATTACHMENT_ID_LENGTH ||
+         memcmp(StoredId.Data, Id, MDO_ATTACHMENT_ID_LENGTH) != 0 )
+        goto done;
+    Value = xrtValueObjectGet(Root, XRT_STR_LITERAL("created_at"));
+    if ( xrtValueType(Value) == XVALUE_UINT ) {
+        if ( !xrtValueGetUInt(Value, &Unsigned) ||
+             Unsigned == 0u || Unsigned > INT64_MAX ) goto done;
+        *CreatedAt = (xtime)Unsigned;
+    } else if ( xrtValueType(Value) == XVALUE_INT ) {
+        if ( !xrtValueGetInt(Value, &Signed) || Signed <= 0 ) goto done;
+        *CreatedAt = (xtime)Signed;
+    } else goto done;
+    Ok = true;
+done:
+    xrtValueRelease(Root);
+    if ( File != NULL && !xrtClose(File) ) Ok = false;
+    return Ok;
+}
+
 bool MdoAttachmentIdsRead(const xvalue* Array, char Ids[4][33],
     size_t* Count)
 {
@@ -313,6 +387,8 @@ bool MdoApiAttachmentsRoute(MdoApiContext* Context)
             "Image storage is unavailable", NULL);
     }
     Ok = MdoAttachmentQuota(Directory, Size);
+    if ( !Ok && MdoAttachmentCollectExpired(Project, Session, Directory) )
+        Ok = MdoAttachmentQuota(Directory, Size);
     for ( Attempt = 0u; Ok && Attempt < 4u; ++Attempt ) {
         Ok = MdoAttachmentNewId(Id);
         if ( !Ok ) break;
@@ -425,6 +501,112 @@ bool MdoAttachmentReadForRun(const char* Project, const char* Session,
     return true;
 }
 
+/* Caller holds the attachment lock. Reference readers take their own locks
+ * only after it; writers acquire locks in the same order. */
+static MdoAttachmentDiscardResult MdoAttachmentDiscardLocked(
+    const char* Project, const char* Session, const char* Id)
+{
+    char Name[MDO_ATTACHMENT_ID_LENGTH + 6u];
+    char DataPath[MDO_SESSION_PATH_CAPACITY];
+    char MetaPath[MDO_SESSION_PATH_CAPACITY];
+    MdoSession* Handle;
+    MdoSessionInfo Info;
+    xwork_error Error;
+    bool DataExists = false;
+    bool MetaExists = false;
+    bool Referenced = false;
+    xfileinfo FileInfo;
+    bool Ok;
+    snprintf(Name, sizeof(Name), "%s.bin", Id);
+    if ( !MdoAttachmentPath(DataPath, sizeof(DataPath), Project,
+            Session, Name) ) return MDO_ATTACHMENT_DISCARD_ERROR;
+    snprintf(Name, sizeof(Name), "%s.json", Id);
+    if ( !MdoAttachmentPath(MetaPath, sizeof(MetaPath), Project,
+            Session, Name) ) return MDO_ATTACHMENT_DISCARD_ERROR;
+    memset(&Error, 0, sizeof(Error));
+    Handle = MdoSessionLoad(Project, Session, &Error);
+    memset(&Info, 0, sizeof(Info)); Info.Size = sizeof(Info);
+    Ok = Handle != NULL && MdoSessionGetInfo(Handle, &Info);
+    if ( Handle != NULL ) MdoSessionRelease(Handle);
+    if ( !Ok ) return MDO_ATTACHMENT_DISCARD_ERROR;
+    if ( Info.RuntimeOpen ) return MDO_ATTACHMENT_DISCARD_IN_USE;
+    Ok = MdoHomeExternalStat(DataPath, &DataExists, &FileInfo) &&
+        (!DataExists || FileInfo.Type == XFILE_TYPE_FILE) &&
+        MdoHomeExternalStat(MetaPath, &MetaExists, &FileInfo) &&
+        (!MetaExists || FileInfo.Type == XFILE_TYPE_FILE);
+    if ( !Ok ) return MDO_ATTACHMENT_DISCARD_ERROR;
+    if ( !DataExists && !MetaExists ) return MDO_ATTACHMENT_DISCARD_MISSING;
+    Ok = MdoApiDraftAttachmentReferenced(Project, Session,
+        Id, &Referenced);
+    if ( Ok && !Referenced )
+        Ok = MdoApiQueueAttachmentReferenced(Project, Session,
+            Id, &Referenced);
+    if ( Ok && !Referenced )
+        Ok = MdoSessionAttachmentRecordReferenced(Project, Session,
+            Id, &Referenced);
+    if ( !Ok ) return MDO_ATTACHMENT_DISCARD_ERROR;
+    if ( Referenced ) return MDO_ATTACHMENT_DISCARD_IN_USE;
+    if ( DataExists && !MdoHomeRemove(DataPath, false) )
+        return MDO_ATTACHMENT_DISCARD_ERROR;
+    if ( MetaExists && !MdoHomeRemove(MetaPath, false) )
+        return MDO_ATTACHMENT_DISCARD_ERROR;
+    return MDO_ATTACHMENT_DISCARD_REMOVED;
+}
+
+/* Reclaim only old uploads when a new upload would exceed its quota. Recent
+ * uploads may still be in a browser tab whose draft has not been saved. */
+static bool MdoAttachmentCollectExpired(const char* Project,
+    const char* Session, const char* Directory)
+{
+    char Candidates[MDO_ATTACHMENT_SWEEP_MAX][MDO_ATTACHMENT_ID_LENGTH + 1u];
+    size_t CandidateCount = 0u;
+    size_t Visited = 0u;
+    bool Exists = false;
+    xfileinfo Info;
+    xdir Dir;
+    xdirentry Entry;
+    xdirnext Next = XDIR_NEXT_END;
+    bool Ok = true;
+    xtime Cutoff = xrtNow() - MDO_ATTACHMENT_GRACE_US;
+    size_t i;
+    if ( !MdoHomeExternalStat(Directory, &Exists, &Info) ) return false;
+    if ( !Exists ) return true;
+    if ( Info.Type != XFILE_TYPE_DIRECTORY ) return false;
+    Dir = MdoHomeOpenDirectory(Directory, XDIR_STAT);
+    if ( Dir == NULL ) return false;
+    memset(&Entry, 0, sizeof(Entry));
+    while ( (Next = xrtDirNext(Dir, &Entry)) == XDIR_NEXT_ITEM ) {
+        xtime Stamp = 0;
+        char Id[MDO_ATTACHMENT_ID_LENGTH + 1u];
+        if ( ++Visited > MDO_ATTACHMENT_SWEEP_MAX * 4u ) {
+            Ok = false;
+            break;
+        }
+        if ( Entry.Info.Type != XFILE_TYPE_FILE ||
+             Entry.Name.Size != MDO_ATTACHMENT_ID_LENGTH + 4u ||
+             memcmp(Entry.Name.Data + MDO_ATTACHMENT_ID_LENGTH,
+                ".bin", 4u) != 0 ||
+             !MdoAttachmentHexId(xrtStrViewN(Entry.Name.Data,
+                MDO_ATTACHMENT_ID_LENGTH), Id) ) continue;
+        if ( !MdoAttachmentCreatedAt(Project, Session, Id, &Stamp) ||
+             Stamp > Cutoff ) continue;
+        if ( CandidateCount == MDO_ATTACHMENT_SWEEP_MAX ) {
+            Ok = false;
+            break;
+        }
+        memcpy(Candidates[CandidateCount++], Id, sizeof(Id));
+    }
+    if ( Next == XDIR_NEXT_ERROR ) Ok = false;
+    if ( !xrtDirClose(Dir) ) Ok = false;
+    if ( !Ok ) return false;
+    for ( i = 0u; i < CandidateCount; ++i ) {
+        MdoAttachmentDiscardResult Result = MdoAttachmentDiscardLocked(
+            Project, Session, Candidates[i]);
+        if ( Result == MDO_ATTACHMENT_DISCARD_ERROR ) return false;
+    }
+    return true;
+}
+
 bool MdoApiAttachmentRoute(MdoApiContext* Context)
 {
     char Project[MDO_PROJECT_ID_CAPACITY];
@@ -436,16 +618,7 @@ bool MdoApiAttachmentRoute(MdoApiContext* Context)
     bool Ok;
     if ( Context->Request->head->MethodCode == XHTTP_METHOD_DELETE ) {
         const xhttp1head* Head = Context->Request->head;
-        char Name[MDO_ATTACHMENT_ID_LENGTH + 6u];
-        char DataPath[MDO_SESSION_PATH_CAPACITY];
-        char MetaPath[MDO_SESSION_PATH_CAPACITY];
-        MdoSession* Handle;
-        MdoSessionInfo Info;
-        xwork_error Error;
-        bool DataExists = false;
-        bool MetaExists = false;
-        bool Referenced = false;
-        xfileinfo FileInfo;
+        MdoAttachmentDiscardResult Result;
         xvalue* Reply;
         if ( ((Head->Flags & (uint32)XHTTP1_CONTENT_LENGTH) != 0u &&
               Head->ContentLength != 0u) ||
@@ -456,57 +629,20 @@ bool MdoApiAttachmentRoute(MdoApiContext* Context)
              !MdoAttachmentHexId(Context->Params[2], Id) )
             return MdoApiReplyError(Context, 404u, "attachment_not_found",
                 "The image does not exist in this session", NULL);
-        snprintf(Name, sizeof(Name), "%s.bin", Id);
-        if ( !MdoAttachmentPath(DataPath, sizeof(DataPath), Project,
-                Session, Name) )
-            return MdoApiReplyError(Context, 400u, "invalid_path",
-                "The attachment path is invalid", NULL);
-        snprintf(Name, sizeof(Name), "%s.json", Id);
-        if ( !MdoAttachmentPath(MetaPath, sizeof(MetaPath), Project,
-                Session, Name) )
-            return MdoApiReplyError(Context, 400u, "invalid_path",
-                "The attachment path is invalid", NULL);
         if ( !MdoApiAttachmentLock() )
             return MdoApiReplyError(Context, 503u, "attachment_unavailable",
                 "Image storage is unavailable", NULL);
-        memset(&Error, 0, sizeof(Error));
-        Handle = MdoSessionLoad(Project, Session, &Error);
-        memset(&Info, 0, sizeof(Info)); Info.Size = sizeof(Info);
-        Ok = Handle != NULL && MdoSessionGetInfo(Handle, &Info);
-        if ( Handle != NULL ) MdoSessionRelease(Handle);
-        if ( !Ok || Info.RuntimeOpen ) {
-            MdoApiAttachmentUnlock();
-            return MdoApiReplyError(Context, Ok ? 409u : 503u,
-                Ok ? "attachment_in_use" : "attachment_unavailable",
-                Ok ? "Wait until the active run finishes before removing an image" :
-                    "Image storage is unavailable", NULL);
-        }
-        Ok = MdoHomeExternalStat(DataPath, &DataExists, &FileInfo) &&
-            (!DataExists || FileInfo.Type == XFILE_TYPE_FILE) &&
-            MdoHomeExternalStat(MetaPath, &MetaExists, &FileInfo) &&
-            (!MetaExists || FileInfo.Type == XFILE_TYPE_FILE);
-        if ( Ok && (DataExists || MetaExists) ) {
-            Ok = MdoApiDraftAttachmentReferenced(Project, Session,
-                Id, &Referenced);
-            if ( Ok && !Referenced )
-                Ok = MdoApiQueueAttachmentReferenced(Project, Session,
-                    Id, &Referenced);
-            if ( Ok && !Referenced )
-                Ok = MdoSessionAttachmentRecordReferenced(Project, Session,
-                    Id, &Referenced);
-        }
-        if ( Ok && !Referenced ) {
-            if ( DataExists ) Ok = MdoHomeRemove(DataPath, false);
-            if ( Ok && MetaExists ) Ok = MdoHomeRemove(MetaPath, false);
-        }
+        Result = MdoAttachmentDiscardLocked(Project, Session, Id);
         MdoApiAttachmentUnlock();
-        if ( !Ok ) return MdoApiReplyError(Context, 503u,
+        if ( Result == MDO_ATTACHMENT_DISCARD_ERROR )
+            return MdoApiReplyError(Context, 503u,
             "attachment_unavailable",
             "The image could not be checked or removed", NULL);
-        if ( !DataExists && !MetaExists )
+        if ( Result == MDO_ATTACHMENT_DISCARD_MISSING )
             return MdoApiReplyError(Context, 404u, "attachment_not_found",
                 "The image does not exist in this session", NULL);
-        if ( Referenced ) return MdoApiReplyError(Context, 409u,
+        if ( Result == MDO_ATTACHMENT_DISCARD_IN_USE )
+            return MdoApiReplyError(Context, 409u,
             "attachment_in_use", "The image is still used by this session",
             NULL);
         Reply = xrtValueObject();

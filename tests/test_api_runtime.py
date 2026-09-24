@@ -1629,6 +1629,48 @@ def run_probe(host: Path) -> None:
                 status, _, body = request(port, "DELETE", image["url"])
                 assert status == 409 and json.loads(body)["error"][
                     "code"] == "attachment_in_use", (status, body)
+                attachment_dir = (home / "sessions/api-project" / session_id /
+                                  "attachments")
+                old_time = int((time.time() - 2 * 86400) * 1_000_000)
+                image_meta_path = attachment_dir / f"{image['id']}.json"
+                meta = json.loads(image_meta_path.read_text(encoding="utf-8"))
+                meta["created_at"] = old_time
+                image_meta_path.write_text(json.dumps(meta),
+                                           encoding="utf-8")
+                status, _, body = request(port, "POST", attachments_path,
+                    body=png_bytes[:32],
+                    headers={"Content-Type": "image/png"})
+                aged = json.loads(body)["data"]
+                assert status == 201, (status, body)
+                aged_meta_path = attachment_dir / f"{aged['id']}.json"
+                aged_meta = json.loads(aged_meta_path.read_text(
+                    encoding="utf-8"))
+                aged_meta["created_at"] = old_time
+                aged_meta_path.write_text(json.dumps(aged_meta),
+                                          encoding="utf-8")
+                filler_ids = [f"{index:032x}" for index in range(1, 15)]
+                assert image["id"] not in filler_ids and aged["id"] not in (
+                    filler_ids)
+                for filler_id in filler_ids:
+                    (attachment_dir / f"{filler_id}.bin").write_bytes(
+                        png_bytes[:32])
+                    (attachment_dir / f"{filler_id}.json").write_text(
+                        json.dumps({"schema_version": 1, "id": filler_id,
+                            "mime_type": "image/png", "size": 32,
+                            "created_at": int(time.time() * 1_000_000)}),
+                        encoding="utf-8")
+                status, _, body = request(port, "POST", attachments_path,
+                    body=png_bytes[:32],
+                    headers={"Content-Type": "image/png"})
+                reclaimed_upload = json.loads(body)
+                assert status == 201, (status, reclaimed_upload)
+                assert not (attachment_dir / f"{aged['id']}.bin").exists()
+                assert (attachment_dir / f"{image['id']}.bin").exists()
+                assert request(port, "DELETE",
+                    reclaimed_upload["data"]["url"])[0] == 200
+                for filler_id in filler_ids:
+                    (attachment_dir / f"{filler_id}.bin").unlink()
+                    (attachment_dir / f"{filler_id}.json").unlink()
                 status, _, body = request(port, "PUT", draft_path,
                     body=b'{"revision":2,"text":"","attachments":[]}',
                     headers={"Content-Type": "application/json"})
