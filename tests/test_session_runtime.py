@@ -211,6 +211,30 @@ static uint64 Events(const char *label, const char *project,
     return cursor;
 }
 
+static uint64 UserSequence(const char *project, const char *session,
+    const char *text) {
+    xwork_error error;
+    MdoSessionEventSnapshot *snapshot = MdoSessionEventReplay(project,
+        session, 0u, 1000u, &error);
+    uint64 found = 0u;
+    size_t index;
+    if (snapshot == NULL) return 0u;
+    for (index = 0u; index < MdoSessionEventSnapshotCount(snapshot);
+         ++index) {
+        MdoSessionEventInfo info;
+        memset(&info, 0, sizeof(info)); info.Size = sizeof(info);
+        if (MdoSessionEventSnapshotAt(snapshot, index, &info) &&
+            info.Kind == XWORK_EVENT_AGENT_START &&
+            info.AgentDepth == 0u && info.Text != NULL &&
+            strcmp(info.Text, text) == 0) {
+            found = info.UserMessageSequence;
+            break;
+        }
+    }
+    MdoSessionEventSnapshotRelease(snapshot);
+    return found;
+}
+
 static bool CorruptEventTail(const char *project, const char *session) {
     char path[MDO_SESSION_PATH_CAPACITY];
     xfile file;
@@ -416,6 +440,22 @@ void ServiceInit(XS_HostInfo *host) {
         fork_probe.Calls,
         fork_probe.SawPriorPrompt && fork_probe.SawPriorAnswer ? 1 : 0);
     MdoSessionRelease(forked); forked = NULL;
+    {
+        uint64 second_sequence = UserSequence("project-alpha", session_id,
+            "second prompt");
+        if (second_sequence < 2u) goto done;
+        fork_options.Title = "Before second prompt";
+        fork_options.ThroughSequence = second_sequence - 1u;
+        forked = MdoSessionFork(session, &fork_options, &error);
+        if (forked == NULL) {
+            printf("prefix_fork_error=%s\n", error.sMessage); goto done;
+        }
+        memset(&info, 0, sizeof(info)); info.Size = sizeof(info);
+        if (!MdoSessionGetInfo(forked, &info)) goto done;
+        printf("prefix_fork=id:%s through:%llu\n", info.Id,
+            (unsigned long long)info.ForkedThroughSequence);
+        MdoSessionRelease(forked); forked = NULL;
+    }
     fork_options.ThroughSequence = rewind_to + UINT64_C(1000000);
     blocked = MdoSessionFork(session, &fork_options, &error);
     printf("invalid_fork=%d code:%d\n", blocked != NULL ? 1 : 0,
@@ -657,6 +697,8 @@ def main() -> int:
             r"title:Forked durable session calls:1 history:1", output)
         assert created and fork and fork.group(1) != created.group(1), output
         assert fork.group(2) == created.group(1), output
+        prefix_fork = re.search(r"prefix_fork=id:([^ ]+) through:([1-9]\d*)", output)
+        assert prefix_fork, output
         assert re.search(r"invalid_fork=0 code:[1-9]\d*", output), output
         assert re.search(r"truncate=boundary:[1-9]\d* tail:[1-9]\d* removed:1", output), output
         assert re.search(r"clear=tail:[1-9]\d* old:0 system:1", output), output
@@ -668,12 +710,12 @@ def main() -> int:
         assert "archived_open=0" in output, output
         assert "stale_update=0 code:7" in output, output
         assert "search_active=count:1 diagnostics:0 code:0" in output, output
-        assert "catalog_trash=count:2 diagnostics:0" in output, output
+        assert "catalog_trash=count:3 diagnostics:0" in output, output
         assert "search_trash=count:1 diagnostics:0 code:0" in output, output
         assert "status:3 pinned:0" in output, output
         assert "failed_create=0 code:1" in output, output
-        assert "catalog_after_failed_create=count:2 diagnostics:0" in output, output
-        assert "catalog_diagnostic=count:2 diagnostics:1" in output, output
+        assert "catalog_after_failed_create=count:3 diagnostics:0" in output, output
+        assert "catalog_diagnostic=count:3 diagnostics:1" in output, output
         assert "recovery=calls:6 prior_prompt:1 prior_answer:1" in output, output
         assert 'todo_snapshot={"items":[{"text":"Inspect code","done":false}],"schema_version":1,"event_id":777}' in output, output
         assert "todo_invalid=0" in output, output
@@ -689,7 +731,7 @@ def main() -> int:
         assert json.loads(todo_files[0].read_text(encoding="utf-8"))[
             "items"][0]["text"] == "Inspect code"
         valid_meta = [path for path in meta_files if path.parent.name != "bad"]
-        assert len(valid_meta) == 2, meta_files
+        assert len(valid_meta) == 3, meta_files
         documents = {
             path.parent.name: json.loads(path.read_text(encoding="utf-8"))
             for path in valid_meta
@@ -697,7 +739,7 @@ def main() -> int:
         source_path = next(path for path in valid_meta
             if documents[path.parent.name]["parent_session_id"] == "")
         child_path = next(path for path in valid_meta
-            if documents[path.parent.name]["parent_session_id"] != "")
+            if path.parent.name == fork.group(1))
         document = documents[source_path.parent.name]
         child = documents[child_path.parent.name]
         assert document["schema_version"] == 3
@@ -711,6 +753,26 @@ def main() -> int:
         assert child_path.parent.name == fork.group(1)
         assert all((path.parent / "snapshot.json").is_file() for path in valid_meta)
         event_path = source_path.parent / "ui-events.jsonl"
+        full_fork_path = home / "sessions/project-alpha" / fork.group(1) / "ui-events.jsonl"
+        prefix_fork_path = home / "sessions/project-alpha" / prefix_fork.group(1) / "ui-events.jsonl"
+        assert full_fork_path.is_file() and prefix_fork_path.is_file()
+        full_fork_events = [json.loads(line) for line in full_fork_path.read_text(
+            encoding="utf-8").splitlines()]
+        prefix_fork_events = [json.loads(line) for line in prefix_fork_path.read_text(
+            encoding="utf-8").splitlines()]
+        assert all(event["session_id"] == fork.group(1)
+                   for event in full_fork_events)
+        assert all(event["session_id"] == prefix_fork.group(1)
+                   for event in prefix_fork_events)
+        assert any(event["text"] == "first durable prompt"
+                   for event in full_fork_events)
+        assert any(event["text"] == "second prompt"
+                   for event in full_fork_events)
+        assert any(event["text"] == "fork prompt" for event in full_fork_events)
+        assert any(event["text"] == "first durable prompt"
+                   for event in prefix_fork_events)
+        assert not any(event["text"] == "second prompt"
+                       for event in prefix_fork_events)
         events = []
         invalid_events = 0
         for line in event_path.read_text(encoding="utf-8").splitlines():

@@ -97,6 +97,12 @@ For a new `agent_start` event, schema 3 includes `user_message_sequence`,
 the exact durable ledger entry written for that user prompt. Other events and
 resumed runs report zero. Existing schema 1 and 2 journal records still replay
 with zero, so clients must not infer an edit boundary for those records.
+Forking at a ledger sequence copies the retained UI event prefix into the new
+session before publishing it. The copied records receive the child's session
+identity; a main-Agent `agent_start` beyond the requested user-message
+sequence and subsequent records are excluded. The UI journal remains bounded
+by the existing retention limit, and unavailable older UI records cannot be
+reconstructed from the model ledger.
 
 The v1 transport deliberately uses bounded pull replay instead of holding an
 SSE connection. This gives desktop, mobile, reload, and suspended-webview

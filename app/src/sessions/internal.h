@@ -14,6 +14,9 @@ bool MdoSessionEventBridgeRef(void* Value);
 void MdoSessionEventBridgeRelease(void* Value);
 bool MdoSessionEventBridgeOnEvent(void* Value, const xwork_event* Event);
 void MdoSessionEventBridgeSetRegistered(MdoSessionEventBridge* Bridge);
+bool MdoSessionEventBridgeClonePrefix(MdoSessionEventBridge* Bridge,
+    const char* SourceProjectId, const char* SourceSessionId,
+    uint64 ThroughSequence, xwork_error* Error);
 
 /* Implemented by manager.c. Called only when the final Agent callback owner
  * releases its bridge. */

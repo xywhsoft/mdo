@@ -2412,6 +2412,12 @@ def run_probe(host: Path) -> None:
                 assert forked["revision"] == 1, forked
                 assert headers["etag"] == (
                     f'"mdo-session-{forked["id"]}-1"'), headers
+                fork_events = json.loads(request(port, "GET",
+                    f'/api/v1/projects/api-project/sessions/{forked["id"]}'
+                    '/events?after=0&limit=32')[2])["data"]["items"]
+                assert any(event["kind"] == "agent_start" and
+                           event["user_message_sequence"] > 0
+                           for event in fork_events), fork_events
 
                 truncate_path = session_path + "/truncate"
                 status, headers, body = request(

@@ -1036,6 +1036,8 @@ MdoSession* MdoSessionFork(MdoSession* Source,
     ManagerLocked = false;
     if ( !MdoAgentSessionSaveFork(Source->Agent, Options->ThroughSequence,
             SnapshotPath, &SavedThrough, Error) ) goto done;
+    if ( !MdoSessionEventBridgeClonePrefix(Bridge, ProjectId,
+            SourceInfo.Id, SavedThrough, Error) ) goto done;
     xrtMutexUnlock(Source->Lock);
     SourceLocked = false;
 

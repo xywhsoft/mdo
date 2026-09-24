@@ -628,6 +628,161 @@ fail:
     return NULL;
 }
 
+/* Forks are prepared before the child Agent is published. Rebuild the UI
+ * journal under the child's identity, keeping only completed source runs
+ * before the requested user-message boundary. The source journal is bounded
+ * and the result is published in one atomic write. */
+bool MdoSessionEventBridgeClonePrefix(MdoSessionEventBridge* Bridge,
+    const char* SourceProjectId, const char* SourceSessionId,
+    uint64 ThroughSequence, xwork_error* Error)
+{
+    char SourcePath[MDO_SESSION_PATH_CAPACITY];
+    char* Source = NULL;
+    char* Output = NULL;
+    size_t SourceSize = 0u;
+    size_t OutputSize = 0u;
+    size_t Capacity = 0u;
+    size_t Start = 0u;
+    uint64 LastSourceEventId = 0u;
+    xfileinfo Info;
+    bool Exists = false;
+    bool Ok = false;
+    xworkErrorInit(Error);
+    if ( Bridge == NULL || Bridge->NextEventId != 1u ||
+         !MdoEventsIdValid(SourceProjectId, MDO_PROJECT_ID_CAPACITY) ||
+         !MdoEventsIdValid(SourceSessionId, MDO_SESSION_ID_CAPACITY) ||
+         !MdoEventsPath(SourcePath, SourceProjectId, SourceSessionId) ) {
+        MdoEventsError(Error, XWORK_ERROR_INVALID_ARGUMENT,
+            "invalid event journal fork request");
+        return false;
+    }
+    if ( ThroughSequence == 0u ) return true;
+    if ( !MdoHomeExternalStat(SourcePath, &Exists, &Info) ) goto io;
+    if ( !Exists ) return true;
+    if ( Info.Type != XFILE_TYPE_FILE ||
+         (Info.Available & XFILE_INFO_SIZE) == 0u ||
+         !MdoEventsRead(SourcePath, &Source, &SourceSize) ) goto io;
+    while ( Start < SourceSize ) {
+        const char* End = (const char*)memchr(Source + Start, '\n',
+            SourceSize - Start);
+        MdoSessionEventOwned Entry;
+        xwork_event Event;
+        char* Json = NULL;
+        size_t JsonSize = 0u;
+        size_t Length;
+        size_t Needed;
+        if ( End == NULL ) break;
+        Length = (size_t)(End - (Source + Start));
+        if ( Length == 0u || Length > MDO_SESSION_EVENT_RECORD_LIMIT ||
+             !MdoEventsParse(SourceProjectId, SourceSessionId,
+                xrtStrViewN(Source + Start, Length), &Entry) ) {
+            xrtClearError();
+            Start += Length + 1u;
+            continue;
+        }
+        Start += Length + 1u;
+        if ( Entry.Info.EventId <= LastSourceEventId ) {
+            MdoEventsOwnedUnit(&Entry);
+            continue;
+        }
+        LastSourceEventId = Entry.Info.EventId;
+        if ( Entry.Info.Kind == XWORK_EVENT_AGENT_START &&
+             Entry.Info.AgentDepth == 0u &&
+             Entry.Info.UserMessageSequence > ThroughSequence ) {
+            MdoEventsOwnedUnit(&Entry);
+            break;
+        }
+        if ( OutputSize == 0u && Entry.Info.EventId > 1u )
+            Bridge->NextEventId = Entry.Info.EventId;
+        if ( Bridge->NextEventId == UINT64_MAX ) {
+            MdoEventsOwnedUnit(&Entry);
+            MdoEventsError(Error, XWORK_ERROR_LIMIT,
+                "fork event identity space is exhausted");
+            goto done;
+        }
+        memset(&Event, 0, sizeof(Event));
+        Event.eKind = Entry.Info.Kind;
+        Event.uAgentTurn = Entry.Info.AgentTurn;
+        Event.uUserMessageSequence = Entry.Info.UserMessageSequence;
+        Event.uAgentDepth = Entry.Info.AgentDepth;
+        Event.uEventId = Entry.Info.SourceEventId;
+        Event.iOccurredAtUs = Entry.Info.OccurredAt;
+        Event.uAgentId = Entry.Info.AgentId;
+        Event.uRunId = Entry.Info.RunId;
+        Event.uTaskId = Entry.Info.TaskId;
+        Event.uArtifactId = Entry.Info.ArtifactId;
+        Event.uParentRunId = Entry.Info.ParentRunId;
+        Event.uEffects = Entry.Info.Effects;
+        Event.eTaskState = Entry.Info.TaskState;
+        Event.uTaskRevision = Entry.Info.TaskRevision;
+        Event.tUsage.uInputTokens = Entry.Info.InputTokens;
+        Event.tUsage.uOutputTokens = Entry.Info.OutputTokens;
+        Event.tUsage.uTotalTokens = Entry.Info.TotalTokens;
+        Event.bSuccess = Entry.Info.Success;
+        Event.bEffectApplied = Entry.Info.EffectApplied;
+        Event.bTextTruncated = Entry.Info.TextTruncated;
+        Event.sText = Entry.Info.Text;
+        Event.iTextLength = strlen(Entry.Info.Text);
+        Event.sToolName = Entry.Info.ToolName;
+        Event.sToolCallId = Entry.Info.ToolCallId;
+        Event.sArtifactPath = Entry.Info.ArtifactPath;
+        Event.sModel = Entry.Info.Model;
+        Json = MdoEventsRecord(Bridge, Bridge->NextEventId, &Event, &JsonSize);
+        MdoEventsOwnedUnit(&Entry);
+        if ( Json == NULL ) {
+            MdoEventsError(Error, XWORK_ERROR_OUT_OF_MEMORY,
+                "cannot serialize the fork event journal");
+            goto done;
+        }
+        if ( OutputSize >= MDO_SESSION_EVENT_FILE_LIMIT * 2u ||
+             JsonSize > MDO_SESSION_EVENT_FILE_LIMIT * 2u -
+                OutputSize - 1u ) {
+            xrtFree(Json);
+            MdoEventsError(Error, XWORK_ERROR_LIMIT,
+                "fork event journal exceeds its bounded copy limit");
+            goto done;
+        }
+        Needed = OutputSize + JsonSize + 1u;
+        if ( Needed > Capacity ) {
+            size_t Next = Capacity != 0u ? Capacity : 4096u;
+            char* NewOutput;
+            while ( Next < Needed ) Next *= 2u;
+            NewOutput = (char*)xrtRealloc(Output, Next);
+            if ( NewOutput == NULL ) {
+                xrtFree(Json);
+                MdoEventsError(Error, XWORK_ERROR_OUT_OF_MEMORY,
+                    "cannot allocate the fork event journal");
+                goto done;
+            }
+            Output = NewOutput;
+            Capacity = Next;
+        }
+        memcpy(Output + OutputSize, Json, JsonSize);
+        OutputSize += JsonSize;
+        Output[OutputSize++] = '\n';
+        ++Bridge->NextEventId;
+        xrtFree(Json);
+    }
+    if ( OutputSize > MDO_SESSION_EVENT_FILE_LIMIT ) {
+        size_t Offset = OutputSize - MDO_SESSION_EVENT_RETAIN_BYTES;
+        while ( Offset < OutputSize && Output[Offset] != '\n' ) ++Offset;
+        if ( Offset < OutputSize ) ++Offset;
+        memmove(Output, Output + Offset, OutputSize - Offset);
+        OutputSize -= Offset;
+    }
+    if ( OutputSize != 0u &&
+         !MdoHomeAtomicWrite(Bridge->Path, Output, OutputSize, false) )
+        goto io;
+    Ok = true;
+    goto done;
+io:
+    MdoEventsXrtError(Error, "cannot clone the session event journal");
+done:
+    xrtFree(Output);
+    xrtFree(Source);
+    return Ok;
+}
+
 bool MdoSessionEventBridgeRef(void* Value)
 {
     MdoSessionEventBridge* Bridge = (MdoSessionEventBridge*)Value;
