@@ -19,7 +19,7 @@ export function loadSession(projectId, sessionId) {
 
 export async function createSession(input) {
   const body = { project_id: resourceId(input.project_id, "project") };
-  for (const key of ["title", "agent_id", "model_id", "reasoning_effort"]) {
+  for (const key of ["title", "agent_id", "model_id", "reasoning_effort", "permission_profile"]) {
     if (input[key]) body[key] = input[key];
   }
   const response = await api.post("/sessions", body);
@@ -48,6 +48,16 @@ async function refreshAfter(response) {
 
 export async function patchSession(session, patch) {
   return refreshAfter(await api.patch(endpoint(session), patch, { ifMatch: etag(session) }));
+}
+
+export async function updateSessionProfile(session, profile) {
+  const body = {
+    model_id: profile.model_id,
+    reasoning_effort: profile.reasoning_effort,
+    permission_profile: profile.permission_profile,
+  };
+  return refreshAfter(await api.put(`${endpoint(session)}/profile`, body,
+    { ifMatch: etag(session) }));
 }
 
 export async function trashSession(session) {

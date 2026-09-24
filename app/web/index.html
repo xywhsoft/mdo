@@ -133,10 +133,16 @@
                 <span class="icon" data-icon="folder" aria-hidden="true"></span>
                 <span id="workspace-label">本地工作区</span>
               </button>
-              <button class="option-chip" id="reasoning-chip" type="button" title="推理强度">
-                <span class="icon" data-icon="brain" aria-hidden="true"></span>
-                <span id="reasoning-label">自动</span>
-              </button>
+              <label class="sr-only" for="composer-model">模型</label>
+              <select class="composer-select" id="composer-model" aria-label="模型"></select>
+              <label class="sr-only" for="composer-reasoning">推理强度</label>
+              <select class="composer-select composer-select-short" id="composer-reasoning" aria-label="推理强度"></select>
+              <label class="sr-only" for="composer-permission">权限</label>
+              <select class="composer-select composer-select-short" id="composer-permission" aria-label="权限">
+                <option value="read-only">只读</option>
+                <option value="balanced">询问</option>
+                <option value="full-access">完全访问</option>
+              </select>
             </div>
             <div class="composer-actions">
               <span class="composer-input-estimate" id="composer-input-estimate" title="按输入文本粗略估算">输入 ~0 tok</span>
@@ -315,7 +321,7 @@
       <section class="inspector-panel" id="context-panel" role="tabpanel" aria-labelledby="context-tab" hidden>
         <div class="panel-intro">
           <h2>会话上下文</h2>
-          <p>会话固定模型、Agent 与资源代次，运行中不会静默切换。</p>
+          <p>模型、推理强度和权限可在输入区切换；运行中的回合保持启动时配置。</p>
         </div>
         <dl class="context-list" id="context-list"></dl>
       </section>
@@ -340,14 +346,12 @@
         <label>项目标识 <input name="project_id" required maxlength="63" value="default" pattern="[A-Za-z0-9_-][A-Za-z0-9._-]*"></label>
         <label>Agent <select name="agent_id" id="agent-select"></select></label>
         <label>模型 <select name="model_id" id="model-select"></select></label>
-        <label>推理强度
-          <select name="reasoning_effort">
-            <option value="">自动</option>
-            <option value="low">低</option>
-            <option value="medium">中</option>
-            <option value="high">高</option>
-          </select>
-        </label>
+        <label>推理强度 <select name="reasoning_effort" id="new-session-reasoning"></select></label>
+        <label>权限 <select name="permission_profile" id="new-session-permission">
+          <option value="read-only">只读</option>
+          <option value="balanced">询问</option>
+          <option value="full-access">完全访问</option>
+        </select></label>
       </div>
       <div class="dialog-error" id="new-session-error" role="alert" hidden></div>
       <footer>

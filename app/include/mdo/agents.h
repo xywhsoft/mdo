@@ -17,6 +17,7 @@ typedef struct MdoAgentSessionOptions {
     const char* ModelId;          /* NULL inherits the Agent/global default. */
     MdoModelProtocol Protocol;    /* zero selects the model default. */
     const char* ReasoningEffort;  /* NULL inherits Agent/global/model policy. */
+    const char* PermissionProfile; /* NULL inherits Agent/global policy. */
     uint32 MaxOutputTokens;       /* zero inherits the selected profile. */
     const char* WorkspaceRoot;    /* NULL selects the current directory. */
     const char* ProjectId;        /* optional memory isolation identity. */

@@ -1067,9 +1067,13 @@ MdoAgentSession* MdoAgentSessionCreateWithRuntime(xwork_runtime* Runtime,
              !MdoAgentsAppendPrompt(&Prompt, MemoryPrompt,
                 MemoryPromptBytes, Error) ) goto fail;
     }
-    Permission = AgentInfo.PermissionProfile != NULL &&
+    Permission = Options->PermissionProfile != NULL &&
+        Options->PermissionProfile[0] != '\0' ? Options->PermissionProfile :
+        (AgentInfo.PermissionProfile != NULL &&
         AgentInfo.PermissionProfile[0] != '\0' ? AgentInfo.PermissionProfile :
-        Settings.PermissionProfile;
+        Settings.PermissionProfile);
+    if ( (AgentInfo.Flags & MDO_AGENT_READ_ONLY) != 0u )
+        Permission = "read-only";
     Approval = MdoAgentsApproval(Permission,
         (AgentInfo.Flags & MDO_AGENT_READ_ONLY) != 0u, &ValidApproval);
     if ( !ValidApproval ) {

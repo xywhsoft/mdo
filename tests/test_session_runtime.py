@@ -303,8 +303,24 @@ void ServiceInit(XS_HostInfo *host) {
     MdoSessionRelease(blocked); blocked = NULL;
     Catalog("catalog_active");
     if (!Run(session, "first durable prompt")) goto done;
+    stale_update = MdoSessionSetProfile(session, NULL, "low",
+        "read-only", &open, &error);
+    printf("profile_busy=%d code:%d\n", stale_update ? 1 : 0,
+        (int)error.eCode);
+    if (stale_update) goto done;
     event_cursor = Events("events_first", "project-alpha", session_id,
         0u, 2u);
+    MdoSessionRelease(session); session = NULL;
+    session = MdoSessionLoad("project-alpha", session_id, &error);
+    if (session == NULL || !MdoSessionSetProfile(session, NULL, "low",
+            "read-only", &open, &error)) {
+        printf("profile_error=%s\n", error.sMessage); goto done;
+    }
+    memset(&info, 0, sizeof(info)); info.Size = sizeof(info);
+    if (!MdoSessionGetInfo(session, &info)) goto done;
+    printf("profile=model:%s reasoning:%s permission:%s revision:%llu\n",
+        info.ModelId, info.ReasoningEffort, info.PermissionProfile,
+        (unsigned long long)info.Revision);
     MdoSessionRelease(session); session = NULL;
     Catalog("catalog_after_create");
     if (!CorruptEventTail("project-alpha", session_id)) goto done;
@@ -562,6 +578,9 @@ def main() -> int:
         assert "legacy_meta=ok:1 parent: through:0" in output, output
         assert "created=id:" in output and "project:project-alpha" in output, output
         assert "duplicate_open=0 code:7" in output, output
+        assert "profile_busy=0 code:7" in output, output
+        assert re.search(r"profile=model:ling-3\.0-tiny reasoning:low "
+            r"permission:read-only revision:[2-9]\d*", output), output
         assert "run=0 text:durable-answer-one" in output, output
         assert "run=0 text:durable-answer-two" in output, output
         assert "run=0 text:durable-answer-three" in output, output
@@ -612,9 +631,10 @@ def main() -> int:
             if documents[path.parent.name]["parent_session_id"] != "")
         document = documents[source_path.parent.name]
         child = documents[child_path.parent.name]
-        assert document["schema_version"] == 2
+        assert document["schema_version"] == 3
+        assert document["permission_profile"] == "read-only"
         assert document["status"] == "active" and document["title"] == "Renamed durable session"
-        assert child["schema_version"] == 2
+        assert child["schema_version"] == 3
         assert child["parent_session_id"] == source_path.parent.name
         assert child["forked_through_sequence"] > 0
         assert child["title"] == "Forked durable session"

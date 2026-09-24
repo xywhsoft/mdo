@@ -512,6 +512,7 @@ select:focus-visible,
 .timeline-sentinel { height: 1px; }
 
 .composer-region {
+  min-width: 0;
   position: relative;
   z-index: 2;
   padding: 6px 20px max(16px, env(safe-area-inset-bottom));
@@ -546,6 +547,13 @@ select:focus-visible,
 .composer textarea::placeholder { color: var(--faint); }
 .composer-toolbar { display: flex; min-height: 42px; align-items: center; justify-content: space-between; gap: 10px; padding: 5px 7px 7px 9px; }
 .composer-options, .composer-actions { display: flex; min-width: 0; align-items: center; gap: 6px; }
+.composer-options { flex: 1 1 auto; overflow-x: auto; scrollbar-width: none; }
+.composer-options::-webkit-scrollbar { display: none; }
+.composer-actions { flex: 0 0 auto; }
+.composer-select { min-width: 0; max-width: 145px; height: 30px; padding: 0 6px; border: 0; border-radius: var(--radius-sm); background: transparent; color: var(--muted); font: inherit; font-size: 11px; cursor: pointer; }
+.composer-select-short { max-width: 84px; }
+.composer-select:hover, .composer-select:focus-visible { background: var(--surface-hover); color: var(--ink); }
+.composer-select:disabled { opacity: .55; cursor: default; }
 .composer-input-estimate { color: var(--faint); font-size: 10px; white-space: nowrap; }
 .context-meter { position: relative; }
 .context-meter > button { display: grid; width: 30px; height: 30px; place-items: center; padding: 0; border: 0; border-radius: 7px; background: transparent; cursor: pointer; }
@@ -926,6 +934,7 @@ select:focus-visible,
   .composer-hint { display: none; }
   .composer-input-estimate { font-size: 9px; }
   .option-chip { max-width: 130px; padding: 0 6px; }
+  #workspace-chip { display: none; }
   .composer textarea { max-height: 160px; }
   .inspector { z-index: 40; width: min(350px, calc(100vw - 30px)); }
   .app-shell[data-sidebar="open"] .scrim,

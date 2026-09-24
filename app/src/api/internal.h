@@ -93,6 +93,7 @@ bool MdoApiOperationRoute(MdoApiContext* pContext);
 bool MdoApiSettingsPreviewRoute(MdoApiContext* pContext);
 bool MdoApiSettingsMutationRoute(MdoApiContext* pContext);
 bool MdoApiSessionCreateRoute(MdoApiContext* pContext);
+bool MdoApiSessionProfileRoute(MdoApiContext* pContext);
 bool MdoApiSessionRoute(MdoApiContext* pContext);
 bool MdoApiSessionRestoreRoute(MdoApiContext* pContext);
 bool MdoApiSessionHistoryRoute(MdoApiContext* pContext);

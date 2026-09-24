@@ -2143,6 +2143,46 @@ def run_unconfigured_model_probe(host: Path) -> None:
                     assert document["data"]["model_id"] == "ling-3.0-tiny", document
                     assert (base / "home/sessions/default" /
                             document["data"]["id"] / "meta.json").is_file()
+                profile_path = ("/api/v1/projects/default/sessions/" +
+                    document["data"]["id"] + "/profile")
+                profile_body = json.dumps({
+                    "model_id": "ling-3.0-tiny",
+                    "reasoning_effort": "low",
+                    "permission_profile": "read-only",
+                }).encode()
+                status, _, response = request(port, "PUT", profile_path,
+                    body=profile_body,
+                    headers={"Content-Type": "application/json"})
+                assert status == 428, (status, response)
+                status, headers, response = request(port, "PUT", profile_path,
+                    body=profile_body,
+                    headers={"Content-Type": "application/json",
+                             "If-Match": '"mdo-session-' +
+                                document["data"]["id"] + '-1"'})
+                profile = json.loads(response)
+                assert status == 200, (status, profile)
+                assert profile["data"]["reasoning_effort"] == "low", profile
+                assert profile["data"]["permission_profile"] == "read-only", profile
+                assert profile["data"]["revision"] == 2, profile
+                assert headers["etag"].endswith('-2"'), headers
+                status, _, response = request(port, "PUT", profile_path,
+                    body=profile_body,
+                    headers={"Content-Type": "application/json",
+                             "If-Match": '"mdo-session-' +
+                                document["data"]["id"] + '-1"'})
+                assert status == 412, (status, response)
+                invalid_profile = json.dumps({
+                    "model_id": "missing-model",
+                    "reasoning_effort": "low",
+                    "permission_profile": "read-only",
+                }).encode()
+                status, _, response = request(port, "PUT", profile_path,
+                    body=invalid_profile,
+                    headers={"Content-Type": "application/json",
+                             "If-Match": headers["etag"]})
+                assert status == 422, (status, response)
+                assert json.loads(response)["error"]["code"] == (
+                    "session_profile_invalid")
                 status, _, response = request(
                     port, "POST", "/api/v1/sessions",
                     body=b'{"project_id":"default","model_id":"unknown"}',

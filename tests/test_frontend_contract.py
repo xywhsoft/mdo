@@ -112,6 +112,16 @@ class FrontendContractTests(unittest.TestCase):
         self.assertIn("if (terminalState(run))", app)
         self.assertIn("/runs/${run}", runs)
 
+    def test_composer_profile_is_applied_to_session_before_run(self) -> None:
+        app = self.scripts["js/app.js"]
+        profile = self.scripts["js/features/chat/composer-profile.js"]
+        sessions = self.scripts["js/state/sessions.js"]
+        self.assertIn("...composerProfile.selection()", app)
+        self.assertIn("updateSessionProfile(session, profile)", profile)
+        self.assertIn("isRunActive()", profile)
+        self.assertIn("/profile", sessions)
+        self.assertIn("ifMatch: etag(session)", sessions)
+
     def test_settings_use_preview_etag_and_server_side_merge(self) -> None:
         state = self.scripts["js/state/settings.js"]
         view = self.scripts["js/features/settings/settings-view.js"]

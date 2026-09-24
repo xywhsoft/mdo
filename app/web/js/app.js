@@ -24,6 +24,7 @@ import { timelineStore, selectTimeline, clearTimeline, refreshSelectedTimeline }
 import { createTimelineView } from "./features/chat/timeline.js";
 import { createConversationDocks } from "./features/chat/conversation-docks.js";
 import { createPromptQueue } from "./features/chat/prompt-queue.js";
+import { createComposerProfile, fillReasoningOptions } from "./features/chat/composer-profile.js";
 import { createTokenMeter } from "./features/chat/token-meter.js";
 import { createTaskPanel } from "./features/tasks/task-panel.js";
 import { createDecisionPanel } from "./features/approvals/decision-panel.js";
@@ -78,7 +79,6 @@ export async function boot() {
   const mobileMeta = $("#mobile-session-meta");
   const contextList = $("#context-list");
   const workspaceLabel = $("#workspace-label");
-  const reasoningLabel = $("#reasoning-label");
   const mobileActivity = $("#mobile-activity-dot");
   const settingsWorkspace = $("#settings-workspace");
   const skipLink = $(".skip-link");
@@ -160,6 +160,13 @@ export async function boot() {
     estimate: $("#composer-input-estimate"), prompt,
     sessionStore: sessionDetailStore, timelineStore, modelsStore, agentsStore,
   });
+  const composerProfile = createComposerProfile({
+    modelSelect: $("#composer-model"), reasoningSelect: $("#composer-reasoning"),
+    permissionSelect: $("#composer-permission"), navigation,
+    sessionStore: sessionDetailStore, modelsStore, agentsStore,
+    isRunActive: () => Boolean(activeRun),
+    onBusyChange: () => setRun(activeRun),
+  });
   createRecoveryPanel({
     container: $("#recovery-list"),
     summary: $("#recovery-summary"),
@@ -213,7 +220,8 @@ export async function boot() {
     send.hidden = false;
     stop.hidden = !activeRun;
     prompt.disabled = !sessionWritable;
-    send.disabled = !sessionWritable || submitting;
+    send.disabled = !sessionWritable || submitting || composerProfile.isBusy();
+    composerProfile.setRunActive(Boolean(activeRun));
     send.setAttribute("aria-label", activeRun ? "加入待发送队列" : "发送任务");
     composerHint.textContent = activeRun
       ? "Enter 排队 · Ctrl Enter 中断并发送"
@@ -259,7 +267,6 @@ export async function boot() {
       mobileTitle.textContent = title;
       mobileMeta.textContent = `${session.model_id || session.agent_id}${statusText}`;
       workspaceLabel.textContent = session.workspace_root ? session.workspace_root.split(/[\\/]/).filter(Boolean).at(-1) || session.workspace_root : "本地工作区";
-      reasoningLabel.textContent = session.reasoning_effort || "自动";
     }
     updateContext(state);
   });
@@ -407,7 +414,8 @@ export async function boot() {
     const selected = navigation.get();
     if (selected.sessionId) return selected;
     const title = text.trim().split(/\r?\n/, 1)[0].slice(0, 80);
-    const session = await createSession({ project_id: "default", title });
+    const session = await createSession({ project_id: "default", title,
+      ...composerProfile.selection() });
     navigation.select(session.project_id, session.id);
     drafts.delete("");
     selectTimeline(session.project_id, session.id);
@@ -420,6 +428,10 @@ export async function boot() {
     const interrupt = interruptRequested;
     interruptRequested = false;
     if (!text || submitting) return;
+    if (composerProfile.isBusy()) {
+      showComposerError(new Error("请等待会话配置更新完成"));
+      return;
+    }
     hideComposerError();
     submitting = true;
     send.disabled = true;
@@ -616,13 +628,29 @@ export async function boot() {
     }
     if (selectedAgent && [...agentSelect.options].some((option) => option.value === selectedAgent)) agentSelect.value = selectedAgent;
     if (selectedModel && [...modelSelect.options].some((option) => option.value === selectedModel)) modelSelect.value = selectedModel;
+    const model = modelsStore.get().data?.models?.find((item) => item.id === modelSelect.value);
+    fillReasoningOptions($("#new-session-reasoning"), model,
+      $("#new-session-reasoning").value);
   }
   agentsStore.subscribe(fillCatalogSelects);
   modelsStore.subscribe(fillCatalogSelects);
+  $("#model-select").addEventListener("change", () => {
+    const model = modelsStore.get().data?.models?.find((item) =>
+      item.id === $("#model-select").value);
+    fillReasoningOptions($("#new-session-reasoning"), model,
+      model?.default_reasoning_effort);
+  });
 
   function openNewSession() {
     dialogError.hidden = true;
     dialogError.textContent = "";
+    const profile = composerProfile.selection();
+    $("#model-select").value = profile.model_id;
+    const model = modelsStore.get().data?.models?.find((item) =>
+      item.id === profile.model_id);
+    fillReasoningOptions($("#new-session-reasoning"), model,
+      profile.reasoning_effort);
+    $("#new-session-permission").value = profile.permission_profile;
     if (!dialog.open) dialog.showModal();
     window.setTimeout(() => dialogForm.elements.title.focus(), 0);
   }
@@ -688,7 +716,6 @@ export async function boot() {
     }
   });
   $("#workspace-chip").addEventListener("click", () => { selectInspectorTab("context"); setDrawer("inspector", true); });
-  $("#reasoning-chip").addEventListener("click", () => { selectInspectorTab("context"); setDrawer("inspector", true); });
 
   document.addEventListener("keydown", (event) => {
     if (event.key === "Escape") {

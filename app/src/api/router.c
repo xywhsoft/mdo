@@ -87,6 +87,8 @@ static const MdoApiRoute g_MdoApiRoutes[] = {
       MdoApiSessionRoute },
     { "/api/v1/projects/{project}/sessions/{session}/restore",
       XHTTP_METHOD_POST, "POST, OPTIONS", MdoApiSessionRestoreRoute },
+    { "/api/v1/projects/{project}/sessions/{session}/profile",
+      XHTTP_METHOD_PUT, "PUT, OPTIONS", MdoApiSessionProfileRoute },
     { "/api/v1/projects/{project}/sessions/{session}/history",
       XHTTP_METHOD_GET | XHTTP_METHOD_HEAD, "GET, HEAD, OPTIONS",
       MdoApiSessionHistoryRoute },

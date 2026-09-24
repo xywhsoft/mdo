@@ -89,6 +89,7 @@ typedef struct MdoSessionInfo {
     char AgentId[MDO_SESSION_IDENTITY_CAPACITY];
     char ModelId[MDO_SESSION_IDENTITY_CAPACITY];
     char ReasoningEffort[MDO_SESSION_REASONING_CAPACITY];
+    char PermissionProfile[MDO_SESSION_REASONING_CAPACITY];
     char WorkspaceRoot[MDO_SESSION_WORKSPACE_CAPACITY];
 } MdoSessionInfo;
 
@@ -164,6 +165,11 @@ MdoAgentSession* MdoSessionAgentRef(MdoSession* Session);
 
 bool MdoSessionRename(MdoSession* Session, const char* Title,
     xwork_error* Error);
+/* Revalidate a recovered idle session before atomically changing its next-run
+ * model, reasoning and permission profile. NULL fields retain their value. */
+bool MdoSessionSetProfile(MdoSession* Session, const char* ModelId,
+    const char* ReasoningEffort, const char* PermissionProfile,
+    const MdoSessionRuntimeOptions* Runtime, xwork_error* Error);
 bool MdoSessionSetPinned(MdoSession* Session, bool Pinned,
     xwork_error* Error);
 bool MdoSessionSetArchived(MdoSession* Session, bool Archived,

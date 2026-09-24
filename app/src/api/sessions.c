@@ -183,6 +183,8 @@ static bool MdoApiSessionInfoValue(const MdoSessionInfo* Info,
             MdoModelProtocolName(Info->Protocol)) &&
         MdoApiValueSetString(Data, "reasoning_effort",
             Info->ReasoningEffort) &&
+        MdoApiValueSetString(Data, "permission_profile",
+            Info->PermissionProfile) &&
         MdoApiValueSetString(Data, "workspace_root", Info->WorkspaceRoot) &&
         MdoApiValueSetString(Data, "status",
             Info->Status == MDO_SESSION_ACTIVE ? "active" :
@@ -416,6 +418,91 @@ static bool MdoApiSessionMutationFailure(MdoApiContext* Context,
         "The session could not be updated", NULL);
 }
 
+bool MdoApiSessionProfileRoute(MdoApiContext* Context)
+{
+    char Project[MDO_PROJECT_ID_CAPACITY];
+    char SessionId[MDO_SESSION_ID_CAPACITY];
+    char Model[MDO_SESSION_IDENTITY_CAPACITY] = { 0 };
+    char Reasoning[MDO_SESSION_REASONING_CAPACITY] = { 0 };
+    char Permission[MDO_SESSION_REASONING_CAPACITY] = { 0 };
+    MdoApiSessionPreconditionStatus Precondition;
+    MdoApiJsonBody Body;
+    MdoApiBodyStatus BodyStatus;
+    MdoSession* Session;
+    MdoSessionInfo Info;
+    xwork_error Error;
+    uint64 ExpectedRevision = 0u;
+    size_t Present = 0u;
+    bool MatchesSession = false;
+    bool Valid;
+
+    if ( !MdoApiSessionPath(Context, Project, SessionId) )
+        return MdoApiReplyError(Context, 400u, "invalid_session_path",
+            "The project or session ID is invalid", NULL);
+    Precondition = MdoApiSessionExpectedRevision(Context, SessionId,
+        &ExpectedRevision, &MatchesSession);
+    if ( Precondition == MDO_API_SESSION_PRECONDITION_MISSING )
+        return MdoApiReplyError(Context, 428u, "precondition_required",
+            "If-Match must contain the current session ETag", NULL);
+    if ( Precondition != MDO_API_SESSION_PRECONDITION_OK )
+        return MdoApiReplyError(Context, 400u, "invalid_precondition",
+            "If-Match must use the form \"mdo-session-ID-N\"", NULL);
+    BodyStatus = MdoApiJsonBodyRead(Context, &Body);
+    if ( BodyStatus != MDO_API_BODY_OK )
+        return MdoApiReplyBodyError(Context, BodyStatus);
+    Valid = xrtValueType(Body.Value) == XVALUE_OBJECT &&
+        MdoApiSessionString(Body.Value, "model_id", Model,
+            sizeof(Model), true, &Present) &&
+        MdoApiSessionString(Body.Value, "reasoning_effort", Reasoning,
+            sizeof(Reasoning), true, &Present) &&
+        MdoApiSessionString(Body.Value, "permission_profile", Permission,
+            sizeof(Permission), true, &Present) &&
+        Present == xrtValueCount(Body.Value);
+    MdoApiJsonBodyUnit(&Body);
+    if ( !Valid )
+        return MdoApiReplyError(Context, 422u, "session_profile_invalid",
+            "The session profile document is invalid", NULL);
+    memset(&Error, 0, sizeof(Error));
+    xrtClearError();
+    Session = MdoSessionLoad(Project, SessionId, &Error);
+    if ( Session == NULL ) return MdoApiSessionLoadFailure(Context, &Error);
+    memset(&Info, 0, sizeof(Info)); Info.Size = sizeof(Info);
+    if ( !MdoSessionGetInfo(Session, &Info) ) {
+        MdoSessionRelease(Session);
+        return MdoApiReplyError(Context, 500u, "session_result_unavailable",
+            "The session metadata is unavailable", NULL);
+    }
+    if ( !MatchesSession || Info.Revision != ExpectedRevision ) {
+        MdoSessionRelease(Session);
+        return MdoApiReplyError(Context, 412u, "revision_conflict",
+            "The session changed; reload it before updating", NULL);
+    }
+    if ( strcmp(Info.ModelId, Model) == 0 &&
+         strcmp(Info.ReasoningEffort, Reasoning) == 0 &&
+         strcmp(Info.PermissionProfile, Permission) == 0 ) {
+        MdoSessionRelease(Session);
+        return MdoApiSessionReply(Context, 200u, &Info);
+    }
+    if ( !MdoSessionSetProfile(Session, Model, Reasoning, Permission,
+            NULL, &Error) ) {
+        MdoSessionRelease(Session);
+        if ( Error.eCode == XWORK_ERROR_MODEL ||
+             Error.eCode == XWORK_ERROR_INVALID_ARGUMENT )
+            return MdoApiReplyError(Context, 422u,
+                "session_profile_invalid",
+                "The requested session profile is invalid", NULL);
+        return MdoApiSessionMutationFailure(Context, Project, SessionId,
+            ExpectedRevision, &Error);
+    }
+    memset(&Info, 0, sizeof(Info)); Info.Size = sizeof(Info);
+    Valid = MdoSessionGetInfo(Session, &Info);
+    MdoSessionRelease(Session);
+    if ( !Valid )
+        return MdoApiReplyError(Context, 500u, "session_result_unavailable",
+            "The session was updated but its metadata is unavailable", NULL);
+    return MdoApiSessionReply(Context, 200u, &Info);
+}
+
 bool MdoApiSessionCreateRoute(MdoApiContext* Context)
 {
     MdoApiJsonBody Body;
@@ -430,6 +517,7 @@ bool MdoApiSessionCreateRoute(MdoApiContext* Context)
     char Model[MDO_SESSION_IDENTITY_CAPACITY] = { 0 };
     char Protocol[40] = { 0 };
     char Reasoning[MDO_SESSION_REASONING_CAPACITY] = { 0 };
+    char Permission[MDO_SESSION_REASONING_CAPACITY] = { 0 };
     char Workspace[MDO_SESSION_WORKSPACE_CAPACITY] = { 0 };
     size_t Present = 0u;
     bool Valid;
@@ -451,6 +539,8 @@ bool MdoApiSessionCreateRoute(MdoApiContext* Context)
             sizeof(Protocol), false, &Present) &&
         MdoApiSessionString(Body.Value, "reasoning_effort", Reasoning,
             sizeof(Reasoning), false, &Present) &&
+        MdoApiSessionString(Body.Value, "permission_profile", Permission,
+            sizeof(Permission), false, &Present) &&
         MdoApiSessionString(Body.Value, "workspace_root", Workspace,
             sizeof(Workspace), false, &Present) &&
         MdoApiSessionUnsigned(Body.Value, "max_output_tokens",
@@ -467,6 +557,8 @@ bool MdoApiSessionCreateRoute(MdoApiContext* Context)
     Options.Agent.AgentId = Agent[0] != '\0' ? Agent : NULL;
     Options.Agent.ModelId = Model[0] != '\0' ? Model : NULL;
     Options.Agent.ReasoningEffort = Reasoning[0] != '\0' ? Reasoning : NULL;
+    Options.Agent.PermissionProfile = Permission[0] != '\0' ?
+        Permission : NULL;
     Options.Agent.WorkspaceRoot = Workspace[0] != '\0' ? Workspace : NULL;
     memset(&Error, 0, sizeof(Error));
     Session = MdoSessionCreate(&Options, &Error);

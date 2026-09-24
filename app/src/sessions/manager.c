@@ -237,6 +237,8 @@ char* MdoSessionsInternalMetaJson(const MdoSessionInfo* Info, size_t* Size)
          !MdoSessionsObjectString(Object, "protocol", Protocol) ||
          !MdoSessionsObjectString(Object, "reasoning_effort",
             Info->ReasoningEffort) ||
+         !MdoSessionsObjectString(Object, "permission_profile",
+            Info->PermissionProfile) ||
          !MdoSessionsObjectTake(Object, "max_output_tokens",
             xrtValueUInt(Info->MaxOutputTokens)) ||
          !MdoSessionsObjectString(Object, "workspace_root",
@@ -334,6 +336,7 @@ bool MdoSessionsInternalMetaParse(const char* ExpectedProject,
     xstrview Model;
     xstrview Protocol;
     xstrview Reasoning;
+    xstrview Permission;
     xstrview Workspace;
     xstrview Status;
     xstrview Previous;
@@ -364,10 +367,12 @@ bool MdoSessionsInternalMetaParse(const char* ExpectedProject,
         xrtStrView("pinned")) : NULL;
     if ( Root == NULL || xrtValueType(Root) != XVALUE_OBJECT ||
          !MdoSessionsValueUInt(Root, "schema_version", &Schema) ||
-         (Schema != 1u && Schema != MDO_SESSION_SCHEMA_VERSION) ||
+         (Schema != 1u && Schema != 2u &&
+          Schema != MDO_SESSION_SCHEMA_VERSION) ||
          ((Schema == 1u && xrtValueCount(Root) != 20u) ||
+          (Schema == 2u && xrtValueCount(Root) != 22u) ||
           (Schema == MDO_SESSION_SCHEMA_VERSION &&
-           xrtValueCount(Root) != 22u)) ||
+           xrtValueCount(Root) != 23u)) ||
          !MdoSessionsValueUInt(Root, "revision", &Revision) ||
          Revision == 0u ||
          !MdoSessionsValueString(Root, "id", &Id) ||
@@ -402,7 +407,7 @@ bool MdoSessionsInternalMetaParse(const char* ExpectedProject,
             sizeof(Info->ReasoningEffort), Reasoning, false) ||
          !MdoSessionsCopy(Info->WorkspaceRoot,
             sizeof(Info->WorkspaceRoot), Workspace, false) ) goto done;
-    if ( Schema == MDO_SESSION_SCHEMA_VERSION ) {
+    if ( Schema >= 2u ) {
         if ( !MdoSessionsValueString(Root, "parent_session_id", &Parent) ||
              !MdoSessionsValueUInt(Root, "forked_through_sequence",
                 &ForkedThrough) ||
@@ -413,6 +418,11 @@ bool MdoSessionsInternalMetaParse(const char* ExpectedProject,
               !MdoSessionsIdValid(Info->ParentSessionId,
                 sizeof(Info->ParentSessionId))) ) goto done;
         Info->ForkedThroughSequence = ForkedThrough;
+    }
+    if ( Schema >= 3u ) {
+        if ( !MdoSessionsValueString(Root, "permission_profile", &Permission) ||
+             !MdoSessionsCopy(Info->PermissionProfile,
+                sizeof(Info->PermissionProfile), Permission, true) ) goto done;
     }
     Info->Status = MdoSessionsStatusParse(Status);
     Info->PreviousStatus = MdoSessionsStatusParse(Previous);
@@ -455,7 +465,7 @@ static bool MdoSessionsMetaRead(const char* ProjectId, const char* SessionId,
     xrtFree(Data);
     if ( !Ok ) {
         xerror* Error = xrtErrorCreate(XERR_PROTOCOL, "mdo.sessions", 1,
-            "session meta.json does not satisfy schema version 1 or 2");
+            "session meta.json does not satisfy schema version 1, 2 or 3");
         if ( Error != NULL ) xrtSetErrorTake(Error);
     }
     return Ok;
@@ -762,6 +772,8 @@ MdoSession* MdoSessionCreate(const MdoSessionCreateOptions* Options,
     snprintf(Info.ModelId, sizeof(Info.ModelId), "%s", AgentInfo.ModelId);
     snprintf(Info.ReasoningEffort, sizeof(Info.ReasoningEffort), "%s",
         AgentInfo.ReasoningEffort);
+    snprintf(Info.PermissionProfile, sizeof(Info.PermissionProfile), "%s",
+        AgentInfo.PermissionProfile);
     snprintf(Info.WorkspaceRoot, sizeof(Info.WorkspaceRoot), "%s", Workspace);
     Session = MdoSessionsHandleCreate(Agent, &Info, MetaPath);
     if ( Session == NULL ) goto memory;
@@ -890,6 +902,7 @@ MdoSession* MdoSessionOpen(const char* ProjectId, const char* SessionId,
     AgentOptions.ModelId = Info.ModelId;
     AgentOptions.Protocol = Info.Protocol;
     AgentOptions.ReasoningEffort = Info.ReasoningEffort;
+    AgentOptions.PermissionProfile = Info.PermissionProfile;
     AgentOptions.MaxOutputTokens = Info.MaxOutputTokens;
     AgentOptions.WorkspaceRoot = Info.WorkspaceRoot;
     AgentOptions.ProjectId = Info.ProjectId;
@@ -1031,6 +1044,7 @@ MdoSession* MdoSessionFork(MdoSession* Source,
     AgentOptions.ModelId = SourceInfo.ModelId;
     AgentOptions.Protocol = SourceInfo.Protocol;
     AgentOptions.ReasoningEffort = SourceInfo.ReasoningEffort;
+    AgentOptions.PermissionProfile = SourceInfo.PermissionProfile;
     AgentOptions.MaxOutputTokens = SourceInfo.MaxOutputTokens;
     AgentOptions.WorkspaceRoot = SourceInfo.WorkspaceRoot;
     AgentOptions.ProjectId = ProjectId;
@@ -1079,6 +1093,8 @@ MdoSession* MdoSessionFork(MdoSession* Source,
     snprintf(Info.ModelId, sizeof(Info.ModelId), "%s", AgentInfo.ModelId);
     snprintf(Info.ReasoningEffort, sizeof(Info.ReasoningEffort), "%s",
         AgentInfo.ReasoningEffort);
+    snprintf(Info.PermissionProfile, sizeof(Info.PermissionProfile), "%s",
+        AgentInfo.PermissionProfile);
     snprintf(Info.WorkspaceRoot, sizeof(Info.WorkspaceRoot), "%s",
         SourceInfo.WorkspaceRoot);
     Session = MdoSessionsHandleCreate(Agent, &Info, MetaPath);
@@ -1247,6 +1263,167 @@ static bool MdoSessionsCandidate(MdoSession* Session,
     if ( Candidate->UpdatedAt < Candidate->CreatedAt )
         Candidate->UpdatedAt = Candidate->CreatedAt;
     return true;
+}
+
+bool MdoSessionSetProfile(MdoSession* Session, const char* ModelId,
+    const char* ReasoningEffort, const char* PermissionProfile,
+    const MdoSessionRuntimeOptions* Runtime, xwork_error* Error)
+{
+    MdoSessionRuntimeOptions Defaults;
+    MdoSessionInfo Candidate;
+    MdoAgentSessionOptions Options;
+    MdoAgentSessionInfo AgentInfo;
+    MdoAgentSession* Agent = NULL;
+    char Relative[MDO_SESSION_PATH_CAPACITY];
+    char* Snapshot = NULL;
+    char* Journal = NULL;
+    char* Artifacts = NULL;
+    bool Reserved = false;
+    bool RecoveryRequired = false;
+    bool Ok = false;
+
+    xworkErrorInit(Error);
+    if ( Runtime == NULL ) {
+        MdoSessionRuntimeOptionsInit(&Defaults);
+        Runtime = &Defaults;
+    }
+    if ( Session == NULL || Runtime->Size < sizeof(*Runtime) ||
+         ((Runtime->OnOwnerRetain != NULL) !=
+          (Runtime->OnOwnerRelease != NULL)) ||
+         (ModelId != NULL &&
+          !MdoSessionsTextValid(ModelId,
+            MDO_SESSION_IDENTITY_CAPACITY, false)) ||
+         (ReasoningEffort != NULL &&
+          !MdoSessionsTextValid(ReasoningEffort,
+            MDO_SESSION_REASONING_CAPACITY, false)) ||
+         (PermissionProfile != NULL &&
+          strcmp(PermissionProfile, "read-only") != 0 &&
+          strcmp(PermissionProfile, "balanced") != 0 &&
+          strcmp(PermissionProfile, "full-access") != 0) ||
+         (ModelId == NULL && ReasoningEffort == NULL &&
+          PermissionProfile == NULL) ) {
+        MdoSessionsError(Error, XWORK_ERROR_INVALID_ARGUMENT,
+            "invalid session profile request");
+        return false;
+    }
+    xrtMutexLock(Session->Lock);
+    xrtMutexLock(g_MdoSessions.Lock);
+    if ( !MdoSessionsValidateCurrent(Session, Error) )
+        goto unlock_manager;
+    if ( Session->Info.Status != MDO_SESSION_ACTIVE ||
+         Session->Agent != NULL ||
+         MdoSessionsActiveFind(Session->Info.ProjectId,
+            Session->Info.Id) != SIZE_MAX ) {
+        MdoSessionsError(Error, XWORK_ERROR_CONTEXT,
+            "the session must be active and idle to change its profile");
+        goto unlock_manager;
+    }
+    if ( (ModelId == NULL ||
+          strcmp(ModelId, Session->Info.ModelId) == 0) &&
+         (ReasoningEffort == NULL ||
+          strcmp(ReasoningEffort, Session->Info.ReasoningEffort) == 0) &&
+         (PermissionProfile == NULL ||
+          strcmp(PermissionProfile,
+            Session->Info.PermissionProfile) == 0) ) {
+        Ok = true;
+        goto unlock_manager;
+    }
+    if ( !MdoSessionsCandidate(Session, &Candidate, Error) )
+        goto unlock_manager;
+    if ( ModelId != NULL )
+        snprintf(Candidate.ModelId, sizeof(Candidate.ModelId), "%s", ModelId);
+    if ( ReasoningEffort != NULL )
+        snprintf(Candidate.ReasoningEffort,
+            sizeof(Candidate.ReasoningEffort), "%s", ReasoningEffort);
+    if ( PermissionProfile != NULL )
+        snprintf(Candidate.PermissionProfile,
+            sizeof(Candidate.PermissionProfile), "%s", PermissionProfile);
+    if ( !MdoSessionsActiveAdd(Candidate.ProjectId, Candidate.Id) ) {
+        MdoSessionsError(Error, XWORK_ERROR_OUT_OF_MEMORY,
+            "cannot reserve the session profile update");
+        goto unlock_manager;
+    }
+    Reserved = true;
+    xrtMutexUnlock(g_MdoSessions.Lock);
+
+    if ( !MdoSessionsPath(Relative, Candidate.ProjectId, Candidate.Id,
+            "snapshot.json") ||
+         (Snapshot = MdoHomeExternalPath(Relative)) == NULL ||
+         !MdoSessionsPath(Relative, Candidate.ProjectId, Candidate.Id,
+            "journal.jsonl") ||
+         (Journal = MdoHomeExternalPath(Relative)) == NULL ||
+         !MdoSessionsPath(Relative, Candidate.ProjectId, Candidate.Id,
+            "artifacts") ||
+         (Artifacts = MdoHomeExternalPath(Relative)) == NULL ) {
+        MdoSessionsError(Error, XWORK_ERROR_OUT_OF_MEMORY,
+            "cannot resolve session profile paths");
+        goto done;
+    }
+    MdoAgentSessionOptionsInit(&Options);
+    Options.AgentId = Candidate.AgentId;
+    Options.ModelId = Candidate.ModelId;
+    Options.Protocol = ModelId != NULL &&
+        strcmp(ModelId, Session->Info.ModelId) != 0 ?
+        0 : Candidate.Protocol;
+    Options.ReasoningEffort = Candidate.ReasoningEffort;
+    Options.PermissionProfile = Candidate.PermissionProfile;
+    Options.MaxOutputTokens = Options.Protocol == 0 ?
+        0u : Candidate.MaxOutputTokens;
+    Options.WorkspaceRoot = Candidate.WorkspaceRoot;
+    Options.ProjectId = Candidate.ProjectId;
+    Options.ProductSessionId = Candidate.Id;
+    Options.SessionPath = Snapshot;
+    Options.JournalPath = Journal;
+    Options.ArtifactDirectory = Artifacts;
+    Options.Recover = true;
+    MdoSessionsRuntimeApply(&Options, Runtime);
+    Agent = MdoAgentSessionCreateWithRuntime(g_MdoSessions.Runtime,
+        &Options, Error);
+    if ( Agent == NULL ) goto done;
+    if ( !MdoAgentSessionRecoveryRequired(Agent, &RecoveryRequired,
+            Error) ) goto done;
+    if ( RecoveryRequired ) {
+        MdoSessionsError(Error, XWORK_ERROR_CONTEXT,
+            "resolve interrupted Agent calls before changing the profile");
+        goto done;
+    }
+    memset(&AgentInfo, 0, sizeof(AgentInfo));
+    AgentInfo.Size = sizeof(AgentInfo);
+    if ( !MdoAgentSessionGetInfo(Agent, &AgentInfo) ) {
+        MdoSessionsError(Error, XWORK_ERROR_CONTEXT,
+            "cannot inspect the selected Agent profile");
+        goto done;
+    }
+    Candidate.Protocol = AgentInfo.Protocol;
+    Candidate.MaxOutputTokens = AgentInfo.MaxOutputTokens;
+    Candidate.ConfigRevision = AgentInfo.ConfigRevision;
+    Candidate.ModelGeneration = AgentInfo.ModelGeneration;
+    Candidate.ModuleGeneration = AgentInfo.ModuleGeneration;
+    Candidate.SkillGeneration = AgentInfo.SkillGeneration;
+    snprintf(Candidate.ModelId, sizeof(Candidate.ModelId), "%s",
+        AgentInfo.ModelId);
+    snprintf(Candidate.ReasoningEffort, sizeof(Candidate.ReasoningEffort),
+        "%s", AgentInfo.ReasoningEffort);
+    snprintf(Candidate.PermissionProfile,
+        sizeof(Candidate.PermissionProfile), "%s",
+        AgentInfo.PermissionProfile);
+    xrtMutexLock(g_MdoSessions.Lock);
+    if ( MdoSessionsValidateCurrent(Session, Error) )
+        Ok = MdoSessionsCommit(Session, &Candidate, Error);
+    xrtMutexUnlock(g_MdoSessions.Lock);
+    goto done;
+
+unlock_manager:
+    xrtMutexUnlock(g_MdoSessions.Lock);
+done:
+    MdoAgentSessionRelease(Agent);
+    xrtFree(Snapshot);
+    xrtFree(Journal);
+    xrtFree(Artifacts);
+    if ( Reserved ) MdoSessionsInternalActiveRelease(
+        Candidate.ProjectId, Candidate.Id);
+    xrtMutexUnlock(Session->Lock);
+    return Ok;
 }
 
 bool MdoSessionRename(MdoSession* Session, const char* Title,
