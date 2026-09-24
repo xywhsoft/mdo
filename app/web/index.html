@@ -76,6 +76,10 @@
       </nav>
 
       <div class="sidebar-footer">
+        <button class="sidebar-link" id="open-schedules" type="button">
+          <span class="icon" data-icon="clock" aria-hidden="true"></span>
+          <span>计划任务</span>
+        </button>
         <button class="sidebar-link" id="open-settings" type="button">
           <span class="icon" data-icon="settings" aria-hidden="true"></span>
           <span>设置</span>
@@ -208,6 +212,7 @@
             <button type="button" data-settings-section="agent">Agent</button>
             <button type="button" data-settings-section="web">联网与搜索</button>
             <p>资源</p>
+            <button type="button" data-settings-section="schedules">计划任务</button>
             <button type="button" data-settings-section="models">模型</button>
             <button type="button" data-settings-section="extensions">扩展与 MCP</button>
             <button type="button" data-settings-section="permissions">权限</button>
@@ -293,6 +298,41 @@
               <section class="settings-section resource-section" data-settings-panel="permissions" hidden><div class="settings-section-heading"><h2>权限</h2><p>查看服务端生效的权限 profile；运行时审批仍由 Agent 策略执行。</p></div><div id="settings-permissions-list"></div></section>
               <section class="settings-section resource-section" data-settings-panel="diagnostics" hidden><div class="settings-section-heading"><h2>诊断与存储</h2><p>检查便携 Home、运行状态和可操作诊断。</p></div><div id="settings-diagnostics-list"></div></section>
             </form>
+
+            <section class="settings-section schedule-section" data-settings-panel="schedules" aria-labelledby="schedules-title" hidden>
+              <div class="settings-section-heading schedule-heading">
+                <div><h2 id="schedules-title">计划任务</h2><p>创建定时运行的 Agent 任务，并管理已有计划。</p></div>
+                <button class="secondary-button" id="schedules-refresh" type="button">刷新</button>
+              </div>
+              <p id="schedules-status" class="schedule-status" role="status"></p>
+              <div id="schedules-list" class="schedule-list" aria-live="polite"></div>
+              <div class="schedule-editor-heading"><h3 id="schedule-editor-title">新建计划</h3><button class="secondary-button" id="schedule-new" type="button">新建</button></div>
+              <form id="schedule-form" class="schedule-form">
+                <label>名称<input name="label" maxlength="256" required placeholder="例如：每天整理项目进展"></label>
+                <label>任务内容<textarea name="input" rows="5" required maxlength="65536" placeholder="告诉 Agent 需要完成什么"></textarea></label>
+                <div class="schedule-form-grid">
+                  <label>开始时间<input name="start_at" type="datetime-local" required></label>
+                  <label>重复方式<select name="frequency"><option value="once">仅一次</option><option value="minutely">每 N 分钟</option><option value="hourly">每 N 小时</option><option value="daily">每 N 天</option><option value="weekly">每 N 周</option></select></label>
+                  <label id="schedule-interval-row">间隔<input name="interval" type="number" min="1" max="1000000" value="1" required></label>
+                  <label>项目<select name="project_id"></select></label>
+                  <label>Agent<select name="agent_id"></select></label>
+                  <label>模型<select name="model_id"></select></label>
+                  <label>思考强度<select name="reasoning_effort"><option value="">模型默认</option><option value="none">无</option><option value="minimal">极低</option><option value="low">低</option><option value="medium">中</option><option value="high">高</option><option value="xhigh">极高</option><option value="max">最大</option></select></label>
+                  <label>时区<select name="timezone"><option value="system_local">设备本地时间</option><option value="utc">UTC</option><option value="fixed_offset">固定偏移</option></select></label>
+                  <label id="schedule-offset-row">UTC 偏移（秒）<input name="utc_offset_seconds" type="number" min="-50400" max="50400" step="60" value="0"></label>
+                  <label>完成提示（可选）<input name="notify" maxlength="256" placeholder="任务完成时显示的提示文本"></label>
+                </div>
+                <fieldset id="schedule-weekdays"><legend>每周运行日</legend><label><input type="checkbox" value="2">周一</label><label><input type="checkbox" value="4">周二</label><label><input type="checkbox" value="8">周三</label><label><input type="checkbox" value="16">周四</label><label><input type="checkbox" value="32">周五</label><label><input type="checkbox" value="64">周六</label><label><input type="checkbox" value="1">周日</label></fieldset>
+                <details class="schedule-advanced"><summary>高级选项</summary><div class="schedule-form-grid">
+                  <label>错过执行时<select name="misfire_policy"><option value="run_once">补运行一次</option><option value="skip">跳过</option><option value="catch_up">追赶执行</option></select></label>
+                  <label>重叠执行时<select name="overlap_policy"><option value="skip">跳过</option><option value="queue_one">排队一次</option></select></label>
+                  <label>追赶上限<input name="max_catch_up" type="number" min="1" max="64" value="1"></label>
+                  <label>最大并发<input name="max_concurrent_runs" type="number" min="1" max="16" value="1"></label>
+                </div></details>
+                <div class="schedule-form-actions"><span id="schedule-form-status" role="status"></span><button class="primary-button" id="schedule-save" type="submit">创建计划</button></div>
+              </form>
+              <dialog id="schedule-delete-dialog" class="confirm-dialog"><form method="dialog"><h3>删除计划任务？</h3><p id="schedule-delete-label"></p><div class="dialog-actions"><button class="secondary-button" value="cancel">取消</button><button class="danger-button" value="delete">删除计划</button></div></form></dialog>
+            </section>
           </div>
         </div>
 

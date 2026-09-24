@@ -43,6 +43,7 @@ import { createTaskPanel } from "./features/tasks/task-panel.js";
 import { createDecisionPanel } from "./features/approvals/decision-panel.js";
 import { createRecoveryPanel } from "./features/approvals/recovery-panel.js";
 import { createSettingsView } from "./features/settings/settings-view.js";
+import { createSchedulePanel } from "./features/settings/schedule-panel.js";
 import { createResourcePanels } from "./features/settings/resource-panels.js";
 import { createKeyboardShortcuts } from "./features/shell/keyboard-shortcuts.js";
 import { createRunNotifications } from "./features/shell/run-notifications.js";
@@ -401,6 +402,10 @@ export async function boot() {
     navigation,
     onApplied: () => Promise.all([loadBootstrap(), loadCatalogs()]),
   });
+  const schedulePanel = createSchedulePanel({
+    panel: $('[data-settings-panel="schedules"]'),
+    projectsStore, agentsStore, modelsStore,
+  });
   createResourcePanels({
     modelsStore,
     agentsStore,
@@ -639,6 +644,11 @@ export async function boot() {
       skipLink.href = "#settings-content";
       skipLink.textContent = "跳到设置内容";
       settingsView.selectSection(settingsSection);
+      const schedulesPage = settingsSection === "schedules";
+      $("#settings-title").textContent = schedulesPage ? "计划任务" : "设置";
+      $("#settings-revision").hidden = schedulesPage;
+      $("#settings-actions").hidden = schedulesPage;
+      if (schedulesPage) void schedulePanel.refresh();
       closeDrawers();
       if (!settingsStore.get().data) await loadSettings();
       return;
@@ -1057,6 +1067,7 @@ export async function boot() {
   $("#decisions-tab").addEventListener("click", () => selectInspectorTab("decisions"));
   $("#context-tab").addEventListener("click", () => selectInspectorTab("context"));
   $("#open-settings").addEventListener("click", () => navigation.openSettings("general"));
+  $("#open-schedules").addEventListener("click", () => navigation.openSettings("schedules"));
   $("#close-settings").addEventListener("click", () => {
     navigation.backToWorkspace();
   });

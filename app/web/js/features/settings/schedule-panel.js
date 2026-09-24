@@ -1,0 +1,303 @@
+import { resourceId } from "../../api/client.js";
+import { createSchedule, loadSchedules, readSchedule, removeSchedule,
+  replaceSchedule, schedulesStore, setScheduleEnabled } from "../../state/schedules.js";
+import { clear, element, errorMessage, toast } from "../../utils/dom.js";
+
+const FREQUENCY = { once: "仅一次", minutely: "分钟", hourly: "小时", daily: "天", weekly: "周" };
+const pad = (value) => String(value).padStart(2, "0");
+
+function localInput(microseconds) {
+  const date = new Date(Number(microseconds) / 1000);
+  if (!Number.isFinite(date.getTime())) return "";
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}` +
+    `T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+}
+
+function clockText(microseconds) {
+  if (!microseconds) return "没有下次执行时间";
+  const date = new Date(Number(microseconds) / 1000);
+  return Number.isFinite(date.getTime())
+    ? new Intl.DateTimeFormat("zh-CN", { dateStyle: "medium", timeStyle: "short" }).format(date)
+    : "执行时间不可用";
+}
+
+function option(select, id, title) {
+  select.append(element("option", { text: title, attrs: { value: id } }));
+}
+
+export function createSchedulePanel({ panel, projectsStore, agentsStore, modelsStore }) {
+  const form = panel.querySelector("#schedule-form");
+  const fields = form.elements;
+  const list = panel.querySelector("#schedules-list");
+  const status = panel.querySelector("#schedules-status");
+  const formStatus = panel.querySelector("#schedule-form-status");
+  const title = panel.querySelector("#schedule-editor-title");
+  const save = panel.querySelector("#schedule-save");
+  const weekdayGroup = panel.querySelector("#schedule-weekdays");
+  const intervalRow = panel.querySelector("#schedule-interval-row");
+  const offsetRow = panel.querySelector("#schedule-offset-row");
+  const deleteDialog = panel.querySelector("#schedule-delete-dialog");
+  let original = null;
+  let etag = "";
+  let busy = false;
+  let loadGeneration = 0;
+  let deleteTarget = null;
+
+  function setFeedback(message, error = false) {
+    formStatus.textContent = message;
+    formStatus.dataset.tone = error ? "error" : "neutral";
+  }
+
+  function syncConditionalFields() {
+    const weekly = fields.frequency.value === "weekly";
+    weekdayGroup.hidden = !weekly;
+    intervalRow.hidden = fields.frequency.value === "once";
+    offsetRow.hidden = fields.timezone.value !== "fixed_offset";
+  }
+
+  function fillCatalogs() {
+    const choices = [
+      [fields.project_id, projectsStore.get().data?.items ?? [], "tasks", "任务项目"],
+      [fields.agent_id, agentsStore.get().data?.items ?? [], "mdo.default", "默认 Agent"],
+      [fields.model_id, modelsStore.get().data?.models ?? [], "", "Agent 默认模型"],
+    ];
+    for (const [select, items, fallback, fallbackTitle] of choices) {
+      const selected = select.options.length ? select.value : (original?.[select.name] ?? fallback);
+      clear(select);
+      option(select, fallback, fallbackTitle);
+      for (const item of items) {
+        try {
+          const id = resourceId(item.id);
+          if (id !== fallback) option(select, id, item.name || item.label || id);
+        } catch { /* Ignore invalid catalog entries. */ }
+      }
+      for (const id of [selected, original?.[select.name]]) {
+        if (id && ![...select.options].some((item) => item.value === id))
+          option(select, id, id);
+      }
+      select.value = selected;
+    }
+  }
+
+  function newSchedule() {
+    original = null;
+    etag = "";
+    form.reset();
+    fields.start_at.value = localInput((Date.now() + 60 * 60 * 1000) * 1000);
+    fillCatalogs();
+    fields.project_id.value = "tasks";
+    fields.agent_id.value = "mdo.default";
+    fields.model_id.value = "";
+    fields.timezone.value = "system_local";
+    title.textContent = "新建计划";
+    save.textContent = "创建计划";
+    setFeedback("");
+    syncConditionalFields();
+  }
+
+  function editSchedule(info, tag) {
+    original = info;
+    etag = tag;
+    fields.label.value = info.label;
+    fields.input.value = info.input;
+    fields.start_at.value = localInput(info.start_at);
+    fields.frequency.value = info.frequency;
+    fields.interval.value = info.interval;
+    fillCatalogs();
+    fields.project_id.value = info.project_id;
+    fields.agent_id.value = info.agent_id;
+    fields.model_id.value = info.model_id;
+    fields.reasoning_effort.value = info.reasoning_effort || "";
+    fields.timezone.value = info.timezone;
+    fields.utc_offset_seconds.value = info.utc_offset_seconds;
+    fields.notify.value = info.notify || "";
+    fields.misfire_policy.value = info.misfire_policy;
+    fields.overlap_policy.value = info.overlap_policy;
+    fields.max_catch_up.value = info.max_catch_up;
+    fields.max_concurrent_runs.value = info.max_concurrent_runs;
+    for (const checkbox of weekdayGroup.querySelectorAll("input"))
+      checkbox.checked = Boolean(info.weekday_mask & Number(checkbox.value));
+    title.textContent = `编辑：${info.label}`;
+    save.textContent = "保存更改";
+    setFeedback("");
+    syncConditionalFields();
+    form.scrollIntoView({ behavior: "smooth", block: "start" });
+    fields.label.focus({ preventScroll: true });
+  }
+
+  function render(state) {
+    if (state.status === "loading") {
+      status.textContent = "正在读取计划任务…";
+      return;
+    }
+    if (state.status === "error") {
+      status.textContent = `读取失败：${errorMessage(state.error)}`;
+      return;
+    }
+    const data = state.data;
+    if (!data) return;
+    const items = data.items ?? [];
+    status.textContent = `${data.total ?? items.length} 项计划` +
+      (!data.enabled ? " · 全局执行已关闭，可在 Agent 设置中开启" : "") +
+      (data.truncated ? " · 仅显示前 100 项" : "") +
+      (data.persistence_fault ? " · 存储故障，请检查诊断" : "");
+    const active = document.activeElement;
+    const activeId = active?.dataset?.scheduleId;
+    const activeAction = active?.dataset?.scheduleAction;
+    clear(list);
+    if (!items.length) {
+      list.append(element("p", { className: "schedule-empty", text: "还没有计划任务。填写下方表单即可创建。" }));
+      return;
+    }
+    for (const item of items) {
+      const card = element("article", { className: "schedule-card" });
+      const heading = element("div", { className: "schedule-card-heading" });
+      heading.append(element("strong", { text: item.label }),
+        element("span", { className: "schedule-badge", text: item.enabled ? "已启用" : "已暂停" }));
+      card.append(heading, element("p", { text: `${FREQUENCY[item.frequency] || item.frequency} · ${item.project_id} · ${item.agent_id}` }),
+        element("p", { text: `下次：${clockText(item.next_occurrence_at)}` }));
+      const actions = element("div", { className: "schedule-card-actions" });
+      for (const [action, text, className] of [
+        ["edit", "编辑", "secondary-button"],
+        ["enabled", item.enabled ? "暂停" : "启用", "secondary-button"],
+        ["delete", "删除", "danger-link"],
+      ]) {
+        const button = element("button", { className, text, attrs: { type: "button" } });
+        button.dataset.scheduleId = item.id;
+        button.dataset.scheduleAction = action;
+        button.disabled = busy;
+        actions.append(button);
+      }
+      card.append(actions);
+      list.append(card);
+    }
+    if (activeId && activeAction)
+      [...list.querySelectorAll("button")].find((button) =>
+        button.dataset.scheduleId === activeId && button.dataset.scheduleAction === activeAction)?.focus();
+  }
+
+  function body() {
+    const date = new Date(fields.start_at.value);
+    const startAt = original && fields.start_at.value === localInput(original.start_at)
+      ? original.start_at : date.getTime() * 1000;
+    if (!Number.isSafeInteger(startAt) || startAt <= 0)
+      throw new Error("请选择有效的开始时间");
+    const weekdayMask = [...weekdayGroup.querySelectorAll("input:checked")]
+      .reduce((mask, box) => mask | Number(box.value), 0);
+    if (fields.frequency.value === "weekly" && weekdayMask === 0)
+      throw new Error("每周计划请至少选择一天");
+    const label = fields.label.value.trim();
+    const input = fields.input.value.trim();
+    const notify = fields.notify.value.trim();
+    const bytes = new TextEncoder();
+    if (!label || !input) throw new Error("请填写计划名称和任务内容");
+    if (bytes.encode(label).length >= 257 || bytes.encode(input).length >= 65537 ||
+        bytes.encode(notify).length >= 257)
+      throw new Error("名称、内容或完成提示超过字节上限");
+    return {
+      label, input,
+      start_at: startAt, frequency: fields.frequency.value,
+      interval: Number(fields.interval.value), weekday_mask: weekdayMask,
+      project_id: fields.project_id.value, agent_id: fields.agent_id.value,
+      model_id: fields.model_id.value, reasoning_effort: fields.reasoning_effort.value,
+      timezone: fields.timezone.value,
+      utc_offset_seconds: fields.timezone.value === "fixed_offset"
+        ? Number(fields.utc_offset_seconds.value) : 0,
+      notify, misfire_policy: fields.misfire_policy.value,
+      overlap_policy: fields.overlap_policy.value,
+      max_catch_up: Number(fields.max_catch_up.value),
+      max_concurrent_runs: Number(fields.max_concurrent_runs.value),
+      ...(original ? {
+        protocol: original.protocol, max_output_tokens: original.max_output_tokens,
+        workspace_root: original.workspace_root, fold_policy: original.fold_policy,
+        misfire_grace_seconds: original.misfire_grace_seconds, enabled: original.enabled,
+      } : {}),
+    };
+  }
+
+  async function mutate(operation, success, resetEditor = false) {
+    if (busy) return;
+    busy = true;
+    render(schedulesStore.get());
+    save.disabled = true;
+    try {
+      const result = await operation();
+      toast(success);
+      if (resetEditor) newSchedule();
+      else if (result?.data?.id === original?.id && result?.etag) {
+        original = result.data;
+        etag = result.etag;
+      } else if (result?.data?.removed && result.data.id === original?.id)
+        newSchedule();
+      await loadSchedules();
+    } catch (error) {
+      const message = errorMessage(error);
+      setFeedback(message, true);
+      toast(message, "error");
+      if (error?.status === 412) await loadSchedules();
+    } finally {
+      busy = false;
+      save.disabled = false;
+      render(schedulesStore.get());
+    }
+  }
+
+  async function openEditor(id) {
+    const generation = ++loadGeneration;
+    setFeedback("正在读取计划…");
+    try {
+      const result = await readSchedule(id);
+      if (generation === loadGeneration) editSchedule(result.data, result.etag);
+    } catch (error) {
+      if (generation === loadGeneration) setFeedback(errorMessage(error), true);
+    }
+  }
+
+  list.addEventListener("click", (event) => {
+    const button = event.target.closest("button[data-schedule-action]");
+    if (!button || busy) return;
+    const item = schedulesStore.get().data?.items?.find((value) => value.id === button.dataset.scheduleId);
+    if (!item) return;
+    if (button.dataset.scheduleAction === "edit") void openEditor(item.id);
+    if (button.dataset.scheduleAction === "enabled")
+      void mutate(() => setScheduleEnabled(item.id, item.revision, !item.enabled),
+        item.enabled ? "计划已暂停" : "计划已启用");
+    if (button.dataset.scheduleAction === "delete") {
+      deleteTarget = item;
+      panel.querySelector("#schedule-delete-label").textContent = `“${item.label}”将从本地计划中移除。`;
+      deleteDialog.returnValue = "cancel";
+      deleteDialog.showModal();
+    }
+  });
+  deleteDialog.addEventListener("close", () => {
+    const target = deleteTarget;
+    deleteTarget = null;
+    if (deleteDialog.returnValue === "delete" && target)
+      void mutate(() => removeSchedule(target.id, target.revision), "计划已删除");
+  });
+  form.addEventListener("submit", (event) => {
+    event.preventDefault();
+    if (busy || !form.reportValidity()) return;
+    let definition;
+    try { definition = body(); }
+    catch (error) { setFeedback(errorMessage(error), true); return; }
+    const editing = original;
+    void mutate(() => editing
+      ? replaceSchedule(editing.id, etag, definition) : createSchedule(definition),
+    editing ? "计划已更新" : "计划已创建", true);
+  });
+  fields.frequency.addEventListener("change", syncConditionalFields);
+  fields.timezone.addEventListener("change", syncConditionalFields);
+  panel.querySelector("#schedule-new").addEventListener("click", () => {
+    ++loadGeneration;
+    newSchedule();
+    fields.label.focus();
+  });
+  panel.querySelector("#schedules-refresh").addEventListener("click", () => { void loadSchedules(); });
+  projectsStore.subscribe(fillCatalogs);
+  agentsStore.subscribe(fillCatalogs);
+  modelsStore.subscribe(fillCatalogs);
+  schedulesStore.subscribe(render);
+  newSchedule();
+  return Object.freeze({ refresh: loadSchedules });
+}
