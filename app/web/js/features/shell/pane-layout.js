@@ -3,7 +3,7 @@ import { errorMessage, toast } from "../../utils/dom.js";
 
 const defaults = Object.freeze({
   sidebar_width: 272, inspector_width: 336,
-  sidebar_open: true, inspector_open: true,
+  sidebar_open: true, inspector_open: false,
 });
 
 function clamp(value, minimum, maximum) {

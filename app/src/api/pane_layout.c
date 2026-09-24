@@ -18,7 +18,7 @@ static void MdoPaneLayoutDefaults(MdoPaneLayout* Layout)
     Layout->SidebarWidth = 272u;
     Layout->InspectorWidth = 336u;
     Layout->SidebarOpen = true;
-    Layout->InspectorOpen = true;
+    Layout->InspectorOpen = false;
 }
 
 static bool MdoPaneLayoutUInt(const xvalue* Object, cstr Key,

@@ -599,7 +599,7 @@ def run_probe(host: Path) -> None:
                 layout_defaults = json.loads(body)["data"]
                 assert layout_defaults == {
                     "sidebar_width": 272, "inspector_width": 336,
-                    "sidebar_open": True, "inspector_open": True,
+                    "sidebar_open": True, "inspector_open": False,
                 }, layout_defaults
                 status, headers, body = request(port, "GET", "/api/v1/models/config")
                 assert status == 200, (status, body)

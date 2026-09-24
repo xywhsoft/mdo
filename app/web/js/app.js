@@ -86,7 +86,7 @@ export async function boot() {
   const shell = $("#app-shell");
   const wideLayout = window.matchMedia("(min-width: 1204px)");
   const mobileLayout = window.matchMedia("(max-width: 760px)");
-  shell.dataset.inspector = wideLayout.matches ? "open" : "closed";
+  shell.dataset.inspector = "closed";
   const prompt = $("#prompt");
   const composer = $("#composer");
   const send = $("#send");
@@ -1100,12 +1100,12 @@ export async function boot() {
   $("#toggle-inspector").addEventListener("click", () => setDrawer("inspector", shell.dataset.inspector !== "open"));
   $("#scrim").addEventListener("click", closeDrawers);
   wideLayout.addEventListener("change", (event) => setDrawer("inspector",
-    !settingsActive && event.matches && (paneLayout?.inspectorOpen() ?? true),
+    !settingsActive && event.matches && (paneLayout?.inspectorOpen() ?? false),
     { persist: false }));
   mobileLayout.addEventListener("change", (event) => setDrawer("sidebar",
     !event.matches && (paneLayout?.sidebarOpen() ?? true), { persist: false }));
   setDrawer("sidebar", !mobileLayout.matches, { persist: false });
-  setDrawer("inspector", !settingsActive && wideLayout.matches, { persist: false });
+  setDrawer("inspector", false, { persist: false });
   paneLayout = createPaneLayout({ shell, mobileLayout, wideLayout,
     sidebarHandle: $("#sidebar-resize"), inspectorHandle: $("#inspector-resize"),
     onLoaded(saved) {
