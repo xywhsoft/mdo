@@ -241,21 +241,21 @@ export async function boot() {
   createRunNotifications({ runsStore, navigation, settingsStore,
     onUnreadChange: (keys) => sessionList.setUnread(keys) });
 
-  async function replaceAndRunMessage(sequence, text, attachments, label) {
-    if (messageActionBusy) throw new Error("请等待当前消息操作完成");
+  async function replaceAndRunMessage(sequence, text, attachments, action) {
+    if (messageActionBusy) throw new Error(t("messageAction.busy", {}, "请等待当前消息操作完成"));
     if (!Number.isSafeInteger(sequence) || sequence < 1 ||
         (!text.trim() && !attachments.length))
-      throw new Error("这条消息没有可用的编辑边界或完整文本");
+      throw new Error(t("messageAction.invalidBoundary", {}, "这条消息没有可用的编辑边界或完整文本"));
     const session = sessionDetailStore.get().data;
     const selected = navigation.get();
     if (!session || session.project_id !== selected.projectId ||
         session.id !== selected.sessionId)
-      throw new Error("请先选择会话");
+      throw new Error(t("messageAction.selectSession", {}, "请先选择会话"));
     if (activeRun || submittingCurrent() || composerImages?.isUploading())
-      throw new Error("请在当前运行结束后操作消息");
+      throw new Error(t("messageAction.waitForRun", {}, "请在当前运行结束后操作消息"));
     if (promptQueue.peek(selected.projectId, selected.sessionId) ||
         prompt.value.trim() || composerAttachments.length)
-      throw new Error("请先处理草稿和待发送队列，再编辑历史消息");
+      throw new Error(t("messageAction.resolveDraft", {}, "请先处理草稿和待发送队列，再编辑历史消息"));
     const targetKey = `${selected.projectId}/${selected.sessionId}`;
     const originVersion = routeVersion;
     const stillSelected = () => routeVersion === originVersion &&
@@ -290,8 +290,11 @@ export async function boot() {
       if (stillSelected()) {
         if (document.activeElement === document.body ||
             !document.activeElement?.isConnected) prompt.focus();
-        toast(label === "重试" ? "已在当前会话重试" : "已在当前会话发送编辑后的消息");
-      } else if (!result.current) toast("原会话已在后台重新运行");
+        toast(action === "retry"
+          ? t("messageAction.retried", {}, "已在当前会话重试")
+          : t("messageAction.edited", {}, "已在当前会话发送编辑后的消息"));
+      } else if (!result.current)
+        toast(t("messageAction.backgroundRun", {}, "原会话已在后台重新运行"));
     } finally { messageActionBusy = false; }
   }
 
@@ -339,18 +342,18 @@ export async function boot() {
     onEdit: async (sequence, text, attachments, owner) => {
       const version = routeVersion;
       if (!isCurrentMessageOwner(owner, version))
-        throw new Error("会话已切换，请重新选择消息");
+        throw new Error(t("messageAction.ownerChanged", {}, "会话已切换，请重新选择消息"));
       const edited = await messageEditDialog.open(text, attachments);
       if (edited !== null) {
         if (!isCurrentMessageOwner(owner, version))
-          throw new Error("会话已切换，请重新选择消息");
-        await replaceAndRunMessage(sequence, edited, attachments, "编辑");
+          throw new Error(t("messageAction.ownerChanged", {}, "会话已切换，请重新选择消息"));
+        await replaceAndRunMessage(sequence, edited, attachments, "edit");
       }
     },
     onRetry: (sequence, text, attachments, owner) => {
       if (!isCurrentMessageOwner(owner))
-        throw new Error("会话已切换，请重新选择消息");
-      return replaceAndRunMessage(sequence, text, attachments, "重试");
+        throw new Error(t("messageAction.ownerChanged", {}, "会话已切换，请重新选择消息"));
+      return replaceAndRunMessage(sequence, text, attachments, "retry");
     },
   });
   conversationSearch = createConversationSearch({

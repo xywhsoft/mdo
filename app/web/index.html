@@ -610,16 +610,16 @@
     <form class="dialog-card" id="message-edit-form">
       <header>
         <div>
-          <h2 id="message-edit-title">编辑消息</h2>
-          <p>会撤回此消息及之后的对话，然后在当前会话重新发送。原消息中的图片会保留。</p>
+          <h2 id="message-edit-title" data-i18n="messageEdit.title">编辑消息</h2>
+          <p data-i18n="messageEdit.description">会撤回此消息及之后的对话，然后在当前会话重新发送。原消息中的图片会保留。</p>
         </div>
       </header>
       <div class="dialog-fields message-edit-fields">
-        <label>消息内容 <textarea id="message-edit-input" name="message" required maxlength="65536" rows="8"></textarea></label>
+        <label><span data-i18n="messageEdit.content">消息内容</span> <textarea id="message-edit-input" name="message" required maxlength="65536" rows="8"></textarea></label>
       </div>
       <footer>
-        <button class="secondary-button" id="cancel-message-edit" type="button">取消</button>
-          <button class="primary-button" type="submit">保存并重新发送</button>
+        <button class="secondary-button" id="cancel-message-edit" type="button" data-i18n="messageEdit.cancel">取消</button>
+        <button class="primary-button" type="submit" data-i18n="messageEdit.resend">保存并重新发送</button>
       </footer>
     </form>
   </dialog>

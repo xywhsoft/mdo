@@ -41,6 +41,8 @@ test("bundled language packs cover the annotated shell and switch without stale 
     "js/features/chat/conversation-docks.js",
     "js/features/chat/conversation-search.js",
     "js/features/chat/composer-images.js",
+    "js/features/chat/message-edit-dialog.js",
+    "js/features/chat/message-replacement.js",
     "js/features/chat/slash-commands.js",
     "js/features/chat/file-mentions.js",
     "js/features/settings/settings-view.js",
