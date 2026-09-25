@@ -102,6 +102,7 @@ export async function boot() {
   const mobileTitle = $("#mobile-session-title");
   const mobileMeta = $("#mobile-session-meta");
   const contextList = $("#context-list");
+  const workspaceChip = $("#workspace-chip");
   const workspaceLabel = $("#workspace-label");
   const mobileActivity = $("#mobile-activity-dot");
   const settingsWorkspace = $("#settings-workspace");
@@ -479,11 +480,39 @@ export async function boot() {
   }
   settingsStore.subscribe(() => setRun(activeRun));
 
+  function currentWorkspace() {
+    const route = navigation.get();
+    const session = sessionDetailStore.get().data;
+    if (session && session.project_id === route.projectId &&
+        session.id === route.sessionId)
+      return session.workspace_root || "";
+    const project = (projectsStore.get().data?.items ?? [])
+      .find((item) => item.id === (route.projectId || "default"));
+    return project?.managed ? project.workspace_root || "" : "";
+  }
+
+  function syncWorkspaceChip() {
+    const root = currentWorkspace();
+    workspaceLabel.textContent = root
+      ? root.split(/[\\/]/).filter(Boolean).at(-1) || root : "本地工作区";
+    workspaceChip.title = root ? `当前工作目录：${root}` : "当前工作目录";
+  }
+
   function updateContext(state) {
     clear(contextList);
-    const session = state.data;
+    const route = navigation.get();
+    const session = state.data?.project_id === route.projectId &&
+      state.data?.id === route.sessionId ? state.data : null;
     if (!session) {
-      contextList.append(element("dt", { text: "状态" }), element("dd", { text: state.status === "loading" ? "正在载入…" : "未选择会话" }));
+      contextList.append(
+        element("dt", { text: "状态" }),
+        element("dd", { text: state.status === "loading" ? "正在载入…" :
+          route.sessionId ? "未选择会话" : "新任务" }),
+        element("dt", { text: "项目" }),
+        element("dd", { text: route.projectId || "default" }),
+        element("dt", { text: "工作区" }),
+        element("dd", { text: currentWorkspace() || "本地工作区" }),
+      );
       return;
     }
     const values = [
@@ -516,9 +545,13 @@ export async function boot() {
       sessionSubtitle.textContent = `${session.project_id} · ${session.agent_id} · ${session.model_id}${statusText}`;
       mobileTitle.textContent = title;
       mobileMeta.textContent = `${session.model_id || session.agent_id}${statusText}`;
-      workspaceLabel.textContent = session.workspace_root ? session.workspace_root.split(/[\\/]/).filter(Boolean).at(-1) || session.workspace_root : "本地工作区";
     }
+    syncWorkspaceChip();
     updateContext(state);
+  });
+  projectsStore.subscribe(() => {
+    syncWorkspaceChip();
+    if (!navigation.get().sessionId) updateContext(sessionDetailStore.get());
   });
 
   bootstrapStore.subscribe((state) => {
@@ -702,6 +735,8 @@ export async function boot() {
       sessionSubtitle.textContent = `将在 ${project} 项目中创建任务`;
       mobileTitle.textContent = "新任务";
       mobileMeta.textContent = project;
+      syncWorkspaceChip();
+      updateContext(sessionDetailStore.get());
     }
     if (key === selectedKey) {
       if (key) {
@@ -1133,7 +1168,7 @@ export async function boot() {
   $("#close-settings").addEventListener("click", () => {
     navigation.backToWorkspace();
   });
-  $("#workspace-chip").addEventListener("click", () => { selectInspectorTab("context"); setDrawer("inspector", true); });
+  workspaceChip.addEventListener("click", () => { selectInspectorTab("context"); setDrawer("inspector", true); });
 
   shortcuts = createKeyboardShortcuts({
     dialog: $("#shortcuts-dialog"), navigation, search: conversationSearch,
