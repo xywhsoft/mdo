@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="zh-CN">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>mdo composer image accessibility probe</title>
+<link rel="stylesheet" href="/app/web/css/app.css">
+<style>body{padding:20px;background:var(--bg);color:var(--ink)}</style>
+<form class="composer" style="max-width:320px">
+  <textarea aria-label="Message"></textarea>
+  <button type="button">Add image</button>
+  <input type="file" hidden>
+  <div class="composer-images"></div>
+</form>
+<pre id="result"></pre>
+<script type="module">
+import { createComposerImages } from "/app/web/js/features/chat/composer-images.js";
+import { loadLocale, subscribeLocale } from "/app/web/js/i18n.js";
+
+const originalFetch = window.fetch;
+window.fetch = (url, options) => originalFetch(
+  typeof url === "string" && url.startsWith("/lang/")
+    ? `/app/web${url}` : url, options);
+const composer = document.querySelector(".composer");
+const prompt = composer.querySelector("textarea");
+const button = composer.querySelector("button");
+const input = composer.querySelector("input");
+const strip = composer.querySelector(".composer-images");
+const output = document.querySelector("#result");
+const id = "a".repeat(32);
+try {
+  const images = createComposerImages({ composer, prompt, button, input, strip,
+    navigation: { get: () => ({ projectId: "qa", sessionId: "image" }) },
+    modelsStore: { get: () => ({ data: { models: [] } }) },
+    sessionStore: { get: () => ({ data: null }) },
+    ensureSession: async () => { throw new Error("not used"); },
+    onChange() {}, onUploading() {}, onError() {},
+  });
+  images.set([id]);
+  const pixel = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='64' height='64'%3E%3Crect width='64' height='64' fill='%235c83b6'/%3E%3C/svg%3E";
+  const fillImage = () => { strip.querySelector("img").src = pixel; };
+  subscribeLocale(fillImage);
+  fillImage();
+  strip.querySelector(".composer-image-remove").focus();
+  await loadLocale("en-US");
+  const english = {
+    remove: strip.querySelector(".composer-image-remove").getAttribute("aria-label"),
+    preview: strip.querySelector(".composer-image-preview").getAttribute("aria-label"),
+    hint: composer.dataset.dropLabel,
+    focus: document.activeElement?.classList.contains("composer-image-remove"),
+  };
+  await loadLocale("ru-RU");
+  const remove = strip.querySelector(".composer-image-remove");
+  const russian = {
+    remove: remove.getAttribute("aria-label"),
+    preview: strip.querySelector(".composer-image-preview").getAttribute("aria-label"),
+    hint: composer.dataset.dropLabel,
+    focus: document.activeElement === remove,
+  };
+  const bounds = remove.getBoundingClientRect();
+  const mobile = window.innerWidth <= 640;
+  const passed = english.remove === "Remove image 1" &&
+    english.preview === "View image 1" && english.hint === "Release to add images" &&
+    english.focus && russian.remove === "Удалить изображение 1" &&
+    russian.preview === "Открыть изображение 1" &&
+    russian.hint === "Отпустите, чтобы добавить изображения" &&
+    russian.focus && (!mobile || (bounds.width >= 40 && bounds.height >= 40)) &&
+    document.documentElement.scrollWidth <= window.innerWidth;
+  output.dataset.passed = String(passed);
+  output.textContent = JSON.stringify({ passed, mobile, width: bounds.width,
+    height: bounds.height, english, russian }, null, 2);
+} catch (error) {
+  output.dataset.passed = "false";
+  output.textContent = error.stack ?? String(error);
+} finally { window.fetch = originalFetch; }
+</script>
+</html>
