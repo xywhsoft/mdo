@@ -1,5 +1,6 @@
 import { api, resourceId } from "../../api/client.js";
 import { toast } from "../../utils/dom.js";
+import { t } from "../../i18n.js";
 
 const endpoint = "/workspace-state";
 
@@ -19,7 +20,8 @@ export async function startWorkspaceNavigation({ navigation, settingsStore,
   sessionsStore, dialog, title, continueButton, newButton, prompt, entryHash }) {
   let saved = null;
   try { saved = (await api.get(endpoint)).data; }
-  catch { toast("无法读取上次会话，将使用当前会话列表。", "error"); }
+  catch { toast(t("startup.readFailed", {},
+    "无法读取上次会话，将使用当前会话列表。"), "error"); }
 
   let lastSavedKey = saved?.project_id && saved?.session_id
     ? `${saved.project_id}/${saved.session_id}` : "";
@@ -36,7 +38,8 @@ export async function startWorkspaceNavigation({ navigation, settingsStore,
         });
         lastSavedKey = next.key;
       } catch {
-        toast("无法保存上次会话；下次启动可能打开其他任务。", "error");
+        toast(t("startup.saveFailed", {},
+          "无法保存上次会话；下次启动可能打开其他任务。"), "error");
         break;
       }
     }
@@ -65,7 +68,7 @@ export async function startWorkspaceNavigation({ navigation, settingsStore,
     return;
   }
 
-  title.textContent = candidate.title || "未命名任务";
+  title.textContent = candidate.title || t("startup.untitled", {}, "未命名任务");
   function openNew() {
     dialog.close();
     navigation.newTask(candidate.project_id, { replace: true });

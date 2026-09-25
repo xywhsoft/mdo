@@ -1,6 +1,7 @@
 import { api, resourceId } from "../api/client.js";
 import { createResourceStore } from "./store.js";
 import { timelineStore } from "../features/chat/timeline-store.js";
+import { t } from "../i18n.js";
 
 export const todoStore = createResourceStore({
   projectId: "", sessionId: "", eventId: 0, items: [],
@@ -45,9 +46,10 @@ async function refreshTodo(token = generation) {
     if (token !== generation) return;
     const data = response.data;
     if (!Array.isArray(data.items) || !Number.isSafeInteger(Number(data.event_id)))
-      throw new Error("计划响应无效");
+      throw new Error(t("todo.invalidResponse", {}, "计划响应无效"));
     if (Number(data.event_id) < observedEventId) {
-      if (retryCount >= 4) throw new Error("计划状态尚未同步，请检查工具结果");
+      if (retryCount >= 4) throw new Error(t("todo.notSynced", {},
+        "计划状态尚未同步，请检查工具结果"));
       if (!retryTimer) {
         retryTimer = window.setTimeout(() => {
           retryTimer = 0;

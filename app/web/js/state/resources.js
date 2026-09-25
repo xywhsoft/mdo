@@ -1,5 +1,6 @@
 import { api, resourceId } from "../api/client.js";
 import { createResourceStore } from "./store.js";
+import { t } from "../i18n.js";
 
 export const modulesStore = createResourceStore({ modules: [], tools: [] });
 export const skillsStore = createResourceStore({ items: [] });
@@ -36,8 +37,10 @@ async function awaitOperation(operation) {
     await new Promise((resolve) => window.setTimeout(resolve, 250));
     current = (await api.get(`/operations/${resourceId(current.id, "operation")}`)).data;
   }
-  if (!current.terminal) throw new Error("操作仍在后台运行，请稍后刷新。");
-  if (current.state !== "succeeded") throw new Error(current.message || "目录刷新失败");
+  if (!current.terminal) throw new Error(t("resource.operationRunning", {},
+    "操作仍在后台运行，请稍后刷新。"));
+  if (current.state !== "succeeded") throw new Error(current.message ||
+    t("resource.reloadFailed", {}, "目录刷新失败"));
   return current;
 }
 

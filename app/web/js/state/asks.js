@@ -1,5 +1,6 @@
 import { api, resourceId } from "../api/client.js";
 import { createResourceStore } from "./store.js";
+import { t } from "../i18n.js";
 
 export const asksStore = createResourceStore({
   projectId: "", sessionId: "", total: 0, items: [], loaded: false,
@@ -34,7 +35,7 @@ export async function refreshSelectedAsks() {
       `/projects/${selected.projectId}/sessions/${selected.sessionId}/asks`);
     if (token !== generation) return;
     const data = response.data;
-    if (!Array.isArray(data.items)) throw new Error("询问响应无效");
+    if (!Array.isArray(data.items)) throw new Error(t("ask.invalidResponse", {}, "询问响应无效"));
     const next = JSON.stringify(data.items);
     if (next !== signature) {
       signature = next;
@@ -51,11 +52,11 @@ export async function answerAsk(projectId, sessionId, id, answer) {
   const project = resourceId(projectId, "project");
   const session = resourceId(sessionId, "session");
   const number = String(id);
-  if (!/^[1-9][0-9]*$/.test(number)) throw new TypeError("询问 ID 无效");
+  if (!/^[1-9][0-9]*$/.test(number)) throw new TypeError(t("ask.invalidId", {}, "询问 ID 无效"));
   const text = String(answer).trim();
-  if (!text) throw new TypeError("请填写回答");
+  if (!text) throw new TypeError(t("ask.answerRequired", {}, "请填写回答"));
   if (new TextEncoder().encode(text).length > 1024)
-    throw new TypeError("回答不能超过 1024 字节");
+    throw new TypeError(t("ask.answerTooLong", {}, "回答不能超过 1024 字节"));
   await api.put(`/projects/${project}/sessions/${session}/asks/${number}`,
     { answer: text });
   await refreshSelectedAsks();

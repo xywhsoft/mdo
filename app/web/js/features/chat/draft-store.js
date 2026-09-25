@@ -1,4 +1,5 @@
 import { api, resourceId } from "../../api/client.js";
+import { t } from "../../i18n.js";
 
 const SAVE_DELAY_MS = 300;
 const MAX_DRAFT_BYTES = 65536;
@@ -81,7 +82,8 @@ export function createDraftStore({ onRestore, onError, onSaved }) {
         const text = current.text;
         const attachments = [...current.attachments];
         if (encoder.encode(text).length > MAX_DRAFT_BYTES) {
-          if (selected === key) onError(new Error("草稿超过 64 KiB 保存上限"));
+          if (selected === key) onError(new Error(t("draft.tooLarge", {},
+            "草稿超过 64 KiB 保存上限")));
           return;
         }
         current.dirty = false;

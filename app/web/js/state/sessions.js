@@ -1,6 +1,7 @@
 import { api, resourceId } from "../api/client.js";
 import { createResourceStore } from "./store.js";
 import { withSessionRuntime } from "./session-runtime.js";
+import { t } from "../i18n.js";
 
 export const sessionsStore = createResourceStore({ generation: 0, items: [] });
 export const sessionDetailStore = createResourceStore();
@@ -121,7 +122,8 @@ export async function loadSessionTranscript(session) {
     const latest = Number(replay.latest_event_id);
     const next = Number(replay.next_cursor);
     if (!Number.isSafeInteger(latest) || !Number.isSafeInteger(next) ||
-        latest < 0 || next < cursor) throw new Error("会话事件游标无效，无法导出 Markdown");
+        latest < 0 || next < cursor) throw new Error(t("session.exportInvalidCursor", {},
+          "会话事件游标无效，无法导出 Markdown"));
     if (latestEventId === null) latestEventId = latest;
     historyLost ||= Boolean(replay.history_lost);
     for (const event of replay.items ?? []) {

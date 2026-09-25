@@ -43,6 +43,8 @@ test("bundled language packs cover the annotated shell and switch without stale 
     "js/features/chat/conversation-docks.js",
     "js/features/chat/conversation-search.js",
     "js/features/chat/composer-images.js",
+    "js/features/chat/draft-store.js",
+    "js/features/chat/feedback-store.js",
     "js/features/chat/message-edit-dialog.js",
     "js/features/chat/message-replacement.js",
     "js/features/chat/slash-commands.js",
@@ -59,6 +61,11 @@ test("bundled language packs cover the annotated shell and switch without stale 
     "js/features/approvals/recovery-panel.js",
     "js/features/approvals/labels.js",
     "js/features/sessions/project-dialog.js",
+    "js/features/shell/workspace-startup.js",
+    "js/state/asks.js",
+    "js/state/todo.js",
+    "js/state/resources.js",
+    "js/state/sessions.js",
     "js/utils/dom.js",
     "js/app.js",
   ]) {
@@ -141,6 +148,9 @@ test("bundled language packs cover the annotated shell and switch without stale 
     assert.equal(node.textContent, "Новая задача");
     assert.equal(node.getAttribute("aria-label"), "Настроить и создать задачу");
     assert.equal(t("nav.actionsFor", { title: "Тест" }), "Действия с сеансом Тест");
+    assert.equal(t("composer.backgroundQueueFailed", { title: "Тест", error: "сбой" }),
+      "Не удалось отправить сообщение из очереди фонового сеанса «Тест»: сбой");
+    assert.equal(t("ask.answerRequired"), "Введите ответ");
     assert.equal(sessionActionItems({ status: "active", pinned: true })[1].label, "Открепить");
     assert.equal(sessionForkTitle({ title: "Тест" }), "Тест (ветка)");
     assert.equal(errorMessage({ code: "network_error" }),
@@ -150,6 +160,8 @@ test("bundled language packs cover the annotated shell and switch without stale 
     assert.equal(t("missing.key", {}, "中文回退"), "中文回退");
     assert.equal(await loadLocale("en-US"), true);
     assert.equal(node.textContent, "New task");
+    assert.equal(t("draft.tooLarge"), "Draft exceeds the 64 KiB save limit");
+    assert.equal(t("startup.untitled"), "Untitled task");
     assert.equal(await loadLocale("zh-CN"), true);
     assert.equal(node.textContent, "新建任务");
     assert.deepEqual(changes, ["zh-CN", "ru-RU", "en-US", "zh-CN"]);

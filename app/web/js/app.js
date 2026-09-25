@@ -899,7 +899,9 @@ export async function boot() {
           try { await promptQueue.select(selected.projectId, selected.sessionId); }
           catch { /* Preserve the original dispatch error. */ }
           if (stillSelected()) showComposerError(error);
-          else toast(`后台会话“${session.title}”的待发送消息未发出：${errorMessage(error)}`,
+          else toast(t("composer.backgroundQueueFailed",
+            { title: session.title, error: errorMessage(error) },
+            `后台会话“${session.title}”的待发送消息未发出：${errorMessage(error)}`),
             "error");
         }
       });
@@ -1161,7 +1163,8 @@ export async function boot() {
         showComposerError(error);
         prompt.focus();
       } else {
-        toast(`后台任务未发出：${errorMessage(error)}`, "error");
+        toast(t("composer.backgroundSendFailed", { error: errorMessage(error) },
+          `后台任务未发出：${errorMessage(error)}`), "error");
       }
     } finally {
       submissions.delete(submissionScope);
@@ -1517,19 +1520,21 @@ export async function boot() {
   async function toggleTheme() {
     if (themeToggleBusy) return;
     if (settingsView.hasPendingChanges()) {
-      toast("先预览、应用或放弃尚未保存的设置", "error");
+      toast(t("settings.resolvePendingTheme", {},
+        "先预览、应用或放弃尚未保存的设置"), "error");
       return;
     }
     themeToggleBusy = true;
     try {
       const settings = settingsStore.get().data ?? (await loadSettings()).data;
       if (!settings?.appearance || !settings.etag)
-        throw new Error("当前设置尚未载入");
+        throw new Error(t("settings.notLoaded", {}, "当前设置尚未载入"));
       const theme = settings.appearance.theme === "dark" ? "light" : "dark";
       const patch = { appearance: { theme } };
       await previewSettings(patch);
       await applySettings(patch, settings.etag);
-      toast(theme === "dark" ? "已切换为深色主题" : "已切换为浅色主题");
+      toast(theme === "dark" ? t("settings.themeDarkApplied", {}, "已切换为深色主题")
+        : t("settings.themeLightApplied", {}, "已切换为浅色主题"));
     } catch (error) { toast(errorMessage(error), "error"); }
     finally { themeToggleBusy = false; }
   }
@@ -1625,7 +1630,7 @@ export async function boot() {
     loadRuns(),
   ]);
   if (initial.some((result) => result.status === "rejected")) {
-    toast("部分资源暂时无法载入，可继续重试。", "error");
+    toast(t("resource.partialLoad", {}, "部分资源暂时无法载入，可继续重试。"), "error");
   }
 
   await startWorkspaceNavigation({ navigation, settingsStore, sessionsStore,

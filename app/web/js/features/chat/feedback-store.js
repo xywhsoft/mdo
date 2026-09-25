@@ -1,5 +1,6 @@
 import { api, resourceId } from "../../api/client.js";
 import { createResourceStore } from "../../state/store.js";
+import { t } from "../../i18n.js";
 
 export const feedbackStore = createResourceStore({
   projectId: "", sessionId: "", items: new Map(),
@@ -41,7 +42,7 @@ export async function setFeedback(projectId, sessionId, eventId, value) {
   const session = resourceId(sessionId, "session");
   if (!Number.isSafeInteger(eventId) || eventId <= 0 ||
       !["good", "bad", "none"].includes(value))
-    throw new TypeError("无效的消息反馈");
+    throw new TypeError(t("feedback.invalid", {}, "无效的消息反馈"));
   const key = `${project}/${session}/${eventId}`;
   if (pending.has(key)) return;
   pending.add(key);
