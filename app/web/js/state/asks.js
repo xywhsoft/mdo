@@ -2,7 +2,7 @@ import { api, resourceId } from "../api/client.js";
 import { createResourceStore } from "./store.js";
 
 export const asksStore = createResourceStore({
-  projectId: "", sessionId: "", total: 0, items: [],
+  projectId: "", sessionId: "", total: 0, items: [], loaded: false,
 });
 
 let generation = 0;
@@ -11,7 +11,8 @@ let signature = "";
 export function clearAsks() {
   generation += 1;
   signature = "";
-  asksStore.setData({ projectId: "", sessionId: "", total: 0, items: [] });
+  asksStore.setData({ projectId: "", sessionId: "", total: 0, items: [],
+    loaded: false });
 }
 
 export async function selectAsks(projectId, sessionId) {
@@ -20,7 +21,7 @@ export async function selectAsks(projectId, sessionId) {
   generation += 1;
   signature = "";
   asksStore.setData({ projectId: project, sessionId: session,
-    total: 0, items: [] });
+    total: 0, items: [], loaded: false });
   await refreshSelectedAsks();
 }
 
@@ -39,7 +40,7 @@ export async function refreshSelectedAsks() {
       signature = next;
       asksStore.setData({ projectId: selected.projectId,
         sessionId: selected.sessionId, total: data.total,
-        items: data.items });
+        items: data.items, loaded: true });
     }
   } catch (error) {
     if (token === generation) asksStore.setError(error);

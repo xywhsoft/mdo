@@ -98,8 +98,9 @@ function approvalCard(item, deciding, submitted, argumentsOpen, onChanged) {
   return card;
 }
 
-function askCard(item, projectId, sessionId, deciding, drafts, onChanged) {
-  const key = String(item.id);
+function askCard(item, projectId, sessionId, deciding, answered, drafts,
+  onChanged, onSettled) {
+  const key = `${projectId}/${sessionId}/${item.id}`;
   const card = element("section", { className: "conversation-dock ask-dock" });
   const actions = element("div", { className: "ask-dock-options" });
   const hint = element("p", { className: "ask-dock-validation",
@@ -112,49 +113,48 @@ function askCard(item, projectId, sessionId, deciding, drafts, onChanged) {
     attrs: { type: "button" } });
   const buttons = [submit];
   const encoder = new TextEncoder();
-  let answered = false;
   function updateValidity() {
     const answer = input.value.trim();
     const tooLong = encoder.encode(answer).length > 1024;
+    const pending = deciding.has(key);
+    const submitted = answered.has(key);
     input.setAttribute("aria-invalid", String(tooLong));
-    hint.textContent = tooLong ? "回答不能超过 1024 字节" : "";
-    hint.dataset.state = tooLong ? "error" : "";
+    input.readOnly = pending || submitted;
+    hint.textContent = pending ? "正在提交回答…" :
+      submitted ? "已提交，等待模型继续…" :
+        tooLong ? "回答不能超过 1024 字节" : "";
+    hint.dataset.state = pending || submitted ? "pending" :
+      tooLong ? "error" : "";
     submit.setAttribute("aria-disabled", String(!answer || tooLong ||
-      deciding.has(key) || answered));
+      pending || submitted));
+    for (const button of buttons.slice(1))
+      button.setAttribute("aria-disabled", String(pending || submitted));
   }
   input.addEventListener("input", () => {
     drafts.set(key, input.value);
     updateValidity();
   });
   async function respond(value) {
-    if (deciding.has(key) || answered) return;
+    if (deciding.has(key) || answered.has(key)) return;
     deciding.add(key);
-    for (const button of buttons) button.setAttribute("aria-disabled", "true");
-    input.readOnly = true;
-    hint.textContent = "正在提交回答…";
-    hint.dataset.state = "pending";
+    updateValidity();
     try {
       await answerAsk(projectId, sessionId, item.id, value);
-      answered = true;
+      answered.add(key);
       drafts.delete(key);
       await onChanged();
     } catch (error) {
-      toast(answered ? "回答已提交，但状态刷新未完成" : errorMessage(error), "error");
-      if (!answered) {
-        input.readOnly = false;
-        for (const button of buttons) button.setAttribute("aria-disabled", "false");
-      }
+      toast(answered.has(key) ? "回答已提交，但状态刷新未完成" :
+        errorMessage(error), "error");
     } finally {
       deciding.delete(key);
-      if (input.isConnected) {
-        if (answered) hint.textContent = "已提交，等待模型继续…";
-        else updateValidity();
-      }
+      if (input.isConnected) updateValidity();
+      onSettled();
     }
   }
   for (const option of item.options ?? []) {
     const button = element("button", { text: option,
-      attrs: { type: "button", "aria-disabled": "false" } });
+      attrs: { type: "button" } });
     button.addEventListener("click", () => void respond(option));
     buttons.push(button);
     actions.append(button);
@@ -173,13 +173,14 @@ function askCard(item, projectId, sessionId, deciding, drafts, onChanged) {
     element("p", { className: "ask-dock-question", text: item.question }),
     actions, element("div", { className: "ask-dock-free" }, [input, submit]),
     hint);
-  return card;
+  return { node: card, sync: updateValidity };
 }
 
 export function createConversationDocks({ container, navigation, tasksStore, approvalsStore,
   asksStore, todoStore, runsStore, onOpenTasks, onChanged }) {
   const approvalDeciding = new Set();
   const askDeciding = new Set();
+  const askAnswered = new Set();
   const submitted = new Set();
   const expanded = new Map();
   const argumentsOpen = new Map();
@@ -244,17 +245,24 @@ export function createConversationDocks({ container, navigation, tasksStore, app
       const key = `${selected.projectId}/${sessionId}/${item.id}`;
       live.add(key);
       if (!askNodes.has(key)) {
-        const node = askCard(item, selected.projectId, sessionId,
-          askDeciding, drafts, onChanged);
-        askNodes.set(key, node);
-        askRoot.append(node);
-      }
+        const card = askCard(item, selected.projectId, sessionId,
+          askDeciding, askAnswered, drafts, onChanged, render);
+        askNodes.set(key, card);
+        askRoot.append(card.node);
+      } else askNodes.get(key).sync();
     }
-    for (const [key, node] of askNodes) {
+    for (const [key, card] of askNodes) {
       if (live.has(key)) continue;
-      node.remove();
+      card.node.remove();
       askNodes.delete(key);
-      drafts.delete(key.split("/").at(-1));
+    }
+    if (askData?.loaded && askData.projectId === selected.projectId &&
+        askData.sessionId === sessionId) {
+      const prefix = `${selected.projectId}/${sessionId}/`;
+      for (const key of drafts.keys())
+        if (key.startsWith(prefix) && !live.has(key)) drafts.delete(key);
+      for (const key of askAnswered)
+        if (key.startsWith(prefix) && !live.has(key)) askAnswered.delete(key);
     }
     if (focusedAsk && !askRoot.contains(document.activeElement))
       document.querySelector("#prompt")?.focus({ preventScroll: true });

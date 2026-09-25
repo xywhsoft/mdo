@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="zh-CN">
+<meta charset="utf-8">
+<title>mdo ask session isolation probe</title>
+<div id="conversation-docks"></div>
+<pre id="result"></pre>
+<script type="module">
+import { createConversationDocks } from "/app/web/js/features/chat/conversation-docks.js";
+import { createResourceStore } from "/app/web/js/state/store.js";
+import { asksStore, selectAsks } from "/app/web/js/state/asks.js";
+
+const question = (label) => ({ id: 7, run_id: 8,
+  question: `${label} 的问题`, options: [`${label} 选项`] });
+const pending = new Map([["first", [question("A")]],
+  ["second", [question("B")]]]);
+const requests = [];
+let rejectFirst;
+const originalFetch = window.fetch;
+window.fetch = (url, options = {}) => {
+  const path = String(url);
+  const session = /\/sessions\/([^/]+)\/asks(?:\/7)?$/.exec(path)?.[1];
+  if (!session) return originalFetch(url, options);
+  if (options.method === "PUT") {
+    requests.push({ session, answer: JSON.parse(options.body).answer });
+    if (session === "first" && requests.filter((item) =>
+      item.session === "first").length === 1)
+      return new Promise((_, reject) => { rejectFirst = () => reject(new Error("offline")); });
+    pending.set(session, []);
+    return Promise.resolve(new Response(JSON.stringify({ ok: true, data: {} }),
+      { status: 200 }));
+  }
+  const items = pending.get(session) ?? [];
+  return Promise.resolve(new Response(JSON.stringify({ ok: true,
+    data: { total: items.length, items } }), { status: 200 }));
+};
+
+let route = { view: "workspace", projectId: "qa", sessionId: "first" };
+const listeners = new Set();
+const navigation = {
+  get: () => route,
+  subscribe(listener) { listeners.add(listener); listener(route);
+    return () => listeners.delete(listener); },
+  select(sessionId) {
+    route = { view: "workspace", projectId: "qa", sessionId };
+    for (const listener of listeners) listener(route);
+  },
+};
+const empty = () => createResourceStore({ items: [] });
+createConversationDocks({
+  container: document.querySelector("#conversation-docks"), navigation,
+  tasksStore: empty(), approvalsStore: empty(), runsStore: empty(),
+  asksStore, todoStore: createResourceStore({ projectId: "", sessionId: "",
+    items: [] }), onOpenTasks() {}, onChanged: async () => {},
+});
+const root = document.querySelector("#conversation-docks");
+const card = () => root.querySelector(".ask-dock");
+async function until(predicate) {
+  for (let attempt = 0; attempt < 50; attempt += 1) {
+    if (predicate()) return true;
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  }
+  return false;
+}
+
+try {
+  await selectAsks("qa", "first");
+  card().querySelector("input").value = "A 草稿";
+  card().querySelector("input").dispatchEvent(new Event("input"));
+  card().querySelector(".ask-dock-options button").click();
+  const firstPending = Boolean(rejectFirst) && card().querySelector("input").readOnly;
+
+  navigation.select("second");
+  await selectAsks("qa", "second");
+  const secondIndependent = card().querySelector("input").value === "" &&
+    !card().querySelector("input").readOnly &&
+    card().querySelector(".ask-dock-options button")
+      .getAttribute("aria-disabled") === "false";
+  card().querySelector("input").value = "B 回答";
+  card().querySelector("input").dispatchEvent(new Event("input"));
+  card().querySelector(".ask-dock-free button").click();
+  const secondAnswered = await until(() => !card()) &&
+    requests.some((item) => item.session === "second" &&
+      item.answer === "B 回答");
+
+  navigation.select("first");
+  await selectAsks("qa", "first");
+  const firstRestored = card().querySelector("input").value === "A 草稿" &&
+    card().querySelector("input").readOnly &&
+    card().querySelector(".ask-dock-options button")
+      .getAttribute("aria-disabled") === "true";
+  rejectFirst();
+  const firstRetryable = await until(() => card() &&
+    !card().querySelector("input").readOnly &&
+    card().querySelector(".ask-dock-options button")
+      .getAttribute("aria-disabled") === "false") &&
+    card().querySelector("input").value === "A 草稿";
+  card().querySelector(".ask-dock-free button").click();
+  const firstAnswered = await until(() => !card()) &&
+    requests.some((item) => item.session === "first" &&
+      item.answer === "A 草稿");
+
+  const passed = firstPending && secondIndependent && secondAnswered &&
+    firstRestored && firstRetryable && firstAnswered;
+  const result = document.querySelector("#result");
+  result.dataset.passed = String(passed);
+  result.textContent = JSON.stringify({ passed, firstPending,
+    secondIndependent, secondAnswered, firstRestored, firstRetryable,
+    firstAnswered, requests }, null, 2);
+} catch (error) {
+  const result = document.querySelector("#result");
+  result.dataset.passed = "false";
+  result.textContent = error.stack ?? String(error);
+} finally { window.fetch = originalFetch; }
+</script>
+</html>
