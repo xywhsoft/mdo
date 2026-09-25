@@ -28,6 +28,8 @@ class Model(BaseHTTPRequestHandler):
     protocol_version = "HTTP/1.1"
     lock = threading.Lock()
     sent = set()
+    verify_recovery = False
+    verification_file = None
 
     def log_message(self, *_args):
         pass
@@ -67,6 +69,18 @@ class Model(BaseHTTPRequestHandler):
                            "name": "exec", "arguments": json.dumps({
                                "argv": [sys.executable, "-c",
                                         "print('approval UI fixture')"],
+                               "timeout_ms": 5000})}]
+            elif (Model.verify_recovery and
+                  "Completion verification gate:" in wire and
+                  "resume-verify" not in Model.sent):
+                Model.sent.add("resume-verify")
+                output = [{"type": "function_call", "call_id": "ui-resume-verify-1",
+                           "name": "exec", "arguments": json.dumps({
+                               "argv": [sys.executable, "-c",
+                                        "import pathlib,sys; "
+                                        "assert pathlib.Path(sys.argv[1]).read_text("
+                                        "encoding='utf-8').startswith('Synthetic workspace')",
+                                        str(Model.verification_file)],
                                "timeout_ms": 5000})}]
         if slow:
             time.sleep(15)
@@ -164,11 +178,15 @@ class ApprovalProxyServer(ThreadingHTTPServer):
 parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument("--approval-delay-ms", type=int, default=0,
                     help="delay one approval PUT by 0-5000 ms for manual duplicate-click QA")
+parser.add_argument("--resume-verify", action="store_true",
+                    help="let the local model verify a resumed run with a bounded read-only command")
 args = parser.parse_args()
 if not 0 <= args.approval_delay_ms <= 5000:
     parser.error("--approval-delay-ms must be between 0 and 5000")
 
 base = Path(tempfile.mkdtemp(prefix="mdo-packed-docks-", dir=ROOT / ".build"))
+Model.verify_recovery = args.resume_verify
+Model.verification_file = base / "README.md"
 shutil.copy2(ROOT / "mdo.exe", base / "mdo.exe")
 (base / "README.md").write_text("Synthetic workspace file for @ completion.\n",
                                 encoding="utf-8")
@@ -205,11 +223,15 @@ try:
                                    creationflags=(subprocess.CREATE_NO_WINDOW
                                                   if os.name == "nt" else 0))
     wait_ready(port, process)
-    status, response = request(port, "POST", "/api/v1/sessions", {
+    options = {
         "project_id": "default", "title": "Packed docks QA",
         "agent_id": "mdo.default", "model_id": "ling-3.0-tiny",
         "protocol": "openai-responses", "reasoning_effort": "medium",
-        "max_output_tokens": 1024})
+        "max_output_tokens": 1024,
+    }
+    if args.resume_verify:
+        options["permission_profile"] = "full-access"
+    status, response = request(port, "POST", "/api/v1/sessions", options)
     if status != 201:
         raise RuntimeError((status, response))
     session = response["data"]["id"]
