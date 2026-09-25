@@ -91,6 +91,7 @@ bool MdoApiApprovalRoute(MdoApiContext* pContext);
 bool MdoApiAsksRoute(MdoApiContext* pContext);
 bool MdoApiAskRoute(MdoApiContext* pContext);
 bool MdoApiWorkspaceFilesRoute(MdoApiContext* pContext);
+bool MdoApiProjectWorkspaceFilesRoute(MdoApiContext* pContext);
 bool MdoApiTaskRoute(MdoApiContext* pContext);
 bool MdoApiTaskOutputRoute(MdoApiContext* pContext);
 bool MdoApiTaskEventsRoute(MdoApiContext* pContext);

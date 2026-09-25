@@ -828,6 +828,33 @@ def run_probe(host: Path) -> None:
                 assert any(item["id"] == "ui-workspace" and item["managed"] and
                            item["session_count"] == 0 for item in listed_projects), (
                                listed_projects)
+                (project_workspace / "mention-start.c").write_text(
+                    "// project fixture", encoding="utf-8")
+                (project_workspace / "nested").mkdir()
+                (project_workspace / "nested/mention-start file.c").write_text(
+                    "// nested fixture", encoding="utf-8")
+                (project_workspace / ".hidden").mkdir()
+                (project_workspace / ".hidden/mention-start-secret.c").write_text(
+                    "// hidden fixture", encoding="utf-8")
+                project_files = (
+                    "/api/v1/projects/ui-workspace/workspace/files")
+                status, headers, body = request(
+                    port, "GET", project_files + "?q=mention-start")
+                document = json.loads(body)
+                assert status == 200, (status, body)
+                assert_common(headers, document)
+                assert document["data"]["items"] == [
+                    "mention-start.c", "nested/mention-start file.c",
+                ], document
+                assert request(port, "HEAD", project_files +
+                               "?q=mention-start")[0] == 200
+                status, _, body = request(port, "GET", project_files + "?q=%00")
+                assert status == 400 and json.loads(body)["error"][
+                    "code"] == "invalid_query", (status, body)
+                status, _, body = request(
+                    port, "GET", "/api/v1/projects/.bad/workspace/files?q=ref")
+                assert status == 400 and json.loads(body)["error"][
+                    "code"] == "invalid_project_path", (status, body)
                 status, _, body = request(
                     port, "POST", "/api/v1/projects",
                     body=json.dumps(project_input).encode(),

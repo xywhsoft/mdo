@@ -88,8 +88,9 @@ export function createFileMentions({ composer, input, navigation }) {
   function update() {
     const token = mentionAtCaret(input);
     const selected = navigation.get();
-    if (!token || selected.view !== "workspace" || !selected.projectId ||
-        !selected.sessionId) { hide(); return; }
+    if (!token || selected.view !== "workspace" || !selected.projectId) {
+      hide(); return;
+    }
     const key = `${selected.projectId}/${selected.sessionId}/${token.query}`;
     if (current === key) return;
     hide();
@@ -99,9 +100,11 @@ export function createFileMentions({ composer, input, navigation }) {
       timer = 0;
       controller = new AbortController();
       try {
+        const scope = selected.sessionId
+          ? `/projects/${selected.projectId}/sessions/${selected.sessionId}`
+          : `/projects/${selected.projectId}`;
         const result = await api.get(
-          `/projects/${selected.projectId}/sessions/${selected.sessionId}` +
-          `/workspace/files?q=${encodeURIComponent(token.query)}`,
+          `${scope}/workspace/files?q=${encodeURIComponent(token.query)}`,
           { signal: controller.signal });
         if (serial !== generation || current !== key ||
             mentionAtCaret(input)?.query !== token.query) return;
@@ -123,7 +126,7 @@ export function createFileMentions({ composer, input, navigation }) {
     if (["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) update();
   });
   input.addEventListener("blur", () => window.setTimeout(hide, 0));
-  navigation.subscribe(hide);
+  navigation.subscribe(() => { hide(); update(); });
 
   return Object.freeze({
     hide,

@@ -2,6 +2,7 @@
 #include <string.h>
 
 #include "internal.h"
+#include "../../include/mdo/projects.h"
 #include "../../include/mdo/sessions.h"
 
 #define MDO_WS_QUERY_MAX 128u
@@ -220,6 +221,32 @@ static bool MdoWsWalk(MdoWsScan* Scan, const char* Absolute,
     return true;
 }
 
+static bool MdoWsReply(MdoApiContext* Context, MdoWsScan* Scan,
+    const char* Root)
+{
+    xvalue* Data;
+    xvalue* Items;
+    size_t Index;
+    bool Ok;
+    if ( !MdoWsWalk(Scan, Root, "", 0u) ) goto unavailable;
+    Data = xrtValueObject();
+    Items = xrtValueArray();
+    Ok = Data != NULL && Items != NULL &&
+        MdoApiValueSetString(Data, "query", Scan->Query) &&
+        MdoApiValueSetBool(Data, "truncated",
+            Scan->Truncated || Scan->Matched > Scan->Count) &&
+        MdoApiValueSetUInt(Data, "scanned", Scan->Entries);
+    for ( Index = 0u; Ok && Index < Scan->Count; ++Index )
+        Ok = MdoApiValueAppendString(Items, Scan->Matches[Index].Path);
+    if ( Ok ) Ok = MdoApiValueSetTake(Data, "items", &Items);
+    xrtValueRelease(Items);
+    if ( !Ok ) { xrtValueRelease(Data); goto unavailable; }
+    return MdoApiReplySuccessTake(Context, 200u, Data, NULL);
+unavailable:
+    return MdoApiReplyError(Context, 503u, "workspace_files_unavailable",
+        "Workspace files could not be listed", NULL);
+}
+
 bool MdoApiWorkspaceFilesRoute(MdoApiContext* Context)
 {
     char ProjectId[MDO_PROJECT_ID_CAPACITY];
@@ -228,9 +255,6 @@ bool MdoApiWorkspaceFilesRoute(MdoApiContext* Context)
     MdoSessionInfo Info;
     MdoWsScan* Scan;
     xwork_error Error;
-    xvalue* Data;
-    xvalue* Items;
-    size_t Index;
     bool Ok;
     if ( Context->ParamCount != 2u ||
          !MdoWsId(Context->Params[0], ProjectId, sizeof(ProjectId)) ||
@@ -259,24 +283,56 @@ bool MdoApiWorkspaceFilesRoute(MdoApiContext* Context)
         xrtFree(Scan);
         goto unavailable;
     }
-    if ( !MdoWsWalk(Scan, Info.WorkspaceRoot, "", 0u) ) {
-        xrtFree(Scan);
-        goto unavailable;
-    }
-    Data = xrtValueObject();
-    Items = xrtValueArray();
-    Ok = Data != NULL && Items != NULL &&
-        MdoApiValueSetString(Data, "query", Scan->Query) &&
-        MdoApiValueSetBool(Data, "truncated",
-            Scan->Truncated || Scan->Matched > Scan->Count) &&
-        MdoApiValueSetUInt(Data, "scanned", Scan->Entries);
-    for ( Index = 0u; Ok && Index < Scan->Count; ++Index )
-        Ok = MdoApiValueAppendString(Items, Scan->Matches[Index].Path);
-    if ( Ok ) Ok = MdoApiValueSetTake(Data, "items", &Items);
-    xrtValueRelease(Items);
+    Ok = MdoWsReply(Context, Scan, Info.WorkspaceRoot);
     xrtFree(Scan);
-    if ( !Ok ) { xrtValueRelease(Data); goto unavailable; }
-    return MdoApiReplySuccessTake(Context, 200u, Data, NULL);
+    return Ok;
+unavailable:
+    return MdoApiReplyError(Context, 503u, "workspace_files_unavailable",
+        "Workspace files could not be listed", NULL);
+}
+
+bool MdoApiProjectWorkspaceFilesRoute(MdoApiContext* Context)
+{
+    char ProjectId[MDO_PROJECT_ID_CAPACITY];
+    MdoProjectInfo Project;
+    MdoWsScan* Scan;
+    xwork_error Error;
+    char* Root = NULL;
+    char* RelativeRoot = NULL;
+    bool Found = false;
+    bool Ok;
+    if ( Context->ParamCount != 1u ||
+         !MdoWsId(Context->Params[0], ProjectId, sizeof(ProjectId)) )
+        return MdoApiReplyError(Context, 400u, "invalid_project_path",
+            "The project ID is invalid", NULL);
+    Scan = (MdoWsScan*)xrtCalloc(1u, sizeof(*Scan));
+    if ( Scan == NULL ) goto unavailable;
+    if ( !MdoWsQuery(Context->Target.Query, Scan->Query) ) {
+        xrtFree(Scan);
+        return MdoApiReplyError(Context, 400u, "invalid_query",
+            "Use a nonempty UTF-8 q query of at most 128 bytes", NULL);
+    }
+    memset(&Project, 0, sizeof(Project));
+    Project.Size = sizeof(Project);
+    memset(&Error, 0, sizeof(Error));
+    if ( !MdoProjectGet(ProjectId, &Project, &Found, &Error) ) {
+        xrtFree(Scan);
+        return MdoApiReplyError(Context, 503u, "project_unavailable",
+            "The project definition is invalid or unavailable", NULL);
+    }
+    if ( !Found ) Root = xrtPathAbs(".");
+    else if ( xrtPathIsAbs(Project.WorkspaceRoot) )
+        Root = xrtPathAbs(Project.WorkspaceRoot);
+    else {
+        RelativeRoot = xrtPathJoin(xsAppPath(), Project.WorkspaceRoot);
+        if ( RelativeRoot != NULL ) Root = xrtPathAbs(RelativeRoot);
+    }
+    xrtFree(RelativeRoot);
+    if ( Root == NULL ) { xrtFree(Scan); goto unavailable; }
+    Ok = MdoWsReply(Context, Scan, Root);
+    xrtFree(Root);
+    xrtFree(Scan);
+    return Ok;
 unavailable:
     return MdoApiReplyError(Context, 503u, "workspace_files_unavailable",
         "Workspace files could not be listed", NULL);
