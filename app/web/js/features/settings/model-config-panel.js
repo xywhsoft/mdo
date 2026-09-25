@@ -1,6 +1,7 @@
 import { api } from "../../api/client.js";
 import { loadModels } from "../../state/catalogs.js";
 import { clear, element, errorMessage, toast } from "../../utils/dom.js";
+import { subscribeLocale, t } from "../../i18n.js";
 
 const protocols = [
   ["openai-chat-completions", "Chat Completions", "chat_completions"],
@@ -19,8 +20,71 @@ const efforts = ["none", "minimal", "low", "medium", "high", "xhigh", "max"];
 const attachments = [["image", "图片"], ["audio", "音频"], ["file", "文件"]];
 const clone = (value) => structuredClone(value);
 
+const labelKeys = Object.freeze({
+  "标识": "modelConfig.id", "名称": "modelConfig.name",
+  "Chat Completions URL": "modelConfig.chatUrl",
+  "Responses URL": "modelConfig.responsesUrl",
+  "Anthropic Messages URL": "modelConfig.anthropicUrl",
+  "凭据引用": "modelConfig.secretRef", "超时（毫秒）": "modelConfig.timeout",
+  "验证 TLS 证书": "modelConfig.verifyTls", "API 模型名": "modelConfig.wireModel",
+  "默认协议": "modelConfig.defaultProtocol",
+  "默认思考强度": "modelConfig.defaultEffort",
+  "计费模型": "modelConfig.billable", "支持的协议": "modelConfig.protocols",
+  "能力": "modelConfig.capabilities", "思考强度": "modelConfig.efforts",
+  "附件": "modelConfig.attachments", "窗口模式": "modelConfig.windowMode",
+  "共享上下文": "modelConfig.sharedContext",
+  "输入/输出分离": "modelConfig.splitWindow",
+  "上下文 token": "modelConfig.contextTokens",
+  "最大输入 token": "modelConfig.maxInputTokens",
+  "最大输出 token": "modelConfig.maxOutputTokens",
+  "输出预留 token": "modelConfig.outputReserveTokens",
+  "摘要 token": "modelConfig.summaryTokens",
+  "文本输入": "modelConfig.textInput", "工具结果": "modelConfig.toolResultInput",
+  "文本输出": "modelConfig.textOutput", "JSON 输出": "modelConfig.jsonOutput",
+  "工具调用": "modelConfig.toolCallOutput",
+  "思考输出": "modelConfig.reasoningOutput",
+  "流式输出": "modelConfig.streaming",
+  "并行工具": "modelConfig.parallelTools",
+  "max_completion_tokens": "modelConfig.maxCompletionTokens",
+  "Developer 角色": "modelConfig.developerRole",
+  "媒体输入": "modelConfig.mediaInput",
+  "图片": "modelConfig.image", "音频": "modelConfig.audio",
+  "文件": "modelConfig.file",
+  none: "settings.reasoningNone", minimal: "settings.reasoningMinimal",
+  low: "settings.reasoningLow", medium: "settings.reasoningMedium",
+  high: "settings.reasoningHigh", xhigh: "settings.reasoningXhigh",
+  max: "settings.reasoningMax",
+});
+
+function copy(tag, key, fallback, params = {}, options = {}) {
+  return element(tag, { ...options, text: t(key, params, fallback), attrs: {
+    ...options.attrs, "data-model-copy-key": key,
+    "data-model-copy-params": JSON.stringify(params),
+    "data-model-copy-fallback": fallback,
+  } });
+}
+
+function translateCopy(container) {
+  for (const node of container.querySelectorAll("[data-model-copy-key]"))
+    node.textContent = t(node.dataset.modelCopyKey,
+      JSON.parse(node.dataset.modelCopyParams), node.dataset.modelCopyFallback);
+  for (const node of container.querySelectorAll("[data-model-attr-key]"))
+    node.setAttribute(node.dataset.modelAttrName,
+      t(node.dataset.modelAttrKey, {}, node.dataset.modelAttrFallback));
+}
+
+function translatedAttribute(node, name, key, fallback) {
+  node.setAttribute(name, t(key, {}, fallback));
+  node.dataset.modelAttrName = name;
+  node.dataset.modelAttrKey = key;
+  node.dataset.modelAttrFallback = fallback;
+  return node;
+}
+
 function input(label, name, value, options = {}) {
-  const field = element("label", { className: "model-field", text: label });
+  const field = element("label", { className: "model-field" }, [
+    labelKeys[label] ? copy("span", labelKeys[label], label) : element("span", { text: label }),
+  ]);
   const control = element(options.kind === "select" ? "select" : "input", {
     attrs: { name, type: options.type || "text", required: options.required ? "" : null,
       min: options.min, max: options.max, maxLength: options.maxLength,
@@ -29,7 +93,9 @@ function input(label, name, value, options = {}) {
   });
   if (options.kind === "select") {
     for (const [key, text] of options.choices ?? [])
-      control.append(element("option", { text, attrs: { value: key } }));
+      control.append(labelKeys[text]
+        ? copy("option", labelKeys[text], text, {}, { attrs: { value: key } })
+        : element("option", { text, attrs: { value: key } }));
   }
   if (options.type === "checkbox") control.checked = Boolean(value);
   else control.value = value ?? "";
@@ -39,12 +105,14 @@ function input(label, name, value, options = {}) {
 
 function checks(title, name, values, choices) {
   const group = element("fieldset", { className: "model-checks" });
-  group.append(element("legend", { text: title }));
+  group.append(labelKeys[title] ? copy("legend", labelKeys[title], title)
+    : element("legend", { text: title }));
   for (const [key, label] of choices) {
-    const line = element("label", { text: label });
+    const line = element("label");
     const box = element("input", { attrs: { type: "checkbox", name, value: key } });
     box.checked = values?.includes(key) ?? false;
-    line.prepend(box);
+    line.append(box, labelKeys[label] ? copy("span", labelKeys[label], label)
+      : element("span", { text: label }));
     group.append(line);
   }
   return group;
@@ -110,11 +178,12 @@ export function createModelConfigPanel(container) {
   function current() { return collection().find((item) => item.id === selectedId) ?? null; }
   function allowChange() {
     if (!dirty) return true;
-    toast("当前表单有未保存的修改，请先保存或放弃。", "error");
+    toast(t("modelConfig.unsaved", {}, "当前表单有未保存的修改，请先保存或放弃。"), "error");
     return false;
   }
 
-  async function transact(next, message, focusKind = kind, focusId = selectedId) {
+  async function transact(next, messageKey, messageFallback,
+    focusKind = kind, focusId = selectedId) {
     if (busy || !document || document.runtime_override) return;
     busy = true;
     try {
@@ -127,7 +196,7 @@ export function createModelConfigPanel(container) {
       busy = false;
       await load(focusKind, focusId);
       container.querySelector('.model-config-item[aria-current="true"]')?.focus();
-      toast(message);
+      toast(t(messageKey, {}, messageFallback));
     } catch (cause) {
       busy = false;
       toast(errorMessage(cause), "error");
@@ -140,9 +209,12 @@ export function createModelConfigPanel(container) {
 
   function renderProvider(form, item) {
     const builtin = item?.builtin;
-    form.append(element("h3", { text: item?.name || "新增 Provider" }),
-      element("p", { text: builtin ? "内置 Provider 由 mdo 提供，配置不可更改。" :
-        "使用凭据引用，不在页面或配置中保存 API Key 明文。" }));
+    form.append(item?.name ? element("h3", { text: item.name })
+      : copy("h3", "modelConfig.newProvider", "新增 Provider"),
+    builtin ? copy("p", "modelConfig.builtinProviderNote",
+      "内置 Provider 由 mdo 提供，配置不可更改。")
+      : copy("p", "modelConfig.secretNote",
+        "使用凭据引用，不在页面或配置中保存 API Key 明文。"));
     if (builtin) return;
     form.append(element("div", { className: "model-form-grid" }, [
       input("标识", "id", item.id, { required: true, readOnly: Boolean(selectedId), maxLength: 128,
@@ -161,9 +233,12 @@ export function createModelConfigPanel(container) {
 
   function renderModel(form, item) {
     const builtin = item?.builtin;
-    form.append(element("h3", { text: item?.name || "新增模型" }),
-      element("p", { text: builtin ? "Ling 3.0 Tiny 是内置免费模型，参数不可编辑。" :
-        "模型引用 Provider；协议必须有对应的 Provider URL。" }));
+    form.append(item?.name ? element("h3", { text: item.name })
+      : copy("h3", "modelConfig.newModel", "新增模型"),
+    builtin ? copy("p", "modelConfig.builtinModelNote",
+      "Ling 3.0 Tiny 是内置免费模型，参数不可编辑。")
+      : copy("p", "modelConfig.providerNote",
+        "模型引用 Provider；协议必须有对应的 Provider URL。"));
     if (builtin) return;
     form.append(element("div", { className: "model-form-grid" }, [
       input("标识", "id", item.id, { required: true, readOnly: Boolean(selectedId), maxLength: 128,
@@ -180,7 +255,7 @@ export function createModelConfigPanel(container) {
     ]));
     form.append(checks("支持的协议", "protocol", item.protocols, protocols));
     const advanced = element("details", { className: "model-advanced" }, [
-      element("summary", { text: "能力与上下文参数" }),
+      copy("summary", "modelConfig.advanced", "能力与上下文参数"),
       checks("能力", "capability", item.capabilities, capabilities),
       checks("思考强度", "effort", item.reasoning_efforts,
         efforts.map((value) => [value, value])),
@@ -250,8 +325,11 @@ export function createModelConfigPanel(container) {
     if (!document) return;
     clear(container);
     const controls = element("div", { className: "model-config-controls" });
-    for (const [value, label] of [["model", "模型"], ["provider", "Provider"]]) {
-      const button = element("button", { className: "secondary-button", text: label,
+    for (const [value, key, label] of [
+      ["model", "modelConfig.models", "模型"],
+      ["provider", "modelConfig.providers", "Provider"],
+    ]) {
+      const button = copy("button", key, label, {}, { className: "secondary-button",
         attrs: { type: "button", "aria-pressed": kind === value } });
       button.addEventListener("click", () => {
         if (!allowChange()) return;
@@ -259,14 +337,14 @@ export function createModelConfigPanel(container) {
       });
       controls.append(button);
     }
-    const refresh = element("button", { className: "secondary-button", text: "刷新",
-      attrs: { type: "button" } });
+    const refresh = copy("button", "modelConfig.refresh", "刷新", {},
+      { className: "secondary-button", attrs: { type: "button" } });
     refresh.addEventListener("click", () => {
       if (allowChange()) void load();
     });
-    const add = element("button", { className: "primary-button",
-      text: kind === "model" ? "新增模型" : "新增 Provider",
-      attrs: { type: "button" } });
+    const add = copy("button", kind === "model" ? "modelConfig.newModel" :
+      "modelConfig.newProvider", kind === "model" ? "新增模型" : "新增 Provider",
+    {}, { className: "primary-button", attrs: { type: "button" } });
     add.disabled = document.runtime_override;
     add.addEventListener("click", () => {
       if (!allowChange()) return;
@@ -274,17 +352,25 @@ export function createModelConfigPanel(container) {
       container.querySelector('input[name="id"]')?.focus();
     });
     controls.append(refresh, add);
-    container.append(element("p", { className: "model-config-status", text:
-      `当前默认：${document.default_model} · 配置 revision ${etag.replace(/\D/g, "")}` }), controls);
-    if (document.runtime_override) container.append(element("p", { className: "resource-error",
-      text: "当前配置含运行时覆盖；请移除启动覆盖后再用页面编辑模型。" }));
+    container.append(copy("p", "modelConfig.status",
+      `当前默认：${document.default_model} · 配置 revision ${etag.replace(/\D/g, "")}`,
+      { model: document.default_model, revision: etag.replace(/\D/g, "") },
+      { className: "model-config-status" }), controls);
+    if (document.runtime_override) container.append(copy("p", "modelConfig.runtimeOverride",
+      "当前配置含运行时覆盖；请移除启动覆盖后再用页面编辑模型。",
+      {}, { className: "resource-error" }));
     const layout = element("div", { className: "model-config-layout" });
-    const list = element("div", { className: "model-config-list", attrs: { "aria-label": kind === "model" ? "模型列表" : "Provider 列表" } });
+    const list = translatedAttribute(element("div", { className: "model-config-list" }),
+      "aria-label", kind === "model" ? "modelConfig.modelList" : "modelConfig.providerList",
+      kind === "model" ? "模型列表" : "Provider 列表");
     for (const item of collection()) {
       const button = element("button", { className: "model-config-item",
         attrs: { type: "button", "aria-current": selectedId === item.id ? "true" : "false" } }, [
         element("strong", { text: item.name || item.id }),
-        element("small", { text: `${item.id}${item.builtin ? " · 内置" : ""}${kind === "model" && item.id === document.default_model ? " · 默认" : ""}` }),
+        element("small", {}, [item.id,
+          item.builtin ? copy("span", "modelConfig.builtinTag", " · 内置") : null,
+          kind === "model" && item.id === document.default_model
+            ? copy("span", "modelConfig.defaultTag", " · 默认") : null]),
       ]);
       button.addEventListener("click", () => {
         if (!allowChange()) return;
@@ -301,15 +387,16 @@ export function createModelConfigPanel(container) {
     else renderProvider(form, item);
     if (kind === "model" && source?.builtin) form.append(element("p", {
       text: `${source.id} · ${source.window.context_tokens} context · ${source.default_protocol}` }));
-    if (source?.builtin && kind === "provider") form.append(element("p", {
-      text: `${source.id} · 内置接口和凭据引用由程序管理` }));
+    if (source?.builtin && kind === "provider") form.append(copy("p",
+      "modelConfig.builtinProviderDetail", `${source.id} · 内置接口和凭据引用由程序管理`,
+      { id: source.id }));
     const actions = element("div", { className: "model-config-actions" });
     if (!source?.builtin && !document.runtime_override) {
-      const save = element("button", { className: "primary-button", text: "保存",
-        attrs: { type: "submit" } });
+      const save = copy("button", "modelConfig.save", "保存", {},
+        { className: "primary-button", attrs: { type: "submit" } });
       save.disabled = Boolean(source);
-      const discard = element("button", { className: "secondary-button", text: "放弃修改",
-        attrs: { type: "button" } });
+      const discard = copy("button", "modelConfig.discard", "放弃修改", {},
+        { className: "secondary-button", attrs: { type: "button" } });
       discard.hidden = true;
       discard.addEventListener("click", () => { dirty = false; render(); });
       form.addEventListener("input", () => { dirty = true; discard.hidden = false; save.disabled = false; });
@@ -320,38 +407,49 @@ export function createModelConfigPanel(container) {
         const next = clone(document);
         const value = kind === "model" ? readModel(form, item) : readProvider(form, item);
         if (kind === "provider" && !Object.keys(value.endpoints).length) {
-          toast("至少填写一个协议接口 URL。", "error"); return;
+          toast(t("modelConfig.endpointRequired", {},
+            "至少填写一个协议接口 URL。"), "error");
+          return;
         }
         if (kind === "model" && (!value.protocols.length ||
             !value.protocols.includes(value.default_protocol) ||
             !value.reasoning_efforts.includes(value.default_reasoning_effort))) {
-          toast("选择至少一个协议和思考强度，并确认默认项属于所选范围。", "error");
+          toast(t("modelConfig.selectionRequired", {},
+            "选择至少一个协议和思考强度，并确认默认项属于所选范围。"), "error");
           return;
         }
         const key = kind === "model" ? "items" : "providers";
         if (source) next[key] = next[key].map((entry) => entry.id === source.id ? value : entry);
         else next[key].push(value);
-        void transact(next, source ? "配置已更新" : "配置已添加", kind, value.id);
+        void transact(next, source ? "modelConfig.updated" : "modelConfig.added",
+          source ? "配置已更新" : "配置已添加", kind, value.id);
       });
       actions.append(save, discard);
       if (source?.removable) {
         const used = kind === "provider" && document.items.some((model) => model.provider === source.id);
         const isDefault = kind === "model" && source.id === document.default_model;
-        const remove = element("button", { className: "danger-link", text: "删除",
-          attrs: { type: "button", title: used ? "先将引用它的模型移到其他 Provider" :
-            isDefault ? "先设置其他默认模型" : "" } });
+        const remove = copy("button", "modelConfig.remove", "删除", {},
+          { className: "danger-link", attrs: { type: "button" } });
+        if (used || isDefault) translatedAttribute(remove, "title",
+          used ? "modelConfig.providerInUse" : "modelConfig.defaultInUse",
+          used ? "先将引用它的模型移到其他 Provider" : "先设置其他默认模型");
         remove.disabled = used || isDefault;
-        const confirm = element("div", { className: "model-delete-confirm", attrs: { role: "group", "aria-label": "确认删除" } }, [
-          element("span", { text: `删除“${source.name}”？使用它的已有会话可能无法继续。` }),
+        const confirm = element("div", { className: "model-delete-confirm", attrs: { role: "group" } }, [
+          copy("span", "modelConfig.removePrompt",
+            `删除“${source.name || source.id}”？使用它的已有会话可能无法继续。`,
+            { name: source.name || source.id }),
         ]);
-        const cancel = element("button", { className: "secondary-button", text: "取消", attrs: { type: "button" } });
-        const apply = element("button", { className: "danger-button", text: "确认删除", attrs: { type: "button" } });
+        translatedAttribute(confirm, "aria-label", "modelConfig.removeGroup", "确认删除");
+        const cancel = copy("button", "modelConfig.cancel", "取消", {},
+          { className: "secondary-button", attrs: { type: "button" } });
+        const apply = copy("button", "modelConfig.confirmRemove", "确认删除", {},
+          { className: "danger-button", attrs: { type: "button" } });
         cancel.addEventListener("click", () => { confirm.hidden = true; remove.focus(); });
         apply.addEventListener("click", () => {
           const next = clone(document);
           next[kind === "model" ? "items" : "providers"] = collection().filter((entry) => entry.id !== source.id);
           confirm.hidden = true;
-          void transact(next, "配置已删除", kind, "");
+          void transact(next, "modelConfig.removed", "配置已删除", kind, "");
         });
         confirm.append(cancel, apply);
         confirm.hidden = true;
@@ -360,12 +458,12 @@ export function createModelConfigPanel(container) {
       }
     }
     if (kind === "model" && source && source.id !== document.default_model && !document.runtime_override) {
-      const setDefault = element("button", { className: "secondary-button", text: "设为默认模型",
-        attrs: { type: "button" } });
+      const setDefault = copy("button", "modelConfig.setDefault", "设为默认模型", {},
+        { className: "secondary-button", attrs: { type: "button" } });
       setDefault.addEventListener("click", () => {
         if (!allowChange()) return;
         const next = clone(document); next.default_model = source.id;
-        void transact(next, "默认模型已更新");
+        void transact(next, "modelConfig.defaultUpdated", "默认模型已更新");
       });
       actions.append(setDefault);
     }
@@ -374,6 +472,7 @@ export function createModelConfigPanel(container) {
     container.append(layout);
   }
 
+  subscribeLocale(() => translateCopy(container));
   void load();
   return Object.freeze({ reload: () => load() });
 }

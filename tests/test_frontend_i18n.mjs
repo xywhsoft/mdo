@@ -51,6 +51,7 @@ test("bundled language packs cover the annotated shell and switch without stale 
     "js/features/settings/feedback-panel.js",
     "js/features/settings/project-panel.js",
     "js/features/settings/memory-panel.js",
+    "js/features/settings/model-config-panel.js",
     "js/features/sessions/project-dialog.js",
     "js/app.js",
   ]) {
@@ -81,6 +82,9 @@ test("bundled language packs cover the annotated shell and switch without stale 
     if (path.endsWith("memory-panel.js"))
       for (const [, key] of source.matchAll(/"(memory\.[^"]+)"/g))
         assert.ok(referenceKeys.includes(key), `missing memory key: ${key}`);
+    if (path.endsWith("model-config-panel.js"))
+      for (const [, key] of source.matchAll(/"(modelConfig\.[^"]+)"/g))
+        assert.ok(referenceKeys.includes(key), `missing model configuration key: ${key}`);
   }
 
   const node = {

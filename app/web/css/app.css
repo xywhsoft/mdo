@@ -1244,6 +1244,10 @@ select:focus-visible,
   .model-config-layout { grid-template-columns: minmax(0, 1fr); }
   .model-config-list { max-height: 180px; }
   .model-form-grid { grid-template-columns: minmax(0, 1fr); }
+  .model-config-controls button, .model-config-actions button,
+  .model-config-item, .model-field input:not([type="checkbox"]),
+  .model-field select, .model-checks label, .model-advanced summary { min-height: 40px; }
+  .model-checks input[type="checkbox"], .model-field input[type="checkbox"] { width: 18px; height: 18px; }
   :root { --header-height: 52px; }
   .app-shell { grid-template-columns: minmax(0, 1fr); grid-template-rows: 52px minmax(0, 1fr); }
   .app-shell[data-sidebar="closed"] { grid-template-columns: minmax(0, 1fr); }
