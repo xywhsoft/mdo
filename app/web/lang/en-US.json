@@ -983,6 +983,8 @@
   "error.generic": "The action did not complete. Try again.",
   "composer.backgroundQueueFailed": "Queued message for background session “{title}” was not sent: {error}",
   "composer.backgroundSendFailed": "Background task was not sent: {error}",
+  "composer.unsentRestored": "The unsent content was restored to the composer.",
+  "composer.unsentMerged": "The unsent content was placed before your new draft. Review it before retrying.",
   "settings.resolvePendingTheme": "Preview, apply, or discard your unsaved settings first",
   "settings.notLoaded": "Settings have not loaded yet",
   "settings.themeDarkApplied": "Switched to dark theme",

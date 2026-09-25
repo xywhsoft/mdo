@@ -160,6 +160,25 @@ class BoundedDelayProxy(BaseHTTPRequestHandler):
                 count = self.server.queue_posts
             print(f"QA queue POST #{count}", flush=True)
             time.sleep(self.server.queue_delay_seconds)
+        if (self.command == "POST" and self.path.startswith("/api/v1/projects/")
+                and "/sessions/" in self.path and self.path.endswith("/runs")):
+            with self.server.count_lock:
+                self.server.run_posts += 1
+                count = self.server.run_posts
+            print(f"QA run POST #{count}", flush=True)
+            time.sleep(self.server.run_delay_seconds)
+            if self.server.fail_first_run and count == 1:
+                payload = json.dumps({"ok": False, "error": {
+                    "code": "qa_run_rejected", "message": "Synthetic run failure"
+                }}).encode()
+                self.send_response(503)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Content-Length", str(len(payload)))
+                self.send_header("Connection", "close")
+                self.end_headers()
+                self.wfile.write(payload)
+                self.close_connection = True
+                return
         headers = {key: value for key, value in self.headers.items()
                    if key.lower() not in {"host", "connection", "content-length"}}
         headers["Host"] = f"127.0.0.1:{self.server.upstream_port}"
@@ -203,6 +222,10 @@ parser.add_argument("--approval-delay-ms", type=int, default=0,
                     help="delay one approval PUT by 0-5000 ms for manual duplicate-click QA")
 parser.add_argument("--queue-delay-ms", type=int, default=0,
                     help="delay queue POSTs by 0-12000 ms for bounded dispatch race QA")
+parser.add_argument("--run-delay-ms", type=int, default=0,
+                    help="delay run POSTs by 0-5000 ms for composer handoff QA")
+parser.add_argument("--fail-first-run", action="store_true",
+                    help="reject one run POST before forwarding, for draft recovery QA")
 parser.add_argument("--slow-ms", type=int, default=15000,
                     help="first SLOW UI model response delay, 0-15000 ms")
 parser.add_argument("--task-ms", type=int, default=12000,
@@ -214,6 +237,8 @@ if not 0 <= args.approval_delay_ms <= 5000:
     parser.error("--approval-delay-ms must be between 0 and 5000")
 if not 0 <= args.queue_delay_ms <= 12000:
     parser.error("--queue-delay-ms must be between 0 and 12000")
+if not 0 <= args.run_delay_ms <= 5000:
+    parser.error("--run-delay-ms must be between 0 and 5000")
 if not 0 <= args.slow_ms <= 15000:
     parser.error("--slow-ms must be between 0 and 15000")
 if not 0 <= args.task_ms <= 30000:
@@ -277,14 +302,18 @@ try:
         raise RuntimeError((status, response))
     session = response["data"]["id"]
     browser_port = port
-    if args.approval_delay_ms or args.queue_delay_ms:
+    if (args.approval_delay_ms or args.queue_delay_ms or args.run_delay_ms
+            or args.fail_first_run):
         proxy = BoundedDelayProxyServer(("127.0.0.1", 0), BoundedDelayProxy)
         proxy.upstream_port = port
         proxy.approval_delay_seconds = args.approval_delay_ms / 1000
         proxy.queue_delay_seconds = args.queue_delay_ms / 1000
+        proxy.run_delay_seconds = args.run_delay_ms / 1000
+        proxy.fail_first_run = args.fail_first_run
         proxy.count_lock = threading.Lock()
         proxy.approval_puts = 0
         proxy.queue_posts = 0
+        proxy.run_posts = 0
         threading.Thread(target=proxy.serve_forever, daemon=True).start()
         browser_port = proxy.server_address[1]
     print(f"READY url=http://127.0.0.1:{browser_port}/#/projects/default/"
@@ -294,6 +323,7 @@ finally:
     if proxy:
         print(f"QA approval PUT total={proxy.approval_puts}", flush=True)
         print(f"QA queue POST total={proxy.queue_posts}", flush=True)
+        print(f"QA run POST total={proxy.run_posts}", flush=True)
         proxy.shutdown()
         proxy.server_close()
     stop_host(process)

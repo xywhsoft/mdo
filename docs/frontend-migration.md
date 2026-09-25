@@ -417,3 +417,11 @@ Home `.build/mdo-packed-docks-lyu66m_d` 使用新单文件程序真实重启后�
 新任务创建期间还存在焦点竞态：修前 Home `.build/mdo-packed-docks-_7h10lis` 在创建会话的短暂加载中禁用输入框，连续键入的 `Next draft QA` 只留下 `Next draf`。现在只对刚创建的目标会话保持输入框可编辑，发送与附件操作仍等详情加载完成后启用；创建时把实时草稿转入新会话。修后 Home `.build/mdo-packed-docks-3aqibawq` 保留完整文本、刷新仍在新会话，返回空白新任务无残留。最终字节 Home `.build/mdo-packed-docks-zjjyenay` 再从新任务连续输入 `First final QA` 与 `Second final QA`，焦点始终在输入框，刷新后第二条完整保留，浏览器脚本错误日志为空。已有会话 Home `.build/mdo-packed-docks-9gwlhfvc` 的快速两次 Enter 也实际排入并发送完整 `Queued action QA`。
 
 有界发布门禁通过 62 个前端模块解析、17 项 Node 测试、114 项 Python 单元/契约测试、19 个运行探针、严格 C 编译、两次确定性打包、单文件零旁路写入与 20 秒启动检查；根目录 `mdo.exe` 已重建，SHA-256：`33a1fbc6fa04e21ebfc05070ad5a747d91fe78ae76b3b471cd88c2b97c34215d`。
+
+进一步恢复旧版 Enter 当场消费输入的手感。此前虽然已避免异步成功时吞掉下一条草稿，但请求未确认期间，输入框仍会短暂保留已提交的原文。现在通过提交快照在 Enter 当场清空文字、附件和原草稿；新会话创建时只转移随后键入的内容。请求明确失败时，将原文和附件恢复到所属会话草稿；若已有新草稿，则把未发送原文置于其前并提示检查，避免静默丢失。已被队列或运行 API 接受后的后续刷新错误不会错误地恢复一份重复输入。三语提示同步更新，测试夹具新增最长 5 秒的有界运行 POST 延迟及一次合成拒绝。
+
+隔离单文件 Home `.build/mdo-packed-docks-01nyh6zh` 验证既有会话 Enter 后输入框立即为空；3 秒后本地合成拒绝将 `Fail first QA` 恢复到输入框，错误提示可见。下一次延迟成功期间键入 `Next unsent QA`，回复到达与刷新后它仍独立保存在草稿中；从新任务发送 `New immediate QA` 时接续键入的 `Follow-up draft QA` 也转移到新会话并保留。320px Home `.build/mdo-packed-docks-ck4vardb` 验证失败时 `Original failed QA` 与随后输入的 `New draft QA` 按顺序合并，刷新后文本仍在，文档宽度 320px、脚本错误日志为空。隔离 Home `.build/mdo-packed-docks-2iqo9ulo` 以 5 秒队列 POST 和 15 秒单次本地回复验证第二条 `Queued second QA` 被自动发送，等待期间写的 `Third draft QA` 刷新后仍完整保存。Node 用例验证失败恢复时文本和图片 ID 一同保存，三条操作均未使用压力或高负载测试。
+
+隔离 Home `.build/mdo-packed-docks-c8heqq4m` 另在原会话运行 POST 等待时切到空白新任务并输入 `Other new task draft QA`；一次合成失败后，原文 `Original session failure QA` 只恢复到原会话草稿，新任务草稿保持原样，切换返回时两者都可读取，浏览器脚本错误日志为空。
+
+有界发布门禁通过 62 个前端模块解析、18 项 Node 测试、114 项 Python 单元/契约测试、19 个运行探针、严格 C 编译、两次确定性打包、单文件零旁路写入与 20 秒启动检查；根目录 `mdo.exe` 已重建，SHA-256：`8d5f1c82590c37e4d99f1a587739bbe64a949ae656a8a1b72f047bba1a1fab87`。

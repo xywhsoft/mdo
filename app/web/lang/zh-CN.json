@@ -983,6 +983,8 @@
   "error.generic": "操作未完成，请重试。",
   "composer.backgroundQueueFailed": "后台会话“{title}”的待发送消息未发出：{error}",
   "composer.backgroundSendFailed": "后台任务未发出：{error}",
+  "composer.unsentRestored": "未发送内容已恢复到输入框。",
+  "composer.unsentMerged": "未发送内容已放在新草稿前面，请检查后重试。",
   "settings.resolvePendingTheme": "先预览、应用或放弃尚未保存的设置",
   "settings.notLoaded": "当前设置尚未载入",
   "settings.themeDarkApplied": "已切换为深色主题",

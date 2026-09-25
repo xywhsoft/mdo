@@ -140,7 +140,6 @@ export async function boot() {
   let interruptRequested = false;
   let themeToggleBusy = false;
   let composerAttachments = [];
-  let composerInputVersion = 0;
   let composerImages = null;
   let shortcuts;
   const queueBlocked = new Set();
@@ -1066,8 +1065,9 @@ export async function boot() {
     }
   }
   recoveryStore.subscribe(syncRecoveryNotice);
-  function showComposerError(error) {
+  function showComposerError(error, note = "") {
     composerError.textContent = errorMessage(error);
+    if (note) composerError.append(" ", note);
     composerError.dataset.code = error?.code || "";
     if (error?.code === "recovery_required") {
       const openDecisions = element("button", {
@@ -1088,8 +1088,7 @@ export async function boot() {
     composerError.hidden = false;
   }
 
-  async function ensureSession(text, { stageDraft = true, attachments = [],
-    rawDraft = text } = {}) {
+  async function ensureSession(text, { stageDraft = true } = {}) {
     const origin = navigation.get();
     const originVersion = routeVersion;
     if (origin.sessionId) return origin;
@@ -1097,13 +1096,11 @@ export async function boot() {
       t("composer.imageTask", {}, "图片任务");
     const session = await createSession({ project_id: origin.projectId || "default", title,
       ...composerProfile.selection() });
-    if (stageDraft) {
-      const stillOnOrigin = routeVersion === originVersion;
+    if (stageDraft && routeVersion === originVersion) {
       // A second prompt typed during session creation belongs to the new
-      // conversation; stage the live composer before navigation restores it.
+      // conversation; stage it before navigation restores the composer.
       draftStore.edit(`${session.project_id}/${session.id}`,
-        stillOnOrigin ? prompt.value : rawDraft,
-        stillOnOrigin ? composerAttachments : attachments, true);
+        prompt.value, composerAttachments, true);
     }
     if (routeVersion === originVersion) {
       showActiveSessions();
@@ -1131,13 +1128,20 @@ export async function boot() {
     hideComposerError();
     let submissionScope = composerScope(origin);
     submissions.add(submissionScope);
-    setRun(activeRun);
     const originatingKey = selectedKey;
-    const originatingDraft = fromComposer && !originatingKey ? prompt.value : null;
     const submittedInput = fromComposer ? prompt.value : "";
-    const submittedInputVersion = composerInputVersion;
     const originatingRun = activeRun;
+    if (fromComposer) {
+      prompt.value = "";
+      composerAttachments = [];
+      composerImages.clear();
+      draftStore.clear(originatingKey);
+      resizePrompt();
+      tokenMeter.refresh();
+    }
+    setRun(activeRun);
     let selected = null;
+    let accepted = false;
     let selectedVersion = originVersion;
     const selectedIsCurrent = () => {
       const current = navigation.get();
@@ -1145,31 +1149,8 @@ export async function boot() {
         (current.projectId === selected.projectId &&
           current.sessionId === selected.sessionId));
     };
-    function finishComposerSubmission() {
-      const targetKey = `${selected.projectId}/${selected.sessionId}`;
-      if (!selectedIsCurrent()) {
-        draftStore.clearIfMatches(targetKey, submittedInput, attachments);
-        return;
-      }
-      // The user may already be typing the next prompt while the request is
-      // in flight. Remove only the submitted prefix, never the new draft.
-      if (composerInputVersion === submittedInputVersion &&
-          prompt.value === submittedInput) prompt.value = "";
-      else if (submittedInput && prompt.value.length > submittedInput.length &&
-               prompt.value.startsWith(submittedInput))
-        prompt.value = prompt.value.slice(submittedInput.length);
-      if (composerAttachments.length === attachments.length &&
-          composerAttachments.every((id, index) => id === attachments[index])) {
-        composerAttachments = [];
-        composerImages.clear();
-      }
-      draftStore.edit(targetKey, prompt.value, composerAttachments, true);
-      resizePrompt();
-      tokenMeter.refresh();
-    }
     try {
-      selected = await ensureSession(text, { stageDraft: fromComposer,
-        attachments, rawDraft: submittedInput });
+      selected = await ensureSession(text, { stageDraft: fromComposer });
       selectedVersion = routeVersion;
       const targetScope = `${selected.projectId}/${selected.sessionId}`;
       if (targetScope !== submissionScope) {
@@ -1182,10 +1163,8 @@ export async function boot() {
         if (!await promptQueue.enqueue(selected.projectId, selected.sessionId, text,
           { first: interrupt, priority: interrupt, attachments }))
           throw new Error(t("composer.queueFull", {}, "待发送队列已满（最多 20 条）"));
+        accepted = true;
         queueBlocked.delete(`${selected.projectId}/${selected.sessionId}`);
-        if (fromComposer) {
-          finishComposerSubmission();
-        }
         if (interrupt && selectedIsCurrent()) {
           await maybeCancelPriorityRun();
         }
@@ -1196,17 +1175,29 @@ export async function boot() {
       }
       await ensurePromptReady(selected.projectId, selected.sessionId);
       const run = await startRun(selected.projectId, selected.sessionId, text, attachments);
-      if (fromComposer) {
-        if (originatingDraft !== null) {
-          if (selectedIsCurrent()) draftStore.clear("");
-          else draftStore.clearIfMatches("", originatingDraft);
-        }
-        finishComposerSubmission();
-      }
+      accepted = true;
+      if (fromComposer && !originatingKey && selectedIsCurrent()) draftStore.clear("");
       if (selectedIsCurrent()) monitorRun(run);
       await Promise.all([...(selectedIsCurrent() ? [refreshSelectedTimeline()] : []),
         loadTasks(), loadRuns(), loadRecovery()]);
     } catch (error) {
+      let restored = null;
+      if (fromComposer && !accepted) {
+        const ownerKey = selected
+          ? `${selected.projectId}/${selected.sessionId}` : originatingKey;
+        if (!originatingKey && selected && selectedIsCurrent())
+          draftStore.clear("");
+        if (selectedIsCurrent())
+          draftStore.capture(ownerKey, prompt.value, composerAttachments);
+        restored = draftStore.restoreUnsent(ownerKey, submittedInput, attachments);
+        if (selectedIsCurrent()) {
+          prompt.value = restored.text;
+          composerAttachments = restored.attachments;
+          composerImages.set(restored.attachments);
+          resizePrompt();
+          tokenMeter.refresh();
+        }
+      }
       if (selectedIsCurrent()) {
         if (!fromComposer && !prompt.value.trim() && !composerAttachments.length) {
           prompt.value = text;
@@ -1214,7 +1205,8 @@ export async function boot() {
           resizePrompt();
           tokenMeter.refresh();
         }
-        showComposerError(error);
+        showComposerError(error, restored
+          ? t(restored.merged ? "composer.unsentMerged" : "composer.unsentRestored") : "");
         prompt.focus();
       } else {
         toast(t("composer.backgroundSendFailed", { error: errorMessage(error) },
@@ -1256,7 +1248,6 @@ export async function boot() {
   }
   window.addEventListener("resize", resizePrompt);
   prompt.addEventListener("input", () => {
-    composerInputVersion += 1;
     resizePrompt();
     draftStore.edit(selectedKey, prompt.value, composerAttachments);
     tokenMeter.refresh();

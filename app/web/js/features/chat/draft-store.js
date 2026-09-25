@@ -159,6 +159,21 @@ export function createDraftStore({ onRestore, onError, onSaved }) {
       edit(key, "", [], true);
       return true;
     },
+    restoreUnsent(key, text, attachments = []) {
+      const current = entry(key);
+      const submitted = imageIds(attachments);
+      if (current.text === text && sameIds(current.attachments, submitted))
+        return { text, attachments: submitted, merged: false };
+      const otherText = Boolean(current.text && current.text !== text);
+      const merged = otherText || current.attachments.some((id) =>
+        !submitted.includes(id));
+      const nextText = otherText && text ? `${text}\n\n${current.text}`
+        : current.text || text;
+      const nextAttachments = [...submitted,
+        ...current.attachments.filter((id) => !submitted.includes(id))].slice(0, 4);
+      edit(key, nextText, nextAttachments, true);
+      return { text: nextText, attachments: nextAttachments, merged };
+    },
     flush,
   });
 }

@@ -983,6 +983,8 @@
   "error.generic": "Действие не завершено. Повторите попытку.",
   "composer.backgroundQueueFailed": "Не удалось отправить сообщение из очереди фонового сеанса «{title}»: {error}",
   "composer.backgroundSendFailed": "Не удалось отправить фоновую задачу: {error}",
+  "composer.unsentRestored": "Неотправленное содержимое восстановлено в поле ввода.",
+  "composer.unsentMerged": "Неотправленное содержимое добавлено перед новым черновиком. Проверьте его перед повтором.",
   "settings.resolvePendingTheme": "Сначала просмотрите, примените или отмените несохранённые настройки",
   "settings.notLoaded": "Настройки ещё не загружены",
   "settings.themeDarkApplied": "Включена тёмная тема",
