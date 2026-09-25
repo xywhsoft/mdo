@@ -24,6 +24,7 @@ import { recoveryStore, selectRecovery, loadRecovery, readRecovery, abandonRecov
 import { navigation } from "./state/navigation.js";
 import { createSessionList } from "./features/sessions/session-list.js";
 import { createSessionActionMenu } from "./features/sessions/session-action-menu.js";
+import { sessionActionDialogCopy, sessionActionToast, sessionForkTitle } from "./features/sessions/session-actions.js";
 import { formatSessionMarkdown, sessionMarkdownFilename } from "./features/sessions/session-export.js";
 import { createProjectDialog } from "./features/sessions/project-dialog.js";
 import { timelineStore, selectTimeline, clearTimeline, refreshSelectedTimeline, reloadSelectedTimeline } from "./features/chat/timeline-store.js";
@@ -316,33 +317,34 @@ export async function boot() {
     feedbackStore,
     onSearchCount: (count, historyLost) => conversationSearch?.setCount(count, historyLost),
     onFeedback: async (eventId, value, owner) => {
-      if (!isCurrentMessageOwner(owner)) throw new Error("会话已切换，请重新选择消息");
+      if (!isCurrentMessageOwner(owner))
+        throw new Error(t("messageAction.ownerChanged", {}, "会话已切换，请重新选择消息"));
       await setFeedback(owner.projectId, owner.sessionId, eventId, value);
     },
     onFork: async (throughSequence, owner) => {
       const version = routeVersion;
       if (!isCurrentMessageOwner(owner, version))
-        throw new Error("会话已切换，请重新选择消息");
+        throw new Error(t("messageAction.ownerChanged", {}, "会话已切换，请重新选择消息"));
       const session = sessionDetailStore.get().data;
       if (!session || `${session.project_id}/${session.id}` !== selectedKey || activeRun)
-        throw new Error("请在当前运行结束后分叉会话");
+        throw new Error(t("sessionAction.forkWaitForRun", {}, "请在当前运行结束后分叉会话"));
       const history = await loadSessionHistory(session);
       if (!isCurrentMessageOwner(owner, version))
-        throw new Error("会话已切换，请重新选择消息");
+        throw new Error(t("messageAction.ownerChanged", {}, "会话已切换，请重新选择消息"));
       const boundary = throughSequence ?? history.last_sequence;
       if (!Number.isSafeInteger(boundary) || boundary < 0 ||
           boundary > history.last_sequence)
-        throw new Error("此回复已不在当前会话历史中，请刷新会话");
+        throw new Error(t("sessionAction.forkHistoryChanged", {}, "此回复已不在当前会话历史中，请刷新会话"));
       const fork = await forkSession({ ...session, etag: history.etag, revision: history.revision }, {
-        title: `${session.title || "未命名任务"}（分支）`,
+        title: sessionForkTitle(session),
         through_sequence: boundary,
       });
       if (isCurrentMessageOwner(owner, version)) {
         pendingForkComposerFocus = `${fork.project_id}/${fork.id}`;
         navigation.select(fork.project_id, fork.id);
         focusForkComposerWhenReady();
-        toast("已创建会话分支");
-      } else toast("原会话的分支已在后台创建");
+        toast(t("sessionAction.forked", {}, "已创建会话分支"));
+      } else toast(t("sessionAction.backgroundFork", {}, "原会话的分支已在后台创建"));
     },
     onEdit: async (sequence, text, attachments, owner) => {
       const version = routeVersion;
@@ -1211,6 +1213,16 @@ export async function boot() {
   const actionConfirm = $("#confirm-session-action");
   let pendingSessionAction = null;
 
+  function syncSessionActionCopy() {
+    if (!pendingSessionAction) return;
+    const [title, description, confirm] = sessionActionDialogCopy(
+      pendingSessionAction.action, pendingSessionAction.session);
+    actionTitle.textContent = title;
+    actionDescription.textContent = description;
+    actionConfirm.textContent = confirm;
+  }
+  subscribeLocale(() => { if (actionDialog.open) syncSessionActionCopy(); });
+
   async function refreshSelectedSession(session) {
     const selected = navigation.get();
     if (selected.projectId === session.project_id && selected.sessionId === session.id) {
@@ -1239,13 +1251,13 @@ export async function boot() {
         await Promise.all([reloadSelectedTimeline(),
           selectTodo(updated.project_id, updated.id)]);
     }
-    toast({ rename: "会话已重命名", pin: updated.pinned ? "会话已置顶" : "已取消置顶", archive: "会话已归档", unarchive: "会话已移回进行中", trash: "会话已移到回收站", restore: "会话已恢复", fork: "已创建会话分支", truncate: "会话历史已截断", clear: "会话历史已清空" }[action]);
+    toast(sessionActionToast(action, updated));
     return updated;
   }
 
   async function handleSessionAction(action, session) {
     if (action === "export" || action === "export_json") {
-      if (action === "export") toast("正在整理 Markdown 会话记录…");
+      if (action === "export") toast(t("sessionAction.preparingMarkdown", {}, "正在整理 Markdown 会话记录…"));
       const file = action === "export_json" ? await exportSession(session) : {
         blob: new Blob([formatSessionMarkdown(session, await loadSessionTranscript(session))],
           { type: "text/markdown;charset=utf-8" }),
@@ -1257,7 +1269,9 @@ export async function boot() {
       link.download = file.filename;
       link.click();
       window.setTimeout(() => URL.revokeObjectURL(url), 0);
-      toast(action === "export_json" ? "JSON 备份已开始下载" : "Markdown 已开始下载");
+      toast(action === "export_json"
+        ? t("sessionAction.jsonDownloading", {}, "JSON 备份已开始下载")
+        : t("sessionAction.markdownDownloading", {}, "Markdown 已开始下载"));
       return;
     }
     if (!["rename", "trash", "fork", "truncate", "clear"].includes(action)) return applySessionAction(action, session);
@@ -1266,24 +1280,16 @@ export async function boot() {
     pendingSessionAction = { action, session: history ? { ...session, etag: history.etag, revision: history.revision } : session };
     const hasTitle = action === "rename" || action === "fork";
     const hasSequence = action === "fork" || action === "truncate";
-    const content = {
-      rename: ["重命名会话", "新标题会同步写入会话元数据。", "保存"],
-      trash: ["移到回收站", `“${session.title || "未命名任务"}”可从回收站恢复。`, "移到回收站"],
-      fork: ["创建会话分支", "从指定消息序列创建独立会话。原会话不会改变。", "创建分支"],
-      truncate: ["截断会话历史", "指定序列之后的模型账本将被永久移除。", "截断历史"],
-      clear: ["清空会话历史", "模型账本将被永久清空，并重新注入当前系统提示词。", "清空历史"],
-    }[action];
-    actionTitle.textContent = content[0];
-    actionDescription.textContent = content[1];
+    syncSessionActionCopy();
     actionFields.hidden = !hasTitle && !hasSequence;
     actionTitleField.hidden = !hasTitle;
     actionSequenceField.hidden = !hasSequence;
     actionForm.elements.title.required = hasTitle;
-    actionForm.elements.title.value = action === "rename" ? session.title || "" : action === "fork" ? `${session.title || "未命名任务"}（分支）` : "";
+    actionForm.elements.title.value = action === "rename" ? session.title || "" :
+      action === "fork" ? sessionForkTitle(session) : "";
     actionForm.elements.through_sequence.required = hasSequence;
     actionForm.elements.through_sequence.value = hasSequence ? String(history.last_sequence) : "";
     actionForm.elements.through_sequence.max = hasSequence ? String(history.last_sequence) : "";
-    actionConfirm.textContent = content[2];
     actionConfirm.className = ["trash", "truncate", "clear"].includes(action) ? "danger-button" : "primary-button";
     actionError.hidden = true;
     if (!actionDialog.open) actionDialog.showModal();

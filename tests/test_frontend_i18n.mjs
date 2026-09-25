@@ -4,7 +4,8 @@ import test from "node:test";
 
 import { currentLocale, loadLocale, subscribeLocale, supportedLocales, t } from
   "../app/web/js/i18n.js";
-import { sessionActionItems } from "../app/web/js/features/sessions/session-actions.js";
+import { sessionActionDialogCopy, sessionActionItems, sessionForkTitle } from
+  "../app/web/js/features/sessions/session-actions.js";
 
 const root = new URL("../app/web/", import.meta.url);
 const packs = Object.fromEntries(supportedLocales.map((name) => [
@@ -67,6 +68,9 @@ test("bundled language packs cover the annotated shell and switch without stale 
     if (path.endsWith("session-actions.js"))
       for (const [, key] of source.matchAll(/\bitem\("[^"]+",\s*"([^"]+)"/g))
         assert.ok(referenceKeys.includes(key), `missing action key: ${key}`);
+    if (path.endsWith("session-actions.js"))
+      for (const [, key] of source.matchAll(/"(sessionAction\.[^"]+)"/g))
+        assert.ok(referenceKeys.includes(key), `missing session action key: ${key}`);
     if (path.endsWith("resource-panels.js"))
       for (const [, key] of source.matchAll(/:\s*"(resource\.[^"]+)"/g))
         assert.ok(referenceKeys.includes(key), `missing resource code key: ${key}`);
@@ -124,6 +128,9 @@ test("bundled language packs cover the annotated shell and switch without stale 
     assert.equal(node.getAttribute("aria-label"), "Настроить и создать задачу");
     assert.equal(t("nav.actionsFor", { title: "Тест" }), "Действия с сеансом Тест");
     assert.equal(sessionActionItems({ status: "active", pinned: true })[1].label, "Открепить");
+    assert.equal(sessionForkTitle({ title: "Тест" }), "Тест (ветка)");
+    assert.equal(sessionActionDialogCopy("trash", { title: "Тест" })[1],
+      "«Тест» можно восстановить из корзины.");
     assert.equal(t("missing.key", {}, "中文回退"), "中文回退");
     assert.equal(await loadLocale("en-US"), true);
     assert.equal(node.textContent, "New task");

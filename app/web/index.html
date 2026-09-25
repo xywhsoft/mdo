@@ -590,17 +590,17 @@
           <h2 id="session-action-title">编辑会话</h2>
           <p id="session-action-description"></p>
         </div>
-        <button class="icon-button" type="button" id="close-session-action" aria-label="关闭">
+        <button class="icon-button" type="button" id="close-session-action" aria-label="关闭" data-i18n-aria-label="sessionAction.close">
           <span class="icon" data-icon="close" aria-hidden="true"></span>
         </button>
       </header>
       <div class="dialog-fields session-action-fields" id="session-action-fields">
-        <label id="session-title-field">标题 <input name="title" maxlength="256"></label>
-        <label id="session-sequence-field" hidden>保留到序列 <input name="through_sequence" type="number" min="0" step="1"></label>
+        <label id="session-title-field"><span data-i18n="sessionAction.titleField">标题</span> <input name="title" maxlength="256"></label>
+        <label id="session-sequence-field" hidden><span data-i18n="sessionAction.sequenceField">保留到序列</span> <input name="through_sequence" type="number" min="0" step="1"></label>
       </div>
       <div class="dialog-error" id="session-action-error" role="alert" hidden></div>
       <footer>
-        <button class="secondary-button" id="cancel-session-action" type="button">取消</button>
+        <button class="secondary-button" id="cancel-session-action" type="button" data-i18n="sessionAction.cancel">取消</button>
         <button class="primary-button" id="confirm-session-action" type="submit">保存</button>
       </footer>
     </form>
