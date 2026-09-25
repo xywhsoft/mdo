@@ -148,6 +148,7 @@ class BoundedDelayProxy(BaseHTTPRequestHandler):
             return
         body = self.rfile.read(length) if length else None
         drop_response = False
+        drop_run_response = False
         if (self.command == "GET" and self.path.startswith("/api/v1/projects/")
                 and "/sessions/" in self.path and self.path.endswith("/queue")
                 and self.server.fail_first_queue_reconcile):
@@ -201,6 +202,7 @@ class BoundedDelayProxy(BaseHTTPRequestHandler):
                 count = self.server.run_posts
             print(f"QA run POST #{count}", flush=True)
             time.sleep(self.server.run_delay_seconds)
+            drop_run_response = self.server.drop_first_run_response and count == 1
             if self.server.fail_first_run and count == 1:
                 payload = json.dumps({"ok": False, "error": {
                     "code": "qa_run_rejected", "message": "Synthetic run failure"
@@ -229,6 +231,11 @@ class BoundedDelayProxy(BaseHTTPRequestHandler):
                 print("QA queue response dropped after upstream acceptance", flush=True)
                 with self.server.count_lock:
                     self.server.dropped_queue_response = True
+                self.close_connection = True
+                self.connection.close()
+                return
+            if drop_run_response:
+                print("QA run response dropped after upstream acceptance", flush=True)
                 self.close_connection = True
                 self.connection.close()
                 return
@@ -268,6 +275,8 @@ parser.add_argument("--run-delay-ms", type=int, default=0,
                     help="delay run POSTs by 0-5000 ms for composer handoff QA")
 parser.add_argument("--fail-first-run", action="store_true",
                     help="reject one run POST before forwarding, for draft recovery QA")
+parser.add_argument("--drop-first-run-response", action="store_true",
+                    help="accept one run POST upstream but close before replying")
 parser.add_argument("--fail-first-queue", action="store_true",
                     help="reject one queue POST before forwarding, for staged draft QA")
 parser.add_argument("--drop-first-queue-response", action="store_true",
@@ -354,6 +363,7 @@ try:
     browser_port = port
     if (args.approval_delay_ms or args.queue_delay_ms or args.run_delay_ms
             or args.fail_first_run or args.fail_first_queue
+            or args.drop_first_run_response
             or args.drop_first_queue_response or args.fail_first_queue_reconcile):
         proxy = BoundedDelayProxyServer(("127.0.0.1", 0), BoundedDelayProxy)
         proxy.upstream_port = port
@@ -361,6 +371,7 @@ try:
         proxy.queue_delay_seconds = args.queue_delay_ms / 1000
         proxy.run_delay_seconds = args.run_delay_ms / 1000
         proxy.fail_first_run = args.fail_first_run
+        proxy.drop_first_run_response = args.drop_first_run_response
         proxy.fail_first_queue = args.fail_first_queue
         proxy.drop_first_queue_response = args.drop_first_queue_response
         proxy.fail_first_queue_reconcile = args.fail_first_queue_reconcile

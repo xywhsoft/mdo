@@ -303,12 +303,14 @@ export async function boot() {
         onStartFailure(updated, error, current) {
           const key = `${updated.project_id}/${updated.id}`;
           draftStore.edit(key, text, attachments, true);
+          if (error.runAdmissionUncertain) void loadRuns();
           if (!current) return;
           prompt.value = text;
           composerAttachments = [...attachments];
           composerImages.set(attachments);
           prompt.dispatchEvent(new Event("input", { bubbles: true }));
-          showComposerError(error);
+          showComposerError(error, error.runAdmissionUncertain
+            ? t("composer.runAdmissionUncertain") : "");
           prompt.focus();
         },
         onStarted(run) { monitorRun(run); },
@@ -938,13 +940,16 @@ export async function boot() {
             loadTasks(), loadRuns(), loadRecovery()]);
         } catch (error) {
           if (error?.code !== "recovery_required") queueBlocked.add(key);
+          if (error.runAdmissionUncertain) void loadRuns();
           try { await promptQueue.select(selected.projectId, selected.sessionId); }
           catch { /* Preserve the original dispatch error. */ }
-          if (stillSelected()) showComposerError(error);
-          else toast(t("composer.backgroundQueueFailed",
+          if (stillSelected()) showComposerError(error, error.runAdmissionUncertain
+            ? t("composer.runAdmissionUncertain") : "");
+          else toast(`${t("composer.backgroundQueueFailed",
             { title: session.title, error: errorMessage(error) },
-            `后台会话“${session.title}”的待发送消息未发出：${errorMessage(error)}`),
-            "error");
+            `后台会话“${session.title}”的待发送消息未发出：${errorMessage(error)}`)}` +
+            (error.runAdmissionUncertain
+              ? ` ${t("composer.runAdmissionUncertain")}` : ""), "error");
         }
       });
   }
@@ -1334,6 +1339,7 @@ export async function boot() {
       await Promise.all([...(selectedIsCurrent() ? [refreshSelectedTimeline()] : []),
         loadTasks(), loadRuns(), loadRecovery()]);
     } catch (error) {
+      if (error.runAdmissionUncertain) void loadRuns();
       let restored = null;
       const ownerKey = selected
         ? `${selected.projectId}/${selected.sessionId}` : originatingKey;
@@ -1353,15 +1359,18 @@ export async function boot() {
           resizePrompt();
           tokenMeter.refresh();
         }
-        showComposerError(error, restored
-          ? error.queueAdmissionUncertain
-            ? t("composer.queueAdmissionUncertain")
-            : t(restored.merged ? "composer.unsentMerged" : "composer.unsentRestored")
-          : "");
+        showComposerError(error, error.queueAdmissionUncertain
+          ? t("composer.queueAdmissionUncertain")
+          : error.runAdmissionUncertain
+            ? t("composer.runAdmissionUncertain")
+            : restored
+              ? t(restored.merged ? "composer.unsentMerged" : "composer.unsentRestored")
+              : "");
         prompt.focus();
       } else {
-        toast(t("composer.backgroundSendFailed", { error: errorMessage(error) },
-          `后台任务未发出：${errorMessage(error)}`), "error");
+        toast(`${t("composer.backgroundSendFailed", { error: errorMessage(error) },
+          `后台任务未发出：${errorMessage(error)}`)}${error.runAdmissionUncertain
+            ? ` ${t("composer.runAdmissionUncertain")}` : ""}`, "error");
       }
       resolveObservedAdmission(ownerKey);
     } finally {

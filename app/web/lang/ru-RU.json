@@ -400,6 +400,7 @@
   "composer.hintSubmitting": "Предыдущее сообщение отправляется · Enter сохранит следующее",
   "composer.hintPendingAdmission": "Предыдущее сообщение отправляется · ожидают очереди: {count}",
   "composer.queueAdmissionUncertain": "Отправка не подтверждена. Текст сохранён; проверьте очередь и журнал перед повтором.",
+  "composer.runAdmissionUncertain": "Запуск мог начаться. Текст сохранён; перед повтором проверьте текущий запуск и журнал сеанса.",
   "composer.shortcutEnterGuide": "Отправить; во время работы прервать и отправить первым",
   "composer.shortcutEnterQueue": "Отправить; во время работы добавить в очередь",
   "composer.shortcutControlGuide": "Во время работы добавить в очередь",

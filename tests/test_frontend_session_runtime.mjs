@@ -61,3 +61,30 @@ test("a failed operation releases its session without blocking other sessions", 
   await assert.rejects(first, /inspection failed/);
   assert.equal(await second, "next");
 });
+
+test("a lost run response is reported as uncertain without replaying the POST", async () => {
+  const originalFetch = globalThis.fetch;
+  let posts = 0;
+  globalThis.fetch = async () => {
+    posts += 1;
+    throw new TypeError("connection closed after acceptance");
+  };
+  try {
+    await assert.rejects(startRun("default", "lost-response", "hello"),
+      (error) => error.code === "network_error" &&
+        error.runAdmissionUncertain === true);
+    assert.equal(posts, 1);
+  } finally { globalThis.fetch = originalFetch; }
+});
+
+test("an explicit run rejection keeps its ordinary failure status", async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => Response.json({ ok: false,
+    error: { code: "session_busy", message: "Session is busy" } },
+  { status: 409 });
+  try {
+    await assert.rejects(startRun("default", "busy-session", "hello"),
+      (error) => error.code === "session_busy" &&
+        error.runAdmissionUncertain !== true);
+  } finally { globalThis.fetch = originalFetch; }
+});

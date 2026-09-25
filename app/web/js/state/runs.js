@@ -12,9 +12,16 @@ export async function startRun(projectId, sessionId, prompt, attachments = []) {
   const project = resourceId(projectId, "project");
   const session = resourceId(sessionId, "session");
   const body = attachments.length ? { prompt, attachments } : { prompt };
-  return withSessionRuntime(project, session, async () =>
-    (await api.post(`/projects/${project}/sessions/${session}/runs`,
-      body)).data);
+  try {
+    return await withSessionRuntime(project, session, async () =>
+      (await api.post(`/projects/${project}/sessions/${session}/runs`,
+        body)).data);
+  } catch (error) {
+    // The server may have started the run before its response was lost.
+    if (["network_error", "invalid_response", "run_result_unavailable"]
+      .includes(error?.code)) error.runAdmissionUncertain = true;
+    throw error;
+  }
 }
 
 export async function readRun(runId) {
