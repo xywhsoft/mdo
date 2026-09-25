@@ -37,6 +37,11 @@ class Model(BaseHTTPRequestHandler):
         wire = json.dumps(payload)
         output = [{"type": "message", "content": [
             {"type": "output_text", "text": "UI fixture completed."}]}]
+        if "MARKDOWN UI" in wire:
+            output[0]["content"][0]["text"] = (
+                "## Markdown QA\n\nSee [Example](https://example.com/guide).\n\n"
+                "```c\nint answer(void) { return 42; }\n```"
+            )
         with Model.lock:
             if "TODO UI" in wire and "todo" not in Model.sent:
                 Model.sent.add("todo")

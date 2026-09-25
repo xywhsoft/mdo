@@ -1289,6 +1289,9 @@ select:focus-visible,
   .scrim { position: fixed; z-index: 35; inset: 0; border: 0; background: rgb(0 0 0 / 28%); }
   .dialog-fields { grid-template-columns: 1fr; }
   .dialog-fields label { grid-column: 1 / -1; }
+  .dialog-card > footer .primary-button,
+  .dialog-card > footer .secondary-button,
+  .dialog-card > footer .danger-button { min-height: 40px; }
   .shortcuts-content dl > div { align-items: flex-start; flex-direction: column; gap: 4px; }
   .shortcuts-content dd { text-align: left; }
   .settings-workspace { grid-row: 1 / -1; }
