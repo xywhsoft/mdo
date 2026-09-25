@@ -203,6 +203,8 @@ select:focus-visible,
 }
 
 .icon-button:hover { background: var(--surface-hover); }
+.icon-button:disabled { opacity: .38; cursor: default; }
+.icon-button:disabled:hover { background: transparent; }
 .icon { display: inline-flex; width: 18px; height: 18px; }
 .icon svg { width: 100%; height: 100%; stroke: currentColor; }
 .sidebar-close, .inspector-close { display: none; }

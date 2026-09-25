@@ -102,6 +102,7 @@ export async function boot() {
   const sessionSubtitle = $("#session-subtitle");
   const mobileTitle = $("#mobile-session-title");
   const mobileMeta = $("#mobile-session-meta");
+  const exportButtons = [$("#export-session"), $("#export-session-mobile")];
   const contextList = $("#context-list");
   const workspaceChip = $("#workspace-chip");
   const workspaceLabel = $("#workspace-label");
@@ -590,8 +591,21 @@ export async function boot() {
     }
   }
 
+  function currentExportSession() {
+    const route = navigation.get();
+    const session = sessionDetailStore.get().data;
+    return route.view === "workspace" && session?.project_id === route.projectId &&
+      session?.id === route.sessionId ? session : null;
+  }
+
+  function updateExportButtons() {
+    const available = Boolean(currentExportSession());
+    for (const button of exportButtons) button.disabled = !available;
+  }
+
   sessionDetailStore.subscribe((state) => {
     const session = state.data;
+    updateExportButtons();
     sessionWritable = session ? session.status === "active" : !navigation.get().sessionId;
     selectedSessionStatus = session?.status ?? (navigation.get().sessionId ? "loading" : "active");
     prompt.placeholder = sessionWritable ? "向墨斗描述任务…" : "该会话不可运行；请先恢复到进行中";
@@ -758,6 +772,7 @@ export async function boot() {
   }
 
   navigation.subscribe(async ({ view, projectId, sessionId, settingsSection }) => {
+    updateExportButtons();
     if (pendingForkComposerFocus &&
         (view !== "workspace" || `${projectId}/${sessionId}` !== pendingForkComposerFocus))
       pendingForkComposerFocus = "";
@@ -1373,15 +1388,19 @@ export async function boot() {
     finally { themeToggleBusy = false; }
   }
 
+  async function exportSelectedSession() {
+    const session = currentExportSession();
+    if (!session) return;
+    try { await handleSessionAction("export", session); }
+    catch (error) { toast(errorMessage(error), "error"); }
+  }
+  for (const button of exportButtons)
+    button.addEventListener("click", () => void exportSelectedSession());
+
   shortcuts = createKeyboardShortcuts({
     dialog: $("#shortcuts-dialog"), navigation, search: conversationSearch,
     onNew: openNewTask,
-    onExport: async () => {
-      const session = sessionDetailStore.get().data;
-      if (!session) return;
-      try { await handleSessionAction("export", session); }
-      catch (error) { toast(errorMessage(error), "error"); }
-    },
+    onExport: exportSelectedSession,
     onSettings: (open) => open ? navigation.openSettings("general")
       : $("#close-settings").click(),
     onToggleTheme: toggleTheme,
