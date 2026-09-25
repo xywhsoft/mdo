@@ -33,11 +33,16 @@ test("bundled language packs cover the annotated shell and switch without stale 
     "js/features/chat/token-meter.js",
     "js/features/chat/timeline.js",
     "js/features/chat/markdown.js",
+    "js/features/chat/prompt-queue.js",
+    "js/features/chat/conversation-docks.js",
     "js/app.js",
   ]) {
     const source = readFileSync(new URL(path, root), "utf8");
     for (const [, key] of source.matchAll(/\bt\("([^"]+)"/g))
       assert.ok(referenceKeys.includes(key), `missing dynamic key: ${key}`);
+    if (path.endsWith("conversation-docks.js"))
+      for (const [, key] of source.matchAll(/"(dock\.[^"]+)"/g))
+        assert.ok(referenceKeys.includes(key), `missing dock key: ${key}`);
     if (path.endsWith("session-actions.js"))
       for (const [, key] of source.matchAll(/\bitem\("[^"]+",\s*"([^"]+)"/g))
         assert.ok(referenceKeys.includes(key), `missing action key: ${key}`);

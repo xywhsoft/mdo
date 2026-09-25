@@ -1282,6 +1282,7 @@ select:focus-visible,
   .conversation-docks { width: calc(100% - 26px); }
   .todo-toggle, .conversation-dock-actions button,
   .ask-dock-options button, .ask-dock-free button { min-height: 40px; }
+  .approval-arguments summary { min-height: 40px; padding-top: 12px; padding-bottom: 12px; }
   .prompt-queue { width: calc(100% - 26px); }
   .prompt-queue button { min-width: 40px; min-height: 40px; }
   .prompt-queue .prompt-queue-toggle { min-height: 40px; }

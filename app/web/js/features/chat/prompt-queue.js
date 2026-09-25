@@ -1,4 +1,5 @@
 import { api, attachmentUrl, resourceId } from "../../api/client.js";
+import { subscribeLocale, t } from "../../i18n.js";
 import { clear, element, errorMessage, toast } from "../../utils/dom.js";
 
 function sessionKey(projectId, sessionId) {
@@ -76,12 +77,12 @@ export function createPromptQueue({ container, navigation, onRetry, onRemoved })
     const [projectId, sessionId] = key.split("/");
     let open = expanded.get(key) ?? true;
     const toggle = element("button", { className: "prompt-queue-toggle",
-      text: `待发送 · ${entries.length}`,
+      text: t("queue.count", { count: entries.length }),
       attrs: { type: "button", "aria-expanded": String(open),
         "aria-controls": "prompt-queue-list", "data-queue-focus": "toggle" },
     });
     const retry = element("button", {
-      text: uncertain ? "确认未发送后重试" : "发送下一条",
+      text: t(uncertain ? "queue.retryUncertain" : "queue.sendNext"),
       attrs: { type: "button", "data-queue-focus": "retry" },
     });
     retry.disabled = busy.has(key) || actionBusy.has(key);
@@ -98,7 +99,7 @@ export function createPromptQueue({ container, navigation, onRetry, onRemoved })
     ]));
     if (uncertain) container.append(element("p", {
       className: "prompt-queue-warning",
-      text: "首条消息可能已被服务端接收。请先核对对话和运行记录，再决定移除或重试。",
+      text: t("queue.uncertainWarning"),
     }));
     const list = element("ol", { className: "prompt-queue-list",
       attrs: { id: "prompt-queue-list" } });
@@ -111,8 +112,8 @@ export function createPromptQueue({ container, navigation, onRetry, onRemoved })
     });
     for (const [index, entry] of entries.entries()) {
       const remove = element("button", {
-        text: "移除",
-        attrs: { type: "button", "aria-label": `移除待发送消息 ${index + 1}`,
+        text: t("queue.remove"),
+        attrs: { type: "button", "aria-label": t("queue.removeNumber", { number: index + 1 }),
           "data-queue-focus": entry.id, "data-queue-index": String(index) },
       });
       remove.disabled = busy.has(key) || actionBusy.has(key);
@@ -126,25 +127,25 @@ export function createPromptQueue({ container, navigation, onRetry, onRemoved })
       });
       const body = element("div", { className: "prompt-queue-item-body" }, [
         element("span", { className: "prompt-queue-text",
-          text: entry.text || "图片消息" }),
+          text: entry.text || t("queue.imageMessage") }),
       ]);
       if (entry.state === "sending") body.append(element("span", {
-        className: "prompt-queue-state", text: "发送状态待确认",
+        className: "prompt-queue-state", text: t("queue.sendingUncertain"),
       }));
       if (entry.priority) body.append(element("span", {
-        className: "prompt-queue-state", text: "中断后优先发送",
+        className: "prompt-queue-state", text: t("queue.priority"),
       }));
       if (entry.attachments?.length) {
         const images = element("div", { className: "prompt-queue-images" });
         for (const [imageIndex, id] of entry.attachments.entries()) {
           if (typeof id !== "string" || !/^[0-9a-f]{32}$/.test(id)) continue;
           images.append(element("button", { attrs: {
-            type: "button", "aria-label": `查看待发送图片 ${imageIndex + 1}`,
+            type: "button", "aria-label": t("queue.viewImage", { number: imageIndex + 1 }),
             "data-image-preview": "",
             "data-image-ref": `queue:${key}/${entry.id}/${id}/${imageIndex}`,
           } }, [element("img", { attrs: {
             src: attachmentUrl(projectId, sessionId, id),
-            alt: `待发送图片 ${imageIndex + 1}`, loading: "lazy",
+            alt: t("queue.imageAlt", { number: imageIndex + 1 }), loading: "lazy",
           } })]));
         }
         body.append(images);
@@ -180,6 +181,7 @@ export function createPromptQueue({ container, navigation, onRetry, onRemoved })
   }
 
   navigation.subscribe(render);
+  subscribeLocale(render);
   return Object.freeze({
     async select(projectId, sessionId) {
       const key = sessionKey(projectId, sessionId);

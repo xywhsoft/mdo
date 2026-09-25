@@ -1,25 +1,36 @@
 import { approvalDecisionStatus, approvalDecisionStore, decideApproval } from "../../state/approvals.js";
 import { answerAsk } from "../../state/asks.js";
+import { subscribeLocale, t } from "../../i18n.js";
 import { clear, element, errorMessage, toast } from "../../utils/dom.js";
 
-const STATE_TEXT = Object.freeze({ pending: "等待中", running: "进行中" });
-const EFFECT_TEXT = Object.freeze({
-  read: "读取", workspace_write: "修改工作区", process: "运行进程",
-  network: "访问网络", external_service: "外部服务", secrets: "使用凭据",
-  schedule: "计划任务", agent_delegation: "子 Agent",
+const STATE_KEYS = Object.freeze({ pending: "dock.task.pending", running: "dock.task.running" });
+const EFFECT_KEYS = Object.freeze({
+  read: "dock.effect.read", workspace_write: "dock.effect.workspaceWrite",
+  process: "dock.effect.process", network: "dock.effect.network",
+  external_service: "dock.effect.externalService", secrets: "dock.effect.secrets",
+  schedule: "dock.effect.schedule", agent_delegation: "dock.effect.agentDelegation",
+});
+const RISK_KEYS = Object.freeze({
+  low: "dock.risk.low", medium: "dock.risk.medium", high: "dock.risk.high",
+});
+const RESOURCE_KEYS = Object.freeze({
+  path: "dock.resource.path", command: "dock.resource.command",
+  process: "dock.resource.process", network: "dock.resource.network",
+  external_service: "dock.resource.externalService", secret: "dock.resource.secret",
+  schedule: "dock.resource.schedule", agent: "dock.resource.agent",
 });
 
 function taskCard(tasks, onOpenTasks) {
   const list = element("ul", { className: "conversation-dock-list" });
   for (const task of tasks.slice(0, 8)) list.append(element("li", {}, [
-    element("span", { className: "conversation-dock-state", text: STATE_TEXT[task.state] || task.state }),
-    element("span", { text: task.label || `任务 #${task.id}` }),
+    element("span", { className: "conversation-dock-state", text: STATE_KEYS[task.state] ? t(STATE_KEYS[task.state]) : task.state }),
+    element("span", { text: task.label || t("dock.task.fallback", { id: task.id }) }),
   ]));
-  const open = element("button", { text: "查看任务详情", attrs: {
+  const open = element("button", { text: t("dock.task.details"), attrs: {
     type: "button", "data-dock-focus": "tasks/open" } });
   open.addEventListener("click", onOpenTasks);
   return element("section", { className: "conversation-dock" }, [
-    element("h3", { text: `后台任务 · ${tasks.length} 项` }), list,
+    element("h3", { text: t("dock.task.count", { count: tasks.length }) }), list,
     element("div", { className: "conversation-dock-actions" }, [open]),
   ]);
 }
@@ -27,7 +38,7 @@ function taskCard(tasks, onOpenTasks) {
 function todoCard(items, expanded, focusKey, onToggle) {
   const done = items.filter((item) => item.done).length;
   const toggle = element("button", {
-    className: "todo-toggle", text: `计划 · ${done}/${items.length}`,
+    className: "todo-toggle", text: t("dock.todo.count", { done, count: items.length }),
     attrs: { type: "button", "aria-expanded": String(expanded),
       "data-dock-focus": focusKey },
   });
@@ -52,12 +63,14 @@ function approvalCard(item, argumentsOpen, onChanged) {
   const card = element("section", { className: "conversation-dock" });
   const resources = element("ul", { className: "conversation-dock-list" });
   for (const resource of item.resources ?? []) resources.append(element("li", {}, [
-    element("span", { className: "conversation-dock-state", text: resource.kind || "资源" }),
+    element("span", { className: "conversation-dock-state",
+      text: RESOURCE_KEYS[resource.kind] ? t(RESOURCE_KEYS[resource.kind]) :
+        resource.kind || t("dock.approval.resource") }),
     element("span", { text: resource.resource }),
   ]));
-  const deny = element("button", { text: "拒绝", attrs: {
+  const deny = element("button", { text: t("dock.approval.deny"), attrs: {
     type: "button", "data-dock-focus": `approval/${key}/deny` } });
-  const allow = element("button", { text: "允许一次", attrs: {
+  const allow = element("button", { text: t("dock.approval.allowOnce"), attrs: {
     type: "button", "data-dock-focus": `approval/${key}/allow` } });
   for (const [button, decision] of [[deny, "deny"], [allow, "allow"]]) {
     button.setAttribute("aria-disabled", String(approvalDecisionStatus(key) !== "idle"));
@@ -68,22 +81,28 @@ function approvalCard(item, argumentsOpen, onChanged) {
         await onChanged();
       } catch (error) {
         toast(approvalDecisionStatus(key) === "submitted"
-          ? "决策已提交，但状态刷新未完成" : errorMessage(error), "error");
+          ? t("dock.approval.refreshPending") : errorMessage(error), "error");
       }
     });
   }
   const argumentsView = element("details", { className: "approval-arguments",
     attrs: { "data-approval-arguments": key,
       open: argumentsOpen.get(key) ? "" : null } }, [
-    element("summary", { text: "查看调用参数", attrs: {
+    element("summary", { text: t("dock.approval.arguments"), attrs: {
       "data-dock-focus": `approval/${key}/arguments` } }),
     element("pre", { text: item.arguments_json || "{}" }),
   ]);
   argumentsView.addEventListener("toggle", () =>
     argumentsOpen.set(key, argumentsView.open));
   card.append(
-    element("h3", { text: `${item.tool || "工具"} 请求权限` }),
-    element("p", { text: `${item.risk || "未知风险"} · ${(item.effects ?? []).map((effect) => EFFECT_TEXT[effect] || effect).join("、") || "未声明影响"} · ${Math.ceil(Number(item.expires_in_ms || 0) / 1000)} 秒` }),
+    element("h3", { text: t("dock.approval.title", { tool: item.tool || t("dock.approval.tool") }) }),
+    element("p", { text: t("dock.approval.summary", {
+      risk: RISK_KEYS[item.risk] ? t(RISK_KEYS[item.risk]) :
+        item.risk || t("dock.approval.unknownRisk"),
+      effects: (item.effects ?? []).map((effect) => EFFECT_KEYS[effect]
+        ? t(EFFECT_KEYS[effect]) : effect).join(", ") || t("dock.approval.noEffects"),
+      seconds: Math.ceil(Number(item.expires_in_ms || 0) / 1000),
+    }) }),
     resources,
     argumentsView,
     element("div", { className: "conversation-dock-actions" }, [deny, allow]),
@@ -99,10 +118,10 @@ function askCard(item, projectId, sessionId, deciding, answered, drafts,
   const hint = element("p", { className: "ask-dock-validation",
     attrs: { id: `ask-answer-hint-${key}`, "aria-live": "polite" } });
   const input = element("input", { className: "ask-dock-input",
-    attrs: { type: "text", maxlength: "1024", placeholder: "也可以输入自己的回答",
-      "aria-label": "回答问题", "aria-describedby": hint.id } });
+    attrs: { type: "text", maxlength: "1024", placeholder: t("dock.ask.placeholder"),
+      "aria-label": t("dock.ask.answerLabel"), "aria-describedby": hint.id } });
   input.value = drafts.get(key) ?? "";
-  const submit = element("button", { text: "提交回答",
+  const submit = element("button", { text: t("dock.ask.submit"),
     attrs: { type: "button" } });
   const buttons = [submit];
   const encoder = new TextEncoder();
@@ -113,9 +132,9 @@ function askCard(item, projectId, sessionId, deciding, answered, drafts,
     const submitted = answered.has(key);
     input.setAttribute("aria-invalid", String(tooLong));
     input.readOnly = pending || submitted;
-    hint.textContent = pending ? "正在提交回答…" :
-      submitted ? "已提交，等待模型继续…" :
-        tooLong ? "回答不能超过 1024 字节" : "";
+    hint.textContent = pending ? t("dock.ask.submitting") :
+      submitted ? t("dock.ask.submitted") :
+        tooLong ? t("dock.ask.tooLong") : "";
     hint.dataset.state = pending || submitted ? "pending" :
       tooLong ? "error" : "";
     submit.setAttribute("aria-disabled", String(!answer || tooLong ||
@@ -137,7 +156,7 @@ function askCard(item, projectId, sessionId, deciding, answered, drafts,
       drafts.delete(key);
       await onChanged();
     } catch (error) {
-      toast(answered.has(key) ? "回答已提交，但状态刷新未完成" :
+      toast(answered.has(key) ? t("dock.ask.refreshPending") :
         errorMessage(error), "error");
     } finally {
       deciding.delete(key);
@@ -162,11 +181,18 @@ function askCard(item, projectId, sessionId, deciding, answered, drafts,
     }
   });
   updateValidity();
-  card.append(element("h3", { text: "需要你回答" }),
+  const title = element("h3", { text: t("dock.ask.title") });
+  card.append(title,
     element("p", { className: "ask-dock-question", text: item.question }),
     actions, element("div", { className: "ask-dock-free" }, [input, submit]),
     hint);
-  return { node: card, sync: updateValidity };
+  return { node: card, sync() {
+    title.textContent = t("dock.ask.title");
+    input.placeholder = t("dock.ask.placeholder");
+    input.setAttribute("aria-label", t("dock.ask.answerLabel"));
+    submit.textContent = t("dock.ask.submit");
+    updateValidity();
+  } };
 }
 
 export function createConversationDocks({ container, navigation, tasksStore, approvalsStore,
@@ -215,7 +241,7 @@ export function createConversationDocks({ container, navigation, tasksStore, app
     }
     if (todoError) otherRoot.append(element("p", {
       className: "todo-dock-error",
-      text: `计划读取失败：${errorMessage(todoStore.get().error)}`,
+      text: t("dock.todo.loadFailed", { error: errorMessage(todoStore.get().error) }),
     }));
     if (tasks.length) otherRoot.append(taskCard(tasks, onOpenTasks));
     for (const item of approvals) otherRoot.append(approvalCard(
@@ -266,6 +292,7 @@ export function createConversationDocks({ container, navigation, tasksStore, app
     approvalDecisionStore.subscribe(render),
     asksStore.subscribe(render),
     todoStore.subscribe(render),
+    subscribeLocale(render),
   ];
   return () => unsubscribers.forEach((unsubscribe) => unsubscribe());
 }
