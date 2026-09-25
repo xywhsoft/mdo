@@ -403,6 +403,7 @@
   "composer.runAdmissionUncertain": "运行可能已经开始；输入已保留，请先核对当前运行和会话轨迹，确认未执行后再重试。",
   "composer.hintReviewRun": "发送待核对 · 请先检查运行和轨迹",
   "composer.hintLoadingDraft": "正在恢复草稿…",
+  "queue.reviewRun": "核对前一轮运行后继续发送",
   "composer.reviewedRun": "已核对，允许继续发送",
   "composer.shortcutEnterGuide": "发送；运行中中断并优先发送",
   "composer.shortcutEnterQueue": "发送；运行中加入待发送队列",

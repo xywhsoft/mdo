@@ -202,7 +202,7 @@ class BoundedDelayProxy(BaseHTTPRequestHandler):
                 count = self.server.run_posts
             print(f"QA run POST #{count}", flush=True)
             time.sleep(self.server.run_delay_seconds)
-            drop_run_response = self.server.drop_first_run_response and count == 1
+            drop_run_response = count == self.server.drop_run_response_number
             if self.server.fail_first_run and count == 1:
                 payload = json.dumps({"ok": False, "error": {
                     "code": "qa_run_rejected", "message": "Synthetic run failure"
@@ -277,6 +277,8 @@ parser.add_argument("--fail-first-run", action="store_true",
                     help="reject one run POST before forwarding, for draft recovery QA")
 parser.add_argument("--drop-first-run-response", action="store_true",
                     help="accept one run POST upstream but close before replying")
+parser.add_argument("--drop-run-response-number", type=int, default=0,
+                    help="accept this numbered run POST upstream but close before replying (1-3)")
 parser.add_argument("--fail-first-queue", action="store_true",
                     help="reject one queue POST before forwarding, for staged draft QA")
 parser.add_argument("--drop-first-queue-response", action="store_true",
@@ -296,6 +298,10 @@ if not 0 <= args.queue_delay_ms <= 12000:
     parser.error("--queue-delay-ms must be between 0 and 12000")
 if not 0 <= args.run_delay_ms <= 5000:
     parser.error("--run-delay-ms must be between 0 and 5000")
+if not 0 <= args.drop_run_response_number <= 3:
+    parser.error("--drop-run-response-number must be between 0 and 3")
+if args.drop_first_run_response and args.drop_run_response_number:
+    parser.error("choose only one run response drop option")
 if not 0 <= args.slow_ms <= 15000:
     parser.error("--slow-ms must be between 0 and 15000")
 if not 0 <= args.task_ms <= 30000:
@@ -363,7 +369,7 @@ try:
     browser_port = port
     if (args.approval_delay_ms or args.queue_delay_ms or args.run_delay_ms
             or args.fail_first_run or args.fail_first_queue
-            or args.drop_first_run_response
+            or args.drop_first_run_response or args.drop_run_response_number
             or args.drop_first_queue_response or args.fail_first_queue_reconcile):
         proxy = BoundedDelayProxyServer(("127.0.0.1", 0), BoundedDelayProxy)
         proxy.upstream_port = port
@@ -371,7 +377,8 @@ try:
         proxy.queue_delay_seconds = args.queue_delay_ms / 1000
         proxy.run_delay_seconds = args.run_delay_ms / 1000
         proxy.fail_first_run = args.fail_first_run
-        proxy.drop_first_run_response = args.drop_first_run_response
+        proxy.drop_run_response_number = (args.drop_run_response_number or
+                                          (1 if args.drop_first_run_response else 0))
         proxy.fail_first_queue = args.fail_first_queue
         proxy.drop_first_queue_response = args.drop_first_queue_response
         proxy.fail_first_queue_reconcile = args.fail_first_queue_reconcile

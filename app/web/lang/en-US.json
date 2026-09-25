@@ -403,6 +403,7 @@
   "composer.runAdmissionUncertain": "The run may have started. Your input was kept; check the current run and session trace before retrying.",
   "composer.hintReviewRun": "Send needs review · check the run and trace",
   "composer.hintLoadingDraft": "Restoring draft…",
+  "queue.reviewRun": "Review the previous run before sending more",
   "composer.reviewedRun": "I've checked; allow sending",
   "composer.shortcutEnterGuide": "Send; interrupt and prioritize while running",
   "composer.shortcutEnterQueue": "Send; queue while running",

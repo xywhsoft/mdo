@@ -429,14 +429,23 @@ export async function boot() {
     onOpenTasks: () => { selectInspectorTab("tasks"); setDrawer("inspector", true); },
     onChanged: () => Promise.all([loadTasks(), loadRuns(), refreshSelectedAsks()]),
   });
+  let draftStore;
   const promptQueue = createPromptQueue({
     container: $("#prompt-queue"), navigation,
     isRunActive: () => Boolean(activeRun),
+    isRunReviewPending: (key) => draftStore?.isRunUncertain(key) ?? false,
     stagedEntries: () => activeSubmissionLane()?.pending.map((item) => ({
       text: item.text, staged: true,
     })) ?? [],
     onRetry: async () => {
       const selected = navigation.get();
+      const key = `${selected.projectId}/${selected.sessionId}`;
+      if (!await draftStore.ensureLoaded(key)) return;
+      if (`${navigation.get().projectId}/${navigation.get().sessionId}` !== key) return;
+      if (draftStore.isRunUncertain(key)) {
+        showComposerError(uncertainRunError());
+        return;
+      }
       const first = promptQueue.peek(selected.projectId, selected.sessionId);
       if (first?.state === "sending")
         await promptQueue.retry(selected.projectId, selected.sessionId, first.id);
@@ -496,7 +505,7 @@ export async function boot() {
     modelSelect: $("#composer-model"),
     sessionStore: sessionDetailStore, timelineStore, modelsStore,
   });
-  const draftStore = createDraftStore({
+  draftStore = createDraftStore({
     onRestore(text, attachments, uncertainRun) {
       prompt.value = text;
       composerAttachments = attachments;
@@ -507,6 +516,7 @@ export async function boot() {
         showComposerError(uncertainRunError());
         setRun(activeRun);
       }
+      promptQueue.render();
     },
     onError(error) {
       draftStatus.textContent = `草稿未保存：${errorMessage(error)}`;
@@ -516,7 +526,7 @@ export async function boot() {
       draftStatus.hidden = true;
       draftStatus.textContent = "";
     },
-    onLoaded() { setRun(activeRun); },
+    onLoaded() { setRun(activeRun); promptQueue.render(); },
   });
   draftStore.select("");
   const composerProfile = createComposerProfile({
@@ -931,6 +941,7 @@ export async function boot() {
         session.id !== selected.sessionId || session.status !== "active" || activeRun ||
         queueBlocked.has(key) ||
         promptQueue.peek(selected.projectId, selected.sessionId)?.state !== "pending") return;
+    if (!await draftStore.ensureLoaded(key) || draftStore.isRunUncertain(key)) return;
     if ((runsStore.get().data?.items ?? []).some((run) =>
       run.project_id === selected.projectId && run.session_id === selected.sessionId && !terminalState(run))) return;
     await promptQueue.exclusive(selected.projectId, selected.sessionId,
@@ -942,7 +953,7 @@ export async function boot() {
         try {
           await ensurePromptReady(selected.projectId, selected.sessionId,
             Boolean(entry.priority));
-          if (!stillSelected()) return;
+          if (!stillSelected() || draftStore.isRunUncertain(key)) return;
           await promptQueue.markSending(selected.projectId, selected.sessionId, entry.id);
           const run = await startRun(selected.projectId, selected.sessionId,
             entry.text, entry.attachments ?? []);
@@ -1146,6 +1157,8 @@ export async function boot() {
         draftStore.setRunUncertain(selectedKey, false);
         hideComposerError();
         setRun(activeRun);
+        promptQueue.render();
+        void dispatchQueued();
         prompt.focus();
       });
       composerError.append(acknowledge);

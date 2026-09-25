@@ -23,7 +23,7 @@ function uncertainPost(error) {
 }
 
 export function createPromptQueue({ container, navigation, isRunActive, stagedEntries,
-  onRetry, onRemoved }) {
+  isRunReviewPending = () => false, onRetry, onRemoved }) {
   const queues = new Map();
   // A consumed item leaves the queue; remember bounded positive evidence so
   // a lost POST response can still reconcile after dispatch removes it.
@@ -92,6 +92,7 @@ export function createPromptQueue({ container, navigation, isRunActive, stagedEn
       return;
     }
     const uncertain = saved[0]?.state === "sending";
+    const reviewPending = isRunReviewPending(key);
     const [projectId, sessionId] = key.split("/");
     let open = expanded.get(key) ?? true;
     const toggle = element("button", { className: "prompt-queue-toggle",
@@ -100,7 +101,7 @@ export function createPromptQueue({ container, navigation, isRunActive, stagedEn
         "aria-controls": "prompt-queue-list", "data-queue-focus": "toggle" },
     });
     const waitingForRun = !uncertain && isRunActive();
-    const retry = waitingForRun || !saved.length ? null : element("button", {
+    const retry = waitingForRun || !saved.length || reviewPending ? null : element("button", {
       text: t(uncertain ? "queue.retryUncertain" : "queue.sendNext"),
       attrs: { type: "button", "data-queue-focus": "retry" },
     });
@@ -117,7 +118,8 @@ export function createPromptQueue({ container, navigation, isRunActive, stagedEn
     }
     container.append(element("div", { className: "prompt-queue-header" }, [
       toggle, retry ?? element("span", { className: "prompt-queue-waiting",
-        text: t(saved.length ? "queue.waitForRun" : "queue.awaitingAdmission") }),
+        text: t(reviewPending ? "queue.reviewRun" : saved.length
+          ? "queue.waitForRun" : "queue.awaitingAdmission") }),
     ]));
     if (uncertain) container.append(element("p", {
       className: "prompt-queue-warning",
