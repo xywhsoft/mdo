@@ -936,6 +936,7 @@ export async function boot() {
     }
     settingsWorkspace.hidden = true;
     for (const region of agentWorkspaceRegions) region.hidden = false;
+    timelineView.restorePreviewScroll();
     skipLink.href = "#timeline";
     skipLink.textContent = t("shell.skip");
     if (settingsActive) {

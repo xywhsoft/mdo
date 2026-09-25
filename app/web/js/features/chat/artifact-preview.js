@@ -4,7 +4,8 @@ import { t } from "../../i18n.js";
 
 const PREVIEW_BYTES = 64 * 1024;
 
-export function artifactPreviewNode(projectId, sessionId, eventId, actionRef, open = false) {
+export function artifactPreviewNode(projectId, sessionId, eventId, actionRef,
+  open = false, scrollTop = 0) {
   const id = String(eventId);
   if (!/^[1-9][0-9]*$/.test(id) || !projectId || !sessionId) return null;
   const path = `/projects/${resourceId(projectId, "project")}` +
@@ -43,6 +44,7 @@ export function artifactPreviewNode(projectId, sessionId, eventId, actionRef, op
         text: `${data.eof
           ? t("task.artifact.full", {}, "完整预览")
           : t("task.artifact.partial", {}, "仅预览前 64 KiB")} · SHA-256 ${data.sha256 || "—"}` }));
+      content.scrollTop = scrollTop;
       loaded = true;
     } catch (error) {
       status.textContent = errorMessage(error);

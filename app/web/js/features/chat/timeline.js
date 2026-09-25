@@ -306,7 +306,7 @@ function foldSection(label, value, copy = false, actionRef = "") {
   ]);
 }
 
-function foldableNode(item, openState, previewOpen, projectId, sessionId) {
+function foldableNode(item, openState, previewOpen, previewScroll, projectId, sessionId) {
   const running = item.state === "running";
   const status = running ? t("timeline.running", {}, "运行中")
     : item.state === "failed" ? t("timeline.failed", {}, "失败")
@@ -354,7 +354,7 @@ function foldableNode(item, openState, previewOpen, projectId, sessionId) {
           item.text || t("timeline.executing", {}, "正在执行…")));
       if (item.artifactId) {
         const preview = artifactPreviewNode(projectId, sessionId,
-          item.artifactEventId, `${item.key}/preview`, previewOpen);
+          item.artifactEventId, `${item.key}/preview`, previewOpen, previewScroll);
         if (preview) body.append(preview);
       }
     }
@@ -389,9 +389,11 @@ function commandButton(label, description, iconName, actionRef, handlers, sessio
   return button;
 }
 
-function timelineNode(item, handlers, feedback, projectId, sessionId, openState, previewOpen) {
+function timelineNode(item, handlers, feedback, projectId, sessionId,
+  openState, previewOpen, previewScroll) {
   if (item.kind === "reasoning" || item.kind === "tool")
-    return foldableNode(item, openState, previewOpen, projectId, sessionId);
+    return foldableNode(item, openState, previewOpen, previewScroll,
+      projectId, sessionId);
   const time = timeNode(item.time);
   const header = element("div", { className: "timeline-item-header" }, [
     element("span", { className: "timeline-role", text: item.role }),
@@ -417,7 +419,7 @@ function timelineNode(item, handlers, feedback, projectId, sessionId, openState,
   const children = [header, body];
   if (item.artifactId) {
     const preview = artifactPreviewNode(projectId, sessionId,
-      item.artifactEventId, `${item.key}/preview`, previewOpen);
+      item.artifactEventId, `${item.key}/preview`, previewOpen, previewScroll);
     if (preview) children.push(preview);
   }
   const sessionKey = `${projectId ?? ""}/${sessionId ?? ""}`;
@@ -532,6 +534,7 @@ export function createTimelineView({ container, welcome, toBottom, store, feedba
   let renderedSession = "";
   const expanded = new Map();
   const previewExpanded = new Map();
+  const previewScroll = new Map();
   const scroller = container.closest(".conversation");
 
   function reconcileRows(entries, projectId, sessionId) {
@@ -544,7 +547,8 @@ export function createTimelineView({ container, welcome, toBottom, store, feedba
       if (!row || row.signature !== signature) {
         const node = timelineNode(item, handlers, feedback, projectId,
           sessionId, expanded.get(item.key),
-          previewExpanded.get(`${item.key}/preview`) ?? false);
+          previewExpanded.get(`${item.key}/preview`) ?? false,
+          previewScroll.get(`${item.key}/preview`) ?? 0);
         mountIcons(node);
         row = { node, signature };
         renderedRows.set(item.key, row);
@@ -592,11 +596,16 @@ export function createTimelineView({ container, welcome, toBottom, store, feedba
         expanded.set(details.getAttribute("data-timeline-key"), details.open);
       for (const details of container.querySelectorAll("details.timeline-artifact-preview")) {
         const action = details.querySelector("summary")?.dataset.timelineAction;
-        if (action) previewExpanded.set(action, details.open);
+        if (action) {
+          previewExpanded.set(action, details.open);
+          const content = details.querySelector(".timeline-artifact-content");
+          if (content?.clientHeight) previewScroll.set(action, content.scrollTop);
+        }
       }
     } else {
       expanded.clear();
       previewExpanded.clear();
+      previewScroll.clear();
       renderedRows.clear();
       clear(container);
       renderedSession = sessionKey;
@@ -609,6 +618,8 @@ export function createTimelineView({ container, welcome, toBottom, store, feedba
       .map((item) => `${item.key}/preview`));
     for (const key of previewExpanded.keys())
       if (!previewKeys.has(key)) previewExpanded.delete(key);
+    for (const key of previewScroll.keys())
+      if (!previewKeys.has(key)) previewScroll.delete(key);
     const visible = searchQuery ? items.filter((item) =>
       `${item.role} ${item.inputText ?? ""} ${item.text} ${item.meta ?? ""}`
         .toLocaleLowerCase().includes(searchQuery)) : items;
@@ -652,6 +663,13 @@ export function createTimelineView({ container, welcome, toBottom, store, feedba
     followTail = scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight < 100;
     updateBottomButton();
   }, { passive: true });
+  container.addEventListener("scroll", (event) => {
+    const content = event.target;
+    if (!content.classList?.contains("timeline-artifact-content") ||
+        !content.clientHeight) return;
+    const action = content.parentElement?.querySelector("summary")?.dataset.timelineAction;
+    if (action) previewScroll.set(action, content.scrollTop);
+  }, { capture: true, passive: true });
   toBottom.addEventListener("click", () => {
     followTail = true;
     scroller.scrollTo({ top: scroller.scrollHeight, behavior: "smooth" });
@@ -665,6 +683,15 @@ export function createTimelineView({ container, welcome, toBottom, store, feedba
   });
   return Object.freeze({
     follow() { followTail = true; },
+    restorePreviewScroll() {
+      for (const details of container.querySelectorAll("details.timeline-artifact-preview")) {
+        if (!details.open) continue;
+        const action = details.querySelector("summary")?.dataset.timelineAction;
+        const content = details.querySelector(".timeline-artifact-content");
+        if (action && content?.clientHeight && previewScroll.has(action))
+          content.scrollTop = previewScroll.get(action);
+      }
+    },
     search(query) {
       searchQuery = query.trim().toLocaleLowerCase();
       queueRender(store.get());
