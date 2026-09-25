@@ -238,13 +238,14 @@ function toolSummaryText(value) {
   return shortLine(raw);
 }
 
-function foldSection(label, value, copy = false) {
+function foldSection(label, value, copy = false, actionRef = "") {
   const heading = element("div", { className: "timeline-fold-section-heading" }, [
     element("span", { text: label }),
   ]);
   if (copy) {
     const button = element("button", { text: "复制", attrs: {
       type: "button", "aria-label": `复制${label}`,
+      "data-timeline-action": actionRef,
     } });
     button.addEventListener("click", async () => {
       try { await copyText(value); toast("已复制"); }
@@ -278,19 +279,31 @@ function foldableNode(item, openState) {
     timeNode(item.time),
   ]));
   function updateBody() {
+    const focusedAction = details.contains(document.activeElement)
+      ? document.activeElement?.dataset.timelineAction : "";
     details.querySelector(".timeline-fold-body")?.remove();
-    if (!details.open) return;
+    if (!details.open) {
+      if (focusedAction) details.querySelector("summary")?.focus({ preventScroll: true });
+      return;
+    }
     const body = element("div", { className: "timeline-fold-body" });
     if (item.kind === "reasoning") {
       body.append(foldSection("思考过程", item.text || "正在思考…"));
     } else {
-      if (item.inputText) body.append(foldSection("调用", item.inputText, true));
+      if (item.inputText) body.append(foldSection("调用", item.inputText, true,
+        `${item.key}/tool-input`));
       if (item.outputText) body.append(foldSection(
-        item.state === "failed" ? "错误输出" : "结果", item.outputText, true));
+        item.state === "failed" ? "错误输出" : "结果", item.outputText, true,
+        `${item.key}/tool-output`));
       if (!item.inputText && !item.outputText)
         body.append(foldSection("执行中", item.text || "正在执行…"));
     }
     details.append(body);
+    if (focusedAction) {
+      const replacement = [...body.querySelectorAll("[data-timeline-action]")]
+        .find((node) => node.dataset.timelineAction === focusedAction);
+      (replacement ?? details.querySelector("summary"))?.focus({ preventScroll: true });
+    }
   }
   details.addEventListener("toggle", updateBody);
   updateBody();
@@ -310,7 +323,13 @@ function timelineNode(item, handlers, feedback, projectId, sessionId, openState)
     header.insertBefore(element("span", { className: "timeline-stopped", text: "已停止" }), time);
   const body = element("div", { className: "timeline-body" +
     (item.kind === "assistant" ? " markdown-body" : "") });
-  if (item.kind === "assistant") body.append(renderMarkdown(item.text));
+  if (item.kind === "assistant") {
+    body.append(renderMarkdown(item.text));
+    for (const [index, button] of [...body.querySelectorAll(".md-code-head button")].entries())
+      button.dataset.timelineAction = `${item.key}/code-${index}`;
+    for (const [index, link] of [...body.querySelectorAll("a")].entries())
+      link.dataset.timelineAction = `${item.key}/link-${index}`;
+  }
   else body.textContent = item.text;
   const children = [header, body];
   if (item.kind === "user" && projectId && sessionId &&
@@ -334,7 +353,8 @@ function timelineNode(item, handlers, feedback, projectId, sessionId, openState)
       (item.kind === "user" && (item.text || item.attachments?.length))) {
     const actions = element("div", { className: "timeline-actions" });
     if (item.text) {
-      const copy = element("button", { text: "复制", attrs: { type: "button", "aria-label": "复制消息" } });
+      const copy = element("button", { text: "复制", attrs: { type: "button", "aria-label": "复制消息",
+        "data-timeline-action": `${item.key}/copy` } });
       copy.addEventListener("click", async () => {
         try { await copyText(item.text); toast("消息已复制"); }
         catch { toast("无法复制消息", "error"); }
@@ -344,7 +364,8 @@ function timelineNode(item, handlers, feedback, projectId, sessionId, openState)
     if (item.kind === "user" &&
         Number.isSafeInteger(item.userMessageSequence) &&
         item.userMessageSequence > 0 && !item.textTruncated) {
-      const edit = element("button", { text: "编辑", attrs: { type: "button", "aria-label": "编辑此消息并重新发送" } });
+      const edit = element("button", { text: "编辑", attrs: { type: "button", "aria-label": "编辑此消息并重新发送",
+        "data-timeline-action": `${item.key}/edit` } });
       edit.addEventListener("click", async () => {
         edit.disabled = true;
         try { await handlers.onEdit(item.userMessageSequence, item.text, item.attachments ?? []); }
@@ -355,7 +376,8 @@ function timelineNode(item, handlers, feedback, projectId, sessionId, openState)
     }
     if (item.kind === "assistant") {
       if ("forkThroughSequence" in item) {
-        const fork = element("button", { text: "分叉", attrs: { type: "button", "aria-label": "从此回复分叉会话" } });
+        const fork = element("button", { text: "分叉", attrs: { type: "button", "aria-label": "从此回复分叉会话",
+          "data-timeline-action": `${item.key}/fork` } });
         fork.addEventListener("click", async () => {
           fork.disabled = true;
           try { await handlers.onFork(item.forkThroughSequence); }
@@ -368,7 +390,8 @@ function timelineNode(item, handlers, feedback, projectId, sessionId, openState)
       if (retryPrompt && Number.isSafeInteger(retryPrompt.sequence) &&
           retryPrompt.sequence > 0 && (retryPrompt.text || retryPrompt.attachments?.length) &&
           !retryPrompt.truncated) {
-        const retry = element("button", { text: "重试", attrs: { type: "button", "aria-label": "重试此回合" } });
+        const retry = element("button", { text: "重试", attrs: { type: "button", "aria-label": "重试此回合",
+          "data-timeline-action": `${item.key}/retry` } });
         retry.addEventListener("click", async () => {
           retry.disabled = true;
           try { await handlers.onRetry(retryPrompt.sequence, retryPrompt.text, retryPrompt.attachments ?? []); }
@@ -382,7 +405,8 @@ function timelineNode(item, handlers, feedback, projectId, sessionId, openState)
           const button = element("button", {
             text: label,
             attrs: { type: "button", "aria-label": label,
-              "aria-pressed": String(feedback === value) },
+              "aria-pressed": String(feedback === value),
+              "data-timeline-action": `${item.key}/feedback-${value}` },
           });
           button.addEventListener("click", async () => {
             button.disabled = true;
@@ -430,11 +454,16 @@ export function createTimelineView({ container, welcome, toBottom, store, feedba
     const data = state.data;
     const sessionKey = `${data?.projectId ?? ""}/${data?.sessionId ?? ""}`;
     let focusedKey = "";
+    let focusedAction = "";
+    let focusedImage = "";
     if (sessionKey === renderedSession) {
-      const focusedFold = document.activeElement?.closest?.(
-        "details[data-timeline-key]");
-      if (focusedFold && container.contains(focusedFold))
-        focusedKey = focusedFold.getAttribute("data-timeline-key") || "";
+      const active = document.activeElement;
+      if (container.contains(active)) {
+        focusedAction = active?.dataset.timelineAction || "";
+        focusedImage = active?.dataset.imageRef || "";
+        const focusedFold = active?.closest?.("details[data-timeline-key]");
+        if (focusedFold) focusedKey = focusedFold.getAttribute("data-timeline-key") || "";
+      }
       for (const details of container.querySelectorAll("details[data-timeline-key]"))
         expanded.set(details.getAttribute("data-timeline-key"), details.open);
     } else {
@@ -462,7 +491,14 @@ export function createTimelineView({ container, welcome, toBottom, store, feedba
           feedback.get(item.feedbackEventId) ?? "", data?.projectId,
           data?.sessionId, expanded.get(item.key)));
     }
-    if (focusedKey) {
+    if (focusedAction || focusedImage) {
+      const replacement = focusedAction
+        ? [...container.querySelectorAll("[data-timeline-action]")].find((node) =>
+          node.dataset.timelineAction === focusedAction)
+        : [...container.querySelectorAll("button[data-image-ref]")].find((button) =>
+          button.dataset.imageRef === focusedImage);
+      (replacement ?? document.querySelector("#prompt"))?.focus({ preventScroll: true });
+    } else if (focusedKey) {
       const replacement = [...container.querySelectorAll("details[data-timeline-key]")]
         .find((node) => node.getAttribute("data-timeline-key") === focusedKey);
       replacement?.querySelector("summary")?.focus({ preventScroll: true });
