@@ -20,7 +20,7 @@ export function createComposerImages({ composer, prompt, button, input, strip,
   navigation, modelsStore, sessionStore, ensureSession, onChange, onRemove,
   onUploading, onError }) {
   let ids = [];
-  let uploading = false;
+  const uploads = new Set();
   const removals = new Set();
   let writable = true;
   let dragDepth = 0;
@@ -33,6 +33,15 @@ export function createComposerImages({ composer, prompt, button, input, strip,
   function owner() {
     const { projectId, sessionId } = navigation.get();
     return projectId && sessionId ? { projectId, sessionId } : null;
+  }
+
+  function scopeKey() {
+    const { projectId, sessionId } = navigation.get();
+    return `${projectId || "default"}/${sessionId || "@new"}`;
+  }
+
+  function uploadingCurrent() {
+    return uploads.has(scopeKey());
   }
 
   function removingCurrent() {
@@ -50,6 +59,7 @@ export function createComposerImages({ composer, prompt, button, input, strip,
       ? "remove" : focused?.matches("[data-image-preview]") ? "preview" : "";
     clear(strip);
     const selected = owner();
+    const uploading = uploadingCurrent();
     const removing = removingCurrent();
     strip.hidden = ids.length === 0 && !uploading && !removing;
     if (selected) for (const [index, id] of ids.entries()) {
@@ -132,7 +142,7 @@ export function createComposerImages({ composer, prompt, button, input, strip,
 
   async function addFiles(files) {
     const candidates = [...files];
-    if (!candidates.length || uploading || removingCurrent()) return;
+    if (!candidates.length || uploadingCurrent() || removingCurrent()) return;
     if (!writable) { onError(new Error("当前会话不可添加图片")); return; }
     if (!imageCapable()) {
       onError(unsupportedModelError());
@@ -157,28 +167,38 @@ export function createComposerImages({ composer, prompt, button, input, strip,
     }
     if (otherFiles) toast(`已跳过 ${otherFiles} 个非图片文件`);
     if (invalidSize) toast(`已跳过 ${invalidSize} 张空白或超过 8 MiB 的图片`);
-    uploading = true;
+    let key = scopeKey();
+    uploads.add(key);
     onUploading(true);
     render();
     try {
       const selected = owner() ?? await ensureSession(prompt.value);
-      const key = `${selected.projectId}/${selected.sessionId}`;
+      const sessionKey = `${selected.projectId}/${selected.sessionId}`;
+      if (key !== sessionKey) {
+        uploads.delete(key);
+        key = sessionKey;
+        uploads.add(key);
+        onUploading(true);
+        render();
+      }
       for (const file of images) {
         const stored = await api.uploadImage(selected.projectId,
           selected.sessionId, file);
-        const current = owner();
-        if (`${current?.projectId}/${current?.sessionId}` !== key) {
+        if (scopeKey() !== key) {
           void api.deleteImage(selected.projectId, selected.sessionId,
             stored.id).catch(() => {});
-          throw new Error("会话已切换，图片未加入当前草稿");
+          break;
         }
         ids = [...ids, stored.id];
         onChange([...ids]);
         render();
       }
-    } catch (error) { onError(error); }
+    } catch (error) {
+      if (scopeKey() === key) onError(error);
+      else toast("原会话图片未保存", "error");
+    }
     finally {
-      uploading = false;
+      uploads.delete(key);
       onUploading(false);
       input.value = "";
       render();
@@ -234,7 +254,7 @@ export function createComposerImages({ composer, prompt, button, input, strip,
     get: () => [...ids],
     set(value) { ids = Array.isArray(value) ? [...value] : []; render(); },
     clear() { ids = []; render(); },
-    isUploading: () => uploading || removingCurrent(),
+    isUploading: () => uploadingCurrent() || removingCurrent(),
     supportsCurrentModel: imageCapable,
     setWritable(value) { writable = Boolean(value); render(); },
   });

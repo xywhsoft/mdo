@@ -1,0 +1,118 @@
+<!doctype html>
+<html lang="zh-CN">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>mdo composer upload session probe</title>
+<link rel="stylesheet" href="/app/web/css/app.css">
+<style>body{padding:20px;background:var(--bg);color:var(--ink)}</style>
+<div id="cases"></div>
+<script type="module">
+import { createComposerImages } from "/app/web/js/features/chat/composer-images.js";
+
+const root = document.querySelector("#cases");
+const a = "a".repeat(32);
+const b = "b".repeat(32);
+const c = "c".repeat(32);
+const originalFetch = window.fetch;
+const deleted = [];
+let finishA;
+let finishC;
+window.fetch = async (url, options = {}) => {
+  if (options.method === "DELETE") {
+    deleted.push(String(url));
+    return new Response(JSON.stringify({ ok: true, data: {} }), { status: 200 });
+  }
+  if (options.method === "POST") {
+    const session = /\/sessions\/([^/]+)\/attachments$/.exec(String(url))?.[1];
+    if (session === "first" || session === "created") {
+      return new Promise((resolve) => {
+        if (session === "first") finishA = () => resolve(new Response(
+          JSON.stringify({ ok: true, data: { id: a } }), { status: 200 }));
+        else finishC = () => resolve(new Response(
+          JSON.stringify({ ok: true, data: { id: c } }), { status: 200 }));
+      });
+    }
+    return new Response(JSON.stringify({ ok: true, data: { id: b } }),
+      { status: 200 });
+  }
+  return originalFetch(url, options);
+};
+
+function createCase(label, initialRoute, ensureSession) {
+  const section = document.createElement("section");
+  section.innerHTML = `<h2></h2><form class="composer"><textarea></textarea>` +
+    `<button type="button">添加图片</button><input type="file" hidden>` +
+    `<div class="composer-images"></div></form><pre></pre>`;
+  section.querySelector("h2").textContent = label;
+  root.append(section);
+  const [composer, prompt, button, input, strip, output] = [
+    section.querySelector("form"), section.querySelector("textarea"),
+    section.querySelector("button"), section.querySelector("input"),
+    section.querySelector(".composer-images"), section.querySelector("pre"),
+  ];
+  let route = initialRoute;
+  const changes = [];
+  const errors = [];
+  const images = createComposerImages({ composer, prompt, button, input, strip,
+    navigation: { get: () => route },
+    modelsStore: { get: () => ({ data: { models: [
+      { id: "image", attachments: 1 }] } }) },
+    sessionStore: { get: () => ({ data: { model_id: "image" } }) },
+    ensureSession: async () => {
+      route = await ensureSession();
+      return route;
+    },
+    onChange: (value) => changes.push({ session: route.sessionId, value }),
+    onUploading() {}, onError: (error) => errors.push(error.message),
+  });
+  function add() {
+    const transfer = new DataTransfer();
+    transfer.items.add(new File([new Uint8Array([1])], "probe.png",
+      { type: "image/png" }));
+    input.files = transfer.files;
+    input.dispatchEvent(new Event("change"));
+  }
+  return { images, button, strip, output, changes, errors, add,
+    setRoute(value) { route = value; images.set([]); } };
+}
+
+try {
+  const first = createCase("切换会话时的并行上传",
+    { projectId: "qa", sessionId: "first" });
+  first.add();
+  const firstBusy = first.images.isUploading();
+  first.setRoute({ projectId: "qa", sessionId: "second" });
+  const secondUsable = !first.images.isUploading() && !first.button.disabled;
+  first.add();
+  await new Promise((resolve) => requestAnimationFrame(resolve));
+  const secondSaved = first.images.get().join() === b;
+  finishA();
+  await new Promise((resolve) => requestAnimationFrame(resolve));
+  const firstPassed = firstBusy && secondUsable && secondSaved &&
+    first.images.get().join() === b && first.errors.length === 0 &&
+    deleted.some((url) => url.includes(`/sessions/first/attachments/${a}`));
+  first.output.dataset.passed = String(firstPassed);
+  first.output.textContent = JSON.stringify({ firstPassed, firstBusy, secondUsable,
+    secondSaved, changes: first.changes, errors: first.errors, deleted }, null, 2);
+
+  const created = createCase("新任务创建会话时保持上传锁",
+    { projectId: "qa", sessionId: "" },
+    async () => ({ projectId: "qa", sessionId: "created" }));
+  created.add();
+  await new Promise((resolve) => requestAnimationFrame(resolve));
+  const newBusy = created.images.isUploading() && created.button.disabled;
+  finishC();
+  await new Promise((resolve) => requestAnimationFrame(resolve));
+  const createdPassed = newBusy && !created.images.isUploading() &&
+    created.images.get().join() === c && created.errors.length === 0;
+  created.output.dataset.passed = String(createdPassed);
+  created.output.textContent = JSON.stringify({ createdPassed, newBusy,
+    attachments: created.images.get(), errors: created.errors }, null, 2);
+} catch (error) {
+  const output = document.createElement("pre");
+  output.dataset.passed = "false";
+  output.textContent = error.stack ?? String(error);
+  root.append(output);
+} finally { window.fetch = originalFetch; }
+</script>
+</html>
