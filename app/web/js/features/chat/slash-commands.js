@@ -2,7 +2,7 @@ import { clear, element, errorMessage, toast } from "../../utils/dom.js";
 
 const COMMANDS = Object.freeze([
   { name: "/new", description: "新建任务" },
-  { name: "/model", description: "选择模型" },
+  { name: "/model", description: "切换到下一个模型" },
   { name: "/fork", description: "分叉当前会话" },
   { name: "/export", description: "导出当前会话 Markdown" },
   { name: "/clear", description: "清空当前会话历史" },

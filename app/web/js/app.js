@@ -330,7 +330,17 @@ export async function boot() {
     onExecute: async (command) => {
       const session = sessionDetailStore.get().data;
       if (command === "/new") openNewTask();
-      else if (command === "/model") $("#composer-model").focus();
+      else if (command === "/model") {
+        const modelSelect = $("#composer-model");
+        if (modelSelect.disabled) throw new Error("当前无法切换模型");
+        const choices = [...modelSelect.options].filter((option) =>
+          option.value && !option.disabled);
+        if (choices.length < 2) throw new Error("没有其他可切换的模型");
+        const index = choices.findIndex((option) =>
+          option.value === modelSelect.value);
+        modelSelect.value = choices[(index + 1) % choices.length].value;
+        modelSelect.dispatchEvent(new Event("change", { bubbles: true }));
+      }
       else if (command === "/settings") navigation.openSettings("general");
       else if (command === "/theme") await toggleTheme();
       else if (command === "/help") {
