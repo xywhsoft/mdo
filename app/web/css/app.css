@@ -1340,6 +1340,9 @@ select:focus-visible,
     min-height: 40px;
     font-size: 11px;
   }
+  .project-panel-toolbar button,
+  .project-settings-actions button,
+  .project-settings-actions select { min-height: 40px; }
   .setting-row input[type="number"] { width: 100%; }
   .settings-grid { grid-template-columns: 1fr; }
   .settings-actions { align-items: stretch; flex-direction: column; gap: 8px; padding: 9px 12px max(9px, env(safe-area-inset-bottom)); }
