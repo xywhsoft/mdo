@@ -20,7 +20,7 @@ function endpoint(key) {
   return `/projects/${resourceId(projectId, "project")}/sessions/${resourceId(sessionId, "session")}/draft`;
 }
 
-export function createDraftStore({ onRestore, onError, onSaved }) {
+export function createDraftStore({ onRestore, onError, onSaved, onLoaded = () => {} }) {
   const entries = new Map();
   const encoder = new TextEncoder();
   let selected = "";
@@ -29,7 +29,8 @@ export function createDraftStore({ onRestore, onError, onSaved }) {
     let value = entries.get(key);
     if (!value) {
       value = { text: "", attachments: [], revision: 0, loaded: false, dirty: false,
-        conflict: false, error: null, loading: null, saving: null, timer: 0 };
+        uncertainRun: false, conflict: false, error: null, loading: null,
+        saving: null, timer: 0 };
       entries.set(key, value);
     }
     return value;
@@ -53,12 +54,17 @@ export function createDraftStore({ onRestore, onError, onSaved }) {
         current.revision = Number(response.data.revision);
         current.loaded = true;
         current.error = null;
+        // A local edit may precede the GET response. Never clear a persisted
+        // review guard while saving that edit.
+        current.uncertainRun ||= response.data.run_admission_uncertain === true;
         if (!current.dirty) {
           current.text = response.data.text ?? "";
           current.attachments = imageIds(response.data.attachments);
-          if (selected === key) onRestore(current.text, [...current.attachments]);
         } else schedule(key, true);
+        if (selected === key) onRestore(current.text,
+          [...current.attachments], current.uncertainRun);
         if (selected === key && !current.dirty) onSaved();
+        if (selected === key) onLoaded();
       } catch (error) {
         current.error = error;
         if (selected === key) onError(error);
@@ -81,6 +87,7 @@ export function createDraftStore({ onRestore, onError, onSaved }) {
       while (current.dirty) {
         const text = current.text;
         const attachments = [...current.attachments];
+        const uncertainRun = current.uncertainRun;
         if (encoder.encode(text).length > MAX_DRAFT_BYTES) {
           if (selected === key) onError(new Error(t("draft.tooLarge", {},
             "草稿超过 64 KiB 保存上限")));
@@ -88,12 +95,14 @@ export function createDraftStore({ onRestore, onError, onSaved }) {
         }
         current.dirty = false;
         try {
-          const body = { revision: current.revision, text, attachments };
+          const body = { revision: current.revision, text, attachments,
+            run_admission_uncertain: uncertainRun };
           const keepalive = encoder.encode(JSON.stringify(body)).length <= 60 * 1024;
           const response = await api.put(endpoint(key), body, { keepalive });
           current.revision = Number(response.data.revision);
           current.error = null;
-          if (current.text !== text || !sameIds(current.attachments, attachments))
+          if (current.text !== text || !sameIds(current.attachments, attachments) ||
+              current.uncertainRun !== uncertainRun)
             current.dirty = true;
           if (selected === key && !current.dirty) onSaved();
         } catch (error) {
@@ -128,7 +137,7 @@ export function createDraftStore({ onRestore, onError, onSaved }) {
   function select(key) {
     selected = key;
     const current = entry(key);
-    onRestore(current.text, [...current.attachments]);
+    onRestore(current.text, [...current.attachments], current.uncertainRun);
     if (current.error) onError(current.error);
     else onSaved();
     if (!current.loaded) void load(key);
@@ -152,6 +161,19 @@ export function createDraftStore({ onRestore, onError, onSaved }) {
         edit(key, text, attachments, true);
     },
     clear(key) { edit(key, "", [], true); },
+    isLoaded(key) { return entry(key).loaded; },
+    async ensureLoaded(key) {
+      await load(key);
+      return entry(key).loaded;
+    },
+    isRunUncertain(key) { return entry(key).uncertainRun; },
+    setRunUncertain(key, uncertain) {
+      const current = entry(key);
+      if (current.uncertainRun === Boolean(uncertain)) return;
+      current.uncertainRun = Boolean(uncertain);
+      current.dirty = true;
+      schedule(key, true);
+    },
     clearIfMatches(key, text, attachments = []) {
       const current = entry(key);
       if (current.text !== text ||

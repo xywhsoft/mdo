@@ -10,6 +10,7 @@
 
 typedef struct MdoDraft {
     uint64 Revision;
+    bool RunAdmissionUncertain;
     char Text[MDO_DRAFT_TEXT_MAX + 1u];
     size_t TextSize;
     char Attachments[4][33];
@@ -91,6 +92,13 @@ static bool MdoDraftUInt(const xvalue* Object, cstr Name, uint64* Output)
     return true;
 }
 
+static bool MdoDraftBool(const xvalue* Object, cstr Name, bool* Output)
+{
+    const xvalue* Value = xrtValueObjectGet(Object, xrtStrView(Name));
+    return xrtValueType(Value) == XVALUE_BOOL &&
+        xrtValueGetBool(Value, Output);
+}
+
 static bool MdoDraftTextView(const xvalue* Object, cstr Name,
     xstrview* Text)
 {
@@ -146,15 +154,18 @@ static bool MdoDraftRead(const char* Path, MdoDraft* Draft)
     Root = xrtJsonRead(xrtStrViewN(Bytes, (size_t)Info.Size), &Config);
     if ( xrtValueType(Root) != XVALUE_OBJECT ||
          !MdoDraftUInt(Root, "schema_version", &Schema) ||
-         (Schema != 1u && Schema != 2u) ||
-         xrtValueCount(Root) != (Schema == 1u ? 3u : 4u) ||
+         (Schema != 1u && Schema != 2u && Schema != 3u) ||
+         xrtValueCount(Root) != (Schema == 1u ? 3u :
+            (Schema == 2u ? 4u : 5u)) ||
          !MdoDraftUInt(Root, "revision", &Draft->Revision) ||
          Draft->Revision == 0u ||
          !MdoDraftText(Root, "text", Draft->Text, &Draft->TextSize) ||
-         (Schema == 2u &&
+         (Schema >= 2u &&
           !MdoAttachmentIdsRead(xrtValueObjectGet(Root,
                 XRT_STR_LITERAL("attachments")), Draft->Attachments,
-                &Draft->AttachmentCount)) )
+                &Draft->AttachmentCount)) ||
+         (Schema == 3u && !MdoDraftBool(Root,
+            "run_admission_uncertain", &Draft->RunAdmissionUncertain)) )
         goto done;
     Ok = true;
 done:
@@ -170,12 +181,14 @@ static bool MdoDraftWrite(const char* Path, const MdoDraft* Draft)
     char* Json = NULL;
     size_t Size = 0u;
     bool Ok = Root != NULL &&
-        MdoApiValueSetUInt(Root, "schema_version", 2u) &&
+        MdoApiValueSetUInt(Root, "schema_version", 3u) &&
         MdoApiValueSetUInt(Root, "revision", Draft->Revision) &&
         MdoApiValueSetStringView(Root, "text",
             xrtStrViewN(Draft->Text, Draft->TextSize)) &&
         MdoAttachmentIdsWriteValue(Root, Draft->Attachments,
-            Draft->AttachmentCount);
+            Draft->AttachmentCount) &&
+        MdoApiValueSetBool(Root, "run_admission_uncertain",
+            Draft->RunAdmissionUncertain);
     if ( Ok ) Json = xrtJsonStringify(Root, false, &Size);
     if ( Json != NULL && Size <= MDO_DRAFT_FILE_MAX )
         Ok = MdoHomeAtomicWrite(Path, Json, Size, false);
@@ -193,7 +206,9 @@ static xvalue* MdoDraftResponse(const MdoDraft* Draft)
          MdoApiValueSetStringView(Data, "text",
             xrtStrViewN(Draft->Text, Draft->TextSize)) &&
          MdoAttachmentIdsWriteValue(Data, Draft->Attachments,
-            Draft->AttachmentCount) ) return Data;
+            Draft->AttachmentCount) &&
+         MdoApiValueSetBool(Data, "run_admission_uncertain",
+            Draft->RunAdmissionUncertain) ) return Data;
     xrtValueRelease(Data);
     return NULL;
 }
@@ -212,6 +227,8 @@ bool MdoApiDraftRoute(MdoApiContext* Context)
     xstrview IncomingText = { 0 };
     char IncomingAttachments[4][33] = {{ 0 }};
     size_t IncomingCount = 0u;
+    bool IncomingUncertain = false;
+    bool UncertainPresent = false;
     bool Ok;
     bool Conflict = false;
     bool AttachmentLocked = false;
@@ -256,10 +273,16 @@ bool MdoApiDraftRoute(MdoApiContext* Context)
         }
         const xvalue* Attachments = xrtValueObjectGet(Body.Value,
             XRT_STR_LITERAL("attachments"));
+        const xvalue* Uncertain = xrtValueObjectGet(Body.Value,
+            XRT_STR_LITERAL("run_admission_uncertain"));
+        UncertainPresent = Uncertain != NULL;
         Ok = xrtValueType(Body.Value) == XVALUE_OBJECT &&
-            xrtValueCount(Body.Value) == (Attachments == NULL ? 2u : 3u) &&
+            xrtValueCount(Body.Value) == (Attachments == NULL ? 2u : 3u) +
+                (UncertainPresent ? 1u : 0u) &&
             MdoDraftUInt(Body.Value, "revision", &ExpectedRevision) &&
             MdoDraftTextView(Body.Value, "text", &IncomingText) &&
+            (!UncertainPresent || MdoDraftBool(Body.Value,
+                "run_admission_uncertain", &IncomingUncertain)) &&
             (Attachments == NULL ||
              MdoAttachmentIdsRead(Attachments, IncomingAttachments,
                 &IncomingCount)) &&
@@ -289,6 +312,8 @@ bool MdoApiDraftRoute(MdoApiContext* Context)
             memcpy(Draft->Attachments, IncomingAttachments,
                 sizeof(Draft->Attachments));
             Draft->AttachmentCount = IncomingCount;
+            if ( UncertainPresent )
+                Draft->RunAdmissionUncertain = IncomingUncertain;
             Ok = MdoDraftWrite(Path, Draft);
         }
     }

@@ -303,7 +303,10 @@ export async function boot() {
         onStartFailure(updated, error, current) {
           const key = `${updated.project_id}/${updated.id}`;
           draftStore.edit(key, text, attachments, true);
-          if (error.runAdmissionUncertain) void loadRuns();
+          if (error.runAdmissionUncertain) {
+            draftStore.setRunUncertain(key, true);
+            void loadRuns();
+          }
           if (!current) return;
           prompt.value = text;
           composerAttachments = [...attachments];
@@ -311,6 +314,7 @@ export async function boot() {
           prompt.dispatchEvent(new Event("input", { bubbles: true }));
           showComposerError(error, error.runAdmissionUncertain
             ? t("composer.runAdmissionUncertain") : "");
+          setRun(activeRun);
           prompt.focus();
         },
         onStarted(run) { monitorRun(run); },
@@ -493,12 +497,16 @@ export async function boot() {
     sessionStore: sessionDetailStore, timelineStore, modelsStore,
   });
   const draftStore = createDraftStore({
-    onRestore(text, attachments) {
+    onRestore(text, attachments, uncertainRun) {
       prompt.value = text;
       composerAttachments = attachments;
       composerImages?.set(attachments);
       resizePrompt();
       tokenMeter.refresh();
+      if (uncertainRun && selectedKey) {
+        showComposerError(uncertainRunError());
+        setRun(activeRun);
+      }
     },
     onError(error) {
       draftStatus.textContent = `草稿未保存：${errorMessage(error)}`;
@@ -508,6 +516,7 @@ export async function boot() {
       draftStatus.hidden = true;
       draftStatus.textContent = "";
     },
+    onLoaded() { setRun(activeRun); },
   });
   draftStore.select("");
   const composerProfile = createComposerProfile({
@@ -634,14 +643,18 @@ export async function boot() {
     // Keep keyboard focus while a newly created session loads its detail.
     prompt.disabled = !sessionWritable && !creatingSession;
     send.disabled = !(sessionWritable || (creatingSession && lane)) ||
-      composerImages?.isUploading() || composerProfile.isBusy();
+      composerImages?.isUploading() || composerProfile.isBusy() ||
+      !draftStore.isLoaded(selectedKey) ||
+      draftStore.isRunUncertain(selectedKey);
     composerImages?.setWritable(sessionWritable && !creatingSession &&
       !(lane && !route.sessionId));
     composerProfile.setRunActive(Boolean(activeRun || lane));
     send.setAttribute("aria-label", activeRun || lane
       ? t("composer.queue", {}, "加入待发送队列")
       : t("shell.send", {}, "发送任务"));
-    composerHint.textContent = pendingCount
+    composerHint.textContent = draftStore.isRunUncertain(selectedKey)
+      ? t("composer.hintReviewRun") : !draftStore.isLoaded(selectedKey)
+      ? t("composer.hintLoadingDraft") : pendingCount
       ? t("composer.hintPendingAdmission", { count: pendingCount })
       : lane && !activeRun ? t("composer.hintSubmitting") : activeRun
       ? (guide
@@ -940,7 +953,11 @@ export async function boot() {
             loadTasks(), loadRuns(), loadRecovery()]);
         } catch (error) {
           if (error?.code !== "recovery_required") queueBlocked.add(key);
-          if (error.runAdmissionUncertain) void loadRuns();
+          if (error.runAdmissionUncertain) {
+            draftStore.setRunUncertain(key, true);
+            void loadRuns();
+            if (stillSelected()) setRun(activeRun);
+          }
           try { await promptQueue.select(selected.projectId, selected.sessionId); }
           catch { /* Preserve the original dispatch error. */ }
           if (stillSelected()) showComposerError(error, error.runAdmissionUncertain
@@ -1040,12 +1057,12 @@ export async function boot() {
     }
     draftStore.capture(selectedKey, prompt.value, composerAttachments);
     selectedKey = key;
+    hideComposerError();
     draftStore.select(key);
     window.clearTimeout(runMonitor);
     runMonitor = 0;
     activeRun = null;
     setRun(null);
-    hideComposerError();
     if (!key) {
       selectRecovery("", "");
       clearTimeline();
@@ -1091,6 +1108,11 @@ export async function boot() {
     error.code = "recovery_required";
     return error;
   }
+  function uncertainRunError() {
+    const error = new Error(t("composer.runAdmissionUncertain"));
+    error.code = "run_admission_uncertain";
+    return error;
+  }
   function syncRecoveryNotice(state) {
     const selected = navigation.get();
     const recovery = state.data;
@@ -1113,6 +1135,21 @@ export async function boot() {
     composerError.dataset.code = error?.code || "";
     if (error?.queueItemId) composerError.dataset.queueItemId = error.queueItemId;
     else delete composerError.dataset.queueItemId;
+    if (error?.runAdmissionUncertain || error?.code === "run_admission_uncertain") {
+      const acknowledge = element("button", {
+        className: "composer-error-action",
+        text: t("composer.reviewedRun"),
+        attrs: { type: "button" },
+      });
+      acknowledge.addEventListener("click", () => {
+        if (!selectedKey || !draftStore.isRunUncertain(selectedKey)) return;
+        draftStore.setRunUncertain(selectedKey, false);
+        hideComposerError();
+        setRun(activeRun);
+        prompt.focus();
+      });
+      composerError.append(acknowledge);
+    }
     if (error?.code === "recovery_required") {
       const openDecisions = element("button", {
         className: "composer-error-action",
@@ -1267,6 +1304,12 @@ export async function boot() {
     const originVersion = routeVersion;
     if (fromComposer && !attachments.length &&
         slashCommands.consumeExact(text)) return;
+    if (!draftStore.isLoaded(selectedKey) &&
+        !await draftStore.ensureLoaded(selectedKey)) return;
+    if (draftStore.isRunUncertain(selectedKey)) {
+      showComposerError(uncertainRunError());
+      return;
+    }
     if (routeVersion !== originVersion) return;
     const existingLane = activeSubmissionLane(origin);
     if (existingLane) {
@@ -1339,7 +1382,11 @@ export async function boot() {
       await Promise.all([...(selectedIsCurrent() ? [refreshSelectedTimeline()] : []),
         loadTasks(), loadRuns(), loadRecovery()]);
     } catch (error) {
-      if (error.runAdmissionUncertain) void loadRuns();
+      if (error.runAdmissionUncertain) {
+        draftStore.setRunUncertain(selected
+          ? `${selected.projectId}/${selected.sessionId}` : selectedKey, true);
+        void loadRuns();
+      }
       let restored = null;
       const ownerKey = selected
         ? `${selected.projectId}/${selected.sessionId}` : originatingKey;
