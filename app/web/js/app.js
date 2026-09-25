@@ -425,6 +425,9 @@ export async function boot() {
   const promptQueue = createPromptQueue({
     container: $("#prompt-queue"), navigation,
     isRunActive: () => Boolean(activeRun),
+    stagedEntries: () => activeSubmissionLane()?.pending.map((item) => ({
+      text: item.text, staged: true,
+    })) ?? [],
     onRetry: async () => {
       const selected = navigation.get();
       const first = promptQueue.peek(selected.projectId, selected.sessionId);
@@ -1159,15 +1162,14 @@ export async function boot() {
   async function drainPendingSubmissions(lane, selected) {
     const ownerKey = `${selected.projectId}/${selected.sessionId}`;
     while (lane.pending.length) {
-      const item = lane.pending.shift();
-      let admitted = false;
+      const item = lane.pending[0];
       try {
         if (!await promptQueue.enqueue(selected.projectId, selected.sessionId,
           item.text, { first: item.interrupt && lane.admitted === 0,
             priority: item.interrupt,
             attachments: item.attachments }))
           throw new Error(t("composer.queueFull", {}, "待发送队列已满（最多 20 条）"));
-        admitted = true;
+        lane.pending.shift();
         lane.admitted += 1;
         queueBlocked.delete(ownerKey);
         if (item.interrupt && selectedOwnsDraft(ownerKey))
@@ -1175,7 +1177,7 @@ export async function boot() {
         // The first run can finish before the queue POST returns.
         if (selectedOwnsDraft(ownerKey)) await dispatchQueued();
       } catch (error) {
-        const unsent = [...(admitted ? [] : [item]), ...lane.pending.splice(0)];
+        const unsent = lane.pending.splice(0);
         const { restored, visible } = unsent.length
           ? restoreUnsentItems(ownerKey, unsent)
           : { restored: null, visible: selectedOwnsDraft(ownerKey) };
@@ -1190,7 +1192,10 @@ export async function boot() {
           }), "error");
         }
         break;
-      } finally { setRun(activeRun); }
+      } finally {
+        setRun(activeRun);
+        promptQueue.render();
+      }
     }
   }
 
@@ -1216,6 +1221,7 @@ export async function boot() {
         attachments: [...attachments], interrupt });
       consumeComposerInput(selectedKey);
       setRun(activeRun);
+      promptQueue.render();
       return;
     }
     if (composerProfile.isBusy()) {
@@ -1304,6 +1310,7 @@ export async function boot() {
       } finally {
         submissionLanes.delete(submissionScope);
         setRun(activeRun);
+        promptQueue.render();
       }
     }
   }

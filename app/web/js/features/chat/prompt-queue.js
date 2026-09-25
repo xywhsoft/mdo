@@ -17,7 +17,8 @@ function newId() {
     (byte) => byte.toString(16).padStart(2, "0")).join("");
 }
 
-export function createPromptQueue({ container, navigation, isRunActive, onRetry, onRemoved }) {
+export function createPromptQueue({ container, navigation, isRunActive, stagedEntries,
+  onRetry, onRemoved }) {
   const queues = new Map();
   const loads = new Map();
   const versions = new Map();
@@ -60,7 +61,9 @@ export function createPromptQueue({ container, navigation, isRunActive, onRetry,
 
   function render() {
     const key = selectedKey();
-    const entries = queues.get(key) ?? [];
+    const saved = queues.get(key) ?? [];
+    const staged = stagedEntries?.() ?? [];
+    const entries = [...saved, ...staged];
     const focused = container.dataset.queueKey === key &&
       container.contains(document.activeElement) ? document.activeElement : null;
     const focusKey = focused?.dataset.queueFocus;
@@ -73,7 +76,7 @@ export function createPromptQueue({ container, navigation, isRunActive, onRetry,
       if (focused) document.querySelector("#prompt")?.focus({ preventScroll: true });
       return;
     }
-    const uncertain = entries[0].state === "sending";
+    const uncertain = saved[0]?.state === "sending";
     const [projectId, sessionId] = key.split("/");
     let open = expanded.get(key) ?? true;
     const toggle = element("button", { className: "prompt-queue-toggle",
@@ -82,7 +85,7 @@ export function createPromptQueue({ container, navigation, isRunActive, onRetry,
         "aria-controls": "prompt-queue-list", "data-queue-focus": "toggle" },
     });
     const waitingForRun = !uncertain && isRunActive();
-    const retry = waitingForRun ? null : element("button", {
+    const retry = waitingForRun || !saved.length ? null : element("button", {
       text: t(uncertain ? "queue.retryUncertain" : "queue.sendNext"),
       attrs: { type: "button", "data-queue-focus": "retry" },
     });
@@ -99,7 +102,7 @@ export function createPromptQueue({ container, navigation, isRunActive, onRetry,
     }
     container.append(element("div", { className: "prompt-queue-header" }, [
       toggle, retry ?? element("span", { className: "prompt-queue-waiting",
-        text: t("queue.waitForRun") }),
+        text: t(saved.length ? "queue.waitForRun" : "queue.awaitingAdmission") }),
     ]));
     if (uncertain) container.append(element("p", {
       className: "prompt-queue-warning",
@@ -115,6 +118,19 @@ export function createPromptQueue({ container, navigation, isRunActive, onRetry,
       list.hidden = !open;
     });
     for (const [index, entry] of entries.entries()) {
+      if (entry.staged) {
+        list.append(element("li", {}, [
+          element("span", { className: "prompt-queue-index",
+            text: String(index + 1) }),
+          element("div", { className: "prompt-queue-item-body" }, [
+            element("span", { className: "prompt-queue-text",
+              text: entry.text || t("queue.imageMessage") }),
+            element("span", { className: "prompt-queue-state",
+              text: t("queue.awaitingAdmission") }),
+          ]),
+        ]));
+        continue;
+      }
       const remove = element("button", {
         text: t("queue.remove"),
         attrs: { type: "button", "aria-label": t("queue.removeNumber", { number: index + 1 }),

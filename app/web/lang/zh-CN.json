@@ -411,6 +411,7 @@
   "queue.retryUncertain": "确认未发送后重试",
   "queue.sendNext": "发送下一条",
   "queue.waitForRun": "当前任务结束后自动发送",
+  "queue.awaitingAdmission": "等待入队确认",
   "queue.uncertainWarning": "首条消息可能已被服务端接收。请先核对对话和运行记录，再决定移除或重试。",
   "queue.remove": "移除",
   "queue.removeNumber": "移除待发送消息 {number}",
