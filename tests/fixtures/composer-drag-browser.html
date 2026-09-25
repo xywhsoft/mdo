@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="zh-CN">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>mdo composer drag probe</title>
+<link rel="stylesheet" href="/app/web/css/app.css">
+<style>
+  body { margin: 24px; background: var(--surface); color: var(--ink); }
+  .probe-controls { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; }
+  #composer { width: min(600px, 100%); min-height: 140px; }
+</style>
+<div class="probe-controls">
+  <button id="enter-file" type="button">模拟文件进入卡片</button>
+  <button id="leave-child" type="button">模拟离开内部元素</button>
+  <button id="drop-file" type="button">模拟放下文件</button>
+</div>
+<p id="qa-status" role="status">等待拖放</p>
+<form class="composer" id="composer">
+  <textarea id="prompt" aria-label="任务输入" placeholder="把文件拖到这里"></textarea>
+  <div id="composer-images" class="composer-images" hidden></div>
+  <button id="composer-attach" type="button">添加图片</button>
+  <input id="composer-file" type="file" hidden>
+</form>
+<div id="toast-region"></div>
+<script type="module">
+import { createComposerImages } from "/app/web/js/features/chat/composer-images.js";
+import { createResourceStore } from "/app/web/js/state/store.js";
+
+const composer = document.querySelector("#composer");
+const status = document.querySelector("#qa-status");
+const model = createResourceStore({ models: [{ id: "image-qa", attachments: 1 }] });
+const session = createResourceStore({ model_id: "image-qa" });
+const navigation = { get: () => ({ projectId: "default", sessionId: "qa-session" }) };
+const transfer = new DataTransfer();
+transfer.items.add(new File(["qa"], "notes.txt", { type: "text/plain" }));
+function drag(node, type) {
+  node.dispatchEvent(new DragEvent(type, {
+    bubbles: true, cancelable: true, dataTransfer: transfer,
+  }));
+}
+createComposerImages({ composer, prompt: document.querySelector("#prompt"),
+  button: document.querySelector("#composer-attach"),
+  input: document.querySelector("#composer-file"),
+  strip: document.querySelector("#composer-images"), navigation,
+  modelsStore: model, sessionStore: session,
+  ensureSession: async () => navigation.get(), onChange: () => {},
+  onUploading: () => {}, onError: (error) => { status.dataset.error = error.message; } });
+let over = 0;
+let highlighted = 0;
+composer.addEventListener("dragover", () => {
+  over += 1;
+  if (composer.hasAttribute("data-drag-over") &&
+      getComputedStyle(composer).borderStyle === "dashed") highlighted += 1;
+});
+composer.addEventListener("drop", (event) => {
+  status.textContent = `拖动经过 ${over} 次，其中 ${highlighted} 次显示落点；放下后提示${composer.hasAttribute("data-drag-over") ? "未清除" : "已清除"}`;
+  status.dataset.over = String(over);
+  status.dataset.highlighted = String(highlighted);
+  status.dataset.cleared = String(!composer.hasAttribute("data-drag-over"));
+  status.dataset.types = [...(event.dataTransfer?.types ?? [])].join(",");
+  status.dataset.files = String(event.dataTransfer?.files?.length ?? 0);
+});
+document.querySelector("#enter-file").addEventListener("click", () => {
+  drag(composer, "dragenter");
+  drag(document.querySelector("#prompt"), "dragenter");
+  drag(document.querySelector("#prompt"), "dragover");
+  status.dataset.entered = String(composer.hasAttribute("data-drag-over"));
+});
+document.querySelector("#leave-child").addEventListener("click", () => {
+  drag(document.querySelector("#prompt"), "dragleave");
+  status.dataset.nested = String(composer.hasAttribute("data-drag-over"));
+});
+document.querySelector("#drop-file").addEventListener("click", () =>
+  drag(composer, "drop"));
+</script>

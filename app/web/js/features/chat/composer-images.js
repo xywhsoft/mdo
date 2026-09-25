@@ -22,6 +22,12 @@ export function createComposerImages({ composer, prompt, button, input, strip,
   let ids = [];
   let uploading = false;
   let writable = true;
+  let dragDepth = 0;
+
+  function clearDragTarget() {
+    dragDepth = 0;
+    composer.removeAttribute("data-drag-over");
+  }
 
   function owner() {
     const { projectId, sessionId } = navigation.get();
@@ -160,16 +166,29 @@ export function createComposerImages({ composer, prompt, button, input, strip,
     event.preventDefault();
     void addFiles(images);
   });
+  composer.addEventListener("dragenter", (event) => {
+    if (![...(event.dataTransfer?.types ?? [])].includes("Files")) return;
+    dragDepth += 1;
+    composer.setAttribute("data-drag-over", "");
+  });
   composer.addEventListener("dragover", (event) => {
     if (![...(event.dataTransfer?.types ?? [])].includes("Files")) return;
     event.preventDefault();
     event.dataTransfer.dropEffect = "copy";
+    composer.setAttribute("data-drag-over", "");
+  });
+  composer.addEventListener("dragleave", () => {
+    if (dragDepth > 0) dragDepth -= 1;
+    if (dragDepth === 0) clearDragTarget();
   });
   composer.addEventListener("drop", (event) => {
     if (![...(event.dataTransfer?.types ?? [])].includes("Files")) return;
     event.preventDefault();
+    clearDragTarget();
     void addFiles(event.dataTransfer?.files ?? []);
   });
+  window.addEventListener("dragend", clearDragTarget);
+  window.addEventListener("blur", clearDragTarget);
 
   render();
   return Object.freeze({
