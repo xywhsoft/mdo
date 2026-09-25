@@ -32,7 +32,7 @@
         </button>
         <div class="session-menu session-header-menu" id="session-header-menu-mobile" role="menu" hidden></div>
       </div>
-      <button class="icon-button" id="open-inspector" type="button" aria-label="打开任务面板" data-i18n-aria-label="shell.tasksPanel" aria-controls="inspector" aria-expanded="false">
+      <button class="icon-button" id="open-inspector" type="button" aria-label="打开检查器" data-i18n-aria-label="shell.tasksPanel" aria-controls="inspector" aria-expanded="false">
         <span class="icon" data-icon="panel-right" aria-hidden="true"></span>
         <span class="activity-dot" id="mobile-activity-dot" hidden></span>
       </button>
@@ -134,7 +134,10 @@
             </button>
             <div class="session-menu session-header-menu" id="session-header-menu" role="menu" hidden></div>
           </div>
-          <button class="icon-button desktop-inspector-toggle" id="toggle-inspector" type="button" aria-label="切换任务面板" data-i18n-aria-label="shell.toggleTasksPanel" aria-controls="inspector" aria-expanded="false">
+          <button class="icon-button" id="open-trace" type="button" aria-label="查看会话轨迹" data-i18n-aria-label="trace.open" aria-controls="trace-panel" disabled>
+            <span class="icon" data-icon="activity" aria-hidden="true"></span>
+          </button>
+          <button class="icon-button desktop-inspector-toggle" id="toggle-inspector" type="button" aria-label="切换检查器" data-i18n-aria-label="shell.toggleTasksPanel" aria-controls="inspector" aria-expanded="false">
             <span class="icon" data-icon="panel-right" aria-hidden="true"></span>
           </button>
         </div>
@@ -423,14 +426,15 @@
     <div class="pane-resize-handle sidebar-resize-handle" id="sidebar-resize" role="separator" aria-label="调整会话导航宽度" aria-orientation="vertical" aria-valuemin="264" aria-valuemax="420" aria-valuenow="272" tabindex="0"></div>
     <div class="pane-resize-handle inspector-resize-handle" id="inspector-resize" role="separator" aria-label="调整任务面板宽度" aria-orientation="vertical" aria-valuemin="300" aria-valuemax="520" aria-valuenow="336" tabindex="0"></div>
 
-    <aside class="inspector" id="inspector" aria-label="任务与上下文" data-i18n-aria-label="inspector.label">
+    <aside class="inspector" id="inspector" aria-label="任务、轨迹与上下文" data-i18n-aria-label="inspector.label">
       <div class="inspector-header">
         <div class="tab-list" role="tablist" aria-label="检查器视图" data-i18n-aria-label="inspector.views">
           <button class="inspector-tab" id="tasks-tab" type="button" role="tab" aria-selected="true" aria-controls="tasks-panel" data-i18n="inspector.tab.tasks">任务</button>
-          <button class="inspector-tab" id="decisions-tab" type="button" role="tab" aria-selected="false" aria-controls="decisions-panel"><span data-i18n="inspector.tab.decisions">决策</span> <span class="tab-count" id="approval-count" hidden>0</span></button>
-          <button class="inspector-tab" id="context-tab" type="button" role="tab" aria-selected="false" aria-controls="context-panel" data-i18n="inspector.tab.context">上下文</button>
+          <button class="inspector-tab" id="decisions-tab" type="button" role="tab" tabindex="-1" aria-selected="false" aria-controls="decisions-panel"><span data-i18n="inspector.tab.decisions">决策</span> <span class="tab-count" id="approval-count" hidden>0</span></button>
+          <button class="inspector-tab" id="trace-tab" type="button" role="tab" tabindex="-1" aria-selected="false" aria-controls="trace-panel" data-i18n="inspector.tab.trace">轨迹</button>
+          <button class="inspector-tab" id="context-tab" type="button" role="tab" tabindex="-1" aria-selected="false" aria-controls="context-panel" data-i18n="inspector.tab.context">上下文</button>
         </div>
-        <button class="icon-button inspector-close" id="close-inspector" type="button" aria-label="关闭任务面板" data-i18n-aria-label="inspector.close">
+        <button class="icon-button inspector-close" id="close-inspector" type="button" aria-label="关闭检查器" data-i18n-aria-label="inspector.close">
           <span class="icon" data-icon="close" aria-hidden="true"></span>
         </button>
       </div>
@@ -466,6 +470,15 @@
           <p data-i18n="inspector.context.description">模型、推理强度和权限可在输入区切换；运行中的回合保持启动时配置。</p>
         </div>
         <dl class="context-list" id="context-list"></dl>
+      </section>
+
+      <section class="inspector-panel" id="trace-panel" role="tabpanel" aria-labelledby="trace-tab" hidden>
+        <div class="panel-intro">
+          <h2 data-i18n="trace.title">会话轨迹</h2>
+          <p data-i18n="trace.description">按时间倒序查看最近的原始事件；展开可检查事件字段。</p>
+        </div>
+        <p class="trace-summary" id="trace-summary" role="status"></p>
+        <div class="trace-list" id="trace-list"></div>
       </section>
     </aside>
 

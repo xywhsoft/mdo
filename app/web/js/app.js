@@ -30,6 +30,7 @@ import { createProjectDialog } from "./features/sessions/project-dialog.js";
 import { timelineStore, selectTimeline, clearTimeline, refreshSelectedTimeline, reloadSelectedTimeline } from "./features/chat/timeline-store.js";
 import { todoStore, selectTodo, clearTodo } from "./state/todo.js";
 import { createTimelineView } from "./features/chat/timeline.js";
+import { createTracePanel } from "./features/chat/trace-panel.js";
 import { createMessageEditDialog } from "./features/chat/message-edit-dialog.js";
 import { runMessageReplacement } from "./features/chat/message-replacement.js";
 import { createConversationSearch } from "./features/chat/conversation-search.js";
@@ -111,6 +112,7 @@ export async function boot() {
   const mobileTitle = $("#mobile-session-title");
   const mobileMeta = $("#mobile-session-meta");
   const exportButtons = [$("#export-session"), $("#export-session-mobile")];
+  const openTrace = $("#open-trace");
   const contextList = $("#context-list");
   const workspaceChip = $("#workspace-chip");
   const workspaceLabel = $("#workspace-label");
@@ -384,6 +386,10 @@ export async function boot() {
   createImagePreview({
     dialog: $("#image-preview"), image: $("#image-preview-content"),
     closeButton: $("#close-image-preview"), navigation,
+  });
+  const tracePanel = createTracePanel({
+    panel: $("#trace-panel"), list: $("#trace-list"),
+    summary: $("#trace-summary"), store: timelineStore, navigation,
   });
   createTaskPanel({
     container: $("#task-list"),
@@ -705,6 +711,7 @@ export async function boot() {
   function updateExportButtons() {
     const available = Boolean(currentExportSession());
     for (const button of exportButtons) button.disabled = !available;
+    openTrace.disabled = !available;
   }
 
   function syncPromptPlaceholder() {
@@ -1512,15 +1519,39 @@ export async function boot() {
   void paneLayout.load();
 
   function selectInspectorTab(tabName) {
-    for (const name of ["tasks", "decisions", "context"]) {
+    for (const name of ["tasks", "decisions", "trace", "context"]) {
       const selected = tabName === name;
       $(`#${name}-tab`).setAttribute("aria-selected", String(selected));
+      $(`#${name}-tab`).tabIndex = selected ? 0 : -1;
       $(`#${name}-panel`).hidden = !selected;
     }
+    if (tabName === "trace") tracePanel.render();
   }
   $("#tasks-tab").addEventListener("click", () => selectInspectorTab("tasks"));
   $("#decisions-tab").addEventListener("click", () => selectInspectorTab("decisions"));
+  $("#trace-tab").addEventListener("click", () => selectInspectorTab("trace"));
   $("#context-tab").addEventListener("click", () => selectInspectorTab("context"));
+  $(".inspector-header .tab-list").addEventListener("keydown", (event) => {
+    const names = ["tasks", "decisions", "trace", "context"];
+    const current = names.indexOf(event.target?.id?.replace(/-tab$/, ""));
+    if (current < 0) return;
+    let next = current;
+    if (event.key === "ArrowRight") next = (current + 1) % names.length;
+    else if (event.key === "ArrowLeft") next = (current - 1 + names.length) % names.length;
+    else if (event.key === "Home") next = 0;
+    else if (event.key === "End") next = names.length - 1;
+    else return;
+    event.preventDefault();
+    selectInspectorTab(names[next]);
+    const tab = $(`#${names[next]}-tab`);
+    tab.focus();
+    tab.scrollIntoView({ block: "nearest", inline: "nearest" });
+  });
+  openTrace.addEventListener("click", () => {
+    selectInspectorTab("trace");
+    setDrawer("inspector", true);
+    $("#trace-tab").scrollIntoView({ block: "nearest", inline: "nearest" });
+  });
   $("#open-settings").addEventListener("click", () => navigation.openSettings("general"));
   $("#open-schedules").addEventListener("click", () => navigation.openSettings("schedules"));
   $("#close-settings").addEventListener("click", () => {
