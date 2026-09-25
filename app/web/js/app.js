@@ -372,7 +372,11 @@ export async function boot() {
     sessionStore: sessionDetailStore, modelsStore, agentsStore, projectsStore,
     isRunActive: () => Boolean(activeRun),
     onBusyChange: () => setRun(activeRun),
-    onSelectionChange: tokenMeter.refresh,
+    onSelectionChange() {
+      tokenMeter.refresh();
+      if (composerError.dataset.code === "image_model_unsupported" &&
+          composerImages?.supportsCurrentModel()) hideComposerError();
+    },
   });
   composerImages = createComposerImages({
     composer, prompt, button: $("#composer-attach"), input: $("#composer-file"),
@@ -789,9 +793,11 @@ export async function boot() {
   function hideComposerError() {
     composerError.hidden = true;
     composerError.textContent = "";
+    delete composerError.dataset.code;
   }
   function showComposerError(error) {
     composerError.textContent = errorMessage(error);
+    composerError.dataset.code = error?.code || "";
     if (error?.code === "recovery_required") {
       const openDecisions = element("button", {
         className: "composer-error-action",

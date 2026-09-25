@@ -4,6 +4,12 @@ import { clear, element } from "../../utils/dom.js";
 const TYPES = new Set(["image/png", "image/jpeg", "image/webp"]);
 const MAX_IMAGE_BYTES = 8 * 1024 * 1024;
 
+function unsupportedModelError() {
+  const error = new Error("当前模型不支持图片，请先切换到支持图片的模型");
+  error.code = "image_model_unsupported";
+  return error;
+}
+
 export function createComposerImages({ composer, prompt, button, input, strip,
   navigation, modelsStore, sessionStore, ensureSession, onChange, onRemove,
   onUploading, onError }) {
@@ -78,7 +84,7 @@ export function createComposerImages({ composer, prompt, button, input, strip,
     if (!images.length || uploading) return;
     if (!writable) { onError(new Error("当前会话不可添加图片")); return; }
     if (!imageCapable()) {
-      onError(new Error("当前模型不支持图片，请先切换到支持图片的模型"));
+      onError(unsupportedModelError());
       return;
     }
     if (images.length + ids.length > 4) {
@@ -125,12 +131,17 @@ export function createComposerImages({ composer, prompt, button, input, strip,
 
   button.addEventListener("click", () => {
     if (!imageCapable()) {
-      onError(new Error("当前模型不支持图片，请先切换到支持图片的模型"));
+      onError(unsupportedModelError());
       return;
     }
     input.click();
   });
-  input.addEventListener("change", () => { void addFiles(input.files ?? []); });
+  input.addEventListener("change", () => {
+    const files = [...(input.files ?? [])];
+    // A rejected file should still trigger change when selected again.
+    input.value = "";
+    void addFiles(files);
+  });
   prompt.addEventListener("paste", (event) => {
     const images = [...(event.clipboardData?.files ?? [])].filter((file) =>
       file.type.startsWith("image/"));
@@ -155,6 +166,7 @@ export function createComposerImages({ composer, prompt, button, input, strip,
     set(value) { ids = Array.isArray(value) ? [...value] : []; render(); },
     clear() { ids = []; render(); },
     isUploading: () => uploading,
+    supportsCurrentModel: imageCapable,
     setWritable(value) { writable = Boolean(value); render(); },
   });
 }
