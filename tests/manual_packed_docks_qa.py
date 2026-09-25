@@ -2,7 +2,8 @@
 
 Run from the repository root after building mdo.exe. The model endpoint only
 binds to localhost and returns one deterministic tool call per marker prompt:
-TODO UI, ASK UI, or APPROVAL UI. The latter requests a harmless print command.
+TODO UI, ASK UI, APPROVAL UI, or TASK UI. The latter two request harmless
+local print commands; TASK UI runs the command as a background task.
 """
 
 import argparse
@@ -58,6 +59,12 @@ class Model(BaseHTTPRequestHandler):
                            "name": "mdo.todo", "arguments": json.dumps({"items": [
                                {"text": "Inspect UI", "done": True},
                                {"text": "Verify refresh", "done": False}]})}]
+            elif "TASK UI" in wire and "task" not in Model.sent:
+                Model.sent.add("task")
+                output = [{"type": "function_call", "call_id": "ui-task-1",
+                           "name": "spawn", "arguments": json.dumps({
+                               "argv": [sys.executable, "-c",
+                                        "print('task UI fixture')"]})}]
             elif "ASK UI" in wire and "ask" not in Model.sent:
                 Model.sent.add("ask")
                 output = [{"type": "function_call", "call_id": "ui-ask-1",

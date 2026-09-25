@@ -643,27 +643,41 @@ export async function boot() {
       state.data?.id === route.sessionId ? state.data : null;
     if (!session) {
       contextList.append(
-        element("dt", { text: "状态" }),
-        element("dd", { text: state.status === "loading" ? "正在载入…" :
-          route.sessionId ? "未选择会话" : "新任务" }),
-        element("dt", { text: "项目" }),
+        element("dt", { text: t("inspector.context.status", {}, "状态") }),
+        element("dd", { text: state.status === "loading"
+          ? t("inspector.context.loading", {}, "正在载入…")
+          : route.sessionId ? t("inspector.context.noSession", {}, "未选择会话")
+            : t("inspector.context.newTask", {}, "新任务") }),
+        element("dt", { text: t("inspector.context.project", {}, "项目") }),
         element("dd", { text: route.projectId || "default" }),
-        element("dt", { text: "工作区" }),
-        element("dd", { text: currentWorkspace() || "本地工作区" }),
+        element("dt", { text: t("inspector.context.workspace", {}, "工作区") }),
+        element("dd", { text: currentWorkspace() ||
+          t("composer.localWorkspace", {}, "本地工作区") }),
       );
       return;
     }
+    const reasoningKeys = {
+      none: "settings.reasoningNone", minimal: "settings.reasoningMinimal",
+      low: "settings.reasoningLow", medium: "settings.reasoningMedium",
+      high: "settings.reasoningHigh", xhigh: "settings.reasoningXhigh",
+      max: "settings.reasoningMax",
+    };
+    const effort = session.reasoning_effort;
+    const reasoning = effort ? t(reasoningKeys[effort] || "", {}, effort)
+      : t("inspector.context.auto", {}, "自动");
     const values = [
-      ["项目", session.project_id],
-      ["Agent", session.agent_id],
-      ["模型", session.model_id],
-      ["协议", session.protocol],
-      ["推理", session.reasoning_effort || "自动"],
-      ["工作区", session.workspace_root || "默认"],
-      ["输出上限", session.max_output_tokens ? `${session.max_output_tokens} tokens` : "默认"],
-      ["配置版本", session.config_revision],
-      ["模块代次", session.module_generation],
-      ["Skill 代次", session.skill_generation],
+      [t("inspector.context.project", {}, "项目"), session.project_id],
+      [t("inspector.context.agent", {}, "Agent"), session.agent_id],
+      [t("inspector.context.model", {}, "模型"), session.model_id],
+      [t("inspector.context.protocol", {}, "协议"), session.protocol],
+      [t("inspector.context.reasoning", {}, "推理"), reasoning],
+      [t("inspector.context.workspace", {}, "工作区"), session.workspace_root ||
+        t("inspector.context.default", {}, "默认")],
+      [t("inspector.context.outputLimit", {}, "输出上限"), session.max_output_tokens
+        ? `${session.max_output_tokens} tokens` : t("inspector.context.default", {}, "默认")],
+      [t("inspector.context.configRevision", {}, "配置版本"), session.config_revision],
+      [t("inspector.context.moduleGeneration", {}, "模块代次"), session.module_generation],
+      [t("inspector.context.skillGeneration", {}, "Skill 代次"), session.skill_generation],
     ];
     for (const [label, value] of values) {
       contextList.append(element("dt", { text: label }), element("dd", { text: value || "—" }));
@@ -718,6 +732,7 @@ export async function boot() {
   });
   subscribeLocale(() => {
     setRun(activeRun);
+    updateContext(sessionDetailStore.get());
     syncPromptPlaceholder();
     syncWorkspaceChip();
     syncRuntimeLabel();
@@ -938,8 +953,10 @@ export async function boot() {
       mobileTitle.textContent = t("shell.newTask");
       mobileMeta.textContent = project;
       syncWorkspaceChip();
-      updateContext(sessionDetailStore.get());
     }
+    // Returning from Settings may keep the same selected session, so refresh
+    // the context before the same-session fast path below.
+    updateContext(sessionDetailStore.get());
     if (key === selectedKey) {
       if (key) {
         queueBlocked.add(key);

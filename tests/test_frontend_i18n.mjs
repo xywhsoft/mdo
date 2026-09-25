@@ -4,6 +4,7 @@ import test from "node:test";
 
 import { currentLocale, loadLocale, subscribeLocale, supportedLocales, t } from
   "../app/web/js/i18n.js";
+import { errorMessage } from "../app/web/js/utils/dom.js";
 import { sessionActionDialogCopy, sessionActionItems, sessionForkTitle } from
   "../app/web/js/features/sessions/session-actions.js";
 
@@ -53,7 +54,12 @@ test("bundled language packs cover the annotated shell and switch without stale 
     "js/features/settings/project-panel.js",
     "js/features/settings/memory-panel.js",
     "js/features/settings/model-config-panel.js",
+    "js/features/tasks/task-panel.js",
+    "js/features/approvals/decision-panel.js",
+    "js/features/approvals/recovery-panel.js",
+    "js/features/approvals/labels.js",
     "js/features/sessions/project-dialog.js",
+    "js/utils/dom.js",
     "js/app.js",
   ]) {
     const source = readFileSync(new URL(path, root), "utf8");
@@ -90,6 +96,14 @@ test("bundled language packs cover the annotated shell and switch without stale 
       for (const [, key] of source.matchAll(/"(modelConfig\.[^"]+)"/g))
         assert.ok(referenceKeys.includes(key), `missing model configuration key: ${key}`);
   }
+  for (const state of ["pending", "running", "succeeded", "failed",
+    "cancelled", "timed_out", "lost"])
+    assert.ok(referenceKeys.includes(`task.state.${state}`));
+  for (const kind of ["process", "agent", "scheduled"])
+    assert.ok(referenceKeys.includes(`task.kind.${kind}`));
+  for (const kind of ["created", "state_changed", "cancel_requested",
+    "restored", "notice_taken"])
+    assert.ok(referenceKeys.includes(`task.event.${kind}`));
 
   const node = {
     dataset: { i18n: "shell.newTask", i18nAriaLabel: "shell.newTask.configure" },
@@ -129,6 +143,8 @@ test("bundled language packs cover the annotated shell and switch without stale 
     assert.equal(t("nav.actionsFor", { title: "Тест" }), "Действия с сеансом Тест");
     assert.equal(sessionActionItems({ status: "active", pinned: true })[1].label, "Открепить");
     assert.equal(sessionForkTitle({ title: "Тест" }), "Тест (ветка)");
+    assert.equal(errorMessage({ code: "network_error" }),
+      "Нет соединения с локальной службой. Проверьте, что mdo работает.");
     assert.equal(sessionActionDialogCopy("trash", { title: "Тест" })[1],
       "«Тест» можно восстановить из корзины.");
     assert.equal(t("missing.key", {}, "中文回退"), "中文回退");

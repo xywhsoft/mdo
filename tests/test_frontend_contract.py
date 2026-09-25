@@ -239,8 +239,8 @@ class FrontendContractTests(unittest.TestCase):
         self.assertIn("approvalDecisionStore.subscribe(render)",
                       self.scripts["js/features/chat/conversation-docks.js"])
         self.assertIn("text: formatArguments(item.arguments_json)", panel)
-        self.assertIn('text: "允许一次"', panel)
-        self.assertIn('text: "拒绝"', panel)
+        self.assertIn('text: t("decision.allowOnce"', panel)
+        self.assertIn('text: t("decision.deny"', panel)
         self.assertIn(".approval-card", self.css)
         self.assertNotIn("innerHTML", panel)
 
