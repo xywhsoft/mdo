@@ -1,4 +1,4 @@
-import { decideApproval } from "../../state/approvals.js";
+import { approvalDecisionStatus, approvalDecisionStore, decideApproval } from "../../state/approvals.js";
 import { clear, element, errorMessage, toast } from "../../utils/dom.js";
 
 const RISK_LABELS = Object.freeze({ low: "低风险", medium: "中风险", high: "高风险" });
@@ -22,27 +22,19 @@ function resourceText(resource) {
 
 export function createDecisionPanel({ container, summary, store, onChanged }) {
   let state = store.get();
-  const deciding = new Set();
-  const submitted = new Set();
   const argumentsOpen = new Map();
   const seen = new Set();
 
-  async function decide(item, decision, card) {
+  async function decide(item, decision) {
     const key = String(item.id);
-    if (deciding.has(key) || submitted.has(key)) return;
-    deciding.add(key);
-    for (const button of card.querySelectorAll("button"))
-      button.setAttribute("aria-disabled", "true");
+    if (approvalDecisionStatus(key) !== "idle") return;
     try {
-      await decideApproval(item.id, decision);
-      submitted.add(key);
+      if (!await decideApproval(item.id, decision)) return;
       toast(decision === "allow" ? `已允许 ${item.tool} 本次执行` : `已拒绝 ${item.tool} 本次执行`);
       await onChanged?.();
     } catch (error) {
-      toast(submitted.has(key) ? "决策已提交，但状态刷新未完成" : errorMessage(error), "error");
-    } finally {
-      deciding.delete(key);
-      render();
+      toast(approvalDecisionStatus(key) === "submitted"
+        ? "决策已提交，但状态刷新未完成" : errorMessage(error), "error");
     }
   }
 
@@ -81,11 +73,11 @@ export function createDecisionPanel({ container, summary, store, onChanged }) {
     );
     const details = card.querySelector("details");
     details.addEventListener("toggle", () => argumentsOpen.set(key, details.open));
-    const busy = deciding.has(key) || submitted.has(key);
+    const busy = approvalDecisionStatus(key) !== "idle";
     allow.setAttribute("aria-disabled", String(busy));
     deny.setAttribute("aria-disabled", String(busy));
-    allow.addEventListener("click", () => void decide(item, "allow", card));
-    deny.addEventListener("click", () => void decide(item, "deny", card));
+    allow.addEventListener("click", () => void decide(item, "allow"));
+    deny.addEventListener("click", () => void decide(item, "deny"));
     return card;
   }
 
@@ -98,7 +90,6 @@ export function createDecisionPanel({ container, summary, store, onChanged }) {
     const total = Number(state.data?.total ?? items.length);
     if (state.status === "ready") {
       const live = new Set(items.map((item) => String(item.id)));
-      for (const key of submitted) if (!live.has(key)) submitted.delete(key);
       for (const key of argumentsOpen.keys()) if (!live.has(key)) argumentsOpen.delete(key);
     }
     clear(summary);
@@ -126,7 +117,7 @@ export function createDecisionPanel({ container, summary, store, onChanged }) {
     }
   }
 
-  return store.subscribe((next) => {
+  const unsubscribeStore = store.subscribe((next) => {
     state = next;
     for (const item of next.data?.items ?? []) {
       const id = String(item.id);
@@ -138,4 +129,6 @@ export function createDecisionPanel({ container, summary, store, onChanged }) {
     }
     render();
   });
+  const unsubscribeDecisions = approvalDecisionStore.subscribe(render);
+  return () => { unsubscribeStore(); unsubscribeDecisions(); };
 }

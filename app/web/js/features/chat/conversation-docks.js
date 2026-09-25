@@ -1,4 +1,4 @@
-import { decideApproval } from "../../state/approvals.js";
+import { approvalDecisionStatus, approvalDecisionStore, decideApproval } from "../../state/approvals.js";
 import { answerAsk } from "../../state/asks.js";
 import { clear, element, errorMessage, toast } from "../../utils/dom.js";
 
@@ -47,7 +47,7 @@ function todoCard(items, expanded, focusKey, onToggle) {
   return card;
 }
 
-function approvalCard(item, deciding, submitted, argumentsOpen, onChanged) {
+function approvalCard(item, argumentsOpen, onChanged) {
   const key = String(item.id);
   const card = element("section", { className: "conversation-dock" });
   const resources = element("ul", { className: "conversation-dock-list" });
@@ -60,23 +60,16 @@ function approvalCard(item, deciding, submitted, argumentsOpen, onChanged) {
   const allow = element("button", { text: "允许一次", attrs: {
     type: "button", "data-dock-focus": `approval/${key}/allow` } });
   for (const [button, decision] of [[deny, "deny"], [allow, "allow"]]) {
-    button.setAttribute("aria-disabled", String(deciding.has(key) || submitted.has(key)));
+    button.setAttribute("aria-disabled", String(approvalDecisionStatus(key) !== "idle"));
     button.addEventListener("click", async () => {
-      if (deciding.has(key) || submitted.has(key)) return;
-      deciding.add(key);
-      deny.setAttribute("aria-disabled", "true");
-      allow.setAttribute("aria-disabled", "true");
+      if (approvalDecisionStatus(key) !== "idle") return;
       try {
-        await decideApproval(item.id, decision);
-        submitted.add(key);
+        if (!await decideApproval(item.id, decision)) return;
         await onChanged();
       } catch (error) {
-        toast(submitted.has(key) ? "决策已提交，但状态刷新未完成" : errorMessage(error), "error");
-        if (!submitted.has(key)) {
-          deny.setAttribute("aria-disabled", "false");
-          allow.setAttribute("aria-disabled", "false");
-        }
-      } finally { deciding.delete(key); }
+        toast(approvalDecisionStatus(key) === "submitted"
+          ? "决策已提交，但状态刷新未完成" : errorMessage(error), "error");
+      }
     });
   }
   const argumentsView = element("details", { className: "approval-arguments",
@@ -178,10 +171,8 @@ function askCard(item, projectId, sessionId, deciding, answered, drafts,
 
 export function createConversationDocks({ container, navigation, tasksStore, approvalsStore,
   asksStore, todoStore, runsStore, onOpenTasks, onChanged }) {
-  const approvalDeciding = new Set();
   const askDeciding = new Set();
   const askAnswered = new Set();
-  const submitted = new Set();
   const expanded = new Map();
   const argumentsOpen = new Map();
   const drafts = new Map();
@@ -228,11 +219,10 @@ export function createConversationDocks({ container, navigation, tasksStore, app
     }));
     if (tasks.length) otherRoot.append(taskCard(tasks, onOpenTasks));
     for (const item of approvals) otherRoot.append(approvalCard(
-      item, approvalDeciding, submitted, argumentsOpen, onChanged));
+      item, argumentsOpen, onChanged));
     if (approvalsStore.get().status === "ready") {
       const live = new Set((approvalsStore.get().data?.items ?? [])
         .map((item) => String(item.id)));
-      for (const key of submitted) if (!live.has(key)) submitted.delete(key);
       for (const key of argumentsOpen.keys()) if (!live.has(key)) argumentsOpen.delete(key);
     }
     if (focusedDock) {
@@ -273,6 +263,7 @@ export function createConversationDocks({ container, navigation, tasksStore, app
   const unsubscribers = [
     navigation.subscribe(render), tasksStore.subscribe(render),
     approvalsStore.subscribe(render), runsStore.subscribe(render),
+    approvalDecisionStore.subscribe(render),
     asksStore.subscribe(render),
     todoStore.subscribe(render),
   ];

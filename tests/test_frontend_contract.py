@@ -233,7 +233,11 @@ class FrontendContractTests(unittest.TestCase):
         self.assertIn('api.get("/approvals")', state)
         self.assertIn('api.put(`/approvals/${id}`, { decision })', state)
         self.assertIn('new Set(["allow", "deny"])', state)
-        self.assertIn("deciding = new Set()", panel)
+        self.assertIn("pending = new Set()", state)
+        self.assertIn("approvalDecisionStatus(key)", panel)
+        self.assertIn("approvalDecisionStore.subscribe(render)", panel)
+        self.assertIn("approvalDecisionStore.subscribe(render)",
+                      self.scripts["js/features/chat/conversation-docks.js"])
         self.assertIn("text: formatArguments(item.arguments_json)", panel)
         self.assertIn('text: "允许一次"', panel)
         self.assertIn('text: "拒绝"', panel)

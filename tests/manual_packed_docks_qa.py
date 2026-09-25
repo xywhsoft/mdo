@@ -5,6 +5,8 @@ binds to localhost and returns one deterministic tool call per marker prompt:
 TODO UI, ASK UI, or APPROVAL UI. The latter requests a harmless print command.
 """
 
+import argparse
+import http.client
 import json
 import os
 import shutil
@@ -86,6 +88,86 @@ class ModelServer(ThreadingHTTPServer):
         super().handle_error(_request, _client_address)
 
 
+class ApprovalDelayProxy(BaseHTTPRequestHandler):
+    """Forward one browser origin while delaying approval PUTs for UI QA."""
+
+    protocol_version = "HTTP/1.1"
+
+    def log_message(self, *_args):
+        pass
+
+    def do_GET(self):
+        self.forward()
+
+    def do_POST(self):
+        self.forward()
+
+    def do_PUT(self):
+        self.forward()
+
+    def do_DELETE(self):
+        self.forward()
+
+    def do_HEAD(self):
+        self.forward()
+
+    def forward(self):
+        length = int(self.headers.get("Content-Length", "0"))
+        if length < 0 or length > 8 * 1024 * 1024:
+            self.send_error(413)
+            return
+        body = self.rfile.read(length) if length else None
+        if self.command == "PUT" and self.path.startswith("/api/v1/approvals/"):
+            with self.server.approval_lock:
+                self.server.approval_puts += 1
+                count = self.server.approval_puts
+            print(f"QA approval PUT #{count}", flush=True)
+            time.sleep(self.server.delay_seconds)
+        headers = {key: value for key, value in self.headers.items()
+                   if key.lower() not in {"host", "connection", "content-length"}}
+        headers["Host"] = f"127.0.0.1:{self.server.upstream_port}"
+        headers["Connection"] = "close"
+        if body is not None:
+            headers["Content-Length"] = str(len(body))
+        upstream = http.client.HTTPConnection(
+            "127.0.0.1", self.server.upstream_port, timeout=30)
+        try:
+            upstream.request(self.command, self.path, body=body, headers=headers)
+            response = upstream.getresponse()
+            payload = response.read()
+            self.send_response(response.status)
+            for key, value in response.getheaders():
+                if key.lower() not in {"connection", "content-length",
+                                       "transfer-encoding"}:
+                    self.send_header(key, value)
+            self.send_header("Content-Length", str(len(payload)))
+            self.send_header("Connection", "close")
+            self.end_headers()
+            if self.command != "HEAD":
+                self.wfile.write(payload)
+            self.close_connection = True
+        except (BrokenPipeError, ConnectionResetError):
+            pass
+        finally:
+            upstream.close()
+
+
+class ApprovalProxyServer(ThreadingHTTPServer):
+    daemon_threads = True
+
+    def handle_error(self, request, client_address):
+        if isinstance(sys.exc_info()[1], (BrokenPipeError, ConnectionResetError)):
+            return
+        super().handle_error(request, client_address)
+
+
+parser = argparse.ArgumentParser(description=__doc__)
+parser.add_argument("--approval-delay-ms", type=int, default=0,
+                    help="delay one approval PUT by 0-5000 ms for manual duplicate-click QA")
+args = parser.parse_args()
+if not 0 <= args.approval_delay_ms <= 5000:
+    parser.error("--approval-delay-ms must be between 0 and 5000")
+
 base = Path(tempfile.mkdtemp(prefix="mdo-packed-docks-", dir=ROOT / ".build"))
 shutil.copy2(ROOT / "mdo.exe", base / "mdo.exe")
 (base / "README.md").write_text("Synthetic workspace file for @ completion.\n",
@@ -114,6 +196,7 @@ env["USERPROFILE"] = str(base)
 env["MDO_LING_RESPONSES_URL"] = f"http://127.0.0.1:{model.server_address[1]}/v1"
 env["MDO_LING_API_KEY"] = "bounded-packed-docks-key"
 process = None
+proxy = None
 try:
     with (base / "packed.log").open("ab") as log:
         process = subprocess.Popen([str(base / "mdo.exe"), "--", "--home",
@@ -130,10 +213,23 @@ try:
     if status != 201:
         raise RuntimeError((status, response))
     session = response["data"]["id"]
-    print(f"READY url=http://127.0.0.1:{port}/#/projects/default/"
+    browser_port = port
+    if args.approval_delay_ms:
+        proxy = ApprovalProxyServer(("127.0.0.1", 0), ApprovalDelayProxy)
+        proxy.upstream_port = port
+        proxy.delay_seconds = args.approval_delay_ms / 1000
+        proxy.approval_lock = threading.Lock()
+        proxy.approval_puts = 0
+        threading.Thread(target=proxy.serve_forever, daemon=True).start()
+        browser_port = proxy.server_address[1]
+    print(f"READY url=http://127.0.0.1:{browser_port}/#/projects/default/"
           f"sessions/{session} base={base}", flush=True)
     input("Press Enter to stop QA servers.\n")
 finally:
+    if proxy:
+        print(f"QA approval PUT total={proxy.approval_puts}", flush=True)
+        proxy.shutdown()
+        proxy.server_close()
     stop_host(process)
     model.shutdown()
     model.server_close()
