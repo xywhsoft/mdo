@@ -1,5 +1,6 @@
 import { api, resourceId } from "../../api/client.js";
 import { clear, element, errorMessage, toast } from "../../utils/dom.js";
+import { subscribeLocale, t } from "../../i18n.js";
 
 const dialog = document.querySelector("#memory-dialog");
 const form = dialog.querySelector("#memory-form");
@@ -20,19 +21,34 @@ let busy = false;
 let requestSerial = 0;
 let returnFocus = null;
 let activeProject = null;
+let statusMessage = null;
 
 export async function openMemoryDirectory(project = null) {
   const path = project ? `/memory/projects/${resourceId(project.id, "project")}`
     : "/memory/global";
   try {
     await api.post(`${path}/open-directory`, {});
-    toast("已在运行 mdo 的设备上打开记忆目录");
+    toast(t("memory.directoryOpened", {}, "已在运行 mdo 的设备上打开记忆目录"));
   } catch (cause) { toast(errorMessage(cause), "error"); }
 }
 
 function setStatus(message, tone = "neutral") {
+  statusMessage = null;
   status.textContent = message;
   status.dataset.tone = tone;
+}
+
+function setLocalizedStatus(key, params = {}, fallback = key, tone = "neutral") {
+  statusMessage = { key, params, fallback };
+  status.textContent = t(key, params, fallback);
+  status.dataset.tone = tone;
+}
+
+function renderTitle() {
+  title.textContent = activeProject
+    ? t("memory.projectTitle", { name: activeProject.name || activeProject.id },
+      `${activeProject.name || activeProject.id} · 项目记忆`)
+    : t("memory.globalTitle", {}, "全局记忆");
 }
 
 function fields() {
@@ -77,10 +93,12 @@ function fill(entry = null) {
 }
 
 function renderList() {
+  const focusedId = document.activeElement?.dataset?.memoryId;
   clear(list);
   const items = collection?.data?.items ?? [];
   if (!items.length) {
-    list.append(element("p", { className: "empty-state", text: "还没有记忆。" }));
+    list.append(element("p", { className: "empty-state",
+      text: t("memory.empty", {}, "还没有记忆。") }));
     return;
   }
   for (const item of items) {
@@ -92,16 +110,19 @@ function renderList() {
     button.addEventListener("click", () => { void select(item.id); });
     list.append(button);
   }
+  if (focusedId) [...list.querySelectorAll("button[data-memory-id]")]
+    .find((button) => button.dataset.memoryId === focusedId)?.focus();
 }
 
 async function refresh({ discardDraft = false, selectId = selectedId } = {}) {
   if (busy || (!discardDraft && dirty())) {
-    setStatus("有未保存的修改。保存后再刷新，或点击“刷新”放弃当前修改。", "error");
+    setLocalizedStatus("memory.dirtyRefresh", {},
+      "有未保存的修改。保存后再刷新，或点击“刷新”放弃当前修改。", "error");
     return;
   }
   const serial = ++requestSerial;
   setBusy(true);
-  setStatus("正在读取记忆…");
+  setLocalizedStatus("memory.loading", {}, "正在读取记忆…");
   try {
     const next = await api.get(collectionPath);
     if (serial !== requestSerial) return;
@@ -114,7 +135,9 @@ async function refresh({ discardDraft = false, selectId = selectedId } = {}) {
       collection.etag = entry.etag;
       fill(entry.data);
     } else fill();
-    setStatus(`${next.data.items.length} 条记忆 · revision ${next.data.revision}`);
+    setLocalizedStatus("memory.count", { count: next.data.items.length,
+      revision: next.data.revision },
+      `${next.data.items.length} 条记忆 · revision ${next.data.revision}`);
   } catch (cause) {
     if (serial === requestSerial) setStatus(errorMessage(cause), "error");
   } finally {
@@ -125,7 +148,8 @@ async function refresh({ discardDraft = false, selectId = selectedId } = {}) {
 async function select(id) {
   if (busy) return;
   if (dirty()) {
-    setStatus("请先保存当前修改，或点击“刷新”放弃修改。", "error");
+    setLocalizedStatus("memory.dirtySelection", {},
+      "请先保存当前修改，或点击“刷新”放弃修改。", "error");
     return;
   }
   const serial = ++requestSerial;
@@ -135,7 +159,8 @@ async function select(id) {
     if (serial !== requestSerial) return;
     collection.etag = result.etag;
     fill(result.data);
-    setStatus(`正在编辑“${result.data.title}”`);
+    setLocalizedStatus("memory.editing", { title: result.data.title },
+      `正在编辑“${result.data.title}”`);
     form.elements.title.focus();
   } catch (cause) {
     if (serial === requestSerial) setStatus(errorMessage(cause), "error");
@@ -147,12 +172,14 @@ async function select(id) {
 function validate(input) {
   if (!form.reportValidity()) return false;
   if (encoder.encode(input.content).length > 16 * 1024) {
-    setStatus("内容最多 16 KiB（按 UTF-8 字节计算）。", "error");
+    setLocalizedStatus("memory.contentLimit", {},
+      "内容最多 16 KiB（按 UTF-8 字节计算）。", "error");
     return false;
   }
   if (input.tags.length > 16 || new Set(input.tags).size !== input.tags.length ||
       input.tags.some((tag) => encoder.encode(tag).length > 64)) {
-    setStatus("标签最多 16 个，每个不超过 64 字节，不能重复。", "error");
+    setLocalizedStatus("memory.tagsLimit", {},
+      "标签最多 16 个，每个不超过 64 字节，不能重复。", "error");
     return false;
   }
   return true;
@@ -160,7 +187,8 @@ function validate(input) {
 
 function close() {
   if (dirty()) {
-    setStatus("有未保存的修改。请保存，或点击“放弃并关闭”。", "error");
+    setLocalizedStatus("memory.dirtyClose", {},
+      "有未保存的修改。请保存，或点击“放弃并关闭”。", "error");
     return;
   }
   dialog.close();
@@ -174,7 +202,8 @@ discard.addEventListener("click", () => { baseline = fingerprint(); dialog.close
 dialog.addEventListener("cancel", (event) => {
   if (!dirty()) return;
   event.preventDefault();
-  setStatus("有未保存的修改。请保存，或点击“放弃并关闭”。", "error");
+  setLocalizedStatus("memory.dirtyClose", {},
+    "有未保存的修改。请保存，或点击“放弃并关闭”。", "error");
 });
 dialog.addEventListener("close", () => {
   ++requestSerial;
@@ -184,9 +213,13 @@ dialog.addEventListener("close", () => {
 form.addEventListener("input", updateDirty);
 form.addEventListener("change", updateDirty);
 dialog.querySelector("#memory-new").addEventListener("click", () => {
-  if (dirty()) { setStatus("请先保存当前修改，或点击“刷新”放弃修改。", "error"); return; }
+  if (dirty()) {
+    setLocalizedStatus("memory.dirtySelection", {},
+      "请先保存当前修改，或点击“刷新”放弃修改。", "error");
+    return;
+  }
   fill();
-  setStatus("新建记忆；标识保存后不可修改。");
+  setLocalizedStatus("memory.newHint", {}, "新建记忆；标识保存后不可修改。");
   form.elements.id.focus();
 });
 dialog.querySelector("#memory-refresh").addEventListener("click", () => {
@@ -203,7 +236,7 @@ form.addEventListener("submit", async (event) => {
     baseline = fingerprint();
     setBusy(false);
     await refresh({ discardDraft: true, selectId: input.id });
-    toast("记忆已保存");
+    toast(t("memory.saved", {}, "记忆已保存"));
   } catch (cause) {
     setStatus(errorMessage(cause), "error");
   } finally { setBusy(false); }
@@ -215,7 +248,10 @@ dialog.querySelector("#memory-delete-cancel").addEventListener("click", () => {
 });
 dialog.querySelector("#memory-delete-apply").addEventListener("click", async () => {
   if (busy || !selectedId || !collection?.etag) return;
-  if (dirty()) { setStatus("先保存或刷新当前修改，再删除。", "error"); return; }
+  if (dirty()) {
+    setLocalizedStatus("memory.dirtyDelete", {}, "先保存或刷新当前修改，再删除。", "error");
+    return;
+  }
   setBusy(true);
   try {
     await api.delete(`${collectionPath}/${resourceId(selectedId, "memory")}`,
@@ -223,7 +259,7 @@ dialog.querySelector("#memory-delete-apply").addEventListener("click", async () 
     fill();
     setBusy(false);
     await refresh({ discardDraft: true, selectId: "" });
-    toast("记忆已删除");
+    toast(t("memory.deleted", {}, "记忆已删除"));
   } catch (cause) {
     setStatus(errorMessage(cause), "error");
   } finally { setBusy(false); }
@@ -238,7 +274,7 @@ export function openMemoryPanel(project = null) {
   selectedId = "";
   baseline = "";
   returnFocus = document.activeElement;
-  title.textContent = project ? `${project.name || project.id} · 项目记忆` : "全局记忆";
+  renderTitle();
   pathLabel.textContent = project ? `Home/memory/projects/${project.id}.json`
     : "Home/memory/global.json";
   fill();
@@ -247,3 +283,11 @@ export function openMemoryPanel(project = null) {
   dialog.querySelector("#memory-close").focus();
   void refresh({ discardDraft: true, selectId: "" });
 }
+
+subscribeLocale(() => {
+  if (!dialog.open) return;
+  renderTitle();
+  if (collection) renderList();
+  if (statusMessage)
+    status.textContent = t(statusMessage.key, statusMessage.params, statusMessage.fallback);
+});

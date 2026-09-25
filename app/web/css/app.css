@@ -1171,7 +1171,7 @@ select:focus-visible,
 .memory-form-actions, .memory-delete-confirm { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; }
 .memory-delete-confirm { padding: 10px; border: 1px solid var(--border-strong); border-radius: var(--radius-sm); font-size: 11px; }
 .memory-delete-confirm[hidden] { display: none; }
-@media (max-width: 620px) { .memory-dialog-body { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(95px, 27dvh) minmax(0, 1fr); } .memory-list-pane { border-right: 0; border-bottom: 1px solid var(--border); } .memory-heading-actions { flex-wrap: wrap; justify-content: end; } }
+@media (max-width: 620px) { .memory-dialog-body { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(95px, 27dvh) minmax(0, 1fr); } .memory-list-pane { border-right: 0; border-bottom: 1px solid var(--border); } .memory-heading-actions { flex-wrap: wrap; justify-content: end; } .memory-dialog button, .memory-form input:not([type="checkbox"]) { min-height: 40px; } .memory-pin { min-height: 40px; } .memory-pin input { width: 18px; height: 18px; } }
 .resource-group-heading { display: flex; align-items: center; justify-content: space-between; margin-top: 9px; padding: 8px 2px 3px; }
 .resource-group-heading h3 { margin: 0; color: var(--muted); font-size: 11px; font-weight: 650; text-transform: uppercase; }
 .resource-group-heading .secondary-button { min-height: 29px; padding: 0 9px; font-size: 10px; }
