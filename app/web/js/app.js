@@ -241,7 +241,7 @@ export async function boot() {
   createRunNotifications({ runsStore, navigation, settingsStore,
     onUnreadChange: (keys) => sessionList.setUnread(keys) });
 
-  async function replaceAndRunMessage(sequence, text, attachments, action) {
+  function assertMessageReplacementReady(sequence, text, attachments) {
     if (messageActionBusy) throw new Error(t("messageAction.busy", {}, "请等待当前消息操作完成"));
     if (!Number.isSafeInteger(sequence) || sequence < 1 ||
         (!text.trim() && !attachments.length))
@@ -256,6 +256,11 @@ export async function boot() {
     if (promptQueue.peek(selected.projectId, selected.sessionId) ||
         prompt.value.trim() || composerAttachments.length)
       throw new Error(t("messageAction.resolveDraft", {}, "请先处理草稿和待发送队列，再编辑历史消息"));
+    return { session, selected };
+  }
+
+  async function replaceAndRunMessage(sequence, text, attachments, action) {
+    const { session, selected } = assertMessageReplacementReady(sequence, text, attachments);
     const targetKey = `${selected.projectId}/${selected.sessionId}`;
     const originVersion = routeVersion;
     const stillSelected = () => routeVersion === originVersion &&
@@ -343,6 +348,7 @@ export async function boot() {
       const version = routeVersion;
       if (!isCurrentMessageOwner(owner, version))
         throw new Error(t("messageAction.ownerChanged", {}, "会话已切换，请重新选择消息"));
+      assertMessageReplacementReady(sequence, text, attachments);
       const edited = await messageEditDialog.open(text, attachments);
       if (edited !== null) {
         if (!isCurrentMessageOwner(owner, version))
