@@ -21,7 +21,7 @@ function fileReference(path) {
 export function createFileMentions({ composer, input, navigation }) {
   const list = element("div", {
     className: "file-mention-menu",
-    attrs: { id: "file-mention-menu", role: "listbox", "aria-label": t("mention.label") },
+    attrs: { id: "file-mention-menu", role: "listbox", "aria-label": t("mention.label", {}, "工作区文件") },
   });
   list.hidden = true;
   composer.append(list);
@@ -128,7 +128,7 @@ export function createFileMentions({ composer, input, navigation }) {
   });
   input.addEventListener("blur", () => window.setTimeout(hide, 0));
   navigation.subscribe(() => { hide(); update(); });
-  subscribeLocale(() => list.setAttribute("aria-label", t("mention.label")));
+  subscribeLocale(() => list.setAttribute("aria-label", t("mention.label", {}, "工作区文件")));
 
   return Object.freeze({
     hide,

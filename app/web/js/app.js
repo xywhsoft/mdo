@@ -1137,7 +1137,8 @@ export async function boot() {
     starter.addEventListener("click", () => {
       if (submittingCurrent() || composerImages.isUploading() ||
           composerProfile.isBusy()) return;
-      void submitPrompt({ text: t(starter.dataset.promptKey), fromComposer: false });
+      void submitPrompt({ text: t(starter.dataset.promptKey, {}, starter.dataset.prompt),
+        fromComposer: false });
     });
   }
   document.querySelector("[data-starter-schedules]")?.addEventListener("click", () =>

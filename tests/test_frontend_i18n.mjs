@@ -25,8 +25,10 @@ test("bundled language packs cover the annotated shell and switch without stale 
   const html = readFileSync(new URL("index.html", root), "utf8");
   for (const [, key] of html.matchAll(/data-i18n(?:-title|-placeholder|-aria-label)?="([^"]+)"/g))
     assert.ok(referenceKeys.includes(key), `missing static key: ${key}`);
-  for (const [, key] of html.matchAll(/data-prompt-key="([^"]+)"/g))
+  for (const [tag, key] of html.matchAll(/<button class="starter"[^>]*data-prompt-key="([^"]+)"[^>]*>/g)) {
     assert.ok(referenceKeys.includes(key), `missing starter prompt: ${key}`);
+    assert.match(tag, /data-prompt="[^"]+"/, `missing bundled starter fallback: ${key}`);
+  }
   for (const path of [
     "js/features/sessions/session-actions.js",
     "js/features/sessions/session-list.js",
@@ -78,6 +80,7 @@ test("bundled language packs cover the annotated shell and switch without stale 
     return Response.json(packs[name]);
   };
   const changes = [];
+  assert.equal(t("welcome.project.prompt", {}, "bundled fallback"), "bundled fallback");
   const unsubscribe = subscribeLocale((name) => changes.push(name));
   try {
     assert.equal(await loadLocale("zh-CN"), true);

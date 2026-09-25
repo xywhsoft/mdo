@@ -2,21 +2,21 @@ import { subscribeLocale, t } from "../../i18n.js";
 import { clear, element, errorMessage, toast } from "../../utils/dom.js";
 
 const COMMANDS = Object.freeze([
-  { name: "/new", descriptionKey: "slash.new" },
-  { name: "/model", descriptionKey: "slash.model" },
-  { name: "/fork", descriptionKey: "slash.fork" },
-  { name: "/export", descriptionKey: "slash.export" },
-  { name: "/clear", descriptionKey: "slash.clear" },
-  { name: "/stop", descriptionKey: "slash.stop" },
-  { name: "/settings", descriptionKey: "slash.settings" },
-  { name: "/theme", descriptionKey: "slash.theme" },
-  { name: "/help", descriptionKey: "slash.help" },
+  { name: "/new", descriptionKey: "slash.new", fallback: "新建任务" },
+  { name: "/model", descriptionKey: "slash.model", fallback: "切换到下一个模型" },
+  { name: "/fork", descriptionKey: "slash.fork", fallback: "分叉当前会话" },
+  { name: "/export", descriptionKey: "slash.export", fallback: "导出当前会话 Markdown" },
+  { name: "/clear", descriptionKey: "slash.clear", fallback: "清空当前会话历史" },
+  { name: "/stop", descriptionKey: "slash.stop", fallback: "停止当前任务" },
+  { name: "/settings", descriptionKey: "slash.settings", fallback: "打开设置" },
+  { name: "/theme", descriptionKey: "slash.theme", fallback: "切换深浅主题" },
+  { name: "/help", descriptionKey: "slash.help", fallback: "查看命令" },
 ]);
 
 export function createSlashCommands({ composer, input, onExecute }) {
   const list = element("div", {
     className: "slash-menu",
-    attrs: { id: "slash-menu", role: "listbox", "aria-label": t("slash.label") },
+    attrs: { id: "slash-menu", role: "listbox", "aria-label": t("slash.label", {}, "斜杠命令") },
   });
   list.hidden = true;
   composer.append(list);
@@ -45,7 +45,7 @@ export function createSlashCommands({ composer, input, onExecute }) {
           "aria-selected": String(index === active) },
       }, [
         element("code", { text: command.name }),
-        element("span", { text: t(command.descriptionKey) }),
+        element("span", { text: t(command.descriptionKey, {}, command.fallback) }),
       ]);
       option.addEventListener("pointerdown", (event) => {
         event.preventDefault();
@@ -76,7 +76,7 @@ export function createSlashCommands({ composer, input, onExecute }) {
   input.addEventListener("input", update);
   input.addEventListener("blur", () => window.setTimeout(hide, 0));
   subscribeLocale(() => {
-    list.setAttribute("aria-label", t("slash.label"));
+    list.setAttribute("aria-label", t("slash.label", {}, "斜杠命令"));
     if (!list.hidden) render();
   });
   return Object.freeze({
