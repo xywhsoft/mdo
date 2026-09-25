@@ -397,7 +397,11 @@ export async function boot() {
         }
       }
     },
-    onUploading: () => setRun(activeRun),
+    onUploading(uploading) {
+      if (uploading && ["image_model_unsupported", "image_selection_invalid"]
+        .includes(composerError.dataset.code)) hideComposerError();
+      setRun(activeRun);
+    },
     onError: showComposerError,
   });
   composerImages.set(composerAttachments);

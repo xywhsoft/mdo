@@ -1,5 +1,5 @@
 import { api, attachmentUrl } from "../../api/client.js";
-import { clear, element } from "../../utils/dom.js";
+import { clear, element, toast } from "../../utils/dom.js";
 
 const TYPES = new Set(["image/png", "image/jpeg", "image/webp"]);
 const MAX_IMAGE_BYTES = 8 * 1024 * 1024;
@@ -7,6 +7,12 @@ const MAX_IMAGE_BYTES = 8 * 1024 * 1024;
 function unsupportedModelError() {
   const error = new Error("当前模型不支持图片，请先切换到支持图片的模型");
   error.code = "image_model_unsupported";
+  return error;
+}
+
+function selectionError(message) {
+  const error = new Error(message);
+  error.code = "image_selection_invalid";
   return error;
 }
 
@@ -80,27 +86,32 @@ export function createComposerImages({ composer, prompt, button, input, strip,
   }
 
   async function addFiles(files) {
-    const images = [...files];
-    if (!images.length || uploading) return;
+    const candidates = [...files];
+    if (!candidates.length || uploading) return;
     if (!writable) { onError(new Error("当前会话不可添加图片")); return; }
     if (!imageCapable()) {
       onError(unsupportedModelError());
       return;
     }
-    if (images.length + ids.length > 4) {
-      onError(new Error("每条消息最多可添加 4 张图片"));
+    const images = [];
+    let otherFiles = 0;
+    let invalidSize = 0;
+    for (const file of candidates) {
+      if (!TYPES.has(file.type)) otherFiles += 1;
+      else if (file.size === 0 || file.size > MAX_IMAGE_BYTES) invalidSize += 1;
+      else images.push(file);
+    }
+    if (!images.length) {
+      onError(selectionError(otherFiles ? "仅支持 PNG、JPEG 和 WebP 图片" :
+        "单张图片不得超过 8 MiB"));
       return;
     }
-    for (const file of images) {
-      if (!TYPES.has(file.type)) {
-        onError(new Error("仅支持 PNG、JPEG 和 WebP 图片"));
-        return;
-      }
-      if (file.size === 0 || file.size > MAX_IMAGE_BYTES) {
-        onError(new Error("单张图片不得超过 8 MiB"));
-        return;
-      }
+    if (images.length + ids.length > 4) {
+      onError(selectionError("每条消息最多可添加 4 张图片"));
+      return;
     }
+    if (otherFiles) toast(`已跳过 ${otherFiles} 个非图片文件`);
+    if (invalidSize) toast(`已跳过 ${invalidSize} 张空白或超过 8 MiB 的图片`);
     uploading = true;
     onUploading(true);
     render();
