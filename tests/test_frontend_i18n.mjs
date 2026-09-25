@@ -48,6 +48,7 @@ test("bundled language packs cover the annotated shell and switch without stale 
     "js/features/settings/settings-view.js",
     "js/features/settings/resource-panels.js",
     "js/features/settings/schedule-panel.js",
+    "js/features/settings/feedback-panel.js",
     "js/app.js",
   ]) {
     const source = readFileSync(new URL(path, root), "utf8");
@@ -68,6 +69,9 @@ test("bundled language packs cover the annotated shell and switch without stale 
     if (path.endsWith("schedule-panel.js"))
       for (const [, key] of source.matchAll(/"(schedule\.[^"]+)"/g))
         assert.ok(referenceKeys.includes(key), `missing schedule key: ${key}`);
+    if (path.endsWith("feedback-panel.js"))
+      for (const [, key] of source.matchAll(/"(feedback\.[^"]+)"/g))
+        assert.ok(referenceKeys.includes(key), `missing feedback key: ${key}`);
   }
 
   const node = {

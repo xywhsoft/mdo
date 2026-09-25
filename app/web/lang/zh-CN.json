@@ -594,5 +594,19 @@
   "schedule.updated": "计划已更新",
   "schedule.wednesday": "周三",
   "schedule.weekdayRequired": "每周计划请至少选择一天",
-  "schedule.weekdays": "每周运行日"
+  "schedule.weekdays": "每周运行日",
+  "feedback.bad": "踩",
+  "feedback.cardDetails": "{time} · {project} · 消息 #{id}",
+  "feedback.cursorStale": "会话列表已变化，请刷新反馈记录。",
+  "feedback.description": "汇总会话回复的点赞与点踩记录，可按需继续加载。",
+  "feedback.diagnostics": "；{count} 项会话目录诊断需在“诊断与存储”中核对",
+  "feedback.empty": "还没有点赞或点踩记录。",
+  "feedback.good": "赞",
+  "feedback.invalidTime": "反馈时间不可用",
+  "feedback.loading": "正在读取反馈…",
+  "feedback.more": "加载更多反馈",
+  "feedback.open": "打开会话",
+  "feedback.pageEmpty": "本页未找到反馈，可以继续加载。",
+  "feedback.refresh": "刷新",
+  "feedback.summary": "已载入 {count} 条反馈，已检查 {scanned} 个会话{diagnostics}。"
 }

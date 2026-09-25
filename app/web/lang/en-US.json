@@ -594,5 +594,19 @@
   "schedule.updated": "Schedule updated",
   "schedule.wednesday": "Wed",
   "schedule.weekdayRequired": "Select at least one weekday for a weekly schedule",
-  "schedule.weekdays": "Days of the week"
+  "schedule.weekdays": "Days of the week",
+  "feedback.bad": "Disliked",
+  "feedback.cardDetails": "{time} · {project} · Message #{id}",
+  "feedback.cursorStale": "The session list changed. Refresh the feedback records.",
+  "feedback.description": "Review likes and dislikes on replies, and load more as needed.",
+  "feedback.diagnostics": "; review {count} session catalog diagnostics in Diagnostics and storage",
+  "feedback.empty": "No likes or dislikes yet.",
+  "feedback.good": "Liked",
+  "feedback.invalidTime": "Feedback time unavailable",
+  "feedback.loading": "Loading feedback…",
+  "feedback.more": "Load more feedback",
+  "feedback.open": "Open session",
+  "feedback.pageEmpty": "No feedback on this page. You can load more.",
+  "feedback.refresh": "Refresh",
+  "feedback.summary": "Feedback records: {count} · Sessions scanned: {scanned}{diagnostics}."
 }

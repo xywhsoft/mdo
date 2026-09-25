@@ -594,5 +594,19 @@
   "schedule.updated": "План обновлён",
   "schedule.wednesday": "Ср",
   "schedule.weekdayRequired": "Выберите хотя бы один день для еженедельного плана",
-  "schedule.weekdays": "Дни недели"
+  "schedule.weekdays": "Дни недели",
+  "feedback.bad": "Не понравилось",
+  "feedback.cardDetails": "{time} · {project} · Сообщение №{id}",
+  "feedback.cursorStale": "Список сеансов изменился. Обновите записи отзывов.",
+  "feedback.description": "Просматривайте оценки ответов и при необходимости загружайте ещё.",
+  "feedback.diagnostics": "; проверьте диагностические записи каталога сеансов: {count} в разделе «Диагностика и хранилище»",
+  "feedback.empty": "Оценок ответов пока нет.",
+  "feedback.good": "Понравилось",
+  "feedback.invalidTime": "Время отзыва недоступно",
+  "feedback.loading": "Загрузка отзывов…",
+  "feedback.more": "Загрузить ещё отзывы",
+  "feedback.open": "Открыть сеанс",
+  "feedback.pageEmpty": "На этой странице нет отзывов. Можно загрузить ещё.",
+  "feedback.refresh": "Обновить",
+  "feedback.summary": "Загружено отзывов: {count}; проверено сеансов: {scanned}{diagnostics}."
 }
