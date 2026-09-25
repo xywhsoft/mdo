@@ -11,13 +11,19 @@
 #define MDO_QUEUE_FILE_MAX (256u * 1024u)
 #define MDO_QUEUE_ID_SIZE 32u
 
+typedef enum MdoQueueState {
+    MDO_QUEUE_STAGED,
+    MDO_QUEUE_PENDING,
+    MDO_QUEUE_SENDING
+} MdoQueueState;
+
 typedef struct MdoQueueItem {
     char Id[MDO_QUEUE_ID_SIZE + 1u];
     char* Text;
     size_t TextSize;
     char Attachments[4][33];
     size_t AttachmentCount;
-    bool Sending;
+    MdoQueueState State;
     bool Priority;
 } MdoQueueItem;
 
@@ -106,14 +112,20 @@ static bool MdoQueueBool(const xvalue* Object, cstr Key, bool* Result)
         xrtValueGetBool(Value, Result);
 }
 
-static bool MdoQueueState(xstrview State, bool* Sending)
+static bool MdoQueueParseState(xstrview State, bool AllowStaged,
+    MdoQueueState* Result)
 {
+    if ( AllowStaged && State.Size == 6u &&
+         memcmp(State.Data, "staged", 6u) == 0 ) {
+        *Result = MDO_QUEUE_STAGED;
+        return true;
+    }
     if ( State.Size == 7u && memcmp(State.Data, "pending", 7u) == 0 ) {
-        *Sending = false;
+        *Result = MDO_QUEUE_PENDING;
         return true;
     }
     if ( State.Size == 7u && memcmp(State.Data, "sending", 7u) == 0 ) {
-        *Sending = true;
+        *Result = MDO_QUEUE_SENDING;
         return true;
     }
     return false;
@@ -129,12 +141,14 @@ static size_t MdoQueueFind(const MdoQueue* Queue, const char* Id)
 
 static bool MdoQueueInsert(MdoQueue* Queue, const char* Id,
     xstrview Text, const char Attachments[4][33],
-    size_t AttachmentCount, bool First, bool Priority)
+    size_t AttachmentCount, bool First, bool Priority,
+    MdoQueueState State)
 {
     MdoQueueItem* Item;
     char* Copy;
     size_t Position = First && Queue->Count != 0u &&
-        Queue->Items[0].Sending ? 1u : (First ? 0u : Queue->Count);
+        Queue->Items[0].State == MDO_QUEUE_SENDING ? 1u :
+        (First ? 0u : Queue->Count);
     if ( Queue->Count >= MDO_QUEUE_MAX_ITEMS ||
          Text.Size > MDO_QUEUE_MAX_TOTAL_TEXT - Queue->TextBytes )
         return false;
@@ -153,6 +167,7 @@ static bool MdoQueueInsert(MdoQueue* Queue, const char* Id,
     memcpy(Item->Attachments, Attachments, sizeof(Item->Attachments));
     Item->AttachmentCount = AttachmentCount;
     Item->Priority = Priority;
+    Item->State = State;
     Queue->TextBytes += Text.Size;
     Queue->Count++;
     return true;
@@ -205,37 +220,37 @@ static bool MdoQueueRead(const char* Path, MdoQueue* Queue)
             if ( !xrtValueGetInt(Version, &Signed) || Signed < 0 ) goto done;
             Schema = (uint64)Signed;
         } else goto done;
-        if ( Schema != 1u && Schema != 2u && Schema != 3u ) goto done;
+        if ( Schema != 1u && Schema != 2u && Schema != 3u &&
+             Schema != 4u ) goto done;
     }
     for ( i = 0u; i < xrtValueCount(Items); ++i ) {
         const xvalue* Entry = xrtValueArrayGet(Items, i);
         xstrview Id;
         xstrview Text;
-        xstrview State;
+        xstrview StateView;
         char IdText[MDO_QUEUE_ID_SIZE + 1u];
         char Attachments[4][33] = {{ 0 }};
         size_t AttachmentCount = 0u;
-        bool Sending;
+        MdoQueueState State;
         bool Priority = false;
         if ( xrtValueType(Entry) != XVALUE_OBJECT ||
              xrtValueCount(Entry) != (Schema == 1u ? 3u :
                 (Schema == 2u ? 4u : 5u)) ||
              !MdoQueueString(Entry, "id", &Id) ||
              !MdoQueueString(Entry, "text", &Text) ||
-             !MdoQueueString(Entry, "state", &State) ||
+             !MdoQueueString(Entry, "state", &StateView) ||
              !MdoQueueId(Id, IdText) ||
              (Schema >= 2u &&
               !MdoAttachmentIdsRead(xrtValueObjectGet(Entry,
                 XRT_STR_LITERAL("attachments")), Attachments,
                 &AttachmentCount)) ||
-             (Schema == 3u &&
+             (Schema >= 3u &&
               !MdoQueueBool(Entry, "priority", &Priority)) ||
              !MdoQueueText(Text, AttachmentCount != 0u) ||
-             !MdoQueueState(State, &Sending) ||
+             !MdoQueueParseState(StateView, Schema == 4u, &State) ||
              MdoQueueFind(Queue, IdText) != SIZE_MAX ||
              !MdoQueueInsert(Queue, IdText, Text, Attachments,
-                AttachmentCount, false, Priority) ) goto done;
-        Queue->Items[Queue->Count - 1u].Sending = Sending;
+                AttachmentCount, false, Priority, State) ) goto done;
     }
     Ok = true;
 done:
@@ -289,7 +304,9 @@ static xvalue* MdoQueueValue(const MdoQueue* Queue)
             MdoApiValueSetStringView(Item, "text",
                 xrtStrViewN(Source->Text, Source->TextSize)) &&
             MdoApiValueSetString(Item, "state",
-                Source->Sending ? "sending" : "pending") &&
+                Source->State == MDO_QUEUE_STAGED ? "staged" :
+                (Source->State == MDO_QUEUE_SENDING ? "sending" :
+                "pending")) &&
             MdoAttachmentIdsWriteValue(Item, Source->Attachments,
                 Source->AttachmentCount) &&
             MdoApiValueSetBool(Item, "priority", Source->Priority) &&
@@ -308,7 +325,7 @@ static bool MdoQueueWrite(const char* Path, const MdoQueue* Queue)
     char* Json;
     size_t Size = 0u;
     bool Ok;
-    if ( Data == NULL || !MdoApiValueSetUInt(Data, "schema_version", 3u) ) {
+    if ( Data == NULL || !MdoApiValueSetUInt(Data, "schema_version", 4u) ) {
         xrtValueRelease(Data);
         return false;
     }
@@ -377,6 +394,7 @@ bool MdoApiQueueRoute(MdoApiContext* Context)
     size_t AttachmentCount = 0u;
     bool First = false;
     bool Priority = false;
+    bool Stage = false;
     bool Add = Context->Request->head->MethodCode == XHTTP_METHOD_POST;
     bool Ok;
     bool AttachmentLocked = false;
@@ -407,14 +425,19 @@ bool MdoApiQueueRoute(MdoApiContext* Context)
                 XRT_STR_LITERAL("attachments"));
             const xvalue* PriorityValue = xrtValueObjectGet(Body.Value,
                 XRT_STR_LITERAL("priority"));
+            const xvalue* StageValue = xrtValueObjectGet(Body.Value,
+                XRT_STR_LITERAL("stage"));
             Ok = xrtValueType(Body.Value) == XVALUE_OBJECT &&
                 xrtValueCount(Body.Value) == (References == NULL ? 3u : 4u) +
-                    (PriorityValue == NULL ? 0u : 1u) &&
+                    (PriorityValue == NULL ? 0u : 1u) +
+                    (StageValue == NULL ? 0u : 1u) &&
                 MdoQueueString(Body.Value, "id", &IdView) &&
                 MdoQueueString(Body.Value, "text", &Text) &&
                 MdoQueueBool(Body.Value, "first", &First) &&
                 (PriorityValue == NULL ||
                  MdoQueueBool(Body.Value, "priority", &Priority)) &&
+                (StageValue == NULL ||
+                 MdoQueueBool(Body.Value, "stage", &Stage)) &&
                 MdoQueueId(IdView, Id) &&
                 (References == NULL ||
                  MdoAttachmentIdsRead(References, Attachments,
@@ -446,7 +469,8 @@ bool MdoApiQueueRoute(MdoApiContext* Context)
             Full = Queue.Count >= MDO_QUEUE_MAX_ITEMS ||
                 Text.Size > MDO_QUEUE_MAX_TOTAL_TEXT - Queue.TextBytes;
             if ( !Full ) Ok = MdoQueueInsert(&Queue, Id, Text,
-                Attachments, AttachmentCount, First, Priority) &&
+                Attachments, AttachmentCount, First, Priority,
+                Stage ? MDO_QUEUE_STAGED : MDO_QUEUE_PENDING) &&
                 MdoQueueWrite(Path, &Queue);
         }
     }
@@ -476,8 +500,8 @@ bool MdoApiQueueItemRoute(MdoApiContext* Context)
     MdoQueue Queue;
     MdoApiJsonBody Body;
     MdoApiBodyStatus BodyStatus;
-    xstrview State;
-    bool Sending = false;
+    xstrview StateView;
+    MdoQueueState NextState = MDO_QUEUE_PENDING;
     bool Change = Context->Request->head->MethodCode == XHTTP_METHOD_PUT;
     bool Ok;
     bool Conflict = false;
@@ -498,8 +522,8 @@ bool MdoApiQueueItemRoute(MdoApiContext* Context)
             return MdoApiReplyBodyError(Context, BodyStatus);
         Ok = xrtValueType(Body.Value) == XVALUE_OBJECT &&
             xrtValueCount(Body.Value) == 1u &&
-            MdoQueueString(Body.Value, "state", &State) &&
-            MdoQueueState(State, &Sending);
+            MdoQueueString(Body.Value, "state", &StateView) &&
+            MdoQueueParseState(StateView, false, &NextState);
         MdoApiJsonBodyUnit(&Body);
         if ( !Ok ) return MdoApiReplyError(Context, 422u,
             "queue_state_invalid", "Expected pending or sending state", NULL);
@@ -517,9 +541,14 @@ bool MdoApiQueueItemRoute(MdoApiContext* Context)
         Index = MdoQueueFind(&Queue, Id);
         if ( Change ) {
             Conflict = Index == SIZE_MAX ||
-                Queue.Items[Index].Sending == Sending;
+                !((Queue.Items[Index].State == MDO_QUEUE_STAGED &&
+                   NextState == MDO_QUEUE_PENDING) ||
+                  (Queue.Items[Index].State == MDO_QUEUE_PENDING &&
+                   NextState == MDO_QUEUE_SENDING) ||
+                  (Queue.Items[Index].State == MDO_QUEUE_SENDING &&
+                   NextState == MDO_QUEUE_PENDING));
             if ( !Conflict ) {
-                Queue.Items[Index].Sending = Sending;
+                Queue.Items[Index].State = NextState;
                 Ok = MdoQueueWrite(Path, &Queue);
             }
         } else if ( Index != SIZE_MAX ) {

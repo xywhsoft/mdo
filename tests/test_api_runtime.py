@@ -2161,21 +2161,46 @@ def run_probe(host: Path) -> None:
                     assert status == 200, (status, body)
                 assert json.loads(request(port, "GET", queue_path)[2])[
                     "data"]["items"] == []
+                staged_id = "2" * 32
+                staged_path = queue_path + "/" + staged_id
+                staged = {"id": staged_id, "text": "durable intent",
+                          "first": False, "stage": True}
+                status, _, body = queue_request("POST", queue_path, staged)
+                assert status == 201 and json.loads(body)["data"]["items"][0][
+                    "state"] == "staged", (status, body)
+                assert json.loads(request(port, "GET", queue_path)[2])[
+                    "data"]["items"][0]["state"] == "staged"
+                status, _, body = queue_request("POST", queue_path, staged)
+                assert status == 200 and len(json.loads(body)["data"][
+                    "items"]) == 1, (status, body)
+                status, _, body = queue_request("PUT", staged_path,
+                    {"state": "sending"})
+                assert status == 409 and json.loads(body)["error"][
+                    "code"] == "queue_state_conflict", (status, body)
+                status, _, body = queue_request("PUT", staged_path,
+                    {"state": "pending"})
+                assert status == 200 and json.loads(body)["data"]["items"][0][
+                    "state"] == "pending", (status, body)
+                assert request(port, "DELETE", staged_path)[0] == 200
                 image_item_id = "d" * 32
                 status, _, body = queue_request("POST", queue_path, {
                     "id": image_item_id, "text": "", "first": False,
-                    "attachments": [image["id"]],
+                    "attachments": [image["id"]], "stage": True,
                 })
                 image_queue = json.loads(body)["data"]["items"]
                 assert status == 201 and image_queue == [{
-                    "id": image_item_id, "text": "", "state": "pending",
+                    "id": image_item_id, "text": "", "state": "staged",
                     "attachments": [image["id"]], "priority": False,
                 }], (status, body)
                 assert json.loads(queue_file.read_text(encoding="utf-8"))[
-                    "schema_version"] == 3
+                    "schema_version"] == 4
                 status, _, body = request(port, "DELETE", image["url"])
                 assert status == 409 and json.loads(body)["error"][
                     "code"] == "attachment_in_use", (status, body)
+                status, _, body = queue_request("PUT",
+                    queue_path + "/" + image_item_id, {"state": "pending"})
+                assert status == 200 and json.loads(body)["data"]["items"][0][
+                    "state"] == "pending", (status, body)
                 status, _, body = queue_request("PUT",
                     queue_path + "/" + image_item_id, {"state": "sending"})
                 assert status == 200 and json.loads(body)["data"]["items"][0][
@@ -2203,9 +2228,17 @@ def run_probe(host: Path) -> None:
                 status, _, body = queue_request("POST", queue_path,
                     {"id": "1" * 32, "text": "new prompt", "first": False})
                 assert status == 201 and json.loads(queue_file.read_text(
-                    encoding="utf-8"))["schema_version"] == 3, (status, body)
+                    encoding="utf-8"))["schema_version"] == 4, (status, body)
                 for item_id in (legacy_id, "1" * 32):
                     assert request(port, "DELETE", queue_path + "/" + item_id)[0] == 200
+                queue_file.write_text(json.dumps({"schema_version": 3,
+                    "items": [{"id": legacy_id, "text": "v3 prompt",
+                               "state": "pending", "attachments": [],
+                               "priority": False}]}), encoding="utf-8")
+                status, _, body = request(port, "GET", queue_path)
+                assert status == 200 and json.loads(body)["data"]["items"][0][
+                    "text"] == "v3 prompt", (status, body)
+                assert request(port, "DELETE", queue_path + "/" + legacy_id)[0] == 200
                 todo_path = session_path + "/todo"
                 todo_file = home / "sessions/api-project" / session_id / "todo.json"
                 status, _, body = request(port, "GET", todo_path)
