@@ -135,6 +135,23 @@ export async function boot() {
   // repeating DELETE while its persisted priority queue item is still waiting.
   const priorityCancelAttempts = new Set();
 
+  function focusForkComposerWhenReady() {
+    if (!pendingForkComposerFocus) return;
+    const route = navigation.get();
+    if (route.view !== "workspace" ||
+        `${route.projectId}/${route.sessionId}` !== pendingForkComposerFocus) {
+      pendingForkComposerFocus = "";
+      return;
+    }
+    const session = sessionDetailStore.get().data;
+    if (!session || `${session.project_id}/${session.id}` !== pendingForkComposerFocus ||
+        prompt.disabled) return;
+    // Navigation removes the original action. Keep a user's newer focus choice.
+    if (document.activeElement === document.body ||
+        !document.activeElement?.isConnected) prompt.focus();
+    pendingForkComposerFocus = "";
+  }
+
   function composerScope(route = navigation.get()) {
     return `${route.projectId || "default"}/${route.sessionId || "@new"}`;
   }
@@ -269,6 +286,7 @@ export async function boot() {
       });
       pendingForkComposerFocus = `${fork.project_id}/${fork.id}`;
       navigation.select(fork.project_id, fork.id);
+      focusForkComposerWhenReady();
       toast("已创建会话分支");
     },
     onEdit: async (sequence, text, attachments) => {
@@ -578,15 +596,7 @@ export async function boot() {
     selectedSessionStatus = session?.status ?? (navigation.get().sessionId ? "loading" : "active");
     prompt.placeholder = sessionWritable ? "向墨斗描述任务…" : "该会话不可运行；请先恢复到进行中";
     setRun(activeRun);
-    if (pendingForkComposerFocus && session && !prompt.disabled &&
-        `${session.project_id}/${session.id}` === pendingForkComposerFocus &&
-        `${navigation.get().projectId}/${navigation.get().sessionId}` === pendingForkComposerFocus) {
-      // The fork button disappears on navigation. Restore a useful keyboard target
-      // only if the user has not focused another control while the session loaded.
-      if (document.activeElement === document.body ||
-          !document.activeElement?.isConnected) prompt.focus();
-      pendingForkComposerFocus = "";
-    }
+    focusForkComposerWhenReady();
     if (session) {
       const title = session.title || "未命名任务";
       sessionTitle.textContent = title;
@@ -1151,7 +1161,8 @@ export async function boot() {
     actionConfirm.className = ["trash", "truncate", "clear"].includes(action) ? "danger-button" : "primary-button";
     actionError.hidden = true;
     if (!actionDialog.open) actionDialog.showModal();
-    if (action === "rename") window.setTimeout(() => actionForm.elements.title.select(), 0);
+    if (action === "rename" || action === "fork")
+      window.setTimeout(() => actionForm.elements.title.select(), 0);
   }
 
   $("#close-session-action").addEventListener("click", () => actionDialog.close());
@@ -1162,9 +1173,15 @@ export async function boot() {
     actionError.hidden = true;
     actionConfirm.disabled = true;
     try {
-      await applySessionAction(pendingSessionAction.action, pendingSessionAction.session, actionForm.elements.title.value.trim());
+      const action = pendingSessionAction.action;
+      const updated = await applySessionAction(action, pendingSessionAction.session,
+        actionForm.elements.title.value.trim());
       actionDialog.close();
       pendingSessionAction = null;
+      if (action === "fork") {
+        pendingForkComposerFocus = `${updated.project_id}/${updated.id}`;
+        focusForkComposerWhenReady();
+      }
     } catch (error) {
       actionError.textContent = errorMessage(error);
       actionError.hidden = false;
