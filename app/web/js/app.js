@@ -142,6 +142,16 @@ export async function boot() {
   // repeating DELETE while its persisted priority queue item is still waiting.
   const priorityCancelAttempts = new Set();
 
+  function syncSettingsTitle(section = navigation.get().settingsSection) {
+    const titles = {
+      projects: ["settings.projects", "项目"],
+      schedules: ["settings.schedules", "计划任务"],
+      feedback: ["settings.feedback", "反馈"],
+    };
+    const [key, fallback] = titles[section] ?? ["shell.settings.title", "设置"];
+    $("#settings-title").textContent = t(key, {}, fallback);
+  }
+
   function focusForkComposerWhenReady() {
     if (!pendingForkComposerFocus) return;
     const route = navigation.get();
@@ -696,6 +706,7 @@ export async function boot() {
     syncWorkspaceChip();
     syncRuntimeLabel();
     skipLink.textContent = t(settingsActive ? "shell.skipSettings" : "shell.skip");
+    if (settingsActive) syncSettingsTitle();
     const session = sessionDetailStore.get().data;
     if (session && selectedKey === `${session.project_id}/${session.id}`) {
       const statusText = sessionStatusSuffix(session.status);
@@ -880,9 +891,7 @@ export async function boot() {
       skipLink.textContent = t("shell.skipSettings");
       settingsView.selectSection(settingsSection);
       const standalonePage = !["general", "agent", "web"].includes(settingsSection);
-      $("#settings-title").textContent = settingsSection === "projects"
-        ? "项目" : settingsSection === "schedules" ? "计划任务"
-          : settingsSection === "feedback" ? "反馈" : "设置";
+      syncSettingsTitle(settingsSection);
       $("#settings-revision").hidden = standalonePage;
       $("#settings-actions").hidden = standalonePage;
       if (settingsSection === "schedules") void schedulePanel.refresh();

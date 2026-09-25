@@ -102,6 +102,14 @@ export function createSettingsView({ form, store, navigation, onApplied }) {
     settings.transaction_service.runtime_consistent ? "neutral" : "error");
   }
 
+  function renderCredential(settings) {
+    credential.textContent = settings.web.credential_configured
+      ? t("settings.credentialConfigured", {},
+        "已配置搜索凭据引用。实际值仅在服务端调用时读取，此处不确认其是否可用。")
+      : t("settings.credentialMissing", {},
+        "尚未配置搜索凭据引用。请通过 mdo Home 文件或环境变量配置。");
+  }
+
   function validateInstructions() {
     const field = form.elements.user_instructions;
     const bytes = new TextEncoder().encode(field.value).length;
@@ -119,8 +127,12 @@ export function createSettingsView({ form, store, navigation, onApplied }) {
       ? settings.locale : "zh-CN";
     const selectedLocale = form.elements.locale.value;
     void loadLocale(selectedLocale).then((applied) => {
-      if (applied && snapshot === settings && form.elements.locale.value === selectedLocale)
-        renderStatus(settings);
+      if (applied && snapshot === settings && form.elements.locale.value === selectedLocale) {
+        renderCredential(settings);
+        validateInstructions();
+        if (fingerprint() === baselineFingerprint) renderStatus(settings);
+        else markDirty();
+      }
     }).catch((error) => toast(errorMessage(error), "error"));
     form.elements.theme.value = settings.appearance.theme;
     form.elements.font_size.value = settings.appearance.font_size;
@@ -149,9 +161,7 @@ export function createSettingsView({ form, store, navigation, onApplied }) {
     form.elements.max_results.value = settings.web.max_results;
     form.elements.endpoint.value = settings.web.endpoint;
     baselineFingerprint = fingerprint();
-    credential.textContent = settings.web.credential_configured
-      ? "搜索凭据已在服务端配置；其引用和值不会发送到页面。"
-      : "尚未检测到搜索凭据。请通过 mdo Home 文件或环境变量配置。";
+    renderCredential(settings);
     previewFingerprint = "";
     restoreConfirm.hidden = true;
     renderStatus(settings);
@@ -177,8 +187,10 @@ export function createSettingsView({ form, store, navigation, onApplied }) {
   form.addEventListener("change", markDirty);
   form.elements.locale.addEventListener("change", async () => {
     try {
-      await loadLocale(form.elements.locale.value);
+      const applied = await loadLocale(form.elements.locale.value);
+      if (!applied) return;
       if (snapshot) renderStatus(snapshot);
+      if (snapshot) renderCredential(snapshot);
       validateInstructions();
       markDirty();
     }
@@ -241,8 +253,9 @@ export function createSettingsView({ form, store, navigation, onApplied }) {
     try {
       const result = await restoreSettings(snapshot.etag);
       restoreConfirm.hidden = true;
-      feedbackText(`已恢复内置默认值，当前 revision ${result.revision}。`, "success");
-      toast("已恢复默认设置");
+      feedbackText(t("settings.restoreAppliedRevision", { revision: result.revision },
+        `已恢复内置默认值，当前 revision ${result.revision}。`), "success");
+      toast(t("settings.restoreToast", {}, "已恢复默认设置"));
       onApplied?.();
     } catch (error) {
       feedbackText(errorMessage(error), "error");
@@ -257,7 +270,7 @@ export function createSettingsView({ form, store, navigation, onApplied }) {
 
   const unsubscribe = store.subscribe((state) => {
     if (state.status === "loading" && !state.data) {
-      revision.textContent = "正在读取当前配置…";
+      revision.textContent = t("settings.loading", {}, "正在读取当前配置…");
       return;
     }
     if (state.status === "error") {

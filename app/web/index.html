@@ -294,14 +294,14 @@
               </section>
 
               <section class="settings-section" data-settings-panel="agent" aria-labelledby="settings-agent-title" hidden>
-                <div class="settings-section-heading"><h2 id="settings-agent-title">Agent</h2><p>默认交互、推理和并行执行策略。</p></div>
+                <div class="settings-section-heading"><h2 id="settings-agent-title">Agent</h2><p data-i18n="settings.agentDescription">默认交互、推理和并行执行策略。</p></div>
                 <div class="setting-row">
-                  <div><label for="setting-interaction">交互模式</label><p>Agent 直接执行，先计划，或每步询问。</p></div>
-                  <select id="setting-interaction" name="interaction_mode"><option value="agent">Agent</option><option value="plan">计划</option><option value="ask">询问</option></select>
+                  <div><label for="setting-interaction" data-i18n="settings.interactionMode">交互模式</label><p data-i18n="settings.interactionModeDescription">Agent 直接执行，先计划，或每步询问。</p></div>
+                  <select id="setting-interaction" name="interaction_mode"><option value="agent">Agent</option><option value="plan" data-i18n="settings.interactionPlan">计划</option><option value="ask" data-i18n="settings.interactionAsk">询问</option></select>
                 </div>
                 <div class="setting-row">
-                  <div><label for="setting-reasoning">默认推理强度</label><p>新会话可单独覆盖这个值。</p></div>
-                  <select id="setting-reasoning" name="reasoning_effort"><option value="none">无</option><option value="minimal">极低</option><option value="low">低</option><option value="medium">中</option><option value="high">高</option><option value="xhigh">极高</option><option value="max">最大</option></select>
+                  <div><label for="setting-reasoning" data-i18n="settings.reasoningDefault">默认推理强度</label><p data-i18n="settings.reasoningDefaultDescription">新会话可单独覆盖这个值。</p></div>
+                  <select id="setting-reasoning" name="reasoning_effort"><option value="none" data-i18n="settings.reasoningNone">无</option><option value="minimal" data-i18n="settings.reasoningMinimal">极低</option><option value="low" data-i18n="settings.reasoningLow">低</option><option value="medium" data-i18n="settings.reasoningMedium">中</option><option value="high" data-i18n="settings.reasoningHigh">高</option><option value="xhigh" data-i18n="settings.reasoningXhigh">极高</option><option value="max" data-i18n="settings.reasoningMax">最大</option></select>
                 </div>
                 <div class="setting-row-wide setting-instructions">
                   <div><label for="setting-instructions" data-i18n="settings.instructions">自定义系统指令</label><p data-i18n="settings.instructionsDescription">附加到新建会话的系统提示词。已有会话继续使用创建时的指令。</p></div>
@@ -309,33 +309,33 @@
                   <small id="settings-instructions-count" aria-live="polite">0 / 8192 字节</small>
                 </div>
                 <div class="setting-row">
-                  <div><label for="setting-parallel-tools">并行工具数</label><p>同一 Agent 最多同时运行 1–64 个工具。</p></div>
+                  <div><label for="setting-parallel-tools" data-i18n="settings.parallelTools">并行工具数</label><p data-i18n="settings.parallelToolsDescription">同一 Agent 最多同时运行 1–64 个工具。</p></div>
                   <input id="setting-parallel-tools" name="max_parallel_tools" type="number" min="1" max="64" required>
                 </div>
                 <div class="setting-row">
-                  <div><label for="setting-parallel-subagents">并行子 Agent 数</label><p>设为 0 可关闭并行子 Agent。</p></div>
+                  <div><label for="setting-parallel-subagents" data-i18n="settings.parallelSubagents">并行子 Agent 数</label><p data-i18n="settings.parallelSubagentsDescription">设为 0 可关闭并行子 Agent。</p></div>
                   <input id="setting-parallel-subagents" name="max_parallel_subagents" type="number" min="0" max="16" required>
                 </div>
-                <label class="setting-switch"><span><strong>允许联机搜索</strong><small>Agent 可按权限策略调用联网搜索工具。</small></span><input name="web_search" type="checkbox"><span class="switch-control" aria-hidden="true"></span></label>
-                <label class="setting-switch"><span><strong>启用记忆</strong><small>新会话固定当前全局和项目记忆快照。</small></span><input name="memory" type="checkbox"><span class="switch-control" aria-hidden="true"></span></label>
-                <label class="setting-switch"><span><strong>启用计划任务</strong><small>允许宿主恢复并执行已配置的计划。</small></span><input name="schedules" type="checkbox"><span class="switch-control" aria-hidden="true"></span></label>
+                <label class="setting-switch"><span><strong data-i18n="settings.webSearchEnabled">允许联机搜索</strong><small data-i18n="settings.webSearchEnabledDescription">Agent 可按权限策略调用联网搜索工具。</small></span><input name="web_search" type="checkbox"><span class="switch-control" aria-hidden="true"></span></label>
+                <label class="setting-switch"><span><strong data-i18n="settings.memoryEnabled">启用记忆</strong><small data-i18n="settings.memoryEnabledDescription">新会话固定当前全局和项目记忆快照。</small></span><input name="memory" type="checkbox"><span class="switch-control" aria-hidden="true"></span></label>
+                <label class="setting-switch"><span><strong data-i18n="settings.schedulesEnabled">启用计划任务</strong><small data-i18n="settings.schedulesEnabledDescription">允许宿主恢复并执行已配置的计划。</small></span><input name="schedules" type="checkbox"><span class="switch-control" aria-hidden="true"></span></label>
               </section>
 
               <section class="settings-section" data-settings-panel="web" aria-labelledby="settings-web-title" hidden>
-                <div class="settings-section-heading"><h2 id="settings-web-title">联网与搜索</h2><p>限制网页访问范围、超时与响应预算。</p></div>
-                <label class="setting-switch"><span><strong>启用 Web 工具</strong><small>统一控制搜索、打开和查找工具。</small></span><input name="web_enabled" type="checkbox"><span class="switch-control" aria-hidden="true"></span></label>
-                <label class="setting-switch"><span><strong>允许 HTTP</strong><small>允许未加密的 HTTP 地址；默认关闭。</small></span><input name="allow_http" type="checkbox"><span class="switch-control" aria-hidden="true"></span></label>
-                <label class="setting-switch"><span><strong>允许私有网络</strong><small>允许访问回环、局域网和私有地址；默认关闭。</small></span><input name="allow_private_networks" type="checkbox"><span class="switch-control" aria-hidden="true"></span></label>
+                <div class="settings-section-heading"><h2 id="settings-web-title" data-i18n="settings.web">联网与搜索</h2><p data-i18n="settings.webDescription">限制网页访问范围、超时与响应预算。</p></div>
+                <label class="setting-switch"><span><strong data-i18n="settings.webEnabled">启用 Web 工具</strong><small data-i18n="settings.webEnabledDescription">统一控制搜索、打开和查找工具。</small></span><input name="web_enabled" type="checkbox"><span class="switch-control" aria-hidden="true"></span></label>
+                <label class="setting-switch"><span><strong data-i18n="settings.allowHttp">允许 HTTP</strong><small data-i18n="settings.allowHttpDescription">允许未加密的 HTTP 地址；默认关闭。</small></span><input name="allow_http" type="checkbox"><span class="switch-control" aria-hidden="true"></span></label>
+                <label class="setting-switch"><span><strong data-i18n="settings.allowPrivateNetworks">允许私有网络</strong><small data-i18n="settings.allowPrivateNetworksDescription">允许访问回环、局域网和私有地址；默认关闭。</small></span><input name="allow_private_networks" type="checkbox"><span class="switch-control" aria-hidden="true"></span></label>
                 <div class="settings-grid">
-                  <label>请求超时（毫秒）<input name="timeout_ms" type="number" min="1000" max="300000" required></label>
-                  <label>空闲超时（毫秒）<input name="idle_timeout_ms" type="number" min="1000" max="300000" required></label>
-                  <label>最大响应（字节）<input name="max_response_bytes" type="number" min="16384" max="16777216" required></label>
-                  <label>最大文本（字节）<input name="max_text_bytes" type="number" min="4096" max="1048576" required></label>
-                  <label>缓存文档数<input name="max_documents" type="number" min="1" max="128" required></label>
-                  <label>搜索结果数<input name="max_results" type="number" min="1" max="32" required></label>
+                  <label><span data-i18n="settings.timeoutMs">请求超时（毫秒）</span><input name="timeout_ms" type="number" min="1000" max="300000" required></label>
+                  <label><span data-i18n="settings.idleTimeoutMs">空闲超时（毫秒）</span><input name="idle_timeout_ms" type="number" min="1000" max="300000" required></label>
+                  <label><span data-i18n="settings.maxResponseBytes">最大响应（字节）</span><input name="max_response_bytes" type="number" min="16384" max="16777216" required></label>
+                  <label><span data-i18n="settings.maxTextBytes">最大文本（字节）</span><input name="max_text_bytes" type="number" min="4096" max="1048576" required></label>
+                  <label><span data-i18n="settings.maxDocuments">缓存文档数</span><input name="max_documents" type="number" min="1" max="128" required></label>
+                  <label><span data-i18n="settings.maxResults">搜索结果数</span><input name="max_results" type="number" min="1" max="32" required></label>
                 </div>
                 <div class="setting-row setting-row-wide">
-                  <div><label for="setting-search-endpoint">搜索服务地址</label><p>凭据仅通过 Home 文件或环境变量配置，页面不会读取 secret 引用。</p></div>
+                  <div><label for="setting-search-endpoint" data-i18n="settings.searchEndpoint">搜索服务地址</label><p data-i18n="settings.searchEndpointDescription">凭据仅通过 Home 文件或环境变量配置，页面不会读取 secret 引用。</p></div>
                   <input id="setting-search-endpoint" name="endpoint" type="url" maxlength="2047" required>
                 </div>
                 <div class="credential-state" id="search-credential-state" role="status"></div>
