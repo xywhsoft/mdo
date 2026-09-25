@@ -1,5 +1,6 @@
 import { createProject, readProject, updateProject } from "../../state/catalogs.js";
 import { element, errorMessage, toast } from "../../utils/dom.js";
+import { subscribeLocale, t } from "../../i18n.js";
 
 function pathName(path) {
   const segments = path.trim().replace(/[\\/]+$/, "").split(/[\\/]/);
@@ -34,16 +35,29 @@ export function createProjectDialog({ dialog, form, error, submit, modelsStore,
   });
   id.addEventListener("input", () => { idEdited = true; });
 
-  function fillModels() {
-    const selected = model.value;
-    model.replaceChildren(element("option", { text: "跟随全局默认",
-      attrs: { value: "" } }), ...(
-      modelsStore.get().data?.models ?? []).map((item) => element("option", {
+  function fillModels(selected = model.value) {
+    const models = modelsStore.get().data?.models ?? [];
+    model.replaceChildren(element("option", { text: t("project.followGlobal", {}, "跟随全局默认"),
+      attrs: { value: "" } }), ...
+      models.map((item) => element("option", {
         text: item.name || item.id, attrs: { value: item.id },
       })));
+    if (selected && !models.some((item) => item.id === selected))
+      model.append(element("option", { text: t("project.unavailableModel", { id: selected },
+        `${selected}（已不可用）`), attrs: { value: selected } }));
     model.value = selected;
   }
-  modelsStore.subscribe(fillModels);
+  function renderText() {
+    title.textContent = editing ? t("project.editTitle", {}, "编辑项目") :
+      t("project.add", {}, "添加项目");
+    description.textContent = editing
+      ? t("project.editDescription", {}, "修改只影响此后创建的任务；已有会话仍使用创建时的配置。")
+      : t("project.addDescription", {}, "指定工作区目录；项目会保留在侧栏，新任务将使用该目录。");
+    submit.textContent = editing ? t("project.save", {}, "保存项目") :
+      t("project.add", {}, "添加项目");
+  }
+  modelsStore.subscribe(() => fillModels());
+  subscribeLocale(() => { fillModels(); renderText(); });
   form.addEventListener("submit", async (event) => {
     event.preventDefault();
     if (!form.reportValidity()) return;
@@ -62,7 +76,9 @@ export function createProjectDialog({ dialog, form, error, submit, modelsStore,
       dialog.close();
       if (!editing) onCreated(result);
       else onUpdated?.(result);
-      toast(editing ? `已更新项目 ${result.name}` : `已添加项目 ${result.name}`);
+      toast(editing ? t("project.updated", { name: result.name },
+        `已更新项目 ${result.name}`) : t("project.added", { name: result.name },
+        `已添加项目 ${result.name}`));
     } catch (cause) {
       error.textContent = errorMessage(cause);
       error.hidden = false;
@@ -84,16 +100,12 @@ export function createProjectDialog({ dialog, form, error, submit, modelsStore,
         workspace.value = editing.workspace_root;
         name.value = editing.name;
         id.value = editing.id;
-        model.value = editing.default_model_id;
+        fillModels(editing.default_model_id);
       }
       nameEdited = Boolean(editing);
       idEdited = Boolean(editing);
       id.readOnly = Boolean(editing);
-      title.textContent = editing ? "编辑项目" : "添加项目";
-      description.textContent = editing
-        ? "修改只影响此后创建的任务；已有会话仍使用创建时的配置。"
-        : "指定工作区目录；项目会保留在侧栏，新任务将使用该目录。";
-      submit.textContent = editing ? "保存项目" : "添加项目";
+      renderText();
       if (!dialog.open) dialog.showModal();
       window.setTimeout(() => (editing ? name : workspace).focus(), 0);
     },

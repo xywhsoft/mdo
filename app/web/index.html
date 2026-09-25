@@ -354,10 +354,10 @@
               <section class="settings-section resource-section" data-settings-panel="diagnostics" hidden><div class="settings-section-heading"><h2 data-i18n="settings.diagnostics">诊断与存储</h2><p data-i18n="resource.diagnosticsDescription">检查便携 Home、运行状态和可操作诊断。</p></div><div id="settings-diagnostics-list"></div></section>
             <section class="settings-section resource-section project-section" data-settings-panel="projects" aria-labelledby="settings-projects-title" hidden>
               <div class="settings-section-heading">
-                <h2 id="settings-projects-title">项目</h2>
-                <p>管理工作区目录和默认模型。取消注册会保留已有会话与计划。</p>
+                <h2 id="settings-projects-title" data-i18n="settings.projects">项目</h2>
+                <p data-i18n="project.description">管理工作区目录和默认模型。取消注册会保留已有会话与计划。</p>
               </div>
-              <div class="project-panel-toolbar"><button class="secondary-button" id="projects-add" type="button">添加项目</button><button class="secondary-button" id="projects-refresh" type="button">刷新</button><button class="secondary-button" id="global-memory" type="button">全局记忆</button><button class="secondary-button" id="global-memory-directory" type="button">打开记忆目录</button></div>
+              <div class="project-panel-toolbar"><button class="secondary-button" id="projects-add" type="button" data-i18n="project.add">添加项目</button><button class="secondary-button" id="projects-refresh" type="button" data-i18n="project.refresh">刷新</button><button class="secondary-button" id="global-memory" type="button" data-i18n="project.globalMemory">全局记忆</button><button class="secondary-button" id="global-memory-directory" type="button" data-i18n="project.openMemoryDirectory">打开记忆目录</button></div>
               <div id="settings-projects-list" class="project-settings-list" aria-live="polite"></div>
             </section>
 
@@ -494,19 +494,19 @@
           <h2 id="project-dialog-title">添加项目</h2>
           <p id="project-dialog-description">指定工作区目录；项目会保留在侧栏，新任务将使用该目录。</p>
         </div>
-        <button class="icon-button" type="button" id="close-project-dialog" aria-label="关闭">
+        <button class="icon-button" type="button" id="close-project-dialog" aria-label="关闭" data-i18n-aria-label="project.close">
           <span class="icon" data-icon="close" aria-hidden="true"></span>
         </button>
       </header>
       <div class="dialog-fields project-fields">
-        <label>工作区目录 <input name="workspace_root" required maxlength="2048" autocomplete="off" placeholder="例如 /work/project 或 D:\work\project"></label>
-        <label>项目名称 <input name="name" required maxlength="256" autocomplete="off"></label>
-        <label>项目标识 <input name="id" required maxlength="64" pattern="[A-Za-z0-9_-][A-Za-z0-9._-]*" autocomplete="off"></label>
-        <label>默认模型 <select name="default_model_id"><option value="">跟随全局默认</option></select></label>
+        <label><span data-i18n="project.workspace">工作区目录</span> <input name="workspace_root" required maxlength="2048" autocomplete="off" placeholder="例如 /work/project 或 D:\work\project" data-i18n-placeholder="project.workspacePlaceholder"></label>
+        <label><span data-i18n="project.name">项目名称</span> <input name="name" required maxlength="256" autocomplete="off"></label>
+        <label><span data-i18n="project.id">项目标识</span> <input name="id" required maxlength="64" pattern="[A-Za-z0-9_-][A-Za-z0-9._-]*" autocomplete="off"></label>
+        <label><span data-i18n="project.defaultModel">默认模型</span> <select name="default_model_id"><option value="">跟随全局默认</option></select></label>
       </div>
       <div class="dialog-error" id="project-error" role="alert" hidden></div>
       <footer>
-        <button class="secondary-button" id="cancel-project" type="button">取消</button>
+        <button class="secondary-button" id="cancel-project" type="button" data-i18n="project.cancel">取消</button>
         <button class="primary-button" id="create-project" type="submit">添加项目</button>
       </footer>
     </form>
@@ -514,22 +514,22 @@
 
   <dialog class="confirm-dialog" id="project-unregister-dialog" aria-labelledby="project-unregister-title">
     <form method="dialog">
-      <h3 id="project-unregister-title">取消注册项目？</h3>
+      <h3 id="project-unregister-title" data-i18n="project.unregisterPrompt">取消注册项目？</h3>
       <p id="project-unregister-description"></p>
       <div class="dialog-error" id="project-unregister-error" role="alert" hidden></div>
-      <div class="dialog-actions"><button class="secondary-button" value="cancel">取消</button><button class="danger-button" value="unregister">取消注册</button></div>
+      <div class="dialog-actions"><button class="secondary-button" value="cancel" data-i18n="project.cancel">取消</button><button class="danger-button" value="unregister" data-i18n="project.unregister">取消注册</button></div>
     </form>
   </dialog>
 
   <dialog class="project-preview-dialog" id="project-purge-preview-dialog" aria-labelledby="project-purge-preview-title">
     <div class="project-preview-shell">
       <h3 id="project-purge-preview-title">项目清除范围</h3>
-      <p>核对项目数据的当前清单。彻底清除功能尚未开放；取消注册会保留现有数据。</p>
+      <p data-i18n="project.previewDescription">核对项目数据的当前清单。彻底清除功能尚未开放；取消注册会保留现有数据。</p>
       <div id="project-purge-preview-status" role="status">正在读取清单…</div>
       <dl class="project-preview-list" id="project-purge-preview-list" hidden></dl>
       <p class="project-preview-note" id="project-purge-preview-note" hidden></p>
-      <p class="project-preview-note">共享审计记录和迁移报告属于多个项目，不随单个项目清除。</p>
-      <div class="dialog-actions"><button class="secondary-button" id="project-purge-preview-refresh" type="button">刷新清单</button><button class="primary-button" id="project-purge-preview-close" type="button">关闭</button></div>
+      <p class="project-preview-note" data-i18n="project.sharedAudit">共享审计记录和迁移报告属于多个项目，不随单个项目清除。</p>
+      <div class="dialog-actions"><button class="secondary-button" id="project-purge-preview-refresh" type="button" data-i18n="project.refreshPreview">刷新清单</button><button class="primary-button" id="project-purge-preview-close" type="button" data-i18n="project.close">关闭</button></div>
     </div>
   </dialog>
 

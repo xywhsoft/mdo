@@ -1,6 +1,7 @@
 import { loadProjects, readProject, readProjectPurgePreview,
   unregisterProject, updateProject } from "../../state/catalogs.js";
 import { clear, element, errorMessage, toast } from "../../utils/dom.js";
+import { subscribeLocale, t } from "../../i18n.js";
 import { openMemoryPanel, openMemoryDirectory } from "./memory-panel.js";
 
 export function createProjectPanel({ panel, projectsStore, modelsStore,
@@ -21,48 +22,49 @@ export function createProjectPanel({ panel, projectsStore, modelsStore,
   let previewProject = null;
   let previewOrigin = null;
   let previewRequest = null;
+  let previewData = null;
 
   function focusProject(id, control = "edit") {
     window.requestAnimationFrame(() => {
       const card = [...list.querySelectorAll("[data-project-id]")]
         .find((item) => item.dataset.projectId === id);
-      const targetControl = control === "model" ? card?.querySelector("select")
-        : [...(card?.querySelectorAll("button") ?? [])]
-          .find((button) => button.textContent ===
-            (control === "preview" ? "核对清除范围" : "编辑")) ??
-          card?.querySelector("button");
+      const targetControl = card?.querySelector(`[data-project-action="${control}"]`) ??
+        card?.querySelector("button");
       targetControl?.focus();
       card?.scrollIntoView({ block: "nearest" });
     });
   }
 
   function showPreview(data) {
+    previewData = data;
     clear(previewList);
     const rows = [
-      ["会话", data.session_count],
-      ["已打开的会话运行态", data.session_runtime_count],
-      ["关联计划", data.schedule_count],
-      ["项目记忆条目", data.project_memory_entry_count],
-      ["项目记忆文件", data.project_memory_present ? "存在" : "无"],
-      ["本项目交互运行", data.active_interactive_run_count],
-      ["全局计划运行", data.active_scheduled_run_count_global],
-      ["本项目会话诊断项", data.session_diagnostic_count],
-      ["全局会话诊断项", data.session_catalog_diagnostic_count_global],
-      ["全局计划诊断项", data.schedule_catalog_diagnostic_count_global],
+      [t("project.previewSessions", {}, "会话"), data.session_count],
+      [t("project.previewSessionRuntime", {}, "已打开的会话运行态"), data.session_runtime_count],
+      [t("project.previewSchedules", {}, "关联计划"), data.schedule_count],
+      [t("project.previewMemoryEntries", {}, "项目记忆条目"), data.project_memory_entry_count],
+      [t("project.previewMemoryFile", {}, "项目记忆文件"), data.project_memory_present
+        ? t("project.exists", {}, "存在") : t("project.none", {}, "无")],
+      [t("project.previewInteractiveRuns", {}, "本项目交互运行"), data.active_interactive_run_count],
+      [t("project.previewScheduledRuns", {}, "全局计划运行"), data.active_scheduled_run_count_global],
+      [t("project.previewSessionDiagnostics", {}, "本项目会话诊断项"), data.session_diagnostic_count],
+      [t("project.previewGlobalSessionDiagnostics", {}, "全局会话诊断项"), data.session_catalog_diagnostic_count_global],
+      [t("project.previewScheduleDiagnostics", {}, "全局计划诊断项"), data.schedule_catalog_diagnostic_count_global],
     ];
     for (const [label, value] of rows)
       previewList.append(element("dt", { text: label }),
-        element("dd", { text: String(value ?? "未知") }));
+        element("dd", { text: String(value ?? t("project.unknown", {}, "未知")) }));
     previewList.hidden = false;
-    previewStatus.textContent = `项目版本 ${data.revision} · 当前清单仅供核对`;
+    previewStatus.textContent = t("project.previewRevision", { revision: data.revision },
+      `项目版本 ${data.revision} · 当前清单仅供核对`);
     const unsettled = [data.session_runtime_count,
       data.active_interactive_run_count, data.active_scheduled_run_count_global,
       data.session_diagnostic_count, data.session_catalog_diagnostic_count_global,
       data.schedule_catalog_diagnostic_count_global].some((value) =>
       Number(value) > 0);
     previewNote.textContent = unsettled
-      ? "存在运行态或诊断项；执行彻底清除前必须重新核对并处理。"
-      : "当前未发现运行态或诊断项；执行彻底清除前仍须重新核对。";
+      ? t("project.previewUnsettled", {}, "存在运行态或诊断项；执行彻底清除前必须重新核对并处理。")
+      : t("project.previewClear", {}, "当前未发现运行态或诊断项；执行彻底清除前仍须重新核对。");
     previewNote.hidden = false;
   }
 
@@ -71,7 +73,8 @@ export function createProjectPanel({ panel, projectsStore, modelsStore,
     previewRequest?.abort();
     const request = new AbortController();
     previewRequest = request;
-    previewStatus.textContent = "正在读取清单…";
+    previewData = null;
+    previewStatus.textContent = t("project.previewLoading", {}, "正在读取清单…");
     previewList.hidden = true;
     previewNote.hidden = true;
     try {
@@ -82,7 +85,8 @@ export function createProjectPanel({ panel, projectsStore, modelsStore,
     } catch (cause) {
       if (cause?.name !== "AbortError" && previewDialog.open &&
           previewRequest === request)
-        previewStatus.textContent = `清单读取失败：${errorMessage(cause)}`;
+        previewStatus.textContent = t("project.previewFailed", { error: errorMessage(cause) },
+          `清单读取失败：${errorMessage(cause)}`);
     } finally {
       if (previewRequest === request) previewRequest = null;
     }
@@ -90,6 +94,9 @@ export function createProjectPanel({ panel, projectsStore, modelsStore,
 
   function render() {
     const snapshot = projectsStore.get();
+    const activeCard = document.activeElement?.closest?.("[data-project-id]");
+    const activeId = activeCard?.dataset.projectId;
+    const activeAction = document.activeElement?.dataset.projectAction;
     clear(list);
     if (snapshot.status === "error") {
       list.append(element("p", { className: "resource-error",
@@ -99,7 +106,7 @@ export function createProjectPanel({ panel, projectsStore, modelsStore,
     const projects = snapshot.data?.items ?? [];
     if (!projects.length) {
       list.append(element("p", { className: "empty-state",
-        text: "还没有项目。可以在这里或侧栏添加工作区。" }));
+        text: t("project.empty", {}, "还没有项目。可以在这里或侧栏添加工作区。") }));
       return;
     }
     const models = modelsStore.get().data?.models ?? [];
@@ -108,33 +115,45 @@ export function createProjectPanel({ panel, projectsStore, modelsStore,
         attrs: { "data-project-id": project.id } });
       card.append(element("h3", { text: project.name || project.id }));
       card.append(element("p", { text: project.managed
-        ? project.workspace_root : "从已有会话或计划中发现" }));
-      card.append(element("p", { text: `${project.session_count} 个会话 · ${project.schedule_count} 项计划 · ${project.id}` }));
+        ? project.workspace_root : t("project.discovered", {}, "从已有会话或计划中发现") }));
+      card.append(element("p", { text: t("project.counts", {
+        sessions: project.session_count, schedules: project.schedule_count, id: project.id,
+      }, `${project.session_count} 个会话 · ${project.schedule_count} 项计划 · ${project.id}`) }));
       const actions = element("div", { className: "project-settings-actions" });
-      const task = element("button", { className: "secondary-button", text: "新任务",
-        attrs: { type: "button" } });
+      const task = element("button", { className: "secondary-button",
+        text: t("project.newTask", {}, "新任务"),
+        attrs: { type: "button", "data-project-action": "task" } });
       task.addEventListener("click", () => navigation.newTask(project.id));
       actions.append(task);
-      const memory = element("button", { className: "secondary-button", text: "项目记忆",
-        attrs: { type: "button" } });
+      const memory = element("button", { className: "secondary-button",
+        text: t("project.memory", {}, "项目记忆"),
+        attrs: { type: "button", "data-project-action": "memory" } });
       memory.addEventListener("click", () => openMemoryPanel(project));
       actions.append(memory);
       const memoryDirectory = element("button", { className: "secondary-button",
-        text: "打开记忆目录", attrs: { type: "button",
-          "aria-label": `打开 ${project.name || project.id} 的记忆目录` } });
+        text: t("project.openMemoryDirectory", {}, "打开记忆目录"), attrs: {
+          type: "button", "data-project-action": "memory-directory",
+          "aria-label": t("project.openProjectMemoryDirectory",
+            { name: project.name || project.id },
+            `打开 ${project.name || project.id} 的记忆目录`),
+        } });
       memoryDirectory.addEventListener("click", () => { void openMemoryDirectory(project); });
       actions.append(memoryDirectory);
       if (project.managed) {
-        const label = element("label", { text: "默认模型" });
-        const select = element("select", { attrs: { "aria-label": `${project.name} 的默认模型` } });
-        select.append(element("option", { text: "跟随全局默认",
+        const label = element("label", { text: t("project.defaultModel", {}, "默认模型") });
+        const select = element("select", { attrs: {
+          "aria-label": t("project.projectDefaultModel", { name: project.name },
+            `${project.name} 的默认模型`), "data-project-action": "model",
+        } });
+        select.append(element("option", { text: t("project.followGlobal", {}, "跟随全局默认"),
           attrs: { value: "" } }));
         for (const model of models)
           select.append(element("option", { text: model.name || model.id,
             attrs: { value: model.id } }));
         if (project.default_model_id && !models.some((model) =>
           model.id === project.default_model_id))
-          select.append(element("option", { text: `${project.default_model_id}（已不可用）`,
+          select.append(element("option", { text: t("project.unavailableModel",
+            { id: project.default_model_id }, `${project.default_model_id}（已不可用）`),
             attrs: { value: project.default_model_id } }));
         select.value = project.default_model_id;
         select.addEventListener("change", async () => {
@@ -145,7 +164,7 @@ export function createProjectPanel({ panel, projectsStore, modelsStore,
               name: current.name, workspace_root: current.workspace_root,
               default_model_id: select.value,
             }, current.etag);
-            toast("项目默认模型已更新");
+            toast(t("project.modelUpdated", {}, "项目默认模型已更新"));
             focusProject(project.id, "model");
           } catch (cause) {
             toast(errorMessage(cause), "error");
@@ -154,28 +173,38 @@ export function createProjectPanel({ panel, projectsStore, modelsStore,
         });
         label.append(select);
         actions.append(label);
-        const edit = element("button", { className: "secondary-button", text: "编辑",
-          attrs: { type: "button" } });
+        const edit = element("button", { className: "secondary-button",
+          text: t("project.edit", {}, "编辑"),
+          attrs: { type: "button", "data-project-action": "edit" } });
         edit.addEventListener("click", () => { void projectDialog.open(project); });
         actions.append(edit);
         const preview = element("button", { className: "secondary-button",
-          text: "核对清除范围", attrs: { type: "button",
-            "aria-label": `核对 ${project.name || project.id} 的清除范围` } });
+          text: t("project.preview", {}, "核对清除范围"), attrs: {
+            type: "button", "data-project-action": "preview",
+            "aria-label": t("project.previewProject", { name: project.name || project.id },
+              `核对 ${project.name || project.id} 的清除范围`),
+          } });
         preview.addEventListener("click", () => {
           previewProject = project;
           previewOrigin = preview;
-          previewTitle.textContent = `${project.name || project.id} · 清除范围`;
+          previewTitle.textContent = t("project.previewTitle",
+            { name: project.name || project.id },
+            `${project.name || project.id} · 清除范围`);
           previewDialog.showModal();
           previewClose.focus();
           void loadPreview();
         });
         actions.append(preview);
-        const remove = element("button", { className: "danger-link", text: "取消注册",
-          attrs: { type: "button" } });
+        const remove = element("button", { className: "danger-link",
+          text: t("project.unregister", {}, "取消注册"),
+          attrs: { type: "button", "data-project-action": "unregister" } });
         remove.addEventListener("click", async () => {
           try {
             target = await readProject(project.id);
-            description.textContent = `“${target.name}” 的项目定义将移除，已有的 ${project.session_count} 个会话和 ${project.schedule_count} 项计划会保留。`;
+            description.textContent = t("project.unregisterDescription", {
+              name: target.name, sessions: project.session_count,
+              schedules: project.schedule_count,
+            }, `“${target.name}” 的项目定义将移除，已有的 ${project.session_count} 个会话和 ${project.schedule_count} 项计划会保留。`);
             error.hidden = true;
             dialog.showModal();
           } catch (cause) { toast(errorMessage(cause), "error"); }
@@ -185,6 +214,7 @@ export function createProjectPanel({ panel, projectsStore, modelsStore,
       card.append(actions);
       list.append(card);
     }
+    if (activeId && activeAction) focusProject(activeId, activeAction);
   }
 
   dialog.querySelector("form").addEventListener("submit", async (event) => {
@@ -196,7 +226,7 @@ export function createProjectPanel({ panel, projectsStore, modelsStore,
     try {
       await unregisterProject(target.id, target.etag);
       dialog.close();
-      toast("项目已取消注册；会话和计划仍保留");
+      toast(t("project.unregistered", {}, "项目已取消注册；会话和计划仍保留"));
       panel.querySelector("#projects-add").focus();
     } catch (cause) {
       error.textContent = errorMessage(cause);
@@ -214,6 +244,7 @@ export function createProjectPanel({ panel, projectsStore, modelsStore,
     else if (id) focusProject(id, "preview");
     previewProject = null;
     previewOrigin = null;
+    previewData = null;
   });
   panel.querySelector("#projects-add").addEventListener("click", () => {
     void projectDialog.open();
@@ -227,6 +258,15 @@ export function createProjectPanel({ panel, projectsStore, modelsStore,
   });
   projectsStore.subscribe(render);
   modelsStore.subscribe(render);
+  subscribeLocale(() => {
+    render();
+    if (previewDialog.open && previewProject) {
+      previewTitle.textContent = t("project.previewTitle",
+        { name: previewProject.name || previewProject.id },
+        `${previewProject.name || previewProject.id} · 清除范围`);
+      if (previewData) showPreview(previewData);
+    }
+  });
 
   return Object.freeze({
     focusProject,
