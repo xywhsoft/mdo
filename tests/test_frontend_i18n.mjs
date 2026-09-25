@@ -31,6 +31,8 @@ test("bundled language packs cover the annotated shell and switch without stale 
     "js/features/chat/composer-profile.js",
     "js/features/chat/composer-project.js",
     "js/features/chat/token-meter.js",
+    "js/features/chat/timeline.js",
+    "js/features/chat/markdown.js",
     "js/app.js",
   ]) {
     const source = readFileSync(new URL(path, root), "utf8");

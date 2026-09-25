@@ -2,6 +2,7 @@ import { element, clear, formatClock, errorMessage, toast } from "../../utils/do
 import { attachmentUrl } from "../../api/client.js";
 import { mountIcons } from "../../components/icons.js";
 import { renderMarkdown } from "./markdown.js";
+import { currentLocale, subscribeLocale, t } from "../../i18n.js";
 
 function modelKey(event, epoch) {
   return `${event.run_id || event.agent_id || event.event_id}-${epoch}-${event.agent_turn || 0}`;
@@ -24,7 +25,10 @@ export function eventsToTimeline(events, historyLost = false) {
   const promptsByRun = new Map();
   const runEpochs = new Map();
   if (historyLost) {
-    items.push({ key: "history-gap", kind: "system", role: "记录提示", text: "更早的事件已不在当前记录中。", state: "done", time: 0 });
+    items.push({ key: "history-gap", kind: "system",
+      role: t("timeline.recordNotice", {}, "记录提示"),
+      text: t("timeline.historyGap", {}, "更早的事件已不在当前记录中。"),
+      state: "done", time: 0 });
   }
   for (const event of events) {
     const runKey = String(event.run_id || event.agent_id || event.event_id);
@@ -41,17 +45,20 @@ export function eventsToTimeline(events, historyLost = false) {
           });
         if (event.agent_depth > 0) {
           items.push({ key: `subagent-${event.event_id}`, kind: "task",
-            role: "子 Agent", text: event.text || "子 Agent 已启动",
+            role: t("timeline.subagent", {}, "子 Agent"),
+            text: event.text || t("timeline.subagentStarted", {}, "子 Agent 已启动"),
             state: "running", time: event.time, meta: `depth ${event.agent_depth}` });
         } else if (Number(event.schema_version) >= 3 &&
                    Number(event.user_message_sequence || 0) === 0) {
           // A resumed run has no new user message. Older event schemas did not
           // carry a durable message sequence, so keep their original projection.
           items.push({ key: `resume-${event.event_id}`, kind: "system",
-            role: "恢复", text: "从上次中断处继续运行", state: "done",
+            role: t("timeline.recovery", {}, "恢复"),
+            text: t("timeline.resumed", {}, "从上次中断处继续运行"), state: "done",
             time: event.time });
         } else {
-          items.push({ key: `user-${event.event_id}`, kind: "user", role: "你",
+          items.push({ key: `user-${event.event_id}`, kind: "user",
+            role: t("timeline.you", {}, "你"),
             text: event.text || "", state: "done", time: event.time,
             attachments: Array.isArray(event.attachments) ? event.attachments : [],
             userMessageSequence: Number(event.user_message_sequence || 0),
@@ -59,7 +66,8 @@ export function eventsToTimeline(events, historyLost = false) {
         }
         break;
       case "model_reasoning_delta": {
-        const thought = appendOrCreate(items, event, "reasoning", "思考",
+        const thought = appendOrCreate(items, event, "reasoning",
+          t("timeline.reasoning", {}, "思考"),
           `reasoning-${modelKey(event, epoch)}`);
         thought.runKey = runKey;
         thought.runEpoch = epoch;
@@ -97,8 +105,8 @@ export function eventsToTimeline(events, historyLost = false) {
         const item = {
           key: `tool-${event.event_id}`,
           kind: "tool",
-          role: event.tool_name || "工具",
-          text: event.text || "正在执行…",
+          role: event.tool_name || t("timeline.tool", {}, "工具"),
+          text: event.text || t("timeline.executing", {}, "正在执行…"),
           inputText: event.text || "",
           outputText: "",
           runKey,
@@ -116,37 +124,64 @@ export function eventsToTimeline(events, historyLost = false) {
         const tool = event.tool_call_id
           ? tools.get(`${runKey}:${epoch}:${event.tool_call_id}`) : null;
         if (tool) {
-          tool.outputText = event.text || (event.success ? "执行完成" : "执行失败");
+          tool.outputText = event.text || (event.success
+            ? t("timeline.executionDone", {}, "执行完成")
+            : t("timeline.executionFailed", {}, "执行失败"));
           tool.text = tool.outputText;
           tool.state = event.success ? "done" : "failed";
           tool.durationSeconds = Math.max(0,
             (Number(event.time) - Number(tool.time)) / 1e6);
         } else {
-          const outputText = event.text || (event.success ? "执行完成" : "执行失败");
+          const outputText = event.text || (event.success
+            ? t("timeline.executionDone", {}, "执行完成")
+            : t("timeline.executionFailed", {}, "执行失败"));
           items.push({ key: `tool-${event.event_id}`, kind: "tool",
-            role: event.tool_name || "工具", text: outputText,
+            role: event.tool_name || t("timeline.tool", {}, "工具"), text: outputText,
             inputText: "", outputText,
             state: event.success ? "done" : "failed", time: event.time });
         }
         break;
       }
       case "task_updated":
-        items.push({ key: `task-${event.event_id}`, kind: "task", role: "后台任务", text: event.text || `任务 #${event.task_id} 已更新`, state: event.terminal ? "done" : "running", time: event.time, meta: event.task_id ? `task ${event.task_id}` : "" });
+        items.push({ key: `task-${event.event_id}`, kind: "task",
+          role: t("timeline.backgroundTask", {}, "后台任务"),
+          text: event.text || t("timeline.taskUpdated", { id: event.task_id },
+            `任务 #${event.task_id} 已更新`),
+          state: event.terminal ? "done" : "running", time: event.time,
+          meta: event.task_id ? `task ${event.task_id}` : "" });
         break;
       case "artifact_created":
-        items.push({ key: `artifact-${event.event_id}`, kind: "system", role: "产物", text: event.artifact_path || event.text || "已创建产物", state: "done", time: event.time });
+        items.push({ key: `artifact-${event.event_id}`, kind: "system",
+          role: t("timeline.artifact", {}, "产物"),
+          text: event.artifact_path || event.text || t("timeline.artifactCreated", {}, "已创建产物"),
+          state: "done", time: event.time });
         break;
       case "compaction_start":
       case "compaction_done":
       case "compaction_rejected":
-        items.push({ key: `context-${event.event_id}`, kind: "system", role: "上下文", text: event.text || (event.kind === "compaction_start" ? "正在整理上下文…" : event.kind === "compaction_done" ? "上下文整理完成" : "上下文整理未应用"), state: event.kind === "compaction_start" ? "running" : "done", time: event.time });
+        items.push({ key: `context-${event.event_id}`, kind: "system",
+          role: t("timeline.context", {}, "上下文"),
+          text: event.text || (event.kind === "compaction_start"
+            ? t("timeline.compacting", {}, "正在整理上下文…")
+            : event.kind === "compaction_done"
+              ? t("timeline.compacted", {}, "上下文整理完成")
+              : t("timeline.compactionRejected", {}, "上下文整理未应用")),
+          state: event.kind === "compaction_start" ? "running" : "done", time: event.time });
         break;
       case "recovery_required":
       case "recovery_resolved":
-        items.push({ key: `recovery-${event.event_id}`, kind: "system", role: "恢复", text: event.text || (event.kind === "recovery_required" ? "会话需要恢复" : "会话已恢复"), state: event.kind === "recovery_required" ? "failed" : "done", time: event.time });
+        items.push({ key: `recovery-${event.event_id}`, kind: "system",
+          role: t("timeline.recovery", {}, "恢复"),
+          text: event.text || (event.kind === "recovery_required"
+            ? t("timeline.recoveryRequired", {}, "会话需要恢复")
+            : t("timeline.recoveryResolved", {}, "会话已恢复")),
+          state: event.kind === "recovery_required" ? "failed" : "done", time: event.time });
         break;
       case "error":
-        items.push({ key: `error-${event.event_id}`, kind: "error", role: "运行错误", text: event.text || "Agent 运行失败", state: "failed", time: event.time });
+        items.push({ key: `error-${event.event_id}`, kind: "error",
+          role: t("timeline.runError", {}, "运行错误"),
+          text: event.text || t("timeline.agentFailed", {}, "Agent 运行失败"),
+          state: "failed", time: event.time });
         break;
       case "agent_done": {
         const terminalState = event.success ? "done" : "cancelled";
@@ -169,14 +204,18 @@ export function eventsToTimeline(events, historyLost = false) {
       }
       case "history_truncated":
         items.push({ key: `history-${event.event_id}`, kind: "system",
-          role: "历史", text: event.text || "会话历史已截断",
+          role: t("timeline.history", {}, "历史"),
+          text: event.text || t("timeline.historyTruncated", {}, "会话历史已截断"),
           state: "done", time: event.time });
         break;
       case "model_start":
         modelStarts.set(modelKey(event, epoch), event.time);
         break;
       default:
-        items.push({ key: `event-${event.event_id}`, kind: "system", role: "事件", text: event.text || event.kind || "未知事件", state: event.terminal ? "done" : "running", time: event.time });
+        items.push({ key: `event-${event.event_id}`, kind: "system",
+          role: t("timeline.event", {}, "事件"),
+          text: event.text || event.kind || t("timeline.unknownEvent", {}, "未知事件"),
+          state: event.terminal ? "done" : "running", time: event.time });
     }
   }
   let nextUserSequence = null;
@@ -211,7 +250,7 @@ function timeNode(value) {
   if (value) {
     const date = new Date(Number(value) / 1000);
     time.dateTime = date.toISOString();
-    time.title = date.toLocaleString("zh-CN");
+    time.title = date.toLocaleString(currentLocale());
   }
   return time;
 }
@@ -244,13 +283,13 @@ function foldSection(label, value, copy = false, actionRef = "") {
     element("span", { text: label }),
   ]);
   if (copy) {
-    const button = element("button", { text: "复制", attrs: {
-      type: "button", "aria-label": `复制${label}`,
+    const button = element("button", { text: t("timeline.copy", {}, "复制"), attrs: {
+      type: "button", "aria-label": t("timeline.copySection", { label }, `复制${label}`),
       "data-timeline-action": actionRef,
     } });
     button.addEventListener("click", async () => {
-      try { await copyText(value); toast("已复制"); }
-      catch { toast("无法复制", "error"); }
+      try { await copyText(value); toast(t("timeline.copied", {}, "已复制")); }
+      catch { toast(t("timeline.copyFailed", {}, "无法复制"), "error"); }
     });
     heading.append(button);
   }
@@ -261,14 +300,18 @@ function foldSection(label, value, copy = false, actionRef = "") {
 
 function foldableNode(item, openState) {
   const running = item.state === "running";
-  const status = running ? "运行中" : item.state === "failed" ? "失败" :
-    item.state === "cancelled" ? "已停止" : "完成";
+  const status = running ? t("timeline.running", {}, "运行中")
+    : item.state === "failed" ? t("timeline.failed", {}, "失败")
+      : item.state === "cancelled" ? t("timeline.stopped", {}, "已停止")
+        : t("timeline.done", {}, "完成");
   const lastLine = item.text?.trimEnd().split("\n").at(-1) || "";
   const preview = item.kind === "reasoning"
     ? (running ? shortLine(lastLine) : "")
     : toolSummaryText(item.inputText || item.outputText || item.text);
   const duration = Number.isFinite(item.durationSeconds) && item.durationSeconds > 0
-    ? `${item.durationSeconds.toFixed(1)} 秒` : "";
+    ? t("timeline.seconds", { seconds: new Intl.NumberFormat(currentLocale(),
+      { minimumFractionDigits: 1, maximumFractionDigits: 1 }).format(item.durationSeconds) },
+    `${item.durationSeconds.toFixed(1)} 秒`) : "";
   const details = element("details", { className: "timeline-fold",
     attrs: { "data-timeline-key": item.key } });
   details.open = openState ?? running;
@@ -289,15 +332,18 @@ function foldableNode(item, openState) {
     }
     const body = element("div", { className: "timeline-fold-body" });
     if (item.kind === "reasoning") {
-      body.append(foldSection("思考过程", item.text || "正在思考…"));
+      body.append(foldSection(t("timeline.reasoningProcess", {}, "思考过程"),
+        item.text || t("timeline.thinking", {}, "正在思考…")));
     } else {
-      if (item.inputText) body.append(foldSection("调用", item.inputText, true,
+      if (item.inputText) body.append(foldSection(t("timeline.call", {}, "调用"), item.inputText, true,
         `${item.key}/tool-input`));
       if (item.outputText) body.append(foldSection(
-        item.state === "failed" ? "错误输出" : "结果", item.outputText, true,
+        item.state === "failed" ? t("timeline.errorOutput", {}, "错误输出")
+          : t("timeline.result", {}, "结果"), item.outputText, true,
         `${item.key}/tool-output`));
       if (!item.inputText && !item.outputText)
-        body.append(foldSection("执行中", item.text || "正在执行…"));
+        body.append(foldSection(t("timeline.executingLabel", {}, "执行中"),
+          item.text || t("timeline.executing", {}, "正在执行…")));
     }
     details.append(body);
     if (focusedAction) {
@@ -339,7 +385,8 @@ function timelineNode(item, handlers, feedback, projectId, sessionId, openState)
     time,
   ]);
   if (item.kind === "assistant" && item.state === "cancelled")
-    header.insertBefore(element("span", { className: "timeline-stopped", text: "已停止" }), time);
+    header.insertBefore(element("span", { className: "timeline-stopped",
+      text: t("timeline.stopped", {}, "已停止") }), time);
   const body = element("div", { className: "timeline-body" +
     (item.kind === "assistant" ? " markdown-body" : "") });
   if (item.kind === "assistant") {
@@ -362,12 +409,14 @@ function timelineNode(item, handlers, feedback, projectId, sessionId, openState)
     for (const [index, id] of item.attachments.entries()) {
       if (typeof id === "string" && /^[0-9a-f]{32}$/.test(id))
         images.append(element("button", { className: "timeline-image-preview",
-          attrs: { type: "button", "aria-label": `查看用户图片 ${index + 1}`,
+          attrs: { type: "button", "aria-label": t("timeline.viewImage",
+            { index: index + 1 }, `查看用户图片 ${index + 1}`),
             "data-image-preview": "",
             "data-image-ref": `timeline:${projectId}/${sessionId}/${item.key}/${id}/${index}` },
         }, [element("img", {
           attrs: { src: attachmentUrl(projectId, sessionId, id),
-            alt: `用户图片 ${index + 1}`, loading: "lazy" },
+            alt: t("timeline.userImage", { index: index + 1 },
+              `用户图片 ${index + 1}`), loading: "lazy" },
         })]));
     }
     if (images.childElementCount) children.push(images);
@@ -378,26 +427,29 @@ function timelineNode(item, handlers, feedback, projectId, sessionId, openState)
     const actions = element("div", { className: "timeline-actions" });
     if (item.text) {
       const copy = element("button", { className: "timeline-action-button", attrs: {
-        type: "button", "aria-label": "复制消息", title: "复制",
+        type: "button", "aria-label": t("timeline.copyMessage", {}, "复制消息"),
+        title: t("timeline.copy", {}, "复制"),
         "data-timeline-action": `${item.key}/copy` },
       }, [actionIcon("copy")]);
       copy.addEventListener("click", async () => {
-        try { await copyText(item.text); toast("消息已复制"); }
-        catch { toast("无法复制消息", "error"); }
+        try { await copyText(item.text); toast(t("timeline.messageCopied", {}, "消息已复制")); }
+        catch { toast(t("timeline.messageCopyFailed", {}, "无法复制消息"), "error"); }
       });
       actions.append(copy);
     }
     if (item.kind === "user" &&
         Number.isSafeInteger(item.userMessageSequence) &&
         item.userMessageSequence > 0 && !item.textTruncated) {
-      const edit = commandButton("编辑", "编辑此消息并重新发送", "compose", `${item.key}/edit`,
+      const edit = commandButton(t("timeline.edit", {}, "编辑"),
+        t("timeline.editResend", {}, "编辑此消息并重新发送"), "compose", `${item.key}/edit`,
         handlers, sessionKey, () => handlers.onEdit(
           item.userMessageSequence, item.text, item.attachments ?? []));
       actions.append(edit);
     }
     if (item.kind === "assistant") {
       if ("forkThroughSequence" in item) {
-        const fork = commandButton("分叉", "从此回复分叉会话", "branch", `${item.key}/fork`,
+        const fork = commandButton(t("timeline.fork", {}, "分叉"),
+          t("timeline.forkFromReply", {}, "从此回复分叉会话"), "branch", `${item.key}/fork`,
           handlers, sessionKey, () => handlers.onFork(item.forkThroughSequence));
         actions.append(fork);
       }
@@ -405,13 +457,15 @@ function timelineNode(item, handlers, feedback, projectId, sessionId, openState)
       if (retryPrompt && Number.isSafeInteger(retryPrompt.sequence) &&
           retryPrompt.sequence > 0 && (retryPrompt.text || retryPrompt.attachments?.length) &&
           !retryPrompt.truncated) {
-        const retry = commandButton("重试", "重试此回合", "retry", `${item.key}/retry`,
+        const retry = commandButton(t("timeline.retry", {}, "重试"),
+          t("timeline.retryTurn", {}, "重试此回合"), "retry", `${item.key}/retry`,
           handlers, sessionKey, () => handlers.onRetry(
             retryPrompt.sequence, retryPrompt.text, retryPrompt.attachments ?? []));
         actions.append(retry);
       }
       if (item.feedbackEventId && item.state === "done") {
-        for (const [value, label] of [["good", "点赞"], ["bad", "点踩"]]) {
+        for (const [value, label] of [["good", t("timeline.like", {}, "点赞")],
+          ["bad", t("timeline.dislike", {}, "点踩")]]) {
           const button = commandButton(label, label, "like",
             `${item.key}/feedback-${value}`, handlers, sessionKey,
             () => handlers.onFeedback(item.feedbackEventId,
@@ -423,7 +477,9 @@ function timelineNode(item, handlers, feedback, projectId, sessionId, openState)
       }
       const stats = [];
       if (item.inputTokens || item.outputTokens)
-        stats.push(`${item.inputTokens || 0} 输入 / ${item.outputTokens || 0} 输出 tokens`);
+        stats.push(t("timeline.usage", { input: item.inputTokens || 0,
+          output: item.outputTokens || 0 },
+        `${item.inputTokens || 0} 输入 / ${item.outputTokens || 0} 输出 tokens`));
       if (Number.isFinite(item.tokensPerSecond)) stats.push(`${item.tokensPerSecond.toFixed(1)} tok/s`);
       if (stats.length) actions.append(element("span", { className: "timeline-stats", text: stats.join(" · ") }));
     }
@@ -530,7 +586,8 @@ export function createTimelineView({ container, welcome, toBottom, store, feedba
     welcome.hidden = Boolean(data?.sessionId && items.length > 0);
     const entries = [];
     if (state.status === "error") {
-      entries.push({ item: { key: "load-error", kind: "error", role: "无法读取时间线",
+      entries.push({ item: { key: "load-error", kind: "error",
+        role: t("timeline.loadError", {}, "无法读取时间线"),
         text: errorMessage(state.error), state: "failed", time: 0 }, feedback: "" });
     } else {
       const selected = feedbackStore.get().data;
@@ -572,12 +629,19 @@ export function createTimelineView({ container, welcome, toBottom, store, feedba
 
   const unsubscribe = store.subscribe(queueRender);
   const unsubscribeFeedback = feedbackStore.subscribe(() => queueRender(store.get()));
+  const unsubscribeLocale = subscribeLocale(() => {
+    renderedRows.clear();
+    queueRender(store.get());
+  });
   return Object.freeze({
     follow() { followTail = true; },
     search(query) {
       searchQuery = query.trim().toLocaleLowerCase();
       queueRender(store.get());
     },
-    destroy() { unsubscribe(); unsubscribeFeedback(); if (frame) cancelAnimationFrame(frame); },
+    destroy() {
+      unsubscribe(); unsubscribeFeedback(); unsubscribeLocale();
+      if (frame) cancelAnimationFrame(frame);
+    },
   });
 }
