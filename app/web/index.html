@@ -9,42 +9,42 @@
   <link rel="stylesheet" href="/css/app.css">
 </head>
 <body>
-  <a class="skip-link" href="#timeline">跳到对话</a>
+  <a class="skip-link" href="#timeline" data-i18n="shell.skip">跳到对话</a>
 
   <div class="app-shell" id="app-shell" data-sidebar="closed" data-inspector="closed">
     <header class="mobile-bar">
-      <button class="icon-button" id="open-sidebar" type="button" aria-label="打开会话导航" aria-controls="sidebar" aria-expanded="false">
+      <button class="icon-button" id="open-sidebar" type="button" aria-label="打开会话导航" data-i18n-aria-label="shell.sidebar.open" aria-controls="sidebar" aria-expanded="false">
         <span class="icon" data-icon="menu" aria-hidden="true"></span>
       </button>
       <div class="mobile-title">
         <strong id="mobile-session-title">墨斗</strong>
         <span id="mobile-session-meta">Agent 工作台</span>
       </div>
-      <button class="icon-button" id="open-find-mobile" type="button" aria-label="搜索当前会话" aria-controls="conversation-find" aria-expanded="false">
+      <button class="icon-button" id="open-find-mobile" type="button" aria-label="搜索当前会话" data-i18n-aria-label="shell.find" aria-controls="conversation-find" aria-expanded="false">
         <span class="icon" data-icon="search" aria-hidden="true"></span>
       </button>
-      <button class="icon-button" id="export-session-mobile" type="button" aria-label="导出当前会话 Markdown" title="导出当前会话 Markdown" disabled>
+      <button class="icon-button" id="export-session-mobile" type="button" aria-label="导出当前会话 Markdown" data-i18n-aria-label="shell.export" title="导出当前会话 Markdown" data-i18n-title="shell.export" disabled>
         <span class="icon" data-icon="download" aria-hidden="true"></span>
       </button>
       <div class="session-action-control" id="session-action-control-mobile">
-        <button class="icon-button" id="session-actions-mobile" type="button" aria-label="更多会话操作" aria-haspopup="menu" aria-controls="session-header-menu-mobile" aria-expanded="false" disabled>
+        <button class="icon-button" id="session-actions-mobile" type="button" aria-label="更多会话操作" data-i18n-aria-label="shell.more" aria-haspopup="menu" aria-controls="session-header-menu-mobile" aria-expanded="false" disabled>
           <span class="icon" data-icon="more" aria-hidden="true"></span>
         </button>
         <div class="session-menu session-header-menu" id="session-header-menu-mobile" role="menu" hidden></div>
       </div>
-      <button class="icon-button" id="open-inspector" type="button" aria-label="打开任务面板" aria-controls="inspector" aria-expanded="false">
+      <button class="icon-button" id="open-inspector" type="button" aria-label="打开任务面板" data-i18n-aria-label="shell.tasksPanel" aria-controls="inspector" aria-expanded="false">
         <span class="icon" data-icon="panel-right" aria-hidden="true"></span>
         <span class="activity-dot" id="mobile-activity-dot" hidden></span>
       </button>
     </header>
 
-    <aside class="sidebar" id="sidebar" aria-label="会话导航">
+    <aside class="sidebar" id="sidebar" aria-label="会话导航" data-i18n-aria-label="shell.sidebar.label">
       <div class="brand-row">
-        <a class="brand" href="#/" aria-label="墨斗主页">
+        <a class="brand" href="#/" aria-label="墨斗主页" data-i18n-aria-label="shell.home">
           <span class="brand-mark" aria-hidden="true">墨</span>
           <span>墨斗</span>
         </a>
-        <button class="icon-button sidebar-close" id="close-sidebar" type="button" aria-label="关闭会话导航">
+        <button class="icon-button sidebar-close" id="close-sidebar" type="button" aria-label="关闭会话导航" data-i18n-aria-label="shell.sidebar.close">
           <span class="icon" data-icon="close" aria-hidden="true"></span>
         </button>
       </div>
@@ -52,31 +52,31 @@
       <div class="new-task-actions">
         <button class="new-task-button" id="new-session" type="button">
           <span class="icon" data-icon="compose" aria-hidden="true"></span>
-          <span>新建任务</span>
+          <span data-i18n="shell.newTask">新建任务</span>
           <kbd>Ctrl N</kbd>
         </button>
         <button class="icon-button new-task-configure" id="new-session-configure" type="button"
-          aria-label="配置后创建任务" title="配置 Agent、项目和模型后创建任务">
+          aria-label="配置后创建任务" data-i18n-aria-label="shell.newTask.configure" title="配置 Agent、项目和模型后创建任务" data-i18n-title="shell.newTask.configureTitle">
           <span class="icon" data-icon="settings" aria-hidden="true"></span>
         </button>
       </div>
 
       <label class="search-box" for="session-search">
         <span class="icon" data-icon="search" aria-hidden="true"></span>
-        <input id="session-search" type="search" autocomplete="off" placeholder="搜索会话" aria-label="搜索会话">
+        <input id="session-search" type="search" autocomplete="off" placeholder="搜索会话" data-i18n-placeholder="shell.searchSessions" aria-label="搜索会话" data-i18n-aria-label="shell.searchSessions">
         <kbd>/</kbd>
       </label>
 
       <nav class="session-navigation" aria-label="会话列表">
         <div class="nav-section-heading">
-          <span>会话</span>
+          <span data-i18n="shell.sessions">会话</span>
           <div class="session-list-controls">
             <label class="sr-only" for="session-status-filter">会话状态</label>
-            <select id="session-status-filter" aria-label="会话状态">
-              <option value="active">进行中</option>
-              <option value="archived">已归档</option>
-              <option value="trash">回收站</option>
-              <option value="all">全部</option>
+            <select id="session-status-filter" aria-label="会话状态" data-i18n-aria-label="shell.sessionStatus">
+              <option value="active" data-i18n="shell.status.active">进行中</option>
+              <option value="archived" data-i18n="shell.status.archived">已归档</option>
+              <option value="trash" data-i18n="shell.status.trash">回收站</option>
+              <option value="all" data-i18n="shell.status.all">全部</option>
             </select>
             <span class="count" id="session-count">0</span>
           </div>
@@ -87,19 +87,19 @@
       <div class="sidebar-footer">
         <button class="sidebar-link" id="open-schedules" type="button">
           <span class="icon" data-icon="clock" aria-hidden="true"></span>
-          <span>计划任务</span>
+          <span data-i18n="shell.schedules">计划任务</span>
         </button>
         <button class="sidebar-link" id="open-shortcuts" type="button">
           <span class="icon" data-icon="help" aria-hidden="true"></span>
-          <span>快捷键帮助</span>
+          <span data-i18n="shell.shortcuts">快捷键帮助</span>
         </button>
         <button class="sidebar-link" id="toggle-theme" type="button">
           <span class="icon" data-icon="theme" aria-hidden="true"></span>
-          <span>切换主题</span>
+          <span data-i18n="shell.theme">切换主题</span>
         </button>
         <button class="sidebar-link" id="open-settings" type="button">
           <span class="icon" data-icon="settings" aria-hidden="true"></span>
-          <span>设置</span>
+          <span data-i18n="shell.settings">设置</span>
         </button>
         <div class="runtime-state" id="runtime-state" role="status">
           <span class="status-dot" aria-hidden="true"></span>
@@ -108,9 +108,9 @@
       </div>
     </aside>
 
-    <main class="workspace" aria-label="Agent 工作区">
+    <main class="workspace" aria-label="Agent 工作区" data-i18n-aria-label="shell.workspace">
       <header class="workspace-header">
-        <button class="icon-button desktop-sidebar-toggle" id="desktop-sidebar-toggle" type="button" aria-label="展开会话导航" aria-controls="sidebar" aria-expanded="false">
+        <button class="icon-button desktop-sidebar-toggle" id="desktop-sidebar-toggle" type="button" aria-label="展开会话导航" data-i18n-aria-label="shell.sidebar.expand" aria-controls="sidebar" aria-expanded="false">
           <span class="icon" data-icon="menu" aria-hidden="true"></span>
         </button>
         <div class="session-heading">
@@ -122,14 +122,14 @@
             <span class="status-dot" aria-hidden="true"></span>
             <span>就绪</span>
           </span>
-          <button class="icon-button" id="open-find" type="button" aria-label="搜索当前会话" aria-controls="conversation-find" aria-expanded="false">
+          <button class="icon-button" id="open-find" type="button" aria-label="搜索当前会话" data-i18n-aria-label="shell.find" aria-controls="conversation-find" aria-expanded="false">
             <span class="icon" data-icon="search" aria-hidden="true"></span>
           </button>
-          <button class="icon-button" id="export-session" type="button" aria-label="导出当前会话 Markdown" title="导出当前会话 Markdown（Ctrl/⌘+E）" disabled>
+          <button class="icon-button" id="export-session" type="button" aria-label="导出当前会话 Markdown" data-i18n-aria-label="shell.export" title="导出当前会话 Markdown（Ctrl/⌘+E）" disabled>
             <span class="icon" data-icon="download" aria-hidden="true"></span>
           </button>
           <div class="session-action-control" id="session-action-control">
-            <button class="icon-button" id="session-actions" type="button" aria-label="更多会话操作" aria-haspopup="menu" aria-controls="session-header-menu" aria-expanded="false" disabled>
+            <button class="icon-button" id="session-actions" type="button" aria-label="更多会话操作" data-i18n-aria-label="shell.more" aria-haspopup="menu" aria-controls="session-header-menu" aria-expanded="false" disabled>
               <span class="icon" data-icon="more" aria-hidden="true"></span>
             </button>
             <div class="session-menu session-header-menu" id="session-header-menu" role="menu" hidden></div>
@@ -140,7 +140,7 @@
         </div>
       </header>
 
-      <section class="conversation" aria-label="当前会话">
+      <section class="conversation" aria-label="当前会话" data-i18n-aria-label="shell.conversation">
         <div class="conversation-find" id="conversation-find" role="search" hidden>
           <label class="sr-only" for="conversation-find-input">搜索已加载的会话记录</label>
           <input id="conversation-find-input" type="search" autocomplete="off" placeholder="搜索已加载的记录">
@@ -149,8 +149,8 @@
         </div>
         <div class="welcome" id="welcome">
           <div class="welcome-mark" aria-hidden="true">墨</div>
-          <h2>今天要做什么？</h2>
-          <p>描述一个目标。墨斗会分析代码、调用工具，并把过程留在可恢复的会话中。</p>
+          <h2 data-i18n="shell.welcome.title">今天要做什么？</h2>
+          <p data-i18n="shell.welcome.body">描述一个目标。墨斗会分析代码、调用工具，并把过程留在可恢复的会话中。</p>
           <div class="starter-grid" aria-label="任务示例">
             <button class="starter" type="button" data-prompt="分析当前项目：技术栈、目录结构、代码质量，给出改进建议">
               <span class="icon" data-icon="code" aria-hidden="true"></span>
@@ -186,11 +186,11 @@
         <div class="composer-error" id="composer-error" role="alert" hidden></div>
         <form class="composer" id="composer">
           <label class="sr-only" for="prompt">向 Agent 描述任务</label>
-          <textarea id="prompt" name="prompt" rows="1" maxlength="65536" placeholder="向墨斗描述任务…" autocomplete="off"></textarea>
+          <textarea id="prompt" name="prompt" rows="1" maxlength="65536" placeholder="向墨斗描述任务…" data-i18n-placeholder="shell.prompt" autocomplete="off"></textarea>
           <div class="composer-images" id="composer-images" aria-live="polite" hidden></div>
           <div class="composer-toolbar">
             <div class="composer-options">
-              <button class="composer-attach" id="composer-attach" type="button" aria-label="添加图片" title="添加图片（PNG、JPEG、WebP）">＋</button>
+              <button class="composer-attach" id="composer-attach" type="button" aria-label="添加图片" data-i18n-aria-label="shell.attach" title="添加图片（PNG、JPEG、WebP）">＋</button>
               <input id="composer-file" type="file" accept="image/png,image/jpeg,image/webp" multiple hidden>
               <button class="option-chip" id="workspace-chip" type="button" title="当前工作目录">
                 <span class="icon" data-icon="folder" aria-hidden="true"></span>
@@ -201,14 +201,14 @@
                 <option value="default">默认项目</option>
               </select>
               <label class="sr-only" for="composer-model">模型</label>
-              <select class="composer-select" id="composer-model" aria-label="模型"></select>
+              <select class="composer-select" id="composer-model" aria-label="模型" data-i18n-aria-label="shell.model"></select>
               <label class="sr-only" for="composer-reasoning">推理强度</label>
-              <select class="composer-select composer-select-short" id="composer-reasoning" aria-label="推理强度"></select>
+              <select class="composer-select composer-select-short" id="composer-reasoning" aria-label="推理强度" data-i18n-aria-label="shell.reasoning"></select>
               <label class="sr-only" for="composer-permission">权限</label>
-              <select class="composer-select composer-select-short" id="composer-permission" aria-label="权限">
-                <option value="read-only">只读</option>
-                <option value="balanced">询问</option>
-                <option value="full-access">完全访问</option>
+              <select class="composer-select composer-select-short" id="composer-permission" aria-label="权限" data-i18n-aria-label="shell.permission">
+                <option value="read-only" data-i18n="shell.permission.readOnly">只读</option>
+                <option value="balanced" data-i18n="shell.permission.balanced">询问</option>
+                <option value="full-access" data-i18n="shell.permission.fullAccess">完全访问</option>
               </select>
             </div>
             <div class="composer-actions">
@@ -221,10 +221,10 @@
               </div>
               <span class="composer-hint" id="composer-hint">Enter 发送 · Shift Enter 换行</span>
               <span class="composer-draft-status" id="draft-status" role="status" hidden></span>
-              <button class="send-button" id="send" type="submit" aria-label="发送任务">
+              <button class="send-button" id="send" type="submit" aria-label="发送任务" data-i18n-aria-label="shell.send">
                 <span class="icon" data-icon="arrow-up" aria-hidden="true"></span>
               </button>
-              <button class="stop-button" id="stop" type="button" aria-label="停止当前任务" hidden>
+              <button class="stop-button" id="stop" type="button" aria-label="停止当前任务" data-i18n-aria-label="shell.stop" hidden>
                 <span aria-hidden="true"></span>
               </button>
             </div>
@@ -234,11 +234,11 @@
 
       <section class="settings-workspace" id="settings-workspace" aria-labelledby="settings-title" hidden>
         <header class="settings-header">
-          <button class="icon-button" id="close-settings" type="button" aria-label="返回 Agent 工作区">
+          <button class="icon-button" id="close-settings" type="button" aria-label="返回 Agent 工作区" data-i18n-aria-label="shell.settings.back">
             <span class="icon" data-icon="arrow-left" aria-hidden="true"></span>
           </button>
           <div>
-            <h1 id="settings-title">设置</h1>
+            <h1 id="settings-title" data-i18n="shell.settings.title">设置</h1>
             <p id="settings-revision">正在读取当前配置…</p>
           </div>
         </header>
