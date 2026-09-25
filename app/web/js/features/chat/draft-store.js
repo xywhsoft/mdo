@@ -152,9 +152,10 @@ export function createDraftStore({ onRestore, onError, onSaved }) {
         edit(key, text, attachments, true);
     },
     clear(key) { edit(key, "", [], true); },
-    clearIfMatches(key, text) {
+    clearIfMatches(key, text, attachments = []) {
       const current = entry(key);
-      if (current.text !== text || current.attachments.length) return false;
+      if (current.text !== text ||
+          !sameIds(current.attachments, imageIds(attachments))) return false;
       edit(key, "", [], true);
       return true;
     },

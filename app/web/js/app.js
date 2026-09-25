@@ -128,6 +128,7 @@ export async function boot() {
   let activeRun = null;
   let runMonitor = 0;
   let selectedKey = "";
+  let creatingSessionKey = "";
   let tasksTimer = 0;
   let runsTimer = 0;
   let approvalsTimer = 0;
@@ -139,6 +140,7 @@ export async function boot() {
   let interruptRequested = false;
   let themeToggleBusy = false;
   let composerAttachments = [];
+  let composerInputVersion = 0;
   let composerImages = null;
   let shortcuts;
   const queueBlocked = new Set();
@@ -612,10 +614,14 @@ export async function boot() {
     runStatus.lastElementChild.textContent = runStateText(shown.state);
     send.hidden = false;
     stop.hidden = !activeRun;
-    prompt.disabled = !sessionWritable;
-    send.disabled = !sessionWritable || submittingCurrent() ||
+    const route = navigation.get();
+    const creatingSession = Boolean(creatingSessionKey) &&
+      creatingSessionKey === `${route.projectId}/${route.sessionId}`;
+    // Keep keyboard focus while a newly created session loads its detail.
+    prompt.disabled = !sessionWritable && !creatingSession;
+    send.disabled = !sessionWritable || creatingSession || submittingCurrent() ||
       composerImages?.isUploading() || composerProfile.isBusy();
-    composerImages?.setWritable(sessionWritable && !submittingCurrent());
+    composerImages?.setWritable(sessionWritable && !creatingSession && !submittingCurrent());
     composerProfile.setRunActive(Boolean(activeRun));
     send.setAttribute("aria-label", activeRun
       ? t("composer.queue", {}, "加入待发送队列")
@@ -1021,6 +1027,12 @@ export async function boot() {
       await Promise.all([loadSession(projectId, sessionId), loadRuns(), loadRecovery(),
         promptQueue.select(projectId, sessionId)]);
     } catch (error) { showComposerError(error); return; }
+    finally {
+      if (creatingSessionKey === key) {
+        creatingSessionKey = "";
+        setRun(activeRun);
+      }
+    }
     queueBlocked.delete(key);
     findActiveRun();
     void maybeCancelPriorityRun();
@@ -1076,7 +1088,8 @@ export async function boot() {
     composerError.hidden = false;
   }
 
-  async function ensureSession(text, stageDraft = true) {
+  async function ensureSession(text, { stageDraft = true, attachments = [],
+    rawDraft = text } = {}) {
     const origin = navigation.get();
     const originVersion = routeVersion;
     if (origin.sessionId) return origin;
@@ -1084,10 +1097,17 @@ export async function boot() {
       t("composer.imageTask", {}, "图片任务");
     const session = await createSession({ project_id: origin.projectId || "default", title,
       ...composerProfile.selection() });
-    if (stageDraft)
-      draftStore.edit(`${session.project_id}/${session.id}`, text, [], true);
+    if (stageDraft) {
+      const stillOnOrigin = routeVersion === originVersion;
+      // A second prompt typed during session creation belongs to the new
+      // conversation; stage the live composer before navigation restores it.
+      draftStore.edit(`${session.project_id}/${session.id}`,
+        stillOnOrigin ? prompt.value : rawDraft,
+        stillOnOrigin ? composerAttachments : attachments, true);
+    }
     if (routeVersion === originVersion) {
       showActiveSessions();
+      creatingSessionKey = `${session.project_id}/${session.id}`;
       navigation.select(session.project_id, session.id);
       selectTimeline(session.project_id, session.id);
     }
@@ -1102,7 +1122,7 @@ export async function boot() {
     const origin = navigation.get();
     const originVersion = routeVersion;
     if (fromComposer && !attachments.length &&
-        await slashCommands.consumeExact(text)) return;
+        slashCommands.consumeExact(text)) return;
     if (routeVersion !== originVersion) return;
     if (composerProfile.isBusy()) {
       showComposerError(new Error(t("composer.profileBusy", {}, "请等待会话配置更新完成")));
@@ -1114,6 +1134,8 @@ export async function boot() {
     setRun(activeRun);
     const originatingKey = selectedKey;
     const originatingDraft = fromComposer && !originatingKey ? prompt.value : null;
+    const submittedInput = fromComposer ? prompt.value : "";
+    const submittedInputVersion = composerInputVersion;
     const originatingRun = activeRun;
     let selected = null;
     let selectedVersion = originVersion;
@@ -1123,8 +1145,31 @@ export async function boot() {
         (current.projectId === selected.projectId &&
           current.sessionId === selected.sessionId));
     };
+    function finishComposerSubmission() {
+      const targetKey = `${selected.projectId}/${selected.sessionId}`;
+      if (!selectedIsCurrent()) {
+        draftStore.clearIfMatches(targetKey, submittedInput, attachments);
+        return;
+      }
+      // The user may already be typing the next prompt while the request is
+      // in flight. Remove only the submitted prefix, never the new draft.
+      if (composerInputVersion === submittedInputVersion &&
+          prompt.value === submittedInput) prompt.value = "";
+      else if (submittedInput && prompt.value.length > submittedInput.length &&
+               prompt.value.startsWith(submittedInput))
+        prompt.value = prompt.value.slice(submittedInput.length);
+      if (composerAttachments.length === attachments.length &&
+          composerAttachments.every((id, index) => id === attachments[index])) {
+        composerAttachments = [];
+        composerImages.clear();
+      }
+      draftStore.edit(targetKey, prompt.value, composerAttachments, true);
+      resizePrompt();
+      tokenMeter.refresh();
+    }
     try {
-      selected = await ensureSession(text, fromComposer);
+      selected = await ensureSession(text, { stageDraft: fromComposer,
+        attachments, rawDraft: submittedInput });
       selectedVersion = routeVersion;
       const targetScope = `${selected.projectId}/${selected.sessionId}`;
       if (targetScope !== submissionScope) {
@@ -1139,14 +1184,7 @@ export async function boot() {
           throw new Error(t("composer.queueFull", {}, "待发送队列已满（最多 20 条）"));
         queueBlocked.delete(`${selected.projectId}/${selected.sessionId}`);
         if (fromComposer) {
-          draftStore.clear(`${selected.projectId}/${selected.sessionId}`);
-          if (selectedIsCurrent()) {
-            prompt.value = "";
-            composerAttachments = [];
-            composerImages.clear();
-            resizePrompt();
-            tokenMeter.refresh();
-          }
+          finishComposerSubmission();
         }
         if (interrupt && selectedIsCurrent()) {
           await maybeCancelPriorityRun();
@@ -1159,16 +1197,11 @@ export async function boot() {
       await ensurePromptReady(selected.projectId, selected.sessionId);
       const run = await startRun(selected.projectId, selected.sessionId, text, attachments);
       if (fromComposer) {
-        draftStore.clear(`${selected.projectId}/${selected.sessionId}`);
-        if (originatingDraft !== null)
-          draftStore.clearIfMatches("", originatingDraft);
-        if (selectedIsCurrent()) {
-          prompt.value = "";
-          composerAttachments = [];
-          composerImages.clear();
-          resizePrompt();
-          tokenMeter.refresh();
+        if (originatingDraft !== null) {
+          if (selectedIsCurrent()) draftStore.clear("");
+          else draftStore.clearIfMatches("", originatingDraft);
         }
+        finishComposerSubmission();
       }
       if (selectedIsCurrent()) monitorRun(run);
       await Promise.all([...(selectedIsCurrent() ? [refreshSelectedTimeline()] : []),
@@ -1223,6 +1256,7 @@ export async function boot() {
   }
   window.addEventListener("resize", resizePrompt);
   prompt.addEventListener("input", () => {
+    composerInputVersion += 1;
     resizePrompt();
     draftStore.edit(selectedKey, prompt.value, composerAttachments);
     tokenMeter.refresh();

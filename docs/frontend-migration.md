@@ -411,3 +411,9 @@ Home `.build/mdo-packed-docks-lyu66m_d` 使用新单文件程序真实重启后�
 修复后的隔离单文件 Home `.build/mdo-packed-docks-c58wn4s6` 验证运行中队列只显示自动发送提示，首条结束后第二条自动进入时间线、获得回复并清空队列。320px Home `.build/mdo-packed-docks-w11ae0yu` 再验证完整排队文本与提示、输入焦点保持；队列左右边界 13–307px、文档宽度等于 320px 视口，浏览器脚本错误日志为空。此轮只使用本地有界 15 秒合成回复，不做高负载测试。
 
 有界发布门禁通过 62 个前端模块解析、17 项 Node 测试、114 项 Python 单元/契约测试、19 个运行探针、严格 C 编译、两次确定性打包、单文件零旁路写入与 20 秒启动检查；根目录 `mdo.exe` 已重建，SHA-256：`a909ac82798f560f771c20a9e88f0146f1a613bf080fdd156f39e5293f924f48`。
+
+修复连续输入时被异步提交清空的竞态。旧版在按 Enter 时同步消费输入；新版此前等队列 POST 或运行启动完成后才无条件清空输入框，隔离打包 Home `.build/mdo-packed-docks-c58wn4s6` 中紧接首条输入第二条时曾只留下 `tion QA`。现在提交时记录原输入及编辑版本，成功后只消费本次提交的前缀，保留随后键入或主动改写的草稿；附件仅在仍与本次提交快照一致时清空，后台会话只在草稿快照匹配时清除。普通输入不再为斜杠命令判定额外等待一个异步回合。
+
+新任务创建期间还存在焦点竞态：修前 Home `.build/mdo-packed-docks-_7h10lis` 在创建会话的短暂加载中禁用输入框，连续键入的 `Next draft QA` 只留下 `Next draf`。现在只对刚创建的目标会话保持输入框可编辑，发送与附件操作仍等详情加载完成后启用；创建时把实时草稿转入新会话。修后 Home `.build/mdo-packed-docks-3aqibawq` 保留完整文本、刷新仍在新会话，返回空白新任务无残留。最终字节 Home `.build/mdo-packed-docks-zjjyenay` 再从新任务连续输入 `First final QA` 与 `Second final QA`，焦点始终在输入框，刷新后第二条完整保留，浏览器脚本错误日志为空。已有会话 Home `.build/mdo-packed-docks-9gwlhfvc` 的快速两次 Enter 也实际排入并发送完整 `Queued action QA`。
+
+有界发布门禁通过 62 个前端模块解析、17 项 Node 测试、114 项 Python 单元/契约测试、19 个运行探针、严格 C 编译、两次确定性打包、单文件零旁路写入与 20 秒启动检查；根目录 `mdo.exe` 已重建，SHA-256：`33a1fbc6fa04e21ebfc05070ad5a747d91fe78ae76b3b471cd88c2b97c34215d`。

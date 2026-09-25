@@ -102,10 +102,10 @@ export function createSlashCommands({ composer, input, onExecute }) {
       }
       return false;
     },
-    async consumeExact(value) {
+    consumeExact(value) {
       const command = COMMANDS.find((item) => item.name === value);
       if (!command) return false;
-      await execute(command);
+      void execute(command);
       return true;
     },
     hide,
