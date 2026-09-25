@@ -716,7 +716,8 @@ select:focus-visible,
 .composer textarea {
   display: block;
   width: 100%;
-  max-height: 220px;
+  max-height: min(336px, 50vh);
+  max-height: min(336px, 50dvh);
   resize: none;
   padding: 14px 15px 7px;
   border: 0;
@@ -1324,7 +1325,7 @@ select:focus-visible,
   .composer-input-estimate { font-size: 9px; }
   .option-chip { max-width: 130px; padding: 0 6px; }
   #workspace-chip { display: none; }
-  .composer textarea { max-height: 160px; }
+  .composer textarea { max-height: min(260px, 42vh); max-height: min(260px, 42dvh); }
   .inspector { z-index: 40; width: min(350px, calc(100vw - 30px)); }
   .app-shell[data-sidebar="open"] .scrim,
   .app-shell[data-inspector="open"] .scrim { display: block; }

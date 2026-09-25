@@ -1195,8 +1195,9 @@ export async function boot() {
 
   function resizePrompt() {
     prompt.style.height = "auto";
-    prompt.style.height = `${Math.min(prompt.scrollHeight, 220)}px`;
+    prompt.style.height = `${Math.min(prompt.scrollHeight, 336)}px`;
   }
+  window.addEventListener("resize", resizePrompt);
   prompt.addEventListener("input", () => {
     resizePrompt();
     draftStore.edit(selectedKey, prompt.value, composerAttachments);
