@@ -1222,6 +1222,7 @@ select:focus-visible,
 @media (max-width: 760px) {
   .timeline-actions button { width: 40px; height: 40px; }
   .timeline-item .timeline-actions button { opacity: 1; }
+  .md-code-head button { min-height: 40px; padding: 0 6px; }
   .icon-button { width: 40px; height: 40px; }
   .model-config-layout { grid-template-columns: minmax(0, 1fr); }
   .model-config-list { max-height: 180px; }
@@ -1268,6 +1269,8 @@ select:focus-visible,
   .todo-toggle, .conversation-dock-actions button,
   .ask-dock-options button, .ask-dock-free button { min-height: 40px; }
   .prompt-queue { width: calc(100% - 26px); }
+  .prompt-queue button { min-width: 40px; min-height: 40px; }
+  .prompt-queue .prompt-queue-toggle { min-height: 40px; }
   .composer-hint { display: none; }
   .composer-toolbar { flex-wrap: wrap; gap: 2px; }
   .composer-options { flex: 1 1 100%; gap: 3px; }

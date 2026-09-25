@@ -12,6 +12,7 @@ import subprocess
 import sys
 import tempfile
 import threading
+import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
@@ -43,6 +44,9 @@ class Model(BaseHTTPRequestHandler):
                 "```c\nint answer(void) { return 42; }\n```"
             )
         with Model.lock:
+            slow = "SLOW UI" in wire and "slow" not in Model.sent
+            if slow:
+                Model.sent.add("slow")
             if "TODO UI" in wire and "todo" not in Model.sent:
                 Model.sent.add("todo")
                 output = [{"type": "function_call", "call_id": "ui-todo-1",
@@ -62,6 +66,8 @@ class Model(BaseHTTPRequestHandler):
                                "argv": [sys.executable, "-c",
                                         "print('approval UI fixture')"],
                                "timeout_ms": 5000})}]
+        if slow:
+            time.sleep(15)
         body = json.dumps({"id": "resp_ui_fixture", "model": "ling-3.0-tiny",
                            "status": "completed", "output": output,
                            "usage": {"input_tokens": 7, "output_tokens": 3,
