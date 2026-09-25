@@ -1,4 +1,5 @@
 import { clear, element, errorMessage, toast } from "../../utils/dom.js";
+import { subscribeLocale } from "../../i18n.js";
 import { sessionActionItems } from "./session-actions.js";
 
 export function createSessionActionMenu({ control, button, menu, navigation,
@@ -108,12 +109,14 @@ export function createSessionActionMenu({ control, button, menu, navigation,
   document.addEventListener("focusin", onDocumentFocusIn);
   const unsubscribeStore = store.subscribe(render);
   const unsubscribeNavigation = navigation.subscribe(render);
+  const unsubscribeLocale = subscribeLocale(render);
 
   return Object.freeze({
     close,
     destroy() {
       unsubscribeStore();
       unsubscribeNavigation();
+      unsubscribeLocale();
       document.removeEventListener("keydown", onDocumentKeyDown, true);
       document.removeEventListener("pointerdown", onDocumentPointerDown);
       document.removeEventListener("focusin", onDocumentFocusIn);

@@ -194,7 +194,7 @@ class FrontendContractTests(unittest.TestCase):
         ):
             self.assertIn(marker, sessions)
         for action in ("fork", "truncate", "clear", "export"):
-            self.assertIn(f'name: "{action}"', actions)
+            self.assertIn(f'item("{action}"', actions)
         self.assertIn('sessionActionItems(session)', listing)
         self.assertIn('sessionActionItems(session)',
                       self.scripts["js/features/sessions/session-action-menu.js"])

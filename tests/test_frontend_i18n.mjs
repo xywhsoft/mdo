@@ -2,8 +2,9 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 
-import { currentLocale, loadLocale, supportedLocales, t } from
+import { currentLocale, loadLocale, subscribeLocale, supportedLocales, t } from
   "../app/web/js/i18n.js";
+import { sessionActionItems } from "../app/web/js/features/sessions/session-actions.js";
 
 const root = new URL("../app/web/", import.meta.url);
 const packs = Object.fromEntries(supportedLocales.map((name) => [
@@ -12,11 +13,26 @@ const packs = Object.fromEntries(supportedLocales.map((name) => [
 
 test("bundled language packs cover the annotated shell and switch without stale responses", async () => {
   const referenceKeys = Object.keys(packs["zh-CN"]).sort();
-  for (const name of supportedLocales)
+  for (const name of supportedLocales) {
     assert.deepEqual(Object.keys(packs[name]).sort(), referenceKeys, name);
+    for (const key of referenceKeys) {
+      const parameters = (value) => [...value.matchAll(/\{([a-zA-Z_][\w]*)\}/g)]
+        .map((match) => match[1]).sort();
+      assert.deepEqual(parameters(packs[name][key]), parameters(packs["zh-CN"][key]),
+        `${name}:${key} parameters`);
+    }
+  }
   const html = readFileSync(new URL("index.html", root), "utf8");
   for (const [, key] of html.matchAll(/data-i18n(?:-title|-placeholder|-aria-label)?="([^"]+)"/g))
     assert.ok(referenceKeys.includes(key), `missing static key: ${key}`);
+  for (const path of [
+    "js/features/sessions/session-actions.js",
+    "js/features/sessions/session-list.js",
+  ]) {
+    const source = readFileSync(new URL(path, root), "utf8");
+    for (const [, key] of source.matchAll(/(?:\bt|\bitem)\("(?:[^"]+",\s*)?(nav\.[^"]+|action\.[^"]+)"/g))
+      assert.ok(referenceKeys.includes(key), `missing dynamic key: ${key}`);
+  }
 
   const node = {
     dataset: { i18n: "shell.newTask", i18nAriaLabel: "shell.newTask.configure" },
@@ -39,6 +55,8 @@ test("bundled language packs cover the annotated shell and switch without stale 
     if (name === "en-US") await englishGate;
     return Response.json(packs[name]);
   };
+  const changes = [];
+  const unsubscribe = subscribeLocale((name) => changes.push(name));
   try {
     assert.equal(await loadLocale("zh-CN"), true);
     assert.equal(node.textContent, "新建任务");
@@ -50,13 +68,17 @@ test("bundled language packs cover the annotated shell and switch without stale 
     assert.equal(globalThis.document.documentElement.lang, "ru-RU");
     assert.equal(node.textContent, "Новая задача");
     assert.equal(node.getAttribute("aria-label"), "Настроить и создать задачу");
+    assert.equal(t("nav.actionsFor", { title: "Тест" }), "Действия с сеансом Тест");
+    assert.equal(sessionActionItems({ status: "active", pinned: true })[1].label, "Открепить");
     assert.equal(t("missing.key", {}, "中文回退"), "中文回退");
     assert.equal(await loadLocale("en-US"), true);
     assert.equal(node.textContent, "New task");
     assert.equal(await loadLocale("zh-CN"), true);
     assert.equal(node.textContent, "新建任务");
+    assert.deepEqual(changes, ["zh-CN", "ru-RU", "en-US", "zh-CN"]);
     await assert.rejects(loadLocale("fr"), /Unsupported locale/);
   } finally {
+    unsubscribe();
     releaseEnglish();
     globalThis.document = originalDocument;
     globalThis.fetch = originalFetch;

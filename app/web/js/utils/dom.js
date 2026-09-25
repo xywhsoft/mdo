@@ -1,3 +1,5 @@
+import { currentLocale } from "../i18n.js";
+
 export function element(tag, options = {}, children = []) {
   const node = document.createElement(tag);
   if (options.className) node.className = options.className;
@@ -19,7 +21,7 @@ export function formatRelativeTime(microseconds) {
   const time = Number(microseconds) / 1000;
   if (!Number.isFinite(time) || time <= 0) return "";
   const seconds = Math.round((time - Date.now()) / 1000);
-  const formatter = new Intl.RelativeTimeFormat("zh-CN", { numeric: "auto" });
+  const formatter = new Intl.RelativeTimeFormat(currentLocale(), { numeric: "auto" });
   if (Math.abs(seconds) < 60) return formatter.format(seconds, "second");
   const minutes = Math.round(seconds / 60);
   if (Math.abs(minutes) < 60) return formatter.format(minutes, "minute");
@@ -27,13 +29,13 @@ export function formatRelativeTime(microseconds) {
   if (Math.abs(hours) < 24) return formatter.format(hours, "hour");
   const days = Math.round(hours / 24);
   if (Math.abs(days) < 14) return formatter.format(days, "day");
-  return new Intl.DateTimeFormat("zh-CN", { month: "short", day: "numeric" }).format(time);
+  return new Intl.DateTimeFormat(currentLocale(), { month: "short", day: "numeric" }).format(time);
 }
 
 export function formatClock(microseconds) {
   const time = Number(microseconds) / 1000;
   if (!Number.isFinite(time) || time <= 0) return "";
-  return new Intl.DateTimeFormat("zh-CN", { hour: "2-digit", minute: "2-digit" }).format(time);
+  return new Intl.DateTimeFormat(currentLocale(), { hour: "2-digit", minute: "2-digit" }).format(time);
 }
 
 export function errorMessage(error) {
