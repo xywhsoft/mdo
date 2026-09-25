@@ -657,14 +657,19 @@ export async function boot() {
     setRun(activeRun);
     syncPromptPlaceholder();
     syncWorkspaceChip();
+    syncRuntimeLabel();
   });
 
-  bootstrapStore.subscribe((state) => {
+  function syncRuntimeLabel() {
+    const state = bootstrapStore.get();
     runtimeState.dataset.state = state.status === "error" ? "error" : state.data?.ready ? "ready" : "loading";
     runtimeLabel.textContent = state.status === "error"
       ? errorMessage(state.error)
-      : state.data?.ready ? `本地服务 ${state.data.version}` : state.data?.message || "正在连接本地服务…";
-  });
+      : state.data?.ready
+        ? t("shell.localService", { version: state.data.version }, `本地服务 ${state.data.version}`)
+        : state.data?.message || t("shell.connecting", {}, "正在连接本地服务…");
+  }
+  bootstrapStore.subscribe(syncRuntimeLabel);
 
   tasksStore.subscribe((state) => {
     const active = (state.data?.items ?? []).some((item) => !item.terminal);

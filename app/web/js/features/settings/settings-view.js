@@ -1,5 +1,6 @@
 import { previewSettings, applySettings, restoreSettings } from "../../state/settings.js";
 import { errorMessage, toast } from "../../utils/dom.js";
+import { currentLocale, loadLocale, supportedLocales, t } from "../../i18n.js";
 
 function number(form, name) {
   return Number(form.elements[name].value);
@@ -7,7 +8,7 @@ function number(form, name) {
 
 function settingsPatch(form, snapshot) {
   return {
-    locale: snapshot.locale,
+    locale: form.elements.locale.value,
     appearance: {
       theme: form.elements.theme.value,
       font_size: form.elements.font_size.value,
@@ -88,8 +89,26 @@ export function createSettingsView({ form, store, navigation, onApplied }) {
     restoreButton.disabled = value || !snapshot?.user_patches?.settings;
   }
 
+  function renderStatus(settings) {
+    revision.textContent = t("settings.revision", { revision: settings.revision },
+      `配置 revision ${settings.revision}`) +
+      (settings.runtime_override ? t("settings.runtimeOverride", {}, " · 含运行时覆盖") : "");
+    feedbackText(settings.transaction_service.runtime_consistent
+      ? t("settings.synced", {}, "配置与本地服务保持同步。")
+      : t("settings.runtimeError", { error: settings.transaction_service.last_error },
+        `运行时配置需要处理：${settings.transaction_service.last_error}`),
+    settings.transaction_service.runtime_consistent ? "neutral" : "error");
+  }
+
   function fill(settings) {
     snapshot = settings;
+    form.elements.locale.value = supportedLocales.includes(settings.locale)
+      ? settings.locale : "zh-CN";
+    const selectedLocale = form.elements.locale.value;
+    void loadLocale(selectedLocale).then((applied) => {
+      if (applied && snapshot === settings && form.elements.locale.value === selectedLocale)
+        renderStatus(settings);
+    }).catch((error) => toast(errorMessage(error), "error"));
     form.elements.theme.value = settings.appearance.theme;
     form.elements.font_size.value = settings.appearance.font_size;
     form.elements.density.value = settings.appearance.density;
@@ -118,12 +137,9 @@ export function createSettingsView({ form, store, navigation, onApplied }) {
     credential.textContent = settings.web.credential_configured
       ? "搜索凭据已在服务端配置；其引用和值不会发送到页面。"
       : "尚未检测到搜索凭据。请通过 mdo Home 文件或环境变量配置。";
-    revision.textContent = `配置 revision ${settings.revision}${settings.runtime_override ? " · 含运行时覆盖" : ""}`;
     previewFingerprint = "";
     restoreConfirm.hidden = true;
-    feedbackText(settings.transaction_service.runtime_consistent
-      ? "配置与本地服务保持同步。"
-      : `运行时配置需要处理：${settings.transaction_service.last_error}`, settings.transaction_service.runtime_consistent ? "neutral" : "error");
+    renderStatus(settings);
     applyAppearance(settings);
     setBusy(false);
   }
@@ -135,11 +151,23 @@ export function createSettingsView({ form, store, navigation, onApplied }) {
     applyButton.disabled = true;
     discardButton.disabled = busy || !dirty;
     feedbackText(dirty
-      ? "有尚未预览的更改。先预览，确认后再应用。"
-      : "配置与本地服务保持同步。", "neutral");
+      ? t("settings.pending", {}, "有尚未预览的更改。先预览，确认后再应用。")
+      : t("settings.synced", {}, "配置与本地服务保持同步。"), "neutral");
   }
   form.addEventListener("input", markDirty);
   form.addEventListener("change", markDirty);
+  form.elements.locale.addEventListener("change", async () => {
+    try {
+      await loadLocale(form.elements.locale.value);
+      if (snapshot) renderStatus(snapshot);
+      markDirty();
+    }
+    catch (error) {
+      form.elements.locale.value = currentLocale();
+      markDirty();
+      toast(errorMessage(error), "error");
+    }
+  });
 
   previewButton.addEventListener("click", async () => {
     if (!snapshot || !form.reportValidity()) return;
@@ -149,8 +177,10 @@ export function createSettingsView({ form, store, navigation, onApplied }) {
       const preview = await previewSettings(patch);
       previewFingerprint = JSON.stringify(patch);
       feedbackText(preview.changes
-        ? `预览通过，将合并 ${preview.patch_bytes} 字节配置。`
-        : "预览通过，当前输入不会改变有效配置。", preview.changes ? "success" : "neutral");
+        ? t("settings.previewBytes", { bytes: preview.patch_bytes },
+          `预览通过，将合并 ${preview.patch_bytes} 字节配置。`)
+        : t("settings.previewNoChange", {}, "预览通过，当前输入不会改变有效配置。"),
+      preview.changes ? "success" : "neutral");
       applyButton.disabled = !preview.changes;
     } catch (error) {
       previewFingerprint = "";
@@ -166,8 +196,11 @@ export function createSettingsView({ form, store, navigation, onApplied }) {
     setBusy(true);
     try {
       const result = await applySettings(settingsPatch(form, snapshot), snapshot.etag);
-      feedbackText(result.changed ? `配置 revision ${result.revision} 已生效。` : "配置没有变化。", "success");
-      toast("设置已应用");
+      feedbackText(result.changed
+        ? t("settings.appliedRevision", { revision: result.revision },
+          `配置 revision ${result.revision} 已生效。`)
+        : t("settings.noChanges", {}, "配置没有变化。"), "success");
+      toast(t("settings.appliedToast", {}, "设置已应用"));
       onApplied?.();
     } catch (error) {
       previewFingerprint = "";

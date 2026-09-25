@@ -964,6 +964,7 @@ select:focus-visible,
   min-height: 0;
   grid-column: 1;
   grid-row: 1 / -1;
+  grid-template-columns: minmax(0, 1fr);
   grid-template-rows: var(--header-height) minmax(0, 1fr) auto;
   background: var(--bg);
 }
@@ -1042,6 +1043,7 @@ select:focus-visible,
 .settings-actions {
   position: relative;
   display: flex;
+  min-width: 0;
   min-height: 62px;
   align-items: center;
   justify-content: space-between;
@@ -1051,7 +1053,7 @@ select:focus-visible,
   background: color-mix(in srgb, var(--bg) 94%, transparent);
   backdrop-filter: blur(12px);
 }
-.settings-actions > div { display: flex; align-items: center; gap: 8px; }
+.settings-actions > div { display: flex; min-width: 0; align-items: center; gap: 8px; }
 .settings-feedback { color: var(--muted); font-size: 11px; }
 .settings-feedback[data-tone="error"] { color: var(--danger); }
 .settings-feedback[data-tone="success"] { color: var(--success); }

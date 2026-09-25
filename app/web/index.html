@@ -67,11 +67,11 @@
         <kbd>/</kbd>
       </label>
 
-      <nav class="session-navigation" aria-label="会话列表">
+      <nav class="session-navigation" aria-label="会话列表" data-i18n-aria-label="shell.sessions">
         <div class="nav-section-heading">
           <span data-i18n="shell.sessions">会话</span>
           <div class="session-list-controls">
-            <label class="sr-only" for="session-status-filter">会话状态</label>
+            <label class="sr-only" for="session-status-filter" data-i18n="shell.sessionStatus">会话状态</label>
             <select id="session-status-filter" aria-label="会话状态" data-i18n-aria-label="shell.sessionStatus">
               <option value="active" data-i18n="shell.status.active">进行中</option>
               <option value="archived" data-i18n="shell.status.archived">已归档</option>
@@ -243,50 +243,54 @@
           </div>
         </header>
         <div class="settings-layout">
-          <nav class="settings-navigation" aria-label="设置分类">
-            <p>偏好设置</p>
-            <button type="button" data-settings-section="general" aria-current="page">常规</button>
+          <nav class="settings-navigation" aria-label="设置分类" data-i18n-aria-label="settings.navigation">
+            <p data-i18n="settings.preferences">偏好设置</p>
+            <button type="button" data-settings-section="general" aria-current="page" data-i18n="settings.general">常规</button>
             <button type="button" data-settings-section="agent">Agent</button>
-            <button type="button" data-settings-section="web">联网与搜索</button>
-            <p>资源</p>
-            <button type="button" data-settings-section="projects">项目</button>
-            <button type="button" data-settings-section="schedules">计划任务</button>
-            <button type="button" data-settings-section="models">模型</button>
-            <button type="button" data-settings-section="feedback">反馈</button>
-            <button type="button" data-settings-section="extensions">扩展与 MCP</button>
-            <button type="button" data-settings-section="permissions">权限</button>
-            <button type="button" data-settings-section="diagnostics">诊断与存储</button>
+            <button type="button" data-settings-section="web" data-i18n="settings.web">联网与搜索</button>
+            <p data-i18n="settings.resources">资源</p>
+            <button type="button" data-settings-section="projects" data-i18n="settings.projects">项目</button>
+            <button type="button" data-settings-section="schedules" data-i18n="settings.schedules">计划任务</button>
+            <button type="button" data-settings-section="models" data-i18n="settings.models">模型</button>
+            <button type="button" data-settings-section="feedback" data-i18n="settings.feedback">反馈</button>
+            <button type="button" data-settings-section="extensions" data-i18n="settings.extensions">扩展与 MCP</button>
+            <button type="button" data-settings-section="permissions" data-i18n="settings.permissions">权限</button>
+            <button type="button" data-settings-section="diagnostics" data-i18n="settings.diagnostics">诊断与存储</button>
           </nav>
 
           <div class="settings-content" id="settings-content" tabindex="-1">
             <form id="settings-form">
               <section class="settings-section" data-settings-panel="general" aria-labelledby="settings-general-title">
                 <div class="settings-section-heading">
-                  <h2 id="settings-general-title">常规</h2>
-                  <p>界面外观、输入方式和工作区打开方式。</p>
+                  <h2 id="settings-general-title" data-i18n="settings.general">常规</h2>
+                  <p data-i18n="settings.generalDescription">界面外观、输入方式和工作区打开方式。</p>
                 </div>
                 <div class="setting-row">
-                  <div><label for="setting-theme">主题</label><p>跟随系统，或固定使用浅色和深色外观。</p></div>
-                  <select id="setting-theme" name="theme"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select>
+                  <div><label for="setting-locale" data-i18n="settings.language">界面语言</label><p data-i18n="settings.languageDescription">切换界面语言；应用设置后在此设备上保留。</p></div>
+                  <select id="setting-locale" name="locale"><option value="zh-CN">简体中文</option><option value="en-US">English</option><option value="ru-RU">Русский</option></select>
                 </div>
                 <div class="setting-row">
-                  <div><label for="setting-font-size">文字大小</label><p>调整工作台的基础字号。</p></div>
-                  <select id="setting-font-size" name="font_size"><option value="small">小</option><option value="normal">标准</option><option value="large">大</option></select>
+                  <div><label for="setting-theme" data-i18n="settings.theme">主题</label><p data-i18n="settings.themeDescription">跟随系统，或固定使用浅色和深色外观。</p></div>
+                  <select id="setting-theme" name="theme"><option value="system" data-i18n="settings.themeSystem">跟随系统</option><option value="light" data-i18n="settings.themeLight">浅色</option><option value="dark" data-i18n="settings.themeDark">深色</option></select>
                 </div>
                 <div class="setting-row">
-                  <div><label for="setting-density">界面密度</label><p>控制列表和控件的纵向间距。</p></div>
-                  <select id="setting-density" name="density"><option value="comfortable">舒适</option><option value="compact">紧凑</option></select>
+                  <div><label for="setting-font-size" data-i18n="settings.fontSize">文字大小</label><p data-i18n="settings.fontSizeDescription">调整工作台的基础字号。</p></div>
+                  <select id="setting-font-size" name="font_size"><option value="small" data-i18n="settings.fontSmall">小</option><option value="normal" data-i18n="settings.fontNormal">标准</option><option value="large" data-i18n="settings.fontLarge">大</option></select>
                 </div>
                 <div class="setting-row">
-                  <div><label for="setting-submit-mode">运行中输入</label><p>排队模式：Enter 排队，Ctrl/⌘+Enter 中断并优先发送；引导模式：两者对调。</p></div>
-                  <select id="setting-submit-mode" name="submit_mode"><option value="queue">排队</option><option value="guide">引导</option></select>
+                  <div><label for="setting-density" data-i18n="settings.density">界面密度</label><p data-i18n="settings.densityDescription">控制列表和控件的纵向间距。</p></div>
+                  <select id="setting-density" name="density"><option value="comfortable" data-i18n="settings.densityComfortable">舒适</option><option value="compact" data-i18n="settings.densityCompact">紧凑</option></select>
                 </div>
-                <label class="setting-switch"><span><strong>完成提示音</strong><small>其他会话的运行结束时播放短提示音。</small></span><input name="completion_sound" type="checkbox"><span class="switch-control" aria-hidden="true"></span></label>
                 <div class="setting-row">
-                  <div><label for="setting-open-mode">启动时打开</label><p>选择启动后的默认工作区行为。</p></div>
-                  <select id="setting-open-mode" name="open_mode"><option value="last">上次会话</option><option value="new">新任务</option><option value="ask">每次询问</option></select>
+                  <div><label for="setting-submit-mode" data-i18n="settings.submitMode">运行中输入</label><p data-i18n="settings.submitModeDescription">排队模式：Enter 排队，Ctrl/⌘+Enter 中断并优先发送；引导模式：两者对调。</p></div>
+                  <select id="setting-submit-mode" name="submit_mode"><option value="queue" data-i18n="settings.submitQueue">排队</option><option value="guide" data-i18n="settings.submitGuide">引导</option></select>
                 </div>
-                <label class="setting-switch"><span><strong>外部写入前确认</strong><small>工作区之外的文件写入始终要求确认。</small></span><input name="confirm_external_write" type="checkbox"><span class="switch-control" aria-hidden="true"></span></label>
+                <label class="setting-switch"><span><strong data-i18n="settings.completionSound">完成提示音</strong><small data-i18n="settings.completionSoundDescription">其他会话的运行结束时播放短提示音。</small></span><input name="completion_sound" type="checkbox"><span class="switch-control" aria-hidden="true"></span></label>
+                <div class="setting-row">
+                  <div><label for="setting-open-mode" data-i18n="settings.openMode">启动时打开</label><p data-i18n="settings.openModeDescription">选择启动后的默认工作区行为。</p></div>
+                  <select id="setting-open-mode" name="open_mode"><option value="last" data-i18n="settings.openLast">上次会话</option><option value="new" data-i18n="settings.openNew">新任务</option><option value="ask" data-i18n="settings.openAsk">每次询问</option></select>
+                </div>
+                <label class="setting-switch"><span><strong data-i18n="settings.confirmExternal">外部写入前确认</strong><small data-i18n="settings.confirmExternalDescription">工作区之外的文件写入始终要求确认。</small></span><input name="confirm_external_write" type="checkbox"><span class="switch-control" aria-hidden="true"></span></label>
               </section>
 
               <section class="settings-section" data-settings-panel="agent" aria-labelledby="settings-agent-title" hidden>
@@ -395,12 +399,12 @@
         </div>
 
         <footer class="settings-actions" id="settings-actions">
-          <div class="settings-feedback" id="settings-feedback" role="status">配置与本地服务保持同步。</div>
+          <div class="settings-feedback" id="settings-feedback" role="status" data-i18n="settings.synced">配置与本地服务保持同步。</div>
           <div>
-            <button class="danger-link" id="restore-settings" type="button">恢复默认</button>
-            <button class="secondary-button" id="discard-settings" type="button" disabled>放弃更改</button>
-            <button class="secondary-button" id="preview-settings" type="button" disabled>预览更改</button>
-            <button class="primary-button" id="apply-settings" type="button" disabled>应用更改</button>
+            <button class="danger-link" id="restore-settings" type="button" data-i18n="settings.restore" disabled>恢复默认</button>
+            <button class="secondary-button" id="discard-settings" type="button" data-i18n="settings.discard" disabled>放弃更改</button>
+            <button class="secondary-button" id="preview-settings" type="button" data-i18n="settings.preview" disabled>预览更改</button>
+            <button class="primary-button" id="apply-settings" type="button" data-i18n="settings.apply" disabled>应用更改</button>
           </div>
           <div class="restore-confirm" id="restore-confirm" hidden>
             <span>将删除当前 settings 用户 patch，并恢复内置默认值。</span>
