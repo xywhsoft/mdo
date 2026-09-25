@@ -30,6 +30,7 @@ class Model(BaseHTTPRequestHandler):
     sent = set()
     verify_recovery = False
     verification_file = None
+    slow_seconds = 15
 
     def log_message(self, *_args):
         pass
@@ -83,7 +84,7 @@ class Model(BaseHTTPRequestHandler):
                                         str(Model.verification_file)],
                                "timeout_ms": 5000})}]
         if slow:
-            time.sleep(15)
+            time.sleep(Model.slow_seconds)
         body = json.dumps({"id": "resp_ui_fixture", "model": "ling-3.0-tiny",
                            "status": "completed", "output": output,
                            "usage": {"input_tokens": 7, "output_tokens": 3,
@@ -102,8 +103,8 @@ class ModelServer(ThreadingHTTPServer):
         super().handle_error(_request, _client_address)
 
 
-class ApprovalDelayProxy(BaseHTTPRequestHandler):
-    """Forward one browser origin while delaying approval PUTs for UI QA."""
+class BoundedDelayProxy(BaseHTTPRequestHandler):
+    """Forward one browser origin with bounded delays for UI race QA."""
 
     protocol_version = "HTTP/1.1"
 
@@ -132,11 +133,18 @@ class ApprovalDelayProxy(BaseHTTPRequestHandler):
             return
         body = self.rfile.read(length) if length else None
         if self.command == "PUT" and self.path.startswith("/api/v1/approvals/"):
-            with self.server.approval_lock:
+            with self.server.count_lock:
                 self.server.approval_puts += 1
                 count = self.server.approval_puts
             print(f"QA approval PUT #{count}", flush=True)
-            time.sleep(self.server.delay_seconds)
+            time.sleep(self.server.approval_delay_seconds)
+        if (self.command == "POST" and self.path.startswith("/api/v1/projects/")
+                and "/sessions/" in self.path and self.path.endswith("/queue")):
+            with self.server.count_lock:
+                self.server.queue_posts += 1
+                count = self.server.queue_posts
+            print(f"QA queue POST #{count}", flush=True)
+            time.sleep(self.server.queue_delay_seconds)
         headers = {key: value for key, value in self.headers.items()
                    if key.lower() not in {"host", "connection", "content-length"}}
         headers["Host"] = f"127.0.0.1:{self.server.upstream_port}"
@@ -166,7 +174,7 @@ class ApprovalDelayProxy(BaseHTTPRequestHandler):
             upstream.close()
 
 
-class ApprovalProxyServer(ThreadingHTTPServer):
+class BoundedDelayProxyServer(ThreadingHTTPServer):
     daemon_threads = True
 
     def handle_error(self, request, client_address):
@@ -178,15 +186,24 @@ class ApprovalProxyServer(ThreadingHTTPServer):
 parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument("--approval-delay-ms", type=int, default=0,
                     help="delay one approval PUT by 0-5000 ms for manual duplicate-click QA")
+parser.add_argument("--queue-delay-ms", type=int, default=0,
+                    help="delay queue POSTs by 0-12000 ms for bounded dispatch race QA")
+parser.add_argument("--slow-ms", type=int, default=15000,
+                    help="first SLOW UI model response delay, 0-15000 ms")
 parser.add_argument("--resume-verify", action="store_true",
                     help="let the local model verify a resumed run with a bounded read-only command")
 args = parser.parse_args()
 if not 0 <= args.approval_delay_ms <= 5000:
     parser.error("--approval-delay-ms must be between 0 and 5000")
+if not 0 <= args.queue_delay_ms <= 12000:
+    parser.error("--queue-delay-ms must be between 0 and 12000")
+if not 0 <= args.slow_ms <= 15000:
+    parser.error("--slow-ms must be between 0 and 15000")
 
 base = Path(tempfile.mkdtemp(prefix="mdo-packed-docks-", dir=ROOT / ".build"))
 Model.verify_recovery = args.resume_verify
 Model.verification_file = base / "README.md"
+Model.slow_seconds = args.slow_ms / 1000
 shutil.copy2(ROOT / "mdo.exe", base / "mdo.exe")
 (base / "README.md").write_text("Synthetic workspace file for @ completion.\n",
                                 encoding="utf-8")
@@ -236,12 +253,14 @@ try:
         raise RuntimeError((status, response))
     session = response["data"]["id"]
     browser_port = port
-    if args.approval_delay_ms:
-        proxy = ApprovalProxyServer(("127.0.0.1", 0), ApprovalDelayProxy)
+    if args.approval_delay_ms or args.queue_delay_ms:
+        proxy = BoundedDelayProxyServer(("127.0.0.1", 0), BoundedDelayProxy)
         proxy.upstream_port = port
-        proxy.delay_seconds = args.approval_delay_ms / 1000
-        proxy.approval_lock = threading.Lock()
+        proxy.approval_delay_seconds = args.approval_delay_ms / 1000
+        proxy.queue_delay_seconds = args.queue_delay_ms / 1000
+        proxy.count_lock = threading.Lock()
         proxy.approval_puts = 0
+        proxy.queue_posts = 0
         threading.Thread(target=proxy.serve_forever, daemon=True).start()
         browser_port = proxy.server_address[1]
     print(f"READY url=http://127.0.0.1:{browser_port}/#/projects/default/"
@@ -250,6 +269,7 @@ try:
 finally:
     if proxy:
         print(f"QA approval PUT total={proxy.approval_puts}", flush=True)
+        print(f"QA queue POST total={proxy.queue_posts}", flush=True)
         proxy.shutdown()
         proxy.server_close()
     stop_host(process)

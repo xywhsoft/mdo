@@ -1099,6 +1099,9 @@ export async function boot() {
         if (interrupt && selectedIsCurrent()) {
           await maybeCancelPriorityRun();
         }
+        // The previous run may finish while the queue POST is in flight.
+        // Its completion check can see an empty queue, so retry dispatch here.
+        if (selectedIsCurrent()) await dispatchQueued();
         return;
       }
       await ensurePromptReady(selected.projectId, selected.sessionId);
