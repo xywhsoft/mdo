@@ -1,6 +1,6 @@
 # 项目彻底清除的事务边界
 
-旧版项目把会话和定义放在同一数据桶中。新版 Home 已拆分存储，因此项目设置中的“取消注册”只删除 `projects/<id>.json`，不能冒充彻底清除。本文件给出恢复旧版清除入口前必须满足的实施条件。`GET /api/v1/projects/{project}/purge-preview` 目前只返回瞬时清单，`advisory: true` 明确表示其结果不能授权删除。
+旧版项目把会话和定义放在同一数据桶中。新版 Home 已拆分存储，因此项目设置中的“取消注册”只删除 `projects/<id>.json`，不能冒充彻底清除。本文件给出恢复旧版清除入口前必须满足的实施条件。项目设置可查看并刷新 `GET /api/v1/projects/{project}/purge-preview` 的瞬时清单；`advisory: true` 明确表示其结果不能授权删除。
 
 ## 清除范围
 

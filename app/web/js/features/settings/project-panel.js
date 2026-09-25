@@ -1,4 +1,5 @@
-import { loadProjects, readProject, unregisterProject, updateProject } from "../../state/catalogs.js";
+import { loadProjects, readProject, readProjectPurgePreview,
+  unregisterProject, updateProject } from "../../state/catalogs.js";
 import { clear, element, errorMessage, toast } from "../../utils/dom.js";
 import { openMemoryPanel, openMemoryDirectory } from "./memory-panel.js";
 
@@ -9,7 +10,17 @@ export function createProjectPanel({ panel, projectsStore, modelsStore,
   const description = dialog.querySelector("#project-unregister-description");
   const error = dialog.querySelector("#project-unregister-error");
   const confirm = dialog.querySelector('[value="unregister"]');
+  const previewDialog = document.querySelector("#project-purge-preview-dialog");
+  const previewTitle = previewDialog.querySelector("#project-purge-preview-title");
+  const previewStatus = previewDialog.querySelector("#project-purge-preview-status");
+  const previewList = previewDialog.querySelector("#project-purge-preview-list");
+  const previewNote = previewDialog.querySelector("#project-purge-preview-note");
+  const previewRefresh = previewDialog.querySelector("#project-purge-preview-refresh");
+  const previewClose = previewDialog.querySelector("#project-purge-preview-close");
   let target = null;
+  let previewProject = null;
+  let previewOrigin = null;
+  let previewRequest = null;
 
   function focusProject(id, control = "edit") {
     window.requestAnimationFrame(() => {
@@ -17,11 +28,64 @@ export function createProjectPanel({ panel, projectsStore, modelsStore,
         .find((item) => item.dataset.projectId === id);
       const targetControl = control === "model" ? card?.querySelector("select")
         : [...(card?.querySelectorAll("button") ?? [])]
-          .find((button) => button.textContent === "编辑") ??
+          .find((button) => button.textContent ===
+            (control === "preview" ? "核对清除范围" : "编辑")) ??
           card?.querySelector("button");
       targetControl?.focus();
       card?.scrollIntoView({ block: "nearest" });
     });
+  }
+
+  function showPreview(data) {
+    clear(previewList);
+    const rows = [
+      ["会话", data.session_count],
+      ["已打开的会话运行态", data.session_runtime_count],
+      ["关联计划", data.schedule_count],
+      ["项目记忆条目", data.project_memory_entry_count],
+      ["项目记忆文件", data.project_memory_present ? "存在" : "无"],
+      ["本项目交互运行", data.active_interactive_run_count],
+      ["全局计划运行", data.active_scheduled_run_count_global],
+      ["本项目会话诊断项", data.session_diagnostic_count],
+      ["全局会话诊断项", data.session_catalog_diagnostic_count_global],
+      ["全局计划诊断项", data.schedule_catalog_diagnostic_count_global],
+    ];
+    for (const [label, value] of rows)
+      previewList.append(element("dt", { text: label }),
+        element("dd", { text: String(value ?? "未知") }));
+    previewList.hidden = false;
+    previewStatus.textContent = `项目版本 ${data.revision} · 当前清单仅供核对`;
+    const unsettled = [data.session_runtime_count,
+      data.active_interactive_run_count, data.active_scheduled_run_count_global,
+      data.session_diagnostic_count, data.session_catalog_diagnostic_count_global,
+      data.schedule_catalog_diagnostic_count_global].some((value) =>
+      Number(value) > 0);
+    previewNote.textContent = unsettled
+      ? "存在运行态或诊断项；执行彻底清除前必须重新核对并处理。"
+      : "当前未发现运行态或诊断项；执行彻底清除前仍须重新核对。";
+    previewNote.hidden = false;
+  }
+
+  async function loadPreview() {
+    if (!previewProject) return;
+    previewRequest?.abort();
+    const request = new AbortController();
+    previewRequest = request;
+    previewStatus.textContent = "正在读取清单…";
+    previewList.hidden = true;
+    previewNote.hidden = true;
+    try {
+      const data = await readProjectPurgePreview(previewProject.id,
+        { signal: request.signal });
+      if (previewDialog.open && previewRequest === request)
+        showPreview(data);
+    } catch (cause) {
+      if (cause?.name !== "AbortError" && previewDialog.open &&
+          previewRequest === request)
+        previewStatus.textContent = `清单读取失败：${errorMessage(cause)}`;
+    } finally {
+      if (previewRequest === request) previewRequest = null;
+    }
   }
 
   function render() {
@@ -94,6 +158,18 @@ export function createProjectPanel({ panel, projectsStore, modelsStore,
           attrs: { type: "button" } });
         edit.addEventListener("click", () => { void projectDialog.open(project); });
         actions.append(edit);
+        const preview = element("button", { className: "secondary-button",
+          text: "核对清除范围", attrs: { type: "button",
+            "aria-label": `核对 ${project.name || project.id} 的清除范围` } });
+        preview.addEventListener("click", () => {
+          previewProject = project;
+          previewOrigin = preview;
+          previewTitle.textContent = `${project.name || project.id} · 清除范围`;
+          previewDialog.showModal();
+          previewClose.focus();
+          void loadPreview();
+        });
+        actions.append(preview);
         const remove = element("button", { className: "danger-link", text: "取消注册",
           attrs: { type: "button" } });
         remove.addEventListener("click", async () => {
@@ -128,6 +204,17 @@ export function createProjectPanel({ panel, projectsStore, modelsStore,
     } finally { confirm.disabled = false; }
   });
   dialog.addEventListener("close", () => { target = null; });
+  previewRefresh.addEventListener("click", () => { void loadPreview(); });
+  previewClose.addEventListener("click", () => previewDialog.close());
+  previewDialog.addEventListener("close", () => {
+    previewRequest?.abort();
+    previewRequest = null;
+    const id = previewProject?.id;
+    if (previewOrigin?.isConnected) previewOrigin.focus();
+    else if (id) focusProject(id, "preview");
+    previewProject = null;
+    previewOrigin = null;
+  });
   panel.querySelector("#projects-add").addEventListener("click", () => {
     void projectDialog.open();
   });

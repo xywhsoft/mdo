@@ -471,6 +471,18 @@
     </form>
   </dialog>
 
+  <dialog class="project-preview-dialog" id="project-purge-preview-dialog" aria-labelledby="project-purge-preview-title">
+    <div class="project-preview-shell">
+      <h3 id="project-purge-preview-title">项目清除范围</h3>
+      <p>核对项目数据的当前清单。彻底清除功能尚未开放；取消注册会保留现有数据。</p>
+      <div id="project-purge-preview-status" role="status">正在读取清单…</div>
+      <dl class="project-preview-list" id="project-purge-preview-list" hidden></dl>
+      <p class="project-preview-note" id="project-purge-preview-note" hidden></p>
+      <p class="project-preview-note">共享审计记录和迁移报告属于多个项目，不随单个项目清除。</p>
+      <div class="dialog-actions"><button class="secondary-button" id="project-purge-preview-refresh" type="button">刷新清单</button><button class="primary-button" id="project-purge-preview-close" type="button">关闭</button></div>
+    </div>
+  </dialog>
+
   <dialog class="memory-dialog" id="memory-dialog" aria-labelledby="memory-title">
     <div class="memory-dialog-shell">
       <header class="memory-dialog-heading"><div><h2 id="memory-title">项目记忆</h2><p id="memory-path"></p></div><div class="memory-heading-actions"><button class="secondary-button" id="memory-open-directory" type="button">打开文件夹</button><button class="secondary-button" id="memory-discard" type="button" hidden>放弃并关闭</button><button class="secondary-button" id="memory-close" type="button">关闭</button></div></header>
