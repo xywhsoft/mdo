@@ -17,7 +17,8 @@ async function lastSessionCandidate(saved, sessions) {
 }
 
 export async function startWorkspaceNavigation({ navigation, settingsStore,
-  sessionsStore, dialog, title, continueButton, newButton, prompt, entryHash }) {
+  sessionsStore, sessionDetailStore, dialog, title, continueButton, newButton,
+  prompt, entryHash }) {
   let saved = null;
   try { saved = (await api.get(endpoint)).data; }
   catch { toast(t("startup.readFailed", {},
@@ -52,19 +53,47 @@ export async function startWorkspaceNavigation({ navigation, settingsStore,
     void flushSelection();
   });
 
+  function openLastSession(session) {
+    const projectId = session.project_id;
+    const sessionId = session.id;
+    navigation.select(projectId, sessionId, { replace: true });
+    let done = false;
+    let unsubscribeDetail = () => {};
+    let unsubscribeRoute = () => {};
+    function finish(focus) {
+      if (done) return;
+      done = true;
+      unsubscribeDetail();
+      unsubscribeRoute();
+      if (focus && !prompt.disabled) prompt.focus();
+    }
+    unsubscribeDetail = sessionDetailStore.subscribe((state) => {
+      if (state.status === "error") { finish(false); return; }
+      if (state.status === "ready" && state.data?.project_id === projectId &&
+          state.data?.id === sessionId) finish(true);
+    });
+    if (done) { unsubscribeDetail(); return; }
+    unsubscribeRoute = navigation.subscribe((route) => {
+      if (route.view !== "workspace" || route.projectId !== projectId ||
+          route.sessionId !== sessionId) finish(false);
+    });
+    if (done) unsubscribeRoute();
+  }
+
   // Hash routes are explicit user choices, including #/ for a blank task.
   if (entryHash || location.hash) return;
   const mode = settingsStore.get().data?.workspace?.open_mode ?? "last";
   if (mode === "new") {
     navigation.newTask(saved?.project_id || "default", { replace: true });
+    prompt.focus();
     return;
   }
   const candidate = await lastSessionCandidate(saved,
     sessionsStore.get().data?.items);
   if (location.hash) return;
-  if (!candidate) { navigation.clear(); return; }
+  if (!candidate) { navigation.clear(); prompt.focus(); return; }
   if (mode !== "ask") {
-    navigation.select(candidate.project_id, candidate.id, { replace: true });
+    openLastSession(candidate);
     return;
   }
 
@@ -76,7 +105,7 @@ export async function startWorkspaceNavigation({ navigation, settingsStore,
   }
   continueButton.addEventListener("click", () => {
     dialog.close();
-    navigation.select(candidate.project_id, candidate.id, { replace: true });
+    openLastSession(candidate);
   }, { once: true });
   newButton.addEventListener("click", openNew, { once: true });
   dialog.addEventListener("cancel", (event) => {
