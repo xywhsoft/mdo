@@ -80,6 +80,21 @@ def runtime_probes(host: Path) -> int:
     return len(probes)
 
 
+def frontend_checks() -> None:
+    node = shutil.which("node")
+    if node is None:
+        raise GateError(
+            "Node.js is required for frontend release checks; "
+            "build_mdo.py remains Node-free"
+        )
+    run([node, "--experimental-vm-modules",
+         str(ROOT / "tools/check_web_modules.mjs")])
+    tests = sorted(TESTS.glob("*.mjs"), key=lambda path: path.name)
+    if not tests:
+        raise GateError("no frontend interaction tests were found")
+    run([node, "--test", *(str(path) for path in tests)])
+
+
 def wait_alive(process: subprocess.Popen[bytes], seconds: int) -> None:
     deadline = time.monotonic() + seconds
     while time.monotonic() < deadline:
@@ -164,6 +179,7 @@ def main(argv: list[str] | None = None) -> int:
         packer = host.with_name("xsw.exe") if os.name == "nt" else host
 
         run([sys.executable, "-m", "unittest", "discover", "-s", "tests"])
+        frontend_checks()
         build = [
             sys.executable, str(ROOT / "tools/build_mdo.py"),
             "--xserver-root", str(xserver), "--output", str(first),

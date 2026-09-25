@@ -16,20 +16,21 @@ Linux：
 python3 tools/qa_release.py --xserver-root /path/to/xserver
 ```
 
-默认命令会从 `deps.lock` 锁定的源码重新构建宿主和第一份 pack。`--skip-host-build` 只用于已经精确构建过同一锁定 revision 的本地宿主；正式发布不得使用。`--skip-gui-smoke` 只适合没有桌面会话的本地或 Linux runner；Windows 发布候选必须保留 GUI 冒烟。
+默认命令会从 `deps.lock` 锁定的源码重新构建宿主和第一份 pack。发布门禁还需要 Node.js 运行前端检查；`tools/build_mdo.py` 仍不依赖 Node.js。`--skip-host-build` 只用于已经精确构建过同一锁定 revision 的本地宿主；正式发布不得使用。`--skip-gui-smoke` 只适合没有桌面会话的本地或 Linux runner；Windows 发布候选必须保留 GUI 冒烟。
 
 ## 自动门禁内容
 
 `tools/qa_release.py` 按顺序执行：
 
 1. 校验 xserver HEAD、xrt 单头、xllm、xllm-session、xwork 生产源码、版本和格式锁；
-2. 运行 113 项 Python 源码、构建、API 和前端合同检查；
-3. 从锁定依赖构建宿主并生成第一份单文件 pack；
-4. 以 GCC C11、`-Wall -Wextra -Werror` 严格编译 mdo unity；
-5. 运行 16 个真实 xs/TCC 低负载运行时探针；
-6. 生成第二份 pack，并要求两份文件的 SHA-256 完全一致；
-7. Windows 上在空临时目录启动单个 `mdo.exe` 5 秒，确认目录零写入；
-8. Windows 上运行 20 秒打包启动回归，确认 TCC 服务初始化后进程仍存活，且没有 crash、dump 或 `xsw.log`。
+2. 运行所有 Python 源码、构建、API 和前端合同检查；
+3. 解析 `app/web/js/` 中所有 ES 模块，运行 `tests/*.mjs` 前端交互测试；
+4. 从锁定依赖构建宿主并生成第一份单文件 pack；
+5. 以 GCC C11、`-Wall -Wextra -Werror` 严格编译 mdo unity；
+6. 运行所有真实 xs/TCC 低负载运行时探针；
+7. 生成第二份 pack，并要求两份文件的 SHA-256 完全一致；
+8. Windows 上在空临时目录启动单个 `mdo.exe` 5 秒，确认目录零写入；
+9. Windows 上运行 20 秒打包启动回归，确认 TCC 服务初始化后进程仍存活，且没有 crash、dump 或 `xsw.log`。
 
 任一步失败都会返回非零退出码。构建产物与探针临时目录位于 `.build/qa-release/`，不进入版本控制。
 
@@ -39,6 +40,8 @@ python3 tools/qa_release.py --xserver-root /path/to/xserver
 | --- | --- | --- |
 | Windows x64 | 113 项合同检查、严格 C11、16 个运行时探针、单文件零写与 20 秒打包启动全部通过 | `f967c49a7b029eda540b9ad5cae2bd20f12aa556fb187693d6593d1945a6923e` |
 | Linux x64 原生文件系统 | 113 项合同检查、严格 C11、16 个运行时探针和两次 pack 一致性全部通过 | `458523cddacb2e16d0a96023dd53d1331b28f0bd55ce6b4178e6daae06c9d724` |
+
+上表为早期平台验收记录；当前测试数量以实际门禁输出为准。新增的前端模块解析覆盖打包页的全部脚本，可在打包前拦住括号遗漏等语法错误。
 
 Linux 迁移发布需要文件系统支持原子且不覆盖目标的目录 rename。WSL DrvFS 当前不支持该语义，mdo 会返回类型化错误、删除 staging 并保留来源；Linux 原生文件系统已通过完整迁移门禁。发布 runner 应在 ext4、xfs、btrfs 等原生文件系统上执行。
 
