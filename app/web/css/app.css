@@ -874,13 +874,14 @@ select:focus-visible,
 .recovery-warning { margin: 10px 0 0; color: var(--warning); font-size: 10px; line-height: 1.5; }
 .recovery-options { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; margin-top: 10px; }
 .recovery-option { min-height: 34px; padding: 0 8px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface); color: var(--muted); font-size: 10px; cursor: pointer; }
-.recovery-option:hover:not(:disabled) { border-color: var(--border-strong); background: var(--surface-hover); }
+.recovery-option:hover:not(:disabled):not([aria-disabled="true"]) { border-color: var(--border-strong); background: var(--surface-hover); }
 .recovery-option.selected { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 10%, var(--surface)); color: var(--ink); }
 .recovery-option:disabled { opacity: .45; cursor: not-allowed; }
+.recovery-option[aria-disabled="true"], .recovery-submit[aria-disabled="true"], .recovery-abandon[aria-disabled="true"] { opacity: .5; cursor: wait; }
 .recovery-submit { width: 100%; min-height: 36px; margin-top: 11px; font-size: 10px; }
 .recovery-actions .recovery-submit { width: auto; margin-top: 0; }
 .recovery-abandon { padding: 0 8px; border: 1px solid var(--border-strong); border-radius: var(--radius-sm); background: var(--surface); color: var(--ink); font-size: 10px; cursor: pointer; }
-.recovery-abandon:hover:not(:disabled) { background: var(--surface-hover); }
+.recovery-abandon:hover:not(:disabled):not([aria-disabled="true"]) { background: var(--surface-hover); }
 .recovery-abandon:disabled { opacity: .45; cursor: not-allowed; }
 .context-list { display: grid; grid-template-columns: minmax(70px, auto) minmax(0, 1fr); gap: 10px 12px; margin: 16px 3px; font-size: 11px; }
 .context-list dt { color: var(--muted); }

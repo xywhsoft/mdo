@@ -15,8 +15,10 @@ export function createRecoveryPanel({ container, summary, store, onResume, onAba
   let state = store.get();
   let submitting = false;
   const choices = new Map();
+  const argumentsOpen = new Map();
 
   function choose(item, action) {
+    if (submitting) return;
     choices.set(String(item.tool_call_id), action);
     render();
   }
@@ -60,18 +62,22 @@ export function createRecoveryPanel({ container, summary, store, onResume, onAba
   }
 
   function optionButton(item, action, label) {
-    const selected = choices.get(String(item.tool_call_id)) === action;
+    const id = String(item.tool_call_id);
+    const selected = choices.get(id) === action;
     const button = element("button", {
       className: selected ? "recovery-option selected" : "recovery-option",
       text: label,
-      attrs: { type: "button", "aria-pressed": String(selected) },
+      attrs: { type: "button", "aria-pressed": String(selected),
+        "aria-disabled": String(submitting),
+        "data-recovery-focus": `${id}/${action}` },
     });
-    button.disabled = submitting || (action === "retry" && !item.tool_available);
+    button.disabled = action === "retry" && !item.tool_available;
     button.addEventListener("click", () => choose(item, action));
     return button;
   }
 
   function renderCard(item) {
+    const id = String(item.tool_call_id);
     const effects = (item.effects ?? []).map((effect) => EFFECT_LABELS[effect] ?? effect).join("、") || "未声明影响";
     const card = element("article", { className: "approval-card recovery-card" });
     card.append(
@@ -88,8 +94,10 @@ export function createRecoveryPanel({ container, summary, store, onResume, onAba
           ? "上次进程可能已执行此调用。再次执行采用至少一次语义。"
           : "当前工具不可用，只能记录为不确定并让模型继续处理。",
       }),
-      element("details", { className: "approval-arguments" }, [
-        element("summary", { text: "查看原调用参数" }),
+      element("details", { className: "approval-arguments", attrs: {
+        "data-recovery-arguments": id, open: argumentsOpen.get(id) ? "" : null } }, [
+        element("summary", { text: "查看原调用参数", attrs: {
+          "data-recovery-focus": `${id}/arguments` } }),
         element("pre", { text: formatArguments(item.arguments_json) }),
       ]),
       element("div", { className: "recovery-options", attrs: { role: "group", "aria-label": `${item.tool} 的恢复决定` } }, [
@@ -97,27 +105,45 @@ export function createRecoveryPanel({ container, summary, store, onResume, onAba
         optionButton(item, "retry", "重新执行"),
       ]),
     );
+    const details = card.querySelector("details");
+    details.addEventListener("toggle", () => argumentsOpen.set(id, details.open));
     return card;
   }
 
+  function restoreFocus(focused) {
+    if (!focused) return;
+    const replacement = [...container.querySelectorAll("[data-recovery-focus]")]
+      .find((node) => node.dataset.recoveryFocus === focused);
+    (replacement && !replacement.disabled ? replacement
+      : document.querySelector("#decisions-tab"))?.focus({ preventScroll: true });
+  }
+
   function render() {
+    const focused = container.contains(document.activeElement)
+      ? document.activeElement?.dataset.recoveryFocus : "";
+    for (const details of container.querySelectorAll("details[data-recovery-arguments]"))
+      argumentsOpen.set(details.dataset.recoveryArguments, details.open);
     const data = state.data ?? {};
     const items = data.items ?? [];
     const activeIds = new Set(items.map((item) => String(item.tool_call_id)));
     for (const id of choices.keys()) if (!activeIds.has(id)) choices.delete(id);
+    for (const id of argumentsOpen.keys()) if (!activeIds.has(id)) argumentsOpen.delete(id);
     clear(summary);
     clear(container);
     if (state.status === "error") {
       summary.textContent = "恢复状态不可用";
       container.append(element("div", { className: "resource-error", text: errorMessage(state.error) }));
+      restoreFocus(focused);
       return;
     }
     if (data.unavailable) {
       summary.textContent = "会话运行期间暂不检查恢复状态";
+      restoreFocus(focused);
       return;
     }
     if (!data.resume_required) {
       summary.textContent = state.status === "loading" ? "正在检查中断状态…" : "当前会话不需要恢复";
+      restoreFocus(focused);
       return;
     }
     summary.append(
@@ -129,9 +155,10 @@ export function createRecoveryPanel({ container, summary, store, onResume, onAba
     const submitButton = element("button", {
       className: "primary-button recovery-submit",
       text: items.length ? "按以上决定恢复会话" : "继续恢复会话",
-      attrs: { type: "button" },
+      attrs: { type: "button", "data-recovery-focus": "submit",
+        "aria-disabled": String(submitting) },
     });
-    submitButton.disabled = submitting || !ready;
+    submitButton.disabled = !ready;
     submitButton.addEventListener("click", () => void submitRecovery(data));
     if (items.length) container.append(submitButton);
     else {
@@ -141,14 +168,15 @@ export function createRecoveryPanel({ container, summary, store, onResume, onAba
       const abandonButton = element("button", {
         className: "recovery-abandon",
         text: "结束中断轮次",
-        attrs: { type: "button" },
+        attrs: { type: "button", "data-recovery-focus": "abandon",
+          "aria-disabled": String(submitting) },
       });
-      abandonButton.disabled = submitting;
       abandonButton.addEventListener("click", () => void submitAbandon(data));
       container.append(element("div", { className: "recovery-actions" }, [
         submitButton, abandonButton,
       ]));
     }
+    restoreFocus(focused);
   }
 
   return store.subscribe((next) => {

@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="zh-CN">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>mdo recovery focus probe</title>
+<link rel="stylesheet" href="/app/web/css/app.css">
+<style>
+  body { margin: 24px; background: var(--surface); color: var(--ink); }
+  .probe-controls { display: flex; gap: 8px; margin-bottom: 16px; }
+  #recovery-list { width: min(640px, 100%); }
+</style>
+<div class="probe-controls">
+  <button id="refresh" type="button">刷新恢复状态</button>
+  <button id="finish" type="button">完成模拟提交</button>
+  <button id="resolve" type="button">解除恢复要求</button>
+</div>
+<p id="qa-status" role="status">提交次数：0</p>
+<button id="decisions-tab" type="button">决策</button>
+<p id="recovery-summary"></p>
+<div id="recovery-list"></div>
+<div id="toast-region"></div>
+<script type="module">
+import { createRecoveryPanel } from "/app/web/js/features/approvals/recovery-panel.js";
+import { createResourceStore } from "/app/web/js/state/store.js";
+
+const pending = {
+  project_id: "default", session_id: "qa-session", resume_required: true,
+  recovery_token: "a".repeat(64), total: 1,
+  items: [{ tool_call_id: "qa-call", tool: "edit", turn: 1,
+    effects: ["workspace_write"], tool_available: true,
+    automatic_retry_safe: false, arguments_json: '{"path":"qa.txt"}' }],
+};
+const store = createResourceStore(pending);
+let submissions = 0;
+let complete = null;
+let active = true;
+window.fetch = async (url, options = {}) => {
+  if (!url.endsWith("/resume") || options.method !== "POST")
+    throw new Error("unexpected QA request");
+  submissions += 1;
+  document.querySelector("#qa-status").textContent = `提交次数：${submissions}`;
+  return new Promise((resolve) => { complete = () => resolve(new Response(
+    JSON.stringify({ ok: true, data: { id: "qa-run", terminal: false } }),
+    { status: 200, headers: { "Content-Type": "application/json" } })); });
+};
+createRecoveryPanel({ container: document.querySelector("#recovery-list"),
+  summary: document.querySelector("#recovery-summary"), store,
+  onResume: () => {
+    active = false;
+    store.setData({ resume_required: false, total: 0, items: [] });
+  } });
+document.querySelector("#refresh").addEventListener("click", () =>
+  store.setData({ ...pending, items: pending.items.map((item) => ({ ...item })) }));
+document.querySelector("#finish").addEventListener("click", () => complete?.());
+document.querySelector("#resolve").addEventListener("click", () => {
+  active = false;
+  store.setData({ resume_required: false, total: 0, items: [] });
+});
+store.setData(pending);
+window.setInterval(() => {
+  if (active) store.setData({ ...pending, items: pending.items.map((item) => ({ ...item })) });
+}, 750);
+</script>
