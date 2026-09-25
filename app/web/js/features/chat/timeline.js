@@ -306,7 +306,7 @@ function foldSection(label, value, copy = false, actionRef = "") {
   ]);
 }
 
-function foldableNode(item, openState, projectId, sessionId) {
+function foldableNode(item, openState, previewOpen, projectId, sessionId) {
   const running = item.state === "running";
   const status = running ? t("timeline.running", {}, "运行中")
     : item.state === "failed" ? t("timeline.failed", {}, "失败")
@@ -333,11 +333,11 @@ function foldableNode(item, openState, projectId, sessionId) {
   function updateBody() {
     const focusedAction = details.contains(document.activeElement)
       ? document.activeElement?.dataset.timelineAction : "";
-    details.querySelector(".timeline-fold-body")?.remove();
     if (!details.open) {
       if (focusedAction) details.querySelector("summary")?.focus({ preventScroll: true });
       return;
     }
+    if (details.querySelector(".timeline-fold-body")) return;
     const body = element("div", { className: "timeline-fold-body" });
     if (item.kind === "reasoning") {
       body.append(foldSection(t("timeline.reasoningProcess", {}, "思考过程"),
@@ -354,7 +354,7 @@ function foldableNode(item, openState, projectId, sessionId) {
           item.text || t("timeline.executing", {}, "正在执行…")));
       if (item.artifactId) {
         const preview = artifactPreviewNode(projectId, sessionId,
-          item.artifactEventId, `${item.key}/preview`);
+          item.artifactEventId, `${item.key}/preview`, previewOpen);
         if (preview) body.append(preview);
       }
     }
@@ -389,9 +389,9 @@ function commandButton(label, description, iconName, actionRef, handlers, sessio
   return button;
 }
 
-function timelineNode(item, handlers, feedback, projectId, sessionId, openState) {
+function timelineNode(item, handlers, feedback, projectId, sessionId, openState, previewOpen) {
   if (item.kind === "reasoning" || item.kind === "tool")
-    return foldableNode(item, openState, projectId, sessionId);
+    return foldableNode(item, openState, previewOpen, projectId, sessionId);
   const time = timeNode(item.time);
   const header = element("div", { className: "timeline-item-header" }, [
     element("span", { className: "timeline-role", text: item.role }),
@@ -417,7 +417,7 @@ function timelineNode(item, handlers, feedback, projectId, sessionId, openState)
   const children = [header, body];
   if (item.artifactId) {
     const preview = artifactPreviewNode(projectId, sessionId,
-      item.artifactEventId, `${item.key}/preview`);
+      item.artifactEventId, `${item.key}/preview`, previewOpen);
     if (preview) children.push(preview);
   }
   const sessionKey = `${projectId ?? ""}/${sessionId ?? ""}`;
@@ -531,6 +531,7 @@ export function createTimelineView({ container, welcome, toBottom, store, feedba
   let searchQuery = "";
   let renderedSession = "";
   const expanded = new Map();
+  const previewExpanded = new Map();
   const scroller = container.closest(".conversation");
 
   function reconcileRows(entries, projectId, sessionId) {
@@ -542,7 +543,8 @@ export function createTimelineView({ container, welcome, toBottom, store, feedba
       let row = renderedRows.get(item.key);
       if (!row || row.signature !== signature) {
         const node = timelineNode(item, handlers, feedback, projectId,
-          sessionId, expanded.get(item.key));
+          sessionId, expanded.get(item.key),
+          previewExpanded.get(`${item.key}/preview`) ?? false);
         mountIcons(node);
         row = { node, signature };
         renderedRows.set(item.key, row);
@@ -588,8 +590,13 @@ export function createTimelineView({ container, welcome, toBottom, store, feedba
       }
       for (const details of container.querySelectorAll("details[data-timeline-key]"))
         expanded.set(details.getAttribute("data-timeline-key"), details.open);
+      for (const details of container.querySelectorAll("details.timeline-artifact-preview")) {
+        const action = details.querySelector("summary")?.dataset.timelineAction;
+        if (action) previewExpanded.set(action, details.open);
+      }
     } else {
       expanded.clear();
+      previewExpanded.clear();
       renderedRows.clear();
       clear(container);
       renderedSession = sessionKey;
@@ -598,6 +605,10 @@ export function createTimelineView({ container, welcome, toBottom, store, feedba
     const foldKeys = new Set(items.filter((item) =>
       item.kind === "reasoning" || item.kind === "tool").map((item) => item.key));
     for (const key of expanded.keys()) if (!foldKeys.has(key)) expanded.delete(key);
+    const previewKeys = new Set(items.filter((item) => item.artifactId)
+      .map((item) => `${item.key}/preview`));
+    for (const key of previewExpanded.keys())
+      if (!previewKeys.has(key)) previewExpanded.delete(key);
     const visible = searchQuery ? items.filter((item) =>
       `${item.role} ${item.inputText ?? ""} ${item.text} ${item.meta ?? ""}`
         .toLocaleLowerCase().includes(searchQuery)) : items;

@@ -4,7 +4,7 @@ import { t } from "../../i18n.js";
 
 const PREVIEW_BYTES = 64 * 1024;
 
-export function artifactPreviewNode(projectId, sessionId, eventId, actionRef) {
+export function artifactPreviewNode(projectId, sessionId, eventId, actionRef, open = false) {
   const id = String(eventId);
   if (!/^[1-9][0-9]*$/.test(id) || !projectId || !sessionId) return null;
   const path = `/projects/${resourceId(projectId, "project")}` +
@@ -17,6 +17,7 @@ export function artifactPreviewNode(projectId, sessionId, eventId, actionRef) {
   const content = element("div", { className: "timeline-artifact-content" });
   const details = element("details", { className: "timeline-artifact-preview" },
     [summary, status, content]);
+  details.open = open;
   let loaded = false;
   let loading = false;
 
@@ -49,5 +50,6 @@ export function artifactPreviewNode(projectId, sessionId, eventId, actionRef) {
       loading = false;
     }
   });
+  if (open) details.dispatchEvent(new Event("toggle"));
   return details;
 }
