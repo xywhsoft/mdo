@@ -124,6 +124,7 @@ export async function boot() {
   let routeVersion = 0;
   let routeSignature = "";
   let messageActionBusy = false;
+  let pendingForkComposerFocus = "";
   let interruptRequested = false;
   let themeToggleBusy = false;
   let composerAttachments = [];
@@ -266,6 +267,7 @@ export async function boot() {
         title: `${session.title || "未命名任务"}（分支）`,
         through_sequence: boundary,
       });
+      pendingForkComposerFocus = `${fork.project_id}/${fork.id}`;
       navigation.select(fork.project_id, fork.id);
       toast("已创建会话分支");
     },
@@ -576,6 +578,15 @@ export async function boot() {
     selectedSessionStatus = session?.status ?? (navigation.get().sessionId ? "loading" : "active");
     prompt.placeholder = sessionWritable ? "向墨斗描述任务…" : "该会话不可运行；请先恢复到进行中";
     setRun(activeRun);
+    if (pendingForkComposerFocus && session && !prompt.disabled &&
+        `${session.project_id}/${session.id}` === pendingForkComposerFocus &&
+        `${navigation.get().projectId}/${navigation.get().sessionId}` === pendingForkComposerFocus) {
+      // The fork button disappears on navigation. Restore a useful keyboard target
+      // only if the user has not focused another control while the session loaded.
+      if (document.activeElement === document.body ||
+          !document.activeElement?.isConnected) prompt.focus();
+      pendingForkComposerFocus = "";
+    }
     if (session) {
       const title = session.title || "未命名任务";
       sessionTitle.textContent = title;
@@ -738,6 +749,9 @@ export async function boot() {
   }
 
   navigation.subscribe(async ({ view, projectId, sessionId, settingsSection }) => {
+    if (pendingForkComposerFocus &&
+        (view !== "workspace" || `${projectId}/${sessionId}` !== pendingForkComposerFocus))
+      pendingForkComposerFocus = "";
     const nextSignature = `${view}/${projectId}/${sessionId}/${settingsSection}`;
     if (nextSignature !== routeSignature) {
       routeSignature = nextSignature;
