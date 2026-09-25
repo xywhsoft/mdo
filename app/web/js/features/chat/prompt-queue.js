@@ -21,8 +21,8 @@ export function createPromptQueue({ container, navigation, onRetry, onRemoved })
   const loads = new Map();
   const versions = new Map();
   const expanded = new Map();
-  let busy = false;
-  let actionBusy = false;
+  const busy = new Set();
+  const actionBusy = new Set();
 
   function selectedKey() {
     const { projectId, sessionId } = navigation.get();
@@ -84,14 +84,14 @@ export function createPromptQueue({ container, navigation, onRetry, onRemoved })
       text: uncertain ? "确认未发送后重试" : "发送下一条",
       attrs: { type: "button", "data-queue-focus": "retry" },
     });
-    retry.disabled = busy || actionBusy;
+    retry.disabled = busy.has(key) || actionBusy.has(key);
     retry.addEventListener("click", async () => {
-      if (busy || actionBusy) return;
-      actionBusy = true;
+      if (busy.has(key) || actionBusy.has(key)) return;
+      actionBusy.add(key);
       render();
       try { await onRetry(); }
       catch (error) { toast(errorMessage(error), "error"); }
-      finally { actionBusy = false; render(); }
+      finally { actionBusy.delete(key); render(); }
     });
     container.append(element("div", { className: "prompt-queue-header" }, [
       toggle, retry,
@@ -115,14 +115,14 @@ export function createPromptQueue({ container, navigation, onRetry, onRemoved })
         attrs: { type: "button", "aria-label": `移除待发送消息 ${index + 1}`,
           "data-queue-focus": entry.id, "data-queue-index": String(index) },
       });
-      remove.disabled = busy || actionBusy;
+      remove.disabled = busy.has(key) || actionBusy.has(key);
       remove.addEventListener("click", async () => {
-        if (busy || actionBusy) return;
-        actionBusy = true;
+        if (busy.has(key) || actionBusy.has(key)) return;
+        actionBusy.add(key);
         render();
         try { await removeItem(entry.id); }
         catch (error) { toast(errorMessage(error), "error"); }
-        finally { actionBusy = false; render(); }
+        finally { actionBusy.delete(key); render(); }
       });
       const body = element("div", { className: "prompt-queue-item-body" }, [
         element("span", { className: "prompt-queue-text",
@@ -215,12 +215,13 @@ export function createPromptQueue({ container, navigation, onRetry, onRemoved })
       update(key, await api.delete(path(key, id)));
       void discardUnusedImages(key, removed?.attachments);
     },
-    async exclusive(callback) {
-      if (busy) return false;
-      busy = true;
+    async exclusive(projectId, sessionId, callback) {
+      const key = sessionKey(projectId, sessionId);
+      if (!key || busy.has(key)) return false;
+      busy.add(key);
       render();
       try { await callback(); return true; }
-      finally { busy = false; render(); }
+      finally { busy.delete(key); render(); }
     },
     render,
   });

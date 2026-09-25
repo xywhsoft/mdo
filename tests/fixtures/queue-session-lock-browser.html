@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="zh-CN">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>mdo queue session lock probe</title>
+<link rel="stylesheet" href="/app/web/css/app.css">
+<style>body{padding:20px;background:var(--bg);color:var(--ink)}</style>
+<textarea id="prompt"></textarea>
+<div id="queue"></div>
+<pre id="result"></pre>
+<script type="module">
+import { createPromptQueue } from "/app/web/js/features/chat/prompt-queue.js";
+
+const container = document.querySelector("#queue");
+const output = document.querySelector("#result");
+const originalFetch = window.fetch;
+let route = { projectId: "qa", sessionId: "first" };
+const listeners = [];
+let finishAction;
+let finishDispatch;
+let retryCalls = 0;
+window.fetch = async (url) => {
+  const session = String(url).includes("/sessions/second/") ? "second" : "first";
+  return new Response(JSON.stringify({ ok: true, data: { items: [{
+    id: session, text: session, state: session === "first" ? "sending" : "pending",
+    attachments: [], priority: false,
+  }] } }), { status: 200, headers: { "Content-Type": "application/json" } });
+};
+try {
+  const queue = createPromptQueue({ container,
+    navigation: { get: () => route, subscribe: (listener) => listeners.push(listener) },
+    onRetry: () => {
+      retryCalls += 1;
+      return new Promise((resolve) => { finishAction = resolve; });
+    },
+  });
+  await queue.select("qa", "first");
+  container.querySelector('[data-queue-focus="retry"]').click();
+  const firstLocked = [...container.querySelectorAll("button")]
+    .filter((button) => button.dataset.queueFocus !== "toggle")
+    .every((button) => button.disabled);
+  route = { projectId: "qa", sessionId: "second" };
+  listeners.forEach((listener) => listener(route));
+  await queue.select("qa", "second");
+  const secondUsable = [...container.querySelectorAll("button")]
+    .filter((button) => button.dataset.queueFocus !== "toggle")
+    .every((button) => !button.disabled);
+  finishAction();
+  await new Promise((resolve) => requestAnimationFrame(resolve));
+  const secondStillUsable = [...container.querySelectorAll("button")]
+    .filter((button) => button.dataset.queueFocus !== "toggle")
+    .every((button) => !button.disabled);
+  const firstDispatch = queue.exclusive("qa", "first", () =>
+    new Promise((resolve) => { finishDispatch = resolve; }));
+  const secondDispatch = await queue.exclusive("qa", "second", async () => {});
+  finishDispatch();
+  const firstDispatchFinished = await firstDispatch;
+  const passed = firstLocked && secondUsable && secondStillUsable &&
+    retryCalls === 1 && secondDispatch && firstDispatchFinished;
+  output.dataset.passed = String(passed);
+  output.textContent = JSON.stringify({ passed, firstLocked, secondUsable,
+    secondStillUsable, retryCalls, secondDispatch, firstDispatchFinished }, null, 2);
+} catch (error) {
+  output.dataset.passed = "false";
+  output.textContent = error.stack ?? String(error);
+} finally { window.fetch = originalFetch; }
+</script>
+</html>

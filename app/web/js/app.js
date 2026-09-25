@@ -686,29 +686,33 @@ export async function boot() {
         promptQueue.peek(selected.projectId, selected.sessionId)?.state !== "pending") return;
     if ((runsStore.get().data?.items ?? []).some((run) =>
       run.project_id === selected.projectId && run.session_id === selected.sessionId && !terminalState(run))) return;
-    await promptQueue.exclusive(async () => {
-      const entry = promptQueue.peek(selected.projectId, selected.sessionId);
-      if (!entry || entry.state !== "pending") return;
-      try {
-        await ensurePromptReady(selected.projectId, selected.sessionId,
-          Boolean(entry.priority));
-        if (navigation.get().projectId !== selected.projectId ||
-            navigation.get().sessionId !== selected.sessionId) return;
-        await promptQueue.markSending(selected.projectId, selected.sessionId, entry.id);
-        const run = await startRun(selected.projectId, selected.sessionId,
-          entry.text, entry.attachments ?? []);
-        if (navigation.get().projectId === selected.projectId &&
-            navigation.get().sessionId === selected.sessionId) monitorRun(run);
-        await promptQueue.remove(selected.projectId, selected.sessionId, entry.id);
-        hideComposerError();
-        await Promise.all([refreshSelectedTimeline(), loadTasks(), loadRuns(), loadRecovery()]);
-      } catch (error) {
-        if (error?.code !== "recovery_required") queueBlocked.add(key);
-        try { await promptQueue.select(selected.projectId, selected.sessionId); }
-        catch { /* Preserve the original dispatch error. */ }
-        showComposerError(error);
-      }
-    });
+    await promptQueue.exclusive(selected.projectId, selected.sessionId,
+      async () => {
+        const stillSelected = () => navigation.get().projectId === selected.projectId &&
+          navigation.get().sessionId === selected.sessionId;
+        const entry = promptQueue.peek(selected.projectId, selected.sessionId);
+        if (!entry || entry.state !== "pending") return;
+        try {
+          await ensurePromptReady(selected.projectId, selected.sessionId,
+            Boolean(entry.priority));
+          if (!stillSelected()) return;
+          await promptQueue.markSending(selected.projectId, selected.sessionId, entry.id);
+          const run = await startRun(selected.projectId, selected.sessionId,
+            entry.text, entry.attachments ?? []);
+          if (stillSelected()) monitorRun(run);
+          await promptQueue.remove(selected.projectId, selected.sessionId, entry.id);
+          if (stillSelected()) hideComposerError();
+          await Promise.all([...(stillSelected() ? [refreshSelectedTimeline()] : []),
+            loadTasks(), loadRuns(), loadRecovery()]);
+        } catch (error) {
+          if (error?.code !== "recovery_required") queueBlocked.add(key);
+          try { await promptQueue.select(selected.projectId, selected.sessionId); }
+          catch { /* Preserve the original dispatch error. */ }
+          if (stillSelected()) showComposerError(error);
+          else toast(`后台会话“${session.title}”的待发送消息未发出：${errorMessage(error)}`,
+            "error");
+        }
+      });
   }
 
   navigation.subscribe(async ({ view, projectId, sessionId, settingsSection }) => {
