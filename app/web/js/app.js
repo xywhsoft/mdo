@@ -332,10 +332,8 @@ export async function boot() {
       if (command === "/new") openNewTask();
       else if (command === "/model") $("#composer-model").focus();
       else if (command === "/settings") navigation.openSettings("general");
-      else if (command === "/theme") {
-        navigation.openSettings("general");
-        window.setTimeout(() => $("#setting-theme").focus(), 0);
-      } else if (command === "/help") {
+      else if (command === "/theme") await toggleTheme();
+      else if (command === "/help") {
         shortcuts.openHelp();
       } else if (command === "/stop") {
         if (!activeRun) throw new Error("当前没有运行中的任务");

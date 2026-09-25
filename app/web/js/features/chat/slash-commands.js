@@ -8,7 +8,7 @@ const COMMANDS = Object.freeze([
   { name: "/clear", description: "清空当前会话历史" },
   { name: "/stop", description: "停止当前任务" },
   { name: "/settings", description: "打开设置" },
-  { name: "/theme", description: "打开外观设置" },
+  { name: "/theme", description: "切换深浅主题" },
   { name: "/help", description: "查看命令" },
 ]);
 
