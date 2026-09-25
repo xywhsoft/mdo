@@ -237,12 +237,9 @@ export function createPromptQueue({ container, navigation, isRunActive, stagedEn
       catch (error) {
         if (!uncertainPost(error)) throw error;
         try { if (await reconcile()) return true; }
-        catch { /* Retry with the same id after an inconclusive read. */ }
-      }
-      try { return await submit(); }
-      catch (error) {
-        try { if (await reconcile()) return true; }
-        catch { /* Keep the original submission failure. */ }
+        catch { /* The queue may have accepted and already consumed the item. */ }
+        // A missing item is also inconclusive: dispatch removes it from the
+        // queue, so resubmitting even the same ID could execute it twice.
         error.queueAdmissionUncertain = true;
         throw error;
       }
