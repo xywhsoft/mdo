@@ -33,6 +33,7 @@ test("bundled language packs cover the annotated shell and switch without stale 
   }
   for (const path of [
     "js/features/sessions/session-actions.js",
+    "js/features/sessions/session-export.js",
     "js/features/sessions/session-list.js",
     "js/features/chat/composer-profile.js",
     "js/features/chat/composer-project.js",
