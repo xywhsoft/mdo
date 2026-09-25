@@ -612,11 +612,6 @@ select:focus-visible,
 .timeline-actions button:disabled, .timeline-actions button[aria-disabled="true"] { opacity: .55; cursor: wait; }
 .timeline-actions button[aria-pressed="true"] { background: var(--surface-hover); color: var(--ink); font-weight: 700; }
 .timeline-stats { margin-left: auto; color: var(--faint); font-size: 10px; white-space: nowrap; }
-@media (hover: hover) {
-  .timeline-item .timeline-actions button { opacity: 0; }
-  .timeline-item:hover .timeline-actions button,
-  .timeline-item:focus-within .timeline-actions button { opacity: 1; }
-}
 .conversation-docks { display: grid; width: min(760px, calc(100% - 40px)); gap: 9px; margin: 0 auto 20px; }
 .conversation-docks[hidden] { display: none; }
 .conversation-dock-stack { display: contents; }
@@ -1240,7 +1235,6 @@ select:focus-visible,
 @media (max-width: 760px) {
   .composer-error-action { min-height: 40px; padding-block: 8px; }
   .timeline-actions button { width: 40px; height: 40px; }
-  .timeline-item .timeline-actions button { opacity: 1; }
   .md-code-head button { min-height: 40px; padding: 0 6px; }
   .icon-button { width: 40px; height: 40px; }
   .search-box, .search-box input { min-height: 40px; }
