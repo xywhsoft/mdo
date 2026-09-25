@@ -411,6 +411,7 @@ export async function boot() {
     store: recoveryStore,
     onResume: (run) => {
       monitorRun(run);
+      if (composerError.dataset.code === "recovery_required") hideComposerError();
       void Promise.all([loadRuns(), loadTasks(), refreshSelectedTimeline()]);
     },
     onAbandon: async () => {
@@ -658,9 +659,7 @@ export async function boot() {
           return;
         }
         void loadRecovery();
-        const error = new Error("上轮运行尚未恢复，请先在“决策”中处理；输入和待发送消息会保留。");
-        error.code = "recovery_required";
-        throw error;
+        throw recoveryRequiredError();
       } catch (error) {
         if (!priority || attempt === 3 ||
             !["recovery_state_conflict", "session_busy"].includes(error?.code))
@@ -799,6 +798,27 @@ export async function boot() {
     composerError.textContent = "";
     delete composerError.dataset.code;
   }
+  function recoveryRequiredError() {
+    const error = new Error("上轮运行尚未恢复，请先在“决策”中处理；输入和待发送消息会保留。");
+    error.code = "recovery_required";
+    return error;
+  }
+  function syncRecoveryNotice(state) {
+    const selected = navigation.get();
+    const recovery = state.data;
+    const required = !activeRun && recovery?.resume_required === true &&
+      !recovery.unavailable && recovery.project_id === selected.projectId &&
+      recovery.session_id === selected.sessionId;
+    if (required) {
+      if (composerError.hidden) {
+        showComposerError(recoveryRequiredError());
+      }
+    } else if (state.status === "ready" &&
+               composerError.dataset.code === "recovery_required") {
+      hideComposerError();
+    }
+  }
+  recoveryStore.subscribe(syncRecoveryNotice);
   function showComposerError(error) {
     composerError.textContent = errorMessage(error);
     composerError.dataset.code = error?.code || "";
@@ -896,7 +916,8 @@ export async function boot() {
     try {
       const run = await cancelRun(activeRun.id);
       setRun(run);
-      await Promise.all([refreshSelectedTimeline(), loadTasks(), loadRuns()]);
+      await Promise.all([refreshSelectedTimeline(), loadTasks(), loadRuns(),
+        ...(terminalState(run) ? [loadRecovery()] : [])]);
       if (terminalState(run)) await dispatchQueued();
     } catch (error) {
       showComposerError(error);
