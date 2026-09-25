@@ -420,10 +420,12 @@ export async function boot() {
       if (command === "/new") openNewTask();
       else if (command === "/model") {
         const modelSelect = $("#composer-model");
-        if (modelSelect.disabled) throw new Error("当前无法切换模型");
+        if (modelSelect.disabled)
+          throw new Error(t("slash.modelBusy", {}, "当前无法切换模型"));
         const choices = [...modelSelect.options].filter((option) =>
           option.value && !option.disabled);
-        if (choices.length < 2) throw new Error("没有其他可切换的模型");
+        if (choices.length < 2)
+          throw new Error(t("slash.noOtherModel", {}, "没有其他可切换的模型"));
         const index = choices.findIndex((option) =>
           option.value === modelSelect.value);
         modelSelect.value = choices[(index + 1) % choices.length].value;
@@ -434,13 +436,16 @@ export async function boot() {
       else if (command === "/help") {
         shortcuts.openHelp();
       } else if (command === "/stop") {
-        if (!activeRun) throw new Error("当前没有运行中的任务");
+        if (!activeRun)
+          throw new Error(t("slash.noActiveRun", {}, "当前没有运行中的任务"));
         stop.click();
       } else {
-        if (!session) throw new Error("请先选择会话");
+        if (!session)
+          throw new Error(t("slash.selectSession", {}, "请先选择会话"));
         if (command === "/export") await handleSessionAction("export", session);
         else {
-          if (activeRun) throw new Error("请在当前运行结束后修改会话历史");
+          if (activeRun)
+            throw new Error(t("slash.waitForHistory", {}, "请在当前运行结束后修改会话历史"));
           if (command === "/fork") await handleSessionAction("fork", session);
           else if (command === "/clear") await handleSessionAction("clear", session);
         }
@@ -716,6 +721,8 @@ export async function boot() {
     syncPromptPlaceholder();
     syncWorkspaceChip();
     syncRuntimeLabel();
+    if (composerError.dataset.code === "recovery_required")
+      showComposerError(recoveryRequiredError());
     skipLink.textContent = t(settingsActive ? "shell.skipSettings" : "shell.skip");
     if (settingsActive) syncSettingsTitle();
     const session = sessionDetailStore.get().data;
@@ -985,7 +992,8 @@ export async function boot() {
     delete composerError.dataset.code;
   }
   function recoveryRequiredError() {
-    const error = new Error("上轮运行尚未恢复，请先在“决策”中处理；输入和待发送消息会保留。");
+    const error = new Error(t("composer.recoveryRequired", {},
+      "上轮运行尚未恢复，请先在“决策”中处理；输入和待发送消息会保留。"));
     error.code = "recovery_required";
     return error;
   }
@@ -1011,7 +1019,7 @@ export async function boot() {
     if (error?.code === "recovery_required") {
       const openDecisions = element("button", {
         className: "composer-error-action",
-        text: "打开恢复决策",
+        text: t("composer.openRecovery", {}, "打开恢复决策"),
         attrs: { type: "button" },
       });
       openDecisions.addEventListener("click", () => {
@@ -1031,7 +1039,8 @@ export async function boot() {
     const origin = navigation.get();
     const originVersion = routeVersion;
     if (origin.sessionId) return origin;
-    const title = text.trim().split(/\r?\n/, 1)[0].slice(0, 80) || "图片任务";
+    const title = text.trim().split(/\r?\n/, 1)[0].slice(0, 80) ||
+      t("composer.imageTask", {}, "图片任务");
     const session = await createSession({ project_id: origin.projectId || "default", title,
       ...composerProfile.selection() });
     if (stageDraft)
@@ -1055,7 +1064,7 @@ export async function boot() {
         await slashCommands.consumeExact(text)) return;
     if (routeVersion !== originVersion) return;
     if (composerProfile.isBusy()) {
-      showComposerError(new Error("请等待会话配置更新完成"));
+      showComposerError(new Error(t("composer.profileBusy", {}, "请等待会话配置更新完成")));
       return;
     }
     hideComposerError();
@@ -1086,7 +1095,7 @@ export async function boot() {
       if (originatingRun) {
         if (!await promptQueue.enqueue(selected.projectId, selected.sessionId, text,
           { first: interrupt, priority: interrupt, attachments }))
-          throw new Error("待发送队列已满（最多 20 条）");
+          throw new Error(t("composer.queueFull", {}, "待发送队列已满（最多 20 条）"));
         queueBlocked.delete(`${selected.projectId}/${selected.sessionId}`);
         if (fromComposer) {
           draftStore.clear(`${selected.projectId}/${selected.sessionId}`);

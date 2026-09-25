@@ -1231,6 +1231,7 @@ select:focus-visible,
 }
 
 @media (max-width: 760px) {
+  .composer-error-action { min-height: 40px; padding-block: 8px; }
   .timeline-actions button { width: 40px; height: 40px; }
   .timeline-item .timeline-actions button { opacity: 1; }
   .md-code-head button { min-height: 40px; padding: 0 6px; }
