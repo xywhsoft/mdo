@@ -94,8 +94,8 @@ export function createSlashCommands({ composer, input, onExecute }) {
         render();
         return true;
       }
-      if (event.key === "Enter" && !event.shiftKey && !event.ctrlKey &&
-          !event.metaKey) {
+      if ((event.key === "Enter" || event.key === "Tab") &&
+          !event.shiftKey && !event.ctrlKey && !event.metaKey && !event.altKey) {
         event.preventDefault();
         void execute(matches[active]);
         return true;

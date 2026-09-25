@@ -146,8 +146,8 @@ export function createFileMentions({ composer, input, navigation }) {
         render();
         return true;
       }
-      if (event.key === "Enter" && !event.shiftKey && !event.ctrlKey &&
-          !event.metaKey) {
+      if ((event.key === "Enter" || event.key === "Tab") &&
+          !event.shiftKey && !event.ctrlKey && !event.metaKey && !event.altKey) {
         event.preventDefault(); insert(choices[active]); return true;
       }
       return false;

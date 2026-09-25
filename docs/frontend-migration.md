@@ -279,3 +279,7 @@ Node 消息替换、会话运行与词典测试 7 项通过，`app.js` 语法检
 修复运行中 Esc 与输入候选的快捷键冲突。原来 `@` 文件候选和斜杠候选仅阻止默认按键，Esc 仍传到全局运行控制；同时桌面常驻侧栏被误判为临时抽屉，裸 Esc 会被抽屉分支吞掉。现在候选消费 Esc 并阻止传播，全局快捷键尊重已处理的事件；抽屉判断只计入移动端侧栏和非宽屏任务面板。修复前的 320px 隔离 Home `.build/mdo-packed-docks-yotozk_e` 在 `SLOW UI` 运行中打开 `@alpha` 后按 Esc，立即出现“Agent 已停止”。修复后的 Home `.build/mdo-packed-docks-2sk55r70` 同样按键只关闭候选，`@alpha` 草稿保留，15 秒本地回复完成，服务端记录 `state=succeeded, cancel_requested=false`。桌面 Home `.build/mdo-packed-docks-ttyvgp42` 在常驻侧栏打开时按裸 Esc，服务端记录 `state=cancelled, cancel_requested=true`。两个修复后的页面均无浏览器脚本错误。
 
 Node 快捷键所有权、词典与会话运行测试 4 项通过，四个改动脚本语法检查通过；有界发布门禁通过 114 项单元/契约测试、18 个运行探针、严格 C 编译、确定性打包、单文件零旁路写入和 20 秒启动检查。根目录 `mdo.exe` SHA-256：`b637716e8a51ba8ba7f0790a0fd24cb823f1de3fd9ac4daefb8bf4b64fa9bb1e`。
+
+恢复旧版输入候选的 Tab 选中。新版先前只接受 Enter：隔离打包 Home `.build/mdo-packed-docks-kso1dqk6` 中，`@alpha` 和 `/he` 候选打开后按 Tab 都转焦到附件按钮，未插入文件也未执行命令。现在无 Shift/Ctrl/⌘/Alt 的 Tab 与 Enter 一样接受当前候选，输入法组合时不处理；Shift+Tab 仍可做反向焦点导航。最终单文件 Home `.build/mdo-packed-docks-lkb8cl9s` 验证桌面 `@alpha` 变成 `@src/alpha.c ` 且输入框保留焦点，`/he` 通过 Tab 打开快捷键帮助，关闭后焦点回到输入框。320px 下 `@QA` 通过 Tab 变成 `@"notes/QA notes.txt" `，输入框保留焦点，页面宽度与视口同为 320px，浏览器无脚本错误。
+
+两个补全模块的 Node 语法检查和四项词典/会话运行/快捷键测试通过；有界发布门禁通过 114 项单元/契约测试、18 个运行探针、严格 C 编译、确定性打包、单文件零旁路写入与 20 秒启动检查。根目录 `mdo.exe` SHA-256：`1cc92a930461604bf880ae873ed51d4dc58f88fc2415de7620f6bb406b474fbe`。
