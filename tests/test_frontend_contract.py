@@ -169,11 +169,13 @@ class FrontendContractTests(unittest.TestCase):
     def test_session_lifecycle_uses_revisioned_server_mutations(self) -> None:
         sessions = self.scripts["js/state/sessions.js"]
         listing = self.scripts["js/features/sessions/session-list.js"]
+        actions = self.scripts["js/features/sessions/session-actions.js"]
         for marker in ("patchSession", "trashSession", "restoreSession"):
             self.assertIn(marker, sessions)
         self.assertIn("ifMatch: etag(session)", sessions)
         self.assertIn('role: "menu"', listing)
-        self.assertIn('session.status === "trash"', listing)
+        self.assertIn('sessionActionItems(session)', listing)
+        self.assertIn('session.status === "trash"', actions)
         self.assertNotIn("innerHTML", listing)
         for marker in (
             'id="session-status-filter"', 'id="session-action-dialog"',
@@ -184,6 +186,7 @@ class FrontendContractTests(unittest.TestCase):
     def test_advanced_session_actions_are_bounded_and_explicit(self) -> None:
         sessions = self.scripts["js/state/sessions.js"]
         listing = self.scripts["js/features/sessions/session-list.js"]
+        actions = self.scripts["js/features/sessions/session-actions.js"]
         client = self.scripts["js/api/client.js"]
         for marker in (
             "loadSessionHistory", "forkSession", "truncateSession",
@@ -191,7 +194,10 @@ class FrontendContractTests(unittest.TestCase):
         ):
             self.assertIn(marker, sessions)
         for action in ("fork", "truncate", "clear", "export"):
-            self.assertIn(f'"{action}"', listing)
+            self.assertIn(f'name: "{action}"', actions)
+        self.assertIn('sessionActionItems(session)', listing)
+        self.assertIn('sessionActionItems(session)',
+                      self.scripts["js/features/sessions/session-action-menu.js"])
         self.assertIn("Number.isSafeInteger", sessions)
         self.assertIn('credentials: "same-origin"', client)
         self.assertIn('response.headers.get("Content-Disposition")', client)

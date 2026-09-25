@@ -23,6 +23,7 @@ import { asksStore, selectAsks, clearAsks, refreshSelectedAsks } from "./state/a
 import { recoveryStore, selectRecovery, loadRecovery, readRecovery, abandonRecovery } from "./state/recovery.js";
 import { navigation } from "./state/navigation.js";
 import { createSessionList } from "./features/sessions/session-list.js";
+import { createSessionActionMenu } from "./features/sessions/session-action-menu.js";
 import { formatSessionMarkdown, sessionMarkdownFilename } from "./features/sessions/session-export.js";
 import { createProjectDialog } from "./features/sessions/project-dialog.js";
 import { timelineStore, selectTimeline, clearTimeline, refreshSelectedTimeline, reloadSelectedTimeline } from "./features/chat/timeline-store.js";
@@ -199,6 +200,16 @@ export async function boot() {
       closeDrawers();
       prompt.focus();
     },
+  });
+  const actionMenus = [
+    ["#session-action-control", "#session-actions", "#session-header-menu"],
+    ["#session-action-control-mobile", "#session-actions-mobile", "#session-header-menu-mobile"],
+  ].map(([control, button, menu]) => createSessionActionMenu({
+    control: $(control), button: $(button), menu: $(menu), navigation,
+    store: sessionDetailStore, onAction: handleSessionAction,
+  }));
+  mobileLayout.addEventListener("change", () => {
+    for (const menu of actionMenus) menu.close();
   });
   function showActiveSessions() {
     $("#session-search").value = "";

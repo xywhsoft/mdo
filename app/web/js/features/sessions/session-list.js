@@ -1,4 +1,5 @@
 import { element, clear, formatRelativeTime, errorMessage, toast } from "../../utils/dom.js";
+import { sessionActionItems } from "./session-actions.js";
 
 export function createSessionList({ container, count, filter, store, projectsStore,
   navigation, onSelect, onAction, onNewInProject, onAddProject,
@@ -11,33 +12,21 @@ export function createSessionList({ container, count, filter, store, projectsSto
   let unread = new Set();
   const sessionKey = (session) => `${session.project_id}/${session.id}`;
 
-  function menuAction(label, name, session, tone = "neutral") {
-    const button = element("button", { text: label, attrs: { type: "button", role: "menuitem", "data-tone": tone } });
+  function menuAction(action, session) {
+    const button = element("button", { text: action.label, attrs: { type: "button", role: "menuitem", "data-tone": action.tone ?? "neutral" } });
     button.addEventListener("click", async (event) => {
       event.stopPropagation();
       focusRequest = { key: sessionKey(session), index: -1 };
       openMenu = "";
       render();
-      try { await onAction(name, session); }
+      try { await onAction(action.name, session); }
       catch (error) { toast(errorMessage(error), "error"); }
     });
     return button;
   }
 
   function menuFor(session) {
-    if (session.status === "trash") return [menuAction("恢复", "restore", session)];
-    const actions = [menuAction("重命名", "rename", session)];
-    if (session.status === "active") {
-      actions.push(menuAction(session.pinned ? "取消置顶" : "置顶", "pin", session));
-      actions.push(menuAction("归档", "archive", session));
-      actions.push(menuAction("创建分支", "fork", session));
-      actions.push(menuAction("截断历史", "truncate", session, "danger"));
-      actions.push(menuAction("清空历史", "clear", session, "danger"));
-      actions.push(menuAction("导出 Markdown", "export", session));
-      actions.push(menuAction("导出 JSON 备份", "export_json", session));
-    } else actions.push(menuAction("移回进行中", "unarchive", session));
-    actions.push(menuAction("移到回收站", "trash", session, "danger"));
-    return actions;
+    return sessionActionItems(session).map((action) => menuAction(action, session));
   }
 
   function render() {

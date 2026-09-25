@@ -404,6 +404,8 @@ select:focus-visible,
 .session-menu button { min-height: 32px; padding: 0 9px; border: 0; border-radius: 6px; background: transparent; text-align: left; cursor: pointer; }
 .session-menu button:hover { background: var(--surface-hover); }
 .session-menu button[data-tone="danger"] { color: var(--danger); }
+.session-action-control { position: relative; display: inline-flex; flex: 0 0 auto; }
+.session-header-menu { top: calc(100% + 6px); right: 0; min-width: 180px; }
 .session-pin { color: var(--muted); font-size: 10px; }
 
 .session-item:hover { background: var(--surface-hover); }
@@ -1240,6 +1242,8 @@ select:focus-visible,
   .app-shell[data-sidebar="closed"] { grid-template-columns: minmax(0, 1fr); }
   .pane-resize-handle { display: none; }
   .mobile-bar {
+    position: relative;
+    z-index: 30;
     display: flex;
     min-width: 0;
     align-items: center;

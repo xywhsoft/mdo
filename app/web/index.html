@@ -26,6 +26,12 @@
       <button class="icon-button" id="export-session-mobile" type="button" aria-label="导出当前会话 Markdown" title="导出当前会话 Markdown" disabled>
         <span class="icon" data-icon="download" aria-hidden="true"></span>
       </button>
+      <div class="session-action-control" id="session-action-control-mobile">
+        <button class="icon-button" id="session-actions-mobile" type="button" aria-label="更多会话操作" aria-haspopup="menu" aria-controls="session-header-menu-mobile" aria-expanded="false" disabled>
+          <span class="icon" data-icon="more" aria-hidden="true"></span>
+        </button>
+        <div class="session-menu session-header-menu" id="session-header-menu-mobile" role="menu" hidden></div>
+      </div>
       <button class="icon-button" id="open-inspector" type="button" aria-label="打开任务面板" aria-controls="inspector" aria-expanded="false">
         <span class="icon" data-icon="panel-right" aria-hidden="true"></span>
         <span class="activity-dot" id="mobile-activity-dot" hidden></span>
@@ -122,6 +128,12 @@
           <button class="icon-button" id="export-session" type="button" aria-label="导出当前会话 Markdown" title="导出当前会话 Markdown（Ctrl/⌘+E）" disabled>
             <span class="icon" data-icon="download" aria-hidden="true"></span>
           </button>
+          <div class="session-action-control" id="session-action-control">
+            <button class="icon-button" id="session-actions" type="button" aria-label="更多会话操作" aria-haspopup="menu" aria-controls="session-header-menu" aria-expanded="false" disabled>
+              <span class="icon" data-icon="more" aria-hidden="true"></span>
+            </button>
+            <div class="session-menu session-header-menu" id="session-header-menu" role="menu" hidden></div>
+          </div>
           <button class="icon-button desktop-inspector-toggle" id="toggle-inspector" type="button" aria-label="切换任务面板" aria-controls="inspector" aria-expanded="false">
             <span class="icon" data-icon="panel-right" aria-hidden="true"></span>
           </button>
