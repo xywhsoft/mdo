@@ -2,6 +2,7 @@ import { approvalDecisionStatus, approvalDecisionStore, decideApproval } from ".
 import { answerAsk } from "../../state/asks.js";
 import { subscribeLocale, t } from "../../i18n.js";
 import { clear, element, errorMessage, toast } from "../../utils/dom.js";
+import { taskBelongsToSession } from "../tasks/task-owner.js";
 
 const STATE_KEYS = Object.freeze({ pending: "dock.task.pending", running: "dock.task.running" });
 const EFFECT_KEYS = Object.freeze({
@@ -216,7 +217,7 @@ export function createConversationDocks({ container, navigation, tasksStore, app
     const selected = navigation.get();
     const sessionId = selected.view === "workspace" ? selected.sessionId : "";
     const tasks = sessionId ? (tasksStore.get().data?.items ?? []).filter((item) =>
-      item.owner_session === sessionId && !item.terminal) : [];
+      !item.terminal && taskBelongsToSession(item, selected.projectId, sessionId)) : [];
     const runIds = new Set((runsStore.get().data?.items ?? [])
       .filter((run) => run.session_id === sessionId && run.project_id === selected.projectId)
       .map((run) => String(run.agent_run_id)));

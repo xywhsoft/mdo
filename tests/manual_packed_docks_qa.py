@@ -64,8 +64,9 @@ class Model(BaseHTTPRequestHandler):
                 output = [{"type": "function_call", "call_id": "ui-task-1",
                            "name": "spawn", "arguments": json.dumps({
                                "argv": [sys.executable, "-c",
+                                        "import time; time.sleep(12); "
                                         "print('task UI fixture')"]})}]
-            elif "ASK UI" in wire and "ask" not in Model.sent:
+            elif "ASK UI" in wire and "TASK UI" not in wire and "ask" not in Model.sent:
                 Model.sent.add("ask")
                 output = [{"type": "function_call", "call_id": "ui-ask-1",
                            "name": "ask_user", "arguments": json.dumps({

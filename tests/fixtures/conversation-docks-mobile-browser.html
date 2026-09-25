@@ -19,7 +19,8 @@ const navigation = {
 };
 createConversationDocks({
   container: document.querySelector("#conversation-docks"), navigation,
-  tasksStore: store({ items: [{ id: 1, owner_session: "mobile",
+  tasksStore: store({ items: [{ id: 1,
+    owner_session: "/tmp/mdo-home/sessions/qa/mobile/snapshot.json",
     terminal: false, state: "running", label: long }] }),
   approvalsStore: store({ items: [{ id: 2, run_id: 3, tool: "shell",
     effects: ["process"], resources: [] }] }),

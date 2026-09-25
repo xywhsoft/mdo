@@ -3,6 +3,7 @@ import {
   cancelTask, clearSelectedTask, readArtifactPreview, selectTask, selectedTask,
 } from "../../state/tasks.js";
 import { subscribeLocale, t } from "../../i18n.js";
+import { taskOwnerLocation } from "./task-owner.js";
 
 const ACTIVE_STATES = new Set(["pending", "running"]);
 const STATE_LABELS = Object.freeze({
@@ -132,6 +133,7 @@ export function createTaskPanel({ container, detailContainer, summary, store, de
       return;
     }
     const { detail: task, output, events, artifacts } = detailState.data;
+    const owner = taskOwnerLocation(task.owner_session);
     const close = element("button", { className: "task-detail-close",
       text: t("task.backToList", {}, "返回任务列表"), attrs: { type: "button" } });
     close.addEventListener("click", closeDetail);
@@ -149,7 +151,8 @@ export function createTaskPanel({ container, detailContainer, summary, store, de
       ...detailPair(t("task.meta.id", {}, "任务 ID"), `#${task.id}`),
       ...detailPair(t("task.meta.kind", {}, "类型"), kindLabel(task.kind)),
       ...detailPair(t("task.meta.state", {}, "状态"), stateLabel(task.state)),
-      ...detailPair(t("task.meta.session", {}, "会话"), task.owner_session),
+      ...detailPair(t("task.meta.session", {}, "会话"), owner
+        ? `${owner.projectId} / ${owner.sessionId}` : task.owner_session),
       ...detailPair("Run", task.owner_run_id ? `#${task.owner_run_id}` : "—"),
       ...detailPair(t("task.meta.parent", {}, "父任务"),
         task.parent_task_id ? `#${task.parent_task_id}` : "—"),

@@ -79,7 +79,8 @@ function refresh() {
   todoStore.setData({ projectId: "qa", sessionId: "focus", items: [
     { text: "检查实现", done: true }, { text: "验证交互", done: false },
   ] });
-  tasksStore.setData({ items: [{ id: 3, owner_session: "focus", state: "running",
+  tasksStore.setData({ items: [{ id: 3,
+    owner_session: "C:\\mdo-home\\sessions\\qa\\focus\\snapshot.json", state: "running",
     label: "后台检查", terminal: false }] });
   runsStore.setData({ items: [{ agent_run_id: 8, project_id: "qa",
     session_id: "focus" }] });
