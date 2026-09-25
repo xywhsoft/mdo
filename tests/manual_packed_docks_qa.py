@@ -2,8 +2,8 @@
 
 Run from the repository root after building mdo.exe. The model endpoint only
 binds to localhost and returns one deterministic tool call per marker prompt:
-TODO UI, ASK UI, APPROVAL UI, or TASK UI. The latter two request harmless
-local print commands; TASK UI runs the command as a background task.
+TODO UI, ASK UI, APPROVAL UI, TASK UI, or ARTIFACT UI. The latter reads one
+bounded synthetic text file so the normal tool-output artifact path is used.
 """
 
 import argparse
@@ -33,6 +33,7 @@ class Model(BaseHTTPRequestHandler):
     verification_file = None
     slow_seconds = 15
     task_seconds = 12
+    artifact_file = None
 
     def log_message(self, *_args):
         pass
@@ -60,6 +61,11 @@ class Model(BaseHTTPRequestHandler):
                            "name": "mdo.todo", "arguments": json.dumps({"items": [
                                {"text": "Inspect UI", "done": True},
                                {"text": "Verify refresh", "done": False}]})}]
+            elif "ARTIFACT UI" in wire and "artifact" not in Model.sent:
+                Model.sent.add("artifact")
+                output = [{"type": "function_call", "call_id": "ui-artifact-1",
+                           "name": "read", "arguments": json.dumps({
+                               "path": str(Model.artifact_file), "max_lines": 200})}]
             elif "TASK UI" in wire and "task" not in Model.sent:
                 Model.sent.add("task")
                 output = [{"type": "function_call", "call_id": "ui-task-1",
@@ -216,11 +222,15 @@ if not 0 <= args.task_ms <= 30000:
 base = Path(tempfile.mkdtemp(prefix="mdo-packed-docks-", dir=ROOT / ".build"))
 Model.verify_recovery = args.resume_verify
 Model.verification_file = base / "README.md"
+Model.artifact_file = base / "artifact-fixture.txt"
 Model.slow_seconds = args.slow_ms / 1000
 Model.task_seconds = args.task_ms / 1000
 shutil.copy2(ROOT / "mdo.exe", base / "mdo.exe")
 (base / "README.md").write_text("Synthetic workspace file for @ completion.\n",
                                 encoding="utf-8")
+Model.artifact_file.write_text("".join(
+    f"{index:03d} " + ("bounded artifact preview " * 36) + "\n"
+    for index in range(90)), encoding="utf-8")
 (base / "src").mkdir()
 (base / "src/alpha.c").write_text("/* first completion item */\n",
                                   encoding="utf-8")

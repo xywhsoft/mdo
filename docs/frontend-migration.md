@@ -355,3 +355,7 @@ Node 词典契约及模块语法检查通过；有界发布门禁通过 114 项�
 同一字节程序还在 Home `.build/mdo-packed-docks-mdu12cab` 完成 320px 手机打包页复核：后台任务运行时对话卡可见，“查看任务详情”点按区高 40px，点按后任务抽屉打开；文档宽度保持 320px，浏览器脚本错误日志为空。
 
 补验后台任务的真实停止路径。`tests/manual_packed_docks_qa.py` 的 `TASK UI` 现在接受 `--task-ms`（0–30000），便于将单个本地休眠进程留在可停止状态；默认仍为 12 秒，不进行并发或负载测试。Home `.build/mdo-packed-docks-t3_ouvsc` 的默认任务在点按前自然完成，因此未把该尝试计入停止证据。Home `.build/mdo-packed-docks-sms40ou0` 使用 30 秒夹具：检查器运行中任务点按“停止”后，页面显示“已停止”，详情事件依次有“请求停止”和状态变化，对话区后台任务卡撤下；服务端 `/api/v1/tasks/1` 返回 `cancelled`、有效退出码 1，浏览器无脚本错误。Home `.build/mdo-packed-docks-is59tyxu` 在 320px 再次点按：停止按钮实测高 40px，任务和卡片同样更新，API 为 `cancelled`，文档宽度 320px，浏览器无脚本错误。应用代码未修改，根目录 `mdo.exe` 与上阶段同字节；有界发布门禁在本阶段重新运行。
+
+修复普通工具产物在对话中不可预览的问题。先在单文件 Home `.build/mdo-packed-docks-mwc0sxyc` 使用 `ARTIFACT UI` 夹具只读约 80 KiB 合成文件：xwork 已写出产物，但默认 64 KiB 内联片段超过 xllm-session 的 2 KiB 单条工具结果上限，运行报 `failed to append an ordered tool result to session`。mdo 现在把内联片段限制为 1024 字节，给状态前缀和产物位置留出空间；时间线直接从持久化的 `tool_done.artifact_id` 在对应工具卡片下提供按需预览，不依赖只写入全局运行记录的 `artifact_created` 事件。预览 API 限制为前 64 KiB，文本用纯文本节点显示，二进制只显示类型和读取大小；中英俄语言均有入口文案。
+
+修复后的 Home `.build/mdo-packed-docks-lyu66m_d` 中，同一只读调用生成 82,380 字节产物，Agent 正常回复；工具卡能预览 65,536 字节并显示 SHA-256 与“仅预览前 64 KiB”。刷新后在 320px 再次展开并预览，入口高 40px、文档宽度 320px，浏览器脚本错误日志为空。Node 用例覆盖工具开始/结束配对及孤立结束事件中的产物 ID。发布门禁通过 60 个前端模块解析、14 项 Node 测试、114 项 Python 单元/契约测试、18 个有界运行探针、严格 C 编译、确定性打包、单文件零旁路写入及 20 秒启动检查；根目录 `mdo.exe` 已重建，SHA-256：`10c80a51cec41ec5c32581a58e9270408149ba76a0a0b01dda5206ff2c808be0`。进程重启后的产物索引回放仍待独立验证。

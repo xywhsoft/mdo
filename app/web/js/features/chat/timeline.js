@@ -2,6 +2,7 @@ import { element, clear, formatClock, errorMessage, toast } from "../../utils/do
 import { attachmentUrl } from "../../api/client.js";
 import { mountIcons } from "../../components/icons.js";
 import { renderMarkdown } from "./markdown.js";
+import { artifactPreviewNode } from "./artifact-preview.js";
 import { currentLocale, subscribeLocale, t } from "../../i18n.js";
 
 function modelKey(event, epoch) {
@@ -131,6 +132,8 @@ export function eventsToTimeline(events, historyLost = false) {
           tool.state = event.success ? "done" : "failed";
           tool.durationSeconds = Math.max(0,
             (Number(event.time) - Number(tool.time)) / 1e6);
+          tool.artifactId = event.artifact_id;
+          tool.artifactPath = event.artifact_path;
         } else {
           const outputText = event.text || (event.success
             ? t("timeline.executionDone", {}, "执行完成")
@@ -138,6 +141,7 @@ export function eventsToTimeline(events, historyLost = false) {
           items.push({ key: `tool-${event.event_id}`, kind: "tool",
             role: event.tool_name || t("timeline.tool", {}, "工具"), text: outputText,
             inputText: "", outputText,
+            artifactId: event.artifact_id, artifactPath: event.artifact_path,
             state: event.success ? "done" : "failed", time: event.time });
         }
         break;
@@ -154,6 +158,7 @@ export function eventsToTimeline(events, historyLost = false) {
         items.push({ key: `artifact-${event.event_id}`, kind: "system",
           role: t("timeline.artifact", {}, "产物"),
           text: event.artifact_path || event.text || t("timeline.artifactCreated", {}, "已创建产物"),
+          artifactId: event.artifact_id,
           state: "done", time: event.time });
         break;
       case "compaction_start":
@@ -344,6 +349,10 @@ function foldableNode(item, openState) {
       if (!item.inputText && !item.outputText)
         body.append(foldSection(t("timeline.executingLabel", {}, "执行中"),
           item.text || t("timeline.executing", {}, "正在执行…")));
+      if (item.artifactId) {
+        const preview = artifactPreviewNode(item.artifactId, `${item.key}/preview`);
+        if (preview) body.append(preview);
+      }
     }
     details.append(body);
     if (focusedAction) {
@@ -402,6 +411,10 @@ function timelineNode(item, handlers, feedback, projectId, sessionId, openState)
   }
   else body.textContent = item.text;
   const children = [header, body];
+  if (item.artifactId) {
+    const preview = artifactPreviewNode(item.artifactId, `${item.key}/preview`);
+    if (preview) children.push(preview);
+  }
   const sessionKey = `${projectId ?? ""}/${sessionId ?? ""}`;
   const owner = { projectId, sessionId };
   if (item.kind === "user" && projectId && sessionId &&

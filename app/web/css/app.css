@@ -597,6 +597,12 @@ select:focus-visible,
 .timeline-fold-section pre { max-height: 320px; margin: 0; overflow: auto; padding: 9px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface-raised); color: var(--ink); font: 11px/1.5 ui-monospace, SFMono-Regular, Consolas, monospace; overflow-wrap: anywhere; white-space: pre-wrap; }
 .timeline-item[data-state="running"] .timeline-role::after { content: ""; display: inline-block; width: 5px; height: 5px; margin-left: 7px; border-radius: 50%; background: var(--warning); animation: pulse 1.5s infinite; }
 .timeline-meta { margin-top: 7px; color: var(--faint); font: 11px ui-monospace, SFMono-Regular, Consolas, monospace; }
+.timeline-artifact-preview { min-width: 0; margin-top: 8px; }
+.timeline-artifact-preview summary { width: fit-content; min-height: 32px; padding: 7px 9px; border: 1px solid var(--border); border-radius: 6px; color: var(--muted); font-size: 11px; cursor: pointer; }
+.timeline-artifact-preview summary:hover, .timeline-artifact-preview summary:focus-visible { color: var(--ink); background: var(--surface-hover); }
+.timeline-artifact-content { min-width: 0; max-height: 350px; overflow: auto; margin-top: 6px; }
+.timeline-artifact-content pre { margin: 0; padding: 9px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface-raised); color: var(--ink); font: 11px/1.5 ui-monospace, SFMono-Regular, Consolas, monospace; white-space: pre-wrap; overflow-wrap: anywhere; }
+.timeline-artifact-note { color: var(--faint); font-size: 10px; overflow-wrap: anywhere; }
 .timeline-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; min-height: 28px; margin-top: 6px; }
 .timeline-item[data-kind="user"] .timeline-actions { justify-content: flex-end; }
 .timeline-actions button { display: inline-grid; width: 32px; height: 32px; flex: 0 0 auto; place-items: center; padding: 0; border: 0; border-radius: 6px; background: transparent; color: var(--muted); cursor: pointer; }
@@ -1290,6 +1296,7 @@ select:focus-visible,
   .starter-grid { grid-template-columns: 1fr; }
   .starter { min-height: 62px; }
   .timeline { width: calc(100% - 26px); padding-top: 20px; }
+  .timeline-artifact-preview summary { min-height: 40px; }
   .conversation-docks { width: calc(100% - 26px); }
   .todo-toggle, .conversation-dock-actions button,
   .ask-dock-options button, .ask-dock-free button { min-height: 40px; }

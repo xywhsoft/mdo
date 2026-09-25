@@ -22,6 +22,7 @@
   "timeline.taskUpdated": "Task #{id} updated",
   "timeline.artifact": "Artifact",
   "timeline.artifactCreated": "Artifact created",
+  "timeline.previewArtifact": "Preview artifact",
   "timeline.context": "Context",
   "timeline.compacting": "Compacting context…",
   "timeline.compacted": "Context compacted",

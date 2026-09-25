@@ -22,6 +22,7 @@
   "timeline.taskUpdated": "任务 #{id} 已更新",
   "timeline.artifact": "产物",
   "timeline.artifactCreated": "已创建产物",
+  "timeline.previewArtifact": "预览产物",
   "timeline.context": "上下文",
   "timeline.compacting": "正在整理上下文…",
   "timeline.compacted": "上下文整理完成",

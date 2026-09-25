@@ -22,6 +22,7 @@
   "timeline.taskUpdated": "Задача №{id} обновлена",
   "timeline.artifact": "Артефакт",
   "timeline.artifactCreated": "Артефакт создан",
+  "timeline.previewArtifact": "Просмотреть артефакт",
   "timeline.context": "Контекст",
   "timeline.compacting": "Сжатие контекста…",
   "timeline.compacted": "Контекст сжат",

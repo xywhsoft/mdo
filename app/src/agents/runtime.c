@@ -1131,6 +1131,9 @@ MdoAgentSession* MdoAgentSessionCreateWithRuntime(xwork_runtime* Runtime,
     DefinitionConfig.uMaxParallelTools = Settings.MaxParallelTools;
     DefinitionConfig.uMaxSubagentDepth = AgentInfo.MaxDepth;
     DefinitionConfig.uMaxConcurrentSubagents = Settings.MaxParallelSubagents;
+    /* xllm-session admits at most 2000 bytes per tool result by default.
+     * Leave room for xwork's status prefix and artifact locator. */
+    DefinitionConfig.iMaxInlineToolBytes = 1024u;
     DefinitionConfig.bRegisterBuiltinTools = true;
     DefinitionConfig.bAutoSaveSession =
         Options->SessionPath != NULL && Options->SessionPath[0] != '\0';
