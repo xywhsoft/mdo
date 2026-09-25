@@ -340,6 +340,10 @@ function timelineNode(item, handlers, feedback, projectId, sessionId, openState)
       button.dataset.timelineAction = `${item.key}/code-${index}`;
     for (const [index, link] of [...body.querySelectorAll("a")].entries())
       link.dataset.timelineAction = `${item.key}/link-${index}`;
+    for (const [index, image] of [...body.querySelectorAll("button.md-image-preview")].entries()) {
+      image.dataset.timelineAction = `${item.key}/markdown-image-${index}`;
+      image.dataset.imageRef = `timeline:${projectId}/${sessionId}/${item.key}/markdown/${index}`;
+    }
   }
   else body.textContent = item.text;
   const children = [header, body];

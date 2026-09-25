@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="zh-CN">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>mdo markdown image probe</title>
+<link rel="stylesheet" href="/app/web/css/app.css">
+<style>
+  body { margin: 20px; background: var(--surface); color: var(--ink); }
+  .conversation { width: min(760px, 100%); max-height: 70vh; overflow: auto; }
+  #timeline .md-image-preview img { min-width: 96px; min-height: 96px; }
+</style>
+<textarea id="prompt" aria-label="输入消息"></textarea>
+<div class="conversation">
+  <p id="welcome"></p>
+  <ol id="timeline"></ol>
+</div>
+<button id="to-bottom" type="button" hidden>到底部</button>
+<dialog id="image-preview" class="image-preview-dialog">
+  <button id="close-image-preview" class="image-preview-close" type="button" aria-label="关闭图片预览">×</button>
+  <img id="image-preview-content" alt="">
+</dialog>
+<div id="toast-region"></div>
+<script type="module">
+import { createTimelineView } from "/app/web/js/features/chat/timeline.js";
+import { createImagePreview } from "/app/web/js/features/chat/image-preview.js";
+import { createResourceStore } from "/app/web/js/state/store.js";
+
+const png = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/Tz8AAAAASUVORK5CYII=";
+const message = `可预览 ![示例图片](${png})\n\n应保持文本 ![危险](javascript:alert(1)) 和 ![SVG](data:image/svg+xml;base64,PHN2Zz48L3N2Zz4=)`;
+const events = [
+  { event_id: 1, run_id: 8, kind: "agent_start", schema_version: 3,
+    user_message_sequence: 1, text: "展示 Markdown 图片", time: 1000000 },
+  { event_id: 2, run_id: 8, kind: "model_text_delta", model: "测试模型",
+    text: message, time: 2000000 },
+  { event_id: 3, run_id: 8, kind: "model_done", success: true,
+    time: 3000000 },
+];
+const store = createResourceStore({ projectId: "qa", sessionId: "images", events });
+const feedbackStore = createResourceStore({ projectId: "qa", sessionId: "images",
+  items: new Map() });
+createTimelineView({ container: document.querySelector("#timeline"),
+  welcome: document.querySelector("#welcome"),
+  toBottom: document.querySelector("#to-bottom"), store, feedbackStore,
+  onFork() {}, onFeedback() {}, onEdit() {}, onRetry() {} });
+createImagePreview({ dialog: document.querySelector("#image-preview"),
+  image: document.querySelector("#image-preview-content"),
+  closeButton: document.querySelector("#close-image-preview"),
+  navigation: { subscribe() { return () => {}; } } });
+document.addEventListener("keydown", (event) => {
+  if (event.key === "F2") {
+    event.preventDefault();
+    store.setData({ projectId: "qa", sessionId: "images", events });
+  }
+});
+store.setData({ projectId: "qa", sessionId: "images", events });
+</script>
+</html>

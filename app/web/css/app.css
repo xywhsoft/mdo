@@ -547,6 +547,8 @@ select:focus-visible,
 .markdown-body code { padding: 1px 4px; border-radius: 4px; background: var(--surface-hover); font: .9em ui-monospace, Consolas, monospace; }
 .markdown-body blockquote { padding-left: 11px; border-left: 2px solid var(--border-strong); color: var(--muted); }
 .markdown-body a { color: var(--focus); overflow-wrap: anywhere; }
+.markdown-body .md-image-preview { display: inline-block; max-width: 100%; padding: 0; border: 0; border-radius: 8px; background: transparent; cursor: zoom-in; vertical-align: middle; }
+.markdown-body .md-image-preview img { display: block; max-width: min(100%, 480px); max-height: 300px; border-radius: inherit; object-fit: contain; }
 .markdown-body hr { margin: 18px 0; border: 0; border-top: 1px solid var(--border); }
 .md-codeblock { overflow: hidden; margin: 0 0 12px; border: 1px solid var(--border); border-radius: var(--radius-sm); }
 .md-code-head { display: flex; align-items: center; justify-content: space-between; padding: 6px 9px; background: var(--surface-hover); color: var(--muted); font-size: 11px; }

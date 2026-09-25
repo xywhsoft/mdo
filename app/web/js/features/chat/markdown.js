@@ -1,6 +1,6 @@
 import { element } from "../../utils/dom.js";
 
-const INLINE = /(`[^`\n]+`|\*\*[^*\n]+\*\*|~~[^~\n]+~~|\*[^*\n]+\*|\[[^\]\n]+\]\([^\s)]+\))/g;
+const INLINE = /(`[^`\n]+`|\*\*[^*\n]+\*\*|~~[^~\n]+~~|\*[^*\n]+\*|!\[[^\]\n]*\]\([^\s)]+\)|\[[^\]\n]+\]\([^\s)]+\))/g;
 const LIST = /^\s{0,3}([-*]|\d+[.)])\s+(.*)$/;
 const HEADING = /^(#{1,4})\s+(.*)$/;
 
@@ -9,6 +9,15 @@ function safeLink(value) {
     const url = new URL(value);
     return url.protocol === "http:" || url.protocol === "https:" ? url.href : null;
   } catch { return null; }
+}
+
+function safeImage(value) {
+  const remote = safeLink(value);
+  if (remote) return remote;
+  if (value.length > 1024 * 1024 ||
+      !/^data:image\/(?:png|jpeg|gif|webp);base64,[A-Za-z0-9+/]+={0,2}$/i.test(value))
+    return null;
+  return value;
 }
 
 function inline(text) {
@@ -22,6 +31,16 @@ function inline(text) {
     else if (token.startsWith("**")) node = element("strong", { text: token.slice(2, -2) });
     else if (token.startsWith("~~")) node = element("del", { text: token.slice(2, -2) });
     else if (token.startsWith("*")) node = element("em", { text: token.slice(1, -1) });
+    else if (token.startsWith("![")) {
+      const bracket = token.indexOf("](");
+      const alt = token.slice(2, bracket);
+      const src = safeImage(token.slice(bracket + 2, -1));
+      if (src) node = element("button", { className: "md-image-preview",
+        attrs: { type: "button", "data-image-preview": "",
+          "aria-label": `查看图片：${alt || "Markdown 图片"}` },
+      }, [element("img", { attrs: { src, alt, loading: "lazy",
+        decoding: "async", referrerpolicy: "no-referrer" } })]);
+    }
     else if (token.startsWith("[")) {
       const bracket = token.indexOf("](");
       const label = token.slice(1, bracket);
