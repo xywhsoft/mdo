@@ -1,5 +1,6 @@
 import { api, resourceId } from "../api/client.js";
 import { createResourceStore } from "./store.js";
+import { withSessionRuntime } from "./session-runtime.js";
 
 export const sessionsStore = createResourceStore({ generation: 0, items: [] });
 export const sessionDetailStore = createResourceStore();
@@ -56,8 +57,10 @@ export async function updateSessionProfile(session, profile) {
     reasoning_effort: profile.reasoning_effort,
     permission_profile: profile.permission_profile,
   };
-  return refreshAfter(await api.put(`${endpoint(session)}/profile`, body,
-    { ifMatch: etag(session) }));
+  const response = await withSessionRuntime(session.project_id, session.id,
+    () => api.put(`${endpoint(session)}/profile`, body,
+      { ifMatch: etag(session) }));
+  return refreshAfter(response);
 }
 
 export async function trashSession(session) {

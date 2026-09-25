@@ -1,5 +1,6 @@
 import { ApiError, api, resourceId } from "../api/client.js";
 import { createResourceStore } from "./store.js";
+import { withSessionRuntime } from "./session-runtime.js";
 
 const EMPTY = Object.freeze({ resume_required: false, total: 0, items: [] });
 let selection = Object.freeze({ projectId: "", sessionId: "" });
@@ -15,6 +16,13 @@ export function selectRecovery(projectId, sessionId) {
   recoveryStore.reset(EMPTY);
 }
 
+export function readRecovery(projectId, sessionId) {
+  const project = resourceId(projectId, "project");
+  const session = resourceId(sessionId, "session");
+  return withSessionRuntime(project, session, async () =>
+    (await api.get(`/projects/${project}/sessions/${session}/recovery`)).data);
+}
+
 export function loadRecovery() {
   if (!selection.sessionId) {
     recoveryStore.reset(EMPTY);
@@ -23,7 +31,7 @@ export function loadRecovery() {
   const current = selection;
   return recoveryStore.load(async () => {
     try {
-      return (await api.get(`/projects/${current.projectId}/sessions/${current.sessionId}/recovery`)).data;
+      return await readRecovery(current.projectId, current.sessionId);
     } catch (error) {
       if (error instanceof ApiError && ["session_busy", "session_state_conflict", "recovery_state_conflict"].includes(error.code)) {
         return { ...EMPTY, unavailable: true };
@@ -48,10 +56,11 @@ export async function resumeRecovery(data, choices) {
     }
     return { tool_call_id: String(item.tool_call_id), action };
   });
-  return (await api.post(`/projects/${project}/sessions/${session}/resume`, {
-    recovery_token: token,
-    decisions,
-  })).data;
+  return withSessionRuntime(project, session, async () =>
+    (await api.post(`/projects/${project}/sessions/${session}/resume`, {
+      recovery_token: token,
+      decisions,
+    })).data);
 }
 
 export async function abandonRecovery(data) {
@@ -63,7 +72,8 @@ export async function abandonRecovery(data) {
       !Number.isSafeInteger(lastSequence) || lastSequence < 1 ||
       data?.resume_required !== true || (data?.items ?? []).length !== 0)
     throw new TypeError("only an unchanged interrupted model turn can be ended");
-  return (await api.post(`/projects/${project}/sessions/${session}/abandon`, {
-    revision, last_sequence: lastSequence,
-  })).data;
+  return withSessionRuntime(project, session, async () =>
+    (await api.post(`/projects/${project}/sessions/${session}/abandon`, {
+      revision, last_sequence: lastSequence,
+    })).data);
 }
