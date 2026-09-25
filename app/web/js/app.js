@@ -416,6 +416,7 @@ export async function boot() {
   });
   const promptQueue = createPromptQueue({
     container: $("#prompt-queue"), navigation,
+    isRunActive: () => Boolean(activeRun),
     onRetry: async () => {
       const selected = navigation.get();
       const first = promptQueue.peek(selected.projectId, selected.sessionId);
@@ -602,7 +603,9 @@ export async function boot() {
   });
 
   function setRun(run) {
+    const wasActive = Boolean(activeRun);
     activeRun = run && !terminalState(run) ? run : null;
+    if (wasActive !== Boolean(activeRun)) promptQueue.render();
     const guide = settingsStore.get().data?.composer?.submit_mode === "guide";
     const shown = run ?? { state: sessionWritable ? "idle" : selectedSessionStatus };
     runStatus.dataset.state = shown.state;

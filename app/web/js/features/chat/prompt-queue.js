@@ -17,7 +17,7 @@ function newId() {
     (byte) => byte.toString(16).padStart(2, "0")).join("");
 }
 
-export function createPromptQueue({ container, navigation, onRetry, onRemoved }) {
+export function createPromptQueue({ container, navigation, isRunActive, onRetry, onRemoved }) {
   const queues = new Map();
   const loads = new Map();
   const versions = new Map();
@@ -81,21 +81,25 @@ export function createPromptQueue({ container, navigation, onRetry, onRemoved })
       attrs: { type: "button", "aria-expanded": String(open),
         "aria-controls": "prompt-queue-list", "data-queue-focus": "toggle" },
     });
-    const retry = element("button", {
+    const waitingForRun = !uncertain && isRunActive();
+    const retry = waitingForRun ? null : element("button", {
       text: t(uncertain ? "queue.retryUncertain" : "queue.sendNext"),
       attrs: { type: "button", "data-queue-focus": "retry" },
     });
-    retry.disabled = busy.has(key) || actionBusy.has(key);
-    retry.addEventListener("click", async () => {
-      if (busy.has(key) || actionBusy.has(key)) return;
-      actionBusy.add(key);
-      render();
-      try { await onRetry(); }
-      catch (error) { toast(errorMessage(error), "error"); }
-      finally { actionBusy.delete(key); render(); }
-    });
+    if (retry) {
+      retry.disabled = busy.has(key) || actionBusy.has(key);
+      retry.addEventListener("click", async () => {
+        if (busy.has(key) || actionBusy.has(key)) return;
+        actionBusy.add(key);
+        render();
+        try { await onRetry(); }
+        catch (error) { toast(errorMessage(error), "error"); }
+        finally { actionBusy.delete(key); render(); }
+      });
+    }
     container.append(element("div", { className: "prompt-queue-header" }, [
-      toggle, retry,
+      toggle, retry ?? element("span", { className: "prompt-queue-waiting",
+        text: t("queue.waitForRun") }),
     ]));
     if (uncertain) container.append(element("p", {
       className: "prompt-queue-warning",
@@ -161,7 +165,7 @@ export function createPromptQueue({ container, navigation, onRetry, onRemoved })
     if (focused) {
       const removes = [...list.querySelectorAll("button[data-queue-index]")];
       const target = focusKey === "toggle" ? toggle :
-        focusKey === "retry" ? retry :
+        focusKey === "retry" ? retry ?? toggle :
         imageRef ? [...list.querySelectorAll("button[data-image-ref]")]
           .find((item) => item.dataset.imageRef === imageRef) :
         removes.find((item) => item.dataset.queueFocus === focusKey) ??
