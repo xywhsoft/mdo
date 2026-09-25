@@ -21,6 +21,7 @@ export function createComposerImages({ composer, prompt, button, input, strip,
   onUploading, onError }) {
   let ids = [];
   let uploading = false;
+  const removals = new Set();
   let writable = true;
   let dragDepth = 0;
 
@@ -34,6 +35,12 @@ export function createComposerImages({ composer, prompt, button, input, strip,
     return projectId && sessionId ? { projectId, sessionId } : null;
   }
 
+  function removingCurrent() {
+    const selected = owner();
+    return Boolean(selected && removals.has(
+      `${selected.projectId}/${selected.sessionId}`));
+  }
+
   function render() {
     const focused = strip.contains(document.activeElement)
       ? document.activeElement : null;
@@ -43,7 +50,8 @@ export function createComposerImages({ composer, prompt, button, input, strip,
       ? "remove" : focused?.matches("[data-image-preview]") ? "preview" : "";
     clear(strip);
     const selected = owner();
-    strip.hidden = ids.length === 0 && !uploading;
+    const removing = removingCurrent();
+    strip.hidden = ids.length === 0 && !uploading && !removing;
     if (selected) for (const [index, id] of ids.entries()) {
       if (!/^[0-9a-f]{32}$/.test(id)) continue;
       const remove = element("button", {
@@ -51,12 +59,40 @@ export function createComposerImages({ composer, prompt, button, input, strip,
         attrs: { type: "button", "aria-label": `移除图片 ${index + 1}`,
           "data-image-id": id, "data-image-index": String(index) },
       });
-      remove.disabled = uploading || !writable;
-      remove.addEventListener("click", () => {
-        ids = ids.filter((_, position) => position !== index);
-        render();
-        onChange([...ids]);
-        void Promise.resolve(onRemove?.(selected, id)).catch(onError);
+      remove.disabled = uploading || removing || !writable;
+      remove.addEventListener("click", async () => {
+        if (removals.has(`${selected.projectId}/${selected.sessionId}`)) return;
+        const previous = [...ids];
+        const key = `${selected.projectId}/${selected.sessionId}`;
+        const restoreFocus = document.activeElement === remove;
+        removals.add(key);
+        onUploading(true);
+        try {
+          ids = ids.filter((_, position) => position !== index);
+          onChange([...ids]);
+          render();
+          if (await onRemove?.(selected, id, previous) === false)
+            throw new Error("草稿未保存，图片已恢复");
+        } catch (error) {
+          const current = owner();
+          if (`${current?.projectId}/${current?.sessionId}` === key) {
+            ids = previous;
+            onChange([...ids]);
+            onError(error);
+          }
+        } finally {
+          removals.delete(key);
+          onUploading(false);
+          render();
+          const current = owner();
+          if (restoreFocus && `${current?.projectId}/${current?.sessionId}` === key &&
+              (document.activeElement === document.body ||
+                strip.contains(document.activeElement))) {
+            const choices = [...strip.querySelectorAll(".composer-image-remove")];
+            (choices[Math.min(index, choices.length - 1)] ?? button)
+              .focus({ preventScroll: true });
+          }
+        }
       });
       strip.append(element("div", { className: "composer-image" }, [
         element("button", { className: "composer-image-preview", attrs: {
@@ -72,8 +108,11 @@ export function createComposerImages({ composer, prompt, button, input, strip,
     if (uploading) strip.append(element("span", {
       className: "composer-image-uploading", text: "正在保存图片…",
     }));
-    button.disabled = !writable || uploading;
-    if (focusedKind) {
+    if (removing) strip.append(element("span", {
+      className: "composer-image-uploading", text: "正在移除图片…",
+    }));
+    button.disabled = !writable || uploading || removing;
+    if (focusedKind && !removing) {
       const candidates = [...strip.querySelectorAll(focusedKind === "remove"
         ? ".composer-image-remove" : "[data-image-preview]")];
       const next = candidates.find((item) =>
@@ -93,7 +132,7 @@ export function createComposerImages({ composer, prompt, button, input, strip,
 
   async function addFiles(files) {
     const candidates = [...files];
-    if (!candidates.length || uploading) return;
+    if (!candidates.length || uploading || removingCurrent()) return;
     if (!writable) { onError(new Error("当前会话不可添加图片")); return; }
     if (!imageCapable()) {
       onError(unsupportedModelError());
@@ -195,7 +234,7 @@ export function createComposerImages({ composer, prompt, button, input, strip,
     get: () => [...ids],
     set(value) { ids = Array.isArray(value) ? [...value] : []; render(); },
     clear() { ids = []; render(); },
-    isUploading: () => uploading,
+    isUploading: () => uploading || removingCurrent(),
     supportsCurrentModel: imageCapable,
     setWritable(value) { writable = Boolean(value); render(); },
   });

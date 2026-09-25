@@ -141,6 +141,9 @@ export function createDraftStore({ onRestore, onError, onSaved }) {
   return Object.freeze({
     select,
     edit,
+    editAttachments(key, attachments, immediate = false) {
+      edit(key, entry(key).text, attachments, immediate);
+    },
     capture(key, text, attachments = []) {
       if (entry(key).text !== text ||
           !sameIds(entry(key).attachments, attachments))

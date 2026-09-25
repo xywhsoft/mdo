@@ -1,0 +1,124 @@
+<!doctype html>
+<html lang="zh-CN">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>mdo composer image removal probe</title>
+<link rel="stylesheet" href="/app/web/css/app.css">
+<style>body{padding:20px;background:var(--bg);color:var(--ink)}.case{margin:0 0 24px}</style>
+<div id="cases"></div>
+<script type="module">
+import { createComposerImages } from "/app/web/js/features/chat/composer-images.js";
+import { createDraftStore } from "/app/web/js/features/chat/draft-store.js";
+
+const ids = ["a".repeat(32), "b".repeat(32)];
+const root = document.querySelector("#cases");
+
+async function run(label, result, switchOwner = false) {
+  const section = document.createElement("section");
+  section.className = "case";
+  const title = document.createElement("h2");
+  title.textContent = label;
+  const composer = document.createElement("form");
+  composer.className = "composer";
+  const prompt = document.createElement("textarea");
+  const button = document.createElement("button");
+  button.type = "button";
+  button.textContent = "添加图片";
+  const input = document.createElement("input");
+  input.type = "file";
+  input.hidden = true;
+  const strip = document.createElement("div");
+  strip.className = "composer-images";
+  const output = document.createElement("pre");
+  composer.append(prompt, button, input, strip);
+  section.append(title, composer, output);
+  root.append(section);
+  let route = { projectId: "qa", sessionId: "first" };
+  let finish;
+  const changes = [];
+  const errors = [];
+  const busy = [];
+  const images = createComposerImages({ composer, prompt, button, input, strip,
+    navigation: { get: () => route },
+    modelsStore: { get: () => ({ data: { models: [] } }) },
+    sessionStore: { get: () => ({ data: null }) },
+    ensureSession: async () => route,
+    onChange: (value) => changes.push(value),
+    onRemove: () => new Promise((resolve) => { finish = resolve; }),
+    onUploading: (value) => busy.push(value),
+    onError: (error) => errors.push(error.message),
+  });
+  images.set([ids[0]]);
+  const remove = strip.querySelector(".composer-image-remove");
+  remove.focus();
+  remove.click();
+  const blocked = images.isUploading() && button.disabled;
+  let switchedUnblocked = true;
+  if (switchOwner) {
+    route = { projectId: "qa", sessionId: "second" };
+    images.set([ids[1]]);
+    switchedUnblocked = !images.isUploading() && !button.disabled;
+  }
+  finish(result);
+  await new Promise((resolve) => requestAnimationFrame(resolve));
+  const actual = images.get();
+  const expected = switchOwner ? ids[1] : result ? null : ids[0];
+  const stateOk = expected ? actual.length === 1 && actual[0] === expected
+    : actual.length === 0;
+  const focusOk = switchOwner || (result
+    ? document.activeElement === button
+    : document.activeElement?.classList.contains("composer-image-remove"));
+  const passed = blocked && switchedUnblocked && stateOk && focusOk && !images.isUploading() &&
+    busy.join(",") === "true,false" &&
+    (result || switchOwner ? errors.length === 0 : errors.length === 1);
+  output.textContent = JSON.stringify({ passed, blocked, switchedUnblocked,
+    stateOk, focusOk,
+    changes, errors, busy, actual }, null, 2);
+  output.dataset.passed = String(passed);
+}
+
+await run("保存失败：保留缩略图", false);
+await run("保存成功：移除缩略图", true);
+await run("切换会话：旧请求不改新会话", false, true);
+
+async function verifyDraftRollback() {
+  const output = document.createElement("pre");
+  root.append(output);
+  const originalFetch = window.fetch;
+  const writes = [];
+  window.fetch = async (url, options = {}) => {
+    if (!String(url).endsWith("/projects/qa/sessions/draft-case/draft"))
+      return originalFetch(url, options);
+    if (options.method === "PUT") {
+      writes.push(JSON.parse(options.body));
+      if (writes.length === 1) return new Response(JSON.stringify({
+        ok: false, error: { code: "request_failed", message: "save failed" },
+      }), { status: 500 });
+      return new Response(JSON.stringify({ ok: true,
+        data: { revision: 2 } }), { status: 200 });
+    }
+    return new Response(JSON.stringify({ ok: true,
+      data: { revision: 1, text: "old", attachments: [ids[0]] } }),
+      { status: 200 });
+  };
+  try {
+    const key = "qa/draft-case";
+    const draft = createDraftStore({ onRestore() {}, onError() {}, onSaved() {} });
+    draft.select(key);
+    await new Promise((resolve) => requestAnimationFrame(resolve));
+    draft.edit(key, "typed during removal", []);
+    const first = await draft.flush(key);
+    draft.editAttachments(key, [ids[0]], true);
+    const second = await draft.flush(key);
+    const passed = !first && second && writes.length === 2 &&
+      writes[0].attachments.length === 0 &&
+      writes[1].attachments[0] === ids[0] &&
+      writes[1].text === "typed during removal";
+    output.dataset.passed = String(passed);
+    output.textContent = JSON.stringify({ passed, first, second, writes }, null, 2);
+  } finally { window.fetch = originalFetch; }
+}
+
+await verifyDraftRollback();
+</script>
+</html>
