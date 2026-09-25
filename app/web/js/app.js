@@ -133,6 +133,7 @@ export async function boot() {
   let runsTimer = 0;
   let approvalsTimer = 0;
   const submissionLanes = new Map();
+  const uncertainAdmissions = new Map();
   let routeVersion = 0;
   let routeSignature = "";
   let messageActionBusy = false;
@@ -953,6 +954,7 @@ export async function boot() {
     if (selected.view !== "workspace" || !selected.sessionId) return;
     try {
       await promptQueue.select(selected.projectId, selected.sessionId);
+      resolveObservedAdmission(`${selected.projectId}/${selected.sessionId}`);
       const current = navigation.get();
       if (current.projectId !== selected.projectId ||
           current.sessionId !== selected.sessionId) return;
@@ -1023,6 +1025,7 @@ export async function boot() {
         queueBlocked.add(key);
         try {
           await promptQueue.select(projectId, sessionId);
+          resolveObservedAdmission(key);
           queueBlocked.delete(key);
           void maybeCancelPriorityRun();
           void dispatchQueued();
@@ -1057,6 +1060,7 @@ export async function boot() {
     try {
       await Promise.all([loadSession(projectId, sessionId), loadRuns(), loadRecovery(),
         promptQueue.select(projectId, sessionId)]);
+      resolveObservedAdmission(key);
     } catch (error) { showComposerError(error); return; }
     finally {
       if (creatingSessionKey === key) {
@@ -1074,6 +1078,7 @@ export async function boot() {
     composerError.hidden = true;
     composerError.textContent = "";
     delete composerError.dataset.code;
+    delete composerError.dataset.queueItemId;
   }
   function recoveryRequiredError() {
     const error = new Error(t("composer.recoveryRequired", {},
@@ -1101,6 +1106,8 @@ export async function boot() {
     composerError.textContent = errorMessage(error);
     if (note) composerError.append(" ", note);
     composerError.dataset.code = error?.code || "";
+    if (error?.queueItemId) composerError.dataset.queueItemId = error.queueItemId;
+    else delete composerError.dataset.queueItemId;
     if (error?.code === "recovery_required") {
       const openDecisions = element("button", {
         className: "composer-error-action",
@@ -1176,6 +1183,33 @@ export async function boot() {
     return { restored, visible };
   }
 
+  function resolveObservedAdmission(key) {
+    const uncertain = uncertainAdmissions.get(key);
+    if (!uncertain) return;
+    const [projectId, sessionId] = key.split("/");
+    if (!promptQueue.observed(projectId, sessionId, uncertain.id)) return;
+    uncertainAdmissions.delete(key);
+    const visible = selectedOwnsDraft(key);
+    if (visible && composerError.dataset.queueItemId === uncertain.id)
+      hideComposerError();
+    if (visible && (prompt.value !== uncertain.text ||
+        JSON.stringify(composerAttachments) !== JSON.stringify(uncertain.attachments))) return;
+    if (!draftStore.clearIfMatches(key, uncertain.text, uncertain.attachments)) return;
+    if (!visible) return;
+    prompt.value = "";
+    composerAttachments = [];
+    composerImages.clear();
+    resizePrompt();
+    tokenMeter.refresh();
+  }
+
+  function rememberUncertainAdmission(key, error, unsent, restored) {
+    if (!error.queueAdmissionUncertain || !error.queueItemId ||
+        unsent.length !== 1 || !restored || restored.merged) return;
+    uncertainAdmissions.set(key, { id: error.queueItemId,
+      text: restored.text, attachments: restored.attachments });
+  }
+
   async function drainPendingSubmissions(lane, selected) {
     const ownerKey = `${selected.projectId}/${selected.sessionId}`;
     while (lane.pending.length) {
@@ -1198,6 +1232,7 @@ export async function boot() {
         const { restored, visible } = unsent.length
           ? restoreUnsentItems(ownerKey, unsent)
           : { restored: null, visible: selectedOwnsDraft(ownerKey) };
+        rememberUncertainAdmission(ownerKey, error, unsent, restored);
         if (visible) {
           showComposerError(error, error.queueAdmissionUncertain
             ? t("composer.queueAdmissionUncertain") : restored
@@ -1210,6 +1245,7 @@ export async function boot() {
               ? ` ${t("composer.queueAdmissionUncertain")}` : ""}`,
           }), "error");
         }
+        resolveObservedAdmission(ownerKey);
         break;
       } finally {
         setRun(activeRun);
@@ -1309,6 +1345,7 @@ export async function boot() {
           draftStore.clear("");
         restored = restoreUnsentItems(ownerKey, unsent).restored;
       }
+      rememberUncertainAdmission(ownerKey, error, unsent, restored);
       if (selectedIsCurrent()) {
         if (!fromComposer && !prompt.value.trim() && !composerAttachments.length) {
           prompt.value = text;
@@ -1326,6 +1363,7 @@ export async function boot() {
         toast(t("composer.backgroundSendFailed", { error: errorMessage(error) },
           `后台任务未发出：${errorMessage(error)}`), "error");
       }
+      resolveObservedAdmission(ownerKey);
     } finally {
       try {
         if (accepted && selected) await drainPendingSubmissions(lane, selected);
