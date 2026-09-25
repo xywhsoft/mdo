@@ -32,6 +32,7 @@ class Model(BaseHTTPRequestHandler):
     verify_recovery = False
     verification_file = None
     slow_seconds = 15
+    task_seconds = 12
 
     def log_message(self, *_args):
         pass
@@ -64,7 +65,7 @@ class Model(BaseHTTPRequestHandler):
                 output = [{"type": "function_call", "call_id": "ui-task-1",
                            "name": "spawn", "arguments": json.dumps({
                                "argv": [sys.executable, "-c",
-                                        "import time; time.sleep(12); "
+                                        f"import time; time.sleep({Model.task_seconds:g}); "
                                         "print('task UI fixture')"]})}]
             elif "ASK UI" in wire and "TASK UI" not in wire and "ask" not in Model.sent:
                 Model.sent.add("ask")
@@ -198,6 +199,8 @@ parser.add_argument("--queue-delay-ms", type=int, default=0,
                     help="delay queue POSTs by 0-12000 ms for bounded dispatch race QA")
 parser.add_argument("--slow-ms", type=int, default=15000,
                     help="first SLOW UI model response delay, 0-15000 ms")
+parser.add_argument("--task-ms", type=int, default=12000,
+                    help="TASK UI background process sleep, 0-30000 ms")
 parser.add_argument("--resume-verify", action="store_true",
                     help="let the local model verify a resumed run with a bounded read-only command")
 args = parser.parse_args()
@@ -207,11 +210,14 @@ if not 0 <= args.queue_delay_ms <= 12000:
     parser.error("--queue-delay-ms must be between 0 and 12000")
 if not 0 <= args.slow_ms <= 15000:
     parser.error("--slow-ms must be between 0 and 15000")
+if not 0 <= args.task_ms <= 30000:
+    parser.error("--task-ms must be between 0 and 30000")
 
 base = Path(tempfile.mkdtemp(prefix="mdo-packed-docks-", dir=ROOT / ".build"))
 Model.verify_recovery = args.resume_verify
 Model.verification_file = base / "README.md"
 Model.slow_seconds = args.slow_ms / 1000
+Model.task_seconds = args.task_ms / 1000
 shutil.copy2(ROOT / "mdo.exe", base / "mdo.exe")
 (base / "README.md").write_text("Synthetic workspace file for @ completion.\n",
                                 encoding="utf-8")

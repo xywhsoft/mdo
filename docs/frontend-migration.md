@@ -353,3 +353,5 @@ Node 词典契约及模块语法检查通过；有界发布门禁通过 114 项�
 修复前单文件 Home `.build/mdo-packed-docks-uq8f_m8k` 中，检查器明确显示 1 个运行中任务，对话停靠区却只有询问卡。修复后的 Home `.build/mdo-packed-docks-hm3xva3d` 用同一真实 `spawn` 路径显示“后台任务 · 1 项”；点击“查看任务详情”打开检查器，详情显示 `default / <会话 ID>`。任务结束后对话卡自动消失，检查器仍保留已完成记录、退出码 0 与标准输出，浏览器脚本错误日志为空。Node 用例覆盖 Windows/Unix 路径、同名会话跨项目隔离与无法识别的来源。发布门禁通过 59 个前端模块解析、12 项 Node 测试、114 项 Python 单元/契约测试、18 个运行探针、严格 C 编译、确定性打包、单文件零旁路写入和 20 秒启动检查；根目录 `mdo.exe` SHA-256：`bd33e044403188e7f19f07e9f811ea02647634c07b7a170d92b8919cb297c6df`。
 
 同一字节程序还在 Home `.build/mdo-packed-docks-mdu12cab` 完成 320px 手机打包页复核：后台任务运行时对话卡可见，“查看任务详情”点按区高 40px，点按后任务抽屉打开；文档宽度保持 320px，浏览器脚本错误日志为空。
+
+补验后台任务的真实停止路径。`tests/manual_packed_docks_qa.py` 的 `TASK UI` 现在接受 `--task-ms`（0–30000），便于将单个本地休眠进程留在可停止状态；默认仍为 12 秒，不进行并发或负载测试。Home `.build/mdo-packed-docks-t3_ouvsc` 的默认任务在点按前自然完成，因此未把该尝试计入停止证据。Home `.build/mdo-packed-docks-sms40ou0` 使用 30 秒夹具：检查器运行中任务点按“停止”后，页面显示“已停止”，详情事件依次有“请求停止”和状态变化，对话区后台任务卡撤下；服务端 `/api/v1/tasks/1` 返回 `cancelled`、有效退出码 1，浏览器无脚本错误。Home `.build/mdo-packed-docks-is59tyxu` 在 320px 再次点按：停止按钮实测高 40px，任务和卡片同样更新，API 为 `cancelled`，文档宽度 320px，浏览器无脚本错误。应用代码未修改，根目录 `mdo.exe` 与上阶段同字节；有界发布门禁在本阶段重新运行。
