@@ -25,6 +25,8 @@ test("bundled language packs cover the annotated shell and switch without stale 
   const html = readFileSync(new URL("index.html", root), "utf8");
   for (const [, key] of html.matchAll(/data-i18n(?:-title|-placeholder|-aria-label)?="([^"]+)"/g))
     assert.ok(referenceKeys.includes(key), `missing static key: ${key}`);
+  for (const [, key] of html.matchAll(/data-prompt-key="([^"]+)"/g))
+    assert.ok(referenceKeys.includes(key), `missing starter prompt: ${key}`);
   for (const path of [
     "js/features/sessions/session-actions.js",
     "js/features/sessions/session-list.js",
@@ -36,6 +38,8 @@ test("bundled language packs cover the annotated shell and switch without stale 
     "js/features/chat/prompt-queue.js",
     "js/features/chat/conversation-docks.js",
     "js/features/chat/conversation-search.js",
+    "js/features/chat/slash-commands.js",
+    "js/features/chat/file-mentions.js",
     "js/app.js",
   ]) {
     const source = readFileSync(new URL(path, root), "utf8");
@@ -44,6 +48,9 @@ test("bundled language packs cover the annotated shell and switch without stale 
     if (path.endsWith("conversation-docks.js"))
       for (const [, key] of source.matchAll(/"(dock\.[^"]+)"/g))
         assert.ok(referenceKeys.includes(key), `missing dock key: ${key}`);
+    if (path.endsWith("slash-commands.js"))
+      for (const [, key] of source.matchAll(/descriptionKey: "([^"]+)"/g))
+        assert.ok(referenceKeys.includes(key), `missing command key: ${key}`);
     if (path.endsWith("session-actions.js"))
       for (const [, key] of source.matchAll(/\bitem\("[^"]+",\s*"([^"]+)"/g))
         assert.ok(referenceKeys.includes(key), `missing action key: ${key}`);

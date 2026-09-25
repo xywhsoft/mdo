@@ -1,21 +1,22 @@
+import { subscribeLocale, t } from "../../i18n.js";
 import { clear, element, errorMessage, toast } from "../../utils/dom.js";
 
 const COMMANDS = Object.freeze([
-  { name: "/new", description: "新建任务" },
-  { name: "/model", description: "切换到下一个模型" },
-  { name: "/fork", description: "分叉当前会话" },
-  { name: "/export", description: "导出当前会话 Markdown" },
-  { name: "/clear", description: "清空当前会话历史" },
-  { name: "/stop", description: "停止当前任务" },
-  { name: "/settings", description: "打开设置" },
-  { name: "/theme", description: "切换深浅主题" },
-  { name: "/help", description: "查看命令" },
+  { name: "/new", descriptionKey: "slash.new" },
+  { name: "/model", descriptionKey: "slash.model" },
+  { name: "/fork", descriptionKey: "slash.fork" },
+  { name: "/export", descriptionKey: "slash.export" },
+  { name: "/clear", descriptionKey: "slash.clear" },
+  { name: "/stop", descriptionKey: "slash.stop" },
+  { name: "/settings", descriptionKey: "slash.settings" },
+  { name: "/theme", descriptionKey: "slash.theme" },
+  { name: "/help", descriptionKey: "slash.help" },
 ]);
 
 export function createSlashCommands({ composer, input, onExecute }) {
   const list = element("div", {
     className: "slash-menu",
-    attrs: { id: "slash-menu", role: "listbox", "aria-label": "斜杠命令" },
+    attrs: { id: "slash-menu", role: "listbox", "aria-label": t("slash.label") },
   });
   list.hidden = true;
   composer.append(list);
@@ -44,7 +45,7 @@ export function createSlashCommands({ composer, input, onExecute }) {
           "aria-selected": String(index === active) },
       }, [
         element("code", { text: command.name }),
-        element("span", { text: command.description }),
+        element("span", { text: t(command.descriptionKey) }),
       ]);
       option.addEventListener("pointerdown", (event) => {
         event.preventDefault();
@@ -52,7 +53,8 @@ export function createSlashCommands({ composer, input, onExecute }) {
       });
       list.append(option);
     });
-    input.setAttribute("aria-activedescendant", `slash-option-${active}`);
+    if (matches.length) input.setAttribute("aria-activedescendant", `slash-option-${active}`);
+    else input.removeAttribute("aria-activedescendant");
   }
 
   async function execute(command) {
@@ -73,6 +75,10 @@ export function createSlashCommands({ composer, input, onExecute }) {
 
   input.addEventListener("input", update);
   input.addEventListener("blur", () => window.setTimeout(hide, 0));
+  subscribeLocale(() => {
+    list.setAttribute("aria-label", t("slash.label"));
+    if (!list.hidden) render();
+  });
   return Object.freeze({
     onKeyDown(event) {
       if (list.hidden || event.isComposing) return false;

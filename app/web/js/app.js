@@ -1133,11 +1133,11 @@ export async function boot() {
     }
   });
 
-  for (const starter of document.querySelectorAll("[data-prompt]")) {
+  for (const starter of document.querySelectorAll("[data-prompt-key]")) {
     starter.addEventListener("click", () => {
       if (submittingCurrent() || composerImages.isUploading() ||
           composerProfile.isBusy()) return;
-      void submitPrompt({ text: starter.dataset.prompt, fromComposer: false });
+      void submitPrompt({ text: t(starter.dataset.promptKey), fromComposer: false });
     });
   }
   document.querySelector("[data-starter-schedules]")?.addEventListener("click", () =>

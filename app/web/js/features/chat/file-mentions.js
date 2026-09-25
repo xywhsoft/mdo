@@ -1,4 +1,5 @@
 import { api } from "../../api/client.js";
+import { subscribeLocale, t } from "../../i18n.js";
 import { clear, element } from "../../utils/dom.js";
 
 const WAIT_MS = 180;
@@ -20,7 +21,7 @@ function fileReference(path) {
 export function createFileMentions({ composer, input, navigation }) {
   const list = element("div", {
     className: "file-mention-menu",
-    attrs: { id: "file-mention-menu", role: "listbox", "aria-label": "工作区文件" },
+    attrs: { id: "file-mention-menu", role: "listbox", "aria-label": t("mention.label") },
   });
   list.hidden = true;
   composer.append(list);
@@ -127,6 +128,7 @@ export function createFileMentions({ composer, input, navigation }) {
   });
   input.addEventListener("blur", () => window.setTimeout(hide, 0));
   navigation.subscribe(() => { hide(); update(); });
+  subscribeLocale(() => list.setAttribute("aria-label", t("mention.label")));
 
   return Object.freeze({
     hide,
