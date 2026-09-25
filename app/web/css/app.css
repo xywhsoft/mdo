@@ -1313,13 +1313,14 @@ select:focus-visible,
   .composer-image { width: 64px; height: 64px; }
   .composer-image-remove { top: -11px; right: -11px; width: 40px; height: 40px; border-radius: 50%; background: radial-gradient(circle 11px, var(--ink) 98%, transparent 100%); }
   .composer-toolbar { flex-wrap: wrap; gap: 2px; }
-  .composer-options { flex: 1 1 100%; gap: 3px; }
+  .composer-options { flex: 1 1 100%; flex-wrap: wrap; gap: 3px; overflow-x: visible; }
   .composer-attach, .composer-select, .context-meter > button,
   .send-button, .stop-button { height: 40px; }
   .composer-attach, .context-meter > button, .send-button,
   .stop-button { width: 40px; }
   .composer-project { min-width: 88px; max-width: 95px; }
-  #composer-model { max-width: 110px; }
+  .composer[data-new-task] .composer-project { order: -1; flex: 0 0 100%; max-width: none; }
+  .composer-options > #composer-model { flex: 1 1 0; max-width: 110px; }
   .composer-select-short { max-width: 56px; }
   .composer-actions { flex: 1 1 100%; justify-content: flex-end; }
   .composer-input-estimate { font-size: 9px; }
