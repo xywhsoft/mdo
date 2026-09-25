@@ -226,6 +226,7 @@
             <button type="button" data-settings-section="projects">项目</button>
             <button type="button" data-settings-section="schedules">计划任务</button>
             <button type="button" data-settings-section="models">模型</button>
+            <button type="button" data-settings-section="feedback">反馈</button>
             <button type="button" data-settings-section="extensions">扩展与 MCP</button>
             <button type="button" data-settings-section="permissions">权限</button>
             <button type="button" data-settings-section="diagnostics">诊断与存储</button>
@@ -307,6 +308,12 @@
             </form>
 
               <section class="settings-section resource-section" data-settings-panel="models" hidden><div class="settings-section-heading"><h2>模型</h2><p>管理 Provider、模型能力与默认模型。Ling 3.0 Tiny 始终保留为内置免费模型。</p></div><div id="settings-models-list"></div></section>
+              <section class="settings-section resource-section" data-settings-panel="feedback" aria-labelledby="settings-feedback-title" hidden>
+                <div class="settings-section-heading"><h2 id="settings-feedback-title">反馈</h2><p>汇总会话回复的点赞与点踩记录，可按需继续加载。</p></div>
+                <div class="feedback-toolbar"><button class="secondary-button" id="feedback-refresh" type="button">刷新</button><span id="feedback-list-status" role="status"></span></div>
+                <div class="feedback-list" id="feedback-list"></div>
+                <button class="secondary-button" id="feedback-more" type="button" hidden>加载更多反馈</button>
+              </section>
               <section class="settings-section resource-section" data-settings-panel="extensions" hidden><div class="settings-section-heading"><h2>扩展与 MCP</h2><p>查看 Agent、Skill、Module 和 MCP 连接。</p></div><div id="settings-extensions-list"></div></section>
               <section class="settings-section resource-section" data-settings-panel="permissions" hidden><div class="settings-section-heading"><h2>权限</h2><p>查看服务端生效的权限 profile；运行时审批仍由 Agent 策略执行。</p></div><div id="settings-permissions-list"></div></section>
               <section class="settings-section resource-section" data-settings-panel="diagnostics" hidden><div class="settings-section-heading"><h2>诊断与存储</h2><p>检查便携 Home、运行状态和可操作诊断。</p></div><div id="settings-diagnostics-list"></div></section>

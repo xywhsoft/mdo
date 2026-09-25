@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 #include "internal.h"
@@ -9,6 +10,8 @@
 #define MDO_FEEDBACK_MAX_ITEMS 512u
 #define MDO_FEEDBACK_MAX_BYTES (32u * 1024u)
 #define MDO_FEEDBACK_REPLAY_PAGE 1000u
+#define MDO_FEEDBACK_LIST_LIMIT 50u
+#define MDO_FEEDBACK_SCAN_LIMIT 100u
 
 typedef struct MdoFeedbackItem {
     uint64 EventId;
@@ -290,6 +293,197 @@ static xvalue* MdoFeedbackResponse(const MdoFeedbackItem* Items,
     xrtValueRelease(Array);
     if ( !Ok ) { xrtValueRelease(Data); return NULL; }
     return Data;
+}
+
+static bool MdoFeedbackDecimal(xstrview Text, uint64* Number)
+{
+    size_t Index;
+    uint64 Value = 0u;
+    if ( Text.Size == 0u ) return false;
+    for ( Index = 0u; Index < Text.Size; ++Index ) {
+        uint64 Digit;
+        if ( Text.Data[Index] < '0' || Text.Data[Index] > '9' ) return false;
+        Digit = (uint64)(Text.Data[Index] - '0');
+        if ( Value > (UINT64_MAX - Digit) / 10u ) return false;
+        Value = Value * 10u + Digit;
+    }
+    *Number = Value;
+    return true;
+}
+
+static bool MdoFeedbackListCursor(xstrview Query, uint64* Generation,
+    size_t* SessionIndex, uint64* AfterEventId)
+{
+    xstrview Parts[3];
+    size_t Start = 7u;
+    size_t Index;
+    uint64 Session;
+    if ( Query.Size == 0u ) {
+        *Generation = 0u;
+        *SessionIndex = 0u;
+        *AfterEventId = 0u;
+        return true;
+    }
+    if ( Query.Size < 12u || memcmp(Query.Data, "cursor=", 7u) != 0 )
+        return false;
+    for ( Index = 0u; Index < 3u; ++Index ) {
+        size_t End = Start;
+        while ( End < Query.Size && Query.Data[End] != '.' ) ++End;
+        if ( (Index < 2u && End == Query.Size) ||
+             (Index == 2u && End != Query.Size) ) return false;
+        Parts[Index] = xrtStrViewN(Query.Data + Start, End - Start);
+        Start = End + 1u;
+    }
+    if ( !MdoFeedbackDecimal(Parts[0], Generation) ||
+         !MdoFeedbackDecimal(Parts[1], &Session) ||
+         !MdoFeedbackDecimal(Parts[2], AfterEventId) ||
+         Session > SIZE_MAX ) return false;
+    *SessionIndex = (size_t)Session;
+    return true;
+}
+
+static int MdoFeedbackCompareEventId(const void* Left, const void* Right)
+{
+    const MdoFeedbackItem* A = (const MdoFeedbackItem*)Left;
+    const MdoFeedbackItem* B = (const MdoFeedbackItem*)Right;
+    return A->EventId < B->EventId ? -1 : A->EventId > B->EventId ? 1 : 0;
+}
+
+static int64 MdoFeedbackOccurredAt(const char* ProjectId,
+    const char* SessionId, uint64 EventId)
+{
+    MdoSessionEventSnapshot* Snapshot;
+    MdoSessionEventInfo Event;
+    xwork_error Error;
+    int64 Time = 0;
+    if ( EventId == 0u ) return 0;
+    memset(&Error, 0, sizeof(Error));
+    Snapshot = MdoSessionEventReplay(ProjectId, SessionId, EventId - 1u,
+        1u, &Error);
+    if ( Snapshot == NULL ) return 0;
+    memset(&Event, 0, sizeof(Event));
+    Event.Size = sizeof(Event);
+    if ( MdoSessionEventSnapshotAt(Snapshot, 0u, &Event) &&
+         Event.EventId == EventId ) Time = Event.OccurredAt;
+    MdoSessionEventSnapshotRelease(Snapshot);
+    return Time;
+}
+
+static xvalue* MdoFeedbackListItem(const MdoSessionInfo* Session,
+    const MdoFeedbackItem* Feedback)
+{
+    xvalue* Item = xrtValueObject();
+    bool Ok = Item != NULL &&
+        MdoApiValueSetString(Item, "project_id", Session->ProjectId) &&
+        MdoApiValueSetString(Item, "session_id", Session->Id) &&
+        MdoApiValueSetString(Item, "title", Session->Title) &&
+        MdoApiValueSetUInt(Item, "event_id", Feedback->EventId) &&
+        MdoApiValueSetString(Item, "value", Feedback->Good ? "good" : "bad") &&
+        MdoApiValueSetInt(Item, "occurred_at",
+            MdoFeedbackOccurredAt(Session->ProjectId, Session->Id,
+                Feedback->EventId));
+    if ( !Ok ) { xrtValueRelease(Item); return NULL; }
+    return Item;
+}
+
+bool MdoApiFeedbackListRoute(MdoApiContext* Context)
+{
+    MdoSessionCatalog* Catalog;
+    MdoSessionInfo Session;
+    MdoFeedbackItem Feedback[MDO_FEEDBACK_MAX_ITEMS];
+    xwork_error Error;
+    xvalue* Data = NULL;
+    xvalue* Array = NULL;
+    uint64 ExpectedGeneration;
+    uint64 AfterEventId;
+    uint64 Generation;
+    size_t SessionIndex;
+    size_t TotalSessions;
+    size_t Scanned = 0u;
+    size_t Emitted = 0u;
+    char Cursor[96] = "";
+    bool Ok = true;
+
+    if ( !MdoFeedbackListCursor(Context->Target.Query,
+            &ExpectedGeneration, &SessionIndex, &AfterEventId) )
+        return MdoApiReplyError(Context, 400u, "invalid_query",
+            "Expected cursor=generation.session_index.after_event_id", NULL);
+    memset(&Error, 0, sizeof(Error));
+    Catalog = MdoSessionCatalogSnapshot(&Error);
+    if ( Catalog == NULL ) return MdoApiReplyError(Context, 503u,
+        "feedback_unavailable", "Session catalog could not be read", NULL);
+    Generation = MdoSessionCatalogGeneration(Catalog);
+    TotalSessions = MdoSessionCatalogCount(Catalog);
+    if ( SessionIndex > TotalSessions ||
+         (Context->Target.Query.Size != 0u &&
+          ExpectedGeneration != Generation) ) {
+        MdoSessionCatalogRelease(Catalog);
+        return MdoApiReplyError(Context, 409u, "feedback_cursor_stale",
+            "Session catalog changed; restart feedback listing", NULL);
+    }
+    Array = xrtValueArray();
+    Ok = Array != NULL;
+    while ( Ok && SessionIndex < TotalSessions &&
+            Scanned < MDO_FEEDBACK_SCAN_LIMIT &&
+            Emitted < MDO_FEEDBACK_LIST_LIMIT ) {
+        char Path[MDO_SESSION_PATH_CAPACITY];
+        size_t Count = 0u;
+        size_t Index;
+        memset(&Session, 0, sizeof(Session));
+        Session.Size = sizeof(Session);
+        if ( !MdoSessionCatalogAt(Catalog, SessionIndex, &Session) ||
+             !MdoFeedbackPath(Path, Session.ProjectId, Session.Id) ||
+             !MdoApiFeedbackReconcile(Session.ProjectId, Session.Id) ) {
+            Ok = false;
+            break;
+        }
+        xrtMutexLock(g_MdoFeedbackLock);
+        Ok = MdoFeedbackRead(Path, Feedback, &Count);
+        xrtMutexUnlock(g_MdoFeedbackLock);
+        if ( !Ok ) break;
+        qsort(Feedback, Count, sizeof(Feedback[0]), MdoFeedbackCompareEventId);
+        for ( Index = 0u; Ok && Index < Count; ++Index ) {
+            xvalue* Item;
+            if ( Feedback[Index].EventId <= AfterEventId ) continue;
+            Item = MdoFeedbackListItem(&Session, &Feedback[Index]);
+            Ok = Item != NULL && MdoApiValueAppendTake(Array, &Item);
+            xrtValueRelease(Item);
+            if ( !Ok ) break;
+            ++Emitted;
+            if ( Emitted == MDO_FEEDBACK_LIST_LIMIT ) {
+                AfterEventId = Feedback[Index].EventId;
+                break;
+            }
+        }
+        ++Scanned;
+        if ( Emitted == MDO_FEEDBACK_LIST_LIMIT && Index + 1u < Count )
+            break;
+        ++SessionIndex;
+        AfterEventId = 0u;
+    }
+    if ( Ok && SessionIndex < TotalSessions ) {
+        int Written = snprintf(Cursor, sizeof(Cursor), "%llu.%llu.%llu",
+            (unsigned long long)Generation,
+            (unsigned long long)SessionIndex,
+            (unsigned long long)AfterEventId);
+        Ok = Written > 0 && (size_t)Written < sizeof(Cursor);
+    }
+    Data = Ok ? xrtValueObject() : NULL;
+    Ok = Ok && Data != NULL &&
+        MdoApiValueSetUInt(Data, "generation", Generation) &&
+        MdoApiValueSetUInt(Data, "scanned_sessions", Scanned) &&
+        MdoApiValueSetUInt(Data, "catalog_diagnostics",
+            MdoSessionCatalogDiagnosticCount(Catalog)) &&
+        MdoApiValueSetString(Data, "next_cursor", Cursor) &&
+        MdoApiValueSetTake(Data, "items", &Array);
+    xrtValueRelease(Array);
+    MdoSessionCatalogRelease(Catalog);
+    if ( !Ok ) {
+        xrtValueRelease(Data);
+        return MdoApiReplyError(Context, 503u, "feedback_unavailable",
+            "Feedback listing could not be read", NULL);
+    }
+    return MdoApiReplySuccessTake(Context, 200u, Data, NULL);
 }
 
 bool MdoApiFeedbackRoute(MdoApiContext* Context)

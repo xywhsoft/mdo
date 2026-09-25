@@ -1105,6 +1105,15 @@ select:focus-visible,
 .resource-card { padding: 13px; border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--surface); }
 .resource-card h3 { margin: 0; font-size: 13px; }
 .resource-card p { margin: 5px 0 0; color: var(--muted); font-size: 11px; }
+.feedback-toolbar, .feedback-card-heading { display: flex; align-items: center; gap: 10px; }
+.feedback-toolbar { flex-wrap: wrap; padding-top: 18px; color: var(--muted); font-size: 12px; }
+.feedback-list { display: grid; gap: 10px; padding-top: 14px; }
+.feedback-card-heading { justify-content: space-between; }
+.feedback-card-heading h3 { min-width: 0; overflow-wrap: anywhere; }
+.feedback-card p { overflow-wrap: anywhere; }
+.feedback-card .secondary-button { margin-top: 10px; }
+.feedback-vote { color: var(--accent); font-size: 12px; font-weight: 650; }
+.feedback-vote.bad { color: var(--danger); }
 .project-panel-toolbar { display: flex; flex-wrap: wrap; gap: 8px; padding-top: 18px; }
 .project-settings-list { display: grid; gap: 10px; padding-top: 14px; }
 .project-settings-card { overflow-wrap: anywhere; }

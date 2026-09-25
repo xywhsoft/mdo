@@ -83,6 +83,7 @@ bool MdoApiMemoryCollectionRoute(MdoApiContext* pContext);
 bool MdoApiMemoryEntryRoute(MdoApiContext* pContext);
 bool MdoApiMemoryOpenDirectoryRoute(MdoApiContext* pContext);
 bool MdoApiSessionsRoute(MdoApiContext* pContext);
+bool MdoApiFeedbackListRoute(MdoApiContext* pContext);
 bool MdoApiRunsRoute(MdoApiContext* pContext);
 bool MdoApiSchedulesRoute(MdoApiContext* pContext);
 bool MdoApiPermissionsRoute(MdoApiContext* pContext);

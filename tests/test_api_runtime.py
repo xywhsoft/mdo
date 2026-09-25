@@ -607,6 +607,9 @@ def run_probe(host: Path) -> None:
                 assert model_config["default_model"] == "ling-3.0-tiny", model_config
                 assert model_config["items"][0]["editable"] is False, model_config
                 assert headers["etag"].startswith('"mdo-config-'), headers
+                status, _, body = request(port, "GET", "/api/v1/feedback")
+                assert status == 200 and json.loads(body)["data"]["items"] == [], (
+                    status, body)
                 assert not home.exists(), home
 
                 status, headers, body = request(
@@ -2287,6 +2290,32 @@ def run_probe(host: Path) -> None:
                 }
                 assert json.loads(request(port, "GET", feedback_path)[2])[
                     "data"]["items"][0]["value"] == "good"
+                status, headers, body = request(port, "GET", "/api/v1/feedback")
+                listed_feedback = json.loads(body)["data"]
+                assert status == 200 and listed_feedback["next_cursor"] == "", (
+                    status, body)
+                assert any(item["project_id"] == "api-project" and
+                           item["session_id"] == session_id and
+                           item["event_id"] == done_id and
+                           item["value"] == "good" and
+                           item["occurred_at"] > 0
+                           for item in listed_feedback["items"]), body
+                cursor = f'{listed_feedback["generation"]}.0.0'
+                status, _, body = request(port, "GET",
+                    f"/api/v1/feedback?cursor={cursor}")
+                assert status == 200 and json.loads(body)["data"]["items"], (
+                    status, body)
+                assert request(port, "HEAD", "/api/v1/feedback")[0] == 200
+                assert request(port, "OPTIONS", "/api/v1/feedback")[1][
+                    "allow"] == "GET, HEAD, OPTIONS"
+                status, _, body = request(port, "GET",
+                    "/api/v1/feedback?cursor=bad")
+                assert status == 400 and json.loads(body)["error"][
+                    "code"] == "invalid_query", (status, body)
+                status, _, body = request(port, "GET",
+                    "/api/v1/feedback?cursor=999.0.0")
+                assert status == 409 and json.loads(body)["error"][
+                    "code"] == "feedback_cursor_stale", (status, body)
                 status, _, body = request(
                     port, "PUT", feedback_path,
                     body=json.dumps({"event_id": done_id,
@@ -2294,6 +2323,9 @@ def run_probe(host: Path) -> None:
                     headers={"Content-Type": "application/json"})
                 assert status == 200 and json.loads(body)["data"]["items"] == [], (
                     status, body)
+                assert not any(item["session_id"] == session_id for item in
+                    json.loads(request(port, "GET", "/api/v1/feedback")[2])[
+                        "data"]["items"])
                 status, _, body = request(
                     port, "PUT", feedback_path, body=feedback_body,
                     headers={"Content-Type": "application/json"})

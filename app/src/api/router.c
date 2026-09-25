@@ -64,6 +64,8 @@ static const MdoApiRoute g_MdoApiRoutes[] = {
     { "/api/v1/sessions",
       XHTTP_METHOD_GET | XHTTP_METHOD_HEAD | XHTTP_METHOD_POST,
       "GET, HEAD, POST, OPTIONS", MdoApiSessionsRoute },
+    { "/api/v1/feedback", XHTTP_METHOD_GET | XHTTP_METHOD_HEAD,
+      "GET, HEAD, OPTIONS", MdoApiFeedbackListRoute },
     { "/api/v1/draft",
       XHTTP_METHOD_GET | XHTTP_METHOD_HEAD | XHTTP_METHOD_PUT,
       "GET, HEAD, PUT, OPTIONS", MdoApiDraftRoute },

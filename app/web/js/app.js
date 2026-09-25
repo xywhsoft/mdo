@@ -48,6 +48,7 @@ import { createSettingsView } from "./features/settings/settings-view.js";
 import { createSchedulePanel } from "./features/settings/schedule-panel.js";
 import { createProjectPanel } from "./features/settings/project-panel.js";
 import { createResourcePanels } from "./features/settings/resource-panels.js";
+import { createFeedbackPanel } from "./features/settings/feedback-panel.js";
 import { createKeyboardShortcuts } from "./features/shell/keyboard-shortcuts.js";
 import { createRunNotifications } from "./features/shell/run-notifications.js";
 import { startWorkspaceNavigation } from "./features/shell/workspace-startup.js";
@@ -462,6 +463,9 @@ export async function boot() {
     panel: $('[data-settings-panel="schedules"]'),
     projectsStore, agentsStore, modelsStore,
   });
+  const feedbackPanel = createFeedbackPanel({
+    panel: $('[data-settings-panel="feedback"]'), navigation,
+  });
   createResourcePanels({
     modelsStore,
     agentsStore,
@@ -741,10 +745,12 @@ export async function boot() {
       settingsView.selectSection(settingsSection);
       const standalonePage = !["general", "agent", "web"].includes(settingsSection);
       $("#settings-title").textContent = settingsSection === "projects"
-        ? "项目" : settingsSection === "schedules" ? "计划任务" : "设置";
+        ? "项目" : settingsSection === "schedules" ? "计划任务"
+          : settingsSection === "feedback" ? "反馈" : "设置";
       $("#settings-revision").hidden = standalonePage;
       $("#settings-actions").hidden = standalonePage;
       if (settingsSection === "schedules") void schedulePanel.refresh();
+      if (settingsSection === "feedback") void feedbackPanel.refresh();
       closeDrawers();
       setDrawer("inspector", false, { persist: false });
       if (!settingsStore.get().data) await loadSettings();
