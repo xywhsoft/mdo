@@ -311,6 +311,17 @@ function foldableNode(item, openState) {
     attrs: { "data-kind": item.kind, "data-state": item.state } }, [details]);
 }
 
+function commandButton(label, description, actionRef, handlers, sessionKey, action) {
+  const button = element("button", { text: label, attrs: {
+    type: "button", "aria-label": description,
+    "data-timeline-action": actionRef,
+    "data-timeline-command": "",
+    "aria-disabled": String(handlers.isBusy(sessionKey)),
+  } });
+  button.addEventListener("click", () => handlers.runAction(sessionKey, action));
+  return button;
+}
+
 function timelineNode(item, handlers, feedback, projectId, sessionId, openState) {
   if (item.kind === "reasoning" || item.kind === "tool")
     return foldableNode(item, openState);
@@ -332,6 +343,7 @@ function timelineNode(item, handlers, feedback, projectId, sessionId, openState)
   }
   else body.textContent = item.text;
   const children = [header, body];
+  const sessionKey = `${projectId ?? ""}/${sessionId ?? ""}`;
   if (item.kind === "user" && projectId && sessionId &&
       item.attachments?.length) {
     const images = element("div", { className: "timeline-images" });
@@ -364,58 +376,33 @@ function timelineNode(item, handlers, feedback, projectId, sessionId, openState)
     if (item.kind === "user" &&
         Number.isSafeInteger(item.userMessageSequence) &&
         item.userMessageSequence > 0 && !item.textTruncated) {
-      const edit = element("button", { text: "编辑", attrs: { type: "button", "aria-label": "编辑此消息并重新发送",
-        "data-timeline-action": `${item.key}/edit` } });
-      edit.addEventListener("click", async () => {
-        edit.disabled = true;
-        try { await handlers.onEdit(item.userMessageSequence, item.text, item.attachments ?? []); }
-        catch (error) { toast(errorMessage(error), "error"); }
-        finally { edit.disabled = false; }
-      });
+      const edit = commandButton("编辑", "编辑此消息并重新发送", `${item.key}/edit`,
+        handlers, sessionKey, () => handlers.onEdit(
+          item.userMessageSequence, item.text, item.attachments ?? []));
       actions.append(edit);
     }
     if (item.kind === "assistant") {
       if ("forkThroughSequence" in item) {
-        const fork = element("button", { text: "分叉", attrs: { type: "button", "aria-label": "从此回复分叉会话",
-          "data-timeline-action": `${item.key}/fork` } });
-        fork.addEventListener("click", async () => {
-          fork.disabled = true;
-          try { await handlers.onFork(item.forkThroughSequence); }
-          catch (error) { toast(errorMessage(error), "error"); }
-          finally { fork.disabled = false; }
-        });
+        const fork = commandButton("分叉", "从此回复分叉会话", `${item.key}/fork`,
+          handlers, sessionKey, () => handlers.onFork(item.forkThroughSequence));
         actions.append(fork);
       }
       const retryPrompt = item.retryPrompt;
       if (retryPrompt && Number.isSafeInteger(retryPrompt.sequence) &&
           retryPrompt.sequence > 0 && (retryPrompt.text || retryPrompt.attachments?.length) &&
           !retryPrompt.truncated) {
-        const retry = element("button", { text: "重试", attrs: { type: "button", "aria-label": "重试此回合",
-          "data-timeline-action": `${item.key}/retry` } });
-        retry.addEventListener("click", async () => {
-          retry.disabled = true;
-          try { await handlers.onRetry(retryPrompt.sequence, retryPrompt.text, retryPrompt.attachments ?? []); }
-          catch (error) { toast(errorMessage(error), "error"); }
-          finally { retry.disabled = false; }
-        });
+        const retry = commandButton("重试", "重试此回合", `${item.key}/retry`,
+          handlers, sessionKey, () => handlers.onRetry(
+            retryPrompt.sequence, retryPrompt.text, retryPrompt.attachments ?? []));
         actions.append(retry);
       }
       if (item.feedbackEventId && item.state === "done") {
         for (const [value, label] of [["good", "点赞"], ["bad", "点踩"]]) {
-          const button = element("button", {
-            text: label,
-            attrs: { type: "button", "aria-label": label,
-              "aria-pressed": String(feedback === value),
-              "data-timeline-action": `${item.key}/feedback-${value}` },
-          });
-          button.addEventListener("click", async () => {
-            button.disabled = true;
-            try {
-              await handlers.onFeedback(item.feedbackEventId,
-                feedback === value ? "none" : value);
-            } catch (error) { toast(errorMessage(error), "error"); }
-            finally { button.disabled = false; }
-          });
+          const button = commandButton(label, label,
+            `${item.key}/feedback-${value}`, handlers, sessionKey,
+            () => handlers.onFeedback(item.feedbackEventId,
+              feedback === value ? "none" : value));
+          button.setAttribute("aria-pressed", String(feedback === value));
           actions.append(button);
         }
       }
@@ -434,7 +421,19 @@ function timelineNode(item, handlers, feedback, projectId, sessionId, openState)
 }
 
 export function createTimelineView({ container, welcome, toBottom, store, feedbackStore, onFork, onFeedback, onEdit, onRetry, onSearchCount }) {
-  const handlers = { onFork, onFeedback, onEdit, onRetry };
+  const busySessions = new Set();
+  const handlers = {
+    onFork, onFeedback, onEdit, onRetry,
+    isBusy: (key) => busySessions.has(key),
+    async runAction(key, action) {
+      if (busySessions.has(key)) return;
+      busySessions.add(key);
+      syncBusy();
+      try { await action(); }
+      catch (error) { toast(errorMessage(error), "error"); }
+      finally { busySessions.delete(key); syncBusy(); }
+    },
+  };
   let pendingState = store.get();
   let frame = 0;
   let followTail = true;
@@ -442,6 +441,12 @@ export function createTimelineView({ container, welcome, toBottom, store, feedba
   let renderedSession = "";
   const expanded = new Map();
   const scroller = container.closest(".conversation");
+
+  function syncBusy() {
+    const busy = busySessions.has(renderedSession);
+    for (const button of container.querySelectorAll("button[data-timeline-command]"))
+      button.setAttribute("aria-disabled", String(busy));
+  }
 
   function updateBottomButton() {
     toBottom.hidden = scroller.scrollHeight - scroller.scrollTop -

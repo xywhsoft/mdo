@@ -594,7 +594,7 @@ select:focus-visible,
 .timeline-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; min-height: 28px; margin-top: 6px; }
 .timeline-actions button { min-height: 26px; padding: 3px 7px; border: 0; border-radius: 6px; background: transparent; color: var(--muted); font-size: 11px; cursor: pointer; }
 .timeline-actions button:hover, .timeline-actions button:focus-visible { background: var(--surface-hover); color: var(--ink); }
-.timeline-actions button:disabled { opacity: .55; cursor: wait; }
+.timeline-actions button:disabled, .timeline-actions button[aria-disabled="true"] { opacity: .55; cursor: wait; }
 .timeline-actions button[aria-pressed="true"] { background: var(--surface-hover); color: var(--ink); font-weight: 700; }
 .timeline-stats { margin-left: auto; color: var(--faint); font-size: 10px; white-space: nowrap; }
 @media (hover: hover) {
