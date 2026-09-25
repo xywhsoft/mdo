@@ -1067,7 +1067,7 @@ select:focus-visible,
 .settings-actions button:disabled { opacity: .42; cursor: default; }
 .restore-confirm { position: absolute; right: 18px; bottom: calc(100% + 8px); max-width: 520px; padding: 12px; border: 1px solid var(--border-strong); border-radius: var(--radius-md); background: var(--surface-raised); box-shadow: var(--shadow-dialog); font-size: 11px; }
 .resource-section > div:last-child { display: grid; gap: 10px; padding-top: 18px; }
-.project-section { width: min(820px, calc(100% - 40px)); margin: 0 auto; padding: 34px 0 48px; }
+.settings-content > .resource-section { width: min(820px, calc(100% - 40px)); margin: 0 auto; padding: 34px 0 48px; }
 .schedule-section { width: min(820px, calc(100% - 40px)); margin: 0 auto; padding: 34px 0 48px; }
 .schedule-heading, .schedule-editor-heading { display: flex; align-items: center; justify-content: space-between; gap: 14px; }
 .schedule-heading .secondary-button { flex: 0 0 auto; }
@@ -1333,6 +1333,7 @@ select:focus-visible,
   .settings-navigation button { width: auto; min-width: max-content; min-height: 40px; }
   .settings-content { overflow: visible; }
   .settings-content form { width: calc(100% - 28px); padding-top: 22px; }
+  .settings-content > .resource-section { width: calc(100% - 28px); padding-top: 22px; }
   .schedule-section { width: calc(100% - 28px); padding-top: 22px; }
   .schedule-form-grid { grid-template-columns: 1fr; }
   .schedule-section button,
