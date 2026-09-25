@@ -1,14 +1,17 @@
+#include <stdio.h>
 #include <string.h>
 
 #include "internal.h"
 #include "../../include/mdo/bootstrap.h"
 #include "../../include/mdo/config.h"
 #include "../../include/mdo/sessions.h"
+#include "../../include/mdo/home.h"
 #include "../../include/mdo/settings.h"
 
 #define MDO_API_LIST_LIMIT 100u
 #define MDO_API_ARTIFACT_DEFAULT_BYTES (64u * 1024u)
 #define MDO_API_ARTIFACT_MAX_BYTES (64u * 1024u)
+#define MDO_API_SESSION_ARTIFACT_MAX_FILE (8u * 1024u * 1024u)
 
 static bool MdoApiStateReply(MdoApiContext* Context, xvalue* Data)
 {
@@ -422,6 +425,198 @@ bool MdoApiArtifactRoute(MdoApiContext* Context)
         MdoApiValueSetString(Data, "data", Encoded);
     xrtFree(Encoded);
     xworkArtifactChunkUnit(&Chunk);
+    if ( !Ok ) { xrtValueRelease(Data); Data = NULL; }
+    if ( Data == NULL ) return MdoApiReplyError(Context, 500u,
+        "artifact_read_failed", "The artifact chunk could not be encoded",
+        NULL);
+    return MdoApiReplySuccessTake(Context, 200u, Data, NULL);
+}
+
+/* The journal is the durable authority for a conversation artifact. xwork's
+ * process-local artifact registry cannot identify it after an exe restart. */
+static bool MdoApiSessionArtifactPath(char Output[MDO_SESSION_PATH_CAPACITY],
+    const char* Project, const char* Session,
+    const MdoSessionEventInfo* Event)
+{
+    const char* Saved = Event->ArtifactPath;
+    size_t Length;
+    size_t FileStart;
+    size_t RunStart;
+    size_t FileLength;
+    size_t Index;
+    char Run[25];
+    char Prefix[22];
+    int Written;
+    if ( Saved == NULL || Event->RunId == 0u || Event->ArtifactId == 0u )
+        return false;
+    Length = strlen(Saved);
+    FileStart = Length;
+    while ( FileStart != 0u && Saved[FileStart - 1u] != '/' &&
+            Saved[FileStart - 1u] != '\\' ) --FileStart;
+    if ( FileStart == 0u || FileStart == Length ) return false;
+    RunStart = FileStart - 1u;
+    while ( RunStart != 0u && Saved[RunStart - 1u] != '/' &&
+            Saved[RunStart - 1u] != '\\' ) --RunStart;
+    if ( RunStart == FileStart - 1u ) return false;
+    snprintf(Run, sizeof(Run), "run-%020llu",
+        (unsigned long long)Event->RunId);
+    if ( FileStart - 1u - RunStart != 24u ||
+         memcmp(Saved + RunStart, Run, 24u) != 0 ) return false;
+    snprintf(Prefix, sizeof(Prefix), "%020llu-",
+        (unsigned long long)Event->ArtifactId);
+    FileLength = Length - FileStart;
+    if ( FileLength < 26u || FileLength > 153u ||
+         memcmp(Saved + FileStart, Prefix, 21u) != 0 ||
+         memcmp(Saved + Length - 4u, ".txt", 4u) != 0 ) return false;
+    for ( Index = FileStart + 21u; Index < Length - 4u; ++Index ) {
+        unsigned char Ch = (unsigned char)Saved[Index];
+        if ( (Ch >= 'a' && Ch <= 'z') ||
+             (Ch >= 'A' && Ch <= 'Z') ||
+             (Ch >= '0' && Ch <= '9') || Ch == '-' || Ch == '_' ) continue;
+        return false;
+    }
+    Written = snprintf(Output, MDO_SESSION_PATH_CAPACITY,
+        "sessions/%s/%s/artifacts/%s/%s", Project, Session, Run,
+        Saved + FileStart);
+    return Written > 0 && (size_t)Written < MDO_SESSION_PATH_CAPACITY;
+}
+
+static bool MdoApiSessionArtifactRead(const char* Path,
+    uint8** Bytes, size_t* Size)
+{
+    xfile File = MdoHomeOpenRead(Path);
+    xfileinfo Info;
+    bool Ok = false;
+    *Bytes = NULL;
+    *Size = 0u;
+    if ( File == NULL ) return false;
+    if ( !xrtFileStat(File, &Info) ||
+         (Info.Available & XFILE_INFO_SIZE) == 0u ||
+         Info.Type != XFILE_TYPE_FILE ||
+         Info.Size > MDO_API_SESSION_ARTIFACT_MAX_FILE ) goto done;
+    *Size = (size_t)Info.Size;
+    *Bytes = (uint8*)xrtMalloc(*Size ? *Size : 1u);
+    if ( *Bytes == NULL ||
+         (*Size && !xrtReadFull(File, *Bytes, *Size, NULL)) ) goto done;
+    Ok = true;
+done:
+    if ( !xrtClose(File) ) Ok = false;
+    if ( !Ok ) { xrtFree(*Bytes); *Bytes = NULL; *Size = 0u; }
+    return Ok;
+}
+
+static bool MdoApiStateCaptureId(MdoApiContext* Context, size_t Index,
+    char* Output, size_t Capacity)
+{
+    xstrview Value;
+    size_t Position;
+    if ( Context == NULL || Index >= Context->ParamCount || Capacity == 0u )
+        return false;
+    Value = Context->Params[Index];
+    if ( Value.Size == 0u || Value.Size >= Capacity ) return false;
+    for ( Position = 0u; Position < Value.Size; ++Position ) {
+        unsigned char Ch = (unsigned char)Value.Data[Position];
+        if ( (Ch >= 'a' && Ch <= 'z') ||
+             (Ch >= 'A' && Ch <= 'Z') ||
+             (Ch >= '0' && Ch <= '9') || Ch == '-' || Ch == '_' ||
+             Ch == '.' ) continue;
+        return false;
+    }
+    memcpy(Output, Value.Data, Value.Size);
+    Output[Value.Size] = '\0';
+    return true;
+}
+
+bool MdoApiSessionArtifactRoute(MdoApiContext* Context)
+{
+    char Project[MDO_PROJECT_ID_CAPACITY];
+    char Session[MDO_SESSION_ID_CAPACITY];
+    char Path[MDO_SESSION_PATH_CAPACITY];
+    MdoSession* Handle;
+    MdoSessionEventSnapshot* Snapshot;
+    MdoSessionEventInfo Event;
+    xwork_error Error;
+    uint64 EventId;
+    uint64 Offset;
+    size_t Limit;
+    uint8* Bytes = NULL;
+    size_t Size = 0u;
+    size_t Count;
+    uint8 Digest[32];
+    char Hex[65];
+    static const char Digits[] = "0123456789abcdef";
+    size_t Index;
+    str Encoded;
+    xvalue* Data;
+    bool Ok;
+    if ( Context->ParamCount != 3u ||
+         !MdoApiStateCaptureId(Context, 0u, Project, sizeof(Project)) ||
+         !MdoApiStateCaptureId(Context, 1u, Session, sizeof(Session)) ||
+         !MdoApiArtifactUnsigned(Context->Params[2], UINT64_MAX,
+            &EventId) || EventId == 0u )
+        return MdoApiReplyError(Context, 400u, "invalid_path",
+            "Project, session or event identifier is invalid", NULL);
+    if ( !MdoApiArtifactQuery(Context->Target.Query, &Offset, &Limit) )
+        return MdoApiReplyError(Context, 400u, "invalid_query",
+            "Only unique numeric offset and bounded limit parameters are accepted",
+            NULL);
+    memset(&Error, 0, sizeof(Error));
+    Handle = MdoSessionLoad(Project, Session, &Error);
+    if ( Handle == NULL ) return MdoApiReplyError(Context, 404u,
+        "session_not_found", "The requested session does not exist", NULL);
+    MdoSessionRelease(Handle);
+    Snapshot = MdoSessionEventReplay(Project, Session, EventId - 1u,
+        1u, &Error);
+    if ( Snapshot == NULL ) return MdoApiReplyError(Context, 409u,
+        "session_events_unavailable", "The session journal cannot be read", NULL);
+    memset(&Event, 0, sizeof(Event)); Event.Size = sizeof(Event);
+    Ok = MdoSessionEventSnapshotCount(Snapshot) == 1u &&
+         MdoSessionEventSnapshotAt(Snapshot, 0u, &Event) &&
+         Event.EventId == EventId &&
+         (Event.Kind == XWORK_EVENT_TOOL_DONE ||
+          Event.Kind == XWORK_EVENT_ARTIFACT_CREATED) &&
+         MdoApiSessionArtifactPath(Path, Project, Session, &Event);
+    MdoSessionEventSnapshotRelease(Snapshot);
+    if ( !Ok ) return MdoApiReplyError(Context, 404u,
+        "artifact_not_found", "The requested session artifact does not exist", NULL);
+    if ( !MdoApiSessionArtifactRead(Path, &Bytes, &Size) )
+        return MdoApiReplyError(Context, 409u, "artifact_read_failed",
+            "The session artifact is unavailable or changed", NULL);
+    if ( Offset > Size ) {
+        xrtFree(Bytes);
+        return MdoApiReplyError(Context, 416u,
+            "artifact_offset_out_of_range",
+            "The artifact offset exceeds its size", NULL);
+    }
+    Count = Size - (size_t)Offset;
+    if ( Count > Limit ) Count = Limit;
+    if ( !xrtSha256(Bytes, Size, Digest) ) {
+        xrtFree(Bytes);
+        return MdoApiReplyError(Context, 500u, "artifact_hash_failed",
+            "The artifact could not be hashed", NULL);
+    }
+    for ( Index = 0u; Index < sizeof(Digest); ++Index ) {
+        Hex[Index * 2u] = Digits[Digest[Index] >> 4];
+        Hex[Index * 2u + 1u] = Digits[Digest[Index] & 15u];
+    }
+    Hex[64] = '\0';
+    Encoded = xrtBase64EncodeNew(Bytes + (size_t)Offset, Count, NULL);
+    xrtFree(Bytes);
+    Data = xrtValueObject();
+    Ok = Encoded != NULL && Data != NULL &&
+        MdoApiValueSetUInt(Data, "event_id", EventId) &&
+        MdoApiValueSetUInt(Data, "artifact_id", Event.ArtifactId) &&
+        MdoApiValueSetString(Data, "encoding", "base64") &&
+        MdoApiValueSetUInt(Data, "offset", Offset) &&
+        MdoApiValueSetUInt(Data, "next", Offset + Count) &&
+        MdoApiValueSetUInt(Data, "total_size", Size) &&
+        MdoApiValueSetUInt(Data, "bytes", Count) &&
+        MdoApiValueSetBool(Data, "eof", Offset + Count == Size) &&
+        MdoApiValueSetString(Data, "sha256", Hex) &&
+        MdoApiValueSetString(Data, "media_type",
+            "text/plain; charset=utf-8") &&
+        MdoApiValueSetString(Data, "data", Encoded);
+    xrtFree(Encoded);
     if ( !Ok ) { xrtValueRelease(Data); Data = NULL; }
     if ( Data == NULL ) return MdoApiReplyError(Context, 500u,
         "artifact_read_failed", "The artifact chunk could not be encoded",

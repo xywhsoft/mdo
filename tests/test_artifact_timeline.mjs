@@ -14,6 +14,7 @@ test("tool results expose their artifact even without a separate artifact event"
   assert.equal(items.length, 1);
   assert.equal(items[0].kind, "tool");
   assert.equal(items[0].artifactId, 3);
+  assert.equal(items[0].artifactEventId, 2);
   assert.equal(items[0].artifactPath, "artifacts/run-7/3-read.txt");
 });
 
@@ -23,4 +24,5 @@ test("unpaired tool results still expose their artifact", () => {
       artifact_id: 4, success: true, time: 1000000 },
   ]);
   assert.equal(item.artifactId, 4);
+  assert.equal(item.artifactEventId, 9);
 });

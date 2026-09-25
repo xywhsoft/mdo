@@ -149,6 +149,17 @@ fetches a resource snapshot, replays after its last cursor, and backs off while
 the cursor is unchanged. Unknown event kinds remain ordered records and must
 not stop replay.
 
+`GET /projects/{project}/sessions/{session}/artifacts/{event-id}` reads a
+tool-output artifact from that session's durable UI journal. The event must be
+`tool_done` or `artifact_created` with a valid artifact ID and file name. The
+server reconstructs the path under the current portable Home, opens it without
+following symlinks, and rejects files over 8 MiB. `offset` defaults to zero;
+`limit` defaults to and cannot exceed 64 KiB. The response includes Base64
+bytes, total size, `eof`, media type, and a SHA-256 digest. Unlike the
+process-local `/artifacts/{artifact}` registry, this session-scoped route works
+after an exe restart or Home move. Missing journal events and artifacts return
+`404`; an offset past the file returns `416`.
+
 `GET /projects/{project}/sessions/{session}/todo` returns the most recent
 successful main-Agent `mdo.todo` tool snapshot as `schema_version`, `event_id`,
 and an `items` array of `{text, done}` objects. A missing sidecar returns an

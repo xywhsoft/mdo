@@ -133,6 +133,7 @@ export function eventsToTimeline(events, historyLost = false) {
           tool.durationSeconds = Math.max(0,
             (Number(event.time) - Number(tool.time)) / 1e6);
           tool.artifactId = event.artifact_id;
+          tool.artifactEventId = event.event_id;
           tool.artifactPath = event.artifact_path;
         } else {
           const outputText = event.text || (event.success
@@ -142,6 +143,7 @@ export function eventsToTimeline(events, historyLost = false) {
             role: event.tool_name || t("timeline.tool", {}, "工具"), text: outputText,
             inputText: "", outputText,
             artifactId: event.artifact_id, artifactPath: event.artifact_path,
+            artifactEventId: event.event_id,
             state: event.success ? "done" : "failed", time: event.time });
         }
         break;
@@ -159,6 +161,7 @@ export function eventsToTimeline(events, historyLost = false) {
           role: t("timeline.artifact", {}, "产物"),
           text: event.artifact_path || event.text || t("timeline.artifactCreated", {}, "已创建产物"),
           artifactId: event.artifact_id,
+          artifactEventId: event.event_id,
           state: "done", time: event.time });
         break;
       case "compaction_start":
@@ -303,7 +306,7 @@ function foldSection(label, value, copy = false, actionRef = "") {
   ]);
 }
 
-function foldableNode(item, openState) {
+function foldableNode(item, openState, projectId, sessionId) {
   const running = item.state === "running";
   const status = running ? t("timeline.running", {}, "运行中")
     : item.state === "failed" ? t("timeline.failed", {}, "失败")
@@ -350,7 +353,8 @@ function foldableNode(item, openState) {
         body.append(foldSection(t("timeline.executingLabel", {}, "执行中"),
           item.text || t("timeline.executing", {}, "正在执行…")));
       if (item.artifactId) {
-        const preview = artifactPreviewNode(item.artifactId, `${item.key}/preview`);
+        const preview = artifactPreviewNode(projectId, sessionId,
+          item.artifactEventId, `${item.key}/preview`);
         if (preview) body.append(preview);
       }
     }
@@ -387,7 +391,7 @@ function commandButton(label, description, iconName, actionRef, handlers, sessio
 
 function timelineNode(item, handlers, feedback, projectId, sessionId, openState) {
   if (item.kind === "reasoning" || item.kind === "tool")
-    return foldableNode(item, openState);
+    return foldableNode(item, openState, projectId, sessionId);
   const time = timeNode(item.time);
   const header = element("div", { className: "timeline-item-header" }, [
     element("span", { className: "timeline-role", text: item.role }),
@@ -412,7 +416,8 @@ function timelineNode(item, handlers, feedback, projectId, sessionId, openState)
   else body.textContent = item.text;
   const children = [header, body];
   if (item.artifactId) {
-    const preview = artifactPreviewNode(item.artifactId, `${item.key}/preview`);
+    const preview = artifactPreviewNode(projectId, sessionId,
+      item.artifactEventId, `${item.key}/preview`);
     if (preview) children.push(preview);
   }
   const sessionKey = `${projectId ?? ""}/${sessionId ?? ""}`;
