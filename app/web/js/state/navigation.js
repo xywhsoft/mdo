@@ -2,7 +2,19 @@ import { resourceId } from "../api/client.js";
 
 const listeners = new Set();
 let current = Object.freeze({ view: "workspace", projectId: "", sessionId: "", settingsSection: "" });
-let lastWorkspace = Object.freeze({ projectId: "", sessionId: "" });
+
+function workspaceFromHistory() {
+  const saved = history.state?.mdoWorkspace;
+  if (!saved || typeof saved !== "object") return null;
+  try {
+    const projectId = saved.projectId ? resourceId(saved.projectId, "project") : "";
+    const sessionId = saved.sessionId ? resourceId(saved.sessionId, "session") : "";
+    return sessionId && !projectId ? null : { projectId, sessionId };
+  } catch { return null; }
+}
+
+let lastWorkspace = Object.freeze(workspaceFromHistory() ??
+  { projectId: "", sessionId: "" });
 
 function parseHash() {
   const settings = /^#\/settings\/([a-z][a-z0-9-]*)$/.exec(location.hash);
@@ -60,6 +72,11 @@ export const navigation = Object.freeze({
   },
   openSettings(section = "general") {
     location.hash = `#/settings/${resourceId(section, "settings section")}`;
+    // Hash navigation survives a refresh, but module state does not. Remember
+    // the workspace on this history entry so Close can return to its origin.
+    const state = history.state && typeof history.state === "object"
+      ? history.state : {};
+    history.replaceState({ ...state, mdoWorkspace: lastWorkspace }, "");
     publish();
   },
   backToWorkspace() {

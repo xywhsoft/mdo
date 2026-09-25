@@ -1224,6 +1224,12 @@ select:focus-visible,
   .timeline-item .timeline-actions button { opacity: 1; }
   .md-code-head button { min-height: 40px; padding: 0 6px; }
   .icon-button { width: 40px; height: 40px; }
+  .search-box, .search-box input { min-height: 40px; }
+  .session-list-controls select { min-height: 40px; }
+  .session-group-new, .session-group-manage,
+  .session-more { width: 40px; height: 40px; }
+  .session-item-row { grid-template-columns: minmax(0, 1fr) 40px; }
+  .session-menu button { min-height: 40px; }
   .model-config-layout { grid-template-columns: minmax(0, 1fr); }
   .model-config-list { max-height: 180px; }
   .model-form-grid { grid-template-columns: minmax(0, 1fr); }
@@ -1301,13 +1307,15 @@ select:focus-visible,
   .settings-layout { display: block; overflow: auto; }
   .settings-navigation { display: flex; min-height: 48px; overflow-x: auto; padding: 7px 10px; border-right: 0; border-bottom: 1px solid var(--border); }
   .settings-navigation p { display: none; }
-  .settings-navigation button { width: auto; min-width: max-content; }
+  .settings-navigation button { width: auto; min-width: max-content; min-height: 40px; }
   .settings-content { overflow: visible; }
   .settings-content form { width: calc(100% - 28px); padding-top: 22px; }
   .schedule-section { width: calc(100% - 28px); padding-top: 22px; }
   .schedule-form-grid { grid-template-columns: 1fr; }
   .setting-row { align-items: flex-start; flex-direction: column; gap: 10px; padding: 15px 0; }
   .setting-row select, .setting-row input { width: 100%; min-width: 0; }
+  .setting-row select, .setting-row input:not([type="checkbox"]),
+  .settings-actions button { min-height: 40px; }
   .setting-row input[type="number"] { width: 100%; }
   .settings-grid { grid-template-columns: 1fr; }
   .settings-actions { align-items: stretch; flex-direction: column; gap: 8px; padding: 9px 12px max(9px, env(safe-area-inset-bottom)); }
