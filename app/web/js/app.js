@@ -119,7 +119,9 @@ export async function boot() {
   let tasksTimer = 0;
   let runsTimer = 0;
   let approvalsTimer = 0;
-  let submitting = false;
+  const submissions = new Set();
+  let routeVersion = 0;
+  let routeSignature = "";
   let messageActionBusy = false;
   let interruptRequested = false;
   let themeToggleBusy = false;
@@ -130,6 +132,14 @@ export async function boot() {
   // A cancelled run can remain nonterminal through several polls. Avoid
   // repeating DELETE while its persisted priority queue item is still waiting.
   const priorityCancelAttempts = new Set();
+
+  function composerScope(route = navigation.get()) {
+    return `${route.projectId || "default"}/${route.sessionId || "@new"}`;
+  }
+
+  function submittingCurrent() {
+    return submissions.has(composerScope());
+  }
 
   const projectDialog = createProjectDialog({
     dialog: $("#project-dialog"), form: $("#project-form"),
@@ -195,7 +205,7 @@ export async function boot() {
     if (!session || session.project_id !== selected.projectId ||
         session.id !== selected.sessionId)
       throw new Error("请先选择会话");
-    if (activeRun || submitting || composerImages?.isUploading())
+    if (activeRun || submittingCurrent() || composerImages?.isUploading())
       throw new Error("请在当前运行结束后操作消息");
     if (promptQueue.peek(selected.projectId, selected.sessionId) ||
         prompt.value.trim() || composerAttachments.length)
@@ -478,9 +488,9 @@ export async function boot() {
     send.hidden = false;
     stop.hidden = !activeRun;
     prompt.disabled = !sessionWritable;
-    send.disabled = !sessionWritable || submitting ||
+    send.disabled = !sessionWritable || submittingCurrent() ||
       composerImages?.isUploading() || composerProfile.isBusy();
-    composerImages?.setWritable(sessionWritable && !submitting);
+    composerImages?.setWritable(sessionWritable && !submittingCurrent());
     composerProfile.setRunActive(Boolean(activeRun));
     send.setAttribute("aria-label", activeRun ? "加入待发送队列" : "发送任务");
     composerHint.textContent = activeRun
@@ -716,6 +726,11 @@ export async function boot() {
   }
 
   navigation.subscribe(async ({ view, projectId, sessionId, settingsSection }) => {
+    const nextSignature = `${view}/${projectId}/${sessionId}/${settingsSection}`;
+    if (nextSignature !== routeSignature) {
+      routeSignature = nextSignature;
+      routeVersion += 1;
+    }
     if (view === "settings") {
       if (!settingsActive) inspectorBeforeSettings = shell.dataset.inspector;
       settingsActive = true;
@@ -851,50 +866,77 @@ export async function boot() {
   }
 
   async function ensureSession(text, stageDraft = true) {
-    const selected = navigation.get();
-    if (selected.sessionId) return selected;
+    const origin = navigation.get();
+    const originVersion = routeVersion;
+    if (origin.sessionId) return origin;
     const title = text.trim().split(/\r?\n/, 1)[0].slice(0, 80) || "图片任务";
-    const session = await createSession({ project_id: selected.projectId || "default", title,
+    const session = await createSession({ project_id: origin.projectId || "default", title,
       ...composerProfile.selection() });
-    showActiveSessions();
     if (stageDraft)
       draftStore.edit(`${session.project_id}/${session.id}`, text, [], true);
-    navigation.select(session.project_id, session.id);
-    selectTimeline(session.project_id, session.id);
+    if (routeVersion === originVersion) {
+      showActiveSessions();
+      navigation.select(session.project_id, session.id);
+      selectTimeline(session.project_id, session.id);
+    }
     return { projectId: session.project_id, sessionId: session.id };
   }
 
   async function submitPrompt({ text, attachments = [], interrupt = false,
     fromComposer = true }) {
     fileMentions.hide();
-    if ((!text && !attachments.length) || submitting ||
+    if ((!text && !attachments.length) || submittingCurrent() ||
         composerImages.isUploading()) return;
+    const origin = navigation.get();
+    const originVersion = routeVersion;
     if (fromComposer && !attachments.length &&
         await slashCommands.consumeExact(text)) return;
+    if (routeVersion !== originVersion) return;
     if (composerProfile.isBusy()) {
       showComposerError(new Error("请等待会话配置更新完成"));
       return;
     }
     hideComposerError();
-    submitting = true;
-    send.disabled = true;
+    let submissionScope = composerScope(origin);
+    submissions.add(submissionScope);
+    setRun(activeRun);
     const originatingKey = selectedKey;
+    const originatingDraft = fromComposer && !originatingKey ? prompt.value : null;
+    const originatingRun = activeRun;
+    let selected = null;
+    let selectedVersion = originVersion;
+    const selectedIsCurrent = () => {
+      const current = navigation.get();
+      return routeVersion === selectedVersion && (!selected ||
+        (current.projectId === selected.projectId &&
+          current.sessionId === selected.sessionId));
+    };
     try {
-      const selected = await ensureSession(text, fromComposer);
-      if (activeRun) {
+      selected = await ensureSession(text, fromComposer);
+      selectedVersion = routeVersion;
+      const targetScope = `${selected.projectId}/${selected.sessionId}`;
+      if (targetScope !== submissionScope) {
+        submissions.delete(submissionScope);
+        submissionScope = targetScope;
+        submissions.add(submissionScope);
+        setRun(activeRun);
+      }
+      if (originatingRun) {
         if (!await promptQueue.enqueue(selected.projectId, selected.sessionId, text,
           { first: interrupt, priority: interrupt, attachments }))
           throw new Error("待发送队列已满（最多 20 条）");
         queueBlocked.delete(`${selected.projectId}/${selected.sessionId}`);
         if (fromComposer) {
-          prompt.value = "";
-          composerAttachments = [];
-          composerImages.clear();
           draftStore.clear(`${selected.projectId}/${selected.sessionId}`);
-          resizePrompt();
-          tokenMeter.refresh();
+          if (selectedIsCurrent()) {
+            prompt.value = "";
+            composerAttachments = [];
+            composerImages.clear();
+            resizePrompt();
+            tokenMeter.refresh();
+          }
         }
-        if (interrupt) {
+        if (interrupt && selectedIsCurrent()) {
           await maybeCancelPriorityRun();
         }
         return;
@@ -902,27 +944,35 @@ export async function boot() {
       await ensurePromptReady(selected.projectId, selected.sessionId);
       const run = await startRun(selected.projectId, selected.sessionId, text, attachments);
       if (fromComposer) {
-        prompt.value = "";
-        composerAttachments = [];
-        composerImages.clear();
         draftStore.clear(`${selected.projectId}/${selected.sessionId}`);
-        if (!originatingKey) draftStore.clear("");
-        resizePrompt();
-        tokenMeter.refresh();
+        if (originatingDraft !== null)
+          draftStore.clearIfMatches("", originatingDraft);
+        if (selectedIsCurrent()) {
+          prompt.value = "";
+          composerAttachments = [];
+          composerImages.clear();
+          resizePrompt();
+          tokenMeter.refresh();
+        }
       }
-      monitorRun(run);
-      await Promise.all([refreshSelectedTimeline(), loadTasks(), loadRuns(), loadRecovery()]);
+      if (selectedIsCurrent()) monitorRun(run);
+      await Promise.all([...(selectedIsCurrent() ? [refreshSelectedTimeline()] : []),
+        loadTasks(), loadRuns(), loadRecovery()]);
     } catch (error) {
-      if (!fromComposer && !prompt.value.trim() && !composerAttachments.length) {
-        prompt.value = text;
-        draftStore.edit(selectedKey, text, [], true);
-        resizePrompt();
-        tokenMeter.refresh();
+      if (selectedIsCurrent()) {
+        if (!fromComposer && !prompt.value.trim() && !composerAttachments.length) {
+          prompt.value = text;
+          draftStore.edit(selectedKey, text, [], true);
+          resizePrompt();
+          tokenMeter.refresh();
+        }
+        showComposerError(error);
+        prompt.focus();
+      } else {
+        toast(`后台任务未发出：${errorMessage(error)}`, "error");
       }
-      showComposerError(error);
-      prompt.focus();
     } finally {
-      submitting = false;
+      submissions.delete(submissionScope);
       setRun(activeRun);
     }
   }
@@ -974,7 +1024,8 @@ export async function boot() {
 
   for (const starter of document.querySelectorAll("[data-prompt]")) {
     starter.addEventListener("click", () => {
-      if (submitting || composerImages.isUploading() || composerProfile.isBusy()) return;
+      if (submittingCurrent() || composerImages.isUploading() ||
+          composerProfile.isBusy()) return;
       void submitPrompt({ text: starter.dataset.prompt, fromComposer: false });
     });
   }

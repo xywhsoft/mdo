@@ -150,6 +150,12 @@ export function createDraftStore({ onRestore, onError, onSaved }) {
         edit(key, text, attachments, true);
     },
     clear(key) { edit(key, "", [], true); },
+    clearIfMatches(key, text) {
+      const current = entry(key);
+      if (current.text !== text || current.attachments.length) return false;
+      edit(key, "", [], true);
+      return true;
+    },
     flush,
   });
 }

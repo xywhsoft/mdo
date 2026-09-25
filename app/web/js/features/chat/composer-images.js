@@ -174,6 +174,7 @@ export function createComposerImages({ composer, prompt, button, input, strip,
     try {
       const selected = owner() ?? await ensureSession(prompt.value);
       const sessionKey = `${selected.projectId}/${selected.sessionId}`;
+      if (key !== sessionKey && scopeKey() !== sessionKey) return;
       if (key !== sessionKey) {
         uploads.delete(key);
         key = sessionKey;
