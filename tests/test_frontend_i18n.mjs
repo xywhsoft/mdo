@@ -46,6 +46,7 @@ test("bundled language packs cover the annotated shell and switch without stale 
     "js/features/chat/slash-commands.js",
     "js/features/chat/file-mentions.js",
     "js/features/settings/settings-view.js",
+    "js/features/settings/resource-panels.js",
     "js/app.js",
   ]) {
     const source = readFileSync(new URL(path, root), "utf8");
@@ -60,6 +61,9 @@ test("bundled language packs cover the annotated shell and switch without stale 
     if (path.endsWith("session-actions.js"))
       for (const [, key] of source.matchAll(/\bitem\("[^"]+",\s*"([^"]+)"/g))
         assert.ok(referenceKeys.includes(key), `missing action key: ${key}`);
+    if (path.endsWith("resource-panels.js"))
+      for (const [, key] of source.matchAll(/:\s*"(resource\.[^"]+)"/g))
+        assert.ok(referenceKeys.includes(key), `missing resource code key: ${key}`);
   }
 
   const node = {
