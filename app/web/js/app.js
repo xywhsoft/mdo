@@ -846,29 +846,27 @@ export async function boot() {
     composerError.hidden = false;
   }
 
-  async function ensureSession(text) {
+  async function ensureSession(text, stageDraft = true) {
     const selected = navigation.get();
     if (selected.sessionId) return selected;
     const title = text.trim().split(/\r?\n/, 1)[0].slice(0, 80) || "图片任务";
     const session = await createSession({ project_id: selected.projectId || "default", title,
       ...composerProfile.selection() });
     showActiveSessions();
-    draftStore.edit(`${session.project_id}/${session.id}`, text, [], true);
+    if (stageDraft)
+      draftStore.edit(`${session.project_id}/${session.id}`, text, [], true);
     navigation.select(session.project_id, session.id);
     selectTimeline(session.project_id, session.id);
     return { projectId: session.project_id, sessionId: session.id };
   }
 
-  composer.addEventListener("submit", async (event) => {
-    event.preventDefault();
+  async function submitPrompt({ text, attachments = [], interrupt = false,
+    fromComposer = true }) {
     fileMentions.hide();
-    const text = prompt.value.trim();
-    const attachments = [...composerAttachments];
-    const interrupt = interruptRequested;
-    interruptRequested = false;
     if ((!text && !attachments.length) || submitting ||
         composerImages.isUploading()) return;
-    if (!attachments.length && await slashCommands.consumeExact(text)) return;
+    if (fromComposer && !attachments.length &&
+        await slashCommands.consumeExact(text)) return;
     if (composerProfile.isBusy()) {
       showComposerError(new Error("请等待会话配置更新完成"));
       return;
@@ -878,18 +876,20 @@ export async function boot() {
     send.disabled = true;
     const originatingKey = selectedKey;
     try {
-      const selected = await ensureSession(text);
+      const selected = await ensureSession(text, fromComposer);
       if (activeRun) {
         if (!await promptQueue.enqueue(selected.projectId, selected.sessionId, text,
           { first: interrupt, priority: interrupt, attachments }))
           throw new Error("待发送队列已满（最多 20 条）");
         queueBlocked.delete(`${selected.projectId}/${selected.sessionId}`);
-        prompt.value = "";
-        composerAttachments = [];
-        composerImages.clear();
-        draftStore.clear(`${selected.projectId}/${selected.sessionId}`);
-        resizePrompt();
-        tokenMeter.refresh();
+        if (fromComposer) {
+          prompt.value = "";
+          composerAttachments = [];
+          composerImages.clear();
+          draftStore.clear(`${selected.projectId}/${selected.sessionId}`);
+          resizePrompt();
+          tokenMeter.refresh();
+        }
         if (interrupt) {
           await maybeCancelPriorityRun();
         }
@@ -897,22 +897,38 @@ export async function boot() {
       }
       await ensurePromptReady(selected.projectId, selected.sessionId);
       const run = await startRun(selected.projectId, selected.sessionId, text, attachments);
-      prompt.value = "";
-      composerAttachments = [];
-      composerImages.clear();
-      draftStore.clear(`${selected.projectId}/${selected.sessionId}`);
-      if (!originatingKey) draftStore.clear("");
-      resizePrompt();
-      tokenMeter.refresh();
+      if (fromComposer) {
+        prompt.value = "";
+        composerAttachments = [];
+        composerImages.clear();
+        draftStore.clear(`${selected.projectId}/${selected.sessionId}`);
+        if (!originatingKey) draftStore.clear("");
+        resizePrompt();
+        tokenMeter.refresh();
+      }
       monitorRun(run);
       await Promise.all([refreshSelectedTimeline(), loadTasks(), loadRuns(), loadRecovery()]);
     } catch (error) {
+      if (!fromComposer && !prompt.value.trim() && !composerAttachments.length) {
+        prompt.value = text;
+        draftStore.edit(selectedKey, text, [], true);
+        resizePrompt();
+        tokenMeter.refresh();
+      }
       showComposerError(error);
       prompt.focus();
     } finally {
       submitting = false;
       setRun(activeRun);
     }
+  }
+
+  composer.addEventListener("submit", (event) => {
+    event.preventDefault();
+    const interrupt = interruptRequested;
+    interruptRequested = false;
+    void submitPrompt({ text: prompt.value.trim(),
+      attachments: [...composerAttachments], interrupt });
   });
 
   stop.addEventListener("click", async () => {
@@ -954,12 +970,12 @@ export async function boot() {
 
   for (const starter of document.querySelectorAll("[data-prompt]")) {
     starter.addEventListener("click", () => {
-      prompt.value = starter.dataset.prompt;
-      prompt.dispatchEvent(new Event("input", { bubbles: true }));
-      resizePrompt();
-      prompt.focus();
+      if (submitting || composerImages.isUploading() || composerProfile.isBusy()) return;
+      void submitPrompt({ text: starter.dataset.prompt, fromComposer: false });
     });
   }
+  document.querySelector("[data-starter-schedules]")?.addEventListener("click", () =>
+    navigation.openSettings("schedules"));
 
   const dialog = $("#new-session-dialog");
   const dialogForm = $("#new-session-form");
