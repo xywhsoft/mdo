@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="zh-CN">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>mdo mobile conversation docks probe</title>
+<link rel="stylesheet" href="/app/web/css/app.css?mobile-docks-probe=1">
+<style>body{margin:0;background:var(--surface);color:var(--ink)}#result{padding:8px}</style>
+<div id="conversation-docks" class="conversation-docks"></div>
+<pre id="result"></pre>
+<script type="module">
+import { createConversationDocks } from "/app/web/js/features/chat/conversation-docks.js";
+import { createResourceStore } from "/app/web/js/state/store.js";
+
+const store = (data) => createResourceStore(data);
+const long = "W".repeat(180);
+const navigation = {
+  get: () => ({ view: "workspace", projectId: "qa", sessionId: "mobile" }),
+  subscribe(listener) { listener(this.get()); return () => {}; },
+};
+createConversationDocks({
+  container: document.querySelector("#conversation-docks"), navigation,
+  tasksStore: store({ items: [{ id: 1, owner_session: "mobile",
+    terminal: false, state: "running", label: long }] }),
+  approvalsStore: store({ items: [{ id: 2, run_id: 3, tool: "shell",
+    effects: ["process"], resources: [] }] }),
+  runsStore: store({ items: [{ agent_run_id: 3, project_id: "qa",
+    session_id: "mobile" }] }),
+  asksStore: store({ projectId: "qa", sessionId: "mobile", loaded: true,
+    items: [{ id: 4, question: "请选择下一步", options: [long] }] }),
+  todoStore: store({ projectId: "qa", sessionId: "mobile",
+    items: [{ text: "核对移动端交互", done: false }] }),
+  onOpenTasks() {}, onChanged: async () => {},
+});
+
+function check() {
+  const root = document.querySelector("#conversation-docks");
+  const option = root.querySelector(".ask-dock-options button");
+  const task = root.querySelector(".conversation-dock-list li span:last-child");
+  const targets = root.querySelectorAll(".todo-toggle, .conversation-dock-actions button, .ask-dock-options button, .ask-dock-free button");
+  const width = document.documentElement.scrollWidth;
+  const minimumHeight = Math.min(...[...targets].map((node) =>
+    node.getBoundingClientRect().height));
+  const optionFits = option.getBoundingClientRect().right <=
+    option.closest(".ask-dock").getBoundingClientRect().right;
+  const taskFits = task.getBoundingClientRect().right <=
+    task.closest(".conversation-dock").getBoundingClientRect().right;
+  const passed = width <= innerWidth && optionFits && taskFits &&
+    minimumHeight >= 40;
+  const result = document.querySelector("#result");
+  result.dataset.passed = innerWidth <= 420 ? String(passed) : "waiting";
+  result.textContent = JSON.stringify({ viewport: innerWidth, document: width,
+    optionFits, taskFits, minimumHeight, passed }, null, 2);
+}
+window.addEventListener("resize", () => requestAnimationFrame(check));
+requestAnimationFrame(check);
+</script>
+</html>

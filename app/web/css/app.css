@@ -610,11 +610,12 @@ select:focus-visible,
 .conversation-docks { display: grid; width: min(760px, calc(100% - 40px)); gap: 9px; margin: 0 auto 20px; }
 .conversation-docks[hidden] { display: none; }
 .conversation-dock-stack { display: contents; }
-.conversation-dock { padding: 12px 14px; border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--surface-raised); }
+.conversation-dock { min-width: 0; padding: 12px 14px; border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--surface-raised); }
 .conversation-dock h3 { margin: 0 0 7px; font-size: 13px; font-weight: 650; }
 .conversation-dock p { margin: 0 0 8px; color: var(--muted); font-size: 12px; overflow-wrap: anywhere; }
 .conversation-dock-list { display: grid; gap: 7px; margin: 0; padding: 0; list-style: none; }
 .conversation-dock-list li { display: flex; gap: 9px; align-items: baseline; font-size: 12px; }
+.conversation-dock-list li span:last-child { min-width: 0; overflow-wrap: anywhere; }
 .conversation-dock-state { min-width: 42px; color: var(--muted); font-size: 10px; }
 .conversation-dock-actions { display: flex; justify-content: flex-end; gap: 7px; margin-top: 9px; }
 .conversation-dock-actions button { min-height: 31px; padding: 0 10px; border: 1px solid var(--border-strong); border-radius: 7px; background: var(--surface); color: var(--ink); cursor: pointer; }
@@ -631,6 +632,7 @@ select:focus-visible,
 .ask-dock-options, .ask-dock-free { display: flex; flex-wrap: wrap; gap: 7px; }
 .ask-dock-options { margin-bottom: 9px; }
 .ask-dock-options button, .ask-dock-free button { padding: 7px 10px; border: 1px solid var(--border-strong); border-radius: 7px; background: var(--surface-raised); color: var(--ink); cursor: pointer; }
+.ask-dock-options button { max-width: 100%; overflow-wrap: anywhere; text-align: left; }
 .ask-dock-options button:hover, .ask-dock-free button:hover { border-color: var(--accent); }
 .ask-dock-options button[aria-disabled="true"], .ask-dock-free button[aria-disabled="true"] { opacity: .5; cursor: default; }
 .ask-dock-free { flex-wrap: nowrap; }
@@ -1263,6 +1265,8 @@ select:focus-visible,
   .starter { min-height: 62px; }
   .timeline { width: calc(100% - 26px); padding-top: 20px; }
   .conversation-docks { width: calc(100% - 26px); }
+  .todo-toggle, .conversation-dock-actions button,
+  .ask-dock-options button, .ask-dock-free button { min-height: 40px; }
   .prompt-queue { width: calc(100% - 26px); }
   .composer-hint { display: none; }
   .composer-toolbar { flex-wrap: wrap; gap: 2px; }
