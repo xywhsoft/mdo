@@ -30,6 +30,7 @@ import { timelineStore, selectTimeline, clearTimeline, refreshSelectedTimeline, 
 import { todoStore, selectTodo, clearTodo } from "./state/todo.js";
 import { createTimelineView } from "./features/chat/timeline.js";
 import { createMessageEditDialog } from "./features/chat/message-edit-dialog.js";
+import { runMessageReplacement } from "./features/chat/message-replacement.js";
 import { createConversationSearch } from "./features/chat/conversation-search.js";
 import { feedbackStore, selectFeedback, clearFeedback, setFeedback } from "./features/chat/feedback-store.js";
 import { createConversationDocks } from "./features/chat/conversation-docks.js";
@@ -245,53 +246,71 @@ export async function boot() {
     if (promptQueue.peek(selected.projectId, selected.sessionId) ||
         prompt.value.trim() || composerAttachments.length)
       throw new Error("请先处理草稿和待发送队列，再编辑历史消息");
+    const targetKey = `${selected.projectId}/${selected.sessionId}`;
+    const originVersion = routeVersion;
+    const stillSelected = () => routeVersion === originVersion &&
+      selectedKey === targetKey &&
+      navigation.get().projectId === selected.projectId &&
+      navigation.get().sessionId === selected.sessionId;
     messageActionBusy = true;
     try {
-      const history = await loadSessionHistory(session);
-      const current = navigation.get();
-      if (current.projectId !== selected.projectId || current.sessionId !== selected.sessionId)
-        throw new Error("会话已切换，请重新选择消息");
-      if (sequence > history.last_sequence)
-        throw new Error("消息已不在当前会话历史中，请刷新会话");
-      const updated = await truncateSession({ ...session, etag: history.etag,
-        revision: history.revision }, sequence - 1);
-      sessionDetailStore.setData(updated);
-      await Promise.all([reloadSelectedTimeline(),
-        selectTodo(updated.project_id, updated.id)]);
-      let run;
-      try { run = await startRun(updated.project_id, updated.id, text.trim(), attachments); }
-      catch (error) {
-        const key = `${updated.project_id}/${updated.id}`;
-        prompt.value = text;
-        composerAttachments = [...attachments];
-        composerImages.set(attachments);
-        draftStore.edit(key, text, attachments, true);
-        prompt.dispatchEvent(new Event("input", { bubbles: true }));
-        showComposerError(error);
-        throw error;
-      }
-      monitorRun(run);
-      void Promise.allSettled([refreshSelectedTimeline(), loadTasks(),
-        loadRuns(), loadRecovery()]);
-      toast(label === "重试" ? "已在当前会话重试" : "已在当前会话发送编辑后的消息");
+      const result = await runMessageReplacement({ session, sequence, text,
+        attachments, isCurrent: stillSelected,
+        loadHistory: loadSessionHistory, truncate: truncateSession, startRun,
+        onTruncated(updated) {
+          sessionDetailStore.setData(updated);
+          void Promise.allSettled([reloadSelectedTimeline(),
+            selectTodo(updated.project_id, updated.id)]);
+        },
+        onStartFailure(updated, error, current) {
+          const key = `${updated.project_id}/${updated.id}`;
+          draftStore.edit(key, text, attachments, true);
+          if (!current) return;
+          prompt.value = text;
+          composerAttachments = [...attachments];
+          composerImages.set(attachments);
+          prompt.dispatchEvent(new Event("input", { bubbles: true }));
+          showComposerError(error);
+          prompt.focus();
+        },
+        onStarted(run) { monitorRun(run); },
+      });
+      void Promise.allSettled([...(stillSelected() ? [refreshSelectedTimeline()] : []),
+        loadTasks(), loadRuns(), loadRecovery()]);
+      if (stillSelected()) {
+        if (document.activeElement === document.body ||
+            !document.activeElement?.isConnected) prompt.focus();
+        toast(label === "重试" ? "已在当前会话重试" : "已在当前会话发送编辑后的消息");
+      } else if (!result.current) toast("原会话已在后台重新运行");
     } finally { messageActionBusy = false; }
   }
 
   let conversationSearch;
+  function isCurrentMessageOwner(owner, version = routeVersion) {
+    const route = navigation.get();
+    return routeVersion === version && route.projectId === owner.projectId &&
+      route.sessionId === owner.sessionId &&
+      selectedKey === `${owner.projectId}/${owner.sessionId}`;
+  }
   const timelineView = createTimelineView({
     container: $("#timeline"), welcome: $("#welcome"),
     toBottom: $("#to-bottom"), store: timelineStore,
     feedbackStore,
     onSearchCount: (count, historyLost) => conversationSearch?.setCount(count, historyLost),
-    onFeedback: async (eventId, value) => {
-      const selected = navigation.get();
-      if (!selected.projectId || !selected.sessionId) throw new Error("请先选择会话");
-      await setFeedback(selected.projectId, selected.sessionId, eventId, value);
+    onFeedback: async (eventId, value, owner) => {
+      if (!isCurrentMessageOwner(owner)) throw new Error("会话已切换，请重新选择消息");
+      await setFeedback(owner.projectId, owner.sessionId, eventId, value);
     },
-    onFork: async (throughSequence) => {
+    onFork: async (throughSequence, owner) => {
+      const version = routeVersion;
+      if (!isCurrentMessageOwner(owner, version))
+        throw new Error("会话已切换，请重新选择消息");
       const session = sessionDetailStore.get().data;
-      if (!session || activeRun) throw new Error("请在当前运行结束后分叉会话");
+      if (!session || `${session.project_id}/${session.id}` !== selectedKey || activeRun)
+        throw new Error("请在当前运行结束后分叉会话");
       const history = await loadSessionHistory(session);
+      if (!isCurrentMessageOwner(owner, version))
+        throw new Error("会话已切换，请重新选择消息");
       const boundary = throughSequence ?? history.last_sequence;
       if (!Number.isSafeInteger(boundary) || boundary < 0 ||
           boundary > history.last_sequence)
@@ -300,17 +319,29 @@ export async function boot() {
         title: `${session.title || "未命名任务"}（分支）`,
         through_sequence: boundary,
       });
-      pendingForkComposerFocus = `${fork.project_id}/${fork.id}`;
-      navigation.select(fork.project_id, fork.id);
-      focusForkComposerWhenReady();
-      toast("已创建会话分支");
+      if (isCurrentMessageOwner(owner, version)) {
+        pendingForkComposerFocus = `${fork.project_id}/${fork.id}`;
+        navigation.select(fork.project_id, fork.id);
+        focusForkComposerWhenReady();
+        toast("已创建会话分支");
+      } else toast("原会话的分支已在后台创建");
     },
-    onEdit: async (sequence, text, attachments) => {
+    onEdit: async (sequence, text, attachments, owner) => {
+      const version = routeVersion;
+      if (!isCurrentMessageOwner(owner, version))
+        throw new Error("会话已切换，请重新选择消息");
       const edited = await messageEditDialog.open(text, attachments);
-      if (edited !== null) await replaceAndRunMessage(sequence, edited, attachments, "编辑");
+      if (edited !== null) {
+        if (!isCurrentMessageOwner(owner, version))
+          throw new Error("会话已切换，请重新选择消息");
+        await replaceAndRunMessage(sequence, edited, attachments, "编辑");
+      }
     },
-    onRetry: (sequence, text, attachments) =>
-      replaceAndRunMessage(sequence, text, attachments, "重试"),
+    onRetry: (sequence, text, attachments, owner) => {
+      if (!isCurrentMessageOwner(owner))
+        throw new Error("会话已切换，请重新选择消息");
+      return replaceAndRunMessage(sequence, text, attachments, "重试");
+    },
   });
   conversationSearch = createConversationSearch({
     bar: $("#conversation-find"), input: $("#conversation-find-input"),

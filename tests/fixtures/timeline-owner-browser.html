@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="zh-CN">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>mdo timeline action owner probe</title>
+<link rel="stylesheet" href="/app/web/css/app.css">
+<textarea id="prompt" aria-label="Input"></textarea>
+<div class="conversation"><p id="welcome"></p><ol id="timeline"></ol></div>
+<button id="to-bottom" type="button" hidden>To bottom</button>
+<div id="toast-region"></div>
+<pre id="result"></pre>
+<script type="module">
+import { createTimelineView } from "/app/web/js/features/chat/timeline.js";
+import { createResourceStore } from "/app/web/js/state/store.js";
+
+const calls = [];
+const store = createResourceStore();
+const feedbackStore = createResourceStore({ projectId: "qa", sessionId: "original",
+  items: new Map() });
+createTimelineView({ container: document.querySelector("#timeline"),
+  welcome: document.querySelector("#welcome"),
+  toBottom: document.querySelector("#to-bottom"), store, feedbackStore,
+  onFork: (...args) => calls.push(["fork", ...args]),
+  onFeedback: (...args) => calls.push(["feedback", ...args]),
+  onEdit: (...args) => calls.push(["edit", ...args]),
+  onRetry: (...args) => calls.push(["retry", ...args]),
+});
+store.setData({ projectId: "qa", sessionId: "original", events: [
+  { event_id: 1, run_id: 1, kind: "agent_start", schema_version: 3,
+    agent_depth: 0, user_message_sequence: 1, text: "First prompt", time: 1000000 },
+  { event_id: 2, run_id: 1, kind: "model_text_delta", model: "Test model",
+    text: "First answer", time: 2000000 },
+  { event_id: 3, run_id: 1, kind: "model_done", success: true,
+    input_tokens: 2, output_tokens: 2, time: 3000000 },
+] });
+const output = document.querySelector("#result");
+try {
+  await new Promise((resolve) => requestAnimationFrame(resolve));
+  for (const suffix of ["/edit", "/retry", "/fork", "/feedback-good"]) {
+    const button = document.querySelector(`[data-timeline-action$="${suffix}"]`);
+    if (!button) throw new Error(`missing action ${suffix}`);
+    button.click();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  }
+  const expected = ["edit", "retry", "fork", "feedback"];
+  const passed = calls.length === expected.length && calls.every((call, index) =>
+    call[0] === expected[index] &&
+    call.at(-1)?.projectId === "qa" && call.at(-1)?.sessionId === "original");
+  output.dataset.passed = String(passed);
+  output.textContent = JSON.stringify({ passed, calls }, null, 2);
+} catch (error) {
+  output.dataset.passed = "false";
+  output.textContent = error.stack ?? String(error);
+}
+</script>
+</html>

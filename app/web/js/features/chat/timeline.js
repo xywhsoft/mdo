@@ -403,6 +403,7 @@ function timelineNode(item, handlers, feedback, projectId, sessionId, openState)
   else body.textContent = item.text;
   const children = [header, body];
   const sessionKey = `${projectId ?? ""}/${sessionId ?? ""}`;
+  const owner = { projectId, sessionId };
   if (item.kind === "user" && projectId && sessionId &&
       item.attachments?.length) {
     const images = element("div", { className: "timeline-images" });
@@ -443,14 +444,14 @@ function timelineNode(item, handlers, feedback, projectId, sessionId, openState)
       const edit = commandButton(t("timeline.edit", {}, "编辑"),
         t("timeline.editResend", {}, "编辑此消息并重新发送"), "compose", `${item.key}/edit`,
         handlers, sessionKey, () => handlers.onEdit(
-          item.userMessageSequence, item.text, item.attachments ?? []));
+          item.userMessageSequence, item.text, item.attachments ?? [], owner));
       actions.append(edit);
     }
     if (item.kind === "assistant") {
       if ("forkThroughSequence" in item) {
         const fork = commandButton(t("timeline.fork", {}, "分叉"),
           t("timeline.forkFromReply", {}, "从此回复分叉会话"), "branch", `${item.key}/fork`,
-          handlers, sessionKey, () => handlers.onFork(item.forkThroughSequence));
+          handlers, sessionKey, () => handlers.onFork(item.forkThroughSequence, owner));
         actions.append(fork);
       }
       const retryPrompt = item.retryPrompt;
@@ -460,7 +461,7 @@ function timelineNode(item, handlers, feedback, projectId, sessionId, openState)
         const retry = commandButton(t("timeline.retry", {}, "重试"),
           t("timeline.retryTurn", {}, "重试此回合"), "retry", `${item.key}/retry`,
           handlers, sessionKey, () => handlers.onRetry(
-            retryPrompt.sequence, retryPrompt.text, retryPrompt.attachments ?? []));
+            retryPrompt.sequence, retryPrompt.text, retryPrompt.attachments ?? [], owner));
         actions.append(retry);
       }
       if (item.feedbackEventId && item.state === "done") {
@@ -469,7 +470,7 @@ function timelineNode(item, handlers, feedback, projectId, sessionId, openState)
           const button = commandButton(label, label, "like",
             `${item.key}/feedback-${value}`, handlers, sessionKey,
             () => handlers.onFeedback(item.feedbackEventId,
-              feedback === value ? "none" : value));
+              feedback === value ? "none" : value, owner));
           if (value === "bad") button.classList.add("timeline-action-dislike");
           button.setAttribute("aria-pressed", String(feedback === value));
           actions.append(button);
