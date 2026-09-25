@@ -3,9 +3,18 @@ import { createSchedule, loadSchedules, readSchedule, removeSchedule,
   readScheduleHistory, replaceSchedule, runSchedule, schedulesStore,
   setScheduleEnabled } from "../../state/schedules.js";
 import { clear, element, errorMessage, toast } from "../../utils/dom.js";
+import { currentLocale, subscribeLocale, t } from "../../i18n.js";
 
-const FREQUENCY = { once: "仅一次", minutely: "分钟", hourly: "小时", daily: "天", weekly: "周" };
-const RESULT = { succeeded: "已完成", failed: "失败", cancelled: "已取消", limit: "达到上限", timed_out: "超时" };
+const FREQUENCY_KEY = {
+  once: "schedule.frequency.once", minutely: "schedule.frequency.minutely",
+  hourly: "schedule.frequency.hourly", daily: "schedule.frequency.daily",
+  weekly: "schedule.frequency.weekly",
+};
+const RESULT_KEY = {
+  succeeded: "schedule.result.succeeded", failed: "schedule.result.failed",
+  cancelled: "schedule.result.cancelled", limit: "schedule.result.limit",
+  timed_out: "schedule.result.timedOut",
+};
 const pad = (value) => String(value).padStart(2, "0");
 
 function localInput(microseconds) {
@@ -16,11 +25,11 @@ function localInput(microseconds) {
 }
 
 function clockText(microseconds) {
-  if (!microseconds) return "没有下次执行时间";
+  if (!microseconds) return t("schedule.noNext", {}, "没有下次执行时间");
   const date = new Date(Number(microseconds) / 1000);
   return Number.isFinite(date.getTime())
-    ? new Intl.DateTimeFormat("zh-CN", { dateStyle: "medium", timeStyle: "short" }).format(date)
-    : "执行时间不可用";
+    ? new Intl.DateTimeFormat(currentLocale(), { dateStyle: "medium", timeStyle: "short" }).format(date)
+    : t("schedule.invalidTime", {}, "执行时间不可用");
 }
 
 function option(select, id, title) {
@@ -51,6 +60,15 @@ export function createSchedulePanel({ panel, projectsStore, agentsStore, modelsS
   let historyGeneration = 0;
   let activeRefresh = 0;
 
+  function renderEditorHeader() {
+    title.textContent = original
+      ? t("schedule.editTitle", { label: original.label }, `编辑：${original.label}`)
+      : t("schedule.newTitle", {}, "新建计划");
+    save.textContent = original
+      ? t("schedule.save", {}, "保存更改")
+      : t("schedule.create", {}, "创建计划");
+  }
+
   function setFeedback(message, error = false) {
     formStatus.textContent = message;
     formStatus.dataset.tone = error ? "error" : "neutral";
@@ -69,9 +87,9 @@ export function createSchedulePanel({ panel, projectsStore, agentsStore, modelsS
 
   function fillCatalogs() {
     const choices = [
-      [fields.project_id, projectsStore.get().data?.items ?? [], "tasks", "任务项目"],
-      [fields.agent_id, agentsStore.get().data?.items ?? [], "mdo.default", "默认 Agent"],
-      [fields.model_id, modelsStore.get().data?.models ?? [], "", "Agent 默认模型"],
+      [fields.project_id, projectsStore.get().data?.items ?? [], "tasks", t("schedule.defaultProject", {}, "任务项目")],
+      [fields.agent_id, agentsStore.get().data?.items ?? [], "mdo.default", t("schedule.defaultAgent", {}, "默认 Agent")],
+      [fields.model_id, modelsStore.get().data?.models ?? [], "", t("schedule.defaultModel", {}, "Agent 默认模型")],
     ];
     for (const [select, items, fallback, fallbackTitle] of choices) {
       const selected = select.options.length ? select.value : (original?.[select.name] ?? fallback);
@@ -101,8 +119,7 @@ export function createSchedulePanel({ panel, projectsStore, agentsStore, modelsS
     fields.agent_id.value = "mdo.default";
     fields.model_id.value = "";
     fields.timezone.value = "system_local";
-    title.textContent = "新建计划";
-    save.textContent = "创建计划";
+    renderEditorHeader();
     setFeedback("");
     syncConditionalFields();
   }
@@ -129,8 +146,7 @@ export function createSchedulePanel({ panel, projectsStore, agentsStore, modelsS
     fields.max_concurrent_runs.value = info.max_concurrent_runs;
     for (const checkbox of weekdayGroup.querySelectorAll("input"))
       checkbox.checked = Boolean(info.weekday_mask & Number(checkbox.value));
-    title.textContent = `编辑：${info.label}`;
-    save.textContent = "保存更改";
+    renderEditorHeader();
     setFeedback("");
     syncConditionalFields();
     form.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -140,11 +156,12 @@ export function createSchedulePanel({ panel, projectsStore, agentsStore, modelsS
   function render(state) {
     if (activeRefresh) { clearTimeout(activeRefresh); activeRefresh = 0; }
     if (state.status === "loading") {
-      status.textContent = "正在读取计划任务…";
+      status.textContent = t("schedule.loading", {}, "正在读取计划任务…");
       return;
     }
     if (state.status === "error") {
-      status.textContent = `读取失败：${errorMessage(state.error)}`;
+      status.textContent = t("schedule.loadFailed", { error: errorMessage(state.error) },
+        `读取失败：${errorMessage(state.error)}`);
       return;
     }
     const data = state.data;
@@ -155,33 +172,39 @@ export function createSchedulePanel({ panel, projectsStore, agentsStore, modelsS
         activeRefresh = 0;
         if (visible()) void loadSchedules();
       }, 1000);
-    status.textContent = `${data.total ?? items.length} 项计划` +
-      (!data.enabled ? " · 全局执行已关闭，可在 Agent 设置中开启" : "") +
-      (data.truncated ? " · 仅显示前 100 项" : "") +
-      (data.persistence_fault ? " · 存储故障，请检查诊断" : "");
+    status.textContent = t("schedule.count", { count: data.total ?? items.length },
+      `${data.total ?? items.length} 项计划`) +
+      (!data.enabled ? t("schedule.globalDisabled", {}, " · 全局执行已关闭，可在 Agent 设置中开启") : "") +
+      (data.truncated ? t("schedule.truncated", {}, " · 仅显示前 100 项") : "") +
+      (data.persistence_fault ? t("schedule.storageFault", {}, " · 存储故障，请检查诊断") : "");
     const active = document.activeElement;
     const activeId = active?.dataset?.scheduleId;
     const activeAction = active?.dataset?.scheduleAction;
     clear(list);
     if (!items.length) {
-      list.append(element("p", { className: "schedule-empty", text: "还没有计划任务。填写下方表单即可创建。" }));
+      list.append(element("p", { className: "schedule-empty",
+        text: t("schedule.empty", {}, "还没有计划任务。填写下方表单即可创建。") }));
       return;
     }
     for (const item of items) {
       const card = element("article", { className: "schedule-card" });
       const heading = element("div", { className: "schedule-card-heading" });
       heading.append(element("strong", { text: item.label }),
-        element("span", { className: "schedule-badge", text: item.enabled ? "已启用" : "已暂停" }));
-      if (item.active_runs) heading.append(element("span", { className: "schedule-badge", text: "运行中" }));
-      card.append(heading, element("p", { text: `${FREQUENCY[item.frequency] || item.frequency} · ${item.project_id} · ${item.agent_id}` }),
-        element("p", { text: `下次：${clockText(item.next_occurrence_at)} · 已触发 ${item.claim_count} 次` }));
+        element("span", { className: "schedule-badge", text: item.enabled
+          ? t("schedule.enabled", {}, "已启用") : t("schedule.paused", {}, "已暂停") }));
+      if (item.active_runs) heading.append(element("span", { className: "schedule-badge",
+        text: t("schedule.running", {}, "运行中") }));
+      card.append(heading, element("p", { text: `${t(FREQUENCY_KEY[item.frequency], {}, item.frequency)} · ${item.project_id} · ${item.agent_id}` }),
+        element("p", { text: t("schedule.nextTrigger", {
+          next: clockText(item.next_occurrence_at), count: item.claim_count,
+        }, `下次：${clockText(item.next_occurrence_at)} · 已触发 ${item.claim_count} 次`) }));
       const actions = element("div", { className: "schedule-card-actions" });
       for (const [action, text, className] of [
-        ["edit", "编辑", "secondary-button"],
-        ["enabled", item.enabled ? "暂停" : "启用", "secondary-button"],
-        ["run", "立即运行", "secondary-button"],
-        ["history", "历史", "secondary-button"],
-        ["delete", "删除", "danger-link"],
+        ["edit", t("schedule.edit", {}, "编辑"), "secondary-button"],
+        ["enabled", item.enabled ? t("schedule.pause", {}, "暂停") : t("schedule.enable", {}, "启用"), "secondary-button"],
+        ["run", t("schedule.run", {}, "立即运行"), "secondary-button"],
+        ["history", t("schedule.history", {}, "历史"), "secondary-button"],
+        ["delete", t("schedule.delete", {}, "删除"), "danger-link"],
       ]) {
         const button = element("button", { className, text, attrs: { type: "button" } });
         button.dataset.scheduleId = item.id;
@@ -190,8 +213,9 @@ export function createSchedulePanel({ panel, projectsStore, agentsStore, modelsS
           (!data.enabled || data.persistence_fault ||
             item.active_runs >= item.max_concurrent_runs));
         if (action === "run" && button.disabled && !busy)
-          button.title = !data.enabled ? "请先在 Agent 设置中启用计划任务" :
-            data.persistence_fault ? "计划任务存储不可用" : "已达到并发运行上限";
+          button.title = !data.enabled ? t("schedule.runDisabledGlobal", {}, "请先在 Agent 设置中启用计划任务") :
+            data.persistence_fault ? t("schedule.runDisabledStorage", {}, "计划任务存储不可用") :
+              t("schedule.runDisabledLimit", {}, "已达到并发运行上限");
         actions.append(button);
       }
       card.append(actions);
@@ -207,19 +231,19 @@ export function createSchedulePanel({ panel, projectsStore, agentsStore, modelsS
     const startAt = original && fields.start_at.value === localInput(original.start_at)
       ? original.start_at : date.getTime() * 1000;
     if (!Number.isSafeInteger(startAt) || startAt <= 0)
-      throw new Error("请选择有效的开始时间");
+      throw new Error(t("schedule.invalidStart", {}, "请选择有效的开始时间"));
     const weekdayMask = [...weekdayGroup.querySelectorAll("input:checked")]
       .reduce((mask, box) => mask | Number(box.value), 0);
     if (fields.frequency.value === "weekly" && weekdayMask === 0)
-      throw new Error("每周计划请至少选择一天");
+      throw new Error(t("schedule.weekdayRequired", {}, "每周计划请至少选择一天"));
     const label = fields.label.value.trim();
     const input = fields.input.value.trim();
     const notify = fields.notify.value.trim();
     const bytes = new TextEncoder();
-    if (!label || !input) throw new Error("请填写计划名称和任务内容");
+    if (!label || !input) throw new Error(t("schedule.required", {}, "请填写计划名称和任务内容"));
     if (bytes.encode(label).length >= 257 || bytes.encode(input).length >= 65537 ||
         bytes.encode(notify).length >= 257)
-      throw new Error("名称、内容或完成提示超过字节上限");
+      throw new Error(t("schedule.tooLong", {}, "名称、内容或完成提示超过字节上限"));
     return {
       label, input,
       start_at: startAt, frequency: fields.frequency.value,
@@ -270,7 +294,7 @@ export function createSchedulePanel({ panel, projectsStore, agentsStore, modelsS
 
   async function openEditor(id) {
     const generation = ++loadGeneration;
-    setFeedback("正在读取计划…");
+    setFeedback(t("schedule.loadingOne", {}, "正在读取计划…"));
     try {
       const result = await readSchedule(id);
       if (generation === loadGeneration) editSchedule(result.data, result.etag);
@@ -281,31 +305,36 @@ export function createSchedulePanel({ panel, projectsStore, agentsStore, modelsS
 
   async function openHistory(item) {
     const generation = ++historyGeneration;
-    historyTitle.textContent = `${item.label} · 执行历史`;
-    historyStatus.textContent = "正在读取执行历史…";
+    historyTitle.textContent = t("schedule.historyTitle", { label: item.label },
+      `${item.label} · 执行历史`);
+    historyStatus.textContent = t("schedule.historyLoading", {}, "正在读取执行历史…");
     clear(historyList);
     historyDialog.showModal();
     try {
       const { data } = await readScheduleHistory(item.id);
       if (generation !== historyGeneration || !historyDialog.open) return;
       historyStatus.textContent = data.items.length
-        ? `${data.items.length} 条记录${data.has_more ? " · 仅显示最近记录" : ""}`
-        : "尚无已完成的运行。";
+        ? t("schedule.historyCount", { count: data.items.length }, `${data.items.length} 条记录`) +
+          (data.has_more ? t("schedule.historyMore", {}, " · 仅显示最近记录") : "")
+        : t("schedule.historyEmpty", {}, "尚无已完成的运行。");
       for (const entry of data.items) {
         const card = element("article", { className: "schedule-history-item" });
         const header = element("header");
         const finished = clockText(entry.finished_at);
-        header.append(element("strong", { text: RESULT[entry.result] || entry.result }),
+        header.append(element("strong", { text: t(RESULT_KEY[entry.result], {}, entry.result) }),
           element("time", { text: finished }));
         card.append(header,
-          element("p", { text: `任务 #${entry.task_id}${entry.agent_run_id ? ` · 运行 #${entry.agent_run_id}` : ""}` }));
+          element("p", { text: t("schedule.historyTask", { id: entry.task_id }, `任务 #${entry.task_id}`) +
+            (entry.agent_run_id ? t("schedule.historyRun", { id: entry.agent_run_id },
+              ` · 运行 #${entry.agent_run_id}`) : "") }));
         if (entry.text) card.append(element("p", { text: entry.text +
           (entry.text_truncated ? "…" : "") }));
         historyList.append(card);
       }
     } catch (error) {
       if (generation === historyGeneration && historyDialog.open)
-        historyStatus.textContent = `读取失败：${errorMessage(error)}`;
+        historyStatus.textContent = t("schedule.loadFailed", { error: errorMessage(error) },
+          `读取失败：${errorMessage(error)}`);
     }
   }
 
@@ -317,13 +346,15 @@ export function createSchedulePanel({ panel, projectsStore, agentsStore, modelsS
     if (button.dataset.scheduleAction === "edit") void openEditor(item.id);
     if (button.dataset.scheduleAction === "history") void openHistory(item);
     if (button.dataset.scheduleAction === "run")
-      void mutate(() => runSchedule(item.id, item.revision), "计划已开始运行");
+      void mutate(() => runSchedule(item.id, item.revision), t("schedule.started", {}, "计划已开始运行"));
     if (button.dataset.scheduleAction === "enabled")
       void mutate(() => setScheduleEnabled(item.id, item.revision, !item.enabled),
-        item.enabled ? "计划已暂停" : "计划已启用");
+        item.enabled ? t("schedule.pausedSuccess", {}, "计划已暂停") :
+          t("schedule.enabledSuccess", {}, "计划已启用"));
     if (button.dataset.scheduleAction === "delete") {
       deleteTarget = item;
-      panel.querySelector("#schedule-delete-label").textContent = `“${item.label}”将从本地计划中移除。`;
+      panel.querySelector("#schedule-delete-label").textContent = t("schedule.deleteLabel",
+        { label: item.label }, `“${item.label}”将从本地计划中移除。`);
       deleteDialog.returnValue = "cancel";
       deleteDialog.showModal();
     }
@@ -332,7 +363,7 @@ export function createSchedulePanel({ panel, projectsStore, agentsStore, modelsS
     const target = deleteTarget;
     deleteTarget = null;
     if (deleteDialog.returnValue === "delete" && target)
-      void mutate(() => removeSchedule(target.id, target.revision), "计划已删除");
+      void mutate(() => removeSchedule(target.id, target.revision), t("schedule.deleted", {}, "计划已删除"));
   });
   historyDialog.addEventListener("close", () => { ++historyGeneration; });
   panel.querySelector("#schedule-history-close").addEventListener("click", () => historyDialog.close());
@@ -345,7 +376,8 @@ export function createSchedulePanel({ panel, projectsStore, agentsStore, modelsS
     const editing = original;
     void mutate(() => editing
       ? replaceSchedule(editing.id, etag, definition) : createSchedule(definition),
-    editing ? "计划已更新" : "计划已创建", true);
+    editing ? t("schedule.updated", {}, "计划已更新") :
+      t("schedule.created", {}, "计划已创建"), true);
   });
   fields.frequency.addEventListener("change", syncConditionalFields);
   fields.timezone.addEventListener("change", syncConditionalFields);
@@ -362,6 +394,12 @@ export function createSchedulePanel({ panel, projectsStore, agentsStore, modelsS
   agentsStore.subscribe(fillCatalogs);
   modelsStore.subscribe(fillCatalogs);
   schedulesStore.subscribe(render);
+  subscribeLocale(() => {
+    fillCatalogs();
+    renderEditorHeader();
+    setFeedback("");
+    render(schedulesStore.get());
+  });
   newSchedule();
   return Object.freeze({ refresh: loadSchedules });
 }
