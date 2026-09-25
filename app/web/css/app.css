@@ -594,7 +594,10 @@ select:focus-visible,
 .timeline-item[data-state="running"] .timeline-role::after { content: ""; display: inline-block; width: 5px; height: 5px; margin-left: 7px; border-radius: 50%; background: var(--warning); animation: pulse 1.5s infinite; }
 .timeline-meta { margin-top: 7px; color: var(--faint); font: 11px ui-monospace, SFMono-Regular, Consolas, monospace; }
 .timeline-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; min-height: 28px; margin-top: 6px; }
-.timeline-actions button { min-height: 26px; padding: 3px 7px; border: 0; border-radius: 6px; background: transparent; color: var(--muted); font-size: 11px; cursor: pointer; }
+.timeline-item[data-kind="user"] .timeline-actions { justify-content: flex-end; }
+.timeline-actions button { display: inline-grid; width: 32px; height: 32px; flex: 0 0 auto; place-items: center; padding: 0; border: 0; border-radius: 6px; background: transparent; color: var(--muted); cursor: pointer; }
+.timeline-actions .icon { width: 16px; height: 16px; }
+.timeline-action-dislike .icon { transform: rotate(180deg); }
 .timeline-actions button:hover, .timeline-actions button:focus-visible { background: var(--surface-hover); color: var(--ink); }
 .timeline-actions button:disabled, .timeline-actions button[aria-disabled="true"] { opacity: .55; cursor: wait; }
 .timeline-actions button[aria-pressed="true"] { background: var(--surface-hover); color: var(--ink); font-weight: 700; }
@@ -1206,6 +1209,8 @@ select:focus-visible,
 }
 
 @media (max-width: 760px) {
+  .timeline-actions button { width: 40px; height: 40px; }
+  .timeline-item .timeline-actions button { opacity: 1; }
   .icon-button { width: 40px; height: 40px; }
   .model-config-layout { grid-template-columns: minmax(0, 1fr); }
   .model-config-list { max-height: 180px; }

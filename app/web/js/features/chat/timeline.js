@@ -1,5 +1,6 @@
 import { element, clear, formatClock, errorMessage, toast } from "../../utils/dom.js";
 import { attachmentUrl } from "../../api/client.js";
+import { mountIcons } from "../../components/icons.js";
 import { renderMarkdown } from "./markdown.js";
 
 function modelKey(event, epoch) {
@@ -311,13 +312,20 @@ function foldableNode(item, openState) {
     attrs: { "data-kind": item.kind, "data-state": item.state } }, [details]);
 }
 
-function commandButton(label, description, actionRef, handlers, sessionKey, action) {
-  const button = element("button", { text: label, attrs: {
+function actionIcon(name) {
+  return element("span", { className: "icon", attrs: {
+    "data-icon": name, "aria-hidden": "true",
+  } });
+}
+
+function commandButton(label, description, iconName, actionRef, handlers, sessionKey, action) {
+  const button = element("button", { className: "timeline-action-button", attrs: {
     type: "button", "aria-label": description,
+    title: label,
     "data-timeline-action": actionRef,
     "data-timeline-command": "",
     "aria-disabled": String(handlers.isBusy(sessionKey)),
-  } });
+  } }, [actionIcon(iconName)]);
   button.addEventListener("click", () => handlers.runAction(sessionKey, action));
   return button;
 }
@@ -369,8 +377,10 @@ function timelineNode(item, handlers, feedback, projectId, sessionId, openState)
       (item.kind === "user" && (item.text || item.attachments?.length))) {
     const actions = element("div", { className: "timeline-actions" });
     if (item.text) {
-      const copy = element("button", { text: "复制", attrs: { type: "button", "aria-label": "复制消息",
-        "data-timeline-action": `${item.key}/copy` } });
+      const copy = element("button", { className: "timeline-action-button", attrs: {
+        type: "button", "aria-label": "复制消息", title: "复制",
+        "data-timeline-action": `${item.key}/copy` },
+      }, [actionIcon("copy")]);
       copy.addEventListener("click", async () => {
         try { await copyText(item.text); toast("消息已复制"); }
         catch { toast("无法复制消息", "error"); }
@@ -380,14 +390,14 @@ function timelineNode(item, handlers, feedback, projectId, sessionId, openState)
     if (item.kind === "user" &&
         Number.isSafeInteger(item.userMessageSequence) &&
         item.userMessageSequence > 0 && !item.textTruncated) {
-      const edit = commandButton("编辑", "编辑此消息并重新发送", `${item.key}/edit`,
+      const edit = commandButton("编辑", "编辑此消息并重新发送", "compose", `${item.key}/edit`,
         handlers, sessionKey, () => handlers.onEdit(
           item.userMessageSequence, item.text, item.attachments ?? []));
       actions.append(edit);
     }
     if (item.kind === "assistant") {
       if ("forkThroughSequence" in item) {
-        const fork = commandButton("分叉", "从此回复分叉会话", `${item.key}/fork`,
+        const fork = commandButton("分叉", "从此回复分叉会话", "branch", `${item.key}/fork`,
           handlers, sessionKey, () => handlers.onFork(item.forkThroughSequence));
         actions.append(fork);
       }
@@ -395,17 +405,18 @@ function timelineNode(item, handlers, feedback, projectId, sessionId, openState)
       if (retryPrompt && Number.isSafeInteger(retryPrompt.sequence) &&
           retryPrompt.sequence > 0 && (retryPrompt.text || retryPrompt.attachments?.length) &&
           !retryPrompt.truncated) {
-        const retry = commandButton("重试", "重试此回合", `${item.key}/retry`,
+        const retry = commandButton("重试", "重试此回合", "retry", `${item.key}/retry`,
           handlers, sessionKey, () => handlers.onRetry(
             retryPrompt.sequence, retryPrompt.text, retryPrompt.attachments ?? []));
         actions.append(retry);
       }
       if (item.feedbackEventId && item.state === "done") {
         for (const [value, label] of [["good", "点赞"], ["bad", "点踩"]]) {
-          const button = commandButton(label, label,
+          const button = commandButton(label, label, "like",
             `${item.key}/feedback-${value}`, handlers, sessionKey,
             () => handlers.onFeedback(item.feedbackEventId,
               feedback === value ? "none" : value));
+          if (value === "bad") button.classList.add("timeline-action-dislike");
           button.setAttribute("aria-pressed", String(feedback === value));
           actions.append(button);
         }
@@ -500,6 +511,7 @@ export function createTimelineView({ container, welcome, toBottom, store, feedba
           feedback.get(item.feedbackEventId) ?? "", data?.projectId,
           data?.sessionId, expanded.get(item.key)));
     }
+    mountIcons(container);
     if (focusedAction || focusedImage) {
       const replacement = focusedAction
         ? [...container.querySelectorAll("[data-timeline-action]")].find((node) =>

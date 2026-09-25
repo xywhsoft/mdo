@@ -28,11 +28,12 @@ import { createResourceStore } from "/app/web/js/state/store.js";
 const png = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/Tz8AAAAASUVORK5CYII=";
 const message = `可预览 ![示例图片](${png})\n\n应保持文本 ![危险](javascript:alert(1)) 和 ![SVG](data:image/svg+xml;base64,PHN2Zz48L3N2Zz4=)`;
 const events = [
-  { event_id: 1, run_id: 8, kind: "agent_start", schema_version: 3,
+  { event_id: 1, run_id: 8, kind: "agent_start", schema_version: 3, agent_depth: 0,
     user_message_sequence: 1, text: "展示 Markdown 图片", time: 1000000 },
   { event_id: 2, run_id: 8, kind: "model_text_delta", model: "测试模型",
     text: message, time: 2000000 },
   { event_id: 3, run_id: 8, kind: "model_done", success: true,
+    input_tokens: 96, output_tokens: 24,
     time: 3000000 },
 ];
 const store = createResourceStore({ projectId: "qa", sessionId: "images", events });
