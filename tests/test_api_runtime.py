@@ -798,8 +798,9 @@ def run_probe(host: Path) -> None:
                     lowered = resource_body.lower()
                     assert b'"secret_ref"' not in lowered, (resource, lowered)
                     assert b'"authorization"' not in lowered, (resource, lowered)
-                assert json.loads(request(port, "GET", "/api/v1/models")[2])[
-                    "data"]["models"][0]["id"] == "ling-3.0-tiny"
+                model_catalog = json.loads(request(port, "GET", "/api/v1/models")[2])["data"]
+                assert model_catalog["models"][0]["id"] == "ling-3.0-tiny"
+                assert model_catalog["default_model_id"] == "ling-3.0-tiny"
 
                 project_workspace = base / "project-workspace"
                 project_workspace.mkdir()
@@ -3468,6 +3469,8 @@ def run_unconfigured_model_probe(host: Path) -> None:
                 status, headers, response = request(port, "GET", model_path)
                 assert status == 200 and json.loads(response)["data"][
                     "default_model"] == "test-model", response
+                assert json.loads(request(port, "GET", "/api/v1/models")[2])[
+                    "data"]["default_model_id"] == "test-model"
                 changed["items"] = [item for item in changed["items"]
                     if item["id"] != "test-model"]
                 status, _, response = request(port, "POST",

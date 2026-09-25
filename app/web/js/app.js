@@ -345,7 +345,8 @@ export async function boot() {
     root: $("#context-meter"), trigger: $("#context-meter-trigger"),
     ring: $("#context-meter-ring"), panel: $("#context-meter-panel"),
     estimate: $("#composer-input-estimate"), prompt,
-    sessionStore: sessionDetailStore, timelineStore, modelsStore, agentsStore,
+    modelSelect: $("#composer-model"),
+    sessionStore: sessionDetailStore, timelineStore, modelsStore,
   });
   const draftStore = createDraftStore({
     onRestore(text, attachments) {
@@ -368,9 +369,10 @@ export async function boot() {
   const composerProfile = createComposerProfile({
     modelSelect: $("#composer-model"), reasoningSelect: $("#composer-reasoning"),
     permissionSelect: $("#composer-permission"), navigation,
-    sessionStore: sessionDetailStore, modelsStore, agentsStore,
+    sessionStore: sessionDetailStore, modelsStore, agentsStore, projectsStore,
     isRunActive: () => Boolean(activeRun),
     onBusyChange: () => setRun(activeRun),
+    onSelectionChange: tokenMeter.refresh,
   });
   composerImages = createComposerImages({
     composer, prompt, button: $("#composer-attach"), input: $("#composer-file"),

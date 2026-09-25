@@ -7,7 +7,7 @@ export function estimateInputTokens(text) {
 }
 
 export function createTokenMeter({ root, trigger, ring, panel, estimate, prompt,
-  sessionStore, timelineStore, modelsStore, agentsStore }) {
+  modelSelect, sessionStore, timelineStore, modelsStore }) {
   let open = false;
 
   function update() {
@@ -15,8 +15,8 @@ export function createTokenMeter({ root, trigger, ring, panel, estimate, prompt,
     estimate.textContent = input ? `输入 ~${input.toLocaleString()} tok` : "输入 ~0 tok";
     const session = sessionStore.get().data;
     const models = modelsStore.get().data?.models ?? [];
-    const defaultAgent = (agentsStore.get().data?.items ?? []).find((agent) => agent.id === "mdo.default");
-    const model = models.find((item) => item.id === (session?.model_id || defaultAgent?.model)) || models[0];
+    const model = models.find((item) => item.id ===
+      (modelSelect.value || session?.model_id)) || null;
     const calls = (timelineStore.get().data?.events ?? []).filter((event) =>
       event.kind === "model_done" && (event.input_tokens || event.output_tokens));
     const latestInput = Number(calls.at(-1)?.input_tokens || 0);
@@ -55,7 +55,7 @@ export function createTokenMeter({ root, trigger, ring, panel, estimate, prompt,
   });
   prompt.addEventListener("input", update);
   const unsubscribers = [sessionStore.subscribe(update), timelineStore.subscribe(update),
-    modelsStore.subscribe(update), agentsStore.subscribe(update)];
+    modelsStore.subscribe(update)];
   update();
   return Object.freeze({
     refresh: update,

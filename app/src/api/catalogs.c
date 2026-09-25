@@ -52,9 +52,14 @@ bool MdoApiModelsRoute(MdoApiContext* Context)
     xvalue* Data = xrtValueObject();
     xvalue* Providers = xrtValueArray();
     xvalue* Models = xrtValueArray();
+    MdoModelInfo Default;
     size_t Index;
     bool Ok = Catalog != NULL && Data != NULL && Providers != NULL &&
         Models != NULL;
+
+    memset(&Default, 0, sizeof(Default));
+    Default.Size = sizeof(Default);
+    if ( Ok ) Ok = MdoModelCatalogDefault(Catalog, &Default);
 
     for ( Index = 0u; Ok && Index < MdoModelCatalogProviderCount(Catalog);
           Index++ ) {
@@ -121,6 +126,7 @@ bool MdoApiModelsRoute(MdoApiContext* Context)
     }
     if ( Ok ) Ok =
         MdoApiValueSetUInt(Data, "generation", MdoModelManagerGeneration()) &&
+        MdoApiValueSetString(Data, "default_model_id", Default.Id) &&
         MdoApiValueSetTake(Data, "providers", &Providers) &&
         MdoApiValueSetTake(Data, "models", &Models);
     xrtValueRelease(Providers);
