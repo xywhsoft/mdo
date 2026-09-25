@@ -397,6 +397,8 @@
   "composer.hintGuide": "Enter прерывает и отправляет · Ctrl+Enter ставит в очередь",
   "composer.hintQueue": "Enter ставит в очередь · Ctrl+Enter прерывает и отправляет",
   "composer.hintIdle": "Enter отправляет · Shift+Enter добавляет строку",
+  "composer.hintSubmitting": "Предыдущее сообщение отправляется · Enter сохранит следующее",
+  "composer.hintPendingAdmission": "Предыдущее сообщение отправляется · ожидают очереди: {count}",
   "composer.shortcutEnterGuide": "Отправить; во время работы прервать и отправить первым",
   "composer.shortcutEnterQueue": "Отправить; во время работы добавить в очередь",
   "composer.shortcutControlGuide": "Во время работы добавить в очередь",

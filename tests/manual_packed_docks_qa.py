@@ -160,6 +160,18 @@ class BoundedDelayProxy(BaseHTTPRequestHandler):
                 count = self.server.queue_posts
             print(f"QA queue POST #{count}", flush=True)
             time.sleep(self.server.queue_delay_seconds)
+            if self.server.fail_first_queue and count == 1:
+                payload = json.dumps({"ok": False, "error": {
+                    "code": "qa_queue_rejected", "message": "Synthetic queue failure"
+                }}).encode()
+                self.send_response(503)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Content-Length", str(len(payload)))
+                self.send_header("Connection", "close")
+                self.end_headers()
+                self.wfile.write(payload)
+                self.close_connection = True
+                return
         if (self.command == "POST" and self.path.startswith("/api/v1/projects/")
                 and "/sessions/" in self.path and self.path.endswith("/runs")):
             with self.server.count_lock:
@@ -226,6 +238,8 @@ parser.add_argument("--run-delay-ms", type=int, default=0,
                     help="delay run POSTs by 0-5000 ms for composer handoff QA")
 parser.add_argument("--fail-first-run", action="store_true",
                     help="reject one run POST before forwarding, for draft recovery QA")
+parser.add_argument("--fail-first-queue", action="store_true",
+                    help="reject one queue POST before forwarding, for staged draft QA")
 parser.add_argument("--slow-ms", type=int, default=15000,
                     help="first SLOW UI model response delay, 0-15000 ms")
 parser.add_argument("--task-ms", type=int, default=12000,
@@ -303,13 +317,14 @@ try:
     session = response["data"]["id"]
     browser_port = port
     if (args.approval_delay_ms or args.queue_delay_ms or args.run_delay_ms
-            or args.fail_first_run):
+            or args.fail_first_run or args.fail_first_queue):
         proxy = BoundedDelayProxyServer(("127.0.0.1", 0), BoundedDelayProxy)
         proxy.upstream_port = port
         proxy.approval_delay_seconds = args.approval_delay_ms / 1000
         proxy.queue_delay_seconds = args.queue_delay_ms / 1000
         proxy.run_delay_seconds = args.run_delay_ms / 1000
         proxy.fail_first_run = args.fail_first_run
+        proxy.fail_first_queue = args.fail_first_queue
         proxy.count_lock = threading.Lock()
         proxy.approval_puts = 0
         proxy.queue_posts = 0

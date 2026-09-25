@@ -425,3 +425,9 @@ Home `.build/mdo-packed-docks-lyu66m_d` 使用新单文件程序真实重启后�
 隔离 Home `.build/mdo-packed-docks-c8heqq4m` 另在原会话运行 POST 等待时切到空白新任务并输入 `Other new task draft QA`；一次合成失败后，原文 `Original session failure QA` 只恢复到原会话草稿，新任务草稿保持原样，切换返回时两者都可读取，浏览器脚本错误日志为空。
 
 有界发布门禁通过 62 个前端模块解析、18 项 Node 测试、114 项 Python 单元/契约测试、19 个运行探针、严格 C 编译、两次确定性打包、单文件零旁路写入与 20 秒启动检查；根目录 `mdo.exe` 已重建，SHA-256：`8d5f1c82590c37e4d99f1a587739bbe64a949ae656a8a1b72f047bba1a1fab87`。
+
+修复请求尚未获服务端确认时第二次 Enter 被静默忽略的问题。输入区现在按会话保留一个提交通道：每次 Enter 当场清空本次输入，后续消息按录入顺序暂存；首条成功后依次写入服务端待发送队列，并在首轮恰好结束的竞态中主动触发派发。首条或后续队列请求明确失败时，将仍未发送的内容按原顺序恢复到所属会话草稿，排在后来键入的草稿前。新会话创建时通道随会话转移；模型配置在提交期间保持锁定，发送入口和三语提示显示暂存数量。暂存消息在请求确认前只存在当前页面内存；此时强制刷新仍可能丢失暂存项，后续需结合服务端持久队列补齐该窗口。
+
+修复前隔离 Home `.build/mdo-packed-docks-c3isxd3m` 的两次快速 Enter 仅发送第一条，第二条留在输入框。修复后 Home `.build/mdo-packed-docks-_p3ane9q` 中已有会话及新任务创建期间的两次快速 Enter 均依次完成两轮；Home `.build/mdo-packed-docks-a3nbvmk7` 的合成首条拒绝将两条消息及新草稿按顺序恢复。Home `.build/mdo-packed-docks-uzu2e6uf` 中一轮 15 秒本地慢速回复与两次 3 秒队列延迟使 B、C 顺序入队并顺序执行，D 草稿保持；Home `.build/mdo-packed-docks-xsm0cos0` 的一次合成队列拒绝将 B、C 恢复到 D 前。各夹具只执行少量本地合成轮次，没有压力或高负载测试。
+
+有界发布门禁通过 62 个前端模块解析、18 项 Node 测试、114 项 Python 单元/契约测试、19 个运行探针、严格 C 编译、确定性打包、单文件零旁路写入及 20 秒启动检查；根目录 `mdo.exe` 已重建，SHA-256：`1a7d33fd1e807af0d900cf1b179d93e04a7fb4e8454c190afb8f3a22fce9e4b3`。

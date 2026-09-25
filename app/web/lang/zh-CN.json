@@ -397,6 +397,8 @@
   "composer.hintGuide": "Enter 中断并发送 · Ctrl Enter 排队",
   "composer.hintQueue": "Enter 排队 · Ctrl Enter 中断并发送",
   "composer.hintIdle": "Enter 发送 · Shift Enter 换行",
+  "composer.hintSubmitting": "上一条正在提交 · Enter 暂存下一条",
+  "composer.hintPendingAdmission": "上一条正在提交 · {count} 条待入队",
   "composer.shortcutEnterGuide": "发送；运行中中断并优先发送",
   "composer.shortcutEnterQueue": "发送；运行中加入待发送队列",
   "composer.shortcutControlGuide": "运行中加入待发送队列",

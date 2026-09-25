@@ -132,7 +132,7 @@ export async function boot() {
   let tasksTimer = 0;
   let runsTimer = 0;
   let approvalsTimer = 0;
-  const submissions = new Set();
+  const submissionLanes = new Map();
   let routeVersion = 0;
   let routeSignature = "";
   let messageActionBusy = false;
@@ -178,8 +178,15 @@ export async function boot() {
     return `${route.projectId || "default"}/${route.sessionId || "@new"}`;
   }
 
+  function activeSubmissionLane(route = navigation.get()) {
+    const scope = composerScope(route);
+    return submissionLanes.get(scope) ??
+      (creatingSessionKey === `${route.projectId}/${route.sessionId}`
+        ? submissionLanes.get(`${route.projectId}/@new`) : null);
+  }
+
   function submittingCurrent() {
-    return submissions.has(composerScope());
+    return Boolean(activeSubmissionLane());
   }
 
   const projectDialog = createProjectDialog({
@@ -614,18 +621,23 @@ export async function boot() {
     send.hidden = false;
     stop.hidden = !activeRun;
     const route = navigation.get();
+    const lane = activeSubmissionLane(route);
+    const pendingCount = lane?.pending.length ?? 0;
     const creatingSession = Boolean(creatingSessionKey) &&
       creatingSessionKey === `${route.projectId}/${route.sessionId}`;
     // Keep keyboard focus while a newly created session loads its detail.
     prompt.disabled = !sessionWritable && !creatingSession;
-    send.disabled = !sessionWritable || creatingSession || submittingCurrent() ||
+    send.disabled = !(sessionWritable || (creatingSession && lane)) ||
       composerImages?.isUploading() || composerProfile.isBusy();
-    composerImages?.setWritable(sessionWritable && !creatingSession && !submittingCurrent());
-    composerProfile.setRunActive(Boolean(activeRun));
-    send.setAttribute("aria-label", activeRun
+    composerImages?.setWritable(sessionWritable && !creatingSession &&
+      !(lane && !route.sessionId));
+    composerProfile.setRunActive(Boolean(activeRun || lane));
+    send.setAttribute("aria-label", activeRun || lane
       ? t("composer.queue", {}, "加入待发送队列")
       : t("shell.send", {}, "发送任务"));
-    composerHint.textContent = activeRun
+    composerHint.textContent = pendingCount
+      ? t("composer.hintPendingAdmission", { count: pendingCount })
+      : lane && !activeRun ? t("composer.hintSubmitting") : activeRun
       ? (guide
         ? t("composer.hintGuide", {}, "Enter 中断并发送 · Ctrl Enter 排队")
         : t("composer.hintQueue", {}, "Enter 排队 · Ctrl Enter 中断并发送"))
@@ -636,7 +648,7 @@ export async function boot() {
     $("#shortcut-control-enter-description").textContent = guide
       ? t("composer.shortcutControlGuide", {}, "运行中加入待发送队列")
       : t("composer.shortcutControlQueue", {}, "中断当前运行，优先发送输入");
-    mobileActivity.hidden = !activeRun;
+    mobileActivity.hidden = !activeRun && !lane;
   }
   settingsStore.subscribe(() => setRun(activeRun));
 
@@ -1111,34 +1123,113 @@ export async function boot() {
     return { projectId: session.project_id, sessionId: session.id };
   }
 
+  function selectedOwnsDraft(key) {
+    const route = navigation.get();
+    return route.view === "workspace" && selectedKey === key &&
+      (key ? `${route.projectId}/${route.sessionId}` === key : !route.sessionId);
+  }
+
+  function consumeComposerInput(ownerKey) {
+    prompt.value = "";
+    composerAttachments = [];
+    composerImages.clear();
+    draftStore.clear(ownerKey);
+    resizePrompt();
+    tokenMeter.refresh();
+  }
+
+  function restoreUnsentItems(ownerKey, items) {
+    const visible = selectedOwnsDraft(ownerKey);
+    if (visible) draftStore.capture(ownerKey, prompt.value, composerAttachments);
+    let restored = null;
+    // Prepending in reverse keeps the original send order ahead of any new draft.
+    for (let index = items.length - 1; index >= 0; index -= 1)
+      restored = draftStore.restoreUnsent(ownerKey,
+        items[index].raw, items[index].attachments);
+    if (visible && restored) {
+      prompt.value = restored.text;
+      composerAttachments = restored.attachments;
+      composerImages.set(restored.attachments);
+      resizePrompt();
+      tokenMeter.refresh();
+    }
+    return { restored, visible };
+  }
+
+  async function drainPendingSubmissions(lane, selected) {
+    const ownerKey = `${selected.projectId}/${selected.sessionId}`;
+    while (lane.pending.length) {
+      const item = lane.pending.shift();
+      let admitted = false;
+      try {
+        if (!await promptQueue.enqueue(selected.projectId, selected.sessionId,
+          item.text, { first: item.interrupt && lane.admitted === 0,
+            priority: item.interrupt,
+            attachments: item.attachments }))
+          throw new Error(t("composer.queueFull", {}, "待发送队列已满（最多 20 条）"));
+        admitted = true;
+        lane.admitted += 1;
+        queueBlocked.delete(ownerKey);
+        if (item.interrupt && selectedOwnsDraft(ownerKey))
+          await maybeCancelPriorityRun();
+        // The first run can finish before the queue POST returns.
+        if (selectedOwnsDraft(ownerKey)) await dispatchQueued();
+      } catch (error) {
+        const unsent = [...(admitted ? [] : [item]), ...lane.pending.splice(0)];
+        const { restored, visible } = unsent.length
+          ? restoreUnsentItems(ownerKey, unsent)
+          : { restored: null, visible: selectedOwnsDraft(ownerKey) };
+        if (visible) {
+          showComposerError(error, restored
+            ? t(restored.merged ? "composer.unsentMerged" : "composer.unsentRestored") : "");
+          prompt.focus();
+        } else {
+          toast(t("composer.backgroundQueueFailed", {
+            title: ownerKey,
+            error: errorMessage(error),
+          }), "error");
+        }
+        break;
+      } finally { setRun(activeRun); }
+    }
+  }
+
   async function submitPrompt({ text, attachments = [], interrupt = false,
     fromComposer = true }) {
     fileMentions.hide();
-    if ((!text && !attachments.length) || submittingCurrent() ||
-        composerImages.isUploading()) return;
+    if ((!text && !attachments.length) || composerImages.isUploading()) return;
     const origin = navigation.get();
     const originVersion = routeVersion;
     if (fromComposer && !attachments.length &&
         slashCommands.consumeExact(text)) return;
     if (routeVersion !== originVersion) return;
+    const existingLane = activeSubmissionLane(origin);
+    if (existingLane) {
+      if (!fromComposer) return;
+      if (existingLane.pending.length >= 20) {
+        showComposerError(new Error(t("composer.queueFull", {},
+          "待发送队列已满（最多 20 条）")));
+        return;
+      }
+      hideComposerError();
+      existingLane.pending.push({ text, raw: prompt.value,
+        attachments: [...attachments], interrupt });
+      consumeComposerInput(selectedKey);
+      setRun(activeRun);
+      return;
+    }
     if (composerProfile.isBusy()) {
       showComposerError(new Error(t("composer.profileBusy", {}, "请等待会话配置更新完成")));
       return;
     }
     hideComposerError();
     let submissionScope = composerScope(origin);
-    submissions.add(submissionScope);
+    const lane = { pending: [], admitted: 0 };
+    submissionLanes.set(submissionScope, lane);
     const originatingKey = selectedKey;
     const submittedInput = fromComposer ? prompt.value : "";
     const originatingRun = activeRun;
-    if (fromComposer) {
-      prompt.value = "";
-      composerAttachments = [];
-      composerImages.clear();
-      draftStore.clear(originatingKey);
-      resizePrompt();
-      tokenMeter.refresh();
-    }
+    if (fromComposer) consumeComposerInput(originatingKey);
     setRun(activeRun);
     let selected = null;
     let accepted = false;
@@ -1154,9 +1245,9 @@ export async function boot() {
       selectedVersion = routeVersion;
       const targetScope = `${selected.projectId}/${selected.sessionId}`;
       if (targetScope !== submissionScope) {
-        submissions.delete(submissionScope);
+        submissionLanes.delete(submissionScope);
         submissionScope = targetScope;
-        submissions.add(submissionScope);
+        submissionLanes.set(submissionScope, lane);
         setRun(activeRun);
       }
       if (originatingRun) {
@@ -1164,6 +1255,7 @@ export async function boot() {
           { first: interrupt, priority: interrupt, attachments }))
           throw new Error(t("composer.queueFull", {}, "待发送队列已满（最多 20 条）"));
         accepted = true;
+        lane.admitted += 1;
         queueBlocked.delete(`${selected.projectId}/${selected.sessionId}`);
         if (interrupt && selectedIsCurrent()) {
           await maybeCancelPriorityRun();
@@ -1182,21 +1274,15 @@ export async function boot() {
         loadTasks(), loadRuns(), loadRecovery()]);
     } catch (error) {
       let restored = null;
-      if (fromComposer && !accepted) {
-        const ownerKey = selected
-          ? `${selected.projectId}/${selected.sessionId}` : originatingKey;
+      const ownerKey = selected
+        ? `${selected.projectId}/${selected.sessionId}` : originatingKey;
+      const unsent = [...(!accepted && fromComposer
+        ? [{ raw: submittedInput, attachments }] : []),
+        ...(!accepted ? lane.pending.splice(0) : [])];
+      if (unsent.length) {
         if (!originatingKey && selected && selectedIsCurrent())
           draftStore.clear("");
-        if (selectedIsCurrent())
-          draftStore.capture(ownerKey, prompt.value, composerAttachments);
-        restored = draftStore.restoreUnsent(ownerKey, submittedInput, attachments);
-        if (selectedIsCurrent()) {
-          prompt.value = restored.text;
-          composerAttachments = restored.attachments;
-          composerImages.set(restored.attachments);
-          resizePrompt();
-          tokenMeter.refresh();
-        }
+        restored = restoreUnsentItems(ownerKey, unsent).restored;
       }
       if (selectedIsCurrent()) {
         if (!fromComposer && !prompt.value.trim() && !composerAttachments.length) {
@@ -1213,8 +1299,12 @@ export async function boot() {
           `后台任务未发出：${errorMessage(error)}`), "error");
       }
     } finally {
-      submissions.delete(submissionScope);
-      setRun(activeRun);
+      try {
+        if (accepted && selected) await drainPendingSubmissions(lane, selected);
+      } finally {
+        submissionLanes.delete(submissionScope);
+        setRun(activeRun);
+      }
     }
   }
 
@@ -1259,7 +1349,8 @@ export async function boot() {
       event.preventDefault();
       const modified = event.ctrlKey || event.metaKey;
       const guide = settingsStore.get().data?.composer?.submit_mode === "guide";
-      interruptRequested = Boolean(activeRun && (guide ? !modified : modified));
+      interruptRequested = Boolean((activeRun || activeSubmissionLane()) &&
+        (guide ? !modified : modified));
       composer.requestSubmit();
     }
   });
