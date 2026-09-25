@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="zh-CN">
+<meta charset="utf-8">
+<title>mdo composer profile session probe</title>
+<label>模型 <select id="model"></select></label>
+<label>推理强度 <select id="reasoning"></select></label>
+<label>权限 <select id="permission"><option value="balanced">询问</option></select></label>
+<pre id="result"></pre>
+<script type="module">
+import { createComposerProfile } from "/app/web/js/features/chat/composer-profile.js";
+
+function store(initial) {
+  let state = { data: initial };
+  const listeners = new Set();
+  return {
+    get: () => state,
+    setData(data) { state = { data }; for (const listener of listeners) listener(state); },
+    subscribe(listener) { listeners.add(listener); listener(state); },
+  };
+}
+
+const session = (id, model = "text") => ({
+  id, project_id: "qa", title: id, status: "active", model_id: model,
+  reasoning_effort: "medium", permission_profile: "balanced", etag: `"${id}"`,
+});
+const modelsStore = store({ default_model_id: "text", models: [
+  { id: "text", name: "Text", reasoning_efforts: ["medium"],
+    default_reasoning_effort: "medium" },
+  { id: "image", name: "Image", reasoning_efforts: ["medium"],
+    default_reasoning_effort: "medium" },
+] });
+const sessionStore = store(session("first"));
+const agentsStore = store({ items: [] });
+const projectsStore = store({ items: [] });
+let route = { projectId: "qa", sessionId: "first" };
+const routeListeners = new Set();
+const navigation = {
+  get: () => route,
+  subscribe(listener) { routeListeners.add(listener); listener(route); },
+  select(sessionId) {
+    route = { projectId: "qa", sessionId };
+    for (const listener of routeListeners) listener(route);
+  },
+};
+const requests = [];
+let busyChanges = 0;
+let finishFirst;
+const originalFetch = window.fetch;
+window.fetch = (url, options = {}) => {
+  const path = String(url);
+  if (path === "/api/v1/sessions") return Promise.resolve(new Response(
+    JSON.stringify({ ok: true, data: { generation: 1, items: [] } }),
+    { status: 200 }));
+  if (options.method === "PUT" && path.endsWith("/profile")) {
+    const id = /\/sessions\/([^/]+)\/profile$/.exec(path)?.[1];
+    requests.push({ id, body: JSON.parse(options.body) });
+    const reply = () => new Response(JSON.stringify({ ok: true,
+      data: session(id, "image") }), { status: 200 });
+    return id === "first" ? new Promise((resolve) => {
+      finishFirst = () => resolve(reply());
+    }) : Promise.resolve(reply());
+  }
+  return originalFetch(url, options);
+};
+
+const modelSelect = document.querySelector("#model");
+const profile = createComposerProfile({
+  modelSelect, reasoningSelect: document.querySelector("#reasoning"),
+  permissionSelect: document.querySelector("#permission"), navigation,
+  sessionStore, modelsStore, agentsStore, projectsStore,
+  isRunActive: () => false, onBusyChange() { busyChanges += 1; },
+});
+async function until(predicate) {
+  for (let attempt = 0; attempt < 50; attempt += 1) {
+    if (predicate()) return true;
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  }
+  return false;
+}
+
+try {
+  modelSelect.value = "image";
+  modelSelect.dispatchEvent(new Event("change"));
+  const firstLocked = profile.isBusy() && modelSelect.disabled &&
+    requests[0]?.id === "first";
+
+  navigation.select("second");
+  sessionStore.setData(null);
+  const loadingLocked = modelSelect.disabled && !profile.isBusy();
+  sessionStore.setData(session("second"));
+  const secondUsable = !modelSelect.disabled && !profile.isBusy();
+  modelSelect.value = "image";
+  modelSelect.dispatchEvent(new Event("change"));
+  const secondSaved = await until(() => requests[1]?.id === "second" &&
+    sessionStore.get().data?.model_id === "image" && !profile.isBusy());
+
+  finishFirst();
+  const firstFinished = await until(() => busyChanges >= 4);
+  const lateFirstSafe = firstFinished && navigation.get().sessionId === "second" &&
+    sessionStore.get().data?.id === "second" &&
+    sessionStore.get().data?.model_id === "image" && !profile.isBusy();
+  const passed = firstLocked && loadingLocked && secondUsable &&
+    secondSaved && lateFirstSafe;
+  document.querySelector("#result").dataset.passed = String(passed);
+  document.querySelector("#result").textContent = JSON.stringify({
+    passed, firstLocked, loadingLocked, secondUsable, secondSaved,
+    lateFirstSafe, requests,
+  }, null, 2);
+} catch (error) {
+  document.querySelector("#result").dataset.passed = "false";
+  document.querySelector("#result").textContent = error.stack ?? String(error);
+} finally { window.fetch = originalFetch; }
+</script>
+</html>

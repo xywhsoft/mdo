@@ -31,10 +31,14 @@ export function createComposerProfile({ modelSelect, reasoningSelect,
   // Blank tasks have no session metadata. Keep manual choices per project, but
   // continue following its configured default until the user picks a model.
   const drafts = new Map();
-  let busy = false;
+  const busy = new Set();
   let runActive = false;
 
   function models() { return modelsStore.get().data?.models ?? []; }
+  function selectedKey() {
+    const route = navigation.get();
+    return route.sessionId ? `${route.projectId}/${route.sessionId}` : "";
+  }
   function current() {
     const route = navigation.get();
     const session = sessionStore.get().data;
@@ -82,7 +86,9 @@ export function createComposerProfile({ modelSelect, reasoningSelect,
       model?.default_reasoning_effort || "";
     fillReasoningOptions(reasoningSelect, model, effort);
     permissionSelect.value = session ? agentPermission(session) : pending.permission_profile;
-    const disabled = busy || runActive || (session && session.status !== "active");
+    const disabled = busy.has(selectedKey()) || runActive ||
+      (Boolean(navigation.get().sessionId) && !session) ||
+      (session && session.status !== "active");
     modelSelect.disabled = disabled || catalog.length === 0;
     reasoningSelect.disabled = disabled || !reasoningSelect.options.length;
     permissionSelect.disabled = disabled;
@@ -91,6 +97,7 @@ export function createComposerProfile({ modelSelect, reasoningSelect,
 
   async function changed(field) {
     const session = current();
+    if (navigation.get().sessionId && !session) { sync(); return; }
     const model = selectedModel(models(), modelSelect.value);
     const effort = fillReasoningOptions(reasoningSelect, model,
       reasoningSelect.value);
@@ -110,11 +117,12 @@ export function createComposerProfile({ modelSelect, reasoningSelect,
       sync();
       return;
     }
-    if (busy || isRunActive() || session.status !== "active") {
+    const key = `${session.project_id}/${session.id}`;
+    if (busy.has(key) || isRunActive() || session.status !== "active") {
       sync();
       return;
     }
-    busy = true;
+    busy.add(key);
     onBusyChange(true);
     sync();
     try {
@@ -122,12 +130,18 @@ export function createComposerProfile({ modelSelect, reasoningSelect,
       const selected = navigation.get();
       if (selected.projectId === updated.project_id &&
           selected.sessionId === updated.id) sessionStore.setData(updated);
-      toast("会话配置已更新");
+      toast(selected.projectId === updated.project_id &&
+        selected.sessionId === updated.id ? "会话配置已更新" :
+        `后台会话“${session.title}”配置已更新`);
     } catch (error) {
-      toast(errorMessage(error), "error");
-      if (navigation.get().sessionId === session.id) sync();
+      const selected = navigation.get();
+      toast(selected.projectId === session.project_id &&
+        selected.sessionId === session.id ? errorMessage(error) :
+        `后台会话“${session.title}”配置更新失败：${errorMessage(error)}`, "error");
+      if (selected.projectId === session.project_id &&
+          selected.sessionId === session.id) sync();
     } finally {
-      busy = false;
+      busy.delete(key);
       onBusyChange(false);
       sync();
     }
@@ -153,7 +167,7 @@ export function createComposerProfile({ modelSelect, reasoningSelect,
       permission_profile: permissionSelect.value,
     }),
     setRunActive(value) { runActive = Boolean(value); sync(); },
-    isBusy: () => busy,
+    isBusy: () => busy.has(selectedKey()),
     sync,
   });
 }
