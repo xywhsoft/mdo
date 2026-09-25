@@ -396,6 +396,12 @@ static bool MdoConfigSettingsValidate(const xvalue* pSettings)
          !MdoConfigStringOneOf(xrtValueObjectGet(pAgent,
             MdoConfigKey("reasoning_effort")), Efforts,
             sizeof(Efforts) / sizeof(Efforts[0])) ||
+         !MdoConfigString(xrtValueObjectGet(pAgent,
+            MdoConfigKey("user_instructions")), &Text) ||
+         Text.Size > 8192u ||
+         (Text.Size != 0u &&
+          memchr(Text.Data, '\0', Text.Size) != NULL) ||
+         !xrtUtf8Valid(Text, NULL) ||
          !MdoConfigBool(pAgent, "web_search") ||
          !MdoConfigBool(pAgent, "memory") ||
          !MdoConfigBool(pAgent, "schedules") ||
@@ -1280,6 +1286,37 @@ bool MdoConfigGetAgentSettings(MdoConfigAgentSettings* pSettings)
     if ( !Ok ) MdoConfigErrorSet(XERR_STATE, MDO_CONFIG_ERROR_STATE,
         "effective Agent settings are unavailable");
     return Ok;
+}
+
+char* MdoConfigAgentInstructions(void)
+{
+    const xvalue* pSettings;
+    const xvalue* pAgent;
+    xstrview Text;
+    char* Result = NULL;
+    if ( !g_MdoConfig.Initialized ) {
+        MdoConfigErrorSet(XERR_STATE, MDO_CONFIG_ERROR_STATE,
+            "Agent instructions are unavailable");
+        return NULL;
+    }
+    xrtMutexLock(g_MdoConfig.Lock);
+    pSettings = xrtValueObjectGet(g_MdoConfig.Effective,
+        MdoConfigKey("settings"));
+    pAgent = pSettings != NULL ? xrtValueObjectGet(pSettings,
+        MdoConfigKey("agent")) : NULL;
+    if ( pAgent != NULL && MdoConfigString(xrtValueObjectGet(pAgent,
+            MdoConfigKey("user_instructions")), &Text) &&
+         Text.Size <= 8192u ) {
+        Result = (char*)xrtMalloc(Text.Size + 1u);
+        if ( Result != NULL ) {
+            if ( Text.Size != 0u ) memcpy(Result, Text.Data, Text.Size);
+            Result[Text.Size] = '\0';
+        }
+    }
+    xrtMutexUnlock(g_MdoConfig.Lock);
+    if ( Result == NULL ) MdoConfigErrorSet(XERR_STATE,
+        MDO_CONFIG_ERROR_STATE, "cannot read Agent instructions");
+    return Result;
 }
 
 bool MdoConfigGetWebSettings(MdoConfigWebSettings* pSettings)

@@ -19,6 +19,7 @@ function settingsPatch(form, snapshot) {
     agent: {
       interaction_mode: form.elements.interaction_mode.value,
       reasoning_effort: form.elements.reasoning_effort.value,
+      user_instructions: form.elements.user_instructions.value,
       web_search: form.elements.web_search.checked,
       memory: form.elements.memory.checked,
       schedules: form.elements.schedules.checked,
@@ -66,6 +67,7 @@ export function createSettingsView({ form, store, navigation, onApplied }) {
   const restoreButton = document.querySelector("#restore-settings");
   const restoreConfirm = document.querySelector("#restore-confirm");
   const credential = document.querySelector("#search-credential-state");
+  const instructionsCount = document.querySelector("#settings-instructions-count");
   let snapshot = null;
   let baselineFingerprint = "";
   let previewFingerprint = "";
@@ -83,7 +85,7 @@ export function createSettingsView({ form, store, navigation, onApplied }) {
   function setBusy(value) {
     busy = value;
     const dirty = Boolean(snapshot) && fingerprint() !== baselineFingerprint;
-    previewButton.disabled = value || !dirty;
+    previewButton.disabled = value || !dirty || !form.elements.user_instructions.validity.valid;
     applyButton.disabled = value || !snapshot || previewFingerprint !== fingerprint();
     discardButton.disabled = value || !dirty;
     restoreButton.disabled = value || !snapshot?.user_patches?.settings;
@@ -98,6 +100,17 @@ export function createSettingsView({ form, store, navigation, onApplied }) {
       : t("settings.runtimeError", { error: settings.transaction_service.last_error },
         `运行时配置需要处理：${settings.transaction_service.last_error}`),
     settings.transaction_service.runtime_consistent ? "neutral" : "error");
+  }
+
+  function validateInstructions() {
+    const field = form.elements.user_instructions;
+    const bytes = new TextEncoder().encode(field.value).length;
+    field.setCustomValidity(bytes > 8192
+      ? t("settings.instructionsTooLong", {}, "自定义指令不能超过 8192 字节。") : "");
+    instructionsCount.textContent = t("settings.instructionsBytes",
+      { bytes }, `${bytes} / 8192 字节`);
+    instructionsCount.dataset.tone = bytes > 8192 ? "error" : "neutral";
+    return bytes <= 8192;
   }
 
   function fill(settings) {
@@ -118,6 +131,8 @@ export function createSettingsView({ form, store, navigation, onApplied }) {
     form.elements.confirm_external_write.checked = settings.workspace.confirm_external_write;
     form.elements.interaction_mode.value = settings.agent.interaction_mode;
     form.elements.reasoning_effort.value = settings.agent.reasoning_effort;
+    form.elements.user_instructions.value = settings.agent.user_instructions ?? "";
+    validateInstructions();
     form.elements.max_parallel_tools.value = settings.agent.max_parallel_tools;
     form.elements.max_parallel_subagents.value = settings.agent.max_parallel_subagents;
     form.elements.web_search.checked = settings.agent.web_search;
@@ -145,14 +160,18 @@ export function createSettingsView({ form, store, navigation, onApplied }) {
   }
 
   function markDirty() {
+    const validInstructions = validateInstructions();
     previewFingerprint = "";
     const dirty = Boolean(snapshot) && fingerprint() !== baselineFingerprint;
-    previewButton.disabled = busy || !dirty;
+    previewButton.disabled = busy || !dirty || !validInstructions;
     applyButton.disabled = true;
     discardButton.disabled = busy || !dirty;
-    feedbackText(dirty
-      ? t("settings.pending", {}, "有尚未预览的更改。先预览，确认后再应用。")
-      : t("settings.synced", {}, "配置与本地服务保持同步。"), "neutral");
+    feedbackText(!validInstructions
+      ? t("settings.instructionsTooLong", {}, "自定义指令不能超过 8192 字节。")
+      : dirty
+        ? t("settings.pending", {}, "有尚未预览的更改。先预览，确认后再应用。")
+        : t("settings.synced", {}, "配置与本地服务保持同步。"),
+    validInstructions ? "neutral" : "error");
   }
   form.addEventListener("input", markDirty);
   form.addEventListener("change", markDirty);
@@ -160,6 +179,7 @@ export function createSettingsView({ form, store, navigation, onApplied }) {
     try {
       await loadLocale(form.elements.locale.value);
       if (snapshot) renderStatus(snapshot);
+      validateInstructions();
       markDirty();
     }
     catch (error) {

@@ -61,6 +61,9 @@ bool MdoConfigInit(void);
 void MdoConfigUnit(void);
 bool MdoConfigGetSnapshot(MdoConfigSnapshot* pSnapshot);
 bool MdoConfigGetAgentSettings(MdoConfigAgentSettings* pSettings);
+/* Caller owns the returned UTF-8 text and releases it with xrtFree.
+ * An empty string is a valid result; NULL indicates a configuration error. */
+char* MdoConfigAgentInstructions(void);
 bool MdoConfigGetWebSettings(MdoConfigWebSettings* pSettings);
 
 /* Returned strings are owned by the caller and released with xrtFree. */

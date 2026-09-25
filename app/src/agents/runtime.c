@@ -567,16 +567,17 @@ static bool MdoAgentsAppendPrompt(char** Prompt, const char* Fragment,
     if ( Prompt == NULL || *Prompt == NULL || Fragment == NULL ) return false;
     if ( FragmentBytes == 0u ) return true;
     BaseBytes = strlen(*Prompt);
-    if ( FragmentBytes > MDO_AGENT_PROMPT_LIMIT - 1u ||
+    if ( BaseBytes >= MDO_AGENT_PROMPT_LIMIT ||
+         FragmentBytes > MDO_AGENT_PROMPT_LIMIT - 1u ||
          BaseBytes > MDO_AGENT_PROMPT_LIMIT - FragmentBytes - 1u ) {
         MdoAgentsError(Error, XWORK_ERROR_LIMIT,
-            "memory references exceed the Agent context injection limit");
+            "Agent system prompt exceeds the context injection limit");
         return false;
     }
     Result = (char*)xrtRealloc(*Prompt, BaseBytes + FragmentBytes + 1u);
     if ( Result == NULL ) {
         MdoAgentsError(Error, XWORK_ERROR_OUT_OF_MEMORY,
-            "cannot append Agent memory references");
+            "cannot append Agent system prompt");
         return false;
     }
     memcpy(Result + BaseBytes, Fragment, FragmentBytes);
@@ -912,6 +913,7 @@ MdoAgentSession* MdoAgentSessionCreateWithRuntime(xwork_runtime* Runtime,
     uint32 MaxOutput;
     bool ValidApproval;
     char* Prompt = NULL;
+    char* Instructions = NULL;
     char* MemoryPrompt = NULL;
     size_t MemoryPromptBytes = 0u;
     uint64 MemoryGeneration = 0u;
@@ -1061,14 +1063,44 @@ MdoAgentSession* MdoAgentSessionCreateWithRuntime(xwork_runtime* Runtime,
             "cannot attach the Agent session journal");
         goto fail;
     }
-    Prompt = MdoAgentsComposePrompt(&AgentInfo, Owner->Skills, Error);
-    if ( Prompt == NULL ) goto fail;
-    if ( Settings.MemoryEnabled ) {
-        MemoryPrompt = MdoMemoryBuildPrompt(Options->ProjectId,
-            &MemoryPromptBytes, &MemoryGeneration, Error);
-        if ( MemoryPrompt == NULL ||
-             !MdoAgentsAppendPrompt(&Prompt, MemoryPrompt,
-                MemoryPromptBytes, Error) ) goto fail;
+    {
+        const char* RecoveredPrompt = Options->Recover ?
+            xllmSessionGetSystemPrompt(Owner->LlmSession) : NULL;
+        if ( RecoveredPrompt != NULL ) {
+            Prompt = xrtStrDup(RecoveredPrompt);
+            if ( Prompt == NULL ) {
+                MdoAgentsError(Error, XWORK_ERROR_OUT_OF_MEMORY,
+                    "cannot restore the Agent system prompt");
+                goto fail;
+            }
+        } else {
+            static const char InstructionsHeader[] =
+                "\n\n<user_instructions>\n";
+            static const char InstructionsFooter[] =
+                "\n</user_instructions>";
+            Prompt = MdoAgentsComposePrompt(&AgentInfo, Owner->Skills, Error);
+            if ( Prompt == NULL ) goto fail;
+            Instructions = MdoConfigAgentInstructions();
+            if ( Instructions == NULL ) {
+                MdoAgentsError(Error, XWORK_ERROR_CONTEXT,
+                    "effective Agent instructions are unavailable");
+                goto fail;
+            }
+            if ( Instructions[0] != '\0' &&
+                 (!MdoAgentsAppendPrompt(&Prompt, InstructionsHeader,
+                    sizeof(InstructionsHeader) - 1u, Error) ||
+                  !MdoAgentsAppendPrompt(&Prompt, Instructions,
+                    strlen(Instructions), Error) ||
+                  !MdoAgentsAppendPrompt(&Prompt, InstructionsFooter,
+                    sizeof(InstructionsFooter) - 1u, Error)) ) goto fail;
+            if ( Settings.MemoryEnabled ) {
+                MemoryPrompt = MdoMemoryBuildPrompt(Options->ProjectId,
+                    &MemoryPromptBytes, &MemoryGeneration, Error);
+                if ( MemoryPrompt == NULL ||
+                     !MdoAgentsAppendPrompt(&Prompt, MemoryPrompt,
+                        MemoryPromptBytes, Error) ) goto fail;
+            }
+        }
     }
     Permission = Options->PermissionProfile != NULL &&
         Options->PermissionProfile[0] != '\0' ? Options->PermissionProfile :
@@ -1192,6 +1224,7 @@ MdoAgentSession* MdoAgentSessionCreateWithRuntime(xwork_runtime* Runtime,
     Session->SkillCount = AgentInfo.SkillCount;
     xworkAgentDefinitionRelease(Definition);
     xrtFree(Prompt);
+    xrtFree(Instructions);
     xrtFree(MemoryPrompt);
     xrtFree(DefaultArtifacts);
     return Session;
@@ -1199,6 +1232,7 @@ MdoAgentSession* MdoAgentSessionCreateWithRuntime(xwork_runtime* Runtime,
 fail:
     xworkAgentDefinitionRelease(Definition);
     xrtFree(Prompt);
+    xrtFree(Instructions);
     xrtFree(MemoryPrompt);
     xrtFree(DefaultArtifacts);
     if ( Session != NULL ) {

@@ -1028,6 +1028,10 @@ select:focus-visible,
 .setting-row input[type="number"] { width: 112px; min-width: 112px; }
 .setting-row-wide { display: grid; align-items: start; gap: 12px; padding: 18px 0; }
 .setting-row-wide input { width: 100%; }
+.setting-instructions textarea { width: 100%; min-height: 112px; resize: vertical; padding: 9px 11px; border: 1px solid var(--border-strong); border-radius: var(--radius-sm); background: var(--surface-raised); color: var(--ink); font: inherit; line-height: 1.5; }
+.setting-instructions textarea:focus { outline: 2px solid var(--focus); outline-offset: 1px; }
+.setting-instructions small { color: var(--muted); text-align: right; }
+.setting-instructions small[data-tone="error"] { color: var(--danger); }
 
 .setting-switch { position: relative; cursor: pointer; }
 .setting-switch input { position: absolute; width: 1px; height: 1px; opacity: 0; }

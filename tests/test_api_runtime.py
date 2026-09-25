@@ -1589,6 +1589,8 @@ def run_probe(host: Path) -> None:
                     "interaction_mode"] == "agent", settings_document
                 assert settings_document["data"]["agent"][
                     "web_search"] is True, settings_document
+                assert settings_document["data"]["agent"][
+                    "user_instructions"] == "", settings_document
                 assert settings_document["data"]["workspace"] == {
                     "open_mode": "last",
                     "confirm_external_write": True,
@@ -1650,9 +1652,20 @@ def run_probe(host: Path) -> None:
                     "sound": True,
                 }, body
 
+                oversized_instructions = json.dumps({
+                    "schema_version": 1,
+                    "patch": {"agent": {"user_instructions": "你" * 2731}},
+                }).encode()
+                status, _, body = request(
+                    port, "PATCH", "/api/v1/settings/settings/preview",
+                    body=oversized_instructions,
+                    headers={"Content-Type": "application/json"})
+                assert status != 200, (status, body)
+
                 merge_document = json.dumps({
                     "schema_version": 1,
-                    "patch": {"agent": {"memory": False}},
+                    "patch": {"agent": {"memory": False,
+                                        "user_instructions": "Review carefully."}},
                 }).encode()
                 status, headers, body = request(
                     port, "PATCH", "/api/v1/settings/settings/preview",
@@ -1677,6 +1690,8 @@ def run_probe(host: Path) -> None:
                     encoding="utf-8"))
                 assert stored["patch"]["appearance"]["theme"] == "dark", stored
                 assert stored["patch"]["agent"]["memory"] is False, stored
+                assert stored["patch"]["agent"][
+                    "user_instructions"] == "Review carefully.", stored
 
                 stale_document = json.dumps({
                     "schema_version": 1,

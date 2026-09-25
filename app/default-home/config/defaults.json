@@ -16,6 +16,7 @@
     "agent": {
       "interaction_mode": "agent",
       "reasoning_effort": "medium",
+      "user_instructions": "",
       "web_search": true,
       "memory": true,
       "schedules": true,

@@ -192,6 +192,7 @@ typedef struct ProbeOwner {{
     bool SawSkillV1;
     bool SawSkillV2;
     bool SawMemory;
+    bool SawInstructionsV1;
 }} ProbeOwner;
 
 static bool OwnerRetain(void *data) {{
@@ -247,6 +248,8 @@ static xllm_result Complete(void *data, const xllm_request *request,
         if (strstr(text, "agent-memory-probe") != NULL &&
             strstr(text, "untrusted reference data") != NULL)
             owner->SawMemory = true;
+        if (strstr(text, "<user_instructions>\nprobe-custom-v1\n</user_instructions>") != NULL)
+            owner->SawInstructionsV1 = true;
     }}
     *response = Response("agent-runtime-ok");
     return *response != NULL ? XLLM_RESULT_OK : XLLM_RESULT_ERROR;
@@ -407,14 +410,73 @@ void ServiceInit(XS_HostInfo *host) {{
             (unsigned long long)run_info.ModuleGeneration,
             (unsigned long long)run_info.SkillGeneration,
             (unsigned long long)run_info.MemoryGeneration);
-    printf("callback=calls:%u model:%d reasoning:%d system_v1:%d skill_v1:%d skill_v2:%d memory:%d\n",
+    printf("callback=calls:%u model:%d reasoning:%d system_v1:%d skill_v1:%d skill_v2:%d memory:%d instructions_v1:%d\n",
         owner.Calls, owner.SawModel ? 1 : 0, owner.SawReasoning ? 1 : 0,
         owner.SawSystemV1 ? 1 : 0, owner.SawSkillV1 ? 1 : 0,
-        owner.SawSkillV2 ? 1 : 0, owner.SawMemory ? 1 : 0);
+        owner.SawSkillV2 ? 1 : 0, owner.SawMemory ? 1 : 0,
+        owner.SawInstructionsV1 ? 1 : 0);
     xworkRunResultUnit(&result);
     MdoAgentRunDestroy(run); run = NULL;
     printf("owner_after_run_destroy=refs:%u retains:%u releases:%u\n",
         owner.Refs, owner.Retains, owner.Releases);
+
+    MdoAgentSessionOptionsInit(&options);
+    options.AgentId = "probe.main";
+    options.ProjectId = "project-alpha";
+    options.WorkspaceRoot = ".";
+    options.SessionPath = "prompt-session.snapshot";
+    options.JournalPath = "prompt-session.journal";
+    options.OnModelComplete = Complete;
+    options.ModelUserData = &owner;
+    session = MdoAgentSessionCreateWithRuntime(runtime, &options, &error);
+    if (session == NULL) {{ PrintRuntimeError("prompt_create_error", &error); goto done; }}
+    printf("prompt_initial=%d\n", strstr(session->SystemPrompt,
+        "probe-custom-v1") != NULL ? 1 : 0);
+    {{
+        xllm_error model_error;
+        if (!xllmSessionSetSystemPrompt(session->Owner->LlmSession,
+                session->SystemPrompt, &model_error) ||
+            !MdoAgentSessionCheckpoint(session, &error)) {{
+            PrintRuntimeError("prompt_checkpoint_error", &error); goto done;
+        }}
+    }}
+    MdoAgentSessionRelease(session); session = NULL;
+    if (!MdoConfigImport(MDO_CONFIG_SETTINGS,
+            xrtStrView("{{\"schema_version\":1,\"patch\":{{\"agent\":{{\"user_instructions\":\"probe-custom-v2\"}}}}}}"))) {{
+        printf("prompt_config_error=1\n"); goto done;
+    }}
+    options.Recover = true;
+    session = MdoAgentSessionCreateWithRuntime(runtime, &options, &error);
+    if (session == NULL) {{ PrintRuntimeError("prompt_recover_error", &error); goto done; }}
+    printf("prompt_recovered=old:%d new:%d\n",
+        strstr(session->SystemPrompt, "probe-custom-v1") != NULL ? 1 : 0,
+        strstr(session->SystemPrompt, "probe-custom-v2") != NULL ? 1 : 0);
+    if (!MdoAgentSessionClear(session, &error)) {{
+        PrintRuntimeError("prompt_clear_error", &error); goto done;
+    }}
+    printf("prompt_after_clear=old:%d new:%d\n",
+        strstr(xllmSessionGetSystemPrompt(session->Owner->LlmSession),
+            "probe-custom-v1") != NULL ? 1 : 0,
+        strstr(xllmSessionGetSystemPrompt(session->Owner->LlmSession),
+            "probe-custom-v2") != NULL ? 1 : 0);
+    if (!MdoAgentSessionTruncateAfter(session, 0u, &error)) {{
+        PrintRuntimeError("prompt_truncate_error", &error); goto done;
+    }}
+    printf("prompt_after_truncate=old:%d new:%d\n",
+        strstr(xllmSessionGetSystemPrompt(session->Owner->LlmSession),
+            "probe-custom-v1") != NULL ? 1 : 0,
+        strstr(xllmSessionGetSystemPrompt(session->Owner->LlmSession),
+            "probe-custom-v2") != NULL ? 1 : 0);
+    MdoAgentSessionRelease(session); session = NULL;
+    options.Recover = false;
+    options.SessionPath = NULL;
+    options.JournalPath = NULL;
+    session = MdoAgentSessionCreateWithRuntime(runtime, &options, &error);
+    if (session == NULL) {{ PrintRuntimeError("prompt_new_error", &error); goto done; }}
+    printf("prompt_new=old:%d new:%d\n",
+        strstr(session->SystemPrompt, "probe-custom-v1") != NULL ? 1 : 0,
+        strstr(session->SystemPrompt, "probe-custom-v2") != NULL ? 1 : 0);
+    MdoAgentSessionRelease(session); session = NULL;
 done:
     MdoAgentRunDestroy(run);
     MdoAgentSessionRelease(invalid);
@@ -477,11 +539,12 @@ def write_site(site: Path, memory_enabled: bool = True) -> None:
     shutil.copy2(
         ROOT / "app/src/memory/internal.h", site / "src/memory/internal.h"
     )
+    defaults_path = site / "default-home/config/defaults.json"
+    defaults = json.loads(defaults_path.read_text(encoding="utf-8"))
+    defaults["settings"]["agent"]["user_instructions"] = "probe-custom-v1"
     if not memory_enabled:
-        defaults_path = site / "default-home/config/defaults.json"
-        defaults = json.loads(defaults_path.read_text(encoding="utf-8"))
         defaults["settings"]["agent"]["memory"] = False
-        defaults_path.write_text(json.dumps(defaults), encoding="utf-8")
+    defaults_path.write_text(json.dumps(defaults), encoding="utf-8")
     shutil.copy2(
         ROOT / "include/mdo/module.h",
         site / "generated/module-sdk/mdo/module.h",
@@ -593,7 +656,12 @@ def main() -> int:
         assert "owner_after_session_release=refs:2 releases:0" in output, output
         assert "run=result:0 text:agent-runtime-ok" in output, output
         assert "run_info=agent:probe.main model:ling-3.0-tiny reasoning:medium state:2 result:0 generations:1/1/1/2" in output, output
-        assert "callback=calls:1 model:1 reasoning:1 system_v1:1 skill_v1:1 skill_v2:0 memory:1" in output, output
+        assert "callback=calls:1 model:1 reasoning:1 system_v1:1 skill_v1:1 skill_v2:0 memory:1 instructions_v1:1" in output, output
+        assert "prompt_initial=1" in output, output
+        assert "prompt_recovered=old:1 new:0" in output, output
+        assert "prompt_after_clear=old:1 new:0" in output, output
+        assert "prompt_after_truncate=old:1 new:0" in output, output
+        assert "prompt_new=old:0 new:1" in output, output
         assert "probe-agent-release-v1" in output, output
         assert "owner_after_run_destroy=refs:1 retains:1 releases:1" in output, output
         assert "probe_done=1" in output, output
@@ -602,7 +670,11 @@ def main() -> int:
         disabled = run_probe(host, disabled_site, base / "home-memory-disabled")
         assert "init_error=" not in disabled, disabled
         assert "generations:1/1/1/0" in disabled, disabled
-        assert "callback=calls:1 model:1 reasoning:1 system_v1:1 skill_v1:1 skill_v2:0 memory:0" in disabled, disabled
+        assert "callback=calls:1 model:1 reasoning:1 system_v1:1 skill_v1:1 skill_v2:0 memory:0 instructions_v1:1" in disabled, disabled
+        assert "prompt_recovered=old:1 new:0" in disabled, disabled
+        assert "prompt_after_clear=old:1 new:0" in disabled, disabled
+        assert "prompt_after_truncate=old:1 new:0" in disabled, disabled
+        assert "prompt_new=old:0 new:1" in disabled, disabled
         assert "probe_done=1" in disabled, disabled
     print("agent runtime probe: PASS")
     return 0

@@ -303,6 +303,11 @@
                   <div><label for="setting-reasoning">默认推理强度</label><p>新会话可单独覆盖这个值。</p></div>
                   <select id="setting-reasoning" name="reasoning_effort"><option value="none">无</option><option value="minimal">极低</option><option value="low">低</option><option value="medium">中</option><option value="high">高</option><option value="xhigh">极高</option><option value="max">最大</option></select>
                 </div>
+                <div class="setting-row-wide setting-instructions">
+                  <div><label for="setting-instructions" data-i18n="settings.instructions">自定义系统指令</label><p data-i18n="settings.instructionsDescription">附加到新建会话的系统提示词。已有会话继续使用创建时的指令。</p></div>
+                  <textarea id="setting-instructions" name="user_instructions" rows="6" maxlength="8192" spellcheck="false" aria-describedby="settings-instructions-count"></textarea>
+                  <small id="settings-instructions-count" aria-live="polite">0 / 8192 字节</small>
+                </div>
                 <div class="setting-row">
                   <div><label for="setting-parallel-tools">并行工具数</label><p>同一 Agent 最多同时运行 1–64 个工具。</p></div>
                   <input id="setting-parallel-tools" name="max_parallel_tools" type="number" min="1" max="64" required>
