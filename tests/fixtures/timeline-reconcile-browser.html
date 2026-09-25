@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="zh-CN">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>mdo timeline reconciliation probe</title>
+<link rel="stylesheet" href="/app/web/css/app.css">
+<style>
+  body { margin: 20px; background: var(--bg); color: var(--ink); }
+  .conversation { width: min(760px, 100%); max-height: 70vh; overflow: auto; }
+</style>
+<button id="extend" type="button">Extend live answer</button>
+<button id="select-extend" type="button">Extend while selecting old text</button>
+<button id="focused-extend" type="button">Extend focused answer</button>
+<button id="feedback" type="button">Update earlier feedback</button>
+<output id="result" role="status">Preparing</output>
+<textarea id="prompt" aria-label="Input"></textarea>
+<div class="conversation"><p id="welcome"></p><ol id="timeline"></ol></div>
+<button id="to-bottom" type="button" hidden>To bottom</button>
+<div id="toast-region"></div>
+<script type="module">
+import { createTimelineView } from "/app/web/js/features/chat/timeline.js";
+import { createResourceStore } from "/app/web/js/state/store.js";
+
+let events = [
+  { event_id: 1, run_id: 1, kind: "agent_start", schema_version: 3,
+    agent_depth: 0, user_message_sequence: 1, text: "First prompt", time: 1000000 },
+  { event_id: 2, run_id: 1, kind: "model_text_delta", model: "Test model",
+    text: "First complete answer", time: 2000000 },
+  { event_id: 3, run_id: 1, kind: "model_done", success: true,
+    input_tokens: 4, output_tokens: 3, time: 3000000 },
+  { event_id: 4, run_id: 2, kind: "agent_start", schema_version: 3,
+    agent_depth: 0, user_message_sequence: 2, text: "Second prompt", time: 4000000 },
+  { event_id: 5, run_id: 2, kind: "model_start", time: 5000000 },
+  { event_id: 6, run_id: 2, kind: "model_text_delta", model: "Test model",
+    text: "Live answer", time: 6000000 },
+];
+const store = createResourceStore();
+const feedbackStore = createResourceStore({ projectId: "qa", sessionId: "timeline",
+  items: new Map() });
+createTimelineView({ container: document.querySelector("#timeline"),
+  welcome: document.querySelector("#welcome"),
+  toBottom: document.querySelector("#to-bottom"), store, feedbackStore,
+  onFork() {}, onFeedback() {}, onEdit() {}, onRetry() {} });
+store.setData({ projectId: "qa", sessionId: "timeline", events });
+const oldUser = () => document.querySelector('#timeline [data-kind="user"]');
+let originalUser;
+requestAnimationFrame(() => { originalUser = oldUser(); });
+
+function report(action) {
+  requestAnimationFrame(() => {
+    const same = originalUser === oldUser();
+    const answer = [...document.querySelectorAll('#timeline [data-kind="assistant"]')]
+      .at(-1)?.querySelector('.timeline-body')?.textContent ?? "";
+    const focus = document.activeElement?.dataset.timelineAction ?? "";
+    const selection = document.getSelection()?.toString() ?? "";
+    document.querySelector("#result").textContent =
+      `${action}: ${same ? "stable" : "replaced"}; focus=${focus}; selection=${selection}; answer=${answer}`;
+  });
+}
+document.querySelector("#extend").addEventListener("click", () => {
+  const action = oldUser().querySelector('[data-timeline-action$="/copy"]');
+  action.focus();
+  events = [...events, { event_id: 7, run_id: 2, kind: "model_text_delta",
+    model: "Test model", text: " updated", time: 7000000 }];
+  store.setData({ projectId: "qa", sessionId: "timeline", events });
+  report("stream");
+});
+document.querySelector("#feedback").addEventListener("click", () => {
+  oldUser().querySelector('[data-timeline-action$="/copy"]').focus();
+  feedbackStore.setData({ projectId: "qa", sessionId: "timeline",
+    items: new Map([[3, "good"]]) });
+  report("feedback");
+});
+document.querySelector("#select-extend").addEventListener("click", () => {
+  const range = document.createRange();
+  range.selectNodeContents(oldUser().querySelector(".timeline-body"));
+  document.getSelection().removeAllRanges();
+  document.getSelection().addRange(range);
+  events = [...events, { event_id: 8, run_id: 2, kind: "model_text_delta",
+    model: "Test model", text: " selected", time: 8000000 }];
+  store.setData({ projectId: "qa", sessionId: "timeline", events });
+  report("selection");
+});
+document.querySelector("#focused-extend").addEventListener("click", () => {
+  [...document.querySelectorAll('#timeline [data-kind="assistant"]')].at(-1)
+    .querySelector('[data-timeline-action$="/copy"]').focus();
+  events = [...events, { event_id: 9, run_id: 2, kind: "model_text_delta",
+    model: "Test model", text: " focused", time: 9000000 }];
+  store.setData({ projectId: "qa", sessionId: "timeline", events });
+  report("focused-stream");
+});
+</script>

@@ -437,6 +437,7 @@ function timelineNode(item, handlers, feedback, projectId, sessionId, openState)
 
 export function createTimelineView({ container, welcome, toBottom, store, feedbackStore, onFork, onFeedback, onEdit, onRetry, onSearchCount }) {
   const busySessions = new Set();
+  const renderedRows = new Map();
   const handlers = {
     onFork, onFeedback, onEdit, onRetry,
     isBusy: (key) => busySessions.has(key),
@@ -456,6 +457,32 @@ export function createTimelineView({ container, welcome, toBottom, store, feedba
   let renderedSession = "";
   const expanded = new Map();
   const scroller = container.closest(".conversation");
+
+  function reconcileRows(entries, projectId, sessionId) {
+    const retained = new Set();
+    let cursor = container.firstChild;
+    for (const { item, feedback } of entries) {
+      retained.add(item.key);
+      const signature = JSON.stringify([item, feedback]);
+      let row = renderedRows.get(item.key);
+      if (!row || row.signature !== signature) {
+        const node = timelineNode(item, handlers, feedback, projectId,
+          sessionId, expanded.get(item.key));
+        mountIcons(node);
+        row = { node, signature };
+        renderedRows.set(item.key, row);
+      }
+      if (row.node !== cursor) container.insertBefore(row.node, cursor);
+      cursor = row.node.nextSibling;
+    }
+    while (cursor) {
+      const next = cursor.nextSibling;
+      cursor.remove();
+      cursor = next;
+    }
+    for (const key of renderedRows.keys())
+      if (!retained.has(key)) renderedRows.delete(key);
+  }
 
   function syncBusy() {
     const busy = busySessions.has(renderedSession);
@@ -488,6 +515,8 @@ export function createTimelineView({ container, welcome, toBottom, store, feedba
         expanded.set(details.getAttribute("data-timeline-key"), details.open);
     } else {
       expanded.clear();
+      renderedRows.clear();
+      clear(container);
       renderedSession = sessionKey;
     }
     const items = eventsToTimeline(data?.events ?? [], data?.historyLost);
@@ -499,27 +528,26 @@ export function createTimelineView({ container, welcome, toBottom, store, feedba
         .toLocaleLowerCase().includes(searchQuery)) : items;
     onSearchCount?.(searchQuery ? visible.length : 0, Boolean(data?.historyLost));
     welcome.hidden = Boolean(data?.sessionId && items.length > 0);
-    clear(container);
+    const entries = [];
     if (state.status === "error") {
-      container.append(timelineNode({ key: "load-error", kind: "error", role: "无法读取时间线", text: errorMessage(state.error), state: "failed", time: 0 }, handlers, "", data?.projectId, data?.sessionId));
+      entries.push({ item: { key: "load-error", kind: "error", role: "无法读取时间线",
+        text: errorMessage(state.error), state: "failed", time: 0 }, feedback: "" });
     } else {
       const selected = feedbackStore.get().data;
       const feedback = selected?.projectId === data?.projectId &&
         selected?.sessionId === data?.sessionId ? selected.items : new Map();
       for (const item of visible)
-        container.append(timelineNode(item, handlers,
-          feedback.get(item.feedbackEventId) ?? "", data?.projectId,
-          data?.sessionId, expanded.get(item.key)));
+        entries.push({ item, feedback: feedback.get(item.feedbackEventId) ?? "" });
     }
-    mountIcons(container);
-    if (focusedAction || focusedImage) {
+    reconcileRows(entries, data?.projectId, data?.sessionId);
+    if ((focusedAction || focusedImage) && !container.contains(document.activeElement)) {
       const replacement = focusedAction
         ? [...container.querySelectorAll("[data-timeline-action]")].find((node) =>
           node.dataset.timelineAction === focusedAction)
         : [...container.querySelectorAll("button[data-image-ref]")].find((button) =>
           button.dataset.imageRef === focusedImage);
       (replacement ?? document.querySelector("#prompt"))?.focus({ preventScroll: true });
-    } else if (focusedKey) {
+    } else if (focusedKey && !container.contains(document.activeElement)) {
       const replacement = [...container.querySelectorAll("details[data-timeline-key]")]
         .find((node) => node.getAttribute("data-timeline-key") === focusedKey);
       replacement?.querySelector("summary")?.focus({ preventScroll: true });
