@@ -839,7 +839,7 @@ export async function boot() {
         await Promise.all([refreshSelectedTimeline(), refreshSelectedAsks()]);
         if (terminalState(run)) {
           await Promise.all([loadSessions(), loadRuns(), loadTasks(), loadRecovery()]);
-          await dispatchQueued();
+          await refreshSelectedQueue();
           prompt.focus();
           return;
         }
@@ -946,6 +946,23 @@ export async function boot() {
             "error");
         }
       });
+  }
+
+  async function refreshSelectedQueue() {
+    const selected = navigation.get();
+    if (selected.view !== "workspace" || !selected.sessionId) return;
+    try {
+      await promptQueue.select(selected.projectId, selected.sessionId);
+      const current = navigation.get();
+      if (current.projectId !== selected.projectId ||
+          current.sessionId !== selected.sessionId) return;
+      await maybeCancelPriorityRun();
+      await dispatchQueued();
+    } catch (error) {
+      const current = navigation.get();
+      if (current.projectId === selected.projectId &&
+          current.sessionId === selected.sessionId) showComposerError(error);
+    }
   }
 
   navigation.subscribe(async ({ view, projectId, sessionId, settingsSection }) => {
@@ -1182,13 +1199,15 @@ export async function boot() {
           ? restoreUnsentItems(ownerKey, unsent)
           : { restored: null, visible: selectedOwnsDraft(ownerKey) };
         if (visible) {
-          showComposerError(error, restored
-            ? t(restored.merged ? "composer.unsentMerged" : "composer.unsentRestored") : "");
+          showComposerError(error, error.queueAdmissionUncertain
+            ? t("composer.queueAdmissionUncertain") : restored
+              ? t(restored.merged ? "composer.unsentMerged" : "composer.unsentRestored") : "");
           prompt.focus();
         } else {
           toast(t("composer.backgroundQueueFailed", {
             title: ownerKey,
-            error: errorMessage(error),
+            error: `${errorMessage(error)}${error.queueAdmissionUncertain
+              ? ` ${t("composer.queueAdmissionUncertain")}` : ""}`,
           }), "error");
         }
         break;
@@ -1298,7 +1317,10 @@ export async function boot() {
           tokenMeter.refresh();
         }
         showComposerError(error, restored
-          ? t(restored.merged ? "composer.unsentMerged" : "composer.unsentRestored") : "");
+          ? error.queueAdmissionUncertain
+            ? t("composer.queueAdmissionUncertain")
+            : t(restored.merged ? "composer.unsentMerged" : "composer.unsentRestored")
+          : "");
         prompt.focus();
       } else {
         toast(t("composer.backgroundSendFailed", { error: errorMessage(error) },
@@ -1755,7 +1777,10 @@ export async function boot() {
     if (document.hidden) return;
     const snapshot = runsStore.get();
     if (snapshot.status === "loading" || snapshot.status === "refreshing") return;
-    runsTimer = window.setTimeout(() => void loadRuns(),
+    runsTimer = window.setTimeout(async () => {
+      await loadRuns();
+      await refreshSelectedQueue();
+    },
       Number(snapshot.data?.active_runs ?? 0) > 0 ? 1500 : 8000);
   }
   runsStore.subscribe(scheduleRunsRefresh);
@@ -1780,7 +1805,7 @@ export async function boot() {
     }
     else {
       scheduleTaskRefresh();
-      void loadRuns();
+      void loadRuns().then(refreshSelectedQueue);
       scheduleApprovalRefresh();
       if (activeRun) scheduleRunPoll(100);
     }

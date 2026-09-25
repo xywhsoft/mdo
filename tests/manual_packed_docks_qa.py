@@ -147,6 +147,27 @@ class BoundedDelayProxy(BaseHTTPRequestHandler):
             self.send_error(413)
             return
         body = self.rfile.read(length) if length else None
+        drop_response = False
+        if (self.command == "GET" and self.path.startswith("/api/v1/projects/")
+                and "/sessions/" in self.path and self.path.endswith("/queue")
+                and self.server.fail_first_queue_reconcile):
+            with self.server.count_lock:
+                fail_reconcile = (self.server.dropped_queue_response
+                                  and not self.server.failed_queue_reconcile)
+                if fail_reconcile:
+                    self.server.failed_queue_reconcile = True
+            if fail_reconcile:
+                payload = json.dumps({"ok": False, "error": {
+                    "code": "qa_read_rejected", "message": "Synthetic queue read failure"
+                }}).encode()
+                self.send_response(503)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Content-Length", str(len(payload)))
+                self.send_header("Connection", "close")
+                self.end_headers()
+                self.wfile.write(payload)
+                self.close_connection = True
+                return
         if self.command == "PUT" and self.path.startswith("/api/v1/approvals/"):
             with self.server.count_lock:
                 self.server.approval_puts += 1
@@ -160,6 +181,7 @@ class BoundedDelayProxy(BaseHTTPRequestHandler):
                 count = self.server.queue_posts
             print(f"QA queue POST #{count}", flush=True)
             time.sleep(self.server.queue_delay_seconds)
+            drop_response = self.server.drop_first_queue_response and count == 1
             if self.server.fail_first_queue and count == 1:
                 payload = json.dumps({"ok": False, "error": {
                     "code": "qa_queue_rejected", "message": "Synthetic queue failure"
@@ -203,6 +225,13 @@ class BoundedDelayProxy(BaseHTTPRequestHandler):
             upstream.request(self.command, self.path, body=body, headers=headers)
             response = upstream.getresponse()
             payload = response.read()
+            if drop_response:
+                print("QA queue response dropped after upstream acceptance", flush=True)
+                with self.server.count_lock:
+                    self.server.dropped_queue_response = True
+                self.close_connection = True
+                self.connection.close()
+                return
             self.send_response(response.status)
             for key, value in response.getheaders():
                 if key.lower() not in {"connection", "content-length",
@@ -224,7 +253,8 @@ class BoundedDelayProxyServer(ThreadingHTTPServer):
     daemon_threads = True
 
     def handle_error(self, request, client_address):
-        if isinstance(sys.exc_info()[1], (BrokenPipeError, ConnectionResetError)):
+        if isinstance(sys.exc_info()[1],
+                      (BrokenPipeError, ConnectionAbortedError, ConnectionResetError)):
             return
         super().handle_error(request, client_address)
 
@@ -240,6 +270,10 @@ parser.add_argument("--fail-first-run", action="store_true",
                     help="reject one run POST before forwarding, for draft recovery QA")
 parser.add_argument("--fail-first-queue", action="store_true",
                     help="reject one queue POST before forwarding, for staged draft QA")
+parser.add_argument("--drop-first-queue-response", action="store_true",
+                    help="accept one queue POST upstream but close before replying")
+parser.add_argument("--fail-first-queue-reconcile", action="store_true",
+                    help="also fail the first queue GET after a dropped response")
 parser.add_argument("--slow-ms", type=int, default=15000,
                     help="first SLOW UI model response delay, 0-15000 ms")
 parser.add_argument("--task-ms", type=int, default=12000,
@@ -257,6 +291,8 @@ if not 0 <= args.slow_ms <= 15000:
     parser.error("--slow-ms must be between 0 and 15000")
 if not 0 <= args.task_ms <= 30000:
     parser.error("--task-ms must be between 0 and 30000")
+if args.fail_first_queue_reconcile and not args.drop_first_queue_response:
+    parser.error("--fail-first-queue-reconcile requires --drop-first-queue-response")
 
 base = Path(tempfile.mkdtemp(prefix="mdo-packed-docks-", dir=ROOT / ".build"))
 Model.verify_recovery = args.resume_verify
@@ -317,7 +353,8 @@ try:
     session = response["data"]["id"]
     browser_port = port
     if (args.approval_delay_ms or args.queue_delay_ms or args.run_delay_ms
-            or args.fail_first_run or args.fail_first_queue):
+            or args.fail_first_run or args.fail_first_queue
+            or args.drop_first_queue_response or args.fail_first_queue_reconcile):
         proxy = BoundedDelayProxyServer(("127.0.0.1", 0), BoundedDelayProxy)
         proxy.upstream_port = port
         proxy.approval_delay_seconds = args.approval_delay_ms / 1000
@@ -325,6 +362,10 @@ try:
         proxy.run_delay_seconds = args.run_delay_ms / 1000
         proxy.fail_first_run = args.fail_first_run
         proxy.fail_first_queue = args.fail_first_queue
+        proxy.drop_first_queue_response = args.drop_first_queue_response
+        proxy.fail_first_queue_reconcile = args.fail_first_queue_reconcile
+        proxy.dropped_queue_response = False
+        proxy.failed_queue_reconcile = False
         proxy.count_lock = threading.Lock()
         proxy.approval_puts = 0
         proxy.queue_posts = 0

@@ -399,6 +399,7 @@
   "composer.hintIdle": "Enter sends · Shift+Enter adds a line",
   "composer.hintSubmitting": "Sending the previous prompt · Enter stages the next",
   "composer.hintPendingAdmission": "Sending the previous prompt · {count} waiting to queue",
+  "composer.queueAdmissionUncertain": "Delivery is unconfirmed. The text was kept; check the queue and trace before retrying.",
   "composer.shortcutEnterGuide": "Send; interrupt and prioritize while running",
   "composer.shortcutEnterQueue": "Send; queue while running",
   "composer.shortcutControlGuide": "Queue while running",

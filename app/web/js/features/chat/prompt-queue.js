@@ -17,6 +17,11 @@ function newId() {
     (byte) => byte.toString(16).padStart(2, "0")).join("");
 }
 
+function uncertainPost(error) {
+  return ["network_error", "invalid_response", "queue_unavailable"]
+    .includes(error?.code);
+}
+
 export function createPromptQueue({ container, navigation, isRunActive, stagedEntries,
   onRetry, onRemoved }) {
   const queues = new Map();
@@ -214,10 +219,33 @@ export function createPromptQueue({ container, navigation, isRunActive, stagedEn
       if (!key || (!text.trim() && !attachments.length)) return false;
       await load(key);
       if ((queues.get(key) ?? []).length >= 20) return false;
-      const response = await api.post(path(key),
-        { id: newId(), text: text.trim(), attachments, first, priority });
-      update(key, response);
-      return true;
+      const body = { id: newId(), text: text.trim(), attachments, first, priority };
+      const keepalive = new TextEncoder().encode(JSON.stringify(body)).length <= 60 * 1024;
+      const submit = async () => {
+        update(key, await api.post(path(key), body, { keepalive }));
+        return true;
+      };
+      const reconcile = async () => {
+        const response = await api.get(path(key));
+        update(key, response);
+        return (response.data?.items ?? []).some((item) =>
+          item.id === body.id && item.text === body.text &&
+          item.priority === body.priority &&
+          JSON.stringify(item.attachments ?? []) === JSON.stringify(body.attachments));
+      };
+      try { return await submit(); }
+      catch (error) {
+        if (!uncertainPost(error)) throw error;
+        try { if (await reconcile()) return true; }
+        catch { /* Retry with the same id after an inconclusive read. */ }
+      }
+      try { return await submit(); }
+      catch (error) {
+        try { if (await reconcile()) return true; }
+        catch { /* Keep the original submission failure. */ }
+        error.queueAdmissionUncertain = true;
+        throw error;
+      }
     },
     peek(projectId, sessionId) {
       const key = sessionKey(projectId, sessionId);
