@@ -55,6 +55,7 @@ import { createFeedbackPanel } from "./features/settings/feedback-panel.js";
 import { createKeyboardShortcuts } from "./features/shell/keyboard-shortcuts.js";
 import { createRunNotifications } from "./features/shell/run-notifications.js";
 import { startWorkspaceNavigation } from "./features/shell/workspace-startup.js";
+import { focusSessionComposerAfterNavigation } from "./features/shell/session-composer-focus.js";
 import { createPaneLayout } from "./features/shell/pane-layout.js";
 import { api } from "./api/client.js";
 import { clear, element, errorMessage, toast } from "./utils/dom.js";
@@ -192,6 +193,7 @@ export async function boot() {
   $("#close-project-dialog").addEventListener("click", () => $("#project-dialog").close());
   $("#cancel-project").addEventListener("click", () => $("#project-dialog").close());
 
+  let cancelSessionComposerFocus = () => {};
   const sessionList = createSessionList({
     container: $("#session-list"),
     count: $("#session-count"),
@@ -199,9 +201,18 @@ export async function boot() {
     projectsStore,
     filter: $("#session-status-filter"),
     navigation,
-    onSelect(session) {
+    onSelect(session, event) {
+      cancelSessionComposerFocus();
       navigation.select(session.project_id, session.id);
       closeDrawers();
+      // Keyboard selection keeps its place in the sidebar; a desktop pointer
+      // selection hands focus to the composer once the target is writable.
+      if (!mobileLayout.matches && event.detail > 0)
+        cancelSessionComposerFocus = focusSessionComposerAfterNavigation({
+          navigation, sessionDetailStore, prompt,
+          projectId: session.project_id, sessionId: session.id,
+          origin: event.currentTarget,
+        });
     },
     onAction: handleSessionAction,
     onAddProject: () => projectDialog.open(),

@@ -131,7 +131,7 @@ export function createSessionList({ container, count, filter, store, projectsSto
         element("time", { className: "session-item-time", text: formatRelativeTime(session.updated_at) }),
         element("span", { className: "session-item-meta", text: `${showProject ? `${session.project_id} · ` : ""}${session.model_id || session.agent_id}${hasUnread ? ` · ${t("nav.unread", {}, "有新结果")}` : ""}` }),
       ]);
-      button.addEventListener("click", () => onSelect(session));
+      button.addEventListener("click", (event) => onSelect(session, event));
       const title = session.title || t("nav.untitled", {}, "未命名任务");
       const more = element("button", { className: "session-more", text: "•••", attrs: { type: "button", "data-session-key": key, "aria-label": t("nav.actionsFor", { title }, `${title} 的操作`), "aria-haspopup": "menu", "aria-expanded": String(openMenu === key) } });
       more.addEventListener("click", (event) => {
