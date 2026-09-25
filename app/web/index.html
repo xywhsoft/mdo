@@ -125,7 +125,7 @@
           <button class="icon-button" id="open-find" type="button" aria-label="搜索当前会话" data-i18n-aria-label="shell.find" aria-controls="conversation-find" aria-expanded="false">
             <span class="icon" data-icon="search" aria-hidden="true"></span>
           </button>
-          <button class="icon-button" id="export-session" type="button" aria-label="导出当前会话 Markdown" data-i18n-aria-label="shell.export" title="导出当前会话 Markdown（Ctrl/⌘+E）" disabled>
+          <button class="icon-button" id="export-session" type="button" aria-label="导出当前会话 Markdown" data-i18n-aria-label="shell.export" title="导出当前会话 Markdown（Ctrl/⌘+E）" data-i18n-title="shell.exportShortcut" disabled>
             <span class="icon" data-icon="download" aria-hidden="true"></span>
           </button>
           <div class="session-action-control" id="session-action-control">
@@ -134,7 +134,7 @@
             </button>
             <div class="session-menu session-header-menu" id="session-header-menu" role="menu" hidden></div>
           </div>
-          <button class="icon-button desktop-inspector-toggle" id="toggle-inspector" type="button" aria-label="切换任务面板" aria-controls="inspector" aria-expanded="false">
+          <button class="icon-button desktop-inspector-toggle" id="toggle-inspector" type="button" aria-label="切换任务面板" data-i18n-aria-label="shell.toggleTasksPanel" aria-controls="inspector" aria-expanded="false">
             <span class="icon" data-icon="panel-right" aria-hidden="true"></span>
           </button>
         </div>
@@ -142,10 +142,10 @@
 
       <section class="conversation" aria-label="当前会话" data-i18n-aria-label="shell.conversation">
         <div class="conversation-find" id="conversation-find" role="search" hidden>
-          <label class="sr-only" for="conversation-find-input">搜索已加载的会话记录</label>
-          <input id="conversation-find-input" type="search" autocomplete="off" placeholder="搜索已加载的记录">
+          <label class="sr-only" for="conversation-find-input" data-i18n="search.label">搜索已加载的会话记录</label>
+          <input id="conversation-find-input" type="search" autocomplete="off" placeholder="搜索已加载的记录" data-i18n-placeholder="search.placeholder">
           <span id="conversation-find-count" role="status"></span>
-          <button class="icon-button" id="close-find" type="button" aria-label="关闭会话搜索">×</button>
+          <button class="icon-button" id="close-find" type="button" aria-label="关闭会话搜索" data-i18n-aria-label="search.close">×</button>
         </div>
         <div class="welcome" id="welcome">
           <div class="welcome-mark" aria-hidden="true">墨</div>
@@ -179,18 +179,18 @@
         <div class="conversation-docks" id="conversation-docks" aria-live="polite" hidden></div>
         <div class="prompt-queue" id="prompt-queue" aria-live="polite" hidden></div>
         <div class="timeline-sentinel" id="timeline-sentinel" aria-hidden="true"></div>
-        <button class="to-bottom" id="to-bottom" type="button" aria-label="回到对话底部" hidden>↓ <span>回到底部</span></button>
+        <button class="to-bottom" id="to-bottom" type="button" aria-label="回到对话底部" data-i18n-aria-label="conversation.toBottom" hidden>↓ <span data-i18n="conversation.toBottomShort">回到底部</span></button>
       </section>
 
-      <section class="composer-region" aria-label="发送消息">
+      <section class="composer-region" aria-label="发送消息" data-i18n-aria-label="composer.region">
         <div class="composer-error" id="composer-error" role="alert" hidden></div>
         <form class="composer" id="composer">
-          <label class="sr-only" for="prompt">向 Agent 描述任务</label>
+          <label class="sr-only" for="prompt" data-i18n="composer.describe">向 Agent 描述任务</label>
           <textarea id="prompt" name="prompt" rows="1" maxlength="65536" placeholder="向墨斗描述任务…" data-i18n-placeholder="shell.prompt" autocomplete="off"></textarea>
           <div class="composer-images" id="composer-images" aria-live="polite" hidden></div>
           <div class="composer-toolbar">
             <div class="composer-options">
-              <button class="composer-attach" id="composer-attach" type="button" aria-label="添加图片" data-i18n-aria-label="shell.attach" title="添加图片（PNG、JPEG、WebP）">＋</button>
+              <button class="composer-attach" id="composer-attach" type="button" aria-label="添加图片" data-i18n-aria-label="shell.attach" title="添加图片（PNG、JPEG、WebP）" data-i18n-title="composer.attachTypes">＋</button>
               <input id="composer-file" type="file" accept="image/png,image/jpeg,image/webp" multiple hidden>
               <button class="option-chip" id="workspace-chip" type="button" title="当前工作目录" data-i18n-title="composer.workspace">
                 <span class="icon" data-icon="folder" aria-hidden="true"></span>

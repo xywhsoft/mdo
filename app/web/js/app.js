@@ -630,6 +630,12 @@ export async function boot() {
       : t("composer.readOnly", {}, "该会话不可运行；请先恢复到进行中");
   }
 
+  function sessionStatusSuffix(status) {
+    if (status === "archived") return ` · ${t("run.archived")}`;
+    if (status === "trash") return ` · ${t("run.trash")}`;
+    return "";
+  }
+
   sessionDetailStore.subscribe((state) => {
     const session = state.data;
     updateExportButtons();
@@ -639,9 +645,9 @@ export async function boot() {
     setRun(activeRun);
     focusForkComposerWhenReady();
     if (session) {
-      const title = session.title || "未命名任务";
+      const title = session.title || t("nav.untitled");
       sessionTitle.textContent = title;
-      const statusText = session.status === "archived" ? " · 已归档" : session.status === "trash" ? " · 回收站" : "";
+      const statusText = sessionStatusSuffix(session.status);
       sessionSubtitle.textContent = `${session.project_id} · ${session.agent_id} · ${session.model_id}${statusText}`;
       mobileTitle.textContent = title;
       mobileMeta.textContent = `${session.model_id || session.agent_id}${statusText}`;
@@ -658,6 +664,22 @@ export async function boot() {
     syncPromptPlaceholder();
     syncWorkspaceChip();
     syncRuntimeLabel();
+    skipLink.textContent = t(settingsActive ? "shell.skipSettings" : "shell.skip");
+    const session = sessionDetailStore.get().data;
+    if (session && selectedKey === `${session.project_id}/${session.id}`) {
+      const statusText = sessionStatusSuffix(session.status);
+      sessionSubtitle.textContent = `${session.project_id} · ${session.agent_id} · ${session.model_id}${statusText}`;
+      mobileMeta.textContent = `${session.model_id || session.agent_id}${statusText}`;
+      if (!session.title) {
+        sessionTitle.textContent = t("nav.untitled");
+        mobileTitle.textContent = t("nav.untitled");
+      }
+    } else if (!selectedKey) {
+      sessionTitle.textContent = t("shell.newTask");
+      sessionSubtitle.textContent = t("shell.newTaskSubtitle", {
+        project: $("#composer-project").value || "default" });
+      mobileTitle.textContent = t("shell.newTask");
+    }
   });
 
   function syncRuntimeLabel() {
@@ -824,7 +846,7 @@ export async function boot() {
       settingsWorkspace.hidden = false;
       for (const region of agentWorkspaceRegions) region.hidden = true;
       skipLink.href = "#settings-content";
-      skipLink.textContent = "跳到设置内容";
+      skipLink.textContent = t("shell.skipSettings");
       settingsView.selectSection(settingsSection);
       const standalonePage = !["general", "agent", "web"].includes(settingsSection);
       $("#settings-title").textContent = settingsSection === "projects"
@@ -842,7 +864,7 @@ export async function boot() {
     settingsWorkspace.hidden = true;
     for (const region of agentWorkspaceRegions) region.hidden = false;
     skipLink.href = "#timeline";
-    skipLink.textContent = "跳到对话";
+    skipLink.textContent = t("shell.skip");
     if (settingsActive) {
       settingsActive = false;
       setDrawer("inspector", (paneLayout?.inspectorOpen() ??
@@ -853,9 +875,9 @@ export async function boot() {
     const key = projectId && sessionId ? `${projectId}/${sessionId}` : "";
     if (!key) {
       const project = projectId || "default";
-      sessionTitle.textContent = "新任务";
-      sessionSubtitle.textContent = `将在 ${project} 项目中创建任务`;
-      mobileTitle.textContent = "新任务";
+      sessionTitle.textContent = t("shell.newTask");
+      sessionSubtitle.textContent = t("shell.newTaskSubtitle", { project });
+      mobileTitle.textContent = t("shell.newTask");
       mobileMeta.textContent = project;
       syncWorkspaceChip();
       updateContext(sessionDetailStore.get());

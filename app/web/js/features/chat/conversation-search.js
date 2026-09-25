@@ -1,6 +1,17 @@
+import { subscribeLocale, t } from "../../i18n.js";
+
 export function createConversationSearch({ bar, input, count, openButtons, closeButton,
   navigation, prompt, onQuery }) {
   let available = false;
+  let matchCount = 0;
+  let olderHistoryMissing = false;
+
+  function renderCount() {
+    if (bar.hidden) return;
+    count.textContent = !input.value.trim() ? t("search.loadedOnly") :
+      t(olderHistoryMissing ? "search.resultsTrimmed" : "search.resultsLoaded",
+        { count: matchCount });
+  }
 
   function close(restoreFocus = false) {
     if (bar.hidden) return;
@@ -18,7 +29,7 @@ export function createConversationSearch({ bar, input, count, openButtons, close
     for (const button of openButtons) button.setAttribute("aria-expanded", "true");
     input.focus();
     input.select();
-    if (!input.value) count.textContent = "仅搜索已加载的记录";
+    renderCount();
   }
 
   for (const button of openButtons) button.addEventListener("click", open);
@@ -36,19 +47,16 @@ export function createConversationSearch({ bar, input, count, openButtons, close
     for (const button of openButtons) button.disabled = !available;
     close();
   });
+  subscribeLocale(renderCount);
 
   return Object.freeze({
     open,
     close,
     isOpen: () => !bar.hidden,
     setCount(value, historyLost) {
-      if (bar.hidden) return;
-      if (!input.value.trim()) {
-        count.textContent = "仅搜索已加载的记录";
-        return;
-      }
-      count.textContent = historyLost
-        ? `${value} 处 · 早期记录未载入` : `${value} 处 · 已加载记录`;
+      matchCount = value;
+      olderHistoryMissing = Boolean(historyLost);
+      renderCount();
     },
   });
 }
