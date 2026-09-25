@@ -77,6 +77,16 @@ class ModelServer(ThreadingHTTPServer):
 
 base = Path(tempfile.mkdtemp(prefix="mdo-packed-docks-", dir=ROOT / ".build"))
 shutil.copy2(ROOT / "mdo.exe", base / "mdo.exe")
+(base / "README.md").write_text("Synthetic workspace file for @ completion.\n",
+                                encoding="utf-8")
+(base / "src").mkdir()
+(base / "src/alpha.c").write_text("/* first completion item */\n",
+                                  encoding="utf-8")
+(base / "src/alpha-test.c").write_text("/* second completion item */\n",
+                                       encoding="utf-8")
+(base / "notes").mkdir()
+(base / "notes/QA notes.txt").write_text("Synthetic spaced filename.\n",
+                                          encoding="utf-8")
 port = free_port()
 model = ModelServer(("127.0.0.1", 0), Model)
 model.daemon_threads = True
