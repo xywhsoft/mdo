@@ -671,7 +671,7 @@ select:focus-visible,
 .prompt-queue-list li { display: flex; align-items: flex-start; gap: 8px; min-width: 0; padding: 6px 8px; border-radius: 6px; background: var(--surface-hover); font-size: 11px; }
 .prompt-queue-index { flex: none; min-width: 18px; padding-top: 3px; color: var(--faint); text-align: right; }
 .prompt-queue-item-body { flex: 1 1 auto; min-width: 0; padding-top: 3px; }
-.prompt-queue-text { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.prompt-queue-text { display: block; white-space: pre-wrap; overflow-wrap: anywhere; }
 .prompt-queue-images { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 6px; }
 .prompt-queue-images button { display: block; width: 42px; height: 42px; padding: 0; border-radius: 6px; cursor: zoom-in; }
 .prompt-queue-images img { width: 100%; height: 100%; border: 1px solid var(--border); border-radius: 6px; object-fit: cover; }
