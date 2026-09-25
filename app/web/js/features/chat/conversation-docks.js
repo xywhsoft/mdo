@@ -15,7 +15,8 @@ function taskCard(tasks, onOpenTasks) {
     element("span", { className: "conversation-dock-state", text: STATE_TEXT[task.state] || task.state }),
     element("span", { text: task.label || `任务 #${task.id}` }),
   ]));
-  const open = element("button", { text: "查看任务详情", attrs: { type: "button" } });
+  const open = element("button", { text: "查看任务详情", attrs: {
+    type: "button", "data-dock-focus": "tasks/open" } });
   open.addEventListener("click", onOpenTasks);
   return element("section", { className: "conversation-dock" }, [
     element("h3", { text: `后台任务 · ${tasks.length} 项` }), list,
@@ -23,11 +24,12 @@ function taskCard(tasks, onOpenTasks) {
   ]);
 }
 
-function todoCard(items, expanded, onToggle) {
+function todoCard(items, expanded, focusKey, onToggle) {
   const done = items.filter((item) => item.done).length;
   const toggle = element("button", {
     className: "todo-toggle", text: `计划 · ${done}/${items.length}`,
-    attrs: { type: "button", "aria-expanded": String(expanded) },
+    attrs: { type: "button", "aria-expanded": String(expanded),
+      "data-dock-focus": focusKey },
   });
   toggle.addEventListener("click", onToggle);
   const card = element("section", { className: "conversation-dock todo-dock" }, [toggle]);
@@ -45,35 +47,47 @@ function todoCard(items, expanded, onToggle) {
   return card;
 }
 
-function approvalCard(item, deciding, onChanged) {
+function approvalCard(item, deciding, submitted, argumentsOpen, onChanged) {
+  const key = String(item.id);
   const card = element("section", { className: "conversation-dock" });
   const resources = element("ul", { className: "conversation-dock-list" });
   for (const resource of item.resources ?? []) resources.append(element("li", {}, [
     element("span", { className: "conversation-dock-state", text: resource.kind || "资源" }),
     element("span", { text: resource.resource }),
   ]));
-  const deny = element("button", { text: "拒绝", attrs: { type: "button" } });
-  const allow = element("button", { text: "允许一次", attrs: { type: "button" } });
+  const deny = element("button", { text: "拒绝", attrs: {
+    type: "button", "data-dock-focus": `approval/${key}/deny` } });
+  const allow = element("button", { text: "允许一次", attrs: {
+    type: "button", "data-dock-focus": `approval/${key}/allow` } });
   for (const [button, decision] of [[deny, "deny"], [allow, "allow"]]) {
-    button.disabled = deciding.has(String(item.id));
+    button.setAttribute("aria-disabled", String(deciding.has(key) || submitted.has(key)));
     button.addEventListener("click", async () => {
-      const key = String(item.id);
-      if (deciding.has(key)) return;
+      if (deciding.has(key) || submitted.has(key)) return;
       deciding.add(key);
-      deny.disabled = allow.disabled = true;
+      deny.setAttribute("aria-disabled", "true");
+      allow.setAttribute("aria-disabled", "true");
       try {
         await decideApproval(item.id, decision);
+        submitted.add(key);
         await onChanged();
       } catch (error) {
-        toast(errorMessage(error), "error");
-        deny.disabled = allow.disabled = false;
+        toast(submitted.has(key) ? "决策已提交，但状态刷新未完成" : errorMessage(error), "error");
+        if (!submitted.has(key)) {
+          deny.setAttribute("aria-disabled", "false");
+          allow.setAttribute("aria-disabled", "false");
+        }
       } finally { deciding.delete(key); }
     });
   }
-  const argumentsView = element("details", { className: "approval-arguments" }, [
-    element("summary", { text: "查看调用参数" }),
+  const argumentsView = element("details", { className: "approval-arguments",
+    attrs: { "data-approval-arguments": key,
+      open: argumentsOpen.get(key) ? "" : null } }, [
+    element("summary", { text: "查看调用参数", attrs: {
+      "data-dock-focus": `approval/${key}/arguments` } }),
     element("pre", { text: item.arguments_json || "{}" }),
   ]);
+  argumentsView.addEventListener("toggle", () =>
+    argumentsOpen.set(key, argumentsView.open));
   card.append(
     element("h3", { text: `${item.tool || "工具"} 请求权限` }),
     element("p", { text: `${item.risk || "未知风险"} · ${(item.effects ?? []).map((effect) => EFFECT_TEXT[effect] || effect).join("、") || "未声明影响"} · ${Math.ceil(Number(item.expires_in_ms || 0) / 1000)} 秒` }),
@@ -98,24 +112,25 @@ function askCard(item, projectId, sessionId, deciding, drafts, onChanged) {
     attrs: { type: "button" } });
   const buttons = [submit];
   const encoder = new TextEncoder();
+  let answered = false;
   function updateValidity() {
     const answer = input.value.trim();
     const tooLong = encoder.encode(answer).length > 1024;
     input.setAttribute("aria-invalid", String(tooLong));
     hint.textContent = tooLong ? "回答不能超过 1024 字节" : "";
     hint.dataset.state = tooLong ? "error" : "";
-    submit.disabled = !answer || tooLong || deciding.has(key);
+    submit.setAttribute("aria-disabled", String(!answer || tooLong ||
+      deciding.has(key) || answered));
   }
   input.addEventListener("input", () => {
     drafts.set(key, input.value);
     updateValidity();
   });
   async function respond(value) {
-    if (deciding.has(key)) return;
+    if (deciding.has(key) || answered) return;
     deciding.add(key);
-    let answered = false;
-    for (const button of buttons) button.disabled = true;
-    input.disabled = true;
+    for (const button of buttons) button.setAttribute("aria-disabled", "true");
+    input.readOnly = true;
     hint.textContent = "正在提交回答…";
     hint.dataset.state = "pending";
     try {
@@ -126,8 +141,8 @@ function askCard(item, projectId, sessionId, deciding, drafts, onChanged) {
     } catch (error) {
       toast(answered ? "回答已提交，但状态刷新未完成" : errorMessage(error), "error");
       if (!answered) {
-        input.disabled = false;
-        for (const button of buttons) button.disabled = false;
+        input.readOnly = false;
+        for (const button of buttons) button.setAttribute("aria-disabled", "false");
       }
     } finally {
       deciding.delete(key);
@@ -139,18 +154,18 @@ function askCard(item, projectId, sessionId, deciding, drafts, onChanged) {
   }
   for (const option of item.options ?? []) {
     const button = element("button", { text: option,
-      attrs: { type: "button" } });
+      attrs: { type: "button", "aria-disabled": "false" } });
     button.addEventListener("click", () => void respond(option));
     buttons.push(button);
     actions.append(button);
   }
   submit.addEventListener("click", () => {
-    if (!submit.disabled) void respond(input.value);
+    if (submit.getAttribute("aria-disabled") === "false") void respond(input.value);
   });
   input.addEventListener("keydown", (event) => {
     if (event.key === "Enter" && !event.isComposing) {
       event.preventDefault();
-      if (!submit.disabled) void respond(input.value);
+      if (submit.getAttribute("aria-disabled") === "false") void respond(input.value);
     }
   });
   updateValidity();
@@ -163,8 +178,11 @@ function askCard(item, projectId, sessionId, deciding, drafts, onChanged) {
 
 export function createConversationDocks({ container, navigation, tasksStore, approvalsStore,
   asksStore, todoStore, runsStore, onOpenTasks, onChanged }) {
-  const deciding = new Set();
+  const approvalDeciding = new Set();
+  const askDeciding = new Set();
+  const submitted = new Set();
   const expanded = new Map();
+  const argumentsOpen = new Map();
   const drafts = new Map();
   const askNodes = new Map();
   const otherRoot = element("div", { className: "conversation-dock-stack" });
@@ -172,6 +190,11 @@ export function createConversationDocks({ container, navigation, tasksStore, app
   container.append(otherRoot, askRoot);
 
   function render() {
+    const focusedDock = otherRoot.contains(document.activeElement)
+      ? document.activeElement?.dataset.dockFocus : "";
+    const focusedAsk = askRoot.contains(document.activeElement);
+    for (const details of otherRoot.querySelectorAll("details[data-approval-arguments]"))
+      argumentsOpen.set(details.dataset.approvalArguments, details.open);
     const selected = navigation.get();
     const sessionId = selected.view === "workspace" ? selected.sessionId : "";
     const tasks = sessionId ? (tasksStore.get().data?.items ?? []).filter((item) =>
@@ -193,7 +216,7 @@ export function createConversationDocks({ container, navigation, tasksStore, app
     if (todoItems.length) {
       const key = `${selected.projectId}/${sessionId}`;
       const open = expanded.get(key) !== false;
-      otherRoot.append(todoCard(todoItems, open, () => {
+      otherRoot.append(todoCard(todoItems, open, `todo/${key}`, () => {
         expanded.set(key, !open);
         render();
       }));
@@ -203,14 +226,26 @@ export function createConversationDocks({ container, navigation, tasksStore, app
       text: `计划读取失败：${errorMessage(todoStore.get().error)}`,
     }));
     if (tasks.length) otherRoot.append(taskCard(tasks, onOpenTasks));
-    for (const item of approvals) otherRoot.append(approvalCard(item, deciding, onChanged));
+    for (const item of approvals) otherRoot.append(approvalCard(
+      item, approvalDeciding, submitted, argumentsOpen, onChanged));
+    if (approvalsStore.get().status === "ready") {
+      const live = new Set((approvalsStore.get().data?.items ?? [])
+        .map((item) => String(item.id)));
+      for (const key of submitted) if (!live.has(key)) submitted.delete(key);
+      for (const key of argumentsOpen.keys()) if (!live.has(key)) argumentsOpen.delete(key);
+    }
+    if (focusedDock) {
+      const replacement = [...otherRoot.querySelectorAll("[data-dock-focus]")]
+        .find((node) => node.dataset.dockFocus === focusedDock);
+      (replacement ?? document.querySelector("#prompt"))?.focus({ preventScroll: true });
+    }
     const live = new Set();
     for (const item of asks) {
       const key = `${selected.projectId}/${sessionId}/${item.id}`;
       live.add(key);
       if (!askNodes.has(key)) {
         const node = askCard(item, selected.projectId, sessionId,
-          deciding, drafts, onChanged);
+          askDeciding, drafts, onChanged);
         askNodes.set(key, node);
         askRoot.append(node);
       }
@@ -221,6 +256,8 @@ export function createConversationDocks({ container, navigation, tasksStore, app
       askNodes.delete(key);
       drafts.delete(key.split("/").at(-1));
     }
+    if (focusedAsk && !askRoot.contains(document.activeElement))
+      document.querySelector("#prompt")?.focus({ preventScroll: true });
     container.hidden = !todoItems.length && !todoError && !tasks.length &&
       !approvals.length && !asks.length;
   }

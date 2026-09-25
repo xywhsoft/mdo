@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="zh-CN">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>mdo conversation focus probe</title>
+<link rel="stylesheet" href="/app/web/css/app.css">
+<style>
+  body { margin: 24px; background: var(--surface); color: var(--ink); }
+  .probe-controls { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; }
+  #conversation-docks { width: min(760px, 100%); margin: 12px 0; }
+  #approval-list { width: min(760px, 100%); }
+</style>
+<div class="probe-controls">
+  <button id="refresh" type="button">刷新状态</button>
+  <button id="resolve-ask" type="button">结束询问</button>
+  <button id="reset-approval" type="button">新建审批</button>
+  <label><input id="fail-followup" type="checkbox"> 决策后刷新失败</label>
+  <label><input id="stale-list" type="checkbox"> 保持过期审批列表</label>
+</div>
+<p id="qa-status" role="status">审批提交次数：0</p>
+<textarea id="prompt" aria-label="输入消息"></textarea>
+<div id="conversation-docks" class="conversation-docks"></div>
+<button id="decisions-tab" type="button">决策</button>
+<p id="approval-summary"></p>
+<div id="approval-list"></div>
+<div id="toast-region"></div>
+<script type="module">
+import { createConversationDocks } from "/app/web/js/features/chat/conversation-docks.js";
+import { createDecisionPanel } from "/app/web/js/features/approvals/decision-panel.js";
+import { approvalsStore } from "/app/web/js/state/approvals.js";
+import { asksStore } from "/app/web/js/state/asks.js";
+import { createResourceStore } from "/app/web/js/state/store.js";
+
+let approvalId = 11;
+let decisions = 0;
+let pendingApprovals = [];
+let pendingAsks = [{ id: 7, run_id: 8, question: "下一步做什么？",
+  options: ["继续检查", "调整方案"] }];
+function approval() {
+  return { id: approvalId, run_id: 8, tool: "shell", risk: "medium",
+    effects: ["process"], resources: [{ kind: "目录", resource: "workspace",
+      access: ["read"] }], arguments_json: '{"command":"rg"}',
+    expires_in_ms: 60000 };
+}
+function envelope(data) {
+  return new Response(JSON.stringify({ ok: true, data }),
+    { status: 200, headers: { "Content-Type": "application/json" } });
+}
+window.fetch = async (url, options = {}) => {
+  if (url.endsWith("/approvals") && options.method === "GET")
+    return envelope({ total: pendingApprovals.length, items: pendingApprovals });
+  if (url.includes("/approvals/") && options.method === "PUT") {
+    decisions += 1;
+    document.querySelector("#qa-status").textContent = `审批提交次数：${decisions}`;
+    await new Promise((resolve) => setTimeout(resolve, 500));
+    if (!document.querySelector("#stale-list").checked)
+      pendingApprovals = pendingApprovals.filter((item) =>
+        !url.endsWith(`/approvals/${item.id}`));
+    return envelope({ decision: JSON.parse(options.body).decision });
+  }
+  if (url.endsWith("/asks") && options.method === "GET")
+    return envelope({ total: pendingAsks.length, items: pendingAsks });
+  if (url.includes("/asks/") && options.method === "PUT") {
+    pendingAsks = [];
+    return envelope({ answer: JSON.parse(options.body).answer });
+  }
+  throw new Error(`Unexpected request: ${url}`);
+};
+
+const selected = { view: "workspace", projectId: "qa", sessionId: "focus" };
+const navigation = { get: () => selected, subscribe(listener) {
+  listener(selected);
+  return () => {};
+} };
+const tasksStore = createResourceStore({ items: [] });
+const todoStore = createResourceStore({ projectId: "qa", sessionId: "focus", items: [] });
+const runsStore = createResourceStore({ items: [] });
+function refresh() {
+  todoStore.setData({ projectId: "qa", sessionId: "focus", items: [
+    { text: "检查实现", done: true }, { text: "验证交互", done: false },
+  ] });
+  tasksStore.setData({ items: [{ id: 3, owner_session: "focus", state: "running",
+    label: "后台检查", terminal: false }] });
+  runsStore.setData({ items: [{ agent_run_id: 8, project_id: "qa",
+    session_id: "focus" }] });
+  approvalsStore.setData({ total: pendingApprovals.length,
+    items: pendingApprovals });
+  asksStore.setData({ projectId: "qa", sessionId: "focus",
+    total: pendingAsks.length, items: pendingAsks });
+}
+async function onChanged() {
+  if (document.querySelector("#fail-followup").checked)
+    throw new Error("模拟刷新失败");
+}
+createDecisionPanel({ container: document.querySelector("#approval-list"),
+  summary: document.querySelector("#approval-summary"),
+  store: approvalsStore, onChanged });
+createConversationDocks({ container: document.querySelector("#conversation-docks"),
+  navigation, tasksStore, approvalsStore, asksStore, todoStore, runsStore,
+  onOpenTasks() {}, onChanged });
+document.querySelector("#refresh").addEventListener("click", refresh);
+document.querySelector("#resolve-ask").addEventListener("click", () => {
+  pendingAsks = [];
+  refresh();
+});
+document.querySelector("#reset-approval").addEventListener("click", () => {
+  approvalId += 1;
+  pendingApprovals = [approval()];
+  refresh();
+});
+document.addEventListener("keydown", (event) => {
+  if (event.key === "F2") { event.preventDefault(); refresh(); }
+  if (event.key === "F3") {
+    event.preventDefault();
+    pendingAsks = [];
+    refresh();
+  }
+});
+pendingApprovals = [approval()];
+refresh();
+</script>
+</html>

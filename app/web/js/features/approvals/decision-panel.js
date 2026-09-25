@@ -23,28 +23,36 @@ function resourceText(resource) {
 export function createDecisionPanel({ container, summary, store, onChanged }) {
   let state = store.get();
   const deciding = new Set();
+  const submitted = new Set();
+  const argumentsOpen = new Map();
   const seen = new Set();
 
   async function decide(item, decision, card) {
-    if (deciding.has(String(item.id))) return;
-    deciding.add(String(item.id));
-    for (const button of card.querySelectorAll("button")) button.disabled = true;
+    const key = String(item.id);
+    if (deciding.has(key) || submitted.has(key)) return;
+    deciding.add(key);
+    for (const button of card.querySelectorAll("button"))
+      button.setAttribute("aria-disabled", "true");
     try {
       await decideApproval(item.id, decision);
+      submitted.add(key);
       toast(decision === "allow" ? `已允许 ${item.tool} 本次执行` : `已拒绝 ${item.tool} 本次执行`);
-      onChanged?.();
+      await onChanged?.();
     } catch (error) {
-      toast(errorMessage(error), "error");
+      toast(submitted.has(key) ? "决策已提交，但状态刷新未完成" : errorMessage(error), "error");
     } finally {
-      deciding.delete(String(item.id));
+      deciding.delete(key);
       render();
     }
   }
 
   function renderCard(item) {
+    const key = String(item.id);
     const card = element("article", { className: "approval-card", attrs: { "data-risk": item.risk } });
-    const allow = element("button", { className: "primary-button approval-allow", text: "允许一次", attrs: { type: "button" } });
-    const deny = element("button", { className: "secondary-button approval-deny", text: "拒绝", attrs: { type: "button" } });
+    const allow = element("button", { className: "primary-button approval-allow", text: "允许一次", attrs: {
+      type: "button", "data-decision-focus": `${key}/allow` } });
+    const deny = element("button", { className: "secondary-button approval-deny", text: "拒绝", attrs: {
+      type: "button", "data-decision-focus": `${key}/deny` } });
     const resources = element("ul", { className: "approval-resources" });
     for (const resource of item.resources ?? []) {
       resources.append(element("li", {}, [
@@ -63,23 +71,36 @@ export function createDecisionPanel({ container, summary, store, onChanged }) {
       ]),
       element("p", { className: "approval-workspace", text: item.workspace_root || "默认工作区" }),
       resources,
-      element("details", { className: "approval-arguments" }, [
-        element("summary", { text: "查看调用参数" }),
+      element("details", { className: "approval-arguments", attrs: {
+        "data-approval-arguments": key, open: argumentsOpen.get(key) ? "" : null } }, [
+        element("summary", { text: "查看调用参数", attrs: {
+          "data-decision-focus": `${key}/arguments` } }),
         element("pre", { text: formatArguments(item.arguments_json) }),
       ]),
       element("div", { className: "approval-actions" }, [deny, allow]),
     );
-    const busy = deciding.has(String(item.id));
-    allow.disabled = busy;
-    deny.disabled = busy;
+    const details = card.querySelector("details");
+    details.addEventListener("toggle", () => argumentsOpen.set(key, details.open));
+    const busy = deciding.has(key) || submitted.has(key);
+    allow.setAttribute("aria-disabled", String(busy));
+    deny.setAttribute("aria-disabled", String(busy));
     allow.addEventListener("click", () => void decide(item, "allow", card));
     deny.addEventListener("click", () => void decide(item, "deny", card));
     return card;
   }
 
   function render() {
+    const focused = container.contains(document.activeElement)
+      ? document.activeElement?.dataset.decisionFocus : "";
+    for (const details of container.querySelectorAll("details[data-approval-arguments]"))
+      argumentsOpen.set(details.dataset.approvalArguments, details.open);
     const items = state.data?.items ?? [];
     const total = Number(state.data?.total ?? items.length);
+    if (state.status === "ready") {
+      const live = new Set(items.map((item) => String(item.id)));
+      for (const key of submitted) if (!live.has(key)) submitted.delete(key);
+      for (const key of argumentsOpen.keys()) if (!live.has(key)) argumentsOpen.delete(key);
+    }
     clear(summary);
     summary.append(
       element("strong", { text: total }),
@@ -89,13 +110,20 @@ export function createDecisionPanel({ container, summary, store, onChanged }) {
     clear(container);
     if (state.status === "error") {
       container.append(element("div", { className: "resource-error", text: errorMessage(state.error) }));
+      if (focused) document.querySelector("#decisions-tab")?.focus({ preventScroll: true });
       return;
     }
     if (!items.length) {
       container.append(element("div", { className: "empty-state", text: state.status === "loading" ? "正在检查待决操作…" : "当前没有等待决定的操作" }));
+      if (focused) document.querySelector("#decisions-tab")?.focus({ preventScroll: true });
       return;
     }
     for (const item of items) container.append(renderCard(item));
+    if (focused) {
+      const replacement = [...container.querySelectorAll("[data-decision-focus]")]
+        .find((node) => node.dataset.decisionFocus === focused);
+      (replacement ?? document.querySelector("#decisions-tab"))?.focus({ preventScroll: true });
+    }
   }
 
   return store.subscribe((next) => {
