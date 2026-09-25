@@ -135,7 +135,9 @@ export function createFileMentions({ composer, input, navigation }) {
     onKeyDown(event) {
       if (list.hidden || event.isComposing) return false;
       if (event.key === "Escape") {
-        event.preventDefault(); hide(); return true;
+        event.preventDefault();
+        event.stopPropagation();
+        hide(); return true;
       }
       if (event.key === "ArrowDown" || event.key === "ArrowUp") {
         event.preventDefault();

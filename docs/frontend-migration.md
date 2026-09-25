@@ -275,3 +275,7 @@ Node 词典、消息替换与会话运行测试 7 项通过，`app.js` 和两个
 修复历史消息编辑入口的迟到拒绝。旧打包 Home `.build/mdo-packed-docks-23xhynxa` 中，输入未发送草稿后点“编辑”仍打开弹窗，只有提交时才会报草稿与队列冲突。现在打开弹窗前复用与实际重发相同的会话、运行、上传、草稿和队列前置检查；提交时再次检查，以处理弹窗打开后状态变化。新打包 Home `.build/mdo-packed-docks-wgozu98j` 中，保留 `Unsaved synthetic draft` 时点击编辑立即显示冲突提示，弹窗不打开且草稿不变；切到干净的新会话完成一轮合成回复后，编辑入口仍打开原文并聚焦文本框，取消后焦点返回原按钮。浏览器没有脚本错误。实际提交编辑/重试仍按完成审计保留，不把入口验证写作截断回放通过。
 
 Node 消息替换、会话运行与词典测试 7 项通过，`app.js` 语法检查通过；有界发布门禁通过 114 项单元/契约测试、18 个运行探针、严格 C 编译、确定性打包、单文件零旁路写入和 20 秒启动检查。根目录 `mdo.exe` SHA-256：`b119f3de769c1c8937fee468a208f503e91b6662d7070eddd59f50c87a8b00a7`。
+
+修复运行中 Esc 与输入候选的快捷键冲突。原来 `@` 文件候选和斜杠候选仅阻止默认按键，Esc 仍传到全局运行控制；同时桌面常驻侧栏被误判为临时抽屉，裸 Esc 会被抽屉分支吞掉。现在候选消费 Esc 并阻止传播，全局快捷键尊重已处理的事件；抽屉判断只计入移动端侧栏和非宽屏任务面板。修复前的 320px 隔离 Home `.build/mdo-packed-docks-yotozk_e` 在 `SLOW UI` 运行中打开 `@alpha` 后按 Esc，立即出现“Agent 已停止”。修复后的 Home `.build/mdo-packed-docks-2sk55r70` 同样按键只关闭候选，`@alpha` 草稿保留，15 秒本地回复完成，服务端记录 `state=succeeded, cancel_requested=false`。桌面 Home `.build/mdo-packed-docks-ttyvgp42` 在常驻侧栏打开时按裸 Esc，服务端记录 `state=cancelled, cancel_requested=true`。两个修复后的页面均无浏览器脚本错误。
+
+Node 快捷键所有权、词典与会话运行测试 4 项通过，四个改动脚本语法检查通过；有界发布门禁通过 114 项单元/契约测试、18 个运行探针、严格 C 编译、确定性打包、单文件零旁路写入和 20 秒启动检查。根目录 `mdo.exe` SHA-256：`b637716e8a51ba8ba7f0790a0fd24cb823f1de3fd9ac4daefb8bf4b64fa9bb1e`。

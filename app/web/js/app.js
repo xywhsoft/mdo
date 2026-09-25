@@ -1514,8 +1514,8 @@ export async function boot() {
       : $("#close-settings").click(),
     onToggleTheme: toggleTheme,
     onStop: () => stop.click(), isRunning: () => Boolean(activeRun),
-    isDrawerOpen: () => shell.dataset.sidebar === "open" ||
-      (mobileLayout.matches && shell.dataset.inspector === "open"),
+    isDrawerOpen: () => (mobileLayout.matches && shell.dataset.sidebar === "open") ||
+      (!wideLayout.matches && shell.dataset.inspector === "open"),
     closeDrawers,
   });
   $("#open-shortcuts").addEventListener("click", () => shortcuts.openHelp());

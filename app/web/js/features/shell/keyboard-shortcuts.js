@@ -16,6 +16,7 @@ export function createKeyboardShortcuts({ dialog, navigation, search, onNew,
   });
 
   document.addEventListener("keydown", (event) => {
+    if (event.defaultPrevented) return;
     if (event.key === "Escape") {
       if (document.querySelector("dialog[open]")) return;
       if (search.isOpen()) { search.close(true); return; }
