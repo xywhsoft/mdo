@@ -28,10 +28,17 @@ test("bundled language packs cover the annotated shell and switch without stale 
   for (const path of [
     "js/features/sessions/session-actions.js",
     "js/features/sessions/session-list.js",
+    "js/features/chat/composer-profile.js",
+    "js/features/chat/composer-project.js",
+    "js/features/chat/token-meter.js",
+    "js/app.js",
   ]) {
     const source = readFileSync(new URL(path, root), "utf8");
-    for (const [, key] of source.matchAll(/(?:\bt|\bitem)\("(?:[^"]+",\s*)?(nav\.[^"]+|action\.[^"]+)"/g))
+    for (const [, key] of source.matchAll(/\bt\("([^"]+)"/g))
       assert.ok(referenceKeys.includes(key), `missing dynamic key: ${key}`);
+    if (path.endsWith("session-actions.js"))
+      for (const [, key] of source.matchAll(/\bitem\("[^"]+",\s*"([^"]+)"/g))
+        assert.ok(referenceKeys.includes(key), `missing action key: ${key}`);
   }
 
   const node = {

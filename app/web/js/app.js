@@ -56,6 +56,7 @@ import { startWorkspaceNavigation } from "./features/shell/workspace-startup.js"
 import { createPaneLayout } from "./features/shell/pane-layout.js";
 import { api } from "./api/client.js";
 import { clear, element, errorMessage, toast } from "./utils/dom.js";
+import { subscribeLocale, t } from "./i18n.js";
 
 const $ = (selector) => {
   const node = document.querySelector(selector);
@@ -67,18 +68,21 @@ function terminalState(run) {
   return Boolean(run?.terminal);
 }
 
+const RUN_STATE_LABEL = Object.freeze({
+  created: ["run.created", "准备中"],
+  running: ["run.running", "运行中"],
+  succeeded: ["run.succeeded", "已完成"],
+  failed: ["run.failed", "运行失败"],
+  cancelled: ["run.cancelled", "已停止"],
+  timed_out: ["run.timedOut", "已超时"],
+  archived: ["run.archived", "已归档"],
+  trash: ["run.trash", "回收站"],
+  loading: ["run.loading", "载入中"],
+});
+
 function runStateText(state) {
-  return ({
-    created: "准备中",
-    running: "运行中",
-    succeeded: "已完成",
-    failed: "运行失败",
-    cancelled: "已停止",
-    timed_out: "已超时",
-    archived: "已归档",
-    trash: "回收站",
-    loading: "载入中",
-  })[state] ?? "就绪";
+  const [key, fallback] = RUN_STATE_LABEL[state] ?? ["run.ready", "就绪"];
+  return t(key, {}, fallback);
 }
 
 export async function boot() {
@@ -536,16 +540,20 @@ export async function boot() {
       composerImages?.isUploading() || composerProfile.isBusy();
     composerImages?.setWritable(sessionWritable && !submittingCurrent());
     composerProfile.setRunActive(Boolean(activeRun));
-    send.setAttribute("aria-label", activeRun ? "加入待发送队列" : "发送任务");
+    send.setAttribute("aria-label", activeRun
+      ? t("composer.queue", {}, "加入待发送队列")
+      : t("shell.send", {}, "发送任务"));
     composerHint.textContent = activeRun
       ? (guide
-        ? "Enter 中断并发送 · Ctrl Enter 排队"
-        : "Enter 排队 · Ctrl Enter 中断并发送")
-      : "Enter 发送 · Shift Enter 换行";
+        ? t("composer.hintGuide", {}, "Enter 中断并发送 · Ctrl Enter 排队")
+        : t("composer.hintQueue", {}, "Enter 排队 · Ctrl Enter 中断并发送"))
+      : t("composer.hintIdle", {}, "Enter 发送 · Shift Enter 换行");
     $("#shortcut-enter-description").textContent = guide
-      ? "发送；运行中中断并优先发送" : "发送；运行中加入待发送队列";
+      ? t("composer.shortcutEnterGuide", {}, "发送；运行中中断并优先发送")
+      : t("composer.shortcutEnterQueue", {}, "发送；运行中加入待发送队列");
     $("#shortcut-control-enter-description").textContent = guide
-      ? "运行中加入待发送队列" : "中断当前运行，优先发送输入";
+      ? t("composer.shortcutControlGuide", {}, "运行中加入待发送队列")
+      : t("composer.shortcutControlQueue", {}, "中断当前运行，优先发送输入");
     mobileActivity.hidden = !activeRun;
   }
   settingsStore.subscribe(() => setRun(activeRun));
@@ -564,8 +572,11 @@ export async function boot() {
   function syncWorkspaceChip() {
     const root = currentWorkspace();
     workspaceLabel.textContent = root
-      ? root.split(/[\\/]/).filter(Boolean).at(-1) || root : "本地工作区";
-    workspaceChip.title = root ? `当前工作目录：${root}` : "当前工作目录";
+      ? root.split(/[\\/]/).filter(Boolean).at(-1) || root
+      : t("composer.localWorkspace", {}, "本地工作区");
+    workspaceChip.title = root
+      ? t("composer.workspacePath", { path: root }, `当前工作目录：${root}`)
+      : t("composer.workspace", {}, "当前工作目录");
   }
 
   function updateContext(state) {
@@ -614,12 +625,17 @@ export async function boot() {
     for (const button of exportButtons) button.disabled = !available;
   }
 
+  function syncPromptPlaceholder() {
+    prompt.placeholder = sessionWritable ? t("shell.prompt", {}, "向墨斗描述任务…")
+      : t("composer.readOnly", {}, "该会话不可运行；请先恢复到进行中");
+  }
+
   sessionDetailStore.subscribe((state) => {
     const session = state.data;
     updateExportButtons();
     sessionWritable = session ? session.status === "active" : !navigation.get().sessionId;
     selectedSessionStatus = session?.status ?? (navigation.get().sessionId ? "loading" : "active");
-    prompt.placeholder = sessionWritable ? "向墨斗描述任务…" : "该会话不可运行；请先恢复到进行中";
+    syncPromptPlaceholder();
     setRun(activeRun);
     focusForkComposerWhenReady();
     if (session) {
@@ -636,6 +652,11 @@ export async function boot() {
   projectsStore.subscribe(() => {
     syncWorkspaceChip();
     if (!navigation.get().sessionId) updateContext(sessionDetailStore.get());
+  });
+  subscribeLocale(() => {
+    setRun(activeRun);
+    syncPromptPlaceholder();
+    syncWorkspaceChip();
   });
 
   bootstrapStore.subscribe((state) => {

@@ -1,9 +1,15 @@
 import { updateSessionProfile } from "../../state/sessions.js";
 import { clear, element, errorMessage, toast } from "../../utils/dom.js";
+import { subscribeLocale, t } from "../../i18n.js";
 
 const EFFORT_LABEL = Object.freeze({
-  none: "无思考", minimal: "极低", low: "低", medium: "中",
-  high: "高", xhigh: "极高", max: "最大",
+  none: ["reasoning.none", "无思考"],
+  minimal: ["reasoning.minimal", "极低"],
+  low: ["reasoning.low", "低"],
+  medium: ["reasoning.medium", "中"],
+  high: ["reasoning.high", "高"],
+  xhigh: ["reasoning.xhigh", "极高"],
+  max: ["reasoning.max", "最大"],
 });
 
 function selectedModel(models, id) {
@@ -15,7 +21,8 @@ export function fillReasoningOptions(select, model, preferred = "") {
     ? model.reasoning_efforts : (preferred ? [preferred] : []);
   clear(select);
   for (const effort of efforts)
-    select.append(element("option", { text: EFFORT_LABEL[effort] || effort,
+    select.append(element("option", { text: EFFORT_LABEL[effort]
+      ? t(EFFORT_LABEL[effort][0], {}, EFFORT_LABEL[effort][1]) : effort,
       attrs: { value: effort } }));
   const chosen = efforts.includes(preferred) ? preferred
     : efforts.includes(model?.default_reasoning_effort)
@@ -72,7 +79,7 @@ export function createComposerProfile({ modelSelect, reasoningSelect,
     const id = session?.model_id || pending.model_id || defaultModelId();
     clear(modelSelect);
     for (const model of catalog) {
-      const suffix = model.free ? " · 免费" : "";
+      const suffix = model.free ? t("model.freeSuffix", {}, " · 免费") : "";
       modelSelect.append(element("option", {
         text: `${model.name || model.id}${suffix}`,
         attrs: { value: model.id },
@@ -131,13 +138,15 @@ export function createComposerProfile({ modelSelect, reasoningSelect,
       if (selected.projectId === updated.project_id &&
           selected.sessionId === updated.id) sessionStore.setData(updated);
       toast(selected.projectId === updated.project_id &&
-        selected.sessionId === updated.id ? "会话配置已更新" :
-        `后台会话“${session.title}”配置已更新`);
+        selected.sessionId === updated.id ? t("profile.updated", {}, "会话配置已更新") :
+        t("profile.backgroundUpdated", { title: session.title },
+          `后台会话“${session.title}”配置已更新`));
     } catch (error) {
       const selected = navigation.get();
       toast(selected.projectId === session.project_id &&
         selected.sessionId === session.id ? errorMessage(error) :
-        `后台会话“${session.title}”配置更新失败：${errorMessage(error)}`, "error");
+        t("profile.backgroundFailed", { title: session.title, error: errorMessage(error) },
+          `后台会话“${session.title}”配置更新失败：${errorMessage(error)}`), "error");
       if (selected.projectId === session.project_id &&
           selected.sessionId === session.id) sync();
     } finally {
@@ -155,11 +164,9 @@ export function createComposerProfile({ modelSelect, reasoningSelect,
   });
   reasoningSelect.addEventListener("change", () => { void changed("reasoning"); });
   permissionSelect.addEventListener("change", () => { void changed("permission"); });
-  modelsStore.subscribe(sync);
-  agentsStore.subscribe(sync);
-  projectsStore.subscribe(sync);
-  sessionStore.subscribe(sync);
-  navigation.subscribe(sync);
+  const unsubscribers = [modelsStore.subscribe(sync), agentsStore.subscribe(sync),
+    projectsStore.subscribe(sync), sessionStore.subscribe(sync),
+    navigation.subscribe(sync), subscribeLocale(sync)];
   return Object.freeze({
     selection: () => ({
       model_id: modelSelect.value,
@@ -169,5 +176,6 @@ export function createComposerProfile({ modelSelect, reasoningSelect,
     setRunActive(value) { runActive = Boolean(value); sync(); },
     isBusy: () => busy.has(selectedKey()),
     sync,
+    destroy: () => unsubscribers.forEach((unsubscribe) => unsubscribe()),
   });
 }

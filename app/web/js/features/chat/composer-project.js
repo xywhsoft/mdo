@@ -1,5 +1,6 @@
 import { resourceId } from "../../api/client.js";
 import { element } from "../../utils/dom.js";
+import { currentLocale, subscribeLocale, t } from "../../i18n.js";
 
 // A new task has no session yet. Its project lives in the URL so refreshing a
 // draft does not silently move the eventual session back to "default".
@@ -24,11 +25,13 @@ export function createComposerProject({ select, navigation, projectsStore,
     const projects = new Map((projectsStore.get().data?.items ?? [])
       .map((project) => [project.id, project]));
     const ordered = ["default", ...[...ids].filter((id) => id !== "default")
-      .sort((a, b) => a.localeCompare(b, "zh-CN"))];
-    const nextKey = ordered.map((id) => `${id}:${projects.get(id)?.name ?? ""}`).join("\n");
+      .sort((a, b) => a.localeCompare(b, currentLocale()))];
+    const nextKey = `${currentLocale()}\n${ordered.map((id) =>
+      `${id}:${projects.get(id)?.name ?? ""}`).join("\n")}`;
     if (nextKey !== optionKey) {
       select.replaceChildren(...ordered.map((id) => element("option", {
-        text: id === "default" ? "默认项目" : projects.get(id)?.name || id,
+        text: id === "default" ? t("nav.defaultProject", {}, "默认项目") :
+          projects.get(id)?.name || id,
         attrs: { value: id },
       })));
       optionKey = nextKey;
@@ -40,8 +43,8 @@ export function createComposerProject({ select, navigation, projectsStore,
   select.addEventListener("change", () => {
     navigation.newTask(select.value, { replace: true });
   });
-  projectsStore.subscribe(sync);
-  sessionsStore.subscribe(sync);
-  navigation.subscribe(sync);
-  return Object.freeze({ sync });
+  const unsubscribers = [projectsStore.subscribe(sync), sessionsStore.subscribe(sync),
+    navigation.subscribe(sync), subscribeLocale(sync)];
+  return Object.freeze({ sync,
+    destroy: () => unsubscribers.forEach((unsubscribe) => unsubscribe()) });
 }

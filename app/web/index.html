@@ -192,19 +192,19 @@
             <div class="composer-options">
               <button class="composer-attach" id="composer-attach" type="button" aria-label="添加图片" data-i18n-aria-label="shell.attach" title="添加图片（PNG、JPEG、WebP）">＋</button>
               <input id="composer-file" type="file" accept="image/png,image/jpeg,image/webp" multiple hidden>
-              <button class="option-chip" id="workspace-chip" type="button" title="当前工作目录">
+              <button class="option-chip" id="workspace-chip" type="button" title="当前工作目录" data-i18n-title="composer.workspace">
                 <span class="icon" data-icon="folder" aria-hidden="true"></span>
-                <span id="workspace-label">本地工作区</span>
+                <span id="workspace-label" data-i18n="composer.localWorkspace">本地工作区</span>
               </button>
-              <label class="sr-only" for="composer-project">新任务项目</label>
-              <select class="composer-select composer-project" id="composer-project" aria-label="新任务项目">
-                <option value="default">默认项目</option>
+              <label class="sr-only" for="composer-project" data-i18n="composer.newTaskProject">新任务项目</label>
+              <select class="composer-select composer-project" id="composer-project" aria-label="新任务项目" data-i18n-aria-label="composer.newTaskProject">
+                <option value="default" data-i18n="nav.defaultProject">默认项目</option>
               </select>
-              <label class="sr-only" for="composer-model">模型</label>
+              <label class="sr-only" for="composer-model" data-i18n="shell.model">模型</label>
               <select class="composer-select" id="composer-model" aria-label="模型" data-i18n-aria-label="shell.model"></select>
-              <label class="sr-only" for="composer-reasoning">推理强度</label>
+              <label class="sr-only" for="composer-reasoning" data-i18n="shell.reasoning">推理强度</label>
               <select class="composer-select composer-select-short" id="composer-reasoning" aria-label="推理强度" data-i18n-aria-label="shell.reasoning"></select>
-              <label class="sr-only" for="composer-permission">权限</label>
+              <label class="sr-only" for="composer-permission" data-i18n="shell.permission">权限</label>
               <select class="composer-select composer-select-short" id="composer-permission" aria-label="权限" data-i18n-aria-label="shell.permission">
                 <option value="read-only" data-i18n="shell.permission.readOnly">只读</option>
                 <option value="balanced" data-i18n="shell.permission.balanced">询问</option>
@@ -212,14 +212,14 @@
               </select>
             </div>
             <div class="composer-actions">
-              <span class="composer-input-estimate" id="composer-input-estimate" title="按输入文本粗略估算">输入 ~0 tok</span>
+              <span class="composer-input-estimate" id="composer-input-estimate" title="按输入文本粗略估算" data-i18n-title="token.estimateTitle">输入 ~0 tok</span>
               <div class="context-meter" id="context-meter">
-                <button type="button" id="context-meter-trigger" aria-label="查看 token 用量" aria-expanded="false" aria-controls="context-meter-panel">
+                <button type="button" id="context-meter-trigger" aria-label="查看 token 用量" data-i18n-aria-label="token.view" aria-expanded="false" aria-controls="context-meter-panel">
                   <span class="context-meter-ring" id="context-meter-ring" aria-hidden="true"></span>
                 </button>
                 <div class="context-meter-panel" id="context-meter-panel" hidden></div>
               </div>
-              <span class="composer-hint" id="composer-hint">Enter 发送 · Shift Enter 换行</span>
+              <span class="composer-hint" id="composer-hint" data-i18n="composer.hintIdle">Enter 发送 · Shift Enter 换行</span>
               <span class="composer-draft-status" id="draft-status" role="status" hidden></span>
               <button class="send-button" id="send" type="submit" aria-label="发送任务" data-i18n-aria-label="shell.send">
                 <span class="icon" data-icon="arrow-up" aria-hidden="true"></span>
