@@ -1196,6 +1196,7 @@ select:focus-visible,
 }
 
 @media (max-width: 760px) {
+  .icon-button { width: 40px; height: 40px; }
   .model-config-layout { grid-template-columns: minmax(0, 1fr); }
   .model-config-list { max-height: 180px; }
   .model-form-grid { grid-template-columns: minmax(0, 1fr); }
@@ -1242,6 +1243,10 @@ select:focus-visible,
   .composer-hint { display: none; }
   .composer-toolbar { flex-wrap: wrap; gap: 2px; }
   .composer-options { flex: 1 1 100%; gap: 3px; }
+  .composer-attach, .composer-select, .context-meter > button,
+  .send-button, .stop-button { height: 40px; }
+  .composer-attach, .context-meter > button, .send-button,
+  .stop-button { width: 40px; }
   .composer-project { min-width: 88px; max-width: 95px; }
   #composer-model { max-width: 110px; }
   .composer-select-short { max-width: 56px; }

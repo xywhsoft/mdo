@@ -1142,10 +1142,15 @@ export async function boot() {
   });
 
   function setDrawer(name, open, options = {}) {
+    if (open && mobileLayout.matches) {
+      const other = name === "sidebar" ? "inspector" : "sidebar";
+      if (shell.dataset[other] === "open")
+        setDrawer(other, false, { persist: false });
+    }
     shell.dataset[name] = open ? "open" : "closed";
     const button = name === "sidebar" ?
       (mobileLayout.matches ? $("#open-sidebar") : $("#desktop-sidebar-toggle"))
-      : $("#open-inspector");
+      : (mobileLayout.matches ? $("#open-inspector") : $("#toggle-inspector"));
     const panel = name === "sidebar" ? $("#sidebar") : $("#inspector");
     const inactive = !open;
     if (inactive && panel.contains(document.activeElement)) button.focus();
@@ -1154,9 +1159,34 @@ export async function boot() {
     if (name === "sidebar")
       $("#desktop-sidebar-toggle").setAttribute("aria-expanded", String(open));
     if (name === "inspector") $("#toggle-inspector").setAttribute("aria-expanded", String(open));
+    if (open && options.focus !== false &&
+        (name === "sidebar" ? mobileLayout.matches : !wideLayout.matches)) {
+      (name === "sidebar" ? $("#close-sidebar") :
+        panel.querySelector('[role="tab"][aria-selected="true"]'))?.focus();
+    }
     if (options.persist === false) paneLayout?.apply();
     else paneLayout?.remember(name, open);
   }
+  document.addEventListener("keydown", (event) => {
+    if (event.key !== "Tab" || document.querySelector("dialog[open]")) return;
+    const panel = mobileLayout.matches && shell.dataset.sidebar === "open"
+      ? $("#sidebar") : !wideLayout.matches && shell.dataset.inspector === "open"
+        ? $("#inspector") : null;
+    if (!panel) return;
+    const items = [...panel.querySelectorAll(
+      'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+    )].filter((item) => item.getClientRects().length &&
+      !item.closest("[hidden], [inert]"));
+    if (!items.length) return;
+    const first = items[0];
+    const last = items[items.length - 1];
+    if (!panel.contains(document.activeElement) ||
+        (event.shiftKey ? document.activeElement === first :
+          document.activeElement === last)) {
+      event.preventDefault();
+      (event.shiftKey ? last : first).focus();
+    }
+  });
   function closeDrawers() {
     if (mobileLayout.matches) setDrawer("sidebar", false, { persist: false });
     if (!wideLayout.matches) setDrawer("inspector", false, { persist: false });
