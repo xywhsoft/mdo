@@ -887,6 +887,61 @@ def run_probe(host: Path) -> None:
                 status, headers, body = request(port, "GET", project_path)
                 assert status == 200 and json.loads(body)["data"]["revision"] == 1
                 assert headers["etag"] == '"mdo-project-ui-workspace-1"'
+                preview_path = project_path + "/purge-preview"
+                status, headers, body = request(port, "GET", preview_path)
+                preview = json.loads(body)["data"]
+                assert status == 200 and headers["etag"] == (
+                    '"mdo-project-ui-workspace-1"'), (status, headers, body)
+                assert preview["advisory"] is True, preview
+                assert preview["session_count"] == 1, preview
+                assert preview["schedule_count"] == 0, preview
+                assert preview["project_memory_present"] is False, preview
+                assert preview["active_interactive_run_count"] == 0, preview
+                assert request(port, "HEAD", preview_path)[0] == 200
+                preview_memory = "/api/v1/memory/projects/ui-workspace"
+                status, headers, body = request(port, "GET", preview_memory)
+                assert status == 200, (status, body)
+                status, _, body = request(port, "PUT", preview_memory,
+                    body=json.dumps({"id": "purge-note", "title": "Purge note",
+                                     "content": "Preview this project memory.",
+                                     "tags": [], "pinned": False}).encode(),
+                    headers={"Content-Type": "application/json",
+                             "If-Match": headers["etag"]})
+                assert status == 200, (status, body)
+                preview_schedule = {
+                    "id": "purge-preview-schedule", "label": "Purge preview",
+                    "notify": "", "project_id": "ui-workspace",
+                    "agent_id": "mdo.default", "model_id": "ling-3.0-tiny",
+                    "protocol": "openai-responses", "reasoning_effort": "medium",
+                    "max_output_tokens": 1024,
+                    "workspace_root": str(project_workspace),
+                    "input": "A disabled preview fixture", "frequency": "once",
+                    "interval": 1, "start_at": 4102444800000000,
+                    "weekday_mask": 0, "timezone": "utc",
+                    "utc_offset_seconds": 0, "fold_policy": "earlier",
+                    "misfire_policy": "run_once", "misfire_grace_seconds": 60,
+                    "max_catch_up": 1, "overlap_policy": "skip",
+                    "max_concurrent_runs": 1, "enabled": False,
+                }
+                status, _, body = request(port, "POST", "/api/v1/schedules",
+                    body=json.dumps(preview_schedule).encode(),
+                    headers={"Content-Type": "application/json"})
+                assert status == 201, (status, body)
+                status, _, body = request(port, "GET", preview_path)
+                preview = json.loads(body)["data"]
+                assert status == 200 and preview["session_count"] == 1, (
+                    status, body)
+                assert preview["schedule_count"] == 1, preview
+                assert preview["project_memory_present"] is True and (
+                    preview["project_memory_entry_count"] == 1), preview
+                status, _, body = request(port, "GET",
+                    "/api/v1/projects/missing/purge-preview")
+                assert status == 404 and json.loads(body)["error"]["code"] == (
+                    "project_not_found"), (status, body)
+                status, _, body = request(port, "GET",
+                    "/api/v1/projects/.bad/purge-preview")
+                assert status == 400 and json.loads(body)["error"]["code"] == (
+                    "invalid_project_path"), (status, body)
                 status, _, body = request(port, "GET", "/api/v1/projects/.bad")
                 assert status == 400 and json.loads(body)["error"]["code"] == (
                     "invalid_project_path"), (status, body)
@@ -930,6 +985,11 @@ def run_probe(host: Path) -> None:
                 assert status == 201, (status, body)
                 assert (Path(json.loads(body)["data"]["workspace_root"]).resolve()
                         == second_workspace.resolve()), body
+                status, headers, body = request(port, "GET", preview_path)
+                preview = json.loads(body)["data"]
+                assert status == 200 and preview["session_count"] == 2, (
+                    status, body)
+                assert headers["etag"] == '"mdo-project-ui-workspace-2"'
                 status, _, body = request(
                     port, "DELETE", project_path,
                     headers={"If-Match": '"mdo-project-ui-workspace-1"'})

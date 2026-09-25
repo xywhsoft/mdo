@@ -3,7 +3,10 @@
 
 #include "internal.h"
 #include "../../include/mdo/config.h"
+#include "../../include/mdo/home.h"
+#include "../../include/mdo/memory.h"
 #include "../../include/mdo/projects.h"
+#include "../../include/mdo/runs.h"
 #include "../../include/mdo/schedules.h"
 #include "../../include/mdo/sessions.h"
 
@@ -427,6 +430,143 @@ bool MdoApiProjectRoute(MdoApiContext* Context)
     if ( Result != MDO_PROJECT_MUTATION_OK )
         return MdoApiProjectMutationFailure(Context, Result);
     return MdoApiProjectReply(Context, 200u, &Info);
+}
+
+/* This is an advisory inventory, not an authorization to remove files.  A
+ * future purge transaction must rescan while holding all affected stores. */
+bool MdoApiProjectPurgePreviewRoute(MdoApiContext* Context)
+{
+    char Id[MDO_PROJECT_ID_CAPACITY] = { 0 };
+    char MemoryPath[96];
+    char Tag[128];
+    MdoProjectInfo Project;
+    MdoSessionCatalog* Sessions = NULL;
+    MdoScheduleCatalog* Schedules = NULL;
+    MdoRunSnapshot* Runs = NULL;
+    MdoMemorySnapshot* Memory = NULL;
+    MdoScheduleExecutorSnapshot Executor;
+    xfileinfo MemoryInfo;
+    xwork_error Error;
+    xvalue* Data = NULL;
+    size_t SessionCount = 0u;
+    size_t SessionRuntimeCount = 0u;
+    size_t SessionDiagnosticCount = 0u;
+    size_t SessionCatalogDiagnosticCount;
+    size_t ScheduleCount = 0u;
+    size_t ActiveRunCount = 0u;
+    size_t Index;
+    bool Found = false;
+    bool MemoryPresent = false;
+    bool Ok = false;
+    int Written;
+
+    if ( Context->ParamCount != 1u || Context->Params[0].Size == 0u ||
+         Context->Params[0].Size >= sizeof(Id) )
+        return MdoApiReplyError(Context, 400u, "invalid_project_path",
+            "The project ID is invalid", NULL);
+    memcpy(Id, Context->Params[0].Data, Context->Params[0].Size);
+    Id[Context->Params[0].Size] = '\0';
+    memset(&Project, 0, sizeof(Project)); Project.Size = sizeof(Project);
+    memset(&Error, 0, sizeof(Error));
+    if ( !MdoProjectGet(Id, &Project, &Found, &Error) )
+        return MdoApiProjectReadFailure(Context, &Error);
+    if ( !Found ) return MdoApiReplyError(Context, 404u,
+        "project_not_found", "The project definition was not found", NULL);
+    Written = snprintf(MemoryPath, sizeof(MemoryPath),
+        "memory/projects/%s.json", Id);
+    if ( Written <= 0 || (size_t)Written >= sizeof(MemoryPath) ) goto done;
+    if ( !MdoHomeExternalStat(MemoryPath, &MemoryPresent, &MemoryInfo) ||
+         (MemoryPresent && MemoryInfo.Type != XFILE_TYPE_FILE) ) goto done;
+    Sessions = MdoSessionCatalogSnapshot(&Error);
+    if ( Sessions == NULL ) goto done;
+    Schedules = MdoScheduleCatalogSnapshot(&Error);
+    if ( Schedules == NULL ) goto done;
+    Runs = MdoRunSnapshotCreate(&Error);
+    if ( Runs == NULL ) goto done;
+    Memory = MdoMemorySnapshotCreate(MDO_MEMORY_PROJECT, Id, &Error);
+    if ( Memory == NULL ) goto done;
+    memset(&Executor, 0, sizeof(Executor)); Executor.Size = sizeof(Executor);
+    if ( !MdoScheduleExecutorGetSnapshot(&Executor) ) goto done;
+    for ( Index = 0u; Index < MdoSessionCatalogCount(Sessions); ++Index ) {
+        MdoSessionInfo Info;
+        memset(&Info, 0, sizeof(Info)); Info.Size = sizeof(Info);
+        if ( !MdoSessionCatalogAt(Sessions, Index, &Info) ) goto done;
+        if ( strcmp(Info.ProjectId, Id) != 0 ) continue;
+        ++SessionCount;
+        if ( Info.RuntimeOpen ) ++SessionRuntimeCount;
+    }
+    for ( Index = 0u; Index < MdoSessionCatalogDiagnosticCount(Sessions);
+          ++Index ) {
+        MdoSessionDiagnostic Diagnostic;
+        memset(&Diagnostic, 0, sizeof(Diagnostic));
+        Diagnostic.Size = sizeof(Diagnostic);
+        if ( !MdoSessionCatalogDiagnosticAt(Sessions, Index,
+                &Diagnostic) ) goto done;
+        if ( strncmp(Diagnostic.Path, "sessions/", 9u) == 0 &&
+             strncmp(Diagnostic.Path + 9u, Id, strlen(Id)) == 0 &&
+             (Diagnostic.Path[9u + strlen(Id)] == '/' ||
+              Diagnostic.Path[9u + strlen(Id)] == '\0') )
+            ++SessionDiagnosticCount;
+    }
+    SessionCatalogDiagnosticCount =
+        MdoSessionCatalogDiagnosticCount(Sessions);
+    for ( Index = 0u; Index < MdoScheduleCatalogCount(Schedules); ++Index ) {
+        MdoScheduleInfo Info;
+        memset(&Info, 0, sizeof(Info)); Info.Size = sizeof(Info);
+        if ( !MdoScheduleCatalogAt(Schedules, Index, &Info) ) goto done;
+        if ( strcmp(Info.ProjectId, Id) == 0 ) ++ScheduleCount;
+    }
+    for ( Index = 0u; Index < MdoRunSnapshotCount(Runs); ++Index ) {
+        MdoRunInfo Info;
+        memset(&Info, 0, sizeof(Info)); Info.Size = sizeof(Info);
+        if ( !MdoRunSnapshotAt(Runs, Index, &Info) ) goto done;
+        if ( strcmp(Info.ProjectId, Id) == 0 && !Info.Terminal )
+            ++ActiveRunCount;
+    }
+    Data = xrtValueObject();
+    Ok = Data != NULL &&
+        MdoApiValueSetString(Data, "id", Project.Id) &&
+        MdoApiValueSetString(Data, "name", Project.Name) &&
+        MdoApiValueSetUInt(Data, "revision", Project.Revision) &&
+        MdoApiValueSetUInt(Data, "session_count", SessionCount) &&
+        MdoApiValueSetUInt(Data, "session_runtime_count",
+            SessionRuntimeCount) &&
+        MdoApiValueSetUInt(Data, "session_diagnostic_count",
+            SessionDiagnosticCount) &&
+        MdoApiValueSetUInt(Data,
+            "session_catalog_diagnostic_count_global",
+            SessionCatalogDiagnosticCount) &&
+        MdoApiValueSetUInt(Data, "schedule_count", ScheduleCount) &&
+        MdoApiValueSetUInt(Data,
+            "schedule_catalog_diagnostic_count_global",
+            MdoScheduleCatalogDiagnosticCount(Schedules)) &&
+        MdoApiValueSetBool(Data, "project_memory_present", MemoryPresent) &&
+        MdoApiValueSetUInt(Data, "project_memory_entry_count",
+            MdoMemorySnapshotCount(Memory)) &&
+        MdoApiValueSetUInt(Data, "active_interactive_run_count",
+            ActiveRunCount) &&
+        MdoApiValueSetUInt(Data, "active_scheduled_run_count_global",
+            Executor.ActiveRuns) &&
+        MdoApiValueSetUInt(Data, "session_generation",
+            MdoSessionCatalogGeneration(Sessions)) &&
+        MdoApiValueSetUInt(Data, "schedule_generation",
+            MdoScheduleCatalogGeneration(Schedules)) &&
+        MdoApiValueSetUInt(Data, "memory_generation",
+            MdoMemorySnapshotGeneration(Memory)) &&
+        MdoApiValueSetBool(Data, "advisory", true);
+done:
+    MdoMemorySnapshotRelease(Memory);
+    MdoRunSnapshotRelease(Runs);
+    MdoScheduleCatalogRelease(Schedules);
+    MdoSessionCatalogRelease(Sessions);
+    if ( !Ok ) {
+        xrtValueRelease(Data);
+        return MdoApiReplyError(Context, 503u, "purge_preview_unavailable",
+            "The project data inventory could not be completed", NULL);
+    }
+    snprintf(Tag, sizeof(Tag), "\"mdo-project-%s-%llu\"", Project.Id,
+        (unsigned long long)Project.Revision);
+    return MdoApiReplySuccessTakeEntityTag(Context, 200u, Data, Tag);
 }
 
 bool MdoApiPermissionsRoute(MdoApiContext* Context)
