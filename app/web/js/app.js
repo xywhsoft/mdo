@@ -273,6 +273,8 @@ export async function boot() {
     if (!session || session.project_id !== selected.projectId ||
         session.id !== selected.sessionId)
       throw new Error(t("messageAction.selectSession", {}, "请先选择会话"));
+    if (session.status !== "active")
+      throw new Error(t("composer.readOnly", {}, "该会话不可运行；请先恢复到进行中"));
     if (activeRun || submittingCurrent() || composerImages?.isUploading())
       throw new Error(t("messageAction.waitForRun", {}, "请在当前运行结束后操作消息"));
     if (promptQueue.peek(selected.projectId, selected.sessionId) ||
@@ -341,6 +343,7 @@ export async function boot() {
   const timelineView = createTimelineView({
     container: $("#timeline"), welcome: $("#welcome"),
     toBottom: $("#to-bottom"), store: timelineStore,
+    sessionStore: sessionDetailStore,
     feedbackStore,
     onSearchCount: (count, historyLost) => conversationSearch?.setCount(count, historyLost),
     onFeedback: async (eventId, value, owner) => {
@@ -355,9 +358,13 @@ export async function boot() {
       const session = sessionDetailStore.get().data;
       if (!session || `${session.project_id}/${session.id}` !== selectedKey || activeRun)
         throw new Error(t("sessionAction.forkWaitForRun", {}, "请在当前运行结束后分叉会话"));
+      if (session.status !== "active")
+        throw new Error(t("composer.readOnly", {}, "该会话不可运行；请先恢复到进行中"));
       const history = await loadSessionHistory(session);
       if (!isCurrentMessageOwner(owner, version))
         throw new Error(t("messageAction.ownerChanged", {}, "会话已切换，请重新选择消息"));
+      if (sessionDetailStore.get().data?.status !== "active")
+        throw new Error(t("composer.readOnly", {}, "该会话不可运行；请先恢复到进行中"));
       const boundary = throughSequence ?? history.last_sequence;
       if (!Number.isSafeInteger(boundary) || boundary < 0 ||
           boundary > history.last_sequence)

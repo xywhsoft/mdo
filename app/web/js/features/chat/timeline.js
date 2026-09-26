@@ -391,7 +391,7 @@ function commandButton(label, description, iconName, actionRef, handlers, sessio
   return button;
 }
 
-function timelineNode(item, handlers, feedback, projectId, sessionId,
+function timelineNode(item, handlers, feedback, projectId, sessionId, writable,
   openState, previewOpen, previewScroll) {
   if (item.kind === "reasoning" || item.kind === "tool")
     return foldableNode(item, openState, previewOpen, previewScroll,
@@ -460,7 +460,7 @@ function timelineNode(item, handlers, feedback, projectId, sessionId,
       });
       actions.append(copy);
     }
-    if (item.kind === "user" &&
+    if (writable && item.kind === "user" &&
         Number.isSafeInteger(item.userMessageSequence) &&
         item.userMessageSequence > 0 && !item.textTruncated) {
       const edit = commandButton(t("timeline.edit", {}, "编辑"),
@@ -470,14 +470,14 @@ function timelineNode(item, handlers, feedback, projectId, sessionId,
       actions.append(edit);
     }
     if (item.kind === "assistant") {
-      if ("forkThroughSequence" in item) {
+      if (writable && "forkThroughSequence" in item) {
         const fork = commandButton(t("timeline.fork", {}, "分叉"),
           t("timeline.forkFromReply", {}, "从此回复分叉会话"), "branch", `${item.key}/fork`,
           handlers, sessionKey, () => handlers.onFork(item.forkThroughSequence, owner));
         actions.append(fork);
       }
       const retryPrompt = item.retryPrompt;
-      if (retryPrompt && Number.isSafeInteger(retryPrompt.sequence) &&
+      if (writable && retryPrompt && Number.isSafeInteger(retryPrompt.sequence) &&
           retryPrompt.sequence > 0 && (retryPrompt.text || retryPrompt.attachments?.length) &&
           !retryPrompt.truncated) {
         const retry = commandButton(t("timeline.retry", {}, "重试"),
@@ -514,7 +514,8 @@ function timelineNode(item, handlers, feedback, projectId, sessionId,
   }, children);
 }
 
-export function createTimelineView({ container, welcome, toBottom, store, feedbackStore, onFork, onFeedback, onEdit, onRetry, onSearchCount }) {
+export function createTimelineView({ container, welcome, toBottom, store, sessionStore = null,
+  feedbackStore, onFork, onFeedback, onEdit, onRetry, onSearchCount }) {
   const busySessions = new Set();
   const renderedRows = new Map();
   const handlers = {
@@ -542,13 +543,13 @@ export function createTimelineView({ container, welcome, toBottom, store, feedba
   function reconcileRows(entries, projectId, sessionId) {
     const retained = new Set();
     let cursor = container.firstChild;
-    for (const { item, feedback } of entries) {
+    for (const { item, feedback, writable } of entries) {
       retained.add(item.key);
-      const signature = JSON.stringify([item, feedback]);
+      const signature = JSON.stringify([item, feedback, writable]);
       let row = renderedRows.get(item.key);
       if (!row || row.signature !== signature) {
         const node = timelineNode(item, handlers, feedback, projectId,
-          sessionId, expanded.get(item.key),
+          sessionId, writable, expanded.get(item.key),
           previewExpanded.get(`${item.key}/preview`) ?? false,
           previewScroll.get(`${item.key}/preview`) ?? 0);
         mountIcons(node);
@@ -639,8 +640,11 @@ export function createTimelineView({ container, welcome, toBottom, store, feedba
       const selected = feedbackStore.get().data;
       const feedback = selected?.projectId === data?.projectId &&
         selected?.sessionId === data?.sessionId ? selected.items : new Map();
+      const session = sessionStore?.get().data;
+      const writable = !sessionStore || (session?.status === "active" &&
+        session.project_id === data?.projectId && session.id === data?.sessionId);
       for (const item of visible)
-        entries.push({ item, feedback: feedback.get(item.feedbackEventId) ?? "" });
+        entries.push({ item, feedback: feedback.get(item.feedbackEventId) ?? "", writable });
     }
     reconcileRows(entries, data?.projectId, data?.sessionId);
     if ((focusedAction || focusedImage) && !container.contains(document.activeElement)) {
@@ -682,6 +686,7 @@ export function createTimelineView({ container, welcome, toBottom, store, feedba
   });
 
   const unsubscribe = store.subscribe(queueRender);
+  const unsubscribeSession = sessionStore?.subscribe(() => queueRender(store.get()));
   const unsubscribeFeedback = feedbackStore.subscribe(() => queueRender(store.get()));
   const unsubscribeLocale = subscribeLocale(() => {
     renderedRows.clear();
@@ -703,7 +708,7 @@ export function createTimelineView({ container, welcome, toBottom, store, feedba
       queueRender(store.get());
     },
     destroy() {
-      unsubscribe(); unsubscribeFeedback(); unsubscribeLocale();
+      unsubscribe(); unsubscribeSession?.(); unsubscribeFeedback(); unsubscribeLocale();
       if (frame) cancelAnimationFrame(frame);
     },
   });
