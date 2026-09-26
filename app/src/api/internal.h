@@ -133,6 +133,8 @@ MdoApiQueueRunStatus MdoApiQueueRunPrepare(const char* ProjectId,
 MdoApiQueueRunStatus MdoApiQueueRunClaim(const char* ProjectId,
     const char* SessionId, const char* Id, xstrview Prompt,
     const char Attachments[4][33], size_t AttachmentCount);
+bool MdoApiQueueRunReleaseClaim(const char* ProjectId,
+    const char* SessionId, const char* Id);
 bool MdoApiQueueRunBind(const char* ProjectId, const char* SessionId,
     const char* Id, xstrview Prompt, const char Attachments[4][33],
     size_t AttachmentCount, const char* RunId);

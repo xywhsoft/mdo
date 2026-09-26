@@ -494,8 +494,8 @@ void MdoRunManagerUnit(void)
         Options.OnOwnerRelease(Options.OwnerUserData);
 }
 
-bool MdoRunStart(const MdoRunStartOptions* Options, MdoRunInfo* Info,
-    xwork_error* Error)
+bool MdoRunStartWithOutcome(const MdoRunStartOptions* Options,
+    MdoRunInfo* Info, xwork_error* Error, bool* MayHaveExecuted)
 {
     MdoSessionRuntimeOptions RuntimeOptions;
     MdoAgentRunOptions RunOptions;
@@ -513,6 +513,7 @@ bool MdoRunStart(const MdoRunStartOptions* Options, MdoRunInfo* Info,
     bool Published = false;
     bool Stopping = false;
     uint64 ImageRunId = 0u;
+    if ( MayHaveExecuted != NULL ) *MayHaveExecuted = false;
     xworkErrorInit(Error);
     if ( Options == NULL || Options->Size < sizeof(*Options) ||
          !MdoRunsIdValid(Options->ProjectId, MDO_PROJECT_ID_CAPACITY) ||
@@ -656,6 +657,9 @@ bool MdoRunStart(const MdoRunStartOptions* Options, MdoRunInfo* Info,
             "cannot register image references before starting the run");
         goto publish;
     }
+    /* From this call onward a worker may have crossed the execution
+     * boundary, including when Start itself reports failure. */
+    if ( MayHaveExecuted != NULL ) *MayHaveExecuted = true;
     if ( !MdoAgentRunStart(Run, Error) ) {
         MdoSessionAttachmentPendingClear(Session, ImageRunId);
         goto publish;
@@ -762,6 +766,12 @@ done:
 unlock_reserve:
     (void)xrtMutexUnlock(g_MdoRuns.Lock);
     goto done;
+}
+
+bool MdoRunStart(const MdoRunStartOptions* Options, MdoRunInfo* Info,
+    xwork_error* Error)
+{
+    return MdoRunStartWithOutcome(Options, Info, Error, NULL);
 }
 
 bool MdoRunCancel(const char* RunId, MdoRunInfo* Info,

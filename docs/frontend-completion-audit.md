@@ -126,6 +126,8 @@ Markdown 会话导出补齐语言一致性。之前英语、俄语页面导出�
 
 ## 打包卡片复测
 
+运行启动前的明确拒绝已有单文件页面证据：Home `.build/mdo-packed-docks-0h2k7ifv` 中，一条 `sending` 合成项因会话模型 ID 失效收到 `session_profile_invalid`，服务端未留下 `starting` 凭据，也未产生用户回合；恢复模型后页面提供“确认未发送后重试”，点击后仅产生一轮用户消息和固定回复，队列清空，凭据升级为带运行 ID 的 `accepted`。运行管理器与 API 探针覆盖同一边界；进入 Agent Start 后仍必须按结果不明人工核对。该测试不覆盖多进程共享 Home 或真实崩溃恢复。
+
 先构建根目录程序，再运行 `python tests/manual_packed_docks_qa.py`，打开打印的本机 URL。夹具在工作区创建 `README.md`、两个 `src/alpha*.c` 和 `notes/QA notes.txt`；可在已有会话输入 `@alpha` 用下方向键选第二项，再用 Enter 插入，或输入 `@QA` 验证带空格路径加引号。切到新任务后输入 `@README` 验证项目工作区。发送 `TODO UI`、`ASK UI`、`APPROVAL UI` 分别检查计划、待答卡片和审批卡片；夹具每个标记只发送一次工具调用，其余模型回复为固定文本。完成后在夹具终端按 Enter 停止服务。测试 Home 位于 `.build/mdo-packed-docks-*`，与日常便携 Home 隔离。审批按钮的交互验收应单独记录；只看到按钮不代表允许或拒绝路径已通过。
 
 ## 发布收尾条件

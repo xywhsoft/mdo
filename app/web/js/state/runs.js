@@ -21,7 +21,8 @@ export async function startRun(projectId, sessionId, prompt, attachments = [],
   } catch (error) {
     // The server may have started the run before its response was lost.
     if (["network_error", "invalid_response", "run_result_unavailable",
-      "run_receipt_unavailable", "queue_run_starting"]
+      "run_receipt_unavailable", "queue_run_starting",
+      "run_start_uncertain"]
       .includes(error?.code)) error.runAdmissionUncertain = true;
     throw error;
   }

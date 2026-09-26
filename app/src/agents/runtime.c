@@ -159,14 +159,14 @@ static bool MdoAgentsResolveModel(const MdoModelCatalog* Catalog,
     if ( !((ModelId != NULL && ModelId[0] != '\0') ?
             MdoModelCatalogModelFind(Catalog, ModelId, &Result->Info) :
             MdoModelCatalogDefault(Catalog, &Result->Info)) ) {
-        MdoAgentsError(Error, XWORK_ERROR_INVALID_ARGUMENT,
+        MdoAgentsError(Error, XWORK_ERROR_MODEL,
             "selected model was not found");
         return false;
     }
     Result->Protocol = Protocol != 0 ? Protocol : Result->Info.DefaultProtocol;
     Flag = MdoAgentsProtocolFlag(Result->Protocol);
     if ( Flag == 0u || (Result->Info.Protocols & Flag) == 0u ) {
-        MdoAgentsError(Error, XWORK_ERROR_INVALID_ARGUMENT,
+        MdoAgentsError(Error, XWORK_ERROR_MODEL,
             "selected model does not support the requested wire protocol");
         return false;
     }
@@ -174,7 +174,7 @@ static bool MdoAgentsResolveModel(const MdoModelCatalog* Catalog,
         Reasoning : Result->Info.DefaultReasoningEffort;
     if ( !MdoAgentsReasoningSupported(&Result->Info,
             Result->ReasoningEffort) ) {
-        MdoAgentsError(Error, XWORK_ERROR_INVALID_ARGUMENT,
+        MdoAgentsError(Error, XWORK_ERROR_MODEL,
             "selected model does not support the requested reasoning effort");
         return false;
     }
@@ -182,7 +182,7 @@ static bool MdoAgentsResolveModel(const MdoModelCatalog* Catalog,
         Result->Info.MaxOutputTokens;
     if ( Result->MaxOutputTokens == 0u ||
          Result->MaxOutputTokens > Result->Info.MaxOutputTokens ) {
-        MdoAgentsError(Error, XWORK_ERROR_INVALID_ARGUMENT,
+        MdoAgentsError(Error, XWORK_ERROR_MODEL,
             "Agent output limit exceeds the selected model profile");
         return false;
     }

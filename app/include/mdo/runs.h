@@ -113,6 +113,10 @@ bool MdoRunManagerGetStatus(MdoRunManagerStatus* Status);
 
 bool MdoRunStart(const MdoRunStartOptions* Options, MdoRunInfo* Info,
     xwork_error* Error);
+/* MayHaveExecuted is set before entering Agent Start. A false result with
+ * this flag clear is safe to retry; a set flag requires run review. */
+bool MdoRunStartWithOutcome(const MdoRunStartOptions* Options,
+    MdoRunInfo* Info, xwork_error* Error, bool* MayHaveExecuted);
 /* Cancellation is idempotent. A retained terminal run is returned unchanged. */
 bool MdoRunCancel(const char* RunId, MdoRunInfo* Info,
     xwork_error* Error);

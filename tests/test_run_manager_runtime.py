@@ -131,6 +131,7 @@ void ServiceInit(XS_HostInfo *host) {
     MdoRunInfo second;
     MdoRunInfo found;
     MdoRunManagerStatus status;
+    bool may_have_executed = true;
     MdoRunSnapshot *snapshot = NULL;
     const char *text = NULL;
     size_t text_size = 0u;
@@ -193,6 +194,12 @@ void ServiceInit(XS_HostInfo *host) {
     printf("first_started=id:%s agent_run:%llu state:%d refs:%u\n",
         first.Id, (unsigned long long)first.AgentRunId, (int)first.State,
         owner.Refs);
+    memset(&second, 0, sizeof(second)); second.Size = sizeof(second);
+    if (MdoRunStartWithOutcome(&start, &second, &error,
+            &may_have_executed) || may_have_executed) {
+        printf("prestart_outcome_error=unexpected execution\n"); goto done;
+    }
+    printf("prestart_denied=may_execute:%d\n", may_have_executed ? 1 : 0);
     if (!WaitForTerminal(first.Id, &found)) {
         printf("wait_error=first\n"); goto done;
     }
@@ -344,6 +351,7 @@ def main() -> int:
         assert "cancel_error=" not in output, output
         assert "manager_owner=refs:2" in output, output
         assert "first_started=id:run-" in output, output
+        assert "prestart_denied=may_execute:0" in output, output
         assert "first_done=state:2 result:0 terminal:1 bytes:24 text:interactive-agent-result refs:2" in output, output
         assert "second_done=state:4 result:-2 terminal:1 cancel:1 refs:2" in output, output
         assert "status=active:0 starting:0 retained:2 started:2 completed:2 failed:1" in output, output

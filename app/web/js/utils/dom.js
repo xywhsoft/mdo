@@ -54,6 +54,8 @@ const API_ERROR_COPY = Object.freeze({
     "运行可能已开始，但队列回执未保存；请核对运行记录。"],
   queue_run_starting: ["error.queueRunStarting",
     "这条消息已经进入启动流程；请核对运行记录后处理，避免重复发送。"],
+  run_start_uncertain: ["error.runStartUncertain",
+    "运行可能已经开始，请核对运行记录后再决定是否重试。"],
   queue_full: ["error.queueFull", "待发送队列已满，请先处理已有消息。"],
   queue_state_conflict: ["error.queueStateConflict",
     "待发送消息状态已变化，请刷新后核对。"],

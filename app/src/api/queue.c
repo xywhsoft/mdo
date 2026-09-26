@@ -626,6 +626,23 @@ MdoApiQueueRunStatus MdoApiQueueRunClaim(const char* ProjectId,
     return Result;
 }
 
+bool MdoApiQueueRunReleaseClaim(const char* ProjectId,
+    const char* SessionId, const char* Id)
+{
+    char Path[MDO_SESSION_PATH_CAPACITY];
+    char RunId[MDO_RUN_ID_CAPACITY];
+    bool Exists;
+    bool Ok = false;
+    if ( Id == NULL || !MdoQueueReceiptPath(Path, ProjectId,
+            SessionId, Id) ) return false;
+    xrtMutexLock(g_MdoQueueLock);
+    if ( MdoQueueReceiptRead(ProjectId, SessionId, Id,
+            &Exists, RunId) && Exists && RunId[0] == '\0' )
+        Ok = MdoHomeRemove(Path, false);
+    xrtMutexUnlock(g_MdoQueueLock);
+    return Ok;
+}
+
 bool MdoApiQueueRunBind(const char* ProjectId, const char* SessionId,
     const char* Id, xstrview Prompt, const char Attachments[4][33],
     size_t AttachmentCount, const char* RunId)

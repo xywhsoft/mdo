@@ -350,6 +350,8 @@ bool MdoApiRunStartRoute(MdoApiContext* Context)
     bool Valid;
     bool AttachmentLocked = false;
     bool QueueBound = true;
+    bool MayHaveExecuted = false;
+    bool ClaimReleased = true;
     if ( !MdoApiRunSessionPath(Context, Project, SessionId) )
         return MdoApiReplyError(Context, 400u, "invalid_run_path",
             "The project or session ID is invalid", NULL);
@@ -479,14 +481,25 @@ bool MdoApiRunStartRoute(MdoApiContext* Context)
     memset(&Info, 0, sizeof(Info)); Info.Size = sizeof(Info);
     memset(&Error, 0, sizeof(Error));
     xrtClearError();
-    Valid = MdoRunStart(&Options, &Info, &Error);
+    Valid = MdoRunStartWithOutcome(&Options, &Info, &Error,
+        &MayHaveExecuted);
     if ( Valid && QueueItemId[0] != '\0' )
         QueueBound = MdoApiQueueRunBind(Project, SessionId,
             QueueItemId, Prompt, AttachmentIds, AttachmentCount, Info.Id);
+    if ( !Valid && !MayHaveExecuted && QueueItemId[0] != '\0' )
+        ClaimReleased = MdoApiQueueRunReleaseClaim(Project, SessionId,
+            QueueItemId);
     if ( AttachmentLocked ) MdoApiAttachmentUnlock();
     if ( AttachmentCount != 0u ) xllmMessageUnit(&UserMessage);
     xrtFree(PromptText);
     MdoApiJsonBodyUnit(&Body);
+    if ( !Valid && MayHaveExecuted )
+        return MdoApiReplyError(Context, 503u, "run_start_uncertain",
+            "The run may have started; review its record before retrying",
+            NULL);
+    if ( !ClaimReleased ) return MdoApiReplyError(Context, 503u,
+        "queue_unavailable", "The queue start claim could not be cleared",
+        NULL);
     if ( !Valid ) return MdoApiRunStartFailure(Context, &Error);
     if ( !QueueBound ) return MdoApiReplyError(Context, 503u,
         "run_receipt_unavailable",

@@ -3739,6 +3739,54 @@ def run_probe(host: Path) -> None:
                 assert status == 409 and json.loads(body)["error"][
                     "code"] == "queue_run_started", (status, body)
 
+                retry_id = "e" * 32
+                retry_path = queue_path + "/" + retry_id
+                status, _, body = queue_request("POST", queue_path, {
+                    "id": retry_id, "text": "prestart retry QA",
+                    "first": False, "stage": True,
+                })
+                assert status == 201, (status, body)
+                for state in ("pending", "sending"):
+                    assert queue_request("PUT", retry_path,
+                        {"state": state})[0] == 200
+                original_meta = meta_path.read_text(encoding="utf-8")
+                changed_meta = json.loads(original_meta)
+                changed_meta["model_id"] = "missing-model-prestart-qa"
+                meta_path.write_text(json.dumps(changed_meta),
+                    encoding="utf-8")
+                status, _, body = queue_request("POST", run_path, {
+                    "prompt": "prestart retry QA", "queue_item_id": retry_id,
+                })
+                assert status == 422 and json.loads(body)["error"][
+                    "code"] == "session_profile_invalid", (status, body)
+                retry_receipt = queue_file.parent / "queue-receipts" / (
+                    retry_id + ".json")
+                assert not retry_receipt.exists(), retry_receipt
+                retry_item = next(item for item in json.loads(request(port,
+                    "GET", queue_path)[2])["data"]["items"]
+                    if item["id"] == retry_id)
+                assert retry_item["state"] == "sending" and (
+                    "start_claimed" not in retry_item), retry_item
+                meta_path.write_text(original_meta, encoding="utf-8")
+                assert queue_request("PUT", retry_path,
+                    {"state": "pending"})[0] == 200
+                assert queue_request("PUT", retry_path,
+                    {"state": "sending"})[0] == 200
+                status, _, body = queue_request("POST", run_path, {
+                    "prompt": "prestart retry QA", "queue_item_id": retry_id,
+                })
+                assert status == 202, (status, body)
+                retry_run_id = json.loads(body)["data"]["id"]
+                deadline = time.monotonic() + 5.0
+                while time.monotonic() < deadline:
+                    retry_run = json.loads(request(port, "GET",
+                        f"/api/v1/runs/{retry_run_id}")[2])["data"]
+                    if retry_run["terminal"]:
+                        break
+                    time.sleep(0.01)
+                assert retry_run["terminal"], retry_run
+                assert request(port, "DELETE", retry_path)[0] == 200
+
                 meta_path.write_text("{broken", encoding="utf-8")
                 status, headers, body = request(
                     port, "GET",

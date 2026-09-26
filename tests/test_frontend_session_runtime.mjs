@@ -105,3 +105,20 @@ test("a competing queue start requires review without replay", async () => {
     assert.equal(posts, 1);
   } finally { globalThis.fetch = originalFetch; }
 });
+
+test("a run error after the execution boundary requires review", async () => {
+  const originalFetch = globalThis.fetch;
+  let posts = 0;
+  globalThis.fetch = async () => {
+    posts += 1;
+    return Response.json({ ok: false, error: {
+      code: "run_start_uncertain", message: "Start outcome unknown",
+    } }, { status: 503 });
+  };
+  try {
+    await assert.rejects(startRun("default", "uncertain-start", "hello"),
+      (error) => error.code === "run_start_uncertain" &&
+        error.runAdmissionUncertain === true);
+    assert.equal(posts, 1);
+  } finally { globalThis.fetch = originalFetch; }
+});
