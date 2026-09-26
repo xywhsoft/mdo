@@ -25,7 +25,9 @@ export function eventsToTimeline(events, historyLost = false) {
   const modelStarts = new Map();
   const promptsByRun = new Map();
   const runEpochs = new Map();
-  if (historyLost) {
+  // An explicit history boundary already explains why earlier events are
+  // absent. A second generic gap notice would imply an unrelated loss.
+  if (historyLost && events[0]?.kind !== "history_truncated") {
     items.push({ key: "history-gap", kind: "system",
       role: t("timeline.recordNotice", {}, "记录提示"),
       text: t("timeline.historyGap", {}, "更早的事件已不在当前记录中。"),

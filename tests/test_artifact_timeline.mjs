@@ -26,3 +26,18 @@ test("unpaired tool results still expose their artifact", () => {
   assert.equal(item.artifactId, 4);
   assert.equal(item.artifactEventId, 9);
 });
+
+test("an explicit first history boundary replaces the generic gap notice", () => {
+  const clear = { kind: "history_truncated", event_id: 6,
+    text: "会话历史已清空", time: 1000000 };
+  const cleared = eventsToTimeline([clear], true);
+  assert.equal(cleared.length, 1);
+  assert.equal(cleared[0].text, clear.text);
+  assert.equal(cleared[0].key, "history-6");
+
+  const unexplained = eventsToTimeline([
+    { kind: "agent_start", event_id: 7, run_id: 3, text: "later",
+      user_message_sequence: 1, time: 2000000 }, clear,
+  ], true);
+  assert.equal(unexplained[0].key, "history-gap");
+});
