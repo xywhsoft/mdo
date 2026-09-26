@@ -1,6 +1,6 @@
 import { api } from "../../api/client.js";
 import { subscribeLocale, t } from "../../i18n.js";
-import { clear, element } from "../../utils/dom.js";
+import { clear, element, revealListOption } from "../../utils/dom.js";
 
 const WAIT_MS = 180;
 const VISIBLE_MAX = 8;
@@ -75,6 +75,15 @@ export function createFileMentions({ composer, input, navigation }) {
       list.append(option);
     });
     input.setAttribute("aria-activedescendant", `file-mention-option-${active}`);
+  }
+
+  function moveActive(delta) {
+    list.children[active]?.setAttribute("aria-selected", "false");
+    active = (active + delta + choices.length) % choices.length;
+    const option = list.children[active];
+    option?.setAttribute("aria-selected", "true");
+    input.setAttribute("aria-activedescendant", option.id);
+    revealListOption(list, option);
   }
 
   function insert(path) {
@@ -152,9 +161,7 @@ export function createFileMentions({ composer, input, navigation }) {
       }
       if (event.key === "ArrowDown" || event.key === "ArrowUp") {
         event.preventDefault();
-        active = (active + (event.key === "ArrowDown" ? 1 : -1) +
-          choices.length) % choices.length;
-        render();
+        moveActive(event.key === "ArrowDown" ? 1 : -1);
         return true;
       }
       if ((event.key === "Enter" || event.key === "Tab") &&

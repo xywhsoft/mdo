@@ -17,6 +17,16 @@ export function clear(node) {
   node.replaceChildren();
 }
 
+export function revealListOption(list, option) {
+  if (!option) return;
+  const top = option.offsetTop;
+  const bottom = top + option.offsetHeight;
+  if (top < list.scrollTop) list.scrollTop = top;
+  else if (bottom > list.scrollTop + list.clientHeight) {
+    list.scrollTop = bottom - list.clientHeight;
+  }
+}
+
 export function formatRelativeTime(microseconds) {
   const time = Number(microseconds) / 1000;
   if (!Number.isFinite(time) || time <= 0) return "";

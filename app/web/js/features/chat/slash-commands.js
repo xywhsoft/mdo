@@ -1,5 +1,5 @@
 import { subscribeLocale, t } from "../../i18n.js";
-import { clear, element, errorMessage, toast } from "../../utils/dom.js";
+import { clear, element, errorMessage, revealListOption, toast } from "../../utils/dom.js";
 
 const COMMANDS = Object.freeze([
   { name: "/new", descriptionKey: "slash.new", fallback: "新建任务" },
@@ -58,6 +58,15 @@ export function createSlashCommands({ composer, input, onExecute }) {
     else input.removeAttribute("aria-activedescendant");
   }
 
+  function moveActive(delta) {
+    list.children[active]?.setAttribute("aria-selected", "false");
+    active = (active + delta + matches.length) % matches.length;
+    const option = list.children[active];
+    option?.setAttribute("aria-selected", "true");
+    input.setAttribute("aria-activedescendant", option.id);
+    revealListOption(list, option);
+  }
+
   async function execute(command) {
     hide();
     input.value = "";
@@ -100,9 +109,7 @@ export function createSlashCommands({ composer, input, onExecute }) {
       }
       if (event.key === "ArrowDown" || event.key === "ArrowUp") {
         event.preventDefault();
-        active = (active + (event.key === "ArrowDown" ? 1 : -1) +
-          matches.length) % matches.length;
-        render();
+        moveActive(event.key === "ArrowDown" ? 1 : -1);
         return true;
       }
       if ((event.key === "Enter" || event.key === "Tab") &&
