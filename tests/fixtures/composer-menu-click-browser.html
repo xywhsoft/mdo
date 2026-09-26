@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="zh-CN">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>mdo composer menu click probe</title>
+<form class="composer"><textarea aria-label="任务输入"></textarea></form>
+<pre id="result"></pre>
+<script type="module">
+import { createFileMentions } from "/app/web/js/features/chat/file-mentions.js";
+import { createSlashCommands } from "/app/web/js/features/chat/slash-commands.js";
+
+const composer = document.querySelector(".composer");
+const input = composer.querySelector("textarea");
+const output = document.querySelector("#result");
+const originalFetch = window.fetch;
+const executed = [];
+window.fetch = async (url, options = {}) => String(url).includes("/workspace/files?q=")
+  ? new Response(JSON.stringify({ ok: true, data: {
+      items: ["notes/中文 文件.txt"],
+    } }), { status: 200, headers: { "Content-Type": "application/json" } })
+  : originalFetch(url, options);
+const navigation = { get: () => ({ view: "workspace", projectId: "qa",
+  sessionId: "session" }), subscribe: () => () => {} };
+createFileMentions({ composer, input, navigation });
+createSlashCommands({ composer, input,
+  onExecute: async (command) => { executed.push(command); } });
+const pointerDown = (option) => option.dispatchEvent(new PointerEvent("pointerdown",
+  { bubbles: true, cancelable: true, pointerType: "touch" }));
+try {
+  input.focus();
+  input.value = "/help";
+  input.dispatchEvent(new Event("input", { bubbles: true }));
+  const slash = composer.querySelector(".slash-option");
+  pointerDown(slash);
+  const slashHeld = input.value === "/help" && executed.length === 0;
+  slash.click();
+  await Promise.resolve();
+  const slashClicked = input.value === "" && executed.join() === "/help";
+
+  input.value = "@中文";
+  input.setSelectionRange(input.value.length, input.value.length);
+  input.dispatchEvent(new Event("input", { bubbles: true }));
+  await new Promise((resolve) => window.setTimeout(resolve, 250));
+  const file = composer.querySelector(".file-mention-option");
+  pointerDown(file);
+  const fileHeld = input.value === "@中文";
+  file.click();
+  const fileClicked = input.value === '@"notes/中文 文件.txt" ';
+  const passed = slashHeld && slashClicked && fileHeld && fileClicked;
+  output.dataset.passed = String(passed);
+  output.textContent = JSON.stringify({ passed, slashHeld, slashClicked,
+    fileHeld, fileClicked, executed }, null, 2);
+} catch (error) {
+  output.dataset.passed = "false";
+  output.textContent = error.stack ?? String(error);
+} finally { window.fetch = originalFetch; }
+</script>
+</html>

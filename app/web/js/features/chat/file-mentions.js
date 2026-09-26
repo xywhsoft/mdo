@@ -70,8 +70,8 @@ export function createFileMentions({ composer, input, navigation }) {
       }, [element("span", { text: path })]);
       option.addEventListener("pointerdown", (event) => {
         event.preventDefault();
-        insert(path);
       });
+      option.addEventListener("click", () => insert(path));
       list.append(option);
     });
     input.setAttribute("aria-activedescendant", `file-mention-option-${active}`);

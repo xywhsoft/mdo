@@ -50,8 +50,8 @@ export function createSlashCommands({ composer, input, onExecute }) {
       ]);
       option.addEventListener("pointerdown", (event) => {
         event.preventDefault();
-        void execute(command);
       });
+      option.addEventListener("click", () => { void execute(command); });
       list.append(option);
     });
     if (matches.length) input.setAttribute("aria-activedescendant", `slash-option-${active}`);
