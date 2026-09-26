@@ -1411,8 +1411,8 @@ export async function boot() {
   }
 
   function clearSubmittedComposer(key, submission) {
-    if (!draftStore.clearIfMatches(key, submission.text,
-      submission.attachments)) return;
+    draftStore.clearIfMatches(key, submission.text,
+      submission.attachments);
     if (!selectedOwnsDraft(key) || prompt.value !== submission.text ||
         JSON.stringify(composerAttachments) !==
           JSON.stringify(submission.attachments)) return;

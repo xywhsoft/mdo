@@ -36,6 +36,11 @@ function sameSubmission(a, b) {
     sameIds(a.attachments, b.attachments));
 }
 
+function sameSubmissionPayload(a, b) {
+  return a?.id === b?.id && a?.text === b?.text &&
+    a?.interrupt === b?.interrupt && sameIds(a.attachments, b.attachments);
+}
+
 function submissions(value) {
   if (!Array.isArray(value) || value.length > MAX_SUBMISSIONS) return null;
   const items = value.map(submission);
@@ -92,7 +97,7 @@ export function createDraftStore({ onRestore, onError, onSaved, onLoaded = () =>
     if (!value) {
       value = { text: "", attachments: [], revision: 0, loaded: false, dirty: false,
         uncertainRun: false, submissions: [], newTask: null, conflict: false,
-        error: null, oversized: false, loading: null,
+        unpersisted: new Set(), error: null, oversized: false, loading: null,
         saving: null, timer: 0 };
       entries.set(key, value);
     }
@@ -139,6 +144,7 @@ export function createDraftStore({ onRestore, onError, onSaved, onLoaded = () =>
         current.loaded = true;
         current.error = null;
         if (!current.submissions.length) current.submissions = storedSubmissions;
+        for (const item of storedSubmissions) current.unpersisted.delete(item.id);
         current.newTask ??= storedNewTask;
         if (!current.dirty) {
           current.text = response.data.text ?? "";
@@ -192,6 +198,8 @@ export function createDraftStore({ onRestore, onError, onSaved, onLoaded = () =>
           const response = await api.put(endpoint(key), body, { keepalive });
           current.revision = Number(response.data.revision);
           current.error = null;
+          for (const item of stagedSubmissions)
+            current.unpersisted.delete(item.id);
           if (current.text !== text || !sameIds(current.attachments, attachments) ||
               current.uncertainRun !== uncertainRun ||
               !sameSubmissions(current.submissions, stagedSubmissions) ||
@@ -214,6 +222,103 @@ export function createDraftStore({ onRestore, onError, onSaved, onLoaded = () =>
         schedule(key);
     }
     return current.loaded && !current.dirty && !current.conflict;
+  }
+
+  function applySessionResponse(key, data) {
+    const current = entry(key);
+    const remoteSubmissions = submissions(data?.submissions);
+    const revision = Number(data?.revision);
+    if (!remoteSubmissions || !Number.isSafeInteger(revision) ||
+        revision < 0 || typeof data.text !== "string" ||
+        !Array.isArray(data.attachments) ||
+        imageIds(data.attachments).length !== data.attachments.length)
+      throw new Error(t("draft.submissionConflict"));
+    const remoteAttachments = imageIds(data.attachments);
+    const localOnly = current.submissions.filter((item) =>
+      current.unpersisted.has(item.id) &&
+      !remoteSubmissions.some((remote) => remote.id === item.id));
+    const combined = submissions([...remoteSubmissions, ...localOnly]);
+    if (!combined || current.submissions.some((item) =>
+        current.unpersisted.has(item.id) &&
+        remoteSubmissions.some((remote) => remote.id === item.id &&
+          !sameSubmissionPayload(remote, item))))
+      throw new Error(t("draft.submissionConflict"));
+    const sameText = current.text === data.text &&
+      sameIds(current.attachments, remoteAttachments);
+    const hadLocalEdit = current.dirty || current.conflict;
+    current.revision = revision;
+    current.loaded = true;
+    current.submissions = combined;
+    for (const item of remoteSubmissions) current.unpersisted.delete(item.id);
+    current.uncertainRun ||= data.run_admission_uncertain === true;
+    if (!localOnly.length && sameText && current.uncertainRun ===
+        (data.run_admission_uncertain === true)) {
+      window.clearTimeout(current.timer);
+      current.timer = 0;
+      current.dirty = false;
+      current.conflict = false;
+      current.error = null;
+      if (selected === key) onSaved();
+    } else if (!localOnly.length && !hadLocalEdit) {
+      current.text = data.text;
+      current.attachments = remoteAttachments;
+      current.error = null;
+      if (selected === key) {
+        onRestore(current.text, [...current.attachments],
+          current.uncertainRun, current.submissions[0] ?? null,
+          [...current.submissions]);
+        onSaved();
+      }
+    } else if (!current.conflict && !data.text &&
+               !remoteAttachments.length) {
+      current.dirty = true;
+      schedule(key, true);
+    } else {
+      current.conflict = true;
+      current.error = Object.assign(new Error(t("draft.submissionConflict")),
+        { code: "draft_conflict" });
+      if (selected === key) onError(current.error);
+    }
+    return combined;
+  }
+
+  async function refreshSessionSubmissions(key) {
+    const current = entry(key);
+    if (current.saving) await current.saving;
+    if (!current.loaded) await load(key);
+    if (!current.loaded) return false;
+    const response = await api.get(endpoint(key));
+    applySessionResponse(key, response.data);
+    return true;
+  }
+
+  async function changeSessionSubmissionState(key, id, state) {
+    const current = entry(key);
+    if (current.saving) await current.saving;
+    const path = `${endpoint(key)}/submissions/${resourceId(id, "submission")}`;
+    let response;
+    try { response = await api.put(path, { state }); }
+    catch (error) {
+      if (!["network_error", "draft_state_conflict",
+            "draft_submission_not_found"].includes(error?.code)) throw error;
+      response = await api.get(endpoint(key));
+    }
+    const items = applySessionResponse(key, response.data);
+    return items.some((item) => item.id === id && item.state === state);
+  }
+
+  async function removeSessionSubmission(key, id) {
+    const current = entry(key);
+    if (current.saving) await current.saving;
+    const path = `${endpoint(key)}/submissions/${resourceId(id, "submission")}`;
+    let response;
+    try { response = await api.delete(path); }
+    catch (error) {
+      if (error?.code !== "network_error") throw error;
+      response = await api.get(endpoint(key));
+    }
+    const items = applySessionResponse(key, response.data);
+    return !items.some((item) => item.id === id);
   }
 
   function edit(key, text, attachments = entry(key).attachments, immediate = false) {
@@ -256,6 +361,7 @@ export function createDraftStore({ onRestore, onError, onSaved, onLoaded = () =>
       ...current.submissions.slice(0, index), next,
       ...current.submissions.slice(index),
     ];
+    current.unpersisted.add(next.id);
     current.dirty = true;
     schedule(key, true);
     return true;
@@ -314,6 +420,31 @@ export function createDraftStore({ onRestore, onError, onSaved, onLoaded = () =>
     submission(key) { return entry(key).submissions[0] ?? null; },
     submissions(key) { return [...entry(key).submissions]; },
     appendSubmission(key, value) { return insertSubmission(key, value); },
+    refreshSessionSubmissions,
+    changeSessionSubmissionState,
+    removeSessionSubmission,
+    async persistUnconfirmedSubmission(key, value) {
+      const current = entry(key);
+      if (!key || !current.unpersisted.has(value.id) ||
+          !sameSubmission(current.submissions.find((item) =>
+            item.id === value.id), value) ||
+          value.state !== "prepared") return false;
+      const path = `${endpoint(key)}/submissions`;
+      let response;
+      try { response = await api.post(path, value); }
+      catch (error) {
+        // A failed draft PUT or a lost append response may already have
+        // committed. Inspect the same ID before making any new intent.
+        try { response = await api.get(endpoint(key)); }
+        catch { current.error = error; if (selected === key) onError(error); return false; }
+      }
+      const remote = response.data;
+      const persisted = submissions(remote?.submissions);
+      const match = persisted?.find((item) => item.id === value.id);
+      if (!match || !sameSubmissionPayload(match, value)) return false;
+      applySessionResponse(key, remote);
+      return true;
+    },
     insertSubmission,
     updateSubmissionState(key, id, state) {
       const current = entry(key);
@@ -335,6 +466,7 @@ export function createDraftStore({ onRestore, onError, onSaved, onLoaded = () =>
       const current = entry(key);
       if (!current.submissions.some((item) => item.id === id)) return false;
       current.submissions = current.submissions.filter((item) => item.id !== id);
+      current.unpersisted.delete(id);
       current.dirty = true;
       schedule(key, true);
       return true;

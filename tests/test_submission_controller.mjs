@@ -22,9 +22,21 @@ test("a second Enter is durable while the first queue POST is still waiting", as
   const promoted = [];
   const reviews = [];
   globalThis.window = { setTimeout, clearTimeout, addEventListener() {} };
-  globalThis.fetch = async (_path, options) => {
+  globalThis.fetch = async (path, options) => {
     if (options.method === "GET")
       return Response.json({ ok: true, data: { ...saved, revision } });
+    if (path.includes("/draft/submissions/")) {
+      const id = path.split("/").at(-1);
+      if (options.method === "DELETE")
+        saved.submissions = saved.submissions.filter((item) => item.id !== id);
+      else {
+        const state = JSON.parse(options.body).state;
+        saved.submissions = saved.submissions.map((item) =>
+          item.id === id ? { ...item, state } : item);
+      }
+      revision += 1;
+      return Response.json({ ok: true, data: { ...saved, revision } });
+    }
     const body = JSON.parse(options.body);
     assert.equal(body.revision, revision);
     saved = { text: body.text, attachments: body.attachments,
@@ -90,6 +102,210 @@ test("a second Enter is durable while the first queue POST is still waiting", as
   }
 });
 
+test("a stale tab appends its stable intent without replacing another tab's intent", async () => {
+  const originalWindow = globalThis.window;
+  const originalFetch = globalThis.fetch;
+  const key = "default/cross-tab";
+  const a = { id: "a".repeat(32), text: "tab A", attachments: [],
+    interrupt: false, state: "prepared" };
+  let remote = { revision: 0, text: "", attachments: [],
+    run_admission_uncertain: false, submissions: [] };
+  let appendCalls = 0;
+  globalThis.window = { setTimeout, clearTimeout, addEventListener() {} };
+  globalThis.fetch = async (path, options) => {
+    if (options.method === "GET")
+      return Response.json({ ok: true, data: structuredClone(remote) });
+    const body = JSON.parse(options.body);
+    if (path.endsWith("/draft/submissions")) {
+      appendCalls += 1;
+      assert.equal(options.method, "POST");
+      assert.equal(remote.submissions.length, 1);
+      remote = { ...remote, revision: remote.revision + 1,
+        submissions: [...remote.submissions, body] };
+      return Response.json({ ok: true, data: structuredClone(remote) },
+        { status: 201 });
+    }
+    assert.equal(options.method, "PUT");
+    if (body.revision !== remote.revision)
+      return Response.json({ ok: false, error: {
+        code: "draft_conflict", message: "stale revision",
+      } }, { status: 409 });
+    remote = { ...remote, ...body, revision: remote.revision + 1 };
+    return Response.json({ ok: true, data: structuredClone(remote) });
+  };
+  try {
+    const callbacks = { onRestore() {}, onError() {}, onSaved() {} };
+    const tabA = createDraftStore(callbacks);
+    const tabB = createDraftStore(callbacks);
+    tabA.select(key);
+    assert.equal(await tabA.ensureLoaded(key), true);
+    assert.equal(tabA.appendSubmission(key, a), true);
+    assert.equal(await tabA.flush(key), true);
+    tabB.select(key);
+    assert.equal(await tabB.ensureLoaded(key), true);
+    assert.equal(tabA.updateSubmissionState(key, a.id, "posting"), true);
+    assert.equal(await tabA.flush(key), true);
+    const reviewed = [];
+    const queue = { newId: () => "b".repeat(32), hasStaged: () => true };
+    const controller = createSubmissionController({ draftStore: tabB,
+      promptQueue: queue,
+      onPersisted(_key, item) {
+        tabB.clearIfMatches(key, item.text, item.attachments);
+      },
+      onPromoted() {}, onReview(_key, item) { reviewed.push(item.id); },
+      onRestored() {}, onChange() {},
+    });
+    assert.equal(await controller.submit(key, "tab B", [], false), true);
+    assert.equal(appendCalls, 1);
+    assert.deepEqual(remote.submissions.map((item) => item.text),
+      ["tab A", "tab B"]);
+    assert.deepEqual(remote.submissions.map((item) => item.state),
+      ["posting", "prepared"]);
+    assert.deepEqual(reviewed, []);
+    const reopened = createDraftStore(callbacks);
+    reopened.select(key);
+    assert.equal(await reopened.ensureLoaded(key), true);
+    assert.deepEqual(reopened.submissions(key).map((item) => item.text),
+      ["tab A", "tab B"]);
+  } finally {
+    globalThis.window = originalWindow;
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("a lost draft PUT response reuses the same saved submission ID", async () => {
+  const originalWindow = globalThis.window;
+  const originalFetch = globalThis.fetch;
+  let remote = { revision: 0, text: "", attachments: [],
+    run_admission_uncertain: false, submissions: [] };
+  let losePut = true;
+  let appendCalls = 0;
+  globalThis.window = { setTimeout: () => 0, clearTimeout() {},
+    addEventListener() {} };
+  globalThis.fetch = async (path, options) => {
+    if (options.method === "GET")
+      return Response.json({ ok: true, data: structuredClone(remote) });
+    const body = JSON.parse(options.body);
+    if (path.endsWith("/draft/submissions")) {
+      appendCalls += 1;
+      assert.equal(remote.submissions[0].id, body.id);
+      assert.equal(remote.submissions[0].text, body.text);
+      return Response.json({ ok: true, data: structuredClone(remote) });
+    }
+    assert.equal(options.method, "PUT");
+    remote = { ...remote, ...body, revision: remote.revision + 1 };
+    if (losePut) { losePut = false; throw new TypeError("lost response"); }
+    return Response.json({ ok: true, data: structuredClone(remote) });
+  };
+  try {
+    const key = "default/lost-put";
+    const draftStore = createDraftStore({ onRestore() {}, onError() {},
+      onSaved() {} });
+    draftStore.select(key);
+    assert.equal(await draftStore.ensureLoaded(key), true);
+    const controller = createSubmissionController({ draftStore,
+      promptQueue: { newId: () => "c".repeat(32), hasStaged: () => true },
+      onPersisted(_key, item) {
+        draftStore.clearIfMatches(key, item.text, item.attachments);
+      },
+      onPromoted() {}, onReview() {}, onRestored() {}, onChange() {},
+    });
+    assert.equal(await controller.submit(key, "saved once", [], false), true);
+    assert.equal(appendCalls, 1);
+    assert.deepEqual(remote.submissions.map((item) => item.id),
+      ["c".repeat(32)]);
+    const reopened = createDraftStore({ onRestore() {}, onError() {},
+      onSaved() {} });
+    reopened.select(key);
+    assert.equal(await reopened.ensureLoaded(key), true);
+    assert.deepEqual(reopened.submissions(key).map((item) => item.text),
+      ["saved once"]);
+  } finally {
+    globalThis.window = originalWindow;
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("a submission with no durable acknowledgement keeps the composer text", async () => {
+  const originalWindow = globalThis.window;
+  const originalFetch = globalThis.fetch;
+  const key = "default/offline";
+  let offline = false;
+  let cleared = 0;
+  globalThis.window = { setTimeout: () => 0, clearTimeout() {},
+    addEventListener() {} };
+  globalThis.fetch = async (_path, options) => {
+    if (offline) throw new TypeError("offline");
+    assert.equal(options.method, "GET");
+    return Response.json({ ok: true, data: { revision: 0, text: "",
+      attachments: [], run_admission_uncertain: false, submissions: [] } });
+  };
+  try {
+    const draftStore = createDraftStore({ onRestore() {}, onError() {},
+      onSaved() {} });
+    draftStore.select(key);
+    assert.equal(await draftStore.ensureLoaded(key), true);
+    offline = true;
+    const controller = createSubmissionController({ draftStore,
+      promptQueue: { newId: () => "d".repeat(32) },
+      onPersisted() { cleared += 1; }, onPromoted() {}, onReview() {},
+      onRestored() {}, onChange() {},
+    });
+    assert.equal(await controller.submit(key, "keep my input", [], false), false);
+    assert.equal(cleared, 0);
+    assert.equal(draftStore.text(key), "keep my input");
+    assert.equal(draftStore.submissions(key).length, 1);
+  } finally {
+    globalThis.window = originalWindow;
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("review restores text after removing an uncertain submission", async () => {
+  const originalWindow = globalThis.window;
+  const originalFetch = globalThis.fetch;
+  const key = "default/review-restore";
+  const item = { id: "e".repeat(32), text: "restore me", attachments: [],
+    interrupt: false, state: "posting" };
+  let remote = { revision: 1, text: item.text, attachments: [],
+    run_admission_uncertain: false, submissions: [item] };
+  let restored;
+  globalThis.window = { setTimeout: () => 0, clearTimeout() {},
+    addEventListener() {} };
+  globalThis.fetch = async (_path, options) => {
+    if (options.method === "DELETE") {
+      remote = { ...remote, revision: remote.revision + 1, text: "",
+        submissions: [] };
+    } else if (options.method === "PUT") {
+      const body = JSON.parse(options.body);
+      assert.equal(body.revision, remote.revision);
+      remote = { ...remote, ...body, revision: remote.revision + 1 };
+    }
+    return Response.json({ ok: true, data: structuredClone(remote) });
+  };
+  try {
+    const draftStore = createDraftStore({ onRestore() {}, onError() {},
+      onSaved() {} });
+    draftStore.select(key);
+    assert.equal(await draftStore.ensureLoaded(key), true);
+    const controller = createSubmissionController({ draftStore,
+      promptQueue: { async select() {}, find() { return null; },
+        async receipt() { return null; } },
+      onPersisted() {}, onPromoted() {}, onReview() {},
+      onRestored(_key, value) { restored = value; }, onChange() {},
+    });
+    assert.equal(await controller.review(key), true);
+    assert.equal(restored.text, item.text);
+    assert.equal(draftStore.text(key), item.text);
+    assert.equal(await draftStore.flush(key), true);
+    assert.equal(remote.text, item.text);
+    assert.deepEqual(remote.submissions, []);
+  } finally {
+    globalThis.window = originalWindow;
+    globalThis.fetch = originalFetch;
+  }
+});
+
 test("a recovered staged predecessor holds later submissions until continued", async () => {
   const key = "default/recovered";
   const later = { id: "2".repeat(32), text: "later", attachments: [],
@@ -101,19 +317,19 @@ test("a recovered staged predecessor holds later submissions until continued", a
   const draftStore = {
     submissions() { return [...saved]; },
     async ensureLoaded() { return true; },
-    updateSubmissionState(_key, id, state) {
+    async refreshSessionSubmissions() { return true; },
+    async changeSessionSubmissionState(_key, id, state) {
       const item = saved.find((candidate) => candidate.id === id);
       if (!item) return false;
       item.state = state;
       return true;
     },
-    clearSubmission(_key, id) {
+    async removeSessionSubmission(_key, id) {
       const index = saved.findIndex((item) => item.id === id);
       if (index < 0) return false;
       saved.splice(index, 1);
       return true;
     },
-    async flush() { return true; },
   };
   const promptQueue = {
     hasStaged() { return queue.some((item) => item.state === "staged"); },
@@ -155,6 +371,7 @@ test("polling an uncertain queue admission asks for review only once", async () 
   const controller = createSubmissionController({
     draftStore: {
       async ensureLoaded() { return true; },
+      async refreshSessionSubmissions() { return true; },
       submissions() { return [first]; },
     },
     promptQueue: { find() { return null; }, receipt() { return null; } },
@@ -180,20 +397,20 @@ test("a consumed queue receipt releases only its matching saved intent", async (
   const promoted = new Promise((resolve) => { done = resolve; });
   const draftStore = {
     async ensureLoaded() { return true; },
+    async refreshSessionSubmissions() { return true; },
     submissions() { return [...items]; },
-    clearSubmission(_key, id) {
+    async removeSessionSubmission(_key, id) {
       const index = items.findIndex((item) => item.id === id);
       if (index < 0) return false;
       items.splice(index, 1);
       return true;
     },
-    updateSubmissionState(_key, id, state) {
+    async changeSessionSubmissionState(_key, id, state) {
       const item = items.find((candidate) => candidate.id === id);
       if (!item) return false;
       item.state = state;
       return true;
     },
-    async flush() { return true; },
   };
   const promptQueue = {
     find(_project, _session, id) {
@@ -263,19 +480,19 @@ test("a definite queue-full rejection stays blocked across reconciliation", asyn
   const draftStore = {
     submissions() { return [...items]; },
     async ensureLoaded() { return true; },
-    updateSubmissionState(_key, id, state) {
+    async refreshSessionSubmissions() { return true; },
+    async changeSessionSubmissionState(_key, id, state) {
       const item = items.find((candidate) => candidate.id === id);
       if (!item) return false;
       item.state = state;
       return true;
     },
-    clearSubmission(_key, id) {
+    async removeSessionSubmission(_key, id) {
       const index = items.findIndex((item) => item.id === id);
       if (index < 0) return false;
       items.splice(index, 1);
       return true;
     },
-    async flush() { return true; },
   };
   const promptQueue = {
     async select() {},

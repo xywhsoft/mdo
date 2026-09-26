@@ -707,3 +707,274 @@ bool MdoApiDraftRoute(MdoApiContext* Context)
         "draft_unavailable", "The draft could not be read or saved", NULL);
     return MdoApiReplySuccessTake(Context, 200u, Data, NULL);
 }
+
+/* Append an intent under the same lock as draft PUT. A stale tab cannot
+ * replace another tab's submissions, and a repeated ID is safe to retry. */
+bool MdoApiDraftSubmissionAppendRoute(MdoApiContext* Context)
+{
+    char Path[MDO_SESSION_PATH_CAPACITY];
+    char ProjectId[MDO_PROJECT_ID_CAPACITY] = { 0 };
+    char SessionId[MDO_SESSION_ID_CAPACITY] = { 0 };
+    MdoSession* Session;
+    MdoDraft* Draft;
+    MdoDraftSubmission* Incoming;
+    MdoApiJsonBody Body;
+    MdoApiBodyStatus BodyStatus;
+    xwork_error Error;
+    xvalue* Data = NULL;
+    size_t i;
+    size_t Total = 0u;
+    int Written;
+    bool Ok;
+    bool AttachmentLocked;
+    bool Duplicate = false;
+    bool Collision = false;
+    bool Full = false;
+    bool Added = false;
+
+    if ( Context->ParamCount != 2u ||
+         !MdoDraftCaptureId(Context->Params[0], ProjectId,
+            sizeof(ProjectId)) ||
+         !MdoDraftCaptureId(Context->Params[1], SessionId,
+            sizeof(SessionId)) )
+        return MdoApiReplyError(Context, 400u, "invalid_path",
+            "Project and session identifiers are invalid", NULL);
+    Written = snprintf(Path, sizeof(Path), "sessions/%s/%s/draft.json",
+        ProjectId, SessionId);
+    if ( Written <= 0 || (size_t)Written >= sizeof(Path) )
+        return MdoApiReplyError(Context, 400u, "invalid_path",
+            "Project and session identifiers are invalid", NULL);
+    memset(&Error, 0, sizeof(Error));
+    Session = MdoSessionLoad(ProjectId, SessionId, &Error);
+    if ( Session == NULL ) return MdoApiReplyError(Context, 404u,
+        "session_not_found", "The requested session does not exist", NULL);
+    MdoSessionRelease(Session);
+    Draft = (MdoDraft*)xrtMalloc(sizeof(*Draft));
+    Incoming = (MdoDraftSubmission*)xrtMalloc(sizeof(*Incoming));
+    if ( Draft == NULL || Incoming == NULL ) {
+        xrtFree(Draft);
+        xrtFree(Incoming);
+        return MdoApiReplyError(Context, 503u, "draft_unavailable",
+            "The draft could not be allocated", NULL);
+    }
+    BodyStatus = MdoApiJsonBodyRead(Context, &Body);
+    if ( BodyStatus != MDO_API_BODY_OK ) {
+        xrtFree(Incoming);
+        xrtFree(Draft);
+        return MdoApiReplyBodyError(Context, BodyStatus);
+    }
+    Ok = MdoDraftSubmissionRead(Body.Value, Incoming, false, false) &&
+        Incoming->State == MDO_DRAFT_PREPARED;
+    if ( !Ok ) {
+        MdoApiJsonBodyUnit(&Body);
+        xrtFree(Incoming);
+        xrtFree(Draft);
+        return MdoApiReplyError(Context, 422u, "draft_submission_invalid",
+            "Expected a prepared submission with bounded text", NULL);
+    }
+    AttachmentLocked = MdoApiAttachmentLock();
+    if ( !AttachmentLocked ) {
+        MdoApiJsonBodyUnit(&Body);
+        xrtFree(Incoming);
+        xrtFree(Draft);
+        return MdoApiReplyError(Context, 503u, "attachment_unavailable",
+            "Image storage is unavailable", NULL);
+    }
+    if ( !MdoAttachmentIdsExist(ProjectId, SessionId,
+            Incoming->Attachments, Incoming->AttachmentCount) ) {
+        MdoApiAttachmentUnlock();
+        MdoApiJsonBodyUnit(&Body);
+        xrtFree(Incoming);
+        xrtFree(Draft);
+        return MdoApiReplyError(Context, 422u, "draft_submission_invalid",
+            "The submission references an unavailable image", NULL);
+    }
+    xrtMutexLock(g_MdoDraftLock);
+    Ok = MdoDraftRead(Path, Draft);
+    if ( Ok ) {
+        for ( i = 0u; i < Draft->SubmissionCount; ++i ) {
+            const MdoDraftSubmission* Existing = Draft->Submissions[i];
+            if ( strcmp(Existing->Id, Incoming->Id) != 0 ) {
+                Total += Existing->TextSize;
+                continue;
+            }
+            Duplicate = true;
+            Collision = Existing->TextSize != Incoming->TextSize ||
+                (Incoming->TextSize != 0u &&
+                 memcmp(Existing->Text, Incoming->Text,
+                    Incoming->TextSize) != 0) ||
+                Existing->AttachmentCount != Incoming->AttachmentCount ||
+                memcmp(Existing->Attachments, Incoming->Attachments,
+                    sizeof(Incoming->Attachments)) != 0 ||
+                Existing->Interrupt != Incoming->Interrupt;
+            break;
+        }
+        if ( !Duplicate ) {
+            Full = Draft->SubmissionCount >= MDO_DRAFT_SUBMISSIONS_MAX ||
+                Incoming->TextSize >
+                    MDO_DRAFT_SUBMISSIONS_TEXT_MAX - Total ||
+                Draft->Revision == UINT64_MAX;
+            if ( !Full ) {
+                Draft->Submissions[Draft->SubmissionCount++] = Incoming;
+                Incoming = NULL;
+                Draft->Revision++;
+                Ok = MdoDraftWrite(Path, Draft);
+                Added = Ok;
+            }
+        }
+        if ( Ok && !Full && !Collision ) Data = MdoDraftResponse(Draft,
+            false);
+    }
+    xrtMutexUnlock(g_MdoDraftLock);
+    MdoApiAttachmentUnlock();
+    MdoApiJsonBodyUnit(&Body);
+    xrtFree(Incoming);
+    MdoDraftRelease(Draft);
+    if ( Collision ) return MdoApiReplyError(Context, 409u,
+        "draft_submission_conflict",
+        "The submission ID already has different content", NULL);
+    if ( Full ) return MdoApiReplyError(Context, 422u,
+        "draft_full", "The draft has reached its submission limit", NULL);
+    if ( !Ok || Data == NULL ) return MdoApiReplyError(Context, 503u,
+        "draft_unavailable", "The draft could not be read or saved", NULL);
+    return MdoApiReplySuccessTake(Context, Added ? 201u : 200u, Data, NULL);
+}
+
+/* Keyed transitions avoid rewriting a stale copy of the whole intent list. */
+bool MdoApiDraftSubmissionRoute(MdoApiContext* Context)
+{
+    char Path[MDO_SESSION_PATH_CAPACITY];
+    char ProjectId[MDO_PROJECT_ID_CAPACITY] = { 0 };
+    char SessionId[MDO_SESSION_ID_CAPACITY] = { 0 };
+    char Id[33] = { 0 };
+    MdoSession* Session;
+    MdoDraft* Draft;
+    MdoApiJsonBody Body;
+    MdoApiBodyStatus BodyStatus;
+    xwork_error Error;
+    xvalue* Data = NULL;
+    xstrview StateText = { 0 };
+    MdoDraftSubmissionState State = MDO_DRAFT_PREPARED;
+    bool Change = Context->Request->head->MethodCode == XHTTP_METHOD_PUT;
+    bool Ok;
+    bool Missing = false;
+    bool InvalidTransition = false;
+    bool Modified = false;
+    size_t Index;
+    int Written;
+
+    if ( Context->ParamCount != 3u ||
+         !MdoDraftCaptureId(Context->Params[0], ProjectId,
+            sizeof(ProjectId)) ||
+         !MdoDraftCaptureId(Context->Params[1], SessionId,
+            sizeof(SessionId)) ||
+         Context->Params[2].Size != 32u )
+        return MdoApiReplyError(Context, 400u, "invalid_path",
+            "Project, session or submission ID is invalid", NULL);
+    for ( Index = 0u; Index < 32u; ++Index ) {
+        unsigned char Byte = (unsigned char)Context->Params[2].Data[Index];
+        if ( !((Byte >= '0' && Byte <= '9') ||
+               (Byte >= 'a' && Byte <= 'f')) )
+            return MdoApiReplyError(Context, 400u, "invalid_path",
+                "Submission ID is invalid", NULL);
+    }
+    memcpy(Id, Context->Params[2].Data, 32u);
+    Written = snprintf(Path, sizeof(Path), "sessions/%s/%s/draft.json",
+        ProjectId, SessionId);
+    if ( Written <= 0 || (size_t)Written >= sizeof(Path) )
+        return MdoApiReplyError(Context, 400u, "invalid_path",
+            "Project and session identifiers are invalid", NULL);
+    memset(&Error, 0, sizeof(Error));
+    Session = MdoSessionLoad(ProjectId, SessionId, &Error);
+    if ( Session == NULL ) return MdoApiReplyError(Context, 404u,
+        "session_not_found", "The requested session does not exist", NULL);
+    MdoSessionRelease(Session);
+    if ( Change ) {
+        BodyStatus = MdoApiJsonBodyRead(Context, &Body);
+        if ( BodyStatus != MDO_API_BODY_OK )
+            return MdoApiReplyBodyError(Context, BodyStatus);
+        const xvalue* Value = xrtValueObjectGet(Body.Value,
+            XRT_STR_LITERAL("state"));
+        Ok = xrtValueType(Body.Value) == XVALUE_OBJECT &&
+            xrtValueCount(Body.Value) == 1u &&
+            xrtValueType(Value) == XVALUE_STRING &&
+            xrtValueGetString(Value, &StateText);
+        if ( Ok && StateText.Size == 8u &&
+             memcmp(StateText.Data, "prepared", 8u) == 0 )
+            State = MDO_DRAFT_PREPARED;
+        else if ( Ok && StateText.Size == 7u &&
+                  memcmp(StateText.Data, "posting", 7u) == 0 )
+            State = MDO_DRAFT_POSTING;
+        else if ( Ok && StateText.Size == 8u &&
+                  memcmp(StateText.Data, "rejected", 8u) == 0 )
+            State = MDO_DRAFT_REJECTED;
+        else Ok = false;
+        MdoApiJsonBodyUnit(&Body);
+        if ( !Ok ) return MdoApiReplyError(Context, 422u,
+            "draft_state_invalid", "Expected a valid submission state", NULL);
+    }
+    Draft = (MdoDraft*)xrtMalloc(sizeof(*Draft));
+    if ( Draft == NULL ) return MdoApiReplyError(Context, 503u,
+        "draft_unavailable", "The draft could not be allocated", NULL);
+    xrtMutexLock(g_MdoDraftLock);
+    Ok = MdoDraftRead(Path, Draft);
+    if ( Ok ) {
+        for ( Index = 0u; Index < Draft->SubmissionCount; ++Index )
+            if ( strcmp(Draft->Submissions[Index]->Id, Id) == 0 ) break;
+        Missing = Index == Draft->SubmissionCount;
+        if ( Change && !Missing ) {
+            MdoDraftSubmissionState Previous =
+                Draft->Submissions[Index]->State;
+            InvalidTransition = Previous != State &&
+                !((Previous == MDO_DRAFT_PREPARED &&
+                   State == MDO_DRAFT_POSTING) ||
+                  (Previous == MDO_DRAFT_POSTING &&
+                   (State == MDO_DRAFT_REJECTED ||
+                    State == MDO_DRAFT_PREPARED)) ||
+                  (Previous == MDO_DRAFT_REJECTED &&
+                   State == MDO_DRAFT_PREPARED));
+            if ( !InvalidTransition && Previous != State ) {
+                Draft->Submissions[Index]->State = State;
+                Modified = true;
+            }
+        } else if ( !Change && !Missing ) {
+            const MdoDraftSubmission* Removed = Draft->Submissions[Index];
+            if ( Draft->TextSize == Removed->TextSize &&
+                 memcmp(Draft->Text, Removed->Text,
+                    Removed->TextSize) == 0 &&
+                 Draft->AttachmentCount == Removed->AttachmentCount &&
+                 memcmp(Draft->Attachments, Removed->Attachments,
+                    sizeof(Draft->Attachments)) == 0 ) {
+                Draft->Text[0] = '\0';
+                Draft->TextSize = 0u;
+                memset(Draft->Attachments, 0, sizeof(Draft->Attachments));
+                Draft->AttachmentCount = 0u;
+            }
+            xrtFree(Draft->Submissions[Index]);
+            for ( ; Index + 1u < Draft->SubmissionCount; ++Index )
+                Draft->Submissions[Index] = Draft->Submissions[Index + 1u];
+            Draft->Submissions[--Draft->SubmissionCount] = NULL;
+            Modified = true;
+        }
+        if ( Modified ) {
+            if ( Draft->Revision == UINT64_MAX ) Ok = false;
+            else {
+                Draft->Revision++;
+                Ok = MdoDraftWrite(Path, Draft);
+            }
+        }
+        if ( Ok && !InvalidTransition && (!Change || !Missing) )
+            Data = MdoDraftResponse(Draft, false);
+    }
+    xrtMutexUnlock(g_MdoDraftLock);
+    MdoDraftRelease(Draft);
+    if ( Missing && Change ) return MdoApiReplyError(Context, 404u,
+        "draft_submission_not_found",
+        "The submission no longer exists", NULL);
+    if ( InvalidTransition ) return MdoApiReplyError(Context, 409u,
+        "draft_state_conflict",
+        "The submission state changed in another window", NULL);
+    if ( !Ok || Data == NULL ) return MdoApiReplyError(Context, 503u,
+        "draft_unavailable", "The draft could not be read or saved", NULL);
+    return MdoApiReplySuccessTake(Context, 200u, Data, NULL);
+}

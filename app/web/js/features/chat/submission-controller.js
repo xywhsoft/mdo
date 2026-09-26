@@ -19,6 +19,7 @@ export function createSubmissionController({ draftStore, promptQueue,
   onPersisted, onPromoted, onConsumed, onReview, onRestored, onChange }) {
   const pumping = new Set();
   const releasing = new Set();
+  const submitting = new Set();
   const reviewed = new Map();
 
   function requestReview(key, submission, error) {
@@ -31,12 +32,10 @@ export function createSubmissionController({ draftStore, promptQueue,
     releasing.add(key);
     onChange(key);
     try {
-      if (!draftStore.clearSubmission(key, submission.id)) return false;
-      if (await draftStore.flush(key)) {
+      if (await draftStore.removeSessionSubmission(key, submission.id)) {
         reviewed.delete(key);
         return true;
       }
-      draftStore.insertSubmission(key, submission, 0);
       return false;
     } finally {
       releasing.delete(key);
@@ -56,6 +55,7 @@ export function createSubmissionController({ draftStore, promptQueue,
     onChange(key);
     try {
       const { projectId, sessionId } = owner(key);
+      if (!await draftStore.refreshSessionSubmissions(key)) return;
       while (draftStore.submissions(key).length) {
         const submission = draftStore.submissions(key)[0];
         if (promptQueue.hasStaged(projectId, sessionId)) return;
@@ -63,9 +63,14 @@ export function createSubmissionController({ draftStore, promptQueue,
           requestReview(key, submission);
           return;
         }
-        if (!draftStore.updateSubmissionState(key, submission.id, "posting") ||
-            !await draftStore.flush(key)) {
-          requestReview(key, submission);
+        try {
+          if (!await draftStore.changeSessionSubmissionState(key,
+              submission.id, "posting")) {
+            requestReview(key, submission);
+            return;
+          }
+        } catch (error) {
+          requestReview(key, submission, error);
           return;
         }
         const posting = { ...submission, state: "posting" };
@@ -106,13 +111,15 @@ export function createSubmissionController({ draftStore, promptQueue,
           // refresh does not mislabel it as an admission with lost response.
           // Other failures remain uncertain until the queue can be checked.
           if (admissionPending && error?.status === 422 &&
-              error?.code === "queue_full" &&
-              draftStore.updateSubmissionState(key, posting.id, "rejected")) {
-            if (await draftStore.flush(key)) {
+              error?.code === "queue_full") {
+            let rejected = false;
+            try { rejected = await draftStore.changeSessionSubmissionState(key,
+              posting.id, "rejected"); }
+            catch { /* Keep the original admission error for review. */ }
+            if (rejected) {
               requestReview(key, { ...posting, state: "rejected" }, error);
               return;
             }
-            draftStore.updateSubmissionState(key, posting.id, "posting");
           }
           requestReview(key, posting, error);
           return;
@@ -127,6 +134,7 @@ export function createSubmissionController({ draftStore, promptQueue,
   async function reconcile(key) {
     if (!key || pumping.has(key)) return false;
     if (!await draftStore.ensureLoaded(key)) return false;
+    if (!await draftStore.refreshSessionSubmissions(key)) return false;
     const first = draftStore.submissions(key)[0];
     if (!first) return true;
     const { projectId, sessionId } = owner(key);
@@ -160,22 +168,32 @@ export function createSubmissionController({ draftStore, promptQueue,
   }
 
   async function submit(key, text, attachments, interrupt) {
-    if (!key || releasing.has(key))
+    if (!key || releasing.has(key) || submitting.has(key))
       throw new Error(t("composer.submissionBusy"));
-    const submission = { id: promptQueue.newId(), text,
-      attachments: [...attachments], interrupt, state: "prepared" };
-    draftStore.capture(key, text, attachments);
-    if (!draftStore.appendSubmission(key, submission))
-      throw new Error(t("composer.queueFull", {},
-        "待发送队列已满（最多 20 条）"));
-    onPersisted(key, submission);
-    onChange(key);
-    if (!await draftStore.flush(key)) {
-      requestReview(key, submission);
-      return false;
+    submitting.add(key);
+    try {
+      const submission = { id: promptQueue.newId(), text,
+        attachments: [...attachments], interrupt, state: "prepared" };
+      draftStore.capture(key, text, attachments);
+      if (!draftStore.appendSubmission(key, submission))
+        throw new Error(t("composer.queueFull", {},
+          "待发送队列已满（最多 20 条）"));
+      onChange(key);
+      if (!await draftStore.flush(key)) {
+        if (await draftStore.persistUnconfirmedSubmission(key, submission)) {
+          onPersisted(key, submission);
+          void pump(key);
+          return true;
+        }
+        requestReview(key, submission);
+        return false;
+      }
+      onPersisted(key, submission);
+      void pump(key);
+      return true;
+    } finally {
+      submitting.delete(key);
     }
-    void pump(key);
-    return true;
   }
 
   async function review(key) {
@@ -203,14 +221,14 @@ export function createSubmissionController({ draftStore, promptQueue,
     }
     if (draftStore.submissions(key).length > 1) {
       // The user has checked the trace and explicitly retries the same ID.
-      draftStore.updateSubmissionState(key, first.id, "prepared");
-      if (!await draftStore.flush(key)) return false;
+      if (!await draftStore.changeSessionSubmissionState(key,
+          first.id, "prepared")) return false;
       void pump(key);
       return true;
     }
+    if (!await release(key, first)) return false;
     const restored = draftStore.restoreUnsent(key, first.text,
       first.attachments);
-    if (!await release(key, first)) return false;
     onRestored(key, restored);
     return true;
   }

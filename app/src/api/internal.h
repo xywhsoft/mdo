@@ -110,6 +110,8 @@ bool MdoApiFeedbackInit(void);
 void MdoApiFeedbackUnit(void);
 bool MdoApiFeedbackReconcile(const char* ProjectId, const char* SessionId);
 bool MdoApiDraftRoute(MdoApiContext* pContext);
+bool MdoApiDraftSubmissionAppendRoute(MdoApiContext* pContext);
+bool MdoApiDraftSubmissionRoute(MdoApiContext* pContext);
 bool MdoApiDraftInit(void);
 void MdoApiDraftUnit(void);
 bool MdoApiDraftAttachmentReferenced(const char* ProjectId,

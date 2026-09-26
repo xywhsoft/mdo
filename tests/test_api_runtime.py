@@ -2305,6 +2305,114 @@ def run_probe(host: Path) -> None:
                     headers={"Content-Type": "application/json"})
                 assert status == 200 and json.loads(stored_draft.read_text(
                     encoding="utf-8"))["schema_version"] == 6, (status, body)
+                append_path = draft_path + "/submissions"
+                append_a = {"id": "6" * 32, "text": "parallel intent A",
+                            "attachments": [], "interrupt": False,
+                            "state": "prepared"}
+                append_b = {"id": "7" * 32, "text": "parallel intent B",
+                            "attachments": [], "interrupt": True,
+                            "state": "prepared"}
+                gate = threading.Barrier(3)
+                append_results = [None, None]
+
+                def append_intent(index, item):
+                    gate.wait()
+                    append_results[index] = request(port, "POST", append_path,
+                        body=json.dumps(item).encode(),
+                        headers={"Content-Type": "application/json"})
+
+                append_threads = [threading.Thread(target=append_intent,
+                    args=(index, item)) for index, item in
+                    enumerate((append_a, append_b))]
+                for thread in append_threads:
+                    thread.start()
+                gate.wait()
+                for thread in append_threads:
+                    thread.join(timeout=10)
+                    assert not thread.is_alive()
+                assert all(result[0] == 201 for result in append_results), (
+                    append_results)
+                appended = json.loads(request(port, "GET", draft_path)[2])[
+                    "data"]
+                assert appended["text"] == "legacy draft updated"
+                assert {item["id"] for item in appended["submissions"]} == {
+                    append_a["id"], append_b["id"]}, appended
+                status, _, body = request(port, "POST", append_path,
+                    body=json.dumps(append_a).encode(),
+                    headers={"Content-Type": "application/json"})
+                assert status == 200 and len(json.loads(body)["data"][
+                    "submissions"]) == 2, (status, body)
+                status, _, body = request(port, "POST", append_path,
+                    body=json.dumps({**append_a, "text": "different"}).encode(),
+                    headers={"Content-Type": "application/json"})
+                assert status == 409 and json.loads(body)["error"][
+                    "code"] == "draft_submission_conflict", (status, body)
+                status, _, body = request(port, "POST", append_path,
+                    body=json.dumps({**append_a, "id": "8" * 32,
+                        "attachments": ["0" * 32]}).encode(),
+                    headers={"Content-Type": "application/json"})
+                assert status == 422 and json.loads(body)["error"][
+                    "code"] == "draft_submission_invalid", (status, body)
+                state_path = append_path + "/" + append_a["id"]
+                status, _, body = request(port, "PUT", state_path,
+                    body=b'{"state":"posting"}',
+                    headers={"Content-Type": "application/json"})
+                assert status == 200 and next(item for item in
+                    json.loads(body)["data"]["submissions"] if item["id"] ==
+                    append_a["id"])["state"] == "posting", (status, body)
+                posting_revision = json.loads(body)["data"]["revision"]
+                status, _, body = request(port, "PUT", state_path,
+                    body=b'{"state":"posting"}',
+                    headers={"Content-Type": "application/json"})
+                assert status == 200 and json.loads(body)["data"][
+                    "revision"] == posting_revision, (status, body)
+                status, _, body = request(port, "PUT",
+                    append_path + "/" + append_b["id"],
+                    body=b'{"state":"rejected"}',
+                    headers={"Content-Type": "application/json"})
+                assert status == 409 and json.loads(body)["error"][
+                    "code"] == "draft_state_conflict", (status, body)
+                status, _, body = request(port, "DELETE",
+                    append_path + "/" + append_b["id"])
+                assert status == 200 and len(json.loads(body)["data"][
+                    "submissions"]) == 1, (status, body)
+                deleted_revision = json.loads(body)["data"]["revision"]
+                status, _, body = request(port, "DELETE",
+                    append_path + "/" + append_b["id"])
+                assert status == 200 and json.loads(body)["data"][
+                    "revision"] == deleted_revision, (status, body)
+                status, _, body = request(port, "POST", append_path,
+                    body=json.dumps(append_b).encode(),
+                    headers={"Content-Type": "application/json"})
+                assert status == 201 and len(json.loads(body)["data"][
+                    "submissions"]) == 2, (status, body)
+                appended = json.loads(body)["data"]
+                status, _, body = request(port, "PUT", draft_path,
+                    body=json.dumps({"revision": appended["revision"],
+                        "text": append_b["text"],
+                        "submissions": appended["submissions"]}).encode(),
+                    headers={"Content-Type": "application/json"})
+                assert status == 200, (status, body)
+                status, _, body = request(port, "DELETE",
+                    append_path + "/" + append_b["id"])
+                assert status == 200 and json.loads(body)["data"][
+                    "text"] == "" and len(json.loads(body)["data"][
+                    "submissions"]) == 1, (status, body)
+                status, _, body = request(port, "PUT", draft_path,
+                    body=json.dumps({"revision": 14, "text": "stale",
+                                     "submissions": []}).encode(),
+                    headers={"Content-Type": "application/json"})
+                assert status == 409 and json.loads(body)["error"][
+                    "code"] == "draft_conflict", (status, body)
+                appended = json.loads(request(port, "GET", draft_path)[2])[
+                    "data"]
+                status, _, body = request(port, "PUT", draft_path,
+                    body=json.dumps({"revision": appended["revision"],
+                        "text": "legacy draft updated",
+                        "submissions": []}).encode(),
+                    headers={"Content-Type": "application/json"})
+                assert status == 200 and json.loads(body)["data"][
+                    "submissions"] == [], (status, body)
                 status, _, body = request(port, "PUT", "/api/v1/draft",
                     body=json.dumps({"revision": 1, "text": "global",
                                      "attachments": [image["id"]]}).encode(),
