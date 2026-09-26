@@ -272,6 +272,21 @@ export function createComposerImages({ composer, prompt, button, input, strip,
     clearDragTarget();
     void addFiles(event.dataTransfer?.files ?? []);
   });
+  // A file released outside the composer would otherwise replace the page in
+  // some browsers, taking an unsent draft with it. Leave other drop targets
+  // alone when they have already handled the event.
+  for (const type of ["dragover", "drop"]) {
+    window.addEventListener(type, (event) => {
+      if (![...(event.dataTransfer?.types ?? [])].includes("Files") ||
+          composer.contains(event.target)) return;
+      clearDragTarget();
+      if (event.defaultPrevented ||
+          (event.target instanceof Element &&
+            event.target.closest('input[type="file"]'))) return;
+      event.preventDefault();
+      if (type === "dragover") event.dataTransfer.dropEffect = "none";
+    });
+  }
   window.addEventListener("dragend", clearDragTarget);
   window.addEventListener("blur", clearDragTarget);
   subscribeLocale(render);

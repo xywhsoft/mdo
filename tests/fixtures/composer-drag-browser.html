@@ -13,6 +13,8 @@
   <button id="enter-file" type="button">模拟文件进入卡片</button>
   <button id="leave-child" type="button">模拟离开内部元素</button>
   <button id="drop-file" type="button">模拟放下文件</button>
+  <button id="drop-outside" type="button">模拟放到输入框外</button>
+  <button id="handled-drop" type="button">模拟其他组件接收文件</button>
 </div>
 <p id="qa-status" role="status">等待拖放</p>
 <form class="composer" id="composer">
@@ -34,9 +36,11 @@ const navigation = { get: () => ({ projectId: "default", sessionId: "qa-session"
 const transfer = new DataTransfer();
 transfer.items.add(new File(["qa"], "notes.txt", { type: "text/plain" }));
 function drag(node, type) {
-  node.dispatchEvent(new DragEvent(type, {
+  const event = new DragEvent(type, {
     bubbles: true, cancelable: true, dataTransfer: transfer,
-  }));
+  });
+  node.dispatchEvent(event);
+  return event;
 }
 createComposerImages({ composer, prompt: document.querySelector("#prompt"),
   button: document.querySelector("#composer-attach"),
@@ -72,4 +76,29 @@ document.querySelector("#leave-child").addEventListener("click", () => {
 });
 document.querySelector("#drop-file").addEventListener("click", () =>
   drag(composer, "drop"));
+document.querySelector("#drop-outside").addEventListener("click", () => {
+  drag(composer, "dragenter");
+  const over = drag(document.querySelector("#qa-status"), "dragover");
+  const drop = drag(document.querySelector("#qa-status"), "drop");
+  status.dataset.outsideOverPrevented = String(over.defaultPrevented);
+  status.dataset.outsideDropPrevented = String(drop.defaultPrevented);
+  status.dataset.outsideDropEffect = transfer.dropEffect;
+  status.dataset.outsideCleared = String(!composer.hasAttribute("data-drag-over"));
+  status.textContent = "文件在输入框外释放时不会离开当前页面";
+});
+const otherTarget = document.createElement("div");
+document.body.append(otherTarget);
+otherTarget.addEventListener("dragover", (event) => {
+  event.preventDefault();
+});
+otherTarget.addEventListener("drop", (event) => event.preventDefault());
+document.querySelector("#handled-drop").addEventListener("click", () => {
+  drag(composer, "dragenter");
+  const over = drag(otherTarget, "dragover");
+  const drop = drag(otherTarget, "drop");
+  status.dataset.handledOver = String(over.defaultPrevented);
+  status.dataset.handledDrop = String(drop.defaultPrevented);
+  status.dataset.handledCleared = String(!composer.hasAttribute("data-drag-over"));
+  status.textContent = "其他组件处理文件后输入区提示已清除";
+});
 </script>
