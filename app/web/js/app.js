@@ -61,7 +61,7 @@ import { startWorkspaceNavigation } from "./features/shell/workspace-startup.js"
 import { focusSessionComposerAfterNavigation } from "./features/shell/session-composer-focus.js";
 import { createPaneLayout } from "./features/shell/pane-layout.js";
 import { api } from "./api/client.js";
-import { clear, element, errorMessage, toast } from "./utils/dom.js";
+import { clear, element, errorMessage, isImeKey, toast } from "./utils/dom.js";
 import { subscribeLocale, t } from "./i18n.js";
 
 const $ = (selector) => {
@@ -1482,7 +1482,7 @@ export async function boot() {
     if (slashCommands.onKeyDown(event)) return;
     if (fileMentions.onKeyDown(event)) return;
     if (event.key === "Enter" && !event.shiftKey &&
-        !event.isComposing && !promptComposing) {
+        !isImeKey(event, promptComposing)) {
       event.preventDefault();
       const modified = event.ctrlKey || event.metaKey;
       const guide = settingsStore.get().data?.composer?.submit_mode === "guide";

@@ -1,7 +1,7 @@
 import { approvalDecisionStatus, approvalDecisionStore, decideApproval } from "../../state/approvals.js";
 import { answerAsk } from "../../state/asks.js";
 import { subscribeLocale, t } from "../../i18n.js";
-import { clear, element, errorMessage, toast } from "../../utils/dom.js";
+import { clear, element, errorMessage, isImeKey, toast } from "../../utils/dom.js";
 import { taskBelongsToSession } from "../tasks/task-owner.js";
 
 const STATE_KEYS = Object.freeze({ pending: "dock.task.pending", running: "dock.task.running" });
@@ -180,7 +180,7 @@ function askCard(item, projectId, sessionId, deciding, answered, drafts,
   input.addEventListener("compositionend", () => { composing = false; });
   input.addEventListener("blur", () => { composing = false; });
   input.addEventListener("keydown", (event) => {
-    if (event.key === "Enter" && !event.isComposing && !composing) {
+    if (event.key === "Enter" && !isImeKey(event, composing)) {
       event.preventDefault();
       if (submit.getAttribute("aria-disabled") === "false") void respond(input.value);
     }

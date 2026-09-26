@@ -1,5 +1,5 @@
 import { subscribeLocale, t } from "../../i18n.js";
-import { clear, element, errorMessage, revealListOption, toast } from "../../utils/dom.js";
+import { clear, element, errorMessage, isImeKey, revealListOption, toast } from "../../utils/dom.js";
 
 const COMMANDS = Object.freeze([
   { name: "/new", descriptionKey: "slash.new", fallback: "新建任务" },
@@ -101,7 +101,7 @@ export function createSlashCommands({ composer, input, onExecute }) {
   });
   return Object.freeze({
     onKeyDown(event) {
-      if (list.hidden || event.isComposing) return false;
+      if (list.hidden || isImeKey(event, composing)) return false;
       if (event.key === "Escape") {
         event.preventDefault();
         event.stopPropagation();

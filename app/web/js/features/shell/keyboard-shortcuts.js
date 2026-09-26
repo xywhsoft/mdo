@@ -1,7 +1,13 @@
+import { isImeKey } from "../../utils/dom.js";
+
 export function createKeyboardShortcuts({ dialog, navigation, search, onNew,
   onExport, onSettings, onToggleTheme, onStop, isRunning, isDrawerOpen,
   closeDrawers }) {
   let previousFocus = null;
+  let composing = false;
+
+  document.addEventListener("compositionstart", () => { composing = true; });
+  document.addEventListener("compositionend", () => { composing = false; });
 
   function openHelp() {
     if (document.querySelector("dialog[open]")) return;
@@ -16,7 +22,7 @@ export function createKeyboardShortcuts({ dialog, navigation, search, onNew,
   });
 
   document.addEventListener("keydown", (event) => {
-    if (event.defaultPrevented) return;
+    if (event.defaultPrevented || isImeKey(event, composing)) return;
     if (event.key === "Escape") {
       if (document.querySelector("dialog[open]")) return;
       if (search.isOpen()) { search.close(true); return; }

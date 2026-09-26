@@ -17,6 +17,12 @@ export function clear(node) {
   node.replaceChildren();
 }
 
+// Some WebViews report the key that commits an IME candidate with
+// isComposing=false but keyCode=229. Keep it out of send/menu shortcuts.
+export function isImeKey(event, composing = false) {
+  return composing || event.isComposing || event.keyCode === 229;
+}
+
 export function revealListOption(list, option) {
   if (!option) return;
   const top = option.offsetTop;

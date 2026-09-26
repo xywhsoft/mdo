@@ -50,6 +50,11 @@ try {
   await wait();
   const fileReady = searches === 1 && !fileMenu.hidden &&
     fileMenu.textContent.includes("notes/中文 文件.txt");
+  const imeEnter = new KeyboardEvent("keydown", { key: "Enter", bubbles: true,
+    cancelable: true, isComposing: false });
+  Object.defineProperty(imeEnter, "keyCode", { value: 229 });
+  const fileImeIgnored = !mentions.onKeyDown(imeEnter) && fileReady &&
+    input.value === "@中文";
   const enter = new KeyboardEvent("keydown", { key: "Enter", bubbles: true,
     cancelable: true });
   mentions.onKeyDown(enter);
@@ -61,6 +66,8 @@ try {
   const quietDuringSlashComposition = slashMenu.hidden;
   input.dispatchEvent(new CompositionEvent("compositionend", { bubbles: true }));
   const slashReady = !slashMenu.hidden && slashMenu.textContent.includes("/model");
+  const slashImeIgnored = !slash.onKeyDown(imeEnter) && executed.length === 0 &&
+    input.value === "/m";
   slash.onKeyDown(new KeyboardEvent("keydown", { key: "Enter", bubbles: true,
     cancelable: true }));
   await Promise.resolve();
@@ -73,12 +80,13 @@ try {
   input.dispatchEvent(new CompositionEvent("compositionend", { bubbles: true }));
   await wait();
   const quietAfterBlur = fileMenu.hidden && searches === 1;
-  const passed = quietDuringFileComposition && fileReady && inserted &&
-    quietDuringSlashComposition && slashReady && quietAfterBlur &&
+  const passed = quietDuringFileComposition && fileReady && fileImeIgnored &&
+    inserted && quietDuringSlashComposition && slashReady && slashImeIgnored && quietAfterBlur &&
     clearedAfterSlash && executed.join() === "/model";
   output.dataset.passed = String(passed);
   output.textContent = JSON.stringify({ passed, quietDuringFileComposition,
-    fileReady, inserted, quietDuringSlashComposition, slashReady, quietAfterBlur,
+    fileReady, fileImeIgnored, inserted, quietDuringSlashComposition,
+    slashReady, slashImeIgnored, quietAfterBlur,
     clearedAfterSlash,
     searches, executed }, null, 2);
 } catch (error) {

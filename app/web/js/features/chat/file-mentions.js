@@ -1,6 +1,6 @@
 import { api } from "../../api/client.js";
 import { subscribeLocale, t } from "../../i18n.js";
-import { clear, element, revealListOption } from "../../utils/dom.js";
+import { clear, element, isImeKey, revealListOption } from "../../utils/dom.js";
 
 const WAIT_MS = 180;
 const VISIBLE_MAX = 8;
@@ -153,7 +153,7 @@ export function createFileMentions({ composer, input, navigation }) {
   return Object.freeze({
     hide,
     onKeyDown(event) {
-      if (list.hidden || event.isComposing) return false;
+      if (list.hidden || isImeKey(event, composing)) return false;
       if (event.key === "Escape") {
         event.preventDefault();
         event.stopPropagation();

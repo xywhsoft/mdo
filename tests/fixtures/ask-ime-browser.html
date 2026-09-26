@@ -54,17 +54,24 @@ try {
   pressEnter(input);
   await tick();
   const quietDuringComposition = submissions === 0 && input.isConnected;
+  let quietAfterCandidate = false;
   if (quietDuringComposition) {
     input.value = "你好";
     input.dispatchEvent(new InputEvent("input", { bubbles: true, isComposing: true }));
     input.dispatchEvent(new CompositionEvent("compositionend", { bubbles: true }));
+    const imeEnter = new KeyboardEvent("keydown", { key: "Enter",
+      bubbles: true, cancelable: true, isComposing: false });
+    Object.defineProperty(imeEnter, "keyCode", { value: 229 });
+    input.dispatchEvent(imeEnter);
+    quietAfterCandidate = submissions === 0 && input.isConnected;
     pressEnter(input);
     await tick();
   }
-  const passed = quietDuringComposition && submissions === 1 && answer === "你好";
+  const passed = quietDuringComposition && quietAfterCandidate &&
+    submissions === 1 && answer === "你好";
   result.dataset.passed = String(passed);
   result.textContent = JSON.stringify({ passed, quietDuringComposition,
-    submissions, answer }, null, 2);
+    quietAfterCandidate, submissions, answer }, null, 2);
 } catch (error) {
   result.dataset.passed = "false";
   result.textContent = error.stack ?? String(error);
