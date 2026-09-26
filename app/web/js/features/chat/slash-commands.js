@@ -25,6 +25,7 @@ export function createSlashCommands({ composer, input, onExecute }) {
   input.setAttribute("aria-expanded", "false");
   let matches = [];
   let active = 0;
+  let composing = false;
 
   function hide() {
     matches = [];
@@ -66,6 +67,7 @@ export function createSlashCommands({ composer, input, onExecute }) {
   }
 
   function update() {
+    if (composing) { hide(); return; }
     const value = input.value;
     if (!value.startsWith("/") || /[\s]/.test(value)) { hide(); return; }
     matches = COMMANDS.filter((command) => command.name.startsWith(value));
@@ -73,8 +75,17 @@ export function createSlashCommands({ composer, input, onExecute }) {
     render();
   }
 
+  input.addEventListener("compositionstart", () => { composing = true; hide(); });
+  input.addEventListener("compositionend", () => {
+    composing = false;
+    if (document.activeElement === input) update();
+    else hide();
+  });
   input.addEventListener("input", update);
-  input.addEventListener("blur", () => window.setTimeout(hide, 0));
+  input.addEventListener("blur", () => {
+    composing = false;
+    window.setTimeout(hide, 0);
+  });
   subscribeLocale(() => {
     list.setAttribute("aria-label", t("slash.label", {}, "斜杠命令"));
     if (!list.hidden) render();

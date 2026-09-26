@@ -31,6 +31,7 @@ export function createFileMentions({ composer, input, navigation }) {
   let timer = 0;
   let controller = null;
   let serial = 0;
+  let composing = false;
 
   function hide() {
     window.clearTimeout(timer);
@@ -87,6 +88,7 @@ export function createFileMentions({ composer, input, navigation }) {
   }
 
   function update() {
+    if (composing) { hide(); return; }
     const token = mentionAtCaret(input);
     const selected = navigation.get();
     if (!token || selected.view !== "workspace" || !selected.projectId) {
@@ -121,12 +123,21 @@ export function createFileMentions({ composer, input, navigation }) {
     }, WAIT_MS);
   }
 
+  input.addEventListener("compositionstart", () => { composing = true; hide(); });
+  input.addEventListener("compositionend", () => {
+    composing = false;
+    if (document.activeElement === input) update();
+    else hide();
+  });
   input.addEventListener("input", update);
   input.addEventListener("click", update);
   input.addEventListener("keyup", (event) => {
     if (["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) update();
   });
-  input.addEventListener("blur", () => window.setTimeout(hide, 0));
+  input.addEventListener("blur", () => {
+    composing = false;
+    window.setTimeout(hide, 0);
+  });
   navigation.subscribe(() => { hide(); update(); });
   subscribeLocale(() => list.setAttribute("aria-label", t("mention.label", {}, "工作区文件")));
 

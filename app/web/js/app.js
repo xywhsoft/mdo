@@ -1469,6 +1469,10 @@ export async function boot() {
     prompt.style.height = `${Math.min(prompt.scrollHeight, 336)}px`;
   }
   window.addEventListener("resize", resizePrompt);
+  let promptComposing = false;
+  prompt.addEventListener("compositionstart", () => { promptComposing = true; });
+  prompt.addEventListener("compositionend", () => { promptComposing = false; });
+  prompt.addEventListener("blur", () => { promptComposing = false; });
   prompt.addEventListener("input", () => {
     resizePrompt();
     draftStore.edit(selectedKey, prompt.value, composerAttachments);
@@ -1477,7 +1481,8 @@ export async function boot() {
   prompt.addEventListener("keydown", (event) => {
     if (slashCommands.onKeyDown(event)) return;
     if (fileMentions.onKeyDown(event)) return;
-    if (event.key === "Enter" && !event.shiftKey && !event.isComposing) {
+    if (event.key === "Enter" && !event.shiftKey &&
+        !event.isComposing && !promptComposing) {
       event.preventDefault();
       const modified = event.ctrlKey || event.metaKey;
       const guide = settingsStore.get().data?.composer?.submit_mode === "guide";

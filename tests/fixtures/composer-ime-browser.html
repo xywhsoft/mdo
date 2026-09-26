@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="zh-CN">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>mdo composer IME probe</title>
+<form class="composer"><textarea aria-label="任务输入"></textarea></form>
+<pre id="result"></pre>
+<script type="module">
+import { createFileMentions } from "/app/web/js/features/chat/file-mentions.js";
+import { createSlashCommands } from "/app/web/js/features/chat/slash-commands.js";
+
+const composer = document.querySelector(".composer");
+const input = composer.querySelector("textarea");
+const output = document.querySelector("#result");
+const originalFetch = window.fetch;
+let searches = 0;
+const executed = [];
+window.fetch = async (url, options = {}) => {
+  if (String(url).includes("/workspace/files?q=")) {
+    searches += 1;
+    return new Response(JSON.stringify({ ok: true, data: {
+      items: ["notes/中文 文件.txt"],
+    }}), { status: 200, headers: { "Content-Type": "application/json" } });
+  }
+  return originalFetch(url, options);
+};
+const navigation = { get: () => ({ view: "workspace", projectId: "qa",
+  sessionId: "session" }), subscribe: () => () => {} };
+const mentions = createFileMentions({ composer, input, navigation });
+const slash = createSlashCommands({ composer, input,
+  onExecute: async (command) => { executed.push(command); } });
+const fileMenu = composer.querySelector("#file-mention-menu");
+const slashMenu = composer.querySelector("#slash-menu");
+const inputEvent = () => input.dispatchEvent(new InputEvent("input", {
+  bubbles: true, isComposing: true,
+}));
+const wait = () => new Promise((resolve) => window.setTimeout(resolve, 250));
+try {
+  input.focus();
+  input.dispatchEvent(new CompositionEvent("compositionstart", { bubbles: true }));
+  input.value = "@中";
+  input.setSelectionRange(input.value.length, input.value.length);
+  inputEvent();
+  await wait();
+  const quietDuringFileComposition = searches === 0 && fileMenu.hidden;
+  input.value = "@中文";
+  input.setSelectionRange(input.value.length, input.value.length);
+  inputEvent();
+  input.dispatchEvent(new CompositionEvent("compositionend", { bubbles: true }));
+  await wait();
+  const fileReady = searches === 1 && !fileMenu.hidden &&
+    fileMenu.textContent.includes("notes/中文 文件.txt");
+  const enter = new KeyboardEvent("keydown", { key: "Enter", bubbles: true,
+    cancelable: true });
+  mentions.onKeyDown(enter);
+  const inserted = input.value === '@"notes/中文 文件.txt" ';
+
+  input.dispatchEvent(new CompositionEvent("compositionstart", { bubbles: true }));
+  input.value = "/m";
+  inputEvent();
+  const quietDuringSlashComposition = slashMenu.hidden;
+  input.dispatchEvent(new CompositionEvent("compositionend", { bubbles: true }));
+  const slashReady = !slashMenu.hidden && slashMenu.textContent.includes("/model");
+  slash.onKeyDown(new KeyboardEvent("keydown", { key: "Enter", bubbles: true,
+    cancelable: true }));
+  await Promise.resolve();
+  const clearedAfterSlash = input.value === "";
+  input.value = "@中";
+  input.setSelectionRange(input.value.length, input.value.length);
+  input.dispatchEvent(new CompositionEvent("compositionstart", { bubbles: true }));
+  inputEvent();
+  input.blur();
+  input.dispatchEvent(new CompositionEvent("compositionend", { bubbles: true }));
+  await wait();
+  const quietAfterBlur = fileMenu.hidden && searches === 1;
+  const passed = quietDuringFileComposition && fileReady && inserted &&
+    quietDuringSlashComposition && slashReady && quietAfterBlur &&
+    clearedAfterSlash && executed.join() === "/model";
+  output.dataset.passed = String(passed);
+  output.textContent = JSON.stringify({ passed, quietDuringFileComposition,
+    fileReady, inserted, quietDuringSlashComposition, slashReady, quietAfterBlur,
+    clearedAfterSlash,
+    searches, executed }, null, 2);
+} catch (error) {
+  output.dataset.passed = "false";
+  output.textContent = error.stack ?? String(error);
+} finally { window.fetch = originalFetch; }
+</script>
+</html>

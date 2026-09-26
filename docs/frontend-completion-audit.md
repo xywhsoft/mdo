@@ -58,6 +58,10 @@ Markdown 会话导出补齐语言一致性。之前英语、俄语页面导出�
 
 输入候选 Esc 的归属已补验。修复前，320px 打包页在慢速运行中关闭 `@` 文件候选会误停止 Agent；修复后候选关闭，草稿保留，本地模型运行以 `succeeded` 结束且 `cancel_requested=false`。桌面常驻侧栏不再遮挡裸 Esc 的停止快捷键，独立打包 Home 中运行以 `cancelled` 结束。斜杠候选复用相同的键盘消费路径，仍需在后续移动端边界复测中持续关注。
 
+中文输入法组字现有模块浏览器证据：`tests/fixtures/composer-ime-browser.html` 对中文文件名和 `/model` 分别触发 compositionstart、输入、compositionend，期间文件 API 不查询、菜单不弹出，结束后才显示候选并能插入 `@"notes/中文 文件.txt"`；输入框失焦后补发 compositionend 不会出现幽灵候选。发送键增加独立组字状态保护，覆盖部分平台 `KeyboardEvent.isComposing` 不可靠的情况。物理输入法及打包移动端的同一路径仍待实测。
+
+独立 Home `.build/mdo-packed-docks-64_618t8` 的打包页也能以 `@中文` 选中 `notes/中文 文件.txt`，刷新后保留带引号的草稿，未误启动任务。此项确认候选与草稿持久化在实际打包版配合正常；组字时序仍以模块浏览器夹具为证据。
+
 旧版候选菜单的 Tab 选中手感已恢复。修复前，文件与斜杠候选打开时按 Tab 会跳到附件按钮，未插入或执行；修复后桌面打包页 `@alpha` 插入 `@src/alpha.c`，`/he` 打开快捷键帮助，320px 下 `@QA` 插入带引号的 `@"notes/QA notes.txt"`，输入框仍保持焦点，文档无横向溢出。Shift+Tab 保留反向焦点导航语义。
 
 运行中排队写入的时序已补验。`tests/manual_packed_docks_qa.py --slow-ms 2000 --queue-delay-ms 6000` 只延迟一条合成消息的模型回复和队列 POST：首轮结束后 POST 才返回，修复后的打包页随即发起第二轮；服务端恰好两次 `agent_start`，队列为零，浏览器无脚本错误。发送链在 POST 成功后重试派发，避免只能等最长约 8 秒的运行列表刷新。本项补充核心操作链中的自动接力证据，不改变队列移除仍需当次图形确认的状态。
