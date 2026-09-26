@@ -134,7 +134,7 @@ select:focus-visible,
   position: relative;
   display: grid;
   grid-template-columns: var(--sidebar-column, var(--sidebar-width)) minmax(0, 1fr) var(--inspector-column, var(--inspector-width));
-  height: 100dvh;
+  height: var(--app-visible-height, 100dvh);
   min-width: 0;
 }
 

@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="zh-CN">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>mdo mobile viewport probe</title>
+<link rel="stylesheet" href="/app/web/css/app.css">
+<div class="app-shell" id="shell"></div>
+<pre id="result"></pre>
+<script type="module">
+import { trackMobileViewport } from "/app/web/js/features/shell/mobile-viewport.js";
+
+const shell = document.querySelector("#shell");
+const output = document.querySelector("#result");
+const visualViewport = Object.assign(new EventTarget(),
+  { height: innerHeight, offsetTop: 0, scale: 1 });
+const fakeWindow = Object.assign(new EventTarget(),
+  { innerHeight, visualViewport });
+const mobile = Object.assign(new EventTarget(), { matches: true });
+const height = () => Math.round(shell.getBoundingClientRect().height);
+const settle = () => new Promise((resolve) => requestAnimationFrame(() =>
+  requestAnimationFrame(resolve)));
+trackMobileViewport(shell, mobile, fakeWindow);
+await settle();
+const initial = height();
+visualViewport.height = Math.round(innerHeight * 0.55);
+visualViewport.dispatchEvent(new Event("resize"));
+await settle();
+const keyboard = height();
+const keyboardStyle = shell.style.getPropertyValue("--app-visible-height");
+visualViewport.offsetTop = 20;
+visualViewport.dispatchEvent(new Event("scroll"));
+await settle();
+const panned = height();
+const pannedStyle = shell.style.getPropertyValue("--app-visible-height");
+visualViewport.scale = 1.5;
+visualViewport.dispatchEvent(new Event("resize"));
+await settle();
+const zoomed = height();
+const passed = Math.abs(initial - innerHeight) <= 2 &&
+  keyboard === visualViewport.height && panned === keyboard + 20 &&
+  zoomed === initial;
+output.dataset.passed = String(passed);
+output.textContent = JSON.stringify({ passed, initial, keyboard, panned,
+  zoomed, keyboardStyle, pannedStyle, layoutHeight: innerHeight }, null, 2);
+</script>
+</html>

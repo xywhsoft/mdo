@@ -60,6 +60,7 @@ import { createRunNotifications } from "./features/shell/run-notifications.js";
 import { startWorkspaceNavigation } from "./features/shell/workspace-startup.js";
 import { focusSessionComposerAfterNavigation } from "./features/shell/session-composer-focus.js";
 import { createPaneLayout } from "./features/shell/pane-layout.js";
+import { trackMobileViewport } from "./features/shell/mobile-viewport.js";
 import { api } from "./api/client.js";
 import { clear, element, errorMessage, isImeKey, toast } from "./utils/dom.js";
 import { subscribeLocale, t } from "./i18n.js";
@@ -98,6 +99,7 @@ export async function boot() {
   const shell = $("#app-shell");
   const wideLayout = window.matchMedia("(min-width: 1204px)");
   const mobileLayout = window.matchMedia("(max-width: 760px)");
+  trackMobileViewport(shell, mobileLayout);
   shell.dataset.inspector = "closed";
   const prompt = $("#prompt");
   const composer = $("#composer");
