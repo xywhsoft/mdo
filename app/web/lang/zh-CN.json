@@ -464,6 +464,7 @@
   "queue.remove": "移除",
   "queue.removeNumber": "移除待发送消息 {number}",
   "queue.imageMessage": "图片消息",
+  "queue.sending": "正在发送…",
   "queue.sendingUncertain": "发送状态待确认",
   "queue.runAccepted": "服务端已接受运行 · 请核对状态",
   "queue.runAcceptedWarning": "运行已由服务端接受。请核对运行记录或恢复状态，再决定是否移除此项；不能再次发送同一队列项。",

@@ -18,6 +18,7 @@ let route = { projectId: "qa", sessionId: "first" };
 const listeners = [];
 let finishAction;
 let finishDispatch;
+let finishLocal;
 let retryCalls = 0;
 let writable = true;
 window.fetch = async (url) => {
@@ -38,6 +39,17 @@ try {
     },
   });
   await queue.select("qa", "first");
+  const reviewOnRestored = container.textContent.includes("queue.uncertainWarning") &&
+    container.textContent.includes("queue.sendingUncertain");
+  const localDispatch = queue.exclusive("qa", "first", () =>
+    new Promise((resolve) => { finishLocal = resolve; }));
+  const normalLocalSend = container.textContent.includes("queue.sending") &&
+    !container.textContent.includes("queue.uncertainWarning") &&
+    !container.querySelector('[data-queue-focus="retry"]');
+  finishLocal();
+  await localDispatch;
+  const reviewAfterOwnerExits = container.textContent.includes("queue.uncertainWarning") &&
+    Boolean(container.querySelector('[data-queue-focus="retry"]'));
   container.querySelector('[data-queue-focus="retry"]').click();
   const firstLocked = [...container.querySelectorAll("button")]
     .filter((button) => button.dataset.queueFocus !== "toggle")
@@ -70,11 +82,13 @@ try {
   writable = true;
   queue.render();
   const restored = Boolean(container.querySelector('[data-queue-focus="retry"]'));
-  const passed = firstLocked && secondUsable && secondStillUsable &&
+  const passed = reviewOnRestored && normalLocalSend && reviewAfterOwnerExits &&
+    firstLocked && secondUsable && secondStillUsable &&
     staleActionBlocked && archived && restored &&
     secondDispatch && firstDispatchFinished;
   output.dataset.passed = String(passed);
-  output.textContent = JSON.stringify({ passed, firstLocked, secondUsable,
+  output.textContent = JSON.stringify({ passed, reviewOnRestored,
+    normalLocalSend, reviewAfterOwnerExits, firstLocked, secondUsable,
     secondStillUsable, retryCalls, secondDispatch, firstDispatchFinished,
     archived, staleActionBlocked, restored }, null, 2);
 } catch (error) {

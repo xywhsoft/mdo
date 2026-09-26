@@ -129,6 +129,9 @@ export function createPromptQueue({ container, navigation, isRunActive, stagedEn
       return;
     }
     const uncertain = saved[0]?.state === "sending";
+    // This page still owns the dispatch while exclusive() is running. A
+    // persisted sending item without that owner needs review after reload.
+    const sendingLocally = uncertain && busy.has(key);
     const acceptedRun = uncertain && Boolean(saved[0]?.run_id);
     const claimedRun = uncertain && saved[0]?.start_claimed === true;
     const stagedHead = saved[0]?.state === "staged";
@@ -143,6 +146,7 @@ export function createPromptQueue({ container, navigation, isRunActive, stagedEn
     });
     const waitingForRun = !uncertain && !stagedHead && isRunActive();
     const retry = !writable || waitingForRun || !saved.length || reviewPending ||
+      sendingLocally ||
       acceptedRun || claimedRun ? null : element("button", {
       text: t(uncertain ? "queue.retryUncertain" : stagedHead
         ? "queue.continueStaged" : "queue.sendNext"),
@@ -161,13 +165,14 @@ export function createPromptQueue({ container, navigation, isRunActive, stagedEn
     }
     container.append(element("div", { className: "prompt-queue-header" }, [
       toggle, retry ?? element("span", { className: "prompt-queue-waiting",
-        text: t(!writable ? "queue.restoreToSend" : acceptedRun ? "queue.runAccepted" : claimedRun
+        text: t(!writable ? "queue.restoreToSend" : sendingLocally ? "queue.sending" :
+          acceptedRun ? "queue.runAccepted" : claimedRun
           ? "queue.runStarting" : reviewPending
           ? "queue.reviewRun" : saved.length
           ? "queue.waitForRun" : entries[0]?.rejected
             ? "queue.rejected" : "queue.awaitingAdmission") }),
     ]));
-    if (uncertain) container.append(element("p", {
+    if (uncertain && !sendingLocally) container.append(element("p", {
       className: "prompt-queue-warning",
       text: t(acceptedRun ? "queue.runAcceptedWarning" : claimedRun
         ? "queue.runStartingWarning" :
@@ -218,6 +223,7 @@ export function createPromptQueue({ container, navigation, isRunActive, stagedEn
       if (entry.state === "sending" || entry.state === "staged")
         body.append(element("span", { className: "prompt-queue-state",
           text: t(entry.state === "staged" ? "queue.staged" :
+            sendingLocally && index === 0 ? "queue.sending" :
             entry.run_id ? "queue.runAccepted" :
             entry.start_claimed ? "queue.runStarting" :
             "queue.sendingUncertain") }));

@@ -464,6 +464,7 @@
   "queue.remove": "Remove",
   "queue.removeNumber": "Remove pending message {number}",
   "queue.imageMessage": "Image message",
+  "queue.sending": "Sending…",
   "queue.sendingUncertain": "Delivery unconfirmed",
   "queue.runAccepted": "Run accepted by server · review its status",
   "queue.runAcceptedWarning": "The server accepted this run. Check its record or recovery state before removing the item; this queue item cannot be sent again.",
