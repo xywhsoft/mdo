@@ -1059,6 +1059,7 @@ xllm_client* MdoModelClientCreate(const MdoModelCatalog* pCatalog,
     size_t EndpointIndex;
     char* Endpoint = NULL;
     char* Secret = NULL;
+    char* ProxyPassword = NULL;
     xx509store* CaStore = NULL;
     MdoConfigTransportSettings Transport;
     xllm_model_profile Profile;
@@ -1149,6 +1150,16 @@ xllm_client* MdoModelClientCreate(const MdoModelCatalog* pCatalog,
         CaStore = MdoModelsLoadCaStore(Transport.CaPemPath, pError);
         if ( CaStore == NULL ) goto done;
     }
+    if ( strcmp(Transport.ProxyKind, "none") != 0 &&
+         Transport.ProxySecretRef[0] != '\0' &&
+         !MdoSecretResolve(xrtStrView(Transport.ProxySecretRef), 4096u,
+            &ProxyPassword) ) {
+        MdoModelsProfileError(pError,
+            "model proxy password reference is unavailable");
+        if ( pError != NULL ) pError->eCode = XLLM_ERROR_AUTH;
+        xrtClearError();
+        goto done;
+    }
     xllmClientConfigInit(&Config);
     Config.sBaseUrl = Endpoint;
     Config.sApiKey = Secret;
@@ -1159,6 +1170,15 @@ xllm_client* MdoModelClientCreate(const MdoModelCatalog* pCatalog,
     Config.uTimeoutMs = pProvider->TimeoutMilliseconds;
     Config.bVerifyPeer = pProvider->VerifyPeer;
     Config.pX509Store = CaStore;
+    if ( strcmp(Transport.ProxyKind, "none") != 0 ) {
+        Config.eProxyKind = strcmp(Transport.ProxyKind, "socks5") == 0
+            ? XLLM_PROXY_SOCKS5 : XLLM_PROXY_HTTP_CONNECT;
+        Config.sProxyHost = Transport.ProxyHost;
+        Config.uProxyPort = Transport.ProxyPort;
+        Config.sProxyUser = Transport.ProxyUser;
+        Config.sProxyPass = ProxyPassword;
+        Config.sProxyBypass = Transport.ProxyBypass;
+    }
     Config.eProvider = MdoModelProtocolProvider(Protocol);
     Config.pModelProfile = &Profile;
     pClient = xllmClientCreate(&Config, pError);
@@ -1174,6 +1194,7 @@ xllm_client* MdoModelClientCreate(const MdoModelCatalog* pCatalog,
 
 done:
     xrtX509StoreFree(CaStore);
+    MdoSecretRelease(&ProxyPassword);
     MdoSecretRelease(&Secret);
     xrtFree(Endpoint);
     return pClient;

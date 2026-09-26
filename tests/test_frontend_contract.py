@@ -138,7 +138,9 @@ class FrontendContractTests(unittest.TestCase):
         self.assertIn("{ ifMatch: etag }", state)
         self.assertIn("previewFingerprint", view)
         self.assertIn("form.reportValidity()", view)
-        self.assertNotIn("secret_ref", view)
+        self.assertNotIn("snapshot.web.secret_ref", view)
+        self.assertNotIn("snapshot.transport.proxy.secret_ref", view)
+        self.assertIn("form.elements.proxy_secret_ref.value.trim()", view)
         self.assertIn('#/settings/${resourceId(section', navigation)
         for marker in (
             'id="settings-workspace"', 'id="preview-settings"',

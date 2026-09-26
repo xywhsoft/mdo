@@ -42,6 +42,10 @@ void ServiceInit(XS_HostInfo* pHost)
         "{\"schema_version\":1,\"patch\":{\"api_key\":\"plaintext\"}}";
     static const char sEscapingCa[] =
         "{\"schema_version\":1,\"patch\":{\"transport\":{\"ca_pem_path\":\"../outside.pem\"}}}";
+    static const char sIncompleteProxy[] =
+        "{\"schema_version\":1,\"patch\":{\"transport\":{\"proxy\":{\"kind\":\"socks5\"}}}}";
+    static const char sPlainProxyPassword[] =
+        "{\"schema_version\":1,\"patch\":{\"transport\":{\"proxy\":{\"password\":\"plaintext\"}}}}";
     static const char sRemoveLing[] =
         "{\"schema_version\":1,\"patch\":{\"items\":[]}}";
     MdoConfigSnapshot Snapshot;
@@ -108,6 +112,10 @@ void ServiceInit(XS_HostInfo* pHost)
     Preview.Size = sizeof(Preview);
     printf("escaping_ca=%d\n", MdoConfigPreviewImport(MDO_CONFIG_SETTINGS,
         xrtStrView(sEscapingCa), &Preview) ? 1 : 0);
+    printf("incomplete_proxy=%d\n", MdoConfigPreviewImport(MDO_CONFIG_SETTINGS,
+        xrtStrView(sIncompleteProxy), &Preview) ? 1 : 0);
+    printf("plain_proxy_password=%d\n", MdoConfigPreviewImport(MDO_CONFIG_SETTINGS,
+        xrtStrView(sPlainProxyPassword), &Preview) ? 1 : 0);
     memset(&Preview, 0, sizeof(Preview));
     Preview.Size = sizeof(Preview);
     if ( MdoConfigPreviewImport(MDO_CONFIG_MODELS,
@@ -236,6 +244,8 @@ def main() -> int:
         assert '"future_option"' in output, output
         assert "sensitive values must be stored as secret_ref" in output, output
         assert "escaping_ca=0" in output, output
+        assert "incomplete_proxy=0" in output, output
+        assert "plain_proxy_password=0" in output, output
         assert "Ling 3.0 Tiny is built-in" in output, output
         assert "restore_preview=1 changes=1" in output, output
         assert "restore=1" in output, output

@@ -346,6 +346,22 @@
                   <div><label for="setting-ca-pem" data-i18n="settings.caPem">自定义 CA 证书</label><p data-i18n="settings.caPemDescription">模型 HTTPS 请求信任便携 Home 中的 PEM 文件，例如 certs/company.pem；留空使用系统证书。</p></div>
                   <input id="setting-ca-pem" name="ca_pem_path" type="text" maxlength="511" placeholder="certs/company.pem" autocomplete="off" spellcheck="false">
                 </div>
+                <div class="setting-row">
+                  <div><label for="setting-proxy-kind" data-i18n="settings.proxyKind">模型请求代理</label><p data-i18n="settings.proxyDescription">模型 HTTPS 请求可经 HTTP CONNECT 或 SOCKS5 代理；选“关闭”可保留下面的参数。</p></div>
+                  <select id="setting-proxy-kind" name="proxy_kind"><option value="none" data-i18n="settings.proxyNone">关闭</option><option value="http-connect">HTTP CONNECT</option><option value="socks5">SOCKS5</option></select>
+                </div>
+                <div class="settings-grid">
+                  <label><span data-i18n="settings.proxyHost">代理主机</span><input name="proxy_host" type="text" maxlength="255" placeholder="127.0.0.1" autocomplete="off" spellcheck="false"></label>
+                  <label><span data-i18n="settings.proxyPort">代理端口</span><input name="proxy_port" type="number" min="0" max="65535" required></label>
+                  <label><span data-i18n="settings.proxyUser">用户名（可选）</span><input name="proxy_user" type="text" maxlength="255" autocomplete="off" spellcheck="false"></label>
+                  <label><span data-i18n="settings.proxySecretRef">密码引用（可选）</span><input name="proxy_secret_ref" type="text" maxlength="2048" placeholder="env:MDO_PROXY_PASSWORD" autocomplete="off" spellcheck="false"></label>
+                </div>
+                <div class="credential-state" id="proxy-credential-state" role="status"></div>
+                <label class="setting-switch" id="proxy-clear-secret-row" hidden><span><strong data-i18n="settings.proxyClearSecret">清除已配置的密码引用</strong><small data-i18n="settings.proxyClearSecretDescription">下次应用时删除旧引用；密码文件或环境变量本身不会被删除。</small></span><input name="proxy_clear_secret" type="checkbox"><span class="switch-control" aria-hidden="true"></span></label>
+                <div class="setting-row setting-row-wide">
+                  <div><label for="setting-proxy-bypass" data-i18n="settings.proxyBypass">不走代理的地址</label><p data-i18n="settings.proxyBypassDescription">逗号分隔的主机名模式，可使用前后 * 通配符，例如 localhost,*.internal。</p></div>
+                  <input id="setting-proxy-bypass" name="proxy_bypass" type="text" maxlength="1023" autocomplete="off" spellcheck="false">
+                </div>
               </section>
             </form>
 

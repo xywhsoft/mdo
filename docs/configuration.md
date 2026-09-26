@@ -38,6 +38,8 @@ mdo 配置 schema v1 由一份内置基线、三份可选用户 patch 和一层�
 
 `settings.transport.ca_pem_path` 可在“联网与搜索”页配置模型 HTTPS 请求使用的自定义 CA。路径必须相对于外部 `mdo-home/`，以 `/` 分隔，不允许盘符、反斜杠或 `..`；例如把 PEM 放到 `mdo-home/certs/company.pem`，设置值为 `certs/company.pem`。空值使用系统证书；非空值将 PEM 中的信任锚与系统证书合并后交给 xllm，不会关闭 TLS 校验，也不影响 Web 搜索工具。运行前读取并解析 PEM，文件缺失、超过 1 MiB 或无有效证书时模型启动明确失败。证书文件随 Home 一起搬移，单文件首次启动不要求创建该目录。
 
+`settings.transport.proxy` 管理模型 HTTPS 请求的可选 HTTP CONNECT 或 SOCKS5 代理，字段为 `kind`（`none`、`http-connect`、`socks5`）、`host`、`port`、`user`、`bypass`。启用时须填写主机和 1–65535 端口；`bypass` 用逗号分隔目标主机模式，支持模式开头或结尾的 `*`。代理密码只能写在 `credential.secret_ref`，引用 `env:`、`file:`、`keychain:` 或 `prompt:`，若使用密码还须填写用户名。`GET /api/v1/settings` 只返回 `credential_configured`，不回传引用文本；设置页输入新引用可替换，勾选清除可移除引用，其他字段的局部更新会保留已有引用。密码在创建模型客户端时解析，读取后即释放临时副本。`kind: none` 保留参数供日后再启用。代理只作用于模型请求，不作用于 Web 搜索、MCP 或应用服务；xllm 当前仅允许 HTTPS 模型端点使用代理。
+
 `models.providers` 与 `models.items` 分开。provider 保存 endpoint、TLS 校验、超时和凭据引用；model 保存 provider ID、wire model、可选协议、默认协议、xllm 能力、上下文/输入/输出窗口、推理档位和附件类型。模型引用的每种协议必须在 provider 上有对应 endpoint，默认协议必须属于模型协议集。
 
 `ling-3.0-tiny` 是内置、免费、不可编辑且不可删除的模型，其 `ling` provider 同样受保护。服务端验证器逐字段核对两个完整 descriptor，并确认默认模型仍存在；前端禁用控件只是交互提示，不承担保护职责。内置 provider 声明 OpenAI Chat Completions、OpenAI Responses 和 Anthropic Messages 三种线上接口，模型默认选择 Responses。程序内置服务地址和随程序分发的公共访问令牌，因此普通用户无需配置；部署环境仍可分别用 `MDO_LING_CHAT_COMPLETIONS_URL`、`MDO_LING_RESPONSES_URL`、`MDO_LING_ANTHROPIC_URL` 和 `MDO_LING_API_KEY` 覆盖。该令牌可从客户端程序中提取，服务端必须独立实施配额、滥用防护与轮换。三种协议的真实线上探针仍需明确记录实际测试结果，离线 fixture 不作为线上成功证据。

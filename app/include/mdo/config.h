@@ -63,6 +63,13 @@ typedef struct MdoConfigTransportSettings {
     /* Empty uses the platform trust store. Otherwise this is a portable
      * path inside the external Home, never an absolute filesystem path. */
     char CaPemPath[512];
+    char ProxyKind[16];
+    char ProxyHost[256];
+    uint16 ProxyPort;
+    char ProxyUser[256];
+    char ProxyBypass[1024];
+    /* Reference only. The resolved password must never enter config JSON. */
+    char ProxySecretRef[2049];
 } MdoConfigTransportSettings;
 
 bool MdoConfigInit(void);

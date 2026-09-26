@@ -352,6 +352,62 @@ static bool MdoConfigHomeRelativePath(xstrview Path)
     return true;
 }
 
+static bool MdoConfigProxyText(xstrview Text, size_t Maximum,
+    bool HostOrBypass)
+{
+    size_t i;
+    if ( Text.Size >= Maximum || !xrtUtf8Valid(Text, NULL) ) return false;
+    for ( i = 0u; i < Text.Size; ++i ) {
+        unsigned char Ch = (unsigned char)Text.Data[i];
+        if ( Ch == 0u || Ch == '\r' || Ch == '\n' ) return false;
+        if ( HostOrBypass && (Ch <= 0x20u || Ch > 0x7eu ||
+                Ch == '/' || Ch == '@') ) return false;
+    }
+    return true;
+}
+
+static bool MdoConfigProxyValidate(const xvalue* Proxy)
+{
+    static const char* const Kinds[] = {
+        "none", "http-connect", "socks5"
+    };
+    const xvalue* Credential;
+    xstrview Kind;
+    xstrview Host;
+    xstrview User;
+    xstrview Bypass;
+    xstrview SecretRef;
+    uint64 Port;
+    if ( xrtValueType(Proxy) != XVALUE_OBJECT ||
+         !MdoConfigStringOneOf(xrtValueObjectGet(Proxy,
+            MdoConfigKey("kind")), Kinds, 3u) ||
+         !MdoConfigString(xrtValueObjectGet(Proxy,
+            MdoConfigKey("kind")), &Kind) ||
+         !MdoConfigString(xrtValueObjectGet(Proxy,
+            MdoConfigKey("host")), &Host) ||
+         !MdoConfigProxyText(Host, 256u, true) ||
+         !MdoConfigUnsigned(xrtValueObjectGet(Proxy,
+            MdoConfigKey("port")), &Port) || Port > 65535u ||
+         !MdoConfigString(xrtValueObjectGet(Proxy,
+            MdoConfigKey("user")), &User) ||
+         !MdoConfigProxyText(User, 256u, false) ||
+         !MdoConfigString(xrtValueObjectGet(Proxy,
+            MdoConfigKey("bypass")), &Bypass) ||
+         !MdoConfigProxyText(Bypass, 1024u, true) ||
+         (!MdoConfigViewEqual(Kind, "none") &&
+          (Host.Size == 0u || Port == 0u)) ) return false;
+    Credential = xrtValueObjectGet(Proxy, MdoConfigKey("credential"));
+    if ( Credential != NULL && xrtValueType(Credential) != XVALUE_NULL &&
+         (xrtValueType(Credential) != XVALUE_OBJECT ||
+          xrtValueCount(Credential) != 1u || User.Size == 0u ||
+          !MdoConfigSecretReferenceValid(xrtValueObjectGet(Credential,
+            MdoConfigKey("secret_ref"))) ||
+          !MdoConfigString(xrtValueObjectGet(Credential,
+            MdoConfigKey("secret_ref")), &SecretRef) ||
+          SecretRef.Size >= 2049u) ) return false;
+    return true;
+}
+
 static bool MdoConfigSettingsValidate(const xvalue* pSettings)
 {
     static const char* const Themes[] = { "system", "light", "dark" };
@@ -371,6 +427,7 @@ static bool MdoConfigSettingsValidate(const xvalue* pSettings)
     const xvalue* pWeb;
     const xvalue* pSearch;
     const xvalue* pTransport;
+    const xvalue* pProxy;
     const xvalue* pWorkspace;
     xstrview Locale;
     xstrview Text;
@@ -395,6 +452,8 @@ static bool MdoConfigSettingsValidate(const xvalue* pSettings)
     pSearch = pWeb != NULL ?
         xrtValueObjectGet(pWeb, MdoConfigKey("search")) : NULL;
     pTransport = xrtValueObjectGet(pSettings, MdoConfigKey("transport"));
+    pProxy = pTransport != NULL ?
+        xrtValueObjectGet(pTransport, MdoConfigKey("proxy")) : NULL;
     pWorkspace = xrtValueObjectGet(pSettings, MdoConfigKey("workspace"));
     if ( xrtValueType(pAppearance) != XVALUE_OBJECT ||
          !MdoConfigStringOneOf(xrtValueObjectGet(pAppearance,
@@ -473,6 +532,7 @@ static bool MdoConfigSettingsValidate(const xvalue* pSettings)
             MdoConfigKey("ca_pem_path")), &Text) ||
          Text.Size >= 512u ||
          (Text.Size != 0u && !MdoConfigHomeRelativePath(Text)) ||
+         !MdoConfigProxyValidate(pProxy) ||
          xrtValueType(pWorkspace) != XVALUE_OBJECT ||
          !MdoConfigStringOneOf(xrtValueObjectGet(pWorkspace,
             MdoConfigKey("open_mode")), OpenModes,
@@ -1446,7 +1506,15 @@ bool MdoConfigGetTransportSettings(MdoConfigTransportSettings* pSettings)
 {
     const xvalue* Settings;
     const xvalue* Transport;
+    const xvalue* Proxy;
+    const xvalue* Credential;
     xstrview Path;
+    xstrview Kind;
+    xstrview Host;
+    xstrview User;
+    xstrview Bypass;
+    xstrview SecretRef = xrtStrView("");
+    uint64 Port;
     uint32 Size;
     bool Ok = false;
 
@@ -1462,13 +1530,42 @@ bool MdoConfigGetTransportSettings(MdoConfigTransportSettings* pSettings)
         MdoConfigKey("settings"));
     Transport = Settings != NULL ? xrtValueObjectGet(Settings,
         MdoConfigKey("transport")) : NULL;
+    Proxy = Transport != NULL ? xrtValueObjectGet(Transport,
+        MdoConfigKey("proxy")) : NULL;
+    Credential = Proxy != NULL ? xrtValueObjectGet(Proxy,
+        MdoConfigKey("credential")) : NULL;
     if ( Transport != NULL && MdoConfigString(xrtValueObjectGet(Transport,
             MdoConfigKey("ca_pem_path")), &Path) &&
-         Path.Size < sizeof(pSettings->CaPemPath) ) {
+         Path.Size < sizeof(pSettings->CaPemPath) &&
+         Proxy != NULL && MdoConfigString(xrtValueObjectGet(Proxy,
+            MdoConfigKey("kind")), &Kind) &&
+         MdoConfigString(xrtValueObjectGet(Proxy,
+            MdoConfigKey("host")), &Host) &&
+         MdoConfigUnsigned(xrtValueObjectGet(Proxy,
+            MdoConfigKey("port")), &Port) &&
+         MdoConfigString(xrtValueObjectGet(Proxy,
+            MdoConfigKey("user")), &User) &&
+         MdoConfigString(xrtValueObjectGet(Proxy,
+            MdoConfigKey("bypass")), &Bypass) &&
+         (Credential == NULL || xrtValueType(Credential) == XVALUE_NULL ||
+          MdoConfigString(xrtValueObjectGet(Credential,
+            MdoConfigKey("secret_ref")), &SecretRef)) &&
+         Kind.Size < sizeof(pSettings->ProxyKind) &&
+         Host.Size < sizeof(pSettings->ProxyHost) &&
+         Port <= UINT16_MAX &&
+         User.Size < sizeof(pSettings->ProxyUser) &&
+         Bypass.Size < sizeof(pSettings->ProxyBypass) &&
+         SecretRef.Size < sizeof(pSettings->ProxySecretRef) ) {
         memset(pSettings, 0, sizeof(*pSettings));
         pSettings->Size = Size;
         pSettings->Revision = g_MdoConfig.Revision;
         memcpy(pSettings->CaPemPath, Path.Data, Path.Size);
+        memcpy(pSettings->ProxyKind, Kind.Data, Kind.Size);
+        memcpy(pSettings->ProxyHost, Host.Data, Host.Size);
+        pSettings->ProxyPort = (uint16)Port;
+        memcpy(pSettings->ProxyUser, User.Data, User.Size);
+        memcpy(pSettings->ProxyBypass, Bypass.Data, Bypass.Size);
+        memcpy(pSettings->ProxySecretRef, SecretRef.Data, SecretRef.Size);
         Ok = true;
     }
     xrtMutexUnlock(g_MdoConfig.Lock);

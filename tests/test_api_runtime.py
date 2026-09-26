@@ -1740,6 +1740,47 @@ def run_probe(host: Path) -> None:
                 assert settings_document["data"]["transaction_service"][
                     "runtime_consistent"] is True, settings_document
 
+                proxy_path = "/api/v1/settings/settings"
+                proxy_headers = {"Content-Type": "application/json",
+                                 "If-Match": headers["etag"]}
+                proxy_document = json.dumps({"schema_version": 1, "patch": {
+                    "transport": {"proxy": {
+                        "kind": "none", "host": "127.0.0.1", "port": 18080,
+                        "user": "probe", "bypass": "localhost",
+                        "credential": {"secret_ref": "env:MDO_TEST_PROXY_PASSWORD"},
+                    }}}}).encode()
+                status, headers, body = request(port, "PATCH", proxy_path,
+                    body=proxy_document, headers=proxy_headers)
+                assert status == 200, (status, body)
+                proxy_etag = headers["etag"]
+                status, _, body = request(port, "GET", "/api/v1/settings")
+                proxy = json.loads(body)["data"]["transport"]["proxy"]
+                assert status == 200 and proxy["credential_configured"] is True, body
+                assert b'"secret_ref"' not in body, body
+                preserve_document = json.dumps({"schema_version": 1, "patch": {
+                    "transport": {"proxy": {"bypass": "localhost,*.internal"}}}}).encode()
+                status, headers, body = request(port, "PATCH", proxy_path,
+                    body=preserve_document,
+                    headers={**proxy_headers, "If-Match": proxy_etag})
+                assert status == 200, (status, body)
+                stored = json.loads((home / "config/settings.json").read_text(
+                    encoding="utf-8"))
+                assert stored["patch"]["transport"]["proxy"]["credential"] == {
+                    "secret_ref": "env:MDO_TEST_PROXY_PASSWORD"}, stored
+                clear_document = json.dumps({"schema_version": 1, "patch": {
+                    "transport": {"proxy": {"credential": None}}}}).encode()
+                status, headers, body = request(port, "PATCH", proxy_path,
+                    body=clear_document,
+                    headers={**proxy_headers, "If-Match": headers["etag"]})
+                assert status == 200, (status, body)
+                status, _, body = request(port, "GET", "/api/v1/settings")
+                proxy = json.loads(body)["data"]["transport"]["proxy"]
+                assert status == 200 and proxy["credential_configured"] is False, body
+                assert proxy["bypass"] == "localhost,*.internal", proxy
+                status, _, body = request(port, "DELETE", proxy_path,
+                    headers={"If-Match": headers["etag"]})
+                assert status == 200, (status, body)
+
                 invalid_session = json.dumps({
                     "project_id": "api-project",
                     "unknown": True,

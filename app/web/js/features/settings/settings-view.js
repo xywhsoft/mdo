@@ -7,6 +7,7 @@ function number(form, name) {
 }
 
 function settingsPatch(form, snapshot) {
+  const proxySecretRef = form.elements.proxy_secret_ref.value.trim();
   return {
     locale: form.elements.locale.value,
     appearance: {
@@ -41,7 +42,18 @@ function settingsPatch(form, snapshot) {
         max_results: number(form, "max_results"),
       },
     },
-    transport: { ca_pem_path: form.elements.ca_pem_path.value.trim() },
+    transport: {
+      ca_pem_path: form.elements.ca_pem_path.value.trim(),
+      proxy: {
+        kind: form.elements.proxy_kind.value,
+        host: form.elements.proxy_host.value.trim(),
+        port: number(form, "proxy_port"),
+        user: form.elements.proxy_user.value.trim(),
+        bypass: form.elements.proxy_bypass.value.trim(),
+        ...(form.elements.proxy_clear_secret.checked ? { credential: null }
+          : proxySecretRef ? { credential: { secret_ref: proxySecretRef } } : {}),
+      },
+    },
     workspace: {
       open_mode: form.elements.open_mode.value,
       confirm_external_write: form.elements.confirm_external_write.checked,
@@ -68,6 +80,7 @@ export function createSettingsView({ form, store, navigation, onApplied }) {
   const restoreButton = document.querySelector("#restore-settings");
   const restoreConfirm = document.querySelector("#restore-confirm");
   const credential = document.querySelector("#search-credential-state");
+  const proxyCredential = document.querySelector("#proxy-credential-state");
   const instructionsCount = document.querySelector("#settings-instructions-count");
   let snapshot = null;
   let baselineFingerprint = "";
@@ -86,7 +99,8 @@ export function createSettingsView({ form, store, navigation, onApplied }) {
   function setBusy(value) {
     busy = value;
     const dirty = Boolean(snapshot) && fingerprint() !== baselineFingerprint;
-    previewButton.disabled = value || !dirty || !form.elements.user_instructions.validity.valid;
+    previewButton.disabled = value || !dirty ||
+      !form.elements.user_instructions.validity.valid || !validateProxy();
     applyButton.disabled = value || !snapshot || previewFingerprint !== fingerprint();
     discardButton.disabled = value || !dirty;
     restoreButton.disabled = value || !snapshot?.user_patches?.settings;
@@ -111,6 +125,15 @@ export function createSettingsView({ form, store, navigation, onApplied }) {
         "尚未配置搜索凭据引用。请通过 mdo Home 文件或环境变量配置。");
   }
 
+  function renderProxyCredential(settings) {
+    const configured = Boolean(settings.transport?.proxy?.credential_configured);
+    document.querySelector("#proxy-clear-secret-row").hidden = !configured;
+    proxyCredential.textContent = configured
+      ? t("settings.proxyCredentialConfigured", {},
+        "代理密码引用已配置；输入新引用可替换，或勾选清除。")
+      : t("settings.proxyCredentialMissing", {}, "未配置代理密码引用。");
+  }
+
   function validateInstructions() {
     const field = form.elements.user_instructions;
     const bytes = new TextEncoder().encode(field.value).length;
@@ -122,6 +145,21 @@ export function createSettingsView({ form, store, navigation, onApplied }) {
     return bytes <= 8192;
   }
 
+  function validateProxy() {
+    const enabled = form.elements.proxy_kind.value !== "none";
+    form.elements.proxy_host.required = enabled;
+    form.elements.proxy_port.min = enabled ? "1" : "0";
+    const user = form.elements.proxy_user;
+    const hasCredential = Boolean(snapshot?.transport?.proxy?.credential_configured) ||
+      Boolean(form.elements.proxy_secret_ref.value.trim());
+    user.setCustomValidity(!form.elements.proxy_clear_secret.checked &&
+      hasCredential &&
+      !user.value.trim() ? t("settings.proxyUserRequired", {},
+        "配置密码引用时须填写代理用户名。") : "");
+    return form.elements.proxy_host.validity.valid &&
+      form.elements.proxy_port.validity.valid && user.validity.valid;
+  }
+
   function fill(settings) {
     snapshot = settings;
     form.elements.locale.value = supportedLocales.includes(settings.locale)
@@ -130,6 +168,7 @@ export function createSettingsView({ form, store, navigation, onApplied }) {
     void loadLocale(selectedLocale).then((applied) => {
       if (applied && snapshot === settings && form.elements.locale.value === selectedLocale) {
         renderCredential(settings);
+        renderProxyCredential(settings);
         validateInstructions();
         if (fingerprint() === baselineFingerprint) renderStatus(settings);
         else markDirty();
@@ -162,6 +201,16 @@ export function createSettingsView({ form, store, navigation, onApplied }) {
     form.elements.max_results.value = settings.web.max_results;
     form.elements.endpoint.value = settings.web.endpoint;
     form.elements.ca_pem_path.value = settings.transport?.ca_pem_path ?? "";
+    const proxy = settings.transport?.proxy ?? {};
+    form.elements.proxy_kind.value = proxy.kind ?? "none";
+    form.elements.proxy_host.value = proxy.host ?? "";
+    form.elements.proxy_port.value = proxy.port ?? 0;
+    form.elements.proxy_user.value = proxy.user ?? "";
+    form.elements.proxy_secret_ref.value = "";
+    form.elements.proxy_clear_secret.checked = false;
+    form.elements.proxy_bypass.value = proxy.bypass ?? "";
+    validateProxy();
+    renderProxyCredential(settings);
     baselineFingerprint = fingerprint();
     renderCredential(settings);
     previewFingerprint = "";
@@ -173,17 +222,20 @@ export function createSettingsView({ form, store, navigation, onApplied }) {
 
   function markDirty() {
     const validInstructions = validateInstructions();
+    const validProxy = validateProxy();
     previewFingerprint = "";
     const dirty = Boolean(snapshot) && fingerprint() !== baselineFingerprint;
-    previewButton.disabled = busy || !dirty || !validInstructions;
+    previewButton.disabled = busy || !dirty || !validInstructions || !validProxy;
     applyButton.disabled = true;
     discardButton.disabled = busy || !dirty;
     feedbackText(!validInstructions
       ? t("settings.instructionsTooLong", {}, "自定义指令不能超过 8192 字节。")
+      : !validProxy
+        ? t("settings.proxyInvalid", {}, "代理地址、端口或用户名需要检查。")
       : dirty
         ? t("settings.pending", {}, "有尚未预览的更改。先预览，确认后再应用。")
         : t("settings.synced", {}, "配置与本地服务保持同步。"),
-    validInstructions ? "neutral" : "error");
+    validInstructions && validProxy ? "neutral" : "error");
   }
   form.addEventListener("input", markDirty);
   form.addEventListener("change", markDirty);
@@ -193,6 +245,7 @@ export function createSettingsView({ form, store, navigation, onApplied }) {
       if (!applied) return;
       if (snapshot) renderStatus(snapshot);
       if (snapshot) renderCredential(snapshot);
+      if (snapshot) renderProxyCredential(snapshot);
       validateInstructions();
       markDirty();
     }

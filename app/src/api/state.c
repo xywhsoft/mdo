@@ -55,6 +55,7 @@ static bool MdoApiSettingsBoolField(xvalue* Target, cstr TargetName,
 bool MdoApiSettingsRoute(MdoApiContext* Context)
 {
     MdoSettingsServiceSnapshot Service;
+    MdoConfigTransportSettings Transport;
     str EffectiveJson;
     size_t EffectiveSize = 0u;
     xvalue* Effective;
@@ -63,7 +64,6 @@ bool MdoApiSettingsRoute(MdoApiContext* Context)
     const xvalue* EffectiveComposer;
     const xvalue* EffectiveNotifications;
     const xvalue* EffectiveAgent;
-    const xvalue* EffectiveTransport;
     const xvalue* EffectiveWorkspace;
     xvalue* Data = xrtValueObject();
     xvalue* Patches = xrtValueObject();
@@ -72,12 +72,15 @@ bool MdoApiSettingsRoute(MdoApiContext* Context)
     xvalue* NotificationsValue = xrtValueObject();
     xvalue* AgentValue = xrtValueObject();
     xvalue* TransportValue = xrtValueObject();
+    xvalue* ProxyValue = xrtValueObject();
     xvalue* WebValue = xrtValueObject();
     xvalue* WorkspaceValue = xrtValueObject();
     xvalue* ServiceValue = xrtValueObject();
     bool Ok;
 
     memset(&Service, 0, sizeof(Service)); Service.Size = sizeof(Service);
+    memset(&Transport, 0, sizeof(Transport));
+    Transport.Size = sizeof(Transport);
     EffectiveJson = MdoConfigEffectiveJson(&EffectiveSize);
     Effective = EffectiveJson != NULL ?
         xrtJsonParse(xrtStrViewN(EffectiveJson, EffectiveSize)) : NULL;
@@ -95,18 +98,16 @@ bool MdoApiSettingsRoute(MdoApiContext* Context)
             XRT_STR_LITERAL("notifications")) : NULL;
     EffectiveAgent = EffectiveSettings != NULL ?
         xrtValueObjectGet(EffectiveSettings, XRT_STR_LITERAL("agent")) : NULL;
-    EffectiveTransport = EffectiveSettings != NULL ?
-        xrtValueObjectGet(EffectiveSettings,
-            XRT_STR_LITERAL("transport")) : NULL;
     EffectiveWorkspace = EffectiveSettings != NULL ?
         xrtValueObjectGet(EffectiveSettings,
             XRT_STR_LITERAL("workspace")) : NULL;
     Ok = Data != NULL && Patches != NULL && AppearanceValue != NULL &&
         ComposerValue != NULL && NotificationsValue != NULL &&
-        AgentValue != NULL && TransportValue != NULL &&
+        AgentValue != NULL && TransportValue != NULL && ProxyValue != NULL &&
         WebValue != NULL && WorkspaceValue != NULL &&
         ServiceValue != NULL && EffectiveSettings != NULL &&
-        MdoSettingsServiceGetSnapshot(&Service);
+        MdoSettingsServiceGetSnapshot(&Service) &&
+        MdoConfigGetTransportSettings(&Transport);
     if ( Ok ) Ok =
         MdoApiValueSetBool(Patches, "settings",
             Service.Config.UserPatch[MDO_CONFIG_SETTINGS]) &&
@@ -182,8 +183,16 @@ bool MdoApiSettingsRoute(MdoApiContext* Context)
             Service.Web.SecretRef[0] != '\0') &&
         MdoApiValueSetTake(Data, "web", &WebValue);
     if ( Ok ) Ok =
-        MdoApiSettingsStringField(TransportValue, "ca_pem_path",
-            EffectiveTransport, "ca_pem_path") &&
+        MdoApiValueSetString(TransportValue, "ca_pem_path",
+            Transport.CaPemPath) &&
+        MdoApiValueSetString(ProxyValue, "kind", Transport.ProxyKind) &&
+        MdoApiValueSetString(ProxyValue, "host", Transport.ProxyHost) &&
+        MdoApiValueSetUInt(ProxyValue, "port", Transport.ProxyPort) &&
+        MdoApiValueSetString(ProxyValue, "user", Transport.ProxyUser) &&
+        MdoApiValueSetString(ProxyValue, "bypass", Transport.ProxyBypass) &&
+        MdoApiValueSetBool(ProxyValue, "credential_configured",
+            Transport.ProxySecretRef[0] != '\0') &&
+        MdoApiValueSetTake(TransportValue, "proxy", &ProxyValue) &&
         MdoApiValueSetTake(Data, "transport", &TransportValue);
     if ( Ok ) Ok =
         MdoApiSettingsStringField(WorkspaceValue, "open_mode",
@@ -203,6 +212,7 @@ bool MdoApiSettingsRoute(MdoApiContext* Context)
     xrtValueRelease(ComposerValue); xrtValueRelease(NotificationsValue);
     xrtValueRelease(AgentValue); xrtValueRelease(WebValue);
     xrtValueRelease(TransportValue);
+    xrtValueRelease(ProxyValue);
     xrtValueRelease(WorkspaceValue); xrtValueRelease(ServiceValue);
     xrtValueRelease(Effective);
     if ( !Ok ) { xrtValueRelease(Data); Data = NULL; }

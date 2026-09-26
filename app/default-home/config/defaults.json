@@ -40,7 +40,14 @@
       }
     },
     "transport": {
-      "ca_pem_path": ""
+      "ca_pem_path": "",
+      "proxy": {
+        "kind": "none",
+        "host": "",
+        "port": 0,
+        "user": "",
+        "bypass": ""
+      }
     },
     "workspace": {
       "open_mode": "last",

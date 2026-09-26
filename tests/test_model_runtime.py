@@ -283,6 +283,25 @@ def main() -> int:
         (valid_home / "certs/test.pem").unlink()
         absent = run_probe(host, site, valid_home)
         assert "client_1=0" in absent and "unavailable in the portable Home" in absent, absent
+        for proxy_kind in ("http-connect", "socks5"):
+            proxy_home = base / proxy_kind
+            (proxy_home / "config").mkdir(parents=True)
+            (proxy_home / "config/settings.json").write_text(json.dumps({
+                "schema_version": 1, "patch": {"transport": {"proxy": {
+                    "kind": proxy_kind, "host": "127.0.0.1", "port": 18080,
+                    "user": "probe", "bypass": "localhost",
+                    "credential": {"secret_ref": "env:MDO_TEST_PROXY_PASSWORD"},
+                }}},
+            }), encoding="utf-8")
+            proxy_output = run_probe(host, site, proxy_home, {
+                "MDO_TEST_PROXY_PASSWORD": "bounded-probe-password",
+            })
+            assert "client_1=1" in proxy_output and "client_3=1" in proxy_output, proxy_output
+            missing_password = run_probe(host, site, proxy_home, {
+                "MDO_TEST_PROXY_PASSWORD": "",
+            })
+            assert "client_1=0" in missing_password, missing_password
+            assert "model proxy password reference is unavailable" in missing_password, missing_password
         output = run_probe(host, site, base / "state", {
             "MDO_LING_CHAT_COMPLETIONS_URL": "https://example.invalid/v1",
             "MDO_LING_RESPONSES_URL": "https://example.invalid/v1",
