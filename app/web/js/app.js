@@ -429,13 +429,15 @@ export async function boot() {
       if (!navigation.get().sessionId)
         return (draftStore?.submissions("") ?? []).map((item) => ({
           text: item.text, attachments: item.attachments, staged: true,
+          rejected: item.state === "rejected",
         }));
       const current = navigation.get();
       const staged = current.sessionId ?
         (draftStore?.submissions(selectedKey) ?? []).filter((item) =>
           !promptQueue.find(current.projectId, current.sessionId, item.id))
           .map((item) => ({ text: item.text,
-            attachments: item.attachments, staged: true })) : [];
+            attachments: item.attachments, staged: true,
+            rejected: item.state === "rejected" })) : [];
       return staged;
     },
     onRetry: async () => {
@@ -523,9 +525,10 @@ export async function boot() {
       if (uncertainRun && selectedKey) {
         showComposerError(uncertainRunError());
         setRun(activeRun);
-      } else if (submission?.state === "posting" && selectedKey &&
+      } else if (["posting", "rejected"].includes(submission?.state) && selectedKey &&
           !submissionController?.isBusy(selectedKey)) {
-        showComposerError(submissionUncertainError());
+        showComposerError(submission.state === "rejected"
+          ? submissionRejectedError() : submissionUncertainError());
         setRun(activeRun);
       }
       promptQueue.render();
@@ -553,9 +556,10 @@ export async function boot() {
         void dispatchQueued();
       }
     },
-    onReview(key, _submission, error) {
+    onReview(key, submission, error) {
       if (selectedOwnsDraft(key))
-        showComposerError(submissionUncertainError(),
+        showComposerError(submission.state === "rejected"
+          ? submissionRejectedError() : submissionUncertainError(),
           error ? errorMessage(error) : "");
       else toast(t("composer.backgroundQueueFailed", {
         title: key, error: error ? errorMessage(error) :
@@ -574,9 +578,10 @@ export async function boot() {
     },
     onChange(key) {
       if (selectedOwnsDraft(key)) {
-        if (composerError.dataset.code === "submission_unconfirmed" &&
+        if (["submission_unconfirmed", "submission_rejected"].includes(
+              composerError.dataset.code) &&
             !draftStore.submissions(key).some((item) =>
-              item.state === "posting")) hideComposerError();
+              ["posting", "rejected"].includes(item.state))) hideComposerError();
         setRun(activeRun);
       }
       promptQueue.render();
@@ -739,6 +744,7 @@ export async function boot() {
     const pendingNewTask = !route.sessionId && Boolean(draftStore.newTask());
     const migratingNewTask = !route.sessionId &&
       Boolean(newTaskController?.isMigrating());
+    const firstSubmission = draftStore.submission(selectedKey);
     const creatingSession = Boolean(creatingSessionKey) &&
       creatingSessionKey === `${route.projectId}/${route.sessionId}`;
     // Keep keyboard focus while a newly created session loads its detail.
@@ -759,7 +765,10 @@ export async function boot() {
       : t("shell.send", {}, "发送任务"));
     composerHint.textContent = draftStore.isRunUncertain(selectedKey)
       ? t("composer.hintReviewRun") : !draftStore.isLoaded(selectedKey)
-      ? t("composer.hintLoadingDraft") : draftStore.submissions(selectedKey).length
+      ? t("composer.hintLoadingDraft") : firstSubmission?.state === "rejected"
+      ? t("composer.hintRejectedSubmission") : firstSubmission?.state === "posting" &&
+          !submissionController?.isBusy(selectedKey)
+      ? t("composer.hintReviewSubmission") : draftStore.submissions(selectedKey).length
       ? t("composer.hintSavingSubmission") : activeRun
       ? (guide
         ? t("composer.hintGuide", {}, "Enter 中断并发送 · Ctrl Enter 排队")
@@ -1224,6 +1233,11 @@ export async function boot() {
     error.code = "submission_unconfirmed";
     return error;
   }
+  function submissionRejectedError() {
+    const error = new Error(t("composer.submissionRejected"));
+    error.code = "submission_rejected";
+    return error;
+  }
   function syncRecoveryNotice(state) {
     const selected = navigation.get();
     const recovery = state.data;
@@ -1263,12 +1277,15 @@ export async function boot() {
       });
       composerError.append(acknowledge);
     }
-    if (error?.code === "submission_unconfirmed") {
+    if (["submission_unconfirmed", "submission_rejected"].includes(error?.code)) {
       const multiple = draftStore.submissions(selectedKey).length > 1;
       const review = element("button", {
         className: "composer-error-action",
-        text: t(multiple ? "composer.retryReviewedSubmission" :
-          "composer.reviewSubmission"),
+        text: t(error.code === "submission_rejected"
+          ? (multiple ? "composer.retryRejectedSubmission" :
+            "composer.restoreRejectedSubmission")
+          : (multiple ? "composer.retryReviewedSubmission" :
+            "composer.reviewSubmission")),
         attrs: { type: "button" },
       });
       review.addEventListener("click", async () => {

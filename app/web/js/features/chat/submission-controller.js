@@ -53,7 +53,7 @@ export function createSubmissionController({ draftStore, promptQueue,
       while (draftStore.submissions(key).length) {
         const submission = draftStore.submissions(key)[0];
         if (promptQueue.hasStaged(projectId, sessionId)) return;
-        if (submission.state === "posting") {
+        if (submission.state === "posting" || submission.state === "rejected") {
           requestReview(key, submission);
           return;
         }
@@ -63,11 +63,17 @@ export function createSubmissionController({ draftStore, promptQueue,
           return;
         }
         const posting = { ...submission, state: "posting" };
+        let admissionPending = true;
         try {
           if (!await promptQueue.stage(projectId, sessionId, posting,
-            { first: posting.interrupt }))
-            throw new Error(t("composer.queueFull", {},
+            { first: posting.interrupt })) {
+            const rejection = new Error(t("composer.queueFull", {},
               "待发送队列已满（最多 20 条）"));
+            rejection.code = "queue_full";
+            rejection.status = 422;
+            throw rejection;
+          }
+          admissionPending = false;
           const item = promptQueue.find(projectId, sessionId, posting.id);
           if (!matches(item, posting) || !await release(key, posting)) {
             requestReview(key, posting);
@@ -76,6 +82,18 @@ export function createSubmissionController({ draftStore, promptQueue,
           await promptQueue.promote(projectId, sessionId, posting.id);
           onPromoted(key, posting);
         } catch (error) {
+          // A queue-full 422 is a definite rejection. Persist that fact so a
+          // refresh does not mislabel it as an admission with lost response.
+          // Other failures remain uncertain until the queue can be checked.
+          if (admissionPending && error?.status === 422 &&
+              error?.code === "queue_full" &&
+              draftStore.updateSubmissionState(key, posting.id, "rejected")) {
+            if (await draftStore.flush(key)) {
+              requestReview(key, { ...posting, state: "rejected" }, error);
+              return;
+            }
+            draftStore.updateSubmissionState(key, posting.id, "posting");
+          }
           requestReview(key, posting, error);
           return;
         }
@@ -103,7 +121,7 @@ export function createSubmissionController({ draftStore, promptQueue,
       if (item.state !== "staged") void pump(key);
       return true;
     }
-    if (first.state === "posting") {
+    if (first.state === "posting" || first.state === "rejected") {
       requestReview(key, first);
       return false;
     }
@@ -139,7 +157,7 @@ export function createSubmissionController({ draftStore, promptQueue,
     await promptQueue.select(projectId, sessionId);
     if (promptQueue.find(projectId, sessionId, first.id))
       return reconcile(key);
-    if (first.state !== "posting") {
+    if (first.state !== "posting" && first.state !== "rejected") {
       void pump(key);
       return true;
     }

@@ -2042,6 +2042,14 @@ def run_probe(host: Path) -> None:
                 status, _, body = request(port, "GET", "/api/v1/draft")
                 assert status == 200 and json.loads(body)["data"][
                     "submissions"] == [first_submission], (status, body)
+                status, _, body = request(port, "PUT", "/api/v1/draft",
+                    body=json.dumps({"revision": 2, "text": "next input",
+                                     "submissions": [{**first_submission,
+                                                      "state": "rejected"}],
+                                     "new_task": new_task}).encode(),
+                    headers={"Content-Type": "application/json"})
+                assert status == 422 and json.loads(body)["error"][
+                    "code"] == "draft_invalid", (status, body)
                 copying_task = {**new_task, "phase": "copying"}
                 status, _, body = request(port, "PUT", "/api/v1/draft",
                     body=json.dumps({"revision": 2, "text": "next input",
@@ -2143,7 +2151,7 @@ def run_probe(host: Path) -> None:
                     "attachments"] == [], (status, body)
                 assert json.loads((home / f"sessions/api-project/{session_id}/"
                                    "draft.json").read_text(encoding="utf-8"))[
-                    "schema_version"] == 5
+                    "schema_version"] == 6
                 status, _, body = request(port, "PUT", draft_path,
                     body=b'{"revision":3,"text":"review before retry",'
                          b'"run_admission_uncertain":true}',
@@ -2220,8 +2228,19 @@ def run_probe(host: Path) -> None:
                     headers={"Content-Type": "application/json"})
                 assert status == 200 and json.loads(body)["data"][
                     "submissions"] == [posting], (status, body)
+                rejected = {**posting, "state": "rejected"}
+                status, _, body = request(port, "PUT", draft_path,
+                    body=json.dumps({"revision": 12, "text": "third draft",
+                                     "submissions": [rejected]}).encode(),
+                    headers={"Content-Type": "application/json"})
+                assert status == 200 and json.loads(body)["data"][
+                    "submissions"] == [rejected], (status, body)
+                assert json.loads(request(port, "GET", draft_path)[2])[
+                    "data"]["submissions"] == [rejected]
                 stored_draft = (home / f"sessions/api-project/{session_id}/"
                                 "draft.json")
+                assert json.loads(stored_draft.read_text(encoding="utf-8"))[
+                    "schema_version"] == 6
                 stored_draft.write_text(json.dumps({
                     "schema_version": 4, "revision": 12,
                     "text": "legacy singleton", "attachments": [],
@@ -2244,7 +2263,7 @@ def run_probe(host: Path) -> None:
                     body=b'{"revision":13,"text":"legacy draft updated"}',
                     headers={"Content-Type": "application/json"})
                 assert status == 200 and json.loads(stored_draft.read_text(
-                    encoding="utf-8"))["schema_version"] == 5, (status, body)
+                    encoding="utf-8"))["schema_version"] == 6, (status, body)
                 status, _, body = request(port, "PUT", "/api/v1/draft",
                     body=json.dumps({"revision": 1, "text": "global",
                                      "attachments": [image["id"]]}).encode(),

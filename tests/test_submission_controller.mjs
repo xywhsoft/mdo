@@ -164,3 +164,69 @@ test("polling an uncertain queue admission asks for review only once", async () 
   assert.equal(await controller.reconcile("default/uncertain"), false);
   assert.equal(reviews, 1);
 });
+
+test("a definite queue-full rejection stays blocked across reconciliation", async () => {
+  const key = "default/rejected";
+  const items = [
+    { id: "a".repeat(32), text: "first", attachments: [],
+      interrupt: false, state: "prepared" },
+    { id: "b".repeat(32), text: "second", attachments: [],
+      interrupt: false, state: "prepared" },
+  ];
+  const queue = [];
+  const reviews = [];
+  let posts = 0;
+  let completed;
+  const done = new Promise((resolve) => { completed = resolve; });
+  const draftStore = {
+    submissions() { return [...items]; },
+    async ensureLoaded() { return true; },
+    updateSubmissionState(_key, id, state) {
+      const item = items.find((candidate) => candidate.id === id);
+      if (!item) return false;
+      item.state = state;
+      return true;
+    },
+    clearSubmission(_key, id) {
+      const index = items.findIndex((item) => item.id === id);
+      if (index < 0) return false;
+      items.splice(index, 1);
+      return true;
+    },
+    async flush() { return true; },
+  };
+  const promptQueue = {
+    async select() {},
+    hasStaged() { return false; },
+    find(_project, _session, id) {
+      return queue.find((item) => item.id === id);
+    },
+    async stage(_project, _session, item) {
+      posts += 1;
+      if (posts === 1) throw { status: 422, code: "queue_full" };
+      queue.push({ id: item.id, text: item.text, attachments: [],
+        priority: item.interrupt, state: "staged" });
+      return item.id;
+    },
+    async promote(_project, _session, id) {
+      queue.find((item) => item.id === id).state = "pending";
+    },
+  };
+  const controller = createSubmissionController({ draftStore, promptQueue,
+    onPersisted() {}, onPromoted() {
+      if (queue.length === 2) completed();
+    },
+    onReview(_key, item) { reviews.push(item.state); },
+    onRestored() {}, onChange() {},
+  });
+  await controller.pump(key);
+  assert.deepEqual(items.map((item) => item.state), ["rejected", "prepared"]);
+  assert.deepEqual(reviews, ["rejected"]);
+  assert.equal(await controller.reconcile(key), false);
+  assert.equal(posts, 1);
+  assert.equal(await controller.review(key), true);
+  await done;
+  assert.equal(posts, 3);
+  assert.deepEqual(queue.map((item) => item.text), ["first", "second"]);
+  assert.deepEqual(items, []);
+});

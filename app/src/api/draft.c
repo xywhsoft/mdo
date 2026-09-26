@@ -10,6 +10,12 @@
 #define MDO_DRAFT_SUBMISSIONS_MAX 20u
 #define MDO_DRAFT_SUBMISSIONS_TEXT_MAX (192u * 1024u)
 
+typedef enum MdoDraftSubmissionState {
+    MDO_DRAFT_PREPARED,
+    MDO_DRAFT_POSTING,
+    MDO_DRAFT_REJECTED
+} MdoDraftSubmissionState;
+
 typedef struct MdoDraftSubmission {
     char Id[33];
     char Text[MDO_DRAFT_TEXT_MAX + 1u];
@@ -17,7 +23,7 @@ typedef struct MdoDraftSubmission {
     char Attachments[4][33];
     size_t AttachmentCount;
     bool Interrupt;
-    bool Posting;
+    MdoDraftSubmissionState State;
 } MdoDraftSubmission;
 
 typedef struct MdoDraftNewTask {
@@ -256,7 +262,7 @@ static xvalue* MdoDraftNewTaskValue(const MdoDraft* Draft)
 }
 
 static bool MdoDraftSubmissionRead(const xvalue* Value,
-    MdoDraftSubmission* Submission, bool Legacy)
+    MdoDraftSubmission* Submission, bool Legacy, bool AllowRejected)
 {
     const xvalue* IdValue;
     const xvalue* StateValue;
@@ -284,7 +290,7 @@ static bool MdoDraftSubmissionRead(const xvalue* Value,
          (Submission->TextSize == 0u &&
           Submission->AttachmentCount == 0u) ) return false;
     if ( Legacy ) {
-        Submission->Posting = true;
+        Submission->State = MDO_DRAFT_POSTING;
     } else {
         StateValue = xrtValueObjectGet(Value,
             XRT_STR_LITERAL("state"));
@@ -292,16 +298,21 @@ static bool MdoDraftSubmissionRead(const xvalue* Value,
              !xrtValueGetString(StateValue, &State) ) return false;
         if ( State.Size == 7u &&
              memcmp(State.Data, "posting", 7u) == 0 )
-            Submission->Posting = true;
-        else if ( State.Size != 8u ||
-                  memcmp(State.Data, "prepared", 8u) != 0 )
+            Submission->State = MDO_DRAFT_POSTING;
+        else if ( State.Size == 8u &&
+                  memcmp(State.Data, "prepared", 8u) == 0 )
+            Submission->State = MDO_DRAFT_PREPARED;
+        else if ( AllowRejected && State.Size == 8u &&
+                  memcmp(State.Data, "rejected", 8u) == 0 )
+            Submission->State = MDO_DRAFT_REJECTED;
+        else
             return false;
     }
     return true;
 }
 
 static bool MdoDraftSubmissionsRead(const xvalue* Value,
-    MdoDraft* Draft, bool Legacy)
+    MdoDraft* Draft, bool Legacy, bool AllowRejected)
 {
     size_t Count;
     size_t Total = 0u;
@@ -320,7 +331,8 @@ static bool MdoDraftSubmissionsRead(const xvalue* Value,
             (MdoDraftSubmission*)xrtMalloc(sizeof(*Submission));
         size_t j;
         if ( Submission == NULL ) return false;
-        if ( !MdoDraftSubmissionRead(Item, Submission, Legacy) ||
+        if ( !MdoDraftSubmissionRead(Item, Submission, Legacy,
+                AllowRejected) ||
              Submission->TextSize >
                 MDO_DRAFT_SUBMISSIONS_TEXT_MAX - Total ) {
             xrtFree(Submission);
@@ -352,7 +364,9 @@ static xvalue* MdoDraftSubmissionValue(const MdoDraftSubmission* Submission,
          MdoApiValueSetBool(Value, "interrupt",
             Submission->Interrupt) &&
          (Legacy || MdoApiValueSetString(Value, "state",
-            Submission->Posting ? "posting" : "prepared")) ) return Value;
+            Submission->State == MDO_DRAFT_POSTING ? "posting" :
+            (Submission->State == MDO_DRAFT_REJECTED ? "rejected" :
+                "prepared"))) ) return Value;
     xrtValueRelease(Value);
     return NULL;
 }
@@ -402,6 +416,7 @@ static void MdoDraftReplaceSubmissions(MdoDraft* Target, MdoDraft* Source)
 
 static bool MdoDraftRead(const char* Path, MdoDraft* Draft)
 {
+    bool Global = strcmp(Path, "data/draft.json") == 0;
     bool Exists = false;
     xfileinfo Info;
     xfile File = NULL;
@@ -432,10 +447,9 @@ static bool MdoDraftRead(const char* Path, MdoDraft* Draft)
     if ( xrtValueType(Root) != XVALUE_OBJECT ||
          !MdoDraftUInt(Root, "schema_version", &Schema) ||
          (Schema < 1u || Schema > 6u) ||
-         (Schema == 6u && strcmp(Path, "data/draft.json") != 0) ||
          xrtValueCount(Root) != (Schema == 1u ? 3u :
             (Schema == 2u ? 4u : (Schema == 3u ? 5u :
-                (Schema == 6u ? 7u : 6u)))) ||
+                (Schema == 6u && Global ? 7u : 6u)))) ||
          !MdoDraftUInt(Root, "revision", &Draft->Revision) ||
          Draft->Revision == 0u ||
          !MdoDraftText(Root, "text", Draft->Text, &Draft->TextSize) ||
@@ -447,11 +461,11 @@ static bool MdoDraftRead(const char* Path, MdoDraft* Draft)
             "run_admission_uncertain", &Draft->RunAdmissionUncertain)) ||
          (Schema == 4u && !MdoDraftSubmissionsRead(
             xrtValueObjectGet(Root, XRT_STR_LITERAL("submission")),
-            Draft, true)) ||
+            Draft, true, false)) ||
          (Schema >= 5u && !MdoDraftSubmissionsRead(
             xrtValueObjectGet(Root, XRT_STR_LITERAL("submissions")),
-            Draft, false)) ||
-         (Schema == 6u && !MdoDraftNewTaskRead(
+            Draft, false, Schema == 6u && !Global)) ||
+         (Schema == 6u && Global && !MdoDraftNewTaskRead(
             xrtValueObjectGet(Root, XRT_STR_LITERAL("new_task")),
             &Draft->NewTask, &Draft->HasNewTask)) ||
          (Draft->HasNewTask && Draft->SubmissionCount != 0u &&
@@ -476,7 +490,7 @@ static bool MdoDraftWrite(const char* Path, const MdoDraft* Draft)
     size_t Size = 0u;
     bool Ok = Root != NULL && Submissions != NULL &&
         (!Global || NewTask != NULL) &&
-        MdoApiValueSetUInt(Root, "schema_version", Global ? 6u : 5u) &&
+        MdoApiValueSetUInt(Root, "schema_version", 6u) &&
         MdoApiValueSetUInt(Root, "revision", Draft->Revision) &&
         MdoApiValueSetStringView(Root, "text",
             xrtStrViewN(Draft->Text, Draft->TextSize)) &&
@@ -623,9 +637,9 @@ bool MdoApiDraftRoute(MdoApiContext* Context)
             (!UncertainPresent || MdoDraftBool(Body.Value,
                 "run_admission_uncertain", &IncomingUncertain)) &&
             (!SubmissionPresent || MdoDraftSubmissionsRead(Submission,
-                Incoming, true)) &&
+                Incoming, true, false)) &&
             (!SubmissionsPresent || MdoDraftSubmissionsRead(Submissions,
-                Incoming, false)) &&
+                Incoming, false, Context->ParamCount == 2u)) &&
             (!NewTaskPresent || MdoDraftNewTaskRead(NewTask,
                 &Incoming->NewTask, &Incoming->HasNewTask)) &&
             (!Incoming->HasNewTask || !SubmissionsPresent ||

@@ -18,7 +18,7 @@ function sameIds(a, b) {
 function submission(value) {
   if (!value || !/^[0-9a-f]{32}$/.test(value.id) ||
       typeof value.text !== "string" || typeof value.interrupt !== "boolean" ||
-      !["prepared", "posting"].includes(value.state))
+      !["prepared", "posting", "rejected"].includes(value.state))
     return null;
   const attachments = imageIds(value.attachments);
   if (!Array.isArray(value.attachments) ||
@@ -314,7 +314,7 @@ export function createDraftStore({ onRestore, onError, onSaved, onLoaded = () =>
     updateSubmissionState(key, id, state) {
       const current = entry(key);
       const item = current.submissions.find((candidate) => candidate.id === id);
-      if (!item || !["prepared", "posting"].includes(state)) return false;
+      if (!item || !["prepared", "posting", "rejected"].includes(state)) return false;
       if (item.state === state) return true;
       current.submissions = current.submissions.map((candidate) =>
         candidate.id === id ? { ...candidate, state } : candidate);

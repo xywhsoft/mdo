@@ -143,7 +143,8 @@ export function createPromptQueue({ container, navigation, isRunActive, stagedEn
     container.append(element("div", { className: "prompt-queue-header" }, [
       toggle, retry ?? element("span", { className: "prompt-queue-waiting",
         text: t(reviewPending ? "queue.reviewRun" : saved.length
-          ? "queue.waitForRun" : "queue.awaitingAdmission") }),
+          ? "queue.waitForRun" : entries[0]?.rejected
+            ? "queue.rejected" : "queue.awaitingAdmission") }),
     ]));
     if (uncertain) container.append(element("p", {
       className: "prompt-queue-warning",
@@ -167,7 +168,8 @@ export function createPromptQueue({ container, navigation, isRunActive, stagedEn
             element("span", { className: "prompt-queue-text",
               text: entry.text || t("queue.imageMessage") }),
             element("span", { className: "prompt-queue-state",
-              text: t("queue.awaitingAdmission") }),
+              text: t(entry.rejected ? "queue.rejected" :
+                "queue.awaitingAdmission") }),
           ]),
         ]));
         continue;

@@ -221,6 +221,18 @@ class BoundedDelayProxy(BaseHTTPRequestHandler):
                 self.wfile.write(payload)
                 self.close_connection = True
                 return
+            if self.server.full_first_queue and count == 1:
+                payload = json.dumps({"ok": False, "error": {
+                    "code": "queue_full", "message": "Synthetic queue is full"
+                }}).encode()
+                self.send_response(422)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Content-Length", str(len(payload)))
+                self.send_header("Connection", "close")
+                self.end_headers()
+                self.wfile.write(payload)
+                self.close_connection = True
+                return
         if (self.command == "POST" and self.path.startswith("/api/v1/projects/")
                 and "/sessions/" in self.path and self.path.endswith("/runs")):
             with self.server.count_lock:
@@ -319,6 +331,8 @@ parser.add_argument("--drop-run-response-number", type=int, default=0,
                     help="accept this numbered run POST upstream but close before replying (1-3)")
 parser.add_argument("--fail-first-queue", action="store_true",
                     help="reject one queue POST before forwarding, for staged draft QA")
+parser.add_argument("--full-first-queue", action="store_true",
+                    help="reject one queue POST with a definite 422 queue_full")
 parser.add_argument("--drop-first-queue-response", action="store_true",
                     help="accept one queue POST upstream but close before replying")
 parser.add_argument("--fail-first-queue-reconcile", action="store_true",
@@ -350,6 +364,8 @@ if not 0 <= args.task_ms <= 30000:
     parser.error("--task-ms must be between 0 and 30000")
 if args.fail_first_queue_reconcile and not args.drop_first_queue_response:
     parser.error("--fail-first-queue-reconcile requires --drop-first-queue-response")
+if args.full_first_queue and (args.fail_first_queue or args.drop_first_queue_response):
+    parser.error("choose only one first-queue rejection or response drop")
 if args.fail_first_create and args.drop_first_create_response:
     parser.error("choose only one first-create failure option")
 
@@ -426,6 +442,7 @@ try:
             or args.create_delay_ms or args.drop_first_create_response
             or args.fail_first_create
             or args.fail_first_run or args.fail_first_queue
+            or args.full_first_queue
             or args.drop_first_run_response or args.drop_run_response_number
             or args.drop_first_queue_response or args.fail_first_queue_reconcile):
         proxy = BoundedDelayProxyServer(("127.0.0.1", 0), BoundedDelayProxy)
@@ -440,6 +457,7 @@ try:
         proxy.drop_run_response_number = (args.drop_run_response_number or
                                           (1 if args.drop_first_run_response else 0))
         proxy.fail_first_queue = args.fail_first_queue
+        proxy.full_first_queue = args.full_first_queue
         proxy.drop_first_queue_response = args.drop_first_queue_response
         proxy.fail_first_queue_reconcile = args.fail_first_queue_reconcile
         proxy.dropped_queue_response = False
