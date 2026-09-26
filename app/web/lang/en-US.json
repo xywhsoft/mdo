@@ -415,6 +415,8 @@
   "composer.newTaskOtherProject": "A new task in another project needs recovery first.",
   "composer.newTaskReview": "The new task send needs review. Its input remains in the portable draft.",
   "composer.retryNewTask": "Reviewed · retry recovery",
+  "composer.newTaskRejected": "Task creation was rejected. Your input is saved; adjust the model, reasoning, or permissions and retry.",
+  "composer.retryNewTaskProfile": "Retry with current options",
   "queue.reviewRun": "Review the previous run before sending more",
   "queue.continueStaged": "Send saved message",
   "queue.staged": "Saved · waiting to send",

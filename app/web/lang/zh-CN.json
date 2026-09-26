@@ -415,6 +415,8 @@
   "composer.newTaskOtherProject": "已有另一个项目的新任务待恢复，请先处理它",
   "composer.newTaskReview": "新任务发送待核对；输入已保存在便携草稿中",
   "composer.retryNewTask": "核对后重试恢复",
+  "composer.newTaskRejected": "任务创建被拒绝；输入仍已保存。可调整模型、思考或权限后重试",
+  "composer.retryNewTaskProfile": "使用当前选项重试创建",
   "queue.reviewRun": "核对前一轮运行后继续发送",
   "queue.continueStaged": "继续发送已保存的消息",
   "queue.staged": "已保存 · 等待继续发送",

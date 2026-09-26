@@ -159,6 +159,19 @@ class BoundedDelayProxy(BaseHTTPRequestHandler):
             time.sleep(self.server.create_delay_seconds)
             drop_create_response = (self.server.drop_first_create_response
                                     and count == 1)
+            if self.server.fail_first_create and count == 1:
+                payload = json.dumps({"ok": False, "error": {
+                    "code": "session_profile_invalid",
+                    "message": "Synthetic profile rejection"
+                }}).encode()
+                self.send_response(422)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Content-Length", str(len(payload)))
+                self.send_header("Connection", "close")
+                self.end_headers()
+                self.wfile.write(payload)
+                self.close_connection = True
+                return
         if (self.command == "GET" and self.path.startswith("/api/v1/projects/")
                 and "/sessions/" in self.path and self.path.endswith("/queue")
                 and self.server.fail_first_queue_reconcile):
@@ -293,6 +306,8 @@ parser.add_argument("--create-delay-ms", type=int, default=0,
                     help="delay session create POSTs by 0-5000 ms for new-task QA")
 parser.add_argument("--drop-first-create-response", action="store_true",
                     help="accept one session creation then close before replying")
+parser.add_argument("--fail-first-create", action="store_true",
+                    help="reject one session creation with a 422 profile error")
 parser.add_argument("--fail-first-run", action="store_true",
                     help="reject one run POST before forwarding, for draft recovery QA")
 parser.add_argument("--drop-first-run-response", action="store_true",
@@ -332,6 +347,8 @@ if not 0 <= args.task_ms <= 30000:
     parser.error("--task-ms must be between 0 and 30000")
 if args.fail_first_queue_reconcile and not args.drop_first_queue_response:
     parser.error("--fail-first-queue-reconcile requires --drop-first-queue-response")
+if args.fail_first_create and args.drop_first_create_response:
+    parser.error("choose only one first-create failure option")
 
 base = Path(tempfile.mkdtemp(prefix="mdo-packed-docks-", dir=ROOT / ".build"))
 if args.image_capable:
@@ -404,6 +421,7 @@ try:
     browser_port = port
     if (args.approval_delay_ms or args.queue_delay_ms or args.run_delay_ms
             or args.create_delay_ms or args.drop_first_create_response
+            or args.fail_first_create
             or args.fail_first_run or args.fail_first_queue
             or args.drop_first_run_response or args.drop_run_response_number
             or args.drop_first_queue_response or args.fail_first_queue_reconcile):
@@ -414,6 +432,7 @@ try:
         proxy.run_delay_seconds = args.run_delay_ms / 1000
         proxy.create_delay_seconds = args.create_delay_ms / 1000
         proxy.drop_first_create_response = args.drop_first_create_response
+        proxy.fail_first_create = args.fail_first_create
         proxy.fail_first_run = args.fail_first_run
         proxy.drop_run_response_number = (args.drop_run_response_number or
                                           (1 if args.drop_first_run_response else 0))

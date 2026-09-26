@@ -22,6 +22,7 @@ export function createNewTaskController({ draftStore, newId, createSession,
   let pumping = false;
   let migrating = false;
   let blocked = false;
+  let createRejected = false;
 
   function changed() { onChange(); }
 
@@ -84,7 +85,12 @@ export function createNewTaskController({ draftStore, newId, createSession,
     try {
       if (!await draftStore.flush(""))
         throw new Error(t("composer.newTaskSaveFailed"));
-      await sessionFor(task);
+      try { await sessionFor(task); }
+      catch (error) {
+        createRejected = task.phase === "creating" &&
+          error?.status >= 400 && error.status < 500;
+        throw error;
+      }
       migrating = true;
       changed();
       const fresh = task.phase === "creating";
@@ -95,6 +101,7 @@ export function createNewTaskController({ draftStore, newId, createSession,
       }
       const key = await copyToSession({ ...task, phase: "copying" },
         fresh || reviewedCopy);
+      createRejected = false;
       onMigrated(key);
     } catch (error) {
       blocked = true;
@@ -172,15 +179,21 @@ export function createNewTaskController({ draftStore, newId, createSession,
     return { projectId, sessionId };
   }
 
-  async function review() {
+  async function review(profile) {
+    if (createRejected) {
+      if (!draftStore.reseedNewTask(newId(), profile))
+        throw new Error(t("composer.newTaskSaveFailed"));
+      createRejected = false;
+    }
     blocked = false;
     await pump(true);
     return !blocked;
   }
 
   return Object.freeze({ submit, reconcile, review, createForAttachment,
-    isBusy() { return pumping || blocked; },
+    isBusy() { return pumping || (blocked && !createRejected); },
     isBlocked() { return blocked; },
+    canChangeProfile() { return blocked && createRejected; },
     isMigrating() { return migrating; },
   });
 }

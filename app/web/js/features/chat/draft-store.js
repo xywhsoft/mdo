@@ -286,6 +286,27 @@ export function createDraftStore({ onRestore, onError, onSaved, onLoaded = () =>
       schedule("", true);
       return true;
     },
+    reseedNewTask(sessionId, profile) {
+      const current = entry("");
+      const task = current.newTask;
+      const first = current.submissions[0];
+      if (!task || task.phase !== "creating" ||
+          (first && first.id !== task.session_id) ||
+          current.submissions.some((item) => item.id === sessionId)) return false;
+      const nextTask = newTask({ ...task, session_id: sessionId,
+        model_id: profile.model_id,
+        reasoning_effort: profile.reasoning_effort,
+        permission_profile: profile.permission_profile });
+      const nextItems = first
+        ? [{ ...first, id: sessionId }, ...current.submissions.slice(1)]
+        : current.submissions;
+      if (!nextTask || !submissions(nextItems)) return false;
+      current.newTask = nextTask;
+      current.submissions = nextItems;
+      current.dirty = true;
+      schedule("", true);
+      return true;
+    },
     submission(key) { return entry(key).submissions[0] ?? null; },
     submissions(key) { return [...entry(key).submissions]; },
     appendSubmission(key, value) { return insertSubmission(key, value); },

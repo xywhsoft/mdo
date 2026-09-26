@@ -618,7 +618,8 @@ export async function boot() {
     onReview(error) {
       const current = navigation.get();
       if (current.view === "workspace" && !current.sessionId) {
-        const review = new Error(t("composer.newTaskReview"));
+        const review = new Error(t(newTaskController.canChangeProfile()
+          ? "composer.newTaskRejected" : "composer.newTaskReview"));
         review.code = "new_task_unconfirmed";
         showComposerError(review, errorMessage(error));
       } else toast(errorMessage(error), "error");
@@ -735,6 +736,7 @@ export async function boot() {
     const route = navigation.get();
     const creatingNewTask = !route.sessionId &&
       Boolean(newTaskController?.isBusy());
+    const pendingNewTask = !route.sessionId && Boolean(draftStore.newTask());
     const migratingNewTask = !route.sessionId &&
       Boolean(newTaskController?.isMigrating());
     const creatingSession = Boolean(creatingSessionKey) &&
@@ -750,7 +752,7 @@ export async function boot() {
       migratingNewTask ||
       Boolean(submissionController?.isReleasing(selectedKey));
     composerImages?.setWritable(sessionWritable && !creatingSession &&
-      !creatingNewTask);
+      !pendingNewTask);
     composerProfile.setRunActive(Boolean(activeRun || creatingNewTask));
     send.setAttribute("aria-label", activeRun || creatingNewTask
       ? t("composer.queue", {}, "加入待发送队列")
@@ -1284,13 +1286,14 @@ export async function boot() {
     if (error?.code === "new_task_unconfirmed") {
       const review = element("button", {
         className: "composer-error-action",
-        text: t("composer.retryNewTask"),
+        text: t(newTaskController.canChangeProfile()
+          ? "composer.retryNewTaskProfile" : "composer.retryNewTask"),
         attrs: { type: "button" },
       });
       review.addEventListener("click", async () => {
         review.disabled = true;
         try {
-          if (await newTaskController.review() &&
+          if (await newTaskController.review(composerProfile.selection()) &&
               !navigation.get().sessionId) hideComposerError();
         } catch (failure) { showComposerError(failure); }
         finally { review.disabled = false; }
