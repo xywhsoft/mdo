@@ -88,3 +88,20 @@ test("an explicit run rejection keeps its ordinary failure status", async () => 
         error.runAdmissionUncertain !== true);
   } finally { globalThis.fetch = originalFetch; }
 });
+
+test("a competing queue start requires review without replay", async () => {
+  const originalFetch = globalThis.fetch;
+  let posts = 0;
+  globalThis.fetch = async () => {
+    posts += 1;
+    return Response.json({ ok: false, error: {
+      code: "queue_run_starting", message: "Start already claimed",
+    } }, { status: 409 });
+  };
+  try {
+    await assert.rejects(startRun("default", "claimed-session", "hello", [],
+      "a".repeat(32)), (error) => error.code === "queue_run_starting" &&
+        error.runAdmissionUncertain === true);
+    assert.equal(posts, 1);
+  } finally { globalThis.fetch = originalFetch; }
+});

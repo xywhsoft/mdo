@@ -310,6 +310,22 @@ bool MdoApiRunsRoute(MdoApiContext* Context)
     return MdoApiReplySuccessTake(Context, 200u, Data, NULL);
 }
 
+static bool MdoApiRunQueueFailure(MdoApiContext* Context,
+    MdoApiQueueRunStatus Status)
+{
+    if ( Status == MDO_API_QUEUE_RUN_UNAVAILABLE )
+        return MdoApiReplyError(Context, 503u, "queue_unavailable",
+            "The queue could not be checked", NULL);
+    if ( Status == MDO_API_QUEUE_RUN_ACCEPTED )
+        return MdoApiReplyError(Context, 409u, "queue_run_started",
+            "This queue item already started a run", NULL);
+    if ( Status == MDO_API_QUEUE_RUN_STARTING )
+        return MdoApiReplyError(Context, 409u, "queue_run_starting",
+            "This queue item has a start in progress or needs review", NULL);
+    return MdoApiReplyError(Context, 409u, "queue_run_conflict",
+        "The sending queue item does not match this run", NULL);
+}
+
 bool MdoApiRunStartRoute(MdoApiContext* Context)
 {
     MdoApiJsonBody Body;
@@ -395,18 +411,7 @@ bool MdoApiRunStartRoute(MdoApiContext* Context)
         if ( QueueStatus != MDO_API_QUEUE_RUN_READY ) {
             xrtFree(PromptText);
             MdoApiJsonBodyUnit(&Body);
-            return MdoApiReplyError(Context,
-                QueueStatus == MDO_API_QUEUE_RUN_UNAVAILABLE ? 503u : 409u,
-                QueueStatus == MDO_API_QUEUE_RUN_UNAVAILABLE ?
-                    "queue_unavailable" :
-                    (QueueStatus == MDO_API_QUEUE_RUN_ACCEPTED ?
-                        "queue_run_started" : "queue_run_conflict"),
-                QueueStatus == MDO_API_QUEUE_RUN_UNAVAILABLE ?
-                    "The queue could not be checked" :
-                    (QueueStatus == MDO_API_QUEUE_RUN_ACCEPTED ?
-                        "This queue item already started a run" :
-                        "The sending queue item does not match this run"),
-                NULL);
+            return MdoApiRunQueueFailure(Context, QueueStatus);
         }
     }
     if ( SessionInfo.Status != MDO_SESSION_ACTIVE || SessionInfo.RuntimeOpen ) {
@@ -459,6 +464,18 @@ bool MdoApiRunStartRoute(MdoApiContext* Context)
     Options.ProjectId = Project;
     Options.SessionId = SessionId;
     Options.Prompt = PromptText;
+    if ( QueueItemId[0] != '\0' ) {
+        MdoApiQueueRunStatus QueueStatus = MdoApiQueueRunClaim(Project,
+            SessionId, QueueItemId, Prompt, AttachmentIds,
+            AttachmentCount);
+        if ( QueueStatus != MDO_API_QUEUE_RUN_READY ) {
+            if ( AttachmentLocked ) MdoApiAttachmentUnlock();
+            if ( AttachmentCount != 0u ) xllmMessageUnit(&UserMessage);
+            xrtFree(PromptText);
+            MdoApiJsonBodyUnit(&Body);
+            return MdoApiRunQueueFailure(Context, QueueStatus);
+        }
+    }
     memset(&Info, 0, sizeof(Info)); Info.Size = sizeof(Info);
     memset(&Error, 0, sizeof(Error));
     xrtClearError();

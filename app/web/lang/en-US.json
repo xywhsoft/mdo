@@ -1021,6 +1021,7 @@
   "error.runLimitReached": "Too many tasks are running at once. Try again shortly.",
   "error.runServiceUnavailable": "The model service is unavailable. Check its configuration and try again.",
   "error.runReceiptUnavailable": "The run may have started, but its queue receipt was not saved. Review the run record.",
+  "error.queueRunStarting": "This message entered the start process. Review the run record before acting to avoid a duplicate.",
   "error.queueFull": "The pending queue is full. Handle existing messages first.",
   "error.queueStateConflict": "The pending message changed state. Refresh and review it.",
   "error.queueItemConsumed": "This queued message already started a run. Check the run record.",

@@ -124,9 +124,13 @@ typedef enum MdoApiQueueRunStatus {
     MDO_API_QUEUE_RUN_READY,
     MDO_API_QUEUE_RUN_CONFLICT,
     MDO_API_QUEUE_RUN_ACCEPTED,
+    MDO_API_QUEUE_RUN_STARTING,
     MDO_API_QUEUE_RUN_UNAVAILABLE
 } MdoApiQueueRunStatus;
 MdoApiQueueRunStatus MdoApiQueueRunPrepare(const char* ProjectId,
+    const char* SessionId, const char* Id, xstrview Prompt,
+    const char Attachments[4][33], size_t AttachmentCount);
+MdoApiQueueRunStatus MdoApiQueueRunClaim(const char* ProjectId,
     const char* SessionId, const char* Id, xstrview Prompt,
     const char Attachments[4][33], size_t AttachmentCount);
 bool MdoApiQueueRunBind(const char* ProjectId, const char* SessionId,

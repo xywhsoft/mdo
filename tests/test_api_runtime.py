@@ -3616,6 +3616,92 @@ def run_probe(host: Path) -> None:
                 })
                 assert status == 409 and json.loads(body)["error"][
                     "code"] == "queue_run_started", (status, body)
+
+                race_id = "9" * 32
+                race_path = queue_path + "/" + race_id
+                assert queue_request("POST", queue_path, {
+                    "id": race_id, "text": "two page queue run",
+                    "first": False, "stage": True,
+                })[0] == 201
+                for state in ("pending", "sending"):
+                    assert queue_request("PUT", race_path,
+                        {"state": state})[0] == 200
+                gate = threading.Barrier(3)
+                race_results = [None, None]
+
+                def race_start(index):
+                    gate.wait(timeout=5)
+                    race_results[index] = queue_request("POST", run_path, {
+                        "prompt": "two page queue run", "queue_item_id": race_id,
+                    })
+
+                contenders = [threading.Thread(target=race_start, args=(i,))
+                              for i in range(2)]
+                for contender in contenders:
+                    contender.start()
+                gate.wait(timeout=5)
+                for contender in contenders:
+                    contender.join(timeout=10)
+                    assert not contender.is_alive()
+                assert sorted(result[0] for result in race_results) == [202,
+                    409], race_results
+                refused = next(result for result in race_results
+                               if result[0] == 409)
+                assert json.loads(refused[2])["error"]["code"] in (
+                    "queue_run_starting", "queue_run_started"), refused
+                race_run_id = json.loads(next(result for result in race_results
+                    if result[0] == 202)[2])["data"]["id"]
+                assert json.loads(request(port, "GET", race_path)[2])[
+                    "data"]["run_id"] == race_run_id
+                deadline = time.monotonic() + 5.0
+                while time.monotonic() < deadline:
+                    race_run = json.loads(request(port, "GET",
+                        f"/api/v1/runs/{race_run_id}")[2])["data"]
+                    if race_run["terminal"]:
+                        break
+                    time.sleep(0.01)
+                assert race_run["terminal"], race_run
+                assert request(port, "DELETE", race_path)[0] == 200
+
+                starting_id = "8" * 32
+                starting_path = queue_path + "/" + starting_id
+                status, _, body = queue_request("POST", queue_path, {
+                    "id": starting_id, "text": "starting queue run",
+                    "first": False, "stage": True,
+                })
+                assert status == 201, (status, body)
+                for state in ("pending", "sending"):
+                    assert queue_request("PUT", starting_path,
+                        {"state": state})[0] == 200
+                starting_receipt = queue_file.parent / "queue-receipts" / (
+                    starting_id + ".json")
+                starting_receipt.write_text(json.dumps({
+                    "schema_version": 2, "id": starting_id,
+                    "state": "starting",
+                }), encoding="utf-8")
+                status, _, body = request(port, "GET", starting_path)
+                assert status == 200 and json.loads(body)["data"] == {
+                    "id": starting_id, "state": "starting",
+                }, (status, body)
+                status, _, body = queue_request("POST", run_path, {
+                    "prompt": "starting queue run", "queue_item_id": starting_id,
+                })
+                assert status == 409 and json.loads(body)["error"][
+                    "code"] == "queue_run_starting", (status, body)
+                assert queue_request("PUT", starting_path,
+                    {"state": "pending"})[0] == 409
+                assert request(port, "DELETE", starting_path)[0] == 200
+                status, _, body = queue_request("POST", run_path, {
+                    "prompt": "starting queue run", "queue_item_id": starting_id,
+                })
+                assert status == 409 and json.loads(body)["error"][
+                    "code"] == "queue_run_starting", (status, body)
+                status, _, body = queue_request("POST", queue_path, {
+                    "id": starting_id, "text": "starting queue run",
+                    "first": False,
+                })
+                assert status == 409 and json.loads(body)["error"][
+                    "code"] == "queue_item_consumed", (status, body)
                 receipt_file.write_text("{broken", encoding="utf-8")
                 status, _, body = request(port, "GET", bound_path)
                 assert status == 503 and json.loads(body)["error"][
