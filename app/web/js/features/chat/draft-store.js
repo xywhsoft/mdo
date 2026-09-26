@@ -233,6 +233,7 @@ export function createDraftStore({ onRestore, onError, onSaved, onLoaded = () =>
         !Array.isArray(data.attachments) ||
         imageIds(data.attachments).length !== data.attachments.length)
       throw new Error(t("draft.submissionConflict"));
+    if (revision < current.revision) return [...current.submissions];
     const remoteAttachments = imageIds(data.attachments);
     const localOnly = current.submissions.filter((item) =>
       current.unpersisted.has(item.id) &&
@@ -245,13 +246,14 @@ export function createDraftStore({ onRestore, onError, onSaved, onLoaded = () =>
       throw new Error(t("draft.submissionConflict"));
     const sameText = current.text === data.text &&
       sameIds(current.attachments, remoteAttachments);
-    const hadLocalEdit = current.dirty || current.conflict;
+    const savingLocalEdit = Boolean(current.saving);
+    const hadLocalEdit = current.dirty || current.conflict || savingLocalEdit;
     current.revision = revision;
     current.loaded = true;
     current.submissions = combined;
     for (const item of remoteSubmissions) current.unpersisted.delete(item.id);
     current.uncertainRun ||= data.run_admission_uncertain === true;
-    if (!localOnly.length && sameText && current.uncertainRun ===
+    if (!savingLocalEdit && !localOnly.length && sameText && current.uncertainRun ===
         (data.run_admission_uncertain === true)) {
       window.clearTimeout(current.timer);
       current.timer = 0;
@@ -269,6 +271,9 @@ export function createDraftStore({ onRestore, onError, onSaved, onLoaded = () =>
           [...current.submissions]);
         onSaved();
       }
+    } else if (savingLocalEdit) {
+      // flush() temporarily clears dirty while its PUT is in flight. A
+      // concurrent response must not restore the pre-save composer text.
     } else if (!current.conflict && !data.text &&
                !remoteAttachments.length) {
       current.dirty = true;
@@ -419,18 +424,37 @@ export function createDraftStore({ onRestore, onError, onSaved, onLoaded = () =>
     },
     submission(key) { return entry(key).submissions[0] ?? null; },
     submissions(key) { return [...entry(key).submissions]; },
+    isSubmissionDurable(key, value) {
+      const current = entry(key);
+      return !current.unpersisted.has(value.id) &&
+        current.submissions.some((item) => sameSubmissionPayload(item, value));
+    },
     appendSubmission(key, value) { return insertSubmission(key, value); },
     refreshSessionSubmissions,
     changeSessionSubmissionState,
     removeSessionSubmission,
     async persistUnconfirmedSubmission(key, value) {
       const current = entry(key);
-      if (!key || !current.unpersisted.has(value.id) ||
-          !sameSubmission(current.submissions.find((item) =>
-            item.id === value.id), value) ||
-          value.state !== "prepared") return false;
+      if (!key || !submission(value) || value.state !== "prepared")
+        return false;
+      const local = current.submissions.find((item) => item.id === value.id);
+      if (local && !sameSubmissionPayload(local, value)) return false;
       const path = `${endpoint(key)}/submissions`;
       let response;
+      // Another tab may already have saved and advanced this ID. Check the
+      // durable record even if a concurrent refresh cleared unpersisted.
+      try { response = await api.get(endpoint(key)); }
+      catch { /* The keyed append below is safe to retry after a lost GET. */ }
+      if (response) {
+        const existing = submissions(response.data?.submissions)?.find(
+          (item) => item.id === value.id);
+        if (existing) {
+          if (!sameSubmissionPayload(existing, value)) return false;
+          applySessionResponse(key, response.data);
+          return true;
+        }
+      }
+      if (!current.unpersisted.has(value.id)) return false;
       try { response = await api.post(path, value); }
       catch (error) {
         // A failed draft PUT or a lost append response may already have

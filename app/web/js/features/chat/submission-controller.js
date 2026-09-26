@@ -20,7 +20,33 @@ export function createSubmissionController({ draftStore, promptQueue,
   const pumping = new Set();
   const releasing = new Set();
   const submitting = new Set();
+  const unacknowledged = new Map();
   const reviewed = new Map();
+
+  function acknowledge(key, submission) {
+    if (unacknowledged.get(key)?.id !== submission.id) return;
+    unacknowledged.delete(key);
+    onPersisted(key, submission);
+    onChange(key);
+  }
+
+  async function verifyUnacknowledged(key) {
+    const submission = unacknowledged.get(key);
+    if (!submission) return;
+    const { projectId, sessionId } = owner(key);
+    let confirmed = draftStore.isSubmissionDurable?.(key, submission) ?? false;
+    if (!confirmed) confirmed = matches(promptQueue.find(projectId,
+      sessionId, submission.id), submission);
+    if (!confirmed) {
+      try { confirmed = Boolean(await promptQueue.receipt(projectId,
+        sessionId, submission.id)); }
+      catch { /* An unreadable receipt is not proof of acceptance. */ }
+    }
+    if (!confirmed) return;
+    acknowledge(key, submission);
+    try { await draftStore.refreshSessionSubmissions(key); }
+    catch { /* The next bounded refresh can clear a stale draft conflict. */ }
+  }
 
   function requestReview(key, submission, error) {
     if (reviewed.get(key) === submission.id) return;
@@ -66,7 +92,13 @@ export function createSubmissionController({ draftStore, promptQueue,
         try {
           if (!await draftStore.changeSessionSubmissionState(key,
               submission.id, "posting")) {
-            requestReview(key, submission);
+            // Another tab may have claimed this intent and be staging it now.
+            // Queue reconciliation will resolve its outcome; this tab must
+            // neither send a second POST nor report a premature failure.
+            const current = draftStore.submissions(key).find((item) =>
+              item.id === submission.id);
+            if (current && current.state !== "posting")
+              requestReview(key, current);
             return;
           }
         } catch (error) {
@@ -135,6 +167,8 @@ export function createSubmissionController({ draftStore, promptQueue,
     if (!key || pumping.has(key)) return false;
     if (!await draftStore.ensureLoaded(key)) return false;
     if (!await draftStore.refreshSessionSubmissions(key)) return false;
+    await verifyUnacknowledged(key);
+    onChange(key);
     const first = draftStore.submissions(key)[0];
     if (!first) return true;
     const { projectId, sessionId } = owner(key);
@@ -168,7 +202,8 @@ export function createSubmissionController({ draftStore, promptQueue,
   }
 
   async function submit(key, text, attachments, interrupt) {
-    if (!key || releasing.has(key) || submitting.has(key))
+    if (!key || releasing.has(key) || submitting.has(key) ||
+        unacknowledged.has(key))
       throw new Error(t("composer.submissionBusy"));
     submitting.add(key);
     try {
@@ -178,17 +213,33 @@ export function createSubmissionController({ draftStore, promptQueue,
       if (!draftStore.appendSubmission(key, submission))
         throw new Error(t("composer.queueFull", {},
           "待发送队列已满（最多 20 条）"));
+      unacknowledged.set(key, submission);
       onChange(key);
       if (!await draftStore.flush(key)) {
-        if (await draftStore.persistUnconfirmedSubmission(key, submission)) {
-          onPersisted(key, submission);
+        let confirmed = false;
+        try { confirmed = await draftStore.persistUnconfirmedSubmission(key,
+          submission); }
+        catch { /* Query the queue and receipt before reporting uncertainty. */ }
+        if (!confirmed) {
+          // A peer may already have moved the ID out of the draft. Its queue
+          // item or accepted run receipt is durable proof of this submission.
+          try {
+            const { projectId, sessionId } = owner(key);
+            await promptQueue.select(projectId, sessionId);
+            confirmed = matches(promptQueue.find(projectId, sessionId,
+              submission.id), submission) || Boolean(await promptQueue.receipt(
+                projectId, sessionId, submission.id));
+          } catch { /* Keep the source text when durable proof is unavailable. */ }
+        }
+        if (confirmed) {
+          acknowledge(key, submission);
           void pump(key);
           return true;
         }
         requestReview(key, submission);
         return false;
       }
-      onPersisted(key, submission);
+      acknowledge(key, submission);
       void pump(key);
       return true;
     } finally {
@@ -227,6 +278,8 @@ export function createSubmissionController({ draftStore, promptQueue,
       return true;
     }
     if (!await release(key, first)) return false;
+    if (unacknowledged.get(key)?.id === first.id)
+      unacknowledged.delete(key);
     const restored = draftStore.restoreUnsent(key, first.text,
       first.attachments);
     onRestored(key, restored);

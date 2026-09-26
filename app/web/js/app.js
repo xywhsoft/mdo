@@ -1103,6 +1103,26 @@ export async function boot() {
           await Promise.all([...(stillSelected() ? [refreshSelectedTimeline()] : []),
             loadTasks(), loadRuns(), loadRecovery()]);
         } catch (error) {
+          if (error?.code === "session_busy") {
+            try {
+              await promptQueue.select(selected.projectId, selected.sessionId);
+              const current = promptQueue.find(selected.projectId,
+                selected.sessionId, entry.id);
+              let deferred = current?.state === "pending";
+              if (current?.state === "sending" && !current.run_id &&
+                  !current.start_claimed) {
+                await promptQueue.retry(selected.projectId,
+                  selected.sessionId, entry.id);
+                deferred = true;
+              }
+              if (deferred) {
+                queueBlocked.delete(key);
+                if (stillSelected()) hideComposerError();
+                void loadRuns();
+                return;
+              }
+            } catch { /* A competing claim needs the normal review path. */ }
+          }
           if (error?.code !== "recovery_required") queueBlocked.add(key);
           if (error.runAdmissionUncertain) {
             draftStore.setRunUncertain(key, true);

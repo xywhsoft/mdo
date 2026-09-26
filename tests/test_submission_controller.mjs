@@ -211,7 +211,7 @@ test("a lost draft PUT response reuses the same saved submission ID", async () =
       onPromoted() {}, onReview() {}, onRestored() {}, onChange() {},
     });
     assert.equal(await controller.submit(key, "saved once", [], false), true);
-    assert.equal(appendCalls, 1);
+    assert.equal(appendCalls, 0);
     assert.deepEqual(remote.submissions.map((item) => item.id),
       ["c".repeat(32)]);
     const reopened = createDraftStore({ onRestore() {}, onError() {},
@@ -259,6 +259,145 @@ test("a submission with no durable acknowledgement keeps the composer text", asy
     globalThis.window = originalWindow;
     globalThis.fetch = originalFetch;
   }
+});
+
+test("a peer-observed intent still confirms its original submitter", async () => {
+  const originalWindow = globalThis.window;
+  const originalFetch = globalThis.fetch;
+  const key = "default/peer-observed";
+  const item = { id: "9".repeat(32), text: "peer saved",
+    attachments: [], interrupt: false, state: "prepared" };
+  let remote = { revision: 0, text: "", attachments: [],
+    run_admission_uncertain: false, submissions: [] };
+  let posts = 0;
+  globalThis.window = { setTimeout: () => 0, clearTimeout() {},
+    addEventListener() {} };
+  globalThis.fetch = async (_path, options) => {
+    if (options.method === "POST") posts += 1;
+    return Response.json({ ok: true, data: structuredClone(remote) });
+  };
+  try {
+    const draftStore = createDraftStore({ onRestore() {}, onError() {},
+      onSaved() {} });
+    draftStore.select(key);
+    assert.equal(await draftStore.ensureLoaded(key), true);
+    assert.equal(draftStore.appendSubmission(key, item), true);
+    remote = { ...remote, revision: 1,
+      submissions: [{ ...item, state: "posting" }] };
+    assert.equal(await draftStore.refreshSessionSubmissions(key), true);
+    assert.equal(await draftStore.persistUnconfirmedSubmission(key, item), true);
+    assert.equal(posts, 0);
+  } finally {
+    globalThis.window = originalWindow;
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("an in-flight composer clear is not undone by an older draft response", async () => {
+  const originalWindow = globalThis.window;
+  const originalFetch = globalThis.fetch;
+  const key = "default/inflight-clear";
+  const item = { id: "8".repeat(32), text: "already submitted",
+    attachments: [], interrupt: false, state: "prepared" };
+  const oldDraft = { revision: 1, text: item.text, attachments: [],
+    run_admission_uncertain: false, submissions: [item] };
+  let resolvePut;
+  let putStarted;
+  const started = new Promise((resolve) => { putStarted = resolve; });
+  let displayed = "";
+  globalThis.window = { setTimeout: () => 0, clearTimeout() {},
+    addEventListener() {} };
+  globalThis.fetch = async (_path, options) => {
+    if (options.method === "GET")
+      return Response.json({ ok: true, data: structuredClone(oldDraft) });
+    assert.equal(options.method, "PUT");
+    putStarted();
+    return new Promise((resolve) => { resolvePut = resolve; });
+  };
+  try {
+    const draftStore = createDraftStore({ onRestore(text) { displayed = text; },
+      onError() {}, onSaved() {} });
+    draftStore.select(key);
+    assert.equal(await draftStore.ensureLoaded(key), true);
+    draftStore.edit(key, "", [], true);
+    displayed = "";
+    const saving = draftStore.flush(key);
+    await started;
+    assert.equal(await draftStore.persistUnconfirmedSubmission(key, item), true);
+    assert.equal(draftStore.text(key), "");
+    assert.equal(displayed, "");
+    resolvePut(Response.json({ ok: true, data: {
+      ...oldDraft, revision: 2, text: "" } }));
+    assert.equal(await saving, true);
+    assert.equal(draftStore.text(key), "");
+  } finally {
+    globalThis.window = originalWindow;
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("an accepted receipt confirms a submitter after its draft intent was consumed", async () => {
+  const key = "default/consumed-before-ack";
+  const item = { id: "a".repeat(32), text: "already accepted",
+    attachments: [], interrupt: false, state: "prepared" };
+  let persisted = 0;
+  let reviewed = 0;
+  const controller = createSubmissionController({
+    draftStore: {
+      capture() {}, appendSubmission() { return true; },
+      async flush() { return false; },
+      async persistUnconfirmedSubmission() { return false; },
+      async refreshSessionSubmissions() { return true; },
+      submissions() { return []; },
+    },
+    promptQueue: {
+      newId() { return item.id; },
+      async select() {}, find() { return null; },
+      async receipt() { return { id: item.id, state: "accepted",
+        run_id: "run-accepted" }; },
+    },
+    onPersisted() { persisted += 1; }, onPromoted() {},
+    onReview() { reviewed += 1; }, onRestored() {}, onChange() {},
+  });
+  assert.equal(await controller.submit(key, item.text, [], false), true);
+  assert.equal(persisted, 1);
+  assert.equal(reviewed, 0);
+});
+
+test("a late receipt clears the original input after an initially uncertain submit", async () => {
+  const key = "default/late-receipt";
+  const id = "b".repeat(32);
+  let accepted = false;
+  let persisted = 0;
+  let reviewed = 0;
+  const controller = createSubmissionController({
+    draftStore: {
+      capture() {}, appendSubmission() { return true; },
+      async flush() { return false; },
+      async persistUnconfirmedSubmission() { return false; },
+      async ensureLoaded() { return true; },
+      async refreshSessionSubmissions() { return true; },
+      isSubmissionDurable() { return false; },
+      submissions() { return []; },
+    },
+    promptQueue: {
+      newId() { return id; }, async select() {},
+      find() { return null; },
+      async receipt() { return accepted ? { id, state: "accepted",
+        run_id: "run-late" } : null; },
+    },
+    onPersisted() { persisted += 1; }, onPromoted() {},
+    onReview() { reviewed += 1; }, onRestored() {}, onChange() {},
+  });
+  assert.equal(await controller.submit(key, "late acknowledgement", [], false), false);
+  assert.equal(persisted, 0);
+  assert.equal(reviewed, 1);
+  await assert.rejects(controller.submit(key, "late acknowledgement", [], false));
+  accepted = true;
+  assert.equal(await controller.reconcile(key), true);
+  assert.equal(persisted, 1);
+  assert.equal(await controller.reconcile(key), true);
+  assert.equal(persisted, 1);
 });
 
 test("review restores text after removing an uncertain submission", async () => {
@@ -381,6 +520,34 @@ test("polling an uncertain queue admission asks for review only once", async () 
   assert.equal(await controller.reconcile("default/uncertain"), false);
   assert.equal(await controller.reconcile("default/uncertain"), false);
   assert.equal(reviews, 1);
+});
+
+test("a second tab does not warn or enqueue while another tab claims the intent", async () => {
+  const key = "default/claimed-elsewhere";
+  const prepared = { id: "f".repeat(32), text: "one intent",
+    attachments: [], interrupt: false, state: "prepared" };
+  let current = prepared;
+  let posts = 0;
+  let reviews = 0;
+  const controller = createSubmissionController({
+    draftStore: {
+      async refreshSessionSubmissions() { return true; },
+      submissions() { return [current]; },
+      async changeSessionSubmissionState() {
+        current = { ...prepared, state: "posting" };
+        return false;
+      },
+    },
+    promptQueue: {
+      hasStaged() { return false; },
+      async stage() { posts += 1; },
+    },
+    onPersisted() {}, onPromoted() {}, onReview() { reviews += 1; },
+    onRestored() {}, onChange() {},
+  });
+  await controller.pump(key);
+  assert.equal(posts, 0);
+  assert.equal(reviews, 0);
 });
 
 test("a consumed queue receipt releases only its matching saved intent", async () => {

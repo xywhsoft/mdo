@@ -21,3 +21,5 @@
 `tests/test_api_runtime.py` 覆盖两请求同时新增、重复 ID、冲突负载、附件校验、状态转移、删除幂等、匹配草稿清理及旧 revision 拒绝；`tests/test_submission_controller.mjs` 覆盖旧标签追加、PUT 响应丢失、无持久确认时保留输入、人工恢复。
 
 2026-09-27 从最终根目录单文件版启动隔离 Home `.build/mdo-packed-docks-cdujm5me`，两张真实浏览器标签同时提交 `TWO TAB FINAL A/B`。两页最终各显示两轮回复，刷新后仍各有 A/B，输入框为空；服务端草稿文本、`submissions`、队列均为空，运行数为 2 且均成功，两页脚本错误为空。代理计数是三次队列 POST、两次运行 POST：其中一次额外队列请求没有产生额外运行。该回归证明本次同进程双标签丢提交缺陷已修复；多进程共享 Home 的排他及中途退出判定仍需独立设计和验证。
+
+后续实时收敛回归补上了不刷新时的操作体验：`flush()` 保存期间不再接受较早响应覆盖输入；明确收到 `session_busy` 且无启动凭据的队列项安全退回 `pending`。隔离 Home `.build/mdo-packed-docks-_hyg7dxr` 中，两页同时提交 A/B 后各自显示两轮回复，输入、队列和过期核对提示在原页面自动清空；刷新保持。服务端两次成功运行，代理两次队列 POST、两次运行 POST。该修复不改变带 `start_claimed` 或运行 ID 的人工核对规则。
