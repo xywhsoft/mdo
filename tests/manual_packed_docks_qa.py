@@ -418,7 +418,8 @@ Model.verification_file = base / "README.md"
 Model.artifact_file = base / "artifact-fixture.txt"
 Model.slow_seconds = args.slow_ms / 1000
 Model.task_seconds = args.task_ms / 1000
-shutil.copy2(ROOT / "mdo.exe", base / "mdo.exe")
+executable_name = "mdo.exe" if os.name == "nt" else "mdo"
+shutil.copy2(ROOT / executable_name, base / executable_name)
 (base / "README.md").write_text("Synthetic workspace file for @ completion.\n",
                                 encoding="utf-8")
 Model.artifact_file.write_text("".join(
@@ -451,7 +452,7 @@ process = None
 proxy = None
 try:
     with (base / "packed.log").open("ab") as log:
-        process = subprocess.Popen([str(base / "mdo.exe"), "--", "--home",
+        process = subprocess.Popen([str(base / executable_name), "--", "--home",
                                     str(home)], cwd=base, env=env, stdout=log,
                                    stderr=subprocess.STDOUT,
                                    creationflags=(subprocess.CREATE_NO_WINDOW

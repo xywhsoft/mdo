@@ -1267,7 +1267,11 @@ MdoSessionEventSnapshot* MdoSessionEventReplay(const char* ProjectId,
         MdoSessionEventOwned Event;
         size_t Length;
         if ( End == NULL ) {
-            Snapshot->HistoryLost = true;
+            /* The writer appends the JSON and its newline separately. A
+             * reader may observe the uncommitted tail between those writes;
+             * only newline-terminated records belong to this snapshot. On
+             * recovery, a stranded tail is terminated and then reported as
+             * a malformed record by the normal path below. */
             break;
         }
         Length = (size_t)(End - (Data + Start));

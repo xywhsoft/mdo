@@ -409,6 +409,8 @@ void ServiceInit(XS_HostInfo *host) {
     Catalog("catalog_after_create");
     if (!AppendLegacySchema2Event("project-alpha", session_id)) goto done;
     if (!CorruptEventTail("project-alpha", session_id)) goto done;
+    (void)Events("events_during_append", "project-alpha", session_id,
+        event_cursor, 100u);
 
     session = MdoSessionOpen("project-alpha", session_id, &open, &error);
     if (session == NULL) { printf("recover_error=%s\n", error.sMessage); goto done; }
@@ -730,8 +732,10 @@ def main() -> int:
         assert 'todo_snapshot={"items":[{"text":"Inspect code","done":false}],"schema_version":1,"event_id":777}' in output, output
         assert "todo_invalid=0" in output, output
         first = re.search(r"events_first=count:(\d+) next:(\d+) latest:(\d+) lost:0", output)
+        during_append = re.search(r"events_during_append=count:(\d+) next:(\d+) latest:(\d+) lost:0", output)
         reopened = re.search(r"events_after_reopen=count:(\d+) next:(\d+) latest:(\d+) lost:1", output)
         assert first and int(first.group(1)) == 2 and int(first.group(3)) >= 2, output
+        assert during_append and int(during_append.group(1)) > 0, output
         assert reopened and int(reopened.group(1)) > 0, output
         assert int(reopened.group(3)) > int(first.group(3)), output
         assert "probe_done=1" in output, output
