@@ -126,6 +126,7 @@ function askCard(item, projectId, sessionId, deciding, answered, drafts,
     attrs: { type: "button" } });
   const buttons = [submit];
   const encoder = new TextEncoder();
+  let composing = false;
   function updateValidity() {
     const answer = input.value.trim();
     const tooLong = encoder.encode(answer).length > 1024;
@@ -175,8 +176,11 @@ function askCard(item, projectId, sessionId, deciding, answered, drafts,
   submit.addEventListener("click", () => {
     if (submit.getAttribute("aria-disabled") === "false") void respond(input.value);
   });
+  input.addEventListener("compositionstart", () => { composing = true; });
+  input.addEventListener("compositionend", () => { composing = false; });
+  input.addEventListener("blur", () => { composing = false; });
   input.addEventListener("keydown", (event) => {
-    if (event.key === "Enter" && !event.isComposing) {
+    if (event.key === "Enter" && !event.isComposing && !composing) {
       event.preventDefault();
       if (submit.getAttribute("aria-disabled") === "false") void respond(input.value);
     }

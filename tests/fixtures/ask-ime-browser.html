@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="zh-CN">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>mdo ask IME probe</title>
+<div id="conversation-docks"></div>
+<pre id="result">运行中</pre>
+<script type="module">
+import { createConversationDocks } from "/app/web/js/features/chat/conversation-docks.js";
+import { createResourceStore } from "/app/web/js/state/store.js";
+import { asksStore } from "/app/web/js/state/asks.js";
+
+const result = document.querySelector("#result");
+const originalFetch = window.fetch;
+const projectId = "qa";
+const sessionId = "ask-ime";
+let pending = [{ id: 7, run_id: 8, question: "请回答", options: [] }];
+let submissions = 0;
+let answer = "";
+window.fetch = async (_url, options = {}) => {
+  if (options.method === "PUT") {
+    submissions += 1;
+    answer = JSON.parse(options.body).answer;
+    pending = [];
+    return new Response(JSON.stringify({ ok: true, data: { id: 7, answer } }),
+      { status: 200, headers: { "Content-Type": "application/json" } });
+  }
+  return new Response(JSON.stringify({ ok: true, data: { items: pending } }),
+    { status: 200, headers: { "Content-Type": "application/json" } });
+};
+const navigation = { get: () => ({ view: "workspace", projectId, sessionId }),
+  subscribe(listener) { listener(this.get()); return () => {}; } };
+const tasksStore = createResourceStore({ items: [] });
+const approvalsStore = createResourceStore({ items: [] });
+const todoStore = createResourceStore({ projectId, sessionId, items: [] });
+const runsStore = createResourceStore({ items: [] });
+asksStore.setData({ projectId, sessionId, loaded: true, items: pending });
+createConversationDocks({ container: document.querySelector("#conversation-docks"),
+  navigation, tasksStore, approvalsStore, asksStore, todoStore, runsStore,
+  onOpenTasks() {}, onChanged: async () => {
+    asksStore.setData({ projectId, sessionId, loaded: true, items: pending });
+  } });
+const tick = () => new Promise((resolve) => window.setTimeout(resolve, 100));
+const pressEnter = (input) => input.dispatchEvent(new KeyboardEvent("keydown", {
+  key: "Enter", bubbles: true, cancelable: true, isComposing: false,
+}));
+try {
+  const input = document.querySelector(".ask-dock-input");
+  if (!input) throw new Error("ask input missing");
+  input.focus();
+  input.dispatchEvent(new CompositionEvent("compositionstart", { bubbles: true }));
+  input.value = "你";
+  input.dispatchEvent(new InputEvent("input", { bubbles: true, isComposing: true }));
+  pressEnter(input);
+  await tick();
+  const quietDuringComposition = submissions === 0 && input.isConnected;
+  if (quietDuringComposition) {
+    input.value = "你好";
+    input.dispatchEvent(new InputEvent("input", { bubbles: true, isComposing: true }));
+    input.dispatchEvent(new CompositionEvent("compositionend", { bubbles: true }));
+    pressEnter(input);
+    await tick();
+  }
+  const passed = quietDuringComposition && submissions === 1 && answer === "你好";
+  result.dataset.passed = String(passed);
+  result.textContent = JSON.stringify({ passed, quietDuringComposition,
+    submissions, answer }, null, 2);
+} catch (error) {
+  result.dataset.passed = "false";
+  result.textContent = error.stack ?? String(error);
+} finally { window.fetch = originalFetch; }
+</script>
+</html>
