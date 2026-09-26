@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="zh-CN">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>mdo mobile composer occlusion probe</title>
+<link rel="stylesheet" href="/app/web/css/app.css?occlusion=4">
+<div class="app-shell" id="shell" data-sidebar="closed">
+  <header class="mobile-bar">墨斗</header>
+  <main class="workspace">
+    <section class="conversation">对话</section>
+    <section class="composer-region">
+      <form class="composer">
+        <div class="slash-menu" role="listbox">
+          <div class="slash-option">/new</div><div class="slash-option">/model</div>
+          <div class="slash-option">/fork</div><div class="slash-option">/export</div>
+          <div class="slash-option">/clear</div><div class="slash-option">/stop</div>
+          <div class="slash-option">/settings</div><div class="slash-option">/theme</div>
+          <div class="slash-option">/help</div>
+        </div>
+        <textarea aria-label="任务输入" style="height:260px">多行草稿</textarea>
+        <div class="composer-toolbar">
+          <div class="composer-options">
+            <button class="composer-attach" type="button">＋</button>
+            <select class="composer-select"><option>Ling 3.0 Tiny</option></select>
+            <select class="composer-select composer-select-short"><option>中</option></select>
+            <select class="composer-select composer-select-short"><option>询问</option></select>
+          </div>
+          <div class="composer-actions">
+            <span class="composer-input-estimate">输入 ~50 tok</span>
+            <button class="send-button" type="button" aria-label="发送任务">↑</button>
+          </div>
+        </div>
+      </form>
+    </section>
+  </main>
+</div>
+<pre id="result"></pre>
+<script type="module">
+import { trackMobileViewport } from "/app/web/js/features/shell/mobile-viewport.js";
+
+const shell = document.querySelector("#shell");
+document.querySelector("textarea").value = Array(20).fill("多行草稿").join("\n");
+const viewport = Object.assign(new EventTarget(),
+  { height: innerHeight, offsetTop: 0, scale: 1 });
+const win = Object.assign(new EventTarget(),
+  { innerHeight, visualViewport: viewport });
+trackMobileViewport(shell, Object.assign(new EventTarget(),
+  { matches: true }), win);
+await new Promise((resolve) => requestAnimationFrame(() =>
+  requestAnimationFrame(resolve)));
+const normalPromptHeight = document.querySelector("textarea").getBoundingClientRect().height;
+const normalMenuHeight = document.querySelector(".slash-menu").getBoundingClientRect().height;
+viewport.height = 300;
+viewport.dispatchEvent(new Event("resize"));
+await new Promise((resolve) => requestAnimationFrame(() =>
+  requestAnimationFrame(resolve)));
+const send = document.querySelector(".send-button").getBoundingClientRect();
+const menu = document.querySelector(".slash-menu").getBoundingClientRect();
+const prompt = document.querySelector("textarea").getBoundingClientRect();
+const promptScrollHeight = document.querySelector("textarea").scrollHeight;
+const composer = document.querySelector(".composer").getBoundingClientRect();
+const result = { visibleBottom: viewport.height, shellHeight:
+  shell.getBoundingClientRect().height, promptHeight: prompt.height,
+  promptScrollHeight, normalPromptHeight, normalMenuHeight,
+  composerTop: composer.top, sendTop: send.top, sendBottom: send.bottom,
+  menuTop: menu.top, menuHeight: menu.height,
+  passed: normalPromptHeight === 260 && normalMenuHeight === 280 &&
+    promptScrollHeight > prompt.height &&
+    send.top >= 0 && send.bottom <= viewport.height && menu.top >= 52 };
+document.querySelector("#result").dataset.passed = String(result.passed);
+document.querySelector("#result").textContent = JSON.stringify(result, null, 2);
+</script>
+</html>
