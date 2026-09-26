@@ -134,6 +134,7 @@ select:focus-visible,
   position: relative;
   display: grid;
   grid-template-columns: var(--sidebar-column, var(--sidebar-width)) minmax(0, 1fr) var(--inspector-column, var(--inspector-width));
+  grid-template-rows: minmax(0, 1fr);
   height: var(--app-visible-height, 100dvh);
   min-width: 0;
 }
@@ -151,6 +152,7 @@ select:focus-visible,
   grid-column: 1;
   display: flex;
   flex-direction: column;
+  min-height: 0;
   border-right: 1px solid var(--border);
   padding: 10px;
 }
@@ -341,6 +343,12 @@ select:focus-visible,
   overflow: auto;
   scrollbar-width: thin;
   scrollbar-color: var(--border-strong) transparent;
+}
+
+@media (min-width: 761px) and (max-height: 480px) {
+  .sidebar { overflow-y: auto; }
+  .session-navigation { flex: 0 0 160px; }
+  .session-list { height: 126px; }
 }
 
 .session-group-heading { display: flex; min-height: 32px; align-items: center; gap: 6px; padding: 6px 9px 2px; color: var(--muted); font-size: 11px; font-weight: 650; }
@@ -758,7 +766,7 @@ select:focus-visible,
 .context-meter > button { display: grid; width: 34px; height: 34px; place-items: center; padding: 0; border: 0; border-radius: 7px; background: transparent; cursor: pointer; }
 .context-meter > button:hover, .context-meter > button[aria-expanded="true"] { background: var(--surface-hover); }
 .context-meter-ring { width: 18px; height: 18px; border-radius: 50%; background: conic-gradient(var(--accent) var(--meter-percent, 0%), var(--border-strong) 0); mask: radial-gradient(transparent 48%, #000 51%); }
-.context-meter-panel { position: absolute; z-index: 15; right: 0; bottom: calc(100% + 8px); width: min(280px, calc(100vw - 24px)); padding: 12px; border: 1px solid var(--border-strong); border-radius: var(--radius-md); background: var(--surface-raised); box-shadow: 0 12px 30px rgb(0 0 0 / 14%); }
+.context-meter-panel { position: absolute; z-index: 15; right: 0; bottom: calc(100% + 8px); width: min(280px, calc(100vw - 24px)); max-height: max(48px, calc(var(--app-visible-height, 100dvh) - var(--header-height) - 74px)); overflow-y: auto; overscroll-behavior: contain; padding: 12px; border: 1px solid var(--border-strong); border-radius: var(--radius-md); background: var(--surface-raised); box-shadow: 0 12px 30px rgb(0 0 0 / 14%); }
 .context-meter-panel[hidden] { display: none; }
 .context-meter-panel h3 { margin: 0 0 8px; font-size: 12px; }
 .context-meter-panel dl { display: grid; grid-template-columns: 1fr auto; gap: 7px 10px; margin: 0; font-size: 11px; }
