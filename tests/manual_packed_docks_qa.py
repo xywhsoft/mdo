@@ -151,6 +151,19 @@ class BoundedDelayProxy(BaseHTTPRequestHandler):
             self.send_error(413)
             return
         body = self.rfile.read(length) if length else None
+        if (self.server.reject_pane_layout and self.path == "/api/v1/pane-layout"
+                and self.command in {"GET", "PUT"}):
+            payload = json.dumps({"ok": False, "error": {
+                "code": "qa_pane_unavailable", "message": "Synthetic layout failure"
+            }}).encode()
+            self.send_response(503)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(payload)))
+            self.send_header("Connection", "close")
+            self.end_headers()
+            self.wfile.write(payload)
+            self.close_connection = True
+            return
         drop_response = False
         drop_run_response = False
         drop_create_response = False
@@ -367,6 +380,8 @@ parser.add_argument("--consume-dropped-queue-response", action="store_true",
                     help="consume that item upstream before dropping its response")
 parser.add_argument("--fail-first-queue-reconcile", action="store_true",
                     help="also fail the first queue GET after a dropped response")
+parser.add_argument("--reject-pane-layout", action="store_true",
+                    help="reject layout GET/PUT for localized error feedback QA")
 parser.add_argument("--slow-ms", type=int, default=15000,
                     help="first SLOW UI model response delay, 0-15000 ms")
 parser.add_argument("--task-ms", type=int, default=12000,
@@ -477,7 +492,8 @@ try:
             or args.fail_first_run or args.fail_first_queue
             or args.full_first_queue
             or args.drop_first_run_response or args.drop_run_response_number
-            or args.drop_first_queue_response or args.fail_first_queue_reconcile):
+            or args.drop_first_queue_response or args.fail_first_queue_reconcile
+            or args.reject_pane_layout):
         proxy = BoundedDelayProxyServer(("127.0.0.1", 0), BoundedDelayProxy)
         proxy.upstream_port = port
         proxy.approval_delay_seconds = args.approval_delay_ms / 1000
@@ -494,6 +510,7 @@ try:
         proxy.drop_first_queue_response = args.drop_first_queue_response
         proxy.consume_dropped_queue_response = args.consume_dropped_queue_response
         proxy.fail_first_queue_reconcile = args.fail_first_queue_reconcile
+        proxy.reject_pane_layout = args.reject_pane_layout
         proxy.dropped_queue_response = False
         proxy.failed_queue_reconcile = False
         proxy.count_lock = threading.Lock()

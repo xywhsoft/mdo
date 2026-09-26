@@ -57,6 +57,7 @@ test("bundled language packs cover the annotated shell and switch without stale 
     "js/features/settings/project-panel.js",
     "js/features/settings/memory-panel.js",
     "js/features/settings/model-config-panel.js",
+    "js/features/shell/pane-layout.js",
     "js/features/tasks/task-panel.js",
     "js/features/approvals/decision-panel.js",
     "js/features/approvals/recovery-panel.js",
@@ -171,6 +172,11 @@ test("bundled language packs cover the annotated shell and switch without stale 
     assert.equal(errorMessage({ code: "toString", message: "Unknown server detail" }),
       "Unknown server detail");
     assert.equal(t("draft.tooLarge"), "Draft exceeds the 64 KiB save limit");
+    assert.equal(errorMessage({ code: "draft_too_large", message: "草稿过长" }),
+      "Draft exceeds the 64 KiB save limit");
+    assert.equal(t("draft.saveFailed", { error: "full" }), "Draft not saved: full");
+    assert.equal(t("pane.loadFailed", { error: "offline" }),
+      "Could not load panel layout: offline");
     assert.equal(t("startup.untitled"), "Untitled task");
     assert.equal(await loadLocale("zh-CN"), true);
     assert.equal(node.textContent, "新建任务");

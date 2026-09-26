@@ -108,6 +108,13 @@ export async function boot() {
   const composerError = $("#composer-error");
   const composerHint = $("#composer-hint");
   const draftStatus = $("#draft-status");
+  let draftError = null;
+  function renderDraftStatus() {
+    draftStatus.hidden = !draftError;
+    const reason = draftError ? errorMessage(draftError) : "";
+    draftStatus.textContent = draftError ? t("draft.saveFailed",
+      { error: reason }, `草稿未保存：${reason}`) : "";
+  }
   const runStatus = $("#run-status");
   const runtimeState = $("#runtime-state");
   const runtimeLabel = $("#runtime-label");
@@ -539,12 +546,12 @@ export async function boot() {
       promptQueue.render();
     },
     onError(error) {
-      draftStatus.textContent = `草稿未保存：${errorMessage(error)}`;
-      draftStatus.hidden = false;
+      draftError = error;
+      renderDraftStatus();
     },
     onSaved() {
-      draftStatus.hidden = true;
-      draftStatus.textContent = "";
+      draftError = null;
+      renderDraftStatus();
     },
     onLoaded() { setRun(activeRun); promptQueue.render(); },
   });
@@ -910,6 +917,7 @@ export async function boot() {
     if (!navigation.get().sessionId) updateContext(sessionDetailStore.get());
   });
   subscribeLocale(() => {
+    renderDraftStatus();
     setRun(activeRun);
     updateContext(sessionDetailStore.get());
     syncPromptPlaceholder();
@@ -1792,7 +1800,6 @@ export async function boot() {
         saved.inspector_open, { persist: false });
     },
   });
-  void paneLayout.load();
 
   function selectInspectorTab(tabName) {
     for (const name of ["tasks", "decisions", "trace", "context"]) {
@@ -1939,11 +1946,16 @@ export async function boot() {
     }
   });
 
+  // Begin restoring panel geometry as soon as settings choose the locale;
+  // unrelated resource requests must not hold it behind their completion.
+  const settingsReady = loadSettings();
+  void settingsReady.then(() => settingsView.localeReady())
+    .then(() => paneLayout.load());
   const initial = await Promise.allSettled([
     loadBootstrap(),
     loadSessions(),
     loadCatalogs(),
-    loadSettings(),
+    settingsReady,
     loadManagementResources(),
     loadTasks(),
     loadApprovals(),

@@ -79,6 +79,7 @@ const API_ERROR_COPY = Object.freeze({
     "这条待发送消息已启动运行，请核对运行记录。"],
   draft_conflict: ["error.draftConflict",
     "草稿已在其他窗口修改，请刷新后核对。"],
+  draft_too_large: ["draft.tooLarge", "草稿超过 64 KiB 保存上限"],
   attachment_unavailable: ["error.attachmentUnavailable",
     "图片存储暂不可用，请重试。"],
   session_state_conflict: ["error.sessionStateConflict",

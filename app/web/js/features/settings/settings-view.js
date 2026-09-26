@@ -86,6 +86,7 @@ export function createSettingsView({ form, store, navigation, onApplied }) {
   let baselineFingerprint = "";
   let previewFingerprint = "";
   let busy = false;
+  let localeReady = Promise.resolve();
 
   function fingerprint() {
     return snapshot ? JSON.stringify(settingsPatch(form, snapshot)) : "";
@@ -165,7 +166,7 @@ export function createSettingsView({ form, store, navigation, onApplied }) {
     form.elements.locale.value = supportedLocales.includes(settings.locale)
       ? settings.locale : "zh-CN";
     const selectedLocale = form.elements.locale.value;
-    void loadLocale(selectedLocale).then((applied) => {
+    localeReady = loadLocale(selectedLocale).then((applied) => {
       if (applied && snapshot === settings && form.elements.locale.value === selectedLocale) {
         renderCredential(settings);
         renderProxyCredential(settings);
@@ -336,6 +337,7 @@ export function createSettingsView({ form, store, navigation, onApplied }) {
   });
 
   return Object.freeze({
+    localeReady() { return localeReady; },
     hasPendingChanges() {
       return busy || (Boolean(snapshot) && fingerprint() !== baselineFingerprint);
     },

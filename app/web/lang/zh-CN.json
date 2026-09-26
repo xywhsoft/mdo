@@ -1070,6 +1070,11 @@
   "todo.invalidResponse": "计划响应无效",
   "todo.notSynced": "计划状态尚未同步，请检查工具结果",
   "draft.tooLarge": "草稿超过 64 KiB 保存上限",
+  "draft.saveFailed": "草稿未保存：{error}",
+  "pane.saveFailed": "无法保存分栏布局：{error}",
+  "pane.loadFailed": "无法读取分栏布局：{error}",
+  "pane.sidebarResize": "调整会话导航宽度",
+  "pane.inspectorResize": "调整任务面板宽度",
   "feedback.invalid": "无效的消息反馈",
   "session.exportInvalidCursor": "会话事件游标无效，无法导出 Markdown"
 }

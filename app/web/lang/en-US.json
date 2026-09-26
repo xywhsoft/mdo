@@ -1070,6 +1070,11 @@
   "todo.invalidResponse": "Invalid task plan response",
   "todo.notSynced": "Task plan has not synchronized. Check the tool result.",
   "draft.tooLarge": "Draft exceeds the 64 KiB save limit",
+  "draft.saveFailed": "Draft not saved: {error}",
+  "pane.saveFailed": "Could not save panel layout: {error}",
+  "pane.loadFailed": "Could not load panel layout: {error}",
+  "pane.sidebarResize": "Resize session navigation",
+  "pane.inspectorResize": "Resize inspector",
   "feedback.invalid": "Invalid message feedback",
   "session.exportInvalidCursor": "Invalid session event cursor; cannot export Markdown"
 }

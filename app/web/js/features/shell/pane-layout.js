@@ -1,5 +1,6 @@
 import { api } from "../../api/client.js";
 import { errorMessage, toast } from "../../utils/dom.js";
+import { t } from "../../i18n.js";
 
 const defaults = Object.freeze({
   sidebar_width: 272, inspector_width: 336,
@@ -56,7 +57,8 @@ export function createPaneLayout({ shell, mobileLayout, wideLayout,
       const snapshot = { ...preference };
       try { await api.put("/pane-layout", snapshot); }
       catch (cause) {
-        toast(`无法保存分栏布局：${errorMessage(cause)}`, "error");
+        const error = errorMessage(cause);
+        toast(t("pane.saveFailed", { error }, `无法保存分栏布局：${error}`), "error");
         break;
       }
     } while (saveAgain);
@@ -153,7 +155,8 @@ export function createPaneLayout({ shell, mobileLayout, wideLayout,
       onLoaded({ ...preference });
       apply();
     } catch (cause) {
-      toast(`无法读取分栏布局：${errorMessage(cause)}`, "error");
+      const error = errorMessage(cause);
+      toast(t("pane.loadFailed", { error }, `无法读取分栏布局：${error}`), "error");
     }
   }
 

@@ -92,7 +92,7 @@ export function createDraftStore({ onRestore, onError, onSaved, onLoaded = () =>
     if (!value) {
       value = { text: "", attachments: [], revision: 0, loaded: false, dirty: false,
         uncertainRun: false, submissions: [], newTask: null, conflict: false,
-        error: null, loading: null,
+        error: null, oversized: false, loading: null,
         saving: null, timer: 0 };
       entries.set(key, value);
     }
@@ -175,10 +175,13 @@ export function createDraftStore({ onRestore, onError, onSaved, onLoaded = () =>
         const stagedSubmissions = [...current.submissions];
         const stagedNewTask = current.newTask && { ...current.newTask };
         if (encoder.encode(text).length > MAX_DRAFT_BYTES) {
-          if (selected === key) onError(new Error(t("draft.tooLarge", {},
-            "草稿超过 64 KiB 保存上限")));
+          current.oversized = true;
+          current.error = Object.assign(new Error(t("draft.tooLarge", {},
+            "草稿超过 64 KiB 保存上限")), { code: "draft_too_large" });
+          if (selected === key) onError(current.error);
           return;
         }
+        current.oversized = false;
         current.dirty = false;
         try {
           const body = { revision: current.revision, text, attachments,
@@ -207,7 +210,7 @@ export function createDraftStore({ onRestore, onError, onSaved, onLoaded = () =>
     try { await current.saving; }
     finally {
       current.saving = null;
-      if (current.dirty && !current.conflict && current.loaded)
+      if (current.dirty && !current.conflict && !current.oversized && current.loaded)
         schedule(key);
     }
     return current.loaded && !current.dirty && !current.conflict;
@@ -221,6 +224,7 @@ export function createDraftStore({ onRestore, onError, onSaved, onLoaded = () =>
     current.text = text;
     current.attachments = ids;
     current.dirty = true;
+    current.oversized = false;
     schedule(key, immediate);
   }
 
@@ -232,7 +236,7 @@ export function createDraftStore({ onRestore, onError, onSaved, onLoaded = () =>
     if (current.error) onError(current.error);
     else onSaved();
     if (!current.loaded) void load(key);
-    else if (current.dirty) schedule(key, true);
+    else if (current.dirty && !current.oversized) schedule(key, true);
   }
 
   window.addEventListener("pagehide", () => {

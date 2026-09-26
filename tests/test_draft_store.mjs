@@ -3,6 +3,49 @@ import test from "node:test";
 
 import { createDraftStore } from "../app/web/js/features/chat/draft-store.js";
 
+test("an oversized draft stays unsaved without repeated retries and recovers after editing", async () => {
+  const originalWindow = globalThis.window;
+  const originalFetch = globalThis.fetch;
+  let saved = "";
+  let puts = 0;
+  const errors = [];
+  globalThis.window = { setTimeout, clearTimeout, addEventListener() {} };
+  globalThis.fetch = async (_path, options) => {
+    if (options.method === "GET")
+      return Response.json({ ok: true, data: { revision: 1, text: saved,
+        attachments: [] } });
+    puts += 1;
+    saved = JSON.parse(options.body).text;
+    return Response.json({ ok: true, data: { revision: 2, text: saved,
+      attachments: [] } });
+  };
+  try {
+    const key = "default/oversized";
+    const store = createDraftStore({ onRestore() {}, onError(error) {
+      errors.push(error);
+    }, onSaved() {} });
+    store.select(key);
+    assert.equal(await store.ensureLoaded(key), true);
+    store.edit(key, "界".repeat(22000), [], true);
+    assert.equal(await store.flush(key), false);
+    assert.equal(errors.length, 1);
+    assert.equal(errors[0].code, "draft_too_large");
+    assert.equal(puts, 0);
+    store.select("");
+    store.select(key);
+    assert.equal(errors.length, 2, "the unsaved error survives navigation");
+    await new Promise((resolve) => setTimeout(resolve, 700));
+    assert.equal(errors.length, 2, "oversized text is not retried on a timer");
+    store.edit(key, "smaller draft", [], true);
+    assert.equal(await store.flush(key), true);
+    assert.equal(saved, "smaller draft");
+    assert.equal(puts, 1);
+  } finally {
+    globalThis.window = originalWindow;
+    globalThis.fetch = originalFetch;
+  }
+});
+
 test("a failed send restores its text and images ahead of a newer saved draft", async () => {
   const originalWindow = globalThis.window;
   const originalFetch = globalThis.fetch;
