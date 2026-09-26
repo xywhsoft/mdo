@@ -712,17 +712,18 @@ select:focus-visible,
 .composer textarea {
   display: block;
   width: 100%;
+  min-height: 74px;
   max-height: min(336px, 50vh);
   max-height: min(336px, 50dvh);
   resize: none;
-  padding: 14px 15px 7px;
+  padding: 16px 16px 8px;
   border: 0;
   outline: 0;
   background: transparent;
   color: var(--ink);
   line-height: 1.5;
 }
-.composer[data-new-task] textarea { min-height: 52px; }
+.composer[data-new-task] textarea { min-height: 74px; }
 .composer textarea::placeholder { color: var(--faint); }
 .composer-images { display: flex; min-height: 0; flex-wrap: wrap; gap: 7px; padding: 3px 12px 6px; }
 .composer-images[hidden] { display: none; }
@@ -732,24 +733,24 @@ select:focus-visible,
 .composer-image-remove { position: absolute; top: -5px; right: -5px; display: grid; width: 19px; height: 19px; place-items: center; padding: 0; border: 0; border-radius: 50%; background: var(--ink); color: var(--surface-raised); cursor: pointer; }
 .composer-image-remove:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 .composer-image-uploading { align-self: center; color: var(--muted); font-size: 11px; }
-.composer-toolbar { display: flex; min-height: 42px; align-items: center; justify-content: space-between; gap: 10px; padding: 5px 7px 7px 9px; }
-.composer-options, .composer-actions { display: flex; min-width: 0; align-items: center; gap: 6px; }
+.composer-toolbar { display: flex; min-height: 46px; align-items: center; justify-content: space-between; gap: 10px; padding: 5px 9px 8px 10px; }
+.composer-options, .composer-actions { display: flex; min-width: 0; align-items: center; gap: 8px; }
 .composer-options { flex: 1 1 auto; overflow-x: auto; scrollbar-width: none; }
 .composer-options::-webkit-scrollbar { display: none; }
 .composer-options > .composer-select { flex: 0 0 auto; }
 .composer-actions { position: relative; flex: 0 0 auto; }
-.composer-attach { width: 30px; height: 30px; flex: 0 0 auto; padding: 0; border: 0; border-radius: 7px; background: transparent; color: var(--muted); font-size: 22px; line-height: 1; cursor: pointer; }
+.composer-attach { width: 34px; height: 34px; flex: 0 0 auto; padding: 0; border: 0; border-radius: 7px; background: transparent; color: var(--muted); font-size: 22px; line-height: 1; cursor: pointer; }
 .composer-attach:hover { background: var(--surface-hover); color: var(--ink); }
 .composer-attach:disabled { opacity: .4; cursor: default; }
-.composer-select { min-width: 0; max-width: 145px; height: 30px; padding: 0 6px; border: 0; border-radius: var(--radius-sm); background: transparent; color: var(--muted); font: inherit; font-size: 11px; cursor: pointer; }
+.composer-select { min-width: 0; max-width: 160px; height: 34px; padding: 0 6px; border: 0; border-radius: var(--radius-sm); background: transparent; color: var(--muted); font: inherit; font-size: 12px; cursor: pointer; }
 .composer-project { flex: 0 0 auto; min-width: 96px; max-width: 130px; color: var(--ink); }
 .composer-project[hidden] { display: none; }
-.composer-select-short { max-width: 84px; }
+.composer-select-short { max-width: 92px; }
 .composer-select:hover, .composer-select:focus-visible { background: var(--surface-hover); color: var(--ink); }
 .composer-select:disabled { opacity: .55; cursor: default; }
-.composer-input-estimate { color: var(--faint); font-size: 10px; white-space: nowrap; }
+.composer-input-estimate { color: var(--faint); font-size: 11px; white-space: nowrap; }
 .context-meter { position: static; }
-.context-meter > button { display: grid; width: 30px; height: 30px; place-items: center; padding: 0; border: 0; border-radius: 7px; background: transparent; cursor: pointer; }
+.context-meter > button { display: grid; width: 34px; height: 34px; place-items: center; padding: 0; border: 0; border-radius: 7px; background: transparent; cursor: pointer; }
 .context-meter > button:hover, .context-meter > button[aria-expanded="true"] { background: var(--surface-hover); }
 .context-meter-ring { width: 18px; height: 18px; border-radius: 50%; background: conic-gradient(var(--accent) var(--meter-percent, 0%), var(--border-strong) 0); mask: radial-gradient(transparent 48%, #000 51%); }
 .context-meter-panel { position: absolute; z-index: 15; right: 0; bottom: calc(100% + 8px); width: min(280px, calc(100vw - 24px)); padding: 12px; border: 1px solid var(--border-strong); border-radius: var(--radius-md); background: var(--surface-raised); box-shadow: 0 12px 30px rgb(0 0 0 / 14%); }
@@ -782,13 +783,13 @@ select:focus-visible,
 .composer-draft-status[hidden] { display: none; }
 .send-button, .stop-button {
   display: grid;
-  width: 31px;
-  height: 31px;
+  width: 34px;
+  height: 34px;
   flex: 0 0 auto;
   place-items: center;
   padding: 0;
   border: 0;
-  border-radius: 9px;
+  border-radius: 999px;
   background: var(--accent);
   color: var(--accent-ink);
   cursor: pointer;
@@ -1216,6 +1217,15 @@ select:focus-visible,
   .app-shell[data-inspector="closed"] .inspector-resize-handle { display: none; }
 }
 
+/* Keep the model and permission controls legible. Shortcut guidance remains
+   in the help panel; context remains in the conversation header drawer. */
+@media (min-width: 761px) {
+  .composer-hint { display: none; }
+}
+@media (min-width: 761px) and (max-width: 1050px) {
+  #workspace-chip { display: none; }
+}
+
 @media (min-width: 761px) {
   .app-shell[data-sidebar="closed"] { grid-template-columns: 0 minmax(0, 1fr) var(--inspector-column, var(--inspector-width)); }
   .app-shell[data-sidebar="closed"][data-inspector="closed"] { grid-template-columns: 0 minmax(0, 1fr); }
@@ -1321,6 +1331,8 @@ select:focus-visible,
   .composer-image { width: 64px; height: 64px; }
   .composer-image-remove { top: -11px; right: -11px; width: 40px; height: 40px; border-radius: 50%; background: radial-gradient(circle 11px, var(--ink) 98%, transparent 100%); }
   .composer-toolbar { flex-wrap: wrap; gap: 2px; }
+  .composer textarea { min-height: 52px; padding: 12px 13px 6px; }
+  .composer[data-new-task] textarea { min-height: 52px; }
   .composer-options { flex: 1 1 100%; flex-wrap: wrap; gap: 3px; overflow-x: visible; }
   .composer-attach, .composer-select, .context-meter > button,
   .send-button, .stop-button { height: 40px; }
