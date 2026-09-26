@@ -574,7 +574,7 @@ export function createTimelineView({ container, welcome, toBottom, store, feedba
   }
 
   function updateBottomButton() {
-    toBottom.hidden = scroller.scrollHeight - scroller.scrollTop -
+    toBottom.hidden = !pendingState.data?.sessionId || scroller.scrollHeight - scroller.scrollTop -
       scroller.clientHeight <= 120;
   }
 
@@ -611,6 +611,9 @@ export function createTimelineView({ container, welcome, toBottom, store, feedba
       renderedRows.clear();
       clear(container);
       renderedSession = sessionKey;
+      // A history position belongs to the previous session. New tasks start
+      // at the welcome heading; existing sessions open on their latest turn.
+      followTail = true;
     }
     const items = eventsToTimeline(data?.events ?? [], data?.historyLost);
     const foldKeys = new Set(items.filter((item) =>
@@ -652,7 +655,8 @@ export function createTimelineView({ container, welcome, toBottom, store, feedba
         .find((node) => node.getAttribute("data-timeline-key") === focusedKey);
       replacement?.querySelector("summary")?.focus({ preventScroll: true });
     }
-    if (followTail && !searchQuery) scroller.scrollTop = scroller.scrollHeight;
+    if (!data?.sessionId) scroller.scrollTop = 0;
+    else if (followTail && !searchQuery) scroller.scrollTop = scroller.scrollHeight;
     updateBottomButton();
   }
 
