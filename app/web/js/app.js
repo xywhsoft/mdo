@@ -1701,6 +1701,7 @@ export async function boot() {
     }
   });
 
+  const drawerReturnFocus = { sidebar: null, inspector: null };
   function setDrawer(name, open, options = {}) {
     if (open && mobileLayout.matches) {
       const other = name === "sidebar" ? "inspector" : "sidebar";
@@ -1712,8 +1713,19 @@ export async function boot() {
       (mobileLayout.matches ? $("#open-sidebar") : $("#desktop-sidebar-toggle"))
       : (mobileLayout.matches ? $("#open-inspector") : $("#toggle-inspector"));
     const panel = name === "sidebar" ? $("#sidebar") : $("#inspector");
+    if (open && panel.inert) {
+      const opener = options.returnFocus ?? document.activeElement;
+      drawerReturnFocus[name] = opener instanceof HTMLElement &&
+        opener !== document.body && opener.tabIndex >= 0 &&
+        !panel.contains(opener) ? opener : button;
+    }
     const inactive = !open;
-    if (inactive && panel.contains(document.activeElement)) button.focus();
+    if (inactive && panel.contains(document.activeElement)) {
+      const opener = drawerReturnFocus[name];
+      const reachable = opener?.isConnected && opener.getClientRects().length &&
+        !opener.matches(":disabled") && !opener.closest("[hidden], [inert]");
+      (reachable ? opener : button).focus();
+    }
     panel.inert = inactive;
     button.setAttribute("aria-expanded", String(open));
     if (name === "sidebar")
@@ -1761,8 +1773,14 @@ export async function boot() {
   wideLayout.addEventListener("change", (event) => setDrawer("inspector",
     !settingsActive && event.matches && (paneLayout?.inspectorOpen() ?? false),
     { persist: false }));
-  mobileLayout.addEventListener("change", (event) => setDrawer("sidebar",
-    !event.matches && (paneLayout?.sidebarOpen() ?? true), { persist: false }));
+  mobileLayout.addEventListener("change", (event) => {
+    setDrawer("sidebar", !event.matches && (paneLayout?.sidebarOpen() ?? true),
+      { persist: false });
+    // The inspector may stay open across this breakpoint. The visible opener
+    // changes from the desktop button to the mobile button (or back).
+    setDrawer("inspector", shell.dataset.inspector === "open",
+      { persist: false, focus: false });
+  });
   setDrawer("sidebar", !mobileLayout.matches, { persist: false });
   setDrawer("inspector", false, { persist: false });
   paneLayout = createPaneLayout({ shell, mobileLayout, wideLayout,
