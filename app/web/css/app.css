@@ -1315,6 +1315,7 @@ select:focus-visible,
   .prompt-queue { width: calc(100% - 26px); }
   .prompt-queue button { min-width: 40px; min-height: 40px; }
   .prompt-queue .prompt-queue-toggle { min-height: 40px; }
+  .slash-option, .file-mention-option { min-height: 40px; }
   .composer-hint { display: none; }
   .composer-images { gap: 12px; padding-top: 12px; }
   .composer-image { width: 64px; height: 64px; }

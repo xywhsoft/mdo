@@ -554,4 +554,6 @@ Home `.build/mdo-packed-docks-lyu66m_d` 使用新单文件程序真实重启后�
 
 中文输入法的候选边界补强：`@` 文件补全和 `/` 命令候选在 compositionstart 至 compositionend 之间暂停并取消旧查询，结束组字且输入框仍有焦点时才更新；失焦后即使补发 compositionend 也不弹出候选。发送键同时检查输入框的组字状态，避免平台没有正确设置 `KeyboardEvent.isComposing` 时误发。生产模块浏览器夹具 `tests/fixtures/composer-ime-browser.html` 以中文文件名和含空格路径验证组字期间零查询、结束后仅一条查询、选中后插入带引号路径；另验证斜杠候选和失焦边界。实际手机输入法与桌面中文输入法仍需物理设备验收。
 
-新打包版另在独立 Home `.build/mdo-packed-docks-64_618t8` 中打开工作区文件 `notes/中文 文件.txt`：输入 `@中文` 显示候选，按 Enter 后草稿变为 `@"notes/中文 文件.txt" `；刷新会话页后草稿仍在，任务未启动。发布门禁通过 114 项 Python 单元/契约测试、39 项 Node 测试、20 个运行探针、严格 C 编译、确定性打包、单文件零旁路写入和 20 秒启动检查。根目录 `mdo.exe` SHA-256 为 `51592ae7e2eaa7d468b0aabf1effb10f6f7a80148d99690663c115dcbd3b0041`。
+新打包版另在独立 Home `.build/mdo-packed-docks-64_618t8` 中打开工作区文件 `notes/中文 文件.txt`：输入 `@中文` 显示候选，按 Enter 后草稿变为 `@"notes/中文 文件.txt" `；刷新会话页后草稿仍在，任务未启动。发布门禁通过 114 项 Python 单元/契约测试、41 项 Node 测试、20 个运行探针、严格 C 编译、确定性打包、单文件零旁路写入和 20 秒启动检查。根目录 `mdo.exe` SHA-256 为 `51592ae7e2eaa7d468b0aabf1effb10f6f7a80148d99690663c115dcbd3b0041`。
+
+320px 触控复测发现 `@` 文件与 `/` 命令候选行均只有 34px，现将移动端最小高度提高到 40px。修复后单文件 Home `.build/mdo-packed-docks-_mst52ou` 中，两种候选行实测 40px，菜单水平范围 x=10–310px，文档宽度保持 320px；点击 `/help` 打开帮助弹层，点击 `notes/中文 文件.txt` 插入带引号路径并保持输入焦点，浏览器脚本错误日志为空。发布门禁通过 114 项 Python 单元/契约测试、41 项 Node 测试、20 个运行探针及严格 C 编译、确定性打包、单文件零旁路写入、20 秒启动检查；根目录 `mdo.exe` SHA-256 为 `289fee9e165c5f80934f9c645933c0e30d85d4b042e80ca25e2bf583e4bdd074`。
