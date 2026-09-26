@@ -3683,6 +3683,15 @@ def run_probe(host: Path) -> None:
                 assert status == 200 and json.loads(body)["data"] == {
                     "id": starting_id, "state": "starting",
                 }, (status, body)
+                visible = json.loads(request(port, "GET", queue_path)[2])[
+                    "data"]["items"]
+                claimed = next(item for item in visible
+                               if item["id"] == starting_id)
+                assert claimed["state"] == "sending" and claimed[
+                    "start_claimed"] is True, claimed
+                persisted = json.loads(queue_file.read_text(
+                    encoding="utf-8"))["items"]
+                assert all("start_claimed" not in item for item in persisted)
                 status, _, body = queue_request("POST", run_path, {
                     "prompt": "starting queue run", "queue_item_id": starting_id,
                 })

@@ -129,6 +129,7 @@ export function createPromptQueue({ container, navigation, isRunActive, stagedEn
     }
     const uncertain = saved[0]?.state === "sending";
     const acceptedRun = uncertain && Boolean(saved[0]?.run_id);
+    const claimedRun = uncertain && saved[0]?.start_claimed === true;
     const stagedHead = saved[0]?.state === "staged";
     const reviewPending = isRunReviewPending(key);
     const [projectId, sessionId] = key.split("/");
@@ -140,7 +141,7 @@ export function createPromptQueue({ container, navigation, isRunActive, stagedEn
     });
     const waitingForRun = !uncertain && !stagedHead && isRunActive();
     const retry = waitingForRun || !saved.length || reviewPending ||
-      acceptedRun ? null : element("button", {
+      acceptedRun || claimedRun ? null : element("button", {
       text: t(uncertain ? "queue.retryUncertain" : stagedHead
         ? "queue.continueStaged" : "queue.sendNext"),
       attrs: { type: "button", "data-queue-focus": "retry" },
@@ -158,14 +159,16 @@ export function createPromptQueue({ container, navigation, isRunActive, stagedEn
     }
     container.append(element("div", { className: "prompt-queue-header" }, [
       toggle, retry ?? element("span", { className: "prompt-queue-waiting",
-        text: t(acceptedRun ? "queue.runAccepted" : reviewPending
+        text: t(acceptedRun ? "queue.runAccepted" : claimedRun
+          ? "queue.runStarting" : reviewPending
           ? "queue.reviewRun" : saved.length
           ? "queue.waitForRun" : entries[0]?.rejected
             ? "queue.rejected" : "queue.awaitingAdmission") }),
     ]));
     if (uncertain) container.append(element("p", {
       className: "prompt-queue-warning",
-      text: t(acceptedRun ? "queue.runAcceptedWarning" :
+      text: t(acceptedRun ? "queue.runAcceptedWarning" : claimedRun
+        ? "queue.runStartingWarning" :
         "queue.uncertainWarning"),
     }));
     const list = element("ol", { className: "prompt-queue-list",
@@ -214,6 +217,7 @@ export function createPromptQueue({ container, navigation, isRunActive, stagedEn
         body.append(element("span", { className: "prompt-queue-state",
           text: t(entry.state === "staged" ? "queue.staged" :
             entry.run_id ? "queue.runAccepted" :
+            entry.start_claimed ? "queue.runStarting" :
             "queue.sendingUncertain") }));
       if (entry.priority) body.append(element("span", {
         className: "prompt-queue-state", text: t("queue.priority"),

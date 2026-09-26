@@ -449,6 +449,8 @@
   "queue.sendingUncertain": "Delivery unconfirmed",
   "queue.runAccepted": "Run accepted by server · review its status",
   "queue.runAcceptedWarning": "The server accepted this run. Check its record or recovery state before removing the item; this queue item cannot be sent again.",
+  "queue.runStarting": "Review start status",
+  "queue.runStartingWarning": "This message entered the start process, but its outcome is unknown. Review the run record before removing it; this queue item cannot be retried.",
   "queue.priority": "Send first after interrupt",
   "queue.viewImage": "View pending image {number}",
   "queue.imageAlt": "Pending image {number}",

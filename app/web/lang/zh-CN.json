@@ -449,6 +449,8 @@
   "queue.sendingUncertain": "发送状态待确认",
   "queue.runAccepted": "服务端已接受运行 · 请核对状态",
   "queue.runAcceptedWarning": "运行已由服务端接受。请核对运行记录或恢复状态，再决定是否移除此项；不能再次发送同一队列项。",
+  "queue.runStarting": "启动结果待核对",
+  "queue.runStartingWarning": "这条消息已进入启动流程，但是否执行成功尚未确认。请核对运行记录后决定是否移除；同一队列项不能重试。",
   "queue.priority": "中断后优先发送",
   "queue.viewImage": "查看待发送图片 {number}",
   "queue.imageAlt": "待发送图片 {number}",

@@ -27,6 +27,7 @@ typedef struct MdoQueueItem {
     size_t AttachmentCount;
     MdoQueueState State;
     bool Priority;
+    bool StartClaimed;
     char RunId[MDO_RUN_ID_CAPACITY];
 } MdoQueueItem;
 
@@ -387,6 +388,8 @@ static bool MdoQueueRead(const char* Path, const char* ProjectId,
              strcmp(RunId, ReceiptRunId) != 0 ) goto done;
         if ( RunIdValue == NULL && ReceiptRunId[0] != '\0' )
             memcpy(RunId, ReceiptRunId, sizeof(RunId));
+        Queue->Items[Queue->Count - 1u].StartClaimed =
+            ReceiptExists && ReceiptRunId[0] == '\0';
         if ( RunIdValue != NULL || ReceiptRunId[0] != '\0' )
             memcpy(Queue->Items[Queue->Count - 1u].RunId, RunId,
                 sizeof(RunId));
@@ -429,7 +432,7 @@ bool MdoApiQueueAttachmentReferenced(const char* ProjectId,
     return Ok;
 }
 
-static xvalue* MdoQueueValue(const MdoQueue* Queue)
+static xvalue* MdoQueueValue(const MdoQueue* Queue, bool IncludeClaim)
 {
     xvalue* Root = xrtValueObject();
     xvalue* Items = xrtValueArray();
@@ -449,6 +452,8 @@ static xvalue* MdoQueueValue(const MdoQueue* Queue)
             MdoAttachmentIdsWriteValue(Item, Source->Attachments,
                 Source->AttachmentCount) &&
             MdoApiValueSetBool(Item, "priority", Source->Priority) &&
+            (!IncludeClaim || !Source->StartClaimed ||
+             MdoApiValueSetBool(Item, "start_claimed", true)) &&
             (Source->RunId[0] == '\0' ||
              MdoApiValueSetString(Item, "run_id", Source->RunId)) &&
             MdoApiValueAppendTake(Items, &Item);
@@ -462,7 +467,7 @@ static xvalue* MdoQueueValue(const MdoQueue* Queue)
 
 static bool MdoQueueWrite(const char* Path, const MdoQueue* Queue)
 {
-    xvalue* Data = MdoQueueValue(Queue);
+    xvalue* Data = MdoQueueValue(Queue, false);
     char* Json;
     size_t Size = 0u;
     bool Ok;
@@ -512,7 +517,7 @@ static bool MdoQueuePath(MdoApiContext* Context,
 static bool MdoQueueReply(MdoApiContext* Context, uint16 Status,
     MdoQueue* Queue)
 {
-    xvalue* Data = MdoQueueValue(Queue);
+    xvalue* Data = MdoQueueValue(Queue, true);
     MdoQueueRelease(Queue);
     if ( Data == NULL ) return MdoApiReplyError(Context, 503u,
         "queue_unavailable", "The queue response could not be created", NULL);
