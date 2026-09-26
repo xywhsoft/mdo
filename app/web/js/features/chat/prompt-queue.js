@@ -74,6 +74,38 @@ export function createPromptQueue({ container, navigation, isRunActive, stagedEn
     finally { loads.delete(key); }
   }
 
+  async function postItem(projectId, sessionId, text,
+    { id = newId(), first = false, priority = false, attachments = [],
+      stage = false } = {}) {
+    const key = sessionKey(projectId, sessionId);
+    if (!key || (!text.trim() && !attachments.length)) return null;
+    await load(key);
+    if ((queues.get(key) ?? []).length >= 20 &&
+        !(queues.get(key) ?? []).some((item) => item.id === id)) return null;
+    const body = { id, text: text.trim(), attachments, first, priority };
+    if (stage) body.stage = true;
+    const keepalive = new TextEncoder().encode(JSON.stringify(body)).length <= 60 * 1024;
+    const reconcile = async () => {
+      const response = await api.get(path(key));
+      update(key, response);
+      return (response.data?.items ?? []).some((item) =>
+        item.id === body.id && item.text === body.text &&
+        item.priority === body.priority &&
+        JSON.stringify(item.attachments ?? []) === JSON.stringify(body.attachments));
+    };
+    try {
+      update(key, await api.post(path(key), body, { keepalive }));
+      return id;
+    } catch (error) {
+      if (!uncertainPost(error)) throw error;
+      try { if (await reconcile()) return id; }
+      catch { /* A different page may have consumed the item. */ }
+      error.queueAdmissionUncertain = true;
+      error.queueItemId = id;
+      throw error;
+    }
+  }
+
   function render() {
     const key = selectedKey();
     const saved = queues.get(key) ?? [];
@@ -92,6 +124,7 @@ export function createPromptQueue({ container, navigation, isRunActive, stagedEn
       return;
     }
     const uncertain = saved[0]?.state === "sending";
+    const stagedHead = saved[0]?.state === "staged";
     const reviewPending = isRunReviewPending(key);
     const [projectId, sessionId] = key.split("/");
     let open = expanded.get(key) ?? true;
@@ -100,9 +133,10 @@ export function createPromptQueue({ container, navigation, isRunActive, stagedEn
       attrs: { type: "button", "aria-expanded": String(open),
         "aria-controls": "prompt-queue-list", "data-queue-focus": "toggle" },
     });
-    const waitingForRun = !uncertain && isRunActive();
+    const waitingForRun = !uncertain && !stagedHead && isRunActive();
     const retry = waitingForRun || !saved.length || reviewPending ? null : element("button", {
-      text: t(uncertain ? "queue.retryUncertain" : "queue.sendNext"),
+      text: t(uncertain ? "queue.retryUncertain" : stagedHead
+        ? "queue.continueStaged" : "queue.sendNext"),
       attrs: { type: "button", "data-queue-focus": "retry" },
     });
     if (retry) {
@@ -166,9 +200,10 @@ export function createPromptQueue({ container, navigation, isRunActive, stagedEn
         element("span", { className: "prompt-queue-text",
           text: entry.text || t("queue.imageMessage") }),
       ]);
-      if (entry.state === "sending") body.append(element("span", {
-        className: "prompt-queue-state", text: t("queue.sendingUncertain"),
-      }));
+      if (entry.state === "sending" || entry.state === "staged")
+        body.append(element("span", { className: "prompt-queue-state",
+          text: t(entry.state === "staged" ? "queue.staged" :
+            "queue.sendingUncertain") }));
       if (entry.priority) body.append(element("span", {
         className: "prompt-queue-state", text: t("queue.priority"),
       }));
@@ -220,6 +255,7 @@ export function createPromptQueue({ container, navigation, isRunActive, stagedEn
   navigation.subscribe(render);
   subscribeLocale(render);
   return Object.freeze({
+    newId,
     async select(projectId, sessionId) {
       const key = sessionKey(projectId, sessionId);
       await load(key, true);
@@ -227,33 +263,35 @@ export function createPromptQueue({ container, navigation, isRunActive, stagedEn
     },
     async enqueue(projectId, sessionId, text,
       { first = false, priority = false, attachments = [] } = {}) {
+      return Boolean(await postItem(projectId, sessionId, text,
+        { first, priority, attachments }));
+    },
+    async stage(projectId, sessionId, submission,
+      { first = false } = {}) {
+      return postItem(projectId, sessionId, submission.text, {
+        id: submission.id, first, priority: submission.interrupt,
+        attachments: submission.attachments, stage: true,
+      });
+    },
+    find(projectId, sessionId, id) {
+      return queues.get(sessionKey(projectId, sessionId))?.find((item) =>
+        item.id === id) ?? null;
+    },
+    async promote(projectId, sessionId, id) {
       const key = sessionKey(projectId, sessionId);
-      if (!key || (!text.trim() && !attachments.length)) return false;
-      await load(key);
-      if ((queues.get(key) ?? []).length >= 20) return false;
-      const body = { id: newId(), text: text.trim(), attachments, first, priority };
-      const keepalive = new TextEncoder().encode(JSON.stringify(body)).length <= 60 * 1024;
-      const submit = async () => {
-        update(key, await api.post(path(key), body, { keepalive }));
+      try {
+        update(key, await api.put(path(key, id), { state: "pending" }));
         return true;
-      };
-      const reconcile = async () => {
-        const response = await api.get(path(key));
-        update(key, response);
-        return (response.data?.items ?? []).some((item) =>
-          item.id === body.id && item.text === body.text &&
-          item.priority === body.priority &&
-          JSON.stringify(item.attachments ?? []) === JSON.stringify(body.attachments));
-      };
-      try { return await submit(); }
-      catch (error) {
-        if (!uncertainPost(error)) throw error;
-        try { if (await reconcile()) return true; }
-        catch { /* The queue may have accepted and already consumed the item. */ }
-        // A missing item is also inconclusive: dispatch removes it from the
-        // queue, so resubmitting even the same ID could execute it twice.
+      } catch (error) {
+        if (error?.code !== "queue_state_conflict" && !uncertainPost(error))
+          throw error;
+        try {
+          await load(key, true);
+          if (["pending", "sending"].includes(
+            queues.get(key)?.find((item) => item.id === id)?.state)) return true;
+        } catch { /* Keep the uncertain state for review. */ }
         error.queueAdmissionUncertain = true;
-        error.queueItemId = body.id;
+        error.queueItemId = id;
         throw error;
       }
     },

@@ -465,3 +465,9 @@ Home `.build/mdo-packed-docks-lyu66m_d` 使用新单文件程序真实重启后�
 连续输入的持久提交日志开始落地。服务端队列 schema 4 增加 `staged`：`POST /queue` 可用 `stage: true` 原子保存尚未允许派发的消息，之后只允许按 `staged → pending → sending` 提升；已标记 `sending` 的旧重试仍可由用户核对后转回 `pending`。旧 schema 1/2/3 可读；图片引用在 `staged` 期间仍受保护。运行探针覆盖原位重复提交、非法跳级、提升、删除、图片引用与旧文件升级。完整写前保存和前端恢复流程在 `docs/durable-submission-journal.md`；本阶段尚未把输入区接到 `staged`，强制刷新时内存暂存可能丢失的缺口仍在。
 
 本阶段有界发布门禁通过 62 个前端模块解析、22 项 Node 测试、114 项 Python 单元/契约测试、19 个运行探针、严格 C 编译、确定性打包、单文件零旁路写入和 20 秒启动检查。根目录 `mdo.exe` 已重建，与门禁产物的 SHA-256 同为 `db40042845083985d34d0e5d5a63e7b3ceaf7f27a829758c227fb887f71d11cd`。
+
+既有会话发送现接入便携写前快照：草稿 schema 4 增加独立 `submission`（稳定 ID、原文、图片 ID、优先标记），先保存快照再清空匹配的输入并写入队列 `staged`，确认同 ID、同内容后清除快照、提升为 `pending`，由统一队列派发运行。普通草稿可同时保存下一条输入。刷新或切换会话时按队列 ID 核对，已保存的 `staged` 项可由用户手动继续；队列项不见时保留快照和核对入口，不自动重发。前端轮询若遇到本页仍在执行的队列 POST，不再把暂时缺席误报为失败。服务端验证快照中的图片仍属于本会话且存在，引用期间不允许删除；草稿 schema 1/2/3 可读并在下次保存升级。
+
+隔离单文件 Home `.build/mdo-packed-docks-yufu5d0r` 中，既有会话两次发送分别落入队列并执行，两次队列 POST、两次运行 POST。`--drop-first-queue-response --fail-first-queue-reconcile` 的 Home `.build/mdo-packed-docks-1pe354rv` 在服务端接受后丢浏览器响应；刷新仍显示同一条 `staged` 消息，点击“继续发送”后只记录一次队列 POST 和一次运行 POST。`--fail-first-queue` 的 Home `.build/mdo-packed-docks-uy2wjflm` 中，队列明确拒绝后保留快照，点击“核对队列并恢复”将原文放回输入区，仅一次队列 POST、零次运行 POST。另有 Node 测试覆盖快照与下一条草稿的分离和刷新恢复，API 探针覆盖 schema 升级、清除和图片引用。当前一个会话只支持一条在途快照：发送期间可继续编辑，但暂不能连续按 Enter 提交多条；新任务创建及旧 `submissionLanes` 也尚未接入写前日志。后续阶段按 `docs/durable-submission-journal.md` 完成有序多项日志与消费凭据。
+
+本阶段有界发布门禁通过 62 个前端模块解析、23 项 Node 测试、114 项 Python 单元/契约测试、19 个运行探针、严格 C 编译、确定性打包、单文件零旁路写入和 20 秒启动检查。根目录 `mdo.exe` 已重建，与门禁产物的 SHA-256 同为 `2cd4d2b38c6e7d9eecb4347516bec5c2fb7a1ec985778f22d82c555cf2395eab`。

@@ -133,6 +133,7 @@ export async function boot() {
   let runsTimer = 0;
   let approvalsTimer = 0;
   const submissionLanes = new Map();
+  const submissionPosts = new Set();
   const uncertainAdmissions = new Map();
   let routeVersion = 0;
   let routeSignature = "";
@@ -434,9 +435,17 @@ export async function boot() {
     container: $("#prompt-queue"), navigation,
     isRunActive: () => Boolean(activeRun),
     isRunReviewPending: (key) => draftStore?.isRunUncertain(key) ?? false,
-    stagedEntries: () => activeSubmissionLane()?.pending.map((item) => ({
-      text: item.text, staged: true,
-    })) ?? [],
+    stagedEntries: () => {
+      const pending = activeSubmissionLane()?.pending.map((item) => ({
+        text: item.text, staged: true,
+      })) ?? [];
+      const current = navigation.get();
+      const inflight = draftStore?.submission(selectedKey);
+      if (inflight && current.sessionId &&
+          !promptQueue.find(current.projectId, current.sessionId, inflight.id))
+        pending.unshift({ text: inflight.text, staged: true });
+      return pending;
+    },
     onRetry: async () => {
       const selected = navigation.get();
       const key = `${selected.projectId}/${selected.sessionId}`;
@@ -447,8 +456,11 @@ export async function boot() {
         return;
       }
       const first = promptQueue.peek(selected.projectId, selected.sessionId);
+      if (draftStore.submission(key) && !await reconcileSubmission(key)) return;
       if (first?.state === "sending")
         await promptQueue.retry(selected.projectId, selected.sessionId, first.id);
+      if (first?.state === "staged")
+        await promptQueue.promote(selected.projectId, selected.sessionId, first.id);
       queueBlocked.delete(`${selected.projectId}/${selected.sessionId}`);
       await maybeCancelPriorityRun();
       await dispatchQueued();
@@ -506,7 +518,7 @@ export async function boot() {
     sessionStore: sessionDetailStore, timelineStore, modelsStore,
   });
   draftStore = createDraftStore({
-    onRestore(text, attachments, uncertainRun) {
+    onRestore(text, attachments, uncertainRun, submission) {
       prompt.value = text;
       composerAttachments = attachments;
       composerImages?.set(attachments);
@@ -514,6 +526,9 @@ export async function boot() {
       tokenMeter.refresh();
       if (uncertainRun && selectedKey) {
         showComposerError(uncertainRunError());
+        setRun(activeRun);
+      } else if (submission && selectedKey && !submissionPosts.has(selectedKey)) {
+        showComposerError(submissionUncertainError());
         setRun(activeRun);
       }
       promptQueue.render();
@@ -655,7 +670,8 @@ export async function boot() {
     send.disabled = !(sessionWritable || (creatingSession && lane)) ||
       composerImages?.isUploading() || composerProfile.isBusy() ||
       !draftStore.isLoaded(selectedKey) ||
-      draftStore.isRunUncertain(selectedKey);
+      draftStore.isRunUncertain(selectedKey) ||
+      Boolean(draftStore.submission(selectedKey));
     composerImages?.setWritable(sessionWritable && !creatingSession &&
       !(lane && !route.sessionId));
     composerProfile.setRunActive(Boolean(activeRun || lane));
@@ -664,7 +680,8 @@ export async function boot() {
       : t("shell.send", {}, "发送任务"));
     composerHint.textContent = draftStore.isRunUncertain(selectedKey)
       ? t("composer.hintReviewRun") : !draftStore.isLoaded(selectedKey)
-      ? t("composer.hintLoadingDraft") : pendingCount
+      ? t("composer.hintLoadingDraft") : draftStore.submission(selectedKey)
+      ? t("composer.hintSavingSubmission") : pendingCount
       ? t("composer.hintPendingAdmission", { count: pendingCount })
       : lane && !activeRun ? t("composer.hintSubmitting") : activeRun
       ? (guide
@@ -941,7 +958,8 @@ export async function boot() {
         session.id !== selected.sessionId || session.status !== "active" || activeRun ||
         queueBlocked.has(key) ||
         promptQueue.peek(selected.projectId, selected.sessionId)?.state !== "pending") return;
-    if (!await draftStore.ensureLoaded(key) || draftStore.isRunUncertain(key)) return;
+    if (!await draftStore.ensureLoaded(key) || draftStore.isRunUncertain(key) ||
+        draftStore.submission(key)) return;
     if ((runsStore.get().data?.items ?? []).some((run) =>
       run.project_id === selected.projectId && run.session_id === selected.sessionId && !terminalState(run))) return;
     await promptQueue.exclusive(selected.projectId, selected.sessionId,
@@ -953,7 +971,8 @@ export async function boot() {
         try {
           await ensurePromptReady(selected.projectId, selected.sessionId,
             Boolean(entry.priority));
-          if (!stillSelected() || draftStore.isRunUncertain(key)) return;
+          if (!stillSelected() || draftStore.isRunUncertain(key) ||
+              draftStore.submission(key)) return;
           await promptQueue.markSending(selected.projectId, selected.sessionId, entry.id);
           const run = await startRun(selected.projectId, selected.sessionId,
             entry.text, entry.attachments ?? []);
@@ -988,6 +1007,7 @@ export async function boot() {
     try {
       await promptQueue.select(selected.projectId, selected.sessionId);
       resolveObservedAdmission(`${selected.projectId}/${selected.sessionId}`);
+      await reconcileSubmission(`${selected.projectId}/${selected.sessionId}`);
       const current = navigation.get();
       if (current.projectId !== selected.projectId ||
           current.sessionId !== selected.sessionId) return;
@@ -1059,6 +1079,7 @@ export async function boot() {
         try {
           await promptQueue.select(projectId, sessionId);
           resolveObservedAdmission(key);
+          await reconcileSubmission(key);
           queueBlocked.delete(key);
           void maybeCancelPriorityRun();
           void dispatchQueued();
@@ -1094,6 +1115,7 @@ export async function boot() {
       await Promise.all([loadSession(projectId, sessionId), loadRuns(), loadRecovery(),
         promptQueue.select(projectId, sessionId)]);
       resolveObservedAdmission(key);
+      await reconcileSubmission(key);
     } catch (error) { showComposerError(error); return; }
     finally {
       if (creatingSessionKey === key) {
@@ -1122,6 +1144,11 @@ export async function boot() {
   function uncertainRunError() {
     const error = new Error(t("composer.runAdmissionUncertain"));
     error.code = "run_admission_uncertain";
+    return error;
+  }
+  function submissionUncertainError() {
+    const error = new Error(t("composer.submissionUncertain"));
+    error.code = "submission_unconfirmed";
     return error;
   }
   function syncRecoveryNotice(state) {
@@ -1162,6 +1189,20 @@ export async function boot() {
         prompt.focus();
       });
       composerError.append(acknowledge);
+    }
+    if (error?.code === "submission_unconfirmed") {
+      const review = element("button", {
+        className: "composer-error-action",
+        text: t("composer.reviewSubmission"),
+        attrs: { type: "button" },
+      });
+      review.addEventListener("click", async () => {
+        review.disabled = true;
+        try { await reviewSubmission(selectedKey); }
+        catch (failure) { showComposerError(failure); }
+        finally { review.disabled = false; }
+      });
+      composerError.append(review);
     }
     if (error?.code === "recovery_required") {
       const openDecisions = element("button", {
@@ -1209,6 +1250,82 @@ export async function boot() {
     const route = navigation.get();
     return route.view === "workspace" && selectedKey === key &&
       (key ? `${route.projectId}/${route.sessionId}` === key : !route.sessionId);
+  }
+
+  function clearSubmittedComposer(key, submission) {
+    if (!draftStore.clearIfMatches(key, submission.text,
+      submission.attachments)) return;
+    if (!selectedOwnsDraft(key) || prompt.value !== submission.text ||
+        JSON.stringify(composerAttachments) !==
+          JSON.stringify(submission.attachments)) return;
+    prompt.value = "";
+    composerAttachments = [];
+    composerImages.clear();
+    resizePrompt();
+    tokenMeter.refresh();
+    prompt.focus();
+  }
+
+  async function reconcileSubmission(key) {
+    const submission = draftStore.submission(key);
+    if (!submission) return true;
+    // Queue polling can happen while this page is still committing the POST.
+    // A temporarily missing item is not evidence of a failed submission.
+    if (submissionPosts.has(key)) return false;
+    if (!await draftStore.ensureLoaded(key)) return false;
+    const [projectId, sessionId] = key.split("/");
+    const item = promptQueue.find(projectId, sessionId, submission.id);
+    if (!item || item.text !== submission.text.trim() ||
+        item.priority !== submission.interrupt ||
+        JSON.stringify(item.attachments ?? []) !==
+          JSON.stringify(submission.attachments)) {
+      if (selectedOwnsDraft(key)) showComposerError(submissionUncertainError());
+      return false;
+    }
+    clearSubmittedComposer(key, submission);
+    draftStore.clearSubmission(key, submission.id);
+    if (!await draftStore.flush(key)) {
+      draftStore.stageSubmission(key, submission);
+      if (selectedOwnsDraft(key)) showComposerError(submissionUncertainError());
+      return false;
+    }
+    if (selectedOwnsDraft(key)) {
+      if (composerError.dataset.code === "submission_unconfirmed") hideComposerError();
+      setRun(activeRun);
+      promptQueue.render();
+    }
+    return true;
+  }
+
+  async function reviewSubmission(key) {
+    if (!key) return;
+    if (submissionPosts.has(key)) return;
+    const submission = draftStore.submission(key);
+    if (!submission) return;
+    const [projectId, sessionId] = key.split("/");
+    await promptQueue.select(projectId, sessionId);
+    if (promptQueue.find(projectId, sessionId, submission.id)) {
+      await reconcileSubmission(key);
+      return;
+    }
+    const restored = draftStore.restoreUnsent(key, submission.text,
+      submission.attachments);
+    draftStore.clearSubmission(key, submission.id);
+    if (!await draftStore.flush(key)) {
+      draftStore.stageSubmission(key, submission);
+      throw submissionUncertainError();
+    }
+    if (selectedOwnsDraft(key)) {
+      prompt.value = restored.text;
+      composerAttachments = restored.attachments;
+      composerImages.set(restored.attachments);
+      resizePrompt();
+      tokenMeter.refresh();
+      hideComposerError();
+      setRun(activeRun);
+      promptQueue.render();
+      prompt.focus();
+    }
   }
 
   function consumeComposerInput(ownerKey) {
@@ -1309,10 +1426,53 @@ export async function boot() {
     }
   }
 
+  async function submitExistingSession(origin, rawInput, attachments, interrupt) {
+    const key = `${origin.projectId}/${origin.sessionId}`;
+    const submission = { id: promptQueue.newId(), text: rawInput,
+      attachments: [...attachments], interrupt };
+    draftStore.capture(key, submission.text, attachments);
+    if (!draftStore.stageSubmission(key, submission)) {
+      showComposerError(submissionUncertainError());
+      return;
+    }
+    hideComposerError();
+    setRun(activeRun);
+    promptQueue.render();
+    submissionPosts.add(key);
+    try {
+      if (!await draftStore.flush(key)) throw submissionUncertainError();
+      clearSubmittedComposer(key, submission);
+      setRun(activeRun);
+      if (!await promptQueue.stage(origin.projectId, origin.sessionId,
+        submission, { first: interrupt }))
+        throw new Error(t("composer.queueFull", {}, "待发送队列已满（最多 20 条）"));
+      submissionPosts.delete(key);
+      if (!await reconcileSubmission(key)) return;
+      await promptQueue.promote(origin.projectId, origin.sessionId,
+        submission.id);
+      queueBlocked.delete(key);
+      if (interrupt && selectedOwnsDraft(key)) await maybeCancelPriorityRun();
+      if (selectedOwnsDraft(key)) await dispatchQueued();
+    } catch (error) {
+      if (selectedOwnsDraft(key))
+        showComposerError(submissionUncertainError(), errorMessage(error));
+      else toast(t("composer.backgroundQueueFailed", {
+        title: key, error: errorMessage(error),
+      }), "error");
+    } finally {
+      submissionPosts.delete(key);
+      if (selectedOwnsDraft(key)) {
+        setRun(activeRun);
+        promptQueue.render();
+      }
+    }
+  }
+
   async function submitPrompt({ text, attachments = [], interrupt = false,
     fromComposer = true }) {
     fileMentions.hide();
     if ((!text && !attachments.length) || composerImages.isUploading()) return;
+    const rawInput = fromComposer ? prompt.value : text;
     const origin = navigation.get();
     const originVersion = routeVersion;
     if (fromComposer && !attachments.length &&
@@ -1321,6 +1481,10 @@ export async function boot() {
         !await draftStore.ensureLoaded(selectedKey)) return;
     if (draftStore.isRunUncertain(selectedKey)) {
       showComposerError(uncertainRunError());
+      return;
+    }
+    if (draftStore.submission(selectedKey)) {
+      showComposerError(submissionUncertainError());
       return;
     }
     if (routeVersion !== originVersion) return;
@@ -1342,6 +1506,10 @@ export async function boot() {
     }
     if (composerProfile.isBusy()) {
       showComposerError(new Error(t("composer.profileBusy", {}, "请等待会话配置更新完成")));
+      return;
+    }
+    if (origin.sessionId && fromComposer) {
+      await submitExistingSession(origin, rawInput, attachments, interrupt);
       return;
     }
     hideComposerError();
