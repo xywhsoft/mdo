@@ -11,12 +11,14 @@ export function loadSessions() {
 }
 
 export function loadSession(projectId, sessionId) {
+  return sessionDetailStore.load(() => readSession(projectId, sessionId));
+}
+
+export async function readSession(projectId, sessionId) {
   const project = resourceId(projectId, "project");
   const session = resourceId(sessionId, "session");
-  return sessionDetailStore.load(async () => {
-    const response = await api.get(`/projects/${project}/sessions/${session}`);
-    return { ...response.data, etag: response.etag };
-  });
+  const response = await api.get(`/projects/${project}/sessions/${session}`);
+  return { ...response.data, etag: response.etag };
 }
 
 export async function createSession(input) {

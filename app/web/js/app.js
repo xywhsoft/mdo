@@ -1,7 +1,7 @@
 import { mountIcons } from "./components/icons.js";
 import { bootstrapStore, loadBootstrap } from "./state/bootstrap.js";
 import {
-  sessionsStore, sessionDetailStore, loadSessions, loadSession, createSession,
+  sessionsStore, sessionDetailStore, loadSessions, loadSession, readSession, createSession,
   patchSession, trashSession, restoreSession, loadSessionHistory, forkSession,
   truncateSession, clearSession, exportSession, loadSessionTranscript,
 } from "./state/sessions.js";
@@ -59,6 +59,7 @@ import { createKeyboardShortcuts } from "./features/shell/keyboard-shortcuts.js"
 import { createRunNotifications } from "./features/shell/run-notifications.js";
 import { startWorkspaceNavigation } from "./features/shell/workspace-startup.js";
 import { focusSessionComposerAfterNavigation } from "./features/shell/session-composer-focus.js";
+import { createSessionMetadataSync } from "./features/shell/session-metadata-sync.js";
 import { createPaneLayout } from "./features/shell/pane-layout.js";
 import { trackMobileViewport } from "./features/shell/mobile-viewport.js";
 import { api } from "./api/client.js";
@@ -142,6 +143,7 @@ export async function boot() {
   let creatingSessionKey = "";
   let tasksTimer = 0;
   let runsTimer = 0;
+  let sessionTimer = 0;
   let approvalsTimer = 0;
   let routeVersion = 0;
   let routeSignature = "";
@@ -1201,12 +1203,19 @@ export async function boot() {
       if (key) {
         queueBlocked.add(key);
         try {
+          const detail = await loadSession(projectId, sessionId);
+          if (detail.status !== "ready" || detail.data?.project_id !== projectId ||
+              detail.data.id !== sessionId) {
+            if (detail.error) throw detail.error;
+            return;
+          }
+          await loadSessions();
           await promptQueue.select(projectId, sessionId);
           await submissionController.reconcile(key);
-          queueBlocked.delete(key);
-          void maybeCancelPriorityRun();
-          void dispatchQueued();
-        } catch (error) { showComposerError(error); }
+        } catch (error) { showComposerError(error); return; }
+        finally { queueBlocked.delete(key); }
+        void maybeCancelPriorityRun();
+        void dispatchQueued();
       }
       return;
     }
@@ -1933,6 +1942,18 @@ export async function boot() {
       Number(snapshot.data?.active_runs ?? 0) > 0 ? 1500 : 8000);
   }
   runsStore.subscribe(scheduleRunsRefresh);
+  const sessionMetadataSync = createSessionMetadataSync({ navigation,
+    store: sessionDetailStore, readSession, loadSessions,
+    onRestored: refreshSelectedQueue });
+  function scheduleSessionRefresh() {
+    window.clearTimeout(sessionTimer);
+    if (document.hidden) return;
+    sessionTimer = window.setTimeout(async () => {
+      try { await sessionMetadataSync.refresh(); }
+      catch { /* Keep the last known state until the next bounded check. */ }
+      scheduleSessionRefresh();
+    }, 8000);
+  }
   function scheduleApprovalRefresh() {
     window.clearTimeout(approvalsTimer);
     if (document.hidden) return;
@@ -1950,11 +1971,15 @@ export async function boot() {
     if (document.hidden) {
       window.clearTimeout(tasksTimer);
       window.clearTimeout(runsTimer);
+      window.clearTimeout(sessionTimer);
       window.clearTimeout(approvalsTimer);
     }
     else {
       scheduleTaskRefresh();
       void loadRuns().then(refreshSelectedQueue);
+      void loadSessions();
+      void sessionMetadataSync.refresh().catch(() => {});
+      scheduleSessionRefresh();
       scheduleApprovalRefresh();
       if (activeRun) scheduleRunPoll(100);
     }
@@ -1988,5 +2013,6 @@ export async function boot() {
     newButton: $("#startup-new"), prompt, entryHash });
   if (!navigation.get().sessionId) void newTaskController.reconcile();
   scheduleTaskRefresh();
+  scheduleSessionRefresh();
   scheduleApprovalRefresh();
 }
