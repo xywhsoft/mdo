@@ -559,6 +559,10 @@ export async function boot() {
         void dispatchQueued();
       }
     },
+    onConsumed(key) {
+      if (selectedOwnsDraft(key)) void refreshSelectedTimeline();
+      void loadRuns();
+    },
     onReview(key, submission, error) {
       if (selectedOwnsDraft(key))
         showComposerError(submission.state === "rejected"

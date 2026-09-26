@@ -1023,6 +1023,7 @@
   "error.runReceiptUnavailable": "The run may have started, but its queue receipt was not saved. Review the run record.",
   "error.queueFull": "The pending queue is full. Handle existing messages first.",
   "error.queueStateConflict": "The pending message changed state. Refresh and review it.",
+  "error.queueItemConsumed": "This queued message already started a run. Check the run record.",
   "error.draftConflict": "The draft changed in another window. Refresh and review it.",
   "error.attachmentUnavailable": "Image storage is unavailable. Try again.",
   "error.sessionStateConflict": "The session state changed. Refresh and try again.",

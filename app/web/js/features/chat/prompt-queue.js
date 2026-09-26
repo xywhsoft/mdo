@@ -78,10 +78,12 @@ export function createPromptQueue({ container, navigation, isRunActive, stagedEn
     const reconcile = async () => {
       const response = await api.get(path(key));
       update(key, response);
-      return (response.data?.items ?? []).some((item) =>
+      if ((response.data?.items ?? []).some((item) =>
         item.id === body.id && item.text === body.text &&
         item.priority === body.priority &&
-        JSON.stringify(item.attachments ?? []) === JSON.stringify(body.attachments));
+        JSON.stringify(item.attachments ?? []) === JSON.stringify(body.attachments)))
+        return true;
+      return Boolean(await readReceipt(key, body.id));
     };
     try {
       update(key, await api.post(path(key), body, { keepalive }));
@@ -92,6 +94,18 @@ export function createPromptQueue({ container, navigation, isRunActive, stagedEn
       catch { /* A different page may have consumed the item. */ }
       error.queueAdmissionUncertain = true;
       error.queueItemId = id;
+      throw error;
+    }
+  }
+
+  async function readReceipt(key, id) {
+    try {
+      const receipt = (await api.get(path(key, id))).data;
+      return receipt?.id === id && receipt.state === "accepted" &&
+        /^run-[A-Za-z0-9_.-]+$/.test(receipt.run_id ?? "")
+        ? receipt : null;
+    } catch (error) {
+      if (error?.status === 404) return null;
       throw error;
     }
   }
@@ -273,6 +287,9 @@ export function createPromptQueue({ container, navigation, isRunActive, stagedEn
     find(projectId, sessionId, id) {
       return queues.get(sessionKey(projectId, sessionId))?.find((item) =>
         item.id === id) ?? null;
+    },
+    receipt(projectId, sessionId, id) {
+      return readReceipt(sessionKey(projectId, sessionId), id);
     },
     hasStaged(projectId, sessionId) {
       return queues.get(sessionKey(projectId, sessionId))?.some((item) =>

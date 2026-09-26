@@ -3570,6 +3570,9 @@ def run_probe(host: Path) -> None:
                     status, _, body = queue_request("PUT", bound_path,
                         {"state": state})
                     assert status == 200, (status, body)
+                status, _, body = request(port, "GET", bound_path)
+                assert status == 404 and json.loads(body)["error"][
+                    "code"] == "queue_receipt_not_found", (status, body)
                 status, _, body = queue_request("POST", run_path, {
                     "prompt": "bound queue run", "queue_item_id": "invalid",
                 })
@@ -3585,6 +3588,11 @@ def run_probe(host: Path) -> None:
                 })
                 assert status == 202, (status, body)
                 bound_run_id = json.loads(body)["data"]["id"]
+                receipt_file = queue_file.parent / "queue-receipts" / (
+                    bound_id + ".json")
+                receipt = json.loads(receipt_file.read_text(encoding="utf-8"))
+                assert receipt == {"schema_version": 1, "id": bound_id,
+                                   "run_id": bound_run_id}, receipt
                 queued = json.loads(request(port, "GET", queue_path)[2])["data"]
                 assert queued["items"][0]["run_id"] == bound_run_id, queued
                 stored = json.loads(queue_file.read_text(encoding="utf-8"))
@@ -3608,7 +3616,33 @@ def run_probe(host: Path) -> None:
                 })
                 assert status == 409 and json.loads(body)["error"][
                     "code"] == "queue_run_started", (status, body)
+                receipt_file.write_text("{broken", encoding="utf-8")
+                status, _, body = request(port, "GET", bound_path)
+                assert status == 503 and json.loads(body)["error"][
+                    "code"] == "queue_unavailable", (status, body)
+                status, _, body = queue_request("POST", queue_path, {
+                    "id": bound_id, "text": "bound queue run", "first": False,
+                })
+                assert status == 503 and json.loads(body)["error"][
+                    "code"] == "queue_unavailable", (status, body)
+                receipt_file.write_text(json.dumps(receipt), encoding="utf-8")
                 assert request(port, "DELETE", bound_path)[0] == 200
+                status, _, body = request(port, "GET", bound_path)
+                assert status == 200 and json.loads(body)["data"] == {
+                    "id": bound_id, "state": "accepted",
+                    "run_id": bound_run_id,
+                }, (status, body)
+                status, _, body = queue_request("POST", queue_path, {
+                    "id": bound_id, "text": "bound queue run", "first": False,
+                    "stage": True,
+                })
+                assert status == 409 and json.loads(body)["error"][
+                    "code"] == "queue_item_consumed", (status, body)
+                status, _, body = queue_request("POST", run_path, {
+                    "prompt": "bound queue run", "queue_item_id": bound_id,
+                })
+                assert status == 409 and json.loads(body)["error"][
+                    "code"] == "queue_run_started", (status, body)
 
                 meta_path.write_text("{broken", encoding="utf-8")
                 status, headers, body = request(

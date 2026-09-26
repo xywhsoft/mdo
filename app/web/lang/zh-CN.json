@@ -1023,6 +1023,7 @@
   "error.runReceiptUnavailable": "运行可能已开始，但队列回执未保存；请核对运行记录。",
   "error.queueFull": "待发送队列已满，请先处理已有消息。",
   "error.queueStateConflict": "待发送消息状态已变化，请刷新后核对。",
+  "error.queueItemConsumed": "这条待发送消息已启动运行，请核对运行记录。",
   "error.draftConflict": "草稿已在其他窗口修改，请刷新后核对。",
   "error.attachmentUnavailable": "图片存储暂不可用，请重试。",
   "error.sessionStateConflict": "会话状态已变化，请刷新后重试。",

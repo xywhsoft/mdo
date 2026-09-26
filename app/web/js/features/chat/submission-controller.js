@@ -16,7 +16,7 @@ function matches(item, submission) {
 // The draft is the write-ahead log. Only its first entry may enter the queue;
 // later entries remain durable and ordered while that request is unresolved.
 export function createSubmissionController({ draftStore, promptQueue,
-  onPersisted, onPromoted, onReview, onRestored, onChange }) {
+  onPersisted, onPromoted, onConsumed, onReview, onRestored, onChange }) {
   const pumping = new Set();
   const releasing = new Set();
   const reviewed = new Map();
@@ -42,6 +42,12 @@ export function createSubmissionController({ draftStore, promptQueue,
       releasing.delete(key);
       onChange(key);
     }
+  }
+
+  async function consumeReceipt(key, submission, receipt) {
+    if (!receipt || !await release(key, submission)) return false;
+    onConsumed?.(key, receipt);
+    return true;
   }
 
   async function pump(key) {
@@ -75,6 +81,13 @@ export function createSubmissionController({ draftStore, promptQueue,
           }
           admissionPending = false;
           const item = promptQueue.find(projectId, sessionId, posting.id);
+          if (!item) {
+            if (await consumeReceipt(key, posting,
+                await promptQueue.receipt(projectId, sessionId, posting.id)))
+              continue;
+            requestReview(key, posting);
+            return;
+          }
           if (!matches(item, posting) || !await release(key, posting)) {
             requestReview(key, posting);
             return;
@@ -82,6 +95,13 @@ export function createSubmissionController({ draftStore, promptQueue,
           await promptQueue.promote(projectId, sessionId, posting.id);
           onPromoted(key, posting);
         } catch (error) {
+          if (error?.code === "queue_item_consumed") {
+            try {
+              if (await consumeReceipt(key, posting,
+                  await promptQueue.receipt(projectId, sessionId,
+                    posting.id))) continue;
+            } catch { /* Keep the original admission error for review. */ }
+          }
           // A queue-full 422 is a definite rejection. Persist that fact so a
           // refresh does not mislabel it as an admission with lost response.
           // Other failures remain uncertain until the queue can be checked.
@@ -121,6 +141,16 @@ export function createSubmissionController({ draftStore, promptQueue,
       if (item.state !== "staged") void pump(key);
       return true;
     }
+    try {
+      if (await consumeReceipt(key, first,
+          await promptQueue.receipt(projectId, sessionId, first.id))) {
+        void pump(key);
+        return true;
+      }
+    } catch (error) {
+      requestReview(key, first, error);
+      return false;
+    }
     if (first.state === "posting" || first.state === "rejected") {
       requestReview(key, first);
       return false;
@@ -157,6 +187,16 @@ export function createSubmissionController({ draftStore, promptQueue,
     await promptQueue.select(projectId, sessionId);
     if (promptQueue.find(projectId, sessionId, first.id))
       return reconcile(key);
+    try {
+      if (await consumeReceipt(key, first,
+          await promptQueue.receipt(projectId, sessionId, first.id))) {
+        void pump(key);
+        return true;
+      }
+    } catch (error) {
+      requestReview(key, first, error);
+      return false;
+    }
     if (first.state !== "posting" && first.state !== "rejected") {
       void pump(key);
       return true;

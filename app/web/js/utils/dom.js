@@ -55,6 +55,8 @@ const API_ERROR_COPY = Object.freeze({
   queue_full: ["error.queueFull", "待发送队列已满，请先处理已有消息。"],
   queue_state_conflict: ["error.queueStateConflict",
     "待发送消息状态已变化，请刷新后核对。"],
+  queue_item_consumed: ["error.queueItemConsumed",
+    "这条待发送消息已启动运行，请核对运行记录。"],
   draft_conflict: ["error.draftConflict",
     "草稿已在其他窗口修改，请刷新后核对。"],
   attachment_unavailable: ["error.attachmentUnavailable",

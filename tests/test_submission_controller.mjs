@@ -117,6 +117,7 @@ test("a recovered staged predecessor holds later submissions until continued", a
   };
   const promptQueue = {
     hasStaged() { return queue.some((item) => item.state === "staged"); },
+    receipt() { return null; },
     find(_project, _session, id) {
       return queue.find((item) => item.id === id);
     },
@@ -156,12 +157,93 @@ test("polling an uncertain queue admission asks for review only once", async () 
       async ensureLoaded() { return true; },
       submissions() { return [first]; },
     },
-    promptQueue: { find() { return null; } },
+    promptQueue: { find() { return null; }, receipt() { return null; } },
     onPersisted() {}, onPromoted() {}, onReview() { reviews += 1; },
     onRestored() {}, onChange() {},
   });
   assert.equal(await controller.reconcile("default/uncertain"), false);
   assert.equal(await controller.reconcile("default/uncertain"), false);
+  assert.equal(reviews, 1);
+});
+
+test("a consumed queue receipt releases only its matching saved intent", async () => {
+  const key = "default/consumed";
+  const items = [
+    { id: "a".repeat(32), text: "already run", attachments: [],
+      interrupt: false, state: "posting" },
+    { id: "b".repeat(32), text: "next", attachments: [],
+      interrupt: false, state: "prepared" },
+  ];
+  const staged = [];
+  const consumed = [];
+  let done;
+  const promoted = new Promise((resolve) => { done = resolve; });
+  const draftStore = {
+    async ensureLoaded() { return true; },
+    submissions() { return [...items]; },
+    clearSubmission(_key, id) {
+      const index = items.findIndex((item) => item.id === id);
+      if (index < 0) return false;
+      items.splice(index, 1);
+      return true;
+    },
+    updateSubmissionState(_key, id, state) {
+      const item = items.find((candidate) => candidate.id === id);
+      if (!item) return false;
+      item.state = state;
+      return true;
+    },
+    async flush() { return true; },
+  };
+  const promptQueue = {
+    find(_project, _session, id) {
+      return staged.find((item) => item.id === id) ?? null;
+    },
+    receipt(_project, _session, id) {
+      return id === "a".repeat(32)
+        ? { id, state: "accepted", run_id: "run-accepted" } : null;
+    },
+    hasStaged() { return false; },
+    async stage(_project, _session, item) {
+      staged.push({ id: item.id, text: item.text,
+        priority: item.interrupt, attachments: item.attachments,
+        state: "staged" });
+      return item.id;
+    },
+    async promote(_project, _session, id) {
+      staged.find((item) => item.id === id).state = "pending";
+    },
+  };
+  const controller = createSubmissionController({ draftStore, promptQueue,
+    onConsumed(_key, receipt) { consumed.push(receipt.run_id); },
+    onPromoted() { done(); }, onReview() { throw new Error("unexpected review"); },
+    onChange() {},
+  });
+  assert.equal(await controller.reconcile(key), true);
+  await promoted;
+  assert.deepEqual(consumed, ["run-accepted"]);
+  assert.deepEqual(staged.map((item) => item.text), ["next"]);
+  assert.deepEqual(items, []);
+});
+
+test("receipt read failure cannot turn review into a duplicate queue POST", async () => {
+  const first = { id: "c".repeat(32), text: "possibly run", attachments: [],
+    interrupt: false, state: "posting" };
+  const second = { id: "d".repeat(32), text: "later", attachments: [],
+    interrupt: false, state: "prepared" };
+  let retries = 0;
+  let reviews = 0;
+  const controller = createSubmissionController({
+    draftStore: { submissions() { return [first, second]; } },
+    promptQueue: {
+      async select() {}, find() { return null; },
+      async receipt() { throw { status: 503, code: "queue_unavailable" }; },
+      async stage() { retries += 1; },
+    },
+    onReview() { reviews += 1; }, onChange() {},
+  });
+  assert.equal(await controller.review("default/uncertain"), false);
+  assert.equal(retries, 0);
   assert.equal(reviews, 1);
 });
 
@@ -198,6 +280,7 @@ test("a definite queue-full rejection stays blocked across reconciliation", asyn
   const promptQueue = {
     async select() {},
     hasStaged() { return false; },
+    receipt() { return null; },
     find(_project, _session, id) {
       return queue.find((item) => item.id === id);
     },

@@ -388,16 +388,6 @@ bool MdoApiRunStartRoute(MdoApiContext* Context)
         return MdoApiReplyError(Context, 500u, "session_read_failed",
             "The session metadata could not be read", NULL);
     }
-    if ( SessionInfo.Status != MDO_SESSION_ACTIVE || SessionInfo.RuntimeOpen ) {
-        xrtFree(PromptText);
-        MdoApiJsonBodyUnit(&Body);
-        return MdoApiReplyError(Context, 409u,
-            SessionInfo.RuntimeOpen ? "session_busy" :
-                "session_state_conflict",
-            SessionInfo.RuntimeOpen ?
-                "The session already has an active runtime" :
-                "The session must be active before starting a run", NULL);
-    }
     if ( QueueItemId[0] != '\0' ) {
         MdoApiQueueRunStatus QueueStatus = MdoApiQueueRunPrepare(Project,
             SessionId, QueueItemId, Prompt, AttachmentIds,
@@ -418,6 +408,16 @@ bool MdoApiRunStartRoute(MdoApiContext* Context)
                         "The sending queue item does not match this run"),
                 NULL);
         }
+    }
+    if ( SessionInfo.Status != MDO_SESSION_ACTIVE || SessionInfo.RuntimeOpen ) {
+        xrtFree(PromptText);
+        MdoApiJsonBodyUnit(&Body);
+        return MdoApiReplyError(Context, 409u,
+            SessionInfo.RuntimeOpen ? "session_busy" :
+                "session_state_conflict",
+            SessionInfo.RuntimeOpen ?
+                "The session already has an active runtime" :
+                "The session must be active before starting a run", NULL);
     }
     if ( AttachmentCount != 0u ) {
         Catalog = MdoModelCatalogSnapshot();

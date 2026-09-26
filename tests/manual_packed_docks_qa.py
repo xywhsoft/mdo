@@ -266,6 +266,34 @@ class BoundedDelayProxy(BaseHTTPRequestHandler):
             response = upstream.getresponse()
             payload = response.read()
             if drop_response:
+                if self.server.consume_dropped_queue_response:
+                    if response.status != 201:
+                        raise RuntimeError(("queue was not accepted", response.status,
+                                            payload))
+                    item = json.loads(body)
+                    item_path = self.path + "/" + item["id"]
+                    for state in ("pending", "sending"):
+                        status, result = request(self.server.upstream_port,
+                                                 "PUT", item_path,
+                                                 {"state": state})
+                        if status != 200:
+                            raise RuntimeError(("queue promotion", status,
+                                                result))
+                    run_body = {"prompt": item["text"],
+                                "queue_item_id": item["id"]}
+                    if item.get("attachments"):
+                        run_body["attachments"] = item["attachments"]
+                    run_path = self.path[:-len("queue")] + "runs"
+                    status, result = request(self.server.upstream_port,
+                                             "POST", run_path, run_body)
+                    if status != 202:
+                        raise RuntimeError(("queue run", status, result))
+                    status, result = request(self.server.upstream_port,
+                                             "DELETE", item_path)
+                    if status != 200:
+                        raise RuntimeError(("queue removal", status, result))
+                    print("QA another page consumed the accepted queue item",
+                          flush=True)
                 print("QA queue response dropped after upstream acceptance", flush=True)
                 with self.server.count_lock:
                     self.server.dropped_queue_response = True
@@ -335,6 +363,8 @@ parser.add_argument("--full-first-queue", action="store_true",
                     help="reject one queue POST with a definite 422 queue_full")
 parser.add_argument("--drop-first-queue-response", action="store_true",
                     help="accept one queue POST upstream but close before replying")
+parser.add_argument("--consume-dropped-queue-response", action="store_true",
+                    help="consume that item upstream before dropping its response")
 parser.add_argument("--fail-first-queue-reconcile", action="store_true",
                     help="also fail the first queue GET after a dropped response")
 parser.add_argument("--slow-ms", type=int, default=15000,
@@ -364,6 +394,8 @@ if not 0 <= args.task_ms <= 30000:
     parser.error("--task-ms must be between 0 and 30000")
 if args.fail_first_queue_reconcile and not args.drop_first_queue_response:
     parser.error("--fail-first-queue-reconcile requires --drop-first-queue-response")
+if args.consume_dropped_queue_response and not args.drop_first_queue_response:
+    parser.error("--consume-dropped-queue-response requires --drop-first-queue-response")
 if args.full_first_queue and (args.fail_first_queue or args.drop_first_queue_response):
     parser.error("choose only one first-queue rejection or response drop")
 if args.fail_first_create and args.drop_first_create_response:
@@ -459,6 +491,7 @@ try:
         proxy.fail_first_queue = args.fail_first_queue
         proxy.full_first_queue = args.full_first_queue
         proxy.drop_first_queue_response = args.drop_first_queue_response
+        proxy.consume_dropped_queue_response = args.consume_dropped_queue_response
         proxy.fail_first_queue_reconcile = args.fail_first_queue_reconcile
         proxy.dropped_queue_response = False
         proxy.failed_queue_reconcile = False
