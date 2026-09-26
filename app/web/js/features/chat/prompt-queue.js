@@ -114,6 +114,7 @@ export function createPromptQueue({ container, navigation, isRunActive, stagedEn
       return;
     }
     const uncertain = saved[0]?.state === "sending";
+    const acceptedRun = uncertain && Boolean(saved[0]?.run_id);
     const stagedHead = saved[0]?.state === "staged";
     const reviewPending = isRunReviewPending(key);
     const [projectId, sessionId] = key.split("/");
@@ -124,7 +125,8 @@ export function createPromptQueue({ container, navigation, isRunActive, stagedEn
         "aria-controls": "prompt-queue-list", "data-queue-focus": "toggle" },
     });
     const waitingForRun = !uncertain && !stagedHead && isRunActive();
-    const retry = waitingForRun || !saved.length || reviewPending ? null : element("button", {
+    const retry = waitingForRun || !saved.length || reviewPending ||
+      acceptedRun ? null : element("button", {
       text: t(uncertain ? "queue.retryUncertain" : stagedHead
         ? "queue.continueStaged" : "queue.sendNext"),
       attrs: { type: "button", "data-queue-focus": "retry" },
@@ -142,13 +144,15 @@ export function createPromptQueue({ container, navigation, isRunActive, stagedEn
     }
     container.append(element("div", { className: "prompt-queue-header" }, [
       toggle, retry ?? element("span", { className: "prompt-queue-waiting",
-        text: t(reviewPending ? "queue.reviewRun" : saved.length
+        text: t(acceptedRun ? "queue.runAccepted" : reviewPending
+          ? "queue.reviewRun" : saved.length
           ? "queue.waitForRun" : entries[0]?.rejected
             ? "queue.rejected" : "queue.awaitingAdmission") }),
     ]));
     if (uncertain) container.append(element("p", {
       className: "prompt-queue-warning",
-      text: t("queue.uncertainWarning"),
+      text: t(acceptedRun ? "queue.runAcceptedWarning" :
+        "queue.uncertainWarning"),
     }));
     const list = element("ol", { className: "prompt-queue-list",
       attrs: { id: "prompt-queue-list" } });
@@ -195,6 +199,7 @@ export function createPromptQueue({ container, navigation, isRunActive, stagedEn
       if (entry.state === "sending" || entry.state === "staged")
         body.append(element("span", { className: "prompt-queue-state",
           text: t(entry.state === "staged" ? "queue.staged" :
+            entry.run_id ? "queue.runAccepted" :
             "queue.sendingUncertain") }));
       if (entry.priority) body.append(element("span", {
         className: "prompt-queue-state", text: t("queue.priority"),
@@ -241,7 +246,7 @@ export function createPromptQueue({ container, navigation, isRunActive, stagedEn
     const removed = queues.get(key)?.find((entry) => entry.id === id);
     update(key, await api.delete(path(key, id)));
     void discardUnusedImages(key, removed?.attachments);
-    await onRemoved?.();
+    await onRemoved?.(key, removed);
   }
 
   navigation.subscribe(render);

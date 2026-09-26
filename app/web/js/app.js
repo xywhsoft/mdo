@@ -463,7 +463,10 @@ export async function boot() {
       await dispatchQueued();
       void submissionController.pump(key);
     },
-    onRemoved: async () => {
+    onRemoved: async (key, removed) => {
+      // Removing an accepted item is an explicit decision after review.
+      // The persisted uncertainty guard still blocks until acknowledged.
+      if (removed?.run_id) queueBlocked.delete(key);
       await maybeCancelPriorityRun();
       await dispatchQueued();
     },
@@ -908,6 +911,12 @@ export async function boot() {
     syncRuntimeLabel();
     if (composerError.dataset.code === "recovery_required")
       showComposerError(recoveryRequiredError());
+    else if (composerError.dataset.code === "run_admission_uncertain")
+      showComposerError(uncertainRunError());
+    else if (composerError.dataset.code === "submission_unconfirmed")
+      showComposerError(submissionUncertainError());
+    else if (composerError.dataset.code === "submission_rejected")
+      showComposerError(submissionRejectedError());
     skipLink.textContent = t(settingsActive ? "shell.skipSettings" : "shell.skip");
     if (settingsActive) syncSettingsTitle();
     const session = sessionDetailStore.get().data;
@@ -1059,7 +1068,7 @@ export async function boot() {
           if (!stillSelected() || draftStore.isRunUncertain(key)) return;
           await promptQueue.markSending(selected.projectId, selected.sessionId, entry.id);
           const run = await startRun(selected.projectId, selected.sessionId,
-            entry.text, entry.attachments ?? []);
+            entry.text, entry.attachments ?? [], entry.id);
           if (stillSelected()) monitorRun(run);
           await promptQueue.remove(selected.projectId, selected.sessionId, entry.id);
           if (stillSelected()) hideComposerError();
@@ -1074,8 +1083,12 @@ export async function boot() {
           }
           try { await promptQueue.select(selected.projectId, selected.sessionId); }
           catch { /* Preserve the original dispatch error. */ }
-          if (stillSelected()) showComposerError(error, error.runAdmissionUncertain
-            ? t("composer.runAdmissionUncertain") : "");
+          const accepted = Boolean(promptQueue.find(selected.projectId,
+            selected.sessionId, entry.id)?.run_id);
+          if (stillSelected()) showComposerError(accepted
+            ? uncertainRunError() : error, accepted ? "" :
+            (error.runAdmissionUncertain
+              ? t("composer.runAdmissionUncertain") : ""));
           else toast(`${t("composer.backgroundQueueFailed",
             { title: session.title, error: errorMessage(error) },
             `后台会话“${session.title}”的待发送消息未发出：${errorMessage(error)}`)}` +
@@ -1091,6 +1104,8 @@ export async function boot() {
     try {
       await promptQueue.select(selected.projectId, selected.sessionId);
       await submissionController.reconcile(`${selected.projectId}/${selected.sessionId}`);
+      if (draftStore.isRunUncertain(`${selected.projectId}/${selected.sessionId}`))
+        showComposerError(uncertainRunError());
       const current = navigation.get();
       if (current.projectId !== selected.projectId ||
           current.sessionId !== selected.sessionId) return;
@@ -1224,7 +1239,11 @@ export async function boot() {
     return error;
   }
   function uncertainRunError() {
-    const error = new Error(t("composer.runAdmissionUncertain"));
+    const selected = navigation.get();
+    const accepted = Boolean(promptQueue.peek(selected.projectId,
+      selected.sessionId)?.run_id);
+    const error = new Error(t(accepted ? "composer.runAcceptedReview" :
+      "composer.runAdmissionUncertain"));
     error.code = "run_admission_uncertain";
     return error;
   }

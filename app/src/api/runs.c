@@ -171,6 +171,27 @@ static bool MdoApiRunAttachmentIds(const xvalue* Object,
     return MdoAttachmentIdsRead(Array, Ids, Count) && *Count != 0u;
 }
 
+static bool MdoApiRunQueueId(const xvalue* Object, char Id[33],
+    size_t* Present)
+{
+    const xvalue* Value = xrtValueObjectGet(Object,
+        XRT_STR_LITERAL("queue_item_id"));
+    xstrview Text;
+    size_t i;
+    if ( Value == NULL ) return true;
+    (*Present)++;
+    if ( xrtValueType(Value) != XVALUE_STRING ||
+         !xrtValueGetString(Value, &Text) || Text.Size != 32u ) return false;
+    for ( i = 0u; i < Text.Size; ++i ) {
+        unsigned char Byte = (unsigned char)Text.Data[i];
+        if ( !((Byte >= '0' && Byte <= '9') ||
+               (Byte >= 'a' && Byte <= 'f')) ) return false;
+    }
+    memcpy(Id, Text.Data, Text.Size);
+    Id[Text.Size] = '\0';
+    return true;
+}
+
 static bool MdoApiRunBuildMessage(const char* Project, const char* Session,
     const char* Prompt, char Ids[4][33], size_t Count,
     xllm_message* Message)
@@ -303,14 +324,16 @@ bool MdoApiRunStartRoute(MdoApiContext* Context)
     MdoModelCatalog* Catalog;
     MdoModelInfo Model;
     xllm_message UserMessage;
-    char AttachmentIds[4][33];
+    char AttachmentIds[4][33] = {{ 0 }};
     size_t AttachmentCount = 0u;
+    char QueueItemId[33] = { 0 };
     char Project[MDO_PROJECT_ID_CAPACITY];
     char SessionId[MDO_SESSION_ID_CAPACITY];
     char* PromptText = NULL;
     size_t Present = 0u;
     bool Valid;
     bool AttachmentLocked = false;
+    bool QueueBound = true;
     if ( !MdoApiRunSessionPath(Context, Project, SessionId) )
         return MdoApiReplyError(Context, 400u, "invalid_run_path",
             "The project or session ID is invalid", NULL);
@@ -329,6 +352,7 @@ bool MdoApiRunStartRoute(MdoApiContext* Context)
     if ( PromptValue != NULL ) Present++;
     Valid = Valid && MdoApiRunAttachmentIds(Body.Value, AttachmentIds,
         &AttachmentCount, &Present) &&
+        MdoApiRunQueueId(Body.Value, QueueItemId, &Present) &&
         (Prompt.Size != 0u || AttachmentCount != 0u) &&
         MdoApiRunReadUInt32(Body.Value, "timeout_ms",
         &Options.TimeoutMilliseconds, &Present) &&
@@ -374,6 +398,27 @@ bool MdoApiRunStartRoute(MdoApiContext* Context)
                 "The session already has an active runtime" :
                 "The session must be active before starting a run", NULL);
     }
+    if ( QueueItemId[0] != '\0' ) {
+        MdoApiQueueRunStatus QueueStatus = MdoApiQueueRunPrepare(Project,
+            SessionId, QueueItemId, Prompt, AttachmentIds,
+            AttachmentCount);
+        if ( QueueStatus != MDO_API_QUEUE_RUN_READY ) {
+            xrtFree(PromptText);
+            MdoApiJsonBodyUnit(&Body);
+            return MdoApiReplyError(Context,
+                QueueStatus == MDO_API_QUEUE_RUN_UNAVAILABLE ? 503u : 409u,
+                QueueStatus == MDO_API_QUEUE_RUN_UNAVAILABLE ?
+                    "queue_unavailable" :
+                    (QueueStatus == MDO_API_QUEUE_RUN_ACCEPTED ?
+                        "queue_run_started" : "queue_run_conflict"),
+                QueueStatus == MDO_API_QUEUE_RUN_UNAVAILABLE ?
+                    "The queue could not be checked" :
+                    (QueueStatus == MDO_API_QUEUE_RUN_ACCEPTED ?
+                        "This queue item already started a run" :
+                        "The sending queue item does not match this run"),
+                NULL);
+        }
+    }
     if ( AttachmentCount != 0u ) {
         Catalog = MdoModelCatalogSnapshot();
         memset(&Model, 0, sizeof(Model)); Model.Size = sizeof(Model);
@@ -418,11 +463,17 @@ bool MdoApiRunStartRoute(MdoApiContext* Context)
     memset(&Error, 0, sizeof(Error));
     xrtClearError();
     Valid = MdoRunStart(&Options, &Info, &Error);
+    if ( Valid && QueueItemId[0] != '\0' )
+        QueueBound = MdoApiQueueRunBind(Project, SessionId,
+            QueueItemId, Prompt, AttachmentIds, AttachmentCount, Info.Id);
     if ( AttachmentLocked ) MdoApiAttachmentUnlock();
     if ( AttachmentCount != 0u ) xllmMessageUnit(&UserMessage);
     xrtFree(PromptText);
     MdoApiJsonBodyUnit(&Body);
     if ( !Valid ) return MdoApiRunStartFailure(Context, &Error);
+    if ( !QueueBound ) return MdoApiReplyError(Context, 503u,
+        "run_receipt_unavailable",
+        "The run started but its queue receipt could not be saved", NULL);
     {
         xvalue* Data = NULL;
         if ( !MdoApiRunValue(&Info, NULL, 0u, false, &Data) )

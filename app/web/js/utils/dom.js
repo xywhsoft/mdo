@@ -50,6 +50,8 @@ const API_ERROR_COPY = Object.freeze({
     "同时运行的任务已达上限，请稍后重试。"],
   run_service_unavailable: ["error.runServiceUnavailable",
     "模型服务暂不可用，请检查模型配置后重试。"],
+  run_receipt_unavailable: ["error.runReceiptUnavailable",
+    "运行可能已开始，但队列回执未保存；请核对运行记录。"],
   queue_full: ["error.queueFull", "待发送队列已满，请先处理已有消息。"],
   queue_state_conflict: ["error.queueStateConflict",
     "待发送消息状态已变化，请刷新后核对。"],

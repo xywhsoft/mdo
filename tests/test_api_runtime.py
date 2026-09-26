@@ -2374,7 +2374,7 @@ def run_probe(host: Path) -> None:
                     "attachments": [image["id"]], "priority": False,
                 }], (status, body)
                 assert json.loads(queue_file.read_text(encoding="utf-8"))[
-                    "schema_version"] == 4
+                    "schema_version"] == 5
                 status, _, body = request(port, "DELETE", image["url"])
                 assert status == 409 and json.loads(body)["error"][
                     "code"] == "attachment_in_use", (status, body)
@@ -2409,7 +2409,7 @@ def run_probe(host: Path) -> None:
                 status, _, body = queue_request("POST", queue_path,
                     {"id": "1" * 32, "text": "new prompt", "first": False})
                 assert status == 201 and json.loads(queue_file.read_text(
-                    encoding="utf-8"))["schema_version"] == 4, (status, body)
+                    encoding="utf-8"))["schema_version"] == 5, (status, body)
                 for item_id in (legacy_id, "1" * 32):
                     assert request(port, "DELETE", queue_path + "/" + item_id)[0] == 200
                 queue_file.write_text(json.dumps({"schema_version": 3,
@@ -3559,6 +3559,57 @@ def run_probe(host: Path) -> None:
                     assert status == 200 and option_headers["allow"] == allow, (
                         suffix, status, option_headers, body)
 
+                bound_id = "7" * 32
+                bound_path = queue_path + "/" + bound_id
+                status, _, body = queue_request("POST", queue_path, {
+                    "id": bound_id, "text": "bound queue run", "first": False,
+                    "stage": True,
+                })
+                assert status == 201, (status, body)
+                for state in ("pending", "sending"):
+                    status, _, body = queue_request("PUT", bound_path,
+                        {"state": state})
+                    assert status == 200, (status, body)
+                status, _, body = queue_request("POST", run_path, {
+                    "prompt": "bound queue run", "queue_item_id": "invalid",
+                })
+                assert status == 422 and json.loads(body)["error"][
+                    "code"] == "run_start_invalid", (status, body)
+                status, _, body = queue_request("POST", run_path, {
+                    "prompt": "different prompt", "queue_item_id": bound_id,
+                })
+                assert status == 409 and json.loads(body)["error"][
+                    "code"] == "queue_run_conflict", (status, body)
+                status, _, body = queue_request("POST", run_path, {
+                    "prompt": "bound queue run", "queue_item_id": bound_id,
+                })
+                assert status == 202, (status, body)
+                bound_run_id = json.loads(body)["data"]["id"]
+                queued = json.loads(request(port, "GET", queue_path)[2])["data"]
+                assert queued["items"][0]["run_id"] == bound_run_id, queued
+                stored = json.loads(queue_file.read_text(encoding="utf-8"))
+                assert stored["schema_version"] == 5 and stored["items"][
+                    0]["run_id"] == bound_run_id, stored
+                status, _, body = queue_request("PUT", bound_path,
+                    {"state": "pending"})
+                assert status == 409 and json.loads(body)["error"][
+                    "code"] == "queue_state_conflict", (status, body)
+                bound_detail = f"/api/v1/runs/{bound_run_id}"
+                deadline = time.monotonic() + 5.0
+                while time.monotonic() < deadline:
+                    bound_run = json.loads(request(port, "GET", bound_detail)[
+                        2])["data"]
+                    if bound_run["terminal"]:
+                        break
+                    time.sleep(0.01)
+                assert bound_run["terminal"], bound_run
+                status, _, body = queue_request("POST", run_path, {
+                    "prompt": "bound queue run", "queue_item_id": bound_id,
+                })
+                assert status == 409 and json.loads(body)["error"][
+                    "code"] == "queue_run_started", (status, body)
+                assert request(port, "DELETE", bound_path)[0] == 200
+
                 meta_path.write_text("{broken", encoding="utf-8")
                 status, headers, body = request(
                     port, "GET",
@@ -3792,6 +3843,7 @@ def run_unconfigured_model_probe(host: Path) -> None:
                 assert remaining["default_model"] == "ling-3.0-tiny", remaining
                 assert [item["id"] for item in remaining["items"]] == [
                     "ling-3.0-tiny"], remaining
+
             except BaseException as error:
                 failure = error
             finally:

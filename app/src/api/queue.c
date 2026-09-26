@@ -3,6 +3,7 @@
 
 #include "internal.h"
 #include "../../include/mdo/home.h"
+#include "../../include/mdo/runs.h"
 #include "../../include/mdo/sessions.h"
 
 #define MDO_QUEUE_MAX_ITEMS 20u
@@ -25,6 +26,7 @@ typedef struct MdoQueueItem {
     size_t AttachmentCount;
     MdoQueueState State;
     bool Priority;
+    char RunId[MDO_RUN_ID_CAPACITY];
 } MdoQueueItem;
 
 typedef struct MdoQueue {
@@ -220,14 +222,17 @@ static bool MdoQueueRead(const char* Path, MdoQueue* Queue)
             if ( !xrtValueGetInt(Version, &Signed) || Signed < 0 ) goto done;
             Schema = (uint64)Signed;
         } else goto done;
-        if ( Schema != 1u && Schema != 2u && Schema != 3u &&
-             Schema != 4u ) goto done;
+        if ( Schema < 1u || Schema > 5u ) goto done;
     }
     for ( i = 0u; i < xrtValueCount(Items); ++i ) {
         const xvalue* Entry = xrtValueArrayGet(Items, i);
         xstrview Id;
         xstrview Text;
         xstrview StateView;
+        xstrview RunIdView = { 0 };
+        char RunId[MDO_RUN_ID_CAPACITY] = { 0 };
+        const xvalue* RunIdValue = xrtValueObjectGet(Entry,
+            XRT_STR_LITERAL("run_id"));
         char IdText[MDO_QUEUE_ID_SIZE + 1u];
         char Attachments[4][33] = {{ 0 }};
         size_t AttachmentCount = 0u;
@@ -235,7 +240,8 @@ static bool MdoQueueRead(const char* Path, MdoQueue* Queue)
         bool Priority = false;
         if ( xrtValueType(Entry) != XVALUE_OBJECT ||
              xrtValueCount(Entry) != (Schema == 1u ? 3u :
-                (Schema == 2u ? 4u : 5u)) ||
+                (Schema == 2u ? 4u : 5u +
+                    (Schema == 5u && RunIdValue != NULL ? 1u : 0u))) ||
              !MdoQueueString(Entry, "id", &Id) ||
              !MdoQueueString(Entry, "text", &Text) ||
              !MdoQueueString(Entry, "state", &StateView) ||
@@ -247,10 +253,22 @@ static bool MdoQueueRead(const char* Path, MdoQueue* Queue)
              (Schema >= 3u &&
               !MdoQueueBool(Entry, "priority", &Priority)) ||
              !MdoQueueText(Text, AttachmentCount != 0u) ||
-             !MdoQueueParseState(StateView, Schema == 4u, &State) ||
+             !MdoQueueParseState(StateView, Schema >= 4u, &State) ||
+             (RunIdValue != NULL &&
+              (Schema != 5u || State != MDO_QUEUE_SENDING ||
+               xrtValueType(RunIdValue) != XVALUE_STRING ||
+               !xrtValueGetString(RunIdValue, &RunIdView) ||
+               RunIdView.Size <= 4u || RunIdView.Size >=
+                   MDO_RUN_ID_CAPACITY ||
+               memcmp(RunIdView.Data, "run-", 4u) != 0 ||
+               !MdoQueueCaptureId(RunIdView, RunId,
+                   sizeof(RunId)))) ||
              MdoQueueFind(Queue, IdText) != SIZE_MAX ||
              !MdoQueueInsert(Queue, IdText, Text, Attachments,
                 AttachmentCount, false, Priority, State) ) goto done;
+        if ( RunIdValue != NULL )
+            memcpy(Queue->Items[Queue->Count - 1u].RunId,
+                RunId, sizeof(RunId));
     }
     Ok = true;
 done:
@@ -310,6 +328,8 @@ static xvalue* MdoQueueValue(const MdoQueue* Queue)
             MdoAttachmentIdsWriteValue(Item, Source->Attachments,
                 Source->AttachmentCount) &&
             MdoApiValueSetBool(Item, "priority", Source->Priority) &&
+            (Source->RunId[0] == '\0' ||
+             MdoApiValueSetString(Item, "run_id", Source->RunId)) &&
             MdoApiValueAppendTake(Items, &Item);
         xrtValueRelease(Item);
     }
@@ -325,7 +345,7 @@ static bool MdoQueueWrite(const char* Path, const MdoQueue* Queue)
     char* Json;
     size_t Size = 0u;
     bool Ok;
-    if ( Data == NULL || !MdoApiValueSetUInt(Data, "schema_version", 4u) ) {
+    if ( Data == NULL || !MdoApiValueSetUInt(Data, "schema_version", 5u) ) {
         xrtValueRelease(Data);
         return false;
     }
@@ -376,6 +396,83 @@ static bool MdoQueueReply(MdoApiContext* Context, uint16 Status,
     if ( Data == NULL ) return MdoApiReplyError(Context, 503u,
         "queue_unavailable", "The queue response could not be created", NULL);
     return MdoApiReplySuccessTake(Context, Status, Data, NULL);
+}
+
+static bool MdoQueueRunPath(char Path[MDO_SESSION_PATH_CAPACITY],
+    const char* ProjectId, const char* SessionId)
+{
+    int Written;
+    if ( ProjectId == NULL || SessionId == NULL ) return false;
+    Written = snprintf(Path, MDO_SESSION_PATH_CAPACITY,
+        "sessions/%s/%s/queue.json", ProjectId, SessionId);
+    return Written > 0 && (size_t)Written < MDO_SESSION_PATH_CAPACITY;
+}
+
+static bool MdoQueueRunMatches(const MdoQueueItem* Item, xstrview Prompt,
+    const char Attachments[4][33], size_t AttachmentCount)
+{
+    return Item->State == MDO_QUEUE_SENDING &&
+        Item->TextSize == Prompt.Size &&
+        (Prompt.Size == 0u ||
+         memcmp(Item->Text, Prompt.Data, Prompt.Size) == 0) &&
+        Item->AttachmentCount == AttachmentCount &&
+        memcmp(Item->Attachments, Attachments,
+            sizeof(Item->Attachments)) == 0;
+}
+
+MdoApiQueueRunStatus MdoApiQueueRunPrepare(const char* ProjectId,
+    const char* SessionId, const char* Id, xstrview Prompt,
+    const char Attachments[4][33], size_t AttachmentCount)
+{
+    char Path[MDO_SESSION_PATH_CAPACITY];
+    MdoQueue Queue;
+    MdoApiQueueRunStatus Result = MDO_API_QUEUE_RUN_UNAVAILABLE;
+    size_t Index;
+    if ( !MdoQueueRunPath(Path, ProjectId, SessionId) || Id == NULL ||
+         Attachments == NULL ) return Result;
+    xrtMutexLock(g_MdoQueueLock);
+    if ( MdoQueueRead(Path, &Queue) ) {
+        Index = MdoQueueFind(&Queue, Id);
+        Result = MDO_API_QUEUE_RUN_CONFLICT;
+        if ( Index != SIZE_MAX ) {
+            const MdoQueueItem* Item = &Queue.Items[Index];
+            if ( MdoQueueRunMatches(Item, Prompt, Attachments,
+                    AttachmentCount) )
+                Result = Item->RunId[0] != '\0' ?
+                    MDO_API_QUEUE_RUN_ACCEPTED : MDO_API_QUEUE_RUN_READY;
+        }
+        MdoQueueRelease(&Queue);
+    }
+    xrtMutexUnlock(g_MdoQueueLock);
+    return Result;
+}
+
+bool MdoApiQueueRunBind(const char* ProjectId, const char* SessionId,
+    const char* Id, xstrview Prompt, const char Attachments[4][33],
+    size_t AttachmentCount, const char* RunId)
+{
+    char Path[MDO_SESSION_PATH_CAPACITY];
+    MdoQueue Queue;
+    size_t Index;
+    bool Ok = false;
+    if ( !MdoQueueRunPath(Path, ProjectId, SessionId) || Id == NULL ||
+         Attachments == NULL || RunId == NULL ||
+         strlen(RunId) >= MDO_RUN_ID_CAPACITY ) return false;
+    xrtMutexLock(g_MdoQueueLock);
+    if ( MdoQueueRead(Path, &Queue) ) {
+        Index = MdoQueueFind(&Queue, Id);
+        if ( Index != SIZE_MAX &&
+             MdoQueueRunMatches(&Queue.Items[Index], Prompt, Attachments,
+                AttachmentCount) &&
+             Queue.Items[Index].RunId[0] == '\0' &&
+             RunId[0] != '\0' ) {
+            memcpy(Queue.Items[Index].RunId, RunId, strlen(RunId) + 1u);
+            Ok = MdoQueueWrite(Path, &Queue);
+        }
+        MdoQueueRelease(&Queue);
+    }
+    xrtMutexUnlock(g_MdoQueueLock);
+    return Ok;
 }
 
 bool MdoApiQueueRoute(MdoApiContext* Context)
@@ -546,6 +643,7 @@ bool MdoApiQueueItemRoute(MdoApiContext* Context)
                   (Queue.Items[Index].State == MDO_QUEUE_PENDING &&
                    NextState == MDO_QUEUE_SENDING) ||
                   (Queue.Items[Index].State == MDO_QUEUE_SENDING &&
+                   Queue.Items[Index].RunId[0] == '\0' &&
                    NextState == MDO_QUEUE_PENDING));
             if ( !Conflict ) {
                 Queue.Items[Index].State = NextState;
