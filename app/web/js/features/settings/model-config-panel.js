@@ -1,6 +1,6 @@
 import { api } from "../../api/client.js";
 import { loadModels } from "../../state/catalogs.js";
-import { clear, element, errorMessage, toast } from "../../utils/dom.js";
+import { clear, element, errorMessage, isImeKey, toast } from "../../utils/dom.js";
 import { subscribeLocale, t } from "../../i18n.js";
 
 const protocols = [
@@ -444,7 +444,14 @@ export function createModelConfigPanel(container) {
           { className: "secondary-button", attrs: { type: "button" } });
         const apply = copy("button", "modelConfig.confirmRemove", "确认删除", {},
           { className: "danger-button", attrs: { type: "button" } });
-        cancel.addEventListener("click", () => { confirm.hidden = true; remove.focus(); });
+        const dismiss = () => { confirm.hidden = true; remove.focus(); };
+        cancel.addEventListener("click", dismiss);
+        confirm.addEventListener("keydown", (event) => {
+          if (event.key !== "Escape" || isImeKey(event)) return;
+          event.preventDefault();
+          event.stopPropagation();
+          dismiss();
+        });
         apply.addEventListener("click", () => {
           const next = clone(document);
           next[kind === "model" ? "items" : "providers"] = collection().filter((entry) => entry.id !== source.id);
