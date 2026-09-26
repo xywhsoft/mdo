@@ -23,7 +23,8 @@ function uncertainPost(error) {
 }
 
 export function createPromptQueue({ container, navigation, isRunActive, stagedEntries,
-  isRunReviewPending = () => false, onRetry, onRemoved }) {
+  isRunReviewPending = () => false, isSessionWritable = () => true,
+  onRetry, onRemoved }) {
   const queues = new Map();
   const loads = new Map();
   const versions = new Map();
@@ -132,6 +133,7 @@ export function createPromptQueue({ container, navigation, isRunActive, stagedEn
     const claimedRun = uncertain && saved[0]?.start_claimed === true;
     const stagedHead = saved[0]?.state === "staged";
     const reviewPending = isRunReviewPending(key);
+    const writable = isSessionWritable();
     const [projectId, sessionId] = key.split("/");
     let open = expanded.get(key) ?? true;
     const toggle = element("button", { className: "prompt-queue-toggle",
@@ -140,7 +142,7 @@ export function createPromptQueue({ container, navigation, isRunActive, stagedEn
         "aria-controls": "prompt-queue-list", "data-queue-focus": "toggle" },
     });
     const waitingForRun = !uncertain && !stagedHead && isRunActive();
-    const retry = waitingForRun || !saved.length || reviewPending ||
+    const retry = !writable || waitingForRun || !saved.length || reviewPending ||
       acceptedRun || claimedRun ? null : element("button", {
       text: t(uncertain ? "queue.retryUncertain" : stagedHead
         ? "queue.continueStaged" : "queue.sendNext"),
@@ -149,7 +151,7 @@ export function createPromptQueue({ container, navigation, isRunActive, stagedEn
     if (retry) {
       retry.disabled = busy.has(key) || actionBusy.has(key);
       retry.addEventListener("click", async () => {
-        if (busy.has(key) || actionBusy.has(key)) return;
+        if (!isSessionWritable() || busy.has(key) || actionBusy.has(key)) return;
         actionBusy.add(key);
         render();
         try { await onRetry(); }
@@ -159,7 +161,7 @@ export function createPromptQueue({ container, navigation, isRunActive, stagedEn
     }
     container.append(element("div", { className: "prompt-queue-header" }, [
       toggle, retry ?? element("span", { className: "prompt-queue-waiting",
-        text: t(acceptedRun ? "queue.runAccepted" : claimedRun
+        text: t(!writable ? "queue.restoreToSend" : acceptedRun ? "queue.runAccepted" : claimedRun
           ? "queue.runStarting" : reviewPending
           ? "queue.reviewRun" : saved.length
           ? "queue.waitForRun" : entries[0]?.rejected

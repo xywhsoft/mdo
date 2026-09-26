@@ -19,6 +19,7 @@ const listeners = [];
 let finishAction;
 let finishDispatch;
 let retryCalls = 0;
+let writable = true;
 window.fetch = async (url) => {
   const session = String(url).includes("/sessions/second/") ? "second" : "first";
   return new Response(JSON.stringify({ ok: true, data: { items: [{
@@ -29,6 +30,8 @@ window.fetch = async (url) => {
 try {
   const queue = createPromptQueue({ container,
     navigation: { get: () => route, subscribe: (listener) => listeners.push(listener) },
+    isRunActive: () => false,
+    isSessionWritable: () => writable,
     onRetry: () => {
       retryCalls += 1;
       return new Promise((resolve) => { finishAction = resolve; });
@@ -55,11 +58,25 @@ try {
   const secondDispatch = await queue.exclusive("qa", "second", async () => {});
   finishDispatch();
   const firstDispatchFinished = await firstDispatch;
+  const staleRetry = container.querySelector('[data-queue-focus="retry"]');
+  writable = false;
+  queue.render();
+  const archived = !container.querySelector('[data-queue-focus="retry"]') &&
+    container.textContent.includes("queue.restoreToSend") &&
+    container.querySelector('[data-queue-index="0"]') &&
+    !container.querySelector('[data-queue-index="0"]').disabled;
+  staleRetry.click();
+  const staleActionBlocked = retryCalls === 1;
+  writable = true;
+  queue.render();
+  const restored = Boolean(container.querySelector('[data-queue-focus="retry"]'));
   const passed = firstLocked && secondUsable && secondStillUsable &&
-    retryCalls === 1 && secondDispatch && firstDispatchFinished;
+    staleActionBlocked && archived && restored &&
+    secondDispatch && firstDispatchFinished;
   output.dataset.passed = String(passed);
   output.textContent = JSON.stringify({ passed, firstLocked, secondUsable,
-    secondStillUsable, retryCalls, secondDispatch, firstDispatchFinished }, null, 2);
+    secondStillUsable, retryCalls, secondDispatch, firstDispatchFinished,
+    archived, staleActionBlocked, restored }, null, 2);
 } catch (error) {
   output.dataset.passed = "false";
   output.textContent = error.stack ?? String(error);

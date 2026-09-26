@@ -440,6 +440,7 @@ export async function boot() {
   const promptQueue = createPromptQueue({
     container: $("#prompt-queue"), navigation,
     isRunActive: () => Boolean(activeRun),
+    isSessionWritable: () => sessionWritable,
     isRunReviewPending: (key) => draftStore?.isRunUncertain(key) ?? false,
     stagedEntries: () => {
       if (!navigation.get().sessionId)
@@ -457,6 +458,7 @@ export async function boot() {
       return staged;
     },
     onRetry: async () => {
+      if (!sessionWritable) return;
       const selected = navigation.get();
       const key = `${selected.projectId}/${selected.sessionId}`;
       if (!await draftStore.ensureLoaded(key)) return;
@@ -466,10 +468,12 @@ export async function boot() {
         return;
       }
       await promptQueue.select(selected.projectId, selected.sessionId);
-      if (`${navigation.get().projectId}/${navigation.get().sessionId}` !== key) return;
+      if (!sessionWritable ||
+          `${navigation.get().projectId}/${navigation.get().sessionId}` !== key) return;
       const first = promptQueue.peek(selected.projectId, selected.sessionId);
       if (draftStore.submission(key) &&
           !await submissionController.reconcile(key)) return;
+      if (!sessionWritable) return;
       if (first?.state === "sending")
         await promptQueue.retry(selected.projectId, selected.sessionId, first.id);
       if (first?.state === "staged")
@@ -905,6 +909,7 @@ export async function boot() {
     updateExportButtons();
     sessionWritable = session ? session.status === "active" : !navigation.get().sessionId;
     selectedSessionStatus = session?.status ?? (navigation.get().sessionId ? "loading" : "active");
+    promptQueue.render();
     syncPromptPlaceholder();
     setRun(activeRun);
     focusForkComposerWhenReady();
@@ -1567,6 +1572,8 @@ export async function boot() {
     else if (action === "clear") updated = await clearSession(session);
     else throw new TypeError("unknown session action");
     await refreshSelectedSession(updated);
+    if (["unarchive", "restore"].includes(action) && updated.status === "active")
+      await refreshSelectedQueue();
     if (["truncate", "clear"].includes(action)) {
       const selected = navigation.get();
       if (selected.projectId === updated.project_id && selected.sessionId === updated.id)

@@ -457,6 +457,7 @@
   "queue.retryUncertain": "Retry after confirming it was not sent",
   "queue.sendNext": "Send next",
   "queue.waitForRun": "Sends when this turn finishes",
+  "queue.restoreToSend": "Restore this session to continue sending",
   "queue.awaitingAdmission": "Waiting to join the queue",
   "queue.rejected": "Queue rejected · input saved",
   "queue.uncertainWarning": "The first message may have reached the server. Check the conversation and run log before removing or retrying it.",
