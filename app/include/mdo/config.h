@@ -57,6 +57,14 @@ typedef struct MdoConfigWebSettings {
     char SecretRef[2049];
 } MdoConfigWebSettings;
 
+typedef struct MdoConfigTransportSettings {
+    uint32 Size;
+    uint64 Revision;
+    /* Empty uses the platform trust store. Otherwise this is a portable
+     * path inside the external Home, never an absolute filesystem path. */
+    char CaPemPath[512];
+} MdoConfigTransportSettings;
+
 bool MdoConfigInit(void);
 void MdoConfigUnit(void);
 bool MdoConfigGetSnapshot(MdoConfigSnapshot* pSnapshot);
@@ -65,6 +73,7 @@ bool MdoConfigGetAgentSettings(MdoConfigAgentSettings* pSettings);
  * An empty string is a valid result; NULL indicates a configuration error. */
 char* MdoConfigAgentInstructions(void);
 bool MdoConfigGetWebSettings(MdoConfigWebSettings* pSettings);
+bool MdoConfigGetTransportSettings(MdoConfigTransportSettings* pSettings);
 
 /* Returned strings are owned by the caller and released with xrtFree. */
 str MdoConfigEffectiveJson(size_t* pSize);

@@ -63,6 +63,7 @@ bool MdoApiSettingsRoute(MdoApiContext* Context)
     const xvalue* EffectiveComposer;
     const xvalue* EffectiveNotifications;
     const xvalue* EffectiveAgent;
+    const xvalue* EffectiveTransport;
     const xvalue* EffectiveWorkspace;
     xvalue* Data = xrtValueObject();
     xvalue* Patches = xrtValueObject();
@@ -70,6 +71,7 @@ bool MdoApiSettingsRoute(MdoApiContext* Context)
     xvalue* ComposerValue = xrtValueObject();
     xvalue* NotificationsValue = xrtValueObject();
     xvalue* AgentValue = xrtValueObject();
+    xvalue* TransportValue = xrtValueObject();
     xvalue* WebValue = xrtValueObject();
     xvalue* WorkspaceValue = xrtValueObject();
     xvalue* ServiceValue = xrtValueObject();
@@ -93,12 +95,16 @@ bool MdoApiSettingsRoute(MdoApiContext* Context)
             XRT_STR_LITERAL("notifications")) : NULL;
     EffectiveAgent = EffectiveSettings != NULL ?
         xrtValueObjectGet(EffectiveSettings, XRT_STR_LITERAL("agent")) : NULL;
+    EffectiveTransport = EffectiveSettings != NULL ?
+        xrtValueObjectGet(EffectiveSettings,
+            XRT_STR_LITERAL("transport")) : NULL;
     EffectiveWorkspace = EffectiveSettings != NULL ?
         xrtValueObjectGet(EffectiveSettings,
             XRT_STR_LITERAL("workspace")) : NULL;
     Ok = Data != NULL && Patches != NULL && AppearanceValue != NULL &&
         ComposerValue != NULL && NotificationsValue != NULL &&
-        AgentValue != NULL && WebValue != NULL && WorkspaceValue != NULL &&
+        AgentValue != NULL && TransportValue != NULL &&
+        WebValue != NULL && WorkspaceValue != NULL &&
         ServiceValue != NULL && EffectiveSettings != NULL &&
         MdoSettingsServiceGetSnapshot(&Service);
     if ( Ok ) Ok =
@@ -176,6 +182,10 @@ bool MdoApiSettingsRoute(MdoApiContext* Context)
             Service.Web.SecretRef[0] != '\0') &&
         MdoApiValueSetTake(Data, "web", &WebValue);
     if ( Ok ) Ok =
+        MdoApiSettingsStringField(TransportValue, "ca_pem_path",
+            EffectiveTransport, "ca_pem_path") &&
+        MdoApiValueSetTake(Data, "transport", &TransportValue);
+    if ( Ok ) Ok =
         MdoApiSettingsStringField(WorkspaceValue, "open_mode",
             EffectiveWorkspace, "open_mode") &&
         MdoApiSettingsBoolField(WorkspaceValue, "confirm_external_write",
@@ -192,6 +202,7 @@ bool MdoApiSettingsRoute(MdoApiContext* Context)
     xrtValueRelease(Patches); xrtValueRelease(AppearanceValue);
     xrtValueRelease(ComposerValue); xrtValueRelease(NotificationsValue);
     xrtValueRelease(AgentValue); xrtValueRelease(WebValue);
+    xrtValueRelease(TransportValue);
     xrtValueRelease(WorkspaceValue); xrtValueRelease(ServiceValue);
     xrtValueRelease(Effective);
     if ( !Ok ) { xrtValueRelease(Data); Data = NULL; }

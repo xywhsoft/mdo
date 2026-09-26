@@ -39,6 +39,9 @@
         "max_results": 8
       }
     },
+    "transport": {
+      "ca_pem_path": ""
+    },
     "workspace": {
       "open_mode": "last",
       "confirm_external_write": true

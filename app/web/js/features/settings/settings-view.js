@@ -41,6 +41,7 @@ function settingsPatch(form, snapshot) {
         max_results: number(form, "max_results"),
       },
     },
+    transport: { ca_pem_path: form.elements.ca_pem_path.value.trim() },
     workspace: {
       open_mode: form.elements.open_mode.value,
       confirm_external_write: form.elements.confirm_external_write.checked,
@@ -160,6 +161,7 @@ export function createSettingsView({ form, store, navigation, onApplied }) {
     form.elements.max_documents.value = settings.web.max_documents;
     form.elements.max_results.value = settings.web.max_results;
     form.elements.endpoint.value = settings.web.endpoint;
+    form.elements.ca_pem_path.value = settings.transport?.ca_pem_path ?? "";
     baselineFingerprint = fingerprint();
     renderCredential(settings);
     previewFingerprint = "";

@@ -330,6 +330,28 @@ static bool MdoConfigBool(const xvalue* pObject, cstr Name)
         xrtValueGetBool(pValue, &bValue);
 }
 
+static bool MdoConfigHomeRelativePath(xstrview Path)
+{
+    size_t Segment = 0u;
+    size_t i;
+    if ( Path.Size == 0u || Path.Data[0] == '/' ||
+         !xrtUtf8Valid(Path, NULL) ) return false;
+    for ( i = 0u; i <= Path.Size; ++i ) {
+        unsigned char Ch = i == Path.Size ? 0u : (unsigned char)Path.Data[i];
+        if ( Ch == '\\' || Ch == ':' || (i != Path.Size && Ch < 0x20u) )
+            return false;
+        if ( Ch == '/' || i == Path.Size ) {
+            size_t Length = i - Segment;
+            if ( Length == 0u ||
+                 (Length == 1u && Path.Data[Segment] == '.') ||
+                 (Length == 2u && Path.Data[Segment] == '.' &&
+                  Path.Data[Segment + 1u] == '.') ) return false;
+            Segment = i + 1u;
+        }
+    }
+    return true;
+}
+
 static bool MdoConfigSettingsValidate(const xvalue* pSettings)
 {
     static const char* const Themes[] = { "system", "light", "dark" };
@@ -348,6 +370,7 @@ static bool MdoConfigSettingsValidate(const xvalue* pSettings)
     const xvalue* pAgent;
     const xvalue* pWeb;
     const xvalue* pSearch;
+    const xvalue* pTransport;
     const xvalue* pWorkspace;
     xstrview Locale;
     xstrview Text;
@@ -371,6 +394,7 @@ static bool MdoConfigSettingsValidate(const xvalue* pSettings)
     pWeb = xrtValueObjectGet(pSettings, MdoConfigKey("web"));
     pSearch = pWeb != NULL ?
         xrtValueObjectGet(pWeb, MdoConfigKey("search")) : NULL;
+    pTransport = xrtValueObjectGet(pSettings, MdoConfigKey("transport"));
     pWorkspace = xrtValueObjectGet(pSettings, MdoConfigKey("workspace"));
     if ( xrtValueType(pAppearance) != XVALUE_OBJECT ||
          !MdoConfigStringOneOf(xrtValueObjectGet(pAppearance,
@@ -444,6 +468,11 @@ static bool MdoConfigSettingsValidate(const xvalue* pSettings)
          !MdoConfigUnsigned(xrtValueObjectGet(pSearch,
             MdoConfigKey("max_results")), &WebMaxResults) ||
          WebMaxResults == 0u || WebMaxResults > 20u ||
+         xrtValueType(pTransport) != XVALUE_OBJECT ||
+         !MdoConfigString(xrtValueObjectGet(pTransport,
+            MdoConfigKey("ca_pem_path")), &Text) ||
+         Text.Size >= 512u ||
+         (Text.Size != 0u && !MdoConfigHomeRelativePath(Text)) ||
          xrtValueType(pWorkspace) != XVALUE_OBJECT ||
          !MdoConfigStringOneOf(xrtValueObjectGet(pWorkspace,
             MdoConfigKey("open_mode")), OpenModes,
@@ -1410,6 +1439,41 @@ bool MdoConfigGetWebSettings(MdoConfigWebSettings* pSettings)
     xrtMutexUnlock(g_MdoConfig.Lock);
     if ( !Ok ) MdoConfigErrorSet(XERR_STATE, MDO_CONFIG_ERROR_STATE,
         "effective Web settings are unavailable");
+    return Ok;
+}
+
+bool MdoConfigGetTransportSettings(MdoConfigTransportSettings* pSettings)
+{
+    const xvalue* Settings;
+    const xvalue* Transport;
+    xstrview Path;
+    uint32 Size;
+    bool Ok = false;
+
+    if ( pSettings == NULL || pSettings->Size < sizeof(*pSettings) ||
+         !g_MdoConfig.Initialized ) {
+        MdoConfigErrorSet(XERR_ARGUMENT, MDO_CONFIG_ERROR_ARGUMENT,
+            "invalid transport settings request");
+        return false;
+    }
+    Size = pSettings->Size;
+    xrtMutexLock(g_MdoConfig.Lock);
+    Settings = xrtValueObjectGet(g_MdoConfig.Effective,
+        MdoConfigKey("settings"));
+    Transport = Settings != NULL ? xrtValueObjectGet(Settings,
+        MdoConfigKey("transport")) : NULL;
+    if ( Transport != NULL && MdoConfigString(xrtValueObjectGet(Transport,
+            MdoConfigKey("ca_pem_path")), &Path) &&
+         Path.Size < sizeof(pSettings->CaPemPath) ) {
+        memset(pSettings, 0, sizeof(*pSettings));
+        pSettings->Size = Size;
+        pSettings->Revision = g_MdoConfig.Revision;
+        memcpy(pSettings->CaPemPath, Path.Data, Path.Size);
+        Ok = true;
+    }
+    xrtMutexUnlock(g_MdoConfig.Lock);
+    if ( !Ok ) MdoConfigErrorSet(XERR_STATE, MDO_CONFIG_ERROR_STATE,
+        "effective transport settings are unavailable");
     return Ok;
 }
 

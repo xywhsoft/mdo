@@ -169,6 +169,8 @@
   "settings.maxResults": "Результатов поиска",
   "settings.searchEndpoint": "Адрес поискового сервиса",
   "settings.searchEndpointDescription": "Укажите учётные данные в файлах Home или переменных среды. Ссылки на секреты не передаются странице.",
+  "settings.caPem": "Свой сертификат CA",
+  "settings.caPemDescription": "HTTPS-запросы моделей доверяют PEM-файлу в переносимом Home, например certs/company.pem. Пустое поле означает системные сертификаты.",
   "settings.credentialConfigured": "Ссылка на учётные данные поиска настроена. Значение читается только при запросе сервера; доступность здесь не проверяется.",
   "settings.credentialMissing": "Ссылка на учётные данные поиска не настроена. Добавьте её через файлы mdo Home или переменные среды.",
   "settings.restoreAppliedRevision": "Встроенные настройки восстановлены; текущая версия {revision}.",

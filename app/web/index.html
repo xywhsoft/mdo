@@ -342,6 +342,10 @@
                   <input id="setting-search-endpoint" name="endpoint" type="url" maxlength="2047" required>
                 </div>
                 <div class="credential-state" id="search-credential-state" role="status"></div>
+                <div class="setting-row setting-row-wide">
+                  <div><label for="setting-ca-pem" data-i18n="settings.caPem">自定义 CA 证书</label><p data-i18n="settings.caPemDescription">模型 HTTPS 请求信任便携 Home 中的 PEM 文件，例如 certs/company.pem；留空使用系统证书。</p></div>
+                  <input id="setting-ca-pem" name="ca_pem_path" type="text" maxlength="511" placeholder="certs/company.pem" autocomplete="off" spellcheck="false">
+                </div>
               </section>
             </form>
 

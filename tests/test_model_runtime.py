@@ -43,6 +43,7 @@ void ServiceInit(XS_HostInfo* host)
     xllm_error error;
     MdoModelClientOptions client_options;
     MdoModelClientInfo client_info;
+    MdoConfigTransportSettings transport;
     unsigned protocol;
     (void)host;
 
@@ -51,6 +52,11 @@ void ServiceInit(XS_HostInfo* host)
         printf("probe_done=1\n");
         return;
     }
+    memset(&transport, 0, sizeof(transport));
+    transport.Size = sizeof(transport);
+    printf("transport_ok=%d path=%s\n",
+        MdoConfigGetTransportSettings(&transport) ? 1 : 0,
+        transport.CaPemPath);
     first = MdoModelCatalogSnapshot();
     printf("catalog_one=%llu providers=%zu models=%zu\n",
         (unsigned long long)MdoModelManagerGeneration(),
@@ -247,6 +253,23 @@ def main() -> int:
         for protocol in (1, 2, 3):
             assert f"client_{protocol}=1" in missing, missing
         assert "error=none" in missing, missing
+        valid_home = base / "ca-valid"
+        (valid_home / "config").mkdir(parents=True)
+        (valid_home / "certs").mkdir()
+        (valid_home / "config/settings.json").write_text(json.dumps({
+            "schema_version": 1,
+            "patch": {"transport": {"ca_pem_path": "certs/test.pem"}},
+        }), encoding="utf-8")
+        shutil.copy2(ROOT / "tests/gpu-ca.crt", valid_home / "certs/test.pem")
+        valid = run_probe(host, site, valid_home)
+        assert "transport_ok=1 path=certs/test.pem" in valid, valid
+        assert "client_1=1" in valid and "client_3=1" in valid, valid
+        (valid_home / "certs/test.pem").write_text("invalid PEM", encoding="utf-8")
+        invalid = run_probe(host, site, valid_home)
+        assert "client_1=0" in invalid and "no valid PEM certificates" in invalid, invalid
+        (valid_home / "certs/test.pem").unlink()
+        absent = run_probe(host, site, valid_home)
+        assert "client_1=0" in absent and "unavailable in the portable Home" in absent, absent
         output = run_probe(host, site, base / "state", {
             "MDO_LING_CHAT_COMPLETIONS_URL": "https://example.invalid/v1",
             "MDO_LING_RESPONSES_URL": "https://example.invalid/v1",

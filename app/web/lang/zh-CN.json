@@ -169,6 +169,8 @@
   "settings.maxResults": "搜索结果数",
   "settings.searchEndpoint": "搜索服务地址",
   "settings.searchEndpointDescription": "凭据仅通过 Home 文件或环境变量配置，页面不会读取 secret 引用。",
+  "settings.caPem": "自定义 CA 证书",
+  "settings.caPemDescription": "模型 HTTPS 请求信任便携 Home 中的 PEM 文件，例如 certs/company.pem；留空使用系统证书。",
   "settings.credentialConfigured": "已配置搜索凭据引用。实际值仅在服务端调用时读取，此处不确认其是否可用。",
   "settings.credentialMissing": "尚未配置搜索凭据引用。请通过 mdo Home 文件或环境变量配置。",
   "settings.restoreAppliedRevision": "已恢复内置默认值，当前 revision {revision}。",

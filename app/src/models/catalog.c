@@ -3,6 +3,7 @@
 #include <string.h>
 
 #include "../../include/mdo/config.h"
+#include "../../include/mdo/home.h"
 #include "../../include/mdo/models.h"
 #include "../../include/mdo/secrets.h"
 #include "../../include/mdo/version.h"
@@ -791,6 +792,70 @@ static void MdoModelsProfileError(xllm_error* pError, cstr Message)
     snprintf(pError->sMessage, sizeof(pError->sMessage), "%s", Message);
 }
 
+static char* MdoModelsLoadCaPem(cstr Path, xllm_error* Error)
+{
+    xfile File = NULL;
+    xfileinfo Info;
+    xx509store* Store = NULL;
+    char* Pem = NULL;
+    size_t Added = 0u;
+    bool Ok = false;
+
+    File = MdoHomeOpenRead(Path);
+    if ( File == NULL ) {
+        xrtClearError();
+        MdoModelsProfileError(Error,
+            "custom CA file is unavailable in the portable Home");
+        return NULL;
+    }
+    memset(&Info, 0, sizeof(Info));
+    if ( !xrtFileStat(File, &Info) ||
+         (Info.Available & XFILE_INFO_SIZE) == 0u ||
+         Info.Size == 0u || Info.Size > 1024u * 1024u ) {
+        MdoModelsProfileError(Error,
+            "custom CA file must be a nonempty PEM file below 1 MiB");
+        goto done;
+    }
+    Pem = (char*)xrtMalloc((size_t)Info.Size + 1u);
+    if ( Pem == NULL ) {
+        MdoModelsProfileError(Error, "cannot allocate custom CA file");
+        if ( Error != NULL ) Error->eCode = XLLM_ERROR_OUT_OF_MEMORY;
+        goto done;
+    }
+    if ( !xrtReadFull(File, Pem, (size_t)Info.Size, NULL) ) {
+        MdoModelsProfileError(Error, "cannot read custom CA file");
+        goto done;
+    }
+    Pem[Info.Size] = '\0';
+    if ( memchr(Pem, '\0', (size_t)Info.Size) != NULL ) {
+        MdoModelsProfileError(Error,
+            "custom CA file contains no valid PEM certificates");
+        goto done;
+    }
+    Store = xrtX509StoreCreate();
+    if ( Store == NULL ) {
+        MdoModelsProfileError(Error, "cannot validate custom CA file");
+        if ( Error != NULL ) Error->eCode = XLLM_ERROR_OUT_OF_MEMORY;
+        goto done;
+    }
+    if ( !xrtX509StoreAddPem(Store, Pem, (size_t)Info.Size, &Added) ||
+         Added == 0u ) {
+        MdoModelsProfileError(Error,
+            "custom CA file contains no valid PEM certificates");
+        goto done;
+    }
+    Ok = true;
+
+done:
+    if ( Store != NULL ) xrtX509StoreFree(Store);
+    if ( !xrtClose(File) ) {
+        Ok = false;
+        MdoModelsProfileError(Error, "cannot close custom CA file");
+    }
+    if ( !Ok ) { xrtClearError(); xrtFree(Pem); Pem = NULL; }
+    return Pem;
+}
+
 bool MdoModelCatalogProfile(const MdoModelCatalog* pCatalog,
     const char* ModelId, MdoModelProtocol Protocol,
     xllm_model_profile* pProfile, xllm_error* pError)
@@ -979,6 +1044,8 @@ xllm_client* MdoModelClientCreate(const MdoModelCatalog* pCatalog,
     size_t EndpointIndex;
     char* Endpoint = NULL;
     char* Secret = NULL;
+    char* CaPem = NULL;
+    MdoConfigTransportSettings Transport;
     xllm_model_profile Profile;
     xllm_client_config Config;
     xllm_client* pClient = NULL;
@@ -1057,6 +1124,16 @@ xllm_client* MdoModelClientCreate(const MdoModelCatalog* pCatalog,
     if ( Endpoint == NULL ) goto done;
     Secret = MdoModelsResolveCredential(pProvider, pError);
     if ( Secret == NULL ) goto done;
+    memset(&Transport, 0, sizeof(Transport));
+    Transport.Size = sizeof(Transport);
+    if ( !MdoConfigGetTransportSettings(&Transport) ) {
+        MdoModelsProfileError(pError, "model transport settings are unavailable");
+        goto done;
+    }
+    if ( Transport.CaPemPath[0] != '\0' ) {
+        CaPem = MdoModelsLoadCaPem(Transport.CaPemPath, pError);
+        if ( CaPem == NULL ) goto done;
+    }
     xllmClientConfigInit(&Config);
     Config.sBaseUrl = Endpoint;
     Config.sApiKey = Secret;
@@ -1066,6 +1143,7 @@ xllm_client* MdoModelClientCreate(const MdoModelCatalog* pCatalog,
     Config.uMaxOutputTokens = MaxOutputTokens;
     Config.uTimeoutMs = pProvider->TimeoutMilliseconds;
     Config.bVerifyPeer = pProvider->VerifyPeer;
+    Config.sCaPem = CaPem;
     Config.eProvider = MdoModelProtocolProvider(Protocol);
     Config.pModelProfile = &Profile;
     pClient = xllmClientCreate(&Config, pError);
@@ -1080,6 +1158,7 @@ xllm_client* MdoModelClientCreate(const MdoModelCatalog* pCatalog,
     }
 
 done:
+    xrtFree(CaPem);
     MdoSecretRelease(&Secret);
     xrtFree(Endpoint);
     return pClient;
