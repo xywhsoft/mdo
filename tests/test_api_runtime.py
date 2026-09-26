@@ -1956,7 +1956,7 @@ def run_probe(host: Path) -> None:
                 assert status == 200 and json.loads(body)["data"] == {
                     "revision": 0, "text": "", "attachments": [],
                     "run_admission_uncertain": False,
-                    "submission": None}, (status, body)
+                    "submission": None, "submissions": []}, (status, body)
                 assert not (home / "data/draft.json").exists()
                 status, _, body = request(
                     port, "PUT", "/api/v1/draft",
@@ -1965,7 +1965,7 @@ def run_probe(host: Path) -> None:
                 assert status == 200 and json.loads(body)["data"] == {
                     "revision": 1, "text": "未发送的草稿", "attachments": [],
                     "run_admission_uncertain": False,
-                    "submission": None}, (status, body)
+                    "submission": None, "submissions": []}, (status, body)
                 status, _, body = request(
                     port, "PUT", "/api/v1/draft",
                     body=b'{"revision":0,"text":"stale"}',
@@ -1979,7 +1979,7 @@ def run_probe(host: Path) -> None:
                 assert status == 200 and json.loads(body)["data"] == {
                     "revision": 0, "text": "", "attachments": [],
                     "run_admission_uncertain": False,
-                    "submission": None}, (status, body)
+                    "submission": None, "submissions": []}, (status, body)
                 status, _, body = request(
                     port, "PUT", draft_path,
                     body=b'{"revision":0,"text":"session draft"}',
@@ -1987,7 +1987,7 @@ def run_probe(host: Path) -> None:
                 assert status == 200 and json.loads(body)["data"] == {
                     "revision": 1, "text": "session draft", "attachments": [],
                     "run_admission_uncertain": False,
-                    "submission": None}, (status, body)
+                    "submission": None, "submissions": []}, (status, body)
                 assert json.loads(request(port, "GET", draft_path)[2])[
                     "data"]["text"] == "session draft"
                 status, _, body = request(port, "PUT", draft_path,
@@ -1997,7 +1997,7 @@ def run_probe(host: Path) -> None:
                 assert status == 200 and json.loads(body)["data"] == {
                     "revision": 2, "text": "", "attachments": [image["id"]],
                     "run_admission_uncertain": False,
-                    "submission": None}, (
+                    "submission": None, "submissions": []}, (
                     status, body)
                 assert json.loads(request(port, "GET", draft_path)[2])[
                     "data"]["attachments"] == [image["id"]]
@@ -2053,7 +2053,7 @@ def run_probe(host: Path) -> None:
                     "attachments"] == [], (status, body)
                 assert json.loads((home / f"sessions/api-project/{session_id}/"
                                    "draft.json").read_text(encoding="utf-8"))[
-                    "schema_version"] == 4
+                    "schema_version"] == 5
                 status, _, body = request(port, "PUT", draft_path,
                     body=b'{"revision":3,"text":"review before retry",'
                          b'"run_admission_uncertain":true}',
@@ -2096,22 +2096,65 @@ def run_probe(host: Path) -> None:
                     headers={"Content-Type": "application/json"})
                 assert status == 200 and json.loads(body)["data"][
                     "submission"] is None, (status, body)
+                prepared = {"id": "4" * 32, "text": "first saved intent",
+                            "attachments": [image["id"]],
+                            "interrupt": False, "state": "prepared"}
+                posting = {"id": "5" * 32, "text": "second saved intent",
+                           "attachments": [], "interrupt": True,
+                           "state": "posting"}
+                status, _, body = request(port, "PUT", draft_path,
+                    body=json.dumps({"revision": 9, "text": "third draft",
+                                     "submissions": [prepared, posting]}).encode(),
+                    headers={"Content-Type": "application/json"})
+                assert status == 200 and json.loads(body)["data"][
+                    "submissions"] == [prepared, posting], (status, body)
+                assert json.loads(request(port, "GET", draft_path)[2])[
+                    "data"]["submissions"] == [prepared, posting]
+                assert request(port, "DELETE", image["url"])[0] == 409
+                status, _, body = request(port, "PUT", draft_path,
+                    body=json.dumps({"revision": 10, "text": "third draft",
+                                     "submissions": [prepared, prepared]}).encode(),
+                    headers={"Content-Type": "application/json"})
+                assert status == 422 and json.loads(body)["error"][
+                    "code"] == "draft_invalid", (status, body)
+                prepared["state"] = "posting"
+                status, _, body = request(port, "PUT", draft_path,
+                    body=json.dumps({"revision": 10, "text": "third draft",
+                                     "submissions": [prepared, posting]}).encode(),
+                    headers={"Content-Type": "application/json"})
+                assert status == 200 and json.loads(body)["data"][
+                    "submissions"] == [prepared, posting], (status, body)
+                status, _, body = request(port, "PUT", draft_path,
+                    body=json.dumps({"revision": 11, "text": "third draft",
+                                     "submissions": [posting]}).encode(),
+                    headers={"Content-Type": "application/json"})
+                assert status == 200 and json.loads(body)["data"][
+                    "submissions"] == [posting], (status, body)
                 stored_draft = (home / f"sessions/api-project/{session_id}/"
                                 "draft.json")
                 stored_draft.write_text(json.dumps({
-                    "schema_version": 2, "revision": 9,
+                    "schema_version": 4, "revision": 12,
+                    "text": "legacy singleton", "attachments": [],
+                    "run_admission_uncertain": False,
+                    "submission": inflight}), encoding="utf-8")
+                status, _, body = request(port, "GET", draft_path)
+                assert status == 200 and json.loads(body)["data"][
+                    "submissions"] == [{**inflight, "state": "posting"}], (
+                    status, body)
+                stored_draft.write_text(json.dumps({
+                    "schema_version": 2, "revision": 13,
                     "text": "legacy draft", "attachments": []}),
                     encoding="utf-8")
                 status, _, body = request(port, "GET", draft_path)
                 assert status == 200 and json.loads(body)["data"] == {
-                    "revision": 9, "text": "legacy draft", "attachments": [],
+                    "revision": 13, "text": "legacy draft", "attachments": [],
                     "run_admission_uncertain": False,
-                    "submission": None}, (status, body)
+                    "submission": None, "submissions": []}, (status, body)
                 status, _, body = request(port, "PUT", draft_path,
-                    body=b'{"revision":9,"text":"legacy draft updated"}',
+                    body=b'{"revision":13,"text":"legacy draft updated"}',
                     headers={"Content-Type": "application/json"})
                 assert status == 200 and json.loads(stored_draft.read_text(
-                    encoding="utf-8"))["schema_version"] == 4, (status, body)
+                    encoding="utf-8"))["schema_version"] == 5, (status, body)
                 status, _, body = request(port, "PUT", "/api/v1/draft",
                     body=json.dumps({"revision": 1, "text": "global",
                                      "attachments": [image["id"]]}).encode(),

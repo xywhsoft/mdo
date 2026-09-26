@@ -7,6 +7,8 @@
 
 #define MDO_DRAFT_TEXT_MAX 65536u
 #define MDO_DRAFT_FILE_MAX (256u * 1024u)
+#define MDO_DRAFT_SUBMISSIONS_MAX 20u
+#define MDO_DRAFT_SUBMISSIONS_TEXT_MAX (192u * 1024u)
 
 typedef struct MdoDraftSubmission {
     char Id[33];
@@ -15,7 +17,7 @@ typedef struct MdoDraftSubmission {
     char Attachments[4][33];
     size_t AttachmentCount;
     bool Interrupt;
-    bool Present;
+    bool Posting;
 } MdoDraftSubmission;
 
 typedef struct MdoDraft {
@@ -25,11 +27,21 @@ typedef struct MdoDraft {
     size_t TextSize;
     char Attachments[4][33];
     size_t AttachmentCount;
-    MdoDraftSubmission Submission;
+    MdoDraftSubmission* Submissions[MDO_DRAFT_SUBMISSIONS_MAX];
+    size_t SubmissionCount;
 } MdoDraft;
 
 static xmutex* g_MdoDraftLock;
 static bool MdoDraftRead(const char* Path, MdoDraft* Draft);
+
+static void MdoDraftRelease(MdoDraft* Draft)
+{
+    size_t i;
+    if ( Draft == NULL ) return;
+    for ( i = 0u; i < Draft->SubmissionCount; ++i )
+        xrtFree(Draft->Submissions[i]);
+    xrtFree(Draft);
+}
 
 bool MdoApiDraftInit(void)
 {
@@ -67,14 +79,20 @@ bool MdoApiDraftAttachmentReferenced(const char* ProjectId,
             *Referenced = true;
             break;
         }
-    if ( Ok && !*Referenced && Draft->Submission.Present )
-        for ( i = 0u; i < Draft->Submission.AttachmentCount; ++i )
-            if ( strcmp(Draft->Submission.Attachments[i], Id) == 0 ) {
-                *Referenced = true;
-                break;
-            }
+    if ( Ok && !*Referenced ) {
+        for ( i = 0u; i < Draft->SubmissionCount; ++i ) {
+            const MdoDraftSubmission* Item = Draft->Submissions[i];
+            size_t j;
+            for ( j = 0u; j < Item->AttachmentCount; ++j )
+                if ( strcmp(Item->Attachments[j], Id) == 0 ) {
+                    *Referenced = true;
+                    break;
+                }
+            if ( *Referenced ) break;
+        }
+    }
     xrtMutexUnlock(g_MdoDraftLock);
-    xrtFree(Draft);
+    MdoDraftRelease(Draft);
     return Ok;
 }
 
@@ -141,15 +159,16 @@ static bool MdoDraftText(const xvalue* Object, cstr Name,
 }
 
 static bool MdoDraftSubmissionRead(const xvalue* Value,
-    MdoDraftSubmission* Submission)
+    MdoDraftSubmission* Submission, bool Legacy)
 {
     const xvalue* IdValue;
+    const xvalue* StateValue;
     xstrview Id;
+    xstrview State;
     size_t i;
     memset(Submission, 0, sizeof(*Submission));
-    if ( xrtValueType(Value) == XVALUE_NULL ) return true;
     if ( xrtValueType(Value) != XVALUE_OBJECT ||
-         xrtValueCount(Value) != 4u ) return false;
+         xrtValueCount(Value) != (Legacy ? 4u : 5u) ) return false;
     IdValue = xrtValueObjectGet(Value, XRT_STR_LITERAL("id"));
     if ( xrtValueType(IdValue) != XVALUE_STRING ||
          !xrtValueGetString(IdValue, &Id) || Id.Size != 32u ) return false;
@@ -167,14 +186,65 @@ static bool MdoDraftSubmissionRead(const xvalue* Value,
          !MdoDraftBool(Value, "interrupt", &Submission->Interrupt) ||
          (Submission->TextSize == 0u &&
           Submission->AttachmentCount == 0u) ) return false;
-    Submission->Present = true;
+    if ( Legacy ) {
+        Submission->Posting = true;
+    } else {
+        StateValue = xrtValueObjectGet(Value,
+            XRT_STR_LITERAL("state"));
+        if ( xrtValueType(StateValue) != XVALUE_STRING ||
+             !xrtValueGetString(StateValue, &State) ) return false;
+        if ( State.Size == 7u &&
+             memcmp(State.Data, "posting", 7u) == 0 )
+            Submission->Posting = true;
+        else if ( State.Size != 8u ||
+                  memcmp(State.Data, "prepared", 8u) != 0 )
+            return false;
+    }
     return true;
 }
 
-static xvalue* MdoDraftSubmissionValue(const MdoDraftSubmission* Submission)
+static bool MdoDraftSubmissionsRead(const xvalue* Value,
+    MdoDraft* Draft, bool Legacy)
+{
+    size_t Count;
+    size_t Total = 0u;
+    size_t i;
+    if ( Legacy ) {
+        if ( xrtValueType(Value) == XVALUE_NULL ) return true;
+        Count = 1u;
+    } else {
+        if ( xrtValueType(Value) != XVALUE_ARRAY ) return false;
+        Count = xrtValueCount(Value);
+        if ( Count > MDO_DRAFT_SUBMISSIONS_MAX ) return false;
+    }
+    for ( i = 0u; i < Count; ++i ) {
+        const xvalue* Item = Legacy ? Value : xrtValueArrayGet(Value, i);
+        MdoDraftSubmission* Submission =
+            (MdoDraftSubmission*)xrtMalloc(sizeof(*Submission));
+        size_t j;
+        if ( Submission == NULL ) return false;
+        if ( !MdoDraftSubmissionRead(Item, Submission, Legacy) ||
+             Submission->TextSize >
+                MDO_DRAFT_SUBMISSIONS_TEXT_MAX - Total ) {
+            xrtFree(Submission);
+            return false;
+        }
+        for ( j = 0u; j < Draft->SubmissionCount; ++j )
+            if ( strcmp(Draft->Submissions[j]->Id, Submission->Id) == 0 ) {
+                xrtFree(Submission);
+                return false;
+            }
+        Total += Submission->TextSize;
+        Draft->Submissions[Draft->SubmissionCount++] = Submission;
+    }
+    return true;
+}
+
+static xvalue* MdoDraftSubmissionValue(const MdoDraftSubmission* Submission,
+    bool Legacy)
 {
     xvalue* Value;
-    if ( !Submission->Present ) return xrtValueNull();
+    if ( Submission == NULL ) return xrtValueNull();
     Value = xrtValueObject();
     if ( Value != NULL &&
          MdoApiValueSetString(Value, "id", Submission->Id) &&
@@ -183,9 +253,54 @@ static xvalue* MdoDraftSubmissionValue(const MdoDraftSubmission* Submission)
          MdoAttachmentIdsWriteValue(Value, Submission->Attachments,
             Submission->AttachmentCount) &&
          MdoApiValueSetBool(Value, "interrupt",
-            Submission->Interrupt) ) return Value;
+            Submission->Interrupt) &&
+         (Legacy || MdoApiValueSetString(Value, "state",
+            Submission->Posting ? "posting" : "prepared")) ) return Value;
     xrtValueRelease(Value);
     return NULL;
+}
+
+static xvalue* MdoDraftSubmissionsValue(const MdoDraft* Draft)
+{
+    xvalue* Array = xrtValueArray();
+    size_t i;
+    bool Ok = Array != NULL;
+    for ( i = 0u; Ok && i < Draft->SubmissionCount; ++i ) {
+        xvalue* Item = MdoDraftSubmissionValue(Draft->Submissions[i], false);
+        Ok = MdoApiValueAppendTake(Array, &Item);
+        xrtValueRelease(Item);
+    }
+    if ( Ok ) return Array;
+    xrtValueRelease(Array);
+    return NULL;
+}
+
+static bool MdoDraftSubmissionAttachmentsExist(const MdoDraft* Draft,
+    const char* Project, const char* Session)
+{
+    size_t i;
+    for ( i = 0u; i < Draft->SubmissionCount; ++i ) {
+        const MdoDraftSubmission* Item = Draft->Submissions[i];
+        if ( Item->AttachmentCount != 0u &&
+             (Project == NULL || Session == NULL ||
+              !MdoAttachmentIdsExist(Project, Session,
+                Item->Attachments, Item->AttachmentCount)) ) return false;
+    }
+    return true;
+}
+
+static void MdoDraftReplaceSubmissions(MdoDraft* Target, MdoDraft* Source)
+{
+    size_t i;
+    for ( i = 0u; i < Target->SubmissionCount; ++i )
+        xrtFree(Target->Submissions[i]);
+    memset(Target->Submissions, 0, sizeof(Target->Submissions));
+    Target->SubmissionCount = Source->SubmissionCount;
+    for ( i = 0u; i < Source->SubmissionCount; ++i ) {
+        Target->Submissions[i] = Source->Submissions[i];
+        Source->Submissions[i] = NULL;
+    }
+    Source->SubmissionCount = 0u;
 }
 
 static bool MdoDraftRead(const char* Path, MdoDraft* Draft)
@@ -213,14 +328,13 @@ static bool MdoDraftRead(const char* Path, MdoDraft* Draft)
     Bytes[Info.Size] = '\0';
     xrtJsonReadConfigInit(&Config);
     Config.MaxInputBytes = MDO_DRAFT_FILE_MAX;
-    Config.MaxDepth = 5u;
-    Config.MaxValues = 32u;
-    Config.MaxContainerItems = 8u;
+    Config.MaxDepth = 6u;
+    Config.MaxValues = 256u;
+    Config.MaxContainerItems = MDO_DRAFT_SUBMISSIONS_MAX;
     Root = xrtJsonRead(xrtStrViewN(Bytes, (size_t)Info.Size), &Config);
     if ( xrtValueType(Root) != XVALUE_OBJECT ||
          !MdoDraftUInt(Root, "schema_version", &Schema) ||
-         (Schema != 1u && Schema != 2u && Schema != 3u &&
-          Schema != 4u) ||
+         (Schema < 1u || Schema > 5u) ||
          xrtValueCount(Root) != (Schema == 1u ? 3u :
             (Schema == 2u ? 4u : (Schema == 3u ? 5u : 6u))) ||
          !MdoDraftUInt(Root, "revision", &Draft->Revision) ||
@@ -232,9 +346,12 @@ static bool MdoDraftRead(const char* Path, MdoDraft* Draft)
                 &Draft->AttachmentCount)) ||
          (Schema >= 3u && !MdoDraftBool(Root,
             "run_admission_uncertain", &Draft->RunAdmissionUncertain)) ||
-         (Schema == 4u && !MdoDraftSubmissionRead(
+         (Schema == 4u && !MdoDraftSubmissionsRead(
             xrtValueObjectGet(Root, XRT_STR_LITERAL("submission")),
-            &Draft->Submission)) )
+            Draft, true)) ||
+         (Schema == 5u && !MdoDraftSubmissionsRead(
+            xrtValueObjectGet(Root, XRT_STR_LITERAL("submissions")),
+            Draft, false)) )
         goto done;
     Ok = true;
 done:
@@ -247,11 +364,11 @@ done:
 static bool MdoDraftWrite(const char* Path, const MdoDraft* Draft)
 {
     xvalue* Root = xrtValueObject();
-    xvalue* Submission = MdoDraftSubmissionValue(&Draft->Submission);
+    xvalue* Submissions = MdoDraftSubmissionsValue(Draft);
     char* Json = NULL;
     size_t Size = 0u;
-    bool Ok = Root != NULL && Submission != NULL &&
-        MdoApiValueSetUInt(Root, "schema_version", 4u) &&
+    bool Ok = Root != NULL && Submissions != NULL &&
+        MdoApiValueSetUInt(Root, "schema_version", 5u) &&
         MdoApiValueSetUInt(Root, "revision", Draft->Revision) &&
         MdoApiValueSetStringView(Root, "text",
             xrtStrViewN(Draft->Text, Draft->TextSize)) &&
@@ -259,13 +376,13 @@ static bool MdoDraftWrite(const char* Path, const MdoDraft* Draft)
             Draft->AttachmentCount) &&
         MdoApiValueSetBool(Root, "run_admission_uncertain",
             Draft->RunAdmissionUncertain) &&
-        MdoApiValueSetTake(Root, "submission", &Submission);
+        MdoApiValueSetTake(Root, "submissions", &Submissions);
     if ( Ok ) Json = xrtJsonStringify(Root, false, &Size);
     if ( Json != NULL && Size <= MDO_DRAFT_FILE_MAX )
         Ok = MdoHomeAtomicWrite(Path, Json, Size, false);
     else Ok = false;
     xrtFree(Json);
-    xrtValueRelease(Submission);
+    xrtValueRelease(Submissions);
     xrtValueRelease(Root);
     return Ok;
 }
@@ -273,8 +390,10 @@ static bool MdoDraftWrite(const char* Path, const MdoDraft* Draft)
 static xvalue* MdoDraftResponse(const MdoDraft* Draft)
 {
     xvalue* Data = xrtValueObject();
-    xvalue* Submission = MdoDraftSubmissionValue(&Draft->Submission);
-    if ( Data != NULL && Submission != NULL &&
+    xvalue* Submission = MdoDraftSubmissionValue(
+        Draft->SubmissionCount ? Draft->Submissions[0] : NULL, true);
+    xvalue* Submissions = MdoDraftSubmissionsValue(Draft);
+    if ( Data != NULL && Submission != NULL && Submissions != NULL &&
          MdoApiValueSetUInt(Data, "revision", Draft->Revision) &&
          MdoApiValueSetStringView(Data, "text",
             xrtStrViewN(Draft->Text, Draft->TextSize)) &&
@@ -282,8 +401,10 @@ static xvalue* MdoDraftResponse(const MdoDraft* Draft)
             Draft->AttachmentCount) &&
          MdoApiValueSetBool(Data, "run_admission_uncertain",
             Draft->RunAdmissionUncertain) &&
-         MdoApiValueSetTake(Data, "submission", &Submission) ) return Data;
+         MdoApiValueSetTake(Data, "submission", &Submission) &&
+         MdoApiValueSetTake(Data, "submissions", &Submissions) ) return Data;
     xrtValueRelease(Submission);
+    xrtValueRelease(Submissions);
     xrtValueRelease(Data);
     return NULL;
 }
@@ -296,6 +417,7 @@ bool MdoApiDraftRoute(MdoApiContext* Context)
     MdoSession* Session;
     xwork_error Error;
     MdoDraft* Draft;
+    MdoDraft* Incoming = NULL;
     MdoApiJsonBody Body;
     MdoApiBodyStatus BodyStatus;
     uint64 ExpectedRevision;
@@ -304,8 +426,8 @@ bool MdoApiDraftRoute(MdoApiContext* Context)
     size_t IncomingCount = 0u;
     bool IncomingUncertain = false;
     bool UncertainPresent = false;
-    MdoDraftSubmission IncomingSubmission;
     bool SubmissionPresent = false;
+    bool SubmissionsPresent = false;
     bool Ok;
     bool Conflict = false;
     bool AttachmentLocked = false;
@@ -331,18 +453,28 @@ bool MdoApiDraftRoute(MdoApiContext* Context)
     Draft = (MdoDraft*)xrtMalloc(sizeof(*Draft));
     if ( Draft == NULL ) return MdoApiReplyError(Context, 503u,
         "draft_unavailable", "The draft could not be allocated", NULL);
+    memset(Draft, 0, sizeof(*Draft));
     ExpectedRevision = 0u;
     if ( Context->Request->head->MethodCode == XHTTP_METHOD_PUT ) {
+        Incoming = (MdoDraft*)xrtMalloc(sizeof(*Incoming));
+        if ( Incoming == NULL ) {
+            MdoDraftRelease(Draft);
+            return MdoApiReplyError(Context, 503u, "draft_unavailable",
+                "The draft could not be allocated", NULL);
+        }
+        memset(Incoming, 0, sizeof(*Incoming));
         BodyStatus = MdoApiJsonBodyRead(Context, &Body);
         if ( BodyStatus != MDO_API_BODY_OK ) {
-            xrtFree(Draft);
+            MdoDraftRelease(Incoming);
+            MdoDraftRelease(Draft);
             return MdoApiReplyBodyError(Context, BodyStatus);
         }
         if ( Context->ParamCount == 2u ) {
             AttachmentLocked = MdoApiAttachmentLock();
             if ( !AttachmentLocked ) {
                 MdoApiJsonBodyUnit(&Body);
-                xrtFree(Draft);
+                MdoDraftRelease(Incoming);
+                MdoDraftRelease(Draft);
                 return MdoApiReplyError(Context, 503u,
                     "attachment_unavailable",
                     "Image storage is unavailable", NULL);
@@ -354,23 +486,28 @@ bool MdoApiDraftRoute(MdoApiContext* Context)
             XRT_STR_LITERAL("run_admission_uncertain"));
         const xvalue* Submission = xrtValueObjectGet(Body.Value,
             XRT_STR_LITERAL("submission"));
+        const xvalue* Submissions = xrtValueObjectGet(Body.Value,
+            XRT_STR_LITERAL("submissions"));
         UncertainPresent = Uncertain != NULL;
         SubmissionPresent = Submission != NULL;
+        SubmissionsPresent = Submissions != NULL;
         Ok = xrtValueType(Body.Value) == XVALUE_OBJECT &&
             xrtValueCount(Body.Value) == (Attachments == NULL ? 2u : 3u) +
                 (UncertainPresent ? 1u : 0u) +
-                (SubmissionPresent ? 1u : 0u) &&
+                (SubmissionPresent ? 1u : 0u) +
+                (SubmissionsPresent ? 1u : 0u) &&
+            !(SubmissionPresent && SubmissionsPresent) &&
             MdoDraftUInt(Body.Value, "revision", &ExpectedRevision) &&
             MdoDraftTextView(Body.Value, "text", &IncomingText) &&
             (!UncertainPresent || MdoDraftBool(Body.Value,
                 "run_admission_uncertain", &IncomingUncertain)) &&
-            (!SubmissionPresent ||
-             (MdoDraftSubmissionRead(Submission, &IncomingSubmission) &&
-              (IncomingSubmission.AttachmentCount == 0u ||
-               (Context->ParamCount == 2u &&
-                MdoAttachmentIdsExist(ProjectId, SessionId,
-                    IncomingSubmission.Attachments,
-                    IncomingSubmission.AttachmentCount))))) &&
+            (!SubmissionPresent || MdoDraftSubmissionsRead(Submission,
+                Incoming, true)) &&
+            (!SubmissionsPresent || MdoDraftSubmissionsRead(Submissions,
+                Incoming, false)) &&
+            MdoDraftSubmissionAttachmentsExist(Incoming,
+                Context->ParamCount == 2u ? ProjectId : NULL,
+                Context->ParamCount == 2u ? SessionId : NULL) &&
             (Attachments == NULL ||
              MdoAttachmentIdsRead(Attachments, IncomingAttachments,
                 &IncomingCount)) &&
@@ -381,7 +518,8 @@ bool MdoApiDraftRoute(MdoApiContext* Context)
         if ( !Ok ) {
             if ( AttachmentLocked ) MdoApiAttachmentUnlock();
             MdoApiJsonBodyUnit(&Body);
-            xrtFree(Draft);
+            MdoDraftRelease(Incoming);
+            MdoDraftRelease(Draft);
             return MdoApiReplyError(Context, 422u, "draft_invalid",
                 "Expected a revision and bounded UTF-8 text", NULL);
         }
@@ -402,7 +540,8 @@ bool MdoApiDraftRoute(MdoApiContext* Context)
             Draft->AttachmentCount = IncomingCount;
             if ( UncertainPresent )
                 Draft->RunAdmissionUncertain = IncomingUncertain;
-            if ( SubmissionPresent ) Draft->Submission = IncomingSubmission;
+            if ( SubmissionPresent || SubmissionsPresent )
+                MdoDraftReplaceSubmissions(Draft, Incoming);
             Ok = MdoDraftWrite(Path, Draft);
         }
     }
@@ -411,7 +550,8 @@ bool MdoApiDraftRoute(MdoApiContext* Context)
     if ( AttachmentLocked ) MdoApiAttachmentUnlock();
     if ( Context->Request->head->MethodCode == XHTTP_METHOD_PUT )
         MdoApiJsonBodyUnit(&Body);
-    xrtFree(Draft);
+    MdoDraftRelease(Incoming);
+    MdoDraftRelease(Draft);
     if ( Conflict ) return MdoApiReplyError(Context, 409u,
         "draft_conflict", "The draft changed in another window", NULL);
     if ( Data == NULL ) return MdoApiReplyError(Context, 503u,

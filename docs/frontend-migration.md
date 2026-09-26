@@ -471,3 +471,7 @@ Home `.build/mdo-packed-docks-lyu66m_d` 使用新单文件程序真实重启后�
 隔离单文件 Home `.build/mdo-packed-docks-yufu5d0r` 中，既有会话两次发送分别落入队列并执行，两次队列 POST、两次运行 POST。`--drop-first-queue-response --fail-first-queue-reconcile` 的 Home `.build/mdo-packed-docks-1pe354rv` 在服务端接受后丢浏览器响应；刷新仍显示同一条 `staged` 消息，点击“继续发送”后只记录一次队列 POST 和一次运行 POST。`--fail-first-queue` 的 Home `.build/mdo-packed-docks-uy2wjflm` 中，队列明确拒绝后保留快照，点击“核对队列并恢复”将原文放回输入区，仅一次队列 POST、零次运行 POST。另有 Node 测试覆盖快照与下一条草稿的分离和刷新恢复，API 探针覆盖 schema 升级、清除和图片引用。当前一个会话只支持一条在途快照：发送期间可继续编辑，但暂不能连续按 Enter 提交多条；新任务创建及旧 `submissionLanes` 也尚未接入写前日志。后续阶段按 `docs/durable-submission-journal.md` 完成有序多项日志与消费凭据。
 
 本阶段有界发布门禁通过 62 个前端模块解析、23 项 Node 测试、114 项 Python 单元/契约测试、19 个运行探针、严格 C 编译、确定性打包、单文件零旁路写入和 20 秒启动检查。根目录 `mdo.exe` 已重建，与门禁产物的 SHA-256 同为 `2cd4d2b38c6e7d9eecb4347516bec5c2fb7a1ec985778f22d82c555cf2395eab`。
+
+连续输入的服务端日志现升级为草稿 schema 5：`submissions` 是最多 20 条的有序列表，正文合计不超过 192 KiB，每条有唯一 ID、正文、最多四张图片、优先标记以及 `prepared/posting` 状态。服务端逐项验证图片存在、保护图片引用，拒绝重复 ID 和越界列表；旧 schema 4 的单条 `submission` 按保守的 `posting` 状态导入。GET 暂时提供旧 `submission` 首项投影，PUT 暂时兼容旧单条写法，因此本阶段的前端仍能使用上一阶段流程。API 探针覆盖两条列表保存、顺序读取、状态更新、移除、重复 ID 拒绝、图片引用和旧文件升级。前端有序入队尚未接线，不把服务端日志能力当作连续 Enter 已完成。
+
+本阶段有界发布门禁通过 62 个前端模块解析、23 项 Node 测试、114 项 Python 单元/契约测试、19 个运行探针、严格 C 编译、确定性打包、单文件零旁路写入和 20 秒启动检查。根目录 `mdo.exe` 已重建，与门禁产物的 SHA-256 同为 `d444a541c548e51de529eab11a4ca147568833306510f8221e2841d1c48753b9`。
