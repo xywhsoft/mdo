@@ -1,5 +1,14 @@
 import { t } from "../../i18n.js";
 
+export function taskTitle(text, fallback = "") {
+  const characters = Array.from(text.trim().split(/\r?\n/, 1)[0])
+    .slice(0, 80);
+  const encoder = new TextEncoder();
+  while (characters.length &&
+      encoder.encode(characters.join("")).length > 256) characters.pop();
+  return characters.join("") || fallback;
+}
+
 function sameSubmission(a, b) {
   return a.id === b.id && a.text === b.text &&
     a.interrupt === b.interrupt && a.state === "prepared" &&
@@ -39,8 +48,9 @@ export function createNewTaskController({ draftStore, newId, createSession,
       throw new Error(t("composer.newTaskCopyFailed"));
     const source = draftStore.submissions("");
     const target = draftStore.submissions(key);
-    if (!source.length || target.length > source.length ||
-        (!fresh && !target.length) || target.some((item, index) =>
+    if (target.length > source.length ||
+        (!fresh && !target.length && source.length) ||
+        target.some((item, index) =>
           !sameSubmission(item, source[index])))
       throw new Error(t("composer.newTaskReviewCopy"));
     for (const item of source.slice(target.length))
@@ -68,7 +78,7 @@ export function createNewTaskController({ draftStore, newId, createSession,
   async function pump(reviewedCopy = false) {
     if (pumping || blocked) return;
     const task = draftStore.newTask();
-    if (!task || !draftStore.submissions("").length) return;
+    if (!task) return;
     pumping = true;
     changed();
     try {
@@ -106,12 +116,13 @@ export function createNewTaskController({ draftStore, newId, createSession,
       throw new Error(t("composer.newTaskOtherProject"));
     if (task?.phase === "copying")
       throw new Error(t("composer.newTaskBusy"));
-    const id = newId();
+    const id = task && !draftStore.submissions("").length
+      ? task.session_id : newId();
     const item = { id, text, attachments: [], interrupt: false,
       state: "prepared" };
     if (!task) {
       task = { project_id: projectId, session_id: id,
-        title: text.trim().split(/\r?\n/, 1)[0].slice(0, 80),
+        title: taskTitle(text),
         agent_id: "mdo.default", model_id: profile.model_id,
         reasoning_effort: profile.reasoning_effort,
         permission_profile: profile.permission_profile,
@@ -137,9 +148,28 @@ export function createNewTaskController({ draftStore, newId, createSession,
 
   async function reconcile() {
     if (!await draftStore.ensureLoaded("")) return false;
-    if (draftStore.newTask() && draftStore.submissions("").length)
-      await pump();
+    if (draftStore.newTask()) await pump();
     return true;
+  }
+
+  async function createForAttachment({ projectId, title, profile }) {
+    if (blocked || migrating || pumping)
+      throw new Error(t("composer.newTaskBusy"));
+    if (!await draftStore.ensureLoaded(""))
+      throw new Error(t("composer.newTaskSaveFailed"));
+    if (draftStore.newTask() || draftStore.submissions("").length)
+      throw new Error(t("composer.newTaskBusy"));
+    const sessionId = newId();
+    if (!draftStore.setNewTask({ project_id: projectId,
+      session_id: sessionId, title, agent_id: "mdo.default",
+      model_id: profile.model_id,
+      reasoning_effort: profile.reasoning_effort,
+      permission_profile: profile.permission_profile,
+      phase: "creating" }))
+      throw new Error(t("composer.newTaskSaveFailed"));
+    await pump();
+    if (blocked) throw new Error(t("composer.newTaskReview"));
+    return { projectId, sessionId };
   }
 
   async function review() {
@@ -148,7 +178,7 @@ export function createNewTaskController({ draftStore, newId, createSession,
     return !blocked;
   }
 
-  return Object.freeze({ submit, reconcile, review,
+  return Object.freeze({ submit, reconcile, review, createForAttachment,
     isBusy() { return pumping || blocked; },
     isBlocked() { return blocked; },
     isMigrating() { return migrating; },

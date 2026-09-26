@@ -39,7 +39,7 @@ import { createConversationDocks } from "./features/chat/conversation-docks.js";
 import { createPromptQueue } from "./features/chat/prompt-queue.js";
 import { createDraftStore } from "./features/chat/draft-store.js";
 import { createSubmissionController } from "./features/chat/submission-controller.js";
-import { createNewTaskController } from "./features/chat/new-task-controller.js";
+import { createNewTaskController, taskTitle } from "./features/chat/new-task-controller.js";
 import { createComposerImages } from "./features/chat/composer-images.js";
 import { createComposerProject } from "./features/chat/composer-project.js";
 import { createImagePreview } from "./features/chat/image-preview.js";
@@ -1320,23 +1320,14 @@ export async function boot() {
     const origin = navigation.get();
     const originVersion = routeVersion;
     if (origin.sessionId) return origin;
-    const title = text.trim().split(/\r?\n/, 1)[0].slice(0, 80) ||
-      t("composer.imageTask", {}, "图片任务");
-    const session = await createSession({ project_id: origin.projectId || "default", title,
-      ...composerProfile.selection() });
-    if (stageDraft && routeVersion === originVersion) {
-      // A second prompt typed during session creation belongs to the new
-      // conversation; stage it before navigation restores the composer.
-      draftStore.edit(`${session.project_id}/${session.id}`,
+    const title = taskTitle(text, t("composer.imageTask", {}, "图片任务"));
+    const owner = await newTaskController.createForAttachment({
+      projectId: origin.projectId || "default", title,
+      profile: composerProfile.selection() });
+    if (stageDraft && routeVersion === originVersion && prompt.value)
+      draftStore.edit(`${owner.projectId}/${owner.sessionId}`,
         prompt.value, composerAttachments, true);
-    }
-    if (routeVersion === originVersion) {
-      showActiveSessions();
-      creatingSessionKey = `${session.project_id}/${session.id}`;
-      navigation.select(session.project_id, session.id);
-      selectTimeline(session.project_id, session.id);
-    }
-    return { projectId: session.project_id, sessionId: session.id };
+    return owner;
   }
 
   function selectedOwnsDraft(key) {

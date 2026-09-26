@@ -2,7 +2,79 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { createDraftStore } from "../app/web/js/features/chat/draft-store.js";
-import { createNewTaskController } from "../app/web/js/features/chat/new-task-controller.js";
+import { createNewTaskController, taskTitle } from "../app/web/js/features/chat/new-task-controller.js";
+
+test("new-task titles stay within the UTF-8 session title limit", () => {
+  const title = taskTitle("😀".repeat(80));
+  assert.equal(Array.from(title).length, 64);
+  assert.equal(new TextEncoder().encode(title).length, 256);
+  assert.equal(taskTitle(" \n", "图片任务"), "图片任务");
+});
+
+test("attachment-first creation recovers a lost create response", async () => {
+  const originalWindow = globalThis.window;
+  const originalFetch = globalThis.fetch;
+  const documents = new Map();
+  const sessionId = "b".repeat(32);
+  let createCalls = 0;
+  let lookups = 0;
+  let migrated = "";
+  globalThis.window = { setTimeout, clearTimeout, addEventListener() {} };
+  globalThis.fetch = async (path, options) => {
+    const current = documents.get(path) ?? { revision: 0, text: "",
+      attachments: [], run_admission_uncertain: false,
+      submissions: [], new_task: null };
+    if (options.method === "GET")
+      return Response.json({ ok: true, data: current });
+    const body = JSON.parse(options.body);
+    assert.equal(body.revision, current.revision);
+    const next = { ...body, revision: current.revision + 1 };
+    documents.set(path, next);
+    return Response.json({ ok: true, data: next });
+  };
+  try {
+    const draftStore = createDraftStore({ onRestore() {},
+      onError(error) { throw error; }, onSaved() {} });
+    draftStore.select("");
+    assert.equal(await draftStore.ensureLoaded(""), true);
+    draftStore.edit("", "image prompt", [], true);
+    const controller = createNewTaskController({ draftStore,
+      newId() { return sessionId; },
+      async createSession(input) {
+        createCalls += 1;
+        assert.equal(input.client_session_id, sessionId);
+        assert.equal(documents.get("/api/v1/draft").new_task.session_id,
+          sessionId);
+        throw new TypeError("response lost");
+      },
+      async findSession(projectId, id) {
+        lookups += 1;
+        assert.equal(projectId, "default");
+        assert.equal(id, sessionId);
+        return { project_id: projectId, id };
+      },
+      onPersisted() {}, onMigrated(key) { migrated = key; },
+      onReview(error) { assert.fail(error.message); }, onChange() {},
+    });
+    const result = await controller.createForAttachment({
+      projectId: "default", title: "image prompt",
+      profile: { model_id: "image-model", reasoning_effort: "medium",
+        permission_profile: "balanced" },
+    });
+    assert.deepEqual(result, { projectId: "default", sessionId });
+    assert.equal(migrated, `default/${sessionId}`);
+    assert.equal(documents.get("/api/v1/draft").new_task, null);
+    assert.equal(documents.get("/api/v1/draft").text, "");
+    const target = documents.get(`/api/v1/projects/default/sessions/${sessionId}/draft`);
+    assert.equal(target.text, "image prompt");
+    assert.deepEqual(target.submissions, []);
+    assert.equal(createCalls, 1);
+    assert.equal(lookups, 1);
+  } finally {
+    globalThis.window = originalWindow;
+    globalThis.fetch = originalFetch;
+  }
+});
 
 test("new-task inputs survive a delayed create and move in order", async () => {
   const originalWindow = globalThis.window;

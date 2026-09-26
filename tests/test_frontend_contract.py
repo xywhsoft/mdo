@@ -122,7 +122,8 @@ class FrontendContractTests(unittest.TestCase):
         app = self.scripts["js/app.js"]
         profile = self.scripts["js/features/chat/composer-profile.js"]
         sessions = self.scripts["js/state/sessions.js"]
-        self.assertIn("...composerProfile.selection()", app)
+        self.assertIn("profile: composerProfile.selection()", app)
+        self.assertIn("newTaskController.createForAttachment", app)
         self.assertIn("updateSessionProfile(session, profile)", profile)
         self.assertIn("isRunActive()", profile)
         self.assertIn("/profile", sessions)

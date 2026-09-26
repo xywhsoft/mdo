@@ -7,6 +7,7 @@ bounded synthetic text file so the normal tool-output artifact path is used.
 """
 
 import argparse
+import base64
 import http.client
 import json
 import os
@@ -310,6 +311,8 @@ parser.add_argument("--task-ms", type=int, default=12000,
                     help="TASK UI background process sleep, 0-30000 ms")
 parser.add_argument("--resume-verify", action="store_true",
                     help="let the local model verify a resumed run with a bounded read-only command")
+parser.add_argument("--image-capable", action="store_true",
+                    help="enable image input in the isolated built-in model fixture")
 args = parser.parse_args()
 if not 0 <= args.approval_delay_ms <= 5000:
     parser.error("--approval-delay-ms must be between 0 and 5000")
@@ -331,6 +334,17 @@ if args.fail_first_queue_reconcile and not args.drop_first_queue_response:
     parser.error("--fail-first-queue-reconcile requires --drop-first-queue-response")
 
 base = Path(tempfile.mkdtemp(prefix="mdo-packed-docks-", dir=ROOT / ".build"))
+if args.image_capable:
+    defaults = json.loads((ROOT / "app/default-home/config/defaults.json")
+                          .read_text(encoding="utf-8"))
+    model_config = defaults["models"]["items"][0]
+    model_config["capabilities"].append("media-input")
+    model_config["attachments"] = ["image"]
+    override = base / "default-home/config/defaults.json"
+    override.parent.mkdir(parents=True)
+    override.write_text(json.dumps(defaults), encoding="utf-8")
+    (base / "fixture.png").write_bytes(base64.b64decode(
+        "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/qokAAAAASUVORK5CYII="))
 Model.verify_recovery = args.resume_verify
 Model.verification_file = base / "README.md"
 Model.artifact_file = base / "artifact-fixture.txt"
