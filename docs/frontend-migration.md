@@ -503,3 +503,7 @@ Home `.build/mdo-packed-docks-lyu66m_d` 使用新单文件程序真实重启后�
 隔离单文件 Home `.build/mdo-packed-docks-hhy2043i` 的代理首次对 `POST /sessions` 返回合成 422：页面仍显示原消息快照，图片入口和发送按钮禁用，推理选项可切换。切到“高”后点击新重试入口，页面进入唯一的新会话，时间线各有一条用户消息与模型回复。代理共收到两次创建 POST（首次被拒绝）、一次队列 POST、一次运行 POST；最终 `data/draft.json` 的 `submissions` 为空、`new_task` 为 null，会话 `meta.json` 的 `reasoning_effort` 为 `high`。Node 用例还覆盖两条待发送输入在拒绝与改配重试之间保持顺序。测试仅用隔离 Home 的本地合成请求。
 
 本阶段有界发布门禁通过 64 个前端模块解析、33 项 Node 测试、114 项 Python 单元/契约测试、19 个运行探针、严格 C 编译、确定性打包、单文件零旁路写入和 20 秒启动检查。根目录 `mdo.exe` 已重建，与门禁产物的 SHA-256 同为 `80fd39b895e16f7018801cdc9db877c77edf1096a67099a84fd5ef174ec3528d`。
+
+补齐三个先前仅有模块或服务端证据的打包页操作。隔离 Home `.build/mdo-packed-docks-ehwdhkzc` 中，先将合成 PNG 加入已有会话草稿，再点击缩略图移除：页面撤下缩略图，焦点回到添加图片按钮，`draft.json` 中图片引用为空，附件目录无剩余文件。同一 Home 的两轮合成对话中，第二条消息通过编辑弹层改为 `EDITED SECOND UI` 后重新发送；第一轮保留，旧第二轮撤回，新回合得到回复。随后点击该回复的重试入口，目标回合重新执行；刷新后仍只显示第一轮和重试后的 `EDITED SECOND UI`，并显示两个历史截断边界。
+
+队列移除使用独立 Home `.build/mdo-packed-docks-igncp34n`：首轮本地模型延迟 15 秒，运行期间提交 `REMOVE BEFORE DISPATCH`，立即点按待发卡片的移除按钮。`queue.json` 随即为 `items: []`；首轮结束后时间线和四条持久 UI 事件只包含第一条消息和回复，第二条未执行。先前 12 秒尝试在点按前已经自动派发，因此未作为通过证据。三项验收均只操作隔离 Home 的合成数据，没有压力或高负载；Windows 打包页已覆盖这些操作，系统原生拖放及其他平台触控另待验证。本阶段未改应用代码，根目录 `mdo.exe` 已重新打包，SHA-256 仍为 `80fd39b895e16f7018801cdc9db877c77edf1096a67099a84fd5ef174ec3528d`。
