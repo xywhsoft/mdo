@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import shutil
 import socket
 import subprocess
@@ -57,6 +58,16 @@ void ServiceInit(XS_HostInfo* host)
     printf("transport_ok=%d path=%s\n",
         MdoConfigGetTransportSettings(&transport) ? 1 : 0,
         transport.CaPemPath);
+    if ( transport.CaPemPath[0] != '\0' ) {
+        xx509store* system = xrtX509StoreSystem();
+        xx509store* combined = MdoModelsLoadCaStore(transport.CaPemPath,
+            NULL);
+        printf("ca_anchor_counts=system:%zu combined:%zu\n",
+            system != NULL ? xrtX509StoreCount(system) : 0u,
+            combined != NULL ? xrtX509StoreCount(combined) : 0u);
+        xrtX509StoreFree(system);
+        xrtX509StoreFree(combined);
+    }
     first = MdoModelCatalogSnapshot();
     printf("catalog_one=%llu providers=%zu models=%zu\n",
         (unsigned long long)MdoModelManagerGeneration(),
@@ -264,6 +275,8 @@ def main() -> int:
         valid = run_probe(host, site, valid_home)
         assert "transport_ok=1 path=certs/test.pem" in valid, valid
         assert "client_1=1" in valid and "client_3=1" in valid, valid
+        counts = re.search(r"ca_anchor_counts=system:(\d+) combined:(\d+)", valid)
+        assert counts and int(counts[2]) >= int(counts[1]) + 1, valid
         (valid_home / "certs/test.pem").write_text("invalid PEM", encoding="utf-8")
         invalid = run_probe(host, site, valid_home)
         assert "client_1=0" in invalid and "no valid PEM certificates" in invalid, invalid

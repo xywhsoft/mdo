@@ -792,10 +792,11 @@ static void MdoModelsProfileError(xllm_error* pError, cstr Message)
     snprintf(pError->sMessage, sizeof(pError->sMessage), "%s", Message);
 }
 
-static char* MdoModelsLoadCaPem(cstr Path, xllm_error* Error)
+static xx509store* MdoModelsLoadCaStore(cstr Path, xllm_error* Error)
 {
     xfile File = NULL;
     xfileinfo Info;
+    xx509store* Validation = NULL;
     xx509store* Store = NULL;
     char* Pem = NULL;
     size_t Added = 0u;
@@ -832,28 +833,42 @@ static char* MdoModelsLoadCaPem(cstr Path, xllm_error* Error)
             "custom CA file contains no valid PEM certificates");
         goto done;
     }
-    Store = xrtX509StoreCreate();
-    if ( Store == NULL ) {
+    Validation = xrtX509StoreCreate();
+    if ( Validation == NULL ) {
         MdoModelsProfileError(Error, "cannot validate custom CA file");
         if ( Error != NULL ) Error->eCode = XLLM_ERROR_OUT_OF_MEMORY;
         goto done;
     }
-    if ( !xrtX509StoreAddPem(Store, Pem, (size_t)Info.Size, &Added) ||
+    if ( !xrtX509StoreAddPem(Validation, Pem, (size_t)Info.Size, &Added) ||
          Added == 0u ) {
         MdoModelsProfileError(Error,
             "custom CA file contains no valid PEM certificates");
         goto done;
     }
+    /* The custom anchors extend system trust. A PEM already present in the
+     * system store is still valid even when the second import adds zero. */
+    Store = xrtX509StoreSystem();
+    if ( Store == NULL ) {
+        xrtClearError();
+        Store = xrtX509StoreCreate();
+    }
+    if ( Store == NULL ||
+         !xrtX509StoreAddPem(Store, Pem, (size_t)Info.Size, NULL) ) {
+        MdoModelsProfileError(Error,
+            "cannot combine system and custom CA certificates");
+        goto done;
+    }
     Ok = true;
 
 done:
-    if ( Store != NULL ) xrtX509StoreFree(Store);
+    xrtX509StoreFree(Validation);
     if ( !xrtClose(File) ) {
         Ok = false;
         MdoModelsProfileError(Error, "cannot close custom CA file");
     }
-    if ( !Ok ) { xrtClearError(); xrtFree(Pem); Pem = NULL; }
-    return Pem;
+    xrtFree(Pem);
+    if ( !Ok ) { xrtClearError(); xrtX509StoreFree(Store); Store = NULL; }
+    return Store;
 }
 
 bool MdoModelCatalogProfile(const MdoModelCatalog* pCatalog,
@@ -1044,7 +1059,7 @@ xllm_client* MdoModelClientCreate(const MdoModelCatalog* pCatalog,
     size_t EndpointIndex;
     char* Endpoint = NULL;
     char* Secret = NULL;
-    char* CaPem = NULL;
+    xx509store* CaStore = NULL;
     MdoConfigTransportSettings Transport;
     xllm_model_profile Profile;
     xllm_client_config Config;
@@ -1131,8 +1146,8 @@ xllm_client* MdoModelClientCreate(const MdoModelCatalog* pCatalog,
         goto done;
     }
     if ( Transport.CaPemPath[0] != '\0' ) {
-        CaPem = MdoModelsLoadCaPem(Transport.CaPemPath, pError);
-        if ( CaPem == NULL ) goto done;
+        CaStore = MdoModelsLoadCaStore(Transport.CaPemPath, pError);
+        if ( CaStore == NULL ) goto done;
     }
     xllmClientConfigInit(&Config);
     Config.sBaseUrl = Endpoint;
@@ -1143,7 +1158,7 @@ xllm_client* MdoModelClientCreate(const MdoModelCatalog* pCatalog,
     Config.uMaxOutputTokens = MaxOutputTokens;
     Config.uTimeoutMs = pProvider->TimeoutMilliseconds;
     Config.bVerifyPeer = pProvider->VerifyPeer;
-    Config.sCaPem = CaPem;
+    Config.pX509Store = CaStore;
     Config.eProvider = MdoModelProtocolProvider(Protocol);
     Config.pModelProfile = &Profile;
     pClient = xllmClientCreate(&Config, pError);
@@ -1158,7 +1173,7 @@ xllm_client* MdoModelClientCreate(const MdoModelCatalog* pCatalog,
     }
 
 done:
-    xrtFree(CaPem);
+    xrtX509StoreFree(CaStore);
     MdoSecretRelease(&Secret);
     xrtFree(Endpoint);
     return pClient;
