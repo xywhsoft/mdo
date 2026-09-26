@@ -15,6 +15,7 @@ const b = "b".repeat(32);
 const c = "c".repeat(32);
 const originalFetch = window.fetch;
 const deleted = [];
+const uploadTypes = [];
 let finishA;
 let finishC;
 window.fetch = async (url, options = {}) => {
@@ -24,6 +25,8 @@ window.fetch = async (url, options = {}) => {
   }
   if (options.method === "POST") {
     const session = /\/sessions\/([^/]+)\/attachments$/.exec(String(url))?.[1];
+    uploadTypes.push({ session, mime: options.headers?.["Content-Type"],
+      fileType: options.body?.type });
     if (session === "first" || session === "created") {
       return new Promise((resolve) => {
         if (session === "first") finishA = () => resolve(new Response(
@@ -65,10 +68,9 @@ function createCase(label, initialRoute, ensureSession) {
     onChange: (value) => changes.push({ session: route.sessionId, value }),
     onUploading() {}, onError: (error) => errors.push(error.message),
   });
-  function add() {
+  function add(name = "probe.png", type = "image/png") {
     const transfer = new DataTransfer();
-    transfer.items.add(new File([new Uint8Array([1])], "probe.png",
-      { type: "image/png" }));
+    transfer.items.add(new File([new Uint8Array([1])], name, { type }));
     input.files = transfer.files;
     input.dispatchEvent(new Event("change"));
   }
@@ -108,6 +110,19 @@ try {
   created.output.dataset.passed = String(createdPassed);
   created.output.textContent = JSON.stringify({ createdPassed, newBusy,
     attachments: created.images.get(), errors: created.errors }, null, 2);
+
+  const unknownMime = createCase("系统未提供图片 MIME",
+    { projectId: "qa", sessionId: "unknown-mime" });
+  unknownMime.add("capture.PNG", "");
+  await new Promise((resolve) => requestAnimationFrame(resolve));
+  const unknownPassed = unknownMime.images.get().join() === b &&
+    unknownMime.errors.length === 0 && uploadTypes.some((item) =>
+      item.session === "unknown-mime" && item.mime === "image/png" &&
+      item.fileType === "");
+  unknownMime.output.dataset.passed = String(unknownPassed);
+  unknownMime.output.textContent = JSON.stringify({ unknownPassed,
+    uploads: uploadTypes.filter((item) => item.session === "unknown-mime"),
+    errors: unknownMime.errors }, null, 2);
 } catch (error) {
   const output = document.createElement("pre");
   output.dataset.passed = "false";

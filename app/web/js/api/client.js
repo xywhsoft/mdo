@@ -81,14 +81,14 @@ export async function apiRequest(path, options = {}) {
   return readEnvelope(response);
 }
 
-async function uploadImage(projectId, sessionId, file) {
+async function uploadImage(projectId, sessionId, file, mime = file.type) {
   const url = requestPath(`/projects/${resourceId(projectId, "project")}` +
     `/sessions/${resourceId(sessionId, "session")}/attachments`);
   let response;
   try {
     response = await fetch(url, {
       method: "POST",
-      headers: { Accept: "application/json", "Content-Type": file.type },
+      headers: { Accept: "application/json", "Content-Type": mime },
       body: file,
       cache: "no-store",
       credentials: "same-origin",

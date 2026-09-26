@@ -3,7 +3,18 @@ import { clear, element, toast } from "../../utils/dom.js";
 import { subscribeLocale, t } from "../../i18n.js";
 
 const TYPES = new Set(["image/png", "image/jpeg", "image/webp"]);
+const EXTENSION_TYPES = new Map([
+  ["png", "image/png"], ["jpg", "image/jpeg"],
+  ["jpeg", "image/jpeg"], ["webp", "image/webp"],
+]);
 const MAX_IMAGE_BYTES = 8 * 1024 * 1024;
+
+export function imageUploadType(file) {
+  if (TYPES.has(file?.type)) return file.type;
+  if (file?.type && file.type !== "application/octet-stream") return "";
+  const extension = /\.([^.]+)$/.exec(file?.name ?? "")?.[1]?.toLowerCase();
+  return EXTENSION_TYPES.get(extension) ?? "";
+}
 
 function unsupportedModelError() {
   const error = new Error(t("image.unsupportedModel", {},
@@ -161,9 +172,10 @@ export function createComposerImages({ composer, prompt, button, input, strip,
     let otherFiles = 0;
     let invalidSize = 0;
     for (const file of candidates) {
-      if (!TYPES.has(file.type)) otherFiles += 1;
+      const mime = imageUploadType(file);
+      if (!mime) otherFiles += 1;
       else if (file.size === 0 || file.size > MAX_IMAGE_BYTES) invalidSize += 1;
-      else images.push(file);
+      else images.push({ file, mime });
     }
     if (!images.length) {
       onError(selectionError(otherFiles ? t("image.typesOnly", {},
@@ -195,9 +207,9 @@ export function createComposerImages({ composer, prompt, button, input, strip,
         onUploading(true);
         render();
       }
-      for (const file of images) {
+      for (const { file, mime } of images) {
         const stored = await api.uploadImage(selected.projectId,
-          selected.sessionId, file);
+          selected.sessionId, file, mime);
         if (scopeKey() !== key) {
           void api.deleteImage(selected.projectId, selected.sessionId,
             stored.id).catch(() => {});
@@ -234,7 +246,7 @@ export function createComposerImages({ composer, prompt, button, input, strip,
   });
   prompt.addEventListener("paste", (event) => {
     const images = [...(event.clipboardData?.files ?? [])].filter((file) =>
-      file.type.startsWith("image/"));
+      Boolean(imageUploadType(file)));
     if (!images.length) return;
     event.preventDefault();
     void addFiles(images);

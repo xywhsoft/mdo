@@ -91,6 +91,12 @@ def probe(host: Path) -> None:
                     session_id = document["data"]["id"]
                     route = ("/api/v1/projects/image-probe/sessions/" +
                              session_id)
+                    status, _, body = request(port, "POST",
+                        route + "/attachments", body=b"not a PNG",
+                        headers={"Content-Type": "image/png"})
+                    rejected = json.loads(body)
+                    assert status == 415 and rejected["error"]["code"] == (
+                        "image_type_invalid"), (status, rejected)
                     image_bytes = b"\x89PNG\r\n\x1a\n" + b"image-run-bytes"
                     status, _, body = request(port, "POST",
                         route + "/attachments", body=image_bytes,
