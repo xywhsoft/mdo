@@ -2,8 +2,65 @@
 #include <string.h>
 
 #include "internal.h"
+#include "../../include/mdo/home.h"
 #include "../../include/mdo/projects.h"
 #include "../../include/mdo/sessions.h"
+
+static xmutex* g_MdoApiSessionCreateLock;
+
+bool MdoApiSessionsInit(void)
+{
+    if ( g_MdoApiSessionCreateLock != NULL ) return true;
+    g_MdoApiSessionCreateLock = xrtMutexCreate();
+    return g_MdoApiSessionCreateLock != NULL;
+}
+
+void MdoApiSessionsUnit(void)
+{
+    if ( g_MdoApiSessionCreateLock != NULL )
+        xrtMutexDestroy(g_MdoApiSessionCreateLock);
+    g_MdoApiSessionCreateLock = NULL;
+}
+
+static bool MdoApiClientSessionIdValid(const char* Id)
+{
+    size_t i;
+    if ( strlen(Id) != 32u ) return false;
+    for ( i = 0u; i < 32u; ++i )
+        if ( !((Id[i] >= '0' && Id[i] <= '9') ||
+               (Id[i] >= 'a' && Id[i] <= 'f')) ) return false;
+    return true;
+}
+
+static bool MdoApiSessionReplayMatches(const MdoSessionInfo* Info,
+    const MdoSessionCreateOptions* Options)
+{
+    char* Workspace = xrtPathAbs(Options->Agent.WorkspaceRoot != NULL &&
+        Options->Agent.WorkspaceRoot[0] != '\0' ?
+        Options->Agent.WorkspaceRoot : ".");
+    bool Matches = Workspace != NULL &&
+        strcmp(Info->ProjectId, Options->ProjectId) == 0 &&
+        strcmp(Info->Id, Options->RequestedId) == 0 &&
+        strcmp(Info->Title, Options->Title != NULL ? Options->Title :
+            "New session") == 0 &&
+        strcmp(Info->WorkspaceRoot, Workspace) == 0 &&
+        (Options->Agent.AgentId == NULL ||
+         strcmp(Info->AgentId, Options->Agent.AgentId) == 0) &&
+        (Options->Agent.ModelId == NULL ||
+         strcmp(Info->ModelId, Options->Agent.ModelId) == 0) &&
+        (Options->Agent.ReasoningEffort == NULL ||
+         strcmp(Info->ReasoningEffort,
+            Options->Agent.ReasoningEffort) == 0) &&
+        (Options->Agent.PermissionProfile == NULL ||
+         strcmp(Info->PermissionProfile,
+            Options->Agent.PermissionProfile) == 0) &&
+        (Options->Agent.Protocol == 0 ||
+         Info->Protocol == Options->Agent.Protocol) &&
+        (Options->Agent.MaxOutputTokens == 0u ||
+         Info->MaxOutputTokens == Options->Agent.MaxOutputTokens);
+    xrtFree(Workspace);
+    return Matches;
+}
 
 typedef enum MdoApiSessionPreconditionStatus {
     MDO_API_SESSION_PRECONDITION_OK = 0,
@@ -521,10 +578,14 @@ bool MdoApiSessionCreateRoute(MdoApiContext* Context)
     char Reasoning[MDO_SESSION_REASONING_CAPACITY] = { 0 };
     char Permission[MDO_SESSION_REASONING_CAPACITY] = { 0 };
     char Workspace[MDO_SESSION_WORKSPACE_CAPACITY] = { 0 };
+    char ClientSessionId[MDO_SESSION_ID_CAPACITY] = { 0 };
+    char SessionDirectory[MDO_SESSION_PATH_CAPACITY];
     str ProjectWorkspace = NULL;
     size_t Present = 0u;
     bool Valid;
     bool ProjectFound = false;
+    bool DirectoryExists = false;
+    bool Replayed = false;
 
     BodyStatus = MdoApiJsonBodyRead(Context, &Body);
     if ( BodyStatus != MDO_API_BODY_OK )
@@ -547,10 +608,14 @@ bool MdoApiSessionCreateRoute(MdoApiContext* Context)
             sizeof(Permission), false, &Present) &&
         MdoApiSessionString(Body.Value, "workspace_root", Workspace,
             sizeof(Workspace), false, &Present) &&
+        MdoApiSessionString(Body.Value, "client_session_id",
+            ClientSessionId, sizeof(ClientSessionId), false, &Present) &&
         MdoApiSessionUnsigned(Body.Value, "max_output_tokens",
             &Options.Agent.MaxOutputTokens, &Present) &&
         Present == xrtValueCount(Body.Value) &&
-        MdoApiSessionProtocol(Protocol, &Options.Agent.Protocol);
+        MdoApiSessionProtocol(Protocol, &Options.Agent.Protocol) &&
+        (ClientSessionId[0] == '\0' ||
+         MdoApiClientSessionIdValid(ClientSessionId));
     if ( !Valid ) {
         MdoApiJsonBodyUnit(&Body);
         return MdoApiReplyError(Context, 422u, "session_create_invalid",
@@ -564,6 +629,8 @@ bool MdoApiSessionCreateRoute(MdoApiContext* Context)
     Options.Agent.PermissionProfile = Permission[0] != '\0' ?
         Permission : NULL;
     Options.Agent.WorkspaceRoot = Workspace[0] != '\0' ? Workspace : NULL;
+    Options.RequestedId = ClientSessionId[0] != '\0' ?
+        ClientSessionId : NULL;
     memset(&Error, 0, sizeof(Error));
     memset(&ProjectInfo, 0, sizeof(ProjectInfo));
     ProjectInfo.Size = sizeof(ProjectInfo);
@@ -595,7 +662,54 @@ bool MdoApiSessionCreateRoute(MdoApiContext* Context)
         if ( Options.Agent.ModelId == NULL && ProjectInfo.DefaultModelId[0] != '\0' )
             Options.Agent.ModelId = ProjectInfo.DefaultModelId;
     }
-    Session = MdoSessionCreate(&Options, &Error);
+    if ( Options.RequestedId != NULL ) {
+        int Written = snprintf(SessionDirectory,
+            sizeof(SessionDirectory), "sessions/%s/%s", Project,
+            ClientSessionId);
+        if ( Written <= 0 || (size_t)Written >= sizeof(SessionDirectory) ||
+             g_MdoApiSessionCreateLock == NULL ||
+             !xrtMutexLock(g_MdoApiSessionCreateLock) ) {
+            xrtFree(ProjectWorkspace);
+            MdoApiJsonBodyUnit(&Body);
+            return MdoApiReplyError(Context, 503u,
+                "session_service_unavailable",
+                "The session create lock is unavailable", NULL);
+        }
+        if ( !MdoHomeExternalStat(SessionDirectory,
+                &DirectoryExists, NULL) ) {
+            xrtMutexUnlock(g_MdoApiSessionCreateLock);
+            xrtFree(ProjectWorkspace);
+            MdoApiJsonBodyUnit(&Body);
+            return MdoApiReplyError(Context, 503u,
+                "session_service_unavailable",
+                "The requested session could not be inspected", NULL);
+        }
+        if ( DirectoryExists ) {
+            Session = MdoSessionLoad(Project, ClientSessionId, &Error);
+            if ( Session == NULL ) {
+                xrtMutexUnlock(g_MdoApiSessionCreateLock);
+                xrtFree(ProjectWorkspace);
+                MdoApiJsonBodyUnit(&Body);
+                return MdoApiReplyError(Context, 409u,
+                    "session_create_incomplete",
+                    "The requested session directory needs inspection", NULL);
+            }
+            memset(&Info, 0, sizeof(Info)); Info.Size = sizeof(Info);
+            Replayed = MdoSessionGetInfo(Session, &Info) &&
+                MdoApiSessionReplayMatches(&Info, &Options);
+            if ( !Replayed ) {
+                MdoSessionRelease(Session);
+                xrtMutexUnlock(g_MdoApiSessionCreateLock);
+                xrtFree(ProjectWorkspace);
+                MdoApiJsonBodyUnit(&Body);
+                return MdoApiReplyError(Context, 409u,
+                    "session_create_conflict",
+                    "The requested session ID belongs to another profile",
+                    NULL);
+            }
+        } else Session = MdoSessionCreate(&Options, &Error);
+        xrtMutexUnlock(g_MdoApiSessionCreateLock);
+    } else Session = MdoSessionCreate(&Options, &Error);
     xrtFree(ProjectWorkspace);
     MdoApiJsonBodyUnit(&Body);
     if ( Session == NULL )
@@ -619,7 +733,7 @@ bool MdoApiSessionCreateRoute(MdoApiContext* Context)
             "The session was created but its metadata is unavailable", NULL);
     }
     MdoSessionRelease(Session);
-    return MdoApiSessionReply(Context, 201u, &Info);
+    return MdoApiSessionReply(Context, Replayed ? 200u : 201u, &Info);
 }
 
 static bool MdoApiSessionPatch(MdoApiContext* Context, MdoSession* Session,

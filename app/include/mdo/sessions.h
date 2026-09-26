@@ -36,6 +36,7 @@ typedef struct MdoSessionCreateOptions {
     const char* ProjectId;       /* required portable identifier. */
     const char* Title;           /* NULL selects "New session". */
     MdoAgentSessionOptions Agent;
+    const char* RequestedId;     /* NULL generates an ID; otherwise reserved. */
 } MdoSessionCreateOptions;
 
 /* Open-time callbacks are intentionally separate from durable identity.

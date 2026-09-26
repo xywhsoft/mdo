@@ -672,6 +672,7 @@ MdoSession* MdoSessionCreate(const MdoSessionCreateOptions* Options,
     char MetaPath[MDO_SESSION_PATH_CAPACITY];
     const char* Title;
     bool DirectoryCreated = false;
+    bool DirectoryExists = false;
 
     xworkErrorInit(Error);
     if ( Options == NULL ) {
@@ -682,6 +683,9 @@ MdoSession* MdoSessionCreate(const MdoSessionCreateOptions* Options,
          Options->Agent.Size < sizeof(Options->Agent) ||
          !MdoSessionsIdValid(Options->ProjectId,
             MDO_PROJECT_ID_CAPACITY) ||
+         (Options->RequestedId != NULL &&
+          !MdoSessionsIdValid(Options->RequestedId,
+            MDO_SESSION_ID_CAPACITY)) ||
          Options->Agent.SessionPath != NULL ||
          Options->Agent.JournalPath != NULL || Options->Agent.Recover ||
          Options->Agent.ArtifactDirectory != NULL ||
@@ -697,7 +701,8 @@ MdoSession* MdoSessionCreate(const MdoSessionCreateOptions* Options,
             "session title is not bounded UTF-8 text");
         return NULL;
     }
-    SessionId = xrtXidMakeString();
+    SessionId = Options->RequestedId != NULL ?
+        xrtStrDup(Options->RequestedId) : xrtXidMakeString();
     Workspace = xrtPathAbs(Options->Agent.WorkspaceRoot != NULL &&
         Options->Agent.WorkspaceRoot[0] != '\0' ?
         Options->Agent.WorkspaceRoot : ".");
@@ -719,6 +724,18 @@ MdoSession* MdoSessionCreate(const MdoSessionCreateOptions* Options,
     ArtifactPath = MdoHomeExternalPath(Relative);
     if ( SnapshotPath == NULL || JournalPath == NULL || ArtifactPath == NULL )
         goto memory;
+    if ( Options->RequestedId != NULL ) {
+        if ( !MdoHomeExternalStat(DirectoryPath, &DirectoryExists, NULL) ) {
+            MdoSessionsXrtError(Error, XWORK_ERROR_IO,
+                "cannot inspect the requested session directory");
+            goto done;
+        }
+        if ( DirectoryExists ) {
+            MdoSessionsError(Error, XWORK_ERROR_CONTEXT,
+                "the requested session ID already exists");
+            goto done;
+        }
+    }
     if ( !MdoHomeCreateDirectory(DirectoryPath) ) {
         MdoSessionsXrtError(Error, XWORK_ERROR_IO,
             "cannot create the managed session directory");

@@ -1789,6 +1789,48 @@ def run_probe(host: Path) -> None:
                 assert meta["id"] == session_id, meta
                 assert meta["project_id"] == "api-project", meta
 
+                client_session_id = "c" * 32
+                requested_session = {
+                    "project_id": "api-project",
+                    "client_session_id": client_session_id,
+                    "title": "Recoverable first prompt",
+                    "agent_id": "mdo.default",
+                    "model_id": "ling-3.0-tiny",
+                    "reasoning_effort": "medium",
+                    "workspace_root": str(base),
+                }
+                requested_body = json.dumps(requested_session).encode()
+                status, _, body = request(
+                    port, "POST", "/api/v1/sessions", body=requested_body,
+                    headers={"Content-Type": "application/json"})
+                assert status == 201, (status, body)
+                requested_data = json.loads(body)["data"]
+                assert requested_data["id"] == client_session_id, requested_data
+                requested_meta = home / (
+                    f"sessions/api-project/{client_session_id}/meta.json")
+                original_meta = requested_meta.read_bytes()
+                status, _, body = request(
+                    port, "POST", "/api/v1/sessions", body=requested_body,
+                    headers={"Content-Type": "application/json"})
+                assert status == 200, (status, body)
+                assert json.loads(body)["data"]["id"] == client_session_id
+                assert requested_meta.read_bytes() == original_meta
+                changed_request = {**requested_session, "title": "Other task"}
+                status, _, body = request(
+                    port, "POST", "/api/v1/sessions",
+                    body=json.dumps(changed_request).encode(),
+                    headers={"Content-Type": "application/json"})
+                assert status == 409 and json.loads(body)["error"][
+                    "code"] == "session_create_conflict", (status, body)
+                invalid_request = {**requested_session,
+                                   "client_session_id": "C" * 32}
+                status, _, body = request(
+                    port, "POST", "/api/v1/sessions",
+                    body=json.dumps(invalid_request).encode(),
+                    headers={"Content-Type": "application/json"})
+                assert status == 422 and json.loads(body)["error"][
+                    "code"] == "session_create_invalid", (status, body)
+
                 selected_workspace = json.dumps({
                     "project_id": "api-project", "session_id": session_id,
                 }).encode()

@@ -276,20 +276,27 @@ static void MdoApiRequestId(char Output[MDO_API_REQUEST_ID_CAPACITY])
 bool MdoApiInit(void)
 {
     if ( g_MdoApiInitialized ) return true;
-    if ( !MdoApiFeedbackInit() ) return false;
+    if ( !MdoApiSessionsInit() ) return false;
+    if ( !MdoApiFeedbackInit() ) {
+        MdoApiSessionsUnit();
+        return false;
+    }
     if ( !MdoApiDraftInit() ) {
         MdoApiFeedbackUnit();
+        MdoApiSessionsUnit();
         return false;
     }
     if ( !MdoApiQueueInit() ) {
         MdoApiDraftUnit();
         MdoApiFeedbackUnit();
+        MdoApiSessionsUnit();
         return false;
     }
     if ( !MdoApiAttachmentsInit() ) {
         MdoApiQueueUnit();
         MdoApiDraftUnit();
         MdoApiFeedbackUnit();
+        MdoApiSessionsUnit();
         return false;
     }
     xrtAtomic64Init(&g_MdoApiFallbackId, 0u);
@@ -304,6 +311,7 @@ void MdoApiUnit(void)
     MdoApiDraftUnit();
     MdoApiQueueUnit();
     MdoApiAttachmentsUnit();
+    MdoApiSessionsUnit();
 }
 
 XS_RequestResult MdoApiRequest(XS_HttpReq* pRequest)
