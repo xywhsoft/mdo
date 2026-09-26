@@ -246,7 +246,7 @@ export async function boot() {
     sessionList.showActive();
   }
   $("#session-search").addEventListener("input", (event) => sessionList.setQuery(event.target.value));
-  createComposerProject({ select: $("#composer-project"), navigation,
+  createComposerProject({ select: $("#composer-project"), row: $("#composer-project-row"), navigation,
     projectsStore, sessionsStore });
 
   const messageEditDialog = createMessageEditDialog({

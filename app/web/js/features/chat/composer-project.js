@@ -4,7 +4,7 @@ import { currentLocale, subscribeLocale, t } from "../../i18n.js";
 
 // A new task has no session yet. Its project lives in the URL so refreshing a
 // draft does not silently move the eventual session back to "default".
-export function createComposerProject({ select, navigation, projectsStore,
+export function createComposerProject({ select, row, navigation, projectsStore,
   sessionsStore }) {
   let optionKey = "";
 
@@ -37,7 +37,9 @@ export function createComposerProject({ select, navigation, projectsStore,
       optionKey = nextKey;
     }
     select.value = current;
-    select.hidden = route.view !== "workspace" || Boolean(route.sessionId);
+    const hidden = route.view !== "workspace" || Boolean(route.sessionId);
+    select.hidden = hidden;
+    if (row) row.hidden = hidden;
   }
 
   select.addEventListener("change", () => {
