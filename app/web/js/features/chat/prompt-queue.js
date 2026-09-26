@@ -25,9 +25,6 @@ function uncertainPost(error) {
 export function createPromptQueue({ container, navigation, isRunActive, stagedEntries,
   isRunReviewPending = () => false, onRetry, onRemoved }) {
   const queues = new Map();
-  // A consumed item leaves the queue; remember bounded positive evidence so
-  // a lost POST response can still reconcile after dispatch removes it.
-  const observedIds = new Map();
   const loads = new Map();
   const versions = new Map();
   const expanded = new Map();
@@ -42,13 +39,6 @@ export function createPromptQueue({ container, navigation, isRunActive, stagedEn
   function update(key, response) {
     versions.set(key, (versions.get(key) ?? 0) + 1);
     const items = response.data?.items ?? [];
-    let observed = observedIds.get(key);
-    if (!observed) observedIds.set(key, observed = new Set());
-    for (const item of items) {
-      if (observed.has(item.id)) continue;
-      observed.add(item.id);
-      if (observed.size > 64) observed.delete(observed.values().next().value);
-    }
     if (!(queues.get(key)?.length) && items.length) expanded.set(key, true);
     queues.set(key, items);
     render();
@@ -298,9 +288,6 @@ export function createPromptQueue({ container, navigation, isRunActive, stagedEn
         error.queueItemId = id;
         throw error;
       }
-    },
-    observed(projectId, sessionId, id) {
-      return observedIds.get(sessionKey(projectId, sessionId))?.has(id) ?? false;
     },
     peek(projectId, sessionId) {
       const key = sessionKey(projectId, sessionId);

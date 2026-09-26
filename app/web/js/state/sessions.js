@@ -21,7 +21,8 @@ export function loadSession(projectId, sessionId) {
 
 export async function createSession(input) {
   const body = { project_id: resourceId(input.project_id, "project") };
-  for (const key of ["title", "agent_id", "model_id", "reasoning_effort", "permission_profile"]) {
+  for (const key of ["title", "agent_id", "model_id", "reasoning_effort",
+    "permission_profile", "client_session_id"]) {
     if (input[key]) body[key] = input[key];
   }
   const response = await api.post("/sessions", body);

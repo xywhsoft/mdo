@@ -149,6 +149,15 @@ class BoundedDelayProxy(BaseHTTPRequestHandler):
         body = self.rfile.read(length) if length else None
         drop_response = False
         drop_run_response = False
+        drop_create_response = False
+        if self.command == "POST" and self.path == "/api/v1/sessions":
+            with self.server.count_lock:
+                self.server.create_posts += 1
+                count = self.server.create_posts
+            print(f"QA create POST #{count}", flush=True)
+            time.sleep(self.server.create_delay_seconds)
+            drop_create_response = (self.server.drop_first_create_response
+                                    and count == 1)
         if (self.command == "GET" and self.path.startswith("/api/v1/projects/")
                 and "/sessions/" in self.path and self.path.endswith("/queue")
                 and self.server.fail_first_queue_reconcile):
@@ -239,6 +248,12 @@ class BoundedDelayProxy(BaseHTTPRequestHandler):
                 self.close_connection = True
                 self.connection.close()
                 return
+            if drop_create_response:
+                print("QA create response dropped after upstream acceptance",
+                      flush=True)
+                self.close_connection = True
+                self.connection.close()
+                return
             self.send_response(response.status)
             for key, value in response.getheaders():
                 if key.lower() not in {"connection", "content-length",
@@ -273,6 +288,10 @@ parser.add_argument("--queue-delay-ms", type=int, default=0,
                     help="delay queue POSTs by 0-12000 ms for bounded dispatch race QA")
 parser.add_argument("--run-delay-ms", type=int, default=0,
                     help="delay run POSTs by 0-5000 ms for composer handoff QA")
+parser.add_argument("--create-delay-ms", type=int, default=0,
+                    help="delay session create POSTs by 0-5000 ms for new-task QA")
+parser.add_argument("--drop-first-create-response", action="store_true",
+                    help="accept one session creation then close before replying")
 parser.add_argument("--fail-first-run", action="store_true",
                     help="reject one run POST before forwarding, for draft recovery QA")
 parser.add_argument("--drop-first-run-response", action="store_true",
@@ -298,6 +317,8 @@ if not 0 <= args.queue_delay_ms <= 12000:
     parser.error("--queue-delay-ms must be between 0 and 12000")
 if not 0 <= args.run_delay_ms <= 5000:
     parser.error("--run-delay-ms must be between 0 and 5000")
+if not 0 <= args.create_delay_ms <= 5000:
+    parser.error("--create-delay-ms must be between 0 and 5000")
 if not 0 <= args.drop_run_response_number <= 3:
     parser.error("--drop-run-response-number must be between 0 and 3")
 if args.drop_first_run_response and args.drop_run_response_number:
@@ -368,6 +389,7 @@ try:
     session = response["data"]["id"]
     browser_port = port
     if (args.approval_delay_ms or args.queue_delay_ms or args.run_delay_ms
+            or args.create_delay_ms or args.drop_first_create_response
             or args.fail_first_run or args.fail_first_queue
             or args.drop_first_run_response or args.drop_run_response_number
             or args.drop_first_queue_response or args.fail_first_queue_reconcile):
@@ -376,6 +398,8 @@ try:
         proxy.approval_delay_seconds = args.approval_delay_ms / 1000
         proxy.queue_delay_seconds = args.queue_delay_ms / 1000
         proxy.run_delay_seconds = args.run_delay_ms / 1000
+        proxy.create_delay_seconds = args.create_delay_ms / 1000
+        proxy.drop_first_create_response = args.drop_first_create_response
         proxy.fail_first_run = args.fail_first_run
         proxy.drop_run_response_number = (args.drop_run_response_number or
                                           (1 if args.drop_first_run_response else 0))
@@ -388,6 +412,7 @@ try:
         proxy.approval_puts = 0
         proxy.queue_posts = 0
         proxy.run_posts = 0
+        proxy.create_posts = 0
         threading.Thread(target=proxy.serve_forever, daemon=True).start()
         browser_port = proxy.server_address[1]
     print(f"READY url=http://127.0.0.1:{browser_port}/#/projects/default/"
@@ -398,6 +423,7 @@ finally:
         print(f"QA approval PUT total={proxy.approval_puts}", flush=True)
         print(f"QA queue POST total={proxy.queue_posts}", flush=True)
         print(f"QA run POST total={proxy.run_posts}", flush=True)
+        print(f"QA create POST total={proxy.create_posts}", flush=True)
         proxy.shutdown()
         proxy.server_close()
     stop_host(process)

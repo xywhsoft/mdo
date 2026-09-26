@@ -1998,7 +1998,8 @@ def run_probe(host: Path) -> None:
                 assert status == 200 and json.loads(body)["data"] == {
                     "revision": 0, "text": "", "attachments": [],
                     "run_admission_uncertain": False,
-                    "submission": None, "submissions": []}, (status, body)
+                    "submission": None, "submissions": [],
+                    "new_task": None}, (status, body)
                 assert not (home / "data/draft.json").exists()
                 status, _, body = request(
                     port, "PUT", "/api/v1/draft",
@@ -2007,7 +2008,8 @@ def run_probe(host: Path) -> None:
                 assert status == 200 and json.loads(body)["data"] == {
                     "revision": 1, "text": "未发送的草稿", "attachments": [],
                     "run_admission_uncertain": False,
-                    "submission": None, "submissions": []}, (status, body)
+                    "submission": None, "submissions": [],
+                    "new_task": None}, (status, body)
                 status, _, body = request(
                     port, "PUT", "/api/v1/draft",
                     body=b'{"revision":0,"text":"stale"}',
@@ -2016,6 +2018,52 @@ def run_probe(host: Path) -> None:
                     "code"] == "draft_conflict", (status, body)
                 assert json.loads((home / "data/draft.json").read_text(
                     encoding="utf-8"))["text"] == "未发送的草稿"
+                new_task = {
+                    "project_id": "api-project", "session_id": "d" * 32,
+                    "title": "Draft-backed new task", "agent_id": "mdo.default",
+                    "model_id": "ling-3.0-tiny",
+                    "reasoning_effort": "medium",
+                    "permission_profile": "balanced", "phase": "creating",
+                }
+                first_submission = {
+                    "id": new_task["session_id"], "text": "first new task prompt",
+                    "attachments": [], "interrupt": False,
+                    "state": "prepared",
+                }
+                status, _, body = request(port, "PUT", "/api/v1/draft",
+                    body=json.dumps({"revision": 1, "text": "next input",
+                                     "submissions": [first_submission],
+                                     "new_task": new_task}).encode(),
+                    headers={"Content-Type": "application/json"})
+                assert status == 200 and json.loads(body)["data"][
+                    "new_task"] == new_task, (status, body)
+                assert json.loads((home / "data/draft.json").read_text(
+                    encoding="utf-8"))["schema_version"] == 6
+                status, _, body = request(port, "GET", "/api/v1/draft")
+                assert status == 200 and json.loads(body)["data"][
+                    "submissions"] == [first_submission], (status, body)
+                copying_task = {**new_task, "phase": "copying"}
+                status, _, body = request(port, "PUT", "/api/v1/draft",
+                    body=json.dumps({"revision": 2, "text": "next input",
+                                     "submissions": [first_submission],
+                                     "new_task": copying_task}).encode(),
+                    headers={"Content-Type": "application/json"})
+                assert status == 200 and json.loads(body)["data"][
+                    "new_task"] == copying_task, (status, body)
+                status, _, body = request(port, "PUT", "/api/v1/draft",
+                    body=json.dumps({"revision": 3, "text": "next input",
+                                     "submissions": [first_submission],
+                                     "new_task": {**new_task,
+                                                  "session_id": "e" * 32}}).encode(),
+                    headers={"Content-Type": "application/json"})
+                assert status == 422, (status, body)
+                status, _, body = request(port, "PUT", "/api/v1/draft",
+                    body=json.dumps({"revision": 3, "text": "",
+                                     "submissions": [],
+                                     "new_task": None}).encode(),
+                    headers={"Content-Type": "application/json"})
+                assert status == 200 and json.loads(body)["data"][
+                    "new_task"] is None, (status, body)
                 draft_path = session_path + "/draft"
                 status, _, body = request(port, "GET", draft_path)
                 assert status == 200 and json.loads(body)["data"] == {

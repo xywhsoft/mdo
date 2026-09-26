@@ -52,6 +52,29 @@ function sameSubmissions(a, b) {
     sameSubmission(item, b[index]));
 }
 
+function newTask(value) {
+  if (value == null) return null;
+  if (typeof value !== "object" || Array.isArray(value) ||
+      !/^[0-9a-f]{32}$/.test(value.session_id) ||
+      !/^[A-Za-z0-9_-][A-Za-z0-9_.-]{0,63}$/.test(value.project_id) ||
+      !["creating", "copying"].includes(value.phase)) return undefined;
+  const fields = ["title", "agent_id", "model_id",
+    "reasoning_effort", "permission_profile"];
+  const limits = [256, 128, 128, 32, 32];
+  if (fields.some((field, index) => typeof value[field] !== "string" ||
+      !value[field] || new TextEncoder().encode(value[field]).length >
+        limits[index])) return undefined;
+  return { project_id: value.project_id, session_id: value.session_id,
+    title: value.title, agent_id: value.agent_id, model_id: value.model_id,
+    reasoning_effort: value.reasoning_effort,
+    permission_profile: value.permission_profile, phase: value.phase };
+}
+
+function sameNewTask(a, b) {
+  return (!a && !b) || (a && b &&
+    Object.keys(a).every((key) => a[key] === b[key]));
+}
+
 function endpoint(key) {
   if (!key) return "/draft";
   const [projectId, sessionId, extra] = key.split("/");
@@ -68,7 +91,7 @@ export function createDraftStore({ onRestore, onError, onSaved, onLoaded = () =>
     let value = entries.get(key);
     if (!value) {
       value = { text: "", attachments: [], revision: 0, loaded: false, dirty: false,
-        uncertainRun: false, submissions: [], conflict: false,
+        uncertainRun: false, submissions: [], newTask: null, conflict: false,
         error: null, loading: null,
         saving: null, timer: 0 };
       entries.set(key, value);
@@ -101,6 +124,13 @@ export function createDraftStore({ onRestore, onError, onSaved, onLoaded = () =>
           }]));
         if (!storedSubmissions)
           throw new Error(t("draft.submissionConflict"));
+        const storedNewTask = newTask(response.data.new_task);
+        if (storedNewTask === undefined ||
+            (current.newTask && storedNewTask &&
+             !sameNewTask(current.newTask, storedNewTask))) {
+          current.conflict = true;
+          throw new Error(t("draft.submissionConflict"));
+        }
         if (current.submissions.length && storedSubmissions.length &&
             !sameSubmissions(current.submissions, storedSubmissions)) {
           current.conflict = true;
@@ -109,6 +139,7 @@ export function createDraftStore({ onRestore, onError, onSaved, onLoaded = () =>
         current.loaded = true;
         current.error = null;
         if (!current.submissions.length) current.submissions = storedSubmissions;
+        current.newTask ??= storedNewTask;
         if (!current.dirty) {
           current.text = response.data.text ?? "";
           current.attachments = imageIds(response.data.attachments);
@@ -142,6 +173,7 @@ export function createDraftStore({ onRestore, onError, onSaved, onLoaded = () =>
         const attachments = [...current.attachments];
         const uncertainRun = current.uncertainRun;
         const stagedSubmissions = [...current.submissions];
+        const stagedNewTask = current.newTask && { ...current.newTask };
         if (encoder.encode(text).length > MAX_DRAFT_BYTES) {
           if (selected === key) onError(new Error(t("draft.tooLarge", {},
             "草稿超过 64 KiB 保存上限")));
@@ -152,13 +184,15 @@ export function createDraftStore({ onRestore, onError, onSaved, onLoaded = () =>
           const body = { revision: current.revision, text, attachments,
             run_admission_uncertain: uncertainRun,
             submissions: stagedSubmissions };
+          if (!key) body.new_task = stagedNewTask;
           const keepalive = encoder.encode(JSON.stringify(body)).length <= 60 * 1024;
           const response = await api.put(endpoint(key), body, { keepalive });
           current.revision = Number(response.data.revision);
           current.error = null;
           if (current.text !== text || !sameIds(current.attachments, attachments) ||
               current.uncertainRun !== uncertainRun ||
-              !sameSubmissions(current.submissions, stagedSubmissions))
+              !sameSubmissions(current.submissions, stagedSubmissions) ||
+              !sameNewTask(current.newTask, stagedNewTask))
             current.dirty = true;
           if (selected === key && !current.dirty) onSaved();
         } catch (error) {
@@ -241,6 +275,17 @@ export function createDraftStore({ onRestore, onError, onSaved, onLoaded = () =>
       return entry(key).loaded;
     },
     isRunUncertain(key) { return entry(key).uncertainRun; },
+    text(key) { return entry(key).text; },
+    newTask(key = "") { return key ? null : entry("").newTask; },
+    setNewTask(value) {
+      const current = entry("");
+      const next = newTask(value);
+      if (next === undefined || sameNewTask(current.newTask, next)) return false;
+      current.newTask = next;
+      current.dirty = true;
+      schedule("", true);
+      return true;
+    },
     submission(key) { return entry(key).submissions[0] ?? null; },
     submissions(key) { return [...entry(key).submissions]; },
     appendSubmission(key, value) { return insertSubmission(key, value); },

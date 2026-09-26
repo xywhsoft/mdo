@@ -39,6 +39,7 @@ import { createConversationDocks } from "./features/chat/conversation-docks.js";
 import { createPromptQueue } from "./features/chat/prompt-queue.js";
 import { createDraftStore } from "./features/chat/draft-store.js";
 import { createSubmissionController } from "./features/chat/submission-controller.js";
+import { createNewTaskController } from "./features/chat/new-task-controller.js";
 import { createComposerImages } from "./features/chat/composer-images.js";
 import { createComposerProject } from "./features/chat/composer-project.js";
 import { createImagePreview } from "./features/chat/image-preview.js";
@@ -133,8 +134,6 @@ export async function boot() {
   let tasksTimer = 0;
   let runsTimer = 0;
   let approvalsTimer = 0;
-  const submissionLanes = new Map();
-  const uncertainAdmissions = new Map();
   let routeVersion = 0;
   let routeSignature = "";
   let messageActionBusy = false;
@@ -143,6 +142,7 @@ export async function boot() {
   let themeToggleBusy = false;
   let composerAttachments = [];
   let composerImages = null;
+  let newTaskController = null;
   let shortcuts;
   const queueBlocked = new Set();
   // A cancelled run can remain nonterminal through several polls. Avoid
@@ -176,19 +176,8 @@ export async function boot() {
     pendingForkComposerFocus = "";
   }
 
-  function composerScope(route = navigation.get()) {
-    return `${route.projectId || "default"}/${route.sessionId || "@new"}`;
-  }
-
-  function activeSubmissionLane(route = navigation.get()) {
-    const scope = composerScope(route);
-    return submissionLanes.get(scope) ??
-      (creatingSessionKey === `${route.projectId}/${route.sessionId}`
-        ? submissionLanes.get(`${route.projectId}/@new`) : null);
-  }
-
   function submittingCurrent() {
-    return Boolean(activeSubmissionLane());
+    return Boolean(!navigation.get().sessionId && newTaskController?.isBusy());
   }
 
   const projectDialog = createProjectDialog({
@@ -437,16 +426,17 @@ export async function boot() {
     isRunActive: () => Boolean(activeRun),
     isRunReviewPending: (key) => draftStore?.isRunUncertain(key) ?? false,
     stagedEntries: () => {
-      const pending = activeSubmissionLane()?.pending.map((item) => ({
-        text: item.text, attachments: item.attachments, staged: true,
-      })) ?? [];
+      if (!navigation.get().sessionId)
+        return (draftStore?.submissions("") ?? []).map((item) => ({
+          text: item.text, attachments: item.attachments, staged: true,
+        }));
       const current = navigation.get();
       const staged = current.sessionId ?
         (draftStore?.submissions(selectedKey) ?? []).filter((item) =>
           !promptQueue.find(current.projectId, current.sessionId, item.id))
           .map((item) => ({ text: item.text,
             attachments: item.attachments, staged: true })) : [];
-      return [...staged, ...pending];
+      return staged;
     },
     onRetry: async () => {
       const selected = navigation.get();
@@ -605,6 +595,39 @@ export async function boot() {
           composerImages?.supportsCurrentModel()) hideComposerError();
     },
   });
+  newTaskController = createNewTaskController({
+    draftStore, newId: () => promptQueue.newId(), createSession,
+    async findSession(projectId, sessionId) {
+      return (await api.get(`/projects/${projectId}/sessions/${sessionId}`)).data;
+    },
+    onPersisted(item) {
+      clearSubmittedComposer("", item);
+      setRun(activeRun);
+    },
+    onMigrated(key) {
+      showActiveSessions();
+      const [projectId, sessionId] = key.split("/");
+      const current = navigation.get();
+      if (current.view === "workspace" && !current.sessionId &&
+          current.projectId === projectId) {
+        creatingSessionKey = key;
+        navigation.select(projectId, sessionId);
+        selectTimeline(projectId, sessionId);
+      }
+    },
+    onReview(error) {
+      const current = navigation.get();
+      if (current.view === "workspace" && !current.sessionId) {
+        const review = new Error(t("composer.newTaskReview"));
+        review.code = "new_task_unconfirmed";
+        showComposerError(review, errorMessage(error));
+      } else toast(errorMessage(error), "error");
+    },
+    onChange() {
+      if (!navigation.get().sessionId) setRun(activeRun);
+      promptQueue.render();
+    },
+  });
   composerImages = createComposerImages({
     composer, prompt, button: $("#composer-attach"), input: $("#composer-file"),
     strip: $("#composer-images"), navigation, modelsStore,
@@ -710,30 +733,32 @@ export async function boot() {
     send.hidden = false;
     stop.hidden = !activeRun;
     const route = navigation.get();
-    const lane = activeSubmissionLane(route);
-    const pendingCount = lane?.pending.length ?? 0;
+    const creatingNewTask = !route.sessionId &&
+      Boolean(newTaskController?.isBusy());
+    const migratingNewTask = !route.sessionId &&
+      Boolean(newTaskController?.isMigrating());
     const creatingSession = Boolean(creatingSessionKey) &&
       creatingSessionKey === `${route.projectId}/${route.sessionId}`;
     // Keep keyboard focus while a newly created session loads its detail.
-    prompt.disabled = !sessionWritable && !creatingSession;
-    send.disabled = !(sessionWritable || (creatingSession && lane)) ||
+    prompt.disabled = (!sessionWritable && !creatingSession) || migratingNewTask;
+    send.disabled = !(sessionWritable || creatingSession) ||
       composerImages?.isUploading() || composerProfile.isBusy() ||
       !draftStore.isLoaded(selectedKey) ||
       draftStore.isRunUncertain(selectedKey) ||
       draftStore.submissions(selectedKey).length >= 20 ||
+      (!route.sessionId && Boolean(newTaskController?.isBlocked())) ||
+      migratingNewTask ||
       Boolean(submissionController?.isReleasing(selectedKey));
     composerImages?.setWritable(sessionWritable && !creatingSession &&
-      !(lane && !route.sessionId));
-    composerProfile.setRunActive(Boolean(activeRun || lane));
-    send.setAttribute("aria-label", activeRun || lane
+      !creatingNewTask);
+    composerProfile.setRunActive(Boolean(activeRun || creatingNewTask));
+    send.setAttribute("aria-label", activeRun || creatingNewTask
       ? t("composer.queue", {}, "加入待发送队列")
       : t("shell.send", {}, "发送任务"));
     composerHint.textContent = draftStore.isRunUncertain(selectedKey)
       ? t("composer.hintReviewRun") : !draftStore.isLoaded(selectedKey)
       ? t("composer.hintLoadingDraft") : draftStore.submissions(selectedKey).length
-      ? t("composer.hintSavingSubmission") : pendingCount
-      ? t("composer.hintPendingAdmission", { count: pendingCount })
-      : lane && !activeRun ? t("composer.hintSubmitting") : activeRun
+      ? t("composer.hintSavingSubmission") : activeRun
       ? (guide
         ? t("composer.hintGuide", {}, "Enter 中断并发送 · Ctrl Enter 排队")
         : t("composer.hintQueue", {}, "Enter 排队 · Ctrl Enter 中断并发送"))
@@ -744,7 +769,7 @@ export async function boot() {
     $("#shortcut-control-enter-description").textContent = guide
       ? t("composer.shortcutControlGuide", {}, "运行中加入待发送队列")
       : t("composer.shortcutControlQueue", {}, "中断当前运行，优先发送输入");
-    mobileActivity.hidden = !activeRun && !lane;
+    mobileActivity.hidden = !activeRun && !creatingNewTask;
   }
   settingsStore.subscribe(() => setRun(activeRun));
 
@@ -1054,7 +1079,6 @@ export async function boot() {
     if (selected.view !== "workspace" || !selected.sessionId) return;
     try {
       await promptQueue.select(selected.projectId, selected.sessionId);
-      resolveObservedAdmission(`${selected.projectId}/${selected.sessionId}`);
       await submissionController.reconcile(`${selected.projectId}/${selected.sessionId}`);
       const current = navigation.get();
       if (current.projectId !== selected.projectId ||
@@ -1126,7 +1150,6 @@ export async function boot() {
         queueBlocked.add(key);
         try {
           await promptQueue.select(projectId, sessionId);
-          resolveObservedAdmission(key);
           await submissionController.reconcile(key);
           queueBlocked.delete(key);
           void maybeCancelPriorityRun();
@@ -1150,6 +1173,7 @@ export async function boot() {
       clearAsks();
       clearFeedback();
       sessionDetailStore.reset();
+      void newTaskController?.reconcile();
       return;
     }
     selectRecovery(projectId, sessionId);
@@ -1162,7 +1186,6 @@ export async function boot() {
     try {
       await Promise.all([loadSession(projectId, sessionId), loadRuns(), loadRecovery(),
         promptQueue.select(projectId, sessionId)]);
-      resolveObservedAdmission(key);
       await submissionController.reconcile(key);
     } catch (error) { showComposerError(error); return; }
     finally {
@@ -1258,6 +1281,22 @@ export async function boot() {
       });
       composerError.append(review);
     }
+    if (error?.code === "new_task_unconfirmed") {
+      const review = element("button", {
+        className: "composer-error-action",
+        text: t("composer.retryNewTask"),
+        attrs: { type: "button" },
+      });
+      review.addEventListener("click", async () => {
+        review.disabled = true;
+        try {
+          if (await newTaskController.review() &&
+              !navigation.get().sessionId) hideComposerError();
+        } catch (failure) { showComposerError(failure); }
+        finally { review.disabled = false; }
+      });
+      composerError.append(review);
+    }
     if (error?.code === "recovery_required") {
       const openDecisions = element("button", {
         className: "composer-error-action",
@@ -1320,104 +1359,6 @@ export async function boot() {
     prompt.focus();
   }
 
-  function consumeComposerInput(ownerKey) {
-    prompt.value = "";
-    composerAttachments = [];
-    composerImages.clear();
-    draftStore.clear(ownerKey);
-    resizePrompt();
-    tokenMeter.refresh();
-  }
-
-  function restoreUnsentItems(ownerKey, items) {
-    const visible = selectedOwnsDraft(ownerKey);
-    if (visible) draftStore.capture(ownerKey, prompt.value, composerAttachments);
-    let restored = null;
-    // Prepending in reverse keeps the original send order ahead of any new draft.
-    for (let index = items.length - 1; index >= 0; index -= 1)
-      restored = draftStore.restoreUnsent(ownerKey,
-        items[index].raw, items[index].attachments);
-    if (visible && restored) {
-      prompt.value = restored.text;
-      composerAttachments = restored.attachments;
-      composerImages.set(restored.attachments);
-      resizePrompt();
-      tokenMeter.refresh();
-    }
-    return { restored, visible };
-  }
-
-  function resolveObservedAdmission(key) {
-    const uncertain = uncertainAdmissions.get(key);
-    if (!uncertain) return;
-    const [projectId, sessionId] = key.split("/");
-    if (!promptQueue.observed(projectId, sessionId, uncertain.id)) return;
-    uncertainAdmissions.delete(key);
-    const visible = selectedOwnsDraft(key);
-    if (visible && composerError.dataset.queueItemId === uncertain.id)
-      hideComposerError();
-    if (visible && (prompt.value !== uncertain.text ||
-        JSON.stringify(composerAttachments) !== JSON.stringify(uncertain.attachments))) return;
-    if (!draftStore.clearIfMatches(key, uncertain.text, uncertain.attachments)) return;
-    if (!visible) return;
-    prompt.value = "";
-    composerAttachments = [];
-    composerImages.clear();
-    resizePrompt();
-    tokenMeter.refresh();
-  }
-
-  function rememberUncertainAdmission(key, error, unsent, restored) {
-    if (!error.queueAdmissionUncertain || !error.queueItemId ||
-        unsent.length !== 1 || !restored || restored.merged) return;
-    uncertainAdmissions.set(key, { id: error.queueItemId,
-      text: restored.text, attachments: restored.attachments });
-  }
-
-  async function drainPendingSubmissions(lane, selected) {
-    const ownerKey = `${selected.projectId}/${selected.sessionId}`;
-    while (lane.pending.length) {
-      const item = lane.pending[0];
-      try {
-        if (!await promptQueue.enqueue(selected.projectId, selected.sessionId,
-          item.text, { first: item.interrupt && lane.admitted === 0,
-            priority: item.interrupt,
-            attachments: item.attachments }))
-          throw new Error(t("composer.queueFull", {}, "待发送队列已满（最多 20 条）"));
-        lane.pending.shift();
-        lane.admitted += 1;
-        queueBlocked.delete(ownerKey);
-        if (item.interrupt && selectedOwnsDraft(ownerKey))
-          await maybeCancelPriorityRun();
-        // The first run can finish before the queue POST returns.
-        if (selectedOwnsDraft(ownerKey)) await dispatchQueued();
-      } catch (error) {
-        const unsent = lane.pending.splice(0);
-        const { restored, visible } = unsent.length
-          ? restoreUnsentItems(ownerKey, unsent)
-          : { restored: null, visible: selectedOwnsDraft(ownerKey) };
-        rememberUncertainAdmission(ownerKey, error, unsent, restored);
-        if (visible) {
-          showComposerError(error, error.queueAdmissionUncertain
-            ? t("composer.queueAdmissionUncertain") : restored
-              ? t(restored.merged ? "composer.unsentMerged" : "composer.unsentRestored") : "");
-          prompt.focus();
-        } else {
-          toast(t("composer.backgroundQueueFailed", {
-            title: ownerKey,
-            error: `${errorMessage(error)}${error.queueAdmissionUncertain
-              ? ` ${t("composer.queueAdmissionUncertain")}` : ""}`,
-          }), "error");
-        }
-        resolveObservedAdmission(ownerKey);
-        break;
-      } finally {
-        setRun(activeRun);
-        promptQueue.render();
-      }
-    }
-  }
-
   async function submitExistingSession(origin, rawInput, attachments, interrupt) {
     const key = `${origin.projectId}/${origin.sessionId}`;
     hideComposerError();
@@ -1446,130 +1387,25 @@ export async function boot() {
       return;
     }
     if (routeVersion !== originVersion) return;
-    const existingLane = activeSubmissionLane(origin);
-    if (existingLane) {
-      if (!fromComposer) return;
-      if (existingLane.pending.length >= 20) {
-        showComposerError(new Error(t("composer.queueFull", {},
-          "待发送队列已满（最多 20 条）")));
-        return;
-      }
-      hideComposerError();
-      existingLane.pending.push({ text, raw: prompt.value,
-        attachments: [...attachments], interrupt });
-      consumeComposerInput(selectedKey);
-      setRun(activeRun);
-      promptQueue.render();
-      return;
-    }
     if (composerProfile.isBusy()) {
-      showComposerError(new Error(t("composer.profileBusy", {}, "请等待会话配置更新完成")));
+      showComposerError(new Error(t("composer.profileBusy", {},
+        "请等待会话配置更新完成")));
       return;
     }
-    if (origin.sessionId && fromComposer) {
-      await submitExistingSession(origin, rawInput, attachments, interrupt);
-      return;
-    }
-    hideComposerError();
-    let submissionScope = composerScope(origin);
-    const lane = { pending: [], admitted: 0 };
-    submissionLanes.set(submissionScope, lane);
-    const originatingKey = selectedKey;
-    const submittedInput = fromComposer ? prompt.value : "";
-    const originatingRun = activeRun;
-    if (fromComposer) consumeComposerInput(originatingKey);
-    setRun(activeRun);
-    let selected = null;
-    let accepted = false;
-    let selectedVersion = originVersion;
-    const selectedIsCurrent = () => {
-      const current = navigation.get();
-      return routeVersion === selectedVersion && (!selected ||
-        (current.projectId === selected.projectId &&
-          current.sessionId === selected.sessionId));
-    };
-    try {
-      selected = await ensureSession(text, { stageDraft: fromComposer });
-      selectedVersion = routeVersion;
-      const targetScope = `${selected.projectId}/${selected.sessionId}`;
-      if (targetScope !== submissionScope) {
-        submissionLanes.delete(submissionScope);
-        submissionScope = targetScope;
-        submissionLanes.set(submissionScope, lane);
-        setRun(activeRun);
-      }
-      if (originatingRun) {
-        if (!await promptQueue.enqueue(selected.projectId, selected.sessionId, text,
-          { first: interrupt, priority: interrupt, attachments }))
-          throw new Error(t("composer.queueFull", {}, "待发送队列已满（最多 20 条）"));
-        accepted = true;
-        lane.admitted += 1;
-        queueBlocked.delete(`${selected.projectId}/${selected.sessionId}`);
-        if (interrupt && selectedIsCurrent()) {
-          await maybeCancelPriorityRun();
-        }
-        // The previous run may finish while the queue POST is in flight.
-        // Its completion check can see an empty queue, so retry dispatch here.
-        if (selectedIsCurrent()) await dispatchQueued();
-        return;
-      }
-      await ensurePromptReady(selected.projectId, selected.sessionId);
-      const run = await startRun(selected.projectId, selected.sessionId, text, attachments);
-      accepted = true;
-      if (fromComposer && !originatingKey && selectedIsCurrent()) draftStore.clear("");
-      if (selectedIsCurrent()) monitorRun(run);
-      await Promise.all([...(selectedIsCurrent() ? [refreshSelectedTimeline()] : []),
-        loadTasks(), loadRuns(), loadRecovery()]);
-    } catch (error) {
-      if (error.runAdmissionUncertain) {
-        draftStore.setRunUncertain(selected
-          ? `${selected.projectId}/${selected.sessionId}` : selectedKey, true);
-        void loadRuns();
-      }
-      let restored = null;
-      const ownerKey = selected
-        ? `${selected.projectId}/${selected.sessionId}` : originatingKey;
-      const unsent = [...(!accepted && fromComposer
-        ? [{ raw: submittedInput, attachments }] : []),
-        ...(!accepted ? lane.pending.splice(0) : [])];
-      if (unsent.length) {
-        if (!originatingKey && selected && selectedIsCurrent())
-          draftStore.clear("");
-        restored = restoreUnsentItems(ownerKey, unsent).restored;
-      }
-      rememberUncertainAdmission(ownerKey, error, unsent, restored);
-      if (selectedIsCurrent()) {
-        if (!fromComposer && !prompt.value.trim() && !composerAttachments.length) {
-          prompt.value = text;
-          draftStore.edit(selectedKey, text, [], true);
-          resizePrompt();
-          tokenMeter.refresh();
-        }
-        showComposerError(error, error.queueAdmissionUncertain
-          ? t("composer.queueAdmissionUncertain")
-          : error.runAdmissionUncertain
-            ? t("composer.runAdmissionUncertain")
-            : restored
-              ? t(restored.merged ? "composer.unsentMerged" : "composer.unsentRestored")
-              : "");
-        prompt.focus();
-      } else {
-        toast(`${t("composer.backgroundSendFailed", { error: errorMessage(error) },
-          `后台任务未发出：${errorMessage(error)}`)}${error.runAdmissionUncertain
-            ? ` ${t("composer.runAdmissionUncertain")}` : ""}`, "error");
-      }
-      resolveObservedAdmission(ownerKey);
-    } finally {
+    if (!origin.sessionId && !attachments.length) {
+      hideComposerError();
       try {
-        if (accepted && selected) await drainPendingSubmissions(lane, selected);
-      } finally {
-        submissionLanes.delete(submissionScope);
-        setRun(activeRun);
-        promptQueue.render();
-      }
+        await newTaskController.submit({ projectId: origin.projectId || "default",
+          text: rawInput, profile: composerProfile.selection(), fromComposer });
+      } catch (error) { showComposerError(error); }
+      return;
     }
+    try {
+      const owner = origin.sessionId ? origin :
+        await ensureSession(rawInput, { stageDraft: fromComposer });
+      await submitExistingSession(owner, rawInput, attachments, interrupt);
+    } catch (error) { showComposerError(error); }
   }
-
   composer.addEventListener("submit", (event) => {
     event.preventDefault();
     const interrupt = interruptRequested;
@@ -1611,7 +1447,7 @@ export async function boot() {
       event.preventDefault();
       const modified = event.ctrlKey || event.metaKey;
       const guide = settingsStore.get().data?.composer?.submit_mode === "guide";
-      interruptRequested = Boolean((activeRun || activeSubmissionLane()) &&
+      interruptRequested = Boolean(activeRun &&
         (guide ? !modified : modified));
       composer.requestSubmit();
     }
@@ -2065,6 +1901,7 @@ export async function boot() {
     title: $("#startup-last-title"),
     continueButton: $("#startup-continue"),
     newButton: $("#startup-new"), prompt, entryHash });
+  if (!navigation.get().sessionId) void newTaskController.reconcile();
   scheduleTaskRefresh();
   scheduleApprovalRefresh();
 }

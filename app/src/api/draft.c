@@ -20,6 +20,17 @@ typedef struct MdoDraftSubmission {
     bool Posting;
 } MdoDraftSubmission;
 
+typedef struct MdoDraftNewTask {
+    char ProjectId[MDO_PROJECT_ID_CAPACITY];
+    char SessionId[MDO_SESSION_ID_CAPACITY];
+    char Title[MDO_SESSION_TITLE_CAPACITY];
+    char AgentId[MDO_SESSION_IDENTITY_CAPACITY];
+    char ModelId[MDO_SESSION_IDENTITY_CAPACITY];
+    char ReasoningEffort[MDO_SESSION_REASONING_CAPACITY];
+    char PermissionProfile[MDO_SESSION_REASONING_CAPACITY];
+    bool Copying;
+} MdoDraftNewTask;
+
 typedef struct MdoDraft {
     uint64 Revision;
     bool RunAdmissionUncertain;
@@ -29,6 +40,8 @@ typedef struct MdoDraft {
     size_t AttachmentCount;
     MdoDraftSubmission* Submissions[MDO_DRAFT_SUBMISSIONS_MAX];
     size_t SubmissionCount;
+    MdoDraftNewTask NewTask;
+    bool HasNewTask;
 } MdoDraft;
 
 static xmutex* g_MdoDraftLock;
@@ -156,6 +169,90 @@ static bool MdoDraftText(const xvalue* Object, cstr Name,
     Output[Text.Size] = '\0';
     *Size = Text.Size;
     return true;
+}
+
+static bool MdoDraftNewTaskString(const xvalue* Value, cstr Name,
+    char* Output, size_t Capacity)
+{
+    const xvalue* Field = xrtValueObjectGet(Value, xrtStrView(Name));
+    xstrview Text;
+    if ( xrtValueType(Field) != XVALUE_STRING ||
+         !xrtValueGetString(Field, &Text) || Text.Size == 0u ||
+         Text.Size >= Capacity || memchr(Text.Data, 0, Text.Size) != NULL ||
+         !xrtUtf8Valid(Text, NULL) ) return false;
+    memcpy(Output, Text.Data, Text.Size);
+    Output[Text.Size] = '\0';
+    return true;
+}
+
+static bool MdoDraftNewTaskRead(const xvalue* Value,
+    MdoDraftNewTask* Task, bool* Present)
+{
+    const xvalue* Phase;
+    xstrview PhaseText;
+    size_t i;
+    *Present = false;
+    memset(Task, 0, sizeof(*Task));
+    if ( xrtValueType(Value) == XVALUE_NULL ) return true;
+    if ( xrtValueType(Value) != XVALUE_OBJECT ||
+         xrtValueCount(Value) != 8u ||
+         !MdoDraftNewTaskString(Value, "project_id", Task->ProjectId,
+            sizeof(Task->ProjectId)) ||
+         !MdoDraftNewTaskString(Value, "session_id", Task->SessionId,
+            sizeof(Task->SessionId)) ||
+         !MdoDraftNewTaskString(Value, "title", Task->Title,
+            sizeof(Task->Title)) ||
+         !MdoDraftNewTaskString(Value, "agent_id", Task->AgentId,
+            sizeof(Task->AgentId)) ||
+         !MdoDraftNewTaskString(Value, "model_id", Task->ModelId,
+            sizeof(Task->ModelId)) ||
+         !MdoDraftNewTaskString(Value, "reasoning_effort",
+            Task->ReasoningEffort, sizeof(Task->ReasoningEffort)) ||
+         !MdoDraftNewTaskString(Value, "permission_profile",
+            Task->PermissionProfile, sizeof(Task->PermissionProfile)) )
+        return false;
+    for ( i = 0u; Task->SessionId[i] != '\0'; ++i )
+        if ( !((Task->SessionId[i] >= '0' && Task->SessionId[i] <= '9') ||
+               (Task->SessionId[i] >= 'a' && Task->SessionId[i] <= 'f')) )
+            return false;
+    if ( i != 32u ) return false;
+    for ( i = 0u; Task->ProjectId[i] != '\0'; ++i )
+        if ( !((Task->ProjectId[i] >= 'a' && Task->ProjectId[i] <= 'z') ||
+               (Task->ProjectId[i] >= 'A' && Task->ProjectId[i] <= 'Z') ||
+               (Task->ProjectId[i] >= '0' && Task->ProjectId[i] <= '9') ||
+               Task->ProjectId[i] == '-' || Task->ProjectId[i] == '_' ||
+               (Task->ProjectId[i] == '.' && i != 0u)) ) return false;
+    Phase = xrtValueObjectGet(Value, XRT_STR_LITERAL("phase"));
+    if ( xrtValueType(Phase) != XVALUE_STRING ||
+         !xrtValueGetString(Phase, &PhaseText) ) return false;
+    if ( PhaseText.Size == 7u &&
+         memcmp(PhaseText.Data, "copying", 7u) == 0 ) Task->Copying = true;
+    else if ( PhaseText.Size != 8u ||
+              memcmp(PhaseText.Data, "creating", 8u) != 0 ) return false;
+    *Present = true;
+    return true;
+}
+
+static xvalue* MdoDraftNewTaskValue(const MdoDraft* Draft)
+{
+    xvalue* Value;
+    const MdoDraftNewTask* Task = &Draft->NewTask;
+    if ( !Draft->HasNewTask ) return xrtValueNull();
+    Value = xrtValueObject();
+    if ( Value != NULL &&
+         MdoApiValueSetString(Value, "project_id", Task->ProjectId) &&
+         MdoApiValueSetString(Value, "session_id", Task->SessionId) &&
+         MdoApiValueSetString(Value, "title", Task->Title) &&
+         MdoApiValueSetString(Value, "agent_id", Task->AgentId) &&
+         MdoApiValueSetString(Value, "model_id", Task->ModelId) &&
+         MdoApiValueSetString(Value, "reasoning_effort",
+            Task->ReasoningEffort) &&
+         MdoApiValueSetString(Value, "permission_profile",
+            Task->PermissionProfile) &&
+         MdoApiValueSetString(Value, "phase",
+            Task->Copying ? "copying" : "creating") ) return Value;
+    xrtValueRelease(Value);
+    return NULL;
 }
 
 static bool MdoDraftSubmissionRead(const xvalue* Value,
@@ -334,9 +431,11 @@ static bool MdoDraftRead(const char* Path, MdoDraft* Draft)
     Root = xrtJsonRead(xrtStrViewN(Bytes, (size_t)Info.Size), &Config);
     if ( xrtValueType(Root) != XVALUE_OBJECT ||
          !MdoDraftUInt(Root, "schema_version", &Schema) ||
-         (Schema < 1u || Schema > 5u) ||
+         (Schema < 1u || Schema > 6u) ||
+         (Schema == 6u && strcmp(Path, "data/draft.json") != 0) ||
          xrtValueCount(Root) != (Schema == 1u ? 3u :
-            (Schema == 2u ? 4u : (Schema == 3u ? 5u : 6u))) ||
+            (Schema == 2u ? 4u : (Schema == 3u ? 5u :
+                (Schema == 6u ? 7u : 6u)))) ||
          !MdoDraftUInt(Root, "revision", &Draft->Revision) ||
          Draft->Revision == 0u ||
          !MdoDraftText(Root, "text", Draft->Text, &Draft->TextSize) ||
@@ -349,9 +448,15 @@ static bool MdoDraftRead(const char* Path, MdoDraft* Draft)
          (Schema == 4u && !MdoDraftSubmissionsRead(
             xrtValueObjectGet(Root, XRT_STR_LITERAL("submission")),
             Draft, true)) ||
-         (Schema == 5u && !MdoDraftSubmissionsRead(
+         (Schema >= 5u && !MdoDraftSubmissionsRead(
             xrtValueObjectGet(Root, XRT_STR_LITERAL("submissions")),
-            Draft, false)) )
+            Draft, false)) ||
+         (Schema == 6u && !MdoDraftNewTaskRead(
+            xrtValueObjectGet(Root, XRT_STR_LITERAL("new_task")),
+            &Draft->NewTask, &Draft->HasNewTask)) ||
+         (Draft->HasNewTask && Draft->SubmissionCount != 0u &&
+          strcmp(Draft->Submissions[0]->Id,
+            Draft->NewTask.SessionId) != 0) )
         goto done;
     Ok = true;
 done:
@@ -363,12 +468,15 @@ done:
 
 static bool MdoDraftWrite(const char* Path, const MdoDraft* Draft)
 {
+    bool Global = strcmp(Path, "data/draft.json") == 0;
     xvalue* Root = xrtValueObject();
     xvalue* Submissions = MdoDraftSubmissionsValue(Draft);
+    xvalue* NewTask = Global ? MdoDraftNewTaskValue(Draft) : NULL;
     char* Json = NULL;
     size_t Size = 0u;
     bool Ok = Root != NULL && Submissions != NULL &&
-        MdoApiValueSetUInt(Root, "schema_version", 5u) &&
+        (!Global || NewTask != NULL) &&
+        MdoApiValueSetUInt(Root, "schema_version", Global ? 6u : 5u) &&
         MdoApiValueSetUInt(Root, "revision", Draft->Revision) &&
         MdoApiValueSetStringView(Root, "text",
             xrtStrViewN(Draft->Text, Draft->TextSize)) &&
@@ -376,24 +484,28 @@ static bool MdoDraftWrite(const char* Path, const MdoDraft* Draft)
             Draft->AttachmentCount) &&
         MdoApiValueSetBool(Root, "run_admission_uncertain",
             Draft->RunAdmissionUncertain) &&
-        MdoApiValueSetTake(Root, "submissions", &Submissions);
+        MdoApiValueSetTake(Root, "submissions", &Submissions) &&
+        (!Global || MdoApiValueSetTake(Root, "new_task", &NewTask));
     if ( Ok ) Json = xrtJsonStringify(Root, false, &Size);
     if ( Json != NULL && Size <= MDO_DRAFT_FILE_MAX )
         Ok = MdoHomeAtomicWrite(Path, Json, Size, false);
     else Ok = false;
     xrtFree(Json);
     xrtValueRelease(Submissions);
+    xrtValueRelease(NewTask);
     xrtValueRelease(Root);
     return Ok;
 }
 
-static xvalue* MdoDraftResponse(const MdoDraft* Draft)
+static xvalue* MdoDraftResponse(const MdoDraft* Draft, bool Global)
 {
     xvalue* Data = xrtValueObject();
     xvalue* Submission = MdoDraftSubmissionValue(
         Draft->SubmissionCount ? Draft->Submissions[0] : NULL, true);
     xvalue* Submissions = MdoDraftSubmissionsValue(Draft);
+    xvalue* NewTask = MdoDraftNewTaskValue(Draft);
     if ( Data != NULL && Submission != NULL && Submissions != NULL &&
+         NewTask != NULL &&
          MdoApiValueSetUInt(Data, "revision", Draft->Revision) &&
          MdoApiValueSetStringView(Data, "text",
             xrtStrViewN(Draft->Text, Draft->TextSize)) &&
@@ -402,9 +514,12 @@ static xvalue* MdoDraftResponse(const MdoDraft* Draft)
          MdoApiValueSetBool(Data, "run_admission_uncertain",
             Draft->RunAdmissionUncertain) &&
          MdoApiValueSetTake(Data, "submission", &Submission) &&
-         MdoApiValueSetTake(Data, "submissions", &Submissions) ) return Data;
+         MdoApiValueSetTake(Data, "submissions", &Submissions) &&
+         (!Global || MdoApiValueSetTake(Data, "new_task", &NewTask)) )
+        return Data;
     xrtValueRelease(Submission);
     xrtValueRelease(Submissions);
+    xrtValueRelease(NewTask);
     xrtValueRelease(Data);
     return NULL;
 }
@@ -428,6 +543,7 @@ bool MdoApiDraftRoute(MdoApiContext* Context)
     bool UncertainPresent = false;
     bool SubmissionPresent = false;
     bool SubmissionsPresent = false;
+    bool NewTaskPresent = false;
     bool Ok;
     bool Conflict = false;
     bool AttachmentLocked = false;
@@ -488,15 +604,20 @@ bool MdoApiDraftRoute(MdoApiContext* Context)
             XRT_STR_LITERAL("submission"));
         const xvalue* Submissions = xrtValueObjectGet(Body.Value,
             XRT_STR_LITERAL("submissions"));
+        const xvalue* NewTask = xrtValueObjectGet(Body.Value,
+            XRT_STR_LITERAL("new_task"));
         UncertainPresent = Uncertain != NULL;
         SubmissionPresent = Submission != NULL;
         SubmissionsPresent = Submissions != NULL;
+        NewTaskPresent = NewTask != NULL;
         Ok = xrtValueType(Body.Value) == XVALUE_OBJECT &&
             xrtValueCount(Body.Value) == (Attachments == NULL ? 2u : 3u) +
                 (UncertainPresent ? 1u : 0u) +
                 (SubmissionPresent ? 1u : 0u) +
-                (SubmissionsPresent ? 1u : 0u) &&
+                (SubmissionsPresent ? 1u : 0u) +
+                (NewTaskPresent ? 1u : 0u) &&
             !(SubmissionPresent && SubmissionsPresent) &&
+            (!NewTaskPresent || Context->ParamCount == 0u) &&
             MdoDraftUInt(Body.Value, "revision", &ExpectedRevision) &&
             MdoDraftTextView(Body.Value, "text", &IncomingText) &&
             (!UncertainPresent || MdoDraftBool(Body.Value,
@@ -505,6 +626,12 @@ bool MdoApiDraftRoute(MdoApiContext* Context)
                 Incoming, true)) &&
             (!SubmissionsPresent || MdoDraftSubmissionsRead(Submissions,
                 Incoming, false)) &&
+            (!NewTaskPresent || MdoDraftNewTaskRead(NewTask,
+                &Incoming->NewTask, &Incoming->HasNewTask)) &&
+            (!Incoming->HasNewTask || !SubmissionsPresent ||
+             Incoming->SubmissionCount == 0u ||
+             strcmp(Incoming->Submissions[0]->Id,
+                Incoming->NewTask.SessionId) == 0) &&
             MdoDraftSubmissionAttachmentsExist(Incoming,
                 Context->ParamCount == 2u ? ProjectId : NULL,
                 Context->ParamCount == 2u ? SessionId : NULL) &&
@@ -542,10 +669,18 @@ bool MdoApiDraftRoute(MdoApiContext* Context)
                 Draft->RunAdmissionUncertain = IncomingUncertain;
             if ( SubmissionPresent || SubmissionsPresent )
                 MdoDraftReplaceSubmissions(Draft, Incoming);
-            Ok = MdoDraftWrite(Path, Draft);
+            if ( NewTaskPresent ) {
+                Draft->NewTask = Incoming->NewTask;
+                Draft->HasNewTask = Incoming->HasNewTask;
+            }
+            if ( Draft->HasNewTask && Draft->SubmissionCount != 0u &&
+                 strcmp(Draft->Submissions[0]->Id,
+                    Draft->NewTask.SessionId) != 0 ) Ok = false;
+            if ( Ok ) Ok = MdoDraftWrite(Path, Draft);
         }
     }
-    Data = Ok && !Conflict ? MdoDraftResponse(Draft) : NULL;
+    Data = Ok && !Conflict ? MdoDraftResponse(Draft,
+        Context->ParamCount == 0u) : NULL;
     xrtMutexUnlock(g_MdoDraftLock);
     if ( AttachmentLocked ) MdoApiAttachmentUnlock();
     if ( Context->Request->head->MethodCode == XHTTP_METHOD_PUT )

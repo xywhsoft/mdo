@@ -120,12 +120,12 @@ export function createSubmissionController({ draftStore, promptQueue,
     if (!draftStore.appendSubmission(key, submission))
       throw new Error(t("composer.queueFull", {},
         "待发送队列已满（最多 20 条）"));
+    onPersisted(key, submission);
     onChange(key);
     if (!await draftStore.flush(key)) {
       requestReview(key, submission);
       return false;
     }
-    onPersisted(key, submission);
     void pump(key);
     return true;
   }
