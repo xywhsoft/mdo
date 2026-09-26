@@ -156,15 +156,27 @@ test("bundled language packs cover the annotated shell and switch without stale 
     assert.equal(sessionForkTitle({ title: "Тест" }), "Тест (ветка)");
     assert.equal(errorMessage({ code: "network_error" }),
       "Нет соединения с локальной службой. Проверьте, что mdo работает.");
+    assert.equal(errorMessage({ code: "session_profile_invalid",
+      message: "The requested session profile is invalid" }),
+      "Профиль сеанса недействителен. Проверьте модель, уровень рассуждения и разрешения.");
+    assert.equal(errorMessage({ code: "invalid_response", message: "服务返回了无效响应" }),
+      "Служба вернула недопустимый ответ. Повторите попытку.");
     assert.equal(sessionActionDialogCopy("trash", { title: "Тест" })[1],
       "«Тест» можно восстановить из корзины.");
     assert.equal(t("missing.key", {}, "中文回退"), "中文回退");
     assert.equal(await loadLocale("en-US"), true);
     assert.equal(node.textContent, "New task");
+    assert.equal(errorMessage({ code: "queue_full", message: "队列已满" }),
+      "The pending queue is full. Handle existing messages first.");
+    assert.equal(errorMessage({ code: "toString", message: "Unknown server detail" }),
+      "Unknown server detail");
     assert.equal(t("draft.tooLarge"), "Draft exceeds the 64 KiB save limit");
     assert.equal(t("startup.untitled"), "Untitled task");
     assert.equal(await loadLocale("zh-CN"), true);
     assert.equal(node.textContent, "新建任务");
+    assert.equal(errorMessage({ code: "session_profile_invalid",
+      message: "The requested session profile is invalid" }),
+      "会话配置无效，请检查模型、思考强度和权限。");
     assert.deepEqual(changes, ["zh-CN", "ru-RU", "en-US", "zh-CN"]);
     await assert.rejects(loadLocale("fr"), /Unsupported locale/);
   } finally {

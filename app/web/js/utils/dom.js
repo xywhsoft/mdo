@@ -38,6 +38,29 @@ export function formatClock(microseconds) {
   return new Intl.DateTimeFormat(currentLocale(), { hour: "2-digit", minute: "2-digit" }).format(time);
 }
 
+// Stable API codes describe user actions; server messages remain useful for
+// unknown failures, but should not determine the language of known failures.
+const API_ERROR_COPY = Object.freeze({
+  invalid_response: ["error.invalidResponse", "服务返回了无效响应，请重试。"],
+  session_profile_invalid: ["error.sessionProfileInvalid",
+    "会话配置无效，请检查模型、思考强度和权限。"],
+  image_model_unsupported: ["error.imageModelUnsupported",
+    "当前模型不支持图片输入，请切换模型或移除图片。"],
+  run_limit_reached: ["error.runLimitReached",
+    "同时运行的任务已达上限，请稍后重试。"],
+  run_service_unavailable: ["error.runServiceUnavailable",
+    "模型服务暂不可用，请检查模型配置后重试。"],
+  queue_full: ["error.queueFull", "待发送队列已满，请先处理已有消息。"],
+  queue_state_conflict: ["error.queueStateConflict",
+    "待发送消息状态已变化，请刷新后核对。"],
+  draft_conflict: ["error.draftConflict",
+    "草稿已在其他窗口修改，请刷新后核对。"],
+  attachment_unavailable: ["error.attachmentUnavailable",
+    "图片存储暂不可用，请重试。"],
+  session_state_conflict: ["error.sessionStateConflict",
+    "会话状态已变化，请刷新后重试。"],
+});
+
 export function errorMessage(error) {
   if (error?.code === "network_error") return t("error.network", {},
     "无法连接本地服务，请确认 mdo 仍在运行。");
@@ -53,6 +76,9 @@ export function errorMessage(error) {
     "迁移来源、目标或预览令牌已经变化，请重新检测后确认。");
   if (error?.code === "migration_invalid") return t("error.migrationInvalid", {},
     "旧数据未通过当前版本的迁移校验。");
+  const known = Object.hasOwn(API_ERROR_COPY, error?.code)
+    ? API_ERROR_COPY[error.code] : null;
+  if (known) return t(known[0], {}, known[1]);
   return error?.message || t("error.generic", {}, "操作未完成，请重试。");
 }
 

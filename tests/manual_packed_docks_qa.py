@@ -136,6 +136,9 @@ class BoundedDelayProxy(BaseHTTPRequestHandler):
     def do_PUT(self):
         self.forward()
 
+    def do_PATCH(self):
+        self.forward()
+
     def do_DELETE(self):
         self.forward()
 
