@@ -3,6 +3,8 @@ import { t } from "../../i18n.js";
 
 const SAVE_DELAY_MS = 300;
 const MAX_DRAFT_BYTES = 65536;
+const MAX_SUBMISSIONS = 20;
+const MAX_SUBMISSION_BYTES = 192 * 1024;
 
 function imageIds(value) {
   return Array.isArray(value) ? value.filter((id) =>
@@ -15,7 +17,8 @@ function sameIds(a, b) {
 
 function submission(value) {
   if (!value || !/^[0-9a-f]{32}$/.test(value.id) ||
-      typeof value.text !== "string" || typeof value.interrupt !== "boolean")
+      typeof value.text !== "string" || typeof value.interrupt !== "boolean" ||
+      !["prepared", "posting"].includes(value.state))
     return null;
   const attachments = imageIds(value.attachments);
   if (!Array.isArray(value.attachments) ||
@@ -24,12 +27,29 @@ function submission(value) {
       new TextEncoder().encode(value.text).length > MAX_DRAFT_BYTES ||
       (!value.text && !attachments.length)) return null;
   return { id: value.id, text: value.text, attachments,
-    interrupt: value.interrupt };
+    interrupt: value.interrupt, state: value.state };
 }
 
 function sameSubmission(a, b) {
   return (!a && !b) || (a && b && a.id === b.id && a.text === b.text &&
-    a.interrupt === b.interrupt && sameIds(a.attachments, b.attachments));
+    a.interrupt === b.interrupt && a.state === b.state &&
+    sameIds(a.attachments, b.attachments));
+}
+
+function submissions(value) {
+  if (!Array.isArray(value) || value.length > MAX_SUBMISSIONS) return null;
+  const items = value.map(submission);
+  const encoder = new TextEncoder();
+  if (items.some((item) => !item) ||
+      new Set(items.map((item) => item.id)).size !== items.length ||
+      items.reduce((total, item) => total + encoder.encode(item.text).length,
+        0) > MAX_SUBMISSION_BYTES) return null;
+  return items;
+}
+
+function sameSubmissions(a, b) {
+  return a.length === b.length && a.every((item, index) =>
+    sameSubmission(item, b[index]));
 }
 
 function endpoint(key) {
@@ -48,7 +68,7 @@ export function createDraftStore({ onRestore, onError, onSaved, onLoaded = () =>
     let value = entries.get(key);
     if (!value) {
       value = { text: "", attachments: [], revision: 0, loaded: false, dirty: false,
-        uncertainRun: false, submission: null, conflict: false,
+        uncertainRun: false, submissions: [], conflict: false,
         error: null, loading: null,
         saving: null, timer: 0 };
       entries.set(key, value);
@@ -75,24 +95,27 @@ export function createDraftStore({ onRestore, onError, onSaved, onLoaded = () =>
         // A local edit may precede the GET response. Never clear a persisted
         // review guard while saving that edit.
         current.uncertainRun ||= response.data.run_admission_uncertain === true;
-        const storedSubmission = submission(response.data.submission);
-        if (response.data.submission != null && !storedSubmission)
+        const storedSubmissions = submissions(response.data.submissions ??
+          (response.data.submission == null ? [] : [{
+            ...response.data.submission, state: "posting",
+          }]));
+        if (!storedSubmissions)
           throw new Error(t("draft.submissionConflict"));
-        if (current.submission && storedSubmission &&
-            !sameSubmission(current.submission, storedSubmission)) {
+        if (current.submissions.length && storedSubmissions.length &&
+            !sameSubmissions(current.submissions, storedSubmissions)) {
           current.conflict = true;
           throw new Error(t("draft.submissionConflict"));
         }
         current.loaded = true;
         current.error = null;
-        current.submission ??= storedSubmission;
+        if (!current.submissions.length) current.submissions = storedSubmissions;
         if (!current.dirty) {
           current.text = response.data.text ?? "";
           current.attachments = imageIds(response.data.attachments);
         } else schedule(key, true);
         if (selected === key) onRestore(current.text,
           [...current.attachments], current.uncertainRun,
-          current.submission);
+          current.submissions[0] ?? null, [...current.submissions]);
         if (selected === key && !current.dirty) onSaved();
         if (selected === key) onLoaded();
       } catch (error) {
@@ -118,7 +141,7 @@ export function createDraftStore({ onRestore, onError, onSaved, onLoaded = () =>
         const text = current.text;
         const attachments = [...current.attachments];
         const uncertainRun = current.uncertainRun;
-        const stagedSubmission = current.submission;
+        const stagedSubmissions = [...current.submissions];
         if (encoder.encode(text).length > MAX_DRAFT_BYTES) {
           if (selected === key) onError(new Error(t("draft.tooLarge", {},
             "草稿超过 64 KiB 保存上限")));
@@ -128,14 +151,14 @@ export function createDraftStore({ onRestore, onError, onSaved, onLoaded = () =>
         try {
           const body = { revision: current.revision, text, attachments,
             run_admission_uncertain: uncertainRun,
-            submission: stagedSubmission };
+            submissions: stagedSubmissions };
           const keepalive = encoder.encode(JSON.stringify(body)).length <= 60 * 1024;
           const response = await api.put(endpoint(key), body, { keepalive });
           current.revision = Number(response.data.revision);
           current.error = null;
           if (current.text !== text || !sameIds(current.attachments, attachments) ||
               current.uncertainRun !== uncertainRun ||
-              !sameSubmission(current.submission, stagedSubmission))
+              !sameSubmissions(current.submissions, stagedSubmissions))
             current.dirty = true;
           if (selected === key && !current.dirty) onSaved();
         } catch (error) {
@@ -171,7 +194,7 @@ export function createDraftStore({ onRestore, onError, onSaved, onLoaded = () =>
     selected = key;
     const current = entry(key);
     onRestore(current.text, [...current.attachments], current.uncertainRun,
-      current.submission);
+      current.submissions[0] ?? null, [...current.submissions]);
     if (current.error) onError(current.error);
     else onSaved();
     if (!current.loaded) void load(key);
@@ -182,6 +205,23 @@ export function createDraftStore({ onRestore, onError, onSaved, onLoaded = () =>
     for (const key of entries.keys())
       if (entry(key).dirty) void flush(key);
   });
+
+  function insertSubmission(key, value, index = entry(key).submissions.length) {
+    const current = entry(key);
+    const next = submission(value);
+    if (!next || !Number.isInteger(index) || index < 0 ||
+        index > current.submissions.length ||
+        current.submissions.length >= MAX_SUBMISSIONS ||
+        current.submissions.some((item) => item.id === next.id) ||
+        !submissions([...current.submissions, next])) return false;
+    current.submissions = [
+      ...current.submissions.slice(0, index), next,
+      ...current.submissions.slice(index),
+    ];
+    current.dirty = true;
+    schedule(key, true);
+    return true;
+  }
 
   return Object.freeze({
     select,
@@ -201,20 +241,30 @@ export function createDraftStore({ onRestore, onError, onSaved, onLoaded = () =>
       return entry(key).loaded;
     },
     isRunUncertain(key) { return entry(key).uncertainRun; },
-    submission(key) { return entry(key).submission; },
-    stageSubmission(key, value) {
+    submission(key) { return entry(key).submissions[0] ?? null; },
+    submissions(key) { return [...entry(key).submissions]; },
+    appendSubmission(key, value) { return insertSubmission(key, value); },
+    insertSubmission,
+    updateSubmissionState(key, id, state) {
       const current = entry(key);
-      if (current.submission) return false;
-      current.submission = submission(value);
-      if (!current.submission) return false;
+      const item = current.submissions.find((candidate) => candidate.id === id);
+      if (!item || !["prepared", "posting"].includes(state)) return false;
+      if (item.state === state) return true;
+      current.submissions = current.submissions.map((candidate) =>
+        candidate.id === id ? { ...candidate, state } : candidate);
       current.dirty = true;
       schedule(key, true);
       return true;
     },
+    stageSubmission(key, value) {
+      const current = entry(key);
+      if (current.submissions.length) return false;
+      return insertSubmission(key, { ...value, state: "posting" });
+    },
     clearSubmission(key, id) {
       const current = entry(key);
-      if (current.submission?.id !== id) return false;
-      current.submission = null;
+      if (!current.submissions.some((item) => item.id === id)) return false;
+      current.submissions = current.submissions.filter((item) => item.id !== id);
       current.dirty = true;
       schedule(key, true);
       return true;

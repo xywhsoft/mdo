@@ -148,7 +148,7 @@ test("an in-flight submission survives refresh while the next draft stays editab
   const firstImage = "a".repeat(32);
   let revision = 0;
   let saved = { text: "", attachments: [], run_admission_uncertain: false,
-    submission: null };
+    submissions: [] };
   globalThis.window = { setTimeout, clearTimeout, addEventListener() {} };
   globalThis.fetch = async (_path, options) => {
     if (options.method === "GET")
@@ -157,7 +157,7 @@ test("an in-flight submission survives refresh while the next draft stays editab
     assert.equal(body.revision, revision);
     saved = { text: body.text, attachments: body.attachments,
       run_admission_uncertain: body.run_admission_uncertain,
-      submission: body.submission };
+      submissions: body.submissions };
     revision += 1;
     return Response.json({ ok: true, data: { ...saved, revision } });
   };
@@ -170,17 +170,18 @@ test("an in-flight submission survives refresh while the next draft stays editab
     assert.equal(await first.ensureLoaded(key), true);
     const submission = { id: "f".repeat(32), text: "first message",
       attachments: [firstImage], interrupt: false };
+    const posting = { ...submission, state: "posting" };
     first.edit(key, submission.text, submission.attachments);
     assert.equal(first.stageSubmission(key, submission), true);
     assert.equal(first.stageSubmission(key, submission), false);
     assert.equal(await first.flush(key), true);
-    assert.deepEqual(saved.submission, submission);
+    assert.deepEqual(saved.submissions, [posting]);
     assert.equal(first.clearIfMatches(key, submission.text,
       submission.attachments), true);
     first.edit(key, "next draft", []);
     assert.equal(await first.flush(key), true);
     assert.equal(saved.text, "next draft");
-    assert.deepEqual(saved.submission, submission);
+    assert.deepEqual(saved.submissions, [posting]);
 
     let restored;
     const reopened = createDraftStore({ onRestore(text, attachments,
@@ -190,11 +191,64 @@ test("an in-flight submission survives refresh while the next draft stays editab
     reopened.select(key);
     assert.equal(await reopened.ensureLoaded(key), true);
     assert.deepEqual(restored, { text: "next draft", attachments: [],
-      uncertainRun: false, pending: submission });
+      uncertainRun: false, pending: posting });
     assert.equal(reopened.clearSubmission(key, submission.id), true);
     assert.equal(await reopened.flush(key), true);
     assert.equal(saved.text, "next draft");
-    assert.equal(saved.submission, null);
+    assert.deepEqual(saved.submissions, []);
+  } finally {
+    globalThis.window = originalWindow;
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("multiple pending submissions keep their order and state across reload", async () => {
+  const originalWindow = globalThis.window;
+  const originalFetch = globalThis.fetch;
+  let revision = 0;
+  let saved = { text: "", attachments: [], run_admission_uncertain: false,
+    submissions: [] };
+  globalThis.window = { setTimeout, clearTimeout, addEventListener() {} };
+  globalThis.fetch = async (_path, options) => {
+    if (options.method === "GET")
+      return Response.json({ ok: true, data: { ...saved, revision } });
+    const body = JSON.parse(options.body);
+    assert.equal(body.revision, revision);
+    saved = { text: body.text, attachments: body.attachments,
+      run_admission_uncertain: body.run_admission_uncertain,
+      submissions: body.submissions };
+    revision += 1;
+    return Response.json({ ok: true, data: { ...saved, revision } });
+  };
+  try {
+    const key = "default/ordered";
+    const first = { id: "1".repeat(32), text: "first",
+      attachments: [], interrupt: false, state: "prepared" };
+    const second = { id: "2".repeat(32), text: "second",
+      attachments: [], interrupt: true, state: "prepared" };
+    const store = createDraftStore({ onRestore() {}, onError(error) {
+      throw error;
+    }, onSaved() {} });
+    store.select(key);
+    assert.equal(await store.ensureLoaded(key), true);
+    assert.equal(store.appendSubmission(key, first), true);
+    assert.equal(store.appendSubmission(key, second), true);
+    assert.equal(store.appendSubmission(key, second), false);
+    assert.equal(await store.flush(key), true);
+    assert.deepEqual(saved.submissions, [first, second]);
+
+    const reopened = createDraftStore({ onRestore() {}, onError(error) {
+      throw error;
+    }, onSaved() {} });
+    reopened.select(key);
+    assert.equal(await reopened.ensureLoaded(key), true);
+    assert.deepEqual(reopened.submissions(key), [first, second]);
+    assert.equal(reopened.updateSubmissionState(key, first.id, "posting"), true);
+    assert.equal(await reopened.flush(key), true);
+    assert.deepEqual(saved.submissions, [{ ...first, state: "posting" }, second]);
+    assert.equal(reopened.clearSubmission(key, first.id), true);
+    assert.equal(await reopened.flush(key), true);
+    assert.deepEqual(saved.submissions, [second]);
   } finally {
     globalThis.window = originalWindow;
     globalThis.fetch = originalFetch;
