@@ -500,14 +500,14 @@ select:focus-visible,
 .welcome[hidden] { display: none; }
 .welcome-mark { width: 42px; height: 42px; margin: 0 auto 18px; font-size: 18px; }
 .welcome h2 { margin: 0; font-size: clamp(22px, 3vw, 30px); font-weight: 620; letter-spacing: -.025em; }
-.welcome > p { max-width: 530px; margin: 10px auto 26px; color: var(--muted); }
+.welcome > p { max-width: 530px; margin: 10px auto 18px; color: var(--muted); }
 .starter-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
 .starter {
   display: flex;
-  min-height: 92px;
+  min-height: 66px;
   gap: 10px;
   align-items: flex-start;
-  padding: 14px;
+  padding: 12px;
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
   background: var(--surface-raised);
