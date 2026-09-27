@@ -72,11 +72,15 @@ class Model(BaseHTTPRequestHandler):
                                "path": str(Model.artifact_file), "max_lines": 200})}]
             elif "TASK UI" in wire and "task" not in Model.sent:
                 Model.sent.add("task")
+                script = (f"import time; time.sleep({Model.task_seconds:g}); "
+                          "print('task UI fixture')")
+                if Model.task_output_lines > 1:
+                    script = ("import time; "
+                              f"print(('task UI fixture line\\n')*{Model.task_output_lines}, "
+                              f"end='', flush=True); time.sleep({Model.task_seconds:g})")
                 output = [{"type": "function_call", "call_id": "ui-task-1",
                            "name": "spawn", "arguments": json.dumps({
-                               "argv": [sys.executable, "-c",
-                                        f"import time; time.sleep({Model.task_seconds:g}); "
-                                        "print('task UI fixture')"]})}]
+                               "argv": [sys.executable, "-c", script]})}]
             elif "SEQUENTIAL DECISIONS UI" in wire and "sequential-decisions" not in Model.sent:
                 Model.sent.add("sequential-decisions")
                 output = [
@@ -481,6 +485,8 @@ parser.add_argument("--model-delay-ms", type=int, default=0,
                     help="delay regular fixture model responses, 0-5000 ms")
 parser.add_argument("--task-ms", type=int, default=12000,
                     help="TASK UI background process sleep, 0-30000 ms")
+parser.add_argument("--task-output-lines", type=int, default=1,
+                    help="TASK UI emits 1-120 short lines before sleeping")
 parser.add_argument("--resume-verify", action="store_true",
                     help="let the local model verify a resumed run with a bounded read-only command")
 parser.add_argument("--image-capable", action="store_true",
@@ -514,6 +520,8 @@ if not 0 <= args.model_delay_ms <= 5000:
     parser.error("--model-delay-ms must be between 0 and 5000")
 if not 0 <= args.task_ms <= 30000:
     parser.error("--task-ms must be between 0 and 30000")
+if not 1 <= args.task_output_lines <= 120:
+    parser.error("--task-output-lines must be between 1 and 120")
 if args.fail_first_queue_reconcile and not args.drop_first_queue_response:
     parser.error("--fail-first-queue-reconcile requires --drop-first-queue-response")
 if args.consume_dropped_queue_response and not args.drop_first_queue_response:
@@ -553,6 +561,7 @@ Model.artifact_file = base / "artifact-fixture.txt"
 Model.slow_seconds = args.slow_ms / 1000
 Model.model_delay_seconds = args.model_delay_ms / 1000
 Model.task_seconds = args.task_ms / 1000
+Model.task_output_lines = args.task_output_lines
 executable_name = "mdo.exe" if os.name == "nt" else "mdo"
 shutil.copy2(ROOT / executable_name, base / executable_name)
 (base / "README.md").write_text("Synthetic workspace file for @ completion.\n",

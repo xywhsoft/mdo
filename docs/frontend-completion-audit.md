@@ -2,6 +2,8 @@
 
 本清单以 `app_bak/wwwroot` 的可操作行为为基线，而不是以页面长得相似或单元测试通过为完成标准。`docs/frontend-migration.md` 记录每次实现和验证；这里记录当前还需要什么证据。审计更新：2026-09-28，基线提交 `f9e2c4c`。
 
+后台任务检查器的轮询焦点和长输出阅读位置已修复。最终单文件 Home `.build/mdo-packed-docks-7j9om5sb` 在真实 5.5 秒轮询后仍保留详情返回与输出折叠项的焦点、输出内部 720px 滚动；Home `.build/mdo-packed-docks-15ktja48` 验证 320px/280px 长命令卡片不再撑宽任务抽屉。Windows/Linux 有界门禁通过，实体设备与原生 WebView 待验，详见[迁移记录](frontend-migration.md#2026-09-28后台任务轮询不再打断阅读)。
+
 手机尺寸的 token 用量弹层现有明确关闭入口。单文件 Home `.build/mdo-packed-docks-hx_08dhk` 在 320×350 附图时验证关闭、焦点返回及随后移除图片；280×250 下 40×40px 关闭按钮完整可见。页面无横向溢出或脚本错误，Windows/Linux 有界门禁通过。实体触控与原生 WebView 仍待验收，详见[迁移记录](frontend-migration.md#2026-09-28手机用量面板提供明确关闭入口)。
 
 输入区 token 估算现能区分纯文字与附图：空白时不显示数值，附图时明确图片 token 未计入，增删附件即时同步详情面板。单文件 Home `.build/mdo-packed-docks-nzzw04lo` 在 320×350 下用合成 PNG 验证文字、附图和移除后的切换；页面无横向溢出或脚本错误，Windows/Linux 有界门禁通过。图像 token 没有通用可靠的本地估算，原生 WebView 与实体手机仍待验收，详见[迁移记录](frontend-migration.md#2026-09-28附图时明确输入-token-估算边界)。
