@@ -234,7 +234,10 @@ export function createPromptQueue({ container, navigation, isRunActive, stagedEn
         attrs: { type: "button", "aria-label": t("queue.removeNumber", { number: index + 1 }),
           "data-queue-focus": entry.id, "data-queue-index": String(index) },
       });
-      remove.disabled = busy.has(key) || actionBusy.has(key);
+      // Keep the focused remove button focusable while its request is in flight.
+      // The click guard below blocks repeats; aria-disabled exposes that state.
+      remove.disabled = busy.has(key);
+      if (actionBusy.has(key)) remove.setAttribute("aria-disabled", "true");
       remove.addEventListener("click", async () => {
         if (busy.has(key) || actionBusy.has(key)) return;
         actionBusy.add(key);
@@ -306,8 +309,16 @@ export function createPromptQueue({ container, navigation, isRunActive, stagedEn
           .find((item) => item.dataset.imageRef === imageRef) :
         removes.find((item) => item.dataset.queueFocus === focusKey) ??
           removes[Math.min(focusIndex, removes.length - 1)];
-      (target?.disabled ? toggle : target ?? toggle)
-        .focus({ preventScroll: true });
+      const restored = target?.disabled ? toggle : target ?? toggle;
+      restored.focus({ preventScroll: true });
+      if (!list.hidden && list.contains(restored)) {
+        const viewport = list.getBoundingClientRect();
+        const bounds = restored.getBoundingClientRect();
+        if (bounds.top < viewport.top)
+          list.scrollTop += bounds.top - viewport.top;
+        else if (bounds.bottom > viewport.bottom)
+          list.scrollTop += bounds.bottom - viewport.bottom;
+      }
     }
   }
 

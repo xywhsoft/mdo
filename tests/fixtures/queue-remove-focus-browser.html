@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="zh-CN">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>mdo queue removal focus probe</title>
+<link rel="stylesheet" href="/app/web/css/app.css">
+<style>
+  body { padding: 20px; }
+  #queue { width: 280px; }
+  #queue .prompt-queue-list { height: 90px; overflow-y: auto; }
+</style>
+<textarea id="prompt"></textarea>
+<div id="queue"></div>
+<pre id="result"></pre>
+<script type="module">
+import { createPromptQueue } from "/app/web/js/features/chat/prompt-queue.js?remove-focus=3";
+
+const container = document.querySelector("#queue");
+const output = document.querySelector("#result");
+const originalFetch = window.fetch;
+let items = ["First", "Middle", "Last"].map((label, index) => ({
+  id: String(index + 1).repeat(32),
+  text: `${label} ${"long text ".repeat(25)}`,
+  state: "pending", attachments: [], priority: false,
+}));
+let deleteCalls = 0;
+window.fetch = async (url, options = {}) => {
+  if (options.method === "DELETE") {
+    deleteCalls += 1;
+    await new Promise((resolve) => setTimeout(resolve, 30));
+    items = items.filter((item) => !String(url).endsWith(`/${item.id}`));
+  }
+  return new Response(JSON.stringify({ ok: true, data: { items } }), {
+    status: 200, headers: { "Content-Type": "application/json" },
+  });
+};
+try {
+  const queue = createPromptQueue({ container,
+    navigation: { get: () => ({ projectId: "qa", sessionId: "focus" }),
+      subscribe: () => {} },
+    isRunActive: () => true,
+  });
+  await queue.select("qa", "focus");
+  let list = container.querySelector(".prompt-queue-list");
+  const middle = list.children[1];
+  list.scrollTop += middle.getBoundingClientRect().top -
+    list.getBoundingClientRect().top;
+  const remove = middle.querySelector("button[data-queue-index]");
+  remove.focus({ preventScroll: true });
+  remove.click();
+  const during = document.activeElement;
+  const focusHeldWhileBusy = during.dataset.queueFocus === "2".repeat(32) &&
+    during.getAttribute("aria-disabled") === "true";
+  during.click();
+  await new Promise((resolve) => setTimeout(resolve, 60));
+  list = container.querySelector(".prompt-queue-list");
+  const next = list.children[1];
+  const nextTop = next.getBoundingClientRect().top -
+    list.getBoundingClientRect().top;
+  const focusedId = document.activeElement?.dataset.queueFocus;
+  const firstRemovalWorks = items.length === 2 && deleteCalls === 1 && focusHeldWhileBusy &&
+    next.dataset.queueItemId === "3".repeat(32) &&
+    Math.abs(nextTop) <= 1 && focusedId === "3".repeat(32);
+  document.activeElement.click();
+  await new Promise((resolve) => setTimeout(resolve, 60));
+  list = container.querySelector(".prompt-queue-list");
+  const viewport = list.getBoundingClientRect();
+  const focused = document.activeElement;
+  const focusBounds = focused.getBoundingClientRect();
+  const priorFocusVisible = focusBounds.top >= viewport.top - 1 &&
+    focusBounds.bottom <= viewport.bottom + 1;
+  const passed = firstRemovalWorks && items.length === 1 && deleteCalls === 2 &&
+    focused.dataset.queueFocus === "1".repeat(32) && priorFocusVisible;
+  output.dataset.passed = String(passed);
+  output.textContent = JSON.stringify({ passed, count: items.length,
+    deleteCalls, focusHeldWhileBusy, nextTop, focusedId,
+    priorFocusVisible, finalScrollTop: list.scrollTop }, null, 2);
+} catch (error) {
+  output.dataset.passed = "false";
+  output.textContent = error.stack ?? String(error);
+} finally { window.fetch = originalFetch; }
+</script>
+</html>

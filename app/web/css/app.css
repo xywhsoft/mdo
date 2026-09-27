@@ -703,7 +703,8 @@ select:focus-visible,
 .prompt-queue-header { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
 .prompt-queue button { padding: 3px 7px; border: 0; border-radius: 6px; background: transparent; color: var(--accent); font-size: 11px; cursor: pointer; }
 .prompt-queue button:hover { background: var(--surface-hover); }
-.prompt-queue button:disabled { opacity: .5; cursor: wait; }
+.prompt-queue button:disabled,
+.prompt-queue button[aria-disabled="true"] { opacity: .5; cursor: wait; }
 .prompt-queue .prompt-queue-toggle { display: flex; min-height: 26px; align-items: center; gap: 5px; color: var(--ink); font-size: 12px; font-weight: 600; }
 .prompt-queue-waiting { color: var(--muted); font-size: 11px; text-align: right; }
 .prompt-queue-toggle::after { content: "⌄"; display: inline-block; color: var(--muted); transition: transform .15s ease; }
