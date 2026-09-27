@@ -338,9 +338,8 @@ export function createPromptQueue({ container, navigation, isRunActive, stagedEn
     },
     async remove(projectId, sessionId, id) {
       const key = sessionKey(projectId, sessionId);
-      const removed = queues.get(key)?.find((entry) => entry.id === id);
       update(key, await api.delete(path(key, id)));
-      void discardUnusedImages(key, removed?.attachments);
+      // Dispatch has transferred any images to the run and its history.
     },
     async exclusive(projectId, sessionId, callback) {
       const key = sessionKey(projectId, sessionId);
