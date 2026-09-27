@@ -2,6 +2,8 @@
 
 本清单以 `app_bak/wwwroot` 的可操作行为为基线，而不是以页面长得相似或单元测试通过为完成标准。`docs/frontend-migration.md` 记录每次实现和验证；这里记录当前还需要什么证据。审计更新：2026-09-28，基线提交 `f9e2c4c`。
 
+手机尺寸的 token 用量弹层现有明确关闭入口。单文件 Home `.build/mdo-packed-docks-hx_08dhk` 在 320×350 附图时验证关闭、焦点返回及随后移除图片；280×250 下 40×40px 关闭按钮完整可见。页面无横向溢出或脚本错误，Windows/Linux 有界门禁通过。实体触控与原生 WebView 仍待验收，详见[迁移记录](frontend-migration.md#2026-09-28手机用量面板提供明确关闭入口)。
+
 输入区 token 估算现能区分纯文字与附图：空白时不显示数值，附图时明确图片 token 未计入，增删附件即时同步详情面板。单文件 Home `.build/mdo-packed-docks-nzzw04lo` 在 320×350 下用合成 PNG 验证文字、附图和移除后的切换；页面无横向溢出或脚本错误，Windows/Linux 有界门禁通过。图像 token 没有通用可靠的本地估算，原生 WebView 与实体手机仍待验收，详见[迁移记录](frontend-migration.md#2026-09-28附图时明确输入-token-估算边界)。
 
 长 UTF-8 文件名的补全缺口已修复。旧单文件页对 48 汉字、144 字节的查询返回 400，输入区无候选；最终 Home `.build/mdo-packed-docks-g_ndy1hu` 的 320×350 页面显示并插入该长路径，刷新保留草稿、无横向溢出或脚本错误。API 探针另核对 511 字节可接受、512 字节拒绝，Windows/Linux 有界门禁通过。实体手机软键盘和原生 WebView 仍待验收，详见[迁移记录](frontend-migration.md#2026-09-28长-utf-8-路径可在输入区补全)。

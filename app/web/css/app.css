@@ -811,7 +811,11 @@ select:focus-visible,
 .context-meter-ring { width: 18px; height: 18px; border-radius: 50%; background: conic-gradient(var(--accent) var(--meter-percent, 0%), var(--border-strong) 0); mask: radial-gradient(transparent 48%, #000 51%); }
 .context-meter-panel { position: absolute; z-index: 15; right: 0; bottom: calc(100% + 8px); width: min(280px, calc(100vw - 24px)); max-height: max(48px, calc(var(--app-visible-height, 100dvh) - var(--header-height) - 74px)); overflow-y: auto; overscroll-behavior: contain; padding: 12px; border: 1px solid var(--border-strong); border-radius: var(--radius-md); background: var(--surface-raised); box-shadow: 0 12px 30px rgb(0 0 0 / 14%); }
 .context-meter-panel[hidden] { display: none; }
-.context-meter-panel h3 { margin: 0 0 8px; font-size: 12px; }
+.context-meter-heading { display: flex; min-height: 40px; align-items: center; justify-content: space-between; gap: 8px; margin: -8px -8px 4px 0; }
+.context-meter-heading h3 { margin: 0; font-size: 12px; }
+.context-meter-close { flex: 0 0 40px; width: 40px; height: 40px; padding: 0; border: 0; border-radius: var(--radius-sm); background: transparent; color: var(--muted); font-size: 22px; cursor: pointer; }
+.context-meter-close:hover { background: var(--surface-hover); color: var(--ink); }
+.context-meter-close:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px; }
 .context-meter-panel dl { display: grid; grid-template-columns: 1fr auto; gap: 7px 10px; margin: 0; font-size: 11px; }
 .context-meter-panel dt { color: var(--muted); }
 .context-meter-panel dd { margin: 0; font-variant-numeric: tabular-nums; }

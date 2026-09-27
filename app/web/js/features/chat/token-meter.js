@@ -11,6 +11,7 @@ export function createTokenMeter({ root, trigger, ring, panel, estimate, prompt,
   modelSelect, sessionStore, timelineStore, modelsStore, runsStore,
   attachments = () => [] }) {
   let open = false;
+  let closeButton = null;
 
   function update() {
     const number = (value) => value.toLocaleString(currentLocale());
@@ -61,7 +62,16 @@ export function createTokenMeter({ root, trigger, ring, panel, estimate, prompt,
         input: number(latestInput), limit: number(lastWindowTokens) },
         `上次 ${lastModelName} 输入 ${number(latestInput)} / 上下文上限 ${number(lastWindowTokens)} tokens`)
       : t("token.view", {}, "查看 token 用量");
+    const scrollTop = panel.scrollTop;
+    const closeFocused = document.activeElement === closeButton;
     clear(panel);
+    closeButton = element("button", { className: "context-meter-close", text: "×",
+      attrs: { type: "button", "aria-label": t("token.close", {}, "关闭 token 用量") } });
+    closeButton.addEventListener("click", () => setOpen(false));
+    const heading = element("div", { className: "context-meter-heading" }, [
+      element("h3", { text: t("token.title", {}, "Token 用量"),
+        attrs: { id: "context-meter-title" } }), closeButton,
+    ]);
     const details = element("dl");
     const rows = [
       [t("token.model", {}, "输入区模型"), model?.name || model?.id || "—"],
@@ -80,8 +90,7 @@ export function createTokenMeter({ root, trigger, ring, panel, estimate, prompt,
     ];
     for (const [label, value] of rows)
       details.append(element("dt", { text: label }), element("dd", { text: value }));
-    panel.append(element("h3", { text: t("token.title", {}, "Token 用量"),
-      attrs: { id: "context-meter-title" } }), details,
+    panel.append(heading, details,
       element("p", { text: t("token.note", {},
         "模型用量来自服务端事件；输入框估算仅供参考。历史事件被裁剪时，累计值只包含当前可见调用。") }));
     if (hasImages)
@@ -90,6 +99,8 @@ export function createTokenMeter({ root, trigger, ring, panel, estimate, prompt,
     if (latestCall && !lastWindowTokens)
       panel.append(element("p", { text: t("token.unknownContext", {},
         "上次调用的模型配置无法确定，暂不显示上下文占比。") }));
+    panel.scrollTop = scrollTop;
+    if (closeFocused) closeButton.focus({ preventScroll: true });
   }
 
   function setOpen(value) {
@@ -97,7 +108,7 @@ export function createTokenMeter({ root, trigger, ring, panel, estimate, prompt,
     open = value;
     panel.hidden = !open;
     trigger.setAttribute("aria-expanded", String(open));
-    if (open) { update(); panel.focus({ preventScroll: true }); }
+    if (open) { update(); panel.scrollTop = 0; panel.focus({ preventScroll: true }); }
     else if (focusWasInside) trigger.focus({ preventScroll: true });
   }
   function onTriggerClick() { setOpen(!open); }

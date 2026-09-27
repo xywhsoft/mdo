@@ -16,10 +16,11 @@ class Node extends EventTarget {
     } };
     this.value = "";
     this.hidden = false;
+    this.scrollTop = 0;
   }
 
   append(...children) { this.children.push(...children); }
-  replaceChildren(...children) { this.children = [...children]; }
+  replaceChildren(...children) { this.children = [...children]; this.scrollTop = 0; }
   contains(target) {
     return this === target || this.children.some((child) => child.contains?.(target));
   }
@@ -69,6 +70,20 @@ test("Token meter Escape closes the panel before the global stop shortcut", () =
 
     trigger.dispatchEvent(new Event("click"));
     assert.equal(panel.hidden, false);
+    assert.equal(document.activeElement, panel);
+    let close = panel.children[0].children[1];
+    assert.equal(close.getAttribute("aria-label"), "关闭 token 用量");
+    panel.scrollTop = 27;
+    close.focus();
+    meter.refresh();
+    close = panel.children[0].children[1];
+    assert.equal(panel.scrollTop, 27, "usage updates preserve reading position");
+    assert.equal(document.activeElement, close, "usage updates preserve close focus");
+    close.dispatchEvent(new Event("click"));
+    assert.equal(panel.hidden, true);
+    assert.equal(document.activeElement, trigger);
+    trigger.dispatchEvent(new Event("click"));
+    assert.equal(panel.scrollTop, 0, "reopening starts at the top");
     assert.equal(document.activeElement, panel);
 
     function escape(keyCode = 27) {

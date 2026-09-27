@@ -422,6 +422,7 @@
   "token.visibleInput": "可见调用累计输入",
   "token.visibleOutput": "可见调用累计输出",
   "token.title": "Token 用量",
+  "token.close": "关闭 token 用量",
   "token.note": "模型用量来自服务端事件；输入框估算仅供参考。历史事件被裁剪时，累计值只包含当前可见调用。",
   "token.unknownContext": "上次调用的模型配置无法确定，暂不显示上下文占比。",
   "composer.newTaskProject": "新任务项目",

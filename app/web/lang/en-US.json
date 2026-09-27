@@ -422,6 +422,7 @@
   "token.visibleInput": "Visible calls: total input",
   "token.visibleOutput": "Visible calls: total output",
   "token.title": "Token usage",
+  "token.close": "Close token usage",
   "token.note": "Model usage comes from server events. The input estimate is approximate; totals include only visible calls when older events have been trimmed.",
   "token.unknownContext": "The last call's model configuration is unavailable, so its context share is hidden.",
   "composer.newTaskProject": "New task project",
