@@ -4,6 +4,12 @@
 
 完成判据及尚缺的打包页证据见 [前端操作体验完成审计](frontend-completion-audit.md)。本文件继续记录每次实现和验证的细节。
 
+## 2026-09-28：斜杠开头的普通输入仍可补全文件
+
+旧版只在输入尚为无空格的斜杠命令时优先显示命令候选。新版文件补全额外拒绝所有以 `/` 开头的输入，导致隔离单文件 Home `.build/mdo-packed-docks-_bcrmrms` 中的 `/explain @alp` 等普通正文既没有斜杠菜单，也无法选择工作区文件。现在文件补全只按光标处的 `@` 引用识别；斜杠命令仍由自己的菜单处理，不再阻断后续普通正文里的文件引用。
+
+最终单文件 Home `.build/mdo-packed-docks-e9jk76i0` 在 320×350 下，`/explain @alp` 显示 `src/alpha.c` 与 `src/alpha-test.c`，按 Enter 后变为 `/explain @src/alpha.c `，输入焦点保持。输入 `/he` 时只显示 `/help`，执行后打开帮助弹层，关闭后焦点回输入框。文档宽 320px，浏览器脚本错误为空。Windows 有界门禁通过 114 项 Python、75 项 Node、71 个模块解析、21 个运行探针、确定性打包、单文件零旁路写入与启动检查；根目录 `mdo.exe` SHA-256 为 `4b608356be692da3974b76eb97ecce9c5d79f8acd66e11e7ec8cf5da4a49dfc2`。同源码 Linux ext4 有界门禁与确定性打包通过，Linux 包 SHA-256 为 `0c648ebb3dd08b77827e02319487e44bbf5d1ce7b8ec0e39ac082757c424958e`。实体软键盘和原生 WebView 仍待验收；未运行压力或高负载测试。
+
 ## 2026-09-28：文件补全替换整个引用并保留正文间距
 
 旧单文件 Home `.build/mdo-packed-docks-32h2bkc2` 中，输入 `@alpha.c`、把光标移到 `@alp` 后选择 `src/alpha.c`，输入区变成 `@src/alpha.c ha.c`：只替换了光标前的前缀，留下原文件名后缀。现按光标所在的完整、未加引号的 `@` 引用计算替换范围；引用后已有空白时复用它，并把光标移过分隔符，避免正文前出现两个空格或继续输入时把字贴到文件名后。

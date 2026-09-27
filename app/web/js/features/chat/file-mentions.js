@@ -10,7 +10,7 @@ function mentionAtCaret(input) {
   const caret = input.selectionStart;
   const before = input.value.slice(0, caret);
   const match = /(?:^|\s)@([^\s@]*)$/.exec(before);
-  if (!match || !match[1] || match[1].length > 128 || before.startsWith("/")) return null;
+  if (!match || !match[1] || match[1].length > 128) return null;
   // Completing from the middle of an existing reference must replace its
   // remaining suffix too; otherwise @alpha.c becomes @src/alpha.c ha.c.
   const suffix = /^[^\s@]*/.exec(input.value.slice(caret))?.[0] ?? "";
