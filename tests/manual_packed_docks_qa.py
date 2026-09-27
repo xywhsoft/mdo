@@ -570,6 +570,8 @@ Model.artifact_file.write_text("".join(
 (base / "notes").mkdir()
 (base / "notes/QA notes.txt").write_text("Synthetic spaced filename.\n",
                                           encoding="utf-8")
+(base / "notes" / (("资料" * 24) + ".txt")).write_text(
+    "Synthetic long UTF-8 filename.\n", encoding="utf-8")
 port = free_port()
 model = ModelServer(("127.0.0.1", 0), Model)
 model.daemon_threads = True

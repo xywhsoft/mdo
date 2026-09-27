@@ -5,8 +5,9 @@
 #include "../../include/mdo/projects.h"
 #include "../../include/mdo/sessions.h"
 
-#define MDO_WS_QUERY_MAX 128u
 #define MDO_WS_PATH_MAX 512u
+#define MDO_WS_QUERY_MAX (MDO_WS_PATH_MAX - 1u)
+#define MDO_WS_QUERY_ERROR "Use a nonempty UTF-8 q query of at most 511 bytes"
 #define MDO_WS_RESULTS_MAX 12u
 #define MDO_WS_ENTRIES_MAX 5000u
 #define MDO_WS_DIRS_MAX 128u
@@ -266,7 +267,7 @@ bool MdoApiWorkspaceFilesRoute(MdoApiContext* Context)
     if ( !MdoWsQuery(Context->Target.Query, Scan->Query) ) {
         xrtFree(Scan);
         return MdoApiReplyError(Context, 400u, "invalid_query",
-            "Use a nonempty UTF-8 q query of at most 128 bytes", NULL);
+            MDO_WS_QUERY_ERROR, NULL);
     }
     memset(&Error, 0, sizeof(Error));
     Session = MdoSessionLoad(ProjectId, SessionId, &Error);
@@ -310,7 +311,7 @@ bool MdoApiProjectWorkspaceFilesRoute(MdoApiContext* Context)
     if ( !MdoWsQuery(Context->Target.Query, Scan->Query) ) {
         xrtFree(Scan);
         return MdoApiReplyError(Context, 400u, "invalid_query",
-            "Use a nonempty UTF-8 q query of at most 128 bytes", NULL);
+            MDO_WS_QUERY_ERROR, NULL);
     }
     memset(&Project, 0, sizeof(Project));
     Project.Size = sizeof(Project);

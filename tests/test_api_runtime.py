@@ -18,6 +18,7 @@ import threading
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+from urllib.parse import quote
 
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -2090,6 +2091,19 @@ def run_probe(host: Path) -> None:
                     port, "GET", files_path + "?q=MENTION-REF")
                 assert status == 200 and json.loads(body)["data"]["items"] == [
                     "mention-ref.c", "mention-fixture/mention-ref nested.c"], body
+                long_query = "资料" * 24
+                long_name = long_query + ".txt"
+                (base / long_name).write_text("// fixture", encoding="utf-8")
+                status, _, body = request(port, "GET", files_path +
+                                          "?q=" + quote(long_query, safe=""))
+                assert status == 200 and json.loads(body)["data"]["items"] == [
+                    long_name], (status, body)
+                status, _, body = request(port, "GET", files_path + "?q=" + "x" * 511)
+                assert status == 200 and json.loads(body)["data"]["items"] == [], (
+                    status, body)
+                status, _, body = request(port, "GET", files_path + "?q=" + "x" * 512)
+                assert status == 400 and json.loads(body)["error"][
+                    "code"] == "invalid_query", (status, body)
                 status, _, _ = request(port, "HEAD", files_path + "?q=mention-ref")
                 assert status == 200, status
                 status, _, body = request(port, "GET", files_path + "?q=%00")

@@ -4,6 +4,8 @@ import { clear, element, isImeKey, revealListOption } from "../../utils/dom.js";
 
 const WAIT_MS = 180;
 const VISIBLE_MAX = 8;
+const QUERY_MAX_BYTES = 511;
+const encoder = new TextEncoder();
 
 function mentionAtCaret(input) {
   if (input.selectionStart !== input.selectionEnd) return null;
@@ -11,7 +13,8 @@ function mentionAtCaret(input) {
   const before = input.value.slice(0, caret);
   // Only the first @ marks the reference. A later @ may be part of a filename.
   const match = /(?:^|\s)@([^\s]*)$/.exec(before);
-  if (!match || !match[1] || match[1].length > 128) return null;
+  if (!match || !match[1] || match[1].length > QUERY_MAX_BYTES ||
+      encoder.encode(match[1]).length > QUERY_MAX_BYTES) return null;
   // Completing from the middle of an existing reference must replace its
   // remaining suffix too; otherwise @alpha.c becomes @src/alpha.c ha.c.
   const suffix = /^[^\s]*/.exec(input.value.slice(caret))?.[0] ?? "";
