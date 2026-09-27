@@ -191,7 +191,7 @@ def write_site(base: Path, port: int) -> Path:
 static xthread* g_MdoApiProbeApprovalThread;
 
 static xwork_permission_decision MdoApiProbeRequestApproval(uint64 RequestId,
-    const char* CallId, const char* ResourceText)
+    const char* CallId, const char* ResourceText, MdoApprovalScope* Scope)
 {
     xwork_permission_resource Resource;
     xwork_permission_request Request;
@@ -214,14 +214,23 @@ static xwork_permission_decision MdoApiProbeRequestApproval(uint64 RequestId,
     Request.sWorkspaceRoot = "api-probe-workspace";
     Request.uAgentTurn = 9u;
     Request.uDeadline = xrtDeadlineAfter(UINT64_C(120) * 1000000u);
-    return MdoApprovalOnPermission(NULL, &Request);
+    return MdoApprovalOnPermission(Scope, &Request);
 }
 
 static int32 MdoApiProbeApprovals(ptr Data)
 {
+    MdoApprovalScope Scope = {0};
+    MdoApprovalScope NextRun = {0};
     (void)Data;
-    (void)MdoApiProbeRequestApproval(7001u, "call-allow", "notes.txt");
-    (void)MdoApiProbeRequestApproval(7002u, "call-deny", "blocked.txt");
+    (void)MdoApiProbeRequestApproval(7001u, "call-allow", "notes.txt", NULL);
+    (void)MdoApiProbeRequestApproval(7002u, "call-deny", "blocked.txt", NULL);
+    if ( MdoApiProbeRequestApproval(7003u, "call-allow-run",
+             "scope.txt", &Scope) != XWORK_PERMISSION_ALLOW ) return 0;
+    /* The same owner is allowed without another prompt; another owner is not. */
+    if ( MdoApiProbeRequestApproval(7004u, "call-auto-allowed",
+             "same-run.txt", &Scope) != XWORK_PERMISSION_ALLOW ) return 0;
+    (void)MdoApiProbeRequestApproval(7005u, "call-next-run",
+        "next-run.txt", &NextRun);
     return 0;
 }
 
@@ -1082,6 +1091,39 @@ def run_probe(host: Path) -> None:
                     body=b'{"decision":"deny"}', headers=decision_headers)
                 assert status == 200, (status, body)
                 assert json.loads(body)["data"]["decision"] == "deny"
+                approval_deadline = time.monotonic() + 3.0
+                approval = None
+                while time.monotonic() < approval_deadline:
+                    approvals = json.loads(request(
+                        port, "GET", "/api/v1/approvals")[2])["data"]
+                    approval = next((item for item in approvals["items"]
+                        if item["id"] == 7003), None)
+                    if approval is not None:
+                        break
+                    time.sleep(0.01)
+                assert approval is not None, approvals
+                status, _, body = request(
+                    port, "PUT", "/api/v1/approvals/7003",
+                    body=b'{"decision":"allow_run"}', headers=decision_headers)
+                assert status == 200, (status, body)
+                assert json.loads(body)["data"]["decision"] == "allow_run"
+                approval_deadline = time.monotonic() + 3.0
+                approval = None
+                while time.monotonic() < approval_deadline:
+                    approvals = json.loads(request(
+                        port, "GET", "/api/v1/approvals")[2])["data"]
+                    assert not any(item["id"] == 7004 for item in approvals["items"]), (
+                        approvals)
+                    approval = next((item for item in approvals["items"]
+                        if item["id"] == 7005), None)
+                    if approval is not None:
+                        break
+                    time.sleep(0.01)
+                assert approval is not None, approvals
+                status, _, body = request(
+                    port, "PUT", "/api/v1/approvals/7005",
+                    body=b'{"decision":"deny"}', headers=decision_headers)
+                assert status == 200, (status, body)
                 for approval_id in ("0", "bad", "18446744073709551616"):
                     status, _, body = request(
                         port, "PUT", f"/api/v1/approvals/{approval_id}",

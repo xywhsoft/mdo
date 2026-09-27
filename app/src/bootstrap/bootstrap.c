@@ -144,6 +144,7 @@ bool MdoBootstrapInit(XS_HostInfo* pHost)
     }
     MdoRunManagerOptionsInit(&RunOptions);
     RunOptions.OnPermission = MdoApprovalOnPermission;
+    RunOptions.UseRunPermissionScope = true;
     if ( !MdoRunManagerInit(g_MdoBootstrap.Runtime, &RunOptions, &WorkError) ) {
         snprintf(g_MdoBootstrap.Message, sizeof(g_MdoBootstrap.Message), "%.255s",
             WorkError.sMessage[0] != '\0' ? WorkError.sMessage :
@@ -154,6 +155,7 @@ bool MdoBootstrapInit(XS_HostInfo* pHost)
     }
     MdoScheduleExecutorOptionsInit(&ExecutorOptions);
     ExecutorOptions.OnPermission = MdoApprovalOnPermission;
+    ExecutorOptions.UseRunPermissionScope = true;
     if ( !MdoScheduleExecutorInit(g_MdoBootstrap.Runtime, &ExecutorOptions,
             &WorkError) ) {
         snprintf(g_MdoBootstrap.Message, sizeof(g_MdoBootstrap.Message), "%.255s",

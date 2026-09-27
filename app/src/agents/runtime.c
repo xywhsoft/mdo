@@ -3,6 +3,7 @@
 #include <string.h>
 
 #include "../../include/mdo/agents.h"
+#include "../../include/mdo/approvals.h"
 #include "../../include/mdo/asks.h"
 #include "../../include/mdo/bootstrap.h"
 #include "../../include/mdo/config.h"
@@ -27,6 +28,7 @@ typedef struct MdoAgentRoute {
 
 typedef struct MdoAgentOwner {
     xatomic32 Refs;
+    MdoApprovalScope ApprovalScope;
     MdoModelCatalog* Models;
     MdoModuleCatalog* Modules;
     MdoSkillCatalog* Skills;
@@ -1168,7 +1170,11 @@ MdoAgentSession* MdoAgentSessionCreateWithRuntime(xwork_runtime* Runtime,
     AgentOptions.OnApproval = Options->OnApproval;
     AgentOptions.pApprovalUserData = Options->ApprovalUserData;
     AgentOptions.OnPermission = Options->OnPermission;
-    AgentOptions.pPermissionUserData = Options->PermissionUserData;
+    /* This owner is created for one run and retained by nested subagents.
+     * Keep product approval grants in that lifetime; injected callbacks keep
+     * their original user data. */
+    AgentOptions.pPermissionUserData = Options->UseRunPermissionScope ?
+        &Owner->ApprovalScope : Options->PermissionUserData;
     AgentOptions.OnHook = Options->OnHook;
     AgentOptions.pHookUserData = Options->HookUserData;
     AgentOptions.OnEvent = Options->OnEvent;

@@ -196,6 +196,8 @@ static bool MdoScheduleExecutorStart(const MdoScheduleClaim* Claim,
     SessionOptions.OnPermission = g_MdoScheduleExecutor.Options.OnPermission;
     SessionOptions.PermissionUserData =
         g_MdoScheduleExecutor.Options.PermissionUserData;
+    SessionOptions.UseRunPermissionScope =
+        g_MdoScheduleExecutor.Options.UseRunPermissionScope;
     SessionOptions.OnHook = g_MdoScheduleExecutor.Options.OnHook;
     SessionOptions.HookUserData = g_MdoScheduleExecutor.Options.HookUserData;
     SessionOptions.OnEvent = g_MdoScheduleExecutor.Options.OnEvent;

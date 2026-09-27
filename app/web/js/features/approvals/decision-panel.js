@@ -14,9 +14,11 @@ export function createDecisionPanel({ container, summary, store, onChanged }) {
     try {
       if (!await decideApproval(item.id, decision)) return;
       const tool = item.tool || t("decision.tool", {}, "工具");
-      toast(decision === "allow"
-        ? t("decision.allowed", { tool }, `已允许 ${tool} 本次执行`)
-        : t("decision.denied", { tool }, `已拒绝 ${tool} 本次执行`));
+      toast(decision === "allow_run"
+        ? t("decision.allowedRun", {}, "本轮运行的工具请求均已允许")
+        : decision === "allow"
+          ? t("decision.allowed", { tool }, `已允许 ${tool} 本次执行`)
+          : t("decision.denied", { tool }, `已拒绝 ${tool} 本次执行`));
       await onChanged?.();
     } catch (error) {
       toast(approvalDecisionStatus(key) === "submitted"
@@ -32,6 +34,9 @@ export function createDecisionPanel({ container, summary, store, onChanged }) {
     const allow = element("button", { className: "primary-button approval-allow",
       text: t("decision.allowOnce", {}, "允许一次"), attrs: {
       type: "button", "data-decision-focus": `${key}/allow` } });
+    const allowRun = element("button", { className: "secondary-button approval-allow-run",
+      text: t("decision.allowRun", {}, "本轮均允许"), attrs: {
+      type: "button", "data-decision-focus": `${key}/allow_run` } });
     const deny = element("button", { className: "secondary-button approval-deny",
       text: t("decision.deny", {}, "拒绝"), attrs: {
       type: "button", "data-decision-focus": `${key}/deny` } });
@@ -66,14 +71,16 @@ export function createDecisionPanel({ container, summary, store, onChanged }) {
           "data-decision-focus": `${key}/arguments` } }),
         element("pre", { text: formatArguments(item.arguments_json) }),
       ]),
-      element("div", { className: "approval-actions" }, [deny, allow]),
+      element("div", { className: "approval-actions" }, [deny, allow, allowRun]),
     );
     const details = card.querySelector("details");
     details.addEventListener("toggle", () => argumentsOpen.set(key, details.open));
     const busy = approvalDecisionStatus(key) !== "idle";
     allow.setAttribute("aria-disabled", String(busy));
+    allowRun.setAttribute("aria-disabled", String(busy));
     deny.setAttribute("aria-disabled", String(busy));
     allow.addEventListener("click", () => void decide(item, "allow"));
+    allowRun.addEventListener("click", () => void decide(item, "allow_run"));
     deny.addEventListener("click", () => void decide(item, "deny"));
     return card;
   }

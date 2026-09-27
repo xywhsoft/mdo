@@ -193,6 +193,7 @@ bool MdoApiApprovalRoute(MdoApiContext* Context)
     const xvalue* DecisionValue;
     xstrview DecisionText;
     xwork_permission_decision Decision;
+    bool AllowRun = false;
     xwork_error Error;
     xvalue* Data;
     uint64 RequestId;
@@ -210,7 +211,7 @@ bool MdoApiApprovalRoute(MdoApiContext* Context)
          !xrtValueGetString(DecisionValue, &DecisionText) ) {
         MdoApiJsonBodyUnit(&Body);
         return MdoApiReplyError(Context, 422u, "approval_decision_invalid",
-            "The request must contain only an allow or deny decision", NULL);
+            "The request must contain only an allow, allow_run, or deny decision", NULL);
     }
     if ( DecisionText.Size == 5u &&
          memcmp(DecisionText.Data, "allow", 5u) == 0 ) {
@@ -220,14 +221,19 @@ bool MdoApiApprovalRoute(MdoApiContext* Context)
                 memcmp(DecisionText.Data, "deny", 4u) == 0 ) {
         Decision = XWORK_PERMISSION_DENY;
         DecisionName = "deny";
+    } else if ( DecisionText.Size == 9u &&
+                memcmp(DecisionText.Data, "allow_run", 9u) == 0 ) {
+        Decision = XWORK_PERMISSION_ALLOW;
+        DecisionName = "allow_run";
+        AllowRun = true;
     } else {
         MdoApiJsonBodyUnit(&Body);
         return MdoApiReplyError(Context, 422u, "approval_decision_invalid",
-            "The request must contain only an allow or deny decision", NULL);
+            "The request must contain only an allow, allow_run, or deny decision", NULL);
     }
     MdoApiJsonBodyUnit(&Body);
     memset(&Error, 0, sizeof(Error));
-    if ( !MdoApprovalDecide(RequestId, Decision, &Error) )
+    if ( !MdoApprovalDecide(RequestId, Decision, AllowRun, &Error) )
         return MdoApiReplyError(Context,
             Error.eCode == XWORK_ERROR_POLICY ? 404u : 503u,
             Error.eCode == XWORK_ERROR_POLICY ? "approval_not_found" :

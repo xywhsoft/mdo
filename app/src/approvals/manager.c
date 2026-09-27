@@ -10,6 +10,8 @@
 typedef struct MdoApprovalEntry {
     bool Used;
     xwork_permission_decision Decision;
+    MdoApprovalScope* Scope;
+    xcancel* Cancel; /* borrowed while the synchronous callback is active. */
     MdoApprovalInfo Info;
 } MdoApprovalEntry;
 
@@ -173,7 +175,7 @@ xwork_permission_decision MdoApprovalOnPermission(void* UserData,
     MdoApprovalEntry* Entry;
     xwork_permission_decision Result = XWORK_PERMISSION_DENY;
     size_t Index;
-    (void)UserData;
+    MdoApprovalScope* Scope = (MdoApprovalScope*)UserData;
     /* The configured profiles permit ordinary reads without a prompt.
      * Returning DEFAULT lets xwork apply its read-only fallback policy. */
     if ( Request != NULL &&
@@ -185,12 +187,22 @@ xwork_permission_decision MdoApprovalOnPermission(void* UserData,
          !xrtMutexLock(g_MdoApprovals.Lock) ) return XWORK_PERMISSION_DENY;
     if ( g_MdoApprovals.Stopping ||
          MdoApprovalFindLocked(Request->uRequestId) != SIZE_MAX ) goto unlock;
+    if ( Request->pCancel != NULL &&
+         xrtCancelRequested(Request->pCancel) ) goto unlock;
+    if ( Request->uDeadline != 0u &&
+         xrtDeadlineExpired(Request->uDeadline) ) goto unlock;
+    if ( Scope != NULL && Scope->AllowRun ) {
+        Result = XWORK_PERMISSION_ALLOW;
+        goto unlock;
+    }
     Index = MdoApprovalFreeLocked();
     if ( Index == SIZE_MAX ) goto unlock;
     Entry = &g_MdoApprovals.Entries[Index];
     memset(Entry, 0, sizeof(*Entry));
     Entry->Used = true;
     Entry->Decision = XWORK_PERMISSION_DEFAULT;
+    Entry->Scope = Scope;
+    Entry->Cancel = Request->pCancel;
     Entry->Info = Captured;
     ++g_MdoApprovals.ActiveCallbacks;
     (void)xrtCondBroadcast(g_MdoApprovals.Changed);
@@ -216,7 +228,13 @@ xwork_permission_decision MdoApprovalOnPermission(void* UserData,
             break;
         }
     }
-    Result = Entry->Decision == XWORK_PERMISSION_ALLOW ?
+    Result = Entry->Decision == XWORK_PERMISSION_ALLOW &&
+        !g_MdoApprovals.Stopping &&
+        (Request->pCancel == NULL ||
+         !xrtCancelRequested(Request->pCancel)) &&
+        (Request->uDeadline == 0u ||
+         !xrtDeadlineExpired(Request->uDeadline)) &&
+        !xrtDeadlineExpired(Entry->Info.ExpiresAt) ?
         XWORK_PERMISSION_ALLOW : XWORK_PERMISSION_DENY;
     memset(Entry, 0, sizeof(*Entry));
     --g_MdoApprovals.ActiveCallbacks;
@@ -323,13 +341,14 @@ bool MdoApprovalSnapshotAt(const MdoApprovalSnapshot* Snapshot, size_t Index,
 }
 
 bool MdoApprovalDecide(uint64 RequestId,
-    xwork_permission_decision Decision, xwork_error* Error)
+    xwork_permission_decision Decision, bool AllowRun, xwork_error* Error)
 {
     size_t Index;
     xworkErrorInit(Error);
     if ( RequestId == 0u ||
          (Decision != XWORK_PERMISSION_ALLOW &&
-          Decision != XWORK_PERMISSION_DENY) ) {
+          Decision != XWORK_PERMISSION_DENY) ||
+         (AllowRun && Decision != XWORK_PERMISSION_ALLOW) ) {
         MdoApprovalError(Error, XWORK_ERROR_INVALID_ARGUMENT,
             "invalid approval decision");
         return false;
@@ -342,13 +361,31 @@ bool MdoApprovalDecide(uint64 RequestId,
     }
     Index = MdoApprovalFindLocked(RequestId);
     if ( g_MdoApprovals.Stopping || Index == SIZE_MAX ||
-         g_MdoApprovals.Entries[Index].Decision != XWORK_PERMISSION_DEFAULT ) {
+         g_MdoApprovals.Entries[Index].Decision != XWORK_PERMISSION_DEFAULT ||
+         xrtDeadlineExpired(g_MdoApprovals.Entries[Index].Info.ExpiresAt) ||
+         (g_MdoApprovals.Entries[Index].Cancel != NULL &&
+          xrtCancelRequested(g_MdoApprovals.Entries[Index].Cancel)) ||
+         (AllowRun && g_MdoApprovals.Entries[Index].Scope == NULL) ) {
         (void)xrtMutexUnlock(g_MdoApprovals.Lock);
         MdoApprovalError(Error, XWORK_ERROR_POLICY,
             "approval request is no longer pending");
         return false;
     }
-    g_MdoApprovals.Entries[Index].Decision = Decision;
+    if ( AllowRun ) {
+        MdoApprovalScope* Scope = g_MdoApprovals.Entries[Index].Scope;
+        Scope->AllowRun = true;
+        for ( Index = 0u; Index < MDO_APPROVAL_PENDING_MAX; ++Index ) {
+            MdoApprovalEntry* Entry = &g_MdoApprovals.Entries[Index];
+            if ( Entry->Used && Entry->Scope == Scope &&
+                 Entry->Decision == XWORK_PERMISSION_DEFAULT )
+                Entry->Decision = (Entry->Cancel == NULL ||
+                    !xrtCancelRequested(Entry->Cancel)) &&
+                    !xrtDeadlineExpired(Entry->Info.ExpiresAt) ?
+                    XWORK_PERMISSION_ALLOW : XWORK_PERMISSION_DENY;
+        }
+    } else {
+        g_MdoApprovals.Entries[Index].Decision = Decision;
+    }
     (void)xrtCondBroadcast(g_MdoApprovals.Changed);
     (void)xrtMutexUnlock(g_MdoApprovals.Lock);
     return true;

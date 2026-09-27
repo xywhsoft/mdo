@@ -74,7 +74,10 @@ function approvalCard(item, argumentsOpen, onChanged) {
     type: "button", "data-dock-focus": `approval/${key}/deny` } });
   const allow = element("button", { text: t("dock.approval.allowOnce"), attrs: {
     type: "button", "data-dock-focus": `approval/${key}/allow` } });
-  for (const [button, decision] of [[deny, "deny"], [allow, "allow"]]) {
+  const allowRun = element("button", { text: t("dock.approval.allowRun"), attrs: {
+    type: "button", "data-dock-focus": `approval/${key}/allow_run` } });
+  for (const [button, decision] of [[deny, "deny"], [allow, "allow"],
+    [allowRun, "allow_run"]]) {
     button.setAttribute("aria-disabled", String(approvalDecisionStatus(key) !== "idle"));
     button.addEventListener("click", async () => {
       if (approvalDecisionStatus(key) !== "idle") return;
@@ -108,7 +111,8 @@ function approvalCard(item, argumentsOpen, onChanged) {
     }) }),
     resources,
     argumentsView,
-    element("div", { className: "conversation-dock-actions" }, [deny, allow]),
+    element("div", { className: "conversation-dock-actions" },
+      [deny, allow, allowRun]),
   );
   return card;
 }

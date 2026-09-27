@@ -641,6 +641,7 @@ static void MdoSessionsRuntimeApply(MdoAgentSessionOptions* Agent,
     Agent->ApprovalUserData = Runtime->ApprovalUserData;
     Agent->OnPermission = Runtime->OnPermission;
     Agent->PermissionUserData = Runtime->PermissionUserData;
+    Agent->UseRunPermissionScope = Runtime->UseRunPermissionScope;
     Agent->OnHook = Runtime->OnHook;
     Agent->HookUserData = Runtime->HookUserData;
     Agent->OnEvent = Runtime->OnEvent;

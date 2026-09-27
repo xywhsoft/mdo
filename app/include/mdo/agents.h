@@ -32,6 +32,7 @@ typedef struct MdoAgentSessionOptions {
     void* ApprovalUserData;
     xwork_permission_fn OnPermission;
     void* PermissionUserData;
+    bool UseRunPermissionScope; /* pass an owner-scoped grant state instead. */
     xwork_hook_fn OnHook;
     void* HookUserData;
     xwork_event_fn OnEvent;

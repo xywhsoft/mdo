@@ -38,7 +38,8 @@ export function loadApprovals() {
 
 export async function decideApproval(value, decision) {
   const id = approvalId(value);
-  if (!new Set(["allow", "deny"]).has(decision)) throw new TypeError("approval decision is invalid");
+  if (!new Set(["allow", "allow_run", "deny"]).has(decision))
+    throw new TypeError("approval decision is invalid");
   if (approvalDecisionStatus(id) !== "idle") return false;
   pending.add(id);
   publishDecisions();

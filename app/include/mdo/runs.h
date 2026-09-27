@@ -23,6 +23,7 @@ typedef struct MdoRunManagerOptions {
     void* ApprovalUserData;
     xwork_permission_fn OnPermission;
     void* PermissionUserData;
+    bool UseRunPermissionScope;
     xwork_hook_fn OnHook;
     void* HookUserData;
     xwork_event_fn OnEvent;

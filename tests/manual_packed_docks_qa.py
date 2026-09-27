@@ -2,7 +2,8 @@
 
 Run from the repository root after building mdo.exe. The model endpoint only
 binds to localhost and returns one deterministic tool call per marker prompt:
-TODO UI, ASK UI, LONG ASK UI, APPROVAL UI, TASK UI, or ARTIFACT UI. The long
+TODO UI, ASK UI, LONG ASK UI, APPROVAL UI, APPROVAL RUN UI,
+APPROVAL NEXT UI, TASK UI, or ARTIFACT UI. The long
 ask has multiline question and options; the latter reads one bounded synthetic
 text file so the normal tool-output artifact path is used.
 """
@@ -93,6 +94,27 @@ class Model(BaseHTTPRequestHandler):
                                    "Продолжить сейчас, а результаты проверить после "
                                    "следующего шага" if long_ask else "Careful",
                                ]})}]
+            elif "APPROVAL RUN UI" in wire and "approval-run-1" not in Model.sent:
+                Model.sent.add("approval-run-1")
+                output = [{"type": "function_call", "call_id": "ui-approval-run-1",
+                           "name": "exec", "arguments": json.dumps({
+                               "argv": [sys.executable, "-c",
+                                        "print('approval run fixture 1')"],
+                               "timeout_ms": 5000})}]
+            elif "APPROVAL RUN UI" in wire and "approval-run-2" not in Model.sent:
+                Model.sent.add("approval-run-2")
+                output = [{"type": "function_call", "call_id": "ui-approval-run-2",
+                           "name": "exec", "arguments": json.dumps({
+                               "argv": [sys.executable, "-c",
+                                        "print('approval run fixture 2')"],
+                               "timeout_ms": 5000})}]
+            elif "APPROVAL NEXT UI" in wire and "approval-next" not in Model.sent:
+                Model.sent.add("approval-next")
+                output = [{"type": "function_call", "call_id": "ui-approval-next",
+                           "name": "exec", "arguments": json.dumps({
+                               "argv": [sys.executable, "-c",
+                                        "print('approval next fixture')"],
+                               "timeout_ms": 5000})}]
             elif "APPROVAL UI" in wire and "approval" not in Model.sent:
                 Model.sent.add("approval")
                 output = [{"type": "function_call", "call_id": "ui-approval-1",

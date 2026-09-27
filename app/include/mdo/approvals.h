@@ -15,6 +15,12 @@
 
 typedef struct MdoApprovalSnapshot MdoApprovalSnapshot;
 
+/* Owned by one Agent runtime (one interactive turn or scheduled execution).
+ * Only the approval manager may access AllowRun, under its lock. */
+typedef struct MdoApprovalScope {
+    bool AllowRun;
+} MdoApprovalScope;
+
 typedef struct MdoApprovalResourceInfo {
     xwork_resource_kind Kind;
     xwork_resource_access Access;
@@ -45,8 +51,10 @@ typedef struct MdoApprovalInfo {
 bool MdoApprovalManagerInit(void);
 void MdoApprovalManagerUnit(void);
 
-/* Synchronous xwork callback. Requests that cannot be represented exactly are
- * denied before tool execution; cancellation, timeout, and shutdown also deny. */
+/* Synchronous xwork callback. UserData is NULL for one-shot decisions or a
+ * runtime-owned MdoApprovalScope for grants covering that runtime. Requests
+ * that cannot be represented exactly are denied before tool execution;
+ * cancellation, timeout, and shutdown also deny. */
 xwork_permission_decision MdoApprovalOnPermission(
     void* UserData, const xwork_permission_request* Request);
 
@@ -59,6 +67,6 @@ bool MdoApprovalSnapshotAt(const MdoApprovalSnapshot* Snapshot, size_t Index,
 
 /* A pending request accepts one decision. Stale or unknown IDs fail closed. */
 bool MdoApprovalDecide(uint64 RequestId,
-    xwork_permission_decision Decision, xwork_error* Error);
+    xwork_permission_decision Decision, bool AllowRun, xwork_error* Error);
 
 #endif

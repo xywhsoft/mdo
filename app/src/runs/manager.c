@@ -614,6 +614,8 @@ bool MdoRunStartWithOutcome(const MdoRunStartOptions* Options,
     RuntimeOptions.ApprovalUserData = g_MdoRuns.Options.ApprovalUserData;
     RuntimeOptions.OnPermission = g_MdoRuns.Options.OnPermission;
     RuntimeOptions.PermissionUserData = g_MdoRuns.Options.PermissionUserData;
+    RuntimeOptions.UseRunPermissionScope =
+        g_MdoRuns.Options.UseRunPermissionScope;
     RuntimeOptions.OnHook = g_MdoRuns.Options.OnHook;
     RuntimeOptions.HookUserData = g_MdoRuns.Options.HookUserData;
     RuntimeOptions.OnEvent = g_MdoRuns.Options.OnEvent;

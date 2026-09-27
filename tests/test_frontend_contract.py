@@ -237,7 +237,7 @@ class FrontendContractTests(unittest.TestCase):
         self.assertIn('id="decisions-panel"', self.index)
         self.assertIn('api.get("/approvals")', state)
         self.assertIn('api.put(`/approvals/${id}`, { decision })', state)
-        self.assertIn('new Set(["allow", "deny"])', state)
+        self.assertIn('new Set(["allow", "allow_run", "deny"])', state)
         self.assertIn("pending = new Set()", state)
         self.assertIn("approvalDecisionStatus(key)", panel)
         self.assertIn("approvalDecisionStore.subscribe(render)", panel)
@@ -245,7 +245,10 @@ class FrontendContractTests(unittest.TestCase):
                       self.scripts["js/features/chat/conversation-docks.js"])
         self.assertIn("text: formatArguments(item.arguments_json)", panel)
         self.assertIn('text: t("decision.allowOnce"', panel)
+        self.assertIn('text: t("decision.allowRun"', panel)
         self.assertIn('text: t("decision.deny"', panel)
+        self.assertIn('t("dock.approval.allowRun")',
+                      self.scripts["js/features/chat/conversation-docks.js"])
         self.assertIn(".approval-card", self.css)
         self.assertNotIn("innerHTML", panel)
 

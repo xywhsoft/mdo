@@ -66,3 +66,32 @@ test("a committed decision stays locked when the refresh fails", async () => {
     globalThis.fetch = originalFetch;
   }
 });
+
+test("run grant shares the one-shot lock across both approval surfaces", async () => {
+  const entered = deferred();
+  const release = deferred();
+  const originalFetch = globalThis.fetch;
+  const decisions = [];
+  globalThis.fetch = async (_path, options) => {
+    if (options.method === "PUT") {
+      decisions.push(JSON.parse(options.body).decision);
+      entered.resolve();
+      await release.promise;
+      return Response.json({ ok: true, data: { decision: "allow_run" } });
+    }
+    return Response.json({ ok: true, data: { total: 0, items: [] } });
+  };
+  try {
+    const first = decideApproval("3", "allow_run");
+    await entered.promise;
+    assert.equal(approvalDecisionStatus("3"), "pending");
+    assert.equal(await decideApproval("3", "allow"), false);
+    release.resolve();
+    assert.equal(await first, true);
+    assert.deepEqual(decisions, ["allow_run"]);
+    assert.equal(approvalDecisionStatus("3"), "idle");
+  } finally {
+    release.resolve();
+    globalThis.fetch = originalFetch;
+  }
+});
