@@ -2,6 +2,8 @@
 
 本清单以 `app_bak/wwwroot` 的可操作行为为基线，而不是以页面长得相似或单元测试通过为完成标准。`docs/frontend-migration.md` 记录每次实现和验证；这里记录当前还需要什么证据。审计更新：2026-09-28，基线提交 `f9e2c4c`。
 
+停止任务期间的键盘焦点现能保持。旧单文件 Home `.build/mdo-packed-docks-77_5mbse` 中，按 Enter 后原生禁用按钮把焦点送到页面根节点；最终 Home `.build/mdo-packed-docks-_nou4wc8` 的 5 秒延迟期间，详情停止按钮在轮询重绘前后均保持焦点、两处入口均标记 `aria-disabled=true`，停止完成后焦点落到详情返回按钮。代理仅一次 DELETE，页面无脚本错误，Windows/Linux 有界门禁通过。实体触控和原生 WebView 仍待验收，详见[迁移记录](frontend-migration.md#2026-09-28停止任务等待期间保留键盘焦点)。
+
 任务停止的两个入口现共享请求状态。旧单文件页在 5 秒延迟响应期间连续点击列表和详情，代理记录两次 DELETE；最终 Home `.build/mdo-packed-docks-ju8y033o` 同一操作下两个按钮一起禁用、代理仅有一次 DELETE，任务最终已停止，页面无脚本错误。Windows/Linux 有界门禁通过；原生 WebView 和实体触控仍待验收，详见[迁移记录](frontend-migration.md#2026-09-28任务停止请求在列表与详情之间去重)。
 
 后台任务检查器的轮询焦点和长输出阅读位置已修复。最终单文件 Home `.build/mdo-packed-docks-7j9om5sb` 在真实 5.5 秒轮询后仍保留详情返回与输出折叠项的焦点、输出内部 720px 滚动；Home `.build/mdo-packed-docks-15ktja48` 验证 320px/280px 长命令卡片不再撑宽任务抽屉。Windows/Linux 有界门禁通过，实体设备与原生 WebView 待验，详见[迁移记录](frontend-migration.md#2026-09-28后台任务轮询不再打断阅读)。

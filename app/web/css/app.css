@@ -902,7 +902,8 @@ select:focus-visible,
 .task-kind, .task-time { color: var(--faint); font-size: 10px; }
 .task-meta { display: flex; justify-content: space-between; gap: 7px; margin-top: 7px; color: var(--muted); font-size: 10px; }
 .task-cancel { padding: 3px 7px; border: 1px solid var(--border); border-radius: 6px; background: transparent; color: var(--muted); font-size: 10px; cursor: pointer; }
-.task-cancel:hover { border-color: var(--danger); color: var(--danger); }
+.task-cancel:hover:not([aria-disabled="true"]) { border-color: var(--danger); color: var(--danger); }
+.task-cancel[aria-disabled="true"] { opacity: .5; cursor: wait; }
 .task-detail { margin-top: 18px; padding-top: 14px; border-top: 1px solid var(--border); }
 .task-detail-actions { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .task-detail-close { padding: 4px 0; border: 0; background: transparent; color: var(--muted); font-size: 11px; cursor: pointer; }

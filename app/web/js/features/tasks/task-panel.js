@@ -82,8 +82,12 @@ export function createTaskPanel({ container, detailContainer, summary, store, de
 
   function syncCancelButtons() {
     for (const root of [container, detailContainer]) {
-      for (const button of root.querySelectorAll("[data-task-cancel]"))
-        button.disabled = pendingCancels.has(button.dataset.taskCancel);
+      for (const button of root.querySelectorAll("[data-task-cancel]")) {
+        // Keep the control focusable while the request is pending; cancel() guards repeat activation.
+        if (pendingCancels.has(button.dataset.taskCancel))
+          button.setAttribute("aria-disabled", "true");
+        else button.removeAttribute("aria-disabled");
+      }
     }
   }
 
@@ -201,7 +205,6 @@ export function createTaskPanel({ container, detailContainer, summary, store, de
           "data-task-focus": "stop", "data-task-cancel": String(task.id),
           "aria-label": t("task.stopNamed", { name: task.label || task.id },
             `停止任务 ${task.label || task.id}`) } });
-      stop.disabled = pendingCancels.has(String(task.id));
       stop.addEventListener("click", () => cancel(task));
       headerActions.push(stop);
     }
@@ -269,6 +272,7 @@ export function createTaskPanel({ container, detailContainer, summary, store, de
         text: t("task.artifact.title", { count: artifacts.length },
           `产物 ${artifacts.length}`) }), artifactList]),
     );
+    syncCancelButtons();
     restoreView(detailContainer, view, close);
   }
 
@@ -323,7 +327,6 @@ export function createTaskPanel({ container, detailContainer, summary, store, de
             "data-task-focus": `cancel/${item.id}`, "data-task-cancel": String(item.id),
             "aria-label": t("task.stopNamed", { name: item.label || item.id },
               `停止任务 ${item.label || item.id}`) } });
-        cancelButton.disabled = pendingCancels.has(String(item.id));
         cancelButton.addEventListener("click", () => cancel(item));
         headerChildren.push(cancelButton);
       }
@@ -335,6 +338,7 @@ export function createTaskPanel({ container, detailContainer, summary, store, de
         ]),
       ]));
     }
+    syncCancelButtons();
     restoreView(container, view, document.querySelector("#tasks-tab"));
   }
 
