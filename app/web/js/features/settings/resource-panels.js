@@ -63,6 +63,29 @@ function resourceCode(value) {
   return key ? t(key, {}, String(value)) : String(value);
 }
 
+const PERMISSION_PROFILE_KEYS = Object.freeze({
+  "read-only": "shell.permission.readOnly",
+  balanced: "shell.permission.balanced",
+  "full-access": "shell.permission.fullAccess",
+});
+
+function permissionProfile(value) {
+  const key = Object.hasOwn(PERMISSION_PROFILE_KEYS, value)
+    ? PERMISSION_PROFILE_KEYS[value] : "";
+  return key ? t(key, {}, value) : String(value ?? "");
+}
+
+function skillMetadata(skill) {
+  const meta = [resourceCode(skill.trust)];
+  if (skill.external && skill.trust !== "external_reference")
+    meta.push(t("resource.external", {}, "外部"));
+  if (!skill.external && skill.trust !== "builtin")
+    meta.push(t("resource.builtin", {}, "内置"));
+  meta.push(t("resource.tokenCount", { count: skill.estimated_tokens },
+    `${skill.estimated_tokens} tokens`));
+  return meta;
+}
+
 export function createResourcePanels({ agentsStore, stores, reload }) {
   const modelsContainer = document.querySelector("#settings-models-list");
   const extensionsContainer = document.querySelector("#settings-extensions-list");
@@ -93,15 +116,14 @@ export function createResourcePanels({ agentsStore, stores, reload }) {
     }
     extensionsContainer.append(heading("Agent"));
     for (const agent of agentsStore.get().data?.items ?? []) {
-      extensionsContainer.append(card(agent.name || agent.id, agent.description, [agent.id, agent.permission_profile,
+      extensionsContainer.append(card(agent.name || agent.id, agent.description, [agent.id, permissionProfile(agent.permission_profile),
         t("resource.toolCount", { count: agent.tools?.length ?? 0 }, `${agent.tools?.length ?? 0} tools`),
         t("resource.skillCount", { count: agent.skills?.length ?? 0 }, `${agent.skills?.length ?? 0} Skills`)]));
     }
     extensionsContainer.append(heading("Skill", action(t("resource.refresh", {}, "刷新"), () => refreshCatalog("skills"))));
     for (const skill of skills.data?.items ?? []) {
-      extensionsContainer.append(card(skill.name || skill.id, skill.description, [resourceCode(skill.trust),
-        skill.external ? t("resource.external", {}, "外部") : t("resource.builtin", {}, "内置"),
-        t("resource.tokenCount", { count: skill.estimated_tokens }, `${skill.estimated_tokens} tokens`)]));
+      extensionsContainer.append(card(skill.name || skill.id, skill.description,
+        skillMetadata(skill)));
     }
     extensionsContainer.append(heading("Module", action(t("resource.rebuild", {}, "重新编译"), () => refreshCatalog("modules"))));
     for (const module of modules.data?.modules ?? []) {
