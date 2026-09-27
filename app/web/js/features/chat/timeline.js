@@ -694,7 +694,7 @@ export function createTimelineView({ container, welcome, toBottom, store, sessio
   });
   return Object.freeze({
     follow() { followTail = true; },
-    externalContentChanged(wasAtBottom) {
+    externalContentChanged(wasAtBottom = followTail) {
       followTail = Boolean(wasAtBottom);
       if (followTail && !searchQuery && pendingState.data?.sessionId)
         scroller.scrollTop = scroller.scrollHeight;

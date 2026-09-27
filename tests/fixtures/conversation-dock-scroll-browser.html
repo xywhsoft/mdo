@@ -37,16 +37,21 @@ const timeline = createTimelineView({
   onFork() {}, onFeedback() {}, onEdit() {}, onRetry() {},
 });
 const todoStore = store({ projectId: "qa", sessionId: "scroll", items: [] });
+const approvalsStore = store({ items: [] });
+const runsStore = store({ items: [] });
 createConversationDocks({
   container: document.querySelector("#conversation-docks"), navigation,
-  tasksStore: store({ items: [] }), approvalsStore: store({ items: [] }),
+  tasksStore: store({ items: [] }), approvalsStore,
   asksStore: store({ projectId: "qa", sessionId: "scroll", items: [] }),
-  runsStore: store({ items: [] }), todoStore,
+  runsStore, todoStore,
   onOpenTasks() {}, onChanged: async () => {},
   onLayoutChange: (wasAtBottom) => timeline.externalContentChanged(wasAtBottom),
 });
 
-requestAnimationFrame(() => requestAnimationFrame(() => {
+const nextFrame = () => new Promise((resolve) => requestAnimationFrame(resolve));
+async function check() {
+  await nextFrame();
+  await nextFrame();
   const scroller = document.querySelector(".conversation");
   const button = document.querySelector("#to-bottom");
   const item = { text: "审批前核对", done: false };
@@ -60,10 +65,26 @@ requestAnimationFrame(() => requestAnimationFrame(() => {
   scroller.scrollTop = 0;
   todoStore.setData({ projectId: "qa", sessionId: "scroll", items: [item] });
   const preserved = scroller.scrollTop === 0 && !button.hidden;
+  todoStore.setData({ projectId: "qa", sessionId: "scroll", items: [] });
+  runsStore.setData({ items: [{ agent_run_id: 3, project_id: "qa", session_id: "scroll" }] });
+  approvalsStore.setData({ items: [{ id: 7, run_id: 3, tool: "exec",
+    risk: "high", effects: ["process"], resources: [],
+    arguments_json: '{"argv":["python","-c","print(1)"]}' }] });
+  scroller.scrollTop = scroller.scrollHeight;
+  await nextFrame();
+  document.querySelector(".approval-arguments summary").click();
+  await nextFrame();
+  await nextFrame();
+  const allow = [...document.querySelectorAll(".conversation-dock-actions button")].at(-1);
+  const expandedPinned = scroller.scrollHeight - scroller.scrollTop -
+    scroller.clientHeight <= 1 &&
+    allow.getBoundingClientRect().bottom <= scroller.getBoundingClientRect().bottom &&
+    button.hidden;
   const result = document.querySelector("#result");
-  result.dataset.passed = String(pinned && preserved);
-  result.textContent = JSON.stringify({ pinned, preserved,
+  result.dataset.passed = String(pinned && preserved && expandedPinned);
+  result.textContent = JSON.stringify({ pinned, preserved, expandedPinned,
     scrollTop: scroller.scrollTop, bottomButtonVisible: !button.hidden });
-}));
+}
+void check();
 </script>
 </html>

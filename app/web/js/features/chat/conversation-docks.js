@@ -212,6 +212,7 @@ export function createConversationDocks({ container, navigation, tasksStore, app
   const askRoot = element("div", { className: "conversation-dock-stack" });
   container.append(otherRoot, askRoot);
   const scroller = container.closest(".conversation");
+  let dockHeight = container.getBoundingClientRect().height;
 
   function render() {
     const oldHeight = scroller?.scrollHeight;
@@ -295,6 +296,7 @@ export function createConversationDocks({ container, navigation, tasksStore, app
       !approvals.length && !asks.length;
     if (scroller && scroller.scrollHeight !== oldHeight)
       onLayoutChange?.(wasAtBottom);
+    dockHeight = container.getBoundingClientRect().height;
   }
 
   const unsubscribers = [
@@ -305,5 +307,17 @@ export function createConversationDocks({ container, navigation, tasksStore, app
     todoStore.subscribe(render),
     subscribeLocale(render),
   ];
-  return () => unsubscribers.forEach((unsubscribe) => unsubscribe());
+  // <details> and validation hints can grow a card without a store render.
+  const resizeObserver = typeof ResizeObserver === "function" && onLayoutChange
+    ? new ResizeObserver(() => {
+      const height = container.getBoundingClientRect().height;
+      if (height === dockHeight) return;
+      dockHeight = height;
+      onLayoutChange();
+    }) : null;
+  resizeObserver?.observe(container);
+  return () => {
+    resizeObserver?.disconnect();
+    unsubscribers.forEach((unsubscribe) => unsubscribe());
+  };
 }
