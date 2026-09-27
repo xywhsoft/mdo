@@ -45,6 +45,7 @@ import { createComposerProject } from "./features/chat/composer-project.js";
 import { createImagePreview } from "./features/chat/image-preview.js";
 import { createSlashCommands } from "./features/chat/slash-commands.js";
 import { createFileMentions } from "./features/chat/file-mentions.js";
+import { trackComposerMenuRoom } from "./features/chat/composer-menu-room.js";
 import { createComposerProfile, fillReasoningOptions } from "./features/chat/composer-profile.js";
 import { createTokenMeter } from "./features/chat/token-meter.js";
 import { createTaskPanel } from "./features/tasks/task-panel.js";
@@ -104,6 +105,7 @@ export async function boot() {
   shell.dataset.inspector = "closed";
   const prompt = $("#prompt");
   const composer = $("#composer");
+  trackComposerMenuRoom(composer);
   const send = $("#send");
   const stop = $("#stop");
   const composerError = $("#composer-error");
