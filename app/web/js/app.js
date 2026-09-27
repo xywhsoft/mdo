@@ -1212,6 +1212,7 @@ export async function boot() {
   }
 
   navigation.subscribe(async ({ view, projectId, sessionId, settingsSection }) => {
+    shell.toggleAttribute("data-settings-open", view === "settings");
     updateExportButtons();
     if (pendingForkComposerFocus &&
         (view !== "workspace" || `${projectId}/${sessionId}` !== pendingForkComposerFocus))

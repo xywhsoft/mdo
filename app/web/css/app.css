@@ -1307,6 +1307,7 @@ select:focus-visible,
   :root { --header-height: 52px; }
   .app-shell { grid-template-columns: minmax(0, 1fr); grid-template-rows: 52px minmax(0, 1fr); }
   .app-shell[data-sidebar="closed"] { grid-template-columns: minmax(0, 1fr); }
+  .app-shell[data-settings-open] { grid-template-rows: minmax(0, 1fr); }
   .pane-resize-handle { display: none; }
   .mobile-bar {
     position: relative;
@@ -1319,6 +1320,7 @@ select:focus-visible,
     border-bottom: 1px solid var(--border);
     background: var(--surface-raised);
   }
+  .app-shell[data-settings-open] .mobile-bar { display: none; }
   .mobile-title { display: grid; min-width: 0; text-align: center; }
   .mobile-title strong, .mobile-title span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .mobile-title strong { font-size: 13px; }
@@ -1336,6 +1338,7 @@ select:focus-visible,
   .app-shell[data-sidebar="open"] .sidebar { transform: translateX(0); }
   .sidebar-close { display: inline-grid; }
   .workspace { grid-column: 1; grid-row: 2; min-height: 0; }
+  .app-shell[data-settings-open] .workspace { grid-row: 1; }
   .workspace-header { display: none; }
   .workspace { grid-template-rows: minmax(0, 1fr) auto; }
   .conversation { grid-row: 1; }
@@ -1396,7 +1399,8 @@ select:focus-visible,
   .shortcuts-content dd { text-align: left; }
   .settings-workspace { grid-row: 1 / -1; }
   .settings-layout { display: block; overflow: auto; }
-  .settings-navigation { display: flex; min-height: 48px; overflow-x: auto; padding: 7px 10px; border-right: 0; border-bottom: 1px solid var(--border); }
+  .settings-navigation { position: sticky; top: 0; z-index: 2; display: flex; min-height: 48px; overflow-x: auto; scrollbar-width: none; padding: 4px 10px; border-right: 0; border-bottom: 1px solid var(--border); }
+  .settings-navigation::-webkit-scrollbar { display: none; }
   .settings-navigation p { display: none; }
   .settings-navigation button { width: auto; min-width: max-content; min-height: 40px; }
   .settings-content { overflow: visible; }
@@ -1445,6 +1449,11 @@ select:focus-visible,
   .settings-action-buttons button { min-width: 0; padding-inline: 2px; font-size: 11px; white-space: nowrap; }
   .settings-action-full { display: none; }
   .settings-action-compact { display: inline; }
+}
+
+@media (max-width: 760px) and (max-height: 300px) {
+  .settings-navigation { position: static; }
+  .setting-instructions textarea { min-height: 80px; height: 80px; }
 }
 
 @media (max-width: 420px) {
