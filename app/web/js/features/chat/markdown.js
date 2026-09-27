@@ -87,10 +87,17 @@ export function renderMarkdown(source) {
       head.append(element("span", { text: fence[1] || "text" }));
       const copy = element("button", { text: t("markdown.copyCode", {}, "复制代码"),
         attrs: { type: "button" } });
+      let resetCopyLabel;
       copy.addEventListener("click", async () => {
-        try { await navigator.clipboard.writeText(code.join("\n"));
-          copy.textContent = t("markdown.copied", {}, "已复制"); }
-        catch { copy.textContent = t("markdown.copyFailed", {}, "复制失败"); }
+        try {
+          await navigator.clipboard.writeText(code.join("\n"));
+          copy.textContent = t("markdown.copied", {}, "已复制");
+        } catch { copy.textContent = t("markdown.copyFailed", {}, "复制失败"); }
+        clearTimeout(resetCopyLabel);
+        resetCopyLabel = setTimeout(() => {
+          if (copy.isConnected)
+            copy.textContent = t("markdown.copyCode", {}, "复制代码");
+        }, 1200);
       });
       head.append(copy);
       block.append(head, element("pre", {}, [element("code", { text: code.join("\n") })]));
