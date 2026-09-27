@@ -641,6 +641,12 @@ bool MdoApiAttachmentRoute(MdoApiContext* Context)
                 "Image storage is unavailable", NULL);
         Result = MdoAttachmentDiscardLocked(Project, Session, Id);
         MdoApiAttachmentUnlock();
+        if ( (Result == MDO_ATTACHMENT_DISCARD_REMOVED ||
+              Result == MDO_ATTACHMENT_DISCARD_MISSING) &&
+             !MdoApiQueueDiscardAcknowledged(Project, Session, Id) )
+            return MdoApiReplyError(Context, 503u,
+                "queue_unavailable", "Image cleanup could not be recorded",
+                NULL);
         if ( Result == MDO_ATTACHMENT_DISCARD_ERROR )
             return MdoApiReplyError(Context, 503u,
             "attachment_unavailable",

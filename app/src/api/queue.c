@@ -12,6 +12,7 @@
 #define MDO_QUEUE_FILE_MAX (256u * 1024u)
 #define MDO_QUEUE_ID_SIZE 32u
 #define MDO_QUEUE_RECEIPT_FILE_MAX 512u
+#define MDO_QUEUE_DISCARD_MAX 256u
 
 typedef enum MdoQueueState {
     MDO_QUEUE_STAGED,
@@ -35,6 +36,8 @@ typedef struct MdoQueue {
     MdoQueueItem Items[MDO_QUEUE_MAX_ITEMS];
     size_t Count;
     size_t TextBytes;
+    char DiscardImages[MDO_QUEUE_DISCARD_MAX][33];
+    size_t DiscardCount;
 } MdoQueue;
 
 static xmutex* g_MdoQueueLock;
@@ -90,6 +93,22 @@ static bool MdoQueueId(xstrview View,
     }
     memcpy(Output, View.Data, View.Size);
     Output[View.Size] = '\0';
+    return true;
+}
+
+static size_t MdoQueueDiscardFind(const MdoQueue* Queue, const char* Id)
+{
+    size_t i;
+    for ( i = 0u; i < Queue->DiscardCount; ++i )
+        if ( strcmp(Queue->DiscardImages[i], Id) == 0 ) return i;
+    return SIZE_MAX;
+}
+
+static bool MdoQueueDiscardAdd(MdoQueue* Queue, const char* Id)
+{
+    if ( MdoQueueDiscardFind(Queue, Id) != SIZE_MAX ) return true;
+    if ( Queue->DiscardCount == MDO_QUEUE_DISCARD_MAX ) return false;
+    memcpy(Queue->DiscardImages[Queue->DiscardCount++], Id, 33u);
     return true;
 }
 
@@ -320,13 +339,13 @@ static bool MdoQueueRead(const char* Path, const char* ProjectId,
     xrtJsonReadConfigInit(&Config);
     Config.MaxInputBytes = MDO_QUEUE_FILE_MAX;
     Config.MaxDepth = 5u;
-    Config.MaxValues = 256u;
-    Config.MaxContainerItems = MDO_QUEUE_MAX_ITEMS;
+    Config.MaxValues = 512u;
+    Config.MaxContainerItems = MDO_QUEUE_DISCARD_MAX;
     Root = xrtJsonRead(xrtStrViewN(Bytes, (size_t)Info.Size), &Config);
     Items = Root != NULL ? xrtValueObjectGet(Root,
         XRT_STR_LITERAL("items")) : NULL;
     if ( xrtValueType(Root) != XVALUE_OBJECT ||
-         xrtValueCount(Root) != 2u ||
+         (xrtValueCount(Root) != 2u && xrtValueCount(Root) != 3u) ||
          xrtValueType(Items) != XVALUE_ARRAY ||
          xrtValueCount(Items) > MDO_QUEUE_MAX_ITEMS ) goto done;
     {
@@ -339,7 +358,24 @@ static bool MdoQueueRead(const char* Path, const char* ProjectId,
             if ( !xrtValueGetInt(Version, &Signed) || Signed < 0 ) goto done;
             Schema = (uint64)Signed;
         } else goto done;
-        if ( Schema < 1u || Schema > 5u ) goto done;
+        if ( Schema < 1u || Schema > 6u ) goto done;
+    }
+    if ( xrtValueCount(Root) != (Schema == 6u ? 3u : 2u) ) goto done;
+    if ( Schema == 6u ) {
+        const xvalue* Discard = xrtValueObjectGet(Root,
+            XRT_STR_LITERAL("discard_images"));
+        if ( xrtValueType(Discard) != XVALUE_ARRAY ||
+             xrtValueCount(Discard) > MDO_QUEUE_DISCARD_MAX ) goto done;
+        for ( i = 0u; i < xrtValueCount(Discard); ++i ) {
+            xstrview Id;
+            char Checked[33];
+            const xvalue* Value = xrtValueArrayGet(Discard, i);
+            if ( xrtValueType(Value) != XVALUE_STRING ||
+                 !xrtValueGetString(Value, &Id) ||
+                 !MdoQueueId(Id, Checked) ||
+                 MdoQueueDiscardFind(Queue, Checked) != SIZE_MAX ||
+                 !MdoQueueDiscardAdd(Queue, Checked) ) goto done;
+        }
     }
     for ( i = 0u; i < xrtValueCount(Items); ++i ) {
         const xvalue* Entry = xrtValueArrayGet(Items, i);
@@ -360,7 +396,7 @@ static bool MdoQueueRead(const char* Path, const char* ProjectId,
         if ( xrtValueType(Entry) != XVALUE_OBJECT ||
              xrtValueCount(Entry) != (Schema == 1u ? 3u :
                 (Schema == 2u ? 4u : 5u +
-                    (Schema == 5u && RunIdValue != NULL ? 1u : 0u))) ||
+                    (Schema >= 5u && RunIdValue != NULL ? 1u : 0u))) ||
              !MdoQueueString(Entry, "id", &Id) ||
              !MdoQueueString(Entry, "text", &Text) ||
              !MdoQueueString(Entry, "state", &StateView) ||
@@ -374,7 +410,7 @@ static bool MdoQueueRead(const char* Path, const char* ProjectId,
              !MdoQueueText(Text, AttachmentCount != 0u) ||
              !MdoQueueParseState(StateView, Schema >= 4u, &State) ||
              (RunIdValue != NULL &&
-              (Schema != 5u || State != MDO_QUEUE_SENDING ||
+              (Schema < 5u || State != MDO_QUEUE_SENDING ||
                xrtValueType(RunIdValue) != XVALUE_STRING ||
                !xrtValueGetString(RunIdValue, &RunIdView) ||
                !MdoQueueRunId(RunIdView, RunId))) ||
@@ -436,8 +472,9 @@ static xvalue* MdoQueueValue(const MdoQueue* Queue, bool IncludeClaim)
 {
     xvalue* Root = xrtValueObject();
     xvalue* Items = xrtValueArray();
+    xvalue* Discard = xrtValueArray();
     size_t i;
-    bool Ok = Root != NULL && Items != NULL;
+    bool Ok = Root != NULL && Items != NULL && Discard != NULL;
     for ( i = 0u; Ok && i < Queue->Count; ++i ) {
         const MdoQueueItem* Source = &Queue->Items[i];
         xvalue* Item = xrtValueObject();
@@ -460,7 +497,11 @@ static xvalue* MdoQueueValue(const MdoQueue* Queue, bool IncludeClaim)
         xrtValueRelease(Item);
     }
     if ( Ok ) Ok = MdoApiValueSetTake(Root, "items", &Items);
+    for ( i = 0u; Ok && i < Queue->DiscardCount; ++i )
+        Ok = MdoApiValueAppendString(Discard, Queue->DiscardImages[i]);
+    if ( Ok ) Ok = MdoApiValueSetTake(Root, "discard_images", &Discard);
     xrtValueRelease(Items);
+    xrtValueRelease(Discard);
     if ( !Ok ) { xrtValueRelease(Root); return NULL; }
     return Root;
 }
@@ -471,7 +512,7 @@ static bool MdoQueueWrite(const char* Path, const MdoQueue* Queue)
     char* Json;
     size_t Size = 0u;
     bool Ok;
-    if ( Data == NULL || !MdoApiValueSetUInt(Data, "schema_version", 5u) ) {
+    if ( Data == NULL || !MdoApiValueSetUInt(Data, "schema_version", 6u) ) {
         xrtValueRelease(Data);
         return false;
     }
@@ -480,6 +521,44 @@ static bool MdoQueueWrite(const char* Path, const MdoQueue* Queue)
         MdoHomeAtomicWrite(Path, Json, Size, false);
     xrtFree(Json);
     xrtValueRelease(Data);
+    return Ok;
+}
+
+/* Attachment DELETE already serialized its reference check. A failed marker
+ * write leaves the deleted image missing, so retrying DELETE can acknowledge
+ * the durable marker without touching another attachment. */
+bool MdoApiQueueDiscardAcknowledged(const char* ProjectId,
+    const char* SessionId, const char* Id)
+{
+    char Path[MDO_SESSION_PATH_CAPACITY];
+    char Checked[33];
+    MdoQueue Queue;
+    size_t Index;
+    bool Ok;
+    int Written;
+    if ( ProjectId == NULL || SessionId == NULL || Id == NULL ||
+         !MdoQueueId(xrtStrView(Id), Checked) ) return false;
+    Written = snprintf(Path, sizeof(Path), "sessions/%s/%s/queue.json",
+        ProjectId, SessionId);
+    if ( Written <= 0 || (size_t)Written >= sizeof(Path) ) return false;
+    xrtMutexLock(g_MdoQueueLock);
+    Ok = MdoQueueRead(Path, ProjectId, SessionId, &Queue);
+    if ( Ok ) {
+        Index = MdoQueueDiscardFind(&Queue, Checked);
+        if ( Index != SIZE_MAX ) {
+            --Queue.DiscardCount;
+            if ( Index < Queue.DiscardCount )
+                memmove(&Queue.DiscardImages[Index],
+                    &Queue.DiscardImages[Index + 1u],
+                    (Queue.DiscardCount - Index) *
+                    sizeof(Queue.DiscardImages[0]));
+            memset(&Queue.DiscardImages[Queue.DiscardCount], 0,
+                sizeof(Queue.DiscardImages[0]));
+            Ok = MdoQueueWrite(Path, &Queue);
+        }
+        MdoQueueRelease(&Queue);
+    }
+    xrtMutexUnlock(g_MdoQueueLock);
     return Ok;
 }
 
@@ -819,6 +898,7 @@ bool MdoApiQueueItemRoute(MdoApiContext* Context)
         Context->Request->head->MethodCode == XHTTP_METHOD_HEAD;
     bool Ok;
     bool Conflict = false;
+    bool CleanupFull = false;
     size_t Index;
 
     if ( !MdoQueuePath(Context, Path, &SessionStatus,
@@ -904,7 +984,19 @@ bool MdoApiQueueItemRoute(MdoApiContext* Context)
             if ( Queue.Items[Index].RunId[0] != '\0' )
                 Ok = MdoQueueReceiptWrite(ProjectId, SessionId, Id,
                     Queue.Items[Index].RunId);
-            if ( Ok ) {
+            if ( Ok && Queue.Items[Index].RunId[0] == '\0' &&
+                 !Queue.Items[Index].StartClaimed ) {
+                size_t ImageIndex;
+                for ( ImageIndex = 0u;
+                      ImageIndex < Queue.Items[Index].AttachmentCount;
+                      ++ImageIndex )
+                    if ( !MdoQueueDiscardAdd(&Queue,
+                            Queue.Items[Index].Attachments[ImageIndex]) ) {
+                        CleanupFull = true;
+                        break;
+                    }
+            }
+            if ( Ok && !CleanupFull ) {
                 Queue.TextBytes -= Queue.Items[Index].TextSize;
                 xrtFree(Queue.Items[Index].Text);
                 if ( Index + 1u < Queue.Count )
@@ -919,6 +1011,9 @@ bool MdoApiQueueItemRoute(MdoApiContext* Context)
     xrtMutexUnlock(g_MdoQueueLock);
     if ( !Ok ) { MdoQueueRelease(&Queue); return MdoApiReplyError(Context,
         503u, "queue_unavailable", "The queue could not be read or saved", NULL); }
+    if ( CleanupFull ) { MdoQueueRelease(&Queue); return MdoApiReplyError(
+        Context, 507u, "queue_cleanup_full",
+        "Too many cancelled images are awaiting cleanup", NULL); }
     if ( Conflict ) { MdoQueueRelease(&Queue); return MdoApiReplyError(Context,
         409u, "queue_state_conflict", "The queue item changed state", NULL); }
     return MdoQueueReply(Context, 200u, &Queue);

@@ -2487,7 +2487,7 @@ def run_probe(host: Path) -> None:
                 queue_file = home / "sessions/api-project" / session_id / "queue.json"
                 status, _, body = request(port, "GET", queue_path)
                 assert status == 200 and json.loads(body)["data"] == {
-                    "items": []}, (status, body)
+                    "items": [], "discard_images": []}, (status, body)
                 assert not queue_file.exists(), queue_file
                 first_id = "a" * 32
                 second_id = "b" * 32
@@ -2588,7 +2588,7 @@ def run_probe(host: Path) -> None:
                     "attachments": [image["id"]], "priority": False,
                 }], (status, body)
                 assert json.loads(queue_file.read_text(encoding="utf-8"))[
-                    "schema_version"] == 5
+                    "schema_version"] == 6
                 status, _, body = request(port, "DELETE", image["url"])
                 assert status == 409 and json.loads(body)["error"][
                     "code"] == "attachment_in_use", (status, body)
@@ -2607,11 +2607,25 @@ def run_probe(host: Path) -> None:
                 assert status == 422, (status, body)
                 status, _, body = request(port, "DELETE",
                     queue_path + "/" + image_item_id)
-                assert status == 200 and json.loads(body)["data"]["items"] == [], (
-                    status, body)
+                assert status == 200 and json.loads(body)["data"] == {
+                    "items": [], "discard_images": [image["id"]]}, (status, body)
+                assert json.loads(queue_file.read_text(encoding="utf-8"))[
+                    "discard_images"] == [image["id"]]
                 status, _, body = request(port, "DELETE", image["url"])
                 assert status == 200 and request(port, "GET", image["url"])[0] == (
                     404), (status, body)
+                assert json.loads(request(port, "GET", queue_path)[2])[
+                    "data"]["discard_images"] == []
+                # Crash recovery: a deleted image may still have a marker if
+                # the host stopped between file deletion and acknowledgement.
+                queue_file.write_text(json.dumps({"schema_version": 6,
+                    "items": [], "discard_images": [image["id"]]}),
+                    encoding="utf-8")
+                status, _, body = request(port, "DELETE", image["url"])
+                assert status == 404 and json.loads(body)["error"][
+                    "code"] == "attachment_not_found", (status, body)
+                assert json.loads(queue_file.read_text(encoding="utf-8"))[
+                    "discard_images"] == []
                 legacy_id = "f" * 32
                 queue_file.write_text(json.dumps({"schema_version": 2,
                     "items": [{"id": legacy_id, "text": "legacy prompt",
@@ -2623,7 +2637,7 @@ def run_probe(host: Path) -> None:
                 status, _, body = queue_request("POST", queue_path,
                     {"id": "1" * 32, "text": "new prompt", "first": False})
                 assert status == 201 and json.loads(queue_file.read_text(
-                    encoding="utf-8"))["schema_version"] == 5, (status, body)
+                    encoding="utf-8"))["schema_version"] == 6, (status, body)
                 for item_id in (legacy_id, "1" * 32):
                     assert request(port, "DELETE", queue_path + "/" + item_id)[0] == 200
                 queue_file.write_text(json.dumps({"schema_version": 3,
@@ -3810,7 +3824,7 @@ def run_probe(host: Path) -> None:
                 queued = json.loads(request(port, "GET", queue_path)[2])["data"]
                 assert queued["items"][0]["run_id"] == bound_run_id, queued
                 stored = json.loads(queue_file.read_text(encoding="utf-8"))
-                assert stored["schema_version"] == 5 and stored["items"][
+                assert stored["schema_version"] == 6 and stored["items"][
                     0]["run_id"] == bound_run_id, stored
                 status, _, body = queue_request("PUT", bound_path,
                     {"state": "pending"})

@@ -122,6 +122,8 @@ bool MdoApiQueueInit(void);
 void MdoApiQueueUnit(void);
 bool MdoApiQueueAttachmentReferenced(const char* ProjectId,
     const char* SessionId, const char* Id, bool* Referenced);
+bool MdoApiQueueDiscardAcknowledged(const char* ProjectId,
+    const char* SessionId, const char* Id);
 typedef enum MdoApiQueueRunStatus {
     MDO_API_QUEUE_RUN_READY,
     MDO_API_QUEUE_RUN_CONFLICT,

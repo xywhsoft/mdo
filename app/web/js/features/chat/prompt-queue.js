@@ -57,7 +57,10 @@ export function createPromptQueue({ container, navigation, isRunActive, stagedEn
     const version = versions.get(key) ?? 0;
     const request = (async () => {
       const response = await api.get(path(key));
-      if ((versions.get(key) ?? 0) === version) update(key, response);
+      if ((versions.get(key) ?? 0) === version) {
+        update(key, response);
+        unusedImages.remember(key, response.data?.discard_images);
+      }
     })();
     loads.set(key, request);
     try { await request; }
