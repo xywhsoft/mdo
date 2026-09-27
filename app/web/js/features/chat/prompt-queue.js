@@ -120,6 +120,13 @@ export function createPromptQueue({ container, navigation, isRunActive, stagedEn
     const entries = [...saved, ...staged];
     const focused = container.dataset.queueKey === key &&
       container.contains(document.activeElement) ? document.activeElement : null;
+    const previousList = container.dataset.queueKey === key &&
+      !container.hidden ? container.querySelector("#prompt-queue-list") : null;
+    const scroll = previousList && !previousList.hidden ? {
+      top: previousList.scrollTop,
+      atBottom: previousList.scrollHeight - previousList.clientHeight -
+        previousList.scrollTop <= 8,
+    } : null;
     const focusKey = focused?.dataset.queueFocus;
     const imageRef = focused?.dataset.imageRef;
     const focusIndex = Number(focused?.dataset.queueIndex ?? 0);
@@ -255,6 +262,8 @@ export function createPromptQueue({ container, navigation, isRunActive, stagedEn
       ]));
     }
     container.append(list);
+    if (scroll && !list.hidden)
+      list.scrollTop = scroll.atBottom ? list.scrollHeight : scroll.top;
     if (focused) {
       const removes = [...list.querySelectorAll("button[data-queue-index]")];
       const target = focusKey === "toggle" ? toggle :

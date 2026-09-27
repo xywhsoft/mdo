@@ -454,7 +454,7 @@ parser.add_argument("--fail-first-queue-reconcile", action="store_true",
 parser.add_argument("--reject-pane-layout", action="store_true",
                     help="reject layout GET/PUT for localized error feedback QA")
 parser.add_argument("--slow-ms", type=int, default=15000,
-                    help="first SLOW UI model response delay, 0-15000 ms")
+                    help="first SLOW UI model response delay, 0-30000 ms")
 parser.add_argument("--model-delay-ms", type=int, default=0,
                     help="delay regular fixture model responses, 0-5000 ms")
 parser.add_argument("--task-ms", type=int, default=12000,
@@ -482,8 +482,8 @@ if not 0 <= args.drop_run_response_number <= 3:
     parser.error("--drop-run-response-number must be between 0 and 3")
 if args.drop_first_run_response and args.drop_run_response_number:
     parser.error("choose only one run response drop option")
-if not 0 <= args.slow_ms <= 15000:
-    parser.error("--slow-ms must be between 0 and 15000")
+if not 0 <= args.slow_ms <= 30000:
+    parser.error("--slow-ms must be between 0 and 30000")
 if not 0 <= args.model_delay_ms <= 5000:
     parser.error("--model-delay-ms must be between 0 and 5000")
 if not 0 <= args.task_ms <= 30000:

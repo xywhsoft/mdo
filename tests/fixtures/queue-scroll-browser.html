@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="zh-CN">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>mdo queue scroll probe</title>
+<link rel="stylesheet" href="/app/web/css/app.css">
+<style>
+  body { padding: 20px; }
+  #queue { width: 280px; }
+  #queue .prompt-queue-list { height: 90px; overflow-y: auto; }
+  #queue .prompt-queue-list li { min-height: 65px; }
+</style>
+<textarea id="prompt"></textarea>
+<div id="queue"></div>
+<pre id="result"></pre>
+<script type="module">
+import { createPromptQueue } from "/app/web/js/features/chat/prompt-queue.js";
+
+const container = document.querySelector("#queue");
+const output = document.querySelector("#result");
+const originalFetch = window.fetch;
+let route = { projectId: "qa", sessionId: "first" };
+let staged = [];
+const listeners = [];
+window.fetch = async (url) => {
+  const second = String(url).includes("/sessions/second/");
+  const items = (second ? ["Other session"] : ["First item", "Second item"])
+    .map((text, index) => ({ id: `item-${index}`, text, state: "pending",
+      attachments: [], priority: false }));
+  return new Response(JSON.stringify({ ok: true, data: { items } }), {
+    status: 200, headers: { "Content-Type": "application/json" },
+  });
+};
+try {
+  const queue = createPromptQueue({ container,
+    navigation: { get: () => route, subscribe: (listener) => listeners.push(listener) },
+    stagedEntries: () => staged, isRunActive: () => true,
+  });
+  await queue.select("qa", "first");
+  let list = container.querySelector(".prompt-queue-list");
+  list.scrollTop = 20;
+  const middleBefore = list.scrollTop;
+  staged.push({ staged: true, text: "Third item" });
+  queue.render();
+  list = container.querySelector(".prompt-queue-list");
+  const middleAfter = list.scrollTop;
+  list.scrollTop = list.scrollHeight;
+  const bottomBefore = list.scrollTop;
+  staged.push({ staged: true, text: "Fourth item" });
+  queue.render();
+  list = container.querySelector(".prompt-queue-list");
+  const bottomAfter = list.scrollTop;
+  const newBottom = list.scrollHeight - list.clientHeight;
+  staged = [];
+  route = { projectId: "qa", sessionId: "second" };
+  listeners.forEach((listener) => listener(route));
+  await queue.select("qa", "second");
+  list = container.querySelector(".prompt-queue-list");
+  const otherSessionTop = list.scrollTop;
+  const passed = middleBefore === 20 && middleAfter === middleBefore &&
+    bottomBefore > middleBefore && bottomAfter === newBottom &&
+    newBottom > bottomBefore && otherSessionTop === 0;
+  output.dataset.passed = String(passed);
+  output.textContent = JSON.stringify({ passed, middleBefore, middleAfter,
+    bottomBefore, bottomAfter, newBottom, otherSessionTop }, null, 2);
+} catch (error) {
+  output.dataset.passed = "false";
+  output.textContent = error.stack ?? String(error);
+} finally { window.fetch = originalFetch; }
+</script>
+</html>
