@@ -253,21 +253,30 @@ export async function boot() {
     control: $(control), button: $(button), menu: $(menu), navigation,
     store: sessionDetailStore, onAction: handleSessionAction,
   }));
+  function switchToProject(projectId) {
+    showActiveSessions();
+    navigation.newTask(projectId);
+    closeDrawers();
+    prompt.focus();
+  }
   const headerProjectSwitcher = createProjectSwitcher({
     control: $("#header-project-control"), button: $("#header-project-switch"),
     name: $("#header-project-name"), separator: $("#session-title-separator"),
     menu: $("#header-project-menu"), navigation, projectsStore,
-    onSelectProject(projectId) {
-      showActiveSessions();
-      navigation.newTask(projectId);
-      closeDrawers();
-      prompt.focus();
-    },
+    onSelectProject: switchToProject,
+    onManageProjects() { navigation.openSettings("projects"); },
+  });
+  const mobileProjectSwitcher = createProjectSwitcher({
+    control: $("#mobile-project-control"), button: $("#mobile-project-switch"),
+    name: $("#mobile-project-name"), menu: $("#mobile-project-menu"),
+    navigation, projectsStore, includeNewTask: true,
+    onSelectProject: switchToProject,
     onManageProjects() { navigation.openSettings("projects"); },
   });
   mobileLayout.addEventListener("change", () => {
     for (const menu of actionMenus) menu.close();
     headerProjectSwitcher.close();
+    mobileProjectSwitcher.close();
   });
   function showActiveSessions() {
     $("#session-search").value = "";
@@ -1013,7 +1022,7 @@ export async function boot() {
       const statusText = sessionStatusSuffix(session.status);
       sessionSubtitle.textContent = `${session.agent_id} · ${session.model_id}${statusText}`;
       mobileTitle.textContent = title;
-      mobileMeta.textContent = `${session.model_id || session.agent_id}${statusText}`;
+      mobileMeta.textContent = statusText;
     }
     syncWorkspaceChip();
     updateContext(state);
@@ -1043,7 +1052,7 @@ export async function boot() {
     if (session && selectedKey === `${session.project_id}/${session.id}`) {
       const statusText = sessionStatusSuffix(session.status);
       sessionSubtitle.textContent = `${session.agent_id} · ${session.model_id}${statusText}`;
-      mobileMeta.textContent = `${session.model_id || session.agent_id}${statusText}`;
+      mobileMeta.textContent = statusText;
       if (!session.title) {
         sessionTitle.textContent = t("nav.untitled");
         mobileTitle.textContent = t("nav.untitled");
@@ -1053,6 +1062,7 @@ export async function boot() {
       sessionSubtitle.textContent = t("shell.newTaskSubtitle", {
         project: $("#composer-project").value || "default" });
       mobileTitle.textContent = t("shell.newTask");
+      mobileMeta.textContent = "";
     }
   });
 
@@ -1332,7 +1342,7 @@ export async function boot() {
       sessionTitle.textContent = t("shell.newTask");
       sessionSubtitle.textContent = t("shell.newTaskSubtitle", { project });
       mobileTitle.textContent = t("shell.newTask");
-      mobileMeta.textContent = project;
+      mobileMeta.textContent = "";
       syncWorkspaceChip();
     }
     // Returning from Settings may keep the same selected session, so refresh

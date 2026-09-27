@@ -1360,9 +1360,18 @@ select:focus-visible,
   }
   .app-shell[data-settings-open] .mobile-bar { display: none; }
   .mobile-title { display: grid; min-width: 0; text-align: center; }
-  .mobile-title strong, .mobile-title span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .mobile-title { position: relative; }
+  .mobile-title strong, .mobile-project-meta { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .mobile-title strong { font-size: 13px; }
-  .mobile-title span { color: var(--muted); font-size: 10px; }
+  .mobile-title-project { display: grid; min-width: 0; min-height: 40px; align-content: center; gap: 1px; padding: 0 2px; border: 0; border-radius: 6px; background: transparent; color: var(--ink); font: inherit; text-align: center; cursor: pointer; }
+  .mobile-title-project:hover, .mobile-title-project[aria-expanded="true"] { background: var(--surface-hover); }
+  .mobile-project-meta { display: flex; min-width: 0; justify-content: center; gap: 2px; color: var(--muted); font-size: 10px; }
+  .mobile-project-meta #mobile-project-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+  .mobile-project-meta [aria-hidden="true"] { flex: 0 0 auto; }
+  .mobile-project-meta #mobile-session-meta { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+  .mobile-project-menu { top: calc(100% + 2px); right: auto; left: 0; min-width: 190px; max-width: min(280px, calc(100vw - 56px)); max-height: min(320px, calc(100vh - 62px)); z-index: 50; }
+  .mobile-project-menu button { display: flex; min-width: 0; min-height: 40px; align-items: center; justify-content: space-between; gap: 8px; }
+  .mobile-project-menu button span:first-child { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .activity-dot { position: absolute; top: 7px; right: 7px; width: 6px; height: 6px; border-radius: 50%; background: var(--warning); }
   .sidebar {
     position: fixed;

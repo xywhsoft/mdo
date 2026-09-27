@@ -4,10 +4,12 @@ import { subscribeLocale, t } from "../../i18n.js";
 // The header project crumb changes the destination for a new task. Existing
 // sessions stay in their own projects and keep their drafts when we leave.
 export function createProjectSwitcher({ control, button, name, separator, menu,
-  navigation, projectsStore, onSelectProject, onManageProjects }) {
+  navigation, projectsStore, onSelectProject, onManageProjects,
+  includeNewTask = false }) {
   function projectId() {
     const route = navigation.get();
-    return route.view === "workspace" && route.sessionId ? route.projectId : "";
+    return route.view === "workspace" && (includeNewTask || route.sessionId)
+      ? route.projectId || navigation.preferredProject() : "";
   }
 
   function projects() {
@@ -36,7 +38,8 @@ export function createProjectSwitcher({ control, button, name, separator, menu,
 
   function render() {
     const current = projectId();
-    control.hidden = separator.hidden = !current;
+    control.hidden = !current;
+    if (separator) separator.hidden = !current;
     if (!current) { close(); clear(menu); return; }
     const list = projects();
     const selected = list.find((item) => item.id === current);

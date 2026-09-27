@@ -16,9 +16,12 @@
       <button class="icon-button" id="open-sidebar" type="button" aria-label="打开会话导航" data-i18n-aria-label="shell.sidebar.open" aria-controls="sidebar" aria-expanded="false">
         <span class="icon" data-icon="menu" aria-hidden="true"></span>
       </button>
-      <div class="mobile-title">
-        <strong id="mobile-session-title">墨斗</strong>
-        <span id="mobile-session-meta">Agent 工作台</span>
+      <div class="mobile-title" id="mobile-project-control">
+        <button class="mobile-title-project" id="mobile-project-switch" type="button" aria-label="切换项目" aria-describedby="mobile-session-title" aria-haspopup="menu" aria-controls="mobile-project-menu" aria-expanded="false">
+          <strong id="mobile-session-title">墨斗</strong>
+          <span class="mobile-project-meta"><span id="mobile-project-name">default</span><span aria-hidden="true">▾</span><span id="mobile-session-meta"></span></span>
+        </button>
+        <div class="session-menu mobile-project-menu" id="mobile-project-menu" role="menu" aria-labelledby="mobile-project-switch" hidden></div>
       </div>
       <button class="icon-button" id="open-find-mobile" type="button" aria-label="搜索当前会话" data-i18n-aria-label="shell.find" aria-controls="conversation-find" aria-expanded="false">
         <span class="icon" data-icon="search" aria-hidden="true"></span>
@@ -119,7 +122,7 @@
               <button class="header-project-switch" id="header-project-switch" type="button" aria-label="切换项目" aria-haspopup="menu" aria-controls="header-project-menu" aria-expanded="false">
                 <span id="header-project-name"></span><span aria-hidden="true">▾</span>
               </button>
-              <div class="session-menu header-project-menu" id="header-project-menu" role="menu" hidden></div>
+              <div class="session-menu header-project-menu" id="header-project-menu" role="menu" aria-labelledby="header-project-switch" hidden></div>
             </div>
             <span class="session-title-separator" id="session-title-separator" aria-hidden="true" hidden>/</span>
             <h1 id="session-title">新任务</h1>

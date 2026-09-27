@@ -2,6 +2,8 @@
 
 本清单以 `app_bak/wwwroot` 的可操作行为为基线，而不是以页面长得相似或单元测试通过为完成标准。`docs/frontend-migration.md` 记录每次实现和验证；这里记录当前还需要什么证据。审计更新：2026-09-27，基线提交 `f9e2c4c`。
 
+手机顶栏的项目入口已恢复：320px/280px 打包页保留会话标题、项目名和已归档状态；菜单可切到第二项目的新任务并聚焦输入框，项目选择器同步。初次打包页验证原会话草稿在返回和刷新后保持、项目管理可往返及归档/恢复；最终单文件 Home `.build/mdo-packed-docks-yuvoidd_` 在 280×250 复核双项目菜单完整可见、无横向溢出和脚本错误。Windows/Linux 有界门禁通过，详见 [迁移记录](frontend-migration.md#2026-09-27手机顶栏恢复快捷切换项目)。实体触控与原生 WebView 仍待验收。
+
 旧版顶栏项目快捷切换已在模块版恢复：单文件 Home `.build/mdo-packed-docks-8de2s1c_` 从已有会话选择第二项目进入新任务，项目配置与输入焦点正确；原会话草稿在返回及刷新后仍在。最终单文件 Home `.build/mdo-packed-docks-d_reut32` 还验证关闭菜单后上键直达末项。761×300 的菜单键盘操作、管理项目返回路径及 320px 手机宽度均已验证；Windows/Linux 有界门禁通过，详见 [迁移记录](frontend-migration.md#2026-09-27会话顶栏快捷切换项目)。实体触控和原生 WebView 尚待验收。
 
 最新交互改动已在 Linux ext4 上从锁定宿主重新构建并通过有界门禁：114 项 Python、67 项 Node、69 个模块、21 个运行探针与确定性单文件包，SHA-256 为 `2c2dd66b1c3347430e76b95e6d8e1a0667e19bef4ff2207c9db7b9807ac6da46`。Linux 包提供的页面在 280×250 复核了顶栏菜单 End 可见性及 Esc 焦点返回；这是 WSL 服务加 Windows 浏览器，原生 Linux WebView 和实体手机仍待验收。`starting` 凭据无运行 ID 时，异常退出后的执行结果仍不能自动判定，当前核对屏障须保留，详见 [迁移记录](frontend-migration.md#2026-09-27最新交互改动的-linux-有界回归)。
