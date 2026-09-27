@@ -528,14 +528,14 @@ export async function boot() {
     stagedEntries: () => {
       if (!navigation.get().sessionId)
         return (draftStore?.submissions("") ?? []).map((item) => ({
-          text: item.text, attachments: item.attachments, staged: true,
+          id: item.id, text: item.text, attachments: item.attachments, staged: true,
           rejected: item.state === "rejected",
         }));
       const current = navigation.get();
       const staged = current.sessionId ?
         (draftStore?.submissions(selectedKey) ?? []).filter((item) =>
           !promptQueue.find(current.projectId, current.sessionId, item.id))
-          .map((item) => ({ text: item.text,
+          .map((item) => ({ id: item.id, text: item.text,
             attachments: item.attachments, staged: true,
             rejected: item.state === "rejected" })) : [];
       return staged;

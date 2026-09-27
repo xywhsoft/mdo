@@ -127,6 +127,16 @@ export function createPromptQueue({ container, navigation, isRunActive, stagedEn
       atBottom: previousList.scrollHeight - previousList.clientHeight -
         previousList.scrollTop <= 8,
     } : null;
+    if (scroll && !scroll.atBottom) {
+      const viewport = previousList.getBoundingClientRect();
+      const anchor = [...previousList.children].find((item) => {
+        const bounds = item.getBoundingClientRect();
+        return item.dataset.queueItemId && bounds.bottom > viewport.top + 1 &&
+          bounds.top < viewport.bottom - 1;
+      });
+      scroll.anchorId = anchor?.dataset.queueItemId;
+      scroll.anchorTop = anchor?.getBoundingClientRect().top - viewport.top;
+    }
     const focusKey = focused?.dataset.queueFocus;
     const imageRef = focused?.dataset.imageRef;
     const focusIndex = Number(focused?.dataset.queueIndex ?? 0);
@@ -197,8 +207,10 @@ export function createPromptQueue({ container, navigation, isRunActive, stagedEn
       list.hidden = !open;
     });
     for (const [index, entry] of entries.entries()) {
+      const itemAttrs = typeof entry.id === "string" && entry.id
+        ? { "data-queue-item-id": entry.id } : {};
       if (entry.staged) {
-        list.append(element("li", {}, [
+        list.append(element("li", { attrs: itemAttrs }, [
           element("span", { className: "prompt-queue-index",
             text: String(index + 1) }),
           element("div", { className: "prompt-queue-item-body" }, [
@@ -254,7 +266,7 @@ export function createPromptQueue({ container, navigation, isRunActive, stagedEn
         }
         body.append(images);
       }
-      list.append(element("li", {}, [
+      list.append(element("li", { attrs: itemAttrs }, [
         element("span", { className: "prompt-queue-index",
           text: String(index + 1) }),
         body,
@@ -262,8 +274,15 @@ export function createPromptQueue({ container, navigation, isRunActive, stagedEn
       ]));
     }
     container.append(list);
-    if (scroll && !list.hidden)
+    if (scroll && !list.hidden) {
       list.scrollTop = scroll.atBottom ? list.scrollHeight : scroll.top;
+      if (!scroll.atBottom && scroll.anchorId) {
+        const anchor = [...list.children].find((item) =>
+          item.dataset.queueItemId === scroll.anchorId);
+        if (anchor) list.scrollTop += anchor.getBoundingClientRect().top -
+          list.getBoundingClientRect().top - scroll.anchorTop;
+      }
+    }
     if (focused) {
       const removes = [...list.querySelectorAll("button[data-queue-index]")];
       const target = focusKey === "toggle" ? toggle :

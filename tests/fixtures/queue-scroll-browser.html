@@ -14,13 +14,14 @@
 <div id="queue"></div>
 <pre id="result"></pre>
 <script type="module">
-import { createPromptQueue } from "/app/web/js/features/chat/prompt-queue.js";
+import { createPromptQueue } from "/app/web/js/features/chat/prompt-queue.js?queue-anchor=1";
 
 const container = document.querySelector("#queue");
 const output = document.querySelector("#result");
 const originalFetch = window.fetch;
 let route = { projectId: "qa", sessionId: "first" };
 let staged = [];
+let omitFirst = false;
 const listeners = [];
 window.fetch = async (url) => {
   const second = String(url).includes("/sessions/second/");
@@ -29,7 +30,8 @@ window.fetch = async (url) => {
     `Second item ${"more text ".repeat(28)}`,
   ])
     .map((text, index) => ({ id: `item-${index}`, text, state: "pending",
-      attachments: [], priority: false }));
+      attachments: [], priority: false }))
+    .filter((item) => second || !omitFirst || item.id !== "item-0");
   return new Response(JSON.stringify({ ok: true, data: { items } }), {
     status: 200, headers: { "Content-Type": "application/json" },
   });
@@ -46,29 +48,44 @@ try {
     item.getBoundingClientRect().bottom + 1);
   list.scrollTop = 20;
   const middleBefore = list.scrollTop;
-  staged.push({ staged: true, text: "Third item" });
+  staged.push({ id: "draft-2", staged: true, text: "Third item" });
   queue.render();
   list = container.querySelector(".prompt-queue-list");
   const middleAfter = list.scrollTop;
   list.scrollTop = list.scrollHeight;
   const bottomBefore = list.scrollTop;
-  staged.push({ staged: true, text: "Fourth item" });
+  staged.push({ id: "draft-3", staged: true, text: "Fourth item" });
   queue.render();
   list = container.querySelector(".prompt-queue-list");
   const bottomAfter = list.scrollTop;
   const newBottom = list.scrollHeight - list.clientHeight;
   staged = [];
+  queue.render();
+  list = container.querySelector(".prompt-queue-list");
+  const secondCard = list.children[1];
+  list.scrollTop += secondCard.getBoundingClientRect().top -
+    list.getBoundingClientRect().top;
+  const beforeHeadRemoval = secondCard.getBoundingClientRect().top -
+    list.getBoundingClientRect().top;
+  omitFirst = true;
+  await queue.select("qa", "first");
+  list = container.querySelector(".prompt-queue-list");
+  const afterHeadRemoval = list.children[0].getBoundingClientRect().top -
+    list.getBoundingClientRect().top;
+  const headRemovalStable = Math.abs(afterHeadRemoval - beforeHeadRemoval) <= 1;
   route = { projectId: "qa", sessionId: "second" };
   listeners.forEach((listener) => listener(route));
   await queue.select("qa", "second");
   list = container.querySelector(".prompt-queue-list");
   const otherSessionTop = list.scrollTop;
-  const passed = cardsFit && middleBefore === 20 && middleAfter === middleBefore &&
+  const passed = cardsFit && headRemovalStable &&
+    middleBefore === 20 && middleAfter === middleBefore &&
     bottomBefore > middleBefore && bottomAfter === newBottom &&
     newBottom > bottomBefore && otherSessionTop === 0;
   output.dataset.passed = String(passed);
   output.textContent = JSON.stringify({ passed, cardsFit, middleBefore, middleAfter,
-    bottomBefore, bottomAfter, newBottom, otherSessionTop }, null, 2);
+    bottomBefore, bottomAfter, newBottom, beforeHeadRemoval,
+    afterHeadRemoval, headRemovalStable, otherSessionTop }, null, 2);
 } catch (error) {
   output.dataset.passed = "false";
   output.textContent = error.stack ?? String(error);
