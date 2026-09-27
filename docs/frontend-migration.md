@@ -4,6 +4,10 @@
 
 完成判据及尚缺的打包页证据见 [前端操作体验完成审计](frontend-completion-audit.md)。本文件继续记录每次实现和验证的细节。
 
+## 2026-09-27：搜索与菜单键盘改动的有界发布回归
+
+会话内搜索、Token 用量弹层以及顶栏/侧栏会话菜单的 Esc 事件改动提交后，运行 Windows 有界发布门禁 `python tools/qa_release.py --xserver-root D:\GIT\xserver-mdo-refactor --skip-host-build`。114 项 Python 检查、65 项前端 Node 测试、68 个前端模块解析、21 个运行探针、严格 C11 编译、两次确定性打包、单文件零旁路写入和 20 秒打包启动检查均通过。根目录 `mdo.exe` 与确定性打包产物 SHA-256 均为 `16d124ade644f9a41e3637670291c73ed7123e6bf458141e2bfa42cc010ccf8c`。此门禁证明这些代码路径未破坏已有有界检查；真实输入法及实体移动端操作仍按审计表继续验收，未运行压力或高负载测试。
+
 ## 2026-09-27：会话内搜索忽略输入法候选 Esc
 
 生产模块夹具 `tests/fixtures/conversation-search-ime-browser.html` 先复现搜索框在中文组字或 `keyCode=229` 候选键下被提前关闭，两个检查均失败。搜索框现跟踪组字状态，并在关闭入口使用统一的 `isImeKey` 判断。修复后夹具验证候选键保持搜索与查询、首次普通 Esc 关闭搜索并将焦点还给输入框、再次 Esc 才由全局快捷键停止运行，四段均通过且无脚本错误。
