@@ -19,6 +19,11 @@ export function createProjectSwitcher({ control, button, name, separator, menu,
       ? [{ id: current, name: current }, ...items] : items;
   }
 
+  function projectLabel(project) {
+    return project.id === "default" ? t("nav.defaultProject", {}, "默认项目") :
+      project.name || project.id;
+  }
+
   function entries() {
     return [...menu.querySelectorAll('[role="menuitem"]')];
   }
@@ -43,7 +48,7 @@ export function createProjectSwitcher({ control, button, name, separator, menu,
     if (!current) { close(); clear(menu); return; }
     const list = projects();
     const selected = list.find((item) => item.id === current);
-    const label = selected?.name || current;
+    const label = projectLabel(selected ?? { id: current, name: current });
     name.textContent = label;
     button.setAttribute("aria-label", t("nav.switchProject", { name: label },
       `切换项目，当前 ${label}`));
@@ -54,7 +59,7 @@ export function createProjectSwitcher({ control, button, name, separator, menu,
       const item = element("button", { attrs: {
         type: "button", role: "menuitem", "data-project-id": project.id,
         "aria-current": String(project.id === current),
-      } }, [element("span", { text: project.name || project.id }),
+      } }, [element("span", { text: projectLabel(project) }),
         ...(project.id === current ? [element("span", { text: "✓",
           attrs: { "aria-hidden": "true" } })] : [])]);
       item.addEventListener("click", () => {
