@@ -385,12 +385,12 @@ export async function boot() {
         toast(t("sessionAction.forked", {}, "已创建会话分支"));
       } else toast(t("sessionAction.backgroundFork", {}, "原会话的分支已在后台创建"));
     },
-    onEdit: async (sequence, text, attachments, owner) => {
+    onEdit: async (sequence, text, attachments, owner, opener) => {
       const version = routeVersion;
       if (!isCurrentMessageOwner(owner, version))
         throw new Error(t("messageAction.ownerChanged", {}, "会话已切换，请重新选择消息"));
       assertMessageReplacementReady(sequence, text, attachments);
-      const edited = await messageEditDialog.open(text, attachments);
+      const edited = await messageEditDialog.open(text, attachments, opener);
       if (edited !== null) {
         if (!isCurrentMessageOwner(owner, version))
           throw new Error(t("messageAction.ownerChanged", {}, "会话已切换，请重新选择消息"));

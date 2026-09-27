@@ -3,11 +3,16 @@ import { t } from "../../i18n.js";
 export function createMessageEditDialog({ dialog, form, input, cancel }) {
   let pending = null;
   let hasAttachments = false;
+  let opener = null;
 
   function finish(value) {
     const resolve = pending;
     pending = null;
+    const returnFocus = opener;
+    opener = null;
     if (dialog.open) dialog.close();
+    if (returnFocus?.isConnected && !returnFocus.disabled)
+      returnFocus.focus({ preventScroll: true });
     resolve?.(value);
   }
 
@@ -29,9 +34,10 @@ export function createMessageEditDialog({ dialog, form, input, cancel }) {
   });
 
   return Object.freeze({
-    open(text, attachments = []) {
+    open(text, attachments = [], source = null) {
       if (pending) return Promise.reject(new Error(t("messageEdit.alreadyOpen", {}, "已有消息正在编辑")));
       hasAttachments = attachments.length > 0;
+      opener = source;
       input.value = text;
       input.required = !hasAttachments;
       input.setCustomValidity("");

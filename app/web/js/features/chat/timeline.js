@@ -387,7 +387,7 @@ function commandButton(label, description, iconName, actionRef, handlers, sessio
     "data-timeline-command": "",
     "aria-disabled": String(handlers.isBusy(sessionKey)),
   } }, [actionIcon(iconName)]);
-  button.addEventListener("click", () => handlers.runAction(sessionKey, action));
+  button.addEventListener("click", () => handlers.runAction(sessionKey, () => action(button)));
   return button;
 }
 
@@ -465,8 +465,8 @@ function timelineNode(item, handlers, feedback, projectId, sessionId, writable,
         item.userMessageSequence > 0 && !item.textTruncated) {
       const edit = commandButton(t("timeline.edit", {}, "编辑"),
         t("timeline.editResend", {}, "编辑此消息并重新发送"), "compose", `${item.key}/edit`,
-        handlers, sessionKey, () => handlers.onEdit(
-          item.userMessageSequence, item.text, item.attachments ?? [], owner));
+        handlers, sessionKey, (opener) => handlers.onEdit(
+          item.userMessageSequence, item.text, item.attachments ?? [], owner, opener));
       actions.append(edit);
     }
     if (item.kind === "assistant") {

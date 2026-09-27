@@ -955,11 +955,11 @@ select:focus-visible,
   box-shadow: var(--shadow-dialog);
 }
 .new-session-dialog::backdrop { background: rgb(0 0 0 / 34%); backdrop-filter: blur(2px); }
-:is(#new-session-dialog, #session-action-dialog) { max-height: calc(100dvh - 32px); overflow: hidden; }
-:is(#new-session-dialog, #session-action-dialog) .dialog-card { display: flex; max-height: calc(100dvh - 32px); min-height: 0; flex-direction: column; }
-:is(#new-session-dialog, #session-action-dialog) .dialog-card > header,
-:is(#new-session-dialog, #session-action-dialog) .dialog-card > footer { flex: 0 0 auto; }
-:is(#new-session-dialog, #session-action-dialog) .dialog-fields { min-height: 0; overflow-y: auto; }
+:is(#new-session-dialog, #session-action-dialog, #message-edit-dialog) { max-height: calc(100dvh - 32px); overflow: hidden; }
+:is(#new-session-dialog, #session-action-dialog, #message-edit-dialog) .dialog-card { display: flex; max-height: calc(100dvh - 32px); min-height: 0; flex-direction: column; }
+:is(#new-session-dialog, #session-action-dialog, #message-edit-dialog) .dialog-card > header,
+:is(#new-session-dialog, #session-action-dialog, #message-edit-dialog) .dialog-card > footer { flex: 0 0 auto; }
+:is(#new-session-dialog, #session-action-dialog, #message-edit-dialog) .dialog-fields { min-height: 0; overflow-y: auto; }
 #new-session-dialog .dialog-error { flex: 0 0 auto; max-height: min(96px, 25dvh); overflow-y: auto; }
 .image-preview-dialog { position: fixed; min-width: 58px; max-width: calc(100vw - 24px); max-height: calc(100dvh - 24px); margin: auto; padding: 48px 8px 8px; border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--surface-raised); box-shadow: var(--shadow-dialog); }
 .image-preview-dialog::backdrop { background: rgb(0 0 0 / 72%); }
@@ -1474,6 +1474,11 @@ select:focus-visible,
   .composer-region:not([data-decision-pending]) .composer-options > #composer-model { flex: 0 0 auto; min-width: 90px; }
   .composer-region:not([data-decision-pending]) .composer-actions { flex: 0 0 auto; }
   .composer-region:not([data-decision-pending]) .composer-input-estimate { display: none; }
+  #message-edit-dialog .dialog-card > header { padding: 8px 12px; }
+  #message-edit-dialog .dialog-card > header p { max-height: 32px; overflow-y: auto; }
+  #message-edit-dialog .dialog-fields { padding: 6px 12px; }
+  #message-edit-dialog .message-edit-fields textarea { min-height: 60px; height: 60px; }
+  #message-edit-dialog .dialog-card > footer { padding: 6px 12px; }
   .settings-navigation { position: static; }
   .setting-instructions textarea { min-height: 80px; height: 80px; }
 }
