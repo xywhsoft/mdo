@@ -214,9 +214,10 @@ export function createConversationDocks({ container, navigation, tasksStore, app
   const argumentsOpen = new Map();
   const drafts = new Map();
   const askNodes = new Map();
-  const otherRoot = element("div", { className: "conversation-dock-stack" });
+  const approvalRoot = element("div", { className: "conversation-dock-stack" });
   const askRoot = element("div", { className: "conversation-dock-stack" });
-  container.append(otherRoot, askRoot);
+  const otherRoot = element("div", { className: "conversation-dock-stack" });
+  container.append(approvalRoot, askRoot, otherRoot);
   const composerRegion = container.parentElement?.classList.contains("composer-region")
     ? container.parentElement : null;
   const conversation = container.closest(".workspace")?.querySelector(".conversation");
@@ -253,6 +254,7 @@ export function createConversationDocks({ container, navigation, tasksStore, app
 
   function revealDecision(arrived = null, force = false) {
     if (container.hidden) return;
+    if (userMovedDock && !force) return;
     const focused = container.contains(document.activeElement)
       ? document.activeElement : null;
     if (focused) {
@@ -264,9 +266,8 @@ export function createConversationDocks({ container, navigation, tasksStore, app
         container.scrollTop += bounds.top - viewport.top;
       return;
     }
-    if (userMovedDock && !force) return;
-    const decision = arrived ?? askRoot.querySelector(".ask-dock") ??
-      otherRoot.querySelector("[data-approval-arguments]")?.closest(".conversation-dock");
+    const decision = arrived ?? approvalRoot.querySelector("[data-approval-id]") ??
+      askRoot.querySelector(".ask-dock");
     if (!decision) return;
     const viewport = container.getBoundingClientRect();
     const content = decision.querySelector(".ask-dock-options button") ??
@@ -302,10 +303,11 @@ export function createConversationDocks({ container, navigation, tasksStore, app
 
   function render() {
     const previousScroll = container.scrollTop;
-    const focusedDock = otherRoot.contains(document.activeElement)
+    const focusedDock = (approvalRoot.contains(document.activeElement) ||
+      otherRoot.contains(document.activeElement))
       ? document.activeElement?.dataset.dockFocus : "";
     const focusedAsk = askRoot.contains(document.activeElement);
-    for (const details of otherRoot.querySelectorAll("details[data-approval-arguments]"))
+    for (const details of approvalRoot.querySelectorAll("details[data-approval-arguments]"))
       argumentsOpen.set(details.dataset.approvalArguments, details.open);
     const selected = navigation.get();
     const sessionId = selected.view === "workspace" ? selected.sessionId : "";
@@ -324,6 +326,7 @@ export function createConversationDocks({ container, navigation, tasksStore, app
       todo?.projectId === selected.projectId && todo?.sessionId === sessionId;
     const todoItems = todo?.projectId === selected.projectId &&
       todo?.sessionId === sessionId ? todo.items : [];
+    clear(approvalRoot);
     clear(otherRoot);
     let newApproval = null;
     const nextDecisions = new Set();
@@ -344,7 +347,7 @@ export function createConversationDocks({ container, navigation, tasksStore, app
       const key = `approval/${selected.projectId}/${sessionId}/${item.id}`;
       nextDecisions.add(key);
       const card = approvalCard(item, argumentsOpen, onChanged);
-      otherRoot.append(card);
+      approvalRoot.append(card);
       if (!visibleDecisions.has(key)) newApproval ??= card;
     }
     if (approvalsStore.get().status === "ready") {
@@ -353,7 +356,7 @@ export function createConversationDocks({ container, navigation, tasksStore, app
       for (const key of argumentsOpen.keys()) if (!live.has(key)) argumentsOpen.delete(key);
     }
     if (focusedDock) {
-      const replacement = [...otherRoot.querySelectorAll("[data-dock-focus]")]
+      const replacement = [...container.querySelectorAll("[data-dock-focus]")]
         .find((node) => node.dataset.dockFocus === focusedDock);
       (replacement ?? document.querySelector("#prompt"))?.focus({ preventScroll: true });
     }
@@ -391,11 +394,16 @@ export function createConversationDocks({ container, navigation, tasksStore, app
     composerRegion?.toggleAttribute("data-decision-pending",
       Boolean(approvals.length || asks.length));
     syncAvailableHeight();
-    const arrived = newAsk ?? newApproval;
+    const arrived = newApproval ?? newAsk;
     if (arrived) {
       userMovedDock = false;
       container.scrollTop += arrived.getBoundingClientRect().top -
         container.getBoundingClientRect().top;
+      // A newly arrived decision takes priority over a focused, non-editing
+      // status card. Do this before ResizeObserver can reschedule reveal.
+      if (document.activeElement?.matches?.(".todo-toggle") ||
+          document.activeElement?.dataset?.dockFocus === "tasks/open")
+        arrived.querySelector("h3")?.focus({ preventScroll: true });
     } else container.scrollTop = previousScroll;
     visibleDecisions.clear();
     for (const key of nextDecisions) visibleDecisions.add(key);

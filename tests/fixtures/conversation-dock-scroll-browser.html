@@ -45,7 +45,6 @@ createConversationDocks({
   runsStore, todoStore, onOpenTasks() {}, onChanged: async () => {},
   onDecisionArrived(card, kind) {
     arrivals.push([kind, card.querySelector("h3")?.textContent]);
-    if (kind === "approval") card.querySelector("h3")?.focus({ preventScroll: true });
   },
 });
 
@@ -94,6 +93,7 @@ async function check() {
     maxHeight: getComputedStyle(prompt).maxHeight };
   const restoredDraft = restoredHeight >= 120 &&
     prompt.value.endsWith("draft line 20");
+  dock.querySelector(".todo-toggle").focus();
   runsStore.setData({ items: [{ agent_run_id: 3, project_id: "qa", session_id: "seat" }] });
   approvalsStore.setData({ items: [{ id: 7, run_id: 3, tool: "exec",
     risk: "high", effects: ["process"], resources: [],
@@ -102,29 +102,40 @@ async function check() {
   const approvalFocusRestored = document.activeElement?.dataset.dockFocus ===
     "approval/7/title";
   await nextFrame();
+  const approvalBeforeTodo = dock.querySelector(".conversation-dock")
+    ?.dataset.approvalId === "7";
   const title = dock.querySelector(".conversation-dock h3").getBoundingClientRect();
   const approvalReadable = title.top >= dock.getBoundingClientRect().top &&
     title.bottom <= dock.getBoundingClientRect().bottom;
-  dock.scrollTop = dock.scrollHeight;
+  const scrollDockToEnd = () => {
+    for (let index = 0; index < 3; index++)
+      dock.dispatchEvent(new WheelEvent("wheel", {
+        bubbles: true, cancelable: true, deltaY: 500,
+      }));
+  };
+  scrollDockToEnd();
+  await nextFrame();
   const allow = [...dock.querySelectorAll(".conversation-dock-actions button")].at(-1);
   const actionVisible = allow.getBoundingClientRect().bottom <=
     dock.getBoundingClientRect().bottom &&
     allow.getBoundingClientRect().top >= dock.getBoundingClientRect().top;
   dock.querySelector(".approval-arguments summary").click();
   await nextFrame();
-  dock.scrollTop = dock.scrollHeight;
+  scrollDockToEnd();
+  await nextFrame();
   const expandedReachable = allow.getBoundingClientRect().bottom <=
     dock.getBoundingClientRect().bottom &&
     allow.getBoundingClientRect().top >= dock.getBoundingClientRect().top;
   const passed = askReadable && restoredDraft && approvalReadable && actionVisible &&
-    approvalFocusRestored &&
+    approvalFocusRestored && approvalBeforeTodo &&
     arrivals.map(([kind]) => kind).join(",") === "ask,approval" &&
     expandedReachable && document.documentElement.scrollWidth <= innerWidth;
   const result = document.querySelector("#result");
   result.dataset.passed = innerWidth <= 420 ? String(passed) : "waiting";
   result.textContent = JSON.stringify({ askReadable, askGeometry,
     restoredDraft, restoredHeight, restoredPending, restoredStyle, approvalReadable,
-    actionVisible, expandedReachable, approvalFocusRestored, arrivals, viewport: innerWidth,
+    actionVisible, expandedReachable, approvalFocusRestored, approvalBeforeTodo,
+    arrivals, viewport: innerWidth,
     documentWidth: document.documentElement.scrollWidth, passed });
 }
 void check();
