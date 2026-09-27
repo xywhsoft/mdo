@@ -113,13 +113,14 @@ test("last-call usage uses its own model after the next model is selected", () =
   let meter;
   let runItems = [{ project_id: "qa", session_id: "s", agent_run_id: 73,
     model_id: "previous" }];
+  let event = { kind: "model_done", run_id: 73, agent_depth: 0,
+    model: "wire-shared", input_tokens: 500, output_tokens: 25 };
   try {
     meter = createTokenMeter({ root, trigger, panel, prompt, estimate, ring,
       modelSelect: { value: "next" },
       sessionStore: resource({ project_id: "qa", id: "s" }),
-      timelineStore: resource({ projectId: "qa", sessionId: "s",
-        events: [{ kind: "model_done", run_id: 73, model: "wire-shared",
-          input_tokens: 500, output_tokens: 25 }] }),
+      timelineStore: { get: () => ({ data: { projectId: "qa", sessionId: "s",
+        events: [event] } }), subscribe: () => () => {} },
       modelsStore: resource({ models: [
         { id: "previous", name: "Previous", wire_model: "wire-shared",
           context_window_tokens: 1000 },
@@ -144,6 +145,12 @@ test("last-call usage uses its own model after the next model is selected", () =
       "shared wire names cannot identify the previous model without a run record");
     assert.doesNotMatch(trigger.title, /10,000/);
     assert.match(panel.children.at(-1).textContent, /unavailable|无法确定/);
+    runItems = [{ project_id: "qa", session_id: "s", agent_run_id: 73,
+      model_id: "previous" }];
+    event = { ...event, agent_depth: 1 };
+    meter.refresh();
+    assert.equal(ring.style.values.get("--meter-percent"), "0%",
+      "a subagent call cannot inherit the main run's model profile");
   } finally {
     meter?.destroy();
     globalThis.document = previousDocument;

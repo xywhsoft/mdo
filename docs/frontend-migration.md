@@ -1065,3 +1065,9 @@ Windows/Linux 有界发布门禁分别通过 114 项 Python、74 项 Node、71 �
 `tests/test_token_meter_escape.mjs` 新增同一 wire 名、两个模型上下文分别为 1,000 和 10,000 的回归用例：上次调用关联前者、输入区选择后者时，占比仍是 500/1,000 = 50%；撤去运行记录后不误用后者的上限。QA 夹具 `tests/manual_packed_docks_qa.py --image-capable --second-model-context-tokens 262144` 提供两个同 wire 名、不同上下文的合法模型配置。隔离单文件 Home `.build/mdo-packed-docks-puv_xby3` 用最终包完成首轮本地有界回复后，切换到第二模型，弹层同时显示输入区 262,144、上次调用 131,072，提示仍归属 Ling 3.0 Tiny；页面脚本错误为空。先前 Home `.build/mdo-packed-docks-4ygl3yoz` 还完成第二轮、刷新并反向切回首轮模型，弹层显示上次调用 Ling Text QA 的 262,144 上限，累计输入/输出 14/6。
 
 Windows/Linux 有界门禁均通过 114 项 Python、75 项 Node、71 个前端模块解析、21 个运行探针及确定性打包；Windows 单文件零旁路写入和 20 秒启动检查通过。根目录 `mdo.exe` 与 Windows 包 SHA-256 均为 `a3e363a9582827962f9c16a3aa63403b142a86bc3881011b49a05d4e1817348b`，Linux 包为 `da8a0ef877c445eec2927a743a2322d70c715f3611f4d918645fba8f0a26cf40`。运行记录只保留于进程内，服务重启后若历史 wire 名对应多个模型，当前仅能诚实显示归属未知；历史精确占比仍需在持久事件中增加模型配置标识。实体触控与原生 WebView 未验收；未做压力或高负载测试。
+
+## 2026-09-28：子 Agent Token 调用的归属边界
+
+继续检查持久事件发现它只记录接口模型名，没有 mdo 模型配置 ID；`xwork` 为子 Agent 事件标注 `agent_depth`，而 `/runs` 的模型 ID 描述顶层交互运行。Token 弹层现仅把深度为 0 的调用与顶层运行记录相连，避免子 Agent 的同名接口调用误用主 Agent 上下文。生产模块回归在相同 run ID、相同 wire 名、深度为 1 的模拟事件下确认占比为未知；完整的历史归属还需兼容旧版 `ui-events.jsonl` schema 1–3，且会话分叉重写事件时须逐条保留原配置快照，不能简单套用当前模型。
+
+Windows/Linux 有界门禁均通过 114 项 Python、75 项 Node、71 个模块解析、21 个运行探针及确定性打包；Windows 单文件零旁路写入与 20 秒启动检查通过。根目录 `mdo.exe` 与 Windows 包 SHA-256 为 `d4167e730648b8b165737fd79d67f50b5f4f7ba0befc65922d72e63e1e68b6f0`，Linux 包为 `79d7b48447fd22ef78c9768f74808f7a5cae676066af467ee62f5a2eabba2b03`。真实子 Agent 模型调用的打包页验收、重启后精确归属、实体设备与原生 WebView 仍需后续验证；未做压力或高负载测试。
