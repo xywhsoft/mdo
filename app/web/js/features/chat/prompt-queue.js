@@ -129,13 +129,19 @@ export function createPromptQueue({ container, navigation, isRunActive, stagedEn
     } : null;
     if (scroll && !scroll.atBottom) {
       const viewport = previousList.getBoundingClientRect();
-      const anchor = [...previousList.children].find((item) => {
+      const previousItems = [...previousList.children];
+      const anchorIndex = previousItems.findIndex((item) => {
         const bounds = item.getBoundingClientRect();
         return item.dataset.queueItemId && bounds.bottom > viewport.top + 1 &&
           bounds.top < viewport.bottom - 1;
       });
-      scroll.anchorId = anchor?.dataset.queueItemId;
-      scroll.anchorTop = anchor?.getBoundingClientRect().top - viewport.top;
+      if (anchorIndex >= 0) {
+        const anchor = previousItems[anchorIndex];
+        scroll.anchorId = anchor.dataset.queueItemId;
+        scroll.anchorTop = anchor.getBoundingClientRect().top - viewport.top;
+        scroll.nextIds = previousItems.slice(anchorIndex + 1)
+          .map((item) => item.dataset.queueItemId).filter(Boolean);
+      }
     }
     const focusKey = focused?.dataset.queueFocus;
     const imageRef = focused?.dataset.imageRef;
@@ -277,10 +283,19 @@ export function createPromptQueue({ container, navigation, isRunActive, stagedEn
     if (scroll && !list.hidden) {
       list.scrollTop = scroll.atBottom ? list.scrollHeight : scroll.top;
       if (!scroll.atBottom && scroll.anchorId) {
-        const anchor = [...list.children].find((item) =>
+        const items = [...list.children];
+        const anchor = items.find((item) =>
           item.dataset.queueItemId === scroll.anchorId);
         if (anchor) list.scrollTop += anchor.getBoundingClientRect().top -
           list.getBoundingClientRect().top - scroll.anchorTop;
+        else {
+          // The item being read was removed; show the next item from its start.
+          const next = scroll.nextIds.map((id) => items.find((item) =>
+            item.dataset.queueItemId === id)).find(Boolean);
+          if (next) list.scrollTop += next.getBoundingClientRect().top -
+            list.getBoundingClientRect().top;
+          else list.scrollTop = list.scrollHeight;
+        }
       }
     }
     if (focused) {
