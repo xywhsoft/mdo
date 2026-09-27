@@ -2,6 +2,8 @@
 
 本清单以 `app_bak/wwwroot` 的可操作行为为基线，而不是以页面长得相似或单元测试通过为完成标准。`docs/frontend-migration.md` 记录每次实现和验证；这里记录当前还需要什么证据。审计更新：2026-09-27，基线提交 `f9e2c4c`。
 
+历史改写期间草稿补验：旧包 `.build/mdo-packed-docks-pcv_zogz` 在历史 GET 延迟中仍允许输入和选图；最终包 `.build/mdo-packed-docks-tnktf_ih` 将输入、图片、模型和发送一同锁住，输入尝试无效，完成后恢复，刷新后回合保留、草稿为空且无脚本错误。详见 [迁移记录](frontend-migration.md#2026-09-27历史消息改写期间保护新草稿)。跨客户端截断与启动之间的模型变动仍待原子事务设计。
+
 代码块复制反馈补验：最终单文件 Home `.build/mdo-packed-docks-ihqf97b5` 在 Markdown 回复中点击“复制代码”，看到“已复制”并于 1.2 秒后恢复原按钮文字；焦点保留，无脚本错误。详见 [迁移记录](frontend-migration.md#2026-09-27代码块复制反馈自动恢复)。
 
 图片历史操作补验：旧单文件 Home `.build/mdo-packed-docks-xnv1rq8n` 在纯文本模型下重试旧图片回合，先截断历史再报不兼容，原回复消失。最终 Home `.build/mdo-packed-docks-1f0miwza` 的重试与编辑均在截断前拒绝，原图片、回复及刷新回放保持；切回图片模型后的重试成功，320px 页面无横向溢出或脚本错误。Home `.build/mdo-packed-docks-zoaen6q3` 又以 2 秒有界历史读取延迟确认读取期间模型和发送锁定、回复仍可见，完成后控件恢复。详见 [迁移记录](frontend-migration.md#2026-09-27图片历史重试先验证模型能力)。跨客户端即时改模型仍待单独验收。

@@ -816,7 +816,7 @@ export async function boot() {
       creatingSessionKey === `${route.projectId}/${route.sessionId}`;
     const serviceFailed = Boolean(bootstrapFailure());
     // Keep keyboard focus while a newly created session loads its detail.
-    prompt.disabled = serviceFailed ||
+    prompt.disabled = serviceFailed || messageActionBusy ||
       (!sessionWritable && !creatingSession) || migratingNewTask;
     send.disabled = serviceFailed || !(sessionWritable || creatingSession) ||
       composerImages?.isUploading() || composerImages?.hasUnsupportedDraft() ||
@@ -827,14 +827,16 @@ export async function boot() {
       (!route.sessionId && Boolean(newTaskController?.isBlocked())) ||
       migratingNewTask ||
       Boolean(submissionController?.isReleasing(selectedKey));
-    composerImages?.setWritable(!serviceFailed && sessionWritable && !creatingSession &&
-      !pendingNewTask);
+    composerImages?.setWritable(!serviceFailed && !messageActionBusy &&
+      sessionWritable && !creatingSession && !pendingNewTask);
     composerProfile.setRunActive(Boolean(activeRun || creatingNewTask ||
       messageActionBusy));
     send.setAttribute("aria-label", activeRun || creatingNewTask
       ? t("composer.queue", {}, "加入待发送队列")
       : t("shell.send", {}, "发送任务"));
-    composerHint.textContent = draftStore.isRunUncertain(selectedKey)
+    composerHint.textContent = messageActionBusy
+      ? t("messageAction.busy", {}, "请等待当前消息操作完成")
+      : draftStore.isRunUncertain(selectedKey)
       ? t("composer.hintReviewRun") : !draftStore.isLoaded(selectedKey)
       ? t("composer.hintLoadingDraft") : firstSubmission?.state === "rejected"
       ? t("composer.hintRejectedSubmission") : firstSubmission?.state === "posting" &&
@@ -1533,6 +1535,11 @@ export async function boot() {
 
   async function submitPrompt({ text, attachments = [], interrupt = false,
     fromComposer = true }) {
+    if (messageActionBusy) {
+      showComposerError(new Error(t("messageAction.busy", {},
+        "请等待当前消息操作完成")));
+      return;
+    }
     fileMentions.hide();
     if ((!text && !attachments.length) || composerImages.isUploading()) return;
     const rawInput = fromComposer ? prompt.value : text;
