@@ -190,3 +190,5 @@ Markdown 会话导出补齐语言一致性。之前英语、俄语页面导出�
 普通发送的过渡态已在最终单文件 Home `.build/mdo-packed-docks-4vonymti` 验证：本页持有派发期间显示“正在发送…”，完成后队列消失；恢复时无本页所有者的 `sending` 仍保留核对提示。`/export` 的真实浏览器下载事件已完成，文件名 `mdo-Packed docks QA.md`，213 字节。Windows/Linux 有界发布门禁通过；未做压力或高负载测试。跨进程、macOS 和实体手机的操作手感仍未验收。
 
 移动端侧栏操作补验：最终单文件 Home `.build/mdo-packed-docks-nrrezjkq` 在 320×350 下恢复 126px 会话列表和可滚动侧栏，操作菜单完整处于视口内，滚动菜单能执行底部 JSON 备份下载；滚动侧栏时菜单收起。桌面置顶和焦点返回通过，同一生产模块的独立浏览器夹具验证 Esc 与底部操作。Windows/Linux 有界门禁通过；实体手机和其他系统触控仍待验收，未做压力或高负载测试。
+
+对话停靠卡片的滚动补验：旧打包页在新审批卡出现时，按钮落在滚动区下方且“回到底部”隐藏。最终单文件 Home `.build/mdo-packed-docks-opbnj52v` 于 390×500 发送 `TODO UI` 和 `APPROVAL UI` 后，审批卡及“允许一次”完整进入对话区；无害命令返回 `exit_code: 0`，回复与工具结果可回放，浏览器脚本错误为空。生产模块夹具 `tests/fixtures/conversation-dock-scroll-browser.html` 同时确认停在底部时跟随新增卡片、主动上滚时保留位置并显示回底入口。Windows/Linux 有界门禁通过，未做压力或高负载测试；实体手机触控仍待验收。

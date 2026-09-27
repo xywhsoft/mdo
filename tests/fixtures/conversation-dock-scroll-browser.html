@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="zh-CN">
+<meta charset="utf-8">
+<title>mdo conversation dock scroll probe</title>
+<link rel="stylesheet" href="/app/web/css/app.css">
+<style>
+  body { margin: 20px; background: var(--surface); color: var(--ink); }
+  .conversation { width: 360px; height: 320px; overflow: auto; }
+  #history { height: 700px; }
+</style>
+<div class="conversation">
+  <p id="welcome"></p>
+  <ol id="timeline"></ol>
+  <div id="history">Earlier conversation</div>
+  <div id="conversation-docks" class="conversation-docks"></div>
+</div>
+<button id="to-bottom" type="button" hidden>回到底部</button>
+<textarea id="prompt" aria-label="输入"></textarea>
+<div id="toast-region"></div>
+<pre id="result"></pre>
+<script type="module">
+import { createTimelineView } from "/app/web/js/features/chat/timeline.js";
+import { createConversationDocks } from "/app/web/js/features/chat/conversation-docks.js";
+import { createResourceStore } from "/app/web/js/state/store.js";
+
+const store = (data) => createResourceStore(data);
+const navigation = {
+  get: () => ({ view: "workspace", projectId: "qa", sessionId: "scroll" }),
+  subscribe(listener) { listener(this.get()); return () => {}; },
+};
+const timeline = createTimelineView({
+  container: document.querySelector("#timeline"),
+  welcome: document.querySelector("#welcome"),
+  toBottom: document.querySelector("#to-bottom"),
+  store: store({ projectId: "qa", sessionId: "scroll", events: [] }),
+  feedbackStore: store({ projectId: "qa", sessionId: "scroll", items: new Map() }),
+  onFork() {}, onFeedback() {}, onEdit() {}, onRetry() {},
+});
+const todoStore = store({ projectId: "qa", sessionId: "scroll", items: [] });
+createConversationDocks({
+  container: document.querySelector("#conversation-docks"), navigation,
+  tasksStore: store({ items: [] }), approvalsStore: store({ items: [] }),
+  asksStore: store({ projectId: "qa", sessionId: "scroll", items: [] }),
+  runsStore: store({ items: [] }), todoStore,
+  onOpenTasks() {}, onChanged: async () => {},
+  onLayoutChange: (wasAtBottom) => timeline.externalContentChanged(wasAtBottom),
+});
+
+requestAnimationFrame(() => requestAnimationFrame(() => {
+  const scroller = document.querySelector(".conversation");
+  const button = document.querySelector("#to-bottom");
+  const item = { text: "审批前核对", done: false };
+  scroller.scrollTop = scroller.scrollHeight;
+  todoStore.setData({ projectId: "qa", sessionId: "scroll", items: [item] });
+  const card = document.querySelector(".conversation-docks .conversation-dock");
+  const pinned = scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight <= 1 &&
+    card.getBoundingClientRect().bottom <= scroller.getBoundingClientRect().bottom &&
+    button.hidden;
+  todoStore.setData({ projectId: "qa", sessionId: "scroll", items: [] });
+  scroller.scrollTop = 0;
+  todoStore.setData({ projectId: "qa", sessionId: "scroll", items: [item] });
+  const preserved = scroller.scrollTop === 0 && !button.hidden;
+  const result = document.querySelector("#result");
+  result.dataset.passed = String(pinned && preserved);
+  result.textContent = JSON.stringify({ pinned, preserved,
+    scrollTop: scroller.scrollTop, bottomButtonVisible: !button.hidden });
+}));
+</script>
+</html>

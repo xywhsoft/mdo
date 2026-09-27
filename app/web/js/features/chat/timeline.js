@@ -694,6 +694,12 @@ export function createTimelineView({ container, welcome, toBottom, store, sessio
   });
   return Object.freeze({
     follow() { followTail = true; },
+    externalContentChanged(wasAtBottom) {
+      followTail = Boolean(wasAtBottom);
+      if (followTail && !searchQuery && pendingState.data?.sessionId)
+        scroller.scrollTop = scroller.scrollHeight;
+      updateBottomButton();
+    },
     restorePreviewScroll() {
       for (const details of container.querySelectorAll("details.timeline-artifact-preview")) {
         if (!details.open) continue;

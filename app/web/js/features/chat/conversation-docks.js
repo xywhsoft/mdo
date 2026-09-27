@@ -201,7 +201,7 @@ function askCard(item, projectId, sessionId, deciding, answered, drafts,
 }
 
 export function createConversationDocks({ container, navigation, tasksStore, approvalsStore,
-  asksStore, todoStore, runsStore, onOpenTasks, onChanged }) {
+  asksStore, todoStore, runsStore, onOpenTasks, onChanged, onLayoutChange }) {
   const askDeciding = new Set();
   const askAnswered = new Set();
   const expanded = new Map();
@@ -211,8 +211,12 @@ export function createConversationDocks({ container, navigation, tasksStore, app
   const otherRoot = element("div", { className: "conversation-dock-stack" });
   const askRoot = element("div", { className: "conversation-dock-stack" });
   container.append(otherRoot, askRoot);
+  const scroller = container.closest(".conversation");
 
   function render() {
+    const oldHeight = scroller?.scrollHeight;
+    const wasAtBottom = scroller &&
+      oldHeight - scroller.scrollTop - scroller.clientHeight < 100;
     const focusedDock = otherRoot.contains(document.activeElement)
       ? document.activeElement?.dataset.dockFocus : "";
     const focusedAsk = askRoot.contains(document.activeElement);
@@ -289,6 +293,8 @@ export function createConversationDocks({ container, navigation, tasksStore, app
       document.querySelector("#prompt")?.focus({ preventScroll: true });
     container.hidden = !todoItems.length && !todoError && !tasks.length &&
       !approvals.length && !asks.length;
+    if (scroller && scroller.scrollHeight !== oldHeight)
+      onLayoutChange?.(wasAtBottom);
   }
 
   const unsubscribers = [
