@@ -160,7 +160,7 @@ export function createSessionList({ container, count, filter, searchInput, store
     const pinned = visible.filter((item) => item.status === "active" && item.pinned);
     const unpinned = visible.filter((item) => item.status !== "active" || !item.pinned);
     const groupIds = new Set(unpinned.map((item) => item.project_id));
-    if (status === "active" && !needle) {
+    if (status === "active") {
       groupIds.add("default");
       for (const project of projectsStore.get().data?.items ?? [])
         groupIds.add(project.id);
@@ -322,7 +322,9 @@ export function createSessionList({ container, count, filter, searchInput, store
         projects.get(projectId)?.name || projectId,
         sessions.length, projectId);
       if (!sessions.length) container.append(element("div", {
-        className: "session-group-empty", text: t("nav.emptyGroup", {}, "暂无会话"),
+        className: "session-group-empty", text: needle
+          ? t("nav.noMatch", {}, "没有匹配的会话")
+          : t("nav.emptyGroup", {}, "暂无会话"),
       }));
       for (const session of sessions) appendSession(session);
     }
