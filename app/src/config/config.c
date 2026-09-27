@@ -423,6 +423,7 @@ static bool MdoConfigSettingsValidate(const xvalue* pSettings)
     const xvalue* pAppearance;
     const xvalue* pComposer;
     const xvalue* pNotifications;
+    const xvalue* pPower;
     const xvalue* pAgent;
     const xvalue* pWeb;
     const xvalue* pSearch;
@@ -447,6 +448,7 @@ static bool MdoConfigSettingsValidate(const xvalue* pSettings)
     pComposer = xrtValueObjectGet(pSettings, MdoConfigKey("composer"));
     pNotifications = xrtValueObjectGet(pSettings,
         MdoConfigKey("notifications"));
+    pPower = xrtValueObjectGet(pSettings, MdoConfigKey("power"));
     pAgent = xrtValueObjectGet(pSettings, MdoConfigKey("agent"));
     pWeb = xrtValueObjectGet(pSettings, MdoConfigKey("web"));
     pSearch = pWeb != NULL ?
@@ -472,6 +474,8 @@ static bool MdoConfigSettingsValidate(const xvalue* pSettings)
          (pNotifications != NULL &&
           (xrtValueType(pNotifications) != XVALUE_OBJECT ||
            !MdoConfigBool(pNotifications, "sound"))) ||
+         xrtValueType(pPower) != XVALUE_OBJECT ||
+         !MdoConfigBool(pPower, "prevent_sleep") ||
          xrtValueType(pAgent) != XVALUE_OBJECT ||
          !MdoConfigStringOneOf(xrtValueObjectGet(pAgent,
             MdoConfigKey("interaction_mode")), InteractionModes,
@@ -1314,6 +1318,34 @@ bool MdoConfigGetSnapshot(MdoConfigSnapshot* pSnapshot)
     pSnapshot->EffectiveBytes = g_MdoConfig.EffectiveBytes;
     xrtMutexUnlock(g_MdoConfig.Lock);
     return true;
+}
+
+bool MdoConfigGetPowerSettings(MdoConfigPowerSettings* pSettings)
+{
+    const xvalue* Settings;
+    const xvalue* Power;
+    bool PreventSleep;
+    uint32 Size;
+    bool Ok = false;
+    if ( pSettings == NULL || pSettings->Size < sizeof(*pSettings) ||
+         !g_MdoConfig.Initialized ) return false;
+    Size = pSettings->Size;
+    xrtMutexLock(g_MdoConfig.Lock);
+    Settings = xrtValueObjectGet(g_MdoConfig.Effective,
+        MdoConfigKey("settings"));
+    Power = Settings != NULL ? xrtValueObjectGet(Settings,
+        MdoConfigKey("power")) : NULL;
+    if ( Power != NULL && MdoConfigBool(Power, "prevent_sleep") &&
+         xrtValueGetBool(xrtValueObjectGet(Power,
+            MdoConfigKey("prevent_sleep")), &PreventSleep) ) {
+        memset(pSettings, 0, sizeof(*pSettings));
+        pSettings->Size = Size;
+        pSettings->Revision = g_MdoConfig.Revision;
+        pSettings->PreventSleep = PreventSleep;
+        Ok = true;
+    }
+    xrtMutexUnlock(g_MdoConfig.Lock);
+    return Ok;
 }
 
 bool MdoConfigGetAgentSettings(MdoConfigAgentSettings* pSettings)

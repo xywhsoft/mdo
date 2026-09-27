@@ -4,6 +4,14 @@
 
 完成判据及尚缺的打包页证据见 [前端操作体验完成审计](frontend-completion-audit.md)。本文件继续记录每次实现和验证的细节。
 
+## 2026-09-27：运行期间阻止系统休眠
+
+旧版常规设置的防休眠仅调用 Windows `SetThreadExecutionState`。新版将 `settings.power.prevent_sleep` 接入便携配置、设置 API 和常规设置页；默认关闭，仍沿用预览、ETag 应用及刷新回放。状态 API 返回平台检查结果、当前是否有交互或计划任务运行、抑制请求是否实际生效。若系统机制不可用，页面明确提示并阻止启用，避免出现已打开但无效的开关。三语词典各增加 5 键。
+
+运行管理器只在交互任务启动/执行或计划任务执行期间持有请求，任务结束、关闭设置或退出时释放。Windows 在同一管理线程上设置和清除 `ES_SYSTEM_REQUIRED | ES_CONTINUOUS`；Linux 可选使用 logind `Inhibit` 返回的文件描述符，关闭描述符释放请求；macOS 使用 IOPM 的 `PreventUserIdleSystemSleep` assertion。三种机制都允许屏幕按系统策略熄灭。[Windows 系统休眠条件](https://learn.microsoft.com/en-us/windows/win32/power/system-sleep-criteria)、[logind 抑制接口](https://wiki.freedesktop.org/www/Software/systemd/logind/)、[Apple IOPM assertion](https://developer.apple.com/documentation/iokit/1557078-iopmassertioncreatewithdescripti) 为平台行为依据。
+
+有界生命周期探针覆盖交互任务、计划任务、关闭开关及活动期间退出。Windows/Linux 发布门禁均通过 114 项 Python、58 项 Node、68 个 JS 模块解析、21 个运行探针和确定性打包；Windows 单文件零旁路写入和启动检查通过。根目录 `mdo.exe` 已重建，Windows SHA-256 为 `bbd04a4b63cff688492b4566fcdcd7c19a83f216515da81bfe63343ca069838f`，Linux 包为 `a7b71a4fcdba81e5f8a2b58ec3ae0f6f094cf7b0a5761a9d7cdb1379decd1c09`。隔离单文件 Home `.build/mdo-packed-docks-f78yru8c` 的常规页实测：预览、应用至 revision 2、刷新后保留；320px 视口开关可点击，页面宽度仍为 320px，草稿可放弃。Linux WSL 环境无可用 logind，验证了不可用反馈但尚未在实体 Linux logind 会话检验真实抑制；macOS 仍待原生构建与设备验收。未进行压力或高负载测试。
+
 ## 2026-09-27：常见操作失败的三语反馈
 
 设置、项目、任务创建、计划、审批、询问和运行记录的若干稳定 API 错误此前直接显示服务端英文原文。现在统一在 `errorMessage` 的错误码表中处理：版本信息缺失提示刷新，项目/审批/询问已被其他窗口处理时提示核对，计划忙碌提示等待，项目清除预览不完整时明确不能沿用旧清单。未知错误仍保留服务端详情，避免用笼统译文掩盖未覆盖的故障。原先七个单独分支也并入同一表，方便继续扩充和审阅。

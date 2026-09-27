@@ -6,6 +6,7 @@
 #include "../../include/mdo/config.h"
 #include "../../include/mdo/sessions.h"
 #include "../../include/mdo/home.h"
+#include "../../include/mdo/power.h"
 #include "../../include/mdo/settings.h"
 
 #define MDO_API_LIST_LIMIT 100u
@@ -56,6 +57,7 @@ bool MdoApiSettingsRoute(MdoApiContext* Context)
 {
     MdoSettingsServiceSnapshot Service;
     MdoConfigTransportSettings Transport;
+    MdoPowerManagerStatus PowerRuntime;
     str EffectiveJson;
     size_t EffectiveSize = 0u;
     xvalue* Effective;
@@ -63,6 +65,7 @@ bool MdoApiSettingsRoute(MdoApiContext* Context)
     const xvalue* EffectiveAppearance;
     const xvalue* EffectiveComposer;
     const xvalue* EffectiveNotifications;
+    const xvalue* EffectivePower;
     const xvalue* EffectiveAgent;
     const xvalue* EffectiveWorkspace;
     xvalue* Data = xrtValueObject();
@@ -70,6 +73,8 @@ bool MdoApiSettingsRoute(MdoApiContext* Context)
     xvalue* AppearanceValue = xrtValueObject();
     xvalue* ComposerValue = xrtValueObject();
     xvalue* NotificationsValue = xrtValueObject();
+    xvalue* PowerValue = xrtValueObject();
+    xvalue* PowerRuntimeValue = xrtValueObject();
     xvalue* AgentValue = xrtValueObject();
     xvalue* TransportValue = xrtValueObject();
     xvalue* ProxyValue = xrtValueObject();
@@ -81,6 +86,8 @@ bool MdoApiSettingsRoute(MdoApiContext* Context)
     memset(&Service, 0, sizeof(Service)); Service.Size = sizeof(Service);
     memset(&Transport, 0, sizeof(Transport));
     Transport.Size = sizeof(Transport);
+    memset(&PowerRuntime, 0, sizeof(PowerRuntime));
+    PowerRuntime.Size = sizeof(PowerRuntime);
     EffectiveJson = MdoConfigEffectiveJson(&EffectiveSize);
     Effective = EffectiveJson != NULL ?
         xrtJsonParse(xrtStrViewN(EffectiveJson, EffectiveSize)) : NULL;
@@ -96,6 +103,8 @@ bool MdoApiSettingsRoute(MdoApiContext* Context)
     EffectiveNotifications = EffectiveSettings != NULL ?
         xrtValueObjectGet(EffectiveSettings,
             XRT_STR_LITERAL("notifications")) : NULL;
+    EffectivePower = EffectiveSettings != NULL ?
+        xrtValueObjectGet(EffectiveSettings, XRT_STR_LITERAL("power")) : NULL;
     EffectiveAgent = EffectiveSettings != NULL ?
         xrtValueObjectGet(EffectiveSettings, XRT_STR_LITERAL("agent")) : NULL;
     EffectiveWorkspace = EffectiveSettings != NULL ?
@@ -103,11 +112,13 @@ bool MdoApiSettingsRoute(MdoApiContext* Context)
             XRT_STR_LITERAL("workspace")) : NULL;
     Ok = Data != NULL && Patches != NULL && AppearanceValue != NULL &&
         ComposerValue != NULL && NotificationsValue != NULL &&
+        PowerValue != NULL && PowerRuntimeValue != NULL &&
         AgentValue != NULL && TransportValue != NULL && ProxyValue != NULL &&
         WebValue != NULL && WorkspaceValue != NULL &&
         ServiceValue != NULL && EffectiveSettings != NULL &&
         MdoSettingsServiceGetSnapshot(&Service) &&
-        MdoConfigGetTransportSettings(&Transport);
+        MdoConfigGetTransportSettings(&Transport) &&
+        MdoPowerManagerGetStatus(&PowerRuntime);
     if ( Ok ) Ok =
         MdoApiValueSetBool(Patches, "settings",
             Service.Config.UserPatch[MDO_CONFIG_SETTINGS]) &&
@@ -142,6 +153,19 @@ bool MdoApiSettingsRoute(MdoApiContext* Context)
                 EffectiveNotifications, "sound") :
             MdoApiValueSetBool(NotificationsValue, "sound", false)) &&
         MdoApiValueSetTake(Data, "notifications", &NotificationsValue);
+    if ( Ok ) Ok =
+        MdoApiSettingsBoolField(PowerValue, "prevent_sleep",
+            EffectivePower, "prevent_sleep") &&
+        MdoApiValueSetTake(Data, "power", &PowerValue) &&
+        MdoApiValueSetBool(PowerRuntimeValue, "checked",
+            PowerRuntime.Checked) &&
+        MdoApiValueSetBool(PowerRuntimeValue, "available",
+            PowerRuntime.Available) &&
+        MdoApiValueSetBool(PowerRuntimeValue, "running",
+            PowerRuntime.Running) &&
+        MdoApiValueSetBool(PowerRuntimeValue, "active",
+            PowerRuntime.Active) &&
+        MdoApiValueSetTake(Data, "power_runtime", &PowerRuntimeValue);
     if ( Ok ) Ok =
         MdoApiSettingsStringField(AgentValue, "interaction_mode",
             EffectiveAgent, "interaction_mode") &&
@@ -210,6 +234,7 @@ bool MdoApiSettingsRoute(MdoApiContext* Context)
         MdoApiValueSetTake(Data, "transaction_service", &ServiceValue);
     xrtValueRelease(Patches); xrtValueRelease(AppearanceValue);
     xrtValueRelease(ComposerValue); xrtValueRelease(NotificationsValue);
+    xrtValueRelease(PowerValue); xrtValueRelease(PowerRuntimeValue);
     xrtValueRelease(AgentValue); xrtValueRelease(WebValue);
     xrtValueRelease(TransportValue);
     xrtValueRelease(ProxyValue);

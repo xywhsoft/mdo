@@ -40,6 +40,12 @@ typedef struct MdoConfigAgentSettings {
     char PermissionProfile[64];
 } MdoConfigAgentSettings;
 
+typedef struct MdoConfigPowerSettings {
+    uint32 Size;
+    uint64 Revision;
+    bool PreventSleep;
+} MdoConfigPowerSettings;
+
 typedef struct MdoConfigWebSettings {
     uint32 Size;
     uint64 Revision;
@@ -76,6 +82,7 @@ bool MdoConfigInit(void);
 void MdoConfigUnit(void);
 bool MdoConfigGetSnapshot(MdoConfigSnapshot* pSnapshot);
 bool MdoConfigGetAgentSettings(MdoConfigAgentSettings* pSettings);
+bool MdoConfigGetPowerSettings(MdoConfigPowerSettings* pSettings);
 /* Caller owns the returned UTF-8 text and releases it with xrtFree.
  * An empty string is a valid result; NULL indicates a configuration error. */
 char* MdoConfigAgentInstructions(void);

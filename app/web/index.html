@@ -292,6 +292,7 @@
                   <select id="setting-submit-mode" name="submit_mode"><option value="queue" data-i18n="settings.submitQueue">排队</option><option value="guide" data-i18n="settings.submitGuide">引导</option></select>
                 </div>
                 <label class="setting-switch"><span><strong data-i18n="settings.completionSound">完成提示音</strong><small data-i18n="settings.completionSoundDescription">其他会话的运行结束时播放短提示音。</small></span><input name="completion_sound" type="checkbox"><span class="switch-control" aria-hidden="true"></span></label>
+                <label class="setting-switch"><span><strong data-i18n="settings.preventSleep">运行期间阻止系统休眠</strong><small data-i18n="settings.preventSleepDescription">仅在 Agent 或计划任务运行时保持系统唤醒，任务结束后释放；不阻止息屏。</small><small id="settings-power-status" aria-live="polite"></small></span><input name="prevent_sleep" type="checkbox" aria-describedby="settings-power-status"><span class="switch-control" aria-hidden="true"></span></label>
                 <div class="setting-row">
                   <div><label for="setting-open-mode" data-i18n="settings.openMode">启动时打开</label><p data-i18n="settings.openModeDescription">选择启动后的默认工作区行为。</p></div>
                   <select id="setting-open-mode" name="open_mode"><option value="last" data-i18n="settings.openLast">上次会话</option><option value="new" data-i18n="settings.openNew">新任务</option><option value="ask" data-i18n="settings.openAsk">每次询问</option></select>

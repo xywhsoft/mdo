@@ -1356,7 +1356,8 @@ def run_probe(host: Path) -> None:
                     "schema_version": 1,
                     "patch": {"appearance": {"theme": "dark"},
                               "composer": {"submit_mode": "guide"},
-                              "notifications": {"sound": True}},
+                              "notifications": {"sound": True},
+                              "power": {"prevent_sleep": True}},
                 }).encode()
                 status, headers, body = request(
                     port, "POST", "/api/v1/settings/settings/preview",
@@ -1627,6 +1628,13 @@ def run_probe(host: Path) -> None:
                 assert settings_document["data"]["notifications"] == {
                     "sound": False,
                 }, settings_document
+                assert settings_document["data"]["power"] == {
+                    "prevent_sleep": False,
+                }, settings_document
+                assert settings_document["data"]["power_runtime"]["checked"] is True
+                assert settings_document["data"]["power_runtime"]["active"] is False
+                assert isinstance(settings_document["data"]["power_runtime"][
+                    "available"], bool)
                 assert settings_document["data"]["agent"][
                     "interaction_mode"] == "agent", settings_document
                 assert settings_document["data"]["agent"][
@@ -1689,9 +1697,13 @@ def run_probe(host: Path) -> None:
                 assert stored["patch"]["appearance"]["theme"] == "dark", stored
                 assert stored["patch"]["composer"]["submit_mode"] == "guide", stored
                 assert stored["patch"]["notifications"]["sound"] is True, stored
+                assert stored["patch"]["power"]["prevent_sleep"] is True, stored
                 status, _, body = request(port, "GET", "/api/v1/settings")
                 assert status == 200 and json.loads(body)["data"]["notifications"] == {
                     "sound": True,
+                }, body
+                assert json.loads(body)["data"]["power"] == {
+                    "prevent_sleep": True,
                 }, body
 
                 oversized_instructions = json.dumps({
@@ -1703,6 +1715,17 @@ def run_probe(host: Path) -> None:
                     body=oversized_instructions,
                     headers={"Content-Type": "application/json"})
                 assert status != 200, (status, body)
+
+                invalid_power = json.dumps({
+                    "schema_version": 1,
+                    "patch": {"power": {"prevent_sleep": "yes"}},
+                }).encode()
+                status, _, body = request(
+                    port, "PATCH", "/api/v1/settings/settings/preview",
+                    body=invalid_power,
+                    headers={"Content-Type": "application/json"})
+                assert status == 422 and json.loads(body)["error"]["code"] == (
+                    "configuration_invalid"), body
 
                 merge_document = json.dumps({
                     "schema_version": 1,

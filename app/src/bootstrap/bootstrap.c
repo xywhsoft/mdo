@@ -9,6 +9,7 @@
 #include "../../include/mdo/models.h"
 #include "../../include/mdo/modules.h"
 #include "../../include/mdo/operations.h"
+#include "../../include/mdo/power.h"
 #include "../../include/mdo/runs.h"
 #include "../../include/mdo/schedules.h"
 #include "../../include/mdo/sessions.h"
@@ -167,6 +168,11 @@ bool MdoBootstrapInit(XS_HostInfo* pHost)
     }
     g_MdoBootstrap.Stage = MDO_BOOTSTRAP_EXECUTOR_READY;
 
+    if ( !MdoPowerManagerInit() ) {
+        MdoBootstrapFail("power manager initialization failed");
+        return false;
+    }
+
     memset(&Home, 0, sizeof(Home));
     Home.Size = sizeof(Home);
     if ( MdoHomeGetSnapshot(&Home) ) {
@@ -212,6 +218,7 @@ void MdoBootstrapUnit(void)
 {
     MdoScheduleExecutorUnit();
     MdoRunManagerUnit();
+    MdoPowerManagerUnit();
     MdoAskManagerUnit();
     MdoApprovalManagerUnit();
     MdoSessionManagerUnit();

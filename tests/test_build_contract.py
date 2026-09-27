@@ -83,6 +83,8 @@ class BuildContractTests(unittest.TestCase):
             "src/sessions/todo.c",
             "src/sessions/manager.c",
             "src/approvals/manager.c",
+            "src/power/inhibitor.c",
+            "src/power/manager.c",
             "src/runs/manager.c",
             "src/bootstrap/bootstrap.c",
             "src/api/http.c",

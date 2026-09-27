@@ -17,6 +17,7 @@ function settingsPatch(form, snapshot) {
     },
     composer: { submit_mode: form.elements.submit_mode.value },
     notifications: { sound: form.elements.completion_sound.checked },
+    power: { prevent_sleep: form.elements.prevent_sleep.checked },
     agent: {
       interaction_mode: form.elements.interaction_mode.value,
       reasoning_effort: form.elements.reasoning_effort.value,
@@ -86,6 +87,7 @@ export function createSettingsView({ form, store, navigation, onApplied }) {
   const sectionContent = document.querySelector(".settings-content");
   const credential = document.querySelector("#search-credential-state");
   const proxyCredential = document.querySelector("#proxy-credential-state");
+  const powerStatus = document.querySelector("#settings-power-status");
   const instructionsCount = document.querySelector("#settings-instructions-count");
   let snapshot = null;
   let baselineFingerprint = "";
@@ -115,10 +117,26 @@ export function createSettingsView({ form, store, navigation, onApplied }) {
     busy = value;
     const dirty = Boolean(snapshot) && fingerprint() !== baselineFingerprint;
     previewButton.disabled = value || !dirty ||
-      !form.elements.user_instructions.validity.valid || !validateProxy();
+      !form.elements.user_instructions.validity.valid || !validateProxy() ||
+      !validatePower();
     applyButton.disabled = value || !snapshot || previewFingerprint !== fingerprint();
     discardButton.disabled = value || !dirty;
     restoreButton.disabled = value || !snapshot?.user_patches?.settings;
+  }
+
+  function validatePower() {
+    const runtime = snapshot?.power_runtime;
+    return !form.elements.prevent_sleep.checked || !runtime?.checked ||
+      runtime.available;
+  }
+
+  function renderPowerStatus(settings) {
+    const runtime = settings.power_runtime;
+    powerStatus.textContent = !runtime?.checked
+      ? t("settings.preventSleepChecking")
+      : !runtime.available
+        ? t("settings.preventSleepUnavailable")
+        : t("settings.preventSleepReady");
   }
 
   function focusAfterAction(preferred = feedback) {
@@ -243,6 +261,7 @@ export function createSettingsView({ form, store, navigation, onApplied }) {
       if (applied && snapshot === settings && form.elements.locale.value === selectedLocale) {
         renderCredential(settings);
         renderProxyCredential(settings);
+        renderPowerStatus(settings);
         validateInstructions();
         if (fingerprint() === baselineFingerprint) renderStatus(settings);
         else markDirty();
@@ -252,6 +271,10 @@ export function createSettingsView({ form, store, navigation, onApplied }) {
     form.elements.font_size.value = settings.appearance.font_size;
     form.elements.density.value = settings.appearance.density;
     form.elements.submit_mode.value = settings.composer.submit_mode;
+    form.elements.prevent_sleep.checked = settings.power?.prevent_sleep ?? false;
+    form.elements.prevent_sleep.disabled = Boolean(settings.power_runtime?.checked &&
+      !settings.power_runtime.available && !form.elements.prevent_sleep.checked);
+    renderPowerStatus(settings);
     form.elements.completion_sound.checked = Boolean(settings.notifications?.sound);
     form.elements.open_mode.value = settings.workspace.open_mode;
     form.elements.confirm_external_write.checked = settings.workspace.confirm_external_write;
@@ -298,19 +321,23 @@ export function createSettingsView({ form, store, navigation, onApplied }) {
     previewAppearance();
     const validInstructions = validateInstructions();
     const validProxy = validateProxy();
+    const validPower = validatePower();
     previewFingerprint = "";
     const dirty = Boolean(snapshot) && fingerprint() !== baselineFingerprint;
-    previewButton.disabled = busy || !dirty || !validInstructions || !validProxy;
+    previewButton.disabled = busy || !dirty || !validInstructions ||
+      !validProxy || !validPower;
     applyButton.disabled = true;
     discardButton.disabled = busy || !dirty;
     feedbackText(!validInstructions
       ? t("settings.instructionsTooLong", {}, "自定义指令不能超过 8192 字节。")
       : !validProxy
         ? t("settings.proxyInvalid", {}, "代理地址、端口或用户名需要检查。")
+      : !validPower
+        ? t("settings.preventSleepUnavailable")
       : dirty
         ? t("settings.pending", {}, "有尚未预览的更改。先预览，确认后再应用。")
         : t("settings.synced", {}, "配置与本地服务保持同步。"),
-    validInstructions && validProxy ? "neutral" : "error");
+    validInstructions && validProxy && validPower ? "neutral" : "error");
   }
   form.addEventListener("input", markDirty);
   form.addEventListener("change", markDirty);
@@ -321,6 +348,7 @@ export function createSettingsView({ form, store, navigation, onApplied }) {
       if (snapshot) renderStatus(snapshot);
       if (snapshot) renderCredential(snapshot);
       if (snapshot) renderProxyCredential(snapshot);
+      if (snapshot) renderPowerStatus(snapshot);
       validateInstructions();
       markDirty();
     }
@@ -332,7 +360,7 @@ export function createSettingsView({ form, store, navigation, onApplied }) {
   });
 
   previewButton.addEventListener("click", async () => {
-    if (!snapshot || !form.reportValidity()) return;
+    if (!snapshot || !form.reportValidity() || !validatePower()) return;
     let nextFocus = previewButton;
     setBusy(true);
     try {
@@ -357,7 +385,8 @@ export function createSettingsView({ form, store, navigation, onApplied }) {
   });
 
   applyButton.addEventListener("click", async () => {
-    if (!snapshot || !form.reportValidity() || previewFingerprint !== fingerprint()) return;
+    if (!snapshot || !form.reportValidity() || !validatePower() ||
+        previewFingerprint !== fingerprint()) return;
     setBusy(true);
     try {
       const result = await applySettings(settingsPatch(form, snapshot), snapshot.etag);

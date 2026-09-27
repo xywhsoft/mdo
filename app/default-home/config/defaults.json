@@ -13,6 +13,9 @@
     "notifications": {
       "sound": false
     },
+    "power": {
+      "prevent_sleep": false
+    },
     "agent": {
       "interaction_mode": "agent",
       "reasoning_effort": "medium",
