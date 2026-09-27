@@ -188,6 +188,10 @@ class BoundedDelayProxy(BaseHTTPRequestHandler):
             self.send_error(413)
             return
         body = self.rfile.read(length) if length else None
+        if (self.command == "GET" and self.path in
+                {"/lang/en-US.json", "/lang/ru-RU.json"}):
+            print(f"QA locale GET {self.path}", flush=True)
+            time.sleep(self.server.locale_delay_seconds)
         if self.command == "POST" and self.path == "/api/v1/projects":
             with self.server.count_lock:
                 self.server.project_posts += 1
@@ -421,6 +425,8 @@ parser.add_argument("--create-delay-ms", type=int, default=0,
                     help="delay session create POSTs by 0-5000 ms for new-task QA")
 parser.add_argument("--project-delay-ms", type=int, default=0,
                     help="delay project create POSTs by 0-5000 ms for sidebar navigation QA")
+parser.add_argument("--locale-delay-ms", type=int, default=0,
+                    help="delay non-default locale GETs by 0-5000 ms for settings navigation QA")
 parser.add_argument("--fail-first-project", action="store_true",
                     help="reject one project creation with a 422 error after any delay")
 parser.add_argument("--history-delay-ms", type=int, default=0,
@@ -468,6 +474,8 @@ if not 0 <= args.create_delay_ms <= 5000:
     parser.error("--create-delay-ms must be between 0 and 5000")
 if not 0 <= args.project_delay_ms <= 5000:
     parser.error("--project-delay-ms must be between 0 and 5000")
+if not 0 <= args.locale_delay_ms <= 5000:
+    parser.error("--locale-delay-ms must be between 0 and 5000")
 if not 0 <= args.history_delay_ms <= 5000:
     parser.error("--history-delay-ms must be between 0 and 5000")
 if not 0 <= args.drop_run_response_number <= 3:
@@ -566,6 +574,7 @@ try:
     browser_port = port
     if (args.approval_delay_ms or args.queue_delay_ms or args.run_delay_ms
             or args.create_delay_ms or args.project_delay_ms
+            or args.locale_delay_ms or args.fail_first_project
             or args.history_delay_ms
             or args.drop_first_create_response
             or args.fail_first_create
@@ -581,6 +590,7 @@ try:
         proxy.run_delay_seconds = args.run_delay_ms / 1000
         proxy.create_delay_seconds = args.create_delay_ms / 1000
         proxy.project_delay_seconds = args.project_delay_ms / 1000
+        proxy.locale_delay_seconds = args.locale_delay_ms / 1000
         proxy.fail_first_project = args.fail_first_project
         proxy.history_delay_seconds = args.history_delay_ms / 1000
         proxy.drop_first_create_response = args.drop_first_create_response
