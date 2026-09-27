@@ -439,7 +439,17 @@ export async function boot() {
     onDecisionArrived: (card, kind) => {
       if (!mobileLayout.matches) return;
       if (kind === "approval" && shell.dataset.inspector === "open" &&
-          $("#decisions-tab").getAttribute("aria-selected") === "true") return;
+          $("#decisions-tab").getAttribute("aria-selected") === "true") {
+        const target = [...$("#approval-list").children]
+          .find((item) => item.dataset.approvalId === card.dataset.approvalId);
+        if (target) {
+          const panel = $("#decisions-panel");
+          panel.scrollTop += target.getBoundingClientRect().top -
+            panel.getBoundingClientRect().top;
+          target.querySelector("h3")?.focus({ preventScroll: true });
+        }
+        return;
+      }
       const sidebarOpen = shell.dataset.sidebar === "open";
       const inspectorOpen = shell.dataset.inspector === "open";
       if (!sidebarOpen && !inspectorOpen) return;

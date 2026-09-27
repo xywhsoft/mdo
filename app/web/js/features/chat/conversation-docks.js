@@ -61,7 +61,8 @@ function todoCard(items, expanded, focusKey, onToggle) {
 
 function approvalCard(item, argumentsOpen, onChanged) {
   const key = String(item.id);
-  const card = element("section", { className: "conversation-dock" });
+  const card = element("section", { className: "conversation-dock",
+    attrs: { "data-approval-id": key } });
   const resources = element("ul", { className: "conversation-dock-list" });
   for (const resource of item.resources ?? []) resources.append(element("li", {}, [
     element("span", { className: "conversation-dock-state",

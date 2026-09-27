@@ -27,7 +27,8 @@ export function createDecisionPanel({ container, summary, store, onChanged }) {
 
   function renderCard(item) {
     const key = String(item.id);
-    const card = element("article", { className: "approval-card", attrs: { "data-risk": item.risk } });
+    const card = element("article", { className: "approval-card", attrs: {
+      "data-risk": item.risk, "data-approval-id": key } });
     const allow = element("button", { className: "primary-button approval-allow",
       text: t("decision.allowOnce", {}, "允许一次"), attrs: {
       type: "button", "data-decision-focus": `${key}/allow` } });
@@ -47,7 +48,8 @@ export function createDecisionPanel({ container, summary, store, onChanged }) {
     card.append(
       element("header", { className: "approval-heading" }, [
         element("div", {}, [
-          element("h3", { text: item.tool || t("decision.unknownTool", {}, "未知工具") }),
+          element("h3", { text: item.tool || t("decision.unknownTool", {}, "未知工具"),
+            attrs: { tabindex: "-1", "data-decision-focus": `${key}/title` } }),
           element("p", { text: `${riskLabel(item.risk)} · ${effectList(item.effects ?? []) ||
             t("decision.noEffects", {}, "未声明影响")}` }),
         ]),
@@ -79,6 +81,8 @@ export function createDecisionPanel({ container, summary, store, onChanged }) {
   function render() {
     const focused = container.contains(document.activeElement)
       ? document.activeElement?.dataset.decisionFocus : "";
+    const scrollHost = container.closest('[role="tabpanel"]');
+    const previousScroll = scrollHost?.scrollTop ?? 0;
     for (const details of container.querySelectorAll("details[data-approval-arguments]"))
       argumentsOpen.set(details.dataset.approvalArguments, details.open);
     const items = state.data?.items ?? [];
@@ -108,6 +112,7 @@ export function createDecisionPanel({ container, summary, store, onChanged }) {
       return;
     }
     for (const item of items) container.append(renderCard(item));
+    if (scrollHost) scrollHost.scrollTop = previousScroll;
     if (focused) {
       const replacement = [...container.querySelectorAll("[data-decision-focus]")]
         .find((node) => node.dataset.decisionFocus === focused);
