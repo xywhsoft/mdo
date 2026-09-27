@@ -34,6 +34,7 @@ export function createFileMentions({ composer, input, navigation }) {
   let composing = false;
 
   function hide() {
+    composer.removeAttribute("data-file-menu-open");
     window.clearTimeout(timer);
     controller?.abort();
     controller = null;
@@ -52,6 +53,7 @@ export function createFileMentions({ composer, input, navigation }) {
   function render() {
     clear(list);
     list.hidden = choices.length === 0;
+    composer.toggleAttribute("data-file-menu-open", !list.hidden);
     if (list.hidden) {
       if (input.getAttribute("aria-controls") === list.id) {
         input.setAttribute("aria-controls", "slash-menu");

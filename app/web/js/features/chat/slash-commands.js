@@ -28,6 +28,7 @@ export function createSlashCommands({ composer, input, onExecute }) {
   let composing = false;
 
   function hide() {
+    composer.removeAttribute("data-slash-menu-open");
     matches = [];
     list.hidden = true;
     clear(list);
@@ -38,6 +39,7 @@ export function createSlashCommands({ composer, input, onExecute }) {
   function render() {
     clear(list);
     list.hidden = matches.length === 0;
+    composer.toggleAttribute("data-slash-menu-open", !list.hidden);
     input.setAttribute("aria-expanded", String(matches.length > 0));
     matches.forEach((command, index) => {
       const option = element("div", {
