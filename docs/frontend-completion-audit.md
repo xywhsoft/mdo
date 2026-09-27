@@ -2,6 +2,8 @@
 
 本清单以 `app_bak/wwwroot` 的可操作行为为基线，而不是以页面长得相似或单元测试通过为完成标准。`docs/frontend-migration.md` 记录每次实现和验证；这里记录当前还需要什么证据。审计更新：2026-09-27，基线提交 `f9e2c4c`。
 
+会话操作菜单输入法补验：侧栏和顶栏菜单的 Esc 关闭入口现都忽略 `isComposing` 及 `keyCode=229`，生产模块浏览器夹具通过候选键保持菜单、普通 Esc 关闭并恢复焦点，且原有侧栏视口与动作检查仍通过。打包页及实体设备的输入法事件仍待验收，详见 [迁移记录](frontend-migration.md#2026-09-27会话操作菜单忽略输入法候选-esc)。
+
 Token 弹层与全局 Esc 的事件顺序现在有生产模块联合回归测试：输入法候选键不触发操作，首次 Esc 关闭弹层且不停止运行，再次 Esc 才走全局停止。重新打包的 `mdo.exe` 字节与上阶段一致；15 秒打包页实测证据仍见下节。详见 [迁移记录](frontend-migration.md#2026-09-27token-弹层与全局-esc-的交互回归测试)。
 
 运行中 Token 弹层补验：旧单文件 Home `.build/mdo-packed-docks-9jfk1twa` 中，打开用量后按 Esc 误把慢回复停止并触发恢复决策；最终 Home `.build/mdo-packed-docks-kwne1ex5` 中同一按键只关闭弹层，15 秒有界回复正常完成，焦点回用量入口，脚本错误为空。详见 [迁移记录](frontend-migration.md#2026-09-27token-用量弹层-esc-不再停止运行)。实体设备键盘仍待验收。

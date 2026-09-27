@@ -313,6 +313,7 @@ export function createSessionList({ container, count, filter, searchInput, store
     const menu = currentMenu();
     if (!menu) return;
     if (event.key === "Escape") {
+      if (isImeKey(event)) return;
       event.preventDefault();
       event.stopImmediatePropagation();
       closeMenu(true);

@@ -1,4 +1,4 @@
-import { clear, element, errorMessage, toast } from "../../utils/dom.js";
+import { clear, element, errorMessage, isImeKey, toast } from "../../utils/dom.js";
 import { subscribeLocale } from "../../i18n.js";
 import { sessionActionItems } from "./session-actions.js";
 
@@ -87,7 +87,7 @@ export function createSessionActionMenu({ control, button, menu, navigation,
   }
 
   function onDocumentKeyDown(event) {
-    if (menu.hidden || event.key !== "Escape") return;
+    if (menu.hidden || event.key !== "Escape" || isImeKey(event)) return;
     event.preventDefault();
     event.stopImmediatePropagation();
     close(true);

@@ -19,9 +19,15 @@
 </aside>
 <span id="session-count"></span>
 <select id="session-filter"><option value="active">进行中</option></select>
+<div id="header-session-control">
+  <button id="header-session-button" type="button">会话操作</button>
+  <div id="header-session-menu" hidden role="menu"></div>
+</div>
 <pre id="result"></pre>
 <script type="module">
 import { createSessionList } from "/app/web/js/features/sessions/session-list.js";
+import { createSessionActionMenu } from
+  "/app/web/js/features/sessions/session-action-menu.js";
 
 const session = { id: "test", project_id: "default", agent_id: "mdo.default",
   model_id: "ling-3.0-tiny", title: "Clipped session", status: "active",
@@ -53,7 +59,17 @@ try {
     rect.bottom <= innerHeight && rect.right <= innerWidth;
   const outsideClippingParent = !document.querySelector(".sidebar").contains(menu);
   const firstFocused = document.activeElement === menu.firstElementChild;
-  document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+  function escape(options = {}) {
+    const event = new KeyboardEvent("keydown", { key: "Escape", bubbles: true,
+      cancelable: true, ...options });
+    if (options.keyCode === 229) Object.defineProperty(event, "keyCode", { value: 229 });
+    document.activeElement.dispatchEvent(event);
+  }
+  escape({ isComposing: true });
+  const sidebarComposingKept = Boolean(document.querySelector("#sidebar-session-menu"));
+  escape({ keyCode: 229 });
+  const sidebarCandidateKept = Boolean(document.querySelector("#sidebar-session-menu"));
+  escape();
   const escapeRestored = !document.querySelector("#sidebar-session-menu") &&
     document.activeElement === more;
   more.click();
@@ -72,11 +88,34 @@ try {
   last.click();
   const actionWorked = action === "trash" && !document.querySelector("#sidebar-session-menu") &&
     document.activeElement === document.querySelector(".session-more");
+  const headerButton = document.querySelector("#header-session-button");
+  const headerMenu = document.querySelector("#header-session-menu");
+  const topMenu = createSessionActionMenu({
+    control: document.querySelector("#header-session-control"), button: headerButton,
+    menu: headerMenu,
+    navigation: { get: () => ({ view: "workspace", projectId: "default",
+      sessionId: "test" }), subscribe: () => () => {} },
+    store: { get: () => ({ data: session }), subscribe: () => () => {} },
+    onAction() {},
+  });
+  headerButton.click();
+  headerMenu.firstElementChild.focus();
+  escape({ isComposing: true });
+  const headerComposingKept = !headerMenu.hidden;
+  escape({ keyCode: 229 });
+  const headerCandidateKept = !headerMenu.hidden;
+  escape();
+  const headerEscapeRestored = headerMenu.hidden && document.activeElement === headerButton;
+  topMenu.destroy();
   const passed = withinViewport && outsideClippingParent && firstFocused &&
-    escapeRestored && lastReachable && actionWorked;
+    sidebarComposingKept && sidebarCandidateKept && escapeRestored &&
+    lastReachable && actionWorked && headerComposingKept &&
+    headerCandidateKept && headerEscapeRestored;
   output.dataset.passed = String(passed);
   output.textContent = JSON.stringify({ passed, withinViewport, outsideClippingParent,
-    firstFocused, escapeRestored, lastReachable, actionWorked,
+    firstFocused, sidebarComposingKept, sidebarCandidateKept, escapeRestored,
+    lastReachable, actionWorked, headerComposingKept, headerCandidateKept,
+    headerEscapeRestored,
     initialRect: { top: rect.top, bottom: rect.bottom, left: rect.left, right: rect.right },
     viewport: { width: innerWidth, height: innerHeight } }, null, 2);
 } catch (error) {
