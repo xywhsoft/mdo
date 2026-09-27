@@ -214,6 +214,8 @@
   "settings.synced": "配置与本地服务保持同步。",
   "settings.runtimeError": "运行时配置需要处理：{error}",
   "settings.pending": "有尚未预览的更改。先预览，确认后再应用。",
+  "settings.pendingBadge": "未应用更改",
+  "settings.reviewPending": "返回未应用的设置",
   "settings.previewBytes": "预览通过，将合并 {bytes} 字节配置。",
   "settings.previewNoChange": "预览通过，当前输入不会改变有效配置。",
   "settings.appliedRevision": "配置 revision {revision} 已生效。",

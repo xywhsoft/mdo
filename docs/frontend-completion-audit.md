@@ -2,6 +2,8 @@
 
 本清单以 `app_bak/wwwroot` 的可操作行为为基线，而不是以页面长得相似或单元测试通过为完成标准。`docs/frontend-migration.md` 记录每次实现和验证；这里记录当前还需要什么证据。审计更新：2026-09-27，基线提交 `f9e2c4c`。
 
+设置暂存状态补验：旧单文件 Home `.build/mdo-packed-docks-vcqn58e5` 在 Agent 分区编辑后转到“扩展与 MCP”，预览/应用栏与待应用提示都消失；最终 Home `.build/mdo-packed-docks-2dwq3u5k` 在资源页顶栏提供返回最近编辑分区的入口，放弃或应用后隐藏。320px 中已验证预览、应用、配置 revision 与会话草稿保持；280px 中英俄名称及 40px 目标均可见、无横向溢出或脚本错误。详见 [迁移记录](frontend-migration.md#2026-09-27资源设置页显示未应用修改)。实体触控与原生 WebView 仍待验收。
+
 会话搜索结果键盘补验：旧单文件 Home `.build/mdo-packed-docks-ard528o8` 在 320px 搜索后按方向下键无法进入命中；最终 Home `.build/mdo-packed-docks-ep5mhxz8` 可在两条结果间上下移动并返回搜索框。手机 Enter 选中后焦点交给输入框，点按选中仍保留阅读焦点；桌面 Enter 选中仍停留列表。无命中不丢焦点，页面无横向溢出及脚本错误，详见 [迁移记录](frontend-migration.md#2026-09-27会话搜索结果的键盘选择与移动焦点)。实体移动端键盘和原生 WebView 仍待验收。
 
 会话搜索快捷键补验：旧单文件 Home `.build/mdo-packed-docks-mls87w_c` 的 320px 收起侧栏下按 `/` 被吞掉；最终 Home `.build/mdo-packed-docks-zlfsvfg0` 的手机和折叠桌面侧栏会先展开并聚焦搜索。手机筛选及 Esc 焦点返回、输入框内的命令补全、设置页不抢焦均已实测，详见 [迁移记录](frontend-migration.md#2026-09-27斜杠会话搜索打开收起的侧栏)。实体移动端键盘仍待验收。

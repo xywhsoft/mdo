@@ -89,14 +89,22 @@ export function createSettingsView({ form, store, navigation, onApplied }) {
   const proxyCredential = document.querySelector("#proxy-credential-state");
   const powerStatus = document.querySelector("#settings-power-status");
   const instructionsCount = document.querySelector("#settings-instructions-count");
+  const pendingLink = document.querySelector("#settings-pending-link");
   let snapshot = null;
   let baselineFingerprint = "";
   let previewFingerprint = "";
   let busy = false;
+  let selectedSection = "general";
+  let lastEditedSection = "general";
   let localeReady = Promise.resolve();
 
   function fingerprint() {
     return snapshot ? JSON.stringify(settingsPatch(form, snapshot)) : "";
+  }
+
+  function syncPendingLink() {
+    pendingLink.hidden = !snapshot || fingerprint() === baselineFingerprint ||
+      ["general", "agent", "web"].includes(selectedSection);
   }
 
   function previewAppearance() {
@@ -311,19 +319,23 @@ export function createSettingsView({ form, store, navigation, onApplied }) {
     baselineFingerprint = fingerprint();
     renderCredential(settings);
     previewFingerprint = "";
+    syncPendingLink();
     restoreConfirm.hidden = true;
     renderStatus(settings);
     applyAppearance(settings);
     setBusy(false);
   }
 
-  function markDirty() {
+  function markDirty(event) {
+    const section = event?.target?.closest?.("[data-settings-panel]")?.dataset.settingsPanel;
+    if (["general", "agent", "web"].includes(section)) lastEditedSection = section;
     previewAppearance();
     const validInstructions = validateInstructions();
     const validProxy = validateProxy();
     const validPower = validatePower();
     previewFingerprint = "";
     const dirty = Boolean(snapshot) && fingerprint() !== baselineFingerprint;
+    syncPendingLink();
     previewButton.disabled = busy || !dirty || !validInstructions ||
       !validProxy || !validPower;
     applyButton.disabled = true;
@@ -341,6 +353,11 @@ export function createSettingsView({ form, store, navigation, onApplied }) {
   }
   form.addEventListener("input", markDirty);
   form.addEventListener("change", markDirty);
+  pendingLink.addEventListener("click", () => {
+    navigation.openSettings(lastEditedSection);
+    sectionNavigation.querySelector(
+      `[data-settings-section="${lastEditedSection}"]`)?.focus({ preventScroll: true });
+  });
   form.elements.locale.addEventListener("change", async () => {
     try {
       const applied = await loadLocale(form.elements.locale.value);
@@ -471,6 +488,7 @@ export function createSettingsView({ form, store, navigation, onApplied }) {
     selectSection(section) {
       const available = [...document.querySelectorAll("[data-settings-panel]")];
       const selected = available.some((panel) => panel.dataset.settingsPanel === section) ? section : "general";
+      selectedSection = selected;
       const previous = sectionNavigation.querySelector('[aria-current="page"]')?.dataset.settingsSection;
       for (const panel of available) panel.hidden = panel.dataset.settingsPanel !== selected;
       let activeButton = null;
@@ -486,6 +504,7 @@ export function createSettingsView({ form, store, navigation, onApplied }) {
         sectionContent.scrollTop = 0;
       }
       revealSectionButton(activeButton);
+      syncPendingLink();
     },
     destroy() {
       unsubscribe();

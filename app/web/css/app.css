@@ -1033,6 +1033,20 @@ select:focus-visible,
 
 .settings-header h1 { margin: 0; font-size: 14px; }
 .settings-header p { margin: 1px 0 0; color: var(--muted); font-size: 10px; }
+.settings-pending-link {
+  min-height: 35px;
+  margin-left: auto;
+  padding: 0 10px;
+  border: 1px solid var(--accent);
+  border-radius: var(--radius-sm);
+  background: var(--surface-active);
+  color: var(--ink);
+  font-size: 11px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.settings-pending-link:hover { background: var(--surface-hover); }
+.settings-pending-link:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 .settings-layout { display: grid; min-width: 0; min-height: 0; grid-template-columns: 210px minmax(0, 1fr); }
 .settings-navigation { min-height: 0; overflow: auto; padding: 18px 12px; border-right: 1px solid var(--border); background: var(--surface); }
 .settings-navigation p { margin: 14px 9px 5px; color: var(--faint); font-size: 10px; font-weight: 650; letter-spacing: .04em; text-transform: uppercase; }
@@ -1414,6 +1428,7 @@ select:focus-visible,
   .shortcuts-content dl > div { align-items: flex-start; flex-direction: column; gap: 4px; }
   .shortcuts-content dd { text-align: left; }
   .settings-workspace { grid-row: 1 / -1; }
+  .settings-pending-link { min-height: 40px; }
   .settings-layout { display: block; overflow: auto; }
   .settings-navigation { position: sticky; top: 0; z-index: 2; display: flex; min-height: 48px; overflow-x: auto; scrollbar-width: none; padding: 4px 10px; border-right: 0; border-bottom: 1px solid var(--border); }
   .settings-navigation::-webkit-scrollbar { display: none; }

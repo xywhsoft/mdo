@@ -214,6 +214,8 @@
   "settings.synced": "Configuration is synchronized with the local service.",
   "settings.runtimeError": "Runtime configuration needs attention: {error}",
   "settings.pending": "Unpreviewed changes. Preview and confirm before applying.",
+  "settings.pendingBadge": "Unsaved changes",
+  "settings.reviewPending": "Return to unsaved settings",
   "settings.previewBytes": "Preview passed; {bytes} bytes of configuration will be merged.",
   "settings.previewNoChange": "Preview passed; the effective configuration will not change.",
   "settings.appliedRevision": "Configuration revision {revision} is active.",

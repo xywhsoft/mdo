@@ -214,6 +214,8 @@
   "settings.synced": "Настройки синхронизированы с локальной службой.",
   "settings.runtimeError": "Требуется проверить конфигурацию: {error}",
   "settings.pending": "Есть изменения без предпросмотра. Сначала просмотрите их.",
+  "settings.pendingBadge": "Не сохранено",
+  "settings.reviewPending": "Вернуться к несохранённым настройкам",
   "settings.previewBytes": "Предпросмотр пройден; будет объединено {bytes} байт настроек.",
   "settings.previewNoChange": "Предпросмотр пройден; действующие настройки не изменятся.",
   "settings.appliedRevision": "Версия настроек {revision} применена.",
