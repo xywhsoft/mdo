@@ -221,11 +221,28 @@ export function createConversationDocks({ container, navigation, tasksStore, app
   let revealFrame = 0;
   let userMovedDock = false;
   const noteUserScroll = () => { userMovedDock = true; };
+  const onDockWheel = (event) => {
+    noteUserScroll();
+    if (event.ctrlKey || event.metaKey ||
+        Math.abs(event.deltaX) >= Math.abs(event.deltaY) ||
+        container.scrollHeight <= container.clientHeight) return;
+    const unit = event.deltaMode === 0 ? 1 : event.deltaMode === 1
+      ? (parseFloat(getComputedStyle(container).lineHeight) || 16)
+      : event.deltaMode === 2 ? container.clientHeight : 0;
+    if (!unit) return;
+    const delta = event.deltaY * unit;
+    const step = Math.max(1, Math.floor(container.clientHeight * 0.8));
+    if (Math.abs(delta) <= step) return;
+    // A single mouse-wheel tick can exceed a short dock's entire viewport.
+    // Keep adjacent lines reachable while leaving small trackpad deltas native.
+    event.preventDefault();
+    container.scrollTop += Math.sign(delta) * step;
+  };
   const noteKeyScroll = (event) => {
     if (["ArrowUp", "ArrowDown", "PageUp", "PageDown", "Home", "End"].includes(event.key))
       noteUserScroll();
   };
-  container.addEventListener("wheel", noteUserScroll, { passive: true });
+  container.addEventListener("wheel", onDockWheel, { passive: false });
   container.addEventListener("touchmove", noteUserScroll, { passive: true });
   container.addEventListener("pointerdown", noteUserScroll);
   container.addEventListener("keydown", noteKeyScroll);
@@ -406,7 +423,7 @@ export function createConversationDocks({ container, navigation, tasksStore, app
     cancelAnimationFrame(revealFrame);
     resizeObserver?.disconnect();
     window.removeEventListener("resize", onResize);
-    container.removeEventListener("wheel", noteUserScroll);
+    container.removeEventListener("wheel", onDockWheel);
     container.removeEventListener("touchmove", noteUserScroll);
     container.removeEventListener("pointerdown", noteUserScroll);
     container.removeEventListener("keydown", noteKeyScroll);
