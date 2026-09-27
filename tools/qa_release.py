@@ -197,6 +197,8 @@ def main(argv: list[str] | None = None) -> int:
             raise GateError(
                 f"pack is not deterministic: {first_hash} != {second_hash}"
             )
+        run([sys.executable, str(TESTS / "test_packed_home_lease.py"),
+             "--packed", str(first)])
 
         if os.name == "nt" and not args.skip_gui_smoke:
             windows_single_file(first, args.observe_seconds)

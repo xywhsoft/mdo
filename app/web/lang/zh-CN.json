@@ -84,6 +84,8 @@
   "messageAction.historyChanged": "消息已不在当前会话历史中，请刷新会话",
   "shell.localService": "本地服务 {version}",
   "shell.connecting": "正在连接本地服务…",
+  "shell.homeInUse": "便携数据目录正由另一个 mdo 进程使用。请关闭那个实例后重启当前程序。",
+  "shell.bootstrapFailed": "本地服务初始化失败：{message}",
   "settings.language": "界面语言",
   "settings.languageDescription": "切换界面语言；应用设置后在此设备上保留。",
   "settings.navigation": "设置分类",

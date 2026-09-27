@@ -113,7 +113,7 @@ export async function boot() {
   const draftStatus = $("#draft-status");
   let draftError = null;
   function renderDraftStatus() {
-    draftStatus.hidden = !draftError;
+    draftStatus.hidden = !draftError || Boolean(bootstrapFailure());
     const reason = draftError ? errorMessage(draftError) : "";
     draftStatus.textContent = draftError ? t("draft.saveFailed",
       { error: reason }, `草稿未保存：${reason}`) : "";
@@ -801,9 +801,11 @@ export async function boot() {
     const firstSubmission = draftStore.submission(selectedKey);
     const creatingSession = Boolean(creatingSessionKey) &&
       creatingSessionKey === `${route.projectId}/${route.sessionId}`;
+    const serviceFailed = Boolean(bootstrapFailure());
     // Keep keyboard focus while a newly created session loads its detail.
-    prompt.disabled = (!sessionWritable && !creatingSession) || migratingNewTask;
-    send.disabled = !(sessionWritable || creatingSession) ||
+    prompt.disabled = serviceFailed ||
+      (!sessionWritable && !creatingSession) || migratingNewTask;
+    send.disabled = serviceFailed || !(sessionWritable || creatingSession) ||
       composerImages?.isUploading() || composerProfile.isBusy() ||
       !draftStore.isLoaded(selectedKey) ||
       draftStore.isRunUncertain(selectedKey) ||
@@ -811,7 +813,7 @@ export async function boot() {
       (!route.sessionId && Boolean(newTaskController?.isBlocked())) ||
       migratingNewTask ||
       Boolean(submissionController?.isReleasing(selectedKey));
-    composerImages?.setWritable(sessionWritable && !creatingSession &&
+    composerImages?.setWritable(!serviceFailed && sessionWritable && !creatingSession &&
       !pendingNewTask);
     composerProfile.setRunActive(Boolean(activeRun || creatingNewTask));
     send.setAttribute("aria-label", activeRun || creatingNewTask
@@ -989,14 +991,32 @@ export async function boot() {
     }
   });
 
+  function bootstrapFailure() {
+    const state = bootstrapStore.get();
+    if (state.status !== "ready" || state.data?.stage !== "failed") return "";
+    const message = state.data.message || "";
+    if (message.includes("external Home is already in use"))
+      return t("shell.homeInUse", {},
+        "便携数据目录正由另一个 mdo 进程使用。请关闭那个实例后重启当前程序。");
+    return t("shell.bootstrapFailed", { message },
+      `本地服务初始化失败：${message}`);
+  }
+
   function syncRuntimeLabel() {
     const state = bootstrapStore.get();
-    runtimeState.dataset.state = state.status === "error" ? "error" : state.data?.ready ? "ready" : "loading";
-    runtimeLabel.textContent = state.status === "error"
+    const failure = bootstrapFailure();
+    runtimeState.dataset.state = state.status === "error" || failure ? "error"
+      : state.data?.ready ? "ready" : "loading";
+    runtimeLabel.textContent = failure || (state.status === "error"
       ? errorMessage(state.error)
       : state.data?.ready
         ? t("shell.localService", { version: state.data.version }, `本地服务 ${state.data.version}`)
-        : state.data?.message || t("shell.connecting", {}, "正在连接本地服务…");
+        : state.data?.message || t("shell.connecting", {}, "正在连接本地服务…"));
+    if (failure || composerError.dataset.code === "bootstrap_failed") {
+      hideComposerError();
+      renderDraftStatus();
+      setRun(activeRun);
+    }
   }
   bootstrapStore.subscribe(syncRuntimeLabel);
 
@@ -1312,6 +1332,14 @@ export async function boot() {
   });
 
   function hideComposerError() {
+    const failure = bootstrapFailure();
+    if (failure) {
+      composerError.hidden = false;
+      composerError.textContent = failure;
+      composerError.dataset.code = "bootstrap_failed";
+      delete composerError.dataset.queueItemId;
+      return;
+    }
     composerError.hidden = true;
     composerError.textContent = "";
     delete composerError.dataset.code;
@@ -1359,6 +1387,7 @@ export async function boot() {
   }
   recoveryStore.subscribe(syncRecoveryNotice);
   function showComposerError(error, note = "") {
+    if (bootstrapFailure()) { hideComposerError(); return; }
     composerError.textContent = errorMessage(error);
     if (note) composerError.append(" ", note);
     composerError.dataset.code = error?.code || "";

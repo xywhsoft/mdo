@@ -17,6 +17,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 PROBE_SOURCE = r'''
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <xsbase.h>
 
@@ -38,16 +39,23 @@ static bool ProbeRead(char* sOutput, size_t iCapacity)
 void ServiceInit(XS_HostInfo* pHost)
 {
     static const char sSession[] = "durable-session";
+    static const char* const sReservedPaths[] = {
+        ".mdo.lock", ".MDO.LOCK", ".mdo.lock.", ".mdo.lock "
+    };
     MdoHomeSnapshot Snapshot;
     char sResource[128];
     xfile File;
+    size_t i;
     bool bRead;
     bool bWrite = false;
     bool bMaterialized = false;
+    bool bReserved = true;
     (void)pHost;
 
     if ( !MdoHomeInit() ) {
-        printf("probe_init_error=1\n");
+        const xerror* Error = xrtGetError();
+        printf("probe_init_error=1 message=%s\n",
+            Error != NULL ? xrtErrorMessage(Error) : "unknown");
         return;
     }
     bRead = ProbeRead(sResource, sizeof(sResource));
@@ -62,14 +70,26 @@ void ServiceInit(XS_HostInfo* pHost)
             xrtFlush(File) && xrtClose(File);
     }
     bMaterialized = MdoResourceMaterialize("config/defaults.json");
+    for ( i = 0u; i < sizeof(sReservedPaths) / sizeof(sReservedPaths[0]); i++ ) {
+        File = MdoHomeOpenWrite(sReservedPaths[i], XFILE_CREATE);
+        bReserved = bReserved && File == NULL && xrtGetError() != NULL &&
+            xrtErrorKind(xrtGetError()) == XERR_ARGUMENT;
+        if (File != NULL) (void)xrtClose(File);
+        xrtClearError();
+    }
     memset(&Snapshot, 0, sizeof(Snapshot));
     Snapshot.Size = sizeof(Snapshot);
     printf("probe_resource=%s\n", sResource);
+    printf("probe_reserved=%d\n", bReserved ? 1 : 0);
     printf("probe_ok=%d mode=%d overlay=%d materialized=%d\n",
         bWrite ? 1 : 0,
         MdoHomeGetSnapshot(&Snapshot) ? (int)Snapshot.Persistence : -1,
         Snapshot.ExternalOverlay ? 1 : 0,
         bMaterialized ? 1 : 0);
+    if (getenv("MDO_PROBE_HOLD")) {
+        fflush(stdout);
+        xrtSleep(6000u);
+    }
 }
 
 void ServiceUnit(XS_HostInfo* pHost)
@@ -155,6 +175,52 @@ def run_probe(host: Path, site: Path, home: Path) -> str:
     return "".join(lines)
 
 
+def probe_exclusive_home(host: Path, base: Path) -> None:
+    home = base / "shared-state"
+    first_site = base / "first-site"
+    second_site = base / "second-site"
+    write_site(first_site)
+    write_site(second_site)
+    environment = os.environ.copy()
+    environment["MDO_PROBE_HOLD"] = "1"
+    creationflags = subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0
+    first = subprocess.Popen(
+        [str(host), "xs.json", "--", "--home", str(home)],
+        cwd=first_site, env=environment,
+        stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+        text=True, encoding="utf-8", errors="replace",
+        creationflags=creationflags,
+    )
+    lines: list[str] = []
+    ready = threading.Event()
+    assert first.stdout is not None
+
+    def read_first() -> None:
+        for line in first.stdout:
+            lines.append(line)
+            if "probe_ok=" in line or "probe_init_error=" in line:
+                ready.set()
+
+    reader = threading.Thread(target=read_first, daemon=True)
+    reader.start()
+    try:
+        assert ready.wait(timeout=8.0), "first Home owner did not start"
+        assert first.poll() is None, "first Home owner exited early"
+        assert "probe_ok=1 mode=1" in "".join(lines), "".join(lines)
+        rejected = run_probe(host, second_site, home)
+        assert "probe_init_error=1" in rejected, rejected
+        assert "external Home is already in use" in rejected, rejected
+        assert first.poll() is None, "first Home owner exited during contention"
+    finally:
+        if first.poll() is None:
+            first.terminate()
+        first.wait(timeout=5.0)
+        reader.join(timeout=3.0)
+    restarted = run_probe(host, second_site, home)
+    assert "probe_ok=1 mode=1" in restarted, restarted
+    assert (home / ".mdo.lock").is_file()
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     default_host = ROOT / ".build" / "host" / ("xs.exe" if os.name == "nt" else "xs")
@@ -175,6 +241,7 @@ def main() -> int:
             raise AssertionError("probe Home must begin absent")
         output = run_probe(host, site, home)
         assert "probe_resource=builtin-default" in output, output
+        assert "probe_reserved=1" in output, output
         assert "probe_ok=1 mode=1 overlay=1 materialized=1" in output, output
         assert (home / "sessions" / "probe.txt").read_text(
             encoding="utf-8") == "durable-session"
@@ -194,6 +261,8 @@ def main() -> int:
         assert "probe_resource=builtin-default" in output, output
         assert "probe_ok=0 mode=2 overlay=0 materialized=0" in output, output
         assert not ephemeral.exists()
+
+        probe_exclusive_home(host, base)
 
     print("home runtime probe: PASS")
     return 0

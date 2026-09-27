@@ -84,6 +84,8 @@
   "messageAction.historyChanged": "The message is no longer in this session's history; refresh the session",
   "shell.localService": "Local service {version}",
   "shell.connecting": "Connecting to local service…",
+  "shell.homeInUse": "Another mdo process is using this portable Home. Close it, then restart this instance.",
+  "shell.bootstrapFailed": "Local service failed to start: {message}",
   "settings.language": "Interface language",
   "settings.languageDescription": "Preview a language now; apply settings to keep it on this device.",
   "settings.navigation": "Settings sections",

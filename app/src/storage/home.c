@@ -5,6 +5,7 @@
 
 #define MDO_RESOURCE_PREFIX "/app/default-home/"
 #define MDO_HOME_ERROR_DOMAIN "mdo.home"
+#define MDO_HOME_LEASE_PATH ".mdo.lock"
 
 typedef enum MdoHomeError {
     MDO_HOME_ERROR_ARGUMENT = 1,
@@ -19,6 +20,7 @@ typedef struct MdoHomeState {
     xvfsdisk OverlayDisk;
     xvfsmount OverlayMount;
     xroot Root;
+    xfile LeaseFile;
     char* Path;
     char* BuiltinDefaults;
     size_t BuiltinDefaultsSize;
@@ -37,13 +39,30 @@ static void MdoHomeErrorSet(xerrkind Kind, MdoHomeError Code, cstr Message)
     if ( pError != NULL ) xrtSetErrorTake(pError);
 }
 
+static bool MdoHomeIsLeasePath(cstr Path)
+{
+    size_t i;
+    const char* pLease = MDO_HOME_LEASE_PATH;
+
+    if ( Path == NULL ) return false;
+    for ( i = 0u; pLease[i] != '\0'; i++ ) {
+        unsigned char Ch = (unsigned char)Path[i];
+        if ( Ch == '\0' ) return false;
+        if ( Ch >= 'A' && Ch <= 'Z' ) Ch = (unsigned char)(Ch + ('a' - 'A'));
+        if ( Ch != (unsigned char)pLease[i] ) return false;
+    }
+    while ( Path[i] == '.' || Path[i] == ' ' ) i++;
+    return Path[i] == '\0';
+}
+
 static bool MdoHomePathValid(cstr Path)
 {
     const unsigned char* p;
     const unsigned char* pSegment;
 
     if ( Path == NULL || Path[0] == '\0' || Path[0] == '/' ||
-         Path[0] == '\\' ) return false;
+         Path[0] == '\\' || MdoHomeIsLeasePath(Path) )
+        return false;
     p = (const unsigned char*)Path;
     pSegment = p;
     for ( ; ; p++ ) {
@@ -195,11 +214,34 @@ static bool MdoHomeMountLocked(void)
     const xvfscase CaseMode = XVFS_CASE_SENSITIVE;
 #endif
     xroot Root = NULL;
+    xfile LeaseFile = NULL;
     xvfsdisk Disk = NULL;
     xvfsmount Mount = NULL;
+    xfileoptions Options;
 
     Root = xrtRootOpen(g_MdoHome.Path);
     if ( Root == NULL ) goto fail;
+    xrtFileOptionsInit(&Options);
+    Options.Flags = XFILE_READ | XFILE_WRITE | XFILE_CREATE | XFILE_NOFOLLOW;
+    LeaseFile = xrtRootFileOpen(Root, MDO_HOME_LEASE_PATH, &Options);
+    if ( LeaseFile == NULL ) goto fail;
+    if ( !xrtFileLock(LeaseFile, XFILE_LOCK_EXCLUSIVE, false) ) {
+        xerror* pLockError = xrtTakeError();
+        bool bBusy = pLockError != NULL &&
+            xrtErrorKind(pLockError) == XERR_AGAIN;
+        (void)xrtClose(LeaseFile);
+        LeaseFile = NULL;
+        if ( bBusy ) {
+            xrtErrorFree(pLockError);
+            xrtClearError();
+            MdoHomeErrorSet(XERR_AGAIN, MDO_HOME_ERROR_STORAGE,
+                "external Home is already in use by another process");
+        } else if ( pLockError != NULL ) {
+            xrtClearError();
+            xrtSetErrorTake(pLockError);
+        }
+        goto fail;
+    }
     Disk = xrtVfsDiskCreate(g_MdoHome.Path, XVFS_DISK_READ);
     if ( Disk == NULL ) goto fail;
     Mount = xrtVfsDiskMount(g_MdoHome.ApplicationVfs,
@@ -207,6 +249,7 @@ static bool MdoHomeMountLocked(void)
     if ( Mount == NULL ) goto fail;
 
     g_MdoHome.Root = Root;
+    g_MdoHome.LeaseFile = LeaseFile;
     g_MdoHome.OverlayDisk = Disk;
     g_MdoHome.OverlayMount = Mount;
     g_MdoHome.ExternalOverlay = true;
@@ -219,6 +262,7 @@ fail:
         xerror* pError = xrtTakeError();
         if ( Mount != NULL ) xrtVfsMountDestroy(Mount);
         if ( Disk != NULL ) xrtVfsDiskDestroy(Disk);
+        if ( LeaseFile != NULL ) (void)xrtClose(LeaseFile);
         if ( Root != NULL ) (void)xrtRootClose(Root);
         xrtClearError();
         if ( pError != NULL ) xrtSetErrorTake(pError);
@@ -339,6 +383,8 @@ void MdoHomeUnit(void)
     }
     if ( g_MdoHome.OverlayDisk != NULL )
         xrtVfsDiskDestroy(g_MdoHome.OverlayDisk);
+    if ( g_MdoHome.LeaseFile != NULL )
+        (void)xrtClose(g_MdoHome.LeaseFile);
     if ( g_MdoHome.Root != NULL ) (void)xrtRootClose(g_MdoHome.Root);
     if ( g_MdoHome.ApplicationVfs != NULL )
         xrtVfsDestroy(g_MdoHome.ApplicationVfs);

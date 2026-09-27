@@ -381,7 +381,14 @@ bool MdoBootstrapGetSnapshot(MdoBootstrapSnapshot* pSnapshot)
          !MdoConfigGetSnapshot(&pSnapshot->Config) ) return false;
     memset(&pSnapshot->Home, 0, sizeof(pSnapshot->Home));
     pSnapshot->Home.Size = sizeof(pSnapshot->Home);
-    return MdoHomeGetSnapshot(&pSnapshot->Home);
+    if ( MdoHomeGetSnapshot(&pSnapshot->Home) ) return true;
+    if ( g_MdoBootstrap.Stage != MDO_BOOTSTRAP_FAILED ) return false;
+    xrtClearError();
+    pSnapshot->Home.Persistence = MDO_PERSISTENCE_EPHEMERAL;
+    pSnapshot->Home.Path = "";
+    snprintf(pSnapshot->Home.Message, sizeof(pSnapshot->Home.Message), "%s",
+        g_MdoBootstrap.Message);
+    return true;
 }
 
 xwork_runtime* MdoBootstrapRuntime(void)
