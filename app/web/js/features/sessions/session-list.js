@@ -172,6 +172,14 @@ export function createSessionList({ container, count, filter, searchInput, store
     count.textContent = String(visible.length);
     container.setAttribute("aria-busy", String(state.status === "loading"));
     clear(container);
+    function restoreQuickProjectFocus() {
+      if (!quickFocus) return;
+      const replacement = container.querySelector(`[data-quick-project-focus="${quickFocus}"]`)
+        ?? container.querySelector(".project-quick-add input");
+      replacement?.focus({ preventScroll: true });
+      if (quickSelection && replacement?.setSelectionRange)
+        replacement.setSelectionRange(...quickSelection);
+    }
 
     if (state.status === "error") {
       openMenu = "";
@@ -183,6 +191,20 @@ export function createSessionList({ container, count, filter, searchInput, store
       container.append(element("div", { className: "empty-state",
         text: t("nav.loading", {}, "正在载入会话…") }));
       return;
+    }
+    if (status === "active") {
+      const add = element("button", { className: "session-group-new", text: "+",
+        attrs: { type: "button", "aria-label": t("nav.addProject", {}, "添加项目"),
+          title: t("nav.addProject", {}, "添加项目") } });
+      add.disabled = quickProjectBusy;
+      add.addEventListener("click", () => {
+        if (!quickProjectOpen) { quickProjectOpen = true; render(); }
+        container.querySelector(".project-quick-add input")?.focus();
+      });
+      container.append(element("div", { className: "session-group-heading project-list-heading" }, [
+        element("span", { className: "session-group-name", text: t("nav.projects", {}, "项目") }), add,
+      ]));
+      if (quickProjectOpen) container.append(quickProjectForm());
     }
     if (visible.length === 0 && orderedGroups.length === 0) {
       openMenu = "";
@@ -201,6 +223,7 @@ export function createSessionList({ container, count, filter, searchInput, store
         text: emptyText,
       }));
       if (requestedFocus || retainedFocus) filter.focus();
+      restoreQuickProjectFocus();
       return;
     }
 
@@ -231,21 +254,6 @@ export function createSessionList({ container, count, filter, searchInput, store
         children.push(create);
       }
       container.append(element("div", { className: "session-group-heading" }, children));
-    }
-
-    if (status === "active" && !needle) {
-      const add = element("button", { className: "session-group-new", text: "+",
-        attrs: { type: "button", "aria-label": t("nav.addProject", {}, "添加项目"),
-          title: t("nav.addProject", {}, "添加项目") } });
-      add.disabled = quickProjectBusy;
-      add.addEventListener("click", () => {
-        if (!quickProjectOpen) { quickProjectOpen = true; render(); }
-        container.querySelector(".project-quick-add input")?.focus();
-      });
-      container.append(element("div", { className: "session-group-heading project-list-heading" }, [
-        element("span", { className: "session-group-name", text: t("nav.projects", {}, "项目") }), add,
-      ]));
-      if (quickProjectOpen) container.append(quickProjectForm());
     }
 
     function appendSession(session, showProject = false) {
@@ -321,13 +329,7 @@ export function createSessionList({ container, count, filter, searchInput, store
     if (openMenu && !openMenuNode) openMenu = "";
     if (!restoredFocus && (requestedFocus || retainedFocus))
       (container.querySelector(".session-item, .session-group-new") ?? filter).focus();
-    if (quickFocus) {
-      const replacement = container.querySelector(`[data-quick-project-focus="${quickFocus}"]`)
-        ?? container.querySelector(".project-quick-add input");
-      replacement?.focus({ preventScroll: true });
-      if (quickSelection && replacement?.setSelectionRange)
-        replacement.setSelectionRange(...quickSelection);
-    }
+    restoreQuickProjectFocus();
   }
 
   const unsubscribeStore = store.subscribe((next) => { state = next; render(); });
