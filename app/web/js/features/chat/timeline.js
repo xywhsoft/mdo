@@ -534,6 +534,7 @@ export function createTimelineView({ container, welcome, toBottom, store, sessio
   let frame = 0;
   let followTail = true;
   let searchQuery = "";
+  let revealFirstSearchMatch = false;
   let renderedSession = "";
   const expanded = new Map();
   const previewExpanded = new Map();
@@ -660,7 +661,15 @@ export function createTimelineView({ container, welcome, toBottom, store, sessio
       replacement?.querySelector("summary")?.focus({ preventScroll: true });
     }
     if (!data?.sessionId) scroller.scrollTop = 0;
-    else if (followTail && !searchQuery) scroller.scrollTop = scroller.scrollHeight;
+    else if (revealFirstSearchMatch) {
+      revealFirstSearchMatch = false;
+      const first = container.querySelector(".timeline-item");
+      const searchBar = scroller.querySelector(".conversation-find:not([hidden])");
+      if (first && searchBar)
+        scroller.scrollTop += first.getBoundingClientRect().top -
+          searchBar.getBoundingClientRect().bottom;
+      else scroller.scrollTop = 0;
+    } else if (followTail && !searchQuery) scroller.scrollTop = scroller.scrollHeight;
     updateBottomButton();
   }
 
@@ -704,7 +713,9 @@ export function createTimelineView({ container, welcome, toBottom, store, sessio
       }
     },
     search(query) {
-      searchQuery = query.trim().toLocaleLowerCase();
+      const next = query.trim().toLocaleLowerCase();
+      revealFirstSearchMatch = Boolean(next) && next !== searchQuery;
+      searchQuery = next;
       queueRender(store.get());
     },
     destroy() {
