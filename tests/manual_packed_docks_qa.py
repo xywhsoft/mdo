@@ -194,6 +194,19 @@ class BoundedDelayProxy(BaseHTTPRequestHandler):
                 count = self.server.project_posts
             print(f"QA project POST #{count}", flush=True)
             time.sleep(self.server.project_delay_seconds)
+            if self.server.fail_first_project and count == 1:
+                payload = json.dumps({"ok": False, "error": {
+                    "code": "project_invalid",
+                    "message": "Synthetic project rejection"
+                }}).encode()
+                self.send_response(422)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Content-Length", str(len(payload)))
+                self.send_header("Connection", "close")
+                self.end_headers()
+                self.wfile.write(payload)
+                self.close_connection = True
+                return
         if (self.server.reject_pane_layout and self.path == "/api/v1/pane-layout"
                 and self.command in {"GET", "PUT"}):
             payload = json.dumps({"ok": False, "error": {
@@ -408,6 +421,8 @@ parser.add_argument("--create-delay-ms", type=int, default=0,
                     help="delay session create POSTs by 0-5000 ms for new-task QA")
 parser.add_argument("--project-delay-ms", type=int, default=0,
                     help="delay project create POSTs by 0-5000 ms for sidebar navigation QA")
+parser.add_argument("--fail-first-project", action="store_true",
+                    help="reject one project creation with a 422 error after any delay")
 parser.add_argument("--history-delay-ms", type=int, default=0,
                     help="delay history GETs by 0-5000 ms for message-action QA")
 parser.add_argument("--drop-first-create-response", action="store_true",
@@ -566,6 +581,7 @@ try:
         proxy.run_delay_seconds = args.run_delay_ms / 1000
         proxy.create_delay_seconds = args.create_delay_ms / 1000
         proxy.project_delay_seconds = args.project_delay_ms / 1000
+        proxy.fail_first_project = args.fail_first_project
         proxy.history_delay_seconds = args.history_delay_ms / 1000
         proxy.drop_first_create_response = args.drop_first_create_response
         proxy.fail_first_create = args.fail_first_create
