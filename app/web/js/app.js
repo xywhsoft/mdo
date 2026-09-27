@@ -67,7 +67,7 @@ import { createSessionMetadataSync } from "./features/shell/session-metadata-syn
 import { createPaneLayout } from "./features/shell/pane-layout.js";
 import { trackMobileViewport } from "./features/shell/mobile-viewport.js";
 import { api } from "./api/client.js";
-import { clear, element, errorMessage, isImeKey, toast } from "./utils/dom.js";
+import { clear, element, errorMessage, isImeKey, refreshRelativeTimes, toast } from "./utils/dom.js";
 import { subscribeLocale, t } from "./i18n.js";
 
 const $ = (selector) => {
@@ -2167,6 +2167,9 @@ export async function boot() {
   approvalsStore.subscribe(scheduleApprovalRefresh);
   asksStore.subscribe(scheduleApprovalRefresh);
   recoveryStore.subscribe(scheduleApprovalRefresh);
+  window.setInterval(() => {
+    if (!document.hidden) refreshRelativeTimes();
+  }, 30_000);
   document.addEventListener("visibilitychange", () => {
     if (document.hidden) {
       window.clearTimeout(tasksTimer);
@@ -2175,6 +2178,7 @@ export async function boot() {
       window.clearTimeout(approvalsTimer);
     }
     else {
+      refreshRelativeTimes();
       scheduleTaskRefresh();
       void loadRuns().then(refreshSelectedQueue);
       void loadSessions();

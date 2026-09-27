@@ -276,7 +276,8 @@ export function createSessionList({ container, count, filter, searchInput, store
         },
       }, [
         element("span", { className: "session-item-title", text: session.title || t("nav.untitled", {}, "未命名任务") }),
-        element("time", { className: "session-item-time", text: formatRelativeTime(session.updated_at) }),
+        element("time", { className: "session-item-time", text: formatRelativeTime(session.updated_at),
+          attrs: { "data-relative-time": session.updated_at } }),
         element("span", { className: "session-item-meta", text: `${showProject ? `${session.project_id} · ` : ""}${session.model_id || session.agent_id}${hasUnread ? ` · ${t("nav.unread", {}, "有新结果")}` : ""}` }),
       ]);
       button.addEventListener("click", (event) => onSelect(session, event));

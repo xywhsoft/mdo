@@ -48,6 +48,15 @@ export function formatRelativeTime(microseconds) {
   return new Intl.DateTimeFormat(currentLocale(), { month: "short", day: "numeric" }).format(time);
 }
 
+// Update only time text. Rebuilding a list here would discard keyboard focus,
+// the open action menu, and the reader's current scroll position.
+export function refreshRelativeTimes(root = document) {
+  for (const node of root.querySelectorAll("[data-relative-time]")) {
+    const label = formatRelativeTime(node.dataset.relativeTime);
+    if (node.textContent !== label) node.textContent = label;
+  }
+}
+
 export function formatClock(microseconds) {
   const time = Number(microseconds) / 1000;
   if (!Number.isFinite(time) || time <= 0) return "";
