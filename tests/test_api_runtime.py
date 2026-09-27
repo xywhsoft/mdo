@@ -2144,7 +2144,7 @@ def run_probe(host: Path) -> None:
                 assert status == 200 and json.loads(body)["data"][
                     "new_task"] == new_task, (status, body)
                 assert json.loads((home / "data/draft.json").read_text(
-                    encoding="utf-8"))["schema_version"] == 6
+                    encoding="utf-8"))["schema_version"] == 7
                 status, _, body = request(port, "GET", "/api/v1/draft")
                 assert status == 200 and json.loads(body)["data"][
                     "submissions"] == [first_submission], (status, body)
@@ -2257,7 +2257,7 @@ def run_probe(host: Path) -> None:
                     "attachments"] == [], (status, body)
                 assert json.loads((home / f"sessions/api-project/{session_id}/"
                                    "draft.json").read_text(encoding="utf-8"))[
-                    "schema_version"] == 6
+                    "schema_version"] == 7
                 status, _, body = request(port, "PUT", draft_path,
                     body=b'{"revision":3,"text":"review before retry",'
                          b'"run_admission_uncertain":true}',
@@ -2346,7 +2346,15 @@ def run_probe(host: Path) -> None:
                 stored_draft = (home / f"sessions/api-project/{session_id}/"
                                 "draft.json")
                 assert json.loads(stored_draft.read_text(encoding="utf-8"))[
-                    "schema_version"] == 6
+                    "schema_version"] == 7
+                stored_draft.write_text(json.dumps({
+                    "schema_version": 6, "revision": 12,
+                    "text": "legacy schema six", "attachments": [],
+                    "run_admission_uncertain": False,
+                    "submissions": [rejected]}), encoding="utf-8")
+                status, _, body = request(port, "GET", draft_path)
+                assert status == 200 and json.loads(body)["data"][
+                    "submissions"] == [rejected], (status, body)
                 stored_draft.write_text(json.dumps({
                     "schema_version": 4, "revision": 12,
                     "text": "legacy singleton", "attachments": [],
@@ -2369,11 +2377,47 @@ def run_probe(host: Path) -> None:
                     body=b'{"revision":13,"text":"legacy draft updated"}',
                     headers={"Content-Type": "application/json"})
                 assert status == 200 and json.loads(stored_draft.read_text(
-                    encoding="utf-8"))["schema_version"] == 6, (status, body)
+                    encoding="utf-8"))["schema_version"] == 7, (status, body)
+                snapshot = {"model_id": "ling-3.0-tiny",
+                            "reasoning_effort": "high",
+                            "permission_profile": "balanced"}
+                revision = json.loads(body)["data"]["revision"]
+                status, _, body = request(port, "PUT", draft_path,
+                    body=json.dumps({"revision": revision,
+                                     "text": "legacy draft updated",
+                                     "composer_profile": snapshot}).encode(),
+                    headers={"Content-Type": "application/json"})
+                assert status == 200 and json.loads(body)["data"][
+                    "composer_profile"] == snapshot, (status, body)
+                revision = json.loads(body)["data"]["revision"]
+                status, _, body = request(port, "PUT", draft_path,
+                    body=json.dumps({"revision": revision,
+                                     "text": "unrelated text edit"}).encode(),
+                    headers={"Content-Type": "application/json"})
+                assert status == 200 and json.loads(body)["data"][
+                    "composer_profile"] == snapshot, (status, body)
+                assert json.loads(stored_draft.read_text(encoding="utf-8"))[
+                    "composer_profile"] == snapshot
+                revision = json.loads(body)["data"]["revision"]
+                status, _, body = request(port, "PUT", draft_path,
+                    body=json.dumps({"revision": revision,
+                                     "text": "unrelated text edit",
+                                     "composer_profile": {**snapshot,
+                                         "permission_profile": "invalid"}}).encode(),
+                    headers={"Content-Type": "application/json"})
+                assert status == 422 and json.loads(body)["error"][
+                    "code"] == "draft_invalid", (status, body)
+                status, _, body = request(port, "PUT", draft_path,
+                    body=json.dumps({"revision": revision,
+                                     "text": "unrelated text edit",
+                                     "composer_profile": None}).encode(),
+                    headers={"Content-Type": "application/json"})
+                assert status == 200 and "composer_profile" not in json.loads(
+                    body)["data"], (status, body)
                 append_path = draft_path + "/submissions"
                 append_a = {"id": "6" * 32, "text": "parallel intent A",
                             "attachments": [], "interrupt": False,
-                            "state": "prepared"}
+                            "state": "prepared", "profile": snapshot}
                 append_b = {"id": "7" * 32, "text": "parallel intent B",
                             "attachments": [], "interrupt": True,
                             "state": "prepared"}
@@ -2399,7 +2443,7 @@ def run_probe(host: Path) -> None:
                     append_results)
                 appended = json.loads(request(port, "GET", draft_path)[2])[
                     "data"]
-                assert appended["text"] == "legacy draft updated"
+                assert appended["text"] == "unrelated text edit"
                 assert {item["id"] for item in appended["submissions"]} == {
                     append_a["id"], append_b["id"]}, appended
                 status, _, body = request(port, "POST", append_path,
@@ -2407,6 +2451,12 @@ def run_probe(host: Path) -> None:
                     headers={"Content-Type": "application/json"})
                 assert status == 200 and len(json.loads(body)["data"][
                     "submissions"]) == 2, (status, body)
+                status, _, body = request(port, "POST", append_path,
+                    body=json.dumps({**append_a, "profile": {
+                        **snapshot, "reasoning_effort": "low"}}).encode(),
+                    headers={"Content-Type": "application/json"})
+                assert status == 409 and json.loads(body)["error"][
+                    "code"] == "draft_submission_conflict", (status, body)
                 status, _, body = request(port, "POST", append_path,
                     body=json.dumps({**append_a, "text": "different"}).encode(),
                     headers={"Content-Type": "application/json"})
@@ -2425,6 +2475,9 @@ def run_probe(host: Path) -> None:
                 assert status == 200 and next(item for item in
                     json.loads(body)["data"]["submissions"] if item["id"] ==
                     append_a["id"])["state"] == "posting", (status, body)
+                assert next(item for item in json.loads(body)["data"][
+                    "submissions"] if item["id"] == append_a["id"])[
+                        "profile"] == snapshot, (status, body)
                 posting_revision = json.loads(body)["data"]["revision"]
                 status, _, body = request(port, "PUT", state_path,
                     body=b'{"state":"posting"}',

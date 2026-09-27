@@ -372,3 +372,57 @@ test("multiple pending submissions keep their order and state across reload", as
     globalThis.fetch = originalFetch;
   }
 });
+
+test("composer profile and per-message snapshots survive edits and reload", async () => {
+  const originalWindow = globalThis.window;
+  const originalFetch = globalThis.fetch;
+  const firstProfile = { model_id: "ling-3.0-tiny",
+    reasoning_effort: "medium", permission_profile: "balanced" };
+  const secondProfile = { ...firstProfile, reasoning_effort: "high" };
+  let saved = { revision: 1, text: "", attachments: [],
+    run_admission_uncertain: false, submissions: [],
+    composer_profile: firstProfile };
+  globalThis.window = { setTimeout, clearTimeout, addEventListener() {} };
+  globalThis.fetch = async (_path, options) => {
+    if (options.method === "GET")
+      return Response.json({ ok: true, data: saved });
+    const body = JSON.parse(options.body);
+    assert.equal(body.revision, saved.revision);
+    saved = { ...body, revision: saved.revision + 1 };
+    return Response.json({ ok: true, data: saved });
+  };
+  try {
+    const key = "default/profiles";
+    const store = createDraftStore({ onRestore() {}, onError(error) {
+      throw error;
+    }, onSaved() {} });
+    store.select(key);
+    store.edit(key, "typed before load", []);
+    assert.equal(await store.ensureLoaded(key), true);
+    assert.deepEqual(store.composerProfile(key), firstProfile);
+    assert.equal(await store.flush(key), true);
+    assert.deepEqual(saved.composer_profile, firstProfile);
+    const first = { id: "a".repeat(32), text: "first", attachments: [],
+      interrupt: false, state: "prepared", profile: firstProfile };
+    assert.equal(store.appendSubmission(key, first), true);
+    assert.equal(store.setComposerProfile(key, secondProfile), true);
+    const second = { ...first, id: "b".repeat(32), text: "second",
+      profile: secondProfile };
+    assert.equal(store.appendSubmission(key, second), true);
+    assert.equal(await store.flush(key), true);
+    assert.deepEqual(saved.submissions, [first, second]);
+    assert.deepEqual(saved.composer_profile, secondProfile);
+    const reopened = createDraftStore({ onRestore() {}, onError(error) {
+      throw error;
+    }, onSaved() {} });
+    reopened.select(key);
+    assert.equal(await reopened.ensureLoaded(key), true);
+    assert.deepEqual(reopened.submissions(key), [first, second]);
+    assert.deepEqual(reopened.composerProfile(key), secondProfile);
+    assert.equal(reopened.isSubmissionDurable(key, { ...first,
+      profile: secondProfile }), false);
+  } finally {
+    globalThis.window = originalWindow;
+    globalThis.fetch = originalFetch;
+  }
+});

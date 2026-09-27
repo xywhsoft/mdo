@@ -15,30 +15,57 @@ function sameIds(a, b) {
   return a.length === b.length && a.every((id, index) => id === b[index]);
 }
 
+function profile(value) {
+  if (value == null) return null;
+  if (typeof value !== "object" || Array.isArray(value) ||
+      Object.keys(value).length !== 3 ||
+      !["read-only", "balanced", "full-access"].includes(
+        value.permission_profile)) return undefined;
+  const fields = [["model_id", 128], ["reasoning_effort", 32],
+    ["permission_profile", 32]];
+  if (fields.some(([name, limit]) => typeof value[name] !== "string" ||
+      !value[name] || value[name].includes("\0") ||
+      new TextEncoder().encode(value[name]).length > limit)) return undefined;
+  return { model_id: value.model_id,
+    reasoning_effort: value.reasoning_effort,
+    permission_profile: value.permission_profile };
+}
+
+function sameProfile(a, b) {
+  return (!a && !b) || (a && b && a.model_id === b.model_id &&
+    a.reasoning_effort === b.reasoning_effort &&
+    a.permission_profile === b.permission_profile);
+}
+
 function submission(value) {
   if (!value || !/^[0-9a-f]{32}$/.test(value.id) ||
       typeof value.text !== "string" || typeof value.interrupt !== "boolean" ||
       !["prepared", "posting", "rejected"].includes(value.state))
     return null;
   const attachments = imageIds(value.attachments);
+  const snapshot = profile(value.profile);
   if (!Array.isArray(value.attachments) ||
+      snapshot === undefined ||
+      (Object.hasOwn(value, "profile") && snapshot === null) ||
       attachments.length !== value.attachments.length ||
       attachments.length > 4 ||
       new TextEncoder().encode(value.text).length > MAX_DRAFT_BYTES ||
       (!value.text && !attachments.length)) return null;
   return { id: value.id, text: value.text, attachments,
-    interrupt: value.interrupt, state: value.state };
+    interrupt: value.interrupt, state: value.state,
+    ...(snapshot ? { profile: snapshot } : {}) };
 }
 
 function sameSubmission(a, b) {
   return (!a && !b) || (a && b && a.id === b.id && a.text === b.text &&
     a.interrupt === b.interrupt && a.state === b.state &&
-    sameIds(a.attachments, b.attachments));
+    sameIds(a.attachments, b.attachments) && sameProfile(a.profile, b.profile));
 }
 
 function sameSubmissionPayload(a, b) {
   return a?.id === b?.id && a?.text === b?.text &&
-    a?.interrupt === b?.interrupt && sameIds(a.attachments, b.attachments);
+    a?.interrupt === b?.interrupt && sameIds(a.attachments, b.attachments) &&
+    sameProfile(a.profile, b.profile);
 }
 
 function submissions(value) {
@@ -96,7 +123,8 @@ export function createDraftStore({ onRestore, onError, onSaved, onLoaded = () =>
     let value = entries.get(key);
     if (!value) {
       value = { text: "", attachments: [], revision: 0, loaded: false, dirty: false,
-        uncertainRun: false, submissions: [], newTask: null, conflict: false,
+        uncertainRun: false, submissions: [], newTask: null,
+        composerProfile: null, profileEdited: false, conflict: false,
         unpersisted: new Set(), error: null, oversized: false, loading: null,
         saving: null, timer: 0 };
       entries.set(key, value);
@@ -130,7 +158,8 @@ export function createDraftStore({ onRestore, onError, onSaved, onLoaded = () =>
         if (!storedSubmissions)
           throw new Error(t("draft.submissionConflict"));
         const storedNewTask = newTask(response.data.new_task);
-        if (storedNewTask === undefined ||
+        const storedProfile = profile(response.data.composer_profile);
+        if (storedNewTask === undefined || storedProfile === undefined ||
             (current.newTask && storedNewTask &&
              !sameNewTask(current.newTask, storedNewTask))) {
           current.conflict = true;
@@ -146,6 +175,7 @@ export function createDraftStore({ onRestore, onError, onSaved, onLoaded = () =>
         if (!current.submissions.length) current.submissions = storedSubmissions;
         for (const item of storedSubmissions) current.unpersisted.delete(item.id);
         current.newTask ??= storedNewTask;
+        if (!current.profileEdited) current.composerProfile = storedProfile;
         if (!current.dirty) {
           current.text = response.data.text ?? "";
           current.attachments = imageIds(response.data.attachments);
@@ -180,6 +210,8 @@ export function createDraftStore({ onRestore, onError, onSaved, onLoaded = () =>
         const uncertainRun = current.uncertainRun;
         const stagedSubmissions = [...current.submissions];
         const stagedNewTask = current.newTask && { ...current.newTask };
+        const stagedProfile = current.composerProfile &&
+          { ...current.composerProfile };
         if (encoder.encode(text).length > MAX_DRAFT_BYTES) {
           current.oversized = true;
           current.error = Object.assign(new Error(t("draft.tooLarge", {},
@@ -192,17 +224,21 @@ export function createDraftStore({ onRestore, onError, onSaved, onLoaded = () =>
         try {
           const body = { revision: current.revision, text, attachments,
             run_admission_uncertain: uncertainRun,
-            submissions: stagedSubmissions };
+            submissions: stagedSubmissions,
+            composer_profile: stagedProfile };
           if (!key) body.new_task = stagedNewTask;
           const keepalive = encoder.encode(JSON.stringify(body)).length <= 60 * 1024;
           const response = await api.put(endpoint(key), body, { keepalive });
           current.revision = Number(response.data.revision);
           current.error = null;
+          if (sameProfile(current.composerProfile, stagedProfile))
+            current.profileEdited = false;
           for (const item of stagedSubmissions)
             current.unpersisted.delete(item.id);
           if (current.text !== text || !sameIds(current.attachments, attachments) ||
               current.uncertainRun !== uncertainRun ||
               !sameSubmissions(current.submissions, stagedSubmissions) ||
+              !sameProfile(current.composerProfile, stagedProfile) ||
               !sameNewTask(current.newTask, stagedNewTask))
             current.dirty = true;
           if (selected === key && !current.dirty) onSaved();
@@ -227,8 +263,10 @@ export function createDraftStore({ onRestore, onError, onSaved, onLoaded = () =>
   function applySessionResponse(key, data) {
     const current = entry(key);
     const remoteSubmissions = submissions(data?.submissions);
+    const remoteProfile = profile(data?.composer_profile);
     const revision = Number(data?.revision);
-    if (!remoteSubmissions || !Number.isSafeInteger(revision) ||
+    if (!remoteSubmissions || remoteProfile === undefined ||
+        !Number.isSafeInteger(revision) ||
         revision < 0 || typeof data.text !== "string" ||
         !Array.isArray(data.attachments) ||
         imageIds(data.attachments).length !== data.attachments.length)
@@ -246,7 +284,8 @@ export function createDraftStore({ onRestore, onError, onSaved, onLoaded = () =>
           !sameSubmissionPayload(remote, item))))
       throw new Error(t("draft.submissionConflict"));
     const sameText = current.text === data.text &&
-      sameIds(current.attachments, remoteAttachments);
+      sameIds(current.attachments, remoteAttachments) &&
+      sameProfile(current.composerProfile, remoteProfile);
     const savingLocalEdit = Boolean(current.saving);
     const hadLocalEdit = current.dirty || current.conflict || savingLocalEdit;
     current.revision = revision;
@@ -265,6 +304,8 @@ export function createDraftStore({ onRestore, onError, onSaved, onLoaded = () =>
     } else if (!localOnly.length && !hadLocalEdit) {
       current.text = data.text;
       current.attachments = remoteAttachments;
+      current.composerProfile = remoteProfile;
+      current.profileEdited = false;
       current.error = null;
       if (selected === key) {
         onRestore(current.text, [...current.attachments],
@@ -396,6 +437,19 @@ export function createDraftStore({ onRestore, onError, onSaved, onLoaded = () =>
     },
     isRunUncertain(key) { return entry(key).uncertainRun; },
     text(key) { return entry(key).text; },
+    composerProfile(key) { return entry(key).composerProfile &&
+      { ...entry(key).composerProfile }; },
+    setComposerProfile(key, value) {
+      const current = entry(key);
+      const next = profile(value);
+      if (next === undefined || sameProfile(current.composerProfile, next))
+        return false;
+      current.composerProfile = next;
+      current.profileEdited = true;
+      current.dirty = true;
+      schedule(key, true);
+      return true;
+    },
     newTask(key = "") { return key ? null : entry("").newTask; },
     setNewTask(value) {
       const current = entry("");
