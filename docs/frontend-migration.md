@@ -4,6 +4,12 @@
 
 完成判据及尚缺的打包页证据见 [前端操作体验完成审计](frontend-completion-audit.md)。本文件继续记录每次实现和验证的细节。
 
+## 2026-09-27：最新交互改动的 Linux 有界回归
+
+将当前提交的源码复制到 WSL 的 ext4 文件系统，从锁定的 xserver `ca2c8c2` 重新构建 Linux 宿主和单文件包，运行 `python3 tools/qa_release.py --xserver-root /home/ubuntu/.cache/mdo-linux-qa-73d848b/xserver --skip-gui-smoke`。114 项 Python 检查、67 项 Node 测试、69 个前端模块解析、21 个运行探针与两次确定性打包均通过；Linux 包 SHA-256 为 `2c2dd66b1c3347430e76b95e6d8e1a0667e19bef4ff2207c9db7b9807ac6da46`。此前第一次复制时把 `--exclude=mdo` 错用成任意目录名排除，漏掉 `app/include/mdo`；修正为仅排除根目录可执行文件后重跑，以上通过结果来自完整源码。未运行压力或高负载测试。
+
+再由 Linux 单文件包启动隔离 Home `.build/mdo-packed-docks-a4w0uvoe`，从 Windows 浏览器访问其 WSL 服务。在 280×250 视口打开顶栏会话菜单，End 聚焦“移到回收站”，菜单 `scrollTop=192`、末项完整可见，Esc 关闭并将焦点还给入口；文档宽为 280px，脚本错误日志为空。这个验证覆盖 Linux 打包服务与前端交互，仍不等于原生 Linux WebView 或实体移动设备。运行中异常退出若留下无 `run_id` 的 `starting` 凭据，目前必须保持核对屏障；凭据本身无法证明模型是否执行，不得凭重启自动重发。后续自动判定需要把稳定提交 ID 与持久运行记录建立可恢复的原子关联，再分别验证启动前失败、启动后退出和响应丢失。
+
 ## 2026-09-27：极短屏会话菜单首尾项键盘可见性
 
 旧单文件 Home `.build/mdo-packed-docks-bgxx3p4v` 在 280×250 视口点击顶栏“更多会话操作”后，焦点留在入口，按 End 不进入末项；菜单内部的键盘焦点移动又阻止浏览器滚动，短屏下末项可能处于可滚动区域外。现在入口展开后可用 Home/End 与上下键直接进入首尾项；菜单内部移动焦点时显式把目标项滚进菜单可见区域，输入法候选按键不触发导航。
