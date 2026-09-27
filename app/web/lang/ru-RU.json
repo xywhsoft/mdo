@@ -613,7 +613,7 @@
   "resource.accessAllowed": "Разрешено",
   "resource.accessDenied": "Запрещено",
   "resource.accessAsk": "Спрашивать",
-  "resource.defaultProfile": "Профиль по умолчанию: {name}",
+  "resource.defaultProfile": "Профиль разрешений по умолчанию: {name}",
   "resource.permissionDescription": "Сервер проверяет разрешения и фиксирует их при создании каждого сеанса агента.",
   "resource.revision": "версия {value}",
   "resource.workspaceAccess": "Чтение рабочей папки: {read} · запись: {write}",

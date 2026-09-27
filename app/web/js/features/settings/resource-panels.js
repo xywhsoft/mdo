@@ -152,11 +152,13 @@ export function createResourcePanels({ agentsStore, stores, reload }) {
     if (state.status === "error") { permissionsContainer.append(empty(errorMessage(state.error))); return; }
     const config = state.data?.configuration;
     if (!config) { permissionsContainer.append(empty(t("resource.permissionsUnavailable", {}, "权限配置不可用"))); return; }
-    permissionsContainer.append(card(t("resource.defaultProfile", { name: config.default_profile }, `默认 profile：${config.default_profile}`),
+    const defaultProfileName = permissionProfile(config.default_profile);
+    permissionsContainer.append(card(t("resource.defaultProfile", { name: defaultProfileName },
+      `默认权限方案：${defaultProfileName}`),
       t("resource.permissionDescription", {}, "权限由服务端配置验证并在每个 Agent 会话创建时固定。"),
       [t("resource.revision", { value: state.data.revision }, `revision ${state.data.revision}`)]));
     for (const [name, profile] of Object.entries(config.profiles ?? {})) {
-      permissionsContainer.append(card(name,
+      permissionsContainer.append(card(permissionProfile(name),
         t("resource.workspaceAccess", { read: access(profile.workspace_read), write: access(profile.workspace_write) },
           `工作区读取：${access(profile.workspace_read)} · 写入：${access(profile.workspace_write)}`),
         [t("resource.processAccess", { value: access(profile.process) }, `进程 ${access(profile.process)}`),

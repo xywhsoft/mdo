@@ -613,7 +613,7 @@
   "resource.accessAllowed": "Allowed",
   "resource.accessDenied": "Denied",
   "resource.accessAsk": "Ask",
-  "resource.defaultProfile": "Default profile: {name}",
+  "resource.defaultProfile": "Default permission profile: {name}",
   "resource.permissionDescription": "The server validates permissions and fixes them when each Agent session is created.",
   "resource.revision": "revision {value}",
   "resource.workspaceAccess": "Workspace read: {read} · write: {write}",
