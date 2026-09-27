@@ -1804,6 +1804,13 @@ export async function boot() {
       dialog.close();
       dialogForm.elements.title.value = "";
       navigation.select(session.project_id, session.id);
+      if (mobileLayout.matches) setDrawer("sidebar", false);
+      cancelSessionComposerFocus();
+      cancelSessionComposerFocus = focusSessionComposerAfterNavigation({
+        navigation, sessionDetailStore, prompt,
+        projectId: session.project_id, sessionId: session.id,
+        origin: mobileLayout.matches ? $("#open-sidebar") : $("#new-session-configure"),
+      });
     } catch (error) {
       dialogError.textContent = errorMessage(error);
       dialogError.hidden = false;

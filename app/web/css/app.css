@@ -953,11 +953,12 @@ select:focus-visible,
   box-shadow: var(--shadow-dialog);
 }
 .new-session-dialog::backdrop { background: rgb(0 0 0 / 34%); backdrop-filter: blur(2px); }
-#session-action-dialog { max-height: calc(100dvh - 32px); overflow: hidden; }
-#session-action-dialog .dialog-card { display: flex; max-height: calc(100dvh - 32px); min-height: 0; flex-direction: column; }
-#session-action-dialog .dialog-card > header,
-#session-action-dialog .dialog-card > footer { flex: 0 0 auto; }
-#session-action-dialog .dialog-fields { min-height: 0; overflow-y: auto; }
+:is(#new-session-dialog, #session-action-dialog) { max-height: calc(100dvh - 32px); overflow: hidden; }
+:is(#new-session-dialog, #session-action-dialog) .dialog-card { display: flex; max-height: calc(100dvh - 32px); min-height: 0; flex-direction: column; }
+:is(#new-session-dialog, #session-action-dialog) .dialog-card > header,
+:is(#new-session-dialog, #session-action-dialog) .dialog-card > footer,
+#new-session-dialog .dialog-error { flex: 0 0 auto; }
+:is(#new-session-dialog, #session-action-dialog) .dialog-fields { min-height: 0; overflow-y: auto; }
 .image-preview-dialog { position: fixed; min-width: 48px; max-width: calc(100vw - 24px); max-height: calc(100dvh - 24px); margin: auto; padding: 8px; border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--surface-raised); box-shadow: var(--shadow-dialog); }
 .image-preview-dialog::backdrop { background: rgb(0 0 0 / 72%); }
 .image-preview-dialog img { display: block; width: auto; height: auto; max-width: calc(100vw - 42px); max-height: calc(100dvh - 42px); object-fit: contain; }
@@ -1400,9 +1401,9 @@ select:focus-visible,
   .dialog-card > footer .primary-button,
   .dialog-card > footer .secondary-button,
   .dialog-card > footer .danger-button { min-height: 40px; }
-  #session-action-dialog .dialog-card > header { padding: 12px 16px 8px; }
-  #session-action-dialog .dialog-fields { gap: 10px; padding: 10px 16px; }
-  #session-action-dialog .dialog-card > footer { padding: 8px 16px; }
+  :is(#new-session-dialog, #session-action-dialog) .dialog-card > header { padding: 12px 16px 8px; }
+  :is(#new-session-dialog, #session-action-dialog) .dialog-fields { gap: 10px; padding: 10px 16px; }
+  :is(#new-session-dialog, #session-action-dialog) .dialog-card > footer { padding: 8px 16px; }
   .shortcuts-content dl > div { align-items: flex-start; flex-direction: column; gap: 4px; }
   .shortcuts-content dd { text-align: left; }
   .settings-workspace { grid-row: 1 / -1; }
