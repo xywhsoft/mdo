@@ -72,6 +72,7 @@ export function createTaskPanel({ container, detailContainer, summary, store, de
   let detailState = detailStore.get();
   let previewState = previewStore.get();
   const expandedOutputs = new Set(["result"]);
+  const pendingCancels = new Set();
   let renderedTaskId = "";
 
   function closeDetail() {
@@ -79,15 +80,27 @@ export function createTaskPanel({ container, detailContainer, summary, store, de
     renderList();
   }
 
-  async function cancel(item, button) {
-    button.disabled = true;
+  function syncCancelButtons() {
+    for (const root of [container, detailContainer]) {
+      for (const button of root.querySelectorAll("[data-task-cancel]"))
+        button.disabled = pendingCancels.has(button.dataset.taskCancel);
+    }
+  }
+
+  async function cancel(item) {
+    const id = String(item.id);
+    if (pendingCancels.has(id)) return;
+    pendingCancels.add(id);
+    syncCancelButtons();
     try {
       await cancelTask(item.id);
       toast(t("task.stopRequested", { id: item.id }, `已请求停止任务 #${item.id}`));
       onChanged?.();
     } catch (error) {
-      button.disabled = false;
       toast(errorMessage(error), "error");
+    } finally {
+      pendingCancels.delete(id);
+      syncCancelButtons();
     }
   }
 
@@ -185,10 +198,11 @@ export function createTaskPanel({ container, detailContainer, summary, store, de
     if (ACTIVE_STATES.has(task.state)) {
       const stop = element("button", { className: "task-cancel",
         text: t("task.stop", {}, "停止"), attrs: { type: "button",
-          "data-task-focus": "stop",
+          "data-task-focus": "stop", "data-task-cancel": String(task.id),
           "aria-label": t("task.stopNamed", { name: task.label || task.id },
             `停止任务 ${task.label || task.id}`) } });
-      stop.addEventListener("click", () => cancel(task, stop));
+      stop.disabled = pendingCancels.has(String(task.id));
+      stop.addEventListener("click", () => cancel(task));
       headerActions.push(stop);
     }
     const metadata = element("dl", { className: "task-detail-meta" });
@@ -306,10 +320,11 @@ export function createTaskPanel({ container, detailContainer, summary, store, de
       if (ACTIVE_STATES.has(item.state)) {
         const cancelButton = element("button", { className: "task-cancel",
           text: t("task.stop", {}, "停止"), attrs: { type: "button",
-            "data-task-focus": `cancel/${item.id}`,
+            "data-task-focus": `cancel/${item.id}`, "data-task-cancel": String(item.id),
             "aria-label": t("task.stopNamed", { name: item.label || item.id },
               `停止任务 ${item.label || item.id}`) } });
-        cancelButton.addEventListener("click", () => cancel(item, cancelButton));
+        cancelButton.disabled = pendingCancels.has(String(item.id));
+        cancelButton.addEventListener("click", () => cancel(item));
         headerChildren.push(cancelButton);
       }
       container.append(element("article", { className: "task-card", attrs: { "data-state": item.state, "data-selected": String(selectedTask() === String(item.id)) } }, [
