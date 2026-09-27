@@ -307,6 +307,7 @@
   "nav.trashEmpty": "Корзина пуста",
   "nav.manageProject": "Управление проектом {name}",
   "nav.newInProject": "Новая задача в проекте {name}",
+  "nav.newInDefaultProject": "Новая задача в проекте по умолчанию",
   "nav.addProject": "Добавить проект",
   "nav.projects": "Проекты",
   "nav.switchProject": "Сменить проект, текущий {name}",

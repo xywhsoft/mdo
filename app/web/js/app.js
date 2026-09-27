@@ -239,12 +239,7 @@ export async function boot() {
       closeDrawers();
       projectPanel.focusProject(projectId);
     },
-    onNewInProject(projectId) {
-      showActiveSessions();
-      navigation.newTask(projectId);
-      closeDrawers();
-      prompt.focus();
-    },
+    onNewInProject: switchToProject,
   });
   const actionMenus = [
     ["#session-action-control", "#session-actions", "#session-header-menu"],

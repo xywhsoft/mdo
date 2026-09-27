@@ -120,9 +120,17 @@ export function createSessionList({ container, count, filter, searchInput, store
     }
 
     function appendHeading(label, size, projectId = "") {
-      const children = [element("span", { className: "session-group-name", text: label }),
-        element("span", { className: "session-group-count", text: String(size) })];
+      const newTaskLabel = projectId === "default"
+        ? t("nav.newInDefaultProject", {}, "在默认项目新建任务")
+        : t("nav.newInProject", { name: label }, `在 ${label} 项目新建任务`);
+      const name = element("span", { className: "session-group-name", text: label });
+      const count = element("span", { className: "session-group-count", text: String(size) });
+      const children = projectId ? [element("button", {
+        className: "session-group-main", attrs: { type: "button",
+          "aria-label": newTaskLabel },
+      }, [name, count])] : [name, count];
       if (projectId) {
+        children[0].addEventListener("click", () => onNewInProject(projectId));
         if (projectId !== "default") {
           const manage = element("button", { className: "session-group-manage",
             text: "•••", attrs: { type: "button",
@@ -132,8 +140,8 @@ export function createSessionList({ container, count, filter, searchInput, store
           children.push(manage);
         }
         const create = element("button", { className: "session-group-new", text: "+",
-          attrs: { type: "button", "aria-label": t("nav.newInProject", { name: projectId }, `在 ${projectId} 项目新建任务`),
-            title: t("nav.newInProject", { name: projectId }, `在 ${projectId} 项目新建任务`) } });
+          attrs: { type: "button", "aria-label": newTaskLabel,
+            title: newTaskLabel } });
         create.addEventListener("click", () => onNewInProject(projectId));
         children.push(create);
       }

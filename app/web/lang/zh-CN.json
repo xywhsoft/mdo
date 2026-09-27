@@ -307,6 +307,7 @@
   "nav.trashEmpty": "回收站为空",
   "nav.manageProject": "管理 {name} 项目",
   "nav.newInProject": "在 {name} 项目新建任务",
+  "nav.newInDefaultProject": "在默认项目新建任务",
   "nav.addProject": "添加项目",
   "nav.projects": "项目",
   "nav.switchProject": "切换项目，当前 {name}",

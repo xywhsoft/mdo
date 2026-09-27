@@ -353,6 +353,9 @@ select:focus-visible,
 }
 
 .session-group-heading { display: flex; min-height: 32px; align-items: center; gap: 6px; padding: 6px 9px 2px; color: var(--muted); font-size: 11px; font-weight: 650; }
+.session-group-main { display: flex; min-width: 0; min-height: 26px; flex: 1 1 auto; align-items: center; gap: 6px; padding: 0 4px; border: 0; border-radius: 6px; background: transparent; color: inherit; font: inherit; text-align: left; cursor: pointer; }
+.session-group-main:hover { background: var(--surface-hover); color: var(--ink); }
+.session-group-main .session-group-name { min-width: 0; }
 .session-group-name { flex: 1 1 auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .session-group-count { color: var(--faint); font-size: 10px; font-variant-numeric: tabular-nums; }
 .session-group-new { display: grid; width: 22px; height: 22px; place-items: center; padding: 0; border: 0; border-radius: 6px; background: transparent; color: var(--muted); font-size: 17px; cursor: pointer; }
@@ -1332,6 +1335,7 @@ select:focus-visible,
   .session-list-controls select { min-height: 40px; }
   .session-group-new, .session-group-manage,
   .session-more { width: 40px; height: 40px; }
+  .session-group-main { min-height: 40px; }
   .session-item-row { grid-template-columns: minmax(0, 1fr) 40px; }
   .session-menu button { min-height: 40px; }
   .model-config-layout { grid-template-columns: minmax(0, 1fr); }

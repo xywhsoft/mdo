@@ -307,6 +307,7 @@
   "nav.trashEmpty": "Trash is empty",
   "nav.manageProject": "Manage project {name}",
   "nav.newInProject": "New task in project {name}",
+  "nav.newInDefaultProject": "New task in the default project",
   "nav.addProject": "Add project",
   "nav.projects": "Projects",
   "nav.switchProject": "Switch project, current {name}",
