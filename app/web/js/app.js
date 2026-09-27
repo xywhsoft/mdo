@@ -25,6 +25,7 @@ import { navigation } from "./state/navigation.js";
 import { createSessionList } from "./features/sessions/session-list.js";
 import { createSessionActionMenu } from "./features/sessions/session-action-menu.js";
 import { sessionActionDialogCopy, sessionActionToast, sessionForkTitle } from "./features/sessions/session-actions.js";
+import { SESSION_TITLE_UTF8_LIMIT, sessionTitleUtf8Bytes } from "./features/sessions/session-title.js";
 import { formatSessionMarkdown, sessionMarkdownFilename } from "./features/sessions/session-export.js";
 import { createProjectDialog } from "./features/sessions/project-dialog.js";
 import { timelineStore, selectTimeline, clearTimeline, refreshSelectedTimeline, reloadSelectedTimeline } from "./features/chat/timeline-store.js";
@@ -1629,6 +1630,17 @@ export async function boot() {
   const actionConfirm = $("#confirm-session-action");
   let pendingSessionAction = null;
 
+  function validateSessionTitle(field, error) {
+    const bytes = sessionTitleUtf8Bytes(field.value.trim());
+    if (bytes <= SESSION_TITLE_UTF8_LIMIT) return true;
+    error.textContent = t("sessionAction.titleTooLong",
+      { bytes, max: SESSION_TITLE_UTF8_LIMIT },
+      `标题占 ${bytes} 字节，最多 ${SESSION_TITLE_UTF8_LIMIT} 字节`);
+    error.hidden = false;
+    field.focus();
+    return false;
+  }
+
   function syncSessionActionCopy() {
     if (!pendingSessionAction) return;
     const [title, description, confirm] = sessionActionDialogCopy(
@@ -1717,9 +1729,12 @@ export async function boot() {
 
   $("#close-session-action").addEventListener("click", () => actionDialog.close());
   $("#cancel-session-action").addEventListener("click", () => actionDialog.close());
+  actionForm.elements.title.addEventListener("input", () => { actionError.hidden = true; });
   actionForm.addEventListener("submit", async (event) => {
     event.preventDefault();
     if (!pendingSessionAction || !actionForm.reportValidity()) return;
+    if (actionTitleField.hidden === false &&
+        !validateSessionTitle(actionForm.elements.title, actionError)) return;
     actionError.hidden = true;
     actionConfirm.disabled = true;
     try {
@@ -1751,7 +1766,7 @@ export async function boot() {
       agentSelect.append(element("option", { text: agent.name || agent.id, attrs: { value: agent.id } }));
     }
     for (const model of modelsStore.get().data?.models ?? []) {
-      const suffix = model.free ? " · 免费" : "";
+      const suffix = model.free ? t("model.freeSuffix", {}, " · 免费") : "";
       modelSelect.append(element("option", { text: `${model.name || model.id}${suffix}`, attrs: { value: model.id } }));
     }
     if (selectedAgent && [...agentSelect.options].some((option) => option.value === selectedAgent)) agentSelect.value = selectedAgent;
@@ -1762,6 +1777,7 @@ export async function boot() {
   }
   agentsStore.subscribe(fillCatalogSelects);
   modelsStore.subscribe(fillCatalogSelects);
+  subscribeLocale(fillCatalogSelects);
   $("#model-select").addEventListener("change", () => {
     const model = modelsStore.get().data?.models?.find((item) =>
       item.id === $("#model-select").value);
@@ -1792,10 +1808,12 @@ export async function boot() {
   $("#new-session").addEventListener("click", openNewTask);
   $("#new-session-configure").addEventListener("click", openNewSession);
   $("#close-new-session").addEventListener("click", () => dialog.close());
+  dialogForm.elements.title.addEventListener("input", () => { dialogError.hidden = true; });
   dialogForm.addEventListener("submit", async (event) => {
     event.preventDefault();
     if (event.submitter?.value === "cancel") { dialog.close(); return; }
     if (!dialogForm.reportValidity()) return;
+    if (!validateSessionTitle(dialogForm.elements.title, dialogError)) return;
     createButton.disabled = true;
     const values = Object.fromEntries(new FormData(dialogForm));
     try {

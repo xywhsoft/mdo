@@ -600,29 +600,29 @@
     <form method="dialog" class="dialog-card" id="new-session-form">
       <header>
         <div>
-          <h2 id="new-session-title">新建任务</h2>
-          <p>选择 Agent 和模型。创建后即可发送第一条指令。</p>
+          <h2 id="new-session-title" data-i18n="shell.newTask">新建任务</h2>
+          <p data-i18n="newSession.description">选择 Agent 和模型。创建后即可发送第一条指令。</p>
         </div>
-        <button class="icon-button" type="button" id="close-new-session" aria-label="关闭">
+        <button class="icon-button" type="button" id="close-new-session" aria-label="关闭" data-i18n-aria-label="sessionAction.close">
           <span class="icon" data-icon="close" aria-hidden="true"></span>
         </button>
       </header>
       <div class="dialog-fields">
-        <label>标题 <input name="title" maxlength="160" placeholder="可选，稍后也可修改"></label>
-        <label>项目标识 <input name="project_id" required maxlength="63" value="default" pattern="[A-Za-z0-9_-][A-Za-z0-9._-]*"></label>
-        <label>Agent <select name="agent_id" id="agent-select"></select></label>
-        <label>模型 <select name="model_id" id="model-select"></select></label>
-        <label>推理强度 <select name="reasoning_effort" id="new-session-reasoning"></select></label>
-        <label>权限 <select name="permission_profile" id="new-session-permission">
-          <option value="read-only">只读</option>
-          <option value="balanced">询问</option>
-          <option value="full-access">完全访问</option>
+        <label><span data-i18n="sessionAction.titleField">标题</span> <input name="title" maxlength="160" placeholder="可选，稍后也可修改" data-i18n-placeholder="newSession.titlePlaceholder"></label>
+        <label><span data-i18n="newSession.projectId">项目标识</span> <input name="project_id" required maxlength="63" value="default" pattern="[A-Za-z0-9_-][A-Za-z0-9._-]*"></label>
+        <label><span data-i18n="newSession.agent">Agent</span> <select name="agent_id" id="agent-select"></select></label>
+        <label><span data-i18n="shell.model">模型</span> <select name="model_id" id="model-select"></select></label>
+        <label><span data-i18n="shell.reasoning">推理强度</span> <select name="reasoning_effort" id="new-session-reasoning"></select></label>
+        <label><span data-i18n="shell.permission">权限</span> <select name="permission_profile" id="new-session-permission">
+          <option value="read-only" data-i18n="shell.permission.readOnly">只读</option>
+          <option value="balanced" data-i18n="shell.permission.balanced">询问</option>
+          <option value="full-access" data-i18n="shell.permission.fullAccess">完全访问</option>
         </select></label>
       </div>
       <div class="dialog-error" id="new-session-error" role="alert" hidden></div>
       <footer>
-        <button class="secondary-button" value="cancel">取消</button>
-        <button class="primary-button" id="create-session" value="default">创建会话</button>
+        <button class="secondary-button" value="cancel" data-i18n="sessionAction.cancel">取消</button>
+        <button class="primary-button" id="create-session" value="default" data-i18n="newSession.create">创建会话</button>
       </footer>
     </form>
   </dialog>

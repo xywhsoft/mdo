@@ -956,9 +956,9 @@ select:focus-visible,
 :is(#new-session-dialog, #session-action-dialog) { max-height: calc(100dvh - 32px); overflow: hidden; }
 :is(#new-session-dialog, #session-action-dialog) .dialog-card { display: flex; max-height: calc(100dvh - 32px); min-height: 0; flex-direction: column; }
 :is(#new-session-dialog, #session-action-dialog) .dialog-card > header,
-:is(#new-session-dialog, #session-action-dialog) .dialog-card > footer,
-#new-session-dialog .dialog-error { flex: 0 0 auto; }
+:is(#new-session-dialog, #session-action-dialog) .dialog-card > footer { flex: 0 0 auto; }
 :is(#new-session-dialog, #session-action-dialog) .dialog-fields { min-height: 0; overflow-y: auto; }
+#new-session-dialog .dialog-error { flex: 0 0 auto; max-height: min(96px, 25dvh); overflow-y: auto; }
 .image-preview-dialog { position: fixed; min-width: 48px; max-width: calc(100vw - 24px); max-height: calc(100dvh - 24px); margin: auto; padding: 8px; border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--surface-raised); box-shadow: var(--shadow-dialog); }
 .image-preview-dialog::backdrop { background: rgb(0 0 0 / 72%); }
 .image-preview-dialog img { display: block; width: auto; height: auto; max-width: calc(100vw - 42px); max-height: calc(100dvh - 42px); object-fit: contain; }
@@ -1463,6 +1463,14 @@ select:focus-visible,
 @media (max-width: 760px) and (max-height: 300px) {
   .settings-navigation { position: static; }
   .setting-instructions textarea { min-height: 80px; height: 80px; }
+}
+
+@media (max-height: 300px) {
+  #new-session-dialog .dialog-card > header { padding: 8px 12px 6px; }
+  #new-session-dialog .dialog-card > header p { display: none; }
+  #new-session-dialog .dialog-fields { gap: 6px; padding: 4px 12px; }
+  #new-session-dialog .dialog-error { margin: 0 12px 4px; }
+  #new-session-dialog .dialog-card > footer { padding: 4px 12px; }
 }
 
 @media (max-width: 420px) {

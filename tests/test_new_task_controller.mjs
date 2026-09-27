@@ -3,11 +3,14 @@ import test from "node:test";
 
 import { createDraftStore } from "../app/web/js/features/chat/draft-store.js";
 import { createNewTaskController, taskTitle } from "../app/web/js/features/chat/new-task-controller.js";
+import { SESSION_TITLE_UTF8_LIMIT, sessionTitleUtf8Bytes } from "../app/web/js/features/sessions/session-title.js";
 
 test("new-task titles stay within the UTF-8 session title limit", () => {
   const title = taskTitle("😀".repeat(80));
   assert.equal(Array.from(title).length, 64);
-  assert.equal(new TextEncoder().encode(title).length, 256);
+  assert.equal(sessionTitleUtf8Bytes(title), SESSION_TITLE_UTF8_LIMIT);
+  assert.equal(sessionTitleUtf8Bytes("测".repeat(85)), 255);
+  assert.equal(sessionTitleUtf8Bytes("测".repeat(86)), 258);
   assert.equal(taskTitle(" \n", "图片任务"), "图片任务");
 });
 

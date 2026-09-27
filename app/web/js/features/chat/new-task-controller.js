@@ -1,11 +1,12 @@
 import { t } from "../../i18n.js";
+import { SESSION_TITLE_UTF8_LIMIT, sessionTitleUtf8Bytes } from "../sessions/session-title.js";
 
 export function taskTitle(text, fallback = "") {
   const characters = Array.from(text.trim().split(/\r?\n/, 1)[0])
     .slice(0, 80);
-  const encoder = new TextEncoder();
   while (characters.length &&
-      encoder.encode(characters.join("")).length > 256) characters.pop();
+      sessionTitleUtf8Bytes(characters.join("")) > SESSION_TITLE_UTF8_LIMIT)
+    characters.pop();
   return characters.join("") || fallback;
 }
 
