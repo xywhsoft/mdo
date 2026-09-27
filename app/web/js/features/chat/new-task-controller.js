@@ -13,7 +13,8 @@ export function taskTitle(text, fallback = "") {
 function sameSubmission(a, b) {
   return a.id === b.id && a.text === b.text &&
     a.interrupt === b.interrupt && a.state === "prepared" &&
-    JSON.stringify(a.attachments) === JSON.stringify(b.attachments);
+    JSON.stringify(a.attachments) === JSON.stringify(b.attachments) &&
+    JSON.stringify(a.profile ?? null) === JSON.stringify(b.profile ?? null);
 }
 
 // Keep the unsent new-task intent in the global Home draft until its entire
@@ -127,7 +128,7 @@ export function createNewTaskController({ draftStore, newId, createSession,
     const id = task && !draftStore.submissions("").length
       ? task.session_id : newId();
     const item = { id, text, attachments: [], interrupt: false,
-      state: "prepared" };
+      state: "prepared", profile: { ...profile } };
     if (!task) {
       task = { project_id: projectId, session_id: id,
         title: taskTitle(text),

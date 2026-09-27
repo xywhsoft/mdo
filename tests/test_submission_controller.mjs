@@ -49,6 +49,10 @@ test("a second Enter is durable while the first queue POST is still waiting", as
   const persisted = [];
   const promoted = [];
   const reviews = [];
+  const firstProfile = { model_id: "ling-3.0-tiny",
+    reasoning_effort: "high", permission_profile: "read-only" };
+  const secondProfile = { model_id: "ling-3.0-tiny",
+    reasoning_effort: "low", permission_profile: "balanced" };
   globalThis.window = { setTimeout, clearTimeout, addEventListener() {} };
   globalThis.fetch = async (path, options) => {
     if (options.method === "GET")
@@ -88,7 +92,8 @@ test("a second Enter is durable while the first queue POST is still waiting", as
           await firstGate;
         }
         queue.push({ id: item.id, text: item.text, priority: item.interrupt,
-          attachments: item.attachments, state: "staged" });
+          attachments: item.attachments, state: "staged",
+          profile: item.profile });
         return item.id;
       },
       find(_project, _session, id) {
@@ -109,18 +114,25 @@ test("a second Enter is durable while the first queue POST is still waiting", as
       onReview(_key, item) { reviews.push(item.id); },
       onRestored() {}, onChange() {},
     });
-    assert.equal(await controller.submit(key, "first", [], false), true);
+    assert.equal(await controller.submit(key, "first", [], false,
+      firstProfile), true);
     await firstStarted;
-    assert.equal(await controller.submit(key, "second", [], false), true);
+    firstProfile.reasoning_effort = "minimal";
+    assert.equal(await controller.submit(key, "second", [], false,
+      secondProfile), true);
     assert.deepEqual(persisted, ["first", "second"]);
     assert.deepEqual(saved.submissions.map((item) => item.text),
       ["first", "second"]);
     assert.deepEqual(saved.submissions.map((item) => item.state),
       ["posting", "prepared"]);
+    assert.deepEqual(saved.submissions.map((item) => item.profile),
+      [{ ...firstProfile, reasoning_effort: "high" }, secondProfile]);
     assert.equal(queue.length, 0);
     releaseFirst();
     await done;
     assert.deepEqual(queue.map((item) => item.text), ["first", "second"]);
+    assert.deepEqual(queue.map((item) => item.profile),
+      [{ ...firstProfile, reasoning_effort: "high" }, secondProfile]);
     assert.deepEqual(promoted, ["first", "second"]);
     assert.deepEqual(reviews, []);
     assert.deepEqual(saved.submissions, []);

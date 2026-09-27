@@ -136,6 +136,8 @@ test("new-task inputs survive a delayed create and move in order", async () => {
     assert.equal(await controller.submit({ projectId: "default",
       text: "second", profile }), true);
     assert.equal(documents.get(globalPath).submissions.length, 2);
+    assert.deepEqual(documents.get(globalPath).submissions.map((item) =>
+      item.profile), [profile, profile]);
     assert.equal(documents.get(globalPath).new_task.phase, "creating");
     releaseCreate();
     assert.equal(await done, `default/${"1".padStart(32, "0")}`);
@@ -143,6 +145,8 @@ test("new-task inputs survive a delayed create and move in order", async () => {
       "1".padStart(32, "0")}/draft`;
     assert.deepEqual(documents.get(sessionPath).submissions.map((item) =>
       item.text), ["first", "second"]);
+    assert.deepEqual(documents.get(sessionPath).submissions.map((item) =>
+      item.profile), [profile, profile]);
     assert.deepEqual(documents.get(globalPath).submissions, []);
     assert.equal(documents.get(globalPath).new_task, null);
     assert.deepEqual(persisted, ["first", "second"]);
@@ -222,6 +226,9 @@ test("a rejected create can change profile without losing queued inputs", async 
       "3".padStart(32, "0")}/draft`);
     assert.deepEqual(target.submissions.map((item) => item.text),
       ["first", "second"]);
+    assert.deepEqual(target.submissions.map((item) => item.profile),
+      [{ ...profile, reasoning_effort: "high" },
+        { ...profile, reasoning_effort: "high" }]);
     assert.equal(target.submissions[0].id, "3".padStart(32, "0"));
     assert.equal(documents.get("/api/v1/draft").new_task, null);
     assert.equal(creates, 2);

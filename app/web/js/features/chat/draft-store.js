@@ -460,7 +460,7 @@ export function createDraftStore({ onRestore, onError, onSaved, onLoaded = () =>
       schedule("", true);
       return true;
     },
-    reseedNewTask(sessionId, profile) {
+    reseedNewTask(sessionId, selectedProfile) {
       const current = entry("");
       const task = current.newTask;
       const first = current.submissions[0];
@@ -468,12 +468,15 @@ export function createDraftStore({ onRestore, onError, onSaved, onLoaded = () =>
           (first && first.id !== task.session_id) ||
           current.submissions.some((item) => item.id === sessionId)) return false;
       const nextTask = newTask({ ...task, session_id: sessionId,
-        model_id: profile.model_id,
-        reasoning_effort: profile.reasoning_effort,
-        permission_profile: profile.permission_profile });
-      const nextItems = first
-        ? [{ ...first, id: sessionId }, ...current.submissions.slice(1)]
-        : current.submissions;
+        model_id: selectedProfile.model_id,
+        reasoning_effort: selectedProfile.reasoning_effort,
+        permission_profile: selectedProfile.permission_profile });
+      // A definite create rejection accepted no task. The user's reviewed
+      // profile replaces every still-pending initial-task snapshot together.
+      const nextItems = current.submissions.map((item, index) => ({
+        ...item, id: index === 0 ? sessionId : item.id,
+        profile: { ...selectedProfile },
+      }));
       if (!nextTask || !submissions(nextItems)) return false;
       current.newTask = nextTask;
       current.submissions = nextItems;

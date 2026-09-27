@@ -118,14 +118,16 @@ class FrontendContractTests(unittest.TestCase):
         self.assertIn("if (terminalState(run))", app)
         self.assertIn("/runs/${run}", runs)
 
-    def test_composer_profile_is_applied_to_session_before_run(self) -> None:
+    def test_composer_profile_has_idle_update_and_queued_snapshot_paths(self) -> None:
         app = self.scripts["js/app.js"]
         profile = self.scripts["js/features/chat/composer-profile.js"]
         sessions = self.scripts["js/state/sessions.js"]
-        self.assertIn("profile: composerProfile.selection()", app)
+        self.assertIn("const profile = composerProfile.selection()", app)
+        self.assertIn("await submissionController.submit(key, rawInput, attachments, interrupt,", app)
         self.assertIn("newTaskController.createForAttachment", app)
         self.assertIn("updateSessionProfile(session, profile)", profile)
         self.assertIn("isRunActive()", profile)
+        self.assertIn("draftStore.setComposerProfile(key,", profile)
         self.assertIn("/profile", sessions)
         self.assertIn("ifMatch: etag(session)", sessions)
 

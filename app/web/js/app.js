@@ -113,6 +113,7 @@ export async function boot() {
   const stop = $("#stop");
   const composerError = $("#composer-error");
   const composerHint = $("#composer-hint");
+  const composerProfileStatus = $("#composer-profile-status");
   const draftStatus = $("#draft-status");
   let draftError = null;
   function renderDraftStatus() {
@@ -513,7 +514,7 @@ export async function boot() {
   let draftStore;
   let submissionController;
   const promptQueue = createPromptQueue({
-    container: $("#prompt-queue"), navigation,
+    container: $("#prompt-queue"), navigation, modelsStore,
     isRunActive: () => Boolean(activeRun),
     isSessionRunActive: (key) => {
       const [projectId, sessionId] = key.split("/");
@@ -529,7 +530,7 @@ export async function boot() {
       if (!navigation.get().sessionId)
         return (draftStore?.submissions("") ?? []).map((item) => ({
           id: item.id, text: item.text, attachments: item.attachments, staged: true,
-          rejected: item.state === "rejected",
+          rejected: item.state === "rejected", profile: item.profile,
         }));
       const current = navigation.get();
       const staged = current.sessionId ?
@@ -537,7 +538,7 @@ export async function boot() {
           !promptQueue.find(current.projectId, current.sessionId, item.id))
           .map((item) => ({ id: item.id, text: item.text,
             attachments: item.attachments, staged: true,
-            rejected: item.state === "rejected" })) : [];
+            rejected: item.state === "rejected", profile: item.profile })) : [];
       return staged;
     },
     onRetry: async () => {
@@ -702,6 +703,7 @@ export async function boot() {
     modelSelect: $("#composer-model"), reasoningSelect: $("#composer-reasoning"),
     permissionSelect: $("#composer-permission"), navigation,
     sessionStore: sessionDetailStore, modelsStore, agentsStore, projectsStore,
+    draftStore, status: composerProfileStatus,
     isRunActive: () => Boolean(activeRun),
     onBusyChange: () => setRun(activeRun),
     onSelectionChange() {
@@ -882,8 +884,8 @@ export async function boot() {
     syncSendDisabled();
     composerImages?.setWritable(!serviceFailed && !messageActionBusy &&
       sessionWritable && !creatingSession && !pendingNewTask);
-    composerProfile.setRunActive(Boolean(activeRun || creatingNewTask ||
-      messageActionBusy));
+    composerProfile.setRunActive(Boolean(activeRun),
+      creatingNewTask || messageActionBusy);
     send.setAttribute("aria-label", activeRun || creatingNewTask
       ? t("composer.queue", {}, "加入待发送队列")
       : t("shell.send", {}, "发送任务"));
@@ -1546,14 +1548,14 @@ export async function boot() {
     composerError.hidden = false;
   }
 
-  async function ensureSession(text, { stageDraft = true } = {}) {
+  async function ensureSession(text, profile, { stageDraft = true } = {}) {
     const origin = navigation.get();
     const originVersion = routeVersion;
     if (origin.sessionId) return origin;
     const title = taskTitle(text, t("composer.imageTask", {}, "图片任务"));
     const owner = await newTaskController.createForAttachment({
       projectId: origin.projectId || "default", title,
-      profile: composerProfile.selection() });
+      profile });
     if (stageDraft && routeVersion === originVersion && prompt.value)
       draftStore.edit(`${owner.projectId}/${owner.sessionId}`,
         prompt.value, composerAttachments, true);
@@ -1580,11 +1582,13 @@ export async function boot() {
     prompt.focus();
   }
 
-  async function submitExistingSession(origin, rawInput, attachments, interrupt) {
+  async function submitExistingSession(origin, rawInput, attachments, interrupt,
+    profile) {
     const key = `${origin.projectId}/${origin.sessionId}`;
     hideComposerError();
     try {
-      await submissionController.submit(key, rawInput, attachments, interrupt);
+      await submissionController.submit(key, rawInput, attachments, interrupt,
+        profile);
     } catch (error) {
       if (selectedOwnsDraft(key)) showComposerError(error);
       else toast(t("composer.backgroundQueueFailed",
@@ -1622,18 +1626,20 @@ export async function boot() {
       showComposerError(unsupportedModelError());
       return;
     }
+    const profile = composerProfile.selection();
     if (!origin.sessionId && !attachments.length) {
       hideComposerError();
       try {
         await newTaskController.submit({ projectId: origin.projectId || "default",
-          text: rawInput, profile: composerProfile.selection(), fromComposer });
+          text: rawInput, profile, fromComposer });
       } catch (error) { showComposerError(error); }
       return;
     }
     try {
       const owner = origin.sessionId ? origin :
-        await ensureSession(rawInput, { stageDraft: fromComposer });
-      await submitExistingSession(owner, rawInput, attachments, interrupt);
+        await ensureSession(rawInput, profile, { stageDraft: fromComposer });
+      await submitExistingSession(owner, rawInput, attachments, interrupt,
+        profile);
     } catch (error) { showComposerError(error); }
   }
   composer.addEventListener("submit", (event) => {

@@ -32,7 +32,7 @@ function sameProfile(a, b) {
 
 export function createPromptQueue({ container, navigation, isRunActive, stagedEntries,
   isRunReviewPending = () => false, isSessionWritable = () => true,
-  isSessionRunActive = () => false,
+  isSessionRunActive = () => false, modelsStore,
   onRetry, onRemoved }) {
   const queues = new Map();
   const loads = new Map();
@@ -47,6 +47,27 @@ export function createPromptQueue({ container, navigation, isRunActive, stagedEn
   function selectedKey() {
     const { projectId, sessionId } = navigation.get();
     return sessionKey(projectId, sessionId);
+  }
+
+  function profileLabel(profile) {
+    if (!profile) return null;
+    const model = modelsStore?.get().data?.models?.find((item) =>
+      item.id === profile.model_id);
+    const permission = {
+      "read-only": ["shell.permission.readOnly", "只读"],
+      balanced: ["shell.permission.balanced", "询问"],
+      "full-access": ["shell.permission.fullAccess", "完全访问"],
+    }[profile.permission_profile];
+    const reasoning = t(`reasoning.${profile.reasoning_effort}`, {},
+      profile.reasoning_effort);
+    const permissionText = permission ? t(permission[0], {}, permission[1]) :
+      profile.permission_profile;
+    return element("span", { className: "prompt-queue-profile",
+      text: t("queue.profileSnapshot", {
+        model: model?.name || profile.model_id, effort: reasoning,
+        permission: permissionText,
+      }, `已固定：${model?.name || profile.model_id} · ${reasoning} · ${permissionText}`),
+    });
   }
 
   function update(key, response) {
@@ -232,6 +253,7 @@ export function createPromptQueue({ container, navigation, isRunActive, stagedEn
           element("div", { className: "prompt-queue-item-body" }, [
             element("span", { className: "prompt-queue-text",
               text: entry.text || t("queue.imageMessage") }),
+            ...(entry.profile ? [profileLabel(entry.profile)] : []),
             element("span", { className: "prompt-queue-state",
               text: t(entry.rejected ? "queue.rejected" :
                 "queue.awaitingAdmission") }),
@@ -260,6 +282,7 @@ export function createPromptQueue({ container, navigation, isRunActive, stagedEn
         element("span", { className: "prompt-queue-text",
           text: entry.text || t("queue.imageMessage") }),
       ]);
+      if (entry.profile) body.append(profileLabel(entry.profile));
       if (entry.state === "sending" || entry.state === "staged")
         body.append(element("span", { className: "prompt-queue-state",
           text: t(entry.state === "staged" ? "queue.staged" :
@@ -342,6 +365,7 @@ export function createPromptQueue({ container, navigation, isRunActive, stagedEn
   }
 
   navigation.subscribe(render);
+  modelsStore?.subscribe(render);
   subscribeLocale(render);
   return Object.freeze({
     newId,

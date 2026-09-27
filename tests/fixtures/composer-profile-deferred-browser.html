@@ -1,0 +1,163 @@
+<!doctype html>
+<html lang="zh-CN">
+<meta charset="utf-8">
+<title>mdo deferred composer profile probe</title>
+<label>模型 <select id="model"></select></label>
+<label>推理强度 <select id="reasoning"></select></label>
+<label>权限 <select id="permission">
+  <option value="read-only">只读</option><option value="balanced">询问</option>
+  <option value="full-access">完全访问</option>
+</select></label>
+<span id="status" hidden></span>
+<pre id="result"></pre>
+<script type="module">
+import { createComposerProfile } from "/app/web/js/features/chat/composer-profile.js";
+import { createDraftStore } from "/app/web/js/features/chat/draft-store.js";
+
+function store(initial) {
+  let state = { data: initial };
+  const listeners = new Set();
+  return {
+    get: () => state,
+    setData(data) { state = { data }; for (const listener of listeners) listener(state); },
+    subscribe(listener) { listeners.add(listener); listener(state); },
+  };
+}
+const session = { id: "first", project_id: "qa", title: "first",
+  status: "active", model_id: "text", reasoning_effort: "medium",
+  permission_profile: "balanced", etag: '"first"' };
+const modelsStore = store({ default_model_id: "text", models: [
+  { id: "text", name: "Text", reasoning_efforts: ["medium"],
+    default_reasoning_effort: "medium" },
+  { id: "other", name: "Other", reasoning_efforts: ["low", "high"],
+    default_reasoning_effort: "high" },
+] });
+const sessionStore = store(session);
+const agentsStore = store({ items: [] });
+const projectsStore = store({ items: [] });
+let route = { projectId: "qa", sessionId: "first" };
+const listeners = new Set();
+const navigation = { get: () => route,
+  subscribe(listener) { listeners.add(listener); listener(route); },
+};
+const saved = new Map();
+let profilePuts = 0;
+let draftPuts = 0;
+window.fetch = async (path, options = {}) => {
+  const url = String(path);
+  if (url === "/api/v1/sessions")
+    return Response.json({ ok: true, data: { generation: 1, items: [] } });
+  if (url.endsWith("/profile")) {
+    profilePuts += 1;
+    const next = JSON.parse(options.body);
+    return Response.json({ ok: true, data: { ...session, ...next } },
+      { headers: { ETag: '"next"' } });
+  }
+  if (!url.endsWith("/draft")) throw new Error(`Unexpected fetch: ${url}`);
+  const key = url.includes("/second/") ? "second" : "first";
+  const current = saved.get(key) || { revision: 0, text: "", attachments: [],
+    run_admission_uncertain: false, submissions: [], composer_profile: null };
+  if (options.method === "GET")
+    return Response.json({ ok: true, data: current });
+  const next = JSON.parse(options.body);
+  if (next.revision !== current.revision)
+    return Response.json({ ok: false, error: { code: "draft_conflict",
+      message: "revision conflict" } }, { status: 409 });
+  draftPuts += 1;
+  const updated = { ...next, revision: current.revision + 1 };
+  saved.set(key, updated);
+  return Response.json({ ok: true, data: updated });
+};
+const errors = [];
+const draftStore = createDraftStore({ onRestore() {}, onError(error) {
+  errors.push(String(error));
+}, onSaved() {}, onLoaded() { profile.sync(); } });
+const modelSelect = document.querySelector("#model");
+const reasoningSelect = document.querySelector("#reasoning");
+const permissionSelect = document.querySelector("#permission");
+const status = document.querySelector("#status");
+let active = true;
+const profile = createComposerProfile({ modelSelect, reasoningSelect,
+  permissionSelect, status, navigation, sessionStore, modelsStore,
+  agentsStore, projectsStore, draftStore, isRunActive: () => active,
+  onBusyChange() {} });
+async function until(predicate) {
+  for (let attempt = 0; attempt < 100; attempt += 1) {
+    if (predicate()) return true;
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  }
+  return false;
+}
+async function choose(select, value) {
+  select.value = value;
+  select.dispatchEvent(new Event("change"));
+  if (!await until(() => !profile.isBusy()))
+    throw new Error(`Profile change stayed busy: ${value}`);
+}
+function selected() { return profile.selection(); }
+try {
+  draftStore.select("qa/first");
+  if (!await until(() => draftStore.isLoaded("qa/first")))
+    throw new Error("Draft did not load");
+  profile.setRunActive(true);
+  const enabledDuringRun = !modelSelect.disabled &&
+    !reasoningSelect.disabled && !permissionSelect.disabled;
+  await choose(modelSelect, "other");
+  await choose(reasoningSelect, "low");
+  await choose(permissionSelect, "full-access");
+  const deferred = saved.get("first")?.composer_profile;
+  const persisted = draftPuts >= 3 && profilePuts === 0 &&
+    deferred?.model_id === "other" &&
+    deferred?.reasoning_effort === "low" &&
+    deferred?.permission_profile === "full-access" &&
+    sessionStore.get().data?.model_id === "text" && !status.hidden;
+  const reloaded = createDraftStore({ onRestore() {}, onError(error) {
+    errors.push(String(error));
+  }, onSaved() {} });
+  const reloadRestored = await reloaded.ensureLoaded("qa/first") &&
+    JSON.stringify(reloaded.composerProfile("qa/first")) ===
+      JSON.stringify(deferred);
+
+  route = { projectId: "qa", sessionId: "second" };
+  for (const listener of listeners) listener(route);
+  sessionStore.setData({ ...session, id: "second", title: "second" });
+  draftStore.select("qa/second");
+  if (!await until(() => draftStore.isLoaded("qa/second")))
+    throw new Error("Second draft did not load");
+  profile.sync();
+  const secondClean = selected().model_id === "text" && status.hidden;
+
+  route = { projectId: "qa", sessionId: "first" };
+  for (const listener of listeners) listener(route);
+  sessionStore.setData(session);
+  draftStore.select("qa/first");
+  profile.sync();
+  const restored = selected().model_id === "other" &&
+    selected().reasoning_effort === "low" &&
+    selected().permission_profile === "full-access" && !status.hidden;
+
+  active = false;
+  profile.setRunActive(false);
+  await choose(modelSelect, "text");
+  const replacedDeferred = saved.get("first")?.composer_profile === null &&
+    selected().model_id === "text" && status.hidden && profilePuts === 1;
+  await choose(modelSelect, "other");
+  const idleUpdated = profilePuts === 2 &&
+    sessionStore.get().data?.model_id === "other" &&
+    saved.get("first")?.composer_profile === null;
+  const passed = enabledDuringRun && persisted && reloadRestored &&
+    secondClean && restored &&
+    replacedDeferred && idleUpdated && !errors.length;
+  document.querySelector("#result").dataset.passed = String(passed);
+  document.querySelector("#result").textContent = JSON.stringify({ passed,
+    enabledDuringRun, persisted, reloadRestored, secondClean, restored,
+    replacedDeferred,
+    idleUpdated, draftPuts, profilePuts, finalSelection: selected(),
+    finalSession: sessionStore.get().data, finalStatus: status.textContent,
+    errors }, null, 2);
+} catch (error) {
+  document.querySelector("#result").dataset.passed = "false";
+  document.querySelector("#result").textContent = error.stack ?? String(error);
+}
+</script>
+</html>

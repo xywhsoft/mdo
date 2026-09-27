@@ -34,12 +34,15 @@ export function fillReasoningOptions(select, model, preferred = "") {
 
 export function createComposerProfile({ modelSelect, reasoningSelect,
   permissionSelect, navigation, sessionStore, modelsStore, agentsStore,
-  projectsStore, isRunActive, onBusyChange, onSelectionChange }) {
+  projectsStore, draftStore, status, isRunActive, onBusyChange,
+  onSelectionChange }) {
   // Blank tasks have no session metadata. Keep manual choices per project, but
   // continue following its configured default until the user picks a model.
   const drafts = new Map();
   const busy = new Set();
+  const changing = new Map();
   let runActive = false;
+  let locked = false;
 
   function models() { return modelsStore.get().data?.models ?? []; }
   function selectedKey() {
@@ -72,11 +75,26 @@ export function createComposerProfile({ modelSelect, reasoningSelect,
     return session?.permission_profile || agent?.permission_profile || "balanced";
   }
 
+  function sessionProfile(session) {
+    return { model_id: session.model_id,
+      reasoning_effort: session.reasoning_effort,
+      permission_profile: agentPermission(session) };
+  }
+  function sameProfile(a, b) {
+    return a?.model_id === b?.model_id &&
+      a?.reasoning_effort === b?.reasoning_effort &&
+      a?.permission_profile === b?.permission_profile;
+  }
+
   function sync() {
     const session = current();
     const pending = draft();
+    const key = selectedKey();
+    const deferred = session && draftStore?.composerProfile(key);
+    const selected = changing.get(key) || deferred;
     const catalog = models();
-    const id = session?.model_id || pending.model_id || defaultModelId();
+    const id = selected?.model_id || session?.model_id || pending.model_id ||
+      defaultModelId();
     clear(modelSelect);
     for (const model of catalog) {
       const suffix = model.free ? t("model.freeSuffix", {}, " · 免费") : "";
@@ -89,16 +107,26 @@ export function createComposerProfile({ modelSelect, reasoningSelect,
       modelSelect.append(element("option", { text: id, attrs: { value: id } }));
     modelSelect.value = id;
     const model = selectedModel(catalog, id);
-    const effort = session?.reasoning_effort || pending.reasoning_effort ||
+    const effort = selected?.reasoning_effort || session?.reasoning_effort ||
+      pending.reasoning_effort ||
       model?.default_reasoning_effort || "";
     fillReasoningOptions(reasoningSelect, model, effort);
-    permissionSelect.value = session ? agentPermission(session) : pending.permission_profile;
-    const disabled = busy.has(selectedKey()) || runActive ||
+    permissionSelect.value = selected?.permission_profile ||
+      (session ? agentPermission(session) : pending.permission_profile);
+    const disabled = busy.has(key) || locked ||
       (Boolean(navigation.get().sessionId) && !session) ||
-      (session && session.status !== "active");
+      (session && (session.status !== "active" ||
+        (draftStore && !draftStore.isLoaded(key))));
     modelSelect.disabled = disabled || catalog.length === 0;
     reasoningSelect.disabled = disabled || !reasoningSelect.options.length;
     permissionSelect.disabled = disabled;
+    if (status) {
+      const nextRun = session && deferred &&
+        !sameProfile(deferred, sessionProfile(session));
+      status.hidden = !nextRun;
+      status.textContent = nextRun
+        ? t("profile.nextRun", {}, "下次任务生效") : "";
+    }
     onSelectionChange?.();
   }
 
@@ -125,18 +153,47 @@ export function createComposerProfile({ modelSelect, reasoningSelect,
       return;
     }
     const key = `${session.project_id}/${session.id}`;
-    if (busy.has(key) || isRunActive() || session.status !== "active") {
+    if (busy.has(key) || locked || session.status !== "active" ||
+        (draftStore && !draftStore.isLoaded(key))) {
       sync();
       return;
     }
     busy.add(key);
     onBusyChange(true);
-    sync();
     try {
+      if (runActive || isRunActive()) {
+        // The running Agent keeps its current profile. Save the editor's
+        // selection as the next submission's intent in the portable draft.
+        if (!draftStore) { sync(); return; }
+        draftStore.setComposerProfile(key,
+          sameProfile(profile, sessionProfile(session)) ? null : profile);
+        sync();
+        if (!await draftStore.flush(key))
+          throw new Error(t("profile.deferredSaveFailed", {},
+            "后续消息配置未能保存，请检查草稿状态"));
+        return;
+      }
+      if (sameProfile(profile, sessionProfile(session))) {
+        if (draftStore?.composerProfile(key)) {
+          draftStore.setComposerProfile(key, null);
+          if (!await draftStore.flush(key))
+            throw new Error(t("profile.deferredSaveFailed", {},
+              "后续消息配置未能保存，请检查草稿状态"));
+        }
+        return;
+      }
+      changing.set(key, profile);
+      sync();
       const updated = await updateSessionProfile(session, profile);
       const selected = navigation.get();
       if (selected.projectId === updated.project_id &&
           selected.sessionId === updated.id) sessionStore.setData(updated);
+      if (draftStore?.composerProfile(key)) {
+        draftStore.setComposerProfile(key, null);
+        if (!await draftStore.flush(key))
+          throw new Error(t("profile.deferredClearFailed", {},
+            "会话配置已更新，但旧的后续消息配置未能清除，请检查草稿状态"));
+      }
       toast(selected.projectId === updated.project_id &&
         selected.sessionId === updated.id ? t("profile.updated", {}, "会话配置已更新") :
         t("profile.backgroundUpdated", { title: session.title },
@@ -150,6 +207,7 @@ export function createComposerProfile({ modelSelect, reasoningSelect,
       if (selected.projectId === session.project_id &&
           selected.sessionId === session.id) sync();
     } finally {
+      changing.delete(key);
       busy.delete(key);
       onBusyChange(false);
       sync();
@@ -173,7 +231,11 @@ export function createComposerProfile({ modelSelect, reasoningSelect,
       reasoning_effort: reasoningSelect.value,
       permission_profile: permissionSelect.value,
     }),
-    setRunActive(value) { runActive = Boolean(value); sync(); },
+    setRunActive(value, blockChanges = false) {
+      runActive = Boolean(value);
+      locked = Boolean(blockChanges);
+      sync();
+    },
     isBusy: () => busy.has(selectedKey()),
     sync,
     destroy: () => unsubscribers.forEach((unsubscribe) => unsubscribe()),
