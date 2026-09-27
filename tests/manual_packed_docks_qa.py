@@ -2,8 +2,9 @@
 
 Run from the repository root after building mdo.exe. The model endpoint only
 binds to localhost and returns one deterministic tool call per marker prompt:
-TODO UI, ASK UI, APPROVAL UI, TASK UI, or ARTIFACT UI. The latter reads one
-bounded synthetic text file so the normal tool-output artifact path is used.
+TODO UI, ASK UI, LONG ASK UI, APPROVAL UI, TASK UI, or ARTIFACT UI. The long
+ask has multiline question and options; the latter reads one bounded synthetic
+text file so the normal tool-output artifact path is used.
 """
 
 import argparse
@@ -77,10 +78,21 @@ class Model(BaseHTTPRequestHandler):
                                         "print('task UI fixture')"]})}]
             elif "ASK UI" in wire and "TASK UI" not in wire and "ask" not in Model.sent:
                 Model.sent.add("ask")
+                long_ask = "LONG ASK UI" in wire
                 output = [{"type": "function_call", "call_id": "ui-ask-1",
                            "name": "ask_user", "arguments": json.dumps({
-                               "question": "Which route should I take?",
-                               "options": ["Fast", "Careful"]})}]
+                               "question": (
+                                   "Нужно выбрать способ проверки изменений в нескольких "
+                                   "модулях: сохранить черновик, проверить доступные "
+                                   "результаты и затем продолжить работу. Какой вариант "
+                                   "подходит для этого сеанса?"
+                               ) if long_ask else "Which route should I take?",
+                               "options": [
+                                   "Сначала проверить локальные результаты и только "
+                                   "потом продолжить" if long_ask else "Fast",
+                                   "Продолжить сейчас, а результаты проверить после "
+                                   "следующего шага" if long_ask else "Careful",
+                               ]})}]
             elif "APPROVAL UI" in wire and "approval" not in Model.sent:
                 Model.sent.add("approval")
                 output = [{"type": "function_call", "call_id": "ui-approval-1",

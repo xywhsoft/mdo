@@ -230,7 +230,7 @@ export function createConversationDocks({ container, navigation, tasksStore, app
   container.addEventListener("pointerdown", noteUserScroll);
   container.addEventListener("keydown", noteKeyScroll);
 
-  function revealDecision() {
+  function revealDecision(arrived = null, force = false) {
     if (container.hidden) return;
     const focused = container.contains(document.activeElement)
       ? document.activeElement : null;
@@ -243,32 +243,39 @@ export function createConversationDocks({ container, navigation, tasksStore, app
         container.scrollTop += bounds.top - viewport.top;
       return;
     }
-    if (userMovedDock || container.scrollTop) return;
-    const decision = askRoot.querySelector(".ask-dock") ??
+    if (userMovedDock && !force) return;
+    const decision = arrived ?? askRoot.querySelector(".ask-dock") ??
       otherRoot.querySelector("[data-approval-arguments]")?.closest(".conversation-dock");
     if (!decision) return;
     const viewport = container.getBoundingClientRect();
     const content = decision.querySelector(".ask-dock-options button") ??
       decision.querySelector(".approval-arguments summary") ??
       decision.querySelector("h3");
-    if (content?.getBoundingClientRect().bottom > viewport.bottom)
-      container.scrollTop += decision.getBoundingClientRect().top - viewport.top;
+    if (!content) return;
+    const bounds = content.getBoundingClientRect();
+    // Use the least scroll that exposes the whole action; when the dock grows
+    // again, move back up so more of the question is readable. A tall option
+    // cannot fit in an extremely short dock, so expose its beginning instead.
+    const delta = bounds.height > viewport.height - 4
+      ? bounds.top - viewport.top - 4 : bounds.bottom - viewport.bottom + 4;
+    if (Math.abs(delta) > 1) container.scrollTop += delta;
   }
 
-  function syncAvailableHeight(revealOnShrink = false) {
+  function scheduleReveal(decision = null, force = false) {
+    cancelAnimationFrame(revealFrame);
+    revealFrame = requestAnimationFrame(() => {
+      revealFrame = 0;
+      revealDecision(decision, force);
+    });
+  }
+
+  function syncAvailableHeight(revealOnResize = false) {
     if (!conversation) return;
     const nextHeight = Math.max(0, Math.floor(conversation.clientHeight - 8));
-    const shrank = nextHeight < availableHeight;
+    const changed = nextHeight !== availableHeight;
     availableHeight = nextHeight;
     container.style.setProperty("--dock-available-height", `${nextHeight}px`);
-    if (revealOnShrink && shrank && !container.hidden) {
-      // Let the new max-height settle before measuring the decision's position.
-      cancelAnimationFrame(revealFrame);
-      revealFrame = requestAnimationFrame(() => {
-        revealFrame = 0;
-        revealDecision();
-      });
-    }
+    if (revealOnResize && changed && !container.hidden) scheduleReveal();
   }
   syncAvailableHeight();
 
@@ -371,7 +378,10 @@ export function createConversationDocks({ container, navigation, tasksStore, app
     } else container.scrollTop = previousScroll;
     visibleDecisions.clear();
     for (const key of nextDecisions) visibleDecisions.add(key);
-    if (arrived) onDecisionArrived?.(arrived, newAsk ? "ask" : "approval");
+    if (arrived) {
+      onDecisionArrived?.(arrived, newAsk ? "ask" : "approval");
+      scheduleReveal(arrived, true);
+    }
   }
 
   const unsubscribers = [
@@ -383,8 +393,13 @@ export function createConversationDocks({ container, navigation, tasksStore, app
     subscribeLocale(render),
   ];
   const resizeObserver = conversation && typeof ResizeObserver === "function"
-    ? new ResizeObserver(() => syncAvailableHeight(true)) : null;
+    ? new ResizeObserver((entries) => {
+      syncAvailableHeight(true);
+      if (entries.some((entry) => entry.target === container) &&
+          !container.hidden && !userMovedDock) scheduleReveal();
+    }) : null;
   resizeObserver?.observe(conversation);
+  resizeObserver?.observe(container);
   const onResize = () => syncAvailableHeight(true);
   window.addEventListener("resize", onResize);
   return () => {
