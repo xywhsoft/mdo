@@ -1,4 +1,4 @@
-import { clear, element } from "../../utils/dom.js";
+import { clear, element, isImeKey } from "../../utils/dom.js";
 import { currentLocale, subscribeLocale, t } from "../../i18n.js";
 
 export function estimateInputTokens(text) {
@@ -56,19 +56,33 @@ export function createTokenMeter({ root, trigger, ring, panel, estimate, prompt,
     if (open) { update(); panel.focus({ preventScroll: true }); }
     else if (focusWasInside) trigger.focus({ preventScroll: true });
   }
-  trigger.addEventListener("click", () => setOpen(!open));
-  document.addEventListener("click", (event) => {
+  function onTriggerClick() { setOpen(!open); }
+  function onOutsideClick(event) {
     if (open && !root.contains(event.target)) setOpen(false);
-  });
-  document.addEventListener("keydown", (event) => {
-    if (open && event.key === "Escape") { setOpen(false); trigger.focus(); }
-  });
+  }
+  function onEscape(event) {
+    if (!open || event.key !== "Escape" || event.defaultPrevented || isImeKey(event) ||
+        document.querySelector("dialog[open]")) return;
+    // The same key must not reach the workspace's Escape-to-stop shortcut.
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    setOpen(false);
+  }
+  trigger.addEventListener("click", onTriggerClick);
+  document.addEventListener("click", onOutsideClick);
+  document.addEventListener("keydown", onEscape);
   prompt.addEventListener("input", update);
   const unsubscribers = [sessionStore.subscribe(update), timelineStore.subscribe(update),
     modelsStore.subscribe(update), subscribeLocale(update)];
   update();
   return Object.freeze({
     refresh: update,
-    destroy: () => unsubscribers.forEach((unsubscribe) => unsubscribe()),
+    destroy() {
+      trigger.removeEventListener("click", onTriggerClick);
+      document.removeEventListener("click", onOutsideClick);
+      document.removeEventListener("keydown", onEscape);
+      prompt.removeEventListener("input", update);
+      unsubscribers.forEach((unsubscribe) => unsubscribe());
+    },
   });
 }

@@ -2,6 +2,8 @@
 
 本清单以 `app_bak/wwwroot` 的可操作行为为基线，而不是以页面长得相似或单元测试通过为完成标准。`docs/frontend-migration.md` 记录每次实现和验证；这里记录当前还需要什么证据。审计更新：2026-09-27，基线提交 `f9e2c4c`。
 
+运行中 Token 弹层补验：旧单文件 Home `.build/mdo-packed-docks-9jfk1twa` 中，打开用量后按 Esc 误把慢回复停止并触发恢复决策；最终 Home `.build/mdo-packed-docks-kwne1ex5` 中同一按键只关闭弹层，15 秒有界回复正常完成，焦点回用量入口，脚本错误为空。详见 [迁移记录](frontend-migration.md#2026-09-27token-用量弹层-esc-不再停止运行)。实体设备键盘仍待验收。
+
 双页面会话状态补验：此前只以外部 API 客户端模拟远端归档/恢复；单文件 Home `.build/mdo-packed-docks-wande1mh` 现由真实页面 A 归档、恢复，页面 B 的只读状态、进行中计数及未发送草稿同步改变，刷新后草稿仍在，320px 无横向溢出或脚本错误。两页均处于浏览器 `visible` 状态；后台标签唤醒、原生移动 WebView 和多进程共享 Home 未由此证明，详见 [迁移记录](frontend-migration.md#2026-09-27双页面归档与恢复同步)。
 
 设置暂存状态补验：旧单文件 Home `.build/mdo-packed-docks-vcqn58e5` 在 Agent 分区编辑后转到“扩展与 MCP”，预览/应用栏与待应用提示都消失；最终 Home `.build/mdo-packed-docks-2dwq3u5k` 在资源页顶栏提供返回最近编辑分区的入口，放弃或应用后隐藏。320px 中已验证预览、应用、配置 revision 与会话草稿保持；280px 中英俄名称及 40px 目标均可见、无横向溢出或脚本错误。详见 [迁移记录](frontend-migration.md#2026-09-27资源设置页显示未应用修改)。实体触控与原生 WebView 仍待验收。
