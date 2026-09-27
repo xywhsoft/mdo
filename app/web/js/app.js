@@ -1200,6 +1200,7 @@ export async function boot() {
       routeVersion += 1;
     }
     if (view === "settings") {
+      const enteringSettings = !settingsActive;
       if (!settingsActive) inspectorBeforeSettings = shell.dataset.inspector;
       settingsActive = true;
       settingsWorkspace.hidden = false;
@@ -1215,11 +1216,15 @@ export async function boot() {
       if (settingsSection === "feedback") void feedbackPanel.refresh();
       closeDrawers();
       setDrawer("inspector", false, { persist: false });
+      if (enteringSettings) $("#settings-title").focus({ preventScroll: true });
       if (!settingsStore.get().data) await loadSettings();
       return;
     }
+    const focusWasInSettings = settingsActive &&
+      settingsWorkspace.contains(document.activeElement);
     settingsWorkspace.hidden = true;
     for (const region of agentWorkspaceRegions) region.hidden = false;
+    if (focusWasInSettings) prompt.focus();
     timelineView.restorePreviewScroll();
     skipLink.href = "#timeline";
     skipLink.textContent = t("shell.skip");
