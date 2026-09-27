@@ -92,6 +92,15 @@ export function createSettingsView({ form, store, navigation, onApplied }) {
     return snapshot ? JSON.stringify(settingsPatch(form, snapshot)) : "";
   }
 
+  function previewAppearance() {
+    if (!snapshot) return;
+    applyAppearance({ appearance: {
+      theme: form.elements.theme.value,
+      font_size: form.elements.font_size.value,
+      density: form.elements.density.value,
+    } });
+  }
+
   function feedbackText(text, tone = "neutral") {
     feedback.textContent = text;
     feedback.dataset.tone = tone;
@@ -222,6 +231,7 @@ export function createSettingsView({ form, store, navigation, onApplied }) {
   }
 
   function markDirty() {
+    previewAppearance();
     const validInstructions = validateInstructions();
     const validProxy = validateProxy();
     previewFingerprint = "";
