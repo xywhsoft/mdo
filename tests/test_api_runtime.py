@@ -2641,11 +2641,6 @@ def run_probe(host: Path) -> None:
                     {"state": "pending"})[0] == 200
                 assert queue_request("PUT", profile_item_path,
                     {"state": "sending"})[0] == 200
-                status, _, body = queue_request("POST", session_path + "/runs",
-                    {"prompt": profile_item["text"],
-                     "queue_item_id": profile_item_id})
-                assert status == 409 and json.loads(body)["error"][
-                    "code"] == "queue_profile_pending", (status, body)
                 assert request(port, "DELETE", profile_item_path)[0] == 200
                 staged_id = "2" * 32
                 staged_path = queue_path + "/" + staged_id
@@ -3941,6 +3936,9 @@ def run_probe(host: Path) -> None:
                 assert queue_request("POST", queue_path, {
                     "id": race_id, "text": "two page queue run",
                     "first": False, "stage": True,
+                    "profile": {"model_id": "ling-3.0-tiny",
+                        "reasoning_effort": "medium",
+                        "permission_profile": "balanced"},
                 })[0] == 201
                 for state in ("pending", "sending"):
                     assert queue_request("PUT", race_path,
@@ -3980,6 +3978,7 @@ def run_probe(host: Path) -> None:
                         break
                     time.sleep(0.01)
                 assert race_run["terminal"], race_run
+                assert race_run["reasoning_effort"] == "medium", race_run
                 assert request(port, "DELETE", race_path)[0] == 200
 
                 starting_id = "8" * 32
@@ -4105,6 +4104,172 @@ def run_probe(host: Path) -> None:
                     time.sleep(0.01)
                 assert retry_run["terminal"], retry_run
                 assert request(port, "DELETE", retry_path)[0] == 200
+
+                profile_bound_id = "6" * 32
+                profile_bound_path = queue_path + "/" + profile_bound_id
+                run_profile = {"model_id": "ling-3.0-tiny",
+                               "reasoning_effort": "high",
+                               "permission_profile": "read-only"}
+                status, _, body = queue_request("POST", queue_path, {
+                    "id": profile_bound_id, "text": "profile-bound run",
+                    "first": False, "stage": True,
+                    "profile": run_profile,
+                })
+                assert status == 201, (status, body)
+                for state in ("pending", "sending"):
+                    assert queue_request("PUT", profile_bound_path,
+                        {"state": state})[0] == 200
+                before_profile = json.loads(meta_path.read_text(
+                    encoding="utf-8"))
+                status, _, body = queue_request("POST", run_path, {
+                    "prompt": "profile-bound run",
+                    "queue_item_id": profile_bound_id,
+                })
+                assert status == 202, (status, body)
+                profile_run = json.loads(body)["data"]
+                assert profile_run["model_id"] == run_profile["model_id"] and (
+                    profile_run["reasoning_effort"] ==
+                    run_profile["reasoning_effort"]), profile_run
+                after_profile = json.loads(meta_path.read_text(
+                    encoding="utf-8"))
+                assert after_profile["revision"] == (
+                    before_profile["revision"] + 1), after_profile
+                assert after_profile["model_id"] == run_profile[
+                    "model_id"] and after_profile["reasoning_effort"] == (
+                    run_profile["reasoning_effort"]), after_profile
+                assert after_profile["permission_profile"] == (
+                    run_profile["permission_profile"]), after_profile
+                deadline = time.monotonic() + 5.0
+                while time.monotonic() < deadline:
+                    profile_run = json.loads(request(port, "GET",
+                        f'/api/v1/runs/{profile_run["id"]}')[2])["data"]
+                    if profile_run["terminal"]:
+                        break
+                    time.sleep(0.01)
+                assert profile_run["state"] == "succeeded", profile_run
+                assert request(port, "DELETE", profile_bound_path)[0] == 200
+
+                next_profile_id = "4" * 32
+                next_profile_path = queue_path + "/" + next_profile_id
+                next_profile = {"model_id": "ling-3.0-tiny",
+                                "reasoning_effort": "medium",
+                                "permission_profile": "balanced"}
+                assert queue_request("POST", queue_path, {
+                    "id": next_profile_id, "text": "next profile run",
+                    "first": False, "stage": True,
+                    "profile": next_profile,
+                })[0] == 201
+                for state in ("pending", "sending"):
+                    assert queue_request("PUT", next_profile_path,
+                        {"state": state})[0] == 200
+                status, _, body = queue_request("POST", run_path, {
+                    "prompt": "next profile run",
+                    "queue_item_id": next_profile_id,
+                })
+                assert status == 202, (status, body)
+                next_run = json.loads(body)["data"]
+                assert next_run["reasoning_effort"] == "medium", next_run
+                restored_meta = json.loads(meta_path.read_text(
+                    encoding="utf-8"))
+                assert restored_meta["revision"] == (
+                    after_profile["revision"] + 1), restored_meta
+                assert restored_meta["permission_profile"] == "balanced"
+                assert restored_meta["reasoning_effort"] == "medium"
+                deadline = time.monotonic() + 5.0
+                while time.monotonic() < deadline:
+                    next_run = json.loads(request(port, "GET",
+                        f'/api/v1/runs/{next_run["id"]}')[2])["data"]
+                    if next_run["terminal"]:
+                        break
+                    time.sleep(0.01)
+                assert next_run["state"] == "succeeded", next_run
+                assert request(port, "DELETE", next_profile_path)[0] == 200
+
+                invalid_profile_id = "5" * 32
+                invalid_profile_path = queue_path + "/" + invalid_profile_id
+                assert queue_request("POST", queue_path, {
+                    "id": invalid_profile_id, "text": "invalid model bound",
+                    "first": False, "stage": True,
+                    "profile": {**run_profile,
+                        "model_id": "missing-profile-model"},
+                })[0] == 201
+                for state in ("pending", "sending"):
+                    assert queue_request("PUT", invalid_profile_path,
+                        {"state": state})[0] == 200
+                status, _, body = queue_request("POST", run_path, {
+                    "prompt": "invalid model bound",
+                    "queue_item_id": invalid_profile_id,
+                })
+                assert status == 422 and json.loads(body)["error"][
+                    "code"] == "session_profile_invalid", (status, body)
+                assert not (queue_file.parent / "queue-receipts" /
+                    (invalid_profile_id + ".json")).exists()
+                assert json.loads(meta_path.read_text(encoding="utf-8")) == (
+                    restored_meta)
+                assert request(port, "DELETE", invalid_profile_path)[0] == 200
+
+                status, headers, body = request(port, "GET",
+                    "/api/v1/models/config")
+                assert status == 200, (status, body)
+                model_config = json.loads(body)["data"]
+                model_patch = json.loads(json.dumps({key: value for key, value
+                    in model_config.items() if key != "runtime_override"}))
+                model_patch["providers"].append({
+                    "id": "queue-local", "name": "Queue Local",
+                    "builtin": False, "editable": True, "removable": True,
+                    "verify_peer": True, "timeout_ms": 5000,
+                    "endpoints": {"responses":
+                        f"http://127.0.0.1:{model_port}/v1/responses"},
+                    "credential": {"secret_ref": "env:MDO_LING_API_KEY"},
+                })
+                local_model = next(item for item in model_patch["items"]
+                    if item["id"] == "ling-3.0-tiny").copy()
+                local_model.update({"id": "queue-local-model",
+                    "name": "Queue Local Model", "provider": "queue-local",
+                    "wire_model": "ling-3.0-tiny", "builtin": False,
+                    "free": False, "editable": True, "removable": True,
+                    "protocols": ["openai-responses"],
+                    "default_protocol": "openai-responses"})
+                model_patch["items"].append(local_model)
+                status, _, body = request(port, "PUT",
+                    "/api/v1/settings/models",
+                    body=json.dumps({"schema_version": 1,
+                        "patch": model_patch}).encode(),
+                    headers={"Content-Type": "application/json",
+                             "If-Match": headers["etag"]})
+                assert status == 200, (status, body)
+                model_bound_id = "3" * 32
+                model_bound_path = queue_path + "/" + model_bound_id
+                assert queue_request("POST", queue_path, {
+                    "id": model_bound_id, "text": "model switch bound",
+                    "first": False, "stage": True,
+                    "profile": {**next_profile,
+                        "model_id": "queue-local-model"},
+                })[0] == 201
+                for state in ("pending", "sending"):
+                    assert queue_request("PUT", model_bound_path,
+                        {"state": state})[0] == 200
+                status, _, body = queue_request("POST", run_path, {
+                    "prompt": "model switch bound",
+                    "queue_item_id": model_bound_id,
+                })
+                assert status == 202, (status, body)
+                model_run = json.loads(body)["data"]
+                assert model_run["model_id"] == "queue-local-model", model_run
+                switched_meta = json.loads(meta_path.read_text(
+                    encoding="utf-8"))
+                assert switched_meta["model_id"] == "queue-local-model"
+                assert switched_meta["revision"] == (
+                    restored_meta["revision"] + 1), switched_meta
+                deadline = time.monotonic() + 5.0
+                while time.monotonic() < deadline:
+                    model_run = json.loads(request(port, "GET",
+                        f'/api/v1/runs/{model_run["id"]}')[2])["data"]
+                    if model_run["terminal"]:
+                        break
+                    time.sleep(0.01)
+                assert model_run["state"] == "succeeded", model_run
+                assert request(port, "DELETE", model_bound_path)[0] == 200
 
                 meta_path.write_text("{broken", encoding="utf-8")
                 status, headers, body = request(

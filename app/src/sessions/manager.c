@@ -55,6 +55,8 @@ static MdoSessionManagerState g_MdoSessions;
 
 static bool MdoSessionsValidateCurrent(MdoSession* Session,
     xwork_error* Error);
+static bool MdoSessionsCommit(MdoSession* Session,
+    const MdoSessionInfo* Candidate, xwork_error* Error);
 
 static void MdoSessionsError(xwork_error* Error, xwork_error_code Code,
     const char* Message)
@@ -844,7 +846,9 @@ MdoSession* MdoSessionOpen(const char* ProjectId, const char* SessionId,
 {
     MdoSessionRuntimeOptions Defaults;
     MdoSessionInfo Info;
+    MdoSessionInfo Candidate;
     MdoAgentSessionOptions AgentOptions;
+    MdoAgentSessionInfo AgentInfo;
     MdoAgentSession* Agent = NULL;
     MdoSessionEventBridge* Bridge = NULL;
     MdoSession* Session = NULL;
@@ -853,6 +857,9 @@ MdoSession* MdoSessionOpen(const char* ProjectId, const char* SessionId,
     char* SnapshotPath = NULL;
     char* JournalPath = NULL;
     char* ArtifactPath = NULL;
+    bool ProfileChanged = false;
+    bool RecoveryRequired = false;
+    bool Committed;
 
     xworkErrorInit(Error);
     if ( Options == NULL ) {
@@ -864,6 +871,19 @@ MdoSession* MdoSessionOpen(const char* ProjectId, const char* SessionId,
          !MdoSessionsIdValid(SessionId, MDO_SESSION_ID_CAPACITY) ||
          ((Options->OnOwnerRetain != NULL) !=
           (Options->OnOwnerRelease != NULL)) ||
+         ((Options->ProfileModelId == NULL) !=
+          (Options->ProfileReasoningEffort == NULL)) ||
+         ((Options->ProfileModelId == NULL) !=
+          (Options->ProfilePermissionProfile == NULL)) ||
+         (Options->ProfileModelId != NULL &&
+          (!MdoSessionsTextValid(Options->ProfileModelId,
+                MDO_SESSION_IDENTITY_CAPACITY, false) ||
+           !MdoSessionsTextValid(Options->ProfileReasoningEffort,
+                MDO_SESSION_REASONING_CAPACITY, false) ||
+           (strcmp(Options->ProfilePermissionProfile, "read-only") != 0 &&
+            strcmp(Options->ProfilePermissionProfile, "balanced") != 0 &&
+            strcmp(Options->ProfilePermissionProfile,
+                "full-access") != 0))) ||
          !MdoSessionsPath(MetaPath, ProjectId, SessionId, "meta.json") ) {
         MdoSessionsError(Error, XWORK_ERROR_INVALID_ARGUMENT,
             "invalid managed session open request");
@@ -926,13 +946,32 @@ MdoSession* MdoSessionOpen(const char* ProjectId, const char* SessionId,
     }
     MdoSessionEventBridgeSetRegistered(Bridge);
     xrtMutexUnlock(g_MdoSessions.Lock);
+    ProfileChanged = Options->ProfileModelId != NULL &&
+        (strcmp(Options->ProfileModelId, Info.ModelId) != 0 ||
+         strcmp(Options->ProfileReasoningEffort,
+            Info.ReasoningEffort) != 0 ||
+         strcmp(Options->ProfilePermissionProfile,
+            Info.PermissionProfile) != 0);
+    if ( ProfileChanged && Info.Revision == UINT64_MAX ) {
+        MdoSessionsError(Error, XWORK_ERROR_LIMIT,
+            "session metadata revision is exhausted");
+        goto done;
+    }
     MdoAgentSessionOptionsInit(&AgentOptions);
     AgentOptions.AgentId = Info.AgentId;
-    AgentOptions.ModelId = Info.ModelId;
-    AgentOptions.Protocol = Info.Protocol;
-    AgentOptions.ReasoningEffort = Info.ReasoningEffort;
-    AgentOptions.PermissionProfile = Info.PermissionProfile;
-    AgentOptions.MaxOutputTokens = Info.MaxOutputTokens;
+    AgentOptions.ModelId = Options->ProfileModelId != NULL ?
+        Options->ProfileModelId : Info.ModelId;
+    AgentOptions.Protocol = Options->ProfileModelId != NULL &&
+        strcmp(Options->ProfileModelId, Info.ModelId) != 0 ?
+        0 : Info.Protocol;
+    AgentOptions.ReasoningEffort =
+        Options->ProfileReasoningEffort != NULL ?
+        Options->ProfileReasoningEffort : Info.ReasoningEffort;
+    AgentOptions.PermissionProfile =
+        Options->ProfilePermissionProfile != NULL ?
+        Options->ProfilePermissionProfile : Info.PermissionProfile;
+    AgentOptions.MaxOutputTokens = AgentOptions.Protocol == 0 ?
+        0u : Info.MaxOutputTokens;
     AgentOptions.WorkspaceRoot = Info.WorkspaceRoot;
     AgentOptions.ProjectId = Info.ProjectId;
     AgentOptions.ProductSessionId = Info.Id;
@@ -949,10 +988,59 @@ MdoSession* MdoSessionOpen(const char* ProjectId, const char* SessionId,
     Agent = MdoAgentSessionCreateWithRuntime(g_MdoSessions.Runtime,
         &AgentOptions, Error);
     if ( Agent == NULL ) goto done;
+    if ( ProfileChanged ) {
+        if ( !MdoAgentSessionRecoveryRequired(Agent, &RecoveryRequired,
+                Error) ) goto done;
+        if ( RecoveryRequired ) {
+            MdoSessionsError(Error, XWORK_ERROR_CONTEXT,
+                "resolve interrupted Agent calls before changing the profile");
+            goto done;
+        }
+        memset(&AgentInfo, 0, sizeof(AgentInfo));
+        AgentInfo.Size = sizeof(AgentInfo);
+        if ( !MdoAgentSessionGetInfo(Agent, &AgentInfo) ) {
+            MdoSessionsError(Error, XWORK_ERROR_CONTEXT,
+                "cannot inspect the selected Agent profile");
+            goto done;
+        }
+        Candidate = Info;
+        ++Candidate.Revision;
+        Candidate.UpdatedAt = xrtNow();
+        if ( Candidate.UpdatedAt < Candidate.CreatedAt )
+            Candidate.UpdatedAt = Candidate.CreatedAt;
+        Candidate.Protocol = AgentInfo.Protocol;
+        Candidate.MaxOutputTokens = AgentInfo.MaxOutputTokens;
+        Candidate.ConfigRevision = AgentInfo.ConfigRevision;
+        Candidate.ModelGeneration = AgentInfo.ModelGeneration;
+        Candidate.ModuleGeneration = AgentInfo.ModuleGeneration;
+        Candidate.SkillGeneration = AgentInfo.SkillGeneration;
+        snprintf(Candidate.ModelId, sizeof(Candidate.ModelId), "%s",
+            AgentInfo.ModelId);
+        snprintf(Candidate.ReasoningEffort,
+            sizeof(Candidate.ReasoningEffort), "%s",
+            AgentInfo.ReasoningEffort);
+        snprintf(Candidate.PermissionProfile,
+            sizeof(Candidate.PermissionProfile), "%s",
+            AgentInfo.PermissionProfile);
+        Candidate.RuntimeOpen = true;
+    }
     Info.RuntimeOpen = true;
     Session = MdoSessionsHandleCreate(Agent, Bridge, &Info, MetaPath);
     if ( Session == NULL ) goto memory;
     Agent = NULL;
+    if ( ProfileChanged ) {
+        xrtMutexLock(Session->Lock);
+        xrtMutexLock(g_MdoSessions.Lock);
+        Committed = MdoSessionsValidateCurrent(Session, Error) &&
+            MdoSessionsCommit(Session, &Candidate, Error);
+        xrtMutexUnlock(g_MdoSessions.Lock);
+        xrtMutexUnlock(Session->Lock);
+        if ( !Committed ) {
+            MdoSessionRelease(Session);
+            Session = NULL;
+            goto done;
+        }
+    }
     goto done;
 memory:
     MdoSessionsError(Error, XWORK_ERROR_OUT_OF_MEMORY,

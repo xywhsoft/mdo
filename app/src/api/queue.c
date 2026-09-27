@@ -638,14 +638,16 @@ static bool MdoQueueRunMatches(const MdoQueueItem* Item, xstrview Prompt,
 
 MdoApiQueueRunStatus MdoApiQueueRunPrepare(const char* ProjectId,
     const char* SessionId, const char* Id, xstrview Prompt,
-    const char Attachments[4][33], size_t AttachmentCount)
+    const char Attachments[4][33], size_t AttachmentCount,
+    MdoApiProfile* Profile)
 {
     char Path[MDO_SESSION_PATH_CAPACITY];
     MdoQueue Queue;
     MdoApiQueueRunStatus Result = MDO_API_QUEUE_RUN_UNAVAILABLE;
     size_t Index;
+    if ( Profile != NULL ) memset(Profile, 0, sizeof(*Profile));
     if ( !MdoQueueRunPath(Path, ProjectId, SessionId) || Id == NULL ||
-         Attachments == NULL ) return Result;
+         Attachments == NULL || Profile == NULL ) return Result;
     xrtMutexLock(g_MdoQueueLock);
     if ( MdoQueueRead(Path, ProjectId, SessionId, &Queue) ) {
         Index = MdoQueueFind(&Queue, Id);
@@ -656,16 +658,18 @@ MdoApiQueueRunStatus MdoApiQueueRunPrepare(const char* ProjectId,
                     AttachmentCount) ) {
                 bool Exists;
                 char RunId[MDO_RUN_ID_CAPACITY];
-                if ( Item->Profile.Present )
-                    Result = MDO_API_QUEUE_RUN_PROFILE_PENDING;
-                else if ( !MdoQueueReceiptRead(ProjectId, SessionId, Id,
+                if ( !MdoQueueReceiptRead(ProjectId, SessionId, Id,
                         &Exists, RunId) )
                     Result = MDO_API_QUEUE_RUN_UNAVAILABLE;
-                else Result = Item->RunId[0] != '\0' ||
-                    (Exists && RunId[0] != '\0') ?
-                    MDO_API_QUEUE_RUN_ACCEPTED :
-                    (Exists ? MDO_API_QUEUE_RUN_STARTING :
-                    MDO_API_QUEUE_RUN_READY);
+                else {
+                    Result = Item->RunId[0] != '\0' ||
+                        (Exists && RunId[0] != '\0') ?
+                        MDO_API_QUEUE_RUN_ACCEPTED :
+                        (Exists ? MDO_API_QUEUE_RUN_STARTING :
+                        MDO_API_QUEUE_RUN_READY);
+                    if ( Result == MDO_API_QUEUE_RUN_READY )
+                        *Profile = Item->Profile;
+                }
             }
         } else {
             bool Exists;
@@ -684,7 +688,8 @@ MdoApiQueueRunStatus MdoApiQueueRunPrepare(const char* ProjectId,
 
 MdoApiQueueRunStatus MdoApiQueueRunClaim(const char* ProjectId,
     const char* SessionId, const char* Id, xstrview Prompt,
-    const char Attachments[4][33], size_t AttachmentCount)
+    const char Attachments[4][33], size_t AttachmentCount,
+    const MdoApiProfile* ExpectedProfile)
 {
     char Path[MDO_SESSION_PATH_CAPACITY];
     MdoQueue Queue;
@@ -693,17 +698,17 @@ MdoApiQueueRunStatus MdoApiQueueRunClaim(const char* ProjectId,
     bool Exists;
     char RunId[MDO_RUN_ID_CAPACITY];
     if ( !MdoQueueRunPath(Path, ProjectId, SessionId) || Id == NULL ||
-         Attachments == NULL ) return Result;
+         Attachments == NULL || ExpectedProfile == NULL ) return Result;
     xrtMutexLock(g_MdoQueueLock);
     if ( MdoQueueRead(Path, ProjectId, SessionId, &Queue) ) {
         Index = MdoQueueFind(&Queue, Id);
         Result = MDO_API_QUEUE_RUN_CONFLICT;
         if ( Index != SIZE_MAX &&
              MdoQueueRunMatches(&Queue.Items[Index], Prompt, Attachments,
-                AttachmentCount) ) {
-            if ( Queue.Items[Index].Profile.Present )
-                Result = MDO_API_QUEUE_RUN_PROFILE_PENDING;
-            else if ( MdoQueueReceiptRead(ProjectId, SessionId, Id,
+                AttachmentCount) &&
+             MdoApiProfileEqual(&Queue.Items[Index].Profile,
+                ExpectedProfile) ) {
+            if ( MdoQueueReceiptRead(ProjectId, SessionId, Id,
                     &Exists, RunId) ) {
                 Result = Queue.Items[Index].RunId[0] != '\0' ||
                     (Exists && RunId[0] != '\0') ?

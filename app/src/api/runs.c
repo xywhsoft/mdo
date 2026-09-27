@@ -322,9 +322,6 @@ static bool MdoApiRunQueueFailure(MdoApiContext* Context,
     if ( Status == MDO_API_QUEUE_RUN_STARTING )
         return MdoApiReplyError(Context, 409u, "queue_run_starting",
             "This queue item has a start in progress or needs review", NULL);
-    if ( Status == MDO_API_QUEUE_RUN_PROFILE_PENDING )
-        return MdoApiReplyError(Context, 409u, "queue_profile_pending",
-            "This queue item's profile cannot start until atomic profile admission is available", NULL);
     return MdoApiReplyError(Context, 409u, "queue_run_conflict",
         "The sending queue item does not match this run", NULL);
 }
@@ -345,6 +342,7 @@ bool MdoApiRunStartRoute(MdoApiContext* Context)
     xllm_message UserMessage;
     char AttachmentIds[4][33] = {{ 0 }};
     size_t AttachmentCount = 0u;
+    MdoApiProfile QueueProfile = { 0 };
     char QueueItemId[33] = { 0 };
     char Project[MDO_PROJECT_ID_CAPACITY];
     char SessionId[MDO_SESSION_ID_CAPACITY];
@@ -412,7 +410,7 @@ bool MdoApiRunStartRoute(MdoApiContext* Context)
     if ( QueueItemId[0] != '\0' ) {
         MdoApiQueueRunStatus QueueStatus = MdoApiQueueRunPrepare(Project,
             SessionId, QueueItemId, Prompt, AttachmentIds,
-            AttachmentCount);
+            AttachmentCount, &QueueProfile);
         if ( QueueStatus != MDO_API_QUEUE_RUN_READY ) {
             xrtFree(PromptText);
             MdoApiJsonBodyUnit(&Body);
@@ -433,7 +431,9 @@ bool MdoApiRunStartRoute(MdoApiContext* Context)
         Catalog = MdoModelCatalogSnapshot();
         memset(&Model, 0, sizeof(Model)); Model.Size = sizeof(Model);
         Valid = Catalog != NULL &&
-            MdoModelCatalogModelFind(Catalog, SessionInfo.ModelId, &Model) &&
+            MdoModelCatalogModelFind(Catalog,
+                QueueProfile.Present ? QueueProfile.ModelId :
+                    SessionInfo.ModelId, &Model) &&
             (Model.Capabilities & XLLM_CAP_IMAGE_IN) != 0u &&
             (Model.Attachments & MDO_MODEL_ATTACHMENT_IMAGE) != 0u;
         MdoModelCatalogRelease(Catalog);
@@ -469,10 +469,15 @@ bool MdoApiRunStartRoute(MdoApiContext* Context)
     Options.ProjectId = Project;
     Options.SessionId = SessionId;
     Options.Prompt = PromptText;
+    if ( QueueProfile.Present ) {
+        Options.ProfileModelId = QueueProfile.ModelId;
+        Options.ProfileReasoningEffort = QueueProfile.ReasoningEffort;
+        Options.ProfilePermissionProfile = QueueProfile.PermissionProfile;
+    }
     if ( QueueItemId[0] != '\0' ) {
         MdoApiQueueRunStatus QueueStatus = MdoApiQueueRunClaim(Project,
             SessionId, QueueItemId, Prompt, AttachmentIds,
-            AttachmentCount);
+            AttachmentCount, &QueueProfile);
         if ( QueueStatus != MDO_API_QUEUE_RUN_READY ) {
             if ( AttachmentLocked ) MdoApiAttachmentUnlock();
             if ( AttachmentCount != 0u ) xllmMessageUnit(&UserMessage);

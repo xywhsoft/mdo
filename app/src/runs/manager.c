@@ -533,6 +533,11 @@ bool MdoRunStartWithOutcome(const MdoRunStartOptions* Options,
              strlen(Options->RecoveryToken) !=
                 MDO_AGENT_RECOVERY_TOKEN_CAPACITY - 1u))) ||
          Options->TimeoutMilliseconds > MDO_RUN_TIMEOUT_MAX ||
+         ((Options->ProfileModelId == NULL) !=
+          (Options->ProfileReasoningEffort == NULL)) ||
+         ((Options->ProfileModelId == NULL) !=
+          (Options->ProfilePermissionProfile == NULL)) ||
+         (Options->Resume && Options->ProfileModelId != NULL) ||
          (Info != NULL && Info->Size < sizeof(*Info)) ) {
         MdoRunsError(Error, XWORK_ERROR_INVALID_ARGUMENT,
             "invalid interactive run start request");
@@ -625,6 +630,11 @@ bool MdoRunStartWithOutcome(const MdoRunStartOptions* Options,
     RuntimeOptions.OwnerUserData = g_MdoRuns.Options.OwnerUserData;
     RuntimeOptions.OnOwnerRetain = g_MdoRuns.Options.OnOwnerRetain;
     RuntimeOptions.OnOwnerRelease = g_MdoRuns.Options.OnOwnerRelease;
+    RuntimeOptions.ProfileModelId = Options->ProfileModelId;
+    RuntimeOptions.ProfileReasoningEffort =
+        Options->ProfileReasoningEffort;
+    RuntimeOptions.ProfilePermissionProfile =
+        Options->ProfilePermissionProfile;
     Session = MdoSessionOpen(Options->ProjectId, Options->SessionId,
         &RuntimeOptions, Error);
     if ( Session == NULL ) goto publish;

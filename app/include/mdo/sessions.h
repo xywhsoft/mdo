@@ -59,6 +59,11 @@ typedef struct MdoSessionRuntimeOptions {
     void* OwnerUserData;
     xwork_agent_owner_retain_fn OnOwnerRetain;
     xwork_agent_owner_release_fn OnOwnerRelease;
+    /* Complete open-time profile override. Applied while this session owns
+     * the exclusive runtime reservation, before its Agent can run. */
+    const char* ProfileModelId;
+    const char* ProfileReasoningEffort;
+    const char* ProfilePermissionProfile;
 } MdoSessionRuntimeOptions;
 
 typedef struct MdoSessionForkOptions {

@@ -4,6 +4,7 @@
 #include <xsbase.h>
 
 #include "../../include/mdo/api.h"
+#include "profile.h"
 
 #define MDO_API_RESPONSE_MAX_BYTES (256u * 1024u)
 #define MDO_API_REQUEST_MAX_BYTES (256u * 1024u)
@@ -129,15 +130,16 @@ typedef enum MdoApiQueueRunStatus {
     MDO_API_QUEUE_RUN_CONFLICT,
     MDO_API_QUEUE_RUN_ACCEPTED,
     MDO_API_QUEUE_RUN_STARTING,
-    MDO_API_QUEUE_RUN_PROFILE_PENDING,
     MDO_API_QUEUE_RUN_UNAVAILABLE
 } MdoApiQueueRunStatus;
 MdoApiQueueRunStatus MdoApiQueueRunPrepare(const char* ProjectId,
     const char* SessionId, const char* Id, xstrview Prompt,
-    const char Attachments[4][33], size_t AttachmentCount);
+    const char Attachments[4][33], size_t AttachmentCount,
+    MdoApiProfile* Profile);
 MdoApiQueueRunStatus MdoApiQueueRunClaim(const char* ProjectId,
     const char* SessionId, const char* Id, xstrview Prompt,
-    const char Attachments[4][33], size_t AttachmentCount);
+    const char Attachments[4][33], size_t AttachmentCount,
+    const MdoApiProfile* ExpectedProfile);
 bool MdoApiQueueRunReleaseClaim(const char* ProjectId,
     const char* SessionId, const char* Id);
 bool MdoApiQueueRunBind(const char* ProjectId, const char* SessionId,

@@ -51,6 +51,11 @@ typedef struct MdoRunStartOptions {
      * the exact Agent instance immediately before the resume starts. */
     const char* RecoveryToken;
     const xwork_resume_options* ResumeOptions;
+    /* Complete queue-bound profile, borrowed until start returns. Null for
+     * ordinary starts and recovery. */
+    const char* ProfileModelId;
+    const char* ProfileReasoningEffort;
+    const char* ProfilePermissionProfile;
 } MdoRunStartOptions;
 
 typedef struct MdoRunInfo {
