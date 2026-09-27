@@ -57,6 +57,19 @@ export function formatClock(microseconds) {
 // Stable API codes describe user actions; server messages remain useful for
 // unknown failures, but should not determine the language of known failures.
 const API_ERROR_COPY = Object.freeze({
+  network_error: ["error.network",
+    "无法连接本地服务，请确认 mdo 仍在运行。"],
+  session_busy: ["error.sessionBusy", "这个会话仍有任务在运行。"],
+  session_not_found: ["error.sessionNotFound",
+    "会话已经不存在，请刷新列表。"],
+  revision_conflict: ["error.revisionConflict",
+    "内容已在其他窗口更新，请刷新后重试。"],
+  recovery_state_conflict: ["error.recoveryConflict",
+    "中断状态已经变化，请核对刷新后的调用再决定。"],
+  migration_conflict: ["error.migrationConflict",
+    "迁移来源、目标或预览令牌已经变化，请重新检测后确认。"],
+  migration_invalid: ["error.migrationInvalid",
+    "旧数据未通过当前版本的迁移校验。"],
   invalid_response: ["error.invalidResponse", "服务返回了无效响应，请重试。"],
   session_profile_invalid: ["error.sessionProfileInvalid",
     "会话配置无效，请检查模型、思考强度和权限。"],
@@ -84,23 +97,33 @@ const API_ERROR_COPY = Object.freeze({
     "图片存储暂不可用，请重试。"],
   session_state_conflict: ["error.sessionStateConflict",
     "会话状态已变化，请刷新后重试。"],
+  precondition_required: ["error.preconditionRequired",
+    "缺少当前版本信息，请刷新页面后重试。"],
+  settings_unavailable: ["error.settingsUnavailable",
+    "设置暂时无法读取，请稍后重试。"],
+  configuration_persistence_failed: ["error.configurationSaveFailed",
+    "设置未能保存，请检查便携数据目录后重试。"],
+  project_not_found: ["error.projectNotFound",
+    "项目已不存在，请刷新项目列表。"],
+  purge_preview_unavailable: ["error.purgePreviewUnavailable",
+    "无法完整检查项目数据；请勿依据旧清单操作，稍后重试。"],
+  session_create_invalid: ["error.sessionCreateInvalid",
+    "无法创建任务，请检查标题和所选配置。"],
+  session_create_conflict: ["error.sessionCreateConflict",
+    "任务创建请求与已有任务冲突，请刷新并核对任务列表。"],
+  schedule_busy: ["error.scheduleBusy",
+    "计划当前无法删除，请等待运行结束后重试。"],
+  schedule_state_conflict: ["error.scheduleStateConflict",
+    "计划状态已变化，请刷新后重试。"],
+  approval_not_found: ["error.approvalNotFound",
+    "审批请求已不存在或已在其他窗口处理，请刷新后核对。"],
+  ask_not_found: ["error.askNotFound",
+    "询问已不存在或已在其他窗口回答，请刷新后核对。"],
+  run_not_found: ["error.runNotFound",
+    "运行记录已不在当前服务中，请检查会话历史。"],
 });
 
 export function errorMessage(error) {
-  if (error?.code === "network_error") return t("error.network", {},
-    "无法连接本地服务，请确认 mdo 仍在运行。");
-  if (error?.code === "session_busy") return t("error.sessionBusy", {},
-    "这个会话仍有任务在运行。");
-  if (error?.code === "session_not_found") return t("error.sessionNotFound", {},
-    "会话已经不存在，请刷新列表。");
-  if (error?.code === "revision_conflict") return t("error.revisionConflict", {},
-    "内容已在其他窗口更新，请刷新后重试。");
-  if (error?.code === "recovery_state_conflict") return t("error.recoveryConflict", {},
-    "中断状态已经变化，请核对刷新后的调用再决定。");
-  if (error?.code === "migration_conflict") return t("error.migrationConflict", {},
-    "迁移来源、目标或预览令牌已经变化，请重新检测后确认。");
-  if (error?.code === "migration_invalid") return t("error.migrationInvalid", {},
-    "旧数据未通过当前版本的迁移校验。");
   const known = Object.hasOwn(API_ERROR_COPY, error?.code)
     ? API_ERROR_COPY[error.code] : null;
   if (known) return t(known[0], {}, known[1]);

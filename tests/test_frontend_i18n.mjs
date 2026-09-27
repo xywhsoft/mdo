@@ -12,6 +12,26 @@ const root = new URL("../app/web/", import.meta.url);
 const packs = Object.fromEntries(supportedLocales.map((name) => [
   name, JSON.parse(readFileSync(new URL(`lang/${name}.json`, root), "utf8")),
 ]));
+const localizedApiErrors = [
+  ["precondition_required", "error.preconditionRequired"],
+  ["settings_unavailable", "error.settingsUnavailable"],
+  ["configuration_persistence_failed", "error.configurationSaveFailed"],
+  ["project_not_found", "error.projectNotFound"],
+  ["purge_preview_unavailable", "error.purgePreviewUnavailable"],
+  ["session_create_invalid", "error.sessionCreateInvalid"],
+  ["session_create_conflict", "error.sessionCreateConflict"],
+  ["schedule_busy", "error.scheduleBusy"],
+  ["schedule_state_conflict", "error.scheduleStateConflict"],
+  ["approval_not_found", "error.approvalNotFound"],
+  ["ask_not_found", "error.askNotFound"],
+  ["run_not_found", "error.runNotFound"],
+];
+
+function assertApiErrorsLocalized(locale) {
+  for (const [code, key] of localizedApiErrors)
+    assert.equal(errorMessage({ code, message: "English server detail" }),
+      packs[locale][key], `${locale}:${code}`);
+}
 
 test("bundled language packs cover the annotated shell and switch without stale responses", async () => {
   const referenceKeys = Object.keys(packs["zh-CN"]).sort();
@@ -141,6 +161,7 @@ test("bundled language packs cover the annotated shell and switch without stale 
   try {
     assert.equal(await loadLocale("zh-CN"), true);
     assert.equal(node.textContent, "新建任务");
+    assertApiErrorsLocalized("zh-CN");
     const stale = loadLocale("en-US");
     assert.equal(await loadLocale("ru-RU"), true);
     releaseEnglish();
@@ -148,6 +169,7 @@ test("bundled language packs cover the annotated shell and switch without stale 
     assert.equal(currentLocale(), "ru-RU");
     assert.equal(globalThis.document.documentElement.lang, "ru-RU");
     assert.equal(node.textContent, "Новая задача");
+    assertApiErrorsLocalized("ru-RU");
     assert.equal(node.getAttribute("aria-label"), "Настроить и создать задачу");
     assert.equal(t("nav.actionsFor", { title: "Тест" }), "Действия с сеансом Тест");
     assert.equal(t("composer.backgroundQueueFailed", { title: "Тест", error: "сбой" }),
@@ -162,13 +184,20 @@ test("bundled language packs cover the annotated shell and switch without stale 
       "Профиль сеанса недействителен. Проверьте модель, уровень рассуждения и разрешения.");
     assert.equal(errorMessage({ code: "invalid_response", message: "服务返回了无效响应" }),
       "Служба вернула недопустимый ответ. Повторите попытку.");
+    assert.equal(errorMessage({ code: "approval_not_found",
+      message: "The requested approval does not exist" }),
+      packs["ru-RU"]["error.approvalNotFound"]);
     assert.equal(sessionActionDialogCopy("trash", { title: "Тест" })[1],
       "«Тест» можно восстановить из корзины.");
     assert.equal(t("missing.key", {}, "中文回退"), "中文回退");
     assert.equal(await loadLocale("en-US"), true);
     assert.equal(node.textContent, "New task");
+    assertApiErrorsLocalized("en-US");
     assert.equal(errorMessage({ code: "queue_full", message: "队列已满" }),
       "The pending queue is full. Handle existing messages first.");
+    assert.equal(errorMessage({ code: "schedule_busy",
+      message: "The schedule cannot be deleted" }),
+      packs["en-US"]["error.scheduleBusy"]);
     assert.equal(errorMessage({ code: "toString", message: "Unknown server detail" }),
       "Unknown server detail");
     assert.equal(t("draft.tooLarge"), "Draft exceeds the 64 KiB save limit");
@@ -183,6 +212,7 @@ test("bundled language packs cover the annotated shell and switch without stale 
     assert.equal(errorMessage({ code: "session_profile_invalid",
       message: "The requested session profile is invalid" }),
       "会话配置无效，请检查模型、思考强度和权限。");
+    assertApiErrorsLocalized("zh-CN");
     assert.deepEqual(changes, ["zh-CN", "ru-RU", "en-US", "zh-CN"]);
     await assert.rejects(loadLocale("fr"), /Unsupported locale/);
   } finally {
