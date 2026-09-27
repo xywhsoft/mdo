@@ -81,6 +81,7 @@ export function createSettingsView({ form, store, navigation, onApplied }) {
   const restoreConfirm = document.querySelector("#restore-confirm");
   const cancelRestoreButton = document.querySelector("#cancel-restore");
   const confirmRestoreButton = document.querySelector("#confirm-restore");
+  const sectionNavigation = document.querySelector(".settings-navigation");
   const credential = document.querySelector("#search-credential-state");
   const proxyCredential = document.querySelector("#proxy-credential-state");
   const instructionsCount = document.querySelector("#settings-instructions-count");
@@ -126,6 +127,33 @@ export function createSettingsView({ form, store, navigation, onApplied }) {
     if (target?.isConnected && target.getClientRects().length)
       target.focus({ preventScroll: true });
   }
+
+  function revealSectionButton(button) {
+    if (!button || !sectionNavigation.getClientRects().length) return;
+    const area = sectionNavigation.getBoundingClientRect();
+    const target = button.getBoundingClientRect();
+    const inset = 8;
+    if (sectionNavigation.scrollWidth > sectionNavigation.clientWidth) {
+      if (target.left < area.left + inset)
+        sectionNavigation.scrollLeft += target.left - area.left - inset;
+      else if (target.right > area.right - inset)
+        sectionNavigation.scrollLeft += target.right - area.right + inset;
+    }
+    if (sectionNavigation.scrollHeight > sectionNavigation.clientHeight) {
+      if (target.top < area.top + inset)
+        sectionNavigation.scrollTop += target.top - area.top - inset;
+      else if (target.bottom > area.bottom - inset)
+        sectionNavigation.scrollTop += target.bottom - area.bottom + inset;
+    }
+  }
+
+  function revealCurrentSection() {
+    revealSectionButton(sectionNavigation.querySelector('[aria-current="page"]'));
+  }
+  window.addEventListener("resize", revealCurrentSection);
+  const sectionResizeObserver = typeof ResizeObserver === "function"
+    ? new ResizeObserver(revealCurrentSection) : null;
+  sectionResizeObserver?.observe(sectionNavigation);
 
   function renderStatus(settings) {
     revision.textContent = t("settings.revision", { revision: settings.revision },
@@ -390,11 +418,20 @@ export function createSettingsView({ form, store, navigation, onApplied }) {
       const available = [...document.querySelectorAll("[data-settings-panel]")];
       const selected = available.some((panel) => panel.dataset.settingsPanel === section) ? section : "general";
       for (const panel of available) panel.hidden = panel.dataset.settingsPanel !== selected;
+      let activeButton = null;
       for (const button of document.querySelectorAll("[data-settings-section]")) {
-        if (button.dataset.settingsSection === selected) button.setAttribute("aria-current", "page");
+        if (button.dataset.settingsSection === selected) {
+          button.setAttribute("aria-current", "page");
+          activeButton = button;
+        }
         else button.removeAttribute("aria-current");
       }
+      revealSectionButton(activeButton);
     },
-    destroy() { unsubscribe(); },
+    destroy() {
+      unsubscribe();
+      window.removeEventListener("resize", revealCurrentSection);
+      sectionResizeObserver?.disconnect();
+    },
   });
 }
