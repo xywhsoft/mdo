@@ -151,6 +151,13 @@ test("last-call usage uses its own model after the next model is selected", () =
     meter.refresh();
     assert.equal(ring.style.values.get("--meter-percent"), "0%",
       "a subagent call cannot inherit the main run's model profile");
+    runItems = [];
+    event = { ...event, agent_depth: 0, model_id: "previous",
+      context_window_tokens: 1000 };
+    meter.refresh();
+    assert.equal(ring.style.values.get("--meter-percent"), "50%",
+      "persisted event profile survives loss of in-memory run records");
+    assert.match(trigger.title, /Previous/);
   } finally {
     meter?.destroy();
     globalThis.document = previousDocument;

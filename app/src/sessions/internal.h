@@ -27,6 +27,8 @@ bool MdoSessionEventTrimReconcileTodo(MdoSessionEventTrimPlan* Plan,
     xwork_error* Error);
 void MdoSessionEventTrimPlanRelease(MdoSessionEventTrimPlan* Plan);
 void MdoSessionEventBridgeSetRegistered(MdoSessionEventBridge* Bridge);
+bool MdoSessionEventBridgeSetProfile(MdoSessionEventBridge* Bridge,
+    const char* ModelId, uint64 ContextWindowTokens);
 bool MdoSessionEventBridgeClonePrefix(MdoSessionEventBridge* Bridge,
     const char* SourceProjectId, const char* SourceSessionId,
     uint64 ThroughSequence, xwork_error* Error);

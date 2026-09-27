@@ -195,6 +195,10 @@ static uint64 Events(const char *label, const char *project,
     MdoSessionEventSnapshot *snapshot = MdoSessionEventReplay(project,
         session, after, limit, &error);
     MdoSessionEventInfo info;
+    MdoSessionEventInfo legacy;
+    size_t legacy_size = offsetof(MdoSessionEventInfo, ModelId);
+    size_t byte;
+    bool legacy_intact = true;
     uint64 cursor = MdoSessionEventSnapshotNextCursor(snapshot);
     printf("%s=count:%zu next:%llu latest:%llu lost:%d\n", label,
         MdoSessionEventSnapshotCount(snapshot),
@@ -208,6 +212,15 @@ static uint64 Events(const char *label, const char *project,
             (unsigned long long)info.SourceEventId, (int)info.Kind,
             (unsigned long long)info.RunId,
             info.Text != NULL ? info.Text : "");
+    memset(&legacy, 0xa5, sizeof(legacy));
+    legacy.Size = (uint32)legacy_size;
+    if (MdoSessionEventSnapshotCount(snapshot) != 0u) {
+        legacy_intact = MdoSessionEventSnapshotAt(snapshot, 0u, &legacy);
+        for (byte = legacy_size; byte < sizeof(legacy); ++byte)
+            legacy_intact = legacy_intact &&
+                ((unsigned char*)&legacy)[byte] == 0xa5u;
+        printf("legacy_event_size=%d\n", legacy_intact ? 1 : 0);
+    }
     MdoSessionEventSnapshotRelease(snapshot);
     return cursor;
 }
@@ -279,7 +292,22 @@ static bool AppendLegacySchema2Event(const char *project, const char *session) {
             project, session) <= 0) return false;
     file = MdoHomeOpenWrite(path, XFILE_CREATE | XFILE_APPEND | XFILE_SYNC);
     if (file == NULL) return false;
-    ok = xrtWriteFull(file, json, (size_t)written, NULL) && xrtFlush(file);
+    ok = xrtWriteFull(file, json, (size_t)written, NULL);
+    written = snprintf(json, sizeof(json),
+        "{\"schema_version\":3,\"event_id\":%llu,\"source_event_id\":0,"
+        "\"occurred_at_us\":1,\"project_id\":\"%s\",\"session_id\":\"%s\","
+        "\"kind\":%u,\"agent_turn\":1,\"user_message_sequence\":0,"
+        "\"agent_depth\":0,\"agent_id\":0,\"run_id\":0,\"task_id\":0,"
+        "\"artifact_id\":0,\"parent_run_id\":0,\"effects\":0,"
+        "\"task_state\":0,\"task_revision\":0,\"input_tokens\":0,"
+        "\"output_tokens\":0,\"total_tokens\":0,\"success\":true,"
+        "\"effect_applied\":false,\"text_truncated\":false,"
+        "\"text\":\"legacy v3 message\",\"tool_name\":\"\","
+        "\"tool_call_id\":\"\",\"artifact_path\":\"\",\"model\":\"\"}\n",
+        (unsigned long long)(latest + 2u), project, session,
+        (unsigned)XWORK_EVENT_AGENT_START);
+    ok = ok && written > 0 && (size_t)written < sizeof(json) &&
+        xrtWriteFull(file, json, (size_t)written, NULL) && xrtFlush(file);
     if (!xrtClose(file)) ok = false;
     return ok;
 }
@@ -739,6 +767,8 @@ def main() -> int:
         assert reopened and int(reopened.group(1)) > 0, output
         assert int(reopened.group(3)) > int(first.group(3)), output
         assert "probe_done=1" in output, output
+        assert ("legacy_event_size=1" in output and
+                "legacy_event_size=0" not in output), output
         meta_files = list(home.glob("sessions/project-alpha/*/meta.json"))
         todo_files = list(home.glob("sessions/project-alpha/*/todo.json"))
         assert len(todo_files) == 1, todo_files
@@ -790,6 +820,19 @@ def main() -> int:
                        for event in prefix_fork_events)
         assert any(event["text"] == "edited second prompt"
                    for event in prefix_fork_events)
+        full_fork_calls = {event["source_event_id"]: event
+                           for event in full_fork_events if event["kind"] == 4}
+        prefix_fork_calls = {event["source_event_id"]: event
+                             for event in prefix_fork_events if event["kind"] == 4}
+        assert full_fork_calls and prefix_fork_calls
+        assert all(event["schema_version"] == 4 and event["model_id"] and
+                   event["context_window_tokens"] > 0
+                   for event in full_fork_calls.values())
+        assert all((event["model_id"], event["context_window_tokens"]) ==
+                   (full_fork_calls[source_id]["model_id"],
+                    full_fork_calls[source_id]["context_window_tokens"])
+                   for source_id, event in prefix_fork_calls.items()
+                   if source_id in full_fork_calls)
         events = []
         invalid_events = 0
         for line in event_path.read_text(encoding="utf-8").splitlines():
@@ -802,7 +845,10 @@ def main() -> int:
         assert invalid_events == 0
         assert all(event["session_id"] == source_path.parent.name for event in events)
         model_events = [event for event in events if event.get("input_tokens")]
-        assert model_events and all(event["schema_version"] == 3 for event in model_events)
+        assert model_events and all(event["schema_version"] == 4 and
+                                    event["model_id"] and
+                                    event["context_window_tokens"] > 0
+                                    for event in model_events)
         assert any(event["user_message_sequence"] > 0 for event in events)
         assert not any(event["text"] in ("legacy message", "first durable prompt",
                                           "second prompt", "third transient prompt")

@@ -26,21 +26,25 @@ export function createTokenMeter({ root, trigger, ring, panel, estimate, prompt,
       event.kind === "model_done" && (event.input_tokens || event.output_tokens));
     const latestCall = calls.at(-1);
     const latestInput = Number(latestCall?.input_tokens || 0);
-    const lastRun = latestCall && !Number(latestCall.agent_depth) && session &&
+    const eventModelId = latestCall?.model_id || "";
+    const lastRun = latestCall && !eventModelId &&
+      !Number(latestCall.agent_depth) && session &&
       (runsStore?.get().data?.items ?? []).find((run) =>
         run.project_id === session.project_id && run.session_id === session.id &&
         Number(run.agent_run_id) === Number(latestCall.run_id));
+    const historicalModelId = eventModelId || lastRun?.model_id || "";
     const matchingModels = models.filter((item) => latestCall?.model &&
       (item.id === latestCall.model || item.wire_model === latestCall.model));
-    const latestModel = lastRun
-      ? models.find((item) => item.id === lastRun.model_id) || null
+    const latestModel = historicalModelId
+      ? models.find((item) => item.id === historicalModelId) || null
       : matchingModels.length === 1 ? matchingModels[0] : null;
-    const lastModelName = latestModel?.name || lastRun?.model_id ||
+    const lastModelName = latestModel?.name || historicalModelId ||
       latestCall?.model || "—";
     const totalInput = calls.reduce((sum, item) => sum + Number(item.input_tokens || 0), 0);
     const totalOutput = calls.reduce((sum, item) => sum + Number(item.output_tokens || 0), 0);
     const windowTokens = Number(model?.context_window_tokens || 0);
-    const lastWindowTokens = Number(latestModel?.context_window_tokens || 0);
+    const lastWindowTokens = Number(latestCall?.context_window_tokens || 0) ||
+      Number(latestModel?.context_window_tokens || 0);
     const percent = lastWindowTokens
       ? Math.min(100, Math.round(latestInput / lastWindowTokens * 100)) : 0;
     ring.style.setProperty("--meter-percent", `${percent}%`);

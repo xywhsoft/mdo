@@ -149,6 +149,8 @@ typedef struct MdoSessionEventInfo {
     const char* ToolCallId;
     const char* ArtifactPath;
     const char* Model;
+    const char* ModelId;
+    uint64 ContextWindowTokens;
 } MdoSessionEventInfo;
 
 bool MdoSessionManagerInit(xwork_runtime* Runtime);

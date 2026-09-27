@@ -261,6 +261,9 @@ static bool MdoApiSessionEventValue(const MdoSessionEventInfo* Event,
         MdoApiValueSetString(Item, "tool_call_id", Event->ToolCallId) &&
         MdoApiValueSetString(Item, "artifact_path", Event->ArtifactPath) &&
         MdoApiValueSetString(Item, "model", Event->Model) &&
+        MdoApiValueSetString(Item, "model_id", Event->ModelId) &&
+        MdoApiValueSetUInt(Item, "context_window_tokens",
+            Event->ContextWindowTokens) &&
         MdoApiValueSetUInt(Item, "task_state", Event->TaskState) &&
         MdoApiValueSetUInt(Item, "task_revision", Event->TaskRevision);
     if (Ok) Ok = MdoApiValueSetUInt(Item, "input_tokens", Event->InputTokens) &&

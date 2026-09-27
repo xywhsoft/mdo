@@ -1,12 +1,13 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <stddef.h>
 #include <string.h>
 
 #include "internal.h"
 #include "../../include/mdo/attachments.h"
 #include "../../include/mdo/home.h"
 
-#define MDO_SESSION_EVENT_SCHEMA 3u
+#define MDO_SESSION_EVENT_SCHEMA 4u
 #define MDO_SESSION_EVENT_FILE_LIMIT (16u * 1024u * 1024u)
 #define MDO_SESSION_EVENT_RETAIN_BYTES (8u * 1024u * 1024u)
 #define MDO_SESSION_EVENT_RECORD_LIMIT (96u * 1024u)
@@ -22,6 +23,7 @@ typedef struct MdoSessionEventOwned {
     char* ToolCallId;
     char* ArtifactPath;
     char* Model;
+    char* ModelId;
 } MdoSessionEventOwned;
 
 struct MdoSessionEventSnapshot {
@@ -40,6 +42,8 @@ struct MdoSessionEventBridge {
     xfile RuntimeLock;
     char ProjectId[MDO_PROJECT_ID_CAPACITY];
     char SessionId[MDO_SESSION_ID_CAPACITY];
+    char ModelId[MDO_SESSION_IDENTITY_CAPACITY];
+    uint64 ContextWindowTokens;
     char Path[MDO_SESSION_PATH_CAPACITY];
     uint64 NextEventId;
     xwork_event_fn UserEvent;
@@ -192,7 +196,8 @@ static bool MdoEventsBoundedView(const char* Text, size_t Claimed,
 }
 
 static char* MdoEventsRecord(const MdoSessionEventBridge* Bridge,
-    uint64 EventId, const xwork_event* Event, size_t* Size)
+    uint64 EventId, const xwork_event* Event, const char* ModelId,
+    uint64 ContextWindowTokens, size_t* Size)
 {
     xvalue* Object = xrtValueObject();
     xstrview Text;
@@ -265,7 +270,11 @@ static char* MdoEventsRecord(const MdoSessionEventBridge* Bridge,
             ToolCallId.Size) ||
          !MdoEventsObjectString(Object, "artifact_path", ArtifactPath.Data,
             ArtifactPath.Size) ||
-         !MdoEventsObjectString(Object, "model", Model.Data, Model.Size) )
+         !MdoEventsObjectString(Object, "model", Model.Data, Model.Size) ||
+         !MdoEventsObjectString(Object, "model_id", ModelId,
+            strlen(ModelId)) ||
+         !MdoEventsObjectTake(Object, "context_window_tokens",
+            xrtValueUInt(ContextWindowTokens)) )
         goto done;
     Json = xrtJsonStringify(Object, false, Size);
     if ( Json != NULL && *Size > MDO_SESSION_EVENT_RECORD_LIMIT ) {
@@ -326,9 +335,14 @@ static bool MdoEventsAppend(MdoSessionEventBridge* Bridge,
     char* Json;
     size_t Size = 0u;
     bool Ok;
+    bool MainModelCall = Event->eKind == XWORK_EVENT_MODEL_DONE &&
+        Event->uAgentDepth == 0u;
     if ( Bridge->NextEventId == 0u || Bridge->NextEventId == UINT64_MAX )
         return false;
-    Json = MdoEventsRecord(Bridge, Bridge->NextEventId, Event, &Size);
+    if ( MainModelCall && Bridge->ModelId[0] == '\0' ) return false;
+    Json = MdoEventsRecord(Bridge, Bridge->NextEventId, Event,
+        MainModelCall ? Bridge->ModelId : "",
+        MainModelCall ? Bridge->ContextWindowTokens : 0u, &Size);
     if ( Json == NULL ||
          !MdoHomeExternalStat(Bridge->Path, &Exists, &Info) ) {
         xrtFree(Json);
@@ -411,6 +425,7 @@ static void MdoEventsOwnedUnit(MdoSessionEventOwned* Event)
     xrtFree(Event->ToolCallId);
     xrtFree(Event->ArtifactPath);
     xrtFree(Event->Model);
+    xrtFree(Event->ModelId);
     memset(Event, 0, sizeof(*Event));
 }
 
@@ -426,6 +441,7 @@ static bool MdoEventsParse(const char* ProjectId, const char* SessionId,
     xstrview ToolCallId;
     xstrview ArtifactPath;
     xstrview Model;
+    xstrview ModelId = xrtStrView("");
     uint64 Schema;
     uint64 Kind;
     uint64 AgentDepth;
@@ -442,12 +458,13 @@ static bool MdoEventsParse(const char* ProjectId, const char* SessionId,
     Root = xrtJsonRead(Json, &Config);
     if ( Root == NULL || xrtValueType(Root) != XVALUE_OBJECT ||
          (xrtValueCount(Root) != 25u && xrtValueCount(Root) != 28u &&
-          xrtValueCount(Root) != 29u) ||
+          xrtValueCount(Root) != 29u && xrtValueCount(Root) != 31u) ||
          !MdoEventsValueUInt(Root, "schema_version", &Schema) ||
          !((Schema == 1u && xrtValueCount(Root) == 25u) ||
            (Schema == 2u && xrtValueCount(Root) == 28u) ||
+           (Schema == 3u && xrtValueCount(Root) == 29u) ||
            (Schema == MDO_SESSION_EVENT_SCHEMA &&
-            xrtValueCount(Root) == 29u)) ||
+            xrtValueCount(Root) == 31u)) ||
          !MdoEventsValueUInt(Root, "event_id", &Result->Info.EventId) ||
          Result->Info.EventId == 0u ||
          !MdoEventsValueUInt(Root, "source_event_id",
@@ -493,7 +510,11 @@ static bool MdoEventsParse(const char* ProjectId, const char* SessionId,
          !MdoEventsValueString(Root, "tool_name", &ToolName) ||
          !MdoEventsValueString(Root, "tool_call_id", &ToolCallId) ||
          !MdoEventsValueString(Root, "artifact_path", &ArtifactPath) ||
-         !MdoEventsValueString(Root, "model", &Model) ) goto done;
+         !MdoEventsValueString(Root, "model", &Model) ||
+         (Schema >= 4u &&
+          (!MdoEventsValueString(Root, "model_id", &ModelId) ||
+           !MdoEventsValueUInt(Root, "context_window_tokens",
+              &Result->Info.ContextWindowTokens))) ) goto done;
     Result->Text = MdoEventsCopy(Text, MDO_SESSION_EVENT_TEXT_LIMIT);
     Result->ToolName = MdoEventsCopy(ToolName, MDO_SESSION_EVENT_METADATA_LIMIT);
     Result->ToolCallId = MdoEventsCopy(ToolCallId,
@@ -501,9 +522,11 @@ static bool MdoEventsParse(const char* ProjectId, const char* SessionId,
     Result->ArtifactPath = MdoEventsCopy(ArtifactPath,
         MDO_SESSION_EVENT_METADATA_LIMIT);
     Result->Model = MdoEventsCopy(Model, MDO_SESSION_EVENT_METADATA_LIMIT);
+    Result->ModelId = MdoEventsCopy(ModelId,
+        MDO_SESSION_IDENTITY_CAPACITY - 1u);
     if ( Result->Text == NULL || Result->ToolName == NULL ||
          Result->ToolCallId == NULL || Result->ArtifactPath == NULL ||
-         Result->Model == NULL ) goto done;
+         Result->Model == NULL || Result->ModelId == NULL ) goto done;
     Result->Info.SchemaVersion = (uint32)Schema;
     Result->Info.Kind = (xwork_event_kind)Kind;
     Result->Info.AgentDepth = (uint32)AgentDepth;
@@ -514,6 +537,7 @@ static bool MdoEventsParse(const char* ProjectId, const char* SessionId,
     Result->Info.ToolCallId = Result->ToolCallId;
     Result->Info.ArtifactPath = Result->ArtifactPath;
     Result->Info.Model = Result->Model;
+    Result->Info.ModelId = Result->ModelId;
     Ok = true;
 done:
     xrtValueRelease(Root);
@@ -752,7 +776,8 @@ bool MdoSessionEventBridgeClonePrefix(MdoSessionEventBridge* Bridge,
         Event.sToolCallId = Entry.Info.ToolCallId;
         Event.sArtifactPath = Entry.Info.ArtifactPath;
         Event.sModel = Entry.Info.Model;
-        Json = MdoEventsRecord(Bridge, Bridge->NextEventId, &Event, &JsonSize);
+        Json = MdoEventsRecord(Bridge, Bridge->NextEventId, &Event,
+            Entry.Info.ModelId, Entry.Info.ContextWindowTokens, &JsonSize);
         MdoEventsOwnedUnit(&Entry);
         if ( Json == NULL ) {
             MdoEventsError(Error, XWORK_ERROR_OUT_OF_MEMORY,
@@ -960,7 +985,7 @@ bool MdoSessionEventTrimApply(MdoSessionEventTrimPlan* Plan,
     Marker.sText = Plan->Clear ? "会话历史已清空" : "会话历史已截断";
     Marker.iTextLength = strlen(Marker.sText);
     Json = MdoEventsRecord(Bridge, Bridge->NextEventId,
-        &Marker, &JsonSize);
+        &Marker, "", 0u, &JsonSize);
     if ( Json == NULL || JsonSize >= MDO_SESSION_EVENT_FILE_LIMIT ) {
         MdoEventsError(Error, XWORK_ERROR_OUT_OF_MEMORY,
             "cannot serialize the history boundary");
@@ -1150,6 +1175,22 @@ void MdoSessionEventBridgeRelease(void* Value)
 void MdoSessionEventBridgeSetRegistered(MdoSessionEventBridge* Bridge)
 {
     if ( Bridge != NULL ) Bridge->Registered = true;
+}
+
+bool MdoSessionEventBridgeSetProfile(MdoSessionEventBridge* Bridge,
+    const char* ModelId, uint64 ContextWindowTokens)
+{
+    size_t Size;
+    if ( Bridge == NULL || ModelId == NULL || ContextWindowTokens == 0u )
+        return false;
+    Size = strlen(ModelId);
+    if ( Size == 0u || Size >= sizeof(Bridge->ModelId) ||
+         !xrtUtf8Valid(xrtStrViewN(ModelId, Size), NULL) ) return false;
+    xrtMutexLock(Bridge->Lock);
+    memcpy(Bridge->ModelId, ModelId, Size + 1u);
+    Bridge->ContextWindowTokens = ContextWindowTokens;
+    xrtMutexUnlock(Bridge->Lock);
+    return true;
 }
 
 bool MdoSessionEventBridgePendingSet(MdoSessionEventBridge* Bridge,
@@ -1358,9 +1399,10 @@ bool MdoSessionEventSnapshotAt(const MdoSessionEventSnapshot* Snapshot,
 {
     uint32 Size;
     if ( Snapshot == NULL || Index >= Snapshot->Count || Info == NULL ||
-         Info->Size < sizeof(*Info) ) return false;
+         Info->Size < offsetof(MdoSessionEventInfo, ModelId) ) return false;
     Size = Info->Size;
-    *Info = Snapshot->Events[Index].Info;
+    memcpy(Info, &Snapshot->Events[Index].Info,
+        Size < sizeof(*Info) ? Size : sizeof(*Info));
     Info->Size = Size;
     return true;
 }

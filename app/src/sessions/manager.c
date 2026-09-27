@@ -777,7 +777,9 @@ MdoSession* MdoSessionCreate(const MdoSessionCreateOptions* Options,
     if ( Agent == NULL ) goto done;
     memset(&AgentInfo, 0, sizeof(AgentInfo));
     AgentInfo.Size = sizeof(AgentInfo);
-    if ( !MdoAgentSessionGetInfo(Agent, &AgentInfo) ) {
+    if ( !MdoAgentSessionGetInfo(Agent, &AgentInfo) ||
+         !MdoSessionEventBridgeSetProfile(Bridge, AgentInfo.ModelId,
+            AgentInfo.ContextWindowTokens) ) {
         MdoSessionsError(Error, XWORK_ERROR_CONTEXT,
             "cannot inspect the created Agent session");
         goto done;
@@ -988,19 +990,21 @@ MdoSession* MdoSessionOpen(const char* ProjectId, const char* SessionId,
     Agent = MdoAgentSessionCreateWithRuntime(g_MdoSessions.Runtime,
         &AgentOptions, Error);
     if ( Agent == NULL ) goto done;
+    memset(&AgentInfo, 0, sizeof(AgentInfo));
+    AgentInfo.Size = sizeof(AgentInfo);
+    if ( !MdoAgentSessionGetInfo(Agent, &AgentInfo) ||
+         !MdoSessionEventBridgeSetProfile(Bridge, AgentInfo.ModelId,
+            AgentInfo.ContextWindowTokens) ) {
+        MdoSessionsError(Error, XWORK_ERROR_CONTEXT,
+            "cannot inspect the opened Agent session");
+        goto done;
+    }
     if ( ProfileChanged ) {
         if ( !MdoAgentSessionRecoveryRequired(Agent, &RecoveryRequired,
                 Error) ) goto done;
         if ( RecoveryRequired ) {
             MdoSessionsError(Error, XWORK_ERROR_CONTEXT,
                 "resolve interrupted Agent calls before changing the profile");
-            goto done;
-        }
-        memset(&AgentInfo, 0, sizeof(AgentInfo));
-        AgentInfo.Size = sizeof(AgentInfo);
-        if ( !MdoAgentSessionGetInfo(Agent, &AgentInfo) ) {
-            MdoSessionsError(Error, XWORK_ERROR_CONTEXT,
-                "cannot inspect the selected Agent profile");
             goto done;
         }
         Candidate = Info;
@@ -1183,7 +1187,9 @@ MdoSession* MdoSessionFork(MdoSession* Source,
     if ( Agent == NULL ) goto done;
     memset(&AgentInfo, 0, sizeof(AgentInfo));
     AgentInfo.Size = sizeof(AgentInfo);
-    if ( !MdoAgentSessionGetInfo(Agent, &AgentInfo) ) {
+    if ( !MdoAgentSessionGetInfo(Agent, &AgentInfo) ||
+         !MdoSessionEventBridgeSetProfile(Bridge, AgentInfo.ModelId,
+            AgentInfo.ContextWindowTokens) ) {
         MdoSessionsError(Error, XWORK_ERROR_CONTEXT,
             "cannot inspect the forked Agent session");
         goto done;
