@@ -2,6 +2,8 @@
 
 本清单以 `app_bak/wwwroot` 的可操作行为为基线，而不是以页面长得相似或单元测试通过为完成标准。`docs/frontend-migration.md` 记录每次实现和验证；这里记录当前还需要什么证据。审计更新：2026-09-27，基线提交 `f9e2c4c`。
 
+历史操作的持久状态补验：单文件 Home `.build/mdo-packed-docks-endhltcz` 中，“运行结果待核对”与被拒绝的持久提交意图分别阻止旧回复重试，原用户/Agent 回合均未截断；清除测试意图后可正常重试。最终字节 Home `.build/mdo-packed-docks-nbur3ljh` 再次验证普通重试与回复完成。异步前置检查的跨会话切换由 Node 测试覆盖，详见 [迁移记录](frontend-migration.md#2026-09-27历史改写前复核持久待发状态)。跨客户端复核后即时变动仍需服务端原子操作。
+
 历史改写期间草稿补验：旧包 `.build/mdo-packed-docks-pcv_zogz` 在历史 GET 延迟中仍允许输入和选图；最终包 `.build/mdo-packed-docks-tnktf_ih` 将输入、图片、模型和发送一同锁住，输入尝试无效，完成后恢复，刷新后回合保留、草稿为空且无脚本错误。详见 [迁移记录](frontend-migration.md#2026-09-27历史消息改写期间保护新草稿)。跨客户端截断与启动之间的模型变动仍待原子事务设计。
 
 代码块复制反馈补验：最终单文件 Home `.build/mdo-packed-docks-ihqf97b5` 在 Markdown 回复中点击“复制代码”，看到“已复制”并于 1.2 秒后恢复原按钮文字；焦点保留，无脚本错误。详见 [迁移记录](frontend-migration.md#2026-09-27代码块复制反馈自动恢复)。

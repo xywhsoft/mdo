@@ -275,6 +275,19 @@ export async function boot() {
       throw unsupportedModelError();
   }
 
+  function assertReplacementIdle(selected) {
+    const key = `${selected.projectId}/${selected.sessionId}`;
+    if (activeRun || submittingCurrent() || composerImages?.isUploading())
+      throw new Error(t("messageAction.waitForRun", {}, "请在当前运行结束后操作消息"));
+    if (!draftStore.isLoaded(key))
+      throw new Error(t("composer.hintLoadingDraft", {}, "正在读取草稿，请稍候"));
+    if (draftStore.isRunUncertain(key)) throw uncertainRunError();
+    if (draftStore.submissions(key).length ||
+        promptQueue.peek(selected.projectId, selected.sessionId) ||
+        prompt.value.trim() || composerAttachments.length)
+      throw new Error(t("messageAction.resolveDraft", {}, "请先处理草稿和待发送队列，再编辑历史消息"));
+  }
+
   function assertMessageReplacementReady(sequence, text, attachments) {
     if (messageActionBusy) throw new Error(t("messageAction.busy", {}, "请等待当前消息操作完成"));
     if (!Number.isSafeInteger(sequence) || sequence < 1 ||
@@ -287,12 +300,8 @@ export async function boot() {
       throw new Error(t("messageAction.selectSession", {}, "请先选择会话"));
     if (session.status !== "active")
       throw new Error(t("composer.readOnly", {}, "该会话不可运行；请先恢复到进行中"));
-    if (activeRun || submittingCurrent() || composerImages?.isUploading())
-      throw new Error(t("messageAction.waitForRun", {}, "请在当前运行结束后操作消息"));
     assertReplacementProfile(attachments);
-    if (promptQueue.peek(selected.projectId, selected.sessionId) ||
-        prompt.value.trim() || composerAttachments.length)
-      throw new Error(t("messageAction.resolveDraft", {}, "请先处理草稿和待发送队列，再编辑历史消息"));
+    assertReplacementIdle(selected);
     return { session, selected };
   }
 
@@ -309,7 +318,14 @@ export async function boot() {
     try {
       const result = await runMessageReplacement({ session, sequence, text,
         attachments, isCurrent: stillSelected,
-        validateBeforeTruncate: () => assertReplacementProfile(attachments),
+        validateBeforeTruncate: async () => {
+          if (!await draftStore.refreshSessionSubmissions(targetKey))
+            throw new Error(t("composer.hintLoadingDraft", {}, "正在读取草稿，请稍候"));
+          await promptQueue.select(selected.projectId, selected.sessionId);
+          if (!stillSelected()) return;
+          assertReplacementProfile(attachments);
+          assertReplacementIdle(selected);
+        },
         loadHistory: loadSessionHistory, truncate: truncateSession, startRun,
         onTruncated(updated) {
           sessionDetailStore.setData(updated);
@@ -1140,7 +1156,8 @@ export async function boot() {
     const key = `${selected.projectId}/${selected.sessionId}`;
     const session = sessionDetailStore.get().data;
     if (!selected.sessionId || !session || session.project_id !== selected.projectId ||
-        session.id !== selected.sessionId || session.status !== "active" || activeRun ||
+        session.id !== selected.sessionId || session.status !== "active" ||
+        activeRun || messageActionBusy ||
         queueBlocked.has(key) ||
         promptQueue.peek(selected.projectId, selected.sessionId)?.state !== "pending") return;
     if (!await draftStore.ensureLoaded(key) || draftStore.isRunUncertain(key)) return;
@@ -1151,11 +1168,12 @@ export async function boot() {
         const stillSelected = () => navigation.get().projectId === selected.projectId &&
           navigation.get().sessionId === selected.sessionId;
         const entry = promptQueue.peek(selected.projectId, selected.sessionId);
-        if (!entry || entry.state !== "pending") return;
+        if (messageActionBusy || !entry || entry.state !== "pending") return;
         try {
           await ensurePromptReady(selected.projectId, selected.sessionId,
             Boolean(entry.priority));
-          if (!stillSelected() || draftStore.isRunUncertain(key)) return;
+          if (!stillSelected() || messageActionBusy ||
+              draftStore.isRunUncertain(key)) return;
           await promptQueue.markSending(selected.projectId, selected.sessionId, entry.id);
           const run = await startRun(selected.projectId, selected.sessionId,
             entry.text, entry.attachments ?? [], entry.id);

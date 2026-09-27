@@ -11,7 +11,8 @@ export async function runMessageReplacement({ session, sequence, text, attachmen
   if (!isCurrent()) throw new Error(t("messageAction.ownerChanged", {}, "会话已切换，请重新选择消息"));
   if (sequence > history.last_sequence)
     throw new Error(t("messageAction.historyChanged", {}, "消息已不在当前会话历史中，请刷新会话"));
-  validateBeforeTruncate();
+  await validateBeforeTruncate();
+  if (!isCurrent()) throw new Error(t("messageAction.ownerChanged", {}, "会话已切换，请重新选择消息"));
 
   const updated = await truncate({ ...session, etag: history.etag,
     revision: history.revision }, sequence - 1);

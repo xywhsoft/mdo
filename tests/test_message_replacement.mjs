@@ -63,6 +63,28 @@ test("profile validation rejects image retry before changing history", async () 
   assert.deepEqual(probe.events, []);
 });
 
+test("an unsettled submission found during preflight cannot truncate history", async () => {
+  const check = deferred();
+  const probe = harness({ validateBeforeTruncate: () => check.promise });
+  const action = runMessageReplacement(probe.args);
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.deepEqual(probe.events, []);
+  check.reject(new Error("pending submission"));
+  await assert.rejects(action, /pending submission/);
+  assert.deepEqual(probe.events, []);
+});
+
+test("navigation during asynchronous preflight cannot truncate the old session", async () => {
+  const check = deferred();
+  const probe = harness({ validateBeforeTruncate: () => check.promise });
+  const action = runMessageReplacement(probe.args);
+  await new Promise((resolve) => setImmediate(resolve));
+  probe.switchRoute();
+  check.resolve();
+  await assert.rejects(action, /会话已切换/);
+  assert.deepEqual(probe.events, []);
+});
+
 test("navigation before truncation prevents changing the new session", async () => {
   const history = deferred();
   const probe = harness({ loadHistory: () => history.promise });
