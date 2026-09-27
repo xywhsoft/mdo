@@ -13,6 +13,10 @@ const COMMANDS = Object.freeze([
   { name: "/help", descriptionKey: "slash.help", fallback: "查看命令" },
 ]);
 
+function exactCommand(value) {
+  return COMMANDS.find((item) => item.name === value);
+}
+
 export function createSlashCommands({ composer, input, onExecute }) {
   const list = element("div", {
     className: "slash-menu",
@@ -123,11 +127,12 @@ export function createSlashCommands({ composer, input, onExecute }) {
       return false;
     },
     consumeExact(value) {
-      const command = COMMANDS.find((item) => item.name === value);
+      const command = exactCommand(value);
       if (!command) return false;
       void execute(command);
       return true;
     },
+    isExact: (value) => Boolean(exactCommand(value)),
     hide,
   });
 }

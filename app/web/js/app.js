@@ -811,6 +811,13 @@ export async function boot() {
         : loadResource(name),
   });
 
+  let sendBlockedByState = true;
+  function syncSendDisabled() {
+    send.disabled = sendBlockedByState ||
+      (composerImages?.hasUnsupportedDraft() &&
+        !slashCommands.isExact(prompt.value.trim()));
+  }
+
   function setRun(run) {
     const wasActive = Boolean(activeRun);
     activeRun = run && !terminalState(run) ? run : null;
@@ -834,8 +841,8 @@ export async function boot() {
     // Keep keyboard focus while a newly created session loads its detail.
     prompt.disabled = serviceFailed || messageActionBusy ||
       (!sessionWritable && !creatingSession) || migratingNewTask;
-    send.disabled = serviceFailed || !(sessionWritable || creatingSession) ||
-      composerImages?.isUploading() || composerImages?.hasUnsupportedDraft() ||
+    sendBlockedByState = serviceFailed || !(sessionWritable || creatingSession) ||
+      composerImages?.isUploading() ||
       composerProfile.isBusy() || messageActionBusy ||
       !draftStore.isLoaded(selectedKey) ||
       draftStore.isRunUncertain(selectedKey) ||
@@ -843,6 +850,7 @@ export async function boot() {
       (!route.sessionId && Boolean(newTaskController?.isBlocked())) ||
       migratingNewTask ||
       Boolean(submissionController?.isReleasing(selectedKey));
+    syncSendDisabled();
     composerImages?.setWritable(!serviceFailed && !messageActionBusy &&
       sessionWritable && !creatingSession && !pendingNewTask);
     composerProfile.setRunActive(Boolean(activeRun || creatingNewTask ||
@@ -1632,6 +1640,7 @@ export async function boot() {
     resizePrompt();
     draftStore.edit(selectedKey, prompt.value, composerAttachments);
     tokenMeter.refresh();
+    syncSendDisabled();
   });
   prompt.addEventListener("keydown", (event) => {
     if (slashCommands.onKeyDown(event)) return;
