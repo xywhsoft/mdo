@@ -3,6 +3,81 @@ import test from "node:test";
 
 import { createDraftStore } from "../app/web/js/features/chat/draft-store.js";
 
+test("a queue refresh does not mistake the current tab's unsaved image edit for a peer conflict", async () => {
+  const originalWindow = globalThis.window;
+  const originalFetch = globalThis.fetch;
+  const first = "a".repeat(32);
+  const second = "b".repeat(32);
+  let revision = 1;
+  let saved = { text: "", attachments: [first] };
+  const errors = [];
+  globalThis.window = { setTimeout, clearTimeout, addEventListener() {} };
+  globalThis.fetch = async (_path, options) => {
+    if (options.method === "GET")
+      return Response.json({ ok: true, data: { ...saved, revision,
+        submissions: [] } });
+    const body = JSON.parse(options.body);
+    if (body.revision !== revision)
+      return Response.json({ ok: false, error: { code: "draft_conflict",
+        message: "The draft changed in another window" } }, { status: 409 });
+    saved = { text: body.text, attachments: body.attachments };
+    revision += 1;
+    return Response.json({ ok: true, data: { ...saved, revision } });
+  };
+  try {
+    const key = "default/images";
+    const store = createDraftStore({ onRestore() {}, onError(error) {
+      errors.push(error);
+    }, onSaved() {} });
+    store.select(key);
+    assert.equal(await store.ensureLoaded(key), true);
+    store.edit(key, "", [first, second]);
+    assert.equal(await store.refreshSessionSubmissions(key), true);
+    assert.equal(errors.length, 0);
+    assert.equal(await store.flush(key), true);
+    assert.deepEqual(saved.attachments, [first, second]);
+    assert.equal(revision, 2);
+  } finally {
+    globalThis.window = originalWindow;
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("a newer peer draft still blocks an unsaved image edit", async () => {
+  const originalWindow = globalThis.window;
+  const originalFetch = globalThis.fetch;
+  const first = "a".repeat(32);
+  const local = "b".repeat(32);
+  const peer = "c".repeat(32);
+  let revision = 1;
+  let saved = { text: "", attachments: [first] };
+  const errors = [];
+  globalThis.window = { setTimeout, clearTimeout, addEventListener() {} };
+  globalThis.fetch = async (_path, options) => {
+    if (options.method === "GET")
+      return Response.json({ ok: true, data: { ...saved, revision,
+        submissions: [] } });
+    throw new Error("a conflicting local edit must not be written");
+  };
+  try {
+    const key = "default/peer-images";
+    const store = createDraftStore({ onRestore() {}, onError(error) {
+      errors.push(error);
+    }, onSaved() {} });
+    store.select(key);
+    assert.equal(await store.ensureLoaded(key), true);
+    store.edit(key, "", [first, local]);
+    saved = { text: "", attachments: [first, peer] };
+    revision += 1;
+    assert.equal(await store.refreshSessionSubmissions(key), true);
+    assert.equal(errors.at(-1)?.code, "draft_conflict");
+    assert.equal(await store.flush(key), false);
+  } finally {
+    globalThis.window = originalWindow;
+    globalThis.fetch = originalFetch;
+  }
+});
+
 test("an oversized draft stays unsaved without repeated retries and recovers after editing", async () => {
   const originalWindow = globalThis.window;
   const originalFetch = globalThis.fetch;

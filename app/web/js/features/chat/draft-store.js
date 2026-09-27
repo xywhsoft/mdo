@@ -234,6 +234,7 @@ export function createDraftStore({ onRestore, onError, onSaved, onLoaded = () =>
         imageIds(data.attachments).length !== data.attachments.length)
       throw new Error(t("draft.submissionConflict"));
     if (revision < current.revision) return [...current.submissions];
+    const sameRevision = revision === current.revision;
     const remoteAttachments = imageIds(data.attachments);
     const localOnly = current.submissions.filter((item) =>
       current.unpersisted.has(item.id) &&
@@ -274,6 +275,10 @@ export function createDraftStore({ onRestore, onError, onSaved, onLoaded = () =>
     } else if (savingLocalEdit) {
       // flush() temporarily clears dirty while its PUT is in flight. A
       // concurrent response must not restore the pre-save composer text.
+    } else if (sameRevision && current.dirty && !current.conflict) {
+      // A queue poll can read the last saved draft during this tab's debounce.
+      // An unchanged revision cannot prove another writer changed the draft.
+      // Keep the local edit and let its scheduled PUT persist it.
     } else if (!current.conflict && !data.text &&
                !remoteAttachments.length) {
       current.dirty = true;
