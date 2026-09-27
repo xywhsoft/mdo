@@ -1563,8 +1563,7 @@ export async function boot() {
     const rawInput = fromComposer ? prompt.value : text;
     const origin = navigation.get();
     const originVersion = routeVersion;
-    if (fromComposer && !attachments.length &&
-        slashCommands.consumeExact(text)) return;
+    if (fromComposer && slashCommands.consumeExact(text)) return;
     if (!draftStore.isLoaded(selectedKey) &&
         !await draftStore.ensureLoaded(selectedKey)) return;
     if (draftStore.isRunUncertain(selectedKey)) {

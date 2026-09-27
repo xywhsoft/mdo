@@ -2,6 +2,8 @@
 
 本清单以 `app_bak/wwwroot` 的可操作行为为基线，而不是以页面长得相似或单元测试通过为完成标准。`docs/frontend-migration.md` 记录每次实现和验证；这里记录当前还需要什么证据。审计更新：2026-09-27，基线提交 `f9e2c4c`。
 
+带图命令补验：旧单文件 Home `.build/mdo-packed-docks-boh5w3td` 在图片草稿中点击发送 `/help`，错误地产生用户消息和运行；最终 Home `.build/mdo-packed-docks-6povs0cs` 的桌面及 320px 页面直接打开帮助，图片草稿保留并经刷新回放，没有新增回合。`/model` 同样由发送按钮执行且保留图片，切到纯文本模型时显示兼容性提示。Windows 有界发布门禁与确定性打包通过，详见 [迁移记录](frontend-migration.md#2026-09-27图片草稿下的斜杠命令发送)。实体触控仍待验收。
+
 移动联网设置字段补验：旧单文件 Home `.build/mdo-packed-docks-akx_w939` 的十个 Web 预算/代理输入框只有 36px；最终 Home `.build/mdo-packed-docks-mta5wy3n` 在 320px/390px 全部达到 40px，320×350 下“搜索结果数”预览和放弃链可用、配置 revision 保持，桌面尺寸未改，页面无横向溢出及脚本错误。极短屏 Home `.build/mdo-packed-docks-aljqtp18` 在 280×250 再次通过预览/放弃，并核对新增模型表单的控件高度、必填项获焦与设置分区切换后的滚动复位；文档宽度 280px，无脚本错误。详见 [迁移记录](frontend-migration.md#2026-09-27移动联网设置字段的点按高度)。实体移动端触控和软键盘仍待验收。
 
 历史操作的持久状态补验：单文件 Home `.build/mdo-packed-docks-endhltcz` 中，“运行结果待核对”与被拒绝的持久提交意图分别阻止旧回复重试，原用户/Agent 回合均未截断；清除测试意图后可正常重试。最终字节 Home `.build/mdo-packed-docks-nbur3ljh` 再次验证普通重试与回复完成。异步前置检查的跨会话切换由 Node 测试覆盖，详见 [迁移记录](frontend-migration.md#2026-09-27历史改写前复核持久待发状态)。跨客户端复核后即时变动仍需服务端原子操作。
