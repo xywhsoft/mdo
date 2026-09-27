@@ -109,6 +109,7 @@ class BuildContractTests(unittest.TestCase):
             "src/api/migration.c",
             "src/api/events.c",
             "src/api/feedback.c",
+            "src/api/profile.c",
             "src/api/draft.c",
             "src/api/queue.c",
             "src/api/todo.c",

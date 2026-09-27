@@ -2,6 +2,7 @@
 #include <string.h>
 
 #include "internal.h"
+#include "profile.h"
 #include "../../include/mdo/home.h"
 #include "../../include/mdo/sessions.h"
 
@@ -16,13 +17,6 @@ typedef enum MdoDraftSubmissionState {
     MDO_DRAFT_REJECTED
 } MdoDraftSubmissionState;
 
-typedef struct MdoDraftProfile {
-    char ModelId[MDO_SESSION_IDENTITY_CAPACITY];
-    char ReasoningEffort[MDO_SESSION_REASONING_CAPACITY];
-    char PermissionProfile[MDO_SESSION_REASONING_CAPACITY];
-    bool Present;
-} MdoDraftProfile;
-
 typedef struct MdoDraftSubmission {
     char Id[33];
     char Text[MDO_DRAFT_TEXT_MAX + 1u];
@@ -31,7 +25,7 @@ typedef struct MdoDraftSubmission {
     size_t AttachmentCount;
     bool Interrupt;
     MdoDraftSubmissionState State;
-    MdoDraftProfile Profile;
+    MdoApiProfile Profile;
 } MdoDraftSubmission;
 
 typedef struct MdoDraftNewTask {
@@ -52,7 +46,7 @@ typedef struct MdoDraft {
     size_t TextSize;
     char Attachments[4][33];
     size_t AttachmentCount;
-    MdoDraftProfile ComposerProfile;
+    MdoApiProfile ComposerProfile;
     MdoDraftSubmission* Submissions[MDO_DRAFT_SUBMISSIONS_MAX];
     size_t SubmissionCount;
     MdoDraftNewTask NewTask;
@@ -200,62 +194,6 @@ static bool MdoDraftNewTaskString(const xvalue* Value, cstr Name,
     return true;
 }
 
-/* A complete snapshot is required: partial profiles could silently inherit
- * a different model or permission when a queued message starts later. */
-static bool MdoDraftProfileRead(const xvalue* Value, MdoDraftProfile* Profile)
-{
-    memset(Profile, 0, sizeof(*Profile));
-    if ( xrtValueType(Value) == XVALUE_NULL ) return true;
-    if ( xrtValueType(Value) != XVALUE_OBJECT ||
-         xrtValueCount(Value) != 3u ||
-         !MdoDraftNewTaskString(Value, "model_id", Profile->ModelId,
-            sizeof(Profile->ModelId)) ||
-         !MdoDraftNewTaskString(Value, "reasoning_effort",
-            Profile->ReasoningEffort, sizeof(Profile->ReasoningEffort)) ||
-         !MdoDraftNewTaskString(Value, "permission_profile",
-            Profile->PermissionProfile, sizeof(Profile->PermissionProfile)) ||
-         (strcmp(Profile->PermissionProfile, "read-only") != 0 &&
-          strcmp(Profile->PermissionProfile, "balanced") != 0 &&
-          strcmp(Profile->PermissionProfile, "full-access") != 0) )
-        return false;
-    Profile->Present = true;
-    return true;
-}
-
-static xvalue* MdoDraftProfileValue(const MdoDraftProfile* Profile)
-{
-    xvalue* Value = xrtValueObject();
-    if ( Value != NULL &&
-         MdoApiValueSetString(Value, "model_id", Profile->ModelId) &&
-         MdoApiValueSetString(Value, "reasoning_effort",
-            Profile->ReasoningEffort) &&
-         MdoApiValueSetString(Value, "permission_profile",
-            Profile->PermissionProfile) ) return Value;
-    xrtValueRelease(Value);
-    return NULL;
-}
-
-static bool MdoDraftProfileSet(xvalue* Object, cstr Name,
-    const MdoDraftProfile* Profile)
-{
-    xvalue* Value;
-    if ( !Profile->Present ) return true;
-    Value = MdoDraftProfileValue(Profile);
-    if ( Value == NULL ) return false;
-    if ( MdoApiValueSetTake(Object, Name, &Value) ) return true;
-    xrtValueRelease(Value);
-    return false;
-}
-
-static bool MdoDraftProfileEqual(const MdoDraftProfile* A,
-    const MdoDraftProfile* B)
-{
-    return A->Present == B->Present &&
-        (!A->Present || (strcmp(A->ModelId, B->ModelId) == 0 &&
-         strcmp(A->ReasoningEffort, B->ReasoningEffort) == 0 &&
-         strcmp(A->PermissionProfile, B->PermissionProfile) == 0));
-}
-
 static bool MdoDraftNewTaskRead(const xvalue* Value,
     MdoDraftNewTask* Task, bool* Present)
 {
@@ -342,7 +280,7 @@ static bool MdoDraftSubmissionRead(const xvalue* Value,
          xrtValueCount(Value) != (Legacy ? 4u : 5u) +
             (ProfileValue != NULL ? 1u : 0u) ||
          (ProfileValue != NULL && (!AllowProfile ||
-          !MdoDraftProfileRead(ProfileValue, &Submission->Profile) ||
+          !MdoApiProfileRead(ProfileValue, &Submission->Profile) ||
           !Submission->Profile.Present)) ) return false;
     IdValue = xrtValueObjectGet(Value, XRT_STR_LITERAL("id"));
     if ( xrtValueType(IdValue) != XVALUE_STRING ||
@@ -435,7 +373,7 @@ static xvalue* MdoDraftSubmissionValue(const MdoDraftSubmission* Submission,
             Submission->AttachmentCount) &&
          MdoApiValueSetBool(Value, "interrupt",
             Submission->Interrupt) &&
-         MdoDraftProfileSet(Value, "profile", &Submission->Profile) &&
+         MdoApiProfileSet(Value, "profile", &Submission->Profile) &&
          (Legacy || MdoApiValueSetString(Value, "state",
             Submission->State == MDO_DRAFT_POSTING ? "posting" :
             (Submission->State == MDO_DRAFT_REJECTED ? "rejected" :
@@ -528,7 +466,7 @@ static bool MdoDraftRead(const char* Path, MdoDraft* Draft)
                 (Schema >= 6u && Global ? 7u : 6u)))) +
                 (ComposerProfile != NULL ? 1u : 0u) ||
          (ComposerProfile != NULL && (Schema != 7u ||
-          !MdoDraftProfileRead(ComposerProfile,
+          !MdoApiProfileRead(ComposerProfile,
             &Draft->ComposerProfile) ||
           !Draft->ComposerProfile.Present)) ||
          !MdoDraftUInt(Root, "revision", &Draft->Revision) ||
@@ -579,7 +517,7 @@ static bool MdoDraftWrite(const char* Path, const MdoDraft* Draft)
             Draft->AttachmentCount) &&
         MdoApiValueSetBool(Root, "run_admission_uncertain",
             Draft->RunAdmissionUncertain) &&
-        MdoDraftProfileSet(Root, "composer_profile",
+        MdoApiProfileSet(Root, "composer_profile",
             &Draft->ComposerProfile) &&
         MdoApiValueSetTake(Root, "submissions", &Submissions) &&
         (!Global || MdoApiValueSetTake(Root, "new_task", &NewTask));
@@ -610,7 +548,7 @@ static xvalue* MdoDraftResponse(const MdoDraft* Draft, bool Global)
             Draft->AttachmentCount) &&
          MdoApiValueSetBool(Data, "run_admission_uncertain",
             Draft->RunAdmissionUncertain) &&
-         MdoDraftProfileSet(Data, "composer_profile",
+         MdoApiProfileSet(Data, "composer_profile",
             &Draft->ComposerProfile) &&
          MdoApiValueSetTake(Data, "submission", &Submission) &&
          MdoApiValueSetTake(Data, "submissions", &Submissions) &&
@@ -724,7 +662,7 @@ bool MdoApiDraftRoute(MdoApiContext* Context)
             (!NewTaskPresent || Context->ParamCount == 0u) &&
             MdoDraftUInt(Body.Value, "revision", &ExpectedRevision) &&
             MdoDraftTextView(Body.Value, "text", &IncomingText) &&
-            (!ComposerProfilePresent || MdoDraftProfileRead(
+            (!ComposerProfilePresent || MdoApiProfileRead(
                 ComposerProfile, &Incoming->ComposerProfile)) &&
             (!UncertainPresent || MdoDraftBool(Body.Value,
                 "run_admission_uncertain", &IncomingUncertain)) &&
@@ -902,7 +840,7 @@ bool MdoApiDraftSubmissionAppendRoute(MdoApiContext* Context)
                 memcmp(Existing->Attachments, Incoming->Attachments,
                     sizeof(Incoming->Attachments)) != 0 ||
                 Existing->Interrupt != Incoming->Interrupt ||
-                !MdoDraftProfileEqual(&Existing->Profile,
+                !MdoApiProfileEqual(&Existing->Profile,
                     &Incoming->Profile);
             break;
         }

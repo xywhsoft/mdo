@@ -23,6 +23,13 @@ function uncertainPost(error) {
     .includes(error?.code);
 }
 
+function sameProfile(a, b) {
+  return (!a && !b) || (a && b &&
+    a.model_id === b.model_id &&
+    a.reasoning_effort === b.reasoning_effort &&
+    a.permission_profile === b.permission_profile);
+}
+
 export function createPromptQueue({ container, navigation, isRunActive, stagedEntries,
   isRunReviewPending = () => false, isSessionWritable = () => true,
   isSessionRunActive = () => false,
@@ -69,7 +76,7 @@ export function createPromptQueue({ container, navigation, isRunActive, stagedEn
 
   async function postItem(projectId, sessionId, text,
     { id = newId(), first = false, priority = false, attachments = [],
-      stage = false } = {}) {
+      stage = false, profile = null } = {}) {
     const key = sessionKey(projectId, sessionId);
     if (!key || (!text.trim() && !attachments.length)) return null;
     await load(key);
@@ -77,6 +84,7 @@ export function createPromptQueue({ container, navigation, isRunActive, stagedEn
         !(queues.get(key) ?? []).some((item) => item.id === id)) return null;
     const body = { id, text: text.trim(), attachments, first, priority };
     if (stage) body.stage = true;
+    if (profile) body.profile = profile;
     const keepalive = new TextEncoder().encode(JSON.stringify(body)).length <= 60 * 1024;
     const reconcile = async () => {
       const response = await api.get(path(key));
@@ -84,7 +92,9 @@ export function createPromptQueue({ container, navigation, isRunActive, stagedEn
       if ((response.data?.items ?? []).some((item) =>
         item.id === body.id && item.text === body.text &&
         item.priority === body.priority &&
-        JSON.stringify(item.attachments ?? []) === JSON.stringify(body.attachments)))
+        JSON.stringify(item.attachments ?? []) ===
+          JSON.stringify(body.attachments) &&
+        sameProfile(item.profile, body.profile)))
         return true;
       return Boolean(await readReceipt(key, body.id));
     };
@@ -341,15 +351,17 @@ export function createPromptQueue({ container, navigation, isRunActive, stagedEn
       render();
     },
     async enqueue(projectId, sessionId, text,
-      { first = false, priority = false, attachments = [] } = {}) {
+      { first = false, priority = false, attachments = [],
+        profile = null } = {}) {
       return Boolean(await postItem(projectId, sessionId, text,
-        { first, priority, attachments }));
+        { first, priority, attachments, profile }));
     },
     async stage(projectId, sessionId, submission,
       { first = false } = {}) {
       return postItem(projectId, sessionId, submission.text, {
         id: submission.id, first, priority: submission.interrupt,
         attachments: submission.attachments, stage: true,
+        profile: submission.profile,
       });
     },
     find(projectId, sessionId, id) {

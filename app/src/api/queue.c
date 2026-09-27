@@ -2,6 +2,7 @@
 #include <string.h>
 
 #include "internal.h"
+#include "profile.h"
 #include "../../include/mdo/home.h"
 #include "../../include/mdo/runs.h"
 #include "../../include/mdo/sessions.h"
@@ -28,6 +29,7 @@ typedef struct MdoQueueItem {
     size_t AttachmentCount;
     MdoQueueState State;
     bool Priority;
+    MdoApiProfile Profile;
     bool StartClaimed;
     char RunId[MDO_RUN_ID_CAPACITY];
 } MdoQueueItem;
@@ -279,7 +281,7 @@ static size_t MdoQueueFind(const MdoQueue* Queue, const char* Id)
 static bool MdoQueueInsert(MdoQueue* Queue, const char* Id,
     xstrview Text, const char Attachments[4][33],
     size_t AttachmentCount, bool First, bool Priority,
-    MdoQueueState State)
+    MdoQueueState State, const MdoApiProfile* Profile)
 {
     MdoQueueItem* Item;
     char* Copy;
@@ -305,6 +307,7 @@ static bool MdoQueueInsert(MdoQueue* Queue, const char* Id,
     Item->AttachmentCount = AttachmentCount;
     Item->Priority = Priority;
     Item->State = State;
+    if ( Profile != NULL ) Item->Profile = *Profile;
     Queue->TextBytes += Text.Size;
     Queue->Count++;
     return true;
@@ -358,10 +361,10 @@ static bool MdoQueueRead(const char* Path, const char* ProjectId,
             if ( !xrtValueGetInt(Version, &Signed) || Signed < 0 ) goto done;
             Schema = (uint64)Signed;
         } else goto done;
-        if ( Schema < 1u || Schema > 6u ) goto done;
+        if ( Schema < 1u || Schema > 7u ) goto done;
     }
-    if ( xrtValueCount(Root) != (Schema == 6u ? 3u : 2u) ) goto done;
-    if ( Schema == 6u ) {
+    if ( xrtValueCount(Root) != (Schema >= 6u ? 3u : 2u) ) goto done;
+    if ( Schema >= 6u ) {
         const xvalue* Discard = xrtValueObjectGet(Root,
             XRT_STR_LITERAL("discard_images"));
         if ( xrtValueType(Discard) != XVALUE_ARRAY ||
@@ -388,6 +391,9 @@ static bool MdoQueueRead(const char* Path, const char* ProjectId,
         bool ReceiptExists = false;
         const xvalue* RunIdValue = xrtValueObjectGet(Entry,
             XRT_STR_LITERAL("run_id"));
+        const xvalue* ProfileValue = xrtValueObjectGet(Entry,
+            XRT_STR_LITERAL("profile"));
+        MdoApiProfile Profile = { 0 };
         char IdText[MDO_QUEUE_ID_SIZE + 1u];
         char Attachments[4][33] = {{ 0 }};
         size_t AttachmentCount = 0u;
@@ -396,7 +402,11 @@ static bool MdoQueueRead(const char* Path, const char* ProjectId,
         if ( xrtValueType(Entry) != XVALUE_OBJECT ||
              xrtValueCount(Entry) != (Schema == 1u ? 3u :
                 (Schema == 2u ? 4u : 5u +
-                    (Schema >= 5u && RunIdValue != NULL ? 1u : 0u))) ||
+                    (Schema >= 5u && RunIdValue != NULL ? 1u : 0u))) +
+                    (ProfileValue != NULL ? 1u : 0u) ||
+             (ProfileValue != NULL && (Schema != 7u ||
+              !MdoApiProfileRead(ProfileValue, &Profile) ||
+              !Profile.Present)) ||
              !MdoQueueString(Entry, "id", &Id) ||
              !MdoQueueString(Entry, "text", &Text) ||
              !MdoQueueString(Entry, "state", &StateView) ||
@@ -416,7 +426,7 @@ static bool MdoQueueRead(const char* Path, const char* ProjectId,
                !MdoQueueRunId(RunIdView, RunId))) ||
              MdoQueueFind(Queue, IdText) != SIZE_MAX ||
              !MdoQueueInsert(Queue, IdText, Text, Attachments,
-                AttachmentCount, false, Priority, State) ) goto done;
+                AttachmentCount, false, Priority, State, &Profile) ) goto done;
         if ( !MdoQueueReceiptRead(ProjectId, SessionId, IdText,
                 &ReceiptExists, ReceiptRunId) ) goto done;
         if ( ReceiptExists && State != MDO_QUEUE_SENDING ) goto done;
@@ -489,6 +499,7 @@ static xvalue* MdoQueueValue(const MdoQueue* Queue, bool IncludeClaim)
             MdoAttachmentIdsWriteValue(Item, Source->Attachments,
                 Source->AttachmentCount) &&
             MdoApiValueSetBool(Item, "priority", Source->Priority) &&
+            MdoApiProfileSet(Item, "profile", &Source->Profile) &&
             (!IncludeClaim || !Source->StartClaimed ||
              MdoApiValueSetBool(Item, "start_claimed", true)) &&
             (Source->RunId[0] == '\0' ||
@@ -512,7 +523,7 @@ static bool MdoQueueWrite(const char* Path, const MdoQueue* Queue)
     char* Json;
     size_t Size = 0u;
     bool Ok;
-    if ( Data == NULL || !MdoApiValueSetUInt(Data, "schema_version", 6u) ) {
+    if ( Data == NULL || !MdoApiValueSetUInt(Data, "schema_version", 7u) ) {
         xrtValueRelease(Data);
         return false;
     }
@@ -645,7 +656,9 @@ MdoApiQueueRunStatus MdoApiQueueRunPrepare(const char* ProjectId,
                     AttachmentCount) ) {
                 bool Exists;
                 char RunId[MDO_RUN_ID_CAPACITY];
-                if ( !MdoQueueReceiptRead(ProjectId, SessionId, Id,
+                if ( Item->Profile.Present )
+                    Result = MDO_API_QUEUE_RUN_PROFILE_PENDING;
+                else if ( !MdoQueueReceiptRead(ProjectId, SessionId, Id,
                         &Exists, RunId) )
                     Result = MDO_API_QUEUE_RUN_UNAVAILABLE;
                 else Result = Item->RunId[0] != '\0' ||
@@ -688,7 +701,9 @@ MdoApiQueueRunStatus MdoApiQueueRunClaim(const char* ProjectId,
         if ( Index != SIZE_MAX &&
              MdoQueueRunMatches(&Queue.Items[Index], Prompt, Attachments,
                 AttachmentCount) ) {
-            if ( MdoQueueReceiptRead(ProjectId, SessionId, Id,
+            if ( Queue.Items[Index].Profile.Present )
+                Result = MDO_API_QUEUE_RUN_PROFILE_PENDING;
+            else if ( MdoQueueReceiptRead(ProjectId, SessionId, Id,
                     &Exists, RunId) ) {
                 Result = Queue.Items[Index].RunId[0] != '\0' ||
                     (Exists && RunId[0] != '\0') ?
@@ -775,6 +790,7 @@ bool MdoApiQueueRoute(MdoApiContext* Context)
     xstrview Text = { 0 };
     char Attachments[4][33] = {{ 0 }};
     size_t AttachmentCount = 0u;
+    MdoApiProfile Profile = { 0 };
     bool First = false;
     bool Priority = false;
     bool Stage = false;
@@ -811,10 +827,13 @@ bool MdoApiQueueRoute(MdoApiContext* Context)
                 XRT_STR_LITERAL("priority"));
             const xvalue* StageValue = xrtValueObjectGet(Body.Value,
                 XRT_STR_LITERAL("stage"));
+            const xvalue* ProfileValue = xrtValueObjectGet(Body.Value,
+                XRT_STR_LITERAL("profile"));
             Ok = xrtValueType(Body.Value) == XVALUE_OBJECT &&
                 xrtValueCount(Body.Value) == (References == NULL ? 3u : 4u) +
                     (PriorityValue == NULL ? 0u : 1u) +
-                    (StageValue == NULL ? 0u : 1u) &&
+                    (StageValue == NULL ? 0u : 1u) +
+                    (ProfileValue == NULL ? 0u : 1u) &&
                 MdoQueueString(Body.Value, "id", &IdView) &&
                 MdoQueueString(Body.Value, "text", &Text) &&
                 MdoQueueBool(Body.Value, "first", &First) &&
@@ -822,6 +841,9 @@ bool MdoApiQueueRoute(MdoApiContext* Context)
                  MdoQueueBool(Body.Value, "priority", &Priority)) &&
                 (StageValue == NULL ||
                  MdoQueueBool(Body.Value, "stage", &Stage)) &&
+                (ProfileValue == NULL ||
+                 (MdoApiProfileRead(ProfileValue, &Profile) &&
+                  Profile.Present)) &&
                 MdoQueueId(IdView, Id) &&
                 (References == NULL ||
                  MdoAttachmentIdsRead(References, Attachments,
@@ -848,7 +870,9 @@ bool MdoApiQueueRoute(MdoApiContext* Context)
                 Queue.Items[Index].AttachmentCount != AttachmentCount ||
                 Queue.Items[Index].Priority != Priority ||
                 memcmp(Queue.Items[Index].Attachments, Attachments,
-                    sizeof(Attachments)) != 0;
+                    sizeof(Attachments)) != 0 ||
+                !MdoApiProfileEqual(&Queue.Items[Index].Profile,
+                    &Profile);
         } else {
             char RunId[MDO_RUN_ID_CAPACITY];
             Ok = MdoQueueReceiptRead(ProjectId, SessionId, Id,
@@ -858,7 +882,8 @@ bool MdoApiQueueRoute(MdoApiContext* Context)
                     Text.Size > MDO_QUEUE_MAX_TOTAL_TEXT - Queue.TextBytes;
                 if ( !Full ) Ok = MdoQueueInsert(&Queue, Id, Text,
                     Attachments, AttachmentCount, First, Priority,
-                    Stage ? MDO_QUEUE_STAGED : MDO_QUEUE_PENDING) &&
+                    Stage ? MDO_QUEUE_STAGED : MDO_QUEUE_PENDING,
+                    &Profile) &&
                     MdoQueueWrite(Path, &Queue);
             }
         }

@@ -10,7 +10,13 @@ function matches(item, submission) {
     item.text === submission.text.trim() &&
     item.priority === submission.interrupt &&
     JSON.stringify(item.attachments ?? []) ===
-      JSON.stringify(submission.attachments);
+      JSON.stringify(submission.attachments) &&
+    ((!item.profile && !submission.profile) ||
+      (item.profile && submission.profile &&
+        item.profile.model_id === submission.profile.model_id &&
+        item.profile.reasoning_effort === submission.profile.reasoning_effort &&
+        item.profile.permission_profile ===
+          submission.profile.permission_profile));
 }
 
 // The draft is the write-ahead log. Only its first entry may enter the queue;

@@ -4,6 +4,34 @@ import test from "node:test";
 import { createDraftStore } from "../app/web/js/features/chat/draft-store.js";
 import { createSubmissionController } from "../app/web/js/features/chat/submission-controller.js";
 
+test("a queued ID with a changed profile cannot acknowledge a draft intent", async () => {
+  const profile = { model_id: "ling-3.0-tiny",
+    reasoning_effort: "high", permission_profile: "balanced" };
+  const intent = { id: "c".repeat(32), text: "profiled prompt",
+    attachments: [], interrupt: false, state: "posting", profile };
+  const reviews = [];
+  let removed = false;
+  const controller = createSubmissionController({
+    draftStore: {
+      ensureLoaded: async () => true,
+      refreshSessionSubmissions: async () => true,
+      submissions: () => [intent],
+      removeSessionSubmission: async () => { removed = true; return true; },
+    },
+    promptQueue: {
+      find: () => ({ id: intent.id, text: intent.text,
+        attachments: [], priority: false, state: "pending",
+        profile: { ...profile, reasoning_effort: "low" } }),
+    },
+    onPersisted() {}, onPromoted() {}, onConsumed() {},
+    onReview(_key, item) { reviews.push(item.id); },
+    onRestored() {}, onChange() {},
+  });
+  assert.equal(await controller.reconcile("default/profiled"), false);
+  assert.deepEqual(reviews, [intent.id]);
+  assert.equal(removed, false);
+});
+
 test("a second Enter is durable while the first queue POST is still waiting", async () => {
   const originalWindow = globalThis.window;
   const originalFetch = globalThis.fetch;

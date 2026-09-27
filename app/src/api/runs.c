@@ -322,6 +322,9 @@ static bool MdoApiRunQueueFailure(MdoApiContext* Context,
     if ( Status == MDO_API_QUEUE_RUN_STARTING )
         return MdoApiReplyError(Context, 409u, "queue_run_starting",
             "This queue item has a start in progress or needs review", NULL);
+    if ( Status == MDO_API_QUEUE_RUN_PROFILE_PENDING )
+        return MdoApiReplyError(Context, 409u, "queue_profile_pending",
+            "This queue item's profile cannot start until atomic profile admission is available", NULL);
     return MdoApiReplyError(Context, 409u, "queue_run_conflict",
         "The sending queue item does not match this run", NULL);
 }

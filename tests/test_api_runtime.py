@@ -2609,6 +2609,44 @@ def run_probe(host: Path) -> None:
                     assert status == 200, (status, body)
                 assert json.loads(request(port, "GET", queue_path)[2])[
                     "data"]["items"] == []
+                profile_item_id = "9" * 32
+                profile_snapshot = {"model_id": "ling-3.0-tiny",
+                                    "reasoning_effort": "high",
+                                    "permission_profile": "balanced"}
+                profile_item = {"id": profile_item_id,
+                                "text": "profiled intent", "first": False,
+                                "stage": True, "profile": profile_snapshot}
+                status, _, body = queue_request("POST", queue_path,
+                    profile_item)
+                assert status == 201 and json.loads(body)["data"][
+                    "items"][0]["profile"] == profile_snapshot, (status, body)
+                assert json.loads(queue_file.read_text(encoding="utf-8"))[
+                    "items"][0]["profile"] == profile_snapshot
+                assert json.loads(request(port, "GET", queue_path)[2])[
+                    "data"]["items"][0]["profile"] == profile_snapshot
+                assert queue_request("POST", queue_path, profile_item)[0] == 200
+                status, _, body = queue_request("POST", queue_path,
+                    {**profile_item, "profile": {**profile_snapshot,
+                        "reasoning_effort": "low"}})
+                assert status == 409 and json.loads(body)["error"][
+                    "code"] == "queue_id_conflict", (status, body)
+                status, _, body = queue_request("POST", queue_path,
+                    {**profile_item, "id": "8" * 32,
+                     "profile": {**profile_snapshot,
+                         "permission_profile": "invalid"}})
+                assert status == 422 and json.loads(body)["error"][
+                    "code"] == "queue_item_invalid", (status, body)
+                profile_item_path = queue_path + "/" + profile_item_id
+                assert queue_request("PUT", profile_item_path,
+                    {"state": "pending"})[0] == 200
+                assert queue_request("PUT", profile_item_path,
+                    {"state": "sending"})[0] == 200
+                status, _, body = queue_request("POST", session_path + "/runs",
+                    {"prompt": profile_item["text"],
+                     "queue_item_id": profile_item_id})
+                assert status == 409 and json.loads(body)["error"][
+                    "code"] == "queue_profile_pending", (status, body)
+                assert request(port, "DELETE", profile_item_path)[0] == 200
                 staged_id = "2" * 32
                 staged_path = queue_path + "/" + staged_id
                 staged = {"id": staged_id, "text": "durable intent",
@@ -2641,7 +2679,7 @@ def run_probe(host: Path) -> None:
                     "attachments": [image["id"]], "priority": False,
                 }], (status, body)
                 assert json.loads(queue_file.read_text(encoding="utf-8"))[
-                    "schema_version"] == 6
+                    "schema_version"] == 7
                 status, _, body = request(port, "DELETE", image["url"])
                 assert status == 409 and json.loads(body)["error"][
                     "code"] == "attachment_in_use", (status, body)
@@ -2690,7 +2728,7 @@ def run_probe(host: Path) -> None:
                 status, _, body = queue_request("POST", queue_path,
                     {"id": "1" * 32, "text": "new prompt", "first": False})
                 assert status == 201 and json.loads(queue_file.read_text(
-                    encoding="utf-8"))["schema_version"] == 6, (status, body)
+                    encoding="utf-8"))["schema_version"] == 7, (status, body)
                 for item_id in (legacy_id, "1" * 32):
                     assert request(port, "DELETE", queue_path + "/" + item_id)[0] == 200
                 queue_file.write_text(json.dumps({"schema_version": 3,
@@ -3877,7 +3915,7 @@ def run_probe(host: Path) -> None:
                 queued = json.loads(request(port, "GET", queue_path)[2])["data"]
                 assert queued["items"][0]["run_id"] == bound_run_id, queued
                 stored = json.loads(queue_file.read_text(encoding="utf-8"))
-                assert stored["schema_version"] == 6 and stored["items"][
+                assert stored["schema_version"] == 7 and stored["items"][
                     0]["run_id"] == bound_run_id, stored
                 status, _, body = queue_request("PUT", bound_path,
                     {"state": "pending"})
