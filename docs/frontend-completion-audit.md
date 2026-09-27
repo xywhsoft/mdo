@@ -194,3 +194,5 @@ Markdown 会话导出补齐语言一致性。之前英语、俄语页面导出�
 对话停靠卡片的滚动补验：旧打包页在新审批卡出现时，按钮落在滚动区下方且“回到底部”隐藏。最终单文件 Home `.build/mdo-packed-docks-opbnj52v` 于 390×500 发送 `TODO UI` 和 `APPROVAL UI` 后，审批卡及“允许一次”完整进入对话区；无害命令返回 `exit_code: 0`，回复与工具结果可回放，浏览器脚本错误为空。生产模块夹具 `tests/fixtures/conversation-dock-scroll-browser.html` 同时确认停在底部时跟随新增卡片、主动上滚时保留位置并显示回底入口。Windows/Linux 有界门禁通过，未做压力或高负载测试；实体手机触控仍待验收。
 
 已有审批卡内部展开也已补验：旧包 Home `.build/mdo-packed-docks-jxse3032` 在 390×500 展开调用参数后把允许按钮推到对话区外，回底按钮仍隐藏。最终单文件 Home `.build/mdo-packed-docks-5zwlz9ii` 展开后按钮下缘 y=303，小于对话区下缘 y=337；允许一次执行无害命令成功并返回输入焦点。生产模块夹具验证内部展开时底部跟随，浏览器脚本日志为空。Windows/Linux 有界发布门禁和确定性打包通过；实体手机触控尚需设备验收，未做压力或高负载测试。
+
+短屏决策依据的可见性现按旧版停靠模式恢复。Linux 旧布局的 320×350 页面中，询问正文和审批标题被顶部遮住；最终 Windows 单文件 Home `.build/mdo-packed-docks-xy1hs8e0` 在同尺寸将询问标题、正文、选项和自由回答完整显示在输入区上方，320×250 的缩视口仍能滚动填写并提交。Home `.build/mdo-packed-docks-66b1m8n2` 验证待办共存时的问答及审批，Linux 最终单文件 Home `/home/ubuntu/.cache/mdo-linux-qa-73d848b/mdo/.build/mdo-packed-docks-9u11ds2z` 通过 320×350 页面完成同样操作，审批结果为 `exit_code: 0`；浏览器脚本错误为空。生产模块夹具在 320×350/390×500 验证停靠位、问题与选项可见及审批按钮内部滚动可达。Windows/Linux 有界发布门禁和确定性打包通过。Linux 图形证据是 Windows 浏览器访问 WSL 服务，原生 Linux WebView、实体手机触控及真实软键盘仍待验收；未做压力或高负载测试。

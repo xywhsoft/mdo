@@ -1,89 +1,92 @@
 <!doctype html>
 <html lang="zh-CN">
 <meta charset="utf-8">
-<title>mdo conversation dock scroll probe</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>mdo conversation dock seat probe</title>
 <link rel="stylesheet" href="/app/web/css/app.css">
 <style>
-  body { margin: 20px; background: var(--surface); color: var(--ink); }
-  .conversation { width: 360px; height: 320px; overflow: auto; }
-  #history { height: 700px; }
+  body { margin: 0; background: var(--surface); color: var(--ink); }
+  .workspace { height: calc(100dvh - 52px); margin-top: 52px; }
+  .conversation-history { height: 700px; }
+  .composer { height: 145px; }
 </style>
-<div class="conversation">
-  <p id="welcome"></p>
-  <ol id="timeline"></ol>
-  <div id="history">Earlier conversation</div>
-  <div id="conversation-docks" class="conversation-docks"></div>
-</div>
-<button id="to-bottom" type="button" hidden>回到底部</button>
-<textarea id="prompt" aria-label="输入"></textarea>
+<main class="workspace">
+  <section class="conversation" aria-label="对话">
+    <div class="conversation-history">Earlier conversation</div>
+  </section>
+  <section class="composer-region" aria-label="发送消息">
+    <div id="conversation-docks" class="conversation-docks" hidden></div>
+    <div class="composer"><textarea id="prompt" aria-label="输入"></textarea></div>
+  </section>
+</main>
 <div id="toast-region"></div>
 <pre id="result"></pre>
 <script type="module">
-import { createTimelineView } from "/app/web/js/features/chat/timeline.js";
 import { createConversationDocks } from "/app/web/js/features/chat/conversation-docks.js";
 import { createResourceStore } from "/app/web/js/state/store.js";
 
 const store = (data) => createResourceStore(data);
 const navigation = {
-  get: () => ({ view: "workspace", projectId: "qa", sessionId: "scroll" }),
+  get: () => ({ view: "workspace", projectId: "qa", sessionId: "seat" }),
   subscribe(listener) { listener(this.get()); return () => {}; },
 };
-const timeline = createTimelineView({
-  container: document.querySelector("#timeline"),
-  welcome: document.querySelector("#welcome"),
-  toBottom: document.querySelector("#to-bottom"),
-  store: store({ projectId: "qa", sessionId: "scroll", events: [] }),
-  feedbackStore: store({ projectId: "qa", sessionId: "scroll", items: new Map() }),
-  onFork() {}, onFeedback() {}, onEdit() {}, onRetry() {},
-});
-const todoStore = store({ projectId: "qa", sessionId: "scroll", items: [] });
+const todoStore = store({ projectId: "qa", sessionId: "seat",
+  items: [{ text: "Inspect UI", done: false }] });
+const asksStore = store({ projectId: "qa", sessionId: "seat", loaded: true,
+  items: [{ id: 4, question: "Which route should I take?",
+    options: ["Fast", "Careful"] }] });
 const approvalsStore = store({ items: [] });
 const runsStore = store({ items: [] });
 createConversationDocks({
   container: document.querySelector("#conversation-docks"), navigation,
-  tasksStore: store({ items: [] }), approvalsStore,
-  asksStore: store({ projectId: "qa", sessionId: "scroll", items: [] }),
-  runsStore, todoStore,
-  onOpenTasks() {}, onChanged: async () => {},
-  onLayoutChange: (wasAtBottom) => timeline.externalContentChanged(wasAtBottom),
+  tasksStore: store({ items: [] }), approvalsStore, asksStore,
+  runsStore, todoStore, onOpenTasks() {}, onChanged: async () => {},
 });
 
 const nextFrame = () => new Promise((resolve) => requestAnimationFrame(resolve));
 async function check() {
   await nextFrame();
   await nextFrame();
-  const scroller = document.querySelector(".conversation");
-  const button = document.querySelector("#to-bottom");
-  const item = { text: "审批前核对", done: false };
-  scroller.scrollTop = scroller.scrollHeight;
-  todoStore.setData({ projectId: "qa", sessionId: "scroll", items: [item] });
-  const card = document.querySelector(".conversation-docks .conversation-dock");
-  const pinned = scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight <= 1 &&
-    card.getBoundingClientRect().bottom <= scroller.getBoundingClientRect().bottom &&
-    button.hidden;
-  todoStore.setData({ projectId: "qa", sessionId: "scroll", items: [] });
-  scroller.scrollTop = 0;
-  todoStore.setData({ projectId: "qa", sessionId: "scroll", items: [item] });
-  const preserved = scroller.scrollTop === 0 && !button.hidden;
-  todoStore.setData({ projectId: "qa", sessionId: "scroll", items: [] });
-  runsStore.setData({ items: [{ agent_run_id: 3, project_id: "qa", session_id: "scroll" }] });
+  const conversation = document.querySelector(".conversation");
+  const composer = document.querySelector(".composer-region");
+  const dock = document.querySelector("#conversation-docks");
+  conversation.scrollTop = 0;
+  const question = dock.querySelector(".ask-dock-question").getBoundingClientRect();
+  const option = dock.querySelector(".ask-dock-options button").getBoundingClientRect();
+  const area = dock.getBoundingClientRect();
+  const askReadable = area.top >= conversation.getBoundingClientRect().top &&
+    area.bottom <= composer.getBoundingClientRect().top &&
+    question.top >= area.top && question.bottom <= area.bottom &&
+    option.top >= area.top && option.bottom <= area.bottom &&
+    conversation.scrollTop === 0;
+
+  asksStore.setData({ projectId: "qa", sessionId: "seat", loaded: true, items: [] });
+  runsStore.setData({ items: [{ agent_run_id: 3, project_id: "qa", session_id: "seat" }] });
   approvalsStore.setData({ items: [{ id: 7, run_id: 3, tool: "exec",
     risk: "high", effects: ["process"], resources: [],
     arguments_json: '{"argv":["python","-c","print(1)"]}' }] });
-  scroller.scrollTop = scroller.scrollHeight;
   await nextFrame();
-  document.querySelector(".approval-arguments summary").click();
+  const title = dock.querySelector(".conversation-dock h3").getBoundingClientRect();
+  const approvalReadable = title.top >= dock.getBoundingClientRect().top &&
+    title.bottom <= dock.getBoundingClientRect().bottom;
+  dock.scrollTop = dock.scrollHeight;
+  const allow = [...dock.querySelectorAll(".conversation-dock-actions button")].at(-1);
+  const actionVisible = allow.getBoundingClientRect().bottom <=
+    dock.getBoundingClientRect().bottom &&
+    allow.getBoundingClientRect().top >= dock.getBoundingClientRect().top;
+  dock.querySelector(".approval-arguments summary").click();
   await nextFrame();
-  await nextFrame();
-  const allow = [...document.querySelectorAll(".conversation-dock-actions button")].at(-1);
-  const expandedPinned = scroller.scrollHeight - scroller.scrollTop -
-    scroller.clientHeight <= 1 &&
-    allow.getBoundingClientRect().bottom <= scroller.getBoundingClientRect().bottom &&
-    button.hidden;
+  dock.scrollTop = dock.scrollHeight;
+  const expandedReachable = allow.getBoundingClientRect().bottom <=
+    dock.getBoundingClientRect().bottom &&
+    allow.getBoundingClientRect().top >= dock.getBoundingClientRect().top;
+  const passed = askReadable && approvalReadable && actionVisible &&
+    expandedReachable && document.documentElement.scrollWidth <= innerWidth;
   const result = document.querySelector("#result");
-  result.dataset.passed = String(pinned && preserved && expandedPinned);
-  result.textContent = JSON.stringify({ pinned, preserved, expandedPinned,
-    scrollTop: scroller.scrollTop, bottomButtonVisible: !button.hidden });
+  result.dataset.passed = innerWidth <= 420 ? String(passed) : "waiting";
+  result.textContent = JSON.stringify({ askReadable, approvalReadable,
+    actionVisible, expandedReachable, viewport: innerWidth,
+    documentWidth: document.documentElement.scrollWidth, passed });
 }
 void check();
 </script>

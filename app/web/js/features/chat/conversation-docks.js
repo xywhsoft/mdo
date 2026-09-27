@@ -201,7 +201,7 @@ function askCard(item, projectId, sessionId, deciding, answered, drafts,
 }
 
 export function createConversationDocks({ container, navigation, tasksStore, approvalsStore,
-  asksStore, todoStore, runsStore, onOpenTasks, onChanged, onLayoutChange }) {
+  asksStore, todoStore, runsStore, onOpenTasks, onChanged }) {
   const askDeciding = new Set();
   const askAnswered = new Set();
   const expanded = new Map();
@@ -211,13 +211,20 @@ export function createConversationDocks({ container, navigation, tasksStore, app
   const otherRoot = element("div", { className: "conversation-dock-stack" });
   const askRoot = element("div", { className: "conversation-dock-stack" });
   container.append(otherRoot, askRoot);
-  const scroller = container.closest(".conversation");
-  let dockHeight = container.getBoundingClientRect().height;
+  const composerRegion = container.parentElement?.classList.contains("composer-region")
+    ? container.parentElement : null;
+  const conversation = container.closest(".workspace")?.querySelector(".conversation");
+  const visibleDecisions = new Set();
+
+  function syncAvailableHeight() {
+    if (conversation)
+      container.style.setProperty("--dock-available-height",
+        `${Math.max(0, Math.floor(conversation.clientHeight - 8))}px`);
+  }
+  syncAvailableHeight();
 
   function render() {
-    const oldHeight = scroller?.scrollHeight;
-    const wasAtBottom = scroller &&
-      oldHeight - scroller.scrollTop - scroller.clientHeight < 100;
+    const previousScroll = container.scrollTop;
     const focusedDock = otherRoot.contains(document.activeElement)
       ? document.activeElement?.dataset.dockFocus : "";
     const focusedAsk = askRoot.contains(document.activeElement);
@@ -241,6 +248,8 @@ export function createConversationDocks({ container, navigation, tasksStore, app
     const todoItems = todo?.projectId === selected.projectId &&
       todo?.sessionId === sessionId ? todo.items : [];
     clear(otherRoot);
+    let newApproval = null;
+    const nextDecisions = new Set();
     if (todoItems.length) {
       const key = `${selected.projectId}/${sessionId}`;
       const open = expanded.get(key) !== false;
@@ -254,8 +263,13 @@ export function createConversationDocks({ container, navigation, tasksStore, app
       text: t("dock.todo.loadFailed", { error: errorMessage(todoStore.get().error) }),
     }));
     if (tasks.length) otherRoot.append(taskCard(tasks, onOpenTasks));
-    for (const item of approvals) otherRoot.append(approvalCard(
-      item, argumentsOpen, onChanged));
+    for (const item of approvals) {
+      const key = `approval/${selected.projectId}/${sessionId}/${item.id}`;
+      nextDecisions.add(key);
+      const card = approvalCard(item, argumentsOpen, onChanged);
+      otherRoot.append(card);
+      if (!visibleDecisions.has(key)) newApproval ??= card;
+    }
     if (approvalsStore.get().status === "ready") {
       const live = new Set((approvalsStore.get().data?.items ?? [])
         .map((item) => String(item.id)));
@@ -267,15 +281,18 @@ export function createConversationDocks({ container, navigation, tasksStore, app
       (replacement ?? document.querySelector("#prompt"))?.focus({ preventScroll: true });
     }
     const live = new Set();
+    let newAsk = null;
     for (const item of asks) {
       const key = `${selected.projectId}/${sessionId}/${item.id}`;
       live.add(key);
+      nextDecisions.add(`ask/${key}`);
       if (!askNodes.has(key)) {
         const card = askCard(item, selected.projectId, sessionId,
           askDeciding, askAnswered, drafts, onChanged, render);
         askNodes.set(key, card);
         askRoot.append(card.node);
       } else askNodes.get(key).sync();
+      if (!visibleDecisions.has(`ask/${key}`)) newAsk ??= askNodes.get(key).node;
     }
     for (const [key, card] of askNodes) {
       if (live.has(key)) continue;
@@ -294,9 +311,16 @@ export function createConversationDocks({ container, navigation, tasksStore, app
       document.querySelector("#prompt")?.focus({ preventScroll: true });
     container.hidden = !todoItems.length && !todoError && !tasks.length &&
       !approvals.length && !asks.length;
-    if (scroller && scroller.scrollHeight !== oldHeight)
-      onLayoutChange?.(wasAtBottom);
-    dockHeight = container.getBoundingClientRect().height;
+    composerRegion?.toggleAttribute("data-decision-pending",
+      Boolean(approvals.length || asks.length));
+    syncAvailableHeight();
+    if (newAsk || newApproval) {
+      const target = newAsk ?? newApproval;
+      container.scrollTop += target.getBoundingClientRect().top -
+        container.getBoundingClientRect().top;
+    } else container.scrollTop = previousScroll;
+    visibleDecisions.clear();
+    for (const key of nextDecisions) visibleDecisions.add(key);
   }
 
   const unsubscribers = [
@@ -307,17 +331,14 @@ export function createConversationDocks({ container, navigation, tasksStore, app
     todoStore.subscribe(render),
     subscribeLocale(render),
   ];
-  // <details> and validation hints can grow a card without a store render.
-  const resizeObserver = typeof ResizeObserver === "function" && onLayoutChange
-    ? new ResizeObserver(() => {
-      const height = container.getBoundingClientRect().height;
-      if (height === dockHeight) return;
-      dockHeight = height;
-      onLayoutChange();
-    }) : null;
-  resizeObserver?.observe(container);
+  const resizeObserver = conversation && typeof ResizeObserver === "function"
+    ? new ResizeObserver(syncAvailableHeight) : null;
+  resizeObserver?.observe(conversation);
+  window.addEventListener("resize", syncAvailableHeight);
   return () => {
     resizeObserver?.disconnect();
+    window.removeEventListener("resize", syncAvailableHeight);
+    composerRegion?.removeAttribute("data-decision-pending");
     unsubscribers.forEach((unsubscribe) => unsubscribe());
   };
 }

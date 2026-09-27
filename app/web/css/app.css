@@ -625,6 +625,19 @@ select:focus-visible,
 .timeline-stats { margin-left: auto; color: var(--faint); font-size: 10px; white-space: nowrap; }
 .conversation-docks { display: grid; width: min(760px, calc(100% - 40px)); gap: 9px; margin: 0 auto 20px; }
 .conversation-docks[hidden] { display: none; }
+.composer-region > .conversation-docks {
+  position: absolute;
+  z-index: 3;
+  bottom: 100%;
+  left: 50%;
+  width: min(var(--composer-width), calc(100% - 40px));
+  max-height: var(--dock-available-height, 320px);
+  margin: 0 0 8px;
+  overflow: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  transform: translateX(-50%);
+}
 .conversation-dock-stack { display: contents; }
 .conversation-dock { min-width: 0; padding: 12px 14px; border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--surface-raised); }
 .conversation-dock h3 { margin: 0 0 7px; font-size: 13px; font-weight: 650; }
@@ -1332,6 +1345,7 @@ select:focus-visible,
   .timeline { width: calc(100% - 26px); padding-top: 20px; }
   .timeline-artifact-preview summary { min-height: 40px; }
   .conversation-docks { width: calc(100% - 26px); }
+  .composer-region > .conversation-docks { width: calc(100% - 18px); }
   .todo-toggle, .conversation-dock-actions button,
   .ask-dock-options button, .ask-dock-free button { min-height: 40px; }
   .approval-arguments summary { min-height: 40px; padding-top: 12px; padding-bottom: 12px; }
@@ -1350,6 +1364,9 @@ select:focus-visible,
   .composer textarea { min-height: 52px; padding: 12px 13px 6px; }
   .composer[data-new-task] textarea { min-height: 52px; }
   .composer-options { flex: 1 1 100%; flex-wrap: wrap; gap: 3px; overflow-x: visible; }
+  .composer-region[data-decision-pending] .composer-options { flex: 0 0 auto; }
+  .composer-region[data-decision-pending] .composer-options > :is(.composer-select, .option-chip) { display: none; }
+  .composer-region[data-decision-pending] .composer-actions { flex: 1 1 auto; }
   .composer-attach, .composer-select, .context-meter > button,
   .send-button, .stop-button { height: 40px; }
   .composer-attach, .context-meter > button, .send-button,

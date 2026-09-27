@@ -436,7 +436,6 @@ export async function boot() {
     runsStore,
     onOpenTasks: () => { selectInspectorTab("tasks"); setDrawer("inspector", true); },
     onChanged: () => Promise.all([loadTasks(), loadRuns(), refreshSelectedAsks()]),
-    onLayoutChange: (wasAtBottom) => timelineView.externalContentChanged(wasAtBottom),
   });
   let draftStore;
   let submissionController;
