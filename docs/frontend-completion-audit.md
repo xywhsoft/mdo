@@ -2,6 +2,8 @@
 
 本清单以 `app_bak/wwwroot` 的可操作行为为基线，而不是以页面长得相似或单元测试通过为完成标准。`docs/frontend-migration.md` 记录每次实现和验证；这里记录当前还需要什么证据。审计更新：2026-09-28，基线提交 `f9e2c4c`。
 
+待办和后台任务停靠卡的阅读状态现可跨轮询保持。旧单文件 Home `.build/mdo-packed-docks-__vf4iek` 在空闲轮询后清掉待办选区；最终 Home `.build/mdo-packed-docks-j__mu890` 中，待办与任务卡并列时选区经过轮询、任务完成及任务卡移除后仍在。浏览器夹具另验证两卡相互更新时未变化卡片的选区、实际内容变更时正确更新；320px 页面无横向溢出或脚本错误，Windows/Linux 有界门禁通过。原生 WebView 和实体触控仍待验收，详见[迁移记录](frontend-migration.md#2026-09-28待办与后台任务轮询保留文本选区)。
+
 审批参数可在等待决策时连续选择和阅读。旧单文件 Home `.build/mdo-packed-docks-fzm443ae` 中停靠卡参数选区在轮询后消失；最终 Home `.build/mdo-packed-docks-izlo7nvx` 的完整 JSON 选区经过 2.4 秒仍在，Home `.build/mdo-packed-docks-3tqfzuki` 的检查器参数选区经过 2.5 秒仍在，随后允许无害工具返回 `exit_code: 0`。两个浏览器夹具还确认倒计时变化复用卡片、调用参数变化时正确替换内容；页面无脚本错误，Windows/Linux 有界门禁通过。原生 WebView 和实体触控仍待验收，详见[迁移记录](frontend-migration.md#2026-09-28审批轮询期间保留命令选区)。
 
 极短屏新审批的首屏上下文现可读。旧单文件 Home `.build/mdo-packed-docks-ilhh5wjg` 在 280–320×250 的待办→询问→审批链中把审批标题卷到屏外、操作按钮仍在屏下，只露出中段参数入口；最终 Home `.build/mdo-packed-docks-7uxlx__z` 在 280×250 先显示标题与风险，再能分段滚动到按钮并完成无害审批。320×350 的独立审批仍能查看标题、命令和参数，浏览器无脚本错误，Windows/Linux 有界门禁通过。实体触控、软键盘与原生 WebView 待验，详见[迁移记录](frontend-migration.md#2026-09-28极短屏新审批先显示决策标题)。

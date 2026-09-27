@@ -1,7 +1,7 @@
 import { approvalDecisionStatus, approvalDecisionStore, decideApproval } from "../../state/approvals.js";
 import { answerAsk } from "../../state/asks.js";
 import { subscribeLocale, t } from "../../i18n.js";
-import { clear, element, errorMessage, isImeKey, toast } from "../../utils/dom.js";
+import { element, errorMessage, isImeKey, toast } from "../../utils/dom.js";
 import { taskBelongsToSession } from "../tasks/task-owner.js";
 
 const STATE_KEYS = Object.freeze({ pending: "dock.task.pending", running: "dock.task.running" });
@@ -57,6 +57,19 @@ function todoCard(items, expanded, focusKey, onToggle) {
     card.append(list);
   }
   return card;
+}
+
+function reconcileCards(root, nodes) {
+  for (const [index, node] of nodes.entries()) {
+    const current = root.children[index];
+    if (current === node) continue;
+    // Keep a surviving sibling attached when another card changes or leaves.
+    if (node.parentElement === root || (current && nodes.includes(current)))
+      root.insertBefore(node, current ?? null);
+    else if (current) current.replaceWith(node);
+    else root.append(node);
+  }
+  while (root.children.length > nodes.length) root.lastElementChild.remove();
 }
 
 function approvalContentKey({ expires_in_ms, ...content }) {
@@ -229,6 +242,9 @@ export function createConversationDocks({ container, navigation, tasksStore, app
   const expanded = new Map();
   const argumentsOpen = new Map();
   const approvalCards = new Map();
+  let todoView = null;
+  let todoErrorView = null;
+  let taskView = null;
   const drafts = new Map();
   const askNodes = new Map();
   const approvalRoot = element("div", { className: "conversation-dock-stack" });
@@ -350,22 +366,39 @@ export function createConversationDocks({ container, navigation, tasksStore, app
       todo?.projectId === selected.projectId && todo?.sessionId === sessionId;
     const todoItems = todo?.projectId === selected.projectId &&
       todo?.sessionId === sessionId ? todo.items : [];
-    clear(otherRoot);
+    const otherNodes = [];
     let newApproval = null;
     const nextDecisions = new Set();
     if (todoItems.length) {
       const key = `${selected.projectId}/${sessionId}`;
       const open = expanded.get(key) !== false;
-      otherRoot.append(todoCard(todoItems, open, `todo/${key}`, () => {
-        expanded.set(key, !open);
-        render();
-      }));
-    }
-    if (todoError) otherRoot.append(element("p", {
-      className: "todo-dock-error",
-      text: t("dock.todo.loadFailed", { error: errorMessage(todoStore.get().error) }),
-    }));
-    if (tasks.length) otherRoot.append(taskCard(tasks, onOpenTasks));
+      const contentKey = JSON.stringify({ key, open,
+        items: todoItems.map(({ text, done }) => [text, done]) });
+      if (!todoView || todoView.contentKey !== contentKey)
+        todoView = { contentKey, node: todoCard(todoItems, open, `todo/${key}`, () => {
+          expanded.set(key, !open);
+          render();
+        }) };
+      otherNodes.push(todoView.node);
+    } else todoView = null;
+    if (todoError) {
+      const message = t("dock.todo.loadFailed", { error: errorMessage(todoStore.get().error) });
+      const contentKey = JSON.stringify([selected.projectId, sessionId, message]);
+      if (!todoErrorView || todoErrorView.contentKey !== contentKey)
+        todoErrorView = { contentKey, node: element("p", {
+          className: "todo-dock-error", text: message,
+        }) };
+      otherNodes.push(todoErrorView.node);
+    } else todoErrorView = null;
+    if (tasks.length) {
+      const contentKey = JSON.stringify({ projectId: selected.projectId, sessionId,
+        count: tasks.length, displayed: tasks.slice(0, 8).map(({ id, state, label }) =>
+          [id, state, label]) });
+      if (!taskView || taskView.contentKey !== contentKey)
+        taskView = { contentKey, node: taskCard(tasks, onOpenTasks) };
+      otherNodes.push(taskView.node);
+    } else taskView = null;
+    reconcileCards(otherRoot, otherNodes);
     const approvalNodes = [];
     const liveApprovals = new Set();
     for (const item of approvals) {
@@ -384,9 +417,7 @@ export function createConversationDocks({ container, navigation, tasksStore, app
     }
     for (const key of approvalCards.keys())
       if (!liveApprovals.has(key)) approvalCards.delete(key);
-    if (approvalRoot.children.length !== approvalNodes.length ||
-        approvalNodes.some((node, index) => approvalRoot.children[index] !== node))
-      approvalRoot.replaceChildren(...approvalNodes);
+    reconcileCards(approvalRoot, approvalNodes);
     if (approvalsStore.get().status === "ready") {
       const live = new Set((approvalsStore.get().data?.items ?? [])
         .map((item) => String(item.id)));
@@ -456,7 +487,13 @@ export function createConversationDocks({ container, navigation, tasksStore, app
     approvalDecisionStore.subscribe(render),
     asksStore.subscribe(render),
     todoStore.subscribe(render),
-    subscribeLocale(() => { approvalCards.clear(); render(); }),
+    subscribeLocale(() => {
+      approvalCards.clear();
+      todoView = null;
+      todoErrorView = null;
+      taskView = null;
+      render();
+    }),
   ];
   const resizeObserver = conversation && typeof ResizeObserver === "function"
     ? new ResizeObserver((entries) => {

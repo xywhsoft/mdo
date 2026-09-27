@@ -38,10 +38,11 @@ const asksStore = store({ projectId: "qa", sessionId: "seat", loaded: true,
     options: ["Fast", "Careful"] }] });
 const approvalsStore = store({ items: [] });
 const runsStore = store({ items: [] });
+const tasksStore = store({ items: [] });
 const arrivals = [];
 createConversationDocks({
   container: document.querySelector("#conversation-docks"), navigation,
-  tasksStore: store({ items: [] }), approvalsStore, asksStore,
+  tasksStore, approvalsStore, asksStore,
   runsStore, todoStore, onOpenTasks() {}, onChanged: async () => {},
   onDecisionArrived(card, kind) {
     arrivals.push([kind, card.querySelector("h3")?.textContent]);
@@ -147,16 +148,74 @@ async function check() {
   const expandedReachable = currentAllow.getBoundingClientRect().bottom <=
     dock.getBoundingClientRect().bottom &&
     currentAllow.getBoundingClientRect().top >= dock.getBoundingClientRect().top;
+  const statusRoot = dock.querySelectorAll(".conversation-dock-stack")[2];
+  const todoNode = statusRoot.querySelector(".todo-dock");
+  const todoText = todoNode.querySelector(".todo-dock-list li span:last-child");
+  range.selectNodeContents(todoText);
+  selection.removeAllRanges();
+  selection.addRange(range);
+  approvalsStore.setData({ items: [{ ...approvalsStore.get().data.items[0],
+    expires_in_ms: 239000 }] });
+  await nextFrame();
+  const todoSelectionStable = statusRoot.querySelector(".todo-dock") === todoNode &&
+    selection.toString() === "Inspect UI";
+  todoStore.setData({ projectId: "qa", sessionId: "seat",
+    items: [{ text: "Inspect UI", done: false, updated_at: "later" }] });
+  await nextFrame();
+  const todoMetadataStable = statusRoot.querySelector(".todo-dock") === todoNode &&
+    selection.toString() === "Inspect UI";
+  selection.removeAllRanges();
+  todoStore.setData({ projectId: "qa", sessionId: "seat",
+    items: [{ text: "Inspect UI updated", done: true }] });
+  await nextFrame();
+  const todoChangeReplaced = statusRoot.querySelector(".todo-dock") !== todoNode &&
+    statusRoot.querySelector(".todo-dock-list")?.textContent.includes("Inspect UI updated");
+  const task = { id: 11, state: "running", label: "Check files", terminal: false,
+    owner_session: "C:/qa/sessions/qa/seat/snapshot.json" };
+  tasksStore.setData({ items: [task] });
+  await nextFrame();
+  const taskNode = statusRoot.querySelector(".conversation-dock:not(.todo-dock)");
+  const taskText = taskNode.querySelector(".conversation-dock-list li span:last-child");
+  range.selectNodeContents(taskText);
+  selection.addRange(range);
+  tasksStore.setData({ items: [{ ...task, updated_at: "later" }] });
+  await nextFrame();
+  const taskSelectionStable = statusRoot.querySelector(".conversation-dock:not(.todo-dock)") ===
+    taskNode && selection.toString() === "Check files";
+  todoStore.setData({ projectId: "qa", sessionId: "seat",
+    items: [{ text: "Inspect UI again", done: true }] });
+  await nextFrame();
+  const taskSelectionAfterTodoChange =
+    statusRoot.querySelector(".conversation-dock:not(.todo-dock)") === taskNode &&
+    selection.toString() === "Check files";
+  selection.removeAllRanges();
+  tasksStore.setData({ items: [{ ...task, state: "pending" }] });
+  await nextFrame();
+  const taskChangeReplaced = statusRoot.querySelector(".conversation-dock:not(.todo-dock)") !==
+    taskNode && statusRoot.querySelector(".conversation-dock:not(.todo-dock)")
+      ?.textContent.includes("Check files");
+  const currentTodo = statusRoot.querySelector(".todo-dock");
+  range.selectNodeContents(currentTodo.querySelector(".todo-dock-list li span:last-child"));
+  selection.addRange(range);
+  tasksStore.setData({ items: [{ ...task, state: "running" }] });
+  await nextFrame();
+  const todoSelectionAfterTaskChange = statusRoot.querySelector(".todo-dock") === currentTodo &&
+    selection.toString() === "Inspect UI again";
+  selection.removeAllRanges();
   const passed = askReadable && restoredDraft && approvalReadable && actionVisible &&
     approvalFocusRestored && approvalBeforeTodo &&
     arrivals.map(([kind]) => kind).join(",") === "ask,approval" &&
     expandedReachable && approvalSelectionStable && approvalChangeReplaced &&
+    todoSelectionStable && todoMetadataStable && todoChangeReplaced && taskSelectionStable &&
+    taskSelectionAfterTodoChange && taskChangeReplaced && todoSelectionAfterTaskChange &&
     document.documentElement.scrollWidth <= innerWidth;
   const result = document.querySelector("#result");
   result.dataset.passed = innerWidth <= 420 ? String(passed) : "waiting";
   result.textContent = JSON.stringify({ askReadable, askGeometry,
     restoredDraft, restoredHeight, restoredPending, restoredStyle, approvalReadable,
     actionVisible, expandedReachable, approvalSelectionStable, approvalChangeReplaced,
+    todoSelectionStable, todoMetadataStable, todoChangeReplaced, taskSelectionStable,
+    taskSelectionAfterTodoChange, taskChangeReplaced, todoSelectionAfterTaskChange,
     approvalFocusRestored, approvalBeforeTodo,
     arrivals, viewport: innerWidth,
     documentWidth: document.documentElement.scrollWidth, passed });
