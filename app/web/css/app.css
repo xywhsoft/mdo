@@ -1468,6 +1468,9 @@ select:focus-visible,
 }
 
 @media (max-width: 760px) and (max-height: 300px) {
+  .composer-images { flex-wrap: nowrap; max-height: 82px; overflow-x: auto; overflow-y: hidden; scrollbar-width: thin; }
+  .composer-image { flex: 0 0 64px; }
+  .composer-image-unsupported { order: -1; flex: 0 0 140px; align-self: center; max-height: 64px; overflow-y: auto; font-size: 11px; line-height: 1.25; }
   .composer-region[data-decision-pending] .composer-input-estimate { display: none; }
   .composer-region:not([data-decision-pending]) .composer textarea { min-height: 40px; max-height: 40px; }
   .composer-region:not([data-decision-pending]) .composer-toolbar { flex-wrap: nowrap; }

@@ -419,7 +419,7 @@
   "image.saving": "Saving images…",
   "image.removing": "Removing image…",
   "image.unsupportedModel": "This model does not support images. Switch to an image-capable model first.",
-  "image.draftUnsupported": "This model cannot send the images in this draft. Switch models or remove the images first.",
+  "image.draftUnsupported": "This model cannot send images. Switch models or remove the images first.",
   "image.removeRollback": "The draft was not saved; the image has been restored",
   "image.readOnly": "Images cannot be added to this session",
   "image.typesOnly": "Only PNG, JPEG, and WebP images are supported",

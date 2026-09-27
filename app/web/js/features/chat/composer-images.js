@@ -161,7 +161,7 @@ export function createComposerImages({ composer, prompt, button, input, strip,
     if (ids.length && !imageCapable()) strip.append(element("span", {
       className: "composer-image-unsupported",
       text: t("image.draftUnsupported", {},
-        "当前模型不支持草稿中的图片；请切换模型或移除图片后再发送"),
+        "当前模型不支持图片；切换模型或移除图片后再发送"),
     }));
     button.disabled = !writable || uploading || removing;
     if (focusedKind && !removing) {
