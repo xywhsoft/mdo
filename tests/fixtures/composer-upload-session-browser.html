@@ -7,7 +7,8 @@
 <style>body{padding:20px;background:var(--bg);color:var(--ink)}</style>
 <div id="cases"></div>
 <script type="module">
-import { createComposerImages } from "/app/web/js/features/chat/composer-images.js";
+const { createComposerImages } = await import(
+  `/app/web/js/features/chat/composer-images.js?fixture=${Date.now()}`);
 
 const root = document.querySelector("#cases");
 const a = "a".repeat(32);
@@ -16,6 +17,14 @@ const c = "c".repeat(32);
 const originalFetch = window.fetch;
 const deleted = [];
 const uploadTypes = [];
+const nextFrame = () => new Promise((resolve) => requestAnimationFrame(resolve));
+async function until(predicate) {
+  for (let attempt = 0; attempt < 30; attempt++) {
+    if (predicate()) return true;
+    await nextFrame();
+  }
+  return predicate();
+}
 let finishA;
 let finishC;
 window.fetch = async (url, options = {}) => {
@@ -74,7 +83,29 @@ function createCase(label, initialRoute, ensureSession) {
     input.files = transfer.files;
     input.dispatchEvent(new Event("change"));
   }
+  function pasteClipboard(files, items) {
+    const event = new Event("paste", { bubbles: true, cancelable: true });
+    Object.defineProperty(event, "clipboardData", { value: { files, items } });
+    prompt.dispatchEvent(event);
+    return event.defaultPrevented;
+  }
+  function pasteItemOnly(name = "clipboard.png", fileType = "image/png") {
+    const image = new File([new Uint8Array([1])], name, { type: fileType });
+    return pasteClipboard([], [{ type: "image/png", getAsFile: () => image }]);
+  }
+  function pasteFilesOnly() {
+    const image = new File([new Uint8Array([1])], "clipboard.png",
+      { type: "image/png" });
+    return pasteClipboard([image], []);
+  }
+  function pasteBoth() {
+    const image = new File([new Uint8Array([1])], "clipboard.png",
+      { type: "image/png" });
+    return pasteClipboard([image],
+      [{ type: "image/png", getAsFile: () => image }]);
+  }
   return { images, button, strip, output, changes, errors, add,
+    pasteItemOnly, pasteFilesOnly, pasteBoth,
     setRoute(value) { route = value; images.set([]); } };
 }
 
@@ -86,10 +117,10 @@ try {
   first.setRoute({ projectId: "qa", sessionId: "second" });
   const secondUsable = !first.images.isUploading() && !first.button.disabled;
   first.add();
-  await new Promise((resolve) => requestAnimationFrame(resolve));
-  const secondSaved = first.images.get().join() === b;
+  const secondSaved = await until(() => first.images.get().join() === b);
   finishA();
-  await new Promise((resolve) => requestAnimationFrame(resolve));
+  await until(() => deleted.some((url) =>
+    url.includes(`/sessions/first/attachments/${a}`)));
   const firstPassed = firstBusy && secondUsable && secondSaved &&
     first.images.get().join() === b && first.errors.length === 0 &&
     deleted.some((url) => url.includes(`/sessions/first/attachments/${a}`));
@@ -101,10 +132,10 @@ try {
     { projectId: "qa", sessionId: "" },
     async () => ({ projectId: "qa", sessionId: "created" }));
   created.add();
-  await new Promise((resolve) => requestAnimationFrame(resolve));
+  await nextFrame();
   const newBusy = created.images.isUploading() && created.button.disabled;
   finishC();
-  await new Promise((resolve) => requestAnimationFrame(resolve));
+  await until(() => !created.images.isUploading());
   const createdPassed = newBusy && !created.images.isUploading() &&
     created.images.get().join() === c && created.errors.length === 0;
   created.output.dataset.passed = String(createdPassed);
@@ -114,7 +145,7 @@ try {
   const unknownMime = createCase("系统未提供图片 MIME",
     { projectId: "qa", sessionId: "unknown-mime" });
   unknownMime.add("capture.PNG", "");
-  await new Promise((resolve) => requestAnimationFrame(resolve));
+  await until(() => unknownMime.images.get().join() === b);
   const unknownPassed = unknownMime.images.get().join() === b &&
     unknownMime.errors.length === 0 && uploadTypes.some((item) =>
       item.session === "unknown-mime" && item.mime === "image/png" &&
@@ -123,6 +154,54 @@ try {
   unknownMime.output.textContent = JSON.stringify({ unknownPassed,
     uploads: uploadTypes.filter((item) => item.session === "unknown-mime"),
     errors: unknownMime.errors }, null, 2);
+
+  const clipboardItem = createCase("仅提供 item 的剪贴板图片",
+    { projectId: "qa", sessionId: "clipboard-item" });
+  const pasteHandled = clipboardItem.pasteItemOnly();
+  await until(() => clipboardItem.images.get().join() === b);
+  const clipboardPassed = pasteHandled && clipboardItem.images.get().join() === b &&
+    clipboardItem.errors.length === 0 && uploadTypes.some((item) =>
+      item.session === "clipboard-item" && item.mime === "image/png");
+  clipboardItem.output.dataset.passed = String(clipboardPassed);
+  clipboardItem.output.textContent = JSON.stringify({ clipboardPassed,
+    pasteHandled, attachments: clipboardItem.images.get(),
+    errors: clipboardItem.errors }, null, 2);
+
+  const clipboardMime = createCase("由 item 提供图片 MIME",
+    { projectId: "qa", sessionId: "clipboard-mime" });
+  const mimeHandled = clipboardMime.pasteItemOnly("clipboard", "");
+  await until(() => clipboardMime.images.get().join() === b);
+  const mimePassed = mimeHandled && clipboardMime.images.get().join() === b &&
+    clipboardMime.errors.length === 0 && uploadTypes.some((item) =>
+      item.session === "clipboard-mime" && item.mime === "image/png" &&
+      item.fileType === "");
+  clipboardMime.output.dataset.passed = String(mimePassed);
+  clipboardMime.output.textContent = JSON.stringify({ mimePassed,
+    mimeHandled, uploads: uploadTypes.filter((item) =>
+      item.session === "clipboard-mime"), errors: clipboardMime.errors }, null, 2);
+
+  const clipboardFiles = createCase("仅提供 files 的剪贴板图片",
+    { projectId: "qa", sessionId: "clipboard-files" });
+  const filesHandled = clipboardFiles.pasteFilesOnly();
+  await until(() => clipboardFiles.images.get().join() === b);
+  const filesPassed = filesHandled && clipboardFiles.images.get().join() === b &&
+    clipboardFiles.errors.length === 0 && uploadTypes.some((item) =>
+      item.session === "clipboard-files" && item.mime === "image/png");
+  clipboardFiles.output.dataset.passed = String(filesPassed);
+  clipboardFiles.output.textContent = JSON.stringify({ filesPassed,
+    filesHandled, errors: clipboardFiles.errors }, null, 2);
+
+  const clipboardBoth = createCase("同时提供 item 与 file 的剪贴板图片",
+    { projectId: "qa", sessionId: "clipboard-both" });
+  const bothHandled = clipboardBoth.pasteBoth();
+  await until(() => clipboardBoth.images.get().join() === b);
+  const bothUploads = uploadTypes.filter((item) =>
+    item.session === "clipboard-both");
+  const bothPassed = bothHandled && clipboardBoth.images.get().join() === b &&
+    bothUploads.length === 1 && clipboardBoth.errors.length === 0;
+  clipboardBoth.output.dataset.passed = String(bothPassed);
+  clipboardBoth.output.textContent = JSON.stringify({ bothPassed,
+    bothHandled, uploads: bothUploads, errors: clipboardBoth.errors }, null, 2);
 } catch (error) {
   const output = document.createElement("pre");
   output.dataset.passed = "false";

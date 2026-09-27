@@ -16,6 +16,24 @@ export function imageUploadType(file) {
   return EXTENSION_TYPES.get(extension) ?? "";
 }
 
+function pastedImages(clipboard) {
+  // Some WebViews expose pasted images only through DataTransfer.items.
+  // Prefer those entries to avoid uploading the same file twice when both
+  // collections are populated, then fall back to DataTransfer.files.
+  const itemFiles = [...(clipboard?.items ?? [])]
+    .map((item) => {
+      const file = typeof item.getAsFile === "function" ? item.getAsFile() : null;
+      if (!file) return null;
+      const mime = imageUploadType(file) ||
+        ((!file.type || file.type === "application/octet-stream") &&
+          TYPES.has(item.type) ? item.type : "");
+      return mime ? { file, mime } : null;
+    }).filter(Boolean);
+  return itemFiles.length ? itemFiles : [...(clipboard?.files ?? [])]
+    .map((file) => ({ file, mime: imageUploadType(file) }))
+    .filter((entry) => Boolean(entry.mime));
+}
+
 function unsupportedModelError() {
   const error = new Error(t("image.unsupportedModel", {},
     "当前模型不支持图片，请先切换到支持图片的模型"));
@@ -171,8 +189,9 @@ export function createComposerImages({ composer, prompt, button, input, strip,
     const images = [];
     let otherFiles = 0;
     let invalidSize = 0;
-    for (const file of candidates) {
-      const mime = imageUploadType(file);
+    for (const candidate of candidates) {
+      const file = candidate.file ?? candidate;
+      const mime = candidate.mime ?? imageUploadType(file);
       if (!mime) otherFiles += 1;
       else if (file.size === 0 || file.size > MAX_IMAGE_BYTES) invalidSize += 1;
       else images.push({ file, mime });
@@ -245,8 +264,7 @@ export function createComposerImages({ composer, prompt, button, input, strip,
     void addFiles(files);
   });
   prompt.addEventListener("paste", (event) => {
-    const images = [...(event.clipboardData?.files ?? [])].filter((file) =>
-      Boolean(imageUploadType(file)));
+    const images = pastedImages(event.clipboardData);
     if (!images.length) return;
     event.preventDefault();
     void addFiles(images);
