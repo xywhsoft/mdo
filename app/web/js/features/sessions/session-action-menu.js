@@ -1,4 +1,4 @@
-import { clear, element, errorMessage, isImeKey, toast } from "../../utils/dom.js";
+import { clear, element, errorMessage, isImeKey, revealListOption, toast } from "../../utils/dom.js";
 import { subscribeLocale } from "../../i18n.js";
 import { sessionActionItems } from "./session-actions.js";
 
@@ -56,7 +56,13 @@ export function createSessionActionMenu({ control, button, menu, navigation,
     render();
     menu.hidden = false;
     button.setAttribute("aria-expanded", "true");
-    if (index >= 0) items()[index]?.focus({ preventScroll: true });
+    if (index >= 0) focusItem(items()[index]);
+  }
+
+  function focusItem(item) {
+    if (!item) return;
+    item.focus({ preventScroll: true });
+    revealListOption(menu, item);
   }
 
   function onButtonClick() {
@@ -65,15 +71,19 @@ export function createSessionActionMenu({ control, button, menu, navigation,
   }
 
   function onButtonKeyDown(event) {
-    if (event.key !== "ArrowDown" && event.key !== "ArrowUp") return;
+    if (isImeKey(event) ||
+        !["ArrowDown", "ArrowUp", "Home", "End"].includes(event.key) ||
+        (menu.hidden && (event.key === "Home" || event.key === "End"))) return;
     const session = currentSession();
     if (!session) return;
     event.preventDefault();
     const entries = sessionActionItems(session);
-    open(event.key === "ArrowDown" ? 0 : entries.length - 1);
+    open(event.key === "ArrowDown" || event.key === "Home"
+      ? 0 : entries.length - 1);
   }
 
   function onMenuKeyDown(event) {
+    if (isImeKey(event)) return;
     const entries = items();
     const index = entries.indexOf(document.activeElement);
     let next = index;
@@ -83,7 +93,7 @@ export function createSessionActionMenu({ control, button, menu, navigation,
     else if (event.key === "End") next = entries.length - 1;
     else return;
     event.preventDefault();
-    entries[next]?.focus({ preventScroll: true });
+    focusItem(entries[next]);
   }
 
   function onDocumentKeyDown(event) {

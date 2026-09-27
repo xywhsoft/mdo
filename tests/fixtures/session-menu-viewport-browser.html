@@ -10,6 +10,7 @@
     display: block; overflow: hidden; }
   .session-navigation { height: 160px; overflow: hidden; }
   .session-list { height: 80px; overflow: auto; }
+  #header-session-control { position: fixed; top: 8px; right: 8px; }
 </style>
 <aside class="sidebar">
   <div class="session-navigation">
@@ -19,9 +20,9 @@
 </aside>
 <span id="session-count"></span>
 <select id="session-filter"><option value="active">进行中</option></select>
-<div id="header-session-control">
+<div id="header-session-control" class="session-action-control">
   <button id="header-session-button" type="button">会话操作</button>
-  <div id="header-session-menu" hidden role="menu"></div>
+  <div id="header-session-menu" class="session-menu session-header-menu" hidden role="menu"></div>
 </div>
 <pre id="result"></pre>
 <script type="module">
@@ -99,7 +100,27 @@ try {
     onAction() {},
   });
   headerButton.click();
-  headerMenu.firstElementChild.focus();
+  function menuKey(target, key) {
+    target.dispatchEvent(new KeyboardEvent("keydown", { key,
+      bubbles: true, cancelable: true }));
+  }
+  function inHeaderViewport(item) {
+    const itemRect = item.getBoundingClientRect();
+    const menuRect = headerMenu.getBoundingClientRect();
+    return itemRect.top >= menuRect.top && itemRect.bottom <= menuRect.bottom;
+  }
+  menuKey(headerButton, "End");
+  const headerEndFocused = document.activeElement === headerMenu.lastElementChild;
+  const headerEndVisible = inHeaderViewport(headerMenu.lastElementChild);
+  const headerEndScrolled = innerHeight > 350 ||
+    (headerMenu.scrollHeight > headerMenu.clientHeight && headerMenu.scrollTop > 0);
+  menuKey(headerMenu.lastElementChild, "ArrowDown");
+  const headerWrapFocused = document.activeElement === headerMenu.firstElementChild;
+  const headerWrapVisible = inHeaderViewport(headerMenu.firstElementChild);
+  menuKey(headerMenu.firstElementChild, "End");
+  menuKey(headerMenu.lastElementChild, "Home");
+  const headerHomeFocused = document.activeElement === headerMenu.firstElementChild;
+  const headerHomeVisible = inHeaderViewport(headerMenu.firstElementChild);
   escape({ isComposing: true });
   const headerComposingKept = !headerMenu.hidden;
   escape({ keyCode: 229 });
@@ -110,12 +131,15 @@ try {
   const passed = withinViewport && outsideClippingParent && firstFocused &&
     sidebarComposingKept && sidebarCandidateKept && escapeRestored &&
     lastReachable && actionWorked && headerComposingKept &&
-    headerCandidateKept && headerEscapeRestored;
+    headerCandidateKept && headerEscapeRestored && headerEndFocused &&
+    headerEndVisible && headerEndScrolled && headerWrapFocused && headerWrapVisible &&
+    headerHomeFocused && headerHomeVisible;
   output.dataset.passed = String(passed);
   output.textContent = JSON.stringify({ passed, withinViewport, outsideClippingParent,
     firstFocused, sidebarComposingKept, sidebarCandidateKept, escapeRestored,
     lastReachable, actionWorked, headerComposingKept, headerCandidateKept,
-    headerEscapeRestored,
+    headerEscapeRestored, headerEndFocused, headerEndVisible, headerEndScrolled,
+    headerWrapFocused, headerWrapVisible, headerHomeFocused, headerHomeVisible,
     initialRect: { top: rect.top, bottom: rect.bottom, left: rect.left, right: rect.right },
     viewport: { width: innerWidth, height: innerHeight } }, null, 2);
 } catch (error) {
