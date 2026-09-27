@@ -620,7 +620,7 @@ export async function boot() {
     ring: $("#context-meter-ring"), panel: $("#context-meter-panel"),
     estimate: $("#composer-input-estimate"), prompt,
     modelSelect: $("#composer-model"),
-    sessionStore: sessionDetailStore, timelineStore, modelsStore,
+    sessionStore: sessionDetailStore, timelineStore, modelsStore, runsStore,
   });
   draftStore = createDraftStore({
     onRestore(text, attachments, uncertainRun, submission) {

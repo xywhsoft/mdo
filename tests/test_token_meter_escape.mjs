@@ -11,7 +11,9 @@ class Node extends EventTarget {
     this.owner = owner;
     this.children = [];
     this.attributes = new Map();
-    this.style = { setProperty() {} };
+    this.style = { values: new Map(), setProperty(name, value) {
+      this.values.set(name, value);
+    } };
     this.value = "";
     this.hidden = false;
   }
@@ -87,6 +89,61 @@ test("Token meter Escape closes the panel before the global stop shortcut", () =
 
     escape();
     assert.equal(stops, 1, "a subsequent bare Escape still stops the run");
+  } finally {
+    meter?.destroy();
+    globalThis.document = previousDocument;
+  }
+});
+
+test("last-call usage uses its own model after the next model is selected", () => {
+  const previousDocument = globalThis.document;
+  const document = new EventTarget();
+  document.createElement = () => new Node(document);
+  document.querySelector = () => null;
+  document.body = new Node(document);
+  document.activeElement = document.body;
+  globalThis.document = document;
+  const root = new Node(document);
+  const trigger = new Node(document);
+  const panel = new Node(document);
+  const prompt = new Node(document);
+  const estimate = new Node(document);
+  const ring = new Node(document);
+  root.append(trigger, panel);
+  let meter;
+  let runItems = [{ project_id: "qa", session_id: "s", agent_run_id: 73,
+    model_id: "previous" }];
+  try {
+    meter = createTokenMeter({ root, trigger, panel, prompt, estimate, ring,
+      modelSelect: { value: "next" },
+      sessionStore: resource({ project_id: "qa", id: "s" }),
+      timelineStore: resource({ projectId: "qa", sessionId: "s",
+        events: [{ kind: "model_done", run_id: 73, model: "wire-shared",
+          input_tokens: 500, output_tokens: 25 }] }),
+      modelsStore: resource({ models: [
+        { id: "previous", name: "Previous", wire_model: "wire-shared",
+          context_window_tokens: 1000 },
+        { id: "next", name: "Next", wire_model: "wire-shared",
+          context_window_tokens: 10000 },
+      ] }), runsStore: { get: () => ({ data: { items: runItems } }),
+        subscribe: () => () => {} } });
+    assert.equal(ring.style.values.get("--meter-percent"), "50%",
+      "last-call input must use the previous model's context window");
+    assert.match(trigger.title, /Previous/);
+    assert.match(trigger.title, /500/);
+    assert.match(trigger.title, /1,000/);
+    const details = panel.children[1];
+    const fields = details.children.map((child) => child.textContent);
+    assert.ok(fields.includes("Next"), "the selected model remains visible");
+    assert.ok(fields.includes("Previous"), "the last-call model is explicit");
+    assert.ok(fields.includes("10,000"));
+    assert.ok(fields.includes("1,000"));
+    runItems = [];
+    meter.refresh();
+    assert.equal(ring.style.values.get("--meter-percent"), "0%",
+      "shared wire names cannot identify the previous model without a run record");
+    assert.doesNotMatch(trigger.title, /10,000/);
+    assert.match(panel.children.at(-1).textContent, /unavailable|无法确定/);
   } finally {
     meter?.destroy();
     globalThis.document = previousDocument;

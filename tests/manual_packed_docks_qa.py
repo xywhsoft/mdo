@@ -463,6 +463,8 @@ parser.add_argument("--resume-verify", action="store_true",
                     help="let the local model verify a resumed run with a bounded read-only command")
 parser.add_argument("--image-capable", action="store_true",
                     help="enable image input in the isolated built-in model fixture")
+parser.add_argument("--second-model-context-tokens", type=int, default=0,
+                    help="set the isolated second model context to 131072-262144 tokens")
 args = parser.parse_args()
 if not 0 <= args.approval_delay_ms <= 5000:
     parser.error("--approval-delay-ms must be between 0 and 5000")
@@ -496,6 +498,10 @@ if args.full_first_queue and (args.fail_first_queue or args.drop_first_queue_res
     parser.error("choose only one first-queue rejection or response drop")
 if args.fail_first_create and args.drop_first_create_response:
     parser.error("choose only one first-create failure option")
+if args.second_model_context_tokens and (
+        not args.image_capable or
+        not 131072 <= args.second_model_context_tokens <= 262144):
+    parser.error("--second-model-context-tokens requires --image-capable and 131072-262144")
 
 base = Path(tempfile.mkdtemp(prefix="mdo-packed-docks-", dir=ROOT / ".build"))
 if args.image_capable:
@@ -505,6 +511,10 @@ if args.image_capable:
     text_model = json.loads(json.dumps(model_config))
     text_model["id"] = "ling-3.0-tiny-text-qa"
     text_model["name"] = "Ling Text QA"
+    if args.second_model_context_tokens:
+        text_model["window"]["context_tokens"] = args.second_model_context_tokens
+        text_model["window"]["max_input_tokens"] = (
+            args.second_model_context_tokens - 1)
     defaults["models"]["items"].append(text_model)
     model_config["capabilities"].append("media-input")
     model_config["attachments"] = ["image"]

@@ -1057,3 +1057,11 @@ Windows/Linux 有界发布门禁分别通过 114 项 Python、74 项 Node、71 �
 生产模块夹具 `tests/fixtures/composer-profile-deferred-browser.html` 新增“无 active 运行但提交待决”用例：模型切换只增加草稿 PUT，未增加会话 profile PUT；待决解除后回到当前模型会清掉后续草稿。隔离单文件 Home `.build/mdo-packed-docks-85yvkzvl` 用 5 秒有界运行 POST 延迟复测，发送 `SLOW UI startup profile race` 后立即选第二模型：队列卡固定原模型，页面显示“下次任务生效”，服务端会话仍为原模型、草稿后续选择为第二模型。随后提交 `NEXT MODEL after startup`，队列卡固定第二模型；两轮服务端运行按原模型、第二模型的顺序成功，最终会话模型为第二模型，队列为空，代理记录两次队列 POST、两次运行 POST，页面无脚本错误。刷新后配置和两轮时间线保留。该夹具在隔离 Home 运行，没有使用真实外部模型端点。
 
 Windows/Linux 有界发布门禁分别通过 114 项 Python、74 项 Node、71 个前端模块解析、21 个运行探针与确定性打包；Windows 单文件零旁路写入及 20 秒启动检查通过。根目录 `mdo.exe` 与 Windows 包 SHA-256 为 `cd559716e64a2d26f1561bf8d5505f6625ce186728f9d7ead0ada65f52a4fabd`，Linux 包为 `9a53f53147e7f09173cbadc415f7ec5c5e6affc69c576262976dc30b87de64ac`。本轮只验收同一页面的发送启动窗口；多进程共享 Home、原生 WebView 与实体设备仍需独立验证，未做压力或高负载测试。
+
+## 2026-09-28：Token 用量按实际调用模型归属
+
+输入区现可在运行中或两轮之间预选下一条消息的模型，原 Token 环和提示却始终拿这个预选模型的上下文上限除以上一轮输入量；模型上下文大小不同就会显示错误的占比。时间线 `model_done.model` 是发给模型端点的 wire 名，多个 mdo 模型配置可以共用它。现优先按时间线的 `run_id`、当前项目与会话关联 `/runs` 中的 `agent_run_id`，再以运行记录的 `model_id` 查目录模型。只有 wire 名在目录中唯一时才回退匹配；同名而运行记录不可得则隐藏占比、显示说明，不把可能错误的配置展示为确定值。弹层分列“输入区模型/上下文上限”和“上次调用模型/上下文上限”；切会话时仅统计与会话一致的时间线。中、英、俄三种语言包同步更新。
+
+`tests/test_token_meter_escape.mjs` 新增同一 wire 名、两个模型上下文分别为 1,000 和 10,000 的回归用例：上次调用关联前者、输入区选择后者时，占比仍是 500/1,000 = 50%；撤去运行记录后不误用后者的上限。QA 夹具 `tests/manual_packed_docks_qa.py --image-capable --second-model-context-tokens 262144` 提供两个同 wire 名、不同上下文的合法模型配置。隔离单文件 Home `.build/mdo-packed-docks-puv_xby3` 用最终包完成首轮本地有界回复后，切换到第二模型，弹层同时显示输入区 262,144、上次调用 131,072，提示仍归属 Ling 3.0 Tiny；页面脚本错误为空。先前 Home `.build/mdo-packed-docks-4ygl3yoz` 还完成第二轮、刷新并反向切回首轮模型，弹层显示上次调用 Ling Text QA 的 262,144 上限，累计输入/输出 14/6。
+
+Windows/Linux 有界门禁均通过 114 项 Python、75 项 Node、71 个前端模块解析、21 个运行探针及确定性打包；Windows 单文件零旁路写入和 20 秒启动检查通过。根目录 `mdo.exe` 与 Windows 包 SHA-256 均为 `a3e363a9582827962f9c16a3aa63403b142a86bc3881011b49a05d4e1817348b`，Linux 包为 `da8a0ef877c445eec2927a743a2322d70c715f3611f4d918645fba8f0a26cf40`。运行记录只保留于进程内，服务重启后若历史 wire 名对应多个模型，当前仅能诚实显示归属未知；历史精确占比仍需在持久事件中增加模型配置标识。实体触控与原生 WebView 未验收；未做压力或高负载测试。

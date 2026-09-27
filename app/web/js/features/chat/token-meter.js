@@ -8,7 +8,7 @@ export function estimateInputTokens(text) {
 }
 
 export function createTokenMeter({ root, trigger, ring, panel, estimate, prompt,
-  modelSelect, sessionStore, timelineStore, modelsStore }) {
+  modelSelect, sessionStore, timelineStore, modelsStore, runsStore }) {
   let open = false;
 
   function update() {
@@ -20,32 +20,60 @@ export function createTokenMeter({ root, trigger, ring, panel, estimate, prompt,
     const models = modelsStore.get().data?.models ?? [];
     const model = models.find((item) => item.id ===
       (modelSelect.value || session?.model_id)) || null;
-    const calls = (timelineStore.get().data?.events ?? []).filter((event) =>
+    const timeline = timelineStore.get().data;
+    const calls = (session && timeline?.projectId === session.project_id &&
+      timeline?.sessionId === session.id ? timeline.events ?? [] : []).filter((event) =>
       event.kind === "model_done" && (event.input_tokens || event.output_tokens));
-    const latestInput = Number(calls.at(-1)?.input_tokens || 0);
+    const latestCall = calls.at(-1);
+    const latestInput = Number(latestCall?.input_tokens || 0);
+    const lastRun = latestCall && session &&
+      (runsStore?.get().data?.items ?? []).find((run) =>
+        run.project_id === session.project_id && run.session_id === session.id &&
+        Number(run.agent_run_id) === Number(latestCall.run_id));
+    const matchingModels = models.filter((item) => latestCall?.model &&
+      (item.id === latestCall.model || item.wire_model === latestCall.model));
+    const latestModel = lastRun
+      ? models.find((item) => item.id === lastRun.model_id) || null
+      : matchingModels.length === 1 ? matchingModels[0] : null;
+    const lastModelName = latestModel?.name || lastRun?.model_id ||
+      latestCall?.model || "—";
     const totalInput = calls.reduce((sum, item) => sum + Number(item.input_tokens || 0), 0);
     const totalOutput = calls.reduce((sum, item) => sum + Number(item.output_tokens || 0), 0);
     const windowTokens = Number(model?.context_window_tokens || 0);
-    const percent = windowTokens ? Math.min(100, Math.round(latestInput / windowTokens * 100)) : 0;
+    const lastWindowTokens = Number(latestModel?.context_window_tokens || 0);
+    const percent = lastWindowTokens
+      ? Math.min(100, Math.round(latestInput / lastWindowTokens * 100)) : 0;
     ring.style.setProperty("--meter-percent", `${percent}%`);
-    trigger.title = windowTokens
-      ? t("token.tooltip", { input: number(latestInput), limit: number(windowTokens) },
-        `上次模型输入 ${number(latestInput)} / 上下文上限 ${number(windowTokens)} tokens`)
+    trigger.title = latestCall && lastWindowTokens
+      ? t("token.tooltip", { model: lastModelName,
+        input: number(latestInput), limit: number(lastWindowTokens) },
+        `上次 ${lastModelName} 输入 ${number(latestInput)} / 上下文上限 ${number(lastWindowTokens)} tokens`)
       : t("token.view", {}, "查看 token 用量");
     clear(panel);
     const details = element("dl");
-    for (const [label, value] of [
-      [t("token.model", {}, "当前模型"), model?.name || model?.id || "—"],
-      [t("token.contextLimit", {}, "上下文上限"), windowTokens ? number(windowTokens) : "—"],
+    const rows = [
+      [t("token.model", {}, "输入区模型"), model?.name || model?.id || "—"],
+      [t("token.contextLimit", {}, "输入区上下文上限"),
+        windowTokens ? number(windowTokens) : "—"],
+      ...(latestCall && latestModel?.id !== model?.id ? [
+        [t("token.lastModel", {}, "上次调用模型"), lastModelName],
+        [t("token.lastContextLimit", {}, "上次调用上下文上限"),
+          lastWindowTokens ? number(lastWindowTokens) : "—"],
+      ] : []),
       [t("token.lastInput", {}, "上次模型输入"), latestInput ? number(latestInput) : "—"],
       [t("token.currentEstimate", {}, "本次输入估算"), `~${number(input)}`],
       [t("token.visibleInput", {}, "可见调用累计输入"), number(totalInput)],
       [t("token.visibleOutput", {}, "可见调用累计输出"), number(totalOutput)],
-    ]) details.append(element("dt", { text: label }), element("dd", { text: value }));
+    ];
+    for (const [label, value] of rows)
+      details.append(element("dt", { text: label }), element("dd", { text: value }));
     panel.append(element("h3", { text: t("token.title", {}, "Token 用量"),
       attrs: { id: "context-meter-title" } }), details,
       element("p", { text: t("token.note", {},
         "模型用量来自服务端事件；输入框估算仅供参考。历史事件被裁剪时，累计值只包含当前可见调用。") }));
+    if (latestCall && !lastWindowTokens)
+      panel.append(element("p", { text: t("token.unknownContext", {},
+        "上次调用的模型配置无法确定，暂不显示上下文占比。") }));
   }
 
   function setOpen(value) {
@@ -73,7 +101,8 @@ export function createTokenMeter({ root, trigger, ring, panel, estimate, prompt,
   document.addEventListener("keydown", onEscape);
   prompt.addEventListener("input", update);
   const unsubscribers = [sessionStore.subscribe(update), timelineStore.subscribe(update),
-    modelsStore.subscribe(update), subscribeLocale(update)];
+    modelsStore.subscribe(update), runsStore?.subscribe(update), subscribeLocale(update)]
+    .filter(Boolean);
   update();
   return Object.freeze({
     refresh: update,
