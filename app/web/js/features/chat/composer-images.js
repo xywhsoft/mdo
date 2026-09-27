@@ -177,9 +177,10 @@ export function createComposerImages({ composer, prompt, button, input, strip,
   function imageCapable() {
     const route = navigation.get();
     const session = sessionStore.get().data;
-    const modelId = session?.model_id && (!modelSelect ||
-      (session.id === route.sessionId && session.project_id === route.projectId))
-      ? session.model_id : modelSelect?.value;
+    // The editor may already target a different model for the next queued
+    // message while the current run still owns the session's old model.
+    const modelId = modelSelect?.value || (session?.id === route.sessionId &&
+      session?.project_id === route.projectId ? session.model_id : "");
     const model = modelsStore.get().data?.models?.find((item) =>
       item.id === modelId);
     return Boolean(Number(model?.attachments ?? 0) & 1);

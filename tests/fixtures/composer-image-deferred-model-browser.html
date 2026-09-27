@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="zh-CN">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>mdo deferred model image probe</title>
+<link rel="stylesheet" href="/app/web/css/app.css">
+<style>body{padding:16px;background:var(--bg);color:var(--ink)}</style>
+<form class="composer" style="max-width:360px">
+  <textarea aria-label="消息"></textarea>
+  <button type="button">添加图片</button>
+  <input type="file" hidden>
+  <select aria-label="模型">
+    <option value="text">Text model</option>
+    <option value="vision">Vision model</option>
+  </select>
+  <div class="composer-images"></div>
+</form>
+<pre id="result"></pre>
+<script type="module">
+import { createComposerImages } from "/app/web/js/features/chat/composer-images.js?deferred-model=1";
+
+const composer = document.querySelector(".composer");
+const prompt = composer.querySelector("textarea");
+const button = composer.querySelector("button");
+const input = composer.querySelector("input");
+const modelSelect = composer.querySelector("select");
+const strip = composer.querySelector(".composer-images");
+const output = document.querySelector("#result");
+const imageId = "a".repeat(32);
+const models = [
+  { id: "text", attachments: 0 },
+  { id: "vision", attachments: 1 },
+];
+const session = { id: "image", project_id: "qa", model_id: "text" };
+const errors = [];
+const uploads = [];
+let pickerOpens = 0;
+input.click = () => { pickerOpens += 1; };
+const originalFetch = window.fetch;
+window.fetch = async (url, options = {}) => {
+  if (String(url).endsWith("/projects/qa/sessions/image/attachments") &&
+      options.method === "POST") {
+    uploads.push({ mime: options.headers?.["Content-Type"],
+      bytes: options.body?.size });
+    return new Response(JSON.stringify({ ok: true, data: { id: imageId } }),
+      { status: 201, headers: { "Content-Type": "application/json" } });
+  }
+  return originalFetch(url, options);
+};
+
+try {
+  const images = createComposerImages({ composer, prompt, button, input, strip,
+    modelSelect,
+    navigation: { get: () => ({ projectId: "qa", sessionId: "image" }) },
+    modelsStore: { get: () => ({ data: { models } }) },
+    sessionStore: { get: () => ({ data: session }) },
+    ensureSession: async () => { throw new Error("existing session expected"); },
+    onChange() {}, onUploading() {}, onError(error) { errors.push(error.code); },
+  });
+  const currentTextBlocked = !images.supportsCurrentModel();
+  modelSelect.value = "vision";
+  images.refresh();
+  const deferredVisionAllowed = images.supportsCurrentModel();
+  if (deferredVisionAllowed) {
+    const transfer = new DataTransfer();
+    transfer.items.add(new File([new Uint8Array([137, 80, 78, 71])],
+      "qa.png", { type: "image/png" }));
+    composer.dispatchEvent(new DragEvent("drop", {
+      bubbles: true, cancelable: true, dataTransfer: transfer,
+    }));
+    for (let attempt = 0; attempt < 20 && !images.get().length; ++attempt)
+      await new Promise((resolve) => setTimeout(resolve, 25));
+  }
+  const uploaded = images.get()[0] === imageId && uploads.length === 1;
+  session.model_id = "vision";
+  modelSelect.value = "text";
+  images.refresh();
+  const deferredTextBlocked = !images.supportsCurrentModel() &&
+    images.hasUnsupportedDraft() &&
+    Boolean(strip.querySelector(".composer-image-unsupported"));
+  button.click();
+  const blockedPicker = pickerOpens === 0 &&
+    errors.at(-1) === "image_model_unsupported";
+  modelSelect.value = "vision";
+  images.refresh();
+  const restored = images.supportsCurrentModel() &&
+    !strip.querySelector(".composer-image-unsupported");
+  const passed = currentTextBlocked && deferredVisionAllowed && uploaded &&
+    deferredTextBlocked && blockedPicker && restored &&
+    document.documentElement.scrollWidth <= window.innerWidth;
+  output.dataset.passed = String(passed);
+  output.textContent = JSON.stringify({ passed, currentTextBlocked,
+    deferredVisionAllowed, uploaded, deferredTextBlocked, blockedPicker,
+    restored, uploads, errors }, null, 2);
+} catch (error) {
+  output.dataset.passed = "false";
+  output.textContent = error.stack ?? String(error);
+} finally { window.fetch = originalFetch; }
+</script>
+</html>
