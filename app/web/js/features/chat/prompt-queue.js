@@ -399,6 +399,11 @@ export function createPromptQueue({ container, navigation, isRunActive, stagedEn
       return queues.get(sessionKey(projectId, sessionId))?.some((item) =>
         item.state === "staged") ?? false;
     },
+    hasUnsettled(projectId, sessionId) {
+      const key = sessionKey(projectId, sessionId);
+      return Boolean(key && (loads.has(key) || busy.has(key) ||
+        queues.get(key)?.length));
+    },
     async promote(projectId, sessionId, id) {
       const key = sessionKey(projectId, sessionId);
       try {

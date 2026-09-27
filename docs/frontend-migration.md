@@ -1049,3 +1049,11 @@ Home 多进程边界按便携目录实现排他：外部 Home 首次挂载时在
 新生产模块浏览器夹具 `tests/fixtures/composer-image-deferred-model-browser.html` 在修复前得到 `deferredVisionAllowed=false`、无法上传；修复后得到 `passed=true`：模拟拖入 PNG 后上传一次，切回纯文本模型时阻止选择器打开并标记已有图片不可发送，再切回带图模型清除警告。隔离单文件 Home `.build/mdo-packed-docks-huob8t4t` 在当前带图运行、待发纯文本模型时实测附件入口提示不支持；Home `.build/mdo-packed-docks-4bnzazwp` 在当前纯文本运行、待发带图模型时通过文件选择器上传隔离生成的 `fixture.png`，随后发送图片消息并得到回复。队列卡显示冻结的带图模型；服务端最终会话模型为带图模型，队列与草稿提交意图为空，刷新后历史图片仍可打开，浏览器脚本错误为空。
 
 Windows/Linux 有界发布门禁分别通过 114 项 Python、74 项 Node、71 个前端模块解析、21 个运行探针与确定性打包；Windows 单文件零旁路写入和 20 秒启动检查通过。根目录 `mdo.exe` 与 Windows 包 SHA-256 为 `d1552ca2f8c9e332401df2164e764db59877ec6f0dd8da1dfdbd48a53070a3e0`，Linux 包为 `380f4539b1003dbee60fb6448bad9116d4b3ea34965b3d1947d10948c987094a`。前一隔离 Home 另暴露发送刚启动时立即切换模型的竞态：运行尚未进入页面 active 状态，空闲配置 API 可能先成功，随后队列快照在启动时覆盖它；本阶段未修复该启动窗口，下一阶段须让队列已占位时的选择也保存为后续意图。原生文件拖放、实体手机与原生 WebView 未验收；未做压力或高负载测试。
+
+## 2026-09-28：发送启动窗口中的后续模型选择
+
+发送已进入持久提交意图、队列或独占派发，但页面尚未收到 active 运行记录时，原输入区仍走空闲会话 profile API。用户此时改选模型，会看到“会话配置已更新”；本轮队列快照启动后却会覆盖它，造成后续选择丢失。输入区现在把草稿提交意图、队列加载及派发、已知未结束运行都视作后续选择的边界，写入便携草稿而不修改本轮会话配置。队列项的不可变模型、思考强度和权限仍按发送当时的快照执行。
+
+生产模块夹具 `tests/fixtures/composer-profile-deferred-browser.html` 新增“无 active 运行但提交待决”用例：模型切换只增加草稿 PUT，未增加会话 profile PUT；待决解除后回到当前模型会清掉后续草稿。隔离单文件 Home `.build/mdo-packed-docks-85yvkzvl` 用 5 秒有界运行 POST 延迟复测，发送 `SLOW UI startup profile race` 后立即选第二模型：队列卡固定原模型，页面显示“下次任务生效”，服务端会话仍为原模型、草稿后续选择为第二模型。随后提交 `NEXT MODEL after startup`，队列卡固定第二模型；两轮服务端运行按原模型、第二模型的顺序成功，最终会话模型为第二模型，队列为空，代理记录两次队列 POST、两次运行 POST，页面无脚本错误。刷新后配置和两轮时间线保留。该夹具在隔离 Home 运行，没有使用真实外部模型端点。
+
+Windows/Linux 有界发布门禁分别通过 114 项 Python、74 项 Node、71 个前端模块解析、21 个运行探针与确定性打包；Windows 单文件零旁路写入及 20 秒启动检查通过。根目录 `mdo.exe` 与 Windows 包 SHA-256 为 `cd559716e64a2d26f1561bf8d5505f6625ce186728f9d7ead0ada65f52a4fabd`，Linux 包为 `9a53f53147e7f09173cbadc415f7ec5c5e6affc69c576262976dc30b87de64ac`。本轮只验收同一页面的发送启动窗口；多进程共享 Home、原生 WebView 与实体设备仍需独立验证，未做压力或高负载测试。

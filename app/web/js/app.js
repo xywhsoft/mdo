@@ -705,6 +705,14 @@ export async function boot() {
     sessionStore: sessionDetailStore, modelsStore, agentsStore, projectsStore,
     draftStore, status: composerProfileStatus,
     isRunActive: () => Boolean(activeRun),
+    hasPendingSubmission(session) {
+      const key = `${session.project_id}/${session.id}`;
+      return Boolean(draftStore.submissions(key).length ||
+        promptQueue.hasUnsettled(session.project_id, session.id) ||
+        (runsStore.get().data?.items ?? []).some((run) =>
+          run.project_id === session.project_id && run.session_id === session.id &&
+          !terminalState(run)));
+    },
     onBusyChange: () => setRun(activeRun),
     onSelectionChange() {
       tokenMeter.refresh();

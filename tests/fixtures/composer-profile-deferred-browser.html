@@ -11,7 +11,7 @@
 <span id="status" hidden></span>
 <pre id="result"></pre>
 <script type="module">
-import { createComposerProfile } from "/app/web/js/features/chat/composer-profile.js";
+import { createComposerProfile } from "/app/web/js/features/chat/composer-profile.js?pending=1";
 import { createDraftStore } from "/app/web/js/features/chat/draft-store.js";
 
 function store(initial) {
@@ -77,9 +77,11 @@ const reasoningSelect = document.querySelector("#reasoning");
 const permissionSelect = document.querySelector("#permission");
 const status = document.querySelector("#status");
 let active = true;
+let pending = false;
 const profile = createComposerProfile({ modelSelect, reasoningSelect,
   permissionSelect, status, navigation, sessionStore, modelsStore,
   agentsStore, projectsStore, draftStore, isRunActive: () => active,
+  hasPendingSubmission: () => pending,
   onBusyChange() {} });
 async function until(predicate) {
   for (let attempt = 0; attempt < 100; attempt += 1) {
@@ -145,6 +147,16 @@ try {
   const idleUpdated = profilePuts === 2 &&
     sessionStore.get().data?.model_id === "other" &&
     saved.get("first")?.composer_profile === null;
+  pending = true;
+  await choose(modelSelect, "text");
+  const pendingDeferred = profilePuts === 2 &&
+    sessionStore.get().data?.model_id === "other" &&
+    saved.get("first")?.composer_profile?.model_id === "text" &&
+    !status.hidden;
+  pending = false;
+  await choose(modelSelect, "other");
+  const pendingCleared = profilePuts === 2 &&
+    saved.get("first")?.composer_profile === null && status.hidden;
   const cleanBeforeConflict = !errors.length;
   active = true;
   profile.setRunActive(true);
@@ -157,12 +169,14 @@ try {
     saved.get("first")?.composer_profile === null;
   const passed = enabledDuringRun && persisted && reloadRestored &&
     secondClean && restored &&
-    replacedDeferred && idleUpdated && cleanBeforeConflict && conflictShown;
+    replacedDeferred && idleUpdated && pendingDeferred && pendingCleared &&
+    cleanBeforeConflict && conflictShown;
   document.querySelector("#result").dataset.passed = String(passed);
   document.querySelector("#result").textContent = JSON.stringify({ passed,
     enabledDuringRun, persisted, reloadRestored, secondClean, restored,
     replacedDeferred,
-    idleUpdated, cleanBeforeConflict, conflictShown, draftPuts, profilePuts,
+    idleUpdated, pendingDeferred, pendingCleared, cleanBeforeConflict,
+    conflictShown, draftPuts, profilePuts,
     finalSelection: selected(),
     finalSession: sessionStore.get().data, finalStatus: status.textContent,
     errors }, null, 2);

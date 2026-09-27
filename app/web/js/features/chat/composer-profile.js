@@ -34,7 +34,8 @@ export function fillReasoningOptions(select, model, preferred = "") {
 
 export function createComposerProfile({ modelSelect, reasoningSelect,
   permissionSelect, navigation, sessionStore, modelsStore, agentsStore,
-  projectsStore, draftStore, status, isRunActive, onBusyChange,
+  projectsStore, draftStore, status, isRunActive,
+  hasPendingSubmission = () => false, onBusyChange,
   onSelectionChange }) {
   // Blank tasks have no session metadata. Keep manual choices per project, but
   // continue following its configured default until the user picks a model.
@@ -167,9 +168,9 @@ export function createComposerProfile({ modelSelect, reasoningSelect,
     busy.add(key);
     onBusyChange(true);
     try {
-      if (runActive || isRunActive()) {
-        // The running Agent keeps its current profile. Save the editor's
-        // selection as the next submission's intent in the portable draft.
+      if (runActive || isRunActive() || hasPendingSubmission(session)) {
+        // A queued submission already froze its profile. Do not change the
+        // session while that run may start; save the next choice separately.
         if (!draftStore) { sync(); return; }
         draftStore.setComposerProfile(key,
           sameProfile(profile, sessionProfile(session)) ? null : profile);
