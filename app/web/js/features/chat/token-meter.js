@@ -42,16 +42,19 @@ export function createTokenMeter({ root, trigger, ring, panel, estimate, prompt,
       [t("token.visibleInput", {}, "可见调用累计输入"), number(totalInput)],
       [t("token.visibleOutput", {}, "可见调用累计输出"), number(totalOutput)],
     ]) details.append(element("dt", { text: label }), element("dd", { text: value }));
-    panel.append(element("h3", { text: t("token.title", {}, "Token 用量") }), details,
+    panel.append(element("h3", { text: t("token.title", {}, "Token 用量"),
+      attrs: { id: "context-meter-title" } }), details,
       element("p", { text: t("token.note", {},
         "模型用量来自服务端事件；输入框估算仅供参考。历史事件被裁剪时，累计值只包含当前可见调用。") }));
   }
 
   function setOpen(value) {
+    const focusWasInside = panel.contains(document.activeElement);
     open = value;
     panel.hidden = !open;
     trigger.setAttribute("aria-expanded", String(open));
-    if (open) update();
+    if (open) { update(); panel.focus({ preventScroll: true }); }
+    else if (focusWasInside) trigger.focus({ preventScroll: true });
   }
   trigger.addEventListener("click", () => setOpen(!open));
   document.addEventListener("click", (event) => {
