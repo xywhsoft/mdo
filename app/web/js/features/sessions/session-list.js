@@ -101,10 +101,19 @@ export function createSessionList({ container, count, filter, store, projectsSto
     }
     if (visible.length === 0 && orderedGroups.length === 0) {
       openMenu = "";
+      let emptyText;
+      if (needle) {
+        emptyText = t("nav.noMatch", {}, "没有匹配的会话");
+      } else if (status === "archived") {
+        emptyText = t("nav.noArchivedSessions", {}, "暂无归档会话");
+      } else if (status === "trash") {
+        emptyText = t("nav.trashEmpty", {}, "回收站为空");
+      } else {
+        emptyText = t("nav.noSessions", {}, "还没有会话，创建一个任务开始使用。");
+      }
       container.append(element("div", {
         className: "empty-state",
-        text: needle ? t("nav.noMatch", {}, "没有匹配的会话") :
-          t("nav.noSessions", {}, "还没有会话，创建一个任务开始使用。"),
+        text: emptyText,
       }));
       if (requestedFocus || retainedFocus) filter.focus();
       return;

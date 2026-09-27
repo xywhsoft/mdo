@@ -301,6 +301,8 @@
   "nav.loading": "Loading sessions…",
   "nav.noMatch": "No matching sessions",
   "nav.noSessions": "No sessions yet. Create a task to get started.",
+  "nav.noArchivedSessions": "No archived sessions",
+  "nav.trashEmpty": "Trash is empty",
   "nav.manageProject": "Manage project {name}",
   "nav.newInProject": "New task in project {name}",
   "nav.addProject": "Add project",

@@ -301,6 +301,8 @@
   "nav.loading": "正在载入会话…",
   "nav.noMatch": "没有匹配的会话",
   "nav.noSessions": "还没有会话，创建一个任务开始使用。",
+  "nav.noArchivedSessions": "暂无归档会话",
+  "nav.trashEmpty": "回收站为空",
   "nav.manageProject": "管理 {name} 项目",
   "nav.newInProject": "在 {name} 项目新建任务",
   "nav.addProject": "添加项目",

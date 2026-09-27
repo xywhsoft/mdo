@@ -301,6 +301,8 @@
   "nav.loading": "Загрузка сеансов…",
   "nav.noMatch": "Подходящих сеансов нет",
   "nav.noSessions": "Сеансов пока нет. Создайте задачу, чтобы начать.",
+  "nav.noArchivedSessions": "Архивных сеансов нет",
+  "nav.trashEmpty": "Корзина пуста",
   "nav.manageProject": "Управление проектом {name}",
   "nav.newInProject": "Новая задача в проекте {name}",
   "nav.addProject": "Добавить проект",
