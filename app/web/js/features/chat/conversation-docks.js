@@ -215,11 +215,58 @@ export function createConversationDocks({ container, navigation, tasksStore, app
     ? container.parentElement : null;
   const conversation = container.closest(".workspace")?.querySelector(".conversation");
   const visibleDecisions = new Set();
+  let availableHeight = 0;
+  let revealFrame = 0;
+  let userMovedDock = false;
+  const noteUserScroll = () => { userMovedDock = true; };
+  const noteKeyScroll = (event) => {
+    if (["ArrowUp", "ArrowDown", "PageUp", "PageDown", "Home", "End"].includes(event.key))
+      noteUserScroll();
+  };
+  container.addEventListener("wheel", noteUserScroll, { passive: true });
+  container.addEventListener("touchmove", noteUserScroll, { passive: true });
+  container.addEventListener("pointerdown", noteUserScroll);
+  container.addEventListener("keydown", noteKeyScroll);
 
-  function syncAvailableHeight() {
-    if (conversation)
-      container.style.setProperty("--dock-available-height",
-        `${Math.max(0, Math.floor(conversation.clientHeight - 8))}px`);
+  function revealDecision() {
+    if (container.hidden) return;
+    const focused = container.contains(document.activeElement)
+      ? document.activeElement : null;
+    if (focused) {
+      const bounds = focused.getBoundingClientRect();
+      const viewport = container.getBoundingClientRect();
+      if (bounds.bottom > viewport.bottom)
+        container.scrollTop += bounds.bottom - viewport.bottom;
+      else if (bounds.top < viewport.top)
+        container.scrollTop += bounds.top - viewport.top;
+      return;
+    }
+    if (userMovedDock || container.scrollTop) return;
+    const decision = askRoot.querySelector(".ask-dock") ??
+      otherRoot.querySelector("[data-approval-arguments]")?.closest(".conversation-dock");
+    if (!decision) return;
+    const viewport = container.getBoundingClientRect();
+    const content = decision.querySelector(".ask-dock-options button") ??
+      decision.querySelector(".approval-arguments summary") ??
+      decision.querySelector("h3");
+    if (content?.getBoundingClientRect().bottom > viewport.bottom)
+      container.scrollTop += decision.getBoundingClientRect().top - viewport.top;
+  }
+
+  function syncAvailableHeight(revealOnShrink = false) {
+    if (!conversation) return;
+    const nextHeight = Math.max(0, Math.floor(conversation.clientHeight - 8));
+    const shrank = nextHeight < availableHeight;
+    availableHeight = nextHeight;
+    container.style.setProperty("--dock-available-height", `${nextHeight}px`);
+    if (revealOnShrink && shrank && !container.hidden) {
+      // Let the new max-height settle before measuring the decision's position.
+      cancelAnimationFrame(revealFrame);
+      revealFrame = requestAnimationFrame(() => {
+        revealFrame = 0;
+        revealDecision();
+      });
+    }
   }
   syncAvailableHeight();
 
@@ -315,6 +362,7 @@ export function createConversationDocks({ container, navigation, tasksStore, app
       Boolean(approvals.length || asks.length));
     syncAvailableHeight();
     if (newAsk || newApproval) {
+      userMovedDock = false;
       const target = newAsk ?? newApproval;
       container.scrollTop += target.getBoundingClientRect().top -
         container.getBoundingClientRect().top;
@@ -332,12 +380,18 @@ export function createConversationDocks({ container, navigation, tasksStore, app
     subscribeLocale(render),
   ];
   const resizeObserver = conversation && typeof ResizeObserver === "function"
-    ? new ResizeObserver(syncAvailableHeight) : null;
+    ? new ResizeObserver(() => syncAvailableHeight(true)) : null;
   resizeObserver?.observe(conversation);
-  window.addEventListener("resize", syncAvailableHeight);
+  const onResize = () => syncAvailableHeight(true);
+  window.addEventListener("resize", onResize);
   return () => {
+    cancelAnimationFrame(revealFrame);
     resizeObserver?.disconnect();
-    window.removeEventListener("resize", syncAvailableHeight);
+    window.removeEventListener("resize", onResize);
+    container.removeEventListener("wheel", noteUserScroll);
+    container.removeEventListener("touchmove", noteUserScroll);
+    container.removeEventListener("pointerdown", noteUserScroll);
+    container.removeEventListener("keydown", noteKeyScroll);
     composerRegion?.removeAttribute("data-decision-pending");
     unsubscribers.forEach((unsubscribe) => unsubscribe());
   };

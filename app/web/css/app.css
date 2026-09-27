@@ -1379,6 +1379,7 @@ select:focus-visible,
   .option-chip { max-width: 130px; padding: 0 6px; }
   #workspace-chip { display: none; }
   .composer textarea { max-height: min(260px, 42vh); max-height: min(260px, 42dvh, max(72px, calc(var(--app-visible-height, 100dvh) - 220px))); }
+  .composer-region[data-decision-pending] .composer textarea { max-height: 52px; overflow-y: auto; }
   .slash-menu, .file-mention-menu { max-height: min(320px, 40vh, max(48px, calc(var(--app-visible-height, 100dvh) - 294px))); }
   .inspector { z-index: 40; width: min(350px, calc(100vw - 30px)); }
   .app-shell[data-sidebar="open"] .scrim,

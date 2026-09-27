@@ -6,9 +6,8 @@
 <link rel="stylesheet" href="/app/web/css/app.css">
 <style>
   body { margin: 0; background: var(--surface); color: var(--ink); }
-  .workspace { height: calc(100dvh - 52px); margin-top: 52px; }
+  .workspace { grid-column: auto; grid-row: auto; height: 600px; margin-top: 52px; }
   .conversation-history { height: 700px; }
-  .composer { height: 145px; }
 </style>
 <main class="workspace">
   <section class="conversation" aria-label="对话">
@@ -16,7 +15,9 @@
   </section>
   <section class="composer-region" aria-label="发送消息">
     <div id="conversation-docks" class="conversation-docks" hidden></div>
-    <div class="composer"><textarea id="prompt" aria-label="输入"></textarea></div>
+    <div class="composer"><textarea id="prompt" aria-label="输入"></textarea>
+      <div class="composer-toolbar"><button type="button">发送</button></div>
+    </div>
   </section>
 </main>
 <div id="toast-region"></div>
@@ -45,11 +46,23 @@ createConversationDocks({
 
 const nextFrame = () => new Promise((resolve) => requestAnimationFrame(resolve));
 async function check() {
+  document.documentElement.dataset.fontSize = "large";
+  const prompt = document.querySelector("#prompt");
+  prompt.value = Array.from({ length: 20 }, (_, index) => `draft line ${index + 1}`).join("\n");
+  prompt.style.height = "130px"; // Match the composer's auto-growed inline height.
+  await nextFrame();
+  await nextFrame();
+  const dock = document.querySelector("#conversation-docks");
+  const initialScroll = dock.scrollTop;
+  const initialAvailable = dock.style.getPropertyValue("--dock-available-height");
+  const initialConversationHeight = document.querySelector(".conversation").clientHeight;
+  document.querySelector(".workspace").style.height = "calc(100dvh - 52px)";
+  await nextFrame();
+  await nextFrame();
   await nextFrame();
   await nextFrame();
   const conversation = document.querySelector(".conversation");
   const composer = document.querySelector(".composer-region");
-  const dock = document.querySelector("#conversation-docks");
   conversation.scrollTop = 0;
   const question = dock.querySelector(".ask-dock-question").getBoundingClientRect();
   const option = dock.querySelector(".ask-dock-options button").getBoundingClientRect();
@@ -58,9 +71,24 @@ async function check() {
     area.bottom <= composer.getBoundingClientRect().top &&
     question.top >= area.top && question.bottom <= area.bottom &&
     option.top >= area.top && option.bottom <= area.bottom &&
-    conversation.scrollTop === 0;
+    conversation.scrollTop === 0 && prompt.getBoundingClientRect().height <= 53 &&
+    prompt.value.endsWith("draft line 20");
+  const askGeometry = { dockTop: area.top, dockBottom: area.bottom,
+    questionTop: question.top, questionBottom: question.bottom,
+    optionTop: option.top, optionBottom: option.bottom,
+    promptHeight: prompt.getBoundingClientRect().height,
+    initialScroll, initialAvailable, initialConversationHeight,
+    resizedAvailable: dock.style.getPropertyValue("--dock-available-height"),
+    resizedScroll: dock.scrollTop };
 
   asksStore.setData({ projectId: "qa", sessionId: "seat", loaded: true, items: [] });
+  await nextFrame();
+  const restoredPending = composer.hasAttribute("data-decision-pending");
+  const restoredHeight = prompt.getBoundingClientRect().height;
+  const restoredStyle = { inlineHeight: prompt.style.height,
+    maxHeight: getComputedStyle(prompt).maxHeight };
+  const restoredDraft = restoredHeight >= 120 &&
+    prompt.value.endsWith("draft line 20");
   runsStore.setData({ items: [{ agent_run_id: 3, project_id: "qa", session_id: "seat" }] });
   approvalsStore.setData({ items: [{ id: 7, run_id: 3, tool: "exec",
     risk: "high", effects: ["process"], resources: [],
@@ -80,11 +108,12 @@ async function check() {
   const expandedReachable = allow.getBoundingClientRect().bottom <=
     dock.getBoundingClientRect().bottom &&
     allow.getBoundingClientRect().top >= dock.getBoundingClientRect().top;
-  const passed = askReadable && approvalReadable && actionVisible &&
+  const passed = askReadable && restoredDraft && approvalReadable && actionVisible &&
     expandedReachable && document.documentElement.scrollWidth <= innerWidth;
   const result = document.querySelector("#result");
   result.dataset.passed = innerWidth <= 420 ? String(passed) : "waiting";
-  result.textContent = JSON.stringify({ askReadable, approvalReadable,
+  result.textContent = JSON.stringify({ askReadable, askGeometry,
+    restoredDraft, restoredHeight, restoredPending, restoredStyle, approvalReadable,
     actionVisible, expandedReachable, viewport: innerWidth,
     documentWidth: document.documentElement.scrollWidth, passed });
 }
