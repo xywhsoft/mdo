@@ -2,7 +2,9 @@
 
 本清单以 `app_bak/wwwroot` 的可操作行为为基线，而不是以页面长得相似或单元测试通过为完成标准。`docs/frontend-migration.md` 记录每次实现和验证；这里记录当前还需要什么证据。审计更新：2026-09-27，基线提交 `f9e2c4c`。
 
-侧栏“添加项目”已恢复旧版行内输入：最终单文件 Home `.build/mdo-packed-docks-pvb1g4af` 在 280×250 输入 Windows 目录并回车创建 `Mobile QA`，进入对应新任务且焦点正确；重复目录显示本地化错误并保留输入，Esc/取消可返回入口，页面无横向溢出或脚本错误。桌面 Home `.build/mdo-packed-docks-ay9eob1q` 也验证带空格目录创建 `Quick QA`。完整配置表单继续可在项目设置使用。Windows/Linux 有界门禁通过，详见 [迁移记录](frontend-migration.md#2026-09-27侧栏行内快捷添加项目)。延迟创建期间主动切页的防抢焦路径尚缺打包页时序证据；实体触控与原生 WebView 仍待验收。
+侧栏“添加项目”已恢复旧版行内输入：最终单文件 Home `.build/mdo-packed-docks-pvb1g4af` 在 280×250 输入 Windows 目录并回车创建 `Mobile QA`，进入对应新任务且焦点正确；重复目录显示本地化错误并保留输入，Esc/取消可返回入口，页面无横向溢出或脚本错误。桌面 Home `.build/mdo-packed-docks-ay9eob1q` 也验证带空格目录创建 `Quick QA`。完整配置表单继续可在项目设置使用。Windows/Linux 有界门禁通过，详见 [迁移记录](frontend-migration.md#2026-09-27侧栏行内快捷添加项目)。实体触控与原生 WebView 仍待验收。
+
+延迟项目创建的切页边界已补验：单文件 Home `.build/mdo-packed-docks-tq8znqpj` 的代理将项目 POST 延后 5 秒；等待时主动切到默认项目新任务，迟到响应只更新项目列表，不抢回路由或焦点。刷新后 `Delayed QA` 仍存在、默认项目仍选中，代理只有 1 次项目 POST，详见 [迁移记录](frontend-migration.md#2026-09-27行内项目创建的迟到响应)。失败且迟到的响应、实体触控与原生 WebView 仍待验收。
 
 侧栏项目分组标题已恢复旧版的直接新建任务动作。最终单文件 Home `.build/mdo-packed-docks-q_ma3eb1` 从默认会话点击第二项目标题进入该项目新任务，输入框获焦；320px 手机侧栏点击默认项目标题会关闭抽屉并正确切换项目，原会话草稿在返回与刷新后保留。页面无横向溢出及脚本错误，Windows/Linux 有界门禁通过，详见 [迁移记录](frontend-migration.md#2026-09-27侧栏点击项目标题直接新建任务)。实体触控和原生 WebView 仍待验收。
 

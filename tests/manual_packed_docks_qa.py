@@ -188,6 +188,12 @@ class BoundedDelayProxy(BaseHTTPRequestHandler):
             self.send_error(413)
             return
         body = self.rfile.read(length) if length else None
+        if self.command == "POST" and self.path == "/api/v1/projects":
+            with self.server.count_lock:
+                self.server.project_posts += 1
+                count = self.server.project_posts
+            print(f"QA project POST #{count}", flush=True)
+            time.sleep(self.server.project_delay_seconds)
         if (self.server.reject_pane_layout and self.path == "/api/v1/pane-layout"
                 and self.command in {"GET", "PUT"}):
             payload = json.dumps({"ok": False, "error": {
@@ -400,6 +406,8 @@ parser.add_argument("--run-delay-ms", type=int, default=0,
                     help="delay run POSTs by 0-5000 ms for composer handoff QA")
 parser.add_argument("--create-delay-ms", type=int, default=0,
                     help="delay session create POSTs by 0-5000 ms for new-task QA")
+parser.add_argument("--project-delay-ms", type=int, default=0,
+                    help="delay project create POSTs by 0-5000 ms for sidebar navigation QA")
 parser.add_argument("--history-delay-ms", type=int, default=0,
                     help="delay history GETs by 0-5000 ms for message-action QA")
 parser.add_argument("--drop-first-create-response", action="store_true",
@@ -443,6 +451,8 @@ if not 0 <= args.run_delay_ms <= 5000:
     parser.error("--run-delay-ms must be between 0 and 5000")
 if not 0 <= args.create_delay_ms <= 5000:
     parser.error("--create-delay-ms must be between 0 and 5000")
+if not 0 <= args.project_delay_ms <= 5000:
+    parser.error("--project-delay-ms must be between 0 and 5000")
 if not 0 <= args.history_delay_ms <= 5000:
     parser.error("--history-delay-ms must be between 0 and 5000")
 if not 0 <= args.drop_run_response_number <= 3:
@@ -540,7 +550,8 @@ try:
     session = response["data"]["id"]
     browser_port = port
     if (args.approval_delay_ms or args.queue_delay_ms or args.run_delay_ms
-            or args.create_delay_ms or args.history_delay_ms
+            or args.create_delay_ms or args.project_delay_ms
+            or args.history_delay_ms
             or args.drop_first_create_response
             or args.fail_first_create
             or args.fail_first_run or args.fail_first_queue
@@ -554,6 +565,7 @@ try:
         proxy.queue_delay_seconds = args.queue_delay_ms / 1000
         proxy.run_delay_seconds = args.run_delay_ms / 1000
         proxy.create_delay_seconds = args.create_delay_ms / 1000
+        proxy.project_delay_seconds = args.project_delay_ms / 1000
         proxy.history_delay_seconds = args.history_delay_ms / 1000
         proxy.drop_first_create_response = args.drop_first_create_response
         proxy.fail_first_create = args.fail_first_create
@@ -573,6 +585,7 @@ try:
         proxy.queue_posts = 0
         proxy.run_posts = 0
         proxy.create_posts = 0
+        proxy.project_posts = 0
         threading.Thread(target=proxy.serve_forever, daemon=True).start()
         browser_port = proxy.server_address[1]
     print(f"READY url=http://127.0.0.1:{browser_port}/#/projects/default/"
@@ -584,6 +597,7 @@ finally:
         print(f"QA queue POST total={proxy.queue_posts}", flush=True)
         print(f"QA run POST total={proxy.run_posts}", flush=True)
         print(f"QA create POST total={proxy.create_posts}", flush=True)
+        print(f"QA project POST total={proxy.project_posts}", flush=True)
         proxy.shutdown()
         proxy.server_close()
     stop_host(process)
