@@ -4,6 +4,12 @@
 
 完成判据及尚缺的打包页证据见 [前端操作体验完成审计](frontend-completion-audit.md)。本文件继续记录每次实现和验证的细节。
 
+## 2026-09-28：Linux 单文件服务上的移动宽度文件补全
+
+将提交 `57ab517` 的同一源码同步到 Linux ext4，用锁定的 xserver 重新生成 Linux 根目录 `mdo`，并以单文件隔离 Home 启动真实 HTTP 服务。在 Windows 内置浏览器连接该 Linux 服务的 320×350 页面，验证从 `@alpha.c and more` 的 `@alp` 中途按 Enter 选择后得到 `@src/alpha.c and more`；`/explain @alp` 仍出现两个文件候选，选择后得到 `/explain @src/alpha.c `；`@QA next` 从引用中途按 Tab 选择带空格路径后得到 `@"notes/QA notes.txt" next`。三次选择后光标均落在正文前、焦点保持在输入框。刷新后最后一条草稿仍在，文档宽 320px、浏览器脚本错误为空。
+
+隔离 Home 为 Linux ext4 的 `.build/mdo-packed-docks-vgjjvbu3`；此项验证的是 Linux 打包后端与浏览器页面，并未运行原生 Linux WebView 或实体手机软键盘。根目录 `mdo.exe` 已重建，SHA-256 为 `4b608356be692da3974b76eb97ecce9c5d79f8acd66e11e7ec8cf5da4a49dfc2`；Linux 根目录 `mdo` SHA-256 为 `0c648ebb3dd08b77827e02319487e44bbf5d1ce7b8ec0e39ac082757c424958e`。应用源码未改，沿用上一阶段同源码的 Windows/Linux 有界门禁；未运行压力或高负载测试。
+
 ## 2026-09-28：斜杠开头的普通输入仍可补全文件
 
 旧版只在输入尚为无空格的斜杠命令时优先显示命令候选。新版文件补全额外拒绝所有以 `/` 开头的输入，导致隔离单文件 Home `.build/mdo-packed-docks-_bcrmrms` 中的 `/explain @alp` 等普通正文既没有斜杠菜单，也无法选择工作区文件。现在文件补全只按光标处的 `@` 引用识别；斜杠命令仍由自己的菜单处理，不再阻断后续普通正文里的文件引用。
