@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="zh-CN">
+<meta charset="utf-8">
+<title>mdo conversation search IME probe</title>
+<button id="open" type="button">搜索会话</button>
+<div id="search" hidden>
+  <input id="query" type="search" aria-label="搜索会话内容">
+  <span id="count"></span>
+  <button id="close" type="button">关闭搜索</button>
+</div>
+<textarea id="prompt" aria-label="输入消息"></textarea>
+<dialog id="help"><button type="button">关闭</button></dialog>
+<pre id="result"></pre>
+<script type="module">
+import { createConversationSearch } from
+  "/app/web/js/features/chat/conversation-search.js?fixture=ime-escape";
+import { createKeyboardShortcuts } from
+  "/app/web/js/features/shell/keyboard-shortcuts.js";
+
+const bar = document.querySelector("#search");
+const input = document.querySelector("#query");
+const prompt = document.querySelector("#prompt");
+const output = document.querySelector("#result");
+let stops = 0;
+const queries = [];
+
+try {
+  const navigation = { get: () => ({ view: "workspace", sessionId: "test" }),
+    subscribe(listener) { listener({ view: "workspace", sessionId: "test" });
+      return () => {}; } };
+  const search = createConversationSearch({ bar, input,
+    count: document.querySelector("#count"),
+    openButtons: [document.querySelector("#open")],
+    closeButton: document.querySelector("#close"), navigation, prompt,
+    onQuery(value) { queries.push(value); } });
+  createKeyboardShortcuts({ dialog: document.querySelector("#help"), navigation,
+    search, onNew() {}, onExport() {}, onSettings() {}, onToggleTheme() {},
+    onStop() { stops += 1; }, isRunning: () => true,
+    isDrawerOpen: () => false, closeDrawers() {} });
+
+  search.open();
+  input.value = "中文";
+  input.dispatchEvent(new Event("input", { bubbles: true }));
+  input.dispatchEvent(new CompositionEvent("compositionstart", { bubbles: true }));
+  function escape(target, options = {}) {
+    const event = new KeyboardEvent("keydown", { key: "Escape", bubbles: true,
+      cancelable: true, ...options });
+    if (options.keyCode === 229)
+      Object.defineProperty(event, "keyCode", { value: 229 });
+    target.dispatchEvent(event);
+  }
+  escape(input);
+  const composingKept = search.isOpen() && input.value === "中文" && stops === 0;
+  input.dispatchEvent(new CompositionEvent("compositionend", { bubbles: true }));
+  escape(input, { keyCode: 229 });
+  const candidateKept = search.isOpen() && input.value === "中文" && stops === 0;
+  escape(input);
+  const firstEscapeClosed = !search.isOpen() && input.value === "" &&
+    document.activeElement === prompt && stops === 0 && queries.at(-1) === "";
+  escape(prompt);
+  const secondEscapeStopped = stops === 1;
+  const passed = composingKept && candidateKept && firstEscapeClosed &&
+    secondEscapeStopped;
+  output.dataset.passed = String(passed);
+  output.textContent = JSON.stringify({ passed, composingKept, candidateKept,
+    firstEscapeClosed, secondEscapeStopped, queries, stops }, null, 2);
+} catch (error) {
+  output.dataset.passed = "false";
+  output.textContent = error.stack ?? String(error);
+}
+</script>
+</html>
