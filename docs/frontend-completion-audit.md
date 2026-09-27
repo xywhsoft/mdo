@@ -2,6 +2,8 @@
 
 本清单以 `app_bak/wwwroot` 的可操作行为为基线，而不是以页面长得相似或单元测试通过为完成标准。`docs/frontend-migration.md` 记录每次实现和验证；这里记录当前还需要什么证据。审计更新：2026-09-28，基线提交 `f9e2c4c`。
 
+询问提交的跨会话边界现有单文件页面证据：Home `.build/mdo-packed-docks-t0we1qu_` 在 320×350 下用 5 秒有界代理延迟第一会话的回答，提交后切到第二会话输入草稿；迟到回调没有把询问卡、标题或焦点带到第二会话，草稿刷新后仍在。第一会话回复完成、待答清空，代理只有一次询问 PUT，页面无横向溢出或脚本错误。原生移动端仍待验收，详见[迁移记录](frontend-migration.md#2026-09-28询问提交期间切换会话的单文件验收)。
+
 完整斜杠命令的键盘手感已对齐旧版。修复前单文件页输入 `/help` 后按 Tab 会直接执行命令；最终单文件 Home `.build/mdo-packed-docks-jqpl8uzc` 在 320×350 下确认完整命令收起候选，Tab 正常移至附件按钮，Enter 仍执行；部分 `/he` 仍可由 Tab 选择。浏览器夹具和 Windows/Linux 有界门禁通过，实体软键盘与原生 WebView 仍待验收，详见[迁移记录](frontend-migration.md#2026-09-28完整斜杠命令收起候选并保留-tab-导航)。
 
 文件名内第二个 `@` 的补全缺口已修复。旧单文件页中服务端能返回 `src/alpha@beta.c`，输入区却不显示候选；最终单文件 Home `.build/mdo-packed-docks-i78k6_tl` 在 320×350 下从 `@omega@beta.c next` 中途选择后完整替换引用，正文、光标和焦点保持，普通 `@alp` 候选仍正常。Windows/Linux 有界门禁和确定性打包通过；实体软键盘与原生 WebView 仍待验收，详见[迁移记录](frontend-migration.md#2026-09-28文件名内的--不再截断补全)。
