@@ -152,10 +152,19 @@ export function createSessionList({ container, count, filter, searchInput, store
     let restoredFocus = false;
     const selected = navigation.get();
     const items = state.data?.items ?? [];
-    const needle = query.trim().toLocaleLowerCase(currentLocale());
+    const locale = currentLocale();
+    const projects = new Map((projectsStore.get().data?.items ?? [])
+      .map((project) => [project.id, project]));
+    const needle = query.trim().toLocaleLowerCase(locale);
+    const defaultProjectName = t("nav.defaultProject", {}, "默认项目");
     const matchingStatus = status === "all" ? items : items.filter((item) => item.status === status);
     const visible = needle
-      ? matchingStatus.filter((item) => `${item.title} ${item.project_id} ${item.agent_id}`.toLocaleLowerCase(currentLocale()).includes(needle))
+      ? matchingStatus.filter((item) => {
+        const projectName = item.project_id === "default" ? defaultProjectName :
+          (projects.get(item.project_id)?.name ?? "");
+        return `${item.title} ${item.project_id} ${projectName} ${item.agent_id}`
+          .toLocaleLowerCase(locale).includes(needle);
+      })
       : matchingStatus;
     const pinned = visible.filter((item) => item.status === "active" && item.pinned);
     const unpinned = visible.filter((item) => item.status !== "active" || !item.pinned);
@@ -166,9 +175,7 @@ export function createSessionList({ container, count, filter, searchInput, store
         groupIds.add(project.id);
     }
     const orderedGroups = [...groupIds].filter(Boolean).sort((a, b) =>
-      a === "default" ? -1 : b === "default" ? 1 : a.localeCompare(b, currentLocale()));
-    const projects = new Map((projectsStore.get().data?.items ?? [])
-      .map((project) => [project.id, project]));
+      a === "default" ? -1 : b === "default" ? 1 : a.localeCompare(b, locale));
     count.textContent = String(visible.length);
     container.setAttribute("aria-busy", String(state.status === "loading"));
     clear(container);
@@ -318,7 +325,7 @@ export function createSessionList({ container, count, filter, searchInput, store
     }
     for (const projectId of orderedGroups) {
       const sessions = unpinned.filter((item) => item.project_id === projectId);
-      appendHeading(projectId === "default" ? t("nav.defaultProject", {}, "默认项目") :
+      appendHeading(projectId === "default" ? defaultProjectName :
         projects.get(projectId)?.name || projectId,
         sessions.length, projectId);
       if (!sessions.length) container.append(element("div", {
