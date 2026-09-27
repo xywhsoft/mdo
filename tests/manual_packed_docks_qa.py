@@ -554,6 +554,8 @@ Model.artifact_file.write_text("".join(
                                   encoding="utf-8")
 (base / "src/alpha-test.c").write_text("/* second completion item */\n",
                                        encoding="utf-8")
+(base / "src/omega@beta.c").write_text("/* filename with at-sign */\n",
+                                        encoding="utf-8")
 (base / "notes").mkdir()
 (base / "notes/QA notes.txt").write_text("Synthetic spaced filename.\n",
                                           encoding="utf-8")

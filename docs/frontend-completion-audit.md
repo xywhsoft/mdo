@@ -2,6 +2,8 @@
 
 本清单以 `app_bak/wwwroot` 的可操作行为为基线，而不是以页面长得相似或单元测试通过为完成标准。`docs/frontend-migration.md` 记录每次实现和验证；这里记录当前还需要什么证据。审计更新：2026-09-28，基线提交 `f9e2c4c`。
 
+文件名内第二个 `@` 的补全缺口已修复。旧单文件页中服务端能返回 `src/alpha@beta.c`，输入区却不显示候选；最终单文件 Home `.build/mdo-packed-docks-i78k6_tl` 在 320×350 下从 `@omega@beta.c next` 中途选择后完整替换引用，正文、光标和焦点保持，普通 `@alp` 候选仍正常。Windows/Linux 有界门禁和确定性打包通过；实体软键盘与原生 WebView 仍待验收，详见[迁移记录](frontend-migration.md#2026-09-28文件名内的--不再截断补全)。
+
 Linux ext4 根目录单文件 `mdo` 现已提供真实 HTTP 服务，Windows 内置浏览器连接其 320×350 页面，复核普通正文、斜杠开头正文及带空格路径的 `@` 补全；候选选择、插入位置、输入焦点和刷新后的草稿均正确，页面无横向溢出或脚本错误。此证据补足 Linux 打包后端的浏览器交互，不能替代原生 Linux WebView 或实体手机软键盘验收，详见[迁移记录](frontend-migration.md#2026-09-28linux-单文件服务上的移动宽度文件补全)。
 
 斜杠开头的普通正文现在可继续使用 `@` 文件补全。隔离单文件 Home `.build/mdo-packed-docks-e9jk76i0` 在 320×350 验证 `/explain @alp` 的候选与插入；`/he` 仍走 `/help` 命令、帮助关闭后返回输入焦点。页面无横向溢出或脚本错误，Windows/Linux 有界门禁与确定性打包通过。实体软键盘与原生 WebView 仍待验收，详见[迁移记录](frontend-migration.md#2026-09-28斜杠开头的普通输入仍可补全文件)。

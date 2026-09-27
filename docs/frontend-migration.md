@@ -4,6 +4,12 @@
 
 完成判据及尚缺的打包页证据见 [前端操作体验完成审计](frontend-completion-audit.md)。本文件继续记录每次实现和验证的细节。
 
+## 2026-09-28：文件名内的 @ 不再截断补全
+
+旧版 `app_bak/wwwroot/src/ui.js` 的文件补全允许首个 `@` 之后继续输入 `@`，但模块版把后续 `@` 当成引用边界。旧 Windows 单文件 Home `.build/mdo-packed-docks-ty_0rpx3` 中，服务端 `/workspace/files?q=alpha%40b` 返回 `src/alpha@beta.c`，输入 `@alpha@b` 却无候选。现在只把引用开头的 `@` 当标记，后续 `@` 保留在查询和完整引用后缀里；隔离夹具固定提供 `src/omega@beta.c`。
+
+最终单文件 Home `.build/mdo-packed-docks-i78k6_tl` 的 320×350 页面在 `@omega@b` 下显示 `src/omega@beta.c`；从 `@omega@beta.c next` 的中途选择后得到 `@src/omega@beta.c next`，光标在 `next` 前、输入焦点保留，菜单关闭。普通 `@alp` 仍显示原有两个文件候选；文档宽 320px、脚本错误为空。Windows/Linux 有界门禁均通过 114 项 Python、全部 Node 用例、71 个模块解析、21 个运行探针及确定性打包；Windows 另通过单文件零旁路写入和 20 秒启动检查。根目录 `mdo.exe` SHA-256 为 `0efa915d88bc2230d951ef86b9c0d227a8cba7c01befb9fd07a79a9710e71f9a`，Linux 根目录 `mdo` 为 `e780b9ad1c990ae45c92ab3b9acf8e1ce5a21b8a37ecd945b27c7facfbd4e5bc`。实体手机软键盘和原生 Linux WebView 仍待验收；未运行压力或高负载测试。
+
 ## 2026-09-28：Linux 单文件服务上的移动宽度文件补全
 
 将提交 `57ab517` 的同一源码同步到 Linux ext4，用锁定的 xserver 重新生成 Linux 根目录 `mdo`，并以单文件隔离 Home 启动真实 HTTP 服务。在 Windows 内置浏览器连接该 Linux 服务的 320×350 页面，验证从 `@alpha.c and more` 的 `@alp` 中途按 Enter 选择后得到 `@src/alpha.c and more`；`/explain @alp` 仍出现两个文件候选，选择后得到 `/explain @src/alpha.c `；`@QA next` 从引用中途按 Tab 选择带空格路径后得到 `@"notes/QA notes.txt" next`。三次选择后光标均落在正文前、焦点保持在输入框。刷新后最后一条草稿仍在，文档宽 320px、浏览器脚本错误为空。
