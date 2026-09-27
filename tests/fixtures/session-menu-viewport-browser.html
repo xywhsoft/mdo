@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="zh-CN">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>mdo session menu viewport probe</title>
+<link rel="stylesheet" href="/app/web/css/app.css">
+<style>
+  body { margin: 0; }
+  .sidebar { position: relative; transform: none; width: 280px; height: 230px;
+    display: block; overflow: hidden; }
+  .session-navigation { height: 160px; overflow: hidden; }
+  .session-list { height: 80px; overflow: auto; }
+</style>
+<aside class="sidebar">
+  <div class="session-navigation">
+    <div class="nav-section-heading">会话</div>
+    <div id="session-list" class="session-list"></div>
+  </div>
+</aside>
+<span id="session-count"></span>
+<select id="session-filter"><option value="active">进行中</option></select>
+<pre id="result"></pre>
+<script type="module">
+import { createSessionList } from "/app/web/js/features/sessions/session-list.js";
+
+const session = { id: "test", project_id: "default", agent_id: "mdo.default",
+  model_id: "ling-3.0-tiny", title: "Clipped session", status: "active",
+  pinned: false, updated_at: Date.now() * 1000 };
+const state = { status: "ready", data: { items: [session] } };
+const store = { get: () => state, subscribe: () => () => {} };
+const projectsStore = { get: () => ({ data: { items: [] } }),
+  subscribe: () => () => {} };
+const navigation = { get: () => ({ projectId: "default", sessionId: "test" }),
+  subscribe: () => () => {} };
+const output = document.querySelector("#result");
+let action = "";
+try {
+  const list = createSessionList({ container: document.querySelector("#session-list"),
+    count: document.querySelector("#session-count"),
+    filter: document.querySelector("#session-filter"), store, projectsStore,
+    navigation, onSelect() {}, onAction(name) { action = name; },
+    onNewInProject() {}, onAddProject() {}, onManageProject() {} });
+  list.setQuery("");
+  let more = document.querySelector(".session-more");
+  more.scrollIntoView({ block: "nearest" });
+  await new Promise(requestAnimationFrame);
+  more.click();
+  await new Promise(requestAnimationFrame);
+  more = document.querySelector(".session-more");
+  let menu = document.querySelector("#sidebar-session-menu");
+  const rect = menu.getBoundingClientRect();
+  const withinViewport = rect.top >= 0 && rect.left >= 0 &&
+    rect.bottom <= innerHeight && rect.right <= innerWidth;
+  const outsideClippingParent = !document.querySelector(".sidebar").contains(menu);
+  const firstFocused = document.activeElement === menu.firstElementChild;
+  document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+  const escapeRestored = !document.querySelector("#sidebar-session-menu") &&
+    document.activeElement === more;
+  more.click();
+  await new Promise(requestAnimationFrame);
+  more = document.querySelector(".session-more");
+  menu = document.querySelector("#sidebar-session-menu");
+  menu.scrollTop = menu.scrollHeight;
+  await new Promise(requestAnimationFrame);
+  const last = menu.lastElementChild;
+  const lastRect = last.getBoundingClientRect();
+  const hit = document.elementFromPoint(lastRect.left + lastRect.width / 2,
+    lastRect.top + lastRect.height / 2);
+  const lastReachable = lastRect.top >= menu.getBoundingClientRect().top &&
+    lastRect.bottom <= menu.getBoundingClientRect().bottom &&
+    (hit === last || last.contains(hit));
+  last.click();
+  const actionWorked = action === "trash" && !document.querySelector("#sidebar-session-menu") &&
+    document.activeElement === document.querySelector(".session-more");
+  const passed = withinViewport && outsideClippingParent && firstFocused &&
+    escapeRestored && lastReachable && actionWorked;
+  output.dataset.passed = String(passed);
+  output.textContent = JSON.stringify({ passed, withinViewport, outsideClippingParent,
+    firstFocused, escapeRestored, lastReachable, actionWorked,
+    initialRect: { top: rect.top, bottom: rect.bottom, left: rect.left, right: rect.right },
+    viewport: { width: innerWidth, height: innerHeight } }, null, 2);
+} catch (error) {
+  output.dataset.passed = "false";
+  output.textContent = error.stack ?? String(error);
+}
+</script>
+</html>

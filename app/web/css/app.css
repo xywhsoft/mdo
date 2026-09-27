@@ -409,6 +409,7 @@ select:focus-visible,
   background: var(--surface-raised);
   box-shadow: 0 12px 32px rgb(0 0 0 / 16%);
 }
+.session-list-menu { position: fixed; z-index: 50; right: auto; }
 .session-menu button { min-height: 32px; padding: 0 9px; border: 0; border-radius: 6px; background: transparent; text-align: left; cursor: pointer; }
 .session-menu button:hover { background: var(--surface-hover); }
 .session-menu button[data-tone="danger"] { color: var(--danger); }
@@ -1418,6 +1419,12 @@ select:focus-visible,
   .option-chip { max-width: 108px; }
   .welcome > p { font-size: 12px; }
   .timeline-item[data-kind="user"] .timeline-body { max-width: 92%; }
+}
+
+@media (max-width: 760px) and (max-height: 480px) {
+  .sidebar { overflow-y: auto; overscroll-behavior: contain; }
+  .session-navigation { flex: 0 0 180px; }
+  .session-list { height: 126px; }
 }
 
 @media (prefers-reduced-motion: reduce) {

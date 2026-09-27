@@ -11,7 +11,27 @@ export function createSessionList({ container, count, filter, store, projectsSto
   let focusRequest = null;
   let state = store.get();
   let unread = new Set();
+  let openMenuNode = null;
+  let openMenuButton = null;
+  const sidebar = container.closest(".sidebar");
   const sessionKey = (session) => `${session.project_id}/${session.id}`;
+
+  function positionMenu() {
+    if (!openMenuNode || !openMenuButton?.isConnected) return;
+    const anchor = openMenuButton.getBoundingClientRect();
+    const margin = 8;
+    const below = Math.max(0, window.innerHeight - anchor.bottom - margin);
+    const above = Math.max(0, anchor.top - margin);
+    const placeAbove = below < Math.min(openMenuNode.scrollHeight, 320) && above > below;
+    openMenuNode.style.maxHeight = `${Math.max(40, Math.min(320,
+      placeAbove ? above : below))}px`;
+    const box = openMenuNode.getBoundingClientRect();
+    openMenuNode.style.top = `${placeAbove
+      ? Math.max(margin, anchor.top - box.height + 3)
+      : Math.min(anchor.bottom - 3, window.innerHeight - margin - box.height)}px`;
+    openMenuNode.style.left = `${Math.max(margin, Math.min(anchor.right - box.width,
+      window.innerWidth - margin - box.width))}px`;
+  }
 
   function menuAction(action, session) {
     const button = element("button", { text: action.label, attrs: { type: "button", role: "menuitem", "data-tone": action.tone ?? "neutral" } });
@@ -41,6 +61,9 @@ export function createSessionList({ container, count, filter, store, projectsSto
         ? { key: focused.dataset.sessionKey, index: -1 }
         : focused?.classList?.contains("session-item")
           ? { key: focused.dataset.sessionKey, index: -2 } : null;
+    openMenuNode?.remove();
+    openMenuNode = null;
+    openMenuButton = null;
     let restoredFocus = false;
     const selected = navigation.get();
     const items = state.data?.items ?? [];
@@ -66,15 +89,18 @@ export function createSessionList({ container, count, filter, store, projectsSto
     clear(container);
 
     if (state.status === "error") {
+      openMenu = "";
       container.append(element("div", { className: "resource-error", text: errorMessage(state.error) }));
       return;
     }
     if (state.status === "loading" && items.length === 0) {
+      openMenu = "";
       container.append(element("div", { className: "empty-state",
         text: t("nav.loading", {}, "正在载入会话…") }));
       return;
     }
     if (visible.length === 0 && orderedGroups.length === 0) {
+      openMenu = "";
       container.append(element("div", {
         className: "empty-state",
         text: needle ? t("nav.noMatch", {}, "没有匹配的会话") :
@@ -141,23 +167,33 @@ export function createSessionList({ container, count, filter, store, projectsSto
           index: openMenu && event.detail === 0 ? 0 : -1 };
         render();
       });
-      const menu = element("div", { className: "session-menu", attrs: {
-        role: "menu", "data-session-key": key,
-      } }, menuFor(session));
-      [...menu.children].forEach((item, index) => {
-        item.dataset.menuIndex = String(index);
-      });
-      menu.hidden = openMenu !== key;
+      const menu = openMenu === key ? element("div", {
+        className: "session-menu session-list-menu", attrs: {
+          id: "sidebar-session-menu", role: "menu", "data-session-key": key,
+        },
+      }, menuFor(session)) : null;
+      if (menu) {
+        [...menu.children].forEach((item, index) => {
+          item.dataset.menuIndex = String(index);
+        });
+        more.setAttribute("aria-controls", menu.id);
+      }
       container.append(element("div", { className: "session-item-row", attrs: {
         "data-status": session.status, "data-unread": hasUnread ? "true" : null,
-      } }, [button, more, menu]));
+      } }, [button, more]));
+      if (menu) {
+        document.body.append(menu);
+        openMenuNode = menu;
+        openMenuButton = more;
+        positionMenu();
+      }
       const target = requestedFocus?.key === key
         ? requestedFocus : retainedFocus?.key === key
           ? retainedFocus : null;
       if (target) {
         if (target.index === -2) button.focus();
         else if (target.index < 0) more.focus();
-        else menu.children[target.index]?.focus();
+        else menu?.children[target.index]?.focus();
         restoredFocus = true;
       }
     }
@@ -175,6 +211,7 @@ export function createSessionList({ container, count, filter, store, projectsSto
       }));
       for (const session of sessions) appendSession(session);
     }
+    if (openMenu && !openMenuNode) openMenu = "";
     if (!restoredFocus && (requestedFocus || retainedFocus))
       (container.querySelector(".session-item, .session-group-new") ?? filter).focus();
   }
@@ -184,20 +221,24 @@ export function createSessionList({ container, count, filter, store, projectsSto
   const unsubscribeNavigation = navigation.subscribe(() => { openMenu = ""; render(); });
   const unsubscribeLocale = subscribeLocale(render);
   filter.addEventListener("change", () => { status = filter.value; openMenu = ""; render(); });
+  container.addEventListener("scroll", onListScroll);
+  sidebar?.addEventListener("scroll", onSidebarScroll);
+  window.addEventListener("resize", positionMenu);
   document.addEventListener("pointerdown", onOutsidePointerDown);
   document.addEventListener("focusin", onFocusIn);
   document.addEventListener("keydown", onDismissKeyDown);
 
   function currentMenu() {
-    return [...container.querySelectorAll(".session-menu")].find((menu) =>
-      !menu.hidden && menu.dataset.sessionKey === openMenu) ?? null;
+    return openMenuNode?.dataset.sessionKey === openMenu ? openMenuNode : null;
   }
 
   function closeMenu(restoreFocus = false) {
     const menu = currentMenu();
-    const more = menu?.previousElementSibling;
+    const more = openMenuButton;
     openMenu = "";
-    if (menu) menu.hidden = true;
+    menu?.remove();
+    openMenuNode = null;
+    openMenuButton = null;
     if (more) {
       more.setAttribute("aria-expanded", "false");
       if (restoreFocus) more.focus();
@@ -206,12 +247,29 @@ export function createSessionList({ container, count, filter, store, projectsSto
 
   function onOutsidePointerDown(event) {
     const menu = currentMenu();
-    if (menu && !menu.parentElement.contains(event.target)) closeMenu();
+    if (menu && !menu.contains(event.target) && event.target !== openMenuButton)
+      closeMenu();
   }
 
   function onFocusIn(event) {
     const menu = currentMenu();
-    if (menu && !menu.parentElement.contains(event.target)) closeMenu();
+    if (menu && !menu.contains(event.target) && event.target !== openMenuButton)
+      closeMenu();
+  }
+
+  function onListScroll() {
+    if (!openMenuButton) return;
+    const anchor = openMenuButton.getBoundingClientRect();
+    const bounds = container.getBoundingClientRect();
+    if (anchor.bottom <= bounds.top || anchor.top >= bounds.bottom ||
+        anchor.bottom <= 0 || anchor.top >= window.innerHeight) closeMenu();
+    else positionMenu();
+  }
+
+  function onSidebarScroll() {
+    // The drawer itself can scroll on short screens. A menu anchored to a
+    // moving row should close rather than float over unrelated controls.
+    if (currentMenu()) closeMenu();
   }
 
   function onDismissKeyDown(event) {
@@ -223,7 +281,7 @@ export function createSessionList({ container, count, filter, store, projectsSto
       closeMenu(true);
       return;
     }
-    if (!menu.contains(event.target) && event.target !== menu.previousElementSibling)
+    if (!menu.contains(event.target) && event.target !== openMenuButton)
       return;
     const items = [...menu.querySelectorAll('[role="menuitem"]')];
     const index = items.indexOf(document.activeElement);
@@ -247,6 +305,10 @@ export function createSessionList({ container, count, filter, store, projectsSto
       unsubscribeProjects();
       unsubscribeNavigation();
       unsubscribeLocale();
+      openMenuNode?.remove();
+      container.removeEventListener("scroll", onListScroll);
+      sidebar?.removeEventListener("scroll", onSidebarScroll);
+      window.removeEventListener("resize", positionMenu);
       document.removeEventListener("pointerdown", onOutsidePointerDown);
       document.removeEventListener("focusin", onFocusIn);
       document.removeEventListener("keydown", onDismissKeyDown);
