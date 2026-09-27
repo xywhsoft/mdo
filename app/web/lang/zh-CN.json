@@ -309,6 +309,8 @@
   "nav.newInProject": "在 {name} 项目新建任务",
   "nav.addProject": "添加项目",
   "nav.projects": "项目",
+  "nav.switchProject": "切换项目，当前 {name}",
+  "nav.manageProjects": "管理项目",
   "nav.untitled": "未命名任务",
   "nav.unread": "有新结果",
   "nav.actionsFor": "{title} 的操作",

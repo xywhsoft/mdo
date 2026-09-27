@@ -469,6 +469,19 @@ select:focus-visible,
 
 .workspace-header { padding: 0 20px; border-bottom: 1px solid var(--border); }
 .session-heading { min-width: 0; }
+.session-title-row { display: flex; min-width: 0; align-items: center; gap: 6px; }
+.session-title-row h1 { min-width: 0; }
+.header-project-control { position: relative; min-width: 0; flex: 0 1 auto; }
+.header-project-control[hidden], .session-title-separator[hidden] { display: none; }
+.header-project-switch { display: flex; max-width: min(150px, 24vw); min-height: 28px; align-items: center; gap: 5px; padding: 2px 5px; border: 0; border-radius: 6px; background: transparent; color: var(--muted); font: inherit; font-size: 12px; cursor: pointer; }
+.header-project-switch:hover, .header-project-switch[aria-expanded="true"] { background: var(--surface-hover); color: var(--ink); }
+.header-project-switch span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.session-title-separator { color: var(--faint); }
+.header-project-menu { top: calc(100% + 4px); right: auto; left: 0; min-width: 190px; max-width: min(280px, calc(100vw - 24px)); max-height: min(320px, calc(100vh - 88px)); }
+.header-project-menu button { display: flex; align-items: center; justify-content: space-between; gap: 8px; white-space: nowrap; }
+.header-project-menu button span:first-child { overflow: hidden; text-overflow: ellipsis; }
+.header-project-menu button[aria-current="true"] { color: var(--accent); }
+.header-project-menu .project-menu-manage { border-top: 1px solid var(--border); border-radius: 0; margin-top: 4px; }
 .session-heading h1 { margin: 0; overflow: hidden; font-size: 14px; font-weight: 650; text-overflow: ellipsis; white-space: nowrap; }
 .session-heading p { margin: 2px 0 0; overflow: hidden; color: var(--muted); font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
 .header-actions { display: flex; align-items: center; gap: 9px; }

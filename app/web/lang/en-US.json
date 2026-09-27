@@ -309,6 +309,8 @@
   "nav.newInProject": "New task in project {name}",
   "nav.addProject": "Add project",
   "nav.projects": "Projects",
+  "nav.switchProject": "Switch project, current {name}",
+  "nav.manageProjects": "Manage projects",
   "nav.untitled": "Untitled task",
   "nav.unread": "New result",
   "nav.actionsFor": "Actions for {title}",

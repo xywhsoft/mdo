@@ -114,7 +114,16 @@
           <span class="icon" data-icon="menu" aria-hidden="true"></span>
         </button>
         <div class="session-heading">
-          <h1 id="session-title">新任务</h1>
+          <div class="session-title-row">
+            <div class="header-project-control" id="header-project-control" hidden>
+              <button class="header-project-switch" id="header-project-switch" type="button" aria-label="切换项目" aria-haspopup="menu" aria-controls="header-project-menu" aria-expanded="false">
+                <span id="header-project-name"></span><span aria-hidden="true">▾</span>
+              </button>
+              <div class="session-menu header-project-menu" id="header-project-menu" role="menu" hidden></div>
+            </div>
+            <span class="session-title-separator" id="session-title-separator" aria-hidden="true" hidden>/</span>
+            <h1 id="session-title">新任务</h1>
+          </div>
           <p id="session-subtitle">选择会话，或向默认 Agent 发起任务</p>
         </div>
         <div class="header-actions">

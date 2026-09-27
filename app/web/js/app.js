@@ -61,6 +61,7 @@ import { createKeyboardShortcuts } from "./features/shell/keyboard-shortcuts.js"
 import { createRunNotifications } from "./features/shell/run-notifications.js";
 import { startWorkspaceNavigation } from "./features/shell/workspace-startup.js";
 import { focusSessionComposerAfterNavigation } from "./features/shell/session-composer-focus.js";
+import { createProjectSwitcher } from "./features/shell/project-switcher.js";
 import { createSessionMetadataSync } from "./features/shell/session-metadata-sync.js";
 import { createPaneLayout } from "./features/shell/pane-layout.js";
 import { trackMobileViewport } from "./features/shell/mobile-viewport.js";
@@ -252,8 +253,21 @@ export async function boot() {
     control: $(control), button: $(button), menu: $(menu), navigation,
     store: sessionDetailStore, onAction: handleSessionAction,
   }));
+  const headerProjectSwitcher = createProjectSwitcher({
+    control: $("#header-project-control"), button: $("#header-project-switch"),
+    name: $("#header-project-name"), separator: $("#session-title-separator"),
+    menu: $("#header-project-menu"), navigation, projectsStore,
+    onSelectProject(projectId) {
+      showActiveSessions();
+      navigation.newTask(projectId);
+      closeDrawers();
+      prompt.focus();
+    },
+    onManageProjects() { navigation.openSettings("projects"); },
+  });
   mobileLayout.addEventListener("change", () => {
     for (const menu of actionMenus) menu.close();
+    headerProjectSwitcher.close();
   });
   function showActiveSessions() {
     $("#session-search").value = "";
@@ -997,7 +1011,7 @@ export async function boot() {
       const title = session.title || t("nav.untitled");
       sessionTitle.textContent = title;
       const statusText = sessionStatusSuffix(session.status);
-      sessionSubtitle.textContent = `${session.project_id} · ${session.agent_id} · ${session.model_id}${statusText}`;
+      sessionSubtitle.textContent = `${session.agent_id} · ${session.model_id}${statusText}`;
       mobileTitle.textContent = title;
       mobileMeta.textContent = `${session.model_id || session.agent_id}${statusText}`;
     }
@@ -1028,7 +1042,7 @@ export async function boot() {
     const session = sessionDetailStore.get().data;
     if (session && selectedKey === `${session.project_id}/${session.id}`) {
       const statusText = sessionStatusSuffix(session.status);
-      sessionSubtitle.textContent = `${session.project_id} · ${session.agent_id} · ${session.model_id}${statusText}`;
+      sessionSubtitle.textContent = `${session.agent_id} · ${session.model_id}${statusText}`;
       mobileMeta.textContent = `${session.model_id || session.agent_id}${statusText}`;
       if (!session.title) {
         sessionTitle.textContent = t("nav.untitled");

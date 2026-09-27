@@ -309,6 +309,8 @@
   "nav.newInProject": "Новая задача в проекте {name}",
   "nav.addProject": "Добавить проект",
   "nav.projects": "Проекты",
+  "nav.switchProject": "Сменить проект, текущий {name}",
+  "nav.manageProjects": "Управление проектами",
   "nav.untitled": "Задача без названия",
   "nav.unread": "Новый результат",
   "nav.actionsFor": "Действия с сеансом {title}",
