@@ -247,9 +247,10 @@ select:focus-visible,
 .inspector-resize-handle { left: calc(100% - var(--inspector-column, var(--inspector-width))); }
 .app-shell[data-dragging] { user-select: none; }
 
-.new-task-actions { display: flex; align-items: center; gap: 2px; }
-.new-task-actions .new-task-button { flex: 1; width: auto; }
-.new-task-configure { flex: 0 0 36px; }
+.new-task-actions { display: flex; align-items: center; gap: 6px; }
+.new-task-actions .new-task-button { flex: 1; min-width: 0; width: auto; border: 1px solid var(--border-strong); background: var(--surface-active); font-weight: 600; }
+.new-task-configure { width: 40px; height: 40px; flex: 0 0 40px; border: 1px solid var(--border); background: var(--surface-raised); }
+.new-task-actions .new-task-button:hover { background: var(--surface-hover); }
 .new-task-button,
 .sidebar-link {
   display: flex;
@@ -1481,6 +1482,7 @@ select:focus-visible,
 }
 
 @media (max-width: 420px) {
+  .new-task-button kbd { display: none; }
   .workspace-label { display: none; }
   .option-chip { max-width: 108px; }
   .welcome > p { font-size: 12px; }
