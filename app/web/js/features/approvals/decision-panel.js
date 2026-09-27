@@ -3,9 +3,14 @@ import { clear, element, errorMessage, toast } from "../../utils/dom.js";
 import { subscribeLocale, t } from "../../i18n.js";
 import { effectList, formatArguments, resourceKindLabel, resourceText, riskLabel } from "./labels.js";
 
+function contentKey({ expires_in_ms, ...content }) {
+  return JSON.stringify(content);
+}
+
 export function createDecisionPanel({ container, summary, store, onChanged }) {
   let state = store.get();
   const argumentsOpen = new Map();
+  const cards = new Map();
   const seen = new Set();
 
   async function decide(item, decision) {
@@ -50,6 +55,7 @@ export function createDecisionPanel({ container, summary, store, onChanged }) {
     }
     if (!resources.children.length) resources.append(element("li", {
       text: t("decision.noResources", {}, "未声明具体资源") }));
+    const timeout = element("span", { className: "approval-timeout" });
     card.append(
       element("header", { className: "approval-heading" }, [
         element("div", {}, [
@@ -58,9 +64,7 @@ export function createDecisionPanel({ container, summary, store, onChanged }) {
           element("p", { text: `${riskLabel(item.risk)} · ${effectList(item.effects ?? []) ||
             t("decision.noEffects", {}, "未声明影响")}` }),
         ]),
-        element("span", { className: "approval-timeout", text: t("decision.seconds",
-          { count: Math.max(0, Math.ceil(Number(item.expires_in_ms) / 1000)) },
-          `${Math.max(0, Math.ceil(Number(item.expires_in_ms) / 1000))} 秒`) }),
+        timeout,
       ]),
       element("p", { className: "approval-workspace", text: item.workspace_root ||
         t("decision.defaultWorkspace", {}, "默认工作区") }),
@@ -74,15 +78,21 @@ export function createDecisionPanel({ container, summary, store, onChanged }) {
       element("div", { className: "approval-actions" }, [deny, allow, allowRun]),
     );
     const details = card.querySelector("details");
-    details.addEventListener("toggle", () => argumentsOpen.set(key, details.open));
-    const busy = approvalDecisionStatus(key) !== "idle";
-    allow.setAttribute("aria-disabled", String(busy));
-    allowRun.setAttribute("aria-disabled", String(busy));
-    deny.setAttribute("aria-disabled", String(busy));
+    details.addEventListener("toggle", () => {
+      if (details.isConnected) argumentsOpen.set(key, details.open);
+    });
     allow.addEventListener("click", () => void decide(item, "allow"));
     allowRun.addEventListener("click", () => void decide(item, "allow_run"));
     deny.addEventListener("click", () => void decide(item, "deny"));
-    return card;
+    return { node: card, sync(next) {
+      item = next;
+      const seconds = Math.max(0, Math.ceil(Number(item.expires_in_ms) / 1000));
+      const label = t("decision.seconds", { count: seconds }, `${seconds} 秒`);
+      if (timeout.textContent !== label) timeout.textContent = label;
+      const busy = String(approvalDecisionStatus(key) !== "idle");
+      for (const button of [allow, allowRun, deny])
+        button.setAttribute("aria-disabled", busy);
+    } };
   }
 
   function render() {
@@ -105,20 +115,40 @@ export function createDecisionPanel({ container, summary, store, onChanged }) {
     );
     if (state.data?.truncated) summary.append(element("span", {
       text: t("decision.truncated", {}, "仅显示最早 4 个") }));
-    clear(container);
     if (state.status === "error") {
+      cards.clear();
+      clear(container);
       container.append(element("div", { className: "resource-error", text: errorMessage(state.error) }));
       if (focused) document.querySelector("#decisions-tab")?.focus({ preventScroll: true });
       return;
     }
     if (!items.length) {
+      cards.clear();
+      clear(container);
       container.append(element("div", { className: "empty-state", text: state.status === "loading"
         ? t("decision.loading", {}, "正在检查待决操作…")
         : t("decision.empty", {}, "当前没有等待决定的操作") }));
       if (focused) document.querySelector("#decisions-tab")?.focus({ preventScroll: true });
       return;
     }
-    for (const item of items) container.append(renderCard(item));
+    const nodes = [];
+    const liveCards = new Set();
+    for (const item of items) {
+      const key = String(item.id);
+      liveCards.add(key);
+      const signature = contentKey(item);
+      let cached = cards.get(key);
+      if (!cached || cached.signature !== signature) {
+        cached = { ...renderCard(item), signature };
+        cards.set(key, cached);
+      }
+      cached.sync(item);
+      nodes.push(cached.node);
+    }
+    for (const key of cards.keys()) if (!liveCards.has(key)) cards.delete(key);
+    if (container.children.length !== nodes.length ||
+        nodes.some((node, index) => container.children[index] !== node))
+      container.replaceChildren(...nodes);
     if (scrollHost) scrollHost.scrollTop = previousScroll;
     if (focused) {
       const replacement = [...container.querySelectorAll("[data-decision-focus]")]
@@ -141,6 +171,6 @@ export function createDecisionPanel({ container, summary, store, onChanged }) {
     render();
   });
   const unsubscribeDecisions = approvalDecisionStore.subscribe(render);
-  const unsubscribeLocale = subscribeLocale(render);
+  const unsubscribeLocale = subscribeLocale(() => { cards.clear(); render(); });
   return () => { unsubscribeStore(); unsubscribeDecisions(); unsubscribeLocale(); };
 }

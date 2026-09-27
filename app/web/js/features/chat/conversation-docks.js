@@ -59,6 +59,20 @@ function todoCard(items, expanded, focusKey, onToggle) {
   return card;
 }
 
+function approvalContentKey({ expires_in_ms, ...content }) {
+  return JSON.stringify(content);
+}
+
+function approvalSummary(item) {
+  return t("dock.approval.summary", {
+    risk: RISK_KEYS[item.risk] ? t(RISK_KEYS[item.risk]) :
+      item.risk || t("dock.approval.unknownRisk"),
+    effects: (item.effects ?? []).map((effect) => EFFECT_KEYS[effect]
+      ? t(EFFECT_KEYS[effect]) : effect).join(", ") || t("dock.approval.noEffects"),
+    seconds: Math.ceil(Number(item.expires_in_ms || 0) / 1000),
+  });
+}
+
 function approvalCard(item, argumentsOpen, onChanged) {
   const key = String(item.id);
   const card = element("section", { className: "conversation-dock",
@@ -78,7 +92,6 @@ function approvalCard(item, argumentsOpen, onChanged) {
     type: "button", "data-dock-focus": `approval/${key}/allow_run` } });
   for (const [button, decision] of [[deny, "deny"], [allow, "allow"],
     [allowRun, "allow_run"]]) {
-    button.setAttribute("aria-disabled", String(approvalDecisionStatus(key) !== "idle"));
     button.addEventListener("click", async () => {
       if (approvalDecisionStatus(key) !== "idle") return;
       try {
@@ -97,24 +110,27 @@ function approvalCard(item, argumentsOpen, onChanged) {
       "data-dock-focus": `approval/${key}/arguments` } }),
     element("pre", { text: item.arguments_json || "{}" }),
   ]);
-  argumentsView.addEventListener("toggle", () =>
-    argumentsOpen.set(key, argumentsView.open));
+  argumentsView.addEventListener("toggle", () => {
+    if (argumentsView.isConnected) argumentsOpen.set(key, argumentsView.open);
+  });
+  const summary = element("p", { text: approvalSummary(item) });
   card.append(
     element("h3", { text: t("dock.approval.title", { tool: item.tool || t("dock.approval.tool") }),
       attrs: { tabindex: "-1", "data-dock-focus": `approval/${key}/title` } }),
-    element("p", { text: t("dock.approval.summary", {
-      risk: RISK_KEYS[item.risk] ? t(RISK_KEYS[item.risk]) :
-        item.risk || t("dock.approval.unknownRisk"),
-      effects: (item.effects ?? []).map((effect) => EFFECT_KEYS[effect]
-        ? t(EFFECT_KEYS[effect]) : effect).join(", ") || t("dock.approval.noEffects"),
-      seconds: Math.ceil(Number(item.expires_in_ms || 0) / 1000),
-    }) }),
+    summary,
     resources,
     argumentsView,
     element("div", { className: "conversation-dock-actions" },
       [deny, allow, allowRun]),
   );
-  return card;
+  return { node: card, sync(next) {
+    item = next;
+    const nextSummary = approvalSummary(item);
+    if (summary.textContent !== nextSummary) summary.textContent = nextSummary;
+    const busy = String(approvalDecisionStatus(key) !== "idle");
+    for (const button of [deny, allow, allowRun])
+      button.setAttribute("aria-disabled", busy);
+  } };
 }
 
 function askCard(item, projectId, sessionId, deciding, answered, drafts,
@@ -212,6 +228,7 @@ export function createConversationDocks({ container, navigation, tasksStore, app
   const askAnswered = new Set();
   const expanded = new Map();
   const argumentsOpen = new Map();
+  const approvalCards = new Map();
   const drafts = new Map();
   const askNodes = new Map();
   const approvalRoot = element("div", { className: "conversation-dock-stack" });
@@ -333,7 +350,6 @@ export function createConversationDocks({ container, navigation, tasksStore, app
       todo?.projectId === selected.projectId && todo?.sessionId === sessionId;
     const todoItems = todo?.projectId === selected.projectId &&
       todo?.sessionId === sessionId ? todo.items : [];
-    clear(approvalRoot);
     clear(otherRoot);
     let newApproval = null;
     const nextDecisions = new Set();
@@ -350,13 +366,27 @@ export function createConversationDocks({ container, navigation, tasksStore, app
       text: t("dock.todo.loadFailed", { error: errorMessage(todoStore.get().error) }),
     }));
     if (tasks.length) otherRoot.append(taskCard(tasks, onOpenTasks));
+    const approvalNodes = [];
+    const liveApprovals = new Set();
     for (const item of approvals) {
       const key = `approval/${selected.projectId}/${sessionId}/${item.id}`;
+      liveApprovals.add(key);
       nextDecisions.add(key);
-      const card = approvalCard(item, argumentsOpen, onChanged);
-      approvalRoot.append(card);
-      if (!visibleDecisions.has(key)) newApproval ??= card;
+      const contentKey = approvalContentKey(item);
+      let cached = approvalCards.get(key);
+      if (!cached || cached.contentKey !== contentKey) {
+        cached = { ...approvalCard(item, argumentsOpen, onChanged), contentKey };
+        approvalCards.set(key, cached);
+      }
+      cached.sync(item);
+      approvalNodes.push(cached.node);
+      if (!visibleDecisions.has(key)) newApproval ??= cached.node;
     }
+    for (const key of approvalCards.keys())
+      if (!liveApprovals.has(key)) approvalCards.delete(key);
+    if (approvalRoot.children.length !== approvalNodes.length ||
+        approvalNodes.some((node, index) => approvalRoot.children[index] !== node))
+      approvalRoot.replaceChildren(...approvalNodes);
     if (approvalsStore.get().status === "ready") {
       const live = new Set((approvalsStore.get().data?.items ?? [])
         .map((item) => String(item.id)));
@@ -426,7 +456,7 @@ export function createConversationDocks({ container, navigation, tasksStore, app
     approvalDecisionStore.subscribe(render),
     asksStore.subscribe(render),
     todoStore.subscribe(render),
-    subscribeLocale(render),
+    subscribeLocale(() => { approvalCards.clear(); render(); }),
   ];
   const resizeObserver = conversation && typeof ResizeObserver === "function"
     ? new ResizeObserver((entries) => {

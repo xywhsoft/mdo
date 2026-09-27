@@ -121,20 +121,43 @@ async function check() {
     allow.getBoundingClientRect().top >= dock.getBoundingClientRect().top;
   dock.querySelector(".approval-arguments summary").click();
   await nextFrame();
+  const approvalNode = dock.querySelector('[data-approval-id="7"]');
+  const argumentsPre = approvalNode.querySelector(".approval-arguments pre");
+  const selection = window.getSelection();
+  const range = document.createRange();
+  range.selectNodeContents(argumentsPre);
+  selection.removeAllRanges();
+  selection.addRange(range);
+  approvalsStore.setData({ items: [{ ...approvalsStore.get().data.items[0],
+    expires_in_ms: 240000 }] });
+  await nextFrame();
+  const approvalSelectionStable = approvalNode === dock.querySelector('[data-approval-id="7"]') &&
+    argumentsPre === dock.querySelector('[data-approval-id="7"] .approval-arguments pre') &&
+    selection.toString().includes("python");
+  selection.removeAllRanges();
+  approvalsStore.setData({ items: [{ ...approvalsStore.get().data.items[0],
+    arguments_json: '{"argv":["changed"]}' }] });
+  await nextFrame();
+  const approvalChangeReplaced = approvalNode !== dock.querySelector('[data-approval-id="7"]') &&
+    dock.querySelector('[data-approval-id="7"] .approval-arguments pre')
+      ?.textContent.includes("changed");
   scrollDockToEnd();
   await nextFrame();
-  const expandedReachable = allow.getBoundingClientRect().bottom <=
+  const currentAllow = [...dock.querySelectorAll(".conversation-dock-actions button")].at(-1);
+  const expandedReachable = currentAllow.getBoundingClientRect().bottom <=
     dock.getBoundingClientRect().bottom &&
-    allow.getBoundingClientRect().top >= dock.getBoundingClientRect().top;
+    currentAllow.getBoundingClientRect().top >= dock.getBoundingClientRect().top;
   const passed = askReadable && restoredDraft && approvalReadable && actionVisible &&
     approvalFocusRestored && approvalBeforeTodo &&
     arrivals.map(([kind]) => kind).join(",") === "ask,approval" &&
-    expandedReachable && document.documentElement.scrollWidth <= innerWidth;
+    expandedReachable && approvalSelectionStable && approvalChangeReplaced &&
+    document.documentElement.scrollWidth <= innerWidth;
   const result = document.querySelector("#result");
   result.dataset.passed = innerWidth <= 420 ? String(passed) : "waiting";
   result.textContent = JSON.stringify({ askReadable, askGeometry,
     restoredDraft, restoredHeight, restoredPending, restoredStyle, approvalReadable,
-    actionVisible, expandedReachable, approvalFocusRestored, approvalBeforeTodo,
+    actionVisible, expandedReachable, approvalSelectionStable, approvalChangeReplaced,
+    approvalFocusRestored, approvalBeforeTodo,
     arrivals, viewport: innerWidth,
     documentWidth: document.documentElement.scrollWidth, passed });
 }
