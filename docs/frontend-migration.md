@@ -4,6 +4,12 @@
 
 完成判据及尚缺的打包页证据见 [前端操作体验完成审计](frontend-completion-audit.md)。本文件继续记录每次实现和验证的细节。
 
+## 2026-09-28：完整斜杠命令收起候选并保留 Tab 导航
+
+旧版只在斜杠输入仍有更长匹配项时显示候选；完整 `/help` 由 Enter 或发送按钮执行。新版单文件 Home `.build/mdo-packed-docks-u1w3ldcc` 在输入完整 `/help` 后仍显示唯一候选，按 Tab 直接打开帮助弹层，夺走了正常键盘焦点导航。现在完整且没有更长匹配项时收起候选，部分输入仍可用 Tab 选择；精确命令继续由现有发送路径执行。
+
+生产模块浏览器夹具确认完整 `/help` 隐藏菜单、部分 `/he` 点击执行以及文件候选点按均通过。最终单文件 Home `.build/mdo-packed-docks-jqpl8uzc` 在 320×350 下输入 `/help` 后菜单隐藏、Tab 把焦点移到附件按钮且未打开弹层，回输入框按 Enter 则打开帮助；关闭后输入 `/he`，Tab 选中 `/help` 并打开帮助。文档宽 320px、浏览器脚本错误为空。Windows/Linux 有界门禁通过 114 项 Python、全部 Node 用例、71 个模块解析、21 个运行探针与确定性打包；Windows 零旁路写入和 20 秒启动检查通过。根目录 `mdo.exe` SHA-256 为 `c1c4eb91e709542ef0cad76e9e072e0726033d4fe892852fca4ac0c190896c4c`，Linux 根目录 `mdo` 为 `0c6d44835e136107336e30800c7984b3fc971692a88b350d8952e4c893b69ba8`。实体软键盘及原生 WebView 仍待验收；未运行压力或高负载测试。
+
 ## 2026-09-28：文件名内的 @ 不再截断补全
 
 旧版 `app_bak/wwwroot/src/ui.js` 的文件补全允许首个 `@` 之后继续输入 `@`，但模块版把后续 `@` 当成引用边界。旧 Windows 单文件 Home `.build/mdo-packed-docks-ty_0rpx3` 中，服务端 `/workspace/files?q=alpha%40b` 返回 `src/alpha@beta.c`，输入 `@alpha@b` 却无候选。现在只把引用开头的 `@` 当标记，后续 `@` 保留在查询和完整引用后缀里；隔离夹具固定提供 `src/omega@beta.c`。

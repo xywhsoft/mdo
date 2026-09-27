@@ -86,6 +86,7 @@ export function createSlashCommands({ composer, input, onExecute }) {
     const value = input.value;
     if (!value.startsWith("/") || /[\s]/.test(value)) { hide(); return; }
     matches = COMMANDS.filter((command) => command.name.startsWith(value));
+    if (!matches.some((command) => command.name !== value)) { hide(); return; }
     active = 0;
     render();
   }

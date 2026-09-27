@@ -30,9 +30,12 @@ try {
   input.focus();
   input.value = "/help";
   input.dispatchEvent(new Event("input", { bubbles: true }));
+  const exactHidden = composer.querySelector(".slash-menu").hidden;
+  input.value = "/he";
+  input.dispatchEvent(new Event("input", { bubbles: true }));
   const slash = composer.querySelector(".slash-option");
   pointerDown(slash);
-  const slashHeld = input.value === "/help" && executed.length === 0;
+  const slashHeld = input.value === "/he" && executed.length === 0;
   slash.click();
   await Promise.resolve();
   const slashClicked = input.value === "" && executed.join() === "/help";
@@ -46,9 +49,9 @@ try {
   const fileHeld = input.value === "@中文";
   file.click();
   const fileClicked = input.value === '@"notes/中文 文件.txt" ';
-  const passed = slashHeld && slashClicked && fileHeld && fileClicked;
+  const passed = exactHidden && slashHeld && slashClicked && fileHeld && fileClicked;
   output.dataset.passed = String(passed);
-  output.textContent = JSON.stringify({ passed, slashHeld, slashClicked,
+  output.textContent = JSON.stringify({ passed, exactHidden, slashHeld, slashClicked,
     fileHeld, fileClicked, executed }, null, 2);
 } catch (error) {
   output.dataset.passed = "false";
