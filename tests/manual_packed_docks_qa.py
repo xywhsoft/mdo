@@ -1,8 +1,8 @@
 """Local packed-page fixture for todo, ask, and approval UI review.
 
 Run from the repository root after building mdo.exe. The model endpoint only
-binds to localhost and returns one deterministic tool call per marker prompt:
-TODO UI, ASK UI, LONG ASK UI, APPROVAL UI, APPROVAL RUN UI,
+binds to localhost and returns deterministic tool calls for marker prompts:
+TODO UI, ASK UI, LONG ASK UI, SEQUENTIAL DECISIONS UI, APPROVAL UI, APPROVAL RUN UI,
 APPROVAL NEXT UI, TASK UI, or ARTIFACT UI. The long
 ask has multiline question and options; the latter reads one bounded synthetic
 text file so the normal tool-output artifact path is used.
@@ -77,6 +77,19 @@ class Model(BaseHTTPRequestHandler):
                                "argv": [sys.executable, "-c",
                                         f"import time; time.sleep({Model.task_seconds:g}); "
                                         "print('task UI fixture')"]})}]
+            elif "SEQUENTIAL DECISIONS UI" in wire and "sequential-decisions" not in Model.sent:
+                Model.sent.add("sequential-decisions")
+                output = [
+                    {"type": "function_call", "call_id": "ui-sequential-ask",
+                     "name": "ask_user", "arguments": json.dumps({
+                         "question": "Which bounded check should run next?",
+                         "options": ["Inspect", "Continue"]})},
+                    {"type": "function_call", "call_id": "ui-sequential-approval",
+                     "name": "exec", "arguments": json.dumps({
+                         "argv": [sys.executable, "-c",
+                                  "print('sequential decision fixture')"],
+                         "timeout_ms": 5000})},
+                ]
             elif "ASK UI" in wire and "TASK UI" not in wire and "ask" not in Model.sent:
                 Model.sent.add("ask")
                 long_ask = "LONG ASK UI" in wire
