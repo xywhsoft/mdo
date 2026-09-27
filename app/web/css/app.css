@@ -364,6 +364,12 @@ select:focus-visible,
 .session-group-manage:hover { background: var(--surface-hover); color: var(--ink); }
 .project-list-heading { padding-top: 10px; }
 .project-list-heading .session-group-new { margin-left: auto; }
+.project-quick-add { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 4px; align-items: center; padding: 4px 9px 8px; }
+.project-quick-add input { min-width: 0; min-height: 32px; padding: 4px 7px; border: 1px solid var(--border-strong); border-radius: 6px; background: var(--surface-raised); color: var(--ink); font: inherit; font-size: 12px; }
+.project-quick-add button { min-height: 32px; padding: 0 8px; border: 0; border-radius: 6px; background: var(--surface-hover); color: var(--ink); font: inherit; font-size: 11px; cursor: pointer; }
+.project-quick-add button:hover { background: var(--surface-active); }
+.project-quick-add button:disabled { opacity: .55; cursor: wait; }
+.project-quick-error { grid-column: 1 / -1; color: var(--danger); font-size: 11px; overflow-wrap: anywhere; }
 .session-group-empty { padding: 5px 10px 11px; color: var(--faint); font-size: 11px; }
 
 .session-item {
@@ -1336,6 +1342,9 @@ select:focus-visible,
   .session-group-new, .session-group-manage,
   .session-more { width: 40px; height: 40px; }
   .session-group-main { min-height: 40px; }
+  .project-quick-add { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .project-quick-add input { grid-column: 1 / -1; }
+  .project-quick-add input, .project-quick-add button { min-height: 40px; }
   .session-item-row { grid-template-columns: minmax(0, 1fr) 40px; }
   .session-menu button { min-height: 40px; }
   .model-config-layout { grid-template-columns: minmax(0, 1fr); }

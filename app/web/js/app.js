@@ -5,7 +5,7 @@ import {
   patchSession, trashSession, restoreSession, loadSessionHistory, forkSession,
   truncateSession, clearSession, exportSession, loadSessionTranscript,
 } from "./state/sessions.js";
-import { modelsStore, agentsStore, projectsStore, loadCatalogs, loadModels, loadAgents } from "./state/catalogs.js";
+import { modelsStore, agentsStore, projectsStore, loadCatalogs, loadModels, loadAgents, createProject } from "./state/catalogs.js";
 import {
   settingsStore, loadSettings, previewSettings, applySettings,
 } from "./state/settings.js";
@@ -28,6 +28,7 @@ import { sessionActionDialogCopy, sessionActionToast, sessionForkTitle } from ".
 import { SESSION_TITLE_UTF8_LIMIT, sessionTitleUtf8Bytes } from "./features/sessions/session-title.js";
 import { formatSessionMarkdown, sessionMarkdownFilename } from "./features/sessions/session-export.js";
 import { createProjectDialog } from "./features/sessions/project-dialog.js";
+import { projectDefaultsFromWorkspace } from "./features/sessions/project-identity.js";
 import { timelineStore, selectTimeline, clearTimeline, refreshSelectedTimeline, reloadSelectedTimeline } from "./features/chat/timeline-store.js";
 import { todoStore, selectTodo, clearTodo } from "./state/todo.js";
 import { createTimelineView } from "./features/chat/timeline.js";
@@ -233,7 +234,7 @@ export async function boot() {
         });
     },
     onAction: handleSessionAction,
-    onAddProject: () => projectDialog.open(),
+    onAddProject: (workspaceRoot) => createProject(projectDefaultsFromWorkspace(workspaceRoot)),
     onManageProject(projectId) {
       navigation.openSettings("projects");
       closeDrawers();

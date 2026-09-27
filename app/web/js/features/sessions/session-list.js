@@ -13,6 +13,11 @@ export function createSessionList({ container, count, filter, searchInput, store
   let unread = new Set();
   let openMenuNode = null;
   let openMenuButton = null;
+  let quickProjectOpen = false;
+  let quickProjectPath = "";
+  let quickProjectBusy = false;
+  let quickProjectError = "";
+  let quickProjectEpoch = 0;
   const sidebar = container.closest(".sidebar");
   const sessionKey = (session) => `${session.project_id}/${session.id}`;
 
@@ -50,10 +55,90 @@ export function createSessionList({ container, count, filter, searchInput, store
     return sessionActionItems(session).map((action) => menuAction(action, session));
   }
 
+  function quickProjectForm() {
+    const input = element("input", { attrs: {
+      type: "text", required: "", autocomplete: "off", spellcheck: "false",
+      "data-quick-project-focus": "path",
+      "aria-label": t("project.workspace", {}, "工作区目录"),
+      placeholder: t("project.workspacePlaceholder", {}, "例如 /work/project"),
+    } });
+    input.value = quickProjectPath;
+    const error = element("span", { className: "project-quick-error",
+      text: quickProjectError, attrs: { role: "alert" } });
+    error.hidden = !quickProjectError;
+    input.addEventListener("input", () => {
+      quickProjectPath = input.value;
+      quickProjectError = "";
+      error.hidden = true;
+    });
+    const submit = element("button", { className: "project-quick-submit",
+      text: t("project.add", {}, "添加项目"), attrs: {
+        type: "submit", "data-quick-project-focus": "submit",
+      } });
+    const cancel = element("button", { className: "project-quick-cancel",
+      text: "×", attrs: { type: "button", "data-quick-project-focus": "cancel",
+        "aria-label": t("project.cancel", {}, "取消") } });
+    const form = element("form", { className: "project-quick-add" },
+      [input, submit, cancel, error]);
+    input.disabled = submit.disabled = cancel.disabled = quickProjectBusy;
+    function close() {
+      if (quickProjectBusy) return;
+      quickProjectEpoch += 1;
+      quickProjectOpen = false;
+      quickProjectPath = "";
+      quickProjectError = "";
+      render();
+      container.querySelector(".project-list-heading .session-group-new")
+        ?.focus({ preventScroll: true });
+    }
+    cancel.addEventListener("click", close);
+    form.addEventListener("keydown", (event) => {
+      if (event.key !== "Escape" || isImeKey(event)) return;
+      event.preventDefault();
+      close();
+    });
+    form.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      if (quickProjectBusy) return;
+      const path = quickProjectPath.trim();
+      if (!path) { input.focus(); return; }
+      quickProjectBusy = true;
+      quickProjectError = "";
+      const epoch = quickProjectEpoch;
+      render();
+      let project;
+      try { project = await onAddProject(path); }
+      catch (cause) {
+        quickProjectBusy = false;
+        if (epoch !== quickProjectEpoch) { render(); return; }
+        quickProjectError = errorMessage(cause);
+        render();
+        container.querySelector(".project-quick-add input")?.focus();
+        return;
+      }
+      quickProjectBusy = false;
+      if (epoch !== quickProjectEpoch) {
+        render();
+        toast(t("project.added", { name: project.name }, `已添加项目 ${project.name}`));
+        return;
+      }
+      quickProjectOpen = false;
+      quickProjectPath = "";
+      render();
+      onNewInProject(project.id);
+      toast(t("project.added", { name: project.name }, `已添加项目 ${project.name}`));
+    });
+    return form;
+  }
+
   function render() {
     const requestedFocus = focusRequest;
     focusRequest = null;
     const focused = document.activeElement;
+    const quickFocus = focused?.closest?.(".project-quick-add")
+      ? focused.dataset.quickProjectFocus : "";
+    const quickSelection = quickFocus === "path"
+      ? [focused.selectionStart, focused.selectionEnd] : null;
     const focusedMenu = focused?.closest?.(".session-menu");
     const retainedFocus = focusedMenu?.dataset.sessionKey === openMenu
       ? { key: openMenu, index: Number(focused.dataset.menuIndex) }
@@ -152,10 +237,15 @@ export function createSessionList({ container, count, filter, searchInput, store
       const add = element("button", { className: "session-group-new", text: "+",
         attrs: { type: "button", "aria-label": t("nav.addProject", {}, "添加项目"),
           title: t("nav.addProject", {}, "添加项目") } });
-      add.addEventListener("click", onAddProject);
+      add.disabled = quickProjectBusy;
+      add.addEventListener("click", () => {
+        if (!quickProjectOpen) { quickProjectOpen = true; render(); }
+        container.querySelector(".project-quick-add input")?.focus();
+      });
       container.append(element("div", { className: "session-group-heading project-list-heading" }, [
         element("span", { className: "session-group-name", text: t("nav.projects", {}, "项目") }), add,
       ]));
+      if (quickProjectOpen) container.append(quickProjectForm());
     }
 
     function appendSession(session, showProject = false) {
@@ -231,13 +321,35 @@ export function createSessionList({ container, count, filter, searchInput, store
     if (openMenu && !openMenuNode) openMenu = "";
     if (!restoredFocus && (requestedFocus || retainedFocus))
       (container.querySelector(".session-item, .session-group-new") ?? filter).focus();
+    if (quickFocus) {
+      const replacement = container.querySelector(`[data-quick-project-focus="${quickFocus}"]`)
+        ?? container.querySelector(".project-quick-add input");
+      replacement?.focus({ preventScroll: true });
+      if (quickSelection && replacement?.setSelectionRange)
+        replacement.setSelectionRange(...quickSelection);
+    }
   }
 
   const unsubscribeStore = store.subscribe((next) => { state = next; render(); });
   const unsubscribeProjects = projectsStore.subscribe(render);
-  const unsubscribeNavigation = navigation.subscribe(() => { openMenu = ""; render(); });
+  const unsubscribeNavigation = navigation.subscribe(() => {
+    openMenu = "";
+    quickProjectEpoch += 1;
+    quickProjectOpen = false;
+    quickProjectPath = "";
+    quickProjectError = "";
+    render();
+  });
   const unsubscribeLocale = subscribeLocale(render);
-  filter.addEventListener("change", () => { status = filter.value; openMenu = ""; render(); });
+  filter.addEventListener("change", () => {
+    status = filter.value;
+    openMenu = "";
+    quickProjectEpoch += 1;
+    quickProjectOpen = false;
+    quickProjectPath = "";
+    quickProjectError = "";
+    render();
+  });
   function sessionButtons() {
     return [...container.querySelectorAll(".session-item")];
   }

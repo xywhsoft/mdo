@@ -1,17 +1,7 @@
 import { createProject, readProject, updateProject } from "../../state/catalogs.js";
 import { element, errorMessage, toast } from "../../utils/dom.js";
 import { subscribeLocale, t } from "../../i18n.js";
-
-function pathName(path) {
-  const segments = path.trim().replace(/[\\/]+$/, "").split(/[\\/]/);
-  return segments.at(-1) || "";
-}
-
-function projectId(name) {
-  const slug = name.toLowerCase().replace(/[^a-z0-9._-]+/g, "-")
-    .replace(/^[._-]+|[._-]+$/g, "").slice(0, 64);
-  return slug || `project-${Date.now().toString(36)}`;
-}
+import { projectDefaultsFromWorkspace, projectIdFromName } from "./project-identity.js";
 
 export function createProjectDialog({ dialog, form, error, submit, modelsStore,
   onCreated, onUpdated }) {
@@ -26,12 +16,13 @@ export function createProjectDialog({ dialog, form, error, submit, modelsStore,
   const description = dialog.querySelector("#project-dialog-description");
 
   workspace.addEventListener("input", () => {
-    if (!nameEdited) name.value = pathName(workspace.value);
-    if (!idEdited) id.value = projectId(name.value);
+    const defaults = projectDefaultsFromWorkspace(workspace.value);
+    if (!nameEdited) name.value = defaults.name;
+    if (!idEdited) id.value = nameEdited ? projectIdFromName(name.value) : defaults.id;
   });
   name.addEventListener("input", () => {
     nameEdited = true;
-    if (!idEdited) id.value = projectId(name.value);
+    if (!idEdited) id.value = projectIdFromName(name.value);
   });
   id.addEventListener("input", () => { idEdited = true; });
 
