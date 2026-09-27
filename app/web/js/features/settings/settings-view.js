@@ -79,6 +79,8 @@ export function createSettingsView({ form, store, navigation, onApplied }) {
   const discardButton = document.querySelector("#discard-settings");
   const restoreButton = document.querySelector("#restore-settings");
   const restoreConfirm = document.querySelector("#restore-confirm");
+  const cancelRestoreButton = document.querySelector("#cancel-restore");
+  const confirmRestoreButton = document.querySelector("#confirm-restore");
   const credential = document.querySelector("#search-credential-state");
   const proxyCredential = document.querySelector("#proxy-credential-state");
   const instructionsCount = document.querySelector("#settings-instructions-count");
@@ -114,6 +116,15 @@ export function createSettingsView({ form, store, navigation, onApplied }) {
     applyButton.disabled = value || !snapshot || previewFingerprint !== fingerprint();
     discardButton.disabled = value || !dirty;
     restoreButton.disabled = value || !snapshot?.user_patches?.settings;
+  }
+
+  function focusAfterAction(preferred = feedback) {
+    if (document.activeElement !== document.body &&
+        document.activeElement !== document.documentElement) return;
+    const target = preferred?.isConnected && !preferred.disabled &&
+      preferred.getClientRects().length ? preferred : feedback;
+    if (target?.isConnected && target.getClientRects().length)
+      target.focus({ preventScroll: true });
   }
 
   function renderStatus(settings) {
@@ -269,6 +280,7 @@ export function createSettingsView({ form, store, navigation, onApplied }) {
 
   previewButton.addEventListener("click", async () => {
     if (!snapshot || !form.reportValidity()) return;
+    let nextFocus = previewButton;
     setBusy(true);
     try {
       const patch = settingsPatch(form, snapshot);
@@ -280,12 +292,14 @@ export function createSettingsView({ form, store, navigation, onApplied }) {
         : t("settings.previewNoChange", {}, "预览通过，当前输入不会改变有效配置。"),
       preview.changes ? "success" : "neutral");
       applyButton.disabled = !preview.changes;
+      if (preview.changes) nextFocus = applyButton;
     } catch (error) {
       previewFingerprint = "";
       feedbackText(errorMessage(error), "error");
     } finally {
       busy = false;
       setBusy(false);
+      focusAfterAction(nextFocus);
     }
   });
 
@@ -305,16 +319,33 @@ export function createSettingsView({ form, store, navigation, onApplied }) {
       feedbackText(errorMessage(error), "error");
     } finally {
       busy = false;
+      focusAfterAction();
     }
   });
 
   discardButton.addEventListener("click", () => {
     if (snapshot) fill(snapshot);
+    // fill() disables the clicked button; move focus before the browser blurs it.
+    feedback.focus({ preventScroll: true });
   });
-  restoreButton.addEventListener("click", () => { restoreConfirm.hidden = false; });
-  document.querySelector("#cancel-restore").addEventListener("click", () => { restoreConfirm.hidden = true; });
-  document.querySelector("#confirm-restore").addEventListener("click", async () => {
-    if (!snapshot) return;
+  function closeRestoreConfirm() {
+    restoreConfirm.hidden = true;
+    (restoreButton.disabled ? feedback : restoreButton).focus({ preventScroll: true });
+  }
+  restoreButton.addEventListener("click", () => {
+    restoreConfirm.hidden = false;
+    cancelRestoreButton.focus({ preventScroll: true });
+  });
+  cancelRestoreButton.addEventListener("click", closeRestoreConfirm);
+  restoreConfirm.addEventListener("keydown", (event) => {
+    if (event.key !== "Escape" || busy) return;
+    event.preventDefault();
+    closeRestoreConfirm();
+  });
+  confirmRestoreButton.addEventListener("click", async () => {
+    if (!snapshot || busy) return;
+    cancelRestoreButton.disabled = true;
+    confirmRestoreButton.disabled = true;
     setBusy(true);
     try {
       const result = await restoreSettings(snapshot.etag);
@@ -327,6 +358,10 @@ export function createSettingsView({ form, store, navigation, onApplied }) {
       feedbackText(errorMessage(error), "error");
     } finally {
       busy = false;
+      cancelRestoreButton.disabled = false;
+      confirmRestoreButton.disabled = false;
+      focusAfterAction(
+        restoreConfirm.hidden ? feedback : confirmRestoreButton);
     }
   });
 

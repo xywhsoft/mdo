@@ -1101,6 +1101,7 @@ select:focus-visible,
   backdrop-filter: blur(12px);
 }
 .settings-actions > div { display: flex; min-width: 0; align-items: center; gap: 8px; }
+.settings-action-compact { display: none; }
 .settings-feedback { color: var(--muted); font-size: 11px; }
 .settings-feedback[data-tone="error"] { color: var(--danger); }
 .settings-feedback[data-tone="success"] { color: var(--success); }
@@ -1431,6 +1432,19 @@ select:focus-visible,
   .settings-actions > div { justify-content: flex-end; overflow-x: auto; }
   .settings-feedback { justify-content: flex-start !important; }
   .restore-confirm { right: 8px; left: 8px; flex-wrap: wrap; }
+}
+
+@media (max-width: 640px) {
+  .settings-actions > .settings-action-buttons {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    width: 100%;
+    gap: 6px;
+    overflow: visible;
+  }
+  .settings-action-buttons button { min-width: 0; padding-inline: 2px; font-size: 11px; white-space: nowrap; }
+  .settings-action-full { display: none; }
+  .settings-action-compact { display: inline; }
 }
 
 @media (max-width: 420px) {
