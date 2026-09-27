@@ -1,6 +1,7 @@
 import { api, attachmentUrl, resourceId } from "../../api/client.js";
 import { subscribeLocale, t } from "../../i18n.js";
 import { clear, element, errorMessage, toast } from "../../utils/dom.js";
+import { createUnusedImageCleanup } from "./unused-image-cleanup.js";
 
 function sessionKey(projectId, sessionId) {
   return projectId && sessionId
@@ -24,6 +25,7 @@ function uncertainPost(error) {
 
 export function createPromptQueue({ container, navigation, isRunActive, stagedEntries,
   isRunReviewPending = () => false, isSessionWritable = () => true,
+  isSessionRunActive = () => false,
   onRetry, onRemoved }) {
   const queues = new Map();
   const loads = new Map();
@@ -31,6 +33,9 @@ export function createPromptQueue({ container, navigation, isRunActive, stagedEn
   const expanded = new Map();
   const busy = new Set();
   const actionBusy = new Set();
+  const unusedImages = createUnusedImageCleanup({
+    deleteImage: api.deleteImage, isRunActive: isSessionRunActive,
+  });
 
   function selectedKey() {
     const { projectId, sessionId } = navigation.get();
@@ -43,12 +48,6 @@ export function createPromptQueue({ container, navigation, isRunActive, stagedEn
     if (!(queues.get(key)?.length) && items.length) expanded.set(key, true);
     queues.set(key, items);
     render();
-  }
-
-  async function discardUnusedImages(key, attachments = []) {
-    const [projectId, sessionId] = key.split("/");
-    await Promise.allSettled(attachments.map((id) =>
-      api.deleteImage(projectId, sessionId, id)));
   }
 
   async function load(key, force = false) {
@@ -271,8 +270,8 @@ export function createPromptQueue({ container, navigation, isRunActive, stagedEn
     if (!key) return;
     const removed = queues.get(key)?.find((entry) => entry.id === id);
     update(key, await api.delete(path(key, id)));
-    void discardUnusedImages(key, removed?.attachments);
-    await onRemoved?.(key, removed);
+    try { await onRemoved?.(key, removed); }
+    finally { unusedImages.remember(key, removed?.attachments); }
   }
 
   navigation.subscribe(render);
@@ -352,5 +351,6 @@ export function createPromptQueue({ container, navigation, isRunActive, stagedEn
       finally { busy.delete(key); render(); }
     },
     render,
+    flushUnusedImages: () => unusedImages.flush(),
   });
 }

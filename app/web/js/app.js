@@ -496,6 +496,14 @@ export async function boot() {
   const promptQueue = createPromptQueue({
     container: $("#prompt-queue"), navigation,
     isRunActive: () => Boolean(activeRun),
+    isSessionRunActive: (key) => {
+      const [projectId, sessionId] = key.split("/");
+      return Boolean(activeRun && activeRun.project_id === projectId &&
+        activeRun.session_id === sessionId) ||
+        (runsStore.get().data?.items ?? []).some((run) =>
+          run.project_id === projectId && run.session_id === sessionId &&
+          !terminalState(run));
+    },
     isSessionWritable: () => sessionWritable,
     isRunReviewPending: (key) => draftStore?.isRunUncertain(key) ?? false,
     stagedEntries: () => {
@@ -1082,6 +1090,7 @@ export async function boot() {
     }
   }
   runsStore.subscribe(findActiveRun);
+  runsStore.subscribe(() => { void promptQueue.flushUnusedImages(); });
 
   function scheduleRunPoll(delay = 750) {
     window.clearTimeout(runMonitor);
