@@ -1,3 +1,5 @@
+import { t } from "../../i18n.js";
+
 export function createImagePreview({ dialog, image, closeButton, navigation }) {
   let origin = null;
 
@@ -15,7 +17,7 @@ export function createImagePreview({ dialog, image, closeButton, navigation }) {
     if (!thumbnail?.src) return;
     origin = trigger;
     image.src = thumbnail.currentSrc || thumbnail.src;
-    image.alt = thumbnail.alt || "图片预览";
+    image.alt = thumbnail.alt || t("image.previewTitle", {}, "图片预览");
     dialog.showModal();
     closeButton.focus();
   });

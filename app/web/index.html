@@ -514,7 +514,7 @@
       </section>
     </aside>
 
-    <button class="scrim" id="scrim" type="button" aria-label="关闭侧栏" tabindex="-1"></button>
+    <button class="scrim" id="scrim" type="button" aria-label="关闭面板" data-i18n-aria-label="shell.closePanel" tabindex="-1"></button>
   </div>
 
   <dialog class="new-session-dialog" id="startup-choice-dialog" aria-labelledby="startup-choice-title">
@@ -669,34 +669,34 @@
     </form>
   </dialog>
 
-  <dialog class="image-preview-dialog" id="image-preview" aria-label="图片预览">
-    <button class="image-preview-close" id="close-image-preview" type="button" aria-label="关闭图片预览">×</button>
+  <dialog class="image-preview-dialog" id="image-preview" aria-label="图片预览" data-i18n-aria-label="image.previewTitle">
+    <button class="image-preview-close" id="close-image-preview" type="button" aria-label="关闭图片预览" data-i18n-aria-label="image.closePreview">×</button>
     <img id="image-preview-content" alt="">
   </dialog>
 
   <dialog class="new-session-dialog shortcuts-dialog" id="shortcuts-dialog" aria-labelledby="shortcuts-title">
     <form method="dialog" class="dialog-card">
       <header>
-        <div><h2 id="shortcuts-title">快捷键与命令</h2><p>输入框外按 ? 打开，Esc 关闭；macOS 用 ⌘ 代替 Ctrl。</p></div>
-        <button class="icon-button" value="close" aria-label="关闭快捷键帮助" type="submit"><span class="icon" data-icon="close" aria-hidden="true"></span></button>
+        <div><h2 id="shortcuts-title" data-i18n="shortcuts.title">快捷键与命令</h2><p data-i18n="shortcuts.intro">输入框外按 ? 打开，Esc 关闭；macOS 用 ⌘ 代替 Ctrl。</p></div>
+        <button class="icon-button" value="close" aria-label="关闭快捷键帮助" data-i18n-aria-label="shortcuts.close" type="submit"><span class="icon" data-icon="close" aria-hidden="true"></span></button>
       </header>
       <div class="shortcuts-content">
-        <h3>键盘操作</h3>
+        <h3 data-i18n="shortcuts.keyboard">键盘操作</h3>
         <dl>
           <div><dt><kbd>Enter</kbd></dt><dd id="shortcut-enter-description">发送；运行中加入待发送队列</dd></div>
-          <div><dt><kbd>Shift</kbd> + <kbd>Enter</kbd></dt><dd>输入换行</dd></div>
+          <div><dt><kbd>Shift</kbd> + <kbd>Enter</kbd></dt><dd data-i18n="shortcuts.newline">输入换行</dd></div>
           <div><dt><kbd>Ctrl</kbd> + <kbd>Enter</kbd></dt><dd id="shortcut-control-enter-description">中断当前运行，优先发送输入</dd></div>
-          <div><dt><kbd>Esc</kbd></dt><dd>关闭弹层；无弹层时中断运行</dd></div>
-          <div><dt><kbd>Ctrl</kbd> + <kbd>K</kbd> / <kbd>N</kbd></dt><dd>新建任务</dd></div>
-          <div><dt><kbd>Ctrl</kbd> + <kbd>F</kbd></dt><dd>搜索当前会话</dd></div>
-          <div><dt><kbd>Ctrl</kbd> + <kbd>E</kbd></dt><dd>导出当前会话 Markdown</dd></div>
-          <div><dt><kbd>Ctrl</kbd> + <kbd>J</kbd></dt><dd>切换深色 / 浅色主题</dd></div>
-          <div><dt><kbd>Ctrl</kbd> + <kbd>,</kbd></dt><dd>打开设置</dd></div>
+          <div><dt><kbd>Esc</kbd></dt><dd data-i18n="shortcuts.escape">关闭弹层；无弹层时中断运行</dd></div>
+          <div><dt><kbd>Ctrl</kbd> + <kbd>K</kbd> / <kbd>N</kbd></dt><dd data-i18n="shell.newTask">新建任务</dd></div>
+          <div><dt><kbd>Ctrl</kbd> + <kbd>F</kbd></dt><dd data-i18n="shell.find">搜索当前会话</dd></div>
+          <div><dt><kbd>Ctrl</kbd> + <kbd>E</kbd></dt><dd data-i18n="shell.export">导出当前会话 Markdown</dd></div>
+          <div><dt><kbd>Ctrl</kbd> + <kbd>J</kbd></dt><dd data-i18n="shortcuts.theme">切换深色 / 浅色主题</dd></div>
+          <div><dt><kbd>Ctrl</kbd> + <kbd>,</kbd></dt><dd data-i18n="shortcuts.openSettings">打开设置</dd></div>
         </dl>
-        <h3>输入增强</h3>
-        <p>输入 <code>/</code> 查看命令，输入 <code>@</code> 补全工作区文件；图片可通过附件按钮、粘贴或拖入添加。</p>
+        <h3 data-i18n="shortcuts.composer">输入增强</h3>
+        <p><span data-i18n="shortcuts.composerBefore">输入 </span><code>/</code><span data-i18n="shortcuts.composerBetween"> 查看命令，输入 </span><code>@</code><span data-i18n="shortcuts.composerAfter"> 补全工作区文件；图片可通过附件按钮、粘贴或拖入添加。</span></p>
       </div>
-      <footer><button class="primary-button" value="close" type="submit">知道了</button></footer>
+      <footer><button class="primary-button" value="close" type="submit" data-i18n="shortcuts.done">知道了</button></footer>
     </form>
   </dialog>
 

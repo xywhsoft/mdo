@@ -960,10 +960,10 @@ select:focus-visible,
 :is(#new-session-dialog, #session-action-dialog) .dialog-card > footer { flex: 0 0 auto; }
 :is(#new-session-dialog, #session-action-dialog) .dialog-fields { min-height: 0; overflow-y: auto; }
 #new-session-dialog .dialog-error { flex: 0 0 auto; max-height: min(96px, 25dvh); overflow-y: auto; }
-.image-preview-dialog { position: fixed; min-width: 48px; max-width: calc(100vw - 24px); max-height: calc(100dvh - 24px); margin: auto; padding: 8px; border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--surface-raised); box-shadow: var(--shadow-dialog); }
+.image-preview-dialog { position: fixed; min-width: 58px; max-width: calc(100vw - 24px); max-height: calc(100dvh - 24px); margin: auto; padding: 48px 8px 8px; border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--surface-raised); box-shadow: var(--shadow-dialog); }
 .image-preview-dialog::backdrop { background: rgb(0 0 0 / 72%); }
-.image-preview-dialog img { display: block; width: auto; height: auto; max-width: calc(100vw - 42px); max-height: calc(100dvh - 42px); object-fit: contain; }
-.image-preview-close { position: absolute; top: 8px; right: 8px; display: grid; width: 32px; height: 32px; place-items: center; padding: 0; border: 1px solid var(--border-strong); border-radius: 50%; background: var(--surface-raised); color: var(--ink); font-size: 22px; line-height: 1; cursor: pointer; }
+.image-preview-dialog img { display: block; width: auto; height: auto; max-width: calc(100vw - 42px); max-height: calc(100dvh - 82px); object-fit: contain; }
+.image-preview-close { position: absolute; top: 4px; right: 8px; display: grid; width: 40px; height: 40px; place-items: center; padding: 0; border: 1px solid var(--border-strong); border-radius: 50%; background: var(--surface-raised); color: var(--ink); font-size: 22px; line-height: 1; cursor: pointer; }
 .dialog-card > header { display: flex; align-items: flex-start; justify-content: space-between; padding: 20px 20px 15px; border-bottom: 1px solid var(--border); }
 .dialog-card h2 { margin: 0; font-size: 17px; }
 .dialog-card header p { margin: 4px 0 0; color: var(--muted); font-size: 11px; }
@@ -988,8 +988,10 @@ select:focus-visible,
 .message-edit-fields textarea { height: min(170px, 24dvh); min-height: 80px; max-height: min(50vh, 360px); resize: vertical; font: inherit; line-height: 1.5; }
 .dialog-error { margin: 0 20px 12px; color: var(--danger); font-size: 12px; }
 .dialog-card > footer { display: flex; justify-content: flex-end; gap: 8px; padding: 13px 20px; border-top: 1px solid var(--border); }
-.shortcuts-dialog { width: min(540px, calc(100vw - 24px)); }
-.shortcuts-content { max-height: min(66dvh, 560px); overflow-y: auto; padding: 14px 20px 18px; }
+.shortcuts-dialog { width: min(540px, calc(100vw - 24px)); max-height: calc(100dvh - 32px); overflow: hidden; }
+.shortcuts-dialog .dialog-card { display: flex; max-height: calc(100dvh - 32px); min-height: 0; flex-direction: column; }
+.shortcuts-dialog .dialog-card > header, .shortcuts-dialog .dialog-card > footer { flex: 0 0 auto; }
+.shortcuts-content { flex: 1 1 auto; min-height: 0; max-height: min(66dvh, 560px); overflow-y: auto; padding: 14px 20px 18px; }
 .shortcuts-content h3 { margin: 12px 0 8px; font-size: 12px; }
 .shortcuts-content h3:first-child { margin-top: 0; }
 .shortcuts-content dl { margin: 0; }
@@ -1405,6 +1407,8 @@ select:focus-visible,
   :is(#new-session-dialog, #session-action-dialog) .dialog-card > header { padding: 12px 16px 8px; }
   :is(#new-session-dialog, #session-action-dialog) .dialog-fields { gap: 10px; padding: 10px 16px; }
   :is(#new-session-dialog, #session-action-dialog) .dialog-card > footer { padding: 8px 16px; }
+  .shortcuts-dialog .dialog-card > header { padding: 12px 16px 8px; }
+  .shortcuts-dialog .dialog-card > footer { padding: 8px 16px; }
   .shortcuts-content dl > div { align-items: flex-start; flex-direction: column; gap: 4px; }
   .shortcuts-content dd { text-align: left; }
   .settings-workspace { grid-row: 1 / -1; }
@@ -1473,6 +1477,7 @@ select:focus-visible,
   #new-session-dialog .dialog-fields { gap: 6px; padding: 4px 12px; }
   #new-session-dialog .dialog-error { margin: 0 12px 4px; }
   #new-session-dialog .dialog-card > footer { padding: 4px 12px; }
+  .shortcuts-dialog .dialog-card > header p { display: none; }
 }
 
 @media (max-width: 420px) {
