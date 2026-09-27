@@ -620,6 +620,7 @@ export async function boot() {
     ring: $("#context-meter-ring"), panel: $("#context-meter-panel"),
     estimate: $("#composer-input-estimate"), prompt,
     modelSelect: $("#composer-model"),
+    attachments: () => composerAttachments,
     sessionStore: sessionDetailStore, timelineStore, modelsStore, runsStore,
   });
   draftStore = createDraftStore({
@@ -763,6 +764,7 @@ export async function boot() {
     onChange(attachments) {
       composerAttachments = attachments;
       draftStore.edit(selectedKey, prompt.value, attachments);
+      tokenMeter.refresh();
     },
     async onRemove(owner, id, previous) {
       const key = `${owner.projectId}/${owner.sessionId}`;

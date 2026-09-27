@@ -163,3 +163,52 @@ test("last-call usage uses its own model after the next model is selected", () =
     globalThis.document = previousDocument;
   }
 });
+
+test("composer estimate names uncounted image tokens and restores text-only state", () => {
+  const previousDocument = globalThis.document;
+  const document = new EventTarget();
+  document.createElement = () => new Node(document);
+  document.querySelector = () => null;
+  document.body = new Node(document);
+  document.activeElement = document.body;
+  globalThis.document = document;
+  const root = new Node(document);
+  const trigger = new Node(document);
+  const panel = new Node(document);
+  const prompt = new Node(document);
+  const estimate = new Node(document);
+  const ring = new Node(document);
+  let images = [];
+  let meter;
+  try {
+    meter = createTokenMeter({ root, trigger, panel, prompt, estimate, ring,
+      attachments: () => images,
+      modelSelect: { value: "ling" },
+      sessionStore: resource(null), timelineStore: resource({ events: [] }),
+      modelsStore: resource({ models: [] }) });
+    assert.equal(estimate.textContent, "", "empty composer should stay quiet");
+    prompt.value = "abcd";
+    meter.refresh();
+    assert.match(estimate.textContent, /~1 tok/);
+    assert.doesNotMatch(estimate.textContent, /图片|image/i);
+    images = ["image-1"];
+    meter.refresh();
+    assert.match(estimate.textContent, /~1 tok/);
+    assert.match(estimate.textContent, /图片|image/i);
+    assert.match(estimate.title, /图片|image/i);
+    assert.match(panel.children.at(-1).textContent, /图片|image/i);
+    prompt.value = "";
+    meter.refresh();
+    assert.match(estimate.textContent, /~0 tok/,
+      "image-only drafts must not look like an empty composer");
+    assert.match(estimate.textContent, /图片|image/i);
+    prompt.value = "abcd";
+    images = [];
+    meter.refresh();
+    assert.doesNotMatch(estimate.textContent, /图片|image/i);
+    assert.doesNotMatch(panel.children.at(-1).textContent, /图片|image/i);
+  } finally {
+    meter?.destroy();
+    globalThis.document = previousDocument;
+  }
+});

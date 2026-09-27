@@ -8,14 +8,22 @@ export function estimateInputTokens(text) {
 }
 
 export function createTokenMeter({ root, trigger, ring, panel, estimate, prompt,
-  modelSelect, sessionStore, timelineStore, modelsStore, runsStore }) {
+  modelSelect, sessionStore, timelineStore, modelsStore, runsStore,
+  attachments = () => [] }) {
   let open = false;
 
   function update() {
     const number = (value) => value.toLocaleString(currentLocale());
     const input = estimateInputTokens(prompt.value);
-    estimate.textContent = t("token.inputEstimate", { count: number(input) },
-      `输入 ~${number(input)} tok`);
+    const hasImages = attachments().length > 0;
+    estimate.textContent = hasImages
+      ? t("token.textEstimateWithImages", { count: number(input) },
+        `文字 ~${number(input)} tok · 图片另计`)
+      : prompt.value ? t("token.inputEstimate", { count: number(input) },
+        `输入 ~${number(input)} tok`) : "";
+    estimate.title = hasImages
+      ? t("token.imageEstimateTitle", {}, "仅估算输入文字；图片 token 未计入")
+      : t("token.estimateTitle", {}, "按输入文本粗略估算");
     const session = sessionStore.get().data;
     const models = modelsStore.get().data?.models ?? [];
     const model = models.find((item) => item.id ===
@@ -65,7 +73,8 @@ export function createTokenMeter({ root, trigger, ring, panel, estimate, prompt,
           lastWindowTokens ? number(lastWindowTokens) : "—"],
       ] : []),
       [t("token.lastInput", {}, "上次模型输入"), latestInput ? number(latestInput) : "—"],
-      [t("token.currentEstimate", {}, "本次输入估算"), `~${number(input)}`],
+      [t(hasImages ? "token.currentTextEstimate" : "token.currentEstimate", {},
+        hasImages ? "本次文字估算" : "本次输入估算"), `~${number(input)}`],
       [t("token.visibleInput", {}, "可见调用累计输入"), number(totalInput)],
       [t("token.visibleOutput", {}, "可见调用累计输出"), number(totalOutput)],
     ];
@@ -75,6 +84,9 @@ export function createTokenMeter({ root, trigger, ring, panel, estimate, prompt,
       attrs: { id: "context-meter-title" } }), details,
       element("p", { text: t("token.note", {},
         "模型用量来自服务端事件；输入框估算仅供参考。历史事件被裁剪时，累计值只包含当前可见调用。") }));
+    if (hasImages)
+      panel.append(element("p", { text: t("token.imageEstimateNote", {},
+        "图片 token 未计入估算，实际用量取决于模型。") }));
     if (latestCall && !lastWindowTokens)
       panel.append(element("p", { text: t("token.unknownContext", {},
         "上次调用的模型配置无法确定，暂不显示上下文占比。") }));
