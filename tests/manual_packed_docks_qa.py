@@ -462,6 +462,10 @@ if args.image_capable:
     defaults = json.loads((ROOT / "app/default-home/config/defaults.json")
                           .read_text(encoding="utf-8"))
     model_config = defaults["models"]["items"][0]
+    text_model = json.loads(json.dumps(model_config))
+    text_model["id"] = "ling-3.0-tiny-text-qa"
+    text_model["name"] = "Ling Text QA"
+    defaults["models"]["items"].append(text_model)
     model_config["capabilities"].append("media-input")
     model_config["attachments"] = ["image"]
     override = base / "default-home/config/defaults.json"

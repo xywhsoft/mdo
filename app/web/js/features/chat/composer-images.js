@@ -34,7 +34,7 @@ function pastedImages(clipboard) {
     .filter((entry) => Boolean(entry.mime));
 }
 
-function unsupportedModelError() {
+export function unsupportedModelError() {
   const error = new Error(t("image.unsupportedModel", {},
     "当前模型不支持图片，请先切换到支持图片的模型"));
   error.code = "image_model_unsupported";
@@ -48,7 +48,7 @@ function selectionError(message) {
 }
 
 export function createComposerImages({ composer, prompt, button, input, strip,
-  navigation, modelsStore, sessionStore, ensureSession, onChange, onRemove,
+  modelSelect, navigation, modelsStore, sessionStore, ensureSession, onChange, onRemove,
   onUploading, onError }) {
   let ids = [];
   const uploads = new Set();
@@ -158,6 +158,11 @@ export function createComposerImages({ composer, prompt, button, input, strip,
       className: "composer-image-uploading",
       text: t("image.removing", {}, "正在移除图片…"),
     }));
+    if (ids.length && !imageCapable()) strip.append(element("span", {
+      className: "composer-image-unsupported",
+      text: t("image.draftUnsupported", {},
+        "当前模型不支持草稿中的图片；请切换模型或移除图片后再发送"),
+    }));
     button.disabled = !writable || uploading || removing;
     if (focusedKind && !removing) {
       const candidates = [...strip.querySelectorAll(focusedKind === "remove"
@@ -170,8 +175,11 @@ export function createComposerImages({ composer, prompt, button, input, strip,
   }
 
   function imageCapable() {
-    const modelId = sessionStore.get().data?.model_id ||
-      document.querySelector("#composer-model")?.value;
+    const route = navigation.get();
+    const session = sessionStore.get().data;
+    const modelId = session?.model_id && (!modelSelect ||
+      (session.id === route.sessionId && session.project_id === route.projectId))
+      ? session.model_id : modelSelect?.value;
     const model = modelsStore.get().data?.models?.find((item) =>
       item.id === modelId);
     return Boolean(Number(model?.attachments ?? 0) & 1);
@@ -316,6 +324,8 @@ export function createComposerImages({ composer, prompt, button, input, strip,
     clear() { ids = []; render(); },
     isUploading: () => uploadingCurrent() || removingCurrent(),
     supportsCurrentModel: imageCapable,
+    hasUnsupportedDraft: () => ids.length > 0 && !imageCapable(),
+    refresh: render,
     setWritable(value) { writable = Boolean(value); render(); },
   });
 }

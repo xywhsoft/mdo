@@ -419,6 +419,7 @@
   "image.saving": "正在保存图片…",
   "image.removing": "正在移除图片…",
   "image.unsupportedModel": "当前模型不支持图片，请先切换到支持图片的模型",
+  "image.draftUnsupported": "当前模型不支持草稿中的图片；请切换模型或移除图片后再发送",
   "image.removeRollback": "草稿未保存，图片已恢复",
   "image.readOnly": "当前会话不可添加图片",
   "image.typesOnly": "仅支持 PNG、JPEG 和 WebP 图片",

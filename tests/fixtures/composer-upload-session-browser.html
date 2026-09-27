@@ -53,23 +53,28 @@ window.fetch = async (url, options = {}) => {
 function createCase(label, initialRoute, ensureSession) {
   const section = document.createElement("section");
   section.innerHTML = `<h2></h2><form class="composer"><textarea></textarea>` +
+    `<select><option value="image">image</option><option value="text">text</option></select>` +
     `<button type="button">添加图片</button><input type="file" hidden>` +
     `<div class="composer-images"></div></form><pre></pre>`;
   section.querySelector("h2").textContent = label;
   root.append(section);
-  const [composer, prompt, button, input, strip, output] = [
+  const [composer, prompt, modelSelect, button, input, strip, output] = [
     section.querySelector("form"), section.querySelector("textarea"),
+    section.querySelector("select"),
     section.querySelector("button"), section.querySelector("input"),
     section.querySelector(".composer-images"), section.querySelector("pre"),
   ];
   let route = initialRoute;
+  let selectedModelId = "image";
   const changes = [];
   const errors = [];
   const images = createComposerImages({ composer, prompt, button, input, strip,
+    modelSelect,
     navigation: { get: () => route },
     modelsStore: { get: () => ({ data: { models: [
-      { id: "image", attachments: 1 }] } }) },
-    sessionStore: { get: () => ({ data: { model_id: "image" } }) },
+      { id: "image", attachments: 1 }, { id: "text", attachments: 0 }] } }) },
+    sessionStore: { get: () => ({ data: { id: route.sessionId,
+      project_id: route.projectId, model_id: selectedModelId } }) },
     ensureSession: async () => {
       route = await ensureSession();
       return route;
@@ -106,6 +111,8 @@ function createCase(label, initialRoute, ensureSession) {
   }
   return { images, button, strip, output, changes, errors, add,
     pasteItemOnly, pasteFilesOnly, pasteBoth,
+    setModel(value) { selectedModelId = value; modelSelect.value = value;
+      images.refresh(); },
     setRoute(value) { route = value; images.set([]); } };
 }
 
@@ -202,6 +209,28 @@ try {
   clipboardBoth.output.dataset.passed = String(bothPassed);
   clipboardBoth.output.textContent = JSON.stringify({ bothPassed,
     bothHandled, uploads: bothUploads, errors: clipboardBoth.errors }, null, 2);
+
+  const incompatible = createCase("图片草稿与模型切换",
+    { projectId: "qa", sessionId: "image-draft" });
+  incompatible.images.set([b]);
+  incompatible.setModel("text");
+  const blocked = incompatible.images.hasUnsupportedDraft() &&
+    incompatible.strip.querySelector(".composer-image-unsupported")?.textContent &&
+    incompatible.images.get().join() === b &&
+    !incompatible.strip.querySelector(".composer-image-remove")?.disabled;
+  incompatible.setModel("image");
+  const restored = !incompatible.images.hasUnsupportedDraft() &&
+    !incompatible.strip.querySelector(".composer-image-unsupported") &&
+    incompatible.images.get().join() === b;
+  incompatible.setModel("text");
+  incompatible.strip.querySelector(".composer-image-remove").click();
+  const removed = await until(() => incompatible.images.get().length === 0) &&
+    !incompatible.images.hasUnsupportedDraft() &&
+    !incompatible.strip.querySelector(".composer-image-unsupported");
+  const incompatiblePassed = Boolean(blocked && restored && removed);
+  incompatible.output.dataset.passed = String(incompatiblePassed);
+  incompatible.output.textContent = JSON.stringify({ incompatiblePassed,
+    blocked, restored, removed, errors: incompatible.errors }, null, 2);
 } catch (error) {
   const output = document.createElement("pre");
   output.dataset.passed = "false";

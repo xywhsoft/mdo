@@ -41,7 +41,7 @@ import { createPromptQueue } from "./features/chat/prompt-queue.js";
 import { createDraftStore } from "./features/chat/draft-store.js";
 import { createSubmissionController } from "./features/chat/submission-controller.js";
 import { createNewTaskController, taskTitle } from "./features/chat/new-task-controller.js";
-import { createComposerImages } from "./features/chat/composer-images.js";
+import { createComposerImages, unsupportedModelError } from "./features/chat/composer-images.js";
 import { createComposerProject } from "./features/chat/composer-project.js";
 import { createImagePreview } from "./features/chat/image-preview.js";
 import { createSlashCommands } from "./features/chat/slash-commands.js";
@@ -651,6 +651,7 @@ export async function boot() {
     onBusyChange: () => setRun(activeRun),
     onSelectionChange() {
       tokenMeter.refresh();
+      composerImages?.refresh();
       if (composerError.dataset.code === "image_model_unsupported" &&
           composerImages?.supportsCurrentModel()) hideComposerError();
     },
@@ -691,7 +692,8 @@ export async function boot() {
   });
   composerImages = createComposerImages({
     composer, prompt, button: $("#composer-attach"), input: $("#composer-file"),
-    strip: $("#composer-images"), navigation, modelsStore,
+    strip: $("#composer-images"), modelSelect: $("#composer-model"),
+    navigation, modelsStore,
     sessionStore: sessionDetailStore, ensureSession,
     onChange(attachments) {
       composerAttachments = attachments;
@@ -807,7 +809,8 @@ export async function boot() {
     prompt.disabled = serviceFailed ||
       (!sessionWritable && !creatingSession) || migratingNewTask;
     send.disabled = serviceFailed || !(sessionWritable || creatingSession) ||
-      composerImages?.isUploading() || composerProfile.isBusy() ||
+      composerImages?.isUploading() || composerImages?.hasUnsupportedDraft() ||
+      composerProfile.isBusy() ||
       !draftStore.isLoaded(selectedKey) ||
       draftStore.isRunUncertain(selectedKey) ||
       draftStore.submissions(selectedKey).length >= 20 ||
@@ -1536,6 +1539,11 @@ export async function boot() {
     if (composerProfile.isBusy()) {
       showComposerError(new Error(t("composer.profileBusy", {},
         "请等待会话配置更新完成")));
+      return;
+    }
+    if (fromComposer && attachments.length &&
+        !composerImages.supportsCurrentModel()) {
+      showComposerError(unsupportedModelError());
       return;
     }
     if (!origin.sessionId && !attachments.length) {
