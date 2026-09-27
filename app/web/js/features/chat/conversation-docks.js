@@ -270,9 +270,16 @@ export function createConversationDocks({ container, navigation, tasksStore, app
       askRoot.querySelector(".ask-dock");
     if (!decision) return;
     const viewport = container.getBoundingClientRect();
-    const content = decision.querySelector(".ask-dock-options button") ??
-      decision.querySelector(".approval-arguments summary") ??
-      decision.querySelector("h3");
+    const title = decision.querySelector("h3");
+    const approvalAction = decision.querySelector(".conversation-dock-actions button");
+    // On a very short screen, the title and even one action cannot share the
+    // dock. Start at the decision context instead of its middle arguments row.
+    const crampedApproval = approvalAction && title &&
+      viewport.height < title.getBoundingClientRect().height +
+        approvalAction.getBoundingClientRect().height + 24;
+    const content = (crampedApproval ? title : null) ??
+      decision.querySelector(".ask-dock-options button") ??
+      decision.querySelector(".approval-arguments summary") ?? title;
     if (!content) return;
     const bounds = content.getBoundingClientRect();
     // Use the least scroll that exposes the whole action; when the dock grows
