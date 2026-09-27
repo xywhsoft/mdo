@@ -17,6 +17,7 @@ const navigation = {
   get: () => ({ view: "workspace", projectId: "qa", sessionId: "mobile" }),
   subscribe(listener) { listener(this.get()); return () => {}; },
 };
+let decisionKind = "";
 createConversationDocks({
   container: document.querySelector("#conversation-docks"), navigation,
   tasksStore: store({ items: [{ id: 1,
@@ -31,6 +32,7 @@ createConversationDocks({
   todoStore: store({ projectId: "qa", sessionId: "mobile",
     items: [{ text: "核对移动端交互", done: false }] }),
   onOpenTasks() {}, onChanged: async () => {},
+  onDecisionArrived(_card, kind) { decisionKind = kind; },
 });
 
 function check() {
@@ -49,8 +51,9 @@ function check() {
     minimumHeight >= 40;
   const result = document.querySelector("#result");
   result.dataset.passed = innerWidth <= 420 ? String(passed) : "waiting";
+  result.dataset.decisionPriority = String(decisionKind === "approval");
   result.textContent = JSON.stringify({ viewport: innerWidth, document: width,
-    optionFits, taskFits, minimumHeight, passed }, null, 2);
+    optionFits, taskFits, minimumHeight, decisionKind, passed }, null, 2);
 }
 window.addEventListener("resize", () => requestAnimationFrame(check));
 requestAnimationFrame(check);

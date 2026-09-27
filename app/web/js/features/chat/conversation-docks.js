@@ -408,7 +408,7 @@ export function createConversationDocks({ container, navigation, tasksStore, app
     visibleDecisions.clear();
     for (const key of nextDecisions) visibleDecisions.add(key);
     if (arrived) {
-      onDecisionArrived?.(arrived, newAsk ? "ask" : "approval");
+      onDecisionArrived?.(arrived, newApproval ? "approval" : "ask");
       scheduleReveal(arrived, true);
     }
   }
