@@ -7,15 +7,19 @@ const VISIBLE_MAX = 8;
 
 function mentionAtCaret(input) {
   if (input.selectionStart !== input.selectionEnd) return null;
-  const before = input.value.slice(0, input.selectionStart);
+  const caret = input.selectionStart;
+  const before = input.value.slice(0, caret);
   const match = /(?:^|\s)@([^\s@]*)$/.exec(before);
   if (!match || !match[1] || match[1].length > 128 || before.startsWith("/")) return null;
-  return { start: input.selectionStart - match[0].length +
-    (match[0][0] === "@" ? 0 : 1), end: input.selectionStart, query: match[1] };
+  // Completing from the middle of an existing reference must replace its
+  // remaining suffix too; otherwise @alpha.c becomes @src/alpha.c ha.c.
+  const suffix = /^[^\s@]*/.exec(input.value.slice(caret))?.[0] ?? "";
+  return { start: caret - match[0].length + (match[0][0] === "@" ? 0 : 1),
+    end: caret + suffix.length, query: match[1] };
 }
 
 function fileReference(path) {
-  return /\s/.test(path) ? `@"${path.replaceAll("\\", "\\\\").replaceAll('"', '\\"')}" ` : `@${path} `;
+  return /\s/.test(path) ? `@"${path.replaceAll("\\", "\\\\").replaceAll('"', '\\"')}"` : `@${path}`;
 }
 
 export function createFileMentions({ composer, input, navigation }) {
@@ -91,8 +95,12 @@ export function createFileMentions({ composer, input, navigation }) {
   function insert(path) {
     const token = mentionAtCaret(input);
     if (!token || !choices.includes(path)) { hide(); return; }
-    const replacement = fileReference(path);
+    const hasSeparator = /\s/.test(input.value[token.end] ?? "");
+    const replacement = fileReference(path) + (hasSeparator ? "" : " ");
     input.setRangeText(replacement, token.start, token.end, "end");
+    // Reuse an existing separator without leaving the caret inside the mention.
+    if (hasSeparator) input.setSelectionRange(input.selectionStart + 1,
+      input.selectionStart + 1);
     hide();
     input.dispatchEvent(new Event("input", { bubbles: true }));
     input.focus();

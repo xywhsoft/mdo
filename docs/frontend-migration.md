@@ -4,6 +4,12 @@
 
 完成判据及尚缺的打包页证据见 [前端操作体验完成审计](frontend-completion-audit.md)。本文件继续记录每次实现和验证的细节。
 
+## 2026-09-28：文件补全替换整个引用并保留正文间距
+
+旧单文件 Home `.build/mdo-packed-docks-32h2bkc2` 中，输入 `@alpha.c`、把光标移到 `@alp` 后选择 `src/alpha.c`，输入区变成 `@src/alpha.c ha.c`：只替换了光标前的前缀，留下原文件名后缀。现按光标所在的完整、未加引号的 `@` 引用计算替换范围；引用后已有空白时复用它，并把光标移过分隔符，避免正文前出现两个空格或继续输入时把字贴到文件名后。
+
+最终隔离单文件 Home `.build/mdo-packed-docks-fhagrpb7` 在 320×350 下，从 `@alpha.c and more` 的 `@alp` 处选中后得到 `@src/alpha.c and more`，光标位于 `and more` 前；从 `@QA next` 选择带空格路径后得到 `@"notes/QA notes.txt" next`，光标同样在正文前。没有后续正文时，从文件名中途按 Tab 补全为 `@src/alpha.c `，输入焦点保持、菜单关闭；文档宽 320px，浏览器脚本错误为空。Windows 有界门禁通过 114 项 Python、75 项 Node、71 个模块解析、21 个运行探针、确定性打包、单文件零旁路写入与启动检查；根目录 `mdo.exe` SHA-256 为 `9a357dcbc8bfba9a2d5a19876d84d067b035fd9a70128452fe545644bb4c26e9`。同源码 Linux ext4 有界门禁与确定性打包通过，Linux 包 SHA-256 为 `7c8e01a08b3def8ac927d5daa026df50e6237920739fc0158ab4c80d342a69bc`。实体软键盘与原生 WebView 仍待验收；未运行压力或高负载测试。
+
 ## 2026-09-28：同轮询问后审批的单文件执行边界
 
 为补查“审批与询问同时到达”，隔离模型夹具新增 `SEQUENTIAL DECISIONS UI`：同一 Responses 输出一次返回 `ask_user` 与无害 `exec` 两个工具调用。实测当前宿主逐个推进待决工具：先只显示询问卡，回答后询问消失才出现审批卡；同一会话并未同时出现两张待决卡。因此上一阶段的同时到达优先级修复仍由生产模块夹具证明，不能把这条顺序链算作双决策同时到达的打包证据。
