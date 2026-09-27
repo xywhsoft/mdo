@@ -2,6 +2,8 @@
 
 本清单以 `app_bak/wwwroot` 的可操作行为为基线，而不是以页面长得相似或单元测试通过为完成标准。`docs/frontend-migration.md` 记录每次实现和验证；这里记录当前还需要什么证据。审计更新：2026-09-27，基线提交 `f9e2c4c`。
 
+图片历史操作补验：旧单文件 Home `.build/mdo-packed-docks-xnv1rq8n` 在纯文本模型下重试旧图片回合，先截断历史再报不兼容，原回复消失。最终 Home `.build/mdo-packed-docks-1f0miwza` 的重试与编辑均在截断前拒绝，原图片、回复及刷新回放保持；切回图片模型后的重试成功，320px 页面无横向溢出或脚本错误。Home `.build/mdo-packed-docks-zoaen6q3` 又以 2 秒有界历史读取延迟确认读取期间模型和发送锁定、回复仍可见，完成后控件恢复。详见 [迁移记录](frontend-migration.md#2026-09-27图片历史重试先验证模型能力)。跨客户端即时改模型仍待单独验收。
+
 草稿保存竞态补验：本页图片尚未保存时，队列 GET 读到同 revision 的旧草稿不再被误判为其他窗口修改；确定性 Node 用例先在旧实现失败，修复后与真正较新 revision 的竞争测试均通过。最终单文件 Home `.build/mdo-packed-docks-a7bs44aw` 两图上传后，API revision 2 和刷新页面均保留两张，无草稿错误，详见 [迁移记录](frontend-migration.md#2026-09-27草稿刷新不再误判本页图片编辑)。真实浏览器中完全相同的时序尚未单独注入；其他跨窗口竞态和实体设备继续验收。
 
 极短屏图片草稿补验：旧包 Home `.build/mdo-packed-docks-hs6de_i5` 在 280×250 显示模型不支持图片时，模型/发送按钮越过视口底部；最终包 `.build/mdo-packed-docks-gkidwmf0` 的提示、40px 移除按钮、模型和发送按钮同屏可见，四图附件区可横向访问且文档不溢出，详见 [迁移记录](frontend-migration.md#2026-09-27极短屏图片草稿操作区)。当时连续上传暴露的草稿竞态已在上节定位，实体设备触控仍待验收。

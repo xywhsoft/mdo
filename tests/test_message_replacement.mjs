@@ -54,6 +54,15 @@ test("message edit stays bound to its original session", async () => {
   assert.deepEqual(probe.events[2].slice(1), ["source", "old", "edited", attachments]);
 });
 
+test("profile validation rejects image retry before changing history", async () => {
+  const probe = harness({ validateBeforeTruncate() {
+    throw new Error("image model unsupported");
+  } });
+  await assert.rejects(runMessageReplacement(probe.args),
+    /image model unsupported/);
+  assert.deepEqual(probe.events, []);
+});
+
 test("navigation before truncation prevents changing the new session", async () => {
   const history = deferred();
   const probe = harness({ loadHistory: () => history.promise });

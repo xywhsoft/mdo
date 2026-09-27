@@ -245,6 +245,9 @@ class BoundedDelayProxy(BaseHTTPRequestHandler):
                 self.wfile.write(payload)
                 self.close_connection = True
                 return
+        if (self.command == "GET" and self.path.startswith("/api/v1/projects/")
+                and "/sessions/" in self.path and self.path.endswith("/history")):
+            time.sleep(self.server.history_delay_seconds)
         if self.command == "PUT" and self.path.startswith("/api/v1/approvals/"):
             with self.server.count_lock:
                 self.server.approval_puts += 1
@@ -397,6 +400,8 @@ parser.add_argument("--run-delay-ms", type=int, default=0,
                     help="delay run POSTs by 0-5000 ms for composer handoff QA")
 parser.add_argument("--create-delay-ms", type=int, default=0,
                     help="delay session create POSTs by 0-5000 ms for new-task QA")
+parser.add_argument("--history-delay-ms", type=int, default=0,
+                    help="delay history GETs by 0-5000 ms for message-action QA")
 parser.add_argument("--drop-first-create-response", action="store_true",
                     help="accept one session creation then close before replying")
 parser.add_argument("--fail-first-create", action="store_true",
@@ -438,6 +443,8 @@ if not 0 <= args.run_delay_ms <= 5000:
     parser.error("--run-delay-ms must be between 0 and 5000")
 if not 0 <= args.create_delay_ms <= 5000:
     parser.error("--create-delay-ms must be between 0 and 5000")
+if not 0 <= args.history_delay_ms <= 5000:
+    parser.error("--history-delay-ms must be between 0 and 5000")
 if not 0 <= args.drop_run_response_number <= 3:
     parser.error("--drop-run-response-number must be between 0 and 3")
 if args.drop_first_run_response and args.drop_run_response_number:
@@ -533,7 +540,8 @@ try:
     session = response["data"]["id"]
     browser_port = port
     if (args.approval_delay_ms or args.queue_delay_ms or args.run_delay_ms
-            or args.create_delay_ms or args.drop_first_create_response
+            or args.create_delay_ms or args.history_delay_ms
+            or args.drop_first_create_response
             or args.fail_first_create
             or args.fail_first_run or args.fail_first_queue
             or args.full_first_queue
@@ -546,6 +554,7 @@ try:
         proxy.queue_delay_seconds = args.queue_delay_ms / 1000
         proxy.run_delay_seconds = args.run_delay_ms / 1000
         proxy.create_delay_seconds = args.create_delay_ms / 1000
+        proxy.history_delay_seconds = args.history_delay_ms / 1000
         proxy.drop_first_create_response = args.drop_first_create_response
         proxy.fail_first_create = args.fail_first_create
         proxy.fail_first_run = args.fail_first_run

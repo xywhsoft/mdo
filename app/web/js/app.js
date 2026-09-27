@@ -268,6 +268,13 @@ export async function boot() {
   createRunNotifications({ runsStore, navigation, settingsStore,
     onUnreadChange: (keys) => sessionList.setUnread(keys) });
 
+  function assertReplacementProfile(attachments) {
+    if (composerProfile.isBusy())
+      throw new Error(t("composer.profileBusy", {}, "请等待会话配置更新完成"));
+    if (attachments.length && !composerImages.supportsCurrentModel())
+      throw unsupportedModelError();
+  }
+
   function assertMessageReplacementReady(sequence, text, attachments) {
     if (messageActionBusy) throw new Error(t("messageAction.busy", {}, "请等待当前消息操作完成"));
     if (!Number.isSafeInteger(sequence) || sequence < 1 ||
@@ -282,6 +289,7 @@ export async function boot() {
       throw new Error(t("composer.readOnly", {}, "该会话不可运行；请先恢复到进行中"));
     if (activeRun || submittingCurrent() || composerImages?.isUploading())
       throw new Error(t("messageAction.waitForRun", {}, "请在当前运行结束后操作消息"));
+    assertReplacementProfile(attachments);
     if (promptQueue.peek(selected.projectId, selected.sessionId) ||
         prompt.value.trim() || composerAttachments.length)
       throw new Error(t("messageAction.resolveDraft", {}, "请先处理草稿和待发送队列，再编辑历史消息"));
@@ -297,9 +305,11 @@ export async function boot() {
       navigation.get().projectId === selected.projectId &&
       navigation.get().sessionId === selected.sessionId;
     messageActionBusy = true;
+    setRun(activeRun);
     try {
       const result = await runMessageReplacement({ session, sequence, text,
         attachments, isCurrent: stillSelected,
+        validateBeforeTruncate: () => assertReplacementProfile(attachments),
         loadHistory: loadSessionHistory, truncate: truncateSession, startRun,
         onTruncated(updated) {
           sessionDetailStore.setData(updated);
@@ -335,7 +345,7 @@ export async function boot() {
           : t("messageAction.edited", {}, "已在当前会话发送编辑后的消息"));
       } else if (!result.current)
         toast(t("messageAction.backgroundRun", {}, "原会话已在后台重新运行"));
-    } finally { messageActionBusy = false; }
+    } finally { messageActionBusy = false; setRun(activeRun); }
   }
 
   let conversationSearch;
@@ -810,7 +820,7 @@ export async function boot() {
       (!sessionWritable && !creatingSession) || migratingNewTask;
     send.disabled = serviceFailed || !(sessionWritable || creatingSession) ||
       composerImages?.isUploading() || composerImages?.hasUnsupportedDraft() ||
-      composerProfile.isBusy() ||
+      composerProfile.isBusy() || messageActionBusy ||
       !draftStore.isLoaded(selectedKey) ||
       draftStore.isRunUncertain(selectedKey) ||
       draftStore.submissions(selectedKey).length >= 20 ||
@@ -819,7 +829,8 @@ export async function boot() {
       Boolean(submissionController?.isReleasing(selectedKey));
     composerImages?.setWritable(!serviceFailed && sessionWritable && !creatingSession &&
       !pendingNewTask);
-    composerProfile.setRunActive(Boolean(activeRun || creatingNewTask));
+    composerProfile.setRunActive(Boolean(activeRun || creatingNewTask ||
+      messageActionBusy));
     send.setAttribute("aria-label", activeRun || creatingNewTask
       ? t("composer.queue", {}, "加入待发送队列")
       : t("shell.send", {}, "发送任务"));
