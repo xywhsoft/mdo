@@ -709,7 +709,7 @@ select:focus-visible,
 .prompt-queue-toggle::after { content: "⌄"; display: inline-block; color: var(--muted); transition: transform .15s ease; }
 .prompt-queue-toggle[aria-expanded="false"]::after { transform: rotate(-90deg); }
 .prompt-queue-warning { margin: 8px 0 0; color: var(--warning); font-size: 11px; line-height: 1.5; }
-.prompt-queue-list { display: grid; gap: 4px; margin: 7px 0 0; padding: 0; list-style: none; counter-reset: queued; }
+.prompt-queue-list { display: grid; grid-auto-rows: max-content; gap: 4px; margin: 7px 0 0; padding: 0; list-style: none; counter-reset: queued; }
 .prompt-queue-list[hidden] { display: none; }
 .prompt-queue-list li { display: flex; align-items: flex-start; gap: 8px; min-width: 0; padding: 6px 8px; border-radius: 6px; background: var(--surface-hover); font-size: 11px; }
 .prompt-queue-index { flex: none; min-width: 18px; padding-top: 3px; color: var(--faint); text-align: right; }

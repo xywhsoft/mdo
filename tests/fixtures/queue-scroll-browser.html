@@ -3,7 +3,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>mdo queue scroll probe</title>
-<link rel="stylesheet" href="/app/web/css/app.css">
+<link rel="stylesheet" href="/app/web/css/app.css?queue-scroll=1">
 <style>
   body { padding: 20px; }
   #queue { width: 280px; }
@@ -24,7 +24,10 @@ let staged = [];
 const listeners = [];
 window.fetch = async (url) => {
   const second = String(url).includes("/sessions/second/");
-  const items = (second ? ["Other session"] : ["First item", "Second item"])
+  const items = (second ? ["Other session"] : [
+    `First item ${"long text ".repeat(28)}`,
+    `Second item ${"more text ".repeat(28)}`,
+  ])
     .map((text, index) => ({ id: `item-${index}`, text, state: "pending",
       attachments: [], priority: false }));
   return new Response(JSON.stringify({ ok: true, data: { items } }), {
@@ -38,6 +41,9 @@ try {
   });
   await queue.select("qa", "first");
   let list = container.querySelector(".prompt-queue-list");
+  const cardsFit = [...list.children].every((item) =>
+    item.querySelector(".prompt-queue-text").getBoundingClientRect().bottom <=
+    item.getBoundingClientRect().bottom + 1);
   list.scrollTop = 20;
   const middleBefore = list.scrollTop;
   staged.push({ staged: true, text: "Third item" });
@@ -57,11 +63,11 @@ try {
   await queue.select("qa", "second");
   list = container.querySelector(".prompt-queue-list");
   const otherSessionTop = list.scrollTop;
-  const passed = middleBefore === 20 && middleAfter === middleBefore &&
+  const passed = cardsFit && middleBefore === 20 && middleAfter === middleBefore &&
     bottomBefore > middleBefore && bottomAfter === newBottom &&
     newBottom > bottomBefore && otherSessionTop === 0;
   output.dataset.passed = String(passed);
-  output.textContent = JSON.stringify({ passed, middleBefore, middleAfter,
+  output.textContent = JSON.stringify({ passed, cardsFit, middleBefore, middleAfter,
     bottomBefore, bottomAfter, newBottom, otherSessionTop }, null, 2);
 } catch (error) {
   output.dataset.passed = "false";
