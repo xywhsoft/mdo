@@ -20,36 +20,44 @@ const efforts = ["none", "minimal", "low", "medium", "high", "xhigh", "max"];
 const attachments = [["image", "图片"], ["audio", "音频"], ["file", "文件"]];
 const clone = (value) => structuredClone(value);
 
-const labelKeys = Object.freeze({
-  "标识": "modelConfig.id", "名称": "modelConfig.name",
-  "Chat Completions URL": "modelConfig.chatUrl",
-  "Responses URL": "modelConfig.responsesUrl",
-  "Anthropic Messages URL": "modelConfig.anthropicUrl",
-  "凭据引用": "modelConfig.secretRef", "超时（毫秒）": "modelConfig.timeout",
-  "验证 TLS 证书": "modelConfig.verifyTls", "API 模型名": "modelConfig.wireModel",
-  "默认协议": "modelConfig.defaultProtocol",
-  "默认思考强度": "modelConfig.defaultEffort",
-  "计费模型": "modelConfig.billable", "支持的协议": "modelConfig.protocols",
-  "能力": "modelConfig.capabilities", "思考强度": "modelConfig.efforts",
-  "附件": "modelConfig.attachments", "窗口模式": "modelConfig.windowMode",
-  "共享上下文": "modelConfig.sharedContext",
-  "输入/输出分离": "modelConfig.splitWindow",
-  "上下文 token": "modelConfig.contextTokens",
-  "最大输入 token": "modelConfig.maxInputTokens",
-  "最大输出 token": "modelConfig.maxOutputTokens",
-  "输出预留 token": "modelConfig.outputReserveTokens",
-  "摘要 token": "modelConfig.summaryTokens",
-  "文本输入": "modelConfig.textInput", "工具结果": "modelConfig.toolResultInput",
-  "文本输出": "modelConfig.textOutput", "JSON 输出": "modelConfig.jsonOutput",
-  "工具调用": "modelConfig.toolCallOutput",
-  "思考输出": "modelConfig.reasoningOutput",
-  "流式输出": "modelConfig.streaming",
-  "并行工具": "modelConfig.parallelTools",
-  "max_completion_tokens": "modelConfig.maxCompletionTokens",
-  "Developer 角色": "modelConfig.developerRole",
-  "媒体输入": "modelConfig.mediaInput",
-  "图片": "modelConfig.image", "音频": "modelConfig.audio",
-  "文件": "modelConfig.file",
+// Translate by stable form names and option values, never by display copy.
+// The latter changes with the locale and makes new fields easy to miss.
+const fieldKeys = Object.freeze({
+  id: "modelConfig.id", name: "modelConfig.name",
+  chat_completions: "modelConfig.chatUrl",
+  responses: "modelConfig.responsesUrl",
+  anthropic_messages: "modelConfig.anthropicUrl",
+  secret_ref: "modelConfig.secretRef", timeout_ms: "modelConfig.timeout",
+  verify_peer: "modelConfig.verifyTls", provider: "modelConfig.provider",
+  wire_model: "modelConfig.wireModel",
+  default_protocol: "modelConfig.defaultProtocol",
+  default_reasoning_effort: "modelConfig.defaultEffort",
+  billable: "modelConfig.billable", protocol: "modelConfig.protocols",
+  capability: "modelConfig.capabilities", effort: "modelConfig.efforts",
+  attachment: "modelConfig.attachments", window_mode: "modelConfig.windowMode",
+  context_tokens: "modelConfig.contextTokens",
+  max_input_tokens: "modelConfig.maxInputTokens",
+  max_output_tokens: "modelConfig.maxOutputTokens",
+  output_reserve_tokens: "modelConfig.outputReserveTokens",
+  summary_tokens: "modelConfig.summaryTokens",
+});
+const optionKeys = Object.freeze({
+  "shared-context": "modelConfig.sharedContext",
+  "split-input-output": "modelConfig.splitWindow",
+  "text-input": "modelConfig.textInput",
+  "tool-result-input": "modelConfig.toolResultInput",
+  "text-output": "modelConfig.textOutput",
+  "json-output": "modelConfig.jsonOutput",
+  "tool-call-output": "modelConfig.toolCallOutput",
+  "reasoning-output": "modelConfig.reasoningOutput",
+  "reasoning-control": "modelConfig.reasoningControl",
+  streaming: "modelConfig.streaming",
+  "parallel-tool-calls": "modelConfig.parallelTools",
+  "max-completion-tokens": "modelConfig.maxCompletionTokens",
+  "developer-role": "modelConfig.developerRole",
+  "media-input": "modelConfig.mediaInput",
+  image: "modelConfig.image", audio: "modelConfig.audio",
+  file: "modelConfig.file",
   none: "settings.reasoningNone", minimal: "settings.reasoningMinimal",
   low: "settings.reasoningLow", medium: "settings.reasoningMedium",
   high: "settings.reasoningHigh", xhigh: "settings.reasoningXhigh",
@@ -83,7 +91,7 @@ function translatedAttribute(node, name, key, fallback) {
 
 function input(label, name, value, options = {}) {
   const field = element("label", { className: "model-field" }, [
-    labelKeys[label] ? copy("span", labelKeys[label], label) : element("span", { text: label }),
+    fieldKeys[name] ? copy("span", fieldKeys[name], label) : element("span", { text: label }),
   ]);
   const control = element(options.kind === "select" ? "select" : "input", {
     attrs: { name, type: options.type || "text", required: options.required ? "" : null,
@@ -92,10 +100,13 @@ function input(label, name, value, options = {}) {
       readOnly: options.readOnly ? "" : null, placeholder: options.placeholder },
   });
   if (options.kind === "select") {
-    for (const [key, text] of options.choices ?? [])
-      control.append(labelKeys[text]
-        ? copy("option", labelKeys[text], text, {}, { attrs: { value: key } })
+    for (const [key, text] of options.choices ?? []) {
+      const optionKey = name === "default_reasoning_effort" || name === "window_mode"
+        ? optionKeys[key] : null;
+      control.append(optionKey
+        ? copy("option", optionKey, text, {}, { attrs: { value: key } })
         : element("option", { text, attrs: { value: key } }));
+    }
   }
   if (options.type === "checkbox") control.checked = Boolean(value);
   else control.value = value ?? "";
@@ -105,13 +116,13 @@ function input(label, name, value, options = {}) {
 
 function checks(title, name, values, choices) {
   const group = element("fieldset", { className: "model-checks" });
-  group.append(labelKeys[title] ? copy("legend", labelKeys[title], title)
+  group.append(fieldKeys[name] ? copy("legend", fieldKeys[name], title)
     : element("legend", { text: title }));
   for (const [key, label] of choices) {
     const line = element("label");
     const box = element("input", { attrs: { type: "checkbox", name, value: key } });
     box.checked = values?.includes(key) ?? false;
-    line.append(box, labelKeys[label] ? copy("span", labelKeys[label], label)
+    line.append(box, optionKeys[key] ? copy("span", optionKeys[key], label)
       : element("span", { text: label }));
     group.append(line);
   }
@@ -385,8 +396,11 @@ export function createModelConfigPanel(container) {
     const form = element("form", { className: "model-config-form" });
     if (kind === "model") renderModel(form, item);
     else renderProvider(form, item);
-    if (kind === "model" && source?.builtin) form.append(element("p", {
-      text: `${source.id} · ${source.window.context_tokens} context · ${source.default_protocol}` }));
+    if (kind === "model" && source?.builtin) form.append(copy("p",
+      "modelConfig.builtinModelDetail",
+      `${source.id} · 上下文 ${source.window.context_tokens} tokens · ${source.default_protocol}`,
+      { id: source.id, tokens: source.window.context_tokens,
+        protocol: source.default_protocol }));
     if (source?.builtin && kind === "provider") form.append(copy("p",
       "modelConfig.builtinProviderDetail", `${source.id} · 内置接口和凭据引用由程序管理`,
       { id: source.id }));
