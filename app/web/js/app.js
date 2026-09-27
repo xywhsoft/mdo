@@ -2060,6 +2060,10 @@ export async function boot() {
     onSettings: (open) => open ? navigation.openSettings("general")
       : $("#close-settings").click(),
     onToggleTheme: toggleTheme,
+    onSessionSearch: () => {
+      if (shell.dataset.sidebar !== "open") setDrawer("sidebar", true);
+      $("#session-search").focus();
+    },
     onStop: () => stop.click(), isRunning: () => Boolean(activeRun),
     isDrawerOpen: () => (mobileLayout.matches && shell.dataset.sidebar === "open") ||
       (!wideLayout.matches && shell.dataset.inspector === "open"),
@@ -2067,14 +2071,6 @@ export async function boot() {
   });
   $("#open-shortcuts").addEventListener("click", () => shortcuts.openHelp());
   $("#toggle-theme").addEventListener("click", () => void toggleTheme());
-  document.addEventListener("keydown", (event) => {
-    if (event.key === "/" && !document.querySelector("dialog[open]") &&
-        document.activeElement?.tagName !== "INPUT" &&
-        document.activeElement?.tagName !== "TEXTAREA") {
-      event.preventDefault();
-      $("#session-search").focus();
-    }
-  });
 
   function scheduleTaskRefresh() {
     window.clearTimeout(tasksTimer);

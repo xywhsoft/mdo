@@ -1,7 +1,7 @@
 import { isImeKey } from "../../utils/dom.js";
 
 export function createKeyboardShortcuts({ dialog, navigation, search, onNew,
-  onExport, onSettings, onToggleTheme, onStop, isRunning, isDrawerOpen,
+  onExport, onSettings, onToggleTheme, onSessionSearch, onStop, isRunning, isDrawerOpen,
   closeDrawers }) {
   let previousFocus = null;
   let composing = false;
@@ -59,6 +59,12 @@ export function createKeyboardShortcuts({ dialog, navigation, search, onNew,
 
     const editable = event.target instanceof Element &&
       event.target.closest("input, textarea, select, [contenteditable]");
+    if (event.key === "/" && !editable && !event.altKey && !modifier &&
+        navigation.get().view === "workspace") {
+      event.preventDefault();
+      onSessionSearch?.();
+      return;
+    }
     if (event.key === "?" && !editable && !event.altKey && !modifier) {
       event.preventDefault();
       openHelp();

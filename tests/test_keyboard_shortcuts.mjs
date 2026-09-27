@@ -57,3 +57,47 @@ test("Escape respects a composer menu before handling a run or drawer", () => {
     globalThis.document = originalDocument;
   }
 });
+
+test("slash search only claims keys in the workspace outside composition", () => {
+  const originalDocument = globalThis.document;
+  const originalElement = globalThis.Element;
+  const document = new EventTarget();
+  document.querySelector = () => null;
+  globalThis.document = document;
+  globalThis.Element = class {};
+  const dialog = new EventTarget();
+  dialog.querySelector = () => null;
+  let view = "workspace";
+  let searches = 0;
+  try {
+    createKeyboardShortcuts({
+      dialog, navigation: { get: () => ({ view, sessionId: "test" }) },
+      search: { isOpen: () => false },
+      onNew() {}, onExport() {}, onSettings() {}, onToggleTheme() {},
+      onSessionSearch: () => { searches += 1; },
+      onStop() {}, isRunning: () => false,
+      isDrawerOpen: () => false, closeDrawers() {},
+    });
+    function slash() {
+      const event = new Event("keydown", { cancelable: true });
+      Object.defineProperty(event, "key", { value: "/" });
+      document.dispatchEvent(event);
+      return event.defaultPrevented;
+    }
+    assert.equal(slash(), true);
+    assert.equal(searches, 1);
+    view = "settings";
+    assert.equal(slash(), false);
+    assert.equal(searches, 1);
+    view = "workspace";
+    document.dispatchEvent(new Event("compositionstart"));
+    assert.equal(slash(), false);
+    assert.equal(searches, 1);
+    document.dispatchEvent(new Event("compositionend"));
+    assert.equal(slash(), true);
+    assert.equal(searches, 2);
+  } finally {
+    globalThis.document = originalDocument;
+    globalThis.Element = originalElement;
+  }
+});
