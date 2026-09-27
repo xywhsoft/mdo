@@ -1302,6 +1302,7 @@ export async function boot() {
       settingsActive = true;
       settingsWorkspace.hidden = false;
       for (const region of agentWorkspaceRegions) region.hidden = true;
+      settingsView.setActive(true);
       skipLink.href = "#settings-content";
       skipLink.textContent = t("shell.skipSettings");
       settingsView.selectSection(settingsSection);
@@ -1321,6 +1322,7 @@ export async function boot() {
       settingsWorkspace.contains(document.activeElement);
     settingsWorkspace.hidden = true;
     for (const region of agentWorkspaceRegions) region.hidden = false;
+    if (settingsActive) settingsView.setActive(false);
     if (focusWasInSettings) prompt.focus();
     timelineView.restorePreviewScroll();
     skipLink.href = "#timeline";

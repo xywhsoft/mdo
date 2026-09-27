@@ -97,6 +97,7 @@ export function createSettingsView({ form, store, navigation, onApplied }) {
   let selectedSection = "general";
   let lastEditedSection = "general";
   let localeReady = Promise.resolve();
+  let previewActive = false;
 
   function fingerprint() {
     return snapshot ? JSON.stringify(settingsPatch(form, snapshot)) : "";
@@ -484,6 +485,29 @@ export function createSettingsView({ form, store, navigation, onApplied }) {
     localeReady() { return localeReady; },
     hasPendingChanges() {
       return busy || (Boolean(snapshot) && fingerprint() !== baselineFingerprint);
+    },
+    setActive(value) {
+      const next = Boolean(value);
+      if (previewActive === next) return;
+      previewActive = next;
+      if (!snapshot) return;
+      if (!next) {
+        applyAppearance(snapshot);
+        localeReady = loadLocale(snapshot.locale)
+          .catch((error) => toast(errorMessage(error), "error"));
+        return;
+      }
+      previewAppearance();
+      const selectedLocale = form.elements.locale.value;
+      localeReady = loadLocale(selectedLocale).then((applied) => {
+        if (!applied || !previewActive || form.elements.locale.value !== selectedLocale) return;
+        renderCredential(snapshot);
+        renderProxyCredential(snapshot);
+        renderPowerStatus(snapshot);
+        validateInstructions();
+        if (fingerprint() === baselineFingerprint) renderStatus(snapshot);
+        else markDirty();
+      }).catch((error) => toast(errorMessage(error), "error"));
     },
     selectSection(section) {
       const available = [...document.querySelectorAll("[data-settings-panel]")];
