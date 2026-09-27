@@ -123,9 +123,15 @@ export function createComposerProfile({ modelSelect, reasoningSelect,
     if (status) {
       const nextRun = session && deferred &&
         !sameProfile(deferred, sessionProfile(session));
-      status.hidden = !nextRun;
-      status.textContent = nextRun
-        ? t("profile.nextRun", {}, "下次任务生效") : "";
+      const saveState = session ?
+        draftStore?.profileSaveState(key) ?? "saved" : "saved";
+      status.hidden = !nextRun && saveState === "saved";
+      status.dataset.state = saveState;
+      status.textContent = saveState === "error"
+        ? t("profile.notSaved", {}, "后续配置未保存")
+        : saveState === "saving"
+          ? t("profile.savingNext", {}, "正在保存后续配置…")
+          : nextRun ? t("profile.nextRun", {}, "下次任务生效") : "";
     }
     onSelectionChange?.();
   }

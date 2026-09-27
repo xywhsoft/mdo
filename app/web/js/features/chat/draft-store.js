@@ -439,6 +439,11 @@ export function createDraftStore({ onRestore, onError, onSaved, onLoaded = () =>
     text(key) { return entry(key).text; },
     composerProfile(key) { return entry(key).composerProfile &&
       { ...entry(key).composerProfile }; },
+    profileSaveState(key) {
+      const current = entry(key);
+      return !current.profileEdited ? "saved" :
+        current.error || current.conflict ? "error" : "saving";
+    },
     setComposerProfile(key, value) {
       const current = entry(key);
       const next = profile(value);

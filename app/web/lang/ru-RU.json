@@ -398,6 +398,8 @@
   "model.freeSuffix": " · Бесплатно",
   "profile.updated": "Настройки сеанса обновлены",
   "profile.nextRun": "Для следующей задачи",
+  "profile.savingNext": "Сохранение настроек следующей задачи…",
+  "profile.notSaved": "Настройки следующей задачи не сохранены",
   "profile.deferredSaveFailed": "Не удалось сохранить настройки следующей задачи; проверьте черновик",
   "profile.deferredClearFailed": "Настройки сеанса обновлены, но прежние настройки следующей задачи не удалены; проверьте черновик",
   "queue.profileSnapshot": "Задано: {model} · {effort} · {permission}",

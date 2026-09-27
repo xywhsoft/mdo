@@ -145,14 +145,25 @@ try {
   const idleUpdated = profilePuts === 2 &&
     sessionStore.get().data?.model_id === "other" &&
     saved.get("first")?.composer_profile === null;
+  const cleanBeforeConflict = !errors.length;
+  active = true;
+  profile.setRunActive(true);
+  const peer = saved.get("first");
+  saved.set("first", { ...peer, revision: peer.revision + 1 });
+  await choose(permissionSelect, "read-only");
+  const conflictShown = draftStore.profileSaveState("qa/first") === "error" &&
+    status.dataset.state === "error" &&
+    status.textContent.includes("未保存") && errors.length === 1 &&
+    saved.get("first")?.composer_profile === null;
   const passed = enabledDuringRun && persisted && reloadRestored &&
     secondClean && restored &&
-    replacedDeferred && idleUpdated && !errors.length;
+    replacedDeferred && idleUpdated && cleanBeforeConflict && conflictShown;
   document.querySelector("#result").dataset.passed = String(passed);
   document.querySelector("#result").textContent = JSON.stringify({ passed,
     enabledDuringRun, persisted, reloadRestored, secondClean, restored,
     replacedDeferred,
-    idleUpdated, draftPuts, profilePuts, finalSelection: selected(),
+    idleUpdated, cleanBeforeConflict, conflictShown, draftPuts, profilePuts,
+    finalSelection: selected(),
     finalSession: sessionStore.get().data, finalStatus: status.textContent,
     errors }, null, 2);
 } catch (error) {

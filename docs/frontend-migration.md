@@ -1031,3 +1031,7 @@ Home 多进程边界按便携目录实现排他：外部 Home 首次挂载时在
 隔离单文件 Home `.build/mdo-packed-docks-rh4d3141` 实测运行中选第二模型、高思考、只读并排队后，首轮及后续轮分别以原模型中思考、第二模型高思考完成。重新打包后的 Home `.build/mdo-packed-docks-f9e1l7aw` 在 390×500 验证状态标签及冻结配置卡片处于可见区，三个选项均可操作且浏览器脚本错误为空；三次实际运行记录依次为原模型中思考、第二模型高思考、原模型中思考。Windows/Linux 有界发布门禁、包哈希与剩余验收范围见下一条。
 
 本阶段 Windows/Linux 有界门禁均通过 114 项 Python、70 项 Node、71 个前端模块解析、21 个运行探针与确定性打包；Windows 另通过单文件零旁路写入和 20 秒启动检查。旧的跨会话异步 profile 浏览器夹具回归 `passed=true`，新夹具 `passed=true`。根目录 `mdo.exe` 与 Windows 包 SHA-256 为 `c2991d7519411e24dc9b041bba66d89c021e32047b5fdb3f15a33c54f07238f1`，Linux 包为 `f9fad31ee58534509d76414fedbf03322a069904fde619bf2c5a169e6648518c`。两条不同配置同时待发、跨标签同会话并发、实体移动设备及原生 WebView 仍待验收；未做压力或高负载测试。
+
+2026-09-28：继续压实运行中配置并修复跨标签冲突提示。单文件 Home `.build/mdo-packed-docks-eye7nuqn` 在一轮 `SLOW UI` 中连续排入 `QUEUE PROFILE A/B`；队列同时保存第二模型/高/只读及原模型/中/询问两份快照，刷新后页面两张卡保持原样，三轮最终分别按原模型中、第二模型高、原模型中完成。另一双标签 Home `.build/mdo-packed-docks-nt_ms6y6` 复现第二标签草稿 revision 冲突：服务端保留第一标签的后续选择，第二标签已有草稿错误提示，却仍显示“下次任务生效”。新增草稿 profile 保存状态后，输入区在写入中显示“正在保存后续配置…”，冲突时显示“后续配置未保存”。模块夹具同时验证状态及远端快照不被覆盖；重新打包的双标签 Home `.build/mdo-packed-docks-5b7eg_vp` 复测未保存标签、原错误提示和刷新恢复，页面脚本错误为空。完整有界门禁与包哈希见下一条。
+
+本次 Windows/Linux 有界门禁均通过 114 项 Python、70 项 Node、71 个前端模块解析、21 个运行探针及确定性打包；Windows 单文件零旁路写入与 20 秒启动检查通过。根目录 `mdo.exe` 和 Windows 包 SHA-256 为 `75ce0935c7c9bd2e791de1594b8541dbcda7f7f22c1f9b02ab941aad4a0e799c`，Linux 包为 `2bd0403ea541a730e8fea9af519328129bd1d189690de05a5c4a26b10ba11176`。跨标签冲突仍要求刷新后核对，实体设备触控与软键盘、原生 Linux/macOS WebView 尚待验收；未做压力或高负载测试。

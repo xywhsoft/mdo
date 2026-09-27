@@ -387,7 +387,9 @@ test("composer profile and per-message snapshots survive edits and reload", asyn
     if (options.method === "GET")
       return Response.json({ ok: true, data: saved });
     const body = JSON.parse(options.body);
-    assert.equal(body.revision, saved.revision);
+    if (body.revision !== saved.revision)
+      return Response.json({ ok: false, error: { code: "draft_conflict",
+        message: "The draft changed in another window" } }, { status: 409 });
     saved = { ...body, revision: saved.revision + 1 };
     return Response.json({ ok: true, data: saved });
   };
@@ -406,14 +408,17 @@ test("composer profile and per-message snapshots survive edits and reload", asyn
       interrupt: false, state: "prepared", profile: firstProfile };
     assert.equal(store.appendSubmission(key, first), true);
     assert.equal(store.setComposerProfile(key, secondProfile), true);
+    assert.equal(store.profileSaveState(key), "saving");
     const second = { ...first, id: "b".repeat(32), text: "second",
       profile: secondProfile };
     assert.equal(store.appendSubmission(key, second), true);
     assert.equal(await store.flush(key), true);
     assert.deepEqual(saved.submissions, [first, second]);
     assert.deepEqual(saved.composer_profile, secondProfile);
+    assert.equal(store.profileSaveState(key), "saved");
+    const errors = [];
     const reopened = createDraftStore({ onRestore() {}, onError(error) {
-      throw error;
+      errors.push(error);
     }, onSaved() {} });
     reopened.select(key);
     assert.equal(await reopened.ensureLoaded(key), true);
@@ -421,6 +426,16 @@ test("composer profile and per-message snapshots survive edits and reload", asyn
     assert.deepEqual(reopened.composerProfile(key), secondProfile);
     assert.equal(reopened.isSubmissionDurable(key, { ...first,
       profile: secondProfile }), false);
+    const peerProfile = { ...secondProfile, permission_profile: "read-only" };
+    assert.equal(store.setComposerProfile(key, peerProfile), true);
+    assert.equal(await store.flush(key), true);
+    assert.equal(reopened.setComposerProfile(key,
+      { ...secondProfile, permission_profile: "full-access" }), true);
+    assert.equal(reopened.profileSaveState(key), "saving");
+    assert.equal(await reopened.flush(key), false);
+    assert.equal(reopened.profileSaveState(key), "error");
+    assert.equal(errors.at(-1)?.code, "draft_conflict");
+    assert.deepEqual(saved.composer_profile, peerProfile);
   } finally {
     globalThis.window = originalWindow;
     globalThis.fetch = originalFetch;
