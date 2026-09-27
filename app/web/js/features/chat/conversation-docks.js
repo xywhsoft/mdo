@@ -96,7 +96,8 @@ function approvalCard(item, argumentsOpen, onChanged) {
   argumentsView.addEventListener("toggle", () =>
     argumentsOpen.set(key, argumentsView.open));
   card.append(
-    element("h3", { text: t("dock.approval.title", { tool: item.tool || t("dock.approval.tool") }) }),
+    element("h3", { text: t("dock.approval.title", { tool: item.tool || t("dock.approval.tool") }),
+      attrs: { tabindex: "-1", "data-dock-focus": `approval/${key}/title` } }),
     element("p", { text: t("dock.approval.summary", {
       risk: RISK_KEYS[item.risk] ? t(RISK_KEYS[item.risk]) :
         item.risk || t("dock.approval.unknownRisk"),
@@ -186,7 +187,7 @@ function askCard(item, projectId, sessionId, deciding, answered, drafts,
     }
   });
   updateValidity();
-  const title = element("h3", { text: t("dock.ask.title") });
+  const title = element("h3", { text: t("dock.ask.title"), attrs: { tabindex: "-1" } });
   card.append(title,
     element("p", { className: "ask-dock-question", text: item.question }),
     actions, element("div", { className: "ask-dock-free" }, [input, submit]),
@@ -201,7 +202,7 @@ function askCard(item, projectId, sessionId, deciding, answered, drafts,
 }
 
 export function createConversationDocks({ container, navigation, tasksStore, approvalsStore,
-  asksStore, todoStore, runsStore, onOpenTasks, onChanged }) {
+  asksStore, todoStore, runsStore, onOpenTasks, onChanged, onDecisionArrived }) {
   const askDeciding = new Set();
   const askAnswered = new Set();
   const expanded = new Map();
@@ -361,14 +362,15 @@ export function createConversationDocks({ container, navigation, tasksStore, app
     composerRegion?.toggleAttribute("data-decision-pending",
       Boolean(approvals.length || asks.length));
     syncAvailableHeight();
-    if (newAsk || newApproval) {
+    const arrived = newAsk ?? newApproval;
+    if (arrived) {
       userMovedDock = false;
-      const target = newAsk ?? newApproval;
-      container.scrollTop += target.getBoundingClientRect().top -
+      container.scrollTop += arrived.getBoundingClientRect().top -
         container.getBoundingClientRect().top;
     } else container.scrollTop = previousScroll;
     visibleDecisions.clear();
     for (const key of nextDecisions) visibleDecisions.add(key);
+    if (arrived) onDecisionArrived?.(arrived, newAsk ? "ask" : "approval");
   }
 
   const unsubscribers = [

@@ -33,6 +33,7 @@ class Model(BaseHTTPRequestHandler):
     verify_recovery = False
     verification_file = None
     slow_seconds = 15
+    model_delay_seconds = 0
     task_seconds = 12
     artifact_file = None
 
@@ -101,6 +102,8 @@ class Model(BaseHTTPRequestHandler):
                                "timeout_ms": 5000})}]
         if slow:
             time.sleep(Model.slow_seconds)
+        elif Model.model_delay_seconds:
+            time.sleep(Model.model_delay_seconds)
         body = json.dumps({"id": "resp_ui_fixture", "model": "ling-3.0-tiny",
                            "status": "completed", "output": output,
                            "usage": {"input_tokens": 7, "output_tokens": 3,
@@ -384,6 +387,8 @@ parser.add_argument("--reject-pane-layout", action="store_true",
                     help="reject layout GET/PUT for localized error feedback QA")
 parser.add_argument("--slow-ms", type=int, default=15000,
                     help="first SLOW UI model response delay, 0-15000 ms")
+parser.add_argument("--model-delay-ms", type=int, default=0,
+                    help="delay regular fixture model responses, 0-5000 ms")
 parser.add_argument("--task-ms", type=int, default=12000,
                     help="TASK UI background process sleep, 0-30000 ms")
 parser.add_argument("--resume-verify", action="store_true",
@@ -405,6 +410,8 @@ if args.drop_first_run_response and args.drop_run_response_number:
     parser.error("choose only one run response drop option")
 if not 0 <= args.slow_ms <= 15000:
     parser.error("--slow-ms must be between 0 and 15000")
+if not 0 <= args.model_delay_ms <= 5000:
+    parser.error("--model-delay-ms must be between 0 and 5000")
 if not 0 <= args.task_ms <= 30000:
     parser.error("--task-ms must be between 0 and 30000")
 if args.fail_first_queue_reconcile and not args.drop_first_queue_response:
@@ -432,6 +439,7 @@ Model.verify_recovery = args.resume_verify
 Model.verification_file = base / "README.md"
 Model.artifact_file = base / "artifact-fixture.txt"
 Model.slow_seconds = args.slow_ms / 1000
+Model.model_delay_seconds = args.model_delay_ms / 1000
 Model.task_seconds = args.task_ms / 1000
 executable_name = "mdo.exe" if os.name == "nt" else "mdo"
 shutil.copy2(ROOT / executable_name, base / executable_name)

@@ -436,6 +436,19 @@ export async function boot() {
     runsStore,
     onOpenTasks: () => { selectInspectorTab("tasks"); setDrawer("inspector", true); },
     onChanged: () => Promise.all([loadTasks(), loadRuns(), refreshSelectedAsks()]),
+    onDecisionArrived: (card, kind) => {
+      if (!mobileLayout.matches) return;
+      if (kind === "approval" && shell.dataset.inspector === "open" &&
+          $("#decisions-tab").getAttribute("aria-selected") === "true") return;
+      const sidebarOpen = shell.dataset.sidebar === "open";
+      const inspectorOpen = shell.dataset.inspector === "open";
+      if (!sidebarOpen && !inspectorOpen) return;
+      if (sidebarOpen) setDrawer("sidebar", false, { persist: false });
+      if (inspectorOpen) setDrawer("inspector", false, { persist: false });
+      const heading = card.querySelector("h3") ?? card;
+      heading.tabIndex = -1;
+      heading.focus({ preventScroll: true });
+    },
   });
   let draftStore;
   let submissionController;

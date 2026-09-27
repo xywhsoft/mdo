@@ -38,10 +38,15 @@ const asksStore = store({ projectId: "qa", sessionId: "seat", loaded: true,
     options: ["Fast", "Careful"] }] });
 const approvalsStore = store({ items: [] });
 const runsStore = store({ items: [] });
+const arrivals = [];
 createConversationDocks({
   container: document.querySelector("#conversation-docks"), navigation,
   tasksStore: store({ items: [] }), approvalsStore, asksStore,
   runsStore, todoStore, onOpenTasks() {}, onChanged: async () => {},
+  onDecisionArrived(card, kind) {
+    arrivals.push([kind, card.querySelector("h3")?.textContent]);
+    if (kind === "approval") card.querySelector("h3")?.focus({ preventScroll: true });
+  },
 });
 
 const nextFrame = () => new Promise((resolve) => requestAnimationFrame(resolve));
@@ -93,6 +98,9 @@ async function check() {
   approvalsStore.setData({ items: [{ id: 7, run_id: 3, tool: "exec",
     risk: "high", effects: ["process"], resources: [],
     arguments_json: '{"argv":["python","-c","print(1)"]}' }] });
+  todoStore.setData(todoStore.get().data);
+  const approvalFocusRestored = document.activeElement?.dataset.dockFocus ===
+    "approval/7/title";
   await nextFrame();
   const title = dock.querySelector(".conversation-dock h3").getBoundingClientRect();
   const approvalReadable = title.top >= dock.getBoundingClientRect().top &&
@@ -109,12 +117,14 @@ async function check() {
     dock.getBoundingClientRect().bottom &&
     allow.getBoundingClientRect().top >= dock.getBoundingClientRect().top;
   const passed = askReadable && restoredDraft && approvalReadable && actionVisible &&
+    approvalFocusRestored &&
+    arrivals.map(([kind]) => kind).join(",") === "ask,approval" &&
     expandedReachable && document.documentElement.scrollWidth <= innerWidth;
   const result = document.querySelector("#result");
   result.dataset.passed = innerWidth <= 420 ? String(passed) : "waiting";
   result.textContent = JSON.stringify({ askReadable, askGeometry,
     restoredDraft, restoredHeight, restoredPending, restoredStyle, approvalReadable,
-    actionVisible, expandedReachable, viewport: innerWidth,
+    actionVisible, expandedReachable, approvalFocusRestored, arrivals, viewport: innerWidth,
     documentWidth: document.documentElement.scrollWidth, passed });
 }
 void check();
