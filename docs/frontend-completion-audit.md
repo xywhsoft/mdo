@@ -2,6 +2,8 @@
 
 本清单以 `app_bak/wwwroot` 的可操作行为为基线，而不是以页面长得相似或单元测试通过为完成标准。`docs/frontend-migration.md` 记录每次实现和验证；这里记录当前还需要什么证据。审计更新：2026-09-27，基线提交 `f9e2c4c`。
 
+会话搜索结果键盘补验：旧单文件 Home `.build/mdo-packed-docks-ard528o8` 在 320px 搜索后按方向下键无法进入命中；最终 Home `.build/mdo-packed-docks-ep5mhxz8` 可在两条结果间上下移动并返回搜索框。手机 Enter 选中后焦点交给输入框，点按选中仍保留阅读焦点；桌面 Enter 选中仍停留列表。无命中不丢焦点，页面无横向溢出及脚本错误，详见 [迁移记录](frontend-migration.md#2026-09-27会话搜索结果的键盘选择与移动焦点)。实体移动端键盘和原生 WebView 仍待验收。
+
 会话搜索快捷键补验：旧单文件 Home `.build/mdo-packed-docks-mls87w_c` 的 320px 收起侧栏下按 `/` 被吞掉；最终 Home `.build/mdo-packed-docks-zlfsvfg0` 的手机和折叠桌面侧栏会先展开并聚焦搜索。手机筛选及 Esc 焦点返回、输入框内的命令补全、设置页不抢焦均已实测，详见 [迁移记录](frontend-migration.md#2026-09-27斜杠会话搜索打开收起的侧栏)。实体移动端键盘仍待验收。
 
 图片不兼容时的命令按钮补验：旧单文件 Home `.build/mdo-packed-docks-8n9vj7qj` 在 320×350 附图、切纯文本模型、输入 `/model` 后仍禁用发送按钮；最终 Home `.build/mdo-packed-docks-uj05disz` 对未知命令继续禁用，却允许精确 `/model` 点按切回图片模型。图片刷新后保留，没有新增回合；详见 [迁移记录](frontend-migration.md#2026-09-27不兼容图片模型下仍可点按命令)。实体触控仍待验收。

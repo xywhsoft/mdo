@@ -1,8 +1,8 @@
-import { element, clear, formatRelativeTime, errorMessage, toast } from "../../utils/dom.js";
+import { element, clear, formatRelativeTime, errorMessage, isImeKey, toast } from "../../utils/dom.js";
 import { currentLocale, subscribeLocale, t } from "../../i18n.js";
 import { sessionActionItems } from "./session-actions.js";
 
-export function createSessionList({ container, count, filter, store, projectsStore,
+export function createSessionList({ container, count, filter, searchInput, store, projectsStore,
   navigation, onSelect, onAction, onNewInProject, onAddProject,
   onManageProject }) {
   let query = "";
@@ -230,6 +230,34 @@ export function createSessionList({ container, count, filter, store, projectsSto
   const unsubscribeNavigation = navigation.subscribe(() => { openMenu = ""; render(); });
   const unsubscribeLocale = subscribeLocale(render);
   filter.addEventListener("change", () => { status = filter.value; openMenu = ""; render(); });
+  function sessionButtons() {
+    return [...container.querySelectorAll(".session-item")];
+  }
+  function onSearchKeyDown(event) {
+    if (event.key !== "ArrowDown" || isImeKey(event)) return;
+    const first = sessionButtons()[0];
+    if (!first) return;
+    event.preventDefault();
+    first.focus();
+  }
+  function onSessionKeyDown(event) {
+    if (event.defaultPrevented || isImeKey(event) || event.altKey ||
+        event.ctrlKey || event.metaKey ||
+        !event.target?.classList?.contains("session-item")) return;
+    const buttons = sessionButtons();
+    const index = buttons.indexOf(event.target);
+    if (index < 0) return;
+    if (event.key === "ArrowDown") {
+      event.preventDefault();
+      buttons[(index + 1) % buttons.length].focus();
+    } else if (event.key === "ArrowUp") {
+      event.preventDefault();
+      if (index === 0) (searchInput ?? filter).focus();
+      else buttons[index - 1].focus();
+    }
+  }
+  searchInput?.addEventListener("keydown", onSearchKeyDown);
+  container.addEventListener("keydown", onSessionKeyDown);
   container.addEventListener("scroll", onListScroll);
   sidebar?.addEventListener("scroll", onSidebarScroll);
   window.addEventListener("resize", positionMenu);
@@ -315,6 +343,8 @@ export function createSessionList({ container, count, filter, store, projectsSto
       unsubscribeNavigation();
       unsubscribeLocale();
       openMenuNode?.remove();
+      searchInput?.removeEventListener("keydown", onSearchKeyDown);
+      container.removeEventListener("keydown", onSessionKeyDown);
       container.removeEventListener("scroll", onListScroll);
       sidebar?.removeEventListener("scroll", onSidebarScroll);
       window.removeEventListener("resize", positionMenu);

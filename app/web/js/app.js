@@ -212,21 +212,23 @@ export async function boot() {
   const sessionList = createSessionList({
     container: $("#session-list"),
     count: $("#session-count"),
+    searchInput: $("#session-search"),
     store: sessionsStore,
     projectsStore,
     filter: $("#session-status-filter"),
     navigation,
     onSelect(session, event) {
+      const mobileKeyboardSelection = mobileLayout.matches && event.detail === 0;
       cancelSessionComposerFocus();
       navigation.select(session.project_id, session.id);
       closeDrawers();
-      // Keyboard selection keeps its place in the sidebar; a desktop pointer
-      // selection hands focus to the composer once the target is writable.
-      if (!mobileLayout.matches && event.detail > 0)
+      // Desktop keyboard navigation stays in the list. A mobile keyboard
+      // selection closes the drawer, so hand focus to the composer instead.
+      if (mobileKeyboardSelection || (!mobileLayout.matches && event.detail > 0))
         cancelSessionComposerFocus = focusSessionComposerAfterNavigation({
           navigation, sessionDetailStore, prompt,
           projectId: session.project_id, sessionId: session.id,
-          origin: event.currentTarget,
+          origin: mobileKeyboardSelection ? $("#open-sidebar") : event.currentTarget,
         });
     },
     onAction: handleSessionAction,

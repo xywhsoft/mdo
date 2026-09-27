@@ -1,4 +1,4 @@
-// A pointer selection can replace its sidebar button while the session loads.
+// Navigation can replace the selected sidebar button while the session loads.
 // Focus the composer only if the user has not moved to another control.
 export function focusSessionComposerAfterNavigation({ navigation, sessionDetailStore,
   prompt, projectId, sessionId, origin }) {
