@@ -1434,6 +1434,7 @@ select:focus-visible,
   .setting-row { align-items: flex-start; flex-direction: column; gap: 10px; padding: 15px 0; }
   .setting-row select, .setting-row input { width: 100%; min-width: 0; }
   .setting-row select, .setting-row input:not([type="checkbox"]),
+  .settings-grid input,
   .settings-actions button { min-height: 40px; }
   .resource-group-heading { flex-wrap: wrap; gap: 8px; }
   .resource-group-heading .secondary-button,
