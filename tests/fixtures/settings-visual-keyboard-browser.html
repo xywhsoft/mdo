@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="zh-CN">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>mdo settings visual keyboard probe</title>
+<link rel="stylesheet" href="/app/web/css/app.css?settings-keyboard=2">
+<div class="app-shell" id="shell" data-settings-open data-sidebar="closed">
+  <main class="workspace">
+    <section class="settings-workspace">
+      <header class="settings-header"><button class="icon-button">←</button><h1>设置</h1></header>
+      <div class="settings-layout">
+        <nav class="settings-navigation" aria-label="设置分类">
+          <button aria-current="page">Agent</button><button>联网与搜索</button>
+        </nav>
+        <div class="settings-content">
+          <form>
+            <div class="settings-section-heading"><h2>Agent</h2></div>
+            <div class="setting-row setting-row-wide setting-instructions">
+              <label for="instructions">自定义指令</label>
+              <textarea id="instructions">保留当前修改</textarea>
+            </div>
+          </form>
+        </div>
+      </div>
+      <footer class="settings-actions" id="actions" data-short-state="empty">
+        <div class="settings-feedback">配置与本地服务保持同步。</div>
+        <div class="settings-action-buttons">
+          <button class="danger-link" id="restore-settings" disabled>重置</button>
+          <button class="secondary-button" id="discard-settings" disabled>放弃</button>
+          <button class="secondary-button" id="preview-settings" disabled>预览</button>
+          <button class="primary-button" id="apply-settings" disabled>应用</button>
+        </div>
+      </footer>
+    </section>
+  </main>
+</div>
+<pre id="result"></pre>
+<script type="module">
+import { trackMobileViewport } from "/app/web/js/features/shell/mobile-viewport.js?settings-keyboard=1";
+const shell = document.querySelector("#shell");
+const viewport = Object.assign(new EventTarget(),
+  { height: innerHeight, offsetTop: 0, scale: 1 });
+const win = Object.assign(new EventTarget(),
+  { innerHeight, visualViewport: viewport });
+trackMobileViewport(shell, Object.assign(new EventTarget(), { matches: true }), win);
+const frame = () => new Promise((resolve) => requestAnimationFrame(() =>
+  requestAnimationFrame(resolve)));
+const layout = document.querySelector(".settings-layout");
+const actions = document.querySelector("#actions");
+await frame();
+const keyboardHeight = 250;
+viewport.height = keyboardHeight;
+viewport.dispatchEvent(new Event("resize"));
+await frame();
+const idle = { layoutHeight: layout.getBoundingClientRect().height,
+  actionsHeight: actions.getBoundingClientRect().height,
+  actionsDisplay: getComputedStyle(actions).display };
+actions.dataset.shortState = "active";
+await frame();
+const dirty = { layoutHeight: layout.getBoundingClientRect().height,
+  actionsHeight: actions.getBoundingClientRect().height,
+  actionsBottom: actions.getBoundingClientRect().bottom };
+actions.dataset.shortState = "restore";
+await frame();
+const restore = { actionsHeight: actions.getBoundingClientRect().height,
+  buttons: [...actions.querySelectorAll("button")]
+    .filter((button) => getComputedStyle(button).display !== "none")
+    .map((button) => button.id) };
+viewport.height = innerHeight;
+viewport.dispatchEvent(new Event("resize"));
+await frame();
+const reopened = { compact: shell.hasAttribute("data-compact-visual-viewport"),
+  actionsHeight: actions.getBoundingClientRect().height,
+  visibleButtons: [...actions.querySelectorAll("button")]
+    .filter((button) => getComputedStyle(button).display !== "none").length };
+const result = { idle, dirty, restore, reopened,
+  passed: idle.actionsDisplay === "none" && idle.layoutHeight >= 140 &&
+    dirty.actionsBottom <= keyboardHeight &&
+    restore.buttons.join(",") === "restore-settings" &&
+    restore.actionsHeight <= 55 && !reopened.compact &&
+    reopened.visibleButtons === 4 && reopened.actionsHeight >= 70 };
+document.querySelector("#result").dataset.passed = String(result.passed);
+document.querySelector("#result").textContent = JSON.stringify(result, null, 2);
+</script>
+</html>

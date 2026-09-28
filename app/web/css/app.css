@@ -1566,6 +1566,41 @@ select:focus-visible,
 }
 
 @media (max-width: 760px) {
+  /* A software keyboard may shorten only visualViewport, leaving height media
+     queries at the original layout height. Keep settings usable in that case. */
+  .app-shell[data-compact-visual-viewport] .settings-workspace {
+    grid-template-rows: 44px minmax(0, 1fr) auto;
+  }
+  .app-shell[data-compact-visual-viewport] .settings-navigation {
+    position: static;
+    min-height: 40px;
+    padding: 0 6px;
+  }
+  .app-shell[data-compact-visual-viewport] .settings-actions {
+    min-height: 0;
+    gap: 4px;
+    padding: 4px 8px;
+  }
+  .app-shell[data-compact-visual-viewport] .settings-feedback {
+    max-height: 30px;
+    overflow-y: auto;
+  }
+  .app-shell[data-compact-visual-viewport]
+    .settings-actions[data-short-state="empty"] { display: none; }
+  .app-shell[data-compact-visual-viewport]
+    .settings-actions[data-short-state="restore"] .settings-feedback,
+  .app-shell[data-compact-visual-viewport]
+    .settings-actions[data-short-state="restore"]
+    :is(#discard-settings, #preview-settings, #apply-settings) { display: none; }
+  .app-shell[data-compact-visual-viewport]
+    .settings-actions[data-short-state="restore"] > .settings-action-buttons {
+    display: flex;
+    justify-content: flex-end;
+  }
+  .app-shell[data-compact-visual-viewport] .setting-instructions textarea {
+    min-height: 80px;
+    height: 80px;
+  }
   .app-shell[data-compact-visual-viewport]
     .composer-region:not([data-decision-pending]) .composer textarea {
     min-height: 40px;
