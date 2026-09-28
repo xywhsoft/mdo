@@ -2,6 +2,8 @@
 
 本清单以 `app_bak/wwwroot` 的可操作行为为基线，而不是以页面长得相似或单元测试通过为完成标准。`docs/frontend-migration.md` 记录每次实现和验证；这里记录当前还需要什么证据。审计更新：2026-09-28，基线提交 `f9e2c4c`。
 
+聊天框停止按钮的等待焦点已补齐。旧单文件 Home `.build/mdo-packed-docks-r3fcc_m1` 的 5 秒停止延迟让焦点落到页面根节点；最终 Home `.build/mdo-packed-docks-moipjuuc` 在 320px 保持按钮焦点与 `aria-disabled` 状态，结束后回到输入框，代理只收到一次运行 DELETE。另在 `.build/mdo-packed-docks-hturksik` 验证停止 A 会话后立即切到 B，迟到响应不改变 B 的“就绪”状态和回复，返回 A 能回放“已停止”及恢复入口。Windows/Linux 有界门禁通过；原生 WebView、实体触控仍待验收，详见[迁移记录](frontend-migration.md#2026-09-28聊天框停止请求期间保留焦点并隔离会话)。
+
 移动设置页切到资源分区时不再留着隐藏表单的 70px 内边距。Windows 单文件 Home `.build/mdo-packed-docks-5xqivsih` 在 320×350 实测“权限”“计划任务”标题距分类栏 22px，未应用主题选择跨分区返回后保持，“Agent”表单恢复正常；Linux 单文件 Home `/home/ubuntu/.cache/mdo-linux-qa-73d848b/mdo-current/.build/mdo-packed-docks-ae_op9b7` 复核“诊断与存储”相同间距，两端无横向溢出或脚本错误。其他设置分区和实体触控继续验收，详见[迁移记录](frontend-migration.md#2026-09-28资源设置页收起空表单间距)。
 
 交错的正文、思考与后台事件现按模型回合归并，避免同一回复出现多张相同键的卡。Node 回归和生产模块浏览器夹具验证完整文本、唯一回复/思考卡、反馈与用量归属、增量更新后的按钮焦点；320px 无溢出或脚本错误。最终单文件 Home `.build/mdo-packed-docks-pjgt3fph` 复核普通 Markdown 回复和消息操作；另在 `.build/mdo-packed-docks-molh0fln` 经有界本地 Chat Completions SSE 端点验证打包进程的交错正文/思考流、持久事件、唯一回复卡与用量，`.build/mdo-packed-docks-jymrn_94` 验证点赞刷新后保留。线上 Ling 端点、其他系统原生 WebView 与实体触控仍待验收，“时间线与消息操作”仍为部分打包实测，详见[迁移记录](frontend-migration.md#2026-09-28单文件打包页验证交错-chat-completions-流)。

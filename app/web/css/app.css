@@ -855,6 +855,7 @@ select:focus-visible,
   cursor: pointer;
 }
 .send-button:disabled { opacity: .32; cursor: default; }
+.stop-button[aria-disabled="true"] { opacity: .5; cursor: wait; }
 .send-button .icon { width: 16px; height: 16px; }
 .stop-button span { width: 10px; height: 10px; border-radius: 2px; background: currentColor; }
 .composer-error { margin-bottom: 7px; padding: 8px 11px; border: 1px solid color-mix(in srgb, var(--danger) 35%, var(--border)); border-radius: var(--radius-sm); background: color-mix(in srgb, var(--danger) 7%, var(--bg)); color: var(--danger); font-size: 12px; }

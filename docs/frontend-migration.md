@@ -4,6 +4,14 @@
 
 完成判据及尚缺的打包页证据见 [前端操作体验完成审计](frontend-completion-audit.md)。本文件继续记录每次实现和验证的细节。
 
+## 2026-09-28：聊天框停止请求期间保留焦点并隔离会话
+
+旧单文件 Home `.build/mdo-packed-docks-r3fcc_m1` 在 320×350 点击“停止当前任务”后立即原生禁用按钮，5 秒有界代理延迟内焦点掉到页面根节点。现在停止按钮在请求期间保持可聚焦，以 `aria-disabled` 和运行 ID 锁防止重复提交；停止完成且该按钮消失时，焦点返回输入框。迟到响应仅在原会话仍被选中且运行 ID 未变时更新当前运行状态，切到另一会话不会覆盖其状态或错误区。
+
+Windows 单文件 Home `.build/mdo-packed-docks-rff829k0` 的 5 秒延迟中确认按钮保持焦点、第二次按 Enter 没有重复停止请求，结束后焦点回输入框。Home `.build/mdo-packed-docks-hturksik` 先创建并完成第二会话，再从第一会话发起停止并立即切换；响应返回后第二会话仍“就绪”、保留自己的回复、没有旧会话错误，返回第一会话可见“已停止”和恢复入口，代理只记录一次运行 DELETE。最终重新打包 Home `.build/mdo-packed-docks-moipjuuc` 又在 320px 复核等待期 `aria-disabled=true` 而原生 `disabled=false`、停止后输入焦点、无横向溢出或脚本错误，代理仍只有一次 DELETE。夹具新增 `--run-cancel-delay-ms`（上限 5 秒），只作用于隔离环境的运行停止请求。
+
+Windows/Linux 有界门禁均通过 114 项 Python、77 项 Node、71 个前端模块解析、21 个运行探针及确定性打包；Windows 另通过单文件零旁路写入与 20 秒启动检查。根目录 `mdo.exe` SHA-256 为 `5081f39876d2316ff1e590a7c8f33efd3aef2185e7accdaa35c2dc5621c1284d`，Linux 根目录 `mdo` 为 `182b5eb44c73a9fa94aa32fc0f6c1813971de5338125a61c7db5dcac95403eea`。原生 WebView 和实体触控仍待验收；未运行压力或高负载测试。
+
 ## 2026-09-28：资源设置页收起空表单间距
 
 320×350 单文件设置页切到“权限”等资源分区时，常规/Agent/联网表单的子分区虽已隐藏，表单自身仍保留 70px 内边距，使分类栏到标题出现约 92px 空白。现在切换分区时一并隐藏不包含当前分区的表单；返回表单分区时原节点与未应用选择保持。修复后的 Windows 单文件 Home `.build/mdo-packed-docks-5xqivsih` 实测“权限”和“计划任务”标题距分类栏 22px，文档宽度 320px；从“常规”选浅色但不应用，经“权限”“计划任务”返回后仍保持草稿，“Agent”表单也正常恢复，浏览器脚本错误为空。Linux 单文件 Home `/home/ubuntu/.cache/mdo-linux-qa-73d848b/mdo-current/.build/mdo-packed-docks-ae_op9b7` 在同尺寸复核“诊断与存储”标题间距 22px、无横向溢出和脚本错误。

@@ -144,6 +144,7 @@ export async function boot() {
   let sessionWritable = true;
   let selectedSessionStatus = "active";
   let activeRun = null;
+  const stoppingRunIds = new Set();
   let runMonitor = 0;
   let selectedKey = "";
   let creatingSessionKey = "";
@@ -859,6 +860,11 @@ export async function boot() {
         !slashCommands.isExact(prompt.value.trim()));
   }
 
+  function syncStopBusy() {
+    stop.setAttribute("aria-disabled", String(Boolean(activeRun &&
+      (activeRun.cancel_requested || stoppingRunIds.has(activeRun.id)))));
+  }
+
   function setRun(run) {
     const wasActive = Boolean(activeRun);
     activeRun = run && !terminalState(run) ? run : null;
@@ -869,6 +875,7 @@ export async function boot() {
     runStatus.lastElementChild.textContent = runStateText(shown.state);
     send.hidden = false;
     stop.hidden = !activeRun;
+    syncStopBusy();
     const route = navigation.get();
     const creatingNewTask = !route.sessionId &&
       Boolean(newTaskController?.isBusy());
@@ -1661,18 +1668,34 @@ export async function boot() {
   });
 
   stop.addEventListener("click", async () => {
-    if (!activeRun) return;
-    stop.disabled = true;
+    if (!activeRun || activeRun.cancel_requested ||
+        stoppingRunIds.has(activeRun.id)) return;
+    const runId = activeRun.id;
+    const { projectId, sessionId } = navigation.get();
+    const stillSelected = () => {
+      const route = navigation.get();
+      return route.projectId === projectId && route.sessionId === sessionId &&
+        (!activeRun || activeRun.id === runId);
+    };
+    stoppingRunIds.add(runId);
+    syncStopBusy();
     try {
-      const run = await cancelRun(activeRun.id);
-      setRun(run);
-      await Promise.all([refreshSelectedTimeline(), loadTasks(), loadRuns(),
-        ...(terminalState(run) ? [loadRecovery()] : [])]);
-      if (terminalState(run)) await dispatchQueued();
+      const run = await cancelRun(runId);
+      if (stillSelected()) {
+        const returnFocus = document.activeElement === stop;
+        if (activeRun?.id === runId) setRun(run);
+        if (returnFocus && stop.hidden && !prompt.disabled)
+          prompt.focus({ preventScroll: true });
+        await Promise.all([refreshSelectedTimeline(), loadTasks(), loadRuns(),
+          ...(terminalState(run) ? [loadRecovery()] : [])]);
+        if (terminalState(run)) await dispatchQueued();
+      } else await Promise.all([loadTasks(), loadRuns()]);
     } catch (error) {
-      showComposerError(error);
+      if (stillSelected()) showComposerError(error);
+      else toast(errorMessage(error), "error");
     } finally {
-      stop.disabled = false;
+      stoppingRunIds.delete(runId);
+      syncStopBusy();
     }
   });
 

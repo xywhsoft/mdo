@@ -336,6 +336,12 @@ class BoundedDelayProxy(BaseHTTPRequestHandler):
                 count = self.server.task_deletes
             print(f"QA task DELETE #{count}", flush=True)
             time.sleep(self.server.task_cancel_delay_seconds)
+        if self.command == "DELETE" and self.path.startswith("/api/v1/runs/"):
+            with self.server.count_lock:
+                self.server.run_deletes += 1
+                count = self.server.run_deletes
+            print(f"QA run DELETE #{count}", flush=True)
+            time.sleep(self.server.run_cancel_delay_seconds)
         if (self.command == "POST" and self.path.startswith("/api/v1/projects/")
                 and "/sessions/" in self.path and self.path.endswith("/queue")):
             with self.server.count_lock:
@@ -480,6 +486,8 @@ parser.add_argument("--ask-delay-ms", type=int, default=0,
                     help="delay ask PUTs by 0-5000 ms for cross-session QA")
 parser.add_argument("--task-cancel-delay-ms", type=int, default=0,
                     help="delay task DELETE by 0-5000 ms for duplicate-click QA")
+parser.add_argument("--run-cancel-delay-ms", type=int, default=0,
+                    help="delay run DELETE by 0-5000 ms for stop-focus QA")
 parser.add_argument("--queue-delay-ms", type=int, default=0,
                     help="delay queue POSTs by 0-12000 ms for bounded dispatch race QA")
 parser.add_argument("--run-delay-ms", type=int, default=0,
@@ -539,6 +547,8 @@ if not 0 <= args.ask_delay_ms <= 5000:
     parser.error("--ask-delay-ms must be between 0 and 5000")
 if not 0 <= args.task_cancel_delay_ms <= 5000:
     parser.error("--task-cancel-delay-ms must be between 0 and 5000")
+if not 0 <= args.run_cancel_delay_ms <= 5000:
+    parser.error("--run-cancel-delay-ms must be between 0 and 5000")
 if not 0 <= args.queue_delay_ms <= 12000:
     parser.error("--queue-delay-ms must be between 0 and 12000")
 if not 0 <= args.run_delay_ms <= 5000:
@@ -666,6 +676,7 @@ try:
     session = response["data"]["id"]
     browser_port = port
     if (args.approval_delay_ms or args.ask_delay_ms or args.task_cancel_delay_ms
+            or args.run_cancel_delay_ms
             or args.queue_delay_ms or args.run_delay_ms
             or args.create_delay_ms or args.project_delay_ms
             or args.locale_delay_ms or args.fail_first_project
@@ -682,6 +693,7 @@ try:
         proxy.approval_delay_seconds = args.approval_delay_ms / 1000
         proxy.ask_delay_seconds = args.ask_delay_ms / 1000
         proxy.task_cancel_delay_seconds = args.task_cancel_delay_ms / 1000
+        proxy.run_cancel_delay_seconds = args.run_cancel_delay_ms / 1000
         proxy.queue_delay_seconds = args.queue_delay_ms / 1000
         proxy.run_delay_seconds = args.run_delay_ms / 1000
         proxy.create_delay_seconds = args.create_delay_ms / 1000
@@ -706,6 +718,7 @@ try:
         proxy.approval_puts = 0
         proxy.ask_puts = 0
         proxy.task_deletes = 0
+        proxy.run_deletes = 0
         proxy.queue_posts = 0
         proxy.run_posts = 0
         proxy.create_posts = 0
@@ -720,6 +733,7 @@ finally:
         print(f"QA approval PUT total={proxy.approval_puts}", flush=True)
         print(f"QA ask PUT total={proxy.ask_puts}", flush=True)
         print(f"QA task DELETE total={proxy.task_deletes}", flush=True)
+        print(f"QA run DELETE total={proxy.run_deletes}", flush=True)
         print(f"QA queue POST total={proxy.queue_posts}", flush=True)
         print(f"QA run POST total={proxy.run_posts}", flush=True)
         print(f"QA create POST total={proxy.create_posts}", flush=True)
