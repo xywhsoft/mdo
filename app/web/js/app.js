@@ -1146,14 +1146,39 @@ export async function boot() {
     window.clearTimeout(runMonitor);
     runMonitor = window.setTimeout(async () => {
       if (!activeRun || document.hidden) return;
+      const runId = activeRun.id;
+      const version = routeVersion;
+      const key = selectedKey;
+      const stillSelected = () => routeVersion === version && selectedKey === key;
+      const stillPollingRun = () => stillSelected() && activeRun?.id === runId;
+      const resumeCurrentRun = () => {
+        if (activeRun?.id === runId && selectedKey === key && !document.hidden)
+          scheduleRunPoll();
+      };
+      let responseApplied = false;
       try {
-        const run = await readRun(activeRun.id);
+        const run = await readRun(runId);
+        // Clearing the timer cannot cancel a read already in flight.
+        if (!stillPollingRun()) { resumeCurrentRun(); return; }
         const returnFocus = document.activeElement === stop;
         setRun(run);
+        responseApplied = true;
         await Promise.all([refreshSelectedTimeline(), refreshSelectedAsks()]);
+        if (!stillSelected() || (activeRun && activeRun.id !== runId)) {
+          resumeCurrentRun();
+          return;
+        }
         if (terminalState(run)) {
           await Promise.all([loadSessions(), loadRuns(), loadTasks(), loadRecovery()]);
+          if (!stillSelected() || (activeRun && activeRun.id !== runId)) {
+            resumeCurrentRun();
+            return;
+          }
           await refreshSelectedQueue();
+          if (!stillSelected() || (activeRun && activeRun.id !== runId)) {
+            resumeCurrentRun();
+            return;
+          }
           if (returnFocus &&
               (document.activeElement === stop ||
                 document.activeElement === document.body) &&
@@ -1164,8 +1189,13 @@ export async function boot() {
             prompt.focus({ preventScroll: true });
           return;
         }
-        scheduleRunPoll();
+        if (stillPollingRun()) scheduleRunPoll();
       } catch (error) {
+        if (!stillSelected() || (!responseApplied && !stillPollingRun()) ||
+            (activeRun && activeRun.id !== runId)) {
+          resumeCurrentRun();
+          return;
+        }
         setRun(null);
         showComposerError(error);
       }

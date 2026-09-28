@@ -314,6 +314,7 @@ class BoundedDelayProxy(BaseHTTPRequestHandler):
         drop_response = False
         drop_run_response = False
         drop_create_response = False
+        delay_run_response = False
         if self.command == "POST" and self.path == "/api/v1/sessions":
             with self.server.count_lock:
                 self.server.create_posts += 1
@@ -359,6 +360,11 @@ class BoundedDelayProxy(BaseHTTPRequestHandler):
         if (self.command == "GET" and self.path.startswith("/api/v1/projects/")
                 and "/sessions/" in self.path and self.path.endswith("/history")):
             time.sleep(self.server.history_delay_seconds)
+        if self.command == "GET" and self.path.startswith("/api/v1/runs/"):
+            with self.server.count_lock:
+                self.server.run_reads += 1
+                count = self.server.run_reads
+            delay_run_response = True
         if self.command == "PUT" and self.path.startswith("/api/v1/approvals/"):
             with self.server.count_lock:
                 self.server.approval_puts += 1
@@ -449,6 +455,21 @@ class BoundedDelayProxy(BaseHTTPRequestHandler):
             upstream.request(self.command, self.path, body=body, headers=headers)
             response = upstream.getresponse()
             payload = response.read()
+            response_status = response.status
+            if delay_run_response:
+                try:
+                    run_state = json.loads(payload)["data"]["state"]
+                except (KeyError, TypeError, ValueError):
+                    run_state = "unknown"
+                print(f"QA run GET #{count} captured={run_state}", flush=True)
+                time.sleep(self.server.run_read_delay_seconds)
+                if self.server.fail_first_run_read and count == 1:
+                    response_status = 503
+                    payload = json.dumps({"ok": False, "error": {
+                        "code": "qa_run_read_rejected",
+                        "message": "Synthetic stale run read failure"
+                    }}).encode()
+                    print("QA first run GET rejected after delay", flush=True)
             if drop_response:
                 if self.server.consume_dropped_queue_response:
                     if response.status != 201:
@@ -495,7 +516,7 @@ class BoundedDelayProxy(BaseHTTPRequestHandler):
                 self.close_connection = True
                 self.connection.close()
                 return
-            self.send_response(response.status)
+            self.send_response(response_status)
             for key, value in response.getheaders():
                 if key.lower() not in {"connection", "content-length",
                                        "transfer-encoding"}:
@@ -546,6 +567,10 @@ parser.add_argument("--fail-first-attachment-delete", action="store_true",
                     help="reject the first attachment DELETE for cleanup-retry QA")
 parser.add_argument("--run-delay-ms", type=int, default=0,
                     help="delay run POSTs by 0-5000 ms for composer handoff QA")
+parser.add_argument("--run-read-delay-ms", type=int, default=0,
+                    help="delay run GETs by 0-5000 ms for route-switch QA")
+parser.add_argument("--fail-first-run-read", action="store_true",
+                    help="reject the first delayed run GET after capturing its state")
 parser.add_argument("--create-delay-ms", type=int, default=0,
                     help="delay session create POSTs by 0-5000 ms for new-task QA")
 parser.add_argument("--project-delay-ms", type=int, default=0,
@@ -617,6 +642,8 @@ if not 0 <= args.queue_read_failures <= 8:
     parser.error("--queue-read-failures must be between 0 and 8")
 if not 0 <= args.run_delay_ms <= 5000:
     parser.error("--run-delay-ms must be between 0 and 5000")
+if not 0 <= args.run_read_delay_ms <= 5000:
+    parser.error("--run-read-delay-ms must be between 0 and 5000")
 if not 0 <= args.create_delay_ms <= 5000:
     parser.error("--create-delay-ms must be between 0 and 5000")
 if not 0 <= args.project_delay_ms <= 5000:
@@ -745,6 +772,8 @@ try:
             or args.attachment_delay_ms or args.fail_first_attachment
             or args.fail_first_attachment_delete
             or args.run_delay_ms
+            or args.run_read_delay_ms
+            or args.fail_first_run_read
             or args.create_delay_ms or args.project_delay_ms
             or args.locale_delay_ms or args.fail_first_project
             or args.history_delay_ms
@@ -770,6 +799,8 @@ try:
         proxy.fail_first_attachment_delete = args.fail_first_attachment_delete
         proxy.attachment_deletes = 0
         proxy.run_delay_seconds = args.run_delay_ms / 1000
+        proxy.run_read_delay_seconds = args.run_read_delay_ms / 1000
+        proxy.fail_first_run_read = args.fail_first_run_read
         proxy.create_delay_seconds = args.create_delay_ms / 1000
         proxy.project_delay_seconds = args.project_delay_ms / 1000
         proxy.locale_delay_seconds = args.locale_delay_ms / 1000
@@ -793,6 +824,7 @@ try:
         proxy.ask_puts = 0
         proxy.task_deletes = 0
         proxy.run_deletes = 0
+        proxy.run_reads = 0
         proxy.queue_posts = 0
         proxy.run_posts = 0
         proxy.create_posts = 0
@@ -809,6 +841,7 @@ finally:
         print(f"QA ask PUT total={proxy.ask_puts}", flush=True)
         print(f"QA task DELETE total={proxy.task_deletes}", flush=True)
         print(f"QA run DELETE total={proxy.run_deletes}", flush=True)
+        print(f"QA run GET total={proxy.run_reads}", flush=True)
         print(f"QA queue POST total={proxy.queue_posts}", flush=True)
         print(f"QA run POST total={proxy.run_posts}", flush=True)
         print(f"QA create POST total={proxy.create_posts}", flush=True)
