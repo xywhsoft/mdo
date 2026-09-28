@@ -7,6 +7,8 @@ import { currentLocale, loadLocale, subscribeLocale, supportedLocales, t } from
 import { errorMessage } from "../app/web/js/utils/dom.js";
 import { sessionActionDialogCopy, sessionActionItems, sessionForkTitle } from
   "../app/web/js/features/sessions/session-actions.js";
+import { resourceDescription } from
+  "../app/web/js/features/settings/resource-panels.js";
 
 const root = new URL("../app/web/", import.meta.url);
 const packs = Object.fromEntries(supportedLocales.map((name) => [
@@ -31,6 +33,35 @@ function assertApiErrorsLocalized(locale) {
   for (const [code, key] of localizedApiErrors)
     assert.equal(errorMessage({ code, message: "English server detail" }),
       packs[locale][key], `${locale}:${code}`);
+}
+
+const builtinResources = [
+  ["agent", { id: "mdo.default", description:
+    "General coding and knowledge-work Agent with inherited model settings." },
+  "resource.defaultAgentDescription"],
+  ["skill", { id: "project-explorer", trust: "builtin", external: false,
+    description: "Inspect a repository and report its structure before making changes." },
+  "resource.projectExplorerDescription"],
+  ["module", { id: "mdo.default-agent", external: false,
+    description: "Built-in default Agent profile." },
+  "resource.defaultAgentModuleDescription"],
+  ["module", { id: "mdo.core.echo", external: false,
+    description: "A minimal built-in module used to verify the complete module ABI path." },
+  "resource.echoModuleDescription"],
+  ["module", { id: "mdo.core.todo", external: false,
+    description: "Publishes a compact plan snapshot for the session conversation dock." },
+  "resource.todoModuleDescription"],
+];
+
+function assertBuiltinDescriptionsLocalized(locale) {
+  for (const [kind, item, key] of builtinResources) {
+    assert.equal(resourceDescription(kind, item), packs[locale][key],
+      `${locale}:${item.id}`);
+    assert.equal(resourceDescription(kind, { ...item, external: true }),
+      item.description, `${locale}:${item.id}:external`);
+    assert.equal(resourceDescription(kind, { ...item, description: "Author copy" }),
+      "Author copy", `${locale}:${item.id}:edited`);
+  }
 }
 
 test("bundled language packs cover the annotated shell and switch without stale responses", async () => {
@@ -163,6 +194,7 @@ test("bundled language packs cover the annotated shell and switch without stale 
     assert.equal(await loadLocale("zh-CN"), true);
     assert.equal(node.textContent, "新建任务");
     assertApiErrorsLocalized("zh-CN");
+    assertBuiltinDescriptionsLocalized("zh-CN");
     const stale = loadLocale("en-US");
     assert.equal(await loadLocale("ru-RU"), true);
     releaseEnglish();
@@ -171,6 +203,7 @@ test("bundled language packs cover the annotated shell and switch without stale 
     assert.equal(globalThis.document.documentElement.lang, "ru-RU");
     assert.equal(node.textContent, "Новая задача");
     assertApiErrorsLocalized("ru-RU");
+    assertBuiltinDescriptionsLocalized("ru-RU");
     assert.equal(node.getAttribute("aria-label"), "Настроить и создать задачу");
     assert.equal(t("nav.actionsFor", { title: "Тест" }), "Действия с сеансом Тест");
     assert.equal(t("composer.backgroundQueueFailed", { title: "Тест", error: "сбой" }),
@@ -194,6 +227,7 @@ test("bundled language packs cover the annotated shell and switch without stale 
     assert.equal(await loadLocale("en-US"), true);
     assert.equal(node.textContent, "New task");
     assertApiErrorsLocalized("en-US");
+    assertBuiltinDescriptionsLocalized("en-US");
     assert.equal(errorMessage({ code: "queue_full", message: "队列已满" }),
       "The pending queue is full. Handle existing messages first.");
     assert.equal(errorMessage({ code: "schedule_busy",

@@ -75,6 +75,35 @@ function permissionProfile(value) {
   return key ? t(key, {}, value) : String(value ?? "");
 }
 
+// Only translate descriptions shipped by mdo itself. An external resource or
+// an edited built-in description remains author-owned text, even with the same ID.
+const BUILTIN_DESCRIPTIONS = Object.freeze({
+  agent: Object.freeze({
+    "mdo.default": ["General coding and knowledge-work Agent with inherited model settings.",
+      "resource.defaultAgentDescription"],
+  }),
+  skill: Object.freeze({
+    "project-explorer": ["Inspect a repository and report its structure before making changes.",
+      "resource.projectExplorerDescription"],
+  }),
+  module: Object.freeze({
+    "mdo.default-agent": ["Built-in default Agent profile.",
+      "resource.defaultAgentModuleDescription"],
+    "mdo.core.echo": ["A minimal built-in module used to verify the complete module ABI path.",
+      "resource.echoModuleDescription"],
+    "mdo.core.todo": ["Publishes a compact plan snapshot for the session conversation dock.",
+      "resource.todoModuleDescription"],
+  }),
+});
+
+export function resourceDescription(kind, item) {
+  const entry = BUILTIN_DESCRIPTIONS[kind]?.[item?.id];
+  const builtin = !item?.external && (kind === "agent"
+    ? item?.id === "mdo.default" : kind !== "skill" || item?.trust === "builtin");
+  return builtin && entry && item.description === entry[0]
+    ? t(entry[1], {}, entry[0]) : item?.description;
+}
+
 function skillMetadata(skill) {
   const meta = [resourceCode(skill.trust)];
   if (skill.external && skill.trust !== "external_reference")
@@ -116,18 +145,18 @@ export function createResourcePanels({ agentsStore, stores, reload }) {
     }
     extensionsContainer.append(heading("Agent"));
     for (const agent of agentsStore.get().data?.items ?? []) {
-      extensionsContainer.append(card(agent.name || agent.id, agent.description, [agent.id, permissionProfile(agent.permission_profile),
+      extensionsContainer.append(card(agent.name || agent.id, resourceDescription("agent", agent), [agent.id, permissionProfile(agent.permission_profile),
         t("resource.toolCount", { count: agent.tools?.length ?? 0 }, `${agent.tools?.length ?? 0} tools`),
         t("resource.skillCount", { count: agent.skills?.length ?? 0 }, `${agent.skills?.length ?? 0} Skills`)]));
     }
     extensionsContainer.append(heading("Skill", action(t("resource.refresh", {}, "刷新"), () => refreshCatalog("skills"))));
     for (const skill of skills.data?.items ?? []) {
-      extensionsContainer.append(card(skill.name || skill.id, skill.description,
+      extensionsContainer.append(card(skill.name || skill.id, resourceDescription("skill", skill),
         skillMetadata(skill)));
     }
     extensionsContainer.append(heading("Module", action(t("resource.rebuild", {}, "重新编译"), () => refreshCatalog("modules"))));
     for (const module of modules.data?.modules ?? []) {
-      extensionsContainer.append(card(module.name || module.id, module.description, [module.version,
+      extensionsContainer.append(card(module.name || module.id, resourceDescription("module", module), [module.version,
         module.external ? t("resource.externalTcc", {}, "外部 TCC") : t("resource.builtin", {}, "内置"),
         t("resource.toolCount", { count: module.tool_count }, `${module.tool_count} tools`),
         t("resource.agentCount", { count: module.agent_count }, `${module.agent_count} agents`)]));
