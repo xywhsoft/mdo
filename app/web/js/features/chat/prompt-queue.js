@@ -487,6 +487,9 @@ export function createPromptQueue({ container, navigation, isRunActive, stagedEn
       finally { busy.delete(key); render(); }
     },
     render,
+    rememberUnusedImages(projectId, sessionId, ids) {
+      unusedImages.remember(sessionKey(projectId, sessionId), ids);
+    },
     flushUnusedImages: () => unusedImages.flush(),
   });
 }

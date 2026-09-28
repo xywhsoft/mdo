@@ -255,6 +255,26 @@ class BoundedDelayProxy(BaseHTTPRequestHandler):
                 self.wfile.write(payload)
                 self.close_connection = True
                 return
+        if (self.command == "DELETE" and
+                self.path.startswith("/api/v1/projects/") and
+                "/sessions/" in self.path and "/attachments/" in self.path):
+            with self.server.count_lock:
+                self.server.attachment_deletes += 1
+                count = self.server.attachment_deletes
+            print(f"QA attachment DELETE #{count}", flush=True)
+            if self.server.fail_first_attachment_delete and count == 1:
+                payload = json.dumps({"ok": False, "error": {
+                    "code": "attachment_unavailable",
+                    "message": "Synthetic attachment delete failure"
+                }}).encode()
+                self.send_response(503)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Content-Length", str(len(payload)))
+                self.send_header("Connection", "close")
+                self.end_headers()
+                self.wfile.write(payload)
+                self.close_connection = True
+                return
         if (self.command == "GET" and self.path in
                 {"/lang/en-US.json", "/lang/ru-RU.json"}):
             print(f"QA locale GET {self.path}", flush=True)
@@ -522,6 +542,8 @@ parser.add_argument("--attachment-delay-ms", type=int, default=0,
                     help="delay attachment POSTs by 0-5000 ms for paste/drop QA")
 parser.add_argument("--fail-first-attachment", action="store_true",
                     help="reject the first attachment POST for queued-upload QA")
+parser.add_argument("--fail-first-attachment-delete", action="store_true",
+                    help="reject the first attachment DELETE for cleanup-retry QA")
 parser.add_argument("--run-delay-ms", type=int, default=0,
                     help="delay run POSTs by 0-5000 ms for composer handoff QA")
 parser.add_argument("--create-delay-ms", type=int, default=0,
@@ -721,6 +743,7 @@ try:
             or args.run_cancel_delay_ms
             or args.queue_delay_ms or args.queue_read_delay_ms
             or args.attachment_delay_ms or args.fail_first_attachment
+            or args.fail_first_attachment_delete
             or args.run_delay_ms
             or args.create_delay_ms or args.project_delay_ms
             or args.locale_delay_ms or args.fail_first_project
@@ -744,6 +767,8 @@ try:
         proxy.attachment_delay_seconds = args.attachment_delay_ms / 1000
         proxy.fail_first_attachment = args.fail_first_attachment
         proxy.attachment_posts = 0
+        proxy.fail_first_attachment_delete = args.fail_first_attachment_delete
+        proxy.attachment_deletes = 0
         proxy.run_delay_seconds = args.run_delay_ms / 1000
         proxy.create_delay_seconds = args.create_delay_ms / 1000
         proxy.project_delay_seconds = args.project_delay_ms / 1000
@@ -779,6 +804,7 @@ try:
     input("Press Enter to stop QA servers.\n")
 finally:
     if proxy:
+        print(f"QA attachment DELETE total={proxy.attachment_deletes}", flush=True)
         print(f"QA approval PUT total={proxy.approval_puts}", flush=True)
         print(f"QA ask PUT total={proxy.ask_puts}", flush=True)
         print(f"QA task DELETE total={proxy.task_deletes}", flush=True)

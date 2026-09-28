@@ -789,6 +789,9 @@ export async function boot() {
         .includes(composerError.dataset.code)) hideComposerError();
       setRun(activeRun);
     },
+    onDiscardedUpload(owner, id) {
+      promptQueue.rememberUnusedImages(owner.projectId, owner.sessionId, [id]);
+    },
     onError: showComposerError,
   });
   composerImages.set(composerAttachments);

@@ -49,7 +49,7 @@ function selectionError(message) {
 
 export function createComposerImages({ composer, prompt, button, input, strip,
   modelSelect, navigation, modelsStore, sessionStore, ensureSession, onChange, onRemove,
-  onUploading, onError }) {
+  onUploading, onError, onDiscardedUpload }) {
   let ids = [];
   const uploadJobs = new Map();
   const removals = new Set();
@@ -226,8 +226,11 @@ export function createComposerImages({ composer, prompt, button, input, strip,
           if (!stored) continue;
           if (scopeKey() !== job.key) {
             discarded = true;
-            void api.deleteImage(selected.projectId, selected.sessionId,
-              stored.id).catch(() => {});
+            // The response arrived after this editor moved away. Give the
+            // unreferenced attachment to the same retrying cleanup path used
+            // for removed queue images; a transient DELETE failure must not
+            // leave it behind silently.
+            onDiscardedUpload(selected, stored.id);
             break;
           }
           ids = [...ids, stored.id];
