@@ -2,6 +2,8 @@
 
 本清单以 `app_bak/wwwroot` 的可操作行为为基线，而不是以页面长得相似或单元测试通过为完成标准。`docs/frontend-migration.md` 记录每次实现和验证；这里记录当前还需要什么证据。审计更新：2026-09-28，基线提交 `f9e2c4c`。
 
+明确会话 URL 刷新后的输入焦点已恢复。旧单文件页在 390×500 的待办加长询问链中可读题目、作答并保留待办，但刷新后输入无焦点；最终 Home `.build/mdo-packed-docks-hwqay5oq` 在桌面与 390×500 明确会话 URL 刷新、390×500 明确新任务 URL 刷新后均让输入框获焦，Node 用例保证不会覆盖加载期间的用户新焦点。Windows/Linux 有界门禁通过，根目录 `mdo.exe` 已重建。实体手机触控、软键盘及原生 WebView 仍待验收，详见[迁移记录](frontend-migration.md#2026-09-28明确会话-url-刷新后恢复输入焦点)。
+
 切会话后的附件删除现在复用可重试清理器。Windows 单文件 Home `.build/mdo-packed-docks-dbmbgbcu` 的首次 DELETE 被故障夹具返回 503，后续自动重试成功：一条 POST、两条 DELETE，原任务附件目录最终为空，两个任务都没有误附图片。Windows/Linux 有界门禁通过，根目录 `mdo.exe` 已重建。页面关闭前尚未重试的跨重启恢复、原生拖放、实体移动端粘贴及 WebView 仍待验收，详见[迁移记录](frontend-migration.md#2026-09-28切会话后附件删除失败的重试)。
 
 连续图片上传的故障边界已在 Windows 单文件 Home 中补验：第一条附件 POST 被夹具拒绝时，页面提示失败，第二张仍继续保存并在刷新后保留；5 秒延迟请求期间切到新任务，两个任务界面都没有误附返回的图片，原会话附件目录也为空。Windows/Linux 有界门禁通过，根目录 `mdo.exe` 已重建。原生拖放、实体移动端粘贴和 WebView 尚待独立验收，详见[迁移记录](frontend-migration.md#2026-09-28连续图片上传的失败和切会话边界)。

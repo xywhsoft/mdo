@@ -83,3 +83,59 @@ test("startup focuses a ready composer without stealing focus after navigation",
     globalThis.location = originalLocation;
   }
 });
+
+test("an explicit session URL focuses after loading without stealing a newer focus", async () => {
+  const originalFetch = globalThis.fetch;
+  const originalLocation = globalThis.location;
+  const originalDocument = globalThis.document;
+  const session = { project_id: "default", id: "S1", title: "Linked task" };
+  const body = { isConnected: true };
+  globalThis.document = { body, activeElement: body };
+  globalThis.location = { hash: "#/projects/default/sessions/S1" };
+  globalThis.fetch = async () => Response.json({ ok: true, data: {
+    project_id: "default", session_id: "S1",
+  } });
+  const base = { settingsStore: { get: () => ({ data: {} }) },
+    sessionsStore: { get: () => ({ data: { items: [session] } }) },
+    dialog: {}, title: {}, continueButton: {}, newButton: {},
+    entryHash: globalThis.location.hash };
+  try {
+    const nav = fakeNavigation();
+    nav.select("default", "S1");
+    const detail = createResourceStore();
+    let focused = 0;
+    const prompt = { disabled: true, focus() { focused += 1; } };
+    await startWorkspaceNavigation({ ...base, navigation: nav,
+      sessionDetailStore: detail, prompt });
+    assert.equal(focused, 0);
+    prompt.disabled = false;
+    detail.setData(session);
+    assert.equal(focused, 1);
+
+    const laterNav = fakeNavigation();
+    laterNav.select("default", "S1");
+    const laterDetail = createResourceStore();
+    let stolen = 0;
+    globalThis.document.activeElement = body;
+    await startWorkspaceNavigation({ ...base, navigation: laterNav,
+      sessionDetailStore: laterDetail,
+      prompt: { disabled: false, focus() { stolen += 1; } } });
+    globalThis.document.activeElement = { isConnected: true };
+    laterDetail.setData(session);
+    assert.equal(stolen, 0);
+
+    const newNav = fakeNavigation();
+    newNav.newTask("default");
+    globalThis.location.hash = "#/projects/default/new";
+    globalThis.document.activeElement = body;
+    let newFocuses = 0;
+    await startWorkspaceNavigation({ ...base, navigation: newNav,
+      sessionDetailStore: createResourceStore(),
+      prompt: { disabled: false, focus() { newFocuses += 1; } } });
+    assert.equal(newFocuses, 1);
+  } finally {
+    globalThis.fetch = originalFetch;
+    globalThis.location = originalLocation;
+    globalThis.document = originalDocument;
+  }
+});

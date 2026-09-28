@@ -1,6 +1,7 @@
 import { api, resourceId } from "../../api/client.js";
 import { toast } from "../../utils/dom.js";
 import { t } from "../../i18n.js";
+import { focusSessionComposerAfterNavigation } from "./session-composer-focus.js";
 
 const endpoint = "/workspace-state";
 
@@ -80,8 +81,22 @@ export async function startWorkspaceNavigation({ navigation, settingsStore,
     if (done) unsubscribeRoute();
   }
 
+  function focusExplicitWorkspace() {
+    const route = navigation.get();
+    if (route.view !== "workspace") return;
+    if (route.projectId && route.sessionId) {
+      focusSessionComposerAfterNavigation({ navigation, sessionDetailStore,
+        prompt, projectId: route.projectId, sessionId: route.sessionId,
+        origin: document.body });
+      return;
+    }
+    const active = document.activeElement;
+    if (!prompt.disabled && (active === document.body || !active?.isConnected))
+      prompt.focus();
+  }
+
   // Hash routes are explicit user choices, including #/ for a blank task.
-  if (entryHash || location.hash) return;
+  if (entryHash || location.hash) { focusExplicitWorkspace(); return; }
   const mode = settingsStore.get().data?.workspace?.open_mode ?? "last";
   if (mode === "new") {
     navigation.newTask(saved?.project_id || "default", { replace: true });
@@ -90,7 +105,7 @@ export async function startWorkspaceNavigation({ navigation, settingsStore,
   }
   const candidate = await lastSessionCandidate(saved,
     sessionsStore.get().data?.items);
-  if (location.hash) return;
+  if (location.hash) { focusExplicitWorkspace(); return; }
   if (!candidate) { navigation.clear(); prompt.focus(); return; }
   if (mode !== "ask") {
     openLastSession(candidate);
