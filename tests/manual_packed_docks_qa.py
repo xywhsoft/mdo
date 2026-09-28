@@ -234,6 +234,11 @@ class BoundedDelayProxy(BaseHTTPRequestHandler):
             self.send_error(413)
             return
         body = self.rfile.read(length) if length else None
+        if (self.command == "POST" and self.path.startswith("/api/v1/projects/")
+                and "/sessions/" in self.path and
+                self.path.endswith("/attachments")):
+            print("QA attachment POST", flush=True)
+            time.sleep(self.server.attachment_delay_seconds)
         if (self.command == "GET" and self.path in
                 {"/lang/en-US.json", "/lang/ru-RU.json"}):
             print(f"QA locale GET {self.path}", flush=True)
@@ -497,6 +502,8 @@ parser.add_argument("--queue-delay-ms", type=int, default=0,
                     help="delay queue POSTs by 0-12000 ms for bounded dispatch race QA")
 parser.add_argument("--queue-read-delay-ms", type=int, default=0,
                     help="delay queue GETs by 0-5000 ms for review-focus QA")
+parser.add_argument("--attachment-delay-ms", type=int, default=0,
+                    help="delay attachment POSTs by 0-5000 ms for paste/drop QA")
 parser.add_argument("--run-delay-ms", type=int, default=0,
                     help="delay run POSTs by 0-5000 ms for composer handoff QA")
 parser.add_argument("--create-delay-ms", type=int, default=0,
@@ -564,6 +571,8 @@ if not 0 <= args.queue_delay_ms <= 12000:
     parser.error("--queue-delay-ms must be between 0 and 12000")
 if not 0 <= args.queue_read_delay_ms <= 5000:
     parser.error("--queue-read-delay-ms must be between 0 and 5000")
+if not 0 <= args.attachment_delay_ms <= 5000:
+    parser.error("--attachment-delay-ms must be between 0 and 5000")
 if not 0 <= args.queue_read_failures <= 8:
     parser.error("--queue-read-failures must be between 0 and 8")
 if not 0 <= args.run_delay_ms <= 5000:
@@ -692,7 +701,8 @@ try:
     browser_port = port
     if (args.approval_delay_ms or args.ask_delay_ms or args.task_cancel_delay_ms
             or args.run_cancel_delay_ms
-            or args.queue_delay_ms or args.queue_read_delay_ms or args.run_delay_ms
+            or args.queue_delay_ms or args.queue_read_delay_ms
+            or args.attachment_delay_ms or args.run_delay_ms
             or args.create_delay_ms or args.project_delay_ms
             or args.locale_delay_ms or args.fail_first_project
             or args.history_delay_ms
@@ -712,6 +722,7 @@ try:
         proxy.run_cancel_delay_seconds = args.run_cancel_delay_ms / 1000
         proxy.queue_delay_seconds = args.queue_delay_ms / 1000
         proxy.queue_read_delay_seconds = args.queue_read_delay_ms / 1000
+        proxy.attachment_delay_seconds = args.attachment_delay_ms / 1000
         proxy.run_delay_seconds = args.run_delay_ms / 1000
         proxy.create_delay_seconds = args.create_delay_ms / 1000
         proxy.project_delay_seconds = args.project_delay_ms / 1000

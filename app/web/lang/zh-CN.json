@@ -436,6 +436,7 @@
   "image.previewTitle": "图片预览",
   "image.closePreview": "关闭图片预览",
   "image.saving": "正在保存图片…",
+  "image.waitForCurrent": "请等待当前图片操作完成后再添加",
   "image.removing": "正在移除图片…",
   "image.unsupportedModel": "当前模型不支持图片，请先切换到支持图片的模型",
   "image.draftUnsupported": "当前模型不支持图片；切换模型或移除图片后再发送",

@@ -188,7 +188,12 @@ export function createComposerImages({ composer, prompt, button, input, strip,
 
   async function addFiles(files) {
     const candidates = [...files];
-    if (!candidates.length || uploadingCurrent() || removingCurrent()) return;
+    if (!candidates.length) return;
+    if (uploadingCurrent() || removingCurrent()) {
+      onError(selectionError(t("image.waitForCurrent", {},
+        "请等待当前图片操作完成后再添加")));
+      return;
+    }
     if (!writable) { onError(new Error(t("image.readOnly", {},
       "当前会话不可添加图片"))); return; }
     if (!imageCapable()) {
