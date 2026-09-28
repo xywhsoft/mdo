@@ -2,6 +2,7 @@ import { resourceId } from "../api/client.js";
 
 const listeners = new Set();
 let current = Object.freeze({ view: "workspace", projectId: "", sessionId: "", settingsSection: "" });
+let newTaskGuard = null;
 
 function workspaceFromHistory() {
   const saved = history.state?.mdoWorkspace;
@@ -41,7 +42,19 @@ function parseHash() {
 }
 
 function publish() {
-  current = Object.freeze(parseHash());
+  let next = parseHash();
+  if (next.view === "workspace" && !next.sessionId && newTaskGuard) {
+    const owner = newTaskGuard.owner();
+    if (owner && owner !== next.projectId) {
+      const projectId = resourceId(owner, "project");
+      // A single portable new-task draft belongs to its original project.
+      // Replace the attempted route so Back cannot revisit a false owner.
+      history.replaceState(history.state, "", `#/projects/${projectId}/new`);
+      newTaskGuard.onRedirect?.(projectId);
+      next = { ...next, projectId };
+    }
+  }
+  current = Object.freeze(next);
   if (current.view === "workspace")
     lastWorkspace = Object.freeze({ projectId: current.projectId, sessionId: current.sessionId });
   for (const listener of listeners) listener(current);
@@ -53,6 +66,10 @@ publish();
 export const navigation = Object.freeze({
   get: () => current,
   preferredProject: () => lastWorkspace.projectId || "default",
+  setNewTaskGuard(owner, onRedirect) {
+    newTaskGuard = { owner, onRedirect };
+  },
+  revalidate: publish,
   subscribe(listener) {
     listeners.add(listener);
     listener(current);

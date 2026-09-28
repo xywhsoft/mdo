@@ -648,6 +648,12 @@ export async function boot() {
         setRun(activeRun);
       }
       promptQueue.render();
+      const pendingProject = draftStore.newTask()?.project_id;
+      if (!selectedKey && pendingProject &&
+          navigation.get().view === "workspace" &&
+          !navigation.get().sessionId &&
+          navigation.get().projectId !== pendingProject)
+        navigation.revalidate();
     },
     onError(error) {
       draftError = error;
@@ -659,6 +665,9 @@ export async function boot() {
     },
     onLoaded() { setRun(activeRun); promptQueue.render(); },
   });
+  navigation.setNewTaskGuard(
+    () => draftStore.newTask()?.project_id,
+    () => toast(t("composer.newTaskOtherProject"), "error"));
   submissionController = createSubmissionController({
     draftStore, promptQueue,
     onPersisted(key, submission) {
@@ -745,9 +754,11 @@ export async function boot() {
       const current = navigation.get();
       if (current.view === "workspace" && !current.sessionId &&
           current.projectId === projectId) {
+        const returnFocus = composerError.contains(document.activeElement);
         creatingSessionKey = key;
         navigation.select(projectId, sessionId);
         selectTimeline(projectId, sessionId);
+        if (returnFocus && !prompt.disabled) prompt.focus({ preventScroll: true });
       }
     },
     onReview(error) {
