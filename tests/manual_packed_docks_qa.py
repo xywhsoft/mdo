@@ -5,7 +5,8 @@ binds to localhost and returns deterministic tool calls for marker prompts:
 TODO UI, ASK UI, LONG ASK UI, SEQUENTIAL DECISIONS UI, APPROVAL UI, APPROVAL RUN UI,
 APPROVAL NEXT UI, TASK UI, or ARTIFACT UI. The long
 ask has multiline question and options; the latter reads one bounded synthetic
-text file so the normal tool-output artifact path is used.
+text file so the normal tool-output artifact path is used. The optional chat
+stream emits two bounded chunks with interleaved text and reasoning fields.
 """
 
 import argparse
@@ -38,11 +39,38 @@ class Model(BaseHTTPRequestHandler):
     model_delay_seconds = 0
     task_seconds = 12
     artifact_file = None
+    chat_stream = False
 
     def log_message(self, *_args):
         pass
 
     def do_POST(self):
+        if self.path == "/v1/chat/completions" and Model.chat_stream:
+            request_body = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
+            if request_body.get("stream") is not True:
+                self.send_error(400, "streaming request required")
+                return
+            chunks = [
+                {"choices": [{"index": 0, "delta": {"role": "assistant",
+                    "content": "Hello ", "reasoning_content": "Thinking "},
+                    "finish_reason": None}]},
+                {"choices": [{"index": 0, "delta": {"content": "world",
+                    "reasoning_content": "again"}, "finish_reason": None}]},
+                {"choices": [{"index": 0, "delta": {}, "finish_reason": "stop"}],
+                    "usage": {"prompt_tokens": 7, "completion_tokens": 3,
+                              "total_tokens": 10}},
+            ]
+            payload = ("".join("data: " + json.dumps({"id": "chatcmpl-qa",
+                "object": "chat.completion.chunk", "model": "ling-3.0-tiny",
+                **chunk}) + "\n\n" for chunk in chunks) +
+                "data: [DONE]\n\n").encode()
+            self.send_response(200)
+            self.send_header("Content-Type", "text/event-stream")
+            self.send_header("Content-Length", str(len(payload)))
+            self.end_headers()
+            self.wfile.write(payload)
+            print("QA interleaved chat stream served", flush=True)
+            return
         if self.path != "/v1/responses":
             self.send_error(404)
             return
@@ -502,6 +530,8 @@ parser.add_argument("--image-capable", action="store_true",
                     help="enable image input in the isolated built-in model fixture")
 parser.add_argument("--second-model-context-tokens", type=int, default=0,
                     help="set the isolated second model context to 131072-262144 tokens")
+parser.add_argument("--interleaved-chat-stream", action="store_true",
+                    help="serve a bounded Chat Completions stream with alternating text and reasoning")
 args = parser.parse_args()
 if not 0 <= args.approval_delay_ms <= 5000:
     parser.error("--approval-delay-ms must be between 0 and 5000")
@@ -573,6 +603,7 @@ Model.slow_seconds = args.slow_ms / 1000
 Model.model_delay_seconds = args.model_delay_ms / 1000
 Model.task_seconds = args.task_ms / 1000
 Model.task_output_lines = args.task_output_lines
+Model.chat_stream = args.interleaved_chat_stream
 executable_name = "mdo.exe" if os.name == "nt" else "mdo"
 shutil.copy2(ROOT / executable_name, base / executable_name)
 (base / "README.md").write_text("Synthetic workspace file for @ completion.\n",
@@ -606,6 +637,9 @@ home = base / "mdo-home"
 env = os.environ.copy()
 env["USERPROFILE"] = str(base)
 env["MDO_LING_RESPONSES_URL"] = f"http://127.0.0.1:{model.server_address[1]}/v1"
+if args.interleaved_chat_stream:
+    env["MDO_LING_CHAT_COMPLETIONS_URL"] = (
+        f"http://127.0.0.1:{model.server_address[1]}/v1")
 env["MDO_LING_API_KEY"] = "bounded-packed-docks-key"
 process = None
 proxy = None
@@ -620,7 +654,8 @@ try:
     options = {
         "project_id": "default", "title": "Packed docks QA",
         "agent_id": "mdo.default", "model_id": "ling-3.0-tiny",
-        "protocol": "openai-responses", "reasoning_effort": "medium",
+        "protocol": ("openai-chat-completions" if args.interleaved_chat_stream
+                     else "openai-responses"), "reasoning_effort": "medium",
         "max_output_tokens": 1024,
     }
     if args.resume_verify:

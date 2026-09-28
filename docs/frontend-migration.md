@@ -4,11 +4,17 @@
 
 完成判据及尚缺的打包页证据见 [前端操作体验完成审计](frontend-completion-audit.md)。本文件继续记录每次实现和验证的细节。
 
+## 2026-09-28：单文件打包页验证交错 Chat Completions 流
+
+扩展有界本地模型夹具 `tests/manual_packed_docks_qa.py --interleaved-chat-stream`，令真实打包进程通过 Chat Completions 协议接收两段同时含正文与思考字段的 SSE：`Hello ` / `Thinking `，接着 `world` / `again`，最后返回用量 7 输入、3 输出。Windows 单文件 Home `.build/mdo-packed-docks-molh0fln` 的持久事件依次为正文、思考、正文、思考和完成事件；页面只显示一张 `Hello world` 回复卡和一张 `Thinking again` 思考卡，用量与 token/s 落在该回复上，刷新后仍一致。320×350 页面无横向溢出或脚本错误。第二个单文件 Home `.build/mdo-packed-docks-jymrn_94` 验证点赞状态刷新后保留。两次夹具均确认交错流实际由模型端点送出。这覆盖打包进程到时间线和消息操作的协议路径；线上 Ling 服务和其他系统原生 WebView、实体触控仍待验收。
+
+本阶段 Windows/Linux 有界门禁通过 114 项 Python、77 项 Node、71 个前端模块解析、21 个运行探针和确定性打包；Windows 另通过单文件零旁路写入与 20 秒启动检查。重新生成的根目录 `mdo.exe` SHA-256 为 `ee25ae6c5147259c881db5ed73c69d9e97891f095e4dc7f3f55297d1dbfa9cca`，Linux 根目录 `mdo` 为 `2f6c4ae4c95a994cf290a38ce1acbd7fabc532d080f9d6b86fb464ca6494fff9`。未运行压力或高负载测试。
+
 ## 2026-09-28：交错流式事件保持同轮消息完整
 
 时间线原来只把相邻的同类流片段接在一张卡上。`xllm` 的 Chat Completions 解析器可从同一增量依次发出正文和思考；正文、思考与后台事件一旦交错，同一模型回合就可能出现多张相同键的回复或思考卡，回复末尾的反馈与 token 用量只落在最后一张。现在按流键归并整个模型回合的同类片段，保留首个片段的位置、完整文本和单一操作卡；每次时间线重放重新建立映射，不跨运行或模型回合共享。
 
-新增 Node 回归先复现交错事件产生 7 张卡而只有 4 个唯一键，修复后验证一张用户、一张回复、一张思考和一张后台任务卡，正文 `Hello world`、思考 `Think again`、反馈事件和用量均归属同一回复。生产模块浏览器夹具又验证增量更新后复制按钮焦点返回，最终只有一张回复卡且点赞/点踩、统计可见；320px 时间线无横向溢出，脚本错误为空。最终单文件 Home `.build/mdo-packed-docks-pjgt3fph` 用本地确定性 Markdown 回复验证普通路径仍显示复制、分叉、重试、反馈及 token/s，320px 无横向溢出和脚本错误；尚未在单文件页注入真实供应商的交错流。Windows/Linux 有界门禁通过 114 项 Python、77 项 Node、71 个前端模块解析、21 个运行探针和确定性打包；Windows 另通过单文件零旁路写入与 20 秒启动检查。根目录 `mdo.exe` SHA-256 为 `ee25ae6c5147259c881db5ed73c69d9e97891f095e4dc7f3f55297d1dbfa9cca`，Linux 根目录 `mdo` 为 `2f6c4ae4c95a994cf290a38ce1acbd7fabc532d080f9d6b86fb464ca6494fff9`。其他系统原生 WebView 与实体触控仍待验收；未运行压力或高负载测试。
+新增 Node 回归先复现交错事件产生 7 张卡而只有 4 个唯一键，修复后验证一张用户、一张回复、一张思考和一张后台任务卡，正文 `Hello world`、思考 `Think again`、反馈事件和用量均归属同一回复。生产模块浏览器夹具又验证增量更新后复制按钮焦点返回，最终只有一张回复卡且点赞/点踩、统计可见；320px 时间线无横向溢出，脚本错误为空。最终单文件 Home `.build/mdo-packed-docks-pjgt3fph` 用本地确定性 Markdown 回复验证普通路径仍显示复制、分叉、重试、反馈及 token/s，320px 无横向溢出和脚本错误。交错 Chat Completions 流的后续单文件实测见上一节。Windows/Linux 有界门禁通过 114 项 Python、77 项 Node、71 个前端模块解析、21 个运行探针和确定性打包；Windows 另通过单文件零旁路写入与 20 秒启动检查。根目录 `mdo.exe` SHA-256 为 `ee25ae6c5147259c881db5ed73c69d9e97891f095e4dc7f3f55297d1dbfa9cca`，Linux 根目录 `mdo` 为 `2f6c4ae4c95a994cf290a38ce1acbd7fabc532d080f9d6b86fb464ca6494fff9`。其他系统原生 WebView 与实体触控仍待验收；未运行压力或高负载测试。
 
 ## 2026-09-28：并行决策到达时保留询问输入位置
 
