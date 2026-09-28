@@ -10,6 +10,7 @@ export function createSessionList({ container, count, filter, searchInput, store
   let openMenu = "";
   let focusRequest = null;
   let state = store.get();
+  let renderedStoreKey = null;
   let unread = new Set();
   let openMenuNode = null;
   let openMenuButton = null;
@@ -20,6 +21,31 @@ export function createSessionList({ container, count, filter, searchInput, store
   let quickProjectEpoch = 0;
   const sidebar = container.closest(".sidebar");
   const sessionKey = (session) => `${session.project_id}/${session.id}`;
+  const currentSession = (key) => (state.data?.items ?? [])
+    .find((session) => sessionKey(session) === key);
+
+  function storeContentKey(snapshot) {
+    const items = snapshot.data?.items ?? [];
+    if (snapshot.status === "error") return JSON.stringify(["error", errorMessage(snapshot.error)]);
+    if (snapshot.status === "loading" && items.length === 0) return '"loading"';
+    // A revision or timestamp can change without changing any visible row.
+    // Keep the row mounted so polling cannot clear selection or menu focus.
+    return JSON.stringify(items.map(({ project_id, id, title, status, pinned,
+      model_id, agent_id }) => [project_id, id, title, status, pinned, model_id, agent_id]));
+  }
+
+  function syncTimes() {
+    const sessions = new Map((state.data?.items ?? [])
+      .map((session) => [sessionKey(session), session]));
+    for (const button of container.querySelectorAll(".session-item")) {
+      const session = sessions.get(button.dataset.sessionKey);
+      const time = button.querySelector(".session-item-time");
+      if (!session || !time) continue;
+      time.dataset.relativeTime = String(session.updated_at);
+      const label = formatRelativeTime(session.updated_at);
+      if (time.textContent !== label) time.textContent = label;
+    }
+  }
 
   function positionMenu() {
     if (!openMenuNode || !openMenuButton?.isConnected) return;
@@ -45,7 +71,9 @@ export function createSessionList({ container, count, filter, searchInput, store
       focusRequest = { key: sessionKey(session), index: -1 };
       openMenu = "";
       render();
-      try { await onAction(action.name, session); }
+      const current = currentSession(sessionKey(session));
+      if (!current) return;
+      try { await onAction(action.name, current); }
       catch (error) { toast(errorMessage(error), "error"); }
     });
     return button;
@@ -280,7 +308,10 @@ export function createSessionList({ container, count, filter, searchInput, store
           attrs: { "data-relative-time": session.updated_at } }),
         element("span", { className: "session-item-meta", text: `${showProject ? `${session.project_id} · ` : ""}${session.model_id || session.agent_id}${hasUnread ? ` · ${t("nav.unread", {}, "有新结果")}` : ""}` }),
       ]);
-      button.addEventListener("click", (event) => onSelect(session, event));
+      button.addEventListener("click", (event) => {
+        const current = currentSession(key);
+        if (current) onSelect(current, event);
+      });
       const title = session.title || t("nav.untitled", {}, "未命名任务");
       const more = element("button", { className: "session-more", text: "•••", attrs: { type: "button", "data-session-key": key, "aria-label": t("nav.actionsFor", { title }, `${title} 的操作`), "aria-haspopup": "menu", "aria-expanded": String(openMenu === key) } });
       more.addEventListener("click", (event) => {
@@ -342,7 +373,17 @@ export function createSessionList({ container, count, filter, searchInput, store
     restoreQuickProjectFocus();
   }
 
-  const unsubscribeStore = store.subscribe((next) => { state = next; render(); });
+  const unsubscribeStore = store.subscribe((next) => {
+    state = next;
+    const key = storeContentKey(next);
+    if (key !== renderedStoreKey) {
+      renderedStoreKey = key;
+      render();
+    } else {
+      container.setAttribute("aria-busy", String(next.status === "loading"));
+      syncTimes();
+    }
+  });
   const unsubscribeProjects = projectsStore.subscribe(render);
   const unsubscribeNavigation = navigation.subscribe(() => {
     openMenu = "";

@@ -26,28 +26,57 @@
 </div>
 <pre id="result"></pre>
 <script type="module">
-import { createSessionList } from "/app/web/js/features/sessions/session-list.js";
+const { createSessionList } = await import(
+  `/app/web/js/features/sessions/session-list.js?fixture=${Date.now()}`);
 import { createSessionActionMenu } from
   "/app/web/js/features/sessions/session-action-menu.js";
 
 const session = { id: "test", project_id: "default", agent_id: "mdo.default",
   model_id: "ling-3.0-tiny", title: "Clipped session", status: "active",
-  pinned: false, updated_at: Date.now() * 1000 };
+  pinned: false, revision: 1, updated_at: Date.now() * 1000 };
 const state = { status: "ready", data: { items: [session] } };
-const store = { get: () => state, subscribe: () => () => {} };
+let publishSessions;
+const store = { get: () => state,
+  subscribe(listener) { publishSessions = listener; listener(state); return () => {}; } };
 const projectsStore = { get: () => ({ data: { items: [] } }),
   subscribe: () => () => {} };
 const navigation = { get: () => ({ projectId: "default", sessionId: "test" }),
   subscribe: () => () => {} };
 const output = document.querySelector("#result");
 let action = "";
+let actionRevision = 0;
 try {
   const list = createSessionList({ container: document.querySelector("#session-list"),
     count: document.querySelector("#session-count"),
     filter: document.querySelector("#session-filter"), store, projectsStore,
-    navigation, onSelect() {}, onAction(name) { action = name; },
+    navigation, onSelect() {}, onAction(name, selected) {
+      action = name;
+      actionRevision = selected.revision;
+    },
     onNewInProject() {}, onAddProject() {}, onManageProject() {} });
   list.setQuery("");
+  const titleNode = document.querySelector(".session-item-title");
+  const selection = window.getSelection();
+  const range = document.createRange();
+  range.selectNodeContents(titleNode);
+  selection.removeAllRanges();
+  selection.addRange(range);
+  const newerTime = session.updated_at + 60_000_000;
+  state.status = "refreshing";
+  publishSessions(state);
+  const nodeAfterRefreshing = titleNode === document.querySelector(".session-item-title");
+  state.status = "ready";
+  state.data = { items: [{ ...session, revision: 2, updated_at: newerTime }] };
+  publishSessions(state);
+  const nodeAfterReady = titleNode === document.querySelector(".session-item-title");
+  await new Promise(requestAnimationFrame);
+  const titleSelectionStable = titleNode === document.querySelector(".session-item-title") &&
+    selection.toString() === "Clipped session";
+  const titleNodeStable = titleNode === document.querySelector(".session-item-title");
+  const selectedTitleText = selection.toString();
+  const timestampUpdated = document.querySelector(".session-item-time")
+    ?.dataset.relativeTime === String(newerTime);
+  selection.removeAllRanges();
   let more = document.querySelector(".session-more");
   more.scrollIntoView({ block: "nearest" });
   await new Promise(requestAnimationFrame);
@@ -60,6 +89,15 @@ try {
     rect.bottom <= innerHeight && rect.right <= innerWidth;
   const outsideClippingParent = !document.querySelector(".sidebar").contains(menu);
   const firstFocused = document.activeElement === menu.firstElementChild;
+  menu.scrollTop = menu.scrollHeight;
+  menu.lastElementChild.focus();
+  const menuScroll = menu.scrollTop;
+  state.status = "refreshing";
+  publishSessions(state);
+  state.status = "ready";
+  publishSessions(state);
+  const menuReadingStable = menu === document.querySelector("#sidebar-session-menu") &&
+    menu.scrollTop === menuScroll && document.activeElement === menu.lastElementChild;
   function escape(options = {}) {
     const event = new KeyboardEvent("keydown", { key: "Escape", bubbles: true,
       cancelable: true, ...options });
@@ -87,7 +125,8 @@ try {
     lastRect.bottom <= menu.getBoundingClientRect().bottom &&
     (hit === last || last.contains(hit));
   last.click();
-  const actionWorked = action === "trash" && !document.querySelector("#sidebar-session-menu") &&
+  const actionWorked = action === "trash" && actionRevision === 2 &&
+    !document.querySelector("#sidebar-session-menu") &&
     document.activeElement === document.querySelector(".session-more");
   const headerButton = document.querySelector("#header-session-button");
   const headerMenu = document.querySelector("#header-session-menu");
@@ -129,15 +168,18 @@ try {
   const headerEscapeRestored = headerMenu.hidden && document.activeElement === headerButton;
   topMenu.destroy();
   const passed = withinViewport && outsideClippingParent && firstFocused &&
+    menuReadingStable &&
     sidebarComposingKept && sidebarCandidateKept && escapeRestored &&
     lastReachable && actionWorked && headerComposingKept &&
     headerCandidateKept && headerEscapeRestored && headerEndFocused &&
     headerEndVisible && headerEndScrolled && headerWrapFocused && headerWrapVisible &&
-    headerHomeFocused && headerHomeVisible;
+    headerHomeFocused && headerHomeVisible && titleSelectionStable && timestampUpdated;
   output.dataset.passed = String(passed);
   output.textContent = JSON.stringify({ passed, withinViewport, outsideClippingParent,
-    firstFocused, sidebarComposingKept, sidebarCandidateKept, escapeRestored,
-    lastReachable, actionWorked, headerComposingKept, headerCandidateKept,
+    titleSelectionStable, titleNodeStable, nodeAfterRefreshing, nodeAfterReady,
+    selectedTitleText, timestampUpdated,
+    firstFocused, menuReadingStable, sidebarComposingKept, sidebarCandidateKept, escapeRestored,
+    lastReachable, actionWorked, actionRevision, headerComposingKept, headerCandidateKept,
     headerEscapeRestored, headerEndFocused, headerEndVisible, headerEndScrolled,
     headerWrapFocused, headerWrapVisible, headerHomeFocused, headerHomeVisible,
     initialRect: { top: rect.top, bottom: rect.bottom, left: rect.left, right: rect.right },
