@@ -861,6 +861,7 @@ select:focus-visible,
 .composer-error { margin-bottom: 7px; padding: 8px 11px; border: 1px solid color-mix(in srgb, var(--danger) 35%, var(--border)); border-radius: var(--radius-sm); background: color-mix(in srgb, var(--danger) 7%, var(--bg)); color: var(--danger); font-size: 12px; }
 .composer-error-action { display: inline-block; margin-left: 8px; padding: 2px 4px; border: 0; border-radius: 4px; background: transparent; color: inherit; font: inherit; font-weight: 650; text-decoration: underline; text-underline-offset: 2px; cursor: pointer; }
 .composer-error-action:hover, .composer-error-action:focus-visible { background: color-mix(in srgb, var(--danger) 12%, transparent); }
+.composer-error-action[aria-disabled="true"] { opacity: .6; cursor: wait; }
 
 .inspector { display: flex; min-height: 0; flex-direction: column; border-left: 1px solid var(--border); }
 .inspector-header { min-height: var(--header-height); padding: 0 13px; border-bottom: 1px solid var(--border); }

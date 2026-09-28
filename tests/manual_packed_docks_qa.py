@@ -294,25 +294,26 @@ class BoundedDelayProxy(BaseHTTPRequestHandler):
                 self.close_connection = True
                 return
         if (self.command == "GET" and self.path.startswith("/api/v1/projects/")
-                and "/sessions/" in self.path and self.path.endswith("/queue")
-                and self.server.fail_first_queue_reconcile):
-            with self.server.count_lock:
-                fail_reconcile = (self.server.dropped_queue_response
-                                  and not self.server.failed_queue_reconcile)
+                and "/sessions/" in self.path and self.path.endswith("/queue")):
+            time.sleep(self.server.queue_read_delay_seconds)
+            if self.server.queue_read_failures_remaining:
+                with self.server.count_lock:
+                    fail_reconcile = (self.server.dropped_queue_response
+                                      and self.server.queue_read_failures_remaining > 0)
+                    if fail_reconcile:
+                        self.server.queue_read_failures_remaining -= 1
                 if fail_reconcile:
-                    self.server.failed_queue_reconcile = True
-            if fail_reconcile:
-                payload = json.dumps({"ok": False, "error": {
-                    "code": "qa_read_rejected", "message": "Synthetic queue read failure"
-                }}).encode()
-                self.send_response(503)
-                self.send_header("Content-Type", "application/json")
-                self.send_header("Content-Length", str(len(payload)))
-                self.send_header("Connection", "close")
-                self.end_headers()
-                self.wfile.write(payload)
-                self.close_connection = True
-                return
+                    payload = json.dumps({"ok": False, "error": {
+                        "code": "qa_read_rejected", "message": "Synthetic queue read failure"
+                    }}).encode()
+                    self.send_response(503)
+                    self.send_header("Content-Type", "application/json")
+                    self.send_header("Content-Length", str(len(payload)))
+                    self.send_header("Connection", "close")
+                    self.end_headers()
+                    self.wfile.write(payload)
+                    self.close_connection = True
+                    return
         if (self.command == "GET" and self.path.startswith("/api/v1/projects/")
                 and "/sessions/" in self.path and self.path.endswith("/history")):
             time.sleep(self.server.history_delay_seconds)
@@ -490,6 +491,8 @@ parser.add_argument("--run-cancel-delay-ms", type=int, default=0,
                     help="delay run DELETE by 0-5000 ms for stop-focus QA")
 parser.add_argument("--queue-delay-ms", type=int, default=0,
                     help="delay queue POSTs by 0-12000 ms for bounded dispatch race QA")
+parser.add_argument("--queue-read-delay-ms", type=int, default=0,
+                    help="delay queue GETs by 0-5000 ms for review-focus QA")
 parser.add_argument("--run-delay-ms", type=int, default=0,
                     help="delay run POSTs by 0-5000 ms for composer handoff QA")
 parser.add_argument("--create-delay-ms", type=int, default=0,
@@ -522,6 +525,8 @@ parser.add_argument("--consume-dropped-queue-response", action="store_true",
                     help="consume that item upstream before dropping its response")
 parser.add_argument("--fail-first-queue-reconcile", action="store_true",
                     help="also fail the first queue GET after a dropped response")
+parser.add_argument("--queue-read-failures", type=int, default=0,
+                    help="fail 0-8 queue GETs after a dropped response")
 parser.add_argument("--reject-pane-layout", action="store_true",
                     help="reject layout GET/PUT for localized error feedback QA")
 parser.add_argument("--slow-ms", type=int, default=15000,
@@ -551,6 +556,10 @@ if not 0 <= args.run_cancel_delay_ms <= 5000:
     parser.error("--run-cancel-delay-ms must be between 0 and 5000")
 if not 0 <= args.queue_delay_ms <= 12000:
     parser.error("--queue-delay-ms must be between 0 and 12000")
+if not 0 <= args.queue_read_delay_ms <= 5000:
+    parser.error("--queue-read-delay-ms must be between 0 and 5000")
+if not 0 <= args.queue_read_failures <= 8:
+    parser.error("--queue-read-failures must be between 0 and 8")
 if not 0 <= args.run_delay_ms <= 5000:
     parser.error("--run-delay-ms must be between 0 and 5000")
 if not 0 <= args.create_delay_ms <= 5000:
@@ -573,8 +582,8 @@ if not 0 <= args.task_ms <= 30000:
     parser.error("--task-ms must be between 0 and 30000")
 if not 1 <= args.task_output_lines <= 120:
     parser.error("--task-output-lines must be between 1 and 120")
-if args.fail_first_queue_reconcile and not args.drop_first_queue_response:
-    parser.error("--fail-first-queue-reconcile requires --drop-first-queue-response")
+if (args.fail_first_queue_reconcile or args.queue_read_failures) and not args.drop_first_queue_response:
+    parser.error("queue read failures require --drop-first-queue-response")
 if args.consume_dropped_queue_response and not args.drop_first_queue_response:
     parser.error("--consume-dropped-queue-response requires --drop-first-queue-response")
 if args.full_first_queue and (args.fail_first_queue or args.drop_first_queue_response):
@@ -677,7 +686,7 @@ try:
     browser_port = port
     if (args.approval_delay_ms or args.ask_delay_ms or args.task_cancel_delay_ms
             or args.run_cancel_delay_ms
-            or args.queue_delay_ms or args.run_delay_ms
+            or args.queue_delay_ms or args.queue_read_delay_ms or args.run_delay_ms
             or args.create_delay_ms or args.project_delay_ms
             or args.locale_delay_ms or args.fail_first_project
             or args.history_delay_ms
@@ -687,6 +696,7 @@ try:
             or args.full_first_queue
             or args.drop_first_run_response or args.drop_run_response_number
             or args.drop_first_queue_response or args.fail_first_queue_reconcile
+            or args.queue_read_failures
             or args.reject_pane_layout):
         proxy = BoundedDelayProxyServer(("127.0.0.1", 0), BoundedDelayProxy)
         proxy.upstream_port = port
@@ -695,6 +705,7 @@ try:
         proxy.task_cancel_delay_seconds = args.task_cancel_delay_ms / 1000
         proxy.run_cancel_delay_seconds = args.run_cancel_delay_ms / 1000
         proxy.queue_delay_seconds = args.queue_delay_ms / 1000
+        proxy.queue_read_delay_seconds = args.queue_read_delay_ms / 1000
         proxy.run_delay_seconds = args.run_delay_ms / 1000
         proxy.create_delay_seconds = args.create_delay_ms / 1000
         proxy.project_delay_seconds = args.project_delay_ms / 1000
@@ -710,10 +721,10 @@ try:
         proxy.full_first_queue = args.full_first_queue
         proxy.drop_first_queue_response = args.drop_first_queue_response
         proxy.consume_dropped_queue_response = args.consume_dropped_queue_response
-        proxy.fail_first_queue_reconcile = args.fail_first_queue_reconcile
+        proxy.queue_read_failures_remaining = max(
+            args.queue_read_failures, int(args.fail_first_queue_reconcile))
         proxy.reject_pane_layout = args.reject_pane_layout
         proxy.dropped_queue_response = False
-        proxy.failed_queue_reconcile = False
         proxy.count_lock = threading.Lock()
         proxy.approval_puts = 0
         proxy.ask_puts = 0

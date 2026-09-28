@@ -1299,8 +1299,16 @@ export async function boot() {
       await dispatchQueued();
     } catch (error) {
       const current = navigation.get();
-      if (current.projectId === selected.projectId &&
-          current.sessionId === selected.sessionId) showComposerError(error);
+      if (current.projectId !== selected.projectId ||
+          current.sessionId !== selected.sessionId) return;
+      const first = draftStore.submissions(
+        `${selected.projectId}/${selected.sessionId}`)[0];
+      if (first && ["posting", "rejected"].includes(first.state)) {
+        const reviewError = first.state === "rejected"
+          ? submissionRejectedError() : submissionUncertainError();
+        if (composerError.dataset.code !== reviewError.code)
+          showComposerError(reviewError, errorMessage(error));
+      } else showComposerError(error);
     }
   }
 
@@ -1482,6 +1490,34 @@ export async function boot() {
     }
   }
   recoveryStore.subscribe(syncRecoveryNotice);
+  function bindComposerReview(review, ownsContext, runReview,
+    presentFailure = (failure) => [failure, ""]) {
+    let reviewing = false;
+    review.addEventListener("click", async () => {
+      if (reviewing || !ownsContext()) return;
+      reviewing = true;
+      review.setAttribute("aria-disabled", "true");
+      try {
+        if (await runReview() && ownsContext()) {
+          const hadFocus = document.activeElement === review;
+          hideComposerError();
+          if (hadFocus) prompt.focus();
+        }
+      } catch (failure) {
+        if (ownsContext()) {
+          const hadFocus = document.activeElement === review;
+          const [error, note] = presentFailure(failure);
+          showComposerError(error, note);
+          if (hadFocus)
+            (composerError.querySelector(".composer-error-action") ?? prompt)
+              .focus();
+        }
+      } finally {
+        reviewing = false;
+        review.removeAttribute("aria-disabled");
+      }
+    });
+  }
   function showComposerError(error, note = "") {
     if (bootstrapFailure()) { hideComposerError(); return; }
     composerError.textContent = errorMessage(error);
@@ -1517,16 +1553,16 @@ export async function boot() {
             "composer.reviewSubmission")),
         attrs: { type: "button" },
       });
-      review.addEventListener("click", async () => {
-        review.disabled = true;
-        try {
-          const key = selectedKey;
-          if (await submissionController.review(key) &&
-              selectedOwnsDraft(key)) hideComposerError();
-        }
-        catch (failure) { showComposerError(failure); }
-        finally { review.disabled = false; }
-      });
+      const key = selectedKey;
+      bindComposerReview(review, () => selectedOwnsDraft(key),
+        () => submissionController.review(key), (failure) => {
+          const first = draftStore.submissions(key)[0];
+          if (!first || !["posting", "rejected"].includes(first.state))
+            return [failure, ""];
+          return [first.state === "rejected"
+            ? submissionRejectedError() : submissionUncertainError(),
+          errorMessage(failure)];
+        });
       composerError.append(review);
     }
     if (error?.code === "new_task_unconfirmed") {
@@ -1536,14 +1572,11 @@ export async function boot() {
           ? "composer.retryNewTaskProfile" : "composer.retryNewTask"),
         attrs: { type: "button" },
       });
-      review.addEventListener("click", async () => {
-        review.disabled = true;
-        try {
-          if (await newTaskController.review(composerProfile.selection()) &&
-              !navigation.get().sessionId) hideComposerError();
-        } catch (failure) { showComposerError(failure); }
-        finally { review.disabled = false; }
-      });
+      const routeVersionAtReview = routeVersion;
+      bindComposerReview(review,
+        () => routeVersion === routeVersionAtReview &&
+          !navigation.get().sessionId,
+        () => newTaskController.review(composerProfile.selection()));
       composerError.append(review);
     }
     if (error?.code === "recovery_required") {
