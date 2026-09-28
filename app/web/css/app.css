@@ -1531,6 +1531,17 @@ select:focus-visible,
 }
 
 @media (max-width: 760px) and (max-height: 300px) {
+  .settings-workspace { grid-template-rows: 44px minmax(0, 1fr) auto; }
+  .settings-navigation { min-height: 40px; padding: 0 6px; }
+  .settings-actions { min-height: 0; gap: 4px; padding: 4px 8px; }
+  .settings-feedback { max-height: 30px; overflow-y: auto; }
+  .settings-actions[data-short-state="empty"] { display: none; }
+  .settings-actions[data-short-state="restore"] .settings-feedback,
+  .settings-actions[data-short-state="restore"] :is(#discard-settings, #preview-settings, #apply-settings) { display: none; }
+  .settings-actions[data-short-state="restore"] > .settings-action-buttons {
+    display: flex;
+    justify-content: flex-end;
+  }
   .composer-images { flex-wrap: nowrap; max-height: 82px; overflow-x: auto; overflow-y: hidden; scrollbar-width: thin; }
   .composer-image { flex: 0 0 64px; }
   .composer-image-unsupported { order: -1; flex: 0 0 140px; align-self: center; max-height: 64px; overflow-y: auto; font-size: 11px; line-height: 1.25; }

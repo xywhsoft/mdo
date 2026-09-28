@@ -1,7 +1,8 @@
 """Local packed-page fixture for todo, ask, and approval UI review.
 
-Run from the repository root after building mdo.exe. The model endpoint only
-binds to localhost and returns deterministic tool calls for marker prompts:
+Run from the repository root after building mdo.exe, or pass --packed-path to
+inspect an isolated pack while the installed executable is running. The model
+endpoint only binds to localhost and returns deterministic tool calls for marker prompts:
 TODO UI, ASK UI, LONG ASK UI, SEQUENTIAL DECISIONS UI, APPROVAL UI, APPROVAL RUN UI,
 APPROVAL NEXT UI, TASK UI, or ARTIFACT UI. The long
 ask has multiline question and options; the latter reads one bounded synthetic
@@ -481,6 +482,9 @@ class BoundedDelayProxyServer(ThreadingHTTPServer):
 
 
 parser = argparse.ArgumentParser(description=__doc__)
+parser.add_argument("--packed-path", type=Path,
+                    default=ROOT / ("mdo.exe" if os.name == "nt" else "mdo"),
+                    help="packed executable to copy into the isolated QA Home")
 parser.add_argument("--approval-delay-ms", type=int, default=0,
                     help="delay one approval PUT by 0-5000 ms for manual duplicate-click QA")
 parser.add_argument("--ask-delay-ms", type=int, default=0,
@@ -546,6 +550,8 @@ parser.add_argument("--second-model-context-tokens", type=int, default=0,
 parser.add_argument("--interleaved-chat-stream", action="store_true",
                     help="serve a bounded Chat Completions stream with alternating text and reasoning")
 args = parser.parse_args()
+if not args.packed_path.is_file():
+    parser.error(f"packed executable not found: {args.packed_path}")
 if not 0 <= args.approval_delay_ms <= 5000:
     parser.error("--approval-delay-ms must be between 0 and 5000")
 if not 0 <= args.ask_delay_ms <= 5000:
@@ -624,7 +630,7 @@ Model.task_seconds = args.task_ms / 1000
 Model.task_output_lines = args.task_output_lines
 Model.chat_stream = args.interleaved_chat_stream
 executable_name = "mdo.exe" if os.name == "nt" else "mdo"
-shutil.copy2(ROOT / executable_name, base / executable_name)
+shutil.copy2(args.packed_path, base / executable_name)
 (base / "README.md").write_text("Synthetic workspace file for @ completion.\n",
                                 encoding="utf-8")
 Model.artifact_file.write_text("".join(

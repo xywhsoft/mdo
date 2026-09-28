@@ -75,6 +75,7 @@ export function applyAppearance(settings) {
 export function createSettingsView({ form, store, navigation, onApplied }) {
   const revision = document.querySelector("#settings-revision");
   const feedback = document.querySelector("#settings-feedback");
+  const actions = document.querySelector("#settings-actions");
   const previewButton = document.querySelector("#preview-settings");
   const applyButton = document.querySelector("#apply-settings");
   const discardButton = document.querySelector("#discard-settings");
@@ -117,9 +118,19 @@ export function createSettingsView({ form, store, navigation, onApplied }) {
     } });
   }
 
+  function syncShortActions() {
+    // Short mobile viewports can release the footer when it has no action.
+    const idle = !busy && Boolean(snapshot) &&
+      fingerprint() === baselineFingerprint &&
+      feedback.dataset.tone === "neutral";
+    actions.dataset.shortState = !idle ? "active"
+      : restoreButton.disabled ? "empty" : "restore";
+  }
+
   function feedbackText(text, tone = "neutral") {
     feedback.textContent = text;
     feedback.dataset.tone = tone;
+    syncShortActions();
   }
 
   function setBusy(value) {
@@ -131,6 +142,7 @@ export function createSettingsView({ form, store, navigation, onApplied }) {
     applyButton.disabled = value || !snapshot || previewFingerprint !== fingerprint();
     discardButton.disabled = value || !dirty;
     restoreButton.disabled = value || !snapshot?.user_patches?.settings;
+    syncShortActions();
   }
 
   function validatePower() {
@@ -152,9 +164,14 @@ export function createSettingsView({ form, store, navigation, onApplied }) {
     if (document.activeElement !== document.body &&
         document.activeElement !== document.documentElement) return;
     const target = preferred?.isConnected && !preferred.disabled &&
-      preferred.getClientRects().length ? preferred : feedback;
+      preferred.getClientRects().length ? preferred : visibleFeedbackTarget();
     if (target?.isConnected && target.getClientRects().length)
       target.focus({ preventScroll: true });
+  }
+
+  function visibleFeedbackTarget() {
+    return feedback.getClientRects().length ? feedback :
+      sectionNavigation.querySelector('[aria-current="page"]');
   }
 
   function revealSectionButton(button) {
@@ -426,11 +443,12 @@ export function createSettingsView({ form, store, navigation, onApplied }) {
   discardButton.addEventListener("click", () => {
     if (snapshot) fill(snapshot);
     // fill() disables the clicked button; move focus before the browser blurs it.
-    feedback.focus({ preventScroll: true });
+    visibleFeedbackTarget()?.focus({ preventScroll: true });
   });
   function closeRestoreConfirm() {
     restoreConfirm.hidden = true;
-    (restoreButton.disabled ? feedback : restoreButton).focus({ preventScroll: true });
+    (restoreButton.disabled ? visibleFeedbackTarget() : restoreButton)
+      ?.focus({ preventScroll: true });
   }
   restoreButton.addEventListener("click", () => {
     restoreConfirm.hidden = false;
