@@ -338,25 +338,32 @@ class BoundedDelayProxy(BaseHTTPRequestHandler):
                 return
         if (self.command == "GET" and self.path.startswith("/api/v1/projects/")
                 and "/sessions/" in self.path and self.path.endswith("/queue")):
+            with self.server.count_lock:
+                self.server.queue_reads += 1
+                queue_read_count = self.server.queue_reads
+            print(f"QA queue GET #{queue_read_count}", flush=True)
             time.sleep(self.server.queue_read_delay_seconds)
+            fail_read = (self.server.fail_first_queue_read
+                         and queue_read_count == 1)
+            fail_reconcile = False
             if self.server.queue_read_failures_remaining:
                 with self.server.count_lock:
                     fail_reconcile = (self.server.dropped_queue_response
                                       and self.server.queue_read_failures_remaining > 0)
                     if fail_reconcile:
                         self.server.queue_read_failures_remaining -= 1
-                if fail_reconcile:
-                    payload = json.dumps({"ok": False, "error": {
-                        "code": "qa_read_rejected", "message": "Synthetic queue read failure"
-                    }}).encode()
-                    self.send_response(503)
-                    self.send_header("Content-Type", "application/json")
-                    self.send_header("Content-Length", str(len(payload)))
-                    self.send_header("Connection", "close")
-                    self.end_headers()
-                    self.wfile.write(payload)
-                    self.close_connection = True
-                    return
+            if fail_read or fail_reconcile:
+                payload = json.dumps({"ok": False, "error": {
+                    "code": "qa_read_rejected", "message": "Synthetic queue read failure"
+                }}).encode()
+                self.send_response(503)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Content-Length", str(len(payload)))
+                self.send_header("Connection", "close")
+                self.end_headers()
+                self.wfile.write(payload)
+                self.close_connection = True
+                return
         if (self.command == "GET" and self.path.startswith("/api/v1/projects/")
                 and "/sessions/" in self.path and self.path.endswith("/history")):
             time.sleep(self.server.history_delay_seconds)
@@ -559,6 +566,8 @@ parser.add_argument("--queue-delay-ms", type=int, default=0,
                     help="delay queue POSTs by 0-12000 ms for bounded dispatch race QA")
 parser.add_argument("--queue-read-delay-ms", type=int, default=0,
                     help="delay queue GETs by 0-5000 ms for review-focus QA")
+parser.add_argument("--fail-first-queue-read", action="store_true",
+                    help="reject the first queue GET for route-switch QA")
 parser.add_argument("--attachment-delay-ms", type=int, default=0,
                     help="delay attachment POSTs by 0-5000 ms for paste/drop QA")
 parser.add_argument("--fail-first-attachment", action="store_true",
@@ -769,6 +778,7 @@ try:
     if (args.approval_delay_ms or args.ask_delay_ms or args.task_cancel_delay_ms
             or args.run_cancel_delay_ms
             or args.queue_delay_ms or args.queue_read_delay_ms
+            or args.fail_first_queue_read
             or args.attachment_delay_ms or args.fail_first_attachment
             or args.fail_first_attachment_delete
             or args.run_delay_ms
@@ -793,6 +803,8 @@ try:
         proxy.run_cancel_delay_seconds = args.run_cancel_delay_ms / 1000
         proxy.queue_delay_seconds = args.queue_delay_ms / 1000
         proxy.queue_read_delay_seconds = args.queue_read_delay_ms / 1000
+        proxy.fail_first_queue_read = args.fail_first_queue_read
+        proxy.queue_reads = 0
         proxy.attachment_delay_seconds = args.attachment_delay_ms / 1000
         proxy.fail_first_attachment = args.fail_first_attachment
         proxy.attachment_posts = 0
@@ -842,6 +854,7 @@ finally:
         print(f"QA task DELETE total={proxy.task_deletes}", flush=True)
         print(f"QA run DELETE total={proxy.run_deletes}", flush=True)
         print(f"QA run GET total={proxy.run_reads}", flush=True)
+        print(f"QA queue GET total={proxy.queue_reads}", flush=True)
         print(f"QA queue POST total={proxy.queue_posts}", flush=True)
         print(f"QA run POST total={proxy.run_posts}", flush=True)
         print(f"QA create POST total={proxy.create_posts}", flush=True)

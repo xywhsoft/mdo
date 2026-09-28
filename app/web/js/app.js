@@ -1422,6 +1422,13 @@ export async function boot() {
     }
     composer.toggleAttribute("data-new-task", !sessionId);
     const key = projectId && sessionId ? `${projectId}/${sessionId}` : "";
+    const version = routeVersion;
+    const stillSelected = () => {
+      const route = navigation.get();
+      return routeVersion === version && route.view === "workspace" &&
+        route.projectId === projectId && route.sessionId === sessionId &&
+        selectedKey === key;
+    };
     if (!key) {
       const project = projectId || "default";
       sessionTitle.textContent = t("shell.newTask");
@@ -1438,16 +1445,23 @@ export async function boot() {
         queueBlocked.add(key);
         try {
           const detail = await loadSession(projectId, sessionId);
+          if (!stillSelected()) return;
           if (detail.status !== "ready" || detail.data?.project_id !== projectId ||
               detail.data.id !== sessionId) {
             if (detail.error) throw detail.error;
             return;
           }
           await loadSessions();
+          if (!stillSelected()) return;
           await promptQueue.select(projectId, sessionId);
+          if (!stillSelected()) return;
           await submissionController.reconcile(key);
-        } catch (error) { showComposerError(error); return; }
+        } catch (error) {
+          if (stillSelected()) showComposerError(error);
+          return;
+        }
         finally { queueBlocked.delete(key); }
+        if (!stillSelected()) return;
         void maybeCancelPriorityRun();
         void dispatchQueued();
       }
@@ -1481,15 +1495,20 @@ export async function boot() {
     try {
       await Promise.all([loadSession(projectId, sessionId), loadRuns(), loadRecovery(),
         promptQueue.select(projectId, sessionId)]);
+      if (!stillSelected()) return;
       await submissionController.reconcile(key);
-    } catch (error) { showComposerError(error); return; }
+    } catch (error) {
+      if (stillSelected()) showComposerError(error);
+      return;
+    }
     finally {
+      queueBlocked.delete(key);
       if (creatingSessionKey === key) {
         creatingSessionKey = "";
-        setRun(activeRun);
+        if (stillSelected()) setRun(activeRun);
       }
     }
-    queueBlocked.delete(key);
+    if (!stillSelected()) return;
     findActiveRun();
     void maybeCancelPriorityRun();
     void dispatchQueued();
