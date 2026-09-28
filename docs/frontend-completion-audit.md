@@ -2,6 +2,8 @@
 
 本清单以 `app_bak/wwwroot` 的可操作行为为基线，而不是以页面长得相似或单元测试通过为完成标准。`docs/frontend-migration.md` 记录每次实现和验证；这里记录当前还需要什么证据。审计更新：2026-09-28，基线提交 `f9e2c4c`。
 
+同一会话重叠加载的队列闸门已按最新加载持有者分离：Node 用例证明旧加载结束不会释放新加载，复核阻断也不会被导航清除。Windows 单文件 Home `.build/mdo-packed-docks-eqs41vij` 在 1.5 秒队列读取延迟下快速往返会话，随后一条本地消息仅产生一次队列和运行提交，回复及用量正常、无脚本错误。打包页尚未直接观测重叠期间的待发派发顺序；原生 WebView、实体移动端仍待验收，详见[迁移记录](frontend-migration.md#2026-09-28同一会话重叠加载不再提前放行待发队列)。
+
 旧会话的迟到加载错误不再写入新任务输入区。旧单文件 Home `.build/mdo-packed-docks-x2t1ctck` 用 5 秒队列 GET 失败复现污染；修复后的 Home `.build/mdo-packed-docks-2tz8gg2f` 同条件下新任务保持就绪且无错误。独立 Home `.build/mdo-packed-docks-s0my701y` 确认仍在原会话时错误正常提示、刷新后恢复。Windows/Linux 有界门禁通过，根目录 `mdo.exe` 已重建；原生 WebView 和实体移动端尚待验收，详见[迁移记录](frontend-migration.md#2026-09-28切换会话后忽略旧导航加载错误)。
 
 未完成的新任务意图现保持项目归属。旧单文件页把默认项目的延迟创建失败与重试按钮显示在第二项目新任务页；修复候选 `.build/mdo-packed-docks-o4aabpn0` 验证侧栏和输入区项目切换均返回意图所属项目，成功重试后第二项目可用。Home `.build/mdo-packed-docks-os2trja_` 验证重试迁移后输入框焦点恢复；最终包 `.build/mdo-packed-docks-6e7smrpi` 验证持久失败意图从其他项目 URL 刷新后仍回到所属项目并保留恢复入口。Windows/Linux 有界门禁通过，根目录 `mdo.exe` 已重建。全局新任务草稿尚不支持多个项目的并行未完成意图，原生 WebView 与实体移动端尚待验收，详见[迁移记录](frontend-migration.md#2026-09-28未完成新任务始终显示在所属项目)。

@@ -33,6 +33,7 @@ import { timelineStore, selectTimeline, clearTimeline, refreshSelectedTimeline, 
 import { todoStore, selectTodo, clearTodo } from "./state/todo.js";
 import { createTimelineView } from "./features/chat/timeline.js";
 import { createTracePanel } from "./features/chat/trace-panel.js";
+import { createQueueGate } from "./features/chat/queue-gate.js";
 import { createMessageEditDialog } from "./features/chat/message-edit-dialog.js";
 import { runMessageReplacement } from "./features/chat/message-replacement.js";
 import { createConversationSearch } from "./features/chat/conversation-search.js";
@@ -162,7 +163,7 @@ export async function boot() {
   let composerImages = null;
   let newTaskController = null;
   let shortcuts;
-  const queueBlocked = new Set();
+  const queueBlocked = createQueueGate();
   // A cancelled run can remain nonterminal through several polls. Avoid
   // repeating DELETE while its persisted priority queue item is still waiting.
   const priorityCancelAttempts = new Set();
@@ -570,7 +571,7 @@ export async function boot() {
         await promptQueue.retry(selected.projectId, selected.sessionId, first.id);
       if (first?.state === "staged")
         await promptQueue.promote(selected.projectId, selected.sessionId, first.id);
-      queueBlocked.delete(`${selected.projectId}/${selected.sessionId}`);
+      queueBlocked.unblock(`${selected.projectId}/${selected.sessionId}`);
       await maybeCancelPriorityRun();
       await dispatchQueued();
       void submissionController.pump(key);
@@ -578,7 +579,7 @@ export async function boot() {
     onRemoved: async (key, removed) => {
       // Removing an accepted item is an explicit decision after review.
       // The persisted uncertainty guard still blocks until acknowledged.
-      if (removed?.run_id) queueBlocked.delete(key);
+      if (removed?.run_id) queueBlocked.unblock(key);
       await maybeCancelPriorityRun();
       await dispatchQueued();
     },
@@ -675,7 +676,7 @@ export async function boot() {
       if (selectedOwnsDraft(key)) setRun(activeRun);
     },
     onPromoted(key, submission) {
-      queueBlocked.delete(key);
+      queueBlocked.unblock(key);
       if (selectedOwnsDraft(key)) {
         if (submission.interrupt) void maybeCancelPriorityRun();
         void dispatchQueued();
@@ -824,7 +825,7 @@ export async function boot() {
     },
     onAbandon: async () => {
       const selected = navigation.get();
-      queueBlocked.delete(`${selected.projectId}/${selected.sessionId}`);
+      queueBlocked.unblock(`${selected.projectId}/${selected.sessionId}`);
       await dispatchQueued();
     },
   });
@@ -1314,14 +1315,14 @@ export async function boot() {
                 deferred = true;
               }
               if (deferred) {
-                queueBlocked.delete(key);
+                queueBlocked.unblock(key);
                 if (stillSelected()) hideComposerError();
                 void loadRuns();
                 return;
               }
             } catch { /* A competing claim needs the normal review path. */ }
           }
-          if (error?.code !== "recovery_required") queueBlocked.add(key);
+          if (error?.code !== "recovery_required") queueBlocked.block(key);
           if (error.runAdmissionUncertain) {
             draftStore.setRunUncertain(key, true);
             void loadRuns();
@@ -1442,7 +1443,7 @@ export async function boot() {
     updateContext(sessionDetailStore.get());
     if (key === selectedKey) {
       if (key) {
-        queueBlocked.add(key);
+        const finishLoad = queueBlocked.beginLoad(key);
         try {
           const detail = await loadSession(projectId, sessionId);
           if (!stillSelected()) return;
@@ -1460,7 +1461,7 @@ export async function boot() {
           if (stillSelected()) showComposerError(error);
           return;
         }
-        finally { queueBlocked.delete(key); }
+        finally { finishLoad(); }
         if (!stillSelected()) return;
         void maybeCancelPriorityRun();
         void dispatchQueued();
@@ -1491,7 +1492,7 @@ export async function boot() {
     void selectTodo(projectId, sessionId);
     void selectAsks(projectId, sessionId);
     void selectFeedback(projectId, sessionId);
-    queueBlocked.add(key);
+    const finishLoad = queueBlocked.beginLoad(key);
     try {
       await Promise.all([loadSession(projectId, sessionId), loadRuns(), loadRecovery(),
         promptQueue.select(projectId, sessionId)]);
@@ -1502,7 +1503,7 @@ export async function boot() {
       return;
     }
     finally {
-      queueBlocked.delete(key);
+      finishLoad();
       if (creatingSessionKey === key) {
         creatingSessionKey = "";
         if (stillSelected()) setRun(activeRun);
