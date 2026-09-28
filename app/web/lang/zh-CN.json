@@ -1121,6 +1121,8 @@
   "error.queueItemConsumed": "这条待发送消息已启动运行，请核对运行记录。",
   "error.draftConflict": "草稿已在其他窗口修改，请刷新后核对。",
   "error.attachmentUnavailable": "图片存储暂不可用，请重试。",
+  "error.imageCleanupUnavailable": "清理记录未能保存，图片仍在草稿中。请重试。",
+  "error.imageCleanupFull": "待清理图片已达上限，图片仍在草稿中。请先处理其他图片。",
   "error.sessionStateConflict": "会话状态已变化，请刷新后重试。",
   "error.preconditionRequired": "缺少当前版本信息，请刷新页面后重试。",
   "error.settingsUnavailable": "设置暂时无法读取，请稍后重试。",

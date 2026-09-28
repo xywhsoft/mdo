@@ -1121,6 +1121,8 @@
   "error.queueItemConsumed": "This queued message already started a run. Check the run record.",
   "error.draftConflict": "The draft changed in another window. Refresh and review it.",
   "error.attachmentUnavailable": "Image storage is unavailable. Try again.",
+  "error.imageCleanupUnavailable": "The cleanup record could not be saved. The image is still in your draft. Try again.",
+  "error.imageCleanupFull": "Too many images await cleanup. The image is still in your draft. Clear other images first.",
   "error.sessionStateConflict": "The session state changed. Refresh and try again.",
   "error.preconditionRequired": "The current revision is missing. Refresh the page and try again.",
   "error.settingsUnavailable": "Settings are temporarily unavailable. Try again later.",

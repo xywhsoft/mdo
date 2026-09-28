@@ -27,6 +27,8 @@ const localizedApiErrors = [
   ["approval_not_found", "error.approvalNotFound"],
   ["ask_not_found", "error.askNotFound"],
   ["run_not_found", "error.runNotFound"],
+  ["image_cleanup_unavailable", "error.imageCleanupUnavailable"],
+  ["image_cleanup_full", "error.imageCleanupFull"],
 ];
 
 function assertApiErrorsLocalized(locale) {

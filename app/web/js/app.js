@@ -795,7 +795,16 @@ export async function boot() {
       if (!await draftStore.flush(key))
         throw new Error(t("image.removeRollback", {},
           "草稿未保存，图片已恢复"));
-      await api.markImageDiscard(owner.projectId, owner.sessionId, id);
+      try { await api.markImageDiscard(owner.projectId, owner.sessionId, id); }
+      catch (error) {
+        // The image still belongs to the saved draft. Report that state,
+        // rather than showing an untranslated queue/storage error.
+        const retained = new Error(error?.message ?? "");
+        retained.code = error?.code === "queue_cleanup_full"
+          ? "image_cleanup_full" : "image_cleanup_unavailable";
+        retained.cause = error;
+        throw retained;
+      }
     },
     async onRemove(owner, id, previous) {
       const key = `${owner.projectId}/${owner.sessionId}`;
@@ -813,6 +822,9 @@ export async function boot() {
         if (error?.code !== "attachment_not_found")
           promptQueue.rememberUnusedImages(owner.projectId, owner.sessionId, [id]);
       }
+      if (selectedOwnsDraft(key) && ["image_cleanup_unavailable",
+        "image_cleanup_full"].includes(composerError.dataset.code))
+        hideComposerError();
       return true;
     },
     onUploading(uploading) {
