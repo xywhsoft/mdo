@@ -14,7 +14,8 @@
 <div id="queue"></div>
 <pre id="result"></pre>
 <script type="module">
-import { createPromptQueue } from "/app/web/js/features/chat/prompt-queue.js?queue-anchor=2";
+const { createPromptQueue } = await import(
+  `/app/web/js/features/chat/prompt-queue.js?fixture=${Date.now()}`);
 
 const container = document.querySelector("#queue");
 const output = document.querySelector("#result");
@@ -50,12 +51,31 @@ try {
   const cardsFit = [...list.children].every((item) =>
     item.querySelector(".prompt-queue-text").getBoundingClientRect().bottom <=
     item.getBoundingClientRect().bottom + 1);
+  const selectedCard = list.children[1];
+  const selectedText = selectedCard.querySelector(".prompt-queue-text").firstChild;
+  const range = document.createRange();
+  range.setStart(selectedText, 0);
+  range.setEnd(selectedText, 11);
+  const selection = window.getSelection();
+  selection.removeAllRanges();
+  selection.addRange(range);
+  const selectedValue = selection.toString();
+  queue.render();
+  list = container.querySelector(".prompt-queue-list");
+  const selectionAfterRender = selection.toString() === selectedValue &&
+    list.children[1] === selectedCard;
+  await queue.select("qa", "first");
+  list = container.querySelector(".prompt-queue-list");
+  const selectionAfterPoll = selection.toString() === selectedValue &&
+    list.children[1] === selectedCard;
   list.scrollTop = 20;
   const middleBefore = list.scrollTop;
   staged.push({ id: "draft-2", staged: true, text: "Third item" });
   queue.render();
   list = container.querySelector(".prompt-queue-list");
   const middleAfter = list.scrollTop;
+  const selectionAfterSiblingAdded = selection.toString() === selectedValue &&
+    list.children[1] === selectedCard;
   list.scrollTop = list.scrollHeight;
   const bottomBefore = list.scrollTop;
   staged.push({ id: "draft-3", staged: true, text: "Fourth item" });
@@ -77,6 +97,10 @@ try {
   const afterHeadRemoval = list.children[0].getBoundingClientRect().top -
     list.getBoundingClientRect().top;
   const headRemovalStable = Math.abs(afterHeadRemoval - beforeHeadRemoval) <= 1;
+  const selectionAfterHeadRemoval = list.children[0] === selectedCard &&
+    selection.toString() === selectedValue &&
+    selectedCard.querySelector(".prompt-queue-index").textContent === "1" &&
+    selectedCard.querySelector("button[data-queue-index]")?.dataset.queueIndex === "0";
   list.scrollTop = 80;
   const currentBeforeRemoval = list.children[0].getBoundingClientRect().top -
     list.getBoundingClientRect().top;
@@ -91,12 +115,16 @@ try {
   await queue.select("qa", "second");
   list = container.querySelector(".prompt-queue-list");
   const otherSessionTop = list.scrollTop;
-  const passed = cardsFit && headRemovalStable && nextStartsAtTop &&
+  const passed = cardsFit && selectionAfterRender && selectionAfterPoll &&
+    selectionAfterSiblingAdded && selectionAfterHeadRemoval &&
+    headRemovalStable && nextStartsAtTop &&
     middleBefore === 20 && middleAfter === middleBefore &&
     bottomBefore > middleBefore && bottomAfter === newBottom &&
     newBottom > bottomBefore && otherSessionTop === 0;
   output.dataset.passed = String(passed);
-  output.textContent = JSON.stringify({ passed, cardsFit, middleBefore, middleAfter,
+  output.textContent = JSON.stringify({ passed, cardsFit, selectionAfterRender,
+    selectionAfterPoll, selectionAfterSiblingAdded, selectionAfterHeadRemoval,
+    middleBefore, middleAfter,
     bottomBefore, bottomAfter, newBottom, beforeHeadRemoval,
     afterHeadRemoval, headRemovalStable, currentBeforeRemoval,
     nextAfterRemoval, nextStartsAtTop, otherSessionTop }, null, 2);

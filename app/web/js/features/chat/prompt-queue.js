@@ -177,7 +177,11 @@ export function createPromptQueue({ container, navigation, isRunActive, stagedEn
     const focusKey = focused?.dataset.queueFocus;
     const imageRef = focused?.dataset.imageRef;
     const focusIndex = Number(focused?.dataset.queueIndex ?? 0);
-    clear(container);
+    if (previousList && entries.length) {
+      for (const child of [...container.children]) {
+        if (child !== previousList) child.remove();
+      }
+    } else clear(container);
     container.dataset.queueKey = key;
     container.hidden = entries.length === 0;
     if (!entries.length) {
@@ -219,7 +223,7 @@ export function createPromptQueue({ container, navigation, isRunActive, stagedEn
         finally { actionBusy.delete(key); render(); }
       });
     }
-    container.append(element("div", { className: "prompt-queue-header" }, [
+    const header = element("div", { className: "prompt-queue-header" }, [
       toggle, retry ?? element("span", { className: "prompt-queue-waiting",
         text: t(!writable ? "queue.restoreToSend" : sendingLocally ? "queue.sending" :
           acceptedRun ? "queue.runAccepted" : claimedRun
@@ -227,15 +231,17 @@ export function createPromptQueue({ container, navigation, isRunActive, stagedEn
           ? "queue.reviewRun" : saved.length
           ? "queue.waitForRun" : entries[0]?.rejected
             ? "queue.rejected" : "queue.awaitingAdmission") }),
-    ]));
-    if (uncertain && !sendingLocally) container.append(element("p", {
+    ]);
+    container.insertBefore(header, previousList);
+    if (uncertain && !sendingLocally) container.insertBefore(element("p", {
       className: "prompt-queue-warning",
       text: t(acceptedRun ? "queue.runAcceptedWarning" : claimedRun
         ? "queue.runStartingWarning" :
         "queue.uncertainWarning"),
-    }));
-    const list = element("ol", { className: "prompt-queue-list",
+    }), previousList);
+    const list = previousList ?? element("ol", { className: "prompt-queue-list",
       attrs: { id: "prompt-queue-list" } });
+    const nextCards = [];
     list.hidden = !open;
     toggle.addEventListener("click", () => {
       open = !open;
@@ -247,7 +253,7 @@ export function createPromptQueue({ container, navigation, isRunActive, stagedEn
       const itemAttrs = typeof entry.id === "string" && entry.id
         ? { "data-queue-item-id": entry.id } : {};
       if (entry.staged) {
-        list.append(element("li", { attrs: itemAttrs }, [
+        nextCards.push(element("li", { attrs: itemAttrs }, [
           element("span", { className: "prompt-queue-index",
             text: String(index + 1) }),
           element("div", { className: "prompt-queue-item-body" }, [
@@ -308,14 +314,47 @@ export function createPromptQueue({ container, navigation, isRunActive, stagedEn
         }
         body.append(images);
       }
-      list.append(element("li", { attrs: itemAttrs }, [
+      nextCards.push(element("li", { attrs: itemAttrs }, [
         element("span", { className: "prompt-queue-index",
           text: String(index + 1) }),
         body,
         remove,
       ]));
     }
-    container.append(list);
+    // Keep an unchanged card connected while queue polls or siblings change.
+    // Replacing it discards the user's text selection, even when scroll is restored.
+    const oldCards = new Map([...list.children]
+      .filter((card) => card.dataset.queueItemId)
+      .map((card) => [card.dataset.queueItemId, card]));
+    const nextIds = new Set(nextCards.map((card) =>
+      card.dataset.queueItemId).filter(Boolean));
+    for (const old of [...list.children]) {
+      if (!old.dataset.queueItemId || !nextIds.has(old.dataset.queueItemId))
+        old.remove();
+    }
+    for (const [index, card] of nextCards.entries()) {
+      const previous = card.dataset.queueItemId &&
+        oldCards.get(card.dataset.queueItemId);
+      if (previous) {
+        const oldIndex = previous.querySelector(".prompt-queue-index");
+        const newIndex = card.querySelector(".prompt-queue-index");
+        if (oldIndex.textContent !== newIndex.textContent)
+          oldIndex.textContent = newIndex.textContent;
+        const oldRemove = previous.querySelector("button[data-queue-index]");
+        const newRemove = card.querySelector("button[data-queue-index]");
+        if (oldRemove && newRemove) {
+          for (const name of ["aria-label", "data-queue-index"]) {
+            if (oldRemove.getAttribute(name) !== newRemove.getAttribute(name))
+              oldRemove.setAttribute(name, newRemove.getAttribute(name));
+          }
+        }
+      }
+      const current = previous?.outerHTML === card.outerHTML ? previous : card;
+      if (list.children[index] !== current)
+        list.insertBefore(current, list.children[index] ?? null);
+    }
+    while (list.children.length > nextCards.length) list.lastElementChild.remove();
+    if (list.parentElement !== container) container.append(list);
     if (scroll && !list.hidden) {
       list.scrollTop = scroll.atBottom ? list.scrollHeight : scroll.top;
       if (!scroll.atBottom && scroll.anchorId) {
