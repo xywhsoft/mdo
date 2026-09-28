@@ -4,6 +4,12 @@
 
 完成判据及尚缺的打包页证据见 [前端操作体验完成审计](frontend-completion-audit.md)。本文件继续记录每次实现和验证的细节。
 
+## 2026-09-28：资源设置页收起空表单间距
+
+320×350 单文件设置页切到“权限”等资源分区时，常规/Agent/联网表单的子分区虽已隐藏，表单自身仍保留 70px 内边距，使分类栏到标题出现约 92px 空白。现在切换分区时一并隐藏不包含当前分区的表单；返回表单分区时原节点与未应用选择保持。修复后的 Windows 单文件 Home `.build/mdo-packed-docks-5xqivsih` 实测“权限”和“计划任务”标题距分类栏 22px，文档宽度 320px；从“常规”选浅色但不应用，经“权限”“计划任务”返回后仍保持草稿，“Agent”表单也正常恢复，浏览器脚本错误为空。Linux 单文件 Home `/home/ubuntu/.cache/mdo-linux-qa-73d848b/mdo-current/.build/mdo-packed-docks-ae_op9b7` 在同尺寸复核“诊断与存储”标题间距 22px、无横向溢出和脚本错误。
+
+Windows/Linux 有界门禁均通过 114 项 Python、77 项 Node、71 个前端模块解析、21 个运行探针和确定性打包；Windows 另通过单文件零旁路写入与 20 秒启动检查。根目录 `mdo.exe` SHA-256 为 `1895df5c5c2dd94ee5bbb4b109afe26b15aeb0084f0645538d193f50c292a072`，Linux 根目录 `mdo` 为 `6b5af67459218b0df968de3c118ce56a012c7252f5a7a52da3c87594a38e47f4`。其他设置分区与实体触控仍待验收；未运行压力或高负载测试。
+
 ## 2026-09-28：单文件打包页验证交错 Chat Completions 流
 
 扩展有界本地模型夹具 `tests/manual_packed_docks_qa.py --interleaved-chat-stream`，令真实打包进程通过 Chat Completions 协议接收两段同时含正文与思考字段的 SSE：`Hello ` / `Thinking `，接着 `world` / `again`，最后返回用量 7 输入、3 输出。Windows 单文件 Home `.build/mdo-packed-docks-molh0fln` 的持久事件依次为正文、思考、正文、思考和完成事件；页面只显示一张 `Hello world` 回复卡和一张 `Thinking again` 思考卡，用量与 token/s 落在该回复上，刷新后仍一致。320×350 页面无横向溢出或脚本错误。第二个单文件 Home `.build/mdo-packed-docks-jymrn_94` 验证点赞状态刷新后保留。两次夹具均确认交错流实际由模型端点送出。这覆盖打包进程到时间线和消息操作的协议路径；线上 Ling 服务和其他系统原生 WebView、实体触控仍待验收。

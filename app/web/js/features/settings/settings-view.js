@@ -515,6 +515,8 @@ export function createSettingsView({ form, store, navigation, onApplied }) {
       selectedSection = selected;
       const previous = sectionNavigation.querySelector('[aria-current="page"]')?.dataset.settingsSection;
       for (const panel of available) panel.hidden = panel.dataset.settingsPanel !== selected;
+      form.hidden = !available.some((panel) => panel.dataset.settingsPanel === selected &&
+        form.contains(panel));
       let activeButton = null;
       for (const button of document.querySelectorAll("[data-settings-section]")) {
         if (button.dataset.settingsSection === selected) {
