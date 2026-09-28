@@ -347,6 +347,11 @@ export function createConversationDocks({ container, navigation, tasksStore, app
       otherRoot.contains(document.activeElement))
       ? document.activeElement?.dataset.dockFocus : "";
     const focusedAsk = askRoot.contains(document.activeElement);
+    const editingAsk = focusedAsk &&
+      document.activeElement.matches(".ask-dock-input");
+    const editor = editingAsk ? document.activeElement : null;
+    const editorTop = editor ? editor.getBoundingClientRect().top -
+      container.getBoundingClientRect().top : 0;
     for (const details of approvalRoot.querySelectorAll("details[data-approval-arguments]"))
       argumentsOpen.set(details.dataset.approvalArguments, details.open);
     const selected = navigation.get();
@@ -463,7 +468,13 @@ export function createConversationDocks({ container, navigation, tasksStore, app
       Boolean(approvals.length || asks.length));
     syncAvailableHeight();
     const arrived = newApproval ?? newAsk;
-    if (arrived) {
+    const keepEditor = editor?.isConnected;
+    if (keepEditor) {
+      // An approval is inserted before asks. Anchor the active answer field
+      // rather than allowing the new card to push it out of the short dock.
+      container.scrollTop += editor.getBoundingClientRect().top -
+        container.getBoundingClientRect().top - editorTop;
+    } else if (arrived) {
       userMovedDock = false;
       container.scrollTop += arrived.getBoundingClientRect().top -
         container.getBoundingClientRect().top;
@@ -477,7 +488,7 @@ export function createConversationDocks({ container, navigation, tasksStore, app
     for (const key of nextDecisions) visibleDecisions.add(key);
     if (arrived) {
       onDecisionArrived?.(arrived, newApproval ? "approval" : "ask");
-      scheduleReveal(arrived, true);
+      if (!keepEditor) scheduleReveal(arrived, true);
     }
   }
 

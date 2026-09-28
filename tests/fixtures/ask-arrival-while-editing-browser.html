@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="zh-CN">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>mdo ask arrival while editing probe</title>
+<link rel="stylesheet" href="/app/web/css/app.css">
+<style>
+  body { margin: 0; }
+  .workspace { grid-column: auto; grid-row: auto; height: 350px; }
+  .conversation-history { height: 500px; }
+  #conversation-docks { max-height: 110px !important; overflow-y: auto; }
+</style>
+<main class="workspace">
+  <section class="conversation"><div class="conversation-history">Earlier conversation</div></section>
+  <section class="composer-region">
+    <div id="conversation-docks" class="conversation-docks" hidden></div>
+    <form class="composer"><textarea id="prompt"></textarea></form>
+  </section>
+</main>
+<pre id="result"></pre>
+<script type="module">
+const { createConversationDocks } = await import(
+  `/app/web/js/features/chat/conversation-docks.js?fixture=${Date.now()}`);
+const { createResourceStore } = await import("/app/web/js/state/store.js");
+const store = (data) => createResourceStore(data);
+const navigation = {
+  get: () => ({ view: "workspace", projectId: "qa", sessionId: "seat" }),
+  subscribe(listener) { listener(this.get()); return () => {}; },
+};
+const first = { id: 1, question: "Which route should be checked first? ".repeat(5),
+  options: ["Inspect the local result", "Continue with the next step"] };
+const second = { id: 2, question: "A second decision has arrived. ".repeat(4),
+  options: ["Wait", "Proceed"] };
+const asksStore = store({ projectId: "qa", sessionId: "seat", loaded: true,
+  items: [first] });
+const approvalsStore = store({ items: [] });
+const runsStore = store({ items: [] });
+const arrivals = [];
+createConversationDocks({ container: document.querySelector("#conversation-docks"),
+  navigation, asksStore, tasksStore: store({ items: [] }),
+  approvalsStore, runsStore,
+  todoStore: store({ projectId: "qa", sessionId: "seat", items: [] }),
+  onOpenTasks() {}, onChanged: async () => {},
+  onDecisionArrived(card) { arrivals.push(card.querySelector(".ask-dock-question")?.textContent); },
+});
+const nextFrame = () => new Promise((resolve) => requestAnimationFrame(resolve));
+try {
+  await nextFrame();
+  await nextFrame();
+  const dock = document.querySelector("#conversation-docks");
+  const input = dock.querySelector(".ask-dock-input");
+  input.focus();
+  input.value = "An answer in progress";
+  input.dispatchEvent(new Event("input", { bubbles: true }));
+  const before = dock.scrollTop;
+  asksStore.setData({ projectId: "qa", sessionId: "seat", loaded: true,
+    items: [first, second] });
+  const immediate = dock.scrollTop;
+  await nextFrame();
+  await nextFrame();
+  const settled = dock.scrollTop;
+  const editingStable = before > 0 && Math.abs(immediate - before) <= 1 &&
+    Math.abs(settled - before) <= 1 && document.activeElement === input &&
+    input.value === "An answer in progress" && arrivals.length === 2;
+  const inputTopBeforeApproval = input.getBoundingClientRect().top -
+    dock.getBoundingClientRect().top;
+  runsStore.setData({ items: [{ agent_run_id: 7, project_id: "qa",
+    session_id: "seat" }] });
+  approvalsStore.setData({ items: [{ id: 8, run_id: 7, tool: "exec",
+    risk: "low", effects: ["read"], resources: [],
+    arguments_json: '{"path":"notes.txt"}' }] });
+  await nextFrame();
+  await nextFrame();
+  const inputTopAfterApproval = input.getBoundingClientRect().top -
+    dock.getBoundingClientRect().top;
+  const approvalPreservesEditor = document.activeElement === input &&
+    Math.abs(inputTopAfterApproval - inputTopBeforeApproval) <= 1 &&
+    input.value === "An answer in progress" && arrivals.length === 3;
+  approvalsStore.setData({ items: [] });
+  await nextFrame();
+  const inputTopAfterRemoval = input.getBoundingClientRect().top -
+    dock.getBoundingClientRect().top;
+  const removalPreservesEditor = document.activeElement === input &&
+    Math.abs(inputTopAfterRemoval - inputTopBeforeApproval) <= 1;
+  input.blur();
+  asksStore.setData({ projectId: "qa", sessionId: "seat", loaded: true,
+    items: [first, second, { id: 3, question: "A third decision arrived.",
+      options: ["Yes", "No"] }] });
+  await nextFrame();
+  const idleReveals = dock.scrollTop > settled + 1 && arrivals.length === 4;
+  const passed = editingStable && approvalPreservesEditor &&
+    removalPreservesEditor && idleReveals;
+  const result = document.querySelector("#result");
+  result.dataset.passed = String(passed);
+  result.textContent = JSON.stringify({ passed, editingStable, approvalPreservesEditor,
+    removalPreservesEditor, idleReveals, inputTopBeforeApproval,
+    inputTopAfterApproval, inputTopAfterRemoval,
+    before, immediate, settled, idleScroll: dock.scrollTop,
+    arrivals: arrivals.length, scrollHeight: dock.scrollHeight,
+    clientHeight: dock.clientHeight }, null, 2);
+} catch (error) {
+  const result = document.querySelector("#result");
+  result.dataset.passed = "false";
+  result.textContent = error.stack ?? String(error);
+}
+</script>
+</html>
