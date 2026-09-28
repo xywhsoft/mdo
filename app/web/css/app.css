@@ -1565,6 +1565,31 @@ select:focus-visible,
   .setting-instructions textarea { min-height: 80px; height: 80px; }
 }
 
+@media (max-width: 760px) {
+  .app-shell[data-compact-visual-viewport]
+    .composer-region:not([data-decision-pending]) .composer textarea {
+    min-height: 40px;
+    max-height: 40px;
+  }
+  .app-shell[data-compact-visual-viewport]
+    .composer-region:not([data-decision-pending]) .composer-toolbar { flex-wrap: nowrap; }
+  .app-shell[data-compact-visual-viewport]
+    .composer-region:not([data-decision-pending]) .composer-options {
+    flex: 1 1 auto;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+  }
+  .app-shell[data-compact-visual-viewport]
+    .composer-region:not([data-decision-pending]) .composer-options > #composer-model {
+    flex: 0 0 auto;
+    min-width: 90px;
+  }
+  .app-shell[data-compact-visual-viewport]
+    .composer-region:not([data-decision-pending]) .composer-actions { flex: 0 0 auto; }
+  .app-shell[data-compact-visual-viewport]
+    .composer-region:not([data-decision-pending]) .composer-input-estimate { display: none; }
+}
+
 @media (max-height: 300px) {
   #new-session-dialog .dialog-card > header { padding: 8px 12px 6px; }
   #new-session-dialog .dialog-card > header p { display: none; }

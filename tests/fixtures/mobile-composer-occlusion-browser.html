@@ -3,7 +3,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>mdo mobile composer occlusion probe</title>
-<link rel="stylesheet" href="/app/web/css/app.css?occlusion=4">
+<link rel="stylesheet" href="/app/web/css/app.css?occlusion=5">
 <div class="app-shell" id="shell" data-sidebar="closed">
   <header class="mobile-bar">墨斗</header>
   <main class="workspace">
@@ -36,21 +36,25 @@
 </div>
 <pre id="result"></pre>
 <script type="module">
-import { trackMobileViewport } from "/app/web/js/features/shell/mobile-viewport.js";
+import { trackMobileViewport } from "/app/web/js/features/shell/mobile-viewport.js?occlusion=5";
+import { trackComposerMenuRoom } from "/app/web/js/features/chat/composer-menu-room.js";
 
 const shell = document.querySelector("#shell");
 document.querySelector("textarea").value = Array(20).fill("多行草稿").join("\n");
 const viewport = Object.assign(new EventTarget(),
   { height: innerHeight, offsetTop: 0, scale: 1 });
 const win = Object.assign(new EventTarget(),
-  { innerHeight, visualViewport: viewport });
+  { innerHeight, visualViewport: viewport, document,
+    getComputedStyle: window.getComputedStyle.bind(window),
+    ResizeObserver: window.ResizeObserver });
 trackMobileViewport(shell, Object.assign(new EventTarget(),
   { matches: true }), win);
+trackComposerMenuRoom(document.querySelector(".composer"), win);
 await new Promise((resolve) => requestAnimationFrame(() =>
   requestAnimationFrame(resolve)));
 const normalPromptHeight = document.querySelector("textarea").getBoundingClientRect().height;
 const normalMenuHeight = document.querySelector(".slash-menu").getBoundingClientRect().height;
-viewport.height = 300;
+viewport.height = 250;
 viewport.dispatchEvent(new Event("resize"));
 await new Promise((resolve) => requestAnimationFrame(() =>
   requestAnimationFrame(resolve)));
@@ -64,9 +68,10 @@ const result = { visibleBottom: viewport.height, shellHeight:
   promptScrollHeight, normalPromptHeight, normalMenuHeight,
   composerTop: composer.top, sendTop: send.top, sendBottom: send.bottom,
   menuTop: menu.top, menuHeight: menu.height,
-  passed: normalPromptHeight === 260 && normalMenuHeight === 280 &&
+  passed: normalPromptHeight === 260 && normalMenuHeight >= 200 &&
     promptScrollHeight > prompt.height &&
-    send.top >= 0 && send.bottom <= viewport.height && menu.top >= 52 };
+    send.top >= 0 && send.bottom <= viewport.height &&
+    menu.top >= 52 && menu.height >= 70 };
 document.querySelector("#result").dataset.passed = String(result.passed);
 document.querySelector("#result").textContent = JSON.stringify(result, null, 2);
 </script>

@@ -19,6 +19,11 @@ export function trackMobileViewport(shell, mobileLayout, win = window) {
       ? visibleViewportBottom(win.innerHeight, viewport) : null;
     if (bottom === null) shell.style.removeProperty("--app-visible-height");
     else shell.style.setProperty("--app-visible-height", `${bottom}px`);
+    // CSS height media queries still see the layout viewport in these WebViews.
+    // Match the compact composer used by truly short windows when the keyboard
+    // leaves only a short visual viewport.
+    shell.toggleAttribute("data-compact-visual-viewport",
+      bottom !== null && bottom <= 300);
   }
   viewport?.addEventListener("resize", sync);
   viewport?.addEventListener("scroll", sync);
