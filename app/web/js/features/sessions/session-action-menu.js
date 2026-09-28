@@ -4,6 +4,8 @@ import { sessionActionItems } from "./session-actions.js";
 
 export function createSessionActionMenu({ control, button, menu, navigation,
   store, onAction }) {
+  let renderedKey = null;
+
   function currentSession() {
     const route = navigation.get();
     const session = store.get().data;
@@ -24,13 +26,20 @@ export function createSessionActionMenu({ control, button, menu, navigation,
 
   function render() {
     const session = currentSession();
-    const focusedAction = menu.contains(document.activeElement)
-      ? document.activeElement.dataset.sessionAction : "";
     button.disabled = !session;
     if (!session) close();
+    const actions = session ? sessionActionItems(session) : [];
+    // Polling can change session metadata while the user reads this menu.
+    // Only replace its DOM when the visible action set or session changes.
+    const contentKey = session ? JSON.stringify([session.project_id, session.id,
+      actions.map(({ name, label, tone }) => [name, label, tone])]) : "";
+    if (contentKey === renderedKey) return;
+    renderedKey = contentKey;
+    const focusedAction = menu.contains(document.activeElement)
+      ? document.activeElement.dataset.sessionAction : "";
     clear(menu);
     if (!session) return;
-    for (const action of sessionActionItems(session)) {
+    for (const action of actions) {
       const item = element("button", { text: action.label, attrs: {
         type: "button", role: "menuitem", "data-session-action": action.name,
         "data-tone": action.tone ?? "neutral",
@@ -53,9 +62,11 @@ export function createSessionActionMenu({ control, button, menu, navigation,
 
   function open(index = -1) {
     if (!currentSession()) return;
+    const wasHidden = menu.hidden;
     render();
     menu.hidden = false;
     button.setAttribute("aria-expanded", "true");
+    if (wasHidden) menu.scrollTop = 0;
     if (index >= 0) focusItem(items()[index]);
   }
 

@@ -28,8 +28,8 @@
 <script type="module">
 const { createSessionList } = await import(
   `/app/web/js/features/sessions/session-list.js?fixture=${Date.now()}`);
-import { createSessionActionMenu } from
-  "/app/web/js/features/sessions/session-action-menu.js";
+const { createSessionActionMenu } = await import(
+  `/app/web/js/features/sessions/session-action-menu.js?fixture=${Date.now()}`);
 
 const session = { id: "test", project_id: "default", agent_id: "mdo.default",
   model_id: "ling-3.0-tiny", title: "Clipped session", status: "active",
@@ -130,12 +130,15 @@ try {
     document.activeElement === document.querySelector(".session-more");
   const headerButton = document.querySelector("#header-session-button");
   const headerMenu = document.querySelector("#header-session-menu");
+  let headerSession = session;
+  let publishHeader;
   const topMenu = createSessionActionMenu({
     control: document.querySelector("#header-session-control"), button: headerButton,
     menu: headerMenu,
     navigation: { get: () => ({ view: "workspace", projectId: "default",
       sessionId: "test" }), subscribe: () => () => {} },
-    store: { get: () => ({ data: session }), subscribe: () => () => {} },
+    store: { get: () => ({ data: headerSession }),
+      subscribe(listener) { publishHeader = listener; listener(); return () => {}; } },
     onAction() {},
   });
   headerButton.click();
@@ -153,6 +156,21 @@ try {
   const headerEndVisible = inHeaderViewport(headerMenu.lastElementChild);
   const headerEndScrolled = innerHeight > 350 ||
     (headerMenu.scrollHeight > headerMenu.clientHeight && headerMenu.scrollTop > 0);
+  const headerLast = headerMenu.lastElementChild;
+  const headerScroll = headerMenu.scrollTop;
+  headerSession = { ...session, revision: 2,
+    updated_at: session.updated_at + 60_000_000 };
+  publishHeader();
+  await new Promise(requestAnimationFrame);
+  const headerPollStable = headerLast === headerMenu.lastElementChild &&
+    headerMenu.scrollTop === headerScroll && document.activeElement === headerLast;
+  headerSession = { ...headerSession, status: "archived" };
+  publishHeader();
+  const headerActionsChanged = headerMenu.querySelectorAll('[role="menuitem"]').length === 3 &&
+    [...headerMenu.querySelectorAll('[role="menuitem"]')]
+      .some((item) => item.dataset.sessionAction === "unarchive");
+  headerSession = { ...headerSession, status: "active" };
+  publishHeader();
   menuKey(headerMenu.lastElementChild, "ArrowDown");
   const headerWrapFocused = document.activeElement === headerMenu.firstElementChild;
   const headerWrapVisible = inHeaderViewport(headerMenu.firstElementChild);
@@ -166,13 +184,18 @@ try {
   const headerCandidateKept = !headerMenu.hidden;
   escape();
   const headerEscapeRestored = headerMenu.hidden && document.activeElement === headerButton;
+  headerButton.click();
+  const headerReopensAtTop = !headerMenu.hidden && headerMenu.scrollTop === 0;
+  topMenu.close(true);
   topMenu.destroy();
   const passed = withinViewport && outsideClippingParent && firstFocused &&
     menuReadingStable &&
     sidebarComposingKept && sidebarCandidateKept && escapeRestored &&
     lastReachable && actionWorked && headerComposingKept &&
     headerCandidateKept && headerEscapeRestored && headerEndFocused &&
-    headerEndVisible && headerEndScrolled && headerWrapFocused && headerWrapVisible &&
+    headerEndVisible && headerEndScrolled && headerPollStable &&
+    headerActionsChanged && headerReopensAtTop &&
+    headerWrapFocused && headerWrapVisible &&
     headerHomeFocused && headerHomeVisible && titleSelectionStable && timestampUpdated;
   output.dataset.passed = String(passed);
   output.textContent = JSON.stringify({ passed, withinViewport, outsideClippingParent,
@@ -181,6 +204,7 @@ try {
     firstFocused, menuReadingStable, sidebarComposingKept, sidebarCandidateKept, escapeRestored,
     lastReachable, actionWorked, actionRevision, headerComposingKept, headerCandidateKept,
     headerEscapeRestored, headerEndFocused, headerEndVisible, headerEndScrolled,
+    headerPollStable, headerActionsChanged, headerReopensAtTop,
     headerWrapFocused, headerWrapVisible, headerHomeFocused, headerHomeVisible,
     initialRect: { top: rect.top, bottom: rect.bottom, left: rect.left, right: rect.right },
     viewport: { width: innerWidth, height: innerHeight } }, null, 2);
