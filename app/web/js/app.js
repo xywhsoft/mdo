@@ -859,9 +859,10 @@ export async function boot() {
 
   let sendBlockedByState = true;
   function syncSendDisabled() {
+    const localCommand = slashCommands.isExact(prompt.value.trim());
     send.disabled = sendBlockedByState ||
-      (composerImages?.hasUnsupportedDraft() &&
-        !slashCommands.isExact(prompt.value.trim()));
+      ((composerImages?.isUploading() ||
+        composerImages?.hasUnsupportedDraft()) && !localCommand);
   }
 
   function syncStopBusy() {
@@ -894,7 +895,6 @@ export async function boot() {
     prompt.disabled = serviceFailed || messageActionBusy ||
       (!sessionWritable && !creatingSession) || migratingNewTask;
     sendBlockedByState = serviceFailed || !(sessionWritable || creatingSession) ||
-      composerImages?.isUploading() ||
       composerProfile.isBusy() || messageActionBusy ||
       !draftStore.isLoaded(selectedKey) ||
       draftStore.isRunUncertain(selectedKey) ||
@@ -1658,11 +1658,13 @@ export async function boot() {
       return;
     }
     fileMentions.hide();
+    // Commands act on the UI and keep an unsent image draft. They must stay
+    // usable while an attachment is still being stored.
+    if (fromComposer && slashCommands.consumeExact(text)) return;
     if ((!text && !attachments.length) || composerImages.isUploading()) return;
     const rawInput = fromComposer ? prompt.value : text;
     const origin = navigation.get();
     const originVersion = routeVersion;
-    if (fromComposer && slashCommands.consumeExact(text)) return;
     if (!draftStore.isLoaded(selectedKey) &&
         !await draftStore.ensureLoaded(selectedKey)) return;
     if (draftStore.isRunUncertain(selectedKey)) {
