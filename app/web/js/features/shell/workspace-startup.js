@@ -17,8 +17,20 @@ async function lastSessionCandidate(saved, sessions) {
   return (sessions ?? []).find((item) => item.status === "active") ?? null;
 }
 
+function runningSessionCandidate(runs, sessions) {
+  const active = new Map((sessions ?? []).filter((session) =>
+    session.status === "active").map((session) =>
+      [`${session.project_id}/${session.id}`, session]));
+  for (const run of runs ?? []) {
+    if (run.terminal !== false) continue;
+    const session = active.get(`${run.project_id}/${run.session_id}`);
+    if (session) return session;
+  }
+  return null;
+}
+
 export async function startWorkspaceNavigation({ navigation, settingsStore,
-  sessionsStore, sessionDetailStore, dialog, title, continueButton, newButton,
+  sessionsStore, runsStore, sessionDetailStore, dialog, title, continueButton, newButton,
   prompt, entryHash }) {
   let saved = null;
   try { saved = (await api.get(endpoint)).data; }
@@ -102,6 +114,13 @@ export async function startWorkspaceNavigation({ navigation, settingsStore,
     navigation.newTask(saved?.project_id || "default", { replace: true });
     prompt.focus();
     return;
+  }
+  // The user's explicit startup mode and route win. In "last" mode, resume
+  // a live conversation before falling back to the last selected session.
+  if (mode === "last") {
+    const running = runningSessionCandidate(runsStore?.get().data?.items,
+      sessionsStore.get().data?.items);
+    if (running) { openLastSession(running); return; }
   }
   const candidate = await lastSessionCandidate(saved,
     sessionsStore.get().data?.items);

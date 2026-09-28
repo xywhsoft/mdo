@@ -2374,6 +2374,7 @@ export async function boot() {
   }
 
   await startWorkspaceNavigation({ navigation, settingsStore, sessionsStore,
+    runsStore,
     sessionDetailStore,
     dialog: $("#startup-choice-dialog"),
     title: $("#startup-last-title"),

@@ -139,3 +139,65 @@ test("an explicit session URL focuses after loading without stealing a newer foc
     globalThis.document = originalDocument;
   }
 });
+
+test("last startup resumes a live session before an idle saved session", async () => {
+  const originalFetch = globalThis.fetch;
+  const originalLocation = globalThis.location;
+  const originalDocument = globalThis.document;
+  const idle = { project_id: "default", id: "idle", title: "Idle", status: "active" };
+  const running = { project_id: "other", id: "live", title: "Live", status: "active" };
+  globalThis.location = { hash: "" };
+  const body = { isConnected: true };
+  globalThis.document = { body, activeElement: body };
+  globalThis.fetch = async (url) => Response.json({ ok: true, data:
+    String(url).endsWith("/workspace-state")
+      ? { project_id: idle.project_id, session_id: idle.id } : idle });
+  const sessionsStore = { get: () => ({ data: { items: [idle, running] } }) };
+  const runsStore = { get: () => ({ data: { items: [
+    { project_id: "other", session_id: "gone", terminal: false },
+    { project_id: "default", session_id: "idle", terminal: true },
+    { project_id: "other", session_id: "live", terminal: false },
+  ] } }) };
+  const base = { sessionsStore, runsStore, dialog: {}, title: {},
+    continueButton: {}, newButton: {}, entryHash: "", prompt: {
+      disabled: false, focus() {},
+    } };
+  try {
+    const last = fakeNavigation();
+    await startWorkspaceNavigation({ ...base, navigation: last,
+      settingsStore: { get: () => ({ data: { workspace: { open_mode: "last" } } }) },
+      sessionDetailStore: createResourceStore() });
+    assert.deepEqual([last.get().projectId, last.get().sessionId],
+      ["other", "live"]);
+
+    const fresh = fakeNavigation();
+    await startWorkspaceNavigation({ ...base, navigation: fresh,
+      settingsStore: { get: () => ({ data: { workspace: { open_mode: "new" } } }) },
+      sessionDetailStore: createResourceStore() });
+    assert.equal(fresh.get().sessionId, "");
+
+    const asking = fakeNavigation();
+    let shown = false;
+    await startWorkspaceNavigation({ ...base, navigation: asking,
+      settingsStore: { get: () => ({ data: { workspace: { open_mode: "ask" } } }) },
+      sessionDetailStore: createResourceStore(),
+      dialog: { addEventListener() {}, showModal() { shown = true; } },
+      continueButton: { addEventListener() {}, focus() {} },
+      newButton: { addEventListener() {} } });
+    assert.equal(shown, true);
+    assert.equal(asking.get().sessionId, "");
+
+    const explicit = fakeNavigation();
+    explicit.select("default", "idle");
+    globalThis.location.hash = "#/projects/default/sessions/idle";
+    await startWorkspaceNavigation({ ...base, navigation: explicit,
+      entryHash: globalThis.location.hash,
+      settingsStore: { get: () => ({ data: { workspace: { open_mode: "last" } } }) },
+      sessionDetailStore: createResourceStore() });
+    assert.equal(explicit.get().sessionId, "idle");
+  } finally {
+    globalThis.fetch = originalFetch;
+    globalThis.location = originalLocation;
+    globalThis.document = originalDocument;
+  }
+});
