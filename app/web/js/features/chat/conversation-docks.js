@@ -310,8 +310,15 @@ export function createConversationDocks({ container, navigation, tasksStore, app
     const crampedApproval = approvalAction && title &&
       viewport.height < title.getBoundingClientRect().height +
         approvalAction.getBoundingClientRect().height + 24;
-    const content = (crampedApproval ? title : null) ??
-      decision.querySelector(".ask-dock-options button") ??
+    const askOption = decision.querySelector(".ask-dock-options button");
+    // If a long question and its first answer cannot fit together, show the
+    // beginning of the question first. Otherwise scrolling to the answer
+    // hides the context needed to choose it.
+    const crampedAsk = askOption && title &&
+      askOption.getBoundingClientRect().bottom -
+        title.getBoundingClientRect().top + 4 > viewport.height;
+    const content = (crampedApproval || crampedAsk ? title : null) ??
+      askOption ??
       decision.querySelector(".approval-arguments summary") ?? title;
     if (!content) return;
     const bounds = content.getBoundingClientRect();
