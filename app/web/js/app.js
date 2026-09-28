@@ -761,7 +761,8 @@ export async function boot() {
     composer, prompt, button: $("#composer-attach"), input: $("#composer-file"),
     strip: $("#composer-images"), modelSelect: $("#composer-model"),
     navigation, modelsStore,
-    sessionStore: sessionDetailStore, ensureSession,
+    sessionStore: sessionDetailStore,
+    ensureSession: (text) => ensureSession(text, composerProfile.selection()),
     onChange(attachments) {
       composerAttachments = attachments;
       draftStore.edit(selectedKey, prompt.value, attachments);

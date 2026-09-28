@@ -437,6 +437,8 @@
   "image.closePreview": "Close image preview",
   "image.saving": "Saving images…",
   "image.waitForCurrent": "Wait for the current image operation before adding another",
+  "image.pendingCount": "Images waiting to be added: {count}",
+  "image.pendingCancelled": "The session changed or saving failed; waiting images were not saved",
   "image.removing": "Removing image…",
   "image.unsupportedModel": "This model does not support images. Switch to an image-capable model first.",
   "image.draftUnsupported": "This model cannot send images. Switch models or remove the images first.",

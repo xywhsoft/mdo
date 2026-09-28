@@ -51,7 +51,7 @@ export function createComposerImages({ composer, prompt, button, input, strip,
   modelSelect, navigation, modelsStore, sessionStore, ensureSession, onChange, onRemove,
   onUploading, onError }) {
   let ids = [];
-  const uploads = new Set();
+  const uploadJobs = new Map();
   const removals = new Set();
   let writable = true;
   let dragDepth = 0;
@@ -71,8 +71,12 @@ export function createComposerImages({ composer, prompt, button, input, strip,
     return `${projectId || "default"}/${sessionId || "@new"}`;
   }
 
+  function currentUpload() {
+    return uploadJobs.get(scopeKey());
+  }
+
   function uploadingCurrent() {
-    return uploads.has(scopeKey());
+    return Boolean(currentUpload());
   }
 
   function removingCurrent() {
@@ -154,6 +158,11 @@ export function createComposerImages({ composer, prompt, button, input, strip,
       className: "composer-image-uploading",
       text: t("image.saving", {}, "正在保存图片…"),
     }));
+    const pending = currentUpload()?.pending ?? 0;
+    if (pending) strip.append(element("span", {
+      className: "composer-image-uploading",
+      text: t("image.pendingCount", { count: pending }, `待添加 ${pending} 张图片`),
+    }));
     if (removing) strip.append(element("span", {
       className: "composer-image-uploading",
       text: t("image.removing", {}, "正在移除图片…"),
@@ -186,17 +195,75 @@ export function createComposerImages({ composer, prompt, button, input, strip,
     return Boolean(Number(model?.attachments ?? 0) & 1);
   }
 
-  async function addFiles(files) {
+  async function runUpload(job) {
+    let discarded = false;
+    try {
+      const selected = owner() ?? await ensureSession(prompt.value);
+      const sessionKey = `${selected.projectId}/${selected.sessionId}`;
+      if (job.key !== sessionKey) {
+        if (scopeKey() !== sessionKey) { discarded = true; return; }
+        uploadJobs.delete(job.key);
+        job.key = sessionKey;
+        uploadJobs.set(sessionKey, job);
+        onUploading(true);
+        render();
+      }
+      while (job.batches.length && scopeKey() === job.key) {
+        const batch = job.batches.shift();
+        if (batch.queued) job.pending -= batch.images.length;
+        for (const { file, mime } of batch.images) {
+          if (scopeKey() !== job.key) { discarded = true; break; }
+          let stored;
+          try {
+            stored = await api.uploadImage(selected.projectId,
+              selected.sessionId, file, mime);
+          } catch (error) {
+            if (scopeKey() === job.key) onError(error);
+            else { discarded = true; break; }
+          } finally {
+            job.reserved -= 1;
+          }
+          if (!stored) continue;
+          if (scopeKey() !== job.key) {
+            discarded = true;
+            void api.deleteImage(selected.projectId, selected.sessionId,
+              stored.id).catch(() => {});
+            break;
+          }
+          ids = [...ids, stored.id];
+          onChange([...ids]);
+          render();
+        }
+        render();
+      }
+    } catch (error) {
+      if (scopeKey() === job.key) onError(error);
+      else discarded = true;
+    } finally {
+      uploadJobs.delete(job.key);
+      if (discarded || job.pending)
+        toast(t("image.pendingCancelled", {},
+          "会话已切换或保存失败，待添加图片未保存"), "error");
+      onUploading(false);
+      input.value = "";
+      render();
+    }
+  }
+
+  function addFiles(files) {
     const candidates = [...files];
     if (!candidates.length) return;
-    if (uploadingCurrent() || removingCurrent()) {
+    if (removingCurrent()) {
       onError(selectionError(t("image.waitForCurrent", {},
         "请等待当前图片操作完成后再添加")));
       return;
     }
-    if (!writable) { onError(new Error(t("image.readOnly", {},
+    const job = currentUpload();
+    // Creating an image-first task briefly marks the editor non-writable while
+    // its session is being created. Already accepted uploads may still queue.
+    if (!job && !writable) { onError(new Error(t("image.readOnly", {},
       "当前会话不可添加图片"))); return; }
-    if (!imageCapable()) {
+    if (!job && !imageCapable()) {
       onError(unsupportedModelError());
       return;
     }
@@ -216,7 +283,7 @@ export function createComposerImages({ composer, prompt, button, input, strip,
         "单张图片不得超过 8 MiB")));
       return;
     }
-    if (images.length + ids.length > 4) {
+    if (images.length + ids.length + (job?.reserved ?? 0) > 4) {
       onError(selectionError(t("image.maxCount", {},
         "每条消息最多可添加 4 张图片")));
       return;
@@ -225,43 +292,19 @@ export function createComposerImages({ composer, prompt, button, input, strip,
       `已跳过 ${otherFiles} 个非图片文件`));
     if (invalidSize) toast(t("image.skippedSize", { count: invalidSize },
       `已跳过 ${invalidSize} 张空白或超过 8 MiB 的图片`));
-    let key = scopeKey();
-    uploads.add(key);
+    if (job) {
+      job.batches.push({ images, queued: true });
+      job.reserved += images.length;
+      job.pending += images.length;
+      render();
+      return;
+    }
+    const next = { key: scopeKey(), batches: [{ images, queued: false }],
+      reserved: images.length, pending: 0 };
+    uploadJobs.set(next.key, next);
     onUploading(true);
     render();
-    try {
-      const selected = owner() ?? await ensureSession(prompt.value);
-      const sessionKey = `${selected.projectId}/${selected.sessionId}`;
-      if (key !== sessionKey && scopeKey() !== sessionKey) return;
-      if (key !== sessionKey) {
-        uploads.delete(key);
-        key = sessionKey;
-        uploads.add(key);
-        onUploading(true);
-        render();
-      }
-      for (const { file, mime } of images) {
-        const stored = await api.uploadImage(selected.projectId,
-          selected.sessionId, file, mime);
-        if (scopeKey() !== key) {
-          void api.deleteImage(selected.projectId, selected.sessionId,
-            stored.id).catch(() => {});
-          break;
-        }
-        ids = [...ids, stored.id];
-        onChange([...ids]);
-        render();
-      }
-    } catch (error) {
-      if (scopeKey() === key) onError(error);
-      else toast(t("image.previousUnsaved", {}, "原会话图片未保存"), "error");
-    }
-    finally {
-      uploads.delete(key);
-      onUploading(false);
-      input.value = "";
-      render();
-    }
+    void runUpload(next);
   }
 
   button.addEventListener("click", () => {
