@@ -2556,6 +2556,44 @@ def run_probe(host: Path) -> None:
                 assert status == 200 and json.loads(body)["data"] == {
                     "items": [], "discard_images": []}, (status, body)
                 assert not queue_file.exists(), queue_file
+                status, _, body = request(port, "POST", attachments_path,
+                    body=png_bytes, headers={"Content-Type": "image/png"})
+                cleanup_image = json.loads(body)["data"]
+                assert status == 201, (status, body)
+                cleanup_marker = (queue_path + "/discard-images/" +
+                                  cleanup_image["id"])
+                status, _, body = request(port, "POST", cleanup_marker,
+                    body=b"{}", headers={"Content-Type": "application/json"})
+                assert status == 400 and json.loads(body)["error"][
+                    "code"] == "body_not_allowed", (status, body)
+                draft_before_cleanup = json.loads(request(port, "GET",
+                    draft_path)[2])["data"]
+                status, _, body = request(port, "PUT", draft_path,
+                    body=json.dumps({"revision": draft_before_cleanup["revision"],
+                        "text": draft_before_cleanup["text"],
+                        "attachments": [cleanup_image["id"]]}).encode(),
+                    headers={"Content-Type": "application/json"})
+                assert status == 200, (status, body)
+                status, _, body = request(port, "POST", cleanup_marker)
+                assert status == 200 and json.loads(body)["data"][
+                    "discard_images"] == [cleanup_image["id"]], (status, body)
+                assert request(port, "POST", cleanup_marker)[0] == 200
+                assert json.loads(queue_file.read_text(encoding="utf-8"))[
+                    "discard_images"] == [cleanup_image["id"]]
+                assert request(port, "DELETE", cleanup_image["url"])[0] == 409
+                draft_with_cleanup = json.loads(request(port, "GET",
+                    draft_path)[2])["data"]
+                status, _, body = request(port, "PUT", draft_path,
+                    body=json.dumps({"revision": draft_with_cleanup["revision"],
+                        "text": draft_with_cleanup["text"],
+                        "attachments": []}).encode(),
+                    headers={"Content-Type": "application/json"})
+                assert status == 200, (status, body)
+                assert json.loads(request(port, "GET", queue_path)[2])[
+                    "data"]["discard_images"] == [cleanup_image["id"]]
+                assert request(port, "DELETE", cleanup_image["url"])[0] == 200
+                assert json.loads(request(port, "GET", queue_path)[2])[
+                    "data"]["discard_images"] == []
                 first_id = "a" * 32
                 second_id = "b" * 32
                 priority_id = "c" * 32

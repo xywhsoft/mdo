@@ -262,10 +262,32 @@ class BoundedDelayProxy(BaseHTTPRequestHandler):
                 self.server.attachment_deletes += 1
                 count = self.server.attachment_deletes
             print(f"QA attachment DELETE #{count}", flush=True)
+            time.sleep(self.server.attachment_delete_delay_seconds)
             if self.server.fail_first_attachment_delete and count == 1:
                 payload = json.dumps({"ok": False, "error": {
                     "code": "attachment_unavailable",
                     "message": "Synthetic attachment delete failure"
+                }}).encode()
+                self.send_response(503)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Content-Length", str(len(payload)))
+                self.send_header("Connection", "close")
+                self.end_headers()
+                self.wfile.write(payload)
+                self.close_connection = True
+                return
+        if (self.command == "POST" and
+                self.path.startswith("/api/v1/projects/") and
+                "/sessions/" in self.path and
+                "/queue/discard-images/" in self.path):
+            with self.server.count_lock:
+                self.server.discard_markers += 1
+                count = self.server.discard_markers
+            print(f"QA discard marker POST #{count}", flush=True)
+            if self.server.fail_first_discard_marker and count == 1:
+                payload = json.dumps({"ok": False, "error": {
+                    "code": "queue_unavailable",
+                    "message": "Synthetic cleanup marker failure"
                 }}).encode()
                 self.send_response(503)
                 self.send_header("Content-Type", "application/json")
@@ -574,6 +596,10 @@ parser.add_argument("--fail-first-attachment", action="store_true",
                     help="reject the first attachment POST for queued-upload QA")
 parser.add_argument("--fail-first-attachment-delete", action="store_true",
                     help="reject the first attachment DELETE for cleanup-retry QA")
+parser.add_argument("--attachment-delete-delay-ms", type=int, default=0,
+                    help="delay attachment DELETEs by 0-5000 ms for cleanup-marker QA")
+parser.add_argument("--fail-first-discard-marker", action="store_true",
+                    help="reject the first durable image cleanup marker")
 parser.add_argument("--run-delay-ms", type=int, default=0,
                     help="delay run POSTs by 0-5000 ms for composer handoff QA")
 parser.add_argument("--run-read-delay-ms", type=int, default=0,
@@ -647,6 +673,8 @@ if not 0 <= args.queue_read_delay_ms <= 5000:
     parser.error("--queue-read-delay-ms must be between 0 and 5000")
 if not 0 <= args.attachment_delay_ms <= 5000:
     parser.error("--attachment-delay-ms must be between 0 and 5000")
+if not 0 <= args.attachment_delete_delay_ms <= 5000:
+    parser.error("--attachment-delete-delay-ms must be between 0 and 5000")
 if not 0 <= args.queue_read_failures <= 8:
     parser.error("--queue-read-failures must be between 0 and 8")
 if not 0 <= args.run_delay_ms <= 5000:
@@ -780,7 +808,8 @@ try:
             or args.queue_delay_ms or args.queue_read_delay_ms
             or args.fail_first_queue_read
             or args.attachment_delay_ms or args.fail_first_attachment
-            or args.fail_first_attachment_delete
+            or args.fail_first_attachment_delete or args.attachment_delete_delay_ms
+            or args.fail_first_discard_marker
             or args.run_delay_ms
             or args.run_read_delay_ms
             or args.fail_first_run_read
@@ -809,7 +838,10 @@ try:
         proxy.fail_first_attachment = args.fail_first_attachment
         proxy.attachment_posts = 0
         proxy.fail_first_attachment_delete = args.fail_first_attachment_delete
+        proxy.attachment_delete_delay_seconds = args.attachment_delete_delay_ms / 1000
         proxy.attachment_deletes = 0
+        proxy.fail_first_discard_marker = args.fail_first_discard_marker
+        proxy.discard_markers = 0
         proxy.run_delay_seconds = args.run_delay_ms / 1000
         proxy.run_read_delay_seconds = args.run_read_delay_ms / 1000
         proxy.fail_first_run_read = args.fail_first_run_read
@@ -849,6 +881,7 @@ try:
 finally:
     if proxy:
         print(f"QA attachment DELETE total={proxy.attachment_deletes}", flush=True)
+        print(f"QA discard marker POST total={proxy.discard_markers}", flush=True)
         print(f"QA approval PUT total={proxy.approval_puts}", flush=True)
         print(f"QA ask PUT total={proxy.ask_puts}", flush=True)
         print(f"QA task DELETE total={proxy.task_deletes}", flush=True)

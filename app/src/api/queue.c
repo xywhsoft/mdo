@@ -911,6 +911,47 @@ bool MdoApiQueueRoute(MdoApiContext* Context)
         &Queue);
 }
 
+/* Record cleanup before a draft drops its last image reference. A crash
+ * after that draft write leaves this ID in queue.json for the next page to
+ * retry. Attachment DELETE still checks every reference before removing it. */
+bool MdoApiQueueDiscardRoute(MdoApiContext* Context)
+{
+    char Path[MDO_SESSION_PATH_CAPACITY];
+    char ProjectId[MDO_PROJECT_ID_CAPACITY];
+    char SessionId[MDO_SESSION_ID_CAPACITY];
+    char Id[33];
+    MdoSessionStatus SessionStatus;
+    MdoQueue Queue;
+    const xhttp1head* Head = Context->Request->head;
+    bool Ok;
+    bool Full = false;
+    if ( Context->ParamCount != 3u ||
+         !MdoQueuePath(Context, Path, &SessionStatus,
+            ProjectId, SessionId) ||
+         !MdoQueueId(Context->Params[2], Id) )
+        return MdoApiReplyError(Context, 404u, "attachment_not_found",
+            "The requested session or image does not exist", NULL);
+    if ( ((Head->Flags & (uint32)XHTTP1_CONTENT_LENGTH) != 0u &&
+          Head->ContentLength != 0u) ||
+         (Head->Flags & (uint32)XHTTP1_TRANSFER_ENCODING) != 0u )
+        return MdoApiReplyError(Context, 400u, "body_not_allowed",
+            "This operation does not accept a request body", NULL);
+    xrtMutexLock(g_MdoQueueLock);
+    Ok = MdoQueueRead(Path, ProjectId, SessionId, &Queue);
+    if ( Ok && MdoQueueDiscardFind(&Queue, Id) == SIZE_MAX ) {
+        Full = !MdoQueueDiscardAdd(&Queue, Id);
+        if ( !Full ) Ok = MdoQueueWrite(Path, &Queue);
+    }
+    xrtMutexUnlock(g_MdoQueueLock);
+    if ( !Ok ) { MdoQueueRelease(&Queue); return MdoApiReplyError(Context,
+        503u, "queue_unavailable", "Image cleanup could not be recorded",
+        NULL); }
+    if ( Full ) { MdoQueueRelease(&Queue); return MdoApiReplyError(Context,
+        507u, "queue_cleanup_full",
+        "Too many images are awaiting cleanup", NULL); }
+    return MdoQueueReply(Context, 200u, &Queue);
+}
+
 bool MdoApiQueueItemRoute(MdoApiContext* Context)
 {
     char Path[MDO_SESSION_PATH_CAPACITY];

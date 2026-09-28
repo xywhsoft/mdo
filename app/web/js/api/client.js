@@ -107,6 +107,14 @@ function deleteImage(projectId, sessionId, id) {
     { method: "DELETE" });
 }
 
+function markImageDiscard(projectId, sessionId, id) {
+  if (!/^[0-9a-f]{32}$/.test(id))
+    throw new TypeError("Attachment ID is invalid");
+  return apiRequest(`/projects/${resourceId(projectId, "project")}` +
+    `/sessions/${resourceId(sessionId, "session")}/queue/discard-images/${id}`,
+    { method: "POST" });
+}
+
 async function download(path) {
   let response;
   try {
@@ -143,4 +151,5 @@ export const api = Object.freeze({
   download,
   uploadImage,
   deleteImage,
+  markImageDiscard,
 });

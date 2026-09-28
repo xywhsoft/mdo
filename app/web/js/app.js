@@ -787,6 +787,16 @@ export async function boot() {
       draftStore.edit(selectedKey, prompt.value, attachments);
       tokenMeter.refresh();
     },
+    async onBeforeRemove(owner, id) {
+      const key = `${owner.projectId}/${owner.sessionId}`;
+      // A queue poll may see the durable marker immediately. Persist the
+      // current reference first, so it cannot delete an unsaved image before
+      // the removal either commits or rolls back.
+      if (!await draftStore.flush(key))
+        throw new Error(t("image.removeRollback", {},
+          "草稿未保存，图片已恢复"));
+      await api.markImageDiscard(owner.projectId, owner.sessionId, id);
+    },
     async onRemove(owner, id, previous) {
       const key = `${owner.projectId}/${owner.sessionId}`;
       let saved = false;

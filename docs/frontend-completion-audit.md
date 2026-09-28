@@ -2,7 +2,9 @@
 
 本清单以 `app_bak/wwwroot` 的可操作行为为基线，而不是以页面长得相似或单元测试通过为完成标准。`docs/frontend-migration.md` 记录每次实现和验证；这里记录当前还需要什么证据。审计更新：2026-09-28，基线提交 `f9e2c4c`。
 
-普通图片移除的暂时 DELETE 失败已接入重试清理：旧单文件 Home `.build/mdo-packed-docks-owgpfb2e` 留下孤立 `.bin/.json`；修复后 Home `.build/mdo-packed-docks-2qw_rivh` 由第二次 DELETE 清空附件目录，草稿引用也为空，页面无脚本错误。Windows/Linux 有界门禁通过。页面关闭前仍未成功重试的持久清理、操作系统原生拖放与实体设备触控尚待验收，详见[迁移记录](frontend-migration.md#2026-09-28图片从草稿移除后重试清理孤立附件)。
+草稿图片移除的清理意图现先写入会话 `queue.json`，再更新草稿与删除附件。API 探针验证仍被引用时拒删、去引用后清标记；Windows 单文件 Home `.build/mdo-packed-docks-44gvokmd` 在延迟且首次失败的 DELETE 下完成重试。另以同一 Home 的持久标记和未删附件构造中断状态，停止打包进程、重启并打开原会话后，附件与标记均清空。Home `.build/mdo-packed-docks-5f_kulu7` 还验证首次标记写入 503 时图片和草稿引用不变，第二次点击才成功移除。此项补齐普通草稿图片移除的跨重启清理证据；弃用上传的独立崩溃窗口、原生 WebView 与实体触控待验收，详见[迁移记录](frontend-migration.md#2026-09-28草稿图片清理意图跨重启恢复)。
+
+普通图片移除的暂时 DELETE 失败已接入重试清理：旧单文件 Home `.build/mdo-packed-docks-owgpfb2e` 留下孤立 `.bin/.json`；修复后 Home `.build/mdo-packed-docks-2qw_rivh` 由第二次 DELETE 清空附件目录，草稿引用也为空，页面无脚本错误。后续阶段已补齐页面关闭前仍未成功重试的持久清理；操作系统原生拖放与实体设备触控尚待验收，详见[迁移记录](frontend-migration.md#2026-09-28图片从草稿移除后重试清理孤立附件)。
 
 运行创建失败后的跨会话复核已有单文件页面证据：Home `.build/mdo-packed-docks-gpatqxoj` 中首次运行 POST 被代理拒绝，离开再返回仍显示待确认消息与人工重试入口，未自动补发；点击重试后才发出第二次 POST 并完成一轮回复。脚本错误为空。320×350 的联网长表单末端输入框在模拟高度缩至 250px 时仍可见；实体软键盘与原生 WebView 仍待验收，详见[迁移记录](frontend-migration.md#2026-09-28运行创建失败后跨会话保留人工核对)。
 

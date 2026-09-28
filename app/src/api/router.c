@@ -207,6 +207,8 @@ static const MdoApiRoute g_MdoApiRoutes[] = {
     { "/api/v1/projects/{project}/sessions/{session}/queue",
       XHTTP_METHOD_GET | XHTTP_METHOD_HEAD | XHTTP_METHOD_POST,
       "GET, HEAD, POST, OPTIONS", MdoApiQueueRoute },
+    { "/api/v1/projects/{project}/sessions/{session}/queue/discard-images/{attachment}",
+      XHTTP_METHOD_POST, "POST, OPTIONS", MdoApiQueueDiscardRoute },
     { "/api/v1/projects/{project}/sessions/{session}/queue/{item}",
       XHTTP_METHOD_GET | XHTTP_METHOD_HEAD | XHTTP_METHOD_PUT |
           XHTTP_METHOD_DELETE,

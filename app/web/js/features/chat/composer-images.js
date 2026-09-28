@@ -48,7 +48,8 @@ function selectionError(message) {
 }
 
 export function createComposerImages({ composer, prompt, button, input, strip,
-  modelSelect, navigation, modelsStore, sessionStore, ensureSession, onChange, onRemove,
+  modelSelect, navigation, modelsStore, sessionStore, ensureSession, onChange,
+  onBeforeRemove, onRemove,
   onUploading, onError, onDiscardedUpload }) {
   let ids = [];
   const uploadJobs = new Map();
@@ -109,13 +110,21 @@ export function createComposerImages({ composer, prompt, button, input, strip,
       remove.disabled = uploading || removing || !writable;
       remove.addEventListener("click", async () => {
         if (removals.has(`${selected.projectId}/${selected.sessionId}`)) return;
-        const previous = [...ids];
+        let previous = [...ids];
         const key = `${selected.projectId}/${selected.sessionId}`;
         const restoreFocus = document.activeElement === remove;
+        let changed = false;
         removals.add(key);
         onUploading(true);
         try {
-          ids = ids.filter((_, position) => position !== index);
+          // Persist the cleanup intent before changing the draft. If the
+          // process exits after the draft save, queue GET can resume cleanup.
+          await onBeforeRemove?.(selected, id);
+          if (scopeKey() !== key || !ids.includes(id)) return;
+          previous = [...ids];
+          const position = ids.indexOf(id);
+          ids = ids.filter((_, itemIndex) => itemIndex !== position);
+          changed = true;
           onChange([...ids]);
           render();
           if (await onRemove?.(selected, id, previous) === false)
@@ -123,8 +132,10 @@ export function createComposerImages({ composer, prompt, button, input, strip,
         } catch (error) {
           const current = owner();
           if (`${current?.projectId}/${current?.sessionId}` === key) {
-            ids = previous;
-            onChange([...ids]);
+            if (changed) {
+              ids = previous;
+              onChange([...ids]);
+            }
             onError(error);
           }
         } finally {

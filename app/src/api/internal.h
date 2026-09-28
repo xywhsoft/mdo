@@ -119,6 +119,7 @@ bool MdoApiDraftAttachmentReferenced(const char* ProjectId,
     const char* SessionId, const char* Id, bool* Referenced);
 bool MdoApiQueueRoute(MdoApiContext* pContext);
 bool MdoApiQueueItemRoute(MdoApiContext* pContext);
+bool MdoApiQueueDiscardRoute(MdoApiContext* pContext);
 bool MdoApiQueueInit(void);
 void MdoApiQueueUnit(void);
 bool MdoApiQueueAttachmentReferenced(const char* ProjectId,
