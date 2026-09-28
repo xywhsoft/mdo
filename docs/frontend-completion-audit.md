@@ -2,6 +2,8 @@
 
 本清单以 `app_bak/wwwroot` 的可操作行为为基线，而不是以页面长得相似或单元测试通过为完成标准。`docs/frontend-migration.md` 记录每次实现和验证；这里记录当前还需要什么证据。审计更新：2026-09-28，基线提交 `f9e2c4c`。
 
+普通图片移除的暂时 DELETE 失败已接入重试清理：旧单文件 Home `.build/mdo-packed-docks-owgpfb2e` 留下孤立 `.bin/.json`；修复后 Home `.build/mdo-packed-docks-2qw_rivh` 由第二次 DELETE 清空附件目录，草稿引用也为空，页面无脚本错误。Windows/Linux 有界门禁通过。页面关闭前仍未成功重试的持久清理、操作系统原生拖放与实体设备触控尚待验收，详见[迁移记录](frontend-migration.md#2026-09-28图片从草稿移除后重试清理孤立附件)。
+
 运行创建失败后的跨会话复核已有单文件页面证据：Home `.build/mdo-packed-docks-gpatqxoj` 中首次运行 POST 被代理拒绝，离开再返回仍显示待确认消息与人工重试入口，未自动补发；点击重试后才发出第二次 POST 并完成一轮回复。脚本错误为空。320×350 的联网长表单末端输入框在模拟高度缩至 250px 时仍可见；实体软键盘与原生 WebView 仍待验收，详见[迁移记录](frontend-migration.md#2026-09-28运行创建失败后跨会话保留人工核对)。
 
 同一会话重叠加载的队列闸门已按最新加载持有者分离：Node 用例证明旧加载结束不会释放新加载，复核阻断也不会被导航清除。Windows 单文件 Home `.build/mdo-packed-docks-eqs41vij` 在 1.5 秒队列读取延迟下快速往返会话，随后一条本地消息仅产生一次队列和运行提交，回复及用量正常、无脚本错误。打包页尚未直接观测重叠期间的待发派发顺序；原生 WebView、实体移动端仍待验收，详见[迁移记录](frontend-migration.md#2026-09-28同一会话重叠加载不再提前放行待发队列)。

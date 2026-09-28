@@ -797,9 +797,11 @@ export async function boot() {
       if (!saved) return false;
       try { await api.deleteImage(owner.projectId, owner.sessionId, id); }
       catch (error) {
-        if (error?.code !== "attachment_in_use" &&
-            error?.code !== "attachment_not_found" && selectedKey === key)
-          showComposerError(error);
+        // The draft no longer references this image. A transient DELETE
+        // failure must use the same retry path as discarded uploads and
+        // removed queue items, even if the user has left this session.
+        if (error?.code !== "attachment_not_found")
+          promptQueue.rememberUnusedImages(owner.projectId, owner.sessionId, [id]);
       }
       return true;
     },
