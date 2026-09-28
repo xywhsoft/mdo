@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="zh-CN">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>mdo interleaved timeline probe</title>
+<link rel="stylesheet" href="/app/web/css/app.css">
+<style>
+  body { margin: 16px; }
+  .conversation { height: 260px; overflow-y: auto; }
+  #result { white-space: pre-wrap; overflow-wrap: anywhere; }
+</style>
+<div class="conversation"><p id="welcome"></p><ol id="timeline"></ol></div>
+<button id="to-bottom" type="button" hidden>To bottom</button>
+<textarea id="prompt"></textarea>
+<div id="toast-region"></div>
+<pre id="result"></pre>
+<script type="module">
+const { createTimelineView } = await import(
+  `/app/web/js/features/chat/timeline.js?fixture=${Date.now()}`);
+const { createResourceStore } = await import("/app/web/js/state/store.js");
+const events = [
+  { kind: "agent_start", event_id: 1, run_id: "run-1", agent_depth: 0,
+    user_message_sequence: 1, text: "Explain this", time: 1000000 },
+  { kind: "model_start", event_id: 2, run_id: "run-1", agent_turn: 1,
+    time: 2000000 },
+  { kind: "model_text_delta", event_id: 3, run_id: "run-1", agent_turn: 1,
+    model: "Ling", text: "Hel", time: 2100000 },
+  { kind: "model_reasoning_delta", event_id: 4, run_id: "run-1", agent_turn: 1,
+    text: "Think", time: 2200000 },
+  { kind: "model_text_delta", event_id: 5, run_id: "run-1", agent_turn: 1,
+    model: "Ling", text: "lo", time: 2300000 },
+  { kind: "model_reasoning_delta", event_id: 6, run_id: "run-1", agent_turn: 1,
+    text: " again", time: 2400000 },
+  { kind: "task_updated", event_id: 7, run_id: "run-1", task_id: 4,
+    text: "Background task completed", terminal: true, time: 2500000 },
+  { kind: "model_text_delta", event_id: 8, run_id: "run-1", agent_turn: 1,
+    model: "Ling", text: " world", time: 2600000 },
+  { kind: "model_done", event_id: 9, run_id: "run-1", agent_turn: 1,
+    success: true, input_tokens: 10, output_tokens: 3, time: 3000000 },
+  { kind: "agent_done", event_id: 10, run_id: "run-1",
+    success: true, time: 3100000 },
+];
+const store = createResourceStore();
+const feedbackStore = createResourceStore({ projectId: "qa", sessionId: "one",
+  items: new Map() });
+createTimelineView({ container: document.querySelector("#timeline"),
+  welcome: document.querySelector("#welcome"),
+  toBottom: document.querySelector("#to-bottom"), store, feedbackStore,
+  onFork() {}, onFeedback() {}, onEdit() {}, onRetry() {} });
+const nextFrame = () => new Promise((resolve) => requestAnimationFrame(resolve));
+try {
+  store.setData({ projectId: "qa", sessionId: "one", events: events.slice(0, 7) });
+  await nextFrame();
+  const timeline = document.querySelector("#timeline");
+  const early = timeline.querySelector('[data-kind="assistant"]');
+  const streaming = timeline.querySelectorAll('[data-kind="assistant"]').length === 1 &&
+    early.querySelector(".timeline-body")?.textContent === "Hello" &&
+    timeline.querySelectorAll('[data-kind="reasoning"]').length === 1;
+  early.querySelector('[data-timeline-action$="/copy"]').focus();
+  const focusKey = document.activeElement.dataset.timelineAction;
+  store.setData({ projectId: "qa", sessionId: "one", events });
+  await nextFrame();
+  const answer = timeline.querySelector('[data-kind="assistant"]');
+  const passed = streaming &&
+    timeline.querySelectorAll('[data-kind="assistant"]').length === 1 &&
+    timeline.querySelectorAll('[data-kind="reasoning"]').length === 1 &&
+    timeline.querySelectorAll('[data-kind="task"]').length === 1 &&
+    answer.querySelector(".timeline-body")?.textContent === "Hello world" &&
+    answer.querySelectorAll('[data-timeline-action*="feedback-"]').length === 2 &&
+    answer.querySelector(".timeline-stats")?.textContent.includes("3") &&
+    document.activeElement.dataset.timelineAction === focusKey;
+  const result = document.querySelector("#result");
+  result.dataset.passed = String(passed);
+  result.textContent = JSON.stringify({ passed, streaming,
+    answerCount: timeline.querySelectorAll('[data-kind="assistant"]').length,
+    answerText: answer.querySelector(".timeline-body")?.textContent,
+    focusedAction: document.activeElement.dataset.timelineAction }, null, 2);
+} catch (error) {
+  const result = document.querySelector("#result");
+  result.dataset.passed = "false";
+  result.textContent = error.stack ?? String(error);
+}
+</script>
+</html>

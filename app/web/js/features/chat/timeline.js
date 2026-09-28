@@ -9,11 +9,12 @@ function modelKey(event, epoch) {
   return `${event.run_id || event.agent_id || event.event_id}-${epoch}-${event.agent_turn || 0}`;
 }
 
-function appendOrCreate(items, event, kind, role, key) {
-  let item = items.at(-1);
-  if (!item || item.key !== key || item.kind !== kind) {
+function appendOrCreate(items, streams, event, kind, role, key) {
+  let item = streams.get(key);
+  if (!item) {
     item = { key, kind, role, text: "", time: event.time, state: "running", meta: "" };
     items.push(item);
+    streams.set(key, item);
   }
   item.text += event.text ?? "";
   return item;
@@ -23,6 +24,7 @@ export function eventsToTimeline(events, historyLost = false) {
   const items = [];
   const tools = new Map();
   const modelStarts = new Map();
+  const streams = new Map();
   const promptsByRun = new Map();
   const runEpochs = new Map();
   // An explicit history boundary already explains why earlier events are
@@ -69,7 +71,7 @@ export function eventsToTimeline(events, historyLost = false) {
         }
         break;
       case "model_reasoning_delta": {
-        const thought = appendOrCreate(items, event, "reasoning",
+        const thought = appendOrCreate(items, streams, event, "reasoning",
           t("timeline.reasoning", {}, "思考"),
           `reasoning-${modelKey(event, epoch)}`);
         thought.runKey = runKey;
@@ -78,7 +80,7 @@ export function eventsToTimeline(events, historyLost = false) {
       }
       case "model_text_delta":
         {
-          const answer = appendOrCreate(items, event, "assistant", event.model || "Agent", `assistant-${modelKey(event, epoch)}`);
+          const answer = appendOrCreate(items, streams, event, "assistant", event.model || "Agent", `assistant-${modelKey(event, epoch)}`);
           answer.runKey = runKey;
           answer.runEpoch = epoch;
           answer.retryPrompt = promptsByRun.get(runKey);
