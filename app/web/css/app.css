@@ -1566,6 +1566,17 @@ select:focus-visible,
 }
 
 @media (max-width: 760px) {
+  :root[data-visual-viewport-reduced]
+    :is(#new-session-dialog, #session-action-dialog, #message-edit-dialog) {
+    position: fixed;
+    top: calc(var(--app-visual-top) + 8px);
+    bottom: auto;
+    max-height: calc(var(--app-visual-height) - 16px);
+    margin-block: 0;
+  }
+  :root[data-visual-viewport-reduced]
+    :is(#new-session-dialog, #session-action-dialog, #message-edit-dialog)
+    .dialog-card { max-height: calc(var(--app-visual-height) - 16px); }
   /* A software keyboard may shorten only visualViewport, leaving height media
      queries at the original layout height. Keep settings usable in that case. */
   .app-shell[data-compact-visual-viewport] .settings-workspace {

@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="zh-CN">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>mdo message dialog keyboard probe</title>
+<link rel="stylesheet" href="/app/web/css/app.css?dialog-keyboard=2">
+<div class="app-shell" id="shell"><main class="workspace"></main></div>
+<dialog class="new-session-dialog" id="message-edit-dialog" aria-labelledby="message-edit-title">
+  <form class="dialog-card">
+    <header><div><h2 id="message-edit-title">编辑消息</h2>
+      <p>会撤回此消息及之后的对话，然后在当前会话重新发送。</p></div></header>
+    <div class="dialog-fields message-edit-fields">
+      <label>消息内容 <textarea required rows="8">保留当前草稿</textarea></label>
+    </div>
+    <footer><button class="secondary-button" type="button">取消</button>
+      <button class="primary-button" type="submit">保存并重新发送</button></footer>
+  </form>
+</dialog>
+<pre id="result"></pre>
+<script type="module">
+import { trackMobileViewport } from "/app/web/js/features/shell/mobile-viewport.js?dialog-keyboard=3";
+const shell = document.querySelector("#shell");
+const dialog = document.querySelector("#message-edit-dialog");
+const viewport = Object.assign(new EventTarget(),
+  { height: innerHeight, offsetTop: 0, scale: 1 });
+const win = Object.assign(new EventTarget(),
+  { innerHeight, visualViewport: viewport });
+trackMobileViewport(shell, Object.assign(new EventTarget(), { matches: true }), win);
+dialog.showModal();
+const frame = () => new Promise((resolve) => requestAnimationFrame(() =>
+  requestAnimationFrame(resolve)));
+await frame();
+viewport.height = 250;
+viewport.dispatchEvent(new Event("resize"));
+await frame();
+const input = dialog.querySelector("textarea");
+const footer = dialog.querySelector("footer");
+const visible = { top: dialog.getBoundingClientRect().top,
+  bottom: dialog.getBoundingClientRect().bottom,
+  height: dialog.getBoundingClientRect().height,
+  inputTop: input.getBoundingClientRect().top,
+  footerBottom: footer.getBoundingClientRect().bottom };
+viewport.offsetTop = 20;
+viewport.dispatchEvent(new Event("scroll"));
+await frame();
+const panned = { top: dialog.getBoundingClientRect().top,
+  bottom: dialog.getBoundingClientRect().bottom };
+viewport.offsetTop = innerHeight - viewport.height;
+viewport.dispatchEvent(new Event("scroll"));
+await frame();
+const bottomPanned = { top: dialog.getBoundingClientRect().top,
+  bottom: dialog.getBoundingClientRect().bottom,
+  shellOverride: shell.style.getPropertyValue("--app-visible-height") };
+viewport.height = innerHeight;
+viewport.offsetTop = 0;
+viewport.dispatchEvent(new Event("resize"));
+await frame();
+const restored = { top: dialog.getBoundingClientRect().top,
+  height: dialog.getBoundingClientRect().height };
+const result = { visible, panned, bottomPanned, restored, passed:
+  visible.top >= 0 && visible.bottom <= 250 &&
+  visible.inputTop < visible.footerBottom && visible.footerBottom <= 250 &&
+  panned.top >= 28 && panned.bottom <= 270 &&
+  bottomPanned.top >= 458 && bottomPanned.bottom <= 700 &&
+  bottomPanned.shellOverride === "" &&
+  restored.height > visible.height };
+document.querySelector("#result").dataset.passed = String(result.passed);
+document.querySelector("#result").textContent = JSON.stringify(result, null, 2);
+</script>
+</html>
