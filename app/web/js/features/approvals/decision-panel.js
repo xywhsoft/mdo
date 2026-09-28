@@ -7,7 +7,7 @@ function contentKey({ expires_in_ms, ...content }) {
   return JSON.stringify(content);
 }
 
-export function createDecisionPanel({ container, summary, store, onChanged }) {
+export function createDecisionPanel({ container, summary, store, onChanged, onDrained }) {
   let state = store.get();
   const argumentsOpen = new Map();
   const cards = new Map();
@@ -25,6 +25,8 @@ export function createDecisionPanel({ container, summary, store, onChanged }) {
           ? t("decision.allowed", { tool }, `已允许 ${tool} 本次执行`)
           : t("decision.denied", { tool }, `已拒绝 ${tool} 本次执行`));
       await onChanged?.();
+      if (state.status === "ready" && Number(state.data?.total ?? 0) === 0)
+        onDrained?.();
     } catch (error) {
       toast(approvalDecisionStatus(key) === "submitted"
         ? t("decision.submittedRefreshFailed", {}, "决策已提交，但状态刷新未完成")

@@ -480,6 +480,13 @@ export async function boot() {
     summary: $("#approval-summary"),
     store: approvalsStore,
     onChanged: () => Promise.all([loadTasks(), loadRuns()]),
+    onDrained: () => {
+      if (!mobileLayout.matches || shell.dataset.inspector !== "open" ||
+          $("#decisions-tab").getAttribute("aria-selected") !== "true" ||
+          document.activeElement !== $("#decisions-tab")) return;
+      setDrawer("inspector", false, { persist: false });
+      if (!prompt.disabled) prompt.focus({ preventScroll: true });
+    },
   });
   createConversationDocks({
     container: $("#conversation-docks"), navigation, tasksStore, approvalsStore,
@@ -1141,12 +1148,20 @@ export async function boot() {
       if (!activeRun || document.hidden) return;
       try {
         const run = await readRun(activeRun.id);
+        const returnFocus = document.activeElement === stop;
         setRun(run);
         await Promise.all([refreshSelectedTimeline(), refreshSelectedAsks()]);
         if (terminalState(run)) {
           await Promise.all([loadSessions(), loadRuns(), loadTasks(), loadRecovery()]);
           await refreshSelectedQueue();
-          prompt.focus();
+          if (returnFocus &&
+              (document.activeElement === stop ||
+                document.activeElement === document.body) &&
+              !prompt.disabled &&
+              shell.dataset.inspector !== "open" &&
+              shell.dataset.sidebar !== "open" &&
+              !document.querySelector("dialog[open]"))
+            prompt.focus({ preventScroll: true });
           return;
         }
         scheduleRunPoll();

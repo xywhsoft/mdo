@@ -2,6 +2,8 @@
 
 本清单以 `app_bak/wwwroot` 的可操作行为为基线，而不是以页面长得相似或单元测试通过为完成标准。`docs/frontend-migration.md` 记录每次实现和验证；这里记录当前还需要什么证据。审计更新：2026-09-28，基线提交 `f9e2c4c`。
 
+移动检查器中处理最后一项审批后，空决策页会关闭并返回对话；运行结束也不再抢走其他面板的焦点。Windows 单文件 Home `.build/mdo-packed-docks-vgckmsog` 在 390×500 验证询问→审批→成功工具结果、面板关闭及输入焦点，并验证 4 秒有界运行结束后所选检查器标签仍获焦；页面无横向溢出或脚本错误。Windows/Linux 有界门禁通过，根目录 `mdo.exe` 已重建。实体触控和原生 WebView 尚待验收，详见[迁移记录](frontend-migration.md#2026-09-28移动决策完成后返回对话且运行结束不抢焦点)。
+
 短屏长询问现先露出标题与问题开头。Windows 单文件 Home `.build/mdo-packed-docks-9buh8ki9` 在 320×350 验证完整问题可读、选项可下滚并提交、回复完成后输入焦点恢复；390×500 的独立 Home 验证标题、问题、选项仍同屏可读，均无横向溢出或脚本错误。Windows/Linux 有界门禁通过，根目录 `mdo.exe` 已重建。实体软键盘、触控与原生 WebView 仍待验收，详见[迁移记录](frontend-migration.md#2026-09-28短屏长询问先显示问题开头)。
 
 图片上传期间的完整斜杠命令现可通过发送按钮或 Enter 执行，普通消息仍等上传结束。Windows 单文件 Home `.build/mdo-packed-docks-25ciy4kz` 在三次延迟图片上传中验证 `/help` 两条路径、刷新后图片草稿与输入焦点、普通消息按钮禁用及恢复，代理没有队列或运行 POST，脚本错误为空。Windows/Linux 有界门禁通过，根目录 `mdo.exe` 已重建。实体移动端粘贴、触控及原生 WebView 仍待验收，详见[迁移记录](frontend-migration.md#2026-09-28图片上传期间保持斜杠命令可执行)。
