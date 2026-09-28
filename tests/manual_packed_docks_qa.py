@@ -237,8 +237,24 @@ class BoundedDelayProxy(BaseHTTPRequestHandler):
         if (self.command == "POST" and self.path.startswith("/api/v1/projects/")
                 and "/sessions/" in self.path and
                 self.path.endswith("/attachments")):
-            print("QA attachment POST", flush=True)
+            with self.server.count_lock:
+                self.server.attachment_posts += 1
+                count = self.server.attachment_posts
+            print(f"QA attachment POST #{count}", flush=True)
             time.sleep(self.server.attachment_delay_seconds)
+            if self.server.fail_first_attachment and count == 1:
+                payload = json.dumps({"ok": False, "error": {
+                    "code": "attachment_store_failed",
+                    "message": "Synthetic attachment failure"
+                }}).encode()
+                self.send_response(503)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Content-Length", str(len(payload)))
+                self.send_header("Connection", "close")
+                self.end_headers()
+                self.wfile.write(payload)
+                self.close_connection = True
+                return
         if (self.command == "GET" and self.path in
                 {"/lang/en-US.json", "/lang/ru-RU.json"}):
             print(f"QA locale GET {self.path}", flush=True)
@@ -504,6 +520,8 @@ parser.add_argument("--queue-read-delay-ms", type=int, default=0,
                     help="delay queue GETs by 0-5000 ms for review-focus QA")
 parser.add_argument("--attachment-delay-ms", type=int, default=0,
                     help="delay attachment POSTs by 0-5000 ms for paste/drop QA")
+parser.add_argument("--fail-first-attachment", action="store_true",
+                    help="reject the first attachment POST for queued-upload QA")
 parser.add_argument("--run-delay-ms", type=int, default=0,
                     help="delay run POSTs by 0-5000 ms for composer handoff QA")
 parser.add_argument("--create-delay-ms", type=int, default=0,
@@ -702,7 +720,8 @@ try:
     if (args.approval_delay_ms or args.ask_delay_ms or args.task_cancel_delay_ms
             or args.run_cancel_delay_ms
             or args.queue_delay_ms or args.queue_read_delay_ms
-            or args.attachment_delay_ms or args.run_delay_ms
+            or args.attachment_delay_ms or args.fail_first_attachment
+            or args.run_delay_ms
             or args.create_delay_ms or args.project_delay_ms
             or args.locale_delay_ms or args.fail_first_project
             or args.history_delay_ms
@@ -723,6 +742,8 @@ try:
         proxy.queue_delay_seconds = args.queue_delay_ms / 1000
         proxy.queue_read_delay_seconds = args.queue_read_delay_ms / 1000
         proxy.attachment_delay_seconds = args.attachment_delay_ms / 1000
+        proxy.fail_first_attachment = args.fail_first_attachment
+        proxy.attachment_posts = 0
         proxy.run_delay_seconds = args.run_delay_ms / 1000
         proxy.create_delay_seconds = args.create_delay_ms / 1000
         proxy.project_delay_seconds = args.project_delay_ms / 1000
