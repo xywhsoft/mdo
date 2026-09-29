@@ -9,6 +9,7 @@
 <script type="module">
 const { createComposerImages } = await import(
   `/app/web/js/features/chat/composer-images.js?fixture=${Date.now()}`);
+const { api } = await import("/app/web/js/api/client.js");
 
 const root = document.querySelector("#cases");
 const a = "a".repeat(32);
@@ -81,6 +82,8 @@ function createCase(label, initialRoute, ensureSession) {
     },
     onChange: (value) => changes.push({ session: route.sessionId, value }),
     onUploading() {}, onError: (error) => errors.push(error.message),
+    onDiscardedUpload: (owner, id) => api.deleteImage(owner.projectId,
+      owner.sessionId, id),
   });
   function add(name = "probe.png", type = "image/png") {
     const transfer = new DataTransfer();
@@ -109,8 +112,19 @@ function createCase(label, initialRoute, ensureSession) {
     return pasteClipboard([image],
       [{ type: "image/png", getAsFile: () => image }]);
   }
+  function dropItemOnly() {
+    const image = new File([new Uint8Array([1])], "dropped.png",
+      { type: "image/png" });
+    const event = new Event("drop", { bubbles: true, cancelable: true });
+    Object.defineProperty(event, "dataTransfer", { value: {
+      types: [], files: [],
+      items: [{ kind: "file", type: "image/png", getAsFile: () => image }],
+    } });
+    composer.dispatchEvent(event);
+    return event.defaultPrevented;
+  }
   return { images, button, strip, output, changes, errors, add,
-    pasteItemOnly, pasteFilesOnly, pasteBoth,
+    pasteItemOnly, pasteFilesOnly, pasteBoth, dropItemOnly,
     setModel(value) { selectedModelId = value; modelSelect.value = value;
       images.refresh(); },
     setRoute(value) { route = value; images.set([]); } };
@@ -209,6 +223,18 @@ try {
   clipboardBoth.output.dataset.passed = String(bothPassed);
   clipboardBoth.output.textContent = JSON.stringify({ bothPassed,
     bothHandled, uploads: bothUploads, errors: clipboardBoth.errors }, null, 2);
+
+  const droppedItem = createCase("仅提供 item 的拖放图片",
+    { projectId: "qa", sessionId: "drop-item-only" });
+  const dropHandled = droppedItem.dropItemOnly();
+  await until(() => droppedItem.images.get().join() === b);
+  const dropUploads = uploadTypes.filter((item) =>
+    item.session === "drop-item-only");
+  const dropPassed = dropHandled && droppedItem.images.get().join() === b &&
+    dropUploads.length === 1 && droppedItem.errors.length === 0;
+  droppedItem.output.dataset.passed = String(dropPassed);
+  droppedItem.output.textContent = JSON.stringify({ dropPassed,
+    dropHandled, uploads: dropUploads, errors: droppedItem.errors }, null, 2);
 
   const incompatible = createCase("图片草稿与模型切换",
     { projectId: "qa", sessionId: "image-draft" });

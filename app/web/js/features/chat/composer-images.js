@@ -25,6 +25,22 @@ function hasDraggedFiles(transfer) {
     (transfer.files?.length ?? 0) > 0;
 }
 
+function droppedFiles(transfer) {
+  const files = [...(transfer?.files ?? [])];
+  if (files.length) return files;
+  // Some WebViews expose a file only through items, including at drop time.
+  // Prefer files when available so the same image is not uploaded twice.
+  return [...(transfer?.items ?? [])].filter((item) => item.kind === "file")
+    .map((item) => {
+      const file = typeof item.getAsFile === "function" ? item.getAsFile() : null;
+      if (!file) return null;
+      const mime = imageUploadType(file) ||
+        ((!file.type || file.type === "application/octet-stream") &&
+          TYPES.has(item.type) ? item.type : "");
+      return { file, mime };
+    }).filter(Boolean);
+}
+
 function pastedImages(clipboard) {
   // Some WebViews expose pasted images only through DataTransfer.items.
   // Prefer those entries to avoid uploading the same file twice when both
@@ -379,7 +395,7 @@ export function createComposerImages({ composer, prompt, button, input, strip,
     if (!hasDraggedFiles(event.dataTransfer)) return;
     event.preventDefault();
     clearDragTarget();
-    void addFiles(event.dataTransfer?.files ?? []);
+    void addFiles(droppedFiles(event.dataTransfer));
   });
   // A file released outside the composer would otherwise replace the page in
   // some browsers, taking an unsent draft with it. Leave other drop targets

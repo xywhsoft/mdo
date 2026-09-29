@@ -2,6 +2,8 @@
 
 本清单以 `app_bak/wwwroot` 的可操作行为为基线，而不是以页面长得相似或单元测试通过为完成标准。`docs/frontend-migration.md` 记录每次实现和验证；这里记录当前还需要什么证据。审计更新：2026-09-30，基线提交 `f9e2c4c`。
 
+2026-09-30 增量：附件拖放现兼容放下时仍只有 `DataTransfer.items`、没有 `files` 的 WebView 视图。生产模块浏览器夹具先复现“已拦截但零上传”，修复后一次 PNG 上传进入附件；其余八个上传、剪贴板和模型兼容场景均通过。Windows/Linux 有界门禁及 21 个运行探针通过，Windows 另通过便携 WebView2 Home 和 20 秒启动；根目录 `mdo.exe` SHA-256 为 `9975083f809ddff576d0139f6e26950639d9e842e8ffed28674c1ced635ce75d`，Linux 包为 `fe7194e30ece68ba66d253f5c408f7dc4afb4ac06bcb41a044899d6704dd4adf`。操作系统原生拖放与实体移动端仍待验收，详见[迁移记录](frontend-migration.md#2026-09-30拖放图片可从-item-only-数据读取)。
+
 2026-09-30 增量：320×350 单文件诊断页的“重新检测”现在跨迁移目录重绘保留焦点；进行中按钮保持不可重复操作。旧包复现焦点落到根部，新包正常检测后回原按钮；注入一次本地 GET 失败时，错误留在迁移分组，第二次检测恢复来源卡。扩展页 Skill 刷新回归通过，两个页面无横向溢出和脚本错误。Windows/Linux 有界门禁及 21 个运行探针通过，Windows 另通过便携 WebView2 Home 和 20 秒启动；根目录 `mdo.exe` SHA-256 为 `06d51492d785c47ecea0fc899ef7bad7f7d7c72da9762626d2ec1397e47f28c6`，Linux 包为 `fec23d58443ec9c5b9f892768c7071979466ad0d64750b3062a2e007110990ae`。实体触控及其他原生 WebView 待验，详见[迁移记录](frontend-migration.md#2026-09-30诊断重新检测保留焦点与原位重试)。
 
 2026-09-30 增量：扩展设置的 Skill、Module、MCP 刷新操作现跨目录重绘保留按钮焦点与进行中状态。旧单文件页复现 Skill 刷新后焦点落到页面根部；新单文件页的三项刷新都回原按钮。注入一次 Skill GET 失败后，错误仅占 Skill 分组，按钮可原位重试并恢复列表，浏览器脚本错误为空。Windows/Linux 有界门禁与 21 个运行探针通过，Windows 另通过便携 WebView2 Home 和 20 秒启动；根目录 `mdo.exe` SHA-256 为 `dc4937aa4b4f76d29c1974cca6ec5e1980d2f4ab7db489e33f0e7aab242c9d7a`，Linux 包为 `7296cbfd7389b78edcbb208bf068e7fab808836d1d12808b0f328c3a1c474f99`。便携目录取舍已由用户确认；偶发启动空壳、实体触控及其他原生 WebView 待验。详见[迁移记录](frontend-migration.md#2026-09-30扩展目录刷新保留操作位置)。
