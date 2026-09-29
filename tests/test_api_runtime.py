@@ -2264,6 +2264,55 @@ def run_probe(host: Path) -> None:
                 for filler_id in filler_ids:
                     (attachment_dir / f"{filler_id}.bin").unlink()
                     (attachment_dir / f"{filler_id}.json").unlink()
+                status, _, body = request(port, "POST", attachments_path,
+                    body=png_bytes[:32],
+                    headers={"Content-Type": "image/png"})
+                assert status == 201, (status, body)
+                orphan = json.loads(body)["data"]
+                orphan_meta_path = attachment_dir / f"{orphan['id']}.json"
+                orphan_meta = json.loads(orphan_meta_path.read_text(
+                    encoding="utf-8"))
+                orphan_meta["created_at"] = old_time
+                orphan_meta_path.write_text(json.dumps(orphan_meta),
+                                            encoding="utf-8")
+                status, _, body = request(port, "POST", attachments_path,
+                    body=png_bytes[:32],
+                    headers={"Content-Type": "image/png"})
+                assert status == 201, (status, body)
+                recent = json.loads(body)["data"]
+                data_only = attachment_dir / ("f" * 32 + ".bin")
+                data_only.write_bytes(png_bytes[:32])
+                old_seconds = time.time() - 2 * 86400
+                os.utime(data_only, (old_seconds, old_seconds))
+                meta_only = attachment_dir / ("e" * 32 + ".json")
+                meta_only.write_text(json.dumps({
+                    "schema_version": 1, "id": "e" * 32,
+                    "mime_type": "image/png", "size": 32,
+                    "created_at": old_time}), encoding="utf-8")
+                recent_data_only = attachment_dir / ("d" * 32 + ".bin")
+                recent_data_only.write_bytes(png_bytes[:32])
+                damaged_data = attachment_dir / ("c" * 32 + ".bin")
+                damaged_meta = attachment_dir / ("c" * 32 + ".json")
+                damaged_data.write_bytes(png_bytes[:32])
+                os.utime(damaged_data, (old_seconds, old_seconds))
+                damaged_meta.write_text("{broken", encoding="utf-8")
+                assert request(port, "GET", draft_path)[0] == 200
+                assert not orphan_meta_path.exists()
+                assert not (attachment_dir / f"{orphan['id']}.bin").exists()
+                assert not data_only.exists() and not meta_only.exists()
+                assert recent_data_only.exists()
+                assert damaged_data.exists() and damaged_meta.exists()
+                assert (attachment_dir / f"{image['id']}.bin").exists()
+                assert (attachment_dir / f"{recent['id']}.bin").exists()
+                assert request(port, "DELETE", recent["url"])[0] == 200
+                recent_data_only.unlink()
+                damaged_data.unlink()
+                damaged_meta.unlink()
+                # Later cases reuse this fixture image after removing it from
+                # the draft; stop treating that intentional fixture as stale.
+                meta["created_at"] = int(time.time() * 1_000_000)
+                image_meta_path.write_text(json.dumps(meta),
+                                           encoding="utf-8")
                 status, _, body = request(port, "PUT", draft_path,
                     body=b'{"revision":2,"text":"","attachments":[]}',
                     headers={"Content-Type": "application/json"})

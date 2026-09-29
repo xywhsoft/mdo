@@ -559,8 +559,10 @@ static MdoAttachmentDiscardResult MdoAttachmentDiscardLocked(
     return MDO_ATTACHMENT_DISCARD_REMOVED;
 }
 
-/* Reclaim only old uploads when a new upload would exceed its quota. Recent
- * uploads may still be in a browser tab whose draft has not been saved. */
+/* Reclaim only old uploads on session reopen or quota pressure. Recent
+ * uploads may still be in a browser tab whose draft has not been saved.
+ * A crash can leave either half of the data/metadata pair; for a data-only
+ * file, use its modification time only when metadata is truly absent. */
 static bool MdoAttachmentCollectExpired(const char* Project,
     const char* Session, const char* Directory)
 {
@@ -575,8 +577,7 @@ static bool MdoAttachmentCollectExpired(const char* Project,
     bool Ok = true;
     xtime Cutoff = xrtNow() - MDO_ATTACHMENT_GRACE_US;
     size_t i;
-    if ( !MdoSessionAttachmentPruneRemoved(Project, Session) ||
-         !MdoHomeExternalStat(Directory, &Exists, &Info) ) return false;
+    if ( !MdoHomeExternalStat(Directory, &Exists, &Info) ) return false;
     if ( !Exists ) return true;
     if ( Info.Type != XFILE_TYPE_DIRECTORY ) return false;
     Dir = MdoHomeOpenDirectory(Directory, XDIR_STAT);
@@ -585,18 +586,50 @@ static bool MdoAttachmentCollectExpired(const char* Project,
     while ( (Next = xrtDirNext(Dir, &Entry)) == XDIR_NEXT_ITEM ) {
         xtime Stamp = 0;
         char Id[MDO_ATTACHMENT_ID_LENGTH + 1u];
+        char Name[MDO_ATTACHMENT_ID_LENGTH + 6u];
+        char Path[MDO_SESSION_PATH_CAPACITY];
+        xfileinfo Counterpart;
+        bool CounterpartExists = false;
+        bool DataFile;
+        bool MetaFile;
         if ( ++Visited > MDO_ATTACHMENT_SWEEP_MAX * 4u ) {
             Ok = false;
             break;
         }
         if ( Entry.Info.Type != XFILE_TYPE_FILE ||
-             Entry.Name.Size != MDO_ATTACHMENT_ID_LENGTH + 4u ||
-             memcmp(Entry.Name.Data + MDO_ATTACHMENT_ID_LENGTH,
-                ".bin", 4u) != 0 ||
+             (Entry.Name.Size != MDO_ATTACHMENT_ID_LENGTH + 4u &&
+              Entry.Name.Size != MDO_ATTACHMENT_ID_LENGTH + 5u) ||
              !MdoAttachmentHexId(xrtStrViewN(Entry.Name.Data,
                 MDO_ATTACHMENT_ID_LENGTH), Id) ) continue;
-        if ( !MdoAttachmentCreatedAt(Project, Session, Id, &Stamp) ||
-             Stamp > Cutoff ) continue;
+        DataFile = Entry.Name.Size == MDO_ATTACHMENT_ID_LENGTH + 4u &&
+            memcmp(Entry.Name.Data + MDO_ATTACHMENT_ID_LENGTH,
+                ".bin", 4u) == 0;
+        MetaFile = Entry.Name.Size == MDO_ATTACHMENT_ID_LENGTH + 5u &&
+            memcmp(Entry.Name.Data + MDO_ATTACHMENT_ID_LENGTH,
+                ".json", 5u) == 0;
+        if ( !DataFile && !MetaFile ) continue;
+        if ( DataFile &&
+             !MdoAttachmentCreatedAt(Project, Session, Id, &Stamp) ) {
+            snprintf(Name, sizeof(Name), "%s.json", Id);
+            if ( !MdoAttachmentPath(Path, sizeof(Path), Project, Session,
+                    Name) ||
+                 !MdoHomeExternalStat(Path, &CounterpartExists,
+                    &Counterpart) ) { Ok = false; break; }
+            if ( CounterpartExists ||
+                 (Entry.Info.Available & XFILE_INFO_MODIFY_TIME) == 0u ||
+                 Entry.Info.Modified <= 0 ) continue;
+            Stamp = Entry.Info.Modified;
+        } else if ( MetaFile ) {
+            if ( !MdoAttachmentCreatedAt(Project, Session, Id, &Stamp) )
+                continue; /* Corrupt metadata needs manual inspection. */
+            snprintf(Name, sizeof(Name), "%s.bin", Id);
+            if ( !MdoAttachmentPath(Path, sizeof(Path), Project, Session,
+                    Name) ||
+                 !MdoHomeExternalStat(Path, &CounterpartExists,
+                    &Counterpart) ) { Ok = false; break; }
+            if ( CounterpartExists ) continue; /* The data entry owns it. */
+        }
+        if ( Stamp > Cutoff ) continue;
         if ( CandidateCount == MDO_ATTACHMENT_SWEEP_MAX ) {
             Ok = false;
             break;
@@ -606,12 +639,30 @@ static bool MdoAttachmentCollectExpired(const char* Project,
     if ( Next == XDIR_NEXT_ERROR ) Ok = false;
     if ( !xrtDirClose(Dir) ) Ok = false;
     if ( !Ok ) return false;
+    if ( CandidateCount != 0u &&
+         !MdoSessionAttachmentPruneRemoved(Project, Session) ) return false;
     for ( i = 0u; i < CandidateCount; ++i ) {
         MdoAttachmentDiscardResult Result = MdoAttachmentDiscardLocked(
             Project, Session, Candidates[i]);
         if ( Result == MDO_ATTACHMENT_DISCARD_ERROR ) return false;
     }
     return true;
+}
+
+bool MdoApiAttachmentSweepExpired(const char* ProjectId,
+    const char* SessionId)
+{
+    char Directory[MDO_SESSION_PATH_CAPACITY];
+    bool Ok;
+    int Written;
+    if ( ProjectId == NULL || SessionId == NULL ) return false;
+    Written = snprintf(Directory, sizeof(Directory),
+        "sessions/%s/%s/attachments", ProjectId, SessionId);
+    if ( Written <= 0 || (size_t)Written >= sizeof(Directory) ||
+         !MdoApiAttachmentLock() ) return false;
+    Ok = MdoAttachmentCollectExpired(ProjectId, SessionId, Directory);
+    MdoApiAttachmentUnlock();
+    return Ok;
 }
 
 bool MdoApiAttachmentRoute(MdoApiContext* Context)

@@ -172,6 +172,10 @@ bool MdoApiAttachmentsInit(void);
 void MdoApiAttachmentsUnit(void);
 bool MdoApiAttachmentLock(void);
 void MdoApiAttachmentUnlock(void);
+/* Best-effort cleanup for old, unreferenced uploads when a session reopens.
+ * The caller must not hold the draft or queue lock. */
+bool MdoApiAttachmentSweepExpired(const char* ProjectId,
+    const char* SessionId);
 bool MdoApiReplyImage(MdoApiContext* pContext, const void* pBody,
     size_t BodySize, cstr ContentType);
 bool MdoAttachmentReadForRun(const char* Project, const char* Session,

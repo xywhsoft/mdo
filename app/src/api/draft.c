@@ -737,6 +737,13 @@ bool MdoApiDraftRoute(MdoApiContext* Context)
         "draft_conflict", "The draft changed in another window", NULL);
     if ( Data == NULL ) return MdoApiReplyError(Context, 503u,
         "draft_unavailable", "The draft could not be read or saved", NULL);
+    if ( Context->ParamCount == 2u &&
+         Context->Request->head->MethodCode == XHTTP_METHOD_GET ) {
+        /* A damaged orphan is left for inspection. Either way, cleanup
+         * cannot turn a valid draft read into an error response. */
+        (void)MdoApiAttachmentSweepExpired(ProjectId, SessionId);
+        xrtClearError();
+    }
     return MdoApiReplySuccessTake(Context, 200u, Data, NULL);
 }
 
