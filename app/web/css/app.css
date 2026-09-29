@@ -1043,6 +1043,11 @@ select:focus-visible,
 .toast { padding: 10px 13px; border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--surface-raised); box-shadow: 0 8px 28px rgb(0 0 0 / 12%); font-size: 12px; animation: toast-in .18s ease-out; }
 .toast[data-tone="error"] { border-color: color-mix(in srgb, var(--danger) 42%, var(--border)); color: var(--danger); }
 
+.startup-failure { position: fixed; z-index: 200; inset: 0; display: grid; place-items: center; padding: 16px; background: var(--bg); }
+.startup-failure-card { width: min(400px, 100%); padding: 24px; border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--surface-raised); box-shadow: var(--shadow-dialog); }
+.startup-failure-card h2 { margin: 0 0 8px; font-size: 18px; }
+.startup-failure-card p { margin: 0 0 20px; color: var(--muted); font-size: 13px; line-height: 1.6; }
+
 .settings-workspace {
   position: absolute;
   z-index: 8;

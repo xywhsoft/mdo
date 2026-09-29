@@ -28,7 +28,7 @@ class FrontendContractTests(unittest.TestCase):
         self.assertIn('<aside class="inspector"', self.index)
         self.assertIn('id="timeline" aria-live="polite"', self.index)
         self.assertIn('id="composer"', self.index)
-        self.assertIn('type="module" src="/js/main.js"', self.index)
+        self.assertIn('import("/js/main.js")', self.index)
         self.assertNotRegex(self.index, r"\son[a-z]+=")
 
     def test_local_module_graph_is_closed(self) -> None:

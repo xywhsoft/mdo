@@ -717,6 +717,25 @@
   </dialog>
 
   <div class="toast-region" id="toast-region" aria-live="polite" aria-atomic="true"></div>
-  <script type="module" src="/js/main.js"></script>
+  <div class="startup-failure" id="startup-failure" role="alertdialog" aria-modal="true"
+       aria-labelledby="startup-failure-title" aria-describedby="startup-failure-description" hidden>
+    <div class="startup-failure-card">
+      <h2 id="startup-failure-title">墨斗界面未能启动</h2>
+      <p id="startup-failure-description">页面资源可能暂时不可用。重新载入后会回到当前任务。</p>
+      <button class="primary-button" id="startup-retry-button" type="button">重新载入</button>
+    </div>
+  </div>
+  <script type="module">
+    const failure = document.getElementById("startup-failure");
+    const retry = document.getElementById("startup-retry-button");
+    retry.addEventListener("click", () => window.location.reload());
+    import("/js/main.js").then(({ start }) => start()).catch((error) => {
+      console.error("Workspace startup failed", error);
+      document.getElementById("app-shell").inert = true;
+      document.querySelector(".skip-link").inert = true;
+      failure.hidden = false;
+      retry.focus();
+    });
+  </script>
 </body>
 </html>
