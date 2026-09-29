@@ -68,6 +68,7 @@
   "timeline.like": "点赞",
   "timeline.dislike": "点踩",
   "timeline.usage": "{input} 输入 / {output} 输出 tokens",
+  "timeline.runUsage": "本轮 {calls} 次模型调用 · {input} 输入 / {output} 输出 tokens",
   "timeline.loadError": "无法读取时间线",
   "messageEdit.title": "编辑消息",
   "messageEdit.description": "会撤回此消息及之后的对话，然后在当前会话重新发送。原消息中的图片会保留。",

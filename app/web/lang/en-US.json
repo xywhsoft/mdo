@@ -68,6 +68,7 @@
   "timeline.like": "Like",
   "timeline.dislike": "Dislike",
   "timeline.usage": "{input} input / {output} output tokens",
+  "timeline.runUsage": "{calls} model calls this run · {input} input / {output} output tokens",
   "timeline.loadError": "Could not load timeline",
   "messageEdit.title": "Edit message",
   "messageEdit.description": "This message and later conversation will be withdrawn, then resent in this session. Images from the original message will be kept.",

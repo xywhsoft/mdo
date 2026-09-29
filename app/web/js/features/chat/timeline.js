@@ -40,6 +40,7 @@ export function eventsToTimeline(events, historyLost = false) {
   const tools = new Map();
   const modelStarts = new Map();
   const toolDurations = new Map();
+  const runUsages = new Map();
   const streams = new Map();
   const promptsByRun = new Map();
   const runEpochs = new Map();
@@ -57,6 +58,9 @@ export function eventsToTimeline(events, historyLost = false) {
     switch (event.kind) {
       case "agent_start":
         runEpochs.set(runKey, Number(event.event_id) || 0);
+        runUsages.set(`${runKey}:${Number(event.event_id) || 0}`,
+          { calls: 0, input: 0, output: 0, modelSeconds: 0,
+            valid: true, durationValid: true });
         if (event.agent_depth === 0 && Number(event.user_message_sequence) > 0)
           promptsByRun.set(runKey, {
             sequence: Number(event.user_message_sequence),
@@ -107,6 +111,25 @@ export function eventsToTimeline(events, historyLost = false) {
         }
         break;
       case "model_done": {
+        const usage = runUsages.get(`${runKey}:${epoch}`);
+        if (usage) {
+          const input = Number(event.input_tokens);
+          const output = Number(event.output_tokens);
+          const startedAt = modelStarts.get(modelKey(event, epoch));
+          const elapsed = (Number(event.time) - Number(startedAt)) / 1e6;
+          usage.calls += 1;
+          if (!Number.isSafeInteger(input) || input < 0 ||
+              !Number.isSafeInteger(output) || output < 0 ||
+              !Number.isSafeInteger(usage.input + input) ||
+              !Number.isSafeInteger(usage.output + output)) usage.valid = false;
+          else if (usage.valid) {
+            usage.input += input;
+            usage.output += output;
+          }
+          if (startedAt == null || !Number.isFinite(elapsed) || elapsed <= 0)
+            usage.durationValid = false;
+          else if (usage.durationValid) usage.modelSeconds += elapsed;
+        }
         for (const thought of items) {
           if (thought.kind !== "reasoning" ||
               thought.key !== `reasoning-${modelKey(event, epoch)}`) continue;
@@ -231,23 +254,48 @@ export function eventsToTimeline(events, historyLost = false) {
               (item.kind !== "reasoning" && item.kind !== "tool")) continue;
           item.state = terminalState;
         }
-        const answer = [...items].reverse().find((item) => item.kind === "assistant" &&
+        let answer = [...items].reverse().find((item) => item.kind === "assistant" &&
           item.runKey === runKey && item.runEpoch === epoch);
+        if (!answer && (event.text || !event.success)) {
+          answer = {
+            key: `done-${event.event_id}`, kind: "assistant",
+            role: event.model || "Agent", text: event.text || "",
+            state: terminalState, time: event.time,
+            runKey, runEpoch: epoch, retryPrompt: promptsByRun.get(runKey),
+            textTruncated: Boolean(event.text_truncated),
+            copySpans: event.text_truncated ? [{ eventId: event.event_id,
+              kind: event.kind, start: 0, end: (event.text || "").length }] : [],
+          };
+          items.push(answer);
+        }
         if (answer) {
           answer.state = terminalState;
           const toolSeconds = toolDurations.get(`${runKey}:${epoch}`);
           if (Number.isFinite(toolSeconds) && toolSeconds > 0)
             answer.toolDurationSeconds = toolSeconds;
+          const usage = runUsages.get(`${runKey}:${epoch}`);
+          if (usage?.valid && usage.calls === 1 && answer.inputTokens == null) {
+            answer.inputTokens = usage.input;
+            answer.outputTokens = usage.output;
+            if (usage.durationValid && usage.modelSeconds > 0) {
+              answer.modelDurationSeconds = usage.modelSeconds;
+              if (usage.output > 0)
+                answer.tokensPerSecond = usage.output / usage.modelSeconds;
+            }
+          }
+          if (usage?.valid && usage.calls > 1) {
+            answer.runUsage = { calls: usage.calls, input: usage.input,
+              output: usage.output };
+            if (usage.durationValid && usage.modelSeconds > 0) {
+              answer.modelDurationSeconds = usage.modelSeconds;
+              if (usage.output > 0)
+                answer.tokensPerSecond = usage.output / usage.modelSeconds;
+            } else {
+              delete answer.modelDurationSeconds;
+              delete answer.tokensPerSecond;
+            }
+          }
         }
-        else if (event.text || !event.success) items.push({
-          key: `done-${event.event_id}`, kind: "assistant",
-          role: event.model || "Agent", text: event.text || "",
-          state: terminalState, time: event.time,
-          runKey, runEpoch: epoch, retryPrompt: promptsByRun.get(runKey),
-          textTruncated: Boolean(event.text_truncated),
-          copySpans: event.text_truncated ? [{ eventId: event.event_id,
-            kind: event.kind, start: 0, end: (event.text || "").length }] : [],
-        });
         break;
       }
       case "history_truncated":
@@ -583,7 +631,10 @@ function timelineNode(item, handlers, feedback, projectId, sessionId, writable,
         }
       }
       const stats = [];
-      if (item.inputTokens || item.outputTokens)
+      if (item.runUsage)
+        stats.push(t("timeline.runUsage", item.runUsage,
+          `本轮 ${item.runUsage.calls} 次模型调用 · ${item.runUsage.input} 输入 / ${item.runUsage.output} 输出 tokens`));
+      else if (item.inputTokens || item.outputTokens)
         stats.push(t("timeline.usage", { input: item.inputTokens || 0,
           output: item.outputTokens || 0 },
         `${item.inputTokens || 0} 输入 / ${item.outputTokens || 0} 输出 tokens`));
