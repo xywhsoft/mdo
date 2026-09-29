@@ -82,7 +82,10 @@ export function createSchedulePanel({ panel, projectsStore, agentsStore, modelsS
 
   function setActionFeedback(message, error = false, id = "") {
     actionFeedback = { message, id };
-    if (!message) list.querySelector(".schedule-card-feedback")?.remove();
+    if (!message) {
+      for (const feedback of list.querySelectorAll(".schedule-card-feedback"))
+        feedback.hidden = true;
+    }
     actionStatus.textContent = id ? "" : message;
     actionStatus.dataset.tone = error ? "error" : "neutral";
   }
@@ -166,6 +169,76 @@ export function createSchedulePanel({ panel, projectsStore, agentsStore, modelsS
     fields.label.focus({ preventScroll: true });
   }
 
+  // Keep card nodes stable while an active run is polled. Replacing the list
+  // each second discards text selection and keyboard focus inside the cards.
+  function syncText(node, value) {
+    if (node.textContent !== value) node.textContent = value;
+  }
+
+  function scheduleCard(id) {
+    const card = element("article", { className: "schedule-card",
+      attrs: { role: "group", tabindex: "-1" } });
+    card.dataset.scheduleId = id;
+    const heading = element("div", { className: "schedule-card-heading" });
+    const running = element("span", { className: "schedule-badge" });
+    running.hidden = true;
+    heading.append(element("strong"), element("span", { className: "schedule-badge" }), running);
+    const feedback = element("p", { className: "schedule-card-feedback",
+      attrs: { role: "status" } });
+    feedback.hidden = true;
+    const actions = element("div", { className: "schedule-card-actions" });
+    for (const [action, className] of [
+      ["edit", "secondary-button"], ["enabled", "secondary-button"],
+      ["run", "secondary-button"], ["history", "secondary-button"],
+      ["delete", "danger-link"],
+    ]) {
+      const button = element("button", { className, attrs: { type: "button" } });
+      button.dataset.scheduleId = id;
+      button.dataset.scheduleAction = action;
+      actions.append(button);
+    }
+    card.append(heading, element("p"), element("p"), feedback, actions);
+    return card;
+  }
+
+  function syncScheduleCard(card, item, data) {
+    if (card.getAttribute("aria-label") !== item.label)
+      card.setAttribute("aria-label", item.label);
+    const [heading, frequency, next, feedback, actions] = card.children;
+    const [label, enabledBadge, runningBadge] = heading.children;
+    syncText(label, item.label);
+    syncText(enabledBadge, item.enabled
+      ? t("schedule.enabled", {}, "已启用") : t("schedule.paused", {}, "已暂停"));
+    runningBadge.hidden = !item.active_runs;
+    if (item.active_runs) syncText(runningBadge, t("schedule.running", {}, "运行中"));
+    syncText(frequency, `${t(FREQUENCY_KEY[item.frequency], {}, item.frequency)} · ${item.project_id} · ${item.agent_id}`);
+    const nextTime = clockText(item.next_occurrence_at);
+    syncText(next, t("schedule.nextTrigger", { next: nextTime, count: item.claim_count },
+      `下次：${nextTime} · 已触发 ${item.claim_count} 次`));
+    const message = item.id === actionFeedback.id ? actionFeedback.message : "";
+    feedback.hidden = !message;
+    if (message) syncText(feedback, message);
+    const titles = {
+      edit: t("schedule.edit", {}, "编辑"),
+      enabled: item.enabled ? t("schedule.pause", {}, "暂停") : t("schedule.enable", {}, "启用"),
+      run: t("schedule.run", {}, "立即运行"),
+      history: t("schedule.history", {}, "历史"),
+      delete: t("schedule.delete", {}, "删除"),
+    };
+    for (const button of actions.children) {
+      const action = button.dataset.scheduleAction;
+      syncText(button, titles[action]);
+      const disabled = busy || (action === "run" &&
+        (!data.enabled || data.persistence_fault ||
+          item.active_runs >= item.max_concurrent_runs));
+      if (button.disabled !== disabled) button.disabled = disabled;
+      if (action === "run") button.title = disabled && !busy
+        ? (!data.enabled ? t("schedule.runDisabledGlobal", {}, "请先在 Agent 设置中启用计划任务") :
+          data.persistence_fault ? t("schedule.runDisabledStorage", {}, "计划任务存储不可用") :
+            t("schedule.runDisabledLimit", {}, "已达到并发运行上限")) : "";
+    }
+  }
+
   function render(state) {
     if (activeRefresh) { clearTimeout(activeRefresh); activeRefresh = 0; }
     if (state.status === "loading") {
@@ -194,58 +267,29 @@ export function createSchedulePanel({ panel, projectsStore, agentsStore, modelsS
     const active = document.activeElement;
     const activeId = active?.dataset?.scheduleId;
     const activeAction = active?.dataset?.scheduleAction;
-    clear(list);
+    const oldCards = new Map([...list.children]
+      .filter((node) => node.dataset.scheduleId)
+      .map((node) => [node.dataset.scheduleId, node]));
+    const kept = new Set();
     if (!items.length) {
-      list.append(element("p", { className: "schedule-empty",
-        text: t("schedule.empty", {}, "还没有计划任务。填写下方表单即可创建。") }));
-      return;
+      const empty = list.querySelector(".schedule-empty") ??
+        element("p", { className: "schedule-empty" });
+      syncText(empty, t("schedule.empty", {}, "还没有计划任务。填写下方表单即可创建。"));
+      if (list.firstChild !== empty) list.prepend(empty);
+      kept.add(empty);
     }
-    for (const item of items) {
-      const card = element("article", { className: "schedule-card",
-        attrs: { role: "group", "aria-label": item.label, tabindex: "-1" } });
-      card.dataset.scheduleId = item.id;
-      const heading = element("div", { className: "schedule-card-heading" });
-      heading.append(element("strong", { text: item.label }),
-        element("span", { className: "schedule-badge", text: item.enabled
-          ? t("schedule.enabled", {}, "已启用") : t("schedule.paused", {}, "已暂停") }));
-      if (item.active_runs) heading.append(element("span", { className: "schedule-badge",
-        text: t("schedule.running", {}, "运行中") }));
-      card.append(heading, element("p", { text: `${t(FREQUENCY_KEY[item.frequency], {}, item.frequency)} · ${item.project_id} · ${item.agent_id}` }),
-        element("p", { text: t("schedule.nextTrigger", {
-          next: clockText(item.next_occurrence_at), count: item.claim_count,
-        }, `下次：${clockText(item.next_occurrence_at)} · 已触发 ${item.claim_count} 次`) }));
-      const actions = element("div", { className: "schedule-card-actions" });
-      for (const [action, text, className] of [
-        ["edit", t("schedule.edit", {}, "编辑"), "secondary-button"],
-        ["enabled", item.enabled ? t("schedule.pause", {}, "暂停") : t("schedule.enable", {}, "启用"), "secondary-button"],
-        ["run", t("schedule.run", {}, "立即运行"), "secondary-button"],
-        ["history", t("schedule.history", {}, "历史"), "secondary-button"],
-        ["delete", t("schedule.delete", {}, "删除"), "danger-link"],
-      ]) {
-        const button = element("button", { className, text, attrs: { type: "button" } });
-        button.dataset.scheduleId = item.id;
-        button.dataset.scheduleAction = action;
-        button.disabled = busy || (action === "run" &&
-          (!data.enabled || data.persistence_fault ||
-            item.active_runs >= item.max_concurrent_runs));
-        if (action === "run" && button.disabled && !busy)
-          button.title = !data.enabled ? t("schedule.runDisabledGlobal", {}, "请先在 Agent 设置中启用计划任务") :
-            data.persistence_fault ? t("schedule.runDisabledStorage", {}, "计划任务存储不可用") :
-              t("schedule.runDisabledLimit", {}, "已达到并发运行上限");
-        actions.append(button);
-      }
-      if (actionFeedback.message && item.id === actionFeedback.id)
-        card.append(element("p", { className: "schedule-card-feedback",
-          text: actionFeedback.message, attrs: { role: "status" } }));
-      card.append(actions);
-      list.append(card);
+    items.forEach((item, index) => {
+      const card = oldCards.get(item.id) ?? scheduleCard(item.id);
+      syncScheduleCard(card, item, data);
+      if (list.children[index] !== card)
+        list.insertBefore(card, list.children[index] ?? null);
+      kept.add(card);
+    });
+    for (const child of [...list.children]) {
+      if (!kept.has(child)) child.remove();
     }
-    if (activeId && activeAction)
-      [...list.querySelectorAll("button")].find((button) =>
-        button.dataset.scheduleId === activeId && button.dataset.scheduleAction === activeAction)?.focus();
-    else if (activeId && active?.classList.contains("schedule-card"))
-      [...list.children].find((card) => card.dataset.scheduleId === activeId)
-        ?.focus({ preventScroll: true });
+    if (activeId && document.activeElement !== active)
+      focusSchedule(activeId, activeAction);
   }
 
   function focusSchedule(id, action = "", reveal = false) {
