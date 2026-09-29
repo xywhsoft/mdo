@@ -60,16 +60,16 @@ function todoCard(items, expanded, focusKey, onToggle) {
 }
 
 function reconcileCards(root, nodes) {
+  const kept = new Set(nodes);
+  for (const child of [...root.children]) {
+    if (!kept.has(child)) child.remove();
+  }
   for (const [index, node] of nodes.entries()) {
     const current = root.children[index];
     if (current === node) continue;
-    // Keep a surviving sibling attached when another card changes or leaves.
-    if (node.parentElement === root || (current && nodes.includes(current)))
-      root.insertBefore(node, current ?? null);
-    else if (current) current.replaceWith(node);
-    else root.append(node);
+    // A surviving card stays mounted when an earlier card disappears.
+    root.insertBefore(node, current ?? null);
   }
-  while (root.children.length > nodes.length) root.lastElementChild.remove();
 }
 
 function approvalContentKey({ expires_in_ms, ...content }) {
@@ -435,7 +435,7 @@ export function createConversationDocks({ container, navigation, tasksStore, app
         .map((item) => String(item.id)));
       for (const key of argumentsOpen.keys()) if (!live.has(key)) argumentsOpen.delete(key);
     }
-    if (focusedDock) {
+    if (focusedDock && !container.contains(document.activeElement)) {
       const replacement = [...container.querySelectorAll("[data-dock-focus]")]
         .find((node) => node.dataset.dockFocus === focusedDock);
       (replacement ?? document.querySelector("#prompt"))?.focus({ preventScroll: true });

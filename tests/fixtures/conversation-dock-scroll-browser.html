@@ -202,12 +202,21 @@ async function check() {
   const todoSelectionAfterTaskChange = statusRoot.querySelector(".todo-dock") === currentTodo &&
     selection.toString() === "Inspect UI again";
   selection.removeAllRanges();
+  const survivingTask = statusRoot.querySelector(".conversation-dock:not(.todo-dock)");
+  range.selectNodeContents(survivingTask.querySelector(".conversation-dock-list li span:last-child"));
+  selection.addRange(range);
+  todoStore.setData({ projectId: "qa", sessionId: "seat", items: [] });
+  await nextFrame();
+  const taskSelectionAfterTodoRemoved = statusRoot.firstElementChild === survivingTask &&
+    selection.toString() === "Check files";
+  selection.removeAllRanges();
   const passed = askReadable && restoredDraft && approvalReadable && actionVisible &&
     approvalFocusRestored && approvalBeforeTodo &&
     arrivals.map(([kind]) => kind).join(",") === "ask,approval" &&
     expandedReachable && approvalSelectionStable && approvalChangeReplaced &&
     todoSelectionStable && todoMetadataStable && todoChangeReplaced && taskSelectionStable &&
     taskSelectionAfterTodoChange && taskChangeReplaced && todoSelectionAfterTaskChange &&
+    taskSelectionAfterTodoRemoved &&
     document.documentElement.scrollWidth <= innerWidth;
   const result = document.querySelector("#result");
   result.dataset.passed = innerWidth <= 420 ? String(passed) : "waiting";
@@ -216,6 +225,7 @@ async function check() {
     actionVisible, expandedReachable, approvalSelectionStable, approvalChangeReplaced,
     todoSelectionStable, todoMetadataStable, todoChangeReplaced, taskSelectionStable,
     taskSelectionAfterTodoChange, taskChangeReplaced, todoSelectionAfterTaskChange,
+    taskSelectionAfterTodoRemoved,
     approvalFocusRestored, approvalBeforeTodo,
     arrivals, viewport: innerWidth,
     documentWidth: document.documentElement.scrollWidth, passed });
