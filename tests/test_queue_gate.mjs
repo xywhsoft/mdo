@@ -26,3 +26,23 @@ test("manual review and navigation loads block independently", () => {
   finishAnother();
   assert.equal(gate.has("default/session-a"), true);
 });
+
+test("a detail refresh cannot release an unfinished runtime check", () => {
+  const gate = createQueueGate();
+  const finishRuntime = gate.beginLoad("default/session-a", "runtime");
+  const finishDetail = gate.beginLoad("default/session-a");
+  finishDetail();
+  assert.equal(gate.has("default/session-a"), true);
+  finishRuntime();
+  assert.equal(gate.has("default/session-a"), false);
+});
+
+test("a newer runtime check replaces an obsolete one", () => {
+  const gate = createQueueGate();
+  const finishOld = gate.beginLoad("default/session-a", "runtime");
+  const finishNew = gate.beginLoad("default/session-a", "runtime");
+  finishOld();
+  assert.equal(gate.has("default/session-a"), true);
+  finishNew();
+  assert.equal(gate.has("default/session-a"), false);
+});

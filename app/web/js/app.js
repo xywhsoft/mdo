@@ -1592,7 +1592,7 @@ export async function boot() {
     void selectTodo(projectId, sessionId);
     void selectAsks(projectId, sessionId);
     void selectFeedback(projectId, sessionId);
-    const finishLoad = queueBlocked.beginLoad(key);
+    const finishLoad = queueBlocked.beginLoad(key, "runtime");
     try {
       await Promise.all([loadSession(projectId, sessionId), loadRuns(), loadRecovery(),
         promptQueue.select(projectId, sessionId)]);
@@ -2456,8 +2456,10 @@ export async function boot() {
   const initial = await Promise.allSettled([
     ...(!explicitSession ? [sessionsReady, catalogsReady] : []),
     settingsReady,
-    loadRecovery(),
-    loadRuns(),
+    // The explicit route's navigation load already owns these reads and holds
+    // its queue gate until they settle. A second boot read can stall the
+    // startup overlay without making dispatch any safer.
+    ...(!explicitSession ? [loadRecovery(), loadRuns()] : []),
   ]);
   reportInitialLoad(initial);
 

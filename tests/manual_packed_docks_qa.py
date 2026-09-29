@@ -251,6 +251,16 @@ Object.defineProperty(navigator, 'clipboard', {
         self.forward()
 
     def forward(self):
+        if self.command == "GET" and self.path == "/api/v1/runs":
+            with self.server.count_lock:
+                self.server.startup_runs_reads += 1
+                startup_read = self.server.startup_runs_reads
+            if startup_read <= 2 and self.server.startup_runs_delay_seconds:
+                print(f"QA delaying runs GET #{startup_read} at "
+                      f"{time.monotonic():.3f}", flush=True)
+                time.sleep(self.server.startup_runs_delay_seconds)
+                print(f"QA released runs GET #{startup_read} at "
+                      f"{time.monotonic():.3f}", flush=True)
         if (self.command == "GET" and self.path in
                 {"/api/v1/sessions", "/api/v1/models"}):
             with self.server.count_lock:
@@ -495,7 +505,7 @@ Object.defineProperty(navigator, 'clipboard', {
             with self.server.count_lock:
                 self.server.queue_posts += 1
                 count = self.server.queue_posts
-            print(f"QA queue POST #{count}", flush=True)
+            print(f"QA queue POST #{count} at {time.monotonic():.3f}", flush=True)
             time.sleep(self.server.queue_delay_seconds)
             drop_response = self.server.drop_first_queue_response and count == 1
             if self.server.fail_first_queue and count == 1:
@@ -527,7 +537,7 @@ Object.defineProperty(navigator, 'clipboard', {
             with self.server.count_lock:
                 self.server.run_posts += 1
                 count = self.server.run_posts
-            print(f"QA run POST #{count}", flush=True)
+            print(f"QA run POST #{count} at {time.monotonic():.3f}", flush=True)
             time.sleep(self.server.run_delay_seconds)
             drop_run_response = count == self.server.drop_run_response_number
             if self.server.fail_first_run and count == 1:
@@ -748,6 +758,8 @@ parser.add_argument("--startup-bootstrap-delay-ms", type=int, default=0,
                     help="delay initial bootstrap GET by 0-30000 ms")
 parser.add_argument("--startup-catalog-delay-ms", type=int, default=0,
                     help="delay initial session-list and model GETs by 0-30000 ms")
+parser.add_argument("--startup-runs-delay-ms", type=int, default=0,
+                    help="delay first two runs GETs by 0-30000 ms")
 parser.add_argument("--startup-workspace-delay-ms", type=int, default=0,
                     help="delay initial workspace-state GET by 0-30000 ms")
 parser.add_argument("--agent-profile-fixture", action="store_true",
@@ -771,6 +783,8 @@ if not 0 <= args.startup_bootstrap_delay_ms <= 30000:
     parser.error("--startup-bootstrap-delay-ms must be between 0 and 30000")
 if not 0 <= args.startup_catalog_delay_ms <= 30000:
     parser.error("--startup-catalog-delay-ms must be between 0 and 30000")
+if not 0 <= args.startup_runs_delay_ms <= 30000:
+    parser.error("--startup-runs-delay-ms must be between 0 and 30000")
 if not 0 <= args.startup_workspace_delay_ms <= 30000:
     parser.error("--startup-workspace-delay-ms must be between 0 and 30000")
 if not 0 <= args.ask_delay_ms <= 5000:
@@ -945,6 +959,7 @@ try:
             or args.fail_first_module or args.delay_first_module_ms
             or args.startup_task_delay_ms or args.startup_bootstrap_delay_ms
             or args.startup_catalog_delay_ms
+            or args.startup_runs_delay_ms
             or args.startup_workspace_delay_ms):
         proxy = BoundedDelayProxyServer(("127.0.0.1", 0), BoundedDelayProxy)
         proxy.upstream_port = port
@@ -959,6 +974,8 @@ try:
         proxy.startup_bootstrap_reads = 0
         proxy.startup_catalog_delay_seconds = args.startup_catalog_delay_ms / 1000
         proxy.startup_catalog_reads = set()
+        proxy.startup_runs_delay_seconds = args.startup_runs_delay_ms / 1000
+        proxy.startup_runs_reads = 0
         proxy.startup_workspace_delay_seconds = args.startup_workspace_delay_ms / 1000
         proxy.startup_workspace_reads = 0
         proxy.approval_delay_seconds = args.approval_delay_ms / 1000
