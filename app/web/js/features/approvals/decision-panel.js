@@ -148,11 +148,19 @@ export function createDecisionPanel({ container, summary, store, onChanged, onDr
       nodes.push(cached.node);
     }
     for (const key of cards.keys()) if (!liveCards.has(key)) cards.delete(key);
-    if (container.children.length !== nodes.length ||
-        nodes.some((node, index) => container.children[index] !== node))
-      container.replaceChildren(...nodes);
+    // Mount only added or changed cards. Replacing the whole container when a
+    // new approval arrives detaches unchanged parameter text and loses the
+    // user's selection while they are reading it.
+    const kept = new Set(nodes);
+    for (const child of [...container.children]) {
+      if (!kept.has(child)) child.remove();
+    }
+    nodes.forEach((node, index) => {
+      if (container.children[index] !== node)
+        container.insertBefore(node, container.children[index] ?? null);
+    });
     if (scrollHost) scrollHost.scrollTop = previousScroll;
-    if (focused) {
+    if (focused && !container.contains(document.activeElement)) {
       const replacement = [...container.querySelectorAll("[data-decision-focus]")]
         .find((node) => node.dataset.decisionFocus === focused);
       (replacement ?? document.querySelector("#decisions-tab"))?.focus({ preventScroll: true });

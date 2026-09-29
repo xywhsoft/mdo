@@ -36,14 +36,40 @@ const samePre = pre === document.querySelector(".approval-arguments pre");
 const selectionKept = selection.toString().includes("python");
 const timerUpdated = card.querySelector(".approval-timeout").textContent.includes("240");
 const stable = sameCard && samePre && selectionKept && timerUpdated;
+store.setData({ total: 2, items: [{ ...item, expires_in_ms: 240000 },
+  { ...item, id: 8, tool: "read", expires_in_ms: 180000 }] });
+await nextFrame();
+const arrivalKeptCard = card === document.querySelector(".approval-card");
+const arrivalKeptSelection = selection.toString().includes("python");
+const arrivalSamePre = pre === card.querySelector(".approval-arguments pre");
+const arrivalKeptExpansion = card.querySelector("details").open;
+const arrivalAdded = document.querySelectorAll(".approval-card").length === 2;
+const arrivalStable = arrivalKeptCard && arrivalSamePre && arrivalKeptSelection &&
+  arrivalKeptExpansion && arrivalAdded;
 selection.removeAllRanges();
-store.setData({ total: 1, items: [{ ...item, arguments_json: '{"argv":["changed"]}' }] });
+const second = document.querySelectorAll(".approval-card")[1];
+second.querySelector("details").open = true;
+await nextFrame();
+const secondPre = second.querySelector(".approval-arguments pre");
+const secondRange = document.createRange();
+secondRange.selectNodeContents(secondPre);
+selection.addRange(secondRange);
+store.setData({ total: 2, items: [
+  { ...item, arguments_json: '{"argv":["changed"]}' },
+  { ...item, id: 8, tool: "read", expires_in_ms: 180000 },
+] });
 await nextFrame();
 const changed = card !== document.querySelector(".approval-card") &&
   document.querySelector(".approval-arguments pre")?.textContent.includes("changed");
+const unaffectedCard = second === document.querySelectorAll(".approval-card")[1];
+const unaffectedSelection = selection.toString().includes("python");
+const changedStable = changed && unaffectedCard && unaffectedSelection;
 const result = document.querySelector("#result");
-result.dataset.passed = String(stable && changed);
+result.dataset.passed = String(stable && arrivalStable && changedStable);
 result.textContent = JSON.stringify({ sameCard, samePre, selectionKept,
-  timerUpdated, stable, changed, passed: stable && changed });
+  timerUpdated, stable, arrivalKeptCard, arrivalKeptSelection,
+  arrivalSamePre, arrivalKeptExpansion, arrivalAdded, arrivalStable,
+  changed, unaffectedCard, unaffectedSelection, changedStable,
+  passed: stable && arrivalStable && changedStable });
 </script>
 </html>
