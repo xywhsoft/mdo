@@ -1463,3 +1463,11 @@ Windows/Linux 真实 xs/TCC API 探针验证顶层事件关联、模拟凭据尚
 发布门禁的单文件检查另暴露一个独立问题：Windows WebView 在 AppData 以可执行文件名选浏览器配置目录。门禁原先把临时测试包命名为 `mdo.exe`，读到了已有墨斗窗口的待提交前端状态，并在隔离目录自动创建会话。现在门禁保留测试包的 `mdo-release-a.exe` 文件名，避免借用用户的浏览器配置；这只修正了测试隔离，并未解决正式程序的 WebView 配置便携性，须在 xs/WebView 集成层另行设计和验证。
 
 Windows 完整有界发布门禁通过 114 项 Python、82 项 Node、72 个前端模块解析、21 个运行探针、确定性打包、单文件零旁路写入和 20 秒启动检查；Linux 门禁也通过。根目录 `mdo.exe` 与 Windows 包 SHA-256 均为 `7b5d167f90d4dbc4ab3c1b7d7b9fb52faad23ab00d540d2bed48d763cdf9e6a1`，Linux 包为 `371d1c6982fcc5c11dba1af525414a33f87158cf0f0d652b6e6fca9612d27934`。未做压力或高负载测试。
+
+## 2026-09-29：xs 支持显式 WebView2 用户数据目录
+
+追查单文件门禁的浏览器状态串用时，确认 vendored webview 0.12.0 的 Windows 后端默认把配置放在 AppData 下以 exe 文件名命名的目录，而既定 mdo 方案要求首次仅启动退出不产生外部目录、默认不写系统目录。这两项约束与 WebView2 初始化需要磁盘用户数据目录之间存在产品取舍，不能通过改一个默认路径来同时满足。
+
+xs 在提交 `7d28779` 增加可选 `window.profile_dir`：UTF-8 绝对路径或相对程序目录的本地路径，非法配置拒绝窗口启动，不回退 AppData；未配置时保持现有 xs 应用兼容行为。独立 Windows 短时真 WebView2 探针验证相对路径、含中文的绝对路径及上级跳转拒绝，三种场景均无按测试程序名生成的 AppData 配置。mdo 已将依赖锁升级到该 xs 提交，但内置 `xs.json` 尚未设置 `profile_dir`；正式程序仍沿用旧配置位置，不能将此阶段视为便携性修复完成。待确定首次启动的数据目录策略后，再接入 mdo 并验证 `MDO_HOME`、`--home`、搬移和重启。
+
+新依赖的 Windows 完整有界发布门禁通过 114 项 Python、82 项 Node、72 个模块解析、21 个运行探针、确定性打包、单文件零旁路写入和 20 秒启动检查；Linux 也完成宿主重编与相同有界门禁。根目录 `mdo.exe` 与 Windows 包 SHA-256 为 `482122473b4bb8a0891342321c6b0513c27b847fcb891a82c9424fb069c5794c`，Linux 包为 `26ceae038ee16ed6eb37e8596e596d362b4a7b82fdd7aeb9b9960c9190327a62`。未做压力或高负载测试。
