@@ -1704,6 +1704,14 @@ Windows 有界发布门禁通过 114 项 Python、101 项 Node、75 个前端模
 
 这次只扩展测试模型夹具，没有改动产品代码。夹具通过 Python 语法检查；根目录 `mdo.exe` 重新由锁定源码生成，SHA-256 仍为 `7e88df8fe1e75f245d339c4be42878fff76c88e133d79c059115b62357dc2513`。上一阶段的 Windows/Linux 有界发布门禁覆盖同一产品源码；本阶段的新增验证是上述真实打包页操作，不声称已覆盖其他原生 WebView 或实体设备剪贴板。
 
+## 2026-09-30：明确会话不等待宿主状态读取
+
+`boot()` 原来把 `/bootstrap` 与会话列表、模型目录和运行恢复等请求一起放进初始 `Promise.allSettled`。`/bootstrap` 只更新本地服务状态和初始化失败提示，却会阻止启动 Promise 完成；明确会话即使已经载入且输入可用，20 秒启动观察上限仍会误判为未启动并遮住工作区。现在该读取跟随任务、审批与管理资源在后台完成，宿主状态订阅照常更新 UI 和真正的初始化失败提示。
+
+隔离代理 `--startup-bootstrap-delay-ms 30000` 只延迟首次宿主状态 GET。旧单文件 Home `.build/mdo-packed-docks-gxdruq3m` 中，原会话“Packed docks QA”及输入框已可用，但根元素仍是 `loading`，20 秒后变成 `timeout` 且遮罩盖住会话。候选 Home `.build/mdo-packed-docks-vizufmuz` 在同样延迟期间已是 `ready`，原标题与可用输入保持，遮罩隐藏；延迟结束后状态改为“本地服务 0.1.0-dev”，浏览器脚本错误为空。这个受控案例不能说明此前静态模块请求均为 200 的偶发空壳具有相同根因，仍需在该故障当次抓取模块执行和原生 WebView2 状态。
+
+Windows 有界发布门禁通过 114 项 Python、101 项 Node、75 个前端模块解析、21 个运行探针、严格 C 编译、确定性打包、便携 WebView2 Home 与 20 秒单文件启动。Linux 独立 ext4 工作树通过同样的单元、模块、运行探针和确定性打包（跳过 GUI 启动）。根目录 `mdo.exe` 已从验证候选覆盖，SHA-256 为 `7aeab0d241d47a943813ef82eb193ce311d85ddc5fccc7d8929baf54924b6b42`；Linux 包为 `4df2b57c6e18681c7b104d2b19b97a010dd23a9a32949573b0b0f08b5c8bbfc2`。未做压力或高负载测试。
+
 ## 2026-09-29：项目级新任务草稿存储接口
 
 代码审计确认新任务在首次发送前共用 `data/draft.json`：切换项目时 `selectedKey` 仍为空，只有写前日志生成 `new_task` 后才阻止跨项目导航。因此未发送文本会跟随项目切换；旧版按懒会话 ID 分开保存草稿。新接口 `GET/HEAD/PUT /api/v1/projects/{project}/draft` 为合法项目 ID 提供独立的 `data/project-drafts/{project}.json`，沿用 revision 冲突、64 KiB 文本上限和 Home 原子写入。空草稿 GET 不创建文件；项目定义尚未建立时也可保存，因为现有新任务允许先选择默认或未登记项目。此接口只接收文本与可选输入配置，不接受图片、待提交意图、`new_task` 或运行核对标记；创建中的写前日志仍由全局 `/draft` 保存。
