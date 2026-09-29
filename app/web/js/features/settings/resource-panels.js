@@ -121,6 +121,7 @@ export function createResourcePanels({ agentsStore, stores, reload }) {
   const permissionsContainer = document.querySelector("#settings-permissions-list");
   const diagnosticsContainer = document.querySelector("#settings-diagnostics-list");
   const unsubscribers = [];
+  const pendingExtensionActions = new Set();
   let confirmingSource = "";
   let migrationResult = null;
   let migrationBusy = false;
@@ -128,52 +129,90 @@ export function createResourcePanels({ agentsStore, stores, reload }) {
   async function refreshCatalog(name) {
     await reloadCatalog(name);
     await reload(name);
+    const state = stores[name].get();
+    if (state.status === "error") throw state.error || new Error(t("resource.reloadFailed", {}, "目录刷新失败"));
     toast(t("resource.catalogRefreshed", { name }, `${name} 目录已刷新`));
+  }
+
+  function extensionButton(key) {
+    return [...extensionsContainer.querySelectorAll("[data-extension-action]")]
+      .find((button) => button.dataset.extensionAction === key);
+  }
+
+  // Store updates rebuild the catalog while a request is in flight. Keep the
+  // action focusable, and guard by identity rather than by a detached button.
+  function extensionAction(key, label, handler, tone = "neutral") {
+    const className = tone === "danger" ? "task-cancel"
+      : tone === "primary" ? "primary-button" : "secondary-button";
+    const button = element("button", { className, text: label, attrs: {
+      type: "button", "data-extension-action": key,
+    } });
+    if (pendingExtensionActions.has(key)) button.setAttribute("aria-disabled", "true");
+    button.addEventListener("click", async () => {
+      if (pendingExtensionActions.has(key)) return;
+      pendingExtensionActions.add(key);
+      button.setAttribute("aria-disabled", "true");
+      try { await handler(); }
+      catch (error) { toast(errorMessage(error), "error"); }
+      finally {
+        pendingExtensionActions.delete(key);
+        extensionButton(key)?.removeAttribute("aria-disabled");
+      }
+    });
+    return button;
   }
 
   createModelConfigPanel(modelsContainer);
 
   function renderExtensions() {
+    const focusedKey = extensionsContainer.contains(document.activeElement)
+      ? document.activeElement?.dataset.extensionAction : "";
     clear(extensionsContainer);
     const modules = stores.modules.get();
     const skills = stores.skills.get();
     const mcp = stores.mcp.get();
-    if ([modules, skills, mcp].some((state) => state.status === "error")) {
-      const failed = [modules, skills, mcp].find((state) => state.status === "error");
-      extensionsContainer.append(empty(errorMessage(failed.error)));
-      return;
-    }
     extensionsContainer.append(heading("Agent"));
     for (const agent of agentsStore.get().data?.items ?? []) {
       extensionsContainer.append(card(agent.name || agent.id, resourceDescription("agent", agent), [agent.id, permissionProfile(agent.permission_profile),
         t("resource.toolCount", { count: agent.tools?.length ?? 0 }, `${agent.tools?.length ?? 0} tools`),
         t("resource.skillCount", { count: agent.skills?.length ?? 0 }, `${agent.skills?.length ?? 0} Skills`)]));
     }
-    extensionsContainer.append(heading("Skill", action(t("resource.refresh", {}, "刷新"), () => refreshCatalog("skills"))));
-    for (const skill of skills.data?.items ?? []) {
+    extensionsContainer.append(heading("Skill", extensionAction("skills-reload",
+      t("resource.refresh", {}, "刷新"), () => refreshCatalog("skills"))));
+    if (skills.status === "error") extensionsContainer.append(empty(errorMessage(skills.error)));
+    for (const skill of skills.status === "error" ? [] : skills.data?.items ?? []) {
       extensionsContainer.append(card(skill.name || skill.id, resourceDescription("skill", skill),
         skillMetadata(skill)));
     }
-    extensionsContainer.append(heading("Module", action(t("resource.rebuild", {}, "重新编译"), () => refreshCatalog("modules"))));
-    for (const module of modules.data?.modules ?? []) {
+    extensionsContainer.append(heading("Module", extensionAction("modules-reload",
+      t("resource.rebuild", {}, "重新编译"), () => refreshCatalog("modules"))));
+    if (modules.status === "error") extensionsContainer.append(empty(errorMessage(modules.error)));
+    for (const module of modules.status === "error" ? [] : modules.data?.modules ?? []) {
       extensionsContainer.append(card(module.name || module.id, resourceDescription("module", module), [module.version,
         module.external ? t("resource.externalTcc", {}, "外部 TCC") : t("resource.builtin", {}, "内置"),
         t("resource.toolCount", { count: module.tool_count }, `${module.tool_count} tools`),
         t("resource.agentCount", { count: module.agent_count }, `${module.agent_count} agents`)]));
     }
-    extensionsContainer.append(heading("MCP", action(t("resource.reloadConfig", {}, "重载配置"), () => refreshCatalog("mcp"))));
-    if (!(mcp.data?.items ?? []).length) extensionsContainer.append(empty(t("resource.noMcp", {}, "尚未配置 MCP 服务器")));
-    for (const server of mcp.data?.items ?? []) {
-      const actions = [action(server.enabled ? t("resource.disable", {}, "停用") :
+    extensionsContainer.append(heading("MCP", extensionAction("mcp-reload",
+      t("resource.reloadConfig", {}, "重载配置"), () => refreshCatalog("mcp"))));
+    if (mcp.status === "error") extensionsContainer.append(empty(errorMessage(mcp.error)));
+    else if (!(mcp.data?.items ?? []).length) extensionsContainer.append(empty(t("resource.noMcp", {}, "尚未配置 MCP 服务器")));
+    for (const server of mcp.status === "error" ? [] : mcp.data?.items ?? []) {
+      const actions = [extensionAction(`mcp-toggle:${server.id}`, server.enabled ? t("resource.disable", {}, "停用") :
         t("resource.enable", {}, "启用"), async () => {
         await setMcpEnabled(server.id, !server.enabled);
         await reload("mcp");
       })];
-      if (server.enabled) actions.push(action(t("resource.refreshTools", {}, "刷新工具"), async () => { await refreshMcp(server.id); await reload("mcp"); }));
-      if (server.connected) actions.push(action(t("resource.disconnect", {}, "断开"), async () => { await disconnectMcp(server.id); await reload("mcp"); }, "danger"));
+      if (server.enabled) actions.push(extensionAction(`mcp-refresh:${server.id}`,
+        t("resource.refreshTools", {}, "刷新工具"), async () => { await refreshMcp(server.id); await reload("mcp"); }));
+      if (server.connected) actions.push(extensionAction(`mcp-disconnect:${server.id}`,
+        t("resource.disconnect", {}, "断开"), async () => { await disconnectMcp(server.id); await reload("mcp"); }, "danger"));
       extensionsContainer.append(card(server.name || server.id, server.description, [server.transport, resourceCode(server.state),
         t("resource.toolCount", { count: server.discovered_tool_count ?? 0 }, `${server.discovered_tool_count ?? 0} tools`)], actions));
     }
+    if (focusedKey) (extensionButton(focusedKey) ||
+      (focusedKey.startsWith("mcp-") ? extensionButton("mcp-reload") : null))
+      ?.focus({ preventScroll: true });
   }
 
   function renderPermissions(state) {

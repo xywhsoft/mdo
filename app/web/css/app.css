@@ -1308,6 +1308,8 @@ select:focus-visible,
 .resource-actions .secondary-button { min-height: 30px; padding: 0 9px; font-size: 10px; }
 .resource-actions .primary-button,
 .resource-actions .task-cancel { min-height: 30px; padding: 0 9px; font-size: 10px; }
+.resource-group-heading button[aria-disabled="true"],
+.resource-actions button[aria-disabled="true"] { opacity: .5; cursor: wait; }
 .migration-paths { display: grid; gap: 5px; margin: 10px 0 0; }
 .migration-paths > div { display: grid; min-width: 0; grid-template-columns: 34px minmax(0, 1fr); gap: 7px; }
 .migration-paths dt { color: var(--faint); font-size: 10px; }
