@@ -16,6 +16,17 @@ function selectedModel(models, id) {
   return models.find((model) => model.id === id) ?? null;
 }
 
+export function fillAgentOptions(select, agents) {
+  const previous = select.value;
+  clear(select);
+  for (const agent of agents) select.append(element("option", {
+    text: agent.name || agent.id, attrs: { value: agent.id },
+  }));
+  const available = [...select.options].map((option) => option.value);
+  select.value = available.includes(previous) ? previous :
+    available.includes("mdo.default") ? "mdo.default" : available[0] || "";
+}
+
 export function agentProfileDefaults(agent, fallback) {
   return {
     model_id: agent?.model || fallback.model_id,

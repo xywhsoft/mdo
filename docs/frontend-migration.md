@@ -10,6 +10,14 @@
 
 Windows/Linux 有界发布门禁均通过 114 项 Python、84 项 Node、72 个前端模块解析、21 个运行探针与确定性打包；Windows 还通过单文件零旁路写入及 20 秒启动检查。根目录 `mdo.exe` 已重建并与 Windows 发布包 SHA-256 `083eff884584b4a8edce4f3431348060b9f2cd7631ffc4e3be23fdd9719c0626` 一致，Linux 包 SHA-256 为 `2dc13ec23c1172db256e956c1e9673333dcd4b8c55f58a14d8b3428ad0b08754`。最终单文件包的实际弹窗切换与创建回放仍待单独验收；便携 WebView 配置与实体设备验收另见下文。未运行压力或高负载测试。
 
+## 2026-09-29：打包页自定义 Agent 创建链补验
+
+在隔离 Home 加入测试用 C Agent，目录按 ID 排序时 `qa.profile` 位于 `mdo.default` 前。前一包 `.build/mdo-packed-docks-1ynazdpb` 的“配置后创建任务”弹窗因此初始选中了 QA Agent；这会令用户无意间改用另一 Agent。现在目录初载或原选择已移除时明确选择 `mdo.default`，目录刷新则保留用户手动选中的 Agent。Node 回归覆盖三个时序。
+
+最终单文件 Home `.build/mdo-packed-docks-8xf736ky` 初开弹窗显示 Default、Ling 3.0 Tiny、中思考、询问权限；手动切到 QA Profile 后立即显示 Ling Text QA、高思考、只读。页面创建 `Agent profile packed QA` 后，服务端会话持久字段为 `agent_id=qa.profile`、`model_id=ling-3.0-tiny-text-qa`、`reasoning_effort=high`、`permission_profile=read-only`。从该页面发送 `PROFILE UI`，有界本地模型返回 `UI fixture completed.`，显示 7 输入 / 3 输出 tokens；刷新后 Agent、配置、两张消息卡与用量仍在，浏览器脚本错误为空。自定义 C Agent 夹具只写入隔离 Home，未加入产品内置目录。
+
+最终代码的 Windows/Linux 有界门禁均通过 114 项 Python、85 项 Node、72 个前端模块解析、21 个运行探针与确定性打包；Windows 单文件零旁路写入及 20 秒启动检查通过。根目录 `mdo.exe` 与 Windows 包 SHA-256 为 `1bffe7953bdfea4b45c3e0d15f0c2b35a87ac9ff765f5991802d8eab82e646f1`，Linux 包为 `d44556f53fb3954b5e36dba3895b76adabf2f4c132e13c6e83fa4a83e10a3339`。实体触控、原生 Linux WebView 和 macOS 仍待验收；未做压力或高负载测试。
+
 ## 2026-09-28：无明确会话 URL 时优先恢复正在运行的任务
 
 旧版走查记录指出，刷新后会自动选中仍在运行的会话并接续显示结果。新版启动时只按便携 Home 保存的上次会话选择，另一会话有活跃运行也会留在空闲任务页。现在仅在“继续上次任务”启动模式且 URL 没有明确选择时，从已载入的运行列表中选择最近的、仍非终态且会话处于进行中的任务；否则沿用上次会话。用户明确打开的会话 URL、“打开新任务”与“每次询问”保持原选择。Node 回归覆盖空闲上次会话、活跃任务、终态/不存在的运行、明确 URL 和其他两种启动模式。

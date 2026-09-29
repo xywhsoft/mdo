@@ -49,7 +49,8 @@ import { createImagePreview } from "./features/chat/image-preview.js";
 import { createSlashCommands } from "./features/chat/slash-commands.js";
 import { createFileMentions } from "./features/chat/file-mentions.js";
 import { trackComposerMenuRoom } from "./features/chat/composer-menu-room.js";
-import { applyAgentProfileDefaults, createComposerProfile, fillReasoningOptions } from
+import { applyAgentProfileDefaults, createComposerProfile, fillAgentOptions,
+  fillReasoningOptions } from
   "./features/chat/composer-profile.js";
 import { createTokenMeter } from "./features/chat/token-meter.js";
 import { createTaskPanel } from "./features/tasks/task-panel.js";
@@ -2022,18 +2023,13 @@ export async function boot() {
   function fillCatalogSelects() {
     const agentSelect = $("#agent-select");
     const modelSelect = $("#model-select");
-    const selectedAgent = agentSelect.value;
     const selectedModel = modelSelect.value;
-    clear(agentSelect);
+    fillAgentOptions(agentSelect, agentsStore.get().data?.items ?? []);
     clear(modelSelect);
-    for (const agent of agentsStore.get().data?.items ?? []) {
-      agentSelect.append(element("option", { text: agent.name || agent.id, attrs: { value: agent.id } }));
-    }
     for (const model of modelsStore.get().data?.models ?? []) {
       const suffix = model.free ? t("model.freeSuffix", {}, " · 免费") : "";
       modelSelect.append(element("option", { text: `${model.name || model.id}${suffix}`, attrs: { value: model.id } }));
     }
-    if (selectedAgent && [...agentSelect.options].some((option) => option.value === selectedAgent)) agentSelect.value = selectedAgent;
     if (selectedModel && [...modelSelect.options].some((option) => option.value === selectedModel)) modelSelect.value = selectedModel;
     const model = modelsStore.get().data?.models?.find((item) => item.id === modelSelect.value);
     fillReasoningOptions($("#new-session-reasoning"), model,

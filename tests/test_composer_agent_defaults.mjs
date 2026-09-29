@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { applyAgentProfileDefaults, createComposerProfile } from
+import { applyAgentProfileDefaults, createComposerProfile, fillAgentOptions } from
   "../app/web/js/features/chat/composer-profile.js";
 import { createResourceStore } from "../app/web/js/state/store.js";
 
@@ -98,4 +98,17 @@ test("new-session dialog applies a selected Agent's declared defaults", () => {
   assert.deepEqual([modelSelect.value, reasoningSelect.value,
     permissionSelect.value], ["missing", "medium", "balanced"]);
   assert.ok(modelSelect.options.some((option) => option.value === "missing"));
+});
+
+test("Agent catalog starts with the built-in default and preserves a manual choice", () => {
+  const select = new Select();
+  const agents = [{ id: "qa.profile", name: "QA Profile" },
+    { id: "mdo.default", name: "Default" }];
+  fillAgentOptions(select, agents);
+  assert.equal(select.value, "mdo.default");
+  select.value = "qa.profile";
+  fillAgentOptions(select, agents);
+  assert.equal(select.value, "qa.profile");
+  fillAgentOptions(select, agents.slice(1));
+  assert.equal(select.value, "mdo.default");
 });

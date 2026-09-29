@@ -652,6 +652,8 @@ parser.add_argument("--resume-verify", action="store_true",
                     help="let the local model verify a resumed run with a bounded read-only command")
 parser.add_argument("--image-capable", action="store_true",
                     help="enable image input in the isolated built-in model fixture")
+parser.add_argument("--agent-profile-fixture", action="store_true",
+                    help="install an isolated custom Agent with model, reasoning and permission defaults")
 parser.add_argument("--second-model-context-tokens", type=int, default=0,
                     help="set the isolated second model context to 131072-262144 tokens")
 parser.add_argument("--interleaved-chat-stream", action="store_true",
@@ -659,6 +661,8 @@ parser.add_argument("--interleaved-chat-stream", action="store_true",
 args = parser.parse_args()
 if not args.packed_path.is_file():
     parser.error(f"packed executable not found: {args.packed_path}")
+if args.agent_profile_fixture and not args.image_capable:
+    parser.error("--agent-profile-fixture requires --image-capable")
 if not 0 <= args.approval_delay_ms <= 5000:
     parser.error("--approval-delay-ms must be between 0 and 5000")
 if not 0 <= args.ask_delay_ms <= 5000:
@@ -772,6 +776,11 @@ threading.Thread(target=model.serve_forever, daemon=True).start()
                      "devlang": "c", "devfile": "generated/mdo_unity.c"}}]}),
     encoding="utf-8")
 home = base / "mdo-home"
+if args.agent_profile_fixture:
+    agent_dir = home / "modules/agents"
+    agent_dir.mkdir(parents=True)
+    shutil.copy2(ROOT / "tests/fixtures/agent-profile-qa.c",
+                 agent_dir / "agent-profile-qa.c")
 env = os.environ.copy()
 env["USERPROFILE"] = str(base)
 env["MDO_LING_RESPONSES_URL"] = f"http://127.0.0.1:{model.server_address[1]}/v1"
