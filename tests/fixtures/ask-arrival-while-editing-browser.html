@@ -88,12 +88,35 @@ try {
       options: ["Yes", "No"] }] });
   await nextFrame();
   const idleReveals = dock.scrollTop > settled + 1 && arrivals.length === 4;
+  input.focus();
+  input.value = "Keep this draft while an earlier slot is reused";
+  input.dispatchEvent(new Event("input", { bubbles: true }));
+  const fourth = { id: 4, question: "A newly ordered decision arrived.",
+    options: ["Now", "Later"] };
+  const inputTopBeforeReorder = input.getBoundingClientRect().top -
+    dock.getBoundingClientRect().top;
+  asksStore.setData({ projectId: "qa", sessionId: "seat", loaded: true,
+    items: [fourth, first, second, { id: 3,
+      question: "A third decision arrived.", options: ["Yes", "No"] }] });
+  await nextFrame();
+  await nextFrame();
+  const askCards = [...dock.querySelectorAll(".ask-dock")];
+  const inputTopAfterReorder = input.getBoundingClientRect().top -
+    dock.getBoundingClientRect().top;
+  const orderedArrivalPreservesEditor =
+    askCards[0]?.querySelector(".ask-dock-question")?.textContent === fourth.question &&
+    askCards[1]?.querySelector(".ask-dock-input") === input &&
+    document.activeElement === input &&
+    input.value === "Keep this draft while an earlier slot is reused" &&
+    Math.abs(inputTopAfterReorder - inputTopBeforeReorder) <= 1 &&
+    arrivals.length === 5;
   const passed = editingStable && approvalPreservesEditor &&
-    removalPreservesEditor && idleReveals;
+    removalPreservesEditor && idleReveals && orderedArrivalPreservesEditor;
   const result = document.querySelector("#result");
   result.dataset.passed = String(passed);
   result.textContent = JSON.stringify({ passed, editingStable, approvalPreservesEditor,
-    removalPreservesEditor, idleReveals, inputTopBeforeApproval,
+    removalPreservesEditor, idleReveals, orderedArrivalPreservesEditor,
+    inputTopBeforeReorder, inputTopAfterReorder, inputTopBeforeApproval,
     inputTopAfterApproval, inputTopAfterRemoval,
     before, immediate, settled, idleScroll: dock.scrollTop,
     arrivals: arrivals.length, scrollHeight: dock.scrollHeight,

@@ -441,6 +441,7 @@ export function createConversationDocks({ container, navigation, tasksStore, app
       (replacement ?? document.querySelector("#prompt"))?.focus({ preventScroll: true });
     }
     const live = new Set();
+    const askCardsInOrder = [];
     let newAsk = null;
     for (const item of asks) {
       const key = `${selected.projectId}/${sessionId}/${item.id}`;
@@ -450,15 +451,15 @@ export function createConversationDocks({ container, navigation, tasksStore, app
         const card = askCard(item, selected.projectId, sessionId,
           askDeciding, askAnswered, drafts, onChanged, render);
         askNodes.set(key, card);
-        askRoot.append(card.node);
       } else askNodes.get(key).sync();
+      askCardsInOrder.push(askNodes.get(key).node);
       if (!visibleDecisions.has(`ask/${key}`)) newAsk ??= askNodes.get(key).node;
     }
-    for (const [key, card] of askNodes) {
+    for (const key of askNodes.keys()) {
       if (live.has(key)) continue;
-      card.node.remove();
       askNodes.delete(key);
     }
+    reconcileCards(askRoot, askCardsInOrder);
     if (askData?.loaded && askData.projectId === selected.projectId &&
         askData.sessionId === sessionId) {
       const prefix = `${selected.projectId}/${sessionId}/`;
