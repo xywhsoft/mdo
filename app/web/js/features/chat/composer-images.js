@@ -329,10 +329,16 @@ export function createComposerImages({ composer, prompt, button, input, strip,
     input.click();
   });
   input.addEventListener("change", () => {
+    const restorePromptFocus = [button, input, document.body,
+      document.documentElement].includes(document.activeElement);
     const files = [...(input.files ?? [])];
     // A rejected file should still trigger change when selected again.
     input.value = "";
     void addFiles(files);
+    // The native picker can return focus to the hidden input or page root.
+    // Keep keyboard entry available while upload continues, without moving
+    // focus when another control already owns it.
+    if (restorePromptFocus) prompt.focus({ preventScroll: true });
   });
   prompt.addEventListener("paste", (event) => {
     const images = pastedImages(event.clipboardData);
