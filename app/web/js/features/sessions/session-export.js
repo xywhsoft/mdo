@@ -45,7 +45,7 @@ export function formatSessionMarkdown(session, transcript, exportedAt = new Date
       "记录提示：已达到单次导出 4096 条事件上限，后续事件未包含。")}`, "");
   if (transcript.textTruncated)
     lines.push(`> ${t("sessionExport.textTruncated", {},
-      "记录提示：部分事件正文已被日志截短。")}`, "");
+      "记录提示：部分事件正文未能完整导出。")}`, "");
 
   let count = 0;
   for (const item of eventsToTimeline(transcript.events ?? [])) {

@@ -383,7 +383,7 @@
   "sessionExport.exportedAt": "Exported on {date}",
   "sessionExport.historyLost": "Record notice: older events have rolled out of the bounded log; this export contains only replayable history.",
   "sessionExport.limitReached": "Record notice: the 4,096-event export limit was reached; later events are omitted.",
-  "sessionExport.textTruncated": "Record notice: some event text was truncated in the log.",
+  "sessionExport.textTruncated": "Record notice: some event text could not be exported in full.",
   "sessionExport.user": "User",
   "sessionExport.assistant": "Assistant",
   "sessionExport.tool": "Tool",

@@ -127,12 +127,13 @@ export async function readCompleteSessionEventText(projectId, sessionId,
 // transcript export bounded, and report when its source cannot be complete.
 const TRANSCRIPT_PAGE_SIZE = 32;
 const TRANSCRIPT_MAX_EVENTS = 4096;
+const TRANSCRIPT_MAX_FULL_TEXT_EVENTS = 64;
+const TRANSCRIPT_MAX_FULL_TEXT_BYTES = 2 * 1024 * 1024;
 
 export async function loadSessionTranscript(session) {
   let cursor = 0;
   let latestEventId = null;
   let historyLost = false;
-  let textTruncated = false;
   const events = [];
   const path = `${endpoint(session)}/events`;
   while (events.length < TRANSCRIPT_MAX_EVENTS) {
@@ -148,7 +149,6 @@ export async function loadSessionTranscript(session) {
       const id = Number(event.event_id);
       if (!Number.isSafeInteger(id) || id <= cursor || id > latestEventId) continue;
       events.push(event);
-      textTruncated ||= Boolean(event.text_truncated);
     }
     const previous = cursor;
     cursor = next;
@@ -158,6 +158,28 @@ export async function loadSessionTranscript(session) {
       break;
     }
   }
+  let fullTextReads = 0;
+  let fullTextBytes = 0;
+  for (let index = 0; index < events.length; index += 1) {
+    const event = events[index];
+    // Reasoning is omitted by the Markdown formatter. Leave its bounded
+    // preview alone and reserve the read budget for exported content.
+    if (!event.text_truncated || event.kind === "model_reasoning_delta" ||
+        fullTextReads >= TRANSCRIPT_MAX_FULL_TEXT_EVENTS ||
+        fullTextBytes >= TRANSCRIPT_MAX_FULL_TEXT_BYTES) continue;
+    fullTextReads += 1;
+    try {
+      const full = await readCompleteSessionEventText(session.project_id,
+        session.id, Number(event.event_id), event.kind);
+      if (full === null) continue;
+      const bytes = new TextEncoder().encode(full).length;
+      if (bytes > TRANSCRIPT_MAX_FULL_TEXT_BYTES - fullTextBytes) continue;
+      fullTextBytes += bytes;
+      events[index] = { ...event, text: full, text_truncated: false };
+    } catch { /* Preserve the visible preview and report an incomplete export. */ }
+  }
+  const textTruncated = events.some((event) => event.text_truncated &&
+    event.kind !== "model_reasoning_delta");
   return { events, historyLost, textTruncated,
     limitReached: events.length >= TRANSCRIPT_MAX_EVENTS && cursor < latestEventId };
 }

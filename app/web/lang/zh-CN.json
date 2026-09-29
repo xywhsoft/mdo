@@ -383,7 +383,7 @@
   "sessionExport.exportedAt": "导出于 {date}",
   "sessionExport.historyLost": "记录提示：较早的事件已从有界日志中滚出，本文只包含可回放部分。",
   "sessionExport.limitReached": "记录提示：已达到单次导出 4096 条事件上限，后续事件未包含。",
-  "sessionExport.textTruncated": "记录提示：部分事件正文已被日志截短。",
+  "sessionExport.textTruncated": "记录提示：部分事件正文未能完整导出。",
   "sessionExport.user": "用户",
   "sessionExport.assistant": "助手",
   "sessionExport.tool": "工具",

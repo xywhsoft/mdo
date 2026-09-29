@@ -383,7 +383,7 @@
   "sessionExport.exportedAt": "Экспортировано {date}",
   "sessionExport.historyLost": "Примечание: ранние события вышли за пределы журнала; экспорт содержит только доступную для воспроизведения историю.",
   "sessionExport.limitReached": "Примечание: достигнут предел экспорта в 4096 событий; последующие события не включены.",
-  "sessionExport.textTruncated": "Примечание: текст некоторых событий был сокращён в журнале.",
+  "sessionExport.textTruncated": "Примечание: текст некоторых событий не удалось экспортировать полностью.",
   "sessionExport.user": "Пользователь",
   "sessionExport.assistant": "Ассистент",
   "sessionExport.tool": "Инструмент",
