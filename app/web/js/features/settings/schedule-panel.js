@@ -41,6 +41,8 @@ export function createSchedulePanel({ panel, projectsStore, agentsStore, modelsS
   const fields = form.elements;
   const list = panel.querySelector("#schedules-list");
   const status = panel.querySelector("#schedules-status");
+  const actionStatus = panel.querySelector("#schedule-action-status");
+  const refreshButton = panel.querySelector("#schedules-refresh");
   const formStatus = panel.querySelector("#schedule-form-status");
   const title = panel.querySelector("#schedule-editor-title");
   const save = panel.querySelector("#schedule-save");
@@ -75,6 +77,11 @@ export function createSchedulePanel({ panel, projectsStore, agentsStore, modelsS
   function setFeedback(message, error = false) {
     formStatus.textContent = message;
     formStatus.dataset.tone = error ? "error" : "neutral";
+  }
+
+  function setActionFeedback(message, error = false) {
+    actionStatus.textContent = message;
+    actionStatus.dataset.tone = error ? "error" : "neutral";
   }
 
   function visible() {
@@ -162,24 +169,23 @@ export function createSchedulePanel({ panel, projectsStore, agentsStore, modelsS
       status.textContent = t("schedule.loading", {}, "正在读取计划任务…");
       return;
     }
-    if (state.status === "error") {
+    const data = state.data;
+    if (state.status === "error")
       status.textContent = t("schedule.loadFailed", { error: errorMessage(state.error) },
         `读取失败：${errorMessage(state.error)}`);
-      return;
-    }
-    const data = state.data;
     if (!data) return;
     const items = data.items ?? [];
-    if (visible() && items.some((item) => item.active_runs > 0))
+    if (state.status !== "error" && visible() && items.some((item) => item.active_runs > 0))
       activeRefresh = setTimeout(() => {
         activeRefresh = 0;
         if (visible()) void loadSchedules();
       }, 1000);
-    status.textContent = t("schedule.count", { count: data.total ?? items.length },
-      `${data.total ?? items.length} 项计划`) +
-      (!data.enabled ? t("schedule.globalDisabled", {}, " · 全局执行已关闭，可在 Agent 设置中开启") : "") +
-      (data.truncated ? t("schedule.truncated", {}, " · 仅显示前 100 项") : "") +
-      (data.persistence_fault ? t("schedule.storageFault", {}, " · 存储故障，请检查诊断") : "");
+    if (state.status !== "error")
+      status.textContent = t("schedule.count", { count: data.total ?? items.length },
+        `${data.total ?? items.length} 项计划`) +
+        (!data.enabled ? t("schedule.globalDisabled", {}, " · 全局执行已关闭，可在 Agent 设置中开启") : "") +
+        (data.truncated ? t("schedule.truncated", {}, " · 仅显示前 100 项") : "") +
+        (data.persistence_fault ? t("schedule.storageFault", {}, " · 存储故障，请检查诊断") : "");
     const active = document.activeElement;
     const activeId = active?.dataset?.scheduleId;
     const activeAction = active?.dataset?.scheduleAction;
@@ -234,6 +240,32 @@ export function createSchedulePanel({ panel, projectsStore, agentsStore, modelsS
         ?.focus({ preventScroll: true });
   }
 
+  function focusSchedule(id, action = "", reveal = false) {
+    const card = [...list.children].find((item) => item.dataset.scheduleId === id);
+    const target = action ? [...(card?.querySelectorAll("button") ?? [])].find((button) =>
+      button.dataset.scheduleAction === action) : card;
+    if (!target || target.disabled) return false;
+    if (reveal) {
+      card.scrollIntoView({ block: "start" });
+      if (action) target.scrollIntoView({ block: "nearest" });
+    }
+    target.focus({ preventScroll: true });
+    return document.activeElement === target;
+  }
+
+  function focusAfterDelete({ id, index }, succeeded) {
+    if (!visible()) return;
+    if (!succeeded && focusSchedule(id, "delete", true)) return;
+    if (succeeded && schedulesStore.get().status === "ready") {
+      const cards = [...list.children].filter((card) =>
+        card.dataset.scheduleId && card.dataset.scheduleId !== id);
+      const neighbor = cards[Math.min(index, cards.length - 1)];
+      if (neighbor && focusSchedule(neighbor.dataset.scheduleId, "", true)) return;
+    }
+    refreshButton.scrollIntoView({ block: "start" });
+    refreshButton.focus({ preventScroll: true });
+  }
+
   function body() {
     const date = new Date(fields.start_at.value);
     const startAt = original && fields.start_at.value === localInput(original.start_at)
@@ -273,14 +305,19 @@ export function createSchedulePanel({ panel, projectsStore, agentsStore, modelsS
     };
   }
 
-  async function mutate(operation, success, resetEditor = false) {
+  async function mutate(operation, success, resetEditor = false,
+                        { listAction = false, deletion = null } = {}) {
     if (busy) return;
+    if (listAction) setActionFeedback("");
     busy = true;
     render(schedulesStore.get());
+    if (deletion && visible()) focusSchedule(deletion.id);
     save.disabled = true;
     let savedId = "";
+    let succeeded = false;
     try {
       const result = await operation();
+      succeeded = true;
       toast(success);
       if (resetEditor) {
         savedId = result?.data?.id || "";
@@ -294,7 +331,8 @@ export function createSchedulePanel({ panel, projectsStore, agentsStore, modelsS
       await loadSchedules();
     } catch (error) {
       const message = errorMessage(error);
-      setFeedback(message, true);
+      if (listAction) setActionFeedback(message, true);
+      else setFeedback(message, true);
       toast(message, "error");
       if (error?.status === 412) await loadSchedules();
     } finally {
@@ -302,11 +340,8 @@ export function createSchedulePanel({ panel, projectsStore, agentsStore, modelsS
       save.disabled = false;
       render(schedulesStore.get());
       if (savedId && visible()) {
-        const card = [...list.children].find((item) => item.dataset.scheduleId === savedId);
-        card?.scrollIntoView({ block: "start" });
-        if (card) card.focus({ preventScroll: true });
-        else panel.querySelector("#schedules-refresh").focus();
-      }
+        if (!focusSchedule(savedId, "", true)) refreshButton.focus();
+      } else if (deletion) focusAfterDelete(deletion, succeeded);
     }
   }
 
@@ -379,13 +414,14 @@ export function createSchedulePanel({ panel, projectsStore, agentsStore, modelsS
     if (button.dataset.scheduleAction === "edit") void openEditor(item.id);
     if (button.dataset.scheduleAction === "history") void openHistory(item);
     if (button.dataset.scheduleAction === "run")
-      void mutate(() => runSchedule(item.id, item.revision), t("schedule.started", {}, "计划已开始运行"));
+      void mutate(() => runSchedule(item.id, item.revision),
+        t("schedule.started", {}, "计划已开始运行"), false, { listAction: true });
     if (button.dataset.scheduleAction === "enabled")
       void mutate(() => setScheduleEnabled(item.id, item.revision, !item.enabled),
         item.enabled ? t("schedule.pausedSuccess", {}, "计划已暂停") :
-          t("schedule.enabledSuccess", {}, "计划已启用"));
+          t("schedule.enabledSuccess", {}, "计划已启用"), false, { listAction: true });
     if (button.dataset.scheduleAction === "delete") {
-      deleteTarget = item;
+      deleteTarget = { item, index: schedulesStore.get().data.items.indexOf(item) };
       panel.querySelector("#schedule-delete-label").textContent = t("schedule.deleteLabel",
         { label: item.label }, `“${item.label}”将从本地计划中移除。`);
       deleteDialog.returnValue = "cancel";
@@ -396,7 +432,9 @@ export function createSchedulePanel({ panel, projectsStore, agentsStore, modelsS
     const target = deleteTarget;
     deleteTarget = null;
     if (deleteDialog.returnValue === "delete" && target)
-      void mutate(() => removeSchedule(target.id, target.revision), t("schedule.deleted", {}, "计划已删除"));
+      void mutate(() => removeSchedule(target.item.id, target.item.revision),
+        t("schedule.deleted", {}, "计划已删除"), false,
+        { listAction: true, deletion: { id: target.item.id, index: target.index } });
   });
   historyDialog.addEventListener("close", () => {
     ++historyGeneration;
@@ -427,7 +465,10 @@ export function createSchedulePanel({ panel, projectsStore, agentsStore, modelsS
     newSchedule();
     fields.label.focus();
   });
-  panel.querySelector("#schedules-refresh").addEventListener("click", () => { void loadSchedules(); });
+  refreshButton.addEventListener("click", () => {
+    setActionFeedback("");
+    void loadSchedules();
+  });
   document.addEventListener("visibilitychange", () => {
     if (visible()) void loadSchedules();
   });

@@ -316,6 +316,54 @@ Object.defineProperty(navigator, 'clipboard', {
                 print("QA delaying initial task list GET", flush=True)
                 time.sleep(self.server.startup_task_delay_seconds)
         path_parts = self.path.split("?", 1)[0].strip("/").split("/")
+        if (self.server.fail_first_schedule_refresh_after_delete and
+                self.command == "GET" and self.path == "/api/v1/schedules"):
+            with self.server.count_lock:
+                reject = (bool(self.server.simulated_deleted_schedules) and
+                          not self.server.schedule_refresh_rejected)
+                if reject:
+                    self.server.schedule_refresh_rejected = True
+            if reject:
+                payload = json.dumps({"ok": False, "error": {
+                    "code": "qa_schedule_list_unavailable",
+                    "message": "Synthetic schedule list failure"
+                }}).encode()
+                print("QA rejected schedule refresh after synthetic delete", flush=True)
+                self.send_response(503)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Content-Length", str(len(payload)))
+                self.send_header("Connection", "close")
+                self.end_headers()
+                self.wfile.write(payload)
+                self.close_connection = True
+                return
+        if (self.server.simulate_schedule_delete and self.command == "DELETE" and
+                len(path_parts) == 4 and
+                path_parts[:3] == ["api", "v1", "schedules"]):
+            schedule_id = path_parts[3]
+            with self.server.count_lock:
+                self.server.schedule_delete_attempts += 1
+                attempt = self.server.schedule_delete_attempts
+                rejected = (self.server.reject_first_simulated_schedule_delete
+                            and attempt == 1)
+                if not rejected:
+                    self.server.simulated_deleted_schedules.add(schedule_id)
+            document = ({"ok": False, "error": {"code": "qa_delete_rejected",
+                "message": "Synthetic schedule delete failure"}} if rejected else
+                {"schema_version": 1, "ok": True, "data": {
+                    "id": schedule_id, "removed": True}})
+            payload = json.dumps(document).encode()
+            print(f"QA synthetic schedule DELETE #{attempt}: " +
+                  ("rejected" if rejected else "removed from proxy view"),
+                  flush=True)
+            self.send_response(503 if rejected else 200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(payload)))
+            self.send_header("Connection", "close")
+            self.end_headers()
+            self.wfile.write(payload)
+            self.close_connection = True
+            return
         if (self.command == "GET" and len(path_parts) == 5 and
                 path_parts[:3] == ["api", "v1", "schedules"] and
                 path_parts[4] == "history"):
@@ -637,6 +685,17 @@ Object.defineProperty(navigator, 'clipboard', {
             response = upstream.getresponse()
             payload = response.read()
             response_status = response.status
+            if (self.server.simulate_schedule_delete and self.command == "GET" and
+                    self.path == "/api/v1/schedules" and response_status == 200):
+                with self.server.count_lock:
+                    deleted = set(self.server.simulated_deleted_schedules)
+                if deleted:
+                    envelope = json.loads(payload)
+                    items = [item for item in envelope["data"]["items"]
+                             if item["id"] not in deleted]
+                    envelope["data"]["items"] = items
+                    envelope["data"]["total"] = len(items)
+                    payload = json.dumps(envelope).encode()
             if ((self.server.locale_hotkey or self.server.no_clipboard_api) and
                     self.command == "GET" and
                     self.path == "/" and response_status == 200):
@@ -782,6 +841,12 @@ parser.add_argument("--history-delay-ms", type=int, default=0,
                     help="delay history GETs by 0-5000 ms for message-action QA")
 parser.add_argument("--fail-first-schedule-history", action="store_true",
                     help="reject the first schedule-history GET for retry QA")
+parser.add_argument("--simulate-schedule-delete", action="store_true",
+                    help="hide deleted plans in the proxy view; never delete upstream")
+parser.add_argument("--reject-first-simulated-schedule-delete", action="store_true",
+                    help="reject the first synthetic delete, then allow retry")
+parser.add_argument("--fail-first-schedule-refresh-after-delete", action="store_true",
+                    help="reject one list refresh after synthetic delete")
 parser.add_argument("--drop-first-create-response", action="store_true",
                     help="accept one session creation then close before replying")
 parser.add_argument("--fail-first-create", action="store_true",
@@ -927,6 +992,10 @@ if args.full_first_queue and (args.fail_first_queue or args.drop_first_queue_res
     parser.error("choose only one first-queue rejection or response drop")
 if args.fail_first_create and args.drop_first_create_response:
     parser.error("choose only one first-create failure option")
+if args.reject_first_simulated_schedule_delete and not args.simulate_schedule_delete:
+    parser.error("--reject-first-simulated-schedule-delete needs --simulate-schedule-delete")
+if args.fail_first_schedule_refresh_after_delete and not args.simulate_schedule_delete:
+    parser.error("--fail-first-schedule-refresh-after-delete needs --simulate-schedule-delete")
 if args.second_model_context_tokens and (
         not args.image_capable or
         not 131072 <= args.second_model_context_tokens <= 262144):
@@ -1040,6 +1109,8 @@ try:
             or args.locale_delay_ms or args.fail_first_project
             or args.history_delay_ms
             or args.fail_first_schedule_history
+            or args.simulate_schedule_delete
+            or args.fail_first_schedule_refresh_after_delete
             or args.drop_first_create_response
             or args.fail_first_create
             or args.fail_first_run or args.fail_first_queue
@@ -1106,6 +1177,14 @@ try:
         proxy.history_delay_seconds = args.history_delay_ms / 1000
         proxy.fail_first_schedule_history = args.fail_first_schedule_history
         proxy.schedule_history_reads = 0
+        proxy.simulate_schedule_delete = args.simulate_schedule_delete
+        proxy.reject_first_simulated_schedule_delete = (
+            args.reject_first_simulated_schedule_delete)
+        proxy.schedule_delete_attempts = 0
+        proxy.simulated_deleted_schedules = set()
+        proxy.fail_first_schedule_refresh_after_delete = (
+            args.fail_first_schedule_refresh_after_delete)
+        proxy.schedule_refresh_rejected = False
         proxy.drop_first_create_response = args.drop_first_create_response
         proxy.fail_first_create = args.fail_first_create
         proxy.fail_first_run = args.fail_first_run

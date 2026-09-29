@@ -1194,6 +1194,9 @@ select:focus-visible,
 .schedule-heading .secondary-button { flex: 0 0 auto; }
 .schedule-status, .schedule-empty { color: var(--muted); font-size: 12px; }
 .schedule-status { margin: 15px 0 9px; }
+.schedule-action-status { margin: 0; }
+.schedule-action-status:not(:empty) { margin-bottom: 9px; font-size: 11px; }
+.schedule-action-status[data-tone="error"] { color: var(--danger); }
 .schedule-list { display: grid; gap: 9px; }
 .schedule-card { padding: 14px; border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--surface); }
 .schedule-card:focus { outline: 2px solid var(--focus); outline-offset: 2px; }
@@ -1507,7 +1510,7 @@ select:focus-visible,
   .settings-content form { width: calc(100% - 28px); padding-top: 22px; }
   .settings-content > .resource-section { width: calc(100% - 28px); padding-top: 22px; }
   .schedule-section { width: calc(100% - 28px); padding-top: 22px; }
-  .schedule-card { scroll-margin-top: 56px; }
+  .schedule-card, #schedules-refresh { scroll-margin-top: 56px; }
   .schedule-form-grid { grid-template-columns: 1fr; }
   .schedule-section button,
   .schedule-form :is(input:not([type="checkbox"]), select, textarea),
