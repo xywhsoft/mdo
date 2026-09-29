@@ -54,7 +54,7 @@
   "timeline.userImage": "用户图片 {index}",
   "timeline.copyMessage": "复制消息",
   "timeline.copyVisibleMessage": "复制可见部分",
-  "timeline.partialMessage": "消息内容有截断；复制仅包含可见部分。",
+  "timeline.partialMessage": "消息内容有截断；复制时会尝试获取全文，无法获取时仅复制可见部分。",
   "timeline.visibleMessageCopied": "已复制可见部分",
   "timeline.messageCopied": "消息已复制",
   "timeline.messageCopyFailed": "无法复制消息",

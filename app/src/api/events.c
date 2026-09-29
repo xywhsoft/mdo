@@ -8,6 +8,7 @@
 #define MDO_API_EVENT_DEFAULT_LIMIT 32u
 #define MDO_API_EVENT_MAX_LIMIT 32u
 #define MDO_API_EVENT_TEXT_BYTES 4096u
+#define MDO_API_EVENT_SINGLE_TEXT_BYTES 65536u
 
 static cstr MdoApiEventKindText(xwork_event_kind Kind)
 {
@@ -55,14 +56,17 @@ static bool MdoApiUnsigned(xstrview Text, uint64 Maximum, uint64* pValue)
     return true;
 }
 
-static bool MdoApiEventQuery(xstrview Query, uint64* pAfter, size_t* pLimit)
+static bool MdoApiEventQuery(xstrview Query, uint64* pAfter, size_t* pLimit,
+    bool* pFullText)
 {
     size_t Position = 0u;
     bool HasAfter = false;
     bool HasLimit = false;
+    bool HasFullText = false;
 
     *pAfter = 0u;
     *pLimit = MDO_API_EVENT_DEFAULT_LIMIT;
+    if ( pFullText != NULL ) *pFullText = false;
     while ( Position < Query.Size ) {
         size_t End = Position;
         size_t Equal = SIZE_MAX;
@@ -88,20 +92,27 @@ static bool MdoApiEventQuery(xstrview Query, uint64* pAfter, size_t* pLimit)
                     &Number) || Number == 0u ) return false;
             *pLimit = (size_t)Number;
             HasLimit = true;
+        } else if ( Name.Size == 9u &&
+                    memcmp(Name.Data, "full_text", 9u) == 0 ) {
+            if ( pFullText == NULL || HasFullText || Value.Size != 1u ||
+                 Value.Data[0] != '1' ) return false;
+            *pFullText = true;
+            HasFullText = true;
         } else return false;
         Position = End + (End < Query.Size ? 1u : 0u);
         if ( Position == Query.Size && End < Query.Size ) return false;
     }
-    return true;
+    return !HasFullText || (HasAfter && HasLimit && *pLimit == 1u);
 }
 
-static xstrview MdoApiEventText(cstr Text, size_t Size, bool* pTruncated)
+static xstrview MdoApiEventText(cstr Text, size_t Size, size_t Limit,
+    bool* pTruncated)
 {
     size_t Retained = Size;
 
     if ( Text == NULL ) return (xstrview){ NULL, 0u };
-    if ( Retained > MDO_API_EVENT_TEXT_BYTES ) {
-        Retained = MDO_API_EVENT_TEXT_BYTES;
+    if ( Retained > Limit ) {
+        Retained = Limit;
         while ( Retained != 0u &&
                (((const unsigned char*)Text)[Retained] & 0xc0u) == 0x80u )
             Retained--;
@@ -115,6 +126,7 @@ static bool MdoApiRuntimeEventValue(const xwork_event* Event, xvalue** pValue)
     xvalue* Item = xrtValueObject();
     bool Truncated = Event->bTextTruncated;
     xstrview Text = MdoApiEventText(Event->sText, Event->iTextLength,
+        MDO_API_EVENT_TEXT_BYTES,
         &Truncated);
     bool Ok = Item != NULL &&
         MdoApiValueSetUInt(Item, "schema_version", Event->uSchemaVersion) &&
@@ -164,7 +176,7 @@ bool MdoApiEventsRoute(MdoApiContext* Context)
     size_t Index;
     bool Ok;
 
-    if ( !MdoApiEventQuery(Context->Target.Query, &After, &Limit) )
+    if ( !MdoApiEventQuery(Context->Target.Query, &After, &Limit, NULL) )
         return MdoApiReplyError(Context, 400u, "invalid_query",
             "Only bounded numeric after and limit parameters are accepted",
             NULL);
@@ -226,14 +238,17 @@ static bool MdoApiCaptureId(MdoApiContext* Context, size_t Index,
 }
 
 static bool MdoApiSessionEventValue(const MdoSessionEventInfo* Event,
-    const char* ProjectId, const char* SessionId, xvalue** pValue)
+    const char* ProjectId, const char* SessionId, bool FullText,
+    xvalue** pValue)
 {
     xvalue* Item = xrtValueObject();
     char Attachments[4][33] = {{ 0 }};
     size_t AttachmentCount = 0u;
     size_t TextSize = Event->Text != NULL ? strlen(Event->Text) : 0u;
     bool Truncated = Event->TextTruncated;
-    xstrview Text = MdoApiEventText(Event->Text, TextSize, &Truncated);
+    xstrview Text = MdoApiEventText(Event->Text, TextSize,
+        FullText ? MDO_API_EVENT_SINGLE_TEXT_BYTES : MDO_API_EVENT_TEXT_BYTES,
+        &Truncated);
     bool Ok = Item != NULL &&
         MdoApiValueSetUInt(Item, "schema_version", Event->SchemaVersion) &&
         MdoApiValueSetUInt(Item, "event_id", Event->EventId) &&
@@ -290,6 +305,7 @@ bool MdoApiSessionEventsRoute(MdoApiContext* Context)
     xvalue* Items = xrtValueArray();
     uint64 After;
     size_t Limit;
+    bool FullText;
     size_t Index;
     bool Ok;
 
@@ -297,9 +313,10 @@ bool MdoApiSessionEventsRoute(MdoApiContext* Context)
          !MdoApiCaptureId(Context, 1u, SessionId, sizeof(SessionId)) )
         return MdoApiReplyError(Context, 400u, "invalid_path",
             "Project and session identifiers are invalid", NULL);
-    if ( !MdoApiEventQuery(Context->Target.Query, &After, &Limit) )
+    if ( !MdoApiEventQuery(Context->Target.Query, &After, &Limit,
+            &FullText) )
         return MdoApiReplyError(Context, 400u, "invalid_query",
-            "Only bounded numeric after and limit parameters are accepted",
+            "Only bounded event queries are accepted",
             NULL);
     memset(&Error, 0, sizeof(Error));
     Session = MdoSessionLoad(ProjectId, SessionId, &Error);
@@ -320,7 +337,8 @@ bool MdoApiSessionEventsRoute(MdoApiContext* Context)
         xvalue* Item = NULL;
         memset(&Event, 0, sizeof(Event)); Event.Size = sizeof(Event);
         Ok = MdoSessionEventSnapshotAt(Snapshot, Index, &Event) &&
-            MdoApiSessionEventValue(&Event, ProjectId, SessionId, &Item) &&
+            MdoApiSessionEventValue(&Event, ProjectId, SessionId,
+                FullText, &Item) &&
             MdoApiValueAppendTake(Items, &Item);
         xrtValueRelease(Item);
     }

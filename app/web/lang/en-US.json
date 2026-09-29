@@ -54,7 +54,7 @@
   "timeline.userImage": "User image {index}",
   "timeline.copyMessage": "Copy message",
   "timeline.copyVisibleMessage": "Copy visible part",
-  "timeline.partialMessage": "Part of this message is omitted. Copy includes the visible part only.",
+  "timeline.partialMessage": "Part of this message is omitted. Copy tries to fetch the full text and reports if only the visible part is available.",
   "timeline.visibleMessageCopied": "Visible part copied",
   "timeline.messageCopied": "Message copied",
   "timeline.messageCopyFailed": "Could not copy message",

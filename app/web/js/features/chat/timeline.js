@@ -1,6 +1,7 @@
 import { element, clear, formatClock, errorMessage, toast } from "../../utils/dom.js";
 import { copyText } from "../../utils/clipboard.js";
 import { attachmentUrl } from "../../api/client.js";
+import { readCompleteSessionEventText } from "../../state/sessions.js";
 import { mountIcons } from "../../components/icons.js";
 import { renderMarkdown } from "./markdown.js";
 import { artifactPreviewNode } from "./artifact-preview.js";
@@ -17,8 +18,13 @@ function appendOrCreate(items, streams, event, kind, role, key) {
     items.push(item);
     streams.set(key, item);
   }
+  const start = item.text.length;
   item.text += event.text ?? "";
-  item.textTruncated ||= Boolean(event.text_truncated);
+  if (event.text_truncated) {
+    item.textTruncated = true;
+    (item.copySpans ??= []).push({ eventId: event.event_id,
+      kind: event.kind, start, end: item.text.length });
+  }
   return item;
 }
 
@@ -69,7 +75,9 @@ export function eventsToTimeline(events, historyLost = false) {
             text: event.text || "", state: "done", time: event.time,
             attachments: Array.isArray(event.attachments) ? event.attachments : [],
             userMessageSequence: Number(event.user_message_sequence || 0),
-            textTruncated: Boolean(event.text_truncated) });
+            textTruncated: Boolean(event.text_truncated),
+            copySpans: event.text_truncated ? [{ eventId: event.event_id,
+              kind: event.kind, start: 0, end: (event.text || "").length }] : [] });
         }
         break;
       case "model_reasoning_delta": {
@@ -213,6 +221,9 @@ export function eventsToTimeline(events, historyLost = false) {
           role: event.model || "Agent", text: event.text || "",
           state: terminalState, time: event.time,
           runKey, runEpoch: epoch, retryPrompt: promptsByRun.get(runKey),
+          textTruncated: Boolean(event.text_truncated),
+          copySpans: event.text_truncated ? [{ eventId: event.event_id,
+            kind: event.kind, start: 0, end: (event.text || "").length }] : [],
         });
         break;
       }
@@ -244,6 +255,37 @@ export function eventsToTimeline(events, historyLost = false) {
       item.forkThroughSequence = nextUserSequence === null ? null : nextUserSequence - 1;
   }
   return items;
+}
+
+export async function resolveTimelineCopyText(item, owner,
+  readEventText = readCompleteSessionEventText) {
+  const visible = item.text ?? "";
+  if (!item.textTruncated) return { text: visible, complete: true };
+  const spans = item.copySpans;
+  if (!owner?.projectId || !owner?.sessionId || !Array.isArray(spans) ||
+      spans.length === 0 || spans.length > 16) return { text: visible, complete: false };
+  let result = "";
+  let offset = 0;
+  try {
+    for (const span of spans) {
+      if (!Number.isSafeInteger(span.eventId) || span.eventId < 1 ||
+          !Number.isSafeInteger(span.start) || !Number.isSafeInteger(span.end) ||
+          span.start < offset || span.end < span.start || span.end > visible.length)
+        return { text: visible, complete: false };
+      const full = await readEventText(owner.projectId, owner.sessionId,
+        span.eventId, span.kind);
+      if (typeof full !== "string" || !full.startsWith(
+        visible.slice(span.start, span.end)))
+        return { text: visible, complete: false };
+      result += visible.slice(offset, span.start) + full;
+      offset = span.end;
+      if (result.length > 1048576) return { text: visible, complete: false };
+    }
+  } catch { return { text: visible, complete: false }; }
+  const complete = result + visible.slice(offset);
+  return complete.length <= 1048576
+    ? { text: complete, complete: true }
+    : { text: visible, complete: false };
 }
 
 function timeNode(value) {
@@ -414,7 +456,7 @@ function timelineNode(item, handlers, feedback, projectId, sessionId, writable,
       item.textTruncated) children.push(element("p", {
     className: "timeline-truncation-note",
     text: t("timeline.partialMessage", {},
-      "消息内容有截断；复制仅包含可见部分。"),
+      "消息内容有截断；复制时会尝试获取全文，无法获取时仅复制可见部分。"),
   }));
   if (item.artifactId) {
     const preview = artifactPreviewNode(projectId, sessionId,
@@ -446,22 +488,26 @@ function timelineNode(item, handlers, feedback, projectId, sessionId, writable,
       (item.kind === "user" && (item.text || item.attachments?.length))) {
     const actions = element("div", { className: "timeline-actions" });
     if (item.text) {
-      const copyLabel = item.textTruncated
-        ? t("timeline.copyVisibleMessage", {}, "复制可见部分")
-        : t("timeline.copyMessage", {}, "复制消息");
+      const copyLabel = t("timeline.copyMessage", {}, "复制消息");
       const copy = element("button", { className: "timeline-action-button", attrs: {
         type: "button", "aria-label": copyLabel,
         title: item.textTruncated ? copyLabel : t("timeline.copy", {}, "复制"),
         "data-timeline-action": `${item.key}/copy` },
       }, [actionIcon("copy")]);
+      let copying = false;
       copy.addEventListener("click", async () => {
+        if (copying) return;
+        copying = true;
+        copy.setAttribute("aria-disabled", "true");
         try {
-          await copyText(item.text);
-          toast(item.textTruncated
-            ? t("timeline.visibleMessageCopied", {}, "已复制可见部分")
-            : t("timeline.messageCopied", {}, "消息已复制"));
+          const resolved = await resolveTimelineCopyText(item, owner);
+          await copyText(resolved.text);
+          toast(resolved.complete
+            ? t("timeline.messageCopied", {}, "消息已复制")
+            : t("timeline.visibleMessageCopied", {}, "已复制可见部分"));
         }
         catch { toast(t("timeline.messageCopyFailed", {}, "无法复制消息"), "error"); }
+        finally { copying = false; copy.setAttribute("aria-disabled", "false"); }
       });
       actions.append(copy);
     }

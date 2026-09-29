@@ -4530,6 +4530,44 @@ def run_probe(host: Path) -> None:
                 assert model_run["state"] == "succeeded", model_run
                 assert request(port, "DELETE", model_bound_path)[0] == 200
 
+                # A normal event page remains bounded; an explicit one-event
+                # read can recover text for the timeline's copy action.
+                long_prompt = "x" * 4095 + "中文" + "tail" * 30
+                status, _, body = request(port, "POST", run_path,
+                    body=json.dumps({"prompt": long_prompt,
+                        "timeout_ms": 10000}).encode(),
+                    headers={"Content-Type": "application/json"})
+                assert status == 202, (status, body)
+                copy_run = json.loads(body)["data"]
+                deadline = time.monotonic() + 5.0
+                while not copy_run["terminal"] and time.monotonic() < deadline:
+                    time.sleep(0.01)
+                    copy_run = json.loads(request(port, "GET",
+                        f'/api/v1/runs/{copy_run["id"]}')[2])["data"]
+                assert copy_run["state"] == "succeeded", copy_run
+                visible = next(event for event in session_events(port,
+                    session_path) if event["kind"] == "agent_start" and
+                    event["run_id"] == copy_run["agent_run_id"])
+                assert visible["text_truncated"] is True, visible
+                assert len(visible["text"].encode()) <= 4096, visible
+                event_id = visible["event_id"]
+                full_path = (session_path +
+                    f"/events?after={event_id - 1}&limit=1&full_text=1")
+                status, _, body = request(port, "GET", full_path)
+                full_items = json.loads(body)["data"]["items"]
+                assert status == 200 and len(full_items) == 1, (status, body)
+                assert full_items[0]["event_id"] == event_id, full_items
+                assert full_items[0]["text"] == long_prompt, full_items
+                assert full_items[0]["text_truncated"] is False, full_items
+                for suffix in ("?after=0&full_text=1",
+                               "?after=0&limit=2&full_text=1",
+                               "?after=0&limit=1&full_text=2",
+                               "?after=0&limit=1&full_text=1&full_text=1"):
+                    assert request(port, "GET", session_path +
+                        "/events" + suffix)[0] == 400, suffix
+                assert request(port, "GET",
+                    "/api/v1/events?after=0&limit=1&full_text=1")[0] == 400
+
                 meta_path.write_text("{broken", encoding="utf-8")
                 status, headers, body = request(
                     port, "GET",

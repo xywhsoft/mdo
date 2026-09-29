@@ -54,7 +54,7 @@
   "timeline.userImage": "Изображение пользователя {index}",
   "timeline.copyMessage": "Копировать сообщение",
   "timeline.copyVisibleMessage": "Копировать видимую часть",
-  "timeline.partialMessage": "Часть сообщения не показана. Копируется лишь видимая часть.",
+  "timeline.partialMessage": "Часть сообщения не показана. При копировании программа попробует получить полный текст и сообщит, если доступна только видимая часть.",
   "timeline.visibleMessageCopied": "Видимая часть скопирована",
   "timeline.messageCopied": "Сообщение скопировано",
   "timeline.messageCopyFailed": "Не удалось скопировать сообщение",

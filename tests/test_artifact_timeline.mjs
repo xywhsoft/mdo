@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { eventsToTimeline } from "../app/web/js/features/chat/timeline.js";
+import { eventsToTimeline, resolveTimelineCopyText } from
+  "../app/web/js/features/chat/timeline.js";
 
 test("tool results expose their artifact even without a separate artifact event", () => {
   const items = eventsToTimeline([
@@ -53,4 +54,40 @@ test("timeline marks incomplete user and assistant text before copy", () => {
   assert.deepEqual(items.filter((item) => ["user", "assistant"].includes(item.kind))
     .map((item) => [item.kind, item.textTruncated]),
   [["user", true], ["assistant", true]]);
+});
+
+test("copy resolves a truncated user event without changing the visible timeline", async () => {
+  const [item] = eventsToTimeline([{ kind: "agent_start", event_id: 10,
+    run_id: 5, time: 1000000, text: "prefix", text_truncated: true }]);
+  const owner = { projectId: "p", sessionId: "s" };
+  const copied = await resolveTimelineCopyText(item, owner,
+    async (project, session, id, kind) => {
+      assert.deepEqual([project, session, id, kind], ["p", "s", 10, "agent_start"]);
+      return "prefix and the rest";
+    });
+  assert.deepEqual(copied, { text: "prefix and the rest", complete: true });
+  assert.equal(item.text, "prefix");
+  assert.deepEqual(await resolveTimelineCopyText(item, owner, async () => null),
+    { text: "prefix", complete: false });
+  const oversized = "prefix" + "x".repeat(1048576);
+  assert.deepEqual(await resolveTimelineCopyText(item, owner,
+    async () => oversized), { text: "prefix", complete: false });
+});
+
+test("copy restores only truncated assistant chunks in their original order", async () => {
+  const items = eventsToTimeline([
+    { kind: "model_text_delta", event_id: 20, run_id: 5,
+      time: 1000000, text: "first " },
+    { kind: "model_text_delta", event_id: 21, run_id: 5,
+      time: 1000001, text: "vis", text_truncated: true },
+    { kind: "model_text_delta", event_id: 22, run_id: 5,
+      time: 1000002, text: " last" },
+  ]);
+  const answer = items.find((item) => item.kind === "assistant");
+  assert.deepEqual(await resolveTimelineCopyText(answer,
+    { projectId: "p", sessionId: "s" }, async () => "visible"),
+  { text: "first visible last", complete: true });
+  assert.deepEqual(await resolveTimelineCopyText(answer,
+    { projectId: "p", sessionId: "s" }, async () => "different"),
+  { text: "first vis last", complete: false });
 });

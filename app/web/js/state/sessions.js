@@ -108,6 +108,21 @@ export function exportSession(session) {
   return api.download(`${endpoint(session)}/export`);
 }
 
+// The event list stays small. A copy action may fetch one original event on
+// demand, but must never accept a neighbouring event after journal compaction.
+export async function readCompleteSessionEventText(projectId, sessionId,
+  eventId, kind) {
+  if (!Number.isSafeInteger(eventId) || eventId < 1 || typeof kind !== "string")
+    throw new TypeError("session event identity is invalid");
+  const path = `${endpoint({ project_id: projectId, id: sessionId })}/events`;
+  const data = (await api.get(`${path}?after=${eventId - 1}&limit=1&full_text=1`)).data;
+  const [event] = data?.items ?? [];
+  if (data?.items?.length !== 1 || event?.event_id !== eventId ||
+      event?.kind !== kind || event?.text_truncated !== false ||
+      typeof event?.text !== "string") return null;
+  return event.text;
+}
+
 // Session events are durable but served in small pages. Keep a one-click
 // transcript export bounded, and report when its source cannot be complete.
 const TRANSCRIPT_PAGE_SIZE = 32;
