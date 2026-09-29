@@ -168,7 +168,7 @@ async function check() {
   todoStore.setData({ projectId: "qa", sessionId: "seat",
     items: [{ text: "Inspect UI updated", done: true }] });
   await nextFrame();
-  const todoChangeReplaced = statusRoot.querySelector(".todo-dock") !== todoNode &&
+  const todoChangeUpdated = statusRoot.querySelector(".todo-dock") === todoNode &&
     statusRoot.querySelector(".todo-dock-list")?.textContent.includes("Inspect UI updated");
   const task = { id: 11, state: "running", label: "Check files", terminal: false,
     owner_session: "C:/qa/sessions/qa/seat/snapshot.json" };
@@ -191,7 +191,7 @@ async function check() {
   selection.removeAllRanges();
   tasksStore.setData({ items: [{ ...task, state: "pending" }] });
   await nextFrame();
-  const taskChangeReplaced = statusRoot.querySelector(".conversation-dock:not(.todo-dock)") !==
+  const taskChangeUpdated = statusRoot.querySelector(".conversation-dock:not(.todo-dock)") ===
     taskNode && statusRoot.querySelector(".conversation-dock:not(.todo-dock)")
       ?.textContent.includes("Check files");
   const currentTodo = statusRoot.querySelector(".todo-dock");
@@ -214,8 +214,8 @@ async function check() {
     approvalFocusRestored && approvalBeforeTodo &&
     arrivals.map(([kind]) => kind).join(",") === "ask,approval" &&
     expandedReachable && approvalSelectionStable && approvalChangeReplaced &&
-    todoSelectionStable && todoMetadataStable && todoChangeReplaced && taskSelectionStable &&
-    taskSelectionAfterTodoChange && taskChangeReplaced && todoSelectionAfterTaskChange &&
+    todoSelectionStable && todoMetadataStable && todoChangeUpdated && taskSelectionStable &&
+    taskSelectionAfterTodoChange && taskChangeUpdated && todoSelectionAfterTaskChange &&
     taskSelectionAfterTodoRemoved &&
     document.documentElement.scrollWidth <= innerWidth;
   const result = document.querySelector("#result");
@@ -223,8 +223,8 @@ async function check() {
   result.textContent = JSON.stringify({ askReadable, askGeometry,
     restoredDraft, restoredHeight, restoredPending, restoredStyle, approvalReadable,
     actionVisible, expandedReachable, approvalSelectionStable, approvalChangeReplaced,
-    todoSelectionStable, todoMetadataStable, todoChangeReplaced, taskSelectionStable,
-    taskSelectionAfterTodoChange, taskChangeReplaced, todoSelectionAfterTaskChange,
+    todoSelectionStable, todoMetadataStable, todoChangeUpdated, taskSelectionStable,
+    taskSelectionAfterTodoChange, taskChangeUpdated, todoSelectionAfterTaskChange,
     taskSelectionAfterTodoRemoved,
     approvalFocusRestored, approvalBeforeTodo,
     arrivals, viewport: innerWidth,

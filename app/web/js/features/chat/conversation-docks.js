@@ -59,27 +59,49 @@ function taskCard(onOpenTasks) {
   } };
 }
 
-function todoCard(items, expanded, focusKey, onToggle) {
-  const done = items.filter((item) => item.done).length;
+function todoCard(focusKey, onToggle) {
   const toggle = element("button", {
-    className: "todo-toggle", text: t("dock.todo.count", { done, count: items.length }),
-    attrs: { type: "button", "aria-expanded": String(expanded),
+    className: "todo-toggle", attrs: { type: "button",
       "data-dock-focus": focusKey },
   });
   toggle.addEventListener("click", onToggle);
-  const card = element("section", { className: "conversation-dock todo-dock" }, [toggle]);
-  if (expanded) {
-    const list = element("ol", { className: "todo-dock-list" });
+  const list = element("ol", { className: "todo-dock-list" });
+  const rows = new Map();
+  const node = element("section", { className: "conversation-dock todo-dock" },
+    [toggle, list]);
+  return { node, sync(items, expanded) {
+    const done = items.filter((item) => item.done).length;
+    const count = t("dock.todo.count", { done, count: items.length });
+    if (toggle.textContent !== count) toggle.textContent = count;
+    toggle.setAttribute("aria-expanded", String(expanded));
+    list.hidden = !expanded;
+    const occurrences = new Map();
+    const ordered = [];
+    const live = new Set();
     const current = items.findIndex((item) => !item.done);
-    for (const [index, item] of items.entries()) list.append(element("li", {
-      className: item.done ? "done" : (index === current ? "current" : ""),
-    }, [
-      element("span", { className: "todo-dock-mark", text: item.done ? "✓" : "○" }),
-      element("span", { text: item.text }),
-    ]));
-    card.append(list);
-  }
-  return card;
+    for (const [index, item] of items.entries()) {
+      // Todo snapshots have no item IDs. Match unchanged text by occurrence
+      // so inserting an earlier item does not remount the one being read.
+      const occurrence = occurrences.get(item.text) ?? 0;
+      occurrences.set(item.text, occurrence + 1);
+      const key = JSON.stringify([item.text, occurrence]);
+      live.add(key);
+      let row = rows.get(key);
+      if (!row) {
+        const mark = element("span", { className: "todo-dock-mark" });
+        row = { node: element("li", {}, [mark,
+          element("span", { text: item.text })]), mark };
+        rows.set(key, row);
+      }
+      const className = item.done ? "done" : (index === current ? "current" : "");
+      if (row.node.className !== className) row.node.className = className;
+      const mark = item.done ? "✓" : "○";
+      if (row.mark.textContent !== mark) row.mark.textContent = mark;
+      ordered.push(row.node);
+    }
+    for (const key of rows.keys()) if (!live.has(key)) rows.delete(key);
+    reconcileCards(list, ordered);
+  } };
 }
 
 function reconcileCards(root, nodes) {
@@ -427,13 +449,12 @@ export function createConversationDocks({ container, navigation, tasksStore, app
     if (todoItems.length) {
       const key = `${selected.projectId}/${sessionId}`;
       const open = expanded.get(key) !== false;
-      const contentKey = JSON.stringify({ key, open,
-        items: todoItems.map(({ text, done }) => [text, done]) });
-      if (!todoView || todoView.contentKey !== contentKey)
-        todoView = { contentKey, node: todoCard(todoItems, open, `todo/${key}`, () => {
-          expanded.set(key, !open);
+      if (!todoView || todoView.key !== key)
+        todoView = { key, ...todoCard(`todo/${key}`, () => {
+          expanded.set(key, expanded.get(key) === false);
           render();
         }) };
+      todoView.sync(todoItems, open);
       otherNodes.push(todoView.node);
     } else todoView = null;
     if (todoError) {

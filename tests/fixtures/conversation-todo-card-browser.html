@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="zh-CN">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>mdo todo dock stability probe</title>
+<link rel="stylesheet" href="/app/web/css/app.css">
+<div id="conversation-docks" class="conversation-docks"></div>
+<pre id="result"></pre>
+<script type="module">
+const { createConversationDocks } = await import(
+  `/app/web/js/features/chat/conversation-docks.js?fixture=${Date.now()}`);
+const { createResourceStore } = await import("/app/web/js/state/store.js");
+
+const items = (...entries) => entries.map(([text, done]) => ({ text, done }));
+const todoStore = createResourceStore({ projectId: "qa", sessionId: "todo-card",
+  items: items(["Review the plan", false], ["Keep reading this item", false]) });
+const empty = () => createResourceStore({ items: [] });
+const navigation = {
+  get: () => ({ view: "workspace", projectId: "qa", sessionId: "todo-card" }),
+  subscribe(listener) { listener(this.get()); return () => {}; },
+};
+createConversationDocks({
+  container: document.querySelector("#conversation-docks"), navigation,
+  tasksStore: empty(), approvalsStore: empty(), runsStore: empty(),
+  asksStore: createResourceStore({ projectId: "qa", sessionId: "todo-card",
+    loaded: true, items: [] }), todoStore,
+  onOpenTasks() {}, onChanged: async () => {},
+});
+
+const card = document.querySelector(".todo-dock");
+const toggle = card.querySelector(".todo-toggle");
+const list = card.querySelector(".todo-dock-list");
+const secondText = list.querySelectorAll("li span:last-child")[1];
+const range = document.createRange();
+range.setStart(secondText.firstChild, 0);
+range.setEnd(secondText.firstChild, 12);
+getSelection().removeAllRanges();
+getSelection().addRange(range);
+const selected = getSelection().toString();
+
+todoStore.setData({ projectId: "qa", sessionId: "todo-card",
+  items: items(["Review the plan", true], ["Keep reading this item", false],
+    ["New trailing item", false]) });
+const nextCard = document.querySelector(".todo-dock");
+const progressKept = nextCard === card &&
+  nextCard.querySelector(".todo-toggle") === toggle &&
+  nextCard.querySelectorAll("li span:last-child")[1] === secondText &&
+  getSelection().toString() === selected &&
+  nextCard.querySelector("li").classList.contains("done") &&
+  nextCard.querySelectorAll("li").length === 3;
+
+todoStore.setData({ projectId: "qa", sessionId: "todo-card",
+  items: items(["New leading item", false], ["Review the plan", true],
+    ["Keep reading this item", false], ["New trailing item", false]) });
+const insertionKept = card.querySelectorAll("li span:last-child")[2] ===
+  secondText && getSelection().toString() === selected;
+
+toggle.focus();
+toggle.click();
+const collapsed = document.activeElement === toggle &&
+  toggle.getAttribute("aria-expanded") === "false" && list.hidden;
+toggle.click();
+const expanded = document.activeElement === toggle &&
+  toggle.getAttribute("aria-expanded") === "true" && !list.hidden &&
+  card.querySelectorAll("li span:last-child")[2] === secondText;
+const passed = progressKept && insertionKept && collapsed && expanded;
+const result = document.querySelector("#result");
+result.dataset.passed = String(passed);
+result.textContent = JSON.stringify({ passed, progressKept, insertionKept,
+  collapsed, expanded }, null, 2);
+</script>
+</html>
