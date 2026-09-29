@@ -69,12 +69,32 @@ tasksStore.setData({ items: [task(2, "running", "Second task updated")] });
 const focusKept = document.activeElement === open &&
   document.querySelector(".conversation-dock button") === open &&
   dock.querySelector("li span:last-child").textContent === "Second task updated";
+tasksStore.setData({ items: [
+  task(1, "pending", "First task"),
+  task(2, "running", "Second task updated"),
+  task(3, "pending", "Third task"),
+] });
+const reorderedRange = document.createRange();
+reorderedRange.setStart(secondLabel.firstChild, 0);
+reorderedRange.setEnd(secondLabel.firstChild, 6);
+getSelection().removeAllRanges();
+getSelection().addRange(reorderedRange);
+tasksStore.setData({ items: [
+  task(3, "pending", "Third task"),
+  task(2, "running", "Second task updated"),
+  task(1, "pending", "First task"),
+] });
+const labelsAfterReorder = [...dock.querySelectorAll("li span:last-child")];
+const reorderKept = labelsAfterReorder[1] === secondLabel &&
+  labelsAfterReorder.map((node) => node.textContent).join() ===
+    "Third task,Second task updated,First task" &&
+  getSelection().toString() === "Second";
 const passed = sameCard && sameLabel && sameButton && selectionKept && updated &&
-  removalKept && focusKept;
+  removalKept && focusKept && reorderKept;
 const result = document.querySelector("#result");
 result.dataset.passed = String(passed);
 result.textContent = JSON.stringify({ passed, sameCard, sameLabel, sameButton,
-  selectionKept, updated, removalKept, focusKept,
+  selectionKept, updated, removalKept, focusKept, reorderKept,
   selection: getSelection().toString() }, null, 2);
 </script>
 </html>

@@ -111,16 +111,22 @@ function reconcileCards(root, nodes) {
   }
   const focused = nodes.find((node) =>
     node.parentElement === root && node.contains(document.activeElement));
-  if (focused) {
-    // Reorder around the focused card so its editor or button never detaches.
-    const index = nodes.indexOf(focused);
-    let next = focused;
+  const selection = document.getSelection();
+  const selected = selection && !selection.isCollapsed ? nodes.find((node) =>
+    node.parentElement === root && node.contains(selection.anchorNode) &&
+      node.contains(selection.focusNode)) : null;
+  const anchor = focused ?? selected;
+  if (anchor) {
+    // Move surrounding nodes instead of detaching an active editor or the
+    // text row the user is reading.
+    const index = nodes.indexOf(anchor);
+    let next = anchor;
     for (let i = index - 1; i >= 0; --i) {
       const node = nodes[i];
       if (node.nextElementSibling !== next) root.insertBefore(node, next);
       next = node;
     }
-    let previous = focused;
+    let previous = anchor;
     for (let i = index + 1; i < nodes.length; ++i) {
       const node = nodes[i];
       if (previous.nextElementSibling !== node)

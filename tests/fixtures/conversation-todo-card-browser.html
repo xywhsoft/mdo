@@ -55,6 +55,12 @@ todoStore.setData({ projectId: "qa", sessionId: "todo-card",
 const insertionKept = card.querySelectorAll("li span:last-child")[2] ===
   secondText && getSelection().toString() === selected;
 
+todoStore.setData({ projectId: "qa", sessionId: "todo-card",
+  items: items(["New trailing item", false], ["Keep reading this item", false],
+    ["Review the plan", true], ["New leading item", false]) });
+const reorderKept = card.querySelectorAll("li span:last-child")[1] ===
+  secondText && getSelection().toString() === selected;
+
 toggle.focus();
 toggle.click();
 const collapsed = document.activeElement === toggle &&
@@ -62,11 +68,12 @@ const collapsed = document.activeElement === toggle &&
 toggle.click();
 const expanded = document.activeElement === toggle &&
   toggle.getAttribute("aria-expanded") === "true" && !list.hidden &&
-  card.querySelectorAll("li span:last-child")[2] === secondText;
-const passed = progressKept && insertionKept && collapsed && expanded;
+  card.querySelectorAll("li span:last-child")[1] === secondText;
+const passed = progressKept && insertionKept && reorderKept && collapsed &&
+  expanded;
 const result = document.querySelector("#result");
 result.dataset.passed = String(passed);
 result.textContent = JSON.stringify({ passed, progressKept, insertionKept,
-  collapsed, expanded }, null, 2);
+  reorderKept, collapsed, expanded }, null, 2);
 </script>
 </html>
