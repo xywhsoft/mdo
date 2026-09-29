@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { createDraftStore } from "../app/web/js/features/chat/draft-store.js";
+import { createDraftStore, projectDraftKey } from "../app/web/js/features/chat/draft-store.js";
 import { createNewTaskController, taskTitle } from "../app/web/js/features/chat/new-task-controller.js";
 import { SESSION_TITLE_UTF8_LIMIT, sessionTitleUtf8Bytes } from "../app/web/js/features/sessions/session-title.js";
 
@@ -38,9 +38,10 @@ test("attachment-first creation recovers a lost create response", async () => {
   try {
     const draftStore = createDraftStore({ onRestore() {},
       onError(error) { throw error; }, onSaved() {} });
-    draftStore.select("");
-    assert.equal(await draftStore.ensureLoaded(""), true);
-    draftStore.edit("", "image prompt", [], true);
+    const projectKey = projectDraftKey("default");
+    draftStore.select(projectKey);
+    assert.equal(await draftStore.ensureLoaded(projectKey), true);
+    draftStore.edit(projectKey, "image prompt", [], true);
     const controller = createNewTaskController({ draftStore,
       newId() { return sessionId; },
       async createSession(input) {
@@ -68,6 +69,7 @@ test("attachment-first creation recovers a lost create response", async () => {
     assert.equal(migrated, `default/${sessionId}`);
     assert.equal(documents.get("/api/v1/draft").new_task, null);
     assert.equal(documents.get("/api/v1/draft").text, "");
+    assert.equal(documents.get("/api/v1/projects/default/draft").text, "");
     const target = documents.get(`/api/v1/projects/default/sessions/${sessionId}/draft`);
     assert.equal(target.text, "image prompt");
     assert.deepEqual(target.submissions, []);
@@ -133,6 +135,7 @@ test("new-task inputs survive a delayed create and move in order", async () => {
     assert.equal(await controller.submit({ projectId: "default",
       text: "first", profile }), true);
     await started;
+    assert.equal(documents.get("/api/v1/projects/default/draft").text, "");
     assert.equal(await controller.submit({ projectId: "default",
       text: "second", profile }), true);
     assert.equal(documents.get(globalPath).submissions.length, 2);
@@ -250,6 +253,7 @@ test("a conflicting create response never attaches input to another session", as
   const controller = createNewTaskController({
     draftStore: {
       newTask() { return task; }, submissions() { return [item]; },
+      text(key) { return key ? "" : item.text; },
       async ensureLoaded() { return true; },
       async flush() { return true; },
     },
@@ -277,6 +281,7 @@ test("an uncertain create keeps its original ID and profile on review", async ()
   const controller = createNewTaskController({
     draftStore: {
       newTask() { return task; }, submissions() { return [item]; },
+      text(key) { return key ? "" : item.text; },
       async ensureLoaded() { return true; }, async flush() { return true; },
       reseedNewTask() { assert.fail("uncertain create must keep its ID"); },
     },

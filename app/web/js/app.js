@@ -41,6 +41,7 @@ import { feedbackStore, selectFeedback, clearFeedback, setFeedback } from "./fea
 import { createConversationDocks } from "./features/chat/conversation-docks.js";
 import { createPromptQueue } from "./features/chat/prompt-queue.js";
 import { createDraftStore } from "./features/chat/draft-store.js";
+import { createProjectDraftSelection } from "./features/chat/project-draft-selection.js";
 import { createSubmissionController } from "./features/chat/submission-controller.js";
 import { createNewTaskController, taskTitle } from "./features/chat/new-task-controller.js";
 import { createComposerImages, unsupportedModelError } from "./features/chat/composer-images.js";
@@ -151,8 +152,11 @@ export async function boot() {
   const stoppingRunIds = new Set();
   let runMonitor = 0;
   let selectedKey = "";
+  let selectedDraftKey = "";
   let lastWorkspaceProjectId = "";
   let creatingSessionKey = "";
+  let migratedDraftTarget = "";
+  let skipLegacyDraftCapture = false;
   let tasksTimer = 0;
   let runsTimer = 0;
   let sessionTimer = 0;
@@ -166,6 +170,7 @@ export async function boot() {
   let composerAttachments = [];
   let composerImages = null;
   let newTaskController = null;
+  let projectDraftSelection = null;
   let shortcuts;
   const queueBlocked = createQueueGate();
   // A cancelled run can remain nonterminal through several polls. Avoid
@@ -670,8 +675,13 @@ export async function boot() {
     },
     onLoaded() { setRun(activeRun); promptQueue.render(); },
   });
+  projectDraftSelection = createProjectDraftSelection({ draftStore, navigation,
+    onFailure: (error) => showComposerError(error),
+    onChange: () => setRun(activeRun),
+    onMigrated: () => { skipLegacyDraftCapture = selectedDraftKey === ""; },
+  });
   navigation.setNewTaskGuard(
-    () => draftStore.newTask()?.project_id,
+    () => projectDraftSelection.owner(),
     () => toast(t("composer.newTaskOtherProject"), "error"));
   submissionController = createSubmissionController({
     draftStore, promptQueue,
@@ -722,6 +732,7 @@ export async function boot() {
     },
   });
   draftStore.select("");
+  void projectDraftSelection.restoreLegacy();
   const composerProfile = createComposerProfile({
     modelSelect: $("#composer-model"), reasoningSelect: $("#composer-reasoning"),
     permissionSelect: $("#composer-permission"), navigation,
@@ -749,8 +760,19 @@ export async function boot() {
     async findSession(projectId, sessionId) {
       return (await api.get(`/projects/${projectId}/sessions/${sessionId}`)).data;
     },
-    onPersisted(item) {
+    onPersisted(item, projectId) {
+      const before = navigation.get();
+      if (before.view === "workspace" && !before.sessionId &&
+          (before.projectId || "default") !== projectId)
+        navigation.revalidate();
+      const route = navigation.get();
+      if (route.view !== "workspace" || route.sessionId ||
+          (route.projectId || "default") !== projectId) return;
       clearSubmittedComposer("", item);
+      if (selectedDraftKey !== "") {
+        selectedDraftKey = "";
+        draftStore.select("");
+      }
       setRun(activeRun);
     },
     onMigrated(key) {
@@ -762,6 +784,7 @@ export async function boot() {
         const returnFocus = composerError.contains(document.activeElement) ||
           document.activeElement === $("#composer-project");
         creatingSessionKey = key;
+        migratedDraftTarget = key;
         navigation.select(projectId, sessionId);
         selectTimeline(projectId, sessionId);
         if (returnFocus && !prompt.disabled) prompt.focus({ preventScroll: true });
@@ -774,6 +797,11 @@ export async function boot() {
       } else toast(errorMessage(error), "error");
     },
     onChange() {
+      if (!navigation.get().sessionId && draftStore.newTask() &&
+          selectedDraftKey !== "") {
+        selectedDraftKey = "";
+        draftStore.select("");
+      }
       if (!navigation.get().sessionId) setRun(activeRun);
       promptQueue.render();
     },
@@ -786,7 +814,7 @@ export async function boot() {
     ensureSession: (text) => ensureSession(text, composerProfile.selection()),
     onChange(attachments) {
       composerAttachments = attachments;
-      draftStore.edit(selectedKey, prompt.value, attachments);
+      draftStore.edit(selectedDraftKey, prompt.value, attachments);
       tokenMeter.refresh();
     },
     async onBeforeRemove(owner, id) {
@@ -932,18 +960,26 @@ export async function boot() {
     const pendingNewTask = !route.sessionId && Boolean(draftStore.newTask());
     const migratingNewTask = !route.sessionId &&
       Boolean(newTaskController?.isMigrating());
-    const firstSubmission = draftStore.submission(selectedKey);
+    const selectingProjectDraft = !route.sessionId && selectedDraftKey === "" &&
+      !pendingNewTask && !projectDraftSelection?.owner();
+    const firstSubmission = draftStore.submission(selectedDraftKey);
     const creatingSession = Boolean(creatingSessionKey) &&
       creatingSessionKey === `${route.projectId}/${route.sessionId}`;
     const serviceFailed = Boolean(bootstrapFailure());
     // Keep keyboard focus while a newly created session loads its detail.
     prompt.disabled = serviceFailed || messageActionBusy ||
+      selectingProjectDraft ||
+      projectDraftSelection?.isMigrating() ||
+      newTaskController?.isPreparing() ||
       (!sessionWritable && !creatingSession) || migratingNewTask;
     sendBlockedByState = serviceFailed || !(sessionWritable || creatingSession) ||
       composerProfile.isBusy() || messageActionBusy ||
-      !draftStore.isLoaded(selectedKey) ||
-      draftStore.isRunUncertain(selectedKey) ||
-      draftStore.submissions(selectedKey).length >= 20 ||
+      !draftStore.isLoaded(selectedDraftKey) ||
+      selectingProjectDraft ||
+      draftStore.isRunUncertain(selectedDraftKey) ||
+      draftStore.submissions(selectedDraftKey).length >= 20 ||
+      projectDraftSelection?.isMigrating() ||
+      newTaskController?.isPreparing() ||
       (!route.sessionId && Boolean(newTaskController?.isBlocked())) ||
       migratingNewTask ||
       Boolean(submissionController?.isReleasing(selectedKey));
@@ -957,12 +993,13 @@ export async function boot() {
       : t("shell.send", {}, "发送任务"));
     composerHint.textContent = messageActionBusy
       ? t("messageAction.busy", {}, "请等待当前消息操作完成")
-      : draftStore.isRunUncertain(selectedKey)
-      ? t("composer.hintReviewRun") : !draftStore.isLoaded(selectedKey)
+      : draftStore.isRunUncertain(selectedDraftKey)
+      ? t("composer.hintReviewRun") : (selectingProjectDraft ||
+          !draftStore.isLoaded(selectedDraftKey))
       ? t("composer.hintLoadingDraft") : firstSubmission?.state === "rejected"
       ? t("composer.hintRejectedSubmission") : firstSubmission?.state === "posting" &&
           !submissionController?.isBusy(selectedKey)
-      ? t("composer.hintReviewSubmission") : draftStore.submissions(selectedKey).length
+      ? t("composer.hintReviewSubmission") : draftStore.submissions(selectedDraftKey).length
       ? t("composer.hintSavingSubmission") : activeRun
       ? (guide
         ? t("composer.hintGuide", {}, "Enter 中断并发送 · Ctrl Enter 排队")
@@ -1460,6 +1497,7 @@ export async function boot() {
     }
     composer.toggleAttribute("data-new-task", !sessionId);
     const key = projectId && sessionId ? `${projectId}/${sessionId}` : "";
+    const nextDraftKey = projectDraftSelection.key({ projectId, sessionId });
     const currentProjectId = projectId || "default";
     // New tasks share an empty draft key, but a transient composer error still
     // belongs to the project where it occurred.
@@ -1485,7 +1523,7 @@ export async function boot() {
     // Returning from Settings may keep the same selected session, so refresh
     // the context before the same-session fast path below.
     updateContext(sessionDetailStore.get());
-    if (key === selectedKey) {
+    if (key === selectedKey && nextDraftKey === selectedDraftKey) {
       if (key) {
         const finishLoad = queueBlocked.beginLoad(key);
         try {
@@ -1512,10 +1550,17 @@ export async function boot() {
       }
       return;
     }
-    draftStore.capture(selectedKey, prompt.value, composerAttachments);
+    // The new-session controller already copied the editor into the target
+    // draft. Capturing it again would resurrect a sent prompt in the source.
+    if (migratedDraftTarget !== key &&
+        !(skipLegacyDraftCapture && selectedDraftKey === ""))
+      draftStore.capture(selectedDraftKey, prompt.value, composerAttachments);
+    migratedDraftTarget = "";
+    skipLegacyDraftCapture = false;
     selectedKey = key;
+    selectedDraftKey = nextDraftKey;
     hideComposerError();
-    draftStore.select(key);
+    draftStore.select(nextDraftKey);
     window.clearTimeout(runMonitor);
     runMonitor = 0;
     activeRun = null;
@@ -1803,9 +1848,9 @@ export async function boot() {
     const rawInput = fromComposer ? prompt.value : text;
     const origin = navigation.get();
     const originVersion = routeVersion;
-    if (!draftStore.isLoaded(selectedKey) &&
-        !await draftStore.ensureLoaded(selectedKey)) return;
-    if (draftStore.isRunUncertain(selectedKey)) {
+    if (!draftStore.isLoaded(selectedDraftKey) &&
+        !await draftStore.ensureLoaded(selectedDraftKey)) return;
+    if (draftStore.isRunUncertain(selectedDraftKey)) {
       showComposerError(uncertainRunError());
       return;
     }
@@ -1887,7 +1932,7 @@ export async function boot() {
   prompt.addEventListener("blur", () => { promptComposing = false; });
   prompt.addEventListener("input", () => {
     resizePrompt();
-    draftStore.edit(selectedKey, prompt.value, composerAttachments);
+    draftStore.edit(selectedDraftKey, prompt.value, composerAttachments);
     tokenMeter.refresh();
     syncSendDisabled();
   });

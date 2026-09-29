@@ -109,9 +109,15 @@ function sameNewTask(a, b) {
 
 function endpoint(key) {
   if (!key) return "/draft";
+  if (key.startsWith("project:"))
+    return `/projects/${resourceId(key.slice("project:".length), "project")}/draft`;
   const [projectId, sessionId, extra] = key.split("/");
   if (extra !== undefined) throw new TypeError("Invalid draft owner");
   return `/projects/${resourceId(projectId, "project")}/sessions/${resourceId(sessionId, "session")}/draft`;
+}
+
+export function projectDraftKey(projectId) {
+  return `project:${resourceId(projectId, "project")}`;
 }
 
 export function createDraftStore({ onRestore, onError, onSaved, onLoaded = () => {} }) {

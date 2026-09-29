@@ -1,4 +1,5 @@
 import { t } from "../../i18n.js";
+import { projectDraftKey } from "./draft-store.js";
 import { SESSION_TITLE_UTF8_LIMIT, sessionTitleUtf8Bytes } from "../sessions/session-title.js";
 
 export function taskTitle(text, fallback = "") {
@@ -22,6 +23,7 @@ function sameSubmission(a, b) {
 export function createNewTaskController({ draftStore, newId, createSession,
   findSession, onPersisted, onMigrated, onReview, onChange }) {
   let pumping = false;
+  let preparing = false;
   let migrating = false;
   let blocked = false;
   let createRejected = false;
@@ -83,10 +85,25 @@ export function createNewTaskController({ draftStore, newId, createSession,
     const task = draftStore.newTask();
     if (!task) return;
     pumping = true;
+    preparing = true;
     changed();
     try {
+      const firstText = draftStore.submissions("")[0]?.text ??
+        draftStore.text("");
       if (!await draftStore.flush(""))
         throw new Error(t("composer.newTaskSaveFailed"));
+      // Once the global journal is durable, remove the exact submitted text
+      // from its project editor. If the app exits here, the next pump repeats
+      // this comparison before creating or replaying the session.
+      const projectKey = projectDraftKey(task.project_id);
+      if (!await draftStore.ensureLoaded(projectKey))
+        throw new Error(t("composer.newTaskSaveFailed"));
+      if (firstText && draftStore.text(projectKey) === firstText)
+        draftStore.clear(projectKey);
+      if (!await draftStore.flush(projectKey))
+        throw new Error(t("composer.newTaskSaveFailed"));
+      preparing = false;
+      changed();
       try { await sessionFor(task); }
       catch (error) {
         createRejected = task.phase === "creating" &&
@@ -109,6 +126,7 @@ export function createNewTaskController({ draftStore, newId, createSession,
       blocked = true;
       onReview(error);
     } finally {
+      preparing = false;
       migrating = false;
       pumping = false;
       changed();
@@ -116,7 +134,7 @@ export function createNewTaskController({ draftStore, newId, createSession,
   }
 
   async function submit({ projectId, text, profile, fromComposer = true }) {
-    if (blocked || migrating)
+    if (blocked || preparing || migrating)
       throw new Error(t("composer.newTaskBusy"));
     if (!await draftStore.ensureLoaded(""))
       throw new Error(t("composer.newTaskSaveFailed"));
@@ -125,6 +143,14 @@ export function createNewTaskController({ draftStore, newId, createSession,
       throw new Error(t("composer.newTaskOtherProject"));
     if (task?.phase === "copying")
       throw new Error(t("composer.newTaskBusy"));
+    if (!task && fromComposer) {
+      const projectKey = projectDraftKey(projectId);
+      if (!await draftStore.ensureLoaded(projectKey))
+        throw new Error(t("composer.newTaskSaveFailed"));
+      draftStore.capture(projectKey, text);
+      if (!await draftStore.flush(projectKey))
+        throw new Error(t("composer.newTaskSaveFailed"));
+    }
     const id = task && !draftStore.submissions("").length
       ? task.session_id : newId();
     const item = { id, text, attachments: [], interrupt: false,
@@ -144,7 +170,7 @@ export function createNewTaskController({ draftStore, newId, createSession,
       throw new Error(t("composer.queueFull"));
     // Hand the editor to the next prompt immediately. The in-memory journal
     // remains dirty until the portable Home confirms this snapshot.
-    onPersisted(item);
+    onPersisted(item, projectId);
     changed();
     if (!await draftStore.flush("")) {
       blocked = true;
@@ -168,6 +194,12 @@ export function createNewTaskController({ draftStore, newId, createSession,
       throw new Error(t("composer.newTaskSaveFailed"));
     if (draftStore.newTask() || draftStore.submissions("").length)
       throw new Error(t("composer.newTaskBusy"));
+    const projectKey = projectDraftKey(projectId);
+    if (!await draftStore.ensureLoaded(projectKey) ||
+        !await draftStore.flush(projectKey))
+      throw new Error(t("composer.newTaskSaveFailed"));
+    if (draftStore.text(projectKey))
+      draftStore.capture("", draftStore.text(projectKey));
     const sessionId = newId();
     if (!draftStore.setNewTask({ project_id: projectId,
       session_id: sessionId, title, agent_id: "mdo.default",
@@ -194,6 +226,7 @@ export function createNewTaskController({ draftStore, newId, createSession,
 
   return Object.freeze({ submit, reconcile, review, createForAttachment,
     isBusy() { return pumping || (blocked && !createRejected); },
+    isPreparing() { return preparing; },
     isBlocked() { return blocked; },
     canChangeProfile() { return blocked && createRejected; },
     isMigrating() { return migrating; },
