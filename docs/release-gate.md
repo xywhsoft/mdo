@@ -34,6 +34,8 @@ python3 tools/qa_release.py --xserver-root /path/to/xserver
 
 任一步失败都会返回非零退出码。构建产物与探针临时目录位于 `.build/qa-release/`，不进入版本控制。
 
+Windows 真实页面绘制的人工检查可另外运行 `pwsh -NoProfile -File tests/native-webview-snapshot.ps1 -PackedPath .\mdo.exe`。它将截图留在 `.build/native-webview-qa-*/window.png`；需要检查会话恢复时可加 `-SeedHome <已有 mdo-home 目录>`，脚本会复制该 Home，不会改动原件。必须人工查看截图中的实际内容；这个检查不证明点击、拖放或偶发启动故障已消失。
+
 ## 当前验证证据
 
 | 平台 | 结果 | 确定性 pack SHA-256 |

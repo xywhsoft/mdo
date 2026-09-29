@@ -1720,6 +1720,14 @@ Windows 有界发布门禁通过 114 项 Python、101 项 Node、75 个前端模
 
 Windows 有界发布门禁通过 114 项 Python、101 项 Node、75 个前端模块解析、21 个运行探针、严格 C 编译、确定性打包、便携 WebView2 Home 与 20 秒单文件启动。Linux 独立 ext4 工作树通过同样的单元、模块、运行探针及确定性打包（跳过 GUI 启动）。根目录 `mdo.exe` 已更新，SHA-256 为 `bf5e097f3ead77d7b23ad5539a1aa2d26416986a2fcf33f4b55ace7f6fb91a20`；Linux 包为 `53c9f23ec3b01e4c212b6729f7baf69f7591bbbc3ac8e11f4fc59322326973c5`。未做压力或高负载测试。
 
+## 2026-09-30：原生 WebView2 单文件窗口对照
+
+之前的发布门禁只确认 Windows 原生窗口能打开、WebView2 数据写入便携 Home、进程能存活 20 秒，不能证明页面实际绘制出可用内容。新增 `tests/native-webview-snapshot.ps1`：把指定单文件包复制到独立目录，可选复制会话 Home；等待真实原生窗口，以 `PrintWindow` 抓取窗口内容，随后正常关窗。截图留在被忽略的 `.build/native-webview-qa-*/window.png` 供人工检查；脚本不把像素数量当作启动成功判据，也不发起模型调用。
+
+对 SHA-256 为 `bf5e097f3ead77d7b23ad5539a1aa2d26416986a2fcf33f4b55ace7f6fb91a20` 的根目录 `mdo.exe` 做两次有界检查。全新 Home `.build/native-webview-qa-4701858b2eeb4edd8e0031563fff0b0a` 的原生窗口显示新任务欢迎页、焦点框、Ling 3.0 Tiny、思考强度和权限。会话 Home 从此前目录延迟验证夹具复制到 `.build/native-webview-qa-659fda46249f4e549bd9ed364cc50dd0`；原生窗口直接恢复“Packed docks QA”，显示上一轮用户与 Agent 消息、复制/分叉/重试/反馈入口、7 输入 / 3 输出 tokens 和 token/s，输入区可见。两个窗口均在约 5 秒抓图后正常关闭，原始夹具 Home 未被修改。
+
+本项缩小了“原生 WebView2 完全不能执行新前端”的可能性，不能推断偶发空壳已解决。两次没有复现该故障，且窗口截图不包含模块执行状态、网络响应或操作结果；真正故障发生时仍须抓取这些证据，原生点击、文件拖放及实体移动端仍待验收。Windows 有界发布门禁再通过 114 项 Python、101 项 Node、75 个前端模块解析、21 个运行探针、严格 C 编译、确定性打包、便携 WebView2 Home 与 20 秒单文件启动；重新生成的包与根目录 `mdo.exe` 同为上述 SHA-256。此阶段仅新增手动 QA 脚本与文档，产品源码和打包字节不变；不做压力或高负载测试。
+
 ## 2026-09-29：项目级新任务草稿存储接口
 
 代码审计确认新任务在首次发送前共用 `data/draft.json`：切换项目时 `selectedKey` 仍为空，只有写前日志生成 `new_task` 后才阻止跨项目导航。因此未发送文本会跟随项目切换；旧版按懒会话 ID 分开保存草稿。新接口 `GET/HEAD/PUT /api/v1/projects/{project}/draft` 为合法项目 ID 提供独立的 `data/project-drafts/{project}.json`，沿用 revision 冲突、64 KiB 文本上限和 Home 原子写入。空草稿 GET 不创建文件；项目定义尚未建立时也可保存，因为现有新任务允许先选择默认或未登记项目。此接口只接收文本与可选输入配置，不接受图片、待提交意图、`new_task` 或运行核对标记；创建中的写前日志仍由全局 `/draft` 保存。
