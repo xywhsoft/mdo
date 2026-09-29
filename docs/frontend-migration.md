@@ -4,6 +4,14 @@
 
 完成判据及尚缺的打包页证据见 [前端操作体验完成审计](frontend-completion-audit.md)。本文件继续记录每次实现和验证的细节。
 
+## 2026-09-30：拖放对象不可读取时明确提示
+
+上一阶段支持 item-only 图片拖放后，仍有一个 WebView 边界：拖放事件报告文件，但 `files` 为空且文件 item 的 `getAsFile()` 返回空。此时浏览器导航已被阻止，页面原先既不上传也不提示，用户可能误以为图片已经加入草稿。现在清除拖放高亮后在输入区显示明确的“无法读取拖放的文件，请使用‘添加图片’选择”，并提供中英俄三语文案；没有文件对象时不发上传请求。
+
+生产模块夹具 `tests/fixtures/composer-upload-session-browser.html` 在旧实现复现 `unreadableHandled=true`、错误列表为空；修复后出现 `image.dropUnavailable` 错误及中文提示。九项既有上传、剪贴板、item-only 拖放和模型兼容场景继续通过，合计十项，浏览器脚本错误为空。该测试使用合成 DataTransfer，不代替操作系统原生拖放或实体设备验收。
+
+Windows/Linux 有界门禁均通过 114 项 Python 测试、77 个前端模块解析、21 个运行探针及确定性打包；Windows 另通过便携 WebView2 Home 和 20 秒启动。根目录 `mdo.exe` 与 Windows 包 SHA-256 为 `ae1daf5fc62cee94f2e960c9932faaf9b642eee307a7e626e61ed3d64592b710`，Linux 包为 `d8f0cd96f1a94de6d97b78e43a9a833c450ce6ac5dd98cb7c1725beebafe5e60`。未做压力或高负载测试。
+
 ## 2026-09-30：拖放图片可从 item-only 数据读取
 
 输入区原先用 `DataTransfer.items` 识别文件拖放，却只从 `DataTransfer.files` 取上传内容。有些 WebView 在放下时仍只提供带 `getAsFile()` 的 item；旧逻辑会阻止页面导航并清除拖放提示，但既不上传也不报错。现在优先读取 `files`，为空时从文件 item 提取图片，并在文件自身未给出类型时使用 item 提供的图片 MIME；两种集合同时存在时只上传一次。

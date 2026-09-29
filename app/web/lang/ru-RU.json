@@ -443,6 +443,7 @@
   "composer.describe": "Опишите задачу агенту",
   "composer.attachTypes": "Добавить изображение (PNG, JPEG, WebP)",
   "image.dropHint": "Отпустите, чтобы добавить изображения",
+  "image.dropUnavailable": "Не удалось прочитать перетащенный файл. Добавьте изображение кнопкой.",
   "image.remove": "Удалить изображение {number}",
   "image.view": "Открыть изображение {number}",
   "image.alt": "Изображение {number}",

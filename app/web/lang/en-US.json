@@ -443,6 +443,7 @@
   "composer.describe": "Describe a task for the agent",
   "composer.attachTypes": "Add image (PNG, JPEG, WebP)",
   "image.dropHint": "Release to add images",
+  "image.dropUnavailable": "Could not read the dropped file. Use Add image to select it.",
   "image.remove": "Remove image {number}",
   "image.view": "View image {number}",
   "image.alt": "Image {number}",

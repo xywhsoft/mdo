@@ -69,6 +69,7 @@ function createCase(label, initialRoute, ensureSession) {
   let selectedModelId = "image";
   const changes = [];
   const errors = [];
+  const errorKeys = [];
   const images = createComposerImages({ composer, prompt, button, input, strip,
     modelSelect,
     navigation: { get: () => route },
@@ -81,7 +82,10 @@ function createCase(label, initialRoute, ensureSession) {
       return route;
     },
     onChange: (value) => changes.push({ session: route.sessionId, value }),
-    onUploading() {}, onError: (error) => errors.push(error.message),
+    onUploading() {}, onError(error) {
+      errors.push(error.message);
+      errorKeys.push(error.localizedMessageKey);
+    },
     onDiscardedUpload: (owner, id) => api.deleteImage(owner.projectId,
       owner.sessionId, id),
   });
@@ -123,8 +127,16 @@ function createCase(label, initialRoute, ensureSession) {
     composer.dispatchEvent(event);
     return event.defaultPrevented;
   }
-  return { images, button, strip, output, changes, errors, add,
-    pasteItemOnly, pasteFilesOnly, pasteBoth, dropItemOnly,
+  function dropUnreadable() {
+    const event = new Event("drop", { bubbles: true, cancelable: true });
+    Object.defineProperty(event, "dataTransfer", { value: {
+      types: ["Files"], files: [], items: [{ kind: "file", getAsFile: () => null }],
+    } });
+    composer.dispatchEvent(event);
+    return event.defaultPrevented;
+  }
+  return { images, button, strip, output, changes, errors, errorKeys, add,
+    pasteItemOnly, pasteFilesOnly, pasteBoth, dropItemOnly, dropUnreadable,
     setModel(value) { selectedModelId = value; modelSelect.value = value;
       images.refresh(); },
     setRoute(value) { route = value; images.set([]); } };
@@ -235,6 +247,16 @@ try {
   droppedItem.output.dataset.passed = String(dropPassed);
   droppedItem.output.textContent = JSON.stringify({ dropPassed,
     dropHandled, uploads: dropUploads, errors: droppedItem.errors }, null, 2);
+
+  const unreadableDrop = createCase("无法读取文件对象的拖放",
+    { projectId: "qa", sessionId: "drop-unreadable" });
+  const unreadableHandled = unreadableDrop.dropUnreadable();
+  const unreadablePassed = unreadableHandled &&
+    unreadableDrop.errorKeys.includes("image.dropUnavailable") &&
+    !uploadTypes.some((item) => item.session === "drop-unreadable");
+  unreadableDrop.output.dataset.passed = String(unreadablePassed);
+  unreadableDrop.output.textContent = JSON.stringify({ unreadablePassed,
+    unreadableHandled, errors: unreadableDrop.errors }, null, 2);
 
   const incompatible = createCase("图片草稿与模型切换",
     { projectId: "qa", sessionId: "image-draft" });

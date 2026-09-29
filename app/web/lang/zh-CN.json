@@ -443,6 +443,7 @@
   "composer.describe": "向 Agent 描述任务",
   "composer.attachTypes": "添加图片（PNG、JPEG、WebP）",
   "image.dropHint": "松开以添加图片",
+  "image.dropUnavailable": "无法读取拖放的文件，请使用“添加图片”选择",
   "image.remove": "移除图片 {number}",
   "image.view": "查看图片 {number}",
   "image.alt": "图片 {number}",

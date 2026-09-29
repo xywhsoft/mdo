@@ -395,7 +395,13 @@ export function createComposerImages({ composer, prompt, button, input, strip,
     if (!hasDraggedFiles(event.dataTransfer)) return;
     event.preventDefault();
     clearDragTarget();
-    void addFiles(droppedFiles(event.dataTransfer));
+    const files = droppedFiles(event.dataTransfer);
+    if (!files.length) {
+      onError(selectionError("image.dropUnavailable",
+        "无法读取拖放的文件，请使用“添加图片”选择"));
+      return;
+    }
+    void addFiles(files);
   });
   // A file released outside the composer would otherwise replace the page in
   // some browsers, taking an unsent draft with it. Leave other drop targets
