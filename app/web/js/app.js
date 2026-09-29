@@ -2441,20 +2441,30 @@ export async function boot() {
   const settingsReady = loadSettings();
   void settingsReady.then(() => settingsView.localeReady())
     .then(() => paneLayout.load());
+  let initialLoadWarned = false;
+  function reportInitialLoad(results) {
+    if (initialLoadWarned ||
+        !results.some((result) => result.status === "rejected")) return;
+    initialLoadWarned = true;
+    toast(t("resource.partialLoad", {}, "部分资源暂时无法载入，可继续重试。"), "error");
+  }
+  // Task, approval, and Settings catalogs populate their own subscribed views.
+  // A slow unrelated resource must not keep an explicit conversation route on
+  // the uninitialized new-task shell.
+  void Promise.allSettled([
+    loadManagementResources(),
+    loadTasks(),
+    loadApprovals(),
+  ]).then(reportInitialLoad);
   const initial = await Promise.allSettled([
     loadBootstrap(),
     loadSessions(),
     loadCatalogs(),
     settingsReady,
-    loadManagementResources(),
-    loadTasks(),
-    loadApprovals(),
     loadRecovery(),
     loadRuns(),
   ]);
-  if (initial.some((result) => result.status === "rejected")) {
-    toast(t("resource.partialLoad", {}, "部分资源暂时无法载入，可继续重试。"), "error");
-  }
+  reportInitialLoad(initial);
 
   await startWorkspaceNavigation({ navigation, settingsStore, sessionsStore,
     runsStore,
