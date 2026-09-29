@@ -110,12 +110,32 @@ try {
     input.value === "Keep this draft while an earlier slot is reused" &&
     Math.abs(inputTopAfterReorder - inputTopBeforeReorder) <= 1 &&
     arrivals.length === 5;
+  const secondInput = askCards[2]?.querySelector(".ask-dock-input");
+  secondInput.focus();
+  secondInput.value = "Keep the reordered card active";
+  secondInput.dispatchEvent(new Event("input", { bubbles: true }));
+  const secondTopBeforeReorder = secondInput.getBoundingClientRect().top -
+    dock.getBoundingClientRect().top;
+  asksStore.setData({ projectId: "qa", sessionId: "seat", loaded: true,
+    items: [fourth, second, first, { id: 3,
+      question: "A third decision arrived.", options: ["Yes", "No"] }] });
+  await nextFrame();
+  const reorderedCards = [...dock.querySelectorAll(".ask-dock")];
+  const secondTopAfterReorder = secondInput.getBoundingClientRect().top -
+    dock.getBoundingClientRect().top;
+  const existingOrderPreservesEditor =
+    reorderedCards[1]?.querySelector(".ask-dock-input") === secondInput &&
+    document.activeElement === secondInput &&
+    secondInput.value === "Keep the reordered card active" &&
+    Math.abs(secondTopAfterReorder - secondTopBeforeReorder) <= 1;
   const passed = editingStable && approvalPreservesEditor &&
-    removalPreservesEditor && idleReveals && orderedArrivalPreservesEditor;
+    removalPreservesEditor && idleReveals && orderedArrivalPreservesEditor &&
+    existingOrderPreservesEditor;
   const result = document.querySelector("#result");
   result.dataset.passed = String(passed);
   result.textContent = JSON.stringify({ passed, editingStable, approvalPreservesEditor,
     removalPreservesEditor, idleReveals, orderedArrivalPreservesEditor,
+    existingOrderPreservesEditor, secondTopBeforeReorder, secondTopAfterReorder,
     inputTopBeforeReorder, inputTopAfterReorder, inputTopBeforeApproval,
     inputTopAfterApproval, inputTopAfterRemoval,
     before, immediate, settled, idleScroll: dock.scrollTop,

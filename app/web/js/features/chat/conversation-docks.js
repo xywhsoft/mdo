@@ -64,6 +64,26 @@ function reconcileCards(root, nodes) {
   for (const child of [...root.children]) {
     if (!kept.has(child)) child.remove();
   }
+  const focused = nodes.find((node) =>
+    node.parentElement === root && node.contains(document.activeElement));
+  if (focused) {
+    // Reorder around the focused card so its editor or button never detaches.
+    const index = nodes.indexOf(focused);
+    let next = focused;
+    for (let i = index - 1; i >= 0; --i) {
+      const node = nodes[i];
+      if (node.nextElementSibling !== next) root.insertBefore(node, next);
+      next = node;
+    }
+    let previous = focused;
+    for (let i = index + 1; i < nodes.length; ++i) {
+      const node = nodes[i];
+      if (previous.nextElementSibling !== node)
+        root.insertBefore(node, previous.nextElementSibling);
+      previous = node;
+    }
+    return;
+  }
   for (const [index, node] of nodes.entries()) {
     const current = root.children[index];
     if (current === node) continue;
