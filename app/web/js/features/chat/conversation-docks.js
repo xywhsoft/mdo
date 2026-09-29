@@ -21,19 +21,42 @@ const RESOURCE_KEYS = Object.freeze({
   schedule: "dock.resource.schedule", agent: "dock.resource.agent",
 });
 
-function taskCard(tasks, onOpenTasks) {
+function taskCard(onOpenTasks) {
   const list = element("ul", { className: "conversation-dock-list" });
-  for (const task of tasks.slice(0, 8)) list.append(element("li", {}, [
-    element("span", { className: "conversation-dock-state", text: STATE_KEYS[task.state] ? t(STATE_KEYS[task.state]) : task.state }),
-    element("span", { text: task.label || t("dock.task.fallback", { id: task.id }) }),
-  ]));
+  const rows = new Map();
+  const title = element("h3");
   const open = element("button", { text: t("dock.task.details"), attrs: {
     type: "button", "data-dock-focus": "tasks/open" } });
   open.addEventListener("click", onOpenTasks);
-  return element("section", { className: "conversation-dock" }, [
-    element("h3", { text: t("dock.task.count", { count: tasks.length }) }), list,
+  const node = element("section", { className: "conversation-dock" }, [
+    title, list,
     element("div", { className: "conversation-dock-actions" }, [open]),
   ]);
+  return { node, sync(tasks) {
+    const count = t("dock.task.count", { count: tasks.length });
+    if (title.textContent !== count) title.textContent = count;
+    const ordered = [];
+    const live = new Set();
+    for (const task of tasks.slice(0, 8)) {
+      const key = String(task.id);
+      live.add(key);
+      let row = rows.get(key);
+      if (!row) {
+        const state = element("span", { className: "conversation-dock-state" });
+        const label = element("span");
+        row = { node: element("li", {}, [state, label]), state, label };
+        rows.set(key, row);
+      }
+      const state = STATE_KEYS[task.state]
+        ? t(STATE_KEYS[task.state]) : task.state || "";
+      const label = task.label || t("dock.task.fallback", { id: task.id });
+      if (row.state.textContent !== state) row.state.textContent = state;
+      if (row.label.textContent !== label) row.label.textContent = label;
+      ordered.push(row.node);
+    }
+    for (const key of rows.keys()) if (!live.has(key)) rows.delete(key);
+    reconcileCards(list, ordered);
+  } };
 }
 
 function todoCard(items, expanded, focusKey, onToggle) {
@@ -423,11 +446,10 @@ export function createConversationDocks({ container, navigation, tasksStore, app
       otherNodes.push(todoErrorView.node);
     } else todoErrorView = null;
     if (tasks.length) {
-      const contentKey = JSON.stringify({ projectId: selected.projectId, sessionId,
-        count: tasks.length, displayed: tasks.slice(0, 8).map(({ id, state, label }) =>
-          [id, state, label]) });
-      if (!taskView || taskView.contentKey !== contentKey)
-        taskView = { contentKey, node: taskCard(tasks, onOpenTasks) };
+      const key = `${selected.projectId}/${sessionId}`;
+      if (!taskView || taskView.key !== key)
+        taskView = { key, ...taskCard(onOpenTasks) };
+      taskView.sync(tasks);
       otherNodes.push(taskView.node);
     } else taskView = null;
     reconcileCards(otherRoot, otherNodes);

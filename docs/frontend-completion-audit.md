@@ -2,6 +2,8 @@
 
 本清单以 `app_bak/wwwroot` 的可操作行为为基线，而不是以页面长得相似或单元测试通过为完成标准。`docs/frontend-migration.md` 记录每次实现和验证；这里记录当前还需要什么证据。审计更新：2026-09-30，基线提交 `f9e2c4c`。
 
+2026-09-30 增量：后台任务轮询现在按任务 ID 保留对话停靠卡的任务行、卡片和详情按钮；状态变化、新增任务及移除队首任务不再打断存活任务名称的文字选区。生产模块浏览器夹具先复现旧实现整卡重建与选区丢失，修复后 `passed=true`。Windows/Linux 有界门禁及 21 个运行探针通过，Windows 另通过便携 WebView2 Home 和 20 秒启动；根目录 `mdo.exe` SHA-256 为 `8b5d42e815cc452f569a45dd8bc01b9d90c935c3b3132446e07abc6519f480ce`，Linux 包为 `8f15db1a4ff54af4f622bba26f9026592d4c806af4047d5d516ae408ea71941a`。真实后台任务的打包页轮询和实体触控仍待验，详见[迁移记录](frontend-migration.md#2026-09-30后台任务卡更新时保留阅读位置)。
+
 2026-09-30 增量：WebView 拖放报告有文件却不给 `File` 对象时，输入区不再静默失败，改为三语提示使用“添加图片”选择。浏览器夹具旧版复现已拦截、零错误，修复后错误键 `image.dropUnavailable` 出现且没有误发上传；其余九项附件场景保持通过。Windows/Linux 有界门禁及 21 个运行探针通过，Windows 另通过便携 WebView2 Home 和 20 秒启动；根目录 `mdo.exe` SHA-256 为 `ae1daf5fc62cee94f2e960c9932faaf9b642eee307a7e626e61ed3d64592b710`，Linux 包为 `d8f0cd96f1a94de6d97b78e43a9a833c450ce6ac5dd98cb7c1725beebafe5e60`。原生文件拖放及实体移动端仍待验，详见[迁移记录](frontend-migration.md#2026-09-30拖放对象不可读取时明确提示)。
 
 2026-09-30 增量：附件拖放现兼容放下时仍只有 `DataTransfer.items`、没有 `files` 的 WebView 视图。生产模块浏览器夹具先复现“已拦截但零上传”，修复后一次 PNG 上传进入附件；其余八个上传、剪贴板和模型兼容场景均通过。Windows/Linux 有界门禁及 21 个运行探针通过，Windows 另通过便携 WebView2 Home 和 20 秒启动；根目录 `mdo.exe` SHA-256 为 `9975083f809ddff576d0139f6e26950639d9e842e8ffed28674c1ced635ce75d`，Linux 包为 `fe7194e30ece68ba66d253f5c408f7dc4afb4ac06bcb41a044899d6704dd4adf`。操作系统原生拖放与实体移动端仍待验收，详见[迁移记录](frontend-migration.md#2026-09-30拖放图片可从-item-only-数据读取)。

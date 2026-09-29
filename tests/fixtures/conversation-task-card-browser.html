@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="zh-CN">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>mdo task dock stability probe</title>
+<link rel="stylesheet" href="/app/web/css/app.css">
+<div id="conversation-docks" class="conversation-docks"></div>
+<pre id="result"></pre>
+<script type="module">
+const { createConversationDocks } = await import(
+  `/app/web/js/features/chat/conversation-docks.js?fixture=${Date.now()}`);
+import { createResourceStore } from "/app/web/js/state/store.js";
+
+const task = (id, state, label) => ({ id, state, label, terminal: false,
+  owner_session: "/tmp/mdo-home/sessions/qa/task-card/snapshot.json" });
+const tasksStore = createResourceStore({ items: [
+  task(1, "pending", "Read this long running task before it changes state"),
+] });
+const empty = () => createResourceStore({ items: [] });
+const navigation = {
+  get: () => ({ view: "workspace", projectId: "qa", sessionId: "task-card" }),
+  subscribe(listener) { listener(this.get()); return () => {}; },
+};
+createConversationDocks({
+  container: document.querySelector("#conversation-docks"), navigation,
+  tasksStore, approvalsStore: empty(), runsStore: empty(),
+  asksStore: createResourceStore({ projectId: "qa", sessionId: "task-card",
+    loaded: true, items: [] }),
+  todoStore: createResourceStore({ projectId: "qa", sessionId: "task-card",
+    items: [] }),
+  onOpenTasks() {}, onChanged: async () => {},
+});
+
+const dock = document.querySelector(".conversation-dock");
+const firstLabel = dock.querySelector("li span:last-child");
+const open = dock.querySelector("button");
+const range = document.createRange();
+range.setStart(firstLabel.firstChild, 0);
+range.setEnd(firstLabel.firstChild, 9);
+getSelection().removeAllRanges();
+getSelection().addRange(range);
+const selected = getSelection().toString();
+tasksStore.setData({ items: [
+  task(1, "running", "Read this long running task before it changes state"),
+  task(2, "pending", "Second task"),
+] });
+const nextDock = document.querySelector(".conversation-dock");
+const nextLabel = nextDock.querySelector("li span:last-child");
+const sameCard = nextDock === dock;
+const sameLabel = nextLabel === firstLabel;
+const sameButton = nextDock.querySelector("button") === open;
+const selectionKept = getSelection().toString() === selected;
+const updated = nextDock.querySelectorAll("li").length === 2 &&
+  nextDock.querySelector("li span:first-child").textContent.includes("running");
+const secondLabel = nextDock.querySelectorAll("li span:last-child")[1];
+const secondRange = document.createRange();
+secondRange.setStart(secondLabel.firstChild, 0);
+secondRange.setEnd(secondLabel.firstChild, 6);
+getSelection().removeAllRanges();
+getSelection().addRange(secondRange);
+tasksStore.setData({ items: [task(2, "running", "Second task")] });
+const survivingLabel = dock.querySelector("li span:last-child");
+const removalKept = document.querySelector(".conversation-dock") === dock &&
+  survivingLabel === secondLabel && getSelection().toString() === "Second" &&
+  dock.querySelectorAll("li").length === 1 &&
+  dock.querySelector("li span:first-child").textContent.includes("running");
+open.focus();
+tasksStore.setData({ items: [task(2, "running", "Second task updated")] });
+const focusKept = document.activeElement === open &&
+  document.querySelector(".conversation-dock button") === open &&
+  dock.querySelector("li span:last-child").textContent === "Second task updated";
+const passed = sameCard && sameLabel && sameButton && selectionKept && updated &&
+  removalKept && focusKept;
+const result = document.querySelector("#result");
+result.dataset.passed = String(passed);
+result.textContent = JSON.stringify({ passed, sameCard, sameLabel, sameButton,
+  selectionKept, updated, removalKept, focusKept,
+  selection: getSelection().toString() }, null, 2);
+</script>
+</html>
