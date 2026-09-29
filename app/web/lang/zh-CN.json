@@ -1226,6 +1226,7 @@
   "sessionLoad.failedTitle": "任务暂时无法载入",
   "sessionLoad.failedDescription": "请重试读取当前任务；会话记录和草稿不会被删除。",
   "sessionLoad.retry": "重试读取",
+  "sessionLoad.retrying": "正在重试…",
   "ask.invalidResponse": "询问响应无效",
   "ask.invalidId": "询问 ID 无效",
   "ask.answerRequired": "请填写回答",

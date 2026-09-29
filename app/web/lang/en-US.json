@@ -1226,6 +1226,7 @@
   "sessionLoad.failedTitle": "Could not load task",
   "sessionLoad.failedDescription": "Retry loading this task. Its conversation and draft have not been deleted.",
   "sessionLoad.retry": "Retry loading",
+  "sessionLoad.retrying": "Retrying…",
   "ask.invalidResponse": "Invalid question response",
   "ask.invalidId": "Invalid question ID",
   "ask.answerRequired": "Enter an answer",

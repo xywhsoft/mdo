@@ -322,11 +322,12 @@ Object.defineProperty(navigator, 'clipboard', {
             with self.server.count_lock:
                 self.server.session_detail_reads += 1
                 detail_read = self.server.session_detail_reads
-            print(f"QA session detail GET #{detail_read}", flush=True)
+            print(f"QA session detail GET #{detail_read} at {time.monotonic():.3f}", flush=True)
             if (detail_read <= self.server.startup_session_delay_reads and
                     self.server.startup_session_delay_seconds):
                 print(f"QA delaying session detail GET #{detail_read}", flush=True)
                 time.sleep(self.server.startup_session_delay_seconds)
+                print(f"QA released session detail GET #{detail_read} at {time.monotonic():.3f}", flush=True)
             if detail_read <= self.server.fail_session_detail_reads:
                 payload = json.dumps({"ok": False, "error": {
                     "code": "qa_session_detail_rejected",
@@ -806,7 +807,7 @@ parser.add_argument("--delay-first-module-ms", type=int, default=0,
 parser.add_argument("--startup-task-delay-ms", type=int, default=0,
                     help="delay initial task-list GET by 0-30000 ms")
 parser.add_argument("--startup-session-delay-ms", type=int, default=0,
-                    help="delay the first session-detail GETs by 0-30000 ms")
+                    help="delay the first session-detail GETs by 0-60000 ms")
 parser.add_argument("--startup-session-delay-reads", type=int, default=1,
                     help="number of first session-detail GETs to delay (1-8)")
 parser.add_argument("--fail-session-detail-reads", type=int, default=0,
@@ -850,8 +851,8 @@ if not 0 <= args.startup_runs_delay_ms <= 30000:
     parser.error("--startup-runs-delay-ms must be between 0 and 30000")
 if not 0 <= args.startup_workspace_delay_ms <= 30000:
     parser.error("--startup-workspace-delay-ms must be between 0 and 30000")
-if not 0 <= args.startup_session_delay_ms <= 30000:
-    parser.error("--startup-session-delay-ms must be between 0 and 30000")
+if not 0 <= args.startup_session_delay_ms <= 60000:
+    parser.error("--startup-session-delay-ms must be between 0 and 60000")
 if not 1 <= args.startup_session_delay_reads <= 8:
     parser.error("--startup-session-delay-reads must be between 1 and 8")
 if not 0 <= args.fail_session_detail_reads <= 8:

@@ -67,8 +67,12 @@ export function createSessionLoadNotice({ navigation, store, conversation,
     notice.hidden = false;
     heading.textContent = title;
     description.textContent = body;
-    retry.textContent = t("sessionLoad.retry", {}, "重试读取");
-    retry.hidden = !failed && !delayed;
+    const retrying = restoreFocus && !failed && !delayed;
+    retry.textContent = retrying
+      ? t("sessionLoad.retrying", {}, "正在重试…")
+      : t("sessionLoad.retry", {}, "重试读取");
+    retry.hidden = !failed && !delayed && !retrying;
+    retry.setAttribute("aria-disabled", retrying ? "true" : "false");
     if (failed && restoreFocus && retrySawLoading) {
       retry.focus();
       restoreFocus = false;
@@ -81,7 +85,7 @@ export function createSessionLoadNotice({ navigation, store, conversation,
   }
 
   retry.addEventListener("click", () => {
-    if (!selected()) return;
+    if (!selected() || (restoreFocus && !delayed)) return;
     restoreFocus = true;
     retrySawLoading = false;
     delayed = false;

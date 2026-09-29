@@ -1226,6 +1226,7 @@
   "sessionLoad.failedTitle": "Не удалось загрузить задачу",
   "sessionLoad.failedDescription": "Повторите загрузку задачи. История и черновик не удалены.",
   "sessionLoad.retry": "Повторить загрузку",
+  "sessionLoad.retrying": "Повторная попытка…",
   "ask.invalidResponse": "Недопустимый ответ службы вопросов",
   "ask.invalidId": "Недопустимый ID вопроса",
   "ask.answerRequired": "Введите ответ",

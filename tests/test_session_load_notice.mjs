@@ -29,6 +29,7 @@ test("a direct task has visible loading, retry, and focus recovery", () => {
   };
   let route = { view: "workspace", projectId: "default", sessionId: "A" };
   let state = { status: "idle", data: null };
+  let revalidations = 0;
   const routeListeners = [];
   const stateListeners = [];
   const store = {
@@ -40,6 +41,7 @@ test("a direct task has visible loading, retry, and focus recovery", () => {
     get: () => route,
     subscribe(listener) { routeListeners.push(listener); listener(route); },
     revalidate() {
+      revalidations += 1;
       for (const listener of routeListeners) listener(route);
       store.set({ status: "loading", data: null });
     },
@@ -73,6 +75,16 @@ test("a direct task has visible loading, retry, and focus recovery", () => {
     assert.equal(sessionTitle.textContent, heading.textContent);
     retry.click();
     assert.equal(conversation.dataset.sessionLoad, "loading");
+    assert.equal(retry.hidden, false);
+    assert.equal(retry["aria-disabled"], "true");
+    assert.equal(retry.textContent.length > 0, true);
+    retry.click();
+    assert.equal(revalidations, 1);
+    store.set({ status: "error", data: null, error: new Error("503 again") });
+    assert.equal(retry["aria-disabled"], "false");
+    assert.equal(retry.focused, 1);
+    retry.click();
+    assert.equal(revalidations, 2);
     prompt.disabled = false;
     // In production, the session subscriber enables the editor before the
     // notice subscriber runs; simulate that ordering for this isolated module.
