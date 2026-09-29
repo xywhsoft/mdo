@@ -64,6 +64,7 @@ export function createSchedulePanel({ panel, projectsStore, agentsStore, modelsS
   let historyItem = null;
   let historyLoading = false;
   let activeRefresh = 0;
+  let actionFeedback = { message: "", id: "" };
 
   function renderEditorHeader() {
     title.textContent = original
@@ -79,8 +80,10 @@ export function createSchedulePanel({ panel, projectsStore, agentsStore, modelsS
     formStatus.dataset.tone = error ? "error" : "neutral";
   }
 
-  function setActionFeedback(message, error = false) {
-    actionStatus.textContent = message;
+  function setActionFeedback(message, error = false, id = "") {
+    actionFeedback = { message, id };
+    if (!message) list.querySelector(".schedule-card-feedback")?.remove();
+    actionStatus.textContent = id ? "" : message;
     actionStatus.dataset.tone = error ? "error" : "neutral";
   }
 
@@ -175,6 +178,8 @@ export function createSchedulePanel({ panel, projectsStore, agentsStore, modelsS
         `读取失败：${errorMessage(state.error)}`);
     if (!data) return;
     const items = data.items ?? [];
+    const feedbackInCard = items.some((item) => item.id === actionFeedback.id);
+    actionStatus.textContent = feedbackInCard ? "" : actionFeedback.message;
     if (state.status !== "error" && visible() && items.some((item) => item.active_runs > 0))
       activeRefresh = setTimeout(() => {
         activeRefresh = 0;
@@ -229,6 +234,9 @@ export function createSchedulePanel({ panel, projectsStore, agentsStore, modelsS
               t("schedule.runDisabledLimit", {}, "已达到并发运行上限");
         actions.append(button);
       }
+      if (actionFeedback.message && item.id === actionFeedback.id)
+        card.append(element("p", { className: "schedule-card-feedback",
+          text: actionFeedback.message, attrs: { role: "status" } }));
       card.append(actions);
       list.append(card);
     }
@@ -262,6 +270,14 @@ export function createSchedulePanel({ panel, projectsStore, agentsStore, modelsS
       const neighbor = cards[Math.min(index, cards.length - 1)];
       if (neighbor && focusSchedule(neighbor.dataset.scheduleId, "", true)) return;
     }
+    refreshButton.scrollIntoView({ block: "start" });
+    refreshButton.focus({ preventScroll: true });
+  }
+
+  function focusAfterListAction({ id, action }) {
+    if (!visible()) return;
+    if (schedulesStore.get().status === "ready" &&
+        (focusSchedule(id, action, true) || focusSchedule(id, "", true))) return;
     refreshButton.scrollIntoView({ block: "start" });
     refreshButton.focus({ preventScroll: true });
   }
@@ -306,12 +322,13 @@ export function createSchedulePanel({ panel, projectsStore, agentsStore, modelsS
   }
 
   async function mutate(operation, success, resetEditor = false,
-                        { listAction = false, deletion = null } = {}) {
+                        { listAction = false, deletion = null, listTarget = null } = {}) {
     if (busy) return;
-    if (listAction) setActionFeedback("");
+    setActionFeedback("");
     busy = true;
     render(schedulesStore.get());
-    if (deletion && visible()) focusSchedule(deletion.id);
+    if (visible() && (deletion || listTarget))
+      focusSchedule((deletion || listTarget).id);
     save.disabled = true;
     let savedId = "";
     let succeeded = false;
@@ -331,9 +348,9 @@ export function createSchedulePanel({ panel, projectsStore, agentsStore, modelsS
       await loadSchedules();
     } catch (error) {
       const message = errorMessage(error);
-      if (listAction) setActionFeedback(message, true);
+      if (listAction) setActionFeedback(message, true, (deletion || listTarget)?.id);
       else setFeedback(message, true);
-      toast(message, "error");
+      if (!listAction) toast(message, "error");
       if (error?.status === 412) await loadSchedules();
     } finally {
       busy = false;
@@ -342,6 +359,7 @@ export function createSchedulePanel({ panel, projectsStore, agentsStore, modelsS
       if (savedId && visible()) {
         if (!focusSchedule(savedId, "", true)) refreshButton.focus();
       } else if (deletion) focusAfterDelete(deletion, succeeded);
+      else if (listTarget) focusAfterListAction(listTarget);
     }
   }
 
@@ -415,11 +433,13 @@ export function createSchedulePanel({ panel, projectsStore, agentsStore, modelsS
     if (button.dataset.scheduleAction === "history") void openHistory(item);
     if (button.dataset.scheduleAction === "run")
       void mutate(() => runSchedule(item.id, item.revision),
-        t("schedule.started", {}, "计划已开始运行"), false, { listAction: true });
+        t("schedule.started", {}, "计划已开始运行"), false,
+        { listAction: true, listTarget: { id: item.id, action: "run" } });
     if (button.dataset.scheduleAction === "enabled")
       void mutate(() => setScheduleEnabled(item.id, item.revision, !item.enabled),
         item.enabled ? t("schedule.pausedSuccess", {}, "计划已暂停") :
-          t("schedule.enabledSuccess", {}, "计划已启用"), false, { listAction: true });
+          t("schedule.enabledSuccess", {}, "计划已启用"), false,
+          { listAction: true, listTarget: { id: item.id, action: "enabled" } });
     if (button.dataset.scheduleAction === "delete") {
       deleteTarget = { item, index: schedulesStore.get().data.items.indexOf(item) };
       panel.querySelector("#schedule-delete-label").textContent = t("schedule.deleteLabel",

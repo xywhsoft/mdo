@@ -1203,6 +1203,7 @@ select:focus-visible,
 .schedule-card-heading, .schedule-card-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
 .schedule-card-heading strong { font-size: 13px; }
 .schedule-card p { margin: 5px 0; color: var(--muted); font-size: 11px; }
+.schedule-card .schedule-card-feedback { margin: 9px 0 0; color: var(--danger); overflow-wrap: anywhere; }
 .schedule-badge { padding: 3px 7px; border-radius: 20px; background: var(--surface-hover); color: var(--muted); font-size: 10px; }
 .schedule-card-actions { margin-top: 10px; }
 .schedule-card-actions button { min-height: 30px; font-size: 11px; }
