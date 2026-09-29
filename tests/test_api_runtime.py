@@ -2253,12 +2253,68 @@ def run_probe(host: Path) -> None:
                     "/api/v1/projects/.bad/draft")
                 assert status == 400 and json.loads(body)["error"][
                     "code"] == "invalid_path", (status, body)
+                profile_draft = "/api/v1/projects/profile-project/draft"
+                override = {"model_id": "", "reasoning_effort": "high",
+                            "permission_profile": ""}
+                status, _, body = request(port, "PUT", profile_draft,
+                    body=json.dumps({"revision": 0, "text": "saved editor",
+                                     "composer_profile": override}).encode(),
+                    headers={"Content-Type": "application/json"})
+                assert status == 200 and json.loads(body)["data"][
+                    "composer_profile"] == override, (status, body)
+                profile_file = home / "data/project-drafts/profile-project.json"
+                assert json.loads(profile_file.read_text(encoding="utf-8"))[
+                    "schema_version"] == 8
+                assert json.loads(request(port, "GET", profile_draft)[2])[
+                    "data"]["composer_profile"] == override
+                for invalid_override in (
+                    {**override, "permission_profile": "invalid"},
+                    {"model_id": "", "reasoning_effort": "",
+                     "permission_profile": ""},
+                    {**override, "extra": "unexpected"},
+                ):
+                    status, _, body = request(port, "PUT", profile_draft,
+                        body=json.dumps({"revision": 1, "text": "saved editor",
+                            "composer_profile": invalid_override}).encode(),
+                        headers={"Content-Type": "application/json"})
+                    assert status == 422 and json.loads(body)["error"][
+                        "code"] == "draft_invalid", (status, body)
+                status, _, body = request(port, "PUT", profile_draft,
+                    body=json.dumps({"revision": 1, "text": "saved editor",
+                                     "composer_profile": None}).encode(),
+                    headers={"Content-Type": "application/json"})
+                assert status == 200 and "composer_profile" not in json.loads(
+                    body)["data"], (status, body)
+                legacy_profile = home / "data/project-drafts/legacy-profile.json"
+                legacy_profile.write_text(json.dumps({
+                    "schema_version": 7, "revision": 1, "text": "old editor",
+                    "attachments": [], "run_admission_uncertain": False,
+                    "submissions": [], "composer_profile": {
+                        "model_id": "ling-3.0-tiny",
+                        "reasoning_effort": "medium",
+                        "permission_profile": "balanced"}}), encoding="utf-8")
+                status, _, body = request(port, "GET",
+                    "/api/v1/projects/legacy-profile/draft")
+                assert status == 200 and json.loads(body)["data"][
+                    "composer_profile"]["model_id"] == "ling-3.0-tiny"
+                status, _, body = request(port, "PUT", "/api/v1/draft",
+                    body=json.dumps({"revision": 0, "text": "",
+                                     "composer_profile": override}).encode(),
+                    headers={"Content-Type": "application/json"})
+                assert status == 422 and json.loads(body)["error"][
+                    "code"] == "draft_invalid", (status, body)
                 draft_path = session_path + "/draft"
                 status, _, body = request(port, "GET", draft_path)
                 assert status == 200 and json.loads(body)["data"] == {
                     "revision": 0, "text": "", "attachments": [],
                     "run_admission_uncertain": False,
                     "submission": None, "submissions": []}, (status, body)
+                status, _, body = request(port, "PUT", draft_path,
+                    body=json.dumps({"revision": 0, "text": "",
+                                     "composer_profile": override}).encode(),
+                    headers={"Content-Type": "application/json"})
+                assert status == 422 and json.loads(body)["error"][
+                    "code"] == "draft_invalid", (status, body)
                 status, _, body = request(
                     port, "PUT", draft_path,
                     body=b'{"revision":0,"text":"session draft"}',

@@ -1,4 +1,5 @@
 import { updateSessionProfile } from "../../state/sessions.js";
+import { projectDraftKey } from "./draft-store.js";
 import { clear, element, errorMessage, toast } from "../../utils/dom.js";
 import { subscribeLocale, t } from "../../i18n.js";
 
@@ -89,12 +90,19 @@ export function createComposerProfile({ modelSelect, reasoningSelect,
     return route.sessionId && session?.id === route.sessionId &&
       session.project_id === route.projectId ? session : null;
   }
-  function draft() {
-    const projectId = navigation.get().projectId || "default";
+  function draft(projectId = navigation.get().projectId || "default") {
     if (!drafts.has(projectId)) drafts.set(projectId, {
       model_id: "", reasoning_effort: "", permission_profile: "",
     });
     return drafts.get(projectId);
+  }
+  function blankOverrides(projectId) {
+    const pending = draft(projectId);
+    const saved = draftStore?.composerProfile(projectDraftKey(projectId));
+    return { model_id: pending.model_id || saved?.model_id || "",
+      reasoning_effort: pending.reasoning_effort || saved?.reasoning_effort || "",
+      permission_profile: pending.permission_profile ||
+        saved?.permission_profile || "" };
   }
   function defaultAgent() {
     return agentsStore.get().data?.items?.find((item) =>
@@ -127,7 +135,8 @@ export function createComposerProfile({ modelSelect, reasoningSelect,
 
   function sync() {
     const session = current();
-    const pending = draft();
+    const projectId = navigation.get().projectId || "default";
+    const pending = session ? draft(projectId) : blankOverrides(projectId);
     const key = selectedKey();
     const deferred = session && draftStore?.composerProfile(key);
     const selected = changing.get(key) || deferred;
@@ -164,14 +173,16 @@ export function createComposerProfile({ modelSelect, reasoningSelect,
     if (status) {
       const nextRun = session && deferred &&
         !sameProfile(deferred, sessionProfile(session));
-      const saveState = session ?
-        draftStore?.profileSaveState(key) ?? "saved" : "saved";
+      const saveState = draftStore?.profileSaveState(session ? key :
+        projectDraftKey(projectId)) ?? "saved";
       status.hidden = !nextRun && saveState === "saved";
       status.dataset.state = saveState;
       status.textContent = saveState === "error"
-        ? t("profile.notSaved", {}, "后续配置未保存")
+        ? session ? t("profile.notSaved", {}, "后续配置未保存")
+          : t("profile.draftNotSaved", {}, "新任务配置未保存")
         : saveState === "saving"
-          ? t("profile.savingNext", {}, "正在保存后续配置…")
+          ? session ? t("profile.savingNext", {}, "正在保存后续配置…")
+            : t("profile.savingDraft", {}, "正在保存新任务配置…")
           : nextRun ? t("profile.nextRun", {}, "下次任务生效") : "";
     }
     onSelectionChange?.();
@@ -179,6 +190,7 @@ export function createComposerProfile({ modelSelect, reasoningSelect,
 
   async function changed(field) {
     const session = current();
+    const projectId = navigation.get().projectId || "default";
     if (navigation.get().sessionId && !session) { sync(); return; }
     const model = selectedModel(models(), modelSelect.value);
     const effort = fillReasoningOptions(reasoningSelect, model,
@@ -189,7 +201,7 @@ export function createComposerProfile({ modelSelect, reasoningSelect,
       permission_profile: permissionSelect.value,
     };
     if (!session) {
-      const pending = draft();
+      const pending = draft(projectId);
       if (field === "model") {
         pending.model_id = profile.model_id;
         pending.reasoning_effort = profile.reasoning_effort;
@@ -197,6 +209,19 @@ export function createComposerProfile({ modelSelect, reasoningSelect,
         pending.reasoning_effort = profile.reasoning_effort;
       } else pending.permission_profile = profile.permission_profile;
       sync();
+      if (!draftStore) return;
+      const projectKey = projectDraftKey(projectId);
+      try {
+        if (!await draftStore.ensureLoaded(projectKey))
+          throw new Error(t("profile.deferredSaveFailed", {},
+            "新任务配置未能保存，请检查草稿状态"));
+        draftStore.setComposerProfile(projectKey, blankOverrides(projectId));
+        sync();
+        if (!await draftStore.flush(projectKey))
+          throw new Error(t("profile.deferredSaveFailed", {},
+            "新任务配置未能保存，请检查草稿状态"));
+      } catch (error) { toast(errorMessage(error), "error"); }
+      finally { sync(); }
       return;
     }
     const key = `${session.project_id}/${session.id}`;

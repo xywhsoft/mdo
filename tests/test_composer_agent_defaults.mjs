@@ -3,6 +3,8 @@ import test from "node:test";
 
 import { applyAgentProfileDefaults, createComposerProfile, fillAgentOptions } from
   "../app/web/js/features/chat/composer-profile.js";
+import { createDraftStore, projectDraftKey } from
+  "../app/web/js/features/chat/draft-store.js";
 import { createResourceStore } from "../app/web/js/state/store.js";
 
 class Select extends EventTarget {
@@ -80,6 +82,103 @@ test("blank task follows the default Agent until the user chooses overrides", ()
   assert.equal(profile.selection().model_id, "text");
   assert.equal(profile.selection().reasoning_effort, "medium");
   profile.destroy();
+});
+
+test("blank task choices survive refresh per project without freezing other defaults", async () => {
+  const oldWindow = globalThis.window;
+  const oldFetch = globalThis.fetch;
+  const documents = new Map();
+  globalThis.window = { setTimeout() { return 1; }, clearTimeout() {},
+    addEventListener() {} };
+  globalThis.fetch = async (url, options) => {
+    const current = documents.get(String(url)) ?? { revision: 0, text: "",
+      attachments: [], submissions: [], composer_profile: null };
+    if (options.method === "GET")
+      return Response.json({ ok: true, data: current });
+    const body = JSON.parse(options.body);
+    assert.equal(body.revision, current.revision);
+    const next = { ...body, revision: current.revision + 1 };
+    documents.set(String(url), next);
+    return Response.json({ ok: true, data: next });
+  };
+  const route = { projectId: "alpha", sessionId: "" };
+  const listeners = new Set();
+  const navigation = { get: () => route, subscribe(listener) {
+    listeners.add(listener);
+    listener(route);
+    return () => listeners.delete(listener);
+  } };
+  const modelsStore = createResourceStore({ default_model_id: "text", models });
+  const agentsStore = createResourceStore({ items: [{ id: "mdo.default",
+    model: "code", reasoning_effort: "high",
+    permission_profile: "balanced" }] });
+  const projectsStore = createResourceStore({ items: [] });
+  const sessionStore = createResourceStore(null);
+  const makeStore = () => createDraftStore({ onRestore() {}, onSaved() {},
+    onError(error) { throw error; } });
+  const makeProfile = (draftStore) => {
+    const modelSelect = new Select();
+    const reasoningSelect = new Select();
+    const permissionSelect = new Select(["read-only", "balanced", "full-access"]);
+    return { profile: createComposerProfile({ modelSelect, reasoningSelect,
+      permissionSelect, navigation, sessionStore, modelsStore, agentsStore,
+      projectsStore, draftStore, isRunActive: () => false,
+      onBusyChange() {} }), modelSelect, reasoningSelect, permissionSelect };
+  };
+  try {
+    const alpha = projectDraftKey("alpha");
+    const beta = projectDraftKey("beta");
+    const firstStore = makeStore();
+    firstStore.select(alpha);
+    assert.equal(await firstStore.ensureLoaded(alpha), true);
+    const first = makeProfile(firstStore);
+    assert.deepEqual(first.profile.selection(), { model_id: "code",
+      reasoning_effort: "high", permission_profile: "balanced" });
+    first.permissionSelect.value = "full-access";
+    first.permissionSelect.dispatchEvent(new Event("change"));
+    await new Promise(setImmediate);
+    assert.equal(await firstStore.flush(alpha), true);
+    assert.deepEqual(documents.get("/api/v1/projects/alpha/draft").composer_profile,
+      { model_id: "", reasoning_effort: "",
+        permission_profile: "full-access" });
+    first.profile.destroy();
+
+    const reopened = makeStore();
+    reopened.select(alpha);
+    assert.equal(await reopened.ensureLoaded(alpha), true);
+    const second = makeProfile(reopened);
+    assert.deepEqual(second.profile.selection(), { model_id: "code",
+      reasoning_effort: "high", permission_profile: "full-access" });
+    agentsStore.setData({ items: [{ id: "mdo.default", model: "text",
+      reasoning_effort: "medium", permission_profile: "balanced" }] });
+    assert.deepEqual(second.profile.selection(), { model_id: "text",
+      reasoning_effort: "medium", permission_profile: "full-access" });
+
+    route.projectId = "beta";
+    for (const listener of listeners) listener(route);
+    reopened.select(beta);
+    assert.equal(await reopened.ensureLoaded(beta), true);
+    second.profile.sync();
+    assert.deepEqual(second.profile.selection(), { model_id: "text",
+      reasoning_effort: "medium", permission_profile: "balanced" });
+    second.modelSelect.value = "code";
+    second.modelSelect.dispatchEvent(new Event("change"));
+    second.reasoningSelect.value = "high";
+    second.reasoningSelect.dispatchEvent(new Event("change"));
+    await new Promise(setImmediate);
+    assert.equal(await reopened.flush(beta), true);
+    assert.deepEqual(documents.get("/api/v1/projects/beta/draft").composer_profile,
+      { model_id: "code", reasoning_effort: "high",
+        permission_profile: "" });
+    route.projectId = "alpha";
+    for (const listener of listeners) listener(route);
+    assert.deepEqual(second.profile.selection(), { model_id: "text",
+      reasoning_effort: "medium", permission_profile: "full-access" });
+    second.profile.destroy();
+  } finally {
+    globalThis.window = oldWindow;
+    globalThis.fetch = oldFetch;
+  }
 });
 
 test("new-session dialog applies a selected Agent's declared defaults", () => {

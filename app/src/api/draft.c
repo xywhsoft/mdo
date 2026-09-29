@@ -200,6 +200,48 @@ static bool MdoDraftNewTaskString(const xvalue* Value, cstr Name,
     return true;
 }
 
+/* A project editor stores only choices the user made. Empty fields continue
+ * following the project's Agent defaults; session submission profiles remain
+ * complete snapshots and use the stricter shared profile parser. */
+static bool MdoDraftProjectProfileString(const xvalue* Value, cstr Name,
+    char* Output, size_t Capacity)
+{
+    const xvalue* Field = xrtValueObjectGet(Value, xrtStrView(Name));
+    xstrview Text;
+    if ( xrtValueType(Field) != XVALUE_STRING ||
+         !xrtValueGetString(Field, &Text) || Text.Size >= Capacity ||
+         (Text.Size != 0u && memchr(Text.Data, 0, Text.Size) != NULL) ||
+         !xrtUtf8Valid(Text, NULL) ) return false;
+    if ( Text.Size != 0u ) memcpy(Output, Text.Data, Text.Size);
+    Output[Text.Size] = '\0';
+    return true;
+}
+
+static bool MdoDraftProjectProfileRead(const xvalue* Value,
+    MdoApiProfile* Profile)
+{
+    if ( Profile == NULL ) return false;
+    memset(Profile, 0, sizeof(*Profile));
+    if ( xrtValueType(Value) == XVALUE_NULL ) return true;
+    if ( xrtValueType(Value) != XVALUE_OBJECT ||
+         xrtValueCount(Value) != 3u ||
+         !MdoDraftProjectProfileString(Value, "model_id", Profile->ModelId,
+            sizeof(Profile->ModelId)) ||
+         !MdoDraftProjectProfileString(Value, "reasoning_effort",
+            Profile->ReasoningEffort, sizeof(Profile->ReasoningEffort)) ||
+         !MdoDraftProjectProfileString(Value, "permission_profile",
+            Profile->PermissionProfile, sizeof(Profile->PermissionProfile)) ||
+         (Profile->PermissionProfile[0] != '\0' &&
+          strcmp(Profile->PermissionProfile, "read-only") != 0 &&
+          strcmp(Profile->PermissionProfile, "balanced") != 0 &&
+          strcmp(Profile->PermissionProfile, "full-access") != 0) ||
+         (Profile->ModelId[0] == '\0' &&
+          Profile->ReasoningEffort[0] == '\0' &&
+          Profile->PermissionProfile[0] == '\0') ) return false;
+    Profile->Present = true;
+    return true;
+}
+
 static bool MdoDraftNewTaskRead(const xvalue* Value,
     MdoDraftNewTask* Task, bool* Present)
 {
@@ -440,6 +482,8 @@ static void MdoDraftReplaceSubmissions(MdoDraft* Target, MdoDraft* Source)
 static bool MdoDraftRead(const char* Path, MdoDraft* Draft)
 {
     bool Global = strcmp(Path, "data/draft.json") == 0;
+    bool Project = strncmp(Path, "data/project-drafts/",
+        sizeof("data/project-drafts/") - 1u) == 0;
     bool Exists = false;
     xfileinfo Info;
     xfile File = NULL;
@@ -472,14 +516,15 @@ static bool MdoDraftRead(const char* Path, MdoDraft* Draft)
         XRT_STR_LITERAL("composer_profile"));
     if ( xrtValueType(Root) != XVALUE_OBJECT ||
          !MdoDraftUInt(Root, "schema_version", &Schema) ||
-         (Schema < 1u || Schema > 7u) ||
+         (Schema < 1u || Schema > 8u || (Schema == 8u && !Project)) ||
          xrtValueCount(Root) != (Schema == 1u ? 3u :
             (Schema == 2u ? 4u : (Schema == 3u ? 5u :
                 (Schema >= 6u && Global ? 7u : 6u)))) +
                 (ComposerProfile != NULL ? 1u : 0u) ||
-         (ComposerProfile != NULL && (Schema != 7u ||
-          !MdoApiProfileRead(ComposerProfile,
-            &Draft->ComposerProfile) ||
+         (ComposerProfile != NULL && (Schema < 7u ||
+          !(Schema == 8u ? MdoDraftProjectProfileRead(ComposerProfile,
+              &Draft->ComposerProfile) : MdoApiProfileRead(ComposerProfile,
+              &Draft->ComposerProfile)) ||
           !Draft->ComposerProfile.Present)) ||
          !MdoDraftUInt(Root, "revision", &Draft->Revision) ||
          Draft->Revision == 0u ||
@@ -514,6 +559,8 @@ done:
 static bool MdoDraftWrite(const char* Path, const MdoDraft* Draft)
 {
     bool Global = strcmp(Path, "data/draft.json") == 0;
+    bool Project = strncmp(Path, "data/project-drafts/",
+        sizeof("data/project-drafts/") - 1u) == 0;
     xvalue* Root = xrtValueObject();
     xvalue* Submissions = MdoDraftSubmissionsValue(Draft);
     xvalue* NewTask = Global ? MdoDraftNewTaskValue(Draft) : NULL;
@@ -521,7 +568,7 @@ static bool MdoDraftWrite(const char* Path, const MdoDraft* Draft)
     size_t Size = 0u;
     bool Ok = Root != NULL && Submissions != NULL &&
         (!Global || NewTask != NULL) &&
-        MdoApiValueSetUInt(Root, "schema_version", 7u) &&
+        MdoApiValueSetUInt(Root, "schema_version", Project ? 8u : 7u) &&
         MdoApiValueSetUInt(Root, "revision", Draft->Revision) &&
         MdoApiValueSetStringView(Root, "text",
             xrtStrViewN(Draft->Text, Draft->TextSize)) &&
@@ -683,8 +730,11 @@ bool MdoApiDraftRoute(MdoApiContext* Context)
             (!NewTaskPresent || Context->ParamCount == 0u) &&
             MdoDraftUInt(Body.Value, "revision", &ExpectedRevision) &&
             MdoDraftTextView(Body.Value, "text", &IncomingText) &&
-            (!ComposerProfilePresent || MdoApiProfileRead(
-                ComposerProfile, &Incoming->ComposerProfile)) &&
+            (!ComposerProfilePresent || (Context->ParamCount == 1u
+                ? MdoDraftProjectProfileRead(ComposerProfile,
+                    &Incoming->ComposerProfile)
+                : MdoApiProfileRead(ComposerProfile,
+                    &Incoming->ComposerProfile))) &&
             (!UncertainPresent || MdoDraftBool(Body.Value,
                 "run_admission_uncertain", &IncomingUncertain)) &&
             (!SubmissionPresent || MdoDraftSubmissionsRead(Submission,

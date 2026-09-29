@@ -15,16 +15,18 @@ function sameIds(a, b) {
   return a.length === b.length && a.every((id, index) => id === b[index]);
 }
 
-function profile(value) {
+function profile(value, allowPartial = false) {
   if (value == null) return null;
   if (typeof value !== "object" || Array.isArray(value) ||
       Object.keys(value).length !== 3 ||
-      !["read-only", "balanced", "full-access"].includes(
-        value.permission_profile)) return undefined;
+      (allowPartial && !Object.values(value).some(Boolean)) ||
+      !["read-only", "balanced", "full-access",
+        ...(allowPartial ? [""] : [])].includes(value.permission_profile))
+    return undefined;
   const fields = [["model_id", 128], ["reasoning_effort", 32],
     ["permission_profile", 32]];
   if (fields.some(([name, limit]) => typeof value[name] !== "string" ||
-      !value[name] || value[name].includes("\0") ||
+      (!allowPartial && !value[name]) || value[name].includes("\0") ||
       new TextEncoder().encode(value[name]).length > limit)) return undefined;
   return { model_id: value.model_id,
     reasoning_effort: value.reasoning_effort,
@@ -164,7 +166,8 @@ export function createDraftStore({ onRestore, onError, onSaved, onLoaded = () =>
         if (!storedSubmissions)
           throw new Error(t("draft.submissionConflict"));
         const storedNewTask = newTask(response.data.new_task);
-        const storedProfile = profile(response.data.composer_profile);
+        const storedProfile = profile(response.data.composer_profile,
+          key.startsWith("project:"));
         if (storedNewTask === undefined || storedProfile === undefined ||
             (current.newTask && storedNewTask &&
              !sameNewTask(current.newTask, storedNewTask))) {
@@ -452,7 +455,7 @@ export function createDraftStore({ onRestore, onError, onSaved, onLoaded = () =>
     },
     setComposerProfile(key, value) {
       const current = entry(key);
-      const next = profile(value);
+      const next = profile(value, key.startsWith("project:"));
       if (next === undefined || sameProfile(current.composerProfile, next))
         return false;
       current.composerProfile = next;
