@@ -722,24 +722,55 @@
   <div class="startup-failure" id="startup-failure" role="alertdialog" aria-modal="true"
        aria-labelledby="startup-failure-title" aria-describedby="startup-failure-description" hidden>
     <div class="startup-failure-card">
-      <h2 id="startup-failure-title">墨斗界面未能启动</h2>
-      <p id="startup-failure-description">页面资源可能暂时不可用。重新载入后会回到当前任务。</p>
-      <button class="primary-button" id="startup-retry-button" type="button">重新载入</button>
+      <h2 id="startup-failure-title" data-i18n="startup.failureTitle">墨斗界面未能启动</h2>
+      <p id="startup-failure-description" data-i18n="startup.failureDescription">页面资源可能暂时不可用。重新载入后会回到当前任务。</p>
+      <button class="primary-button" id="startup-retry-button" type="button" data-i18n="startup.retry">重新载入</button>
     </div>
   </div>
   <script>
     const failure = document.getElementById("startup-failure");
+    const title = document.getElementById("startup-failure-title");
     const retry = document.getElementById("startup-retry-button");
     const description = document.getElementById("startup-failure-description");
-    const failureMessage = description.textContent;
     const shell = document.getElementById("app-shell");
     const skip = document.querySelector(".skip-link");
     const startupState = document.documentElement.dataset;
     startupState.mdoStartup = "loading";
     let timedOut = false;
-    function showFailure(message, state) {
+    // This path must work even when the language module itself cannot import.
+    const startupCopy = {
+      "zh-CN": {
+        appTitle: "墨斗", title: "墨斗界面未能启动", retry: "重新载入",
+        failed: "页面资源可能暂时不可用。重新载入后会回到当前任务。",
+        timeout: "界面启动时间过长。可以重新载入；若服务仍在启动，也可以稍等片刻。",
+      },
+      "en-US": {
+        appTitle: "Mdo", title: "Mdo could not start", retry: "Reload",
+        failed: "A page resource may be temporarily unavailable. Reload to return to this task.",
+        timeout: "Mdo is taking too long to start. Reload, or wait if the service is still starting.",
+      },
+      "ru-RU": {
+        appTitle: "Mdo", title: "Не удалось запустить Mdo", retry: "Перезагрузить",
+        failed: "Ресурс страницы временно недоступен. Перезагрузите страницу, чтобы вернуться к задаче.",
+        timeout: "Mdo запускается слишком долго. Перезагрузите страницу или подождите запуска службы.",
+      },
+    };
+    function failureCopy() {
+      const language = startupState.mdoConfiguredLocale ||
+        navigator.languages?.[0] || navigator.language || "zh-CN";
+      const primary = language.toLowerCase().split("-")[0];
+      return startupCopy[language] || startupCopy[primary === "ru" ? "ru-RU"
+        : primary === "en" ? "en-US" : "zh-CN"];
+    }
+    function showFailure(state) {
       startupState.mdoStartup = state;
-      description.textContent = message;
+      const copy = failureCopy();
+      document.title = copy.appTitle;
+      title.textContent = copy.title;
+      retry.textContent = copy.retry;
+      description.dataset.i18n = state === "timeout"
+        ? "startup.timeoutDescription" : "startup.failureDescription";
+      description.textContent = copy[state];
       shell.inert = true;
       skip.inert = true;
       failure.hidden = false;
@@ -749,7 +780,7 @@
     const startupTimer = window.setTimeout(() => {
       timedOut = true;
       console.warn("Workspace startup is still pending after 20 seconds");
-      showFailure("界面启动时间过长。可以重新载入；若服务仍在启动，也可以稍等片刻。", "timeout");
+      showFailure("timeout");
     }, 20000);
     import("/js/main.js").then(({ start }) => start()).then(() => {
       window.clearTimeout(startupTimer);
@@ -768,7 +799,7 @@
     }).catch((error) => {
       window.clearTimeout(startupTimer);
       console.error("Workspace startup failed", error);
-      showFailure(failureMessage, "failed");
+      showFailure("failed");
     });
   </script>
 </body>

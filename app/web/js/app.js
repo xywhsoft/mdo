@@ -2430,7 +2430,11 @@ export async function boot() {
   // unrelated resource requests must not hold it behind their completion.
   const settingsReady = loadSettings();
   void settingsReady.then(() => settingsView.localeReady())
-    .then(() => paneLayout.load());
+    .then(() => {
+      if (settingsStore.get().status === "ready")
+        document.documentElement.dataset.mdoConfiguredLocale = document.documentElement.lang;
+      return paneLayout.load();
+    });
   let initialLoadWarned = false;
   function reportInitialLoad(results) {
     if (initialLoadWarned ||
