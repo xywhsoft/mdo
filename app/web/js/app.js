@@ -67,6 +67,7 @@ import { startWorkspaceNavigation } from "./features/shell/workspace-startup.js"
 import { focusSessionComposerAfterNavigation } from "./features/shell/session-composer-focus.js";
 import { createProjectSwitcher } from "./features/shell/project-switcher.js";
 import { createSessionMetadataSync } from "./features/shell/session-metadata-sync.js";
+import { createSessionLoadNotice } from "./features/shell/session-load-notice.js";
 import { createPaneLayout } from "./features/shell/pane-layout.js";
 import { trackMobileViewport } from "./features/shell/mobile-viewport.js";
 import { api } from "./api/client.js";
@@ -1141,6 +1142,12 @@ export async function boot() {
     syncWorkspaceChip();
     updateContext(state);
   });
+  createSessionLoadNotice({ navigation, store: sessionDetailStore,
+    conversation: $(".conversation"), notice: $("#conversation-load"),
+    heading: $("#conversation-load-title"),
+    description: $("#conversation-load-description"),
+    retry: $("#conversation-load-retry"), sessionTitle, sessionSubtitle,
+    mobileTitle, mobileMeta, prompt });
   projectsStore.subscribe(() => {
     syncWorkspaceChip();
     if (!navigation.get().sessionId) updateContext(sessionDetailStore.get());
@@ -1545,7 +1552,8 @@ export async function boot() {
           if (!stillSelected()) return;
           if (detail.status !== "ready" || detail.data?.project_id !== projectId ||
               detail.data.id !== sessionId) {
-            if (detail.error) throw detail.error;
+            if (detail.status === "ready")
+              sessionDetailStore.setError(new Error("Session detail does not match the selected task"));
             return;
           }
           // Returning from Settings may refresh the sidebar, but that catalog
@@ -1599,9 +1607,14 @@ export async function boot() {
     void selectFeedback(projectId, sessionId);
     const finishLoad = queueBlocked.beginLoad(key, "runtime");
     try {
-      await Promise.all([loadSession(projectId, sessionId), loadRuns(), loadRecovery(),
+      const [detail] = await Promise.all([loadSession(projectId, sessionId), loadRuns(), loadRecovery(),
         promptQueue.select(projectId, sessionId)]);
       if (!stillSelected()) return;
+      if (detail.status !== "ready") return;
+      if (detail.data?.project_id !== projectId || detail.data?.id !== sessionId) {
+        sessionDetailStore.setError(new Error("Session detail does not match the selected task"));
+        return;
+      }
       await submissionController.reconcile(key);
     } catch (error) {
       if (stillSelected()) showComposerError(error);

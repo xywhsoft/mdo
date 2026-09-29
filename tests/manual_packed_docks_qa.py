@@ -315,6 +315,32 @@ Object.defineProperty(navigator, 'clipboard', {
             if task_read == 1 and self.server.startup_task_delay_seconds:
                 print("QA delaying initial task list GET", flush=True)
                 time.sleep(self.server.startup_task_delay_seconds)
+        path_parts = self.path.split("?", 1)[0].strip("/").split("/")
+        if (self.command == "GET" and len(path_parts) == 6 and
+                path_parts[:3] == ["api", "v1", "projects"] and
+                path_parts[4] == "sessions"):
+            with self.server.count_lock:
+                self.server.session_detail_reads += 1
+                detail_read = self.server.session_detail_reads
+            print(f"QA session detail GET #{detail_read}", flush=True)
+            if (detail_read <= self.server.startup_session_delay_reads and
+                    self.server.startup_session_delay_seconds):
+                print(f"QA delaying session detail GET #{detail_read}", flush=True)
+                time.sleep(self.server.startup_session_delay_seconds)
+            if detail_read <= self.server.fail_session_detail_reads:
+                payload = json.dumps({"ok": False, "error": {
+                    "code": "qa_session_detail_rejected",
+                    "message": "Synthetic session detail failure"
+                }}).encode()
+                print(f"QA rejected session detail GET #{detail_read}", flush=True)
+                self.send_response(503)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Content-Length", str(len(payload)))
+                self.send_header("Connection", "close")
+                self.end_headers()
+                self.wfile.write(payload)
+                self.close_connection = True
+                return
         if (self.command == "GET" and self.path == "/js/main.js" and
                 (self.server.fail_first_module or
                  self.server.delay_first_module_seconds)):
@@ -779,6 +805,12 @@ parser.add_argument("--delay-first-module-ms", type=int, default=0,
                     help="delay first main.js GET by 0-60000 ms to test startup timeout")
 parser.add_argument("--startup-task-delay-ms", type=int, default=0,
                     help="delay initial task-list GET by 0-30000 ms")
+parser.add_argument("--startup-session-delay-ms", type=int, default=0,
+                    help="delay the first session-detail GETs by 0-30000 ms")
+parser.add_argument("--startup-session-delay-reads", type=int, default=1,
+                    help="number of first session-detail GETs to delay (1-8)")
+parser.add_argument("--fail-session-detail-reads", type=int, default=0,
+                    help="reject the first 0-8 session-detail GETs to test retry")
 parser.add_argument("--startup-bootstrap-delay-ms", type=int, default=0,
                     help="delay initial bootstrap GET by 0-30000 ms")
 parser.add_argument("--startup-catalog-delay-ms", type=int, default=0,
@@ -818,6 +850,12 @@ if not 0 <= args.startup_runs_delay_ms <= 30000:
     parser.error("--startup-runs-delay-ms must be between 0 and 30000")
 if not 0 <= args.startup_workspace_delay_ms <= 30000:
     parser.error("--startup-workspace-delay-ms must be between 0 and 30000")
+if not 0 <= args.startup_session_delay_ms <= 30000:
+    parser.error("--startup-session-delay-ms must be between 0 and 30000")
+if not 1 <= args.startup_session_delay_reads <= 8:
+    parser.error("--startup-session-delay-reads must be between 1 and 8")
+if not 0 <= args.fail_session_detail_reads <= 8:
+    parser.error("--fail-session-detail-reads must be between 0 and 8")
 if not 0 <= args.ask_delay_ms <= 5000:
     parser.error("--ask-delay-ms must be between 0 and 5000")
 if not 0 <= args.task_cancel_delay_ms <= 5000:
@@ -989,6 +1027,7 @@ try:
             or args.no_clipboard_api
             or args.fail_first_module or args.delay_first_module_ms
             or args.startup_task_delay_ms or args.startup_bootstrap_delay_ms
+            or args.startup_session_delay_ms or args.fail_session_detail_reads
             or args.startup_catalog_delay_ms
             or args.subsequent_sessions_delay_ms
             or args.startup_runs_delay_ms or args.fail_first_runs_list
@@ -1002,6 +1041,10 @@ try:
         proxy.module_reads = 0
         proxy.startup_task_delay_seconds = args.startup_task_delay_ms / 1000
         proxy.startup_task_reads = 0
+        proxy.startup_session_delay_seconds = args.startup_session_delay_ms / 1000
+        proxy.startup_session_delay_reads = args.startup_session_delay_reads
+        proxy.session_detail_reads = 0
+        proxy.fail_session_detail_reads = args.fail_session_detail_reads
         proxy.startup_bootstrap_delay_seconds = args.startup_bootstrap_delay_ms / 1000
         proxy.startup_bootstrap_reads = 0
         proxy.startup_catalog_delay_seconds = args.startup_catalog_delay_ms / 1000

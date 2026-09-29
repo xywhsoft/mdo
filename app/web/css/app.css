@@ -521,6 +521,13 @@ select:focus-visible,
 }
 
 .welcome[hidden] { display: none; }
+.conversation[data-session-load] .welcome { display: none; }
+.conversation-load { display: grid; justify-items: start; gap: 10px; width: min(520px, calc(100% - 40px)); margin: max(48px, 8vh) auto 28px; padding: 20px; border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--surface-raised); }
+.conversation-load[hidden], .conversation-load button[hidden] { display: none; }
+.conversation-load[data-state="error"] { border-color: color-mix(in srgb, var(--danger) 40%, var(--border)); }
+.conversation-load h2 { margin: 0; font-size: 16px; }
+.conversation-load p { margin: 0; color: var(--muted); font-size: 13px; line-height: 1.5; }
+.conversation-load button { min-height: 40px; padding: 0 14px; }
 .welcome-mark { width: 42px; height: 42px; margin: 0 auto 18px; font-size: 18px; }
 .welcome h2 { margin: 0; font-size: clamp(22px, 3vw, 30px); font-weight: 620; letter-spacing: -.025em; }
 .welcome > p { max-width: 530px; margin: 10px auto 18px; color: var(--muted); }

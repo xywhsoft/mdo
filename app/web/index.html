@@ -191,6 +191,12 @@
           </div>
         </div>
 
+        <div class="conversation-load" id="conversation-load" role="status" hidden>
+          <h2 id="conversation-load-title">正在载入任务…</h2>
+          <p id="conversation-load-description">正在读取会话记录。</p>
+          <button class="secondary-button" id="conversation-load-retry" type="button" hidden>重试读取</button>
+        </div>
+
         <ol class="timeline" id="timeline" aria-live="polite" aria-relevant="additions text" tabindex="-1"></ol>
         <div class="prompt-queue" id="prompt-queue" aria-live="polite" hidden></div>
         <div class="timeline-sentinel" id="timeline-sentinel" aria-hidden="true"></div>
