@@ -15,6 +15,7 @@
   "timeline.you": "Вы",
   "timeline.reasoning": "Рассуждение",
   "timeline.tool": "Инструмент",
+  "timeline.toolTime": "Инструменты: {duration}",
   "timeline.executing": "Выполняется…",
   "timeline.executionDone": "Выполнение завершено",
   "timeline.executionFailed": "Ошибка выполнения",

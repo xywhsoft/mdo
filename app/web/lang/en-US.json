@@ -15,6 +15,7 @@
   "timeline.you": "You",
   "timeline.reasoning": "Reasoning",
   "timeline.tool": "Tool",
+  "timeline.toolTime": "Tools {duration}",
   "timeline.executing": "Running…",
   "timeline.executionDone": "Execution completed",
   "timeline.executionFailed": "Execution failed",

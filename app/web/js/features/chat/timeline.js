@@ -11,6 +11,13 @@ function modelKey(event, epoch) {
   return `${event.run_id || event.agent_id || event.event_id}-${epoch}-${event.agent_turn || 0}`;
 }
 
+function durationLabel(seconds) {
+  const number = new Intl.NumberFormat(currentLocale(),
+    { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+  const value = seconds < 0.1 ? `<${number.format(0.1)}` : number.format(seconds);
+  return t("timeline.seconds", { seconds: value }, `${value} 秒`);
+}
+
 function appendOrCreate(items, streams, event, kind, role, key) {
   let item = streams.get(key);
   if (!item) {
@@ -32,6 +39,7 @@ export function eventsToTimeline(events, historyLost = false) {
   const items = [];
   const tools = new Map();
   const modelStarts = new Map();
+  const toolDurations = new Map();
   const streams = new Map();
   const promptsByRun = new Map();
   const runEpochs = new Map();
@@ -151,6 +159,11 @@ export function eventsToTimeline(events, historyLost = false) {
           tool.state = event.success ? "done" : "failed";
           tool.durationSeconds = Math.max(0,
             (Number(event.time) - Number(tool.time)) / 1e6);
+          if (event.success && Number.isFinite(tool.durationSeconds) &&
+              tool.durationSeconds > 0) {
+            const key = `${runKey}:${epoch}`;
+            toolDurations.set(key, (toolDurations.get(key) || 0) + tool.durationSeconds);
+          }
           tool.artifactId = event.artifact_id;
           tool.artifactEventId = event.event_id;
           tool.artifactPath = event.artifact_path;
@@ -220,7 +233,12 @@ export function eventsToTimeline(events, historyLost = false) {
         }
         const answer = [...items].reverse().find((item) => item.kind === "assistant" &&
           item.runKey === runKey && item.runEpoch === epoch);
-        if (answer) answer.state = terminalState;
+        if (answer) {
+          answer.state = terminalState;
+          const toolSeconds = toolDurations.get(`${runKey}:${epoch}`);
+          if (Number.isFinite(toolSeconds) && toolSeconds > 0)
+            answer.toolDurationSeconds = toolSeconds;
+        }
         else if (event.text || !event.success) items.push({
           key: `done-${event.event_id}`, kind: "assistant",
           role: event.model || "Agent", text: event.text || "",
@@ -570,12 +588,11 @@ function timelineNode(item, handlers, feedback, projectId, sessionId, writable,
           output: item.outputTokens || 0 },
         `${item.inputTokens || 0} 输入 / ${item.outputTokens || 0} 输出 tokens`));
       if (Number.isFinite(item.modelDurationSeconds) && item.modelDurationSeconds > 0) {
-        const number = new Intl.NumberFormat(currentLocale(),
-          { minimumFractionDigits: 1, maximumFractionDigits: 1 });
-        const seconds = item.modelDurationSeconds < 0.1
-          ? `<${number.format(0.1)}` : number.format(item.modelDurationSeconds);
-        stats.push(`LLM ${t("timeline.seconds", { seconds }, `${seconds} 秒`)}`);
+        stats.push(`LLM ${durationLabel(item.modelDurationSeconds)}`);
       }
+      if (Number.isFinite(item.toolDurationSeconds) && item.toolDurationSeconds > 0)
+        stats.push(t("timeline.toolTime", { duration: durationLabel(item.toolDurationSeconds) },
+          `工具 ${durationLabel(item.toolDurationSeconds)}`));
       if (Number.isFinite(item.tokensPerSecond)) stats.push(`${item.tokensPerSecond.toFixed(1)} tok/s`);
       if (stats.length) actions.append(element("span", { className: "timeline-stats", text: stats.join(" · ") }));
     }
