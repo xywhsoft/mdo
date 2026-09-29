@@ -187,7 +187,9 @@ export function createSchedulePanel({ panel, projectsStore, agentsStore, modelsS
       return;
     }
     for (const item of items) {
-      const card = element("article", { className: "schedule-card" });
+      const card = element("article", { className: "schedule-card",
+        attrs: { role: "group", "aria-label": item.label, tabindex: "-1" } });
+      card.dataset.scheduleId = item.id;
       const heading = element("div", { className: "schedule-card-heading" });
       heading.append(element("strong", { text: item.label }),
         element("span", { className: "schedule-badge", text: item.enabled
@@ -224,6 +226,9 @@ export function createSchedulePanel({ panel, projectsStore, agentsStore, modelsS
     if (activeId && activeAction)
       [...list.querySelectorAll("button")].find((button) =>
         button.dataset.scheduleId === activeId && button.dataset.scheduleAction === activeAction)?.focus();
+    else if (activeId && active?.classList.contains("schedule-card"))
+      [...list.children].find((card) => card.dataset.scheduleId === activeId)
+        ?.focus({ preventScroll: true });
   }
 
   function body() {
@@ -270,10 +275,14 @@ export function createSchedulePanel({ panel, projectsStore, agentsStore, modelsS
     busy = true;
     render(schedulesStore.get());
     save.disabled = true;
+    let savedId = "";
     try {
       const result = await operation();
       toast(success);
-      if (resetEditor) newSchedule();
+      if (resetEditor) {
+        savedId = result?.data?.id || "";
+        newSchedule();
+      }
       else if (result?.data?.id === original?.id && result?.etag) {
         original = result.data;
         etag = result.etag;
@@ -289,6 +298,12 @@ export function createSchedulePanel({ panel, projectsStore, agentsStore, modelsS
       busy = false;
       save.disabled = false;
       render(schedulesStore.get());
+      if (savedId && visible()) {
+        const card = [...list.children].find((item) => item.dataset.scheduleId === savedId);
+        card?.scrollIntoView({ block: "start" });
+        if (card) card.focus({ preventScroll: true });
+        else panel.querySelector("#schedules-refresh").focus();
+      }
     }
   }
 
