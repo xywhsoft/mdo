@@ -4,8 +4,8 @@ import { currentLocale, subscribeLocale, t } from "../../i18n.js";
 
 // A new task has no session yet. Its project lives in the URL so refreshing a
 // draft does not silently move the eventual session back to "default".
-export function createComposerProject({ select, row, navigation, projectsStore,
-  sessionsStore }) {
+export function createComposerProject({ select, row, prompt, navigation,
+  projectsStore, sessionsStore }) {
   let optionKey = "";
 
   function addId(ids, value) {
@@ -43,7 +43,14 @@ export function createComposerProject({ select, row, navigation, projectsStore,
   }
 
   select.addEventListener("change", () => {
-    navigation.newTask(select.value, { replace: true });
+    const requested = select.value;
+    navigation.newTask(requested, { replace: true });
+    // The native picker can leave focus on the document after the route
+    // changes. Successful selection should be ready for the next prompt;
+    // a guarded redirect keeps the project control available for correction.
+    if (navigation.get().projectId === requested && !prompt.disabled)
+      prompt.focus({ preventScroll: true });
+    else if (!select.hidden) select.focus({ preventScroll: true });
   });
   const unsubscribers = [projectsStore.subscribe(sync), sessionsStore.subscribe(sync),
     navigation.subscribe(sync), subscribeLocale(sync)];

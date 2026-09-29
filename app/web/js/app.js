@@ -286,8 +286,8 @@ export async function boot() {
     sessionList.showActive();
   }
   $("#session-search").addEventListener("input", (event) => sessionList.setQuery(event.target.value));
-  createComposerProject({ select: $("#composer-project"), row: $("#composer-project-row"), navigation,
-    projectsStore, sessionsStore });
+  createComposerProject({ select: $("#composer-project"), row: $("#composer-project-row"),
+    prompt, navigation, projectsStore, sessionsStore });
 
   const messageEditDialog = createMessageEditDialog({
     dialog: $("#message-edit-dialog"), form: $("#message-edit-form"),
@@ -759,7 +759,8 @@ export async function boot() {
       const current = navigation.get();
       if (current.view === "workspace" && !current.sessionId &&
           current.projectId === projectId) {
-        const returnFocus = composerError.contains(document.activeElement);
+        const returnFocus = composerError.contains(document.activeElement) ||
+          document.activeElement === $("#composer-project");
         creatingSessionKey = key;
         navigation.select(projectId, sessionId);
         selectTimeline(projectId, sessionId);
