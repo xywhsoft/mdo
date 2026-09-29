@@ -33,7 +33,7 @@ python tools/qa_release.py --xserver-root D:\GIT\xserver-mdo-refactor
 
 它会验证依赖锁、Python 合同检查、全部前端 ES 模块语法与 Node 交互测试、
 严格 C11 编译、真实 TCC 低负载运行时探针、两次确定性 pack，
-以及 Windows 单文件零写和打包启动回归。构建命令不依赖 Node.js，
+以及 Windows 无窗口只读启动零写、原生窗口便携 Home 和打包启动回归。构建命令不依赖 Node.js，
 发布门禁运行前端检查时需要 Node.js。
 门禁范围、Linux 文件系统要求与 Ling 线上探针见[发布门禁](docs/release-gate.md)，
 当前功能和限制见[0.1.0-dev 发布说明](docs/release-notes-0.1.0-dev.md)。
@@ -62,8 +62,9 @@ tools/build_mdo.py   验证、生成、宿主构建与打包入口
 ```
 
 发布物可以只有 `mdo.exe`。运行时持久化数据只允许进入可执行文件旁的
-`mdo-home/`；单纯启动和退出不得创建该目录。该行为由 MDO-1 bootstrap 和
-端到端测试固定。可以用 `MDO_HOME` 环境变量覆盖，也可以把应用参数
+`mdo-home/`。Windows 原生窗口首次打开时，WebView2 会按需创建
+`mdo-home/data/cache/webview2/`；无窗口的只读启动和退出不会创建 Home。
+该行为由便携 Home 与发布门禁测试固定。可以用 `MDO_HOME` 环境变量覆盖，也可以把应用参数
 放在 xs 的 `--` 分隔符之后：
 
 ```powershell
