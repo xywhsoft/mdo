@@ -118,7 +118,9 @@ def stop_process(process: subprocess.Popen[bytes]) -> None:
 def windows_single_file(executable: Path, observe_seconds: int) -> None:
     with tempfile.TemporaryDirectory(prefix="mdo-release-clean-") as temporary:
         root = Path(temporary)
-        target = root / "mdo.exe"
+        # WebView2 profiles are keyed by the executable basename. Reusing
+        # mdo.exe here can replay a real user's pending browser state.
+        target = root / executable.name
         shutil.copy2(executable, target)
         process = subprocess.Popen(
             [str(target)], cwd=root,

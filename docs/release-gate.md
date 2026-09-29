@@ -29,7 +29,7 @@ python3 tools/qa_release.py --xserver-root /path/to/xserver
 5. 以 GCC C11、`-Wall -Wextra -Werror` 严格编译 mdo unity；
 6. 运行所有真实 xs/TCC 低负载运行时探针；
 7. 生成第二份 pack，并要求两份文件的 SHA-256 完全一致；
-8. Windows 上在空临时目录启动单个 `mdo.exe` 5 秒，确认目录零写入；
+8. Windows 上在空临时目录以测试包原文件名启动单个可执行文件 5 秒，确认目录零写入；保留原名是为了避免 WebView 共用现有 `mdo.exe` 的 AppData 浏览器状态；
 9. Windows 上运行 20 秒打包启动回归，确认 TCC 服务初始化后进程仍存活，且没有 crash、dump 或 `xsw.log`。
 
 任一步失败都会返回非零退出码。构建产物与探针临时目录位于 `.build/qa-release/`，不进入版本控制。
