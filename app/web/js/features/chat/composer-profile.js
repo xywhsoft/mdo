@@ -16,6 +16,14 @@ function selectedModel(models, id) {
   return models.find((model) => model.id === id) ?? null;
 }
 
+export function agentProfileDefaults(agent, fallback) {
+  return {
+    model_id: agent?.model || fallback.model_id,
+    reasoning_effort: agent?.reasoning_effort || fallback.reasoning_effort,
+    permission_profile: agent?.permission_profile || fallback.permission_profile,
+  };
+}
+
 export function fillReasoningOptions(select, model, preferred = "") {
   const efforts = model?.reasoning_efforts?.length
     ? model.reasoning_efforts : (preferred ? [preferred] : []);
@@ -30,6 +38,20 @@ export function fillReasoningOptions(select, model, preferred = "") {
   select.value = chosen;
   select.disabled = efforts.length === 0;
   return chosen;
+}
+
+export function applyAgentProfileDefaults({ agent, fallback, models,
+  modelSelect, reasoningSelect, permissionSelect }) {
+  const profile = agentProfileDefaults(agent, fallback);
+  if (profile.model_id && ![...modelSelect.options].some((option) =>
+    option.value === profile.model_id)) {
+    modelSelect.append(element("option", { text: profile.model_id,
+      attrs: { value: profile.model_id } }));
+  }
+  modelSelect.value = profile.model_id;
+  fillReasoningOptions(reasoningSelect,
+    selectedModel(models, profile.model_id), profile.reasoning_effort);
+  permissionSelect.value = profile.permission_profile;
 }
 
 export function createComposerProfile({ modelSelect, reasoningSelect,
@@ -59,15 +81,20 @@ export function createComposerProfile({ modelSelect, reasoningSelect,
   function draft() {
     const projectId = navigation.get().projectId || "default";
     if (!drafts.has(projectId)) drafts.set(projectId, {
-      model_id: "", reasoning_effort: "", permission_profile: "balanced",
+      model_id: "", reasoning_effort: "", permission_profile: "",
     });
     return drafts.get(projectId);
+  }
+  function defaultAgent() {
+    return agentsStore.get().data?.items?.find((item) =>
+      item.id === "mdo.default");
   }
   function defaultModelId() {
     const projectId = navigation.get().projectId || "default";
     const project = (projectsStore.get().data?.items ?? []).find((item) =>
       item.id === projectId);
     return project?.default_model_id ||
+      defaultAgent()?.model ||
       modelsStore.get().data?.default_model_id || models()[0]?.id || "";
   }
   function agentPermission(session) {
@@ -110,10 +137,12 @@ export function createComposerProfile({ modelSelect, reasoningSelect,
     const model = selectedModel(catalog, id);
     const effort = selected?.reasoning_effort || session?.reasoning_effort ||
       pending.reasoning_effort ||
+      (!session && defaultAgent()?.reasoning_effort) ||
       model?.default_reasoning_effort || "";
     fillReasoningOptions(reasoningSelect, model, effort);
     permissionSelect.value = selected?.permission_profile ||
-      (session ? agentPermission(session) : pending.permission_profile);
+      (session ? agentPermission(session) :
+        pending.permission_profile || agentPermission(null));
     const disabled = busy.has(key) || locked ||
       (Boolean(navigation.get().sessionId) && !session) ||
       (session && (session.status !== "active" ||

@@ -49,7 +49,8 @@ import { createImagePreview } from "./features/chat/image-preview.js";
 import { createSlashCommands } from "./features/chat/slash-commands.js";
 import { createFileMentions } from "./features/chat/file-mentions.js";
 import { trackComposerMenuRoom } from "./features/chat/composer-menu-room.js";
-import { createComposerProfile, fillReasoningOptions } from "./features/chat/composer-profile.js";
+import { applyAgentProfileDefaults, createComposerProfile, fillReasoningOptions } from
+  "./features/chat/composer-profile.js";
 import { createTokenMeter } from "./features/chat/token-meter.js";
 import { createTaskPanel } from "./features/tasks/task-panel.js";
 import { createDecisionPanel } from "./features/approvals/decision-panel.js";
@@ -2041,6 +2042,17 @@ export async function boot() {
   agentsStore.subscribe(fillCatalogSelects);
   modelsStore.subscribe(fillCatalogSelects);
   subscribeLocale(fillCatalogSelects);
+  function applyNewSessionAgentDefaults() {
+    const agentId = $("#agent-select").value;
+    const agent = agentsStore.get().data?.items?.find((item) =>
+      item.id === agentId);
+    applyAgentProfileDefaults({ agent, fallback: composerProfile.selection(),
+      models: modelsStore.get().data?.models ?? [],
+      modelSelect: $("#model-select"),
+      reasoningSelect: $("#new-session-reasoning"),
+      permissionSelect: $("#new-session-permission") });
+  }
+  $("#agent-select").addEventListener("change", applyNewSessionAgentDefaults);
   $("#model-select").addEventListener("change", () => {
     const model = modelsStore.get().data?.models?.find((item) =>
       item.id === $("#model-select").value);
@@ -2051,14 +2063,8 @@ export async function boot() {
   function openNewSession() {
     dialogError.hidden = true;
     dialogError.textContent = "";
-    const profile = composerProfile.selection();
     dialogForm.elements.project_id.value = navigation.get().projectId || navigation.preferredProject();
-    $("#model-select").value = profile.model_id;
-    const model = modelsStore.get().data?.models?.find((item) =>
-      item.id === profile.model_id);
-    fillReasoningOptions($("#new-session-reasoning"), model,
-      profile.reasoning_effort);
-    $("#new-session-permission").value = profile.permission_profile;
+    applyNewSessionAgentDefaults();
     if (!dialog.open) dialog.showModal();
     window.setTimeout(() => dialogForm.elements.title.focus(), 0);
   }
