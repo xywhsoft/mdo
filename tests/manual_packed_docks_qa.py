@@ -251,6 +251,16 @@ Object.defineProperty(navigator, 'clipboard', {
         self.forward()
 
     def forward(self):
+        if self.command == "GET" and self.path == "/api/v1/sessions":
+            with self.server.count_lock:
+                self.server.session_list_reads += 1
+                session_list_read = self.server.session_list_reads
+            if session_list_read > 1 and self.server.subsequent_sessions_delay_seconds:
+                print(f"QA delaying sessions GET #{session_list_read} at "
+                      f"{time.monotonic():.3f}", flush=True)
+                time.sleep(self.server.subsequent_sessions_delay_seconds)
+                print(f"QA released sessions GET #{session_list_read} at "
+                      f"{time.monotonic():.3f}", flush=True)
         if self.command == "GET" and self.path == "/api/v1/runs":
             with self.server.count_lock:
                 self.server.startup_runs_reads += 1
@@ -773,6 +783,8 @@ parser.add_argument("--startup-bootstrap-delay-ms", type=int, default=0,
                     help="delay initial bootstrap GET by 0-30000 ms")
 parser.add_argument("--startup-catalog-delay-ms", type=int, default=0,
                     help="delay initial session-list and model GETs by 0-30000 ms")
+parser.add_argument("--subsequent-sessions-delay-ms", type=int, default=0,
+                    help="delay session-list GETs after the first by 0-30000 ms")
 parser.add_argument("--startup-runs-delay-ms", type=int, default=0,
                     help="delay first two runs GETs by 0-30000 ms")
 parser.add_argument("--fail-first-runs-list", action="store_true",
@@ -800,6 +812,8 @@ if not 0 <= args.startup_bootstrap_delay_ms <= 30000:
     parser.error("--startup-bootstrap-delay-ms must be between 0 and 30000")
 if not 0 <= args.startup_catalog_delay_ms <= 30000:
     parser.error("--startup-catalog-delay-ms must be between 0 and 30000")
+if not 0 <= args.subsequent_sessions_delay_ms <= 30000:
+    parser.error("--subsequent-sessions-delay-ms must be between 0 and 30000")
 if not 0 <= args.startup_runs_delay_ms <= 30000:
     parser.error("--startup-runs-delay-ms must be between 0 and 30000")
 if not 0 <= args.startup_workspace_delay_ms <= 30000:
@@ -976,6 +990,7 @@ try:
             or args.fail_first_module or args.delay_first_module_ms
             or args.startup_task_delay_ms or args.startup_bootstrap_delay_ms
             or args.startup_catalog_delay_ms
+            or args.subsequent_sessions_delay_ms
             or args.startup_runs_delay_ms or args.fail_first_runs_list
             or args.startup_workspace_delay_ms):
         proxy = BoundedDelayProxyServer(("127.0.0.1", 0), BoundedDelayProxy)
@@ -991,6 +1006,8 @@ try:
         proxy.startup_bootstrap_reads = 0
         proxy.startup_catalog_delay_seconds = args.startup_catalog_delay_ms / 1000
         proxy.startup_catalog_reads = set()
+        proxy.subsequent_sessions_delay_seconds = args.subsequent_sessions_delay_ms / 1000
+        proxy.session_list_reads = 0
         proxy.startup_runs_delay_seconds = args.startup_runs_delay_ms / 1000
         proxy.startup_runs_reads = 0
         proxy.fail_first_runs_list = args.fail_first_runs_list

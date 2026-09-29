@@ -1548,7 +1548,9 @@ export async function boot() {
             if (detail.error) throw detail.error;
             return;
           }
-          await loadSessions();
+          // Returning from Settings may refresh the sidebar, but that catalog
+          // must not hold the queue gate for this already selected session.
+          void loadSessions();
           if (!stillSelected()) return;
           await promptQueue.select(projectId, sessionId);
           if (!stillSelected()) return;
