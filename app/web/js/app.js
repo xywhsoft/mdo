@@ -2444,9 +2444,17 @@ export async function boot() {
     loadTasks(),
     loadApprovals(),
   ]).then(reportInitialLoad);
+  const sessionsReady = loadSessions();
+  const catalogsReady = loadCatalogs();
+  // A direct session URL already names its destination. Its sidebar and
+  // selection catalogs may fill in after the conversation becomes usable;
+  // routes without a session still need the catalog to choose a destination.
+  const explicitSession = navigation.get().view === "workspace" &&
+    Boolean(navigation.get().sessionId);
+  if (explicitSession)
+    void Promise.allSettled([sessionsReady, catalogsReady]).then(reportInitialLoad);
   const initial = await Promise.allSettled([
-    loadSessions(),
-    loadCatalogs(),
+    ...(!explicitSession ? [sessionsReady, catalogsReady] : []),
     settingsReady,
     loadRecovery(),
     loadRuns(),

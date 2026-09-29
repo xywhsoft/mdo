@@ -1712,6 +1712,14 @@ Windows 有界发布门禁通过 114 项 Python、101 项 Node、75 个前端模
 
 Windows 有界发布门禁通过 114 项 Python、101 项 Node、75 个前端模块解析、21 个运行探针、严格 C 编译、确定性打包、便携 WebView2 Home 与 20 秒单文件启动。Linux 独立 ext4 工作树通过同样的单元、模块、运行探针和确定性打包（跳过 GUI 启动）。根目录 `mdo.exe` 已从验证候选覆盖，SHA-256 为 `7aeab0d241d47a943813ef82eb193ce311d85ddc5fccc7d8929baf54924b6b42`；Linux 包为 `4df2b57c6e18681c7b104d2b19b97a010dd23a9a32949573b0b0f08b5c8bbfc2`。未做压力或高负载测试。
 
+## 2026-09-30：明确会话不等待侧栏与选择目录
+
+`boot()` 仍把初始会话列表和模型、Agent、项目目录与运行恢复一起等待。明确会话 URL 已经指定目标，当前会话详情及队列可独立读取；侧栏和选择目录的慢响应不应让启动 Promise 留在 `loading`，更不应让 20 秒遮罩盖住原会话。现在所有目录请求照常立即发出并更新各自视图，但仅在没有明确会话 URL、需要决定“继续上次任务”目标时作为启动门槛。运行与恢复状态仍在门槛中，未放松发送前的安全核对。
+
+隔离代理 `--startup-catalog-delay-ms 30000` 同时延迟首次 `/api/v1/sessions` 和 `/api/v1/models`。旧单文件 Home `.build/mdo-packed-docks-e5alvk6j` 在“Packed docks QA”标题和输入已经可用时仍是 `loading`。候选 Home `.build/mdo-packed-docks-j0hmnaui` 在代理确认两条请求仍被延迟期间进入 `ready`、保持原会话且无遮罩；实际发送 `CATALOG DELAY UI` 后，服务端记录一次队列 POST、一次运行 POST，页面显示固定回复及 7 输入 / 3 输出 tokens，浏览器脚本错误为空。这个受控目录延迟不能解释先前静态资源均返回 200 的偶发空壳；原生 WebView2 与实体设备仍需验收。
+
+Windows 有界发布门禁通过 114 项 Python、101 项 Node、75 个前端模块解析、21 个运行探针、严格 C 编译、确定性打包、便携 WebView2 Home 与 20 秒单文件启动。Linux 独立 ext4 工作树通过同样的单元、模块、运行探针及确定性打包（跳过 GUI 启动）。根目录 `mdo.exe` 已更新，SHA-256 为 `bf5e097f3ead77d7b23ad5539a1aa2d26416986a2fcf33f4b55ace7f6fb91a20`；Linux 包为 `53c9f23ec3b01e4c212b6729f7baf69f7591bbbc3ac8e11f4fc59322326973c5`。未做压力或高负载测试。
+
 ## 2026-09-29：项目级新任务草稿存储接口
 
 代码审计确认新任务在首次发送前共用 `data/draft.json`：切换项目时 `selectedKey` 仍为空，只有写前日志生成 `new_task` 后才阻止跨项目导航。因此未发送文本会跟随项目切换；旧版按懒会话 ID 分开保存草稿。新接口 `GET/HEAD/PUT /api/v1/projects/{project}/draft` 为合法项目 ID 提供独立的 `data/project-drafts/{project}.json`，沿用 revision 冲突、64 KiB 文本上限和 Home 原子写入。空草稿 GET 不创建文件；项目定义尚未建立时也可保存，因为现有新任务允许先选择默认或未登记项目。此接口只接收文本与可选输入配置，不接受图片、待提交意图、`new_task` 或运行核对标记；创建中的写前日志仍由全局 `/draft` 保存。

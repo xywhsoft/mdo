@@ -251,6 +251,14 @@ Object.defineProperty(navigator, 'clipboard', {
         self.forward()
 
     def forward(self):
+        if (self.command == "GET" and self.path in
+                {"/api/v1/sessions", "/api/v1/models"}):
+            with self.server.count_lock:
+                first_catalog_read = self.path not in self.server.startup_catalog_reads
+                self.server.startup_catalog_reads.add(self.path)
+            if first_catalog_read and self.server.startup_catalog_delay_seconds:
+                print(f"QA delaying initial catalog GET {self.path}", flush=True)
+                time.sleep(self.server.startup_catalog_delay_seconds)
         if self.command == "GET" and self.path == "/api/v1/bootstrap":
             with self.server.count_lock:
                 self.server.startup_bootstrap_reads += 1
@@ -738,6 +746,8 @@ parser.add_argument("--startup-task-delay-ms", type=int, default=0,
                     help="delay initial task-list GET by 0-30000 ms")
 parser.add_argument("--startup-bootstrap-delay-ms", type=int, default=0,
                     help="delay initial bootstrap GET by 0-30000 ms")
+parser.add_argument("--startup-catalog-delay-ms", type=int, default=0,
+                    help="delay initial session-list and model GETs by 0-30000 ms")
 parser.add_argument("--startup-workspace-delay-ms", type=int, default=0,
                     help="delay initial workspace-state GET by 0-30000 ms")
 parser.add_argument("--agent-profile-fixture", action="store_true",
@@ -759,6 +769,8 @@ if not 0 <= args.startup_task_delay_ms <= 30000:
     parser.error("--startup-task-delay-ms must be between 0 and 30000")
 if not 0 <= args.startup_bootstrap_delay_ms <= 30000:
     parser.error("--startup-bootstrap-delay-ms must be between 0 and 30000")
+if not 0 <= args.startup_catalog_delay_ms <= 30000:
+    parser.error("--startup-catalog-delay-ms must be between 0 and 30000")
 if not 0 <= args.startup_workspace_delay_ms <= 30000:
     parser.error("--startup-workspace-delay-ms must be between 0 and 30000")
 if not 0 <= args.ask_delay_ms <= 5000:
@@ -932,6 +944,7 @@ try:
             or args.no_clipboard_api
             or args.fail_first_module or args.delay_first_module_ms
             or args.startup_task_delay_ms or args.startup_bootstrap_delay_ms
+            or args.startup_catalog_delay_ms
             or args.startup_workspace_delay_ms):
         proxy = BoundedDelayProxyServer(("127.0.0.1", 0), BoundedDelayProxy)
         proxy.upstream_port = port
@@ -944,6 +957,8 @@ try:
         proxy.startup_task_reads = 0
         proxy.startup_bootstrap_delay_seconds = args.startup_bootstrap_delay_ms / 1000
         proxy.startup_bootstrap_reads = 0
+        proxy.startup_catalog_delay_seconds = args.startup_catalog_delay_ms / 1000
+        proxy.startup_catalog_reads = set()
         proxy.startup_workspace_delay_seconds = args.startup_workspace_delay_ms / 1000
         proxy.startup_workspace_reads = 0
         proxy.approval_delay_seconds = args.approval_delay_ms / 1000
