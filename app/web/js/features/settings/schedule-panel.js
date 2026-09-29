@@ -51,6 +51,7 @@ export function createSchedulePanel({ panel, projectsStore, agentsStore, modelsS
   const historyDialog = panel.querySelector("#schedule-history-dialog");
   const historyTitle = panel.querySelector("#schedule-history-title");
   const historyStatus = panel.querySelector("#schedule-history-status");
+  const historyRetry = panel.querySelector("#schedule-history-retry");
   const historyList = panel.querySelector("#schedule-history-list");
   let original = null;
   let etag = "";
@@ -58,6 +59,8 @@ export function createSchedulePanel({ panel, projectsStore, agentsStore, modelsS
   let loadGeneration = 0;
   let deleteTarget = null;
   let historyGeneration = 0;
+  let historyItem = null;
+  let historyLoading = false;
   let activeRefresh = 0;
 
   function renderEditorHeader() {
@@ -319,15 +322,23 @@ export function createSchedulePanel({ panel, projectsStore, agentsStore, modelsS
   }
 
   async function openHistory(item) {
+    if (historyLoading) return;
     const generation = ++historyGeneration;
+    const retrying = historyDialog.open;
+    historyItem = item;
+    historyLoading = true;
     historyTitle.textContent = t("schedule.historyTitle", { label: item.label },
       `${item.label} · 执行历史`);
     historyStatus.textContent = t("schedule.historyLoading", {}, "正在读取执行历史…");
+    historyRetry.hidden = !retrying;
+    historyRetry.setAttribute("aria-disabled", "true");
     clear(historyList);
-    historyDialog.showModal();
+    if (!retrying) historyDialog.showModal();
     try {
       const { data } = await readScheduleHistory(item.id);
       if (generation !== historyGeneration || !historyDialog.open) return;
+      historyRetry.hidden = true;
+      historyRetry.removeAttribute("aria-disabled");
       historyStatus.textContent = data.items.length
         ? t("schedule.historyCount", { count: data.items.length }, `${data.items.length} 条记录`) +
           (data.has_more ? t("schedule.historyMore", {}, " · 仅显示最近记录") : "")
@@ -346,10 +357,17 @@ export function createSchedulePanel({ panel, projectsStore, agentsStore, modelsS
           (entry.text_truncated ? "…" : "") }));
         historyList.append(card);
       }
+      if (retrying) panel.querySelector("#schedule-history-close").focus({ preventScroll: true });
     } catch (error) {
-      if (generation === historyGeneration && historyDialog.open)
+      if (generation === historyGeneration && historyDialog.open) {
         historyStatus.textContent = t("schedule.loadFailed", { error: errorMessage(error) },
           `读取失败：${errorMessage(error)}`);
+        historyRetry.hidden = false;
+        historyRetry.removeAttribute("aria-disabled");
+        historyRetry.focus({ preventScroll: true });
+      }
+    } finally {
+      if (generation === historyGeneration) historyLoading = false;
     }
   }
 
@@ -380,8 +398,16 @@ export function createSchedulePanel({ panel, projectsStore, agentsStore, modelsS
     if (deleteDialog.returnValue === "delete" && target)
       void mutate(() => removeSchedule(target.id, target.revision), t("schedule.deleted", {}, "计划已删除"));
   });
-  historyDialog.addEventListener("close", () => { ++historyGeneration; });
+  historyDialog.addEventListener("close", () => {
+    ++historyGeneration;
+    historyItem = null;
+    historyLoading = false;
+    historyRetry.hidden = true;
+  });
   panel.querySelector("#schedule-history-close").addEventListener("click", () => historyDialog.close());
+  historyRetry.addEventListener("click", () => {
+    if (historyItem && !historyLoading && historyDialog.open) void openHistory(historyItem);
+  });
   form.addEventListener("submit", (event) => {
     event.preventDefault();
     if (busy || !form.reportValidity()) return;

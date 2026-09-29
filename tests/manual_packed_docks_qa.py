@@ -316,6 +316,26 @@ Object.defineProperty(navigator, 'clipboard', {
                 print("QA delaying initial task list GET", flush=True)
                 time.sleep(self.server.startup_task_delay_seconds)
         path_parts = self.path.split("?", 1)[0].strip("/").split("/")
+        if (self.command == "GET" and len(path_parts) == 5 and
+                path_parts[:3] == ["api", "v1", "schedules"] and
+                path_parts[4] == "history"):
+            with self.server.count_lock:
+                self.server.schedule_history_reads += 1
+                history_read = self.server.schedule_history_reads
+            if history_read == 1 and self.server.fail_first_schedule_history:
+                payload = json.dumps({"ok": False, "error": {
+                    "code": "qa_history_unavailable",
+                    "message": "Synthetic schedule history failure"
+                }}).encode()
+                print("QA rejected schedule history GET #1", flush=True)
+                self.send_response(503)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Content-Length", str(len(payload)))
+                self.send_header("Connection", "close")
+                self.end_headers()
+                self.wfile.write(payload)
+                self.close_connection = True
+                return
         if (self.command == "GET" and len(path_parts) == 6 and
                 path_parts[:3] == ["api", "v1", "projects"] and
                 path_parts[4] == "sessions"):
@@ -760,6 +780,8 @@ parser.add_argument("--fail-first-project", action="store_true",
                     help="reject one project creation with a 422 error after any delay")
 parser.add_argument("--history-delay-ms", type=int, default=0,
                     help="delay history GETs by 0-5000 ms for message-action QA")
+parser.add_argument("--fail-first-schedule-history", action="store_true",
+                    help="reject the first schedule-history GET for retry QA")
 parser.add_argument("--drop-first-create-response", action="store_true",
                     help="accept one session creation then close before replying")
 parser.add_argument("--fail-first-create", action="store_true",
@@ -1017,6 +1039,7 @@ try:
             or args.create_delay_ms or args.project_delay_ms
             or args.locale_delay_ms or args.fail_first_project
             or args.history_delay_ms
+            or args.fail_first_schedule_history
             or args.drop_first_create_response
             or args.fail_first_create
             or args.fail_first_run or args.fail_first_queue
@@ -1081,6 +1104,8 @@ try:
         proxy.locale_delay_seconds = args.locale_delay_ms / 1000
         proxy.fail_first_project = args.fail_first_project
         proxy.history_delay_seconds = args.history_delay_ms / 1000
+        proxy.fail_first_schedule_history = args.fail_first_schedule_history
+        proxy.schedule_history_reads = 0
         proxy.drop_first_create_response = args.drop_first_create_response
         proxy.fail_first_create = args.fail_first_create
         proxy.fail_first_run = args.fail_first_run

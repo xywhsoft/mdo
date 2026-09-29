@@ -725,6 +725,7 @@
   "schedule.historyHeading": "执行历史",
   "schedule.historyLoading": "正在读取执行历史…",
   "schedule.historyMore": " · 仅显示最近记录",
+  "schedule.historyRetry": "重试读取",
   "schedule.historyRun": " · 运行 #{id}",
   "schedule.historyTask": "任务 #{id}",
   "schedule.historyTitle": "{label} · 执行历史",

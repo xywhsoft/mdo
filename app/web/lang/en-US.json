@@ -725,6 +725,7 @@
   "schedule.historyHeading": "Run history",
   "schedule.historyLoading": "Loading run history…",
   "schedule.historyMore": " · Showing recent records only",
+  "schedule.historyRetry": "Retry loading",
   "schedule.historyRun": " · Run #{id}",
   "schedule.historyTask": "Task #{id}",
   "schedule.historyTitle": "{label} · Run history",

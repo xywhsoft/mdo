@@ -725,6 +725,7 @@
   "schedule.historyHeading": "История запусков",
   "schedule.historyLoading": "Загрузка истории запусков…",
   "schedule.historyMore": " · Показаны только последние записи",
+  "schedule.historyRetry": "Повторить загрузку",
   "schedule.historyRun": " · Запуск №{id}",
   "schedule.historyTask": "Задача №{id}",
   "schedule.historyTitle": "{label} · История запусков",
