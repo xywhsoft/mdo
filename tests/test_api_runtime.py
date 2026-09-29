@@ -2170,23 +2170,34 @@ def run_probe(host: Path) -> None:
                     headers={"Content-Type": "application/json"})
                 assert status == 422 and json.loads(body)["error"][
                     "code"] == "draft_invalid", (status, body)
-                copying_task = {**new_task, "phase": "copying"}
+                rejected_task = {**new_task, "phase": "rejected"}
                 status, _, body = request(port, "PUT", "/api/v1/draft",
                     body=json.dumps({"revision": 2, "text": "next input",
+                                     "submissions": [first_submission],
+                                     "new_task": rejected_task}).encode(),
+                    headers={"Content-Type": "application/json"})
+                assert status == 200 and json.loads(body)["data"][
+                    "new_task"] == rejected_task, (status, body)
+                status, _, body = request(port, "GET", "/api/v1/draft")
+                assert status == 200 and json.loads(body)["data"][
+                    "new_task"] == rejected_task, (status, body)
+                copying_task = {**new_task, "phase": "copying"}
+                status, _, body = request(port, "PUT", "/api/v1/draft",
+                    body=json.dumps({"revision": 3, "text": "next input",
                                      "submissions": [first_submission],
                                      "new_task": copying_task}).encode(),
                     headers={"Content-Type": "application/json"})
                 assert status == 200 and json.loads(body)["data"][
                     "new_task"] == copying_task, (status, body)
                 status, _, body = request(port, "PUT", "/api/v1/draft",
-                    body=json.dumps({"revision": 3, "text": "next input",
+                    body=json.dumps({"revision": 4, "text": "next input",
                                      "submissions": [first_submission],
                                      "new_task": {**new_task,
                                                   "session_id": "e" * 32}}).encode(),
                     headers={"Content-Type": "application/json"})
                 assert status == 422, (status, body)
                 status, _, body = request(port, "PUT", "/api/v1/draft",
-                    body=json.dumps({"revision": 3, "text": "",
+                    body=json.dumps({"revision": 4, "text": "",
                                      "submissions": [],
                                      "new_task": None}).encode(),
                     headers={"Content-Type": "application/json"})

@@ -84,6 +84,13 @@ export function createNewTaskController({ draftStore, newId, createSession,
     if (pumping || blocked) return;
     const task = draftStore.newTask();
     if (!task) return;
+    if (task.phase === "rejected") {
+      createRejected = true;
+      blocked = true;
+      onReview();
+      changed();
+      return;
+    }
     pumping = true;
     preparing = true;
     changed();
@@ -108,6 +115,13 @@ export function createNewTaskController({ draftStore, newId, createSession,
       catch (error) {
         createRejected = task.phase === "creating" &&
           error?.status >= 400 && error.status < 500;
+        if (createRejected) {
+          // Persist the definitive rejection before showing the retry action.
+          // A reload must never retry a request that the server rejected.
+          draftStore.setNewTask({ ...task, phase: "rejected" });
+          if (!await draftStore.flush(""))
+            throw new Error(t("composer.newTaskSaveFailed"));
+        }
         throw error;
       }
       migrating = true;

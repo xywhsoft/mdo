@@ -89,7 +89,7 @@ function newTask(value) {
   if (typeof value !== "object" || Array.isArray(value) ||
       !/^[0-9a-f]{32}$/.test(value.session_id) ||
       !/^[A-Za-z0-9_-][A-Za-z0-9_.-]{0,63}$/.test(value.project_id) ||
-      !["creating", "copying"].includes(value.phase)) return undefined;
+      !["creating", "copying", "rejected"].includes(value.phase)) return undefined;
   const fields = ["title", "agent_id", "model_id",
     "reasoning_effort", "permission_profile"];
   const limits = [256, 128, 128, 32, 32];
@@ -475,10 +475,10 @@ export function createDraftStore({ onRestore, onError, onSaved, onLoaded = () =>
       const current = entry("");
       const task = current.newTask;
       const first = current.submissions[0];
-      if (!task || task.phase !== "creating" ||
+      if (!task || !["creating", "rejected"].includes(task.phase) ||
           (first && first.id !== task.session_id) ||
           current.submissions.some((item) => item.id === sessionId)) return false;
-      const nextTask = newTask({ ...task, session_id: sessionId,
+      const nextTask = newTask({ ...task, phase: "creating", session_id: sessionId,
         model_id: selectedProfile.model_id,
         reasoning_effort: selectedProfile.reasoning_effort,
         permission_profile: selectedProfile.permission_profile });

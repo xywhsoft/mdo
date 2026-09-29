@@ -219,10 +219,31 @@ test("a rejected create can change profile without losing queued inputs", async 
     releaseReject();
     await reviewed;
     assert.equal(controller.canChangeProfile(), true);
+    assert.equal(documents.get("/api/v1/draft").new_task.phase,
+      "rejected");
+    const reloadedStore = createDraftStore({
+      onRestore() {}, onError(error) { throw error; }, onSaved() {} });
+    let restoredReviews = 0;
+    const reloaded = createNewTaskController({ draftStore: reloadedStore,
+      newId() { id += 1; return id.toString(16).padStart(32, "0"); },
+      async createSession(input) {
+        creates += 1;
+        assert.equal(input.client_session_id, "3".padStart(32, "0"));
+        assert.equal(input.reasoning_effort, "high");
+        return { project_id: input.project_id, id: input.client_session_id };
+      },
+      async findSession() { assert.fail("definitive rejection needs no lookup"); },
+      onPersisted() {}, onMigrated(key) { migrated = key; },
+      onReview() { restoredReviews += 1; }, onChange() {},
+    });
+    await reloaded.reconcile();
+    assert.equal(restoredReviews, 1);
+    assert.equal(creates, 1);
+    assert.equal(reloaded.canChangeProfile(), true);
     const before = documents.get("/api/v1/draft");
     assert.deepEqual(before.submissions.map((item) => item.text),
       ["first", "second"]);
-    assert.equal(await controller.review({ ...profile,
+    assert.equal(await reloaded.review({ ...profile,
       reasoning_effort: "high" }), true);
     assert.equal(migrated, `default/${"3".padStart(32, "0")}`);
     const target = documents.get(`/api/v1/projects/default/sessions/${

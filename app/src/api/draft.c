@@ -28,6 +28,12 @@ typedef struct MdoDraftSubmission {
     MdoApiProfile Profile;
 } MdoDraftSubmission;
 
+typedef enum MdoDraftNewTaskPhase {
+    MDO_DRAFT_TASK_CREATING,
+    MDO_DRAFT_TASK_COPYING,
+    MDO_DRAFT_TASK_REJECTED
+} MdoDraftNewTaskPhase;
+
 typedef struct MdoDraftNewTask {
     char ProjectId[MDO_PROJECT_ID_CAPACITY];
     char SessionId[MDO_SESSION_ID_CAPACITY];
@@ -36,7 +42,7 @@ typedef struct MdoDraftNewTask {
     char ModelId[MDO_SESSION_IDENTITY_CAPACITY];
     char ReasoningEffort[MDO_SESSION_REASONING_CAPACITY];
     char PermissionProfile[MDO_SESSION_REASONING_CAPACITY];
-    bool Copying;
+    MdoDraftNewTaskPhase Phase;
 } MdoDraftNewTask;
 
 typedef struct MdoDraft {
@@ -235,7 +241,11 @@ static bool MdoDraftNewTaskRead(const xvalue* Value,
     if ( xrtValueType(Phase) != XVALUE_STRING ||
          !xrtValueGetString(Phase, &PhaseText) ) return false;
     if ( PhaseText.Size == 7u &&
-         memcmp(PhaseText.Data, "copying", 7u) == 0 ) Task->Copying = true;
+         memcmp(PhaseText.Data, "copying", 7u) == 0 )
+        Task->Phase = MDO_DRAFT_TASK_COPYING;
+    else if ( PhaseText.Size == 8u &&
+              memcmp(PhaseText.Data, "rejected", 8u) == 0 )
+        Task->Phase = MDO_DRAFT_TASK_REJECTED;
     else if ( PhaseText.Size != 8u ||
               memcmp(PhaseText.Data, "creating", 8u) != 0 ) return false;
     *Present = true;
@@ -259,7 +269,9 @@ static xvalue* MdoDraftNewTaskValue(const MdoDraft* Draft)
          MdoApiValueSetString(Value, "permission_profile",
             Task->PermissionProfile) &&
          MdoApiValueSetString(Value, "phase",
-            Task->Copying ? "copying" : "creating") ) return Value;
+            Task->Phase == MDO_DRAFT_TASK_COPYING ? "copying" :
+            (Task->Phase == MDO_DRAFT_TASK_REJECTED ? "rejected" :
+             "creating")) ) return Value;
     xrtValueRelease(Value);
     return NULL;
 }
