@@ -35,4 +35,17 @@ test("interleaved text, reasoning, and task events retain one card per model tur
     "Think again");
   assert.equal(items.find((item) => item.kind === "assistant").feedbackEventId, 9);
   assert.equal(items.find((item) => item.kind === "assistant").outputTokens, 3);
+  assert.equal(items.find((item) => item.kind === "assistant").modelDurationSeconds, 1);
+});
+
+test("a truncated event window does not invent an LLM duration", () => {
+  const items = eventsToTimeline([
+    { kind: "model_text_delta", event_id: 8, run_id: "run-2", agent_turn: 1,
+      model: "Ling", text: "Reply", time: 2100000 },
+    { kind: "model_done", event_id: 9, run_id: "run-2", agent_turn: 1,
+      success: true, input_tokens: 7, output_tokens: 3, time: 3100000 },
+  ]);
+  const answer = items.find((item) => item.kind === "assistant");
+  assert.equal(answer.modelDurationSeconds, undefined);
+  assert.equal(answer.tokensPerSecond, 3);
 });

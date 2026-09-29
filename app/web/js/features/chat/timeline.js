@@ -113,7 +113,10 @@ export function eventsToTimeline(events, historyLost = false) {
             answer.feedbackEventId = Number(event.event_id);
           answer.inputTokens = Number(event.input_tokens || 0);
           answer.outputTokens = Number(event.output_tokens || 0);
-          const elapsed = (Number(event.time) - Number(modelStarts.get(modelKey(event, epoch)) || answer.time)) / 1e6;
+          const startedAt = modelStarts.get(modelKey(event, epoch));
+          const elapsed = (Number(event.time) - Number(startedAt ?? answer.time)) / 1e6;
+          if (startedAt != null && Number.isFinite(Number(startedAt)) && elapsed > 0)
+            answer.modelDurationSeconds = elapsed;
           if (elapsed > 0 && answer.outputTokens > 0) answer.tokensPerSecond = answer.outputTokens / elapsed;
         }
         break;
@@ -566,6 +569,13 @@ function timelineNode(item, handlers, feedback, projectId, sessionId, writable,
         stats.push(t("timeline.usage", { input: item.inputTokens || 0,
           output: item.outputTokens || 0 },
         `${item.inputTokens || 0} 输入 / ${item.outputTokens || 0} 输出 tokens`));
+      if (Number.isFinite(item.modelDurationSeconds) && item.modelDurationSeconds > 0) {
+        const number = new Intl.NumberFormat(currentLocale(),
+          { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+        const seconds = item.modelDurationSeconds < 0.1
+          ? `<${number.format(0.1)}` : number.format(item.modelDurationSeconds);
+        stats.push(`LLM ${t("timeline.seconds", { seconds }, `${seconds} 秒`)}`);
+      }
       if (Number.isFinite(item.tokensPerSecond)) stats.push(`${item.tokensPerSecond.toFixed(1)} tok/s`);
       if (stats.length) actions.append(element("span", { className: "timeline-stats", text: stats.join(" · ") }));
     }
