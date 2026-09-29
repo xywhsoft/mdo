@@ -207,6 +207,17 @@ class BoundedDelayProxy(BaseHTTPRequestHandler):
 
     protocol_version = "HTTP/1.1"
 
+    LOCALE_HOTKEY = b'''<script>
+// Isolated packed-page probe: switch UI language without moving focus away
+// from the current conversation control. F9 is only active in this proxy.
+document.addEventListener('keydown', async event => {
+  if (event.key !== 'F9') return;
+  event.preventDefault();
+  const locale = await import('/js/i18n.js');
+  await locale.loadLocale(locale.currentLocale() === 'zh-CN' ? 'en-US' : 'zh-CN');
+}, true);
+</script>'''
+
     def log_message(self, *_args):
         pass
 
@@ -485,6 +496,12 @@ class BoundedDelayProxy(BaseHTTPRequestHandler):
             response = upstream.getresponse()
             payload = response.read()
             response_status = response.status
+            if (self.server.locale_hotkey and self.command == "GET" and
+                    self.path == "/" and response_status == 200):
+                if b"</body>" not in payload:
+                    raise RuntimeError("packed page has no body for locale probe")
+                payload = payload.replace(b"</body>",
+                                          self.LOCALE_HOTKEY + b"</body>", 1)
             if delay_run_response:
                 try:
                     run_state = json.loads(payload)["data"]["state"]
@@ -652,6 +669,8 @@ parser.add_argument("--resume-verify", action="store_true",
                     help="let the local model verify a resumed run with a bounded read-only command")
 parser.add_argument("--image-capable", action="store_true",
                     help="enable image input in the isolated built-in model fixture")
+parser.add_argument("--locale-hotkey", action="store_true",
+                    help="let F9 change packed-page locale without moving focus")
 parser.add_argument("--agent-profile-fixture", action="store_true",
                     help="install an isolated custom Agent with model, reasoning and permission defaults")
 parser.add_argument("--second-model-context-tokens", type=int, default=0,
@@ -832,9 +851,10 @@ try:
             or args.drop_first_run_response or args.drop_run_response_number
             or args.drop_first_queue_response or args.fail_first_queue_reconcile
             or args.queue_read_failures
-            or args.reject_pane_layout):
+            or args.reject_pane_layout or args.locale_hotkey):
         proxy = BoundedDelayProxyServer(("127.0.0.1", 0), BoundedDelayProxy)
         proxy.upstream_port = port
+        proxy.locale_hotkey = args.locale_hotkey
         proxy.approval_delay_seconds = args.approval_delay_ms / 1000
         proxy.ask_delay_seconds = args.ask_delay_ms / 1000
         proxy.task_cancel_delay_seconds = args.task_cancel_delay_ms / 1000
