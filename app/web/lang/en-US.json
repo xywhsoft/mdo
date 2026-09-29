@@ -482,6 +482,7 @@
   "composer.hintGuide": "Enter interrupts and sends · Ctrl+Enter queues",
   "composer.hintQueue": "Enter queues · Ctrl+Enter interrupts and sends",
   "composer.hintIdle": "Enter sends · Shift+Enter adds a line",
+  "composer.hintRunListUnavailable": "Could not check runs · queued messages will send after an automatic retry",
   "composer.hintSubmitting": "Sending the previous prompt · Enter stages the next",
   "composer.hintPendingAdmission": "Sending the previous prompt · {count} waiting to queue",
   "composer.queueAdmissionUncertain": "Delivery is unconfirmed. The text was kept; check the queue and trace before retrying.",

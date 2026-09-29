@@ -482,6 +482,7 @@
   "composer.hintGuide": "Enter 中断并发送 · Ctrl Enter 排队",
   "composer.hintQueue": "Enter 排队 · Ctrl Enter 中断并发送",
   "composer.hintIdle": "Enter 发送 · Shift Enter 换行",
+  "composer.hintRunListUnavailable": "运行状态读取失败 · 待发消息将在自动重试后发送",
   "composer.hintSubmitting": "上一条正在提交 · Enter 暂存下一条",
   "composer.hintPendingAdmission": "上一条正在提交 · {count} 条待入队",
   "composer.queueAdmissionUncertain": "发送状态尚未确认；内容已保留，请先核对队列和轨迹再重试。",

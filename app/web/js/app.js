@@ -1015,6 +1015,8 @@ export async function boot() {
       ? (guide
         ? t("composer.hintGuide", {}, "Enter 中断并发送 · Ctrl Enter 排队")
         : t("composer.hintQueue", {}, "Enter 排队 · Ctrl Enter 中断并发送"))
+      : route.sessionId && runsStore.get().status === "error"
+      ? t("composer.hintRunListUnavailable")
       : t("composer.hintIdle", {}, "Enter 发送 · Shift Enter 换行");
     $("#shortcut-enter-description").textContent = guide
       ? t("composer.shortcutEnterGuide", {}, "发送；运行中中断并优先发送")
@@ -1365,6 +1367,7 @@ export async function boot() {
         queueBlocked.has(key) ||
         promptQueue.peek(selected.projectId, selected.sessionId)?.state !== "pending") return;
     if (!await draftStore.ensureLoaded(key) || draftStore.isRunUncertain(key)) return;
+    if (runsStore.get().status !== "ready") return;
     if ((runsStore.get().data?.items ?? []).some((run) =>
       run.project_id === selected.projectId && run.session_id === selected.sessionId && !terminalState(run))) return;
     await promptQueue.exclusive(selected.projectId, selected.sessionId,

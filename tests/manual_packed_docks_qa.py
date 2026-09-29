@@ -261,6 +261,21 @@ Object.defineProperty(navigator, 'clipboard', {
                 time.sleep(self.server.startup_runs_delay_seconds)
                 print(f"QA released runs GET #{startup_read} at "
                       f"{time.monotonic():.3f}", flush=True)
+            if startup_read == 1 and self.server.fail_first_runs_list:
+                payload = json.dumps({"ok": False, "error": {
+                    "code": "qa_runs_list_rejected",
+                    "message": "Synthetic runs-list failure"
+                }}).encode()
+                print(f"QA rejected runs GET #1 at {time.monotonic():.3f}",
+                      flush=True)
+                self.send_response(503)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Content-Length", str(len(payload)))
+                self.send_header("Connection", "close")
+                self.end_headers()
+                self.wfile.write(payload)
+                self.close_connection = True
+                return
         if (self.command == "GET" and self.path in
                 {"/api/v1/sessions", "/api/v1/models"}):
             with self.server.count_lock:
@@ -760,6 +775,8 @@ parser.add_argument("--startup-catalog-delay-ms", type=int, default=0,
                     help="delay initial session-list and model GETs by 0-30000 ms")
 parser.add_argument("--startup-runs-delay-ms", type=int, default=0,
                     help="delay first two runs GETs by 0-30000 ms")
+parser.add_argument("--fail-first-runs-list", action="store_true",
+                    help="reject the initial global runs GET with 503")
 parser.add_argument("--startup-workspace-delay-ms", type=int, default=0,
                     help="delay initial workspace-state GET by 0-30000 ms")
 parser.add_argument("--agent-profile-fixture", action="store_true",
@@ -959,7 +976,7 @@ try:
             or args.fail_first_module or args.delay_first_module_ms
             or args.startup_task_delay_ms or args.startup_bootstrap_delay_ms
             or args.startup_catalog_delay_ms
-            or args.startup_runs_delay_ms
+            or args.startup_runs_delay_ms or args.fail_first_runs_list
             or args.startup_workspace_delay_ms):
         proxy = BoundedDelayProxyServer(("127.0.0.1", 0), BoundedDelayProxy)
         proxy.upstream_port = port
@@ -976,6 +993,7 @@ try:
         proxy.startup_catalog_reads = set()
         proxy.startup_runs_delay_seconds = args.startup_runs_delay_ms / 1000
         proxy.startup_runs_reads = 0
+        proxy.fail_first_runs_list = args.fail_first_runs_list
         proxy.startup_workspace_delay_seconds = args.startup_workspace_delay_ms / 1000
         proxy.startup_workspace_reads = 0
         proxy.approval_delay_seconds = args.approval_delay_ms / 1000
