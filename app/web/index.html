@@ -725,15 +725,18 @@
       <button class="primary-button" id="startup-retry-button" type="button">重新载入</button>
     </div>
   </div>
-  <script type="module">
+  <script>
     const failure = document.getElementById("startup-failure");
     const retry = document.getElementById("startup-retry-button");
     const description = document.getElementById("startup-failure-description");
     const failureMessage = description.textContent;
     const shell = document.getElementById("app-shell");
     const skip = document.querySelector(".skip-link");
+    const startupState = document.documentElement.dataset;
+    startupState.mdoStartup = "loading";
     let timedOut = false;
-    function showFailure(message) {
+    function showFailure(message, state) {
+      startupState.mdoStartup = state;
       description.textContent = message;
       shell.inert = true;
       skip.inert = true;
@@ -744,10 +747,11 @@
     const startupTimer = window.setTimeout(() => {
       timedOut = true;
       console.warn("Workspace startup is still pending after 20 seconds");
-      showFailure("界面启动时间过长。可以重新载入；若服务仍在启动，也可以稍等片刻。");
+      showFailure("界面启动时间过长。可以重新载入；若服务仍在启动，也可以稍等片刻。", "timeout");
     }, 20000);
     import("/js/main.js").then(({ start }) => start()).then(() => {
       window.clearTimeout(startupTimer);
+      startupState.mdoStartup = "ready";
       if (!timedOut) return;
       failure.hidden = true;
       shell.inert = false;
@@ -762,7 +766,7 @@
     }).catch((error) => {
       window.clearTimeout(startupTimer);
       console.error("Workspace startup failed", error);
-      showFailure(failureMessage);
+      showFailure(failureMessage, "failed");
     });
   </script>
 </body>
