@@ -728,13 +728,41 @@
   <script type="module">
     const failure = document.getElementById("startup-failure");
     const retry = document.getElementById("startup-retry-button");
-    retry.addEventListener("click", () => window.location.reload());
-    import("/js/main.js").then(({ start }) => start()).catch((error) => {
-      console.error("Workspace startup failed", error);
-      document.getElementById("app-shell").inert = true;
-      document.querySelector(".skip-link").inert = true;
+    const description = document.getElementById("startup-failure-description");
+    const failureMessage = description.textContent;
+    const shell = document.getElementById("app-shell");
+    const skip = document.querySelector(".skip-link");
+    let timedOut = false;
+    function showFailure(message) {
+      description.textContent = message;
+      shell.inert = true;
+      skip.inert = true;
       failure.hidden = false;
       retry.focus();
+    }
+    retry.addEventListener("click", () => window.location.reload());
+    const startupTimer = window.setTimeout(() => {
+      timedOut = true;
+      console.warn("Workspace startup is still pending after 20 seconds");
+      showFailure("界面启动时间过长。可以重新载入；若服务仍在启动，也可以稍等片刻。");
+    }, 20000);
+    import("/js/main.js").then(({ start }) => start()).then(() => {
+      window.clearTimeout(startupTimer);
+      if (!timedOut) return;
+      failure.hidden = true;
+      shell.inert = false;
+      skip.inert = false;
+      if (document.activeElement === retry) {
+        const dialogs = document.querySelectorAll("dialog[open]");
+        const dialog = dialogs[dialogs.length - 1];
+        (dialog?.querySelector("button:not([disabled])") ??
+          document.getElementById(document.getElementById("settings-workspace").hidden
+            ? "prompt" : "close-settings"))?.focus();
+      }
+    }).catch((error) => {
+      window.clearTimeout(startupTimer);
+      console.error("Workspace startup failed", error);
+      showFailure(failureMessage);
     });
   </script>
 </body>

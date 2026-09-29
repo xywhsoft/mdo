@@ -241,19 +241,24 @@ document.addEventListener('keydown', async event => {
 
     def forward(self):
         if (self.command == "GET" and self.path == "/js/main.js" and
-                self.server.fail_first_module):
+                (self.server.fail_first_module or
+                 self.server.delay_first_module_seconds)):
             with self.server.count_lock:
                 self.server.module_reads += 1
                 module_read = self.server.module_reads
             if module_read == 1:
-                print("QA rejected first main module GET", flush=True)
-                self.send_response(503)
-                self.send_header("Content-Type", "text/javascript")
-                self.send_header("Content-Length", "0")
-                self.send_header("Connection", "close")
-                self.end_headers()
-                self.close_connection = True
-                return
+                if self.server.delay_first_module_seconds:
+                    print("QA delaying first main module GET", flush=True)
+                    time.sleep(self.server.delay_first_module_seconds)
+                if self.server.fail_first_module:
+                    print("QA rejected first main module GET", flush=True)
+                    self.send_response(503)
+                    self.send_header("Content-Type", "text/javascript")
+                    self.send_header("Content-Length", "0")
+                    self.send_header("Connection", "close")
+                    self.end_headers()
+                    self.close_connection = True
+                    return
         length = int(self.headers.get("Content-Length", "0"))
         if length < 0 or length > 8 * 1024 * 1024:
             self.send_error(413)
@@ -687,6 +692,8 @@ parser.add_argument("--locale-hotkey", action="store_true",
                     help="let F9 change packed-page locale without moving focus")
 parser.add_argument("--fail-first-module", action="store_true",
                     help="reject the first main.js GET to test startup recovery")
+parser.add_argument("--delay-first-module-ms", type=int, default=0,
+                    help="delay first main.js GET by 0-60000 ms to test startup timeout")
 parser.add_argument("--agent-profile-fixture", action="store_true",
                     help="install an isolated custom Agent with model, reasoning and permission defaults")
 parser.add_argument("--second-model-context-tokens", type=int, default=0,
@@ -700,6 +707,8 @@ if args.agent_profile_fixture and not args.image_capable:
     parser.error("--agent-profile-fixture requires --image-capable")
 if not 0 <= args.approval_delay_ms <= 5000:
     parser.error("--approval-delay-ms must be between 0 and 5000")
+if not 0 <= args.delay_first_module_ms <= 60000:
+    parser.error("--delay-first-module-ms must be between 0 and 60000")
 if not 0 <= args.ask_delay_ms <= 5000:
     parser.error("--ask-delay-ms must be between 0 and 5000")
 if not 0 <= args.task_cancel_delay_ms <= 5000:
@@ -868,11 +877,12 @@ try:
             or args.drop_first_queue_response or args.fail_first_queue_reconcile
             or args.queue_read_failures
             or args.reject_pane_layout or args.locale_hotkey
-            or args.fail_first_module):
+            or args.fail_first_module or args.delay_first_module_ms):
         proxy = BoundedDelayProxyServer(("127.0.0.1", 0), BoundedDelayProxy)
         proxy.upstream_port = port
         proxy.locale_hotkey = args.locale_hotkey
         proxy.fail_first_module = args.fail_first_module
+        proxy.delay_first_module_seconds = args.delay_first_module_ms / 1000
         proxy.module_reads = 0
         proxy.approval_delay_seconds = args.approval_delay_ms / 1000
         proxy.ask_delay_seconds = args.ask_delay_ms / 1000
