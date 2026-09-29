@@ -1581,3 +1581,11 @@ Windows 有界发布门禁通过 114 项 Python、85 项 Node、72 个前端模�
 修复候选单文件 Home `.build/mdo-packed-docks-m6i67cww` 在上述隔离模式完成一轮回复，代码按钮显示“已复制”且保持焦点；剪贴板读取和实际粘贴均得到 `int answer(void) { return 42; }`。同页普通消息复制仍得到完整 Markdown 原文。三项 Node 用例覆盖异步成功、缺少 API 时的回退和异步拒绝后的确定失败。这里验证的是打包页与隔离浏览器的旧 API 路径；实体移动端和各系统原生 WebView 仍需验收。
 
 Windows 有界发布门禁通过 114 项 Python、88 项 Node、73 个前端模块解析、21 个运行探针、严格 C 编译、确定性打包、便携 WebView2 Home 与 20 秒单文件启动。Linux 在 WSL 原生文件系统的独立拷贝通过同一有界门禁（跳过 GUI 启动），Linux 包 SHA-256 为 `f464aac33084e5a60446cf81f8cc4f6bd96c3c710c2b12c8b9846270781d534d`。根目录 `mdo.exe` 已更新，SHA-256 与 Windows 候选同为 `50c9207109e66ec8b6961ddeda7aae3d2b4595f33ad3bd2507ce5256bc6ab833`。未做压力或高负载测试。
+
+## 2026-09-29：项目级新任务草稿存储接口
+
+代码审计确认新任务在首次发送前共用 `data/draft.json`：切换项目时 `selectedKey` 仍为空，只有写前日志生成 `new_task` 后才阻止跨项目导航。因此未发送文本会跟随项目切换；旧版按懒会话 ID 分开保存草稿。新接口 `GET/HEAD/PUT /api/v1/projects/{project}/draft` 为合法项目 ID 提供独立的 `data/project-drafts/{project}.json`，沿用 revision 冲突、64 KiB 文本上限和 Home 原子写入。空草稿 GET 不创建文件；项目定义尚未建立时也可保存，因为现有新任务允许先选择默认或未登记项目。此接口只接收文本与可选输入配置，不接受图片、待提交意图、`new_task` 或运行核对标记；创建中的写前日志仍由全局 `/draft` 保存。
+
+API 探针验证两个项目的文本及 revision 相互隔离、空读取零写入、HEAD、旧 revision 冲突和非法路径/提交载荷拒绝。此提交是前端接线前的存储阶段：当前打包界面仍选用全局草稿，跨项目文本串用尚未修复；下一阶段必须接入项目键、迁移旧全局文本，并在打包页验证切换、刷新、发送和创建失败恢复。
+
+Windows 有界发布门禁通过 114 项 Python、88 项 Node、73 个前端模块解析、21 个运行探针、严格 C 编译、确定性打包、便携 WebView2 Home 和 20 秒单文件启动；候选 SHA-256 为 `9b7204bf06ffe1b2d08b7900e80d887fbd764ca70a0f97aeccf683097aaa262f`。Linux 在 WSL 原生文件系统的独立拷贝通过相同的有界单元与运行探针及确定性打包（跳过 GUI 启动），包 SHA-256 为 `e6b98d4c91e1b0a7e875a6ac63d8e00d3529ae2b746b23b581fd8a928db3d41f`。未做压力或高负载测试。

@@ -2192,6 +2192,56 @@ def run_probe(host: Path) -> None:
                     headers={"Content-Type": "application/json"})
                 assert status == 200 and json.loads(body)["data"][
                     "new_task"] is None, (status, body)
+                project_draft = "/api/v1/projects/api-project/draft"
+                other_project_draft = "/api/v1/projects/default/draft"
+                status, _, body = request(port, "GET", project_draft)
+                assert status == 200 and json.loads(body)["data"][
+                    "text"] == "", (status, body)
+                assert request(port, "HEAD", project_draft)[0] == 200
+                assert not (home / "data/project-drafts/api-project.json").exists()
+                status, _, body = request(port, "PUT", project_draft,
+                    body=b'{"revision":0,"text":"project A input"}',
+                    headers={"Content-Type": "application/json"})
+                assert status == 200 and json.loads(body)["data"][
+                    "text"] == "project A input", (status, body)
+                status, _, body = request(port, "GET", other_project_draft)
+                assert status == 200 and json.loads(body)["data"][
+                    "text"] == "", (status, body)
+                status, _, body = request(port, "PUT", other_project_draft,
+                    body=b'{"revision":0,"text":"project B input"}',
+                    headers={"Content-Type": "application/json"})
+                assert status == 200 and json.loads(body)["data"][
+                    "text"] == "project B input", (status, body)
+                assert json.loads(request(port, "GET", project_draft)[2])[
+                    "data"]["text"] == "project A input"
+                assert json.loads((home / "data/project-drafts/api-project.json")
+                    .read_text(encoding="utf-8"))["text"] == "project A input"
+                status, _, body = request(port, "PUT", project_draft,
+                    body=b'{"revision":0,"text":"stale"}',
+                    headers={"Content-Type": "application/json"})
+                assert status == 409 and json.loads(body)["error"][
+                    "code"] == "draft_conflict", (status, body)
+                status, _, body = request(port, "PUT", project_draft,
+                    body=json.dumps({"revision": 1, "text": "forbidden",
+                                     "submissions": [first_submission]}).encode(),
+                    headers={"Content-Type": "application/json"})
+                assert status == 422 and json.loads(body)["error"][
+                    "code"] == "draft_invalid", (status, body)
+                status, _, body = request(port, "PUT", project_draft,
+                    body=json.dumps({"revision": 1, "text": "forbidden",
+                                     "new_task": new_task}).encode(),
+                    headers={"Content-Type": "application/json"})
+                assert status == 422 and json.loads(body)["error"][
+                    "code"] == "draft_invalid", (status, body)
+                status, _, body = request(port, "GET",
+                    "/api/v1/projects/missing/draft")
+                assert status == 200 and json.loads(body)["data"][
+                    "text"] == "", (status, body)
+                assert not (home / "data/project-drafts/missing.json").exists()
+                status, _, body = request(port, "GET",
+                    "/api/v1/projects/.bad/draft")
+                assert status == 400 and json.loads(body)["error"][
+                    "code"] == "invalid_path", (status, body)
                 draft_path = session_path + "/draft"
                 status, _, body = request(port, "GET", draft_path)
                 assert status == 200 and json.loads(body)["data"] == {

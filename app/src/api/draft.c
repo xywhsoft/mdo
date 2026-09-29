@@ -585,10 +585,19 @@ bool MdoApiDraftRoute(MdoApiContext* Context)
     bool Ok;
     bool Conflict = false;
     bool AttachmentLocked = false;
+    int Written;
     xvalue* Data;
 
     if ( Context->ParamCount == 0u ) {
         memcpy(Path, "data/draft.json", sizeof("data/draft.json"));
+    } else if ( Context->ParamCount == 1u &&
+         MdoDraftCaptureId(Context->Params[0], ProjectId,
+            sizeof(ProjectId)) ) {
+        Written = snprintf(Path, sizeof(Path),
+            "data/project-drafts/%s.json", ProjectId);
+        if ( Written <= 0 || (size_t)Written >= sizeof(Path) )
+            return MdoApiReplyError(Context, 400u, "invalid_path",
+                "The project identifier is invalid", NULL);
     } else if ( Context->ParamCount == 2u &&
          MdoDraftCaptureId(Context->Params[0], ProjectId,
             sizeof(ProjectId)) &&
@@ -685,7 +694,10 @@ bool MdoApiDraftRoute(MdoApiContext* Context)
             (IncomingCount == 0u ||
              (Context->ParamCount == 2u &&
               MdoAttachmentIdsExist(ProjectId, SessionId,
-                IncomingAttachments, IncomingCount)));
+                IncomingAttachments, IncomingCount))) &&
+            (Context->ParamCount != 1u ||
+             (Incoming->SubmissionCount == 0u && !Incoming->HasNewTask &&
+              !IncomingUncertain && IncomingCount == 0u));
         if ( !Ok ) {
             if ( AttachmentLocked ) MdoApiAttachmentUnlock();
             MdoApiJsonBodyUnit(&Body);
