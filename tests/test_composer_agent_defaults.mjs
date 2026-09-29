@@ -27,10 +27,17 @@ class Select extends EventTarget {
   }
 
   get value() { return this.selected; }
+  focus() { globalThis.document.activeElement = this; }
   set value(value) {
     this.selected = this.options.some((option) => option.value === value)
       ? value : "";
   }
+}
+
+class Button extends EventTarget {
+  hidden = true;
+  disabled = false;
+  focus() { globalThis.document.activeElement = this; }
 }
 
 globalThis.document = {
@@ -120,10 +127,12 @@ test("blank task choices survive refresh per project without freezing other defa
     const modelSelect = new Select();
     const reasoningSelect = new Select();
     const permissionSelect = new Select(["read-only", "balanced", "full-access"]);
+    const resetButton = new Button();
     return { profile: createComposerProfile({ modelSelect, reasoningSelect,
       permissionSelect, navigation, sessionStore, modelsStore, agentsStore,
-      projectsStore, draftStore, isRunActive: () => false,
-      onBusyChange() {} }), modelSelect, reasoningSelect, permissionSelect };
+      projectsStore, draftStore, resetButton, isRunActive: () => false,
+      onBusyChange() {} }), modelSelect, reasoningSelect, permissionSelect,
+    resetButton };
   };
   try {
     const alpha = projectDraftKey("alpha");
@@ -174,6 +183,28 @@ test("blank task choices survive refresh per project without freezing other defa
     for (const listener of listeners) listener(route);
     assert.deepEqual(second.profile.selection(), { model_id: "text",
       reasoning_effort: "medium", permission_profile: "full-access" });
+    assert.equal(second.resetButton.hidden, false);
+    second.resetButton.focus();
+    second.resetButton.dispatchEvent(new Event("click"));
+    await new Promise(setImmediate);
+    assert.equal(await reopened.flush(alpha), true);
+    assert.equal(documents.get("/api/v1/projects/alpha/draft").composer_profile,
+      null);
+    assert.deepEqual(second.profile.selection(), { model_id: "text",
+      reasoning_effort: "medium", permission_profile: "balanced" });
+    assert.equal(second.resetButton.hidden, true);
+    assert.equal(globalThis.document.activeElement, second.modelSelect);
+    agentsStore.setData({ items: [{ id: "mdo.default", model: "code",
+      reasoning_effort: "high", permission_profile: "read-only" }] });
+    assert.deepEqual(second.profile.selection(), { model_id: "code",
+      reasoning_effort: "high", permission_profile: "read-only" });
+    const afterReset = makeStore();
+    afterReset.select(alpha);
+    assert.equal(await afterReset.ensureLoaded(alpha), true);
+    const third = makeProfile(afterReset);
+    assert.equal(third.resetButton.hidden, true);
+    assert.deepEqual(third.profile.selection(), second.profile.selection());
+    third.profile.destroy();
     second.profile.destroy();
   } finally {
     globalThis.window = oldWindow;

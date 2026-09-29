@@ -801,6 +801,11 @@ select:focus-visible,
 .composer-select-short { max-width: 92px; }
 .composer-select:hover, .composer-select:focus-visible { background: var(--surface-hover); color: var(--ink); }
 .composer-select:disabled { opacity: .55; cursor: default; }
+.composer-profile-reset { flex: 0 0 34px; width: 34px; height: 34px; padding: 0; border: 0; border-radius: var(--radius-sm); background: transparent; color: var(--muted); font: inherit; font-size: 20px; cursor: pointer; }
+.composer-profile-reset:hover, .composer-profile-reset:focus-visible { background: var(--surface-hover); color: var(--ink); }
+.composer-profile-reset:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px; }
+.composer-profile-reset:disabled { opacity: .55; cursor: default; }
+.composer-profile-reset[hidden] { display: none; }
 .composer-profile-status { flex: 0 0 auto; padding: 3px 6px; border-radius: var(--radius-sm); background: var(--surface-hover); color: var(--accent); font-size: 10px; white-space: nowrap; }
 .composer-profile-status[hidden] { display: none; }
 .composer-profile-status[data-state="error"] { color: var(--danger); }
@@ -1449,9 +1454,10 @@ select:focus-visible,
   .composer-region[data-decision-pending] .composer-options > :is(.composer-select, .option-chip) { display: none; }
   .composer-region[data-decision-pending] .composer-actions { flex: 1 1 auto; }
   .composer-attach, .composer-select, .context-meter > button,
-  .send-button, .stop-button { height: 40px; }
+  .composer-profile-reset, .send-button, .stop-button { height: 40px; }
   .composer-attach, .context-meter > button, .send-button,
-  .stop-button { width: 40px; }
+  .composer-profile-reset, .stop-button { width: 40px; }
+  .composer-profile-reset { flex-basis: 40px; }
   .composer-project-row .composer-project { height: 40px; }
   .composer-options > #composer-model { flex: 1 1 0; max-width: 110px; }
   .composer-select-short { max-width: 56px; }

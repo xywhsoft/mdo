@@ -402,6 +402,7 @@
   "profile.notSaved": "Настройки следующей задачи не сохранены",
   "profile.savingDraft": "Сохранение настроек новой задачи…",
   "profile.draftNotSaved": "Настройки новой задачи не сохранены",
+  "profile.followDefaults": "Следовать настройкам проекта по умолчанию",
   "profile.deferredSaveFailed": "Не удалось сохранить настройки следующей задачи; проверьте черновик",
   "profile.deferredClearFailed": "Настройки сеанса обновлены, но прежние настройки следующей задачи не удалены; проверьте черновик",
   "queue.profileSnapshot": "Задано: {model} · {effort} · {permission}",

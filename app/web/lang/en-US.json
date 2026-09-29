@@ -402,6 +402,7 @@
   "profile.notSaved": "Next task settings not saved",
   "profile.savingDraft": "Saving new task settings…",
   "profile.draftNotSaved": "New task settings not saved",
+  "profile.followDefaults": "Follow project defaults",
   "profile.deferredSaveFailed": "Could not save the next task settings; check the draft status",
   "profile.deferredClearFailed": "Session settings updated, but old next task settings could not be cleared; check the draft status",
   "queue.profileSnapshot": "Fixed: {model} · {effort} · {permission}",

@@ -68,7 +68,7 @@ export function applyAgentProfileDefaults({ agent, fallback, models,
 
 export function createComposerProfile({ modelSelect, reasoningSelect,
   permissionSelect, navigation, sessionStore, modelsStore, agentsStore,
-  projectsStore, draftStore, status, isRunActive,
+  projectsStore, draftStore, status, resetButton, isRunActive,
   hasPendingSubmission = () => false, onBusyChange,
   onSelectionChange }) {
   // Blank tasks have no session metadata. Keep manual choices per project, but
@@ -76,6 +76,8 @@ export function createComposerProfile({ modelSelect, reasoningSelect,
   const drafts = new Map();
   const busy = new Set();
   const changing = new Map();
+  const resetting = new Set();
+  const draftVersions = new Map();
   let runActive = false;
   let locked = false;
 
@@ -103,6 +105,15 @@ export function createComposerProfile({ modelSelect, reasoningSelect,
       reasoning_effort: pending.reasoning_effort || saved?.reasoning_effort || "",
       permission_profile: pending.permission_profile ||
         saved?.permission_profile || "" };
+  }
+  function hasOverride(profile) {
+    return Boolean(profile.model_id || profile.reasoning_effort ||
+      profile.permission_profile);
+  }
+  function bumpDraftVersion(projectId) {
+    const version = (draftVersions.get(projectId) ?? 0) + 1;
+    draftVersions.set(projectId, version);
+    return version;
   }
   function defaultAgent() {
     return agentsStore.get().data?.items?.find((item) =>
@@ -164,12 +175,19 @@ export function createComposerProfile({ modelSelect, reasoningSelect,
       (session ? agentPermission(session) :
         pending.permission_profile || agentPermission(null));
     const disabled = busy.has(key) || locked ||
+      (!session && resetting.has(projectId)) ||
       (Boolean(navigation.get().sessionId) && !session) ||
       (session && (session.status !== "active" ||
         (draftStore && !draftStore.isLoaded(key))));
     modelSelect.disabled = disabled || catalog.length === 0;
     reasoningSelect.disabled = disabled || !reasoningSelect.options.length;
     permissionSelect.disabled = disabled;
+    if (resetButton) {
+      resetButton.hidden = Boolean(navigation.get().sessionId) ||
+        !hasOverride(pending);
+      resetButton.disabled = disabled || Boolean(draftStore &&
+        !draftStore.isLoaded(projectDraftKey(projectId)));
+    }
     if (status) {
       const nextRun = session && deferred &&
         !sameProfile(deferred, sessionProfile(session));
@@ -192,6 +210,7 @@ export function createComposerProfile({ modelSelect, reasoningSelect,
     const session = current();
     const projectId = navigation.get().projectId || "default";
     if (navigation.get().sessionId && !session) { sync(); return; }
+    if (!session && (locked || resetting.has(projectId))) { sync(); return; }
     const model = selectedModel(models(), modelSelect.value);
     const effort = fillReasoningOptions(reasoningSelect, model,
       reasoningSelect.value);
@@ -201,6 +220,7 @@ export function createComposerProfile({ modelSelect, reasoningSelect,
       permission_profile: permissionSelect.value,
     };
     if (!session) {
+      const version = bumpDraftVersion(projectId);
       const pending = draft(projectId);
       if (field === "model") {
         pending.model_id = profile.model_id;
@@ -215,6 +235,8 @@ export function createComposerProfile({ modelSelect, reasoningSelect,
         if (!await draftStore.ensureLoaded(projectKey))
           throw new Error(t("profile.deferredSaveFailed", {},
             "新任务配置未能保存，请检查草稿状态"));
+        if (draftVersions.get(projectId) !== version ||
+            resetting.has(projectId)) return;
         draftStore.setComposerProfile(projectKey, blankOverrides(projectId));
         sync();
         if (!await draftStore.flush(projectKey))
@@ -286,6 +308,44 @@ export function createComposerProfile({ modelSelect, reasoningSelect,
     }
   }
 
+  async function resetBlankProfile() {
+    const route = navigation.get();
+    const projectId = route.projectId || "default";
+    if (route.sessionId || locked || resetting.has(projectId) ||
+        !hasOverride(blankOverrides(projectId))) return;
+    const projectKey = projectDraftKey(projectId);
+    // Keep the old choice visible until the clear is durable. A failed write
+    // then leaves a usable retry action, even when the old choice came from disk.
+    drafts.set(projectId, blankOverrides(projectId));
+    bumpDraftVersion(projectId);
+    resetting.add(projectId);
+    sync();
+    let cleared = false;
+    try {
+      if (draftStore) {
+        if (!await draftStore.ensureLoaded(projectKey))
+          throw new Error(t("profile.deferredSaveFailed", {},
+            "新任务配置未能保存，请检查草稿状态"));
+        draftStore.setComposerProfile(projectKey, null);
+        sync();
+        if (!await draftStore.flush(projectKey))
+          throw new Error(t("profile.deferredSaveFailed", {},
+            "新任务配置未能保存，请检查草稿状态"));
+      }
+      drafts.set(projectId, { model_id: "", reasoning_effort: "",
+        permission_profile: "" });
+      cleared = true;
+    } catch (error) { toast(errorMessage(error), "error"); }
+    finally {
+      resetting.delete(projectId);
+      sync();
+      const selected = navigation.get();
+      if (cleared && !selected.sessionId &&
+          (selected.projectId || "default") === projectId)
+        modelSelect.focus({ preventScroll: true });
+    }
+  }
+
   modelSelect.addEventListener("change", () => {
     const model = selectedModel(models(), modelSelect.value);
     fillReasoningOptions(reasoningSelect, model,
@@ -294,6 +354,7 @@ export function createComposerProfile({ modelSelect, reasoningSelect,
   });
   reasoningSelect.addEventListener("change", () => { void changed("reasoning"); });
   permissionSelect.addEventListener("change", () => { void changed("permission"); });
+  resetButton?.addEventListener("click", () => { void resetBlankProfile(); });
   const unsubscribers = [modelsStore.subscribe(sync), agentsStore.subscribe(sync),
     projectsStore.subscribe(sync), sessionStore.subscribe(sync),
     navigation.subscribe(sync), subscribeLocale(sync)];

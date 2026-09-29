@@ -402,6 +402,7 @@
   "profile.notSaved": "后续配置未保存",
   "profile.savingDraft": "正在保存新任务配置…",
   "profile.draftNotSaved": "新任务配置未保存",
+  "profile.followDefaults": "跟随项目默认配置",
   "profile.deferredSaveFailed": "后续消息配置未能保存，请检查草稿状态",
   "profile.deferredClearFailed": "会话配置已更新，但旧的后续消息配置未能清除，请检查草稿状态",
   "queue.profileSnapshot": "已固定：{model} · {effort} · {permission}",

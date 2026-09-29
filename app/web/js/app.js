@@ -119,6 +119,7 @@ export async function boot() {
   let composerErrorState = null;
   const composerHint = $("#composer-hint");
   const composerProfileStatus = $("#composer-profile-status");
+  const composerProfileReset = $("#composer-profile-reset");
   const draftStatus = $("#draft-status");
   let draftError = null;
   function renderDraftStatus() {
@@ -737,7 +738,7 @@ export async function boot() {
     modelSelect: $("#composer-model"), reasoningSelect: $("#composer-reasoning"),
     permissionSelect: $("#composer-permission"), navigation,
     sessionStore: sessionDetailStore, modelsStore, agentsStore, projectsStore,
-    draftStore, status: composerProfileStatus,
+    draftStore, status: composerProfileStatus, resetButton: composerProfileReset,
     isRunActive: () => Boolean(activeRun),
     hasPendingSubmission(session) {
       const key = `${session.project_id}/${session.id}`;
