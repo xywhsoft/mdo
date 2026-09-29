@@ -41,3 +41,16 @@ test("an explicit first history boundary replaces the generic gap notice", () =>
   ], true);
   assert.equal(unexplained[0].key, "history-gap");
 });
+
+test("timeline marks incomplete user and assistant text before copy", () => {
+  const items = eventsToTimeline([
+    { kind: "agent_start", event_id: 10, run_id: 5, time: 1000000,
+      user_message_sequence: 2, text: "visible user prefix",
+      text_truncated: true },
+    { kind: "model_text_delta", event_id: 11, run_id: 5, time: 2000000,
+      text: "visible answer prefix", text_truncated: true },
+  ]);
+  assert.deepEqual(items.filter((item) => ["user", "assistant"].includes(item.kind))
+    .map((item) => [item.kind, item.textTruncated]),
+  [["user", true], ["assistant", true]]);
+});

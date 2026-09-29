@@ -18,6 +18,7 @@ function appendOrCreate(items, streams, event, kind, role, key) {
     streams.set(key, item);
   }
   item.text += event.text ?? "";
+  item.textTruncated ||= Boolean(event.text_truncated);
   return item;
 }
 
@@ -409,6 +410,12 @@ function timelineNode(item, handlers, feedback, projectId, sessionId, writable,
   }
   else body.textContent = item.text;
   const children = [header, body];
+  if ((item.kind === "user" || item.kind === "assistant") &&
+      item.textTruncated) children.push(element("p", {
+    className: "timeline-truncation-note",
+    text: t("timeline.partialMessage", {},
+      "消息内容有截断；复制仅包含可见部分。"),
+  }));
   if (item.artifactId) {
     const preview = artifactPreviewNode(projectId, sessionId,
       item.artifactEventId, `${item.key}/preview`, previewOpen, previewScroll);
@@ -439,13 +446,21 @@ function timelineNode(item, handlers, feedback, projectId, sessionId, writable,
       (item.kind === "user" && (item.text || item.attachments?.length))) {
     const actions = element("div", { className: "timeline-actions" });
     if (item.text) {
+      const copyLabel = item.textTruncated
+        ? t("timeline.copyVisibleMessage", {}, "复制可见部分")
+        : t("timeline.copyMessage", {}, "复制消息");
       const copy = element("button", { className: "timeline-action-button", attrs: {
-        type: "button", "aria-label": t("timeline.copyMessage", {}, "复制消息"),
-        title: t("timeline.copy", {}, "复制"),
+        type: "button", "aria-label": copyLabel,
+        title: item.textTruncated ? copyLabel : t("timeline.copy", {}, "复制"),
         "data-timeline-action": `${item.key}/copy` },
       }, [actionIcon("copy")]);
       copy.addEventListener("click", async () => {
-        try { await copyText(item.text); toast(t("timeline.messageCopied", {}, "消息已复制")); }
+        try {
+          await copyText(item.text);
+          toast(item.textTruncated
+            ? t("timeline.visibleMessageCopied", {}, "已复制可见部分")
+            : t("timeline.messageCopied", {}, "消息已复制"));
+        }
         catch { toast(t("timeline.messageCopyFailed", {}, "无法复制消息"), "error"); }
       });
       actions.append(copy);

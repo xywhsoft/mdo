@@ -570,6 +570,8 @@ select:focus-visible,
 .timeline-images img { display: block; width: auto; max-width: min(240px, 100%); max-height: 240px; border: 1px solid var(--border); border-radius: 9px; object-fit: contain; background: var(--surface-raised); }
 .timeline-item[data-kind="assistant"] .timeline-body { font-size: 14px; line-height: 1.65; }
 .timeline-item[data-kind="assistant"] .timeline-body:empty { display: none; }
+.timeline-truncation-note { margin: 6px 0 0; color: var(--muted); font-size: 11px; line-height: 1.5; overflow-wrap: anywhere; }
+.timeline-item[data-kind="user"] .timeline-truncation-note { max-width: min(86%, 640px); margin-left: auto; text-align: right; }
 .timeline-stopped { color: var(--muted); font-size: 11px; }
 .markdown-body { white-space: normal; }
 .markdown-body > :first-child { margin-top: 0; }
