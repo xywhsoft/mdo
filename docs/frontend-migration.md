@@ -1433,3 +1433,9 @@ Windows/Linux 有界门禁均通过 114 项 Python、75 项 Node、71 个模块�
 先前的单文件页面验收只看到浏览器下载完成事件和 Blob 正文，没有独立读回磁盘文件。此轮从根目录最终 `mdo.exe` 复制启动隔离 Home `.build/mdo-packed-docks-a5wvlxal`，用本地有界模型夹具从页面发送 `MARKDOWN UI export disk QA`，待含链接和 C 代码块的回复完成后，在桌面顶栏依次执行“导出 Markdown”和“导出 JSON 备份”。Edge 浏览器实际下载并保存文件，磁盘读回的 Markdown 为 296 字节，包含用户指令、`## Markdown QA`、HTTPS 链接和代码块；JSON 备份为 2574 字节，可解析，含 `export_schema`、`exported_at_us`、`meta` 和 `snapshot`。同一会话在 320×350 视口经手机顶栏下载 Markdown，磁盘读回仍为 296 字节且含相同回合；文档宽度 320px，页面脚本错误为空。这证明当前 Windows 浏览器经最终单文件包的导出落盘链路；实体手机与原生 WebView 的下载行为仍须独立验收。
 
 本阶段没有修改应用代码。Windows 有界发布门禁通过 114 项 Python 检查、72 个前端模块解析、21 个运行探针、确定性打包、单文件零旁路写入和 20 秒打包启动检查；未做压力或高负载测试。重新生成的根目录 `mdo.exe` 与门禁包 SHA-256 均为 `65e2e0efed4bb9adb44c88ed8939ce5ad554fecb078c0c53f0b88453c001cefa`。
+
+## 2026-09-29：设置与导出斜杠命令的打包页操作链
+
+继续使用最终单文件 `mdo.exe` 与隔离 Home `.build/mdo-packed-docks-0yzx973m`，仅在该 QA 实例增加第二个模型配置。1280×350 与 320×350 页面分别输入 `/settings` 并按 Enter，进入常规设置；设置标题得到焦点，点击返回后回到原会话、输入框清空并重新获得焦点，两个视口均无横向溢出。随后从页面发送 `MARKDOWN UI slash export QA`，在桌面与 320×350 页输入 `/export` 并按 Enter；两次下载都独立保存到磁盘，读回的 297 字节 Markdown 包含用户指令和 `## Markdown QA` 回复，命令本身没有作为聊天消息留下。页面脚本错误为空。此项补齐了旧版已有的 `/settings` 和 `/export` 命令操作手感；原先打包页已验收 `/model`、`/theme`、`/help`、`/clear`，新版扩展的 `/new`、`/fork`、`/stop` 另有前述证据。旧版 `/demo` 与 `/image` 只调用展示夹具，不作为生产命令迁移。
+
+没有修改应用代码；本轮沿用前一阶段已通过的 Windows 有界门禁和确定性单文件包，重新核对根目录程序 SHA-256 为 `65e2e0efed4bb9adb44c88ed8939ce5ad554fecb078c0c53f0b88453c001cefa`。实体手机的软键盘与触控、原生 WebView 下载行为仍待独立验收；未做压力或高负载测试。
