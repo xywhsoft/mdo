@@ -1427,3 +1427,9 @@ Windows/Linux 有界门禁均通过 114 项 Python、75 项 Node、71 个模块�
 定向会话运行探针覆盖 schema 2/3 读取、schema 4 模型事件、分叉时逐条保留配置以及旧结构体大小的读取；前端用例覆盖运行记录消失后的事件快照优先级。隔离单文件 Home `.build/mdo-packed-docks-zyfemq_h` 在本地有界模型夹具下完成两轮调用：两条 `model_done` 的 wire 名同为 `ling-3.0-tiny`，持久模型 ID 分别是 `ling-3.0-tiny` 与 `ling-3.0-tiny-text-qa`，上下文上限分别是 131,072 与 262,144。停止服务并从同一 Home 重启后，`/runs` 的 `items` 为空；页面把输入区切回首模型，Token 弹层仍显示上次调用为 Ling Text QA、上限 262,144，累计输入/输出 14/6，脚本错误为空。再从该会话建立完整历史分叉，子会话日志仍分别保存两条原始配置。测试仅使用隔离的本地回复夹具，没有外部模型调用。
 
 最终代码的 Windows/Linux 有界门禁均通过 114 项 Python、75 项 Node、71 个前端模块解析、21 个运行探针与确定性打包；Windows 单文件零旁路写入和 20 秒启动检查通过。根目录 `mdo.exe` 与 Windows 包 SHA-256 均为 `75056a4c833779aea8f04e65f1f9d3338d30df3ca20e0add0dce96d755383cef`，Linux 包为 `796a4b9a68bcd25bea364d61eeb7389a8055d878d068854192a161f054368c7f`。既有 schema 1–3 事件未保存可反推出配置的资料，不能追补同名 wire 的精确归属；子 Agent 模型快照、实体设备及原生 WebView 仍待验收，未做压力或高负载测试。
+
+## 2026-09-29：最终打包页导出文件落盘核对
+
+先前的单文件页面验收只看到浏览器下载完成事件和 Blob 正文，没有独立读回磁盘文件。此轮从根目录最终 `mdo.exe` 复制启动隔离 Home `.build/mdo-packed-docks-a5wvlxal`，用本地有界模型夹具从页面发送 `MARKDOWN UI export disk QA`，待含链接和 C 代码块的回复完成后，在桌面顶栏依次执行“导出 Markdown”和“导出 JSON 备份”。Edge 浏览器实际下载并保存文件，磁盘读回的 Markdown 为 296 字节，包含用户指令、`## Markdown QA`、HTTPS 链接和代码块；JSON 备份为 2574 字节，可解析，含 `export_schema`、`exported_at_us`、`meta` 和 `snapshot`。同一会话在 320×350 视口经手机顶栏下载 Markdown，磁盘读回仍为 296 字节且含相同回合；文档宽度 320px，页面脚本错误为空。这证明当前 Windows 浏览器经最终单文件包的导出落盘链路；实体手机与原生 WebView 的下载行为仍须独立验收。
+
+本阶段没有修改应用代码。Windows 有界发布门禁通过 114 项 Python 检查、72 个前端模块解析、21 个运行探针、确定性打包、单文件零旁路写入和 20 秒打包启动检查；未做压力或高负载测试。重新生成的根目录 `mdo.exe` 与门禁包 SHA-256 均为 `65e2e0efed4bb9adb44c88ed8939ce5ad554fecb078c0c53f0b88453c001cefa`。
