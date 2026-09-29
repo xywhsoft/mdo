@@ -17,6 +17,7 @@ import subprocess
 import sys
 import tempfile
 import time
+import uuid
 from pathlib import Path
 
 import build_mdo
@@ -118,26 +119,88 @@ def stop_process(process: subprocess.Popen[bytes]) -> None:
 def windows_single_file(executable: Path, observe_seconds: int) -> None:
     with tempfile.TemporaryDirectory(prefix="mdo-release-clean-") as temporary:
         root = Path(temporary)
-        # WebView2 profiles are keyed by the executable basename. Reusing
-        # mdo.exe here can replay a real user's pending browser state.
-        target = root / executable.name
+        first = root / "portable-first"
+        first.mkdir()
+        # A unique name also makes any accidental AppData fallback observable.
+        name = f"mdo-portable-{uuid.uuid4().hex}.exe"
+        target = first / name
         shutil.copy2(executable, target)
-        process = subprocess.Popen(
-            [str(target)], cwd=root,
-            stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-        )
-        try:
-            wait_alive(process, observe_seconds)
-        finally:
-            stop_process(process)
-        unexpected = sorted(path.name for path in root.iterdir()
-                            if path.name != target.name)
-        if unexpected:
-            raise GateError(
-                "single-file startup wrote unexpected side files: " +
-                ", ".join(unexpected)
+
+        def launch(path: Path, *, arguments: tuple[str, ...] = (),
+                   environment: dict[str, str] | None = None) -> None:
+            env = os.environ.copy()
+            env.pop("MDO_HOME", None)
+            env["XS_APP_AUTOCLOSE_MS"] = str(observe_seconds * 1000)
+            if environment:
+                env.update(environment)
+            process = subprocess.Popen(
+                [str(path), *arguments], cwd=path.parent, env=env,
+                stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
             )
+            try:
+                wait_alive(process, max(1, observe_seconds - 1))
+                if process.wait(timeout=observe_seconds + 10) != 0:
+                    raise GateError("portable GUI did not close cleanly")
+            except subprocess.TimeoutExpired as error:
+                raise GateError("portable GUI did not auto-close") from error
+            finally:
+                stop_process(process)
+
+        def profile(home: Path) -> Path:
+            path = home / "data/cache/webview2"
+            if not path.is_dir():
+                raise GateError(f"WebView2 did not use portable Home: {path}")
+            return path
+
+        launch(target)
+        marker = profile(first / "mdo-home") / "mdo-portability-probe"
+        marker.write_text("keep", encoding="ascii")
+        unexpected = sorted(path.name for path in first.iterdir()
+                            if path.name not in {name, "mdo-home"})
+        if unexpected:
+            raise GateError("single-file startup wrote side files: " +
+                            ", ".join(unexpected))
+        appdata = os.environ.get("APPDATA")
+        if appdata and (Path(appdata) / name).exists():
+            raise GateError("WebView2 profile fell back to AppData")
+
+        # Move exactly the executable and its Home, then open the same profile.
+        second = root / "portable-moved"
+        second.mkdir()
+        target.replace(second / name)
+        source_home = first / "mdo-home"
+        deadline = time.monotonic() + 5
+        while True:
+            try:
+                source_home.replace(second / "mdo-home")
+                break
+            except PermissionError as error:
+                if time.monotonic() >= deadline:
+                    raise GateError("WebView2 kept portable Home open after close") from error
+                time.sleep(0.2)
+        launch(second / name)
+        profile(second / "mdo-home")
+        if (second / "mdo-home/data/cache/webview2" /
+                marker.name).read_text(encoding="ascii") != "keep":
+            raise GateError("moved WebView2 profile lost existing data")
+        if sorted(path.name for path in second.iterdir()) != ["mdo-home", name]:
+            raise GateError("moved single-file startup wrote side files")
+
+        env_home = root / "环境 Home"
+        launch(second / name, environment={"MDO_HOME": str(env_home)})
+        profile(env_home)
+        cli_home = root / "命令 Home"
+        ignored_env = root / "ignored-environment"
+        launch(second / name, arguments=("--", "--home", str(cli_home)),
+               environment={"MDO_HOME": str(ignored_env)})
+        profile(cli_home)
+        if ignored_env.exists():
+            raise GateError("--home did not override MDO_HOME")
+        if sorted(path.name for path in second.iterdir()) != ["mdo-home", name]:
+            raise GateError("Home overrides wrote beside the executable")
+        if appdata and (Path(appdata) / name).exists():
+            raise GateError("WebView2 profile fell back to AppData")
 
 
 def windows_packed_crash_gate(packer: Path, observe_seconds: int) -> None:
@@ -212,7 +275,7 @@ def main(argv: list[str] | None = None) -> int:
         print(f"[qa] PASS: unit/contract suite, {probe_count} runtime probes")
         print(f"[qa] PASS: deterministic pack sha256={first_hash}")
         if os.name == "nt" and not args.skip_gui_smoke:
-            print("[qa] PASS: single-file zero-write and packed crash gates")
+            print("[qa] PASS: portable WebView2 Home and packed crash gates")
         return 0
     except (GateError, build_mdo.BuildError, KeyError, OSError,
             subprocess.CalledProcessError, ValueError) as error:

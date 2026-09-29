@@ -143,7 +143,7 @@ catalog 是引用计数的不可变 owned snapshot。它扫描 `sessions/` 下�
 不会隐藏其他有效会话。无法读取顶层目录、目录迭代失败或内存不足会使整个
 snapshot 失败，因为此时无法保证列表完整。
 
-单文件首次启动只初始化 manager，不创建 `mdo-home`。第一次真正创建会话时
+无窗口的单文件首次启动只初始化 manager，不创建 `mdo-home`；Windows 原生 GUI 会先在 Home 内创建 WebView2 缓存。第一次真正创建会话时
 才建立外部 Home 与目录。所有目录枚举、元数据读写和清理都经过 Home 的锚定
 文件系统接口。
 

@@ -196,6 +196,7 @@
 65. 浏览器修改配置只能提交它实际展示的安全字段，但服务端 PATCH 必须把这些字段递归合并到当前用户 patch；数组与标量整体替换，未下发给浏览器的未知字段和 secret reference 保持不变。预览指纹只授权完全相同的当前表单，正式提交继续使用全局强 ETag，避免跨页面或外部编辑被静默覆盖。
 66. 浏览器恢复中断会话前必须先读取服务端 recovery view，并为每个未落账持久调用显式选择 `RETRY` 或 `RECORD_UNCERTAIN`；没有 pending call 的模型中断也必须由用户显式继续。恢复 token 绑定 call ID、工具、参数、effect、可用性、自动重试安全性和 continuation 状态，但不绑定进程内 catalog generation；run manager 在重新打开的同一 Agent 上紧邻启动再次计算 token，状态变化以 409 失败，不能把陈旧页面决定静默套用到新状态。
 67. 旧数据迁移的确认令牌必须绑定来源 ID、目标、排序后的文件路径、大小和内容；执行时先完整重做预览，发布前再重做一次并确认目标仍不存在。转换器只能写同级临时目录，所有当前 schema 复验通过后才能不覆盖 rename；旧来源永不修改，失败只能删除本次已知临时目录。迁移成功后当前进程不可假装已经热加载全部 manager，API 和界面必须明确返回 `restart_required`。
+68. Windows 原生 WebView2 用户数据属于便携 Home：启动原生窗口时可以创建唯一的 `mdo-home/data/cache/webview2`。`--home` 优先于 `MDO_HOME`，后者优先于程序旁默认 Home；无效显式配置拒绝开窗，不回退 AppData。无窗口的只读启动继续按需创建 Home。xs `a3c9885` 提供窗口初始化前的路径解析，mdo 内置配置和发布门禁验证单文件、搬移与覆盖；实体移动端和其他原生 WebView 仍须单独验收。
 
 ## 下一步
 

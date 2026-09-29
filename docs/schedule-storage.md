@@ -15,7 +15,7 @@ mdo-home/
       └─ <schedule-id>.jsonl
 ```
 
-外部 `schedules/` 不存在时，manager 只发布空 catalog，不创建 Home。自动执行器也先检查是否存在到期定义；空闲轮询不会获取 writer lock，因此单文件首次启动保持零外部写入。
+外部 `schedules/` 不存在时，manager 只发布空 catalog，不创建 Home。自动执行器也先检查是否存在到期定义；空闲轮询不会获取 writer lock，因此无窗口的单文件首次启动保持零外部写入。Windows 原生 GUI 的 WebView2 缓存则在首次开窗时进入 Home。
 
 每个定义文件使用严格 schema version 1。未知、缺失、重复或类型不匹配的字段使该条目进入 diagnostics，不会隐藏其他有效定义。主要字段分为四组：
 

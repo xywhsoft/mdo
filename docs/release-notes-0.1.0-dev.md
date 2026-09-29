@@ -4,7 +4,7 @@
 
 ## 产品能力
 
-- 单个 `mdo.exe` 可直接运行；配置、会话、记忆、Skill、模块和缓存统一进入可执行文件旁的 `mdo-home/`，空目录首次启动保持零写入；
+- 单个 `mdo.exe` 可直接运行；配置、会话、记忆、Skill、模块和缓存统一进入可执行文件旁的 `mdo-home/`。Windows 原生窗口首次启动会创建 Home 中的 WebView2 浏览器数据目录；
 - 内置不可编辑、不可删除的 Ling 3.0 Tiny，支持 Chat Completions、Responses 与 Anthropic Messages 方言；provider 与 model profile 分离，可配置连接、能力、上下文、输出上限和推理等级；
 - Agent 会话、流式 timeline、工具审批、故障恢复、任务、产物、审计、checkpoint、分叉、归档和回收站使用服务端权威状态；
 - `agents/`、`subagents/` 与 `tools/` 可放置 C 模块，使用版本化 `mdo/module.h`、受限 TCC 和事务式 generation 热重载；

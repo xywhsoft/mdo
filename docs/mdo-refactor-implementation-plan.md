@@ -69,7 +69,7 @@ mdo.exe
 mdo-home/
 ```
 
-初次下载时可以只有 `mdo.exe`。仅启动和退出不得创建外部目录。第一次产生持久化写入时，才按需创建 `mdo-home` 及必要子目录。
+初次下载时可以只有 `mdo.exe`。Windows 原生 GUI 的 WebView2 启动即需写入浏览器数据，因此首次打开会按需创建唯一的 `mdo-home/data/cache/webview2`；无窗口的只读启动仍保持按需创建 Home。浏览器数据也属于可搬移的 Home，不得回退到 AppData。
 
 ```text
 mdo-home/
@@ -1632,8 +1632,8 @@ web/js/
 
 1. 只复制 `mdo.exe`；
 2. 校验启动、UI、Ling 3.0 Tiny、默认 Agent/Tool/Skill；
-3. 仅启动退出后断言没有 `mdo-home`；
-4. 创建会话后断言只出现一个 `mdo-home`；
+3. Windows 原生 GUI 仅启动退出后断言只出现 `mdo-home`，WebView2 数据位于 `mdo-home/data/cache/webview2`；无窗口的只读启动仍不创建 Home；
+4. 创建会话后断言持久数据仍只进入同一个 `mdo-home`；
 5. 断言没有写入用户 home、AppData、工作目录其他位置；
 6. 创建外部覆盖并验证优先；
 7. 删除覆盖并验证恢复内置；

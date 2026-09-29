@@ -24,6 +24,12 @@
         "url": "/",
         "devtools": false,
         "close": "stop",
+        "profile_dir": {
+          "argument": "--home",
+          "environment": "MDO_HOME",
+          "default": "mdo-home",
+          "subdir": "data/cache/webview2"
+        },
         "install_fallback": "ask"
       }
     }

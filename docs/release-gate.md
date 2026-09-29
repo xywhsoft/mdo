@@ -29,7 +29,7 @@ python3 tools/qa_release.py --xserver-root /path/to/xserver
 5. 以 GCC C11、`-Wall -Wextra -Werror` 严格编译 mdo unity；
 6. 运行所有真实 xs/TCC 低负载运行时探针；
 7. 生成第二份 pack，并要求两份文件的 SHA-256 完全一致；
-8. Windows 上在空临时目录以测试包原文件名启动单个可执行文件 5 秒，确认目录零写入；保留原名是为了避免 WebView 共用现有 `mdo.exe` 的 AppData 浏览器状态；
+8. Windows 上将单文件包复制到空临时目录，用唯一文件名打开原生 WebView2，确认旁边只生成 `mdo-home` 且浏览器数据在其 `data/cache/webview2` 中、没有按程序名写入 AppData；移动可执行文件与 Home 后重启，并检查 `MDO_HOME` 与 `--home` 覆盖；
 9. Windows 上运行 20 秒打包启动回归，确认 TCC 服务初始化后进程仍存活，且没有 crash、dump 或 `xsw.log`。
 
 任一步失败都会返回非零退出码。构建产物与探针临时目录位于 `.build/qa-release/`，不进入版本控制。
@@ -42,6 +42,8 @@ python3 tools/qa_release.py --xserver-root /path/to/xserver
 | Linux x64 原生文件系统 | 113 项合同检查、严格 C11、16 个运行时探针和两次 pack 一致性全部通过 | `458523cddacb2e16d0a96023dd53d1331b28f0bd55ce6b4178e6daae06c9d724` |
 
 上表为早期平台验收记录；当前测试数量以实际门禁输出为准。新增的前端模块解析覆盖打包页的全部脚本，可在打包前拦住括号遗漏等语法错误。
+
+2026-09-29 便携 WebView2 接入后，Windows/Linux 门禁各通过 114 项 Python 合同检查、85 项 Node 交互检查、72 个前端模块解析、21 个有界运行探针和确定性打包；Windows 另通过原生 GUI 的 Home 搬移与覆盖验证，以及 20 秒打包启动回归。Windows SHA-256 为 `b3ce5a4a2197a83c4ab61aac82b774f7de1db20ca379f52eccbf7bfe53ed1416`，Linux 为 `e6149367e507122d8a4f497acbaa94c45b8b74c6fa51510b072311c6f7e2a229`。没有进行压力或高负载测试。
 
 Linux 迁移发布需要文件系统支持原子且不覆盖目标的目录 rename。WSL DrvFS 当前不支持该语义，mdo 会返回类型化错误、删除 staging 并保留来源；Linux 原生文件系统已通过完整迁移门禁。发布 runner 应在 ext4、xfs、btrfs 等原生文件系统上执行。
 

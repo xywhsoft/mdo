@@ -1529,3 +1529,11 @@ Windows/Linux 有界发布门禁均通过 114 项 Python、85 项 Node、72 个�
 中间候选 Home `.build/mdo-packed-docks-4zvc8218` 验证正常切项目后聚焦输入框；5 秒延迟创建期间尝试跨项目被阻止，项目选择器保持焦点，但创建完成后焦点再次掉到根节点。最终候选 Home `.build/mdo-packed-docks-8hzb6tsg` 重走完整链：在 `src` 项目发送 `FINAL PROJECT GUARD FOCUS QA`，立即尝试改到默认项目；页面仍是 `/projects/src/new`、提示先处理另一项目的新任务、焦点在项目选择器。创建完成后路由为 `/projects/src/sessions/...`，显示唯一用户回合和本地有界回复，输入框重新获焦。320×350 视口又验证 `src`→`default` 正常切换后输入框获焦，页面宽度为 320px，脚本错误为空。延迟创建未产生错误归属会话或重复请求；夹具记录一次创建、一次队列提交和一次运行。定向导航及新任务控制器的 7 项 Node 用例通过。
 
 Windows/Linux 有界发布门禁均通过 114 项 Python、85 项 Node、72 个前端模块解析、21 个运行探针与确定性打包；Windows 另通过单文件零旁路写入与 20 秒启动检查。根目录 `mdo.exe` 与 Windows 发布包 SHA-256 均为 `22adc275fb89f0710d911a5b6f7bd3c3a74339881285569ac45eeec1e710a9cc`，Linux 发布包为 `ceb1e41157202082c57b051507378e75cab2be9226999b802ac8478ea7c7601c`。这些为浏览器访问打包服务的证据，实体手机软键盘和其他原生 WebView 仍待验收；未做压力或高负载测试。
+
+## 2026-09-29：原生 WebView2 配置进入便携 Home
+
+用户选择便携优先：Windows 原生窗口首次打开可以创建程序旁唯一的 `mdo-home`，而不是为保持空启动零写入而把浏览器状态留在 AppData。xs `a3c9885` 在窗口初始化前依据应用参数 `--home`、环境变量 `MDO_HOME`、程序旁默认 `mdo-home` 依次解析 Home，并将 WebView2 用户数据写入其 `data/cache/webview2`；无效显式配置拒绝启动，不回退 AppData。mdo 内置 `xs.json` 已启用该对象形式，`deps.lock` 锁定对应 xs 提交。无窗口的只读启动仍按需创建 Home。
+
+xs 的短时原生 WebView2 探针覆盖默认、中文绝对路径环境变量、CLI 优先级、等号语法、重复参数及越界子目录。mdo 发布门禁从空目录复制单文件，以唯一程序名启动，确认旁边仅出现 Home；关闭后搬移程序和 Home，再启动并确认浏览器目录中已有测试标记保留。另以 `MDO_HOME`、`--home` 启动确认各自目录及 CLI 优先级，检查没有按测试程序名写入 AppData。服务端 API 探针改用无窗口配置，避免浏览器子进程持有临时 Home 文件；原生窗口由上述独立门禁验证。Windows/Linux 有界门禁各通过 114 项 Python、85 项 Node、72 个模块解析、21 个运行探针和确定性打包；Windows 另通过 20 秒打包启动回归。根目录 `mdo.exe` 与 Windows 候选 SHA-256 同为 `b3ce5a4a2197a83c4ab61aac82b774f7de1db20ca379f52eccbf7bfe53ed1416`，Linux 包为 `e6149367e507122d8a4f497acbaa94c45b8b74c6fa51510b072311c6f7e2a229`。实体移动端和其他原生 WebView 尚待验收；未做压力或高负载测试。
+
+同一阶段还在 320×350 的隔离打包浏览器页复核询问与审批的连续交接：回答询问后才出现审批卡，允许一次后安全 shell 调用返回 `exit_code: 0`，模型回复和 token 计量出现；重载后卡片仍在，页面无横向溢出和脚本错误。这只证明顺序到达场景，不证明两个待决请求同时到达时的稳定性。
