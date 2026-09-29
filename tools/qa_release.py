@@ -199,6 +199,9 @@ def main(argv: list[str] | None = None) -> int:
             )
         run([sys.executable, str(TESTS / "test_packed_home_lease.py"),
              "--packed", str(first)])
+        run([sys.executable,
+             str(TESTS / "test_packed_queue_start_recovery.py"),
+             "--packed", str(first)])
 
         if os.name == "nt" and not args.skip_gui_smoke:
             windows_single_file(first, args.observe_seconds)

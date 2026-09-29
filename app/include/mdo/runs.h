@@ -56,6 +56,12 @@ typedef struct MdoRunStartOptions {
     const char* ProfileModelId;
     const char* ProfileReasoningEffort;
     const char* ProfilePermissionProfile;
+    /* A queued start records both IDs before Agent Start. The callback is
+     * synchronous and its context is borrowed only until this call returns. */
+    const char* QueueItemId;
+    bool (*OnPrepared)(void* UserData, const char* RunId,
+        uint64 AgentRunId);
+    void* PreparedUserData;
 } MdoRunStartOptions;
 
 typedef struct MdoRunInfo {

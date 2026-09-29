@@ -83,6 +83,20 @@ def stop(process: subprocess.Popen) -> None:
         process.wait(timeout=5)
 
 
+def release_packed_copies(*copies: Path) -> None:
+    """Allow Windows to release an exited executable before temp cleanup."""
+    for copy in copies:
+        deadline = time.monotonic() + 5.0
+        while True:
+            try:
+                copy.unlink()
+                break
+            except PermissionError:
+                if time.monotonic() >= deadline:
+                    raise
+                time.sleep(0.05)
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--packed", type=Path, default=ROOT / ("mdo.exe" if os.name == "nt" else "mdo"))
@@ -139,6 +153,8 @@ def main() -> int:
             assert any(item["id"] == session_id for item in response["data"]["items"]), response
         finally:
             stop(restarted)
+        release_packed_copies(first_site / packed.name,
+                              second_site / packed.name)
     print("packed Home lease probe: PASS")
     return 0
 

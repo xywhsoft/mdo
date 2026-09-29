@@ -7,7 +7,7 @@
 #include "../../include/mdo/attachments.h"
 #include "../../include/mdo/home.h"
 
-#define MDO_SESSION_EVENT_SCHEMA 4u
+#define MDO_SESSION_EVENT_SCHEMA 5u
 #define MDO_SESSION_EVENT_FILE_LIMIT (16u * 1024u * 1024u)
 #define MDO_SESSION_EVENT_RETAIN_BYTES (8u * 1024u * 1024u)
 #define MDO_SESSION_EVENT_RECORD_LIMIT (96u * 1024u)
@@ -55,6 +55,7 @@ struct MdoSessionEventBridge {
     uint64 PendingRunId;
     char PendingIds[4][33];
     size_t PendingCount;
+    char PendingQueueItemId[33];
 };
 
 struct MdoSessionEventTrimPlan {
@@ -205,6 +206,10 @@ static char* MdoEventsRecord(const MdoSessionEventBridge* Bridge,
     xstrview ToolCallId;
     xstrview ArtifactPath;
     xstrview Model;
+    const char* QueueItemId = Event->eKind == XWORK_EVENT_AGENT_START &&
+        Event->uAgentDepth == 0u &&
+        Event->uRunId == Bridge->PendingRunId ?
+            Bridge->PendingQueueItemId : "";
     bool Truncated = Event->bTextTruncated;
     char* Json = NULL;
     if ( Object == NULL ||
@@ -239,6 +244,8 @@ static char* MdoEventsRecord(const MdoSessionEventBridge* Bridge,
          !MdoEventsObjectTake(Object, "agent_id",
             xrtValueUInt(Event->uAgentId)) ||
          !MdoEventsObjectTake(Object, "run_id", xrtValueUInt(Event->uRunId)) ||
+         !MdoEventsObjectString(Object, "queue_item_id",
+            QueueItemId, strlen(QueueItemId)) ||
          !MdoEventsObjectTake(Object, "task_id",
             xrtValueUInt(Event->uTaskId)) ||
          !MdoEventsObjectTake(Object, "artifact_id",
@@ -442,6 +449,7 @@ static bool MdoEventsParse(const char* ProjectId, const char* SessionId,
     xstrview ArtifactPath;
     xstrview Model;
     xstrview ModelId = xrtStrView("");
+    xstrview QueueItemId = xrtStrView("");
     uint64 Schema;
     uint64 Kind;
     uint64 AgentDepth;
@@ -458,13 +466,15 @@ static bool MdoEventsParse(const char* ProjectId, const char* SessionId,
     Root = xrtJsonRead(Json, &Config);
     if ( Root == NULL || xrtValueType(Root) != XVALUE_OBJECT ||
          (xrtValueCount(Root) != 25u && xrtValueCount(Root) != 28u &&
-          xrtValueCount(Root) != 29u && xrtValueCount(Root) != 31u) ||
+          xrtValueCount(Root) != 29u && xrtValueCount(Root) != 31u &&
+          xrtValueCount(Root) != 32u) ||
          !MdoEventsValueUInt(Root, "schema_version", &Schema) ||
          !((Schema == 1u && xrtValueCount(Root) == 25u) ||
            (Schema == 2u && xrtValueCount(Root) == 28u) ||
            (Schema == 3u && xrtValueCount(Root) == 29u) ||
+           (Schema == 4u && xrtValueCount(Root) == 31u) ||
            (Schema == MDO_SESSION_EVENT_SCHEMA &&
-            xrtValueCount(Root) == 31u)) ||
+            xrtValueCount(Root) == 32u)) ||
          !MdoEventsValueUInt(Root, "event_id", &Result->Info.EventId) ||
          Result->Info.EventId == 0u ||
          !MdoEventsValueUInt(Root, "source_event_id",
@@ -485,6 +495,11 @@ static bool MdoEventsParse(const char* ProjectId, const char* SessionId,
          AgentDepth > UINT32_MAX ||
          !MdoEventsValueUInt(Root, "agent_id", &Result->Info.AgentId) ||
          !MdoEventsValueUInt(Root, "run_id", &Result->Info.RunId) ||
+         (Schema >= 5u &&
+          !MdoEventsValueString(Root, "queue_item_id", &QueueItemId)) ||
+         (QueueItemId.Size != 0u &&
+          (QueueItemId.Size != 32u ||
+           Kind != (uint64)XWORK_EVENT_AGENT_START || AgentDepth != 0u)) ||
          !MdoEventsValueUInt(Root, "task_id", &Result->Info.TaskId) ||
          !MdoEventsValueUInt(Root, "artifact_id", &Result->Info.ArtifactId) ||
          !MdoEventsValueUInt(Root, "parent_run_id", &Result->Info.ParentRunId) ||
@@ -515,6 +530,15 @@ static bool MdoEventsParse(const char* ProjectId, const char* SessionId,
           (!MdoEventsValueString(Root, "model_id", &ModelId) ||
            !MdoEventsValueUInt(Root, "context_window_tokens",
               &Result->Info.ContextWindowTokens))) ) goto done;
+    if ( QueueItemId.Size != 0u ) {
+        size_t Index;
+        for ( Index = 0u; Index < QueueItemId.Size; ++Index ) {
+            unsigned char Byte = (unsigned char)QueueItemId.Data[Index];
+            if ( !((Byte >= '0' && Byte <= '9') ||
+                   (Byte >= 'a' && Byte <= 'f')) ) goto done;
+        }
+        memcpy(Result->Info.QueueItemId, QueueItemId.Data, 32u);
+    }
     Result->Text = MdoEventsCopy(Text, MDO_SESSION_EVENT_TEXT_LIMIT);
     Result->ToolName = MdoEventsCopy(ToolName, MDO_SESSION_EVENT_METADATA_LIMIT);
     Result->ToolCallId = MdoEventsCopy(ToolCallId,
@@ -1194,16 +1218,30 @@ bool MdoSessionEventBridgeSetProfile(MdoSessionEventBridge* Bridge,
 }
 
 bool MdoSessionEventBridgePendingSet(MdoSessionEventBridge* Bridge,
-    uint64 RunId, const char Ids[4][33], size_t Count)
+    uint64 RunId, const char Ids[4][33], size_t Count,
+    const char* QueueItemId)
 {
     bool Ok;
+    size_t Index;
     if ( Bridge == NULL || RunId == 0u || Count > 4u ||
          (Count != 0u && Ids == NULL) ) return false;
+    if ( QueueItemId != NULL ) {
+        if ( strlen(QueueItemId) != 32u ) return false;
+        for ( Index = 0u; Index < 32u; ++Index ) {
+            unsigned char Byte = (unsigned char)QueueItemId[Index];
+            if ( !((Byte >= '0' && Byte <= '9') ||
+                   (Byte >= 'a' && Byte <= 'f')) ) return false;
+        }
+    }
     xrtMutexLock(Bridge->Lock);
     Ok = true;
     Bridge->PendingRunId = RunId;
     Bridge->PendingCount = Count;
     memset(Bridge->PendingIds, 0, sizeof(Bridge->PendingIds));
+    memset(Bridge->PendingQueueItemId, 0,
+        sizeof(Bridge->PendingQueueItemId));
+    if ( QueueItemId != NULL )
+        memcpy(Bridge->PendingQueueItemId, QueueItemId, 32u);
     if ( Count != 0u )
         memcpy(Bridge->PendingIds, Ids, Count * sizeof(Ids[0]));
     xrtMutexUnlock(Bridge->Lock);
@@ -1219,6 +1257,8 @@ void MdoSessionEventBridgePendingClear(MdoSessionEventBridge* Bridge,
         Bridge->PendingRunId = 0u;
         Bridge->PendingCount = 0u;
         memset(Bridge->PendingIds, 0, sizeof(Bridge->PendingIds));
+        memset(Bridge->PendingQueueItemId, 0,
+            sizeof(Bridge->PendingQueueItemId));
     }
     xrtMutexUnlock(Bridge->Lock);
 }
@@ -1245,6 +1285,8 @@ bool MdoSessionEventBridgeOnEvent(void* Value, const xwork_event* Event)
         Bridge->PendingRunId = 0u;
         Bridge->PendingCount = 0u;
         memset(Bridge->PendingIds, 0, sizeof(Bridge->PendingIds));
+        memset(Bridge->PendingQueueItemId, 0,
+            sizeof(Bridge->PendingQueueItemId));
     }
     /* A UI projection failure must not cancel a successful Agent tool call.
      * The journal remains authoritative for the completed tool event. */
@@ -1358,6 +1400,67 @@ io:
     MdoSessionEventSnapshotRelease(Snapshot);
     MdoEventsXrtError(Error, "cannot read the session event journal");
     return NULL;
+}
+
+bool MdoSessionEventQueueStartSeen(const char* ProjectId,
+    const char* SessionId, const char* QueueItemId, uint64 AgentRunId,
+    bool* Seen)
+{
+    char Path[MDO_SESSION_PATH_CAPACITY];
+    xfileinfo Info;
+    char* Data = NULL;
+    size_t Size = 0u;
+    size_t Start = 0u;
+    bool Exists = false;
+    size_t i;
+    if ( Seen == NULL || QueueItemId == NULL || AgentRunId == 0u ||
+         !MdoEventsIdValid(ProjectId, MDO_PROJECT_ID_CAPACITY) ||
+         !MdoEventsIdValid(SessionId, MDO_SESSION_ID_CAPACITY) ||
+         strlen(QueueItemId) != 32u ||
+         !MdoEventsPath(Path, ProjectId, SessionId) ) return false;
+    *Seen = false;
+    for ( i = 0u; i < 32u; ++i ) {
+        unsigned char Byte = (unsigned char)QueueItemId[i];
+        if ( !((Byte >= '0' && Byte <= '9') ||
+               (Byte >= 'a' && Byte <= 'f')) ) return false;
+    }
+    if ( !MdoHomeExternalStat(Path, &Exists, &Info) ) return false;
+    if ( !Exists ) return true;
+    if ( Info.Type != XFILE_TYPE_FILE ||
+         (Info.Available & XFILE_INFO_SIZE) == 0u ||
+         !MdoEventsRead(Path, &Data, &Size) ) return false;
+    while ( Start < Size ) {
+        const char* End = (const char*)memchr(Data + Start, '\n',
+            Size - Start);
+        size_t Length;
+        bool Possible = false;
+        if ( End == NULL ) break; /* An unterminated tail proves nothing. */
+        Length = (size_t)(End - (Data + Start));
+        if ( Length <= MDO_SESSION_EVENT_RECORD_LIMIT ) {
+            for ( i = Start; i + 32u <= Start + Length; ++i ) {
+                if ( Data[i] == QueueItemId[0] &&
+                     memcmp(Data + i, QueueItemId, 32u) == 0 ) {
+                    Possible = true;
+                    break;
+                }
+            }
+        }
+        if ( Possible ) {
+            MdoSessionEventOwned Event;
+            if ( MdoEventsParse(ProjectId, SessionId,
+                    xrtStrViewN(Data + Start, Length), &Event) ) {
+                *Seen = Event.Info.Kind == XWORK_EVENT_AGENT_START &&
+                    Event.Info.AgentDepth == 0u &&
+                    Event.Info.RunId == AgentRunId &&
+                    strcmp(Event.Info.QueueItemId, QueueItemId) == 0;
+                MdoEventsOwnedUnit(&Event);
+                if ( *Seen ) break;
+            } else xrtClearError();
+        }
+        Start += Length + 1u;
+    }
+    xrtFree(Data);
+    return true;
 }
 
 MdoSessionEventSnapshot* MdoSessionEventSnapshotRef(

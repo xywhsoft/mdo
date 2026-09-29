@@ -326,6 +326,21 @@ static bool MdoApiRunQueueFailure(MdoApiContext* Context,
         "The sending queue item does not match this run", NULL);
 }
 
+typedef struct MdoApiRunPreparedContext {
+    const char* ProjectId;
+    const char* SessionId;
+    const char* QueueItemId;
+} MdoApiRunPreparedContext;
+
+static bool MdoApiRunRecordPrepared(void* UserData, const char* RunId,
+    uint64 AgentRunId)
+{
+    const MdoApiRunPreparedContext* Prepared =
+        (const MdoApiRunPreparedContext*)UserData;
+    return MdoApiQueueRunRecordPrepared(Prepared->ProjectId,
+        Prepared->SessionId, Prepared->QueueItemId, RunId, AgentRunId);
+}
+
 bool MdoApiRunStartRoute(MdoApiContext* Context)
 {
     MdoApiJsonBody Body;
@@ -343,6 +358,7 @@ bool MdoApiRunStartRoute(MdoApiContext* Context)
     char AttachmentIds[4][33] = {{ 0 }};
     size_t AttachmentCount = 0u;
     MdoApiProfile QueueProfile = { 0 };
+    MdoApiRunPreparedContext Prepared;
     char QueueItemId[33] = { 0 };
     char Project[MDO_PROJECT_ID_CAPACITY];
     char SessionId[MDO_SESSION_ID_CAPACITY];
@@ -475,6 +491,12 @@ bool MdoApiRunStartRoute(MdoApiContext* Context)
         Options.ProfilePermissionProfile = QueueProfile.PermissionProfile;
     }
     if ( QueueItemId[0] != '\0' ) {
+        Prepared.ProjectId = Project;
+        Prepared.SessionId = SessionId;
+        Prepared.QueueItemId = QueueItemId;
+        Options.QueueItemId = QueueItemId;
+        Options.OnPrepared = MdoApiRunRecordPrepared;
+        Options.PreparedUserData = &Prepared;
         MdoApiQueueRunStatus QueueStatus = MdoApiQueueRunClaim(Project,
             SessionId, QueueItemId, Prompt, AttachmentIds,
             AttachmentCount, &QueueProfile);

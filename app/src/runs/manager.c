@@ -537,6 +537,8 @@ bool MdoRunStartWithOutcome(const MdoRunStartOptions* Options,
           (Options->ProfileReasoningEffort == NULL)) ||
          ((Options->ProfileModelId == NULL) !=
           (Options->ProfilePermissionProfile == NULL)) ||
+         ((Options->QueueItemId == NULL) !=
+          (Options->OnPrepared == NULL)) ||
          (Options->Resume && Options->ProfileModelId != NULL) ||
          (Info != NULL && Info->Size < sizeof(*Info)) ) {
         MdoRunsError(Error, XWORK_ERROR_INVALID_ARGUMENT,
@@ -664,9 +666,18 @@ bool MdoRunStartWithOutcome(const MdoRunStartOptions* Options,
     }
     ImageRunId = AgentInfo.Run.uRunId;
     if ( !MdoSessionAttachmentPendingSet(Session, ImageRunId,
-            Options->AttachmentIds, Options->AttachmentCount) ) {
+            Options->AttachmentIds, Options->AttachmentCount,
+            Options->QueueItemId) ) {
         MdoRunsError(Error, XWORK_ERROR_CONTEXT,
             "cannot register image references before starting the run");
+        goto publish;
+    }
+    if ( Options->OnPrepared != NULL &&
+         !Options->OnPrepared(Options->PreparedUserData, Reserved.Id,
+            ImageRunId) ) {
+        MdoSessionAttachmentPendingClear(Session, ImageRunId);
+        MdoRunsError(Error, XWORK_ERROR_IO,
+            "cannot persist queue run identity before Agent Start");
         goto publish;
     }
     /* From this call onward a worker may have crossed the execution

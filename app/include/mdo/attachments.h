@@ -18,7 +18,7 @@ bool MdoSessionAttachmentRunRead(const char* ProjectId,
 
 typedef struct MdoSession MdoSession;
 bool MdoSessionAttachmentPendingSet(MdoSession* Session, uint64 AgentRunId,
-    const char Ids[4][33], size_t Count);
+    const char Ids[4][33], size_t Count, const char* QueueItemId);
 void MdoSessionAttachmentPendingClear(MdoSession* Session, uint64 AgentRunId);
 
 /* Copy retained event images into a new fork before it is published. */

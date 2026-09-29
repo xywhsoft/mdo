@@ -132,6 +132,7 @@ typedef struct MdoSessionEventInfo {
     uint32 AgentDepth;
     uint64 AgentId;
     uint64 RunId;
+    char QueueItemId[33]; /* Present only on a queue-bound main Agent start. */
     uint64 TaskId;
     uint64 ArtifactId;
     uint64 ParentRunId;
@@ -235,6 +236,11 @@ uint64 MdoSessionEventSnapshotLatestId(
     const MdoSessionEventSnapshot* Snapshot);
 bool MdoSessionEventSnapshotHistoryLost(
     const MdoSessionEventSnapshot* Snapshot);
+/* Positive evidence only: a missing or trimmed event leaves the start
+ * uncertain. Does not create or change session state. */
+bool MdoSessionEventQueueStartSeen(const char* ProjectId,
+    const char* SessionId, const char* QueueItemId, uint64 AgentRunId,
+    bool* Seen);
 
 /* The built-in mdo.todo tool projects its latest successful main-Agent
  * snapshot into a bounded Home sidecar. A missing sidecar loads as empty and

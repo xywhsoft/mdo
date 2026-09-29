@@ -1335,13 +1335,13 @@ bool MdoSessionGetInfo(MdoSession* Session, MdoSessionInfo* Info)
 }
 
 bool MdoSessionAttachmentPendingSet(MdoSession* Session, uint64 AgentRunId,
-    const char Ids[4][33], size_t Count)
+    const char Ids[4][33], size_t Count, const char* QueueItemId)
 {
     bool Ok;
     if ( Session == NULL ) return false;
     xrtMutexLock(Session->Lock);
     Ok = MdoSessionEventBridgePendingSet(Session->Bridge,
-        AgentRunId, Ids, Count);
+        AgentRunId, Ids, Count, QueueItemId);
     xrtMutexUnlock(Session->Lock);
     return Ok;
 }

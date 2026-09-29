@@ -4026,6 +4026,40 @@ def run_probe(host: Path) -> None:
                         break
                     time.sleep(0.01)
                 assert bound_run["terminal"], bound_run
+                start_events = [json.loads(line) for line in (
+                    queue_file.parent / "ui-events.jsonl").read_text(
+                        encoding="utf-8").splitlines()
+                    if bound_id in line]
+                proven_starts = [event for event in start_events
+                    if event.get("queue_item_id") == bound_id]
+                assert len(proven_starts) == 1 and proven_starts[0][
+                    "run_id"] == bound_run["agent_run_id"], proven_starts
+                # Simulate a crash after the durable Agent start event but
+                # before the API can promote its prepared queue receipt.
+                receipt_file.write_text(json.dumps({
+                    "schema_version": 3, "id": bound_id,
+                    "state": "starting", "run_id": bound_run_id,
+                    "agent_run_id": bound_run["agent_run_id"] + 1,
+                }), encoding="utf-8")
+                stored = json.loads(queue_file.read_text(encoding="utf-8"))
+                del stored["items"][0]["run_id"]
+                queue_file.write_text(json.dumps(stored), encoding="utf-8")
+                unproven = json.loads(request(port, "GET", queue_path)[2])[
+                    "data"]["items"][0]
+                assert unproven["start_claimed"] is True and "run_id" not in \
+                    unproven, unproven
+                receipt_file.write_text(json.dumps({
+                    "schema_version": 3, "id": bound_id,
+                    "state": "starting", "run_id": bound_run_id,
+                    "agent_run_id": bound_run["agent_run_id"],
+                }), encoding="utf-8")
+                recovered = json.loads(request(port, "GET", queue_path)[2])[
+                    "data"]["items"][0]
+                assert recovered["run_id"] == bound_run_id and not recovered.get(
+                    "start_claimed", False), recovered
+                receipt = json.loads(receipt_file.read_text(encoding="utf-8"))
+                assert receipt == {"schema_version": 1, "id": bound_id,
+                                   "run_id": bound_run_id}, receipt
                 status, _, body = queue_request("POST", run_path, {
                     "prompt": "bound queue run", "queue_item_id": bound_id,
                 })
@@ -4102,6 +4136,13 @@ def run_probe(host: Path) -> None:
                 assert status == 200 and json.loads(body)["data"] == {
                     "id": starting_id, "state": "starting",
                 }, (status, body)
+                starting_receipt.write_text(json.dumps({
+                    "schema_version": 3, "id": starting_id,
+                    "state": "starting", "run_id": "run-unseen",
+                    "agent_run_id": 999999,
+                }), encoding="utf-8")
+                assert json.loads(request(port, "GET", starting_path)[2])[
+                    "data"] == {"id": starting_id, "state": "starting"}
                 visible = json.loads(request(port, "GET", queue_path)[2])[
                     "data"]["items"]
                 claimed = next(item for item in visible

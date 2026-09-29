@@ -825,7 +825,7 @@ def main() -> int:
         prefix_fork_calls = {event["source_event_id"]: event
                              for event in prefix_fork_events if event["kind"] == 4}
         assert full_fork_calls and prefix_fork_calls
-        assert all(event["schema_version"] == 4 and event["model_id"] and
+        assert all(event["schema_version"] == 5 and event["model_id"] and
                    event["context_window_tokens"] > 0
                    for event in full_fork_calls.values())
         assert all((event["model_id"], event["context_window_tokens"]) ==
@@ -845,7 +845,7 @@ def main() -> int:
         assert invalid_events == 0
         assert all(event["session_id"] == source_path.parent.name for event in events)
         model_events = [event for event in events if event.get("input_tokens")]
-        assert model_events and all(event["schema_version"] == 4 and
+        assert model_events and all(event["schema_version"] == 5 and
                                     event["model_id"] and
                                     event["context_window_tokens"] > 0
                                     for event in model_events)
