@@ -627,7 +627,8 @@
       </header>
       <div class="dialog-fields">
         <label><span data-i18n="sessionAction.titleField">标题</span> <input name="title" maxlength="160" placeholder="可选，稍后也可修改" data-i18n-placeholder="newSession.titlePlaceholder"></label>
-        <label><span data-i18n="newSession.projectId">项目标识</span> <input name="project_id" required maxlength="63" value="default" pattern="[A-Za-z0-9_-][A-Za-z0-9._-]*"></label>
+        <label><span data-i18n="newSession.projectId">项目标识</span> <input name="project_id" required maxlength="63" value="default" pattern="[A-Za-z0-9_-][A-Za-z0-9._-]*" list="new-session-projects" autocomplete="off"></label>
+        <datalist id="new-session-projects"></datalist>
         <label><span data-i18n="newSession.agent">Agent</span> <select name="agent_id" id="agent-select"></select></label>
         <label><span data-i18n="shell.model">模型</span> <select name="model_id" id="model-select"></select></label>
         <label><span data-i18n="shell.reasoning">推理强度</span> <select name="reasoning_effort" id="new-session-reasoning"></select></label>

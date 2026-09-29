@@ -50,9 +50,8 @@ import { createImagePreview } from "./features/chat/image-preview.js";
 import { createSlashCommands } from "./features/chat/slash-commands.js";
 import { createFileMentions } from "./features/chat/file-mentions.js";
 import { trackComposerMenuRoom } from "./features/chat/composer-menu-room.js";
-import { applyAgentProfileDefaults, createComposerProfile, fillAgentOptions,
-  fillReasoningOptions } from
-  "./features/chat/composer-profile.js";
+import { createComposerProfile } from "./features/chat/composer-profile.js";
+import { createNewSessionProfile } from "./features/chat/new-session-profile.js";
 import { createTokenMeter } from "./features/chat/token-meter.js";
 import { createTaskPanel } from "./features/tasks/task-panel.js";
 import { createDecisionPanel } from "./features/approvals/decision-panel.js";
@@ -2102,47 +2101,21 @@ export async function boot() {
     }
   });
 
-  function fillCatalogSelects() {
-    const agentSelect = $("#agent-select");
-    const modelSelect = $("#model-select");
-    const selectedModel = modelSelect.value;
-    fillAgentOptions(agentSelect, agentsStore.get().data?.items ?? []);
-    clear(modelSelect);
-    for (const model of modelsStore.get().data?.models ?? []) {
-      const suffix = model.free ? t("model.freeSuffix", {}, " · 免费") : "";
-      modelSelect.append(element("option", { text: `${model.name || model.id}${suffix}`, attrs: { value: model.id } }));
-    }
-    if (selectedModel && [...modelSelect.options].some((option) => option.value === selectedModel)) modelSelect.value = selectedModel;
-    const model = modelsStore.get().data?.models?.find((item) => item.id === modelSelect.value);
-    fillReasoningOptions($("#new-session-reasoning"), model,
-      $("#new-session-reasoning").value);
-  }
-  agentsStore.subscribe(fillCatalogSelects);
-  modelsStore.subscribe(fillCatalogSelects);
-  subscribeLocale(fillCatalogSelects);
-  function applyNewSessionAgentDefaults() {
-    const agentId = $("#agent-select").value;
-    const agent = agentsStore.get().data?.items?.find((item) =>
-      item.id === agentId);
-    applyAgentProfileDefaults({ agent, fallback: composerProfile.selection(),
-      models: modelsStore.get().data?.models ?? [],
-      modelSelect: $("#model-select"),
-      reasoningSelect: $("#new-session-reasoning"),
-      permissionSelect: $("#new-session-permission") });
-  }
-  $("#agent-select").addEventListener("change", applyNewSessionAgentDefaults);
-  $("#model-select").addEventListener("change", () => {
-    const model = modelsStore.get().data?.models?.find((item) =>
-      item.id === $("#model-select").value);
-    fillReasoningOptions($("#new-session-reasoning"), model,
-      model?.default_reasoning_effort);
+  const newSessionProfile = createNewSessionProfile({
+    projectInput: dialogForm.elements.project_id,
+    projectOptions: $("#new-session-projects"),
+    agentSelect: $("#agent-select"), modelSelect: $("#model-select"),
+    reasoningSelect: $("#new-session-reasoning"),
+    permissionSelect: $("#new-session-permission"),
+    projectsStore, agentsStore, modelsStore,
+    currentSelection: () => composerProfile.selection(),
   });
 
   function openNewSession() {
     dialogError.hidden = true;
     dialogError.textContent = "";
     dialogForm.elements.project_id.value = navigation.get().projectId || navigation.preferredProject();
-    applyNewSessionAgentDefaults();
+    newSessionProfile.resetForOpen();
     if (!dialog.open) dialog.showModal();
     window.setTimeout(() => dialogForm.elements.title.focus(), 0);
   }

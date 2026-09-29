@@ -1,10 +1,13 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { applyAgentProfileDefaults, createComposerProfile, fillAgentOptions } from
+import { applyAgentProfileDefaults, createComposerProfile, fillAgentOptions,
+  projectProfileDefaults } from
   "../app/web/js/features/chat/composer-profile.js";
 import { createDraftStore, projectDraftKey } from
   "../app/web/js/features/chat/draft-store.js";
+import { createNewSessionProfile } from
+  "../app/web/js/features/chat/new-session-profile.js";
 import { createResourceStore } from "../app/web/js/state/store.js";
 
 class Select extends EventTarget {
@@ -38,6 +41,12 @@ class Button extends EventTarget {
   hidden = true;
   disabled = false;
   focus() { globalThis.document.activeElement = this; }
+}
+
+class OptionsList {
+  options = [];
+  append(option) { this.options.push(option); }
+  replaceChildren() { this.options = []; }
 }
 
 globalThis.document = {
@@ -228,6 +237,73 @@ test("new-session dialog applies a selected Agent's declared defaults", () => {
   assert.deepEqual([modelSelect.value, reasoningSelect.value,
     permissionSelect.value], ["missing", "medium", "balanced"]);
   assert.ok(modelSelect.options.some((option) => option.value === "missing"));
+});
+
+test("configured task follows its target project's model unless the Agent declares one", () => {
+  const catalog = { default_model_id: "text", models };
+  const projects = [{ id: "beta", default_model_id: "code" }];
+  const agents = [{ id: "mdo.default", model: "",
+    permission_profile: "balanced" }];
+  const fallback = projectProfileDefaults("beta", projects, agents, catalog);
+  assert.deepEqual(fallback, { model_id: "code", reasoning_effort: "medium",
+    permission_profile: "balanced" });
+  const modelSelect = new Select(["text", "code"]);
+  const reasoningSelect = new Select();
+  const permissionSelect = new Select(["read-only", "balanced", "full-access"]);
+  applyAgentProfileDefaults({ agent: { model: "text", reasoning_effort: "medium",
+    permission_profile: "read-only" }, fallback, models,
+  modelSelect, reasoningSelect, permissionSelect });
+  assert.deepEqual([modelSelect.value, reasoningSelect.value,
+    permissionSelect.value], ["text", "medium", "read-only"]);
+  assert.equal(projectProfileDefaults("unknown", projects, agents,
+    catalog).model_id, "text");
+});
+
+test("configured task project input updates defaults and keeps later manual model choice", () => {
+  const projectInput = new EventTarget();
+  projectInput.value = "default";
+  const projectOptions = new OptionsList();
+  const agentSelect = new Select();
+  const modelSelect = new Select();
+  const reasoningSelect = new Select();
+  const permissionSelect = new Select(["read-only", "balanced", "full-access"]);
+  const projectsStore = createResourceStore({ items: [
+    { id: "default", name: "Default" },
+    { id: "beta", name: "Beta", default_model_id: "code" },
+  ] });
+  const agentsStore = createResourceStore({ items: [
+    { id: "mdo.default", name: "Default", model: "",
+      permission_profile: "balanced" },
+    { id: "qa.agent", name: "QA", model: "text",
+      permission_profile: "read-only" },
+  ] });
+  const modelsStore = createResourceStore({ default_model_id: "text", models });
+  const profile = createNewSessionProfile({ projectInput, projectOptions,
+    agentSelect, modelSelect, reasoningSelect, permissionSelect,
+    projectsStore, agentsStore, modelsStore,
+    currentSelection: () => ({ model_id: "text", reasoning_effort: "medium",
+      permission_profile: "balanced" }) });
+  assert.deepEqual(projectOptions.options.map((option) => option.value),
+    ["default", "beta"]);
+  profile.resetForOpen();
+  assert.equal(modelSelect.value, "text");
+  projectInput.value = "beta";
+  projectInput.dispatchEvent(new Event("input"));
+  assert.equal(modelSelect.value, "code");
+  modelSelect.value = "text";
+  modelSelect.dispatchEvent(new Event("change"));
+  assert.equal(modelSelect.value, "text");
+  projectInput.value = "be";
+  projectInput.dispatchEvent(new Event("input"));
+  assert.equal(modelSelect.value, "text");
+  projectInput.value = "beta";
+  projectInput.dispatchEvent(new Event("change"));
+  assert.equal(modelSelect.value, "code");
+  agentSelect.value = "qa.agent";
+  agentSelect.dispatchEvent(new Event("change"));
+  assert.deepEqual([modelSelect.value, permissionSelect.value],
+    ["text", "read-only"]);
+  profile.destroy();
 });
 
 test("Agent catalog starts with the built-in default and preserves a manual choice", () => {

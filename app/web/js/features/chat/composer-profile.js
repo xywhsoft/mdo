@@ -36,6 +36,20 @@ export function agentProfileDefaults(agent, fallback) {
   };
 }
 
+export function projectProfileDefaults(projectId, projects, agents, catalog) {
+  const project = projects.find((item) => item.id === projectId);
+  const defaultAgent = agents.find((item) => item.id === "mdo.default");
+  const modelId = project?.default_model_id || defaultAgent?.model ||
+    catalog.default_model_id || catalog.models?.[0]?.id || "";
+  const model = selectedModel(catalog.models ?? [], modelId);
+  return {
+    model_id: modelId,
+    reasoning_effort: defaultAgent?.reasoning_effort ||
+      model?.default_reasoning_effort || "",
+    permission_profile: defaultAgent?.permission_profile || "balanced",
+  };
+}
+
 export function fillReasoningOptions(select, model, preferred = "") {
   const efforts = model?.reasoning_efforts?.length
     ? model.reasoning_efforts : (preferred ? [preferred] : []);
