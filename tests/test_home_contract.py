@@ -18,6 +18,7 @@ class HomeContractTests(unittest.TestCase):
         for symbol in (
             "MdoResourceOpenRead",
             "MdoHomeExternalStat",
+            "MdoHomeRenameNoReplace",
             "MdoHomeOpenWrite",
             "MdoResourceMaterialize",
         ):

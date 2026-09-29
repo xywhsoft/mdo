@@ -48,6 +48,7 @@ void ServiceInit(XS_HostInfo* pHost)
     size_t i;
     bool bRead;
     bool bWrite = false;
+    bool bRename = false;
     bool bMaterialized = false;
     bool bReserved = true;
     (void)pHost;
@@ -70,6 +71,13 @@ void ServiceInit(XS_HostInfo* pHost)
             xrtFlush(File) && xrtClose(File);
     }
     bMaterialized = MdoResourceMaterialize("config/defaults.json");
+    if ( bWrite && MdoHomeRemove("sessions/moved.txt", false) ) {
+        bRename = MdoHomeRenameNoReplace("sessions/probe.txt",
+            "sessions/moved.txt") &&
+            !MdoHomeRenameNoReplace("config/defaults.json",
+                "sessions/moved.txt");
+        xrtClearError();
+    }
     for ( i = 0u; i < sizeof(sReservedPaths) / sizeof(sReservedPaths[0]); i++ ) {
         File = MdoHomeOpenWrite(sReservedPaths[i], XFILE_CREATE);
         bReserved = bReserved && File == NULL && xrtGetError() != NULL &&
@@ -81,6 +89,7 @@ void ServiceInit(XS_HostInfo* pHost)
     Snapshot.Size = sizeof(Snapshot);
     printf("probe_resource=%s\n", sResource);
     printf("probe_reserved=%d\n", bReserved ? 1 : 0);
+    printf("probe_rename=%d\n", bRename ? 1 : 0);
     printf("probe_ok=%d mode=%d overlay=%d materialized=%d\n",
         bWrite ? 1 : 0,
         MdoHomeGetSnapshot(&Snapshot) ? (int)Snapshot.Persistence : -1,
@@ -242,8 +251,9 @@ def main() -> int:
         output = run_probe(host, site, home)
         assert "probe_resource=builtin-default" in output, output
         assert "probe_reserved=1" in output, output
+        assert "probe_rename=1" in output, output
         assert "probe_ok=1 mode=1 overlay=1 materialized=1" in output, output
-        assert (home / "sessions" / "probe.txt").read_text(
+        assert (home / "sessions" / "moved.txt").read_text(
             encoding="utf-8") == "durable-session"
         assert (home / "config" / "defaults.json").read_text(
             encoding="utf-8") == "builtin-default"

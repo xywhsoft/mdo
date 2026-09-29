@@ -596,6 +596,28 @@ done:
     return bOk;
 }
 
+bool MdoHomeRenameNoReplace(cstr Source, cstr Target)
+{
+    bool bOk;
+
+    if ( !MdoHomePathValid(Source) || !MdoHomePathValid(Target) ||
+         !g_MdoHome.Initialized ) {
+        MdoHomeErrorSet(XERR_ARGUMENT, MDO_HOME_ERROR_ARGUMENT,
+            "invalid external Home rename request");
+        return false;
+    }
+    xrtMutexLock(g_MdoHome.Lock);
+    if ( g_MdoHome.Root == NULL ) {
+        xrtMutexUnlock(g_MdoHome.Lock);
+        MdoHomeErrorSet(XERR_NOT_FOUND, MDO_HOME_ERROR_STORAGE,
+            "external Home does not exist");
+        return false;
+    }
+    bOk = xrtRootRenameNoReplace(g_MdoHome.Root, Source, Target);
+    xrtMutexUnlock(g_MdoHome.Lock);
+    return bOk;
+}
+
 str MdoHomeExternalPath(cstr Path)
 {
     str Result;

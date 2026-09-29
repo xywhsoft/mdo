@@ -2,12 +2,12 @@
   "schema_version": 1,
   "hash_algorithm": "sha256-path-nul-lf-normalized-content-nul-v1",
   "xrt": {
-    "commit": "5c4fbdc076017c3ed2955858cac35195bb60680c",
+    "commit": "6040abda647bd947bd561cd185f37a3751f122f4",
     "version": "2.0.0-dev",
-    "single_header_sha256": "4117e104f24b66fc224eca91de66167797dc3823165d46be2c406f18e0f1f13f"
+    "single_header_sha256": "1ea16b21f968d09e5084162f3919b7e6ae2412f9e13c3bbbdd4b322bcd5a26d2"
   },
   "xserver": {
-    "commit": "a3c9885b3663dadc838f895a64db34c4d807510e",
+    "commit": "5f1e31a20f236adfeb9b4f5a554aa1df41771558",
     "version": "1.0.0",
     "required_extensions": [
       "xwork",

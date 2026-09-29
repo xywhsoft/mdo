@@ -1549,3 +1549,11 @@ xs 的短时原生 WebView2 探针覆盖默认、中文绝对路径环境变量�
 已补做不经代理的对照：同一根目录打包字节在 Home `.build/mdo-packed-docks-8at52v86` 直接提供页面，新标签页初载及连续两次重载均进入原会话，输入框获焦。样本量仅两次重载，不能据此排除产品端的偶发问题，但暂时把代理及浏览器控制器的组合列为优先排查对象；原生 WebView2 仍需独立实测。
 
 本阶段未修改产品应用代码。Windows 有界发布门禁通过 114 项 Python、85 项 Node、72 个模块解析、21 个运行探针、确定性打包、便携 WebView2 Home 检查及 20 秒单文件启动；Linux 有界门禁通过相同单元、模块与运行探针以及确定性打包（跳过 GUI 启动）。根目录 `mdo.exe` 已用新生成的 Windows 候选覆盖，SHA-256 为 `b3ce5a4a2197a83c4ab61aac82b774f7de1db20ca379f52eccbf7bfe53ed1416`；Linux 包为 `e6149367e507122d8a4f497acbaa94c45b8b74c6fa51510b072311c6f7e2a229`。未做压力或高负载测试。
+
+## 2026-09-29：项目清除事务的锚定搬迁原语
+
+xrt `ad47ae3d`、`6040abda` 增加 `xrtRootRenameNoReplace`：源与目标父目录均从根句柄逐段解析，拒绝中间符号链接、越界路径和现存目标，末级链接作为对象自身移动；Linux 使用 `renameat2(RENAME_NOREPLACE)`，macOS/FreeBSD 使用排他改名接口，Windows 使用目标目录句柄相对的 `FileRenameInformation`，不支持的平台失败关闭，不以检查后普通改名代替。Windows 模块及单头 `file_root` 套件通过；Linux 原生临时文件系统上的新增目录根与单头用例通过。Linux 全套 `file_root` 的大小写策略测试在修改前的锁定 xrt 基线和本次版本均失败，故不把它记为本次回归通过；macOS/FreeBSD 尚未实机验证。
+
+xs `5f1e31a` 同步 xrt 与 xhttp 宿主单头、TCC 导出符号，并通过 Windows xwork/webview 宿主重建、35 项扩展单测及 xhttp vendored 字节核验。mdo 的依赖锁指向上述提交；`MdoHomeRenameNoReplace` 在 Home 锁内调用锚定 API，不创建 Home 或父目录。真实 xs/TCC Home 探针验证搬迁成功、已有目标不被替换。它只是项目清除事务的底层原语，项目设置仍只有只读预览和取消注册；跨进程项目租约、清单刷盘、逆向恢复和共享审计记录策略仍未落地。
+
+Windows 有界发布门禁通过 114 项 Python、85 项 Node、21 个运行探针、严格 C 编译、确定性打包、便携 WebView2 Home 与 20 秒打包启动，候选 SHA-256 为 `335481499760e91b821083aeb477b31c941f320fa51e264a76d513072f96d8f4`。Linux 在 WSL 的 Windows 挂载盘上运行迁移探针时遇到无覆盖改名失败；将同一 mdo 工作树及 xs 提交放入 WSL 原生文件系统后，完整有界门禁通过，确定性包 SHA-256 为 `b8d5cc25103412178d76aad05bae191baa83ce19f4c3f99f6972d6bbc19c4e39`。未做压力或高负载测试。

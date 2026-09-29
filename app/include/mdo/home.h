@@ -48,6 +48,11 @@ bool MdoHomeCreateDirectory(cstr Path);
  * directories are a successful no-op. */
 bool MdoHomeRemoveEmptyDirectory(cstr Path);
 
+/* Atomically moves an existing external Home object within the same Home.
+ * Both paths must already have real parent directories; existing targets and
+ * intermediate symlinks are rejected. No Home or parent directory is created. */
+bool MdoHomeRenameNoReplace(cstr Source, cstr Target);
+
 /* Returns an owned native path below the configured external Home. This does
  * not create Home or any parent. It exists for libraries whose persistence
  * API accepts native paths rather than xfile handles. */
