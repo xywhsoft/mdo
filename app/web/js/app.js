@@ -151,6 +151,7 @@ export async function boot() {
   const stoppingRunIds = new Set();
   let runMonitor = 0;
   let selectedKey = "";
+  let lastWorkspaceProjectId = "";
   let creatingSessionKey = "";
   let tasksTimer = 0;
   let runsTimer = 0;
@@ -1458,6 +1459,13 @@ export async function boot() {
     }
     composer.toggleAttribute("data-new-task", !sessionId);
     const key = projectId && sessionId ? `${projectId}/${sessionId}` : "";
+    const currentProjectId = projectId || "default";
+    // New tasks share an empty draft key, but a transient composer error still
+    // belongs to the project where it occurred.
+    if (!key && !selectedKey && lastWorkspaceProjectId &&
+        lastWorkspaceProjectId !== currentProjectId)
+      hideComposerError();
+    lastWorkspaceProjectId = currentProjectId;
     const version = routeVersion;
     const stillSelected = () => {
       const route = navigation.get();
