@@ -1,4 +1,5 @@
 import { element } from "../../utils/dom.js";
+import { copyText } from "../../utils/clipboard.js";
 import { t } from "../../i18n.js";
 
 const INLINE = /(`[^`\n]+`|\*\*[^*\n]+\*\*|~~[^~\n]+~~|\*[^*\n]+\*|!\[[^\]\n]*\]\([^\s)]+\)|\[[^\]\n]+\]\([^\s)]+\))/g;
@@ -90,7 +91,7 @@ export function renderMarkdown(source) {
       let resetCopyLabel;
       copy.addEventListener("click", async () => {
         try {
-          await navigator.clipboard.writeText(code.join("\n"));
+          await copyText(code.join("\n"));
           copy.textContent = t("markdown.copied", {}, "已复制");
         } catch { copy.textContent = t("markdown.copyFailed", {}, "复制失败"); }
         clearTimeout(resetCopyLabel);

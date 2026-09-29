@@ -217,6 +217,12 @@ document.addEventListener('keydown', async event => {
   await locale.loadLocale(locale.currentLocale() === 'zh-CN' ? 'en-US' : 'zh-CN');
 }, true);
 </script>'''
+    NO_CLIPBOARD_API = b'''<script>
+// Isolated probe for WebViews without the asynchronous Clipboard API.
+Object.defineProperty(navigator, 'clipboard', {
+  configurable: true, value: undefined
+});
+</script>'''
 
     def log_message(self, *_args):
         pass
@@ -515,12 +521,15 @@ document.addEventListener('keydown', async event => {
             response = upstream.getresponse()
             payload = response.read()
             response_status = response.status
-            if (self.server.locale_hotkey and self.command == "GET" and
+            if ((self.server.locale_hotkey or self.server.no_clipboard_api) and
+                    self.command == "GET" and
                     self.path == "/" and response_status == 200):
                 if b"</body>" not in payload:
-                    raise RuntimeError("packed page has no body for locale probe")
+                    raise RuntimeError("packed page has no body for UI probe")
                 payload = payload.replace(b"</body>",
-                                          self.LOCALE_HOTKEY + b"</body>", 1)
+                    (self.LOCALE_HOTKEY if self.server.locale_hotkey else b"") +
+                    (self.NO_CLIPBOARD_API if self.server.no_clipboard_api else b"") +
+                    b"</body>", 1)
             if delay_run_response:
                 try:
                     run_state = json.loads(payload)["data"]["state"]
@@ -690,6 +699,8 @@ parser.add_argument("--image-capable", action="store_true",
                     help="enable image input in the isolated built-in model fixture")
 parser.add_argument("--locale-hotkey", action="store_true",
                     help="let F9 change packed-page locale without moving focus")
+parser.add_argument("--no-clipboard-api", action="store_true",
+                    help="hide navigator.clipboard in the isolated browser page")
 parser.add_argument("--fail-first-module", action="store_true",
                     help="reject the first main.js GET to test startup recovery")
 parser.add_argument("--delay-first-module-ms", type=int, default=0,
@@ -877,10 +888,12 @@ try:
             or args.drop_first_queue_response or args.fail_first_queue_reconcile
             or args.queue_read_failures
             or args.reject_pane_layout or args.locale_hotkey
+            or args.no_clipboard_api
             or args.fail_first_module or args.delay_first_module_ms):
         proxy = BoundedDelayProxyServer(("127.0.0.1", 0), BoundedDelayProxy)
         proxy.upstream_port = port
         proxy.locale_hotkey = args.locale_hotkey
+        proxy.no_clipboard_api = args.no_clipboard_api
         proxy.fail_first_module = args.fail_first_module
         proxy.delay_first_module_seconds = args.delay_first_module_ms / 1000
         proxy.module_reads = 0

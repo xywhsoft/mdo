@@ -1,4 +1,5 @@
 import { element, clear, formatClock, errorMessage, toast } from "../../utils/dom.js";
+import { copyText } from "../../utils/clipboard.js";
 import { attachmentUrl } from "../../api/client.js";
 import { mountIcons } from "../../components/icons.js";
 import { renderMarkdown } from "./markdown.js";
@@ -242,19 +243,6 @@ export function eventsToTimeline(events, historyLost = false) {
       item.forkThroughSequence = nextUserSequence === null ? null : nextUserSequence - 1;
   }
   return items;
-}
-
-async function copyText(value) {
-  if (navigator.clipboard?.writeText) return navigator.clipboard.writeText(value);
-  const input = document.createElement("textarea");
-  input.value = value;
-  input.style.position = "fixed";
-  input.style.opacity = "0";
-  document.body.append(input);
-  input.select();
-  const copied = document.execCommand("copy");
-  input.remove();
-  if (!copied) throw new Error("clipboard unavailable");
 }
 
 function timeNode(value) {

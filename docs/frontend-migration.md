@@ -1573,3 +1573,11 @@ Windows 有界发布门禁通过前端模块解析、85 项 Node、21 个运行�
 隔离代理新增 `--delay-first-module-ms`，只延迟首次 `/js/main.js` 请求，最多 60 秒。候选单文件 Home `.build/mdo-packed-docks-w_8al53i` 延迟 60 秒时，约 20 秒后会话 URL 下出现超时说明且重载按钮获焦；点击后同一 URL 加载 “Packed docks QA”，Ling 3.0 Tiny、询问权限与输入焦点恢复。另一独立 Home `.build/mdo-packed-docks-sb02jfsc` 延迟 30 秒后未点击重试，最终自行进入该会话，输入框获焦。页面证据限于隔离浏览器和入口请求；初始 API 请求长时间不返回、原生 WebView2 及此前 200 响应空壳的具体根因还须分别验证。
 
 Windows 有界发布门禁通过 114 项 Python、85 项 Node、72 个前端模块解析、21 个运行探针、严格 C 编译、确定性打包、便携 WebView2 Home 与 20 秒单文件启动。Linux 在 WSL 原生文件系统的独立拷贝通过相同单元、模块和运行探针及确定性打包（跳过 GUI 启动）。根目录 `mdo.exe` 已重建，SHA-256 为 `6f13b13c738a90cea43d2b42598bf650cd71632e714ae718acb782d3cc4f4ac8`；Linux 包为 `653fb2ae27e182742a3b39b9e7b6913e895d89f19f57a10dd6eb90ddd5c7b538`。未做压力或高负载测试。
+
+## 2026-09-29：代码块复制兼容缺少异步 Clipboard API 的 WebView
+
+普通消息复制已有旧式 `execCommand("copy")` 回退，但 Markdown 代码块只调用 `navigator.clipboard.writeText`。隔离代理新增 `--no-clipboard-api`，仅在测试页隐藏该 API；修复前打包页的 `MARKDOWN UI` 回复点击“复制代码”显示“复制失败”，同页普通消息复制成功。现两处操作共用小型复制工具：优先使用异步 API，缺失或拒绝时尝试旧式路径；回退清理临时输入框并把焦点还给原按钮，确定失败才显示错误。
+
+修复候选单文件 Home `.build/mdo-packed-docks-m6i67cww` 在上述隔离模式完成一轮回复，代码按钮显示“已复制”且保持焦点；剪贴板读取和实际粘贴均得到 `int answer(void) { return 42; }`。同页普通消息复制仍得到完整 Markdown 原文。三项 Node 用例覆盖异步成功、缺少 API 时的回退和异步拒绝后的确定失败。这里验证的是打包页与隔离浏览器的旧 API 路径；实体移动端和各系统原生 WebView 仍需验收。
+
+Windows 有界发布门禁通过 114 项 Python、88 项 Node、73 个前端模块解析、21 个运行探针、严格 C 编译、确定性打包、便携 WebView2 Home 与 20 秒单文件启动。Linux 在 WSL 原生文件系统的独立拷贝通过同一有界门禁（跳过 GUI 启动），Linux 包 SHA-256 为 `f464aac33084e5a60446cf81f8cc4f6bd96c3c710c2b12c8b9846270781d534d`。根目录 `mdo.exe` 已更新，SHA-256 与 Windows 候选同为 `50c9207109e66ec8b6961ddeda7aae3d2b4595f33ad3bd2507ce5256bc6ab833`。未做压力或高负载测试。
