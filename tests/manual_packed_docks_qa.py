@@ -246,6 +246,13 @@ Object.defineProperty(navigator, 'clipboard', {
         self.forward()
 
     def forward(self):
+        if self.command == "GET" and self.path == "/api/v1/workspace-state":
+            with self.server.count_lock:
+                self.server.startup_workspace_reads += 1
+                workspace_read = self.server.startup_workspace_reads
+            if workspace_read == 1 and self.server.startup_workspace_delay_seconds:
+                print("QA delaying initial workspace state GET", flush=True)
+                time.sleep(self.server.startup_workspace_delay_seconds)
         if self.command == "GET" and self.path == "/api/v1/tasks":
             with self.server.count_lock:
                 self.server.startup_task_reads += 1
@@ -616,6 +623,9 @@ Object.defineProperty(navigator, 'clipboard', {
 
 class BoundedDelayProxyServer(ThreadingHTTPServer):
     daemon_threads = True
+    # The packed page requests its ES modules concurrently. The default TCP
+    # backlog of five can reject otherwise healthy localhost connections.
+    request_queue_size = 128
 
     def handle_error(self, request, client_address):
         if isinstance(sys.exc_info()[1],
@@ -714,6 +724,8 @@ parser.add_argument("--delay-first-module-ms", type=int, default=0,
                     help="delay first main.js GET by 0-60000 ms to test startup timeout")
 parser.add_argument("--startup-task-delay-ms", type=int, default=0,
                     help="delay initial task-list GET by 0-30000 ms")
+parser.add_argument("--startup-workspace-delay-ms", type=int, default=0,
+                    help="delay initial workspace-state GET by 0-30000 ms")
 parser.add_argument("--agent-profile-fixture", action="store_true",
                     help="install an isolated custom Agent with model, reasoning and permission defaults")
 parser.add_argument("--second-model-context-tokens", type=int, default=0,
@@ -731,6 +743,8 @@ if not 0 <= args.delay_first_module_ms <= 60000:
     parser.error("--delay-first-module-ms must be between 0 and 60000")
 if not 0 <= args.startup_task_delay_ms <= 30000:
     parser.error("--startup-task-delay-ms must be between 0 and 30000")
+if not 0 <= args.startup_workspace_delay_ms <= 30000:
+    parser.error("--startup-workspace-delay-ms must be between 0 and 30000")
 if not 0 <= args.ask_delay_ms <= 5000:
     parser.error("--ask-delay-ms must be between 0 and 5000")
 if not 0 <= args.task_cancel_delay_ms <= 5000:
@@ -901,7 +915,7 @@ try:
             or args.reject_pane_layout or args.locale_hotkey
             or args.no_clipboard_api
             or args.fail_first_module or args.delay_first_module_ms
-            or args.startup_task_delay_ms):
+            or args.startup_task_delay_ms or args.startup_workspace_delay_ms):
         proxy = BoundedDelayProxyServer(("127.0.0.1", 0), BoundedDelayProxy)
         proxy.upstream_port = port
         proxy.locale_hotkey = args.locale_hotkey
@@ -911,6 +925,8 @@ try:
         proxy.module_reads = 0
         proxy.startup_task_delay_seconds = args.startup_task_delay_ms / 1000
         proxy.startup_task_reads = 0
+        proxy.startup_workspace_delay_seconds = args.startup_workspace_delay_ms / 1000
+        proxy.startup_workspace_reads = 0
         proxy.approval_delay_seconds = args.approval_delay_ms / 1000
         proxy.ask_delay_seconds = args.ask_delay_ms / 1000
         proxy.task_cancel_delay_seconds = args.task_cancel_delay_ms / 1000

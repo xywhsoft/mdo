@@ -140,6 +140,51 @@ test("an explicit session URL focuses after loading without stealing a newer foc
   }
 });
 
+test("an explicit session opens before the saved selection responds", async () => {
+  const originalFetch = globalThis.fetch;
+  const originalLocation = globalThis.location;
+  const originalDocument = globalThis.document;
+  const body = { isConnected: true };
+  globalThis.document = { body, activeElement: body };
+  globalThis.location = { hash: "#/projects/default/sessions/S1" };
+  let answerSaved;
+  const savedResponse = new Promise((resolve) => { answerSaved = resolve; });
+  const writes = [];
+  globalThis.fetch = async (url, options) => {
+    assert.equal(String(url), "/api/v1/workspace-state");
+    if (options.method === "PUT") {
+      writes.push(JSON.parse(options.body));
+      return Response.json({ ok: true, data: {} });
+    }
+    return savedResponse;
+  };
+  try {
+    const navigation = fakeNavigation();
+    navigation.select("default", "S1");
+    let finished = false;
+    const opening = startWorkspaceNavigation({ navigation,
+      settingsStore: { get: () => ({ data: {} }) },
+      sessionsStore: { get: () => ({ data: { items: [] } }) },
+      sessionDetailStore: createResourceStore(),
+      dialog: {}, title: {}, continueButton: {}, newButton: {},
+      prompt: { disabled: false, focus() {} },
+      entryHash: globalThis.location.hash }).then(() => { finished = true; });
+    await new Promise(setImmediate);
+    assert.equal(finished, true);
+    assert.deepEqual(writes, []);
+    answerSaved(Response.json({ ok: true, data: {
+      project_id: "default", session_id: "older",
+    } }));
+    await opening;
+    await new Promise(setImmediate);
+    assert.deepEqual(writes, [{ project_id: "default", session_id: "S1" }]);
+  } finally {
+    globalThis.fetch = originalFetch;
+    globalThis.location = originalLocation;
+    globalThis.document = originalDocument;
+  }
+});
+
 test("last startup resumes a live session before an idle saved session", async () => {
   const originalFetch = globalThis.fetch;
   const originalLocation = globalThis.location;

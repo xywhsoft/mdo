@@ -32,17 +32,12 @@ function runningSessionCandidate(runs, sessions) {
 export async function startWorkspaceNavigation({ navigation, settingsStore,
   sessionsStore, runsStore, sessionDetailStore, dialog, title, continueButton, newButton,
   prompt, entryHash }) {
-  let saved = null;
-  try { saved = (await api.get(endpoint)).data; }
-  catch { toast(t("startup.readFailed", {},
-    "无法读取上次会话，将使用当前会话列表。"), "error"); }
-
-  let lastSavedKey = saved?.project_id && saved?.session_id
-    ? `${saved.project_id}/${saved.session_id}` : "";
+  let lastSavedKey = "";
+  let savedReady = false;
   let target = null;
   let saving = false;
   async function flushSelection() {
-    if (saving) return;
+    if (!savedReady || saving) return;
     saving = true;
     while (target && target.key !== lastSavedKey) {
       const next = target;
@@ -65,6 +60,18 @@ export async function startWorkspaceNavigation({ navigation, settingsStore,
     target = { key, projectId, sessionId };
     void flushSelection();
   });
+
+  const savedPromise = (async () => {
+    let saved = null;
+    try { saved = (await api.get(endpoint)).data; }
+    catch { toast(t("startup.readFailed", {},
+      "无法读取上次会话，将使用当前会话列表。"), "error"); }
+    lastSavedKey = saved?.project_id && saved?.session_id
+      ? `${saved.project_id}/${saved.session_id}` : "";
+    savedReady = true;
+    void flushSelection();
+    return saved;
+  })();
 
   function openLastSession(session) {
     const projectId = session.project_id;
@@ -109,6 +116,7 @@ export async function startWorkspaceNavigation({ navigation, settingsStore,
 
   // Hash routes are explicit user choices, including #/ for a blank task.
   if (entryHash || location.hash) { focusExplicitWorkspace(); return; }
+  const saved = await savedPromise;
   const mode = settingsStore.get().data?.workspace?.open_mode ?? "last";
   if (mode === "new") {
     navigation.newTask(saved?.project_id || "default", { replace: true });
