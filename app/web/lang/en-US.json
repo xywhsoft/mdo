@@ -445,7 +445,7 @@
   "image.removeRollback": "The draft was not saved; the image has been restored",
   "image.readOnly": "Images cannot be added to this session",
   "image.typesOnly": "Only PNG, JPEG, and WebP images are supported",
-  "image.maxSize": "Each image must be no larger than 8 MiB",
+  "image.maxSize": "Choose a non-empty image no larger than 8 MiB",
   "image.maxCount": "Each message can include up to 4 images",
   "image.skippedFiles": "Skipped {count} non-image files",
   "image.skippedSize": "Skipped {count} empty or oversized images",

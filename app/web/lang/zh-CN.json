@@ -445,7 +445,7 @@
   "image.removeRollback": "草稿未保存，图片已恢复",
   "image.readOnly": "当前会话不可添加图片",
   "image.typesOnly": "仅支持 PNG、JPEG 和 WebP 图片",
-  "image.maxSize": "单张图片不得超过 8 MiB",
+  "image.maxSize": "请选择非空且不超过 8 MiB 的图片",
   "image.maxCount": "每条消息最多可添加 4 张图片",
   "image.skippedFiles": "已跳过 {count} 个非图片文件",
   "image.skippedSize": "已跳过 {count} 张空白或超过 8 MiB 的图片",

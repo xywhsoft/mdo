@@ -34,17 +34,22 @@ function pastedImages(clipboard) {
     .filter((entry) => Boolean(entry.mime));
 }
 
-export function unsupportedModelError() {
-  const error = new Error(t("image.unsupportedModel", {},
-    "当前模型不支持图片，请先切换到支持图片的模型"));
-  error.code = "image_model_unsupported";
+function imageError(key, fallback, code = "") {
+  const error = new Error(t(key, {}, fallback));
+  error.code = code;
+  error.localizedMessageKey = key;
+  error.localizedMessageFallback = fallback;
   return error;
 }
 
-function selectionError(message) {
-  const error = new Error(message);
-  error.code = "image_selection_invalid";
-  return error;
+export function unsupportedModelError() {
+  return imageError("image.unsupportedModel",
+    "当前模型不支持图片，请先切换到支持图片的模型",
+    "image_model_unsupported");
+}
+
+function selectionError(key, fallback) {
+  return imageError(key, fallback, "image_selection_invalid");
 }
 
 export function createComposerImages({ composer, prompt, button, input, strip,
@@ -268,15 +273,15 @@ export function createComposerImages({ composer, prompt, button, input, strip,
     const candidates = [...files];
     if (!candidates.length) return;
     if (removingCurrent()) {
-      onError(selectionError(t("image.waitForCurrent", {},
-        "请等待当前图片操作完成后再添加")));
+      onError(selectionError("image.waitForCurrent",
+        "请等待当前图片操作完成后再添加"));
       return;
     }
     const job = currentUpload();
     // Creating an image-first task briefly marks the editor non-writable while
     // its session is being created. Already accepted uploads may still queue.
-    if (!job && !writable) { onError(new Error(t("image.readOnly", {},
-      "当前会话不可添加图片"))); return; }
+    if (!job && !writable) { onError(imageError("image.readOnly",
+      "当前会话不可添加图片")); return; }
     if (!job && !imageCapable()) {
       onError(unsupportedModelError());
       return;
@@ -292,14 +297,14 @@ export function createComposerImages({ composer, prompt, button, input, strip,
       else images.push({ file, mime });
     }
     if (!images.length) {
-      onError(selectionError(otherFiles ? t("image.typesOnly", {},
-        "仅支持 PNG、JPEG 和 WebP 图片") : t("image.maxSize", {},
-        "单张图片不得超过 8 MiB")));
+      onError(otherFiles
+        ? selectionError("image.typesOnly", "仅支持 PNG、JPEG 和 WebP 图片")
+        : selectionError("image.maxSize", "请选择非空且不超过 8 MiB 的图片"));
       return;
     }
     if (images.length + ids.length + (job?.reserved ?? 0) > 4) {
-      onError(selectionError(t("image.maxCount", {},
-        "每条消息最多可添加 4 张图片")));
+      onError(selectionError("image.maxCount",
+        "每条消息最多可添加 4 张图片"));
       return;
     }
     if (otherFiles) toast(t("image.skippedFiles", { count: otherFiles },

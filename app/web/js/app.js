@@ -115,6 +115,7 @@ export async function boot() {
   const send = $("#send");
   const stop = $("#stop");
   const composerError = $("#composer-error");
+  let composerErrorState = null;
   const composerHint = $("#composer-hint");
   const composerProfileStatus = $("#composer-profile-status");
   const draftStatus = $("#draft-status");
@@ -371,7 +372,7 @@ export async function boot() {
           composerImages.set(attachments);
           prompt.dispatchEvent(new Event("input", { bubbles: true }));
           showComposerError(error, error.runAdmissionUncertain
-            ? t("composer.runAdmissionUncertain") : "");
+            ? () => t("composer.runAdmissionUncertain") : "");
           setRun(activeRun);
           prompt.focus();
         },
@@ -692,7 +693,7 @@ export async function boot() {
       if (selectedOwnsDraft(key))
         showComposerError(submission.state === "rejected"
           ? submissionRejectedError() : submissionUncertainError(),
-          error ? errorMessage(error) : "");
+          error || "");
       else toast(t("composer.backgroundQueueFailed", {
         title: key, error: error ? errorMessage(error) :
           t("composer.submissionUncertain"),
@@ -767,10 +768,7 @@ export async function boot() {
     onReview(error) {
       const current = navigation.get();
       if (current.view === "workspace" && !current.sessionId) {
-        const review = new Error(t(newTaskController.canChangeProfile()
-          ? "composer.newTaskRejected" : "composer.newTaskReview"));
-        review.code = "new_task_unconfirmed";
-        showComposerError(review, errorMessage(error));
+        showComposerError(newTaskReviewError(), error);
       } else toast(errorMessage(error), "error");
     },
     onChange() {
@@ -1102,14 +1100,25 @@ export async function boot() {
     syncPromptPlaceholder();
     syncWorkspaceChip();
     syncRuntimeLabel();
+    const focusedAction = composerError.contains(document.activeElement)
+      ? [...composerError.querySelectorAll(".composer-error-action")]
+        .indexOf(document.activeElement) : -1;
+    const currentError = composerErrorState;
     if (composerError.dataset.code === "recovery_required")
-      showComposerError(recoveryRequiredError());
+      showComposerError(recoveryRequiredError(), currentError?.note);
     else if (composerError.dataset.code === "run_admission_uncertain")
-      showComposerError(uncertainRunError());
+      showComposerError(uncertainRunError(), currentError?.note);
     else if (composerError.dataset.code === "submission_unconfirmed")
-      showComposerError(submissionUncertainError());
+      showComposerError(submissionUncertainError(), currentError?.note);
     else if (composerError.dataset.code === "submission_rejected")
-      showComposerError(submissionRejectedError());
+      showComposerError(submissionRejectedError(), currentError?.note);
+    else if (composerError.dataset.code === "new_task_unconfirmed")
+      showComposerError(newTaskReviewError(), currentError?.note);
+    else if (!composerError.hidden && currentError)
+      showComposerError(currentError.error, currentError.note);
+    if (focusedAction >= 0)
+      (composerError.querySelectorAll(".composer-error-action")[focusedAction] ?? prompt)
+        .focus({ preventScroll: true });
     skipLink.textContent = t(settingsActive ? "shell.skipSettings" : "shell.skip");
     if (settingsActive) syncSettingsTitle();
     const session = sessionDetailStore.get().data;
@@ -1361,7 +1370,7 @@ export async function boot() {
           if (stillSelected()) showComposerError(accepted
             ? uncertainRunError() : error, accepted ? "" :
             (error.runAdmissionUncertain
-              ? t("composer.runAdmissionUncertain") : ""));
+              ? () => t("composer.runAdmissionUncertain") : ""));
           else toast(`${t("composer.backgroundQueueFailed",
             { title: session.title, error: errorMessage(error) },
             `后台会话“${session.title}”的待发送消息未发出：${errorMessage(error)}`)}` +
@@ -1394,7 +1403,7 @@ export async function boot() {
         const reviewError = first.state === "rejected"
           ? submissionRejectedError() : submissionUncertainError();
         if (composerError.dataset.code !== reviewError.code)
-          showComposerError(reviewError, errorMessage(error));
+          showComposerError(reviewError, error);
       } else showComposerError(error);
     }
   }
@@ -1542,6 +1551,7 @@ export async function boot() {
   });
 
   function hideComposerError() {
+    composerErrorState = null;
     const failure = bootstrapFailure();
     if (failure) {
       composerError.hidden = false;
@@ -1624,10 +1634,27 @@ export async function boot() {
       }
     });
   }
+  function localComposerError(key, fallback = "", code = "") {
+    const error = new Error(t(key, {}, fallback));
+    error.code = code;
+    error.localizedMessageKey = key;
+    error.localizedMessageFallback = fallback;
+    return error;
+  }
+  function newTaskReviewError() {
+    const key = newTaskController.canChangeProfile()
+      ? "composer.newTaskRejected" : "composer.newTaskReview";
+    return localComposerError(key, "", "new_task_unconfirmed");
+  }
   function showComposerError(error, note = "") {
     if (bootstrapFailure()) { hideComposerError(); return; }
-    composerError.textContent = errorMessage(error);
-    if (note) composerError.append(" ", note);
+    composerErrorState = { error, note };
+    composerError.textContent = error?.localizedMessageKey
+      ? t(error.localizedMessageKey, {}, error.localizedMessageFallback || error.message)
+      : errorMessage(error);
+    const detail = typeof note === "function" ? note()
+      : typeof note === "object" && note ? errorMessage(note) : note;
+    if (detail) composerError.append(" ", detail);
     composerError.dataset.code = error?.code || "";
     if (error?.queueItemId) composerError.dataset.queueItemId = error.queueItemId;
     else delete composerError.dataset.queueItemId;
@@ -1667,7 +1694,7 @@ export async function boot() {
             return [failure, ""];
           return [first.state === "rejected"
             ? submissionRejectedError() : submissionUncertainError(),
-          errorMessage(failure)];
+          failure];
         });
       composerError.append(review);
     }
@@ -1755,8 +1782,8 @@ export async function boot() {
   async function submitPrompt({ text, attachments = [], interrupt = false,
     fromComposer = true }) {
     if (messageActionBusy) {
-      showComposerError(new Error(t("messageAction.busy", {},
-        "请等待当前消息操作完成")));
+      showComposerError(localComposerError("messageAction.busy",
+        "请等待当前消息操作完成"));
       return;
     }
     fileMentions.hide();
@@ -1775,8 +1802,8 @@ export async function boot() {
     }
     if (routeVersion !== originVersion) return;
     if (composerProfile.isBusy()) {
-      showComposerError(new Error(t("composer.profileBusy", {},
-        "请等待会话配置更新完成")));
+      showComposerError(localComposerError("composer.profileBusy",
+        "请等待会话配置更新完成"));
       return;
     }
     if (fromComposer && attachments.length &&
