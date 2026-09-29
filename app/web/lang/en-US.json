@@ -77,6 +77,7 @@
   "messageEdit.alreadyOpen": "A message is already being edited",
   "messageAction.busy": "Wait for the current message action to finish",
   "messageAction.invalidBoundary": "This message has no usable edit boundary or complete text",
+  "messageAction.fullTextUnavailable": "The full message could not be retrieved. Session history was not changed; refresh and try again.",
   "messageAction.selectSession": "Select a session first",
   "messageAction.waitForRun": "Wait for the current run to finish before changing messages",
   "messageAction.resolveDraft": "Resolve the draft and send queue before editing history",

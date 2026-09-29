@@ -444,22 +444,33 @@ export async function boot() {
         toast(t("sessionAction.forked", {}, "已创建会话分支"));
       } else toast(t("sessionAction.backgroundFork", {}, "原会话的分支已在后台创建"));
     },
-    onEdit: async (sequence, text, attachments, owner, opener) => {
+    onEdit: async (sequence, text, attachments, owner, opener,
+      resolveText = () => text) => {
       const version = routeVersion;
       if (!isCurrentMessageOwner(owner, version))
         throw new Error(t("messageAction.ownerChanged", {}, "会话已切换，请重新选择消息"));
       assertMessageReplacementReady(sequence, text, attachments);
-      const edited = await messageEditDialog.open(text, attachments, opener);
+      const completeText = await resolveText();
+      if (!isCurrentMessageOwner(owner, version))
+        throw new Error(t("messageAction.ownerChanged", {}, "会话已切换，请重新选择消息"));
+      assertMessageReplacementReady(sequence, completeText, attachments);
+      const edited = await messageEditDialog.open(completeText, attachments, opener);
       if (edited !== null) {
         if (!isCurrentMessageOwner(owner, version))
           throw new Error(t("messageAction.ownerChanged", {}, "会话已切换，请重新选择消息"));
         await replaceAndRunMessage(sequence, edited, attachments, "edit");
       }
     },
-    onRetry: (sequence, text, attachments, owner) => {
-      if (!isCurrentMessageOwner(owner))
+    onRetry: async (sequence, text, attachments, owner,
+      resolveText = () => text) => {
+      const version = routeVersion;
+      if (!isCurrentMessageOwner(owner, version))
         throw new Error(t("messageAction.ownerChanged", {}, "会话已切换，请重新选择消息"));
-      return replaceAndRunMessage(sequence, text, attachments, "retry");
+      assertMessageReplacementReady(sequence, text, attachments);
+      const completeText = await resolveText();
+      if (!isCurrentMessageOwner(owner, version))
+        throw new Error(t("messageAction.ownerChanged", {}, "会话已切换，请重新选择消息"));
+      return replaceAndRunMessage(sequence, completeText, attachments, "retry");
     },
   });
   conversationSearch = createConversationSearch({

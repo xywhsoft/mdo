@@ -77,6 +77,7 @@
   "messageEdit.alreadyOpen": "已有消息正在编辑",
   "messageAction.busy": "请等待当前消息操作完成",
   "messageAction.invalidBoundary": "这条消息没有可用的编辑边界或完整文本",
+  "messageAction.fullTextUnavailable": "无法取回完整消息；当前会话历史没有改动，请刷新后重试。",
   "messageAction.selectSession": "请先选择会话",
   "messageAction.waitForRun": "请在当前运行结束后操作消息",
   "messageAction.resolveDraft": "请先处理草稿和待发送队列，再编辑历史消息",

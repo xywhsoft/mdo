@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { eventsToTimeline, resolveTimelineCopyText } from
+import { eventsToTimeline, resolveTimelineCopyText,
+  resolveTimelineActionText } from
   "../app/web/js/features/chat/timeline.js";
 
 test("tool results expose their artifact even without a separate artifact event", () => {
@@ -90,4 +91,24 @@ test("copy restores only truncated assistant chunks in their original order", as
   assert.deepEqual(await resolveTimelineCopyText(answer,
     { projectId: "p", sessionId: "s" }, async () => "different"),
   { text: "first vis last", complete: false });
+});
+
+test("long-message edit and retry require the original prompt before changing history", async () => {
+  const items = eventsToTimeline([
+    { kind: "agent_start", event_id: 31, run_id: 6, time: 1000000,
+      agent_depth: 0, user_message_sequence: 4, text: "visible",
+      text_truncated: true },
+    { kind: "model_text_delta", event_id: 32, run_id: 6,
+      time: 2000000, text: "answer" },
+  ]);
+  const owner = { projectId: "p", sessionId: "s" };
+  const prompt = items.find((item) => item.kind === "user");
+  const retry = items.find((item) => item.kind === "assistant").retryPrompt;
+  assert.deepEqual(retry.copySpans, prompt.copySpans);
+  assert.equal(await resolveTimelineActionText(prompt, owner,
+    async () => "visible remainder"), "visible remainder");
+  assert.equal(await resolveTimelineActionText(retry, owner,
+    async () => "visible remainder"), "visible remainder");
+  await assert.rejects(resolveTimelineActionText(retry, owner,
+    async () => null), /完整消息/);
 });

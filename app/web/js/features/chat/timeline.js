@@ -53,7 +53,9 @@ export function eventsToTimeline(events, historyLost = false) {
           promptsByRun.set(runKey, {
             sequence: Number(event.user_message_sequence),
             text: event.text || "",
-            truncated: Boolean(event.text_truncated),
+            textTruncated: Boolean(event.text_truncated),
+            copySpans: event.text_truncated ? [{ eventId: event.event_id,
+              kind: event.kind, start: 0, end: (event.text || "").length }] : [],
             attachments: event.attachments || [],
           });
         if (event.agent_depth > 0) {
@@ -288,6 +290,14 @@ export async function resolveTimelineCopyText(item, owner,
     : { text: visible, complete: false };
 }
 
+export async function resolveTimelineActionText(item, owner,
+  readEventText = readCompleteSessionEventText) {
+  const resolved = await resolveTimelineCopyText(item, owner, readEventText);
+  if (!resolved.complete) throw new Error(t("messageAction.fullTextUnavailable", {},
+    "无法取回完整消息；当前会话历史没有改动，请刷新后重试。"));
+  return resolved.text;
+}
+
 function timeNode(value) {
   const time = element("time", { className: "timeline-time", text: formatClock(value) });
   if (value) {
@@ -513,11 +523,12 @@ function timelineNode(item, handlers, feedback, projectId, sessionId, writable,
     }
     if (writable && item.kind === "user" &&
         Number.isSafeInteger(item.userMessageSequence) &&
-        item.userMessageSequence > 0 && !item.textTruncated) {
+        item.userMessageSequence > 0) {
       const edit = commandButton(t("timeline.edit", {}, "编辑"),
         t("timeline.editResend", {}, "编辑此消息并重新发送"), "compose", `${item.key}/edit`,
         handlers, sessionKey, (opener) => handlers.onEdit(
-          item.userMessageSequence, item.text, item.attachments ?? [], owner, opener));
+          item.userMessageSequence, item.text, item.attachments ?? [], owner,
+          opener, () => resolveTimelineActionText(item, owner)));
       actions.append(edit);
     }
     if (item.kind === "assistant") {
@@ -529,12 +540,13 @@ function timelineNode(item, handlers, feedback, projectId, sessionId, writable,
       }
       const retryPrompt = item.retryPrompt;
       if (writable && retryPrompt && Number.isSafeInteger(retryPrompt.sequence) &&
-          retryPrompt.sequence > 0 && (retryPrompt.text || retryPrompt.attachments?.length) &&
-          !retryPrompt.truncated) {
+          retryPrompt.sequence > 0 && (retryPrompt.text || retryPrompt.attachments?.length)) {
         const retry = commandButton(t("timeline.retry", {}, "重试"),
           t("timeline.retryTurn", {}, "重试此回合"), "retry", `${item.key}/retry`,
           handlers, sessionKey, () => handlers.onRetry(
-            retryPrompt.sequence, retryPrompt.text, retryPrompt.attachments ?? [], owner));
+            retryPrompt.sequence, retryPrompt.text,
+            retryPrompt.attachments ?? [], owner,
+            () => resolveTimelineActionText(retryPrompt, owner)));
         actions.append(retry);
       }
       if (item.feedbackEventId && item.state === "done") {
