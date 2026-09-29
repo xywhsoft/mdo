@@ -1690,6 +1690,14 @@ Windows 有界发布门禁通过 114 项 Python、85 项 Node、72 个前端模�
 
 Windows 有界发布门禁通过 114 项 Python、88 项 Node、73 个前端模块解析、21 个运行探针、严格 C 编译、确定性打包、便携 WebView2 Home 与 20 秒单文件启动。Linux 在 WSL 原生文件系统的独立拷贝通过同一有界门禁（跳过 GUI 启动），Linux 包 SHA-256 为 `f464aac33084e5a60446cf81f8cc4f6bd96c3c710c2b12c8b9846270781d534d`。根目录 `mdo.exe` 已更新，SHA-256 与 Windows 候选同为 `50c9207109e66ec8b6961ddeda7aae3d2b4595f33ad3bd2507ce5256bc6ab833`。未做压力或高负载测试。
 
+## 2026-09-29：缺少 Files 类型标记时仍接收文件拖放
+
+旧版输入卡对拖放不检查 `DataTransfer.types`。新版只认其中的 `Files`；若 WebView 在拖入时仅提供 `items.kind=file`、放下时才提供 `files`，附件便无法进入选择流程。文件落在输入卡外时，浏览器还可能导航到本地文件并丢失未发送草稿。现在按类型、条目和实际文件三种证据识别拖放，输入区内交给原有上传与类型校验，外部落点阻止文件导航；纯文本拖放不受影响。
+
+隔离浏览器夹具 `tests/fixtures/composer-drag-browser.html` 构造空 `types`、拖入时仅有文件条目、放下时仅有文件列表的事件。输入卡的 `dragover/drop` 均被接收，非图片文件进入原有“仅支持 PNG、JPEG 和 WebP 图片”反馈；输入卡外的两类事件均阻止默认导航，落点提示清除。纯文本的 `dragover/drop` 均没有被拦截，浏览器脚本错误为空。这证明生产模块对该 WebView 数据形态的处理，不代替 Windows 资源管理器或其他操作系统的真实拖放验收。
+
+Windows 有界发布门禁通过 114 项 Python、101 项 Node、75 个前端模块解析、21 个运行探针、严格 C 编译、确定性打包、便携 WebView2 Home 与 20 秒单文件启动。Linux 独立 ext4 工作树通过相同单元、模块、运行探针与确定性打包（跳过 GUI 启动）。根目录 `mdo.exe` 已从验证候选覆盖，SHA-256 为 `7e88df8fe1e75f245d339c4be42878fff76c88e133d79c059115b62357dc2513`；Linux 包为 `039a98e65c627eadaf2a991a28786214147d6138e5815b1c9cdb685361511ffe`。未做压力或高负载测试。
+
 ## 2026-09-29：项目级新任务草稿存储接口
 
 代码审计确认新任务在首次发送前共用 `data/draft.json`：切换项目时 `selectedKey` 仍为空，只有写前日志生成 `new_task` 后才阻止跨项目导航。因此未发送文本会跟随项目切换；旧版按懒会话 ID 分开保存草稿。新接口 `GET/HEAD/PUT /api/v1/projects/{project}/draft` 为合法项目 ID 提供独立的 `data/project-drafts/{project}.json`，沿用 revision 冲突、64 KiB 文本上限和 Home 原子写入。空草稿 GET 不创建文件；项目定义尚未建立时也可保存，因为现有新任务允许先选择默认或未登记项目。此接口只接收文本与可选输入配置，不接受图片、待提交意图、`new_task` 或运行核对标记；创建中的写前日志仍由全局 `/draft` 保存。

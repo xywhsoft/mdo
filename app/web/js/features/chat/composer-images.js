@@ -16,6 +16,15 @@ export function imageUploadType(file) {
   return EXTENSION_TYPES.get(extension) ?? "";
 }
 
+function hasDraggedFiles(transfer) {
+  if (!transfer) return false;
+  // WebViews do not all expose the same DataTransfer view before drop. The
+  // file list can appear only at drop time, even when types lacked "Files".
+  return [...(transfer.types ?? [])].includes("Files") ||
+    [...(transfer.items ?? [])].some((item) => item.kind === "file") ||
+    (transfer.files?.length ?? 0) > 0;
+}
+
 function pastedImages(clipboard) {
   // Some WebViews expose pasted images only through DataTransfer.items.
   // Prefer those entries to avoid uploading the same file twice when both
@@ -352,12 +361,12 @@ export function createComposerImages({ composer, prompt, button, input, strip,
     void addFiles(images);
   });
   composer.addEventListener("dragenter", (event) => {
-    if (![...(event.dataTransfer?.types ?? [])].includes("Files")) return;
+    if (!hasDraggedFiles(event.dataTransfer)) return;
     dragDepth += 1;
     composer.setAttribute("data-drag-over", "");
   });
   composer.addEventListener("dragover", (event) => {
-    if (![...(event.dataTransfer?.types ?? [])].includes("Files")) return;
+    if (!hasDraggedFiles(event.dataTransfer)) return;
     event.preventDefault();
     event.dataTransfer.dropEffect = "copy";
     composer.setAttribute("data-drag-over", "");
@@ -367,7 +376,7 @@ export function createComposerImages({ composer, prompt, button, input, strip,
     if (dragDepth === 0) clearDragTarget();
   });
   composer.addEventListener("drop", (event) => {
-    if (![...(event.dataTransfer?.types ?? [])].includes("Files")) return;
+    if (!hasDraggedFiles(event.dataTransfer)) return;
     event.preventDefault();
     clearDragTarget();
     void addFiles(event.dataTransfer?.files ?? []);
@@ -377,7 +386,7 @@ export function createComposerImages({ composer, prompt, button, input, strip,
   // alone when they have already handled the event.
   for (const type of ["dragover", "drop"]) {
     window.addEventListener(type, (event) => {
-      if (![...(event.dataTransfer?.types ?? [])].includes("Files") ||
+      if (!hasDraggedFiles(event.dataTransfer) ||
           composer.contains(event.target)) return;
       clearDragTarget();
       if (event.defaultPrevented ||

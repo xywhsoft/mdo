@@ -15,6 +15,7 @@
   <button id="drop-file" type="button">模拟放下文件</button>
   <button id="drop-outside" type="button">模拟放到输入框外</button>
   <button id="handled-drop" type="button">模拟其他组件接收文件</button>
+  <button id="sparse-transfer" type="button">模拟 WebView 缺少 Files 标记</button>
 </div>
 <p id="qa-status" role="status">等待拖放</p>
 <form class="composer" id="composer">
@@ -31,7 +32,8 @@ import { createResourceStore } from "/app/web/js/state/store.js";
 const composer = document.querySelector("#composer");
 const status = document.querySelector("#qa-status");
 const model = createResourceStore({ models: [{ id: "image-qa", attachments: 1 }] });
-const session = createResourceStore({ model_id: "image-qa" });
+const session = createResourceStore({ id: "qa-session", project_id: "default",
+  model_id: "image-qa" });
 const navigation = { get: () => ({ projectId: "default", sessionId: "qa-session" }) };
 const transfer = new DataTransfer();
 transfer.items.add(new File(["qa"], "notes.txt", { type: "text/plain" }));
@@ -100,5 +102,41 @@ document.querySelector("#handled-drop").addEventListener("click", () => {
   status.dataset.handledDrop = String(drop.defaultPrevented);
   status.dataset.handledCleared = String(!composer.hasAttribute("data-drag-over"));
   status.textContent = "其他组件处理文件后输入区提示已清除";
+});
+document.querySelector("#sparse-transfer").addEventListener("click", () => {
+  // Some native WebViews reveal file items during drag but omit the Files type;
+  // the actual File object then appears only in the drop event.
+  function sparseDrag(node, type, dataTransfer) {
+    const event = new Event(type, { bubbles: true, cancelable: true });
+    Object.defineProperty(event, "dataTransfer", { value: dataTransfer });
+    node.dispatchEvent(event);
+    return event;
+  }
+  const file = new File(["qa"], "notes.txt", { type: "text/plain" });
+  const dragging = { types: [], items: [{ kind: "file" }], files: [],
+    dropEffect: "none" };
+  const dropped = { types: [], items: [], files: [file],
+    dropEffect: "none" };
+  sparseDrag(composer, "dragenter", dragging);
+  const over = sparseDrag(document.querySelector("#prompt"),
+    "dragover", dragging);
+  const drop = sparseDrag(composer, "drop", dropped);
+  status.dataset.sparseOver = String(over.defaultPrevented);
+  status.dataset.sparseDrop = String(drop.defaultPrevented);
+  status.dataset.sparseCleared = String(!composer.hasAttribute("data-drag-over"));
+  sparseDrag(composer, "dragenter", dragging);
+  const outsideOver = sparseDrag(status, "dragover", dragging);
+  const outsideDrop = sparseDrag(status, "drop", dropped);
+  status.dataset.sparseOutsideOver = String(outsideOver.defaultPrevented);
+  status.dataset.sparseOutsideDrop = String(outsideDrop.defaultPrevented);
+  status.dataset.sparseOutsideCleared =
+    String(!composer.hasAttribute("data-drag-over"));
+  const textTransfer = { types: ["text/plain"], items: [], files: [],
+    dropEffect: "none" };
+  const textOver = sparseDrag(composer, "dragover", textTransfer);
+  const textDrop = sparseDrag(composer, "drop", textTransfer);
+  status.dataset.textOverPrevented = String(textOver.defaultPrevented);
+  status.dataset.textDropPrevented = String(textDrop.defaultPrevented);
+  status.textContent = "无 Files 标记的文件仍被接收，普通文本拖放保持原样";
 });
 </script>
