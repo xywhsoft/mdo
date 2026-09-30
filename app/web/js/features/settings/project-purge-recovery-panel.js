@@ -1,0 +1,89 @@
+import { subscribeLocale, t } from "../../i18n.js";
+import { errorMessage } from "../../utils/dom.js";
+
+function statusCopy(state) {
+  if (!state.checked) return t("purgeRecovery.loading");
+  if (!state.intent) return state.error ? t("purgeRecovery.unavailable") : "";
+  if (state.result?.committed) return t("purgeRecovery.committed");
+  if (state.result?.outcome === "aborted") return t("purgeRecovery.aborted");
+  if (state.result?.outcome === "pending") return t("purgeRecovery.pending");
+  if (state.result?.outcome === "not_accepted") return t("purgeRecovery.notAccepted");
+  return t("purgeRecovery.unknown");
+}
+
+// Stable nodes keep keyboard focus while a query, locale change, or another
+// page changes the result. No filesystem names are interpreted as markup.
+export function createProjectPurgeRecoveryPanel({ panel, notice, recovery, navigation }) {
+  const query = panel.querySelector('[data-purge-action="query"]');
+  const cancel = panel.querySelector('[data-purge-action="cancel"]');
+  const acknowledge = panel.querySelector('[data-purge-action="acknowledge"]');
+  const error = panel.querySelector('[data-purge-field="error"]');
+  const binding = panel.querySelector("dl");
+  const jump = notice.querySelector("button");
+
+  function focus() {
+    panel.querySelector("h3").focus({ preventScroll: true });
+    panel.scrollIntoView({ block: "nearest" });
+  }
+
+  function render(state = recovery.get()) {
+    const paused = recovery.isPaused();
+    const active = document.activeElement;
+    panel.hidden = !paused;
+    panel.setAttribute("aria-busy", String(state.busy));
+    notice.hidden = !paused || (navigation.get().view === "settings" &&
+      navigation.get().settingsSection === "projects");
+    notice.querySelector("span").textContent = t("purgeRecovery.notice");
+    jump.textContent = t("purgeRecovery.open");
+    panel.querySelector("h3").textContent = t("purgeRecovery.title");
+    panel.querySelector('[data-purge-field="description"]').textContent = t("purgeRecovery.description");
+    panel.querySelector('[data-purge-field="status"]').textContent = statusCopy(state);
+    binding.hidden = !state.intent;
+    for (const field of ["name", "project_id", "revision", "purge_request_id"])
+      panel.querySelector(`[data-purge-field="${field}"]`).textContent = String(state.intent?.[field] ?? "");
+    for (const field of ["name", "project_id", "revision", "purge_request_id"])
+      panel.querySelector(`[data-purge-label="${field}"]`).textContent = t(`purgeRecovery.${field}`);
+    error.hidden = !state.error;
+    error.textContent = state.error ? errorMessage(state.error) : "";
+    query.textContent = state.busy ? t("purgeRecovery.working") : t("purgeRecovery.query");
+    cancel.textContent = t("purgeRecovery.cancel");
+    acknowledge.textContent = t("purgeRecovery.acknowledge");
+    query.disabled = state.busy;
+    cancel.hidden = !state.intent || state.result?.committed ||
+      ["pending", "aborted"].includes(state.result?.outcome);
+    cancel.disabled = state.busy;
+    acknowledge.hidden = state.result?.outcome !== "aborted";
+    acknowledge.disabled = state.busy;
+    // If the clicked action disappears, return to the surviving query button.
+    // Do not steal focus from a user's newer choice elsewhere on the page.
+    if (active && panel.contains(active) && (panel.hidden || active.hidden)) {
+      if (panel.hidden) document.querySelector("#projects-refresh").focus();
+      else query.focus();
+    }
+  }
+
+  async function act(origin, operation) {
+    await operation();
+    // Disabling the clicked button while awaiting HTTP may move focus to
+    // body before render sees it. Recover it after the operation settles.
+    if (document.activeElement === document.body || document.activeElement === origin) {
+      if (panel.hidden) document.querySelector("#projects-refresh").focus();
+      else (origin.hidden ? query : origin).focus();
+    }
+  }
+  query.addEventListener("click", () => { void act(query, recovery.refresh); });
+  cancel.addEventListener("click", () => { void act(cancel, recovery.cancel); });
+  acknowledge.addEventListener("click", () => { void act(acknowledge, recovery.acknowledgeAbort); });
+  jump.addEventListener("click", () => {
+    navigation.openSettings("projects");
+    window.requestAnimationFrame(focus);
+  });
+  recovery.subscribe(render);
+  subscribeLocale(() => render());
+  navigation.subscribe(() => render());
+  window.addEventListener("focus", () => { void recovery.refresh(); });
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible") void recovery.refresh();
+  });
+  return Object.freeze({ focus });
+}

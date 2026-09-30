@@ -66,6 +66,7 @@ export function formatClock(microseconds) {
 // Stable API codes describe user actions; server messages remain useful for
 // unknown failures, but should not determine the language of known failures.
 const API_ERROR_COPY = Object.freeze({
+  purge_review_required: ["error.purgeReviewRequired", "请先核对项目清除请求，再继续修改或发送任务。"],
   network_error: ["error.network",
     "无法连接本地服务，请确认 mdo 仍在运行。"],
   session_busy: ["error.sessionBusy", "这个会话仍有任务在运行。"],

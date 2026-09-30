@@ -1,4 +1,21 @@
 const API_ROOT = "/api/v1";
+let writeGuard = null;
+
+// A recovery gate is local to this page. The server remains authoritative;
+// this prevents restored drafts/queues from writing before recovery is read.
+export function setApiWriteGuard(guard) {
+  writeGuard = guard;
+  return () => { if (writeGuard === guard) writeGuard = null; };
+}
+
+function checkWrite(path, options) {
+  const method = (options.method ?? "GET").toUpperCase();
+  if (!["GET", "HEAD", "OPTIONS"].includes(method) && writeGuard &&
+      !writeGuard({ ...options, path, method }))
+    throw new ApiError("Review the saved project purge request before writing", {
+      code: "purge_review_required",
+    });
+}
 
 export class ApiError extends Error {
   constructor(message, options = {}) {
@@ -57,6 +74,7 @@ async function readEnvelope(response) {
 }
 
 export async function apiRequest(path, options = {}) {
+  checkWrite(path, options);
   const method = options.method ?? "GET";
   const headers = new Headers({ Accept: "application/json" });
   if (options.body !== undefined) headers.set("Content-Type", "application/json");
@@ -82,8 +100,10 @@ export async function apiRequest(path, options = {}) {
 }
 
 async function uploadImage(projectId, sessionId, file, mime = file.type) {
-  const url = requestPath(`/projects/${resourceId(projectId, "project")}` +
-    `/sessions/${resourceId(sessionId, "session")}/attachments`);
+  const path = `/projects/${resourceId(projectId, "project")}` +
+    `/sessions/${resourceId(sessionId, "session")}/attachments`;
+  checkWrite(path, { method: "POST" });
+  const url = requestPath(path);
   let response;
   try {
     response = await fetch(url, {

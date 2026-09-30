@@ -1,8 +1,10 @@
 """Review the project candidate inventory in an isolated single-file pack.
 
-Only synthetic local project data is seeded. No model is called and no purge
-is executed. Type 'break'/'fix' to toggle one orphan plan file for error UI;
-'status' verifies every seeded project/workspace byte remains unchanged.
+Only synthetic local project data is seeded; no model is called. The default
+mode never executes removal. Recovery mode 'committed' removes only the owned
+synthetic project through the production API before opening its result page.
+Type 'break'/'fix' to toggle one orphan plan file for preview errors; 'status'
+checks retained bytes and, for committed removal, absence of removed roots.
 """
 from __future__ import annotations
 
@@ -23,6 +25,8 @@ def main() -> int:
     parser.add_argument("--packed-path", type=Path, default=ROOT / "mdo.exe")
     parser.add_argument("--include-references", action="store_true",
         help="Seed attributable global draft and last-session references for preview QA")
+    parser.add_argument("--recovery-mode", choices=("not-accepted", "aborted", "committed"),
+        help="Save one synthetic purge intent for bounded recovery-panel QA")
     args = parser.parse_args()
     base = Path(tempfile.mkdtemp(prefix="mdo-packed-purge-", dir=ROOT / ".build"))
     packed = base / ("mdo.exe" if os.name == "nt" else "mdo")
@@ -96,6 +100,21 @@ def main() -> int:
             path = home / item["path"]
             for leaf in path.rglob("*") if path.is_dir() else [path]:
                 if leaf.is_file(): seeded[leaf] = leaf.read_bytes()
+        purge_id = "c" * 32
+        removed_roots = []
+        if args.recovery_mode:
+            _, preview_headers, _ = request(port, "GET", "/api/v1/" + preview_path)
+            purge_body = {"purge_request_id": purge_id, "created_at": preview["created_at"]}
+            purge_headers = {"If-Match": preview_headers["etag"]}
+            api("POST", f"projects/{project}/purge-intent", purge_body, **purge_headers)
+            if args.recovery_mode in ("aborted", "committed"):
+                action = "purge-cancel" if args.recovery_mode == "aborted" else "purge"
+                result = api("POST", f"projects/{project}/{action}", purge_body, **purge_headers)
+                assert result["outcome"] == args.recovery_mode, result
+            if args.recovery_mode == "committed":
+                removed_roots = [home / item["path"] for item in preview["targets"]]
+                assert all(not path.exists() for path in seeded if path != sentinel)
+                seeded = {sentinel: sentinel.read_bytes()}
         orphan = home / "schedules/orphan.json.bak"
         print(f"READY url=http://127.0.0.1:{port}/#/settings base={base}", flush=True)
         while True:
@@ -103,9 +122,15 @@ def main() -> int:
             if not command: break
             if command == "break": orphan.write_bytes(b"Synthetic orphan")
             elif command == "fix": orphan.unlink(missing_ok=True)
+            elif args.recovery_mode:
+                print(json.dumps(api("GET", "project-purge-intent"), ensure_ascii=False), flush=True)
+                status, _, data = request(port, "GET", "/api/v1/project-purges/" + purge_id)
+                assert status in (200, 404), (status, data)
+                print(data.decode("utf-8"), flush=True)
             else: print(json.dumps(api("GET", preview_path), ensure_ascii=False), flush=True)
             assert all(path.read_bytes() == data for path, data in seeded.items())
-            print("PASS: seeded project and workspace bytes unchanged", flush=True)
+            assert all(not path.exists() for path in removed_roots), "Purged data was recreated"
+            print("PASS: retained seeded bytes unchanged; removed roots absent", flush=True)
     finally:
         stop_host(process)
     return 0

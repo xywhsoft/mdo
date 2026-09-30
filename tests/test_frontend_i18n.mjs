@@ -15,6 +15,7 @@ const packs = Object.fromEntries(supportedLocales.map((name) => [
   name, JSON.parse(readFileSync(new URL(`lang/${name}.json`, root), "utf8")),
 ]));
 const localizedApiErrors = [
+  ["purge_review_required", "error.purgeReviewRequired"],
   ["precondition_required", "error.preconditionRequired"],
   ["settings_unavailable", "error.settingsUnavailable"],
   ["home_import_busy", "error.homeImportBusy"],

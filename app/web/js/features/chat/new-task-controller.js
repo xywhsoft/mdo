@@ -21,7 +21,8 @@ function sameSubmission(a, b) {
 // Keep the unsent new-task intent in the global Home draft until its entire
 // ordered list is copied to the new session draft. No queue POST happens here.
 export function createNewTaskController({ draftStore, newId, createSession,
-  findSession, onPersisted, onMigrated, onReview, onChange }) {
+  findSession, onPersisted, onMigrated, onReview, onChange,
+  isWritePaused = () => false }) {
   let pumping = false;
   let preparing = false;
   let migrating = false;
@@ -81,6 +82,7 @@ export function createNewTaskController({ draftStore, newId, createSession,
   }
 
   async function pump(reviewedCopy = false) {
+    if (isWritePaused()) return false;
     if (pumping || blocked) return;
     const task = draftStore.newTask();
     if (!task) return;
@@ -148,6 +150,7 @@ export function createNewTaskController({ draftStore, newId, createSession,
   }
 
   async function submit({ projectId, text, profile, fromComposer = true }) {
+    if (isWritePaused()) return false;
     if (blocked || preparing || migrating)
       throw new Error(t("composer.newTaskBusy"));
     if (!await draftStore.ensureLoaded(""))
@@ -196,12 +199,14 @@ export function createNewTaskController({ draftStore, newId, createSession,
   }
 
   async function reconcile() {
+    if (isWritePaused()) return false;
     if (!await draftStore.ensureLoaded("")) return false;
     if (draftStore.newTask()) await pump();
     return true;
   }
 
   async function createForAttachment({ projectId, title, profile }) {
+    if (isWritePaused()) throw new Error(t("error.purgeReviewRequired"));
     if (blocked || migrating || pumping)
       throw new Error(t("composer.newTaskBusy"));
     if (!await draftStore.ensureLoaded(""))
@@ -228,6 +233,7 @@ export function createNewTaskController({ draftStore, newId, createSession,
   }
 
   async function review(profile) {
+    if (isWritePaused()) return false;
     if (createRejected) {
       if (!draftStore.reseedNewTask(newId(), profile))
         throw new Error(t("composer.newTaskSaveFailed"));

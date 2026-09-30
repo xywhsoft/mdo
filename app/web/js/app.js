@@ -59,6 +59,8 @@ import { createRecoveryPanel } from "./features/approvals/recovery-panel.js";
 import { createSettingsView } from "./features/settings/settings-view.js";
 import { createSchedulePanel } from "./features/settings/schedule-panel.js";
 import { createProjectPanel } from "./features/settings/project-panel.js";
+import { createProjectPurgeRecovery } from "./features/settings/project-purge-recovery.js";
+import { createProjectPurgeRecoveryPanel } from "./features/settings/project-purge-recovery-panel.js";
 import { createResourcePanels } from "./features/settings/resource-panels.js";
 import { createFeedbackPanel } from "./features/settings/feedback-panel.js";
 import { createKeyboardShortcuts } from "./features/shell/keyboard-shortcuts.js";
@@ -71,7 +73,7 @@ import { createSessionLoadNotice } from "./features/shell/session-load-notice.js
 import { waitForSelectedDetail } from "./features/shell/session-detail-wait.js";
 import { createPaneLayout } from "./features/shell/pane-layout.js";
 import { trackMobileViewport } from "./features/shell/mobile-viewport.js";
-import { api } from "./api/client.js";
+import { api, setApiWriteGuard } from "./api/client.js";
 import { clear, element, errorMessage, isImeKey, refreshRelativeTimes, toast } from "./utils/dom.js";
 import { subscribeLocale, t } from "./i18n.js";
 
@@ -105,6 +107,11 @@ function runStateText(state) {
 export async function boot() {
   mountIcons();
   const entryHash = location.hash;
+  const purgeRecovery = createProjectPurgeRecovery({ transport: api });
+  setApiWriteGuard((request) => purgeRecovery.allowsWrite(request));
+  // Check portable recovery before restored drafts migrate or dispatch.
+  // A failed read leaves a visible retry gate; read-only views still load.
+  await purgeRecovery.refresh();
 
   const shell = $("#app-shell");
   const wideLayout = window.matchMedia("(min-width: 1204px)");
@@ -659,6 +666,7 @@ export async function boot() {
     sessionStore: sessionDetailStore, timelineStore, modelsStore, runsStore,
   });
   draftStore = createDraftStore({
+    isWritePaused: purgeRecovery.isPaused,
     onRestore(text, attachments, uncertainRun, submission) {
       prompt.value = text;
       composerAttachments = attachments;
@@ -701,6 +709,7 @@ export async function boot() {
     () => projectDraftSelection.owner(),
     () => toast(t("composer.newTaskOtherProject"), "error"));
   submissionController = createSubmissionController({
+    isWritePaused: purgeRecovery.isPaused,
     draftStore, promptQueue,
     onPersisted(key, submission) {
       clearSubmittedComposer(key, submission);
@@ -749,7 +758,7 @@ export async function boot() {
     },
   });
   draftStore.select("");
-  void projectDraftSelection.restoreLegacy();
+  if (!purgeRecovery.isPaused()) void projectDraftSelection.restoreLegacy();
   const composerProfile = createComposerProfile({
     modelSelect: $("#composer-model"), reasoningSelect: $("#composer-reasoning"),
     permissionSelect: $("#composer-permission"), navigation,
@@ -773,6 +782,7 @@ export async function boot() {
     },
   });
   newTaskController = createNewTaskController({
+    isWritePaused: purgeRecovery.isPaused,
     draftStore, newId: () => promptQueue.newId(), createSession,
     async findSession(projectId, sessionId) {
       return (await api.get(`/projects/${projectId}/sessions/${sessionId}`)).data;
@@ -923,6 +933,10 @@ export async function boot() {
     panel: $('[data-settings-panel="projects"]'), projectsStore,
     modelsStore, projectDialog, navigation,
   });
+  createProjectPurgeRecoveryPanel({
+    panel: $("#project-purge-recovery"), notice: $("#project-purge-notice"),
+    recovery: purgeRecovery, navigation,
+  });
   const schedulePanel = createSchedulePanel({
     panel: $('[data-settings-panel="schedules"]'),
     projectsStore, agentsStore, modelsStore,
@@ -984,12 +998,12 @@ export async function boot() {
       creatingSessionKey === `${route.projectId}/${route.sessionId}`;
     const serviceFailed = Boolean(bootstrapFailure());
     // Keep keyboard focus while a newly created session loads its detail.
-    prompt.disabled = serviceFailed || messageActionBusy ||
+    prompt.disabled = serviceFailed || messageActionBusy || purgeRecovery.isPaused() ||
       selectingProjectDraft ||
       projectDraftSelection?.isMigrating() ||
       newTaskController?.isPreparing() ||
       (!sessionWritable && !creatingSession) || migratingNewTask;
-    sendBlockedByState = serviceFailed || !(sessionWritable || creatingSession) ||
+    sendBlockedByState = serviceFailed || purgeRecovery.isPaused() || !(sessionWritable || creatingSession) ||
       composerProfile.isBusy() || messageActionBusy ||
       !draftStore.isLoaded(selectedDraftKey) ||
       selectingProjectDraft ||
@@ -1001,14 +1015,14 @@ export async function boot() {
       migratingNewTask ||
       Boolean(submissionController?.isReleasing(selectedKey));
     syncSendDisabled();
-    composerImages?.setWritable(!serviceFailed && !messageActionBusy &&
+    composerImages?.setWritable(!serviceFailed && !messageActionBusy && !purgeRecovery.isPaused() &&
       sessionWritable && !creatingSession && !pendingNewTask);
     composerProfile.setRunActive(Boolean(activeRun),
-      creatingNewTask || messageActionBusy);
+      creatingNewTask || messageActionBusy || purgeRecovery.isPaused());
     send.setAttribute("aria-label", activeRun || creatingNewTask
       ? t("composer.queue", {}, "加入待发送队列")
       : t("shell.send", {}, "发送任务"));
-    composerHint.textContent = messageActionBusy
+    composerHint.textContent = purgeRecovery.isPaused() ? t("error.purgeReviewRequired") : messageActionBusy
       ? t("messageAction.busy", {}, "请等待当前消息操作完成")
       : draftStore.isRunUncertain(selectedDraftKey)
       ? t("composer.hintReviewRun") : (selectingProjectDraft ||
@@ -1033,6 +1047,18 @@ export async function boot() {
     mobileActivity.hidden = !activeRun && !creatingNewTask;
   }
   settingsStore.subscribe(() => setRun(activeRun));
+  let purgeWasPaused = purgeRecovery.isPaused();
+  purgeRecovery.subscribe(() => {
+    const paused = purgeRecovery.isPaused();
+    setRun(activeRun);
+    if (purgeWasPaused && !paused) {
+      draftStore.resumeSaves();
+      void projectDraftSelection.restoreLegacy();
+      void newTaskController.reconcile();
+      if (selectedKey) void submissionController.reconcile(selectedKey);
+    }
+    purgeWasPaused = paused;
+  });
 
   function currentWorkspace() {
     const route = navigation.get();
@@ -1321,6 +1347,7 @@ export async function boot() {
   }
 
   async function maybeCancelPriorityRun() {
+    if (purgeRecovery.isPaused()) return;
     const selected = navigation.get();
     const run = activeRun;
     const key = `${selected.projectId}/${selected.sessionId}`;
@@ -1370,6 +1397,7 @@ export async function boot() {
   }
 
   async function dispatchQueued() {
+    if (purgeRecovery.isPaused()) return;
     const selected = navigation.get();
     const key = `${selected.projectId}/${selected.sessionId}`;
     const session = sessionDetailStore.get().data;

@@ -122,7 +122,8 @@ export function projectDraftKey(projectId) {
   return `project:${resourceId(projectId, "project")}`;
 }
 
-export function createDraftStore({ onRestore, onError, onSaved, onLoaded = () => {} }) {
+export function createDraftStore({ onRestore, onError, onSaved, onLoaded = () => {},
+  isWritePaused = () => false }) {
   const entries = new Map();
   const encoder = new TextEncoder();
   let selected = "";
@@ -143,7 +144,7 @@ export function createDraftStore({ onRestore, onError, onSaved, onLoaded = () =>
   function schedule(key, immediate = false) {
     const current = entry(key);
     window.clearTimeout(current.timer);
-    if (current.conflict) return;
+    if (current.conflict || isWritePaused()) return;
     current.timer = window.setTimeout(() => { void flush(key); },
       immediate ? 0 : SAVE_DELAY_MS);
   }
@@ -206,6 +207,7 @@ export function createDraftStore({ onRestore, onError, onSaved, onLoaded = () =>
     const current = entry(key);
     window.clearTimeout(current.timer);
     current.timer = 0;
+    if (isWritePaused()) return false;
     if (current.saving) {
       await current.saving;
       return current.loaded && !current.dirty && !current.conflict;
@@ -214,6 +216,7 @@ export function createDraftStore({ onRestore, onError, onSaved, onLoaded = () =>
       if (!current.loaded) await load(key);
       if (!current.loaded || current.conflict) return;
       while (current.dirty) {
+        if (isWritePaused()) return;
         const text = current.text;
         const attachments = [...current.attachments];
         const uncertainRun = current.uncertainRun;
@@ -263,7 +266,7 @@ export function createDraftStore({ onRestore, onError, onSaved, onLoaded = () =>
     try { await current.saving; }
     finally {
       current.saving = null;
-      if (current.dirty && !current.conflict && !current.oversized && current.loaded)
+      if (!isWritePaused() && current.dirty && !current.conflict && !current.oversized && current.loaded)
         schedule(key);
     }
     return current.loaded && !current.dirty && !current.conflict;
@@ -601,5 +604,11 @@ export function createDraftStore({ onRestore, onError, onSaved, onLoaded = () =>
       return { text: nextText, attachments: nextAttachments, merged };
     },
     flush,
+    resumeSaves() {
+      if (isWritePaused()) return;
+      for (const [key, current] of entries)
+        if (current.dirty && current.loaded && !current.conflict && !current.oversized)
+          schedule(key);
+    },
   });
 }

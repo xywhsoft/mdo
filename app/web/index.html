@@ -12,6 +12,9 @@
   <a class="skip-link" href="#timeline" data-i18n="shell.skip" inert>跳到对话</a>
 
   <div class="app-shell" id="app-shell" data-sidebar="closed" data-inspector="closed" inert>
+    <div id="project-purge-notice" class="project-purge-notice" role="status" hidden>
+      <span></span><button class="secondary-button" type="button"></button>
+    </div>
     <header class="mobile-bar">
       <button class="icon-button" id="open-sidebar" type="button" aria-label="打开会话导航" data-i18n-aria-label="shell.sidebar.open" aria-controls="sidebar" aria-expanded="false">
         <span class="icon" data-icon="menu" aria-hidden="true"></span>
@@ -409,6 +412,23 @@
               </div>
               <div class="project-panel-toolbar"><button class="secondary-button" id="projects-add" type="button" data-i18n="project.add">添加项目</button><button class="secondary-button" id="projects-refresh" type="button" data-i18n="project.refresh">刷新</button><button class="secondary-button" id="global-memory" type="button" data-i18n="project.globalMemory">全局记忆</button><button class="secondary-button" id="global-memory-directory" type="button" data-i18n="project.openMemoryDirectory">打开记忆目录</button></div>
               <div id="settings-projects-list" class="project-settings-list" aria-live="polite"></div>
+              <section id="project-purge-recovery" class="resource-card project-purge-recovery" aria-labelledby="project-purge-recovery-title" hidden>
+                <h3 id="project-purge-recovery-title" tabindex="-1"></h3>
+                <p data-purge-field="description"></p>
+                <dl>
+                  <dt data-purge-label="name"></dt><dd data-purge-field="name"></dd>
+                  <dt data-purge-label="project_id"></dt><dd data-purge-field="project_id"></dd>
+                  <dt data-purge-label="revision"></dt><dd data-purge-field="revision"></dd>
+                  <dt data-purge-label="purge_request_id"></dt><dd data-purge-field="purge_request_id"></dd>
+                </dl>
+                <p data-purge-field="status" role="status"></p>
+                <p data-purge-field="error" class="resource-error" role="alert" hidden></p>
+                <div class="project-settings-actions">
+                  <button class="secondary-button" type="button" data-purge-action="query"></button>
+                  <button class="secondary-button" type="button" data-purge-action="cancel" hidden></button>
+                  <button class="primary-button" type="button" data-purge-action="acknowledge" hidden></button>
+                </div>
+              </section>
             </section>
 
             <section class="settings-section schedule-section" data-settings-panel="schedules" aria-labelledby="schedules-title" hidden>

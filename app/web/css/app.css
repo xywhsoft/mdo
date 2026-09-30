@@ -1267,6 +1267,15 @@ select:focus-visible,
 .project-settings-card { overflow-wrap: anywhere; }
 .project-settings-actions { display: flex; align-items: end; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
 .project-settings-actions button { min-height: 32px; }
+.project-purge-recovery { margin-top: 16px; overflow-wrap: anywhere; }
+.project-purge-recovery dl { display: grid; grid-template-columns: minmax(70px, 1fr) minmax(0, 2fr); gap: 7px 12px; font-size: 12px; }
+.project-purge-recovery dt { color: var(--muted); }
+.project-purge-recovery dd { margin: 0; }
+.project-purge-recovery [data-purge-field="purge_request_id"] { font-family: var(--font-mono); }
+.project-purge-recovery button { min-height: 40px; }
+.project-purge-notice { position: fixed; z-index: 60; right: 12px; bottom: max(12px, env(safe-area-inset-bottom)); display: flex; align-items: center; flex-wrap: wrap; gap: 8px; width: min(420px, calc(100vw - 24px)); box-sizing: border-box; padding: 12px; border: 1px solid var(--border-strong); border-radius: var(--radius-md); background: var(--surface-raised); box-shadow: 0 6px 24px rgb(0 0 0 / 15%); font-size: 12px; }
+.project-purge-notice span { flex: 1 1 180px; overflow-wrap: anywhere; }
+.project-purge-notice button { min-height: 40px; }
 .project-settings-actions label { display: grid; gap: 4px; margin-right: auto; color: var(--muted); font-size: 11px; }
 .project-settings-actions select { min-height: 32px; max-width: min(260px, 70vw); padding: 5px 8px; border: 1px solid var(--border-strong); border-radius: var(--radius-sm); background: var(--surface-raised); color: var(--ink); }
 .project-preview-dialog, #project-unregister-dialog { width: min(500px, calc(100vw - 28px)); max-height: calc(100dvh - 32px); padding: 20px; overflow: auto; border: 1px solid var(--border-strong); border-radius: var(--radius-md); background: var(--surface-raised); color: var(--ink); box-shadow: var(--shadow-dialog); }

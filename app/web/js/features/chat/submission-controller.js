@@ -22,7 +22,8 @@ function matches(item, submission) {
 // The draft is the write-ahead log. Only its first entry may enter the queue;
 // later entries remain durable and ordered while that request is unresolved.
 export function createSubmissionController({ draftStore, promptQueue,
-  onPersisted, onPromoted, onConsumed, onReview, onRestored, onChange }) {
+  onPersisted, onPromoted, onConsumed, onReview, onRestored, onChange,
+  isWritePaused = () => false }) {
   const pumping = new Set();
   const releasing = new Set();
   const submitting = new Set();
@@ -82,6 +83,7 @@ export function createSubmissionController({ draftStore, promptQueue,
   }
 
   async function pump(key) {
+    if (isWritePaused()) return false;
     if (!key || pumping.has(key)) return;
     pumping.add(key);
     onChange(key);
@@ -170,6 +172,7 @@ export function createSubmissionController({ draftStore, promptQueue,
   }
 
   async function reconcile(key) {
+    if (isWritePaused()) return false;
     if (!key || pumping.has(key)) return false;
     if (!await draftStore.ensureLoaded(key)) return false;
     if (!await draftStore.refreshSessionSubmissions(key)) return false;
@@ -208,6 +211,7 @@ export function createSubmissionController({ draftStore, promptQueue,
   }
 
   async function submit(key, text, attachments, interrupt, profile = null) {
+    if (isWritePaused()) return false;
     if (!key || releasing.has(key) || submitting.has(key) ||
         unacknowledged.has(key))
       throw new Error(t("composer.submissionBusy"));
@@ -255,6 +259,7 @@ export function createSubmissionController({ draftStore, promptQueue,
   }
 
   async function review(key) {
+    if (isWritePaused()) return false;
     if (!key || pumping.has(key) || releasing.has(key)) return false;
     const first = draftStore.submissions(key)[0];
     if (!first) return true;
