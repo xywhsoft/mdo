@@ -20,6 +20,14 @@ function stateLabel(value) {
   return t(`task.state.${value}`, {}, STATE_LABELS[value] || value);
 }
 
+function stopping(item) {
+  return ACTIVE_STATES.has(item.state) && Boolean(item.stop_requested);
+}
+
+function taskStateLabel(item) {
+  return stopping(item) ? t("task.stopping", {}, "正在停止…") : stateLabel(item.state);
+}
+
 function kindLabel(value) {
   return t(`task.kind.${value}`, {}, KIND_LABELS[value] || value);
 }
@@ -84,7 +92,7 @@ export function createTaskPanel({ container, detailContainer, summary, store, de
     for (const root of [container, detailContainer]) {
       for (const button of root.querySelectorAll("[data-task-cancel]")) {
         // Keep the control focusable while the request is pending; cancel() guards repeat activation.
-        if (pendingCancels.has(button.dataset.taskCancel))
+        if (pendingCancels.has(button.dataset.taskCancel) || button.dataset.taskStopping === "true")
           button.setAttribute("aria-disabled", "true");
         else button.removeAttribute("aria-disabled");
       }
@@ -93,7 +101,7 @@ export function createTaskPanel({ container, detailContainer, summary, store, de
 
   async function cancel(item) {
     const id = String(item.id);
-    if (pendingCancels.has(id)) return;
+    if (pendingCancels.has(id) || stopping(item)) return;
     pendingCancels.add(id);
     syncCancelButtons();
     try {
@@ -201,8 +209,9 @@ export function createTaskPanel({ container, detailContainer, summary, store, de
     const headerActions = [close];
     if (ACTIVE_STATES.has(task.state)) {
       const stop = element("button", { className: "task-cancel",
-        text: t("task.stop", {}, "停止"), attrs: { type: "button",
+        text: stopping(task) ? t("task.stopping", {}, "正在停止…") : t("task.stop", {}, "停止"), attrs: { type: "button",
           "data-task-focus": "stop", "data-task-cancel": String(task.id),
+          "data-task-stopping": String(stopping(task)),
           "aria-label": t("task.stopNamed", { name: task.label || task.id },
             `停止任务 ${task.label || task.id}`) } });
       stop.addEventListener("click", () => cancel(task));
@@ -212,7 +221,7 @@ export function createTaskPanel({ container, detailContainer, summary, store, de
     metadata.append(
       ...detailPair(t("task.meta.id", {}, "任务 ID"), `#${task.id}`),
       ...detailPair(t("task.meta.kind", {}, "类型"), kindLabel(task.kind)),
-      ...detailPair(t("task.meta.state", {}, "状态"), stateLabel(task.state)),
+      ...detailPair(t("task.meta.state", {}, "状态"), taskStateLabel(task)),
       ...detailPair(t("task.meta.session", {}, "会话"), owner
         ? `${owner.projectId} / ${owner.sessionId}` : task.owner_session),
       ...detailPair("Run", task.owner_run_id ? `#${task.owner_run_id}` : "—"),
@@ -261,7 +270,7 @@ export function createTaskPanel({ container, detailContainer, summary, store, de
       element("div", { className: "task-detail-actions" }, headerActions),
       element("header", { className: "task-detail-heading" }, [
         element("h3", { text: taskName(task) }),
-        element("p", { text: `${kindLabel(task.kind)} · ${stateLabel(task.state)}` }),
+        element("p", { text: `${kindLabel(task.kind)} · ${taskStateLabel(task)}` }),
       ]),
       metadata,
       element("section", { className: "task-detail-section" }, [element("h4", {
@@ -323,8 +332,9 @@ export function createTaskPanel({ container, detailContainer, summary, store, de
       const headerChildren = [open];
       if (ACTIVE_STATES.has(item.state)) {
         const cancelButton = element("button", { className: "task-cancel",
-          text: t("task.stop", {}, "停止"), attrs: { type: "button",
+          text: stopping(item) ? t("task.stopping", {}, "正在停止…") : t("task.stop", {}, "停止"), attrs: { type: "button",
             "data-task-focus": `cancel/${item.id}`, "data-task-cancel": String(item.id),
+            "data-task-stopping": String(stopping(item)),
             "aria-label": t("task.stopNamed", { name: item.label || item.id },
               `停止任务 ${item.label || item.id}`) } });
         cancelButton.addEventListener("click", () => cancel(item));
@@ -333,7 +343,7 @@ export function createTaskPanel({ container, detailContainer, summary, store, de
       container.append(element("article", { className: "task-card", attrs: { "data-state": item.state, "data-selected": String(selectedTask() === String(item.id)) } }, [
         element("div", { className: "task-card-header" }, headerChildren),
         element("div", { className: "task-meta" }, [
-          element("span", { text: stateLabel(item.state) }),
+          element("span", { text: taskStateLabel(item) }),
           element("time", { className: "task-time", text: formatRelativeTime(item.started_at || item.created_at) }),
         ]),
       ]));

@@ -14,6 +14,7 @@ typedef struct MdoScheduleExecution {
     uint64 TaskId;
     uint64 AgentRunId;
     MdoAgentRun* Run;
+    bool CancelRequested;
 } MdoScheduleExecution;
 
 typedef struct MdoScheduleExecutorState {
@@ -155,6 +156,36 @@ static bool MdoScheduleExecutorHarvest(size_t* Completed, xwork_error* Error)
     return true;
 }
 
+/* Generic task_cancel callers can bypass the product API. Observe their
+ * requests before harvesting or starting more work; the snapshot owns copied
+ * task data and keeps the runtime's locks out of Agent cancellation. */
+static bool MdoScheduleExecutorForwardTaskCancels(xwork_error* Error)
+{
+    xwork_task_snapshot* Tasks;
+    size_t i;
+    if ( g_MdoScheduleExecutor.ActiveCount == 0u ) return true;
+    Tasks = xworkRuntimeTaskSnapshot(g_MdoScheduleExecutor.Runtime, 0u, Error);
+    if ( Tasks == NULL ) return false;
+    for ( i = 0u; i < g_MdoScheduleExecutor.ActiveCount; ++i ) {
+        MdoScheduleExecution* Execution = &g_MdoScheduleExecutor.Active[i];
+        xwork_task_info Info;
+        if ( Execution->CancelRequested ) continue;
+        xworkTaskInfoInit(&Info);
+        if ( !xworkTaskSnapshotFind(Tasks, Execution->TaskId, &Info) ||
+             Info.eState == XWORK_TASK_CANCELLED ) {
+            if ( !MdoAgentRunCancel(Execution->Run) ) {
+                xworkTaskSnapshotRelease(Tasks);
+                MdoScheduleExecutorError(Error, XWORK_ERROR_CONTEXT,
+                    "cannot cancel a scheduled Agent run");
+                return false;
+            }
+            Execution->CancelRequested = true;
+        }
+    }
+    xworkTaskSnapshotRelease(Tasks);
+    return true;
+}
+
 static bool MdoScheduleExecutorFailClaim(uint64 TaskId, const char* Message,
     xwork_error* Error)
 {
@@ -277,7 +308,8 @@ bool MdoScheduleExecutorPump(int64 Now, size_t* Started, size_t* Completed,
             "schedule executor is stopping");
         goto done;
     }
-    if ( !MdoScheduleExecutorHarvest(&CompletedValue, Error) ) goto done;
+    if ( !MdoScheduleExecutorForwardTaskCancels(Error) ||
+         !MdoScheduleExecutorHarvest(&CompletedValue, Error) ) goto done;
     for ( i = 0u; i < g_MdoScheduleExecutor.Options.MaxClaimsPerPump; ++i ) {
         MdoScheduleClaim Claim;
         if ( !MdoScheduleExecutorGrow() ) {
@@ -336,6 +368,58 @@ bool MdoScheduleExecutorRunNow(const char* ScheduleId,
 done:
     xrtMutexUnlock(g_MdoScheduleExecutor.Lock);
     return Ok;
+}
+
+bool MdoScheduleExecutorCancelTask(uint64 TaskId, bool* Handled,
+    xwork_error* Error)
+{
+    size_t i;
+    bool Ok = true;
+    xworkErrorInit(Error);
+    if ( Handled != NULL ) *Handled = false;
+    if ( TaskId == 0u || Handled == NULL ) {
+        MdoScheduleExecutorError(Error, XWORK_ERROR_INVALID_ARGUMENT,
+            "a task id and cancellation ownership result are required");
+        return false;
+    }
+    if ( !g_MdoScheduleExecutor.Initialized ) return true;
+    xrtMutexLock(g_MdoScheduleExecutor.Lock);
+    for ( i = 0u; i < g_MdoScheduleExecutor.ActiveCount; ++i ) {
+        MdoScheduleExecution* Execution = &g_MdoScheduleExecutor.Active[i];
+        size_t Before;
+        if ( Execution->TaskId != TaskId ) continue;
+        *Handled = true;
+        Before = g_MdoScheduleExecutor.ActiveCount;
+        /* FinishAt waits only after observing a terminal Run. The executor
+         * lock keeps the Run alive and serializes cancellation with harvest. */
+        Ok = MdoScheduleExecutorFinishAt(i, NULL, Error);
+        if ( !Ok || g_MdoScheduleExecutor.ActiveCount != Before ) break;
+        if ( !Execution->CancelRequested ) {
+            Ok = MdoAgentRunCancel(Execution->Run);
+            if ( Ok ) Execution->CancelRequested = true;
+            else MdoScheduleExecutorError(Error, XWORK_ERROR_CONTEXT,
+                "cannot cancel a scheduled Agent run");
+        }
+        break;
+    }
+    xrtMutexUnlock(g_MdoScheduleExecutor.Lock);
+    return Ok;
+}
+
+bool MdoScheduleExecutorTaskCancellationRequested(uint64 TaskId)
+{
+    size_t i;
+    bool Requested = false;
+    if ( !g_MdoScheduleExecutor.Initialized || TaskId == 0u ) return false;
+    xrtMutexLock(g_MdoScheduleExecutor.Lock);
+    for ( i = 0u; i < g_MdoScheduleExecutor.ActiveCount; ++i ) {
+        if ( g_MdoScheduleExecutor.Active[i].TaskId == TaskId ) {
+            Requested = g_MdoScheduleExecutor.Active[i].CancelRequested;
+            break;
+        }
+    }
+    xrtMutexUnlock(g_MdoScheduleExecutor.Lock);
+    return Requested;
 }
 
 static int32 MdoScheduleExecutorThread(ptr Data)

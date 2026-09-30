@@ -212,6 +212,13 @@ bool MdoScheduleExecutorPump(int64 Now, size_t* Started, size_t* Completed,
 bool MdoScheduleExecutorRunNow(const char* ScheduleId,
     uint64 ExpectedRevision, int64 Now, uint64* TaskId,
     uint64* AgentRunId, xwork_error* Error);
+/* Cancels an owned Agent run cooperatively, without declaring its task done.
+ * Handled distinguishes executor-owned tasks from generic runtime tasks. A run
+ * already completed is harvested with its actual result. Repeated requests
+ * are idempotent; no model/tool completion is awaited under the executor lock. */
+bool MdoScheduleExecutorCancelTask(uint64 TaskId, bool* Handled,
+    xwork_error* Error);
+bool MdoScheduleExecutorTaskCancellationRequested(uint64 TaskId);
 bool MdoScheduleExecutorGetSnapshot(MdoScheduleExecutorSnapshot* Snapshot);
 
 MdoScheduleCatalog* MdoScheduleCatalogSnapshot(xwork_error* Error);

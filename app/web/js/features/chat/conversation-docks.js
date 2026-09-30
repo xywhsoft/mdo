@@ -47,7 +47,8 @@ function taskCard(onOpenTasks) {
         row = { node: element("li", {}, [state, label]), state, label };
         rows.set(key, row);
       }
-      const state = STATE_KEYS[task.state]
+      const state = STATE_KEYS[task.state] && task.stop_requested
+        ? t("task.stopping") : STATE_KEYS[task.state]
         ? t(STATE_KEYS[task.state]) : task.state || "";
       const label = task.label || t("dock.task.fallback", { id: task.id });
       if (row.state.textContent !== state) row.state.textContent = state;

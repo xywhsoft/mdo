@@ -1060,6 +1060,7 @@
   "task.backToList": "返回任务列表",
   "task.detail.loading": "正在载入任务详情…",
   "task.stop": "停止",
+  "task.stopping": "正在停止…",
   "task.stopNamed": "停止任务 {name}",
   "task.meta.id": "任务 ID",
   "task.meta.kind": "类型",

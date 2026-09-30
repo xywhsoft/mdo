@@ -119,6 +119,148 @@ static xllm_result Complete(void *data, const xllm_request *request,
     return *response != NULL ? XLLM_RESULT_OK : XLLM_RESULT_ERROR;
 }
 
+typedef struct CancelProbe {
+    xatomic32 Entered;
+    xatomic32 SawCancel;
+    xatomic32 Release;
+    bool Immediate;
+} CancelProbe;
+
+static xllm_result CancelComplete(void *data, const xllm_request *request,
+    const xllm_stream_callbacks *callbacks, xllm_response **response,
+    xllm_error *error) {
+    CancelProbe *probe = (CancelProbe*)data;
+    unsigned i;
+    (void)callbacks; (void)error;
+    *response = NULL;
+    xrtAtomic32Store(&probe->Entered, 1u, XMEMORY_RELEASE);
+    if (probe->Immediate) {
+        *response = Response("completed before stop");
+        return *response != NULL ? XLLM_RESULT_OK : XLLM_RESULT_ERROR;
+    }
+    for (i = 0u; i < 1000u; ++i) {
+        if (xrtCancelRequested(request->pCancel)) {
+            xrtAtomic32Store(&probe->SawCancel, 1u, XMEMORY_RELEASE);
+            if (xrtAtomic32Load(&probe->Release, XMEMORY_ACQUIRE) != 0u)
+                return XLLM_RESULT_CANCELLED;
+        }
+        xrtSleep(2u);
+    }
+    return XLLM_RESULT_ERROR;
+}
+
+static bool WaitAtomic(xatomic32 *value) {
+    unsigned i;
+    for (i = 0u; i < 500u; ++i) {
+        if (xrtAtomic32Load(value, XMEMORY_ACQUIRE) != 0u) return true;
+        xrtSleep(2u);
+    }
+    return false;
+}
+
+static bool ExecutorCancellationProbe(xwork_runtime *runtime) {
+    const int64 now = 1700000000000000LL;
+    MdoScheduleExecutorOptions executor;
+    MdoScheduleCreateOptions create;
+    CancelProbe probe;
+    xwork_error error;
+    xwork_task_snapshot *tasks = NULL;
+    xwork_task_info task;
+    uint64 task_id = 0u, run_id = 0u;
+    size_t started = 0u, completed = 0u;
+    unsigned mode, i;
+    bool handled = true, ok = false;
+    memset(&probe, 0, sizeof(probe));
+    xrtAtomic32Init(&probe.Entered, 0u);
+    xrtAtomic32Init(&probe.SawCancel, 0u);
+    xrtAtomic32Init(&probe.Release, 0u);
+    MdoScheduleExecutorOptionsInit(&executor);
+    executor.Automatic = false;
+    executor.OnModelComplete = CancelComplete;
+    executor.ModelUserData = &probe;
+    if (!MdoScheduleExecutorInit(runtime, &executor, &error) ||
+        !MdoScheduleExecutorCancelTask(UINT64_MAX, &handled, &error) || handled ||
+        MdoScheduleExecutorCancelTask(0u, &handled, &error) ||
+        error.eCode != XWORK_ERROR_INVALID_ARGUMENT) goto done;
+    /* Model cancellation, generic task_cancel forwarding, and completion
+     * before the user stops all run through the real Agent worker. */
+    for (mode = 0u; mode < 3u; ++mode) {
+        const char *id = mode == 0u ? "cancel-model" :
+            (mode == 1u ? "cancel-generic" : "cancel-completed");
+        xrtAtomic32Store(&probe.Entered, 0u, XMEMORY_RELEASE);
+        xrtAtomic32Store(&probe.SawCancel, 0u, XMEMORY_RELEASE);
+        xrtAtomic32Store(&probe.Release, 0u, XMEMORY_RELEASE);
+        probe.Immediate = mode == 2u;
+        MdoScheduleCreateOptionsInit(&create);
+        create.Id = id; create.Label = id;
+        create.ProjectId = "project-alpha";
+        create.Input = "bounded cancellation";
+        create.AgentId = "mdo.default";
+        create.StartAt = now + 60000000LL;
+        create.Enabled = false;
+        if (!MdoScheduleCreate(&create, NULL, &error) ||
+            !MdoScheduleExecutorRunNow(id, 1u, now, &task_id, &run_id, &error) ||
+            !WaitAtomic(&probe.Entered)) goto done;
+        if (mode == 2u) {
+            MdoAgentRunInfo info;
+            for (i = 0u; i < 500u; ++i) {
+                memset(&info, 0, sizeof(info)); info.Size = sizeof(info);
+                if (!MdoAgentRunGetInfo(g_MdoScheduleExecutor.Active[0].Run,
+                        &info)) goto done;
+                if (info.Run.eState == XWORK_RUN_SUCCEEDED) break;
+                xrtSleep(2u);
+            }
+            if (i == 500u || !MdoScheduleExecutorCancelTask(task_id,
+                    &handled, &error) || !handled ||
+                g_MdoScheduleExecutor.ActiveCount != 0u ||
+                MdoScheduleExecutorTaskCancellationRequested(task_id)) goto done;
+        } else {
+            if (mode == 0u) {
+                if (!MdoScheduleExecutorCancelTask(task_id, &handled, &error) ||
+                    !handled || !MdoScheduleExecutorCancelTask(task_id,
+                        &handled, &error) || !handled) goto done;
+                tasks = xworkRuntimeTaskSnapshot(runtime, 0u, &error);
+                xworkTaskInfoInit(&task);
+                if (tasks == NULL || !xworkTaskSnapshotFind(tasks, task_id, &task) ||
+                    task.eState != XWORK_TASK_RUNNING ||
+                    !MdoScheduleExecutorTaskCancellationRequested(task_id) ||
+                    ExecutorLeaseAvailable("project-alpha")) goto done;
+                xworkTaskSnapshotRelease(tasks); tasks = NULL;
+            } else {
+                if (!xworkRuntimeCancelTask(runtime, task_id, &error) ||
+                    !MdoScheduleExecutorPump(now, &started, &completed, &error) ||
+                    !MdoScheduleExecutorTaskCancellationRequested(task_id)) goto done;
+            }
+            if (!WaitAtomic(&probe.SawCancel)) goto done;
+            printf("schedule_cancel_%s_requested=1\n", mode == 0u ? "model" : "generic");
+            xrtAtomic32Store(&probe.Release, 1u, XMEMORY_RELEASE);
+            completed = 0u;
+            for (i = 0u; i < 500u && completed == 0u; ++i) {
+                xrtSleep(2u);
+                if (!MdoScheduleExecutorPump(now, &started, &completed, &error)) goto done;
+            }
+            if (completed != 1u || g_MdoScheduleExecutor.ActiveCount != 0u ||
+                !ExecutorLeaseAvailable("project-alpha")) goto done;
+        }
+        tasks = xworkRuntimeTaskSnapshot(runtime, 0u, &error);
+        xworkTaskInfoInit(&task);
+        if (tasks == NULL || !xworkTaskSnapshotFind(tasks, task_id, &task) ||
+            task.eState != (mode == 2u ? XWORK_TASK_SUCCEEDED : XWORK_TASK_CANCELLED) ||
+            !MdoScheduleExecutorCancelTask(task_id, &handled, &error) || handled)
+            goto done;
+        xworkTaskSnapshotRelease(tasks); tasks = NULL;
+        printf("schedule_cancel_%s_finished=1\n", mode == 2u ? "completed" :
+            (mode == 0u ? "model" : "generic"));
+    }
+    ok = true;
+done:
+    xrtAtomic32Store(&probe.Release, 1u, XMEMORY_RELEASE);
+    xworkTaskSnapshotRelease(tasks);
+    MdoScheduleExecutorUnit();
+    if (!ok) printf("cancel_probe_error=%s\n", error.sMessage);
+    return ok;
+}
+
 static bool ExecutorOwnerLeaseProbe(xwork_runtime *runtime) {
     const int64 start = 1700000000000000LL;
     MdoAgentSessionOptions options;
@@ -263,6 +405,10 @@ void ServiceInit(XS_HostInfo *host) {
     }
     if (getenv("MDO_SCHEDULE_OWNER_ONLY") != NULL) {
         if (!ExecutorOwnerLeaseProbe(runtime)) printf("owner_lease_error=1\n");
+        printf("probe_done=1\n"); goto done;
+    }
+    if (getenv("MDO_SCHEDULE_CANCEL_ONLY") != NULL) {
+        if (!ExecutorCancellationProbe(runtime)) printf("cancel_error=1\n");
         printf("probe_done=1\n"); goto done;
     }
     MdoScheduleCreateOptionsInit(&create);
@@ -423,10 +569,13 @@ def write_site(site: Path, memory_enabled: bool = True) -> None:
     }]}), encoding="utf-8")
 
 
-def run_probe(host: Path, site: Path, home: Path, owner_only: bool = False) -> str:
+def run_probe(host: Path, site: Path, home: Path, owner_only: bool = False,
+              cancel_only: bool = False) -> str:
     env = os.environ.copy()
     if owner_only:
         env["MDO_SCHEDULE_OWNER_ONLY"] = "1"
+    if cancel_only:
+        env["MDO_SCHEDULE_CANCEL_ONLY"] = "1"
     process = subprocess.Popen(
         [str(host), "xs.json", "--", "--home", str(home)], cwd=site,
         stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
@@ -476,6 +625,19 @@ def main() -> int:
         owner_site = base / "owner-site"
         owner_home = base / "owner-home"
         write_site(owner_site, memory_enabled=False)
+        cancel_home = base / "cancel-home"
+        cancel_output = run_probe(host, site, cancel_home, cancel_only=True)
+        assert "cancel_error=" not in cancel_output, cancel_output
+        for label in ("model_requested", "generic_requested", "model_finished",
+                      "generic_finished", "completed_finished"):
+            assert f"schedule_cancel_{label}=1" in cancel_output, cancel_output
+        for schedule, result in (("cancel-model", -2), ("cancel-generic", -2),
+                                 ("cancel-completed", 0)):
+            records = [json.loads(line) for line in
+                (cancel_home / f"schedules/history/{schedule}.jsonl").read_text(
+                    encoding="utf-8").splitlines()]
+            assert len(records) == 1 and records[0]["result"] == result, records
+            assert records[0]["agent_run_id"] > 0, records
         owner_output = run_probe(host, owner_site, owner_home, owner_only=True)
         assert "owner_lease_error=" not in owner_output, owner_output
         for label in ("creation", "failed_start", "retained", "released", "shutdown"):

@@ -138,6 +138,13 @@ export function readArtifactPreview(artifact) {
 export async function cancelTask(value) {
   const id = taskId(value);
   const response = await api.delete(`/tasks/${id}`);
+  // The acknowledged snapshot remains authoritative even if the subsequent
+  // read fails. Do not make an accepted stop look available for resubmission.
+  const list = tasksStore.get().data;
+  if (list?.items) tasksStore.setData({ ...list,
+    items: list.items.map((item) => String(item.id) === id ? response.data : item) });
+  const detail = taskDetailStore.get().data;
+  if (detail?.id === id) taskDetailStore.setData({ ...detail, detail: response.data });
   await loadTasks();
   if (selectedTaskId === id) await refreshSelectedTask();
   return response.data;

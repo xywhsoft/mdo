@@ -244,7 +244,14 @@ length.
 `/tasks/{task}/events?after={revision}&limit={count}` replays the task-local
 state window. The maximum page is 64 events. Cancellation through
 `DELETE /tasks/{task}` is idempotent and returns the current task snapshot, including
-its new revision and ETag.
+its revision and ETag. For a scheduled task owned by the product executor it
+requests cancellation of the actual Agent Run. The task stays `running` until
+the Run exits; `stop_requested: true` lets clients display "Stopping" and
+disable repeat activation. A Run already completed is harvested with its actual
+result. The ETag includes the stop request bit even before the xwork task
+revision changes. An acknowledged snapshot must be retained if a later refresh
+fails. Cancelled terminal tasks also report `stop_requested: true`; other
+generic task kinds retain their existing xwork cancellation semantics.
 
 ## Approvals and interrupted-run recovery
 

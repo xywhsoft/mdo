@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="zh-CN">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>mdo task cancellation probe</title>
+<link rel="stylesheet" href="/app/web/css/app.css">
+<style>
+body { height: auto; overflow: auto; padding: 12px; }
+#tasks-panel { overflow: auto; max-height: 70vh; }
+#result { white-space: pre-wrap; overflow-wrap: anywhere; }
+</style>
+<button id="finish">完成真实退出阶段（模拟）</button>
+<pre id="result">载入生产组件…</pre>
+<div id="conversation-docks" class="conversation-docks"></div>
+<section id="tasks-panel" role="tabpanel">
+  <div id="summary"></div><div id="tasks"></div><div id="task-detail"></div>
+</section>
+<script type="module">
+import { loadLocale } from "/app/web/js/i18n.js";
+import { createResourceStore } from "/app/web/js/state/store.js";
+import { createTaskPanel } from "/app/web/js/features/tasks/task-panel.js";
+import { createConversationDocks } from "/app/web/js/features/chat/conversation-docks.js";
+import { loadTasks, tasksStore, taskDetailStore, artifactPreviewStore,
+  selectTask, refreshSelectedTask } from "/app/web/js/state/tasks.js";
+
+await loadLocale("zh-CN");
+const task = { id: 9001, kind: "scheduled", state: "running", terminal: false,
+  stop_requested: false, revision: 1, label: "等待退出的计划任务",
+  owner_session: "/tmp/home/sessions/qa/cancel/snapshot.json" };
+const originalFetch = window.fetch.bind(window);
+let deletes = 0, acknowledge;
+const reply = (data) => Response.json({ ok: true, data });
+window.fetch = async (input, options = {}) => {
+  const path = String(input);
+  if (path === "/api/v1/tasks/9001" && options.method === "DELETE") {
+    deletes += 1;
+    await new Promise((resolve) => { acknowledge = resolve; });
+    task.stop_requested = true;
+    return reply({ ...task });
+  }
+  if (path === "/api/v1/tasks") return reply({ items: [{ ...task }], total: 1 });
+  if (path === "/api/v1/tasks/9001") return reply({ ...task });
+  if (path.startsWith("/api/v1/tasks/9001/output?")) {
+    const chunk = { data: "", start: 0, next: 0, dropped: false };
+    return reply({ complete: task.terminal, stdout: chunk, stderr: chunk, result: chunk });
+  }
+  if (path.startsWith("/api/v1/tasks/9001/events?"))
+    return reply({ items: [], next_revision: task.revision, history_lost: false });
+  if (path === "/api/v1/artifacts") return reply({ items: [] });
+  return originalFetch(input, options);
+};
+const empty = () => createResourceStore({ items: [] });
+createTaskPanel({ container: document.querySelector("#tasks"),
+  detailContainer: document.querySelector("#task-detail"),
+  summary: document.querySelector("#summary"), store: tasksStore,
+  detailStore: taskDetailStore, previewStore: artifactPreviewStore });
+const navigation = { get: () => ({ view: "workspace", projectId: "qa", sessionId: "cancel" }),
+  subscribe(listener) { listener(this.get()); return () => {}; } };
+createConversationDocks({ container: document.querySelector("#conversation-docks"),
+  navigation, tasksStore, approvalsStore: empty(), runsStore: empty(),
+  asksStore: createResourceStore({ projectId: "qa", sessionId: "cancel", loaded: true, items: [] }),
+  todoStore: createResourceStore({ projectId: "qa", sessionId: "cancel", items: [] }),
+  onOpenTasks() {}, onChanged: async () => {} });
+await loadTasks();
+await selectTask(9001);
+const stop = document.querySelector('#task-detail [data-task-cancel]');
+stop.focus();
+stop.click(); stop.click();
+await new Promise((resolve) => setTimeout(resolve, 0));
+const pendingGuard = deletes === 1 && stop.getAttribute("aria-disabled") === "true" &&
+  document.activeElement === stop;
+acknowledge();
+for (let i = 0; i < 50 && !taskDetailStore.get().data?.detail.stop_requested; i += 1)
+  await new Promise((resolve) => setTimeout(resolve, 10));
+await loadTasks(); await refreshSelectedTask();
+const stoppingButton = document.querySelector('#task-detail [data-task-cancel]');
+stoppingButton.click();
+document.querySelector('#tasks [data-task-cancel]').click();
+const stoppingGuard = deletes === 1 && stoppingButton.getAttribute("aria-disabled") === "true";
+const focusKept = document.activeElement === stoppingButton;
+const truthfulState = taskDetailStore.get().data.detail.state === "running" &&
+  !taskDetailStore.get().data.detail.terminal &&
+  stoppingButton.textContent === "正在停止…" &&
+  document.querySelector(".conversation-dock-state").textContent === "正在停止…";
+const result = document.querySelector("#result");
+function report(extra = {}) {
+  const passed = pendingGuard && stoppingGuard && focusKept && truthfulState &&
+    document.documentElement.scrollWidth <= innerWidth && extra.finished !== false;
+  result.dataset.passed = String(passed);
+  result.textContent = JSON.stringify({ passed, pendingGuard, stoppingGuard,
+    focusKept, truthfulState, deletes, ...extra }, null, 2);
+}
+report();
+document.querySelector("#finish").addEventListener("click", async () => {
+  // Server completion is deliberately separate from the acknowledged request.
+  task.state = "cancelled"; task.terminal = true; task.revision += 1;
+  await loadTasks(); await refreshSelectedTask();
+  const finished = !document.querySelector('[data-task-cancel]') &&
+    !document.querySelector(".conversation-dock-state") &&
+    document.querySelector("#task-detail").textContent.includes("已停止");
+  report({ finished });
+});
+</script>
+</html>

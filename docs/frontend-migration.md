@@ -4,6 +4,42 @@
 
 完成判据及尚缺的打包页证据见 [前端操作体验完成审计](frontend-completion-audit.md)。本文件继续记录每次实现和验证的细节。
 
+## 2026-09-30：计划任务停止接到实际 Agent Run
+
+原任务面板调用 xwork 的通用 task 取消，只改变 scheduled task 的状态，未取消执行器
+持有的 Agent Run。现优先由执行器处理自己的 task ID，并把取消传给模型和工具。
+取消请求与收割在同一个生命周期锁下串行；仍运行的 Run 不等待退出、不提前标记
+terminal，已完成的 Run 按真实结果归档。直接 xwork 取消仍由下一次 pump 转发。
+
+task API 新增 `stop_requested`，强 ETag 同时反映该位。列表、详情与对话停靠卡在
+等待退出时显示三语“正在停止…”，保留按钮焦点并拦截重复点击；实际退出后才显示
+“已停止”。停止响应的确认快照先写入前端状态，随后的 GET 失败不会丢失已接受状态。
+没有修改 xrt、xs 或 xwork 的 API/ABI。
+
+真实 xs/TCC 运行探针覆盖模型取消令牌、等待实际退出期间的 RUNNING 和项目租约、
+重复停止、直接 task_cancel 转发、取消历史唯一性，以及完成后停止保留成功结果。
+HTTP 探针另外让实际 `ask_user` 工具处于等待中，验证 DELETE 使工具退出、待询问
+清空，并写唯一 cancelled 历史。新增两项 Node 测试验证确认后读取失败和明确拒绝。
+
+隔离候选单文件 Home `.build/mdo-packed-docks-ojmxka25` 的真实任务面板停止了正在
+等待回答的 `cancel-packed-ask`：先显示“正在停止…”，随后活动数归零，历史中只有
+task/run 3 的 cancelled 结果，文本为 `user question was cancelled`，浏览器脚本
+错误为空。生产组件夹具 `tests/fixtures/task-cancellation-browser.html` 使用相同
+打包 CSS/JS，在 320×350 验证重复激活只发送一次 DELETE、确认后持续停止提示、
+轮询重绘保留按钮焦点，以及模拟实际退出后移除停靠卡并显示已停止。该夹具的
+退出阶段是模拟状态，不代替前述真实模型/工具的执行证据。
+
+最终根目录单文件包在另一隔离 Home `.build/mdo-packed-docks-xc9fw1y_` 复核相同
+320×350 夹具，确认新的停止响应快照合并后五项断言及模拟退出均通过，脚本错误为空。
+
+本轮 Linux 全量复验遇到宿主环境故障：C 盘只剩约 44 MiB，WSL 写入失败后文件系统
+变为只读，后续 `/bin/bash` 启动报 I/O error。故不能报告 Linux 门禁通过；须恢复
+环境后重跑。Windows 编译临时目录切到 `.build/compiler-temp` 后，完整有界门禁
+通过 114 项 Python、115 项 Node、77 个前端模块解析、严格 C11、21 个运行探针、
+确定性打包、便携 WebView2 Home 与 20 秒启动。根目录 `mdo.exe` SHA-256 为
+`34406ef03a73a2fe2d98f2224373d5e199300e8172579d9d8e9ba1beca948a4a`。
+实体移动端和 macOS 仍待验，未做压力或高负载测试。
+
 ## 2026-09-30：计划认领与运行拥有者保持连续租约
 
 到期和显式认领现在在游标同步前保留完整 catalog 的项目集合，再核对 generation 与就绪状态；空闲读取仍无写入。认领成功把项目租约转移到 manager，直到结果历史发布才释放，不留下 Agent 创建前的交接空窗。未完成 mdo claim 上限为 64，提前分配与检查，不依赖 runtime task 是否被调用者释放。Finish 只处理仍有 mdo claim 的任务，重复完成不会追加历史；统一 task 已 cancelled 时按 cancelled 记录。

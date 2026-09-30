@@ -1060,6 +1060,7 @@
   "task.backToList": "К списку задач",
   "task.detail.loading": "Загрузка сведений о задаче…",
   "task.stop": "Остановить",
+  "task.stopping": "Останавливается…",
   "task.stopNamed": "Остановить задачу {name}",
   "task.meta.id": "ID задачи",
   "task.meta.kind": "Тип",

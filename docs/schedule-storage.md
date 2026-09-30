@@ -70,6 +70,17 @@ bootstrap 创建一个长生命周期 schedule executor。生产默认使用一�
 
 完成后，executor 把 Agent run result 写回原 scheduled task，并向 `history/<id>.jsonl` 追加 task ID、Agent run ID、计划时间、完成时间、result 和有界最终文本。shutdown 先停止 timer，再取消并回收活动 Agent run，最后将对应 scheduled task 记为 cancelled；这发生在 schedule、module、memory 和 runtime manager 释放之前。
 
+任务面板停止现通过 `MdoScheduleExecutorCancelTask` 向实际 Run 的取消令牌发出请求，
+不提前把 product-owned task 标成 terminal。重复请求幂等；在执行器锁内只检查终态、
+保留 Run 生命周期和发出取消，不等待尚在运行的模型/工具完成。已完成但尚未收割
+的 Run 按真实成功/失败结果归档；取消中保持 Agent 与 claim 的项目租约，直到实际
+退出、回收和历史发布。API 返回 `stop_requested`，前端列表、详情和对话停靠卡显示
+“正在停止…”，退出后才显示“已停止”。停止已接受后的读取失败保留已确认快照。
+
+直接调用 xwork `task_cancel` 的嵌入端/工具仍使用原有立即标记语义；下一次 pump
+通过公开 task 快照向对应 Agent Run 传递取消。默认轮询间隔 250 ms。这一兼容路径
+不改变 xwork 的 task API/ABI，不应把其提前 terminal 的标记视为 Run 已退出。
+
 ## 公开操作
 
 - `MdoScheduleCreate` 创建定义；ID 为空时生成 XID。
@@ -81,6 +92,7 @@ bootstrap 创建一个长生命周期 schedule executor。生产默认使用一�
 - `MdoScheduleHistoryRecent` 有界读取最近 32 条持久完成记录；文本以 UTF-8 边界截断为预览，无历史时不创建 Home。
 - `MdoScheduleCatalogSnapshot` 返回引用计数不可变快照和恢复 diagnostics。
 - `MdoScheduleExecutorGetSnapshot` 返回活动数、累计 claim/completion/failure 和最近错误。
+- `MdoScheduleExecutorCancelTask` 取消持有的 Run，返回是否由执行器处理，供通用 task API 安全回退；`MdoScheduleExecutorTaskCancellationRequested` 提供进行中的请求状态。
 
 计划任务的 HTTP 资源和 UI 编辑器已接入；执行历史以有界最近记录页展示。更早历史的分页仍需在后续阶段实现。
 
@@ -98,8 +110,11 @@ bootstrap 创建一个长生命周期 schedule executor。生产默认使用一�
 验证失败创建/启动清理、模型回调、产品 Run 回收后的直接 runtime 引用保留，以及
 关闭时最终 Agent 拥有者已释放、历史尚未写入的空窗仍被 claim 保护。
 
-任务面板取消计划 task 到实际 Agent Run 的停止链尚未接通，本阶段不将历史 cancelled
-记录作为实际 Agent 已停止的证据；完整项目清除事务与跨重启恢复也仍待实现。
+取消执行探针现验证模型真正收到取消令牌、等待模型退出期间 task 仍为 RUNNING、
+项目租约仍保留、重复请求与重复历史保护、直接 xwork 取消的 pump 转发，以及已完成
+Run 的真实成功结果。HTTP 探针通过实际 `ask_user` 等待工具验证退出和唯一 cancelled
+历史。打包组件夹具在 320×350 验证请求中/退出后的显示、重复点击与焦点。
+完整项目清除事务、跨重启恢复及计划运行中询问的专用展示入口仍待实现。
 
 Windows/Linux 有界发布门禁各通过 114 项 Python、113 项 Node、77 个前端模块解析、
 严格 C11、21 个运行探针与确定性打包；Windows 另通过便携 WebView2 Home 和 20 秒

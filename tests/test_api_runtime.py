@@ -69,6 +69,7 @@ class ModelHandler(BaseHTTPRequestHandler):
     ask_sent = False
     ask_cancel_sent = False
     ask_verify_sent = False
+    schedule_cancel_sent = False
 
     def log_message(self, format: str, *args: object) -> None:
         del format, args
@@ -132,6 +133,14 @@ class ModelHandler(BaseHTTPRequestHandler):
                     "call_id": "ask-cancel-call",
                     "name": "ask_user",
                     "arguments": '{"question":"Cancel this question?"}',
+                }]
+            if "SCHEDULE cancel probe" in json.dumps(payload) and not ModelHandler.schedule_cancel_sent:
+                ModelHandler.schedule_cancel_sent = True
+                output = [{
+                    "type": "function_call",
+                    "call_id": "schedule-cancel-call",
+                    "name": "ask_user",
+                    "arguments": '{"question":"Cancel this scheduled tool?"}',
                 }]
             if "Answer the pending question." in json.dumps(payload) and not ModelHandler.ask_verify_sent:
                 ModelHandler.ask_verify_sent = True
@@ -246,6 +255,12 @@ static bool MdoApiProbeLeaseControl(XS_HttpReq* Request)
             MDO_PROJECT_LEASE_EXCLUSIVE, &Error);
         Ok = Exclusive != NULL;
         MdoProjectLeaseRelease(Exclusive);
+    } else if ( MdoApiViewEqualText(Target,
+            "/__fixture/project-lease/schedule-ask") ) {
+        MdoAskInfo Pending;
+        size_t Count = 0u;
+        Ok = MdoAskList("api-project", "cancel-api", &Pending, 1u, &Count) &&
+            MdoApiValueSetUInt(Data, "count", Count);
     } else if ( MdoApiViewEqualText(Target,
             "/__fixture/project-lease/checkpoint") ) {
         Ok = MdoApiValueSetUInt(Data, "checks", xrtAtomic32Load(
@@ -871,6 +886,7 @@ def run_probe(host: Path) -> None:
         ModelHandler.ask_sent = False
         ModelHandler.ask_cancel_sent = False
         ModelHandler.ask_verify_sent = False
+        ModelHandler.schedule_cancel_sent = False
         model_thread.start()
         environment = os.environ.copy()
         environment["USERPROFILE"] = str(base)
@@ -4084,6 +4100,58 @@ def run_probe(host: Path) -> None:
                     port, "DELETE", manual_path,
                     headers={"If-Match": manual_after_etag})
                 assert status == 200, (status, body)
+
+                cancel_definition = dict(manual_definition)
+                cancel_definition.update({
+                    "id": "cancel-api", "label": "Cancelled API schedule",
+                    "input": "SCHEDULE cancel probe",
+                })
+                status, headers, body = request(port, "POST", "/api/v1/schedules",
+                    body=json.dumps(cancel_definition).encode(),
+                    headers={"Content-Type": "application/json"})
+                assert status == 201, (status, body)
+                cancel_schedule_path = "/api/v1/schedules/cancel-api"
+                status, _, body = request(port, "POST", cancel_schedule_path + "/run",
+                    headers={"If-Match": headers["etag"]})
+                assert status == 202, (status, body)
+                scheduled_run = json.loads(body)["data"]
+                scheduled_task_path = f'/api/v1/tasks/{scheduled_run["task_id"]}'
+                # The fixture reads the real ask manager, proving cancellation
+                # reaches an executing tool rather than only a task marker.
+                deadline = time.monotonic() + 5.0
+                while time.monotonic() < deadline:
+                    count = json.loads(request(port, "GET",
+                        "/__fixture/project-lease/schedule-ask")[2])["data"]["count"]
+                    if count == 1: break
+                    time.sleep(0.02)
+                assert count == 1, count
+                status, headers, body = request(port, "GET", scheduled_task_path)
+                before_stop = json.loads(body)["data"]
+                assert status == 200 and before_stop["state"] == "running", body
+                assert before_stop["stop_requested"] is False, before_stop
+                before_stop_etag = headers["etag"]
+                for _ in range(2):
+                    status, headers, body = request(port, "DELETE", scheduled_task_path)
+                    stopped = json.loads(body)["data"]
+                    assert status == 200 and stopped["stop_requested"] is True, body
+                    assert stopped["state"] in {"running", "cancelled"}, stopped
+                    if stopped["state"] == "running":
+                        assert stopped["terminal"] is False, stopped
+                        assert headers["etag"] != before_stop_etag, headers
+                deadline = time.monotonic() + 5.0
+                while time.monotonic() < deadline:
+                    status, _, body = request(port, "GET", cancel_schedule_path + "/history")
+                    cancel_history = json.loads(body)["data"]["items"]
+                    if cancel_history: break
+                    time.sleep(0.02)
+                assert status == 200 and len(cancel_history) == 1, (status, body)
+                assert cancel_history[0]["result"] == "cancelled", cancel_history
+                assert cancel_history[0]["task_id"] == scheduled_run["task_id"], cancel_history
+                assert cancel_history[0]["agent_run_id"] == scheduled_run["agent_run_id"], cancel_history
+                assert json.loads(request(port, "GET",
+                    "/__fixture/project-lease/schedule-ask")[2])["data"]["count"] == 0
+                status, _, body = request(port, "GET", scheduled_task_path)
+                assert status == 200 and json.loads(body)["data"]["state"] == "cancelled", body
 
                 status, headers, body = request(
                     port, "PATCH", session_path,

@@ -1060,6 +1060,7 @@
   "task.backToList": "Back to tasks",
   "task.detail.loading": "Loading task details…",
   "task.stop": "Stop",
+  "task.stopping": "Stopping…",
   "task.stopNamed": "Stop task {name}",
   "task.meta.id": "Task ID",
   "task.meta.kind": "Type",
