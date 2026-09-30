@@ -4,6 +4,7 @@
 #include "../../include/mdo/home.h"
 #include "../../include/mdo/config.h"
 #include "../../include/mdo/memory.h"
+#include "../../include/mdo/project_lifecycle.h"
 #include "internal.h"
 
 #define MDO_MEMORY_SCHEMA_VERSION 1u
@@ -46,6 +47,7 @@ struct MdoMemorySnapshot {
 
 typedef struct MdoMemoryAgentBinding {
     xatomic32 Refs;
+    MdoProjectLease* ProjectLease;
     char ProjectId[MDO_MEMORY_PROJECT_CAPACITY];
     char SessionId[MDO_MEMORY_PROJECT_CAPACITY];
 } MdoMemoryAgentBinding;
@@ -764,6 +766,7 @@ bool MdoMemoryInternalImportEmpty(
     size_t i;
     size_t Published = 0u;
     uint64 Current = 0u;
+    MdoProjectLease* Leases[MDO_MEMORY_MAX_ENTRIES + 1u] = { 0 };
     bool Ok = false;
     xworkErrorInit(Error);
     if ( !MdoMemoryImportCandidatesValid(Stores, StoreCount) ||
@@ -775,7 +778,16 @@ bool MdoMemoryInternalImportEmpty(
             "invalid memory directory import request");
         return false;
     }
-    if ( !MdoMemoryInternalTransferBegin(&Current, Error) ) return false;
+    /* Reserve the complete project set before the memory lock, writer file,
+     * audit, or first store publication. Partial acquisition writes nothing.
+     * Every lease remains held until publication or rollback has finished. */
+    for ( i = 0u; i < StoreCount; ++i ) {
+        if ( Stores[i].Scope != MDO_MEMORY_PROJECT ) continue;
+        Leases[i] = MdoProjectLeaseAcquire(Stores[i].ProjectId,
+            MDO_PROJECT_LEASE_SHARED, Error);
+        if ( Leases[i] == NULL ) goto done_leases;
+    }
+    if ( !MdoMemoryInternalTransferBegin(&Current, Error) ) goto done_leases;
     if ( ExpectedGeneration != UINT64_MAX &&
          ExpectedGeneration != Current ) {
         MdoMemoryError(Error, XWORK_ERROR_CONTEXT,
@@ -821,6 +833,8 @@ rollback:
 done:
     if ( Generation != NULL ) *Generation = Current;
     MdoMemoryInternalTransferEnd();
+done_leases:
+    for ( i = 0u; i < StoreCount; ++i ) MdoProjectLeaseRelease(Leases[i]);
     return Ok;
 }
 
@@ -1641,6 +1655,7 @@ static void MdoMemoryBindingRelease(void* UserData)
     Previous = xrtAtomic32FetchSub(&Binding->Refs, 1u, XMEMORY_ACQ_REL);
     if ( Previous > 1u ) return;
     if ( Previous == 0u ) abort();
+    MdoProjectLeaseRelease(Binding->ProjectLease);
     memset(Binding, 0, sizeof(*Binding));
     xrtFree(Binding);
 }
@@ -1673,6 +1688,14 @@ bool MdoMemoryAgentBind(xwork_agent* Agent, const char* ProjectId,
         ProjectId != NULL ? ProjectId : "");
     snprintf(Binding->SessionId, sizeof(Binding->SessionId), "%s",
         SessionId != NULL ? SessionId : "");
+    if ( Binding->ProjectId[0] != '\0' ) {
+        Binding->ProjectLease = MdoProjectLeaseAcquire(Binding->ProjectId,
+            MDO_PROJECT_LEASE_SHARED, Error);
+        if ( Binding->ProjectLease == NULL ) {
+            MdoMemoryBindingRelease(Binding);
+            return false;
+        }
+    }
     MdoMemoryDefinitions(Definitions, Binding, MdoMemoryBindingRef,
         MdoMemoryBindingRelease);
     Ok = xworkAgentReplaceToolsBySource(Agent, MDO_MEMORY_TOOL_SOURCE,
@@ -1991,6 +2014,7 @@ bool MdoMemoryUpsert(const MdoMemoryWriteOptions* Options,
 {
     char Path[MDO_MEMORY_PATH_CAPACITY];
     MdoMemorySnapshot* Snapshot = NULL;
+    MdoProjectLease* Lease = NULL;
     MdoMemoryEntry* Entry;
     char* Id = NULL;
     char* Title = NULL;
@@ -2006,6 +2030,11 @@ bool MdoMemoryUpsert(const MdoMemoryWriteOptions* Options,
         MdoMemoryError(Error, XWORK_ERROR_INVALID_ARGUMENT,
             "invalid or sensitive memory write request");
         return false;
+    }
+    if ( Options->Scope == MDO_MEMORY_PROJECT ) {
+        Lease = MdoProjectLeaseAcquire(Options->ProjectId,
+            MDO_PROJECT_LEASE_SHARED, Error);
+        if ( Lease == NULL ) return false;
     }
     Id = xrtStrDup(Options->Id);
     Title = xrtStrDup(Options->Title);
@@ -2105,6 +2134,7 @@ done:
         for ( i = 0u; i < Options->TagCount; ++i ) xrtFree(Tags[i]);
         xrtFree(Tags);
     }
+    MdoProjectLeaseRelease(Lease);
     return Ok;
 }
 
@@ -2113,6 +2143,7 @@ bool MdoMemoryRemove(const MdoMemoryRemoveOptions* Options,
 {
     char Path[MDO_MEMORY_PATH_CAPACITY];
     MdoMemorySnapshot* Snapshot = NULL;
+    MdoProjectLease* Lease = NULL;
     size_t Index;
     uint64 Previous;
     bool Ok = false;
@@ -2131,6 +2162,11 @@ bool MdoMemoryRemove(const MdoMemoryRemoveOptions* Options,
         MdoMemoryError(Error, XWORK_ERROR_INVALID_ARGUMENT,
             "invalid memory remove request");
         return false;
+    }
+    if ( Options->Scope == MDO_MEMORY_PROJECT ) {
+        Lease = MdoProjectLeaseAcquire(Options->ProjectId,
+            MDO_PROJECT_LEASE_SHARED, Error);
+        if ( Lease == NULL ) return false;
     }
     xrtMutexLock(g_MdoMemory.Lock);
     if ( !MdoMemoryWriterLock(Error) ) goto done;
@@ -2174,5 +2210,6 @@ bool MdoMemoryRemove(const MdoMemoryRemoveOptions* Options,
 done:
     MdoMemorySnapshotRelease(Snapshot);
     xrtMutexUnlock(g_MdoMemory.Lock);
+    MdoProjectLeaseRelease(Lease);
     return Ok;
 }

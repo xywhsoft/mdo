@@ -102,7 +102,7 @@ inserted into the prompt as a text reference, with quotes for spaces.
 ## Project lifecycle exclusion
 
 Project definition endpoints, project/session drafts and submission intents,
-queues, feedback, attachments, todos, and related session operations hold a
+queues, feedback, attachments, todos, project memory, and related session operations hold a
 shared project lease for the entire handler. An exclusive project operation
 causes these requests to return `409 project_busy` before running the handler.
 Definition creation also checks the lease in the direct C writer. A busy project
@@ -112,10 +112,18 @@ their endpoint's validation response. Global drafts and other projects keep
 their own scope.
 
 The global feedback listing can repair stored feedback; that repair obtains its
-own project lease. The current exclusive primitive is infrastructure for the
-planned purge transaction. There is no executable project-purge API yet, and
-`purge-preview` remains advisory. Memory, schedules, migration, and independent
-sidecar helpers still require a complete lifecycle audit before purge opens.
+own project lease. Direct C memory writers and sidecar writers (todos, image
+records/pruning/rollback, queue receipts/claims, and expired upload cleanup) also
+obtain their own leases. Image copying retains both source and destination
+projects. Memory directory import retains every associated project before any
+publication and through completion or rollback; retained Agent memory tool
+catalogs keep their project lease until the last tool reference is released.
+Global memory remains independent of project exclusion.
+
+The current exclusive primitive is infrastructure for the planned purge
+transaction. There is no executable project-purge API yet, and `purge-preview`
+remains advisory. Schedule and legacy migration boundaries, the purge
+transaction, and startup recovery still need implementation before purge opens.
 
 ## Settings transactions
 

@@ -23,6 +23,7 @@ PROBE_SOURCE = r'''
 #include <xsbase.h>
 
 #include "src/storage/home.c"
+#include "src/projects/lifecycle.c"
 #include "src/config/config.c"
 #include "src/security/secrets.c"
 #include "src/models/catalog.c"
@@ -111,7 +112,8 @@ void ServiceInit(XS_HostInfo *host) {
     unsigned i;
     (void)host;
     memset(&owner, 0, sizeof(owner)); owner.Refs = 1u;
-    if (!MdoHomeInit() || !MdoConfigInit() || !MdoModelManagerInit()) {
+    if (!MdoHomeInit() || !MdoProjectLifecycleInit() ||
+        !MdoConfigInit() || !MdoModelManagerInit()) {
         printf("init_error=product\n"); goto done;
     }
     xworkRuntimeConfigInit(&runtime_config);
@@ -217,6 +219,7 @@ done:
     xworkRuntimeRelease(runtime);
     MdoModelManagerUnit();
     MdoConfigUnit();
+    MdoProjectLifecycleUnit();
     MdoHomeUnit();
 }
 
@@ -228,7 +231,7 @@ def write_site(site: Path) -> None:
     for relative in (
         "web", "default-home/config", "default-home/modules/tools",
         "default-home/modules/agents", "default-home/skills/project-explorer/templates",
-        "generated/module-sdk/mdo", "src/storage", "src/config", "src/security",
+        "generated/module-sdk/mdo", "src/storage", "src/projects", "src/config", "src/security",
         "src/models", "src/skills", "src/memory", "src/modules", "src/agents", "src/asks",
         "src/schedules", "include/mdo",
     ):
@@ -240,7 +243,8 @@ def write_site(site: Path) -> None:
         "default-home/modules/agents/builtin_default.c",
         "default-home/skills/project-explorer/SKILL.md",
         "default-home/skills/project-explorer/templates/report.md",
-        "src/storage/home.c", "src/config/config.c", "src/security/secrets.c",
+        "src/storage/home.c", "src/projects/lifecycle.c",
+        "src/config/config.c", "src/security/secrets.c",
         "src/models/catalog.c", "src/skills/manager.c", "src/memory/manager.c",
         "src/modules/manager.c", "src/agents/runtime.c",
         "src/asks/manager.c",

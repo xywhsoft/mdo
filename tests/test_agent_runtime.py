@@ -165,6 +165,7 @@ PROBE_SOURCE = rf'''
 #include <xsbase.h>
 
 #include "src/storage/home.c"
+#include "src/projects/lifecycle.c"
 #include "src/config/config.c"
 #include "src/security/secrets.c"
 #include "src/models/catalog.c"
@@ -297,7 +298,7 @@ void ServiceInit(XS_HostInfo *host) {{
     ProbeOwner owner;
     (void)host;
     memset(&owner, 0, sizeof(owner)); owner.Refs = 1u;
-    if (!MdoHomeInit() ||
+    if (!MdoHomeInit() || !MdoProjectLifecycleInit() ||
         !MdoHomeAtomicWrite("skills/probe-skill/SKILL.md", sSkillV1,
             strlen(sSkillV1), false) ||
         !MdoHomeAtomicWrite("modules/agents/probe.c", sModuleV1,
@@ -487,6 +488,7 @@ done:
     xworkRuntimeRelease(runtime);
     MdoModelManagerUnit();
     MdoConfigUnit();
+    MdoProjectLifecycleUnit();
     MdoHomeUnit();
     printf("probe_done=1\n");
 }}
@@ -505,6 +507,7 @@ def write_site(site: Path, memory_enabled: bool = True) -> None:
         "default-home/skills/project-explorer/templates",
         "generated/module-sdk/mdo",
         "src/storage",
+        "src/projects",
         "src/config",
         "src/security",
         "src/models",
@@ -524,6 +527,7 @@ def write_site(site: Path, memory_enabled: bool = True) -> None:
         "default-home/skills/project-explorer/SKILL.md",
         "default-home/skills/project-explorer/templates/report.md",
         "src/storage/home.c",
+        "src/projects/lifecycle.c",
         "src/config/config.c",
         "src/security/secrets.c",
         "src/models/catalog.c",

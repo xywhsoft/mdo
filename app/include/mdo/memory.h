@@ -75,6 +75,8 @@ typedef struct MdoMemoryImportOptions {
     const char* Reason;
 } MdoMemoryImportOptions;
 
+/* Project writes, imports, and Agent bindings require an initialized project
+ * lifecycle service. They take leases before memory locks or durable writes. */
 bool MdoMemoryManagerInit(xwork_runtime* Runtime);
 void MdoMemoryManagerUnit(void);
 uint64 MdoMemoryManagerGeneration(void);
@@ -102,7 +104,9 @@ bool MdoMemoryRemove(const MdoMemoryRemoveOptions* Options,
 
 /* Directory exports use a readable manifest/global/projects layout and require
  * a destination that does not exist. Preview fully validates the source without
- * writing. Import refuses to overwrite any existing global or project store. */
+ * writing. Import refuses to overwrite any existing global or project store.
+ * It reserves every imported project before its first audit/store write and
+ * retains the reservations through any rollback. */
 bool MdoMemoryExportDirectory(const char* Directory,
     MdoMemoryTransferSummary* Summary, xwork_error* Error);
 bool MdoMemoryPreviewImportDirectory(const char* Directory,
@@ -116,7 +120,9 @@ str MdoMemoryBuildPrompt(const char* ProjectId, size_t* Bytes,
     uint64* Generation, xwork_error* Error);
 
 /* Agent bindings provide project isolation and audit correlation to runtime
- * memory tools. Bind owns copies; Unbind is an idempotent lifecycle action. */
+ * memory tools. Bind owns copies and a project lease; tool-catalog references
+ * keep it alive until their final release, including after Unbind. Unbind is
+ * an idempotent lifecycle action. */
 bool MdoMemoryAgentBind(xwork_agent* Agent, const char* ProjectId,
     const char* SessionId, xwork_error* Error);
 void MdoMemoryAgentUnbind(xwork_agent* Agent);

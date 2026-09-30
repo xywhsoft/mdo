@@ -5,6 +5,7 @@
 #include "../../include/mdo/attachments.h"
 #include "../../include/mdo/home.h"
 #include "../../include/mdo/sessions.h"
+#include "../../include/mdo/project_lifecycle.h"
 
 #define MDO_ATTACHMENT_ID_BYTES 16u
 #define MDO_ATTACHMENT_ID_LENGTH (MDO_ATTACHMENT_ID_BYTES * 2u)
@@ -655,13 +656,20 @@ bool MdoApiAttachmentSweepExpired(const char* ProjectId,
     char Directory[MDO_SESSION_PATH_CAPACITY];
     bool Ok;
     int Written;
+    MdoProjectLease* Lease;
     if ( ProjectId == NULL || SessionId == NULL ) return false;
     Written = snprintf(Directory, sizeof(Directory),
         "sessions/%s/%s/attachments", ProjectId, SessionId);
-    if ( Written <= 0 || (size_t)Written >= sizeof(Directory) ||
-         !MdoApiAttachmentLock() ) return false;
+    if ( Written <= 0 || (size_t)Written >= sizeof(Directory) ) return false;
+    Lease = MdoProjectLeaseAcquire(ProjectId, MDO_PROJECT_LEASE_SHARED, NULL);
+    if ( Lease == NULL ) return false;
+    if ( !MdoApiAttachmentLock() ) {
+        MdoProjectLeaseRelease(Lease);
+        return false;
+    }
     Ok = MdoAttachmentCollectExpired(ProjectId, SessionId, Directory);
     MdoApiAttachmentUnlock();
+    MdoProjectLeaseRelease(Lease);
     return Ok;
 }
 

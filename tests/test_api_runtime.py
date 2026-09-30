@@ -269,6 +269,41 @@ static bool MdoApiProbeLeaseControl(XS_HttpReq* Request)
                 MDO_PROJECT_MUTATION_BUSY &&
             !MdoApiFeedbackReconcile("lease-probe", "lease-session");
     } else if ( MdoApiViewEqualText(Target,
+            "/__fixture/project-lease/direct-sidecars") ) {
+        const char* Project = "lease-probe";
+        const char* Session = "lease-session";
+        const char* Id = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+        const char Ids[4][33] = {{"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}};
+        MdoApiProfile Profile = {0};
+        xwork_event Todo = {0};
+        bool Referenced = false;
+        Todo.eKind = XWORK_EVENT_TOOL_DONE; Todo.bSuccess = true;
+        Todo.sToolName = "mdo.todo"; Todo.sText = "{\"items\":[]}";
+        Todo.iTextLength = strlen(Todo.sText);
+        Ok = g_MdoApiProbeLease != NULL &&
+            !MdoSessionTodoProject(Project, Session, 1u, &Todo) &&
+            !MdoSessionTodoReset(Project, Session) &&
+            !MdoSessionAttachmentEventWrite(Project, Session, 1u, 1u, Ids, 1u) &&
+            !MdoSessionAttachmentPruneRemoved(Project, Session) &&
+            !MdoApiAttachmentSweepExpired(Project, Session) &&
+            !MdoApiQueueAttachmentReferenced(Project, Session, Id, &Referenced) &&
+            !MdoApiQueueDiscardAcknowledged(Project, Session, Id) &&
+            !MdoApiQueueRunRecordPrepared(Project, Session, Id, "run-lease", 1u) &&
+            MdoApiQueueRunPrepare(Project, Session, Id, xrtStrView("probe"),
+                Ids, 1u, &Profile) == MDO_API_QUEUE_RUN_UNAVAILABLE &&
+            MdoApiQueueRunClaim(Project, Session, Id, xrtStrView("probe"),
+                Ids, 1u, &Profile) == MDO_API_QUEUE_RUN_UNAVAILABLE &&
+            !MdoApiQueueRunReleaseClaim(Project, Session, Id) &&
+            !MdoApiQueueRunBind(Project, Session, Id, xrtStrView("probe"),
+                Ids, 1u, "run-lease") &&
+            !MdoSessionAttachmentEventClone("lease-source", Session, 1u,
+                Project, Session, 1u, 1u);
+        Exclusive = MdoProjectLeaseAcquire("lease-source",
+            MDO_PROJECT_LEASE_EXCLUSIVE, &Error);
+        Ok = Ok && Exclusive != NULL;
+        MdoProjectLeaseRelease(Exclusive);
+        MdoSessionAttachmentForkRollback(Project, Session);
+    } else if ( MdoApiViewEqualText(Target,
             "/__fixture/project-lease/mutation-errors") ) {
         MdoProjectCreateOptionsInit(&Options);
         Options.Id = "lease-probe"; Options.Name = "Must not replace revision 2";
@@ -664,11 +699,26 @@ def project_lease_exclusion(port: int, home: Path, session_id: str) -> None:
         ("POST", session + "/clear"), ("POST", session + "/truncate"),
         ("POST", session + "/fork"), ("POST", session + "/runs"),
         ("GET", "/api/v1/projects/LEASE-PROBE./draft"),
+        ("GET", "/api/v1/memory/projects/lease-probe"),
+        ("PUT", "/api/v1/memory/projects/lease-probe"),
+        ("GET", "/api/v1/memory/projects/lease-probe/entry"),
+        ("DELETE", "/api/v1/memory/projects/lease-probe/entry"),
+        ("POST", "/api/v1/memory/projects/lease-probe/open-directory"),
     ]
     paths = [home / "projects/lease-probe.json",
              home / "projects/lease-probe.json.bak",
              home / "data/project-drafts/lease-probe.json",
              home / "sessions/lease-probe"]
+    if home.exists():
+        # Only this isolated fixture's files are seeded; rollback must leave
+        # them untouched while the project exclusive lease is held.
+        directory = home / "sessions/lease-probe/lease-session/attachments"
+        for name in ("events/1.json", "runs/1.json",
+                     "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.bin",
+                     "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.json"):
+            path = directory / name
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(b"lease sentinel")
 
     def inventory() -> dict[str, bytes | str | None]:
         files = [child for path in paths for child in
@@ -681,6 +731,7 @@ def project_lease_exclusion(port: int, home: Path, session_id: str) -> None:
     assert request(port, "POST", fixture + "acquire")[0] == 200
     try:
         assert request(port, "GET", fixture + "direct")[0] == 200
+        assert request(port, "GET", fixture + "direct-sidecars")[0] == 200
         for method, path in targets:
             status, _, body = request(port, method, path)
             assert status == 409 and json.loads(body)["error"]["code"] == (

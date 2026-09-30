@@ -3,6 +3,7 @@
 
 #include "../../include/mdo/home.h"
 #include "../../include/mdo/sessions.h"
+#include "../../include/mdo/project_lifecycle.h"
 
 #define MDO_TODO_FILE_MAX (16u * 1024u)
 #define MDO_TODO_INPUT_MAX 12288u
@@ -134,6 +135,7 @@ bool MdoSessionTodoProject(const char* ProjectId, const char* SessionId,
     char* Json = NULL;
     size_t Size = 0u;
     bool Ok = false;
+    MdoProjectLease* Lease = NULL;
     if ( Event == NULL || Event->eKind != XWORK_EVENT_TOOL_DONE ||
          !Event->bSuccess || Event->uAgentDepth != 0u ||
          Event->sToolName == NULL ||
@@ -143,6 +145,8 @@ bool MdoSessionTodoProject(const char* ProjectId, const char* SessionId,
          Event->iTextLength > MDO_TODO_INPUT_MAX ||
          Event->bTextTruncated ||
          !MdoTodoPath(Path, ProjectId, SessionId) ) return false;
+    Lease = MdoProjectLeaseAcquire(ProjectId, MDO_PROJECT_LEASE_SHARED, NULL);
+    if ( Lease == NULL ) return false;
     Root = MdoTodoParse(xrtStrViewN(Event->sText,
         Event->iTextLength), false);
     if ( Root == NULL ||
@@ -155,6 +159,7 @@ bool MdoSessionTodoProject(const char* ProjectId, const char* SessionId,
 done:
     xrtFree(Json);
     xrtValueRelease(Root);
+    MdoProjectLeaseRelease(Lease);
     return Ok;
 }
 
@@ -204,7 +209,10 @@ bool MdoSessionTodoReset(const char* ProjectId, const char* SessionId)
     char* Json = NULL;
     size_t Size = 0u;
     bool Ok = false;
+    MdoProjectLease* Lease = NULL;
     if ( !MdoTodoPath(Path, ProjectId, SessionId) ) return false;
+    Lease = MdoProjectLeaseAcquire(ProjectId, MDO_PROJECT_LEASE_SHARED, NULL);
+    if ( Lease == NULL ) return false;
     Root = MdoTodoEmpty();
     if ( Root == NULL ) goto done;
     Json = xrtJsonStringify(Root, false, &Size);
@@ -213,5 +221,6 @@ bool MdoSessionTodoReset(const char* ProjectId, const char* SessionId)
 done:
     xrtFree(Json);
     xrtValueRelease(Root);
+    MdoProjectLeaseRelease(Lease);
     return Ok;
 }

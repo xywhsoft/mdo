@@ -6,6 +6,7 @@
 #include "../../include/mdo/home.h"
 #include "../../include/mdo/runs.h"
 #include "../../include/mdo/sessions.h"
+#include "../../include/mdo/project_lifecycle.h"
 
 #define MDO_QUEUE_MAX_ITEMS 20u
 #define MDO_QUEUE_MAX_TEXT (64u * 1024u - 1u)
@@ -315,6 +316,9 @@ bool MdoApiQueueRunRecordPrepared(const char* ProjectId,
          !MdoQueueRunId(xrtStrView(RunId), CheckedRun) ||
          !MdoQueueReceiptPath(Path, ProjectId, SessionId, Id) )
         return false;
+    MdoProjectLease* Lease = MdoProjectLeaseAcquire(ProjectId,
+        MDO_PROJECT_LEASE_SHARED, NULL);
+    if ( Lease == NULL ) return false;
     xrtMutexLock(g_MdoQueueLock);
     if ( MdoQueueReceiptReadEx(ProjectId, SessionId, Id, &Exists,
             ExistingRun, PreparedRun, &ExistingAgent) && Exists &&
@@ -333,6 +337,7 @@ bool MdoApiQueueRunRecordPrepared(const char* ProjectId,
         }
     }
     xrtMutexUnlock(g_MdoQueueLock);
+    MdoProjectLeaseRelease(Lease);
     return Ok;
 }
 
@@ -564,6 +569,9 @@ bool MdoApiQueueAttachmentReferenced(const char* ProjectId,
     Written = snprintf(Path, sizeof(Path), "sessions/%s/%s/queue.json",
         ProjectId, SessionId);
     if ( Written <= 0 || (size_t)Written >= sizeof(Path) ) return false;
+    MdoProjectLease* Lease = MdoProjectLeaseAcquire(ProjectId,
+        MDO_PROJECT_LEASE_SHARED, NULL);
+    if ( Lease == NULL ) return false;
     xrtMutexLock(g_MdoQueueLock);
     Ok = MdoQueueRead(Path, ProjectId, SessionId, &Queue);
     if ( Ok ) {
@@ -576,6 +584,7 @@ bool MdoApiQueueAttachmentReferenced(const char* ProjectId,
         MdoQueueRelease(&Queue);
     }
     xrtMutexUnlock(g_MdoQueueLock);
+    MdoProjectLeaseRelease(Lease);
     return Ok;
 }
 
@@ -653,6 +662,9 @@ bool MdoApiQueueDiscardAcknowledged(const char* ProjectId,
     Written = snprintf(Path, sizeof(Path), "sessions/%s/%s/queue.json",
         ProjectId, SessionId);
     if ( Written <= 0 || (size_t)Written >= sizeof(Path) ) return false;
+    MdoProjectLease* Lease = MdoProjectLeaseAcquire(ProjectId,
+        MDO_PROJECT_LEASE_SHARED, NULL);
+    if ( Lease == NULL ) return false;
     xrtMutexLock(g_MdoQueueLock);
     Ok = MdoQueueRead(Path, ProjectId, SessionId, &Queue);
     if ( Ok ) {
@@ -671,6 +683,7 @@ bool MdoApiQueueDiscardAcknowledged(const char* ProjectId,
         MdoQueueRelease(&Queue);
     }
     xrtMutexUnlock(g_MdoQueueLock);
+    MdoProjectLeaseRelease(Lease);
     return Ok;
 }
 
@@ -749,6 +762,9 @@ MdoApiQueueRunStatus MdoApiQueueRunPrepare(const char* ProjectId,
     if ( Profile != NULL ) memset(Profile, 0, sizeof(*Profile));
     if ( !MdoQueueRunPath(Path, ProjectId, SessionId) || Id == NULL ||
          Attachments == NULL || Profile == NULL ) return Result;
+    MdoProjectLease* Lease = MdoProjectLeaseAcquire(ProjectId,
+        MDO_PROJECT_LEASE_SHARED, NULL);
+    if ( Lease == NULL ) return MDO_API_QUEUE_RUN_UNAVAILABLE;
     xrtMutexLock(g_MdoQueueLock);
     if ( MdoQueueRead(Path, ProjectId, SessionId, &Queue) ) {
         Index = MdoQueueFind(&Queue, Id);
@@ -784,6 +800,7 @@ MdoApiQueueRunStatus MdoApiQueueRunPrepare(const char* ProjectId,
         MdoQueueRelease(&Queue);
     }
     xrtMutexUnlock(g_MdoQueueLock);
+    MdoProjectLeaseRelease(Lease);
     return Result;
 }
 
@@ -800,6 +817,9 @@ MdoApiQueueRunStatus MdoApiQueueRunClaim(const char* ProjectId,
     char RunId[MDO_RUN_ID_CAPACITY];
     if ( !MdoQueueRunPath(Path, ProjectId, SessionId) || Id == NULL ||
          Attachments == NULL || ExpectedProfile == NULL ) return Result;
+    MdoProjectLease* Lease = MdoProjectLeaseAcquire(ProjectId,
+        MDO_PROJECT_LEASE_SHARED, NULL);
+    if ( Lease == NULL ) return MDO_API_QUEUE_RUN_UNAVAILABLE;
     xrtMutexLock(g_MdoQueueLock);
     if ( MdoQueueRead(Path, ProjectId, SessionId, &Queue) ) {
         Index = MdoQueueFind(&Queue, Id);
@@ -823,6 +843,7 @@ MdoApiQueueRunStatus MdoApiQueueRunClaim(const char* ProjectId,
         MdoQueueRelease(&Queue);
     }
     xrtMutexUnlock(g_MdoQueueLock);
+    MdoProjectLeaseRelease(Lease);
     return Result;
 }
 
@@ -835,11 +856,15 @@ bool MdoApiQueueRunReleaseClaim(const char* ProjectId,
     bool Ok = false;
     if ( Id == NULL || !MdoQueueReceiptPath(Path, ProjectId,
             SessionId, Id) ) return false;
+    MdoProjectLease* Lease = MdoProjectLeaseAcquire(ProjectId,
+        MDO_PROJECT_LEASE_SHARED, NULL);
+    if ( Lease == NULL ) return false;
     xrtMutexLock(g_MdoQueueLock);
     if ( MdoQueueReceiptRead(ProjectId, SessionId, Id,
             &Exists, RunId) && Exists && RunId[0] == '\0' )
         Ok = MdoHomeRemove(Path, false);
     xrtMutexUnlock(g_MdoQueueLock);
+    MdoProjectLeaseRelease(Lease);
     return Ok;
 }
 
@@ -855,6 +880,9 @@ bool MdoApiQueueRunBind(const char* ProjectId, const char* SessionId,
     if ( !MdoQueueRunPath(Path, ProjectId, SessionId) || Id == NULL ||
          Attachments == NULL || RunId == NULL ||
          !MdoQueueRunId(xrtStrView(RunId), ValidRunId) ) return false;
+    MdoProjectLease* Lease = MdoProjectLeaseAcquire(ProjectId,
+        MDO_PROJECT_LEASE_SHARED, NULL);
+    if ( Lease == NULL ) return false;
     xrtMutexLock(g_MdoQueueLock);
     if ( MdoQueueRead(Path, ProjectId, SessionId, &Queue) ) {
         Index = MdoQueueFind(&Queue, Id);
@@ -879,6 +907,7 @@ bool MdoApiQueueRunBind(const char* ProjectId, const char* SessionId,
         MdoQueueRelease(&Queue);
     }
     xrtMutexUnlock(g_MdoQueueLock);
+    MdoProjectLeaseRelease(Lease);
     return Ok;
 }
 

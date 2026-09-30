@@ -17,7 +17,8 @@ memory/
 └─ .writer.lock
 ```
 
-所有文件按需创建。只初始化 manager、创建空 Agent 或单文件启动不会创建 Home。
+记忆文件按需创建。只初始化 manager、创建空 Agent 或无窗口的单文件只读启动不会创建 Home。
+Windows 原生窗口首次开窗则为便携 WebView2 数据创建 `mdo-home/data/cache/webview2`。
 全局 scope 不接受 project ID；项目 scope 必须提供最多 64 字节的安全 ID，只允许
 ASCII 字母、数字、`-`、`_` 和非首位的 `.`。Agent 会话固定自己的 project ID，
 同一工具定义不能越过该身份访问其他项目。
@@ -147,7 +148,9 @@ manifest 的 identity、revision、计数、字节数与 SHA-256。summary 返�
 generation，供 UI 确认后作为导入并发令牌。
 
 `MdoMemoryImportDirectory()` 会重新执行同样的完整来源校验，不能依赖旧 preview。
-它取得 writer lock 后核对 `ExpectedGeneration`，并要求目标没有 `global.json`、对应
+全部来源校验完成后，它在记忆 mutex 和 writer 文件锁之前先取得全部关联项目的共享
+生命周期租约；任一项目被独占时释放已取得的租约，不创建 Home、不发布任何 store。
+取得 writer lock 后核对 `ExpectedGeneration`，并要求目标没有 `global.json`、对应
 备份或任何 project store 条目。当前协议有意拒绝 merge/replace，避免自动解决冲突
 或静默丢失本地记忆；调用方需要先显式处理现有数据。
 
@@ -155,6 +158,18 @@ generation，供 UI 确认后作为导入并发令牌。
 后续 store 失败，已发布的本次 store 会被删除。审计中的 prepared 记录仍保留，明确
 反映发生过未完成尝试。成功后整个目录导入只推进一次 manager generation，同时保留
 来源 store/entry revision 和时间。
+全部项目租约保持到成功发布或既有失败回滚结束；此隔离机制不新增导入的崩溃恢复协议。
+
+## 项目生命周期
+
+Home 初始化后须先初始化项目生命周期服务，再使用项目记忆写入或工具绑定。
+`MdoMemoryUpsert()` 和 `MdoMemoryRemove()` 在记忆锁、writer 文件锁及审计写入前
+取得项目共享租约，清理完成后释放。全局记忆不取得项目租约。
+
+启用记忆工具时，`MdoMemoryAgentBind()` 在更换 Agent 工具之前取得该 Agent 的项目
+租约。工具绑定有引用计数；`MdoMemoryAgentUnbind()` 移除 Agent 工具后，已经保留的
+工具目录快照仍持有绑定和租约，直到最后一个工具引用释放。仅保留纯数据记忆快照
+不保留写入能力。关闭记忆工具的绑定不额外取得租约。
 
 ## 当前验证范围
 
@@ -164,6 +179,12 @@ Windows 真实 xs/TCC 探针覆盖空 store、全局/项目隔离、创建/更�
 既存目标拒绝、未知文件拒绝、manifest 哈希篡改拒绝、preview generation 失效、空目标
 导入、导入审计和二次导入拒绝。
 
-阶段验收另包含 55 项静态合同、严格 GCC C11 unity 编译、10 个真实 xs/TCC 有界
+初始 MDO-7D 阶段验收另包含 55 项静态合同、严格 GCC C11 unity 编译、10 个真实 xs/TCC 有界
 运行探针、锁定依赖的完整 Windows 宿主与单文件重建，以及隔离目录 5 秒零写启动。
 按约束未运行压力或高负载测试。
+
+2026-09-30 生命周期阶段另覆盖独占拒绝、多个项目部分取得失败时的释放、全部项目在
+实际发布点仍被保留、受控最终 store 写入失败后的同步回滚与租约释放，以及 Agent
+解绑后工具目录引用保持。Windows/Linux 完整有界门禁各通过 114 项 Python、113 项
+Node、77 个前端模块解析、严格 C11、21 个运行探针和确定性打包。Windows 另通过
+便携 WebView2 Home 和 20 秒打包启动；未进行压力或高负载测试。

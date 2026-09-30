@@ -23,9 +23,110 @@ PROBE_SOURCE = r'''
 #include <xsbase.h>
 
 #include "src/storage/home.c"
+#include "src/projects/lifecycle.c"
 #include "src/config/config.c"
+static bool MemoryProbePublish(const char *path);
 #include "src/memory/manager.c"
 #include "src/memory/transfer.c"
+
+static bool probe_publication;
+static bool probe_all_reserved;
+static unsigned probe_publication_checks;
+
+static bool MemoryLeaseFree(const char *project) {
+    xwork_error error;
+    MdoProjectLease *lease = MdoProjectLeaseAcquire(project,
+        MDO_PROJECT_LEASE_EXCLUSIVE, &error);
+    bool free = lease != NULL;
+    MdoProjectLeaseRelease(lease);
+    return free;
+}
+
+/* Runs immediately before each actual store publication in the copied source.
+ * The last store fails deliberately, after the first two have been published. */
+static bool MemoryProbePublish(const char *path) {
+    static const char *projects[] = {"lease-first", "lease-last"};
+    size_t i;
+    if (!probe_publication) return true;
+    ++probe_publication_checks;
+    for (i = 0u; i < 2u; ++i) {
+        xwork_error error;
+        MdoProjectLease *lease = MdoProjectLeaseAcquire(projects[i],
+            MDO_PROJECT_LEASE_EXCLUSIVE, &error);
+        if (lease != NULL || error.eCode != XWORK_ERROR_CONTEXT)
+            probe_all_reserved = false;
+        MdoProjectLeaseRelease(lease);
+    }
+    xrtClearError();
+    return strcmp(path, "memory/projects/lease-last.json") != 0;
+}
+
+static bool MemoryLeaseProbe(void) {
+    static const char empty[] =
+        "{\"schema_version\":1,\"revision\":1,\"updated_at_us\":0,\"entries\":[]}";
+    MdoMemoryImportCandidate stores[3] = {
+        {MDO_MEMORY_GLOBAL, NULL, "memory/global.json", NULL},
+        {MDO_MEMORY_PROJECT, "lease-first", "memory/projects/lease-first.json", NULL},
+        {MDO_MEMORY_PROJECT, "lease-last", "memory/projects/lease-last.json", NULL}
+    };
+    MdoMemoryWriteOptions write;
+    MdoMemoryRemoveOptions remove;
+    MdoProjectLease *held = NULL;
+    MdoHomeSnapshot home = {0};
+    xfileinfo stat;
+    xwork_error error;
+    uint64 generation = MdoMemoryManagerGeneration();
+    bool exists, blocked, unchanged, rolled_back, ok = false;
+    size_t i;
+    for (i = 0u; i < 3u; ++i) {
+        stores[i].Snapshot = MdoMemoryInternalParse(stores[i].Scope,
+            stores[i].ProjectId, xrtStrView(empty));
+        if (stores[i].Snapshot == NULL) goto done;
+    }
+    held = MdoProjectLeaseAcquire("LEASE-LAST.", MDO_PROJECT_LEASE_EXCLUSIVE, &error);
+    if (held == NULL) goto done;
+    MdoMemoryWriteOptionsInit(&write);
+    write.Scope = MDO_MEMORY_PROJECT; write.ProjectId = "lease-last";
+    write.Id = "blocked"; write.Title = "Blocked"; write.Content = "No commit";
+    MdoMemoryRemoveOptionsInit(&remove);
+    remove.Scope = MDO_MEMORY_PROJECT; remove.ProjectId = "lease-last";
+    remove.Id = "blocked";
+    blocked = !MdoMemoryUpsert(&write, &error) && error.eCode == XWORK_ERROR_CONTEXT &&
+        !MdoMemoryRemove(&remove, &error) && error.eCode == XWORK_ERROR_CONTEXT &&
+        !MdoMemoryUpsert(&write, NULL) && !MdoMemoryRemove(&remove, NULL);
+    printf("memory_lease_mutations=%d\n", blocked ? 1 : 0);
+    if (!blocked) goto done;
+    blocked = !MdoMemoryInternalImportEmpty(stores, 3u, UINT64_MAX,
+        "lease-probe", NULL, NULL, &error) && error.eCode == XWORK_ERROR_CONTEXT;
+    home.Size = sizeof(home);
+    unchanged = MdoMemoryManagerGeneration() == generation &&
+        MdoHomeGetSnapshot(&home) && !xrtPathStat(home.Path, false, &stat);
+    xrtClearError();
+    printf("memory_lease_import_blocked=%d\n", blocked && unchanged ? 1 : 0);
+    if (!blocked || !unchanged || !MemoryLeaseFree("lease-first")) goto done;
+    printf("memory_lease_partial_cleanup=1\n");
+    MdoProjectLeaseRelease(held); held = NULL;
+    probe_publication = true; probe_all_reserved = true;
+    blocked = !MdoMemoryInternalImportEmpty(stores, 3u, UINT64_MAX,
+        "lease-probe", NULL, NULL, &error) && error.eCode == XWORK_ERROR_IO;
+    probe_publication = false;
+    rolled_back = blocked && probe_all_reserved && probe_publication_checks == 3u &&
+        MdoMemoryManagerGeneration() == generation;
+    for (i = 0u; i < 3u; ++i)
+        if (!MdoHomeExternalStat(stores[i].Path, &exists, &stat) || exists)
+            rolled_back = false;
+    rolled_back = rolled_back && MemoryLeaseFree("lease-first") &&
+        MemoryLeaseFree("lease-last");
+    printf("memory_lease_import_rollback=%d\n", rolled_back ? 1 : 0);
+    /* Restore this isolated fixture's empty audit before the existing roundtrip. */
+    ok = rolled_back && MdoHomeRemove("memory/audit.jsonl", false);
+done:
+    probe_publication = false;
+    MdoProjectLeaseRelease(held);
+    for (i = 0u; i < 3u; ++i)
+        MdoMemorySnapshotRelease((MdoMemorySnapshot*)stores[i].Snapshot);
+    return ok;
+}
 
 static void PrintSnapshot(const char *label, MdoMemoryScope scope,
     const char *project) {
@@ -99,6 +200,8 @@ void ServiceInit(XS_HostInfo *host) {
     xwork_agent_options agent_options;
     xwork_agent *agent = NULL;
     xwork_agent *isolated = NULL;
+    xwork_tool_catalog *held_catalog = NULL;
+    MdoProjectLease *held_project = NULL;
     MdoMemoryWriteOptions write;
     MdoMemoryRemoveOptions remove;
     MdoMemoryImportOptions import_options;
@@ -114,7 +217,7 @@ void ServiceInit(XS_HostInfo *host) {
     (void)host;
     memset(&tool_probe, 0, sizeof(tool_probe));
 
-    if (!MdoHomeInit() || !MdoConfigInit()) {
+    if (!MdoHomeInit() || !MdoProjectLifecycleInit() || !MdoConfigInit()) {
         printf("init_error=pre-runtime\n"); goto done;
     }
     xworkRuntimeConfigInit(&runtime_config);
@@ -123,6 +226,7 @@ void ServiceInit(XS_HostInfo *host) {
         printf("init_error=runtime\n"); goto done;
     }
     PrintSnapshot("global_empty", MDO_MEMORY_GLOBAL, NULL);
+    if (!MemoryLeaseProbe()) goto done;
 
     MdoMemoryWriteOptionsInit(&write);
     write.Scope = MDO_MEMORY_GLOBAL;
@@ -212,6 +316,20 @@ void ServiceInit(XS_HostInfo *host) {
     printf("tool_permissions=%u resources:%u\n", tool_probe.Permissions,
         tool_probe.Resources);
 
+    held_catalog = xworkAgentToolCatalogSnapshot(agent);
+    if (held_catalog == NULL || MemoryLeaseFree("project-alpha")) goto done;
+    MdoMemoryAgentUnbind(agent);
+    if (MemoryLeaseFree("project-alpha")) goto done;
+    printf("memory_lease_binding_retained=1\n");
+    xworkToolCatalogRelease(held_catalog); held_catalog = NULL;
+    held_project = MdoProjectLeaseAcquire("project-alpha",
+        MDO_PROJECT_LEASE_EXCLUSIVE, &error);
+    if (held_project == NULL) goto done;
+    printf("memory_lease_binding_released=1\n");
+    if (MdoMemoryAgentBind(agent, "project-alpha", "session-a", &error) ||
+        error.eCode != XWORK_ERROR_CONTEXT) goto done;
+    printf("memory_lease_binding_rejected=1\n");
+
     MdoMemoryRemoveOptionsInit(&remove);
     remove.Scope = MDO_MEMORY_GLOBAL;
     remove.Id = "editor-style";
@@ -219,6 +337,8 @@ void ServiceInit(XS_HostInfo *host) {
     remove.Actor = "runtime-probe";
     remove.Reason = "preference removed";
     if (!MdoMemoryRemove(&remove, &error)) goto done;
+    printf("memory_lease_global_independent=1\n");
+    MdoProjectLeaseRelease(held_project); held_project = NULL;
     PrintSnapshot("global_removed", MDO_MEMORY_GLOBAL, NULL);
 
     memset(&export_summary, 0, sizeof(export_summary));
@@ -296,6 +416,15 @@ void ServiceInit(XS_HostInfo *host) {
     import_options.Reason = "portable memory restore";
     memset(&import_summary, 0, sizeof(import_summary));
     import_summary.Size = sizeof(import_summary);
+    held_project = MdoProjectLeaseAcquire("project-alpha",
+        MDO_PROJECT_LEASE_EXCLUSIVE, &error);
+    if (held_project == NULL) goto done;
+    result = MdoMemoryImportDirectory(&import_options, &import_summary, &error);
+    if (result || strcmp(error.sMessage, "project lifecycle is busy") != 0 ||
+        MdoMemoryManagerGeneration() != preview_summary.Generation) goto done;
+    printf("memory_lease_directory_import=1\n");
+    MdoProjectLeaseRelease(held_project); held_project = NULL;
+    if (!MemoryLeaseFree("project-alpha")) goto done;
     result = MdoMemoryImportDirectory(&import_options, &import_summary, &error);
     printf("directory_stale=%d code:%d\n", result ? 1 : 0,
         (int)error.eCode);
@@ -327,6 +456,8 @@ void ServiceInit(XS_HostInfo *host) {
     printf("probe_done=1\n");
 done:
     xrtFree(prompt);
+    xworkToolCatalogRelease(held_catalog);
+    MdoProjectLeaseRelease(held_project);
     MdoMemoryAgentUnbind(isolated);
     MdoMemoryAgentUnbind(agent);
     xworkAgentDestroy(isolated);
@@ -337,6 +468,7 @@ done:
     MdoMemoryManagerUnit();
     xworkRuntimeRelease(runtime);
     MdoConfigUnit();
+    MdoProjectLifecycleUnit();
     MdoHomeUnit();
 }
 
@@ -349,6 +481,7 @@ def write_site(site: Path) -> None:
         "web",
         "default-home/config",
         "src/storage",
+        "src/projects",
         "src/config",
         "src/memory",
         "include/mdo",
@@ -358,6 +491,7 @@ def write_site(site: Path) -> None:
     for relative in (
         "default-home/config/defaults.json",
         "src/storage/home.c",
+        "src/projects/lifecycle.c",
         "src/config/config.c",
         "src/memory/manager.c",
         "src/memory/transfer.c",
@@ -366,8 +500,17 @@ def write_site(site: Path) -> None:
     shutil.copy2(
         ROOT / "app/src/memory/internal.h", site / "src/memory/internal.h"
     )
-    for name in ("home.h", "config.h", "memory.h"):
+    for name in ("home.h", "config.h", "memory.h", "project_lifecycle.h"):
         shutil.copy2(ROOT / "app/include/mdo" / name, site / "include/mdo" / name)
+    # Inject a bounded publication fault only into this temporary application's copy.
+    manager = site / "src/memory/manager.c"
+    text = manager.read_text(encoding="utf-8")
+    publication = "    Ok = MdoHomeAtomicWrite(Path, Json, Size, true);"
+    assert text.count(publication) == 1
+    manager.write_text(text.replace(publication,
+        "    Ok = MemoryProbePublish(Path) &&\n"
+        "        MdoHomeAtomicWrite(Path, Json, Size, true);", 1),
+        encoding="utf-8", newline="\n")
     (site / "probe.c").write_text(PROBE_SOURCE, encoding="utf-8")
     with socket.socket() as listener:
         listener.bind(("127.0.0.1", 0))
@@ -444,6 +587,10 @@ def main() -> int:
         output = run_probe(host, site, home)
         assert "init_error=" not in output, output
         assert "write_error=" not in output, output
+        for label in ("mutations", "import_blocked", "partial_cleanup", "import_rollback",
+                      "binding_retained", "binding_released", "binding_rejected",
+                      "global_independent", "directory_import"):
+            assert f"memory_lease_{label}=1" in output, output
         assert "global_empty=ok:1 revision:0 count:0 generation:1 code:0" in output, output
         assert "global_written=ok:1 revision:1 count:1 generation:2 code:0" in output, output
         assert "memory_item=id:editor-style title:Editor preference" in output, output
