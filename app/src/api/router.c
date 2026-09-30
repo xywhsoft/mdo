@@ -4,6 +4,7 @@
 #include "internal.h"
 #include "../../include/mdo/project_lifecycle.h"
 #include "../../include/mdo/projects.h"
+#include "../../include/mdo/home.h"
 
 typedef struct MdoApiRoute {
     cstr Path;
@@ -342,6 +343,15 @@ static bool MdoApiRouteInvoke(MdoApiContext* Context,
     MdoProjectLease* Lease;
     xwork_error Error;
     bool Ok;
+    MdoHomeSnapshot Home;
+    memset(&Home, 0, sizeof(Home)); Home.Size = sizeof(Home);
+    if ( (Context->Request->head->MethodCode &
+            (XHTTP_METHOD_GET | XHTTP_METHOD_HEAD)) == 0u && MdoHomeGetSnapshot(&Home) ) {
+        if ( Home.RestartRequired ) return MdoApiReplyError(Context, 503u,
+            "home_restart_required", "Restart mdo before changing imported data", NULL);
+        if ( Home.ImportInProgress ) return MdoApiReplyError(Context, 409u,
+            "home_import_busy", "Home import is in progress; wait before changing data", NULL);
+    }
     if ( !Route->ProjectLease ) return Route->Proc(Context);
     /* Invalid captures retain each endpoint's existing validation response.
      * They cannot pass its path validation or reach a durable write. */

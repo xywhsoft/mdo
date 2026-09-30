@@ -472,7 +472,7 @@ static bool MdoMigrationHashFiles(xroot Root, const char* SourceId,
     size_t i;
     bool Ok = false;
     xrtSha256Init(&Hash);
-    if ( !xrtSha256Update(&Hash, "mdo-legacy-migration-preview-v1", 31u) ||
+    if ( !xrtSha256Update(&Hash, "mdo-legacy-migration-preview-v2", 31u) ||
          !MdoMigrationHashUInt64(&Hash, (uint64)strlen(SourceId)) ||
          !xrtSha256Update(&Hash, SourceId, strlen(SourceId)) ||
          !MdoMigrationHashUInt64(&Hash,
@@ -482,7 +482,8 @@ static bool MdoMigrationHashFiles(xroot Root, const char* SourceId,
          !MdoMigrationHashUInt64(&Hash,
             (uint64)strlen(Preview->TargetPath)) ||
          !xrtSha256Update(&Hash, Preview->TargetPath,
-            strlen(Preview->TargetPath)) ) goto crypto;
+            strlen(Preview->TargetPath)) ||
+         !MdoMigrationHashUInt64(&Hash, Preview->PreserveBrowserCache ? 1u : 0u) ) goto crypto;
     Buffer = (uint8*)xrtMalloc(MDO_MIGRATION_READ_CHUNK);
     if ( Buffer == NULL ) {
         MdoMigrationError(Error, XWORK_ERROR_OUT_OF_MEMORY,
@@ -569,6 +570,60 @@ static bool MdoMigrationSamePath(const char* Left, const char* Right)
     }
 }
 
+static bool MdoMigrationPathAncestor(const char* Parent, const char* Child)
+{
+    unsigned char Previous = 0u;
+    for ( ; ; ++Parent, ++Child ) {
+        unsigned char A = (unsigned char)*Parent;
+        unsigned char B = (unsigned char)*Child;
+#if defined(_WIN32) || defined(_WIN64)
+        if ( A == '\\' ) A = '/';
+        if ( B == '\\' ) B = '/';
+        if ( A >= 'A' && A <= 'Z' ) A += 'a' - 'A';
+        if ( B >= 'A' && B <= 'Z' ) B += 'a' - 'A';
+#endif
+        if ( A == '\0' ) return B == '\0' || B == '/' || Previous == '/';
+        if ( A != B ) return false;
+        Previous = A;
+    }
+}
+
+/* Resolve existing ancestors too: a custom Home inside the old source (also
+ * through a linked parent) must not write staging into the preserved source. */
+static bool MdoMigrationPathsOverlap(const char* Source, const char* Target,
+    bool* Overlap)
+{
+    char* SourceReal = xrtPathReal(Source);
+    char* TargetReal = NULL;
+    char* Current = xrtStrDup(Target);
+    size_t Depth;
+    bool TargetExists = true;
+    bool Ok = false;
+    *Overlap = MdoMigrationPathAncestor(Source, Target) ||
+        MdoMigrationPathAncestor(Target, Source);
+    if ( SourceReal == NULL || Current == NULL ) goto done;
+    for ( Depth = 0u; Depth < 64u; ++Depth ) {
+        char* Parent;
+        TargetReal = xrtPathReal(Current);
+        if ( TargetReal != NULL ) break;
+        if ( xrtGetError() == NULL || xrtErrorKind(xrtGetError()) != XERR_NOT_FOUND ) goto done;
+        xrtClearError();
+        TargetExists = false;
+        Parent = xrtPathParent(Current);
+        if ( Parent == NULL || MdoMigrationSamePath(Parent, Current) ) {
+            xrtFree(Parent); goto done;
+        }
+        xrtFree(Current); Current = Parent;
+    }
+    if ( TargetReal == NULL ) goto done;
+    *Overlap = *Overlap || MdoMigrationPathAncestor(SourceReal, TargetReal) ||
+        (TargetExists && MdoMigrationPathAncestor(TargetReal, SourceReal));
+    Ok = true;
+done:
+    xrtFree(SourceReal); xrtFree(TargetReal); xrtFree(Current);
+    return Ok;
+}
+
 static char* MdoMigrationSourcePath(const char* SourceId)
 {
     char* Base = NULL;
@@ -599,6 +654,7 @@ bool MdoLegacyMigrationPreview(const char* SourceId,
     xroot Root = NULL;
     const xerror* Cause;
     bool Ok = false;
+    bool Overlap = false;
     if ( Error != NULL ) xworkErrorInit(Error);
     if ( SourceId == NULL || Preview == NULL ||
          Preview->Size < sizeof(*Preview) ||
@@ -645,16 +701,11 @@ bool MdoLegacyMigrationPreview(const char* SourceId,
         Ok = true;
         goto done;
     }
-    if ( xrtPathStat(TargetAbsolute, false, &Info) ) {
-        Preview->ConflictCount = 1u;
-        Preview->TargetAvailable = false;
-    } else {
-        Cause = xrtGetError();
-        if ( Cause == NULL || xrtErrorKind(Cause) != XERR_NOT_FOUND ) goto io;
-        xrtClearError();
-        Preview->TargetAvailable = true;
-    }
-    if ( MdoMigrationSamePath(SourceAbsolute, TargetAbsolute) ) {
+    if ( !MdoHomeImportInspect(&Preview->TargetAvailable,
+            &Preview->PreserveBrowserCache) ) goto io;
+    if ( !Preview->TargetAvailable ) Preview->ConflictCount = 1u;
+    if ( !MdoMigrationPathsOverlap(SourceAbsolute, TargetAbsolute, &Overlap) ) goto io;
+    if ( Overlap ) {
         Preview->TargetAvailable = false;
         if ( Preview->ConflictCount == 0u ) Preview->ConflictCount = 1u;
     }

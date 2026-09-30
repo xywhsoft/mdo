@@ -258,13 +258,16 @@ export function createResourcePanels({ agentsStore, stores, reload }) {
       diagnosticActions.create("migrations-rescan", t("resource.rescan", {}, "重新检测"),
         () => reloadChecked("migrations"))));
     if (migrationResult?.restart_required) {
-      diagnosticsContainer.append(card(t("resource.restartTitle", {}, "迁移已完成，需要重启 mdo"),
-        t("resource.restartDescription", {}, "数据已原子发布；当前进程仍使用启动时的运行配置。关闭并重新启动 mdo 后再继续工作。"),
+      const result = card(t("resource.restartTitle", {}, "迁移已完成，需要重启 mdo"),
+        t("resource.restartDescription", {}, "完整迁移批次已提交；当前进程仍使用启动时的运行配置。关闭并重新启动 mdo 后再继续工作。"),
         [migrationResult.target_path,
           t("resource.sessionCount", { count: migrationResult.imported_sessions }, `${migrationResult.imported_sessions} sessions`),
           t("resource.memoryCount", { count: migrationResult.imported_memory_entries }, `${migrationResult.imported_memory_entries} memories`),
           t("resource.skippedCount", { count: migrationResult.skipped_items }, `${migrationResult.skipped_items} skipped`)],
-        []));
+        []);
+      result.setAttribute("tabindex", "-1");
+      result.setAttribute("data-diagnostic-action", "migrations-result");
+      diagnosticsContainer.append(result);
     }
     if (migrations.status === "error") {
       diagnosticsContainer.append(empty(errorMessage(migrations.error)));
@@ -279,16 +282,20 @@ export function createResourcePanels({ agentsStore, stores, reload }) {
           : !source.valid ? source.message || t("resource.sourceInvalid", {}, "旧数据未通过只读校验。")
             : !source.target_available ? t("resource.targetExists", {}, "目标 mdo Home 已存在，迁移不会覆盖现有数据。")
               : t("resource.importable", {}, "只读预览已通过，可以导入到新的便携 Home。");
+        const cacheNotice = source.preserve_browser_cache
+          ? t("resource.cachePreserved", {}, "便携浏览器缓存会保留；已有用户数据不会被覆盖。") : "";
         const actions = [];
         if (source.importable && migrations.data.requires_confirmation) {
-          actions.push(action(confirmingSource === source.source_id
+          actions.push(diagnosticActions.create(`migration-review:${source.source_id}`, confirmingSource === source.source_id
             ? t("resource.awaitConfirmation", {}, "等待确认")
             : t("resource.reviewImport", {}, "查看导入确认"), () => {
+            if (migrationBusy) return;
             confirmingSource = source.source_id;
             renderDiagnostics();
+            diagnosticActions.find(`migration-cancel:${source.source_id}`)?.focus();
           }, "primary"));
         }
-        const item = card(label, description, [
+        const item = card(label, [description, cacheNotice].filter(Boolean).join(" "), [
           t("resource.fileCount", { count: source.file_count }, `${source.file_count} files`),
           t("resource.projectCount", { count: source.project_count }, `${source.project_count} projects`),
           t("resource.sessionCount", { count: source.session_count }, `${source.session_count} sessions`),
@@ -303,8 +310,16 @@ export function createResourcePanels({ agentsStore, stores, reload }) {
           element("div", {}, [element("dt", { text: t("resource.target", {}, "目标") }), element("dd", { text: source.target_path })]),
         ]));
         if (confirmingSource === source.source_id && source.importable) {
-          const cancel = action(t("resource.cancel", {}, "取消"), () => { confirmingSource = ""; renderDiagnostics(); });
-          const confirm = action(t("resource.confirmImport", {}, "确认导入"), async () => {
+          const cancel = diagnosticActions.create(`migration-cancel:${source.source_id}`,
+            t("resource.cancel", {}, "取消"), () => {
+              if (migrationBusy) return;
+              confirmingSource = "";
+              renderDiagnostics();
+              diagnosticActions.find(`migration-review:${source.source_id}`)?.focus();
+            });
+          const confirm = diagnosticActions.create(`migration-confirm:${source.source_id}`,
+            t("resource.confirmImport", {}, "确认导入"), async () => {
+            if (migrationBusy) return;
             migrationBusy = true;
             renderDiagnostics();
             try {
@@ -321,10 +336,10 @@ export function createResourcePanels({ agentsStore, stores, reload }) {
             }
           }, "danger");
           cancel.disabled = migrationBusy;
-          confirm.disabled = migrationBusy;
+          if (migrationBusy) confirm.setAttribute("aria-disabled", "true");
           item.append(element("div", { className: "migration-confirm", attrs: { role: "alert" } }, [
             element("strong", { text: t("resource.importPromptTitle", {}, "确认从此预览导入？") }),
-            element("p", { text: t("resource.importPromptDescription", {}, "mdo 将创建目标 Home，旧目录会原样保留；目标已存在、内容变化或令牌过期都会中止。成功后必须重启 mdo。") }),
+            element("p", { text: t("resource.importPromptDescription", {}, "mdo 将导入到尚无用户数据的 Home，并保留浏览器缓存；旧目录会原样保留，已有用户数据、来源变化或令牌过期都会中止。成功后必须重启 mdo。") }),
             element("div", { className: "resource-actions" }, [cancel, confirm]),
           ]));
         }
@@ -337,7 +352,12 @@ export function createResourcePanels({ agentsStore, stores, reload }) {
     for (const item of diagnostics.status === "error" ? [] : diagnostics.data?.items ?? []) {
       diagnosticsContainer.append(card(`${item.domain} · ${item.stage}`, item.message, [item.subject_id || item.path || "runtime"]));
     }
-    if (focusedKey) diagnosticActions.find(focusedKey)?.focus({ preventScroll: true });
+    if (focusedKey) {
+      const restored = diagnosticActions.find(focusedKey);
+      if (restored) restored.focus({ preventScroll: true });
+      else if (focusedKey.startsWith("migration-confirm:") && migrationResult?.restart_required)
+        diagnosticActions.find("migrations-result")?.focus();
+    }
   }
 
   unsubscribers.push(agentsStore.subscribe(renderExtensions));

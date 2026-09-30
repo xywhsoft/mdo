@@ -611,6 +611,19 @@ done:
     apply_text = apply_text.replace(publish,
         "    if ( !MdoApiProbeMigrationCheckpoint(&Context, 2u, NULL, Error) ||\n"
         "         !xrtPathRename(Context.StagePath, Context.Preview.TargetPath, false) ) {", 1)
+    cache_publish = ('    if ( Context.CacheImport != NULL ) {\n'
+        '        MdoHomeImport* Import = Context.CacheImport;\n'
+        '        Context.CacheImport = NULL; /* End consumes on success and failure. */')
+    assert apply_text.count(cache_publish) == 1
+    apply_text = apply_text.replace(cache_publish,
+        '    if ( Context.CacheImport != NULL ) {\n'
+        '        if ( !MdoApiProbeMigrationCheckpoint(&Context, 2u, NULL, Error) ) goto done;\n'
+        '        MdoHomeImport* Import = Context.CacheImport;\n'
+        '        Context.CacheImport = NULL; /* End consumes on success and failure. */', 1)
+    cache_cleanup = '        if ( !MdoHomeImportEnd(Import, false) )'
+    assert apply_text.count(cache_cleanup) == 1
+    apply_text = apply_text.replace(cache_cleanup,
+        '        (void)MdoApiProbeMigrationCheckpoint(&Context, 3u, NULL, NULL);\n' + cache_cleanup, 1)
     apply_text = apply_text.replace(cleanup,
         "            (void)MdoApiProbeMigrationCheckpoint(&Context, 3u, NULL, NULL);\n" + cleanup, 1)
     apply_path.write_text(apply_text, encoding="utf-8", newline="\n")
@@ -1039,6 +1052,104 @@ def scheduled_questions_probe(port: int, home: Path, definition: dict) -> None:
         assert answer in text, (answer, text)
     assert not (home / "sessions/api-project/ask-api").exists()
     assert not list((home / "sessions/api-project").glob("schedule-task-*"))
+
+
+def run_cache_migration_probe(host: Path) -> None:
+    """HTTP import preserves an existing cache, freezes writes, then loads on restart."""
+    with tempfile.TemporaryDirectory(prefix="api-cache-import-", dir=ROOT / ".build") as raw:
+        base = Path(raw)
+        port = free_port()
+        config = write_site(base, port)
+        home = base / "home"
+        cache = home / "data/cache/webview2/cache.bin"
+        cache.parent.mkdir(parents=True)
+        cache.write_bytes(b"portable-cache")
+        legacy = base / ".mdo"
+        legacy.mkdir()
+        source_bytes = b'{"models":[],"settings":{"theme":"dark"}}'
+        (legacy / "config.json").write_bytes(source_bytes)
+        env = dict(os.environ, USERPROFILE=str(base), HOME=str(base), MDO_HOME=str(home))
+        fixture = "/__fixture/migration-lease/"
+        path = "/api/v1/migrations/legacy"
+        for restart in (False, True, None):
+            env["MDO_HOME"] = str(legacy / "must-not-be-created" if restart is None else home)
+            log_path = base / ("restart.log" if restart else "import.log")
+            with log_path.open("wb") as log:
+                process = subprocess.Popen([str(host), str(config)], cwd=base, env=env,
+                    stdout=log, stderr=subprocess.STDOUT,
+                    creationflags=subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0)
+                try:
+                    wait_ready(port, process)
+                    status, _, body = request(port, "GET", "/api/v1/bootstrap")
+                    state = json.loads(body)["data"]["home"]
+                    assert status == 200 and not state["restart_required"], body
+                    assert not state["import_in_progress"], state
+                    if restart is None:
+                        status, _, body = request(port, "GET", path)
+                        source = next(item for item in json.loads(body)["data"]["items"]
+                                      if item["source_id"] == "user-home")
+                        assert status == 200 and source["valid"] and not source["importable"], body
+                        payload = json.dumps({"source_id": "user-home",
+                                              "preview_token": source["preview_token"]}).encode()
+                        assert request(port, "POST", path, body=payload,
+                            headers={"Content-Type": "application/json"})[0] == 409
+                        assert not (legacy / "must-not-be-created").exists()
+                        continue
+                    if restart:
+                        assert not (home / ".mdo-import").exists()
+                        assert not (home / ".mdo-import-cleanup").exists()
+                        status, _, body = request(port, "GET", "/api/v1/settings")
+                        assert status == 200 and json.loads(body)["data"][
+                            "appearance"]["theme"] == "dark", body
+                        continue
+                    status, _, body = request(port, "GET", path)
+                    source = next(item for item in json.loads(body)["data"]["items"]
+                                  if item["source_id"] == "user-home")
+                    assert status == 200 and source["importable"] and (
+                        source["preserve_browser_cache"] is True), body
+                    payload = json.dumps({"source_id": "user-home",
+                                          "preview_token": source["preview_token"]}).encode()
+                    for failure in ("fail-report", "fail-publish"):
+                        assert request(port, "POST", fixture + failure)[0] == 200
+                        try:
+                            status, _, body = request(port, "POST", path, body=payload,
+                                headers={"Content-Type": "application/json"})
+                            assert status == 500, (status, body)
+                            assert not (home / ".mdo-import").exists()
+                            assert not (home / "config").exists()
+                            assert cache.read_bytes() == b"portable-cache"
+                            assert not json.loads(request(port, "GET", "/api/v1/bootstrap")[2])[
+                                "data"]["home"]["restart_required"]
+                        finally:
+                            assert request(port, "POST", fixture + "clear-failure")[0] == 200
+                    status, _, body = request(port, "POST", path, body=payload,
+                        headers={"Content-Type": "application/json"})
+                    assert status == 201 and json.loads(body)["data"]["restart_required"], body
+                    state = json.loads(request(port, "GET", "/api/v1/bootstrap")[2])["data"]["home"]
+                    assert state["restart_required"] and not state["import_in_progress"], state
+                    evidence = migration_lease_snapshot(port)
+                    assert evidence["publish"] >= 2 and evidence["cleanup"] >= 2, evidence
+                    status, _, body = request(port, "POST", "/api/v1/projects",
+                        body=b'{"id":"must-not-write","name":"Blocked"}',
+                        headers={"Content-Type": "application/json"})
+                    assert status == 503 and json.loads(body)["error"]["code"] == (
+                        "home_restart_required"), body
+                    assert not (home / "projects/must-not-write.json").exists()
+                    assert (home / ".mdo-import/committed").is_file()
+                except BaseException as error:
+                    raise RuntimeError(f"{error}\n{log_path.read_text(encoding='utf-8', errors='replace')[-6000:]}") from error
+                finally:
+                    if process.poll() is None:
+                        process.terminate()
+                        try:
+                            process.wait(timeout=5)
+                        except subprocess.TimeoutExpired:
+                            process.kill()
+                            process.wait(timeout=3)
+            assert cache.read_bytes() == b"portable-cache"
+            assert (legacy / "config.json").read_bytes() == source_bytes
+        assert cache.read_bytes() == b"portable-cache"
+        assert (legacy / "config.json").read_bytes() == source_bytes
 
 
 def run_probe(host: Path) -> None:
@@ -5475,6 +5586,7 @@ def main() -> int:
         print(f"missing xs host: {host}", file=sys.stderr)
         return 2
     run_unconfigured_model_probe(host)
+    run_cache_migration_probe(host)
     run_probe(host)
     print("API runtime probe: PASS")
     return 0

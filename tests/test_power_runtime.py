@@ -142,7 +142,7 @@ def main() -> int:
                          "src/power", "include/mdo"):
             (site / relative).mkdir(parents=True, exist_ok=True)
         (site / "web/index.html").write_text("probe", encoding="utf-8")
-        for relative in ("default-home/config/defaults.json", "src/storage/home.c",
+        for relative in ("default-home/config/defaults.json", "src/storage/home.c", "src/storage/home_import.inc.c",
                          "src/config/config.c", "src/power/inhibitor.c",
                          "src/power/manager.c"):
             shutil.copy2(ROOT / "app" / relative, site / relative)

@@ -17,6 +17,7 @@ typedef struct MdoMigrationPreview {
     bool Valid;
     bool Importable;
     bool TargetAvailable;
+    bool PreserveBrowserCache;
     size_t FileCount;
     size_t ProjectCount;
     size_t SessionCount;
@@ -69,8 +70,10 @@ bool MdoLegacyMigrationDiscover(MdoMigrationPreview* Previews,
 void MdoMigrationApplyOptionsInit(MdoMigrationApplyOptions* Options);
 
 /* Re-runs the complete preview and requires an exact content-bound token.
- * Conversion happens in a sibling staging directory and the target is
- * published once without replacement. The source is never modified.
+ * A missing target is published once from sibling staging. A mounted Home
+ * containing only browser cache uses the recoverable Home import transaction;
+ * its cache is retained and writes stay frozen until restart. The source is
+ * never modified; source/target containment is refused.
  * Requires the project lifecycle service. All mapped projects are reserved
  * before the first staging write, through publication or failed-stage cleanup;
  * a busy destination project returns XWORK_ERROR_CONTEXT without writing. */

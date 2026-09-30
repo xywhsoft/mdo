@@ -4,6 +4,7 @@
 #include "../../include/mdo/migration.h"
 #include "../../include/mdo/models.h"
 #include "../../include/mdo/project_lifecycle.h"
+#include "../../include/mdo/home_import.h"
 
 #define MDO_MIGRATION_MAX_FILES 4096u
 #define MDO_MIGRATION_MAX_ENTRIES 8192u
@@ -62,6 +63,7 @@ typedef struct MdoMigrationContext {
     MdoMigrationPreview Preview;
     MdoMigrationApplyResult* Result;
     char* StagePath;
+    MdoHomeImport* CacheImport;
     MdoMigrationModelMap* Models;
     size_t ModelCount;
     MdoMigrationProjectMap* Projects;

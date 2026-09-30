@@ -66,6 +66,8 @@ static xvalue* MdoApiBootstrapData(const MdoBootstrapSnapshot* Snapshot)
         MdoApiValueSetString(Home, "mode",
             MdoApiPersistenceText(Snapshot->Home.Persistence)) &&
         MdoApiValueSetBool(Home, "external_overlay", Snapshot->Home.ExternalOverlay) &&
+        MdoApiValueSetBool(Home, "restart_required", Snapshot->Home.RestartRequired) &&
+        MdoApiValueSetBool(Home, "import_in_progress", Snapshot->Home.ImportInProgress) &&
         MdoApiValueSetString(Home, "path", Snapshot->Home.Path) &&
         MdoApiValueSetString(Home, "message", Snapshot->Home.Message) &&
         MdoApiValueSetTake(Data, "home", &Home);

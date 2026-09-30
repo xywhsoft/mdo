@@ -200,11 +200,11 @@ def write_site(site: Path) -> None:
         (site / relative).mkdir(parents=True, exist_ok=True)
     (site / "web/index.html").write_text("probe", encoding="utf-8")
     for relative in (
-        "default-home/config/defaults.json", "src/storage/home.c",
+        "default-home/config/defaults.json", "src/storage/home.c", "src/storage/home_import.inc.c",
         "src/config/config.c", "src/config/service.c",
     ):
         shutil.copy2(ROOT / "app" / relative, site / relative)
-    for name in ("home.h", "config.h", "models.h", "schedules.h",
+    for name in ("home.h", "home_import.h", "config.h", "models.h", "schedules.h",
                  "settings.h", "web.h"):
         shutil.copy2(ROOT / "app/include/mdo" / name,
                      site / "include/mdo" / name)

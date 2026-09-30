@@ -570,7 +570,7 @@ def write_site(site: Path) -> None:
     (site / "web/index.html").write_text("probe", encoding="utf-8")
     for relative in (
         "default-home/config/defaults.json",
-        "src/storage/home.c",
+        "src/storage/home.c", "src/storage/home_import.inc.c",
         "src/projects/lifecycle.c",
         "src/config/config.c",
         "src/schedules/manager.c",
@@ -598,7 +598,7 @@ def write_site(site: Path) -> None:
         '    xrtMutexUnlock(g_MdoSchedules.Lock);\n    ScheduleProbeCatalogResolved();\n    for ( i = 0u; i < Count; ++i )')
     source = source.replace('xworkRuntimeSetScheduleEnabled(', 'ScheduleProbeSetEnabled(')
     manager.write_text(source, encoding="utf-8")
-    for name in ("home.h", "config.h", "models.h", "schedules.h",
+    for name in ("home.h", "home_import.h", "config.h", "models.h", "schedules.h",
                  "project_lifecycle.h"):
         shutil.copy2(ROOT / "app/include/mdo" / name, site / "include/mdo" / name)
     (site / "probe.c").write_text(PROBE_SOURCE, encoding="utf-8")

@@ -16,6 +16,7 @@ static xvalue* MdoApiMigrationPreviewValue(
         MdoApiValueSetBool(Item, "importable", Preview->Importable) &&
         MdoApiValueSetBool(Item, "target_available",
             Preview->TargetAvailable) &&
+        MdoApiValueSetBool(Item, "preserve_browser_cache", Preview->PreserveBrowserCache) &&
         MdoApiValueSetUInt(Item, "file_count", Preview->FileCount) &&
         MdoApiValueSetUInt(Item, "project_count", Preview->ProjectCount) &&
         MdoApiValueSetUInt(Item, "session_count", Preview->SessionCount) &&

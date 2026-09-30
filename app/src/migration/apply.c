@@ -43,9 +43,22 @@ static char* MdoMigrationStagePath(const char* Target)
 static bool MdoMigrationPrepareStage(MdoMigrationContext* Context,
     xwork_error* Error)
 {
-    char* Parent = xrtPathParent(Context->Preview.TargetPath);
+    char* Parent;
     xfileinfo Info;
     const xerror* Cause;
+    if ( Context->Preview.PreserveBrowserCache ) {
+        Context->CacheImport = MdoHomeImportBegin(&Context->StageRoot,
+            &Context->StagePath);
+        if ( Context->CacheImport != NULL ) return true;
+        Cause = xrtGetError();
+        if ( Cause != NULL && (xrtErrorKind(Cause) == XERR_STATE ||
+                xrtErrorKind(Cause) == XERR_AGAIN) )
+            MdoMigrationError(Error, XWORK_ERROR_CONTEXT,
+                "target Home is no longer available for cache-preserving import");
+        else MdoMigrationXrtError(Error, "cannot prepare cache-preserving import");
+        return false;
+    }
+    Parent = xrtPathParent(Context->Preview.TargetPath);
     if ( Parent == NULL || !xrtDirCreateAll(Parent) ) {
         xrtFree(Parent);
         MdoMigrationXrtError(Error, "cannot create migration target parent");
@@ -220,27 +233,37 @@ bool MdoLegacyMigrationApply(const MdoMigrationApplyOptions* Options,
     memset(&FinalPreview, 0, sizeof(FinalPreview));
     FinalPreview.Size = sizeof(FinalPreview);
     if ( !MdoLegacyMigrationPreview(Options->SourceId, &FinalPreview, Error) ||
-         !FinalPreview.Importable ||
+         !FinalPreview.Valid ||
+         (Context.CacheImport == NULL && !FinalPreview.Importable) ||
          strcmp(FinalPreview.PreviewToken, Options->PreviewToken) != 0 ) {
         if ( Error == NULL || Error->eCode == XWORK_ERROR_NONE )
             MdoMigrationError(Error, XWORK_ERROR_CONTEXT,
                 "legacy source or target changed during migration");
         goto done;
     }
-    if ( xrtPathStat(Context.Preview.TargetPath, false, &Info) ) {
-        MdoMigrationError(Error, XWORK_ERROR_CONTEXT,
-            "target Home appeared during migration");
-        goto done;
-    }
-    Cause = xrtGetError();
-    if ( Cause == NULL || xrtErrorKind(Cause) != XERR_NOT_FOUND ) {
-        MdoMigrationXrtError(Error, "cannot recheck migration target");
-        goto done;
-    }
-    xrtClearError();
-    if ( !xrtPathRename(Context.StagePath, Context.Preview.TargetPath, false) ) {
-        MdoMigrationXrtError(Error, "cannot atomically publish migrated Home");
-        goto done;
+    if ( Context.CacheImport != NULL ) {
+        MdoHomeImport* Import = Context.CacheImport;
+        Context.CacheImport = NULL; /* End consumes on success and failure. */
+        if ( !MdoHomeImportEnd(Import, true) ) {
+            MdoMigrationXrtError(Error, "cannot publish cache-preserving import");
+            goto done;
+        }
+    } else {
+        if ( xrtPathStat(Context.Preview.TargetPath, false, &Info) ) {
+            MdoMigrationError(Error, XWORK_ERROR_CONTEXT,
+                "target Home appeared during migration");
+            goto done;
+        }
+        Cause = xrtGetError();
+        if ( Cause == NULL || xrtErrorKind(Cause) != XERR_NOT_FOUND ) {
+            MdoMigrationXrtError(Error, "cannot recheck migration target");
+            goto done;
+        }
+        xrtClearError();
+        if ( !xrtPathRename(Context.StagePath, Context.Preview.TargetPath, false) ) {
+            MdoMigrationXrtError(Error, "cannot atomically publish migrated Home");
+            goto done;
+        }
     }
     Published = true;
     Result->RestartRequired = true;
@@ -254,7 +277,13 @@ done:
         (void)xrtRootClose(Context.SourceRoot);
         Context.SourceRoot = NULL;
     }
-    if ( !Published && Context.StagePath != NULL ) {
+    if ( Context.CacheImport != NULL ) {
+        MdoHomeImport* Import = Context.CacheImport;
+        Context.CacheImport = NULL;
+        if ( !MdoHomeImportEnd(Import, false) )
+            MdoMigrationXrtError(Error, "cache-preserving import needs startup recovery");
+    }
+    if ( !Published && !Context.Preview.PreserveBrowserCache && Context.StagePath != NULL ) {
         size_t TargetSize = strlen(Context.Preview.TargetPath);
         if ( strncmp(Context.StagePath, Context.Preview.TargetPath,
                 TargetSize) == 0 &&

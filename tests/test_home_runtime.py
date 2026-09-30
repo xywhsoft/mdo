@@ -117,10 +117,10 @@ def write_site(site: Path) -> None:
     (site / "web" / "index.html").write_text("probe", encoding="utf-8")
     (site / "default-home" / "config" / "defaults.json").write_text(
         "builtin-default", encoding="utf-8")
-    shutil.copy2(ROOT / "app" / "src" / "storage" / "home.c",
-                 site / "src" / "storage" / "home.c")
-    shutil.copy2(ROOT / "app" / "include" / "mdo" / "home.h",
-                 site / "include" / "mdo" / "home.h")
+    for name in ("home.c", "home_import.inc.c"):
+        shutil.copy2(ROOT / "app/src/storage" / name, site / "src/storage" / name)
+    for name in ("home.h", "home_import.h"):
+        shutil.copy2(ROOT / "app/include/mdo" / name, site / "include/mdo" / name)
     (site / "probe.c").write_text(PROBE_SOURCE, encoding="utf-8")
     with socket.socket() as listener:
         listener.bind(("127.0.0.1", 0))

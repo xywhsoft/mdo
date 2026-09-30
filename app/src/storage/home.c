@@ -2,6 +2,7 @@
 #include <string.h>
 
 #include "../../include/mdo/home.h"
+#include "../../include/mdo/home_import.h"
 
 #define MDO_RESOURCE_PREFIX "/app/default-home/"
 #define MDO_HOME_ERROR_DOMAIN "mdo.home"
@@ -27,10 +28,14 @@ typedef struct MdoHomeState {
     MdoPersistenceMode Persistence;
     bool ExternalOverlay;
     bool Initialized;
+    MdoHomeImport* Import;
+    bool RestartRequired;
     char Message[256];
 } MdoHomeState;
 
 static MdoHomeState g_MdoHome;
+
+static bool MdoHomeImportRecoverLocked(bool* Published);
 
 static void MdoHomeErrorSet(xerrkind Kind, MdoHomeError Code, cstr Message)
 {
@@ -70,6 +75,24 @@ static bool MdoHomePathValid(cstr Path)
             return false;
         if ( *p == '/' || *p == '\0' ) {
             size_t iLength = (size_t)(p - pSegment);
+            if ( pSegment == (const unsigned char*)Path ) {
+                static const char* const Reserved[] = {
+                    ".mdo-import", ".mdo-import-cleanup"
+                };
+                size_t i, Length = iLength;
+                while ( Length != 0u && (pSegment[Length - 1u] == '.' ||
+                        pSegment[Length - 1u] == ' ') ) --Length;
+                for ( i = 0u; i < sizeof(Reserved) / sizeof(Reserved[0]); ++i ) {
+                    size_t j;
+                    if ( strlen(Reserved[i]) != Length ) continue;
+                    for ( j = 0u; j < Length; ++j ) {
+                        unsigned char Ch = pSegment[j];
+                        if ( Ch >= 'A' && Ch <= 'Z' ) Ch += 'a' - 'A';
+                        if ( Ch != (unsigned char)Reserved[i][j] ) break;
+                    }
+                    if ( j == Length ) return false;
+                }
+            }
             if ( iLength == 0u ||
                  (iLength == 1u && pSegment[0] == '.') ||
                  (iLength == 2u && pSegment[0] == '.' &&
@@ -272,8 +295,18 @@ fail:
     return false;
 }
 
+static bool MdoHomeWritableLocked(void)
+{
+    if ( g_MdoHome.Import == NULL && !g_MdoHome.RestartRequired ) return true;
+    MdoHomeErrorSet(XERR_AGAIN, MDO_HOME_ERROR_STATE,
+        g_MdoHome.RestartRequired ? "Home import requires restart before writing" :
+        "Home import is in progress");
+    return false;
+}
+
 static bool MdoHomeEnsureLocked(void)
 {
+    if ( !MdoHomeWritableLocked() ) return false;
     if ( g_MdoHome.Persistence == MDO_PERSISTENCE_EXTERNAL ) return true;
     if ( g_MdoHome.Persistence == MDO_PERSISTENCE_EPHEMERAL ) {
         MdoHomeErrorSet(XERR_PERMISSION, MDO_HOME_ERROR_STORAGE,
@@ -353,7 +386,7 @@ bool MdoHomeInit(void)
                 "external Home path exists but is not a directory");
             goto fail;
         }
-        if ( !MdoHomeMountLocked() ) goto fail;
+        if ( !MdoHomeMountLocked() || !MdoHomeImportRecoverLocked(NULL) ) goto fail;
     } else {
         pError = xrtGetError();
         if ( pError == NULL || xrtErrorKind(pError) != XERR_NOT_FOUND )
@@ -418,6 +451,8 @@ bool MdoHomeGetSnapshot(MdoHomeSnapshot* pSnapshot)
     xrtMutexLock(g_MdoHome.Lock);
     pSnapshot->Persistence = g_MdoHome.Persistence;
     pSnapshot->ExternalOverlay = g_MdoHome.ExternalOverlay;
+    pSnapshot->RestartRequired = g_MdoHome.RestartRequired;
+    pSnapshot->ImportInProgress = g_MdoHome.Import != NULL;
     pSnapshot->Path = g_MdoHome.Path;
     snprintf(pSnapshot->Message, sizeof(pSnapshot->Message), "%s",
         g_MdoHome.Message);
@@ -573,6 +608,7 @@ bool MdoHomeRemoveEmptyDirectory(cstr Path)
         return false;
     }
     xrtMutexLock(g_MdoHome.Lock);
+    if ( !MdoHomeWritableLocked() ) goto done;
     if ( g_MdoHome.Root == NULL ) {
         bOk = true;
         goto done;
@@ -607,6 +643,10 @@ bool MdoHomeRenameNoReplace(cstr Source, cstr Target)
         return false;
     }
     xrtMutexLock(g_MdoHome.Lock);
+    if ( !MdoHomeWritableLocked() ) {
+        xrtMutexUnlock(g_MdoHome.Lock);
+        return false;
+    }
     if ( g_MdoHome.Root == NULL ) {
         xrtMutexUnlock(g_MdoHome.Lock);
         MdoHomeErrorSet(XERR_NOT_FOUND, MDO_HOME_ERROR_STORAGE,
@@ -627,7 +667,7 @@ str MdoHomeExternalPath(cstr Path)
         return NULL;
     }
     xrtMutexLock(g_MdoHome.Lock);
-    Result = xrtPathJoin(g_MdoHome.Path, Path);
+    Result = MdoHomeWritableLocked() ? xrtPathJoin(g_MdoHome.Path, Path) : NULL;
     xrtMutexUnlock(g_MdoHome.Lock);
     return Result;
 }
@@ -844,7 +884,8 @@ bool MdoHomeAtomicWrite(cstr Path, const void* pData, size_t iSize,
 done:
     if ( !bOk ) {
         xerror* pSaved = xrtTakeError();
-        if ( g_MdoHome.Root != NULL )
+        if ( g_MdoHome.Root != NULL && g_MdoHome.Import == NULL &&
+             !g_MdoHome.RestartRequired )
             (void)xrtRootRemove(g_MdoHome.Root, sTemporary);
         xrtClearError();
         if ( pSaved != NULL ) xrtSetErrorTake(pSaved);
@@ -865,6 +906,7 @@ bool MdoHomeRemove(cstr Path, bool Backup)
         return false;
     }
     xrtMutexLock(g_MdoHome.Lock);
+    if ( !MdoHomeWritableLocked() ) goto done;
     if ( g_MdoHome.Root == NULL ) {
         bOk = true;
         goto done;
@@ -942,7 +984,8 @@ done:
         if ( Target != NULL ) (void)xrtClose(Target);
         if ( !bOk ) {
             xrtMutexLock(g_MdoHome.Lock);
-            if ( g_MdoHome.Root != NULL )
+            if ( g_MdoHome.Root != NULL && g_MdoHome.Import == NULL &&
+                 !g_MdoHome.RestartRequired )
                 (void)xrtRootRemove(g_MdoHome.Root, Path);
             xrtMutexUnlock(g_MdoHome.Lock);
             xrtClearError();
@@ -953,3 +996,7 @@ done:
     }
     return bOk;
 }
+
+/* Private part of the same translation unit: it shares the Home mutex/root
+ * without exposing them to migration callers or depending on unity ordering. */
+#include "home_import.inc.c"

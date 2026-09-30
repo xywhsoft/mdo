@@ -17,6 +17,8 @@ const packs = Object.fromEntries(supportedLocales.map((name) => [
 const localizedApiErrors = [
   ["precondition_required", "error.preconditionRequired"],
   ["settings_unavailable", "error.settingsUnavailable"],
+  ["home_import_busy", "error.homeImportBusy"],
+  ["home_restart_required", "error.homeRestartRequired"],
   ["configuration_persistence_failed", "error.configurationSaveFailed"],
   ["project_not_found", "error.projectNotFound"],
   ["project_busy", "error.projectBusy"],
