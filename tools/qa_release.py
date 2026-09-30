@@ -10,6 +10,7 @@ single-file startup checks.
 from __future__ import annotations
 
 import argparse
+from contextlib import contextmanager
 import hashlib
 import os
 import shutil
@@ -30,6 +31,26 @@ BUILD = ROOT / ".build"
 
 class GateError(RuntimeError):
     pass
+
+
+@contextmanager
+def temporary_gate_directory(prefix: str):
+    root = Path(tempfile.mkdtemp(prefix=prefix))
+    try:
+        yield root
+    finally:
+        temp_root = Path(tempfile.gettempdir()).resolve()
+        actual = root.resolve()
+        if actual.parent != temp_root or not actual.name.startswith(prefix):
+            raise GateError(f"refusing to clean unexpected temporary path: {actual}")
+        deadline = time.monotonic() + 5
+        while root.exists():
+            try:
+                shutil.rmtree(root)
+            except PermissionError as error:
+                if time.monotonic() >= deadline:
+                    raise GateError("portable WebView2 profile stayed open after exit") from error
+                time.sleep(0.2)
 
 
 def command_text(command: list[str]) -> str:
@@ -117,8 +138,7 @@ def stop_process(process: subprocess.Popen[bytes]) -> None:
 
 
 def windows_single_file(executable: Path, observe_seconds: int) -> None:
-    with tempfile.TemporaryDirectory(prefix="mdo-release-clean-") as temporary:
-        root = Path(temporary)
+    with temporary_gate_directory("mdo-release-clean-") as root:
         first = root / "portable-first"
         first.mkdir()
         # A unique name also makes any accidental AppData fallback observable.
