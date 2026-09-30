@@ -4,6 +4,16 @@
 
 完成判据及尚缺的打包页证据见 [前端操作体验完成审计](frontend-completion-audit.md)。本文件继续记录每次实现和验证的细节。
 
+## 2026-09-30：记录启动停留阶段以定位偶发空白页
+
+此前隔离浏览器偶发出现静态资源返回 200、会话 URL 保留、却没有初始化 API 请求的空白启动。本轮先用原根目录单文件包在隔离 Home `.build/mdo-packed-docks-xkoailpd` 做两次有界刷新：两次都恢复 “Packed docks QA”，无网络加载失败或脚本异常，不能据此排除偶发故障，也不能将其归因于 mdo。
+
+页面根节点现在记录 `data-mdo-startup-stage`：`import` 表示入口模块及静态依赖仍未完成导入；`setup` 表示已进入应用初始化；`resources` 表示正在等待启动所需的资源；`navigation` 表示正在选择启动路由；`ready` 表示启动完成。20 秒观察上限的控制台提示会带上当时阶段，失败时保留最后阶段。这一标记不改变启动路由、超时恢复或消息操作。下次复现时，可同时读取 `data-mdo-startup` 和该阶段，收集模块网络瀑布，再与原生 WebView2 对照。
+
+候选单文件包在 `.build/mdo-packed-docks-m0ro98xg` 延迟首个入口模块 30 秒，载入期间观察到 `import`，请求完成后恢复原会话与输入焦点；在 `.build/mdo-packed-docks-tcf01y6p` 延迟首次会话及模型目录读取 10 秒，无 hash 的页面观察到 `resources`，完成后变为 `ready` 并恢复上次会话。最终同字节包在独立 Home `.build/mdo-packed-docks-fx_mp7oo` 连续刷新明确会话 URL 三次，均为 `ready`、标题和输入焦点正确，CDP 未记录网络加载失败或脚本异常。未捕获真实偶发空白页，故根因仍待故障当次证据。
+
+Windows/Linux 有界发布门禁各通过 114 项 Python 检查、77 个前端模块解析、21 个运行探针及确定性打包；Windows 另通过便携 WebView2 Home 和 20 秒打包启动。根目录 `mdo.exe` 与 Windows 包 SHA-256 为 `6e94e6a541da398aa161df2cb0756acfcbddfe0dc096d9d0de60742b0932f313`，Linux 包为 `c674dcb252a108b71cd54e6490fc1ef2f6c8d507bbc452ff488aff5efd237530`。未做压力或高负载测试。
+
 ## 2026-09-30：启动询问弹窗随界面语言显示
 
 选择“启动时询问是否继续上次任务”后，弹窗过去写死中文；英文和俄文设置下，标题、说明和两个按钮仍是中文。现将这些文字接入三语词典，并在无明确路由且确实采用询问模式时等待语言包就绪，再打开弹窗。明确会话 URL 的恢复仍不等待语言包。

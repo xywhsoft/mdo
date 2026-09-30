@@ -751,6 +751,8 @@
     const skip = document.querySelector(".skip-link");
     const startupState = document.documentElement.dataset;
     startupState.mdoStartup = "loading";
+    // Keep the last reached stage visible even if the module graph stalls.
+    startupState.mdoStartupStage = "import";
     // This path must work even when the language module itself cannot import.
     const startupCopy = {
       "zh-CN": {
@@ -793,12 +795,17 @@
     }
     retry.addEventListener("click", () => window.location.reload());
     const startupTimer = window.setTimeout(() => {
-      console.warn("Workspace startup is still pending after 20 seconds");
+      console.warn("Workspace startup is still pending after 20 seconds at stage",
+        startupState.mdoStartupStage);
       showFailure("timeout");
     }, 20000);
-    import("/js/main.js").then(({ start }) => start()).then(() => {
+    import("/js/main.js").then(({ start }) => {
+      startupState.mdoStartupStage = "setup";
+      return start();
+    }).then(() => {
       window.clearTimeout(startupTimer);
       startupState.mdoStartup = "ready";
+      startupState.mdoStartupStage = "ready";
       loading.hidden = true;
       failure.hidden = true;
       shell.inert = false;
@@ -813,7 +820,8 @@
       }
     }).catch((error) => {
       window.clearTimeout(startupTimer);
-      console.error("Workspace startup failed", error);
+      console.error("Workspace startup failed at stage",
+        startupState.mdoStartupStage, error);
       showFailure("failed");
     });
   </script>

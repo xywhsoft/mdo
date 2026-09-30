@@ -2479,6 +2479,7 @@ export async function boot() {
     Boolean(navigation.get().sessionId);
   if (explicitSession)
     void Promise.allSettled([sessionsReady, catalogsReady]).then(reportInitialLoad);
+  document.documentElement.dataset.mdoStartupStage = "resources";
   const initial = await Promise.allSettled([
     ...(!explicitSession ? [sessionsReady, catalogsReady] : []),
     settingsReady,
@@ -2495,6 +2496,7 @@ export async function boot() {
       settingsStore.get().data?.workspace?.open_mode === "ask")
     await settingsView.localeReady();
 
+  document.documentElement.dataset.mdoStartupStage = "navigation";
   await startWorkspaceNavigation({ navigation, settingsStore, sessionsStore,
     runsStore,
     sessionDetailStore,
