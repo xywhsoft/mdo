@@ -3,6 +3,7 @@
 #include <string.h>
 
 #include "internal.h"
+#include "../../include/mdo/project_lifecycle.h"
 #include "../../include/mdo/home.h"
 #include "../../include/mdo/sessions.h"
 
@@ -263,13 +264,19 @@ bool MdoApiFeedbackReconcile(const char* ProjectId, const char* SessionId)
     size_t Count = 0u;
     bool Changed = false;
     bool Ok;
+    MdoProjectLease* Lease;
     if ( !MdoFeedbackPath(Path, ProjectId, SessionId) ) return false;
+    /* The global feedback listing also repairs sidecars, without a scoped
+     * request or an open session. Protect that independent write boundary. */
+    Lease = MdoProjectLeaseAcquire(ProjectId, MDO_PROJECT_LEASE_SHARED, NULL);
+    if ( Lease == NULL ) return false;
     xrtMutexLock(g_MdoFeedbackLock);
     Ok = MdoFeedbackRead(Path, Items, &Count);
     if ( Ok ) Ok = MdoFeedbackPruneRemoved(ProjectId, SessionId,
         Items, &Count, &Changed);
     if ( Ok && Changed ) Ok = MdoFeedbackWrite(Path, Items, Count);
     xrtMutexUnlock(g_MdoFeedbackLock);
+    MdoProjectLeaseRelease(Lease);
     return Ok;
 }
 

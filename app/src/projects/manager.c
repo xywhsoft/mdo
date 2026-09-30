@@ -3,6 +3,7 @@
 #include <string.h>
 
 #include "../../include/mdo/home.h"
+#include "../../include/mdo/project_lifecycle.h"
 #include "../../include/mdo/projects.h"
 
 #define MDO_PROJECT_SCHEMA_VERSION 1u
@@ -346,12 +347,25 @@ static bool MdoProjectsFields(const MdoProjectCreateOptions* Options,
     return true;
 }
 
+static MdoProjectMutationResult MdoProjectsLease(const char* Id,
+    MdoProjectLease** Lease, xwork_error* Error)
+{
+    xwork_error Failure;
+    *Lease = MdoProjectLeaseAcquire(Id, MDO_PROJECT_LEASE_SHARED, &Failure);
+    if ( Error != NULL ) *Error = Failure;
+    if ( *Lease != NULL ) return MDO_PROJECT_MUTATION_OK;
+    return Failure.eCode == XWORK_ERROR_CONTEXT &&
+        strcmp(Failure.sMessage, "project lifecycle is busy") == 0 ?
+        MDO_PROJECT_MUTATION_BUSY : MDO_PROJECT_MUTATION_UNAVAILABLE;
+}
+
 bool MdoProjectCreate(const MdoProjectCreateOptions* Options,
     MdoProjectInfo* Info, xwork_error* Error)
 {
     MdoProjectInfo Candidate;
     char Path[96];
     xfile Lock = NULL;
+    MdoProjectLease* Lease = NULL;
     xfileinfo Stat;
     char* Json = NULL;
     size_t Size = 0u;
@@ -371,6 +385,8 @@ bool MdoProjectCreate(const MdoProjectCreateOptions* Options,
             "project fields are invalid or exceed their bounds");
         return false;
     }
+    if ( MdoProjectsLease(Options->Id, &Lease, Error) !=
+            MDO_PROJECT_MUTATION_OK ) return false;
     Candidate.Revision = 1u;
     Candidate.CreatedAt = xrtNow();
     Candidate.UpdatedAt = Candidate.CreatedAt;
@@ -378,7 +394,7 @@ bool MdoProjectCreate(const MdoProjectCreateOptions* Options,
     if ( Json == NULL ) {
         MdoProjectsError(Error, XWORK_ERROR_OUT_OF_MEMORY,
             "cannot serialize project definition");
-        return false;
+        goto done;
     }
     Lock = MdoHomeOpenWrite("projects/.writer.lock",
         XFILE_READ | XFILE_CREATE | XFILE_SYNC);
@@ -411,6 +427,7 @@ bool MdoProjectCreate(const MdoProjectCreateOptions* Options,
 done:
     if ( Lock != NULL ) (void)xrtClose(Lock);
     xrtFree(Json);
+    MdoProjectLeaseRelease(Lease);
     return Ok;
 }
 
@@ -449,6 +466,7 @@ MdoProjectMutationResult MdoProjectReplace(
     char Path[96];
     char CheckPath[96];
     xfile Lock = NULL;
+    MdoProjectLease* Lease = NULL;
     char* Json = NULL;
     size_t Size = 0u;
     MdoProjectMutationResult Result;
@@ -458,8 +476,11 @@ MdoProjectMutationResult MdoProjectReplace(
         return MDO_PROJECT_MUTATION_INVALID;
     memset(&Candidate, 0, sizeof(Candidate));
     Candidate.Size = sizeof(Candidate);
-    if ( !MdoProjectsFields(Options, &Candidate, CheckPath) )
+    if ( ExpectedRevision == 0u ||
+         !MdoProjectsFields(Options, &Candidate, CheckPath) )
         return MDO_PROJECT_MUTATION_INVALID;
+    Result = MdoProjectsLease(Options->Id, &Lease, Error);
+    if ( Result != MDO_PROJECT_MUTATION_OK ) return Result;
     Result = MdoProjectsMutationBegin(Options->Id, ExpectedRevision,
         Path, &Lock, &Current, Error);
     if ( Result != MDO_PROJECT_MUTATION_OK ) goto done;
@@ -485,6 +506,7 @@ MdoProjectMutationResult MdoProjectReplace(
 done:
     if ( Lock != NULL ) (void)xrtClose(Lock);
     xrtFree(Json);
+    MdoProjectLeaseRelease(Lease);
     return Result;
 }
 
@@ -494,13 +516,19 @@ MdoProjectMutationResult MdoProjectUnregister(const char* Id,
     MdoProjectInfo Current;
     char Path[96];
     xfile Lock = NULL;
+    MdoProjectLease* Lease = NULL;
     MdoProjectMutationResult Result;
     xworkErrorInit(Error);
+    if ( ExpectedRevision == 0u || !MdoProjectsId(Id) )
+        return MDO_PROJECT_MUTATION_INVALID;
+    Result = MdoProjectsLease(Id, &Lease, Error);
+    if ( Result != MDO_PROJECT_MUTATION_OK ) return Result;
     Result = MdoProjectsMutationBegin(Id, ExpectedRevision, Path,
         &Lock, &Current, Error);
     if ( Result == MDO_PROJECT_MUTATION_OK &&
          !MdoHomeRemove(Path, true) )
         Result = MDO_PROJECT_MUTATION_UNAVAILABLE;
     if ( Lock != NULL ) (void)xrtClose(Lock);
+    MdoProjectLeaseRelease(Lease);
     return Result;
 }

@@ -36,7 +36,8 @@ typedef enum MdoProjectMutationResult {
     MDO_PROJECT_MUTATION_INVALID,
     MDO_PROJECT_MUTATION_NOT_FOUND,
     MDO_PROJECT_MUTATION_REVISION_CONFLICT,
-    MDO_PROJECT_MUTATION_UNAVAILABLE
+    MDO_PROJECT_MUTATION_UNAVAILABLE,
+    MDO_PROJECT_MUTATION_BUSY
 } MdoProjectMutationResult;
 
 void MdoProjectCreateOptionsInit(MdoProjectCreateOptions* Options);
@@ -48,8 +49,10 @@ bool MdoProjectList(MdoProjectInfo* Items, size_t Capacity, size_t* Count,
     size_t* InvalidCount, bool* Truncated, xwork_error* Error);
 bool MdoProjectCreate(const MdoProjectCreateOptions* Options,
     MdoProjectInfo* Info, xwork_error* Error);
-/* Replace and unregister require a revision read by the caller. Both hold the
- * project writer lock while re-reading the definition and publishing a backup. */
+/* All definition writes acquire a shared lifecycle lease before touching Home
+ * or taking the project writer lock. Initialize the lifecycle service first.
+ * Replace and unregister require a revision read by the caller, re-read under
+ * the writer lock, and report BUSY if lifecycle exclusion prevents the write. */
 MdoProjectMutationResult MdoProjectReplace(
     const MdoProjectCreateOptions* Options, uint64 ExpectedRevision,
     MdoProjectInfo* Info, xwork_error* Error);

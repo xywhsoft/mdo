@@ -99,6 +99,24 @@ limit or result limit was reached; `scanned` reports entries visited. The UI
 debounces requests and shows the first eight candidates. A selected name is
 inserted into the prompt as a text reference, with quotes for spaces.
 
+## Project lifecycle exclusion
+
+Project definition endpoints, project/session drafts and submission intents,
+queues, feedback, attachments, todos, and related session operations hold a
+shared project lease for the entire handler. An exclusive project operation
+causes these requests to return `409 project_busy` before running the handler.
+Definition creation also checks the lease in the direct C writer. A busy project
+is distinct from `project_exists`, stale revisions, and invalid fields.
+`OPTIONS` and `405` responses do not take a lease; invalid identifiers retain
+their endpoint's validation response. Global drafts and other projects keep
+their own scope.
+
+The global feedback listing can repair stored feedback; that repair obtains its
+own project lease. The current exclusive primitive is infrastructure for the
+planned purge transaction. There is no executable project-purge API yet, and
+`purge-preview` remains advisory. Memory, schedules, migration, and independent
+sidecar helpers still require a complete lifecycle audit before purge opens.
+
 ## Settings transactions
 
 `GET /settings` returns the effective, typed UI settings and the current

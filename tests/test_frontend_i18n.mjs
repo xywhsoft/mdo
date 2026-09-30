@@ -19,6 +19,7 @@ const localizedApiErrors = [
   ["settings_unavailable", "error.settingsUnavailable"],
   ["configuration_persistence_failed", "error.configurationSaveFailed"],
   ["project_not_found", "error.projectNotFound"],
+  ["project_busy", "error.projectBusy"],
   ["purge_preview_unavailable", "error.purgePreviewUnavailable"],
   ["session_create_invalid", "error.sessionCreateInvalid"],
   ["session_create_conflict", "error.sessionCreateConflict"],

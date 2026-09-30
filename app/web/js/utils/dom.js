@@ -166,6 +166,8 @@ const API_ERROR_COPY = Object.freeze({
     "项目目录或名称无效，请检查后重试。"],
   project_unavailable: ["error.projectUnavailable",
     "项目未能保存，请检查便携数据目录后重试。"],
+  project_busy: ["error.projectBusy",
+    "项目数据正在变更，请稍后重试；本次操作未执行。"],
   purge_preview_unavailable: ["error.purgePreviewUnavailable",
     "无法完整检查项目数据；请勿依据旧清单操作，稍后重试。"],
   session_create_invalid: ["error.sessionCreateInvalid",

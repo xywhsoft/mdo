@@ -187,9 +187,114 @@ def write_site(base: Path, port: int) -> Path:
 #include "../../include/mdo/approvals.h"
 #include "../../include/mdo/home.h"
 #include "../../include/mdo/sessions.h"
+#include "../../include/mdo/project_lifecycle.h"
+#include "../../include/mdo/projects.h"
 #include <xllm-session.h>
 
 static xthread* g_MdoApiProbeApprovalThread;
+static xmutex* g_MdoApiProbeLeaseLock;
+static MdoProjectLease* g_MdoApiProbeLease;
+static xatomic32 g_MdoApiProbeLeaseChecks, g_MdoApiProbeLeaseViolations;
+
+/* Test-only checkpoints are inserted after session release and immediately
+ * before definition publication in the copied app, never in the shipped app. */
+bool MdoApiProbeLeaseCheckpoint(const char* ProjectId)
+{
+    xwork_error Error;
+    MdoProjectLease* Exclusive;
+    bool Blocked;
+    if ( strcmp(ProjectId, "lease-probe") != 0 ) return true;
+    Exclusive = MdoProjectLeaseAcquire(ProjectId,
+        MDO_PROJECT_LEASE_EXCLUSIVE, &Error);
+    Blocked = Exclusive == NULL && Error.eCode == XWORK_ERROR_CONTEXT;
+    MdoProjectLeaseRelease(Exclusive);
+    (void)xrtAtomic32FetchAdd(&g_MdoApiProbeLeaseChecks, 1u, XMEMORY_RELAXED);
+    if ( !Blocked ) (void)xrtAtomic32FetchAdd(
+        &g_MdoApiProbeLeaseViolations, 1u, XMEMORY_RELAXED);
+    return Blocked;
+}
+
+static bool MdoApiProbeLeaseControl(XS_HttpReq* Request)
+{
+    static const char Prefix[] = "/__fixture/project-lease/";
+    xstrview Target;
+    MdoApiContext Context;
+    MdoProjectCreateOptions Options;
+    MdoProjectLease* Exclusive;
+    xwork_error Error;
+    xvalue* Data;
+    bool Ok = true;
+    if ( Request == NULL || Request->head == NULL ) return false;
+    Target = Request->head->Target;
+    if ( Target.Size < sizeof(Prefix) - 1u ||
+         memcmp(Target.Data, Prefix, sizeof(Prefix) - 1u) != 0 ) return false;
+    memset(&Context, 0, sizeof(Context)); Context.Request = Request;
+    snprintf(Context.RequestId, sizeof(Context.RequestId), "fixture-lease");
+    Data = xrtValueObject();
+    xrtMutexLock(g_MdoApiProbeLeaseLock);
+    if ( MdoApiViewEqualText(Target, "/__fixture/project-lease/acquire") ) {
+        if ( g_MdoApiProbeLease == NULL ) g_MdoApiProbeLease =
+            MdoProjectLeaseAcquire("lease-probe", MDO_PROJECT_LEASE_EXCLUSIVE,
+                &Error);
+        Ok = g_MdoApiProbeLease != NULL;
+    } else if ( MdoApiViewEqualText(Target,
+            "/__fixture/project-lease/release") ) {
+        MdoProjectLeaseRelease(g_MdoApiProbeLease); g_MdoApiProbeLease = NULL;
+    } else if ( MdoApiViewEqualText(Target,
+            "/__fixture/project-lease/free") ) {
+        Exclusive = MdoProjectLeaseAcquire("lease-probe",
+            MDO_PROJECT_LEASE_EXCLUSIVE, &Error);
+        Ok = Exclusive != NULL;
+        MdoProjectLeaseRelease(Exclusive);
+    } else if ( MdoApiViewEqualText(Target,
+            "/__fixture/project-lease/checkpoint") ) {
+        Ok = MdoApiValueSetUInt(Data, "checks", xrtAtomic32Load(
+                &g_MdoApiProbeLeaseChecks, XMEMORY_ACQUIRE)) &&
+            MdoApiValueSetUInt(Data, "violations", xrtAtomic32Load(
+                &g_MdoApiProbeLeaseViolations, XMEMORY_ACQUIRE));
+    } else if ( MdoApiViewEqualText(Target,
+            "/__fixture/project-lease/direct") ) {
+        MdoProjectCreateOptionsInit(&Options);
+        Options.Id = "lease-probe"; Options.Name = "Must not be published";
+        Ok = g_MdoApiProbeLease != NULL &&
+            !MdoProjectCreate(&Options, NULL, &Error) &&
+            Error.eCode == XWORK_ERROR_CONTEXT &&
+            MdoProjectReplace(&Options, 1u, NULL, &Error) ==
+                MDO_PROJECT_MUTATION_BUSY &&
+            MdoProjectUnregister("lease-probe", 1u, &Error) ==
+                MDO_PROJECT_MUTATION_BUSY &&
+            MdoProjectReplace(&Options, 1u, NULL, NULL) ==
+                MDO_PROJECT_MUTATION_BUSY &&
+            MdoProjectUnregister("lease-probe", 1u, NULL) ==
+                MDO_PROJECT_MUTATION_BUSY &&
+            !MdoApiFeedbackReconcile("lease-probe", "lease-session");
+    } else if ( MdoApiViewEqualText(Target,
+            "/__fixture/project-lease/mutation-errors") ) {
+        MdoProjectCreateOptionsInit(&Options);
+        Options.Id = "lease-probe"; Options.Name = "Must not replace revision 2";
+        /* Unlike the HTTP precondition check, these errors occur after the
+         * direct writer has acquired its lease and entered MutationBegin. */
+        Ok = g_MdoApiProbeLease == NULL &&
+            !MdoProjectCreate(&Options, NULL, &Error) &&
+            strcmp(Error.sMessage, "project ID already exists") == 0 &&
+            MdoProjectReplace(&Options, 1u, NULL, &Error) ==
+                MDO_PROJECT_MUTATION_REVISION_CONFLICT &&
+            MdoProjectUnregister("lease-probe", 1u, &Error) ==
+                MDO_PROJECT_MUTATION_REVISION_CONFLICT;
+        Exclusive = MdoProjectLeaseAcquire("lease-probe",
+            MDO_PROJECT_LEASE_EXCLUSIVE, &Error);
+        Ok = Ok && Exclusive != NULL;
+        MdoProjectLeaseRelease(Exclusive);
+    } else Ok = false;
+    xrtMutexUnlock(g_MdoApiProbeLeaseLock);
+    if ( Ok ) (void)MdoApiReplySuccessTake(&Context, 200u, Data, NULL);
+    else {
+        xrtValueRelease(Data);
+        (void)MdoApiReplyError(&Context, 500u, "lease_fixture_failed",
+            "Project lease fixture failed", NULL);
+    }
+    return true;
+}
 
 static xwork_permission_decision MdoApiProbeRequestApproval(uint64 RequestId,
     const char* CallId, const char* ResourceText, MdoApprovalScope* Scope)
@@ -336,6 +441,9 @@ done:
     replacement = (
         fixture + "void ServiceInit(XS_HostInfo* pHost)\n{\n"
         "    if ( MdoBootstrapInit(pHost) ) {\n"
+        "        g_MdoApiProbeLeaseLock = xrtMutexCreate();\n"
+        "        xrtAtomic32Init(&g_MdoApiProbeLeaseChecks, 0u);\n"
+        "        xrtAtomic32Init(&g_MdoApiProbeLeaseViolations, 0u);\n"
         "        MdoApiProbeCreateTasks();\n"
         "        g_MdoApiProbeApprovalThread = xrtThreadCreate(\n"
         "            MdoApiProbeApprovals, NULL, 0u);\n"
@@ -349,6 +457,9 @@ done:
         "}\n\nXS_RequestResult RequestProc")
     unit_replacement = (
         "    MdoApiUnit();\n"
+        "    MdoProjectLeaseRelease(g_MdoApiProbeLease);\n"
+        "    g_MdoApiProbeLease = NULL;\n"
+        "    xrtMutexDestroy(g_MdoApiProbeLeaseLock);\n"
         "    MdoBootstrapUnit();\n"
         "    if ( g_MdoApiProbeApprovalThread != NULL ) {\n"
         "        (void)xrtThreadWait(g_MdoApiProbeApprovalThread);\n"
@@ -370,6 +481,7 @@ done:
         "    static const char Marker[] = \"fixture=recovery\";\n"
         "    static bool CreatedEdit, CreatedAsk;\n"
         "    size_t Index;\n"
+        "    if ( MdoApiProbeLeaseControl(pRequest) ) return XS_OK;\n"
         "    if ( pRequest != NULL && pRequest->head != NULL ) {\n"
         "        xstrview Target = pRequest->head->Target;\n"
         "        for ( Index = 0u; Index + sizeof(Marker) - 1u <= Target.Size; ++Index ) {\n"
@@ -394,6 +506,30 @@ done:
         raise RuntimeError("API recovery fixture could not patch RequestProc")
     service_path.write_text(service_text.replace(
         request_needle, request_replacement, 1), encoding="utf-8", newline="\n")
+    draft_path = base / "src/api/draft.c"
+    draft_text = draft_path.read_text(encoding="utf-8")
+    checkpoint = "    Draft = (MdoDraft*)xrtMalloc(sizeof(*Draft));"
+    route_start = draft_text.index("bool MdoApiDraftRoute(")
+    route_end = draft_text.index("bool MdoApiDraftSubmissionAppendRoute(")
+    route_text = draft_text[route_start:route_end]
+    assert route_text.count(checkpoint) == 1
+    hooked_route = route_text.replace(checkpoint,
+        '    if ( ProjectId[0] != \'\\0\' &&\n'
+        '         !MdoApiProbeLeaseCheckpoint(ProjectId) )\n'
+        '        return MdoApiReplyError(Context, 500u, "lease_gap",\n'
+        '            "Draft lost its project lease", NULL);\n' + checkpoint, 1)
+    draft_text = draft_text[:route_start] + hooked_route + draft_text[route_end:]
+    draft_text = "bool MdoApiProbeLeaseCheckpoint(const char* ProjectId);\n" + draft_text
+    draft_path.write_text(draft_text, encoding="utf-8", newline="\n")
+    project_path = base / "src/projects/manager.c"
+    project_text = project_path.read_text(encoding="utf-8")
+    publication = "    if ( !MdoHomeAtomicWrite(Path, Json, Size, false) ) {"
+    assert project_text.count(publication) == 1
+    project_text = "bool MdoApiProbeLeaseCheckpoint(const char* ProjectId);\n" + project_text
+    project_text = project_text.replace(publication,
+        '    if ( !MdoApiProbeLeaseCheckpoint(Candidate.Id) ||\n'
+        '         !MdoHomeAtomicWrite(Path, Json, Size, false) ) {', 1)
+    project_path.write_text(project_text, encoding="utf-8", newline="\n")
     mock_server = base / "mcp_mock_server.py"
     mock_server.write_text(MCP_MOCK_SERVER, encoding="utf-8")
     mcp_document = {
@@ -501,6 +637,120 @@ def assert_common(headers: dict[str, str], document: dict) -> None:
     assert re.fullmatch(r"mdo-[0-9a-f]{24}|mdo-[0-9a-f]{16}", request_id), request_id
     assert document["schema_version"] == 1, document
     assert document["request_id"] == request_id, document
+
+
+def project_lease_exclusion(port: int, home: Path, session_id: str) -> None:
+    """One held exclusive lease, bounded API calls, and exact file evidence."""
+    fixture = "/__fixture/project-lease/"
+    prefix = "/api/v1/projects/lease-probe"
+    session = prefix + "/sessions/" + session_id
+    targets = [
+        ("GET", prefix), ("PUT", prefix), ("DELETE", prefix),
+        ("GET", prefix + "/draft"), ("PUT", prefix + "/draft"),
+        ("GET", session + "/draft"), ("PUT", session + "/draft"),
+        ("POST", session + "/draft/submissions"),
+        ("PUT", session + "/draft/submissions/intent"),
+        ("DELETE", session + "/draft/submissions/intent"),
+        ("GET", session + "/queue"), ("POST", session + "/queue"),
+        ("GET", session + "/queue/item"),
+        ("PUT", session + "/queue/item"),
+        ("DELETE", session + "/queue/item"),
+        ("POST", session + "/queue/discard-images/image"),
+        ("GET", session + "/feedback"), ("PUT", session + "/feedback"),
+        ("GET", session + "/todo"),
+        ("POST", session + "/attachments"),
+        ("GET", session + "/attachments/image"),
+        ("DELETE", session + "/attachments/image"),
+        ("POST", session + "/clear"), ("POST", session + "/truncate"),
+        ("POST", session + "/fork"), ("POST", session + "/runs"),
+        ("GET", "/api/v1/projects/LEASE-PROBE./draft"),
+    ]
+    paths = [home / "projects/lease-probe.json",
+             home / "projects/lease-probe.json.bak",
+             home / "data/project-drafts/lease-probe.json",
+             home / "sessions/lease-probe"]
+
+    def inventory() -> dict[str, bytes | str | None]:
+        files = [child for path in paths for child in
+                 ([path] + sorted(path.rglob("*")) if path.is_dir() else [path])]
+        return {str(path.relative_to(home)): path.read_bytes()
+                if path.is_file() else ("directory" if path.is_dir() else None)
+                for path in files}
+
+    before = inventory()
+    assert request(port, "POST", fixture + "acquire")[0] == 200
+    try:
+        assert request(port, "GET", fixture + "direct")[0] == 200
+        for method, path in targets:
+            status, _, body = request(port, method, path)
+            assert status == 409 and json.loads(body)["error"]["code"] == (
+                "project_busy"), (method, path, status, body)
+        status, _, body = request(port, "POST", "/api/v1/projects",
+            body=b'{"id":"lease-probe","name":"Blocked creation"}',
+            headers={"Content-Type": "application/json"})
+        assert status == 409 and json.loads(body)["error"]["code"] == (
+            "project_busy"), (status, body)
+        status, _, body = request(port, "HEAD", prefix + "/draft")
+        assert status == 409 and body == b"", (status, body)
+        assert request(port, "OPTIONS", prefix + "/draft")[0] == 200
+        assert request(port, "PATCH", prefix + "/draft")[0] == 405
+        assert request(port, "GET", "/api/v1/draft")[0] == 200
+        assert request(port, "GET", "/api/v1/projects/unrelated-lease/draft")[0] == 200
+        assert before == inventory(), (before.keys(), inventory().keys())
+    finally:
+        assert request(port, "POST", fixture + "release")[0] == 200
+    assert request(port, "GET", fixture + "free")[0] == 200
+
+
+def project_lease_roundtrip(port: int, home: Path) -> None:
+    """The handler pins past session close; success and failure release it."""
+    fixture = "/__fixture/project-lease/"
+    project = "/api/v1/projects/lease-probe"
+    status, _, body = request(port, "POST", "/api/v1/projects",
+        body=b'{"id":"lease-probe","name":"Lease fixture"}',
+        headers={"Content-Type": "application/json"})
+    assert status == 201, (status, body)
+    assert request(port, "GET", fixture + "free")[0] == 200
+    status, _, body = request(port, "POST", "/api/v1/sessions",
+        body=b'{"project_id":"lease-probe","title":"Lease fixture"}',
+        headers={"Content-Type": "application/json"})
+    assert status == 201, (status, body)
+    session_id = json.loads(body)["data"]["id"]
+    session = project + "/sessions/" + session_id
+    assert request(port, "GET", fixture + "free")[0] == 200
+    for path in (project + "/draft", session + "/draft"):
+        for method, payload, expected in (
+                ("GET", None, 200), ("PUT", b"{}", 422),
+                ("PUT", b'{"revision":0,"text":"lease draft"}', 200),
+                ("PUT", b'{"revision":0,"text":"stale"}', 409)):
+            status, _, body = request(port, method, path, body=payload,
+                headers={"Content-Type": "application/json"})
+            assert status == expected, (path, status, body)
+            assert request(port, "GET", fixture + "free")[0] == 200
+    project_lease_exclusion(port, home, session_id)
+    # Project mutation failures must release their independently acquired lease.
+    status, _, body = request(port, "GET", project)
+    assert status == 200, (status, body)
+    changed = {"name": "Lease renamed", "workspace_root": ".",
+               "default_model_id": ""}
+    status, _, body = request(port, "PUT", project,
+        body=json.dumps(changed).encode(), headers={
+            "Content-Type": "application/json",
+            "If-Match": '"mdo-project-lease-probe-1"'})
+    assert status == 200 and json.loads(body)["data"]["revision"] == 2, (status, body)
+    assert request(port, "GET", fixture + "mutation-errors")[0] == 200
+    assert request(port, "GET", fixture + "free")[0] == 200
+    assert request(port, "DELETE", project, headers={
+        "If-Match": '"mdo-project-lease-probe-1"'})[0] == 412
+    assert request(port, "GET", fixture + "free")[0] == 200
+    status, _, body = request(port, "DELETE", project, headers={
+        "If-Match": '"mdo-project-lease-probe-2"'})
+    assert status == 200, (status, body)
+    assert request(port, "GET", fixture + "free")[0] == 200
+    status, _, body = request(port, "GET", fixture + "checkpoint")
+    evidence = json.loads(body)["data"]
+    assert status == 200 and evidence["checks"] >= 9 and (
+        evidence["violations"] == 0), evidence
 
 
 def run_probe(host: Path) -> None:
@@ -620,6 +870,9 @@ def run_probe(host: Path) -> None:
                 status, _, body = request(port, "GET", "/api/v1/feedback")
                 assert status == 200 and json.loads(body)["data"]["items"] == [], (
                     status, body)
+                assert not home.exists(), home
+
+                project_lease_exclusion(port, home, "lease-session")
                 assert not home.exists(), home
 
                 status, headers, body = request(
@@ -4630,6 +4883,7 @@ def run_probe(host: Path) -> None:
                 assert headers["allow"] == (
                     "PUT, PATCH, DELETE, OPTIONS"), headers
                 assert document["data"]["allow"] == headers["allow"], document
+                project_lease_roundtrip(port, home)
             except BaseException as error:
                 failure = error
             finally:

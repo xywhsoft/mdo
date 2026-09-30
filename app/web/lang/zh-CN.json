@@ -1184,6 +1184,7 @@
   "error.projectExists": "项目标识已存在，请更换工作区目录或在项目设置中指定其他标识。",
   "error.projectInvalid": "项目目录或名称无效，请检查后重试。",
   "error.projectUnavailable": "项目未能保存，请检查便携数据目录后重试。",
+  "error.projectBusy": "项目数据正在变更，请稍后重试；本次操作未执行。",
   "error.purgePreviewUnavailable": "无法完整检查项目数据；请勿依据旧清单操作，稍后重试。",
   "error.sessionCreateInvalid": "无法创建任务，请检查标题和所选配置。",
   "error.sessionCreateConflict": "任务创建请求与已有任务冲突，请刷新并核对任务列表。",

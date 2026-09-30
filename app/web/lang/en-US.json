@@ -1184,6 +1184,7 @@
   "error.projectExists": "This project ID already exists. Choose another workspace folder or set a different ID in project settings.",
   "error.projectInvalid": "The project folder or name is invalid. Check it and try again.",
   "error.projectUnavailable": "The project could not be saved. Check the portable data folder and try again.",
+  "error.projectBusy": "Project data is being changed. Try again later; this operation was not performed.",
   "error.purgePreviewUnavailable": "The project data could not be fully inspected. Do not rely on the old list; try again later.",
   "error.sessionCreateInvalid": "Could not create the task. Check its title and selected options.",
   "error.sessionCreateConflict": "This task creation conflicts with an existing task. Refresh and check the task list.",

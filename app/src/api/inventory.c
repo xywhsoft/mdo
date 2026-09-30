@@ -205,6 +205,10 @@ static bool MdoApiProjectCreateRoute(MdoApiContext* Context)
         if ( strcmp(Error.sMessage, "project ID already exists") == 0 )
             return MdoApiReplyError(Context, 409u, "project_exists",
                 "A project with this ID already exists", NULL);
+        if ( Error.eCode == XWORK_ERROR_CONTEXT &&
+             strcmp(Error.sMessage, "project lifecycle is busy") == 0 )
+            return MdoApiReplyError(Context, 409u, "project_busy",
+                "Project data is being changed; try again later", NULL);
         return MdoApiReplyError(Context, 503u, "project_unavailable",
             "The project could not be saved", NULL);
     }
@@ -318,6 +322,9 @@ static bool MdoApiProjectMutationFailure(MdoApiContext* Context,
     case MDO_PROJECT_MUTATION_REVISION_CONFLICT:
         return MdoApiReplyError(Context, 412u, "revision_conflict",
             "The project changed; reload it before updating", NULL);
+    case MDO_PROJECT_MUTATION_BUSY:
+        return MdoApiReplyError(Context, 409u, "project_busy",
+            "Project data is being changed; try again later", NULL);
     default:
         return MdoApiReplyError(Context, 503u, "project_unavailable",
             "The project definition could not be changed", NULL);

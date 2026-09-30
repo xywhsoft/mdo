@@ -2,12 +2,17 @@
 #include <string.h>
 
 #include "internal.h"
+#include "../../include/mdo/project_lifecycle.h"
+#include "../../include/mdo/projects.h"
 
 typedef struct MdoApiRoute {
     cstr Path;
     xhttpmethod Methods;
     cstr Allow;
     MdoApiRouteProc Proc;
+    /* First capture is the project ID. Keep a lease through the entire
+     * handler, including lazy repair and cleanup after a session is closed. */
+    bool ProjectLease;
 } MdoApiRoute;
 
 static xatomic64 g_MdoApiFallbackId;
@@ -15,210 +20,210 @@ static bool g_MdoApiInitialized;
 
 static const MdoApiRoute g_MdoApiRoutes[] = {
     { "/api/v1/bootstrap", XHTTP_METHOD_GET | XHTTP_METHOD_HEAD,
-      "GET, HEAD, OPTIONS", MdoApiBootstrapRoute },
+      "GET, HEAD, OPTIONS", MdoApiBootstrapRoute, false },
     { "/api/v1/settings", XHTTP_METHOD_GET | XHTTP_METHOD_HEAD,
-      "GET, HEAD, OPTIONS", MdoApiSettingsRoute },
+      "GET, HEAD, OPTIONS", MdoApiSettingsRoute, false },
     { "/api/v1/workspace-state",
       XHTTP_METHOD_GET | XHTTP_METHOD_HEAD | XHTTP_METHOD_PUT,
-      "GET, HEAD, PUT, OPTIONS", MdoApiWorkspaceStateRoute },
+      "GET, HEAD, PUT, OPTIONS", MdoApiWorkspaceStateRoute, false },
     { "/api/v1/pane-layout",
       XHTTP_METHOD_GET | XHTTP_METHOD_HEAD | XHTTP_METHOD_PUT,
-      "GET, HEAD, PUT, OPTIONS", MdoApiPaneLayoutRoute },
+      "GET, HEAD, PUT, OPTIONS", MdoApiPaneLayoutRoute, false },
     { "/api/v1/models", XHTTP_METHOD_GET | XHTTP_METHOD_HEAD,
-      "GET, HEAD, OPTIONS", MdoApiModelsRoute },
+      "GET, HEAD, OPTIONS", MdoApiModelsRoute, false },
     { "/api/v1/models/config", XHTTP_METHOD_GET | XHTTP_METHOD_HEAD,
-      "GET, HEAD, OPTIONS", MdoApiModelConfigRoute },
+      "GET, HEAD, OPTIONS", MdoApiModelConfigRoute, false },
     { "/api/v1/agents", XHTTP_METHOD_GET | XHTTP_METHOD_HEAD,
-      "GET, HEAD, OPTIONS", MdoApiAgentsRoute },
+      "GET, HEAD, OPTIONS", MdoApiAgentsRoute, false },
     { "/api/v1/modules", XHTTP_METHOD_GET | XHTTP_METHOD_HEAD,
-      "GET, HEAD, OPTIONS", MdoApiModulesRoute },
+      "GET, HEAD, OPTIONS", MdoApiModulesRoute, false },
     { "/api/v1/skills", XHTTP_METHOD_GET | XHTTP_METHOD_HEAD,
-      "GET, HEAD, OPTIONS", MdoApiSkillsRoute },
+      "GET, HEAD, OPTIONS", MdoApiSkillsRoute, false },
     { "/api/v1/mcp", XHTTP_METHOD_GET | XHTTP_METHOD_HEAD,
-      "GET, HEAD, OPTIONS", MdoApiMcpRoute },
+      "GET, HEAD, OPTIONS", MdoApiMcpRoute, false },
     { "/api/v1/projects", XHTTP_METHOD_GET | XHTTP_METHOD_HEAD |
-      XHTTP_METHOD_POST, "GET, HEAD, POST, OPTIONS", MdoApiProjectsRoute },
+      XHTTP_METHOD_POST, "GET, HEAD, POST, OPTIONS", MdoApiProjectsRoute, false },
     { "/api/v1/projects/{project}", XHTTP_METHOD_GET | XHTTP_METHOD_HEAD |
       XHTTP_METHOD_PUT | XHTTP_METHOD_DELETE,
-      "GET, HEAD, PUT, DELETE, OPTIONS", MdoApiProjectRoute },
+      "GET, HEAD, PUT, DELETE, OPTIONS", MdoApiProjectRoute, true },
     { "/api/v1/projects/{project}/purge-preview",
       XHTTP_METHOD_GET | XHTTP_METHOD_HEAD,
-      "GET, HEAD, OPTIONS", MdoApiProjectPurgePreviewRoute },
+      "GET, HEAD, OPTIONS", MdoApiProjectPurgePreviewRoute, false },
     { "/api/v1/projects/{project}/workspace/files",
       XHTTP_METHOD_GET | XHTTP_METHOD_HEAD,
-      "GET, HEAD, OPTIONS", MdoApiProjectWorkspaceFilesRoute },
+      "GET, HEAD, OPTIONS", MdoApiProjectWorkspaceFilesRoute, false },
     { "/api/v1/memory/global", XHTTP_METHOD_GET | XHTTP_METHOD_HEAD |
-      XHTTP_METHOD_PUT, "GET, HEAD, PUT, OPTIONS", MdoApiMemoryCollectionRoute },
+      XHTTP_METHOD_PUT, "GET, HEAD, PUT, OPTIONS", MdoApiMemoryCollectionRoute, false },
     { "/api/v1/memory/global/open-directory", XHTTP_METHOD_POST,
-      "POST, OPTIONS", MdoApiMemoryOpenDirectoryRoute },
+      "POST, OPTIONS", MdoApiMemoryOpenDirectoryRoute, false },
     { "/api/v1/memory/global/{entry}", XHTTP_METHOD_GET | XHTTP_METHOD_HEAD |
-      XHTTP_METHOD_DELETE, "GET, HEAD, DELETE, OPTIONS", MdoApiMemoryEntryRoute },
+      XHTTP_METHOD_DELETE, "GET, HEAD, DELETE, OPTIONS", MdoApiMemoryEntryRoute, false },
     { "/api/v1/memory/projects/{project}", XHTTP_METHOD_GET |
       XHTTP_METHOD_HEAD | XHTTP_METHOD_PUT,
-      "GET, HEAD, PUT, OPTIONS", MdoApiMemoryCollectionRoute },
+      "GET, HEAD, PUT, OPTIONS", MdoApiMemoryCollectionRoute, false },
     { "/api/v1/memory/projects/{project}/open-directory", XHTTP_METHOD_POST,
-      "POST, OPTIONS", MdoApiMemoryOpenDirectoryRoute },
+      "POST, OPTIONS", MdoApiMemoryOpenDirectoryRoute, false },
     { "/api/v1/memory/projects/{project}/{entry}", XHTTP_METHOD_GET |
       XHTTP_METHOD_HEAD | XHTTP_METHOD_DELETE,
-      "GET, HEAD, DELETE, OPTIONS", MdoApiMemoryEntryRoute },
+      "GET, HEAD, DELETE, OPTIONS", MdoApiMemoryEntryRoute, false },
     { "/api/v1/sessions",
       XHTTP_METHOD_GET | XHTTP_METHOD_HEAD | XHTTP_METHOD_POST,
-      "GET, HEAD, POST, OPTIONS", MdoApiSessionsRoute },
+      "GET, HEAD, POST, OPTIONS", MdoApiSessionsRoute, false },
     { "/api/v1/feedback", XHTTP_METHOD_GET | XHTTP_METHOD_HEAD,
-      "GET, HEAD, OPTIONS", MdoApiFeedbackListRoute },
+      "GET, HEAD, OPTIONS", MdoApiFeedbackListRoute, false },
     { "/api/v1/draft",
       XHTTP_METHOD_GET | XHTTP_METHOD_HEAD | XHTTP_METHOD_PUT,
-      "GET, HEAD, PUT, OPTIONS", MdoApiDraftRoute },
+      "GET, HEAD, PUT, OPTIONS", MdoApiDraftRoute, false },
     { "/api/v1/projects/{project}/draft",
       XHTTP_METHOD_GET | XHTTP_METHOD_HEAD | XHTTP_METHOD_PUT,
-      "GET, HEAD, PUT, OPTIONS", MdoApiDraftRoute },
+      "GET, HEAD, PUT, OPTIONS", MdoApiDraftRoute, true },
     { "/api/v1/runs", XHTTP_METHOD_GET | XHTTP_METHOD_HEAD,
-      "GET, HEAD, OPTIONS", MdoApiRunsRoute },
+      "GET, HEAD, OPTIONS", MdoApiRunsRoute, false },
     { "/api/v1/schedules",
       XHTTP_METHOD_GET | XHTTP_METHOD_HEAD | XHTTP_METHOD_POST,
-      "GET, HEAD, POST, OPTIONS", MdoApiSchedulesRoute },
+      "GET, HEAD, POST, OPTIONS", MdoApiSchedulesRoute, false },
     { "/api/v1/tasks", XHTTP_METHOD_GET | XHTTP_METHOD_HEAD,
-      "GET, HEAD, OPTIONS", MdoApiTasksRoute },
+      "GET, HEAD, OPTIONS", MdoApiTasksRoute, false },
     { "/api/v1/approvals", XHTTP_METHOD_GET | XHTTP_METHOD_HEAD,
-      "GET, HEAD, OPTIONS", MdoApiApprovalsRoute },
+      "GET, HEAD, OPTIONS", MdoApiApprovalsRoute, false },
     { "/api/v1/projects/{project}/sessions/{session}/asks",
       XHTTP_METHOD_GET | XHTTP_METHOD_HEAD,
-      "GET, HEAD, OPTIONS", MdoApiAsksRoute },
+      "GET, HEAD, OPTIONS", MdoApiAsksRoute, false },
     { "/api/v1/projects/{project}/sessions/{session}/workspace/files",
       XHTTP_METHOD_GET | XHTTP_METHOD_HEAD,
-      "GET, HEAD, OPTIONS", MdoApiWorkspaceFilesRoute },
+      "GET, HEAD, OPTIONS", MdoApiWorkspaceFilesRoute, false },
     { "/api/v1/artifacts", XHTTP_METHOD_GET | XHTTP_METHOD_HEAD,
-      "GET, HEAD, OPTIONS", MdoApiArtifactsRoute },
+      "GET, HEAD, OPTIONS", MdoApiArtifactsRoute, false },
     { "/api/v1/permissions", XHTTP_METHOD_GET | XHTTP_METHOD_HEAD,
-      "GET, HEAD, OPTIONS", MdoApiPermissionsRoute },
+      "GET, HEAD, OPTIONS", MdoApiPermissionsRoute, false },
     { "/api/v1/diagnostics", XHTTP_METHOD_GET | XHTTP_METHOD_HEAD,
-      "GET, HEAD, OPTIONS", MdoApiDiagnosticsRoute },
+      "GET, HEAD, OPTIONS", MdoApiDiagnosticsRoute, false },
     { "/api/v1/storage", XHTTP_METHOD_GET | XHTTP_METHOD_HEAD,
-      "GET, HEAD, OPTIONS", MdoApiStorageRoute },
+      "GET, HEAD, OPTIONS", MdoApiStorageRoute, false },
     { "/api/v1/migrations/legacy",
       XHTTP_METHOD_GET | XHTTP_METHOD_HEAD | XHTTP_METHOD_POST,
-      "GET, HEAD, POST, OPTIONS", MdoApiLegacyMigrationsRoute },
+      "GET, HEAD, POST, OPTIONS", MdoApiLegacyMigrationsRoute, false },
     { "/api/v1/events", XHTTP_METHOD_GET | XHTTP_METHOD_HEAD,
-      "GET, HEAD, OPTIONS", MdoApiEventsRoute },
+      "GET, HEAD, OPTIONS", MdoApiEventsRoute, false },
     { "/api/v1/operations", XHTTP_METHOD_GET | XHTTP_METHOD_HEAD,
-      "GET, HEAD, OPTIONS", MdoApiOperationsRoute },
+      "GET, HEAD, OPTIONS", MdoApiOperationsRoute, false },
     { "/api/v1/settings/{domain}/preview",
       XHTTP_METHOD_POST | XHTTP_METHOD_PATCH,
-      "POST, PATCH, OPTIONS", MdoApiSettingsPreviewRoute },
+      "POST, PATCH, OPTIONS", MdoApiSettingsPreviewRoute, false },
     { "/api/v1/settings/{domain}",
       XHTTP_METHOD_PUT | XHTTP_METHOD_PATCH | XHTTP_METHOD_DELETE,
-      "PUT, PATCH, DELETE, OPTIONS", MdoApiSettingsMutationRoute },
+      "PUT, PATCH, DELETE, OPTIONS", MdoApiSettingsMutationRoute, false },
     { "/api/v1/models/reload", XHTTP_METHOD_POST,
-      "POST, OPTIONS", MdoApiModelsReloadRoute },
+      "POST, OPTIONS", MdoApiModelsReloadRoute, false },
     { "/api/v1/skills/reload", XHTTP_METHOD_POST,
-      "POST, OPTIONS", MdoApiSkillsReloadRoute },
+      "POST, OPTIONS", MdoApiSkillsReloadRoute, false },
     { "/api/v1/modules/reload", XHTTP_METHOD_POST,
-      "POST, OPTIONS", MdoApiModulesReloadRoute },
+      "POST, OPTIONS", MdoApiModulesReloadRoute, false },
     { "/api/v1/mcp/reload", XHTTP_METHOD_POST,
-      "POST, OPTIONS", MdoApiMcpReloadRoute },
+      "POST, OPTIONS", MdoApiMcpReloadRoute, false },
     { "/api/v1/mcp/{server}/enabled", XHTTP_METHOD_PUT,
-      "PUT, OPTIONS", MdoApiMcpEnabledRoute },
+      "PUT, OPTIONS", MdoApiMcpEnabledRoute, false },
     { "/api/v1/mcp/{server}/disconnect", XHTTP_METHOD_POST,
-      "POST, OPTIONS", MdoApiMcpDisconnectRoute },
+      "POST, OPTIONS", MdoApiMcpDisconnectRoute, false },
     { "/api/v1/mcp/{server}/refresh", XHTTP_METHOD_POST,
-      "POST, OPTIONS", MdoApiMcpRefreshRoute },
+      "POST, OPTIONS", MdoApiMcpRefreshRoute, false },
     { "/api/v1/operations/{operation}",
       XHTTP_METHOD_GET | XHTTP_METHOD_HEAD | XHTTP_METHOD_DELETE,
-      "GET, HEAD, DELETE, OPTIONS", MdoApiOperationRoute },
+      "GET, HEAD, DELETE, OPTIONS", MdoApiOperationRoute, false },
     { "/api/v1/projects/{project}/sessions/{session}",
       XHTTP_METHOD_GET | XHTTP_METHOD_HEAD | XHTTP_METHOD_PATCH |
         XHTTP_METHOD_DELETE,
       "GET, HEAD, PATCH, DELETE, OPTIONS",
-      MdoApiSessionRoute },
+      MdoApiSessionRoute, true },
     { "/api/v1/projects/{project}/sessions/{session}/restore",
-      XHTTP_METHOD_POST, "POST, OPTIONS", MdoApiSessionRestoreRoute },
+      XHTTP_METHOD_POST, "POST, OPTIONS", MdoApiSessionRestoreRoute, true },
     { "/api/v1/projects/{project}/sessions/{session}/profile",
-      XHTTP_METHOD_PUT, "PUT, OPTIONS", MdoApiSessionProfileRoute },
+      XHTTP_METHOD_PUT, "PUT, OPTIONS", MdoApiSessionProfileRoute, true },
     { "/api/v1/projects/{project}/sessions/{session}/history",
       XHTTP_METHOD_GET | XHTTP_METHOD_HEAD, "GET, HEAD, OPTIONS",
-      MdoApiSessionHistoryRoute },
+      MdoApiSessionHistoryRoute, true },
     { "/api/v1/projects/{project}/sessions/{session}/attachments",
-      XHTTP_METHOD_POST, "POST, OPTIONS", MdoApiAttachmentsRoute },
+      XHTTP_METHOD_POST, "POST, OPTIONS", MdoApiAttachmentsRoute, true },
     { "/api/v1/projects/{project}/sessions/{session}/attachments/{attachment}",
       XHTTP_METHOD_GET | XHTTP_METHOD_HEAD | XHTTP_METHOD_DELETE,
       "GET, HEAD, DELETE, OPTIONS",
-      MdoApiAttachmentRoute },
+      MdoApiAttachmentRoute, true },
     { "/api/v1/projects/{project}/sessions/{session}/artifacts/{event}",
       XHTTP_METHOD_GET | XHTTP_METHOD_HEAD,
-      "GET, HEAD, OPTIONS", MdoApiSessionArtifactRoute },
+      "GET, HEAD, OPTIONS", MdoApiSessionArtifactRoute, false },
     { "/api/v1/projects/{project}/sessions/{session}/recovery",
       XHTTP_METHOD_GET | XHTTP_METHOD_HEAD, "GET, HEAD, OPTIONS",
-      MdoApiSessionRecoveryRoute },
+      MdoApiSessionRecoveryRoute, true },
     { "/api/v1/projects/{project}/sessions/{session}/resume",
-      XHTTP_METHOD_POST, "POST, OPTIONS", MdoApiSessionResumeRoute },
+      XHTTP_METHOD_POST, "POST, OPTIONS", MdoApiSessionResumeRoute, true },
     { "/api/v1/projects/{project}/sessions/{session}/abandon",
-      XHTTP_METHOD_POST, "POST, OPTIONS", MdoApiSessionAbandonRoute },
+      XHTTP_METHOD_POST, "POST, OPTIONS", MdoApiSessionAbandonRoute, true },
     { "/api/v1/projects/{project}/sessions/{session}/fork",
-      XHTTP_METHOD_POST, "POST, OPTIONS", MdoApiSessionForkRoute },
+      XHTTP_METHOD_POST, "POST, OPTIONS", MdoApiSessionForkRoute, true },
     { "/api/v1/projects/{project}/sessions/{session}/truncate",
-      XHTTP_METHOD_POST, "POST, OPTIONS", MdoApiSessionTruncateRoute },
+      XHTTP_METHOD_POST, "POST, OPTIONS", MdoApiSessionTruncateRoute, true },
     { "/api/v1/projects/{project}/sessions/{session}/clear",
-      XHTTP_METHOD_POST, "POST, OPTIONS", MdoApiSessionClearRoute },
+      XHTTP_METHOD_POST, "POST, OPTIONS", MdoApiSessionClearRoute, true },
     { "/api/v1/projects/{project}/sessions/{session}/export",
       XHTTP_METHOD_GET | XHTTP_METHOD_HEAD, "GET, HEAD, OPTIONS",
-      MdoApiSessionExportRoute },
+      MdoApiSessionExportRoute, true },
     { "/api/v1/projects/{project}/sessions/{session}/runs",
-      XHTTP_METHOD_POST, "POST, OPTIONS", MdoApiRunStartRoute },
+      XHTTP_METHOD_POST, "POST, OPTIONS", MdoApiRunStartRoute, true },
     { "/api/v1/runs/{run}",
       XHTTP_METHOD_GET | XHTTP_METHOD_HEAD | XHTTP_METHOD_DELETE,
-      "GET, HEAD, DELETE, OPTIONS", MdoApiRunRoute },
+      "GET, HEAD, DELETE, OPTIONS", MdoApiRunRoute, false },
     { "/api/v1/schedules/{schedule}",
       XHTTP_METHOD_GET | XHTTP_METHOD_HEAD | XHTTP_METHOD_PUT |
         XHTTP_METHOD_DELETE,
-      "GET, HEAD, PUT, DELETE, OPTIONS", MdoApiScheduleRoute },
+      "GET, HEAD, PUT, DELETE, OPTIONS", MdoApiScheduleRoute, false },
     { "/api/v1/schedules/{schedule}/enabled", XHTTP_METHOD_PUT,
-      "PUT, OPTIONS", MdoApiScheduleEnabledRoute },
+      "PUT, OPTIONS", MdoApiScheduleEnabledRoute, false },
     { "/api/v1/schedules/{schedule}/history",
       XHTTP_METHOD_GET | XHTTP_METHOD_HEAD,
-      "GET, HEAD, OPTIONS", MdoApiScheduleHistoryRoute },
+      "GET, HEAD, OPTIONS", MdoApiScheduleHistoryRoute, false },
     { "/api/v1/schedules/{schedule}/run", XHTTP_METHOD_POST,
-      "POST, OPTIONS", MdoApiScheduleRunRoute },
+      "POST, OPTIONS", MdoApiScheduleRunRoute, false },
     { "/api/v1/tasks/{task}/output", XHTTP_METHOD_GET | XHTTP_METHOD_HEAD,
-      "GET, HEAD, OPTIONS", MdoApiTaskOutputRoute },
+      "GET, HEAD, OPTIONS", MdoApiTaskOutputRoute, false },
     { "/api/v1/approvals/{approval}", XHTTP_METHOD_PUT,
-      "PUT, OPTIONS", MdoApiApprovalRoute },
+      "PUT, OPTIONS", MdoApiApprovalRoute, false },
     { "/api/v1/projects/{project}/sessions/{session}/asks/{ask}",
-      XHTTP_METHOD_PUT, "PUT, OPTIONS", MdoApiAskRoute },
+      XHTTP_METHOD_PUT, "PUT, OPTIONS", MdoApiAskRoute, false },
     { "/api/v1/tasks/{task}/events", XHTTP_METHOD_GET | XHTTP_METHOD_HEAD,
-      "GET, HEAD, OPTIONS", MdoApiTaskEventsRoute },
+      "GET, HEAD, OPTIONS", MdoApiTaskEventsRoute, false },
     { "/api/v1/artifacts/{artifact}",
       XHTTP_METHOD_GET | XHTTP_METHOD_HEAD,
-      "GET, HEAD, OPTIONS", MdoApiArtifactRoute },
+      "GET, HEAD, OPTIONS", MdoApiArtifactRoute, false },
     { "/api/v1/tasks/{task}",
       XHTTP_METHOD_GET | XHTTP_METHOD_HEAD | XHTTP_METHOD_DELETE,
-      "GET, HEAD, DELETE, OPTIONS", MdoApiTaskRoute },
+      "GET, HEAD, DELETE, OPTIONS", MdoApiTaskRoute, false },
     { "/api/v1/projects/{project}/sessions/{session}/events",
       XHTTP_METHOD_GET | XHTTP_METHOD_HEAD, "GET, HEAD, OPTIONS",
-      MdoApiSessionEventsRoute },
+      MdoApiSessionEventsRoute, false },
     { "/api/v1/projects/{project}/sessions/{session}/feedback",
       XHTTP_METHOD_GET | XHTTP_METHOD_HEAD | XHTTP_METHOD_PUT,
-      "GET, HEAD, PUT, OPTIONS", MdoApiFeedbackRoute },
+      "GET, HEAD, PUT, OPTIONS", MdoApiFeedbackRoute, true },
     { "/api/v1/projects/{project}/sessions/{session}/draft",
       XHTTP_METHOD_GET | XHTTP_METHOD_HEAD | XHTTP_METHOD_PUT,
-      "GET, HEAD, PUT, OPTIONS", MdoApiDraftRoute },
+      "GET, HEAD, PUT, OPTIONS", MdoApiDraftRoute, true },
     { "/api/v1/projects/{project}/sessions/{session}/draft/submissions",
       XHTTP_METHOD_POST, "POST, OPTIONS",
-      MdoApiDraftSubmissionAppendRoute },
+      MdoApiDraftSubmissionAppendRoute, true },
     { "/api/v1/projects/{project}/sessions/{session}/draft/submissions/{submission}",
       XHTTP_METHOD_PUT | XHTTP_METHOD_DELETE,
-      "PUT, DELETE, OPTIONS", MdoApiDraftSubmissionRoute },
+      "PUT, DELETE, OPTIONS", MdoApiDraftSubmissionRoute, true },
     { "/api/v1/projects/{project}/sessions/{session}/queue",
       XHTTP_METHOD_GET | XHTTP_METHOD_HEAD | XHTTP_METHOD_POST,
-      "GET, HEAD, POST, OPTIONS", MdoApiQueueRoute },
+      "GET, HEAD, POST, OPTIONS", MdoApiQueueRoute, true },
     { "/api/v1/projects/{project}/sessions/{session}/queue/discard-images/{attachment}",
-      XHTTP_METHOD_POST, "POST, OPTIONS", MdoApiQueueDiscardRoute },
+      XHTTP_METHOD_POST, "POST, OPTIONS", MdoApiQueueDiscardRoute, true },
     { "/api/v1/projects/{project}/sessions/{session}/queue/{item}",
       XHTTP_METHOD_GET | XHTTP_METHOD_HEAD | XHTTP_METHOD_PUT |
           XHTTP_METHOD_DELETE,
-      "GET, HEAD, PUT, DELETE, OPTIONS", MdoApiQueueItemRoute },
+      "GET, HEAD, PUT, DELETE, OPTIONS", MdoApiQueueItemRoute, true },
     { "/api/v1/projects/{project}/sessions/{session}/todo",
       XHTTP_METHOD_GET | XHTTP_METHOD_HEAD,
-      "GET, HEAD, OPTIONS", MdoApiTodoRoute },
+      "GET, HEAD, OPTIONS", MdoApiTodoRoute, true },
 };
 
 static bool MdoApiViewEqualText(xstrview View, cstr Text)
@@ -326,6 +331,37 @@ void MdoApiUnit(void)
     MdoApiSessionsUnit();
 }
 
+static bool MdoApiRouteInvoke(MdoApiContext* Context,
+    const MdoApiRoute* Route)
+{
+    char ProjectId[MDO_PROJECT_ID_CAPACITY];
+    MdoProjectLease* Lease;
+    xwork_error Error;
+    bool Ok;
+    if ( !Route->ProjectLease ) return Route->Proc(Context);
+    /* Invalid captures retain each endpoint's existing validation response.
+     * They cannot pass its path validation or reach a durable write. */
+    if ( Context->ParamCount == 0u || Context->Params[0].Size == 0u ||
+         Context->Params[0].Size >= sizeof(ProjectId) )
+        return Route->Proc(Context);
+    memcpy(ProjectId, Context->Params[0].Data, Context->Params[0].Size);
+    ProjectId[Context->Params[0].Size] = '\0';
+    Lease = MdoProjectLeaseAcquire(ProjectId, MDO_PROJECT_LEASE_SHARED, &Error);
+    if ( Lease == NULL ) {
+        if ( Error.eCode == XWORK_ERROR_INVALID_ARGUMENT )
+            return Route->Proc(Context);
+        if ( Error.eCode == XWORK_ERROR_CONTEXT &&
+             strcmp(Error.sMessage, "project lifecycle is busy") == 0 )
+            return MdoApiReplyError(Context, 409u, "project_busy",
+                "Project data is being changed; try again later", NULL);
+        return MdoApiReplyError(Context, 503u, "project_unavailable",
+            "Project data is unavailable", NULL);
+    }
+    Ok = Route->Proc(Context);
+    MdoProjectLeaseRelease(Lease);
+    return Ok;
+}
+
 XS_RequestResult MdoApiRequest(XS_HttpReq* pRequest)
 {
     MdoApiContext Context;
@@ -352,7 +388,7 @@ XS_RequestResult MdoApiRequest(XS_HttpReq* pRequest)
         if ( pRequest->head->MethodCode == XHTTP_METHOD_OPTIONS ) {
             (void)MdoApiReplyOptions(&Context, Route->Allow);
         } else if ( (pRequest->head->MethodCode & Route->Methods) != 0u ) {
-            (void)Route->Proc(&Context);
+            (void)MdoApiRouteInvoke(&Context, Route);
         } else {
             (void)MdoApiReplyError(&Context, 405u, "method_not_allowed",
                 "The request method is not allowed for this resource",
