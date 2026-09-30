@@ -4,6 +4,7 @@
 #include "../../include/mdo/config.h"
 #include "../../include/mdo/home.h"
 #include "../../include/mdo/schedules.h"
+#include "../../include/mdo/project_lifecycle.h"
 #include "internal.h"
 
 #define MDO_SCHEDULE_SCHEMA_VERSION 1u
@@ -766,6 +767,118 @@ static MdoScheduleEntry* MdoSchedulesFind(const char* ScheduleId)
     return NULL;
 }
 
+typedef struct MdoSchedulesLeaseScope {
+    MdoProjectLease* Leases[MDO_SCHEDULE_MAX];
+    size_t Count;
+    bool Locked;
+} MdoSchedulesLeaseScope;
+
+static bool MdoSchedulesLeaseLock(xwork_error* Error)
+{
+    if ( xrtMutexLock(g_MdoSchedules.Lock) ) return true;
+    MdoSchedulesError(Error, XWORK_ERROR_CONTEXT,
+        "schedule manager is unavailable");
+    return false;
+}
+
+static void MdoSchedulesLeaseEnd(MdoSchedulesLeaseScope* Scope)
+{
+    size_t i;
+    if ( Scope->Locked ) xrtMutexUnlock(g_MdoSchedules.Lock);
+    for ( i = 0u; i < Scope->Count; ++i )
+        MdoProjectLeaseRelease(Scope->Leases[i]);
+    memset(Scope, 0, sizeof(*Scope));
+}
+
+/* Resolve under a read-only manager lock, drop it, reserve both identities,
+ * then recheck ownership under the mutation lock. No registry lock is held
+ * while acquiring the manager lock, and no unreserved identity may be used
+ * if another writer moved/recreated the definition during resolution. */
+static bool MdoSchedulesProjectWriteBegin(const char* ScheduleId,
+    const char* DestinationProject, MdoSchedulesLeaseScope* Scope,
+    xwork_error* Error)
+{
+    MdoScheduleEntry* Entry;
+    char ProjectId[MDO_SCHEDULE_PROJECT_CAPACITY];
+    memset(Scope, 0, sizeof(*Scope));
+    if ( !MdoSchedulesLeaseLock(Error) ) return false;
+    Entry = MdoSchedulesFind(ScheduleId);
+    if ( Entry == NULL || !Entry->Registered ) {
+        xrtMutexUnlock(g_MdoSchedules.Lock);
+        MdoSchedulesError(Error, XWORK_ERROR_INVALID_ARGUMENT,
+            "schedule was not found or restored");
+        return false;
+    }
+    snprintf(ProjectId, sizeof(ProjectId), "%s", Entry->Info.ProjectId);
+    xrtMutexUnlock(g_MdoSchedules.Lock);
+    Scope->Leases[0] = MdoProjectLeaseAcquire(ProjectId,
+        MDO_PROJECT_LEASE_SHARED, Error);
+    if ( Scope->Leases[0] == NULL ) return false;
+    Scope->Count = 1u;
+    if ( DestinationProject != NULL &&
+         strcmp(ProjectId, DestinationProject) != 0 ) {
+        Scope->Leases[1] = MdoProjectLeaseAcquire(DestinationProject,
+            MDO_PROJECT_LEASE_SHARED, Error);
+        if ( Scope->Leases[1] == NULL ) goto failed;
+        Scope->Count = 2u;
+    }
+    if ( !MdoSchedulesLeaseLock(Error) ) goto failed;
+    Scope->Locked = true;
+    Entry = MdoSchedulesFind(ScheduleId);
+    if ( Entry == NULL || !Entry->Registered ||
+         strcmp(Entry->Info.ProjectId, ProjectId) != 0 ) {
+        MdoSchedulesError(Error, XWORK_ERROR_CONTEXT,
+            "schedule project changed; reload before updating");
+        goto failed;
+    }
+    return true;
+failed:
+    MdoSchedulesLeaseEnd(Scope);
+    return false;
+}
+
+/* Global settings affect the complete catalog, including rollback/disable.
+ * Pin the bounded project set before mutation, then reject a stale catalog.
+ * Bulk work is all-or-nothing when any associated project is exclusive. */
+static bool MdoSchedulesAllProjectsBegin(MdoSchedulesLeaseScope* Scope,
+    xwork_error* Error)
+{
+    char Projects[MDO_SCHEDULE_MAX][MDO_SCHEDULE_PROJECT_CAPACITY];
+    size_t Count;
+    size_t i;
+    uint64 Generation;
+    memset(Scope, 0, sizeof(*Scope));
+    if ( !MdoSchedulesLeaseLock(Error) ) return false;
+    Count = g_MdoSchedules.Count;
+    Generation = g_MdoSchedules.Generation;
+    for ( i = 0u; i < Count; ++i )
+        snprintf(Projects[i], sizeof(Projects[i]), "%s",
+            g_MdoSchedules.Entries[i].Info.ProjectId);
+    xrtMutexUnlock(g_MdoSchedules.Lock);
+    for ( i = 0u; i < Count; ++i ) {
+        Scope->Leases[i] = MdoProjectLeaseAcquire(Projects[i],
+            MDO_PROJECT_LEASE_SHARED, Error);
+        if ( Scope->Leases[i] == NULL ) goto failed;
+        ++Scope->Count;
+    }
+    if ( !MdoSchedulesLeaseLock(Error) ) goto failed;
+    Scope->Locked = true;
+    if ( Generation == UINT64_MAX ) {
+        MdoSchedulesError(Error, XWORK_ERROR_LIMIT,
+            "schedule generation is exhausted");
+        goto failed;
+    }
+    if ( Generation != g_MdoSchedules.Generation ) {
+        MdoSchedulesError(Error, XWORK_ERROR_CONTEXT,
+            "schedule catalog changed; retry after reload");
+        goto failed;
+    }
+    return true;
+failed:
+    MdoSchedulesLeaseEnd(Scope);
+    return false;
+}
+
 static bool MdoSchedulesAddEntry(const MdoScheduleInfo* Info,
     bool Registered)
 {
@@ -973,6 +1086,7 @@ uint64 MdoScheduleManagerGeneration(void)
 bool MdoScheduleManagerReloadSettings(xwork_error* Error)
 {
     MdoConfigAgentSettings Settings;
+    MdoSchedulesLeaseScope Scope;
     bool PreviousEnabled;
     size_t Index;
     size_t Updated = 0u;
@@ -997,8 +1111,15 @@ bool MdoScheduleManagerReloadSettings(xwork_error* Error)
         (void)xrtMutexUnlock(g_MdoSchedules.Lock);
         return true;
     }
+    (void)xrtMutexUnlock(g_MdoSchedules.Lock);
+    if ( !MdoSchedulesAllProjectsBegin(&Scope, Error) ) return false;
+    PreviousEnabled = g_MdoSchedules.Enabled;
+    if ( PreviousEnabled == Settings.SchedulesEnabled ) {
+        MdoSchedulesLeaseEnd(&Scope);
+        return true;
+    }
     if ( g_MdoSchedules.Generation == UINT64_MAX ) {
-        (void)xrtMutexUnlock(g_MdoSchedules.Lock);
+        MdoSchedulesLeaseEnd(&Scope);
         MdoSchedulesError(Error, XWORK_ERROR_LIMIT,
             "schedule generation is exhausted");
         return false;
@@ -1038,7 +1159,7 @@ bool MdoScheduleManagerReloadSettings(xwork_error* Error)
             MdoSchedulesError(Error, XWORK_ERROR_CONTEXT,
                 "schedule settings rollback failed; scheduling was disabled");
         }
-        (void)xrtMutexUnlock(g_MdoSchedules.Lock);
+        MdoSchedulesLeaseEnd(&Scope);
         return false;
     }
     g_MdoSchedules.Enabled = Settings.SchedulesEnabled;
@@ -1048,7 +1169,7 @@ bool MdoScheduleManagerReloadSettings(xwork_error* Error)
             g_MdoSchedules.Entries[Index].Registered &&
             g_MdoSchedules.Entries[Index].Info.Enabled &&
             g_MdoSchedules.Enabled;
-    (void)xrtMutexUnlock(g_MdoSchedules.Lock);
+    MdoSchedulesLeaseEnd(&Scope);
     return true;
 }
 
@@ -1171,6 +1292,7 @@ bool MdoScheduleCreate(const MdoScheduleCreateOptions* Options,
     MdoScheduleInfo* Info, xwork_error* Error)
 {
     char* GeneratedId = NULL;
+    MdoProjectLease* Lease = NULL;
     MdoScheduleInfo Candidate;
     xwork_schedule_config Config;
     xwork_schedule_info RuntimeInfo;
@@ -1191,6 +1313,9 @@ bool MdoScheduleCreate(const MdoScheduleCreateOptions* Options,
     if ( (Options->Id == NULL && GeneratedId == NULL) ||
          !MdoSchedulesInfoFromOptions(Options, GeneratedId, &Candidate,
             Error) || !MdoSchedulesPath(Path, Candidate.Id) ) goto done;
+    Lease = MdoProjectLeaseAcquire(Candidate.ProjectId,
+        MDO_PROJECT_LEASE_SHARED, Error);
+    if ( Lease == NULL ) goto done;
     xrtMutexLock(g_MdoSchedules.Lock);
     if ( g_MdoSchedules.PersistenceFault ) {
         MdoSchedulesError(Error, XWORK_ERROR_IO,
@@ -1250,6 +1375,7 @@ done_locked:
     xrtMutexUnlock(g_MdoSchedules.Lock);
 done:
     xrtFree(GeneratedId);
+    MdoProjectLeaseRelease(Lease);
     return Ok;
 }
 
@@ -1257,6 +1383,7 @@ bool MdoScheduleSetEnabled(const char* ScheduleId, uint64 ExpectedRevision,
     bool Enabled, MdoScheduleInfo* Info, xwork_error* Error)
 {
     MdoScheduleEntry* Entry;
+    MdoSchedulesLeaseScope Scope;
     MdoScheduleInfo Previous;
     xwork_schedule_info RuntimeInfo;
     bool Ok = false;
@@ -1268,7 +1395,8 @@ bool MdoScheduleSetEnabled(const char* ScheduleId, uint64 ExpectedRevision,
             "invalid schedule enable request");
         return false;
     }
-    xrtMutexLock(g_MdoSchedules.Lock);
+    if ( !MdoSchedulesProjectWriteBegin(ScheduleId, NULL, &Scope,
+            Error) ) return false;
     Entry = MdoSchedulesFind(ScheduleId);
     if ( Entry == NULL || !Entry->Registered ) {
         MdoSchedulesError(Error, XWORK_ERROR_INVALID_ARGUMENT,
@@ -1324,7 +1452,7 @@ rollback:
         Previous.Enabled && g_MdoSchedules.Enabled, NULL);
     Entry->Info = Previous;
 done:
-    xrtMutexUnlock(g_MdoSchedules.Lock);
+    MdoSchedulesLeaseEnd(&Scope);
     return Ok;
 }
 
@@ -1334,6 +1462,7 @@ bool MdoScheduleReplace(const char* ScheduleId, uint64 ExpectedRevision,
 {
     MdoScheduleCreateOptions Normalized;
     MdoScheduleEntry* Entry;
+    MdoSchedulesLeaseScope Scope;
     MdoScheduleInfo Candidate;
     MdoScheduleInfo Previous;
     xwork_schedule_config Config;
@@ -1355,7 +1484,8 @@ bool MdoScheduleReplace(const char* ScheduleId, uint64 ExpectedRevision,
     Normalized.Id = ScheduleId;
     if ( !MdoSchedulesInfoFromOptions(&Normalized, NULL, &Candidate,
             Error) ) return false;
-    xrtMutexLock(g_MdoSchedules.Lock);
+    if ( !MdoSchedulesProjectWriteBegin(ScheduleId, Candidate.ProjectId,
+            &Scope, Error) ) return false;
     Entry = MdoSchedulesFind(ScheduleId);
     if ( Entry == NULL || !Entry->Registered ) {
         MdoSchedulesError(Error, XWORK_ERROR_INVALID_ARGUMENT,
@@ -1414,7 +1544,7 @@ rollback:
             Previous.RuntimeGeneration, NULL) )
         g_MdoSchedules.PersistenceFault = true;
 done:
-    xrtMutexUnlock(g_MdoSchedules.Lock);
+    MdoSchedulesLeaseEnd(&Scope);
     return Ok;
 }
 
@@ -1422,6 +1552,7 @@ bool MdoScheduleRemove(const char* ScheduleId, uint64 ExpectedRevision,
     xwork_error* Error)
 {
     MdoScheduleEntry* Entry;
+    MdoSchedulesLeaseScope Scope;
     MdoScheduleInfo Previous;
     xwork_schedule_info RuntimeInfo;
     char Path[MDO_SCHEDULE_PATH_CAPACITY];
@@ -1437,7 +1568,8 @@ bool MdoScheduleRemove(const char* ScheduleId, uint64 ExpectedRevision,
             "invalid schedule remove request");
         return false;
     }
-    xrtMutexLock(g_MdoSchedules.Lock);
+    if ( !MdoSchedulesProjectWriteBegin(ScheduleId, NULL, &Scope,
+            Error) ) return false;
     Entry = MdoSchedulesFind(ScheduleId);
     if ( Entry == NULL || !Entry->Registered ) {
         MdoSchedulesError(Error, XWORK_ERROR_INVALID_ARGUMENT,
@@ -1490,7 +1622,7 @@ bool MdoScheduleRemove(const char* ScheduleId, uint64 ExpectedRevision,
         ++g_MdoSchedules.Generation;
     Ok = true;
 done:
-    xrtMutexUnlock(g_MdoSchedules.Lock);
+    MdoSchedulesLeaseEnd(&Scope);
     return Ok;
 }
 

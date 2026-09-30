@@ -160,6 +160,8 @@ typedef struct MdoScheduleExecutorSnapshot {
 
 bool MdoScheduleManagerInit(xwork_runtime* Runtime);
 void MdoScheduleManagerUnit(void);
+/* Global enable changes reserve every catalog project before mutation and
+ * retain those leases through settings rollback. An unchanged switch is idle. */
 bool MdoScheduleManagerReloadSettings(xwork_error* Error);
 uint64 MdoScheduleManagerGeneration(void);
 bool MdoScheduleManagerEnabled(void);
@@ -167,6 +169,9 @@ bool MdoScheduleManagerEnabled(void);
 void MdoScheduleCreateOptionsInit(MdoScheduleCreateOptions* Options);
 void MdoScheduleClaimInit(MdoScheduleClaim* Claim);
 
+/* Definition writers require an initialized project lifecycle service. They
+ * reserve the definition project before writer/audit/store changes. Replace
+ * reserves both its current and destination projects and rechecks ownership. */
 bool MdoScheduleCreate(const MdoScheduleCreateOptions* Options,
     MdoScheduleInfo* Info, xwork_error* Error);
 bool MdoScheduleReplace(const char* ScheduleId, uint64 ExpectedRevision,

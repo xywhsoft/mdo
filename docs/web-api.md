@@ -120,9 +120,15 @@ publication and through completion or rollback; retained Agent memory tool
 catalogs keep their project lease until the last tool reference is released.
 Global memory remains independent of project exclusion.
 
+Schedule definition writers reserve their associated project. Replacement
+reserves both the current and destination project, then rechecks ownership
+under the mutation lock. Global schedule enable changes reserve every catalog
+project before updating runtime state and through rollback; a changed catalog
+is rejected before mutation. Reloading an unchanged switch is read-only.
+
 The current exclusive primitive is infrastructure for the planned purge
 transaction. There is no executable project-purge API yet, and `purge-preview`
-remains advisory. Schedule and legacy migration boundaries, the purge
+remains advisory. Schedule claim/completion/run ownership and legacy migration boundaries, the purge
 transaction, and startup recovery still need implementation before purge opens.
 
 ## Settings transactions

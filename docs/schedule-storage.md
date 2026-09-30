@@ -30,11 +30,21 @@ mdo-home/
 
 所有产品 mutation 先取得进程内 mutex 和 `schedules/.writer.lock`，再核对调用方给出的 revision。创建、启停、认领推进和删除都会先追加不含原始输入的 prepared audit；audit 只保存输入字节数和 SHA-256。定义随后用 Home 原子替换接口发布。写入失败后 manager 进入 fail-stop persistence fault，拒绝继续推进游标，防止内存状态与磁盘状态持续分叉。
 
+定义创建/替换/启停/删除还在 writer/audit/store 变化前取得项目共享租约。由于定义可迁到不同项目，按 schedule ID 修改时先在只读 manager 锁内解析项目，释放锁后取得租约，再在写入锁内重新核对归属；归属变化返回冲突。替换同时保留原项目和目标项目，直到成功发布或失败补偿结束。独占冲突不会创建 Home 或修改定义/审计，其他项目的独立定义操作仍可执行。
+
 每次启动枚举定义并用 `xworkRuntimeRestoreSchedule` 一次恢复完整 cursor。单个损坏文件形成结构化 diagnostic。合法定义即使暂时不能恢复进 runtime，也仍在 catalog 中可见，但 `Runnable=false`。
 
 认领使用调用方提供的 Unix 微秒时间。manager 先只读检查最早 occurrence；没有到期项时直接返回 next wake，不创建外部文件。存在到期项时才获取 writer lock 并调用 xwork。xwork 因 `skip` misfire 或 overlap 推进但没有返回 task 时，mdo 仍比较并持久化所有变化的 cursor，写入 `advance` audit，避免重启后重复处理已经跳过的 occurrence。
 
 全局 `settings.agent.schedules=false` 会保留并展示定义，但将它们以 disabled 状态恢复到 xwork。此时 catalog 的 `Runnable` 为 false，claim 保持空闲。
+
+全局开关重载先保留整个有界 catalog 的关联项目，再在 manager 锁内核对 generation。
+任一项目被独占或 catalog 在取得租约期间变化时，在 runtime 修改前返回冲突；已取得的
+租约全部释放。租约覆盖批量更新、失败回滚和回滚失败后的兜底停用。开关没有变化时
+是只读空操作，不额外取得租约。
+
+目前这些租约覆盖定义和全局重载。计划 claim/finish、结果持久化与运行对象最终释放
+仍须补齐连续的生命周期保护，项目彻底清除入口因此尚未开放。
 
 显式“立即运行”要求全局执行开关开启、定义已恢复且调用方持有当前 revision。它使用 xwork 的统一 scheduled task 和并发上限；暂停或周期已结束的定义也可执行。此操作更新最近认领时间、认领计数和 revision，写入 `run-now` audit，却不推进下一次 occurrence 或 catch-up 游标。执行失败仍通过常规 task/历史链记录。
 
@@ -59,3 +69,15 @@ bootstrap 创建一个长生命周期 schedule executor。生产默认使用一�
 - `MdoScheduleExecutorGetSnapshot` 返回活动数、累计 claim/completion/failure 和最近错误。
 
 计划任务的 HTTP 资源和 UI 编辑器已接入；执行历史以有界最近记录页展示。更早历史的分页仍需在后续阶段实现。
+
+## 当前验证范围
+
+2026-09-30 的真实 xs/TCC 探针覆盖定义独占拒绝、创建不落盘、定义及审计字节保持、
+其他项目可写、原/目标项目的共同保留、受控发布失败后的补偿，以及解析期间真实
+跨项目迁移与 catalog 增量导致的二次校验拒绝。全局更新和回滚被受控失败后，兜底
+停用的每个节点仍保留全部关联项目；操作退出后租约全部可重新取得。
+检查点仅注入复制的测试源，正式应用不含这些入口。
+
+Windows/Linux 有界发布门禁各通过 114 项 Python、113 项 Node、77 个前端模块解析、
+严格 C11、21 个运行探针与确定性打包；Windows 另通过便携 WebView2 Home 和 20 秒
+打包启动。未做压力或高负载测试，macOS 与实体移动端仍待独立验收。

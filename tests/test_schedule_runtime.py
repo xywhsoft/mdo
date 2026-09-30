@@ -24,8 +24,195 @@ PROBE_SOURCE = r'''
 #include <xsbase.h>
 
 #include "src/storage/home.c"
+#include "src/projects/lifecycle.c"
 #include "src/config/config.c"
+static void ScheduleProbeResolved(const char *id);
+static void ScheduleProbeCatalogResolved(void);
+static bool ScheduleProbePublish(const char *path);
+static bool ScheduleProbeSetEnabled(xwork_runtime *runtime, const char *id,
+    bool enabled, xwork_error *error);
 #include "src/schedules/manager.c"
+
+static bool ProbeMove;
+static bool ProbeCatalogChange;
+static bool ProbeHookOk = true;
+static bool ProbePublishing;
+static unsigned ProbePublishFail;
+static unsigned ProbePublishChecks;
+static unsigned ProbeSettingsChecks;
+static bool ProbeSettingsRollback;
+
+static bool ScheduleLeaseAvailable(const char *project) {
+    MdoProjectLease *lease = MdoProjectLeaseAcquire(project,
+        MDO_PROJECT_LEASE_EXCLUSIVE, NULL);
+    bool available = lease != NULL;
+    MdoProjectLeaseRelease(lease);
+    return available;
+}
+
+static void ScheduleProbeOptions(MdoScheduleCreateOptions *options,
+    const char *id, const char *project) {
+    MdoScheduleCreateOptionsInit(options);
+    options->Id = id;
+    options->Label = "Lifecycle probe";
+    options->ProjectId = project;
+    options->AgentId = "reviewer";
+    options->Input = "bounded lifecycle probe";
+    options->StartAt = 1700000000000000LL;
+}
+
+/* Inject a real intervening definition write at the unlocked resolution
+ * boundary, rather than mutating manager fields directly. */
+static void ScheduleProbeResolved(const char *id) {
+    MdoScheduleCreateOptions options;
+    if (!ProbeMove) return;
+    ProbeMove = false;
+    ScheduleProbeOptions(&options, id, "project-gamma");
+    ProbeHookOk = MdoScheduleReplace(id, UINT64_MAX, &options, NULL, NULL);
+}
+
+static void ScheduleProbeCatalogResolved(void) {
+    MdoScheduleCreateOptions options;
+    if (!ProbeCatalogChange) return;
+    ProbeCatalogChange = false;
+    ScheduleProbeOptions(&options, "scope-added", "project-gamma");
+    ProbeHookOk = MdoScheduleCreate(&options, NULL, NULL);
+}
+
+static bool ScheduleProbePublish(const char *path) {
+    (void)path;
+    if (!ProbePublishing) return true;
+    ++ProbePublishChecks;
+    if (ScheduleLeaseAvailable("project-alpha") ||
+        ScheduleLeaseAvailable("project-beta")) ProbeHookOk = false;
+    if (ProbePublishFail != 0u) { --ProbePublishFail; return false; }
+    return true;
+}
+
+/* Fail the second global update and its rollback. Both the rollback and the
+ * fallback disable must still reserve every project in the catalog. */
+static bool ScheduleProbeSetEnabled(xwork_runtime *runtime, const char *id,
+    bool enabled, xwork_error *error) {
+    if (ProbeSettingsRollback) {
+        ++ProbeSettingsChecks;
+        if (ScheduleLeaseAvailable("project-beta") ||
+            ScheduleLeaseAvailable("project-gamma")) ProbeHookOk = false;
+        if (ProbeSettingsChecks == 2u || ProbeSettingsChecks == 3u) {
+            MdoSchedulesError(error, XWORK_ERROR_CONTEXT, "controlled settings failure");
+            return false;
+        }
+    }
+    return xworkRuntimeSetScheduleEnabled(runtime, id, enabled, error);
+}
+
+static bool ScheduleLeaseProbe(void) {
+    static const char disable[] =
+        "{\"schema_version\":1,\"patch\":{\"agent\":{\"schedules\":false}}}";
+    static const char restore[] = "{\"schema_version\":1,\"patch\":{}}";
+    const char *paths[] = {"schedules/scope-a.json", "schedules/scope-b.json",
+        "schedules/audit.jsonl"};
+    char *before[3] = {0};
+    size_t sizes[3] = {0};
+    MdoScheduleCreateOptions options;
+    MdoProjectLease *exclusive = NULL;
+    MdoHomeSnapshot home;
+    xwork_error error;
+    xfileinfo stat;
+    uint64 generation;
+    size_t i;
+    bool ok = false;
+    ScheduleProbeOptions(&options, "scope-a", "project-alpha");
+    exclusive = MdoProjectLeaseAcquire("PROJECT-ALPHA.",
+        MDO_PROJECT_LEASE_EXCLUSIVE, &error);
+    if (exclusive == NULL || MdoScheduleCreate(&options, NULL, &error) ||
+        error.eCode != XWORK_ERROR_CONTEXT ||
+        MdoScheduleCreate(&options, NULL, NULL) ||
+        MdoScheduleManagerGeneration() != 1u) goto done;
+    memset(&home, 0, sizeof(home)); home.Size = sizeof(home);
+    if (!MdoHomeGetSnapshot(&home) || xrtPathStat(home.Path, false, &stat)) goto done;
+    printf("schedule_lease_create=1\n");
+    MdoProjectLeaseRelease(exclusive); exclusive = NULL;
+    if (!MdoScheduleCreate(&options, NULL, &error)) goto done;
+    ScheduleProbeOptions(&options, "scope-b", "project-beta");
+    if (!MdoScheduleCreate(&options, NULL, &error)) goto done;
+    for (i = 0u; i < 3u; ++i)
+        if (!MdoSchedulesRead(paths[i], &before[i], &sizes[i])) goto done;
+    generation = MdoScheduleManagerGeneration();
+    exclusive = MdoProjectLeaseAcquire("project-alpha",
+        MDO_PROJECT_LEASE_EXCLUSIVE, &error);
+    ScheduleProbeOptions(&options, "scope-a", "project-beta");
+    if (exclusive == NULL ||
+        MdoScheduleReplace("scope-a", 1u, &options, NULL, NULL) ||
+        MdoScheduleSetEnabled("scope-a", 1u, false, NULL, NULL) ||
+        MdoScheduleRemove("scope-a", 1u, NULL) ||
+        !MdoScheduleManagerReloadSettings(&error) ||
+        MdoScheduleManagerGeneration() != generation) goto done;
+    for (i = 0u; i < 3u; ++i) {
+        char *after = NULL;
+        size_t size = 0u;
+        bool same = MdoSchedulesRead(paths[i], &after, &size) &&
+            sizes[i] == size && memcmp(before[i], after, size) == 0;
+        xrtFree(after);
+        if (!same) goto done;
+    }
+    if (!MdoScheduleSetEnabled("scope-b", 1u, false, NULL, &error)) goto done;
+    printf("schedule_lease_writers=1\n");
+    MdoProjectLeaseRelease(exclusive); exclusive = NULL;
+    exclusive = MdoProjectLeaseAcquire("project-beta",
+        MDO_PROJECT_LEASE_EXCLUSIVE, &error);
+    if (exclusive == NULL ||
+        MdoScheduleReplace("scope-a", 1u, &options, NULL, &error) ||
+        error.eCode != XWORK_ERROR_CONTEXT ||
+        !ScheduleLeaseAvailable("project-alpha")) goto done;
+    printf("schedule_lease_destination=1\n");
+    if (!MdoConfigImport(MDO_CONFIG_SETTINGS, xrtStrView(disable))) goto done;
+    generation = MdoScheduleManagerGeneration();
+    if (MdoScheduleManagerReloadSettings(&error) ||
+        error.eCode != XWORK_ERROR_CONTEXT || !MdoScheduleManagerEnabled() ||
+        MdoScheduleManagerGeneration() != generation ||
+        !ScheduleLeaseAvailable("project-alpha")) goto done;
+    printf("schedule_lease_settings_blocked=1\n");
+    MdoProjectLeaseRelease(exclusive); exclusive = NULL;
+    if (!MdoConfigImport(MDO_CONFIG_SETTINGS, xrtStrView(restore))) goto done;
+    ProbePublishing = true;
+    if (!MdoScheduleReplace("scope-a", 1u, &options, NULL, &error) ||
+        ProbePublishChecks != 1u || !ProbeHookOk) goto done;
+    ScheduleProbeOptions(&options, "scope-a", "project-alpha");
+    ProbePublishFail = 1u;
+    if (MdoScheduleReplace("scope-a", 2u, &options, NULL, &error) ||
+        ProbePublishChecks != 3u || !ProbeHookOk) goto done;
+    ProbePublishing = false;
+    if (!ScheduleLeaseAvailable("project-alpha") ||
+        !ScheduleLeaseAvailable("project-beta")) goto done;
+    printf("schedule_lease_replace_rollback=1\n");
+    ProbeMove = true;
+    if (MdoScheduleSetEnabled("scope-a", UINT64_MAX, false, NULL, &error) ||
+        error.eCode != XWORK_ERROR_CONTEXT ||
+        strcmp(error.sMessage, "schedule project changed; reload before updating") != 0 ||
+        !ProbeHookOk || !ScheduleLeaseAvailable("project-beta") ||
+        !ScheduleLeaseAvailable("project-gamma")) goto done;
+    printf("schedule_lease_owner_race=1\n");
+    if (!MdoConfigImport(MDO_CONFIG_SETTINGS, xrtStrView(disable))) goto done;
+    ProbeCatalogChange = true;
+    if (MdoScheduleManagerReloadSettings(&error) ||
+        error.eCode != XWORK_ERROR_CONTEXT || !MdoScheduleManagerEnabled() ||
+        !ProbeHookOk || !ScheduleLeaseAvailable("project-beta") ||
+        !ScheduleLeaseAvailable("project-gamma")) goto done;
+    printf("schedule_lease_catalog_race=1\n");
+    ProbeSettingsRollback = true;
+    if (MdoScheduleManagerReloadSettings(&error) ||
+        strcmp(error.sMessage, "schedule settings rollback failed; scheduling was disabled") != 0 ||
+        MdoScheduleManagerEnabled() || ProbeSettingsChecks != 6u || !ProbeHookOk ||
+        !ScheduleLeaseAvailable("project-beta") ||
+        !ScheduleLeaseAvailable("project-gamma")) goto done;
+    ProbeSettingsRollback = false;
+    printf("schedule_lease_settings_rollback=1\n");
+    ok = true;
+done:
+    MdoProjectLeaseRelease(exclusive);
+    for (i = 0u; i < 3u; ++i) xrtFree(before[i]);
+    return ok;
+}
 
 static void PrintCatalog(const char *label) {
     xwork_error error;
@@ -64,7 +251,7 @@ void ServiceInit(XS_HostInfo *host) {
     bool result;
     (void)host;
 
-    if (!MdoHomeInit() || !MdoConfigInit()) {
+    if (!MdoHomeInit() || !MdoProjectLifecycleInit() || !MdoConfigInit()) {
         printf("init_error=pre-runtime\n"); goto done;
     }
     xworkRuntimeConfigInit(&runtime_config);
@@ -73,6 +260,10 @@ void ServiceInit(XS_HostInfo *host) {
         printf("init_error=runtime\n"); goto done;
     }
     PrintCatalog("catalog_empty");
+    if (getenv("MDO_SCHEDULE_LEASE_ONLY") != NULL) {
+        if (!ScheduleLeaseProbe()) printf("lease_probe_error=1\n");
+        printf("probe_done=1\n"); goto done;
+    }
     if (getenv("MDO_SCHEDULE_EMPTY_ONLY") != NULL) {
         printf("probe_done=1\n"); goto done;
     }
@@ -245,6 +436,7 @@ done:
     MdoScheduleManagerUnit();
     xworkRuntimeRelease(runtime);
     MdoConfigUnit();
+    MdoProjectLifecycleUnit();
     MdoHomeUnit();
 }
 
@@ -254,19 +446,38 @@ void ServiceUnit(XS_HostInfo *host) { (void)host; }
 
 def write_site(site: Path) -> None:
     for relative in ("web", "default-home/config", "src/storage", "src/config",
-                     "src/schedules", "include/mdo"):
+                     "src/projects", "src/schedules", "include/mdo"):
         (site / relative).mkdir(parents=True, exist_ok=True)
     (site / "web/index.html").write_text("probe", encoding="utf-8")
     for relative in (
         "default-home/config/defaults.json",
         "src/storage/home.c",
+        "src/projects/lifecycle.c",
         "src/config/config.c",
         "src/schedules/manager.c",
     ):
         shutil.copy2(ROOT / "app" / relative, site / relative)
     shutil.copy2(ROOT / "app/src/schedules/internal.h",
                  site / "src/schedules/internal.h")
-    for name in ("home.h", "config.h", "models.h", "schedules.h"):
+    manager = site / "src/schedules/manager.c"
+    source = manager.read_text(encoding="utf-8")
+    # Hooks exist only in this copied fixture, never in the packed app.
+    old = '    Ok = MdoHomeAtomicWrite(Path, Json, Size, true);'
+    assert source.count(old) == 1
+    source = source.replace(old,
+        '    Ok = ScheduleProbePublish(Path) && MdoHomeAtomicWrite(Path, Json, Size, true);')
+    old = '    xrtMutexUnlock(g_MdoSchedules.Lock);\n    Scope->Leases[0]'
+    assert source.count(old) == 1
+    source = source.replace(old,
+        '    xrtMutexUnlock(g_MdoSchedules.Lock);\n    ScheduleProbeResolved(ScheduleId);\n    Scope->Leases[0]')
+    old = '    xrtMutexUnlock(g_MdoSchedules.Lock);\n    for ( i = 0u; i < Count; ++i )'
+    assert source.count(old) == 1
+    source = source.replace(old,
+        '    xrtMutexUnlock(g_MdoSchedules.Lock);\n    ScheduleProbeCatalogResolved();\n    for ( i = 0u; i < Count; ++i )')
+    source = source.replace('xworkRuntimeSetScheduleEnabled(', 'ScheduleProbeSetEnabled(')
+    manager.write_text(source, encoding="utf-8")
+    for name in ("home.h", "config.h", "models.h", "schedules.h",
+                 "project_lifecycle.h"):
         shutil.copy2(ROOT / "app/include/mdo" / name, site / "include/mdo" / name)
     (site / "probe.c").write_text(PROBE_SOURCE, encoding="utf-8")
     with socket.socket() as listener:
@@ -286,6 +497,8 @@ def run_probe(host: Path, site: Path, home: Path, mode: str = "") -> str:
         env["MDO_SCHEDULE_EMPTY_ONLY"] = "1"
     elif mode == "disabled":
         env["MDO_SCHEDULE_DISABLED_ONLY"] = "1"
+    elif mode == "lease":
+        env["MDO_SCHEDULE_LEASE_ONLY"] = "1"
     process = subprocess.Popen(
         [str(host), "xs.json", "--", "--home", str(home)], cwd=site,
         stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
@@ -337,6 +550,12 @@ def main() -> int:
         assert "catalog_empty=count:0 diagnostics:0 generation:1 enabled:1 code:0" in empty_output, empty_output
         assert "probe_done=1" in empty_output, empty_output
         assert not empty_home.exists(), list(empty_home.rglob("*")) if empty_home.exists() else ""
+
+        lease_output = run_probe(host, site, base / "lease-home", mode="lease")
+        assert "lease_probe_error=" not in lease_output, lease_output
+        for label in ("create", "writers", "destination", "settings_blocked",
+                      "replace_rollback", "owner_race", "catalog_race", "settings_rollback"):
+            assert f"schedule_lease_{label}=1" in lease_output, lease_output
 
         output = run_probe(host, site, home)
         assert "init_error=" not in output, output
