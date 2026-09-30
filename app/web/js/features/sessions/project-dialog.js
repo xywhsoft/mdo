@@ -73,6 +73,7 @@ export function createProjectDialog({ dialog, form, error, submit, modelsStore,
     } catch (cause) {
       error.textContent = errorMessage(cause);
       error.hidden = false;
+      error.focus();
     } finally {
       submit.disabled = false;
     }

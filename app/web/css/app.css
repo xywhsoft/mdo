@@ -1007,12 +1007,12 @@ select:focus-visible,
   box-shadow: var(--shadow-dialog);
 }
 .new-session-dialog::backdrop { background: rgb(0 0 0 / 34%); backdrop-filter: blur(2px); }
-:is(#new-session-dialog, #session-action-dialog, #message-edit-dialog) { max-height: calc(100dvh - 32px); overflow: hidden; }
-:is(#new-session-dialog, #session-action-dialog, #message-edit-dialog) .dialog-card { display: flex; max-height: calc(100dvh - 32px); min-height: 0; flex-direction: column; }
-:is(#new-session-dialog, #session-action-dialog, #message-edit-dialog) .dialog-card > header,
-:is(#new-session-dialog, #session-action-dialog, #message-edit-dialog) .dialog-card > footer { flex: 0 0 auto; }
-:is(#new-session-dialog, #session-action-dialog, #message-edit-dialog) .dialog-fields { min-height: 0; overflow-y: auto; }
-#new-session-dialog .dialog-error { flex: 0 0 auto; max-height: min(96px, 25dvh); overflow-y: auto; }
+:is(#new-session-dialog, #session-action-dialog, #message-edit-dialog, #project-dialog) { max-height: calc(100dvh - 32px); overflow: hidden; }
+:is(#new-session-dialog, #session-action-dialog, #message-edit-dialog, #project-dialog) .dialog-card { display: flex; max-height: calc(100dvh - 32px); min-height: 0; flex-direction: column; }
+:is(#new-session-dialog, #session-action-dialog, #message-edit-dialog, #project-dialog) .dialog-card > header,
+:is(#new-session-dialog, #session-action-dialog, #message-edit-dialog, #project-dialog) .dialog-card > footer { flex: 0 0 auto; }
+:is(#new-session-dialog, #session-action-dialog, #message-edit-dialog, #project-dialog) .dialog-fields { min-height: 0; overflow-y: auto; }
+:is(#new-session-dialog, #project-dialog) .dialog-error { flex: 0 0 auto; max-height: min(96px, 25dvh); overflow-y: auto; }
 .image-preview-dialog { position: fixed; min-width: 58px; max-width: calc(100vw - 24px); max-height: calc(100dvh - 24px); margin: auto; padding: 48px 8px 8px; border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--surface-raised); box-shadow: var(--shadow-dialog); }
 .image-preview-dialog::backdrop { background: rgb(0 0 0 / 72%); }
 .image-preview-dialog img { display: block; width: auto; height: auto; max-width: calc(100vw - 42px); max-height: calc(100dvh - 82px); object-fit: contain; }
@@ -1519,9 +1519,9 @@ select:focus-visible,
   .dialog-card > footer .primary-button,
   .dialog-card > footer .secondary-button,
   .dialog-card > footer .danger-button { min-height: 40px; }
-  :is(#new-session-dialog, #session-action-dialog) .dialog-card > header { padding: 12px 16px 8px; }
-  :is(#new-session-dialog, #session-action-dialog) .dialog-fields { gap: 10px; padding: 10px 16px; }
-  :is(#new-session-dialog, #session-action-dialog) .dialog-card > footer { padding: 8px 16px; }
+  :is(#new-session-dialog, #session-action-dialog, #project-dialog) .dialog-card > header { padding: 12px 16px 8px; }
+  :is(#new-session-dialog, #session-action-dialog, #project-dialog) .dialog-fields { gap: 10px; padding: 10px 16px; }
+  :is(#new-session-dialog, #session-action-dialog, #project-dialog) .dialog-card > footer { padding: 8px 16px; }
   .shortcuts-dialog .dialog-card > header { padding: 12px 16px 8px; }
   .shortcuts-dialog .dialog-card > footer { padding: 8px 16px; }
   .shortcuts-content dl > div { align-items: flex-start; flex-direction: column; gap: 4px; }
@@ -1690,11 +1690,11 @@ select:focus-visible,
 }
 
 @media (max-height: 300px) {
-  #new-session-dialog .dialog-card > header { padding: 8px 12px 6px; }
-  #new-session-dialog .dialog-card > header p { display: none; }
-  #new-session-dialog .dialog-fields { gap: 6px; padding: 4px 12px; }
-  #new-session-dialog .dialog-error { margin: 0 12px 4px; }
-  #new-session-dialog .dialog-card > footer { padding: 4px 12px; }
+  :is(#new-session-dialog, #project-dialog) .dialog-card > header { padding: 8px 12px 6px; }
+  :is(#new-session-dialog, #project-dialog) .dialog-card > header p { display: none; }
+  :is(#new-session-dialog, #project-dialog) .dialog-fields { gap: 6px; padding: 4px 12px; }
+  :is(#new-session-dialog, #project-dialog) .dialog-error { margin: 0 12px 4px; }
+  :is(#new-session-dialog, #project-dialog) .dialog-card > footer { padding: 4px 12px; }
   .shortcuts-dialog .dialog-card > header p { display: none; }
 }
 
