@@ -5,7 +5,7 @@ import {
   patchSession, trashSession, restoreSession, loadSessionHistory, forkSession,
   truncateSession, clearSession, exportSession, loadSessionTranscript,
 } from "./state/sessions.js";
-import { modelsStore, agentsStore, projectsStore, loadCatalogs, loadModels, loadAgents, createProject } from "./state/catalogs.js";
+import { modelsStore, agentsStore, projectsStore, loadCatalogs, loadModels, loadAgents, loadProjects, createProject } from "./state/catalogs.js";
 import {
   settingsStore, loadSettings, previewSettings, applySettings,
 } from "./state/settings.js";
@@ -59,6 +59,7 @@ import { createRecoveryPanel } from "./features/approvals/recovery-panel.js";
 import { createSettingsView } from "./features/settings/settings-view.js";
 import { createSchedulePanel } from "./features/settings/schedule-panel.js";
 import { createProjectPanel } from "./features/settings/project-panel.js";
+import { createProjectPurgeConfirmation } from "./features/settings/project-purge-confirmation.js";
 import { createProjectPurgeRecovery } from "./features/settings/project-purge-recovery.js";
 import { createProjectPurgeRecoveryPanel } from "./features/settings/project-purge-recovery-panel.js";
 import { createResourcePanels } from "./features/settings/resource-panels.js";
@@ -73,7 +74,7 @@ import { createSessionLoadNotice } from "./features/shell/session-load-notice.js
 import { waitForSelectedDetail } from "./features/shell/session-detail-wait.js";
 import { createPaneLayout } from "./features/shell/pane-layout.js";
 import { trackMobileViewport } from "./features/shell/mobile-viewport.js";
-import { api, setApiWriteGuard, currentPageWriteToken, setApiWriteConflictHandler } from "./api/client.js";
+import { api, ApiError, setApiWriteGuard, currentPageWriteToken, setApiWriteConflictHandler, hasPendingApiWrites } from "./api/client.js";
 import { clear, element, errorMessage, isImeKey, refreshRelativeTimes, toast } from "./utils/dom.js";
 import { subscribeLocale, t } from "./i18n.js";
 
@@ -111,10 +112,19 @@ export async function boot() {
     getWriteToken: currentPageWriteToken,
     onReload(projectId) {
       const saved = history.state?.mdoWorkspace;
-      if (!projectId || saved?.projectId === projectId)
-        history.replaceState({ ...history.state, mdoWorkspace: null }, "", location.href);
+      const route = navigation.get();
+      const url = route.view === "workspace" && (!projectId || route.projectId === projectId)
+        ? "#/settings/projects" : location.href;
+      history.replaceState({ ...history.state,
+        ...(!projectId || saved?.projectId === projectId ? { mdoWorkspace: null } : {}) }, "", url);
       window.location.reload();
     },
+    async beforePrepare() {
+      if (localPurgeBusy()) throw new ApiError("Wait for local operations", { code: "purge_client_busy" });
+      if (!await draftStore.flushAll()) throw new ApiError("Save or copy local drafts", { code: "purge_draft_unsaved" });
+      if (localPurgeBusy()) throw new ApiError("Wait for local operations", { code: "purge_client_busy" });
+    },
+    canComplete: () => !localPurgeBusy() && !draftStore.hasUnsaved(),
   });
   setApiWriteConflictHandler((error) => purgeRecovery.markWriteConflict(error));
   setApiWriteGuard((request) => purgeRecovery.allowsWrite(request));
@@ -225,6 +235,13 @@ export async function boot() {
 
   function submittingCurrent() {
     return Boolean(!navigation.get().sessionId && newTaskController?.isBusy());
+  }
+
+  function localPurgeBusy() {
+    return hasPendingApiWrites() || messageActionBusy ||
+      composerImages?.hasInFlight() || composerProfile.hasInFlight() ||
+      submissionController?.hasInFlight() || promptQueue.hasInFlight() ||
+      newTaskController?.isBusy() || newTaskController?.isPreparing() || newTaskController?.isMigrating();
   }
 
   const projectDialog = createProjectDialog({
@@ -938,14 +955,24 @@ export async function boot() {
     navigation,
     onApplied: () => Promise.all([loadBootstrap(), loadCatalogs()]),
   });
+  const purgeConfirmation = createProjectPurgeConfirmation({
+    dialog: $("#project-purge-confirm-dialog"), recovery: purgeRecovery,
+    onResolved: () => {
+      void loadProjects();
+      // Native dialog close restores its previous focus after this callback.
+      // Focus the result panel only after that restoration has settled.
+      window.requestAnimationFrame(() => purgeRecoveryPanel.focus());
+    },
+  });
   const projectPanel = createProjectPanel({
     panel: $('[data-settings-panel="projects"]'), projectsStore,
-    modelsStore, projectDialog, navigation,
+    modelsStore, projectDialog, navigation, purgeRecovery, purgeConfirmation,
   });
-  createProjectPurgeRecoveryPanel({
+  const purgeRecoveryPanel = createProjectPurgeRecoveryPanel({
     panel: $("#project-purge-recovery"), notice: $("#project-purge-notice"),
     recovery: purgeRecovery, navigation,
     unsentSnapshots: draftStore.unsentSnapshots,
+    onReview: (intent, origin) => projectPanel.openPurgeReview(intent, origin),
   });
   const schedulePanel = createSchedulePanel({
     panel: $('[data-settings-panel="schedules"]'),

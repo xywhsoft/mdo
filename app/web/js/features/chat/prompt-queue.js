@@ -486,6 +486,7 @@ export function createPromptQueue({ container, navigation, isRunActive, stagedEn
       try { await callback(); return true; }
       finally { busy.delete(key); render(); }
     },
+    hasInFlight: () => Boolean(busy.size || actionBusy.size),
     render,
     rememberUnusedImages(projectId, sessionId, ids) {
       unusedImages.remember(sessionKey(projectId, sessionId), ids);

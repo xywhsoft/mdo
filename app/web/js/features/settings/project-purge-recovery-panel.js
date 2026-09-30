@@ -5,7 +5,7 @@ function statusCopy(state) {
   if (state.writeConflict && !state.intent) return t("purgeRecovery.stalePage");
   if (!state.checked) return t("purgeRecovery.loading");
   if (!state.intent) return state.error ? t("purgeRecovery.unavailable") : "";
-  if (state.result?.committed) return t("purgeRecovery.committed");
+  if (state.result?.committed) return t(state.result.restart_required ? "purgeConfirm.committedRestart" : "purgeRecovery.committed");
   if (state.result?.outcome === "aborted") return t("purgeRecovery.aborted");
   if (state.result?.outcome === "pending") return t("purgeRecovery.pending");
   if (state.result?.outcome === "not_accepted") return t("purgeRecovery.notAccepted");
@@ -15,12 +15,14 @@ function statusCopy(state) {
 // Stable nodes keep keyboard focus while a query, locale change, or another
 // page changes the result. No filesystem names are interpreted as markup.
 export function createProjectPurgeRecoveryPanel({ panel, notice, recovery, navigation,
-  unsentSnapshots = () => [] }) {
+  unsentSnapshots = () => [], onReview = () => {} }) {
   const query = panel.querySelector('[data-purge-action="query"]');
   const cancel = panel.querySelector('[data-purge-action="cancel"]');
   const acknowledge = panel.querySelector('[data-purge-action="acknowledge"]');
   const reload = panel.querySelector('[data-purge-action="reload"]');
   const copy = panel.querySelector('[data-purge-action="copy"]');
+  const review = panel.querySelector('[data-purge-action="review"]');
+  const complete = panel.querySelector('[data-purge-action="complete"]');
   const error = panel.querySelector('[data-purge-field="error"]');
   const binding = panel.querySelector("dl");
   const jump = notice.querySelector("button");
@@ -60,8 +62,16 @@ export function createProjectPurgeRecoveryPanel({ panel, notice, recovery, navig
     acknowledge.disabled = state.busy;
     reload.textContent = t("purgeRecovery.reload");
     copy.textContent = t("purgeRecovery.copyDrafts");
-    reload.hidden = copy.hidden = !state.writeConflict;
+    reload.hidden = copy.hidden = !(state.writeConflict || state.error?.code === "purge_draft_unsaved" ||
+      (state.intent && !state.intentSaved));
     reload.disabled = copy.disabled = state.busy;
+    review.textContent = t("purgeConfirm.review");
+    review.hidden = !state.intent || !state.intentSaved || state.result?.outcome !== "not_accepted" || state.writeConflict;
+    review.disabled = state.busy;
+    complete.textContent = t("purgeConfirm.complete");
+    complete.hidden = state.result?.accepted !== true || state.result?.outcome !== "committed" ||
+      !state.result?.committed || state.result?.restart_required;
+    complete.disabled = state.busy;
     // If the clicked action disappears, return to the surviving query button.
     // Do not steal focus from a user's newer choice elsewhere on the page.
     if (active && panel.contains(active) && (panel.hidden || active.hidden)) {
@@ -83,6 +93,8 @@ export function createProjectPurgeRecoveryPanel({ panel, notice, recovery, navig
   cancel.addEventListener("click", () => { void act(cancel, recovery.cancel); });
   acknowledge.addEventListener("click", () => { void act(acknowledge, recovery.acknowledgeAbort); });
   reload.addEventListener("click", () => recovery.reload());
+  review.addEventListener("click", () => onReview(recovery.get().intent, review));
+  complete.addEventListener("click", () => { void act(complete, recovery.completeCommitted); });
   copy.addEventListener("click", async () => {
     try {
       await navigator.clipboard.writeText(JSON.stringify(unsentSnapshots(), null, 2));

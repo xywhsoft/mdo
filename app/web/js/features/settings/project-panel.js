@@ -3,9 +3,10 @@ import { loadProjects, readProject, readProjectPurgePreview,
 import { clear, element, errorMessage, toast } from "../../utils/dom.js";
 import { subscribeLocale, t } from "../../i18n.js";
 import { openMemoryPanel, openMemoryDirectory } from "./memory-panel.js";
+import { reviewedPurgeIntent, purgeBindingsMatch } from "./project-purge-contract.js";
 
 export function createProjectPanel({ panel, projectsStore, modelsStore,
-  projectDialog, navigation }) {
+  projectDialog, navigation, purgeRecovery, purgeConfirmation }) {
   const list = panel.querySelector("#settings-projects-list");
   const dialog = document.querySelector("#project-unregister-dialog");
   const description = dialog.querySelector("#project-unregister-description");
@@ -18,11 +19,30 @@ export function createProjectPanel({ panel, projectsStore, modelsStore,
   const previewNote = previewDialog.querySelector("#project-purge-preview-note");
   const previewRefresh = previewDialog.querySelector("#project-purge-preview-refresh");
   const previewClose = previewDialog.querySelector("#project-purge-preview-close");
+  const previewConfirm = previewDialog.querySelector("#project-purge-preview-confirm");
   let target = null;
   let previewProject = null;
   let previewOrigin = null;
   let previewRequest = null;
   let previewData = null;
+
+  function canConfirmPreview() {
+    if (!previewData || purgeRecovery.get().busy || purgeRecovery.get().writeConflict || purgeRecovery.get().error) return false;
+    try {
+      const intent = purgeRecovery.get().intent;
+      const reviewed = reviewedPurgeIntent(previewData, intent?.purge_request_id ?? "0".repeat(32));
+      return !intent ? !purgeRecovery.isPaused() : purgeRecovery.get().intentSaved &&
+        purgeRecovery.get().result?.outcome === "not_accepted" && purgeBindingsMatch(reviewed, intent);
+    } catch { return false; }
+  }
+
+  function openPreview(project, origin) {
+    previewProject = project; previewOrigin = origin;
+    previewTitle.textContent = t("project.previewTitle", { name: project.name || project.id });
+    previewConfirm.disabled = true;
+    previewDialog.showModal(); previewClose.focus();
+    void loadPreview();
+  }
 
   function focusProject(id, control = "edit") {
     window.requestAnimationFrame(() => {
@@ -98,6 +118,10 @@ export function createProjectPanel({ panel, projectsStore, modelsStore,
       ? t("project.previewUnsettled", {}, "存在运行态或诊断项；执行彻底清除前必须重新核对并处理。")
       : t("project.previewClear", {}, "当前未发现运行态或诊断项；执行彻底清除前仍须重新核对。");
     previewNote.hidden = false;
+    previewConfirm.disabled = !canConfirmPreview();
+    const intent = purgeRecovery.get().intent;
+    if (intent && (intent.project_id !== data.id || intent.revision !== data.revision || intent.created_at !== data.created_at))
+      previewNote.textContent = t("purgeConfirm.changedBinding");
   }
 
   async function loadPreview() {
@@ -106,6 +130,7 @@ export function createProjectPanel({ panel, projectsStore, modelsStore,
     const request = new AbortController();
     previewRequest = request;
     previewData = null;
+    previewConfirm.disabled = true;
     previewStatus.textContent = t("project.previewLoading", {}, "正在读取清单…");
     previewList.hidden = true;
     previewNote.hidden = true;
@@ -216,16 +241,7 @@ export function createProjectPanel({ panel, projectsStore, modelsStore,
             "aria-label": t("project.previewProject", { name: project.name || project.id },
               `核对 ${project.name || project.id} 的清除范围`),
           } });
-        preview.addEventListener("click", () => {
-          previewProject = project;
-          previewOrigin = preview;
-          previewTitle.textContent = t("project.previewTitle",
-            { name: project.name || project.id },
-            `${project.name || project.id} · 清除范围`);
-          previewDialog.showModal();
-          previewClose.focus();
-          void loadPreview();
-        });
+        preview.addEventListener("click", () => openPreview(project, preview));
         actions.append(preview);
         const remove = element("button", { className: "danger-link",
           text: t("project.unregister", {}, "取消注册"),
@@ -269,12 +285,20 @@ export function createProjectPanel({ panel, projectsStore, modelsStore,
   dialog.addEventListener("close", () => { target = null; });
   previewRefresh.addEventListener("click", () => { void loadPreview(); });
   previewClose.addEventListener("click", () => previewDialog.close());
+  previewConfirm.addEventListener("click", () => {
+    if (!canConfirmPreview()) return;
+    const data = previewData, origin = previewOrigin;
+    previewDialog.close();
+    purgeConfirmation.open(data, origin);
+  });
   previewDialog.addEventListener("close", () => {
     previewRequest?.abort();
     previewRequest = null;
     const id = previewProject?.id;
-    if (previewOrigin?.isConnected) previewOrigin.focus();
-    else if (id) focusProject(id, "preview");
+    if (!document.querySelector("#project-purge-confirm-dialog").open) {
+      if (previewOrigin?.isConnected) previewOrigin.focus();
+      else if (id) focusProject(id, "preview");
+    }
     previewProject = null;
     previewOrigin = null;
     previewData = null;
@@ -291,6 +315,7 @@ export function createProjectPanel({ panel, projectsStore, modelsStore,
   });
   projectsStore.subscribe(render);
   modelsStore.subscribe(render);
+  purgeRecovery.subscribe(() => { previewConfirm.disabled = !canConfirmPreview(); });
   subscribeLocale(() => {
     render();
     if (previewDialog.open && previewProject) {
@@ -303,5 +328,8 @@ export function createProjectPanel({ panel, projectsStore, modelsStore,
 
   return Object.freeze({
     focusProject,
+    openPurgeReview(intent, origin) {
+      openPreview({ id: intent.project_id, name: intent.name }, origin);
+    },
   });
 }

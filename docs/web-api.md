@@ -220,8 +220,9 @@ receipt; deleting a local pending flag alone cannot cancel a delayed request.
 Receipts live in `data/project-purges/<id>.json`, bounded to 2048 bytes each and
 1024 records, with no automatic expiry/reuse. Preserve them with Home backups.
 The storage protocol guarantees tested process-interruption recovery, not
-power-loss directory durability. The product confirmation button, intent UI,
-lost-response UI and navigation settlement remain to be wired.
+power-loss directory durability. The product now connects inventory review,
+typed-ID confirmation, saved original intent, explicit execution and result
+recovery. See the [frontend flow and validation boundaries](project-purge-frontend.md).
 
 `GET/HEAD /project-purge-intent` reads the one portable saved client intent,
 returning `{intent: null | {...}, replayed: false}` and its strong ETag. It
@@ -245,7 +246,11 @@ replayed when the intent is absent and the original terminal remains. Old ETags
 cannot clear another intent. Existing intents can be read/replayed during Home
 isolation; actual new saves/removals still require recovery. All intent routes
 support OPTIONS and normal method fencing. See the [portable intent protocol](project-purge-intent.md)
-for file limits, locking, failure semantics and the remaining frontend wiring.
+for file limits, locking and failure semantics. The frontend drains local
+operations and saves loaded dirty drafts before preparing a new ID, never
+automatically executes on reload, and keeps all local writes paused through
+committed acknowledgement until an actual page reload. Ordinary writes must
+carry the fixed page token described in [HTTP write admission](http-write-admission.md).
 
 ## Settings transactions
 

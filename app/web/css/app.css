@@ -1285,6 +1285,10 @@ select:focus-visible,
 .project-preview-dialog .dialog-actions, #project-unregister-dialog .dialog-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 18px; }
 .project-preview-dialog .dialog-actions { position: sticky; bottom: -20px; padding: 12px 0 0; background: var(--surface-raised); }
 .project-preview-dialog .dialog-actions button { min-height: 40px; }
+.project-preview-dialog .dialog-actions { flex-wrap: wrap; }
+.project-purge-id-label { display: grid; gap: 8px; font-size: 12px; overflow-wrap: anywhere; }
+.project-purge-id-label input { box-sizing: border-box; width: 100%; min-width: 0; min-height: 40px; padding: 8px; border: 1px solid var(--border); border-radius: var(--radius-sm); color: var(--ink); background: var(--surface); }
+#project-purge-confirm-dialog [role="alert"] { color: var(--danger); }
 .project-preview-list { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 7px 14px; margin: 16px 0; padding: 12px; border: 1px solid var(--border); border-radius: var(--radius-sm); font-size: 12px; }
 .project-preview-list[hidden], .project-preview-note[hidden] { display: none; }
 .project-preview-list dt { color: var(--muted); }

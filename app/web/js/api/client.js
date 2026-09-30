@@ -2,6 +2,14 @@ const API_ROOT = "/api/v1";
 let writeGuard = null;
 let pageWriteToken = null;
 let writeConflictHandler = null;
+let pendingWrites = 0;
+export function hasPendingApiWrites() { return pendingWrites !== 0; }
+
+async function trackWrite(operation) {
+  pendingWrites += 1;
+  try { return await operation(); }
+  finally { pendingWrites -= 1; }
+}
 
 export function currentPageWriteToken() { return pageWriteToken; }
 export function setApiWriteConflictHandler(handler) { writeConflictHandler = handler; }
@@ -89,6 +97,11 @@ async function readEnvelope(response, path = "", method = "GET") {
 
 export async function apiRequest(path, options = {}) {
   checkWrite(path, options);
+  return !["GET", "HEAD", "OPTIONS"].includes((options.method ?? "GET").toUpperCase())
+    ? trackWrite(() => sendJson(path, options)) : sendJson(path, options);
+}
+
+async function sendJson(path, options) {
   const method = options.method ?? "GET";
   const headers = new Headers({ Accept: "application/json" });
   if (options.body !== undefined) headers.set("Content-Type", "application/json");
@@ -119,6 +132,10 @@ async function uploadImage(projectId, sessionId, file, mime = file.type) {
   const path = `/projects/${resourceId(projectId, "project")}` +
     `/sessions/${resourceId(sessionId, "session")}/attachments`;
   checkWrite(path, { method: "POST" });
+  return trackWrite(() => sendImage(path, file, mime));
+}
+
+async function sendImage(path, file, mime) {
   const url = requestPath(path);
   let response;
   try {

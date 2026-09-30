@@ -1,7 +1,11 @@
 """Review the project candidate inventory in an isolated single-file pack.
 
-Only synthetic local project data is seeded; no model is called. The default
-mode never executes removal. Recovery mode 'committed' removes only the owned
+Only synthetic local project data is seeded; no model is called. The script
+never submits the confirmation UI automatically. Use --cancel-before-execute
+to exercise that UI: a copied C fixture durably reserves a zero-target abort
+before execution, so seeded content cannot be removed by any GUI click.
+This fixture is not evidence of a production GUI committed-removal click.
+Recovery mode 'committed' removes only the owned
 synthetic project through the production API before opening its result page.
 Type 'restart' to restart only this owned host and review the old page's token;
 'break'/'fix' toggle one orphan plan file for preview errors; 'status'
@@ -28,10 +32,30 @@ def main() -> int:
         help="Seed attributable global draft and last-session references for preview QA")
     parser.add_argument("--recovery-mode", choices=("not-accepted", "aborted", "committed"),
         help="Save one synthetic purge intent for bounded recovery-panel QA")
+    parser.add_argument("--cancel-before-execute", action="store_true",
+        help="Copied C fixture reserves an abort before execution; GUI can never remove seeded content")
+    parser.add_argument("--xsw", type=Path, default=ROOT / ".build/host/xsw.exe")
     args = parser.parse_args()
     base = Path(tempfile.mkdtemp(prefix="mdo-packed-purge-", dir=ROOT / ".build"))
     packed = base / ("mdo.exe" if os.name == "nt" else "mdo")
     shutil.copy2(args.packed_path, packed)
+    if args.cancel_before_execute:
+        assert not args.recovery_mode, "Use a separate fixture for precommitted recovery"
+        fixture_app = base / "fixture-app"
+        shutil.copytree(ROOT / "app", fixture_app)
+        source = fixture_app / "src/api/project_purge.c"
+        old = "    Revision = Binding.Revision; CreatedAt = Binding.CreatedAt;"
+        text = source.read_text(encoding="utf-8")
+        assert text.count(old) == 1
+        injected = old + '''
+    /* Owned UI fixture only: reserve a durable zero-target abort before any
+     * execution. The GUI cannot remove seeded project or workspace data. */
+    if ( !Cancel && !MdoHomePurgeRequestCancel(Id, Project, Revision, CreatedAt, &Receipt, &Replayed) ) {
+        MdoApiPurgeIntentActionEnd();
+        return MdoApiReplyError(Context, 503u, "fixture_refused", "Owned abort reservation failed", NULL);
+    }'''
+        source.write_text(text.replace(old, injected), encoding="utf-8", newline="\n")
+        subprocess.run([str(args.xsw.resolve()), "pack", str(fixture_app), "-o", str(packed)], check=True)
     home = base / "mdo-home"
     workspace = base / "workspace"
     workspace.mkdir()
@@ -137,6 +161,14 @@ def main() -> int:
                 assert status in (200, 404), (status, data)
                 print(data.decode("utf-8"), flush=True)
             else: print(json.dumps(api("GET", preview_path), ensure_ascii=False), flush=True)
+            if args.cancel_before_execute:
+                saved = api("GET", "project-purge-intent")["intent"]
+                if saved:
+                    status, _, data = request(port, "GET", "/api/v1/project-purges/" + saved["purge_request_id"])
+                    if status == 200:
+                        receipt = json.loads(data)["data"]
+                        assert receipt["outcome"] == "aborted" and not receipt["committed"] and receipt["target_count"] == 0, receipt
+                        print("PASS: GUI execution reserved a zero-target abort", flush=True)
             assert all(path.read_bytes() == data for path, data in seeded.items())
             assert all(not path.exists() for path in removed_roots), "Purged data was recreated"
             print("PASS: retained seeded bytes unchanged; removed roots absent", flush=True)

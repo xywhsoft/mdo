@@ -300,6 +300,7 @@ export function createSubmissionController({ draftStore, promptQueue,
 
   return Object.freeze({
     submit, pump, reconcile, review,
+    hasInFlight: () => Boolean(pumping.size || releasing.size || submitting.size),
     isBusy(key) { return pumping.has(key); },
     isReleasing(key) { return releasing.has(key); },
   });

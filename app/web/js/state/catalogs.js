@@ -45,7 +45,7 @@ export async function unregisterProject(id, etag) {
 export async function readProjectPurgePreview(id, options = {}) {
   const response = await api.get(
     `/projects/${resourceId(id, "project")}/purge-preview`, options);
-  return response.data;
+  return { ...response.data, etag: response.etag };
 }
 
 export function loadCatalogs() {

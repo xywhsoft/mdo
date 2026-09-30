@@ -21,6 +21,8 @@ const localizedApiErrors = [
   ["write_admission_busy", "error.writeAdmissionBusy"],
   ["write_admission_unavailable", "error.writeAdmissionUnavailable"],
   ["purge_review_required", "error.purgeReviewRequired"],
+  ["purge_client_busy", "error.purgeClientBusy"],
+  ["purge_draft_unsaved", "error.purgeDraftUnsaved"],
   ["precondition_required", "error.preconditionRequired"],
   ["settings_unavailable", "error.settingsUnavailable"],
   ["home_import_busy", "error.homeImportBusy"],

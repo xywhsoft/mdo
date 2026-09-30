@@ -604,6 +604,14 @@ export function createDraftStore({ onRestore, onError, onSaved, onLoaded = () =>
       return { text: nextText, attachments: nextAttachments, merged };
     },
     flush,
+    async flushAll() {
+      // Touch only existing edits/requests; never create empty drafts merely
+      // because a project removal needs to drain the current page.
+      for (const [key, current] of entries)
+        if ((current.dirty || current.saving) && !await flush(key)) return false;
+      return ![...entries.values()].some(current => current.dirty || current.saving);
+    },
+    hasUnsaved: () => [...entries.values()].some(current => current.dirty || current.saving),
     resumeSaves() {
       if (isWritePaused()) return;
       for (const [key, current] of entries)

@@ -429,6 +429,8 @@
                   <button class="primary-button" type="button" data-purge-action="acknowledge" hidden></button>
                   <button class="secondary-button" type="button" data-purge-action="copy" hidden></button>
                   <button class="primary-button" type="button" data-purge-action="reload" hidden></button>
+                  <button class="secondary-button" type="button" data-purge-action="review" hidden></button>
+                  <button class="primary-button" type="button" data-purge-action="complete" hidden></button>
                 </div>
               </section>
             </section>
@@ -622,8 +624,19 @@
       <p class="project-preview-note" id="project-purge-preview-note" hidden></p>
         <p class="project-preview-note" data-i18n="project.sharedAudit">共享审计记录和迁移报告属于多个项目，不随单个项目清除。</p>
         <p class="project-preview-note" data-i18n="project.workspaceRetained">工作区源文件保留在原位置；此清单只核对 mdo 内的项目数据。</p>
-      <div class="dialog-actions"><button class="secondary-button" id="project-purge-preview-refresh" type="button" data-i18n="project.refreshPreview">刷新清单</button><button class="primary-button" id="project-purge-preview-close" type="button" data-i18n="project.close">关闭</button></div>
+      <div class="dialog-actions"><button class="secondary-button" id="project-purge-preview-refresh" type="button" data-i18n="project.refreshPreview">刷新清单</button><button class="danger-button" id="project-purge-preview-confirm" type="button" data-i18n="purgeConfirm.review" disabled>继续核对清除</button><button class="primary-button" id="project-purge-preview-close" type="button" data-i18n="project.close">关闭</button></div>
     </div>
+  </dialog>
+
+  <dialog class="project-preview-dialog" id="project-purge-confirm-dialog" aria-labelledby="project-purge-confirm-title">
+    <form class="project-preview-shell">
+      <h3 id="project-purge-confirm-title"></h3>
+      <p data-purge-confirm="description"></p>
+      <p data-i18n="purgeConfirm.irreversible">此操作无法撤销。工作区源文件、共享审计记录和迁移报告保留。</p>
+      <label class="project-purge-id-label"><span></span><input autocomplete="off" spellcheck="false" maxlength="64" required></label>
+      <p role="alert" tabindex="-1" hidden></p>
+      <div class="dialog-actions"><button class="secondary-button" data-purge-confirm="cancel" type="button">取消</button><button class="danger-button" type="submit" disabled>彻底清除项目数据</button></div>
+    </form>
   </dialog>
 
   <dialog class="memory-dialog" id="memory-dialog" aria-labelledby="memory-title">

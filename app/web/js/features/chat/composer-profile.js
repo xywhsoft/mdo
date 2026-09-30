@@ -384,6 +384,7 @@ export function createComposerProfile({ modelSelect, reasoningSelect,
       sync();
     },
     isBusy: () => busy.has(selectedKey()),
+    hasInFlight: () => busy.size !== 0,
     sync,
     destroy: () => unsubscribers.forEach((unsubscribe) => unsubscribe()),
   });
