@@ -435,6 +435,10 @@ function foldableNode(item, openState, previewOpen, previewScroll, projectId, se
     ? t("timeline.seconds", { seconds: new Intl.NumberFormat(currentLocale(),
       { minimumFractionDigits: 1, maximumFractionDigits: 1 }).format(item.durationSeconds) },
     `${item.durationSeconds.toFixed(1)} 秒`) : "";
+  const elapsed = duration && item.kind === "tool"
+    ? t("timeline.toolElapsed", { duration }, `总历时 ${duration}`) : "";
+  const foldStatus = elapsed && (item.state === "failed" || item.state === "cancelled")
+    ? `${status} · ${elapsed}` : elapsed || duration || status;
   const details = element("details", { className: "timeline-fold",
     attrs: { "data-timeline-key": item.key } });
   details.open = openState ?? running;
@@ -442,10 +446,7 @@ function foldableNode(item, openState, previewOpen, previewScroll, projectId, se
     element("span", { className: "timeline-fold-marker", attrs: { "aria-hidden": "true" } }),
     element("span", { className: "timeline-role", text: item.role }),
     element("span", { className: "timeline-fold-preview", text: preview }),
-    element("span", { className: "timeline-fold-status",
-      text: duration && item.kind === "tool"
-        ? t("timeline.toolElapsed", { duration }, `总历时 ${duration}`)
-        : duration || status }),
+    element("span", { className: "timeline-fold-status", text: foldStatus }),
     timeNode(item.time),
   ]));
   function updateBody() {
