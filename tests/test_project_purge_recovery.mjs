@@ -20,7 +20,7 @@ const result = (outcome, extra = {}) => ({ ...intent, accepted: true,
 const missing = () => new ApiError("No result", {
   status: 404, code: "purge_request_not_found" });
 
-function fixture() {
+function fixture(options = {}) {
   let remote = saved();
   let receipt = null;
   const calls = [];
@@ -44,7 +44,7 @@ function fixture() {
       return empty;
     },
   };
-  const recovery = createProjectPurgeRecovery({ transport });
+  const recovery = createProjectPurgeRecovery({ transport, ...options });
   return { recovery, transport, calls,
     set remote(value) { remote = value; },
     set receipt(value) { receipt = value; },
@@ -57,6 +57,21 @@ test("cold empty reads unlock without creating or executing a request", async ()
   await f.recovery.refresh();
   assert.equal(f.recovery.isPaused(), false);
   assert.deepEqual(f.calls, [["get", "/project-purge-intent"]]);
+});
+
+test("abort acknowledgement on a stale page does not resume saves or discard unsent input via automatic reload", async () => {
+  const token = "b".repeat(32) + "-0";
+  let reloads = 0;
+  const f = fixture({ getWriteToken: () => token, onReload() { reloads += 1; } });
+  f.remote = { ...saved(), writeToken: "b".repeat(32) + "-1" };
+  f.receipt = result("aborted");
+  await f.recovery.refresh();
+  await f.recovery.acknowledgeAbort();
+  assert.equal(f.recovery.get().intent, null);
+  assert.equal(f.recovery.get().writeConflict, true);
+  assert.equal(f.recovery.isPaused(), true);
+  assert.equal(reloads, 0);
+  f.recovery.reload(); assert.equal(reloads, 1);
 });
 
 test("unknown saved requests cancel with the original binding and need explicit abort acknowledgement", async () => {

@@ -78,6 +78,10 @@ def request(port: int, method: str, path: str, body: dict | None = None):
     connection = http.client.HTTPConnection("127.0.0.1", port, timeout=4)
     payload = json.dumps(body).encode() if body is not None else None
     headers = {"Content-Type": "application/json"} if payload else {}
+    if method not in ("GET", "HEAD", "OPTIONS") and path.startswith("/api/v1/"):
+        from test_api_runtime import request as raw_request
+        _, metadata, _ = raw_request(port, "GET", "/api/v1/bootstrap")
+        headers["X-Mdo-Write-Token"] = metadata["x-mdo-write-token"]
     try:
         connection.request(method, path, body=payload, headers=headers)
         response = connection.getresponse()

@@ -3,7 +3,8 @@
 Only synthetic local project data is seeded; no model is called. The default
 mode never executes removal. Recovery mode 'committed' removes only the owned
 synthetic project through the production API before opening its result page.
-Type 'break'/'fix' to toggle one orphan plan file for preview errors; 'status'
+Type 'restart' to restart only this owned host and review the old page's token;
+'break'/'fix' toggle one orphan plan file for preview errors; 'status'
 checks retained bytes and, for committed removal, absence of removed roots.
 """
 from __future__ import annotations
@@ -118,9 +119,17 @@ def main() -> int:
         orphan = home / "schedules/orphan.json.bak"
         print(f"READY url=http://127.0.0.1:{port}/#/settings base={base}", flush=True)
         while True:
-            command = input("Type status, break, fix, or Enter to stop: ").strip()
+            command = input("Type status, restart, break, fix, or Enter to stop: ").strip()
             if not command: break
-            if command == "break": orphan.write_bytes(b"Synthetic orphan")
+            if command == "restart":
+                stop_host(process)
+                with (base / "packed.log").open("ab") as log:
+                    process = subprocess.Popen([str(packed)], cwd=base, env=env, stdout=log,
+                        stderr=subprocess.STDOUT,
+                        creationflags=subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0)
+                wait_ready(port, process)
+                print("Restarted owned fixture host; old page must recheck before writing", flush=True)
+            elif command == "break": orphan.write_bytes(b"Synthetic orphan")
             elif command == "fix": orphan.unlink(missing_ok=True)
             elif args.recovery_mode:
                 print(json.dumps(api("GET", "project-purge-intent"), ensure_ascii=False), flush=True)

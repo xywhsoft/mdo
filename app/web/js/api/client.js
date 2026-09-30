@@ -1,5 +1,10 @@
 const API_ROOT = "/api/v1";
 let writeGuard = null;
+let pageWriteToken = null;
+let writeConflictHandler = null;
+
+export function currentPageWriteToken() { return pageWriteToken; }
+export function setApiWriteConflictHandler(handler) { writeConflictHandler = handler; }
 
 // A recovery gate is local to this page. The server remains authoritative;
 // this prevents restored drafts/queues from writing before recovery is read.
@@ -49,7 +54,7 @@ export function attachmentUrl(projectId, sessionId, id) {
     `/sessions/${resourceId(sessionId, "session")}/attachments/${id}`);
 }
 
-async function readEnvelope(response) {
+async function readEnvelope(response, path = "", method = "GET") {
   let envelope = null;
   try { envelope = await response.json(); }
   catch {
@@ -58,18 +63,27 @@ async function readEnvelope(response) {
     });
   }
   if (!response.ok || envelope?.ok !== true) {
-    throw new ApiError(envelope?.error?.message || `请求失败 (${response.status})`, {
+    const error = new ApiError(envelope?.error?.message || `请求失败 (${response.status})`, {
       status: response.status,
       code: envelope?.error?.code,
       requestId: envelope?.request_id,
       details: envelope?.error?.details,
     });
+    if (["write_token_required", "write_token_invalid", "write_token_conflict"].includes(error.code))
+      writeConflictHandler?.(error);
+    throw error;
   }
+  const writeToken = response.headers.get("X-Mdo-Write-Token") ?? "";
+  // A page adopts exactly its first verified startup token. Later responses
+  // never silently renew stale drafts or queued actions after removal/restart.
+  if (path === "/project-purge-intent" && method === "GET" && pageWriteToken === null &&
+      /^[0-9a-f]{32}-(0|[1-9][0-9]{0,19})$/.test(writeToken)) pageWriteToken = writeToken;
   return {
     data: envelope.data,
     requestId: envelope.request_id ?? "",
     schemaVersion: envelope.schema_version,
     etag: response.headers.get("ETag") ?? "",
+    writeToken,
   };
 }
 
@@ -79,6 +93,8 @@ export async function apiRequest(path, options = {}) {
   const headers = new Headers({ Accept: "application/json" });
   if (options.body !== undefined) headers.set("Content-Type", "application/json");
   if (options.ifMatch) headers.set("If-Match", options.ifMatch);
+  if (pageWriteToken && !["GET", "HEAD", "OPTIONS"].includes(method.toUpperCase()))
+    headers.set("X-Mdo-Write-Token", pageWriteToken);
 
   let response;
   try {
@@ -96,7 +112,7 @@ export async function apiRequest(path, options = {}) {
     throw new ApiError("无法连接本地 mdo 服务", { code: "network_error" });
   }
 
-  return readEnvelope(response);
+  return readEnvelope(response, path, method);
 }
 
 async function uploadImage(projectId, sessionId, file, mime = file.type) {
@@ -108,7 +124,8 @@ async function uploadImage(projectId, sessionId, file, mime = file.type) {
   try {
     response = await fetch(url, {
       method: "POST",
-      headers: { Accept: "application/json", "Content-Type": mime },
+      headers: { Accept: "application/json", "Content-Type": mime,
+        ...(pageWriteToken ? { "X-Mdo-Write-Token": pageWriteToken } : {}) },
       body: file,
       cache: "no-store",
       credentials: "same-origin",

@@ -2,6 +2,7 @@
 #include <string.h>
 
 #include "internal.h"
+#include "write_admission.h"
 
 static bool MdoApiConnectionSend(XS_HttpReq* pRequest, const void* pData,
     size_t Size)
@@ -24,7 +25,8 @@ static bool MdoApiReplyRaw(MdoApiContext* pContext, uint16 Status,
 {
     char Head[1536];
     char Length[32];
-    xhttpfield Fields[9];
+    xhttpfield Fields[10];
+    char WriteToken[MDO_API_WRITE_TOKEN_CAPACITY];
     size_t FieldCount = 0u;
     size_t HeadSize = 0u;
     xstrview Reason;
@@ -48,6 +50,8 @@ static bool MdoApiReplyRaw(MdoApiContext* pContext, uint16 Status,
         XRT_STR_LITERAL("Referrer-Policy"), XRT_STR_LITERAL("no-referrer") };
     Fields[FieldCount++] = (xhttpfield){
         XRT_STR_LITERAL("X-Request-Id"), xrtStrView(pContext->RequestId) };
+    if ( MdoApiWriteToken(WriteToken) ) Fields[FieldCount++] = (xhttpfield){
+        XRT_STR_LITERAL("X-Mdo-Write-Token"), xrtStrView(WriteToken) };
     if ( Allow != NULL ) {
         Fields[FieldCount++] = (xhttpfield){
             XRT_STR_LITERAL("Allow"), xrtStrView(Allow) };

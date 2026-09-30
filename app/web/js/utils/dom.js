@@ -66,6 +66,11 @@ export function formatClock(microseconds) {
 // Stable API codes describe user actions; server messages remain useful for
 // unknown failures, but should not determine the language of known failures.
 const API_ERROR_COPY = Object.freeze({
+  write_token_required: ["error.writeTokenRequired", "请重新载入页面，取得当前服务的写入版本后再继续操作。"],
+  write_token_invalid: ["error.writeTokenInvalid", "页面的写入版本无效，请重新载入后继续。"],
+  write_token_conflict: ["error.writeTokenConflict", "项目已清除或服务已重启。请先复制尚未保存的草稿，再重新载入页面。"],
+  write_admission_busy: ["error.writeAdmissionBusy", "已有写入或项目清除仍在处理，请等待完成后重新核对原请求。"],
+  write_admission_unavailable: ["error.writeAdmissionUnavailable", "写入保护暂时不可用，请保持原请求并重新启动 mdo。"],
   purge_review_required: ["error.purgeReviewRequired", "请先核对项目清除请求，再继续修改或发送任务。"],
   network_error: ["error.network",
     "无法连接本地服务，请确认 mdo 仍在运行。"],

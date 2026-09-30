@@ -791,7 +791,17 @@ done:
 def request(port: int, method: str, target: str, *,
             body: bytes | list[bytes] | None = None,
             headers: dict[str, str] | None = None,
-            encode_chunked: bool = False) -> tuple[int, dict[str, str], bytes]:
+            encode_chunked: bool = False,
+            read_write_token: bool = True) -> tuple[int, dict[str, str], bytes]:
+    headers = dict(headers or {})
+    # Ordinary probe clients explicitly read a current host token before a
+    # mutation. Stale/missing-token tests disable this; never replace a token
+    # supplied by a test. Endpoint ETag/body preconditions remain unchanged.
+    if read_write_token and method not in ("GET", "HEAD", "OPTIONS") and target.startswith("/api/v1/") and not any(
+            name.lower() == "x-mdo-write-token" for name in headers):
+        _, current, _ = request(port, "GET", "/api/v1/bootstrap")
+        if "x-mdo-write-token" in current:
+            headers["X-Mdo-Write-Token"] = current["x-mdo-write-token"]
     connection = http.client.HTTPConnection("127.0.0.1", port, timeout=4)
     try:
         connection.request(method, target, body=body, headers=headers or {},

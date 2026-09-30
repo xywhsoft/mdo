@@ -109,8 +109,10 @@ def run_probe(host: Path) -> None:
             # Send the full request and close without consuming any response.
             # A durable result, rather than a guessed retry/new ID, settles it.
             lost = http.client.HTTPConnection("127.0.0.1", probe.port, timeout=5)
+            _, current, _ = request(probe.port, "GET", "/api/v1/bootstrap")
             lost.request("POST", PURGE, json.dumps(body),
-                {"Content-Type": "application/json", **headers})
+                {"Content-Type": "application/json", **headers,
+                 "X-Mdo-Write-Token": current["x-mdo-write-token"]})
             lost.close()
             deadline = time.monotonic() + 3
             while request(probe.port, "GET", RESULT)[0] != 200:

@@ -3,6 +3,7 @@
 
 #include "internal.h"
 #include "purge_intent.h"
+#include "write_admission.h"
 #include "../../include/mdo/project_lifecycle.h"
 #include "../../include/mdo/projects.h"
 #include "../../include/mdo/home.h"
@@ -351,6 +352,16 @@ bool MdoApiInit(void)
         MdoApiSessionsUnit();
         return false;
     }
+    if ( !MdoApiWriteInit() ) {
+        MdoApiPurgeIntentUnit();
+        MdoApiAttachmentsUnit();
+        MdoApiWorkspaceStateUnit();
+        MdoApiQueueUnit();
+        MdoApiDraftUnit();
+        MdoApiFeedbackUnit();
+        MdoApiSessionsUnit();
+        return false;
+    }
     xrtAtomic64Init(&g_MdoApiFallbackId, 0u);
     g_MdoApiInitialized = true;
     return true;
@@ -359,6 +370,7 @@ bool MdoApiInit(void)
 void MdoApiUnit(void)
 {
     g_MdoApiInitialized = false;
+    MdoApiWriteUnit();
     MdoApiPurgeIntentUnit();
     MdoApiWorkspaceStateUnit();
     MdoApiFeedbackUnit();
@@ -368,7 +380,7 @@ void MdoApiUnit(void)
     MdoApiSessionsUnit();
 }
 
-static bool MdoApiRouteInvoke(MdoApiContext* Context,
+static bool MdoApiRouteInvokeData(MdoApiContext* Context,
     const MdoApiRoute* Route)
 {
     char ProjectId[MDO_PROJECT_ID_CAPACITY];
@@ -411,6 +423,21 @@ static bool MdoApiRouteInvoke(MdoApiContext* Context,
     }
     Ok = Route->Proc(Context);
     MdoProjectLeaseRelease(Lease);
+    return Ok;
+}
+
+static bool MdoApiRouteInvoke(MdoApiContext* Context, const MdoApiRoute* Route)
+{
+    xhttpmethod Method = Context->Request->head->MethodCode;
+    bool Read = (Method & (XHTTP_METHOD_GET | XHTTP_METHOD_HEAD)) != 0u;
+    bool Recovery = Route->Proc == MdoApiProjectPurgeCancelRoute ||
+        Route->Proc == MdoApiProjectPurgeIntentRoute;
+    bool Exclusive = Route->Proc == MdoApiProjectPurgeRoute;
+    bool Stop = Route->Proc == MdoApiRunRoute && Method == XHTTP_METHOD_DELETE;
+    bool Ok;
+    if ( !Read && !Recovery && !MdoApiWriteEnter(Context, Exclusive, Stop) ) return true;
+    Ok = MdoApiRouteInvokeData(Context, Route);
+    MdoApiWriteLeave(Context);
     return Ok;
 }
 

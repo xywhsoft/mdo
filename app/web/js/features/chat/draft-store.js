@@ -610,5 +610,15 @@ export function createDraftStore({ onRestore, onError, onSaved, onLoaded = () =>
         if (current.dirty && current.loaded && !current.conflict && !current.oversized)
           schedule(key);
     },
+    unsentSnapshots() {
+      return [...entries].filter(([, current]) => current.text || current.attachments.length ||
+          current.newTask || current.composerProfile || current.uncertainRun || current.submissions.length)
+        .map(([key, current]) => ({ key, text: current.text,
+          attachments: [...current.attachments], new_task: current.newTask && { ...current.newTask },
+          composer_profile: current.composerProfile && { ...current.composerProfile },
+          run_admission_uncertain: current.uncertainRun,
+          submissions: current.submissions.map((item) => ({ ...item,
+            attachments: [...item.attachments], ...(item.profile ? { profile: { ...item.profile } } : {}) })) }));
+    },
   });
 }

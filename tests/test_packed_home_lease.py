@@ -27,8 +27,13 @@ def request(port: int, method: str, path: str, body: dict | None = None):
     connection = http.client.HTTPConnection("127.0.0.1", port, timeout=2)
     try:
         data = json.dumps(body).encode() if body is not None else None
+        headers = {"Content-Type": "application/json"} if data else {}
+        if method not in ("GET", "HEAD", "OPTIONS"):
+            from test_api_runtime import request as raw_request
+            _, metadata, _ = raw_request(port, "GET", "/api/v1/bootstrap")
+            headers["X-Mdo-Write-Token"] = metadata["x-mdo-write-token"]
         connection.request(method, path, data,
-                           {"Content-Type": "application/json"} if data else {})
+                           headers)
         response = connection.getresponse()
         return response.status, json.loads(response.read())
     finally:

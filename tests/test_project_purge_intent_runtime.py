@@ -88,9 +88,11 @@ def running(host, base):
 
 
 def discard_reply(probe, method, path, payload=None, headers=None):
+    _, current, _ = request(probe.port, "GET", "/api/v1/bootstrap")
     connection = http.client.HTTPConnection("127.0.0.1", probe.port, timeout=2)
     connection.request(method, path, json.dumps(payload).encode() if payload else None,
-                       {"Content-Type": "application/json", **(headers or {})})
+                       {"Content-Type": "application/json", **(headers or {}),
+                        "X-Mdo-Write-Token": current["x-mdo-write-token"]})
     connection.close()
 
 

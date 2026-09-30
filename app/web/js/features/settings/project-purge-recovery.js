@@ -52,9 +52,10 @@ function readResult(value, intent) {
 // Recovery never executes a purge. A missing receipt is not proof that a
 // delayed execution cannot arrive: only a durable abort permits dismissal.
 // Keep a locally known binding even if another page acknowledges its intent.
-export function createProjectPurgeRecovery({ transport, timeoutMs = 8000 }) {
+export function createProjectPurgeRecovery({ transport, timeoutMs = 8000,
+  getWriteToken = () => null, onReload = () => {} }) {
   let state = Object.freeze({ checked: false, intent: null, result: null,
-    busy: false, error: null });
+    busy: false, error: null, writeConflict: false });
   let flight = null;
   const listeners = new Set();
 
@@ -94,7 +95,10 @@ export function createProjectPurgeRecovery({ transport, timeoutMs = 8000 }) {
   }
 
   async function inspect() {
-    const remote = readIntent(await request("get", "/project-purge-intent"));
+    const response = await request("get", "/project-purge-intent");
+    const remote = readIntent(response);
+    if (getWriteToken() && response.writeToken && response.writeToken !== getWriteToken())
+      publish({ writeConflict: true });
     const known = state.intent;
     if (known && !matches(known, remote)) {
       // An immutable abort may safely retire this page's old binding. A
@@ -161,11 +165,13 @@ export function createProjectPurgeRecovery({ transport, timeoutMs = 8000 }) {
 
   return Object.freeze({
     get: () => state, refresh, cancel, acknowledgeAbort,
+    markWriteConflict(error) { publish({ writeConflict: true, error }); },
+    reload() { onReload(state.intent?.project_id ?? null); },
     subscribe(listener) { listeners.add(listener); listener(state);
       return () => listeners.delete(listener); },
-    isPaused: () => !state.checked || Boolean(state.intent) || Boolean(state.error),
+    isPaused: () => !state.checked || Boolean(state.intent) || Boolean(state.error) || state.writeConflict,
     allowsWrite({ method, path, ifMatch, body }) {
-      if (state.checked && !state.intent && !state.error) return true;
+      if (state.checked && !state.intent && !state.error && !state.writeConflict) return true;
       // Stopping an existing run does not admit new work or recreate drafts.
       if (method === "DELETE" && /^\/runs\/[0-9a-f]{32}$/.test(path)) return true;
       const intent = state.intent;

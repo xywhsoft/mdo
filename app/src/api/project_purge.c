@@ -3,6 +3,7 @@
 
 #include "internal.h"
 #include "purge_intent.h"
+#include "write_admission.h"
 #include "../../include/mdo/project_purge.h"
 
 /* A client purge ID is separate from the per-HTTP correlation ID. All paths
@@ -181,7 +182,15 @@ static bool MdoApiProjectPurgeAction(MdoApiContext* Context, bool Cancel)
     /* Do not GET the current definition here: it may be gone or replaced,
      * while a receipt remains valid. The coordinator checks fresh attempts. */
     xworkErrorInit(&Error); memset(&Result, 0, sizeof(Result));
-    if ( !Cancel ) Status = MdoProjectPurgeExecuteRequested(Id, Project, Revision, CreatedAt, &Result, &Error);
+    if ( !Cancel ) {
+        /* Invalidate old pages before a fresh attempt can move any data. A
+         * previously accepted ID can only replay, even after intent ACK. */
+        if ( (!MdoHomePurgeReceiptGet(Id, &Receipt, &Found) || !Found) &&
+             !MdoApiWriteInvalidate(Context) ) {
+            MdoApiPurgeIntentActionEnd(); return true;
+        }
+        Status = MdoProjectPurgeExecuteRequested(Id, Project, Revision, CreatedAt, &Result, &Error);
+    }
     else if ( MdoHomePurgeRequestCancel(Id, Project, Revision, CreatedAt, &Receipt, &Replayed) ) {
         MdoApiPurgeReceiptResult(&Receipt, &Result, Replayed);
         Status = Result.RestartRequired ? MDO_PROJECT_PURGE_RESTART_REQUIRED : MDO_PROJECT_PURGE_OK;

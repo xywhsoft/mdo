@@ -73,7 +73,7 @@ import { createSessionLoadNotice } from "./features/shell/session-load-notice.js
 import { waitForSelectedDetail } from "./features/shell/session-detail-wait.js";
 import { createPaneLayout } from "./features/shell/pane-layout.js";
 import { trackMobileViewport } from "./features/shell/mobile-viewport.js";
-import { api, setApiWriteGuard } from "./api/client.js";
+import { api, setApiWriteGuard, currentPageWriteToken, setApiWriteConflictHandler } from "./api/client.js";
 import { clear, element, errorMessage, isImeKey, refreshRelativeTimes, toast } from "./utils/dom.js";
 import { subscribeLocale, t } from "./i18n.js";
 
@@ -107,7 +107,16 @@ function runStateText(state) {
 export async function boot() {
   mountIcons();
   const entryHash = location.hash;
-  const purgeRecovery = createProjectPurgeRecovery({ transport: api });
+  const purgeRecovery = createProjectPurgeRecovery({ transport: api,
+    getWriteToken: currentPageWriteToken,
+    onReload(projectId) {
+      const saved = history.state?.mdoWorkspace;
+      if (!projectId || saved?.projectId === projectId)
+        history.replaceState({ ...history.state, mdoWorkspace: null }, "", location.href);
+      window.location.reload();
+    },
+  });
+  setApiWriteConflictHandler((error) => purgeRecovery.markWriteConflict(error));
   setApiWriteGuard((request) => purgeRecovery.allowsWrite(request));
   // Check portable recovery before restored drafts migrate or dispatch.
   // A failed read leaves a visible retry gate; read-only views still load.
@@ -936,6 +945,7 @@ export async function boot() {
   createProjectPurgeRecoveryPanel({
     panel: $("#project-purge-recovery"), notice: $("#project-purge-notice"),
     recovery: purgeRecovery, navigation,
+    unsentSnapshots: draftStore.unsentSnapshots,
   });
   const schedulePanel = createSchedulePanel({
     panel: $('[data-settings-panel="schedules"]'),

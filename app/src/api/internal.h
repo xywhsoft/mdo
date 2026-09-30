@@ -19,6 +19,8 @@ typedef struct MdoApiContext {
     char RequestId[MDO_API_REQUEST_ID_CAPACITY];
     xstrview Params[MDO_API_ROUTE_PARAM_MAX];
     size_t ParamCount;
+    bool WriteShared;
+    bool WriteExclusive;
 } MdoApiContext;
 
 typedef bool (*MdoApiRouteProc)(MdoApiContext* pContext);
