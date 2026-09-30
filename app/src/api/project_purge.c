@@ -2,6 +2,7 @@
 #include <string.h>
 
 #include "internal.h"
+#include "purge_intent.h"
 #include "../../include/mdo/project_purge.h"
 
 /* A client purge ID is separate from the per-HTTP correlation ID. All paths
@@ -98,36 +99,46 @@ bool MdoApiProjectPurgeResultRoute(MdoApiContext* Context)
     return MdoApiReplySuccessTake(Context, 200u, Data, NULL);
 }
 
-static bool MdoApiProjectPurgeAction(MdoApiContext* Context, bool Cancel)
+bool MdoApiPurgeBindingValid(const MdoApiPurgeBinding* Binding)
 {
-    char Project[MDO_PROJECT_ID_CAPACITY], Id[MDO_HOME_PURGE_REQUEST_CAPACITY];
+    return Binding != NULL && memchr(Binding->RequestId, '\0', sizeof(Binding->RequestId)) != NULL &&
+        memchr(Binding->ProjectId, '\0', sizeof(Binding->ProjectId)) != NULL &&
+        MdoHomePurgeRequestIdValid(Binding->RequestId) && MdoApiPurgeProjectValid(Binding->ProjectId) &&
+        Binding->Revision != 0u && Binding->Revision != UINT64_MAX && Binding->CreatedAt > 0;
+}
+
+bool MdoApiPurgeBindingRead(MdoApiContext* Context, MdoApiPurgeBinding* Binding)
+{
+    char* Project = Binding->ProjectId;
+    char* Id = Binding->RequestId;
     uint64 Revision = 0u;
     int64 CreatedAt = 0;
-    int Precondition, Accepted = -1;
-    bool Matches, Valid, Found, Replayed = false;
+    int Precondition;
+    bool Matches, Valid;
     xstrview RequestId;
     MdoApiJsonBody Body;
     MdoApiBodyStatus BodyStatus;
-    MdoProjectPurgeStatus Status;
-    MdoProjectPurgeResult Result;
-    MdoHomePurgeReceipt Receipt;
-    xwork_error Error;
-    xvalue* Data;
-    uint16 HttpStatus = 503u;
-    cstr Code = "purge_unavailable", Outcome = "unknown";
-    if ( !MdoApiPurgeCapture(Context, Project, sizeof(Project)) || !MdoApiPurgeProjectValid(Project) )
-        return MdoApiReplyError(Context, 400u, "invalid_project_path", "The project ID is invalid", NULL);
+    uint16 Status = 400u;
+    cstr Code, Message;
+    memset(Binding, 0, sizeof(*Binding));
+    if ( !MdoApiPurgeCapture(Context, Project, sizeof(Binding->ProjectId)) || !MdoApiPurgeProjectValid(Project) ) {
+        Code = "invalid_project_path"; Message = "The project ID is invalid"; goto invalid;
+    }
     Precondition = MdoApiProjectExpectedRevision(Context, Project, &Revision, &Matches);
-    if ( Precondition == 0 ) return MdoApiReplyError(Context, 428u, "precondition_required",
-        "If-Match must contain the reviewed project ETag", NULL);
-    if ( Precondition < 0 ) return MdoApiReplyError(Context, 400u, "invalid_precondition",
-        "If-Match must use the form \"mdo-project-ID-N\"", NULL);
-    if ( !Matches ) return MdoApiReplyError(Context, 412u, "revision_conflict",
-        "The project ETag belongs to another project", NULL);
-    if ( Revision == UINT64_MAX ) return MdoApiReplyError(Context, 422u, "purge_invalid",
-        "The project revision cannot authorize a purge request", NULL);
+    if ( Precondition == 0 ) {
+        Status = 428u; Code = "precondition_required"; Message = "If-Match must contain the reviewed project ETag"; goto invalid;
+    }
+    if ( Precondition < 0 ) {
+        Code = "invalid_precondition"; Message = "If-Match must use the form \"mdo-project-ID-N\""; goto invalid;
+    }
+    if ( !Matches ) {
+        Status = 412u; Code = "revision_conflict"; Message = "The project ETag belongs to another project"; goto invalid;
+    }
+    if ( Revision == UINT64_MAX ) {
+        Status = 422u; Code = "purge_invalid"; Message = "The project revision cannot authorize a purge request"; goto invalid;
+    }
     BodyStatus = MdoApiJsonBodyRead(Context, &Body);
-    if ( BodyStatus != MDO_API_BODY_OK ) return MdoApiReplyBodyError(Context, BodyStatus);
+    if ( BodyStatus != MDO_API_BODY_OK ) { (void)MdoApiReplyBodyError(Context, BodyStatus); return false; }
     Valid = xrtValueType(Body.Value) == XVALUE_OBJECT && xrtValueCount(Body.Value) == 2u &&
         xrtValueGetString(xrtValueObjectGet(Body.Value, XRT_STR_LITERAL("purge_request_id")), &RequestId) &&
         RequestId.Size == 32u && memchr(RequestId.Data, '\0', RequestId.Size) == NULL &&
@@ -137,8 +148,36 @@ static bool MdoApiProjectPurgeAction(MdoApiContext* Context, bool Cancel)
         Valid = MdoHomePurgeRequestIdValid(Id);
     }
     MdoApiJsonBodyUnit(&Body);
-    if ( !Valid ) return MdoApiReplyError(Context, 422u, "purge_invalid",
-        "Expected a lowercase purge request ID and the reviewed project creation time", NULL);
+    if ( !Valid ) {
+        Status = 422u; Code = "purge_invalid";
+        Message = "Expected a lowercase purge request ID and the reviewed project creation time"; goto invalid;
+    }
+    Binding->Revision = Revision; Binding->CreatedAt = CreatedAt;
+    return true;
+invalid:
+    (void)MdoApiReplyError(Context, Status, Code, Message, NULL);
+    return false;
+}
+
+static bool MdoApiProjectPurgeAction(MdoApiContext* Context, bool Cancel)
+{
+    MdoApiPurgeBinding Binding;
+    cstr Project, Id;
+    uint64 Revision;
+    int64 CreatedAt;
+    int Accepted = -1;
+    bool Found, Replayed = false;
+    MdoProjectPurgeStatus Status;
+    MdoProjectPurgeResult Result;
+    MdoHomePurgeReceipt Receipt;
+    xwork_error Error;
+    xvalue* Data;
+    uint16 HttpStatus = 503u;
+    cstr Code = "purge_unavailable", Outcome = "unknown";
+    if ( !MdoApiPurgeBindingRead(Context, &Binding) ||
+         !MdoApiPurgeIntentActionBegin(Context, &Binding) ) return true;
+    Project = Binding.ProjectId; Id = Binding.RequestId;
+    Revision = Binding.Revision; CreatedAt = Binding.CreatedAt;
     /* Do not GET the current definition here: it may be gone or replaced,
      * while a receipt remains valid. The coordinator checks fresh attempts. */
     xworkErrorInit(&Error); memset(&Result, 0, sizeof(Result));
@@ -181,6 +220,7 @@ static bool MdoApiProjectPurgeAction(MdoApiContext* Context, bool Cancel)
     default: break;
     }
     Data = MdoApiPurgeValue(Id, Project, Revision, CreatedAt, &Result, Outcome, Accepted);
+    MdoApiPurgeIntentActionEnd();
     if ( Data == NULL ) return MdoApiReplyError(Context, 500u, "purge_result_unavailable",
         "The purge result could not be serialized; query the same request ID", NULL);
     if ( Code == NULL ) return MdoApiReplySuccessTake(Context, HttpStatus, Data, NULL);

@@ -193,8 +193,8 @@ Repeated POST with the same binding replays its terminal result without touching
 the current project, caches or generations, even after a same-name recreation.
 Pending requests require restart; terminal aborted requests only replay the
 abort. Restart first recovers storage/result evidence, then loads managers.
-Ordinary mutations remain fenced during isolation; only the dedicated purge
-and cancellation handlers can report the recorded facts through POST. Import fencing still
+Ordinary mutations remain fenced during isolation; the dedicated purge,
+cancellation and intent handlers can report recorded facts without new Home writes. Import fencing still
 applies. Keep the same ID across disconnects and verify its binding/commit fact
 before changing navigation or beginning another attempt.
 
@@ -220,8 +220,32 @@ receipt; deleting a local pending flag alone cannot cancel a delayed request.
 Receipts live in `data/project-purges/<id>.json`, bounded to 2048 bytes each and
 1024 records, with no automatic expiry/reuse. Preserve them with Home backups.
 The storage protocol guarantees tested process-interruption recovery, not
-power-loss directory durability. The product confirmation button, persisted
-client intent, lost-response UI and navigation settlement remain to be wired.
+power-loss directory durability. The product confirmation button, intent UI,
+lost-response UI and navigation settlement remain to be wired.
+
+`GET/HEAD /project-purge-intent` reads the one portable saved client intent,
+returning `{intent: null | {...}, replayed: false}` and its strong ETag. It
+never creates Home or treats damaged data as missing. `POST
+/projects/{project}/purge-intent` takes the original reviewed project ETag and
+the same exact two-field body as execution. A fresh request validates the
+current definition's revision/incarnation under a shared lease, captures its
+name, then atomically saves `data/project-purge-intent.json`. An existing exact
+binding replays without a definition lookup; a different binding returns 409.
+An already accepted ID cannot create another intent after acknowledgement.
+Saving never executes/cancels a purge. While an intent exists, purge/cancel POST
+must match it; they hold the same intent mutex through result capture.
+
+`DELETE /project-purge-intent` requires `If-Match: "mdo-purge-intent-<id>"` and
+a verified matching terminal receipt. Missing/pending results return 409
+`purge_intent_unsettled`, and mismatched/damaged evidence preserves the intent.
+The client must apply the original commit fact to local drafts/queues/navigation
+first. DELETE does not cancel execution: use the durable cancellation route
+before discarding an unaccepted intent. Lost acknowledgement replies can be
+replayed when the intent is absent and the original terminal remains. Old ETags
+cannot clear another intent. Existing intents can be read/replayed during Home
+isolation; actual new saves/removals still require recovery. All intent routes
+support OPTIONS and normal method fencing. See the [portable intent protocol](project-purge-intent.md)
+for file limits, locking, failure semantics and the remaining frontend wiring.
 
 ## Settings transactions
 

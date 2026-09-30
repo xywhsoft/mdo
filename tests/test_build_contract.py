@@ -101,6 +101,7 @@ class BuildContractTests(unittest.TestCase):
             "src/api/pane_layout.c",
             "src/api/inventory.c",
             "src/api/project_purge.c",
+            "src/api/project_purge_intent.c",
             "src/api/memory.c",
             "src/api/tasks.c",
             "src/api/approvals.c",

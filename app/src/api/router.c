@@ -2,6 +2,7 @@
 #include <string.h>
 
 #include "internal.h"
+#include "purge_intent.h"
 #include "../../include/mdo/project_lifecycle.h"
 #include "../../include/mdo/projects.h"
 #include "../../include/mdo/home.h"
@@ -58,6 +59,10 @@ static const MdoApiRoute g_MdoApiRoutes[] = {
       "POST, OPTIONS", MdoApiProjectPurgeCancelRoute, false },
     { "/api/v1/project-purges/{request}", XHTTP_METHOD_GET | XHTTP_METHOD_HEAD,
       "GET, HEAD, OPTIONS", MdoApiProjectPurgeResultRoute, false },
+    { "/api/v1/projects/{project}/purge-intent", XHTTP_METHOD_POST,
+      "POST, OPTIONS", MdoApiProjectPurgeIntentPrepareRoute, false },
+    { "/api/v1/project-purge-intent", XHTTP_METHOD_GET | XHTTP_METHOD_HEAD | XHTTP_METHOD_DELETE,
+      "GET, HEAD, DELETE, OPTIONS", MdoApiProjectPurgeIntentRoute, false },
     { "/api/v1/projects/{project}/workspace/files",
       XHTTP_METHOD_GET | XHTTP_METHOD_HEAD,
       "GET, HEAD, OPTIONS", MdoApiProjectWorkspaceFilesRoute, false },
@@ -337,6 +342,15 @@ bool MdoApiInit(void)
         MdoApiSessionsUnit();
         return false;
     }
+    if ( !MdoApiPurgeIntentInit() ) {
+        MdoApiAttachmentsUnit();
+        MdoApiWorkspaceStateUnit();
+        MdoApiQueueUnit();
+        MdoApiDraftUnit();
+        MdoApiFeedbackUnit();
+        MdoApiSessionsUnit();
+        return false;
+    }
     xrtAtomic64Init(&g_MdoApiFallbackId, 0u);
     g_MdoApiInitialized = true;
     return true;
@@ -345,6 +359,7 @@ bool MdoApiInit(void)
 void MdoApiUnit(void)
 {
     g_MdoApiInitialized = false;
+    MdoApiPurgeIntentUnit();
     MdoApiWorkspaceStateUnit();
     MdoApiFeedbackUnit();
     MdoApiDraftUnit();
@@ -368,7 +383,9 @@ static bool MdoApiRouteInvoke(MdoApiContext* Context,
          * the failure deliberately froze Home. Its storage boundary still
          * refuses every new mutation until recovery; import fencing stays. */
         if ( Home.RestartRequired && Route->Proc != MdoApiProjectPurgeRoute &&
-             Route->Proc != MdoApiProjectPurgeCancelRoute ) return MdoApiReplyError(Context, 503u,
+             Route->Proc != MdoApiProjectPurgeCancelRoute &&
+             Route->Proc != MdoApiProjectPurgeIntentPrepareRoute &&
+             Route->Proc != MdoApiProjectPurgeIntentRoute ) return MdoApiReplyError(Context, 503u,
             "home_restart_required", "Restart mdo before changing imported data", NULL);
         if ( Home.ImportInProgress ) return MdoApiReplyError(Context, 409u,
             "home_import_busy", "Home import is in progress; wait before changing data", NULL);
