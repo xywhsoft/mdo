@@ -641,6 +641,7 @@
   "resource.mcpDisabled": "已停用",
   "resource.tokenCount": "{count} tokens",
   "resource.toolCount": "{count} 个工具",
+  "resource.toolsByPermission": "未设工具白名单 · 仍受权限约束",
   "resource.skillCount": "{count} 个 Skill",
   "resource.agentCount": "{count} 个 Agent",
   "resource.disable": "停用",

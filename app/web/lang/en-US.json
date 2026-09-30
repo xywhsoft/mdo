@@ -641,6 +641,7 @@
   "resource.mcpDisabled": "Disabled",
   "resource.tokenCount": "Tokens: {count}",
   "resource.toolCount": "Tools: {count}",
+  "resource.toolsByPermission": "No tool allowlist · permissions still apply",
   "resource.skillCount": "Skills: {count}",
   "resource.agentCount": "Agents: {count}",
   "resource.disable": "Disable",

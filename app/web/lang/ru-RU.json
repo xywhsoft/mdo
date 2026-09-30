@@ -641,6 +641,7 @@
   "resource.mcpDisabled": "Отключён",
   "resource.tokenCount": "{count} токенов",
   "resource.toolCount": "Инструменты: {count}",
+  "resource.toolsByPermission": "Без списка инструментов · разрешения действуют",
   "resource.skillCount": "Навыки: {count}",
   "resource.agentCount": "Агенты: {count}",
   "resource.disable": "Отключить",

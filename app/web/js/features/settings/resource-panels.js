@@ -177,8 +177,11 @@ export function createResourcePanels({ agentsStore, stores, reload }) {
     const mcp = stores.mcp.get();
     extensionsContainer.append(heading("Agent"));
     for (const agent of agentsStore.get().data?.items ?? []) {
+      const toolSummary = agent.tools?.length
+        ? t("resource.toolCount", { count: agent.tools.length }, `${agent.tools.length} tools`)
+        : t("resource.toolsByPermission", {}, "未设工具白名单 · 仍受权限约束");
       extensionsContainer.append(card(agent.name || agent.id, resourceDescription("agent", agent), [agent.id, permissionProfile(agent.permission_profile),
-        t("resource.toolCount", { count: agent.tools?.length ?? 0 }, `${agent.tools?.length ?? 0} tools`),
+        toolSummary,
         t("resource.skillCount", { count: agent.skills?.length ?? 0 }, `${agent.skills?.length ?? 0} Skills`)]));
     }
     extensionsContainer.append(heading("Skill", extensionActions.create("skills-reload",
