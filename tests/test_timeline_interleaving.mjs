@@ -50,7 +50,7 @@ test("a truncated event window does not invent an LLM duration", () => {
   assert.equal(answer.tokensPerSecond, 3);
 });
 
-test("successful tool time belongs only to the final reply of its run", () => {
+test("completed tool-stage wall time belongs only to the final reply of its run", () => {
   const events = [
     { kind: "agent_start", event_id: 1, run_id: "reused", agent_depth: 0,
       user_message_sequence: 1, time: 1000000 },
@@ -84,12 +84,12 @@ test("successful tool time belongs only to the final reply of its run", () => {
   ];
   const answers = eventsToTimeline(events).filter((item) => item.kind === "assistant");
   assert.equal(answers.length, 3);
-  assert.equal(answers[0].toolDurationSeconds, undefined);
-  assert.equal(answers[1].toolDurationSeconds, 1.5);
+  assert.equal(answers[0].toolStageSeconds, undefined);
+  assert.equal(answers[1].toolStageSeconds, 2.5);
   assert.deepEqual(answers[1].runUsage, { calls: 2, input: 14, output: 6 });
   assert.equal(answers[1].modelDurationSeconds, 1.5);
   assert.equal(answers[1].tokensPerSecond, 4);
-  assert.equal(answers[2].toolDurationSeconds, undefined);
+  assert.equal(answers[2].toolStageSeconds, undefined);
   assert.equal(answers[2].runUsage, undefined);
 });
 

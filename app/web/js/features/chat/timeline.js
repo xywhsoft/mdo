@@ -39,7 +39,7 @@ export function eventsToTimeline(events, historyLost = false) {
   const items = [];
   const tools = new Map();
   const modelStarts = new Map();
-  const toolDurations = new Map();
+  const toolStageDurations = new Map();
   const runUsages = new Map();
   const streams = new Map();
   const promptsByRun = new Map();
@@ -180,12 +180,13 @@ export function eventsToTimeline(events, historyLost = false) {
             : t("timeline.executionFailed", {}, "执行失败"));
           tool.text = tool.outputText;
           tool.state = event.success ? "done" : "failed";
+          // Tool start precedes ask/approval; this is wall time, not executor time.
           tool.durationSeconds = Math.max(0,
             (Number(event.time) - Number(tool.time)) / 1e6);
-          if (event.success && Number.isFinite(tool.durationSeconds) &&
-              tool.durationSeconds > 0) {
+          if (Number.isFinite(tool.durationSeconds) && tool.durationSeconds > 0) {
             const key = `${runKey}:${epoch}`;
-            toolDurations.set(key, (toolDurations.get(key) || 0) + tool.durationSeconds);
+            toolStageDurations.set(key,
+              (toolStageDurations.get(key) || 0) + tool.durationSeconds);
           }
           tool.artifactId = event.artifact_id;
           tool.artifactEventId = event.event_id;
@@ -270,9 +271,9 @@ export function eventsToTimeline(events, historyLost = false) {
         }
         if (answer) {
           answer.state = terminalState;
-          const toolSeconds = toolDurations.get(`${runKey}:${epoch}`);
+          const toolSeconds = toolStageDurations.get(`${runKey}:${epoch}`);
           if (Number.isFinite(toolSeconds) && toolSeconds > 0)
-            answer.toolDurationSeconds = toolSeconds;
+            answer.toolStageSeconds = toolSeconds;
           const usage = runUsages.get(`${runKey}:${epoch}`);
           if (usage?.valid && usage.calls === 1 && answer.inputTokens == null) {
             answer.inputTokens = usage.input;
@@ -441,7 +442,10 @@ function foldableNode(item, openState, previewOpen, previewScroll, projectId, se
     element("span", { className: "timeline-fold-marker", attrs: { "aria-hidden": "true" } }),
     element("span", { className: "timeline-role", text: item.role }),
     element("span", { className: "timeline-fold-preview", text: preview }),
-    element("span", { className: "timeline-fold-status", text: duration || status }),
+    element("span", { className: "timeline-fold-status",
+      text: duration && item.kind === "tool"
+        ? t("timeline.toolElapsed", { duration }, `总历时 ${duration}`)
+        : duration || status }),
     timeNode(item.time),
   ]));
   function updateBody() {
@@ -641,9 +645,9 @@ function timelineNode(item, handlers, feedback, projectId, sessionId, writable,
       if (Number.isFinite(item.modelDurationSeconds) && item.modelDurationSeconds > 0) {
         stats.push(`LLM ${durationLabel(item.modelDurationSeconds)}`);
       }
-      if (Number.isFinite(item.toolDurationSeconds) && item.toolDurationSeconds > 0)
-        stats.push(t("timeline.toolTime", { duration: durationLabel(item.toolDurationSeconds) },
-          `工具 ${durationLabel(item.toolDurationSeconds)}`));
+      if (Number.isFinite(item.toolStageSeconds) && item.toolStageSeconds > 0)
+        stats.push(t("timeline.toolStageTime", { duration: durationLabel(item.toolStageSeconds) },
+          `工具和等待合计 ${durationLabel(item.toolStageSeconds)}`));
       if (Number.isFinite(item.tokensPerSecond)) stats.push(`${item.tokensPerSecond.toFixed(1)} tok/s`);
       if (stats.length) actions.append(element("span", { className: "timeline-stats", text: stats.join(" · ") }));
     }
