@@ -341,6 +341,7 @@ export function createConversationDocks({ container, navigation, tasksStore, app
   let availableHeight = 0;
   let revealFrame = 0;
   let userMovedDock = false;
+  let keyboardExpansionDismissed = false;
   function setDecisionExpanded(expanded) {
     if (!composerRegion) return;
     composerRegion.toggleAttribute("data-decision-expanded", expanded);
@@ -354,6 +355,7 @@ export function createConversationDocks({ container, navigation, tasksStore, app
   }
   function toggleDecisionExpanded(card) {
     const expanded = !composerRegion?.hasAttribute("data-decision-expanded");
+    keyboardExpansionDismissed = !expanded;
     setDecisionExpanded(expanded);
     if (expanded) {
       container.scrollTop += card.getBoundingClientRect().top -
@@ -391,6 +393,7 @@ export function createConversationDocks({ container, navigation, tasksStore, app
     if (event.key !== "Escape" || event.defaultPrevented ||
         !composerRegion?.hasAttribute("data-decision-expanded")) return;
     event.preventDefault();
+    keyboardExpansionDismissed = true;
     setDecisionExpanded(false);
   };
   container.addEventListener("keydown", collapseOnEscape);
@@ -461,6 +464,16 @@ export function createConversationDocks({ container, navigation, tasksStore, app
       ? document.activeElement.closest(".conversation-dock")?.querySelector("h3")
       : null;
     composerRegion?.toggleAttribute("data-decision-cramped", Boolean(cramped));
+    const keyboardAsk = cramped &&
+      composerRegion?.closest(".app-shell")?.hasAttribute("data-compact-visual-viewport") &&
+      document.activeElement?.matches?.(".ask-dock-input") &&
+      container.contains(document.activeElement);
+    if (!keyboardAsk) keyboardExpansionDismissed = false;
+    // Keep the question and expansion control reachable while the software
+    // keyboard leaves only enough room for the active answer field.
+    if (keyboardAsk && !keyboardExpansionDismissed &&
+        !composerRegion.hasAttribute("data-decision-expanded"))
+      setDecisionExpanded(true);
     // A restored viewport has room for the dock again. Do not keep the
     // temporary full-screen decision layer or focus its now-hidden toggle.
     if (!cramped && composerRegion?.hasAttribute("data-decision-expanded"))

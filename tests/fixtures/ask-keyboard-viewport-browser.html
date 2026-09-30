@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="zh-CN">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>mdo ask keyboard viewport probe</title>
+<link rel="stylesheet" href="/app/web/css/app.css">
+<div class="app-shell" id="shell">
+  <header class="mobile-bar">墨斗</header>
+  <main class="workspace">
+    <section class="conversation">Earlier conversation</section>
+    <section class="composer-region">
+      <div id="conversation-docks" class="conversation-docks" hidden></div>
+      <form class="composer">
+        <textarea id="prompt" aria-label="任务输入"></textarea>
+        <div class="composer-toolbar"><button type="button">发送</button></div>
+      </form>
+    </section>
+  </main>
+</div>
+<div id="toast-region"></div>
+<pre id="result"></pre>
+<script type="module">
+import { createConversationDocks } from "/app/web/js/features/chat/conversation-docks.js?ask-keyboard=2";
+import { trackMobileViewport } from "/app/web/js/features/shell/mobile-viewport.js";
+import { createResourceStore } from "/app/web/js/state/store.js";
+
+const shell = document.querySelector("#shell");
+const viewport = Object.assign(new EventTarget(),
+  { height: innerHeight, offsetTop: 0, scale: 1 });
+const win = Object.assign(new EventTarget(),
+  { innerHeight, visualViewport: viewport });
+trackMobileViewport(shell, Object.assign(new EventTarget(), { matches: true }), win);
+const route = { view: "workspace", projectId: "qa", sessionId: "keyboard" };
+const navigation = { get: () => route,
+  subscribe(listener) { listener(route); return () => {}; } };
+const store = (data) => createResourceStore(data);
+createConversationDocks({ container: document.querySelector("#conversation-docks"),
+  navigation, tasksStore: store({ items: [] }),
+  approvalsStore: store({ items: [] }), runsStore: store({ items: [] }),
+  asksStore: store({ projectId: "qa", sessionId: "keyboard", loaded: true,
+    items: [{ id: 7, question: "Which result should be inspected first? ".repeat(4),
+      options: ["Inspect the local result", "Continue with the next step"] }] }),
+  todoStore: store({ projectId: "qa", sessionId: "keyboard", items: [] }),
+  onOpenTasks() {}, onChanged: async () => {} });
+
+const frame = () => new Promise((resolve) => requestAnimationFrame(() =>
+  requestAnimationFrame(resolve)));
+const rect = (selector) => {
+  const box = document.querySelector(selector).getBoundingClientRect();
+  return { top: Math.round(box.top), bottom: Math.round(box.bottom),
+    height: Math.round(box.height) };
+};
+const geometry = () => ({ shell: rect("#shell"),
+  conversation: rect(".conversation"), dock: rect("#conversation-docks"),
+  title: rect(".ask-dock h3"), question: rect(".ask-dock-question"),
+  input: rect(".ask-dock-input"), submit: rect(".ask-dock-free button"),
+  toggle: rect(".decision-dock-expand"),
+  cramped: document.querySelector(".composer-region").hasAttribute("data-decision-cramped"),
+  expanded: document.querySelector(".composer-region").hasAttribute("data-decision-expanded"),
+  compact: shell.hasAttribute("data-compact-visual-viewport"),
+  editorFocused: document.activeElement?.matches?.(".ask-dock-input"),
+  scrollTop: document.querySelector("#conversation-docks").scrollTop });
+await frame();
+const initial = geometry();
+const input = document.querySelector(".ask-dock-input");
+input.focus();
+input.value = "Keep this answer";
+input.dispatchEvent(new Event("input", { bubbles: true }));
+viewport.height = 250;
+viewport.dispatchEvent(new Event("resize"));
+await frame();
+await frame();
+const keyboard = geometry();
+const dock = document.querySelector("#conversation-docks");
+dock.scrollTop = 0;
+await frame();
+const context = geometry();
+dock.scrollTop = dock.scrollHeight;
+await frame();
+const backToAnswer = geometry();
+input.dispatchEvent(new KeyboardEvent("keydown", {
+  key: "Escape", bubbles: true, cancelable: true }));
+await frame();
+const dismissed = geometry();
+viewport.dispatchEvent(new Event("resize"));
+await frame();
+const stillDismissed = geometry();
+viewport.height = innerHeight;
+viewport.dispatchEvent(new Event("resize"));
+await frame();
+const restored = geometry();
+const result = { initial, keyboard, context, backToAnswer,
+  dismissed, stillDismissed, restored,
+  focused: document.activeElement === input,
+  answer: input.value,
+  passed: keyboard.expanded && keyboard.toggle.top >= 52 &&
+    keyboard.toggle.bottom <= 250 && keyboard.input.top >= 52 &&
+    keyboard.input.bottom <= 250 && keyboard.submit.top >= 52 &&
+    keyboard.submit.bottom <= 250 &&
+    context.question.top >= context.toggle.bottom &&
+    context.question.bottom <= 242 &&
+    backToAnswer.input.top >= 52 && backToAnswer.input.bottom <= 242 &&
+    !dismissed.expanded &&
+    !stillDismissed.expanded && !restored.expanded &&
+    document.activeElement === input && input.value === "Keep this answer" };
+document.querySelector("#result").dataset.passed = String(result.passed);
+document.querySelector("#result").textContent = JSON.stringify(result, null, 2);
+</script>
+</html>

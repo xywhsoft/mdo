@@ -2101,3 +2101,11 @@ Windows 有界发布门禁通过 114 项 Python、88 项 Node、73 个前端模�
 候选单文件 Home `.build/mdo-packed-docks-7s7oekha` 实测 `SEQUENTIAL DECISIONS UI`：询问到达后焦点在“需要你回答”，点击 Inspect 后审批标题获焦，允许一次得到 `exit_code: 0`、固定模型回复、待决卡清空。第二轮 `ASK UI` 模型延迟时预先输入 `Draft for the next turn`，询问到达后草稿与主输入焦点都保留。页面宽度等于 320px，浏览器脚本错误为空。这证明的是服务端依次推进的两张决策卡，不证明两张卡同时待决；实体手机软键盘仍需验收。
 
 Windows/Linux 有界门禁均通过 114 项 Python、113 项 Node、77 个模块解析、21 个运行探针和确定性打包；Windows 另通过便携 WebView2 Home 与 20 秒打包启动。根目录 `mdo.exe` SHA-256 为 `c9e6f573957f3dd26712df6eef14e3b1afc0db0457354b5c05535d7921ff7644`，Linux 包为 `4922f340b0b272987b2d4383d89546205275c381e2940287a0265b6bf631aad2`。未做压力或高负载测试。
+
+## 2026-09-30：自由回答时保留问题回看入口
+
+生产停靠卡在 320×700 布局、软键盘仅把可见视口缩至 250px 时，原来会把自由回答输入框滚进仅 76px 高的卡片，但询问正文和手动展开入口都在屏幕上方。正在作答的用户无法回看问题。现在只在可见视口压缩、询问输入框获焦且停靠卡拥挤时自动展开决策层；标题和展开入口保留在层顶，回答框与提交按钮留在可见底部。卡片仍可上滚读完整问题、下滚继续回答；Esc 或展开按钮的手动收起会保持到软键盘场景结束，恢复视口后自动回到普通布局。
+
+新增 `tests/fixtures/ask-keyboard-viewport-browser.html` 通过生产 `createConversationDocks` 与 `trackMobileViewport` 模拟该时序。隔离候选单文件 Home `.build/mdo-packed-docks-c6l77t44` 经 `--ask-keyboard-viewport-fixture` 从候选包读取 CSS/JS：修复前同场景标题位于 y=-135–-116、展开入口 y=-135–-95；修复后入口 y=57–97、输入与提交 y=202–242。滚到卡片顶部时 72px 高的问题段落完整位于 y=127–199，滚回底部后回答框可见；Esc 不会立即重新展开，布局高度恢复后输入值和焦点仍在。脚本错误为空。此验证使用模拟 `visualViewport`，未代替实体手机软键盘与触控验收。
+
+Windows/Linux 有界门禁通过 114 项 Python、113 项 Node、77 个模块解析、21 个运行探针及确定性打包；Windows 另通过便携 WebView2 Home 和 20 秒启动。根目录 `mdo.exe` SHA-256 为 `0528a2745cedbbbea2314022d79600a4725dd6dac142fed0d0ea9a8790a0d3a3`，Linux 包为 `a0c5922c4059cc6817e1ee95e48f5c385018dae42b7b66cff021c18cc96fe891`。未做压力或高负载测试。

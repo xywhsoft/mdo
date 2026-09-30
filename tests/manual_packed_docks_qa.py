@@ -253,6 +253,16 @@ Object.defineProperty(navigator, 'clipboard', {
         pass
 
     def do_GET(self):
+        if (self.path == "/__qa/ask-keyboard-viewport" and
+                self.server.ask_keyboard_viewport_fixture):
+            payload = ((ROOT / "tests/fixtures/ask-keyboard-viewport-browser.html")
+                       .read_bytes().replace(b"/app/web/", b"/"))
+            self.send_response(200)
+            self.send_header("Content-Type", "text/html; charset=utf-8")
+            self.send_header("Content-Length", str(len(payload)))
+            self.end_headers()
+            self.wfile.write(payload)
+            return
         if (self.path == "/__qa/decision-expand-arrival" and
                 self.server.decision_expand_arrival_fixture):
             # Serve only the test document; its CSS and JS resolve from the
@@ -921,6 +931,8 @@ parser.add_argument("--no-clipboard-api", action="store_true",
                     help="hide navigator.clipboard in the isolated browser page")
 parser.add_argument("--decision-expand-arrival-fixture", action="store_true",
                     help="serve the synthetic decision-arrival page with packed assets")
+parser.add_argument("--ask-keyboard-viewport-fixture", action="store_true",
+                    help="serve the ask keyboard viewport probe with packed assets")
 parser.add_argument("--fail-first-module", action="store_true",
                     help="reject the first main.js GET to test startup recovery")
 parser.add_argument("--delay-first-module-ms", type=int, default=0,
@@ -1154,6 +1166,7 @@ try:
             or args.queue_read_failures
             or args.reject_pane_layout or args.locale_hotkey
             or args.no_clipboard_api or args.decision_expand_arrival_fixture
+            or args.ask_keyboard_viewport_fixture
             or args.fail_first_module or args.delay_first_module_ms
             or args.startup_task_delay_ms or args.startup_bootstrap_delay_ms
             or args.startup_session_delay_ms or args.fail_session_detail_reads
@@ -1165,6 +1178,7 @@ try:
         proxy.upstream_port = port
         proxy.decision_expand_arrival_fixture = (
             args.decision_expand_arrival_fixture)
+        proxy.ask_keyboard_viewport_fixture = args.ask_keyboard_viewport_fixture
         proxy.locale_hotkey = args.locale_hotkey
         proxy.no_clipboard_api = args.no_clipboard_api
         proxy.fail_first_module = args.fail_first_module
