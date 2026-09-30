@@ -89,6 +89,7 @@ bool MdoApiProjectPurgePreviewRoute(MdoApiContext* pContext);
 int MdoApiProjectExpectedRevision(const MdoApiContext* Context,
     const char* Id, uint64* Revision, bool* MatchesProject);
 bool MdoApiProjectPurgeRoute(MdoApiContext* pContext);
+bool MdoApiProjectPurgeCancelRoute(MdoApiContext* pContext);
 bool MdoApiProjectPurgeResultRoute(MdoApiContext* pContext);
 bool MdoApiMemoryCollectionRoute(MdoApiContext* pContext);
 bool MdoApiMemoryEntryRoute(MdoApiContext* pContext);

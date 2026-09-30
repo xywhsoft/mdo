@@ -254,12 +254,15 @@ static bool MdoHomePurgeRequestValid(const MdoHomePurgeRequest* Request)
         MdoHomePurgeRequestIdValid(Request->Id) && MdoHomePurgeId(Request->ProjectId) &&
         Request->Revision != 0u && Request->Revision != UINT64_MAX &&
         Request->CreatedAt != 0u && Request->CreatedAt <= INT64_MAX &&
-        Request->Targets != 0u && Request->Targets <= MDO_HOME_PURGE_TARGET_LIMIT &&
+        Request->Targets <= MDO_HOME_PURGE_TARGET_LIMIT &&
         Request->Files <= MDO_HOME_PURGE_NODE_LIMIT && Request->Directories <= MDO_HOME_PURGE_NODE_LIMIT &&
         Request->Files + Request->Directories <= MDO_HOME_PURGE_NODE_LIMIT &&
         Request->Targets <= Request->Files + Request->Directories &&
         Request->Schedules <= Request->Targets &&
-        Request->Files >= (size_t)Request->Selection + (size_t)Request->GlobalDraft;
+        Request->Files >= (size_t)Request->Selection + (size_t)Request->GlobalDraft &&
+        (Request->Targets != 0u || (Request->Files == 0u && Request->Directories == 0u &&
+            Request->Schedules == 0u && Request->Bytes == 0u &&
+            !Request->Selection && !Request->GlobalDraft));
 }
 
 static bool MdoHomePurgeRequestSame(const MdoHomePurgeRequest* A, const MdoHomePurgeRequest* B)
@@ -350,7 +353,11 @@ static bool MdoHomePurgeRecordRead(cstr Path, bool Terminal, MdoHomePurgeReceipt
         if ( Ok && MdoHomeImportName(Outcome, "committed") ) Receipt->Outcome = MDO_HOME_PURGE_COMMITTED;
         else if ( Ok && MdoHomeImportName(Outcome, "aborted") ) Receipt->Outcome = MDO_HOME_PURGE_ABORTED;
         else Ok = false;
-        if ( Ok ) Receipt->Committed = Receipt->Outcome == MDO_HOME_PURGE_COMMITTED;
+        if ( Ok ) {
+            Receipt->Committed = Receipt->Outcome == MDO_HOME_PURGE_COMMITTED;
+            /* A cancellation has no ready manifest and cannot commit. */
+            Ok = !Receipt->Committed || Receipt->Request.Targets != 0u;
+        }
     }
     xrtValueRelease(Root); xrtFree(Text);
     return Ok ? true : MdoHomePurgeError("invalid or changed project purge request/result record");
@@ -479,6 +486,10 @@ static bool MdoHomePurgeReceiptPublish(const MdoHomePurgeRequest* Request, MdoHo
     xfileinfo Info;
     xvalue* Root;
     bool Exists, Ok = false;
+    if ( !MdoHomePurgeRequestValid(Request) ||
+         (Outcome != MDO_HOME_PURGE_COMMITTED && Outcome != MDO_HOME_PURGE_ABORTED) ||
+         (Outcome == MDO_HOME_PURGE_COMMITTED && Request->Targets == 0u) )
+        return MdoHomePurgeError("invalid project purge terminal publication");
     MdoHomePurgeReceiptPath(Path, Request->Id);
     if ( !MdoHomePurgeRecordRead(Path, true, &Existing, &Exists) ) return false;
     if ( Exists ) return MdoHomePurgeRequestSame(&Existing.Request, Request) && Existing.Outcome == Outcome ?
@@ -864,6 +875,95 @@ done:
     return Ok;
 }
 
+/* Both execution and cancellation must see an unused journal slot while
+ * holding Home's lock. Never start a second transaction over pending evidence. */
+static bool MdoHomePurgeAvailableLocked(void)
+{
+    size_t i;
+    bool Exists;
+    xfileinfo Info;
+    if ( !MdoHomeWritableLocked() ) return false;
+    if ( g_MdoHome.Root == NULL || g_MdoHome.LeaseFile == NULL )
+        return MdoHomePurgeError("project purge requires an already-existing leased Home");
+    for ( i = 0u; i < 2u; ++i ) {
+        cstr Journal = i == 0u ? MDO_HOME_PURGE_DIR : MDO_HOME_PURGE_GC;
+        if ( !MdoHomeImportStat(Journal, &Exists, &Info) ) return false;
+        if ( Exists ) {
+            g_MdoHome.RestartRequired = true;
+            snprintf(g_MdoHome.Message, sizeof(g_MdoHome.Message),
+                "pending project purge journal requires restart");
+            return false;
+        }
+    }
+    return true;
+}
+
+bool MdoHomePurgeRequestCancel(cstr Id, cstr Project, uint64 Revision, int64 CreatedAt,
+    MdoHomePurgeReceipt* Receipt, bool* Replayed)
+{
+    MdoHomePurgeRequest Request;
+    bool Found, Created = false, Ok = false;
+    if ( Receipt != NULL ) memset(Receipt, 0, sizeof(*Receipt));
+    if ( Replayed != NULL ) *Replayed = false;
+    if ( !g_MdoHome.Initialized || Receipt == NULL || Replayed == NULL ||
+         !MdoHomePurgeRequestIdValid(Id) || !MdoHomePurgeId(Project) || CreatedAt <= 0 )
+        return MdoHomePurgeError("invalid project purge cancellation");
+    memset(&Request, 0, sizeof(Request));
+    snprintf(Request.Id, sizeof(Request.Id), "%s", Id);
+    snprintf(Request.ProjectId, sizeof(Request.ProjectId), "%s", Project);
+    Request.Revision = Revision; Request.CreatedAt = (uint64)CreatedAt;
+    if ( !MdoHomePurgeRequestValid(&Request) )
+        return MdoHomePurgeError("invalid project purge cancellation binding");
+    xrtMutexLock(g_MdoHome.Lock);
+    if ( !MdoHomePurgeReceiptGetLocked(Id, Receipt, &Found) ) goto done;
+    if ( Found ) {
+        if ( strcmp(Receipt->Request.ProjectId, Project) != 0 ||
+             Receipt->Request.Revision != Revision || Receipt->Request.CreatedAt != (uint64)CreatedAt ) {
+            MdoHomeErrorSet(XERR_ARGUMENT, MDO_HOME_ERROR_ARGUMENT,
+                "project purge request ID belongs to another project version");
+            goto done;
+        }
+        if ( Receipt->Outcome == MDO_HOME_PURGE_PENDING ) {
+            g_MdoHome.RestartRequired = true;
+            snprintf(g_MdoHome.Message, sizeof(g_MdoHome.Message),
+                "accepted project purge requires recovery before cancellation");
+            (void)MdoHomePurgeError(g_MdoHome.Message);
+            goto done;
+        }
+        *Replayed = true; Ok = true; xrtClearError(); goto done;
+    }
+    if ( !MdoHomePurgeAvailableLocked() || !MdoHomePurgeReceiptCapacity() ) goto done;
+    if ( !xrtRootDirCreate(g_MdoHome.Root, MDO_HOME_PURGE_DIR, 0700u) ) goto done;
+    Created = true;
+    /* No ready marker or payload: the same empty preparation recovery path
+     * publishes ABORTED, even if this process exits just after acceptance. */
+    if ( !MdoHomeImportWrite(MDO_HOME_PURGE_DIR "/owner", MDO_HOME_PURGE_MAGIC,
+            sizeof(MDO_HOME_PURGE_MAGIC) - 1u) || !MdoHomePurgeRequestSave(&Request) ) goto done;
+    Ok = MdoHomePurgeRecoverLocked();
+done:
+    if ( !Ok && Created ) {
+        xerror* Saved = xrtTakeError();
+        if ( !MdoHomePurgeRecoverLocked() ) {
+            g_MdoHome.RestartRequired = true;
+            snprintf(g_MdoHome.Message, sizeof(g_MdoHome.Message),
+                "project purge cancellation recovery requires restart; preserve its journal");
+        }
+        xrtClearError();
+        if ( Saved != NULL ) xrtSetErrorTake(Saved);
+        else (void)MdoHomePurgeError("project purge cancellation publication failed");
+    }
+    /* Publication/close errors can still leave a completed terminal record.
+     * Verify acceptance and cleanup rather than claiming cancellation failed. */
+    if ( Created && !g_MdoHome.RestartRequired ) {
+        Ok = MdoHomePurgeReceiptGetLocked(Id, Receipt, &Found) && Found &&
+            MdoHomePurgeRequestSame(&Request, &Receipt->Request) && Receipt->Outcome == MDO_HOME_PURGE_ABORTED;
+        if ( Ok ) xrtClearError();
+    }
+    if ( !Ok ) { memset(Receipt, 0, sizeof(*Receipt)); *Replayed = false; }
+    xrtMutexUnlock(g_MdoHome.Lock);
+    return Ok;
+}
+
 static bool MdoHomePurgeFilesImpl(cstr ProjectId, const MdoHomePurgeTarget* Targets,
     size_t Count, const MdoHomePurgeRequest* Request, bool* Committed)
 {
@@ -880,17 +980,7 @@ static bool MdoHomePurgeFilesImpl(cstr ProjectId, const MdoHomePurgeTarget* Targ
     if ( Request != NULL ) { Manifest.HasRequest = true; Manifest.Request = *Request; }
     if ( !MdoHomePurgeTargets(&Manifest) ) return MdoHomePurgeError("invalid project purge targets");
     xrtMutexLock(g_MdoHome.Lock);
-    if ( !MdoHomeWritableLocked() || g_MdoHome.Root == NULL || g_MdoHome.LeaseFile == NULL ) goto done;
-    for ( i = 0u; i < 2u; ++i ) {
-        cstr Journal = i == 0u ? MDO_HOME_PURGE_DIR : MDO_HOME_PURGE_GC;
-        if ( !MdoHomeImportStat(Journal, &Exists, &Info) ) goto done;
-        if ( Exists ) {
-            g_MdoHome.RestartRequired = true;
-            snprintf(g_MdoHome.Message, sizeof(g_MdoHome.Message),
-                "pending project purge journal requires restart");
-            goto done;
-        }
-    }
+    if ( !MdoHomePurgeAvailableLocked() ) goto done;
     if ( Request != NULL ) {
         char Path[96];
         MdoHomePurgeReceipt Receipt;

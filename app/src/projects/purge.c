@@ -271,6 +271,13 @@ done:
     MdoProjectPurgeInventoryFree(Inventory);
     xrtFree(Targets);
     MdoProjectLeaseRelease(Owner);
+    /* A cancellation can reserve this ID after the initial lookup/scan but
+     * before storage acceptance. Release every guard first, then return the
+     * immutable original receipt instead of this abandoned scan's counts.
+     * A different binding still reports REQUEST_CONFLICT without any move. */
+    if ( RequestConflict && RequestId != NULL )
+        (void)MdoProjectPurgeReplay(RequestId, ProjectId, ExpectedRevision,
+            ExpectedCreatedAt, Result, &Status, Error);
     return Status;
 }
 

@@ -13,7 +13,8 @@ typedef struct MdoHomePurgeTarget {
 } MdoHomePurgeTarget;
 
 /* Request IDs are exactly 32 lowercase hexadecimal bytes. Immutable request
- * metadata describes the exclusively scanned attempt, not a client path list. */
+ * metadata describes the exclusively scanned attempt, not a client path list.
+ * Zero statistics are reserved for a cancellation with no target scan/move. */
 typedef struct MdoHomePurgeRequest {
     char Id[MDO_HOME_PURGE_REQUEST_CAPACITY];
     char ProjectId[65];
@@ -42,6 +43,17 @@ bool MdoHomePurgeRequestIdValid(cstr RequestId);
  * authorization. Pending requests require recovery, not a new execution.
  * Malformed/conflicting records fail, never appear as a missing result. */
 bool MdoHomePurgeReceiptGet(cstr RequestId, MdoHomePurgeReceipt* Receipt, bool* Found);
+
+/* Durably reserve the reviewed ID as ABORTED before any execution accepts it.
+ * No project roots are read or moved, and a missing Home is never created.
+ * A matching terminal receipt is returned unchanged (including COMMITTED:
+ * cancellation cannot undo a completed purge). Replayed distinguishes that
+ * case from a newly reserved ID. Pending, conflicting or damaged evidence
+ * fails; query the SAME ID and recover before discarding the client intent.
+ * Home's lock serializes acceptance with FilesRequested, including callers
+ * that already scanned targets. No project lifecycle lease is needed here. */
+bool MdoHomePurgeRequestCancel(cstr RequestId, cstr ProjectId, uint64 Revision,
+    int64 CreatedAt, MdoHomePurgeReceipt* Receipt, bool* Replayed);
 
 /* Storage-only transaction, not an API authorization boundary. The caller
  * must hold its project's exclusive lifecycle lease, validate the revision,

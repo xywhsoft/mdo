@@ -22,6 +22,18 @@ static cstr MdoApiPurgeOutcome(MdoHomePurgeOutcome Outcome)
         Outcome == MDO_HOME_PURGE_ABORTED ? "aborted" : "pending";
 }
 
+static bool MdoApiPurgeProjectValid(cstr Id)
+{
+    size_t i;
+    if ( Id[0] == '\0' || Id[0] == '.' ) return false;
+    for ( i = 0u; Id[i] != '\0'; ++i ) {
+        unsigned char Ch = (unsigned char)Id[i];
+        if ( !((Ch >= 'a' && Ch <= 'z') || (Ch >= 'A' && Ch <= 'Z') ||
+                (Ch >= '0' && Ch <= '9') || Ch == '-' || Ch == '_' || Ch == '.') ) return false;
+    }
+    return true;
+}
+
 static xvalue* MdoApiPurgeValue(cstr Id, cstr Project, uint64 Revision, int64 CreatedAt,
     const MdoProjectPurgeResult* Result, cstr Outcome, int Accepted)
 {
@@ -49,12 +61,27 @@ static xvalue* MdoApiPurgeValue(cstr Id, cstr Project, uint64 Revision, int64 Cr
     return Data;
 }
 
+static void MdoApiPurgeReceiptResult(const MdoHomePurgeReceipt* Receipt,
+    MdoProjectPurgeResult* Result, bool Replayed)
+{
+    MdoHomeSnapshot Home;
+    memset(Result, 0, sizeof(*Result));
+    Result->Committed = Receipt->Committed; Result->Replayed = Replayed;
+    Result->Targets = Receipt->Request.Targets; Result->Files = Receipt->Request.Files;
+    Result->Directories = Receipt->Request.Directories; Result->Bytes = Receipt->Request.Bytes;
+    Result->Schedules = Receipt->Request.Schedules;
+    Result->SelectionRemoved = Result->Committed && Receipt->Request.Selection;
+    Result->GlobalDraftRemoved = Result->Committed && Receipt->Request.GlobalDraft;
+    memset(&Home, 0, sizeof(Home)); Home.Size = sizeof(Home);
+    Result->RestartRequired = !MdoHomeGetSnapshot(&Home) || Home.RestartRequired ||
+        Receipt->Outcome == MDO_HOME_PURGE_PENDING;
+}
+
 bool MdoApiProjectPurgeResultRoute(MdoApiContext* Context)
 {
     char Id[MDO_HOME_PURGE_REQUEST_CAPACITY];
     MdoHomePurgeReceipt Receipt;
     MdoProjectPurgeResult Result;
-    MdoHomeSnapshot Home;
     bool Found;
     xvalue* Data;
     if ( !MdoApiPurgeCapture(Context, Id, sizeof(Id)) || !MdoHomePurgeRequestIdValid(Id) )
@@ -63,16 +90,7 @@ bool MdoApiProjectPurgeResultRoute(MdoApiContext* Context)
         return MdoApiReplyError(Context, 503u, "purge_result_unavailable", "The purge result could not be verified", NULL);
     if ( !Found ) return MdoApiReplyError(Context, 404u, "purge_request_not_found",
         "No accepted purge request or result is known; this does not authorize a new request", NULL);
-    memset(&Result, 0, sizeof(Result));
-    Result.Committed = Receipt.Committed;
-    Result.Targets = Receipt.Request.Targets; Result.Files = Receipt.Request.Files;
-    Result.Directories = Receipt.Request.Directories; Result.Bytes = Receipt.Request.Bytes;
-    Result.Schedules = Receipt.Request.Schedules;
-    Result.SelectionRemoved = Result.Committed && Receipt.Request.Selection;
-    Result.GlobalDraftRemoved = Result.Committed && Receipt.Request.GlobalDraft;
-    memset(&Home, 0, sizeof(Home)); Home.Size = sizeof(Home);
-    Result.RestartRequired = !MdoHomeGetSnapshot(&Home) || Home.RestartRequired ||
-        Receipt.Outcome == MDO_HOME_PURGE_PENDING;
+    MdoApiPurgeReceiptResult(&Receipt, &Result, false);
     Data = MdoApiPurgeValue(Id, Receipt.Request.ProjectId, Receipt.Request.Revision,
         (int64)Receipt.Request.CreatedAt, &Result, MdoApiPurgeOutcome(Receipt.Outcome), 1);
     if ( Data == NULL ) return MdoApiReplyError(Context, 500u, "purge_result_unavailable",
@@ -80,13 +98,13 @@ bool MdoApiProjectPurgeResultRoute(MdoApiContext* Context)
     return MdoApiReplySuccessTake(Context, 200u, Data, NULL);
 }
 
-bool MdoApiProjectPurgeRoute(MdoApiContext* Context)
+static bool MdoApiProjectPurgeAction(MdoApiContext* Context, bool Cancel)
 {
     char Project[MDO_PROJECT_ID_CAPACITY], Id[MDO_HOME_PURGE_REQUEST_CAPACITY];
     uint64 Revision = 0u;
     int64 CreatedAt = 0;
     int Precondition, Accepted = -1;
-    bool Matches, Valid, Found;
+    bool Matches, Valid, Found, Replayed = false;
     xstrview RequestId;
     MdoApiJsonBody Body;
     MdoApiBodyStatus BodyStatus;
@@ -97,7 +115,7 @@ bool MdoApiProjectPurgeRoute(MdoApiContext* Context)
     xvalue* Data;
     uint16 HttpStatus = 503u;
     cstr Code = "purge_unavailable", Outcome = "unknown";
-    if ( !MdoApiPurgeCapture(Context, Project, sizeof(Project)) )
+    if ( !MdoApiPurgeCapture(Context, Project, sizeof(Project)) || !MdoApiPurgeProjectValid(Project) )
         return MdoApiReplyError(Context, 400u, "invalid_project_path", "The project ID is invalid", NULL);
     Precondition = MdoApiProjectExpectedRevision(Context, Project, &Revision, &Matches);
     if ( Precondition == 0 ) return MdoApiReplyError(Context, 428u, "precondition_required",
@@ -106,6 +124,8 @@ bool MdoApiProjectPurgeRoute(MdoApiContext* Context)
         "If-Match must use the form \"mdo-project-ID-N\"", NULL);
     if ( !Matches ) return MdoApiReplyError(Context, 412u, "revision_conflict",
         "The project ETag belongs to another project", NULL);
+    if ( Revision == UINT64_MAX ) return MdoApiReplyError(Context, 422u, "purge_invalid",
+        "The project revision cannot authorize a purge request", NULL);
     BodyStatus = MdoApiJsonBodyRead(Context, &Body);
     if ( BodyStatus != MDO_API_BODY_OK ) return MdoApiReplyBodyError(Context, BodyStatus);
     Valid = xrtValueType(Body.Value) == XVALUE_OBJECT && xrtValueCount(Body.Value) == 2u &&
@@ -121,11 +141,33 @@ bool MdoApiProjectPurgeRoute(MdoApiContext* Context)
         "Expected a lowercase purge request ID and the reviewed project creation time", NULL);
     /* Do not GET the current definition here: it may be gone or replaced,
      * while a receipt remains valid. The coordinator checks fresh attempts. */
-    Status = MdoProjectPurgeExecuteRequested(Id, Project, Revision, CreatedAt, &Result, &Error);
+    xworkErrorInit(&Error); memset(&Result, 0, sizeof(Result));
+    if ( !Cancel ) Status = MdoProjectPurgeExecuteRequested(Id, Project, Revision, CreatedAt, &Result, &Error);
+    else if ( MdoHomePurgeRequestCancel(Id, Project, Revision, CreatedAt, &Receipt, &Replayed) ) {
+        MdoApiPurgeReceiptResult(&Receipt, &Result, Replayed);
+        Status = Result.RestartRequired ? MDO_PROJECT_PURGE_RESTART_REQUIRED : MDO_PROJECT_PURGE_OK;
+        if ( Result.RestartRequired ) snprintf(Error.sMessage, sizeof(Error.sMessage),
+            "The request result is recorded; restart before further writes");
+    } else {
+        const xerror* Cause = xrtGetError();
+        MdoHomeSnapshot Home;
+        Status = Cause != NULL && xrtErrorKind(Cause) == XERR_ARGUMENT ?
+            MDO_PROJECT_PURGE_REQUEST_CONFLICT : MDO_PROJECT_PURGE_UNAVAILABLE;
+        snprintf(Error.sMessage, sizeof(Error.sMessage), "%s",
+            Cause != NULL && xrtErrorMessage(Cause) != NULL ? xrtErrorMessage(Cause) :
+            "Cancellation could not be verified; query the same request ID");
+        memset(&Home, 0, sizeof(Home)); Home.Size = sizeof(Home);
+        Result.RestartRequired = !MdoHomeGetSnapshot(&Home) || Home.RestartRequired;
+        if ( Result.RestartRequired && Status != MDO_PROJECT_PURGE_REQUEST_CONFLICT )
+            Status = MDO_PROJECT_PURGE_RESTART_REQUIRED;
+    }
     if ( MdoHomePurgeReceiptGet(Id, &Receipt, &Found) ) {
         Accepted = Found && strcmp(Receipt.Request.ProjectId, Project) == 0 &&
             Receipt.Request.Revision == Revision && Receipt.Request.CreatedAt == (uint64)CreatedAt;
         Outcome = Accepted ? MdoApiPurgeOutcome(Receipt.Outcome) : "not_accepted";
+        /* Failed cancellation never invokes execution. Report original facts
+         * even when cancellation lost to acceptance or needs recovery. */
+        if ( Cancel && Accepted ) MdoApiPurgeReceiptResult(&Receipt, &Result, Replayed);
     }
     switch ( Status ) {
     case MDO_PROJECT_PURGE_OK: HttpStatus = 200u; Code = NULL; break;
@@ -143,4 +185,14 @@ bool MdoApiProjectPurgeRoute(MdoApiContext* Context)
         "The purge result could not be serialized; query the same request ID", NULL);
     if ( Code == NULL ) return MdoApiReplySuccessTake(Context, HttpStatus, Data, NULL);
     return MdoApiReplyErrorDetailsTake(Context, HttpStatus, Code, Error.sMessage, Data);
+}
+
+bool MdoApiProjectPurgeRoute(MdoApiContext* Context)
+{
+    return MdoApiProjectPurgeAction(Context, false);
+}
+
+bool MdoApiProjectPurgeCancelRoute(MdoApiContext* Context)
+{
+    return MdoApiProjectPurgeAction(Context, true);
 }

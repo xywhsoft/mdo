@@ -194,9 +194,28 @@ the current project, caches or generations, even after a same-name recreation.
 Pending requests require restart; terminal aborted requests only replay the
 abort. Restart first recovers storage/result evidence, then loads managers.
 Ordinary mutations remain fenced during isolation; only the dedicated purge
-coordinator can report the recorded facts through POST. Import fencing still
+and cancellation handlers can report the recorded facts through POST. Import fencing still
 applies. Keep the same ID across disconnects and verify its binding/commit fact
 before changing navigation or beginning another attempt.
+
+`POST /projects/{project}/purge-cancel` takes the same reviewed `If-Match` and
+exact two-field body. It reserves a previously unaccepted ID as terminal
+`aborted`, with zero counts/bytes and no removed references; it never scans or
+moves project data, or creates a missing Home. An existing matching terminal
+receipt is returned unchanged with `replayed: true`. A committed result stays
+committed: HTTP 200 here means the original result is settled, not proof that
+cancellation prevented deletion. A matching pending request requires recovery;
+conflicting IDs return 409 and damaged records return 503. Both original purge
+and cancellation POST may report receipts while Home is frozen, but neither
+can accept a new storage mutation. Import fencing still applies to both.
+
+Cancellation acceptance shares the execution storage lock and durable journal.
+If cancellation wins, a late execution of that ID only replays the abort even
+when its scan started earlier. If execution wins, cancellation reports that
+result or pending recovery; it never rewrites the receipt. Accepted cancellation
+survives process exits and restart, occupies one receipt slot and has no expiry.
+Clients may discard their intent only after verifying a matching terminal
+receipt; deleting a local pending flag alone cannot cancel a delayed request.
 
 Receipts live in `data/project-purges/<id>.json`, bounded to 2048 bytes each and
 1024 records, with no automatic expiry/reuse. Preserve them with Home backups.
