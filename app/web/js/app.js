@@ -170,6 +170,7 @@ export async function boot() {
   let interruptRequested = false;
   let themeToggleBusy = false;
   let composerAttachments = [];
+  let promptComposing = false;
   let composerImages = null;
   let newTaskController = null;
   let projectDraftSelection = null;
@@ -534,7 +535,10 @@ export async function boot() {
       }
       const sidebarOpen = shell.dataset.sidebar === "open";
       const inspectorOpen = shell.dataset.inspector === "open";
-      if (!sidebarOpen && !inspectorOpen) return;
+      if (!sidebarOpen && !inspectorOpen &&
+          (promptComposing || prompt.value.length || composerAttachments.length ||
+           (document.activeElement !== prompt &&
+            document.activeElement !== document.body))) return;
       if (sidebarOpen) setDrawer("sidebar", false, { persist: false });
       if (inspectorOpen) setDrawer("inspector", false, { persist: false });
       const heading = card.querySelector("h3") ?? card;
@@ -1959,7 +1963,6 @@ export async function boot() {
     prompt.style.height = `${Math.min(prompt.scrollHeight, 336)}px`;
   }
   window.addEventListener("resize", resizePrompt);
-  let promptComposing = false;
   prompt.addEventListener("compositionstart", () => { promptComposing = true; });
   prompt.addEventListener("compositionend", () => { promptComposing = false; });
   prompt.addEventListener("blur", () => { promptComposing = false; });
