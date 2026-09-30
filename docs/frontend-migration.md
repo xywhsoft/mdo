@@ -4,6 +4,14 @@
 
 完成判据及尚缺的打包页证据见 [前端操作体验完成审计](frontend-completion-audit.md)。本文件继续记录每次实现和验证的细节。
 
+## 2026-09-30：模型编辑区重绘后保留键盘位置
+
+模型与 Provider 使用同一双栏编辑区。旧单文件 Home `.build/mdo-packed-docks-431719st` 在 280×250 新建 Provider 时，填写标识和名称后点“放弃修改”，表单重绘移除原按钮，焦点落到页面根节点；切换模型/Provider 及选择列表项也会移除获焦按钮。另在候选 Home `.build/mdo-packed-docks-40dtomky` 复现“刷新”成功后同样失焦。键盘用户必须重新从页面入口定位到编辑区。
+
+现在分类切换后聚焦当前分类按钮，列表选择后聚焦选中资源；放弃新建草稿后回到“新增模型”或“新增 Provider”，放弃已有资源的编辑后回到原列表项。候选单文件 Home `.build/mdo-packed-docks-40dtomky` 在 280×250 逐项验证这些焦点链。另在隔离 Home 新建仅指向 `example.invalid` 的测试 Provider，修改名称后放弃，表单恢复已保存名称、焦点落到原 Provider 列表项。最终候选 Home `.build/mdo-packed-docks-esz2uo2h` 验证刷新后焦点回新“刷新”按钮；刷新后的焦点恢复只在当前焦点退回页面根节点、编辑区仍可见时执行。页面宽 280px，浏览器脚本错误为空。测试 Provider 未用于模型请求。其他设置分区与实体触控仍需继续验收。未做压力或高负载测试。
+
+最终源码的 Windows 有界门禁通过 114 项 Python、113 项 Node、77 个模块解析、21 个运行探针、确定性打包、便携 WebView2 Home 和 20 秒启动；Linux 在 WSL 原生文件系统复用已锁定宿主，通过相同单元、模块、运行探针及确定性打包（跳过 GUI）。根目录 `mdo.exe` 已更新，与 Windows 发布候选 SHA-256 同为 `a07fbe509d07a47adf93169a603d91522d6c9754fb897fe599d03abd3c4fbdf6`；Linux 包为 `8ef612e3a7bcc6803dca12e38a6b26cebdb97499d57a2aa2021ace66bdaccba3`。
+
 ## 2026-09-30：视口恢复后退出极短屏决策浮层
 
 真实单文件 Home `.build/mdo-packed-docks-74paobil` 在 280×250 收到 `ASK UI` 询问并点“展开决策”后，把窗口放大到 320×350：会话区已有 177px、不再符合拥挤条件，但浮层仍占 288px，按钮继续显示“收起决策”并获焦。原因是高度同步只隐藏了拥挤标记，没有清除展开状态；展开状态本身又让按钮保持可见。

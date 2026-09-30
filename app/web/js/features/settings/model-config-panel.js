@@ -345,13 +345,20 @@ export function createModelConfigPanel(container) {
       button.addEventListener("click", () => {
         if (!allowChange()) return;
         kind = value; selectedId = collection()[0]?.id ?? ""; render();
+        container.querySelector('.model-config-controls [aria-pressed="true"]')?.focus();
       });
       controls.append(button);
     }
     const refresh = copy("button", "modelConfig.refresh", "刷新", {},
       { className: "secondary-button", attrs: { type: "button" } });
-    refresh.addEventListener("click", () => {
-      if (allowChange()) void load();
+    refresh.addEventListener("click", async () => {
+      if (!allowChange()) return;
+      await load();
+      // A successful reload replaces the clicked button. Leave later user
+      // focus alone if they moved to another part of the app meanwhile.
+      if (container.isConnected && container.getClientRects().length &&
+          document.activeElement === document.body)
+        container.querySelector('[data-model-copy-key="modelConfig.refresh"]')?.focus();
     });
     const add = copy("button", kind === "model" ? "modelConfig.newModel" :
       "modelConfig.newProvider", kind === "model" ? "新增模型" : "新增 Provider",
@@ -386,6 +393,7 @@ export function createModelConfigPanel(container) {
       button.addEventListener("click", () => {
         if (!allowChange()) return;
         selectedId = item.id; render();
+        container.querySelector('.model-config-item[aria-current="true"]')?.focus();
       });
       list.append(button);
     }
@@ -412,7 +420,16 @@ export function createModelConfigPanel(container) {
       const discard = copy("button", "modelConfig.discard", "放弃修改", {},
         { className: "secondary-button", attrs: { type: "button" } });
       discard.hidden = true;
-      discard.addEventListener("click", () => { dirty = false; render(); });
+      discard.addEventListener("click", () => {
+        dirty = false;
+        render();
+        // Replacing the form removes the activated button. Return keyboard
+        // focus to the saved resource, or to Add for an unsaved new item.
+        const target = source
+          ? container.querySelector('.model-config-item[aria-current="true"]')
+          : container.querySelector('.model-config-controls .primary-button');
+        target?.focus();
+      });
       form.addEventListener("input", () => { dirty = true; discard.hidden = false; save.disabled = false; });
       form.addEventListener("change", () => { dirty = true; discard.hidden = false; save.disabled = false; });
       form.addEventListener("submit", (event) => {
