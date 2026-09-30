@@ -299,22 +299,30 @@ bool MdoApiInit(void)
 {
     if ( g_MdoApiInitialized ) return true;
     if ( !MdoApiSessionsInit() ) return false;
+    if ( !MdoApiWorkspaceStateInit() ) {
+        MdoApiSessionsUnit();
+        return false;
+    }
     if ( !MdoApiFeedbackInit() ) {
+        MdoApiWorkspaceStateUnit();
         MdoApiSessionsUnit();
         return false;
     }
     if ( !MdoApiDraftInit() ) {
+        MdoApiWorkspaceStateUnit();
         MdoApiFeedbackUnit();
         MdoApiSessionsUnit();
         return false;
     }
     if ( !MdoApiQueueInit() ) {
+        MdoApiWorkspaceStateUnit();
         MdoApiDraftUnit();
         MdoApiFeedbackUnit();
         MdoApiSessionsUnit();
         return false;
     }
     if ( !MdoApiAttachmentsInit() ) {
+        MdoApiWorkspaceStateUnit();
         MdoApiQueueUnit();
         MdoApiDraftUnit();
         MdoApiFeedbackUnit();
@@ -329,6 +337,7 @@ bool MdoApiInit(void)
 void MdoApiUnit(void)
 {
     g_MdoApiInitialized = false;
+    MdoApiWorkspaceStateUnit();
     MdoApiFeedbackUnit();
     MdoApiDraftUnit();
     MdoApiQueueUnit();

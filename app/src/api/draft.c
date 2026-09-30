@@ -3,7 +3,10 @@
 
 #include "internal.h"
 #include "profile.h"
+#include "project_references.h"
 #include "../../include/mdo/home.h"
+#include "../../include/mdo/projects.h"
+#include "../../include/mdo/schedules.h"
 #include "../../include/mdo/sessions.h"
 
 #define MDO_DRAFT_TEXT_MAX 65536u
@@ -556,6 +559,131 @@ done:
     return Ok;
 }
 
+bool MdoApiDraftReferenceLock(const char* ProjectId,
+    const MdoProjectLease* Owner, MdoHomePurgeTarget* Target, bool* Present)
+{
+    MdoDraft* Draft;
+    xfileinfo Before, After;
+    bool Exists, AfterExists, Ok;
+    if ( Target == NULL || Present == NULL || g_MdoDraftLock == NULL ||
+         !MdoProjectLeaseProtects(Owner, ProjectId, MDO_PROJECT_LEASE_EXCLUSIVE) )
+        return false;
+    *Present = false;
+    memset(Target, 0, sizeof(*Target));
+    Draft = (MdoDraft*)xrtMalloc(sizeof(*Draft));
+    if ( Draft == NULL ) return false;
+    memset(Draft, 0, sizeof(*Draft));
+    xrtMutexLock(g_MdoDraftLock);
+    Ok = MdoHomeExternalStat("data/draft.json", &Exists, &Before) &&
+        (!Exists || MdoReferenceInfoUsable(&Before)) &&
+        MdoDraftRead("data/draft.json", Draft) &&
+        MdoHomeExternalStat("data/draft.json", &AfterExists, &After) &&
+        Exists == AfterExists && (!Exists || MdoReferenceInfoSame(&Before, &After));
+    if ( Ok && Exists && Draft->HasNewTask &&
+         strcmp(Draft->NewTask.ProjectId, ProjectId) == 0 ) {
+        *Present = true;
+        snprintf(Target->Path, sizeof(Target->Path), "data/draft.json");
+        Target->Info = After;
+    }
+    MdoDraftRelease(Draft);
+    if ( !Ok ) xrtMutexUnlock(g_MdoDraftLock);
+    return Ok;
+}
+
+void MdoApiDraftReferenceUnlock(void)
+{
+    xrtMutexUnlock(g_MdoDraftLock);
+}
+
+typedef enum MdoDraftGlobalPinResult {
+    MDO_DRAFT_GLOBAL_PIN_OK,
+    MDO_DRAFT_GLOBAL_PIN_CONFLICT,
+    MDO_DRAFT_GLOBAL_PIN_BUSY,
+    MDO_DRAFT_GLOBAL_PIN_MISSING,
+    MDO_DRAFT_GLOBAL_PIN_UNAVAILABLE
+} MdoDraftGlobalPinResult;
+
+/* The project picker also exposes unregistered buckets derived from sessions
+ * or schedules. Preserve those and the empty built-in default workspace;
+ * requiring a projects/<id>.json would break first launch and old sessions. */
+static bool MdoDraftGlobalProjectAvailable(const char* ProjectId, bool* Found)
+{
+    MdoProjectInfo Project;
+    MdoSessionCatalog* Sessions;
+    MdoScheduleCatalog* Schedules;
+    xwork_error Error;
+    size_t i;
+    bool Ok = true;
+    *Found = strcmp(ProjectId, "default") == 0;
+    if ( *Found ) return true;
+    memset(&Project, 0, sizeof(Project)); Project.Size = sizeof(Project);
+    if ( !MdoProjectGet(ProjectId, &Project, Found, &Error) ) return false;
+    if ( *Found ) return true;
+    Sessions = MdoSessionCatalogSnapshot(&Error);
+    if ( Sessions == NULL ) return false;
+    for ( i = 0u; Ok && !*Found && i < MdoSessionCatalogCount(Sessions); ++i ) {
+        MdoSessionInfo Item;
+        memset(&Item, 0, sizeof(Item)); Item.Size = sizeof(Item);
+        Ok = MdoSessionCatalogAt(Sessions, i, &Item);
+        if ( Ok ) *Found = strcmp(Item.ProjectId, ProjectId) == 0;
+    }
+    if ( !*Found && MdoSessionCatalogDiagnosticCount(Sessions) != 0u ) Ok = false;
+    MdoSessionCatalogRelease(Sessions);
+    if ( !Ok || *Found ) return Ok;
+    Schedules = MdoScheduleCatalogSnapshot(&Error);
+    if ( Schedules == NULL ) return false;
+    for ( i = 0u; Ok && !*Found && i < MdoScheduleCatalogCount(Schedules); ++i ) {
+        MdoScheduleInfo Item;
+        memset(&Item, 0, sizeof(Item)); Item.Size = sizeof(Item);
+        Ok = MdoScheduleCatalogAt(Schedules, i, &Item);
+        if ( Ok ) *Found = strcmp(Item.ProjectId, ProjectId) == 0;
+    }
+    if ( !*Found && MdoScheduleCatalogDiagnosticCount(Schedules) != 0u ) Ok = false;
+    MdoScheduleCatalogRelease(Schedules);
+    return Ok;
+}
+
+/* The global draft is outside project routes. A PUT which introduces or
+ * retains new_task must pin that project before taking the final draft lock.
+ * For a partial PUT, snapshot the owner, drop the lock, then acquire the lease;
+ * the normal revision check and owner check below validate the snapshot again.
+ * Explicitly clearing new_task and unassociated text need only the draft lock.
+ * This ordering prevents a delayed request resurrecting a purged reference. */
+static MdoDraftGlobalPinResult MdoDraftGlobalWritePin(const MdoDraft* Incoming,
+    bool NewTaskPresent, uint64 ExpectedRevision, MdoProjectLease** Lease,
+    char ProjectId[MDO_PROJECT_ID_CAPACITY])
+{
+    MdoDraft* Snapshot;
+    xwork_error Error;
+    bool Ok, Found;
+    *Lease = NULL;
+    ProjectId[0] = '\0';
+    if ( NewTaskPresent ) {
+        if ( Incoming->HasNewTask ) snprintf(ProjectId, MDO_PROJECT_ID_CAPACITY,
+            "%s", Incoming->NewTask.ProjectId);
+    } else {
+        Snapshot = (MdoDraft*)xrtMalloc(sizeof(*Snapshot));
+        if ( Snapshot == NULL ) return MDO_DRAFT_GLOBAL_PIN_UNAVAILABLE;
+        memset(Snapshot, 0, sizeof(*Snapshot));
+        xrtMutexLock(g_MdoDraftLock);
+        Ok = MdoDraftRead("data/draft.json", Snapshot);
+        if ( Ok && Snapshot->Revision == ExpectedRevision && Snapshot->HasNewTask )
+            snprintf(ProjectId, MDO_PROJECT_ID_CAPACITY, "%s", Snapshot->NewTask.ProjectId);
+        Found = Snapshot->Revision == ExpectedRevision;
+        xrtMutexUnlock(g_MdoDraftLock);
+        MdoDraftRelease(Snapshot);
+        if ( !Ok ) return MDO_DRAFT_GLOBAL_PIN_UNAVAILABLE;
+        if ( !Found ) return MDO_DRAFT_GLOBAL_PIN_CONFLICT;
+    }
+    if ( ProjectId[0] == '\0' ) return MDO_DRAFT_GLOBAL_PIN_OK;
+    *Lease = MdoProjectLeaseAcquire(ProjectId, MDO_PROJECT_LEASE_SHARED, &Error);
+    if ( *Lease == NULL ) return Error.eCode == XWORK_ERROR_CONTEXT ?
+        MDO_DRAFT_GLOBAL_PIN_BUSY : MDO_DRAFT_GLOBAL_PIN_UNAVAILABLE;
+    if ( !MdoDraftGlobalProjectAvailable(ProjectId, &Found) )
+        return MDO_DRAFT_GLOBAL_PIN_UNAVAILABLE;
+    return Found ? MDO_DRAFT_GLOBAL_PIN_OK : MDO_DRAFT_GLOBAL_PIN_MISSING;
+}
+
 static bool MdoDraftWrite(const char* Path, const MdoDraft* Draft)
 {
     bool Global = strcmp(Path, "data/draft.json") == 0;
@@ -629,6 +757,8 @@ bool MdoApiDraftRoute(MdoApiContext* Context)
     xwork_error Error;
     MdoDraft* Draft;
     MdoDraft* Incoming = NULL;
+    MdoProjectLease* GlobalLease = NULL;
+    char GlobalProject[MDO_PROJECT_ID_CAPACITY] = { 0 };
     MdoApiJsonBody Body;
     MdoApiBodyStatus BodyStatus;
     uint64 ExpectedRevision;
@@ -769,10 +899,32 @@ bool MdoApiDraftRoute(MdoApiContext* Context)
                 "Expected a revision and bounded UTF-8 text", NULL);
         }
     }
+    if ( Context->ParamCount == 0u &&
+         Context->Request->head->MethodCode == XHTTP_METHOD_PUT ) {
+        MdoDraftGlobalPinResult Pin = MdoDraftGlobalWritePin(Incoming,
+            NewTaskPresent, ExpectedRevision, &GlobalLease, GlobalProject);
+        if ( Pin != MDO_DRAFT_GLOBAL_PIN_OK ) {
+            MdoProjectLeaseRelease(GlobalLease);
+            MdoApiJsonBodyUnit(&Body);
+            MdoDraftRelease(Incoming);
+            MdoDraftRelease(Draft);
+            if ( Pin == MDO_DRAFT_GLOBAL_PIN_CONFLICT ) return MdoApiReplyError(
+                Context, 409u, "draft_conflict", "The draft changed in another window", NULL);
+            if ( Pin == MDO_DRAFT_GLOBAL_PIN_BUSY ) return MdoApiReplyError(
+                Context, 409u, "project_busy", "The draft project is in use", NULL);
+            if ( Pin == MDO_DRAFT_GLOBAL_PIN_MISSING ) return MdoApiReplyError(
+                Context, 404u, "project_not_found", "The draft project no longer exists", NULL);
+            return MdoApiReplyError(Context, 503u, "draft_unavailable",
+                "The draft project could not be read or protected", NULL);
+        }
+    }
     xrtMutexLock(g_MdoDraftLock);
     Ok = MdoDraftRead(Path, Draft);
     if ( Ok && Context->Request->head->MethodCode == XHTTP_METHOD_PUT ) {
         Conflict = Draft->Revision != ExpectedRevision;
+        if ( !Conflict && Context->ParamCount == 0u && !NewTaskPresent &&
+             Draft->HasNewTask && strcmp(Draft->NewTask.ProjectId, GlobalProject) != 0 )
+            Ok = false;
         if ( !Conflict && Draft->Revision == UINT64_MAX ) Ok = false;
         if ( Ok && !Conflict ) {
             Draft->Revision++;
@@ -802,6 +954,7 @@ bool MdoApiDraftRoute(MdoApiContext* Context)
     Data = Ok && !Conflict ? MdoDraftResponse(Draft,
         Context->ParamCount == 0u) : NULL;
     xrtMutexUnlock(g_MdoDraftLock);
+    MdoProjectLeaseRelease(GlobalLease);
     if ( AttachmentLocked ) MdoApiAttachmentUnlock();
     if ( Context->Request->head->MethodCode == XHTTP_METHOD_PUT )
         MdoApiJsonBodyUnit(&Body);

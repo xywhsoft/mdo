@@ -16,7 +16,10 @@ typedef struct MdoHomePurgeTarget {
  * settle global references, and synchronize managers after a commit.
  * Targets come from a fresh exclusive inventory, never an HTTP request.
  *
- * Moves only the project's fixed roots and valid schedule namespaces into a
+ * Global data/draft.json and data/workspace-state.json are allowed only when
+ * the caller holds their reference guard and has validated current ownership;
+ * unassociated text and another project's records must never be included.
+ * Moves the project's fixed roots, owned references and schedule namespaces into a
  * private journal. Immutable flushed markers and recorded file identities
  * support process-interruption recovery before managers initialize. A failed
  * precommit move rolls back without replacement; ambiguity freezes Home

@@ -533,6 +533,9 @@ done:
     shutil.copy2(ROOT / "tests/fixtures/migration-lifecycle.c",
                  base / "src/bootstrap/migration-lease-probe.c")
     fixture += '\n#include "migration-lease-probe.c"\n'
+    shutil.copy2(ROOT / "tests/fixtures/project-references.c",
+                 base / "src/bootstrap/project-references-probe.c")
+    fixture += '\n#include "project-references-probe.c"\n'
     replacement = (
         fixture + "void ServiceInit(XS_HostInfo* pHost)\n{\n"
         "    if ( MdoBootstrapInit(pHost) ) {\n"
@@ -541,6 +544,7 @@ done:
         "        xrtAtomic32Init(&g_MdoApiProbeLeaseViolations, 0u);\n"
         "        xrtAtomic32Init(&g_MdoApiPurgeProbeSmallLimit, 0u);\n"
         "        MdoApiProbeMigrationInit();\n"
+        "        MdoApiReferenceProbeInit();\n"
         "        MdoApiProbeCreateTasks();\n"
         "        g_MdoApiProbeApprovalThread = xrtThreadCreate(\n"
         "            MdoApiProbeApprovals, NULL, 0u);\n"
@@ -553,6 +557,7 @@ done:
         "    MdoBootstrapUnit();\n"
         "}\n\nXS_RequestResult RequestProc")
     unit_replacement = (
+        "    MdoApiReferenceProbeUnit();\n"
         "    MdoApiUnit();\n"
         "    MdoProjectLeaseRelease(g_MdoApiProbeLease);\n"
         "    g_MdoApiProbeLease = NULL;\n"
@@ -582,6 +587,7 @@ done:
         "    size_t Index;\n"
         "    if ( MdoApiProbeLeaseControl(pRequest) ) return XS_OK;\n"
         "    if ( MdoApiProbeMigrationLeaseControl(pRequest) ) return XS_OK;\n"
+        "    if ( MdoApiReferenceProbeControl(pRequest) ) return XS_OK;\n"
         "    if ( pRequest != NULL && pRequest->head != NULL ) {\n"
         "        xstrview Target = pRequest->head->Target;\n"
         "        for ( Index = 0u; Index + sizeof(Marker) - 1u <= Target.Size; ++Index ) {\n"
@@ -620,16 +626,47 @@ done:
         '            "Draft lost its project lease", NULL);\n' + checkpoint, 1)
     draft_text = draft_text[:route_start] + hooked_route + draft_text[route_end:]
     draft_text = "bool MdoApiProbeLeaseCheckpoint(const char* ProjectId);\n" + draft_text
+    draft_text = ("bool MdoApiReferenceProbeWriteCheckpoint(const char* ProjectId);\n"
+                  "void MdoApiReferenceProbeBeforeLock(bool Draft);\n" + draft_text)
+    publication = "        Ok = MdoHomeAtomicWrite(Path, Json, Size, false);"
+    assert draft_text.count(publication) == 1
+    draft_text = draft_text.replace(publication,
+        "        Ok = (!Global || !Draft->HasNewTask ||\n"
+        "            MdoApiReferenceProbeWriteCheckpoint(Draft->NewTask.ProjectId)) &&\n"
+        "            MdoHomeAtomicWrite(Path, Json, Size, false);", 1)
+    route_start = draft_text.index("bool MdoApiDraftRoute(")
+    route_end = draft_text.index("bool MdoApiDraftSubmissionAppendRoute(")
+    route_text = draft_text[route_start:route_end]
+    final_lock = "    xrtMutexLock(g_MdoDraftLock);\n    Ok = MdoDraftRead(Path, Draft);"
+    assert route_text.count(final_lock) == 1
+    route_text = route_text.replace(final_lock,
+        "    if ( Context->ParamCount == 0u && Context->Request->head->MethodCode == XHTTP_METHOD_PUT )\n"
+        "        MdoApiReferenceProbeBeforeLock(true);\n" + final_lock, 1)
+    draft_text = draft_text[:route_start] + route_text + draft_text[route_end:]
     draft_path.write_text(draft_text, encoding="utf-8", newline="\n")
     selection_path = base / "src/api/workspace_state.c"
     selection_text = selection_path.read_text(encoding="utf-8")
     publication = "        Ok = MdoWorkspaceStateWrite(&State);"
     assert selection_text.count(publication) == 1
     selection_text = "bool MdoApiProbeLeaseCheckpoint(const char* ProjectId);\n" + selection_text
+    selection_text = "void MdoApiReferenceProbeBeforeLock(bool Draft);\n" + selection_text
+    selection_lock = "        xrtMutexLock(g_MdoWorkspaceStateLock);\n        Ok = MdoWorkspaceStateWrite(&State);"
+    assert selection_text.count(selection_lock) == 1
+    selection_text = selection_text.replace(selection_lock,
+        "        MdoApiReferenceProbeBeforeLock(false);\n" + selection_lock, 1)
     selection_text = selection_text.replace(publication,
         "        Ok = MdoApiProbeLeaseCheckpoint(State.ProjectId) &&\n"
         "            MdoWorkspaceStateWrite(&State);", 1)
     selection_path.write_text(selection_text, encoding="utf-8", newline="\n")
+    purge_storage_path = base / "src/storage/home_purge.inc.c"
+    purge_storage = purge_storage_path.read_text(encoding="utf-8")
+    commit = '    if ( !MdoHomePurgeMarker("committed", MDO_HOME_PURGE_MAGIC,\n'
+    assert purge_storage.count(commit) == 1
+    purge_storage = "bool MdoApiReferenceProbeCommitAllowed(void);\n" + purge_storage
+    purge_storage = purge_storage.replace(commit,
+        '    if ( !MdoApiReferenceProbeCommitAllowed() ||\n'
+        '         !MdoHomePurgeMarker("committed", MDO_HOME_PURGE_MAGIC,\n', 1)
+    purge_storage_path.write_text(purge_storage, encoding="utf-8", newline="\n")
     inventory_path = base / "src/api/inventory.c"
     inventory_text = inventory_path.read_text(encoding="utf-8")
     inventory_text = inventory_text.replace(

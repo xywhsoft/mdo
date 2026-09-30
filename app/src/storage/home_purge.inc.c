@@ -36,7 +36,9 @@ static bool MdoHomePurgeId(cstr Id)
 
 /* Recovery cannot name arbitrary Home files, parent paths or overlapping
  * trees. Plan ownership is validated by the caller's exclusive inventory;
- * this layer accepts only a syntactically valid plan namespace. */
+ * this layer accepts only a syntactically valid plan namespace. The two global
+ * reference files require the caller's owned reference guard and conditional
+ * project association check; they are not unconditional project roots. */
 static bool MdoHomePurgePath(cstr Project, const MdoHomePurgeTarget* Target)
 {
     static const struct { cstr Format; bool Directory; } Fixed[] = {
@@ -49,6 +51,9 @@ static bool MdoHomePurgePath(cstr Project, const MdoHomePurgeTarget* Target)
     const char* Start;
     size_t i, Size;
     bool History;
+    if ( strcmp(Target->Path, "data/draft.json") == 0 ||
+         strcmp(Target->Path, "data/workspace-state.json") == 0 )
+        return Target->Info.Type == XFILE_TYPE_FILE;
     for ( i = 0u; i < sizeof(Fixed) / sizeof(Fixed[0]); ++i ) {
         snprintf(Path, sizeof(Path), Fixed[i].Format, Project);
         if ( strcmp(Target->Path, Path) == 0 ) return Target->Info.Type ==

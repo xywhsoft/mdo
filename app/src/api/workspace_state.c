@@ -1,6 +1,8 @@
+#include <stdio.h>
 #include <string.h>
 
 #include "internal.h"
+#include "project_references.h"
 #include "../../include/mdo/home.h"
 #include "../../include/mdo/sessions.h"
 
@@ -11,6 +13,28 @@ typedef struct MdoWorkspaceState {
     char ProjectId[MDO_PROJECT_ID_CAPACITY];
     char SessionId[MDO_SESSION_ID_CAPACITY];
 } MdoWorkspaceState;
+
+static xmutex* g_MdoWorkspaceStateLock;
+
+struct MdoProjectReferenceGuard {
+    MdoProjectLease* Owner;
+    MdoHomePurgeTarget Targets[2];
+    size_t Count;
+    bool SelectionLocked, DraftLocked;
+};
+
+bool MdoApiWorkspaceStateInit(void)
+{
+    if ( g_MdoWorkspaceStateLock != NULL ) return true;
+    g_MdoWorkspaceStateLock = xrtMutexCreate();
+    return g_MdoWorkspaceStateLock != NULL;
+}
+
+void MdoApiWorkspaceStateUnit(void)
+{
+    if ( g_MdoWorkspaceStateLock != NULL ) xrtMutexDestroy(g_MdoWorkspaceStateLock);
+    g_MdoWorkspaceStateLock = NULL;
+}
 
 static bool MdoWorkspaceStateId(const xvalue* Object, cstr Name,
     char* Output, size_t Capacity)
@@ -100,6 +124,81 @@ static bool MdoWorkspaceStateWrite(const MdoWorkspaceState* State)
     return Ok;
 }
 
+void MdoApiProjectReferencesFree(MdoProjectReferenceGuard* Guard)
+{
+    if ( Guard == NULL ) return;
+    if ( Guard->DraftLocked ) MdoApiDraftReferenceUnlock();
+    if ( Guard->SelectionLocked ) xrtMutexUnlock(g_MdoWorkspaceStateLock);
+    MdoProjectLeaseRelease(Guard->Owner);
+    xrtFree(Guard);
+}
+
+MdoProjectReferenceGuard* MdoApiProjectReferencesBegin(const char* ProjectId,
+    MdoProjectLease* Owner, xwork_error* Error)
+{
+    MdoProjectReferenceGuard* Guard;
+    MdoWorkspaceState State;
+    xfileinfo Before, After;
+    bool Exists, AfterExists, DraftPresent;
+    xworkErrorInit(Error);
+    if ( g_MdoWorkspaceStateLock == NULL ||
+         !MdoProjectLeaseProtects(Owner, ProjectId, MDO_PROJECT_LEASE_EXCLUSIVE) ) {
+        if ( Error != NULL ) {
+            Error->eCode = XWORK_ERROR_INVALID_ARGUMENT;
+            snprintf(Error->sMessage, sizeof(Error->sMessage),
+                "project references require a current exclusive lease");
+        }
+        return NULL;
+    }
+    Guard = (MdoProjectReferenceGuard*)xrtMalloc(sizeof(*Guard));
+    if ( Guard == NULL ) {
+        if ( Error != NULL ) Error->eCode = XWORK_ERROR_OUT_OF_MEMORY;
+        return NULL;
+    }
+    memset(Guard, 0, sizeof(*Guard));
+    Guard->Owner = MdoProjectLeaseRef(Owner);
+    if ( Guard->Owner == NULL ) goto failed;
+    xrtMutexLock(g_MdoWorkspaceStateLock);
+    Guard->SelectionLocked = true;
+    if ( !MdoHomeExternalStat(MDO_WORKSPACE_STATE_PATH, &Exists, &Before) ||
+         (Exists && !MdoReferenceInfoUsable(&Before)) ||
+         !MdoWorkspaceStateRead(&State) ||
+         !MdoHomeExternalStat(MDO_WORKSPACE_STATE_PATH, &AfterExists, &After) ||
+         Exists != AfterExists || (Exists && !MdoReferenceInfoSame(&Before, &After)) )
+        goto failed;
+    if ( Exists && strcmp(State.ProjectId, ProjectId) == 0 ) {
+        snprintf(Guard->Targets[Guard->Count].Path,
+            sizeof(Guard->Targets[Guard->Count].Path), "%s", MDO_WORKSPACE_STATE_PATH);
+        Guard->Targets[Guard->Count++].Info = After;
+    }
+    if ( !MdoApiDraftReferenceLock(ProjectId, Owner,
+            &Guard->Targets[Guard->Count], &DraftPresent) ) goto failed;
+    Guard->DraftLocked = true;
+    if ( DraftPresent ) ++Guard->Count;
+    return Guard;
+failed:
+    MdoApiProjectReferencesFree(Guard);
+    if ( Error != NULL ) {
+        Error->eCode = XWORK_ERROR_IO;
+        snprintf(Error->sMessage, sizeof(Error->sMessage),
+            "global project references are invalid or changed during inspection");
+    }
+    return NULL;
+}
+
+size_t MdoApiProjectReferencesCount(const MdoProjectReferenceGuard* Guard)
+{
+    return Guard != NULL ? Guard->Count : 0u;
+}
+
+bool MdoApiProjectReferencesAt(const MdoProjectReferenceGuard* Guard,
+    size_t Index, MdoHomePurgeTarget* Target)
+{
+    if ( Guard == NULL || Target == NULL || Index >= Guard->Count ) return false;
+    *Target = Guard->Targets[Index];
+    return true;
+}
+
 bool MdoApiWorkspaceStateRoute(MdoApiContext* Context)
 {
     MdoWorkspaceState State;
@@ -131,14 +230,20 @@ bool MdoApiWorkspaceStateRoute(MdoApiContext* Context)
             "session_not_found", "The selected session does not exist", NULL);
         /* Keep the session's project lease through publication. Releasing it
          * before this write lets project exclusion race a stale selection. */
+        xrtMutexLock(g_MdoWorkspaceStateLock);
         Ok = MdoWorkspaceStateWrite(&State);
+        xrtMutexUnlock(g_MdoWorkspaceStateLock);
         MdoSessionRelease(Session);
         if ( !Ok )
             return MdoApiReplyError(Context, 503u, "workspace_state_unavailable",
                 "The last session could not be saved", NULL);
-    } else if ( !MdoWorkspaceStateRead(&State) )
-        return MdoApiReplyError(Context, 503u, "workspace_state_unavailable",
-            "The last session could not be read", NULL);
+    } else {
+        xrtMutexLock(g_MdoWorkspaceStateLock);
+        Ok = MdoWorkspaceStateRead(&State);
+        xrtMutexUnlock(g_MdoWorkspaceStateLock);
+        if ( !Ok ) return MdoApiReplyError(Context, 503u,
+            "workspace_state_unavailable", "The last session could not be read", NULL);
+    }
 
     Data = xrtValueObject();
     Ok = Data != NULL &&

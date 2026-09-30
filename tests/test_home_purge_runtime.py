@@ -54,6 +54,7 @@ static bool PurgeProbeBefore(unsigned Step) {
 static bool PurgeProbeAfter(unsigned Step) {
     char Mode[40]; snprintf(Mode, sizeof(Mode), "crash-%u", Step);
     if ( PurgeProbeMode(Mode) ) PurgeProbeCheckpoint();
+    if ( Step == 1u && PurgeProbeMode("global-crash-1") ) PurgeProbeCheckpoint();
     snprintf(Mode, sizeof(Mode), "fail-after-%u", Step);
     if ( PurgeProbeMode(Mode) || (Step == 4u && PurgeProbeMode("fail-rollback")) )
         return PurgeProbeFailure();
@@ -63,10 +64,10 @@ static bool PurgeProbeRollback(void) {
     return PurgeProbeMode("fail-rollback") ? PurgeProbeFailure() : true;
 }
 static bool PurgeProbeCommit(void) {
-    if ( PurgeProbeMode("fail-commit") ) return PurgeProbeFailure();
+    if ( PurgeProbeMode("fail-commit") || PurgeProbeMode("global-fail-commit") ) return PurgeProbeFailure();
     if ( !MdoHomePurgeMarker("committed", MDO_HOME_PURGE_MAGIC,
             sizeof(MDO_HOME_PURGE_MAGIC) - 1u) ) return false;
-    if ( PurgeProbeMode("crash-committed") ) PurgeProbeCheckpoint();
+    if ( PurgeProbeMode("crash-committed") || PurgeProbeMode("global-crash-committed") ) PurgeProbeCheckpoint();
     return true;
 }
 static bool PurgeProbeRename(cstr Source, cstr Target) {
@@ -85,6 +86,10 @@ static bool PurgeProbeClean(cstr Path, bool Remove) {
     return true;
 }
 
+static int PurgeProbeCompare(const void* A, const void* B) {
+    return strcmp(((const MdoHomePurgeTarget*)A)->Path, ((const MdoHomePurgeTarget*)B)->Path);
+}
+
 void ServiceInit(XS_HostInfo* Host) {
     static const char* const Paths[] = {
         "data/project-drafts/probe.json", "data/project-drafts/probe.json.bak",
@@ -92,11 +97,11 @@ void ServiceInit(XS_HostInfo* Host) {
         "migration/session-prompts/probe", "projects/probe.json", "projects/probe.json.bak",
         "schedules/history/plan.jsonl", "schedules/plan.json", "schedules/plan.json.bak", "sessions/probe"
     };
-    MdoHomePurgeTarget Targets[11];
+    MdoHomePurgeTarget Targets[13];
     MdoHomeSnapshot Snapshot;
     xfile Held = NULL;
     bool Committed = false, Ok, Exists, Reserved = true;
-    size_t i;
+    size_t i, Count = 11u;
     (void)Host;
     if ( !MdoHomeInit() ) { printf("purge_init=0\n"); fflush(stdout); return; }
     if ( PurgeProbeMode("inspect") ) { printf("purge_inspect=1\n"); goto done; }
@@ -113,6 +118,17 @@ void ServiceInit(XS_HostInfo* Host) {
                 printf("purge_fixture=0\n"); goto done;
             }
         }
+        if ( strncmp(getenv("MDO_PURGE_MODE"), "global-", 7u) == 0 ) {
+            static const char* const Globals[] = { "data/draft.json", "data/workspace-state.json" };
+            for ( i = 0u; i < 2u; ++i ) {
+                snprintf(Targets[Count].Path, sizeof(Targets[Count].Path), "%s", Globals[i]);
+                if ( !MdoHomeExternalStat(Globals[i], &Exists, &Targets[Count].Info) || !Exists ) {
+                    printf("purge_fixture=0\n"); goto done;
+                }
+                ++Count;
+            }
+            qsort(Targets, Count, sizeof(Targets[0]), PurgeProbeCompare);
+        }
         if ( PurgeProbeMode("invalid-path") ) snprintf(Targets[0].Path,
             sizeof(Targets[0].Path), "config/defaults.json");
         if ( PurgeProbeMode("stale-identity") ) ++Targets[0].Info.Identity;
@@ -127,7 +143,7 @@ void ServiceInit(XS_HostInfo* Host) {
             Held = xrtRootFileOpen(g_MdoHome.Root, Targets[3].Path, &Options);
             if ( Held == NULL ) { printf("purge_fixture=0\n"); goto done; }
         }
-        Ok = MdoHomePurgeFiles("probe", Targets, 11u, &Committed);
+        Ok = MdoHomePurgeFiles("probe", Targets, Count, &Committed);
     }
     memset(&Snapshot, 0, sizeof(Snapshot)); Snapshot.Size = sizeof(Snapshot);
     (void)MdoHomeGetSnapshot(&Snapshot);
@@ -258,6 +274,27 @@ def run_probe(host: Path) -> None:
             assert "purge_end=1 committed=1 frozen=0 reserved=1" in text, (mode, text)
             expected = {p: b for p, b in before.items() if not any(
                 p == root or p.startswith(root + "/") for root in PATHS)}
+            assert inventory(home) == expected, mode
+            assert "purge_inspect=1" in launch(host, site, home, "inspect")
+            assert inventory(home) == expected, mode
+        # Caller-approved conditional references use the same manifest and
+        # recovery direction, including process interruption after their move.
+        globals_owned = ["data/draft.json", "data/workspace-state.json"]
+        for mode in ("global-success", "global-fail-commit", "global-crash-1",
+                     "global-crash-committed"):
+            home = base / mode
+            seed(home)
+            (home / "data/draft.json").write_bytes(b"caller-validated project draft")
+            (home / "data/workspace-state.json").write_bytes(b"caller-validated project selection")
+            before = inventory(home)
+            crash = mode.startswith("global-crash-")
+            text = launch(host, site, home, mode, checkpoint=crash)
+            committed = mode in ("global-success", "global-crash-committed")
+            if not crash:
+                assert f"purge_end={int(committed)} committed={int(committed)} frozen=0 reserved=1" in text, text
+            assert "purge_inspect=1" in launch(host, site, home, "inspect")
+            expected = {p: b for p, b in before.items() if not committed or not any(
+                p == root or p.startswith(root + "/") for root in PATHS + globals_owned)}
             assert inventory(home) == expected, mode
             assert "purge_inspect=1" in launch(host, site, home, "inspect")
             assert inventory(home) == expected, mode
