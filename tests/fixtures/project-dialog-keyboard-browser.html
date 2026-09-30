@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="zh-CN">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>mdo project dialog keyboard probe</title>
+<link rel="stylesheet" href="/app/web/css/app.css?project-keyboard=2">
+<div class="app-shell" id="shell"><main class="workspace"></main></div>
+<dialog class="new-session-dialog" id="project-dialog" aria-labelledby="project-dialog-title">
+  <form class="dialog-card">
+    <header><div><h2 id="project-dialog-title">添加项目</h2>
+      <p>指定工作区目录；项目会保留在侧栏。</p></div></header>
+    <div class="dialog-fields project-fields">
+      <label>工作区目录 <input name="workspace_root" value="D:\work\project"></label>
+      <label>项目名称 <input name="name" value="project"></label>
+      <label>项目标识 <input name="id" value="project"></label>
+      <label>默认模型 <select><option>跟随全局默认</option></select></label>
+    </div>
+    <div class="dialog-error" hidden></div>
+    <footer><button class="secondary-button" type="button">取消</button>
+      <button class="primary-button" type="submit">添加项目</button></footer>
+  </form>
+</dialog>
+<pre id="result"></pre>
+<script type="module">
+import { trackMobileViewport } from "/app/web/js/features/shell/mobile-viewport.js";
+const shell = document.querySelector("#shell");
+const dialog = document.querySelector("#project-dialog");
+const viewport = Object.assign(new EventTarget(),
+  { height: innerHeight, offsetTop: 0, scale: 1 });
+const win = Object.assign(new EventTarget(),
+  { innerHeight, visualViewport: viewport });
+trackMobileViewport(shell, Object.assign(new EventTarget(), { matches: true }), win);
+dialog.showModal();
+const frame = () => new Promise((resolve) => requestAnimationFrame(() =>
+  requestAnimationFrame(resolve)));
+const geometry = () => {
+  const footer = dialog.querySelector("footer");
+  const fields = dialog.querySelector(".project-fields");
+  return { top: dialog.getBoundingClientRect().top,
+    bottom: dialog.getBoundingClientRect().bottom,
+    footerBottom: footer.getBoundingClientRect().bottom,
+    fieldsHeight: fields.clientHeight, fieldsScrollHeight: fields.scrollHeight };
+};
+await frame();
+viewport.height = 250;
+viewport.dispatchEvent(new Event("resize"));
+await frame();
+const visible = geometry();
+viewport.offsetTop = 20;
+viewport.dispatchEvent(new Event("scroll"));
+await frame();
+const panned = geometry();
+viewport.offsetTop = innerHeight - viewport.height;
+viewport.dispatchEvent(new Event("scroll"));
+await frame();
+const bottomPanned = geometry();
+viewport.height = innerHeight;
+viewport.offsetTop = 0;
+viewport.dispatchEvent(new Event("resize"));
+await frame();
+const restored = geometry();
+const result = { visible, panned, bottomPanned, restored,
+  passed: visible.top >= 0 && visible.bottom <= 250 &&
+    visible.footerBottom <= 250 &&
+    visible.fieldsScrollHeight > visible.fieldsHeight &&
+    panned.top >= 28 && panned.bottom <= 270 &&
+    bottomPanned.top >= innerHeight - 250 + 8 &&
+    bottomPanned.bottom <= innerHeight &&
+    restored.bottom > visible.bottom };
+document.querySelector("#result").dataset.passed = String(result.passed);
+document.querySelector("#result").textContent = JSON.stringify(result, null, 2);
+</script>
+</html>
