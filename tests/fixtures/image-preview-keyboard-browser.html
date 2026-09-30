@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="zh-CN">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>mdo image preview keyboard probe</title>
+<link rel="stylesheet" href="/app/web/css/app.css?image-keyboard=2">
+<div class="app-shell" id="shell"><main class="workspace">
+  <button data-image-preview id="trigger" type="button" aria-label="预览图片">
+    <img alt="测试图片" src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='400' height='300'%3E%3Crect width='400' height='300' fill='%234f46e5'/%3E%3C/svg%3E">
+  </button>
+</main></div>
+<dialog class="image-preview-dialog" id="image-preview" aria-label="图片预览">
+  <button class="image-preview-close" id="close-image-preview" type="button" aria-label="关闭图片预览">×</button>
+  <img id="image-preview-content" alt="">
+</dialog>
+<pre id="result"></pre>
+<script type="module">
+import { trackMobileViewport } from "/app/web/js/features/shell/mobile-viewport.js";
+import { createImagePreview } from "/app/web/js/features/chat/image-preview.js";
+const shell = document.querySelector("#shell");
+const trigger = document.querySelector("#trigger");
+const dialog = document.querySelector("#image-preview");
+const image = document.querySelector("#image-preview-content");
+const closeButton = document.querySelector("#close-image-preview");
+const viewport = Object.assign(new EventTarget(),
+  { height: innerHeight, offsetTop: 0, scale: 1 });
+const win = Object.assign(new EventTarget(),
+  { innerHeight, visualViewport: viewport });
+trackMobileViewport(shell, Object.assign(new EventTarget(), { matches: true }), win);
+createImagePreview({ dialog, image, closeButton,
+  navigation: { subscribe() {} } });
+trigger.focus();
+trigger.click();
+const frame = () => new Promise((resolve) => requestAnimationFrame(() =>
+  requestAnimationFrame(resolve)));
+const geometry = () => {
+  const d = dialog.getBoundingClientRect();
+  const c = closeButton.getBoundingClientRect();
+  const i = image.getBoundingClientRect();
+  return { top: d.top, bottom: d.bottom,
+    closeTop: c.top, closeBottom: c.bottom,
+    imageBottom: i.bottom, imageHeight: i.height };
+};
+await frame();
+viewport.height = 250;
+viewport.dispatchEvent(new Event("resize"));
+await frame();
+const visible = geometry();
+viewport.offsetTop = 20;
+viewport.dispatchEvent(new Event("scroll"));
+await frame();
+const panned = geometry();
+viewport.offsetTop = innerHeight - viewport.height;
+viewport.dispatchEvent(new Event("scroll"));
+await frame();
+const bottomPanned = geometry();
+viewport.height = innerHeight;
+viewport.offsetTop = 0;
+viewport.dispatchEvent(new Event("resize"));
+await frame();
+const restored = geometry();
+closeButton.click();
+const result = { visible, panned, bottomPanned, restored,
+  closed: !dialog.open, returnedFocus: document.activeElement === trigger,
+  passed: visible.top >= 0 && visible.bottom <= 250 &&
+    visible.closeTop >= 0 && visible.closeBottom <= 250 &&
+    visible.imageBottom <= 250 && visible.imageHeight > 0 &&
+    panned.top >= 28 && panned.bottom <= 270 &&
+    bottomPanned.top >= innerHeight - 250 + 8 && bottomPanned.bottom <= innerHeight &&
+    restored.bottom > visible.bottom && !dialog.open &&
+    document.activeElement === trigger };
+document.querySelector("#result").dataset.passed = String(result.passed);
+document.querySelector("#result").textContent = JSON.stringify(result, null, 2);
+</script>
+</html>

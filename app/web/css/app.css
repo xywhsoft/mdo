@@ -1689,7 +1689,7 @@ select:focus-visible,
     min-height: 80px;
   }
   :root[data-visual-viewport-reduced]
-    :is(#new-session-dialog, #session-action-dialog, #message-edit-dialog, #project-dialog, #shortcuts-dialog) {
+    :is(#new-session-dialog, #session-action-dialog, #message-edit-dialog, #project-dialog, #shortcuts-dialog, #image-preview) {
     position: fixed;
     top: calc(var(--app-visual-top) + 8px);
     bottom: auto;
@@ -1699,6 +1699,9 @@ select:focus-visible,
   :root[data-visual-viewport-reduced]
     :is(#new-session-dialog, #session-action-dialog, #message-edit-dialog, #project-dialog, #shortcuts-dialog)
     .dialog-card { max-height: calc(var(--app-visual-height) - 16px); }
+  :root[data-visual-viewport-reduced] #image-preview img {
+    max-height: max(1px, calc(var(--app-visual-height) - 82px));
+  }
   /* A software keyboard may shorten only visualViewport, leaving height media
      queries at the original layout height. Keep settings usable in that case. */
   .app-shell[data-compact-visual-viewport] .settings-workspace {
