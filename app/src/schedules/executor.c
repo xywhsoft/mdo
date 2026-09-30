@@ -4,7 +4,7 @@
 #include "../../include/mdo/agents.h"
 #include "../../include/mdo/schedules.h"
 
-#define MDO_SCHEDULE_EXECUTOR_ACTIVE_MAX 64u
+#define MDO_SCHEDULE_EXECUTOR_ACTIVE_MAX MDO_SCHEDULE_OUTSTANDING_MAX
 #define MDO_SCHEDULE_EXECUTOR_CLAIM_MAX 16u
 #define MDO_SCHEDULE_EXECUTOR_POLL_DEFAULT 250u
 #define MDO_SCHEDULE_EXECUTOR_POLL_MIN 50u

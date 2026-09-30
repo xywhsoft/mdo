@@ -7,6 +7,7 @@
 #include "models.h"
 
 #define MDO_SCHEDULE_ID_CAPACITY 65u
+#define MDO_SCHEDULE_OUTSTANDING_MAX 64u
 #define MDO_SCHEDULE_LABEL_CAPACITY 257u
 #define MDO_SCHEDULE_NOTIFY_CAPACITY 257u
 #define MDO_SCHEDULE_PROJECT_CAPACITY 65u
@@ -181,12 +182,18 @@ bool MdoScheduleSetEnabled(const char* ScheduleId, uint64 ExpectedRevision,
     bool Enabled, MdoScheduleInfo* Info, xwork_error* Error);
 bool MdoScheduleRemove(const char* ScheduleId, uint64 ExpectedRevision,
     xwork_error* Error);
+/* Due/explicit claims reserve the complete catalog while synchronizing xwork
+ * cursors. A successful claim retains its project's lease in the manager
+ * through FinishTask history publication. Idle polling is read-only. */
 bool MdoScheduleClaimDue(int64 Now, MdoScheduleClaim* Claim,
     xwork_error* Error);
 bool MdoScheduleTrigger(const char* ScheduleId, uint64 ExpectedRevision,
     int64 Now, MdoScheduleClaim* Claim, xwork_error* Error);
 bool MdoScheduleFinishTask(uint64 TaskId, xwork_result Result,
     const char* ResultText, xwork_error* Error);
+/* Completes an outstanding mdo claim once. History failure keeps the claim's
+ * lease until manager shutdown, preventing purge of incomplete persistence.
+ * A task already cancelled through xwork is recorded as cancelled. */
 bool MdoScheduleFinishTaskWithRun(uint64 TaskId, uint64 AgentRunId,
     xwork_result Result, const char* ResultText, xwork_error* Error);
 bool MdoScheduleHistoryRecent(const char* ScheduleId,

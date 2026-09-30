@@ -20,7 +20,7 @@ typedef struct MdoAgentSessionOptions {
     const char* PermissionProfile; /* NULL inherits Agent/global policy. */
     uint32 MaxOutputTokens;       /* zero inherits the selected profile. */
     const char* WorkspaceRoot;    /* NULL selects the current directory. */
-    const char* ProjectId;        /* optional memory isolation identity. */
+    const char* ProjectId;        /* optional project lifecycle/memory identity. */
     const char* ProductSessionId; /* optional memory audit correlation. */
     const char* SessionPath;      /* optional xllm-session snapshot path. */
     const char* JournalPath;      /* optional write-ahead journal path. */
@@ -104,6 +104,8 @@ typedef struct MdoAgentRunInfo {
 void MdoAgentSessionOptionsInit(MdoAgentSessionOptions* Options);
 MdoAgentSession* MdoAgentSessionCreate(
     const MdoAgentSessionOptions* Options, xwork_error* Error);
+/* A nonempty ProjectId pins the project until the final callback owner release,
+ * including retained runtime Agent references, regardless of memory settings. */
 MdoAgentSession* MdoAgentSessionCreateWithRuntime(xwork_runtime* Runtime,
     const MdoAgentSessionOptions* Options, xwork_error* Error);
 MdoAgentSession* MdoAgentSessionRef(MdoAgentSession* Session);

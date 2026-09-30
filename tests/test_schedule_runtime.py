@@ -29,6 +29,8 @@ PROBE_SOURCE = r'''
 static void ScheduleProbeResolved(const char *id);
 static void ScheduleProbeCatalogResolved(void);
 static bool ScheduleProbePublish(const char *path);
+static bool ScheduleProbeHistory(const char *path, const char *json,
+    size_t size, xwork_error *error);
 static bool ScheduleProbeSetEnabled(xwork_runtime *runtime, const char *id,
     bool enabled, xwork_error *error);
 #include "src/schedules/manager.c"
@@ -39,8 +41,12 @@ static bool ProbeHookOk = true;
 static bool ProbePublishing;
 static unsigned ProbePublishFail;
 static unsigned ProbePublishChecks;
+static unsigned ProbePublishFailAt;
 static unsigned ProbeSettingsChecks;
 static bool ProbeSettingsRollback;
+static bool ProbeHistoryCheck;
+static bool ProbeHistoryFail;
+static unsigned ProbeHistoryChecks;
 
 static bool ScheduleLeaseAvailable(const char *project) {
     MdoProjectLease *lease = MdoProjectLeaseAcquire(project,
@@ -85,8 +91,22 @@ static bool ScheduleProbePublish(const char *path) {
     ++ProbePublishChecks;
     if (ScheduleLeaseAvailable("project-alpha") ||
         ScheduleLeaseAvailable("project-beta")) ProbeHookOk = false;
+    if (ProbePublishFailAt == ProbePublishChecks) return false;
     if (ProbePublishFail != 0u) { --ProbePublishFail; return false; }
     return true;
+}
+
+static bool ScheduleProbeHistory(const char *path, const char *json,
+    size_t size, xwork_error *error) {
+    if (ProbeHistoryCheck) {
+        ++ProbeHistoryChecks;
+        if (ScheduleLeaseAvailable("project-alpha")) ProbeHookOk = false;
+        if (ProbeHistoryFail) {
+            MdoSchedulesError(error, XWORK_ERROR_IO, "controlled history failure");
+            return false;
+        }
+    }
+    return MdoSchedulesAppendBounded(path, json, size, error);
 }
 
 /* Fail the second global update and its rollback. Both the rollback and the
@@ -214,6 +234,100 @@ done:
     return ok;
 }
 
+static bool ScheduleExecutionLeaseProbe(bool claim_failure) {
+    const int64 start = 1700000000000000LL;
+    const char *paths[] = {"schedules/claim-a.json", "schedules/claim-0.json",
+        "schedules/audit.jsonl"};
+    char *before[3] = {0};
+    size_t sizes[3] = {0};
+    MdoScheduleCreateOptions options;
+    MdoScheduleClaim claim;
+    MdoProjectLease *exclusive = NULL;
+    xwork_error error;
+    size_t i;
+    bool ok = false;
+    /* The missed occurrence sorts before the actual claim when times tie:
+     * one call advances this project and claims another in the same pass. */
+    ScheduleProbeOptions(&options, "claim-0", "project-beta");
+    options.Frequency = XWORK_SCHEDULE_MINUTELY;
+    options.MisfirePolicy = XWORK_SCHEDULE_MISFIRE_SKIP;
+    options.MisfireGraceSeconds = 1u;
+    if (!MdoScheduleCreate(&options, NULL, &error)) goto done;
+    ScheduleProbeOptions(&options, "claim-a", "project-alpha");
+    if (!MdoScheduleCreate(&options, NULL, &error)) goto done;
+    for (i = 0u; i < 3u; ++i)
+        if (!MdoSchedulesRead(paths[i], &before[i], &sizes[i])) goto done;
+    exclusive = MdoProjectLeaseAcquire("PROJECT-BETA.",
+        MDO_PROJECT_LEASE_EXCLUSIVE, &error);
+    MdoScheduleClaimInit(&claim);
+    if (exclusive == NULL ||
+        !MdoScheduleClaimDue(start - 1, &claim, &error) || claim.Claimed ||
+        MdoScheduleClaimDue(start + 300000000LL, &claim, &error) ||
+        error.eCode != XWORK_ERROR_CONTEXT || claim.Claimed ||
+        MdoScheduleTrigger("claim-a", 1u, start, &claim, NULL)) goto done;
+    for (i = 0u; i < 3u; ++i) {
+        char *after = NULL;
+        size_t size = 0u;
+        bool same = MdoSchedulesRead(paths[i], &after, &size) &&
+            sizes[i] == size && memcmp(before[i], after, size) == 0;
+        xrtFree(after);
+        if (!same) goto done;
+    }
+    MdoProjectLeaseRelease(exclusive); exclusive = NULL;
+    if (!ScheduleLeaseAvailable("project-alpha")) goto done;
+    printf("schedule_claim_exclusion=1\n");
+    ProbePublishing = true;
+    ProbePublishFailAt = claim_failure ? 2u : 0u;
+    MdoScheduleClaimInit(&claim);
+    if (claim_failure) {
+        if (MdoScheduleClaimDue(start + 300000000LL, &claim, &error) ||
+            claim.Claimed || ProbePublishChecks != 2u || !ProbeHookOk ||
+            ScheduleLeaseAvailable("project-alpha") ||
+            ScheduleLeaseAvailable("project-beta")) goto done;
+        MdoScheduleManagerUnit();
+        if (!ScheduleLeaseAvailable("project-alpha") ||
+            !ScheduleLeaseAvailable("project-beta")) goto done;
+        printf("schedule_claim_failure_isolation=1\n");
+        ok = true; goto done;
+    }
+    if (!MdoScheduleClaimDue(start + 300000000LL, &claim, &error) ||
+        !claim.Claimed || strcmp(claim.ProjectId, "project-alpha") != 0 ||
+        ProbePublishChecks != 2u || !ProbeHookOk ||
+        ScheduleLeaseAvailable("project-alpha") ||
+        !ScheduleLeaseAvailable("project-beta")) goto done;
+    ProbePublishing = false;
+    printf("schedule_claim_handoff=1\n");
+    ProbeHistoryCheck = true;
+    if (!MdoScheduleFinishTask(claim.TaskId, XWORK_RESULT_OK, "claim completed", &error) ||
+        ProbeHistoryChecks != 1u || !ProbeHookOk ||
+        !ScheduleLeaseAvailable("project-alpha") ||
+        MdoScheduleFinishTask(claim.TaskId, XWORK_RESULT_OK, "duplicate", NULL)) goto done;
+    printf("schedule_claim_finish=1\n");
+    MdoScheduleClaimInit(&claim);
+    if (!MdoScheduleTrigger("claim-a", 2u, start, &claim, &error) ||
+        !xworkRuntimeCancelTask(g_MdoSchedules.Runtime, claim.TaskId, &error) ||
+        ScheduleLeaseAvailable("project-alpha") ||
+        !MdoScheduleFinishTask(claim.TaskId, XWORK_RESULT_OK, "cancel observed", &error) ||
+        !ScheduleLeaseAvailable("project-alpha")) goto done;
+    printf("schedule_claim_cancel=1\n");
+    MdoScheduleClaimInit(&claim);
+    if (!MdoScheduleTrigger("claim-a", 3u, start, &claim, &error)) goto done;
+    ProbeHistoryFail = true;
+    if (MdoScheduleFinishTask(claim.TaskId, XWORK_RESULT_OK, "history failed", &error) ||
+        error.eCode != XWORK_ERROR_IO || ScheduleLeaseAvailable("project-alpha") ||
+        !ScheduleLeaseAvailable("project-beta") ||
+        MdoScheduleFinishTask(claim.TaskId, XWORK_RESULT_OK, "retry", &error) ||
+        error.eCode != XWORK_ERROR_IO || ProbeHistoryChecks != 3u) goto done;
+    MdoScheduleManagerUnit();
+    if (!ScheduleLeaseAvailable("project-alpha")) goto done;
+    printf("schedule_claim_history_isolation=1\n");
+    ok = true;
+done:
+    MdoProjectLeaseRelease(exclusive);
+    for (i = 0u; i < 3u; ++i) xrtFree(before[i]);
+    return ok;
+}
+
 static void PrintCatalog(const char *label) {
     xwork_error error;
     MdoScheduleCatalog *catalog = MdoScheduleCatalogSnapshot(&error);
@@ -260,6 +374,11 @@ void ServiceInit(XS_HostInfo *host) {
         printf("init_error=runtime\n"); goto done;
     }
     PrintCatalog("catalog_empty");
+    if (getenv("MDO_SCHEDULE_EXECUTION_ONLY") != NULL) {
+        bool fail = getenv("MDO_SCHEDULE_CLAIM_FAILURE") != NULL;
+        if (!ScheduleExecutionLeaseProbe(fail)) printf("execution_lease_error=1\n");
+        printf("probe_done=1\n"); goto done;
+    }
     if (getenv("MDO_SCHEDULE_LEASE_ONLY") != NULL) {
         if (!ScheduleLeaseProbe()) printf("lease_probe_error=1\n");
         printf("probe_done=1\n"); goto done;
@@ -466,6 +585,9 @@ def write_site(site: Path) -> None:
     assert source.count(old) == 1
     source = source.replace(old,
         '    Ok = ScheduleProbePublish(Path) && MdoHomeAtomicWrite(Path, Json, Size, true);')
+    old = '    Ok = MdoSchedulesAppendBounded(Path, Json, Size, Error);'
+    assert source.count(old) == 1
+    source = source.replace(old, '    Ok = ScheduleProbeHistory(Path, Json, Size, Error);')
     old = '    xrtMutexUnlock(g_MdoSchedules.Lock);\n    Scope->Leases[0]'
     assert source.count(old) == 1
     source = source.replace(old,
@@ -499,6 +621,10 @@ def run_probe(host: Path, site: Path, home: Path, mode: str = "") -> str:
         env["MDO_SCHEDULE_DISABLED_ONLY"] = "1"
     elif mode == "lease":
         env["MDO_SCHEDULE_LEASE_ONLY"] = "1"
+    elif mode in ("execution", "claim-failure"):
+        env["MDO_SCHEDULE_EXECUTION_ONLY"] = "1"
+        if mode == "claim-failure":
+            env["MDO_SCHEDULE_CLAIM_FAILURE"] = "1"
     process = subprocess.Popen(
         [str(host), "xs.json", "--", "--home", str(home)], cwd=site,
         stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
@@ -556,6 +682,25 @@ def main() -> int:
         for label in ("create", "writers", "destination", "settings_blocked",
                       "replace_rollback", "owner_race", "catalog_race", "settings_rollback"):
             assert f"schedule_lease_{label}=1" in lease_output, lease_output
+
+        execution_home = base / "execution-home"
+        execution_output = run_probe(host, site, execution_home, mode="execution")
+        assert "execution_lease_error=" not in execution_output, execution_output
+        for label in ("exclusion", "handoff", "finish", "cancel", "history_isolation"):
+            assert f"schedule_claim_{label}=1" in execution_output, execution_output
+        execution_history = [json.loads(line) for line in
+            (execution_home / "schedules/history/claim-a.jsonl").read_text(
+                encoding="utf-8").splitlines()]
+        assert len(execution_history) == 2, execution_history
+        assert [item["result"] for item in execution_history] == [0, -2]
+        failure_home = base / "claim-failure-home"
+        failure_output = run_probe(host, site, failure_home, mode="claim-failure")
+        assert "execution_lease_error=" not in failure_output, failure_output
+        assert "schedule_claim_failure_isolation=1" in failure_output, failure_output
+        assert json.loads((failure_home / "schedules/claim-0.json").read_text(
+            encoding="utf-8"))["revision"] == 2
+        assert json.loads((failure_home / "schedules/claim-a.json").read_text(
+            encoding="utf-8"))["revision"] == 1
 
         output = run_probe(host, site, home)
         assert "init_error=" not in output, output

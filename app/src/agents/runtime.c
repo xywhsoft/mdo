@@ -11,6 +11,7 @@
 #include "../../include/mdo/memory.h"
 #include "../../include/mdo/models.h"
 #include "../../include/mdo/modules.h"
+#include "../../include/mdo/project_lifecycle.h"
 #include "../../include/mdo/skills.h"
 
 #define MDO_AGENT_DEFAULT_ID "mdo.default"
@@ -28,6 +29,7 @@ typedef struct MdoAgentRoute {
 
 typedef struct MdoAgentOwner {
     xatomic32 Refs;
+    MdoProjectLease* ProjectLease;
     MdoApprovalScope ApprovalScope;
     MdoModelCatalog* Models;
     MdoModuleCatalog* Modules;
@@ -259,6 +261,7 @@ static void MdoAgentOwnerRelease(MdoAgentOwner* Owner)
     MdoSkillCatalogRelease(Owner->Skills);
     MdoModuleCatalogRelease(Owner->Modules);
     MdoModelCatalogRelease(Owner->Models);
+    MdoProjectLeaseRelease(Owner->ProjectLease);
     memset(Owner, 0, sizeof(*Owner));
     xrtFree(Owner);
 }
@@ -952,6 +955,13 @@ MdoAgentSession* MdoAgentSessionCreateWithRuntime(xwork_runtime* Runtime,
         goto fail;
     }
     xrtAtomic32Init(&Owner->Refs, 1u);
+    /* The callback owner, including retained runtime Agent references, outlives
+     * the product session. Project exclusion must not depend on memory tools. */
+    if ( Options->ProjectId != NULL && Options->ProjectId[0] != '\0' ) {
+        Owner->ProjectLease = MdoProjectLeaseAcquire(Options->ProjectId,
+            MDO_PROJECT_LEASE_SHARED, Error);
+        if ( Owner->ProjectLease == NULL ) goto fail;
+    }
     Owner->RouteLock = xrtMutexCreate();
     if ( Owner->RouteLock == NULL ) {
         MdoAgentsError(Error, XWORK_ERROR_OUT_OF_MEMORY,

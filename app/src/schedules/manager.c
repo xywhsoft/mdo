@@ -29,6 +29,16 @@ struct MdoScheduleCatalog {
     size_t DiagnosticCount;
 };
 
+/* One pin per outstanding mdo claim, bounded independently of runtime release.
+ * Allocate before advancing xwork; transfer a reserved project lease rather
+ * than opening a gap between claim publication and executor startup. */
+typedef struct MdoScheduleTaskLease {
+    struct MdoScheduleTaskLease* Next;
+    uint64 TaskId;
+    MdoProjectLease* Lease;
+    bool RuntimeFinished;
+} MdoScheduleTaskLease;
+
 typedef struct MdoScheduleState {
     xmutex* Lock;
     xfile WriterLock;
@@ -37,6 +47,10 @@ typedef struct MdoScheduleState {
     size_t Count;
     size_t Capacity;
     MdoScheduleDiagnostic* Diagnostics;
+    MdoScheduleTaskLease* TaskLeases;
+    size_t TaskLeaseCount;
+    MdoProjectLease* FaultLeases[MDO_SCHEDULE_MAX];
+    size_t FaultLeaseCount;
     size_t DiagnosticCount;
     size_t DiagnosticCapacity;
     uint64 Generation;
@@ -790,6 +804,66 @@ static void MdoSchedulesLeaseEnd(MdoSchedulesLeaseScope* Scope)
     memset(Scope, 0, sizeof(*Scope));
 }
 
+/* Cursor synchronization can partially publish more than the claimed project.
+ * Keep the entire affected set isolated after a persistence failure; releasing
+ * it would let purge treat an incomplete catalog as a settled inventory. */
+static void MdoSchedulesLeaseFault(MdoSchedulesLeaseScope* Scope)
+{
+    size_t i;
+    g_MdoSchedules.PersistenceFault = true;
+    if ( g_MdoSchedules.FaultLeaseCount != 0u ) return;
+    for ( i = 0u; i < Scope->Count; ++i ) {
+        if ( Scope->Leases[i] == NULL ) continue;
+        g_MdoSchedules.FaultLeases[g_MdoSchedules.FaultLeaseCount++] =
+            Scope->Leases[i];
+        Scope->Leases[i] = NULL;
+    }
+}
+
+static MdoScheduleTaskLease* MdoSchedulesTaskLeaseFind(uint64 TaskId)
+{
+    MdoScheduleTaskLease* Pin;
+    for ( Pin = g_MdoSchedules.TaskLeases; Pin != NULL; Pin = Pin->Next )
+        if ( Pin->TaskId == TaskId ) return Pin;
+    return NULL;
+}
+
+static MdoScheduleTaskLease* MdoSchedulesTaskLeaseRemove(uint64 TaskId)
+{
+    MdoScheduleTaskLease** Link = &g_MdoSchedules.TaskLeases;
+    while ( *Link != NULL ) {
+        MdoScheduleTaskLease* Pin = *Link;
+        if ( Pin->TaskId == TaskId ) {
+            *Link = Pin->Next;
+            Pin->Next = NULL;
+            --g_MdoSchedules.TaskLeaseCount;
+            return Pin;
+        }
+        Link = &Pin->Next;
+    }
+    return NULL;
+}
+
+static void MdoSchedulesTaskLeaseFree(MdoScheduleTaskLease* Pin)
+{
+    if ( Pin == NULL ) return;
+    MdoProjectLeaseRelease(Pin->Lease);
+    xrtFree(Pin);
+}
+
+/* The all-project scope and manager lock cover this exact entry order. */
+static void MdoSchedulesTaskLeasePublish(MdoScheduleTaskLease* Pin,
+    const MdoScheduleEntry* Entry, uint64 TaskId, MdoSchedulesLeaseScope* Scope)
+{
+    size_t Index = (size_t)(Entry - g_MdoSchedules.Entries);
+    Pin->TaskId = TaskId;
+    Pin->Lease = Scope->Leases[Index];
+    Scope->Leases[Index] = NULL;
+    Pin->Next = g_MdoSchedules.TaskLeases;
+    g_MdoSchedules.TaskLeases = Pin;
+    ++g_MdoSchedules.TaskLeaseCount;
+}
+
 /* Resolve under a read-only manager lock, drop it, reserve both identities,
  * then recheck ownership under the mutation lock. No registry lock is held
  * while acquiring the manager lock, and no unreserved identity may be used
@@ -1054,6 +1128,7 @@ bool MdoScheduleManagerInit(xwork_runtime* Runtime)
 void MdoScheduleManagerUnit(void)
 {
     size_t i;
+    MdoScheduleTaskLease* Pin;
     xwork_error Error;
     if ( g_MdoSchedules.Runtime != NULL ) {
         for ( i = 0u; i < g_MdoSchedules.Count; ++i )
@@ -1069,6 +1144,12 @@ void MdoScheduleManagerUnit(void)
     xrtFree(g_MdoSchedules.Diagnostics);
     if ( g_MdoSchedules.Runtime != NULL )
         xworkRuntimeRelease(g_MdoSchedules.Runtime);
+    while ( (Pin = g_MdoSchedules.TaskLeases) != NULL ) {
+        g_MdoSchedules.TaskLeases = Pin->Next;
+        MdoSchedulesTaskLeaseFree(Pin);
+    }
+    for ( i = 0u; i < g_MdoSchedules.FaultLeaseCount; ++i )
+        MdoProjectLeaseRelease(g_MdoSchedules.FaultLeases[i]);
     if ( g_MdoSchedules.Lock != NULL ) xrtMutexDestroy(g_MdoSchedules.Lock);
     memset(&g_MdoSchedules, 0, sizeof(g_MdoSchedules));
 }
@@ -1749,6 +1830,8 @@ bool MdoScheduleClaimDue(int64 Now, MdoScheduleClaim* Claim,
 {
     xwork_schedule_claim RuntimeClaim;
     MdoScheduleEntry* Entry;
+    MdoSchedulesLeaseScope Scope = { 0 };
+    MdoScheduleTaskLease* Pin = NULL;
     bool Claimed = false;
     bool Due = false;
     int64 NextWake = 0;
@@ -1764,7 +1847,8 @@ bool MdoScheduleClaimDue(int64 Now, MdoScheduleClaim* Claim,
     ClaimSize = Claim->Size;
     memset(Claim, 0, sizeof(*Claim));
     Claim->Size = ClaimSize;
-    xrtMutexLock(g_MdoSchedules.Lock);
+    if ( !MdoSchedulesLeaseLock(Error) ) return false;
+    Scope.Locked = true;
     if ( !g_MdoSchedules.Enabled ) { Ok = true; goto done; }
     if ( g_MdoSchedules.PersistenceFault ) {
         MdoSchedulesError(Error, XWORK_ERROR_IO,
@@ -1774,6 +1858,30 @@ bool MdoScheduleClaimDue(int64 Now, MdoScheduleClaim* Claim,
     if ( !MdoSchedulesClaimPreflight(Now, &Due, &NextWake, Error) ) goto done;
     Claim->NextWakeAt = NextWake;
     if ( !Due ) { Ok = true; goto done; }
+    xrtMutexUnlock(g_MdoSchedules.Lock);
+    Scope.Locked = false;
+    if ( !MdoSchedulesAllProjectsBegin(&Scope, Error) ) return false;
+    /* Readiness may have changed while the project set was reserved. */
+    if ( !g_MdoSchedules.Enabled ) { Ok = true; goto done; }
+    if ( g_MdoSchedules.PersistenceFault ) {
+        MdoSchedulesError(Error, XWORK_ERROR_IO,
+            "schedule persistence is faulted; restart after repairing storage");
+        goto done;
+    }
+    if ( !MdoSchedulesClaimPreflight(Now, &Due, &NextWake, Error) ) goto done;
+    Claim->NextWakeAt = NextWake;
+    if ( !Due ) { Ok = true; goto done; }
+    if ( g_MdoSchedules.TaskLeaseCount >= MDO_SCHEDULE_OUTSTANDING_MAX ) {
+        MdoSchedulesError(Error, XWORK_ERROR_LIMIT,
+            "schedule outstanding claim limit was exceeded");
+        goto done;
+    }
+    Pin = (MdoScheduleTaskLease*)xrtCalloc(1u, sizeof(*Pin));
+    if ( Pin == NULL ) {
+        MdoSchedulesError(Error, XWORK_ERROR_OUT_OF_MEMORY,
+            "cannot reserve scheduled task ownership");
+        goto done;
+    }
     if ( !MdoSchedulesWriterLock(Error) ) goto done;
     xworkScheduleClaimInit(&RuntimeClaim);
     if ( !xworkRuntimeClaimDueSchedule(g_MdoSchedules.Runtime, Now,
@@ -1781,6 +1889,7 @@ bool MdoScheduleClaimDue(int64 Now, MdoScheduleClaim* Claim,
         xwork_error RuntimeError = Error != NULL ? *Error : (xwork_error){0};
         xwork_error SyncError;
         if ( !MdoSchedulesSyncRuntime(NULL, false, "claim", &SyncError) ) {
+            MdoSchedulesLeaseFault(&Scope);
             if ( Error != NULL ) *Error = SyncError;
         } else if ( Error != NULL ) {
             *Error = RuntimeError;
@@ -1788,8 +1897,21 @@ bool MdoScheduleClaimDue(int64 Now, MdoScheduleClaim* Claim,
         goto done;
     }
     Claim->NextWakeAt = NextWake;
+    if ( Claimed ) {
+        Entry = MdoSchedulesFind(RuntimeClaim.sScheduleId);
+        if ( Entry == NULL || !Entry->Registered ) {
+            MdoSchedulesError(Error, XWORK_ERROR_CONTEXT,
+                "claimed schedule is missing from the product catalog");
+            goto fail_task;
+        }
+        MdoSchedulesTaskLeasePublish(Pin, Entry, RuntimeClaim.uTaskId, &Scope);
+        Pin = NULL;
+    }
     if ( !MdoSchedulesSyncRuntime(&RuntimeClaim, Claimed, "claim", Error) ) {
-        if ( Claimed ) goto fail_task;
+        MdoSchedulesLeaseFault(&Scope);
+        if ( Claimed ) {
+            goto fail_task;
+        }
         goto done;
     }
     if ( !Claimed ) { Ok = true; goto done; }
@@ -1803,11 +1925,17 @@ bool MdoScheduleClaimDue(int64 Now, MdoScheduleClaim* Claim,
     Ok = true;
     goto done;
 fail_task:
-    (void)xworkRuntimeFinishScheduledTask(g_MdoSchedules.Runtime,
+    if ( xworkRuntimeFinishScheduledTask(g_MdoSchedules.Runtime,
         RuntimeClaim.uTaskId, XWORK_RESULT_ERROR,
-        "schedule claim was not durably recorded", NULL);
+        "schedule claim was not durably recorded", NULL) &&
+         !g_MdoSchedules.PersistenceFault ) {
+        MdoScheduleTaskLease* Removed =
+            MdoSchedulesTaskLeaseRemove(RuntimeClaim.uTaskId);
+        if ( Removed != NULL ) { MdoSchedulesTaskLeaseFree(Pin); Pin = Removed; }
+    }
 done:
-    xrtMutexUnlock(g_MdoSchedules.Lock);
+    MdoSchedulesLeaseEnd(&Scope);
+    MdoSchedulesTaskLeaseFree(Pin);
     return Ok;
 }
 
@@ -1816,6 +1944,8 @@ bool MdoScheduleTrigger(const char* ScheduleId, uint64 ExpectedRevision,
 {
     xwork_schedule_claim RuntimeClaim;
     MdoScheduleEntry* Entry;
+    MdoSchedulesLeaseScope Scope = { 0 };
+    MdoScheduleTaskLease* Pin = NULL;
     uint32 ClaimSize;
     bool Ok = false;
     xworkErrorInit(Error);
@@ -1830,7 +1960,8 @@ bool MdoScheduleTrigger(const char* ScheduleId, uint64 ExpectedRevision,
     ClaimSize = Claim->Size;
     memset(Claim, 0, sizeof(*Claim));
     Claim->Size = ClaimSize;
-    xrtMutexLock(g_MdoSchedules.Lock);
+    if ( !MdoSchedulesLeaseLock(Error) ) return false;
+    Scope.Locked = true;
     Entry = MdoSchedulesFind(ScheduleId);
     if ( Entry == NULL || !Entry->Registered ) {
         MdoSchedulesError(Error, XWORK_ERROR_INVALID_ARGUMENT,
@@ -1847,6 +1978,16 @@ bool MdoScheduleTrigger(const char* ScheduleId, uint64 ExpectedRevision,
             "schedule persistence is faulted; restart after repairing storage");
         goto done;
     }
+    xrtMutexUnlock(g_MdoSchedules.Lock);
+    Scope.Locked = false;
+    if ( !MdoSchedulesAllProjectsBegin(&Scope, Error) ) return false;
+    Entry = MdoSchedulesFind(ScheduleId);
+    if ( Entry == NULL || !Entry->Registered || !g_MdoSchedules.Enabled ||
+         g_MdoSchedules.PersistenceFault ) {
+        MdoSchedulesError(Error, XWORK_ERROR_CONTEXT,
+            "schedule state changed; reload before triggering");
+        goto done;
+    }
     if ( Entry->Info.Revision != ExpectedRevision ) {
         MdoSchedulesError(Error, XWORK_ERROR_CONTEXT,
             "schedule revision changed; reload before triggering");
@@ -1857,12 +1998,27 @@ bool MdoScheduleTrigger(const char* ScheduleId, uint64 ExpectedRevision,
             "schedule revision is exhausted");
         goto done;
     }
+    if ( g_MdoSchedules.TaskLeaseCount >= MDO_SCHEDULE_OUTSTANDING_MAX ) {
+        MdoSchedulesError(Error, XWORK_ERROR_LIMIT,
+            "schedule outstanding claim limit was exceeded");
+        goto done;
+    }
+    Pin = (MdoScheduleTaskLease*)xrtCalloc(1u, sizeof(*Pin));
+    if ( Pin == NULL ) {
+        MdoSchedulesError(Error, XWORK_ERROR_OUT_OF_MEMORY,
+            "cannot reserve scheduled task ownership");
+        goto done;
+    }
     if ( !MdoSchedulesWriterLock(Error) ) goto done;
     xworkScheduleClaimInit(&RuntimeClaim);
     if ( !xworkRuntimeTriggerSchedule(g_MdoSchedules.Runtime,
             ScheduleId, Now, &RuntimeClaim, Error) ) goto done;
-    if ( !MdoSchedulesSyncRuntime(&RuntimeClaim, true, "run-now", Error) )
+    MdoSchedulesTaskLeasePublish(Pin, Entry, RuntimeClaim.uTaskId, &Scope);
+    Pin = NULL;
+    if ( !MdoSchedulesSyncRuntime(&RuntimeClaim, true, "run-now", Error) ) {
+        MdoSchedulesLeaseFault(&Scope);
         goto fail_task;
+    }
     MdoSchedulesCopyClaim(Entry, &RuntimeClaim, 0, Claim);
     Ok = true;
     goto done;
@@ -1871,7 +2027,8 @@ fail_task:
         RuntimeClaim.uTaskId, XWORK_RESULT_ERROR,
         "explicit schedule trigger was not durably recorded", NULL);
 done:
-    xrtMutexUnlock(g_MdoSchedules.Lock);
+    MdoSchedulesLeaseEnd(&Scope);
+    MdoSchedulesTaskLeaseFree(Pin);
     return Ok;
 }
 
@@ -1914,6 +2071,9 @@ bool MdoScheduleFinishTaskWithRun(uint64 TaskId, uint64 AgentRunId,
 {
     xwork_task_snapshot* Snapshot = NULL;
     xwork_task_info Task;
+    MdoScheduleTaskLease* Pin;
+    MdoScheduleTaskLease* Removed = NULL;
+    MdoProjectLease* Lease = NULL;
     bool Ok = false;
     xworkErrorInit(Error);
     if ( !g_MdoSchedules.Initialized || TaskId == 0u ||
@@ -1926,7 +2086,32 @@ bool MdoScheduleFinishTaskWithRun(uint64 TaskId, uint64 AgentRunId,
             "invalid schedule finish request");
         return false;
     }
-    xrtMutexLock(g_MdoSchedules.Lock);
+    /* Pin an existing claim under the read lock; Ref cannot open a new
+     * acquisition or race project exclusion. Recheck after relocking. */
+    if ( !MdoSchedulesLeaseLock(Error) ) return false;
+    Pin = MdoSchedulesTaskLeaseFind(TaskId);
+    if ( Pin != NULL ) Lease = MdoProjectLeaseRef(Pin->Lease);
+    xrtMutexUnlock(g_MdoSchedules.Lock);
+    if ( Lease == NULL ) {
+        MdoSchedulesError(Error, XWORK_ERROR_CONTEXT,
+            "scheduled task has no outstanding mdo claim");
+        return false;
+    }
+    if ( !MdoSchedulesLeaseLock(Error) ) {
+        MdoProjectLeaseRelease(Lease);
+        return false;
+    }
+    Pin = MdoSchedulesTaskLeaseFind(TaskId);
+    if ( Pin == NULL ) {
+        MdoSchedulesError(Error, XWORK_ERROR_CONTEXT,
+            "scheduled task was already completed");
+        goto done;
+    }
+    if ( Pin->RuntimeFinished ) {
+        MdoSchedulesError(Error, XWORK_ERROR_IO,
+            "schedule completion persistence is faulted; restart after repairing storage");
+        goto done;
+    }
     if ( !MdoSchedulesWriterLock(Error) ) goto done;
     Snapshot = xworkRuntimeTaskSnapshot(g_MdoSchedules.Runtime, 0u, Error);
     xworkTaskInfoInit(&Task);
@@ -1936,8 +2121,13 @@ bool MdoScheduleFinishTaskWithRun(uint64 TaskId, uint64 AgentRunId,
             "scheduled task was not found");
         goto done;
     }
-    if ( !xworkRuntimeFinishScheduledTask(g_MdoSchedules.Runtime, TaskId,
+    /* Unified task cancellation can precede Agent harvesting. Respect its
+     * terminal state and still persist history once, rather than leaking the
+     * claim or reporting a successful scheduled task after cancellation. */
+    if ( Task.eState == XWORK_TASK_CANCELLED ) Result = XWORK_RESULT_CANCELLED;
+    else if ( !xworkRuntimeFinishScheduledTask(g_MdoSchedules.Runtime, TaskId,
             Result, ResultText, Error) ) goto done;
+    Pin->RuntimeFinished = true;
     if ( !MdoSchedulesHistory(TaskId, AgentRunId, &Task, Result, ResultText,
             Error) ) {
         g_MdoSchedules.PersistenceFault = true;
@@ -1945,10 +2135,13 @@ bool MdoScheduleFinishTaskWithRun(uint64 TaskId, uint64 AgentRunId,
     }
     if ( g_MdoSchedules.Generation != UINT64_MAX )
         ++g_MdoSchedules.Generation;
+    Removed = MdoSchedulesTaskLeaseRemove(TaskId);
     Ok = true;
 done:
     xworkTaskSnapshotRelease(Snapshot);
     xrtMutexUnlock(g_MdoSchedules.Lock);
+    MdoSchedulesTaskLeaseFree(Removed);
+    MdoProjectLeaseRelease(Lease);
     return Ok;
 }
 

@@ -33,6 +33,7 @@ PROBE_SOURCE = r'''
 #include "src/agents/runtime.c"
 #include "src/asks/manager.c"
 #include "src/schedules/manager.c"
+static void ShutdownLeaseCheckpoint(void);
 #include "src/schedules/executor.c"
 
 xwork_runtime *MdoBootstrapRuntime(void) { return NULL; }
@@ -43,7 +44,27 @@ typedef struct Owner {
     unsigned Releases;
     unsigned Calls;
     bool SawPrompt;
+    bool CheckLease;
+    bool SawLease;
 } Owner;
+
+static Owner *ShutdownOwner;
+static bool ShutdownProtected;
+static bool ShutdownOwnerReleased;
+
+static bool ExecutorLeaseAvailable(const char *project) {
+    MdoProjectLease *lease = MdoProjectLeaseAcquire(project,
+        MDO_PROJECT_LEASE_EXCLUSIVE, NULL);
+    bool available = lease != NULL;
+    MdoProjectLeaseRelease(lease);
+    return available;
+}
+
+static void ShutdownLeaseCheckpoint(void) {
+    if (ShutdownOwner == NULL) return;
+    ShutdownProtected = !ExecutorLeaseAvailable("project-alpha");
+    ShutdownOwnerReleased = ShutdownOwner->Refs == 1u;
+}
 
 static bool OwnerRetain(void *data) {
     Owner *owner = (Owner*)data;
@@ -87,6 +108,8 @@ static xllm_result Complete(void *data, const xllm_request *request,
     size_t i;
     (void)callbacks; (void)error;
     ++owner->Calls;
+    if (owner->CheckLease)
+        owner->SawLease = !ExecutorLeaseAvailable("project-alpha");
     for (i = 0u; i < request->iMessageCount; ++i) {
         const char *text = request->pMessages[i].sContent;
         if (text != NULL && strstr(text, "execute scheduled review") != NULL)
@@ -94,6 +117,121 @@ static xllm_result Complete(void *data, const xllm_request *request,
     }
     *response = Response("scheduled-agent-result");
     return *response != NULL ? XLLM_RESULT_OK : XLLM_RESULT_ERROR;
+}
+
+static bool ExecutorOwnerLeaseProbe(xwork_runtime *runtime) {
+    const int64 start = 1700000000000000LL;
+    MdoAgentSessionOptions options;
+    MdoAgentSession *session = NULL;
+    MdoScheduleCreateOptions create;
+    MdoScheduleExecutorOptions executor;
+    MdoProjectLease *exclusive = NULL;
+    xwork_run *retained = NULL;
+    xwork_agent *agent = NULL;
+    xwork_run_config retained_config;
+    MdoHomeSnapshot home;
+    xfileinfo stat;
+    xwork_error error;
+    Owner owner;
+    size_t started = 0u, completed = 0u;
+    uint64 task_id, run_id;
+    unsigned i;
+    bool ok = false;
+    memset(&owner, 0, sizeof(owner)); owner.Refs = 1u; owner.CheckLease = true;
+    MdoAgentSessionOptionsInit(&options);
+    options.ProjectId = "project-alpha";
+    options.WorkspaceRoot = ".";
+    options.OnModelComplete = Complete;
+    options.ModelUserData = &owner;
+    options.OwnerUserData = &owner;
+    options.OnOwnerRetain = OwnerRetain;
+    options.OnOwnerRelease = OwnerRelease;
+    exclusive = MdoProjectLeaseAcquire("PROJECT-ALPHA.",
+        MDO_PROJECT_LEASE_EXCLUSIVE, &error);
+    session = MdoAgentSessionCreateWithRuntime(runtime, &options, &error);
+    memset(&home, 0, sizeof(home)); home.Size = sizeof(home);
+    if (exclusive == NULL || session != NULL || error.eCode != XWORK_ERROR_CONTEXT ||
+        owner.Refs != 1u || !MdoHomeGetSnapshot(&home) ||
+        xrtPathStat(home.Path, false, &stat)) goto done;
+    MdoProjectLeaseRelease(exclusive); exclusive = NULL;
+    options.AgentId = "missing-agent";
+    session = MdoAgentSessionCreateWithRuntime(runtime, &options, &error);
+    if (session != NULL || owner.Refs != 1u ||
+        !ExecutorLeaseAvailable("project-alpha")) goto done;
+    printf("schedule_owner_creation=1\n");
+
+    MdoScheduleExecutorOptionsInit(&executor);
+    executor.Automatic = false;
+    executor.OnModelComplete = Complete;
+    executor.ModelUserData = &owner;
+    executor.OwnerUserData = &owner;
+    executor.OnOwnerRetain = OwnerRetain;
+    executor.OnOwnerRelease = OwnerRelease;
+    if (!MdoScheduleExecutorInit(runtime, &executor, &error)) goto done;
+    MdoScheduleCreateOptionsInit(&create);
+    create.Id = "lease-failed-start";
+    create.Label = "Failed startup";
+    create.ProjectId = "project-alpha";
+    create.AgentId = "missing-agent";
+    create.Input = "bounded failed startup";
+    create.StartAt = start;
+    if (!MdoScheduleCreate(&create, NULL, &error) ||
+        MdoScheduleExecutorPump(start, &started, &completed, &error) ||
+        !ExecutorLeaseAvailable("project-alpha") || owner.Refs != 1u) goto done;
+    printf("schedule_owner_failed_start=1\n");
+    create.Id = "lease-agent";
+    create.Label = "Retained owner";
+    create.AgentId = "mdo.default";
+    create.Input = "execute scheduled review";
+    if (!MdoScheduleCreate(&create, NULL, &error) ||
+        !MdoScheduleExecutorPump(start, &started, &completed, &error) ||
+        started != 1u || g_MdoScheduleExecutor.ActiveCount != 1u) goto done;
+    agent = g_MdoScheduleExecutor.Active[0].Run->Session->Agent;
+    xworkRunConfigInit(&retained_config);
+    retained_config.sPrompt = "retained runtime reference, never started";
+    retained = xworkRunCreate(agent, &retained_config, &error);
+    if (retained == NULL || ExecutorLeaseAvailable("project-alpha") ||
+        !ExecutorLeaseAvailable("project-beta")) goto done;
+    {
+        xwork_tool_catalog *tools = xworkAgentToolCatalogSnapshot(agent);
+        xwork_tool_info info;
+        bool has_memory = false;
+        if (tools == NULL) goto done;
+        for (i = 0u; i < xworkToolCatalogCount(tools); ++i) {
+            memset(&info, 0, sizeof(info));
+            if (xworkToolCatalogToolAt(tools, i, &info) && info.sName != NULL &&
+                strncmp(info.sName, "memory_", 7u) == 0) has_memory = true;
+        }
+        xworkToolCatalogRelease(tools);
+        if (has_memory) goto done;
+    }
+    completed = 0u;
+    for (i = 0u; i < 100u && completed == 0u; ++i) {
+        xrtSleep(5u);
+        if (!MdoScheduleExecutorPump(start, &started, &completed, &error)) goto done;
+    }
+    if (completed != 1u || g_MdoScheduleExecutor.ActiveCount != 0u ||
+        !owner.SawLease || ExecutorLeaseAvailable("project-alpha")) goto done;
+    printf("schedule_owner_retained=1\n");
+    xworkRunDestroy(retained); retained = NULL;
+    if (!ExecutorLeaseAvailable("project-alpha") || owner.Refs != 1u) goto done;
+    printf("schedule_owner_released=1\n");
+    if (!MdoScheduleExecutorRunNow("lease-agent", 2u, start,
+            &task_id, &run_id, &error)) goto done;
+    ShutdownOwner = &owner;
+    MdoScheduleExecutorUnit();
+    ShutdownOwner = NULL;
+    if (!ShutdownProtected || !ShutdownOwnerReleased ||
+        !ExecutorLeaseAvailable("project-alpha")) goto done;
+    printf("schedule_owner_shutdown=1\n");
+    ok = true;
+done:
+    MdoProjectLeaseRelease(exclusive);
+    MdoAgentSessionRelease(session);
+    MdoScheduleExecutorUnit();
+    xworkRunDestroy(retained);
+    ShutdownOwner = NULL;
+    return ok;
 }
 
 void ServiceInit(XS_HostInfo *host) {
@@ -122,6 +260,10 @@ void ServiceInit(XS_HostInfo *host) {
         !MdoMemoryManagerInit(runtime) || !MdoModuleManagerInit(runtime) ||
         !MdoScheduleManagerInit(runtime)) {
         printf("init_error=runtime\n"); goto done;
+    }
+    if (getenv("MDO_SCHEDULE_OWNER_ONLY") != NULL) {
+        if (!ExecutorOwnerLeaseProbe(runtime)) printf("owner_lease_error=1\n");
+        printf("probe_done=1\n"); goto done;
     }
     MdoScheduleCreateOptionsInit(&create);
     create.Id = "agent-review";
@@ -227,7 +369,7 @@ void ServiceUnit(XS_HostInfo *host) { (void)host; }
 '''
 
 
-def write_site(site: Path) -> None:
+def write_site(site: Path, memory_enabled: bool = True) -> None:
     for relative in (
         "web", "default-home/config", "default-home/modules/tools",
         "default-home/modules/agents", "default-home/skills/project-explorer/templates",
@@ -258,6 +400,17 @@ def write_site(site: Path) -> None:
                  site / "src/schedules/internal.h")
     shutil.copy2(ROOT / "include/mdo/module.h",
                  site / "generated/module-sdk/mdo/module.h")
+    if not memory_enabled:
+        defaults = site / "default-home/config/defaults.json"
+        config = json.loads(defaults.read_text(encoding="utf-8"))
+        config["settings"]["agent"]["memory"] = False
+        defaults.write_text(json.dumps(config), encoding="utf-8")
+    executor = site / "src/schedules/executor.c"
+    source = executor.read_text(encoding="utf-8")
+    old = '        MdoAgentRunDestroy(Active[i].Run);'
+    assert source.count(old) == 1
+    source = source.replace(old, old + '\n        ShutdownLeaseCheckpoint();')
+    executor.write_text(source, encoding="utf-8")
     (site / "probe.c").write_text(PROBE_SOURCE, encoding="utf-8")
     with socket.socket() as listener:
         listener.bind(("127.0.0.1", 0))
@@ -270,11 +423,14 @@ def write_site(site: Path) -> None:
     }]}), encoding="utf-8")
 
 
-def run_probe(host: Path, site: Path, home: Path) -> str:
+def run_probe(host: Path, site: Path, home: Path, owner_only: bool = False) -> str:
+    env = os.environ.copy()
+    if owner_only:
+        env["MDO_SCHEDULE_OWNER_ONLY"] = "1"
     process = subprocess.Popen(
         [str(host), "xs.json", "--", "--home", str(home)], cwd=site,
         stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
-        encoding="utf-8", errors="replace",
+        encoding="utf-8", errors="replace", env=env,
         creationflags=subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0,
     )
     lines: list[str] = []
@@ -317,6 +473,22 @@ def main() -> int:
         site = base / "site"
         home = base / "home"
         write_site(site)
+        owner_site = base / "owner-site"
+        owner_home = base / "owner-home"
+        write_site(owner_site, memory_enabled=False)
+        owner_output = run_probe(host, owner_site, owner_home, owner_only=True)
+        assert "owner_lease_error=" not in owner_output, owner_output
+        for label in ("creation", "failed_start", "retained", "released", "shutdown"):
+            assert f"schedule_owner_{label}=1" in owner_output, owner_output
+        failed_history = [json.loads(line) for line in
+            (owner_home / "schedules/history/lease-failed-start.jsonl").read_text(
+                encoding="utf-8").splitlines()]
+        assert len(failed_history) == 1 and failed_history[0]["result"] == -1
+        assert failed_history[0]["agent_run_id"] == 0
+        owner_history = [json.loads(line) for line in
+            (owner_home / "schedules/history/lease-agent.jsonl").read_text(
+                encoding="utf-8").splitlines()]
+        assert [item["result"] for item in owner_history] == [0, -2]
         output = run_probe(host, site, home)
         assert "init_error=" not in output, output
         assert "create_error=" not in output, output

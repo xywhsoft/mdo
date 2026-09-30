@@ -126,9 +126,17 @@ under the mutation lock. Global schedule enable changes reserve every catalog
 project before updating runtime state and through rollback; a changed catalog
 is rejected before mutation. Reloading an unchanged switch is read-only.
 
+Due and explicit schedule claims also reserve the complete catalog while
+synchronizing runtime cursors, then retain the claimed project's lease through
+history publication. At most 64 mdo claims may be outstanding. Agent callback
+owners separately retain their project until final runtime reference release,
+even when memory tools are disabled. Cursor publication failure isolates the
+complete project set; history failure retains the claim until manager shutdown.
+This is process-local isolation, not a new crash-recovery transaction.
+
 The current exclusive primitive is infrastructure for the planned purge
 transaction. There is no executable project-purge API yet, and `purge-preview`
-remains advisory. Schedule claim/completion/run ownership and legacy migration boundaries, the purge
+remains advisory. Legacy migration boundaries, the purge
 transaction, and startup recovery still need implementation before purge opens.
 
 ## Settings transactions
