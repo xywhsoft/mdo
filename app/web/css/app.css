@@ -1452,6 +1452,8 @@ select:focus-visible,
   .starter-grid { grid-template-columns: 1fr; }
   .starter { min-height: 62px; }
   .timeline { width: calc(100% - 26px); padding-top: 20px; }
+  /* Keep the scroll shortcut clear of right-aligned message actions on narrow screens. */
+  .to-bottom { margin-right: auto; margin-left: 12px; }
   .timeline-artifact-preview summary { min-height: 40px; }
   .conversation-docks { width: calc(100% - 26px); }
   .composer-region > .conversation-docks { width: calc(100% - 18px); }
