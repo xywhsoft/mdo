@@ -279,6 +279,7 @@ void MdoMigrationContextUnit(MdoMigrationContext* Context)
         xrtFree(Context->Models[i].NewId);
     }
     for ( i = 0u; i < Context->ProjectCount; ++i ) {
+        MdoProjectLeaseRelease(Context->Projects[i].Lease);
         xrtFree(Context->Projects[i].OldId);
         xrtFree(Context->Projects[i].NewId);
         xrtFree(Context->Projects[i].WorkspaceRoot);

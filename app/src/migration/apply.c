@@ -81,6 +81,23 @@ static bool MdoMigrationPrepareStage(MdoMigrationContext* Context,
     return true;
 }
 
+static bool MdoMigrationProtectProjects(MdoMigrationContext* Context,
+    xwork_error* Error)
+{
+    size_t i;
+    /* PlanProjects is read-only and complete, including remapped buckets and
+     * the default tasks scope. No staging or destination write precedes this
+     * reservation. ContextUnit releases partial acquisitions on every failure,
+     * and successful reservations only after publication/rollback cleanup. */
+    for ( i = 0u; i < Context->ProjectCount; ++i ) {
+        MdoMigrationProjectMap* Map = &Context->Projects[i];
+        Map->Lease = MdoProjectLeaseAcquire(Map->NewId,
+            MDO_PROJECT_LEASE_SHARED, Error);
+        if ( Map->Lease == NULL ) return false;
+    }
+    return true;
+}
+
 void MdoMigrationApplyOptionsInit(MdoMigrationApplyOptions* Options)
 {
     if ( Options == NULL ) return;
@@ -141,6 +158,12 @@ bool MdoLegacyMigrationApply(const MdoMigrationApplyOptions* Options,
     if ( Context.Scan.Count > 1u ) qsort(Context.Scan.Files,
         Context.Scan.Count, sizeof(*Context.Scan.Files),
         MdoMigrationFileCompare);
+    if ( !MdoMigrationPlanProjects(&Context, Error) ) {
+        MdoMigrationApplyFailure(Error, XWORK_ERROR_INVALID_ARGUMENT,
+            "legacy projects cannot be converted");
+        goto done;
+    }
+    if ( !MdoMigrationProtectProjects(&Context, Error) ) goto done;
     if ( !MdoMigrationPrepareStage(&Context, Error) ) {
         MdoMigrationApplyFailure(Error, XWORK_ERROR_IO,
             "cannot prepare migration staging directory");
@@ -149,11 +172,6 @@ bool MdoLegacyMigrationApply(const MdoMigrationApplyOptions* Options,
     if ( !MdoMigrationConvertConfig(&Context, Error) ) {
         MdoMigrationApplyFailure(Error, XWORK_ERROR_INVALID_ARGUMENT,
             "legacy configuration cannot be converted");
-        goto done;
-    }
-    if ( !MdoMigrationConvertProjects(&Context, Error) ) {
-        MdoMigrationApplyFailure(Error, XWORK_ERROR_INVALID_ARGUMENT,
-            "legacy projects cannot be converted");
         goto done;
     }
     if ( !MdoMigrationConvertSessions(&Context, Error) ) {

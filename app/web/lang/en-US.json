@@ -1141,7 +1141,7 @@
   "error.sessionNotFound": "This session no longer exists. Refresh the list.",
   "error.revisionConflict": "Content changed in another window. Refresh and try again.",
   "error.recoveryConflict": "The interrupted run changed. Review the refreshed calls before deciding.",
-  "error.migrationConflict": "The migration source, target, or preview token changed. Check again before confirming.",
+  "error.migrationConflict": "Migration conditions changed or a related project is busy. Wait for the current operation to finish, then check again.",
   "error.migrationInvalid": "Legacy data did not pass validation for this version.",
   "error.invalidResponse": "The service returned an invalid response. Try again.",
   "error.sessionProfileInvalid": "The session profile is invalid. Check the model, reasoning level, and permissions.",

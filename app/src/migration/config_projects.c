@@ -638,7 +638,7 @@ static bool MdoMigrationBucket(const char* Path, char* Bucket,
     return true;
 }
 
-bool MdoMigrationConvertProjects(MdoMigrationContext* Context,
+bool MdoMigrationPlanProjects(MdoMigrationContext* Context,
     xwork_error* Error)
 {
     size_t i;

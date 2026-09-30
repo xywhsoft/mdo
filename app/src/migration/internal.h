@@ -3,6 +3,7 @@
 
 #include "../../include/mdo/migration.h"
 #include "../../include/mdo/models.h"
+#include "../../include/mdo/project_lifecycle.h"
 
 #define MDO_MIGRATION_MAX_FILES 4096u
 #define MDO_MIGRATION_MAX_ENTRIES 8192u
@@ -51,6 +52,7 @@ typedef struct MdoMigrationProjectMap {
     char* OldId;
     char* NewId;
     char* WorkspaceRoot;
+    MdoProjectLease* Lease; /* protects publication and failed-stage cleanup */
 } MdoMigrationProjectMap;
 
 typedef struct MdoMigrationContext {
@@ -107,7 +109,9 @@ void MdoMigrationContextUnit(MdoMigrationContext* Context);
 
 bool MdoMigrationConvertConfig(MdoMigrationContext* Context,
     xwork_error* Error);
-bool MdoMigrationConvertProjects(MdoMigrationContext* Context,
+/* Build the complete destination identity map without creating directories or
+ * files. It is immutable once apply acquires the corresponding project leases. */
+bool MdoMigrationPlanProjects(MdoMigrationContext* Context,
     xwork_error* Error);
 bool MdoMigrationConvertSessions(MdoMigrationContext* Context,
     xwork_error* Error);

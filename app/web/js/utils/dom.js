@@ -76,7 +76,7 @@ const API_ERROR_COPY = Object.freeze({
   recovery_state_conflict: ["error.recoveryConflict",
     "中断状态已经变化，请核对刷新后的调用再决定。"],
   migration_conflict: ["error.migrationConflict",
-    "迁移来源、目标或预览令牌已经变化，请重新检测后确认。"],
+    "迁移条件已变化或相关项目正忙，请等待当前操作结束，再重新检测。"],
   migration_invalid: ["error.migrationInvalid",
     "旧数据未通过当前版本的迁移校验。"],
   invalid_response: ["error.invalidResponse", "服务返回了无效响应，请重试。"],

@@ -70,7 +70,10 @@ void MdoMigrationApplyOptionsInit(MdoMigrationApplyOptions* Options);
 
 /* Re-runs the complete preview and requires an exact content-bound token.
  * Conversion happens in a sibling staging directory and the target is
- * published once without replacement. The source is never modified. */
+ * published once without replacement. The source is never modified.
+ * Requires the project lifecycle service. All mapped projects are reserved
+ * before the first staging write, through publication or failed-stage cleanup;
+ * a busy destination project returns XWORK_ERROR_CONTEXT without writing. */
 bool MdoLegacyMigrationApply(const MdoMigrationApplyOptions* Options,
     MdoMigrationApplyResult* Result, xwork_error* Error);
 

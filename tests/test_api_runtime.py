@@ -495,12 +495,16 @@ done:
 
 '''
     needle = "void ServiceInit(XS_HostInfo* pHost)\n{\n    (void)MdoBootstrapInit(pHost);\n"
+    shutil.copy2(ROOT / "tests/fixtures/migration-lifecycle.c",
+                 base / "src/bootstrap/migration-lease-probe.c")
+    fixture += '\n#include "migration-lease-probe.c"\n'
     replacement = (
         fixture + "void ServiceInit(XS_HostInfo* pHost)\n{\n"
         "    if ( MdoBootstrapInit(pHost) ) {\n"
         "        g_MdoApiProbeLeaseLock = xrtMutexCreate();\n"
         "        xrtAtomic32Init(&g_MdoApiProbeLeaseChecks, 0u);\n"
         "        xrtAtomic32Init(&g_MdoApiProbeLeaseViolations, 0u);\n"
+        "        MdoApiProbeMigrationInit();\n"
         "        MdoApiProbeCreateTasks();\n"
         "        g_MdoApiProbeApprovalThread = xrtThreadCreate(\n"
         "            MdoApiProbeApprovals, NULL, 0u);\n"
@@ -516,6 +520,8 @@ done:
         "    MdoApiUnit();\n"
         "    MdoProjectLeaseRelease(g_MdoApiProbeLease);\n"
         "    g_MdoApiProbeLease = NULL;\n"
+        "    MdoProjectLeaseRelease(g_MdoMigrationProbeExclusive);\n"
+        "    g_MdoMigrationProbeExclusive = NULL;\n"
         "    xrtMutexDestroy(g_MdoApiProbeLeaseLock);\n"
         "    MdoBootstrapUnit();\n"
         "    if ( g_MdoApiProbeApprovalThread != NULL ) {\n"
@@ -539,6 +545,7 @@ done:
         "    static bool CreatedEdit, CreatedAsk;\n"
         "    size_t Index;\n"
         "    if ( MdoApiProbeLeaseControl(pRequest) ) return XS_OK;\n"
+        "    if ( MdoApiProbeMigrationLeaseControl(pRequest) ) return XS_OK;\n"
         "    if ( pRequest != NULL && pRequest->head != NULL ) {\n"
         "        xstrview Target = pRequest->head->Target;\n"
         "        for ( Index = 0u; Index + sizeof(Marker) - 1u <= Target.Size; ++Index ) {\n"
@@ -587,6 +594,39 @@ done:
         '    if ( !MdoApiProbeLeaseCheckpoint(Candidate.Id) ||\n'
         '         !MdoHomeAtomicWrite(Path, Json, Size, false) ) {', 1)
     project_path.write_text(project_text, encoding="utf-8", newline="\n")
+    # Fault and ownership observations affect only this copied application.
+    declaration = ("\nbool MdoApiProbeMigrationCheckpoint(const MdoMigrationContext* Context,\n"
+                   "    unsigned Phase, const char* Path, xwork_error* Error);\n")
+    apply_path = base / "src/migration/apply.c"
+    apply_text = apply_path.read_text(encoding="utf-8")
+    apply_text = apply_text.replace('#include "internal.h"\n',
+                                    '#include "internal.h"\n' + declaration, 1)
+    prepare = "    if ( !MdoMigrationPrepareStage(&Context, Error) ) {"
+    publish = "    if ( !xrtPathRename(Context.StagePath, Context.Preview.TargetPath, false) ) {"
+    cleanup = "            (void)xrtDirRemoveAll(Context.StagePath);"
+    assert apply_text.count(prepare) == apply_text.count(publish) == apply_text.count(cleanup) == 1
+    apply_text = apply_text.replace(prepare,
+        "    if ( !MdoApiProbeMigrationCheckpoint(&Context, 0u, NULL, Error) ||\n"
+        "         !MdoMigrationPrepareStage(&Context, Error) ) {", 1)
+    apply_text = apply_text.replace(publish,
+        "    if ( !MdoApiProbeMigrationCheckpoint(&Context, 2u, NULL, Error) ||\n"
+        "         !xrtPathRename(Context.StagePath, Context.Preview.TargetPath, false) ) {", 1)
+    apply_text = apply_text.replace(cleanup,
+        "            (void)MdoApiProbeMigrationCheckpoint(&Context, 3u, NULL, NULL);\n" + cleanup, 1)
+    apply_path.write_text(apply_text, encoding="utf-8", newline="\n")
+    common_path = base / "src/migration/common.c"
+    common_text = common_path.read_text(encoding="utf-8")
+    common_text = common_text.replace('#include "internal.h"\n',
+                                      '#include "internal.h"\n' + declaration, 1)
+    write_start = common_text.index("bool MdoMigrationStageWrite(")
+    write_end = common_text.index("bool MdoMigrationStageCopy(", write_start)
+    write_text = common_text[write_start:write_end]
+    point = "    xrtFileOptionsInit(&Options);"
+    assert write_text.count(point) == 1
+    write_text = write_text.replace(point,
+        "    if ( !MdoApiProbeMigrationCheckpoint(Context, 1u, Path, Error) ) return false;\n" + point, 1)
+    common_path.write_text(common_text[:write_start] + write_text + common_text[write_end:],
+                           encoding="utf-8", newline="\n")
     mock_server = base / "mcp_mock_server.py"
     mock_server.write_text(MCP_MOCK_SERVER, encoding="utf-8")
     mcp_document = {
@@ -824,6 +864,97 @@ def project_lease_roundtrip(port: int, home: Path) -> None:
     evidence = json.loads(body)["data"]
     assert status == 200 and evidence["checks"] >= 9 and (
         evidence["violations"] == 0), evidence
+
+
+def migration_lease_snapshot(port: int) -> dict:
+    status, _, body = request(port, "GET", "/__fixture/migration-lease/checkpoint")
+    assert status == 200, (status, body)
+    evidence = json.loads(body)["data"]
+    assert evidence["violations"] == 0, evidence
+    return evidence
+
+
+def migration_lease_probe(port: int, home: Path, legacy: Path) -> tuple[dict, dict]:
+    """Reserve every mapped bucket before staging, through cleanup/publication."""
+    fixture = "/__fixture/migration-lease/"
+    path = "/api/v1/migrations/legacy"
+    remapped_dir = legacy / "projects/Legacy Project"
+    remapped_dir.mkdir()
+    remapped_file = remapped_dir / "project.json"
+    remapped_file.write_text(json.dumps({"name": "Remapped fixture",
+        "path": str(legacy.parent / "workspace")}), encoding="utf-8")
+
+    def preview() -> dict:
+        status, _, body = request(port, "GET", path)
+        assert status == 200, (status, body)
+        source = next(item for item in json.loads(body)["data"]["items"]
+                      if item["source_id"] == "user-home")
+        assert source["importable"] is True, source
+        return source
+
+    def inventory() -> dict:
+        return {item.relative_to(legacy).as_posix(): item.read_bytes()
+                for item in legacy.rglob("*") if item.is_file()}
+
+    def available(name: str) -> None:
+        status, _, body = request(port, "GET", fixture + "free-" + name)
+        assert status == 200 and json.loads(body)["data"]["available"], (name, body)
+
+    def apply() -> tuple[int, dict[str, str], bytes]:
+        return request(port, "POST", path,
+            body=json.dumps({"source_id": "user-home",
+                             "preview_token": source["preview_token"]}).encode(),
+            headers={"Content-Type": "application/json"})
+
+    def unchanged() -> None:
+        assert not home.exists(), home
+        assert not list(home.parent.glob(f"{home.name}.migrate-*")), home
+        assert before == inventory(), "legacy source changed"
+
+    try:
+        source, before = preview(), inventory()
+        for held in ("first", "tasks", "remapped"):
+            checkpoint = migration_lease_snapshot(port)
+            assert request(port, "POST", fixture + "acquire-" + held)[0] == 200
+            try:
+                status, _, body = apply()
+                assert status == 409 and json.loads(body)["error"]["code"] == (
+                    "migration_conflict"), (held, status, body)
+                # Covers the public C entry when no error output is supplied.
+                assert request(port, "POST", fixture + "apply-null-error")[0] == 200
+                unchanged()
+                assert checkpoint == migration_lease_snapshot(port)
+                for other in ("first", "tasks", "remapped"):
+                    if other != held:
+                        available(other)  # Partial acquisition must be unwound.
+            finally:
+                assert request(port, "POST", fixture + "release")[0] == 200
+            available(held)
+
+        for failure in ("fail-report", "fail-publish"):
+            checkpoint = migration_lease_snapshot(port)
+            assert request(port, "POST", fixture + failure)[0] == 200
+            try:
+                status, _, body = apply()
+                assert status == 500 and json.loads(body)["error"]["code"] == (
+                    "migration_failed"), (failure, status, body)
+                unchanged()
+                after = migration_lease_snapshot(port)
+                assert after["prepare"] > checkpoint["prepare"] and (
+                    after["write"] > checkpoint["write"] and
+                    after["cleanup"] > checkpoint["cleanup"]), after
+                assert after["remapped"] is True, after
+                if failure == "fail-publish":
+                    assert after["publish"] > checkpoint["publish"], after
+                for name in ("first", "tasks", "remapped"):
+                    available(name)
+            finally:
+                assert request(port, "POST", fixture + "clear-failure")[0] == 200
+    finally:
+        # Remove only the two entries created by this fixture, never legacy data.
+        remapped_file.unlink()
+        remapped_dir.rmdir()
+    return preview(), migration_lease_snapshot(port)
 
 
 def scheduled_questions_probe(port: int, home: Path, definition: dict) -> None:
@@ -1099,6 +1230,7 @@ def run_probe(host: Path) -> None:
                              for item in refreshed["items"]}["user-home"]
                 assert user_home["importable"] is True, user_home
 
+                user_home, migration_before = migration_lease_probe(port, home, legacy)
                 status, headers, body = request(
                     port, "POST", "/api/v1/migrations/legacy",
                     body=json.dumps({
@@ -1145,6 +1277,16 @@ def run_probe(host: Path) -> None:
                 assert (home / "migration/session-prompts/api-legacy/"
                         "s123456789abc.txt").is_file(), home
                 assert legacy.is_dir(), legacy
+
+                migration_after = migration_lease_snapshot(port)
+                assert migration_after["prepare"] > migration_before["prepare"] and (
+                    migration_after["write"] > migration_before["write"] and
+                    migration_after["publish"] > migration_before["publish"] and
+                    migration_after["cleanup"] == migration_before["cleanup"]), migration_after
+                for name in ("first", "tasks", "remapped"):
+                    status, _, body = request(port, "GET",
+                        "/__fixture/migration-lease/free-" + name)
+                    assert status == 200 and json.loads(body)["data"]["available"], body
 
                 # The UI reads bounded summaries and edits through store-wide
                 # ETags, so concurrent agent writes cannot be overwritten.
