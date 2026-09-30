@@ -227,8 +227,8 @@ def write_site(site: Path) -> None:
     shutil.copytree(ROOT / "app/default-home/skills",
                     site / "default-home/skills", dirs_exist_ok=True)
     for relative in (
-        "src/storage/home.c", "src/storage/home_import.inc.c", "src/skills/manager.c",
-        "include/mdo/home.h", "include/mdo/home_import.h", "include/mdo/skills.h",
+        "src/storage/home.c", "src/storage/home_import.inc.c", "src/storage/home_purge.inc.c", "src/skills/manager.c",
+        "include/mdo/home.h", "include/mdo/home_import.h", "include/mdo/home_purge.h", "include/mdo/skills.h",
     ):
         shutil.copy2(ROOT / "app" / relative, site / relative)
     (site / "probe.c").write_text(PROBE_SOURCE, encoding="utf-8")

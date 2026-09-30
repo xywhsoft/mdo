@@ -117,9 +117,9 @@ def write_site(site: Path) -> None:
     (site / "web" / "index.html").write_text("probe", encoding="utf-8")
     (site / "default-home" / "config" / "defaults.json").write_text(
         "builtin-default", encoding="utf-8")
-    for name in ("home.c", "home_import.inc.c"):
+    for name in ("home.c", "home_import.inc.c", "home_purge.inc.c"):
         shutil.copy2(ROOT / "app/src/storage" / name, site / "src/storage" / name)
-    for name in ("home.h", "home_import.h"):
+    for name in ("home.h", "home_import.h", "home_purge.h"):
         shutil.copy2(ROOT / "app/include/mdo" / name, site / "include/mdo" / name)
     (site / "probe.c").write_text(PROBE_SOURCE, encoding="utf-8")
     with socket.socket() as listener:

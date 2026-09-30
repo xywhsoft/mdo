@@ -171,9 +171,9 @@ def write_site(site: Path) -> int:
     (site / "web/index.html").write_text("probe", encoding="utf-8")
     for relative in (
         "default-home/config/defaults.json",
-        "src/storage/home.c", "src/storage/home_import.inc.c", "src/config/config.c",
+        "src/storage/home.c", "src/storage/home_import.inc.c", "src/storage/home_purge.inc.c", "src/config/config.c",
         "src/security/secrets.c", "src/models/catalog.c",
-        "include/mdo/home.h", "include/mdo/home_import.h", "include/mdo/config.h", "include/mdo/models.h",
+        "include/mdo/home.h", "include/mdo/home_import.h", "include/mdo/home_purge.h", "include/mdo/config.h", "include/mdo/models.h",
         "include/mdo/secrets.h", "include/mdo/version.h",
     ):
         shutil.copy2(ROOT / "app" / relative, site / relative)

@@ -3,17 +3,15 @@
 
 #include "projects.h"
 #include "project_lifecycle.h"
+#include "home_purge.h"
 
-#define MDO_PROJECT_PURGE_PATH_CAPACITY 256u
-#define MDO_PROJECT_PURGE_TARGET_LIMIT 1024u
+#define MDO_PROJECT_PURGE_PATH_CAPACITY MDO_HOME_PURGE_PATH_CAPACITY
+#define MDO_PROJECT_PURGE_TARGET_LIMIT MDO_HOME_PURGE_TARGET_LIMIT
 #define MDO_PROJECT_PURGE_NODE_LIMIT 8192u
 #define MDO_PROJECT_PURGE_DEPTH_LIMIT 16u
 
 typedef struct MdoProjectPurgeInventory MdoProjectPurgeInventory;
-typedef struct MdoProjectPurgeTarget {
-    char Path[MDO_PROJECT_PURGE_PATH_CAPACITY];
-    xfileinfo Info; /* no-follow identity captured before traversal */
-} MdoProjectPurgeTarget;
+typedef MdoHomePurgeTarget MdoProjectPurgeTarget;
 
 typedef struct MdoProjectPurgeInventoryInfo {
     MdoProjectInfo Project;

@@ -3,6 +3,7 @@
 
 #include "../../include/mdo/home.h"
 #include "../../include/mdo/home_import.h"
+#include "../../include/mdo/home_purge.h"
 
 #define MDO_RESOURCE_PREFIX "/app/default-home/"
 #define MDO_HOME_ERROR_DOMAIN "mdo.home"
@@ -36,6 +37,7 @@ typedef struct MdoHomeState {
 static MdoHomeState g_MdoHome;
 
 static bool MdoHomeImportRecoverLocked(bool* Published);
+static bool MdoHomePurgeRecoverLocked(void);
 
 static void MdoHomeErrorSet(xerrkind Kind, MdoHomeError Code, cstr Message)
 {
@@ -77,7 +79,8 @@ static bool MdoHomePathValid(cstr Path)
             size_t iLength = (size_t)(p - pSegment);
             if ( pSegment == (const unsigned char*)Path ) {
                 static const char* const Reserved[] = {
-                    ".mdo-import", ".mdo-import-cleanup"
+                    ".mdo-import", ".mdo-import-cleanup",
+                    ".mdo-purge", ".mdo-purge-cleanup"
                 };
                 size_t i, Length = iLength;
                 while ( Length != 0u && (pSegment[Length - 1u] == '.' ||
@@ -299,7 +302,7 @@ static bool MdoHomeWritableLocked(void)
 {
     if ( g_MdoHome.Import == NULL && !g_MdoHome.RestartRequired ) return true;
     MdoHomeErrorSet(XERR_AGAIN, MDO_HOME_ERROR_STATE,
-        g_MdoHome.RestartRequired ? "Home import requires restart before writing" :
+        g_MdoHome.RestartRequired ? "Home storage requires restart before writing" :
         "Home import is in progress");
     return false;
 }
@@ -386,7 +389,8 @@ bool MdoHomeInit(void)
                 "external Home path exists but is not a directory");
             goto fail;
         }
-        if ( !MdoHomeMountLocked() || !MdoHomeImportRecoverLocked(NULL) ) goto fail;
+        if ( !MdoHomeMountLocked() || !MdoHomePurgeRecoverLocked() ||
+             !MdoHomeImportRecoverLocked(NULL) ) goto fail;
     } else {
         pError = xrtGetError();
         if ( pError == NULL || xrtErrorKind(pError) != XERR_NOT_FOUND )
@@ -1000,3 +1004,4 @@ done:
 /* Private part of the same translation unit: it shares the Home mutex/root
  * without exposing them to migration callers or depending on unity ordering. */
 #include "home_import.inc.c"
+#include "home_purge.inc.c"

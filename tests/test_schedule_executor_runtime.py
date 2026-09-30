@@ -531,7 +531,7 @@ def write_site(site: Path, memory_enabled: bool = True) -> None:
         "default-home/modules/agents/builtin_default.c",
         "default-home/skills/project-explorer/SKILL.md",
         "default-home/skills/project-explorer/templates/report.md",
-        "src/storage/home.c", "src/storage/home_import.inc.c", "src/projects/lifecycle.c",
+        "src/storage/home.c", "src/storage/home_import.inc.c", "src/storage/home_purge.inc.c", "src/projects/lifecycle.c",
         "src/config/config.c", "src/security/secrets.c",
         "src/models/catalog.c", "src/skills/manager.c", "src/memory/manager.c",
         "src/modules/manager.c", "src/agents/runtime.c",

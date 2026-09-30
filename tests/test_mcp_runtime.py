@@ -357,8 +357,8 @@ def write_site(site: Path, base: Path) -> tuple[Path, Path]:
     shutil.copy2(ROOT / "app/default-home/config/defaults.json",
                  site / "default-home/config/defaults.json")
     for relative in (
-        "src/storage/home.c", "src/storage/home_import.inc.c", "src/security/secrets.c", "src/mcp/manager.c",
-        "include/mdo/home.h", "include/mdo/home_import.h", "include/mdo/secrets.h", "include/mdo/mcp.h",
+        "src/storage/home.c", "src/storage/home_import.inc.c", "src/storage/home_purge.inc.c", "src/security/secrets.c", "src/mcp/manager.c",
+        "include/mdo/home.h", "include/mdo/home_import.h", "include/mdo/home_purge.h", "include/mdo/secrets.h", "include/mdo/mcp.h",
     ):
         shutil.copy2(ROOT / "app" / relative, site / relative)
     (site / "probe.c").write_text(probe_source(
