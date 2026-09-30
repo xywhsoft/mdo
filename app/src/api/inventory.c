@@ -6,6 +6,7 @@
 #include "../../include/mdo/home.h"
 #include "../../include/mdo/memory.h"
 #include "../../include/mdo/projects.h"
+#include "../../include/mdo/project_purge.h"
 #include "../../include/mdo/runs.h"
 #include "../../include/mdo/schedules.h"
 #include "../../include/mdo/sessions.h"
@@ -463,6 +464,8 @@ bool MdoApiProjectPurgePreviewRoute(MdoApiContext* Context)
     MdoScheduleCatalog* Schedules = NULL;
     MdoRunSnapshot* Runs = NULL;
     MdoMemorySnapshot* Memory = NULL;
+    MdoProjectPurgeInventory* Inventory = NULL;
+    MdoProjectPurgeInventoryInfo InventoryInfo;
     MdoScheduleExecutorSnapshot Executor;
     xwork_error Error;
     xvalue* Data = NULL;
@@ -493,6 +496,8 @@ bool MdoApiProjectPurgePreviewRoute(MdoApiContext* Context)
         return MdoApiProjectReadFailure(Context, &Error);
     if ( !Found ) return MdoApiReplyError(Context, 404u,
         "project_not_found", "The project definition was not found", NULL);
+    Inventory = MdoProjectPurgeInventoryCreate(Id, NULL, &Error);
+    if ( Inventory == NULL || !MdoProjectPurgeInventoryGetInfo(Inventory, &InventoryInfo) ) goto done;
     if ( !MdoApiProjectPreviewPath("projects/%s.json.bak", Id,
             false, &ProjectBackupPresent) ||
          !MdoApiProjectPreviewPath("memory/projects/%s.json", Id,
@@ -587,8 +592,34 @@ bool MdoApiProjectPurgePreviewRoute(MdoApiContext* Context)
             MdoScheduleCatalogGeneration(Schedules)) &&
         MdoApiValueSetUInt(Data, "memory_generation",
             MdoMemorySnapshotGeneration(Memory)) &&
-        MdoApiValueSetBool(Data, "advisory", true);
+        MdoApiValueSetBool(Data, "advisory", true) &&
+        MdoApiValueSetUInt(Data, "target_count", InventoryInfo.Targets) &&
+        MdoApiValueSetUInt(Data, "file_count", InventoryInfo.Files) &&
+        MdoApiValueSetUInt(Data, "directory_count", InventoryInfo.Directories) &&
+        MdoApiValueSetUInt(Data, "total_bytes", InventoryInfo.Bytes) &&
+        MdoApiValueSetBool(Data, "project_draft_present", InventoryInfo.ProjectDraft) &&
+        MdoApiValueSetBool(Data, "project_draft_backup_present", InventoryInfo.ProjectDraftBackup) &&
+        MdoApiValueSetUInt(Data, "schedule_backup_count", InventoryInfo.ScheduleBackups) &&
+        MdoApiValueSetUInt(Data, "schedule_history_count", InventoryInfo.ScheduleHistories) &&
+        MdoApiValueSetBool(Data, "shared_records_retained", true) &&
+        MdoApiValueSetBool(Data, "workspace_files_removed", false);
+    if ( Ok ) {
+        xvalue* Targets = xrtValueArray();
+        Ok = Targets != NULL;
+        for ( Index = 0u; Ok && Index < InventoryInfo.Targets; ++Index ) {
+            MdoProjectPurgeTarget Target;
+            xvalue* Item = xrtValueObject();
+            Ok = Item != NULL && MdoProjectPurgeInventoryAt(Inventory, Index, &Target) &&
+                MdoApiValueSetString(Item, "path", Target.Path) &&
+                MdoApiValueSetString(Item, "type", Target.Info.Type == XFILE_TYPE_DIRECTORY ?
+                    "directory" : "file") && MdoApiValueAppendTake(Targets, &Item);
+            xrtValueRelease(Item);
+        }
+        if ( Ok ) Ok = MdoApiValueSetTake(Data, "targets", &Targets);
+        xrtValueRelease(Targets);
+    }
 done:
+    MdoProjectPurgeInventoryFree(Inventory);
     MdoMemorySnapshotRelease(Memory);
     MdoRunSnapshotRelease(Runs);
     MdoScheduleCatalogRelease(Schedules);

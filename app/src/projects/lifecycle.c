@@ -203,3 +203,16 @@ void MdoProjectLeaseRelease(MdoProjectLease* Lease)
     xrtFree(Lease);
     if ( Dispose ) MdoProjectLifecycleDispose(Registry);
 }
+
+bool MdoProjectLeaseProtects(const MdoProjectLease* Lease,
+    const char* ProjectId, MdoProjectLeaseMode Mode)
+{
+    char Key[MDO_PROJECT_LIFECYCLE_ID_CAPACITY];
+    bool Protected;
+    if ( Lease == NULL || !MdoProjectLifecycleKey(ProjectId, Key) ||
+         Lease->Mode != Mode || Lease->Registry != g_MdoProjectLeases ) return false;
+    xrtMutexLock(Lease->Registry->Lock);
+    Protected = !Lease->Registry->Closed && strcmp(Lease->Entry->Key, Key) == 0;
+    xrtMutexUnlock(Lease->Registry->Lock);
+    return Protected;
+}

@@ -129,8 +129,11 @@ bool MdoApiWorkspaceStateRoute(MdoApiContext* Context)
         Session = MdoSessionLoad(State.ProjectId, State.SessionId, &Error);
         if ( Session == NULL ) return MdoApiReplyError(Context, 404u,
             "session_not_found", "The selected session does not exist", NULL);
+        /* Keep the session's project lease through publication. Releasing it
+         * before this write lets project exclusion race a stale selection. */
+        Ok = MdoWorkspaceStateWrite(&State);
         MdoSessionRelease(Session);
-        if ( !MdoWorkspaceStateWrite(&State) )
+        if ( !Ok )
             return MdoApiReplyError(Context, 503u, "workspace_state_unavailable",
                 "The last session could not be saved", NULL);
     } else if ( !MdoWorkspaceStateRead(&State) )

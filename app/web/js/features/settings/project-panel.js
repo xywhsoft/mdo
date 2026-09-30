@@ -44,11 +44,15 @@ export function createProjectPanel({ panel, projectsStore, modelsStore,
     const rows = [
       [t("project.previewDefinitionBackup", {}, "项目定义备份"),
         presence(data.project_definition_backup_present)],
+      [t("project.previewDraft", {}, "项目新任务草稿"), presence(data.project_draft_present)],
+      [t("project.previewDraftBackup", {}, "项目新任务草稿备份"), presence(data.project_draft_backup_present)],
       [t("project.previewSessions", {}, "会话"), data.session_count],
       [t("project.previewSessionDirectory", {}, "会话数据目录"),
         presence(data.session_directory_present)],
       [t("project.previewSessionRuntime", {}, "已打开的会话运行态"), data.session_runtime_count],
       [t("project.previewSchedules", {}, "关联计划"), data.schedule_count],
+      [t("project.previewScheduleBackups", {}, "关联计划备份"), data.schedule_backup_count],
+      [t("project.previewScheduleHistories", {}, "关联计划历史文件"), data.schedule_history_count],
       [t("project.previewMemoryEntries", {}, "项目记忆条目"), data.project_memory_entry_count],
       [t("project.previewMemoryFile", {}, "项目记忆文件"),
         presence(data.project_memory_present)],
@@ -61,10 +65,23 @@ export function createProjectPanel({ panel, projectsStore, modelsStore,
       [t("project.previewSessionDiagnostics", {}, "本项目会话诊断项"), data.session_diagnostic_count],
       [t("project.previewGlobalSessionDiagnostics", {}, "全局会话诊断项"), data.session_catalog_diagnostic_count_global],
       [t("project.previewScheduleDiagnostics", {}, "全局计划诊断项"), data.schedule_catalog_diagnostic_count_global],
+      [t("project.previewFiles", {}, "候选文件数"), data.file_count],
+      [t("project.previewDirectories", {}, "候选目录数"), data.directory_count],
+      [t("project.previewBytes", {}, "候选文件字节数"), data.total_bytes],
     ];
     for (const [label, value] of rows)
       previewList.append(element("dt", { text: label }),
         element("dd", { text: String(value ?? t("project.unknown", {}, "未知")) }));
+    if (Array.isArray(data.targets)) {
+      const paths = element("ol", { className: "project-preview-paths" });
+      // The server bounds this inventory; every candidate must be reviewable.
+      for (const target of data.targets)
+        paths.append(element("li", {}, [element("code", { text: target.path })]));
+      previewList.append(element("dt", { className: "project-preview-target-label",
+        text: t("project.previewTargets", { count: data.target_count },
+          `候选路径（${data.target_count} 项）`) }),
+        element("dd", { className: "project-preview-targets" }, [paths]));
+    }
     previewList.hidden = false;
     previewStatus.textContent = t("project.previewRevision", { revision: data.revision },
       `项目版本 ${data.revision} · 当前清单仅供核对`);

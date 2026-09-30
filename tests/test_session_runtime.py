@@ -76,7 +76,11 @@ static bool LifecycleProbe(void) {
     first = MdoProjectLeaseAcquire("LifeCycle-Probe.",
         MDO_PROJECT_LEASE_SHARED, &error);
     pin = MdoProjectLeaseRef(first);
-    if (pin == NULL || !LeaseBlocked("lifecycle-probe",
+    if (pin == NULL || !MdoProjectLeaseProtects(pin, "LIFECYCLE-PROBE.",
+            MDO_PROJECT_LEASE_SHARED) ||
+        MdoProjectLeaseProtects(pin, "lifecycle-probe", MDO_PROJECT_LEASE_EXCLUSIVE) ||
+        MdoProjectLeaseProtects(pin, "another-project", MDO_PROJECT_LEASE_SHARED) ||
+        !LeaseBlocked("lifecycle-probe",
             MDO_PROJECT_LEASE_EXCLUSIVE)) goto done;
     MdoProjectLeaseRelease(first); first = NULL;
     if (!LeaseBlocked("lifecycle-probe", MDO_PROJECT_LEASE_EXCLUSIVE)) goto done;
@@ -89,11 +93,14 @@ static bool LifecycleProbe(void) {
     /* Unit closes the old registry while pins survive. A fresh Init owns a
      * separate registry; releasing the old pin cannot unlock the new one. */
     MdoProjectLifecycleUnit();
+    if (MdoProjectLeaseProtects(pin, "lifecycle-probe", MDO_PROJECT_LEASE_SHARED)) goto done;
     if (!LeaseBlocked("lifecycle-probe", MDO_PROJECT_LEASE_SHARED) ||
         !MdoProjectLifecycleInit()) goto done;
     exclusive = MdoProjectLeaseAcquire("lifecycle-probe",
         MDO_PROJECT_LEASE_EXCLUSIVE, &error);
-    if (exclusive == NULL) goto done;
+    if (exclusive == NULL || !MdoProjectLeaseProtects(exclusive, "lifecycle-probe.",
+            MDO_PROJECT_LEASE_EXCLUSIVE) ||
+        MdoProjectLeaseProtects(pin, "lifecycle-probe", MDO_PROJECT_LEASE_SHARED)) goto done;
     MdoProjectLeaseRelease(pin); pin = NULL;
     thread = xrtThreadCreate(LeaseReaderThread, &reader_blocked, 0u);
     if (thread == NULL || xrtThreadWait(thread) != XWAIT_OK) goto done;

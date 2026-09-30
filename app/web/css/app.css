@@ -1280,6 +1280,10 @@ select:focus-visible,
 .project-preview-list[hidden], .project-preview-note[hidden] { display: none; }
 .project-preview-list dt { color: var(--muted); }
 .project-preview-list dd { margin: 0; font-variant-numeric: tabular-nums; text-align: right; }
+.project-preview-list .project-preview-target-label,
+.project-preview-list .project-preview-targets { grid-column: 1 / -1; min-width: 0; text-align: left; }
+.project-preview-paths { margin: 0; padding-inline-start: 18px; }
+.project-preview-paths code { white-space: normal; overflow-wrap: anywhere; }
 #project-purge-preview-status { margin-top: 12px; font-size: 12px; }
 .memory-dialog { width: min(850px, calc(100vw - 28px)); height: min(680px, calc(100dvh - 28px)); max-height: calc(100dvh - 28px); padding: 0; border: 1px solid var(--border-strong); border-radius: var(--radius-md); background: var(--surface-raised); color: var(--ink); box-shadow: var(--shadow-dialog); }
 .memory-dialog::backdrop { background: rgb(0 0 0 / 40%); }

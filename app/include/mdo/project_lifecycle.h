@@ -34,4 +34,10 @@ MdoProjectLease* MdoProjectLeaseAcquire(const char* ProjectId,
 MdoProjectLease* MdoProjectLeaseRef(MdoProjectLease* Lease);
 void MdoProjectLeaseRelease(MdoProjectLease* Lease);
 
+/* The caller must own a live reference. Checks the current registry, project
+ * gate key and exact mode without acquiring a second lease; closed/old
+ * registries never authorize a new transaction. Does not create files. */
+bool MdoProjectLeaseProtects(const MdoProjectLease* Lease,
+    const char* ProjectId, MdoProjectLeaseMode Mode);
+
 #endif

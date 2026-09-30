@@ -49,7 +49,7 @@ static const MdoApiRoute g_MdoApiRoutes[] = {
       "GET, HEAD, PUT, DELETE, OPTIONS", MdoApiProjectRoute, true },
     { "/api/v1/projects/{project}/purge-preview",
       XHTTP_METHOD_GET | XHTTP_METHOD_HEAD,
-      "GET, HEAD, OPTIONS", MdoApiProjectPurgePreviewRoute, false },
+      "GET, HEAD, OPTIONS", MdoApiProjectPurgePreviewRoute, true },
     { "/api/v1/projects/{project}/workspace/files",
       XHTTP_METHOD_GET | XHTTP_METHOD_HEAD,
       "GET, HEAD, OPTIONS", MdoApiProjectWorkspaceFilesRoute, false },

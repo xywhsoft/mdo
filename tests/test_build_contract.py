@@ -77,6 +77,7 @@ class BuildContractTests(unittest.TestCase):
             "src/agents/runtime.c",
             "src/asks/manager.c",
             "src/projects/manager.c",
+            "src/projects/purge_inventory.c",
             "src/schedules/manager.c",
             "src/schedules/executor.c",
             "src/sessions/events.c",

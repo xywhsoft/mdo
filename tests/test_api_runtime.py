@@ -210,6 +210,7 @@ def write_site(base: Path, port: int) -> Path:
 #include "../../include/mdo/home.h"
 #include "../../include/mdo/sessions.h"
 #include "../../include/mdo/project_lifecycle.h"
+#include "../../include/mdo/project_purge.h"
 #include "../../include/mdo/projects.h"
 #include <xllm-session.h>
 
@@ -217,6 +218,11 @@ static xthread* g_MdoApiProbeApprovalThread;
 static xmutex* g_MdoApiProbeLeaseLock;
 static MdoProjectLease* g_MdoApiProbeLease;
 static xatomic32 g_MdoApiProbeLeaseChecks, g_MdoApiProbeLeaseViolations;
+static xatomic32 g_MdoApiPurgeProbeSmallLimit;
+size_t MdoApiPurgeProbeLimit(void) {
+    return xrtAtomic32Load(&g_MdoApiPurgeProbeSmallLimit, XMEMORY_ACQUIRE) ?
+        4u : MDO_PROJECT_PURGE_NODE_LIMIT;
+}
 
 /* Test-only checkpoints are inserted after session release and immediately
  * before definition publication in the copied app, never in the shipped app. */
@@ -274,6 +280,35 @@ static bool MdoApiProbeLeaseControl(XS_HttpReq* Request)
                 &g_MdoApiProbeLeaseChecks, XMEMORY_ACQUIRE)) &&
             MdoApiValueSetUInt(Data, "violations", xrtAtomic32Load(
                 &g_MdoApiProbeLeaseViolations, XMEMORY_ACQUIRE));
+    } else if ( MdoApiViewEqualText(Target,
+            "/__fixture/project-lease/purge-limit") ) {
+        xrtAtomic32Store(&g_MdoApiPurgeProbeSmallLimit, 1u, XMEMORY_RELEASE);
+    } else if ( MdoApiViewEqualText(Target,
+            "/__fixture/project-lease/purge-reset-limit") ) {
+        xrtAtomic32Store(&g_MdoApiPurgeProbeSmallLimit, 0u, XMEMORY_RELEASE);
+    } else if ( MdoApiViewEqualText(Target,
+            "/__fixture/project-lease/purge-owner") ) {
+        MdoProjectLease* Owner = MdoProjectLeaseAcquire("ui-workspace",
+            MDO_PROJECT_LEASE_EXCLUSIVE, &Error);
+        MdoProjectLease* Wrong = MdoProjectLeaseAcquire("other-owner",
+            MDO_PROJECT_LEASE_EXCLUSIVE, &Error);
+        MdoProjectPurgeInventory* Inventory = MdoProjectPurgeInventoryCreate(
+            "ui-workspace", Owner, &Error);
+        Ok = Owner != NULL && Wrong != NULL && Inventory != NULL;
+        MdoProjectPurgeInventoryFree(Inventory);
+        Inventory = MdoProjectPurgeInventoryCreate("ui-workspace", NULL, &Error);
+        Ok = Ok && Inventory == NULL && Error.eCode == XWORK_ERROR_CONTEXT;
+        MdoProjectPurgeInventoryFree(Inventory);
+        Inventory = MdoProjectPurgeInventoryCreate("ui-workspace", Wrong, &Error);
+        Ok = Ok && Inventory == NULL && Error.eCode == XWORK_ERROR_INVALID_ARGUMENT;
+        MdoProjectPurgeInventoryFree(Inventory);
+        MdoProjectLeaseRelease(Wrong);
+        MdoProjectLeaseRelease(Owner);
+        Owner = MdoProjectLeaseAcquire("ui-workspace", MDO_PROJECT_LEASE_SHARED, &Error);
+        Inventory = MdoProjectPurgeInventoryCreate("ui-workspace", Owner, NULL);
+        Ok = Ok && Owner != NULL && Inventory == NULL;
+        MdoProjectPurgeInventoryFree(Inventory);
+        MdoProjectLeaseRelease(Owner);
     } else if ( MdoApiViewEqualText(Target,
             "/__fixture/project-lease/direct") ) {
         MdoProjectCreateOptionsInit(&Options);
@@ -504,6 +539,7 @@ done:
         "        g_MdoApiProbeLeaseLock = xrtMutexCreate();\n"
         "        xrtAtomic32Init(&g_MdoApiProbeLeaseChecks, 0u);\n"
         "        xrtAtomic32Init(&g_MdoApiProbeLeaseViolations, 0u);\n"
+        "        xrtAtomic32Init(&g_MdoApiPurgeProbeSmallLimit, 0u);\n"
         "        MdoApiProbeMigrationInit();\n"
         "        MdoApiProbeCreateTasks();\n"
         "        g_MdoApiProbeApprovalThread = xrtThreadCreate(\n"
@@ -585,6 +621,29 @@ done:
     draft_text = draft_text[:route_start] + hooked_route + draft_text[route_end:]
     draft_text = "bool MdoApiProbeLeaseCheckpoint(const char* ProjectId);\n" + draft_text
     draft_path.write_text(draft_text, encoding="utf-8", newline="\n")
+    selection_path = base / "src/api/workspace_state.c"
+    selection_text = selection_path.read_text(encoding="utf-8")
+    publication = "        Ok = MdoWorkspaceStateWrite(&State);"
+    assert selection_text.count(publication) == 1
+    selection_text = "bool MdoApiProbeLeaseCheckpoint(const char* ProjectId);\n" + selection_text
+    selection_text = selection_text.replace(publication,
+        "        Ok = MdoApiProbeLeaseCheckpoint(State.ProjectId) &&\n"
+        "            MdoWorkspaceStateWrite(&State);", 1)
+    selection_path.write_text(selection_text, encoding="utf-8", newline="\n")
+    inventory_path = base / "src/api/inventory.c"
+    inventory_text = inventory_path.read_text(encoding="utf-8")
+    inventory_text = inventory_text.replace(
+        "    Inventory = MdoProjectPurgeInventoryCreate(Id, NULL, &Error);",
+        "    Inventory = MdoProjectPurgeInventoryCreate(Id, NULL, &Error);\n"
+        "    if ( Inventory == NULL ) printf(\"purge_inventory_failure=%s\\n\", Error.sMessage);", 1)
+    inventory_path.write_text(inventory_text, encoding="utf-8", newline="\n")
+    purge_path = base / "src/projects/purge_inventory.c"
+    purge_text = purge_path.read_text(encoding="utf-8")
+    budget = "++Inventory->Nodes > MDO_PROJECT_PURGE_NODE_LIMIT"
+    assert purge_text.count(budget) == 1
+    purge_text = purge_text.replace(budget, "++Inventory->Nodes > MdoApiPurgeProbeLimit()")
+    purge_text = "#include <stddef.h>\nsize_t MdoApiPurgeProbeLimit(void);\n" + purge_text
+    purge_path.write_text(purge_text, encoding="utf-8", newline="\n")
     project_path = base / "src/projects/manager.c"
     project_text = project_path.read_text(encoding="utf-8")
     publication = "    if ( !MdoHomeAtomicWrite(Path, Json, Size, false) ) {"
@@ -756,6 +815,7 @@ def project_lease_exclusion(port: int, home: Path, session_id: str) -> None:
     session = prefix + "/sessions/" + session_id
     targets = [
         ("GET", prefix), ("PUT", prefix), ("DELETE", prefix),
+        ("GET", prefix + "/purge-preview"),
         ("GET", prefix + "/draft"), ("PUT", prefix + "/draft"),
         ("GET", session + "/draft"), ("PUT", session + "/draft"),
         ("POST", session + "/draft/submissions"),
@@ -854,6 +914,21 @@ def project_lease_roundtrip(port: int, home: Path) -> None:
             assert status == expected, (path, status, body)
             assert request(port, "GET", fixture + "free")[0] == 200
     project_lease_exclusion(port, home, session_id)
+    selected = {"project_id": "lease-probe", "session_id": session_id}
+    status, _, body = request(port, "PUT", "/api/v1/workspace-state",
+        body=json.dumps(selected).encode(), headers={"Content-Type": "application/json"})
+    assert status == 200, (status, body)
+    assert request(port, "GET", fixture + "free")[0] == 200
+    before = (home / "data/workspace-state.json").read_bytes()
+    assert request(port, "POST", fixture + "acquire")[0] == 200
+    try:
+        status, _, _ = request(port, "PUT", "/api/v1/workspace-state",
+            body=json.dumps(selected).encode(), headers={"Content-Type": "application/json"})
+        assert status == 404
+        assert (home / "data/workspace-state.json").read_bytes() == before
+    finally:
+        assert request(port, "POST", fixture + "release")[0] == 200
+    assert request(port, "GET", fixture + "free")[0] == 200
     # Project mutation failures must release their independently acquired lease.
     status, _, body = request(port, "GET", project)
     assert status == 200, (status, body)
@@ -877,6 +952,143 @@ def project_lease_roundtrip(port: int, home: Path) -> None:
     evidence = json.loads(body)["data"]
     assert status == 200 and evidence["checks"] >= 9 and (
         evidence["violations"] == 0), evidence
+
+
+def purge_inventory_probe(port: int, home: Path, workspace: Path) -> None:
+    """Check complete read-only candidates and bounded fail-closed scans."""
+    preview_path = "/api/v1/projects/ui-workspace/purge-preview"
+    controls = "/__fixture/project-lease/"
+    draft = home / "data/project-drafts/ui-workspace.json"
+    schedule = home / "schedules/purge-preview-schedule.json"
+    backup = schedule.with_suffix(".json.bak")
+    history = home / "schedules/history/purge-preview-schedule.jsonl"
+    sidecar = home / "migration/session-prompts/ui-workspace"
+
+    def files() -> dict[str, bytes]:
+        return {str(path.relative_to(home)): path.read_bytes()
+                for path in home.rglob("*") if path.is_file() and
+                path.name not in (".mdo.lock", ".writer.lock")}
+
+    def unavailable() -> None:
+        status, _, body = request(port, "GET", preview_path)
+        document = json.loads(body)
+        assert status == 503 and document["error"]["code"] == (
+            "purge_preview_unavailable"), (status, body)
+        assert "data" not in document or document["data"] is None, document
+
+    status, _, body = request(port, "PUT",
+        "/api/v1/projects/ui-workspace/draft",
+        body=json.dumps({"revision": 0, "text": "Unsaved project input"}).encode(),
+        headers={"Content-Type": "application/json"})
+    assert status == 200, (status, body)
+    draft.with_suffix(".json.bak").write_bytes(draft.read_bytes())
+    backup.write_bytes(schedule.read_bytes())
+    history.parent.mkdir(parents=True, exist_ok=True)
+    history.write_text('{"fixture":"owned history"}\n', encoding="utf-8")
+    (sidecar / "prompt.txt").write_text("Owned migration prompt", encoding="utf-8")
+    foreign = workspace / "purge-inventory-sentinel.txt"
+    foreign.write_bytes(b"User workspace must remain unchanged")
+    foreign_bytes = foreign.read_bytes()
+    try:
+        before = files()
+        status, _, body = request(port, "GET", preview_path)
+        assert status == 200, (status, body)
+        preview = json.loads(body)["data"]
+        paths = [item["path"] for item in preview["targets"]]
+        expected = sorted([
+            "projects/ui-workspace.json", "projects/ui-workspace.json.bak",
+            "data/project-drafts/ui-workspace.json", "data/project-drafts/ui-workspace.json.bak",
+            "memory/projects/ui-workspace.json", "memory/projects/ui-workspace.json.bak",
+            "sessions/ui-workspace", "migration/session-prompts/ui-workspace",
+            "schedules/purge-preview-schedule.json", "schedules/purge-preview-schedule.json.bak",
+            "schedules/history/purge-preview-schedule.jsonl",
+        ])
+        assert paths == expected and preview["target_count"] == len(expected), preview
+        nodes = []
+        for relative in paths:
+            root = home / relative
+            nodes.append(root)
+            if root.is_dir():
+                nodes.extend(root.rglob("*"))
+        assert preview["file_count"] == sum(path.is_file() for path in nodes), preview
+        assert preview["directory_count"] == sum(path.is_dir() for path in nodes), preview
+        assert preview["total_bytes"] == sum(path.stat().st_size for path in nodes
+                                              if path.is_file()), preview
+        assert preview["project_draft_present"] and preview["project_draft_backup_present"]
+        assert preview["schedule_backup_count"] == 1 and preview["schedule_history_count"] == 1
+        assert preview["shared_records_retained"] and not preview["workspace_files_removed"]
+        assert request(port, "HEAD", preview_path)[0] == 200
+        assert request(port, "POST", controls + "purge-owner")[0] == 200
+        assert files() == before and foreign.read_bytes() == foreign_bytes
+        # A reassigned schedule's previous backup is still owned by its
+        # current namespace, never attributed from the old project field.
+        previous = json.loads(backup.read_bytes())
+        previous["project_id"] = "previous-owner"
+        backup.write_text(json.dumps(previous), encoding="utf-8")
+        try:
+            status, _, body = request(port, "GET", preview_path)
+            assert status == 200, (status, body)
+            assert json.loads(body)["data"]["schedule_backup_count"] == 1
+        finally:
+            backup.write_bytes(schedule.read_bytes())
+        assert request(port, "POST", controls + "purge-limit")[0] == 200
+        try:
+            unavailable()
+            assert files() == before
+        finally:
+            assert request(port, "POST", controls + "purge-reset-limit")[0] == 200
+        for orphan in (home / "schedules/orphan.json.bak",
+                       home / "schedules/history/orphan.jsonl"):
+            orphan.write_bytes(b"Unattributable data")
+            try:
+                unchanged = files()
+                unavailable()
+                assert files() == unchanged
+            finally:
+                orphan.unlink()
+        primary_bytes = schedule.read_bytes()
+        altered = json.loads(primary_bytes)
+        altered["project_id"] = "different-owner"
+        schedule.write_text(json.dumps(altered), encoding="utf-8")
+        try:
+            unavailable()
+        finally:
+            schedule.write_bytes(primary_bytes)
+        # Only 18 empty directories exercise the production depth cap; the
+        # copied-source node cap above uses four nodes, never a load test.
+        depth_root = sidecar / "depth-probe"
+        deep = depth_root
+        for _ in range(17):
+            deep = deep / "d"
+        deep.mkdir(parents=True)
+        try:
+            unavailable()
+        finally:
+            assert depth_root.resolve().is_relative_to(home.resolve())
+            shutil.rmtree(depth_root)
+        link = sidecar / "foreign-link"
+        try:
+            link.symlink_to(workspace, target_is_directory=True)
+        except OSError:
+            if os.name != "nt":
+                raise
+            subprocess.run(["cmd", "/c", "mklink", "/J", str(link), str(workspace)],
+                           check=True, capture_output=True)
+        try:
+            unavailable()
+            assert foreign.read_bytes() == foreign_bytes
+        finally:
+            if link.is_symlink():
+                link.unlink()
+            else:
+                link.rmdir()  # remove the owned junction, never its target
+        assert request(port, "POST", controls + "purge-owner")[0] == 200
+        assert files() == before and foreign.read_bytes() == foreign_bytes
+    finally:
+        backup.unlink(missing_ok=True)
+        history.unlink(missing_ok=True)
+        (sidecar / "prompt.txt").unlink(missing_ok=True)
+        foreign.unlink(missing_ok=True)
 
 
 def migration_lease_snapshot(port: int) -> dict:
@@ -1399,6 +1611,26 @@ def run_probe(host: Path) -> None:
                         "/__fixture/migration-lease/free-" + name)
                     assert status == 200 and json.loads(body)["data"]["available"], body
 
+                # Publication requires restart. Do not run the rest of the API
+                # suite against managers from before the imported generation.
+                # Preserve the complete migrated fixture and start fresh here.
+                process.terminate()
+                try:
+                    process.wait(timeout=3)
+                except subprocess.TimeoutExpired:
+                    process.kill()
+                    process.wait(timeout=3)
+                imported_home = base / "migration-evidence-home"
+                assert home.resolve().parent == base.resolve()
+                assert imported_home.resolve().parent == base.resolve()
+                home.rename(imported_home)
+                process = subprocess.Popen(
+                    [str(host), str(config_path), "--", "--home", str(home)],
+                    cwd=base, env=environment, stdout=log, stderr=subprocess.STDOUT,
+                    creationflags=subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0)
+                wait_ready(port, process)
+                assert not home.exists(), home
+
                 # The UI reads bounded summaries and edits through store-wide
                 # ETags, so concurrent agent writes cannot be overwritten.
                 memory_path = "/api/v1/memory/projects/api-project"
@@ -1567,6 +1799,7 @@ def run_probe(host: Path) -> None:
                 assert headers["etag"] == '"mdo-project-ui-workspace-1"'
                 preview_path = project_path + "/purge-preview"
                 status, headers, body = request(port, "GET", preview_path)
+                assert status == 200, (status, body)
                 preview = json.loads(body)["data"]
                 assert status == 200 and headers["etag"] == (
                     '"mdo-project-ui-workspace-1"'), (status, headers, body)
@@ -1641,6 +1874,7 @@ def run_probe(host: Path) -> None:
                 finally:
                     memory_backup.rmdir()
                     memory_backup.write_bytes(memory_file.read_bytes())
+                purge_inventory_probe(port, home, project_workspace)
                 status, _, body = request(port, "GET",
                     "/api/v1/projects/missing/purge-preview")
                 assert status == 404 and json.loads(body)["error"]["code"] == (
