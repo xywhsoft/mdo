@@ -594,6 +594,8 @@
   "dock.approval.summary": "{risk} · {effects} · {seconds} sec",
   "dock.approval.unknownRisk": "Unknown risk",
   "dock.approval.noEffects": "No effects declared",
+  "dock.expandDecision": "Expand decision",
+  "dock.collapseDecision": "Collapse decision",
   "dock.ask.placeholder": "Or enter your own answer",
   "dock.ask.answerLabel": "Answer question",
   "dock.ask.submit": "Submit answer",

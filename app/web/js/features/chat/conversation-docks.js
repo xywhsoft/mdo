@@ -157,7 +157,17 @@ function approvalSummary(item) {
   });
 }
 
-function approvalCard(item, argumentsOpen, onChanged) {
+function decisionHeader(title, onExpand) {
+  const expand = element("button", { className: "decision-dock-expand",
+    text: t("dock.expandDecision"), attrs: { type: "button",
+      "aria-expanded": "false", "aria-controls": "conversation-docks" } });
+  if (title.dataset.dockFocus)
+    expand.dataset.dockFocus = `${title.dataset.dockFocus}/expand`;
+  expand.addEventListener("click", onExpand);
+  return element("div", { className: "decision-dock-header" }, [title, expand]);
+}
+
+function approvalCard(item, argumentsOpen, onChanged, onExpand) {
   const key = String(item.id);
   const card = element("section", { className: "conversation-dock",
     attrs: { "data-approval-id": key } });
@@ -198,9 +208,11 @@ function approvalCard(item, argumentsOpen, onChanged) {
     if (argumentsView.isConnected) argumentsOpen.set(key, argumentsView.open);
   });
   const summary = element("p", { text: approvalSummary(item) });
+  const title = element("h3", { text: t("dock.approval.title",
+    { tool: item.tool || t("dock.approval.tool") }),
+    attrs: { tabindex: "-1", "data-dock-focus": `approval/${key}/title` } });
   card.append(
-    element("h3", { text: t("dock.approval.title", { tool: item.tool || t("dock.approval.tool") }),
-      attrs: { tabindex: "-1", "data-dock-focus": `approval/${key}/title` } }),
+    decisionHeader(title, () => onExpand(card)),
     summary,
     resources,
     argumentsView,
@@ -218,7 +230,7 @@ function approvalCard(item, argumentsOpen, onChanged) {
 }
 
 function askCard(item, projectId, sessionId, deciding, answered, drafts,
-  onChanged, onSettled) {
+  onChanged, onSettled, onExpand) {
   const key = `${projectId}/${sessionId}/${item.id}`;
   const card = element("section", { className: "conversation-dock ask-dock" });
   const actions = element("div", { className: "ask-dock-options" });
@@ -293,7 +305,7 @@ function askCard(item, projectId, sessionId, deciding, answered, drafts,
   });
   updateValidity();
   const title = element("h3", { text: t("dock.ask.title"), attrs: { tabindex: "-1" } });
-  card.append(title,
+  card.append(decisionHeader(title, () => onExpand(card)),
     element("p", { className: "ask-dock-question", text: item.question }),
     actions, element("div", { className: "ask-dock-free" }, [input, submit]),
     hint);
@@ -329,6 +341,26 @@ export function createConversationDocks({ container, navigation, tasksStore, app
   let availableHeight = 0;
   let revealFrame = 0;
   let userMovedDock = false;
+  function setDecisionExpanded(expanded) {
+    if (!composerRegion) return;
+    composerRegion.toggleAttribute("data-decision-expanded", expanded);
+    for (const button of container.querySelectorAll(".decision-dock-expand")) {
+      const label = t(expanded ? "dock.collapseDecision" :
+        "dock.expandDecision");
+      if (button.textContent !== label) button.textContent = label;
+      if (button.getAttribute("aria-expanded") !== String(expanded))
+        button.setAttribute("aria-expanded", String(expanded));
+    }
+  }
+  function toggleDecisionExpanded(card) {
+    const expanded = !composerRegion?.hasAttribute("data-decision-expanded");
+    setDecisionExpanded(expanded);
+    if (expanded) {
+      container.scrollTop += card.getBoundingClientRect().top -
+        container.getBoundingClientRect().top;
+      scheduleReveal(card, true);
+    }
+  }
   const noteUserScroll = () => { userMovedDock = true; };
   const onDockWheel = (event) => {
     noteUserScroll();
@@ -355,6 +387,13 @@ export function createConversationDocks({ container, navigation, tasksStore, app
   container.addEventListener("touchmove", noteUserScroll, { passive: true });
   container.addEventListener("pointerdown", noteUserScroll);
   container.addEventListener("keydown", noteKeyScroll);
+  const collapseOnEscape = (event) => {
+    if (event.key !== "Escape" || event.defaultPrevented ||
+        !composerRegion?.hasAttribute("data-decision-expanded")) return;
+    event.preventDefault();
+    setDecisionExpanded(false);
+  };
+  container.addEventListener("keydown", collapseOnEscape);
 
   function revealDecision(arrived = null, force = false) {
     if (container.hidden) return;
@@ -415,6 +454,15 @@ export function createConversationDocks({ container, navigation, tasksStore, app
     const changed = nextHeight !== availableHeight;
     availableHeight = nextHeight;
     container.style.setProperty("--dock-available-height", `${nextHeight}px`);
+    const cramped = composerRegion?.hasAttribute("data-decision-pending") &&
+      nextHeight < 120 && container.scrollHeight > nextHeight + 4;
+    const hiddenFocus = !cramped &&
+      !composerRegion?.hasAttribute("data-decision-expanded") &&
+      document.activeElement?.matches?.(".decision-dock-expand")
+      ? document.activeElement.closest(".conversation-dock")?.querySelector("h3")
+      : null;
+    composerRegion?.toggleAttribute("data-decision-cramped", Boolean(cramped));
+    hiddenFocus?.focus({ preventScroll: true });
     if (revealOnResize && changed && !container.hidden) scheduleReveal();
   }
   syncAvailableHeight();
@@ -489,7 +537,8 @@ export function createConversationDocks({ container, navigation, tasksStore, app
       const contentKey = approvalContentKey(item);
       let cached = approvalCards.get(key);
       if (!cached || cached.contentKey !== contentKey) {
-        cached = { ...approvalCard(item, argumentsOpen, onChanged), contentKey };
+        cached = { ...approvalCard(item, argumentsOpen, onChanged,
+          toggleDecisionExpanded), contentKey };
         approvalCards.set(key, cached);
       }
       cached.sync(item);
@@ -518,7 +567,8 @@ export function createConversationDocks({ container, navigation, tasksStore, app
       nextDecisions.add(`ask/${key}`);
       if (!askNodes.has(key)) {
         const card = askCard(item, selected.projectId, sessionId,
-          askDeciding, askAnswered, drafts, onChanged, render);
+          askDeciding, askAnswered, drafts, onChanged, render,
+          toggleDecisionExpanded);
         askNodes.set(key, card);
       } else askNodes.get(key).sync();
       askCardsInOrder.push(askNodes.get(key).node);
@@ -543,6 +593,8 @@ export function createConversationDocks({ container, navigation, tasksStore, app
       !approvals.length && !asks.length;
     composerRegion?.toggleAttribute("data-decision-pending",
       Boolean(approvals.length || asks.length));
+    setDecisionExpanded(Boolean(approvals.length || asks.length) &&
+      composerRegion?.hasAttribute("data-decision-expanded"));
     syncAvailableHeight();
     const arrived = newApproval ?? newAsk;
     const keepEditor = editor?.isConnected;
@@ -601,7 +653,10 @@ export function createConversationDocks({ container, navigation, tasksStore, app
     container.removeEventListener("touchmove", noteUserScroll);
     container.removeEventListener("pointerdown", noteUserScroll);
     container.removeEventListener("keydown", noteKeyScroll);
+    container.removeEventListener("keydown", collapseOnEscape);
     composerRegion?.removeAttribute("data-decision-pending");
+    composerRegion?.removeAttribute("data-decision-cramped");
+    composerRegion?.removeAttribute("data-decision-expanded");
     unsubscribers.forEach((unsubscribe) => unsubscribe());
   };
 }

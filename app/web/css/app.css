@@ -673,6 +673,9 @@ select:focus-visible,
 .conversation-dock-stack { display: contents; }
 .conversation-dock { min-width: 0; padding: 12px 14px; border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--surface-raised); }
 .conversation-dock h3 { margin: 0 0 7px; font-size: 13px; font-weight: 650; }
+.decision-dock-header { display: flex; min-width: 0; align-items: start; gap: 8px; margin-bottom: 7px; }
+.decision-dock-header h3 { flex: 1; min-width: 0; margin: 0; }
+.decision-dock-expand { display: none; }
 .conversation-dock p { margin: 0 0 8px; color: var(--muted); font-size: 12px; overflow-wrap: anywhere; }
 .conversation-dock-list { display: grid; gap: 7px; margin: 0; padding: 0; list-style: none; }
 .conversation-dock-list li { display: flex; gap: 9px; align-items: baseline; font-size: 12px; }
@@ -1452,6 +1455,22 @@ select:focus-visible,
   .timeline-artifact-preview summary { min-height: 40px; }
   .conversation-docks { width: calc(100% - 26px); }
   .composer-region > .conversation-docks { width: calc(100% - 18px); }
+  .composer-region:is([data-decision-cramped], [data-decision-expanded])
+    .decision-dock-expand { display: inline-flex; min-height: 40px; align-items: center; flex: 0 0 auto; padding: 0 8px; border: 1px solid var(--border-strong); border-radius: 7px; background: var(--surface-raised); color: var(--ink); font: inherit; font-size: 11px; cursor: pointer; }
+  .composer-region[data-decision-expanded] > .conversation-docks {
+    position: fixed; z-index: 45;
+    top: calc(var(--app-visual-top, 0px) + 52px);
+    left: 9px; width: calc(100vw - 18px);
+    height: calc(var(--app-visual-height, 100dvh) - 60px);
+    max-height: none; box-sizing: border-box; margin: 0; padding: 6px;
+    transform: none; border: 1px solid var(--border-strong);
+    border-radius: var(--radius-md); background: var(--surface-raised);
+    box-shadow: 0 8px 30px rgb(0 0 0 / 18%);
+  }
+  .composer-region[data-decision-expanded] .decision-dock-header {
+    position: sticky; top: -6px; z-index: 1;
+    padding: 4px 0; background: var(--surface-raised);
+  }
   .todo-toggle, .conversation-dock-actions button,
   .ask-dock-options button, .ask-dock-free button { min-height: 40px; }
   .approval-arguments summary { min-height: 40px; padding-top: 12px; padding-bottom: 12px; }

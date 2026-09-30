@@ -594,6 +594,8 @@
   "dock.approval.summary": "{risk} · {effects} · {seconds} с",
   "dock.approval.unknownRisk": "Неизвестный риск",
   "dock.approval.noEffects": "Влияние не указано",
+  "dock.expandDecision": "Развернуть решение",
+  "dock.collapseDecision": "Свернуть решение",
   "dock.ask.placeholder": "Или введите свой ответ",
   "dock.ask.answerLabel": "Ответить на вопрос",
   "dock.ask.submit": "Отправить ответ",
