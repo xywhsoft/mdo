@@ -38,13 +38,24 @@ export function createProjectPanel({ panel, projectsStore, modelsStore,
   function showPreview(data) {
     previewData = data;
     clear(previewList);
+    const presence = (present) => typeof present !== "boolean"
+      ? t("project.unknown", {}, "未知") : present
+        ? t("project.exists", {}, "存在") : t("project.none", {}, "无");
     const rows = [
+      [t("project.previewDefinitionBackup", {}, "项目定义备份"),
+        presence(data.project_definition_backup_present)],
       [t("project.previewSessions", {}, "会话"), data.session_count],
+      [t("project.previewSessionDirectory", {}, "会话数据目录"),
+        presence(data.session_directory_present)],
       [t("project.previewSessionRuntime", {}, "已打开的会话运行态"), data.session_runtime_count],
       [t("project.previewSchedules", {}, "关联计划"), data.schedule_count],
       [t("project.previewMemoryEntries", {}, "项目记忆条目"), data.project_memory_entry_count],
-      [t("project.previewMemoryFile", {}, "项目记忆文件"), data.project_memory_present
-        ? t("project.exists", {}, "存在") : t("project.none", {}, "无")],
+      [t("project.previewMemoryFile", {}, "项目记忆文件"),
+        presence(data.project_memory_present)],
+      [t("project.previewMemoryBackup", {}, "项目记忆备份"),
+        presence(data.project_memory_backup_present)],
+      [t("project.previewMigrationSidecar", {}, "旧版会话提示目录"),
+        presence(data.migration_sidecar_present)],
       [t("project.previewInteractiveRuns", {}, "本项目交互运行"), data.active_interactive_run_count],
       [t("project.previewScheduledRuns", {}, "全局计划运行"), data.active_scheduled_run_count_global],
       [t("project.previewSessionDiagnostics", {}, "本项目会话诊断项"), data.session_diagnostic_count],

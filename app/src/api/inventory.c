@@ -432,12 +432,24 @@ bool MdoApiProjectRoute(MdoApiContext* Context)
     return MdoApiProjectReply(Context, 200u, &Info);
 }
 
+static bool MdoApiProjectPreviewPath(cstr Format, cstr Id,
+    bool Directory, bool* pPresent)
+{
+    char Path[128];
+    xfileinfo Info;
+    int Written = snprintf(Path, sizeof(Path), Format, Id);
+
+    if ( Written <= 0 || (size_t)Written >= sizeof(Path) ||
+         !MdoHomeExternalStat(Path, pPresent, &Info) ) return false;
+    return !*pPresent || Info.Type == (Directory ?
+        XFILE_TYPE_DIRECTORY : XFILE_TYPE_FILE);
+}
+
 /* This is an advisory inventory, not an authorization to remove files.  A
  * future purge transaction must rescan while holding all affected stores. */
 bool MdoApiProjectPurgePreviewRoute(MdoApiContext* Context)
 {
     char Id[MDO_PROJECT_ID_CAPACITY] = { 0 };
-    char MemoryPath[96];
     char Tag[128];
     MdoProjectInfo Project;
     MdoSessionCatalog* Sessions = NULL;
@@ -445,7 +457,6 @@ bool MdoApiProjectPurgePreviewRoute(MdoApiContext* Context)
     MdoRunSnapshot* Runs = NULL;
     MdoMemorySnapshot* Memory = NULL;
     MdoScheduleExecutorSnapshot Executor;
-    xfileinfo MemoryInfo;
     xwork_error Error;
     xvalue* Data = NULL;
     size_t SessionCount = 0u;
@@ -457,8 +468,11 @@ bool MdoApiProjectPurgePreviewRoute(MdoApiContext* Context)
     size_t Index;
     bool Found = false;
     bool MemoryPresent = false;
+    bool ProjectBackupPresent = false;
+    bool MemoryBackupPresent = false;
+    bool SessionDirectoryPresent = false;
+    bool MigrationSidecarPresent = false;
     bool Ok = false;
-    int Written;
 
     if ( Context->ParamCount != 1u || Context->Params[0].Size == 0u ||
          Context->Params[0].Size >= sizeof(Id) )
@@ -472,11 +486,16 @@ bool MdoApiProjectPurgePreviewRoute(MdoApiContext* Context)
         return MdoApiProjectReadFailure(Context, &Error);
     if ( !Found ) return MdoApiReplyError(Context, 404u,
         "project_not_found", "The project definition was not found", NULL);
-    Written = snprintf(MemoryPath, sizeof(MemoryPath),
-        "memory/projects/%s.json", Id);
-    if ( Written <= 0 || (size_t)Written >= sizeof(MemoryPath) ) goto done;
-    if ( !MdoHomeExternalStat(MemoryPath, &MemoryPresent, &MemoryInfo) ||
-         (MemoryPresent && MemoryInfo.Type != XFILE_TYPE_FILE) ) goto done;
+    if ( !MdoApiProjectPreviewPath("projects/%s.json.bak", Id,
+            false, &ProjectBackupPresent) ||
+         !MdoApiProjectPreviewPath("memory/projects/%s.json", Id,
+            false, &MemoryPresent) ||
+         !MdoApiProjectPreviewPath("memory/projects/%s.json.bak", Id,
+            false, &MemoryBackupPresent) ||
+         !MdoApiProjectPreviewPath("sessions/%s", Id,
+            true, &SessionDirectoryPresent) ||
+         !MdoApiProjectPreviewPath("migration/session-prompts/%s", Id,
+            true, &MigrationSidecarPresent) ) goto done;
     Sessions = MdoSessionCatalogSnapshot(&Error);
     if ( Sessions == NULL ) goto done;
     Schedules = MdoScheduleCatalogSnapshot(&Error);
@@ -541,6 +560,14 @@ bool MdoApiProjectPurgePreviewRoute(MdoApiContext* Context)
             "schedule_catalog_diagnostic_count_global",
             MdoScheduleCatalogDiagnosticCount(Schedules)) &&
         MdoApiValueSetBool(Data, "project_memory_present", MemoryPresent) &&
+        MdoApiValueSetBool(Data, "project_definition_backup_present",
+            ProjectBackupPresent) &&
+        MdoApiValueSetBool(Data, "project_memory_backup_present",
+            MemoryBackupPresent) &&
+        MdoApiValueSetBool(Data, "session_directory_present",
+            SessionDirectoryPresent) &&
+        MdoApiValueSetBool(Data, "migration_sidecar_present",
+            MigrationSidecarPresent) &&
         MdoApiValueSetUInt(Data, "project_memory_entry_count",
             MdoMemorySnapshotCount(Memory)) &&
         MdoApiValueSetUInt(Data, "active_interactive_run_count",

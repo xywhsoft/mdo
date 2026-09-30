@@ -910,6 +910,10 @@ def run_probe(host: Path) -> None:
                 assert preview["session_count"] == 1, preview
                 assert preview["schedule_count"] == 0, preview
                 assert preview["project_memory_present"] is False, preview
+                assert preview["project_definition_backup_present"] is False, preview
+                assert preview["project_memory_backup_present"] is False, preview
+                assert preview["session_directory_present"] is True, preview
+                assert preview["migration_sidecar_present"] is False, preview
                 assert preview["active_interactive_run_count"] == 0, preview
                 assert request(port, "HEAD", preview_path)[0] == 200
                 preview_memory = "/api/v1/memory/projects/ui-workspace"
@@ -948,6 +952,31 @@ def run_probe(host: Path) -> None:
                 assert preview["schedule_count"] == 1, preview
                 assert preview["project_memory_present"] is True and (
                     preview["project_memory_entry_count"] == 1), preview
+                project_file = home / "projects/ui-workspace.json"
+                memory_file = home / "memory/projects/ui-workspace.json"
+                (home / "projects/ui-workspace.json.bak").write_bytes(
+                    project_file.read_bytes())
+                (home / "memory/projects/ui-workspace.json.bak").write_bytes(
+                    memory_file.read_bytes())
+                (home / "migration/session-prompts/ui-workspace").mkdir(
+                    parents=True)
+                status, _, body = request(port, "GET", preview_path)
+                preview = json.loads(body)["data"]
+                assert status == 200 and preview["advisory"] is True, (
+                    status, body)
+                assert preview["project_definition_backup_present"] is True, preview
+                assert preview["project_memory_backup_present"] is True, preview
+                assert preview["migration_sidecar_present"] is True, preview
+                memory_backup = home / "memory/projects/ui-workspace.json.bak"
+                memory_backup.unlink()
+                memory_backup.mkdir()
+                try:
+                    status, _, body = request(port, "GET", preview_path)
+                    assert status == 503 and json.loads(body)["error"]["code"] == (
+                        "purge_preview_unavailable"), (status, body)
+                finally:
+                    memory_backup.rmdir()
+                    memory_backup.write_bytes(memory_file.read_bytes())
                 status, _, body = request(port, "GET",
                     "/api/v1/projects/missing/purge-preview")
                 assert status == 404 and json.loads(body)["error"]["code"] == (
