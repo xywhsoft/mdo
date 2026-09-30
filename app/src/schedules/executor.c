@@ -2,6 +2,7 @@
 #include <string.h>
 
 #include "../../include/mdo/agents.h"
+#include "../../include/mdo/asks.h"
 #include "../../include/mdo/schedules.h"
 
 #define MDO_SCHEDULE_EXECUTOR_ACTIVE_MAX MDO_SCHEDULE_OUTSTANDING_MAX
@@ -9,12 +10,15 @@
 #define MDO_SCHEDULE_EXECUTOR_POLL_DEFAULT 250u
 #define MDO_SCHEDULE_EXECUTOR_POLL_MIN 50u
 #define MDO_SCHEDULE_EXECUTOR_POLL_MAX 5000u
+#define MDO_SCHEDULE_ASK_SCOPE_CAPACITY 48u
 
 typedef struct MdoScheduleExecution {
     uint64 TaskId;
     uint64 AgentRunId;
     MdoAgentRun* Run;
     bool CancelRequested;
+    char ProjectId[MDO_SCHEDULE_PROJECT_CAPACITY];
+    char AskScopeId[MDO_SCHEDULE_ASK_SCOPE_CAPACITY];
 } MdoScheduleExecution;
 
 typedef struct MdoScheduleExecutorState {
@@ -210,6 +214,7 @@ static bool MdoScheduleExecutorStart(const MdoScheduleClaim* Claim,
     MdoAgentRunInfo Info;
     MdoScheduleExecution* Active;
     char Failure[256];
+    char AskScopeId[MDO_SCHEDULE_ASK_SCOPE_CAPACITY];
     MdoAgentSessionOptionsInit(&SessionOptions);
     SessionOptions.AgentId = Claim->AgentId;
     SessionOptions.ModelId = Claim->ModelId[0] != '\0' ? Claim->ModelId : NULL;
@@ -221,6 +226,11 @@ static bool MdoScheduleExecutorStart(const MdoScheduleClaim* Claim,
         Claim->WorkspaceRoot : NULL;
     SessionOptions.ProjectId = Claim->ProjectId;
     SessionOptions.ProductSessionId = Claim->ScheduleId;
+    /* The plan ID remains the memory/audit identity; questions belong to this
+     * particular occurrence, so overlapping executions never share answers. */
+    snprintf(AskScopeId, sizeof(AskScopeId), "schedule-task-%llu",
+        (unsigned long long)Claim->TaskId);
+    SessionOptions.AskScopeId = AskScopeId;
     SessionOptions.OnApproval = g_MdoScheduleExecutor.Options.OnApproval;
     SessionOptions.ApprovalUserData =
         g_MdoScheduleExecutor.Options.ApprovalUserData;
@@ -260,6 +270,8 @@ static bool MdoScheduleExecutorStart(const MdoScheduleClaim* Claim,
     Active->TaskId = Claim->TaskId;
     Active->AgentRunId = Info.Run.uRunId;
     Active->Run = Run;
+    snprintf(Active->ProjectId, sizeof(Active->ProjectId), "%s", Claim->ProjectId);
+    snprintf(Active->AskScopeId, sizeof(Active->AskScopeId), "%s", AskScopeId);
     Run = NULL;
     MdoAgentSessionRelease(Session);
     if ( g_MdoScheduleExecutor.ClaimsStarted != UINT64_MAX )
@@ -420,6 +432,63 @@ bool MdoScheduleExecutorTaskCancellationRequested(uint64 TaskId)
     }
     xrtMutexUnlock(g_MdoScheduleExecutor.Lock);
     return Requested;
+}
+
+bool MdoScheduleExecutorTaskAsks(uint64 TaskId, MdoAskInfo* Items,
+    size_t Capacity, size_t* Count, xwork_error* Error)
+{
+    size_t i;
+    bool Ok = true;
+    xworkErrorInit(Error);
+    if ( Count != NULL ) *Count = 0u;
+    if ( TaskId == 0u || Count == NULL ||
+         (Capacity != 0u && Items == NULL) ) {
+        MdoScheduleExecutorError(Error, XWORK_ERROR_INVALID_ARGUMENT,
+            "invalid task question query");
+        return false;
+    }
+    if ( !g_MdoScheduleExecutor.Initialized ) return true;
+    xrtMutexLock(g_MdoScheduleExecutor.Lock);
+    for ( i = 0u; i < g_MdoScheduleExecutor.ActiveCount; ++i ) {
+        MdoScheduleExecution* Execution = &g_MdoScheduleExecutor.Active[i];
+        if ( Execution->TaskId != TaskId || Execution->CancelRequested ) continue;
+        Ok = MdoAskList(Execution->ProjectId, Execution->AskScopeId,
+            Items, Capacity, Count);
+        if ( !Ok ) MdoScheduleExecutorError(Error, XWORK_ERROR_CONTEXT,
+            "scheduled task questions are unavailable");
+        break;
+    }
+    xrtMutexUnlock(g_MdoScheduleExecutor.Lock);
+    return Ok;
+}
+
+bool MdoScheduleExecutorAnswerTaskAsk(uint64 TaskId, uint64 AskId,
+    const char* Answer, xwork_error* Error)
+{
+    size_t i;
+    bool Ok = false;
+    xworkErrorInit(Error);
+    if ( !g_MdoScheduleExecutor.Initialized || TaskId == 0u || AskId == 0u ) {
+        MdoScheduleExecutorError(Error, XWORK_ERROR_POLICY,
+            "the scheduled task question is no longer pending");
+        return false;
+    }
+    xrtMutexLock(g_MdoScheduleExecutor.Lock);
+    for ( i = 0u; i < g_MdoScheduleExecutor.ActiveCount; ++i ) {
+        MdoScheduleExecution* Execution = &g_MdoScheduleExecutor.Active[i];
+        if ( Execution->TaskId != TaskId || Execution->CancelRequested ) continue;
+        /* Answer checks the tool's cancellation token and deadline atomically
+         * with its one-shot submission. Harvest/stop cannot destroy the scope
+         * while this short operation holds the executor lifecycle lock. */
+        Ok = MdoAskAnswer(Execution->ProjectId, Execution->AskScopeId,
+            AskId, Answer, Error);
+        break;
+    }
+    if ( !Ok && (Error == NULL || Error->eCode == XWORK_ERROR_NONE) )
+        MdoScheduleExecutorError(Error, XWORK_ERROR_POLICY,
+            "the scheduled task question is no longer pending");
+    xrtMutexUnlock(g_MdoScheduleExecutor.Lock);
+    return Ok;
 }
 
 static int32 MdoScheduleExecutorThread(ptr Data)

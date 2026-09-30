@@ -40,6 +40,7 @@ window.fetch = async (input, options = {}) => {
   }
   if (path === "/api/v1/tasks") return reply({ items: [{ ...task }], total: 1 });
   if (path === "/api/v1/tasks/9001") return reply({ ...task });
+  if (path === "/api/v1/tasks/9001/asks") return reply({ items: [], total: 0 });
   if (path.startsWith("/api/v1/tasks/9001/output?")) {
     const chunk = { data: "", start: 0, next: 0, dropped: false };
     return reply({ complete: task.terminal, stdout: chunk, stderr: chunk, result: chunk });

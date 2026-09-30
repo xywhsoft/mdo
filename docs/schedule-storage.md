@@ -83,6 +83,18 @@ bootstrap 创建一个长生命周期 schedule executor。生产默认使用一�
 
 ## 公开操作
 
+每次执行以统一 task ID 生成独立的 `AskScopeId`，通过原有 `ask_user` 工具注册；
+`ProductSessionId` 仍为计划 ID，项目记忆审计关联不变。只增加宿主侧问答路由，
+不增加模型工具描述、产品会话或会话目录。同一计划并行运行时，问题与回答互不
+可见；派生工具目录中的询问仍属于该执行范围。回答时短暂持有执行器生命周期锁，
+防止停止或回收移除范围；询问 manager 再原子检查取消令牌、截止时间和一次性提交。
+此保证针对执行器拥有的停止路径；直接 xwork 取消仍按前述 pump 转发语义处理。
+
+任务详情以旧版询问卡片提供选项与自由回答，轮询不重新挂载编辑器。草稿按 task/ask
+保存，切任务或语言不串用；中文输入法确认不会误提交。接受回答后的读取失败保留
+“已提交”及只读输入，原位重试只刷新状态。任务列表使用 `pending_questions` 显示
+“等待你回答”，实际 Run 和租约保持活动，直到回答后的运行退出。
+
 - `MdoScheduleCreate` 创建定义；ID 为空时生成 XID。
 - `MdoScheduleSetEnabled` 使用 revision 启停定义。
 - `MdoScheduleRemove` 使用 revision 删除没有活动 run 的定义；历史和审计保留。
@@ -93,6 +105,7 @@ bootstrap 创建一个长生命周期 schedule executor。生产默认使用一�
 - `MdoScheduleCatalogSnapshot` 返回引用计数不可变快照和恢复 diagnostics。
 - `MdoScheduleExecutorGetSnapshot` 返回活动数、累计 claim/completion/failure 和最近错误。
 - `MdoScheduleExecutorCancelTask` 取消持有的 Run，返回是否由执行器处理，供通用 task API 安全回退；`MdoScheduleExecutorTaskCancellationRequested` 提供进行中的请求状态。
+- `MdoScheduleExecutorTaskAsks` 读取某次执行的询问；`MdoScheduleExecutorAnswerTaskAsk` 按执行归属一次性回答，供 `/tasks/{task}/asks` 的 GET/HEAD 和单条 PUT 使用。
 
 计划任务的 HTTP 资源和 UI 编辑器已接入；执行历史以有界最近记录页展示。更早历史的分页仍需在后续阶段实现。
 
@@ -114,8 +127,12 @@ bootstrap 创建一个长生命周期 schedule executor。生产默认使用一�
 项目租约仍保留、重复请求与重复历史保护、直接 xwork 取消的 pump 转发，以及已完成
 Run 的真实成功结果。HTTP 探针通过实际 `ask_user` 等待工具验证退出和唯一 cancelled
 历史。打包组件夹具在 320×350 验证请求中/退出后的显示、重复点击与焦点。
-完整项目清除事务、跨重启恢复及计划运行中询问的专用展示入口仍待实现。
+HTTP 探针另覆盖同一计划两个真实 `ask_user` 执行、反序回答与输出对应、跨 task
+拒绝、UTF-8 字节上限、重复/迟到回答、HEAD/OPTIONS、终态空列表及无会话目录。
+打包组件夹具覆盖轮询/输入法、语言切换、独立草稿、重复提交和接受后的读取失败。
+完整项目清除事务和跨重启恢复仍待实现；待回答的计划运行没有新增持久恢复机制。
 
-Windows/Linux 有界发布门禁各通过 114 项 Python、113 项 Node、77 个前端模块解析、
-严格 C11、21 个运行探针与确定性打包；Windows 另通过便携 WebView2 Home 和 20 秒
-打包启动。未做压力或高负载测试，macOS 与实体移动端仍待独立验收。
+本阶段 Windows 有界发布门禁通过 114 项 Python、117 项 Node、80 个前端模块解析、
+严格 C11、21 个运行探针与确定性打包，另通过便携 WebView2 Home 和 20 秒打包启动。
+WSL 因宿主空间耗尽后的只读/I/O error 尚未恢复，新增链路的 Linux 门禁未完成。
+未做压力或高负载测试，macOS 与实体移动端仍待独立验收。

@@ -48,16 +48,21 @@ export async function refreshSelectedAsks() {
   }
 }
 
-export async function answerAsk(projectId, sessionId, id, answer) {
-  const project = resourceId(projectId, "project");
-  const session = resourceId(sessionId, "session");
+export function validateAskAnswer(id, answer) {
   const number = String(id);
   if (!/^[1-9][0-9]*$/.test(number)) throw new TypeError(t("ask.invalidId", {}, "询问 ID 无效"));
   const text = String(answer).trim();
   if (!text) throw new TypeError(t("ask.answerRequired", {}, "请填写回答"));
   if (new TextEncoder().encode(text).length > 1024)
     throw new TypeError(t("ask.answerTooLong", {}, "回答不能超过 1024 字节"));
-  await api.put(`/projects/${project}/sessions/${session}/asks/${number}`,
-    { answer: text });
+  return { id: number, answer: text };
+}
+
+export async function answerAsk(projectId, sessionId, id, answer) {
+  const project = resourceId(projectId, "project");
+  const session = resourceId(sessionId, "session");
+  const validated = validateAskAnswer(id, answer);
+  await api.put(`/projects/${project}/sessions/${session}/asks/${validated.id}`,
+    { answer: validated.answer });
   await refreshSelectedAsks();
 }

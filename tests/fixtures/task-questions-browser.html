@@ -1,0 +1,130 @@
+<!doctype html>
+<html lang="zh-CN">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>mdo scheduled question interaction probe</title>
+<link rel="stylesheet" href="/app/web/css/app.css">
+<style>
+body { height: auto; overflow: auto; padding: 12px; }
+#result { white-space: pre-wrap; overflow-wrap: anywhere; }
+.inspector { width: auto; min-width: 0; }
+#tasks-panel { overflow: auto; max-height: 80vh; }
+</style>
+<pre id="result">载入生产组件…</pre>
+<div class="inspector"><section id="tasks-panel" role="tabpanel">
+  <div id="summary"></div><div id="tasks"></div><div id="task-detail"></div>
+</section></div>
+<script type="module">
+import { loadLocale } from "/app/web/js/i18n.js";
+import { createTaskPanel } from "/app/web/js/features/tasks/task-panel.js";
+import { loadTasks, tasksStore, taskDetailStore, artifactPreviewStore,
+  selectTask, refreshSelectedTask } from "/app/web/js/state/tasks.js";
+
+const originalFetch = window.fetch.bind(window);
+const tasks = new Map([1, 2].map((id) => [id, {
+  id, state: "running", kind: "scheduled", terminal: false,
+  pending_questions: 1, label: `计划执行 ${id}`, revision: 1,
+}]));
+const questions = new Map([1, 2].map((id) => [id, [{
+  id: id * 11, question: `计划执行 ${id} 应采取哪条路线？`, options: ["路线一", "路线二"],
+}]]));
+const replies = [];
+let acknowledge, failDetail = false;
+const reply = (data) => Response.json({ ok: true, data });
+window.fetch = async (input, options = {}) => {
+  const path = String(input);
+  if (path === "/api/v1/tasks") return reply({ total: 2, items: [...tasks.values()] });
+  if (path === "/api/v1/artifacts") return reply({ items: [] });
+  const match = path.match(/^\/api\/v1\/tasks\/(\d+)(.*)$/);
+  if (!match) return originalFetch(input, options);
+  const id = Number(match[1]), suffix = match[2];
+  if (suffix.startsWith("/asks/") && options.method === "PUT") {
+    replies.push({ task: id, ask: Number(suffix.slice(6)), ...JSON.parse(options.body) });
+    if (id === 1) await new Promise((resolve) => { acknowledge = resolve; });
+    tasks.get(id).pending_questions = 0;
+    questions.set(id, []);
+    if (id === 1) failDetail = true;
+    return reply(replies.at(-1));
+  }
+  if (suffix === "/asks") return reply({ total: questions.get(id).length, items: questions.get(id) });
+  if (!suffix) {
+    if (failDetail) { failDetail = false; return Response.json({ ok: false,
+      error: { message: "Synthetic task refresh failure" } }, { status: 503 }); }
+    return reply({ ...tasks.get(id) });
+  }
+  if (suffix.startsWith("/output?")) {
+    const chunk = { data: "", start: 0, next: 0, dropped: false };
+    return reply({ complete: false, stdout: chunk, stderr: chunk, result: chunk });
+  }
+  if (suffix.startsWith("/events?")) return reply({ items: [], next_revision: 1 });
+  throw new Error(`Unexpected fixture request: ${path}`);
+};
+const result = document.querySelector("#result");
+const checks = {};
+const input = () => document.querySelector(".ask-dock-input");
+const submit = () => document.querySelector(".ask-dock-free button");
+const tick = () => new Promise((resolve) => setTimeout(resolve, 10));
+async function until(predicate) {
+  for (let i = 0; i < 100 && !predicate(); i += 1) await tick();
+  if (!predicate()) throw new Error("Bounded fixture wait expired");
+}
+try {
+  await loadLocale("zh-CN");
+  createTaskPanel({ container: document.querySelector("#tasks"),
+    detailContainer: document.querySelector("#task-detail"),
+    summary: document.querySelector("#summary"), store: tasksStore,
+    detailStore: taskDetailStore, previewStore: artifactPreviewStore });
+  await loadTasks(); await selectTask(1);
+  const original = input();
+  original.focus(); original.value = "中文草稿";
+  original.dispatchEvent(new Event("input")); original.setSelectionRange(1, 3);
+  original.dispatchEvent(new CompositionEvent("compositionstart"));
+  await refreshSelectedTask();
+  original.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+  checks.pollAndIme = input() === original && document.activeElement === original &&
+    original.value === "中文草稿" && original.selectionStart === 1 && replies.length === 0;
+  await loadLocale("en-US");
+  checks.localeKeepsEditor = input() === original && document.activeElement === original &&
+    original.getAttribute("aria-label") === "Answer question";
+  original.dispatchEvent(new CompositionEvent("compositionend"));
+  await loadLocale("zh-CN");
+  await selectTask(2);
+  input().value = "第二项草稿"; input().dispatchEvent(new Event("input"));
+  await selectTask(1);
+  checks.scopedDraft = input().value === "中文草稿";
+  input().value = "中".repeat(342); input().dispatchEvent(new Event("input"));
+  submit().click(); await tick();
+  checks.byteLimit = input().getAttribute("aria-invalid") === "true" && replies.length === 0;
+  input().value = "保留草稿"; input().dispatchEvent(new Event("input")); input().focus();
+  const answering = input();
+  submit().click(); submit().click();
+  document.querySelector(".ask-dock-options button").click();
+  await until(() => Boolean(acknowledge));
+  checks.repeatGuard = replies.length === 1 && answering.readOnly && document.activeElement === answering;
+  acknowledge();
+  await until(() => taskDetailStore.get().status === "error");
+  checks.acceptedRefreshFailure = input() === answering && answering.readOnly &&
+    document.querySelector(".ask-dock-validation").textContent.includes("已提交");
+  submit().click(); await tick();
+  checks.noResubmit = replies.length === 1;
+  document.querySelector('[data-task-focus="retry"]').click();
+  await until(() => taskDetailStore.get().status === "ready");
+  checks.retryReconciles = !input() &&
+    document.activeElement?.dataset.taskFocus === "back";
+  await selectTask(2);
+  checks.otherDraftKept = input().value === "第二项草稿";
+  document.querySelectorAll(".ask-dock-options button")[1].click();
+  await until(() => !input());
+  checks.rightTask = replies.length === 2 && replies[0].task === 1 &&
+    replies[0].ask === 11 && replies[0].answer === "保留草稿" &&
+    replies[1].task === 2 && replies[1].ask === 22 && replies[1].answer === "路线二";
+  checks.noOverflow = document.documentElement.scrollWidth <= innerWidth;
+  const passed = Object.values(checks).every(Boolean);
+  result.dataset.passed = String(passed);
+  result.textContent = JSON.stringify({ passed, checks, replies }, null, 2);
+} catch (error) {
+  result.dataset.passed = "false";
+  result.textContent = JSON.stringify({ passed: false, checks, error: String(error) }, null, 2);
+}
+</script>
+</html>

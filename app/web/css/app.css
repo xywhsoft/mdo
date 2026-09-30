@@ -930,6 +930,8 @@ select:focus-visible,
 .task-detail-heading { margin-top: 10px; }
 .task-detail-heading h3 { margin: 0; overflow-wrap: anywhere; font-size: 14px; }
 .task-detail-heading p { margin: 4px 0 0; color: var(--muted); font-size: 10px; }
+.task-questions { margin-top: 12px; }
+.task-questions[hidden] { display: none; }
 .task-detail-meta { display: grid; grid-template-columns: 64px minmax(0, 1fr); gap: 7px 9px; margin: 14px 0; padding: 11px; border-radius: var(--radius-sm); background: var(--surface-hover); font-size: 10px; }
 .task-detail-meta dt { color: var(--muted); }
 .task-detail-meta dd { margin: 0; overflow-wrap: anywhere; }

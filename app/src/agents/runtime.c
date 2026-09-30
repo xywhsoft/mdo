@@ -1198,7 +1198,8 @@ MdoAgentSession* MdoAgentSessionCreateWithRuntime(xwork_runtime* Runtime,
         &AgentOptions, Error);
     if ( Session->Agent == NULL ) goto fail;
     if ( !MdoAskRegisterTool(Session->Agent, Options->ProjectId,
-            Options->ProductSessionId, &Session->AskBinding, Error) ||
+            Options->AskScopeId != NULL ? Options->AskScopeId :
+                Options->ProductSessionId, &Session->AskBinding, Error) ||
          !MdoMemoryAgentBind(Session->Agent, Options->ProjectId,
             Options->ProductSessionId, Error) ||
          !MdoAgentsPublishSubagents(Owner, Session->Agent, &AgentInfo, &Model,

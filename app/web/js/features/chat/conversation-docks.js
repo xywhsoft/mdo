@@ -1,7 +1,9 @@
 import { approvalDecisionStatus, approvalDecisionStore, decideApproval } from "../../state/approvals.js";
 import { answerAsk } from "../../state/asks.js";
 import { subscribeLocale, t } from "../../i18n.js";
-import { element, errorMessage, isImeKey, toast } from "../../utils/dom.js";
+import { element, errorMessage, toast } from "../../utils/dom.js";
+import { createAskCard } from "../asks/ask-card.js";
+import { reconcileCards } from "../../utils/reconcile.js";
 import { taskBelongsToSession } from "../tasks/task-owner.js";
 
 const STATE_KEYS = Object.freeze({ pending: "dock.task.pending", running: "dock.task.running" });
@@ -49,7 +51,8 @@ function taskCard(onOpenTasks) {
       }
       const state = STATE_KEYS[task.state] && task.stop_requested
         ? t("task.stopping") : STATE_KEYS[task.state]
-        ? t(STATE_KEYS[task.state]) : task.state || "";
+        ? Number(task.pending_questions) > 0 ? t("task.awaitingAnswer")
+          : t(STATE_KEYS[task.state]) : task.state || "";
       const label = task.label || t("dock.task.fallback", { id: task.id });
       if (row.state.textContent !== state) row.state.textContent = state;
       if (row.label.textContent !== label) row.label.textContent = label;
@@ -103,45 +106,6 @@ function todoCard(focusKey, onToggle) {
     for (const key of rows.keys()) if (!live.has(key)) rows.delete(key);
     reconcileCards(list, ordered);
   } };
-}
-
-function reconcileCards(root, nodes) {
-  const kept = new Set(nodes);
-  for (const child of [...root.children]) {
-    if (!kept.has(child)) child.remove();
-  }
-  const focused = nodes.find((node) =>
-    node.parentElement === root && node.contains(document.activeElement));
-  const selection = document.getSelection();
-  const selected = selection && !selection.isCollapsed ? nodes.find((node) =>
-    node.parentElement === root && node.contains(selection.anchorNode) &&
-      node.contains(selection.focusNode)) : null;
-  const anchor = focused ?? selected;
-  if (anchor) {
-    // Move surrounding nodes instead of detaching an active editor or the
-    // text row the user is reading.
-    const index = nodes.indexOf(anchor);
-    let next = anchor;
-    for (let i = index - 1; i >= 0; --i) {
-      const node = nodes[i];
-      if (node.nextElementSibling !== next) root.insertBefore(node, next);
-      next = node;
-    }
-    let previous = anchor;
-    for (let i = index + 1; i < nodes.length; ++i) {
-      const node = nodes[i];
-      if (previous.nextElementSibling !== node)
-        root.insertBefore(node, previous.nextElementSibling);
-      previous = node;
-    }
-    return;
-  }
-  for (const [index, node] of nodes.entries()) {
-    const current = root.children[index];
-    if (current === node) continue;
-    // A surviving card stays mounted when an earlier card disappears.
-    root.insertBefore(node, current ?? null);
-  }
 }
 
 function approvalContentKey({ expires_in_ms, ...content }) {
@@ -232,91 +196,12 @@ function approvalCard(item, argumentsOpen, onChanged, onExpand) {
 
 function askCard(item, projectId, sessionId, deciding, answered, drafts,
   onChanged, onSettled, onExpand) {
-  const key = `${projectId}/${sessionId}/${item.id}`;
-  const card = element("section", { className: "conversation-dock ask-dock" });
-  const actions = element("div", { className: "ask-dock-options" });
-  const hint = element("p", { className: "ask-dock-validation",
-    attrs: { id: `ask-answer-hint-${key}`, "aria-live": "polite" } });
-  const input = element("input", { className: "ask-dock-input",
-    attrs: { type: "text", maxlength: "1024", placeholder: t("dock.ask.placeholder"),
-      "aria-label": t("dock.ask.answerLabel"), "aria-describedby": hint.id } });
-  input.value = drafts.get(key) ?? "";
-  const submit = element("button", { text: t("dock.ask.submit"),
-    attrs: { type: "button" } });
-  const buttons = [submit];
-  const encoder = new TextEncoder();
-  let composing = false;
-  function updateValidity() {
-    const answer = input.value.trim();
-    const tooLong = encoder.encode(answer).length > 1024;
-    const pending = deciding.has(key);
-    const submitted = answered.has(key);
-    input.setAttribute("aria-invalid", String(tooLong));
-    input.readOnly = pending || submitted;
-    hint.textContent = pending ? t("dock.ask.submitting") :
-      submitted ? t("dock.ask.submitted") :
-        tooLong ? t("dock.ask.tooLong") : "";
-    hint.dataset.state = pending || submitted ? "pending" :
-      tooLong ? "error" : "";
-    submit.setAttribute("aria-disabled", String(!answer || tooLong ||
-      pending || submitted));
-    for (const button of buttons.slice(1))
-      button.setAttribute("aria-disabled", String(pending || submitted));
-  }
-  input.addEventListener("input", () => {
-    drafts.set(key, input.value);
-    updateValidity();
+  return createAskCard({ item, key: `${projectId}/${sessionId}/${item.id}`,
+    deciding, answered, drafts,
+    onAnswer: (value) => answerAsk(projectId, sessionId, item.id, value),
+    onChanged, onSettled,
+    renderHeader: (title, card) => decisionHeader(title, () => onExpand(card)),
   });
-  async function respond(value) {
-    if (deciding.has(key) || answered.has(key)) return;
-    deciding.add(key);
-    updateValidity();
-    try {
-      await answerAsk(projectId, sessionId, item.id, value);
-      answered.add(key);
-      drafts.delete(key);
-      await onChanged();
-    } catch (error) {
-      toast(answered.has(key) ? t("dock.ask.refreshPending") :
-        errorMessage(error), "error");
-    } finally {
-      deciding.delete(key);
-      if (input.isConnected) updateValidity();
-      onSettled();
-    }
-  }
-  for (const option of item.options ?? []) {
-    const button = element("button", { text: option,
-      attrs: { type: "button" } });
-    button.addEventListener("click", () => void respond(option));
-    buttons.push(button);
-    actions.append(button);
-  }
-  submit.addEventListener("click", () => {
-    if (submit.getAttribute("aria-disabled") === "false") void respond(input.value);
-  });
-  input.addEventListener("compositionstart", () => { composing = true; });
-  input.addEventListener("compositionend", () => { composing = false; });
-  input.addEventListener("blur", () => { composing = false; });
-  input.addEventListener("keydown", (event) => {
-    if (event.key === "Enter" && !isImeKey(event, composing)) {
-      event.preventDefault();
-      if (submit.getAttribute("aria-disabled") === "false") void respond(input.value);
-    }
-  });
-  updateValidity();
-  const title = element("h3", { text: t("dock.ask.title"), attrs: { tabindex: "-1" } });
-  card.append(decisionHeader(title, () => onExpand(card)),
-    element("p", { className: "ask-dock-question", text: item.question }),
-    actions, element("div", { className: "ask-dock-free" }, [input, submit]),
-    hint);
-  return { node: card, sync() {
-    title.textContent = t("dock.ask.title");
-    input.placeholder = t("dock.ask.placeholder");
-    input.setAttribute("aria-label", t("dock.ask.answerLabel"));
-    submit.textContent = t("dock.ask.submit");
-    updateValidity();
-  } };
 }
 
 export function createConversationDocks({ container, navigation, tasksStore, approvalsStore,

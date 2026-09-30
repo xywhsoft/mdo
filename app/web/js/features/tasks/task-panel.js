@@ -1,9 +1,11 @@
 import { element, clear, formatRelativeTime, errorMessage, toast } from "../../utils/dom.js";
 import {
-  cancelTask, clearSelectedTask, readArtifactPreview, selectTask, selectedTask,
+  cancelTask, clearSelectedTask, loadTasks, readArtifactPreview,
+  refreshSelectedTask, selectTask, selectedTask,
 } from "../../state/tasks.js";
 import { subscribeLocale, t } from "../../i18n.js";
 import { taskOwnerLocation } from "./task-owner.js";
+import { createTaskQuestions } from "./task-questions.js";
 
 const ACTIVE_STATES = new Set(["pending", "running"]);
 const STATE_LABELS = Object.freeze({
@@ -25,7 +27,9 @@ function stopping(item) {
 }
 
 function taskStateLabel(item) {
-  return stopping(item) ? t("task.stopping", {}, "正在停止…") : stateLabel(item.state);
+  return stopping(item) ? t("task.stopping", {}, "正在停止…") :
+    ACTIVE_STATES.has(item.state) && Number(item.pending_questions) > 0
+      ? t("task.awaitingAnswer", {}, "等待你回答") : stateLabel(item.state);
 }
 
 function kindLabel(value) {
@@ -82,6 +86,15 @@ export function createTaskPanel({ container, detailContainer, summary, store, de
   const expandedOutputs = new Set(["result"]);
   const pendingCancels = new Set();
   let renderedTaskId = "";
+  const detailHeader = element("div");
+  const detailBody = element("div");
+  const questions = createTaskQuestions({ onChanged: async () => {
+    const states = await Promise.all([loadTasks(), refreshSelectedTask()]);
+    const failed = states.find((state) => state.status === "error");
+    if (failed) throw failed.error;
+    onChanged?.();
+  } });
+  detailContainer.append(detailHeader, questions.node, detailBody);
 
   function closeDetail() {
     clearSelectedTask();
@@ -168,7 +181,10 @@ export function createTaskPanel({ container, detailContainer, summary, store, de
   function renderDetail() {
     const view = captureView(detailContainer);
     const priorTaskId = renderedTaskId;
-    clear(detailContainer);
+    // Polling may rebuild metadata, but must leave the active answer editor
+    // mounted so selection, focus and IME composition survive unchanged reads.
+    clear(detailHeader);
+    clear(detailBody);
     const selected = selectedTask();
     renderedTaskId = selected;
     if (selected && priorTaskId !== selected) {
@@ -176,6 +192,10 @@ export function createTaskPanel({ container, detailContainer, summary, store, de
       view.outputScrolls.clear();
     }
     detailContainer.hidden = !selected;
+    const snapshot = detailState.data?.id === selected ? detailState.data : null;
+    questions.sync(selected, snapshot && ACTIVE_STATES.has(snapshot.detail.state)
+      && !stopping(snapshot.detail) ? snapshot.asks?.items ?? [] : [],
+      detailState.status === "ready" || !selected);
     if (!selected) {
       if (view.focus && priorTaskId) container.querySelector(
         `[data-task-focus="open/${priorTaskId}"]`)?.focus({ preventScroll: true });
@@ -183,18 +203,21 @@ export function createTaskPanel({ container, detailContainer, summary, store, de
       return;
     }
     if (detailState.status === "error") {
-      detailContainer.append(
-        element("button", { className: "task-detail-close",
-          text: t("task.backToList", {}, "返回任务列表"), attrs: {
-            type: "button", "data-task-focus": "back" } }),
-        element("div", { className: "resource-error", text: errorMessage(detailState.error) }),
-      );
-      detailContainer.firstElementChild.addEventListener("click", closeDetail);
-      restoreView(detailContainer, view, detailContainer.firstElementChild);
+      const retry = element("button", { className: "task-detail-close",
+        text: t("task.detail.retry", {}, "重试读取"),
+        attrs: { type: "button", "data-task-focus": "retry" } });
+      retry.addEventListener("click", () => void refreshSelectedTask());
+      const close = element("button", { className: "task-detail-close",
+        text: t("task.backToList", {}, "返回任务列表"), attrs: {
+          type: "button", "data-task-focus": "back" } });
+      close.addEventListener("click", closeDetail);
+      detailHeader.append(element("div", { className: "task-detail-actions" }, [close, retry]));
+      detailBody.append(element("div", { className: "resource-error", text: errorMessage(detailState.error) }));
+      restoreView(detailContainer, view, retry);
       return;
     }
     if (!detailState.data) {
-      detailContainer.append(element("div", { className: "empty-state",
+      detailBody.append(element("div", { className: "empty-state",
         text: t("task.detail.loading", {}, "正在载入任务详情…") }));
       restoreView(detailContainer, view, container.querySelector(
         `[data-task-focus="open/${selected}"]`));
@@ -266,13 +289,14 @@ export function createTaskPanel({ container, detailContainer, summary, store, de
     }
     if (!artifacts.length) artifactList.append(element("p", { className: "task-output-note",
       text: t("task.artifact.empty", {}, "该任务没有产物。") }));
-    detailContainer.append(
+    detailHeader.append(
       element("div", { className: "task-detail-actions" }, headerActions),
       element("header", { className: "task-detail-heading" }, [
         element("h3", { text: taskName(task) }),
         element("p", { text: `${kindLabel(task.kind)} · ${taskStateLabel(task)}` }),
       ]),
-      metadata,
+    );
+    detailBody.append(metadata,
       element("section", { className: "task-detail-section" }, [element("h4", {
         text: t("task.output.title", {}, "输出") }), outputBody]),
       element("section", { className: "task-detail-section" }, [element("h4", {

@@ -1,5 +1,7 @@
 import { api } from "../api/client.js";
 import { createResourceStore } from "./store.js";
+import { validateAskAnswer } from "./asks.js";
+import { t } from "../i18n.js";
 
 const OUTPUT_PAGE_BYTES = 32 * 1024;
 const OUTPUT_RETAINED_BYTES = 256 * 1024;
@@ -97,20 +99,33 @@ export function refreshSelectedTask() {
   const result = previous?.output?.streams?.result?.next ?? 0;
   const after = previous?.events?.nextRevision ?? 0;
   return taskDetailStore.load(async () => {
-    const [detail, output, events, artifacts] = await Promise.all([
+    const [detail, output, events, artifacts, asks] = await Promise.all([
       api.get(`/tasks/${id}`),
       api.get(`/tasks/${id}/output?stdout=${stdout}&stderr=${stderr}&result=${result}&limit=${OUTPUT_PAGE_BYTES}`),
       api.get(`/tasks/${id}/events?after=${after}&limit=64`),
       api.get("/artifacts"),
+      api.get(`/tasks/${id}/asks`),
     ]);
+    if (!Array.isArray(asks.data?.items))
+      throw new TypeError(t("ask.invalidResponse", {}, "询问响应无效"));
     return {
       id,
       detail: detail.data,
+      asks: asks.data,
       output: mergeOutput(previous?.output, output.data),
       events: mergeEvents(previous?.events, events.data),
       artifacts: (artifacts.data?.items ?? []).filter((item) => String(item.task_id) === id).reverse(),
     };
   });
+}
+
+export async function answerTaskAsk(value, askId, answer) {
+  const id = taskId(value);
+  const validated = validateAskAnswer(askId, answer);
+  // Return the acknowledgement before reading again so the card can lock an
+  // accepted answer even when the following snapshot cannot be retrieved.
+  return (await api.put(`/tasks/${id}/asks/${validated.id}`,
+    { answer: validated.answer })).data;
 }
 
 export function readArtifactPreview(artifact) {

@@ -30,7 +30,7 @@ Read snapshots:
   `/operations`;
 - `/projects/{project}/sessions/{session}`, `/runs/{run}`,
   `/schedules/{schedule}`, `/schedules/{schedule}/history`,
-  `/tasks/{task}`, `/operations/{operation}`, and
+  `/tasks/{task}`, `/tasks/{task}/asks`, `/operations/{operation}`, and
   `/projects/{project}/sessions/{session}/recovery` and
   `/projects/{project}/sessions/{session}/todo` and
   `/projects/{project}/sessions/{session}/asks` and
@@ -45,7 +45,7 @@ Mutations:
 - add a persistent project with its workspace and optional default model;
 - fork, truncate, clear, export, and resume durable sessions;
 - start and cancel interactive Agent runs, resolve one-shot approval requests,
-  and answer session-bound user questions;
+  and answer session-bound or scheduled-task-bound user questions;
 - create, replace, enable, disable, remove, and explicitly run schedules;
 - cancel a process, Subagent, or scheduled task through its unified task ID.
 
@@ -252,6 +252,26 @@ result. The ETag includes the stop request bit even before the xwork task
 revision changes. An acknowledged snapshot must be retained if a later refresh
 fails. Cancelled terminal tasks also report `stop_requested: true`; other
 generic task kinds retain their existing xwork cancellation semantics.
+
+`GET /tasks/{task}/asks` returns `{total, items}` for that scheduled execution.
+Items use the same question shape as session questions: `id`, `run_id`,
+`created_at`, `question`, and up to eight `options`. Each execution owns a
+distinct scope, so overlapping runs of one plan cannot answer each other's
+questions. The scope is inherited by delegated tools; an item's `run_id` may
+therefore identify a delegated run. No product session or directory is created.
+A valid finished, stopping, or generic task returns an empty list; an unknown
+task returns `404 task_not_found`.
+
+`PUT /tasks/{task}/asks/{ask}` accepts only `{"answer":"text"}`, with 1 to
+1024 UTF-8 bytes. Wrong-task, cancelled, expired, or previously answered IDs
+return `404 ask_not_found`. `HEAD` is supported for the list and both routes
+report their methods through `OPTIONS`. All question lists share the process
+manager's limit of 16 outstanding items; no additional model tool is published.
+Task snapshots expose `pending_questions`, zero for generic and terminal
+tasks. Their ETag includes the count when nonzero, even if the xwork revision
+has not changed. Clients may display "Waiting for your answer" while keeping
+the task running. An accepted answer must remain locked if a subsequent read
+fails; read retry must not submit it again.
 
 ## Approvals and interrupted-run recovery
 

@@ -1061,6 +1061,8 @@
   "task.detail.loading": "Загрузка сведений о задаче…",
   "task.stop": "Остановить",
   "task.stopping": "Останавливается…",
+  "task.awaitingAnswer": "Ожидание вашего ответа",
+  "task.detail.retry": "Повторить чтение",
   "task.stopNamed": "Остановить задачу {name}",
   "task.meta.id": "ID задачи",
   "task.meta.kind": "Тип",

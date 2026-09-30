@@ -3,6 +3,8 @@
 
 #include "internal.h"
 #include "../../include/mdo/asks.h"
+#include "../../include/mdo/bootstrap.h"
+#include "../../include/mdo/schedules.h"
 
 static bool MdoApiAskIdText(xstrview View, char* Output, size_t Capacity)
 {
@@ -57,7 +59,34 @@ static bool MdoApiAskSession(MdoApiContext* Context,
     return true;
 }
 
-bool MdoApiAsksRoute(MdoApiContext* Context)
+/* Validate the public task resource independently of executor membership. A
+ * finished or generic task has an empty question list, not a phantom session. */
+static uint32 MdoApiAskTaskStatus(uint64 TaskId, bool* Terminal)
+{
+    xwork_runtime* Runtime = MdoBootstrapRuntime();
+    xwork_task_snapshot* Snapshot;
+    xwork_task_info Info;
+    uint32 Status;
+    if ( Runtime == NULL ) return 503u;
+    Snapshot = xworkRuntimeTaskSnapshot(Runtime, 0u, NULL);
+    if ( Snapshot == NULL ) return 503u;
+    xworkTaskInfoInit(&Info);
+    Status = xworkTaskSnapshotFind(Snapshot, TaskId, &Info) ? 200u : 404u;
+    *Terminal = Status == 200u && Info.eState >= XWORK_TASK_SUCCEEDED &&
+        Info.eState <= XWORK_TASK_LOST;
+    xworkTaskSnapshotRelease(Snapshot);
+    return Status;
+}
+
+static bool MdoApiAskTaskError(MdoApiContext* Context, uint32 Status)
+{
+    return MdoApiReplyError(Context, Status,
+        Status == 404u ? "task_not_found" : "asks_unavailable",
+        Status == 404u ? "The requested task does not exist" :
+            "Task questions could not be read", NULL);
+}
+
+static bool MdoApiAsksReadRoute(MdoApiContext* Context, bool TaskScope)
 {
     char ProjectId[MDO_PROJECT_ID_CAPACITY];
     char SessionId[MDO_SESSION_ID_CAPACITY];
@@ -67,15 +96,28 @@ bool MdoApiAsksRoute(MdoApiContext* Context)
     size_t Total = 0u;
     size_t Index;
     bool Ok;
-    if ( Context->ParamCount != 2u ||
+    bool Terminal = false;
+    uint64 TaskId = 0u;
+    xwork_error Error;
+    if ( TaskScope ) {
+        uint32 Status;
+        if ( Context->ParamCount != 1u ||
+             !MdoApiAskNumber(Context->Params[0], &TaskId) )
+            return MdoApiReplyError(Context, 400u, "invalid_path",
+                "The task identifier must be a nonzero decimal integer", NULL);
+        Status = MdoApiAskTaskStatus(TaskId, &Terminal);
+        if ( Status != 200u ) return MdoApiAskTaskError(Context, Status);
+    } else if ( Context->ParamCount != 2u ||
          !MdoApiAskSession(Context, ProjectId, SessionId) )
         return MdoApiReplyError(Context, 404u, "session_not_found",
             "The requested session does not exist", NULL);
     Pending = (MdoAskInfo*)xrtCalloc(MDO_ASK_PENDING_MAX,
         sizeof(*Pending));
     if ( Pending == NULL ) goto unavailable;
-    if ( !MdoAskList(ProjectId, SessionId, Pending,
-            MDO_ASK_PENDING_MAX, &Total) ) {
+    Ok = TaskScope ? (Terminal || MdoScheduleExecutorTaskAsks(TaskId,
+        Pending, MDO_ASK_PENDING_MAX, &Total, &Error)) :
+        MdoAskList(ProjectId, SessionId, Pending, MDO_ASK_PENDING_MAX, &Total);
+    if ( !Ok ) {
         xrtFree(Pending);
         goto unavailable;
     }
@@ -115,7 +157,17 @@ unavailable:
         "Pending user questions could not be read", NULL);
 }
 
-bool MdoApiAskRoute(MdoApiContext* Context)
+bool MdoApiAsksRoute(MdoApiContext* Context)
+{
+    return MdoApiAsksReadRoute(Context, false);
+}
+
+bool MdoApiTaskAsksRoute(MdoApiContext* Context)
+{
+    return MdoApiAsksReadRoute(Context, true);
+}
+
+static bool MdoApiAskApplyRoute(MdoApiContext* Context, bool TaskScope)
 {
     char ProjectId[MDO_PROJECT_ID_CAPACITY];
     char SessionId[MDO_SESSION_ID_CAPACITY];
@@ -127,11 +179,21 @@ bool MdoApiAskRoute(MdoApiContext* Context)
     xwork_error Error;
     xvalue* Data;
     uint64 Id;
-    if ( Context->ParamCount != 3u ||
-         !MdoApiAskNumber(Context->Params[2], &Id) )
+    uint64 TaskId = 0u;
+    bool Terminal = false;
+    bool Applied;
+    if ( Context->ParamCount != (TaskScope ? 2u : 3u) ||
+         !MdoApiAskNumber(Context->Params[TaskScope ? 1u : 2u], &Id) )
         return MdoApiReplyError(Context, 400u, "invalid_ask_id",
             "The question ID must be a nonzero decimal integer", NULL);
-    if ( !MdoApiAskSession(Context, ProjectId, SessionId) )
+    if ( TaskScope ) {
+        uint32 TaskStatus;
+        if ( !MdoApiAskNumber(Context->Params[0], &TaskId) )
+            return MdoApiReplyError(Context, 400u, "invalid_path",
+                "The task identifier must be a nonzero decimal integer", NULL);
+        TaskStatus = MdoApiAskTaskStatus(TaskId, &Terminal);
+        if ( TaskStatus != 200u ) return MdoApiAskTaskError(Context, TaskStatus);
+    } else if ( !MdoApiAskSession(Context, ProjectId, SessionId) )
         return MdoApiReplyError(Context, 404u, "session_not_found",
             "The requested session does not exist", NULL);
     Status = MdoApiJsonBodyRead(Context, &Body);
@@ -154,7 +216,11 @@ bool MdoApiAskRoute(MdoApiContext* Context)
     Answer[AnswerText.Size] = '\0';
     MdoApiJsonBodyUnit(&Body);
     memset(&Error, 0, sizeof(Error));
-    if ( !MdoAskAnswer(ProjectId, SessionId, Id, Answer, &Error) )
+    if ( TaskScope && Terminal ) Error.eCode = XWORK_ERROR_POLICY;
+    Applied = TaskScope ? (!Terminal && MdoScheduleExecutorAnswerTaskAsk(
+        TaskId, Id, Answer, &Error)) :
+        MdoAskAnswer(ProjectId, SessionId, Id, Answer, &Error);
+    if ( !Applied )
         return MdoApiReplyError(Context,
             Error.eCode == XWORK_ERROR_POLICY ? 404u : 503u,
             Error.eCode == XWORK_ERROR_POLICY ? "ask_not_found" :
@@ -170,4 +236,14 @@ bool MdoApiAskRoute(MdoApiContext* Context)
             "The answer was applied but its result could not be created", NULL);
     }
     return MdoApiReplySuccessTake(Context, 200u, Data, NULL);
+}
+
+bool MdoApiAskRoute(MdoApiContext* Context)
+{
+    return MdoApiAskApplyRoute(Context, false);
+}
+
+bool MdoApiTaskAskRoute(MdoApiContext* Context)
+{
+    return MdoApiAskApplyRoute(Context, true);
 }

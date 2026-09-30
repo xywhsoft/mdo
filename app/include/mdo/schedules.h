@@ -6,6 +6,8 @@
 
 #include "models.h"
 
+struct MdoAskInfo;
+
 #define MDO_SCHEDULE_ID_CAPACITY 65u
 #define MDO_SCHEDULE_OUTSTANDING_MAX 64u
 #define MDO_SCHEDULE_LABEL_CAPACITY 257u
@@ -219,6 +221,13 @@ bool MdoScheduleExecutorRunNow(const char* ScheduleId,
 bool MdoScheduleExecutorCancelTask(uint64 TaskId, bool* Handled,
     xwork_error* Error);
 bool MdoScheduleExecutorTaskCancellationRequested(uint64 TaskId);
+/* Each execution has an independent question scope, including its delegated
+ * tools. Queries return an empty set once the execution is gone or stopping;
+ * answers are one-shot and cannot address another execution's question. */
+bool MdoScheduleExecutorTaskAsks(uint64 TaskId, struct MdoAskInfo* Items,
+    size_t Capacity, size_t* Count, xwork_error* Error);
+bool MdoScheduleExecutorAnswerTaskAsk(uint64 TaskId, uint64 AskId,
+    const char* Answer, xwork_error* Error);
 bool MdoScheduleExecutorGetSnapshot(MdoScheduleExecutorSnapshot* Snapshot);
 
 MdoScheduleCatalog* MdoScheduleCatalogSnapshot(xwork_error* Error);

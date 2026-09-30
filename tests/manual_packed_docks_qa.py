@@ -253,6 +253,16 @@ Object.defineProperty(navigator, 'clipboard', {
         pass
 
     def do_GET(self):
+        if (self.path == "/__qa/task-questions" and
+                self.server.task_questions_fixture):
+            payload = ((ROOT / "tests/fixtures/task-questions-browser.html")
+                       .read_bytes().replace(b"/app/web/", b"/"))
+            self.send_response(200)
+            self.send_header("Content-Type", "text/html; charset=utf-8")
+            self.send_header("Content-Length", str(len(payload)))
+            self.end_headers()
+            self.wfile.write(payload)
+            return
         if (self.path == "/__qa/task-cancellation" and
                 self.server.task_cancellation_fixture):
             payload = ((ROOT / "tests/fixtures/task-cancellation-browser.html")
@@ -967,6 +977,8 @@ parser.add_argument("--ask-keyboard-viewport-fixture", action="store_true",
                     help="serve the ask keyboard viewport probe with packed assets")
 parser.add_argument("--task-cancellation-fixture", action="store_true",
                     help="serve a task stop/exit probe with packed production components")
+parser.add_argument("--task-questions-fixture", action="store_true",
+                    help="serve a task question probe with packed production components")
 parser.add_argument("--fail-first-fork-invalid", action="store_true",
                     help="reject the first session fork with a stable validation code")
 parser.add_argument("--fail-first-module", action="store_true",
@@ -1203,6 +1215,7 @@ try:
             or args.reject_pane_layout or args.locale_hotkey
             or args.no_clipboard_api or args.decision_expand_arrival_fixture
             or args.ask_keyboard_viewport_fixture or args.task_cancellation_fixture
+            or args.task_questions_fixture
             or args.fail_first_fork_invalid
             or args.fail_first_module or args.delay_first_module_ms
             or args.startup_task_delay_ms or args.startup_bootstrap_delay_ms
@@ -1217,6 +1230,7 @@ try:
             args.decision_expand_arrival_fixture)
         proxy.ask_keyboard_viewport_fixture = args.ask_keyboard_viewport_fixture
         proxy.task_cancellation_fixture = args.task_cancellation_fixture
+        proxy.task_questions_fixture = args.task_questions_fixture
         proxy.fail_first_fork_invalid = args.fail_first_fork_invalid
         proxy.fork_rejected = False
         proxy.locale_hotkey = args.locale_hotkey

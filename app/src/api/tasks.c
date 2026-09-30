@@ -107,8 +107,14 @@ static bool MdoApiTaskStopRequested(const xwork_task_info* Info)
 }
 
 static bool MdoApiTaskInfoValue(const xwork_task_info* Info,
-    bool StopRequested, xvalue** Value)
+    bool StopRequested, xvalue** Value, size_t* PendingQuestions)
 {
+    size_t Questions = 0u;
+    if ( Info->eKind == XWORK_TASK_SCHEDULED &&
+         !MdoApiTaskTerminal(Info->eState) &&
+         !MdoScheduleExecutorTaskAsks(Info->uTaskId, NULL, 0u,
+            &Questions, NULL) ) return false;
+    if ( PendingQuestions != NULL ) *PendingQuestions = Questions;
     xvalue* Item = xrtValueObject();
     bool Ok = Item != NULL &&
         MdoApiValueSetUInt(Item, "id", Info->uTaskId) &&
@@ -119,6 +125,7 @@ static bool MdoApiTaskInfoValue(const xwork_task_info* Info,
         MdoApiValueSetString(Item, "state", MdoApiTaskStateText(Info->eState)) &&
         MdoApiValueSetBool(Item, "terminal", MdoApiTaskTerminal(Info->eState)) &&
         MdoApiValueSetBool(Item, "stop_requested", StopRequested) &&
+        MdoApiValueSetUInt(Item, "pending_questions", Questions) &&
         MdoApiValueSetUInt(Item, "revision", Info->uRevision) &&
         MdoApiValueSetInt(Item, "created_at", Info->iCreatedAtUs) &&
         MdoApiValueSetInt(Item, "started_at", Info->iStartedAtUs) &&
@@ -141,7 +148,8 @@ static bool MdoApiTaskInfoValue(const xwork_task_info* Info,
 }
 
 static MdoApiTaskLookup MdoApiTaskLookupValue(xwork_runtime* Runtime,
-    uint64 TaskId, xvalue** Value, uint64* Revision, bool* StopRequested)
+    uint64 TaskId, xvalue** Value, uint64* Revision, bool* StopRequested,
+    size_t* PendingQuestions)
 {
     xwork_error Error;
     xwork_task_snapshot* Snapshot;
@@ -150,6 +158,7 @@ static MdoApiTaskLookup MdoApiTaskLookupValue(xwork_runtime* Runtime,
     *Value = NULL;
     *Revision = 0u;
     *StopRequested = false;
+    *PendingQuestions = 0u;
     memset(&Error, 0, sizeof(Error));
     Snapshot = xworkRuntimeTaskSnapshot(Runtime, 0u, &Error);
     if ( Snapshot == NULL ) return MDO_API_TASK_LOOKUP_FAILED;
@@ -158,7 +167,8 @@ static MdoApiTaskLookup MdoApiTaskLookupValue(xwork_runtime* Runtime,
         Lookup = MDO_API_TASK_LOOKUP_MISSING;
     } else {
         *StopRequested = MdoApiTaskStopRequested(&Info);
-        if ( !MdoApiTaskInfoValue(&Info, *StopRequested, Value) ) {
+        if ( !MdoApiTaskInfoValue(&Info, *StopRequested, Value,
+                PendingQuestions) ) {
             Lookup = MDO_API_TASK_LOOKUP_FAILED;
         } else {
             *Revision = Info.uRevision;
@@ -174,22 +184,26 @@ static bool MdoApiTaskReply(MdoApiContext* Context, xwork_runtime* Runtime,
 {
     xvalue* Data = NULL;
     char EntityTag[80];
+    char AskTag[24];
     MdoApiTaskLookup Lookup;
     uint64 Revision;
     bool StopRequested;
+    size_t PendingQuestions;
     Lookup = MdoApiTaskLookupValue(Runtime, TaskId, &Data, &Revision,
-        &StopRequested);
+        &StopRequested, &PendingQuestions);
     if ( Lookup == MDO_API_TASK_LOOKUP_MISSING )
         return MdoApiReplyError(Context, 404u, "task_not_found",
             "The requested task does not exist", NULL);
     if ( Lookup == MDO_API_TASK_LOOKUP_FAILED )
         return MdoApiReplyError(Context, 500u, "task_unavailable",
             "The task detail could not be read", NULL);
-    /* Executor cancellation changes the representation before xwork's task
-     * revision advances; include the request bit in the strong entity tag. */
-    (void)snprintf(EntityTag, sizeof(EntityTag), "\"mdo-task-%llu-%llu%s\"",
+    AskTag[0] = '\0';
+    if ( PendingQuestions != 0u ) snprintf(AskTag, sizeof(AskTag),
+        "-asks-%zu", PendingQuestions);
+    /* Interaction metadata can change before xwork's task revision advances. */
+    (void)snprintf(EntityTag, sizeof(EntityTag), "\"mdo-task-%llu-%llu%s%s\"",
         (unsigned long long)TaskId, (unsigned long long)Revision,
-        StopRequested ? "-stop" : "");
+        StopRequested ? "-stop" : "", AskTag);
     return MdoApiReplySuccessTakeEntityTag(Context, 200u, Data, EntityTag);
 }
 
@@ -217,7 +231,7 @@ bool MdoApiTasksRoute(MdoApiContext* Context)
         xvalue* Item = NULL;
         xworkTaskInfoInit(&Info);
         Ok = xworkTaskSnapshotTaskAt(Snapshot, Index, &Info) &&
-            MdoApiTaskInfoValue(&Info, MdoApiTaskStopRequested(&Info), &Item) &&
+            MdoApiTaskInfoValue(&Info, MdoApiTaskStopRequested(&Info), &Item, NULL) &&
             MdoApiValueAppendTake(Items, &Item);
         xrtValueRelease(Item);
     }

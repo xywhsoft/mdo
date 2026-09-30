@@ -142,6 +142,19 @@ class ModelHandler(BaseHTTPRequestHandler):
                     "name": "ask_user",
                     "arguments": '{"question":"Cancel this scheduled tool?"}',
                 }]
+            if "SCHEDULE ask probe" in json.dumps(payload):
+                answers = [item for item in payload.get("input", [])
+                           if item.get("type") == "function_call_output"]
+                output = [{"type": "message", "content": [{
+                    "type": "output_text",
+                    "text": "Scheduled answer: " + answers[-1]["output"],
+                }]}] if answers else [{
+                    "type": "function_call", "call_id": "schedule-ask-call",
+                    "name": "ask_user", "arguments": json.dumps({
+                        "question": "Which scheduled route?",
+                        "options": ["First", "Second"],
+                    }),
+                }]
             if "Answer the pending question." in json.dumps(payload) and not ModelHandler.ask_verify_sent:
                 ModelHandler.ask_verify_sent = True
                 output = [{
@@ -255,12 +268,6 @@ static bool MdoApiProbeLeaseControl(XS_HttpReq* Request)
             MDO_PROJECT_LEASE_EXCLUSIVE, &Error);
         Ok = Exclusive != NULL;
         MdoProjectLeaseRelease(Exclusive);
-    } else if ( MdoApiViewEqualText(Target,
-            "/__fixture/project-lease/schedule-ask") ) {
-        MdoAskInfo Pending;
-        size_t Count = 0u;
-        Ok = MdoAskList("api-project", "cancel-api", &Pending, 1u, &Count) &&
-            MdoApiValueSetUInt(Data, "count", Count);
     } else if ( MdoApiViewEqualText(Target,
             "/__fixture/project-lease/checkpoint") ) {
         Ok = MdoApiValueSetUInt(Data, "checks", xrtAtomic32Load(
@@ -817,6 +824,90 @@ def project_lease_roundtrip(port: int, home: Path) -> None:
     evidence = json.loads(body)["data"]
     assert status == 200 and evidence["checks"] >= 9 and (
         evidence["violations"] == 0), evidence
+
+
+def scheduled_questions_probe(port: int, home: Path, definition: dict) -> None:
+    """Two runs of one plan must not share a question scope or fake sessions."""
+    plan = dict(definition, id="ask-api", label="API questions",
+                input="SCHEDULE ask probe", max_concurrent_runs=2)
+    path = "/api/v1/schedules/ask-api"
+    json_headers = {"Content-Type": "application/json"}
+    status, headers, body = request(port, "POST", "/api/v1/schedules",
+        body=json.dumps(plan).encode(), headers=json_headers)
+    assert status == 201, (status, body)
+    runs = []
+    for _ in range(2):
+        etag = request(port, "GET", path)[1]["etag"]
+        status, _, body = request(port, "POST", path + "/run",
+                                 headers={"If-Match": etag})
+        assert status == 202, (status, body)
+        runs.append(json.loads(body)["data"])
+    tasks = [f'/api/v1/tasks/{run["task_id"]}' for run in runs]
+    questions = []
+    for task, run in zip(tasks, runs):
+        deadline = time.monotonic() + 5
+        pending = {"items": []}
+        while time.monotonic() < deadline:
+            status, _, body = request(port, "GET", task + "/asks")
+            assert status == 200, (status, body)
+            pending = json.loads(body)["data"]
+            if pending["items"]: break
+            time.sleep(0.01)
+        assert pending["total"] == 1, pending
+        question = pending["items"][0]
+        assert question["options"] == ["First", "Second"], question
+        assert question["run_id"] == run["agent_run_id"], (question, run)
+        questions.append(question)
+        status, headers, body = request(port, "GET", task)
+        assert status == 200 and json.loads(body)["data"]["pending_questions"] == 1, body
+        assert headers["etag"].endswith('-asks-1"'), headers
+        status, _, body = request(port, "HEAD", task + "/asks")
+        assert status == 200 and not body, (status, body)
+        status, headers, _ = request(port, "OPTIONS", task + "/asks")
+        assert status == 200 and headers["allow"] == "GET, HEAD, OPTIONS", headers
+        status, headers, _ = request(port, "OPTIONS", task + f'/asks/{question["id"]}')
+        assert status == 200 and headers["allow"] == "PUT, OPTIONS", headers
+    assert questions[0]["id"] != questions[1]["id"], questions
+    status, _, body = request(port, "PUT", tasks[0] + f'/asks/{questions[1]["id"]}',
+        body=b'{"answer":"wrong run"}', headers=json_headers)
+    assert status == 404 and json.loads(body)["error"]["code"] == "ask_not_found", body
+    answer_path = tasks[0] + f'/asks/{questions[0]["id"]}'
+    for invalid in [{"answer": ""}, {"answer": "中" * 342},
+                    {"answer": "First", "extra": True}]:
+        status, _, body = request(port, "PUT", answer_path,
+            body=json.dumps(invalid).encode(), headers=json_headers)
+        assert status == 422 and json.loads(body)["error"]["code"] == "ask_answer_invalid", body
+    for invalid_id in ["0", "bad", "18446744073709551616"]:
+        assert request(port, "GET", f"/api/v1/tasks/{invalid_id}/asks")[0] == 400
+    assert request(port, "GET", "/api/v1/tasks/18446744073709551615/asks")[0] == 404
+    # Answer in reverse order; a different task's prompt must remain pending.
+    for index, answer in [(1, "Second"), (0, "自由回答")]:
+        answer_path = tasks[index] + f'/asks/{questions[index]["id"]}'
+        status, _, body = request(port, "PUT", answer_path,
+            body=json.dumps({"answer": answer}).encode(), headers=json_headers)
+        assert status == 200 and json.loads(body)["data"]["answer"] == answer, body
+        assert request(port, "PUT", answer_path, body=b'{"answer":"again"}',
+                       headers=json_headers)[0] == 404
+        if index == 1:
+            still_pending = json.loads(request(port, "GET", tasks[0] + "/asks")[2])["data"]
+            assert still_pending["items"][0]["id"] == questions[0]["id"], still_pending
+    history = []
+    deadline = time.monotonic() + 5
+    while time.monotonic() < deadline:
+        history = json.loads(request(port, "GET", path + "/history")[2])["data"]["items"]
+        if len(history) == 2: break
+        time.sleep(0.01)
+    assert len(history) == 2 and all(item["result"] == "succeeded" for item in history), history
+    assert {item["task_id"] for item in history} == {run["task_id"] for run in runs}, history
+    assert {item["agent_run_id"] for item in history} == {run["agent_run_id"] for run in runs}, history
+    for task, answer in zip(tasks, ["自由回答", "Second"]):
+        status, _, body = request(port, "GET", task + "/asks")
+        assert status == 200 and json.loads(body)["data"] == {"total": 0, "items": []}, body
+        document = json.loads(request(port, "GET", task + "/output")[2])["data"]
+        text = base64.b64decode(document["result"]["data"]).decode()
+        assert answer in text, (answer, text)
+    assert not (home / "sessions/api-project/ask-api").exists()
+    assert not list((home / "sessions/api-project").glob("schedule-task-*"))
 
 
 def run_probe(host: Path) -> None:
@@ -4116,19 +4207,22 @@ def run_probe(host: Path) -> None:
                 assert status == 202, (status, body)
                 scheduled_run = json.loads(body)["data"]
                 scheduled_task_path = f'/api/v1/tasks/{scheduled_run["task_id"]}'
-                # The fixture reads the real ask manager, proving cancellation
-                # reaches an executing tool rather than only a task marker.
+                # Public task questions prove cancellation reaches an executing
+                # tool, without relying on internal scope names.
                 deadline = time.monotonic() + 5.0
                 while time.monotonic() < deadline:
-                    count = json.loads(request(port, "GET",
-                        "/__fixture/project-lease/schedule-ask")[2])["data"]["count"]
+                    pending = json.loads(request(port, "GET",
+                        scheduled_task_path + "/asks")[2])["data"]
+                    count = pending["total"]
                     if count == 1: break
                     time.sleep(0.02)
                 assert count == 1, count
+                pending_id = pending["items"][0]["id"]
                 status, headers, body = request(port, "GET", scheduled_task_path)
                 before_stop = json.loads(body)["data"]
                 assert status == 200 and before_stop["state"] == "running", body
                 assert before_stop["stop_requested"] is False, before_stop
+                assert before_stop["pending_questions"] == 1, before_stop
                 before_stop_etag = headers["etag"]
                 for _ in range(2):
                     status, headers, body = request(port, "DELETE", scheduled_task_path)
@@ -4149,9 +4243,16 @@ def run_probe(host: Path) -> None:
                 assert cancel_history[0]["task_id"] == scheduled_run["task_id"], cancel_history
                 assert cancel_history[0]["agent_run_id"] == scheduled_run["agent_run_id"], cancel_history
                 assert json.loads(request(port, "GET",
-                    "/__fixture/project-lease/schedule-ask")[2])["data"]["count"] == 0
+                    scheduled_task_path + "/asks")[2])["data"]["total"] == 0
+                status, _, body = request(port, "PUT",
+                    scheduled_task_path + f"/asks/{pending_id}",
+                    body=b'{"answer":"too late"}',
+                    headers={"Content-Type": "application/json"})
+                assert status == 404 and json.loads(body)["error"]["code"] == "ask_not_found", body
                 status, _, body = request(port, "GET", scheduled_task_path)
                 assert status == 200 and json.loads(body)["data"]["state"] == "cancelled", body
+
+                scheduled_questions_probe(port, home, manual_definition)
 
                 status, headers, body = request(
                     port, "PATCH", session_path,
