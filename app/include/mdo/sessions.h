@@ -154,6 +154,8 @@ typedef struct MdoSessionEventInfo {
     uint64 ContextWindowTokens;
 } MdoSessionEventInfo;
 
+/* Product bootstrap (or an embedder) initializes MdoProjectLifecycle before
+ * this manager. Session handles and callback owners pin a shared project lease. */
 bool MdoSessionManagerInit(xwork_runtime* Runtime);
 void MdoSessionManagerUnit(void);
 uint64 MdoSessionManagerGeneration(void);

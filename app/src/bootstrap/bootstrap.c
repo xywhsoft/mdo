@@ -10,6 +10,7 @@
 #include "../../include/mdo/modules.h"
 #include "../../include/mdo/operations.h"
 #include "../../include/mdo/power.h"
+#include "../../include/mdo/project_lifecycle.h"
 #include "../../include/mdo/runs.h"
 #include "../../include/mdo/schedules.h"
 #include "../../include/mdo/sessions.h"
@@ -52,6 +53,10 @@ bool MdoBootstrapInit(XS_HostInfo* pHost)
         return g_MdoBootstrap.Stage == MDO_BOOTSTRAP_EXECUTOR_READY;
     if ( !MdoHomeInit() ) {
         MdoBootstrapFail("Home initialization failed");
+        return false;
+    }
+    if ( !MdoProjectLifecycleInit() ) {
+        MdoBootstrapFail("project lifecycle initialization failed");
         return false;
     }
     g_MdoBootstrap.Stage = MDO_BOOTSTRAP_HOME_READY;
@@ -235,6 +240,7 @@ void MdoBootstrapUnit(void)
     MdoModelManagerUnit();
     MdoSettingsServiceUnit();
     MdoConfigUnit();
+    MdoProjectLifecycleUnit();
     MdoHomeUnit();
     memset(&g_MdoBootstrap, 0, sizeof(g_MdoBootstrap));
 }

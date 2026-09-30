@@ -23,6 +23,7 @@ PROBE_SOURCE = r'''
 #include <xsbase.h>
 
 #include "src/storage/home.c"
+#include "src/projects/lifecycle.c"
 #include "src/config/config.c"
 #include "src/security/secrets.c"
 #include "src/models/catalog.c"
@@ -51,6 +52,68 @@ typedef struct Probe {
     bool SawClearPrompt;
     bool SawClearAnswer;
 } Probe;
+
+static bool LeaseBlocked(const char *id, MdoProjectLeaseMode mode) {
+    xwork_error error;
+    MdoProjectLease *lease = MdoProjectLeaseAcquire(id, mode, &error);
+    bool blocked = lease == NULL && error.eCode == XWORK_ERROR_CONTEXT;
+    MdoProjectLeaseRelease(lease);
+    return blocked;
+}
+
+static int32 LeaseReaderThread(ptr data) {
+    bool *blocked = (bool*)data;
+    *blocked = LeaseBlocked("lifecycle-probe", MDO_PROJECT_LEASE_SHARED);
+    return 0;
+}
+
+static bool LifecycleProbe(void) {
+    xwork_error error;
+    MdoProjectLease *first = NULL, *pin = NULL, *exclusive = NULL;
+    MdoProjectLease *other = NULL, *invalid = NULL;
+    xthread *thread = NULL;
+    bool reader_blocked = false, ok = false;
+    first = MdoProjectLeaseAcquire("LifeCycle-Probe.",
+        MDO_PROJECT_LEASE_SHARED, &error);
+    pin = MdoProjectLeaseRef(first);
+    if (pin == NULL || !LeaseBlocked("lifecycle-probe",
+            MDO_PROJECT_LEASE_EXCLUSIVE)) goto done;
+    MdoProjectLeaseRelease(first); first = NULL;
+    if (!LeaseBlocked("lifecycle-probe", MDO_PROJECT_LEASE_EXCLUSIVE)) goto done;
+    other = MdoProjectLeaseAcquire("another-project",
+        MDO_PROJECT_LEASE_EXCLUSIVE, &error);
+    if (other == NULL) goto done;
+    MdoProjectLeaseRelease(other); other = NULL;
+    invalid = MdoProjectLeaseAcquire("../escape", MDO_PROJECT_LEASE_SHARED, &error);
+    if (invalid != NULL || error.eCode != XWORK_ERROR_INVALID_ARGUMENT) goto done;
+    /* Unit closes the old registry while pins survive. A fresh Init owns a
+     * separate registry; releasing the old pin cannot unlock the new one. */
+    MdoProjectLifecycleUnit();
+    if (!LeaseBlocked("lifecycle-probe", MDO_PROJECT_LEASE_SHARED) ||
+        !MdoProjectLifecycleInit()) goto done;
+    exclusive = MdoProjectLeaseAcquire("lifecycle-probe",
+        MDO_PROJECT_LEASE_EXCLUSIVE, &error);
+    if (exclusive == NULL) goto done;
+    MdoProjectLeaseRelease(pin); pin = NULL;
+    thread = xrtThreadCreate(LeaseReaderThread, &reader_blocked, 0u);
+    if (thread == NULL || xrtThreadWait(thread) != XWAIT_OK) goto done;
+    xrtThreadDestroy(thread); thread = NULL;
+    if (!reader_blocked || !LeaseBlocked("LIFECYCLE-PROBE.",
+            MDO_PROJECT_LEASE_EXCLUSIVE)) goto done;
+    MdoProjectLeaseRelease(exclusive); exclusive = NULL;
+    first = MdoProjectLeaseAcquire("lifecycle-probe",
+        MDO_PROJECT_LEASE_SHARED, &error);
+    ok = first != NULL;
+done:
+    if (thread != NULL) { (void)xrtThreadWait(thread); xrtThreadDestroy(thread); }
+    MdoProjectLeaseRelease(first);
+    MdoProjectLeaseRelease(pin);
+    MdoProjectLeaseRelease(exclusive);
+    MdoProjectLeaseRelease(other);
+    MdoProjectLeaseRelease(invalid);
+    printf("lease_primitives=%d\n", ok ? 1 : 0);
+    return ok;
+}
 
 static char *Copy(const char *text) {
     size_t size = strlen(text) + 1u;
@@ -345,6 +408,9 @@ void ServiceInit(XS_HostInfo *host) {
     MdoSession *forked = NULL;
     MdoSession *blocked = NULL;
     MdoSession *stale = NULL;
+    MdoProjectLease *exclusive = NULL;
+    MdoAgentSession *retained_session = NULL;
+    bool blocked_directory = true;
     bool stale_update;
     uint64 event_cursor = 0u;
     uint64 rewind_to = 0u;
@@ -363,7 +429,8 @@ void ServiceInit(XS_HostInfo *host) {
     (void)host;
     memset(&probe, 0, sizeof(probe));
     memset(&fork_probe, 0, sizeof(fork_probe));
-    if (!MdoHomeInit() || !MdoConfigInit() || !MdoModelManagerInit() ||
+    if (!MdoHomeInit() || !MdoProjectLifecycleInit() ||
+        !LifecycleProbe() || !MdoConfigInit() || !MdoModelManagerInit() ||
         !MdoSkillManagerInit()) { printf("init_error=pre-runtime\n"); goto done; }
     if (!LegacyMeta()) goto done;
     xworkRuntimeConfigInit(&runtime_config);
@@ -422,8 +489,35 @@ void ServiceInit(XS_HostInfo *host) {
     if (stale_update) goto done;
     event_cursor = Events("events_first", "project-alpha", session_id,
         0u, 2u);
+    retained_session = MdoSessionAgentRef(session);
+    if (retained_session == NULL) goto done;
     MdoSessionRelease(session); session = NULL;
+    printf("lease_callback_owner=%d\n", LeaseBlocked("project-alpha",
+        MDO_PROJECT_LEASE_EXCLUSIVE) ? 1 : 0);
+    MdoAgentSessionRelease(retained_session); retained_session = NULL;
+    exclusive = MdoProjectLeaseAcquire("project-alpha",
+        MDO_PROJECT_LEASE_EXCLUSIVE, &error);
+    if (exclusive == NULL) goto done;
+    create.RequestedId = "blocked-by-project-lease";
+    blocked = MdoSessionCreate(&create, &error);
+    printf("lease_create_blocked=%d\n", blocked == NULL &&
+        error.eCode == XWORK_ERROR_CONTEXT ? 1 : 0);
+    MdoSessionRelease(blocked); blocked = NULL;
+    blocked = MdoSessionOpen("project-alpha", session_id, &open, &error);
+    printf("lease_open_blocked=%d\n", blocked == NULL &&
+        error.eCode == XWORK_ERROR_CONTEXT ? 1 : 0);
+    MdoSessionRelease(blocked); blocked = NULL;
+    blocked = MdoSessionLoad("project-alpha", session_id, &error);
+    printf("lease_load_blocked=%d\n", blocked == NULL &&
+        error.eCode == XWORK_ERROR_CONTEXT ? 1 : 0);
+    MdoSessionRelease(blocked); blocked = NULL;
+    if (!MdoHomeExternalStat("sessions/project-alpha/blocked-by-project-lease",
+            &blocked_directory, NULL) || blocked_directory) goto done;
+    MdoProjectLeaseRelease(exclusive); exclusive = NULL;
+    create.RequestedId = NULL;
     session = MdoSessionLoad("project-alpha", session_id, &error);
+    printf("lease_loaded_handle=%d\n", LeaseBlocked("project-alpha",
+        MDO_PROJECT_LEASE_EXCLUSIVE) ? 1 : 0);
     if (session == NULL || !MdoSessionSetProfile(session, NULL, "low",
             "read-only", &open, &error)) {
         printf("profile_error=%s\n", error.sMessage); goto done;
@@ -567,6 +661,10 @@ void ServiceInit(XS_HostInfo *host) {
     printf("failed_create=%d code:%d\n", blocked != NULL ? 1 : 0,
         (int)error.eCode);
     MdoSessionRelease(blocked); blocked = NULL;
+    exclusive = MdoProjectLeaseAcquire("project-alpha",
+        MDO_PROJECT_LEASE_EXCLUSIVE, &error);
+    printf("lease_failed_create_cleanup=%d\n", exclusive != NULL ? 1 : 0);
+    MdoProjectLeaseRelease(exclusive); exclusive = NULL;
     Catalog("catalog_after_failed_create");
 
     if (!MdoHomeAtomicWrite("sessions/project-alpha/bad/meta.json",
@@ -577,6 +675,8 @@ void ServiceInit(XS_HostInfo *host) {
         probe.SawPriorAnswer ? 1 : 0);
     printf("probe_done=1\n");
 done:
+    MdoAgentSessionRelease(retained_session);
+    MdoProjectLeaseRelease(exclusive);
     MdoSessionRelease(stale);
     MdoSessionRelease(blocked);
     MdoSessionRelease(forked);
@@ -589,6 +689,7 @@ done:
     xworkRuntimeRelease(runtime);
     MdoModelManagerUnit();
     MdoConfigUnit();
+    MdoProjectLifecycleUnit();
     MdoHomeUnit();
 }
 
@@ -606,6 +707,7 @@ def write_site(site: Path) -> None:
         "default-home/skills/project-explorer/templates",
         "generated/module-sdk/mdo",
         "src/storage",
+        "src/projects",
         "src/config",
         "src/security",
         "src/models",
@@ -626,6 +728,7 @@ def write_site(site: Path) -> None:
         "default-home/skills/project-explorer/SKILL.md",
         "default-home/skills/project-explorer/templates/report.md",
         "src/storage/home.c",
+        "src/projects/lifecycle.c",
         "src/config/config.c",
         "src/security/secrets.c",
         "src/models/catalog.c",
@@ -713,6 +816,11 @@ def main() -> int:
         output = run_probe(host, site, home)
         assert "init_error=" not in output, output
         assert "create_error=" not in output, output
+        for label in ("lease_primitives", "lease_callback_owner",
+                      "lease_create_blocked", "lease_open_blocked",
+                      "lease_load_blocked", "lease_loaded_handle",
+                      "lease_failed_create_cleanup"):
+            assert f"{label}=1" in output, output
         assert "recover_error=" not in output, output
         assert "fork_error=" not in output, output
         assert "catalog_empty=count:0 diagnostics:0 generation:1" in output, output

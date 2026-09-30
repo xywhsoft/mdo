@@ -40,6 +40,7 @@ struct MdoSessionEventBridge {
     xatomic32 Refs;
     xmutex* Lock;
     xfile RuntimeLock;
+    MdoProjectLease* ProjectLease;
     char ProjectId[MDO_PROJECT_ID_CAPACITY];
     char SessionId[MDO_SESSION_ID_CAPACITY];
     char ModelId[MDO_SESSION_IDENTITY_CAPACITY];
@@ -606,6 +607,7 @@ static bool MdoEventsScanLatest(const char* ProjectId, const char* SessionId,
 
 MdoSessionEventBridge* MdoSessionEventBridgeCreate(
     const char* ProjectId, const char* SessionId,
+    MdoProjectLease* ProjectLease,
     xwork_event_fn UserEvent, void* UserEventData,
     void* UserOwnerData, xwork_agent_owner_retain_fn UserOwnerRetain,
     xwork_agent_owner_release_fn UserOwnerRelease, xwork_error* Error)
@@ -619,7 +621,8 @@ MdoSessionEventBridge* MdoSessionEventBridgeCreate(
     bool Incomplete = false;
     char RuntimeLockPath[MDO_SESSION_PATH_CAPACITY];
     xworkErrorInit(Error);
-    if ( !MdoEventsIdValid(ProjectId, MDO_PROJECT_ID_CAPACITY) ||
+    if ( ProjectLease == NULL ||
+         !MdoEventsIdValid(ProjectId, MDO_PROJECT_ID_CAPACITY) ||
          !MdoEventsIdValid(SessionId, MDO_SESSION_ID_CAPACITY) ||
          ((UserOwnerRetain != NULL) != (UserOwnerRelease != NULL)) ) {
         MdoEventsError(Error, XWORK_ERROR_INVALID_ARGUMENT,
@@ -633,6 +636,12 @@ MdoSessionEventBridge* MdoSessionEventBridgeCreate(
         return NULL;
     }
     xrtAtomic32Init(&Bridge->Refs, 1u);
+    Bridge->ProjectLease = MdoProjectLeaseRef(ProjectLease);
+    if ( Bridge->ProjectLease == NULL ) {
+        MdoEventsError(Error, XWORK_ERROR_LIMIT,
+            "cannot retain the session project lease");
+        goto fail;
+    }
     Bridge->Lock = xrtMutexCreate();
     snprintf(Bridge->ProjectId, sizeof(Bridge->ProjectId), "%s", ProjectId);
     snprintf(Bridge->SessionId, sizeof(Bridge->SessionId), "%s", SessionId);
@@ -1192,6 +1201,7 @@ void MdoSessionEventBridgeRelease(void* Value)
     if ( Bridge->UserOwnerRetained && Bridge->UserOwnerRelease != NULL )
         Bridge->UserOwnerRelease(Bridge->UserOwnerData);
     if ( Bridge->Lock != NULL ) xrtMutexDestroy(Bridge->Lock);
+    MdoProjectLeaseRelease(Bridge->ProjectLease);
     memset(Bridge, 0, sizeof(*Bridge));
     xrtFree(Bridge);
 }

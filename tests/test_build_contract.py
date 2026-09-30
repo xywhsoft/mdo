@@ -54,6 +54,7 @@ class BuildContractTests(unittest.TestCase):
         sources = BUILD.source_list()
         self.assertEqual(sources, [
             "src/storage/home.c",
+            "src/projects/lifecycle.c",
             "src/config/config.c",
             "src/config/service.c",
             "src/security/secrets.c",

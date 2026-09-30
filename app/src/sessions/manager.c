@@ -35,6 +35,7 @@ struct MdoSession {
     xmutex* Lock;
     MdoAgentSession* Agent;
     MdoSessionEventBridge* Bridge;
+    MdoProjectLease* ProjectLease;
     MdoSessionInfo Info;
     char MetaPath[MDO_SESSION_PATH_CAPACITY];
 };
@@ -491,7 +492,8 @@ static bool MdoSessionsMetaWrite(const char* Path,
 }
 
 static MdoSession* MdoSessionsHandleCreate(MdoAgentSession* Agent,
-    MdoSessionEventBridge* Bridge, const MdoSessionInfo* Info,
+    MdoSessionEventBridge* Bridge, MdoProjectLease* ProjectLease,
+    const MdoSessionInfo* Info,
     const char* MetaPath)
 {
     MdoSession* Session = (MdoSession*)xrtCalloc(1u, sizeof(*Session));
@@ -502,7 +504,10 @@ static MdoSession* MdoSessionsHandleCreate(MdoAgentSession* Agent,
         xrtFree(Session);
         return NULL;
     }
-    if ( Bridge != NULL && !MdoSessionEventBridgeRef(Bridge) ) {
+    Session->ProjectLease = MdoProjectLeaseRef(ProjectLease);
+    if ( Session->ProjectLease == NULL ||
+         (Bridge != NULL && !MdoSessionEventBridgeRef(Bridge)) ) {
+        MdoProjectLeaseRelease(Session->ProjectLease);
         xrtMutexDestroy(Session->Lock);
         xrtFree(Session);
         return NULL;
@@ -663,6 +668,7 @@ MdoSession* MdoSessionCreate(const MdoSessionCreateOptions* Options,
     MdoAgentSessionInfo AgentInfo;
     MdoAgentSession* Agent = NULL;
     MdoSessionEventBridge* Bridge = NULL;
+    MdoProjectLease* ProjectLease = NULL;
     MdoSession* Session = NULL;
     MdoSessionInfo Info;
     char* SessionId = NULL;
@@ -704,6 +710,9 @@ MdoSession* MdoSessionCreate(const MdoSessionCreateOptions* Options,
             "session title is not bounded UTF-8 text");
         return NULL;
     }
+    ProjectLease = MdoProjectLeaseAcquire(Options->ProjectId,
+        MDO_PROJECT_LEASE_SHARED, Error);
+    if ( ProjectLease == NULL ) return NULL;
     SessionId = Options->RequestedId != NULL ?
         xrtStrDup(Options->RequestedId) : xrtXidMakeString();
     Workspace = xrtPathAbs(Options->Agent.WorkspaceRoot != NULL &&
@@ -746,6 +755,7 @@ MdoSession* MdoSessionCreate(const MdoSessionCreateOptions* Options,
     }
     DirectoryCreated = true;
     Bridge = MdoSessionEventBridgeCreate(Options->ProjectId, SessionId,
+        ProjectLease,
         Options->Agent.OnEvent, Options->Agent.EventUserData,
         Options->Agent.OwnerUserData, Options->Agent.OnOwnerRetain,
         Options->Agent.OnOwnerRelease, Error);
@@ -808,7 +818,7 @@ MdoSession* MdoSessionCreate(const MdoSessionCreateOptions* Options,
     snprintf(Info.PermissionProfile, sizeof(Info.PermissionProfile), "%s",
         AgentInfo.PermissionProfile);
     snprintf(Info.WorkspaceRoot, sizeof(Info.WorkspaceRoot), "%s", Workspace);
-    Session = MdoSessionsHandleCreate(Agent, Bridge, &Info, MetaPath);
+    Session = MdoSessionsHandleCreate(Agent, Bridge, ProjectLease, &Info, MetaPath);
     if ( Session == NULL ) goto memory;
     Agent = NULL;
     xrtMutexLock(g_MdoSessions.Lock);
@@ -840,6 +850,7 @@ done:
     xrtFree(JournalPath);
     xrtFree(ArtifactPath);
     xrtFree(Workspace);
+    MdoProjectLeaseRelease(ProjectLease);
     return Session;
 }
 
@@ -853,6 +864,7 @@ MdoSession* MdoSessionOpen(const char* ProjectId, const char* SessionId,
     MdoAgentSessionInfo AgentInfo;
     MdoAgentSession* Agent = NULL;
     MdoSessionEventBridge* Bridge = NULL;
+    MdoProjectLease* ProjectLease = NULL;
     MdoSession* Session = NULL;
     char Relative[MDO_SESSION_PATH_CAPACITY];
     char MetaPath[MDO_SESSION_PATH_CAPACITY];
@@ -891,24 +903,27 @@ MdoSession* MdoSessionOpen(const char* ProjectId, const char* SessionId,
             "invalid managed session open request");
         return NULL;
     }
+    ProjectLease = MdoProjectLeaseAcquire(ProjectId,
+        MDO_PROJECT_LEASE_SHARED, Error);
+    if ( ProjectLease == NULL ) return NULL;
     xrtMutexLock(g_MdoSessions.Lock);
     if ( !MdoSessionsMetaRead(ProjectId, SessionId, &Info) ) {
         xrtMutexUnlock(g_MdoSessions.Lock);
         MdoSessionsXrtError(Error, XWORK_ERROR_IO,
             "cannot read session metadata");
-        return NULL;
+        goto done;
     }
     if ( Info.Status != MDO_SESSION_ACTIVE ) {
         xrtMutexUnlock(g_MdoSessions.Lock);
         MdoSessionsError(Error, XWORK_ERROR_POLICY,
             "archived or trashed sessions must be restored before opening");
-        return NULL;
+        goto done;
     }
     if ( MdoSessionsActiveFind(ProjectId, SessionId) != SIZE_MAX ) {
         xrtMutexUnlock(g_MdoSessions.Lock);
         MdoSessionsError(Error, XWORK_ERROR_CONTEXT,
             "session already has an active runtime");
-        return NULL;
+        goto done;
     }
     xrtMutexUnlock(g_MdoSessions.Lock);
     if ( !MdoSessionsPath(Relative, ProjectId, SessionId, "snapshot.json") )
@@ -922,7 +937,7 @@ MdoSession* MdoSessionOpen(const char* ProjectId, const char* SessionId,
     ArtifactPath = MdoHomeExternalPath(Relative);
     if ( SnapshotPath == NULL || JournalPath == NULL || ArtifactPath == NULL )
         goto memory;
-    Bridge = MdoSessionEventBridgeCreate(ProjectId, SessionId,
+    Bridge = MdoSessionEventBridgeCreate(ProjectId, SessionId, ProjectLease,
         Options->OnEvent, Options->EventUserData, Options->OwnerUserData,
         Options->OnOwnerRetain, Options->OnOwnerRelease, Error);
     if ( Bridge == NULL ) goto done;
@@ -1029,7 +1044,7 @@ MdoSession* MdoSessionOpen(const char* ProjectId, const char* SessionId,
         Candidate.RuntimeOpen = true;
     }
     Info.RuntimeOpen = true;
-    Session = MdoSessionsHandleCreate(Agent, Bridge, &Info, MetaPath);
+    Session = MdoSessionsHandleCreate(Agent, Bridge, ProjectLease, &Info, MetaPath);
     if ( Session == NULL ) goto memory;
     Agent = NULL;
     if ( ProfileChanged ) {
@@ -1055,6 +1070,7 @@ done:
     xrtFree(SnapshotPath);
     xrtFree(JournalPath);
     xrtFree(ArtifactPath);
+    MdoProjectLeaseRelease(ProjectLease);
     return Session;
 }
 
@@ -1066,6 +1082,7 @@ MdoSession* MdoSessionFork(MdoSession* Source,
     MdoAgentSessionInfo AgentInfo;
     MdoAgentSession* Agent = NULL;
     MdoSessionEventBridge* Bridge = NULL;
+    MdoProjectLease* ProjectLease = NULL;
     MdoSession* Session = NULL;
     MdoSessionInfo SourceInfo;
     MdoSessionInfo Info;
@@ -1100,6 +1117,14 @@ MdoSession* MdoSessionFork(MdoSession* Source,
             "invalid managed session fork request");
         return NULL;
     }
+    /* The source already owns the project's shared lease. Pin it before
+     * touching either manager lock; fork and rollback retain this pin. */
+    ProjectLease = MdoProjectLeaseRef(Source->ProjectLease);
+    if ( ProjectLease == NULL ) {
+        MdoSessionsError(Error, XWORK_ERROR_LIMIT,
+            "cannot retain the fork source project lease");
+        return NULL;
+    }
     xrtMutexLock(Source->Lock);
     SourceLocked = true;
     if ( Source->Agent == NULL || Source->Info.Status != MDO_SESSION_ACTIVE ) {
@@ -1132,7 +1157,7 @@ MdoSession* MdoSessionFork(MdoSession* Source,
         goto done;
     }
     DirectoryCreated = true;
-    Bridge = MdoSessionEventBridgeCreate(ProjectId, SessionId,
+    Bridge = MdoSessionEventBridgeCreate(ProjectId, SessionId, ProjectLease,
         Options->Runtime.OnEvent, Options->Runtime.EventUserData,
         Options->Runtime.OwnerUserData, Options->Runtime.OnOwnerRetain,
         Options->Runtime.OnOwnerRelease, Error);
@@ -1222,7 +1247,7 @@ MdoSession* MdoSessionFork(MdoSession* Source,
         AgentInfo.PermissionProfile);
     snprintf(Info.WorkspaceRoot, sizeof(Info.WorkspaceRoot), "%s",
         SourceInfo.WorkspaceRoot);
-    Session = MdoSessionsHandleCreate(Agent, Bridge, &Info, MetaPath);
+    Session = MdoSessionsHandleCreate(Agent, Bridge, ProjectLease, &Info, MetaPath);
     if ( Session == NULL ) goto memory;
     Agent = NULL;
     xrtMutexLock(g_MdoSessions.Lock);
@@ -1257,6 +1282,7 @@ done:
     xrtFree(SnapshotPath);
     xrtFree(JournalPath);
     xrtFree(ArtifactPath);
+    MdoProjectLeaseRelease(ProjectLease);
     return Session;
 }
 
@@ -1279,6 +1305,7 @@ MdoSession* MdoSessionLoad(const char* ProjectId, const char* SessionId,
 {
     MdoSessionInfo Info;
     MdoSession* Session;
+    MdoProjectLease* ProjectLease;
     char MetaPath[MDO_SESSION_PATH_CAPACITY];
     xworkErrorInit(Error);
     if ( !g_MdoSessions.Initialized ||
@@ -1289,18 +1316,23 @@ MdoSession* MdoSessionLoad(const char* ProjectId, const char* SessionId,
             "invalid managed session load request");
         return NULL;
     }
+    ProjectLease = MdoProjectLeaseAcquire(ProjectId,
+        MDO_PROJECT_LEASE_SHARED, Error);
+    if ( ProjectLease == NULL ) return NULL;
     xrtMutexLock(g_MdoSessions.Lock);
     if ( !MdoSessionsMetaRead(ProjectId, SessionId, &Info) ) {
         xrtMutexUnlock(g_MdoSessions.Lock);
         MdoSessionsXrtError(Error, XWORK_ERROR_IO,
             "cannot read session metadata");
+        MdoProjectLeaseRelease(ProjectLease);
         return NULL;
     }
-    Session = MdoSessionsHandleCreate(NULL, NULL, &Info, MetaPath);
+    Session = MdoSessionsHandleCreate(NULL, NULL, ProjectLease, &Info, MetaPath);
     if ( Session != NULL )
         Session->Info.RuntimeOpen =
             MdoSessionsActiveFind(ProjectId, SessionId) != SIZE_MAX;
     xrtMutexUnlock(g_MdoSessions.Lock);
+    MdoProjectLeaseRelease(ProjectLease);
     if ( Session == NULL )
         MdoSessionsError(Error, XWORK_ERROR_OUT_OF_MEMORY,
             "cannot allocate loaded session metadata");
@@ -1317,6 +1349,7 @@ void MdoSessionRelease(MdoSession* Session)
     MdoAgentSessionRelease(Session->Agent);
     MdoSessionEventBridgeRelease(Session->Bridge);
     xrtMutexDestroy(Session->Lock);
+    MdoProjectLeaseRelease(Session->ProjectLease);
     memset(Session, 0, sizeof(*Session));
     xrtFree(Session);
 }

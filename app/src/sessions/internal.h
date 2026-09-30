@@ -2,12 +2,14 @@
 #define MDO_SESSIONS_INTERNAL_H
 
 #include "../../include/mdo/sessions.h"
+#include "../../include/mdo/project_lifecycle.h"
 
 typedef struct MdoSessionEventBridge MdoSessionEventBridge;
 typedef struct MdoSessionEventTrimPlan MdoSessionEventTrimPlan;
 
 MdoSessionEventBridge* MdoSessionEventBridgeCreate(
     const char* ProjectId, const char* SessionId,
+    MdoProjectLease* ProjectLease,
     xwork_event_fn UserEvent, void* UserEventData,
     void* UserOwnerData, xwork_agent_owner_retain_fn UserOwnerRetain,
     xwork_agent_owner_release_fn UserOwnerRelease, xwork_error* Error);

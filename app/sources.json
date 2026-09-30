@@ -2,6 +2,7 @@
   "schema_version": 1,
   "sources": [
     "src/storage/home.c",
+    "src/projects/lifecycle.c",
     "src/config/config.c",
     "src/config/service.c",
     "src/security/secrets.c",
