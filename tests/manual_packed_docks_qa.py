@@ -3,7 +3,8 @@
 Run from the repository root after building mdo.exe, or pass --packed-path to
 inspect an isolated pack while the installed executable is running. The model
 endpoint only binds to localhost and returns deterministic tool calls for marker prompts:
-TODO UI, ASK UI, LONG ASK UI, LONG RESPONSE UI, SEQUENTIAL DECISIONS UI, APPROVAL UI, APPROVAL RUN UI,
+TODO UI, TODO UPDATE UI, TODO REORDER UI, ASK UI, LONG ASK UI, LONG RESPONSE UI,
+SEQUENTIAL DECISIONS UI, APPROVAL UI, APPROVAL RUN UI,
 APPROVAL NEXT UI, TASK UI, or ARTIFACT UI. The long
 ask has multiline question and options; the latter reads one bounded synthetic
 text file so the normal tool-output artifact path is used. The optional chat
@@ -93,7 +94,19 @@ class Model(BaseHTTPRequestHandler):
             slow = "SLOW UI" in wire and "slow" not in Model.sent
             if slow:
                 Model.sent.add("slow")
-            if "TODO UI" in wire and "todo" not in Model.sent:
+            if "TODO REORDER UI" in wire and "todo-reorder" not in Model.sent:
+                Model.sent.add("todo-reorder")
+                output = [{"type": "function_call", "call_id": "ui-todo-reorder-1",
+                           "name": "mdo.todo", "arguments": json.dumps({"items": [
+                               {"text": "Verify refresh", "done": True},
+                               {"text": "Inspect UI", "done": True}]})}]
+            elif "TODO UPDATE UI" in wire and "todo-update" not in Model.sent:
+                Model.sent.add("todo-update")
+                output = [{"type": "function_call", "call_id": "ui-todo-update-1",
+                           "name": "mdo.todo", "arguments": json.dumps({"items": [
+                               {"text": "Inspect UI", "done": True},
+                               {"text": "Verify refresh", "done": True}]})}]
+            elif "TODO UI" in wire and "todo" not in Model.sent:
                 Model.sent.add("todo")
                 output = [{"type": "function_call", "call_id": "ui-todo-1",
                            "name": "mdo.todo", "arguments": json.dumps({"items": [
