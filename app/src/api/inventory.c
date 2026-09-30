@@ -1,7 +1,9 @@
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 #include "internal.h"
+#include "project_references.h"
 #include "../../include/mdo/config.h"
 #include "../../include/mdo/home.h"
 #include "../../include/mdo/memory.h"
@@ -272,7 +274,7 @@ static bool MdoApiProjectNoBody(const MdoApiContext* Context)
              (Head->Flags & (uint32)XHTTP1_TRANSFER_ENCODING) != 0u);
 }
 
-static int MdoApiProjectExpectedRevision(const MdoApiContext* Context,
+int MdoApiProjectExpectedRevision(const MdoApiContext* Context,
     const char* Id, uint64* Revision, bool* MatchesProject)
 {
     static const char Prefix[] = "\"mdo-project-";
@@ -453,6 +455,11 @@ static bool MdoApiProjectPreviewPath(cstr Format, cstr Id,
         XFILE_TYPE_DIRECTORY : XFILE_TYPE_FILE);
 }
 
+static int MdoApiProjectPreviewTargetCompare(const void* A, const void* B)
+{
+    return strcmp(((const MdoHomePurgeTarget*)A)->Path, ((const MdoHomePurgeTarget*)B)->Path);
+}
+
 /* This is an advisory inventory, not an authorization to remove files.  A
  * future purge transaction must rescan while holding all affected stores. */
 bool MdoApiProjectPurgePreviewRoute(MdoApiContext* Context)
@@ -466,6 +473,12 @@ bool MdoApiProjectPurgePreviewRoute(MdoApiContext* Context)
     MdoMemorySnapshot* Memory = NULL;
     MdoProjectPurgeInventory* Inventory = NULL;
     MdoProjectPurgeInventoryInfo InventoryInfo;
+    MdoProjectReferenceGuard* References = NULL;
+    MdoHomePurgeTarget ReferenceTargets[2];
+    MdoHomePurgeTarget* Candidates = NULL;
+    size_t ReferenceCount = 0u;
+    uint64 ReferenceBytes = 0u;
+    bool SelectionPresent = false, GlobalDraftPresent = false;
     MdoScheduleExecutorSnapshot Executor;
     xwork_error Error;
     xvalue* Data = NULL;
@@ -498,6 +511,29 @@ bool MdoApiProjectPurgePreviewRoute(MdoApiContext* Context)
         "project_not_found", "The project definition was not found", NULL);
     Inventory = MdoProjectPurgeInventoryCreate(Id, NULL, &Error);
     if ( Inventory == NULL || !MdoProjectPurgeInventoryGetInfo(Inventory, &InventoryInfo) ) goto done;
+    Project = InventoryInfo.Project;
+    /* Match the execution scope without making the shared preview a delete
+     * token. Ordinary writers can change these records after it is released. */
+    References = MdoApiProjectReferencesPreview(Id, &Error);
+    if ( References == NULL ) goto done;
+    ReferenceCount = MdoApiProjectReferencesCount(References);
+    if ( ReferenceCount > 2u || InventoryInfo.Targets > MDO_PROJECT_PURGE_TARGET_LIMIT - ReferenceCount ||
+         InventoryInfo.Files + InventoryInfo.Directories > MDO_PROJECT_PURGE_NODE_LIMIT - ReferenceCount ) goto done;
+    for ( Index = 0u; Index < ReferenceCount; ++Index ) {
+        if ( !MdoApiProjectReferencesAt(References, Index, &ReferenceTargets[Index]) ||
+             ReferenceBytes > UINT64_MAX - ReferenceTargets[Index].Info.Size ) goto done;
+        ReferenceBytes += ReferenceTargets[Index].Info.Size;
+        SelectionPresent = SelectionPresent || strcmp(ReferenceTargets[Index].Path, "data/workspace-state.json") == 0;
+        GlobalDraftPresent = GlobalDraftPresent || strcmp(ReferenceTargets[Index].Path, "data/draft.json") == 0;
+    }
+    if ( InventoryInfo.Bytes > UINT64_MAX - ReferenceBytes ) goto done;
+    Candidates = (MdoHomePurgeTarget*)xrtCalloc(InventoryInfo.Targets + ReferenceCount, sizeof(*Candidates));
+    if ( Candidates == NULL ) goto done;
+    for ( Index = 0u; Index < InventoryInfo.Targets; ++Index )
+        if ( !MdoProjectPurgeInventoryAt(Inventory, Index, &Candidates[Index]) ) goto done;
+    for ( Index = 0u; Index < ReferenceCount; ++Index )
+        Candidates[InventoryInfo.Targets + Index] = ReferenceTargets[Index];
+    qsort(Candidates, InventoryInfo.Targets + ReferenceCount, sizeof(*Candidates), MdoApiProjectPreviewTargetCompare);
     if ( !MdoApiProjectPreviewPath("projects/%s.json.bak", Id,
             false, &ProjectBackupPresent) ||
          !MdoApiProjectPreviewPath("memory/projects/%s.json", Id,
@@ -559,6 +595,7 @@ bool MdoApiProjectPurgePreviewRoute(MdoApiContext* Context)
         MdoApiValueSetString(Data, "id", Project.Id) &&
         MdoApiValueSetString(Data, "name", Project.Name) &&
         MdoApiValueSetUInt(Data, "revision", Project.Revision) &&
+        MdoApiValueSetInt(Data, "created_at", InventoryInfo.Project.CreatedAt) &&
         MdoApiValueSetUInt(Data, "session_count", SessionCount) &&
         MdoApiValueSetUInt(Data, "session_runtime_count",
             SessionRuntimeCount) &&
@@ -593,10 +630,12 @@ bool MdoApiProjectPurgePreviewRoute(MdoApiContext* Context)
         MdoApiValueSetUInt(Data, "memory_generation",
             MdoMemorySnapshotGeneration(Memory)) &&
         MdoApiValueSetBool(Data, "advisory", true) &&
-        MdoApiValueSetUInt(Data, "target_count", InventoryInfo.Targets) &&
-        MdoApiValueSetUInt(Data, "file_count", InventoryInfo.Files) &&
+        MdoApiValueSetBool(Data, "selection_reference_present", SelectionPresent) &&
+        MdoApiValueSetBool(Data, "global_draft_reference_present", GlobalDraftPresent) &&
+        MdoApiValueSetUInt(Data, "target_count", InventoryInfo.Targets + ReferenceCount) &&
+        MdoApiValueSetUInt(Data, "file_count", InventoryInfo.Files + ReferenceCount) &&
         MdoApiValueSetUInt(Data, "directory_count", InventoryInfo.Directories) &&
-        MdoApiValueSetUInt(Data, "total_bytes", InventoryInfo.Bytes) &&
+        MdoApiValueSetUInt(Data, "total_bytes", InventoryInfo.Bytes + ReferenceBytes) &&
         MdoApiValueSetBool(Data, "project_draft_present", InventoryInfo.ProjectDraft) &&
         MdoApiValueSetBool(Data, "project_draft_backup_present", InventoryInfo.ProjectDraftBackup) &&
         MdoApiValueSetUInt(Data, "schedule_backup_count", InventoryInfo.ScheduleBackups) &&
@@ -606,12 +645,12 @@ bool MdoApiProjectPurgePreviewRoute(MdoApiContext* Context)
     if ( Ok ) {
         xvalue* Targets = xrtValueArray();
         Ok = Targets != NULL;
-        for ( Index = 0u; Ok && Index < InventoryInfo.Targets; ++Index ) {
-            MdoProjectPurgeTarget Target;
+        for ( Index = 0u; Ok && Index < InventoryInfo.Targets + ReferenceCount; ++Index ) {
+            const MdoHomePurgeTarget* Target = &Candidates[Index];
             xvalue* Item = xrtValueObject();
-            Ok = Item != NULL && MdoProjectPurgeInventoryAt(Inventory, Index, &Target) &&
-                MdoApiValueSetString(Item, "path", Target.Path) &&
-                MdoApiValueSetString(Item, "type", Target.Info.Type == XFILE_TYPE_DIRECTORY ?
+            Ok = Item != NULL &&
+                MdoApiValueSetString(Item, "path", Target->Path) &&
+                MdoApiValueSetString(Item, "type", Target->Info.Type == XFILE_TYPE_DIRECTORY ?
                     "directory" : "file") && MdoApiValueAppendTake(Targets, &Item);
             xrtValueRelease(Item);
         }
@@ -619,6 +658,8 @@ bool MdoApiProjectPurgePreviewRoute(MdoApiContext* Context)
         xrtValueRelease(Targets);
     }
 done:
+    xrtFree(Candidates);
+    MdoApiProjectReferencesFree(References);
     MdoProjectPurgeInventoryFree(Inventory);
     MdoMemorySnapshotRelease(Memory);
     MdoRunSnapshotRelease(Runs);

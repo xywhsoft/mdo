@@ -50,6 +50,12 @@ static const MdoApiRoute g_MdoApiRoutes[] = {
     { "/api/v1/projects/{project}/purge-preview",
       XHTTP_METHOD_GET | XHTTP_METHOD_HEAD,
       "GET, HEAD, OPTIONS", MdoApiProjectPurgePreviewRoute, true },
+    /* The purge coordinator acquires exclusion itself and looks up durable
+     * receipts before reading the current (possibly deleted) definition. */
+    { "/api/v1/projects/{project}/purge", XHTTP_METHOD_POST,
+      "POST, OPTIONS", MdoApiProjectPurgeRoute, false },
+    { "/api/v1/project-purges/{request}", XHTTP_METHOD_GET | XHTTP_METHOD_HEAD,
+      "GET, HEAD, OPTIONS", MdoApiProjectPurgeResultRoute, false },
     { "/api/v1/projects/{project}/workspace/files",
       XHTTP_METHOD_GET | XHTTP_METHOD_HEAD,
       "GET, HEAD, OPTIONS", MdoApiProjectWorkspaceFilesRoute, false },
@@ -356,7 +362,10 @@ static bool MdoApiRouteInvoke(MdoApiContext* Context,
     memset(&Home, 0, sizeof(Home)); Home.Size = sizeof(Home);
     if ( (Context->Request->head->MethodCode &
             (XHTTP_METHOD_GET | XHTTP_METHOD_HEAD)) == 0u && MdoHomeGetSnapshot(&Home) ) {
-        if ( Home.RestartRequired ) return MdoApiReplyError(Context, 503u,
+        /* This one coordinator must replay committed/pending facts even when
+         * the failure deliberately froze Home. Its storage boundary still
+         * refuses every new mutation until recovery; import fencing stays. */
+        if ( Home.RestartRequired && Route->Proc != MdoApiProjectPurgeRoute ) return MdoApiReplyError(Context, 503u,
             "home_restart_required", "Restart mdo before changing imported data", NULL);
         if ( Home.ImportInProgress ) return MdoApiReplyError(Context, 409u,
             "home_import_busy", "Home import is in progress; wait before changing data", NULL);

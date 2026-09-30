@@ -134,10 +134,75 @@ even when memory tools are disabled. Cursor publication failure isolates the
 complete project set; history failure retains the claim until manager shutdown.
 This is process-local isolation, not a new crash-recovery transaction.
 
-The current exclusive primitive is infrastructure for the planned purge
-transaction. There is no executable project-purge API yet, and `purge-preview`
-remains advisory. Legacy migration boundaries, the purge
-transaction, and startup recovery still need implementation before purge opens.
+The project purge coordinator acquires its own exclusive lease; a shared route
+lease must not wrap its execution. Preview keeps a shared lease and locks the
+global selection and draft records in the same order as execution. It stays
+advisory: ordinary writers may change the inventory after the preview releases.
+
+## Project purge requests and results
+
+`GET /projects/{project}/purge-preview` lists every generated candidate root
+and its file/directory/byte totals. `selection_reference_present` and
+`global_draft_reference_present` describe current, exactly attributable global
+references, included in both the paths and totals. Other/unassociated records,
+historical global backups, workspace sources and shared audits are retained.
+Damaged references fail the entire preview with `503 purge_preview_unavailable`.
+The reply supplies the project ETag, `revision`, and `created_at` (Unix
+microseconds), but `advisory: true` never authorizes a future move.
+
+`POST /projects/{project}/purge` requires the reviewed strong project ETag in
+`If-Match` and exactly this JSON body:
+
+```json
+{"purge_request_id":"dddddddddddddddddddddddddddddddd","created_at":1790790000000000}
+```
+
+The purge ID is 32 lowercase hexadecimal characters, separate from the HTTP
+correlation `request_id`. It binds the project ID, revision and creation time;
+a recreated same-name project can restart at revision 1. The coordinator checks
+fresh attempts under exclusion, rescans all roots, validates runtime objects
+and schedules, and settles conditional global references in one Home transaction.
+Client paths, extra fields, non-integer creation times and weak/duplicate ETags
+are rejected. Missing `If-Match` returns `428`; stale revision/creation time
+returns `412`. Fresh attempts need a registered primary definition.
+
+Normal commit returns `200` with `purge_request_id`, `project_id`, `revision`,
+`created_at`, `accepted`, `outcome`, `committed`, `replayed`, `restart_required`,
+counts/bytes and conditional-reference removal flags. `workspace_files_removed`
+is false and `shared_records_retained` is true. `409 project_purge_aborted`
+reports a compensated/uncommitted attempt; `409 project_busy` reports live
+owners; `409 purge_request_conflict` reports an ID bound to a different version.
+`503 purge_restart_required` can mean committed deletion with remaining cleanup
+or cache recovery. All coordinator failures carry the same facts under
+`error.details`: HTTP failure alone is never proof that deletion did not commit.
+`accepted: null` and `outcome: unknown` mean the record could not be verified;
+`accepted: false` and `not_accepted` apply to this exact attempted binding.
+
+`GET /project-purges/{purge-request-id}` queries the durable result independently
+of the current project definition or lease, including during Home isolation.
+It returns `200` with the original binding, statistics and proven commit fact.
+`outcome` is `pending`, `committed` or `aborted`. Pending publication with a
+valid commit marker still reports `committed: true` and requires recovery.
+Missing accepted/result records return `404 purge_request_not_found`; this is
+not authorization to invent another ID after losing a response. Invalid IDs
+return `400`, while damaged/conflicting records return `503` instead of missing.
+GET/HEAD never create or repair Home. POST supports OPTIONS; result queries
+support GET/HEAD/OPTIONS, with normal no-store envelopes and method fencing.
+
+Repeated POST with the same binding replays its terminal result without touching
+the current project, caches or generations, even after a same-name recreation.
+Pending requests require restart; terminal aborted requests only replay the
+abort. Restart first recovers storage/result evidence, then loads managers.
+Ordinary mutations remain fenced during isolation; only the dedicated purge
+coordinator can report the recorded facts through POST. Import fencing still
+applies. Keep the same ID across disconnects and verify its binding/commit fact
+before changing navigation or beginning another attempt.
+
+Receipts live in `data/project-purges/<id>.json`, bounded to 2048 bytes each and
+1024 records, with no automatic expiry/reuse. Preserve them with Home backups.
+The storage protocol guarantees tested process-interruption recovery, not
+power-loss directory durability. The product confirmation button, persisted
+client intent, lost-response UI and navigation settlement remain to be wired.
 
 ## Settings transactions
 

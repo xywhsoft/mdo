@@ -21,6 +21,8 @@ from test_interrupt_runtime import stop_host
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--packed-path", type=Path, default=ROOT / "mdo.exe")
+    parser.add_argument("--include-references", action="store_true",
+        help="Seed attributable global draft and last-session references for preview QA")
     args = parser.parse_args()
     base = Path(tempfile.mkdtemp(prefix="mdo-packed-purge-", dir=ROOT / ".build"))
     packed = base / ("mdo.exe" if os.name == "nt" else "mdo")
@@ -54,7 +56,15 @@ def main() -> int:
         api("POST", "projects", {"id": project, "name": "候选清单验证",
             "workspace_root": str(workspace), "default_model_id": "ling-3.0-tiny"})
         api("PUT", f"projects/{project}/draft", {"revision": 0, "text": "尚未发送的新任务草稿"})
-        api("POST", "sessions", {"project_id": project, "title": "清单里的会话"})
+        session = api("POST", "sessions", {"project_id": project, "title": "清单里的会话"})
+        if args.include_references:
+            api("PUT", "workspace-state", {"project_id": project, "session_id": session["id"]})
+            draft = api("GET", "draft")
+            api("PUT", "draft", {"revision": draft["revision"], "text": "当前项目的全局待建任务草稿",
+                "new_task": {"project_id": project, "session_id": "f" * 32, "title": "待建任务",
+                    "agent_id": "mdo.default", "model_id": "ling-3.0-tiny", "reasoning_effort": "medium",
+                    "permission_profile": "balanced", "phase": "rejected"},
+                "submissions": [], "attachments": [], "run_admission_uncertain": False})
         _, headers, _ = request(port, "GET", f"/api/v1/memory/projects/{project}")
         api("PUT", f"memory/projects/{project}", {"id": "fixture-note", "title": "项目记忆",
             "content": "用于核对候选数据范围。", "tags": [], "pinned": False},

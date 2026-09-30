@@ -18,6 +18,10 @@ typedef struct MdoProjectReferenceGuard MdoProjectReferenceGuard;
  * two files must move in the SAME transaction as the project data. */
 MdoProjectReferenceGuard* MdoApiProjectReferencesBegin(const char* ProjectId,
     MdoProjectLease* Owner, xwork_error* Error);
+/* Advisory inspection acquires its own shared project lease and the same
+ * selection/draft locks. It never authorizes moves or repairs either file. */
+MdoProjectReferenceGuard* MdoApiProjectReferencesPreview(const char* ProjectId,
+    xwork_error* Error);
 size_t MdoApiProjectReferencesCount(const MdoProjectReferenceGuard* Guard);
 bool MdoApiProjectReferencesAt(const MdoProjectReferenceGuard* Guard,
     size_t Index, MdoHomePurgeTarget* Target);
@@ -26,6 +30,8 @@ void MdoApiProjectReferencesFree(MdoProjectReferenceGuard* Guard);
 /* Internal half of the guard. Success keeps the draft mutex on this thread;
  * failure unlocks it. The combined guard always acquires selection first. */
 bool MdoApiDraftReferenceLock(const char* ProjectId,
+    const MdoProjectLease* Owner, MdoHomePurgeTarget* Target, bool* Present);
+bool MdoApiDraftReferencePreviewLock(const char* ProjectId,
     const MdoProjectLease* Owner, MdoHomePurgeTarget* Target, bool* Present);
 void MdoApiDraftReferenceUnlock(void);
 

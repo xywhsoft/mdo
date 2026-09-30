@@ -559,14 +559,15 @@ done:
     return Ok;
 }
 
-bool MdoApiDraftReferenceLock(const char* ProjectId,
-    const MdoProjectLease* Owner, MdoHomePurgeTarget* Target, bool* Present)
+static bool MdoApiDraftReferenceLockMode(const char* ProjectId,
+    const MdoProjectLease* Owner, MdoProjectLeaseMode Mode,
+    MdoHomePurgeTarget* Target, bool* Present)
 {
     MdoDraft* Draft;
     xfileinfo Before, After;
     bool Exists, AfterExists, Ok;
     if ( Target == NULL || Present == NULL || g_MdoDraftLock == NULL ||
-         !MdoProjectLeaseProtects(Owner, ProjectId, MDO_PROJECT_LEASE_EXCLUSIVE) )
+         !MdoProjectLeaseProtects(Owner, ProjectId, Mode) )
         return false;
     *Present = false;
     memset(Target, 0, sizeof(*Target));
@@ -588,6 +589,20 @@ bool MdoApiDraftReferenceLock(const char* ProjectId,
     MdoDraftRelease(Draft);
     if ( !Ok ) xrtMutexUnlock(g_MdoDraftLock);
     return Ok;
+}
+
+bool MdoApiDraftReferenceLock(const char* ProjectId,
+    const MdoProjectLease* Owner, MdoHomePurgeTarget* Target, bool* Present)
+{
+    return MdoApiDraftReferenceLockMode(ProjectId, Owner,
+        MDO_PROJECT_LEASE_EXCLUSIVE, Target, Present);
+}
+
+bool MdoApiDraftReferencePreviewLock(const char* ProjectId,
+    const MdoProjectLease* Owner, MdoHomePurgeTarget* Target, bool* Present)
+{
+    return MdoApiDraftReferenceLockMode(ProjectId, Owner,
+        MDO_PROJECT_LEASE_SHARED, Target, Present);
 }
 
 void MdoApiDraftReferenceUnlock(void)

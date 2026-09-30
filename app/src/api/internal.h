@@ -57,6 +57,10 @@ bool MdoApiReplySuccessTakeRevision(MdoApiContext* pContext, uint16 Status,
     xvalue* pData, uint64 Revision);
 bool MdoApiReplyError(MdoApiContext* pContext, uint16 Status, cstr Code,
     cstr Message, cstr Allow);
+/* Takes optional structured facts even on failure (e.g. committed deletion
+ * with pending cleanup). Clients must not infer rollback from HTTP status. */
+bool MdoApiReplyErrorDetailsTake(MdoApiContext* pContext, uint16 Status,
+    cstr Code, cstr Message, xvalue* Details);
 bool MdoApiReplyOptions(MdoApiContext* pContext, cstr Allow);
 MdoApiBodyStatus MdoApiJsonBodyRead(MdoApiContext* pContext,
     MdoApiJsonBody* pBody);
@@ -82,6 +86,10 @@ bool MdoApiMcpRoute(MdoApiContext* pContext);
 bool MdoApiProjectsRoute(MdoApiContext* pContext);
 bool MdoApiProjectRoute(MdoApiContext* pContext);
 bool MdoApiProjectPurgePreviewRoute(MdoApiContext* pContext);
+int MdoApiProjectExpectedRevision(const MdoApiContext* Context,
+    const char* Id, uint64* Revision, bool* MatchesProject);
+bool MdoApiProjectPurgeRoute(MdoApiContext* pContext);
+bool MdoApiProjectPurgeResultRoute(MdoApiContext* pContext);
 bool MdoApiMemoryCollectionRoute(MdoApiContext* pContext);
 bool MdoApiMemoryEntryRoute(MdoApiContext* pContext);
 bool MdoApiMemoryOpenDirectoryRoute(MdoApiContext* pContext);

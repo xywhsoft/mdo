@@ -193,8 +193,8 @@ bool MdoApiReplySuccessTakeRevision(MdoApiContext* pContext, uint16 Status,
         EntityTag);
 }
 
-bool MdoApiReplyError(MdoApiContext* pContext, uint16 Status, cstr Code,
-    cstr Message, cstr Allow)
+static bool MdoApiReplyErrorImpl(MdoApiContext* pContext, uint16 Status, cstr Code,
+    cstr Message, cstr Allow, xvalue* Details)
 {
     xvalue* Envelope = xrtValueObject();
     xvalue* Error = xrtValueObject();
@@ -205,6 +205,12 @@ bool MdoApiReplyError(MdoApiContext* pContext, uint16 Status, cstr Code,
          !xrtValueObjectSetNew(Error, XRT_STR_LITERAL("message"),
             xrtValueString(xrtStrView(Message != NULL ? Message :
                 "Internal server error"))) ) {
+        xrtValueRelease(Details);
+        xrtValueRelease(Error);
+        xrtValueRelease(Envelope);
+        return MdoApiReplySerializationFailure(pContext, 500u);
+    }
+    if ( Details != NULL && !xrtValueObjectSetNew(Error, XRT_STR_LITERAL("details"), Details) ) {
         xrtValueRelease(Error);
         xrtValueRelease(Envelope);
         return MdoApiReplySerializationFailure(pContext, 500u);
@@ -219,6 +225,18 @@ bool MdoApiReplyError(MdoApiContext* pContext, uint16 Status, cstr Code,
         return MdoApiReplySerializationFailure(pContext, 500u);
     }
     return MdoApiReplyValue(pContext, Status, Envelope, Allow, NULL);
+}
+
+bool MdoApiReplyError(MdoApiContext* Context, uint16 Status, cstr Code,
+    cstr Message, cstr Allow)
+{
+    return MdoApiReplyErrorImpl(Context, Status, Code, Message, Allow, NULL);
+}
+
+bool MdoApiReplyErrorDetailsTake(MdoApiContext* Context, uint16 Status,
+    cstr Code, cstr Message, xvalue* Details)
+{
+    return MdoApiReplyErrorImpl(Context, Status, Code, Message, NULL, Details);
 }
 
 bool MdoApiReplyOptions(MdoApiContext* pContext, cstr Allow)

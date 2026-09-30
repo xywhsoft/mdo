@@ -133,8 +133,8 @@ void MdoApiProjectReferencesFree(MdoProjectReferenceGuard* Guard)
     xrtFree(Guard);
 }
 
-MdoProjectReferenceGuard* MdoApiProjectReferencesBegin(const char* ProjectId,
-    MdoProjectLease* Owner, xwork_error* Error)
+static MdoProjectReferenceGuard* MdoApiProjectReferencesAcquire(const char* ProjectId,
+    MdoProjectLease* Owner, MdoProjectLeaseMode Mode, xwork_error* Error)
 {
     MdoProjectReferenceGuard* Guard;
     MdoWorkspaceState State;
@@ -142,11 +142,11 @@ MdoProjectReferenceGuard* MdoApiProjectReferencesBegin(const char* ProjectId,
     bool Exists, AfterExists, DraftPresent;
     xworkErrorInit(Error);
     if ( g_MdoWorkspaceStateLock == NULL ||
-         !MdoProjectLeaseProtects(Owner, ProjectId, MDO_PROJECT_LEASE_EXCLUSIVE) ) {
+         !MdoProjectLeaseProtects(Owner, ProjectId, Mode) ) {
         if ( Error != NULL ) {
             Error->eCode = XWORK_ERROR_INVALID_ARGUMENT;
             snprintf(Error->sMessage, sizeof(Error->sMessage),
-                "project references require a current exclusive lease");
+                "project references require a current lease of the requested mode");
         }
         return NULL;
     }
@@ -171,8 +171,9 @@ MdoProjectReferenceGuard* MdoApiProjectReferencesBegin(const char* ProjectId,
             sizeof(Guard->Targets[Guard->Count].Path), "%s", MDO_WORKSPACE_STATE_PATH);
         Guard->Targets[Guard->Count++].Info = After;
     }
-    if ( !MdoApiDraftReferenceLock(ProjectId, Owner,
-            &Guard->Targets[Guard->Count], &DraftPresent) ) goto failed;
+    if ( !(Mode == MDO_PROJECT_LEASE_EXCLUSIVE ?
+            MdoApiDraftReferenceLock(ProjectId, Owner, &Guard->Targets[Guard->Count], &DraftPresent) :
+            MdoApiDraftReferencePreviewLock(ProjectId, Owner, &Guard->Targets[Guard->Count], &DraftPresent)) ) goto failed;
     Guard->DraftLocked = true;
     if ( DraftPresent ) ++Guard->Count;
     return Guard;
@@ -184,6 +185,23 @@ failed:
             "global project references are invalid or changed during inspection");
     }
     return NULL;
+}
+
+MdoProjectReferenceGuard* MdoApiProjectReferencesBegin(const char* ProjectId,
+    MdoProjectLease* Owner, xwork_error* Error)
+{
+    return MdoApiProjectReferencesAcquire(ProjectId, Owner, MDO_PROJECT_LEASE_EXCLUSIVE, Error);
+}
+
+MdoProjectReferenceGuard* MdoApiProjectReferencesPreview(const char* ProjectId,
+    xwork_error* Error)
+{
+    MdoProjectLease* Owner = MdoProjectLeaseAcquire(ProjectId, MDO_PROJECT_LEASE_SHARED, Error);
+    MdoProjectReferenceGuard* Guard;
+    if ( Owner == NULL ) return NULL;
+    Guard = MdoApiProjectReferencesAcquire(ProjectId, Owner, MDO_PROJECT_LEASE_SHARED, Error);
+    MdoProjectLeaseRelease(Owner);
+    return Guard;
 }
 
 size_t MdoApiProjectReferencesCount(const MdoProjectReferenceGuard* Guard)
