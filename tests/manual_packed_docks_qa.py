@@ -358,6 +358,28 @@ Object.defineProperty(navigator, 'clipboard', {
                 print("QA delaying initial task list GET", flush=True)
                 time.sleep(self.server.startup_task_delay_seconds)
         path_parts = self.path.split("?", 1)[0].strip("/").split("/")
+        if (self.server.fail_first_fork_invalid and self.command == "POST" and
+                len(path_parts) == 7 and
+                path_parts[:3] == ["api", "v1", "projects"] and
+                path_parts[4] == "sessions" and path_parts[6] == "fork"):
+            with self.server.count_lock:
+                reject = not self.server.fork_rejected
+                self.server.fork_rejected = True
+            if reject:
+                payload = json.dumps({"ok": False, "error": {
+                    "code": "session_fork_invalid",
+                    "message": "Fork accepts only a valid title and through_sequence"
+                }}).encode()
+                print("QA rejected first fork POST with session_fork_invalid",
+                      flush=True)
+                self.send_response(422)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Content-Length", str(len(payload)))
+                self.send_header("Connection", "close")
+                self.end_headers()
+                self.wfile.write(payload)
+                self.close_connection = True
+                return
         if (self.server.fail_first_schedule_refresh_after_delete and
                 self.command == "GET" and self.path == "/api/v1/schedules"):
             with self.server.count_lock:
@@ -933,6 +955,8 @@ parser.add_argument("--decision-expand-arrival-fixture", action="store_true",
                     help="serve the synthetic decision-arrival page with packed assets")
 parser.add_argument("--ask-keyboard-viewport-fixture", action="store_true",
                     help="serve the ask keyboard viewport probe with packed assets")
+parser.add_argument("--fail-first-fork-invalid", action="store_true",
+                    help="reject the first session fork with a stable validation code")
 parser.add_argument("--fail-first-module", action="store_true",
                     help="reject the first main.js GET to test startup recovery")
 parser.add_argument("--delay-first-module-ms", type=int, default=0,
@@ -1166,7 +1190,7 @@ try:
             or args.queue_read_failures
             or args.reject_pane_layout or args.locale_hotkey
             or args.no_clipboard_api or args.decision_expand_arrival_fixture
-            or args.ask_keyboard_viewport_fixture
+            or args.ask_keyboard_viewport_fixture or args.fail_first_fork_invalid
             or args.fail_first_module or args.delay_first_module_ms
             or args.startup_task_delay_ms or args.startup_bootstrap_delay_ms
             or args.startup_session_delay_ms or args.fail_session_detail_reads
@@ -1179,6 +1203,8 @@ try:
         proxy.decision_expand_arrival_fixture = (
             args.decision_expand_arrival_fixture)
         proxy.ask_keyboard_viewport_fixture = args.ask_keyboard_viewport_fixture
+        proxy.fail_first_fork_invalid = args.fail_first_fork_invalid
+        proxy.fork_rejected = False
         proxy.locale_hotkey = args.locale_hotkey
         proxy.no_clipboard_api = args.no_clipboard_api
         proxy.fail_first_module = args.fail_first_module

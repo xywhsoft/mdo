@@ -2109,3 +2109,11 @@ Windows/Linux 有界门禁均通过 114 项 Python、113 项 Node、77 个模块
 新增 `tests/fixtures/ask-keyboard-viewport-browser.html` 通过生产 `createConversationDocks` 与 `trackMobileViewport` 模拟该时序。隔离候选单文件 Home `.build/mdo-packed-docks-c6l77t44` 经 `--ask-keyboard-viewport-fixture` 从候选包读取 CSS/JS：修复前同场景标题位于 y=-135–-116、展开入口 y=-135–-95；修复后入口 y=57–97、输入与提交 y=202–242。滚到卡片顶部时 72px 高的问题段落完整位于 y=127–199，滚回底部后回答框可见；Esc 不会立即重新展开，布局高度恢复后输入值和焦点仍在。脚本错误为空。此验证使用模拟 `visualViewport`，未代替实体手机软键盘与触控验收。
 
 Windows/Linux 有界门禁通过 114 项 Python、113 项 Node、77 个模块解析、21 个运行探针及确定性打包；Windows 另通过便携 WebView2 Home 和 20 秒启动。根目录 `mdo.exe` SHA-256 为 `0528a2745cedbbbea2314022d79600a4725dd6dac142fed0d0ea9a8790a0d3a3`，Linux 包为 `a0c5922c4059cc6817e1ee95e48f5c385018dae42b7b66cff021c18cc96fe891`。未做压力或高负载测试。
+
+## 2026-09-30：消息操作失败提示与弹窗焦点
+
+旧版支持中英俄切换，新版核心消息操作的成功路径已经恢复，但会话修改、分叉、截断及反馈中的 11 个稳定 API 失败码仍直接显示英文服务端原文。现为这些码补齐三语提示，保留未知错误的原始详情；其中“会话已更改、反馈未同步”明确提示先刷新核对，避免重复操作。三语语言包各 1264 键，`test_frontend_i18n.mjs` 核对每个新增码在三种语言下的文本。
+
+隔离候选单文件 Home `.build/mdo-packed-docks-6e4vvo5_` 的代理首次拒绝分支 POST，返回真实稳定码 `session_fork_invalid` 和英文详情。320×350 页显示中文错误，错误位于 y=249–266、确认按钮 y=287–327，文档宽 320px；修复前失败后焦点掉到页面根节点，修复后聚焦错误提示，Tab 可进入操作按钮，重试只创建一条独立分支并回到新会话输入框。Home `.build/mdo-packed-docks-jhn2e8no` 的首次新任务创建返回 `session_profile_invalid`，错误位于 y=231–266、创建按钮 y=287–327，焦点停在错误提示；仅用键盘重试后创建成功，焦点回输入框。两页脚本错误为空。项目取消注册弹窗也补上失败焦点，但本轮没有为该失败分支做打包页实测。
+
+最终 Windows/Linux 有界发布门禁均通过单元、77 个前端模块解析、21 个运行探针及确定性打包；Windows 另通过便携 WebView2 Home 和 20 秒单文件启动。根目录 `mdo.exe` SHA-256 为 `644a1867bad9975136f74c4076095fd0db3ff9e97524930520ac5464a6b34663`，Linux 包为 `d94a657a76aca53608901eadc7e7600d62beab50b1dbfb994719b94fb7d3b48f`。原生手机触控、软键盘以及其余服务端失败码的本地化仍待验收；未做压力或高负载测试。

@@ -586,7 +586,7 @@
     <form method="dialog">
       <h3 id="project-unregister-title" data-i18n="project.unregisterPrompt">取消注册项目？</h3>
       <p id="project-unregister-description"></p>
-      <div class="dialog-error" id="project-unregister-error" role="alert" hidden></div>
+      <div class="dialog-error" id="project-unregister-error" role="alert" tabindex="-1" hidden></div>
       <div class="dialog-actions"><button class="secondary-button" value="cancel" data-i18n="project.cancel">取消</button><button class="danger-button" value="unregister" data-i18n="project.unregister">取消注册</button></div>
     </form>
   </dialog>
@@ -646,7 +646,7 @@
           <option value="full-access" data-i18n="shell.permission.fullAccess">完全访问</option>
         </select></label>
       </div>
-      <div class="dialog-error" id="new-session-error" role="alert" hidden></div>
+      <div class="dialog-error" id="new-session-error" role="alert" tabindex="-1" hidden></div>
       <footer>
         <button class="secondary-button" value="cancel" data-i18n="sessionAction.cancel">取消</button>
         <button class="primary-button" id="create-session" value="default" data-i18n="newSession.create">创建会话</button>
@@ -669,7 +669,7 @@
         <label id="session-title-field"><span data-i18n="sessionAction.titleField">标题</span> <input name="title" maxlength="256"></label>
         <label id="session-sequence-field" hidden><span data-i18n="sessionAction.sequenceField">保留到序列</span> <input name="through_sequence" type="number" min="0" step="1"></label>
       </div>
-      <div class="dialog-error" id="session-action-error" role="alert" hidden></div>
+      <div class="dialog-error" id="session-action-error" role="alert" tabindex="-1" hidden></div>
       <footer>
         <button class="secondary-button" id="cancel-session-action" type="button" data-i18n="sessionAction.cancel">取消</button>
         <button class="primary-button" id="confirm-session-action" type="submit">保存</button>

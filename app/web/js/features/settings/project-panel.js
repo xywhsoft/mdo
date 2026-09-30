@@ -231,6 +231,7 @@ export function createProjectPanel({ panel, projectsStore, modelsStore,
     } catch (cause) {
       error.textContent = errorMessage(cause);
       error.hidden = false;
+      error.focus();
     } finally { confirm.disabled = false; }
   });
   dialog.addEventListener("close", () => { target = null; });

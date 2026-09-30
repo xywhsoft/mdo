@@ -2132,6 +2132,7 @@ export async function boot() {
     } catch (error) {
       actionError.textContent = errorMessage(error);
       actionError.hidden = false;
+      actionError.focus();
     } finally {
       actionConfirm.disabled = false;
     }
@@ -2188,6 +2189,7 @@ export async function boot() {
     } catch (error) {
       dialogError.textContent = errorMessage(error);
       dialogError.hidden = false;
+      dialogError.focus();
     } finally {
       createButton.disabled = false;
     }
