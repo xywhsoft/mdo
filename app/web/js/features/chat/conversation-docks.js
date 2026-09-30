@@ -457,11 +457,14 @@ export function createConversationDocks({ container, navigation, tasksStore, app
     const cramped = composerRegion?.hasAttribute("data-decision-pending") &&
       nextHeight < 120 && container.scrollHeight > nextHeight + 4;
     const hiddenFocus = !cramped &&
-      !composerRegion?.hasAttribute("data-decision-expanded") &&
       document.activeElement?.matches?.(".decision-dock-expand")
       ? document.activeElement.closest(".conversation-dock")?.querySelector("h3")
       : null;
     composerRegion?.toggleAttribute("data-decision-cramped", Boolean(cramped));
+    // A restored viewport has room for the dock again. Do not keep the
+    // temporary full-screen decision layer or focus its now-hidden toggle.
+    if (!cramped && composerRegion?.hasAttribute("data-decision-expanded"))
+      setDecisionExpanded(false);
     hiddenFocus?.focus({ preventScroll: true });
     if (revealOnResize && changed && !container.hidden) scheduleReveal();
   }
