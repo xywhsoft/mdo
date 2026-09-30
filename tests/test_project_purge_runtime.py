@@ -49,8 +49,9 @@ def patch_site(site: Path) -> None:
            "!MdoHomePurgeMove(Slot, Manifest.Targets[i].Path, &Manifest.Targets[i].Info))",
            "(!MdoPurgeFixtureRollbackAllowed() ||\n"
            "                     !MdoHomePurgeMove(Slot, Manifest.Targets[i].Path, &Manifest.Targets[i].Info)))")
-    change("src/storage/home_purge.inc.c", "    if ( !Exists ) return true;",
-           "    if ( !Exists ) return true;\n    if ( !MdoPurgeFixtureCleanupAllowed() ) return false;")
+    gc_check = "    if ( Info.Type != XFILE_TYPE_DIRECTORY ||\n         !MdoHomePurgeJournal(MDO_HOME_PURGE_GC, &Empty) )"
+    change("src/storage/home_purge.inc.c", gc_check,
+           "    if ( !MdoPurgeFixtureCleanupAllowed() ) return false;\n" + gc_check)
     change("src/schedules/manager.c", '#include "internal.h"',
            '#include "internal.h"\nbool MdoPurgeFixtureUnregister(xwork_runtime*, const char*, xwork_error*);')
     change("src/schedules/manager.c",
@@ -60,8 +61,8 @@ def patch_site(site: Path) -> None:
            '#include "../sessions/internal.h"\n'
            "bool MdoPurgeFixtureCacheCommit(MdoSchedulePurgeGuard*, xwork_error*);\n"
            "void MdoPurgeFixtureAfterStorage(bool);")
-    change("src/projects/purge.c", "    memset(&Home, 0, sizeof(Home)); Home.Size = sizeof(Home);",
-           "    MdoPurgeFixtureAfterStorage(Result->Committed);\n"
+    change("src/projects/purge.c", "    }\n    memset(&Home, 0, sizeof(Home)); Home.Size = sizeof(Home);",
+           "    }\n    MdoPurgeFixtureAfterStorage(Result->Committed);\n"
            "    memset(&Home, 0, sizeof(Home)); Home.Size = sizeof(Home);")
     change("src/projects/purge.c", "MdoSchedulesPurgeCommit(Schedules, &Failure)",
            "MdoPurgeFixtureCacheCommit(Schedules, &Failure)")

@@ -56,7 +56,9 @@ bool MdoHomeRemoveEmptyDirectory(cstr Path);
 
 /* Atomically moves an existing external Home object within the same Home.
  * Both paths must already have real parent directories; existing targets and
- * intermediate symlinks are rejected. No Home or parent directory is created. */
+ * intermediate symlinks are rejected. The reserved purge-receipt namespace and
+ * its data parent cannot be moved or replaced through this API.
+ * No Home or parent directory is created. */
 bool MdoHomeRenameNoReplace(cstr Source, cstr Target);
 
 /* Returns an owned native path below the configured external Home. This does

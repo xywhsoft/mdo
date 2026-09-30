@@ -73,8 +73,50 @@ static int MdoProjectPurgeTargetCompare(const void* A, const void* B)
     return strcmp(((const MdoHomePurgeTarget*)A)->Path, ((const MdoHomePurgeTarget*)B)->Path);
 }
 
-MdoProjectPurgeStatus MdoProjectPurgeExecute(const char* ProjectId,
-    uint64 ExpectedRevision, MdoProjectPurgeResult* Result, xwork_error* Error)
+/* Look up before acquiring exclusion: a terminal receipt remains readable
+ * when a failed cache/cleanup step deliberately pins that project's gate. */
+static bool MdoProjectPurgeReplay(const char* RequestId, const char* ProjectId,
+    uint64 Revision, int64 CreatedAt, MdoProjectPurgeResult* Result,
+    MdoProjectPurgeStatus* Status, xwork_error* Error)
+{
+    MdoHomePurgeReceipt Receipt;
+    MdoHomeSnapshot Home;
+    bool Found;
+    if ( !MdoHomePurgeReceiptGet(RequestId, &Receipt, &Found) ) {
+        *Status = MdoProjectPurgeError(Error, MDO_PROJECT_PURGE_UNAVAILABLE, XWORK_ERROR_IO,
+            "cannot verify the project purge request/result record");
+        return true;
+    }
+    if ( !Found ) return false;
+    if ( strcmp(Receipt.Request.ProjectId, ProjectId) != 0 ||
+         Receipt.Request.Revision != Revision || Receipt.Request.CreatedAt != (uint64)CreatedAt ) {
+        *Status = MdoProjectPurgeError(Error, MDO_PROJECT_PURGE_REQUEST_CONFLICT, XWORK_ERROR_CONTEXT,
+            "purge request ID belongs to another project version");
+        return true;
+    }
+    Result->Targets = Receipt.Request.Targets; Result->Files = Receipt.Request.Files;
+    Result->Directories = Receipt.Request.Directories; Result->Bytes = Receipt.Request.Bytes;
+    Result->Schedules = Receipt.Request.Schedules;
+    Result->Committed = Receipt.Committed;
+    Result->Replayed = Receipt.Outcome != MDO_HOME_PURGE_PENDING;
+    Result->SelectionRemoved = Result->Committed && Receipt.Request.Selection;
+    Result->GlobalDraftRemoved = Result->Committed && Receipt.Request.GlobalDraft;
+    memset(&Home, 0, sizeof(Home)); Home.Size = sizeof(Home);
+    Result->RestartRequired = !MdoHomeGetSnapshot(&Home) || Home.RestartRequired ||
+        Receipt.Outcome == MDO_HOME_PURGE_PENDING;
+    if ( Result->RestartRequired )
+        *Status = MdoProjectPurgeError(Error, MDO_PROJECT_PURGE_RESTART_REQUIRED, XWORK_ERROR_IO,
+            "project purge result is recorded; restart to settle storage and caches");
+    else if ( Result->Committed ) {
+        *Status = MDO_PROJECT_PURGE_OK; xworkErrorInit(Error); xrtClearError();
+    } else *Status = MdoProjectPurgeError(Error, MDO_PROJECT_PURGE_ABORTED, XWORK_ERROR_IO,
+        "recorded project purge did not commit; use a new request after checking its result");
+    return true;
+}
+
+static MdoProjectPurgeStatus MdoProjectPurgeExecuteImpl(const char* RequestId,
+    const char* ProjectId, uint64 ExpectedRevision, int64 ExpectedCreatedAt,
+    MdoProjectPurgeResult* Result, xwork_error* Error)
 {
     MdoProjectLease* Owner = NULL;
     MdoProjectPurgeInventory* Inventory = NULL;
@@ -84,18 +126,25 @@ MdoProjectPurgeStatus MdoProjectPurgeExecute(const char* ProjectId,
     MdoProjectPurgeInventoryInfo Info;
     MdoProjectInfo Project;
     MdoHomeSnapshot Home;
+    MdoHomePurgeRequest Request;
     xwork_error Failure, LocalError;
     char StorageMessage[256];
     MdoProjectPurgeStatus Status = MDO_PROJECT_PURGE_UNAVAILABLE;
     size_t i, ReferenceCount;
     bool Found, CacheOk, HasSessions = false, HasMemory = false;
-    bool Selection = false, Draft = false;
+    bool Selection = false, Draft = false, RequestConflict = false;
     if ( Result != NULL ) memset(Result, 0, sizeof(*Result));
     if ( Error == NULL ) Error = &LocalError;
     xworkErrorInit(Error);
-    if ( Result == NULL || ExpectedRevision == 0u || ExpectedRevision == UINT64_MAX )
+    if ( Result == NULL || ProjectId == NULL || ExpectedRevision == 0u || ExpectedRevision == UINT64_MAX ||
+         (RequestId != NULL && (!MdoHomePurgeRequestIdValid(RequestId) || ExpectedCreatedAt <= 0)) )
         return MdoProjectPurgeError(Error, MDO_PROJECT_PURGE_INVALID,
             XWORK_ERROR_INVALID_ARGUMENT, "purge requires a current project revision and result");
+    if ( RequestId != NULL ) {
+        snprintf(Result->RequestId, sizeof(Result->RequestId), "%s", RequestId);
+        if ( MdoProjectPurgeReplay(RequestId, ProjectId, ExpectedRevision, ExpectedCreatedAt,
+                Result, &Status, Error) ) return Status;
+    }
     Owner = MdoProjectLeaseAcquire(ProjectId, MDO_PROJECT_LEASE_EXCLUSIVE, &Failure);
     if ( Owner == NULL ) {
         if ( Error != NULL ) *Error = Failure;
@@ -103,6 +152,8 @@ MdoProjectPurgeStatus MdoProjectPurgeExecute(const char* ProjectId,
         return Failure.eCode == XWORK_ERROR_INVALID_ARGUMENT ?
             MDO_PROJECT_PURGE_INVALID : MDO_PROJECT_PURGE_UNAVAILABLE;
     }
+    if ( RequestId != NULL && MdoProjectPurgeReplay(RequestId, ProjectId, ExpectedRevision,
+            ExpectedCreatedAt, Result, &Status, Error) ) goto done;
     memset(&Project, 0, sizeof(Project)); Project.Size = sizeof(Project);
     if ( !MdoProjectGet(ProjectId, &Project, &Found, Error) ) goto done;
     if ( !Found ) {
@@ -110,7 +161,7 @@ MdoProjectPurgeStatus MdoProjectPurgeExecute(const char* ProjectId,
             "project definition was not found");
         goto done;
     }
-    if ( Project.Revision != ExpectedRevision ) {
+    if ( Project.Revision != ExpectedRevision || (RequestId != NULL && Project.CreatedAt != ExpectedCreatedAt) ) {
         Status = MdoProjectPurgeError(Error, MDO_PROJECT_PURGE_REVISION_CONFLICT, XWORK_ERROR_CONTEXT,
             "project revision changed; refresh before purge");
         goto done;
@@ -121,7 +172,7 @@ MdoProjectPurgeStatus MdoProjectPurgeExecute(const char* ProjectId,
     }
     Inventory = MdoProjectPurgeInventoryCreate(ProjectId, Owner, Error);
     if ( Inventory == NULL || !MdoProjectPurgeInventoryGetInfo(Inventory, &Info) ) goto done;
-    if ( Info.Project.Revision != ExpectedRevision ) {
+    if ( Info.Project.Revision != ExpectedRevision || (RequestId != NULL && Info.Project.CreatedAt != ExpectedCreatedAt) ) {
         Status = MdoProjectPurgeError(Error, MDO_PROJECT_PURGE_REVISION_CONFLICT, XWORK_ERROR_CONTEXT,
             "project changed during its exclusive purge scan");
         goto done;
@@ -168,9 +219,20 @@ MdoProjectPurgeStatus MdoProjectPurgeExecute(const char* ProjectId,
     Result->Schedules = MdoSchedulesPurgeCount(Schedules);
     /* The durable commit marker, rather than cleanup's return value, decides
      * whether the in-memory catalogs must now forget the removed project. */
-    (void)MdoHomePurgeFiles(ProjectId, Targets, Result->Targets, &Result->Committed);
+    if ( RequestId == NULL ) (void)MdoHomePurgeFiles(ProjectId, Targets, Result->Targets, &Result->Committed);
+    else {
+        memset(&Request, 0, sizeof(Request));
+        snprintf(Request.Id, sizeof(Request.Id), "%s", RequestId);
+        snprintf(Request.ProjectId, sizeof(Request.ProjectId), "%s", ProjectId);
+        Request.Revision = ExpectedRevision; Request.CreatedAt = (uint64)ExpectedCreatedAt;
+        Request.Targets = Result->Targets; Request.Files = Result->Files;
+        Request.Directories = Result->Directories; Request.Schedules = Result->Schedules;
+        Request.Bytes = Result->Bytes; Request.Selection = Selection; Request.GlobalDraft = Draft;
+        (void)MdoHomePurgeFilesRequested(&Request, Targets, Result->Targets, &Result->Committed);
+    }
     {
         const xerror* Cause = xrtGetError();
+        RequestConflict = RequestId != NULL && Cause != NULL && xrtErrorKind(Cause) == XERR_ARGUMENT;
         snprintf(StorageMessage, sizeof(StorageMessage), "%s",
             Cause != NULL && xrtErrorMessage(Cause) != NULL ? xrtErrorMessage(Cause) :
             "project purge did not commit; its original data was restored");
@@ -197,6 +259,8 @@ MdoProjectPurgeStatus MdoProjectPurgeExecute(const char* ProjectId,
         MdoSchedulesPurgeQuarantine(Schedules);
         Status = MdoProjectPurgeError(Error, MDO_PROJECT_PURGE_RESTART_REQUIRED, XWORK_ERROR_IO,
             "project purge is unresolved; restart to recover its journal");
+    } else if ( RequestConflict ) {
+        Status = MdoProjectPurgeError(Error, MDO_PROJECT_PURGE_REQUEST_CONFLICT, XWORK_ERROR_CONTEXT, StorageMessage);
     } else {
         Status = MdoProjectPurgeError(Error, MDO_PROJECT_PURGE_ABORTED, XWORK_ERROR_IO,
             StorageMessage);
@@ -208,4 +272,22 @@ done:
     xrtFree(Targets);
     MdoProjectLeaseRelease(Owner);
     return Status;
+}
+
+MdoProjectPurgeStatus MdoProjectPurgeExecute(const char* ProjectId,
+    uint64 ExpectedRevision, MdoProjectPurgeResult* Result, xwork_error* Error)
+{
+    return MdoProjectPurgeExecuteImpl(NULL, ProjectId, ExpectedRevision, 0, Result, Error);
+}
+
+MdoProjectPurgeStatus MdoProjectPurgeExecuteRequested(const char* RequestId,
+    const char* ProjectId, uint64 ExpectedRevision, int64 ExpectedCreatedAt,
+    MdoProjectPurgeResult* Result, xwork_error* Error)
+{
+    if ( RequestId == NULL ) {
+        if ( Result != NULL ) memset(Result, 0, sizeof(*Result));
+        return MdoProjectPurgeError(Error, MDO_PROJECT_PURGE_INVALID, XWORK_ERROR_INVALID_ARGUMENT,
+            "durable purge requires a client request ID");
+    }
+    return MdoProjectPurgeExecuteImpl(RequestId, ProjectId, ExpectedRevision, ExpectedCreatedAt, Result, Error);
 }

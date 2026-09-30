@@ -48,7 +48,8 @@ typedef enum MdoProjectPurgeStatus {
     MDO_PROJECT_PURGE_BUSY,
     MDO_PROJECT_PURGE_UNAVAILABLE,
     MDO_PROJECT_PURGE_ABORTED,
-    MDO_PROJECT_PURGE_RESTART_REQUIRED
+    MDO_PROJECT_PURGE_RESTART_REQUIRED,
+    MDO_PROJECT_PURGE_REQUEST_CONFLICT
 } MdoProjectPurgeStatus;
 
 typedef struct MdoProjectPurgeResult {
@@ -56,6 +57,8 @@ typedef struct MdoProjectPurgeResult {
     bool SelectionRemoved, GlobalDraftRemoved;
     size_t Targets, Files, Directories, Schedules;
     uint64 Bytes;
+    bool Replayed;
+    char RequestId[MDO_HOME_PURGE_REQUEST_CAPACITY];
 } MdoProjectPurgeResult;
 
 /* Synchronous application coordinator. Acquires exclusion, validates the
@@ -67,5 +70,13 @@ typedef struct MdoProjectPurgeResult {
  * an HTTP delete endpoint or automatically retry after a lost response. */
 MdoProjectPurgeStatus MdoProjectPurgeExecute(const char* ProjectId,
     uint64 ExpectedRevision, MdoProjectPurgeResult* Result, xwork_error* Error);
+
+/* Durable client execution. Request ID is bound to project ID, revision and
+ * creation time (a recreated definition can start again at revision 1).
+ * Matching terminal receipts replay without touching the current project.
+ * Accepted pending requests require recovery; conflicts never move files. */
+MdoProjectPurgeStatus MdoProjectPurgeExecuteRequested(const char* RequestId,
+    const char* ProjectId, uint64 ExpectedRevision, int64 ExpectedCreatedAt,
+    MdoProjectPurgeResult* Result, xwork_error* Error);
 
 #endif

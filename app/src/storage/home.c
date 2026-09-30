@@ -62,13 +62,34 @@ static bool MdoHomeIsLeasePath(cstr Path)
     return Path[i] == '\0';
 }
 
+static bool MdoHomeIsPurgeReceiptPath(cstr Path, bool IncludeParent)
+{
+    static const char* const Segments[] = { "data", "project-purges" };
+    size_t i;
+    cstr Start = Path;
+    if ( Path == NULL ) return false;
+    for ( i = 0u; i < 2u; ++i ) {
+        cstr End = strchr(Start, '/');
+        size_t j, Length = End != NULL ? (size_t)(End - Start) : strlen(Start);
+        while ( Length != 0u && (Start[Length - 1u] == '.' || Start[Length - 1u] == ' ') ) --Length;
+        if ( Length != strlen(Segments[i]) ) return false;
+        for ( j = 0u; j < Length; ++j ) {
+            unsigned char Ch = (unsigned char)Start[j];
+            if ( Ch >= 'A' && Ch <= 'Z' ) Ch += 'a' - 'A';
+            if ( Ch != (unsigned char)Segments[i][j] ) return false;
+        }
+        if ( i == 0u ) { if ( End == NULL ) return IncludeParent; Start = End + 1; }
+    }
+    return true;
+}
+
 static bool MdoHomePathValid(cstr Path)
 {
     const unsigned char* p;
     const unsigned char* pSegment;
 
     if ( Path == NULL || Path[0] == '\0' || Path[0] == '/' ||
-         Path[0] == '\\' || MdoHomeIsLeasePath(Path) )
+         Path[0] == '\\' || MdoHomeIsLeasePath(Path) || MdoHomeIsPurgeReceiptPath(Path, false) )
         return false;
     p = (const unsigned char*)Path;
     pSegment = p;
@@ -652,6 +673,7 @@ bool MdoHomeRenameNoReplace(cstr Source, cstr Target)
     bool bOk;
 
     if ( !MdoHomePathValid(Source) || !MdoHomePathValid(Target) ||
+         MdoHomeIsPurgeReceiptPath(Source, true) || MdoHomeIsPurgeReceiptPath(Target, true) ||
          !g_MdoHome.Initialized ) {
         MdoHomeErrorSet(XERR_ARGUMENT, MDO_HOME_ERROR_ARGUMENT,
             "invalid external Home rename request");

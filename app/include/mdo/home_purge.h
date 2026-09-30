@@ -5,11 +5,43 @@
 
 #define MDO_HOME_PURGE_PATH_CAPACITY 256u
 #define MDO_HOME_PURGE_TARGET_LIMIT 1024u
+#define MDO_HOME_PURGE_REQUEST_CAPACITY 33u
 
 typedef struct MdoHomePurgeTarget {
     char Path[MDO_HOME_PURGE_PATH_CAPACITY];
     xfileinfo Info;
 } MdoHomePurgeTarget;
+
+/* Request IDs are exactly 32 lowercase hexadecimal bytes. Immutable request
+ * metadata describes the exclusively scanned attempt, not a client path list. */
+typedef struct MdoHomePurgeRequest {
+    char Id[MDO_HOME_PURGE_REQUEST_CAPACITY];
+    char ProjectId[65];
+    uint64 Revision;
+    uint64 CreatedAt; /* project incarnation, Unix microseconds */
+    size_t Targets, Files, Directories, Schedules;
+    uint64 Bytes;
+    bool Selection, GlobalDraft;
+} MdoHomePurgeRequest;
+
+typedef enum MdoHomePurgeOutcome {
+    MDO_HOME_PURGE_PENDING = 0,
+    MDO_HOME_PURGE_COMMITTED,
+    MDO_HOME_PURGE_ABORTED
+} MdoHomePurgeOutcome;
+
+typedef struct MdoHomePurgeReceipt {
+    MdoHomePurgeRequest Request;
+    MdoHomePurgeOutcome Outcome;
+    bool Committed; /* proven commit marker even if terminal publication is pending */
+} MdoHomePurgeReceipt;
+
+bool MdoHomePurgeRequestIdValid(cstr RequestId);
+/* Read-only, including during restart-required isolation. Found=false means
+ * no accepted request or terminal receipt is known; it does not grant retry
+ * authorization. Pending requests require recovery, not a new execution.
+ * Malformed/conflicting records fail, never appear as a missing result. */
+bool MdoHomePurgeReceiptGet(cstr RequestId, MdoHomePurgeReceipt* Receipt, bool* Found);
 
 /* Storage-only transaction, not an API authorization boundary. The caller
  * must hold its project's exclusive lifecycle lease, validate the revision,
@@ -28,5 +60,12 @@ typedef struct MdoHomePurgeTarget {
  * nothing happened. No power-loss metadata durability is promised. */
 bool MdoHomePurgeFiles(cstr ProjectId, const MdoHomePurgeTarget* Targets,
     size_t Count, bool* Committed);
+
+/* Same storage boundary, with durable acceptance and immutable terminal
+ * receipt. Existing IDs are rejected before any move; the application looks
+ * up and replays matching results before entering this function. Neither
+ * receipt retention nor process-interruption recovery expires IDs. */
+bool MdoHomePurgeFilesRequested(const MdoHomePurgeRequest* Request,
+    const MdoHomePurgeTarget* Targets, size_t Count, bool* Committed);
 
 #endif
