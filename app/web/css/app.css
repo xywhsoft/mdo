@@ -580,6 +580,7 @@ select:focus-visible,
 .timeline-truncation-note { margin: 6px 0 0; color: var(--muted); font-size: 11px; line-height: 1.5; overflow-wrap: anywhere; }
 .timeline-item[data-kind="user"] .timeline-truncation-note { max-width: min(86%, 640px); margin-left: auto; text-align: right; }
 .timeline-stopped { color: var(--muted); font-size: 11px; }
+.timeline-failed { color: var(--danger); font-size: 11px; }
 .markdown-body { white-space: normal; }
 .markdown-body > :first-child { margin-top: 0; }
 .markdown-body > :last-child { margin-bottom: 0; }

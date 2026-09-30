@@ -1,5 +1,7 @@
 """Local packed-page fixture for todo, ask, and approval UI review.
 
+With --interleaved-chat-stream, send STREAM FAIL UI for a deterministic parse
+failure after real text/reasoning deltas; all traffic stays on localhost.
 Run from the repository root after building mdo.exe, or pass --packed-path to
 inspect an isolated pack while the installed executable is running. The model
 endpoint only binds to localhost and returns deterministic tool calls for marker prompts:
@@ -52,6 +54,7 @@ class Model(BaseHTTPRequestHandler):
             if request_body.get("stream") is not True:
                 self.send_error(400, "streaming request required")
                 return
+            stream_failure = "STREAM FAIL UI" in json.dumps(request_body)
             chunks = [
                 {"choices": [{"index": 0, "delta": {"role": "assistant",
                     "content": "Hello ", "reasoning_content": "Thinking "},
@@ -62,10 +65,15 @@ class Model(BaseHTTPRequestHandler):
                     "usage": {"prompt_tokens": 7, "completion_tokens": 3,
                               "total_tokens": 10}},
             ]
+            # A malformed final event deterministically fails after two real
+            # deltas. Only the owned localhost fixture supports this trigger.
+            if stream_failure:
+                chunks = chunks[:2]
             payload = ("".join("data: " + json.dumps({"id": "chatcmpl-qa",
                 "object": "chat.completion.chunk", "model": "ling-3.0-tiny",
                 **chunk}) + "\n\n" for chunk in chunks) +
-                "data: [DONE]\n\n").encode()
+                ("data: {malformed-json}\n\n" if stream_failure else
+                 "data: [DONE]\n\n")).encode()
             self.send_response(200)
             self.send_header("Content-Type", "text/event-stream")
             self.send_header("Content-Length", str(len(payload)))

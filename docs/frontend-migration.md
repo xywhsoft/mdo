@@ -4,6 +4,42 @@
 
 完成判据及尚缺的打包页证据见 [前端操作体验完成审计](frontend-completion-audit.md)。本文件继续记录每次实现和验证的细节。
 
+## 2026-10-01：运行失败结束部分回复与思考卡
+
+原时间线只在 `agent_done` 中收敛尚未结束的卡片；xwork 的取消使用
+`agent_done.success=false`，致命失败则单独发出 `error`。因而模型先输出文字/
+思考、再失败时，页面虽显示运行错误，回复和思考仍保持“运行中”。工具或
+循环保护失败也可能让最后一张回复显示为正常完成。协议已核对当前锁定的
+xwork 源码，不把所有 `success=false` 当作失败，也不按错误文字猜取消。
+
+时间线现在把 `error` 作为对应执行的终态，结束它的尚未完成回复、思考和工具
+卡，并将该执行的最后回复标记为失败。回复头使用已有三语“失败”文案；
+主动取消仍显示“已停止”。范围严格绑定 run ID 与启动事件 epoch，不改变
+并行 Agent 或复用 ID 的上一轮。已有文字、复制片段、重试输入与完成工具的
+真实状态保留；缺少 `model_done` 时不凭失败事件生成 Token 用量或 tok/s。
+
+新增五项 Node 用例先在原实现复现三项失败，再全部通过：部分流终态、并行/
+复用 ID 隔离、完成模型后的工具失败、没有输出的启动失败及主动取消。既有
+八项交错时间线用例继续通过。
+
+旧根目录单文件 Home `.build/mdo-packed-docks-h2yqm5kb` 使用本机 Chat
+Completions 模型，发送 `STREAM FAIL UI`：两段真实文字/思考 delta 后附损坏
+JSON，正式运行库发出 error；页面的部分回复和思考仍为 running。新最终包
+Home `.build/mdo-packed-docks-y11tavvt` 重复同一操作，二者变为 failed，原错误
+详情保持，复制实际读回 `Hello world`。320×350 刷新后仍为 failed，没有统计
+速度标签，三个回复操作按钮高 40px，文档宽度等于 320px，脚本错误日志为空。
+390×600 另保存可读失败界面；没有把浏览器视口当作实体手机。截图：
+`.build/qa-terminal-error-before.png`、`.build/qa-terminal-error-desktop.png`、
+`.build/qa-terminal-error-mobile.png`。模型、Home 与程序均为隔离夹具，未调用
+公网模型或改变日常会话；测试服务已正常退出。
+
+Windows 门禁通过 114 项 Python、157 项 Node、84 个模块解析、严格 C11、
+31 个运行探针、确定性打包及便携 WebView2 Home/20 秒启动。根目录程序、
+两次打包及新 UI 验收包 SHA-256 均为
+`4a13b8c3cb46ae6f55ddf78da532e120d69cc7cafc590f92c30deec9633cec72`。
+本阶段没有修改 xrt/xs 或事件存储格式。Linux/macOS、原生完整操作及实体设备
+未新增验收；不做压力或高负载测试，长期前端恢复目标继续保持未完成。
+
 ## 2026-10-01：项目清除的确认执行与提交后收敛
 
 项目清单现可进入独立确认弹窗：默认聚焦取消，输入原项目 ID 才能提交，打开、

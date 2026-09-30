@@ -44,6 +44,14 @@ export function eventsToTimeline(events, historyLost = false) {
   const streams = new Map();
   const promptsByRun = new Map();
   const runEpochs = new Map();
+  function settleStreams(runKey, epoch, state) {
+    // ERROR is a terminal event in xwork, just like AGENT_DONE. Scope the
+    // settlement to this execution: other Agents and reused run IDs survive.
+    for (const item of items) {
+      if (item.runKey === runKey && item.runEpoch === epoch && item.state === "running" &&
+          ["assistant", "reasoning", "tool"].includes(item.kind)) item.state = state;
+    }
+  }
   // An explicit history boundary already explains why earlier events are
   // absent. A second generic gap notice would imply an unrelated loss.
   if (historyLost && events[0]?.kind !== "history_truncated") {
@@ -241,20 +249,20 @@ export function eventsToTimeline(events, historyLost = false) {
             : t("timeline.recoveryResolved", {}, "会话已恢复")),
           state: event.kind === "recovery_required" ? "failed" : "done", time: event.time });
         break;
-      case "error":
+      case "error": {
+        settleStreams(runKey, epoch, "failed");
+        const answer = [...items].reverse().find((item) => item.kind === "assistant" &&
+          item.runKey === runKey && item.runEpoch === epoch);
+        if (answer) answer.state = "failed";
         items.push({ key: `error-${event.event_id}`, kind: "error",
           role: t("timeline.runError", {}, "运行错误"),
           text: event.text || t("timeline.agentFailed", {}, "Agent 运行失败"),
           state: "failed", time: event.time });
         break;
+      }
       case "agent_done": {
         const terminalState = event.success ? "done" : "cancelled";
-        for (const item of items) {
-          if (item.runKey !== runKey || item.runEpoch !== epoch ||
-              item.state !== "running" ||
-              (item.kind !== "reasoning" && item.kind !== "tool")) continue;
-          item.state = terminalState;
-        }
+        settleStreams(runKey, epoch, terminalState);
         let answer = [...items].reverse().find((item) => item.kind === "assistant" &&
           item.runKey === runKey && item.runEpoch === epoch);
         if (!answer && (event.text || !event.success)) {
@@ -521,6 +529,9 @@ function timelineNode(item, handlers, feedback, projectId, sessionId, writable,
   if (item.kind === "assistant" && item.state === "cancelled")
     header.insertBefore(element("span", { className: "timeline-stopped",
       text: t("timeline.stopped", {}, "已停止") }), time);
+  if (item.kind === "assistant" && item.state === "failed")
+    header.insertBefore(element("span", { className: "timeline-failed",
+      text: t("timeline.failed", {}, "失败") }), time);
   const body = element("div", { className: "timeline-body" +
     (item.kind === "assistant" ? " markdown-body" : "") });
   if (item.kind === "assistant") {
