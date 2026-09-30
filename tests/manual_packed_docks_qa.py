@@ -5,7 +5,7 @@ inspect an isolated pack while the installed executable is running. The model
 endpoint only binds to localhost and returns deterministic tool calls for marker prompts:
 TODO UI, TODO UPDATE UI, TODO REORDER UI, ASK UI, LONG ASK UI, LONG RESPONSE UI,
 SEQUENTIAL DECISIONS UI, APPROVAL UI, APPROVAL RUN UI,
-APPROVAL NEXT UI, TASK UI, or ARTIFACT UI. The long
+APPROVAL NEXT UI, TASK UI, TASK SECOND UI, or ARTIFACT UI. The long
 ask has multiline question and options; the latter reads one bounded synthetic
 text file so the normal tool-output artifact path is used. The optional chat
 stream emits two bounded chunks with interleaved text and reasoning fields.
@@ -126,6 +126,13 @@ class Model(BaseHTTPRequestHandler):
                               f"print(('task UI fixture line\\n')*{Model.task_output_lines}, "
                               f"end='', flush=True); time.sleep({Model.task_seconds:g})")
                 output = [{"type": "function_call", "call_id": "ui-task-1",
+                           "name": "spawn", "arguments": json.dumps({
+                               "argv": [sys.executable, "-c", script]})}]
+            elif "TASK SECOND UI" in wire and "task-second" not in Model.sent:
+                Model.sent.add("task-second")
+                script = (f"import time; time.sleep({Model.task_seconds:g}); "
+                          "print('task UI fixture second')")
+                output = [{"type": "function_call", "call_id": "ui-task-second-1",
                            "name": "spawn", "arguments": json.dumps({
                                "argv": [sys.executable, "-c", script]})}]
             elif "SEQUENTIAL DECISIONS UI" in wire and "sequential-decisions" not in Model.sent:
@@ -889,7 +896,7 @@ parser.add_argument("--slow-ms", type=int, default=15000,
 parser.add_argument("--model-delay-ms", type=int, default=0,
                     help="delay regular fixture model responses, 0-5000 ms")
 parser.add_argument("--task-ms", type=int, default=12000,
-                    help="TASK UI background process sleep, 0-30000 ms")
+                    help="TASK UI background process sleep, 0-60000 ms")
 parser.add_argument("--task-output-lines", type=int, default=1,
                     help="TASK UI emits 1-120 short lines before sleeping")
 parser.add_argument("--resume-verify", action="store_true",
@@ -993,8 +1000,8 @@ if not 0 <= args.slow_ms <= 30000:
     parser.error("--slow-ms must be between 0 and 30000")
 if not 0 <= args.model_delay_ms <= 5000:
     parser.error("--model-delay-ms must be between 0 and 5000")
-if not 0 <= args.task_ms <= 30000:
-    parser.error("--task-ms must be between 0 and 30000")
+if not 0 <= args.task_ms <= 60000:
+    parser.error("--task-ms must be between 0 and 60000")
 if not 1 <= args.task_output_lines <= 120:
     parser.error("--task-output-lines must be between 1 and 120")
 if (args.fail_first_queue_reconcile or args.queue_read_failures) and not args.drop_first_queue_response:
