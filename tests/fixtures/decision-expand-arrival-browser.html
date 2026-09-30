@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="zh-CN">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>mdo decision expansion and arrival probe</title>
+<link rel="stylesheet" href="/app/web/css/app.css">
+<div class="app-shell">
+  <header class="mobile-bar">墨斗</header>
+  <main class="workspace">
+    <section class="conversation">Earlier conversation</section>
+    <section class="composer-region">
+      <div id="conversation-docks" class="conversation-docks" hidden></div>
+      <form class="composer">
+        <textarea id="prompt" aria-label="任务输入"></textarea>
+        <div class="composer-toolbar"><button type="button">发送</button></div>
+      </form>
+    </section>
+  </main>
+</div>
+<div id="toast-region"></div>
+<pre id="result"></pre>
+<script type="module">
+import { createConversationDocks } from "/app/web/js/features/chat/conversation-docks.js";
+import { createResourceStore } from "/app/web/js/state/store.js";
+
+const store = (data) => createResourceStore(data);
+const route = { view: "workspace", projectId: "qa", sessionId: "expand" };
+const navigation = {
+  get: () => route,
+  subscribe(listener) { listener(route); return () => {}; },
+};
+const first = { id: 1,
+  question: "Which result should be inspected first? ".repeat(5),
+  options: ["Inspect the local result", "Continue with the next step"] };
+const second = { id: 2,
+  question: "A second decision arrived while the first answer is being edited.",
+  options: ["Wait", "Proceed"] };
+const asksStore = store({ projectId: "qa", sessionId: "expand", loaded: true,
+  items: [first] });
+const approvalsStore = store({ items: [] });
+const runsStore = store({ items: [{ agent_run_id: 3, project_id: "qa",
+  session_id: "expand" }] });
+createConversationDocks({
+  container: document.querySelector("#conversation-docks"), navigation,
+  asksStore, approvalsStore, runsStore,
+  tasksStore: store({ items: [] }),
+  todoStore: store({ projectId: "qa", sessionId: "expand", items: [] }),
+  onOpenTasks() {}, onChanged: async () => {},
+  onDecisionArrived() {},
+});
+
+const frame = () => new Promise((resolve) => requestAnimationFrame(resolve));
+const settle = async () => { await frame(); await frame(); };
+try {
+  await settle();
+  const dock = document.querySelector("#conversation-docks");
+  const region = document.querySelector(".composer-region");
+  const firstCard = dock.querySelector(".ask-dock");
+  const toggle = firstCard.querySelector(".decision-dock-expand");
+  const cramped = region.hasAttribute("data-decision-cramped") &&
+    dock.clientHeight < 120 && toggle.getBoundingClientRect().height >= 40;
+  toggle.click();
+  await settle();
+  const expanded = region.hasAttribute("data-decision-expanded") &&
+    dock.clientHeight > 120 && toggle.getAttribute("aria-expanded") === "true";
+
+  const editor = firstCard.querySelector(".ask-dock-input");
+  editor.focus();
+  editor.value = "Keep this answer";
+  editor.dispatchEvent(new Event("input", { bubbles: true }));
+  const editorTop = editor.getBoundingClientRect().top -
+    dock.getBoundingClientRect().top;
+  asksStore.setData({ projectId: "qa", sessionId: "expand", loaded: true,
+    items: [first, second] });
+  approvalsStore.setData({ items: [{ id: 5, run_id: 3, tool: "exec",
+    risk: "high", effects: ["process"], resources: [],
+    arguments_json: "{}" }] });
+  await settle();
+  const arrivalKeepsEditor = region.hasAttribute("data-decision-expanded") &&
+    document.activeElement === editor && editor.value === "Keep this answer" &&
+    Math.abs(editor.getBoundingClientRect().top -
+      dock.getBoundingClientRect().top - editorTop) <= 2 &&
+    dock.querySelectorAll(".ask-dock").length === 2 &&
+    dock.querySelectorAll("[data-approval-id]").length === 1 &&
+    [...dock.querySelectorAll(".decision-dock-expand")].every((button) =>
+      button.getAttribute("aria-expanded") === "true");
+
+  editor.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape",
+    bubbles: true, cancelable: true }));
+  await settle();
+  const escapeKeepsEditor = !region.hasAttribute("data-decision-expanded") &&
+    document.activeElement === editor && editor.value === "Keep this answer" &&
+    [...dock.querySelectorAll(".decision-dock-expand")].every((button) =>
+      button.getAttribute("aria-expanded") === "false");
+  asksStore.setData({ projectId: "qa", sessionId: "expand", loaded: true,
+    items: [] });
+  approvalsStore.setData({ items: [] });
+  await settle();
+  const drained = !region.hasAttribute("data-decision-expanded") &&
+    !region.hasAttribute("data-decision-pending") && dock.hidden &&
+    document.activeElement === document.querySelector("#prompt");
+  const passed = cramped && expanded && arrivalKeepsEditor &&
+    escapeKeepsEditor && drained && document.documentElement.scrollWidth <= innerWidth;
+  const result = document.querySelector("#result");
+  result.dataset.passed = innerWidth <= 420 ? String(passed) : "waiting";
+  result.textContent = JSON.stringify({ passed, cramped, expanded,
+    arrivalKeepsEditor, escapeKeepsEditor, drained,
+    dockHeight: dock.clientHeight, width: document.documentElement.scrollWidth }, null, 2);
+} catch (error) {
+  const result = document.querySelector("#result");
+  result.dataset.passed = "false";
+  result.textContent = error.stack ?? String(error);
+}
+</script>
+</html>

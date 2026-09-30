@@ -4,6 +4,12 @@
 
 完成判据及尚缺的打包页证据见 [前端操作体验完成审计](frontend-completion-audit.md)。本文件继续记录每次实现和验证的细节。
 
+## 2026-09-30：打包资源下补验极短屏多决策到达
+
+新增 `tests/fixtures/decision-expand-arrival-browser.html`，在 280×250 合成一张长询问卡，展开后输入答案，再插入第二张询问和一张审批卡。夹具检查展开按钮状态一致、原答案和焦点保留、编辑器相对停靠区位置不跳动、Esc 收起后继续编辑，以及清空待决项后主输入获焦且页面不横向溢出。源码直载的浏览器夹具通过；隔离代理 `tests/manual_packed_docks_qa.py --packed-path .\mdo.exe --decision-expand-arrival-fixture` 只提供测试文档，CSS 和 JS 请求仍转发到单文件包内置 VFS，同尺寸结果 `passed=true`，浏览器脚本错误为空。
+
+这验证了正式打包资源在合成多卡状态下的交互；并不代表真实运行服务已产生同时待决的多张卡，也不替代实体手机软键盘、触摸或 Linux 原生 WebView。当前 WSL 无 DISPLAY、Wayland 或可用图形宿主，故本轮未取得 Linux 原生 GUI 证据。产品代码与包字节未变；重建候选包与根目录 `mdo.exe` SHA-256 均为 `414628269fd8a32f5f0dc9ec47229d4cb191b6719e507b2ae51994e3fe97a6cb`。未做压力或高负载测试。
+
 ## 2026-09-30：便携 WebView2 门禁等待临时配置释放
 
 有界发布门禁的 Python、前端、运行探针和确定性打包已经通过后，Windows `TemporaryDirectory` 在删除测试专用 WebView2 Home 时偶发遇到 `BrowserMetrics/*.pma` 的短暂文件占用，导致整项门禁报 `WinError 5`。测试进程已正常结束，随后检查没有残留的测试进程。门禁现仅对自身在系统临时目录下创建、名称前缀匹配的绝对目录做最多 5 秒的删除重试；目录持续被占用仍明确失败，不掩盖便携配置错误，也不触碰其他目录。重跑 Windows 有界门禁后，便携 Home 搬移、环境变量与 CLI 优先级、20 秒打包启动及确定性打包均通过。此项只修复测试收尾，不改变产品包行为。
