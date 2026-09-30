@@ -9,6 +9,7 @@ const status = dialog.querySelector("#memory-status");
 const title = dialog.querySelector("#memory-title");
 const pathLabel = dialog.querySelector("#memory-path");
 const discard = dialog.querySelector("#memory-discard");
+const saveButton = form.querySelector('button[type="submit"]');
 const removeButton = dialog.querySelector("#memory-remove");
 const deleteConfirm = dialog.querySelector("#memory-delete-confirm");
 const encoder = new TextEncoder();
@@ -69,7 +70,7 @@ function updateDirty() { discard.hidden = !dirty(); }
 
 function setBusy(value) {
   busy = value;
-  form.querySelector('button[type="submit"]').disabled = value;
+  saveButton.disabled = value;
   removeButton.disabled = value;
   dialog.querySelector("#memory-new").disabled = value;
   dialog.querySelector("#memory-refresh").disabled = value;
@@ -239,7 +240,13 @@ form.addEventListener("submit", async (event) => {
     toast(t("memory.saved", {}, "记忆已保存"));
   } catch (cause) {
     setStatus(errorMessage(cause), "error");
-  } finally { setBusy(false); }
+  } finally {
+    setBusy(false);
+    // Disabling the submit button during the request can send focus to the
+    // document. Return it only if the user has not focused another control.
+    if (dialog.open && (document.activeElement === document.body ||
+        document.activeElement === document.documentElement)) saveButton.focus();
+  }
 });
 removeButton.addEventListener("click", () => { deleteConfirm.hidden = false; });
 dialog.querySelector("#memory-delete-cancel").addEventListener("click", () => {
@@ -260,6 +267,15 @@ dialog.querySelector("#memory-delete-apply").addEventListener("click", async () 
     setBusy(false);
     await refresh({ discardDraft: true, selectId: "" });
     toast(t("memory.deleted", {}, "记忆已删除"));
+    // Hiding the confirmation can blur its button at the next layout frame.
+    // Return to the list only when focus has not moved elsewhere meanwhile.
+    requestAnimationFrame(() => {
+      if (dialog.open && (deleteConfirm.contains(document.activeElement) ||
+          document.activeElement === document.body ||
+          document.activeElement === document.documentElement))
+        (list.querySelector("button[data-memory-id]") ||
+          dialog.querySelector("#memory-new")).focus();
+    });
   } catch (cause) {
     setStatus(errorMessage(cause), "error");
   } finally { setBusy(false); }

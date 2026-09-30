@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="zh-CN">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>mdo memory dialog keyboard probe</title>
+<link rel="stylesheet" href="/app/web/css/app.css?memory-keyboard=1">
+<div class="app-shell" id="shell"><main class="workspace"></main></div>
+<dialog class="memory-dialog" id="memory-dialog" aria-labelledby="memory-title">
+  <div class="memory-dialog-shell">
+    <header class="memory-dialog-heading"><div><h2 id="memory-title">全局记忆</h2>
+      <p>Home/memory/global.json</p></div>
+      <div class="memory-heading-actions"><button class="secondary-button">打开文件夹</button>
+        <button class="secondary-button">关闭</button></div></header>
+    <p class="memory-status">0 条记忆 · revision 0</p>
+    <div class="memory-dialog-body">
+      <div class="memory-list-pane"><div class="memory-list-heading"><strong>条目</strong>
+        <div><button class="secondary-button">刷新</button><button class="secondary-button">新建</button></div></div>
+        <div class="memory-list"><p>还没有记忆。</p></div></div>
+      <form class="memory-form"><label>标识 <input name="id"></label>
+        <label>标题 <input name="title"></label>
+        <label>内容 <textarea name="content" rows="9"></textarea></label>
+        <label>标签 <input name="tags"></label>
+        <div class="memory-form-actions"><button class="primary-button">保存记忆</button></div></form>
+    </div>
+  </div>
+</dialog>
+<pre id="result"></pre>
+<script type="module">
+import { trackMobileViewport } from "/app/web/js/features/shell/mobile-viewport.js";
+const shell = document.querySelector("#shell");
+const dialog = document.querySelector("#memory-dialog");
+const body = dialog.querySelector(".memory-dialog-body");
+const viewport = Object.assign(new EventTarget(),
+  { height: innerHeight, offsetTop: 0, scale: 1 });
+const win = Object.assign(new EventTarget(),
+  { innerHeight, visualViewport: viewport });
+trackMobileViewport(shell, Object.assign(new EventTarget(), { matches: true }), win);
+dialog.showModal();
+const frame = () => new Promise((resolve) => requestAnimationFrame(() =>
+  requestAnimationFrame(resolve)));
+const geometry = () => {
+  const r = dialog.getBoundingClientRect();
+  return { top: r.top, bottom: r.bottom, bodyHeight: body.clientHeight,
+    bodyScrollHeight: body.scrollHeight, bodyOverflow: getComputedStyle(body).overflowY };
+};
+await frame();
+viewport.height = 250;
+viewport.dispatchEvent(new Event("resize"));
+await frame();
+const visible = geometry();
+viewport.offsetTop = 20;
+viewport.dispatchEvent(new Event("scroll"));
+await frame();
+const panned = geometry();
+viewport.offsetTop = innerHeight - viewport.height;
+viewport.dispatchEvent(new Event("scroll"));
+await frame();
+const bottomPanned = geometry();
+viewport.height = innerHeight;
+viewport.offsetTop = 0;
+viewport.dispatchEvent(new Event("resize"));
+await frame();
+const restored = geometry();
+const result = { visible, panned, bottomPanned, restored,
+  passed: visible.top >= 0 && visible.bottom <= 250 &&
+    visible.bodyHeight >= 100 && visible.bodyScrollHeight > visible.bodyHeight &&
+    visible.bodyOverflow === "auto" &&
+    panned.top >= 28 && panned.bottom <= 270 &&
+    bottomPanned.top >= innerHeight - 250 + 8 && bottomPanned.bottom <= innerHeight &&
+    restored.bottom > visible.bottom };
+document.querySelector("#result").dataset.passed = String(result.passed);
+document.querySelector("#result").textContent = JSON.stringify(result, null, 2);
+</script>
+</html>
