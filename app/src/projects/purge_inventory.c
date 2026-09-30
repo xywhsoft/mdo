@@ -340,6 +340,7 @@ MdoProjectPurgeInventory* MdoProjectPurgeInventoryCreate(const char* ProjectId,
         (void)MdoPurgeError(Error, XWORK_ERROR_CONTEXT, "schedule catalog changed during purge scan");
         goto done;
     }
+    Inventory->Info.ScheduleGeneration = MdoScheduleCatalogGeneration(Schedules);
     if ( Inventory->Info.Targets > 1u ) qsort(Inventory->Targets,
         Inventory->Info.Targets, sizeof(*Inventory->Targets), MdoPurgeCompare);
     Ok = true;

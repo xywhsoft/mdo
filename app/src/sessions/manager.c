@@ -607,6 +607,18 @@ uint64 MdoSessionManagerGeneration(void)
     return Generation;
 }
 
+bool MdoSessionsProjectPurged(const char* ProjectId, const MdoProjectLease* Owner)
+{
+    bool Ok;
+    if ( !g_MdoSessions.Initialized ||
+         !MdoProjectLeaseProtects(Owner, ProjectId, MDO_PROJECT_LEASE_EXCLUSIVE) ) return false;
+    xrtMutexLock(g_MdoSessions.Lock);
+    Ok = g_MdoSessions.Generation != UINT64_MAX;
+    if ( Ok ) ++g_MdoSessions.Generation;
+    xrtMutexUnlock(g_MdoSessions.Lock);
+    return Ok;
+}
+
 void MdoSessionCreateOptionsInit(MdoSessionCreateOptions* Options)
 {
     if ( Options == NULL ) return;

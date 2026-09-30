@@ -464,6 +464,17 @@ bool MdoHomeGetSnapshot(MdoHomeSnapshot* pSnapshot)
     return true;
 }
 
+bool MdoHomeRequireRestart(cstr Message)
+{
+    if ( !g_MdoHome.Initialized ) return false;
+    xrtMutexLock(g_MdoHome.Lock);
+    g_MdoHome.RestartRequired = true;
+    snprintf(g_MdoHome.Message, sizeof(g_MdoHome.Message), "%s",
+        Message != NULL ? Message : "application state requires restart before writing");
+    xrtMutexUnlock(g_MdoHome.Lock);
+    return true;
+}
+
 xfile MdoResourceOpenRead(cstr Path)
 {
     xfileoptions Options;

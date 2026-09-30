@@ -7,6 +7,10 @@
 typedef struct MdoSessionEventBridge MdoSessionEventBridge;
 typedef struct MdoSessionEventTrimPlan MdoSessionEventTrimPlan;
 
+/* Publish a committed project bucket removal to catalog observers. The
+ * exclusive owner proves no session/Agent object needs to be evicted. */
+bool MdoSessionsProjectPurged(const char* ProjectId, const MdoProjectLease* Owner);
+
 MdoSessionEventBridge* MdoSessionEventBridgeCreate(
     const char* ProjectId, const char* SessionId,
     MdoProjectLease* ProjectLease,

@@ -22,6 +22,10 @@ typedef struct MdoHomeSnapshot {
 bool MdoHomeInit(void);
 void MdoHomeUnit(void);
 bool MdoHomeGetSnapshot(MdoHomeSnapshot* pSnapshot);
+/* Freeze ordinary and native-path writes after an application consistency
+ * failure. Does not create Home or repair data. Stop writers before Unit;
+ * a fresh Init recovers storage before managers reload their state. */
+bool MdoHomeRequireRestart(cstr Message);
 
 /* Borrowed immutable bytes captured from the application VFS before the
  * external Home overlay is mounted.  The view remains valid until Unit. */

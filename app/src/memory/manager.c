@@ -1729,6 +1729,18 @@ uint64 MdoMemoryManagerGeneration(void)
     return Generation;
 }
 
+bool MdoMemoryProjectPurged(const char* ProjectId, const MdoProjectLease* Owner)
+{
+    bool Ok;
+    if ( !g_MdoMemory.Initialized ||
+         !MdoProjectLeaseProtects(Owner, ProjectId, MDO_PROJECT_LEASE_EXCLUSIVE) ) return false;
+    xrtMutexLock(g_MdoMemory.Lock);
+    Ok = g_MdoMemory.Generation != UINT64_MAX;
+    if ( Ok ) ++g_MdoMemory.Generation;
+    xrtMutexUnlock(g_MdoMemory.Lock);
+    return Ok;
+}
+
 void MdoMemoryWriteOptionsInit(MdoMemoryWriteOptions* Options)
 {
     if ( Options == NULL ) return;

@@ -820,6 +820,150 @@ static void MdoSchedulesLeaseFault(MdoSchedulesLeaseScope* Scope)
     }
 }
 
+struct MdoSchedulePurgeGuard {
+    MdoProjectLease* Owner;
+    char ProjectId[MDO_SCHEDULE_PROJECT_CAPACITY];
+    size_t Count;
+    bool Locked, Applied, Successful, Quarantined;
+    xwork_error Error;
+};
+
+void MdoSchedulesPurgeFree(MdoSchedulePurgeGuard* Guard)
+{
+    if ( Guard == NULL ) return;
+    if ( Guard->Locked ) xrtMutexUnlock(g_MdoSchedules.Lock);
+    MdoProjectLeaseRelease(Guard->Owner);
+    xrtFree(Guard);
+}
+
+static bool MdoSchedulesPurgeRegistered(const char* Id)
+{
+    size_t i, Count = xworkRuntimeScheduleCount(g_MdoSchedules.Runtime);
+    if ( Count > MDO_SCHEDULE_MAX ) return false;
+    for ( i = 0u; i < Count; ++i ) {
+        xwork_schedule_info Info;
+        xworkScheduleInfoInit(&Info);
+        if ( !xworkRuntimeScheduleAt(g_MdoSchedules.Runtime, i, &Info) ) return false;
+        if ( Info.tConfig.sScheduleId != NULL && strcmp(Info.tConfig.sScheduleId, Id) == 0 )
+            return true;
+    }
+    return false;
+}
+
+MdoSchedulePurgeGuard* MdoSchedulesPurgeBegin(const char* ProjectId,
+    MdoProjectLease* Owner, uint64 ExpectedGeneration, xwork_error* Error)
+{
+    MdoSchedulePurgeGuard* Guard;
+    size_t i;
+    xworkErrorInit(Error);
+    if ( !g_MdoSchedules.Initialized ||
+         !MdoProjectLeaseProtects(Owner, ProjectId, MDO_PROJECT_LEASE_EXCLUSIVE) ) {
+        MdoSchedulesError(Error, XWORK_ERROR_INVALID_ARGUMENT,
+            "schedule purge requires a current exclusive project lease");
+        return NULL;
+    }
+    Guard = (MdoSchedulePurgeGuard*)xrtCalloc(1u, sizeof(*Guard));
+    if ( Guard == NULL ) {
+        MdoSchedulesError(Error, XWORK_ERROR_OUT_OF_MEMORY, "cannot allocate schedule purge guard");
+        return NULL;
+    }
+    Guard->Owner = MdoProjectLeaseRef(Owner);
+    snprintf(Guard->ProjectId, sizeof(Guard->ProjectId), "%s", ProjectId);
+    if ( Guard->Owner == NULL || !MdoSchedulesLeaseLock(Error) ) goto failed;
+    Guard->Locked = true;
+    if ( g_MdoSchedules.Generation != ExpectedGeneration || ExpectedGeneration == UINT64_MAX ) {
+        MdoSchedulesError(Error, XWORK_ERROR_CONTEXT, "schedule catalog changed; rescan before purge");
+        goto failed;
+    }
+    if ( g_MdoSchedules.PersistenceFault || g_MdoSchedules.FaultLeaseCount != 0u ||
+         g_MdoSchedules.DiagnosticCount != 0u ) {
+        MdoSchedulesError(Error, XWORK_ERROR_IO, "schedule state must be repaired before project purge");
+        goto failed;
+    }
+    for ( i = 0u; i < g_MdoSchedules.Count; ++i ) {
+        const MdoScheduleEntry* Entry = &g_MdoSchedules.Entries[i];
+        xwork_schedule_info RuntimeInfo;
+        if ( strcmp(Entry->Info.ProjectId, ProjectId) != 0 ) continue;
+        xworkScheduleInfoInit(&RuntimeInfo);
+        if ( !Entry->Registered || !xworkRuntimeScheduleGetInfo(g_MdoSchedules.Runtime,
+                Entry->Info.Id, &RuntimeInfo) || !MdoSchedulesPurgeRegistered(Entry->Info.Id) ||
+             RuntimeInfo.iActiveRuns != 0u || RuntimeInfo.uGeneration != Entry->Info.RuntimeGeneration ||
+             RuntimeInfo.tConfig.bEnabled != (Entry->Info.Enabled && g_MdoSchedules.Enabled) ) {
+            MdoSchedulesError(Error, XWORK_ERROR_CONTEXT,
+                "an owned schedule is active or inconsistent with the purge inventory");
+            goto failed;
+        }
+        ++Guard->Count;
+    }
+    return Guard;
+failed:
+    MdoSchedulesPurgeFree(Guard);
+    return NULL;
+}
+
+size_t MdoSchedulesPurgeCount(const MdoSchedulePurgeGuard* Guard)
+{
+    return Guard != NULL ? Guard->Count : 0u;
+}
+
+void MdoSchedulesPurgeQuarantine(MdoSchedulePurgeGuard* Guard)
+{
+    size_t i;
+    xwork_error Error;
+    if ( Guard == NULL || !Guard->Locked || Guard->Quarantined ) return;
+    Guard->Quarantined = true;
+    g_MdoSchedules.PersistenceFault = true;
+    for ( i = 0u; i < g_MdoSchedules.Count; ++i )
+        if ( strcmp(g_MdoSchedules.Entries[i].Info.ProjectId, Guard->ProjectId) == 0 )
+            (void)xworkRuntimeSetScheduleEnabled(g_MdoSchedules.Runtime,
+                g_MdoSchedules.Entries[i].Info.Id, false, &Error);
+    /* Begin rejected any existing fault; reserve the preallocated slot rather
+     * than allocating after storage has committed or become ambiguous. */
+    if ( Guard->Owner != NULL && g_MdoSchedules.FaultLeaseCount < MDO_SCHEDULE_MAX ) {
+        g_MdoSchedules.FaultLeases[g_MdoSchedules.FaultLeaseCount++] = Guard->Owner;
+        Guard->Owner = NULL;
+    }
+    (void)MdoHomeRequireRestart("project purge state requires restart; preserve any storage journal");
+}
+
+bool MdoSchedulesPurgeCommit(MdoSchedulePurgeGuard* Guard, xwork_error* Error)
+{
+    size_t i = 0u;
+    bool Ok = true;
+    xworkErrorInit(Error);
+    if ( Guard == NULL || !Guard->Locked ) {
+        MdoSchedulesError(Error, XWORK_ERROR_INVALID_ARGUMENT, "invalid schedule purge guard");
+        return false;
+    }
+    if ( Guard->Applied ) {
+        if ( Error != NULL ) *Error = Guard->Error;
+        return Guard->Successful;
+    }
+    if ( Guard->Quarantined ) {
+        MdoSchedulesError(Error, XWORK_ERROR_CONTEXT, "quarantined purge requires restart");
+        return false;
+    }
+    Guard->Applied = true;
+    while ( i < g_MdoSchedules.Count ) {
+        MdoScheduleEntry* Entry = &g_MdoSchedules.Entries[i];
+        xwork_error Failure;
+        if ( strcmp(Entry->Info.ProjectId, Guard->ProjectId) != 0 ) { ++i; continue; }
+        if ( !xworkRuntimeUnregisterSchedule(g_MdoSchedules.Runtime, Entry->Info.Id, &Failure) ) {
+            if ( Ok ) Guard->Error = Failure;
+            Ok = false;
+            /* Continue withdrawing every owned schedule. Keep a failed native
+             * entry disabled as well as fencing all mdo claims until restart. */
+            (void)xworkRuntimeSetScheduleEnabled(g_MdoSchedules.Runtime, Entry->Info.Id, false, NULL);
+        }
+        g_MdoSchedules.Entries[i] = g_MdoSchedules.Entries[--g_MdoSchedules.Count];
+    }
+    if ( Guard->Count != 0u ) ++g_MdoSchedules.Generation;
+    Guard->Successful = Ok;
+    if ( !Ok ) MdoSchedulesPurgeQuarantine(Guard);
+    if ( Error != NULL ) *Error = Guard->Error;
+    return Ok;
+}
+
 static MdoScheduleTaskLease* MdoSchedulesTaskLeaseFind(uint64 TaskId)
 {
     MdoScheduleTaskLease* Pin;

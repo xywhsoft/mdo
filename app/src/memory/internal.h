@@ -2,6 +2,7 @@
 #define MDO_MEMORY_INTERNAL_H
 
 #include "../../include/mdo/memory.h"
+#include "../../include/mdo/project_lifecycle.h"
 
 typedef struct MdoMemoryImportCandidate {
     MdoMemoryScope Scope;
@@ -9,6 +10,10 @@ typedef struct MdoMemoryImportCandidate {
     const char* Path;
     const MdoMemorySnapshot* Snapshot;
 } MdoMemoryImportCandidate;
+
+/* Stores are read from Home, not a mutable content cache. Notify generation
+ * observers after committed removal while exclusion still protects tools. */
+bool MdoMemoryProjectPurged(const char* ProjectId, const MdoProjectLease* Owner);
 
 /* Private bridge between the store and directory-transfer translation units. */
 bool MdoMemoryInternalId(const char* Text, size_t Capacity);
