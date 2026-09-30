@@ -2489,6 +2489,12 @@ export async function boot() {
   ]);
   reportInitialLoad(initial);
 
+  // Only the opt-in startup choice waits for its language pack. Explicit
+  // conversation routes still become usable without a locale fetch gate.
+  if (!entryHash && !location.hash &&
+      settingsStore.get().data?.workspace?.open_mode === "ask")
+    await settingsView.localeReady();
+
   await startWorkspaceNavigation({ navigation, settingsStore, sessionsStore,
     runsStore,
     sessionDetailStore,
