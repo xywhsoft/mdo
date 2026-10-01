@@ -343,6 +343,15 @@ sidecar serves quick reads.
 Pure read tools, including this plan emitter, follow the configured automatic
 read permission; effectful tools still use one-shot approval.
 
+History maintenance emits `history_truncated`; its positive `source_event_id`
+identifies the first discarded UI event and its own `event_id` is the exclusive
+end of that discarded range. Incremental clients must remove cached events in
+this range as well as showing the marker. They retain the prefix and later
+events, including new turns whose model sequence was reused. Markers without a
+valid range remain display notes. A plan projection can revert to an earlier
+`event_id` or zero after maintenance; clients must invalidate prior plan reads
+and reload it instead of enforcing the previous monotonic floor.
+
 ## User questions
 
 The built-in `ask_user` tool suspends its tool call while the user answers a

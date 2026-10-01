@@ -4,6 +4,20 @@
 
 完成判据及尚缺的打包页证据见 [前端操作体验完成审计](frontend-completion-audit.md)。本文件继续记录每次实现和验证的细节。
 
+## 2026-10-01：外部历史修改同步时间线和待办
+
+正式打包复现表明，事件轮询把 `history_truncated` 作为普通追加记录，外部清空/截断后旧消息卡仍留在缓存，待办观察器又只允许事件 ID 增长，无法恢复更早的计划或清空计划。现在按服务端标记的 `[source_event_id, event_id)` 移除已载入的事件；保留前缀、边界及之后的新回合，模型账本 sequence 复用不影响判断。只接受有效正整数范围，旧式或自定义无范围说明仍按原文显示；记录上限和每轮分页上限保持有界。重叠轮询只发布最新读取，迟到响应不能复活已删除缓存或退回 cursor。
+
+待办收到有效历史边界后使旧读取失效、重置原单调事件下限，并读取服务端修复后的投影；保留计划可以回退到较早事件 ID，清空可以回到 0。响应仍落在已删除范围时按原有有界退避复查，不重新显示旧计划。编辑框保持已输入文字；关闭时原按钮已移除，则通过所属会话校验后的回退直接聚焦输入框。其他路由没有回退焦点，迟到关闭仍不能影响新编辑框。
+
+最终 Windows 单文件 Home `.build/mdo-packed-docks-hsnpym5_` 从页面完成 `TODO UI` 与 `TODO UPDATE UI`，计划为 2/2。在第二条编辑框输入 `MY RETAINED EDIT UI` 后，本地 API 模拟另一客户端从 sequence 5 截断，原第二条来源 ID 为 10，新的范围标记为 19。已有页面无需刷新即只剩第一轮和截断说明，待办由事件 14 回到事件 5、显示 1/2；编辑文字及输入焦点不变。点击取消后焦点为 `prompt`。先前无回退的候选 Home `.build/mdo-packed-docks-g8ivvpxe` 对此操作会落到 BODY，正式候选已纠正。
+
+同一最终页在 320×350 输入下一条 `DRAFT AFTER HISTORY CLEAR UI`，再由本地 API 模拟另一客户端清空。页面自动移除旧用户/助手卡和计划，只保留标记 20；待办服务投影为事件 0、空列表，输入文字及 `prompt` 焦点保留，文档宽 320px，浏览器错误日志为空。截图为 `.build/qa-live-history-edit-retained.png` 与 `.build/qa-live-history-clear-mobile.png`，服务端记录为 `.build/qa-live-history-truncate.json` 与 `.build/qa-live-history-clear.json`。本轮没有在图形页执行永久清空，外部客户端由本地隔离 API 模拟。
+
+七项新 Node 用例覆盖范围合并、不改原数据、无范围说明、明确清空与 gap、反序轮询、旧待办读取隔离、保留计划回退/新计划更新、删除范围内的旧响应重试；编辑用例补验来源移除后的安全焦点回退和路由变化拒绝。Windows 打包操作及两平台有界门禁之外，原生窗口/实体设备与阅读保留前缀时的滚动位置仍需独立验收。
+
+最终 Windows/Linux 有界发布门禁均通过 114 项 Python、240 项 Node、90 个模块解析、严格 C11 编译、32 个运行探针、Home 租约/队列恢复及 A/B 确定性打包；Windows 另通过便携 WebView2 Home 和 20 秒单文件启动。根目录 `mdo.exe` 已更新，SHA-256 与实际操作的候选及 A/B 包同为 `fa3832965af75569998e4dbe2d33cb1f9855d7d358ed2db1fe7955aac5808149`；Linux 原生文件系统包为 `b6bca2581973f5e676765234232dfba496679a3b9e4014e4c1bb257f7fc244a4`。日志为 `.build/qa-live-history-focus-release.log` 与 `.build/qa-live-history-focus-linux-release.log`。未做压力或高负载测试。
+
 ## 2026-10-01：消息编辑与重试绑定原始事件
 
 旧消息的编辑或重试原先只核对模型账本 sequence，再获取最新 ETag 截断。另一客户端清空并重新运行后，sequence 会复用；这让旧操作能够撤回另一客户端的新消息。修复前根目录包的隔离 Home `.build/mdo-packed-docks-55kglozd` 中，原用户消息的事件 ID 为 1，替换后为 7，两者 sequence 均为 2；按当时前端正文提交序列单字段请求返回 200，新消息被移除。原编辑窗口保持打开，最终破坏性请求通过本地 API 复现。

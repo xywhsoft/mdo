@@ -504,10 +504,13 @@ export async function boot() {
       if (!isCurrentMessageOwner(owner, version))
         throw new Error(t("messageAction.ownerChanged", {}, "会话已切换，请重新选择消息"));
       assertMessageReplacementReady(sequence, completeText, attachments);
-      await messageEditDialog.open(completeText, attachments, opener, async (edited) => {
-        if (!isCurrentMessageOwner(owner, version))
-          throw new Error(t("messageAction.ownerChanged", {}, "会话已切换，请重新选择消息"));
-        await replaceAndRunMessage(sequence, edited, attachments, "edit", sourceEventId);
+      await messageEditDialog.open(completeText, attachments, opener, {
+        onCommit: async (edited) => {
+          if (!isCurrentMessageOwner(owner, version))
+            throw new Error(t("messageAction.ownerChanged", {}, "会话已切换，请重新选择消息"));
+          await replaceAndRunMessage(sequence, edited, attachments, "edit", sourceEventId);
+        },
+        fallbackFocus: () => isCurrentMessageOwner(owner, version) ? prompt : null,
       });
       if (isCurrentMessageOwner(owner, version) &&
           (document.activeElement === document.body || !document.activeElement?.isConnected))

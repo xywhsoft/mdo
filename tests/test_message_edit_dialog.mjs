@@ -154,11 +154,11 @@ test("a delayed commit keeps the editor open and rejects duplicate submission an
   const context = setup();
   let complete;
   let calls = 0;
-  const result = context.editor.open("original", [], context.opener, async (text) => {
+  const result = context.editor.open("original", [], context.opener, { onCommit: async (text) => {
     calls += 1;
     assert.equal(text, "edited");
     await new Promise((resolve) => { complete = resolve; });
-  });
+  } });
   context.input.value = "edited";
   context.key();
   context.key();
@@ -183,10 +183,10 @@ test("a refused message edit preserves text and attachments for correction or ca
   const context = setup();
   let calls = 0;
   let settled = false;
-  const result = context.editor.open("original", ["a".repeat(32)], context.opener, async () => {
+  const result = context.editor.open("original", ["a".repeat(32)], context.opener, { onCommit: async () => {
     calls += 1;
     if (calls === 1) throw Object.assign(new Error("refused"), { code: "session_message_changed" });
-  });
+  } });
   result.then(() => { settled = true; });
   context.input.value = "my unsent edit";
   context.key();
@@ -208,8 +208,8 @@ test("a refused message edit preserves text and attachments for correction or ca
 test("a late commit response cannot close or change a newer editor", async () => {
   const context = setup();
   let complete;
-  const first = context.editor.open("first", [], context.opener, () =>
-    new Promise(resolve => { complete = resolve; }));
+  const first = context.editor.open("first", [], context.opener, { onCommit: () =>
+    new Promise(resolve => { complete = resolve; }) });
   context.key();
   context.dialog.close();
   assert.equal(await first, null);
@@ -227,4 +227,21 @@ test("a late commit response cannot close or change a newer editor", async () =>
   assert.equal(context.input.readOnly, false);
   context.cancel.dispatchEvent(new Event("click"));
   assert.equal(await next, null);
+});
+
+test("closing an editor whose opener was removed returns focus through its owner-checked fallback", async () => {
+  const context = setup();
+  let current = true;
+  const prompt = { isConnected: true, focus() { context.state.focus = "prompt"; } };
+  const options = { fallbackFocus: () => current ? prompt : null };
+  const first = context.editor.open("old source", [], context.opener, options);
+  context.opener.isConnected = false;
+  context.cancel.dispatchEvent(new Event("click"));
+  assert.equal(await first, null);
+  assert.equal(context.state.focus, "prompt");
+  const second = context.editor.open("different route", [], context.opener, options);
+  current = false;
+  context.cancel.dispatchEvent(new Event("click"));
+  assert.equal(await second, null);
+  assert.equal(context.state.focus, "input");
 });

@@ -7,6 +7,7 @@ export function createMessageEditDialog({ dialog, form, input, cancel, submit, e
   let hasAttachments = false;
   let opener = null;
   let commit = null;
+  let fallbackFocus = null;
   let committing = false;
   const composition = createCompositionTracker(input);
 
@@ -16,10 +17,14 @@ export function createMessageEditDialog({ dialog, form, input, cancel, submit, e
     commit = null;
     setCommitting(false);
     const returnFocus = opener;
+    const fallback = fallbackFocus;
     opener = null;
+    fallbackFocus = null;
     if (dialog.open) dialog.close();
-    if (returnFocus?.isConnected && !returnFocus.disabled)
-      returnFocus.focus({ preventScroll: true });
+    const target = returnFocus?.isConnected && !returnFocus.disabled
+      ? returnFocus : fallback?.();
+    if (target?.isConnected && !target.disabled)
+      target.focus({ preventScroll: true });
     resolve?.(value);
   }
 
@@ -88,11 +93,12 @@ export function createMessageEditDialog({ dialog, form, input, cancel, submit, e
   });
 
   return Object.freeze({
-    open(text, attachments = [], source = null, onCommit = null) {
+    open(text, attachments = [], source = null, options = {}) {
       if (pending) return Promise.reject(new Error(t("messageEdit.alreadyOpen", {}, "已有消息正在编辑")));
       hasAttachments = attachments.length > 0;
       opener = source;
-      commit = onCommit;
+      commit = options.onCommit ?? null;
+      fallbackFocus = options.fallbackFocus ?? null;
       setCommitting(false);
       if (error) error.hidden = true;
       input.value = text;

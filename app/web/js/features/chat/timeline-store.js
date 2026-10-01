@@ -14,8 +14,27 @@ export const timelineStore = createResourceStore({
 });
 
 let generation = 0;
+let refreshVersion = 0;
 let pollTimer = 0;
 let pollDelay = 800;
+
+export function historyRemovalRange(event) {
+  if (event.kind !== "history_truncated") return null;
+  const first = Number(event.source_event_id);
+  const end = Number(event.event_id);
+  return Number.isSafeInteger(first) && first > 0 &&
+    Number.isSafeInteger(end) && first <= end ? { first, end } : null;
+}
+
+export function mergeTimelineEvents(retained, additions) {
+  const events = retained.concat(additions);
+  const ranges = events.map(historyRemovalRange).filter(Boolean);
+  // Durable markers identify discarded UI IDs, not reusable model sequences.
+  // Apply them to cached events as well as records in the current replay page.
+  return { events: ranges.length ? events.filter((event) => ranges.every(({ first, end }) =>
+    Number(event.event_id) < first || Number(event.event_id) >= end)) : events,
+  cleared: additions.some((event) => historyRemovalRange(event)?.first === 1) };
+}
 
 function stopTimer() {
   window.clearTimeout(pollTimer);
@@ -31,6 +50,8 @@ function schedulePoll(token) {
 async function refreshTimeline(token = generation) {
   const current = timelineStore.get().data;
   if (!current?.sessionId || token !== generation) return;
+  const request = ++refreshVersion;
+  const isCurrent = () => token === generation && request === refreshVersion;
   let cursor = current.cursor;
   let events = current.events;
   let latestEventId = current.latestEventId;
@@ -42,15 +63,15 @@ async function refreshTimeline(token = generation) {
       const response = await api.get(
         `/projects/${current.projectId}/sessions/${current.sessionId}/events?after=${cursor}&limit=32`,
       );
-      if (token !== generation) return;
+      if (!isCurrent()) return;
       const replay = response.data;
       const additions = (replay.items ?? []).filter((item) => Number(item.event_id) > cursor);
       if (replay.history_lost) {
-        events = additions;
         historyLost = true;
-      } else if (additions.length) {
-        events = events.concat(additions);
       }
+      const merged = mergeTimelineEvents(replay.history_lost ? [] : events, additions);
+      events = merged.events;
+      if (merged.cleared) historyLost = false;
       if (events.length > RETAINED_EVENTS) {
         events = events.slice(-RETAINED_EVENTS);
         historyLost = true;
@@ -68,13 +89,13 @@ async function refreshTimeline(token = generation) {
       pollDelay = Math.min(Math.round(pollDelay * 1.45), 4000);
     }
   } catch (error) {
-    if (token !== generation) return;
+    if (!isCurrent()) return;
     if (error?.code !== "session_events_unavailable" && error?.code !== "session_not_found") {
       timelineStore.setError(error);
       pollDelay = 2500;
     }
   } finally {
-    schedulePoll(token);
+    if (isCurrent()) schedulePoll(token);
   }
 }
 
