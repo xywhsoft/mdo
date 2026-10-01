@@ -4,6 +4,53 @@
 
 完成判据及尚缺的打包页证据见 [前端操作体验完成审计](frontend-completion-audit.md)。本文件继续记录每次实现和验证的细节。
 
+## 2026-10-01：恢复决定绑定原会话与恢复快照
+
+恢复面板原先只用 `tool_call_id` 保存选择，并以一个全局布尔值标记提交中。
+同一个调用 ID 出现在新恢复快照中时，会沿用旧的“重新执行”；会话 A 请求
+未返回时，会话 B 的选择也被禁用。更严重的是，迟到的 A 回调会直接接管当前
+运行监视器、清掉当前输入错误，或解除当前会话的队列阻塞。
+
+新增独立的 `recovery-decisions.js` 控制器：选择绑定项目、会话和恢复令牌，
+相同快照刷新保留选择，新的快照需要重新核对；工具变为不可用时移除重试
+选择。每个会话有独立的提交锁，请求开始时冻结自己的选择副本；旧响应不会
+清掉另一会话的选择，也不能释放同会话的新请求。失败保留当前快照的选择。
+恢复和结束中断轮次的回调都携带原拥有者；只有原会话仍在当前工作区时才
+接管运行监视、清除输入错误或派发队列，后台完成仍刷新运行及任务清单。
+没有修改 HTTP 协议、工具重试语义或权限规则。
+
+验证证据：
+
+- 七项新增 Node 用例覆盖令牌变化、项目/会话隔离、工具不可用、独立在途
+  请求、迟到/重复完成、失败保留及工作区切换。
+- 正式生产模块的浏览器夹具 `tests/fixtures/recovery-context-browser.html`
+  先在旧实现复现新令牌沿用选择、A 请求阻塞 B；新实现能分别提交 A 的重试
+  与 B 的不确定记录，A 先返回时保留 B 的选择和提交锁，两次回调分别归属
+  A、B。这是合成 HTTP 响应证据，没有实际重复执行写入工具。
+- 最终 Windows 单文件 Home `.build/mdo-packed-docks-90ilydhp` 实际完成
+  `SLOW UI` → 停止 → 打开恢复决定 → 继续恢复 → 审核一次只读合成文件检查
+  → `exit_code: 0` → 正常结束。未发送草稿和输入焦点保留，决策计数归零，
+  脚本错误为空；390×600 页面无横向溢出，保存了桌面及手机视口截图。
+  另一个 Home `.build/mdo-packed-docks-2c8lwljn` 确认无验证的合成模型触发
+  现有完成保护后显示失败，不能把它计为正常完成。
+- Windows 和 Linux 原生文件系统均通过 114 项 Python、164 项 Node、85 个
+  前端模块解析、严格 C11、31 个运行探针和确定性打包；Windows 另通过便携
+  WebView2 Home 与 20 秒打包启动检查。Linux 宿主从锁定的 xs `5f1e31a`
+  重新构建，原生快照位于 `/home/ubuntu/.cache/mdo-linux-qa-recovery-context`。
+
+根目录 `mdo.exe`、Windows A/B 包及上述 UI 包的 SHA-256 均为
+`a0c93b4716af874d18cc8d46f9ee9d1030170482b1b68518f6c7c0e45307c2f0`；Linux
+A/B 包为 `ab4d3f4b13c83d5a32d6f19fdb9bd4379b4457c621cedd4737fbeab6d2df9ffd`。
+日志分别是 `.build/qa-recovery-context-release.log` 和
+`.build/qa-recovery-context-linux-native-release.log`。
+
+WSL 环境已能写入临时文件；Linux 服务层复验不再因只读环境搁置。不过同一
+门禁在 `/mnt/d` 的 Home 导入回滚处失败，独立小目录验证该挂载盘的
+`renameat2(RENAME_NOREPLACE)` 返回 `EINVAL`，原生 `/tmp` 成功。这项限制及
+后续修复约束见 [Linux 文件系统原子操作记录](linux-filesystem-atomic-rename.md)。
+没有跳过断言或改用可覆盖目标的重命名。实体手机、真实软键盘、macOS 和原生
+窗口完整操作仍需验收；长期目标未完成，未做压力或高负载测试。
+
 ## 2026-10-01：运行失败结束部分回复与思考卡
 
 原时间线只在 `agent_done` 中收敛尚未结束的卡片；xwork 的取消使用

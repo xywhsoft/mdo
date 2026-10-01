@@ -56,6 +56,7 @@ import { createTokenMeter } from "./features/chat/token-meter.js";
 import { createTaskPanel } from "./features/tasks/task-panel.js";
 import { createDecisionPanel } from "./features/approvals/decision-panel.js";
 import { createRecoveryPanel } from "./features/approvals/recovery-panel.js";
+import { recoveryMatchesWorkspace } from "./features/approvals/recovery-decisions.js";
 import { createSettingsView } from "./features/settings/settings-view.js";
 import { createSchedulePanel } from "./features/settings/schedule-panel.js";
 import { createProjectPanel } from "./features/settings/project-panel.js";
@@ -925,15 +926,17 @@ export async function boot() {
     container: $("#recovery-list"),
     summary: $("#recovery-summary"),
     store: recoveryStore,
-    onResume: (run) => {
-      monitorRun(run);
-      if (composerError.dataset.code === "recovery_required") hideComposerError();
-      void Promise.all([loadRuns(), loadTasks(), refreshSelectedTimeline()]);
+    onResume: (run, owner) => {
+      const ownsView = recoveryMatchesWorkspace(owner, navigation.get());
+      if (ownsView) {
+        monitorRun(run);
+        if (composerError.dataset.code === "recovery_required") hideComposerError();
+      }
+      void Promise.all([loadRuns(), loadTasks(), ...(ownsView ? [refreshSelectedTimeline()] : [])]);
     },
-    onAbandon: async () => {
-      const selected = navigation.get();
-      queueBlocked.unblock(`${selected.projectId}/${selected.sessionId}`);
-      await dispatchQueued();
+    onAbandon: async (owner) => {
+      queueBlocked.unblock(`${owner.project_id}/${owner.session_id}`);
+      if (recoveryMatchesWorkspace(owner, navigation.get())) await dispatchQueued();
     },
   });
 

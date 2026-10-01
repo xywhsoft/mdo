@@ -2,73 +2,79 @@ import { abandonRecovery, loadRecovery, resumeRecovery } from "../../state/recov
 import { clear, element, errorMessage, toast } from "../../utils/dom.js";
 import { subscribeLocale, t } from "../../i18n.js";
 import { effectList, formatArguments } from "./labels.js";
+import { createRecoveryDecisions } from "./recovery-decisions.js";
 
 export function createRecoveryPanel({ container, summary, store, onResume, onAbandon }) {
   let state = store.get();
-  let submitting = false;
-  const choices = new Map();
+  const decisions = createRecoveryDecisions();
   const argumentsOpen = new Map();
 
-  function choose(item, action) {
-    if (submitting) return;
-    choices.set(String(item.tool_call_id), action);
-    render();
+  function choose(data, item, action) {
+    if (decisions.choose(data, item.tool_call_id, action)) render();
   }
 
   async function submitRecovery(data) {
-    if (submitting) return;
-    submitting = true;
+    const operation = decisions.begin(data);
+    if (!operation) return;
+    let accepted = false;
     render();
     try {
-      const run = await resumeRecovery(data, choices);
-      choices.clear();
-      toast(t("recovery.submitted", {}, "恢复决定已提交，正在继续会话"));
-      onResume?.(run);
-      await loadRecovery();
+      const run = await resumeRecovery(operation.data, operation.choices);
+      accepted = true;
+      if (decisions.isCurrent(data)) toast(t("recovery.submitted", {}, "恢复决定已提交，正在继续会话"));
+      onResume?.(run, operation.data);
+      if (decisions.isCurrent(data)) await loadRecovery();
     } catch (error) {
-      toast(errorMessage(error), "error");
-      if (error?.code === "recovery_state_conflict") await loadRecovery();
+      if (decisions.isCurrent(data)) {
+        toast(errorMessage(error), "error");
+        if (error?.code === "recovery_state_conflict") await loadRecovery();
+      }
     } finally {
-      submitting = false;
+      decisions.finish(operation, accepted);
       render();
     }
   }
 
   async function submitAbandon(data) {
-    if (submitting) return;
-    submitting = true;
+    const operation = decisions.begin(data);
+    if (!operation) return;
+    let accepted = false;
     render();
     try {
-      await abandonRecovery(data);
-      choices.clear();
-      toast(t("recovery.abandoned", {}, "已结束中断的轮次"));
-      await loadRecovery();
-      await onAbandon?.();
+      await abandonRecovery(operation.data);
+      accepted = true;
+      if (decisions.isCurrent(data)) {
+        toast(t("recovery.abandoned", {}, "已结束中断的轮次"));
+        await loadRecovery();
+      }
+      await onAbandon?.(operation.data);
     } catch (error) {
-      toast(errorMessage(error), "error");
-      if (error?.code === "recovery_state_conflict") await loadRecovery();
+      if (decisions.isCurrent(data)) {
+        toast(errorMessage(error), "error");
+        if (error?.code === "recovery_state_conflict") await loadRecovery();
+      }
     } finally {
-      submitting = false;
+      decisions.finish(operation, accepted);
       render();
     }
   }
 
-  function optionButton(item, action, label) {
+  function optionButton(data, item, action, label) {
     const id = String(item.tool_call_id);
-    const selected = choices.get(id) === action;
+    const selected = decisions.choice(id) === action;
     const button = element("button", {
       className: selected ? "recovery-option selected" : "recovery-option",
       text: label,
       attrs: { type: "button", "aria-pressed": String(selected),
-        "aria-disabled": String(submitting),
+        "aria-disabled": String(decisions.isBusy(data)),
         "data-recovery-focus": `${id}/${action}` },
     });
     button.disabled = action === "retry" && !item.tool_available;
-    button.addEventListener("click", () => choose(item, action));
+    button.addEventListener("click", () => choose(data, item, action));
     return button;
   }
 
-  function renderCard(item) {
+  function renderCard(data, item) {
     const id = String(item.tool_call_id);
     const tool = item.tool || t("decision.unknownTool", {}, "未知工具");
     const effects = effectList(item.effects ?? []) ||
@@ -102,8 +108,8 @@ export function createRecoveryPanel({ container, summary, store, onResume, onAba
       element("div", { className: "recovery-options", attrs: { role: "group",
         "aria-label": t("recovery.group", { tool },
           `${tool} 的恢复决定`) } }, [
-        optionButton(item, "record_uncertain", t("recovery.recordUncertain", {}, "记录为不确定")),
-        optionButton(item, "retry", t("recovery.retry", {}, "重新执行")),
+        optionButton(data, item, "record_uncertain", t("recovery.recordUncertain", {}, "记录为不确定")),
+        optionButton(data, item, "retry", t("recovery.retry", {}, "重新执行")),
       ]),
     );
     const details = card.querySelector("details");
@@ -126,8 +132,8 @@ export function createRecoveryPanel({ container, summary, store, onResume, onAba
       argumentsOpen.set(details.dataset.recoveryArguments, details.open);
     const data = state.data ?? {};
     const items = data.items ?? [];
+    decisions.select(data);
     const activeIds = new Set(items.map((item) => String(item.tool_call_id)));
-    for (const id of choices.keys()) if (!activeIds.has(id)) choices.delete(id);
     for (const id of argumentsOpen.keys()) if (!activeIds.has(id)) argumentsOpen.delete(id);
     clear(summary);
     clear(container);
@@ -155,14 +161,14 @@ export function createRecoveryPanel({ container, summary, store, onResume, onAba
         ? t("recovery.pendingCallsSuffix", {}, " 个持久化调用需要处理")
         : t("recovery.modelRetrySuffix", {}, " 个工具调用；需要重新请求模型")),
     );
-    for (const item of items) container.append(renderCard(item));
-    const ready = items.every((item) => choices.has(String(item.tool_call_id)));
+    for (const item of items) container.append(renderCard(data, item));
+    const ready = decisions.ready(data);
     const submitButton = element("button", {
       className: "primary-button recovery-submit",
       text: items.length ? t("recovery.resumeWithChoices", {}, "按以上决定恢复会话")
         : t("recovery.resume", {}, "继续恢复会话"),
       attrs: { type: "button", "data-recovery-focus": "submit",
-        "aria-disabled": String(submitting) },
+        "aria-disabled": String(decisions.isBusy(data)) },
     });
     submitButton.disabled = !ready;
     submitButton.addEventListener("click", () => void submitRecovery(data));
@@ -176,7 +182,7 @@ export function createRecoveryPanel({ container, summary, store, onResume, onAba
         className: "recovery-abandon",
         text: t("recovery.endTurn", {}, "结束中断轮次"),
         attrs: { type: "button", "data-recovery-focus": "abandon",
-          "aria-disabled": String(submitting) },
+          "aria-disabled": String(decisions.isBusy(data)) },
       });
       abandonButton.addEventListener("click", () => void submitAbandon(data));
       container.append(element("div", { className: "recovery-actions" }, [
