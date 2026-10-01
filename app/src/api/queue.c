@@ -3,45 +3,11 @@
 
 #include "internal.h"
 #include "profile.h"
+#include "../sessions/sidecars/queue.h"
 #include "../../include/mdo/home.h"
 #include "../../include/mdo/runs.h"
 #include "../../include/mdo/sessions.h"
 #include "../../include/mdo/project_lifecycle.h"
-
-#define MDO_QUEUE_MAX_ITEMS 20u
-#define MDO_QUEUE_MAX_TEXT (64u * 1024u - 1u)
-#define MDO_QUEUE_MAX_TOTAL_TEXT (192u * 1024u)
-#define MDO_QUEUE_FILE_MAX (256u * 1024u)
-#define MDO_QUEUE_ID_SIZE 32u
-#define MDO_QUEUE_RECEIPT_FILE_MAX 512u
-#define MDO_QUEUE_DISCARD_MAX 256u
-
-typedef enum MdoQueueState {
-    MDO_QUEUE_STAGED,
-    MDO_QUEUE_PENDING,
-    MDO_QUEUE_SENDING
-} MdoQueueState;
-
-typedef struct MdoQueueItem {
-    char Id[MDO_QUEUE_ID_SIZE + 1u];
-    char* Text;
-    size_t TextSize;
-    char Attachments[4][33];
-    size_t AttachmentCount;
-    MdoQueueState State;
-    bool Priority;
-    MdoApiProfile Profile;
-    bool StartClaimed;
-    char RunId[MDO_RUN_ID_CAPACITY];
-} MdoQueueItem;
-
-typedef struct MdoQueue {
-    MdoQueueItem Items[MDO_QUEUE_MAX_ITEMS];
-    size_t Count;
-    size_t TextBytes;
-    char DiscardImages[MDO_QUEUE_DISCARD_MAX][33];
-    size_t DiscardCount;
-} MdoQueue;
 
 static xmutex* g_MdoQueueLock;
 
@@ -68,93 +34,6 @@ void MdoApiQueueCaptureUnlock(void)
     xrtMutexUnlock(g_MdoQueueLock);
 }
 
-static void MdoQueueRelease(MdoQueue* Queue)
-{
-    size_t i;
-    for ( i = 0u; i < Queue->Count; ++i ) xrtFree(Queue->Items[i].Text);
-    memset(Queue, 0, sizeof(*Queue));
-}
-
-static bool MdoQueueCaptureId(xstrview View, char* Output,
-    size_t Capacity)
-{
-    size_t i;
-    if ( View.Size == 0u || View.Size >= Capacity || View.Data[0] == '.' )
-        return false;
-    for ( i = 0u; i < View.Size; ++i ) {
-        unsigned char Byte = (unsigned char)View.Data[i];
-        if ( (Byte >= 'a' && Byte <= 'z') ||
-             (Byte >= 'A' && Byte <= 'Z') ||
-             (Byte >= '0' && Byte <= '9') || Byte == '-' || Byte == '_' ||
-             Byte == '.' ) continue;
-        return false;
-    }
-    memcpy(Output, View.Data, View.Size);
-    Output[View.Size] = '\0';
-    return true;
-}
-
-static bool MdoQueueId(xstrview View,
-    char Output[MDO_QUEUE_ID_SIZE + 1u])
-{
-    size_t i;
-    if ( View.Size != MDO_QUEUE_ID_SIZE ) return false;
-    for ( i = 0u; i < View.Size; ++i ) {
-        unsigned char Byte = (unsigned char)View.Data[i];
-        if ( !((Byte >= '0' && Byte <= '9') ||
-               (Byte >= 'a' && Byte <= 'f')) ) return false;
-    }
-    memcpy(Output, View.Data, View.Size);
-    Output[View.Size] = '\0';
-    return true;
-}
-
-static size_t MdoQueueDiscardFind(const MdoQueue* Queue, const char* Id)
-{
-    size_t i;
-    for ( i = 0u; i < Queue->DiscardCount; ++i )
-        if ( strcmp(Queue->DiscardImages[i], Id) == 0 ) return i;
-    return SIZE_MAX;
-}
-
-static bool MdoQueueDiscardAdd(MdoQueue* Queue, const char* Id)
-{
-    if ( MdoQueueDiscardFind(Queue, Id) != SIZE_MAX ) return true;
-    if ( Queue->DiscardCount == MDO_QUEUE_DISCARD_MAX ) return false;
-    memcpy(Queue->DiscardImages[Queue->DiscardCount++], Id, 33u);
-    return true;
-}
-
-static bool MdoQueueRunId(xstrview View, char Output[MDO_RUN_ID_CAPACITY])
-{
-    return View.Size > 4u && View.Size < MDO_RUN_ID_CAPACITY &&
-        memcmp(View.Data, "run-", 4u) == 0 &&
-        MdoQueueCaptureId(View, Output, MDO_RUN_ID_CAPACITY);
-}
-
-static bool MdoQueueString(const xvalue* Object, cstr Key,
-    xstrview* Text)
-{
-    const xvalue* Value = xrtValueObjectGet(Object, xrtStrView(Key));
-    return xrtValueType(Value) == XVALUE_STRING &&
-        xrtValueGetString(Value, Text);
-}
-
-static bool MdoQueueText(xstrview Text, bool AllowEmpty)
-{
-    return (AllowEmpty || Text.Size > 0u) &&
-        Text.Size <= MDO_QUEUE_MAX_TEXT &&
-        memchr(Text.Data, 0, Text.Size) == NULL &&
-        xrtUtf8Valid(Text, NULL);
-}
-
-static bool MdoQueueBool(const xvalue* Object, cstr Key, bool* Result)
-{
-    const xvalue* Value = xrtValueObjectGet(Object, xrtStrView(Key));
-    return xrtValueType(Value) == XVALUE_BOOL &&
-        xrtValueGetBool(Value, Result);
-}
-
 static bool MdoQueueReceiptPath(char Path[MDO_SESSION_PATH_CAPACITY],
     const char* ProjectId, const char* SessionId, const char* Id)
 {
@@ -174,86 +53,27 @@ static bool MdoQueueReceiptReadEx(const char* ProjectId,
     xfileinfo Info;
     xfile File = NULL;
     char Bytes[MDO_QUEUE_RECEIPT_FILE_MAX + 1u];
-    xjsonreadconfig Config;
-    xvalue* Root = NULL;
-    const xvalue* Version;
-    const xvalue* AgentRun;
-    uint64 Schema = 0u;
-    uint64 PreparedAgentRunId = 0u;
-    int64 Signed;
-    xstrview StoredId, StoredRun, StoredState;
+    MdoQueueReceipt Receipt;
     bool Ok = false;
-    *Exists = false;
-    memset(RunId, 0, MDO_RUN_ID_CAPACITY);
-    if ( PreparedRunId != NULL )
-        memset(PreparedRunId, 0, MDO_RUN_ID_CAPACITY);
+    *Exists = false; RunId[0] = '\0';
+    if ( PreparedRunId != NULL ) PreparedRunId[0] = '\0';
     if ( AgentRunId != NULL ) *AgentRunId = 0u;
     if ( !MdoQueueReceiptPath(Path, ProjectId, SessionId, Id) ||
          !MdoHomeExternalStat(Path, Exists, &Info) ) return false;
     if ( !*Exists ) return true;
-    if ( Info.Type != XFILE_TYPE_FILE ||
-         (Info.Available & XFILE_INFO_SIZE) == 0u ||
-         Info.Size == 0u || Info.Size > MDO_QUEUE_RECEIPT_FILE_MAX )
-        return false;
+    if ( Info.Type != XFILE_TYPE_FILE || (Info.Available & XFILE_INFO_SIZE) == 0u ||
+         Info.Size == 0u || Info.Size > MDO_QUEUE_RECEIPT_FILE_MAX ) return false;
     File = MdoHomeOpenRead(Path);
-    if ( File == NULL || !xrtReadFull(File, Bytes, (size_t)Info.Size,
-            NULL) ) goto done;
-    Bytes[Info.Size] = '\0';
-    xrtJsonReadConfigInit(&Config);
-    Config.MaxInputBytes = MDO_QUEUE_RECEIPT_FILE_MAX;
-    Config.MaxDepth = 2u;
-    Config.MaxValues = 8u;
-    Root = xrtJsonRead(xrtStrViewN(Bytes, (size_t)Info.Size), &Config);
-    Version = xrtValueObjectGet(Root, XRT_STR_LITERAL("schema_version"));
-    if ( xrtValueType(Version) == XVALUE_UINT ) {
-        if ( !xrtValueGetUInt(Version, &Schema) ) goto done;
-    } else if ( xrtValueType(Version) == XVALUE_INT ) {
-        if ( !xrtValueGetInt(Version, &Signed) || Signed < 0 ) goto done;
-        Schema = (uint64)Signed;
-    } else goto done;
-    if ( xrtValueType(Root) != XVALUE_OBJECT ||
-         xrtValueCount(Root) != (Schema == 3u ? 5u : 3u) ||
-         (Schema != 1u && Schema != 2u && Schema != 3u) ||
-         !MdoQueueString(Root, "id", &StoredId) ||
-         StoredId.Size != MDO_QUEUE_ID_SIZE ||
-         memcmp(StoredId.Data, Id, MDO_QUEUE_ID_SIZE) != 0 ) goto done;
-    if ( Schema == 1u ) {
-        if ( !MdoQueueString(Root, "run_id", &StoredRun) ||
-             !MdoQueueRunId(StoredRun, RunId) ) goto done;
-    } else {
-        if ( !MdoQueueString(Root, "state", &StoredState) ||
-             StoredState.Size != 8u ||
-             memcmp(StoredState.Data, "starting", 8u) != 0 ) goto done;
-        if ( Schema == 3u ) {
-            char CheckedRun[MDO_RUN_ID_CAPACITY];
-            if ( !MdoQueueString(Root, "run_id", &StoredRun) ||
-                 !MdoQueueRunId(StoredRun, CheckedRun) ) goto done;
-            AgentRun = xrtValueObjectGet(Root,
-                XRT_STR_LITERAL("agent_run_id"));
-            if ( xrtValueType(AgentRun) == XVALUE_UINT ) {
-                if ( !xrtValueGetUInt(AgentRun,
-                        &PreparedAgentRunId) ) goto done;
-            } else if ( xrtValueType(AgentRun) == XVALUE_INT ) {
-                if ( !xrtValueGetInt(AgentRun, &Signed) ||
-                     Signed <= 0 ) goto done;
-                PreparedAgentRunId = (uint64)Signed;
-            } else goto done;
-            if ( PreparedAgentRunId == 0u ) goto done;
-            if ( PreparedRunId != NULL )
-                memcpy(PreparedRunId, CheckedRun, sizeof(CheckedRun));
-            if ( AgentRunId != NULL ) *AgentRunId = PreparedAgentRunId;
-        }
-    }
-    Ok = true;
-done:
-    xrtValueRelease(Root);
+    if ( File != NULL && xrtReadFull(File, Bytes, (size_t)Info.Size, NULL) )
+        Ok = MdoQueueReceiptParse(xrtStrViewN(Bytes, (size_t)Info.Size), Id, &Receipt);
     if ( File != NULL && !xrtClose(File) ) Ok = false;
-    if ( !Ok ) {
-        RunId[0] = '\0';
-        if ( PreparedRunId != NULL ) PreparedRunId[0] = '\0';
-        if ( AgentRunId != NULL ) *AgentRunId = 0u;
+    if ( !Ok ) return false;
+    if ( Receipt.Schema == 1u ) memcpy(RunId, Receipt.RunId, MDO_RUN_ID_CAPACITY);
+    if ( Receipt.Schema == 3u ) {
+        if ( PreparedRunId != NULL ) memcpy(PreparedRunId, Receipt.RunId, MDO_RUN_ID_CAPACITY);
+        if ( AgentRunId != NULL ) *AgentRunId = Receipt.AgentRunId;
     }
-    return Ok;
+    return true;
 }
 
 static bool MdoQueueReceiptRead(const char* ProjectId,
@@ -367,201 +187,37 @@ static bool MdoQueueReceiptClaim(const char* ProjectId,
         MdoHomeAtomicWrite(Path, Bytes, (size_t)Written, false);
 }
 
-static bool MdoQueueParseState(xstrview State, bool AllowStaged,
-    MdoQueueState* Result)
-{
-    if ( AllowStaged && State.Size == 6u &&
-         memcmp(State.Data, "staged", 6u) == 0 ) {
-        *Result = MDO_QUEUE_STAGED;
-        return true;
-    }
-    if ( State.Size == 7u && memcmp(State.Data, "pending", 7u) == 0 ) {
-        *Result = MDO_QUEUE_PENDING;
-        return true;
-    }
-    if ( State.Size == 7u && memcmp(State.Data, "sending", 7u) == 0 ) {
-        *Result = MDO_QUEUE_SENDING;
-        return true;
-    }
-    return false;
-}
-
-static size_t MdoQueueFind(const MdoQueue* Queue, const char* Id)
-{
-    size_t i;
-    for ( i = 0u; i < Queue->Count; ++i )
-        if ( strcmp(Queue->Items[i].Id, Id) == 0 ) return i;
-    return SIZE_MAX;
-}
-
-static bool MdoQueueInsert(MdoQueue* Queue, const char* Id,
-    xstrview Text, const char Attachments[4][33],
-    size_t AttachmentCount, bool First, bool Priority,
-    MdoQueueState State, const MdoApiProfile* Profile)
-{
-    MdoQueueItem* Item;
-    char* Copy;
-    size_t Position = First && Queue->Count != 0u &&
-        Queue->Items[0].State == MDO_QUEUE_SENDING ? 1u :
-        (First ? 0u : Queue->Count);
-    if ( Queue->Count >= MDO_QUEUE_MAX_ITEMS ||
-         Text.Size > MDO_QUEUE_MAX_TOTAL_TEXT - Queue->TextBytes )
-        return false;
-    Copy = (char*)xrtMalloc(Text.Size + 1u);
-    if ( Copy == NULL ) return false;
-    if ( Text.Size != 0u ) memcpy(Copy, Text.Data, Text.Size);
-    Copy[Text.Size] = '\0';
-    if ( Position < Queue->Count )
-        memmove(&Queue->Items[Position + 1u], &Queue->Items[Position],
-            (Queue->Count - Position) * sizeof(Queue->Items[0]));
-    Item = &Queue->Items[Position];
-    memset(Item, 0, sizeof(*Item));
-    memcpy(Item->Id, Id, MDO_QUEUE_ID_SIZE + 1u);
-    Item->Text = Copy;
-    Item->TextSize = Text.Size;
-    memcpy(Item->Attachments, Attachments, sizeof(Item->Attachments));
-    Item->AttachmentCount = AttachmentCount;
-    Item->Priority = Priority;
-    Item->State = State;
-    if ( Profile != NULL ) Item->Profile = *Profile;
-    Queue->TextBytes += Text.Size;
-    Queue->Count++;
-    return true;
-}
-
 static bool MdoQueueRead(const char* Path, const char* ProjectId,
     const char* SessionId, MdoQueue* Queue)
 {
-    bool Exists = false;
+    bool Exists = false, Ok = false;
     xfileinfo Info;
     xfile File = NULL;
     char* Bytes = NULL;
-    xvalue* Root = NULL;
-    const xvalue* Items;
-    xjsonreadconfig Config;
-    uint64 Schema;
-    size_t i;
-    bool Ok = false;
     memset(Queue, 0, sizeof(*Queue));
     if ( !MdoHomeExternalStat(Path, &Exists, &Info) ) return false;
     if ( !Exists ) return true;
-    if ( Info.Type != XFILE_TYPE_FILE ||
-         (Info.Available & XFILE_INFO_SIZE) == 0u ||
-         Info.Size > MDO_QUEUE_FILE_MAX || Info.Size > SIZE_MAX - 1u )
-        return false;
-    File = MdoHomeOpenRead(Path);
-    Bytes = (char*)xrtMalloc((size_t)Info.Size + 1u);
-    if ( File == NULL || Bytes == NULL ||
-         (Info.Size != 0u && !xrtReadFull(File, Bytes,
-            (size_t)Info.Size, NULL)) ) goto done;
-    Bytes[Info.Size] = '\0';
-    xrtJsonReadConfigInit(&Config);
-    Config.MaxInputBytes = MDO_QUEUE_FILE_MAX;
-    Config.MaxDepth = 5u;
-    Config.MaxValues = 512u;
-    Config.MaxContainerItems = MDO_QUEUE_DISCARD_MAX;
-    Root = xrtJsonRead(xrtStrViewN(Bytes, (size_t)Info.Size), &Config);
-    Items = Root != NULL ? xrtValueObjectGet(Root,
-        XRT_STR_LITERAL("items")) : NULL;
-    if ( xrtValueType(Root) != XVALUE_OBJECT ||
-         (xrtValueCount(Root) != 2u && xrtValueCount(Root) != 3u) ||
-         xrtValueType(Items) != XVALUE_ARRAY ||
-         xrtValueCount(Items) > MDO_QUEUE_MAX_ITEMS ) goto done;
-    {
-        const xvalue* Version = xrtValueObjectGet(Root,
-            XRT_STR_LITERAL("schema_version"));
-        int64 Signed;
-        if ( xrtValueType(Version) == XVALUE_UINT ) {
-            if ( !xrtValueGetUInt(Version, &Schema) ) goto done;
-        } else if ( xrtValueType(Version) == XVALUE_INT ) {
-            if ( !xrtValueGetInt(Version, &Signed) || Signed < 0 ) goto done;
-            Schema = (uint64)Signed;
-        } else goto done;
-        if ( Schema < 1u || Schema > 7u ) goto done;
-    }
-    if ( xrtValueCount(Root) != (Schema >= 6u ? 3u : 2u) ) goto done;
-    if ( Schema >= 6u ) {
-        const xvalue* Discard = xrtValueObjectGet(Root,
-            XRT_STR_LITERAL("discard_images"));
-        if ( xrtValueType(Discard) != XVALUE_ARRAY ||
-             xrtValueCount(Discard) > MDO_QUEUE_DISCARD_MAX ) goto done;
-        for ( i = 0u; i < xrtValueCount(Discard); ++i ) {
-            xstrview Id;
-            char Checked[33];
-            const xvalue* Value = xrtValueArrayGet(Discard, i);
-            if ( xrtValueType(Value) != XVALUE_STRING ||
-                 !xrtValueGetString(Value, &Id) ||
-                 !MdoQueueId(Id, Checked) ||
-                 MdoQueueDiscardFind(Queue, Checked) != SIZE_MAX ||
-                 !MdoQueueDiscardAdd(Queue, Checked) ) goto done;
+    if ( Info.Type != XFILE_TYPE_FILE || (Info.Available & XFILE_INFO_SIZE) == 0u ||
+         Info.Size > MDO_QUEUE_FILE_MAX || Info.Size > SIZE_MAX - 1u ) return false;
+    File = MdoHomeOpenRead(Path); Bytes = (char*)xrtMalloc((size_t)Info.Size + 1u);
+    if ( File != NULL && Bytes != NULL && (Info.Size == 0u ||
+         xrtReadFull(File, Bytes, (size_t)Info.Size, NULL)) ) {
+        Bytes[Info.Size] = '\0';
+        Ok = MdoQueueParse(xrtStrViewN(Bytes, (size_t)Info.Size), Queue);
+        if ( Ok ) {
+            size_t i;
+            for ( i = 0u; i < Queue->Count; ++i ) {
+                bool ReceiptExists;
+                char ReceiptRunId[MDO_RUN_ID_CAPACITY];
+                MdoQueueItem* Item = &Queue->Items[i];
+                if ( !MdoQueueReceiptResolve(ProjectId, SessionId, Item->Id, &ReceiptExists, ReceiptRunId) ||
+                     !MdoQueueReceiptApply(Item, ReceiptExists, ReceiptRunId) ) { Ok = false; break; }
+            }
         }
     }
-    for ( i = 0u; i < xrtValueCount(Items); ++i ) {
-        const xvalue* Entry = xrtValueArrayGet(Items, i);
-        xstrview Id;
-        xstrview Text;
-        xstrview StateView;
-        xstrview RunIdView = { 0 };
-        char RunId[MDO_RUN_ID_CAPACITY] = { 0 };
-        char ReceiptRunId[MDO_RUN_ID_CAPACITY];
-        bool ReceiptExists = false;
-        const xvalue* RunIdValue = xrtValueObjectGet(Entry,
-            XRT_STR_LITERAL("run_id"));
-        const xvalue* ProfileValue = xrtValueObjectGet(Entry,
-            XRT_STR_LITERAL("profile"));
-        MdoApiProfile Profile = { 0 };
-        char IdText[MDO_QUEUE_ID_SIZE + 1u];
-        char Attachments[4][33] = {{ 0 }};
-        size_t AttachmentCount = 0u;
-        MdoQueueState State;
-        bool Priority = false;
-        if ( xrtValueType(Entry) != XVALUE_OBJECT ||
-             xrtValueCount(Entry) != (Schema == 1u ? 3u :
-                (Schema == 2u ? 4u : 5u +
-                    (Schema >= 5u && RunIdValue != NULL ? 1u : 0u))) +
-                    (ProfileValue != NULL ? 1u : 0u) ||
-             (ProfileValue != NULL && (Schema != 7u ||
-              !MdoApiProfileRead(ProfileValue, &Profile) ||
-              !Profile.Present)) ||
-             !MdoQueueString(Entry, "id", &Id) ||
-             !MdoQueueString(Entry, "text", &Text) ||
-             !MdoQueueString(Entry, "state", &StateView) ||
-             !MdoQueueId(Id, IdText) ||
-             (Schema >= 2u &&
-              !MdoAttachmentIdsRead(xrtValueObjectGet(Entry,
-                XRT_STR_LITERAL("attachments")), Attachments,
-                &AttachmentCount)) ||
-             (Schema >= 3u &&
-              !MdoQueueBool(Entry, "priority", &Priority)) ||
-             !MdoQueueText(Text, AttachmentCount != 0u) ||
-             !MdoQueueParseState(StateView, Schema >= 4u, &State) ||
-             (RunIdValue != NULL &&
-              (Schema < 5u || State != MDO_QUEUE_SENDING ||
-               xrtValueType(RunIdValue) != XVALUE_STRING ||
-               !xrtValueGetString(RunIdValue, &RunIdView) ||
-               !MdoQueueRunId(RunIdView, RunId))) ||
-             MdoQueueFind(Queue, IdText) != SIZE_MAX ||
-             !MdoQueueInsert(Queue, IdText, Text, Attachments,
-                AttachmentCount, false, Priority, State, &Profile) ) goto done;
-        if ( !MdoQueueReceiptResolve(ProjectId, SessionId, IdText,
-                &ReceiptExists, ReceiptRunId) ) goto done;
-        if ( ReceiptExists && State != MDO_QUEUE_SENDING ) goto done;
-        if ( RunIdValue != NULL && ReceiptExists &&
-             strcmp(RunId, ReceiptRunId) != 0 ) goto done;
-        if ( RunIdValue == NULL && ReceiptRunId[0] != '\0' )
-            memcpy(RunId, ReceiptRunId, sizeof(RunId));
-        Queue->Items[Queue->Count - 1u].StartClaimed =
-            ReceiptExists && ReceiptRunId[0] == '\0';
-        if ( RunIdValue != NULL || ReceiptRunId[0] != '\0' )
-            memcpy(Queue->Items[Queue->Count - 1u].RunId, RunId,
-                sizeof(RunId));
-    }
-    Ok = true;
-done:
-    xrtValueRelease(Root);
     xrtFree(Bytes);
     if ( File != NULL && !xrtClose(File) ) Ok = false;
-    if ( !Ok ) MdoQueueRelease(Queue);
+    if ( !Ok ) { MdoQueueRelease(Queue); }
     return Ok;
 }
 

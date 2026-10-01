@@ -73,7 +73,9 @@ str MdoSessionBackupEncode(const MdoSessionBackup* Backup,
  * a network callback. Deadline/cancel checks are cooperative between bounded
  * operations; a single JSON token/hash/codec operation cannot be interrupted.
  *
- * Metadata/UI/todo reuse live readers; image metadata shares the export checker.
+ * Metadata/UI/todo and draft/queue/receipts/feedback/image bindings reuse live
+ * readers. Image metadata shares the export checker. Retained-history ID
+ * relationships and the model ledger are not yet fully validated.
  * Success is NOT complete schema validation, image decoding or xllm/UI replay
  * and does not authorize restoration. Legacy v1 cannot be encoded as v2. */
 MdoSessionBackup* MdoSessionBackupDecode(const void* Document, size_t Bytes,

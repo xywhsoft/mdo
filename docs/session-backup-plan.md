@@ -58,8 +58,9 @@ manager 调用或库通过 native path 写入不能被它自动覆盖。不得�
    和全部日志。采用专用上传/下载边界并
    分别限制文件数、单文件、总字节、JSON/base64 膨胀和传输时间；定额失败需要
    明确反馈。导出完成即释放捕获锁，下载速度不能占用运行窗口。
-4. **进行中**：离线拥有解码、清单及 metadata/UI/todo schema 校验已接入；
-   其余 schema、图片实际解码及生产预览 worker 未完成。先实现离线验证与预览，
+4. **进行中**：离线拥有解码、清单及 metadata/UI/todo、draft/queue/receipt/
+   feedback/消息绑定 schema 校验已接入；模型账本、保留历史的 ID 关系、
+   图片实际解码及生产预览 worker 未完成。先实现离线验证与预览，
    再做恢复事务。验证所有 schema、路径、ID、内容
    校验和引用；拒绝链接、绝对路径、`..`、重复文件和大小声明失真。v1 只能
    预览为模型快照，不能误报为完整带图备份。未知模型/Agent 的会话可保留
@@ -378,3 +379,45 @@ Windows A/B 同一包，SHA-256 为
 完整完成标记、在拥有该 context 的 executor 上于发送检查点开始短 deadline。
 最后一处已补齐依赖复制。业务/零写入/真实背压/截止时间断言保持，未放宽
 产品限额或跳过失败；最终两平台完整门禁包含全部修正。
+
+## 共享侧车解析与离线 schema 校验
+
+新增 `sessions/sidecars/{profile,binding,draft,queue,feedback}.{h,c}`，只消费
+内存 JSON/值，拥有 DTO 的文本与提交分配。头文件明确 Parse 输出与 Unit/
+Release 的生命周期；失败释放部分拥有对象，完整解析后不保留输入或 DOM
+视图。session 层不引用 api 层。旧 HTTP profile 类型保留为核心 DTO 的别名，
+原有构建响应和写文件仍在 api 中；原生附件绑定读取也复用纯 binding parser。
+
+草稿 scope 显式区分 session/global/project；完整 profile 与项目部分选择
+共享规则，保存的未知 model/reasoning 不查询 catalog。保持 session 草稿
+1–7、队列 1–7、回执 1–3、反馈 1 和附件绑定 1 的格式。新解码还检查回执
+内容 ID 与文件名一致、run 绑定与文件名一致，事件/运行数字文件名不能溢出
+uint64。日常队列读取仍先解析，再按原规则读取/修复回执并协调 sending 状态；
+离线仅检查格式，不能从已准备回执推导运行成功、写新回执或自动投递。
+
+修正 JSON MaxValues：反馈的根 object/version/array 也占三个节点，512 项
+需要 `512*3+3`；队列预算覆盖 20 项带四图片/完整 profile 和 256 个清理 ID
+同时存在。文件大小、文本/图片数量、清理项和上传配额不变。队列清理 ID
+可以指向已删除图片，仍不作为必须恢复资源。
+
+扩展 owning decoder 探针保留真实会话/正式下载上传基础，追加侧车历史格式、
+profile/字段/类型/身份/重复键和 ID、部分分配失败、文件名溢出及声明上限。
+总计 115 个小错误输入，HTTP/TLS 都检查失败后可重试和 Home 零写入。
+满队列的图片数据只是 pair/schema fixture，不宣称通过真实图片解码。
+五个核心文件可分别按 C11/Wall/Wextra/Werror 编译；原 API 和恢复测试继续
+覆盖日常读取的锁、回执晋级、编辑器草稿与重启恢复。
+
+步骤 4 仍在进行：模型 snapshot/journal 严格 schema 与校验和/重放、图片实际
+解码、保留 UI 的反馈/绑定/queue receipt 关系及 production worker 尚缺。
+需要兼容合法裁剪后缺历史证据的侧车，不能简单要求所有旧 ID 都在 retained
+UI 中。随后按步骤 5 实际试恢复、原子发布新会话，再接步骤 6 页面体验；
+当前 schema 成功和 `PreviewGet` 事实仍不授权完整恢复。
+
+Windows/Linux 完整有界门禁通过 114 Python、240 Node、90 模块、严格 C11、
+35 运行探针、A/B 和三项 packed；Windows 另通过便携 WebView2 Home 与打包
+崩溃/20 秒启动。Linux 是新 ext4 源拷贝，复用相同锁定 SDK/宿主并跳过 GUI。
+Windows A/B 与根目录程序 SHA-256 同为
+`d2d9f2bf24b1c176832f9283869ceaacd3d5be370b665ef1965a1c0f3f4633a2`；Linux
+包为 `33530a65c903438bd4c3a013bb761fc788f73e6adf1cfcb8b936fa713cf850d0`。
+日志 `.build/qa-sidecars-{verified,linux-verified}.log`；独立编译与 API/session/
+run manager 的定向检查也通过。没有压力或高负载测试，未执行真实恢复。

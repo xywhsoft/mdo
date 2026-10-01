@@ -2,6 +2,7 @@
 #include <string.h>
 
 #include "internal.h"
+#include "../sessions/sidecars/binding.h"
 #include "../../include/mdo/attachments.h"
 #include "../../include/mdo/home.h"
 #include "../../include/mdo/sessions.h"
@@ -328,25 +329,9 @@ static bool MdoAttachmentCreatedAt(const char* Project,
     return Ok;
 }
 
-bool MdoAttachmentIdsRead(const xvalue* Array, char Ids[4][33],
-    size_t* Count)
+bool MdoAttachmentIdsRead(const xvalue* Array, char Ids[4][33], size_t* Count)
 {
-    size_t i;
-    if ( Count == NULL || Ids == NULL ||
-         xrtValueType(Array) != XVALUE_ARRAY ||
-         xrtValueCount(Array) > 4u ) return false;
-    *Count = xrtValueCount(Array);
-    for ( i = 0u; i < *Count; ++i ) {
-        const xvalue* Item = xrtValueArrayGet(Array, i);
-        xstrview Text;
-        size_t j;
-        if ( xrtValueType(Item) != XVALUE_STRING ||
-             !xrtValueGetString(Item, &Text) ||
-             !MdoAttachmentHexId(Text, Ids[i]) ) return false;
-        for ( j = 0u; j < i; ++j )
-            if ( strcmp(Ids[i], Ids[j]) == 0 ) return false;
-    }
-    return true;
+    return MdoImageIdsRead(Array, Ids, Count);
 }
 
 bool MdoAttachmentIdsExist(const char* Project, const char* Session,

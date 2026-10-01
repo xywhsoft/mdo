@@ -4,6 +4,10 @@
 
 #include "backup_internal.h"
 #include "internal.h"
+#include "sidecars/draft.h"
+#include "sidecars/queue.h"
+#include "sidecars/feedback.h"
+#include "sidecars/binding.h"
 
 /* SAX keeps only the small envelope and one in-progress file. The JSON reader
  * owns its current decoded token; no borrowed token or base64 tree survives a
@@ -71,6 +75,57 @@ static bool MdoDecodeSchemaFailure(MdoDecode* Decode, const char* Message, const
     const xerror* Error = xrtGetError();
     if ( Error != NULL && xrtErrorKind(Error) == XERR_MEMORY ) return MdoDecodeMemory(Decode);
     return MdoDecodeInvalid(Decode, Message, Path);
+}
+
+static bool MdoDecodeBindingNumber(const char* Name, uint64* Number)
+{
+    uint64 Parsed = 0u;
+    size_t i;
+    for ( i = 0u; Name[i] >= '0' && Name[i] <= '9'; ++i ) {
+        unsigned Digit = (unsigned)(Name[i] - '0');
+        if ( Parsed > (UINT64_MAX - Digit) / 10u ) return false;
+        Parsed = Parsed * 10u + Digit;
+    }
+    if ( i == 0u || Parsed == 0u || strcmp(Name + i, ".json") != 0 ) return false;
+    *Number = Parsed;
+    return true;
+}
+
+/* These are the live product codecs, separated from filesystem adapters.
+ * Parsing owned bytes cannot repair receipts, query a runtime or write Home.
+ * Retained-history relationships and actual replay remain separate gates. */
+static bool MdoDecodeSidecar(MdoDecode* Decode, const MdoBackupOwnedFile* File)
+{
+    xstrview Json = xrtStrViewN(File->Data, File->Bytes);
+    bool Ok = true;
+    xrtClearError();
+    if ( strcmp(File->Path, "draft.json") == 0 ) {
+        MdoDraft* Draft = (MdoDraft*)xrtMalloc(sizeof(*Draft));
+        if ( Draft == NULL ) return MdoDecodeMemory(Decode);
+        Ok = MdoDraftParse(Json, MDO_DRAFT_SESSION, Draft);
+        MdoDraftUnit(Draft); xrtFree(Draft);
+    } else if ( strcmp(File->Path, "queue.json") == 0 ) {
+        MdoQueue Queue;
+        Ok = MdoQueueParse(Json, &Queue); MdoQueueRelease(&Queue);
+    } else if ( strcmp(File->Path, "feedback.json") == 0 ) {
+        MdoFeedbackItem Items[MDO_FEEDBACK_MAX_ITEMS];
+        size_t Count;
+        Ok = MdoFeedbackParse(Json, Items, &Count);
+    } else if ( strncmp(File->Path, "queue-receipts/", 15u) == 0 ) {
+        char Id[33];
+        MdoQueueReceipt Receipt;
+        memcpy(Id, File->Path + 15u, 32u); Id[32] = '\0';
+        Ok = MdoQueueReceiptParse(Json, Id, &Receipt);
+    } else if ( strncmp(File->Path, "attachments/events/", 19u) == 0 ||
+                strncmp(File->Path, "attachments/runs/", 17u) == 0 ) {
+        bool Run = strncmp(File->Path, "attachments/runs/", 17u) == 0;
+        uint64 NameId = 0u, AgentRunId;
+        char Ids[4][33];
+        size_t Count;
+        Ok = MdoDecodeBindingNumber(File->Path + (Run ? 17u : 19u), &NameId) &&
+            MdoImageBindingParse(Json, Run ? NameId : 0u, &AgentRunId, Ids, &Count);
+    }
+    return Ok || MdoDecodeSchemaFailure(Decode, "invalid session backup sidecar schema or identity", File->Path);
 }
 
 static bool MdoDecodeUInt(const xjsonevent* Event, uint64* Value)
@@ -347,13 +402,12 @@ static bool MdoDecodeManifest(MdoDecode* Decode)
     }
     if ( !MdoBackupValidate(Decode->Backup, &Decode->Backup->Limits, Decode->Cancel,
             &Decode->Backup->History, &Decode->Error) ) return false;
-    /* Metadata/attachment schemas are already checked by the common reader.
-     * Validate UI and todo with the exact live parsers, without creating a
-     * bridge or projecting state. Other product schemas/replay remain a
-     * distinct, required gate before restoration may be offered. */
+    /* Validate sidecars/UI with the exact live parsers without projecting state.
+     * Cross-file history relationships and model replay remain required. */
     for ( i = 0u; i < Decode->Backup->Count; ++i ) {
         const MdoBackupOwnedFile* File = &Decode->Backup->Files[i];
         if ( !MdoBackupCheck(&Decode->Backup->Limits, Decode->Cancel, &Decode->Error) ) return false;
+        if ( !MdoDecodeSidecar(Decode, File) ) return false;
         if ( strcmp(File->Path, "todo.json") == 0 ) {
             xrtClearError();
             if ( !MdoSessionsInternalTodoValid(xrtStrViewN(File->Data, File->Bytes)) )

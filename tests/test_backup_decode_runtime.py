@@ -165,6 +165,122 @@ class Probe(UploadProbe):
         for key, new in (("schema_version", 2), ("event_id", -1), ("items", [{"text": "", "done": True}]),
                          ("items", [{"text": "item", "done": "yes"}]), ("unknown", 1)):
             altered("todo " + key, lambda doc, k=key, n=new: replace(doc, "todo.json", dump({**todo, k: n})))
+        # Offline and live readers now share owned product codecs. Historical
+        # session schemas remain readable; project/global draft formats do not
+        # acquire session meaning merely because their JSON is valid.
+        profile = {"model_id": "uninstalled-model", "reasoning_effort": "future-effort",
+                   "permission_profile": "balanced"}
+        draft = {"schema_version": 7, "revision": 1, "text": "Saved draft", "attachments": [],
+                 "run_admission_uncertain": False, "submissions": []}
+        item = {"id": "b" * 32, "text": "Pending input", "state": "pending",
+                "attachments": [], "priority": False, "profile": profile}
+        queue = {"schema_version": 7, "items": [item], "discard_images": []}
+        receipt_path = "queue-receipts/" + "c" * 32 + ".json"
+        receipt = {"schema_version": 3, "id": "c" * 32, "state": "starting",
+                   "run_id": "run-prepared", "agent_run_id": 7}
+        feedback = {"schema_version": 1, "items": [{"event_id": 2, "value": "good"}]}
+        binding = {"schema_version": 1, "run_id": 7, "attachments": []}
+        samples = (("draft.json", draft), ("queue.json", queue), (receipt_path, receipt),
+                   ("feedback.json", feedback), ("attachments/runs/7.json", binding),
+                   ("attachments/events/2.json", binding))
+        for path, sample in samples:
+            valid = copy.deepcopy(small)
+            replace(valid, path, dump(sample))
+            assert self.validate(dump(valid))["ok"], path
+            for key in ("schema_version", "unknown"):
+                altered(path + " " + key, lambda doc, p=path, s=sample, k=key:
+                        replace(doc, p, dump({**s, k: 99})))
+            encoded = dump(sample)
+            altered(path + " duplicate key", lambda doc, p=path, data=encoded:
+                    replace(doc, p, b'{"schema_version":1,' + data[1:]))
+        for key, new in (("schema_version", 8), ("revision", 0), ("revision", 1.5),
+                         ("text", "nul\x00text"), ("run_admission_uncertain", "no"),
+                         ("submissions", [{"id": "a" * 32, "text": "", "attachments": [],
+                                           "interrupt": False, "state": "prepared"}]),
+                         ("composer_profile", {**profile, "model_id": ""}),
+                         ("composer_profile", {**profile, "permission_profile": "arbitrary"})):
+            altered("draft " + key, lambda doc, k=key, n=new:
+                    replace(doc, "draft.json", dump({**draft, k: n})))
+        for key, new in (("id", "A" * 32), ("text", ""), ("state", "running"),
+                         ("priority", 1), ("profile", None), ("run_id", "run-invalid-state")):
+            altered("queue item " + key, lambda doc, k=key, n=new:
+                    replace(doc, "queue.json", dump({**queue, "items": [{**item, k: n}]})))
+        altered("duplicate queue IDs", lambda doc: replace(doc, "queue.json",
+                dump({**queue, "items": [item, item]})))
+        altered("duplicate discard IDs", lambda doc: replace(doc, "queue.json",
+                dump({**queue, "discard_images": ["d" * 32, "d" * 32]})))
+        for key, new in (("id", "a" * 32), ("state", "started"), ("run_id", "wrong-prefix"),
+                         ("agent_run_id", 0), ("agent_run_id", True)):
+            altered("receipt " + key, lambda doc, k=key, n=new:
+                    replace(doc, receipt_path, dump({**receipt, k: n})))
+        for new in ([{"event_id": 0, "value": "good"}], [{"event_id": 2, "value": "like"}],
+                    feedback["items"] * 2):
+            altered("feedback item", lambda doc, n=new:
+                    replace(doc, "feedback.json", dump({**feedback, "items": n})))
+        altered("binding run filename mismatch", lambda doc: replace(doc, "attachments/runs/7.json",
+                dump({**binding, "run_id": 8})))
+        altered("binding duplicate images", lambda doc: replace(doc, "attachments/runs/7.json",
+                dump({**binding, "attachments": ["a" * 32, "a" * 32]})))
+        altered("binding event filename overflow", lambda doc:
+                replace(doc, "attachments/events/18446744073709551616.json", dump(binding)))
+        for schema in range(1, 8):
+            legacy_draft = {"schema_version": schema, "revision": 1, "text": "Legacy draft"}
+            if schema >= 2:
+                legacy_draft["attachments"] = []
+            if schema >= 3:
+                legacy_draft["run_admission_uncertain"] = False
+            if schema == 4:
+                legacy_draft["submission"] = None
+            elif schema >= 5:
+                legacy_draft["submissions"] = []
+            old_item = {k: item[k] for k in ("id", "text", "state")}
+            if schema >= 2:
+                old_item["attachments"] = []
+            if schema >= 3:
+                old_item["priority"] = False
+            old_queue = {"schema_version": schema, "items": [old_item]}
+            if schema >= 6:
+                old_queue["discard_images"] = []
+            valid = copy.deepcopy(small)
+            replace(valid, "draft.json", dump(legacy_draft))
+            replace(valid, "queue.json", dump(old_queue))
+            assert self.validate(dump(valid))["ok"], schema
+        for historical in ({"schema_version": 1, "id": "c" * 32, "run_id": "run-completed"},
+                           {"schema_version": 2, "id": "c" * 32, "state": "starting"}):
+            valid = copy.deepcopy(small)
+            replace(valid, receipt_path, dump(historical))
+            assert self.validate(dump(valid))["ok"], historical
+        # Declared maxima are ordinary bounded format cases, not load tests.
+        # Prior node caps rejected the 512th feedback or a combined full queue.
+        maximum = copy.deepcopy(small)
+        replace(maximum, "feedback.json", dump({"schema_version": 1, "items": [
+            {"event_id": i + 1, "value": "good"} for i in range(512)]}))
+        images = [f"{i + 1000:032x}" for i in range(4)]
+        for image_id in images:
+            # Pair/schema fixture only. It deliberately does not claim actual
+            # image decoding, which remains a required restoration gate.
+            replace(maximum, f"attachments/{image_id}.bin", b"\x89PNG\r\n\x1a\n")
+            replace(maximum, f"attachments/{image_id}.json", dump({"schema_version": 1,
+                "id": image_id, "mime_type": "image/png", "size": 8, "created_at": 1}))
+        replace(maximum, "queue.json", dump({**queue, "items": [
+            {**item, "id": f"{i + 1:032x}", "attachments": images} for i in range(20)],
+            "discard_images": [f"{i + 2000:032x}" for i in range(256)]}))
+        submission = {"text": "Prepared input", "attachments": [], "interrupt": False,
+                      "state": "prepared", "profile": profile}
+        altered("duplicate submission IDs", lambda doc: replace(doc, "draft.json", dump({**draft,
+            "submissions": [{**submission, "id": "a" * 32}, {**submission, "id": "a" * 32}]})))
+        altered("last submission invalid", lambda doc: replace(doc, "draft.json", dump({**draft,
+            "submissions": [{**submission, "id": "a" * 32},
+                            {**submission, "id": "b" * 32, "profile": None}]})))
+        replace(maximum, "draft.json", dump({**draft, "composer_profile": profile,
+            "submissions": [{**submission, "id": f"{i + 1:032x}"} for i in range(20)]}))
+        assert self.validate(dump(maximum))["ok"]
+        altered("over feedback count", lambda doc: replace(doc, "feedback.json", dump({
+            "schema_version": 1, "items": [{"event_id": i + 1, "value": "good"} for i in range(513)]})))
+        altered("over queue count", lambda doc: replace(doc, "queue.json", dump({**queue,
+            "items": [{**item, "id": f"{i + 1:032x}"} for i in range(21)]})))
+        altered("over submissions count", lambda doc: replace(doc, "draft.json", dump({**draft,
+            "submissions": [{**submission, "id": f"{i + 1:032x}"} for i in range(21)]})))
         altered("duplicate UI key", lambda doc: replace(doc, "ui-events.jsonl",
                 raw_ui.replace(b'"schema_version":5', b'"schema_version":5,"schema_version":5', 1)))
         altered("duplicate todo key", lambda doc: replace(doc, "todo.json",

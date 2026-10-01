@@ -35,6 +35,7 @@ PROBE_SOURCE = r'''
 #include "src/sessions/data_gate.c"
 #include "src/sessions/events.c"
 #include "src/sessions/todo.c"
+#include "src/sessions/sidecars/binding.c"
 #include "src/sessions/attachments.c"
 #include "src/sessions/manager.c"
 #include "src/runs/manager.c"
@@ -265,7 +266,7 @@ def write_site(site: Path) -> None:
         "default-home/modules/agents", "default-home/skills/project-explorer/templates",
         "generated/module-sdk/mdo", "src/storage", "src/config", "src/security",
         "src/models", "src/skills", "src/memory", "src/modules", "src/agents", "src/asks",
-        "src/projects", "src/sessions", "src/runs", "include/mdo",
+        "src/projects", "src/sessions", "src/sessions/sidecars", "src/runs", "include/mdo",
     ):
         (site / relative).mkdir(parents=True, exist_ok=True)
     (site / "web/index.html").write_text("probe", encoding="utf-8")
@@ -282,6 +283,7 @@ def write_site(site: Path) -> None:
         "src/sessions/data_gate.c", "src/sessions/data_gate.h", "src/sessions/events.c",
         "src/asks/manager.c",
         "src/sessions/todo.c", "src/sessions/attachments.c",
+        "src/sessions/sidecars/binding.c", "src/sessions/sidecars/binding.h",
         "src/sessions/internal.h", "src/sessions/manager.c", "src/runs/manager.c",
     ):
         shutil.copy2(ROOT / "app" / relative, site / relative)

@@ -37,6 +37,7 @@ PROBE_SOURCE = r'''
 #include "src/sessions/data_gate.c"
 #include "src/sessions/events.c"
 #include "src/sessions/todo.c"
+#include "src/sessions/sidecars/binding.c"
 #include "src/sessions/attachments.c"
 #include "src/sessions/manager.c"
 #include "src/sessions/backup.c"
@@ -789,7 +790,7 @@ def write_site(site: Path) -> None:
         "src/modules",
         "src/agents",
         "src/asks",
-        "src/sessions",
+        "src/sessions", "src/sessions/sidecars",
         "include/mdo",
     ):
         (site / relative).mkdir(parents=True, exist_ok=True)
@@ -813,6 +814,7 @@ def write_site(site: Path) -> None:
         "src/sessions/data_gate.c", "src/sessions/data_gate.h",
         "src/sessions/events.c",
         "src/sessions/todo.c", "src/sessions/attachments.c",
+        "src/sessions/sidecars/binding.c", "src/sessions/sidecars/binding.h",
         "src/sessions/internal.h",
         "src/sessions/manager.c",
         "src/sessions/backup.c",

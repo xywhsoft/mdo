@@ -4,6 +4,34 @@
 
 完成判据及尚缺的打包页证据见 [前端操作体验完成审计](frontend-completion-audit.md)。本文件继续记录每次实现和验证的细节。
 
+## 2026-10-02：共享侧车解析边界
+
+草稿、队列、回执、反馈和消息附件绑定的解析移到
+`app/src/sessions/sidecars/`，不依赖 HTTP、Home 或运行管理器。HTTP 层保留
+原有文件读取、锁和回执修复；离线解码只解析拥有的字节，不查询运行、提升
+prepared 回执或恢复执行队列。完整/部分 composer profile 共用一个解析器，
+未知模型和思考强度保留为数据，权限值仍严格限定。失败释放草稿提交和队列
+文本的部分分配；新模块可独立按严格 C11 编译，不依赖 unity 的隐式声明。
+
+离线验证增加上述 schema、回执文件名身份、绑定 run 文件名身份和 uint64
+文件名范围。保留历史 session draft/queue 1–7 和 receipt 1–3；项目专用
+draft 8 不作为 session 数据。修正反馈 512 项和队列满项/图片/清理清单组合
+的 JSON 节点预算，没有增加文件/队列/正文限额。
+
+扩展 HTTP/TLS 探针覆盖 115 个错误输入、部分拥有对象失败后重试、历史格式、
+未知 profile 和声明上限组合；所有校验前后 Home 逐字节一致。图片边界样例
+只验证 pair/schema，不代表图片可实际解码。保留历史的跨文件 ID 关系、模型
+账本、真实图片解码和回放仍需完成，生产预览 worker、原子恢复及正式页面
+菜单也未接入。本子阶段继续属于步骤 4，不把完整恢复写成完成。
+
+Windows/Linux 完整有界门禁通过 114 Python、240 Node、90 模块、严格 C11、
+35 运行探针、确定性 A/B 和三项 packed；Windows 另通过便携 WebView2 Home
+和打包崩溃/20 秒启动。Linux 使用新 ext4 源拷贝和相同锁定 SDK/宿主，跳过
+GUI。根目录程序已更新为 Windows 验证包，SHA-256 为
+`d2d9f2bf24b1c176832f9283869ceaacd3d5be370b665ef1965a1c0f3f4633a2`；Linux
+包为 `33530a65c903438bd4c3a013bb761fc788f73e6adf1cfcb8b936fa713cf850d0`。
+日志 `.build/qa-sidecars-{verified,linux-verified}.log`，未运行压力/高负载测试。
+
 ## 2026-10-02：备份离线解码与部分 schema 校验
 
 新增只在内存中工作的拥有解码与预览事实 API。外层 SAX 不构造完整 base64

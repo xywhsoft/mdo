@@ -3,21 +3,15 @@
 #include <string.h>
 
 #include "internal.h"
+#include "../sessions/sidecars/feedback.h"
 #include "../../include/mdo/project_lifecycle.h"
 #include "../../include/mdo/home.h"
 #include "../../include/mdo/sessions.h"
 
 /* Feedback is UI state, separate from the agent's checkpoint and event log. */
-#define MDO_FEEDBACK_MAX_ITEMS 512u
-#define MDO_FEEDBACK_MAX_BYTES (32u * 1024u)
 #define MDO_FEEDBACK_REPLAY_PAGE 1000u
 #define MDO_FEEDBACK_LIST_LIMIT 50u
 #define MDO_FEEDBACK_SCAN_LIMIT 100u
-
-typedef struct MdoFeedbackItem {
-    uint64 EventId;
-    bool Good;
-} MdoFeedbackItem;
 
 static xmutex* g_MdoFeedbackLock;
 
@@ -71,96 +65,28 @@ static bool MdoFeedbackPath(char Path[MDO_SESSION_PATH_CAPACITY],
     return Size > 0 && (size_t)Size < MDO_SESSION_PATH_CAPACITY;
 }
 
-static bool MdoFeedbackUInt(const xvalue* Object, cstr Name,
-    uint64* Output)
-{
-    const xvalue* Value = xrtValueObjectGet(Object, xrtStrView(Name));
-    int64 Signed;
-    if ( xrtValueType(Value) == XVALUE_UINT )
-        return xrtValueGetUInt(Value, Output);
-    if ( xrtValueType(Value) != XVALUE_INT ||
-         !xrtValueGetInt(Value, &Signed) || Signed < 0 ) return false;
-    *Output = (uint64)Signed;
-    return true;
-}
-
-static bool MdoFeedbackValue(const xvalue* Object, bool* Good)
-{
-    const xvalue* Value = xrtValueObjectGet(Object, XRT_STR_LITERAL("value"));
-    xstrview Text;
-    if ( xrtValueType(Value) != XVALUE_STRING ||
-         !xrtValueGetString(Value, &Text) ) return false;
-    if ( Text.Size == 4u && memcmp(Text.Data, "good", 4u) == 0 ) {
-        *Good = true;
-        return true;
-    }
-    if ( Text.Size == 3u && memcmp(Text.Data, "bad", 3u) == 0 ) {
-        *Good = false;
-        return true;
-    }
-    return false;
-}
-
 /* Called under the feedback lock; malformed sidecars are never overwritten. */
 static bool MdoFeedbackRead(const char* Path, MdoFeedbackItem* Items,
     size_t* Count)
 {
-    bool Exists = false;
+    bool Exists = false, Ok = false;
     xfileinfo Info;
     xfile File = NULL;
     char* Bytes = NULL;
-    xvalue* Root = NULL;
-    const xvalue* Array;
-    xjsonreadconfig Config;
-    uint64 Schema;
-    size_t i;
-    bool Ok = false;
     *Count = 0u;
     if ( !MdoHomeExternalStat(Path, &Exists, &Info) ) return false;
     if ( !Exists ) return true;
-    if ( Info.Type != XFILE_TYPE_FILE ||
-         (Info.Available & XFILE_INFO_SIZE) == 0u ||
-         Info.Size > MDO_FEEDBACK_MAX_BYTES || Info.Size > SIZE_MAX - 1u )
-        return false;
-    File = MdoHomeOpenRead(Path);
-    Bytes = (char*)xrtMalloc((size_t)Info.Size + 1u);
-    if ( File == NULL || Bytes == NULL ||
-         (Info.Size != 0u && !xrtReadFull(File, Bytes,
-            (size_t)Info.Size, NULL)) ) goto done;
-    Bytes[Info.Size] = '\0';
-    xrtJsonReadConfigInit(&Config);
-    Config.MaxInputBytes = MDO_FEEDBACK_MAX_BYTES;
-    Config.MaxDepth = 4u;
-    Config.MaxValues = MDO_FEEDBACK_MAX_ITEMS * 3u + 2u;
-    Config.MaxContainerItems = MDO_FEEDBACK_MAX_ITEMS;
-    Root = xrtJsonRead(xrtStrViewN(Bytes, (size_t)Info.Size), &Config);
-    Array = Root != NULL ? xrtValueObjectGet(Root,
-        XRT_STR_LITERAL("items")) : NULL;
-    if ( xrtValueType(Root) != XVALUE_OBJECT ||
-         xrtValueCount(Root) != 2u ||
-         !MdoFeedbackUInt(Root, "schema_version", &Schema) || Schema != 1u ||
-         xrtValueType(Array) != XVALUE_ARRAY ||
-         xrtValueCount(Array) > MDO_FEEDBACK_MAX_ITEMS ) goto done;
-    for ( i = 0u; i < xrtValueCount(Array); ++i ) {
-        const xvalue* Item = xrtValueArrayGet(Array, i);
-        uint64 EventId;
-        size_t j;
-        bool Good;
-        if ( xrtValueType(Item) != XVALUE_OBJECT ||
-             xrtValueCount(Item) != 2u ||
-             !MdoFeedbackUInt(Item, "event_id", &EventId) ||
-             EventId == 0u || !MdoFeedbackValue(Item, &Good) ) goto done;
-        for ( j = 0u; j < i; ++j )
-            if ( Items[j].EventId == EventId ) goto done;
-        Items[i].EventId = EventId;
-        Items[i].Good = Good;
+    if ( Info.Type != XFILE_TYPE_FILE || (Info.Available & XFILE_INFO_SIZE) == 0u ||
+         Info.Size > MDO_FEEDBACK_MAX_BYTES || Info.Size > SIZE_MAX - 1u ) return false;
+    File = MdoHomeOpenRead(Path); Bytes = (char*)xrtMalloc((size_t)Info.Size + 1u);
+    if ( File != NULL && Bytes != NULL && (Info.Size == 0u ||
+         xrtReadFull(File, Bytes, (size_t)Info.Size, NULL)) ) {
+        Bytes[Info.Size] = '\0';
+        Ok = MdoFeedbackParse(xrtStrViewN(Bytes, (size_t)Info.Size), Items, Count);
     }
-    *Count = xrtValueCount(Array);
-    Ok = true;
-done:
-    xrtValueRelease(Root);
     xrtFree(Bytes);
     if ( File != NULL && !xrtClose(File) ) Ok = false;
+    if ( !Ok ) { *Count = 0u; }
     return Ok;
 }
 
