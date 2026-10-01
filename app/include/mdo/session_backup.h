@@ -94,4 +94,16 @@ MdoSessionBackup* MdoSessionBackupDecode(const void* Document, size_t Bytes,
 bool MdoSessionBackupPreviewGet(const MdoSessionBackup* Backup,
     MdoSessionBackupPreview* Preview);
 
+/* Separate semantic gate for a successfully decoded backup. Replays its model
+ * snapshot and optional journal through xllm-session's byte restore core.
+ * Returns an independently owned, unbound session; the backup may be released
+ * immediately. Destroy the result with xllmSessionDestroy(). No Home/catalog,
+ * driver, tool, queue or persistence attachment is accessed. NULL Limits starts
+ * a fresh bounded thirty-second operation; it does not reuse decode's deadline.
+ * Failure never changes the decoded bytes. Use a bounded worker: cancellation
+ * is cooperative between bounded parse/copy/replay operations. Success proves
+ * model replay only, not UI consistency, image decoding or full restore readiness. */
+xllm_session* MdoSessionBackupReplayModel(const MdoSessionBackup* Backup,
+    const MdoSessionBackupLimits* Limits, const xcancel* Cancel, xwork_error* Error);
+
 #endif

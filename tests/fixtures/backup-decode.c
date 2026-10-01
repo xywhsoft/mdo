@@ -51,6 +51,83 @@ static bool BackupDecodeFixtureSeed(XS_HttpReq* Request)
     return true;
 }
 
+/* A decoded object is retained after its upload pin is released. This adapter
+ * exercises only the model replay gate; it cannot publish a product session. */
+static bool BackupDecodeFixtureReplay(XS_HttpReq* Request)
+{
+    static const char Prefix[] = "/__fixture/backup-decode/replay";
+    xstrview Target = Request->head->Target;
+    MdoApiContext Context = {0};
+    MdoSessionBackupLimits Limits;
+    xllm_session* Session;
+    xllm_request ModelRequest;
+    xllm_session_config Config;
+    xllm_file_ledger Ledger = {0};
+    xwork_error Error;
+    xllm_error ModelError;
+    xcancel* Cancel = NULL;
+    xvalue *Value, *Messages;
+    bool Rendered, Released;
+    size_t i, j;
+    if ( Target.Size < sizeof(Prefix) - 1u || memcmp(Target.Data, Prefix, sizeof(Prefix) - 1u) != 0 ) return false;
+    MdoSessionBackupLimitsInit(&Limits);
+    if ( MdoApiViewEqualText(Target, "/__fixture/backup-decode/replay-deadline") ) Limits.Deadline = 1u;
+    if ( MdoApiViewEqualText(Target, "/__fixture/backup-decode/replay-file") ) Limits.FileBytes = 1u;
+    if ( MdoApiViewEqualText(Target, "/__fixture/backup-decode/replay-files") ) Limits.Files = 1u;
+    if ( MdoApiViewEqualText(Target, "/__fixture/backup-decode/replay-cancel") ) {
+        Cancel = xrtCancelCreate();
+        if ( Cancel == NULL ) return false;
+        (void)xrtCancelRequest(Cancel);
+    }
+    Session = MdoSessionBackupReplayModel(g_DecodeFixtureBackup, &Limits, Cancel,
+        MdoApiViewEqualText(Target, "/__fixture/backup-decode/replay-null-error") ? NULL : &Error);
+    xrtCancelDestroy(Cancel);
+    Released = MdoApiViewEqualText(Target, "/__fixture/backup-decode/replay-release");
+    if ( Released ) BackupDecodeFixtureUnit();
+    xllmRequestInit(&ModelRequest);
+    Rendered = Session != NULL && xllmSessionBuildRequest(Session, &ModelRequest, &ModelError);
+    Value = xrtValueObject(); Messages = xrtValueArray();
+    (void)MdoApiValueSetBool(Value, "ok", Session != NULL);
+    (void)MdoApiValueSetBool(Value, "rendered", Rendered);
+    (void)MdoApiValueSetBool(Value, "released", Released);
+    if ( !MdoApiViewEqualText(Target, "/__fixture/backup-decode/replay-null-error") ) {
+        (void)MdoApiValueSetUInt(Value, "code", Error.eCode);
+        (void)MdoApiValueSetString(Value, "error", Error.sMessage);
+    }
+    (void)MdoApiValueSetBool(Value, "restore_ready", false);
+    if ( Session != NULL ) {
+        (void)MdoApiValueSetBool(Value, "unbound", !xllmSessionHasDriver(Session) &&
+            !xllmSessionJournalPath(Session) && xllmSessionGetConfig(Session, &Config) && !Config.sSnapshotPath);
+        (void)MdoApiValueSetUInt(Value, "turn", xllmSessionCurrentTurn(Session));
+        (void)MdoApiValueSetUInt(Value, "last_sequence", xllmSessionLastSequence(Session));
+        (void)xllmSessionGetFileLedger(Session, &Ledger);
+        (void)MdoApiValueSetUInt(Value, "read_files", Ledger.iReadFileCount);
+        (void)MdoApiValueSetUInt(Value, "modified_files", Ledger.iModifiedFileCount);
+    }
+    if ( Rendered ) for ( i = 0u; i < ModelRequest.iMessageCount; ++i ) {
+        const xllm_message* Message = &ModelRequest.pMessages[i];
+        xvalue *Entry = xrtValueObject(), *Calls = xrtValueArray();
+        (void)MdoApiValueSetUInt(Entry, "role", Message->eRole);
+        (void)MdoApiValueSetString(Entry, "content", Message->sContent != NULL ? Message->sContent : "");
+        (void)MdoApiValueSetString(Entry, "reasoning", Message->sReasoningContent != NULL ? Message->sReasoningContent : "");
+        (void)MdoApiValueSetString(Entry, "tool_call_id", Message->sToolCallId != NULL ? Message->sToolCallId : "");
+        for ( j = 0u; j < Message->iToolCallCount; ++j ) {
+            xvalue* Call = xrtValueObject();
+            (void)MdoApiValueSetString(Call, "id", Message->pToolCalls[j].sId);
+            (void)MdoApiValueSetString(Call, "name", Message->pToolCalls[j].sName);
+            (void)MdoApiValueSetString(Call, "arguments", Message->pToolCalls[j].sArgumentsJson);
+            (void)xrtValueArrayAppendNew(Calls, Call);
+        }
+        (void)MdoApiValueSetTake(Entry, "tool_calls", &Calls);
+        (void)xrtValueArrayAppendNew(Messages, Entry);
+    }
+    (void)MdoApiValueSetTake(Value, "messages", &Messages);
+    xllmRequestUnit(&ModelRequest); xllmSessionDestroy(Session);
+    Context.Request = Request; snprintf(Context.RequestId, sizeof(Context.RequestId), "replay-fixture");
+    (void)MdoApiReplySuccessTake(&Context, 200u, Value, NULL);
+    return true;
+}
+
 /* Write a few records through the locked library, using only a test-owned
  * file in the isolated Home. This checks writer/reader compatibility without
  * invoking a model or borrowing the product session's ledger. */
@@ -113,6 +190,7 @@ static bool BackupDecodeFixtureControl(XS_HttpReq* Request)
     xcancel* Cancel = NULL;
     size_t i;
     bool Encodable = false;
+    if ( BackupDecodeFixtureReplay(Request) ) return true;
     if ( BackupDecodeFixtureJournal(Request) ) return true;
     if ( BackupDecodeFixtureSeed(Request) ) return true;
     if ( Target.Size < sizeof(Prefix) - 1u || memcmp(Target.Data, Prefix, sizeof(Prefix) - 1u) != 0 ) return false;

@@ -2,8 +2,9 @@
 
 Real idle-session meta/snapshot/draft/queue and a normal 2 MiB artifact round
 trip without Home writes. A small malformed-document corpus exercises parser,
-envelope, codec/hash, path/identity/reference and budget failures. No restore,
-model/shell/queue execution, pressure test or production preview route.
+envelope, codec/hash, path/identity/reference and budget failures. A separate
+unbound model replay gate checks ownership and semantic failures. No product
+restore, model/shell/queue execution, pressure test or production preview route.
 """
 from __future__ import annotations
 
@@ -105,6 +106,18 @@ class Probe(UploadProbe):
         assert value["data"]["preview_size_safe"], value
         return value["data"]
 
+    def replay(self, data, mode="replay"):
+        decoded = self.validate(data)
+        assert decoded["ok"], decoded
+        # The upload pin and original bytes have been released by validate.
+        status, response = self.api("GET", DECODE + mode)
+        assert status == 200, response
+        value = response["data"]
+        if mode != "replay-release":
+            retained = self.api("GET", DECODE + "state")[1]["data"]
+            assert retained["ok"] and retained["files"] == decoded["files"], retained
+        return value
+
     def check(self):
         status, body = self.api("POST", "/api/v1/sessions", {
             "project_id": "default", "title": "Offline decode 便携", "agent_id": "mdo.default",
@@ -170,9 +183,23 @@ class Probe(UploadProbe):
             {"sequence": 2, "turn": 1, "flags": 0, "role": 2, "content": "Answer",
              "reasoning": "Retained reasoning", "tool_call_id": None, "tool_calls": []}])
         assert self.validate(dump(with_snapshot(populated)))["ok"]
+        value = self.replay(dump(with_snapshot(populated)), "replay-release")
+        assert value["ok"] and value["rendered"] and value["unbound"] and value["released"], value
+        assert not value["restore_ready"] and value["last_sequence"] == 2 and value["turn"] == 1
+        assert [(m["role"], m["content"]) for m in value["messages"]] == [(1, "Question 中文"), (2, "Answer")], value
+        assert value["messages"][1]["reasoning"] == "Retained reasoning"
+        assert not self.api("GET", DECODE + "state")[1]["data"]["ok"]
         real_ledger = with_snapshot(snapshot_root)
         replace(real_ledger, "journal.jsonl", library_journal)
         assert self.validate(dump(real_ledger))["ok"]
+        value = self.replay(dump(real_ledger))
+        assert value["ok"] and value["rendered"] and value["unbound"] and value["messages"] == [], value
+        assert value["last_sequence"] == 0 and value["turn"] == 0
+        assert value["read_files"] == value["modified_files"] == 0
+        for mode, code in (("replay-deadline", 11), ("replay-cancel", 9), ("replay-file", 11), ("replay-files", 11)):
+            value = self.replay(dump(with_snapshot(populated)), mode)
+            assert not value["ok"] and not value["rendered"] and value["code"] == code, (mode, value)
+        assert self.replay(dump(with_snapshot(populated)), "replay-null-error")["ok"]
         # Older formats omit the v3 checksum and sequence-array additions.
         for version in (1, 2):
             older = copy.deepcopy(populated)
@@ -181,11 +208,15 @@ class Probe(UploadProbe):
             for key in ("read_file_sequences", "modified_file_sequences", "config"):
                 older.pop(key, None)
             assert self.validate(dump(with_snapshot(older)))["ok"], version
+            value = self.replay(dump(with_snapshot(older)))
+            assert value["ok"] and value["rendered"] and value["last_sequence"] == 2, (version, value)
         # Keep model arguments opaque: malformed input can legitimately remain
         # in history after a rejected tool call. An empty provider ID is allowed.
         opaque = copy.deepcopy(populated)
         opaque["entries"][1]["tool_calls"] = [{"id": "", "name": "read", "arguments": "{invalid"}]
         assert self.validate(dump(with_snapshot(opaque)))["ok"]
+        value = self.replay(dump(with_snapshot(opaque)))
+        assert not value["ok"] and value["code"] == 6 and not value["restore_ready"], value
         large_snapshot = copy.deepcopy(populated)
         large_snapshot["entries"][0]["content"] = "Retained text " * 8192
         assert self.validate(dump(with_snapshot(large_snapshot)), "snapshot-cancel")["code"] == 9
@@ -256,6 +287,59 @@ class Probe(UploadProbe):
             result.update({"sequence" if version == 3 else "journal_sequence": sequence,
                            "type" if version == 3 else "operation": operation})
             return {**result, **fields}
+
+        # A real semantic tool round is distinct from schema-only samples. An
+        # unmatched result and a duplicate call must remain inspectable while
+        # failing the replay gate. Neither path can run the recorded tool.
+        call_entry = {"sequence": 3, "turn": 1, "flags": 0, "role": 2, "content": "Calling read",
+                      "reasoning": None, "tool_call_id": None,
+                      "tool_calls": [{"id": "call-1", "name": "read", "arguments": "{\"path\":\"source.c\"}"}]}
+        result_entry = {"sequence": 4, "turn": 1, "flags": 0, "role": 3, "content": "Recorded tool output",
+                        "reasoning": None, "tool_call_id": "call-1", "tool_calls": []}
+        round_records = [record("add_message", entry=call_entry), record("add_message", sequence=2, entry=result_entry),
+                         record("ledger", sequence=3, kind="read", path="source.c", after_sequence=4)]
+        value = self.replay(dump(with_journal(round_records)))
+        assert value["ok"] and value["rendered"] and value["last_sequence"] == 4 and value["read_files"] == 1, value
+        assert value["messages"][-2]["tool_calls"] == call_entry["tool_calls"]
+        assert value["messages"][-1]["tool_call_id"] == "call-1" and value["messages"][-1]["content"] == "Recorded tool output"
+        value = self.replay(dump(with_journal(round_records, newline=b"\r\n")))
+        assert value["ok"] and value["last_sequence"] == 4, value
+        for version in (1, 2):
+            old_round = [record("add_message", version=version, entry=call_entry),
+                         record("add_message", sequence=2, version=version, entry=result_entry)]
+            value = self.replay(dump(with_journal(old_round)))
+            assert value["ok"] and value["rendered"] and value["last_sequence"] == 4, (version, value)
+        value = self.replay(dump(with_journal([record("add_message", entry={**result_entry, "sequence": 3})])))
+        assert not value["ok"] and value["code"] == 6, value
+        value = self.replay(dump(with_journal([record("add_message", entry={**call_entry,
+            "tool_calls": [call_entry["tool_calls"][0], call_entry["tool_calls"][0]]})])))
+        assert not value["ok"] and value["code"] == 6, value
+        value = self.replay(dump(with_journal([record("begin_turn", turn=9)])))
+        assert not value["ok"] and value["code"] == 6, value
+        value = self.replay(dump(with_journal([record("begin_turn", turn=2),
+            record("add_message", sequence=2, entry={**populated["entries"][0], "sequence": 3, "turn": 2})])))
+        assert value["ok"] and value["turn"] == 2 and value["last_sequence"] == 3, value
+        checkpoint_records = [record("begin_turn", turn=1),
+                              record("add_message", sequence=2, entry=populated["entries"][0]),
+                              record("add_message", sequence=3, entry=populated["entries"][1]),
+                              record("begin_turn", sequence=4, turn=2),
+                              record("add_message", sequence=5,
+                                     entry={**populated["entries"][0], "sequence": 3, "turn": 2})]
+        value = self.replay(dump(with_journal(checkpoint_records, checkpoint=3)))
+        assert value["ok"] and value["rendered"] and value["turn"] == 2 and value["last_sequence"] == 3, value
+        assert [m["content"] for m in value["messages"]] == ["Question 中文", "Answer", "Question 中文"], value
+        compact_summary = "\n".join("## " + heading + "\nPersisted summary" for heading in (
+            "Objective", "Constraints", "Architecture and decisions", "Completed work",
+            "Current repository state", "Verification evidence", "Open issues and risks", "Exact next actions",
+            "Goal", "Constraints & Preferences", "Progress", "Key Decisions", "Next Steps", "Critical Context"))
+        compact_record = record("compact", through_sequence=2, generation=1, compaction_count=1,
+                                usage={"prompt_tokens": 10, "output_tokens": 2}, summary=compact_summary)
+        value = self.replay(dump(with_journal([compact_record])))
+        assert value["ok"] and any("Persisted summary" in m["content"] for m in value["messages"]), value
+        value = self.replay(dump(with_journal([{**compact_record, "summary": "Missing required sections"}])))
+        assert not value["ok"] and value["code"] == 6, value
+        value = self.replay(dump(with_journal([record("truncate", from_sequence=1, to_sequence=2, reason="overflow_l2")])))
+        assert value["ok"] and value["rendered"] and not any(m["content"] == "Answer" for m in value["messages"]), value
 
         journal_samples = [
             record("begin_turn", turn=2),
@@ -639,6 +723,8 @@ class Probe(UploadProbe):
         value = self.validate(legacy)
         assert value["ok"] and value["schema"] == 1 and not value["encodable"] and not value["restore_ready"], value
         assert value["files"] == [f for f in expected if f["path"] in ("meta.json", "snapshot.json")]
+        value = self.replay(legacy, "replay-release")
+        assert value["ok"] and value["unbound"] and value["released"] and not value["restore_ready"], value
         bad_legacy = legacy.replace(b'"export_schema":1', b'"export_schema":1,"files":[]')
         assert not self.validate(bad_legacy)["ok"]
         assert not self.validate(legacy.replace(b'"version":3', b'"version":3,"version":3', 1))["ok"]
@@ -646,7 +732,8 @@ class Probe(UploadProbe):
         self.api("GET", DECODE + "release")
         assert before == inventory()
         print(f"backup decode {'TLS' if self.secure else 'HTTP'}: owned v2/v1, exact bytes, "
-              f"{len(cases)} malformed inputs, budgets/cancel, retries and zero Home writes PASS", flush=True)
+              f"{len(cases)} malformed inputs, separate unbound model replay, budgets/cancel, "
+              "retries and zero Home writes PASS", flush=True)
 
 
 def main():

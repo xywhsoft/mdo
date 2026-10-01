@@ -4,6 +4,54 @@
 
 完成判据及尚缺的打包页证据见 [前端操作体验完成审计](frontend-completion-audit.md)。本文件继续记录每次实现和验证的细节。
 
+## 2026-10-02：离线模型上下文重放
+
+xllm-session 新增 `xllmSessionRestore()`，以借用的 snapshot/journal 字节为
+输入，复用文件恢复的 loader 和 operation replay，返回独立拥有的内存上下文。
+不继承 snapshot/journal 路径、client、driver、hooks 或 cancel，不访问原文件，
+不启动模型、工具或队列。空 snapshot 可按调用方配置创建，配置中的持久化路径
+也会移除；残尾明确拒绝。旧文件 `Load/Recover` 的崩溃修补行为保持原合同。
+同一源码提供 newest pinned system prompt getter，修正此前 SDK 额外实现未进入
+上游版本标记的问题。源头提交 `cb6c05f6`，xs 同步提交 `0649523`；vendored
+15 个文件逐字节验证，TCC 公共入口覆盖门禁通过。
+
+恢复选项有独立 Size/ABI，默认 snapshot/journal 32/64 MiB、每条 JSON 262144
+值、65536 条记录、深度 64（最大 256）。covered 记录也消耗预算；解析值/深度
+预算、OOM、取消和 deadline 分别报错。CRC 分块和拷贝/记录间检查取消；失败
+销毁整个未发布对象。库的 Windows/Linux 有界回归检查实际工具回合、ledger、
+v1/v2 fixture、rewind/clear、源字节保持、输入销毁后的深所有权、逐点分配失败，
+以及所有存储故障钩子在 byte restore 中均未被调用。
+
+mdo 的 `MdoSessionBackupReplayModel()` 只接收已成功 owning decode 的对象，
+启动新的最多 30 秒预算。模型语义检查独立于格式检查：历史中的空 provider ID
+或错误工具参数仍可检查/保存；重放失败单独返回，不能删掉或修补原始证据。
+HTTP/TLS 探针释放上传 pin 后重放，释放整个 backup 后仍可渲染；工具配对、
+checkpoint 去重、旧格式/CRLF、压缩质量门、截断与真实库写出的 rewind/clear
+均验证。错误 turn、重复 call、孤立 result、预算、取消和 deadline 都明确失败，
+相同 backup 的各文件 SHA-256 保持，Home inventory 逐字节不变。
+
+第一次集成门禁发现测试夹具的类型名错误及新模块未加入 unity 构建清单；
+已修正类型/工具参数字段和清单，并保留初次失败日志。语义错误映射到当前
+`XWORK_ERROR_IO`（6），修正测试误用的错误码。定向探针通过后才
+重新执行完整门禁。此阶段仍没有生产预览路由、完整恢复事务或菜单入口；
+模型/UI 对应、图片实际解码、staging/新身份/来源及非覆盖发布继续按
+[备份实施记录](session-backup-plan.md#独立模型上下文重放) 完成，manifest 保持
+`restore_ready:false`。原生与实体设备体验验收仍独立登记。
+
+两平台完整有界门禁通过 114 Python、251 Node、90 模块、严格 C11、36 运行
+探针、三项 packed 与独立 A/B；新 replay 模块也分别通过独立严格 C11。
+Windows 另通过便携 WebView2 Home 移动/覆盖优先级及 20 秒启动。xs/xsw 已
+从新 SDK 构建；最终门禁复用同一新宿主，不为仅修正 app 清单再次编译宿主。
+Linux 最终使用新 ext4 源拷贝，复用本轮从 SDK@0649523 新构建的原生宿主
+（SHA-256 `d304dfd00f84ba8d6410db1049a525755d27c6e888901dceb7596105ab79c5d7`），
+跳过 GUI。测试 Node 仍只在隔离目录，官方归档 SHA 已复核。
+日志 `.build/qa-session-memory-{final,linux-final}.log`；库日志
+`.build/qa-session-memory-{windows,linux}.log`。根目录 `mdo.exe` 已从验证候选
+覆盖，与 Windows A/B SHA-256 同为
+`a571f1ef2e080b050c589375cbc69368ae4e8b6ffaadb7dd8de30b0524164016`；
+Linux A/B 为 `14ed2a06d4494bf4727dbce1ca09eaf09bfd20a9cba3a6d2341e15f929d64e12`。
+没有压力或高负载测试，完整产品恢复与实体/原生交互仍未验收。
+
 ## 2026-10-02：模型 journal 格式校验
 
 快照模块整理为 `backup_model.c`，两种模型文件共用字段、整数/文本和 CRC

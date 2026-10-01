@@ -1,6 +1,6 @@
 # 会话 JSON 完整备份与恢复实施记录
 
-状态：专用下载/上传和离线解码已接入，完整校验与恢复入口待实现。2026-10-02 已完成
+状态：专用下载/上传、离线解码和独立模型重放已接入，完整校验与恢复入口待实现。2026-10-02 已完成
 checkpoint 与有界读取共用排他运行窗口、统一捕获边界、v2 捕获/编码层和
 有界 HTTP/TLS 传输。现有页面仍使用 `export_schema:1`，只有 meta 和模型 snapshot。
 格式/传输验证通过不表示正式页面已经导出完整备份，或恢复事务已经完成。
@@ -60,7 +60,7 @@ manager 调用或库通过 native path 写入不能被它自动覆盖。不得�
    明确反馈。导出完成即释放捕获锁，下载速度不能占用运行窗口。
 4. **进行中**：离线拥有解码、清单及 metadata/UI/todo、draft/queue/receipt/
    feedback/消息绑定 schema、模型 snapshot/journal schema/CRC、checkpoint 后记录
-   连号和保留 UI 的侧车关系校验已接入；实际模型重放及其与 UI 的关系、图片
+   连号、保留 UI 的侧车关系和独立模型上下文重放已接入；模型与 UI 的关系、图片
    实际解码及生产预览 worker 未完成。先实现离线验证与预览，
    再做恢复事务。验证所有 schema、路径、ID、内容
    校验和引用；拒绝链接、绝对路径、`..`、重复文件和大小声明失真。v1 只能
@@ -81,6 +81,8 @@ manager 调用或库通过 native path 写入不能被它自动覆盖。不得�
 正式导出/恢复验证，也不能代替原生及实体设备验收。
 
 ## 模型快照格式与原字节 CRC 校验
+
+下文保存各阶段当时的边界；当前模型重放增量见末尾“独立模型上下文重放”。
 
 2026-10-02 新增独立的 `backup_snapshot.c`，在共用的文件检查入口接入，
 捕获后的 v2 编码与拥有离线解码复用已解析的 JSON tree，不再二次解析快照。
@@ -558,3 +560,54 @@ Linux 为 `5bc37b6bc5762d58f6be4202f39d90ebbb7cb007bc9bc91c05ccd6bc7917873b`。
 函数，采用独立额度和生命周期。HTTP/TLS 及打包 VFS 的 GET/HEAD、备份带图
 与移动 exe 重启读回已增加覆盖。这不替代离线备份中的实际图片解码、完整
 恢复与页面验收；详见 `frontend-migration.md` 的普通图片附件发送记录。
+
+## 独立模型上下文重放
+
+2026-10-02 新增 `MdoSessionBackupReplayModel()`，只接受成功 owning decode
+的对象，在新的最多 30 秒预算内调用库的 `xllmSessionRestore()`。默认预算
+不复用 decode 已消耗的 deadline；文件数、单文件/总字节和取消先检查，模型
+解析保留 262144 值/深度 32，并由库限制 journal 条数。返回对象独立拥有，
+释放上传 pin、原文和整个 backup 后仍能渲染。错误只丢弃未发布的上下文，
+原始文件不变；语义错误与可检查的历史格式分开报告。
+
+库 API 从借用字节恢复，不访问文件、不继承路径、client、driver、hooks
+或 cancel，也不发起模型/工具调用。使用与 Load/Recover 相同的 snapshot
+loader 和七类 operation replay；v1/v2 兼容默认、工具配对、summary 质量、
+checkpoint 和 rewind/clear 不另写状态机。journal 必须完整换行，残尾不
+修补；CRC 使用原字节，CRLF 的换行 CR 不属于校验正文。解析预算、OOM、
+取消和过期 deadline 各有错误，失败销毁整个 partial context。取消仍是
+合作式，单次 native JSON 解析不能被强制打断。
+
+源头在隔离 xrt worktree 的 `codex/mdo-session-restore` 分支，提交
+`cb6c05f67e7f471e14b53d33208ef380bf0fbfbd`。该 extlib 基于原锁定库版本
+`c88a4259`，xrt 单头仍单独锁定 `6040abda`，没有混入主工作树的其他修改。
+同时将此前 SDK 的 pinned system prompt getter 纳入源头；xs 提交
+`064952339ae425de3fd74d20b4b714ec5b3d30a2` 同步 15 个生产文件并更新
+UPSTREAM/公开 TCC 符号。逐字节校验和 SDK 35 项门禁通过（Windows 跳过一
+项 Linux 专用 build-plan），mdo deps.lock 同步新源 revision 与 tree hash。
+
+库的 Windows/Linux 有界回归覆盖实际 snapshot+tail/journal-only、工具与
+文件 ledger、v1/v2 fixture、撤回与清空、深所有权、逐分配点 OOM 和首条
+重放后取消；byte restore 没有进入任何已武装的存储故障钩子。mdo HTTP/TLS
+探针覆盖 Unicode/reasoning、旧格式/CRLF、covered checkpoint 去重、配对
+工具和 ledger、压缩质量、截断、真实库 writer 的 rewind/clear，以及错误
+turn、重复 call、孤立 result、deadline/cancel/budget、NULL error 和释放
+backup 后渲染。失败后同一 backup 的文件 SHA-256 不变；237 种 malformed
+输入继续通过，整个检查前后 Home inventory 逐字节相同。夹具的孤立源文件
+清单与类型/字段接线在首次门禁发现后修正，失败日志保留。
+
+步骤 4 尚缺模型/UI 的消息与删除边界对应、图片实际解码、生产预览 worker。
+步骤 5 的 staging、新 ID/来源、修正已删除投影、非覆盖原子发布与 catalog
+仍缺；步骤 6 正式菜单、三语进度/错误、完整页面导出恢复及原生/实体设备
+也未验收。保持 `restore_ready:false`，内存上下文可重放不授权发布、队列
+续行或调用模型。本阶段没有真实产品恢复、压力或高负载测试。
+
+两平台最终有界门禁通过 114 Python、251 Node、90 模块、严格 C11、36
+运行探针、三项 packed 与独立 A/B；新模块另有两平台独立严格 C11 检查。
+Windows 另通过便携 WebView2 Home 与 20 秒启动。宿主本轮从新 SDK 重建，
+清单修正后的门禁复用同一宿主；Linux 使用新 ext4 源拷贝并跳过 GUI。
+根目录程序与 Windows A/B SHA-256 为
+`a571f1ef2e080b050c589375cbc69368ae4e8b6ffaadb7dd8de30b0524164016`；Linux 为
+`14ed2a06d4494bf4727dbce1ca09eaf09bfd20a9cba3a6d2341e15f929d64e12`。
+日志 `.build/qa-session-memory-{final,linux-final}.log`，库的 bounded gate 在
+`.build/qa-session-memory-{windows,linux}.log`。完整备份恢复和页面验收仍待后续。

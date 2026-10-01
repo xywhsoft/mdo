@@ -2,6 +2,23 @@
 
 本清单以 `app_bak/wwwroot` 的可操作行为为基线，而不是以页面长得相似或单元测试通过为完成标准。`docs/frontend-migration.md` 记录每次实现和验证；这里记录当前还需要什么证据。审计更新：2026-10-02，基线提交 `f9e2c4c`。
 
+2026-10-02 增量：独立模型重放已接入。xllm-session 的 filesystem-free byte
+restore 与文件恢复共用语义核心，Windows/Linux 有界库回归检查无存储访问、
+深所有权、旧格式迁移、撤回/清空及取消/OOM 清理；xs 公共入口已同步并锁定。
+mdo HTTP/TLS owning probe 验证释放上传/备份后的上下文、工具配对、压缩质量、
+截断、checkpoint 和错误语义分离，原备份及 Home 字节不变。成功只证明模型
+上下文可重放；模型/UI 关系、图片实际解码、production worker、新身份/来源、
+原子非覆盖发布及正式菜单仍缺，完整恢复行不升级。详见
+[模型重放](frontend-migration.md#2026-10-02离线模型上下文重放)。
+
+同阶段最终 Windows/Linux 有界门禁通过 114 Python、251 Node、90 模块、
+严格 C11、36 运行探针、三项 packed 和独立 A/B；Windows 另通过便携 Home
+与 20 秒启动。新 SDK 的 xs/xsw 和 Linux 原生宿主均已本轮重建，最终门禁
+复用这批宿主。根目录程序已更新为
+`a571f1ef2e080b050c589375cbc69368ae4e8b6ffaadb7dd8de30b0524164016`，
+Linux 包为 `14ed2a06d4494bf4727dbce1ca09eaf09bfd20a9cba3a6d2341e15f929d64e12`。
+没有压力或高负载测试，原生/实体设备交互仍缺证据。
+
 2026-10-02 增量：模型文件共用 `backup_model.c`，新增 journal v1–3 七种
 记录的字段/CRC 和 checkpoint 后连号检查，保留旧可省略字段及 rewind 零
 边界。HTTP/TLS 的 237 种错误输入、真实库写出的五种记录、CRLF/covered 前缀、
