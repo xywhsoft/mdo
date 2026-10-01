@@ -371,6 +371,20 @@ export function createSettingsView({ form, store, navigation, onApplied }) {
   }
   form.addEventListener("input", markDirty);
   form.addEventListener("change", markDirty);
+  function reportSettingsValidity() {
+    const invalid = [...form.elements].find((field) =>
+      field.willValidate && !field.validity.valid);
+    if (!invalid) return true;
+    // Native form validation cannot focus a field in a hidden settings panel.
+    // Reveal its section before reporting that field, keeping every edit.
+    const section = invalid.closest("[data-settings-panel]")?.dataset.settingsPanel;
+    if (section && section !== selectedSection) navigation.openSettings(section);
+    feedbackText(t("settings.invalidInput"), "error");
+    invalid.focus();
+    keepFocusedSettingVisible();
+    invalid.reportValidity();
+    return false;
+  }
   pendingLink.addEventListener("click", () => {
     navigation.openSettings(lastEditedSection);
     sectionNavigation.querySelector(
@@ -395,7 +409,7 @@ export function createSettingsView({ form, store, navigation, onApplied }) {
   });
 
   previewButton.addEventListener("click", async () => {
-    if (!snapshot || !form.reportValidity() || !validatePower()) return;
+    if (!snapshot || !reportSettingsValidity() || !validatePower()) return;
     let nextFocus = previewButton;
     setBusy(true);
     try {
@@ -420,7 +434,7 @@ export function createSettingsView({ form, store, navigation, onApplied }) {
   });
 
   applyButton.addEventListener("click", async () => {
-    if (!snapshot || !form.reportValidity() || !validatePower() ||
+    if (!snapshot || !reportSettingsValidity() || !validatePower() ||
         previewFingerprint !== fingerprint()) return;
     setBusy(true);
     try {

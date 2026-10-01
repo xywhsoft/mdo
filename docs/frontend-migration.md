@@ -4,6 +4,60 @@
 
 完成判据及尚缺的打包页证据见 [前端操作体验完成审计](frontend-completion-audit.md)。本文件继续记录每次实现和验证的细节。
 
+## 2026-10-01：跨设置分区校验定位到错误字段
+
+旧包 Home `.build/mdo-packed-docks-c90dhtgx`（基线 7bb103c）复现：
+Agent 并行工具数填 0 后切到常规，点击预览仍留在常规和预览按钮，提示
+仍为“有尚未预览的更改”，错误字段隐藏。原生整表 reportValidity 无法
+把隐藏分区中的字段显示给用户，操作看起来没有反应。
+
+预览和应用现在共同查找首个参与原生校验的无效字段，先显示其设置分区，
+保留全部未应用输入，再给出三语提示、聚焦字段并调用该字段的原生校验。
+移动端沿用已有可见区域滚动，错误字段不会落到固定分类栏或操作栏下。
+不会跳过其他分区的校验，也不把无效值发给 API；预览、ETag 和服务端
+合并事务保持不变。三语词典各增加一键，现各 1346 键。
+
+验证：
+
+- 新夹具 `tests/fixtures/settings-invalid-panel-browser.html` 使用完整
+  正式表单、约束、CSS 和设置模块。桌面及 320×350 实际操作验证数值
+  下限、必填空值、多个错误依次定位，以及英语/俄语 URL 提示。字段
+  可见并获焦、未应用系统指令逐字保留、文档无溢出，错误输入预览请求
+  数为 0；全部修正后恰发一次预览，页面无脚本错误。
+- Windows 最终单文件 Home `.build/mdo-packed-docks-bum78aka`，会话
+  `V-ORkGCJjdXmFVR3a27JbrAE9iBOD-yR`。320×350 下并行数 0 自动切回
+  Agent，字段 y=139.453～179.453、焦点正确、revision 保持 1。联网
+  超时 100 和无效 URL 依次在英语、俄语界面被定位，系统指令仍为
+  `Windows settings preservation QA`。修正后预览、应用使 revision=2；
+  刷新保留俄语、工具数 8、超时 45000、合成搜索 URL 和指令。另一次
+  设置往返等待输入启用后确认原会话路由、未发送草稿及 prompt 焦点，
+  无脚本错误。截图 `.build/qa-settings-invalid-panel-windows-short.png`。
+- Linux 最终单文件 Home
+  `/home/ubuntu/.cache/mdo-linux-qa-settings-invalid-panel-final/.build/mdo-packed-docks-qun4p73z`，
+  会话 `V-ORkGZKi1QukLL2EJtFeUyRf5J1SGdF`。320×350 的并行数 65 自动
+  切回 Agent，原生提示上限 64；搜索 URL 为空时从英语常规切到联网
+  字段。修正后预览/应用及刷新保存工具数 6、合成 URL 和指令
+  `Linux settings preservation QA`；等待语言包载入后英语 revision 2
+  与提示正常，页面宽度 320px、错误日志为空。截图
+  `.build/qa-settings-invalid-panel-linux-short.png`。两端停服后核对
+  `mdo-home/config/settings.json`，只有上述有效差量，没有错误值。
+- 首轮两端门禁因旧源码契约硬编码 form.reportValidity 调用而失败；
+  更新为字段的原生 reportValidity 断言，操作行为由浏览器验证。初次
+  日志保留在 `.build/qa-settings-invalid-panel-linux-release-initial.log`
+  及 `.build/qa-settings-invalid-panel-release-initial.log`。
+  最终 Windows/Linux 全门禁通过 114 项 Python、203 项 Node、88 个模块、
+  严格 C11、32 个运行探针及确定性 A/B 打包；Windows 另通过便携
+  WebView2/20 秒启动。最终日志
+  `.build/qa-settings-invalid-panel-release.log`、
+  `.build/qa-settings-invalid-panel-linux-release.log`。
+- Windows A/B 及根目录 SHA-256：
+  `6e13407237a1494ef7a40345f77cf7cbbcec4fc8afe4d87856ad3fdf3c5b075f`；
+  Linux A/B SHA-256：
+  `71396c7c52b5037a33034016f437a9a31c9b7699a29070d2a93690f7ffce6cfa`。
+
+Linux 图形证据来自 Windows 浏览器访问 Linux 服务，不代替原生 WebView
+或实体设备。内置 Ling 配置不变，未做压力/高负载测试，长期目标继续。
+
 ## 2026-10-01：停靠卡片为历史消息保留滚动空间
 
 跨平台复核发现一个实际操作缺陷：320×350 下，即使收起计划并滚到历史

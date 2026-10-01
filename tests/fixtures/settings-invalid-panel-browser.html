@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="zh-CN">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>mdo settings invalid panel probe</title>
+<link rel="stylesheet" href="/app/web/css/app.css?settings-validity=1">
+<style>
+  .app-shell { grid-template-columns: minmax(0, 1fr); }
+  .workspace { grid-column: 1 / -1; }
+  #result { position: fixed; top: 0; right: 0; z-index: 30; max-width: 160px;
+    height: 12px; overflow: hidden; font-size: 8px; background: white; }
+</style>
+<output id="result" role="status">Preparing</output>
+<script type="module">
+import { createSettingsView } from "/app/web/js/features/settings/settings-view.js?settings-validity=1";
+import { createResourceStore } from "/app/web/js/state/store.js";
+const realFetch = window.fetch.bind(window);
+let previews = 0;
+window.fetch = async (url, options) => {
+  if (String(url).startsWith("/lang/"))
+    return realFetch(`/app/web${url}`, { ...options, cache: "no-store" });
+  if (String(url) === "/api/v1/settings/settings/preview") {
+    previews++;
+    return new Response(JSON.stringify({ ok: true, data: { changes: true, patch_bytes: 123 } }),
+      { headers: { "Content-Type": "application/json" } });
+  }
+  if (String(url).startsWith("/api/")) throw new Error("Unexpected fixture API write");
+  return realFetch(url, options);
+};
+// Use the complete production form, including constraints and hidden panels.
+const source = await (await realFetch("/app/web/index.html", { cache: "no-store" })).text();
+const page = new DOMParser().parseFromString(source, "text/html");
+const workspace = page.querySelector("#settings-workspace");
+workspace.hidden = false;
+const shell = document.createElement("div");
+shell.className = "app-shell";
+shell.setAttribute("data-settings-open", "");
+const main = document.createElement("main");
+main.className = "workspace";
+main.append(workspace);
+shell.append(main);
+document.body.append(shell);
+const defaults = (await (await realFetch("/app/default-home/config/defaults.json")).json()).settings;
+const snapshot = { ...defaults, revision: 1, etag: '"qa"',
+  user_patches: { settings: false }, transaction_service: { runtime_consistent: true },
+  power_runtime: { checked: true, available: true },
+  web: { ...defaults.web, ...defaults.web.search, credential_configured: false } };
+const store = createResourceStore();
+let section = "general";
+let view;
+const navigation = { openSettings(next) {
+  section = next;
+  view.selectSection(next);
+  document.querySelector("#settings-actions").hidden = !["general", "agent", "web"].includes(next);
+} };
+const form = document.querySelector("#settings-form");
+view = createSettingsView({ form, store, navigation });
+view.setActive(true);
+store.setData(snapshot);
+view.selectSection(section);
+await view.localeReady();
+function report() {
+  const field = document.activeElement;
+  const bounds = field?.getBoundingClientRect();
+  const layout = document.querySelector(".settings-layout").getBoundingClientRect();
+  const nav = document.querySelector(".settings-navigation").getBoundingClientRect();
+  const invalid = [...form.elements].filter(e=>e.willValidate && !e.validity.valid);
+  document.querySelector("#result").dataset.ready = "true";
+  document.querySelector("#result").textContent = JSON.stringify({ section, previews,
+    focused: field?.name || field?.id, invalid: invalid.map(e=>e.name),
+    feedback: document.querySelector("#settings-feedback").textContent,
+    tone: document.querySelector("#settings-feedback").dataset.tone,
+    value: form.elements.max_parallel_tools.value, instructions: form.elements.user_instructions.value,
+    focusedVisible: Boolean(bounds?.height && bounds.top >= Math.max(layout.top,
+      nav.bottom < layout.bottom ? nav.bottom : layout.top) && bounds.bottom <= layout.bottom),
+    overflow: document.documentElement.scrollWidth > innerWidth,
+  });
+}
+const reportSoon = ()=>requestAnimationFrame(()=>requestAnimationFrame(report));
+document.addEventListener("click", reportSoon);
+document.addEventListener("input", reportSoon);
+document.addEventListener("change", ()=>view.localeReady().then(reportSoon));
+window.addEventListener("resize", reportSoon);
+reportSoon();
+</script>
+</html>

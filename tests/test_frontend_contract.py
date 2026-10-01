@@ -139,7 +139,7 @@ class FrontendContractTests(unittest.TestCase):
         self.assertIn('api.patch("/settings/settings"', state)
         self.assertIn("{ ifMatch: etag }", state)
         self.assertIn("previewFingerprint", view)
-        self.assertIn("form.reportValidity()", view)
+        self.assertIn("invalid.reportValidity()", view)
         self.assertNotIn("snapshot.web.secret_ref", view)
         self.assertNotIn("snapshot.transport.proxy.secret_ref", view)
         self.assertIn("form.elements.proxy_secret_ref.value.trim()", view)
