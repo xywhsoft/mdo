@@ -2,6 +2,25 @@
 
 本清单以 `app_bak/wwwroot` 的可操作行为为基线，而不是以页面长得相似或单元测试通过为完成标准。`docs/frontend-migration.md` 记录每次实现和验证；这里记录当前还需要什么证据。审计更新：2026-10-02，基线提交 `f9e2c4c`。
 
+2026-10-02 增量：助手响应的正文、逐块推理及 opaque 签名共同保存，空
+推理也能回放；session 共用 xllm 的响应转换并保持用量反馈。修复正文
+被 native part 清除、签名误用 joined reasoning、Completions 文字未转义
+及 Anthropic 普通助手正文漏闭合括号。跨 dialect 编码过滤外来签名，原
+账本不改。源库 `5d16ece2`、xs `ef0e006` 已提交，库的两平台 bounded
+gate 通过；mdo 三轮源运行/重新打开/独立重放继续核对正文、签名和图片。
+
+其他 native block 与工具/正文任意交错尚未映射。实际图片解码、生产
+worker、staging 发布、正式完整备份菜单与原生/实体设备仍待完成，完整
+恢复行不升级，`restore_ready:false` 保持。详见
+[本次迁移](frontend-migration.md#2026-10-02助手正文与逐块推理签名共同保存)。
+同阶段 Windows/Linux 有界门禁均通过 114 Python、252 Node、90 模块、
+严格 C11、36 运行探针、三项 packed 与独立 A/B；Windows 另通过便携
+WebView2 Home 与 20 秒启动。根目录程序更新为
+`94b2468c5fe81fd387ee6a9aeca544a96718031860aea6a452de122f242fcbf1`；
+Linux 为 `6d95c732bc8d52f0abb755e412026530bff83aff504bbd81b481abd2c85e550a`。
+日志 `.build/qa-signed-{windows,linux}-final.log`，未做压力或高负载测试。
+没有本阶段原生点击/实体设备证据，完整备份恢复继续未完成。
+
 2026-10-02 增量：xllm-session v4 已保存完整消息的有序 parts 与 native，
 恢复时深复制原文/二进制字节并兼容旧 v1–3；旧文件中已丢失的内容不补造。
 源头 `799124f9`、xs `455b70f` 已提交，16 个生产文件逐字节同步。真实产品

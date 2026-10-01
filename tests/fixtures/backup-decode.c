@@ -67,6 +67,14 @@ static bool BackupDecodeFixtureSeed(XS_HttpReq* Request)
 /* Generate both ledgers through a real product run, with a deterministic
  * in-process model. This writes only the probe's isolated source session;
  * later decode/replay checks are measured separately for zero Home writes. */
+static char* BackupDecodeFixtureCopyText(const char* Text)
+{
+    size_t Bytes = strlen(Text) + 1u;
+    char* Copy = (char*)malloc(Bytes);
+    if ( Copy != NULL ) memcpy(Copy, Text, Bytes);
+    return Copy;
+}
+
 static xllm_result BackupDecodeFixtureComplete(void* Data, const xllm_request* Request,
     const xllm_stream_callbacks* Callbacks, xllm_response** Response, xllm_error* Error)
 {
@@ -74,28 +82,55 @@ static xllm_result BackupDecodeFixtureComplete(void* Data, const xllm_request* R
     xllm_response* Value;
     const char* Text;
     size_t i;
-    bool SawImage = false;
+    bool SawImage = false, SawAssistant = false;
     (void)Callbacks; (void)Error;
     for ( i = 0u; i < Request->iMessageCount; ++i ) {
         const xllm_message* Message = &Request->pMessages[i];
+        if ( Message->eRole == XLLM_ROLE_ASSISTANT && Message->iPartCount == 6u ) {
+            SawAssistant = Message->pParts[0].eKind == XLLM_PART_REASONING &&
+                strcmp(Message->pParts[0].sText, "fixture reasoning") == 0 &&
+                Message->pParts[1].eKind == XLLM_PART_NATIVE &&
+                strcmp(Message->pParts[1].sText, "fixture-signature") == 0 &&
+                Message->pParts[2].eKind == XLLM_PART_TEXT &&
+                strcmp(Message->pParts[2].sText, "Writer answer ") == 0 &&
+                Message->pParts[4].eKind == XLLM_PART_REASONING && Message->pParts[4].sText[0] == '\0' &&
+                Message->pParts[5].eKind == XLLM_PART_NATIVE &&
+                strcmp(Message->pParts[5].sText, "fixture-empty-signature") == 0;
+        }
         if ( Message->eRole != XLLM_ROLE_USER || Message->iPartCount != 2u ) continue;
         SawImage = Message->pParts[0].eKind == XLLM_PART_TEXT && Message->pParts[0].sText != NULL &&
             strcmp(Message->pParts[0].sText, "Writer question \xe4\xb8\xad\xe6\x96\x87") == 0 &&
             Message->pParts[1].eKind == XLLM_PART_IMAGE && Message->pParts[1].iDataSize == 68u &&
             memcmp(Message->pParts[1].pData, "\x89PNG\r\n\x1a\n", 8u) == 0;
     }
-    if ( !SawImage ) return XLLM_RESULT_ERROR; /* Includes the call after reopening the source session. */
+    if ( !SawImage || (*Calls != 0u && !SawAssistant) ) return XLLM_RESULT_ERROR;
     Text = ++*Calls == 1u ? "Writer answer one" : "Writer answer two";
     Value = (xllm_response*)calloc(1u, sizeof(*Value));
     if ( Value == NULL ) return XLLM_RESULT_ERROR;
-    Value->sContent = (char*)malloc(strlen(Text) + 1u);
-    if ( Value->sContent == NULL ) { xllmResponseDestroy(Value); return XLLM_RESULT_ERROR; }
-    memcpy(Value->sContent, Text, strlen(Text) + 1u);
+    Value->sContent = BackupDecodeFixtureCopyText(Text);
+    Value->sReasoningContent = BackupDecodeFixtureCopyText("fixture reasoning");
+    Value->pBlocks = (xllm_block*)calloc(4u, sizeof(*Value->pBlocks));
+    if ( Value->sContent == NULL || Value->sReasoningContent == NULL || Value->pBlocks == NULL ) goto memory;
+    Value->iBlockCount = 4u;
+    Value->pBlocks[0].eKind = XLLM_BLOCK_REASONING;
+    Value->pBlocks[0].sText = BackupDecodeFixtureCopyText("fixture reasoning");
+    Value->pBlocks[0].sNative = BackupDecodeFixtureCopyText("fixture-signature");
+    Value->pBlocks[1].eKind = XLLM_BLOCK_TEXT;
+    Value->pBlocks[1].sText = BackupDecodeFixtureCopyText("Writer answer ");
+    Value->pBlocks[2].eKind = XLLM_BLOCK_TEXT;
+    Value->pBlocks[2].sText = BackupDecodeFixtureCopyText(*Calls == 1u ? "one" : "two");
+    Value->pBlocks[3].eKind = XLLM_BLOCK_REASONING;
+    Value->pBlocks[3].sText = BackupDecodeFixtureCopyText("");
+    Value->pBlocks[3].sNative = BackupDecodeFixtureCopyText("fixture-empty-signature");
+    for ( i = 0u; i < 4u; ++i ) if ( Value->pBlocks[i].sText == NULL ) goto memory;
+    if ( Value->pBlocks[0].sNative == NULL || Value->pBlocks[3].sNative == NULL ) goto memory;
     Value->eFinish = XLLM_FINISH_STOP; Value->uHttpStatus = 200u;
     Value->tUsage.uInputTokens = 40u; Value->tUsage.uOutputTokens = 8u;
     Value->tUsage.uTotalTokens = 48u;
     *Response = Value;
     return XLLM_RESULT_OK;
+memory:
+    xllmResponseDestroy(Value); return XLLM_RESULT_ERROR;
 }
 
 static bool BackupDecodeFixtureRun(MdoSession* Session, const char* Prompt, bool WithImage, xwork_error* Error)
@@ -237,6 +272,7 @@ static bool BackupDecodeFixtureReplay(XS_HttpReq* Request)
             uint8 Digest[XRT_SHA256_SIZE]; char Hash[65];
             (void)MdoApiValueSetUInt(Item, "kind", Part->eKind);
             (void)MdoApiValueSetString(Item, "text", Part->sText != NULL ? Part->sText : "");
+            (void)MdoApiValueSetString(Item, "native_type", Part->sNativeType != NULL ? Part->sNativeType : "");
             (void)MdoApiValueSetUInt(Item, "bytes", Part->iDataSize);
             if ( Part->iDataSize && xrtSha256(Part->pData, Part->iDataSize, Digest) ) {
                 MdoUploadHash(Digest, Hash); (void)MdoApiValueSetString(Item, "sha256", Hash);

@@ -63,7 +63,8 @@ manager 调用或库通过 native path 写入不能被它自动覆盖。不得�
    feedback/消息绑定 schema、模型 snapshot/journal schema/CRC、checkpoint 后记录
    连号、保留 UI 的侧车关系、独立模型上下文重放和模型/UI 关系检查已接入。
    新模型 writer 已用 v4 保存完整消息 parts/native；旧文件的已丢失内容
-   不能修复。助手响应签名转换、图片实际解码及生产预览 worker 未完成。
+   不能修复。助手 thinking/text 与签名转换已接入；其他 native 块未映射，
+   图片实际解码及生产预览 worker 未完成。
    先实现离线验证与预览，
    再做恢复事务。验证所有 schema、路径、ID、内容
    校验和引用；拒绝链接、绝对路径、`..`、重复文件和大小声明失真。v1 只能
@@ -753,3 +754,69 @@ Windows 完整门禁复用已建宿主；Linux 使用新的 ext4 源副本并跳
 `ea490f94e346925572b8d820d7d13d9fc8fa11868f3aae9c0da9f177fcf33e7c`；
 Linux 为 `ae17c3a32d4f1c41a157bd9380a3e1bef565fd0416194112586d0b2965e3f51f`。
 日志 `.build/qa-parts-{windows,linux}-final.log`。没有压力或高负载测试。
+
+## 助手响应签名与正文保真转换
+
+2026-10-02 源库提交 `5d16ece2b049fd73eee1d8e79551d6d70c6be216`，修复
+上一阶段记录的响应转换缺口。Anthropic 要求回传 thinking 块时保留原文
+和签名，签名是 opaque 字段，不能解释或拼接成另一块。
+参见 [官方 thinking 文档](https://platform.claude.com/docs/en/build-with-claude/thinking)。
+
+`xllmMessageFromResponse` 在存在签名时使用原有 parts 模型：按响应的
+TEXT/REASONING 块顺序复制，每段 REASONING 后跟对应的 NATIVE part，
+native_type 为 `thinking_signature`、text 为签名。TEXT parts 保留原始
+正文，content 保持 null，空推理也有自己的 part。无 TEXT block 的
+自定义响应可从 joined content 保存正文；普通 unsigned 响应继续保持
+紧凑的 content 表示。输出深复制，不借用响应缓冲；分配失败释放整个
+输出。count 非零却缺少 block/tool 数组的参数明确拒绝。
+
+Anthropic encoder 优先用签名前的原始 REASONING part，既有 native-only
+消息继续使用旧 joined reasoning，但不声称能重建旧分块。空推理仍编码
+thinking 与签名。其他 dialect 跳过这个专有 signature part，原账本保留；
+GLM reasoning_content 与可见正文分开。Completions 使用共用的 JSON
+字符串转义生成分段正文，修复原先直接在引号中拼接文字导致的非法 JSON；
+Anthropic 普通助手正文补闭合对象；Responses 的零可见 parts 使用空文字。
+没有增加 public ABI、导出入口或持久化版本。
+
+`xllmSessionAddAssistantResponse` 共用该转换，仍在成功追加后反馈原 usage。
+这使正常运行保存的 assistant、history 容器、file/byte restore 与后续
+请求都保留相同 parts。工具仍是独立数组，只保证数组本身的顺序，不映射
+工具与正文的任意交错；redacted thinking 及其他 provider-native block
+仍未接入。不能把本次 signed thinking 的修复写成全部 provider 回放完成。
+v1–3 与已丢失内容的旧消息仍按前述不完整证据处理，不能补造数据。
+
+xs 提交 `ef0e00608827655818424af6731cac919200f552`，逐字节同步 xllm
+18 个生产文件、xllm-session 16 个生产文件。对应 tree SHA-256 为：
+
+- xllm：`605bcc5d36bc66308a47325d115d713dfb7d1ddb7641319c57c00e67fcb29d66`
+- xllm-session：`b75eca97d9859232fb43ba87164cdef7d3a0b42c368c1ab59b4cb4e37fd44230`
+
+deps.lock、UPSTREAM 与公开目录保持同步，SDK 35 项门禁通过（Windows
+跳过一项 Linux build-plan）。库 Windows/Linux bounded gate 覆盖已解析
+Anthropic SSE、thinking/正文/工具共存、多签名和空推理、四种 dialect、
+Unicode/引号/反斜杠/控制字符、跨协议过滤、原缓冲修改、全部转换分配点
+失败、缺失数组、plain assistant 和 custom fallback；session 的真实
+snapshot、journal-only、snapshot+tail、file Load/Recover 后再次编码均
+保留原 signed thinking、正文和工具对。日志
+`.build/qa-signed-{xllm,session}-windows-complete.log` 与
+`.build/qa-signed-linux.log`。初次 Linux staging 脚本的前缀替换误改了
+Path.parts，已修正 helper，未改变源码或放宽任何门禁。
+
+mdo HTTP/TLS 隔离探针在三轮实际运行中返回两段正文、有字/空推理和
+两项 opaque 签名；在第三轮前释放并重新打开源会话，下一次实际模型
+请求仍有原 parts。正常捕获→独立重放核对全部 assistant parts 和
+native_type，原中文/PNG 的 SHA-256、六项模型/UI 关系及缩短范围后的
+投影缺口继续通过。固定响应仅用于测试自己的模型；没有线上真实签名
+验证或 shell 调用。备份检查前后源字节和 Home inventory 不变，257 个
+格式错误输入继续覆盖。生产预览 worker、图片实际解码、staging 发布和
+正式完整备份菜单仍待完成，`restore_ready:false` 保持。
+
+最终 Windows/Linux 有界门禁均通过 114 Python、252 Node、90 模块、严格
+C11、36 运行探针、三项 packed 与独立 A/B；Windows 另通过便携 Home
+覆盖/搬移/重启与 20 秒启动。两端宿主本轮均从 SDK `ef0e006` 重建，
+Windows 完整门禁复用已建宿主；Linux 使用新的 ext4 源副本并跳过 GUI。
+根目录程序与 Windows A/B SHA-256 为
+`94b2468c5fe81fd387ee6a9aeca544a96718031860aea6a452de122f242fcbf1`；
+Linux 为 `6d95c732bc8d52f0abb755e412026530bff83aff504bbd81b481abd2c85e550a`。
+日志 `.build/qa-signed-{windows,linux}-final.log`。未做压力或高负载测试，
+本阶段不增加原生点击或实体设备证据。

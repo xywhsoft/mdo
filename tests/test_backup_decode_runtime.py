@@ -187,6 +187,14 @@ class Probe(UploadProbe):
         assert part_message["parts"][0]["text"] == "Writer question 中文", part_message
         assert part_message["parts"][1]["bytes"] == len(expected_pixel), part_message
         assert part_message["parts"][1]["sha256"] == hashlib.sha256(expected_pixel).hexdigest(), part_message
+        assistants = [m for m in writer_model["messages"] if m["role"] == 2]
+        assert len(assistants) == 3, assistants
+        for index, message in enumerate(assistants):
+            assert message["content"] == "" and message["part_count"] == 6, message
+            assert [(p["kind"], p["text"]) for p in message["parts"]] == [
+                (1, "fixture reasoning"), (5, "fixture-signature"), (0, "Writer answer "),
+                (0, "one" if index == 0 else "two"), (1, ""), (5, "fixture-empty-signature")], message
+            assert message["parts"][1]["native_type"] == message["parts"][5]["native_type"] == "thinking_signature", message
         writer_history = self.model_history(writer_source)
         assert writer_history["ok"] and writer_history["matched"] == 6, writer_history
         assert writer_history["unverified"] == writer_history["unprojected"] == 0, writer_history

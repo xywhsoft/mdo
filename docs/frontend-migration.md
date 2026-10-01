@@ -4,6 +4,52 @@
 
 完成判据及尚缺的打包页证据见 [前端操作体验完成审计](frontend-completion-audit.md)。本文件继续记录每次实现和验证的细节。
 
+## 2026-10-02：助手正文与逐块推理签名共同保存
+
+修复 xllmMessageFromResponse 在追加签名 part 时清掉 content 的问题。
+带签名的响应改为有序 TEXT/REASONING parts，每个原始推理后紧跟自己的
+thinking_signature NATIVE part；空推理也保留签名。普通无签名响应保持
+文字表示，工具在独立数组中保持顺序。xllm-session 共用这一转换，继续
+反馈原用量，因此运行、会话重启和备份重放使用同一组完整消息。
+
+Anthropic 按相邻原始推理回放签名，旧 native-only 消息仍使用原 joined
+reasoning fallback；不会从旧数据推测缺失的分块。Completions/GLM/Responses
+过滤 Anthropic 专有签名，保留原账本，让切换协议后的正文可编码。GLM
+推理只进入 reasoning_content，不混入 content。同时修复 Completions
+分段文字直接拼入引号而未转义，以及 Anthropic 普通助手正文漏闭合括号。
+零可见 parts 的 Responses 消息使用空文字。未增加工具目录或前端选项。
+
+源库 `5d16ece2`，xs `ef0e006` 已分别提交；xllm 18、xllm-session 16 个
+生产文件逐字节同步，公开入口及持久化 schema 4 保持，deps.lock 同步。
+库 Windows/Linux bounded gate 覆盖已解析 Anthropic SSE、原文/工具共存、
+多段/空推理、分段 Unicode/引号/反斜杠/控制字符、四种 dialect、原始
+缓冲修改、所有转换分配点失败、正常文字与自定义 joined text fallback，
+以及真正的 file Load/Recover、journal-only 和 snapshot+tail 后再次编码。
+
+mdo 隔离 HTTP/TLS 探针的三轮实际运行响应包含两段正文、一段有字推理、
+一段空推理及两项 opaque 签名。在第三轮前释放并重新打开会话，后续
+实际模型请求仍有原 parts；正常捕获后独立重放核对所有 assistant parts、
+signature 类型、中文/PNG 与六项 UI 关系。固定响应只在隔离测试模型中
+执行，不联网；后续备份检查保持 Home inventory 和原备份字节不变。
+257 个格式错误输入继续覆盖。
+
+本阶段只保证现有 response thinking/text 块及工具数组的转换。工具与
+正文的任意交错、redacted thinking 和其他 provider-native block 尚未映射；
+旧文件已丢失的内容不能补造。完整备份恢复仍需图片实际解码、生产 worker、
+staging 原子非覆盖发布及正式菜单；原生/实体设备交互验收继续保留。
+详见 [签名实施记录](session-backup-plan.md#助手响应签名与正文保真转换)。
+
+最终 Windows/Linux 有界发布门禁均通过 114 Python、252 Node、90 模块、
+严格 C11、36 运行探针、三项 packed 与独立 A/B；Windows 另通过便携
+WebView2 Home 覆盖/搬移/重启及 20 秒启动。Windows xs/xsw 本轮从
+SDK `ef0e006` 重建，完整门禁复用该宿主；Linux 使用新 ext4 副本
+`/home/ubuntu/.cache/mdo-linux-signed-6mkvaaw8` 重建原生宿主并跳过 GUI。
+根目录程序已更新为 Windows A/B 的同一字节：
+`94b2468c5fe81fd387ee6a9aeca544a96718031860aea6a452de122f242fcbf1`；
+Linux 为 `6d95c732bc8d52f0abb755e412026530bff83aff504bbd81b481abd2c85e550a`。
+日志 `.build/qa-signed-{windows,linux}-final.log`。未做压力或高负载测试，
+本阶段不增加原生点击或实体设备验收等级。
+
 ## 2026-10-02：完整消息的多模态持久化
 
 xllm-session 的新 snapshot/journal 使用 v4，保存所有有序 parts 的类型、
