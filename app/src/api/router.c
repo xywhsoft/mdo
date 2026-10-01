@@ -378,7 +378,9 @@ bool MdoApiInit(void)
         MdoApiSessionsUnit();
         return false;
     }
-    if ( !MdoApiBackupUploadsInit() || !MdoApiDownloadsInit() ) {
+    if ( !MdoApiBackupUploadsInit() || !MdoApiDownloadsInit() ||
+         !MdoApiImageDownloadsInit() ) {
+        MdoApiImageDownloadsUnit(); MdoApiDownloadsUnit();
         MdoApiBackupUploadsUnit();
         MdoApiWriteUnit(); MdoApiPurgeIntentUnit(); MdoApiAttachmentsUnit();
         MdoApiWorkspaceStateUnit(); MdoApiQueueUnit(); MdoApiDraftUnit();
@@ -394,6 +396,7 @@ void MdoApiUnit(void)
 {
     g_MdoApiInitialized = false;
     MdoApiDownloadsUnit();
+    MdoApiImageDownloadsUnit();
     MdoApiBackupUploadsUnit();
     MdoApiWriteUnit();
     MdoApiPurgeIntentUnit();

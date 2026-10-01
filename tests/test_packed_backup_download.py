@@ -16,6 +16,7 @@ import tempfile
 import time
 
 from test_api_runtime import request as raw_request
+from fixture_images import ordinary_png
 from test_packed_home_lease import (
     ROOT, release_packed_copies, request, site, start, stop, wait_bootstrap,
 )
@@ -115,8 +116,22 @@ def main() -> int:
             artifact = directory / ARTIFACT
             artifact.parent.mkdir(parents=True)
             artifact.write_bytes(payload)
+            # An ordinary valid PNG also crosses the send queue. Its upload,
+            # readback, HEAD and moved-executable read use only embedded TCC/VFS
+            # sources; no external app overlay or model execution is involved.
+            png = ordinary_png()
+            status, _, response_data = raw_request(first_port, "POST", path + "/attachments",
+                body=png, headers={"Content-Type": "image/png"})
+            assert status == 201, (status, response_data[:512])
+            image = json.loads(response_data)["data"]
+            status, headers, data = raw_request(first_port, "GET", image["url"])
+            assert status == 200 and data == png, (status, data[:512])
+            assert headers["content-type"] == "image/png" and headers["connection"] == "close"
+            status, headers, data = raw_request(first_port, "HEAD", image["url"])
+            assert status == 200 and data == b"" and headers["content-length"] == str(len(png))
             files = download(first_port, path)
             assert files[ARTIFACT] == payload
+            assert files[f"attachments/{image['id']}.bin"] == png
             assert json.loads(files["draft.json"])["text"] == "便携草稿 / portable draft"
             assert json.loads(files["queue.json"])["items"][0]["id"] == "d" * 32
             assert json.loads(files["meta.json"])["title"] == "Packed backup 便携"
@@ -124,10 +139,13 @@ def main() -> int:
             second = start(second_site, packed, home, env)
             status, response = wait_bootstrap(second, second_port, second_site / "packed.log")
             assert status == 200 and response["data"]["ready"], response
+            status, _, data = raw_request(second_port, "GET", image["url"])
+            assert status == 200 and data == png, (status, data[:512])
             moved_files = download(second_port, path)
             # Checkpoint/capture timestamps can change; retained user content
             # must remain exact after loading the same Home at a new exe path.
-            for name in (ARTIFACT, "draft.json", "queue.json", "meta.json"):
+            for name in (ARTIFACT, "draft.json", "queue.json", "meta.json",
+                         f"attachments/{image['id']}.bin", f"attachments/{image['id']}.json"):
                 assert moved_files[name] == files[name], name
             for source in (first_site, second_site):
                 assert sorted(p.name for p in source.iterdir()) == [packed.name, "packed.log", "xs.json"]

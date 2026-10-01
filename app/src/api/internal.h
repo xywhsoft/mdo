@@ -82,6 +82,13 @@ bool MdoApiReplyBackupDownload(MdoApiContext* Context, const void* Body,
 bool MdoApiDownloadsInit(void);
 void MdoApiDownloadsUnit(void);
 bool MdoApiDownloadSend(MdoApiContext* Context, const void* Data, size_t Bytes);
+bool MdoApiDownloadLive(const MdoApiContext* Context);
+bool MdoApiImageDownloadsInit(void);
+void MdoApiImageDownloadsUnit(void);
+/* IDs are validated by the attachment route. Only copied IDs/method/request ID
+ * and owned stream references escape; no body is allocated until execution. */
+bool MdoApiImageDownloadStart(MdoApiContext* Context, cstr Project,
+    cstr Session, cstr Id);
 /* Always consumes Session. Success takes over only this connection; the
  * executor copies request fields and retains the stream before admission. */
 bool MdoApiSessionBackupStart(MdoApiContext* Context, struct MdoSession* Session);

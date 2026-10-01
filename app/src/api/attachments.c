@@ -777,10 +777,6 @@ bool MdoApiAttachmentRoute(MdoApiContext* Context)
     char Project[MDO_PROJECT_ID_CAPACITY];
     char Session[MDO_SESSION_ID_CAPACITY];
     char Id[MDO_ATTACHMENT_ID_LENGTH + 1u];
-    char* Data = NULL;
-    size_t Size = 0u;
-    cstr Mime = NULL;
-    bool Ok;
     if ( Context->Request->head->MethodCode == XHTTP_METHOD_DELETE ) {
         const xhttp1head* Head = Context->Request->head;
         MdoAttachmentDiscardResult Result;
@@ -822,12 +818,8 @@ bool MdoApiAttachmentRoute(MdoApiContext* Context)
         return MdoApiReplySuccessTake(Context, 200u, Reply, NULL);
     }
     if ( !MdoAttachmentSession(Context, Project, Session, false) ||
-         !MdoAttachmentHexId(Context->Params[2], Id) ||
-         !MdoAttachmentReadForRun(Project, Session, Id,
-            &Data, &Size, &Mime) )
+         !MdoAttachmentHexId(Context->Params[2], Id) )
         return MdoApiReplyError(Context, 404u, "attachment_not_found",
             "The image does not exist in this session", NULL);
-    Ok = MdoApiReplyImage(Context, Data, Size, Mime);
-    xrtFree(Data);
-    return Ok;
+    return MdoApiImageDownloadStart(Context, Project, Session, Id);
 }

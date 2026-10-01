@@ -470,3 +470,8 @@ Linux 为 `5bc37b6bc5762d58f6be4202f39d90ebbb7cb007bc9bc91c05ccd6bc7917873b`。
 日志 `.build/qa-relations-{verified,linux-verified}.log`。
 没有真实恢复、压力或高负载测试。额外普通图片读回超时已登记为独立待修项，
 这些通过结果不能证明全部附件传输和页面操作已恢复。
+
+上述普通 PNG 读回超时已在后续图片发送阶段修复；图片与备份共用有界传输
+函数，采用独立额度和生命周期。HTTP/TLS 及打包 VFS 的 GET/HEAD、备份带图
+与移动 exe 重启读回已增加覆盖。这不替代离线备份中的实际图片解码、完整
+恢复与页面验收；详见 `frontend-migration.md` 的普通图片附件发送记录。

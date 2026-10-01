@@ -27,7 +27,7 @@ typedef struct MdoDownloadState {
 
 static MdoDownloadState g_MdoDownloads;
 
-static bool MdoDownloadLive(const MdoApiContext* Context)
+bool MdoApiDownloadLive(const MdoApiContext* Context)
 {
     if ( Context == NULL || Context->Request == NULL ||
          xrtCancelRequested(Context->SendCancel) ||
@@ -61,7 +61,7 @@ bool MdoApiDownloadSend(MdoApiContext* Context, const void* Data, size_t Bytes)
     while ( Offset < Bytes ) {
         size_t Chunk = Bytes - Offset;
         XS_HttpReq* Request = Context->Request;
-        if ( !MdoDownloadLive(Context) ) return false;
+        if ( !MdoApiDownloadLive(Context) ) return false;
         if ( Chunk > MDO_DOWNLOAD_CHUNK ) Chunk = MDO_DOWNLOAD_CHUNK;
         if ( Request->tls != NULL ) {
             if ( !MdoDownloadFuture(xrtTlsStreamSendAsync(Request->tls,
@@ -132,7 +132,7 @@ static xtaskoutcome MdoDownloadRun(xcancel* Cancel, ptr Value, xtaskvalue* Resul
     static const char Hex[] = "0123456789abcdef";
     (void)Result;
     Job->Context.SendCancel = Cancel;
-    if ( !MdoDownloadLive(&Job->Context) ) return XTASK_CANCELLED;
+    if ( !MdoApiDownloadLive(&Job->Context) ) return XTASK_CANCELLED;
     memset(&Info, 0, sizeof(Info)); Info.Size = sizeof(Info);
     if ( !MdoSessionGetInfo(Job->Session, &Info) ) {
         Job->Sent = MdoApiReplyError(&Job->Context, 503u, "session_backup_unavailable",
@@ -149,10 +149,10 @@ static xtaskoutcome MdoDownloadRun(xcancel* Cancel, ptr Value, xtaskvalue* Resul
     Backup = MdoSessionBackupCapture(Job->Session, &Limits, &Error);
     MdoApiSessionCaptureRelease(&Guard);
     MdoSessionRelease(Job->Session); Job->Session = NULL;
-    if ( Backup != NULL && MdoDownloadLive(&Job->Context) )
+    if ( Backup != NULL && MdoApiDownloadLive(&Job->Context) )
         Document = MdoSessionBackupEncode(Backup, &Limits, &Bytes, &Error);
     MdoSessionBackupRelease(Backup);
-    if ( !MdoDownloadLive(&Job->Context) ) { xrtFree(Document); return XTASK_CANCELLED; }
+    if ( !MdoApiDownloadLive(&Job->Context) ) { xrtFree(Document); return XTASK_CANCELLED; }
     if ( Document == NULL ) {
         Job->Sent = MdoDownloadFailure(&Job->Context, &Error);
         return XTASK_FAILED;
