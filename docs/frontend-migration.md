@@ -4,6 +4,61 @@
 
 完成判据及尚缺的打包页证据见 [前端操作体验完成审计](frontend-completion-audit.md)。本文件继续记录每次实现和验证的细节。
 
+## 2026-10-01：图片预览关闭与重绘保持状态
+
+真实 DOM 夹具稳定复现旧实现的三项缺陷：名称请求完成前原缩略图被重绘，
+已打开预览无法补上名称；同一事件任务中关闭第一张再打开第二张，迟到的
+原生 close 事件清空新预览；导航关闭预览后，旧 close 回调抢走新输入焦点。
+旧夹具的 nameAfterRerender、reopened、navigationFocus 均为 false。
+
+现在预览捕获缩略图已绑定的会话范围名称 Promise，独立等待名称，只有
+仍属同一次打开才更新。WeakMap 不延长缩略图生命周期，没有额外元数据
+请求，也不再使用 MutationObserver。关闭同步清理当前预览，迟到 close
+事件不清理已重开的对话框；普通关闭和 Esc 恢复原图或其重绘替代按钮的
+焦点，导航关闭不再异步抢焦点。外部直接调用原生 dialog.close 仍可清理。
+
+验证：
+
+- 两项新增 Node 用例覆盖原图脱离后的名称完成，以及重用节点时新旧预览
+  各自持有名称读取。既有七项名称用例继续通过。
+- 新 `image-preview-lifecycle-browser.html` 直接使用正式模块，桌面与
+  320×350 验证重绘后名称、替代缩略图焦点、快速重开、导航焦点、外部
+  关闭、旧名称隔离、当前名称完成，全部通过，无溢出或夹具脚本错误。
+  QA 代理另提供同一夹具从最终包读取模块的路由，两种视口同样通过。
+- 既有 `image-names-browser.html` 桌面与短屏继续通过迟到名称、单次共享
+  读取、队列选择和卡片保持、三语焦点；短屏移除按钮宽 40px。既有软件
+  键盘预览夹具验证三种可视视口位置、恢复和关闭焦点，全部通过。
+- 最终包隔离 Home `.build/mdo-packed-docks-lcfrhe3l`，会话
+  `V-ORjoxf_TlYO_iaV_Isfmh3MM8MIvQW`。合成粘贴通过正式上传与草稿保存
+  两张 PNG；QA 控制在同一任务内关闭/重开，桌面和 320×350 均保留第二张
+  名称及关闭按钮焦点。控制首次失败是点击了重绘后脱离的第二个节点；
+  诊断证实打开预览时两旧节点已脱离，改为定位当前同 ID 卡片后通过。
+  正式输入区、上传和预览模块未为控制替换实现。
+- 普通打包页面恢复两图和未发送文字；Esc 清空预览资源、回到正确缩略图，
+  草稿保持。一次实际图文运行完成后刷新恢复两图和名称；历史预览关闭后
+  可继续编辑，320×350 无溢出。截图
+  `.build/qa-image-preview-lifecycle-packed.png` 和
+  `.build/qa-image-preview-lifecycle-workbench.png`。
+- 复用标签累计两次 MutationObserver 非 Node 参数错误；其来源仍未确认，
+  本轮没有复现原报告的精确堆栈，不能将三项稳定缺陷视作该错误的根因。
+  当前正式前端已无 MutationObserver 调用；新标签桌面和短屏实际历史
+  预览/Esc/草稿验证的错误日志为空。保留这项未确认现象，不宣称所有
+  原生窗口已验收。
+- Windows 与新的 Linux 原生文件系统快照完整门禁均通过 114 项 Python、
+  195 项 Node、88 个前端模块、严格 C11、32 个运行探针及确定性 A/B 打包；
+  Windows 另通过便携 WebView2/20 秒启动。日志为
+  `.build/qa-image-preview-lifecycle-release.log` 和
+  `.build/qa-image-preview-lifecycle-linux-release.log`；Linux 快照为
+  `/home/ubuntu/.cache/mdo-linux-qa-image-preview-lifecycle`。
+- Windows A/B 及根目录 SHA-256：
+  `67b51533081d4977bf20fd6b108ba6fd28c809b97667be8ff7939f353418258b`；
+  Linux A/B SHA-256：
+  `e01c2e576b3337bdb6d3908c56c24e24ffe167b33d00a1e56f5e4985a0d1d5a1`。
+
+内置 Ling 生产配置未改，图片能力只在隔离 QA 开启。未做压力/高负载测试；
+合成粘贴、浏览器 Esc 与视口夹具不代表系统原生拖放、输入法或实体设备
+通过。原生 GUI/其他系统等缺口保留，长期目标继续。
+
 ## 2026-10-01：附件原始文件名贯穿草稿、队列、历史与分叉
 
 对照旧版 `attach-name`，新版附件只有图片序号，上传元数据没有保存名称。

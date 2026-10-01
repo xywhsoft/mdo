@@ -4,14 +4,15 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>mdo packed image-transfer probe</title>
 <style>
-body { margin:0; display:grid; grid-template-rows:auto 1fr; height:100dvh; font:14px sans-serif; }
-header { padding:6px; display:flex; gap:8px; align-items:center; }
+body { margin:0; display:grid; grid-template-columns:minmax(0,1fr); grid-template-rows:auto 1fr; height:100dvh; font:14px sans-serif; }
+header { padding:6px; display:flex; flex-wrap:wrap; gap:8px; align-items:center; }
 button { min-height:40px; }
 #result { overflow-wrap:anywhere; }
-iframe { width:100%; height:100%; min-height:0; border:0; }
+iframe { width:100%; height:100%; min-width:0; min-height:0; border:0; }
 </style>
 <header><button id="paste" type="button">粘贴两张图片</button>
-<button id="queue" type="button">发送并排队图片任务</button><output id="result">等待工作台</output></header>
+<button id="queue" type="button">发送并排队图片任务</button>
+<button id="preview" type="button">验证快速预览切换</button><output id="result">等待工作台</output></header>
 <iframe id="mdo" title="打包版工作台"></iframe>
 <script type="module">
 const frame = document.querySelector("#mdo");
@@ -73,6 +74,31 @@ document.querySelector("#queue").addEventListener("click", async (event) => {
     });
     result.textContent = "正式待发队列已保存两个完整文件名（15 / 204 字符）";
   } catch (error) { result.textContent = error.message; }
+});
+document.querySelector("#preview").addEventListener("click", async () => {
+  const doc = frame.contentDocument;
+  const images = [...doc.querySelectorAll(".composer-image-preview")];
+  if (images.length !== 2) { result.textContent = "请先添加两张图片"; return; }
+  const secondId = images[1].dataset.imageId;
+  images[0].click();
+  const afterOpen = { open: doc.querySelector("#image-preview").open,
+    firstConnected: images[0].isConnected, secondConnected: images[1].isConnected };
+  doc.querySelector("#close-image-preview").click();
+  // Opening the dialog blurs the editor and synchronously redraws draft cards.
+  // Like the next real click, target the current card instead of a detached node.
+  const second = [...doc.querySelectorAll(".composer-image-preview")]
+    .find((button) => button.dataset.imageId === secondId);
+  second?.click();
+  await new Promise((done) => frame.contentWindow.requestAnimationFrame(() =>
+    frame.contentWindow.requestAnimationFrame(done)));
+  const dialog = doc.querySelector("#image-preview");
+  const image = doc.querySelector("#image-preview-content");
+  const passed = dialog.open && image.getAttribute("src") &&
+    image.alt === "跨平台附件".repeat(40) + ".png" &&
+    doc.activeElement === doc.querySelector("#close-image-preview");
+  result.textContent = passed ? "正式预览快速切换成功，名称和关闭按钮焦点保持" :
+    JSON.stringify({ passed, afterOpen, secondConnected: second?.isConnected, open: dialog.open,
+      name: image.alt, focus: doc.activeElement.id });
 });
 </script>
 </html>

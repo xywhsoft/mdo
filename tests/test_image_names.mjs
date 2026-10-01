@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { api, attachmentFileName } from "../app/web/js/api/client.js";
-import { createImageNameCache, labelImageName } from
+import { createImageNameCache, labelImageName, previewImageName } from
   "../app/web/js/features/chat/image-names.js";
 
 const id = "a".repeat(32);
@@ -135,4 +135,37 @@ test("late reads update only the still connected thumbnail with its original ref
     await done;
     assert.equal(nodes.caption.textContent, change === "connected" ? "capture.png" : "generic");
   }
+});
+
+test("an open preview retains its name read after the original thumbnail is detached", async () => {
+  const pending = deferred();
+  const cache = createImageNameCache({ read: () => pending.promise });
+  const nodes = thumbnail();
+  const labels = label(nodes, cache);
+  const previewName = previewImageName(nodes.preview);
+  nodes.preview.isConnected = false;
+  pending.resolve(envelope("original.png"));
+  assert.equal(await previewName, "original.png");
+  await labels;
+  assert.equal(nodes.image.alt, "generic"); // the detached DOM still stays untouched
+});
+
+test("reusing a thumbnail binds a new name read without changing a captured preview", async () => {
+  const nodes = thumbnail();
+  const first = deferred();
+  const second = deferred();
+  const firstCache = createImageNameCache({ read: () => first.promise });
+  const secondCache = createImageNameCache({ read: () => second.promise });
+  const oldLabels = label(nodes, firstCache);
+  const originalPreview = previewImageName(nodes.preview);
+  nodes.preview.dataset.imageRef = "replacement";
+  const newLabels = label(nodes, secondCache);
+  const replacementPreview = previewImageName(nodes.preview);
+  first.resolve(envelope("original.png"));
+  second.resolve(envelope("replacement.png"));
+  assert.equal(await originalPreview, "original.png");
+  assert.equal(await replacementPreview, "replacement.png");
+  await Promise.all([oldLabels, newLabels]);
+  assert.equal(nodes.image.alt, "replacement.png");
+  assert.equal(await previewImageName({}), "");
 });

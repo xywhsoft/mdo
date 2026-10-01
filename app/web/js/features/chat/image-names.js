@@ -52,6 +52,15 @@ export function createImageNameCache({ limit = 128, retryMs = 5000,
 }
 
 export const imageNames = createImageNameCache();
+const previewNames = new WeakMap();
+const unnamedPreview = Promise.resolve("");
+
+// A preview owns the metadata promise captured when its source thumbnail was
+// rendered. It can finish after that thumbnail is replaced; the dialog does
+// not need to observe mutable DOM nodes or parse an attachment URL/reference.
+export function previewImageName(preview) {
+  return previewNames.get(preview) ?? unnamedPreview;
+}
 
 export function labelImageName({ preview, caption, remove, owner, id,
   viewLabel, removeLabel, cache = imageNames }) {
@@ -71,7 +80,9 @@ export function labelImageName({ preview, caption, remove, owner, id,
   // Cached names are applied before reconciliation compares new and existing
   // cards. Otherwise each queue poll would replace a previously named card.
   apply(cache.peek(owner, id));
-  return cache.get(owner, id).then((name) => {
+  const pendingName = cache.get(owner, id);
+  previewNames.set(preview, pendingName);
+  return pendingName.then((name) => {
     // Async reads must never label a detached/reused thumbnail after navigation
     // or a locale rerender. Updating text in place also preserves focus.
     if (!name || !preview.isConnected || preview.dataset.imageRef !== reference) return;

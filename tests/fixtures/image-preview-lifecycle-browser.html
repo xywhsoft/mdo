@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="zh-CN">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>mdo image preview lifecycle probe</title>
+<link rel="stylesheet" href="/app/web/css/app.css">
+<style>body{padding:12px}#thumbnails{display:flex;flex-wrap:wrap;gap:12px}.thumb{width:90px}.thumb img{display:block;width:80px;height:60px}pre{white-space:pre-wrap;overflow-wrap:anywhere}</style>
+<textarea id="prompt">保留输入</textarea><div id="thumbnails"></div>
+<dialog class="image-preview-dialog" id="preview"><button id="close" class="image-preview-close" type="button">×</button>
+<img id="image" alt=""><bdi class="image-file-name image-preview-name" id="name"></bdi></dialog>
+<pre id="result"></pre>
+<script type="module">
+import { createImagePreview } from "/app/web/js/features/chat/image-preview.js";
+import { createImageNameCache, labelImageName } from "/app/web/js/features/chat/image-names.js";
+const dialog = document.querySelector("#preview");
+const image = document.querySelector("#image");
+const caption = document.querySelector("#name");
+const closeButton = document.querySelector("#close");
+const prompt = document.querySelector("#prompt");
+const output = document.querySelector("#result");
+const errors = [];
+window.addEventListener("error", (event) => errors.push({ message: event.message, stack: event.error?.stack }));
+const listeners = [];
+const frames = () => new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done)));
+const pixel = "data:image/svg+xml," + encodeURIComponent("<svg xmlns='http://www.w3.org/2000/svg' width='80' height='60'><rect width='80' height='60' fill='#557ab4'/></svg>");
+const owner = { projectId: "qa", sessionId: "preview" };
+const id = "a".repeat(32);
+let resolveName;
+const pending = new Promise((done) => { resolveName = done; });
+const cache = createImageNameCache({ read: () => pending });
+function thumbnail(reference, alt = "图片 1") {
+  const button = document.createElement("button");
+  button.type = "button"; button.className = "thumb";
+  button.dataset.imagePreview = ""; button.dataset.imageRef = reference;
+  const image = document.createElement("img"); image.src = pixel; image.alt = alt;
+  const name = document.createElement("bdi"); name.className = "image-file-name"; name.textContent = alt;
+  button.append(image, name);
+  document.querySelector("#thumbnails").append(button);
+  return button;
+}
+function label(button, names = cache) {
+  return labelImageName({ preview: button, caption: button.querySelector("bdi"), owner, id, cache: names,
+    viewLabel: (name) => `查看 ${name}` });
+}
+try {
+  createImagePreview({ dialog, image, caption, closeButton,
+    navigation: { subscribe: (callback) => listeners.push(callback) } });
+  let first = thumbnail("first"); label(first);
+  first.focus(); first.click();
+  first.remove(); first = thumbnail("first"); label(first);
+  resolveName({ data: { id, schema_version: 2, file_name: "迟到但属于原图片.png" } });
+  await frames();
+  const nameAfterRerender = caption.textContent === "迟到但属于原图片.png" && dialog.open;
+  closeButton.click(); await frames();
+  const rerenderFocus = document.activeElement === first;
+
+  const second = thumbnail("second", "第二张.png");
+  first.click(); closeButton.click(); second.click();
+  await frames();
+  const reopened = dialog.open && image.getAttribute("src") === pixel &&
+    caption.textContent === "第二张.png" && document.activeElement === closeButton;
+  closeButton.click(); await frames();
+
+  first.click();
+  for (const listener of listeners) listener();
+  prompt.focus();
+  await frames();
+  const navigationFocus = !dialog.open && document.activeElement === prompt &&
+    prompt.value === "保留输入" && !image.hasAttribute("src");
+
+  second.click(); dialog.close(); await frames();
+  const externalClose = !dialog.open && document.activeElement === second &&
+    !image.hasAttribute("src") && caption.textContent === "";
+
+  let resolveThird, resolveFourth;
+  const thirdName = new Promise((done) => { resolveThird = done; });
+  const fourthName = new Promise((done) => { resolveFourth = done; });
+  const third = thumbnail("third", "第三张.png");
+  const fourth = thumbnail("fourth", "第四张.png");
+  label(third, createImageNameCache({ read: () => thirdName }));
+  label(fourth, createImageNameCache({ read: () => fourthName }));
+  third.click(); closeButton.click(); fourth.click();
+  resolveThird({ data: { id, schema_version: 2, file_name: "第三张迟到名称.png" } });
+  await frames();
+  const staleNameIgnored = dialog.open && caption.textContent === "第四张.png";
+  resolveFourth({ data: { id, schema_version: 2, file_name: "第四张正确名称.png" } });
+  await frames();
+  const currentNameArrived = caption.textContent === "第四张正确名称.png";
+  closeButton.click(); await frames();
+  const noOverflow = document.documentElement.scrollWidth <= innerWidth;
+  const passed = nameAfterRerender && rerenderFocus && reopened && navigationFocus &&
+    externalClose && staleNameIgnored && currentNameArrived && noOverflow && errors.length === 0;
+  output.dataset.passed = String(passed);
+  output.textContent = JSON.stringify({ passed, nameAfterRerender, rerenderFocus, reopened,
+    navigationFocus, externalClose, staleNameIgnored, currentNameArrived, noOverflow, errors }, null, 2);
+} catch (error) { output.dataset.passed = "false"; output.textContent = error.stack; }
+</script>
+</html>

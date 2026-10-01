@@ -13,6 +13,8 @@ text file so the normal tool-output artifact path is used. The optional chat
 stream emits two bounded chunks with interleaved text and reasoning fields.
 With --image-capable --image-transfer-fixture, /__qa/image-transfer serves a
 synthetic clipboard control for the actual packed editor and attachment API.
+It also exercises rapid close/reopen in the real workbench; the component route
+/__qa/image-preview-lifecycle imports the exact packed preview/name modules.
 """
 
 import argparse
@@ -263,6 +265,20 @@ Object.defineProperty(navigator, 'clipboard', {
         pass
 
     def do_GET(self):
+        if (self.path == "/__qa/image-preview-lifecycle" and
+                self.server.image_transfer_fixture):
+            # Exercise the exact packed modules in an owned component page;
+            # only the asset base changes from the repository fixture URL.
+            fixture = (ROOT / "tests/fixtures/image-preview-lifecycle-browser.html").read_text(
+                encoding="utf-8").replace("/app/web/", "/")
+            body = fixture.encode("utf-8")
+            self.send_response(200)
+            self.send_header("Content-Type", "text/html; charset=utf-8")
+            self.send_header("Content-Length", str(len(body)))
+            self.send_header("Cache-Control", "no-store")
+            self.end_headers()
+            self.wfile.write(body)
+            return
         if (self.path == "/__qa/image-transfer" and
                 self.server.image_transfer_fixture):
             payload = (ROOT / "tests/fixtures/packed-image-transfer-browser.html").read_bytes()
