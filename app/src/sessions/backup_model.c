@@ -180,11 +180,46 @@ invalid:
 
 #undef MDO_SNAPSHOT_FIELD
 
-static bool MdoBackupModelEntry(const xvalue* Entry, uint64 CurrentTurn, uint64 Next, uint64* Sequence,
+static bool MdoBackupModelParts(const xvalue* Entry, uint64 Version,
+    const MdoSessionBackupLimits* Limits, const xcancel* Cancel, xwork_error* Error, const char* Path)
+{
+    static const char* const Keys[] = {"kind", "text", "native_type", "media_type",
+        "source_url", "detail", "data_bytes", "data"};
+    static const char* const Strings[] = {"text", "native_type", "media_type", "source_url", "detail"};
+    const xvalue* Parts = MdoBackupModelGet(Entry, "parts");
+    size_t i, j;
+    if ( Version < 4u ) return (Parts == NULL && MdoBackupModelGet(Entry, "native") == NULL) ||
+        MdoBackupModelInvalid(Error, Path);
+    if ( xrtValueType(Parts) != XVALUE_ARRAY ||
+         !MdoBackupModelText(Entry, "native", false, true) ||
+         (xrtValueCount(Parts) != 0u && xrtValueType(MdoBackupModelGet(Entry, "content")) != XVALUE_NULL) )
+        return MdoBackupModelInvalid(Error, Path);
+    for ( i = 0u; i < xrtValueCount(Parts); ++i ) {
+        const xvalue* Part = xrtValueArrayGet(Parts, i);
+        const xvalue* Data = MdoBackupModelGet(Part, "data");
+        uint64 Kind, Bytes;
+        xstrview Encoded;
+        size_t Decoded = 0u;
+        if ( !MdoBackupCheck(Limits, Cancel, Error) ) return false;
+        if ( !MdoBackupModelKeys(Part, Keys, sizeof(Keys) / sizeof(Keys[0])) ||
+             !MdoBackupUInt(Part, "kind", &Kind) || Kind > XLLM_PART_NATIVE ||
+             !MdoBackupUInt(Part, "data_bytes", &Bytes) || Bytes > SIZE_MAX )
+            return MdoBackupModelInvalid(Error, Path);
+        for ( j = 0u; j < sizeof(Strings) / sizeof(Strings[0]); ++j )
+            if ( !MdoBackupModelText(Part, Strings[j], false, true) ) return MdoBackupModelInvalid(Error, Path);
+        if ( Data == NULL || (xrtValueType(Data) == XVALUE_NULL ? Bytes != 0u :
+             (!xrtValueGetString(Data, &Encoded) || Bytes == 0u ||
+              !xrtBase64Decode(Encoded.Data, Encoded.Size, NULL, 0u, &Decoded, NULL) || Decoded != (size_t)Bytes)) )
+            return MdoBackupModelInvalid(Error, Path);
+    }
+    return true;
+}
+
+static bool MdoBackupModelEntry(const xvalue* Entry, uint64 Version, uint64 CurrentTurn, uint64 Next, uint64* Sequence,
     const MdoSessionBackupLimits* Limits, const xcancel* Cancel, xwork_error* Error, const char* Path)
 {
     static const char* const Keys[] = {"sequence", "turn", "flags", "role", "content",
-        "reasoning", "tool_call_id", "tool_calls"};
+        "reasoning", "tool_call_id", "tool_calls", "native", "parts"};
     static const char* const CallKeys[] = {"id", "name", "arguments"};
     const xvalue* Calls;
     uint64 Turn, Flags = 0u, Role;
@@ -198,6 +233,7 @@ static bool MdoBackupModelEntry(const xvalue* Entry, uint64 CurrentTurn, uint64 
          !MdoBackupModelText(Entry, "content", true, true) ||
          !MdoBackupModelText(Entry, "reasoning", true, true) ||
          !MdoBackupModelText(Entry, "tool_call_id", true, true) ) return MdoBackupModelInvalid(Error, Path);
+    if ( !MdoBackupModelParts(Entry, Version, Limits, Cancel, Error, Path) ) return false;
     Calls = MdoBackupModelGet(Entry, "tool_calls");
     if ( Calls == NULL ) return true;
     if ( xrtValueType(Calls) != XVALUE_ARRAY ) return MdoBackupModelInvalid(Error, Path);
@@ -262,16 +298,16 @@ static bool MdoBackupModelSnapshotValidate(const MdoBackupOwnedFile* File, const
     size_t i;
     if ( !MdoBackupModelKeys(Root, Keys, sizeof(Keys) / sizeof(Keys[0])) ||
          !MdoBackupView(Root, "format", &Format) || !MdoBackupModelEqual(Format, "xllm-session") ||
-         !MdoBackupUInt(Root, "version", &Version) || Version < 1u || Version > 3u ||
+         !MdoBackupUInt(Root, "version", &Version) || Version < 1u || Version > 4u ||
          !MdoBackupUInt(Root, "next_sequence", &Next) || Next == 0u ||
          !MdoBackupUInt(Root, "current_turn", &CurrentTurn) ||
          !MdoBackupModelText(Root, "summary", true, true) ) goto invalid;
-    if ( Version == 3u || MdoBackupModelGet(Root, "checksum") != NULL ) {
+    if ( Version >= 3u || MdoBackupModelGet(Root, "checksum") != NULL ) {
         if ( !MdoBackupModelChecksum(File, Limits, Cancel, Error) ) return false;
     }
-    if ( (Version == 3u && MdoBackupModelGet(Root, "journal_sequence") != NULL) ||
-         (Version != 3u && MdoBackupModelGet(Root, "checkpoint_sequence") != NULL) ||
-         (Version == 3u && MdoBackupModelGet(Root, "config") == NULL) ) goto invalid;
+    if ( (Version >= 3u && MdoBackupModelGet(Root, "journal_sequence") != NULL) ||
+         (Version < 3u && MdoBackupModelGet(Root, "checkpoint_sequence") != NULL) ||
+         (Version >= 3u && MdoBackupModelGet(Root, "config") == NULL) ) goto invalid;
     for ( i = 0u; i < sizeof(Counters) / sizeof(Counters[0]); ++i )
         if ( !MdoBackupModelUInt(Root, Counters[i], &Number, true) ) goto invalid;
     Number = 0u;
@@ -288,7 +324,7 @@ static bool MdoBackupModelSnapshotValidate(const MdoBackupOwnedFile* File, const
     for ( i = 0u; i < xrtValueCount(Entries); ++i ) {
         uint64 Sequence;
         if ( !MdoBackupCheck(Limits, Cancel, Error) ) return false;
-        if ( !MdoBackupModelEntry(xrtValueArrayGet(Entries, i), CurrentTurn, Next, &Sequence,
+        if ( !MdoBackupModelEntry(xrtValueArrayGet(Entries, i), Version, CurrentTurn, Next, &Sequence,
                 Limits, Cancel, Error, File->Path) ) return false;
         if ( Sequence <= Last ) goto invalid;
         Last = Sequence;
@@ -317,14 +353,14 @@ static bool MdoBackupModelJournalRecord(const MdoBackupOwnedFile* File, const xv
     xstrview Format, Operation, Text;
     const xvalue* Usage;
     if ( !MdoBackupView(Root, "format", &Format) || !MdoBackupModelEqual(Format, "xllm-session-journal") ||
-         !MdoBackupUInt(Root, "version", &Version) || Version < 1u || Version > 3u ) goto invalid;
-    Keys[2] = Version == 3u ? "sequence" : "journal_sequence";
-    Keys[3] = Version == 3u ? "type" : "operation";
+         !MdoBackupUInt(Root, "version", &Version) || Version < 1u || Version > 4u ) goto invalid;
+    Keys[2] = Version >= 3u ? "sequence" : "journal_sequence";
+    Keys[3] = Version >= 3u ? "type" : "operation";
     if ( !MdoBackupUInt(Root, Keys[2], &Sequence) || Sequence == 0u ||
          !MdoBackupView(Root, Keys[3], &Operation) ) goto invalid;
     /* Covered records still need a sound schema and CRC. Only their replay is
      * deduplicated; corrupt bytes are not made harmless by an old sequence. */
-    if ( Version == 3u || MdoBackupModelGet(Root, "checksum") != NULL )
+    if ( Version >= 3u || MdoBackupModelGet(Root, "checksum") != NULL )
         if ( !MdoBackupModelChecksum(File, Limits, Cancel, Error) ) return false;
     if ( MdoBackupModelEqual(Operation, "begin_turn") ) { Payload = Begin; Count = 1u; }
     else if ( MdoBackupModelEqual(Operation, "add_message") ) { Payload = Message; Count = 1u; }
@@ -340,7 +376,7 @@ static bool MdoBackupModelJournalRecord(const MdoBackupOwnedFile* File, const xv
     } else if ( Payload == Message ) {
         /* Context relationships (turn advancement, tool pairs, truncation and
          * summary quality) belong to actual library replay, not this reader. */
-        if ( !MdoBackupModelEntry(MdoBackupModelGet(Root, "entry"), UINT64_MAX, UINT64_MAX, &A,
+        if ( !MdoBackupModelEntry(MdoBackupModelGet(Root, "entry"), Version, UINT64_MAX, UINT64_MAX, &A,
                 Limits, Cancel, Error, File->Path) ) return false;
     } else if ( Payload == Compact ) {
         if ( !MdoBackupUInt(Root, "through_sequence", &A) || A == 0u || A == UINT64_MAX ||
@@ -397,7 +433,7 @@ bool MdoBackupModelValidate(const MdoSessionBackup* Backup,
     Ok = MdoBackupModelSnapshotValidate(Snapshot, Root, Limits, Cancel, Error);
     if ( Ok ) {
         (void)MdoBackupUInt(Root, "version", &Version);
-        (void)MdoBackupModelUInt(Root, Version == 3u ? "checkpoint_sequence" : "journal_sequence", &Checkpoint, true);
+        (void)MdoBackupModelUInt(Root, Version >= 3u ? "checkpoint_sequence" : "journal_sequence", &Checkpoint, true);
     }
     xrtValueRelease(Root);
     if ( !Ok ) return false;

@@ -4,6 +4,51 @@
 
 完成判据及尚缺的打包页证据见 [前端操作体验完成审计](frontend-completion-audit.md)。本文件继续记录每次实现和验证的细节。
 
+## 2026-10-02：完整消息的多模态持久化
+
+xllm-session 的新 snapshot/journal 使用 v4，保存所有有序 parts 的类型、
+文字、来源 URL、媒体类型、detail、native 类型及原始二进制字节，也保存
+message native。普通文字仍使用原有 content；含 parts 的消息以 parts 为准，
+拒绝同时出现竞争 content。二进制使用规范化的带 padding base64，恢复前
+核对声明大小；深复制后不再依赖 JSON 或上传对象，不获取 URL 或外部文件。
+读取继续兼容 v1–3；这些旧文件已经丢失的内容不能自动补回。旧程序无法
+读取 v4，回退库版本前须保留原始文件。
+
+源库提交 `799124f9`，xs 提交 `455b70f`。16 个生产文件逐字节同步，94 个
+公开 TCC 入口保持；deps.lock 锁定源 revision、tree hash 和 schema 4，构建
+时额外核对公开 schema 宏。Windows/Linux 的有界库回归覆盖六类 parts、
+含 NUL/高位字节、URL、native、实际 file load/recover、snapshot+tail、
+journal-only、有效 CRC 下的非法字段/版本/编码、取消、分配失败和源释放。
+
+mdo 离线备份检查接入 v4。模型/UI 核对按有序 TEXT parts 拼接，排除推理
+与 native；分段 Unicode、空段、跨段截断及明确冲突均有用例。HTTP/TLS
+探针从正常产品入口运行三轮，首轮含中文与真实 1×1 PNG，在第三轮前释放
+并重新打开会话，三次实际模型请求都保留原图与原文。正常捕获→独立重放
+再核对完整图片 SHA-256，关系检查得到六项匹配且无缺口；缩短 UI 前缀后
+明确报告两条缺口。原 Ling 配置未改，测试模型仅在隔离副本声明图片能力，
+使用进程内固定响应。首次探针因图片能力前置条件失败，已修正测试模型和
+能力名称，没有放宽正式模型检查。257 个格式错误输入及 Home 零写入合同
+继续通过。
+
+本阶段解决已有消息的 parts/native 存储。另发现助手响应到消息的转换
+尚未完整传递 provider 推理签名；现有 xllmMessageFromResponse 添加 native
+part 时可能丢失 content，不能直接替换 session 的转换调用。后续须在
+xllm 源头修复并验证助手文字与签名共存。图片实际解码、生产预览 worker、
+staging 原子非覆盖发布、正式完整备份菜单及原生/实体设备仍待完成，
+manifest 保持 `restore_ready:false`。详见
+[多模态持久化记录](session-backup-plan.md#完整消息的多模态持久化)。
+
+最终 Windows/Linux 有界发布门禁均通过 114 Python、252 Node、90 模块、
+严格 C11、36 运行探针、三项 packed 与独立 A/B；Windows 另通过便携
+WebView2 Home 覆盖/搬移/重启和 20 秒启动。Windows 复用本轮从 SDK
+`455b70f` 重建的 xs/xsw；Linux 在新 ext4 副本
+`/home/ubuntu/.cache/mdo-linux-parts-opnuds93` 重建原生宿主并跳过 GUI。
+根目录程序已更新为 Windows A/B 的同一字节：
+`ea490f94e346925572b8d820d7d13d9fc8fa11868f3aae9c0da9f177fcf33e7c`；
+Linux 为 `ae17c3a32d4f1c41a157bd9380a3e1bef565fd0416194112586d0b2965e3f51f`。
+日志 `.build/qa-parts-{windows,linux}-final.log`。没有压力或高负载测试，
+本阶段不增加原生点击或实体设备交互验收等级。
+
 ## 2026-10-02：会话备份的模型与 UI 关系检查
 
 新增独立的 `MdoSessionBackupCheckModelHistory()`，在拥有离线备份和独立

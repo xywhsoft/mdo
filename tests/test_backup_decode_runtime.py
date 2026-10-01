@@ -61,6 +61,16 @@ def set_ui(document, events):
 class Probe(UploadProbe):
     def __init__(self, host, base, secure):
         super().__init__(host, base, secure)
+        # Keep Ling unchanged. The test-owned model advertises image input for
+        # a deterministic callback; no endpoint is invoked by the source run.
+        defaults_path = self.site / "default-home/config/defaults.json"
+        defaults = json.loads(defaults_path.read_text(encoding="utf-8"))
+        vision = copy.deepcopy(defaults["models"]["items"][0])
+        vision.update(id="backup-vision-fixture", name="Backup vision fixture", builtin=False,
+                      free=False, editable=True, removable=True)
+        vision["capabilities"].append("media-input"); vision["attachments"] = ["image"]
+        defaults["models"]["items"].append(vision)
+        defaults_path.write_text(json.dumps(defaults), encoding="utf-8")
         shutil.copy2(ROOT / "tests/fixtures/backup-decode.c", self.site / "src/bootstrap/backup-decode.c")
         relations = self.site / "src/sessions/backup_relations.c"
         source = relations.read_text(encoding="utf-8")
@@ -156,12 +166,13 @@ class Probe(UploadProbe):
         assert [r["sequence"] for r in library_records] == list(range(1, len(library_records) + 1))
         status, body = self.api("POST", "/api/v1/sessions", {
             "project_id": "default", "title": "Actual writer compatibility", "agent_id": "mdo.default",
-            "model_id": "ling-3.0-tiny", "protocol": "openai-responses", "reasoning_effort": "medium",
+            "model_id": "backup-vision-fixture", "protocol": "openai-responses", "reasoning_effort": "medium",
             "max_output_tokens": 1024,
         })
         assert status == 201, body
         writer_id = body["data"]["id"]
-        assert self.api("GET", DECODE + "seed-runtime/" + writer_id)[1]["data"] is True
+        seeded = self.api("GET", DECODE + "seed-runtime/" + writer_id)[1]["data"]
+        assert seeded["ok"] and seeded["calls"] == 3, seeded
         status, _, writer_raw = self.call("GET", f"/api/v1/projects/default/sessions/{writer_id}/backup")
         assert status == 200
         writer_source = json.loads(writer_raw)
@@ -169,8 +180,15 @@ class Probe(UploadProbe):
             return {str(p.relative_to(self.home)): p.read_bytes() for p in self.home.rglob("*")
                     if p.is_file() and p != self.home / ".mdo.lock"}
         before = inventory()
+        expected_pixel = base64.b64decode("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+a8Z8AAAAASUVORK5CYII=")
+        writer_model = self.replay(writer_raw, "replay-release")
+        assert writer_model["ok"] and writer_model["released"] and writer_model["unbound"], writer_model
+        part_message = next(m for m in writer_model["messages"] if m["part_count"] == 2)
+        assert part_message["parts"][0]["text"] == "Writer question 中文", part_message
+        assert part_message["parts"][1]["bytes"] == len(expected_pixel), part_message
+        assert part_message["parts"][1]["sha256"] == hashlib.sha256(expected_pixel).hexdigest(), part_message
         writer_history = self.model_history(writer_source)
-        assert writer_history["ok"] and writer_history["matched"] == 4, writer_history
+        assert writer_history["ok"] and writer_history["matched"] == 6, writer_history
         assert writer_history["unverified"] == writer_history["unprojected"] == 0, writer_history
         writer_events = [json.loads(line) for line in base64.b64decode(next(
             f for f in writer_source["files"] if f["path"] == "ui-events.jsonl")["data"]).splitlines()]
@@ -180,7 +198,7 @@ class Probe(UploadProbe):
         first_writer_turn = min(e["agent_turn"] for e in writer_events if e["agent_turn"] > 0)
         set_ui(retained_writer, [e for e in writer_events if e["agent_turn"] > first_writer_turn])
         gap = self.model_history(retained_writer)
-        assert gap["ok"] and gap["matched"] == 2 and gap["unprojected"] == 2, gap
+        assert gap["ok"] and gap["matched"] == 4 and gap["unprojected"] == 2, gap
         value = self.validate(raw)
         assert value["ok"] and value["schema"] == 2 and value["encodable"] and not value["restore_ready"], value
         assert value["project_id"] == "default" and value["session_id"] == session_id
@@ -201,21 +219,31 @@ class Probe(UploadProbe):
         def snapshot_bytes(root):
             root = dict(root)
             root.pop("checksum", None)
-            if root.get("version") != 3:
+            if root.get("version", 0) < 3:
                 return dump(root)
             prefix = dump(root)[:-1]
             return prefix + b',"checksum":"' + f"{zlib.crc32(prefix):08x}".encode() + b'"}'
         def with_snapshot(root):
             document = copy.deepcopy(small)
+            root = copy.deepcopy(root)
+            if root.get("version", 0) < 4:
+                for entry in root.get("entries", []):
+                    entry.pop("parts", None); entry.pop("native", None)
             replace(document, "snapshot.json", snapshot_bytes(root))
             return document
         populated = copy.deepcopy(snapshot_root)
         populated.update(current_turn=1, next_sequence=3, entries=[
             {"sequence": 1, "turn": 1, "flags": 0, "role": 1, "content": "Question 中文",
-             "reasoning": None, "tool_call_id": None, "tool_calls": []},
+             "reasoning": None, "tool_call_id": None, "tool_calls": [], "parts": [], "native": None},
             {"sequence": 2, "turn": 1, "flags": 0, "role": 2, "content": "Answer",
-             "reasoning": "Retained reasoning", "tool_call_id": None, "tool_calls": []}])
+             "reasoning": "Retained reasoning", "tool_call_id": None, "tool_calls": [], "parts": [], "native": None}])
         assert self.validate(dump(with_snapshot(populated)))["ok"]
+        part = {"kind": 0, "text": "Question 中文", "native_type": None, "media_type": None,
+                "source_url": None, "detail": None, "data_bytes": 0, "data": None}
+        multimodal = copy.deepcopy(populated)
+        multimodal["entries"][0].update(content=None, parts=[part, {**part, "kind": 2, "text": None,
+            "media_type": "image/png", "data_bytes": len(expected_pixel), "data": base64.b64encode(expected_pixel).decode()}])
+        assert self.replay(dump(with_snapshot(multimodal)))["messages"][0]["parts"][1]["sha256"] == hashlib.sha256(expected_pixel).hexdigest()
         value = self.replay(dump(with_snapshot(populated)), "replay-release")
         assert value["ok"] and value["rendered"] and value["unbound"] and value["released"], value
         assert not value["restore_ready"] and value["last_sequence"] == 2 and value["turn"] == 1
@@ -234,12 +262,13 @@ class Probe(UploadProbe):
             assert not value["ok"] and not value["rendered"] and value["code"] == code, (mode, value)
         assert self.replay(dump(with_snapshot(populated)), "replay-null-error")["ok"]
         # Older formats omit the v3 checksum and sequence-array additions.
-        for version in (1, 2):
+        for version in (1, 2, 3):
             older = copy.deepcopy(populated)
             older["version"] = version
-            older["journal_sequence"] = older.pop("checkpoint_sequence")
-            for key in ("read_file_sequences", "modified_file_sequences", "config"):
-                older.pop(key, None)
+            if version < 3:
+                older["journal_sequence"] = older.pop("checkpoint_sequence")
+                for key in ("read_file_sequences", "modified_file_sequences", "config"):
+                    older.pop(key, None)
             assert self.validate(dump(with_snapshot(older)))["ok"], version
             value = self.replay(dump(with_snapshot(older)))
             assert value["ok"] and value["rendered"] and value["last_sequence"] == 2, (version, value)
@@ -266,7 +295,7 @@ class Probe(UploadProbe):
             root = copy.deepcopy(populated)
             change(root)
             cases.append((label, dump(with_snapshot(root))))
-        for key, bad in (("format", "other"), ("version", 4), ("next_sequence", 0),
+        for key, bad in (("format", "other"), ("version", 5), ("next_sequence", 0),
                          ("next_sequence", True), ("current_turn", -1), ("entries", {}),
                          ("summary", 7), ("fill_seen", 2), ("summary_generation", 2**32),
                          ("compacted_through", 3), ("tail_floor", 3), ("checkpoint_sequence", "1")):
@@ -274,6 +303,19 @@ class Probe(UploadProbe):
         bad_snapshot("snapshot unknown field", lambda root: root.update(secret_path="ignored"))
         bad_snapshot("snapshot unknown configuration", lambda root: root["config"].update(client="ignored"))
         bad_snapshot("snapshot invalid config type", lambda root: root.update(config=None))
+        for key in ("parts", "native"):
+            bad_snapshot("v4 missing " + key, lambda root, key=key: root["entries"][0].pop(key))
+        for key, value in (("parts", None), ("native", 3)):
+            bad_snapshot("v4 invalid " + key, lambda root, key=key, value=value: root["entries"][0].update({key: value}))
+        for key, value in (("kind", 6), ("kind", True), ("text", "nul\x00text"), ("data_bytes", 1),
+                           ("data", "AB=="), ("data_bytes", 2**64-1), ("media_type", False)):
+            bad = copy.deepcopy(multimodal); bad["entries"][0]["parts"][0][key] = value
+            cases.append(("v4 part " + key, dump(with_snapshot(bad))))
+        for key in part:
+            bad = copy.deepcopy(multimodal); bad["entries"][0]["parts"][0].pop(key)
+            cases.append(("v4 part missing " + key, dump(with_snapshot(bad))))
+        bad = copy.deepcopy(multimodal); bad["entries"][0]["content"] = "Competing fast path"
+        cases.append(("v4 conflicting text path", dump(with_snapshot(bad))))
         for key, bad in (("max_output_tokens", 2**32), ("max_input_tokens", -1),
                          ("window_mode", 3), ("journal_durability", 2), ("prune_trigger", "0.75"),
                          ("compact_trigger", 0.1), ("summary_style", "unknown"),
@@ -303,7 +345,7 @@ class Probe(UploadProbe):
         def journal_bytes(record):
             record = dict(record)
             record.pop("checksum", None)
-            if record.get("version") != 3:
+            if record.get("version", 0) < 3:
                 return dump(record)
             prefix = dump(record)[:-1]
             return prefix + b',"checksum":"' + f"{zlib.crc32(prefix):08x}".encode() + b'"}'
@@ -315,10 +357,13 @@ class Probe(UploadProbe):
             replace(document, "journal.jsonl", b"".join(journal_bytes(r) + newline for r in records))
             return document
 
-        def record(operation, sequence=1, version=3, **fields):
+        def record(operation, sequence=1, version=4, **fields):
             result = {"format": "xllm-session-journal", "version": version}
-            result.update({"sequence" if version == 3 else "journal_sequence": sequence,
-                           "type" if version == 3 else "operation": operation})
+            result.update({"sequence" if version >= 3 else "journal_sequence": sequence,
+                           "type" if version >= 3 else "operation": operation})
+            fields = copy.deepcopy(fields)
+            if version < 4 and "entry" in fields:
+                fields["entry"].pop("parts", None); fields["entry"].pop("native", None)
             return {**result, **fields}
 
         # A real semantic tool round is distinct from schema-only samples. An
@@ -326,9 +371,9 @@ class Probe(UploadProbe):
         # failing the replay gate. Neither path can run the recorded tool.
         call_entry = {"sequence": 3, "turn": 1, "flags": 0, "role": 2, "content": "Calling read",
                       "reasoning": None, "tool_call_id": None,
-                      "tool_calls": [{"id": "call-1", "name": "read", "arguments": "{\"path\":\"source.c\"}"}]}
+                      "tool_calls": [{"id": "call-1", "name": "read", "arguments": "{\"path\":\"source.c\"}"}], "parts": [], "native": None}
         result_entry = {"sequence": 4, "turn": 1, "flags": 0, "role": 3, "content": "Recorded tool output",
-                        "reasoning": None, "tool_call_id": "call-1", "tool_calls": []}
+                        "reasoning": None, "tool_call_id": "call-1", "tool_calls": [], "parts": [], "native": None}
         round_records = [record("add_message", entry=call_entry), record("add_message", sequence=2, entry=result_entry),
                          record("ledger", sequence=3, kind="read", path="source.c", after_sequence=4)]
         value = self.replay(dump(with_journal(round_records)))
@@ -337,7 +382,7 @@ class Probe(UploadProbe):
         assert value["messages"][-1]["tool_call_id"] == "call-1" and value["messages"][-1]["content"] == "Recorded tool output"
         value = self.replay(dump(with_journal(round_records, newline=b"\r\n")))
         assert value["ok"] and value["last_sequence"] == 4, value
-        for version in (1, 2):
+        for version in (1, 2, 3):
             old_round = [record("add_message", version=version, entry=call_entry),
                          record("add_message", sequence=2, version=version, entry=result_entry)]
             value = self.replay(dump(with_journal(old_round)))
@@ -395,7 +440,7 @@ class Probe(UploadProbe):
             legacy_compact = record("compact", version=version, through_sequence=2,
                                     compaction_count=1, summary="Legacy summary")
             assert self.validate(dump(with_journal([legacy_compact])))["ok"], version
-        legacy_v3 = record("compact", through_sequence=2, compaction_count=1, summary="Legacy v3 summary")
+        legacy_v3 = record("compact", version=3, through_sequence=2, compaction_count=1, summary="Legacy v3 summary")
         assert self.validate(dump(with_journal([legacy_v3])))["ok"]
         assert self.validate(dump(with_journal([record("rewind", through_sequence=0,
                                                           previous_next_sequence=3)])))["ok"]
@@ -412,7 +457,7 @@ class Probe(UploadProbe):
             change(sample)
             cases.append((label, dump(with_journal([sample]))))
 
-        for key, bad in (("format", "other"), ("version", 4), ("sequence", 0),
+        for key, bad in (("format", "other"), ("version", 5), ("sequence", 0),
                          ("sequence", True), ("sequence", -1), ("sequence", "1"),
                          ("type", "execute"), ("type", "begin_turn\x00ignored"), ("turn", 0),
                          ("turn", False), ("turn", "2"), ("turn", -1), ("unknown", 1),
@@ -763,7 +808,8 @@ class Probe(UploadProbe):
         self.check_model_history(with_snapshot, populated, ui[0], kinds)
         bad_legacy = legacy.replace(b'"export_schema":1', b'"export_schema":1,"files":[]')
         assert not self.validate(bad_legacy)["ok"]
-        assert not self.validate(legacy.replace(b'"version":3', b'"version":3,"version":3', 1))["ok"]
+        version_field = b'"version":' + str(snapshot_root["version"]).encode()
+        assert not self.validate(legacy.replace(version_field, version_field + b',' + version_field, 1))["ok"]
         assert self.validate(raw_small)["ok"]  # errors never poison later input
         self.api("GET", DECODE + "release")
         assert before == inventory()
@@ -797,6 +843,32 @@ class Probe(UploadProbe):
         set_ui(base, [prompt, answer])
         value = self.model_history(base)
         assert value["ok"] and value["matched"] == 2 and value["unverified"] == value["unprojected"] == 0, value
+        # The display projection joins only TEXT parts, in order. Reasoning and
+        # native signatures are retained model data, not visible answer text.
+        def text_part(text, kind=0):
+            return {"kind": kind, "text": text, "native_type": None, "media_type": None,
+                    "source_url": None, "detail": None, "data_bytes": 0, "data": None}
+        segmented = copy.deepcopy(populated)
+        segmented["entries"][0].update(content=None, parts=[text_part("Question "), text_part("中文")])
+        segmented["entries"][1].update(content=None, parts=[
+            text_part("private reasoning", 1), text_part("An"), text_part(""),
+            {**text_part("opaque-signature", 5), "native_type": "thinking_signature"}, text_part("swer")])
+        parts_doc = with_snapshot(segmented)
+        parts_doc["files"] = [f for f in parts_doc["files"] if f["path"] in ("meta.json", "snapshot.json")]
+        recount(parts_doc); set_ui(parts_doc, [prompt, answer])
+        value = self.model_history(parts_doc)
+        assert value["ok"] and value["matched"] == 2 and value["unverified"] == value["unprojected"] == 0, value
+        set_ui(parts_doc, [{**prompt, "text": "Question 中", "text_truncated": True},
+                           {**answer, "text": "Answ", "text_truncated": True}])
+        value = self.model_history(parts_doc)
+        assert value["ok"] and value["matched"] == 2 and value["unverified"] == 2, value
+        for records in ([prompt, {**answer, "text": "An"}],
+                        [prompt, {**answer, "text": "Wrong", "text_truncated": True}],
+                        [{**prompt, "text": "中文Question "}, answer],
+                        [prompt, {**answer, "text": "private reasoningAnswer"}]):
+            set_ui(parts_doc, records)
+            value = self.model_history(parts_doc)
+            assert not value["ok"] and value["code"] == 6, (records, value)
         for mode, code in (("model-history-deadline", 11), ("model-history-file", 11),
                            ("model-history-cancel", 9), ("model-history-step-cancel", 9)):
             value = self.model_history(base, mode)
@@ -846,7 +918,7 @@ class Probe(UploadProbe):
             {"id": "inspect", "name": "read", "arguments": '{"path":"file.c"}'}])
         tool_model["entries"] += [
             {"sequence": 3, "turn": 1, "flags": 0, "role": 3, "content": "status: success\nmodel framing",
-             "reasoning": None, "tool_call_id": "inspect", "tool_calls": []},
+             "reasoning": None, "tool_call_id": "inspect", "tool_calls": [], "parts": [], "native": None},
             {**populated["entries"][1], "sequence": 4, "turn": 2, "content": "Completed"}]
         def tool_document(root=tool_model):
             doc = with_snapshot(root)
@@ -878,7 +950,8 @@ class Probe(UploadProbe):
         # binding evidence reports that gap, while a retained conflicting text
         # cannot hide behind the same binding.
         image_id = "a" * 32
-        image_model = copy.deepcopy(populated); image_model["entries"][0]["content"] = None
+        image_model = copy.deepcopy(populated); image_model["version"] = 3
+        image_model["entries"][0]["content"] = None
         doc = tool_document(image_model); set_ui(doc, [{**prompt, "text": "Prompt with image"}, answer])
         replace(doc, f"attachments/{image_id}.bin", b"\x89PNG\r\n\x1a\n")
         replace(doc, f"attachments/{image_id}.json", dump({"schema_version": 1, "id": image_id,

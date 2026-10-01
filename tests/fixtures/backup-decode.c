@@ -73,7 +73,18 @@ static xllm_result BackupDecodeFixtureComplete(void* Data, const xllm_request* R
     unsigned* Calls = (unsigned*)Data;
     xllm_response* Value;
     const char* Text;
-    (void)Request; (void)Callbacks; (void)Error;
+    size_t i;
+    bool SawImage = false;
+    (void)Callbacks; (void)Error;
+    for ( i = 0u; i < Request->iMessageCount; ++i ) {
+        const xllm_message* Message = &Request->pMessages[i];
+        if ( Message->eRole != XLLM_ROLE_USER || Message->iPartCount != 2u ) continue;
+        SawImage = Message->pParts[0].eKind == XLLM_PART_TEXT && Message->pParts[0].sText != NULL &&
+            strcmp(Message->pParts[0].sText, "Writer question \xe4\xb8\xad\xe6\x96\x87") == 0 &&
+            Message->pParts[1].eKind == XLLM_PART_IMAGE && Message->pParts[1].iDataSize == 68u &&
+            memcmp(Message->pParts[1].pData, "\x89PNG\r\n\x1a\n", 8u) == 0;
+    }
+    if ( !SawImage ) return XLLM_RESULT_ERROR; /* Includes the call after reopening the source session. */
     Text = ++*Calls == 1u ? "Writer answer one" : "Writer answer two";
     Value = (xllm_response*)calloc(1u, sizeof(*Value));
     if ( Value == NULL ) return XLLM_RESULT_ERROR;
@@ -87,20 +98,34 @@ static xllm_result BackupDecodeFixtureComplete(void* Data, const xllm_request* R
     return XLLM_RESULT_OK;
 }
 
-static bool BackupDecodeFixtureRun(MdoSession* Session, const char* Prompt)
+static bool BackupDecodeFixtureRun(MdoSession* Session, const char* Prompt, bool WithImage, xwork_error* Error)
 {
     MdoAgentSession* Agent = MdoSessionAgentRef(Session);
     MdoAgentRunOptions Options;
     MdoAgentRun* Run;
     xwork_run_result Result = {0};
-    xwork_error Error;
+    xllm_message Message;
     bool Ok;
     if ( Agent == NULL ) return false;
     MdoAgentRunOptionsInit(&Options); Options.Prompt = Prompt;
+    xllmMessageInit(&Message, XLLM_ROLE_USER);
+    if ( WithImage ) {
+        static const char Png[] = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+a8Z8AAAAASUVORK5CYII=";
+        size_t Bytes = 0u;
+        void* Pixel = xrtBase64DecodeNew(Png, sizeof(Png) - 1u, &Bytes, NULL);
+        xllm_part Part = {0};
+        Part.eKind = XLLM_PART_TEXT; Part.sText = (char*)Prompt;
+        Ok = Pixel != NULL && xllmMessageAddPart(&Message, &Part);
+        memset(&Part, 0, sizeof(Part)); Part.eKind = XLLM_PART_IMAGE;
+        Part.pData = (uint8_t*)Pixel; Part.iDataSize = Bytes; Part.sMediaType = "image/png";
+        Ok = Ok && xllmMessageAddPart(&Message, &Part); xrtFree(Pixel);
+        if ( !Ok ) { xllmMessageUnit(&Message); MdoAgentSessionRelease(Agent); return false; }
+        Options.UserMessage = &Message;
+    }
     Options.Deadline = xrtDeadlineAfter(UINT64_C(5000000));
-    Run = MdoAgentRunCreate(Agent, &Options, &Error); MdoAgentSessionRelease(Agent);
-    Ok = Run != NULL && MdoAgentRunStart(Run, &Error) &&
-        MdoAgentRunWait(Run, Options.Deadline, &Result, &Error) == XWORK_RESULT_OK;
+    Run = MdoAgentRunCreate(Agent, &Options, Error); MdoAgentSessionRelease(Agent); xllmMessageUnit(&Message);
+    Ok = Run != NULL && MdoAgentRunStart(Run, Error) &&
+        MdoAgentRunWait(Run, Options.Deadline, &Result, Error) == XWORK_RESULT_OK;
     xworkRunResultUnit(&Result); MdoAgentRunDestroy(Run);
     return Ok;
 }
@@ -115,17 +140,25 @@ static bool BackupDecodeFixtureSeedRuntime(XS_HttpReq* Request)
     xwork_error Error;
     char Id[33];
     unsigned Calls = 0u;
+    xvalue* Value;
     bool Ok;
     if ( Target.Size != sizeof(Prefix) - 1u + 32u || memcmp(Target.Data, Prefix, sizeof(Prefix) - 1u) != 0 ) return false;
     memcpy(Id, Target.Data + sizeof(Prefix) - 1u, 32u); Id[32] = '\0';
     MdoSessionRuntimeOptionsInit(&Options); Options.OnModelComplete = BackupDecodeFixtureComplete;
     Options.ModelUserData = &Calls;
     Session = MdoSessionOpen("default", Id, &Options, &Error);
-    Ok = Session != NULL && BackupDecodeFixtureRun(Session, "Writer question \xe4\xb8\xad\xe6\x96\x87") &&
-        BackupDecodeFixtureRun(Session, "Second writer question") && Calls == 2u;
+    Ok = Session != NULL && BackupDecodeFixtureRun(Session, "Writer question \xe4\xb8\xad\xe6\x96\x87", true, &Error) &&
+        BackupDecodeFixtureRun(Session, "Second writer question", false, &Error) && Calls == 2u;
+    MdoSessionRelease(Session);
+    Session = Ok ? MdoSessionOpen("default", Id, &Options, &Error) : NULL;
+    Ok = Ok && Session != NULL && BackupDecodeFixtureRun(Session, "After reopening", false, &Error) && Calls == 3u;
     MdoSessionRelease(Session);
     Context.Request = Request; snprintf(Context.RequestId, sizeof(Context.RequestId), "decode-runtime-seed");
-    (void)MdoApiReplySuccessTake(&Context, 200u, xrtValueBool(Ok), NULL);
+    Value = xrtValueObject();
+    (void)MdoApiValueSetBool(Value, "ok", Ok); (void)MdoApiValueSetUInt(Value, "calls", Calls);
+    (void)MdoApiValueSetString(Value, "error", Error.sMessage);
+    (void)MdoApiValueSetUInt(Value, "code", Error.eCode);
+    (void)MdoApiReplySuccessTake(&Context, 200u, Value, NULL);
     return true;
 }
 
@@ -184,7 +217,7 @@ static bool BackupDecodeFixtureReplay(XS_HttpReq* Request)
     }
     if ( Rendered ) for ( i = 0u; i < ModelRequest.iMessageCount; ++i ) {
         const xllm_message* Message = &ModelRequest.pMessages[i];
-        xvalue *Entry = xrtValueObject(), *Calls = xrtValueArray();
+        xvalue *Entry = xrtValueObject(), *Calls = xrtValueArray(), *Parts = xrtValueArray();
         (void)MdoApiValueSetUInt(Entry, "role", Message->eRole);
         (void)MdoApiValueSetString(Entry, "content", Message->sContent != NULL ? Message->sContent : "");
         (void)MdoApiValueSetString(Entry, "reasoning", Message->sReasoningContent != NULL ? Message->sReasoningContent : "");
@@ -197,6 +230,20 @@ static bool BackupDecodeFixtureReplay(XS_HttpReq* Request)
             (void)xrtValueArrayAppendNew(Calls, Call);
         }
         (void)MdoApiValueSetTake(Entry, "tool_calls", &Calls);
+        (void)MdoApiValueSetUInt(Entry, "part_count", Message->iPartCount);
+        for ( j = 0u; j < Message->iPartCount; ++j ) {
+            const xllm_part* Part = &Message->pParts[j];
+            xvalue* Item = xrtValueObject();
+            uint8 Digest[XRT_SHA256_SIZE]; char Hash[65];
+            (void)MdoApiValueSetUInt(Item, "kind", Part->eKind);
+            (void)MdoApiValueSetString(Item, "text", Part->sText != NULL ? Part->sText : "");
+            (void)MdoApiValueSetUInt(Item, "bytes", Part->iDataSize);
+            if ( Part->iDataSize && xrtSha256(Part->pData, Part->iDataSize, Digest) ) {
+                MdoUploadHash(Digest, Hash); (void)MdoApiValueSetString(Item, "sha256", Hash);
+            }
+            (void)xrtValueArrayAppendNew(Parts, Item);
+        }
+        (void)MdoApiValueSetTake(Entry, "parts", &Parts);
         (void)xrtValueArrayAppendNew(Messages, Entry);
     }
     (void)MdoApiValueSetTake(Value, "messages", &Messages);

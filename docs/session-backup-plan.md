@@ -62,7 +62,8 @@ manager 调用或库通过 native path 写入不能被它自动覆盖。不得�
 4. **进行中**：离线拥有解码、清单及 metadata/UI/todo、draft/queue/receipt/
    feedback/消息绑定 schema、模型 snapshot/journal schema/CRC、checkpoint 后记录
    连号、保留 UI 的侧车关系、独立模型上下文重放和模型/UI 关系检查已接入。
-   旧多模态模型账本缺失 parts 的问题、图片实际解码及生产预览 worker 未完成。
+   新模型 writer 已用 v4 保存完整消息 parts/native；旧文件的已丢失内容
+   不能修复。助手响应签名转换、图片实际解码及生产预览 worker 未完成。
    先实现离线验证与预览，
    再做恢复事务。验证所有 schema、路径、ID、内容
    校验和引用；拒绝链接、绝对路径、`..`、重复文件和大小声明失真。v1 只能
@@ -683,3 +684,72 @@ Linux 为 `4e74f65bfcb567070900c45867e976a9dca677c76b4b599adc34eafccaeadedb`。
 `.build/qa-model-history-library-windows.log`、`.build/qa-model-history-linux.log`。
 最终 size canary 使用分配器对齐的短存储，两平台 HTTP/TLS 定向补验通过，
 日志 `.build/qa-model-history-probe-aligned-{windows,linux}.log`。生产包字节未变。
+
+## 完整消息的多模态持久化
+
+2026-10-02 的 xllm-session `799124f928dad085a045a1049b1d083b5ab1d194`
+修复上一阶段发现的 writer 缺口。snapshot 与 journal 新写入版本均为 4，
+沿用 v3 的 CRC、checkpoint 和记录序号。公开宏
+`XLLM_SESSION_PERSISTENCE_SCHEMA_VERSION` 声明当前格式，mdo 构建核对
+该宏与 deps.lock。读取兼容 v1–3；这些旧 entry 不得带 v4 字段，防止
+错误降级后静默忽略消息内容。版本 5 及未来未知格式明确拒绝。
+
+每个 v4 entry 要求 nullable `native` 与 `parts` 数组。普通消息使用空
+数组；非空数组要求 `content:null`，避免 xllm parts 与文字 fast path
+互相竞争。每个 part 必须完整携带以下八个字段：
+
+| 字段 | 合同 |
+| --- | --- |
+| kind | 公共 enum 0–5；TEXT、REASONING、IMAGE、AUDIO、FILE、NATIVE |
+| text、native_type、media_type、source_url、detail | nullable 字符串，不含 NUL；顺序和原文保留 |
+| data_bytes | 非负整数，恢复时检查 size_t 范围及实际解码长度 |
+| data | 零字节为 null；非零为规范带 padding 的标准 base64，包括原始 NUL/高位字节 |
+
+message native 须为有效 JSON；native part 的 opaque text 不要求是 JSON。
+恢复临时借用 DOM 字符串，AddPart 深复制后立即释放临时二进制；失败销毁
+整个未发布上下文，不能返回部分恢复。URL/FILE 元数据只是原消息内容，
+不会触发网络、文件、模型或工具访问。上传总字节预算约束编码数据，解码
+前校验尺寸，取消/截止时间在 parts 之间及完成时检查；单次 codec 操作仍
+是协作式有界检查，不冒充原生指令可中断的硬超时。
+
+库的 Windows/Linux bounded gate 已验证真实 file load/recover、
+snapshot+tail、journal-only、六类 parts 与 URL 图片、message native、
+原字节和字段顺序、释放原始消息/文件缓冲后仍可用、取消及 session 分配
+失败清理。有效 CRC 下的非法 enum、错误尺寸/非规范 pad bits、漏 parts、
+版本降级/未知版本均拒绝。日志 `.build/qa-parts-library-windows-final.log`
+与 `.build/qa-parts-linux.log`，没有压力或高负载测试。
+
+xs `455b70fb2f9ec92a5d2e72f0d523d0bb85ba2525` 同步源库 16 个生产文件，
+tree SHA-256 为 `10dc791e36074531609f606f6f2b8f72294ef8ab681970f4d3f6148712f232e6`；
+94 个公开 TCC 入口保持，SDK 门禁通过。mdo 的模型文件 schema 检查同时
+接受 v1–4；实际独立重放仍是另一项语义结果，不能以格式通过替代恢复。
+模型/UI 文字核对无分配地拼接有序 TEXT parts，忽略 REASONING/NATIVE，
+分段 Unicode、空段、跨段截断、颠倒顺序/混入推理/缺失文字均有回归。
+
+HTTP/TLS 使用隔离副本和进程内响应，从正常产品入口运行三轮：首轮含
+中文与真实 1×1 PNG，第三轮之前释放并重新打开会话。三次实际模型请求
+均见原文和原图；正常备份捕获后独立重放核对完整图片 SHA-256。模型/UI
+关系六项匹配且无未核对/缺口，缩短 UI 前缀后报告两条模型缺口。原 Ling
+配置保持，测试模型仅在隔离副本声明图片能力。首次能力配置错误已修正，
+没有放宽产品能力验证。257 个格式错误输入、失败重试、预算/取消、原始
+备份字节及 Home inventory 继续保持。源会话生成发生在零写入基线之前。
+
+尚需完成助手响应到消息的保真转换：目前 session 添加 assistant 时没有
+保留 provider 的推理签名；xllmMessageFromResponse 添加 native part 会
+清掉先前 content，直接改用它会引入丢字。须在 xllm 源头修复文字/签名
+共存和响应转换，再在 session 中接入并做实际响应回归。v4 可保留已经
+传入消息的这些字段，并不自动补全上游没有传递的响应内容。
+
+已有旧备份丢失 parts 时继续报告无法完整核对，不从 UI 或附件倒推模型
+消息。图片实际解码、生产预览 worker、独立 staging、来源/新身份、原子
+非覆盖发布、catalog 与正式菜单仍待实现；`restore_ready:false` 保持。
+本阶段不增加原生点击或实体设备证据。
+
+最终 Windows/Linux 有界门禁均通过 114 Python、252 Node、90 模块、严格
+C11、36 运行探针、三项 packed 与独立 A/B；Windows 另通过便携 Home
+覆盖/搬移/重启与 20 秒启动。两端宿主本轮均由 SDK `455b70f` 重建，
+Windows 完整门禁复用已建宿主；Linux 使用新的 ext4 源副本并跳过 GUI。
+根目录程序与 Windows A/B SHA-256 为
+`ea490f94e346925572b8d820d7d13d9fc8fa11868f3aae9c0da9f177fcf33e7c`；
+Linux 为 `ae17c3a32d4f1c41a157bd9380a3e1bef565fd0416194112586d0b2965e3f51f`。
+日志 `.build/qa-parts-{windows,linux}-final.log`。没有压力或高负载测试。

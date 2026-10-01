@@ -169,6 +169,10 @@ def verify_dependencies(xserver: Path, lock: dict) -> None:
             raise BuildError(f"{name} production tree hash mismatch: {actual_hash}")
         verify_version(root / header_name, version_macros, record.get("version", ""))
 
+    session_header = (xserver / "lib" / "xllm-session" / "xllm-session.h").read_text(encoding="utf-8")
+    if int(macro(session_header, "XLLM_SESSION_PERSISTENCE_SCHEMA_VERSION").rstrip("uU")) != libraries["xllm-session"].get("persistence_schema_version"):
+        raise BuildError("xllm-session persistence schema version does not match deps.lock")
+
     xwork_header = (xserver / "lib" / "xwork" / "xwork.h").read_text(encoding="utf-8")
     if int(macro(xwork_header, "XWORK_ABI_VERSION").rstrip("uU")) != libraries["xwork"].get("abi_version"):
         raise BuildError("xwork ABI version does not match deps.lock")

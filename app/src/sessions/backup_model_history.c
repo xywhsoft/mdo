@@ -170,6 +170,24 @@ static bool MdoBackupModelImageEvidence(MdoBackupModelIndex* Index,
     return true;
 }
 
+/* TEXT parts are authoritative for multimodal messages. Compare their ordered
+ * concatenation without allocating a second, potentially large prompt. */
+static bool MdoBackupMessagePartsText(const char* Ui, const xllm_message* Message, bool Truncated)
+{
+    size_t Offset = 0u, Bytes = strlen(Ui != NULL ? Ui : ""), i;
+    if ( Message->iPartCount == 0u ) return MdoBackupLinkText(Ui, Message->sContent, Truncated);
+    for ( i = 0u; i < Message->iPartCount; ++i ) {
+        const xllm_part* Part = &Message->pParts[i];
+        size_t Length, Compare;
+        if ( Part->eKind != XLLM_PART_TEXT || Part->sText == NULL ) continue;
+        Length = strlen(Part->sText); Compare = Length < Bytes - Offset ? Length : Bytes - Offset;
+        if ( Compare != 0u && memcmp(Ui + Offset, Part->sText, Compare) != 0 ) return false;
+        Offset += Compare;
+        if ( Compare < Length ) return Truncated;
+    }
+    return Offset == Bytes;
+}
+
 static bool MdoBackupModelEvent(const MdoSessionEventInfo* Event, void* Data)
 {
     MdoBackupModelIndex* Index = (MdoBackupModelIndex*)Data;
@@ -190,7 +208,7 @@ static bool MdoBackupModelEvent(const MdoSessionEventInfo* Event, void* Data)
         if ( !MdoBackupModelImageEvidence(Index, Event, &HasImages) ) return false;
         PartsLost = Entry->View.pMessage->iPartCount == 0u && HasImages;
         if ( !(PartsLost && Entry->View.pMessage->sContent == NULL) &&
-             !MdoBackupLinkText(Event->Text, Entry->View.pMessage->sContent, Partial) )
+             !MdoBackupMessagePartsText(Event->Text, Entry->View.pMessage, Partial) )
             return MdoBackupModelConflict(Index, "UI prompt conflicts with its retained model text");
         Partial = Partial || PartsLost;
     } else if ( Event->Kind == XWORK_EVENT_MODEL_DONE && Event->Success ) {
@@ -204,7 +222,7 @@ static bool MdoBackupModelEvent(const MdoSessionEventInfo* Event, void* Data)
             return MdoBackupModelConflict(Index, "UI model completion has no retained assistant turn");
         if ( Low + 1u < Index->AssistantCount && Index->Assistants[Low + 1u].Turn == Event->AgentTurn ) goto unverified;
         Entry = &Index->Entries[Index->Assistants[Low].Entry];
-        if ( Entry->Projected || !MdoBackupLinkText(Event->Text, Entry->View.pMessage->sContent, Partial) )
+        if ( Entry->Projected || !MdoBackupMessagePartsText(Event->Text, Entry->View.pMessage, Partial) )
             return MdoBackupModelConflict(Index, "UI model completion conflicts with its retained assistant text");
     } else if ( Event->Kind == XWORK_EVENT_TOOL_START || Event->Kind == XWORK_EVENT_TOOL_DONE ||
                 Event->Kind == XWORK_EVENT_RECOVERY_RESOLVED ) {
