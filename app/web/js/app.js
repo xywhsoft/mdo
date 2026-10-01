@@ -515,6 +515,7 @@ export async function boot() {
     count: $("#conversation-find-count"), closeButton: $("#close-find"),
     openButtons: [$("#open-find"), $("#open-find-mobile")],
     navigation, prompt, onQuery: (query) => timelineView.search(query),
+    onOpen: closeDrawers,
   });
   createImagePreview({
     dialog: $("#image-preview"), image: $("#image-preview-content"),

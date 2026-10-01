@@ -4,6 +4,62 @@
 
 完成判据及尚缺的打包页证据见 [前端操作体验完成审计](frontend-completion-audit.md)。本文件继续记录每次实现和验证的细节。
 
+## 2026-10-01：会话搜索先收起覆盖抽屉
+
+基线 a8f10f6 的单文件 Home `.build/mdo-packed-docks-4p_7eu5v`，会话
+`V-ORkLm8IGskTHvXdQBD9_7knUaHz7-g`：完成一轮真实回复后，320×350
+从侧栏搜索框按 Ctrl+F，底层会话搜索虽获焦，侧栏和遮罩仍打开；搜索
+框中心的命中元素属于侧栏，按 Tab 被抽屉的焦点循环送回。960×600
+从轨迹标签按 Ctrl+F 同样留下检查器，搜索框中心命中轨迹标题。
+无障碍树中的搜索框 active 并不能证明控件可操作。基线截图
+`.build/qa-search-drawer-before-mobile.png` 保留。
+
+搜索模块增加可选打开回调，由应用接入既有 closeDrawers：先收起覆盖
+对话的手机侧栏或中等屏检查器，再显示并聚焦搜索。宽桌面常驻面板
+仍保留，关闭沿用临时布局路径。再次打开保留查询，Esc 返回输入框，
+不改变消息过滤范围、草稿或询问/停止的键盘规则。
+
+验证：
+
+- Windows 最终 A 包 Home `.build/mdo-packed-docks-b4fknpf0`，会话
+  `V-ORkMy1ffn2BL9VGY_kv1gkaCUslwJQ`。320×350 从侧栏 Ctrl+F 后
+  两抽屉收起，搜索框中心命中自身，输入匹配一条用户消息；Tab 到
+  关闭搜索按钮，Esc 回 prompt，未发送文本逐字保留。960×600 从轨迹
+  Ctrl+F 收起检查器，重复打开保留查询；1280×720 的两个常驻面板均
+  保持打开。截图 `.build/qa-search-drawer-windows-mobile.png`。
+- 同一 Windows 会话再触发真实 ask_user，填写自由回答草稿，从手机
+  检查器 Ctrl+F 并 Esc。回答草稿保留，焦点回 prompt，运行 API 仍为
+  running/cancel_requested=false。随后实际提交回答，两个回合均为
+  succeeded、未请求取消，第二轮 tool_calls=1；刷新回放两轮历史并
+  恢复后续输入草稿 `Keep final search draft`。脚本错误日志为空。
+- Linux 最终 A 包 Home
+  `/home/ubuntu/.cache/mdo-linux-qa-search-drawer/.build/mdo-packed-docks-dbfssc2f`，
+  会话 `V-ORkO5xYSnp4A1MT8_hZhfa22Bwxn47`。320×350 从侧栏及检查器
+  Ctrl+F 均收起覆盖面板并聚焦搜索；命中自身、实际查询、Tab/Esc
+  通过。刷新显示完整用户/Agent 回合、输入焦点与
+  `Linux retained search draft`；磁盘队列为空，草稿未确认标记为 false，
+  文档宽度 320px，页面脚本错误为空。截图
+  `.build/qa-search-drawer-linux-mobile.png`。Linux 图形证据仍是 Windows
+  浏览器连接 Linux 服务，不代替原生 Linux WebView。
+- 既有真实 DOM 输入法夹具 `conversation-search-ime-browser.html` 通过：
+  输入法组字及 229 候选键不关闭搜索，第一次 Esc 只关闭搜索，第二次
+  Esc 才触发停止。此次没有增加镜像实现的单元测试。
+- Windows/Linux 全门禁均通过 114 项 Python、203 项 Node、88 个模块、
+  严格 C11、32 个运行探针、Home 租约/队列启动恢复及确定性 A/B；
+  Windows 另通过便携 WebView2 Home 和 20 秒启动。日志
+  `.build/qa-search-drawer-release.log`、
+  `.build/qa-search-drawer-linux-release.log`。Linux 使用全新 ext4 快照，
+  首次准备的 mkdir 命令无法执行时门禁尚未启动；改用 Python 文件
+  API 完成快照准备，没有削减门禁或放宽原子文件系统断言。
+- Windows A/B 及更新后的根目录 SHA-256：
+  `790ddae18eac007071a5245ba917fd3956537d0d66873ba9cede0f5a425fc309`；
+  Linux A/B SHA-256：
+  `c6ad9d4457a4bf654ecda9d5c49af1a0e34dba347f52dc90a2305bc3c06fa409`。
+
+两端夹具已正常退出，浏览器临时页关闭。原生窗口、系统输入法与实体
+设备的验收缺口保留。内置 Ling 配置不变，未做压力或高负载测试，
+长期目标继续。
+
 ## 2026-10-01：引导模式的排队与中断顺序补验
 
 本轮只补实际验收，没有改变程序行为。载入阶段曾显示权限选项禁用；

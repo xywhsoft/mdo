@@ -2,7 +2,7 @@ import { subscribeLocale, t } from "../../i18n.js";
 import { isImeKey } from "../../utils/dom.js";
 
 export function createConversationSearch({ bar, input, count, openButtons, closeButton,
-  navigation, prompt, onQuery }) {
+  navigation, prompt, onQuery, onOpen }) {
   let available = false;
   let matchCount = 0;
   let olderHistoryMissing = false;
@@ -28,6 +28,9 @@ export function createConversationSearch({ bar, input, count, openButtons, close
 
   function open() {
     if (!available) return;
+    // Drawers can cover the search field and retain the keyboard focus loop.
+    // Reveal the conversation before moving focus into it.
+    onOpen?.();
     bar.hidden = false;
     for (const button of openButtons) button.setAttribute("aria-expanded", "true");
     input.focus();
