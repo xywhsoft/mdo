@@ -722,7 +722,8 @@
         </div>
       </header>
       <div class="dialog-fields message-edit-fields">
-        <label><span data-i18n="messageEdit.content">消息内容</span> <textarea id="message-edit-input" name="message" required maxlength="65536" rows="8"></textarea></label>
+        <label><span data-i18n="messageEdit.content">消息内容</span> <textarea id="message-edit-input" name="message" aria-describedby="message-edit-help" required maxlength="65536" rows="8"></textarea></label>
+        <p id="message-edit-help" data-i18n="messageEdit.keyboardHelp">Enter 保存并重新发送，Shift+Enter 换行。</p>
       </div>
       <footer>
         <button class="secondary-button" id="cancel-message-edit" type="button" data-i18n="messageEdit.cancel">取消</button>

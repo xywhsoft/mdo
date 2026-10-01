@@ -1341,5 +1341,6 @@
   "purgeConfirm.changedBinding": "项目版本或创建时间已经变化。请先取消原请求，再重新核对当前项目；不会沿用旧确认清除新项目。",
   "error.purgeClientBusy": "请等待提交、图片上传和其他操作完成，并处理运行态或诊断项，再核对清除。",
   "error.purgeDraftUnsaved": "仍有未保存的草稿。请先保存，或复制草稿后重新载入，再核对清除结果。",
-  "purgeConfirm.committedRestart": "原请求已提交清除，但宿主需要恢复。请关闭并重新启动 mdo，再核对原编号；仅刷新页面不能代替重启。"
+  "purgeConfirm.committedRestart": "原请求已提交清除，但宿主需要恢复。请关闭并重新启动 mdo，再核对原编号；仅刷新页面不能代替重启。",
+  "messageEdit.keyboardHelp": "Enter 保存并重新发送，Shift+Enter 换行。"
 }

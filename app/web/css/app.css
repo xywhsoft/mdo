@@ -1044,6 +1044,7 @@ select:focus-visible,
 .session-action-fields label { grid-column: 1 / -1; }
 .message-edit-fields { grid-template-columns: 1fr; }
 .message-edit-fields label { grid-column: 1 / -1; }
+#message-edit-help { margin: 0; color: var(--muted); font-size: 11px; line-height: 1.5; }
 .message-edit-fields textarea { height: min(170px, 24dvh); min-height: 80px; max-height: min(50vh, 360px); resize: vertical; font: inherit; line-height: 1.5; }
 .dialog-error { margin: 0 20px 12px; color: var(--danger); font-size: 12px; }
 .dialog-card > footer { display: flex; justify-content: flex-end; gap: 8px; padding: 13px 20px; border-top: 1px solid var(--border); }

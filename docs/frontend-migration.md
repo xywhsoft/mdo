@@ -4,6 +4,58 @@
 
 完成判据及尚缺的打包页证据见 [前端操作体验完成审计](frontend-completion-audit.md)。本文件继续记录每次实现和验证的细节。
 
+## 2026-10-01：消息编辑恢复 Enter 保存重发
+
+旧版 `chrome.js` 的 promptModal 以 Enter 确认消息编辑，新版 textarea 只
+能通过按钮确认。真实 DOM 夹具先复现 Enter 仅插入换行、弹窗仍打开；
+现在无修饰键的 Enter 走与按钮相同的 requestSubmit 和验证，Shift+Enter
+保留换行。共享输入法跟踪阻止候选确认、keyCode 229 和组合输入触发重发，
+输入框或窗口失焦释放组合状态。禁用、只读及已处理的按键不再次提交。
+
+编辑框关联可访问的键盘提示，中英俄词典各 1344 键。提示属于可滚动内容
+区，按钮保持可操作；中文/英文短屏可直接看到提示，俄语长标题和说明在
+320×350 需要滚动查看。调整提示段落默认边距，避免额外空白遮挡。
+
+验证：
+
+- 新增五项 Node 用例覆盖单次提交及焦点、修饰键、输入法及失焦释放、
+  空白验证/纯图片编辑，以及禁用/只读/已处理按键。正式模块浏览器夹具
+  验证实际 Enter 和 Shift+Enter，三种合成输入法候选均被阻止，结束组合
+  后可提交原文并恢复焦点。
+- 首次重载夹具仍读到浏览器缓存中的旧模块；检查导出的函数确定 Enter
+  处理器未加载。仅给 QA 夹具模块 URL 增加查询参数后，加载新实现并通过；
+  正式模块及路由不依赖这个参数。
+- 初版包隔离 Home `.build/mdo-packed-docks-ktzm13ch`，会话
+  `V-ORjvfRzHbPeCRlwiBhB8P_RoaS4wG_`。两次普通运行后，桌面 Enter 编辑
+  重发第二条，刷新保留第一条及新多行文本、移除原第二条；320×250 验证
+  空白 Enter 留在原弹窗并提示，修正后仍可重发并刷新。共 2 次队列 POST、
+  4 次运行 POST，未因键盘提交重复运行。
+- 最终包隔离 Home `.build/mdo-packed-docks-g6hgk53d`，会话
+  `V-ORjxubt3sEDOkphcGREWdxBuUlqehP`。正式工作台实际 Shift+Enter 换行、
+  Enter 将历史消息改为 `EDIT ENTER FINAL UPDATED UI` 加“最终包第二行”；
+  1 次队列 POST、2 次运行 POST。中文/英语提示保留输入；通过设置预览/
+  应用事务保存俄语（revision 2），返回原会话，滚动显示完整俄语提示，
+  取消恢复对应编辑按钮焦点。刷新仍为俄语且保留新多行历史，320px 无横向
+  溢出，浏览器错误日志为空。最终包组件另通过三种合成候选保护。
+- 截图 `.build/qa-message-edit-enter-packed-final.png`、
+  `.build/qa-message-edit-enter-packed-ru.png`。临时页面与服务均正常关闭。
+- 最终 Windows/Linux 原生文件系统全门禁均通过 114 项 Python、200 项
+  Node、88 个前端模块、严格 C11、32 个运行探针及确定性 A/B 打包；Windows
+  另通过便携 WebView2/20 秒启动。日志为
+  `.build/qa-message-edit-enter-release-final.log` 和
+  `.build/qa-message-edit-enter-linux-release-final.log`；Linux 快照为
+  `/home/ubuntu/.cache/mdo-linux-qa-message-edit-enter-final`。
+  提示边距调整前的两端通过日志也保留，最终验收使用调整后的完整结果。
+- Windows A/B 及根目录 SHA-256：
+  `752e88b88563b86f928e561969a9b6cc01d2d8ffde95f205c86891114e69ac8f`；
+  Linux A/B SHA-256：
+  `b92da9aaf3704168e0ee49d2cc6f983eae12e729db17475c97de269483ab8e40`。
+
+俄语工作台的历史边界仍显示服务端中文“会话历史已截断”，已确认是下一项
+语言缺口。内置 Ling 生产配置不变，未做压力/高负载测试；合成输入法事件
+和浏览器视口不代表原生输入法或实体设备通过，其他原生 GUI 缺口保留。
+长期目标继续。
+
 ## 2026-10-01：图片预览关闭与重绘保持状态
 
 真实 DOM 夹具稳定复现旧实现的三项缺陷：名称请求完成前原缩略图被重绘，

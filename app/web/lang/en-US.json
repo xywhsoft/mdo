@@ -1341,5 +1341,6 @@
   "purgeConfirm.changedBinding": "The project revision or creation time changed. Cancel the original request and review the current project again; the old confirmation cannot remove a new project.",
   "error.purgeClientBusy": "Wait for submissions, image uploads and other operations, and resolve active runs or diagnostics before reviewing removal.",
   "error.purgeDraftUnsaved": "Some drafts are unsaved. Save them, or copy them and reload before acknowledging the removal result.",
-  "purgeConfirm.committedRestart": "The original removal was committed, but the host needs recovery. Close and restart mdo, then check the original ID; reloading this page does not restart the host."
+  "purgeConfirm.committedRestart": "The original removal was committed, but the host needs recovery. Close and restart mdo, then check the original ID; reloading this page does not restart the host.",
+  "messageEdit.keyboardHelp": "Enter saves and resends; Shift+Enter adds a new line."
 }

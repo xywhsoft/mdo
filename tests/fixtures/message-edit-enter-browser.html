@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="zh-CN">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>mdo message edit Enter probe</title>
+<link rel="stylesheet" href="/app/web/css/app.css">
+<style>body{padding:12px}pre{white-space:pre-wrap;overflow-wrap:anywhere}</style>
+<button id="open" type="button">打开消息编辑</button>
+<button id="ime" type="button">检查输入法保护</button>
+<dialog class="new-session-dialog" id="dialog" aria-labelledby="title">
+  <form class="dialog-card" id="form">
+    <header><div><h2 id="title">编辑消息</h2>
+      <p>会撤回此消息及之后的对话，然后在当前会话重新发送。</p></div></header>
+    <div class="dialog-fields message-edit-fields">
+      <label>消息内容 <textarea id="message" aria-describedby="message-edit-help" required maxlength="65536" rows="8"></textarea></label>
+      <p id="message-edit-help">Enter 保存并重新发送，Shift+Enter 换行。</p>
+    </div>
+    <footer><button class="secondary-button" id="cancel" type="button">取消</button>
+      <button class="primary-button" type="submit">保存并重新发送</button></footer>
+  </form>
+</dialog>
+<pre id="result">等待打开编辑</pre>
+<pre id="implementation"></pre><pre id="key-state"></pre>
+<script type="module">
+import { createMessageEditDialog } from "/app/web/js/features/chat/message-edit-dialog.js?edit-enter=1";
+const dialog = document.querySelector("#dialog");
+const form = document.querySelector("#form");
+const input = document.querySelector("#message");
+const cancel = document.querySelector("#cancel");
+const opener = document.querySelector("#open");
+const output = document.querySelector("#result");
+const controller = createMessageEditDialog({ dialog, form, input, cancel });
+document.querySelector("#implementation").textContent = JSON.stringify({
+  enterHandler: createMessageEditDialog.toString().includes("form.requestSubmit()") });
+input.addEventListener("keydown", (event) => {
+  document.querySelector("#key-state").textContent = JSON.stringify({ key: event.key,
+    shift: event.shiftKey, ctrl: event.ctrlKey, meta: event.metaKey, alt: event.altKey,
+    composing: event.isComposing, keyCode: event.keyCode, prevented: event.defaultPrevented });
+});
+opener.addEventListener("click", async () => {
+  output.textContent = "等待键盘输入";
+  const text = await controller.open("保留原始内容", [], opener);
+  output.textContent = JSON.stringify({ submitted: text !== null, text,
+    open: dialog.open, returnedFocus: document.activeElement === opener,
+    noOverflow: document.documentElement.scrollWidth <= innerWidth }, null, 2);
+});
+document.querySelector("#ime").addEventListener("click", async (event) => {
+  const origin = event.currentTarget;
+  const result = controller.open("输入法候选完成后的消息", [], origin);
+  const key = (fields = {}) => {
+    const key = new KeyboardEvent("keydown", { key: "Enter", bubbles: true,
+      cancelable: true, ...fields });
+    input.dispatchEvent(key);
+    return !key.defaultPrevented && dialog.open;
+  };
+  const candidate229 = key({ keyCode: 229 });
+  const candidateComposing = key({ isComposing: true });
+  input.dispatchEvent(new CompositionEvent("compositionstart", { bubbles: true }));
+  const trackedCandidate = key();
+  input.dispatchEvent(new CompositionEvent("compositionend", { bubbles: true }));
+  input.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true }));
+  const text = await result;
+  const returnedFocus = document.activeElement === origin;
+  const passed = candidate229 && candidateComposing && trackedCandidate && !dialog.open &&
+    text === "输入法候选完成后的消息" && returnedFocus;
+  output.textContent = JSON.stringify({ passed, candidate229, candidateComposing,
+    trackedCandidate, text, returnedFocus }, null, 2);
+});
+</script>
+</html>

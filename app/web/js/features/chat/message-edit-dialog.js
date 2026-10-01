@@ -1,9 +1,12 @@
 import { t } from "../../i18n.js";
+import { isImeKey } from "../../utils/dom.js";
+import { createCompositionTracker } from "../../utils/composition.js";
 
 export function createMessageEditDialog({ dialog, form, input, cancel }) {
   let pending = null;
   let hasAttachments = false;
   let opener = null;
+  const composition = createCompositionTracker(input);
 
   function finish(value) {
     const resolve = pending;
@@ -28,6 +31,15 @@ export function createMessageEditDialog({ dialog, form, input, cancel }) {
     if (form.reportValidity()) finish(value);
   });
   input.addEventListener("input", () => input.setCustomValidity(""));
+  input.addEventListener("keydown", (event) => {
+    if (!pending || event.defaultPrevented || input.disabled || input.readOnly ||
+        event.key !== "Enter" || event.shiftKey || event.ctrlKey || event.metaKey ||
+        event.altKey || isImeKey(event, composition.isComposing(input))) return;
+    // Match the old editor's Enter-to-resend, using the same form validation
+    // as the button. Shift+Enter remains the textarea's native line break.
+    event.preventDefault();
+    form.requestSubmit();
+  });
   cancel.addEventListener("click", () => finish(null));
   dialog.addEventListener("close", () => {
     if (pending) finish(null);
