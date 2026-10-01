@@ -1,5 +1,9 @@
 {
   "error.sessionCaptureBusy": "会话数据正在保存或清理，请稍后重新导出。",
+  "error.sessionBackupBusy": "另一个会话备份正在进行，请稍后重试。",
+  "error.sessionBackupLimit": "会话备份超出大小或时间限额，请稍后重试或减少保留内容。",
+  "error.sessionBackupInvalid": "会话记录存在不可读内容或缺失附件，暂时无法完整备份。",
+  "error.sessionBackupUnavailable": "备份服务暂时不可用，原始会话仍保留，请稍后重试。",
   "error.sessionMessageChanged": "原消息已在其他窗口更改或移除。请保留编辑内容，刷新会话后重新选择消息。",
   "app.name": "墨斗",
   "app.title": "墨斗",

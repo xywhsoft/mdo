@@ -1,9 +1,9 @@
 # 会话 JSON 完整备份与恢复实施记录
 
-状态：待接入专用传输和恢复入口。2026-10-01 已完成 checkpoint 与有界读取
-共用排他运行窗口、统一捕获边界和 v2 文件格式的内部捕获/编码层；现有 HTTP
-`export_schema:1` 的内容仍只有 meta 和模型 snapshot。内部格式验证通过不
-表示正式页面已经导出完整备份，或恢复事务已经完成。
+状态：专用下载已接入，上传与恢复入口待实现。2026-10-01 已完成 checkpoint
+与有界读取共用排他运行窗口、统一捕获边界、v2 捕获/编码层和有界 HTTP/TLS
+下载。现有页面仍使用 `export_schema:1`，内容只有 meta 和模型 snapshot。
+格式/传输验证通过不表示正式页面已经导出完整备份，或恢复事务已经完成。
 旧版核心功能是 Markdown 导出，图片携带已经恢复；这里补齐新版现有 JSON
 备份入口，不将它冒充旧版已有的导入能力。
 
@@ -53,9 +53,9 @@ manager 调用或库通过 native path 写入不能被它自动覆盖。不得�
    读取串行；失败释放引用/claim。现有 v1 envelope 保持兼容。
 2. **已完成**：实际文件清单、统一捕获边界和确定性
    小型冲突用例，见下节。后续完整格式必须从这个入口复制文件，不能绕过。
-3. **格式子阶段已完成，传输待实现**：版本化 manifest 与专用有界传输。
-   当前普通 API 请求上限 256 KiB、
-   下载上限 33 MiB，不能直接塞入图片和全部日志。应采用专用上传/下载边界并
+3. **格式和下载已完成，上传待实现**：版本化 manifest 与专用有界传输。
+   当前普通 API 请求上限 256 KiB、旧 v1 下载上限 33 MiB，不能直接塞入图片
+   和全部日志。采用专用上传/下载边界并
    分别限制文件数、单文件、总字节、JSON/base64 膨胀和传输时间；定额失败需要
    明确反馈。导出完成即释放捕获锁，下载速度不能占用运行窗口。
 4. 先实现离线验证与预览，再做恢复事务。验证所有 schema、路径、ID、内容
@@ -181,9 +181,9 @@ artifact 文件引用。待回收 `discard_images` 允许对象已经不存在�
 `queue_restore_policy:require-user-confirmation`。不能据此开放恢复或声称
 步骤 4–6 完成；现有页面菜单及 v1 HTTP 保持原行为。
 
-传输接入前另查明：xs 使用非阻塞发送队列，xrt 默认 TCP WriteLimit 为 1 MiB；
+传输接入前查明：xs 使用非阻塞发送队列，xrt 默认 TCP WriteLimit 为 1 MiB；
 不能把 96 MiB 文档直接交给现有一次 `StreamSend` 并声称下载支持上限。
-后续专用接口须按 XS_TAKEOVER 生命周期管理有界分块、背压、截止时间、
+专用接口须按 XS_TAKEOVER 生命周期管理有界分块、背压、截止时间、
 取消/关闭与脚本代释放，不占用会话捕获锁，也不能放大所有普通请求限额。
 
 确定性小型 C/TCC fixture 不发起模型/shell/队列，独立 Python 读回逐项核对
@@ -204,3 +204,52 @@ Unicode 名称、草稿/队列、反馈/todo、回执及 artifact。捕获后写
 `1d3059efa6127f2eae7a9ee0a11a8916dbab46c6f33e2a70effaf36be7340709`；Linux
 最终包为 `4e5f26d3bc7f406699f883e9ed3730d07601db6bbf3b8a99ec65ecdd63a90582`。
 本轮没有更换页面菜单/普通 HTTP 导出，没有执行浏览器下载或真实导入操作。
+
+## 专用 HTTP/TLS 下载与生命周期
+
+新增 `GET/HEAD/OPTIONS /api/v1/projects/{project}/sessions/{session}/backup`。
+普通请求、图片和 v1 `/export` 限额与行为保持；只为 v2 单独发送最高 96 MiB
+文档。一次进程最多一个备份任务，第二个返回可重试的 `session_backup_busy`；
+executor 首次下载才创建一个线程，不排队多个大文档，不写临时下载文件。
+
+任务只复制 request ID、方法码并持有 TCP 或 TLS stream 引用，不保留请求视图。
+session 自带的 project lease 覆盖捕获；取得四类 API guard 后复制，立即释放
+guard 和 session，再编码和下载。异步捕获不绕过 Home/项目生命周期边界。
+响应为 JSON attachment，Content-Length 精确，强 ETag 为最终文档 SHA-256；
+HEAD 保留同一编码/预算判定和长度，但不发送正文。成功 drain 后 orderly close，
+失败/取消 abort；专用响应声明 `Connection: close`，没有更换 xs event table。
+
+每次至多 16 KiB；TCP 根据 WriteLimit 收紧，处理 AGAIN 的零受理并等 DRAIN，
+TLS 使用 off-worker async Send 与 DRAIN Future。每个 Future 的 wait/cancel/
+detach 在任务仍持有 stream 时完成。入场起共用 30 秒单调截止时间；捕获仍
+最多五秒。时间/取消在有界操作之间检查，同步 native read/checkpoint 或一次
+JSON 解析仍不能被强制中断。关闭/超时已发送部分内容时直接断开，不能给出
+完整文件成功响应。四类新错误均有中英俄稳定码映射。
+
+xs 的 XS_TAKEOVER 连接持有脚本代；API Unit 停止入场，cancel/wait/destroy
+下载 executor 后才释放 API manager 和脚本代码。真实网络等待可由取消唤醒，
+包括 Unit 在唯一网络 worker 上执行的情形。Unit 不允许在该 executor 内调用；
+同步文件系统操作的协作取消边界仍适用。
+
+`test_backup_download_runtime.py` 在隔离复制源中注入暂停/小预算控制，分别
+通过 HTTP/TLS 发送普通 2 MiB artifact，最终文档超过默认 1 MiB 发送队列。
+逐文件独立 base64/长度/hash 读回，验证捕获后实际 metadata 修改不影响原
+备份且不占用存储锁、单任务拒绝、HEAD、断连、截止时间、无效内容与重试。
+单个 socket 的缓冲缩小后，确认实际 pending bytes，再从网络 worker cancel
+真实背压等待并释放执行槽；不是压力或高负载测试。`test_packed_backup_download.py`
+只在隔离目录放已打包程序及 HTTP 测试配置，源代码全部来自内置 VFS；下载
+草稿、待确认队列和原 artifact 后，换程序目录重启同一 Home，再核对原字节。
+没有执行模型、shell、队列，也没有进行浏览器下载或恢复。
+
+上传接收、严格离线验证/预览、实际 xllm/UI replay、新会话原子发布和正式
+页面菜单仍待步骤 3–6 完成；`restore_ready:false` 继续保留。此后端下载不能
+当作正式页面导出到新 Home 再恢复成功的证据。
+
+本阶段 Windows/Linux 完整有界门禁通过 114 Python、240 Node、90 前端模块、
+严格 C11、33 运行探针和 A/B 确定性；Windows 另通过便携窗口与打包崩溃/
+20 秒启动。最后映射排版及项目租约/packed 新验证在 Windows 复验完整前端、
+API、A/B、三项 packed 和便携窗口；Linux 全门禁包含最终代码/新验证。
+日志为 `.build/qa-backup-download-{release,final,linux-release}.log`。
+根目录程序与最终 Windows A/B 同为
+`6ea1f9b686bc5971cb84b4672136aee8c79d0b5cac1d31db21e98f739282093e`；Linux
+包为 `a3dad18d2340d4410dc2366a6896a8646750760b7b6406d0303fa463897b68f6`。

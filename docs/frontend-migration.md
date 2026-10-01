@@ -4,6 +4,40 @@
 
 完成判据及尚缺的打包页证据见 [前端操作体验完成审计](frontend-completion-audit.md)。本文件继续记录每次实现和验证的细节。
 
+## 2026-10-01：完整会话备份的专用下载
+
+新增 v2 `/backup` 的 GET/HEAD/OPTIONS，使用惰性单任务 executor 和
+XS_TAKEOVER 连接生命周期。只在捕获阶段持有 session/项目租约及 API
+存储 guard，之后独立编码并按至多 16 KiB 分块发送；TCP 处理队列满与
+DRAIN，TLS 使用异步 Send/DRAIN。整个任务共用 30 秒截止时间，连接
+关闭或取消释放任务；Unit 先取消并 join，再释放 manager/TCC 代码。
+普通 API、图片及旧 v1 导出限额不变，缓存继续位于便携 Home。
+
+真实 HTTP/TLS 小探针发送正常 2 MiB 文件，返回文档超过默认发送队列；
+独立读回 hash/字节、HEAD、捕获后 metadata 修改、错误/重试、断连、
+超时、占用拒绝和 shutdown 均通过。缩小单个 socket 缓冲并确认实际
+pending 后，从唯一网络 worker 取消真实背压等待，执行槽可再次使用。
+新 packed 探针完全从内置 VFS/TCC 加载代码，核对草稿/待确认队列/
+artifact；换程序目录重启同一 Home 后，原内容逐字节一致且没有派发。
+项目独占期间 GET/HEAD 下载也拒绝，OPTIONS 保持可用。没有模型、
+shell/队列执行或压力/高负载测试。
+
+四类备份错误已有三语提示。页面仍使用 v1 菜单，v2 保留
+`restore_ready:false`；上传、离线完整 schema/引用验证、实际账本/UI
+恢复、原子新会话发布及正式页面导出/恢复继续按
+[实施记录](session-backup-plan.md#专用-httptls-下载与生命周期) 推进。
+后端 HTTP 接收与内置 VFS 核对不能代替浏览器下载或实体设备验收。
+
+Windows/Linux 完整有界门禁通过 114 Python、240 Node、90 模块解析、严格
+C11、33 运行探针及确定性 A/B；Windows 另经便携 WebView2 Home 与打包
+崩溃/20 秒启动。最后整理映射缩进并加入项目租约/内置 VFS 验证后，
+Windows 重新通过完整前端检查、API、A/B、三项 packed 探针和便携窗口；
+Linux 完整门禁直接包含最终代码及新探针。日志为
+`.build/qa-backup-download-{release,final,linux-release}.log`。
+根目录 `mdo.exe` 已更新到最终 A/B 包，SHA-256 为
+`6ea1f9b686bc5971cb84b4672136aee8c79d0b5cac1d31db21e98f739282093e`；Linux
+包为 `a3dad18d2340d4410dc2366a6896a8646750760b7b6406d0303fa463897b68f6`。
+
 ## 2026-10-01：完整会话备份的内部文件格式
 
 新增独立 `session_backup.h` 和 `sessions/backup.c`。统一捕获窗口内仅复制

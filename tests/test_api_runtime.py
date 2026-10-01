@@ -879,6 +879,7 @@ def project_lease_exclusion(port: int, home: Path, session_id: str) -> None:
         ("POST", session + "/queue/discard-images/image"),
         ("GET", session + "/feedback"), ("PUT", session + "/feedback"),
         ("GET", session + "/todo"),
+        ("GET", session + "/backup"),
         ("POST", session + "/attachments"),
         ("GET", session + "/attachments/image"),
         ("DELETE", session + "/attachments/image"),
@@ -929,6 +930,9 @@ def project_lease_exclusion(port: int, home: Path, session_id: str) -> None:
             "project_busy"), (status, body)
         status, _, body = request(port, "HEAD", prefix + "/draft")
         assert status == 409 and body == b"", (status, body)
+        status, _, body = request(port, "HEAD", session + "/backup")
+        assert status == 409 and body == b"", (status, body)
+        assert request(port, "OPTIONS", session + "/backup")[0] == 200
         assert request(port, "OPTIONS", prefix + "/draft")[0] == 200
         assert request(port, "PATCH", prefix + "/draft")[0] == 405
         assert request(port, "GET", "/api/v1/draft")[0] == 200

@@ -955,6 +955,18 @@ bool MdoApiSessionExportRoute(MdoApiContext* Context)
     return Result;
 }
 
+bool MdoApiSessionBackupRoute(MdoApiContext* Context)
+{
+    MdoSessionInfo Info;
+    MdoSession* Session;
+    uint64 ExpectedRevision;
+    bool ReplyResult;
+    if ( !MdoApiSessionNoBody(Context) ) return MdoApiReplyError(Context, 400u,
+        "body_not_allowed", "Session backup does not accept a request body", NULL);
+    Session = MdoApiSessionOpenActive(Context, false, &Info, &ExpectedRevision, &ReplyResult);
+    return Session != NULL ? MdoApiSessionBackupStart(Context, Session) : ReplyResult;
+}
+
 static bool MdoApiSessionLedgerMutation(MdoApiContext* Context,
     bool Clear)
 {

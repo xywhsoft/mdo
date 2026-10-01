@@ -93,6 +93,7 @@ class BuildContractTests(unittest.TestCase):
             "src/runs/manager.c",
             "src/bootstrap/bootstrap.c",
             "src/api/http.c",
+            "src/api/downloads.c",
             "src/api/write_admission.c",
             "src/api/body.c",
             "src/api/attachments.c",

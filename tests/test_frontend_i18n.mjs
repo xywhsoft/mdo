@@ -16,6 +16,10 @@ const packs = Object.fromEntries(supportedLocales.map((name) => [
 ]));
 const localizedApiErrors = [
   ["session_capture_busy", "error.sessionCaptureBusy"],
+  ["session_backup_busy", "error.sessionBackupBusy"],
+  ["session_backup_limit", "error.sessionBackupLimit"],
+  ["session_backup_invalid", "error.sessionBackupInvalid"],
+  ["session_backup_unavailable", "error.sessionBackupUnavailable"],
   ["session_message_changed", "error.sessionMessageChanged"],
   ["image_name_invalid", "error.imageNameInvalid"],
   ["write_token_required", "error.writeTokenRequired"],

@@ -185,6 +185,9 @@ static const MdoApiRoute g_MdoApiRoutes[] = {
     { "/api/v1/projects/{project}/sessions/{session}/export",
       XHTTP_METHOD_GET | XHTTP_METHOD_HEAD, "GET, HEAD, OPTIONS",
       MdoApiSessionExportRoute, true },
+    { "/api/v1/projects/{project}/sessions/{session}/backup",
+      XHTTP_METHOD_GET | XHTTP_METHOD_HEAD, "GET, HEAD, OPTIONS",
+      MdoApiSessionBackupRoute, true },
     { "/api/v1/projects/{project}/sessions/{session}/runs",
       XHTTP_METHOD_POST, "POST, OPTIONS", MdoApiRunStartRoute, true },
     { "/api/v1/runs/{run}",
@@ -365,6 +368,12 @@ bool MdoApiInit(void)
         MdoApiSessionsUnit();
         return false;
     }
+    if ( !MdoApiDownloadsInit() ) {
+        MdoApiWriteUnit(); MdoApiPurgeIntentUnit(); MdoApiAttachmentsUnit();
+        MdoApiWorkspaceStateUnit(); MdoApiQueueUnit(); MdoApiDraftUnit();
+        MdoApiFeedbackUnit(); MdoApiSessionsUnit();
+        return false;
+    }
     xrtAtomic64Init(&g_MdoApiFallbackId, 0u);
     g_MdoApiInitialized = true;
     return true;
@@ -373,6 +382,7 @@ bool MdoApiInit(void)
 void MdoApiUnit(void)
 {
     g_MdoApiInitialized = false;
+    MdoApiDownloadsUnit();
     MdoApiWriteUnit();
     MdoApiPurgeIntentUnit();
     MdoApiWorkspaceStateUnit();
@@ -476,7 +486,7 @@ XS_RequestResult MdoApiRequest(XS_HttpReq* pRequest)
                 "The request method is not allowed for this resource",
                 Route->Allow);
         }
-        return XS_OK;
+        return Context.Takeover ? XS_TAKEOVER : XS_OK;
     }
     (void)MdoApiReplyError(&Context, 404u, "route_not_found",
         "The requested API resource does not exist", NULL);

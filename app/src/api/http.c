@@ -3,14 +3,17 @@
 
 #include "internal.h"
 #include "write_admission.h"
+#include "../../include/mdo/session_backup.h"
 
-static bool MdoApiConnectionSend(XS_HttpReq* pRequest, const void* pData,
+static bool MdoApiConnectionSend(MdoApiContext* Context, const void* pData,
     size_t Size)
 {
     size_t Written = 0u;
+    XS_HttpReq* pRequest = Context != NULL ? Context->Request : NULL;
 
     if ( pRequest == NULL || (pData == NULL && Size != 0u) ) return false;
     if ( Size == 0u ) return true;
+    if ( Context->SendDeadline != 0u ) return MdoApiDownloadSend(Context, pData, Size);
     if ( pRequest->tls != NULL ) {
         return xrtTlsStreamSend(pRequest->tls, pData, Size, &Written) ==
             XTLS_OK && Written == Size;
@@ -25,7 +28,7 @@ static bool MdoApiReplyRaw(MdoApiContext* pContext, uint16 Status,
 {
     char Head[1536];
     char Length[32];
-    xhttpfield Fields[10];
+    xhttpfield Fields[11];
     char WriteToken[MDO_API_WRITE_TOKEN_CAPACITY];
     size_t FieldCount = 0u;
     size_t HeadSize = 0u;
@@ -65,15 +68,17 @@ static bool MdoApiReplyRaw(MdoApiContext* pContext, uint16 Status,
             XRT_STR_LITERAL("Content-Disposition"),
             xrtStrView(ContentDisposition) };
     }
+    if ( pContext->CloseResponse ) Fields[FieldCount++] = (xhttpfield){
+        XRT_STR_LITERAL("Connection"), XRT_STR_LITERAL("close") };
     Reason = xrtHttpStatusText(Status);
     if ( !xrtHttp1ResponseWrite(XHTTP_VERSION_1_1, Status, Reason,
             Fields, FieldCount, Head, sizeof(Head), &HeadSize) ||
-         !MdoApiConnectionSend(pContext->Request, Head, HeadSize) ) {
+         !MdoApiConnectionSend(pContext, Head, HeadSize) ) {
         return false;
     }
     if ( BodySize != 0u &&
          pContext->Request->head->MethodCode != XHTTP_METHOD_HEAD ) {
-        return MdoApiConnectionSend(pContext->Request, pBody, BodySize);
+        return MdoApiConnectionSend(pContext, pBody, BodySize);
     }
     return true;
 }
@@ -145,6 +150,17 @@ bool MdoApiReplyImage(MdoApiContext* pContext, const void* pBody,
         return false;
     return MdoApiReplyRaw(pContext, 200u, pBody, BodySize, NULL, NULL,
         ContentType, NULL);
+}
+
+bool MdoApiReplyBackupDownload(MdoApiContext* Context, const void* Body,
+    size_t Bytes, cstr Disposition, cstr EntityTag)
+{
+    if ( Context == NULL || Context->SendDeadline == 0u ||
+         !Context->CloseResponse || Body == NULL || Bytes == 0u ||
+         Bytes > MDO_SESSION_BACKUP_MAX_DOCUMENT_BYTES ||
+         Disposition == NULL || EntityTag == NULL ) return false;
+    return MdoApiReplyRaw(Context, 200u, Body, Bytes, NULL, EntityTag,
+        "application/json; charset=utf-8", Disposition);
 }
 
 bool MdoApiReplySuccessTake(MdoApiContext* pContext, uint16 Status,

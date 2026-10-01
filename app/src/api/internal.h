@@ -21,6 +21,11 @@ typedef struct MdoApiContext {
     size_t ParamCount;
     bool WriteShared;
     bool WriteExclusive;
+    /* Set only on a copied, owned request in the download executor. */
+    xdeadline SendDeadline;
+    xcancel* SendCancel;
+    bool CloseResponse;
+    bool Takeover;
 } MdoApiContext;
 
 typedef bool (*MdoApiRouteProc)(MdoApiContext* pContext);
@@ -72,6 +77,15 @@ void MdoApiJsonBodyUnit(MdoApiJsonBody* pBody);
 bool MdoApiReplyBodyError(MdoApiContext* pContext, MdoApiBodyStatus Status);
 bool MdoApiReplyDownload(MdoApiContext* pContext, const void* pBody,
     size_t BodySize, cstr ContentDisposition, cstr EntityTag);
+bool MdoApiReplyBackupDownload(MdoApiContext* Context, const void* Body,
+    size_t Bytes, cstr Disposition, cstr EntityTag);
+bool MdoApiDownloadsInit(void);
+void MdoApiDownloadsUnit(void);
+bool MdoApiDownloadSend(MdoApiContext* Context, const void* Data, size_t Bytes);
+/* Always consumes Session. Success takes over only this connection; the
+ * executor copies request fields and retains the stream before admission. */
+bool MdoApiSessionBackupStart(MdoApiContext* Context, struct MdoSession* Session);
+bool MdoApiSessionBackupRoute(MdoApiContext* Context);
 
 bool MdoApiBootstrapRoute(MdoApiContext* pContext);
 bool MdoApiSettingsRoute(MdoApiContext* pContext);

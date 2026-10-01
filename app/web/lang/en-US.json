@@ -1,5 +1,9 @@
 {
   "error.sessionCaptureBusy": "Session data is being saved or cleaned up. Try exporting again shortly.",
+  "error.sessionBackupBusy": "Another session backup is in progress. Try again shortly.",
+  "error.sessionBackupLimit": "The session backup exceeds its size or time limit. Try again later or reduce retained content.",
+  "error.sessionBackupInvalid": "Session records contain unreadable data or missing attachments. A complete backup cannot be created yet.",
+  "error.sessionBackupUnavailable": "The backup service is temporarily unavailable. Your original session is retained; try again later.",
   "error.sessionMessageChanged": "The original message changed or was removed in another window. Keep your edit, refresh the conversation, and select the message again.",
   "app.name": "Mdo",
   "app.title": "Mdo",
