@@ -1,6 +1,7 @@
 import { api } from "../../api/client.js";
 import { subscribeLocale, t } from "../../i18n.js";
 import { clear, element, isImeKey, revealListOption } from "../../utils/dom.js";
+import { replaceInputText } from "../../utils/text-edit.js";
 
 const WAIT_MS = 180;
 const VISIBLE_MAX = 8;
@@ -99,14 +100,16 @@ export function createFileMentions({ composer, input, navigation }) {
   function insert(path) {
     const token = mentionAtCaret(input);
     if (!token || !choices.includes(path)) { hide(); return; }
-    const hasSeparator = /\s/.test(input.value[token.end] ?? "");
-    const replacement = fileReference(path) + (hasSeparator ? "" : " ");
-    input.setRangeText(replacement, token.start, token.end, "end");
-    // Reuse an existing separator without leaving the caret inside the mention.
-    if (hasSeparator) input.setSelectionRange(input.selectionStart + 1,
-      input.selectionStart + 1);
+    const separator = input.value[token.end];
+    const hasSeparator = /\s/.test(separator ?? "");
+    // Include the existing separator in the same native edit. This keeps its
+    // character and the caret after it together when the user undoes/redoes.
+    const replacement = fileReference(path) + (hasSeparator ? separator : " ");
+    if (!replaceInputText(input, token.start,
+      token.end + (hasSeparator ? 1 : 0), replacement)) {
+      hide(); return;
+    }
     hide();
-    input.dispatchEvent(new Event("input", { bubbles: true }));
     input.focus();
   }
 

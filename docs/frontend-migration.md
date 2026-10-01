@@ -4,6 +4,56 @@
 
 完成判据及尚缺的打包页证据见 [前端操作体验完成审计](frontend-completion-audit.md)。本文件继续记录每次实现和验证的细节。
 
+## 2026-10-01：文件补全进入输入撤销记录
+
+文件补全原先用 `setRangeText` 修改 textarea。实际键盘验证表明，补全后
+按 Ctrl+Z 会收到 `historyUndo`，文字却不回退。现在公共文本编辑模块优先
+使用浏览器编辑命令，使完整引用成为一次可撤销的编辑。已有空格或换行
+一并放入该次编辑，保留原分隔符及后续文字，重做后的光标仍在分隔符之后。
+浏览器不支持命令时保留既有 `setRangeText` 回退，不新增工具链依赖。
+
+公共模块只补发未由原生编辑发出的 input 通知，避免重复保存草稿与估算
+token。返回失败但实际已经编辑的命令不会重复插入；`beforeinput` 被取消
+时保留原文及原光标，禁用/只读输入不会被旧选项修改。选择本来就完整的
+引用仅移动光标，不重置撤销历史。
+
+验证：
+
+- 六项 Node 用例覆盖原生通知、编辑后返回失败、缺失/拒绝的命令、取消、
+  无内容变化及只读输入。真正的原生撤销由浏览器键盘验证，不以模拟命令
+  测试代替。
+- `composer-mention-undo-browser.html` 原实现实际补全 `keep this draft @QA`
+  后 Ctrl+Z 无文字变化；新实现一次撤销回到原查询，Ctrl+Shift+Z 恢复
+  `@"notes/QA notes.txt"`。带后续 `tail` 的补全及重做均保留后续文字，
+  光标仍在 `tail` 之前。
+- 320×350 夹具页用中文多行草稿、鼠标选择路径验证换行保留及撤销/重做；
+  文档宽度 320px，重做光标位于下一行“后面保留”之前。截图为
+  `.build/qa-mention-undo-browser-mobile.png`。该证据来自浏览器组件，不代表
+  原生移动设备或所有 WebView 通过；旧环境回退没有新增原生撤销保证。
+
+- 最终单文件 Home `.build/mdo-packed-docks-hxv656rf` 从真实工作区选择
+  `notes/QA notes.txt`。磁盘草稿已保存后，桌面 Ctrl+Z/Ctrl+Shift+Z 仍分别
+  回到 `@QA` 和完整引用，保留后续 `tail` 及光标。Ctrl+K 进入新任务后
+  Ctrl+Z 不能带回旧输入；返回原会话仍保留其草稿。320×350 中实际用
+  鼠标选择路径、多行中文草稿验证撤销与重做，磁盘 revision 8 保留原换行；
+  刷新读回相同内容，文档宽度 320px，浏览器脚本错误为空。390×600 截图
+  为 `.build/qa-mention-undo-packed.png`。
+- 从最终包读取公共文本编辑模块，SHA-256 与源码字节一致。Windows/Linux
+  原生文件系统有界门禁均通过 114 项 Python、175 项 Node、86 个模块、
+  严格 C11、32 个运行探针与确定性 A/B 打包；Windows 另通过便携窗口及
+  20 秒启动。没有压力或高负载测试，没有将 Linux 服务验证写作原生 GUI
+  或实体手机键盘的验收。
+
+根目录 `mdo.exe` 使用通过门禁的 Windows 包更新，SHA-256 为
+`ccda933dc6383c01f4c331cdf088416a888086a2d1345d5a1fca44e585342428`。
+Linux A/B 包 SHA-256 为
+`391f7ec8d997a67fc89fb5c3210789fef7caecbf42d9536d946c1adaa81c389a`。
+日志为 `.build/qa-mention-undo-release.log` 与
+`.build/qa-mention-undo-linux-native-release.log`。独立组件页可用
+`python -m http.server 38925 --bind 127.0.0.1` 打开
+`/tests/fixtures/composer-mention-undo-browser.html`，键入 `keep @QA`，选择
+候选后依次按 Ctrl+Z、Ctrl+Shift+Z 重放；光标放在多行中间同样可验证。
+
 ## 2026-10-01：兼容复制保留文字选择
 
 缺少异步剪贴板 API 的 WebView 使用临时 textarea 复制。原实现只恢复

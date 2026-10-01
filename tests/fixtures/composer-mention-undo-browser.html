@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="zh-CN">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>mdo file mention undo probe</title>
+<style>
+body { font: 16px system-ui; margin: 20px; }
+textarea { width: 100%; min-height: 100px; box-sizing: border-box; }
+.file-mention-menu { border: 1px solid #777; }
+.file-mention-option { min-height: 40px; padding: 6px; }
+[aria-selected="true"] { background: #def; }
+pre { white-space: pre-wrap; overflow-wrap: anywhere; }
+</style>
+<form class="composer">
+  <label for="draft">输入草稿</label>
+  <textarea id="draft"></textarea>
+</form>
+<pre id="result">等待输入</pre>
+<script type="module">
+import { createFileMentions } from "/app/web/js/features/chat/file-mentions.js?undo-probe=2";
+
+const composer = document.querySelector(".composer");
+const input = document.querySelector("#draft");
+const output = document.querySelector("#result");
+const originalFetch = window.fetch;
+window.fetch = async (url, options) => String(url).includes("/workspace/files?q=")
+  ? new Response(JSON.stringify({ ok: true, data: {
+      items: ["notes/QA notes.txt"],
+    }}), { status: 200, headers: { "Content-Type": "application/json" } })
+  : originalFetch(url, options);
+const navigation = { get: () => ({ view: "workspace", projectId: "qa",
+  sessionId: "undo" }), subscribe: () => () => {} };
+const mentions = createFileMentions({ composer, input, navigation });
+input.addEventListener("keydown", (event) => mentions.onKeyDown(event));
+input.addEventListener("input", (event) => {
+  output.textContent = JSON.stringify({ value: input.value, type: event.inputType,
+    start: input.selectionStart, end: input.selectionEnd }, null, 2);
+});
+composer.addEventListener("submit", (event) => event.preventDefault());
+</script>
+</html>
