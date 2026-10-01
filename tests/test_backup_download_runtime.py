@@ -56,13 +56,13 @@ class Probe:
         replace(self.site, "src/api/downloads.c", "#define MDO_DOWNLOAD_CHUNK 16384u",
                 "uint64 BackupDownloadFixtureTimeout(void);\n"
                 "bool BackupDownloadFixtureLowFiles(void);\n"
-                "bool BackupDownloadFixturePause(unsigned, xcancel*, xdeadline);\n"
+                "bool BackupDownloadFixturePause(unsigned, MdoApiContext*);\n"
                 "#define MDO_DOWNLOAD_CHUNK 16384u")
         replace(self.site, "src/api/downloads.c", "    Job->Context.SendCancel = Cancel;",
                 "    Job->Context.SendCancel = Cancel;\n"
-                "    if (!BackupDownloadFixturePause(1u, Cancel, Job->Context.SendDeadline)) return XTASK_CANCELLED;")
+                "    if (!BackupDownloadFixturePause(1u, &Job->Context)) return XTASK_CANCELLED;")
         replace(self.site, "src/api/downloads.c", "    while ( Offset < Bytes ) {",
-                "    if (!BackupDownloadFixturePause(2u, Context->SendCancel, Context->SendDeadline)) return false;\n"
+                "    if (!BackupDownloadFixturePause(2u, Context)) return false;\n"
                 "    while ( Offset < Bytes ) {")
         replace(self.site, "src/api/downloads.c", "xrtDeadlineAfter(MDO_DOWNLOAD_TIMEOUT_US)",
                 "xrtDeadlineAfter(BackupDownloadFixtureTimeout())")

@@ -161,7 +161,7 @@ void ServiceInit(XS_HostInfo* Host) {
     }
 done:
     if ( Held != NULL ) (void)xrtClose(Held);
-    MdoHomeUnit(); fflush(stdout);
+    MdoHomeUnit(); printf("purge_finished=1\n"); fflush(stdout);
 }
 void ServiceUnit(XS_HostInfo* Host) { (void)Host; }
 '''
@@ -212,8 +212,11 @@ def launch(host: Path, site: Path, home: Path, mode: str, *, checkpoint: bool = 
             env=env, stdout=output, stderr=subprocess.STDOUT)
         try:
             deadline = time.monotonic() + 8
-            needles = ("purge_checkpoint=1",) if checkpoint else (
-                "purge_end=", "purge_init=0", "purge_inspect=1")
+            # A visible printf prefix may be a partial native write. Wait for
+            # the fixture's final, complete line before terminating it; later
+            # frozen/write assertions must also have reached the log.
+            needles = ("purge_checkpoint=1\n",) if checkpoint else (
+                "purge_finished=1\n", "purge_init=0\n")
             while time.monotonic() < deadline:
                 text = log.read_text(encoding="utf-8", errors="replace")
                 if any(needle in text for needle in needles):

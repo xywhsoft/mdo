@@ -27,8 +27,7 @@ static void BackupDownloadFixtureUnit(void)
 
 uint64 BackupDownloadFixtureTimeout(void)
 {
-    return xrtAtomic32Exchange(&g_BackupFixtureShort, 0u, XMEMORY_ACQ_REL) ?
-        250000u : 30000000u;
+    return 30000000u;
 }
 
 bool BackupDownloadFixtureLowFiles(void)
@@ -36,19 +35,26 @@ bool BackupDownloadFixtureLowFiles(void)
     return xrtAtomic32Exchange(&g_BackupFixtureFiles, 0u, XMEMORY_ACQ_REL) != 0u;
 }
 
-bool BackupDownloadFixturePause(unsigned Phase, xcancel* Cancel, xdeadline Deadline)
+bool BackupDownloadFixturePause(unsigned Phase, MdoApiContext* Context)
 {
     xfuture* Future;
+    xdeadline Deadline;
     bool Ok;
     if ( xrtAtomic32Load(&g_BackupFixturePhase, XMEMORY_ACQUIRE) != Phase ) return true;
     xrtMutexLock(g_BackupFixtureLock);
     Future = xrtFutureRef(g_BackupFixtureFuture);
     xrtMutexUnlock(g_BackupFixtureLock);
     if ( Future == NULL ) return false;
+    /* Start the short production deadline at the send checkpoint, on the
+     * owning executor thread. Slow capture/encoding cannot consume this test's
+     * observation window, and there is no concurrent deadline-field write. */
+    if ( Phase == 2u && xrtAtomic32Exchange(&g_BackupFixtureShort, 0u, XMEMORY_ACQ_REL) )
+        Context->SendDeadline = xrtDeadlineAfter(250000u);
+    Deadline = Context->SendDeadline;
     xrtAtomic32Store(&g_BackupFixtureEntered, Phase, XMEMORY_RELEASE);
     /* A fixture itself never waits more than five seconds. */
     if ( Deadline > xrtDeadlineAfter(5000000u) ) Deadline = xrtDeadlineAfter(5000000u);
-    Ok = xrtFutureWaitUntilCancel(Future, Deadline, Cancel) == XWAIT_OK &&
+    Ok = xrtFutureWaitUntilCancel(Future, Deadline, Context->SendCancel) == XWAIT_OK &&
         xrtFutureState(Future) == XFUTURE_RESOLVED;
     xrtFutureDestroy(Future);
     return Ok;
