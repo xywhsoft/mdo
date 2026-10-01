@@ -1023,6 +1023,9 @@ select:focus-visible,
 .image-preview-dialog::backdrop { background: rgb(0 0 0 / 72%); }
 .image-preview-dialog img { display: block; width: auto; height: auto; max-width: calc(100vw - 42px); max-height: calc(100dvh - 106px); object-fit: contain; }
 .image-preview-name { width: min(480px, calc(100vw - 42px)); }
+.image-preview-status { width: min(480px, calc(100vw - 42px)); margin: 12px 0; color: var(--muted); font-size: 13px; line-height: 1.6; overflow-wrap: anywhere; }
+.image-preview-retry { min-height: 40px; padding: 8px 14px; border: 1px solid var(--border-strong); border-radius: var(--radius-sm); background: var(--bg); color: var(--ink); cursor: pointer; }
+.image-preview-retry[aria-disabled="true"] { cursor: wait; opacity: .65; }
 .image-preview-close { position: absolute; top: 4px; right: 8px; display: grid; width: 40px; height: 40px; place-items: center; padding: 0; border: 1px solid var(--border-strong); border-radius: 50%; background: var(--surface-raised); color: var(--ink); font-size: 22px; line-height: 1; cursor: pointer; }
 .dialog-card > header { display: flex; align-items: flex-start; justify-content: space-between; padding: 20px 20px 15px; border-bottom: 1px solid var(--border); }
 .dialog-card h2 { margin: 0; font-size: 17px; }

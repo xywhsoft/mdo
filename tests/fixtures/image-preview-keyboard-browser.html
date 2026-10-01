@@ -36,7 +36,7 @@ const frame = () => new Promise((resolve) => requestAnimationFrame(() =>
 const geometry = () => {
   const d = dialog.getBoundingClientRect();
   const c = closeButton.getBoundingClientRect();
-  const i = image.getBoundingClientRect();
+  const i = dialog.querySelector("img").getBoundingClientRect();
   return { top: d.top, bottom: d.bottom,
     closeTop: c.top, closeBottom: c.bottom,
     imageBottom: i.bottom, imageHeight: i.height };

@@ -542,6 +542,7 @@ export async function boot() {
   createImagePreview({
     dialog: $("#image-preview"), image: $("#image-preview-content"),
     caption: $("#image-preview-name"),
+    status: $("#image-preview-status"), retryButton: $("#retry-image-preview"),
     closeButton: $("#close-image-preview"), navigation,
   });
   const tracePanel = createTracePanel({

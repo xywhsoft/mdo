@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="zh-CN">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>mdo image preview load probe</title>
+<link rel="stylesheet" href="/app/web/css/app.css">
+<style>body{padding:12px}.thumb{margin:8px;width:130px;min-height:90px}.thumb img{display:block;width:80px;height:50px;margin:auto}pre{white-space:pre-wrap;overflow-wrap:anywhere}</style>
+<textarea id="prompt">保留输入与焦点</textarea>
+<div><button class="thumb" id="broken" data-image-preview data-image-ref="broken" type="button"><img src="/__qa/image/retry" alt="临时不可用.png">失败图片</button>
+<button class="thumb" id="good" data-image-preview data-image-ref="good" type="button"><img src="/__qa/image/good" alt="正常图片.png">正常图片</button>
+<button class="thumb" id="slow" data-image-preview data-image-ref="slow" type="button"><img src="/__qa/image/slow" alt="慢速旧图片.png">慢速旧图片</button></div>
+<div><button id="locale" type="button">English</button><button id="race" type="button">验证关闭后重开与迟到旧事件</button></div>
+<dialog class="image-preview-dialog" id="preview" aria-label="图片预览">
+<button id="close" class="image-preview-close" type="button" aria-label="关闭图片预览">×</button>
+<img id="image" alt="">
+<bdi class="image-file-name image-preview-name" id="name"></bdi>
+<p class="image-preview-status" id="status" role="status" aria-live="polite" hidden></p>
+<button class="image-preview-retry" id="retry" type="button" hidden>重新载入</button></dialog>
+<pre id="result"></pre>
+<script type="module">
+import { createImagePreview } from "/app/web/js/features/chat/image-preview.js";
+import { loadLocale } from "/app/web/js/i18n.js";
+const dialog = document.querySelector("#preview");
+const close = document.querySelector("#close"), status = document.querySelector("#status"), retry = document.querySelector("#retry");
+const errors = [], output = document.querySelector("#result");
+window.addEventListener("error", e => errors.push(e.message));
+createImagePreview({ dialog, image: document.querySelector("#image"), caption: document.querySelector("#name"),
+  closeButton: close, status, retryButton: retry, navigation: { subscribe() {} } });
+document.querySelector("#locale").addEventListener("click", async () => {
+  await loadLocale("en-US");
+  document.querySelector("#locale").textContent = "English active";
+});
+document.querySelector("#race").addEventListener("click", async () => {
+  document.querySelector("#slow").click();
+  const old = dialog.querySelector("img");
+  await new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done)));
+  close.click(); document.querySelector("#good").click();
+  // Retained DOM producers are deliberately adversarial, while the real slow
+  // HTTP failure also arrives after the new image. Neither may alter it.
+  old.dispatchEvent(new Event("error")); old.dispatchEvent(new Event("load"));
+});
+function report() {
+  const image = dialog.querySelector("img"), d = dialog.getBoundingClientRect(), c = close.getBoundingClientRect();
+  output.textContent = JSON.stringify({ open: dialog.open, source: image.getAttribute("src"),
+    phase: dialog.dataset.imageState, visible: !image.hidden, decoded: image.naturalWidth > 0,
+    status: status.textContent, statusVisible: !status.hidden, retryVisible: !retry.hidden,
+    name: document.querySelector("#name").textContent, focus: document.activeElement?.id,
+    fits: !dialog.open || (d.left >= 0 && d.right <= innerWidth && d.top >= 0 && d.bottom <= innerHeight && c.top >= 0),
+    noOverflow: document.documentElement.scrollWidth <= innerWidth, errors }, null, 2);
+  requestAnimationFrame(report);
+}
+report();
+</script></html>

@@ -15,6 +15,8 @@ With --image-capable --image-transfer-fixture, /__qa/image-transfer serves a
 synthetic clipboard control for the actual packed editor and attachment API.
 It also exercises rapid close/reopen in the real workbench; the component route
 /__qa/image-preview-lifecycle imports the exact packed preview/name modules.
+/__qa/image-preview-load tests loading, HTTP failure, retry and obsolete events.
+POST /__qa/recover makes its failed image available without touching session data.
 With --message-edit-fixture, /__qa/message-edit-enter serves the keyboard and
 IME component probe against the exact packed message editor module.
 With --export-download-fixture, /__qa/export-download observes the Blob passed
@@ -268,7 +270,46 @@ Object.defineProperty(navigator, 'clipboard', {
     def log_message(self, *_args):
         pass
 
+    def preview_reply(self, code, body, mime):
+        self.send_response(code)
+        self.send_header("Content-Type", mime)
+        self.send_header("Content-Length", str(len(body)))
+        self.send_header("Cache-Control", "no-store")
+        self.end_headers()
+        try:
+            self.wfile.write(body)
+        except (BrokenPipeError, ConnectionResetError):
+            pass  # Closing the preview may cancel an in-flight image request.
+
     def do_GET(self):
+        if self.server.image_transfer_fixture:
+            if self.path == "/__qa/image-preview-load":
+                body = ((ROOT / "tests/fixtures/image-preview-load-browser.html")
+                        .read_bytes().replace(b"/app/web/", b"/"))
+                self.preview_reply(200, body, "text/html; charset=utf-8")
+                return
+            if self.path == "/__qa/image-preview-keyboard":
+                body = ((ROOT / "tests/fixtures/image-preview-keyboard-browser.html")
+                        .read_bytes().replace(b"/app/web/", b"/"))
+                self.preview_reply(200, body, "text/html; charset=utf-8")
+                return
+            if self.path in ("/__qa/image/retry", "/__qa/image/good", "/__qa/image/slow"):
+                with self.server.count_lock:
+                    self.server.preview_image_reads += 1
+                    available = self.path.endswith("/good") or self.server.preview_image_recovered
+                if self.path.endswith("/slow"):
+                    time.sleep(1)  # One bounded obsolete request, never load testing.
+                    available = False
+                pixel = base64.b64decode("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+a8Z8AAAAASUVORK5CYII=")
+                self.preview_reply(200 if available else 503,
+                                   pixel if available else b"not available", "image/png")
+                return
+            if self.path == "/__qa/state":
+                with self.server.count_lock:
+                    body = json.dumps({"recovered": self.server.preview_image_recovered,
+                                       "reads": self.server.preview_image_reads}).encode()
+                self.preview_reply(200, body, "application/json")
+                return
         if (self.path == "/__qa/export-download" and
                 self.server.export_download_fixture):
             payload = (ROOT / "tests/fixtures/packed-export-download-browser.html").read_bytes()
@@ -363,6 +404,14 @@ Object.defineProperty(navigator, 'clipboard', {
         self.forward()
 
     def do_POST(self):
+        if self.server.image_transfer_fixture and self.path == "/__qa/recover":
+            if self.headers.get("Content-Length", "0") != "0":
+                self.send_error(400, "body must be empty")
+                return
+            with self.server.count_lock:
+                self.server.preview_image_recovered = True
+            self.preview_reply(200, b"{}", "application/json")
+            return
         self.forward()
 
     def do_PUT(self):
@@ -1300,6 +1349,8 @@ try:
         proxy = BoundedDelayProxyServer(("127.0.0.1", 0), BoundedDelayProxy)
         proxy.upstream_port = port
         proxy.image_transfer_fixture = args.image_transfer_fixture
+        proxy.preview_image_recovered = False
+        proxy.preview_image_reads = 0
         proxy.message_edit_fixture = args.message_edit_fixture
         proxy.export_download_fixture = args.export_download_fixture
         proxy.qa_session = session

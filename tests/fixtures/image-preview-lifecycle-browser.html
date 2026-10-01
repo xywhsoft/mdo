@@ -57,7 +57,7 @@ try {
   const second = thumbnail("second", "第二张.png");
   first.click(); closeButton.click(); second.click();
   await frames();
-  const reopened = dialog.open && image.getAttribute("src") === pixel &&
+  const reopened = dialog.open && dialog.querySelector("img").getAttribute("src") === pixel &&
     caption.textContent === "第二张.png" && document.activeElement === closeButton;
   closeButton.click(); await frames();
 
@@ -66,11 +66,11 @@ try {
   prompt.focus();
   await frames();
   const navigationFocus = !dialog.open && document.activeElement === prompt &&
-    prompt.value === "保留输入" && !image.hasAttribute("src");
+    prompt.value === "保留输入" && !dialog.querySelector("img").hasAttribute("src");
 
   second.click(); dialog.close(); await frames();
   const externalClose = !dialog.open && document.activeElement === second &&
-    !image.hasAttribute("src") && caption.textContent === "";
+    !dialog.querySelector("img").hasAttribute("src") && caption.textContent === "";
 
   let resolveThird, resolveFourth;
   const thirdName = new Promise((done) => { resolveThird = done; });
