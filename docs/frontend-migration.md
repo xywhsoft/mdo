@@ -35,23 +35,31 @@ compositionstart、compositionend 和不冒泡的 blur。输入框失焦只释�
   390×600 页面显示最终回复和消息操作，脚本错误为空，文档宽度等于视口。
   截图为 `.build/qa-decision-ime-packed.png`。从该包读取三个修改的模块，
   与源码字节一致。
-- Windows 完整有界门禁通过 114 项 Python、181 项 Node、87 个模块解析、
-  严格 C11、32 个运行探针、确定性 A/B 打包、便携 WebView2 Home 和 20 秒
-  启动。日志为 `.build/qa-decision-ime-release.log`，没有压力或高负载测试。
+- Windows 完整有界门禁和 Linux 原生文件系统复验均通过 114 项 Python、
+  181 项 Node、87 个模块解析、严格 C11、32 个运行探针及确定性 A/B 打包；
+  Windows 另通过便携 WebView2 Home 和 20 秒启动。Windows 日志为
+  `.build/qa-decision-ime-release.log`，没有压力或高负载测试。
 
 根目录 `mdo.exe` 使用已验证的 Windows 包，SHA-256 为
 `149b25071342fb56a6fb1582ca5eda21ca8b3a969546706058a93caf8d341508`。
 
-本轮 Linux 门禁未通过：新原生快照
+本轮首次 Linux 门禁未通过：新原生快照
 `/home/ubuntu/.cache/mdo-linux-qa-decision-ime` 已完成单元/前端检查及部分运行
 探针，在项目清除意图探针中遭遇只读文件系统；随后 `findmnt`、`df`、
 `dmesg` 程序均报 I/O 错误。Windows 检查时 C 盘仅余 18,239,488 字节，
 Ubuntu 的 `ext4.vhdx` 位于 C 盘，文件大小 50,931,433,472 字节。磁盘空间
 与 WSL 故障同时出现，尚未取得内核日志确认因果。失败日志保留在
-`.build/qa-decision-ime-linux-native-release.log`，没有继续写入、重置 WSL
-或删除其数据。本次不宣称 Linux 全门禁或 Linux A/B 包通过；需先恢复
-环境再复验。原生窗口完整点击、系统文件拖放、其他图形平台及实体设备的
-缺口仍保留，长期目标未完成。
+`.build/qa-decision-ime-linux-native-release.log`。失败后停止该快照的写入，
+没有重置 WSL 或删除其数据。
+
+随后只读复核显示 C 盘可用空间回到约 3.7GB，WSL 根目录为 rw。在全新的
+`/home/ubuntu/.cache/mdo-linux-qa-decision-ime-recheck` 快照中单独重跑完整
+门禁，全部通过；Linux A/B 包 SHA-256 为
+`e069eea04773b24105c0e829c266c14ecfb5ae1c71c8bccf0a60d74afe892b66`，
+日志为 `.build/qa-decision-ime-linux-native-recheck-release.log`。没有把部分
+通过或环境自动恢复当成完整复验，也没有把该结果外推到 `/mnt/d` 的原子
+文件系统能力或 Linux 原生 GUI。原生窗口完整点击、系统文件拖放、其他
+图形平台及实体设备的缺口仍保留，长期目标未完成。
 
 ## 2026-10-01：文件补全进入输入撤销记录
 
