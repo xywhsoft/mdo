@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="zh-CN">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>mdo clipboard selection probe</title>
+<style>
+body { font: 16px system-ui; margin: 20px; }
+button { min-height: 40px; }
+pre { white-space: pre-wrap; overflow-wrap: anywhere; }
+</style>
+<p id="message">回复正文：保留正在阅读的选择范围。</p>
+<button id="copy" type="button">验证兼容复制与文字选择</button>
+<pre id="result">等待验证</pre>
+<script type="module">
+import { copyText } from "/app/web/js/utils/clipboard.js?selection-probe";
+
+const copy = document.querySelector("#copy");
+const message = document.querySelector("#message");
+const output = document.querySelector("#result");
+// This owned fixture models WebViews without the asynchronous Clipboard API.
+Object.defineProperty(navigator, "clipboard", { configurable: true, value: undefined });
+copy.addEventListener("click", async () => {
+  const selection = document.getSelection();
+  const text = message.firstChild;
+  selection.setBaseAndExtent(text, text.length, text, 5);
+  copy.focus();
+  const before = selection.toString();
+  try {
+    await copyText("mdo clipboard compatibility QA");
+    const after = selection.toString();
+    const backward = selection.anchorNode === text &&
+      selection.anchorOffset === text.length && selection.focusNode === text &&
+      selection.focusOffset === 5;
+    const focused = document.activeElement === copy;
+    const passed = before === after && backward && focused;
+    output.dataset.passed = String(passed);
+    output.textContent = JSON.stringify({ passed, before, after, backward, focused }, null, 2);
+  } catch (error) {
+    output.dataset.passed = "false";
+    output.textContent = error.stack ?? String(error);
+  }
+});
+</script>
+</html>

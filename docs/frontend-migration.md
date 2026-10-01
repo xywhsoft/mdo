@@ -4,6 +4,52 @@
 
 完成判据及尚缺的打包页证据见 [前端操作体验完成审计](frontend-completion-audit.md)。本文件继续记录每次实现和验证的细节。
 
+## 2026-10-01：兼容复制保留文字选择
+
+缺少异步剪贴板 API 的 WebView 使用临时 textarea 复制。原实现只恢复
+按钮焦点，临时选择会清除读者选中的回复文字。现在公共复制模块在进入
+兼容路径时保存 DOM 范围、原始端点及方向，复制结束后恢复原端点仍在
+文档中的范围；Range 的克隆也会在节点删除后移动到父节点，不能将这种
+移动误判为原选择仍然存在。多个范围和不支持方向 API 的环境使用 Range
+回退。当前焦点在输入框时，保留
+选区、方向和内部滚动位置。快照在异步 API 返回失败之后才获取，避免把
+等待期间已经转移的焦点带回旧按钮；同步复制事件移除的节点不被恢复。
+成功的异步路径和既有复制失败提示保持原行为。
+
+验证：
+
+- 新增五项 Node 用例，覆盖反向选择、多范围回退、复制抛错、复制事件移除
+  节点且活 Range 移到父节点，以及等待异步拒绝时继续编辑另一草稿；复制
+  模块共八项用例通过。原端点保护用例在中间打包模块上实际失败，修复后
+  通过，日志为 `.build/qa-clipboard-live-range-before.log`。
+- `clipboard-selection-browser.html` 用正式公共模块模拟缺少异步接口。
+  原实现实际点击后 `before` 为完整选中文字、`after` 为空；修复后选择
+  文字、反向端点和按钮焦点均保持。桌面及 320×350 页面通过，短屏文档
+  宽度 320px。该夹具验证选择恢复与兼容调用结果，不是原生系统剪贴板
+  内容或其他平台原生窗口的验收。
+
+- 最终包 Home `.build/mdo-packed-docks-hpp9kfns` 完成一轮本机合成 Markdown
+  回复。桌面实际复制代码和整条回复，读回分别为完整 C 代码与原 Markdown；
+  320×350 再复制整条回复，未发送中文草稿保持，刷新仍保留，文档宽度为
+  320px，脚本错误为空。390×600 截图为
+  `.build/qa-clipboard-selection-final-packed.png`。
+- 从该最终包读取 `/js/utils/clipboard.js`，字节 SHA-256 与源码一致；以
+  提取的模块重复桌面及短屏夹具验证，选择、方向、焦点均保持。兼容模式
+  仍仅验证调用结果与选择恢复，不将其写为原生系统剪贴板内容验收。
+- Windows/Linux 原生文件系统有界全门禁通过 114 项 Python、169 项 Node、
+  85 个前端模块、严格 C11、32 个运行探针与确定性 A/B 打包。Windows 另
+  通过便携 WebView2 Home 和 20 秒启动；没有压力或高负载测试。Linux 的
+  服务门禁不代表 Linux 原生 GUI、macOS 或实体触控设备通过。
+
+根目录 `mdo.exe` 使用通过门禁的 Windows 包更新，SHA-256 为
+`654ebb2b85e4864665cd05f7c27dfab39ac6fce72207c0f6392838485b14f8ea`。
+Linux A/B 包 SHA-256 为
+`4e6e200dc7fe7cfbdca44ca469b119ebc0df2f616ed245a23786ab661d6198ee`。
+日志：`.build/qa-clipboard-selection-final-release.log` 和
+`.build/qa-clipboard-selection-final-linux-native-release.log`。独立夹具可用
+`python -m http.server 38921 --bind 127.0.0.1` 打开
+`/tests/fixtures/clipboard-selection-browser.html` 后点击验证按钮重放。
+
 ## 2026-10-01：旧数据导入在写入前检查文件系统能力
 
 当前 WSL 挂载盘拒绝 `RENAME_NOREPLACE`，原来的缓存 Home 导入却先写了
