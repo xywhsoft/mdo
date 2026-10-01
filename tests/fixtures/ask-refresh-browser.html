@@ -1,0 +1,125 @@
+<!doctype html>
+<html lang="zh-CN">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>mdo ask refresh ordering probe</title>
+<link rel="stylesheet" href="/app/web/css/app.css">
+<style>
+body { display: block; overflow: auto; padding: 24px; }
+main { max-width: 720px; margin: auto; }
+#conversation-docks { position: static; max-height: none; }
+#controls { display: flex; flex-wrap: wrap; gap: 8px; margin: 16px 0; }
+#result { white-space: pre-wrap; overflow-wrap: anywhere; }
+</style>
+<main>
+<h1>询问刷新验证</h1>
+<p>输入回答并移动光标，验证读取恢复；挂起旧快照后，在询问框按 Enter 提交，再释放旧快照。</p>
+<div id="conversation-docks"></div>
+<label>主输入框 <input id="prompt"></label>
+<div id="controls">
+<button id="recover" disabled>验证读取恢复</button>
+<button id="hold" disabled>挂起旧快照</button>
+<button id="release" disabled>释放旧快照</button>
+</div>
+<pre id="result" aria-live="polite">准备中</pre>
+</main>
+<script type="module">
+import { createConversationDocks } from "/app/web/js/features/chat/conversation-docks.js";
+import { createResourceStore } from "/app/web/js/state/store.js";
+import { asksStore, selectAsks, refreshSelectedAsks } from "/app/web/js/state/asks.js";
+
+const result = document.querySelector("#result");
+const originalFetch = window.fetch;
+let items = [{ id: 7, run_id: 8, question: "接下来如何处理？", options: ["继续", "先复核"] }];
+const requests = [];
+const report = {};
+const healthy = (snapshot = items) => Response.json({ ok: true,
+  data: { total: snapshot.length, items: snapshot } });
+const failed = () => Response.json({ ok: false,
+  error: { code: "fixture_read_failed", message: "Temporary read failure" } }, { status: 503 });
+let nextRead = () => Promise.resolve(healthy());
+let releaseRead;
+let delayedRead;
+window.fetch = (url, options = {}) => {
+  if (!String(url).includes("/sessions/ask-refresh/asks")) return originalFetch(url, options);
+  if (options.method === "PUT") {
+    requests.push(JSON.parse(options.body).answer);
+    items = [];
+    report.acceptedAnswers = requests;
+    show();
+    return Promise.resolve(Response.json({ ok: true, data: {} }));
+  }
+  return nextRead();
+};
+function show() { result.textContent = JSON.stringify(report, null, 2); }
+const route = { view: "workspace", projectId: "qa", sessionId: "ask-refresh" };
+const navigation = { get: () => route,
+  subscribe(listener) { listener(route); return () => {}; } };
+const empty = () => createResourceStore({ items: [] });
+createConversationDocks({ container: document.querySelector("#conversation-docks"),
+  navigation, tasksStore: empty(), approvalsStore: empty(), runsStore: empty(),
+  asksStore, todoStore: createResourceStore({ projectId: "", sessionId: "", items: [] }),
+  onOpenTasks() {}, onChanged: async () => {},
+});
+const editor = () => document.querySelector(".ask-dock-input");
+// These fixture controls simulate a background read without stealing focus.
+for (const button of document.querySelectorAll("#controls button"))
+  button.addEventListener("mousedown", (event) => event.preventDefault());
+document.querySelector("#recover").addEventListener("click", async () => {
+  const input = editor();
+  const before = { value: input.value, start: input.selectionStart,
+    end: input.selectionEnd, focused: document.activeElement === input };
+  nextRead = () => Promise.resolve(failed());
+  await refreshSelectedAsks();
+  report.failureRetainsEditor = asksStore.get().status === "error" && editor() === input;
+  nextRead = () => Promise.resolve(healthy());
+  await refreshSelectedAsks();
+  report.recovered = asksStore.get().status === "ready" && asksStore.get().error === null;
+  await refreshSelectedAsks();
+  let finishOldFailure;
+  nextRead = () => new Promise((resolve) => { finishOldFailure = resolve; });
+  const stale = refreshSelectedAsks();
+  nextRead = () => Promise.resolve(healthy());
+  await refreshSelectedAsks();
+  finishOldFailure(failed());
+  await stale;
+  report.staleErrorIgnored = asksStore.get().status === "ready";
+  report.editorRetained = editor() === input && input.value === before.value;
+  report.caretRetained = input.selectionStart === before.start && input.selectionEnd === before.end;
+  report.focusRetained = before.focused && document.activeElement === input;
+  report.draft = input.value;
+  report.caret = [input.selectionStart, input.selectionEnd];
+  document.querySelector("#recover").disabled = true;
+  show();
+});
+document.querySelector("#hold").addEventListener("click", () => {
+  const snapshot = structuredClone(items);
+  nextRead = () => new Promise((resolve) => { releaseRead = () => resolve(healthy(snapshot)); });
+  delayedRead = refreshSelectedAsks();
+  nextRead = () => Promise.resolve(healthy());
+  report.held = true;
+  document.querySelector("#hold").disabled = true;
+  document.querySelector("#release").disabled = false;
+  show();
+});
+document.querySelector("#release").addEventListener("click", async () => {
+  report.removedBeforeRelease = editor() === null && requests.length === 1;
+  releaseRead();
+  await delayedRead;
+  report.staleQuestionIgnored = editor() === null && asksStore.get().data.items.length === 0;
+  report.mainInputFocused = document.activeElement === document.querySelector("#prompt");
+  const passed = ["failureRetainsEditor", "recovered", "staleErrorIgnored", "editorRetained",
+    "caretRetained", "focusRetained", "removedBeforeRelease", "staleQuestionIgnored",
+    "mainInputFocused"].every((key) => report[key] === true);
+  report.passed = passed;
+  result.dataset.passed = String(passed);
+  document.querySelector("#release").disabled = true;
+  show();
+});
+await selectAsks("qa", "ask-refresh");
+document.querySelector("#recover").disabled = false;
+document.querySelector("#hold").disabled = false;
+report.ready = true;
+show();
+</script>
+</html>

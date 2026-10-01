@@ -27,9 +27,11 @@ export async function selectAsks(projectId, sessionId) {
 }
 
 export async function refreshSelectedAsks() {
-  const token = generation;
   const selected = asksStore.get().data;
   if (!selected?.projectId || !selected?.sessionId) return;
+  // The most recently started read owns both data and errors, even when the
+  // session stays selected. A delayed response must not revive an answered ask.
+  const token = ++generation;
   try {
     const response = await api.get(
       `/projects/${selected.projectId}/sessions/${selected.sessionId}/asks`);
@@ -37,7 +39,9 @@ export async function refreshSelectedAsks() {
     const data = response.data;
     if (!Array.isArray(data.items)) throw new Error(t("ask.invalidResponse", {}, "询问响应无效"));
     const next = JSON.stringify(data.items);
-    if (next !== signature) {
+    // Recover from a transient failure even when the pending questions did not
+    // change. Healthy identical snapshots still leave editor subscriptions alone.
+    if (next !== signature || asksStore.get().status !== "ready") {
       signature = next;
       asksStore.setData({ projectId: selected.projectId,
         sessionId: selected.sessionId, total: data.total,
