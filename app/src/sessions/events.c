@@ -571,14 +571,21 @@ done:
     return Ok;
 }
 
-bool MdoSessionsInternalEventValid(const char* ProjectId, const char* SessionId, xstrview Json)
+bool MdoSessionsInternalEventVisit(const char* ProjectId, const char* SessionId,
+    xstrview Json, MdoSessionEventVisitor Visitor, void* Data)
 {
     MdoSessionEventOwned Event;
     bool Ok;
     if ( ProjectId == NULL || SessionId == NULL ) return false;
     Ok = MdoEventsParse(ProjectId, SessionId, Json, &Event);
+    if ( Ok && Visitor != NULL ) Ok = Visitor(&Event.Info, Data);
     MdoEventsOwnedUnit(&Event);
     return Ok;
+}
+
+bool MdoSessionsInternalEventValid(const char* ProjectId, const char* SessionId, xstrview Json)
+{
+    return MdoSessionsInternalEventVisit(ProjectId, SessionId, Json, NULL, NULL);
 }
 
 static bool MdoEventsScanLatest(const char* ProjectId, const char* SessionId,

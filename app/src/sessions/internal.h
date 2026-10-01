@@ -8,6 +8,13 @@
 typedef struct MdoSessionEventBridge MdoSessionEventBridge;
 typedef struct MdoSessionEventTrimPlan MdoSessionEventTrimPlan;
 
+/* Pure parsing seams. Event strings are borrowed only during Visitor; neither
+ * function reads Home or projects state. TodoParse returns an owned value. */
+typedef bool (*MdoSessionEventVisitor)(const MdoSessionEventInfo* Event, void* Data);
+bool MdoSessionsInternalEventVisit(const char* ProjectId, const char* SessionId,
+    xstrview Json, MdoSessionEventVisitor Visitor, void* Data);
+xvalue* MdoSessionsInternalTodoParse(xstrview Json, bool Stored);
+
 /* Publish a committed project bucket removal to catalog observers. The
  * exclusive owner proves no session/Agent object needs to be evicted. */
 bool MdoSessionsProjectPurged(const char* ProjectId, const MdoProjectLease* Owner);

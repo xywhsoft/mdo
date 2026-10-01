@@ -116,6 +116,11 @@ static xvalue* MdoTodoParse(xstrview Json, bool Stored)
     return Root;
 }
 
+xvalue* MdoSessionsInternalTodoParse(xstrview Json, bool Stored)
+{
+    return MdoTodoParse(Json, Stored);
+}
+
 bool MdoSessionsInternalTodoValid(xstrview Json)
 {
     xvalue* Root = MdoTodoParse(Json, true);

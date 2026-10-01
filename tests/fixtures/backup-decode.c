@@ -7,6 +7,19 @@ static void BackupDecodeFixtureUnit(void)
     MdoSessionBackupRelease(g_DecodeFixtureBackup); g_DecodeFixtureBackup = NULL;
 }
 
+static bool BackupDecodeFixturePreviewSizeSafe(void)
+{
+    uint32 Words[2] = {sizeof(uint32), UINT32_C(0x12345678)};
+    void* Small = xrtMalloc(sizeof(Words));
+    bool Ok;
+    if ( Small == NULL ) return false;
+    memcpy(Small, Words, sizeof(Words));
+    Ok = !MdoSessionBackupPreviewGet(g_DecodeFixtureBackup, (MdoSessionBackupPreview*)Small) &&
+        memcmp(Small, Words, sizeof(Words)) == 0;
+    xrtFree(Small);
+    return Ok;
+}
+
 static bool BackupDecodeFixtureSeed(XS_HttpReq* Request)
 {
     static const char Prefix[] = "/__fixture/backup-decode/seed/";
@@ -53,6 +66,14 @@ static bool BackupDecodeFixtureControl(XS_HttpReq* Request)
     if ( BackupDecodeFixtureSeed(Request) ) return true;
     if ( Target.Size < sizeof(Prefix) - 1u || memcmp(Target.Data, Prefix, sizeof(Prefix) - 1u) != 0 ) return false;
     Context.Request = Request; snprintf(Context.RequestId, sizeof(Context.RequestId), "decode-fixture");
+    if ( MdoApiViewEqualText(Target, "/__fixture/backup-decode/kinds") ) {
+        Value = xrtValueObject();
+        (void)MdoApiValueSetUInt(Value, "start", XWORK_EVENT_AGENT_START);
+        (void)MdoApiValueSetUInt(Value, "model", XWORK_EVENT_MODEL_DONE);
+        (void)MdoApiValueSetUInt(Value, "removed", MDO_SESSION_EVENT_HISTORY_TRUNCATED);
+        (void)MdoApiReplySuccessTake(&Context, 200u, Value, NULL);
+        return true;
+    }
     xworkErrorInit(&Error); MdoSessionBackupLimitsInit(&Limits);
     if ( MdoApiViewEqualText(Target, "/__fixture/backup-decode/release") ) BackupDecodeFixtureUnit();
     else if ( !MdoApiViewEqualText(Target, "/__fixture/backup-decode/state") ) {
@@ -63,14 +84,18 @@ static bool BackupDecodeFixtureControl(XS_HttpReq* Request)
         if ( MdoApiViewEqualText(Target, "/__fixture/backup-decode/document") ) Limits.DocumentBytes = 1u;
         if ( MdoApiViewEqualText(Target, "/__fixture/backup-decode/deadline") ) Limits.Deadline = 1u;
         if ( MdoApiViewEqualText(Target, "/__fixture/backup-decode/budget") ) Limits.Files += 1u;
-        if ( MdoApiViewEqualText(Target, "/__fixture/backup-decode/cancel") ) {
+        if ( MdoApiViewEqualText(Target, "/__fixture/backup-decode/cancel") ||
+             MdoApiViewEqualText(Target, "/__fixture/backup-decode/history-cancel") ) {
             Cancel = xrtCancelCreate();
             if ( Cancel == NULL ) return false;
-            (void)xrtCancelRequest(Cancel);
+            if ( MdoApiViewEqualText(Target, "/__fixture/backup-decode/cancel") )
+                (void)xrtCancelRequest(Cancel);
+            else g_BackupHistoryProbeCancel = Cancel;
         }
         g_DecodeFixtureBackup = MdoSessionBackupDecode(MdoApiBackupUploadData(g_UploadFixturePin),
             MdoApiBackupUploadBytes(g_UploadFixturePin), &Limits, Cancel,
             MdoApiViewEqualText(Target, "/__fixture/backup-decode/null-error") ? NULL : &Error);
+        g_BackupHistoryProbeCancel = NULL;
         xrtCancelDestroy(Cancel);
     }
     Preview.Size = sizeof(Preview);
@@ -87,11 +112,14 @@ static bool BackupDecodeFixtureControl(XS_HttpReq* Request)
     (void)MdoApiValueSetString(Value, "error", Error.sMessage);
     (void)MdoApiValueSetBool(Value, "encodable", Encodable);
     (void)MdoApiValueSetBool(Value, "restore_ready", false);
+    (void)MdoApiValueSetBool(Value, "preview_size_safe", BackupDecodeFixturePreviewSizeSafe());
     (void)MdoApiValueSetUInt(Value, "schema", Preview.ExportSchema);
     (void)MdoApiValueSetUInt(Value, "bytes", Preview.Bytes);
     (void)MdoApiValueSetUInt(Value, "ui_first", Preview.UiFirstEventId);
     (void)MdoApiValueSetUInt(Value, "ui_last", Preview.UiLastEventId);
     (void)MdoApiValueSetUInt(Value, "ui_records", Preview.UiRecords);
+    (void)MdoApiValueSetUInt(Value, "unverified_refs", Preview.UnverifiedHistoryReferences);
+    (void)MdoApiValueSetUInt(Value, "removed_refs", Preview.RemovedHistoryReferences);
     (void)MdoApiValueSetString(Value, "project_id", Preview.Info.ProjectId);
     (void)MdoApiValueSetString(Value, "session_id", Preview.Info.Id);
     (void)MdoApiValueSetString(Value, "model_id", Preview.Info.ModelId);

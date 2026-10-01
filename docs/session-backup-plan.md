@@ -59,8 +59,8 @@ manager 调用或库通过 native path 写入不能被它自动覆盖。不得�
    分别限制文件数、单文件、总字节、JSON/base64 膨胀和传输时间；定额失败需要
    明确反馈。导出完成即释放捕获锁，下载速度不能占用运行窗口。
 4. **进行中**：离线拥有解码、清单及 metadata/UI/todo、draft/queue/receipt/
-   feedback/消息绑定 schema 校验已接入；模型账本、保留历史的 ID 关系、
-   图片实际解码及生产预览 worker 未完成。先实现离线验证与预览，
+   feedback/消息绑定 schema 和保留 UI 的侧车关系校验已接入；模型账本及其
+   与 UI 的关系、图片实际解码及生产预览 worker 未完成。先实现离线验证与预览，
    再做恢复事务。验证所有 schema、路径、ID、内容
    校验和引用；拒绝链接、绝对路径、`..`、重复文件和大小声明失真。v1 只能
    预览为模型快照，不能误报为完整带图备份。未知模型/Agent 的会话可保留
@@ -421,3 +421,52 @@ Windows A/B 与根目录程序 SHA-256 同为
 包为 `33530a65c903438bd4c3a013bb761fc788f73e6adf1cfcb8b936fa713cf850d0`。
 日志 `.build/qa-sidecars-{verified,linux-verified}.log`；独立编译与 API/session/
 run manager 的定向检查也通过。没有压力或高负载测试，未执行真实恢复。
+
+## 保留历史的关系与未知引用
+
+`backup_relations.c` 以 owning UI 原字节为输入，使用 live event visitor 构造
+排序的数值事实及原字节 offset；callback 中的字符串不逃逸。索引及删除区间
+数组各自不超过 UI 文件字节预算，receipt 数由 1024 文件预算约束。先严格
+解析每条事件，按 ID 查找反馈/todo/绑定，删除区间排序合并后查找；不创建
+完整日志 DOM，不向 Home/catalog/runtime 查询或写入。文件、事件、引用和
+队列项间检查 deadline/cancel；单个 codec/JSON/qsort 等操作仍为合作取消。
+
+保留范围内的正证据必须一致：反馈目标是成功 MODEL_DONE；todo 的 event
+必须是成功主 Agent 的 mdo.todo，非截断文本可解析且 items 与侧车相等；
+event 图片绑定必须是相同 run 的主 Agent START。UI 中队列绑定 START 必须
+有同 ID 的 durable receipt；prepared receipt 的 Agent run 必须匹配，重复
+START 身份拒绝。纯 `MdoQueueReceiptApply` 复用实时发送状态一致性规则；
+只有已有 accepted receipt，或匹配的 prepared/start 证据，才能和 sending
+项中非空 run_id 一致。验证不会提升回执、启动队列或改写输入。
+
+前缀 retention 使旧引用不可再核实；这不构成被删证明。明确 marker 的
+`[source_event_id,event_id)` 是被删证明，不能同时存在仍保留的事件。
+缺少保留范围内或未来目标、非法 marker/重复 start 及 event ID UINT64_MAX
+拒绝；删除区间内的侧车留作后续 staging 协调。预览分别报告未知和已删除
+侧车引用次数，而非唯一 ID 数量；没有 UI 时保持未知，不伪造来源事实。
+旧 source=0 marker 的 todo reset 规则与 live reconciler 相同，不替反馈/
+附件凭空创造删除范围。
+
+旧 run 数字可跨重启复用，`attachments/events` 的当前绑定覆盖 legacy runs；
+不强行比较两个列表，legacy run 记录报告未知。缺少 surviving START 的
+prepared/accepted receipt 保留为未知；schema 2 claim 也不能证明 accepted
+运行身份。UI/账本的 sequence 对应、真实图片解码及 xllm replay 仍需后续
+验证，零未知/删除引用数不表示完整恢复资格。
+
+公开 preview Size 不匹配现在在任何清零之前返回，避免旧调用者的小缓冲区
+被新结构长度覆盖；其他失败才清零已知大小对象。探针用真实 8 字节分配和
+guard 验证成功/失败解码后都不越界写。扩展 corpus 共 134 个小错误输入，
+另有 prepared/claimed/accepted、prefix/显式删除、数字 run 重用及缺失目标
+的独立正反用例；在第一个严格 UI callback 之后注入取消，证明索引的失败
+清理。HTTP/TLS 校验前后 Home 可读文件逐字节相同。首次探针仅因同名测试
+变量覆盖失败，保留日志并改名后重跑。
+
+Windows/Linux ext4 全部门禁通过：114 项 Python、240 项 Node、90 个前端
+模块、严格 C11、35 个运行探针、3 个打包探针及独立 A/B 包一致；Windows
+另通过便携 WebView2 Home 和打包启动 20 秒检查。
+Windows 与根目录程序 SHA-256 为
+`770a5ba8d41ff4485b9c69c149c0bb2704e8348f93327894f9218a72d19f4065`，
+Linux 为 `5bc37b6bc5762d58f6be4202f39d90ebbb7cb007bc9bc91c05ccd6bc7917873b`。
+日志 `.build/qa-relations-{verified,linux-verified}.log`。
+没有真实恢复、压力或高负载测试。额外普通图片读回超时已登记为独立待修项，
+这些通过结果不能证明全部附件传输和页面操作已恢复。

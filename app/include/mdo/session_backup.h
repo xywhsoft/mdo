@@ -41,6 +41,10 @@ typedef struct MdoSessionBackupPreview {
     int64 CapturedAt;
     size_t Files, Bytes;
     uint64 UiFirstEventId, UiLastEventId, UiRecords;
+    /* Old retained sidecars without surviving UI evidence, and sidecars
+     * covered by durable history removal markers. Neither is silently
+     * repaired; restore must reconcile removed projections in staging. */
+    size_t UnverifiedHistoryReferences, RemovedHistoryReferences;
 } MdoSessionBackupPreview;
 
 void MdoSessionBackupLimitsInit(MdoSessionBackupLimits* Limits);
@@ -74,14 +78,17 @@ str MdoSessionBackupEncode(const MdoSessionBackup* Backup,
  * operations; a single JSON token/hash/codec operation cannot be interrupted.
  *
  * Metadata/UI/todo and draft/queue/receipts/feedback/image bindings reuse live
- * readers. Image metadata shares the export checker. Retained-history ID
- * relationships and the model ledger are not yet fully validated.
+ * readers. Image metadata shares the export checker. Retained UI evidence is
+ * checked against feedback/todo/bindings/queue receipts. Older or explicitly
+ * removed references are reported separately. The model ledger is not yet
+ * fully validated, and pending projections are not repaired here.
  * Success is NOT complete schema validation, image decoding or xllm/UI replay
  * and does not authorize restoration. Legacy v1 cannot be encoded as v2. */
 MdoSessionBackup* MdoSessionBackupDecode(const void* Document, size_t Bytes,
     const MdoSessionBackupLimits* Limits, const xcancel* Cancel, xwork_error* Error);
-/* Only decoded objects supply preview facts. Initialize Preview.Size; failure
- * clears all fields except Size. All returned metadata is copied. */
+/* Only decoded objects supply preview facts. Initialize Preview.Size. A size
+ * mismatch leaves the caller's object untouched; other failures clear fields
+ * except Size. All returned metadata is copied. */
 bool MdoSessionBackupPreviewGet(const MdoSessionBackup* Backup,
     MdoSessionBackupPreview* Preview);
 

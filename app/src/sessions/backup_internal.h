@@ -16,6 +16,11 @@ typedef struct MdoBackupOwnedFile {
 
 typedef struct MdoBackupHistory { uint64 First, Last, Records; } MdoBackupHistory;
 
+typedef struct MdoBackupRelations {
+    size_t UnverifiedHistoryReferences;
+    size_t RemovedHistoryReferences;
+} MdoBackupRelations;
+
 struct MdoSessionBackup {
     MdoSessionInfo Info;
     MdoBackupOwnedFile* Files;
@@ -25,6 +30,7 @@ struct MdoSessionBackup {
     uint32 Schema;
     bool Decoded;
     MdoBackupHistory History;
+    MdoBackupRelations Relations;
 };
 
 extern const char* const MdoBackupOptionalFiles[MDO_BACKUP_OPTIONAL_FILES];
@@ -43,5 +49,8 @@ bool MdoBackupView(const xvalue* Value, const char* Key, xstrview* Text);
 bool MdoBackupValidate(const MdoSessionBackup* Backup,
     const MdoSessionBackupLimits* Limits, const xcancel* Cancel,
     MdoBackupHistory* History, xwork_error* Error);
+bool MdoBackupRelationsValidate(const MdoSessionBackup* Backup,
+    const MdoSessionBackupLimits* Limits, const xcancel* Cancel,
+    MdoBackupRelations* Relations, xwork_error* Error);
 
 #endif

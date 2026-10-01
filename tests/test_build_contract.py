@@ -92,6 +92,7 @@ class BuildContractTests(unittest.TestCase):
             "src/sessions/todo.c",
             "src/sessions/manager.c",
             "src/sessions/backup.c",
+            "src/sessions/backup_relations.c",
             "src/sessions/backup_decode.c",
             "src/approvals/manager.c",
             "src/power/inhibitor.c",

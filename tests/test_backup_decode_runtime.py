@@ -46,10 +46,26 @@ def replace(document, path, data):
     return recount(document)
 
 
+def set_ui(document, events):
+    replace(document, "ui-events.jsonl", b"".join(dump(event) + b"\n" for event in events))
+    document.update(ui_first_event_id=events[0]["event_id"] if events else 0,
+                    ui_last_event_id=events[-1]["event_id"] if events else 0,
+                    ui_records=len(events))
+    return document
+
+
 class Probe(UploadProbe):
     def __init__(self, host, base, secure):
         super().__init__(host, base, secure)
         shutil.copy2(ROOT / "tests/fixtures/backup-decode.c", self.site / "src/bootstrap/backup-decode.c")
+        relations = self.site / "src/sessions/backup_relations.c"
+        source = relations.read_text(encoding="utf-8")
+        hook = "    memcpy(Fact->QueueId, Event->QueueItemId, sizeof(Fact->QueueId));"
+        assert source.count(hook) == 1
+        source = source.replace(hook, hook + "\n    if ( g_BackupHistoryProbeCancel != NULL )\n"
+                                "        (void)xrtCancelRequest(g_BackupHistoryProbeCancel);", 1)
+        source = "static xcancel* g_BackupHistoryProbeCancel;\n" + source
+        relations.write_text(source, encoding="utf-8", newline="\n")
         service = self.site / "src/bootstrap/service.c"
         text = service.read_text(encoding="utf-8")
         text = text.replace('#include "backup-upload.c"', '#include "backup-upload.c"\n#include "backup-decode.c"', 1)
@@ -72,6 +88,7 @@ class Probe(UploadProbe):
         assert status == 200, value
         self.control("release")
         assert self.api("DELETE", path)[0] == 200
+        assert value["data"]["preview_size_safe"], value
         return value["data"]
 
     def check(self):
@@ -113,7 +130,7 @@ class Probe(UploadProbe):
         replace(small, ARTIFACT, b"fixture artifact\x00\xff\n")
         raw_small = dump(small)
         for mode, code in (("files", 11), ("file", 11), ("total", 11), ("document", 11),
-                           ("deadline", 11), ("cancel", 9), ("budget", 1)):
+                           ("deadline", 11), ("cancel", 9), ("history-cancel", 9), ("budget", 1)):
             value = self.validate(raw_small, mode)
             assert not value["ok"] and value["code"] == code and value["files"] == [], (mode, value)
         cases = []
@@ -180,11 +197,16 @@ class Probe(UploadProbe):
                    "run_id": "run-prepared", "agent_run_id": 7}
         feedback = {"schema_version": 1, "items": [{"event_id": 2, "value": "good"}]}
         binding = {"schema_version": 1, "run_id": 7, "attachments": []}
+        # Shape/maximum cases refer to the evicted prefix. Surviving IDs have
+        # stronger type/evidence requirements, tested separately below.
+        historical = copy.deepcopy(small)
+        set_ui(historical, [{**event, "event_id": i + 1001} for i, event in enumerate(ui)])
+        replace(historical, "todo.json", dump({**todo, "event_id": 1002}))
         samples = (("draft.json", draft), ("queue.json", queue), (receipt_path, receipt),
                    ("feedback.json", feedback), ("attachments/runs/7.json", binding),
                    ("attachments/events/2.json", binding))
         for path, sample in samples:
-            valid = copy.deepcopy(small)
+            valid = copy.deepcopy(historical)
             replace(valid, path, dump(sample))
             assert self.validate(dump(valid))["ok"], path
             for key in ("schema_version", "unknown"):
@@ -241,18 +263,18 @@ class Probe(UploadProbe):
             old_queue = {"schema_version": schema, "items": [old_item]}
             if schema >= 6:
                 old_queue["discard_images"] = []
-            valid = copy.deepcopy(small)
+            valid = copy.deepcopy(historical)
             replace(valid, "draft.json", dump(legacy_draft))
             replace(valid, "queue.json", dump(old_queue))
             assert self.validate(dump(valid))["ok"], schema
-        for historical in ({"schema_version": 1, "id": "c" * 32, "run_id": "run-completed"},
+        for historical_receipt in ({"schema_version": 1, "id": "c" * 32, "run_id": "run-completed"},
                            {"schema_version": 2, "id": "c" * 32, "state": "starting"}):
-            valid = copy.deepcopy(small)
-            replace(valid, receipt_path, dump(historical))
-            assert self.validate(dump(valid))["ok"], historical
+            valid = copy.deepcopy(historical)
+            replace(valid, receipt_path, dump(historical_receipt))
+            assert self.validate(dump(valid))["ok"], historical_receipt
         # Declared maxima are ordinary bounded format cases, not load tests.
         # Prior node caps rejected the 512th feedback or a combined full queue.
-        maximum = copy.deepcopy(small)
+        maximum = copy.deepcopy(historical)
         replace(maximum, "feedback.json", dump({"schema_version": 1, "items": [
             {"event_id": i + 1, "value": "good"} for i in range(512)]}))
         images = [f"{i + 1000:032x}" for i in range(4)]
@@ -281,6 +303,101 @@ class Probe(UploadProbe):
             "items": [{**item, "id": f"{i + 1:032x}"} for i in range(21)]})))
         altered("over submissions count", lambda doc: replace(doc, "draft.json", dump({**draft,
             "submissions": [{**submission, "id": f"{i + 1:032x}"} for i in range(21)]})))
+        kinds = self.api("GET", DECODE + "kinds")[1]["data"]
+        queue_id = "c" * 32
+        start = {**ui[0], "event_id": 1, "kind": kinds["start"], "run_id": 7,
+                 "artifact_id": 0, "artifact_path": "", "tool_name": "", "text": "Prompt",
+                 "queue_item_id": queue_id}
+        model = {**start, "event_id": 2, "kind": kinds["model"], "text": "Answer", "queue_item_id": ""}
+        plan = {**ui[1], "event_id": 3, "run_id": 7, "artifact_id": 0, "artifact_path": ""}
+        related = copy.deepcopy(small)
+        set_ui(related, [start, model, plan])
+        replace(related, "todo.json", dump({**todo, "event_id": 3}))
+        replace(related, "feedback.json", dump(feedback))
+        replace(related, "attachments/events/1.json", dump(binding))
+        replace(related, receipt_path, dump(receipt))
+        value = self.validate(dump(related))
+        assert value["ok"] and value["unverified_refs"] == 0 and value["removed_refs"] == 0, value
+        def related_bad(label, change):
+            doc = copy.deepcopy(related)
+            change(doc)
+            cases.append((label, dump(doc)))
+        for event_id in (1, 4):
+            related_bad("feedback wrong/missing target", lambda doc, n=event_id:
+                        replace(doc, "feedback.json", dump({**feedback, "items": [{"event_id": n, "value": "good"}]})))
+        related_bad("unsuccessful model feedback", lambda doc: set_ui(doc, [start, {**model, "success": False}, plan]))
+        related_bad("binding wrong run", lambda doc: replace(doc, "attachments/events/1.json", dump({**binding, "run_id": 8})))
+        related_bad("binding wrong target kind", lambda doc: replace(doc, "attachments/events/2.json", dump(binding)))
+        related_bad("todo wrong event", lambda doc: replace(doc, "todo.json", dump({**todo, "event_id": 1})))
+        related_bad("todo different items", lambda doc: replace(doc, "todo.json", dump({**todo, "event_id": 3,
+                    "items": [{"text": "Altered projection", "done": False}]})))
+        related_bad("nonempty reset todo", lambda doc: replace(doc, "todo.json", dump({**todo, "event_id": 0})))
+        for key, new in (("tool_name", "other"), ("agent_depth", 1), ("text_truncated", True)):
+            related_bad("todo projection " + key, lambda doc, k=key, n=new:
+                        set_ui(doc, [start, model, {**plan, k: n}]))
+        sending = {**item, "id": queue_id, "state": "sending", "run_id": "run-prepared"}
+        related_bad("queue run conflicts with receipt", lambda doc: replace(doc, "queue.json", dump({**queue,
+                    "items": [{**sending, "run_id": "run-other"}]})))
+        related_bad("pending queue already receipted", lambda doc: replace(doc, "queue.json", dump({**queue,
+                    "items": [{**item, "id": queue_id}]})))
+        related_bad("receipt contradicts retained start", lambda doc: replace(doc, receipt_path,
+                    dump({**receipt, "agent_run_id": 8})))
+        related_bad("retained queue start missing receipt", lambda doc: recount(doc.update(
+                    files=[f for f in doc["files"] if f["path"] != receipt_path]) or doc))
+        related_bad("queue ID starts twice", lambda doc: set_ui(doc, [start, model, plan, {**start, "event_id": 4}]))
+        marker = {**start, "event_id": 4, "kind": kinds["removed"], "source_event_id": 1,
+                  "queue_item_id": "", "run_id": 0, "text": "History removed"}
+        related_bad("marker contradicts surviving events", lambda doc: set_ui(doc, [start, model, plan, marker]))
+        related_bad("marker inverted range", lambda doc: set_ui(doc, [{**marker, "source_event_id": 5}]))
+        related_bad("event ID cannot advance", lambda doc: set_ui(doc, [start, model, {**plan, "event_id": 2**64 - 1}]))
+        valid = copy.deepcopy(related)
+        replace(valid, "queue.json", dump({**queue, "items": [sending]}))
+        assert self.validate(dump(valid))["ok"]  # prepared + matching durable start
+        replace(valid, receipt_path, dump({"schema_version": 1, "id": queue_id, "run_id": "run-prepared"}))
+        assert self.validate(dump(valid))["ok"]
+        replace(valid, receipt_path, dump({"schema_version": 2, "id": queue_id, "state": "starting"}))
+        assert not self.validate(dump(valid))["ok"]  # a claim cannot prove an explicit accepted run
+        sending.pop("run_id")
+        replace(valid, "queue.json", dump({**queue, "items": [sending]}))
+        value = self.validate(dump(valid))
+        assert value["ok"] and value["unverified_refs"] == 1, value
+        set_ui(valid, [{**start, "queue_item_id": ""}, model, plan])
+        replace(valid, receipt_path, dump(receipt))
+        value = self.validate(dump(valid))
+        assert value["ok"] and value["unverified_refs"] == 1, value  # interrupted prepared receipt, no promotion
+        replace(valid, "queue.json", dump({**queue, "items": [{**sending, "run_id": "run-prepared"}]}))
+        assert not self.validate(dump(valid))["ok"]
+        prefix = copy.deepcopy(related)
+        set_ui(prefix, [{**start, "event_id": 101}, {**model, "event_id": 102}, {**plan, "event_id": 103}])
+        replace(prefix, "todo.json", dump({**todo, "event_id": 103}))
+        value = self.validate(dump(prefix))
+        assert value["ok"] and value["unverified_refs"] == 2 and value["removed_refs"] == 0, value
+        removed = copy.deepcopy(related)
+        set_ui(removed, [marker])
+        value = self.validate(dump(removed))
+        assert value["ok"] and value["removed_refs"] == 3 and value["unverified_refs"] == 1, value
+        set_ui(removed, [start, {**marker, "source_event_id": 2}])
+        value = self.validate(dump(removed))
+        assert value["ok"] and value["removed_refs"] == 2 and value["unverified_refs"] == 0, value
+        # A zero-source legacy marker has special todo reset semantics, not an
+        # invented image/feedback removal interval.
+        legacy_clear = copy.deepcopy(historical)
+        set_ui(legacy_clear, [{**marker, "event_id": 1003, "source_event_id": 0}])
+        value = self.validate(dump(legacy_clear))
+        assert value["ok"] and value["removed_refs"] == 1 and value["unverified_refs"] == 0, value
+        reuse = copy.deepcopy(related)
+        image_id = images[0]
+        for file in maximum["files"]:
+            if file["path"] in (f"attachments/{image_id}.bin", f"attachments/{image_id}.json"):
+                replace(reuse, file["path"], base64.b64decode(file["data"]))
+        replace(reuse, "attachments/runs/7.json", dump({**binding, "attachments": [image_id]}))
+        value = self.validate(dump(reuse))
+        assert value["ok"] and value["unverified_refs"] == 1, value  # current event binding overrides legacy run reuse
+        gap = copy.deepcopy(related)
+        set_ui(gap, [{**start, "event_id": 10}, {**model, "event_id": 12}, {**plan, "event_id": 13}])
+        replace(gap, "todo.json", dump({**todo, "event_id": 13}))
+        replace(gap, "feedback.json", dump({**feedback, "items": [{"event_id": 11, "value": "good"}]}))
+        assert not self.validate(dump(gap))["ok"]
         altered("duplicate UI key", lambda doc: replace(doc, "ui-events.jsonl",
                 raw_ui.replace(b'"schema_version":5', b'"schema_version":5,"schema_version":5', 1)))
         altered("duplicate todo key", lambda doc: replace(doc, "todo.json",

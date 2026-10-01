@@ -403,7 +403,7 @@ static bool MdoDecodeManifest(MdoDecode* Decode)
     if ( !MdoBackupValidate(Decode->Backup, &Decode->Backup->Limits, Decode->Cancel,
             &Decode->Backup->History, &Decode->Error) ) return false;
     /* Validate sidecars/UI with the exact live parsers without projecting state.
-     * Cross-file history relationships and model replay remain required. */
+     * The indexed retained-history check follows; model replay remains required. */
     for ( i = 0u; i < Decode->Backup->Count; ++i ) {
         const MdoBackupOwnedFile* File = &Decode->Backup->Files[i];
         if ( !MdoBackupCheck(&Decode->Backup->Limits, Decode->Cancel, &Decode->Error) ) return false;
@@ -413,22 +413,9 @@ static bool MdoDecodeManifest(MdoDecode* Decode)
             if ( !MdoSessionsInternalTodoValid(xrtStrViewN(File->Data, File->Bytes)) )
                 return MdoDecodeSchemaFailure(Decode, "invalid session backup todo schema", File->Path);
         }
-        if ( strcmp(File->Path, "ui-events.jsonl") == 0 ) {
-            size_t Offset = 0u;
-            while ( Offset < File->Bytes ) {
-                const char* End = (const char*)memchr(File->Data + Offset, '\n', File->Bytes - Offset);
-                size_t LineBytes;
-                if ( End == NULL ) return MdoDecodeInvalid(Decode, "partial session backup UI record", File->Path);
-                LineBytes = (size_t)(End - File->Data - Offset);
-                xrtClearError();
-                if ( !MdoSessionsInternalEventValid(Decode->Backup->Info.ProjectId, Decode->Backup->Info.Id,
-                        xrtStrViewN(File->Data + Offset, LineBytes)) )
-                    return MdoDecodeSchemaFailure(Decode, "invalid session backup UI schema or identity", File->Path);
-                Offset += LineBytes + 1u;
-                if ( !MdoBackupCheck(&Decode->Backup->Limits, Decode->Cancel, &Decode->Error) ) return false;
-            }
-        }
     }
+    if ( !MdoBackupRelationsValidate(Decode->Backup, &Decode->Backup->Limits, Decode->Cancel,
+            &Decode->Backup->Relations, &Decode->Error) ) return false;
     if ( Schema == MDO_SESSION_BACKUP_SCHEMA &&
          (First != Decode->Backup->History.First || Last != Decode->Backup->History.Last ||
           Records != Decode->Backup->History.Records) ) goto invalid;
@@ -524,12 +511,16 @@ done:
 
 bool MdoSessionBackupPreviewGet(const MdoSessionBackup* Backup, MdoSessionBackupPreview* Preview)
 {
-    bool Valid = Preview != NULL && Preview->Size == sizeof(*Preview);
-    if ( Preview != NULL ) { memset(Preview, 0, sizeof(*Preview)); Preview->Size = sizeof(*Preview); }
-    if ( !Valid || Backup == NULL || !Backup->Decoded ) return false;
+    /* A caller built against a different size may own a smaller allocation.
+     * Check the size header before touching any field beyond that header. */
+    if ( Preview == NULL || Preview->Size != sizeof(*Preview) ) return false;
+    memset(Preview, 0, sizeof(*Preview)); Preview->Size = sizeof(*Preview);
+    if ( Backup == NULL || !Backup->Decoded ) return false;
     Preview->ExportSchema = Backup->Schema; Preview->Info = Backup->Info;
     Preview->CapturedAt = Backup->CapturedAt; Preview->Files = Backup->Count; Preview->Bytes = Backup->Bytes;
     Preview->UiFirstEventId = Backup->History.First; Preview->UiLastEventId = Backup->History.Last;
     Preview->UiRecords = Backup->History.Records;
+    Preview->UnverifiedHistoryReferences = Backup->Relations.UnverifiedHistoryReferences;
+    Preview->RemovedHistoryReferences = Backup->Relations.RemovedHistoryReferences;
     return true;
 }
