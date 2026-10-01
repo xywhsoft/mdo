@@ -26,6 +26,8 @@ static bool HomeProbeAfter(unsigned Step);
 static bool HomeProbeCommit(void);
 static void HomeProbeCleanup(unsigned Step);
 static bool HomeProbeRollback(void);
+static bool HomeProbePreflightBefore(void);
+static bool HomeProbePreflightAfter(void);
 #include "src/storage/home.c"
 
 static void HomeProbeCheckpoint(void)
@@ -38,6 +40,26 @@ static bool HomeProbeFailure(void)
 {
     MdoHomeErrorSet(XERR_IO, MDO_HOME_ERROR_STORAGE, "synthetic import failure");
     return false;
+}
+
+static bool HomeProbePreflightBefore(void)
+{
+    const char* Mode = getenv("MDO_IMPORT_MODE");
+    if ( strcmp(Mode, "crash-preflight-source") == 0 ) HomeProbeCheckpoint();
+    if ( strcmp(Mode, "reject-preflight") != 0 ) return true;
+    MdoHomeErrorSet(XERR_UNSUPPORTED, MDO_HOME_ERROR_STORAGE,
+        "synthetic unsupported no-replace directory move");
+    return false;
+}
+
+static bool HomeProbePreflightAfter(void)
+{
+    const char* Mode = getenv("MDO_IMPORT_MODE");
+    if ( strcmp(Mode, "crash-preflight-target") == 0 ) HomeProbeCheckpoint();
+    if ( strcmp(Mode, "fail-preflight-after") == 0 ) return HomeProbeFailure();
+    if ( strcmp(Mode, "foreign-preflight-target") == 0 )
+        return MdoHomeImportWrite(MDO_HOME_IMPORT_GC "/foreign.txt", "preserve", 8u);
+    return true;
 }
 
 static bool HomeProbeBefore(unsigned Step)
@@ -129,7 +151,17 @@ void ServiceInit(XS_HostInfo* Host)
     Cache = MdoHomeOpenRead("data/cache/webview2/cache.bin");
     Import = MdoHomeImportBegin(&Stage, &Path);
     if ( Import == NULL || Stage == NULL || Path == NULL || Cache == NULL ) {
-        printf("import_begin=0\n"); fflush(stdout); return;
+        bool Unsupported = xrtGetError() != NULL && xrtErrorKind(xrtGetError()) == XERR_UNSUPPORTED;
+        bool Writable;
+        if ( Cache != NULL ) (void)xrtClose(Cache);
+        memset(&Snapshot, 0, sizeof(Snapshot)); Snapshot.Size = sizeof(Snapshot);
+        (void)MdoHomeGetSnapshot(&Snapshot);
+        xrtClearError();
+        Writable = MdoHomeAtomicWrite("resumed.txt", "ok", 2u, false) &&
+            MdoHomeRemove("resumed.txt", false);
+        printf("import_begin=0 unsupported=%d restart=%d writable=%d reserved=%d\n",
+            Unsupported, Snapshot.RestartRequired, Writable, Reserved);
+        fflush(stdout); return;
     }
     Frozen = HomeProbeFrozen();
     for ( i = 0u; i < 7u; ++i ) {
@@ -182,6 +214,7 @@ def site_fixture(site: Path) -> None:
     commit = '    return MdoHomeImportMarker("committed", MDO_HOME_IMPORT_MAGIC);'
     cleanup = '            snprintf(Path, sizeof(Path), "%s/%s", MDO_HOME_IMPORT_GC, Files[i]);'
     rollback = '                if ( !xrtRootRenameNoReplace(g_MdoHome.Root,\n                        g_MdoHomeImportRoots[i], Destination) ) return false;'
+    preflight = '    if ( !xrtRootRenameNoReplace(g_MdoHome.Root,\n            MDO_HOME_IMPORT_DIR, MDO_HOME_IMPORT_GC) ) return false;'
     assert text.count(move) == text.count(commit) == text.count(cleanup) == 1
     text = text.replace(move, '        if ( !HomeProbeBefore((unsigned)i + 1u) ) return false;\n' +
         move + '\n        if ( !HomeProbeAfter((unsigned)i + 1u) ) return false;')
@@ -189,6 +222,9 @@ def site_fixture(site: Path) -> None:
     text = text.replace(cleanup, "            HomeProbeCleanup((unsigned)i);\n" + cleanup)
     assert text.count(rollback) == 1
     text = text.replace(rollback, '                if ( !HomeProbeRollback() || !xrtRootRenameNoReplace(g_MdoHome.Root,\n                        g_MdoHomeImportRoots[i], Destination) ) return false;')
+    assert text.count(preflight) == 1
+    text = text.replace(preflight, '    if ( !HomeProbePreflightBefore() ) return false;\n' +
+        preflight + '\n    if ( !HomeProbePreflightAfter() ) return false;')
     source.write_text(text, encoding="utf-8", newline="\n")
 
 
@@ -201,7 +237,7 @@ def launch(host: Path, site: Path, home: Path, mode: str, log: Path,
         try:
             deadline = time.monotonic() + 8
             needles = ("import_checkpoint=1",) if checkpoint else (
-                "import_end=", "import_init=0", "import_inspect=")
+                "import_end=", "import_begin=", "import_init=0", "import_inspect=")
             while time.monotonic() < deadline:
                 text = log.read_text(encoding="utf-8", errors="replace")
                 if any(needle in text for needle in needles):
@@ -240,6 +276,36 @@ def run_probe(host: Path) -> None:
         site_fixture(site)
         baseline = {"data/cache/webview2/cache.bin": b"cache-byte"}
         roots = ("config", "secrets", "projects", "sessions", "memory", "schedules", "migration")
+        # Reject missing capabilities before there is a populated transaction;
+        # also exercise an error reported after the empty move actually happens.
+        for mode in ("reject-preflight", "fail-preflight-after"):
+            home = base / mode
+            cache_home(home)
+            output = launch(host, site, home, mode, base / "preflight.log")
+            assert f"unsupported={int(mode == 'reject-preflight')}" in output, output
+            assert "restart=0 writable=1 reserved=1" in output, output
+            assert inventory(home) == baseline, output
+            assert not (home / ".mdo-import").exists()
+            assert not (home / ".mdo-import-cleanup").exists()
+        for mode in ("crash-preflight-source", "crash-preflight-target"):
+            home = base / mode
+            cache_home(home)
+            launch(host, site, home, mode, base / "preflight.log", checkpoint=True)
+            marker = ".mdo-import" if mode.endswith("source") else ".mdo-import-cleanup"
+            assert (home / marker).is_dir() and not list((home / marker).iterdir())
+            output = launch(host, site, home, "inspect", base / "preflight-restart.log")
+            assert "import_inspect=1 available=1 cache=1" in output, output
+            assert inventory(home) == baseline
+            assert not (home / ".mdo-import").exists()
+            assert not (home / ".mdo-import-cleanup").exists()
+        home = base / "foreign-preflight-target"
+        cache_home(home)
+        output = launch(host, site, home, "foreign-preflight-target", base / "preflight.log")
+        assert "restart=1 writable=0" in output, output
+        expected_foreign = dict(baseline, **{".mdo-import-cleanup/foreign.txt": b"preserve"})
+        assert inventory(home) == expected_foreign
+        output = launch(host, site, home, "inspect", base / "preflight-restart.log")
+        assert "import_init=0" in output and inventory(home) == expected_foreign, output
         for mode in ("abort", *(f"fail-{i}" for i in range(1, 8)),
                      "fail-after-4", "fail-after-7", "fail-commit", "fail-rollback"):
             home = base / mode

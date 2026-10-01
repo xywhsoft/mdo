@@ -87,6 +87,8 @@ const API_ERROR_COPY = Object.freeze({
     "迁移条件已变化或相关项目正忙，请等待当前操作结束，再重新检测。"],
   migration_invalid: ["error.migrationInvalid",
     "旧数据未通过当前版本的迁移校验。"],
+  migration_storage_unsupported: ["error.migrationStorageUnsupported",
+    "当前位置的文件系统不支持安全导入所需的原子操作。请将便携目录放到支持这些操作的文件系统，再导入。"],
   home_import_busy: ["error.homeImportBusy", "旧数据正在导入，请等待完成。"],
   home_restart_required: ["error.homeRestartRequired",
     "导入的数据需要重启后启用，请关闭并重新启动 mdo。"],

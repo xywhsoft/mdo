@@ -1155,6 +1155,7 @@
   "error.recoveryConflict": "中断状态已经变化，请核对刷新后的调用再决定。",
   "error.migrationConflict": "迁移条件已变化或相关项目正忙，请等待当前操作结束，再重新检测。",
   "error.migrationInvalid": "旧数据未通过当前版本的迁移校验。",
+  "error.migrationStorageUnsupported": "当前位置的文件系统不支持安全导入所需的原子操作。请将便携目录放到支持这些操作的文件系统，再导入。",
   "error.homeImportBusy": "旧数据正在导入，请等待完成。",
   "error.homeRestartRequired": "导入的数据需要重启后启用，请关闭并重新启动 mdo。",
   "error.invalidResponse": "服务返回了无效响应，请重试。",

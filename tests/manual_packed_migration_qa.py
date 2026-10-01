@@ -51,7 +51,7 @@ def main() -> int:
 
     try:
         process = start()
-        print(f"READY url=http://127.0.0.1:{port}/#/settings base={base}", flush=True)
+        print(f"READY url=http://127.0.0.1:{port}/#/settings/diagnostics base={base}", flush=True)
         while True:
             command = input("Type restart, status, or Enter to stop: ").strip()
             if not command: break

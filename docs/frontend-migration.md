@@ -4,6 +4,48 @@
 
 完成判据及尚缺的打包页证据见 [前端操作体验完成审计](frontend-completion-audit.md)。本文件继续记录每次实现和验证的细节。
 
+## 2026-10-01：旧数据导入在写入前检查文件系统能力
+
+当前 WSL 挂载盘拒绝 `RENAME_NOREPLACE`，原来的缓存 Home 导入却先写了
+owner 和 payload，再在退休事务时失败，导致事务残留及写入冻结。现在
+`MdoHomeImportBegin` 在既有 Home 锁及进程租约中，先移动一个空事务目录、
+清理后重新创建记录，再给转换器暂存根。能力缺失时仅移除空目录；这个
+准备阶段的两个空目录位置都能由现有启动恢复处理，不新增读取/启动写入。
+未知清理内容仍保留且冻结 Home，未把外部内容当作可删除缓存。
+
+迁移结果增加明确的失败种类，在资源释放及清零后仍保留；API 不解析错误
+文字，缺失能力返回 `409 migration_storage_unsupported`。前端按稳定码显示
+三语存储限制提示，用户无需误以为重启即可完成导入。未修改 xrt、未弱化
+无覆盖改名保证、未自动移动用户的便携目录。
+
+验证：
+
+- Home 事务探针新增五种模式：能力拒绝、空目录已移动后返回错误、移动前/
+  后进程退出，以及清理目录混入未知文件。前四种保留缓存且无事务残留；
+  最后一种保留未知字节并拒绝启动。原有搬迁、回滚、提交与恢复用例仍通过。
+- 新 HTTP 探针在复制源码中注入两个相同消息、不同 xrt 种类，验证只有
+  `XERR_UNSUPPORTED` 走新错误码；两次请求均保留来源/缓存、无事务记录、
+  不要求重启，之后正式项目写入成功。三语错误映射由已有 i18n 测试覆盖。
+- 真实 Linux 单文件 Home `/mnt/d/GIT/mdo/.build/mdo-packed-migration-7xfc26sl`
+  在桌面及 320×350 页面实际确认导入，得到中文限制提示，宽度无溢出，
+  脚本错误为空。后台实际状态 `restart_required=false`、
+  `import_in_progress=false`，来源/缓存原字节保留，两个事务目录不存在。
+- 最终 Windows 包 Home `.build/mdo-packed-migration-h41gdy3q` 在 320×350
+  完成正常导入，结果卡获焦；重启读回迁入深色主题，事务退场，旧来源与
+  缓存保持。测试助手打印链接修正为实际的 `/settings/diagnostics` 路由。
+- Windows/Linux 原生文件系统均通过 114 项 Python、164 项 Node、85 个模块、
+  严格 C11、32 个运行探针和确定性打包；Windows 另通过便携 WebView2 Home
+  及 20 秒启动检查。日志为 `.build/qa-import-preflight-release.log` 和
+  `.build/qa-import-preflight-linux-native-release.log`。
+
+根目录与 Windows A/B/UI 包 SHA-256 为
+`6a422378d44d1ae3eb6205789cb2679295a7eb85d519e2aefd5e3b77090ca127`；Linux
+A/B/真实挂载盘 UI 包为
+`f59b0548e5665e55dbed27a7721234b99c691fedd1a11e0e34f40355e8ddc0b5`。
+挂载盘仍不支持原子不覆盖移动，本轮证明的是缓存 Home 导入提前拒绝，不能
+报告该路径的完整事务兼容或全门禁通过。实体设备、原生窗口完整操作及
+macOS 仍待验收；长期目标未完成，未做压力或高负载测试。
+
 ## 2026-10-01：恢复决定绑定原会话与恢复快照
 
 恢复面板原先只用 `tool_call_id` 保存选择，并以一个全局布尔值标记提交中。

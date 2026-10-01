@@ -37,6 +37,8 @@ Content-Type: application/json
 
 `source_id` 只能是 `portable-data` 或 `user-home`。来源内容、目标状态或令牌发生变化，或关联项目正被独占时返回 `409 migration_conflict`；旧数据不能按当前 schema 转换时返回 `422 migration_invalid`。预览的 `preserve_browser_cache` 表明本次采用缓存保留事务，预览令牌同时绑定此目标模式。
 
+缓存 Home 导入在写入转换结果之前，会以空事务目录检查真实的无覆盖原子移动。文件系统明确不支持时返回 `409 migration_storage_unsupported`，前端按此稳定码显示存储限制提示；正常清理后没有迁入数据、事务残留或导入冻结。只读预览不会创建试探目录，因此 `importable=true` 表示内容/目标模式校验通过，不是文件系统能力已经通过写入验证。其他 I/O 错误仍是 `migration_failed`，不会凭错误文字分类。
+
 缓存 Home 正在导入时普通写请求返回 `409 home_import_busy`，成功发布后返回 `503 home_restart_required`，直到退出并重启。只读请求仍可用；`bootstrap.home` 的 `import_in_progress` 与 `restart_required` 可用于判断当前阶段。已有运行时管理器不会继续写入迁入的新配置代。
 
 ## 转换规则
@@ -57,7 +59,7 @@ Content-Type: application/json
 服务端对来源执行锚定、无链接、有界扫描，并用文件路径、大小和内容计算预览令牌。配置、会话、记忆和计划都必须通过当前解析器，发布前再次核对来源。两种目标使用不同发布路径：
 
 - 目标不存在时保留原有同级唯一暂存目录和一次不覆盖 rename，失败时不创建 Home。
-- 目标仅有浏览器缓存时使用 Home 锚定事务 `.mdo-import`，持有现有跨进程 Home 租约并冻结普通 Home 写入。只能发布固定的七个数据根，缓存和宿主锁保持原位；就绪清单记录目录设备及文件 ID，逐项无覆盖搬迁后发布不可变提交标记。
+- 目标仅有浏览器缓存时先检查空事务目录的无覆盖移动，再使用 Home 锚定事务 `.mdo-import`，持有现有跨进程 Home 租约并冻结普通 Home 写入。只能发布固定的七个数据根，缓存和宿主锁保持原位；就绪清单记录目录设备及文件 ID，逐项无覆盖搬迁后发布不可变提交标记。
 
 启动恢复发生在配置和其他 manager 初始化之前：提交前逆序搬回，提交后保留完整迁移批次；清理先整体改名到 `.mdo-import-cleanup`，最后删除所有者标记，避免中断清理误判提交阶段。未知项、位置歧义、目录被替换或无效标记会拒绝启动并保留事务，不猜测删除。详细契约和故障点见 [Home 导入事务](home-import-transaction.md)。
 

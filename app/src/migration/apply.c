@@ -51,6 +51,8 @@ static bool MdoMigrationPrepareStage(MdoMigrationContext* Context,
             &Context->StagePath);
         if ( Context->CacheImport != NULL ) return true;
         Cause = xrtGetError();
+        if ( Cause != NULL && xrtErrorKind(Cause) == XERR_UNSUPPORTED )
+            Context->Result->Failure = MDO_MIGRATION_APPLY_FAILURE_STORAGE_UNSUPPORTED;
         if ( Cause != NULL && (xrtErrorKind(Cause) == XERR_STATE ||
                 xrtErrorKind(Cause) == XERR_AGAIN) )
             MdoMigrationError(Error, XWORK_ERROR_CONTEXT,
@@ -128,6 +130,7 @@ bool MdoLegacyMigrationApply(const MdoMigrationApplyOptions* Options,
     int Written;
     bool Published = false;
     bool Ok = false;
+    MdoMigrationApplyFailureKind Failure;
     if ( Error != NULL ) xworkErrorInit(Error);
     if ( Options == NULL || Options->Size < sizeof(*Options) ||
          Result == NULL || Result->Size < sizeof(*Result) ||
@@ -292,8 +295,10 @@ done:
             xrtClearError();
         }
     }
+    Failure = Result->Failure;
     MdoMigrationContextUnit(&Context);
     if ( !Ok && !Published ) memset(Result, 0, sizeof(*Result));
     if ( !Ok && !Published ) Result->Size = sizeof(*Result);
+    if ( !Ok && !Published ) Result->Failure = Failure;
     return Ok;
 }

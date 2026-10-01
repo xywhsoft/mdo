@@ -41,6 +41,11 @@ typedef struct MdoMigrationApplyOptions {
     const char* PreviewToken;
 } MdoMigrationApplyOptions;
 
+typedef enum MdoMigrationApplyFailureKind {
+    MDO_MIGRATION_APPLY_FAILURE_NONE = 0,
+    MDO_MIGRATION_APPLY_FAILURE_STORAGE_UNSUPPORTED
+} MdoMigrationApplyFailureKind;
+
 typedef struct MdoMigrationApplyResult {
     uint32 Size;
     bool RestartRequired;
@@ -54,6 +59,9 @@ typedef struct MdoMigrationApplyResult {
     uint64 WrittenBytes;
     char TargetPath[MDO_MIGRATION_PATH_CAPACITY];
     char ReportPath[MDO_MIGRATION_PATH_CAPACITY];
+    /* Typed failure survives cleanup; callers must not classify error text.
+     * NONE leaves the general xwork_error as the authoritative failure. */
+    MdoMigrationApplyFailureKind Failure;
 } MdoMigrationApplyResult;
 
 /* Resolves and inspects one known legacy source without creating Home or

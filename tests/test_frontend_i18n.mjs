@@ -26,6 +26,7 @@ const localizedApiErrors = [
   ["precondition_required", "error.preconditionRequired"],
   ["settings_unavailable", "error.settingsUnavailable"],
   ["home_import_busy", "error.homeImportBusy"],
+  ["migration_storage_unsupported", "error.migrationStorageUnsupported"],
   ["home_restart_required", "error.homeRestartRequired"],
   ["configuration_persistence_failed", "error.configurationSaveFailed"],
   ["project_not_found", "error.projectNotFound"],

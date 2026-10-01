@@ -16,7 +16,10 @@ bool MdoHomeImportInspect(bool* Available, bool* PreserveCache);
  * staging root and native diagnostic path. The caller must close Stage before
  * End and consume Import before HomeUnit; no Home mutex is held while the
  * caller converts/validates its payload.
- * The existing Home process lease remains held throughout. */
+ * The existing Home process lease remains held throughout. Before staging any
+ * payload, an empty journal move checks the filesystem's no-replace directory
+ * rename. Unsupported storage returns XERR_UNSUPPORTED without payload data;
+ * cleanup failure still freezes writes for startup recovery. */
 MdoHomeImport* MdoHomeImportBegin(xroot* Stage, str* Path);
 
 /* Consumes Import exactly once, after the staging root and all its files close.

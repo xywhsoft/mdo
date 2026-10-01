@@ -86,6 +86,10 @@ static bool MdoApiLegacyMigrationApplyRoute(MdoApiContext* Context)
     Result.Size = sizeof(Result);
     memset(&Error, 0, sizeof(Error));
     if ( !MdoLegacyMigrationApply(&Options, &Result, &Error) ) {
+        if ( Result.Failure == MDO_MIGRATION_APPLY_FAILURE_STORAGE_UNSUPPORTED )
+            return MdoApiReplyError(Context, 409u, "migration_storage_unsupported",
+                "Target filesystem does not support the atomic no-replace directory move required for safe import",
+                NULL);
         uint16 Status = Error.eCode == XWORK_ERROR_CONTEXT ? 409u :
             (Error.eCode == XWORK_ERROR_INVALID_ARGUMENT ? 422u : 500u);
         return MdoApiReplyError(Context, Status,

@@ -450,6 +450,19 @@ static bool MdoHomeImportRecoverLocked(bool* Published)
     return MdoHomeImportRetire();
 }
 
+/* Exercise the actual no-replace directory move before staging user data.
+ * Filesystems can reject it even when directory creation works. Both empty
+ * journal locations already have startup recovery; a rejected move needs
+ * only removal of the empty source, never retirement of a populated batch.
+ * Do not perform this write probe in Inspect or ordinary Home startup. */
+static bool MdoHomeImportPreflight(void)
+{
+    if ( !xrtRootRenameNoReplace(g_MdoHome.Root,
+            MDO_HOME_IMPORT_DIR, MDO_HOME_IMPORT_GC) ) return false;
+    return MdoHomeImportGc() &&
+        xrtRootDirCreate(g_MdoHome.Root, MDO_HOME_IMPORT_DIR, 0700u);
+}
+
 MdoHomeImport* MdoHomeImportBegin(xroot* Stage, str* Path)
 {
     MdoHomeImport* Import = NULL;
@@ -473,6 +486,7 @@ MdoHomeImport* MdoHomeImportBegin(xroot* Stage, str* Path)
     }
     Import->Active = true;
     g_MdoHome.Import = Import;
+    if ( !MdoHomeImportPreflight() ) goto fail;
     if ( !MdoHomeImportWrite(MDO_HOME_IMPORT_DIR "/owner", MDO_HOME_IMPORT_MAGIC,
             sizeof(MDO_HOME_IMPORT_MAGIC) - 1u) ||
          !xrtRootDirCreate(g_MdoHome.Root, MDO_HOME_IMPORT_DIR "/payload", 0700u) ) goto fail;
