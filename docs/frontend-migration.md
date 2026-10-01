@@ -4,6 +4,68 @@
 
 完成判据及尚缺的打包页证据见 [前端操作体验完成审计](frontend-completion-audit.md)。本文件继续记录每次实现和验证的细节。
 
+## 2026-10-01：新任务首次发送后恢复输入焦点
+
+上一阶段 Linux 最终单文件页在首次懒创建并完成回复后，prompt 已启用，
+但焦点仍落在 body；等待 3 秒也未恢复。新任务 pump 保存及迁移草稿时
+短暂禁用输入，浏览器丢失原输入框焦点，原 onMigrated 无法再判断归属。
+
+新增独立的 new-task-composer-focus 模块：仅在空白新任务的已聚焦输入框
+即将禁用时记录项目与焦点意图；确认目标会话后，等待该会话输入可用，
+再一次性恢复焦点。记录仅在内存中，不把重启恢复或后台页面当作用户
+正在输入。项目/路由变化、另一控件获焦、点击非输入内容、窗口失焦、
+页面隐藏、显式新任务及准备失败均取消记录。原准备和迁移期间的输入
+禁用规则保留；恢复使用 preventScroll，不改草稿、运行或队列协议。
+
+验证：
+
+- 新增七项 Node 回归覆盖禁用/迁移/启用顺序、恢复一次、后台/已有会话
+  不捕获、后续焦点和非可聚焦内容点击、项目/路由变化、窗口失焦/隐藏、
+  错误目标及显式取消。真实 DOM 夹具从按钮启动，通过保留、另一控件、
+  内容点击、离开后返回、后台五种情况，使用正式模块及真实 textarea。
+  初版夹具假定禁用一定移焦 body，首例实际仍保留 disabled textarea；
+  最终夹具记录两种浏览器结果，但严格要求仅保留场景最终聚焦 prompt。
+- Windows 最终 A 包 Home `.build/mdo-packed-docks-27cr37rz`，原会话
+  `V-ORkVmfIZJWFMfvzwxrOeblE9XDL7MC`。320×350 键盘新建并发送
+  `FIRST TASK FOCUS WINDOWS`，创建 `023786106aefb3cde91203f34ed41cd7`，
+  回复完成后 prompt 启用且获焦；直接输入下一条草稿，刷新仍保留文本
+  和焦点。磁盘核对原草稿、下一条草稿独立保存，队列为空；截图
+  `.build/qa-new-task-focus-windows-mobile.png`。
+- Windows 另一个最终 A 包 Home `.build/mdo-packed-docks-a46ss426`，
+  创建 POST 有界延迟 5 秒。960×600 创建期间打开检查器，迁移完成至
+  `73e29a32f41f66cc6107762cb8ebade0` 后焦点仍为 tasks-tab；之后正常
+  新建 `df9906052da78cf9ef2ae9e70461a95e`，回复后 prompt 恢复焦点。
+  两轮实际运行均 succeeded/cancel_requested=false，页面错误为空。
+- Linux 全新 ext4 快照最终 A 包 Home
+  `/home/ubuntu/.cache/mdo-linux-qa-new-task-focus/.build/mdo-packed-docks-x1e6cxv1`，
+  同样有界延迟创建 5 秒。320×350 首条创建
+  `8c6def2f6907a9aa3b572c3f9430a446`，回复后 prompt 启用并获焦，
+  下一条草稿刷新保留；截图 `.build/qa-new-task-focus-linux-mobile.png`。
+  创建期间打开检查器后，`eda1dc6c9a054035a49bd08e5e481e10` 的回复
+  完成仍聚焦 tasks-tab。另在创建期间切回原会话
+  `V-ORkX-JpdnnjCwAidSVaDGJ46q1QPXF`，创建完成不把路由切回，原草稿
+  保留；随后选择 `a7f3318a6359bbc468f2931e98fde4c5` 才继续其待发项，
+  该会话正常回复并获焦。最终四轮运行均成功且未请求取消，页面无错误。
+- 两次尝试等待短暂的 disabled 状态未命中；后续状态核对均确认已完成
+  并获焦，未将等待超时记作输入失败。一次通配 URL 等待也超时，最终
+  核对实际路由与检查器焦点确认通过。Linux 首次非交互 helper 因 stdin
+  EOF 退出 1，改用 PTY 后正式夹具正常运行；这些不计入门禁通过数。
+- Windows/Linux 完整门禁各通过 114 Python、210 Node、89 模块、严格
+  C11、32 个运行探针、Home 租约、队列启动恢复及确定性 A/B；Windows
+  另通过便携 WebView2 Home/20 秒启动。日志
+  `.build/qa-new-task-focus-release.log`、
+  `.build/qa-new-task-focus-linux-release.log`，两端最终进程退出码均为 0。
+- Windows A/B 及更新后的根目录 SHA-256：
+  `949b8b57f2586d4c51d023e017ff759d01b2d76aa7bfeeae1c4036a1dc8c4cf0`；
+  Linux A/B SHA-256：
+  `f0a9f45d3572c2a656e186e589ea27ef549790f1089bb990d3c55f4803680925`。
+
+首次懒创建的输入焦点缺口关闭。两端正式夹具正常退出，临时浏览器页
+已关闭。Linux 图形证据仍来自 Windows 浏览器
+访问真实 Linux 服务，不等于 Linux 原生 WebView 验收。原生窗口点击、
+系统拖放/输入法、实体移动端与其余审计缺口保留；长期任务继续，未做
+压力或高负载测试。
+
 ## 2026-10-01：新任务入口收起覆盖输入区的检查器
 
 基线 57cff72 的 Home `.build/mdo-packed-docks-01vmkboh`，会话

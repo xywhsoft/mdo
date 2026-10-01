@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="zh-CN">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>mdo new-task composer focus probe</title>
+<h1 id="heading">新任务输入焦点</h1>
+<textarea id="prompt" aria-label="输入消息"></textarea>
+<button id="other" type="button">另一个控件</button>
+<button id="run" type="button">运行焦点检查</button>
+<pre id="result"></pre>
+<script type="module">
+import { createNewTaskComposerFocus } from
+  "/app/web/js/features/chat/new-task-composer-focus.js";
+
+const prompt = document.querySelector("#prompt");
+const output = document.querySelector("#result");
+let route = { view: "workspace", projectId: "default", sessionId: "" };
+const listeners = new Set();
+const navigation = { get: () => route,
+  subscribe(fn) { listeners.add(fn); fn(route); return () => listeners.delete(fn); } };
+function select(sessionId) {
+  route = { ...route, sessionId };
+  for (const fn of listeners) fn(route);
+}
+// Keep both browser outcomes as evidence: disabling can move focus to body,
+// or retain the disabled editor. The final focus owner is the contract.
+document.querySelector("#run").addEventListener("click", async () => {
+  const focus = createNewTaskComposerFocus({ prompt, navigation });
+  const results = [];
+  try {
+    for (const choice of ["keep", "other", "content", "leave", "background"]) {
+      select("");
+      prompt.disabled = false;
+      prompt.focus();
+      if (choice === "background") prompt.blur();
+      focus.capture();
+      prompt.disabled = true;
+      await new Promise(requestAnimationFrame);
+      const disabledFocusLost = document.activeElement === document.body;
+      const disabledInputFocused = document.activeElement === prompt;
+      if (choice === "other") document.querySelector("#other").focus();
+      if (choice === "content") document.querySelector("#heading")
+        .dispatchEvent(new PointerEvent("pointerdown", { bubbles: true }));
+      if (choice === "leave") { select("other"); select(""); }
+      focus.migrate("default", "created");
+      select("created");
+      prompt.disabled = false;
+      const restored = focus.restore();
+      results.push({ choice, disabledFocusLost, disabledInputFocused, restored,
+        promptFocused: document.activeElement === prompt,
+        passed: (disabledFocusLost || disabledInputFocused) &&
+          restored === (choice === "keep") &&
+          (document.activeElement === prompt) === (choice === "keep") });
+    }
+    const passed = results.every(item => item.passed);
+    output.dataset.passed = String(passed);
+    output.textContent = JSON.stringify({ passed, results }, null, 2);
+  } catch (error) {
+    output.dataset.passed = "false";
+    output.textContent = error.stack ?? String(error);
+  } finally { focus.destroy(); }
+});
+</script>
+</html>

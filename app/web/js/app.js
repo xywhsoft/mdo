@@ -44,6 +44,7 @@ import { createDraftStore } from "./features/chat/draft-store.js";
 import { createProjectDraftSelection } from "./features/chat/project-draft-selection.js";
 import { createSubmissionController } from "./features/chat/submission-controller.js";
 import { createNewTaskController, taskTitle } from "./features/chat/new-task-controller.js";
+import { createNewTaskComposerFocus } from "./features/chat/new-task-composer-focus.js";
 import { createComposerImages, unsupportedModelError } from "./features/chat/composer-images.js";
 import { createComposerProject } from "./features/chat/composer-project.js";
 import { createImagePreview } from "./features/chat/image-preview.js";
@@ -139,6 +140,7 @@ export async function boot() {
   trackMobileViewport(shell, mobileLayout);
   shell.dataset.inspector = "closed";
   const prompt = $("#prompt");
+  const newTaskComposerFocus = createNewTaskComposerFocus({ prompt, navigation });
   const composer = $("#composer");
   trackComposerMenuRoom(composer);
   const send = $("#send");
@@ -839,6 +841,7 @@ export async function boot() {
           current.projectId === projectId) {
         const returnFocus = composerError.contains(document.activeElement) ||
           document.activeElement === $("#composer-project");
+        newTaskComposerFocus.migrate(projectId, sessionId);
         creatingSessionKey = key;
         migratedDraftTarget = key;
         navigation.select(projectId, sessionId);
@@ -847,6 +850,7 @@ export async function boot() {
       }
     },
     onReview(error) {
+      newTaskComposerFocus.cancel();
       const current = navigation.get();
       if (current.view === "workspace" && !current.sessionId) {
         showComposerError(newTaskReviewError(), error);
@@ -1039,12 +1043,15 @@ export async function boot() {
     const creatingSession = Boolean(creatingSessionKey) &&
       creatingSessionKey === `${route.projectId}/${route.sessionId}`;
     const serviceFailed = Boolean(bootstrapFailure());
+    if (newTaskController?.isPreparing() || migratingNewTask)
+      newTaskComposerFocus.capture();
     // Keep keyboard focus while a newly created session loads its detail.
     prompt.disabled = serviceFailed || messageActionBusy || purgeRecovery.isPaused() ||
       selectingProjectDraft ||
       projectDraftSelection?.isMigrating() ||
       newTaskController?.isPreparing() ||
       (!sessionWritable && !creatingSession) || migratingNewTask;
+    newTaskComposerFocus.restore();
     sendBlockedByState = serviceFailed || purgeRecovery.isPaused() || !(sessionWritable || creatingSession) ||
       composerProfile.isBusy() || messageActionBusy ||
       !draftStore.isLoaded(selectedDraftKey) ||
@@ -2227,6 +2234,7 @@ export async function boot() {
     window.setTimeout(() => dialogForm.elements.title.focus(), 0);
   }
   function openNewTask() {
+    newTaskComposerFocus.cancel();
     showActiveSessions();
     navigation.newTask(navigation.get().projectId || navigation.preferredProject());
     closeDrawers();
