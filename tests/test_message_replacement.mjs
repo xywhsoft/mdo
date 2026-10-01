@@ -111,6 +111,18 @@ test("navigation during truncation finishes the old run without changing new UI"
   assert.deepEqual(probe.events[1].slice(1), ["source", "old", "edited", attachments]);
 });
 
+test("a refused history transaction never announces a visible commit", async () => {
+  const probe = harness({ truncate: async () => { throw new Error("history conflict"); } });
+  await assert.rejects(runMessageReplacement(probe.args), /history conflict/);
+  assert.deepEqual(probe.events, []);
+});
+
+test("an obsolete message boundary cannot commit or reveal a replacement turn", async () => {
+  const probe = harness({ loadHistory: async () => ({ last_sequence: 2 }) });
+  await assert.rejects(runMessageReplacement(probe.args), /消息已不在/);
+  assert.deepEqual(probe.events, []);
+});
+
 test("failed background resend saves the old draft without touching visible UI", async () => {
   const start = deferred();
   const probe = harness({ startRun: (...args) => {

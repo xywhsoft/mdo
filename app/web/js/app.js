@@ -400,6 +400,10 @@ export async function boot() {
         },
         loadHistory: loadSessionHistory, truncate: truncateSession, startRun,
         onTruncated(updated) {
+          // A committed edit/retry starts a new turn. An old history filter
+          // must not hide its messages; cancelled or rejected edits keep it.
+          conversationSearch.close();
+          timelineView.follow();
           sessionDetailStore.setData(updated);
           void Promise.allSettled([reloadSelectedTimeline(),
             selectTodo(updated.project_id, updated.id)]);
@@ -426,14 +430,19 @@ export async function boot() {
       void Promise.allSettled([...(stillSelected() ? [refreshSelectedTimeline()] : []),
         loadTasks(), loadRuns(), loadRecovery()]);
       if (stillSelected()) {
-        if (document.activeElement === document.body ||
-            !document.activeElement?.isConnected) prompt.focus();
         toast(action === "retry"
           ? t("messageAction.retried", {}, "已在当前会话重试")
           : t("messageAction.edited", {}, "已在当前会话发送编辑后的消息"));
       } else if (!result.current)
         toast(t("messageAction.backgroundRun", {}, "原会话已在后台重新运行"));
-    } finally { messageActionBusy = false; setRun(activeRun); }
+    } finally {
+      messageActionBusy = false;
+      setRun(activeRun);
+      // setRun releases the editor's disabled state. Restore focus only
+      // after that release, and respect any later control/route selection.
+      if (stillSelected() && (document.activeElement === document.body ||
+          !document.activeElement?.isConnected)) prompt.focus({ preventScroll: true });
+    }
   }
 
   let conversationSearch;

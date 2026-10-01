@@ -4,6 +4,64 @@
 
 完成判据及尚缺的打包页证据见 [前端操作体验完成审计](frontend-completion-audit.md)。本文件继续记录每次实现和验证的细节。
 
+## 2026-10-01：历史编辑和重试后退出旧查询并恢复输入
+
+基线 `38e9626` 单文件 Home `.build/mdo-packed-docks-h01hm2m1` 于
+1280×720 搜索 `SEARCH ORIGINAL PROMPT`，从命中消息编辑成
+`REPLACED PROMPT WITHOUT ORIGINAL WORDS` 并重发。服务端两轮均成功，
+当前日志已有新提示与回复，但页面仍保留旧查询、显示零匹配与空时间线，
+输入已启用却无输入焦点。截图 `.build/qa-search-replacement-before.png`。
+旧版与新版均按查询隐藏未命中行；本轮保留该搜索模式，补齐从历史操作
+回到新回合的路径。
+
+编辑和重试共用的 onTruncated 回调现在于历史替换确认成功、且仍在原
+会话时关闭搜索并跟随新回合。取消弹窗、前置校验拒绝和截断失败不执行
+此回调，原查询保留；异步过程中切会话也不操作新页面。输入聚焦移到
+消息操作 finally 中、setRun 解除禁用之后，仅当前路由且焦点落在 body
+或断开节点时恢复，保留用户后续选择的控件。
+
+验证：
+
+- 新增两项 Node 边界用例验证截断拒绝及过期消息边界不通知可见提交；
+  既有原会话绑定、前置校验、截断中导航和后台失败隔离继续通过。这些是
+  回调合同用例，不单独宣称已验证完整搜索页面。
+- Windows 最终 A 包 Home `.build/mdo-packed-docks-w9rozypi`，会话
+  `V-ORkl5v6nmPH-vqqi6sHHboisaTBb0R`。1280×720 实际搜索、打开并取消
+  编辑后查询与命中保留，焦点返回 user-1/edit；填写 `UNSENT DRAFT KEEP`
+  后编辑被明确拒绝，草稿/查询不变。清除草稿后改成不匹配旧查询的文本并
+  重发，搜索关闭、完整新提示与回复可见，prompt 启用并获焦。截图
+  `.build/qa-search-replacement-windows-edit.png`。
+- Windows 通过 1200ms 有界历史读取延迟，从回复搜索命中重试；期间打开
+  检查器，新回合显示后 toggle-inspector 焦点保留。再次重试校验期间
+  Ctrl+N 切新任务，填写 `NEW TASK DRAFT AFTER ABORT`，旧请求不截断、
+  不新增运行，新任务路由/草稿/焦点保持，刷新仍保留。返回源会话后，
+  仍只有正确的替换提示与回复，源草稿为空。一次过早的编辑弹窗等待未
+  命中，后续页面就绪后正式取消链通过；未计入门禁通过数。
+- Linux 全新 ext4 快照最终 A 包 Home
+  `/home/ubuntu/.cache/mdo-linux-qa-search-replacement/.build/mdo-packed-docks-knryrq9v`，
+  会话 `V-ORkl5tbVWGAv1bcU0ytze5k5Lwbrsj`。320×350 从
+  `LINUX SEARCH ORIGINAL` 搜索命中取消编辑，查询与原按钮焦点保留；
+  实际改为 `LINUX REPLACED TEXT WITHOUT MATCH` 并重发，随后从回复
+  搜索命中重试，两次均关闭搜索并显示新回合，输入启用且获焦。
+  `LINUX FOLLOW-UP DRAFT` 刷新保留；截图
+  `.build/qa-search-replacement-linux-mobile.png`。
+- 最终服务端两端各三轮 succeeded/cancel_requested=false；源会话当前
+  提示均为所提交的替换原文，Windows 代理总计三次运行 POST、零取消，
+  切路由的校验不新增运行。两端页面无脚本错误，正式夹具退出码为 0。
+- Windows/Linux 完整门禁各通过 114 Python、218 Node、89 模块、严格
+  C11、32 个运行探针、Home 租约、队列启动恢复及确定性 A/B；Windows
+  另通过便携 WebView2 Home/20 秒启动。日志
+  `.build/qa-search-replacement-release.log`、
+  `.build/qa-search-replacement-linux-release.log`，两端退出码为 0。
+- Windows A/B 及更新后的根目录 SHA-256：
+  `e50fd79e34d1e9600c4878dc17b77f37637c7c6eb50637baf7f3acfaa5ff4723`；
+  Linux A/B SHA-256：
+  `580d73c6700775a4d66fabfedce9cb54cc5964d441b14ef5fd3808454b818c53`。
+
+临时浏览器页和视口覆盖已清理。Linux 图形证据仍来自 Windows 浏览器
+访问真实 Linux 服务，原生 WebView/输入法/系统拖放及实体移动端缺口
+保留；长期任务继续，便携 Home 策略不变，未做压力或高负载测试。
+
 ## 2026-10-01：搜索期间收起待决覆盖层并露出匹配正文
 
 基线 `80b0779` 单文件 Home `.build/mdo-packed-docks-qqlcfeee` 在
