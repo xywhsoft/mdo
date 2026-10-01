@@ -1,4 +1,12 @@
 {
+  "error.backupUploadInvalid": "备份上传信息或分段格式无效，请重新选择原始备份文件。",
+  "error.backupUploadLimit": "备份文件最多 96 MiB，每个上传分段最多 256 KiB。",
+  "error.backupUploadBusy": "另一个备份正在上传或校验，请结束后重试。",
+  "error.backupUploadConflict": "上传内容、进度或状态不一致，请核对已接收的进度后重试。",
+  "error.backupUploadIncomplete": "备份文件尚未完整接收，请继续上传。",
+  "error.backupUploadChecksum": "备份文件校验不一致，请重新上传原始文件。",
+  "error.backupUploadNotFound": "上传已过期、取消或结束，请重新选择备份文件。",
+  "error.backupUploadUnavailable": "备份上传服务暂时不可用，请稍后重试。",
   "error.sessionCaptureBusy": "会话数据正在保存或清理，请稍后重新导出。",
   "error.sessionBackupBusy": "另一个会话备份正在进行，请稍后重试。",
   "error.sessionBackupLimit": "会话备份超出大小或时间限额，请稍后重试或减少保留内容。",

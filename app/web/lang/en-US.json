@@ -1,4 +1,12 @@
 {
+  "error.backupUploadInvalid": "The backup upload metadata or chunk format is invalid. Select the original backup file again.",
+  "error.backupUploadLimit": "A backup file may be at most 96 MiB; each upload chunk may be at most 256 KiB.",
+  "error.backupUploadBusy": "Another backup is uploading or being checked. Wait for it to finish and retry.",
+  "error.backupUploadConflict": "The upload content, progress or state conflicts. Check the received progress before retrying.",
+  "error.backupUploadIncomplete": "The backup file has not been fully received. Continue uploading.",
+  "error.backupUploadChecksum": "The backup file checksum does not match. Upload the original file again.",
+  "error.backupUploadNotFound": "The upload has expired, been cancelled or ended. Select the backup file again.",
+  "error.backupUploadUnavailable": "The backup upload service is unavailable. Retry later.",
   "error.sessionCaptureBusy": "Session data is being saved or cleaned up. Try exporting again shortly.",
   "error.sessionBackupBusy": "Another session backup is in progress. Try again shortly.",
   "error.sessionBackupLimit": "The session backup exceeds its size or time limit. Try again later or reduce retained content.",

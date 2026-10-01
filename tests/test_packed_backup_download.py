@@ -50,6 +50,26 @@ def download(port: int, path: str) -> dict[str, bytes]:
         files[item["path"]] = content
     assert document["file_count"] == len(files)
     assert document["total_bytes"] == sum(map(len, files.values()))
+    # Dedicated uploads keep the host's ordinary body ceiling: split this
+    # real packed backup, seal it, and check the whole-document checksum.
+    upload_id = "e" * 32
+    prefix = "/api/v1/session-backups/uploads"
+    upload_path = prefix + "/" + upload_id
+    status, reply = request(port, "POST", prefix, {
+        "id": upload_id, "bytes": len(data), "sha256": hashlib.sha256(data).hexdigest(),
+    })
+    assert status == 201, reply
+    chunk_size = reply["data"]["chunk_max_bytes"]
+    assert chunk_size == 256 * 1024
+    for offset in range(0, len(data), chunk_size):
+        chunk = data[offset:offset + chunk_size]
+        status, _, reply_data = raw_request(port, "PUT", upload_path + f"/chunks/{offset}",
+            body=chunk, headers={"Content-Type": "application/octet-stream"})
+        assert status == 200 and json.loads(reply_data)["data"]["received_bytes"] == offset + len(chunk)
+    status, reply = request(port, "POST", upload_path + "/seal")
+    assert status == 200 and reply["data"]["sha256"] == hashlib.sha256(data).hexdigest(), reply
+    assert reply["data"]["restore_ready"] is False
+    assert request(port, "DELETE", upload_path)[0] == 200
     return files
 
 

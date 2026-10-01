@@ -4,6 +4,7 @@
 #include "internal.h"
 #include "purge_intent.h"
 #include "write_admission.h"
+#include "backup_upload.h"
 #include "../../include/mdo/project_lifecycle.h"
 #include "../../include/mdo/projects.h"
 #include "../../include/mdo/home.h"
@@ -38,6 +39,15 @@ static const MdoApiRoute g_MdoApiRoutes[] = {
       "GET, HEAD, OPTIONS", MdoApiModelConfigRoute, false },
     { "/api/v1/agents", XHTTP_METHOD_GET | XHTTP_METHOD_HEAD,
       "GET, HEAD, OPTIONS", MdoApiAgentsRoute, false },
+    { "/api/v1/session-backups/uploads", XHTTP_METHOD_GET | XHTTP_METHOD_HEAD | XHTTP_METHOD_POST,
+      "GET, HEAD, POST, OPTIONS", MdoApiBackupUploadsRoute, false },
+    { "/api/v1/session-backups/uploads/{upload}",
+      XHTTP_METHOD_GET | XHTTP_METHOD_HEAD | XHTTP_METHOD_DELETE,
+      "GET, HEAD, DELETE, OPTIONS", MdoApiBackupUploadRoute, false },
+    { "/api/v1/session-backups/uploads/{upload}/chunks/{offset}", XHTTP_METHOD_PUT,
+      "PUT, OPTIONS", MdoApiBackupUploadChunkRoute, false },
+    { "/api/v1/session-backups/uploads/{upload}/seal", XHTTP_METHOD_POST,
+      "POST, OPTIONS", MdoApiBackupUploadSealRoute, false },
     { "/api/v1/modules", XHTTP_METHOD_GET | XHTTP_METHOD_HEAD,
       "GET, HEAD, OPTIONS", MdoApiModulesRoute, false },
     { "/api/v1/skills", XHTTP_METHOD_GET | XHTTP_METHOD_HEAD,
@@ -368,7 +378,8 @@ bool MdoApiInit(void)
         MdoApiSessionsUnit();
         return false;
     }
-    if ( !MdoApiDownloadsInit() ) {
+    if ( !MdoApiBackupUploadsInit() || !MdoApiDownloadsInit() ) {
+        MdoApiBackupUploadsUnit();
         MdoApiWriteUnit(); MdoApiPurgeIntentUnit(); MdoApiAttachmentsUnit();
         MdoApiWorkspaceStateUnit(); MdoApiQueueUnit(); MdoApiDraftUnit();
         MdoApiFeedbackUnit(); MdoApiSessionsUnit();
@@ -383,6 +394,7 @@ void MdoApiUnit(void)
 {
     g_MdoApiInitialized = false;
     MdoApiDownloadsUnit();
+    MdoApiBackupUploadsUnit();
     MdoApiWriteUnit();
     MdoApiPurgeIntentUnit();
     MdoApiWorkspaceStateUnit();

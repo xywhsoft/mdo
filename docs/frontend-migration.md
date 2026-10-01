@@ -4,6 +4,42 @@
 
 完成判据及尚缺的打包页证据见 [前端操作体验完成审计](frontend-completion-audit.md)。本文件继续记录每次实现和验证的细节。
 
+## 2026-10-02：完整会话备份的分段上传
+
+新增独立上传 store 与查询/创建/分段/seal/取消 API。一个槽最多 96 MiB，
+每段最多 256 KiB，沿用 write token 与 Home 写入 admission；固定五分钟
+过期，不续期。相同创建意图、相同已接收字节的重试不重复累加，状态/偏移/
+内容冲突明确拒绝；当前槽查询可以找回旧页面的 ID。未经格式验证的原始
+文档只留内存，不写会话、凭据或 staging，不发起任何运行。后续 validator
+可 pin sealed 不可变字节，取消/过期后仍保留读者的引用和配额，旧 store
+Release 不会误释放新 generation；入场/worker/TCC teardown 合同已注明。
+
+真实 HTTP/TLS 探针从 2 MiB artifact 的 v2 文档开始，分段收齐并从 pin
+独立读回 hash。覆盖无 token、类型/预算/偏移、相同重试/异字节冲突、
+未收齐单段断连、seal/校验失败、取消/过期、跨 generation 释放和 Home
+零侧车写入。packed 内置 VFS 探针也加入上传/seal/删除。八类新错误已
+映射中英俄；页面仍是 v1 菜单，上传 checksum 不等于 schema/replay 校验。
+
+这条普通文件传输同时定位并修正 xs 的 TLS 请求停滞：HTTP 保留完整请求
+之前必须请求继续解密，TLS PlainLimit 也必须覆盖有效接收窗口。xs 已提交
+`c840d8c`、`483d753`，依赖锁升至后者。新增独立 HTTP/TLS 默认/大/小窗口、
+固定/分块、hash、keep-alive 与超限拒绝探针；不改 xrt 核心，不增加全局
+普通 API 配额，不运行压力/高负载测试。
+
+下一阶段按 [实施记录](session-backup-plan.md#专用分段上传与不可变读取)
+实现离线格式/引用校验与预览，再做实际账本/UI replay 和原子新会话恢复。
+没有用传输成功代替正式页面导出/恢复、原生下载或实体移动端验收。
+
+Windows/Linux 重新构建锁定 xs 宿主，独立 xs HTTP/TLS 小探针均通过。
+mdo 完整有界门禁在两平台通过 114 Python、240 Node、90 模块解析、严格
+C11、34 运行探针、A/B 确定性与三项 packed 探针；Windows 另通过便携
+WebView2 Home 和打包崩溃/20 秒启动，Linux 使用新 ext4 独立源拷贝、跳过
+GUI。日志为 `.build/qa-backup-upload-{xs-build,xs-receive,runtime,release,linux-host,linux-xs-receive,linux-release}.log`。
+根目录程序已用最终 Windows A/B 更新，SHA-256 为
+`3d2fcd26719706568c216cfaa8250abfabcfd56c3270c6f5ae82d619fa25bc29`；Linux
+包为 `13e8487ac69d3bcb3c22c60bf1950885982d2b025980e5c8d7cfd4daee730a54`。
+缓存继续位于 `mdo-home/data/cache/webview2`；没有压力或高负载测试。
+
 ## 2026-10-01：完整会话备份的专用下载
 
 新增 v2 `/backup` 的 GET/HEAD/OPTIONS，使用惰性单任务 executor 和

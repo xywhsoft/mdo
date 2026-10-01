@@ -1,8 +1,8 @@
 # 会话 JSON 完整备份与恢复实施记录
 
-状态：专用下载已接入，上传与恢复入口待实现。2026-10-01 已完成 checkpoint
-与有界读取共用排他运行窗口、统一捕获边界、v2 捕获/编码层和有界 HTTP/TLS
-下载。现有页面仍使用 `export_schema:1`，内容只有 meta 和模型 snapshot。
+状态：专用下载/上传已接入，完整校验与恢复入口待实现。2026-10-02 已完成
+checkpoint 与有界读取共用排他运行窗口、统一捕获边界、v2 捕获/编码层和
+有界 HTTP/TLS 传输。现有页面仍使用 `export_schema:1`，只有 meta 和模型 snapshot。
 格式/传输验证通过不表示正式页面已经导出完整备份，或恢复事务已经完成。
 旧版核心功能是 Markdown 导出，图片携带已经恢复；这里补齐新版现有 JSON
 备份入口，不将它冒充旧版已有的导入能力。
@@ -53,7 +53,7 @@ manager 调用或库通过 native path 写入不能被它自动覆盖。不得�
    读取串行；失败释放引用/claim。现有 v1 envelope 保持兼容。
 2. **已完成**：实际文件清单、统一捕获边界和确定性
    小型冲突用例，见下节。后续完整格式必须从这个入口复制文件，不能绕过。
-3. **格式和下载已完成，上传待实现**：版本化 manifest 与专用有界传输。
+3. **已完成**：版本化 manifest 与专用有界下载/分段上传。
    当前普通 API 请求上限 256 KiB、旧 v1 下载上限 33 MiB，不能直接塞入图片
    和全部日志。采用专用上传/下载边界并
    分别限制文件数、单文件、总字节、JSON/base64 膨胀和传输时间；定额失败需要
@@ -241,8 +241,8 @@ xs 的 XS_TAKEOVER 连接持有脚本代；API Unit 停止入场，cancel/wait/d
 草稿、待确认队列和原 artifact 后，换程序目录重启同一 Home，再核对原字节。
 没有执行模型、shell、队列，也没有进行浏览器下载或恢复。
 
-上传接收、严格离线验证/预览、实际 xllm/UI replay、新会话原子发布和正式
-页面菜单仍待步骤 3–6 完成；`restore_ready:false` 继续保留。此后端下载不能
+严格离线验证/预览、实际 xllm/UI replay、新会话原子发布和正式
+页面菜单仍待步骤 4–6 完成；`restore_ready:false` 继续保留。此后端下载不能
 当作正式页面导出到新 Home 再恢复成功的证据。
 
 本阶段 Windows/Linux 完整有界门禁通过 114 Python、240 Node、90 前端模块、
@@ -253,3 +253,67 @@ API、A/B、三项 packed 和便携窗口；Linux 全门禁包含最终代码/�
 根目录程序与最终 Windows A/B 同为
 `6ea1f9b686bc5971cb84b4672136aee8c79d0b5cac1d31db21e98f739282093e`；Linux
 包为 `a3dad18d2340d4410dc2366a6896a8646750760b7b6406d0303fa463897b68f6`。
+
+## 专用分段上传与不可变读取
+
+xs 的 RequestProc 在请求体收齐后调用；大文件不能通过简单放大普通请求限额
+解决。传输分为下列入口，普通 API 的 256 KiB 限额及图片 8 MiB 限额保持：
+
+| 方法/路径（统一前缀 `/api/v1/session-backups/uploads`） | 合同 |
+| --- | --- |
+| GET/HEAD 前缀 | 当前可见上传或 `upload:null`，可找回旧页面/丢失创建回复的 ID |
+| POST 前缀 | 严格 `{id,bytes,sha256?}`；ID 为客户端先生成的 32 位小写 hex，字节数 1–96 MiB，可选 SHA-256 为 64 位小写 hex |
+| GET/HEAD `/{id}` | 接收进度、分段上限、剩余时间、receiving/sealed 和传输校验状态 |
+| PUT `/{id}/chunks/{offset}` | application/octet-stream，解码后最多 256 KiB；固定长度/分块 HTTP 均按解码字节核对 |
+| POST `/{id}/seal` | 无正文；已收齐则结束 SHA-256，声明不符为 422 并丢弃上传；重复 seal 保持同一校验结果 |
+| DELETE `/{id}` | 无正文；移除可见性，释放无人读取的内容；没有会话目录操作 |
+
+所有写入仍需当前 write token，并服从 Home 导入/重启和 HTTP 写入 admission。
+创建意图在分配前验证字段/类型/预算；相同 ID/字节数/期望 hash 的重试只读
+当前进度，不重置内容或截止时间。不同意图明确冲突。偏移必须是规范十进制；
+只在当前末尾追加，已经收齐的范围仅允许逐字节相同的重试，不重复累加 hash；
+越界、重叠追加、不同内容和 seal 后写入都拒绝。断连前未收齐的单段不会进
+handler，因此不会推进已接收字节。错误回复后先 GET 进度，不能假定回滚。
+
+每个 API store 只有一个上传槽，按声明字节数分配一次精确容量，最多 96 MiB；
+没有全量 realloc、后台 idle 线程、磁盘暂存、用户路径或 request/stream 借用。
+下载的配额独立，不能将 96 MiB 宣称为整个进程内存上限。创建后固定五分钟
+单调截止时间，重试/查询不续期；过期内容在任何上传访问时立即不可见，内存
+在下一次上传访问、最后一个 pin 或 Unit 回收。无访问时不承诺五分钟整点释放
+内存。重启会丢弃上传，客户端须保留原文件重新上传；不在 Home 留半成品。
+
+sealed 只表示字节数与传输 hash，仍是未经格式验证的原始数据，响应保留
+`validation:transport-sha256` 和 `restore_ready:false`。不解析大 JSON，不创建
+session，不执行模型/shell/队列。未来离线 validator 可 Acquire 不可变字节，
+在 store 锁外执行；cancel/expiry 后已有 pin 保留内容及配额，最后 Release 才
+释放。store 的 owner/pin 计数保护各自的锁与槽，Unit/Init 后迟到的旧 Release
+不能碰新 generation。生产 Unit 前必须停止入场并 join reader workers，TCC
+卸载前释放所有调用者；内存引用不能代替代码生命周期。
+
+本阶段正常文件传输发现 xs 的 TLS 全请求模型存在两处衔接缺口：共享 context
+只有默认 256 KiB PlainLimit，且保留部分 header/body 时未请求 ReadMore。已在
+独立 xs 分支提交 `c840d8c`、`483d753`，mdo 依赖锁升级到后者。HTTP listener
+独立 context 保留 policy/其他限额，明文预算为 effective recv_limit 加一条 TLS
+record；大小溢出/创建失败拒绝启动。等待保留前缀时按 xrt API 请求增长，失败
+abort；没有修改 xrt 核心或放大其他协议/普通 API 限额。listener 保留引用后
+释放局部 context，失败路径平衡。xs 独立小探针覆盖默认/大/小窗口，真实
+HTTP/TLS 固定/分块请求的字节与 hash、keep-alive 和仅发送头部的超限拒绝。
+
+mdo 的独立 HTTP/TLS 探针把正常 2 MiB artifact 的真实 v2 下载文档再分段上传，
+直接从不可变 pin 独立计算原字节 hash；覆盖缺 token、字段/媒体类型/偏移/
+预算错误、相同重试、不同内容冲突、未完整单段断连、seal/校验失败重试、
+取消时保留 reader、过期和旧 generation Release。上传前后 Home 可读文件
+逐字节一致（Windows 排除被宿主独占的 `.mdo.lock`）；没有执行恢复。
+packed VFS 探针也增加真实文档的上传/校验/删除，不使用外部 app 源。
+
+下一步在这个 sealed 不可变输入上完成离线严格 schema、路径/身份/hash/引用
+验证与预览；然后实际账本/UI 试恢复及独立新会话原子发布，最后切换页面菜单。
+
+本阶段 Windows/Linux 分别重建锁定 xs 宿主并通过独立 HTTP/TLS 窗口探针，
+mdo 完整有界门禁通过 114 Python、240 Node、90 模块、严格 C11、34 运行
+探针、A/B 和三项 packed；Windows 另通过便携窗口及打包崩溃/20 秒启动。
+Linux 为新 ext4 工作树、跳过 GUI。根目录程序与 Windows A/B 同为
+`3d2fcd26719706568c216cfaa8250abfabcfd56c3270c6f5ae82d619fa25bc29`；Linux
+包为 `13e8487ac69d3bcb3c22c60bf1950885982d2b025980e5c8d7cfd4daee730a54`。
+日志为 `.build/qa-backup-upload-{xs-build,xs-receive,runtime,release,linux-host,linux-xs-receive,linux-release}.log`。
+没有压力/高负载、浏览器下载或真实恢复测试，完整恢复不由本阶段证明。

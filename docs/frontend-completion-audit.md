@@ -2,6 +2,22 @@
 
 本清单以 `app_bak/wwwroot` 的可操作行为为基线，而不是以页面长得相似或单元测试通过为完成标准。`docs/frontend-migration.md` 记录每次实现和验证；这里记录当前还需要什么证据。审计更新：2026-10-01，基线提交 `f9e2c4c`。
 
+2026-10-02 增量：v2 专用分段上传完成。单槽 96 MiB、单段 256 KiB、
+固定过期、顺序/相同重试/冲突、传输 SHA-256、查询与取消已实现；原数据
+只留内存。HTTP/TLS 真实文档和 immutable pin hash、部分请求断连、过期/
+取消/跨 generation 释放、write token 与 Home 零侧车写入通过；packed
+内置 VFS 探针新增上传/seal。xs 两处 TLS 请求停滞的限额/增长通知衔接
+已修正并独立验证，依赖锁更新；八类错误三语同步。sealed 仍明确
+`restore_ready:false`，正式页面未切换，完整离线验证、实际账本/UI replay、
+原子新会话恢复和正式页面读回仍未完成，本行不升级。详见
+[实施记录](session-backup-plan.md#专用分段上传与不可变读取)。
+Windows/Linux 新构建 xs 的独立 HTTP/TLS 窗口探针和 mdo 完整有界门禁
+均通过：114 Python、240 Node、90 模块、严格 C11、34 运行探针、确定性
+A/B 和三项 packed；Windows 另经便携窗口与打包崩溃/20 秒启动。
+根目录程序已更新，SHA-256 为
+`3d2fcd26719706568c216cfaa8250abfabcfd56c3270c6f5ae82d619fa25bc29`。
+没有压力或高负载测试。
+
 2026-10-01 增量：v2 完整会话备份已有专用 HTTP/TLS 下载，按 16 KiB
 以内分块和 drain 发送，捕获后释放存储锁与 session，拥有 stream 引用直到
 Future wait/cancel 完成。单任务、统一截止时间、断连/取消、HEAD、真实
