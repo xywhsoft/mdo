@@ -86,6 +86,7 @@ class BuildContractTests(unittest.TestCase):
             "src/sessions/attachments.c",
             "src/sessions/todo.c",
             "src/sessions/manager.c",
+            "src/sessions/backup.c",
             "src/approvals/manager.c",
             "src/power/inhibitor.c",
             "src/power/manager.c",

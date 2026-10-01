@@ -1,8 +1,9 @@
 # 会话 JSON 完整备份与恢复实施记录
 
-状态：待实现完整格式与恢复入口。2026-10-01 已完成 checkpoint 与有界读取
-共用排他运行窗口，以及统一捕获边界；`export_schema:1` 的内容仍只有 meta
-和模型 snapshot。捕获基础通过验证不表示完整备份格式已经完成。
+状态：待接入专用传输和恢复入口。2026-10-01 已完成 checkpoint 与有界读取
+共用排他运行窗口、统一捕获边界和 v2 文件格式的内部捕获/编码层；现有 HTTP
+`export_schema:1` 的内容仍只有 meta 和模型 snapshot。内部格式验证通过不
+表示正式页面已经导出完整备份，或恢复事务已经完成。
 旧版核心功能是 Markdown 导出，图片携带已经恢复；这里补齐新版现有 JSON
 备份入口，不将它冒充旧版已有的导入能力。
 
@@ -52,7 +53,8 @@ manager 调用或库通过 native path 写入不能被它自动覆盖。不得�
    读取串行；失败释放引用/claim。现有 v1 envelope 保持兼容。
 2. **已完成**：实际文件清单、统一捕获边界和确定性
    小型冲突用例，见下节。后续完整格式必须从这个入口复制文件，不能绕过。
-3. 定义版本化 manifest 与专用有界传输。当前普通 API 请求上限 256 KiB、
+3. **格式子阶段已完成，传输待实现**：版本化 manifest 与专用有界传输。
+   当前普通 API 请求上限 256 KiB、
    下载上限 33 MiB，不能直接塞入图片和全部日志。应采用专用上传/下载边界并
    分别限制文件数、单文件、总字节、JSON/base64 膨胀和传输时间；定额失败需要
    明确反馈。导出完成即释放捕获锁，下载速度不能占用运行窗口。
@@ -139,3 +141,66 @@ C11、32 运行探针及确定性打包；Windows 另通过便携 WebView2 Home 
 Linux 为 `195ffc4b7d5ecf19203f59bbfe0b040659c5900ac2cbebd0f52dc6da3b910bad`。
 日志为 `.build/qa-session-capture-{release,linux-release,final,final-linux}.log`。
 根目录 `mdo.exe` 已更新到最终 Windows 验证包。
+
+## v2 内部文件格式与所有权
+
+`MdoSessionBackupCapture()` 仅通过统一捕获入口复制当前文件；HTTP 调用方
+与 API 存储 manager 共用进程的调用方（包括非 HTTP 线程）还必须持有四类
+API guard。返回不可变、独立拥有字节的对象，释放 API guard
+和 session 后才调用 `MdoSessionBackupEncode()`。编码、JSON 检查、hash 和
+base64 均在捕获边界之外，不再次读取 Home。路径按 session 目录相对路径
+排序，每项保存 `path`、`bytes`、`sha256`、`encoding:base64` 和精确原字节。
+
+清单记录 `format:mdo-session-backup`、`export_schema:2`、原项目/会话 ID、
+revision、捕获时间、来源 workspace、文件数量/总字节、当前 UI 首末事件 ID
+和记录数，以及缺少的可选侧车文件。checkpoint 后 journal 可以合法不存在，
+不会为了导出创建空 journal。retention 明示早期内容可能已经清理，不能从
+当前保留文件推导“包含从创建以来的全部历史”。来源 workspace 和事件中
+旧 artifact 原生路径只是来源信息，后续恢复必须重写映射，不能直接使用。
+
+默认硬预算为 1024 文件、单文件 32 MiB、原字节合计 64 MiB、编码文档 96 MiB；
+另按实际产品文件收紧图片、metadata、UI 日志、引用和侧车限额。遍历最多
+4096 节点、三层；只接收已知逻辑文件与目录，未知内容明确失败。Home 锚定
+的 no-follow 打开、regular-file/目录类型和前后 identity/size 复核拒绝链接、
+特殊文件及替换。只跳过已知逻辑文件的 `.bak`/`.tmp`/`.bak.tmp` 和 regular
+`.runtime.lock`；不将未知文件或链接冒充可忽略临时文件。相对路径不接受
+绝对路径、父目录、分隔符别名和超出已知路径格式的文件名。
+
+捕获默认五秒、编码默认三十秒的单调截止时间，可降低预算/时间，不能抬高；
+在分块读取和各有界操作之间检查。同步 native read/checkpoint 和一次 JSON
+解析不能被截止时间强制中断，不能把这写成操作系统级硬超时。最终文档先
+估算 base64 膨胀和头部余量，再分配一次输出；不会构造第二份完整 base64
+value tree。输出大小失败为零，全部部分文件/缓冲释放，可重新捕获。
+
+编码检查 JSON 语法、无残缺尾的 JSONL、metadata 身份/revision、UI 事件 ID
+递增、图片元数据/二进制成对及长度/名称、草稿/队列/消息图片引用和 UI
+artifact 文件引用。待回收 `discard_images` 允许对象已经不存在。记录所有
+原字节而非运行恢复或队列派发。这里尚未验证所有产品 schema、图片实际
+解码、所有 ID 关系及实际 xllm/UI replay，因此 manifest 明确
+`validation:json-syntax-and-resource-references`、`restore_ready:false` 和
+`queue_restore_policy:require-user-confirmation`。不能据此开放恢复或声称
+步骤 4–6 完成；现有页面菜单及 v1 HTTP 保持原行为。
+
+传输接入前另查明：xs 使用非阻塞发送队列，xrt 默认 TCP WriteLimit 为 1 MiB；
+不能把 96 MiB 文档直接交给现有一次 `StreamSend` 并声称下载支持上限。
+后续专用接口须按 XS_TAKEOVER 生命周期管理有界分块、背压、截止时间、
+取消/关闭与脚本代释放，不占用会话捕获锁，也不能放大所有普通请求限额。
+
+确定性小型 C/TCC fixture 不发起模型/shell/队列，独立 Python 读回逐项核对
+base64、长度、SHA-256、路径排序、UI 保留范围、图片二进制零字节/完整
+Unicode 名称、草稿/队列、反馈/todo、回执及 artifact。捕获后写入新草稿再
+编码仍得到旧字节；降低单文件/总字节/文件数/文档预算、截止时间、缺图、
+缺 artifact、未知内容、残缺日志均明确失败，清理后成功重试。实际链接
+能力可用时另确认拒绝链接；探针侧车部分为格式校验的最小子集，这不是
+完整 schema/replay 或真实恢复成功用例。
+
+本子阶段 Windows/Linux 完整有界门禁通过 114 Python、240 Node、90 模块、
+严格 C11、32 运行探针、确定性 A/B、packed Home 租约/队列恢复；Windows
+另通过便携窗口与打包崩溃/20 秒启动。最后加强不可变字节的独立读回断言
+及 API guard 注释后，两平台重跑 session 与 A/B/packed 租约/队列，Windows
+最终包另通过便携窗口/20 秒启动；Linux 实际符号链接拒绝断言通过。日志为
+`.build/qa-session-backup-format-{release,linux-release,final,final-linux}.log`。
+根目录程序已更新，与 Windows 最终 A/B 同为
+`1d3059efa6127f2eae7a9ee0a11a8916dbab46c6f33e2a70effaf36be7340709`；Linux
+最终包为 `4e5f26d3bc7f406699f883e9ed3730d07601db6bbf3b8a99ec65ecdd63a90582`。
+本轮没有更换页面菜单/普通 HTTP 导出，没有执行浏览器下载或真实导入操作。

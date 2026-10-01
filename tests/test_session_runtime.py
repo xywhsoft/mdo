@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import argparse
+import base64
+import hashlib
 import json
 import os
 import re
@@ -37,7 +39,9 @@ PROBE_SOURCE = r'''
 #include "src/sessions/todo.c"
 #include "src/sessions/attachments.c"
 #include "src/sessions/manager.c"
+#include "src/sessions/backup.c"
 #include "session-capture.c"
+#include "session-backup.c"
 
 xwork_runtime *MdoBootstrapRuntime(void) { return NULL; }
 
@@ -569,6 +573,7 @@ void ServiceInit(XS_HostInfo *host) {
         export_json != NULL && strstr(export_json, "\"snapshot\":{") != NULL);
     xrtFree(export_json); export_json = NULL;
     if (!CaptureSessionBoundaryProbe(session)) goto done;
+    if (!SessionBackupProbe(session)) goto done;
     {
         char meta_path[MDO_SESSION_PATH_CAPACITY];
         bool failed, released;
@@ -810,9 +815,11 @@ def write_site(site: Path) -> None:
         "src/sessions/todo.c", "src/sessions/attachments.c",
         "src/sessions/internal.h",
         "src/sessions/manager.c",
+        "src/sessions/backup.c",
     ):
         shutil.copy2(ROOT / "app" / relative, site / relative)
     shutil.copy2(ROOT / "tests/fixtures/session-capture.c", site / "session-capture.c")
+    shutil.copy2(ROOT / "tests/fixtures/session-backup.c", site / "session-backup.c")
     for header in (ROOT / "app/include/mdo").glob("*.h"):
         shutil.copy2(header, site / "include/mdo" / header.name)
     shutil.copy2(
@@ -912,6 +919,58 @@ def main() -> int:
         assert "capture_data_gate=1" in output, output
         assert "capture_boundary=writers:1 other:1 locks:1 calls:1" in output, output
         assert "capture_failure=preserved:1 released:1 retry:1" in output, output
+        assert "backup_format=immutable:1 bounded:1 missing:1 unknown:1 deadline:1 partial:1 retry:1" in output, output
+        assert "backup_format_error=" not in output, output
+        if os.name != "nt":
+            assert "backup_link=rejected" in output, output
+        backup = json.loads((home / "data/session-backup-probe.json").read_text(encoding="utf-8"))
+        assert (home / "data/session-backup-probe.json").read_bytes() == (
+            home / "data/session-backup-after-write.json").read_bytes()
+        assert backup["format"] == "mdo-session-backup" and backup["export_schema"] == 2
+        assert backup["restore_ready"] is False
+        assert backup["validation"] == "json-syntax-and-resource-references"
+        assert backup["queue_restore_policy"] == "require-user-confirmation"
+        assert backup["history_retention"] == "earlier-content-may-have-been-pruned"
+        assert backup["project_id"] == backup["session_id"] == "backup-fixture"
+        restored_files = {}
+        ordered_paths = []
+        for item in backup["files"]:
+            path = item["path"]
+            assert path not in restored_files and not path.startswith(("/", "\\"))
+            assert ".." not in path.split("/") and "\\" not in path and ":" not in path
+            assert item["encoding"] == "base64"
+            data = base64.b64decode(item["data"], validate=True)
+            assert item["bytes"] == len(data)
+            assert item["sha256"] == hashlib.sha256(data).hexdigest()
+            restored_files[path] = data
+            ordered_paths.append(path)
+        assert ordered_paths == sorted(ordered_paths)
+        assert backup["file_count"] == len(restored_files)
+        assert backup["total_bytes"] == sum(map(len, restored_files.values()))
+        assert all(not path.endswith((".bak", ".tmp")) and path != ".runtime.lock"
+                   for path in restored_files)
+        assert not set(backup["absent_files"]) & set(restored_files)
+        assert "journal.jsonl" in backup["absent_files"] or "journal.jsonl" in restored_files
+        image_id = "a" * 32
+        assert restored_files[f"attachments/{image_id}.bin"] == b"\x89PNG\x00\xff\x01\x02"
+        image_meta = json.loads(restored_files[f"attachments/{image_id}.json"])
+        assert image_meta["file_name"] == "original 图片.png" and image_meta["size"] == 8
+        assert json.loads(restored_files["draft.json"])["text"] == "draft"
+        assert json.loads(restored_files["queue.json"])["items"][0]["state"] == "pending"
+        assert json.loads(restored_files["todo.json"])["items"][0]["text"] == "Saved task"
+        assert json.loads(restored_files["feedback.json"])["items"][0]["vote"] == 1
+        assert "queue-receipts/" + "b" * 32 + ".json" in restored_files
+        assert json.loads(restored_files["attachments/events/1.json"])["attachments"] == [image_id]
+        assert json.loads(restored_files["attachments/runs/1.json"])["attachments"] == [image_id]
+        artifact = "artifacts/run-00000000000000000001/00000000000000000001-probe.txt"
+        assert restored_files[artifact] == b"full artifact\n"
+        events = [json.loads(line) for line in restored_files["ui-events.jsonl"].splitlines()]
+        assert backup["ui_first_event_id"] == events[0]["event_id"]
+        assert backup["ui_last_event_id"] == events[-1]["event_id"]
+        assert backup["ui_records"] == len(events)
+        assert events[-1]["artifact_path"].replace("\\", "/").endswith(artifact)
+        assert isinstance(json.loads(restored_files["snapshot.json"]), dict)
+        assert json.loads(restored_files["meta.json"])["revision"] == backup["revision"]
         assert "export_stale=failed:1 size:0 context:1" in output, output
         assert "message_guard=reused:1 changed:1" in output, output
         assert "message_guard_retained=1" in output, output

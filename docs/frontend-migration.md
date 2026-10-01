@@ -4,6 +4,39 @@
 
 完成判据及尚缺的打包页证据见 [前端操作体验完成审计](frontend-completion-audit.md)。本文件继续记录每次实现和验证的细节。
 
+## 2026-10-01：完整会话备份的内部文件格式
+
+新增独立 `session_backup.h` 和 `sessions/backup.c`。统一捕获窗口内仅复制
+当前逻辑文件，之后用独立拥有的字节检查引用和编码；网络、hash/base64 和
+JSON 解析不进入捕获锁。v2 manifest 保存文件相对路径、原字节、长度与
+SHA-256，覆盖 snapshot/journal、UI、图片及名称、todo/反馈/草稿/队列、
+回执及 artifact；声明来源、缺失的可选文件和实际保留范围。预算、锚定
+no-follow、identity 复核、已知路径白名单和失败释放均显式执行。
+
+这是 [备份实施记录](session-backup-plan.md) 第三阶段的格式子阶段。
+manifest 明确 `restore_ready:false`；所有产品 schema、实际账本/UI 恢复
+和专用传输仍待完成，页面现有 v1 菜单不改。排查发现 xs 的非阻塞发送队列
+不能一次受理上限文档，后续必须处理分块、背压及 XS_TAKEOVER 生命周期，
+不会仅扩大普通 API/下载限额。格式测试不代替正式页导出/新 Home 恢复。
+
+小型 fixture 验证捕获之后的草稿修改不改变备份，单文件/总字节/文件数/
+文档大小/时间预算、未知文件、缺失图/artifact、残缺日志的失败与重试。
+独立 Python 逐文件校验实际 base64、长度和 SHA-256，以及 Unicode 名称、
+原图含零字节、UI 范围与全部侧车内容；有链接权限的平台另测实际链接拒绝。
+fixture 不执行模型、shell 或队列，不是完整 schema/replay 恢复证明。
+
+Windows/Linux 完整有界门禁通过 114 Python、240 Node、90 模块解析、严格
+C11、32 运行探针、A/B 确定性打包和 packed Home 租约/队列恢复；Windows
+另通过便携 WebView2 Home 和打包崩溃/20 秒启动。最终加强不可变字节读回
+断言及 API guard 注释后，两平台重跑 session 探针、A/B、packed 租约/队列，
+Windows 最终包再通过便携窗口/20 秒启动。Linux 明确验证实际符号链接拒绝。
+日志为 `.build/qa-session-backup-format-{release,linux-release,final,final-linux}.log`。
+根目录 `mdo.exe` 已更新，与最终 Windows A/B 包一致，SHA-256 为
+`1d3059efa6127f2eae7a9ee0a11a8916dbab46c6f33e2a70effaf36be7340709`；
+Linux 最终包为 `4e5f26d3bc7f406699f883e9ed3730d07601db6bbf3b8a99ec65ecdd63a90582`。
+便携 WebView2 缓存继续位于 `mdo-home/data/cache/webview2`，首次原生启动
+创建 Home 的选择保持。未做压力或高负载测试。
+
 ## 2026-10-01：会话备份统一捕获边界
 
 完整备份按 [实施记录](session-backup-plan.md) 完成第二阶段。新增
