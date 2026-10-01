@@ -231,6 +231,7 @@ export function createConversationDocks({ container, navigation, tasksStore, app
   let revealFrame = 0;
   let userMovedDock = false;
   let keyboardExpansionDismissed = false;
+  let searching = false;
   function syncHistoryOverlap() {
     if (!conversation || !composerRegion) return;
     const history = conversation.getBoundingClientRect();
@@ -513,8 +514,8 @@ export function createConversationDocks({ container, navigation, tasksStore, app
     }
     if (focusedAsk && !askRoot.contains(document.activeElement))
       document.querySelector("#prompt")?.focus({ preventScroll: true });
-    container.hidden = !todoItems.length && !todoError && !tasks.length &&
-      !approvals.length && !asks.length;
+    container.hidden = searching || (!todoItems.length && !todoError && !tasks.length &&
+      !approvals.length && !asks.length);
     composerRegion?.toggleAttribute("data-decision-pending",
       Boolean(approvals.length || asks.length));
     setDecisionExpanded(Boolean(approvals.length || asks.length) &&
@@ -539,7 +540,7 @@ export function createConversationDocks({ container, navigation, tasksStore, app
     } else container.scrollTop = previousScroll;
     visibleDecisions.clear();
     for (const key of nextDecisions) visibleDecisions.add(key);
-    if (arrived) {
+    if (arrived && !searching) {
       onDecisionArrived?.(arrived, newApproval ? "approval" : "ask");
       if (!keepEditor) scheduleReveal(arrived, true);
     }
@@ -569,7 +570,7 @@ export function createConversationDocks({ container, navigation, tasksStore, app
   resizeObserver?.observe(container);
   const onResize = () => syncAvailableHeight(true);
   window.addEventListener("resize", onResize);
-  return () => {
+  function destroy() {
     cancelAnimationFrame(revealFrame);
     resizeObserver?.disconnect();
     window.removeEventListener("resize", onResize);
@@ -584,5 +585,22 @@ export function createConversationDocks({ container, navigation, tasksStore, app
     composerRegion?.removeAttribute("data-decision-cramped");
     composerRegion?.removeAttribute("data-decision-expanded");
     unsubscribers.forEach((unsubscribe) => unsubscribe());
-  };
+  }
+  return Object.freeze({
+    setSearchActive(value) {
+      const next = Boolean(value);
+      if (next === searching) return;
+      searching = next;
+      if (next) {
+        // Search needs the history beneath the floating cards. Keep their
+        // state and answer drafts, but dismiss the expanded decision layer.
+        cancelAnimationFrame(revealFrame);
+        revealFrame = 0;
+        keyboardExpansionDismissed = true;
+        setDecisionExpanded(false);
+      }
+      render();
+    },
+    destroy,
+  });
 }

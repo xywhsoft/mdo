@@ -8,6 +8,14 @@ import { artifactPreviewNode } from "./artifact-preview.js";
 import { currentLocale, subscribeLocale, t } from "../../i18n.js";
 import { labelImageName } from "./image-names.js";
 
+export function searchResultTop(row, content, searchBottom, viewportBottom, lineHeight = 24) {
+  const room = Math.max(0, viewportBottom - searchBottom);
+  const firstLine = Math.min(content.height, lineHeight);
+  // A short viewport can fit the header or the first text line, but not both.
+  // Give the search result's text priority; larger views retain its metadata.
+  return room < content.top - row.top + firstLine ? content.top : row.top;
+}
+
 function modelKey(event, epoch) {
   return `${event.run_id || event.agent_id || event.event_id}-${epoch}-${event.agent_turn || 0}`;
 }
@@ -840,10 +848,14 @@ export function createTimelineView({ container, welcome, toBottom, store, sessio
       revealFirstSearchMatch = false;
       const first = container.querySelector(".timeline-item");
       const searchBar = scroller.querySelector(".conversation-find:not([hidden])");
-      if (first && searchBar)
-        scroller.scrollTop += first.getBoundingClientRect().top -
-          searchBar.getBoundingClientRect().bottom;
-      else scroller.scrollTop = 0;
+      if (first && searchBar) {
+        const content = first.querySelector(".timeline-body") ?? first;
+        const bottom = searchBar.getBoundingClientRect().bottom;
+        const target = searchResultTop(first.getBoundingClientRect(),
+          content.getBoundingClientRect(), bottom, scroller.getBoundingClientRect().bottom,
+          parseFloat(getComputedStyle(content).lineHeight) || 24);
+        scroller.scrollTop += target - bottom;
+      } else scroller.scrollTop = 0;
     } else if (followTail && !searchQuery) scroller.scrollTop = scroller.scrollHeight;
     updateBottomButton();
   }

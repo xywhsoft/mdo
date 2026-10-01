@@ -1,0 +1,131 @@
+<!doctype html>
+<html lang="zh-CN">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>mdo search and pending decisions probe</title>
+<link rel="stylesheet" href="/app/web/css/app.css">
+<div class="app-shell">
+  <header class="mobile-bar">
+    <button id="open" type="button">搜索</button>
+    <button id="arrival" type="button">追加待决</button>
+    <button id="navigate" type="button">切换会话</button>
+    <select id="locale" aria-label="界面语言"><option value="zh-CN">中文</option><option value="en-US">English</option><option value="ru-RU">Русский</option></select>
+  </header>
+  <main class="workspace">
+    <section class="conversation">
+      <div class="conversation-find" id="search" hidden role="search">
+        <input id="query" type="search" aria-label="搜索会话内容">
+        <span id="count"></span>
+        <button class="icon-button" id="close" type="button" aria-label="关闭搜索">×</button>
+      </div>
+      <p id="welcome" hidden></p>
+      <ol id="timeline" class="timeline" role="list"></ol>
+      <div class="timeline-sentinel"></div>
+      <button id="to-bottom" type="button" hidden>回到底部</button>
+    </section>
+    <section class="composer-region">
+      <div id="conversation-docks" class="conversation-docks" hidden></div>
+      <form class="composer">
+        <textarea id="prompt" aria-label="任务输入"></textarea>
+        <div class="composer-toolbar"><button type="button">发送</button></div>
+      </form>
+    </section>
+  </main>
+</div>
+<dialog id="help"><button type="button">关闭</button></dialog>
+<pre id="result" hidden></pre>
+<script type="module">
+import { createResourceStore as store } from "/app/web/js/state/store.js";
+import { createConversationDocks } from "/app/web/js/features/chat/conversation-docks.js";
+import { createConversationSearch } from "/app/web/js/features/chat/conversation-search.js";
+import { createKeyboardShortcuts } from "/app/web/js/features/shell/keyboard-shortcuts.js";
+import { createTimelineView } from "/app/web/js/features/chat/timeline.js";
+import { loadLocale } from "/app/web/js/i18n.js";
+
+// The source HTTP fixture lives at the repository root; use the exact packs
+// shipped under app/web instead of the packed host's /lang mount.
+const sourceFetch = window.fetch.bind(window);
+window.fetch = (url, options) => sourceFetch(
+  typeof url === "string" && url.startsWith("/lang/") ? `/app/web${url}` : url, options);
+await loadLocale("zh-CN");
+
+let route = { view: "workspace", projectId: "qa", sessionId: "search" };
+const listeners = new Set();
+const navigation = { get: () => route,
+  subscribe(fn) { listeners.add(fn); fn(route); return () => listeners.delete(fn); } };
+const ask = { id: 1, question: "Keep the unsubmitted answer while searching history.",
+  options: ["Inspect the local result", "Continue with the next step"] };
+const asks = store({ projectId: "qa", sessionId: "search", loaded: true, items: [ask] });
+const approvals = store({ items: [] });
+let arrivals = 0;
+let stops = 0;
+const docks = createConversationDocks({
+  container: document.querySelector("#conversation-docks"), navigation,
+  asksStore: asks, approvalsStore: approvals,
+  runsStore: store({ items: [{ agent_run_id: 3, project_id: "qa", session_id: "search" }] }),
+  tasksStore: store({ items: [] }),
+  todoStore: store({ projectId: "qa", sessionId: "search", items: [] }),
+  onOpenTasks() {}, onChanged: async () => {},
+  onDecisionArrived(card) { arrivals += 1; card.querySelector("h3")?.focus(); },
+});
+let search;
+const timeline = createTimelineView({
+  container: document.querySelector("#timeline"),
+  welcome: document.querySelector("#welcome"),
+  toBottom: document.querySelector("#to-bottom"),
+  store: store({ projectId: "qa", sessionId: "search", events: [
+    { event_id: 1, run_id: 3, kind: "agent_start", schema_version: 3,
+      agent_depth: 0, user_message_sequence: 1, text: "Search target", time: 1000000 },
+  ] }),
+  feedbackStore: store({ projectId: "qa", sessionId: "search", items: new Map() }),
+  onFork() {}, onFeedback() {}, onEdit() {}, onRetry() {},
+  onSearchCount: (count, limited) => search?.setCount(count, limited),
+});
+search = createConversationSearch({
+  bar: document.querySelector("#search"), input: document.querySelector("#query"),
+  count: document.querySelector("#count"), closeButton: document.querySelector("#close"),
+  openButtons: [document.querySelector("#open")], navigation,
+  prompt: document.querySelector("#prompt"),
+  onOpen: () => docks.setSearchActive(true),
+  onClose: () => docks.setSearchActive(false),
+  onQuery: (query) => timeline.search(query),
+});
+createKeyboardShortcuts({ dialog: document.querySelector("#help"), navigation,
+  search, onNew() {}, onExport() {}, onSettings() {}, onToggleTheme() {},
+  onStop() { stops += 1; }, isRunning: () => true,
+  isDrawerOpen: () => false, closeDrawers() {} });
+document.querySelector("#locale").addEventListener("change", async (event) => {
+  await loadLocale(event.target.value);
+  report();
+});
+document.querySelector("#arrival").addEventListener("click", () => {
+  // A bounded delayed store update stands for an arrival during input; this
+  // is a component test, not evidence of simultaneous real tool calls.
+  setTimeout(() => {
+    approvals.setData({ items: [{ id: 5, run_id: 3, tool: "read",
+      risk: "low", effects: ["read"], expires_in_ms: 60000,
+      resources: [], arguments_json: "{}" }] });
+    report();
+  }, 250);
+});
+document.querySelector("#navigate").addEventListener("click", () => {
+  route = { ...route, sessionId: route.sessionId === "search" ? "other" : "search" };
+  for (const fn of listeners) fn(route);
+  report();
+});
+function report() {
+  const root = document.querySelector("#conversation-docks");
+  document.querySelector("#result").textContent = JSON.stringify({
+    searchOpen: search.isOpen(), dockHidden: root.hidden,
+    expanded: root.parentElement.hasAttribute("data-decision-expanded"),
+    answer: root.querySelector(".ask-dock-input")?.value,
+    pendingApprovals: approvals.get().data.items.length,
+    arrivals, stops,
+  });
+}
+document.addEventListener("focusin", () => requestAnimationFrame(report));
+document.addEventListener("input", report);
+window.addEventListener("resize", () => requestAnimationFrame(report));
+report();
+</script>
+</html>

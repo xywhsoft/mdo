@@ -517,7 +517,11 @@ export async function boot() {
     count: $("#conversation-find-count"), closeButton: $("#close-find"),
     openButtons: [$("#open-find"), $("#open-find-mobile")],
     navigation, prompt, onQuery: (query) => timelineView.search(query),
-    onOpen: closeDrawers,
+    onOpen() {
+      closeDrawers();
+      conversationDocks.setSearchActive(true);
+    },
+    onClose: () => conversationDocks.setSearchActive(false),
   });
   createImagePreview({
     dialog: $("#image-preview"), image: $("#image-preview-content"),
@@ -550,7 +554,7 @@ export async function boot() {
       if (!prompt.disabled) prompt.focus({ preventScroll: true });
     },
   });
-  createConversationDocks({
+  const conversationDocks = createConversationDocks({
     container: $("#conversation-docks"), navigation, tasksStore, approvalsStore,
     asksStore,
     todoStore,

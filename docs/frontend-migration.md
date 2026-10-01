@@ -4,6 +4,80 @@
 
 完成判据及尚缺的打包页证据见 [前端操作体验完成审计](frontend-completion-audit.md)。本文件继续记录每次实现和验证的细节。
 
+## 2026-10-01：搜索期间收起待决覆盖层并露出匹配正文
+
+基线 `80b0779` 单文件 Home `.build/mdo-packed-docks-qqlcfeee` 在
+320×250 生成长询问及真实审批后复现：展开待决卡片再按 Ctrl+F，搜索框
+本身可点击，但匹配消息被覆盖；关闭搜索后，prompt 虽获焦，中心仍被
+卡片遮挡。审批搜索的消息中心命中 SECTION.conversation-dock，截图
+`.build/qa-search-expanded-approval-before.png`；没有把它误报为搜索框遮挡。
+
+搜索新增关闭生命周期，工作台在打开搜索前收起决策覆盖层并隐藏悬浮
+停靠卡片；卡片节点、待决状态和未提交回答继续保留。搜索期间的新待决
+正常更新，但不触发焦点/滚动揭示。关闭搜索先恢复普通卡片，再聚焦输入；
+切会话也解除隐藏，不聚焦已离开的会话。停靠控制器返回明确的
+setSearchActive/destroy 接口；仓库现有调用未使用旧的销毁返回值。
+
+首版修复的 Windows/Linux 门禁均通过 114 Python、213 Node，但最终
+单文件页又发现极短屏的独立定位缺陷：卡片已隐藏，搜索仍对齐角色/时间，
+正文 y=124.39 落入输入区。时间线现在按实际行高和可用空间判断：空间
+不足以同时容纳标题和第一行正文时，优先露出正文；宽屏保留原定位。
+初版组件只用静态段落，未发现此问题；最终夹具改用正式时间线渲染组件，
+不把简化夹具当作完整页面验收。
+
+验证：
+
+- 六项新增 Node 回归覆盖搜索关闭顺序、不可用/重复开关、切会话、IME
+  及 229 保护，以及正常/临界/短屏/放大行高的正文定位。
+- 正式组件夹具 `conversation-search-docks-browser.html` 于 320×250
+  展开询问、输入自由回答、Ctrl+F 搜索；正文首行可点击，卡片隐藏，回答
+  保留。250ms 有界新审批更新不抢搜索焦点；切换英语/俄语、关闭搜索和
+  切会话后返回均保留回答，Esc 返回可点 prompt，停止次数为零。
+  最终实际时间线夹具的正文 y=100.39；俄语关闭后回答保留、两卡恢复。
+- 既有搜索 IME、决策展开到达、询问键盘视口三项 DOM 夹具通过。初次
+  两个自动夹具在页面加载后才设视口，记录到旧高度；改为加载前设置
+  280×250 / 390×700 后通过。新夹具最初导入名及语言挂载路径错误已修正。
+  桌面移动栏隐藏时一次点搜索按钮未命中，随后改用 Ctrl+F；这些夹具
+  启动/操作失败未计为生产通过。
+- Windows 最终 A 包 Home `.build/mdo-packed-docks-18rrinpr`，会话
+  `V-ORkh7zgkyWcbUmUKYNhgqU4qYgpK5c`。320×250 展开真实 `LONG ASK UI`，
+  自由回答 `Windows final answer retained`，主草稿 `WINDOWS NEXT DRAFT`。
+  搜索后正文 y=100.39、首行命中真实正文，回答/草稿不变；Esc 返回可点
+  prompt，卡片以普通状态恢复，随后展开并提交回答完成。真实审批同样
+  展开→搜索→Esc→拒绝，草稿保留。刷新回放两轮历史与
+  `WINDOWS DRAFT AFTER APPROVAL`。独立 1280×720 页的角色/时间及正文
+  均可见，未因短屏策略丢失标题。截图
+  `.build/qa-search-expanded-final-windows-mobile.png`、
+  `.build/qa-search-expanded-final-windows-desktop.png`。
+- Linux 全新 ext4 快照最终 A 包 Home
+  `/home/ubuntu/.cache/mdo-linux-qa-search-expanded-final/.build/mdo-packed-docks-lari634h`，
+  会话 `V-ORkh7yVz2HYXSagrmtMUJlQEoLBVG5`。同样验证询问回答
+  `Linux final answer retained`、正文首行、Esc 可点输入和实际回答提交。
+  两轮真实审批均拒绝完成；首轮在渲染前读取到 bodyHit=false，第二轮
+  等结果计数后核对 y=100.39、bodyHit=true，未将瞬时旧布局报作最终失败。
+  刷新回放三轮历史与 `LINUX DRAFT AFTER APPROVAL`。截图
+  `.build/qa-search-expanded-final-linux-mobile.png`。
+- 服务端最终核对 Windows 两轮、Linux 三轮均 succeeded 且
+  cancel_requested=false；待审批数为零，询问工具结果为所保留的回答，
+  exec 结果为主动拒绝；两端队列已排空，页面脚本错误为空。一次 API
+  读取使用超过允许上限的 limit=64 返回 400，改为 32 后核对通过。
+- 最终两端完整门禁各通过 114 Python、216 Node、89 模块、严格 C11、
+  32 个运行探针、Home 租约、队列启动恢复和确定性 A/B；Windows 另通过
+  便携 WebView2 Home/20 秒启动。日志
+  `.build/qa-search-expanded-final-release.log`、
+  `.build/qa-search-expanded-final-linux-release.log`，两端退出码均为 0。
+  首版日志 `.build/qa-search-expanded-release.log` 和
+  `.build/qa-search-expanded-linux-release.log` 保留，不作为最终字节证据。
+- Windows 最终 A/B 及更新后的根目录 SHA-256：
+  `0cb5d5aeae187ab067c3bf8c03d88f6019fd9abe863c7567bff694300bc2848d`；
+  Linux 最终 A/B SHA-256：
+  `45533a9fb4d28ba304275121411f9b706e2bd3a8884618d41d30ff3bd3725d0a`。
+
+两端正式夹具正常退出，临时浏览器页已关闭，视口覆盖已清理。Linux 页面
+仍由 Windows 浏览器访问真实 Linux 服务，不等于 Linux 原生 WebView
+验收。用户选择的 WebView2 便携 Home 策略继续保留；原生点击、输入法、
+系统拖放及实体移动端等缺口仍待验收，长期任务继续。未做压力或高负载测试。
+
 ## 2026-10-01：新任务首次发送后恢复输入焦点
 
 上一阶段 Linux 最终单文件页在首次懒创建并完成回复后，prompt 已启用，

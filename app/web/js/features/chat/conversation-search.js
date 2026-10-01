@@ -2,7 +2,7 @@ import { subscribeLocale, t } from "../../i18n.js";
 import { isImeKey } from "../../utils/dom.js";
 
 export function createConversationSearch({ bar, input, count, openButtons, closeButton,
-  navigation, prompt, onQuery, onOpen }) {
+  navigation, prompt, onQuery, onOpen, onClose }) {
   let available = false;
   let matchCount = 0;
   let olderHistoryMissing = false;
@@ -23,6 +23,7 @@ export function createConversationSearch({ bar, input, count, openButtons, close
     onQuery("");
     count.textContent = "";
     for (const button of openButtons) button.setAttribute("aria-expanded", "false");
+    onClose?.();
     if (restoreFocus) prompt.focus();
   }
 
