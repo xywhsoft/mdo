@@ -4,6 +4,51 @@
 
 完成判据及尚缺的打包页证据见 [前端操作体验完成审计](frontend-completion-audit.md)。本文件继续记录每次实现和验证的细节。
 
+## 2026-10-01：引导模式的排队与中断顺序补验
+
+本轮只补实际验收，没有改变程序行为。载入阶段曾显示权限选项禁用；
+待输入启用后核对 DOM，选择器及三个选项均未禁用。通过原生选择器
+切到只读，收到“会话配置已更新”，磁盘元数据保存 read-only。不能把
+初始无障碍快照的禁用状态当作稳定缺陷。
+
+Windows 单文件 Home `.build/mdo-packed-docks-86c1u2xg`，会话
+`V-ORkIB5ycJxZVVcqdrO1jYT89rts8fv`；Linux 单文件 Home
+`/home/ubuntu/.cache/mdo-linux-qa-settings-invalid-panel-final/.build/mdo-packed-docks-8z8ok7hp`，
+会话 `V-ORkJOjmsjUS4B3Vhq8JIhNMzJH132R`。两端通过常规设置预览、
+应用引导模式，再返回原会话，执行相同有界流程：
+
+1. 输入区选择高推理、只读，Enter 发送带 SLOW UI 标记的首轮；本地
+   模型延迟上限 12 秒。收到运行中状态后仍能切换输入区配置。
+2. 切无思考，Ctrl+Enter 提交普通待发项；卡片明确冻结无思考和只读。
+3. 切低推理，Enter 提交优先项；普通项的冻结配置仍为无思考，不被
+   此后输入区的选择覆盖。
+4. 真实运行列表依次为 agent_run_id 1/high/cancelled/cancel_requested、
+   2/low/succeeded、3/none/succeeded。持久日志的用户正文依次为首轮、
+   Enter 优先项、Ctrl+Enter 普通项；队列及未确认提交均为空。
+5. 刷新回放保留“已停止”、优先回复和普通回复，输入框为空并聚焦。
+   输入区保留最后手动选择的低推理及“下次任务生效”，草稿保存该
+   后续配置；末个队列回合使用无思考，这是两种不同的归属。
+
+Windows 桌面截图 `.build/qa-guide-mode-windows.png`；Linux 320×350
+截图 `.build/qa-guide-mode-linux-short.png`，文档宽度 320px。两端新页
+脚本错误日志为空。设置返回时队列读取尚在途，配置可能先存为后续
+草稿而非立即修改会话元数据，属既有保护；首次提交仍使用该选择。
+本轮不把没有出现直接更新 toast 的情况当作更新失败。
+
+两端重新打包通过，SHA-256 与上一轮完整门禁的 A/B 包逐字节相同：
+Windows 及根目录为
+`6e13407237a1494ef7a40345f77cf7cbbcec4fc8afe4d87856ad3fdf3c5b075f`，
+Linux 为
+`71396c7c52b5037a33034016f437a9a31c9b7699a29070d2a93690f7ffce6cfa`。
+构建日志 `.build/qa-guide-mode-build.log`、
+`.build/qa-guide-mode-linux-build.log`。生产源码及测试未修改，完整门禁
+沿用上一轮的 114 Python、203 Node、88 模块、严格 C11、32 运行探针和
+便携窗口/20 秒启动结果，没有把本轮重打包说成重新运行全门禁。
+
+两端夹具正常关闭。Linux 图形证据仍是 Windows 浏览器连接 Linux 服务，
+不代替原生 WebView、Command 键、输入法或实体手机。内置 Ling 配置不变，
+未做压力/高负载测试，长期目标继续。
+
 ## 2026-10-01：跨设置分区校验定位到错误字段
 
 旧包 Home `.build/mdo-packed-docks-c90dhtgx`（基线 7bb103c）复现：
