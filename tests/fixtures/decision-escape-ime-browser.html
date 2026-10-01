@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="zh-CN">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>mdo decision Escape composition probe</title>
+<link rel="stylesheet" href="/app/web/css/app.css">
+<style>
+body { display: block; }
+.workspace { height: 360px; grid-column: auto; grid-row: auto; }
+#result { margin: 8px; white-space: pre-wrap; overflow-wrap: anywhere; }
+</style>
+<main class="workspace">
+  <section class="conversation">输入法与询问展开状态验证</section>
+  <section class="composer-region">
+    <div id="docks" class="conversation-docks"></div>
+    <form class="composer"><textarea id="prompt" aria-label="任务草稿"></textarea></form>
+  </section>
+</main>
+<dialog id="help"></dialog>
+<pre id="result">等待验证</pre>
+<script type="module">
+import { createConversationDocks } from "/app/web/js/features/chat/conversation-docks.js?escape-ime=2";
+import { createResourceStore } from "/app/web/js/state/store.js";
+import { createKeyboardShortcuts } from "/app/web/js/features/shell/keyboard-shortcuts.js?escape-ime=2";
+
+const store = (data) => createResourceStore(data);
+const route = { view: "workspace", projectId: "qa", sessionId: "ime" };
+const navigation = { get: () => route, subscribe(listener) {
+  listener(route); return () => {};
+} };
+const asks = store({ projectId: "qa", sessionId: "ime", loaded: true,
+  items: [{ id: 1, question: "请解释下一步如何检查。", options: [] }] });
+const root = document.querySelector("#docks");
+const region = root.parentElement;
+const prompt = document.querySelector("#prompt");
+const output = document.querySelector("#result");
+let stops = 0;
+let newTasks = 0;
+createConversationDocks({ container: root, navigation, asksStore: asks,
+  tasksStore: store({ items: [] }), approvalsStore: store({ items: [] }),
+  runsStore: store({ items: [] }),
+  todoStore: store({ projectId: "qa", sessionId: "ime", items: [] }),
+  onOpenTasks() {}, onChanged: async () => {} });
+createKeyboardShortcuts({ dialog: document.querySelector("#help"), navigation,
+  search: { isOpen: () => false }, onNew() { newTasks += 1; },
+  onExport() {}, onSettings() {}, onToggleTheme() {},
+  onStop() { stops += 1; }, isRunning: () => true,
+  isDrawerOpen: () => false, closeDrawers() {} });
+const compose = (input, kind) => input.dispatchEvent(new CompositionEvent(kind,
+  { bubbles: true }));
+function key(input, name, options = {}) {
+  const event = new KeyboardEvent("keydown", { key: name, bubbles: true,
+    cancelable: true, ...options });
+  if (options.keyCode === 229) Object.defineProperty(event, "keyCode", { value: 229 });
+  input.dispatchEvent(event);
+  return event;
+}
+function expand() {
+  if (!region.hasAttribute("data-decision-expanded"))
+    root.querySelector(".decision-dock-expand").click();
+}
+try {
+  const input = root.querySelector(".ask-dock-input");
+  input.focus();
+  input.value = "正在选择中文候选";
+  input.dispatchEvent(new Event("input", { bubbles: true }));
+  expand();
+  compose(input, "compositionstart");
+  const composingEscape = key(input, "Escape");
+  const composingKept = region.hasAttribute("data-decision-expanded") &&
+    !composingEscape.defaultPrevented && input.value === "正在选择中文候选";
+  compose(input, "compositionend");
+  expand();
+  const metadataEscape = key(input, "Escape", { isComposing: true });
+  const metadataKept = region.hasAttribute("data-decision-expanded") &&
+    !metadataEscape.defaultPrevented;
+  expand();
+  const candidateEscape = key(input, "Escape", { keyCode: 229 });
+  const candidateKept = region.hasAttribute("data-decision-expanded") &&
+    !candidateEscape.defaultPrevented;
+  expand();
+  const ordinaryEscape = key(input, "Escape");
+  const ordinaryCollapsed = !region.hasAttribute("data-decision-expanded") &&
+    ordinaryEscape.defaultPrevented && stops === 0;
+  compose(input, "compositionstart");
+  asks.setData({ projectId: "qa", sessionId: "ime", loaded: true, items: [] });
+  prompt.focus();
+  key(prompt, "k", { ctrlKey: true });
+  const removedEditorReleased = newTasks === 1;
+  const passed = composingKept && metadataKept && candidateKept &&
+    ordinaryCollapsed && removedEditorReleased;
+  output.dataset.passed = String(passed);
+  output.textContent = JSON.stringify({ passed, composingKept, metadataKept,
+    candidateKept, ordinaryCollapsed, removedEditorReleased, stops, newTasks }, null, 2);
+} catch (error) {
+  output.dataset.passed = "false";
+  output.textContent = error.stack ?? String(error);
+}
+</script>
+</html>

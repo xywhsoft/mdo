@@ -1,7 +1,8 @@
 import { approvalDecisionStatus, approvalDecisionStore, decideApproval } from "../../state/approvals.js";
 import { answerAsk } from "../../state/asks.js";
 import { subscribeLocale, t } from "../../i18n.js";
-import { element, errorMessage, toast } from "../../utils/dom.js";
+import { element, errorMessage, isImeKey, toast } from "../../utils/dom.js";
+import { createCompositionTracker } from "../../utils/composition.js";
 import { createAskCard } from "../asks/ask-card.js";
 import { reconcileCards } from "../../utils/reconcile.js";
 import { taskBelongsToSession } from "../tasks/task-owner.js";
@@ -206,6 +207,7 @@ function askCard(item, projectId, sessionId, deciding, answered, drafts,
 
 export function createConversationDocks({ container, navigation, tasksStore, approvalsStore,
   asksStore, todoStore, runsStore, onOpenTasks, onChanged, onDecisionArrived }) {
+  const composition = createCompositionTracker(container);
   const askDeciding = new Set();
   const askAnswered = new Set();
   const expanded = new Map();
@@ -277,6 +279,7 @@ export function createConversationDocks({ container, navigation, tasksStore, app
   container.addEventListener("keydown", noteKeyScroll);
   const collapseOnEscape = (event) => {
     if (event.key !== "Escape" || event.defaultPrevented ||
+        isImeKey(event, composition.isComposing(event.target)) ||
         !composerRegion?.hasAttribute("data-decision-expanded")) return;
     event.preventDefault();
     keyboardExpansionDismissed = true;
@@ -556,6 +559,7 @@ export function createConversationDocks({ container, navigation, tasksStore, app
     container.removeEventListener("pointerdown", noteUserScroll);
     container.removeEventListener("keydown", noteKeyScroll);
     container.removeEventListener("keydown", collapseOnEscape);
+    composition.dispose();
     composerRegion?.removeAttribute("data-decision-pending");
     composerRegion?.removeAttribute("data-decision-cramped");
     composerRegion?.removeAttribute("data-decision-expanded");

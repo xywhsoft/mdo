@@ -5,6 +5,63 @@ import { createKeyboardShortcuts } from
   "../app/web/js/features/shell/keyboard-shortcuts.js";
 import { isImeKey } from "../app/web/js/utils/dom.js";
 
+function targetedEvent(type, target, fields = {}) {
+  const event = new Event(type, { cancelable: true });
+  Object.defineProperty(event, "target", { value: target });
+  for (const [name, value] of Object.entries(fields))
+    Object.defineProperty(event, name, { value });
+  return event;
+}
+
+test("composition in a removed or different editor cannot block new-task shortcuts", () => {
+  const originalDocument = globalThis.document;
+  const document = new EventTarget();
+  document.querySelector = () => null;
+  globalThis.document = document;
+  const first = {};
+  const second = {};
+  const dialog = new EventTarget();
+  let created = 0;
+  try {
+    createKeyboardShortcuts({ dialog,
+      navigation: { get: () => ({ view: "workspace" }) },
+      search: { isOpen: () => false },
+      onNew() { created += 1; }, onExport() {}, onSettings() {}, onToggleTheme() {},
+      onStop() {}, isRunning: () => false,
+      isDrawerOpen: () => false, closeDrawers() {} });
+    document.dispatchEvent(targetedEvent("compositionstart", first));
+    document.dispatchEvent(targetedEvent("keydown", first, { key: "k", ctrlKey: true }));
+    assert.equal(created, 0);
+    document.dispatchEvent(targetedEvent("keydown", second, { key: "k", ctrlKey: true }));
+    assert.equal(created, 1);
+    document.dispatchEvent(targetedEvent("blur", first));
+    document.dispatchEvent(targetedEvent("keydown", first, { key: "k", ctrlKey: true }));
+    assert.equal(created, 2);
+  } finally { globalThis.document = originalDocument; }
+});
+
+test("window focus loss releases an unfinished composition before shortcuts resume", () => {
+  const originalDocument = globalThis.document;
+  const document = new EventTarget();
+  document.querySelector = () => null;
+  document.defaultView = new EventTarget();
+  globalThis.document = document;
+  const editor = {};
+  let created = 0;
+  try {
+    createKeyboardShortcuts({ dialog: new EventTarget(),
+      navigation: { get: () => ({ view: "workspace" }) },
+      search: { isOpen: () => false },
+      onNew() { created += 1; }, onExport() {}, onSettings() {}, onToggleTheme() {},
+      onStop() {}, isRunning: () => false,
+      isDrawerOpen: () => false, closeDrawers() {} });
+    document.dispatchEvent(targetedEvent("compositionstart", editor));
+    document.defaultView.dispatchEvent(new Event("blur"));
+    document.dispatchEvent(targetedEvent("keydown", editor, { key: "k", ctrlKey: true }));
+    assert.equal(created, 1);
+  } finally { globalThis.document = originalDocument; }
+});
+
 test("IME candidate keys cannot submit a composer turn", () => {
   assert.equal(isImeKey({ isComposing: false, keyCode: 229 }), true);
   assert.equal(isImeKey({ isComposing: false, keyCode: 13 }, true), true);
