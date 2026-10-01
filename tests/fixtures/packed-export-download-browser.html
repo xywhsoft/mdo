@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="zh-CN">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>mdo packed export download probe</title>
+<style>
+body { margin:0; display:grid; grid-template-rows:110px minmax(0,1fr); height:100dvh; font:14px sans-serif; }
+header { padding:6px; overflow:auto; }
+pre { margin:4px 0; white-space:pre-wrap; overflow-wrap:anywhere; }
+iframe { width:100%; height:100%; min-width:0; min-height:0; border:0; }
+</style>
+<header><strong>正式导出 Blob 核对（不拦截原下载）</strong>
+<pre id="result" role="status">等待工作台</pre></header>
+<iframe id="mdo" title="打包版工作台"></iframe>
+<script type="module">
+const frame = document.querySelector("#mdo");
+const output = document.querySelector("#result");
+const captures = [];
+frame.addEventListener("load", () => {
+  const urls = frame.contentWindow.URL;
+  const original = urls.createObjectURL.bind(urls);
+  // Observe only export data; preserve the native URL and actual download.
+  // The replacement belongs to this owned QA iframe and disappears on close.
+  urls.createObjectURL = (blob) => {
+    const url = original(blob);
+    const markdown = blob.type.startsWith("text/markdown");
+    // The backup API deliberately downloads JSON as application/octet-stream.
+    const jsonCandidate = blob.type.includes("json") || blob.type === "application/octet-stream";
+    if (markdown || jsonCandidate) {
+      void blob.text().then((text) => {
+        let document = null;
+        if (!markdown) {
+          try { document = JSON.parse(text); } catch { return; }
+          if (!document || typeof document !== "object" ||
+              !("export_schema" in document && "snapshot" in document)) return;
+        }
+        const capture = { type:blob.type, bytes:blob.size,
+          hasSyntheticPrompt:text.includes("EXPORT DOWNLOAD QA"),
+          hasSyntheticPng:text.includes("iVBORw0KGgoAAAANSUhEUgAAAAEAAAAB"),
+          markdownImageReferences:(text.match(/^- [a-f0-9]{32}$/gm) || []).length,
+          markdownEmbeddedImages:(text.match(/!\[[^\n]*\]\(data:image\//g) || []).length };
+        if (document) {
+          capture.keys = Object.keys(document);
+          capture.snapshotType = typeof document.snapshot;
+        }
+        captures.push(capture);
+        output.textContent = JSON.stringify(captures.slice(-4), null, 2);
+      }).catch((error) => { output.textContent = error.message; });
+    }
+    return url;
+  };
+  output.textContent = "观察已就绪，请使用正式工作台的导出入口";
+});
+frame.src = "__MDO_QA_ROUTE__";
+</script>
+</html>

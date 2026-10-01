@@ -17,6 +17,8 @@ It also exercises rapid close/reopen in the real workbench; the component route
 /__qa/image-preview-lifecycle imports the exact packed preview/name modules.
 With --message-edit-fixture, /__qa/message-edit-enter serves the keyboard and
 IME component probe against the exact packed message editor module.
+With --export-download-fixture, /__qa/export-download observes the Blob passed
+by the real workbench's Markdown/JSON export without replacing its download.
 """
 
 import argparse
@@ -267,6 +269,18 @@ Object.defineProperty(navigator, 'clipboard', {
         pass
 
     def do_GET(self):
+        if (self.path == "/__qa/export-download" and
+                self.server.export_download_fixture):
+            payload = (ROOT / "tests/fixtures/packed-export-download-browser.html").read_bytes()
+            route = f"/#/projects/default/sessions/{self.server.qa_session}"
+            payload = payload.replace(b'"__MDO_QA_ROUTE__"', json.dumps(route).encode())
+            self.send_response(200)
+            self.send_header("Content-Type", "text/html; charset=utf-8")
+            self.send_header("Content-Length", str(len(payload)))
+            self.send_header("Cache-Control", "no-store")
+            self.end_headers()
+            self.wfile.write(payload)
+            return
         if (self.path == "/__qa/message-edit-enter" and
                 self.server.message_edit_fixture):
             payload = ((ROOT / "tests/fixtures/message-edit-enter-browser.html")
@@ -1022,6 +1036,8 @@ parser.add_argument("--image-transfer-fixture", action="store_true",
                     help="serve a partial-items clipboard probe against the real packed editor")
 parser.add_argument("--message-edit-fixture", action="store_true",
                     help="serve the keyboard/IME edit probe with packed production components")
+parser.add_argument("--export-download-fixture", action="store_true",
+                    help="observe Markdown/JSON export data and preserve the real packed download")
 parser.add_argument("--locale-hotkey", action="store_true",
                     help="let F9 change packed-page locale without moving focus")
 parser.add_argument("--no-clipboard-api", action="store_true",
@@ -1272,6 +1288,7 @@ try:
             or args.ask_keyboard_viewport_fixture or args.task_cancellation_fixture
             or args.task_questions_fixture or args.image_transfer_fixture
             or args.message_edit_fixture
+            or args.export_download_fixture
             or args.fail_first_fork_invalid
             or args.fail_first_module or args.delay_first_module_ms
             or args.startup_task_delay_ms or args.startup_bootstrap_delay_ms
@@ -1284,6 +1301,7 @@ try:
         proxy.upstream_port = port
         proxy.image_transfer_fixture = args.image_transfer_fixture
         proxy.message_edit_fixture = args.message_edit_fixture
+        proxy.export_download_fixture = args.export_download_fixture
         proxy.qa_session = session
         proxy.decision_expand_arrival_fixture = (
             args.decision_expand_arrival_fixture)

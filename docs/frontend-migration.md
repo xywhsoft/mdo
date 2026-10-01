@@ -4,6 +4,18 @@
 
 完成判据及尚缺的打包页证据见 [前端操作体验完成审计](frontend-completion-audit.md)。本文件继续记录每次实现和验证的细节。
 
+## 2026-10-01：导出下载完成事件与图片可携带性核对
+
+上一阶段的内嵌浏览器下载等待接口超时，不能据此确定 `mdo` 下载失败。本轮从正式导出按钮和菜单观察 `Page.downloadWillBegin`/`Page.downloadProgress`，并新增 `tests/fixtures/packed-export-download-browser.html`。QA 代理仅在显式 `--export-download-fixture` 下提供该页面；页面在自己持有的工作台 iframe 中读取原始 Blob，仍调用原生 `createObjectURL`、保留原生 URL 和正式下载动作，关闭页面后观察器消失。产品源码及打包资源没有修改。JSON API 的 MIME 为 `application/octet-stream`，观察器按备份文档形状识别它，不能只按 `application/json` 判断是否已经导出。
+
+Windows 隔离 Home `.build/mdo-packed-docks-edralh3s` 通过实际输入完成普通文字回合，标题栏导出收到 GUID `1342499e-9077-459a-b448-a3fc314a6b20` 的 297/297 字节 `completed`。另一个 Home `.build/mdo-packed-docks-9eus21i9` 实际完成文字与两张合成 PNG 的纯图片回合：文字 Markdown 300 字节完成；带图 Markdown 555 字节完成，JSON 2903 字节完成且正式 Blob 可以解析为含 `export_schema`、`meta`、`snapshot` 的对象。下载详情及 Blob 元数据保存在 `.build/qa-export-download-windows-*-events.json`、`*-captures.json`；截图为 `.build/qa-export-download-windows.png`。这些文件只含隔离 QA 数据。
+
+Linux 独立 ext4 镜像 `/home/ubuntu/.cache/mdo-linux-qa-export-download` 的单文件包在 Home `.build/mdo-packed-docks-fahf_2h0` 完成一次实际纯图片回合。父页面 320×460，实际工作台及文档宽度为 320×350；标题栏 Markdown 下载 GUID `68cf89da-6eea-4778-8e5b-cc2b2cbe7c5f` 为 278/278 字节完成，菜单 JSON GUID `2dfa7a71-6390-4777-a8a8-8e66de9761a5` 为 2500/2500 字节完成，两者与正式 Blob 大小一致。证据在 `.build/qa-export-download-linux-*-events.json`、`*-captures.json`，截图为 `.build/qa-export-download-linux.png`。当前内嵌浏览器没有返回可独立读回的磁盘文件路径，故仅确认浏览器传输完成和交付内容，不把它写成磁盘文件读回验收，也不据此推断实体手机或原生 WebView 的下载通过。
+
+内容核对同时发现下一项实质缺口：两平台的 Markdown 均只输出两个附件 ID，内嵌图片数为零、合成 PNG 字节不在文件中；旧版 `app_bak/wwwroot/src/chrome.js` 会写入图片 data URL。因此旧版可独立携带图片的 Markdown 体验尚未恢复。JSON `export_schema:1` 根据现有 `MdoSessionExportJson` 合同只导出 meta 和 checkpointed xllm snapshot，本轮含图备份同样不包含 PNG 字节及 UI 日志；它不能当作完整带图会话备份。这两项进入后续导出修复范围，不能用下载完成关闭内容缺口。没有对未证实的对象 URL 回收时序作补丁。
+
+Windows 与 Linux 重新构建的程序字节分别保持上一阶段 SHA-256：`53d4228fde4ccea8b89512ac5117b8d029d0317bf6f4923cef400f947f037eab` 和 `e02d3a2a1f2fcce34481069be2d1380952d55155f36a923986305d939b040321`。根目录程序与新 Windows 包一致。本轮通过 114 项 Python、222 项 Node、89 个前端模块解析及两平台 QA 脚本编译；上一阶段对相同产品字节的严格 C11、32 个运行探针、确定性 A/B 和便携窗口门禁仍是上一阶段证据，本轮没有重复运行或重复计数。未做压力或高负载测试。
+
 ## 2026-10-01：纯图片消息保留实际空原文
 
 基线 `e3d3f81` 的打包页在纯图片编辑重发后显示 `[Image attachment]`，
