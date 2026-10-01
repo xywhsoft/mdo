@@ -139,6 +139,11 @@ bool MdoAgentSessionCheckpoint(MdoAgentSession* Session, xwork_error* Error);
 typedef bool (*MdoAgentCheckpointReadFn)(void* UserData, xwork_error* Error);
 bool MdoAgentSessionWithCheckpoint(MdoAgentSession* Session,
     MdoAgentCheckpointReadFn Read, void* UserData, xwork_error* Error);
+/* Capture additionally refuses pending/running background tasks and retained
+ * descendants. This covers their native artifact writes and final callbacks;
+ * a root run claim alone does not freeze an asynchronous child Agent. */
+bool MdoAgentSessionWithQuiescentCheckpoint(MdoAgentSession* Session,
+    MdoAgentCheckpointReadFn Read, void* UserData, xwork_error* Error);
 bool MdoAgentSessionLastSequence(MdoAgentSession* Session,
     uint64* LastSequence, xwork_error* Error);
 /* Close a cancelled model turn without repeating it. Requires an exact ledger

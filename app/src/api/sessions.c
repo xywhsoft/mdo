@@ -908,6 +908,7 @@ bool MdoApiSessionHistoryRoute(MdoApiContext* Context)
 
 bool MdoApiSessionExportRoute(MdoApiContext* Context)
 {
+    MdoApiSessionCaptureGuard Guard;
     MdoSessionInfo Info;
     MdoSession* Session;
     xwork_error Error;
@@ -924,8 +925,14 @@ bool MdoApiSessionExportRoute(MdoApiContext* Context)
     Session = MdoApiSessionOpenActive(Context, false, &Info,
         &ExpectedRevision, &ReplyResult);
     if ( Session == NULL ) return ReplyResult;
+    if ( !MdoApiSessionCaptureAcquire(&Guard) ) {
+        MdoSessionRelease(Session);
+        return MdoApiReplyError(Context, 409u, "session_capture_busy",
+            "Session data is changing; retry the export", NULL);
+    }
     memset(&Error, 0, sizeof(Error));
     Document = MdoSessionExportJson(Session, &DocumentSize, &Error);
+    MdoApiSessionCaptureRelease(&Guard);
     MdoSessionRelease(Session);
     if ( Document == NULL ) return MdoApiSessionActiveFailure(Context, &Error);
     EntityTagSize = snprintf(EntityTag, sizeof(EntityTag),

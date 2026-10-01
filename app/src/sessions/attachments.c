@@ -5,6 +5,7 @@
 #include "../../include/mdo/home.h"
 #include "../../include/mdo/sessions.h"
 #include "../../include/mdo/project_lifecycle.h"
+#include "data_gate.h"
 
 #define MDO_IMAGE_RUN_RECORD_MAX 320u
 #define MDO_IMAGE_FILE_MAX (8u * 1024u * 1024u)
@@ -177,12 +178,16 @@ bool MdoSessionAttachmentEventWrite(const char* ProjectId,
     bool Exists;
     xfileinfo Info;
     MdoProjectLease* Lease;
+    MdoSessionDataLease* DataLease = NULL;
     bool Ok = false;
     if ( !MdoImageEventPath(EventPath, ProjectId, SessionId, EventId) ||
          !MdoImageRunPath(LegacyPath, ProjectId, SessionId, AgentRunId) )
         return false;
     Lease = MdoProjectLeaseAcquire(ProjectId, MDO_PROJECT_LEASE_SHARED, NULL);
     if ( Lease == NULL ) return false;
+    DataLease = MdoSessionDataAcquire(ProjectId, SessionId,
+        MDO_SESSION_DATA_WRITE, NULL);
+    if ( DataLease == NULL ) goto done;
     if ( Count == 0u ) {
         if ( !MdoHomeExternalStat(LegacyPath, &Exists, &Info) ) goto done;
         if ( !Exists ) { Ok = true; goto done; }
@@ -190,6 +195,7 @@ bool MdoSessionAttachmentEventWrite(const char* ProjectId,
     Ok = MdoImageRecordWrite(EventPath, AgentRunId, Ids, Count);
 done:
     MdoProjectLeaseRelease(Lease);
+    MdoSessionDataRelease(DataLease);
     return Ok;
 }
 
@@ -295,9 +301,13 @@ bool MdoSessionAttachmentPruneRemoved(const char* ProjectId,
     size_t i;
     bool Ok = false;
     int Written;
+    MdoSessionDataLease* DataLease = NULL;
     MdoProjectLease* Lease = MdoProjectLeaseAcquire(ProjectId,
         MDO_PROJECT_LEASE_SHARED, NULL);
     if ( Lease == NULL ) return false;
+    DataLease = MdoSessionDataAcquire(ProjectId, SessionId,
+        MDO_SESSION_DATA_WRITE, NULL);
+    if ( DataLease == NULL ) goto done;
     for ( ; ; ) {
         MdoSessionEventSnapshot* Snapshot;
         xwork_error Error;
@@ -410,6 +420,7 @@ done:
     xrtFree(Removed);
     xrtFree(Ranges);
     MdoProjectLeaseRelease(Lease);
+    MdoSessionDataRelease(DataLease);
     return Ok;
 }
 
@@ -459,6 +470,8 @@ bool MdoSessionAttachmentEventClone(const char* SourceProjectId,
     size_t i;
     MdoProjectLease* SourceLease = NULL;
     MdoProjectLease* TargetLease = NULL;
+    MdoSessionDataLease* SourceDataLease = NULL;
+    MdoSessionDataLease* TargetDataLease = NULL;
     bool Ok = false;
     /* Older UI journals may contain a synthetic top-level start without a
      * runtime run identity. Such events could never own uploaded images. */
@@ -469,6 +482,12 @@ bool MdoSessionAttachmentEventClone(const char* SourceProjectId,
     TargetLease = MdoProjectLeaseAcquire(TargetProjectId,
         MDO_PROJECT_LEASE_SHARED, NULL);
     if ( TargetLease == NULL ) goto done;
+    SourceDataLease = MdoSessionDataAcquire(SourceProjectId, SourceSessionId,
+        MDO_SESSION_DATA_WRITE, NULL);
+    if ( SourceDataLease == NULL ) goto done;
+    TargetDataLease = MdoSessionDataAcquire(TargetProjectId, TargetSessionId,
+        MDO_SESSION_DATA_WRITE, NULL);
+    if ( TargetDataLease == NULL ) goto done;
     if ( !MdoSessionAttachmentEventRead(SourceProjectId, SourceSessionId,
             SourceEventId, AgentRunId, Ids, &Count) ) goto done;
     for ( i = 0u; i < Count; ++i ) {
@@ -501,6 +520,8 @@ bool MdoSessionAttachmentEventClone(const char* SourceProjectId,
 done:
     MdoProjectLeaseRelease(TargetLease);
     MdoProjectLeaseRelease(SourceLease);
+    MdoSessionDataRelease(TargetDataLease);
+    MdoSessionDataRelease(SourceDataLease);
     return Ok;
 }
 
@@ -546,9 +567,13 @@ void MdoSessionAttachmentForkRollback(const char* ProjectId,
     char Directory[MDO_SESSION_PATH_CAPACITY];
     int Written;
     MdoProjectLease* Lease;
+    MdoSessionDataLease* DataLease;
     if ( ProjectId == NULL || SessionId == NULL ) return;
     Lease = MdoProjectLeaseAcquire(ProjectId, MDO_PROJECT_LEASE_SHARED, NULL);
     if ( Lease == NULL ) return;
+    DataLease = MdoSessionDataAcquire(ProjectId, SessionId,
+        MDO_SESSION_DATA_WRITE, NULL);
+    if ( DataLease == NULL ) { MdoProjectLeaseRelease(Lease); return; }
     Written = snprintf(Directory, sizeof(Directory),
         "sessions/%s/%s/attachments/events", ProjectId, SessionId);
     if ( Written > 0 && (size_t)Written < sizeof(Directory) )
@@ -562,4 +587,5 @@ void MdoSessionAttachmentForkRollback(const char* ProjectId,
     if ( Written > 0 && (size_t)Written < sizeof(Directory) )
         MdoImageRollbackFiles(Directory);
     MdoProjectLeaseRelease(Lease);
+    MdoSessionDataRelease(DataLease);
 }

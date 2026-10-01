@@ -58,6 +58,16 @@ void MdoApiQueueUnit(void)
     g_MdoQueueLock = NULL;
 }
 
+bool MdoApiQueueCaptureTryLock(void)
+{
+    return g_MdoQueueLock != NULL && xrtMutexTryLock(g_MdoQueueLock);
+}
+
+void MdoApiQueueCaptureUnlock(void)
+{
+    xrtMutexUnlock(g_MdoQueueLock);
+}
+
 static void MdoQueueRelease(MdoQueue* Queue)
 {
     size_t i;

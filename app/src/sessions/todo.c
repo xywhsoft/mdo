@@ -4,6 +4,7 @@
 #include "../../include/mdo/home.h"
 #include "../../include/mdo/sessions.h"
 #include "../../include/mdo/project_lifecycle.h"
+#include "data_gate.h"
 
 #define MDO_TODO_FILE_MAX (16u * 1024u)
 #define MDO_TODO_INPUT_MAX 12288u
@@ -136,6 +137,7 @@ bool MdoSessionTodoProject(const char* ProjectId, const char* SessionId,
     size_t Size = 0u;
     bool Ok = false;
     MdoProjectLease* Lease = NULL;
+    MdoSessionDataLease* DataLease = NULL;
     if ( Event == NULL || Event->eKind != XWORK_EVENT_TOOL_DONE ||
          !Event->bSuccess || Event->uAgentDepth != 0u ||
          Event->sToolName == NULL ||
@@ -147,6 +149,9 @@ bool MdoSessionTodoProject(const char* ProjectId, const char* SessionId,
          !MdoTodoPath(Path, ProjectId, SessionId) ) return false;
     Lease = MdoProjectLeaseAcquire(ProjectId, MDO_PROJECT_LEASE_SHARED, NULL);
     if ( Lease == NULL ) return false;
+    DataLease = MdoSessionDataAcquire(ProjectId, SessionId,
+        MDO_SESSION_DATA_WRITE, NULL);
+    if ( DataLease == NULL ) goto done;
     Root = MdoTodoParse(xrtStrViewN(Event->sText,
         Event->iTextLength), false);
     if ( Root == NULL ||
@@ -160,6 +165,7 @@ done:
     xrtFree(Json);
     xrtValueRelease(Root);
     MdoProjectLeaseRelease(Lease);
+    MdoSessionDataRelease(DataLease);
     return Ok;
 }
 
@@ -210,9 +216,13 @@ bool MdoSessionTodoReset(const char* ProjectId, const char* SessionId)
     size_t Size = 0u;
     bool Ok = false;
     MdoProjectLease* Lease = NULL;
+    MdoSessionDataLease* DataLease = NULL;
     if ( !MdoTodoPath(Path, ProjectId, SessionId) ) return false;
     Lease = MdoProjectLeaseAcquire(ProjectId, MDO_PROJECT_LEASE_SHARED, NULL);
     if ( Lease == NULL ) return false;
+    DataLease = MdoSessionDataAcquire(ProjectId, SessionId,
+        MDO_SESSION_DATA_WRITE, NULL);
+    if ( DataLease == NULL ) goto done;
     Root = MdoTodoEmpty();
     if ( Root == NULL ) goto done;
     Json = xrtJsonStringify(Root, false, &Size);
@@ -222,5 +232,6 @@ done:
     xrtFree(Json);
     xrtValueRelease(Root);
     MdoProjectLeaseRelease(Lease);
+    MdoSessionDataRelease(DataLease);
     return Ok;
 }

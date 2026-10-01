@@ -183,6 +183,24 @@ bool MdoApiSessionForkRoute(MdoApiContext* pContext);
 bool MdoApiSessionTruncateRoute(MdoApiContext* pContext);
 bool MdoApiSessionClearRoute(MdoApiContext* pContext);
 bool MdoApiSessionExportRoute(MdoApiContext* pContext);
+typedef struct MdoApiSessionCaptureGuard {
+    bool Attachment;
+    bool Draft;
+    bool Queue;
+    bool Feedback;
+} MdoApiSessionCaptureGuard;
+/* All try-locks, fixed attachment -> draft -> queue -> feedback order. Covers
+ * GET-triggered repair and cleanup as well as background/direct API helpers.
+ * Then call MdoSessionWithCapture/ExportJson; release before network output. */
+bool MdoApiSessionCaptureAcquire(MdoApiSessionCaptureGuard* Guard);
+void MdoApiSessionCaptureRelease(MdoApiSessionCaptureGuard* Guard);
+bool MdoApiAttachmentCaptureTryLock(void);
+bool MdoApiDraftCaptureTryLock(void);
+void MdoApiDraftCaptureUnlock(void);
+bool MdoApiQueueCaptureTryLock(void);
+void MdoApiQueueCaptureUnlock(void);
+bool MdoApiFeedbackCaptureTryLock(void);
+void MdoApiFeedbackCaptureUnlock(void);
 bool MdoApiRunStartRoute(MdoApiContext* pContext);
 bool MdoApiAttachmentsRoute(MdoApiContext* pContext);
 bool MdoApiAttachmentRoute(MdoApiContext* pContext);

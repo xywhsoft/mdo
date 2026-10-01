@@ -289,6 +289,8 @@ static bool ReadCheckpoint(void *data, xwork_error *error) {{
     return !probe->Fail;
 }}
 
+#include "agent-capture.c"
+
 static bool AgentHasTool(const MdoAgentSession *session, const char *name) {{
     xwork_tool_catalog *catalog;
     xwork_tool_info info;
@@ -454,6 +456,8 @@ void ServiceInit(XS_HostInfo *host) {{
     options.WorkspaceRoot = ".";
     options.SessionPath = "prompt-session.snapshot";
     options.JournalPath = "prompt-session.journal";
+    /* Isolated in-process fixture; permit the bounded child lifetime probe. */
+    options.PermissionProfile = "full-access";
     options.OnModelComplete = Complete;
     options.ModelUserData = &owner;
     session = MdoAgentSessionCreateWithRuntime(runtime, &options, &error);
@@ -503,6 +507,7 @@ void ServiceInit(XS_HostInfo *host) {{
             !MdoAgentSessionWithCheckpoint(session, ReadCheckpoint, &reader, NULL) &&
             MdoAgentSessionLastSequence(session, &sequence, &error));
     }}
+    if (!QuiescentCaptureProbe(session)) goto done;
     MdoAgentSessionRelease(session); session = NULL;
     if (!MdoConfigImport(MDO_CONFIG_SETTINGS,
             xrtStrView("{{\"schema_version\":1,\"patch\":{{\"agent\":{{\"user_instructions\":\"probe-custom-v2\"}}}}}}"))) {{
@@ -611,6 +616,7 @@ def write_site(site: Path, memory_enabled: bool = True) -> None:
         "src/asks/manager.c",
     ):
         shutil.copy2(ROOT / "app" / relative, site / relative)
+    shutil.copy2(ROOT / "tests/fixtures/agent-capture.c", site / "agent-capture.c")
     for header in (ROOT / "app/include/mdo").glob("*.h"):
         shutil.copy2(header, site / "include/mdo" / header.name)
     shutil.copy2(
@@ -753,6 +759,7 @@ def main() -> int:
                 "checkpoint_reader_busy=skipped:1 retained:1 released:1",
                 "checkpoint_reader_null_error=1",
                 "checkpoint_reader_no_snapshot=failed:1 skipped:1 released:1",
+                "quiescent_capture=pending:1 running:1 terminal:1 child:1 retained:1 retry:1",
             ):
                 assert expected in probe_output, probe_output
         assert "init_error=" not in disabled, disabled

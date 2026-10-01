@@ -34,6 +34,16 @@ void MdoApiFeedbackUnit(void)
     g_MdoFeedbackLock = NULL;
 }
 
+bool MdoApiFeedbackCaptureTryLock(void)
+{
+    return g_MdoFeedbackLock != NULL && xrtMutexTryLock(g_MdoFeedbackLock);
+}
+
+void MdoApiFeedbackCaptureUnlock(void)
+{
+    xrtMutexUnlock(g_MdoFeedbackLock);
+}
+
 static bool MdoFeedbackCaptureId(xstrview View, char* Output,
     size_t Capacity)
 {

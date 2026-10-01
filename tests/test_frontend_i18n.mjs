@@ -15,6 +15,7 @@ const packs = Object.fromEntries(supportedLocales.map((name) => [
   name, JSON.parse(readFileSync(new URL(`lang/${name}.json`, root), "utf8")),
 ]));
 const localizedApiErrors = [
+  ["session_capture_busy", "error.sessionCaptureBusy"],
   ["session_message_changed", "error.sessionMessageChanged"],
   ["image_name_invalid", "error.imageNameInvalid"],
   ["write_token_required", "error.writeTokenRequired"],

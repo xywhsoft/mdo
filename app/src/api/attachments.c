@@ -45,6 +45,11 @@ bool MdoApiAttachmentLock(void)
         xrtMutexLock(g_MdoAttachmentLock);
 }
 
+bool MdoApiAttachmentCaptureTryLock(void)
+{
+    return g_MdoAttachmentLock != NULL && xrtMutexTryLock(g_MdoAttachmentLock);
+}
+
 void MdoApiAttachmentUnlock(void)
 {
     if ( g_MdoAttachmentLock != NULL )

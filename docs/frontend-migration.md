@@ -4,6 +4,43 @@
 
 完成判据及尚缺的打包页证据见 [前端操作体验完成审计](frontend-completion-audit.md)。本文件继续记录每次实现和验证的细节。
 
+## 2026-10-01：会话备份统一捕获边界
+
+完整备份按 [实施记录](session-backup-plan.md) 完成第二阶段。新增
+`MdoSessionWithCapture()`，在最新 metadata、root run claim、底层 data 排他
+租约与 event bridge 的固定边界内同步读取。API 入口另按固定顺序尝试取得
+attachment/draft/queue/feedback 存储锁，覆盖 GET 清理、直接 helper 和回执
+修复；遇到占用立即释放并重试，不把网络下载速度带进排他窗口。新增冲突
+提示已有中文/英文/俄文映射。原 v1 JSON 只含 meta/snapshot，保持兼容，
+没有误称已完成带图完整备份或恢复。
+
+模型捕获另拒绝本会话 pending/running 后台任务和未释放的 child owner；
+task → owner 检查顺序覆盖已发布但尚未启动的直接子任务与存活后代。事件、
+待办、附件引用、剪枝、分叉图片复制及回收都登记底层写租约，其他 metadata
+handle 由全局 manager 锁固定。租约关闭后的最终释放安全，重新 Init 不会被
+旧 owner 解锁；不创建新的磁盘目录/锁。checkpoint 后才能安全取得 data
+排他，避免碰撞中的新运行被误拒绝首条消息。
+
+真实 xs/TCC 探针覆盖四类 API 锁的跨线程占用、部分取得后的逆序释放、嵌套
+拒绝保留外层锁、成功重试；底层别名、嵌套 writer、不同会话和关闭后释放；
+reader 内直接侧车写入/剪枝/分叉拒绝、其他 handle/thread 排他、reader 错误
+保留与 claim 释放。真实后台 child 用信号量暂停模型回调，确认捕获拒绝而
+没有调用 reader，结束后成功捕获；pending/running/terminal 任务和 retained
+后代引用也覆盖。普通 checkpoint 与既有前端交互保持。
+
+Windows/Linux 后端全门禁通过 114 Python、240 Node、90 前端模块、严格 C11、
+32 运行探针、确定性打包；Windows 另通过便携 WebView2 Home、打包崩溃/20 秒
+启动。三语映射最后补齐后，两平台再通过 contract、全部前端检查、A/B、
+packed Home lease 与队列恢复，Windows 最终包另通过便携窗口/20 秒启动。
+日志为 `.build/qa-session-capture-{release,linux-release,final,final-linux}.log`。
+根目录 `mdo.exe` 已更新，与 Windows 最终 A/B 包一致，SHA-256 为
+`b2a3e7db3a2a63d6735c071bcba2cfd40d7276cb6efa38a6d18ecae278647ddd`；Linux
+原生文件系统最终包为
+`195ffc4b7d5ecf19203f59bbfe0b040659c5900ac2cbebd0f52dc6da3b910bad`。
+
+本阶段不代替完整会话导出/恢复、原生下载或实体手机验收。下一步是版本化
+manifest、有界传输、离线验证与新会话原子恢复。未做压力或高负载测试。
+
 ## 2026-10-01：外部历史修改同步时间线和待办
 
 正式打包复现表明，事件轮询把 `history_truncated` 作为普通追加记录，外部清空/截断后旧消息卡仍留在缓存，待办观察器又只允许事件 ID 增长，无法恢复更早的计划或清空计划。现在按服务端标记的 `[source_event_id, event_id)` 移除已载入的事件；保留前缀、边界及之后的新回合，模型账本 sequence 复用不影响判断。只接受有效正整数范围，旧式或自定义无范围说明仍按原文显示；记录上限和每轮分页上限保持有界。重叠轮询只发布最新读取，迟到响应不能复活已删除缓存或退回 cursor。

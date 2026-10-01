@@ -3,6 +3,7 @@
 
 #include "../../include/mdo/sessions.h"
 #include "../../include/mdo/project_lifecycle.h"
+#include "data_gate.h"
 
 typedef struct MdoSessionEventBridge MdoSessionEventBridge;
 typedef struct MdoSessionEventTrimPlan MdoSessionEventTrimPlan;
@@ -34,6 +35,8 @@ bool MdoSessionEventTrimReconcileTodo(MdoSessionEventTrimPlan* Plan,
     xwork_error* Error);
 void MdoSessionEventTrimPlanRelease(MdoSessionEventTrimPlan* Plan);
 void MdoSessionEventBridgeSetRegistered(MdoSessionEventBridge* Bridge);
+bool MdoSessionEventBridgeCaptureTryLock(MdoSessionEventBridge* Bridge);
+void MdoSessionEventBridgeCaptureUnlock(MdoSessionEventBridge* Bridge);
 bool MdoSessionEventBridgeSetProfile(MdoSessionEventBridge* Bridge,
     const char* ModelId, uint64 ContextWindowTokens);
 bool MdoSessionEventBridgeClonePrefix(MdoSessionEventBridge* Bridge,

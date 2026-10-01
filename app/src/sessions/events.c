@@ -1321,9 +1321,13 @@ void MdoSessionEventBridgePendingClear(MdoSessionEventBridge* Bridge,
 bool MdoSessionEventBridgeOnEvent(void* Value, const xwork_event* Event)
 {
     MdoSessionEventBridge* Bridge = (MdoSessionEventBridge*)Value;
+    MdoSessionDataLease* DataLease;
     xwork_event UserEvent;
     bool Ok;
     if ( Bridge == NULL || Event == NULL ) return false;
+    DataLease = MdoSessionDataAcquire(Bridge->ProjectId, Bridge->SessionId,
+        MDO_SESSION_DATA_WRITE, NULL);
+    if ( DataLease == NULL ) return false;
     UserEvent = *Event;
     xrtMutexLock(Bridge->Lock);
     Ok = true;
@@ -1361,6 +1365,7 @@ bool MdoSessionEventBridgeOnEvent(void* Value, const xwork_event* Event)
             Bridge->SessionId, Bridge->NextEventId - 1u, Event) )
         xrtClearError();
     xrtMutexUnlock(Bridge->Lock);
+    MdoSessionDataRelease(DataLease);
     if ( !Ok ) return false;
     return Bridge->UserEvent == NULL ||
         Bridge->UserEvent(Bridge->UserEventData, Event);
@@ -1467,6 +1472,16 @@ io:
     MdoSessionEventSnapshotRelease(Snapshot);
     MdoEventsXrtError(Error, "cannot read the session event journal");
     return NULL;
+}
+
+bool MdoSessionEventBridgeCaptureTryLock(MdoSessionEventBridge* Bridge)
+{
+    return Bridge != NULL && xrtMutexTryLock(Bridge->Lock);
+}
+
+void MdoSessionEventBridgeCaptureUnlock(MdoSessionEventBridge* Bridge)
+{
+    if ( Bridge != NULL ) xrtMutexUnlock(Bridge->Lock);
 }
 
 bool MdoSessionEventQueueStartSeen(const char* ProjectId,

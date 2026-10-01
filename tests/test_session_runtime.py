@@ -32,10 +32,12 @@ PROBE_SOURCE = r'''
 #include "src/modules/manager.c"
 #include "src/agents/runtime.c"
 #include "src/asks/manager.c"
+#include "src/sessions/data_gate.c"
 #include "src/sessions/events.c"
 #include "src/sessions/todo.c"
 #include "src/sessions/attachments.c"
 #include "src/sessions/manager.c"
+#include "session-capture.c"
 
 xwork_runtime *MdoBootstrapRuntime(void) { return NULL; }
 
@@ -454,6 +456,7 @@ void ServiceInit(XS_HostInfo *host) {
         printf("init_error=runtime message:%s\n", error.sMessage); goto done;
     }
     Catalog("catalog_empty");
+    if (!CaptureDataGateProbe()) goto done;
     MdoSessionCreateOptionsInit(&create);
     create.ProjectId = "project-alpha";
     create.Title = "Initial title";
@@ -565,6 +568,7 @@ void ServiceInit(XS_HostInfo *host) {
         export_json != NULL && strstr(export_json, "\"meta\":{") != NULL,
         export_json != NULL && strstr(export_json, "\"snapshot\":{") != NULL);
     xrtFree(export_json); export_json = NULL;
+    if (!CaptureSessionBoundaryProbe(session)) goto done;
     {
         char meta_path[MDO_SESSION_PATH_CAPACITY];
         bool failed, released;
@@ -801,12 +805,14 @@ def write_site(site: Path) -> None:
         "src/modules/manager.c",
         "src/agents/runtime.c",
         "src/asks/manager.c",
+        "src/sessions/data_gate.c", "src/sessions/data_gate.h",
         "src/sessions/events.c",
         "src/sessions/todo.c", "src/sessions/attachments.c",
         "src/sessions/internal.h",
         "src/sessions/manager.c",
     ):
         shutil.copy2(ROOT / "app" / relative, site / relative)
+    shutil.copy2(ROOT / "tests/fixtures/session-capture.c", site / "session-capture.c")
     for header in (ROOT / "app/include/mdo").glob("*.h"):
         shutil.copy2(header, site / "include/mdo" / header.name)
     shutil.copy2(
@@ -903,6 +909,9 @@ def main() -> int:
         assert re.search(r"export=ok:1 size:[1-9]\d* schema:1 meta:1 snapshot:1", output), output
         assert "export_unopened=failed:1 size:0 context:1" in output, output
         assert "export_read_failure=failed:1 released:1 retry:1" in output, output
+        assert "capture_data_gate=1" in output, output
+        assert "capture_boundary=writers:1 other:1 locks:1 calls:1" in output, output
+        assert "capture_failure=preserved:1 released:1 retry:1" in output, output
         assert "export_stale=failed:1 size:0 context:1" in output, output
         assert "message_guard=reused:1 changed:1" in output, output
         assert "message_guard_retained=1" in output, output

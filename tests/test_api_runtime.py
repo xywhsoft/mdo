@@ -536,6 +536,9 @@ done:
     shutil.copy2(ROOT / "tests/fixtures/project-references.c",
                  base / "src/bootstrap/project-references-probe.c")
     fixture += '\n#include "project-references-probe.c"\n'
+    shutil.copy2(ROOT / "tests/fixtures/session-capture-api.c",
+                 base / "src/bootstrap/session-capture-probe.c")
+    fixture += '\n#include "session-capture-probe.c"\n'
     replacement = (
         fixture + "void ServiceInit(XS_HostInfo* pHost)\n{\n"
         "    if ( MdoBootstrapInit(pHost) ) {\n"
@@ -586,6 +589,7 @@ done:
         "    static bool CreatedEdit, CreatedAsk;\n"
         "    size_t Index;\n"
         "    if ( MdoApiProbeLeaseControl(pRequest) ) return XS_OK;\n"
+        "    if ( MdoApiCaptureProbe(pRequest) ) return XS_OK;\n"
         "    if ( MdoApiProbeMigrationLeaseControl(pRequest) ) return XS_OK;\n"
         "    if ( MdoApiReferenceProbeControl(pRequest) ) return XS_OK;\n"
         "    if ( pRequest != NULL && pRequest->head != NULL ) {\n"
@@ -4937,6 +4941,8 @@ def run_probe(host: Path) -> None:
                 assert headers["etag"] == current_etag, headers
 
                 export_path = session_path + "/export"
+                status, headers, body = request(port, "GET", "/__fixture/session-capture")
+                assert status == 200 and json.loads(body)["data"]["ok"], (status, body)
                 status, headers, body = request(port, "GET", export_path)
                 assert status == 200, (status, body)
                 exported = json.loads(body)

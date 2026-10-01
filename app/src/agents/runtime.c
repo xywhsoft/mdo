@@ -29,6 +29,7 @@ typedef struct MdoAgentRoute {
 
 typedef struct MdoAgentOwner {
     xatomic32 Refs;
+    xwork_runtime* Runtime;
     MdoProjectLease* ProjectLease;
     MdoApprovalScope ApprovalScope;
     MdoModelCatalog* Models;
@@ -262,6 +263,7 @@ static void MdoAgentOwnerRelease(MdoAgentOwner* Owner)
     MdoModuleCatalogRelease(Owner->Modules);
     MdoModelCatalogRelease(Owner->Models);
     MdoProjectLeaseRelease(Owner->ProjectLease);
+    xworkRuntimeRelease(Owner->Runtime);
     memset(Owner, 0, sizeof(*Owner));
     xrtFree(Owner);
 }
@@ -955,6 +957,8 @@ MdoAgentSession* MdoAgentSessionCreateWithRuntime(xwork_runtime* Runtime,
         goto fail;
     }
     xrtAtomic32Init(&Owner->Refs, 1u);
+    Owner->Runtime = xworkRuntimeRef(Runtime);
+    if ( Owner->Runtime == NULL ) goto fail;
     /* The callback owner, including retained runtime Agent references, outlives
      * the product session. Project exclusion must not depend on memory tools. */
     if ( Options->ProjectId != NULL && Options->ProjectId[0] != '\0' ) {
@@ -1461,8 +1465,44 @@ bool MdoAgentSessionCheckpoint(MdoAgentSession* Session, xwork_error* Error)
     return MdoAgentSessionWithCheckpoint(Session, NULL, NULL, Error);
 }
 
-bool MdoAgentSessionWithCheckpoint(MdoAgentSession* Session,
-    MdoAgentCheckpointReadFn Read, void* UserData, xwork_error* Error)
+/* The root run claim is already held. No new root task can be submitted.
+ * Pending background delegation has a published root task before that claim
+ * is released; running descendants retain this callback owner until their
+ * final writes and events complete. Check tasks before the owner count so
+ * the queued-child -> retained-child handoff cannot escape both checks. */
+static bool MdoAgentCaptureQuiescent(MdoAgentSession* Session,
+    xwork_error* Error)
+{
+    xwork_task_snapshot* Tasks;
+    size_t i;
+    bool Ok = true;
+    Tasks = xworkRuntimeTaskSnapshot(Session->Owner->Runtime, 0u, Error);
+    if ( Tasks == NULL ) return false;
+    for ( i = 0u; i < xworkTaskSnapshotCount(Tasks); ++i ) {
+        xwork_task_info Info;
+        xworkTaskInfoInit(&Info);
+        if ( !xworkTaskSnapshotTaskAt(Tasks, i, &Info) ) { Ok = false; break; }
+        if ( Info.sOwnerSession != NULL && Session->SnapshotPath != NULL &&
+             strcmp(Info.sOwnerSession, Session->SnapshotPath) == 0 &&
+             (Info.eState == XWORK_TASK_PENDING || Info.eState == XWORK_TASK_RUNNING) ) {
+            Ok = false;
+            break;
+        }
+    }
+    xworkTaskSnapshotRelease(Tasks);
+    /* Exactly two base owners: the product Agent session and its root xwork
+     * Agent. Child Agents (including nested queued delegations) add owners. */
+    if ( !Ok || xrtAtomic32Load(&Session->Owner->Refs, XMEMORY_ACQUIRE) != 2u ) {
+        MdoAgentsError(Error, XWORK_ERROR_CONTEXT,
+            "session background tasks or child Agents are still active");
+        return false;
+    }
+    return true;
+}
+
+static bool MdoAgentWithCheckpoint(MdoAgentSession* Session,
+    MdoAgentCheckpointReadFn Read, void* UserData, bool Quiescent,
+    xwork_error* Error)
 {
     xwork_error LocalError;
     xllm_error ModelError;
@@ -1476,7 +1516,9 @@ bool MdoAgentSessionWithCheckpoint(MdoAgentSession* Session,
         return false;
     }
     if ( !MdoAgentLedgerBegin(Session, Error) ) goto done;
-    if ( !MdoAgentLedgerCheckpoint(Session, &ModelError) ) {
+    if ( Quiescent && !MdoAgentCaptureQuiescent(Session, Error) ) {
+        Ok = false;
+    } else if ( !MdoAgentLedgerCheckpoint(Session, &ModelError) ) {
         MdoAgentsModelError(Error, &ModelError,
             "cannot checkpoint the Agent session");
     } else {
@@ -1489,6 +1531,18 @@ bool MdoAgentSessionWithCheckpoint(MdoAgentSession* Session,
 done:
     MdoAgentSessionRelease(Session);
     return Ok;
+}
+
+bool MdoAgentSessionWithCheckpoint(MdoAgentSession* Session,
+    MdoAgentCheckpointReadFn Read, void* UserData, xwork_error* Error)
+{
+    return MdoAgentWithCheckpoint(Session, Read, UserData, false, Error);
+}
+
+bool MdoAgentSessionWithQuiescentCheckpoint(MdoAgentSession* Session,
+    MdoAgentCheckpointReadFn Read, void* UserData, xwork_error* Error)
+{
+    return MdoAgentWithCheckpoint(Session, Read, UserData, true, Error);
 }
 
 bool MdoAgentSessionLastSequence(MdoAgentSession* Session,

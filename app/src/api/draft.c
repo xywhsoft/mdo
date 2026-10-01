@@ -87,6 +87,16 @@ void MdoApiDraftUnit(void)
     g_MdoDraftLock = NULL;
 }
 
+bool MdoApiDraftCaptureTryLock(void)
+{
+    return g_MdoDraftLock != NULL && xrtMutexTryLock(g_MdoDraftLock);
+}
+
+void MdoApiDraftCaptureUnlock(void)
+{
+    xrtMutexUnlock(g_MdoDraftLock);
+}
+
 bool MdoApiDraftAttachmentReferenced(const char* ProjectId,
     const char* SessionId, const char* Id, bool* Referenced)
 {

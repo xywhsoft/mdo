@@ -218,6 +218,16 @@ MdoSessionMessageMutationResult MdoSessionTruncateMessage(MdoSession* Session,
 str MdoSessionExportJson(MdoSession* Session, size_t* Size,
     xwork_error* Error);
 
+/* Nonblocking session-owned capture: current metadata, quiescent checkpoint,
+ * UI events, todo and direct attachment reference/fork writers are fixed for
+ * the callback. API callers must additionally freeze attachment/draft/queue/
+ * feedback storage with the API capture guard. Read performs bounded external
+ * Home reads/copies only; no network, manager APIs or callback reentry. */
+typedef bool (*MdoSessionCaptureReadFn)(const MdoSessionInfo* Info,
+    void* UserData, xwork_error* Error);
+bool MdoSessionWithCapture(MdoSession* Session, MdoSessionCaptureReadFn Read,
+    void* UserData, xwork_error* Error);
+
 MdoSessionCatalog* MdoSessionCatalogSnapshot(xwork_error* Error);
 MdoSessionCatalog* MdoSessionCatalogSearch(const MdoSessionQuery* Query,
     xwork_error* Error);

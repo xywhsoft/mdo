@@ -578,7 +578,8 @@ bool MdoSessionManagerInit(xwork_runtime* Runtime)
     memset(&g_MdoSessions, 0, sizeof(g_MdoSessions));
     g_MdoSessions.Lock = xrtMutexCreate();
     g_MdoSessions.Runtime = xworkRuntimeRef(Runtime);
-    if ( g_MdoSessions.Lock == NULL || g_MdoSessions.Runtime == NULL ) {
+    if ( g_MdoSessions.Lock == NULL || g_MdoSessions.Runtime == NULL ||
+         !MdoSessionDataInit() ) {
         MdoSessionManagerUnit();
         return false;
     }
@@ -590,6 +591,7 @@ bool MdoSessionManagerInit(xwork_runtime* Runtime)
 void MdoSessionManagerUnit(void)
 {
     g_MdoSessions.Initialized = false;
+    MdoSessionDataUnit();
     if ( g_MdoSessions.Runtime != NULL )
         xworkRuntimeRelease(g_MdoSessions.Runtime);
     if ( g_MdoSessions.Lock != NULL ) xrtMutexDestroy(g_MdoSessions.Lock);
@@ -1896,10 +1898,9 @@ typedef struct MdoSessionExportCapture {
     size_t Size;
 } MdoSessionExportCapture;
 
-/* The caller holds Session->Lock and the Agent run claim throughout this
- * capture. Serialize metadata validation/read with mutations from other
- * handles; release that manager lock before copying the bounded snapshot. */
-static bool MdoSessionsExportCapture(void* UserData, xwork_error* Error)
+/* MdoSessionWithCapture holds the metadata manager lock for the entire copy. */
+static bool MdoSessionsExportCapture(const MdoSessionInfo* Info,
+    void* UserData, xwork_error* Error)
 {
     MdoSessionExportCapture* Capture = (MdoSessionExportCapture*)UserData;
     MdoSession* Session = Capture->Session;
@@ -1915,19 +1916,14 @@ static bool MdoSessionsExportCapture(void* UserData, xwork_error* Error)
     size_t HeaderSize;
     size_t Total;
     int Written;
-    bool MetaOk;
-    xrtMutexLock(g_MdoSessions.Lock);
-    MetaOk = MdoSessionsValidateCurrent(Session, Error);
-    if ( MetaOk && !MdoSessionsReadBounded(Session->MetaPath,
+    if ( !MdoSessionsReadBounded(Session->MetaPath,
             MDO_SESSION_META_LIMIT, &Meta, &MetaSize) ) {
         MdoSessionsXrtError(Error, XWORK_ERROR_IO,
             "cannot read the session export metadata");
-        MetaOk = false;
+        goto done;
     }
-    xrtMutexUnlock(g_MdoSessions.Lock);
-    if ( !MetaOk ) goto done;
-    if ( !MdoSessionsPath(SnapshotPath, Session->Info.ProjectId,
-            Session->Info.Id, "snapshot.json") ||
+    if ( !MdoSessionsPath(SnapshotPath, Info->ProjectId,
+            Info->Id, "snapshot.json") ||
          !MdoSessionsReadBounded(SnapshotPath,
             MDO_SESSION_EXPORT_SNAPSHOT_LIMIT, &Snapshot, &SnapshotSize) ) {
         MdoSessionsXrtError(Error, XWORK_ERROR_IO,
@@ -1971,6 +1967,68 @@ done:
     return Capture->Data != NULL;
 }
 
+typedef struct MdoSessionCaptureRead {
+    MdoSession* Session;
+    MdoSessionCaptureReadFn Read;
+    void* UserData;
+} MdoSessionCaptureRead;
+
+static bool MdoSessionsCaptureRead(void* UserData, xwork_error* Error)
+{
+    MdoSessionCaptureRead* Capture = (MdoSessionCaptureRead*)UserData;
+    MdoSession* Session = Capture->Session;
+    MdoSessionDataLease* DataLease;
+    bool BridgeLocked;
+    bool Ok = false;
+    /* Take the run claim before excluding event writers. Otherwise a run
+     * entering between data exclusion and claim acquisition could have its
+     * first event spuriously rejected by a capture that ultimately fails. */
+    DataLease = MdoSessionDataAcquire(Session->Info.ProjectId, Session->Info.Id,
+        MDO_SESSION_DATA_CAPTURE, Error);
+    if ( DataLease == NULL ) return false;
+    BridgeLocked = MdoSessionEventBridgeCaptureTryLock(Session->Bridge);
+    if ( BridgeLocked ) Ok = Capture->Read(&Session->Info, Capture->UserData, Error);
+    else MdoSessionsError(Error, XWORK_ERROR_CONTEXT, "session events are busy");
+    if ( BridgeLocked ) MdoSessionEventBridgeCaptureUnlock(Session->Bridge);
+    MdoSessionDataRelease(DataLease);
+    return Ok;
+}
+
+bool MdoSessionWithCapture(MdoSession* Session, MdoSessionCaptureReadFn Read,
+    void* UserData, xwork_error* Error)
+{
+    MdoSessionCaptureRead Capture;
+    bool ManagerLocked = false;
+    bool Ok = false;
+    xwork_error LocalError;
+    if ( Error == NULL ) Error = &LocalError;
+    xworkErrorInit(Error);
+    if ( Session == NULL || Read == NULL ) {
+        MdoSessionsError(Error, XWORK_ERROR_INVALID_ARGUMENT,
+            "session and bounded capture reader are required");
+        return false;
+    }
+    if ( !g_MdoSessions.Initialized || !xrtMutexTryLock(Session->Lock) ) goto busy;
+    ManagerLocked = xrtMutexTryLock(g_MdoSessions.Lock);
+    if ( !ManagerLocked ) goto done;
+    if ( Session->Agent == NULL || Session->Info.Status != MDO_SESSION_ACTIVE ||
+         !MdoSessionsValidateCurrent(Session, Error) ) goto done;
+    Capture.Session = Session;
+    Capture.Read = Read;
+    Capture.UserData = UserData;
+    Ok = MdoAgentSessionWithQuiescentCheckpoint(Session->Agent,
+        MdoSessionsCaptureRead, &Capture, Error);
+done:
+    if ( ManagerLocked ) xrtMutexUnlock(g_MdoSessions.Lock);
+    xrtMutexUnlock(Session->Lock);
+    if ( !Ok && Error->eCode == XWORK_ERROR_NONE ) goto busy;
+    return Ok;
+busy:
+    MdoSessionsError(Error, XWORK_ERROR_CONTEXT,
+        "session capture is busy or the session is not open and active");
+    return false;
+}
+
 str MdoSessionExportJson(MdoSession* Session, size_t* Size,
     xwork_error* Error)
 {
@@ -1984,15 +2042,10 @@ str MdoSessionExportJson(MdoSession* Session, size_t* Size,
     }
     memset(&Capture, 0, sizeof(Capture));
     Capture.Session = Session;
-    xrtMutexLock(Session->Lock);
-    if ( Session->Agent == NULL || Session->Info.Status != MDO_SESSION_ACTIVE ) {
-        MdoSessionsError(Error, XWORK_ERROR_CONTEXT,
-            "an open active session is required for export");
-    } else if ( MdoAgentSessionWithCheckpoint(Session->Agent,
+    if ( MdoSessionWithCapture(Session,
             MdoSessionsExportCapture, &Capture, Error) ) {
         *Size = Capture.Size;
     }
-    xrtMutexUnlock(Session->Lock);
     return Capture.Data;
 }
 

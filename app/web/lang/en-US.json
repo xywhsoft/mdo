@@ -1,4 +1,5 @@
 {
+  "error.sessionCaptureBusy": "Session data is being saved or cleaned up. Try exporting again shortly.",
   "error.sessionMessageChanged": "The original message changed or was removed in another window. Keep your edit, refresh the conversation, and select the message again.",
   "app.name": "Mdo",
   "app.title": "Mdo",

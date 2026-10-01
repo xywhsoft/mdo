@@ -32,6 +32,7 @@ PROBE_SOURCE = r'''
 #include "src/modules/manager.c"
 #include "src/agents/runtime.c"
 #include "src/asks/manager.c"
+#include "src/sessions/data_gate.c"
 #include "src/sessions/events.c"
 #include "src/sessions/todo.c"
 #include "src/sessions/attachments.c"
@@ -277,7 +278,8 @@ def write_site(site: Path) -> None:
         "src/storage/home.c", "src/storage/home_import.inc.c", "src/storage/home_purge.inc.c", "src/projects/lifecycle.c",
         "src/config/config.c", "src/security/secrets.c",
         "src/models/catalog.c", "src/skills/manager.c", "src/memory/manager.c",
-        "src/modules/manager.c", "src/agents/runtime.c", "src/sessions/events.c",
+        "src/modules/manager.c", "src/agents/runtime.c",
+        "src/sessions/data_gate.c", "src/sessions/data_gate.h", "src/sessions/events.c",
         "src/asks/manager.c",
         "src/sessions/todo.c", "src/sessions/attachments.c",
         "src/sessions/internal.h", "src/sessions/manager.c", "src/runs/manager.c",
