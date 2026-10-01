@@ -877,9 +877,38 @@ done:
     return Ok;
 }
 
+static bool MdoEventsMessageMatches(MdoSessionEventBridge* Bridge,
+    const char* Data, size_t Size, uint64 SourceEventId, uint64 Sequence)
+{
+    size_t Start = 0u;
+    bool Found = false;
+    while ( Start < Size ) {
+        const char* End = (const char*)memchr(Data + Start, '\n', Size - Start);
+        MdoSessionEventOwned Entry;
+        size_t Length;
+        if ( End == NULL ) break;
+        Length = (size_t)(End - (Data + Start));
+        if ( Length != 0u && Length <= MDO_SESSION_EVENT_RECORD_LIMIT &&
+             MdoEventsParse(Bridge->ProjectId, Bridge->SessionId,
+                xrtStrViewN(Data + Start, Length), &Entry) ) {
+            if ( Entry.Info.EventId == SourceEventId ) {
+                bool Matches = !Found &&
+                    Entry.Info.Kind == XWORK_EVENT_AGENT_START &&
+                    Entry.Info.AgentDepth == 0u &&
+                    Entry.Info.UserMessageSequence == Sequence;
+                MdoEventsOwnedUnit(&Entry);
+                if ( !Matches ) return false;
+                Found = true;
+            } else MdoEventsOwnedUnit(&Entry);
+        } else xrtClearError();
+        Start += Length + 1u;
+    }
+    return Found;
+}
+
 MdoSessionEventTrimPlan* MdoSessionEventTrimPrepare(
     MdoSessionEventBridge* Bridge, uint64 ThroughSequence, bool Clear,
-    xwork_error* Error)
+    uint64 SourceEventId, bool* MessageChanged, xwork_error* Error)
 {
     MdoSessionEventTrimPlan* Plan = NULL;
     char* Data = NULL;
@@ -892,7 +921,9 @@ MdoSessionEventTrimPlan* MdoSessionEventTrimPrepare(
     bool Exists = false;
     xfileinfo Info;
     xworkErrorInit(Error);
-    if ( Bridge == NULL ) {
+    if ( MessageChanged != NULL ) *MessageChanged = false;
+    if ( Bridge == NULL || (SourceEventId != 0u &&
+            (Clear || ThroughSequence == UINT64_MAX)) ) {
         MdoEventsError(Error, XWORK_ERROR_INVALID_ARGUMENT,
             "an active event bridge is required to trim history");
         return NULL;
@@ -908,6 +939,16 @@ MdoSessionEventTrimPlan* MdoSessionEventTrimPrepare(
          (Exists && (Info.Type != XFILE_TYPE_FILE ||
           (Info.Available & XFILE_INFO_SIZE) == 0u ||
           !MdoEventsRead(Bridge->Path, &Data, &Size))) ) goto io;
+    /* Validate against the unmodified journal, including a first-message edit
+     * whose trim plan is Clear. Manager serialization spans this check and the
+     * mutation, so another history edit cannot replace the source in between. */
+    if ( SourceEventId != 0u && !MdoEventsMessageMatches(Bridge,
+            Data, Size, SourceEventId, ThroughSequence + 1u) ) {
+        if ( MessageChanged != NULL ) *MessageChanged = true;
+        MdoEventsError(Error, XWORK_ERROR_CONTEXT,
+            "the original message changed; reload before editing or retrying");
+        goto fail;
+    }
     while ( !Plan->Clear && Start < Size ) {
         const char* End = (const char*)memchr(Data + Start, '\n',
             Size - Start);

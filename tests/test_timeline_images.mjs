@@ -18,9 +18,11 @@ test("an image-only user row and its retry keep empty text and durable attachmen
   const answer = items.find(item => item.kind === "assistant");
   assert.equal(user.text, "");
   assert.equal(user.userMessageSequence, 9);
+  assert.equal(user.sourceEventId, 1);
   assert.deepEqual(user.attachments, attachments);
   assert.equal(answer.retryPrompt.text, "");
   assert.equal(answer.retryPrompt.sequence, 9);
+  assert.equal(answer.retryPrompt.sourceEventId, 1);
   assert.deepEqual(answer.retryPrompt.attachments, attachments);
 });
 

@@ -203,6 +203,16 @@ bool MdoSessionFinishInterrupted(MdoSession* Session,
 bool MdoSessionClear(MdoSession* Session, xwork_error* Error);
 bool MdoSessionTruncateAfter(MdoSession* Session, uint64 ThroughSequence,
     xwork_error* Error);
+typedef enum MdoSessionMessageMutationResult {
+    MDO_SESSION_MESSAGE_OK = 0,
+    MDO_SESSION_MESSAGE_CHANGED,
+    MDO_SESSION_MESSAGE_FAILED
+} MdoSessionMessageMutationResult;
+/* Edit/retry must identify the original top-level agent_start event, not just
+ * a ledger sequence that can be reused after truncation. Refuses without
+ * changing files when that event no longer owns ThroughSequence + 1. */
+MdoSessionMessageMutationResult MdoSessionTruncateMessage(MdoSession* Session,
+    uint64 ThroughSequence, uint64 SourceEventId, xwork_error* Error);
 /* Returns owned UTF-8 JSON containing meta and a checkpointed xllm snapshot.
  * Release with xrtFree. Artifacts and UI events remain separate exports. */
 str MdoSessionExportJson(MdoSession* Session, size_t* Size,

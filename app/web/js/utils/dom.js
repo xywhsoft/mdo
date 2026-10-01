@@ -77,6 +77,8 @@ const API_ERROR_COPY = Object.freeze({
   network_error: ["error.network",
     "无法连接本地服务，请确认 mdo 仍在运行。"],
   session_busy: ["error.sessionBusy", "这个会话仍有任务在运行。"],
+  session_message_changed: ["error.sessionMessageChanged",
+    "原消息已在其他窗口更改或移除。请保留编辑内容，刷新会话后重新选择消息。"],
   session_not_found: ["error.sessionNotFound",
     "会话已经不存在，请刷新列表。"],
   revision_conflict: ["error.revisionConflict",

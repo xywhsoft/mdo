@@ -7,6 +7,8 @@ function setup({ queuedClose = false } = {}) {
   const form = new EventTarget();
   const input = new EventTarget();
   const cancel = new EventTarget();
+  const submit = { disabled: false };
+  const error = { hidden: true, textContent: "", focus() { state.focus = "error"; } };
   const view = new EventTarget();
   const opener = { isConnected: true, focus() { state.focus = "opener"; } };
   const state = { focus: "", submits: 0, reports: 0, validity: "" };
@@ -28,7 +30,7 @@ function setup({ queuedClose = false } = {}) {
     state.submits += 1;
     if (form.reportValidity()) form.dispatchEvent(new Event("submit", { cancelable: true }));
   };
-  const editor = createMessageEditDialog({ dialog, form, input, cancel });
+  const editor = createMessageEditDialog({ dialog, form, input, cancel, submit, error });
   const key = (fields = {}, consumed = false) => {
     const event = new Event("keydown", { cancelable: true });
     for (const [name, value] of Object.entries({ key: "Enter", ...fields }))
@@ -37,7 +39,7 @@ function setup({ queuedClose = false } = {}) {
     input.dispatchEvent(event);
     return event;
   };
-  return { editor, dialog, input, cancel, view, opener, state, key,
+  return { editor, dialog, input, cancel, submit, error, view, opener, state, key,
     flushClose() { while (closeEvents.length) closeEvents.shift()(); } };
 }
 
@@ -146,4 +148,83 @@ test("disabled, readonly, and previously consumed Enter cannot submit", async ()
   assert.equal(context.state.submits, 0);
   context.cancel.dispatchEvent(new Event("click"));
   assert.equal(await result, null);
+});
+
+test("a delayed commit keeps the editor open and rejects duplicate submission and cancellation", async () => {
+  const context = setup();
+  let complete;
+  let calls = 0;
+  const result = context.editor.open("original", [], context.opener, async (text) => {
+    calls += 1;
+    assert.equal(text, "edited");
+    await new Promise((resolve) => { complete = resolve; });
+  });
+  context.input.value = "edited";
+  context.key();
+  context.key();
+  context.cancel.dispatchEvent(new Event("click"));
+  const escape = new Event("cancel", { cancelable: true });
+  context.dialog.dispatchEvent(escape);
+  assert.equal(escape.defaultPrevented, true);
+  assert.equal(context.dialog.open, true);
+  assert.equal(context.input.readOnly, true);
+  assert.equal(context.cancel.disabled, true);
+  assert.equal(context.submit.disabled, true);
+  assert.equal(calls, 1);
+  complete();
+  assert.equal(await result, "edited");
+  assert.equal(context.dialog.open, false);
+  assert.equal(context.input.readOnly, false);
+  assert.equal(context.cancel.disabled, false);
+  assert.equal(context.submit.disabled, false);
+});
+
+test("a refused message edit preserves text and attachments for correction or cancellation", async () => {
+  const context = setup();
+  let calls = 0;
+  let settled = false;
+  const result = context.editor.open("original", ["a".repeat(32)], context.opener, async () => {
+    calls += 1;
+    if (calls === 1) throw Object.assign(new Error("refused"), { code: "session_message_changed" });
+  });
+  result.then(() => { settled = true; });
+  context.input.value = "my unsent edit";
+  context.key();
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(settled, false);
+  assert.equal(context.dialog.open, true);
+  assert.equal(context.input.value, "my unsent edit");
+  assert.equal(context.input.required, false);
+  assert.equal(context.input.readOnly, false);
+  assert.equal(context.error.hidden, false);
+  assert.match(context.error.textContent, /原消息已在其他窗口/);
+  assert.equal(context.state.focus, "error");
+  context.input.value = "corrected";
+  context.key();
+  assert.equal(await result, "corrected");
+  assert.equal(calls, 2);
+});
+
+test("a late commit response cannot close or change a newer editor", async () => {
+  const context = setup();
+  let complete;
+  const first = context.editor.open("first", [], context.opener, () =>
+    new Promise(resolve => { complete = resolve; }));
+  context.key();
+  context.dialog.close();
+  assert.equal(await first, null);
+  assert.equal(context.input.readOnly, false);
+  assert.equal(context.cancel.disabled, false);
+  assert.equal(context.submit.disabled, false);
+  let settled = false;
+  const next = context.editor.open("next", ["b".repeat(32)], context.opener);
+  next.then(() => { settled = true; });
+  complete();
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(settled, false);
+  assert.equal(context.dialog.open, true);
+  assert.equal(context.input.value, "next");
+  assert.equal(context.input.readOnly, false);
+  context.cancel.dispatchEvent(new Event("click"));
+  assert.equal(await next, null);
 });

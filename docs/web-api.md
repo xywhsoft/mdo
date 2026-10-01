@@ -252,6 +252,25 @@ automatically executes on reload, and keeps all local writes paused through
 committed acknowledgement until an actual page reload. Ordinary writes must
 carry the fixed page token described in [HTTP write admission](http-write-admission.md).
 
+## Message edit and retry ownership
+
+`POST /projects/{project}/sessions/{session}/truncate` requires a session
+`If-Match` and `through_sequence`. Message edit/retry also supplies the original
+top-level `agent_start` event ID, for example
+`{"through_sequence":1,"source_event_id":17}`. Before modifying history, the
+server checks that this event is still retained, has depth zero, and owns
+sequence `through_sequence + 1`. Sequence numbers may be reused after a clear
+or truncate; a fresh ETag alone does not identify the original message.
+
+A removed, replaced, or mismatched source returns `409
+session_message_changed` without committing the maintenance operation. Invalid
+source IDs (including zero, fractions, strings, and null) return `422
+session_truncate_invalid`. Generic ledger maintenance may omit the optional
+source field; the frontend's message edit and retry always include it. The
+editor retains text and attachment IDs after a failed commit, displays the
+localized error in the dialog, and only closes after successful submission.
+The subsequent run start remains a separate operation.
+
 ## Settings transactions
 
 `GET /settings` returns the effective, typed UI settings and the current

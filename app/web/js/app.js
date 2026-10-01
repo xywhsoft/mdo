@@ -337,6 +337,7 @@ export async function boot() {
   const messageEditDialog = createMessageEditDialog({
     dialog: $("#message-edit-dialog"), form: $("#message-edit-form"),
     input: $("#message-edit-input"), cancel: $("#cancel-message-edit"),
+    submit: $("#message-edit-form button[type=submit]"), error: $("#message-edit-error"),
   });
   createRunNotifications({ runsStore, navigation, settingsStore,
     onUnreadChange: (keys) => sessionList.setUnread(keys) });
@@ -378,7 +379,7 @@ export async function boot() {
     return { session, selected };
   }
 
-  async function replaceAndRunMessage(sequence, text, attachments, action) {
+  async function replaceAndRunMessage(sequence, text, attachments, action, sourceEventId) {
     const { session, selected } = assertMessageReplacementReady(sequence, text, attachments);
     const targetKey = `${selected.projectId}/${selected.sessionId}`;
     const originVersion = routeVersion;
@@ -389,7 +390,7 @@ export async function boot() {
     messageActionBusy = true;
     setRun(activeRun);
     try {
-      const result = await runMessageReplacement({ session, sequence, text,
+      const result = await runMessageReplacement({ session, sequence, sourceEventId, text,
         attachments, isCurrent: stillSelected,
         validateBeforeTruncate: async () => {
           if (!await draftStore.refreshSessionSubmissions(targetKey))
@@ -494,7 +495,7 @@ export async function boot() {
       } else toast(t("sessionAction.backgroundFork", {}, "原会话的分支已在后台创建"));
     },
     onEdit: async (sequence, text, attachments, owner, opener,
-      resolveText = () => text) => {
+      resolveText = () => text, sourceEventId) => {
       const version = routeVersion;
       if (!isCurrentMessageOwner(owner, version))
         throw new Error(t("messageAction.ownerChanged", {}, "会话已切换，请重新选择消息"));
@@ -503,15 +504,17 @@ export async function boot() {
       if (!isCurrentMessageOwner(owner, version))
         throw new Error(t("messageAction.ownerChanged", {}, "会话已切换，请重新选择消息"));
       assertMessageReplacementReady(sequence, completeText, attachments);
-      const edited = await messageEditDialog.open(completeText, attachments, opener);
-      if (edited !== null) {
+      await messageEditDialog.open(completeText, attachments, opener, async (edited) => {
         if (!isCurrentMessageOwner(owner, version))
           throw new Error(t("messageAction.ownerChanged", {}, "会话已切换，请重新选择消息"));
-        await replaceAndRunMessage(sequence, edited, attachments, "edit");
-      }
+        await replaceAndRunMessage(sequence, edited, attachments, "edit", sourceEventId);
+      });
+      if (isCurrentMessageOwner(owner, version) &&
+          (document.activeElement === document.body || !document.activeElement?.isConnected))
+        prompt.focus({ preventScroll: true });
     },
     onRetry: async (sequence, text, attachments, owner,
-      resolveText = () => text) => {
+      resolveText = () => text, sourceEventId) => {
       const version = routeVersion;
       if (!isCurrentMessageOwner(owner, version))
         throw new Error(t("messageAction.ownerChanged", {}, "会话已切换，请重新选择消息"));
@@ -519,7 +522,7 @@ export async function boot() {
       const completeText = await resolveText();
       if (!isCurrentMessageOwner(owner, version))
         throw new Error(t("messageAction.ownerChanged", {}, "会话已切换，请重新选择消息"));
-      return replaceAndRunMessage(sequence, completeText, attachments, "retry");
+      return replaceAndRunMessage(sequence, completeText, attachments, "retry", sourceEventId);
     },
   });
   conversationSearch = createConversationSearch({

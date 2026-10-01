@@ -94,10 +94,14 @@ export async function forkSession(session, input) {
   return { ...response.data, etag: response.etag };
 }
 
-export async function truncateSession(session, throughSequence) {
-  return refreshAfter(await api.post(`${endpoint(session)}/truncate`, {
-    through_sequence: sequence(throughSequence),
-  }, { ifMatch: etag(session) }));
+export async function truncateSession(session, throughSequence, sourceEventId) {
+  const body = { through_sequence: sequence(throughSequence) };
+  if (sourceEventId !== undefined) {
+    body.source_event_id = sequence(sourceEventId);
+    if (!body.source_event_id) throw new TypeError("source event ID must be positive");
+  }
+  return refreshAfter(await api.post(`${endpoint(session)}/truncate`, body,
+    { ifMatch: etag(session) }));
 }
 
 export async function clearSession(session) {

@@ -22,12 +22,12 @@ function harness(overrides = {}) {
     events,
     switchRoute() { current = false; },
     args: {
-      session, sequence: 3, text: " edited ", attachments,
+      session, sequence: 3, sourceEventId: 17, text: " edited ", attachments,
       isCurrent: () => current,
       loadHistory: async () => ({ last_sequence: 6, etag: '"source-v4"',
         revision: 4 }),
-      truncate: async (value, through) => {
-        events.push(["truncate", value, through]);
+      truncate: async (value, through, sourceEventId) => {
+        events.push(["truncate", value, through, sourceEventId]);
         return updated;
       },
       startRun: async (...args) => {
@@ -51,6 +51,7 @@ test("message edit stays bound to its original session", async () => {
     ["truncate", "visible-truncate", "start", "visible-run"]);
   assert.equal(probe.events[0][1].id, "old");
   assert.equal(probe.events[0][2], 2);
+  assert.equal(probe.events[0][3], 17);
   assert.deepEqual(probe.events[2].slice(1), ["source", "old", "edited", attachments]);
 });
 
@@ -121,6 +122,30 @@ test("an obsolete message boundary cannot commit or reveal a replacement turn", 
   const probe = harness({ loadHistory: async () => ({ last_sequence: 2 }) });
   await assert.rejects(runMessageReplacement(probe.args), /消息已不在/);
   assert.deepEqual(probe.events, []);
+});
+
+test("missing original event identity cannot load or mutate history", async () => {
+  for (const sourceEventId of [undefined, 0, -1, NaN, 1.5]) {
+    const probe = harness({ sourceEventId, loadHistory() {
+      throw new Error("history must not be read");
+    } });
+    await assert.rejects(runMessageReplacement(probe.args), /消息已不在/);
+    assert.deepEqual(probe.events, []);
+  }
+});
+
+test("a reused sequence with a fresh revision still submits the original event guard", async () => {
+  const probe = harness({
+    loadHistory: async () => ({ last_sequence: 6, etag: '"source-v8"', revision: 8 }),
+    truncate: async (value, through, sourceEventId) => {
+      assert.equal(value.revision, 8);
+      assert.equal(through, 2);
+      assert.equal(sourceEventId, 17);
+      throw Object.assign(new Error("original message replaced"), { code: "session_message_changed" });
+    },
+  });
+  await assert.rejects(runMessageReplacement(probe.args), /original message replaced/);
+  assert.deepEqual(probe.events, [], "a refused source guard must not announce a commit or start a run");
 });
 
 test("failed background resend saves the old draft without touching visible UI", async () => {

@@ -122,6 +122,15 @@ xllm-session 判定合法的 message sequence，不能切开 tool call/result �
 后立即 checkpoint。`MdoSessionClear()` 清理旧上下文后重新写入当前组合系统
 提示词，再 checkpoint，因此下一轮不会丢失 Agent 身份和 Skill 指令。
 
+消息编辑与重试使用 `MdoSessionTruncateMessage()`，同时提供保留边界和原始
+顶层 `agent_start` 的事件 ID。账本 sequence 在截断后可能复用，单靠新 revision
+或相同 sequence 无法证明用户选择的仍是原消息。该接口在准备 UI 裁切前检查
+事件仍存在、深度为 0 且 sequence 等于保留边界加 1；检查与维护由 manager
+串行，首条消息的清空计划也必须检查原始记录。来源不匹配返回
+`MDO_SESSION_MESSAGE_CHANGED`，不写入元数据、模型账本或 UI 日志。
+原 `MdoSessionTruncateAfter()` 保留通用账本维护语义。本检查不提供截断后运行
+启动的整体原子事务，也不改变外部窗口的时间线刷新机制。
+
 `MdoSessionFork()` 只接受打开且 active 的源会话。调用方可指定合法 sequence，
 也可用 `UINT64_MAX` 选择当前保留尾部。子会话获得新的 session ID、snapshot、
 journal、UI event、artifact 根和 runtime lease；模型历史是深拷贝的合法前缀，

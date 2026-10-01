@@ -295,8 +295,8 @@ static uint64 Events(const char *label, const char *project,
     return cursor;
 }
 
-static uint64 UserSequence(const char *project, const char *session,
-    const char *text) {
+static uint64 UserIdentity(const char *project, const char *session,
+    const char *text, bool event_id) {
     xwork_error error;
     MdoSessionEventSnapshot *snapshot = MdoSessionEventReplay(project,
         session, 0u, 1000u, &error);
@@ -311,12 +311,16 @@ static uint64 UserSequence(const char *project, const char *session,
             info.Kind == XWORK_EVENT_AGENT_START &&
             info.AgentDepth == 0u && info.Text != NULL &&
             strcmp(info.Text, text) == 0) {
-            found = info.UserMessageSequence;
+            found = event_id ? info.EventId : info.UserMessageSequence;
             break;
         }
     }
     MdoSessionEventSnapshotRelease(snapshot);
     return found;
+}
+
+static uint64 UserSequence(const char *project, const char *session, const char *text) {
+    return UserIdentity(project, session, text, false);
 }
 
 static bool CorruptEventTail(const char *project, const char *session) {
@@ -422,6 +426,8 @@ void ServiceInit(XS_HostInfo *host) {
     uint64 event_cursor = 0u;
     uint64 rewind_to = 0u;
     uint64 transient_tail = 0u;
+    uint64 transient_source = 0u;
+    uint64 transient_sequence = 0u;
     uint64 cleared_tail = 0u;
     xwork_event todo_event;
     xvalue *todo_value = NULL;
@@ -631,8 +637,11 @@ void ServiceInit(XS_HostInfo *host) {
     MdoSessionRelease(blocked); blocked = NULL;
     if (!Run(session, "third transient prompt") ||
         !MdoSessionLastSequence(session, &transient_tail, &error) ||
-        transient_tail <= rewind_to ||
-        !MdoSessionTruncateAfter(session, rewind_to, &error)) goto done;
+        transient_tail <= rewind_to) goto done;
+    transient_source = UserIdentity("project-alpha", session_id, "third transient prompt", true);
+    transient_sequence = UserSequence("project-alpha", session_id, "third transient prompt");
+    if (transient_source == 0u || MdoSessionTruncateMessage(session, rewind_to,
+            transient_source, &error) != MDO_SESSION_MESSAGE_OK) goto done;
     printf("visible_truncate=removed:%d\n",
         UserSequence("project-alpha", session_id,
             "third transient prompt") == 0u ? 1 : 0);
@@ -646,6 +655,19 @@ void ServiceInit(XS_HostInfo *host) {
         (unsigned long long)rewind_to,
         (unsigned long long)transient_tail,
         probe.SawTruncatedPrompt ? 0 : 1);
+    {
+        uint64 before, after;
+        MdoSessionMessageMutationResult result;
+        if (!MdoSessionLastSequence(session, &before, &error)) goto done;
+        result = MdoSessionTruncateMessage(session, transient_sequence - 1u,
+            transient_source, &error);
+        printf("message_guard=reused:%d changed:%d\n",
+            UserSequence("project-alpha", session_id, "after truncation prompt") == transient_sequence,
+            result == MDO_SESSION_MESSAGE_CHANGED && error.eCode == XWORK_ERROR_CONTEXT);
+        if (!MdoSessionLastSequence(session, &after, &error)) goto done;
+        printf("message_guard_retained=%d\n", before == after &&
+            UserSequence("project-alpha", session_id, "after truncation prompt") == transient_sequence);
+    }
     if (!MdoSessionClear(session, &error) ||
         !MdoSessionLastSequence(session, &cleared_tail, &error)) goto done;
     printf("visible_clear=removed:%d\n",
@@ -882,6 +904,8 @@ def main() -> int:
         assert "export_unopened=failed:1 size:0 context:1" in output, output
         assert "export_read_failure=failed:1 released:1 retry:1" in output, output
         assert "export_stale=failed:1 size:0 context:1" in output, output
+        assert "message_guard=reused:1 changed:1" in output, output
+        assert "message_guard_retained=1" in output, output
         created = re.search(r"created=id:([^ ]+) project:project-alpha", output)
         fork = re.search(
             r"fork=id:([^ ]+) parent:([^ ]+) through:([1-9]\d*) "

@@ -90,6 +90,7 @@ export function eventsToTimeline(events, historyLost = false) {
             valid: true, durationValid: true });
         if (event.agent_depth === 0 && Number(event.user_message_sequence) > 0)
           promptsByRun.set(runKey, {
+            sourceEventId: Number(event.event_id),
             sequence: Number(event.user_message_sequence),
             text: event.text || "",
             textTruncated: Boolean(event.text_truncated),
@@ -116,6 +117,7 @@ export function eventsToTimeline(events, historyLost = false) {
             text: event.text || "", state: "done", time: event.time,
             attachments: Array.isArray(event.attachments) ? event.attachments : [],
             userMessageSequence: Number(event.user_message_sequence || 0),
+            sourceEventId: Number(event.event_id),
             textTruncated: Boolean(event.text_truncated),
             copySpans: event.text_truncated ? [{ eventId: event.event_id,
               kind: event.kind, start: 0, end: (event.text || "").length }] : [] });
@@ -639,7 +641,7 @@ function timelineNode(item, handlers, feedback, projectId, sessionId, writable,
         t("timeline.editResend", {}, "编辑此消息并重新发送"), "compose", `${item.key}/edit`,
         handlers, sessionKey, (opener) => handlers.onEdit(
           item.userMessageSequence, item.text, item.attachments ?? [], owner,
-          opener, () => resolveTimelineActionText(item, owner)));
+          opener, () => resolveTimelineActionText(item, owner), item.sourceEventId));
       actions.append(edit);
     }
     if (item.kind === "assistant") {
@@ -657,7 +659,7 @@ function timelineNode(item, handlers, feedback, projectId, sessionId, writable,
           handlers, sessionKey, () => handlers.onRetry(
             retryPrompt.sequence, retryPrompt.text,
             retryPrompt.attachments ?? [], owner,
-            () => resolveTimelineActionText(retryPrompt, owner)));
+            () => resolveTimelineActionText(retryPrompt, owner), retryPrompt.sourceEventId));
         actions.append(retry);
       }
       if (item.feedbackEventId && item.state === "done") {

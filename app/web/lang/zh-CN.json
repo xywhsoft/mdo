@@ -1,4 +1,5 @@
 {
+  "error.sessionMessageChanged": "原消息已在其他窗口更改或移除。请保留编辑内容，刷新会话后重新选择消息。",
   "app.name": "墨斗",
   "app.title": "墨斗",
   "markdown.viewImage": "查看图片：{alt}",

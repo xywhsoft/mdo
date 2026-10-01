@@ -27,7 +27,7 @@ void MdoSessionEventBridgePendingClear(MdoSessionEventBridge* Bridge,
     uint64 RunId);
 MdoSessionEventTrimPlan* MdoSessionEventTrimPrepare(
     MdoSessionEventBridge* Bridge, uint64 ThroughSequence, bool Clear,
-    xwork_error* Error);
+    uint64 SourceEventId, bool* MessageChanged, xwork_error* Error);
 bool MdoSessionEventTrimApply(MdoSessionEventTrimPlan* Plan,
     xwork_error* Error);
 bool MdoSessionEventTrimReconcileTodo(MdoSessionEventTrimPlan* Plan,

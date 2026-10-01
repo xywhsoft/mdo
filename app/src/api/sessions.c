@@ -958,6 +958,7 @@ static bool MdoApiSessionLedgerMutation(MdoApiContext* Context,
     xwork_error Error;
     uint64 ExpectedRevision;
     uint64 ThroughSequence = 0u;
+    uint64 SourceEventId = 0u;
     size_t Present = 0u;
     bool ReplyResult;
     bool Ok;
@@ -980,18 +981,32 @@ static bool MdoApiSessionLedgerMutation(MdoApiContext* Context,
         Ok = xrtValueType(Body.Value) == XVALUE_OBJECT &&
             MdoApiSessionUInt64(Body.Value, "through_sequence",
                 &ThroughSequence, &Present) && Present == 1u &&
+            MdoApiSessionUInt64(Body.Value, "source_event_id",
+                &SourceEventId, &Present) &&
+            (Present == 1u || (Present == 2u && SourceEventId != 0u &&
+                ThroughSequence != UINT64_MAX)) &&
             Present == xrtValueCount(Body.Value);
         MdoApiJsonBodyUnit(&Body);
         if ( !Ok ) {
             MdoSessionRelease(Session);
             return MdoApiReplyError(Context, 422u,
                 "session_truncate_invalid",
-                "Truncate requires exactly one non-negative through_sequence",
+                "Truncate requires through_sequence and an optional positive source_event_id",
                 NULL);
         }
     }
     memset(&Error, 0, sizeof(Error));
-    Ok = Clear ? MdoSessionClear(Session, &Error) :
+    if ( !Clear && SourceEventId != 0u ) {
+        MdoSessionMessageMutationResult Mutation = MdoSessionTruncateMessage(
+            Session, ThroughSequence, SourceEventId, &Error);
+        if ( Mutation == MDO_SESSION_MESSAGE_CHANGED ) {
+            MdoSessionRelease(Session);
+            return MdoApiReplyError(Context, 409u, "session_message_changed",
+                "The original message changed; refresh before editing or retrying",
+                NULL);
+        }
+        Ok = Mutation == MDO_SESSION_MESSAGE_OK;
+    } else Ok = Clear ? MdoSessionClear(Session, &Error) :
         MdoSessionTruncateAfter(Session, ThroughSequence, &Error);
     if ( !Ok ) {
         MdoSessionRelease(Session);

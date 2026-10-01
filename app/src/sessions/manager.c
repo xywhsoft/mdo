@@ -1813,12 +1813,14 @@ bool MdoSessionFinishInterrupted(MdoSession* Session,
 }
 
 static bool MdoSessionsLedgerMutation(MdoSession* Session,
-    bool Clear, uint64 ThroughSequence, xwork_error* Error)
+    bool Clear, uint64 ThroughSequence, uint64 SourceEventId,
+    bool* MessageChanged, xwork_error* Error)
 {
     MdoSessionInfo Candidate;
     MdoSessionEventTrimPlan* Trim = NULL;
     bool Ok = false;
     xworkErrorInit(Error);
+    if ( MessageChanged != NULL ) *MessageChanged = false;
     if ( Session == NULL ) {
         MdoSessionsError(Error, XWORK_ERROR_INVALID_ARGUMENT,
             "session is required");
@@ -1835,7 +1837,7 @@ static bool MdoSessionsLedgerMutation(MdoSession* Session,
         goto done;
     }
     Trim = MdoSessionEventTrimPrepare(Session->Bridge,
-        ThroughSequence, Clear, Error);
+        ThroughSequence, Clear, SourceEventId, MessageChanged, Error);
     if ( Trim == NULL ) goto done;
     Ok = Clear ? MdoAgentSessionClear(Session->Agent, Error) :
         MdoAgentSessionTruncateAfter(Session->Agent, ThroughSequence, Error);
@@ -1863,13 +1865,29 @@ done:
 
 bool MdoSessionClear(MdoSession* Session, xwork_error* Error)
 {
-    return MdoSessionsLedgerMutation(Session, true, 0u, Error);
+    return MdoSessionsLedgerMutation(Session, true, 0u, 0u, NULL, Error);
 }
 
 bool MdoSessionTruncateAfter(MdoSession* Session, uint64 ThroughSequence,
     xwork_error* Error)
 {
-    return MdoSessionsLedgerMutation(Session, false, ThroughSequence, Error);
+    return MdoSessionsLedgerMutation(Session, false, ThroughSequence, 0u,
+        NULL, Error);
+}
+
+MdoSessionMessageMutationResult MdoSessionTruncateMessage(MdoSession* Session,
+    uint64 ThroughSequence, uint64 SourceEventId, xwork_error* Error)
+{
+    bool MessageChanged = false;
+    xworkErrorInit(Error);
+    if ( SourceEventId == 0u || ThroughSequence == UINT64_MAX ) {
+        MdoSessionsError(Error, XWORK_ERROR_INVALID_ARGUMENT,
+            "a source event and a valid message boundary are required");
+        return MDO_SESSION_MESSAGE_FAILED;
+    }
+    if ( MdoSessionsLedgerMutation(Session, false, ThroughSequence,
+            SourceEventId, &MessageChanged, Error) ) return MDO_SESSION_MESSAGE_OK;
+    return MessageChanged ? MDO_SESSION_MESSAGE_CHANGED : MDO_SESSION_MESSAGE_FAILED;
 }
 
 typedef struct MdoSessionExportCapture {

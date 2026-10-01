@@ -4,6 +4,20 @@
 
 完成判据及尚缺的打包页证据见 [前端操作体验完成审计](frontend-completion-audit.md)。本文件继续记录每次实现和验证的细节。
 
+## 2026-10-01：消息编辑与重试绑定原始事件
+
+旧消息的编辑或重试原先只核对模型账本 sequence，再获取最新 ETag 截断。另一客户端清空并重新运行后，sequence 会复用；这让旧操作能够撤回另一客户端的新消息。修复前根目录包的隔离 Home `.build/mdo-packed-docks-55kglozd` 中，原用户消息的事件 ID 为 1，替换后为 7，两者 sequence 均为 2；按当时前端正文提交序列单字段请求返回 200，新消息被移除。原编辑窗口保持打开，最终破坏性请求通过本地 API 复现。
+
+前端现在把原始顶层 `agent_start` 事件 ID 随编辑与回复重试传递；后端在维护准备阶段核对该事件仍拥有 `through_sequence + 1`，拒绝来源不匹配并返回 `409 session_message_changed`。通用截断 API 保持兼容。编辑弹窗等异步提交成功后才关闭；失败时文字和附件参数保留、错误获焦，提交中阻止重复激活和取消。已有 Enter/Shift+Enter/输入法行为保持，短屏错误状态缩减辅助说明，保留可编辑正文与操作按钮。
+
+最终 Windows 单文件 Home `.build/mdo-packed-docks-3paog76y` 从页面发送 `STALE ORIGINAL UI`，打开编辑框并输入 `MY UNSENT EDIT UI`，再用本地 API 模拟另一客户端替换为 `UPDATED BY OTHER CLIENT UI`。新旧事件仍为 1/7，sequence 仍为 2；点击“保存并重新发送”后出现明确中文冲突，弹窗不关闭、文字不变，焦点在错误提示，Tab 到取消按钮。会话目录全部文件的前后 SHA-256 相同，新消息仍在且没有第三次运行。320×250 中正文 y=89–133、错误 y=139–174、两按钮 y=185–225，文档宽 320px，浏览器错误日志为空。截图为 `.build/qa-stale-message-windows.png` 和 `.build/qa-stale-message-mobile.png`；记录为 `.build/qa-stale-message-after.json`。
+
+Node 用例覆盖来源传递、复用 sequence 后的拒绝、无来源拒绝、提交等待/重复激活、失败保留与迟到响应隔离；真实 C/TCC 探针覆盖同 sequence 的新旧事件，API 探针覆盖合法来源、错误事件种类/边界、非法字段、已移除来源以及拒绝时文件不变。此证据不代替原生 WebView/实体手机验收。另观察到外部清空后已有页面仍暂留旧消息卡；本次保护其操作不误撤回新消息，后续仍需修补实时历史边界投影。
+
+Windows/Linux 有界发布门禁均通过 114 项 Python、232 项 Node、90 个前端模块解析、严格 C11 编译、32 个运行探针、Home 租约/队列恢复与 A/B 确定性打包；Windows 另通过便携 WebView2 Home 和 20 秒单文件启动。Windows 包 SHA-256 为 `09e13914b6729971737bd95ec7b2487ea1179eb56f8fc3029603d2af0cb54107`，Linux 原生文件系统包为 `4098ef53a3d4e2d762c4d682242bfde8102ba1b4dec48d7938835a8efa6b8cb7`。门禁日志为 `.build/qa-stale-message-release.log` 与 `.build/qa-stale-message-linux-release.log`；未做压力或高负载测试。
+
+根目录 `mdo.exe` 已从 Windows 验证包更新；其 SHA-256 与 A/B 两包及上述图形候选一致。
+
 ## 2026-10-01：JSON 导出保留 checkpoint 读取排他权
 
 完整备份审阅发现现有 `MdoSessionExportJson()` 在 checkpoint 返回时已释放

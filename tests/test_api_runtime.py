@@ -5004,15 +5004,51 @@ def run_probe(host: Path) -> None:
                 }), encoding="utf-8")
 
                 truncate_path = session_path + "/truncate"
+                protected_files = (meta_path,
+                    *(meta_path.parent / name for name in
+                      ("snapshot.json", "journal.jsonl", "ui-events.jsonl")),
+                    sidecar, todo_file)
+                # A checkpoint may have compacted away the model journal;
+                # refusal must preserve both existing bytes and absent files.
+                def protected_state():
+                    return {p: p.read_bytes() if p.exists() else None
+                            for p in protected_files}
+                protected_before = protected_state()
+                for bad_source, boundary in (
+                    (removed_done_id, cutoff_start["user_message_sequence"] - 1),
+                    (cutoff_start["event_id"], cutoff_start["user_message_sequence"]),
+                ):
+                    status, _, body = request(port, "POST", truncate_path,
+                        body=json.dumps({"through_sequence": boundary,
+                            "source_event_id": bad_source}).encode(),
+                        headers={"Content-Type": "application/json", "If-Match": current_etag})
+                    assert status == 409 and json.loads(body)["error"]["code"] == "session_message_changed", (status, body)
+                    assert protected_state() == protected_before
+                for invalid_source in (0, -1, 1.5, "1", None):
+                    status, _, body = request(port, "POST", truncate_path,
+                        body=json.dumps({"through_sequence": 0,
+                            "source_event_id": invalid_source}).encode(),
+                        headers={"Content-Type": "application/json", "If-Match": current_etag})
+                    assert status == 422 and json.loads(body)["error"]["code"] == "session_truncate_invalid", (status, body)
+                    assert protected_state() == protected_before
                 status, headers, body = request(port, "POST", truncate_path,
                     body=json.dumps({"through_sequence":
-                        cutoff_start["user_message_sequence"] - 1}).encode(),
+                        cutoff_start["user_message_sequence"] - 1,
+                        "source_event_id": cutoff_start["event_id"]}).encode(),
                     headers={"Content-Type": "application/json",
                              "If-Match": current_etag})
                 document = json.loads(body)
                 assert status == 200 and document["data"]["revision"] == 8, (
                     status, body)
                 current_etag = headers["etag"]
+                protected_after = protected_state()
+                status, _, body = request(port, "POST", truncate_path,
+                    body=json.dumps({"through_sequence":
+                        cutoff_start["user_message_sequence"] - 1,
+                        "source_event_id": cutoff_start["event_id"]}).encode(),
+                    headers={"Content-Type": "application/json", "If-Match": current_etag})
+                assert status == 409 and json.loads(body)["error"]["code"] == "session_message_changed", (status, body)
+                assert protected_state() == protected_after
                 restored_todo = json.loads(request(port, "GET", todo_path)[2])[
                     "data"]
                 assert restored_todo["items"] == [

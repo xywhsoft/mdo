@@ -1018,7 +1018,7 @@ select:focus-visible,
 :is(#new-session-dialog, #session-action-dialog, #message-edit-dialog, #project-dialog) .dialog-card > header,
 :is(#new-session-dialog, #session-action-dialog, #message-edit-dialog, #project-dialog) .dialog-card > footer { flex: 0 0 auto; }
 :is(#new-session-dialog, #session-action-dialog, #message-edit-dialog, #project-dialog) .dialog-fields { min-height: 0; overflow-y: auto; }
-:is(#new-session-dialog, #project-dialog) .dialog-error { flex: 0 0 auto; max-height: min(96px, 25dvh); overflow-y: auto; }
+:is(#new-session-dialog, #project-dialog, #message-edit-dialog) .dialog-error { flex: 0 0 auto; max-height: min(96px, 25dvh); overflow-y: auto; }
 .image-preview-dialog { position: fixed; min-width: 58px; max-width: calc(100vw - 24px); max-height: calc(100dvh - 24px); margin: auto; padding: 48px 8px 8px; border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--surface-raised); box-shadow: var(--shadow-dialog); }
 .image-preview-dialog::backdrop { background: rgb(0 0 0 / 72%); }
 .image-preview-dialog img { display: block; width: auto; height: auto; max-width: calc(100vw - 42px); max-height: calc(100dvh - 106px); object-fit: contain; }
@@ -1789,6 +1789,11 @@ select:focus-visible,
 }
 
 @media (max-height: 300px) {
+  /* Keep the retained edit and failure visible together on short screens. */
+  #message-edit-dialog:has(.dialog-error:not([hidden])) .dialog-card > header p,
+  #message-edit-dialog:has(.dialog-error:not([hidden])) #message-edit-help { display: none; }
+  #message-edit-dialog:has(.dialog-error:not([hidden])) textarea { min-height: 44px; height: 44px; }
+  #message-edit-dialog .dialog-error { margin: 0 12px 4px; }
   :is(#new-session-dialog, #project-dialog) .dialog-card > header { padding: 8px 12px 6px; }
   :is(#new-session-dialog, #project-dialog) .dialog-card > header p { display: none; }
   :is(#new-session-dialog, #project-dialog) .dialog-fields { gap: 6px; padding: 4px 12px; }
