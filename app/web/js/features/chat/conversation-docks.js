@@ -227,9 +227,26 @@ export function createConversationDocks({ container, navigation, tasksStore, app
   const conversation = container.closest(".workspace")?.querySelector(".conversation");
   const visibleDecisions = new Set();
   let availableHeight = 0;
+  let overlapHeight = 0;
   let revealFrame = 0;
   let userMovedDock = false;
   let keyboardExpansionDismissed = false;
+  function syncHistoryOverlap() {
+    if (!conversation || !composerRegion) return;
+    const history = conversation.getBoundingClientRect();
+    const dock = container.getBoundingClientRect();
+    const next = container.hidden || dock.bottom <= history.top ? 0 : Math.max(0,
+      Math.ceil(history.bottom - Math.max(history.top, dock.top)));
+    if (next === overlapHeight) return;
+    const followTail = conversation.scrollHeight - conversation.scrollTop -
+      conversation.clientHeight <= 1;
+    overlapHeight = next;
+    // The dock floats over history. Reserve its actual overlap at the end of
+    // the scrollable content so the final message and queue actions can clear
+    // it; scroll-padding also keeps keyboard focus above the covered area.
+    conversation.style.setProperty("--conversation-dock-overlap", `${next}px`);
+    if (followTail) conversation.scrollTop = conversation.scrollHeight;
+  }
   function setDecisionExpanded(expanded) {
     if (!composerRegion) return;
     composerRegion.toggleAttribute("data-decision-expanded", expanded);
@@ -240,6 +257,7 @@ export function createConversationDocks({ container, navigation, tasksStore, app
       if (button.getAttribute("aria-expanded") !== String(expanded))
         button.setAttribute("aria-expanded", String(expanded));
     }
+    syncHistoryOverlap();
   }
   function toggleDecisionExpanded(card) {
     const expanded = !composerRegion?.hasAttribute("data-decision-expanded");
@@ -368,6 +386,7 @@ export function createConversationDocks({ container, navigation, tasksStore, app
     if (!cramped && composerRegion?.hasAttribute("data-decision-expanded"))
       setDecisionExpanded(false);
     hiddenFocus?.focus({ preventScroll: true });
+    syncHistoryOverlap();
     if (revealOnResize && changed && !container.hidden) scheduleReveal();
   }
   syncAvailableHeight();
@@ -560,6 +579,7 @@ export function createConversationDocks({ container, navigation, tasksStore, app
     container.removeEventListener("keydown", noteKeyScroll);
     container.removeEventListener("keydown", collapseOnEscape);
     composition.dispose();
+    conversation?.style.removeProperty("--conversation-dock-overlap");
     composerRegion?.removeAttribute("data-decision-pending");
     composerRegion?.removeAttribute("data-decision-cramped");
     composerRegion?.removeAttribute("data-decision-expanded");

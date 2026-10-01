@@ -504,13 +504,14 @@ select:focus-visible,
   overflow: auto;
   overscroll-behavior: contain;
   scrollbar-width: thin;
+  scroll-padding-bottom: var(--conversation-dock-overlap, 0px);
 }
 .conversation-find { position: sticky; z-index: 12; top: 8px; display: flex; width: min(440px, calc(100% - 24px)); min-height: 40px; align-items: center; gap: 8px; margin: 8px 12px 0 auto; padding: 4px 6px 4px 11px; border: 1px solid var(--border-strong); border-radius: var(--radius-md); background: var(--surface-raised); box-shadow: 0 10px 24px rgb(0 0 0 / 12%); }
 .conversation-find[hidden] { display: none; }
 .conversation-find input { min-width: 0; flex: 1 1 auto; border: 0; outline: 0; background: transparent; color: var(--ink); font: inherit; font-size: 12px; }
 .conversation-find span { flex: 0 0 auto; color: var(--muted); font-size: 10px; white-space: nowrap; }
 .conversation-find .icon-button { width: 28px; height: 28px; flex: 0 0 auto; font-size: 18px; }
-.to-bottom { position: sticky; z-index: 10; bottom: 12px; display: flex; align-items: center; gap: 6px; min-height: 32px; margin: 0 max(20px, calc((100% - 760px) / 2)) 12px auto; padding: 4px 11px; border: 1px solid var(--border-strong); border-radius: 999px; background: var(--surface-raised); box-shadow: 0 6px 18px rgb(0 0 0 / 12%); color: var(--ink); font: inherit; font-size: 11px; cursor: pointer; }
+.to-bottom { position: sticky; z-index: 10; bottom: calc(12px + var(--conversation-dock-overlap, 0px)); display: flex; align-items: center; gap: 6px; min-height: 32px; margin: 0 max(20px, calc((100% - 760px) / 2)) 12px auto; padding: 4px 11px; border: 1px solid var(--border-strong); border-radius: 999px; background: var(--surface-raised); box-shadow: 0 6px 18px rgb(0 0 0 / 12%); color: var(--ink); font: inherit; font-size: 11px; cursor: pointer; }
 .to-bottom[hidden] { display: none; }
 .to-bottom:hover, .to-bottom:focus-visible { background: var(--surface-hover); }
 
@@ -735,7 +736,7 @@ select:focus-visible,
 .prompt-queue-images img { display: block; width: 42px; height: 42px; margin: 0 auto; border: 1px solid var(--border); border-radius: 6px; object-fit: cover; }
 .prompt-queue-list .prompt-queue-state { display: block; margin-top: 3px; color: var(--warning); }
 .prompt-queue-list li > button:last-child { flex: none; }
-.timeline-sentinel { height: 1px; }
+.timeline-sentinel { height: calc(1px + var(--conversation-dock-overlap, 0px)); }
 
 .composer-region {
   min-width: 0;

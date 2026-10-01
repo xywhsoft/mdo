@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="zh-CN">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>mdo dock and history reachability probe</title>
+<link rel="stylesheet" href="/app/web/css/app.css?history-overlap=1">
+<style>
+  .app-shell { grid-template-columns: minmax(0, 1fr); }
+  .workspace { grid-column: 1 / -1; }
+  #result { position: fixed; left: 8px; top: 2px; z-index: 20; font-size: 10px; }
+</style>
+<div class="app-shell">
+  <header class="mobile-bar"><button type="button" data-tail>History bottom</button></header>
+  <main class="workspace">
+    <header class="workspace-header"><button type="button" data-tail>History bottom</button></header>
+    <section class="conversation" aria-label="History">
+      <ol class="timeline" id="timeline"></ol>
+      <div class="timeline-sentinel" aria-hidden="true"></div>
+    </section>
+    <section class="composer-region">
+      <div class="conversation-docks" id="conversation-docks" hidden></div>
+      <form class="composer">
+        <textarea id="prompt" aria-label="Draft">Keep this draft</textarea>
+        <div class="composer-toolbar">
+          <button type="button" id="clear">Clear plan</button>
+          <button type="button" id="restore">Restore plan</button>
+          <button type="button" id="reading">Check reading</button>
+        </div>
+      </form>
+    </section>
+  </main>
+</div>
+<output id="result" role="status">Preparing</output>
+<script type="module">
+import { createConversationDocks } from "/app/web/js/features/chat/conversation-docks.js?history-overlap=1";
+import { createResourceStore } from "/app/web/js/state/store.js";
+const conversation = document.querySelector(".conversation");
+const timeline = document.querySelector("#timeline");
+for (let index = 0; index < 12; index++) {
+  const row = document.createElement("li");
+  row.className = "timeline-item";
+  const body = document.createElement("p");
+  body.textContent = `Message ${index + 1}: readable history before the plan`;
+  row.append(body);
+  timeline.append(row);
+}
+const action = document.createElement("button");
+action.className = "timeline-action-button";
+action.textContent = "Final action";
+action.setAttribute("aria-label", "Final message action");
+const actions = document.createElement("div");
+actions.className = "timeline-actions";
+actions.append(action);
+timeline.lastElementChild.append(actions);
+let clicks = 0;
+action.addEventListener("click", () => { clicks++; report(); });
+const empty = () => createResourceStore({ items: [] });
+const plan = { projectId: "qa", sessionId: "overlap", items: [
+  { text: "Inspect history", done: true }, { text: "Keep actions reachable", done: false }] };
+const todoStore = createResourceStore(plan);
+const navigation = { get: () => ({ view: "workspace", projectId: "qa", sessionId: "overlap" }),
+  subscribe(listener) { listener(this.get()); return () => {}; } };
+createConversationDocks({ container: document.querySelector("#conversation-docks"), navigation,
+  tasksStore: empty(), approvalsStore: empty(), runsStore: empty(), todoStore,
+  asksStore: createResourceStore({ projectId: "qa", sessionId: "overlap", loaded: true, items: [] }),
+  onOpenTasks() {}, onChanged: async () => {} });
+const frame = () => new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));
+function report(extra = {}) {
+  const button = action.getBoundingClientRect();
+  const history = conversation.getBoundingClientRect();
+  const dockNode = document.querySelector("#conversation-docks");
+  const dock = dockNode.getBoundingClientRect();
+  const bottom = dockNode.hidden ? history.bottom : Math.min(history.bottom, dock.top);
+  document.querySelector("#result").textContent = JSON.stringify({
+    actionFits: button.top >= history.top && button.bottom <= bottom,
+    historyTop: history.top, visibleBottom: bottom, actionTop: button.top, actionBottom: button.bottom,
+    reservation: conversation.style.getPropertyValue("--conversation-dock-overlap"), clicks,
+    draft: document.querySelector("#prompt").value, overflow: document.documentElement.scrollWidth > innerWidth,
+    ...extra,
+  });
+}
+document.querySelector("#clear").addEventListener("click", async()=>{
+  todoStore.setData({ ...plan, items: [] }); await frame(); report({ hidden: true });
+});
+document.querySelector("#restore").addEventListener("click", async()=>{
+  todoStore.setData(plan); await frame(); report({ hidden: false });
+});
+document.querySelector("#reading").addEventListener("click", async()=>{
+  conversation.scrollTop = 80;
+  const before = conversation.scrollTop;
+  document.querySelector(".todo-toggle").click();
+  await frame(); report({ before, after: conversation.scrollTop, readingKept: before === conversation.scrollTop });
+});
+document.querySelector(".todo-toggle").addEventListener("click", async()=>{ await frame(); report(); });
+window.addEventListener("resize", async()=>{ await frame(); report(); });
+document.querySelectorAll("[data-tail]").forEach(button=>button.addEventListener("click", async()=>{
+  conversation.scrollTop = conversation.scrollHeight; await frame(); report();
+}));
+await frame();
+conversation.scrollTop = conversation.scrollHeight;
+await frame(); report();
+</script>

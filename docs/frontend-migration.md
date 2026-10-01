@@ -4,6 +4,70 @@
 
 完成判据及尚缺的打包页证据见 [前端操作体验完成审计](frontend-completion-audit.md)。本文件继续记录每次实现和验证的细节。
 
+## 2026-10-01：停靠卡片为历史消息保留滚动空间
+
+跨平台复核发现一个实际操作缺陷：320×350 下，即使收起计划并滚到历史
+末尾，悬浮停靠卡片仍遮住最后的消息按钮。定位器报告点击成功却没有
+复制提示或反馈变化，不能视作通过。Linux 旧包中用户复制按钮的中心
+y=119.109 落在卡片覆盖区；不是剪贴板或会话接口错误。
+
+现在复用停靠区的 ResizeObserver，计算其对历史区的实际覆盖高度，并
+通过既有时间线尾部 sentinel 保留滚动空间；scroll-padding 使键盘聚焦
+能够避开覆盖区，回到底部入口随覆盖高度上移。只在原本紧贴末尾时继续
+跟随；阅读历史时保持位置，卡片隐藏及模块销毁时清理预留。没有缩小
+历史内容盒，也没有新增观察器或协议。极短屏展开计划时仍可先收起计划
+阅读历史，不承诺在同一屏同时显示完整历史、计划和输入区。
+
+验证：
+
+- 新增正式 CSS/模块浏览器夹具
+  `tests/fixtures/conversation-history-overlap-browser.html`。同一夹具配
+  基线 5542cc1 的两份文件先复现 actionFits=false：按钮 y=121.125～
+  161.125，可见历史下缘 138.406。修复后同样收起计划、滚到末尾，按钮
+  y=53.125～93.125，预留 68px，actionFits=true；实际点击计数为 1。
+- 阅读位置测试在计划变化前后保持 scrollTop=80；隐藏计划预留归零，
+  恢复并收起后为 68px。390×600 展开计划及桌面也可到达末条按钮，草稿
+  保持、文档无溢出、新页面无脚本错误。既有软件键盘询问夹具在 390×600
+  重新载入后通过提交、展开/收起及焦点检查。
+- 最终 Windows 单文件 Home `.build/mdo-packed-docks-a5jiwe4s`，源会话
+  `V-ORkBBhuCCWFpDuuYvlg4OSChNhGlI4`、分支
+  `V-ORkBbmJUMv2UC4slR5UbZtCQK0qO7M`。实际生成待办及两轮回复，在
+  320×350 收起计划后点击用户复制，浏览器剪贴板逐字为
+  `WINDOWS DOCK FINAL MESSAGE`；末条点赞刷新保持，末条分叉立即创建
+  两轮分支并聚焦输入，源会话不变。页面宽度 320px、预留 68px、错误
+  日志为空，截图 `.build/qa-history-overlap-windows-short.png`。
+- 最终 Linux 原生 ext4 单文件 Home
+  `/home/ubuntu/.cache/mdo-linux-qa-conversation-history-overlap/.build/mdo-packed-docks-cxasq0j9`，
+  源会话 `V-ORkC0ih9XS5XGM0CYtgAGSSVN8DwDU`、分支
+  `V-ORkCzmyAoTOeGzy_2OqEZyaMR3kWNl`。同样以真实待办和两轮回复验证
+  320×350 复制原文 `LINUX DOCK FINAL MESSAGE`、点赞刷新保持、末条
+  分叉两轮历史与输入焦点。再复制末条助手成功，按钮 y=65.125～105.125
+  小于卡片上缘 119；截图 `.build/qa-history-overlap-linux-short.png`。
+  文档宽度 320px、预留 68px、错误日志为空。两端正常停服后读磁盘日志，
+  源/分支各有对应两条用户正文，源反馈均为 event_id=13、value=good。
+- 本轮修复前另在 Linux 旧包 Home
+  `/home/ubuntu/.cache/mdo-linux-qa-timeline-history-locale/.build/mdo-packed-docks-9cn07ry7`
+  完成五轮有界运行：12 秒慢回复、待办、自由询问、询问期间排队并自动
+  续发、一次审批执行无害 Python 命令（exit_code=0）。询问草稿在排队
+  更新时保持，Enter 提交后聚焦输入；刷新回放四轮历史及待办，审批后
+  结果持久化。`@QA` 补全带空格路径后实际 Ctrl+Z/Ctrl+Shift+Z 撤销/
+  重做并刷新保留草稿。这些补足 Linux 服务及浏览器交互证据，旧包的
+  复制/点赞因覆盖没有通过，不能与最终修复的证据混为一谈。
+- Windows/Linux 新原生文件系统全门禁通过 114 项 Python、203 项 Node、
+  88 个模块、严格 C11、32 个运行探针及确定性 A/B 打包；Windows 另通过
+  便携 WebView2/20 秒启动。日志为
+  `.build/qa-conversation-history-overlap-release.log`、
+  `.build/qa-conversation-history-overlap-linux-release.log`；Linux 快照为
+  `/home/ubuntu/.cache/mdo-linux-qa-conversation-history-overlap`。
+- Windows A/B 及根目录 SHA-256：
+  `25ec0204fa75477d3ec733e224e3f1285476041e89344ffc4768b6579faadf95`；
+  Linux A/B SHA-256：
+  `6ed23c2b2fc23987fb767b2a603c0d9d2443d4a3c6c11db449f8fda4e494237a`。
+
+Linux 页面由 Windows 浏览器连接真实 Linux 服务，不能替代 Linux 原生
+WebView、系统剪贴板、输入法及实体触控验收。未增加词典键（各 1345 键），
+未做压力/高负载测试，内置 Ling 生产配置不变，长期目标继续。
+
 ## 2026-10-01：历史截断与清空提示随界面语言显示
 
 上一轮俄语工作台的历史边界仍显示中文。服务端持久化日志使用同一种
