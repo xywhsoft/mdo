@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="zh-CN">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>mdo clipboard file-list probe</title>
+<link rel="stylesheet" href="/app/web/css/app.css">
+<style>body{display:block;padding:8px}pre{white-space:pre-wrap;overflow-wrap:anywhere}</style>
+<form class="composer">
+  <label for="prompt">多图粘贴草稿</label>
+  <textarea id="prompt">保留当前草稿</textarea>
+  <button type="button">添加图片</button>
+  <input type="file" hidden>
+  <div class="composer-images"></div>
+</form>
+<pre id="result">等待验证</pre>
+<script type="module">
+import { createComposerImages } from "/app/web/js/features/chat/composer-images.js?file-list=2";
+
+const composer = document.querySelector(".composer");
+const prompt = composer.querySelector("textarea");
+const strip = composer.querySelector(".composer-images");
+const output = document.querySelector("#result");
+const uploads = [];
+const errors = [];
+const originalFetch = window.fetch;
+window.fetch = async (url, options = {}) => {
+  if (String(url).endsWith("/projects/qa/sessions/image/attachments") &&
+      options.method === "POST") {
+    uploads.push({ name: options.body.name, mime: options.headers["Content-Type"] });
+    return new Response(JSON.stringify({ ok: true,
+      data: { id: uploads.length.toString(16).padStart(32, "0") } }),
+      { status: 201, headers: { "Content-Type": "application/json" } });
+  }
+  return originalFetch(url, options);
+};
+try {
+  const images = createComposerImages({ composer, prompt, strip,
+    button: composer.querySelector("button"), input: composer.querySelector("input"),
+    navigation: { get: () => ({ projectId: "qa", sessionId: "image" }) },
+    modelSelect: { value: "vision" },
+    modelsStore: { get: () => ({ data: { models: [{ id: "vision", attachments: 1 }] } }) },
+    sessionStore: { get: () => ({ data: null }) },
+    ensureSession: async () => { throw new Error("existing session expected"); },
+    onChange() {}, onUploading() {}, onError(error) { errors.push(error.code); },
+  });
+  const first = new File([new Uint8Array([137, 80, 78, 71])],
+    "first.png", { type: "image/png" });
+  const second = new File([new Uint8Array([137, 80, 78, 71])],
+    "second.png", { type: "image/png" });
+  const paste = new Event("paste", { bubbles: true, cancelable: true });
+  Object.defineProperty(paste, "clipboardData", { value: {
+    files: [first, second],
+    items: [
+      { kind: "file", type: "image/png", getAsFile: () => first },
+      { kind: "file", type: "image/png", getAsFile: () => null },
+    ],
+  } });
+  prompt.focus();
+  prompt.dispatchEvent(paste);
+  for (let attempt = 0; attempt < 20 && images.isUploading(); ++attempt)
+    await new Promise((resolve) => setTimeout(resolve, 25));
+  const passed = paste.defaultPrevented && uploads.length === 2 &&
+    uploads[0].name === "first.png" && uploads[1].name === "second.png" &&
+    images.get().length === 2 && prompt.value === "保留当前草稿" && errors.length === 0;
+  output.dataset.passed = String(passed);
+  output.textContent = JSON.stringify({ passed, uploads, images: images.get().length,
+    draft: prompt.value, errors }, null, 2);
+} catch (error) {
+  output.dataset.passed = "false";
+  output.textContent = error.stack ?? String(error);
+} finally { window.fetch = originalFetch; }
+</script>
+</html>

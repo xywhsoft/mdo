@@ -25,38 +25,31 @@ function hasDraggedFiles(transfer) {
     (transfer.files?.length ?? 0) > 0;
 }
 
-function droppedFiles(transfer) {
+function transferredImage(file, item) {
+  const mime = imageUploadType(file) ||
+    ((!file.type || file.type === "application/octet-stream") &&
+      TYPES.has(item?.type) ? item.type : "");
+  return { file, mime };
+}
+
+export function imageTransferFiles(transfer) {
+  const items = [...(transfer?.items ?? [])].filter((item) => item.kind === "file" ||
+    (!item.kind && typeof item.getAsFile === "function"));
   const files = [...(transfer?.files ?? [])];
-  if (files.length) return files;
+  // FileList owns the complete file order. A partially readable items view
+  // must not hide its remaining files, or cause those files to upload twice.
+  // File items follow the same order and can supply a missing OS MIME type.
+  if (files.length) return files.map((file, index) => transferredImage(file, items[index]));
   // Some WebViews expose a file only through items, including at drop time.
-  // Prefer files when available so the same image is not uploaded twice.
-  return [...(transfer?.items ?? [])].filter((item) => item.kind === "file")
+  return items
     .map((item) => {
       const file = typeof item.getAsFile === "function" ? item.getAsFile() : null;
-      if (!file) return null;
-      const mime = imageUploadType(file) ||
-        ((!file.type || file.type === "application/octet-stream") &&
-          TYPES.has(item.type) ? item.type : "");
-      return { file, mime };
+      return file ? transferredImage(file, item) : null;
     }).filter(Boolean);
 }
 
 function pastedImages(clipboard) {
-  // Some WebViews expose pasted images only through DataTransfer.items.
-  // Prefer those entries to avoid uploading the same file twice when both
-  // collections are populated, then fall back to DataTransfer.files.
-  const itemFiles = [...(clipboard?.items ?? [])]
-    .map((item) => {
-      const file = typeof item.getAsFile === "function" ? item.getAsFile() : null;
-      if (!file) return null;
-      const mime = imageUploadType(file) ||
-        ((!file.type || file.type === "application/octet-stream") &&
-          TYPES.has(item.type) ? item.type : "");
-      return mime ? { file, mime } : null;
-    }).filter(Boolean);
-  return itemFiles.length ? itemFiles : [...(clipboard?.files ?? [])]
-    .map((file) => ({ file, mime: imageUploadType(file) }))
-    .filter((entry) => Boolean(entry.mime));
+  return imageTransferFiles(clipboard).filter((entry) => Boolean(entry.mime));
 }
 
 function imageError(key, fallback, code = "") {
@@ -395,7 +388,7 @@ export function createComposerImages({ composer, prompt, button, input, strip,
     if (!hasDraggedFiles(event.dataTransfer)) return;
     event.preventDefault();
     clearDragTarget();
-    const files = droppedFiles(event.dataTransfer);
+    const files = imageTransferFiles(event.dataTransfer);
     if (!files.length) {
       onError(selectionError("image.dropUnavailable",
         "无法读取拖放的文件，请使用“添加图片”选择"));

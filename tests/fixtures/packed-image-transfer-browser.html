@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="zh-CN">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>mdo packed image-transfer probe</title>
+<style>
+body { margin:0; display:grid; grid-template-rows:auto 1fr; height:100dvh; font:14px sans-serif; }
+header { padding:6px; display:flex; gap:8px; align-items:center; }
+button { min-height:40px; }
+#result { overflow-wrap:anywhere; }
+iframe { width:100%; height:100%; min-height:0; border:0; }
+</style>
+<header><button id="paste" type="button">粘贴两张图片</button><output id="result">等待工作台</output></header>
+<iframe id="mdo" title="打包版工作台"></iframe>
+<script type="module">
+const frame = document.querySelector("#mdo");
+const result = document.querySelector("#result");
+const button = document.querySelector("#paste");
+frame.src = "__MDO_QA_ROUTE__";
+button.addEventListener("click", () => {
+  const child = frame.contentWindow;
+  const prompt = frame.contentDocument.querySelector("#prompt");
+  if (!prompt || frame.contentDocument.querySelector("#composer-attach")?.disabled) {
+    result.textContent = "工作台尚未准备好";
+    return;
+  }
+  const bytes = Uint8Array.from(atob(
+    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/lZkAAAAASUVORK5CYII="),
+    (character) => character.charCodeAt(0));
+  const first = new child.File([bytes], "first.png", { type: "image/png" });
+  const second = new child.File([bytes], "second.png", { type: "image/png" });
+  const event = new child.Event("paste", { bubbles: true, cancelable: true });
+  Object.defineProperty(event, "clipboardData", { value: {
+    files: [first, second], items: [
+      { kind: "file", type: "image/png", getAsFile: () => first },
+      { kind: "file", type: "image/png", getAsFile: () => null },
+    ],
+  } });
+  prompt.focus();
+  prompt.dispatchEvent(event);
+  result.textContent = event.defaultPrevented ? "两张图片已交给实际输入区" : "粘贴未处理";
+  button.disabled = true;
+});
+</script>
+</html>

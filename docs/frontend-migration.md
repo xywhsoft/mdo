@@ -4,6 +4,60 @@
 
 完成判据及尚缺的打包页证据见 [前端操作体验完成审计](frontend-completion-audit.md)。本文件继续记录每次实现和验证的细节。
 
+## 2026-10-01：多图粘贴保留完整文件列表
+
+粘贴和拖放现在共用文件读取函数。原粘贴逻辑只要从 clipboard.items 读出
+一张图片，就不再检查 files。组件页复现：完整 FileList 有 first.png 和
+second.png，但第二个 item 的 getAsFile 返回 null 时，只上传了第一张。
+
+现在以可用 FileList 的完整顺序为准，items 只补充未声明的 MIME；没有
+FileList 时再读取 items。两种视图同时存在不会重复上传，也不按文件名、
+大小等元数据合并用户分别选择的文件。显式 MIME 仍优先于扩展名及 item
+提示；仅有 getAsFile 的既有剪贴板视图继续兼容。粘贴过滤图片，普通文本
+继续由浏览器插入；拖放保留非图片条目以显示原有类型反馈。
+
+验证：
+
+- 新增五项 Node 用例覆盖部分可读的 items、两视图去重、相同文件元数据、
+  文件及 item MIME、items-only 和纯文本。两个既有文件 MIME 用例仍通过。
+- `composer-transfer-files-browser.html` 先在旧实现实际显示 passed:false、
+  uploads:1、images:1；新实现上传 first.png 和 second.png 各一次，草稿
+  保持，错误为空，320×350 文档宽度等于视口。
+- 现有 `composer-upload-session-browser.html` 十个用例全部通过：跨会话
+  上传隔离、新任务上传锁、空 MIME、仅 items、仅 files、双视图、拖放、
+  无可读文件以及模型兼容切换。该证据来自浏览器组件，不代表系统原生
+  文件拖放已验收。
+- 新的 `--image-transfer-fixture` 仅在隔离 QA 代理提供控制页；iframe 加载
+  未修改的单文件工作台，控制页生成第二个 item 不可读的合成粘贴事件。
+  图片上传、草稿保存及图文运行均走正式生产模块和真实本地 API，没有
+  模拟上传响应。`--image-capable` 只给隔离测试配置启用图片，本次未改
+  产品内置 Ling 3.0 Tiny 的配置。
+- 最终单文件 Home `.build/mdo-packed-docks-we0zy1we` 实际添加两张有效
+  PNG；磁盘 draft revision 1 保存原文“保留这段草稿，并检查两张图片”和
+  两个不同附件 ID。打开普通打包页后，320×350 仍有两张图片和原草稿，
+  移除按钮均为 40×40px，两张图片都完成解码。390×600 截图为
+  `.build/qa-image-transfer-packed.png`。
+- 实际粘贴纯文本“，继续正文”保持两张图片，再发送图文任务，正常回复、
+  输入焦点回到 prompt、草稿及待发附件清空。320×350 刷新回放仍显示两张
+  已解码的历史图片和原回复，文档无横向溢出，脚本错误为空。结束截图为
+  `.build/qa-image-transfer-packed-complete.png`。包内 composer-images.js
+  与源码逐字节一致。
+- Windows 完整有界门禁通过 114 项 Python、186 项 Node、87 个模块、
+  严格 C11、32 个运行探针、确定性 A/B 打包及便携窗口/20 秒启动。Linux
+  本轮只复验 87 个前端模块及 186 项 Node 用例，没有宣称完整运行门禁或
+  新 Linux A/B 包通过；C 盘可用空间本轮曾降至约 267MB，结合上一阶段
+  WSL 只读/I/O 故障，本次没有再创建完整原生发布快照。没有压力或高负载
+  测试，原生系统剪贴板多文件、文件拖放和实体设备仍待验收。
+
+根目录 `mdo.exe` 使用已验证的 Windows 包，SHA-256 为
+`e137aca4fc0e0db62a92c7e1e25e780808e9808da183f916e9a8e4a2470fa7d7`。
+日志为 `.build/qa-image-transfer-release.log`、
+`.build/qa-image-transfer-linux-frontend.log`。可用
+`python tests/manual_packed_docks_qa.py --packed-path mdo.exe --image-capable --image-transfer-fixture`
+启动新隔离 Home，打开 READY 地址同源的 `/__qa/image-transfer`，在工作台
+输入草稿，再点击“粘贴两张图片”重放。候选事件由夹具合成，不能把这条
+链路写作原生操作系统剪贴板或实体手机已通过。长期目标仍未完成。
+
 ## 2026-10-01：询问 Escape 与快捷键遵守输入法状态
 
 询问卡展开时，原来的 Escape 处理没有检查中文候选状态，会提前收起卡片。

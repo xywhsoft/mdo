@@ -11,6 +11,8 @@ APPROVAL NEXT UI, TASK UI, TASK SECOND UI, or ARTIFACT UI. The long
 ask has multiline question and options; the latter reads one bounded synthetic
 text file so the normal tool-output artifact path is used. The optional chat
 stream emits two bounded chunks with interleaved text and reasoning fields.
+With --image-capable --image-transfer-fixture, /__qa/image-transfer serves a
+synthetic clipboard control for the actual packed editor and attachment API.
 """
 
 import argparse
@@ -261,6 +263,18 @@ Object.defineProperty(navigator, 'clipboard', {
         pass
 
     def do_GET(self):
+        if (self.path == "/__qa/image-transfer" and
+                self.server.image_transfer_fixture):
+            payload = (ROOT / "tests/fixtures/packed-image-transfer-browser.html").read_bytes()
+            route = f"/#/projects/default/sessions/{self.server.qa_session}"
+            payload = payload.replace(b'"__MDO_QA_ROUTE__"', json.dumps(route).encode())
+            self.send_response(200)
+            self.send_header("Content-Type", "text/html; charset=utf-8")
+            self.send_header("Content-Length", str(len(payload)))
+            self.send_header("Cache-Control", "no-store")
+            self.end_headers()
+            self.wfile.write(payload)
+            return
         if (self.path == "/__qa/task-questions" and
                 self.server.task_questions_fixture):
             payload = ((ROOT / "tests/fixtures/task-questions-browser.html")
@@ -975,6 +989,8 @@ parser.add_argument("--resume-verify", action="store_true",
                     help="let the local model verify a resumed run with a bounded read-only command")
 parser.add_argument("--image-capable", action="store_true",
                     help="enable image input in the isolated built-in model fixture")
+parser.add_argument("--image-transfer-fixture", action="store_true",
+                    help="serve a partial-items clipboard probe against the real packed editor")
 parser.add_argument("--locale-hotkey", action="store_true",
                     help="let F9 change packed-page locale without moving focus")
 parser.add_argument("--no-clipboard-api", action="store_true",
@@ -1223,7 +1239,7 @@ try:
             or args.reject_pane_layout or args.locale_hotkey
             or args.no_clipboard_api or args.decision_expand_arrival_fixture
             or args.ask_keyboard_viewport_fixture or args.task_cancellation_fixture
-            or args.task_questions_fixture
+            or args.task_questions_fixture or args.image_transfer_fixture
             or args.fail_first_fork_invalid
             or args.fail_first_module or args.delay_first_module_ms
             or args.startup_task_delay_ms or args.startup_bootstrap_delay_ms
@@ -1234,6 +1250,8 @@ try:
             or args.startup_workspace_delay_ms):
         proxy = BoundedDelayProxyServer(("127.0.0.1", 0), BoundedDelayProxy)
         proxy.upstream_port = port
+        proxy.image_transfer_fixture = args.image_transfer_fixture
+        proxy.qa_session = session
         proxy.decision_expand_arrival_fixture = (
             args.decision_expand_arrival_fixture)
         proxy.ask_keyboard_viewport_fixture = args.ask_keyboard_viewport_fixture
