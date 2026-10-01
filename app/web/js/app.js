@@ -2229,7 +2229,7 @@ export async function boot() {
   function openNewTask() {
     showActiveSessions();
     navigation.newTask(navigation.get().projectId || navigation.preferredProject());
-    if (mobileLayout.matches) setDrawer("sidebar", false);
+    closeDrawers();
     prompt.focus();
   }
   $("#new-session").addEventListener("click", openNewTask);
@@ -2249,7 +2249,7 @@ export async function boot() {
       dialog.close();
       dialogForm.elements.title.value = "";
       navigation.select(session.project_id, session.id);
-      if (mobileLayout.matches) setDrawer("sidebar", false);
+      closeDrawers();
       cancelSessionComposerFocus();
       cancelSessionComposerFocus = focusSessionComposerAfterNavigation({
         navigation, sessionDetailStore, prompt,

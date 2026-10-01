@@ -4,6 +4,65 @@
 
 完成判据及尚缺的打包页证据见 [前端操作体验完成审计](frontend-completion-audit.md)。本文件继续记录每次实现和验证的细节。
 
+## 2026-10-01：新任务入口收起覆盖输入区的检查器
+
+基线 57cff72 的 Home `.build/mdo-packed-docks-01vmkboh`，会话
+`V-ORkPVW174btfrXhk4vmbOamIAP7kiJ`：320×350 打开检查器，从任务
+标签 Ctrl+K 后路由已变为新任务、prompt 已获焦，但检查器仍打开，
+输入框中心命中“暂无后台任务”。960×600 从侧栏配置创建会话
+`V-ORkPtFid7-cH4h5Gg2w1P-3RxiSOkC` 后，也仍留下覆盖输入区的检查器。
+基线截图 `.build/qa-new-task-drawer-before.png` 保留。
+
+普通新任务和配置创建成功两个入口现在均调用既有 closeDrawers，与
+项目切换、已有会话选择保持一致；关闭手机覆盖面板及中等屏检查器，
+宽桌面常驻面板不受影响。配置创建仍等待正确会话详情后恢复输入焦点，
+懒创建、草稿迁移、权限与模型配置事务保持原路径。
+
+验证：
+
+- Windows 最终 A 包 Home `.build/mdo-packed-docks-31ppfo5b`，原会话
+  `V-ORkQJJieehH3ki--HM64-55OkuK3bW`。完成一轮真实回复并写入未发送
+  草稿后，320×350 从检查器 Ctrl+K 进入可操作新任务，命中与焦点均
+  为 prompt、两个抽屉收起。填写新任务草稿，再从检查器 Ctrl+N，文本
+  不丢失；重复打开时服务端仍仅原会话目录。手机侧栏用 Enter 选回
+  原会话恢复 `Keep original session draft`，再 Ctrl+K 恢复
+  `NEW TASK RETAINED DRAFT`，刷新保留后者。截图
+  `.build/qa-new-task-drawer-windows-mobile.png`。
+- 发送新任务首条后创建 `36a12d21ffac898f091ef962aef2e66d`，实际得到
+  回复。960×600 从轨迹 Ctrl+N 先收起检查器，侧栏保留；再次打开
+  检查器后配置创建 `V-ORkQtf3HjzQIsJzh82EKSe0LA6lzGQ`，输入框可见、
+  获焦，所选 Ling/高推理/只读正确显示。发送后第三个回合实际使用
+  high，三个运行均 succeeded/cancel_requested=false。1280×720 从
+  轨迹 Ctrl+K 后新任务获焦、两侧常驻面板仍打开；页面错误日志为空。
+- Linux 最终 A 包 Home
+  `/home/ubuntu/.cache/mdo-linux-qa-new-task-drawer/.build/mdo-packed-docks-rx52hmx2`，
+  原会话 `V-ORkR0SgVyFqyyrR34T11sfamfwxxBj`。320×350 从检查器
+  Ctrl+N、从侧栏 Ctrl+K 均收起覆盖面板，焦点及中心命中为 prompt；
+  原会话和新任务的两份草稿经切换及刷新分别保留，文档宽 320px。
+  截图 `.build/qa-new-task-drawer-linux-mobile.png`。新任务首条创建
+  `50ebf9a557fbf1740317c3bcef21b048`，完成一轮回复、队列归零。
+  960×600 覆盖检查器下配置创建 `V-ORkRhbbLdBma7QduA4zpOOKxxAnrFY`，
+  成功后检查器收起、prompt 可见并获焦。页面错误日志为空。
+- 两端全门禁通过 114 项 Python、203 项 Node、88 个模块、严格 C11、
+  32 个运行探针、Home 租约/队列启动恢复及确定性 A/B；Windows 另通过
+  便携 WebView2 Home/20 秒启动。Linux 使用全新 ext4 快照。日志
+  `.build/qa-new-task-drawer-release.log`、
+  `.build/qa-new-task-drawer-linux-release.log`。
+- Windows A/B 及更新后的根目录 SHA-256：
+  `646e8cc9fbd6c7ef962270f94f63317df1e8d90967f8fff8670d978eb65689b6`；
+  Linux A/B SHA-256：
+  `c46d6b9521209286638f79e485750c420138414ae5af38bdf34ddfb9bcd206e1`。
+
+本轮另发现独立缺口：新任务首条发送后 Windows 曾显示空焦点；Linux
+在回复完成、prompt 已启用时仍无焦点，等待 3 秒没有回到 prompt。
+该证据不是配置创建后的焦点失败，也不是抽屉遮挡；新任务准备阶段会
+暂时禁用输入，焦点归属的恢复仍需修复。下一阶段先补此项，不把首条
+得到回复当作完整输入链验收通过。
+
+两端夹具正常退出，临时浏览器页关闭。Linux 图形证据仍来自 Windows
+浏览器连接 Linux 服务；原生窗口、输入法与实体设备缺口保留。内置
+Ling 配置不变，未做压力/高负载测试，长期目标继续。
+
 ## 2026-10-01：会话搜索先收起覆盖抽屉
 
 基线 a8f10f6 的单文件 Home `.build/mdo-packed-docks-4p_7eu5v`，会话
