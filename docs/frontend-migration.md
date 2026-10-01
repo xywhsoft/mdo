@@ -4,6 +4,68 @@
 
 完成判据及尚缺的打包页证据见 [前端操作体验完成审计](frontend-completion-audit.md)。本文件继续记录每次实现和验证的细节。
 
+## 2026-10-01：消息编辑隔离迟到关闭事件及带图历史操作补验
+
+基线 `ef692e9` 的正式编辑控制器配合原生 dialog，先取消上一条编辑，
+在同一任务内立即打开下一条带图消息。旧 dialog.close() 排队的 close
+事件随后把新编辑也取消：reopened/focused 为 false，第二条返回 null。
+这是组件夹具生成的快速序列，未将它描述成用户在完整工作台上的手动点击。
+
+close 回调现在仅在 dialog 已关闭时处理当前 pending。新编辑已经打开时，
+忽略上一轮迟到事件，保留内容、图片允许空文字的状态和焦点；外部关闭当前
+dialog 仍取消并返回当前入口。两项新增 Node 用例覆盖这两个边界。
+
+验证：
+
+- 正式组件源码夹具确认新关闭条件实际加载后，快速取消/重开、空文字带图
+  提交、焦点返回均通过；既有 keyCode 229、isComposing 与组合状态保护
+  继续通过。初次 reload 后的结果仍失败，未计为通过；加入模块版本与
+  已加载条件诊断后，新标签确认通过。尚未证明最初 reload 的失败原因。
+- 最终 Windows/Linux A 包的 `/__qa/message-edit-enter` 在 320×250 均
+  通过上述快速切换及合成 IME 序列。这一路由读取最终包的正式控制器，
+  图片引用用于校验编辑状态，不代表实际上传；真正上传由下一项补验。
+- Windows 最终包 Home `.build/mdo-packed-docks-9y6x0duu`，源会话
+  `V-ORl9L64d6GYXqoBcpotiEm4G7YtgG3`。合成剪贴板交给真实输入区两张
+  PNG，`@alpha` 用 ArrowDown/Tab 选中 `@src/alpha-test.c `，焦点保留。
+  实际图文发送后进入完整工作台，历史预览/Esc 返回正确缩略图；编辑取消
+  返回编辑入口、原内容和两图保留；再开编辑清空文字并 Enter 重发，图片
+  保留且输入获焦。实际重试后仍两图，从回复分叉得到
+  `V-ORlA1uZfFS74JZ0dlbg2xRgA5NtTfl`，分支加载两图并聚焦输入。
+- Linux ext4 最终包 Home
+  `/home/ubuntu/.cache/mdo-linux-qa-edit-reopen/.build/mdo-packed-docks-xgociult`，
+  源会话 `V-ORl9O_W1d59B-KopmDap6BVaEi3d-U`。合成粘贴后正式页面在
+  320×350 恢复两图草稿，键盘文件补全/图文发送、编辑取消、空文字带图
+  Enter 重发、实际重试均通过。回复分叉得到
+  `V-ORlAodKYX3dfaDGkYzemFI-l4sl0IB`；填写
+  `LINUX FORK FOLLOW-UP DRAFT` 后刷新，草稿、两图、完整名称保持。
+  独立正式页历史预览/Esc 返回正确缩略图，草稿不变且无横向溢出。
+- 两端只读 API 核对源/分支各一条有效 agent_start，图片占位文字为
+  `[Image attachment]`，两附件 ID 保留；源/分支的文件名分别 15/204
+  字符，图片各 68 字节且 SHA-256 一致。核对结果保存在
+  `.build/qa-edit-reopen-windows-images.json`、
+  `.build/qa-edit-reopen-linux-images.json`。两端各三轮 succeeded、
+  cancel_requested=false、活动数零，`.build/qa-edit-reopen-runs.json`。
+- 合成粘贴 iframe 标签各记到一次 MutationObserver 非 Node 参数错误，
+  来源仍未确认；正式前端没有 MutationObserver 调用。另开独立正式页后，
+  Windows 分支编辑/取消及 Linux 短屏历史预览/Esc 的错误日志均为空。
+  不将本次关闭竞态修复宣称为该错误的根因。截图
+  `.build/qa-edit-reopen-windows-final.png`、
+  `.build/qa-edit-reopen-linux-mobile.png`。
+- Windows/Linux 完整门禁均退出 0，各通过 114 Python、220 Node、89
+  模块、严格 C11、32 运行探针、Home lease、队列启动恢复和确定性 A/B；
+  Windows 另通过便携 WebView2/20 秒启动。日志
+  `.build/qa-edit-reopen-release.log`、`.build/qa-edit-reopen-linux-release.log`。
+  Linux 全新 ext4 快照复用已验证宿主，依赖锁照常检查；没有重建宿主。
+- Windows A/B 和根目录 SHA-256：
+  `e34babd9ce3b0b6e045a27fd7cbc82560df07821c6c02ddabf23d5c2323b13eb`；
+  Linux A/B：
+  `54ddb12e64451252c28a09047316cdd85a585f22bdefbb92abcd8b9875f427bb`。
+
+所有模型通信使用隔离 Home 的本地测试服务，图片能力仅由 QA 配置打开，
+不据此宣称生产 Ling 的图片能力或图片理解质量。合成 IME/剪贴板及浏览器
+视口不替代原生 GUI、实体软键盘、系统拖放验收；长期目标继续，未做压力
+或高负载测试。
+
 ## 2026-10-01：历史编辑和重试后退出旧查询并恢复输入
 
 基线 `38e9626` 单文件 Home `.build/mdo-packed-docks-h01hm2m1` 于

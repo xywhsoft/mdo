@@ -7,6 +7,7 @@
 <style>body{padding:12px}pre{white-space:pre-wrap;overflow-wrap:anywhere}</style>
 <button id="open" type="button">打开消息编辑</button>
 <button id="ime" type="button">检查输入法保护</button>
+<button id="reopen" type="button">快速取消后编辑另一条</button>
 <dialog class="new-session-dialog" id="dialog" aria-labelledby="title">
   <form class="dialog-card" id="form">
     <header><div><h2 id="title">编辑消息</h2>
@@ -22,7 +23,7 @@
 <pre id="result">等待打开编辑</pre>
 <pre id="implementation"></pre><pre id="key-state"></pre>
 <script type="module">
-import { createMessageEditDialog } from "/app/web/js/features/chat/message-edit-dialog.js?edit-enter=1";
+import { createMessageEditDialog } from "/app/web/js/features/chat/message-edit-dialog.js?edit-enter=2";
 const dialog = document.querySelector("#dialog");
 const form = document.querySelector("#form");
 const input = document.querySelector("#message");
@@ -31,7 +32,8 @@ const opener = document.querySelector("#open");
 const output = document.querySelector("#result");
 const controller = createMessageEditDialog({ dialog, form, input, cancel });
 document.querySelector("#implementation").textContent = JSON.stringify({
-  enterHandler: createMessageEditDialog.toString().includes("form.requestSubmit()") });
+  enterHandler: createMessageEditDialog.toString().includes("form.requestSubmit()"),
+  queuedCloseGuard: createMessageEditDialog.toString().includes("!dialog.open && pending") });
 input.addEventListener("keydown", (event) => {
   document.querySelector("#key-state").textContent = JSON.stringify({ key: event.key,
     shift: event.shiftKey, ctrl: event.ctrlKey, meta: event.metaKey, alt: event.altKey,
@@ -65,6 +67,28 @@ document.querySelector("#ime").addEventListener("click", async (event) => {
     text === "输入法候选完成后的消息" && returnedFocus;
   output.textContent = JSON.stringify({ passed, candidate229, candidateComposing,
     trackedCandidate, text, returnedFocus }, null, 2);
+});
+
+document.querySelector("#reopen").addEventListener("click", async (event) => {
+  const origin = event.currentTarget;
+  const first = controller.open("上一条消息", [], opener);
+  cancel.click();
+  let secondSettled = false;
+  const second = controller.open("下一条带图消息", ["a".repeat(32)], origin);
+  second.then(() => { secondSettled = true; });
+  await new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done)));
+  const reopened = dialog.open && !secondSettled && input.value === "下一条带图消息";
+  const focused = document.activeElement === input;
+  const attachmentState = !input.required;
+  if (dialog.open) {
+    input.value = "";
+    form.requestSubmit();
+  }
+  const secondValue = await second;
+  const passed = (await first) === null && reopened && focused && attachmentState &&
+    secondValue === "" && document.activeElement === origin;
+  output.textContent = JSON.stringify({ passed, reopened, focused, attachmentState,
+    secondValue, returnedFocus: document.activeElement === origin }, null, 2);
 });
 </script>
 </html>

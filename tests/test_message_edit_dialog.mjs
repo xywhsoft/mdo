@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { createMessageEditDialog } from "../app/web/js/features/chat/message-edit-dialog.js";
 
-function setup() {
+function setup({ queuedClose = false } = {}) {
   const dialog = new EventTarget();
   const form = new EventTarget();
   const input = new EventTarget();
@@ -16,7 +16,13 @@ function setup() {
   input.focus = () => { state.focus = "input"; };
   input.setSelectionRange = () => {};
   dialog.showModal = () => { dialog.open = true; };
-  dialog.close = () => { dialog.open = false; dialog.dispatchEvent(new Event("close")); };
+  const closeEvents = [];
+  dialog.close = () => {
+    dialog.open = false;
+    const dispatch = () => dialog.dispatchEvent(new Event("close"));
+    if (queuedClose) closeEvents.push(dispatch);
+    else dispatch();
+  };
   form.reportValidity = () => !state.validity && (!input.required || Boolean(input.value));
   form.requestSubmit = () => {
     state.submits += 1;
@@ -31,8 +37,42 @@ function setup() {
     input.dispatchEvent(event);
     return event;
   };
-  return { editor, dialog, input, cancel, view, opener, state, key };
+  return { editor, dialog, input, cancel, view, opener, state, key,
+    flushClose() { while (closeEvents.length) closeEvents.shift()(); } };
 }
+
+test("a queued close from a cancelled edit cannot cancel a reopened image-only edit", async () => {
+  const context = setup({ queuedClose: true });
+  const first = context.editor.open("old", [], context.opener);
+  context.cancel.dispatchEvent(new Event("click"));
+  assert.equal(await first, null);
+  const nextOpener = { isConnected: true, focus() { context.state.focus = "next"; } };
+  let settled = false;
+  const second = context.editor.open("new", ["a".repeat(32)], nextOpener);
+  second.then(() => { settled = true; });
+  context.flushClose();
+  await Promise.resolve();
+  assert.equal(settled, false);
+  assert.equal(context.dialog.open, true);
+  assert.equal(context.input.value, "new");
+  assert.equal(context.input.required, false);
+  assert.equal(context.state.focus, "input");
+  context.input.value = "";
+  context.key();
+  assert.equal(await second, "");
+  context.flushClose();
+  assert.equal(context.state.focus, "next");
+});
+
+test("an externally closed current dialog still cancels and restores its own opener", async () => {
+  const context = setup({ queuedClose: true });
+  const result = context.editor.open("original", [], context.opener);
+  context.dialog.close();
+  context.flushClose();
+  assert.equal(await result, null);
+  assert.equal(context.dialog.open, false);
+  assert.equal(context.state.focus, "opener");
+});
 
 test("plain Enter saves one edit and returns focus to its message action", async () => {
   const context = setup();

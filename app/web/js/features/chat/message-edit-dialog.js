@@ -42,7 +42,9 @@ export function createMessageEditDialog({ dialog, form, input, cancel }) {
   });
   cancel.addEventListener("click", () => finish(null));
   dialog.addEventListener("close", () => {
-    if (pending) finish(null);
+    // Native close events are queued. A previous cancellation must not
+    // resolve a newer edit that has already reopened this dialog.
+    if (!dialog.open && pending) finish(null);
   });
 
   return Object.freeze({
