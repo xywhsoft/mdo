@@ -4,6 +4,28 @@
 
 完成判据及尚缺的打包页证据见 [前端操作体验完成审计](frontend-completion-audit.md)。本文件继续记录每次实现和验证的细节。
 
+## 2026-10-02：窄屏图片名称与提示的间距
+
+上一阶段浏览器实测发现手机布局的 `.composer-image` 固定 64px 高度，
+但真实内容包含 68px 图片和 20px 名称；兼容提示被排到同一行高度范围。
+去掉 tile 固定高度，并把该断点的图片设为与 tile 一致的 64×64，让名称
+参与正常排版，40px 移除按钮和预览/关闭交互保持原来的操作方式。
+
+更新的隔离打包实例在 390×844 和 320×844 下实测：四张有效 PNG 正常显示，
+320px 下第四张正常换行；最后一个预览按钮 bottom=704.20，提示 top=716.20，
+保持 12px 间距，页面 scrollWidth 等于 viewport 宽度，没有横向溢出。
+第四张预览和 Escape 关闭恢复触发按钮焦点通过。浏览器视口已 reset，临时
+页面与便携 Home 服务已关闭清理。截图 `.build/qa-images-mobile-{fixed,320}.jpg`，
+测量 `.build/qa-images-mobile-browser.json`。只证明浏览器响应式显示与此条
+交互；实体手机键盘/触控、原生 WebView2 交互及 JPEG/WebP 解码仍需另行验收。
+
+本次仅样式修改，C/API 延续上一提交 `e53625d` 已通过的 Windows 完整门禁。
+增量检查通过 114 项 Python 契约、240 项 Node 测试、90 个前端模块及扩展
+打包图片/备份/移动路径探针；独立 A/B 包与根目录程序 SHA-256 为
+`8d76168f75a72bd8e519a39bdcaad5e08bda70a4762e4d9bdd4416c00d2f3ef2`。
+日志 `.build/qa-images-mobile-{build,verified}.log`。当前环境无 WSL 发行版，
+本次 Linux 验证未执行，不做压力或高负载测试。
+
 ## 2026-10-02：普通图片附件的有界发送
 
 修复上一阶段额外发现的图片读回超时：原路径写出 200 和完整 Content-Length，

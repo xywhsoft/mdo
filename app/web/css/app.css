@@ -1527,7 +1527,10 @@ select:focus-visible,
   .slash-option, .file-mention-option { min-height: 40px; }
   .composer-hint { display: none; }
   .composer-images { gap: 12px; padding-top: 12px; }
-  .composer-image { width: 64px; height: 64px; }
+  /* Reserve the caption in normal flow; a fixed tile height overlaps the
+     next row's model compatibility message once image names are present. */
+  .composer-image { width: 64px; }
+  .composer-image img { width: 64px; height: 64px; }
   .composer-image-remove { top: -11px; right: -11px; width: 40px; height: 40px; border-radius: 50%; background: radial-gradient(circle 11px, var(--ink) 98%, transparent 100%); }
   .composer-toolbar { flex-wrap: wrap; gap: 2px; }
   .composer textarea { min-height: 52px; padding: 12px 13px 6px; }
