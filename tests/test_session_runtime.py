@@ -816,6 +816,7 @@ def write_site(site: Path) -> None:
         "src/sessions/internal.h",
         "src/sessions/manager.c",
         "src/sessions/backup.c",
+        "src/sessions/backup_internal.h",
     ):
         shutil.copy2(ROOT / "app" / relative, site / relative)
     shutil.copy2(ROOT / "tests/fixtures/session-capture.c", site / "session-capture.c")

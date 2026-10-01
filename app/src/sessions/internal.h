@@ -52,5 +52,9 @@ void MdoSessionsInternalActiveRelease(const char* ProjectId,
 char* MdoSessionsInternalMetaJson(const MdoSessionInfo* Info, size_t* Size);
 bool MdoSessionsInternalMetaParse(const char* ExpectedProject,
     const char* ExpectedId, xstrview Json, MdoSessionInfo* Info);
+/* Filesystem-free schema seams for offline backup inspection. They reuse the
+ * live readers, release all parse allocations and never project/write state. */
+bool MdoSessionsInternalEventValid(const char* ProjectId, const char* SessionId, xstrview Json);
+bool MdoSessionsInternalTodoValid(xstrview Json);
 
 #endif

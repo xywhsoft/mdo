@@ -1,6 +1,19 @@
 # 前端操作体验完成审计
 
-本清单以 `app_bak/wwwroot` 的可操作行为为基线，而不是以页面长得相似或单元测试通过为完成标准。`docs/frontend-migration.md` 记录每次实现和验证；这里记录当前还需要什么证据。审计更新：2026-10-01，基线提交 `f9e2c4c`。
+本清单以 `app_bak/wwwroot` 的可操作行为为基线，而不是以页面长得相似或单元测试通过为完成标准。`docs/frontend-migration.md` 记录每次实现和验证；这里记录当前还需要什么证据。审计更新：2026-10-02，基线提交 `f9e2c4c`。
+
+2026-10-02 增量：离线拥有解码与清单检查已接入，精确核对版本/字段、路径、
+base64/长度/hash、重复文件、metadata 身份及实际 UI 保留范围；UI/todo schema
+复用真实读取器。HTTP/TLS 真实 2 MiB 文件的拥有副本、65 种错误输入、预算/
+取消/截止时间、失败重试和 Home 零写入通过。v1 明确仅 meta/模型 snapshot，
+不能升级为完整格式。其他 schema/ID 关系、图片实际解码、生产预览 worker、
+实际回放/原子恢复及页面菜单仍缺；完整备份/恢复行不升级。详见
+[实施记录](session-backup-plan.md#离线拥有解码与部分-schema-校验)。
+两平台完整有界门禁通过 114 Python、240 Node、90 模块、严格 C11、35 运行
+探针、A/B 和三项 packed；Windows 另经便携窗口与打包崩溃/20 秒启动。
+根目录程序已更新，SHA-256 为
+`b2a3cbc20bf1b0112c13aedffa503b2e8024c3ba937c51f78e3fa773f02d4ab7`。
+日志 `.build/qa-backup-decode-{verified,linux-verified}.log`，没有压力/高负载测试。
 
 2026-10-02 增量：v2 专用分段上传完成。单槽 96 MiB、单段 256 KiB、
 固定过期、顺序/相同重试/冲突、传输 SHA-256、查询与取消已实现；原数据

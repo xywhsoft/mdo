@@ -4,6 +4,37 @@
 
 完成判据及尚缺的打包页证据见 [前端操作体验完成审计](frontend-completion-audit.md)。本文件继续记录每次实现和验证的细节。
 
+## 2026-10-02：备份离线解码与部分 schema 校验
+
+新增只在内存中工作的拥有解码与预览事实 API。外层 SAX 不构造完整 base64
+DOM，逐项核对清单、路径、base64/长度/hash、重复字段/文件、metadata 身份/
+workspace 和实际保留范围；解码结果独立于上传生命周期。预算及合作取消/
+截止时间覆盖解析事件和文件，失败释放部分对象。UI/todo 复用现有纯读取器
+进行 schema 检查，不投影或写数据。v1 精确保留原 meta/snapshot 字节，明确
+仅模型快照，不能升级为完整 v2。
+
+HTTP/TLS 运行探针由真实会话草稿/待确认队列、真实 UI/todo 投影及普通
+2 MiB artifact 开始，独立核对 decoded 原字节；释放 upload 后副本保持。
+65 个小型错误输入（含跨平台大小写路径别名）、降低预算、取消/截止时间、
+失败重试及 Home 零写入通过。
+没有生产 HTTP 预览 worker/菜单，draft/queue/receipt/消息绑定/模型账本完整
+schema 和关系、图片实际解码及真正回放仍缺；这只是步骤 4 的子阶段，
+完整 JSON 恢复尚未完成，原生/实体设备证据不由后端探针替代。详见
+[实施记录](session-backup-plan.md#离线拥有解码与部分-schema-校验)。
+
+Windows/Linux 完整有界门禁通过 114 Python、240 Node、90 模块、严格 C11、
+35 运行探针、A/B 与三项 packed；Windows 另经便携窗口及打包崩溃/20 秒启动。
+Linux 为新 ext4 源拷贝、相同锁定宿主，跳过 GUI。根目录程序已更新到
+`b2a3cbc20bf1b0112c13aedffa503b2e8024c3ba937c51f78e3fa773f02d4ab7`；Linux
+包为 `b1780ce13c14da5013579941872743ecd1e09233f34f7a842105913d2cab2e78`。
+日志 `.build/qa-backup-decode-{verified,linux-verified}.log`；初轮日志保留。
+门禁同时修正半行日志终止、短 deadline 检查点和隔离探针缺头文件问题，
+保留原业务断言，前两项已提交 `6a51def`。便携缓存位置与取舍继续保持。
+
+下一步继续抽取 draft/queue/receipt/消息绑定及模型账本的纯 schema 读取边界，
+补全跨引用和图片实际解码，再接入预览 worker、独立恢复事务与正式页面。
+完整恢复及原生/实体设备交互仍未由本阶段证明，没有压力/高负载测试。
+
 ## 2026-10-02：完整会话备份的分段上传
 
 新增独立上传 store 与查询/创建/分段/seal/取消 API。一个槽最多 96 MiB，

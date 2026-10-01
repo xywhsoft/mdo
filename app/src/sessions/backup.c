@@ -5,27 +5,17 @@
 #include "../../include/mdo/home.h"
 #include "../../include/mdo/session_backup.h"
 #include "internal.h"
+#include "backup_internal.h"
 
 #define MDO_BACKUP_SCAN_NODES 4096u
 #define MDO_BACKUP_READ_CHUNK 65536u
-#define MDO_BACKUP_JSON_VALUES 262144u
 #define MDO_BACKUP_EVENT_BYTES (96u * 1024u)
 
-typedef struct MdoBackupOwnedFile {
-    char Path[MDO_SESSION_BACKUP_PATH_CAPACITY];
-    char* Data;
-    size_t Bytes;
-} MdoBackupOwnedFile;
-
-struct MdoSessionBackup {
-    MdoSessionInfo Info;
-    MdoBackupOwnedFile* Files;
-    size_t Count, Capacity, Bytes, Nodes;
-    int64 CapturedAt;
-    MdoSessionBackupLimits Limits;
+const char* const MdoBackupOptionalFiles[MDO_BACKUP_OPTIONAL_FILES] = {
+    "journal.jsonl", "ui-events.jsonl", "todo.json", "draft.json", "queue.json", "feedback.json"
 };
 
-static bool MdoBackupError(xwork_error* Error, xwork_error_code Code,
+bool MdoBackupError(xwork_error* Error, xwork_error_code Code,
     const char* Message, const char* Path)
 {
     if ( Error != NULL ) {
@@ -48,7 +38,7 @@ void MdoSessionBackupLimitsInit(MdoSessionBackupLimits* Limits)
     Limits->DocumentBytes = MDO_SESSION_BACKUP_MAX_DOCUMENT_BYTES;
 }
 
-static bool MdoBackupLimits(const MdoSessionBackupLimits* Input,
+bool MdoBackupLimits(const MdoSessionBackupLimits* Input,
     MdoSessionBackupLimits* Output, uint64 Timeout, xwork_error* Error)
 {
     MdoSessionBackupLimitsInit(Output);
@@ -75,7 +65,15 @@ static bool MdoBackupTime(const MdoSessionBackupLimits* Limits, xwork_error* Err
         MdoBackupError(Error, XWORK_ERROR_LIMIT, "session backup deadline exceeded", NULL);
 }
 
-static bool MdoBackupDigits(const char* Text, size_t Size, bool Hex)
+bool MdoBackupCheck(const MdoSessionBackupLimits* Limits, const xcancel* Cancel,
+    xwork_error* Error)
+{
+    if ( xrtCancelRequested(Cancel) )
+        return MdoBackupError(Error, XWORK_ERROR_CANCELLED, "session backup validation cancelled", NULL);
+    return MdoBackupTime(Limits, Error);
+}
+
+bool MdoBackupDigits(const char* Text, size_t Size, bool Hex)
 {
     size_t i;
     if ( Size == 0u ) return false;
@@ -108,7 +106,7 @@ static bool MdoBackupSuffix(const char* Text, const char* Suffix)
 
 /* Whitelist the current logical files; unknown content fails rather than
  * silently creating an allegedly complete bundle. No native path is exported. */
-static size_t MdoBackupPathLimit(const char* Path, bool Directory)
+size_t MdoBackupPathLimit(const char* Path, bool Directory)
 {
     const char* Name;
     size_t Size, i;
@@ -294,13 +292,13 @@ done:
     return Ok;
 }
 
-static int MdoBackupCompare(const void* Left, const void* Right)
+int MdoBackupCompare(const void* Left, const void* Right)
 {
     return strcmp(((const MdoBackupOwnedFile*)Left)->Path,
         ((const MdoBackupOwnedFile*)Right)->Path);
 }
 
-static const MdoBackupOwnedFile* MdoBackupFind(const MdoSessionBackup* Backup, const char* Path)
+const MdoBackupOwnedFile* MdoBackupFind(const MdoSessionBackup* Backup, const char* Path)
 {
     MdoBackupOwnedFile Key;
     memset(&Key, 0, sizeof(Key));
@@ -340,6 +338,7 @@ MdoSessionBackup* MdoSessionBackupCapture(MdoSession* Session,
         return NULL;
     }
     Backup->Limits = Budget;
+    Backup->Schema = MDO_SESSION_BACKUP_SCHEMA;
     if ( !MdoSessionWithCapture(Session, MdoBackupCaptureRead, Backup, Error) ) goto failed;
     qsort(Backup->Files, Backup->Count, sizeof(*Backup->Files), MdoBackupCompare);
     if ( MdoBackupFind(Backup, "meta.json") == NULL ||
@@ -376,7 +375,7 @@ bool MdoSessionBackupFileGet(const MdoSessionBackup* Backup, size_t Index, MdoSe
     return true;
 }
 
-static bool MdoBackupUInt(const xvalue* Value, const char* Key, uint64* Number)
+bool MdoBackupUInt(const xvalue* Value, const char* Key, uint64* Number)
 {
     const xvalue* Child = xrtValueObjectGet(Value, xrtStrView(Key));
     int64 Signed;
@@ -385,7 +384,7 @@ static bool MdoBackupUInt(const xvalue* Value, const char* Key, uint64* Number)
     *Number = (uint64)Signed; return true;
 }
 
-static bool MdoBackupView(const xvalue* Value, const char* Key, xstrview* Text)
+bool MdoBackupView(const xvalue* Value, const char* Key, xstrview* Text)
 {
     return xrtValueGetString(xrtValueObjectGet(Value, xrtStrView(Key)), Text);
 }
@@ -470,8 +469,6 @@ static bool MdoBackupImageMeta(const MdoSessionBackup* Backup,
     return true;
 }
 
-typedef struct MdoBackupHistory { uint64 First, Last, Records; } MdoBackupHistory;
-
 static bool MdoBackupEventArtifact(const MdoSessionBackup* Backup, const xvalue* Event)
 {
     xstrview Path;
@@ -496,8 +493,9 @@ static bool MdoBackupEventArtifact(const MdoSessionBackup* Backup, const xvalue*
     return MdoBackupPathLimit(Relative, false) != 0u && MdoBackupFind(Backup, Relative) != NULL;
 }
 
-static bool MdoBackupValidate(const MdoSessionBackup* Backup,
-    const MdoSessionBackupLimits* Limits, MdoBackupHistory* History, xwork_error* Error)
+bool MdoBackupValidate(const MdoSessionBackup* Backup,
+    const MdoSessionBackupLimits* Limits, const xcancel* Cancel,
+    MdoBackupHistory* History, xwork_error* Error)
 {
     size_t i;
     memset(History, 0, sizeof(*History));
@@ -506,7 +504,7 @@ static bool MdoBackupValidate(const MdoSessionBackup* Backup,
         size_t Offset = 0u;
         bool Lines = MdoBackupSuffix(File->Path, ".jsonl");
         bool Ui = strcmp(File->Path, "ui-events.jsonl") == 0;
-        if ( !MdoBackupTime(Limits, Error) ) return false;
+        if ( !MdoBackupCheck(Limits, Cancel, Error) ) return false;
         if ( MdoBackupSuffix(File->Path, ".bin") ) {
             if ( !MdoBackupImage(Backup, xrtStrViewN(File->Path + 12u, 32u)) ) goto invalid;
             continue;
@@ -523,6 +521,9 @@ static bool MdoBackupValidate(const MdoSessionBackup* Backup,
             if ( End != NULL ) Bytes = (size_t)(End - (File->Data + Offset));
             if ( Bytes == 0u || (Ui && Bytes > MDO_BACKUP_EVENT_BYTES) ) goto invalid;
             Root = MdoBackupJson(File->Data + Offset, Bytes);
+            if ( Root == NULL && xrtGetError() != NULL && xrtErrorKind(xrtGetError()) == XERR_MEMORY )
+                return MdoBackupError(Error, XWORK_ERROR_OUT_OF_MEMORY,
+                    "cannot parse session backup file", File->Path);
             Ok = xrtValueType(Root) == XVALUE_OBJECT;
             if ( Ok && strcmp(File->Path, "meta.json") == 0 ) {
                 MdoSessionInfo Meta;
@@ -546,7 +547,7 @@ static bool MdoBackupValidate(const MdoSessionBackup* Backup,
             xrtValueRelease(Root);
             if ( !Ok ) goto invalid;
             Offset += Bytes + (Lines ? 1u : 0u);
-            if ( !MdoBackupTime(Limits, Error) ) return false;
+            if ( !MdoBackupCheck(Limits, Cancel, Error) ) return false;
         } while ( Lines && Offset < File->Bytes );
         continue;
 invalid:
@@ -572,8 +573,6 @@ static bool MdoBackupString(xvalue* Object, const char* Key, const char* Value)
 str MdoSessionBackupEncode(const MdoSessionBackup* Backup,
     const MdoSessionBackupLimits* Limits, size_t* Size, xwork_error* Error)
 {
-    static const char* const Optional[] = { "journal.jsonl", "ui-events.jsonl", "todo.json",
-        "draft.json", "queue.json", "feedback.json" };
     MdoSessionBackupLimits Budget;
     MdoBackupHistory History;
     xvalue* Root = NULL;
@@ -588,14 +587,19 @@ str MdoSessionBackupEncode(const MdoSessionBackup* Backup,
         (void)MdoBackupError(Error, XWORK_ERROR_INVALID_ARGUMENT, "backup and document size are required", NULL);
         return NULL;
     }
+    if ( Backup->Schema != MDO_SESSION_BACKUP_SCHEMA ) {
+        (void)MdoBackupError(Error, XWORK_ERROR_INVALID_ARGUMENT,
+            "legacy model-only export cannot become a full session backup", NULL);
+        return NULL;
+    }
     if ( !MdoBackupLimits(Limits, &Budget, 30000000u, Error) ) return NULL;
     if ( Backup->Count > Budget.Files || Backup->Bytes > Budget.TotalBytes ) goto limit;
-    if ( !MdoBackupValidate(Backup, &Budget, &History, Error) ) goto done;
+    if ( !MdoBackupValidate(Backup, &Budget, NULL, &History, Error) ) goto done;
     Root = xrtValueObject(); Absent = xrtValueArray();
     if ( Root == NULL || Absent == NULL ) goto memory;
-    for ( i = 0u; i < sizeof(Optional) / sizeof(Optional[0]); ++i ) {
-        if ( MdoBackupFind(Backup, Optional[i]) == NULL &&
-             !xrtValueArrayAppendNew(Absent, xrtValueString(xrtStrView(Optional[i]))) ) goto memory;
+    for ( i = 0u; i < MDO_BACKUP_OPTIONAL_FILES; ++i ) {
+        if ( MdoBackupFind(Backup, MdoBackupOptionalFiles[i]) == NULL &&
+             !xrtValueArrayAppendNew(Absent, xrtValueString(xrtStrView(MdoBackupOptionalFiles[i]))) ) goto memory;
     }
     if ( !MdoBackupString(Root, "format", "mdo-session-backup") ||
          !MdoBackupSet(Root, "export_schema", xrtValueUInt(MDO_SESSION_BACKUP_SCHEMA)) ||

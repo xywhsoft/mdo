@@ -1,6 +1,6 @@
 # 会话 JSON 完整备份与恢复实施记录
 
-状态：专用下载/上传已接入，完整校验与恢复入口待实现。2026-10-02 已完成
+状态：专用下载/上传和离线解码已接入，完整校验与恢复入口待实现。2026-10-02 已完成
 checkpoint 与有界读取共用排他运行窗口、统一捕获边界、v2 捕获/编码层和
 有界 HTTP/TLS 传输。现有页面仍使用 `export_schema:1`，只有 meta 和模型 snapshot。
 格式/传输验证通过不表示正式页面已经导出完整备份，或恢复事务已经完成。
@@ -58,7 +58,9 @@ manager 调用或库通过 native path 写入不能被它自动覆盖。不得�
    和全部日志。采用专用上传/下载边界并
    分别限制文件数、单文件、总字节、JSON/base64 膨胀和传输时间；定额失败需要
    明确反馈。导出完成即释放捕获锁，下载速度不能占用运行窗口。
-4. 先实现离线验证与预览，再做恢复事务。验证所有 schema、路径、ID、内容
+4. **进行中**：离线拥有解码、清单及 metadata/UI/todo schema 校验已接入；
+   其余 schema、图片实际解码及生产预览 worker 未完成。先实现离线验证与预览，
+   再做恢复事务。验证所有 schema、路径、ID、内容
    校验和引用；拒绝链接、绝对路径、`..`、重复文件和大小声明失真。v1 只能
    预览为模型快照，不能误报为完整带图备份。未知模型/Agent 的会话可保留
    原数据供查看，继续运行前重新选择并验证有效 profile。
@@ -317,3 +319,62 @@ Linux 为新 ext4 工作树、跳过 GUI。根目录程序与 Windows A/B 同为
 包为 `13e8487ac69d3bcb3c22c60bf1950885982d2b025980e5c8d7cfd4daee730a54`。
 日志为 `.build/qa-backup-upload-{xs-build,xs-receive,runtime,release,linux-host,linux-xs-receive,linux-release}.log`。
 没有压力/高负载、浏览器下载或真实恢复测试，完整恢复不由本阶段证明。
+
+## 离线拥有解码与部分 schema 校验
+
+`MdoSessionBackupDecode()` 接受 sealed 上传的不可变字节或其他同步借用输入，
+只在内存中返回拥有各文件字节的对象。复用捕获/编码的路径白名单、大小预算、
+metadata 与资源引用规则，不接触 Home、catalog、Agent、模型、shell 或队列。
+生产调用方须将它放到有界 worker，先 pin 输入，在结束后释放；本轮没有新增
+HTTP 预览入口或 worker，不在网络 callback 上解析大文档。
+
+外层 JSON 使用 SAX，只保存小清单和一个进行中的文件，不创建整份 base64
+DOM。访问器自己按字段记录拒绝重复键（包括转义后的同名键），因为 xrt 的
+visitor 不执行 DOM 重复键策略。每项严格检查路径、字段类型、规范 base64、
+声明大小及 SHA-256；拒绝未知字段/文件、重复路径及 Windows 大小写别名、
+绝对/父目录/分隔符别名，
+事件/运行引用文件名还拒绝不规范的前导零。文件排序后核对总数、总字节、
+可选文件缺失声明、metadata 原身份/revision/workspace 和 UI 首末 ID/记录数。
+来源 workspace 与 artifact 原生路径仍只作来源，不作为写入目标。
+
+预算仍为 1024 文件、32 MiB 单文件、64 MiB 原字节合计及 96 MiB 文档，允许
+调用方降低；路径另受产品限额约束。一次解码拥有至多 64 MiB 原数据，解析器
+的当前字符串 token 可额外占用单文件 base64 大小；上传自身及一次产品 JSON
+解析的 DOM/节点也占独立预算，不能把 64/96 MiB 宣称为整个进程峰值。每个
+visitor 事件、文件和日志记录间检查单调截止时间/取消，不能硬中断单个 token、
+hash、codec 或 DOM 解析操作。所有失败释放部分文件和清单；输入不被修改。
+
+metadata 和图片元数据复用已有检查；UI 事件 schema/身份及 todo schema 通过
+新增纯校验 seam 复用真实读取器，释放所有解析对象且不投影或写侧车。尚未
+完成 draft、queue、queue receipt、消息附件绑定及模型账本的完整 schema/ID
+关系、图片实际解码或 xllm/UI 试恢复。`PreviewGet` 只返回已解码对象的复制
+事实，成功不是完整恢复资格；manifest/上传的 `restore_ready:false` 保留。
+
+兼容 v1 原始 meta/snapshot JSON 字节，不重序列化 snapshot 的校验内容。
+预览明确 `ExportSchema:1`，只有两文件，不能称为完整带图备份，编码器也明确
+拒绝把它包装成 v2。未知模型身份保留供查看，不作配置查询或模型调用。
+
+`test_backup_decode_runtime.py` 从真实 idle 会话、正式草稿/待确认队列 API、
+事件投影产生的 UI/todo 和普通 2 MiB artifact 开始，经正式下载/分段上传后
+独立核对所有原字节的 hash。释放 upload pin/取消原上传后，解码对象仍保有
+副本。HTTP/TLS 均覆盖 65 个小型错误输入、重复/转义键、版本/路径/大小/
+hash/保留范围/身份/资源错误、UI/todo schema、下调预算、取消/截止时间和
+失败后重试；全部验证前后 Home 可读文件逐字节相同。v1 精确字节与禁止
+升级为完整格式通过。部分 schema 仍缺，本子阶段不把实施步骤 4–6 写成完成，
+没有浏览器下载、真实恢复、压力或高负载测试。
+
+本子阶段 Windows/Linux 完整有界门禁通过 114 Python、240 Node、90 模块、
+严格 C11、35 运行探针、确定性 A/B 和三项 packed；Windows 另通过便携
+WebView2 Home 及打包崩溃/20 秒启动。Linux 使用新 ext4 独立源拷贝，复用
+上一阶段已重建/验证的相同锁定 xs 宿主，跳过 GUI。根目录程序已更新到
+Windows A/B 同一包，SHA-256 为
+`b2a3cbc20bf1b0112c13aedffa503b2e8024c3ba937c51f78e3fa773f02d4ab7`；Linux
+包为 `b1780ce13c14da5013579941872743ecd1e09233f34f7a842105913d2cab2e78`。
+最终日志为 `.build/qa-backup-decode-{verified,linux-verified}.log`。
+
+初轮日志保留了三处探针问题：清除探针在 printf 只有半行时便终止进程；
+下载探针的 250ms 截止时间从入场开始，慢编码时未到达发送暂停点；会话探针
+手动复制源时缺少新增的内部头文件。前两处已提交 `6a51def`，分别等待 Unit 后
+完整完成标记、在拥有该 context 的 executor 上于发送检查点开始短 deadline。
+最后一处已补齐依赖复制。业务/零写入/真实背压/截止时间断言保持，未放宽
+产品限额或跳过失败；最终两平台完整门禁包含全部修正。

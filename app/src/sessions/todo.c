@@ -5,6 +5,7 @@
 #include "../../include/mdo/sessions.h"
 #include "../../include/mdo/project_lifecycle.h"
 #include "data_gate.h"
+#include "internal.h"
 
 #define MDO_TODO_FILE_MAX (16u * 1024u)
 #define MDO_TODO_INPUT_MAX 12288u
@@ -113,6 +114,14 @@ static xvalue* MdoTodoParse(xstrview Json, bool Stored)
         return NULL;
     }
     return Root;
+}
+
+bool MdoSessionsInternalTodoValid(xstrview Json)
+{
+    xvalue* Root = MdoTodoParse(Json, true);
+    bool Ok = Root != NULL;
+    xrtValueRelease(Root);
+    return Ok;
 }
 
 static xvalue* MdoTodoEmpty(void)

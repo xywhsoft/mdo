@@ -32,6 +32,17 @@ typedef struct MdoSessionBackupFile {
     size_t Bytes;
 } MdoSessionBackupFile;
 
+/* Facts from an offline-decoded document. ExportSchema == 1 means ONLY meta
+ * and a model snapshot; it must never be advertised as a full backup. */
+typedef struct MdoSessionBackupPreview {
+    uint32 Size;
+    uint32 ExportSchema;
+    MdoSessionInfo Info;
+    int64 CapturedAt;
+    size_t Files, Bytes;
+    uint64 UiFirstEventId, UiLastEventId, UiRecords;
+} MdoSessionBackupPreview;
+
 void MdoSessionBackupLimitsInit(MdoSessionBackupLimits* Limits);
 /* Copies only through MdoSessionWithCapture. Callers sharing a process with
  * active API storage managers must additionally hold MdoApiSessionCaptureGuard
@@ -52,5 +63,24 @@ bool MdoSessionBackupFileGet(const MdoSessionBackup* Backup, size_t Index,
  * Returns xrtFree-owned JSON; failure always leaves Size zero. */
 str MdoSessionBackupEncode(const MdoSessionBackup* Backup,
     const MdoSessionBackupLimits* Limits, size_t* Size, xwork_error* Error);
+
+/* Filesystem-free, owning decode of v2 or legacy v1. Checks the envelope,
+ * whitelist, budgets, base64/SHA-256, metadata identity, declared retention and
+ * resource references using the same rules as encode. Duplicate JSON keys,
+ * duplicate paths and unsupported format fields fail. Input/Cancel are only
+ * borrowed synchronously and may be released after return. No Home/catalog,
+ * Agent/model/tool or queue operation is performed. Use a bounded worker, not
+ * a network callback. Deadline/cancel checks are cooperative between bounded
+ * operations; a single JSON token/hash/codec operation cannot be interrupted.
+ *
+ * Metadata/UI/todo reuse live readers; image metadata shares the export checker.
+ * Success is NOT complete schema validation, image decoding or xllm/UI replay
+ * and does not authorize restoration. Legacy v1 cannot be encoded as v2. */
+MdoSessionBackup* MdoSessionBackupDecode(const void* Document, size_t Bytes,
+    const MdoSessionBackupLimits* Limits, const xcancel* Cancel, xwork_error* Error);
+/* Only decoded objects supply preview facts. Initialize Preview.Size; failure
+ * clears all fields except Size. All returned metadata is copied. */
+bool MdoSessionBackupPreviewGet(const MdoSessionBackup* Backup,
+    MdoSessionBackupPreview* Preview);
 
 #endif

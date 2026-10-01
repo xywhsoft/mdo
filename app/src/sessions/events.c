@@ -571,6 +571,16 @@ done:
     return Ok;
 }
 
+bool MdoSessionsInternalEventValid(const char* ProjectId, const char* SessionId, xstrview Json)
+{
+    MdoSessionEventOwned Event;
+    bool Ok;
+    if ( ProjectId == NULL || SessionId == NULL ) return false;
+    Ok = MdoEventsParse(ProjectId, SessionId, Json, &Event);
+    MdoEventsOwnedUnit(&Event);
+    return Ok;
+}
+
 static bool MdoEventsScanLatest(const char* ProjectId, const char* SessionId,
     const char* Data, size_t Size, uint64* Latest, bool* Incomplete)
 {
