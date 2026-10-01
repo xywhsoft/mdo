@@ -19,6 +19,16 @@ function durationLabel(seconds) {
   return t("timeline.seconds", { seconds: value }, `${value} 秒`);
 }
 
+function historyBoundaryText(event) {
+  // Existing journals use one kind for both operations. Translate only the
+  // server's canonical markers; imported/custom history notes stay verbatim.
+  if (event.text === "会话历史已清空")
+    return t("timeline.historyCleared", {}, "会话历史已清空");
+  if (!event.text || event.text === "会话历史已截断")
+    return t("timeline.historyTruncated", {}, "会话历史已截断");
+  return event.text;
+}
+
 function appendOrCreate(items, streams, event, kind, role, key) {
   let item = streams.get(key);
   if (!item) {
@@ -311,7 +321,7 @@ export function eventsToTimeline(events, historyLost = false) {
       case "history_truncated":
         items.push({ key: `history-${event.event_id}`, kind: "system",
           role: t("timeline.history", {}, "历史"),
-          text: event.text || t("timeline.historyTruncated", {}, "会话历史已截断"),
+          text: historyBoundaryText(event),
           state: "done", time: event.time });
         break;
       case "model_start":

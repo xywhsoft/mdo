@@ -35,6 +35,7 @@
   "timeline.agentFailed": "Agent 运行失败",
   "timeline.history": "历史",
   "timeline.historyTruncated": "会话历史已截断",
+  "timeline.historyCleared": "会话历史已清空",
   "timeline.event": "事件",
   "timeline.unknownEvent": "未知事件",
   "timeline.copy": "复制",

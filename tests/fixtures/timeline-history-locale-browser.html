@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="zh-CN">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>mdo history boundary language probe</title>
+<link rel="stylesheet" href="/app/web/css/app.css">
+<style>
+  body { padding: 16px; background: var(--bg); color: var(--ink); }
+  nav { display: flex; flex-wrap: wrap; gap: 8px; }
+  .conversation { width: min(760px, 100%); max-height: 70vh; overflow: auto; }
+  #result { display: block; overflow-wrap: anywhere; }
+</style>
+<nav aria-label="Probe language">
+  <button type="button" data-locale="zh-CN">中文</button>
+  <button type="button" data-locale="en-US">English</button>
+  <button type="button" data-locale="ru-RU">Русский</button>
+</nav>
+<output id="result" role="status">Preparing</output>
+<textarea id="prompt" aria-label="Unsent draft">未发送草稿 remains unchanged</textarea>
+<div class="conversation"><p id="welcome"></p><ol id="timeline"></ol></div>
+<button id="to-bottom" type="button" hidden>To bottom</button>
+<div id="toast-region"></div>
+<script type="module">
+import { createTimelineView } from "/app/web/js/features/chat/timeline.js?history-locale=1";
+import { createResourceStore } from "/app/web/js/state/store.js";
+import { loadLocale, currentLocale, t } from "/app/web/js/i18n.js";
+
+// Source-tree serving has no /lang alias; packed serving rewrites this prefix.
+const nativeFetch = globalThis.fetch.bind(globalThis);
+globalThis.fetch = (path, options) => typeof path === "string" && path.startsWith("/lang/")
+  ? nativeFetch("/app/web/" + path.slice(1), { ...options, cache: "no-store" })
+  : nativeFetch(path, options);
+const events = [
+  { event_id: 1, kind: "history_truncated", text: "会话历史已截断", time: 1000000 },
+  { event_id: 2, kind: "history_truncated", text: "会话历史已清空", time: 2000000 },
+  { event_id: 3, kind: "history_truncated", text: "作者的历史说明 stays literal", time: 3000000 },
+  { event_id: 4, kind: "agent_start", schema_version: 3, run_id: 1,
+    agent_depth: 0, user_message_sequence: 1, text: "会话历史已清空", time: 4000000 },
+  { event_id: 5, kind: "model_text_delta", run_id: 1,
+    text: "会话历史已截断", time: 5000000 },
+  { event_id: 6, kind: "agent_done", run_id: 1, success: true, time: 6000000 },
+];
+const original = JSON.stringify(events);
+const store = createResourceStore();
+const feedbackStore = createResourceStore({ projectId: "qa", sessionId: "history-language",
+  items: new Map() });
+createTimelineView({ container: document.querySelector("#timeline"),
+  welcome: document.querySelector("#welcome"),
+  toBottom: document.querySelector("#to-bottom"), store, feedbackStore });
+store.setData({ projectId: "qa", sessionId: "history-language", events, historyLost: true });
+
+async function switchLanguage(name) {
+  await loadLocale(name);
+  requestAnimationFrame(() => {
+    const bodies = [...document.querySelectorAll("#timeline .timeline-body")]
+      .map((node) => node.textContent);
+    const roles = [...document.querySelectorAll("#timeline .timeline-role")]
+      .map((node) => node.textContent);
+    document.querySelector("#result").textContent = JSON.stringify({
+      locale: currentLocale(), bodies, roles,
+      translated: bodies[0] === t("timeline.historyTruncated") &&
+        bodies[1] === t("timeline.historyCleared"),
+      originals: bodies[2] === events[2].text && bodies[3] === events[3].text &&
+        bodies[4] === events[4].text && JSON.stringify(events) === original,
+      draft: document.querySelector("#prompt").value,
+      overflow: document.documentElement.scrollWidth > innerWidth,
+    });
+  });
+}
+document.querySelectorAll("[data-locale]").forEach((button) => {
+  button.addEventListener("click", () => switchLanguage(button.dataset.locale));
+});
+await switchLanguage("zh-CN");
+</script>

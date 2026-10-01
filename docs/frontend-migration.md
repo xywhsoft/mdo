@@ -4,6 +4,51 @@
 
 完成判据及尚缺的打包页证据见 [前端操作体验完成审计](frontend-completion-audit.md)。本文件继续记录每次实现和验证的细节。
 
+## 2026-10-01：历史截断与清空提示随界面语言显示
+
+上一轮俄语工作台的历史边界仍显示中文。服务端持久化日志使用同一种
+history_truncated 事件表示截断和清空，以两条固定文案区分操作；投影原先
+优先显示 event.text，已有译文因此没有使用。本阶段仅在该事件类型中
+映射服务端的两条原始固定提示，空说明仍按既有截断回退；未知/导入说明
+保持原文。用户、模型、工具、错误和未知事件中的相同中文不会被替换。
+不改变日志格式、服务端 API 或事件正文，三语词典各 1345 键。
+
+验证：
+
+- 新增三项 Node 回归覆盖三语切换与再次回切、截断/清空/缺省提示、原事件
+  不变、未知说明与普通正文隔离，以及显式边界不重复显示缺口通知。
+- 浏览器组件页先复现英语角色已翻译但两条边界仍为中文。修复后桌面及
+  320×350 三语 translated/originals 均为 true，未发送草稿保持，无溢出。
+  初次夹具漏传 feedbackStore，补齐后才完成复现；新标签脚本错误为空。
+  QA 模块查询参数和语言包 no-store 避免沿用测试期间的旧缓存，正式页面
+  不依赖这些控制。
+- 最终单文件 Home `.build/mdo-packed-docks-ucv4d8mq`，会话
+  `V-ORk2zRgsU2elmWw0YhLzG_TW1rKjs4`。普通发送后，通过实际编辑/Enter
+  重发生成历史边界；新用户正文含“会话历史已截断”和第二行 QA 标记。
+  英语只翻译系统行；常规设置预览/应用英语、俄语（revision 1→2→3），
+  每次返回原会话并刷新，边界、角色和用量按对应语言显示，用户正文逐字
+  保留。俄语 320×350 页面宽度 320px，历史提示和输入操作可见；桌面与
+  短屏截图为 `.build/qa-timeline-history-locale-packed-ru.png`、
+  `.build/qa-timeline-history-locale-packed-ru-short.png`，脚本错误日志为空。
+  共 1 次队列 POST、2 次运行 POST。磁盘日志核对确认历史提示及用户原文
+  仍为原始 UTF-8；临时页面和服务正常关闭。
+- 清空提示的显示由正式模块组件及 Node 用例验证；本轮没有在工作台执行
+  清空操作。两端完整门禁包含既有真实 HTTP 清空/截断日志回归。
+- Windows/Linux 新原生文件系统全门禁通过 114 项 Python、203 项 Node、
+  88 个模块、严格 C11、32 个运行探针及确定性 A/B 打包；Windows 另通过
+  便携 WebView2/20 秒启动。日志为
+  `.build/qa-timeline-history-locale-release.log`、
+  `.build/qa-timeline-history-locale-linux-release.log`；Linux 快照为
+  `/home/ubuntu/.cache/mdo-linux-qa-timeline-history-locale`。
+- Windows A/B 及根目录 SHA-256：
+  `e4871318f9846e9dfe2e94197ee6596b01177a58113fff0b98ea201ffe2b8d00`；
+  Linux A/B SHA-256：
+  `16c608c34240d6c52fca9096d2c70735c9d091c5962b15b3943ccb174848cb21`。
+
+本项关闭上一轮确认的历史边界语言缺口，不代表其他服务端错误和说明已
+全部本地化。内置 Ling 生产配置不变；未做压力/高负载测试，原生 GUI、
+输入法及实体设备验收缺口保留，长期目标继续。
+
 ## 2026-10-01：消息编辑恢复 Enter 保存重发
 
 旧版 `chrome.js` 的 promptModal 以 Enter 确认消息编辑，新版 textarea 只

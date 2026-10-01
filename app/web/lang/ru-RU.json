@@ -35,6 +35,7 @@
   "timeline.agentFailed": "Ошибка работы агента",
   "timeline.history": "История",
   "timeline.historyTruncated": "История сеанса обрезана",
+  "timeline.historyCleared": "История сеанса очищена",
   "timeline.event": "Событие",
   "timeline.unknownEvent": "Неизвестное событие",
   "timeline.copy": "Копировать",

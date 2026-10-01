@@ -35,6 +35,7 @@
   "timeline.agentFailed": "Agent run failed",
   "timeline.history": "History",
   "timeline.historyTruncated": "Session history truncated",
+  "timeline.historyCleared": "Session history cleared",
   "timeline.event": "Event",
   "timeline.unknownEvent": "Unknown event",
   "timeline.copy": "Copy",
