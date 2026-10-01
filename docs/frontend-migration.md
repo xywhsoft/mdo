@@ -4,6 +4,73 @@
 
 完成判据及尚缺的打包页证据见 [前端操作体验完成审计](frontend-completion-audit.md)。本文件继续记录每次实现和验证的细节。
 
+## 2026-10-01：纯图片消息保留实际空原文
+
+基线 `e3d3f81` 的打包页在纯图片编辑重发后显示 `[Image attachment]`，
+编辑和重试还会把它当作正文。旧版 assembler 从 content 分别提取文字和
+图片，ui 仅在文字存在时渲染气泡；新版已具备空气泡隐藏样式，差异来自
+xwork 诊断启动事件的占位文字进入了 mdo 的持久 UI 会话记录。
+
+mdo 在启动前把实际空 Prompt 的意图与图片引用、运行 ID 一起登记；持有
+既有 bridge 锁时，只对匹配运行的顶层图片启动事件复制并还原空文字，
+写入持久 UI 记录。成功或撤销后清理该意图，其他运行及恢复不继承。没有
+按文本值猜测；用户真的输入 `[Image attachment]` 会完整保留。xwork
+原始诊断事件、模型消息与会话格式不变，现有文字无法可靠追溯是否为占位
+符，保持原样；用户手动清空后重发可写入正确空原文。
+
+验证：
+
+- 扩展真实 xs/TCC 图片运行探针，覆盖空 Prompt、普通图文及明确输入
+  占位同名文字，API text/original_text_bytes 与输入一致；图片仍进入
+  模型请求。进程重启后文字和引用回放，旧 run-ID 引用兼容、重用运行 ID
+  的新文字/图文不被误清；分叉首条纯图片消息保留空文字及元数据。两项
+  Node 用例覆盖纯图片时间线/重试引用和明确文字的投影。
+- Windows 最终 A 包 Home `.build/mdo-packed-docks-j5ipb_u1`，源会话
+  `V-ORlDbUWNlOJRpScU4NYEL9I18TpgcU`。合成粘贴两 PNG 后空文字发送；
+  1280×720 正式页用户正文为空且 display:none，两图及完整名称保留。
+  编辑原文为空、输入获焦且允许空文本，直接 Enter 重发，再实际重试后
+  分叉 `V-ORlEgxPJAkV0MPwS38oruh9PD9JQpc`。分支仍空原文，编辑填入
+  `[Image attachment]` 后重发及刷新，明确文字与两图保留；返回源会话
+  仍为纯图片。截图 `.build/qa-image-only-text-windows.png`。
+- Linux 最终 A 包 Home
+  `/home/ubuntu/.cache/mdo-linux-qa-image-only-text/.build/mdo-packed-docks-_ehxb0fa`，
+  源会话 `V-ORlDbO7NImJzigB8q4vft_LJISFBnN`，320×350 正式页实际空
+  文字发送、空原文编辑/Enter、重试及回复分叉均通过。分支
+  `V-ORlFZueUsLdnxaVKk1LWXje4Tlr8Pz` 的原文仍空，明确输入占位同名
+  文字后重发和刷新完整保留，两图已加载、名称 15/204 字符，无横向溢出。
+  截图 `.build/qa-image-only-text-linux-edit.png`、
+  `.build/qa-image-only-text-linux-literal.png`。
+- 两端 API 核对源为空文字/0 字节、分支为明确文字/18 字节，附件 ID 与
+  源一致、两图各 68 字节且字节/名称相同；明确文字修改前另有分支空原文
+  核对。结果 `.build/qa-image-only-text-{windows,linux}-images.json`。
+  两端各四轮 succeeded、未取消、活动数零，
+  `.build/qa-image-only-text-runs.json`；独立正式页错误日志为空。
+- 从两端实际 API 事件调用正式 Markdown 格式化函数，空文字和明确文字
+  各生成 395/471 字节文件，用户条目、两附件引用及正文有无均符合输入。
+  这是 API/格式化验证，不是浏览器实际下载通过：Windows 的导出按钮
+  点击后下载事件等待 10 秒超时，页面无脚本错误，尚未取得本轮下载文件。
+- 通过只读 CDP 捕获本次 iframe MutationObserver 非 Node 异常的精确
+  堆栈：script 4，零基行 193、列 6482，Yv/oc 调用链在 require("electron")
+  包装的注入标注脚本中对 documentElement 执行 observe。该脚本含
+  data-codex-browser-design-group 标记，属于 Codex 内置浏览器注入代码，
+  不在 mdo 前端源码中。证据
+  `.build/qa-image-only-text-injected-error.json`、
+  `.build/qa-image-only-text-injected-source.txt`。未修改注入代码；以前没有
+  堆栈的同文错误记录继续保留其原有事实，不推定所有平台的相似错误同源。
+- Windows/Linux 完整发布门禁均退出 0，各通过 114 Python、222 Node、
+  89 模块、严格 C11、32 运行探针、Home lease、队列启动恢复及确定性 A/B；
+  Windows 另通过便携 WebView2/20 秒启动。Linux 全新 ext4 快照复用已
+  验证宿主，依赖锁照常验证。日志 `.build/qa-image-only-text-release.log`、
+  `.build/qa-image-only-text-linux-release.log`。
+- Windows A/B 和根目录 SHA-256：
+  `53d4228fde4ccea8b89512ac5117b8d029d0317bf6f4923cef400f947f037eab`；
+  Linux A/B：
+  `e02d3a2a1f2fcce34481069be2d1380952d55155f36a923986305d939b040321`。
+
+测试图片能力仅由隔离 QA 配置开启，模型通信使用本地服务。合成粘贴和
+浏览器视口不代表系统剪贴板、原生窗口或实体软键盘验收；未做压力/高负载
+测试，长期目标继续。浏览器导出下载超时留作后续独立排查。
+
 ## 2026-10-01：消息编辑隔离迟到关闭事件及带图历史操作补验
 
 基线 `ef692e9` 的正式编辑控制器配合原生 dialog，先取消上一条编辑，

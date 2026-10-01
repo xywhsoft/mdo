@@ -23,8 +23,11 @@ bool MdoSessionAttachmentRunRead(const char* ProjectId,
     char Ids[4][33], size_t* Count);
 
 typedef struct MdoSession MdoSession;
+/* EmptyPrompt records original input intent before the runtime emits its
+ * diagnostic start event. Only submissions with images may have empty text. */
 bool MdoSessionAttachmentPendingSet(MdoSession* Session, uint64 AgentRunId,
-    const char Ids[4][33], size_t Count, const char* QueueItemId);
+    const char Ids[4][33], size_t Count, bool EmptyPrompt,
+    const char* QueueItemId);
 void MdoSessionAttachmentPendingClear(MdoSession* Session, uint64 AgentRunId);
 
 /* Copy retained event images into a new fork before it is published. Clone

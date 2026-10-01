@@ -151,7 +151,8 @@ def probe(host: Path) -> None:
                         assert status == 422 and rejected["error"]["code"] == (
                             expected), (status, rejected)
                     encoded = base64.b64encode(image_bytes).decode()
-                    for prompt in ("", "Describe this image"):
+                    prompts = ("", "Describe this image", "[Image attachment]")
+                    for prompt in prompts:
                         ModelHandler.calls = 0
                         ModelHandler.last_payload = None
                         status, _, body = request(port, "POST", route + "/runs",
@@ -170,6 +171,9 @@ def probe(host: Path) -> None:
                                   item["run_id"] == run["agent_run_id"]]
                         assert len(starts) == 1 and starts[0]["attachments"] == (
                             [image_id]), starts
+                        assert starts[0]["text"] == prompt and not starts[0][
+                            "text_truncated"], starts
+                        assert starts[0]["original_text_bytes"] == len(prompt.encode()), starts
                         completed.append((starts[0]["event_id"],
                                           run["agent_run_id"]))
                         record = (home / "sessions/image-probe" / session_id /
@@ -192,7 +196,7 @@ def probe(host: Path) -> None:
                         except subprocess.TimeoutExpired:
                             process.kill()
                             process.wait(timeout=3)
-            # Simulate the two legacy run-ID records left by an older build.
+            # Simulate legacy run-ID records left by an older build.
             # New text and image runs reuse these IDs after host restart.
             attachment_root = home / "sessions/image-probe" / session_id / "attachments"
             sidecar = attachment_root / f"{image_id}.json"
@@ -230,9 +234,10 @@ def probe(host: Path) -> None:
                     assert status == 200, (status, body)
                     restored = [item for item in json.loads(body)["data"]["items"]
                                 if item["kind"] == "agent_start"]
-                    assert len(restored) == 2 and all(
+                    assert len(restored) == len(prompts) and all(
                         item["attachments"] == [image_id] for item in restored), (
                         restored)
+                    assert [item["text"] for item in restored] == list(prompts), restored
                     status, _, body = request(port, "DELETE",
                         route + "/attachments/" + image_id)
                     assert status == 409 and json.loads(body)["error"][
@@ -265,10 +270,12 @@ def probe(host: Path) -> None:
                         assert status == 200, (status, body)
                         starts = [item for item in json.loads(body)["data"]["items"]
                                   if item["kind"] == "agent_start"]
-                        assert len(starts) == 2 + (1 if not refs else 2), starts
-                        assert [item["attachments"] for item in starts[:2]] == (
-                            [[image_id], [image_id]]), starts
+                        assert len(starts) == len(prompts) + (1 if not refs else 2), starts
+                        assert [item["attachments"] for item in starts[:len(prompts)]] == (
+                            [[image_id]] * len(prompts)), starts
+                        assert [item["text"] for item in starts[:len(prompts)]] == list(prompts), starts
                         assert starts[-1]["attachments"] == refs, starts
+                        assert starts[-1]["text"] == prompt, starts
                         if run["agent_run_id"] in [old[1] for old in completed]:
                             marker = (attachment_root / "events" /
                                       f"{starts[-1]['event_id']}.json")
@@ -309,6 +316,7 @@ def probe(host: Path) -> None:
                                     if item["kind"] == "agent_start"]
                     assert len(child_starts) == 1 and (
                         child_starts[0]["attachments"] == [image_id]), child_starts
+                    assert child_starts[0]["text"] == "", child_starts
                     child_root = home / "sessions/image-probe" / child_id
                     assert (child_root / "attachments" / f"{image_id}.bin").read_bytes() == (
                         image_bytes)

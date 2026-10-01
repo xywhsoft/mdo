@@ -667,6 +667,8 @@ bool MdoRunStartWithOutcome(const MdoRunStartOptions* Options,
     ImageRunId = AgentInfo.Run.uRunId;
     if ( !MdoSessionAttachmentPendingSet(Session, ImageRunId,
             Options->AttachmentIds, Options->AttachmentCount,
+            !Options->Resume && Options->AttachmentCount != 0u &&
+                (Options->Prompt == NULL || Options->Prompt[0] == '\0'),
             Options->QueueItemId) ) {
         MdoRunsError(Error, XWORK_ERROR_CONTEXT,
             "cannot register image references before starting the run");

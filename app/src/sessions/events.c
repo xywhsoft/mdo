@@ -56,6 +56,7 @@ struct MdoSessionEventBridge {
     uint64 PendingRunId;
     char PendingIds[4][33];
     size_t PendingCount;
+    bool PendingEmptyPrompt;
     char PendingQueueItemId[33];
 };
 
@@ -1229,11 +1230,12 @@ bool MdoSessionEventBridgeSetProfile(MdoSessionEventBridge* Bridge,
 
 bool MdoSessionEventBridgePendingSet(MdoSessionEventBridge* Bridge,
     uint64 RunId, const char Ids[4][33], size_t Count,
-    const char* QueueItemId)
+    bool EmptyPrompt, const char* QueueItemId)
 {
     bool Ok;
     size_t Index;
     if ( Bridge == NULL || RunId == 0u || Count > 4u ||
+         (EmptyPrompt && Count == 0u) ||
          (Count != 0u && Ids == NULL) ) return false;
     if ( QueueItemId != NULL ) {
         if ( strlen(QueueItemId) != 32u ) return false;
@@ -1247,6 +1249,7 @@ bool MdoSessionEventBridgePendingSet(MdoSessionEventBridge* Bridge,
     Ok = true;
     Bridge->PendingRunId = RunId;
     Bridge->PendingCount = Count;
+    Bridge->PendingEmptyPrompt = EmptyPrompt;
     memset(Bridge->PendingIds, 0, sizeof(Bridge->PendingIds));
     memset(Bridge->PendingQueueItemId, 0,
         sizeof(Bridge->PendingQueueItemId));
@@ -1266,6 +1269,7 @@ void MdoSessionEventBridgePendingClear(MdoSessionEventBridge* Bridge,
     if ( Bridge->PendingRunId == RunId ) {
         Bridge->PendingRunId = 0u;
         Bridge->PendingCount = 0u;
+        Bridge->PendingEmptyPrompt = false;
         memset(Bridge->PendingIds, 0, sizeof(Bridge->PendingIds));
         memset(Bridge->PendingQueueItemId, 0,
             sizeof(Bridge->PendingQueueItemId));
@@ -1276,24 +1280,36 @@ void MdoSessionEventBridgePendingClear(MdoSessionEventBridge* Bridge,
 bool MdoSessionEventBridgeOnEvent(void* Value, const xwork_event* Event)
 {
     MdoSessionEventBridge* Bridge = (MdoSessionEventBridge*)Value;
+    xwork_event UserEvent;
     bool Ok;
     if ( Bridge == NULL || Event == NULL ) return false;
+    UserEvent = *Event;
     xrtMutexLock(Bridge->Lock);
     Ok = true;
     if ( Event->eKind == XWORK_EVENT_AGENT_START &&
          Event->uAgentDepth == 0u ) {
         const size_t Count = Bridge->PendingRunId == Event->uRunId ?
             Bridge->PendingCount : 0u;
+        /* xwork's diagnostic start text may contain an image placeholder.
+         * Persist the actual empty submission for display, edit, retry and
+         * export. Run-bound intent distinguishes it from literal user text;
+         * the original runtime event and model message remain untouched. */
+        if ( Count != 0u && Bridge->PendingEmptyPrompt ) {
+            UserEvent.sText = "";
+            UserEvent.iTextLength = 0u;
+            UserEvent.bTextTruncated = false;
+        }
         Ok = MdoSessionAttachmentEventWrite(Bridge->ProjectId,
             Bridge->SessionId, Bridge->NextEventId, Event->uRunId,
             Bridge->PendingIds, Count);
     }
-    if ( Ok ) Ok = MdoEventsAppend(Bridge, Event);
+    if ( Ok ) Ok = MdoEventsAppend(Bridge, &UserEvent);
     if ( Ok && Event->eKind == XWORK_EVENT_AGENT_START &&
          Event->uAgentDepth == 0u &&
          Bridge->PendingRunId == Event->uRunId ) {
         Bridge->PendingRunId = 0u;
         Bridge->PendingCount = 0u;
+        Bridge->PendingEmptyPrompt = false;
         memset(Bridge->PendingIds, 0, sizeof(Bridge->PendingIds));
         memset(Bridge->PendingQueueItemId, 0,
             sizeof(Bridge->PendingQueueItemId));
