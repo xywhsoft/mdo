@@ -1,6 +1,7 @@
 # 会话 JSON 完整备份与恢复实施记录
 
-状态：专用下载/上传、离线解码和独立模型重放已接入，完整校验与恢复入口待实现。2026-10-02 已完成
+状态：专用下载/上传、离线解码、独立模型重放和模型/UI 关系检查已接入，
+完整校验与恢复入口待实现。2026-10-02 已完成
 checkpoint 与有界读取共用排他运行窗口、统一捕获边界、v2 捕获/编码层和
 有界 HTTP/TLS 传输。现有页面仍使用 `export_schema:1`，只有 meta 和模型 snapshot。
 格式/传输验证通过不表示正式页面已经导出完整备份，或恢复事务已经完成。
@@ -60,8 +61,9 @@ manager 调用或库通过 native path 写入不能被它自动覆盖。不得�
    明确反馈。导出完成即释放捕获锁，下载速度不能占用运行窗口。
 4. **进行中**：离线拥有解码、清单及 metadata/UI/todo、draft/queue/receipt/
    feedback/消息绑定 schema、模型 snapshot/journal schema/CRC、checkpoint 后记录
-   连号、保留 UI 的侧车关系和独立模型上下文重放已接入；模型与 UI 的关系、图片
-   实际解码及生产预览 worker 未完成。先实现离线验证与预览，
+   连号、保留 UI 的侧车关系、独立模型上下文重放和模型/UI 关系检查已接入。
+   旧多模态模型账本缺失 parts 的问题、图片实际解码及生产预览 worker 未完成。
+   先实现离线验证与预览，
    再做恢复事务。验证所有 schema、路径、ID、内容
    校验和引用；拒绝链接、绝对路径、`..`、重复文件和大小声明失真。v1 只能
    预览为模型快照，不能误报为完整带图备份。未知模型/Agent 的会话可保留
@@ -611,3 +613,73 @@ Windows 另通过便携 WebView2 Home 与 20 秒启动。宿主本轮从新 SDK 
 `14ed2a06d4494bf4727dbce1ca09eaf09bfd20a9cba3a6d2341e15f929d64e12`。
 日志 `.build/qa-session-memory-{final,linux-final}.log`，库的 bounded gate 在
 `.build/qa-session-memory-{windows,linux}.log`。完整备份恢复和页面验收仍待后续。
+
+## 保留模型账本与 UI 关系检查
+
+2026-10-02 新增显式的 `MdoSessionBackupCheckModelHistory()`。只接受成功
+解码的拥有对象，以新预算先重放独立模型，再用原始保留账本核对主 Agent
+事件。不使用 `BuildRequest()` 的渲染结果建立身份索引，因为压缩/剪枝会隐藏
+仍然保留的原始消息。解码、模型重放和关系检查是三个独立结果，关系失败
+不得销毁可检查的原始备份。
+
+xllm-session 增加 `xllmSessionEntryCount/EntryAt`：只读零分配的原始 entry
+视图携带 sequence、turn、flags 及借用 message。只供单写入线程在稳定状态
+下检查；任意修改/销毁使视图失效，不能当作跨线程快照。hook 内或瞬态状态
+拒绝返回借用指针，size 不匹配不修改输出，其他失败清空。库的有界测试
+覆盖分配故障下仍可读取、watermark 隐藏但原 entry 可见、撤回/清空、hook/
+瞬态状态和短结构体。源头提交 `e2b990f290f212c7cb2352806219faf5f91ad8f5`；
+xs 提交 `34fba960d1b2525a6bf64524358e6d9c32c4592e` 逐字节同步 15 个生产文件，
+TCC 增加公开入口，deps.lock 锁定同一来源。xrt 核心版本保持 `6040abda`。
+
+关系检查按以下规则处理保留范围：
+
+- 用户事件的非零 `user_message_sequence` 必须对应同 turn 的普通 user
+  entry；角色、turn、文字或重复投影冲突明确失败。没有序号的旧记录/续行
+  只报告无法核对，不凭运行 ID 猜测 user 身份。
+- 成功 MODEL_DONE 对应同 turn 的唯一 assistant；核对文字与重复投影。
+  同 turn 多条旧 assistant 没有唯一依据，报告无法核对。失败模型事件不
+  伪造 assistant；子 Agent 有独立账本，不与根账本混用。
+- 工具按 turn 和 call ID 联合索引，核对 name 及 TOOL_START 的原参数。
+  UI 的显示结果和模型的结果包装本来不同，不能直接逐字节比较。TOOL_DONE/
+  RECOVERY_RESOLVED 核对实际持久化 result；TOOL_DONE 先于 result append
+  的真实崩溃窗口标为不完整证据，不修改原数据或重新执行工具。
+- 被明确截断的文字只核对已保存的前缀，同时记为无法完整核对。没有对应
+  UI 的保留模型 entry 统计为投影缺口；system 和 synthetic/pinned 内容
+  不要求与用户可见消息一一对应。已删除历史的侧车关系仍由既有 removal
+  marker 校验检查，恢复时须在 staging 中处理已删除投影。
+
+`MatchedUiRecords` 是已匹配身份的记录数；部分证据可以同时计入
+`UnverifiedUiRecords`。`UnprojectedModelMessages` 是缺少 UI 投影的普通
+模型消息数。返回 true 只表示没有证明矛盾，不能将这些计数当作完整恢复
+资格。v1 没有 UI，仍可检查模型；缺口不会被补造。输出 Size 合同、预算/
+取消/截止时间及失败清理与模型重放一致；解析/排序是有界协作操作，不是
+能打断任意原生指令的硬超时。没有 Home/catalog、存储、模型、工具或队列
+调用，始终保持 `restore_ready:false`。
+
+HTTP/TLS 隔离探针通过真实产品运行生成两轮 user/assistant、模型快照与
+UI 文件，再从正常备份入口捕获，得到四项匹配且无未核对/投影缺口。缩短
+UI 保留前缀后明确报告两条模型消息缺口。测试源运行使用进程内固定响应，
+不访问线上模型；它在零写入 inventory 基线之前执行，不能混淆源数据
+生成与后续离线检查的零写入合同。其余小用例检查角色/序号/turn/文字/
+工具身份/参数冲突、旧记录、子 Agent、截断、恢复事件、待持久化工具结果、
+旧多模态、deadline/budget/cancel、NULL error、失败后重试、备份原字节保持。
+
+本阶段发现一个需先修复的持久化缺口：当前 `xllm_session__write_entry`
+没有写出 `pParts/iPartCount`，journal 的 add_message 共用同一个 writer。
+mdo 带图请求的文字在 TEXT part 中而非 sContent，重新加载后图片与该文字
+均可能缺失。已有有效图片绑定、但模型 entry 无 parts 的旧备份明确记为
+无法完整核对；非空模型文字的明确冲突仍然拒绝。不能凭 UI 文字补写模型
+账本或声称可完整恢复。后续必须在源库设计有版本、字节预算、二进制编码
+及旧格式兼容的多模态持久化，并证明保存/重放/重启/备份恢复的实际 parts。
+随后再完成图片实际解码、生产 worker、staging 发布、正式菜单和设备验收。
+
+最终 Windows/Linux 有界门禁通过 114 Python、252 Node、90 模块、严格
+C11、36 运行探针、三项 packed 和独立 A/B；Windows 另通过便携 Home
+覆盖/搬移/重启与 20 秒启动。Linux 在新 ext4 源副本中从同一 SDK 重建
+原生宿主，跳过 GUI；没有压力或高负载测试。根目录程序与 Windows A/B
+SHA-256 为 `2d76be9b8f9aa88a20de852755c3799fecf7fc49a45847c7af70d4e67be43542`；
+Linux 为 `4e74f65bfcb567070900c45867e976a9dca677c76b4b599adc34eafccaeadedb`。
+日志 `.build/qa-model-history-{windows,linux}-final.log`，源库 bounded 回归见
+`.build/qa-model-history-library-windows.log`、`.build/qa-model-history-linux.log`。
+最终 size canary 使用分配器对齐的短存储，两平台 HTTP/TLS 定向补验通过，
+日志 `.build/qa-model-history-probe-aligned-{windows,linux}.log`。生产包字节未变。

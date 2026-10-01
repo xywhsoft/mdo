@@ -20,6 +20,19 @@ static bool BackupDecodeFixturePreviewSizeSafe(void)
     return Ok;
 }
 
+static bool BackupDecodeFixtureModelHistorySizeSafe(void)
+{
+    uint32 Words[2] = {sizeof(uint32), UINT32_C(0x12345678)};
+    void* Small = xrtMalloc(sizeof(Words));
+    bool Ok;
+    if ( Small == NULL ) return false;
+    memcpy(Small, Words, sizeof(Words));
+    Ok = !MdoSessionBackupCheckModelHistory(g_DecodeFixtureBackup, NULL, NULL,
+        (MdoSessionBackupModelHistory*)Small, NULL) && memcmp(Small, Words, sizeof(Words)) == 0;
+    xrtFree(Small);
+    return Ok;
+}
+
 static bool BackupDecodeFixtureSeed(XS_HttpReq* Request)
 {
     static const char Prefix[] = "/__fixture/backup-decode/seed/";
@@ -47,6 +60,71 @@ static bool BackupDecodeFixtureSeed(XS_HttpReq* Request)
     Ok = Ok && MdoSessionEventBridgeOnEvent(Session->Bridge, &Event);
     xrtFree(Artifact); MdoSessionRelease(Session);
     Context.Request = Request; snprintf(Context.RequestId, sizeof(Context.RequestId), "decode-seed");
+    (void)MdoApiReplySuccessTake(&Context, 200u, xrtValueBool(Ok), NULL);
+    return true;
+}
+
+/* Generate both ledgers through a real product run, with a deterministic
+ * in-process model. This writes only the probe's isolated source session;
+ * later decode/replay checks are measured separately for zero Home writes. */
+static xllm_result BackupDecodeFixtureComplete(void* Data, const xllm_request* Request,
+    const xllm_stream_callbacks* Callbacks, xllm_response** Response, xllm_error* Error)
+{
+    unsigned* Calls = (unsigned*)Data;
+    xllm_response* Value;
+    const char* Text;
+    (void)Request; (void)Callbacks; (void)Error;
+    Text = ++*Calls == 1u ? "Writer answer one" : "Writer answer two";
+    Value = (xllm_response*)calloc(1u, sizeof(*Value));
+    if ( Value == NULL ) return XLLM_RESULT_ERROR;
+    Value->sContent = (char*)malloc(strlen(Text) + 1u);
+    if ( Value->sContent == NULL ) { xllmResponseDestroy(Value); return XLLM_RESULT_ERROR; }
+    memcpy(Value->sContent, Text, strlen(Text) + 1u);
+    Value->eFinish = XLLM_FINISH_STOP; Value->uHttpStatus = 200u;
+    Value->tUsage.uInputTokens = 40u; Value->tUsage.uOutputTokens = 8u;
+    Value->tUsage.uTotalTokens = 48u;
+    *Response = Value;
+    return XLLM_RESULT_OK;
+}
+
+static bool BackupDecodeFixtureRun(MdoSession* Session, const char* Prompt)
+{
+    MdoAgentSession* Agent = MdoSessionAgentRef(Session);
+    MdoAgentRunOptions Options;
+    MdoAgentRun* Run;
+    xwork_run_result Result = {0};
+    xwork_error Error;
+    bool Ok;
+    if ( Agent == NULL ) return false;
+    MdoAgentRunOptionsInit(&Options); Options.Prompt = Prompt;
+    Options.Deadline = xrtDeadlineAfter(UINT64_C(5000000));
+    Run = MdoAgentRunCreate(Agent, &Options, &Error); MdoAgentSessionRelease(Agent);
+    Ok = Run != NULL && MdoAgentRunStart(Run, &Error) &&
+        MdoAgentRunWait(Run, Options.Deadline, &Result, &Error) == XWORK_RESULT_OK;
+    xworkRunResultUnit(&Result); MdoAgentRunDestroy(Run);
+    return Ok;
+}
+
+static bool BackupDecodeFixtureSeedRuntime(XS_HttpReq* Request)
+{
+    static const char Prefix[] = "/__fixture/backup-decode/seed-runtime/";
+    xstrview Target = Request->head->Target;
+    MdoSessionRuntimeOptions Options;
+    MdoSession* Session;
+    MdoApiContext Context = {0};
+    xwork_error Error;
+    char Id[33];
+    unsigned Calls = 0u;
+    bool Ok;
+    if ( Target.Size != sizeof(Prefix) - 1u + 32u || memcmp(Target.Data, Prefix, sizeof(Prefix) - 1u) != 0 ) return false;
+    memcpy(Id, Target.Data + sizeof(Prefix) - 1u, 32u); Id[32] = '\0';
+    MdoSessionRuntimeOptionsInit(&Options); Options.OnModelComplete = BackupDecodeFixtureComplete;
+    Options.ModelUserData = &Calls;
+    Session = MdoSessionOpen("default", Id, &Options, &Error);
+    Ok = Session != NULL && BackupDecodeFixtureRun(Session, "Writer question \xe4\xb8\xad\xe6\x96\x87") &&
+        BackupDecodeFixtureRun(Session, "Second writer question") && Calls == 2u;
+    MdoSessionRelease(Session);
+    Context.Request = Request; snprintf(Context.RequestId, sizeof(Context.RequestId), "decode-runtime-seed");
     (void)MdoApiReplySuccessTake(&Context, 200u, xrtValueBool(Ok), NULL);
     return true;
 }
@@ -178,6 +256,46 @@ done:
     return true;
 }
 
+static bool BackupDecodeFixtureModelHistory(XS_HttpReq* Request)
+{
+    static const char Prefix[] = "/__fixture/backup-decode/model-history";
+    xstrview Target = Request->head->Target;
+    MdoApiContext Context = {0};
+    MdoSessionBackupLimits Limits;
+    MdoSessionBackupModelHistory History = {0};
+    xwork_error Error;
+    xcancel* Cancel = NULL;
+    xvalue* Value;
+    bool Ok, SizeSafe;
+    if ( Target.Size < sizeof(Prefix) - 1u || memcmp(Target.Data, Prefix, sizeof(Prefix) - 1u) != 0 ) return false;
+    MdoSessionBackupLimitsInit(&Limits); History.Size = sizeof(History); xworkErrorInit(&Error);
+    if ( MdoApiViewEqualText(Target, "/__fixture/backup-decode/model-history-deadline") ) Limits.Deadline = 1u;
+    if ( MdoApiViewEqualText(Target, "/__fixture/backup-decode/model-history-file") ) Limits.FileBytes = 1u;
+    if ( MdoApiViewEqualText(Target, "/__fixture/backup-decode/model-history-cancel") ||
+         MdoApiViewEqualText(Target, "/__fixture/backup-decode/model-history-step-cancel") ) {
+        Cancel = xrtCancelCreate();
+        if ( Cancel == NULL ) return false;
+        if ( MdoApiViewEqualText(Target, "/__fixture/backup-decode/model-history-cancel") ) (void)xrtCancelRequest(Cancel);
+        else g_BackupModelHistoryProbeCancel = Cancel;
+    }
+    SizeSafe = BackupDecodeFixtureModelHistorySizeSafe();
+    Ok = MdoSessionBackupCheckModelHistory(g_DecodeFixtureBackup, &Limits, Cancel, &History,
+        MdoApiViewEqualText(Target, "/__fixture/backup-decode/model-history-null-error") ? NULL : &Error);
+    g_BackupModelHistoryProbeCancel = NULL; xrtCancelDestroy(Cancel);
+    Value = xrtValueObject();
+    (void)MdoApiValueSetBool(Value, "ok", Ok);
+    (void)MdoApiValueSetUInt(Value, "code", Error.eCode);
+    (void)MdoApiValueSetString(Value, "error", Error.sMessage);
+    (void)MdoApiValueSetUInt(Value, "matched", History.MatchedUiRecords);
+    (void)MdoApiValueSetUInt(Value, "unverified", History.UnverifiedUiRecords);
+    (void)MdoApiValueSetUInt(Value, "unprojected", History.UnprojectedModelMessages);
+    (void)MdoApiValueSetBool(Value, "size_safe", SizeSafe);
+    (void)MdoApiValueSetBool(Value, "restore_ready", false);
+    Context.Request = Request; snprintf(Context.RequestId, sizeof(Context.RequestId), "model-history-fixture");
+    (void)MdoApiReplySuccessTake(&Context, 200u, Value, NULL);
+    return true;
+}
+
 static bool BackupDecodeFixtureControl(XS_HttpReq* Request)
 {
     static const char Prefix[] = "/__fixture/backup-decode/";
@@ -191,14 +309,19 @@ static bool BackupDecodeFixtureControl(XS_HttpReq* Request)
     size_t i;
     bool Encodable = false;
     if ( BackupDecodeFixtureReplay(Request) ) return true;
+    if ( BackupDecodeFixtureModelHistory(Request) ) return true;
     if ( BackupDecodeFixtureJournal(Request) ) return true;
     if ( BackupDecodeFixtureSeed(Request) ) return true;
+    if ( BackupDecodeFixtureSeedRuntime(Request) ) return true;
     if ( Target.Size < sizeof(Prefix) - 1u || memcmp(Target.Data, Prefix, sizeof(Prefix) - 1u) != 0 ) return false;
     Context.Request = Request; snprintf(Context.RequestId, sizeof(Context.RequestId), "decode-fixture");
     if ( MdoApiViewEqualText(Target, "/__fixture/backup-decode/kinds") ) {
         Value = xrtValueObject();
         (void)MdoApiValueSetUInt(Value, "start", XWORK_EVENT_AGENT_START);
         (void)MdoApiValueSetUInt(Value, "model", XWORK_EVENT_MODEL_DONE);
+        (void)MdoApiValueSetUInt(Value, "tool_start", XWORK_EVENT_TOOL_START);
+        (void)MdoApiValueSetUInt(Value, "tool_done", XWORK_EVENT_TOOL_DONE);
+        (void)MdoApiValueSetUInt(Value, "recovery", XWORK_EVENT_RECOVERY_RESOLVED);
         (void)MdoApiValueSetUInt(Value, "removed", MDO_SESSION_EVENT_HISTORY_TRUNCATED);
         (void)MdoApiReplySuccessTake(&Context, 200u, Value, NULL);
         return true;

@@ -3,8 +3,10 @@
 Real idle-session meta/snapshot/draft/queue and a normal 2 MiB artifact round
 trip without Home writes. A small malformed-document corpus exercises parser,
 envelope, codec/hash, path/identity/reference and budget failures. A separate
-unbound model replay gate checks ownership and semantic failures. No product
-restore, model/shell/queue execution, pressure test or production preview route.
+unbound model replay gate checks ownership and semantic failures. A test-owned
+source session uses an in-process model to prove real writer compatibility;
+inspection never executes models, shell or queues. No product restore, pressure
+test or production preview route.
 """
 from __future__ import annotations
 
@@ -81,6 +83,14 @@ class Probe(UploadProbe):
         snapshot.write_text("static xcancel* g_BackupSnapshotProbeCancel;\n"
                             "static xcancel* g_BackupJournalProbeCancel;\n" + source,
                             encoding="utf-8", newline="\n")
+        history = self.site / "src/sessions/backup_model_history.c"
+        source = history.read_text(encoding="utf-8")
+        hook = "    ++Index->Facts.MatchedUiRecords;"
+        assert source.count(hook) == 1
+        source = source.replace(hook, hook + "\n    if ( g_BackupModelHistoryProbeCancel != NULL )\n"
+                                "        (void)xrtCancelRequest(g_BackupModelHistoryProbeCancel);", 1)
+        history.write_text("static xcancel* g_BackupModelHistoryProbeCancel;\n" + source,
+                           encoding="utf-8", newline="\n")
         service = self.site / "src/bootstrap/service.c"
         text = service.read_text(encoding="utf-8")
         text = text.replace('#include "backup-upload.c"', '#include "backup-upload.c"\n#include "backup-decode.c"', 1)
@@ -144,10 +154,33 @@ class Probe(UploadProbe):
         library_records = [json.loads(line) for line in library_journal.splitlines()]
         assert {r["type"] for r in library_records} == {"begin_turn", "add_message", "ledger", "rewind", "clear"}
         assert [r["sequence"] for r in library_records] == list(range(1, len(library_records) + 1))
+        status, body = self.api("POST", "/api/v1/sessions", {
+            "project_id": "default", "title": "Actual writer compatibility", "agent_id": "mdo.default",
+            "model_id": "ling-3.0-tiny", "protocol": "openai-responses", "reasoning_effort": "medium",
+            "max_output_tokens": 1024,
+        })
+        assert status == 201, body
+        writer_id = body["data"]["id"]
+        assert self.api("GET", DECODE + "seed-runtime/" + writer_id)[1]["data"] is True
+        status, _, writer_raw = self.call("GET", f"/api/v1/projects/default/sessions/{writer_id}/backup")
+        assert status == 200
+        writer_source = json.loads(writer_raw)
         def inventory():
             return {str(p.relative_to(self.home)): p.read_bytes() for p in self.home.rglob("*")
                     if p.is_file() and p != self.home / ".mdo.lock"}
         before = inventory()
+        writer_history = self.model_history(writer_source)
+        assert writer_history["ok"] and writer_history["matched"] == 4, writer_history
+        assert writer_history["unverified"] == writer_history["unprojected"] == 0, writer_history
+        writer_events = [json.loads(line) for line in base64.b64decode(next(
+            f for f in writer_source["files"] if f["path"] == "ui-events.jsonl")["data"]).splitlines()]
+        # Retention may drop UI projections without deleting model entries.
+        # That is a declared coverage gap, not contradictory model bytes.
+        retained_writer = copy.deepcopy(writer_source)
+        first_writer_turn = min(e["agent_turn"] for e in writer_events if e["agent_turn"] > 0)
+        set_ui(retained_writer, [e for e in writer_events if e["agent_turn"] > first_writer_turn])
+        gap = self.model_history(retained_writer)
+        assert gap["ok"] and gap["matched"] == 2 and gap["unprojected"] == 2, gap
         value = self.validate(raw)
         assert value["ok"] and value["schema"] == 2 and value["encodable"] and not value["restore_ready"], value
         assert value["project_id"] == "default" and value["session_id"] == session_id
@@ -725,6 +758,9 @@ class Probe(UploadProbe):
         assert value["files"] == [f for f in expected if f["path"] in ("meta.json", "snapshot.json")]
         value = self.replay(legacy, "replay-release")
         assert value["ok"] and value["unbound"] and value["released"] and not value["restore_ready"], value
+        value = self.replay(legacy, "model-history")
+        assert value["ok"] and value["matched"] == value["unverified"] == 0, value
+        self.check_model_history(with_snapshot, populated, ui[0], kinds)
         bad_legacy = legacy.replace(b'"export_schema":1', b'"export_schema":1,"files":[]')
         assert not self.validate(bad_legacy)["ok"]
         assert not self.validate(legacy.replace(b'"version":3', b'"version":3,"version":3', 1))["ok"]
@@ -733,7 +769,127 @@ class Probe(UploadProbe):
         assert before == inventory()
         print(f"backup decode {'TLS' if self.secure else 'HTTP'}: owned v2/v1, exact bytes, "
               f"{len(cases)} malformed inputs, separate unbound model replay, budgets/cancel, "
-              "retries and zero Home writes PASS", flush=True)
+              "model/UI relations and real writers, retries and zero Home writes PASS", flush=True)
+
+    def model_history(self, document, mode="model-history"):
+        decoded = self.validate(dump(document))
+        assert decoded["ok"], decoded
+        status, response = self.api("GET", DECODE + mode)
+        assert status == 200, response
+        value = response["data"]
+        assert value["size_safe"] and not value["restore_ready"], value
+        retained = self.api("GET", DECODE + "state")[1]["data"]
+        assert retained["ok"] and retained["files"] == decoded["files"], retained
+        if not value["ok"]:
+            assert value["matched"] == value["unverified"] == value["unprojected"] == 0, value
+        return value
+
+    def check_model_history(self, with_snapshot, populated, template, kinds):
+        base = with_snapshot(populated)
+        base["files"] = [f for f in base["files"] if f["path"] in ("meta.json", "snapshot.json")]
+        recount(base)
+        prompt = {**template, "event_id": 1, "run_id": 7, "kind": kinds["start"],
+                  "agent_turn": 1, "agent_depth": 0, "user_message_sequence": 1,
+                  "tool_name": "", "tool_call_id": "", "artifact_id": 0,
+                  "artifact_path": "", "queue_item_id": "", "text": "Question 中文"}
+        answer = {**prompt, "event_id": 2, "kind": kinds["model"], "success": True,
+                  "user_message_sequence": 0, "text": "Answer"}
+        set_ui(base, [prompt, answer])
+        value = self.model_history(base)
+        assert value["ok"] and value["matched"] == 2 and value["unverified"] == value["unprojected"] == 0, value
+        for mode, code in (("model-history-deadline", 11), ("model-history-file", 11),
+                           ("model-history-cancel", 9), ("model-history-step-cancel", 9)):
+            value = self.model_history(base, mode)
+            assert not value["ok"] and value["code"] == code, (mode, value)
+        assert self.model_history(base, "model-history-null-error")["ok"]
+        contradictions = [
+            [{**prompt, "user_message_sequence": 2}, answer],
+            [{**prompt, "user_message_sequence": 999}, answer],
+            [{**prompt, "agent_turn": 2}, answer],
+            [{**prompt, "text": "Changed question"}, answer],
+            [prompt, {**answer, "text": "Changed answer"}],
+            [prompt, {**answer, "agent_turn": 999}],
+            [prompt, answer, {**prompt, "event_id": 3}],
+            [prompt, answer, {**answer, "event_id": 3}],
+        ]
+        for records in contradictions:
+            doc = copy.deepcopy(base); set_ui(doc, records)
+            value = self.model_history(doc)
+            assert not value["ok"] and value["code"] == 6, (records, value)
+        assert not self.model_history(doc, "model-history-null-error")["ok"]
+        doc = copy.deepcopy(base); set_ui(doc, [{**prompt, "user_message_sequence": 0}, answer])
+        value = self.model_history(doc)
+        assert value["ok"] and value["unverified"] == 1 and value["unprojected"] == 1, value
+        doc = copy.deepcopy(base); set_ui(doc, [answer])
+        value = self.model_history(doc)
+        assert value["ok"] and value["matched"] == 1 and value["unprojected"] == 1, value
+        doc = copy.deepcopy(base); set_ui(doc, [prompt, {**answer, "text": "Ans", "text_truncated": True}])
+        value = self.model_history(doc)
+        assert value["ok"] and value["matched"] == 2 and value["unverified"] == 1, value
+        set_ui(doc, [prompt, {**answer, "text": "Wrong prefix", "text_truncated": True}])
+        assert not self.model_history(doc)["ok"]
+        doc = copy.deepcopy(base); set_ui(doc, [prompt, answer, {**answer, "event_id": 3,
+                                                       "agent_depth": 1, "agent_turn": 999, "text": "Child context"}])
+        assert self.model_history(doc)["matched"] == 2
+        ambiguous = copy.deepcopy(populated)
+        ambiguous["entries"].append({**ambiguous["entries"][1], "sequence": 3, "content": "Other assistant"})
+        ambiguous["next_sequence"] = 4
+        doc = with_snapshot(ambiguous); doc["files"] = copy.deepcopy(base["files"])
+        snap = next(f for f in with_snapshot(ambiguous)["files"] if f["path"] == "snapshot.json")
+        doc["files"] = [f for f in doc["files"] if f["path"] != "snapshot.json"] + [snap]; recount(doc)
+        value = self.model_history(doc)
+        assert value["ok"] and value["unverified"] == 1 and value["unprojected"] == 2, value
+
+        tool_model = copy.deepcopy(populated)
+        tool_model.update(current_turn=2, next_sequence=5)
+        tool_model["entries"][1].update(content="Inspect", tool_calls=[
+            {"id": "inspect", "name": "read", "arguments": '{"path":"file.c"}'}])
+        tool_model["entries"] += [
+            {"sequence": 3, "turn": 1, "flags": 0, "role": 3, "content": "status: success\nmodel framing",
+             "reasoning": None, "tool_call_id": "inspect", "tool_calls": []},
+            {**populated["entries"][1], "sequence": 4, "turn": 2, "content": "Completed"}]
+        def tool_document(root=tool_model):
+            doc = with_snapshot(root)
+            doc["files"] = [f for f in doc["files"] if f["path"] in ("meta.json", "snapshot.json")]
+            return recount(doc)
+        tool_start = {**answer, "event_id": 3, "kind": kinds["tool_start"], "tool_name": "read",
+                      "tool_call_id": "inspect", "text": '{"path":"file.c"}'}
+        tool_done = {**tool_start, "event_id": 4, "kind": kinds["tool_done"], "text": "inline display"}
+        tool_records = [prompt, {**answer, "text": "Inspect"}, tool_start, tool_done,
+                        {**answer, "event_id": 5, "agent_turn": 2, "text": "Completed"}]
+        doc = tool_document(); set_ui(doc, tool_records)
+        value = self.model_history(doc)
+        assert value["ok"] and value["matched"] == 5 and value["unverified"] == value["unprojected"] == 0, value
+        for key, bad in (("tool_call_id", "different"), ("tool_name", "write"),
+                         ("agent_turn", 2), ("text", "{}")):
+            doc = tool_document(); records = copy.deepcopy(tool_records); records[2][key] = bad; set_ui(doc, records)
+            value = self.model_history(doc)
+            assert not value["ok"] and value["code"] == 6, (key, value)
+        pending = copy.deepcopy(tool_model); pending["entries"] = pending["entries"][:2]
+        pending.update(current_turn=1, next_sequence=3)
+        doc = tool_document(pending); set_ui(doc, tool_records[:4])
+        value = self.model_history(doc)
+        assert value["ok"] and value["unverified"] == 1, value
+        doc = tool_document(); records = copy.deepcopy(tool_records); records[3]["kind"] = kinds["recovery"]
+        set_ui(doc, records)
+        assert self.model_history(doc)["unverified"] == 0
+
+        # A normal old multimodal snapshot loses its TEXT/IMAGE parts. Positive
+        # binding evidence reports that gap, while a retained conflicting text
+        # cannot hide behind the same binding.
+        image_id = "a" * 32
+        image_model = copy.deepcopy(populated); image_model["entries"][0]["content"] = None
+        doc = tool_document(image_model); set_ui(doc, [{**prompt, "text": "Prompt with image"}, answer])
+        replace(doc, f"attachments/{image_id}.bin", b"\x89PNG\r\n\x1a\n")
+        replace(doc, f"attachments/{image_id}.json", dump({"schema_version": 1, "id": image_id,
+            "mime_type": "image/png", "size": 8, "created_at": 1}))
+        replace(doc, "attachments/events/1.json", dump({"schema_version": 1, "run_id": 7, "attachments": [image_id]}))
+        value = self.model_history(doc)
+        assert value["ok"] and value["matched"] == 2 and value["unverified"] == 1, value
+        original_snapshot = next(f for f in base["files"] if f["path"] == "snapshot.json")
+        replace(doc, "snapshot.json", base64.b64decode(original_snapshot["data"]))
+        assert not self.model_history(doc)["ok"]
+        assert self.model_history(base)["unverified"] == 0  # failure/cancel never poison a retry
 
 
 def main():

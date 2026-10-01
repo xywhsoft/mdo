@@ -2,6 +2,27 @@
 
 本清单以 `app_bak/wwwroot` 的可操作行为为基线，而不是以页面长得相似或单元测试通过为完成标准。`docs/frontend-migration.md` 记录每次实现和验证；这里记录当前还需要什么证据。审计更新：2026-10-02，基线提交 `f9e2c4c`。
 
+2026-10-02 增量：备份新增独立模型/UI 关系检查，核对根 Agent 的用户
+sequence、assistant turn/文字及工具身份/参数。明确冲突拒绝，旧记录、
+截断、模糊身份及持久化窗口报告无法完整核对，缺少 UI 投影单独统计。
+真实产品两轮运行→正式捕获→离线检查得到四项匹配且无缺口；UI 保留前缀
+缩短后报告两条缺口。HTTP/TLS 同时覆盖错误、取消与 Home 原字节保持。
+源头 xllm-session `e2b990f2` 与 xs `34fba96` 已提交并同步依赖锁定。
+
+本轮发现旧模型 writer 没有持久化多模态 parts，带图输入的文字也可能
+缺失；存在有效图片绑定的旧记录会明确标为无法完整核对。此问题需在库
+中先修复，随后完成实际图片解码、生产 worker、staging 非覆盖发布、正式
+菜单和原生/实体设备验收。完整恢复行仍不升级，`restore_ready:false` 保持。
+详见 [关系检查](frontend-migration.md#2026-10-02会话备份的模型与-ui-关系检查)。
+
+同阶段 Windows/Linux 有界门禁通过 114 Python、252 Node、90 模块、严格
+C11、36 运行探针、三项 packed 和独立 A/B；Windows 另通过便携 WebView2
+Home 与 20 秒启动。根目录程序更新为
+`2d76be9b8f9aa88a20de852755c3799fecf7fc49a45847c7af70d4e67be43542`，
+Linux 为 `4e74f65bfcb567070900c45867e976a9dca677c76b4b599adc34eafccaeadedb`。
+日志 `.build/qa-model-history-{windows,linux}-final.log`，未做压力/高负载测试。
+没有本阶段原生点击或实体设备证据，完整备份恢复继续未完成。
+
 2026-10-02 增量：图片预览新增加载提示、失败反馈和原 URL 重试。Windows
 候选包的正式组件验证 HTTP 503、再次失败、恢复成功、旧节点事件隔离、
 Esc、原名与焦点；中文 320×350、英文 280×250 布局稳定后均在视口内。

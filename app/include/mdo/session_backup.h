@@ -106,4 +106,27 @@ bool MdoSessionBackupPreviewGet(const MdoSessionBackup* Backup,
 xllm_session* MdoSessionBackupReplayModel(const MdoSessionBackup* Backup,
     const MdoSessionBackupLimits* Limits, const xcancel* Cancel, xwork_error* Error);
 
+typedef struct MdoSessionBackupModelHistory {
+    uint32 Size;
+    size_t MatchedUiRecords;
+    size_t UnverifiedUiRecords;
+    size_t UnprojectedModelMessages;
+} MdoSessionBackupModelHistory;
+
+/* Separate filesystem-free relation gate: replays the owned model, then
+ * checks retained main-Agent user sequences, assistant turns/text and tool
+ * turn/ID/name/arguments against its raw ledger. Tool display output differs
+ * from model framing, so only call identity and durable result presence are
+ * compared. Legacy/resume starts without sequences, ambiguous old assistant
+ * turns, bounded text, old lost multimodal parts and tool completion before
+ * result persistence are reported as unverified; absent UI projections are
+ * reported separately.
+ * No source bytes are repaired. A true result means no proven contradiction,
+ * NOT complete restoration eligibility. Initialize History.Size. Size
+ * mismatch leaves it untouched; other failures clear it except Size. A fresh
+ * bounded operation uses the same cancellation/deadline as model replay. */
+bool MdoSessionBackupCheckModelHistory(const MdoSessionBackup* Backup,
+    const MdoSessionBackupLimits* Limits, const xcancel* Cancel,
+    MdoSessionBackupModelHistory* History, xwork_error* Error);
+
 #endif

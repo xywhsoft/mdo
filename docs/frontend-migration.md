@@ -4,6 +4,51 @@
 
 完成判据及尚缺的打包页证据见 [前端操作体验完成审计](frontend-completion-audit.md)。本文件继续记录每次实现和验证的细节。
 
+## 2026-10-02：会话备份的模型与 UI 关系检查
+
+新增独立的 `MdoSessionBackupCheckModelHistory()`，在拥有离线备份和独立
+模型重放之后，核对根 Agent 的用户 sequence、assistant turn/文字及工具
+turn/call ID/name/原参数。明确冲突失败；旧序号缺失、模糊 assistant、截断
+内容与工具完成早于结果持久化的窗口报告无法完整核对。UI 保留范围缩短
+时报告模型投影缺口，不重建被淘汰的数据。结果不修改备份、不写 Home，
+不会执行模型/工具/队列，manifest 保持 `restore_ready:false`。
+
+xllm-session 新增稳定状态下原始 retained ledger 的只读视图；包含被
+watermark 隐藏的 entry，避免把渲染后的 request 当作原始身份。单写线程、
+借用所有权、size 校验和 hook/瞬态拒绝均有有界库回归。源头 `e2b990f2`、
+xs `34fba96` 已提交，15 个生产文件逐字节同步、TCC 公共入口及 deps.lock
+已同步。Windows xs/xsw 与 Linux 宿主均从此 SDK 构建。
+
+HTTP/TLS 探针新增实际产品两轮运行→正式捕获→离线关系检查，四条消息
+匹配、没有缺口；缩短 UI 前缀后报告两条模型缺口。源运行使用进程内固定
+响应，仅发生在测试自己的隔离 Home；零写入基线之后只进行离线检查。
+237 个既有格式错误输入继续覆盖，新用例检查明确冲突、旧记录、截断、
+子 Agent、工具/恢复事件、取消清理、失败重试、NULL error 和旧多模态缺口。
+首次有界库 fixture 在 TURN_COMPLETE 状态下调用 BeginModelCall，已改为
+先打开新回合；首次真实保留范围 fixture 假定首 turn 为 1，已改为取实际
+事件边界。两处只修正测试前置条件。新增模块的两个静态名字与 unity 中的
+旧模块重名，也已修正；失败日志保留，没有放宽编译/库合同。
+
+检查发现现有 xllm-session snapshot/journal writer 没有保存多模态 parts，
+带图请求的文字也可能丢失。这类旧备份只报告无法完整核对，不能报成完整
+可恢复。多模态持久化、离线图片解码、生产预览 worker、独立 staging 与
+非覆盖原子发布、正式菜单和原生/实体设备仍待完成。详见
+[实施记录](session-backup-plan.md#保留模型账本与-ui-关系检查)。
+
+最终 Windows/Linux 有界门禁通过 114 Python、252 Node、90 模块、严格
+C11、36 运行探针、三项 packed 和独立 A/B。Windows 另通过便携 WebView2
+Home 的覆盖/搬移/重启与 20 秒启动；Linux 使用新的 ext4 源副本
+`/home/ubuntu/.cache/mdo-linux-model-history-6p8oazb_` 重建宿主，跳过 GUI。
+根目录程序已更新为 Windows A/B 的同一字节：
+`2d76be9b8f9aa88a20de852755c3799fecf7fc49a45847c7af70d4e67be43542`；
+Linux 为 `4e74f65bfcb567070900c45867e976a9dca677c76b4b599adc34eafccaeadedb`。
+日志 `.build/qa-model-history-{windows,linux}-final.log`；库 bounded 回归为
+`.build/qa-model-history-library-windows.log` 和 `.build/qa-model-history-linux.log`。
+没有压力或高负载测试，本阶段不增加原生点击或实体设备交互验收等级。
+最终短结构体 canary 改用分配器对齐的存储，避免假定 uint32 栈数组满足
+报告结构体的对齐。生产字节未变，两平台 HTTP/TLS 定向补验均通过，日志
+`.build/qa-model-history-probe-aligned-{windows,linux}.log`。
+
 ## 2026-10-02：图片预览加载反馈与重试
 
 打包页复现了图片 HTTP 503 后预览仅显示损坏图片和文件名的情况。正式

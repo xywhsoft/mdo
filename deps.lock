@@ -7,7 +7,7 @@
     "single_header_sha256": "1ea16b21f968d09e5084162f3919b7e6ae2412f9e13c3bbbdd4b322bcd5a26d2"
   },
   "xserver": {
-    "commit": "064952339ae425de3fd74d20b4b714ec5b3d30a2",
+    "commit": "34fba960d1b2525a6bf64524358e6d9c32c4592e",
     "version": "1.0.0",
     "required_extensions": [
       "xwork",
@@ -22,8 +22,8 @@
     },
     "xllm-session": {
       "version": "3.0.0-dev",
-      "source_commit": "cb6c05f67e7f471e14b53d33208ef380bf0fbfbd",
-      "production_tree_sha256": "2e7bc4ca552c6391119cd85cb17951588f354432ba3102a6868a7bc58bc67151",
+      "source_commit": "e2b990f290f212c7cb2352806219faf5f91ad8f5",
+      "production_tree_sha256": "7fb6d0359bf7f9033c7806317b49e87309cda88179294dd7ddf9b071d531882a",
       "persistence_schema_version": 3
     },
     "xwork": {
