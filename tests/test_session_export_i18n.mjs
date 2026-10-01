@@ -43,6 +43,7 @@ test("Markdown session export follows the selected language and keeps transcript
     assert.match(english, /Call:\n\n````\n```source```\n````/);
     assert.match(english, /Result:\n\n```\nfile body\n```/);
     assert.match(english, /Image attachments:\n\n- image-1/);
+    assert.match(english, /Record notice: some images were omitted/);
     assert.match(english, /See https:\/\/example.com/);
     assert.doesNotMatch(english, /导出于|用户|图片附件/);
     assert.match(formatSessionMarkdown(session, { events: [] }, exportedAt),
@@ -58,6 +59,7 @@ test("Markdown session export follows the selected language and keeps transcript
     assert.match(russian, /Вызов:\n\n````/);
     assert.match(russian, /Результат:\n\n```/);
     assert.match(russian, /Вложения с изображениями:\n\n- image-1/);
+    assert.match(russian, /Примечание: некоторые изображения не включены/);
   } finally {
     await loadLocale("zh-CN");
     globalThis.fetch = previousFetch;

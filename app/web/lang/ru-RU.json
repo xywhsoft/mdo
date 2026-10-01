@@ -405,6 +405,7 @@
   "sessionExport.call": "Вызов:",
   "sessionExport.result": "Результат:",
   "sessionExport.images": "Вложения с изображениями:",
+  "sessionExport.imagesIncomplete": "Примечание: некоторые изображения не включены (отсутствуют, недоступны или превышен лимит экспорта); для сохранённых ID вложений нужен исходный Home.",
   "sessionExport.empty": "Сообщений пока нет.",
   "reasoning.none": "Нет",
   "reasoning.minimal": "Минимум",

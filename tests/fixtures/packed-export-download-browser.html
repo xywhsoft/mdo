@@ -38,7 +38,18 @@ frame.addEventListener("load", () => {
           hasSyntheticPrompt:text.includes("EXPORT DOWNLOAD QA"),
           hasSyntheticPng:text.includes("iVBORw0KGgoAAAANSUhEUgAAAAEAAAAB"),
           markdownImageReferences:(text.match(/^- [a-f0-9]{32}$/gm) || []).length,
-          markdownEmbeddedImages:(text.match(/!\[[^\n]*\]\(data:image\//g) || []).length };
+          markdownEmbeddedImages:(text.match(/!\[[^\n]*\]\(data:image\//g) || []).length +
+            (text.match(/^\[mdo-image-[a-f0-9]{32}\]: data:image\//gm) || []).length };
+        if (markdown) {
+          const embedded = [...text.matchAll(/data:image\/(?:png|jpeg|webp);base64,([A-Za-z0-9+/]+={0,2})/g)];
+          const syntheticPng = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/lZkAAAAASUVORK5CYII=";
+          capture.embeddedImageBytes = embedded.map((match) => atob(match[1]).length);
+          capture.allEmbeddedImagesMatchFixture = embedded.length > 0 &&
+            embedded.every((match) => match[1] === syntheticPng);
+          capture.hasOriginalImageName = text.includes('截图 "1" 100%\\.png');
+          capture.hasLongOriginalImageName = text.includes("跨平台附件".repeat(40) + "\\.png");
+          capture.imagesIncomplete = text.includes("部分图片未包含");
+        }
         if (document) {
           capture.keys = Object.keys(document);
           capture.snapshotType = typeof document.snapshot;

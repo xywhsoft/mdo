@@ -4,6 +4,22 @@
 
 完成判据及尚缺的打包页证据见 [前端操作体验完成审计](frontend-completion-audit.md)。本文件继续记录每次实现和验证的细节。
 
+## 2026-10-01：Markdown 导出携带原图与原文件名
+
+上一阶段已确认真实下载完成，但新版 Markdown 仅输出附件 ID，无法像旧版一样离开原 Home 读取图片。本轮新增独立 `session-export-images.js`：从最终时间线投影选出实际导出的附件，按原项目/会话读取元数据和原图。重复编辑/重试引用只读取一次。元数据身份、版本、图片类型、名称和大小不一致时不内嵌；正文流按元数据大小有界读取，过长、过短或响应类型错误均拒绝，关闭未完成流。每次导出最多 16 个唯一附件、32 MiB 原始图片字节和 30 秒；失败下载也预留并消耗读取预算。没有新增构建依赖或请求外部图片。
+
+格式化器输出标准 Markdown 图片引用，在文件末尾为每个 ID 写一份 data URL 定义。这样保留原始图片和完整文件名，同一图片在多条消息中重复出现时不会复制大段 base64；整个文件可脱离 Home 保存。原始名称只作图片说明，对 Markdown 标点转义，不作为路径或 HTML。旧 v1 无文件名附件用 ID 追溯。缺失、读失败或达到预算的图片仍保留附件 ID，文件内明确提示需要原 Home；中英俄提示已齐全。完整 CommonMark 增强仍是独立范围，本轮不扩张现有聊天渲染器。
+
+新增五项 Node 回归，覆盖纯图片空正文、原图字节与名称、重复引用只读/内嵌一次、缺失图片后继续读取、旧 v1 兼容、错误身份/名称/大小/流拒绝、图片数量和传输预算（含失败预留），以及截止时间取消后不继续读下一图。三语导出用例核对不完整提示；既有长正文补读与明确原文测试继续通过。边界测试使用小图和缩小的预算，不做压力或高负载测试。
+
+最终 Windows 单文件 Home `.build/mdo-packed-docks-shw1kweb` 与 Linux ext4 Home `/home/ubuntu/.cache/mdo-linux-qa-markdown-images/.build/mdo-packed-docks-w93b93f6` 各实际空文字发送两张合成 PNG，等待成功后从正式标题栏导出。两端都得到 1253 字节的 Markdown Blob；各有两份内嵌定义，解码后均为 68 字节且与输入 PNG 的全部 base64 完全一致。15 字符名称 `截图 "1" 100%.png` 和 204 字符长名称完整保留，无 ID 占位、无不完整提示。Linux 实际工作台与文档宽度为 320×350；刷新工作台后再次导出，两端内容结果保持。Windows 首次下载 GUID `780af51c-7768-4fdb-aeb7-d6eb4ba89fcc`、Linux `7087df01-fc1a-4b92-ba4c-2a5c22fea5bd` 都报告 1253/1253 字节 `completed`。详情在 `.build/qa-markdown-images-*-events.json`、`*-captures.json`；截图 `.build/qa-markdown-images-windows.png`、`qa-markdown-images-linux.png`。内嵌浏览器没有可独立读回的磁盘路径，不把 Blob/传输核对写成磁盘文件验收，也不代替实体设备或原生 WebView 下载验证。
+
+Windows 最终有界门禁通过 114 Python、227 Node、90 个模块、严格 C11、32 个运行探针、确定性 A/B、打包 Home 租约/队列恢复、便携 WebView2 Home 和 20 秒启动。最初门禁期间代码审阅补上流关闭与名称空格保留，前后包不同而被 A/B 拦截；该失败日志保留为 `.build/qa-markdown-images-release.log`，源码稳定后的整轮重跑及最终包通过，日志为 `.build/qa-markdown-images-release-final.log`。Linux 的 C 源码未变；独立 ext4 镜像完成相同有界门禁及最终 A/B，并在同步这两项最终 JS 修正后另跑完整前端门禁，见 `.build/qa-markdown-images-linux-release.log`、`qa-markdown-images-linux-final-web.log`。Windows 包及根目录 `mdo.exe` SHA-256 为 `3ab8a2d6ced06f7c85d94261525d37206d0b947d2c8cd1d845414fd2b78ef1fb`；Linux 为 `94b3e7fc82c5d41a2d6f99cf80785b53749de9e5109ce832ca6b84827f14dc41`。
+
+本轮 iframe 观察页的两平台各记录两条无栈 `MutationObserver.observe` 同文错误；本轮没有取得它们的调用栈，不能仅凭文字归为上一阶段已定位的 Electron 注入错误，更不能宣称整个夹具无错误。另打开两平台独立正式会话页并点击同一导出入口，错误日志均为空、消息与图片名称及操作按钮正常。上述下载完成和 Blob 字节证据独立成立。
+
+本轮关闭 Markdown 的图片内容缺口。JSON v1 仍仅提供 meta 与运行快照，没有 UI 事件和附件字节，完整可携带备份及恢复验证继续待实现；没有靠改名隐藏这一缺口。原生端、实体手机和此前审计边界仍待验收，长期目标保持进行中。
+
 ## 2026-10-01：导出下载完成事件与图片可携带性核对
 
 上一阶段的内嵌浏览器下载等待接口超时，不能据此确定 `mdo` 下载失败。本轮从正式导出按钮和菜单观察 `Page.downloadWillBegin`/`Page.downloadProgress`，并新增 `tests/fixtures/packed-export-download-browser.html`。QA 代理仅在显式 `--export-download-fixture` 下提供该页面；页面在自己持有的工作台 iframe 中读取原始 Blob，仍调用原生 `createObjectURL`、保留原生 URL 和正式下载动作，关闭页面后观察器消失。产品源码及打包资源没有修改。JSON API 的 MIME 为 `application/octet-stream`，观察器按备份文档形状识别它，不能只按 `application/json` 判断是否已经导出。

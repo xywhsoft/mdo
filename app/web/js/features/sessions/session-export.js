@@ -5,6 +5,10 @@ function singleLine(value) {
   return String(value ?? "").replace(/\s+/g, " ").trim();
 }
 
+function imageLabel(value) {
+  return String(value).replace(/[\\`*_{}\[\]()#+\-.!<>|]/g, "\\$&");
+}
+
 function fenced(value) {
   const content = String(value ?? "");
   let longest = 2;
@@ -48,6 +52,8 @@ export function formatSessionMarkdown(session, transcript, exportedAt = new Date
       "记录提示：部分事件正文未能完整导出。")}`, "");
 
   let count = 0;
+  const imageDefinitions = new Map();
+  let imagesIncomplete = Boolean(transcript.imagesIncomplete);
   for (const item of eventsToTimeline(transcript.events ?? [])) {
     if (item.key === "history-gap" || item.kind === "reasoning") continue;
     if (!item.text && !item.attachments?.length && item.kind !== "tool") continue;
@@ -63,11 +69,27 @@ export function formatSessionMarkdown(session, transcript, exportedAt = new Date
     } else if (item.text) lines.push(String(item.text), "");
     if (item.attachments?.length) {
       lines.push(t("sessionExport.images", {}, "图片附件："), "");
-      for (const id of item.attachments) lines.push(`- ${id}`);
+      for (const id of item.attachments) {
+        const image = transcript.images?.get(id);
+        if (image) {
+          // Reference definitions carry each original image only once, even
+          // when retries repeat it in many messages. The file is self-contained.
+          const reference = `mdo-image-${id}`;
+          lines.push(`![${imageLabel(image.name)}][${reference}]`);
+          imageDefinitions.set(reference, image.dataUrl);
+        } else {
+          lines.push(`- ${id}`);
+          imagesIncomplete = true;
+        }
+      }
       lines.push("");
     }
     count += 1;
   }
   if (!count) lines.push(`_${t("sessionExport.empty", {}, "暂无对话消息。")}_`, "");
+  if (imagesIncomplete) lines.push(`> ${t("sessionExport.imagesIncomplete", {},
+    "记录提示：部分图片未包含（图片缺失、读取失败或达到导出上限）；保留的附件 ID 需要原 Home。")}`, "");
+  for (const [reference, dataUrl] of imageDefinitions)
+    lines.push(`[${reference}]: ${dataUrl}`, "");
   return lines.join("\n");
 }

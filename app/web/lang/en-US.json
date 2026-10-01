@@ -405,6 +405,7 @@
   "sessionExport.call": "Call:",
   "sessionExport.result": "Result:",
   "sessionExport.images": "Image attachments:",
+  "sessionExport.imagesIncomplete": "Record notice: some images were omitted (missing, unreadable, or beyond the export limit); retained attachment IDs require the original Home.",
   "sessionExport.empty": "No conversation messages yet.",
   "reasoning.none": "None",
   "reasoning.minimal": "Minimal",

@@ -405,6 +405,7 @@
   "sessionExport.call": "调用：",
   "sessionExport.result": "结果：",
   "sessionExport.images": "图片附件：",
+  "sessionExport.imagesIncomplete": "记录提示：部分图片未包含（图片缺失、读取失败或达到导出上限）；保留的附件 ID 需要原 Home。",
   "sessionExport.empty": "暂无对话消息。",
   "reasoning.none": "无思考",
   "reasoning.minimal": "极低",

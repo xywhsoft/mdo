@@ -27,6 +27,7 @@ import { createSessionActionMenu } from "./features/sessions/session-action-menu
 import { sessionActionDialogCopy, sessionActionToast, sessionForkTitle } from "./features/sessions/session-actions.js";
 import { SESSION_TITLE_UTF8_LIMIT, sessionTitleUtf8Bytes } from "./features/sessions/session-title.js";
 import { formatSessionMarkdown, sessionMarkdownFilename } from "./features/sessions/session-export.js";
+import { loadSessionMarkdownImages } from "./features/sessions/session-export-images.js";
 import { createProjectDialog } from "./features/sessions/project-dialog.js";
 import { projectDefaultsFromWorkspace } from "./features/sessions/project-identity.js";
 import { timelineStore, selectTimeline, clearTimeline, refreshSelectedTimeline, reloadSelectedTimeline } from "./features/chat/timeline-store.js";
@@ -2161,7 +2162,8 @@ export async function boot() {
     if (action === "export" || action === "export_json") {
       if (action === "export") toast(t("sessionAction.preparingMarkdown", {}, "正在整理 Markdown 会话记录…"));
       const file = action === "export_json" ? await exportSession(session) : {
-        blob: new Blob([formatSessionMarkdown(session, await loadSessionTranscript(session))],
+        blob: new Blob([formatSessionMarkdown(session, await loadSessionMarkdownImages(
+          session, await loadSessionTranscript(session)))],
           { type: "text/markdown;charset=utf-8" }),
         filename: sessionMarkdownFilename(session),
       };
