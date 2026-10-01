@@ -59,8 +59,9 @@ manager 调用或库通过 native path 写入不能被它自动覆盖。不得�
    分别限制文件数、单文件、总字节、JSON/base64 膨胀和传输时间；定额失败需要
    明确反馈。导出完成即释放捕获锁，下载速度不能占用运行窗口。
 4. **进行中**：离线拥有解码、清单及 metadata/UI/todo、draft/queue/receipt/
-   feedback/消息绑定 schema、模型 snapshot schema/CRC 和保留 UI 的侧车关系校验已接入；journal 及其
-   与 UI 的关系、图片实际解码及生产预览 worker 未完成。先实现离线验证与预览，
+   feedback/消息绑定 schema、模型 snapshot/journal schema/CRC、checkpoint 后记录
+   连号和保留 UI 的侧车关系校验已接入；实际模型重放及其与 UI 的关系、图片
+   实际解码及生产预览 worker 未完成。先实现离线验证与预览，
    再做恢复事务。验证所有 schema、路径、ID、内容
    校验和引用；拒绝链接、绝对路径、`..`、重复文件和大小声明失真。v1 只能
    预览为模型快照，不能误报为完整带图备份。未知模型/Agent 的会话可保留
@@ -107,8 +108,8 @@ v3 CRC-32/ISO-HDLC 核对原文件末尾 checksum 之前的精确字节，保持
 已改为必定修改现存 checksum 字节；完整门禁另发现手写 session 探针漏掉新
 模块，已同步其 include 与复制清单，没有放宽产品校验。
 
-这完成快照格式边界；journal 严格 schema/CRC、实际 xllm 重放及模型/UI 关系
-仍需接入。图片实际解码、生产预览 worker、新 ID/原子 staging 恢复和正式菜单
+这完成快照格式边界；后续 journal 格式接入见下节，实际 xllm 重放及模型/UI
+关系仍需接入。图片实际解码、生产预览 worker、新 ID/原子 staging 恢复和正式菜单
 也未完成。manifest 保持 `restore_ready:false`，本阶段不开放导入或自动续行。
 
 Windows/Linux 完整有界门禁通过 114 Python、251 Node、90 模块、严格 C11、
@@ -119,6 +120,47 @@ Windows/Linux 完整有界门禁通过 114 Python、251 Node、90 模块、严�
 Linux A/B 为
 `d769d8a556a94b0037550297b47f7ef67e40c6698fdecf7f533f44dfc23da785`。
 日志 `.build/qa-backup-snapshot-{final,linux-final}.log`；没有压力或高负载测试。
+
+## 模型 journal 格式与 checkpoint 连号检查
+
+2026-10-02 将快照校验模块整理为 `backup_model.c`，snapshot 与 journal 共用
+消息字段、整数/文本及原字节 CRC 检查。共同入口先解析快照并取得 checkpoint，
+再逐行解析 journal，一次只持有一行的 JSON tree；两份文件不再经过通用扫描
+二次解析。其他侧车和 UI 继续使用各自读取器，来源路径和原始工具参数保持
+记录，不作为打开文件、恢复路径或执行工具的指令。
+
+v1/2 使用 `journal_sequence`/`operation`，v3 使用 `sequence`/`type`。七类
+记录 begin_turn/add_message/compact/ledger/truncate/rewind/clear 分别检查已知
+字段及必需值，拒绝错类型、未知/重复字段、NUL 和数值窄化。保留库重放所
+支持的可省略 generation/usage/after_sequence，以及 rewind 的零边界。
+v3 CRC 对换行前精确字节校验，CRLF 仅移除 framing 的 CR；空行和未终止尾
+记录拒绝，离线检查不截短文件或修补损坏内容。
+
+记录编号必须严格递增；snapshot 已覆盖的前缀可从中间开始或缺少已覆盖号，
+但仍核对每一行的 schema/CRC。超出 checkpoint 的第一条必须是 checkpoint+1，
+后续不能跳号。每条记录及 CRC 的每 64 KiB 保留取消/截止时间检查。此处检查
+格式和记录编号，尚不证明消息与 turn 的完整关系、工具配对、实际压缩摘要
+质量或 rewind 后的模型上下文。这些必须以 xllm-session 实际重放验证，不能
+用相同外观的手写状态机替代。
+
+有界 HTTP/TLS 探针新增合法旧记录、旧 v3 可省略字段、七种记录 schema、
+covered/tail 编号和 CRLF，检查字段/CRC 损坏、缺号/乱序、重复/空/残缺行及
+首条读取后取消。另通过锁定库实际写出 begin_turn、add_message、ledger、
+rewind、clear，将精确行字节纳入离线解码。该夹具只使用隔离 Home 的自有
+临时文件，在零写入比较前移除；解码、重编码和错误重试期间 Home 原字节
+保持，没有模型/shell/queue 执行。其余两类使用 schema 样例，尚未冒充实际
+compaction/truncate 重放证据。
+
+本阶段继续保持 `restore_ready:false`，正式页面菜单和恢复事务未开放。
+
+Windows/Linux 完整有界门禁通过 114 Python、251 Node、90 模块、严格 C11、
+36 运行探针、独立 A/B 与三项 packed；Windows 另通过便携 WebView2 Home
+和 20 秒打包启动。Linux 使用新 ext4 源拷贝和同一锁定 SDK 新构建宿主，跳过
+GUI。根目录程序与 Windows A/B SHA-256 为
+`dd9b148ce35f07c1bd3d8b180a79b71d9b37ac66a17703bd72d8850981e5519f`，
+Linux A/B 为
+`d70032d9bc70cf02a50a13a2f7e7814c15b7cb8639ff310d198282e362d56fbb`。
+日志 `.build/qa-backup-journal-{final,linux-final}.log`；没有压力或高负载测试。
 
 ## 统一捕获边界与实际文件清单
 

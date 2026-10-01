@@ -2,6 +2,20 @@
 
 本清单以 `app_bak/wwwroot` 的可操作行为为基线，而不是以页面长得相似或单元测试通过为完成标准。`docs/frontend-migration.md` 记录每次实现和验证；这里记录当前还需要什么证据。审计更新：2026-10-02，基线提交 `f9e2c4c`。
 
+2026-10-02 增量：模型文件共用 `backup_model.c`，新增 journal v1–3 七种
+记录的字段/CRC 和 checkpoint 后连号检查，保留旧可省略字段及 rewind 零
+边界。HTTP/TLS 的 237 种错误输入、真实库写出的五种记录、CRLF/covered 前缀、
+首条读取后取消与 Home 原字节保持通过；其余两种为 schema 样例。实际模型
+重放、模型/UI 关系、图片实际解码、生产预览 worker、原子恢复及正式菜单
+仍未完成。manifest 保持 `restore_ready:false`，完整恢复行不升级。详见
+[journal 校验](frontend-migration.md#2026-10-02模型-journal-格式校验)。
+两平台完整有界门禁通过 114 Python、251 Node、90 模块、严格 C11、36 运行
+探针、独立 A/B 及三项 packed；Windows 另通过便携 Home 与 20 秒启动。
+根目录程序已更新到
+`dd9b148ce35f07c1bd3d8b180a79b71d9b37ac66a17703bd72d8850981e5519f`。
+Linux 在新 ext4 源拷贝中从同一锁定 SDK 构建宿主，跳过 GUI；原生/实体设备
+交互仍缺证据，没有压力或高负载测试。
+
 2026-10-02 增量：备份模型 snapshot 新增 v1–3 格式/字段、消息与文件序号、
 配置位宽/范围及原字节 CRC 校验。拥有解码 HTTP/TLS 的 177 种错误输入、
 合法旧格式/推理/错误工具参数、CRC 中途取消与 Home 原字节保持通过。

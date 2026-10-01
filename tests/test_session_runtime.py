@@ -41,7 +41,7 @@ PROBE_SOURCE = r'''
 #include "src/sessions/attachments.c"
 #include "src/sessions/manager.c"
 #include "src/sessions/backup.c"
-#include "src/sessions/backup_snapshot.c"
+#include "src/sessions/backup_model.c"
 #include "session-capture.c"
 #include "session-backup.c"
 
@@ -819,7 +819,7 @@ def write_site(site: Path) -> None:
         "src/sessions/internal.h",
         "src/sessions/manager.c",
         "src/sessions/backup.c",
-        "src/sessions/backup_snapshot.c",
+        "src/sessions/backup_model.c",
         "src/sessions/backup_internal.h",
     ):
         shutil.copy2(ROOT / "app" / relative, site / relative)

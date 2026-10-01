@@ -51,6 +51,56 @@ static bool BackupDecodeFixtureSeed(XS_HttpReq* Request)
     return true;
 }
 
+/* Write a few records through the locked library, using only a test-owned
+ * file in the isolated Home. This checks writer/reader compatibility without
+ * invoking a model or borrowing the product session's ledger. */
+static bool BackupDecodeFixtureJournal(XS_HttpReq* Request)
+{
+    static const char Relative[] = "data/backup-journal-probe.jsonl";
+    MdoApiContext Context = {0};
+    xllm_session* Session = NULL;
+    xllm_error Error;
+    xvalue* Value;
+    xfile File = NULL;
+    char Buffer[16384], Extra;
+    size_t Bytes = 0u, Read = 0u;
+    str Native = NULL;
+    bool Ok = false;
+    if ( !MdoApiViewEqualText(Request->head->Target, "/__fixture/backup-decode/journal") ) return false;
+    if ( !MdoHomeAtomicWrite(Relative, "", 0u, false) ) goto done;
+    Native = MdoHomeExternalPath(Relative);
+    Session = xllmSessionCreate(NULL, &Error);
+    if ( Session == NULL || Native == NULL || !xllmSessionEnableJournal(Session, Native, &Error) ||
+         xllmSessionBeginTurn(Session) != 1u ||
+         !xllmSessionAddText(Session, 1u, XLLM_ROLE_USER, "Original question", 0u) ||
+         !xllmSessionAddText(Session, 1u, XLLM_ROLE_ASSISTANT, "Original answer", 0u) ||
+         !xllmSessionNoteFileRead(Session, "../source.c") ||
+         !xllmSessionNoteFileModified(Session, "C:\\source\\file.c") ||
+         xllmSessionBeginTurn(Session) != 2u ||
+         !xllmSessionAddText(Session, 2u, XLLM_ROLE_USER, "Second question", 0u) ||
+         !xllmSessionAddText(Session, 2u, XLLM_ROLE_ASSISTANT, "Second answer", 0u) ||
+         !xllmSessionTruncateAfter(Session, 2u, &Error) || !xllmSessionClear(Session, &Error) ||
+         !xllmSessionFlushJournal(Session, &Error) ) goto done;
+    File = MdoHomeOpenRead(Relative);
+    if ( File == NULL ) goto done;
+    while ( Bytes < sizeof(Buffer) - 1u ) {
+        if ( !xrtRead(File, Buffer + Bytes, sizeof(Buffer) - 1u - Bytes, &Read) ) goto done;
+        if ( Read == 0u ) break;
+        Bytes += Read;
+    }
+    Ok = Bytes > 0u && xrtRead(File, &Extra, 1u, &Read) && Read == 0u;
+done:
+    if ( File != NULL && !xrtClose(File) ) Ok = false;
+    xllmSessionDestroy(Session); xrtFree(Native);
+    if ( !MdoHomeRemove(Relative, false) ) Ok = false;
+    Value = xrtValueObject();
+    (void)MdoApiValueSetBool(Value, "ok", Ok);
+    if ( Ok ) { Buffer[Bytes] = '\0'; (void)MdoApiValueSetString(Value, "journal", Buffer); }
+    Context.Request = Request; snprintf(Context.RequestId, sizeof(Context.RequestId), "journal-writer");
+    (void)MdoApiReplySuccessTake(&Context, 200u, Value, NULL);
+    return true;
+}
+
 static bool BackupDecodeFixtureControl(XS_HttpReq* Request)
 {
     static const char Prefix[] = "/__fixture/backup-decode/";
@@ -63,6 +113,7 @@ static bool BackupDecodeFixtureControl(XS_HttpReq* Request)
     xcancel* Cancel = NULL;
     size_t i;
     bool Encodable = false;
+    if ( BackupDecodeFixtureJournal(Request) ) return true;
     if ( BackupDecodeFixtureSeed(Request) ) return true;
     if ( Target.Size < sizeof(Prefix) - 1u || memcmp(Target.Data, Prefix, sizeof(Prefix) - 1u) != 0 ) return false;
     Context.Request = Request; snprintf(Context.RequestId, sizeof(Context.RequestId), "decode-fixture");
@@ -86,6 +137,7 @@ static bool BackupDecodeFixtureControl(XS_HttpReq* Request)
         if ( MdoApiViewEqualText(Target, "/__fixture/backup-decode/budget") ) Limits.Files += 1u;
         if ( MdoApiViewEqualText(Target, "/__fixture/backup-decode/cancel") ||
              MdoApiViewEqualText(Target, "/__fixture/backup-decode/history-cancel") ||
+             MdoApiViewEqualText(Target, "/__fixture/backup-decode/journal-cancel") ||
              MdoApiViewEqualText(Target, "/__fixture/backup-decode/snapshot-cancel") ) {
             Cancel = xrtCancelCreate();
             if ( Cancel == NULL ) return false;
@@ -93,6 +145,8 @@ static bool BackupDecodeFixtureControl(XS_HttpReq* Request)
                 (void)xrtCancelRequest(Cancel);
             else if ( MdoApiViewEqualText(Target, "/__fixture/backup-decode/history-cancel") )
                 g_BackupHistoryProbeCancel = Cancel;
+            else if ( MdoApiViewEqualText(Target, "/__fixture/backup-decode/journal-cancel") )
+                g_BackupJournalProbeCancel = Cancel;
             else g_BackupSnapshotProbeCancel = Cancel;
         }
         g_DecodeFixtureBackup = MdoSessionBackupDecode(MdoApiBackupUploadData(g_UploadFixturePin),
@@ -100,6 +154,7 @@ static bool BackupDecodeFixtureControl(XS_HttpReq* Request)
             MdoApiViewEqualText(Target, "/__fixture/backup-decode/null-error") ? NULL : &Error);
         g_BackupHistoryProbeCancel = NULL;
         g_BackupSnapshotProbeCancel = NULL;
+        g_BackupJournalProbeCancel = NULL;
         xrtCancelDestroy(Cancel);
     }
     Preview.Size = sizeof(Preview);

@@ -4,6 +4,39 @@
 
 完成判据及尚缺的打包页证据见 [前端操作体验完成审计](frontend-completion-audit.md)。本文件继续记录每次实现和验证的细节。
 
+## 2026-10-02：模型 journal 格式校验
+
+快照模块整理为 `backup_model.c`，两种模型文件共用字段、整数/文本和 CRC
+校验。先检查 snapshot 并取得 checkpoint，再逐行检查 journal，一次只持有
+一行 JSON tree，不重复解析两份文件。v1/2 与 v3 使用各自的序号/操作字段，
+七种记录检查各自已知字段和必需值；保留库实际支持的旧可省略字段与 rewind
+零边界。换行前精确字节参与 CRC，支持 CRLF；空/残缺行拒绝，不修补文件。
+covered 前缀仍检查 schema/CRC，记录严格递增，checkpoint 后必须连续编号。
+
+HTTP/TLS 拥有解码探针通过 237 种小错误输入，新增旧记录、合法 CRLF/covered
+前缀及首条读取后的取消。锁定库实际写出 begin_turn/add_message/ledger/
+rewind/clear，并将精确字节纳入检查；只写隔离 Home 的自有夹具文件，零写入
+对比前已移除。其他两种操作为 schema 样例，不冒充压缩/截断真实重放。
+新模块也通过独立严格 C11 编译。详见
+[journal 边界](session-backup-plan.md#模型-journal-格式与-checkpoint-连号检查)。
+
+Windows/Linux 完整有界门禁通过：114 Python、251 Node、90 模块、严格 C11、
+36 运行探针、独立 A/B 和三项 packed。Windows 另通过便携 WebView2 Home
+与 20 秒打包启动；Linux 使用新 ext4 源拷贝、同一锁定 SDK 新构建宿主，
+跳过 GUI。测试 Node 从之前隔离目录的官方归档取得，复核原 SHA-256 后仅
+解压到本轮目录，不作为生产构建依赖。日志
+`.build/qa-backup-journal-{final,linux-final}.log`。根目录程序与 Windows A/B
+SHA-256 为
+`dd9b148ce35f07c1bd3d8b180a79b71d9b37ac66a17703bd72d8850981e5519f`，
+Linux A/B 为
+`d70032d9bc70cf02a50a13a2f7e7814c15b7cb8639ff310d198282e362d56fbb`。
+没有压力或高负载测试。
+
+字段/CRC/记录连号不能证明上下文可实际恢复。模型 turn 与消息关系、工具
+配对、摘要质量和 rewind 后上下文仍需库实际重放，图片实际解码、生产预览
+worker、原子恢复及正式菜单也未完成。manifest 保持 `restore_ready:false`，
+完整恢复和原生/实体设备证据不升级为已完成。
+
 ## 2026-10-02：备份模型快照格式与原字节校验
 
 `backup_snapshot.c` 在捕获后编码与离线拥有解码的共同入口检查模型快照。

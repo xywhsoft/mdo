@@ -389,7 +389,7 @@ bool MdoBackupView(const xvalue* Value, const char* Key, xstrview* Text)
     return xrtValueGetString(xrtValueObjectGet(Value, xrtStrView(Key)), Text);
 }
 
-static xvalue* MdoBackupJson(const void* Data, size_t Bytes)
+xvalue* MdoBackupJson(const void* Data, size_t Bytes)
 {
     xjsonreadconfig Config;
     xrtJsonReadConfigInit(&Config);
@@ -499,12 +499,14 @@ bool MdoBackupValidate(const MdoSessionBackup* Backup,
 {
     size_t i;
     memset(History, 0, sizeof(*History));
+    if ( !MdoBackupModelValidate(Backup, Limits, Cancel, Error) ) return false;
     for ( i = 0u; i < Backup->Count; ++i ) {
         const MdoBackupOwnedFile* File = &Backup->Files[i];
         size_t Offset = 0u;
         bool Lines = MdoBackupSuffix(File->Path, ".jsonl");
         bool Ui = strcmp(File->Path, "ui-events.jsonl") == 0;
         if ( !MdoBackupCheck(Limits, Cancel, Error) ) return false;
+        if ( strcmp(File->Path, "snapshot.json") == 0 || strcmp(File->Path, "journal.jsonl") == 0 ) continue;
         if ( MdoBackupSuffix(File->Path, ".bin") ) {
             if ( !MdoBackupImage(Backup, xrtStrViewN(File->Path + 12u, 32u)) ) goto invalid;
             continue;
@@ -525,11 +527,6 @@ bool MdoBackupValidate(const MdoSessionBackup* Backup,
                 return MdoBackupError(Error, XWORK_ERROR_OUT_OF_MEMORY,
                     "cannot parse session backup file", File->Path);
             Ok = xrtValueType(Root) == XVALUE_OBJECT;
-            if ( Ok && strcmp(File->Path, "snapshot.json") == 0 &&
-                 !MdoBackupSnapshotValidate(File, Root, Limits, Cancel, Error) ) {
-                xrtValueRelease(Root);
-                return false;
-            }
             if ( Ok && strcmp(File->Path, "meta.json") == 0 ) {
                 MdoSessionInfo Meta;
                 Ok = MdoSessionsInternalMetaParse(Backup->Info.ProjectId, Backup->Info.Id,

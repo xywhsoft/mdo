@@ -46,7 +46,8 @@ int MdoBackupCompare(const void* Left, const void* Right);
 const MdoBackupOwnedFile* MdoBackupFind(const MdoSessionBackup* Backup, const char* Path);
 bool MdoBackupUInt(const xvalue* Value, const char* Key, uint64* Number);
 bool MdoBackupView(const xvalue* Value, const char* Key, xstrview* Text);
-bool MdoBackupSnapshotValidate(const MdoBackupOwnedFile* File, const xvalue* Root,
+xvalue* MdoBackupJson(const void* Data, size_t Bytes);
+bool MdoBackupModelValidate(const MdoSessionBackup* Backup,
     const MdoSessionBackupLimits* Limits, const xcancel* Cancel, xwork_error* Error);
 bool MdoBackupValidate(const MdoSessionBackup* Backup,
     const MdoSessionBackupLimits* Limits, const xcancel* Cancel,

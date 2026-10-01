@@ -67,13 +67,18 @@ class Probe(UploadProbe):
                                 "        (void)xrtCancelRequest(g_BackupHistoryProbeCancel);", 1)
         source = "static xcancel* g_BackupHistoryProbeCancel;\n" + source
         relations.write_text(source, encoding="utf-8", newline="\n")
-        snapshot = self.site / "src/sessions/backup_snapshot.c"
+        snapshot = self.site / "src/sessions/backup_model.c"
         source = snapshot.read_text(encoding="utf-8")
         hook = "    for ( i = 0u; i < Prefix; ) {"
         assert source.count(hook) == 1
         source = source.replace(hook, hook + "\n        if ( i != 0u && g_BackupSnapshotProbeCancel != NULL )\n"
                                 "            (void)xrtCancelRequest(g_BackupSnapshotProbeCancel);", 1)
-        snapshot.write_text("static xcancel* g_BackupSnapshotProbeCancel;\n" + source,
+        hook = "        Offset += Framed + 1u;"
+        assert source.count(hook) == 1
+        source = source.replace(hook, hook + "\n        if ( g_BackupJournalProbeCancel != NULL )\n"
+                                "            (void)xrtCancelRequest(g_BackupJournalProbeCancel);", 1)
+        snapshot.write_text("static xcancel* g_BackupSnapshotProbeCancel;\n"
+                            "static xcancel* g_BackupJournalProbeCancel;\n" + source,
                             encoding="utf-8", newline="\n")
         service = self.site / "src/bootstrap/service.c"
         text = service.read_text(encoding="utf-8")
@@ -120,6 +125,12 @@ class Probe(UploadProbe):
         status, _, raw = self.call("GET", session_path + "/backup")
         assert status == 200 and len(raw) > CHUNK
         source = json.loads(raw)
+        status, written = self.api("GET", DECODE + "journal")
+        assert status == 200 and written["data"]["ok"], written
+        library_journal = written["data"]["journal"].encode()
+        library_records = [json.loads(line) for line in library_journal.splitlines()]
+        assert {r["type"] for r in library_records} == {"begin_turn", "add_message", "ledger", "rewind", "clear"}
+        assert [r["sequence"] for r in library_records] == list(range(1, len(library_records) + 1))
         def inventory():
             return {str(p.relative_to(self.home)): p.read_bytes() for p in self.home.rglob("*")
                     if p.is_file() and p != self.home / ".mdo.lock"}
@@ -159,6 +170,9 @@ class Probe(UploadProbe):
             {"sequence": 2, "turn": 1, "flags": 0, "role": 2, "content": "Answer",
              "reasoning": "Retained reasoning", "tool_call_id": None, "tool_calls": []}])
         assert self.validate(dump(with_snapshot(populated)))["ok"]
+        real_ledger = with_snapshot(snapshot_root)
+        replace(real_ledger, "journal.jsonl", library_journal)
+        assert self.validate(dump(real_ledger))["ok"]
         # Older formats omit the v3 checksum and sequence-array additions.
         for version in (1, 2):
             older = copy.deepcopy(populated)
@@ -221,6 +235,117 @@ class Probe(UploadProbe):
         empty_snapshot = copy.deepcopy(small)
         replace(empty_snapshot, "snapshot.json", b"{}")
         cases.append(("snapshot has no format", dump(empty_snapshot)))
+
+        def journal_bytes(record):
+            record = dict(record)
+            record.pop("checksum", None)
+            if record.get("version") != 3:
+                return dump(record)
+            prefix = dump(record)[:-1]
+            return prefix + b',"checksum":"' + f"{zlib.crc32(prefix):08x}".encode() + b'"}'
+
+        def with_journal(records, checkpoint=0, newline=b"\n"):
+            root = copy.deepcopy(populated)
+            root["checkpoint_sequence"] = checkpoint
+            document = with_snapshot(root)
+            replace(document, "journal.jsonl", b"".join(journal_bytes(r) + newline for r in records))
+            return document
+
+        def record(operation, sequence=1, version=3, **fields):
+            result = {"format": "xllm-session-journal", "version": version}
+            result.update({"sequence" if version == 3 else "journal_sequence": sequence,
+                           "type" if version == 3 else "operation": operation})
+            return {**result, **fields}
+
+        journal_samples = [
+            record("begin_turn", turn=2),
+            record("add_message", entry={**populated["entries"][1], "sequence": 3}),
+            record("compact", through_sequence=2, generation=1, compaction_count=1,
+                   usage={"prompt_tokens": 10, "output_tokens": 2}, summary="Persisted summary"),
+            record("ledger", kind="read", path="C:\\source\\中文.c", after_sequence=2),
+            record("ledger", kind="modified", path="../source.c", after_sequence=0),
+            record("truncate", from_sequence=1, to_sequence=2, reason="overflow_l2"),
+            record("rewind", through_sequence=1, previous_next_sequence=3),
+            record("clear", through_sequence=0, previous_next_sequence=3),
+        ]
+        # Individual schema samples are not a claim that every operation can
+        # replay on the same context; real library replay remains a later gate.
+        for sample in journal_samples:
+            assert self.validate(dump(with_journal([sample])))["ok"], sample
+        for version in (1, 2):
+            legacy_record = record("begin_turn", version=version, turn=2)
+            assert self.validate(dump(with_journal([legacy_record])))["ok"], version
+            legacy_compact = record("compact", version=version, through_sequence=2,
+                                    compaction_count=1, summary="Legacy summary")
+            assert self.validate(dump(with_journal([legacy_compact])))["ok"], version
+        legacy_v3 = record("compact", through_sequence=2, compaction_count=1, summary="Legacy v3 summary")
+        assert self.validate(dump(with_journal([legacy_v3])))["ok"]
+        assert self.validate(dump(with_journal([record("rewind", through_sequence=0,
+                                                          previous_next_sequence=3)])))["ok"]
+        covered = [record("begin_turn", sequence=2, turn=1), record("begin_turn", sequence=4, turn=2),
+                   record("ledger", sequence=5, kind="read", path="source.c")]
+        assert self.validate(dump(with_journal(covered, checkpoint=4)))["ok"]
+        assert self.validate(dump(with_journal(covered, checkpoint=4, newline=b"\r\n")))["ok"]
+        assert self.validate(dump(with_journal([], checkpoint=4)))["ok"]
+        value = self.validate(dump(with_journal(covered, checkpoint=4)), "journal-cancel")
+        assert not value["ok"] and value["code"] == 9 and value["files"] == [], value
+
+        def bad_journal(label, change, operation="begin_turn"):
+            sample = copy.deepcopy(next(r for r in journal_samples if r["type"] == operation))
+            change(sample)
+            cases.append((label, dump(with_journal([sample]))))
+
+        for key, bad in (("format", "other"), ("version", 4), ("sequence", 0),
+                         ("sequence", True), ("sequence", -1), ("sequence", "1"),
+                         ("type", "execute"), ("type", "begin_turn\x00ignored"), ("turn", 0),
+                         ("turn", False), ("turn", "2"), ("turn", -1), ("unknown", 1),
+                         ("operation", "begin_turn"), ("journal_sequence", 1)):
+            bad_journal(f"journal {key}={bad}", lambda r, k=key, v=bad: r.update({k: v}))
+        for key in ("format", "version", "sequence", "type", "turn"):
+            bad_journal("journal missing " + key, lambda r, k=key: r.pop(k))
+        for key, bad in (("role", 4), ("sequence", 0), ("sequence", 2**64-1),
+                         ("flags", 4), ("content", "nul\x00text"), ("tool_calls", {})):
+            bad_journal("journal entry " + key,
+                        lambda r, k=key, v=bad: r["entry"].update({k: v}), "add_message")
+        for key, bad in (("through_sequence", 0), ("generation", 2**32),
+                         ("compaction_count", 0), ("summary", ""), ("summary", None),
+                         ("usage", None), ("usage", {"prompt_tokens": True}),
+                         ("usage", {"other_tokens": 1})):
+            bad_journal("journal compact " + key,
+                        lambda r, k=key, v=bad: r.update({k: v}), "compact")
+        for key, bad in (("kind", "write"), ("path", ""), ("path", "nul\x00path"),
+                         ("path", {}), ("after_sequence", -1), ("after_sequence", 2**64-1)):
+            bad_journal("journal ledger " + key,
+                        lambda r, k=key, v=bad: r.update({k: v}), "ledger")
+        for key, bad in (("from_sequence", 0), ("to_sequence", 1), ("reason", {})):
+            bad_journal("journal truncate " + key,
+                        lambda r, k=key, v=bad: r.update({k: v}), "truncate")
+        for operation, key, bad in (("rewind", "through_sequence", 3),
+                                    ("rewind", "previous_next_sequence", 1),
+                                    ("clear", "through_sequence", 1),
+                                    ("clear", "previous_next_sequence", 0)):
+            bad_journal(f"journal {operation} {key}",
+                        lambda r, k=key, v=bad: r.update({k: v}), operation)
+        for label, records, checkpoint in (
+                ("tail gap", [record("begin_turn", sequence=6, turn=2)], 4),
+                ("duplicate covered", [covered[0], covered[0]], 4),
+                ("reverse covered", [covered[1], covered[0]], 4),
+                ("gap after first tail", [covered[2], record("begin_turn", sequence=7, turn=3)], 4)):
+            cases.append(("journal " + label, dump(with_journal(records, checkpoint))))
+        framed = journal_bytes(journal_samples[0])
+        damaged_line = framed[:-10] + (b"0" if framed[-10:-9] != b"0" else b"1") + framed[-9:]
+        for label, payload, checkpoint in (
+                ("CRC mismatch", damaged_line + b"\n", 0),
+                ("covered CRC mismatch", damaged_line + b"\n", 4),
+                ("missing CRC", dump(journal_samples[0]) + b"\n", 0),
+                ("CRC wrong trailer", framed + b" \n", 0),
+                ("torn valid record", framed, 0), ("blank line", b"\n", 0),
+                ("CR blank line", b"\r\n", 0), ("array line", b"[]\n", 0),
+                ("duplicate key", b'{"turn":2,' + framed[1:] + b"\n", 0)):
+            document = with_journal([], checkpoint)
+            replace(document, "journal.jsonl", payload)
+            cases.append(("journal " + label, dump(document)))
+
         for key, new in (("export_schema", 99), ("format", "other"), ("file_count", 99),
                          ("total_bytes", 1), ("captured_at_us", -1), ("captured_at_us", 1.5),
                          ("restore_ready", True), ("queue_restore_policy", "resume"),

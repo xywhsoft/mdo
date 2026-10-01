@@ -60,7 +60,8 @@ void MdoSessionBackupRelease(MdoSessionBackup* Backup);
 size_t MdoSessionBackupFileCount(const MdoSessionBackup* Backup);
 bool MdoSessionBackupFileGet(const MdoSessionBackup* Backup, size_t Index,
     MdoSessionBackupFile* File);
-/* Checks captured JSON syntax, image pairs and attachment/artifact references,
+/* Checks model snapshot/journal fields and CRC, captured JSON syntax, image
+ * pairs and attachment/artifact references,
  * then encodes exact bytes with per-file SHA-256. It does not reload Home or
  * validate every product schema/xllm replay (the offline restore validator is
  * a separate stage). The manifest explicitly declares restore_ready:false.
@@ -80,8 +81,9 @@ str MdoSessionBackupEncode(const MdoSessionBackup* Backup,
  * Metadata/UI/todo and draft/queue/receipts/feedback/image bindings reuse live
  * readers. Image metadata shares the export checker. Retained UI evidence is
  * checked against feedback/todo/bindings/queue receipts. Older or explicitly
- * removed references are reported separately. The model ledger is not yet
- * fully validated, and pending projections are not repaired here.
+ * removed references are reported separately. Model snapshot/journal schemas,
+ * exact-byte CRC and checkpoint/tail record numbering are checked. Actual
+ * model context replay and pending projection repair remain separate stages.
  * Success is NOT complete schema validation, image decoding or xllm/UI replay
  * and does not authorize restoration. Legacy v1 cannot be encoded as v2. */
 MdoSessionBackup* MdoSessionBackupDecode(const void* Document, size_t Bytes,
