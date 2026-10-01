@@ -262,6 +262,33 @@ static void PrintRuntimeError(const char *label, const xwork_error *error) {{
         error != NULL && error->sMessage[0] != '\0' ? error->sMessage : "none");
 }}
 
+typedef struct CheckpointReaderProbe {{
+    MdoAgentSession *Session;
+    unsigned Calls;
+    bool Busy;
+    bool SnapshotReady;
+    bool Fail;
+    bool Silent;
+}} CheckpointReaderProbe;
+
+static bool ReadCheckpoint(void *data, xwork_error *error) {{
+    CheckpointReaderProbe *probe = (CheckpointReaderProbe*)data;
+    xwork_error nested;
+    uint64 sequence;
+    FILE *snapshot;
+    ++probe->Calls;
+    probe->Busy = !MdoAgentSessionLastSequence(probe->Session,
+        &sequence, &nested) && nested.eCode != XWORK_ERROR_NONE;
+    snapshot = fopen(probe->Session->SnapshotPath, "rb");
+    probe->SnapshotReady = snapshot != NULL && fgetc(snapshot) == '{{';
+    if (snapshot != NULL) fclose(snapshot);
+    if (probe->Fail && !probe->Silent) {{
+        error->eCode = XWORK_ERROR_LIMIT;
+        snprintf(error->sMessage, sizeof(error->sMessage), "%s", "reader-probe-failure");
+    }}
+    return !probe->Fail;
+}}
+
 static bool AgentHasTool(const MdoAgentSession *session, const char *name) {{
     xwork_tool_catalog *catalog;
     xwork_tool_info info;
@@ -441,6 +468,41 @@ void ServiceInit(XS_HostInfo *host) {{
             PrintRuntimeError("prompt_checkpoint_error", &error); goto done;
         }}
     }}
+    {{
+        CheckpointReaderProbe reader;
+        uint64 sequence;
+        bool ok, released, preserved, busy_skipped;
+        memset(&reader, 0, sizeof(reader)); reader.Session = session;
+        ok = MdoAgentSessionWithCheckpoint(session, ReadCheckpoint, &reader, &error);
+        released = MdoAgentSessionLastSequence(session, &sequence, &error);
+        printf("checkpoint_reader_success=ok:%d calls:%u busy:%d snapshot:%d released:%d\n",
+            ok, reader.Calls, reader.Busy, reader.SnapshotReady, released);
+        reader.Fail = true;
+        ok = MdoAgentSessionWithCheckpoint(session, ReadCheckpoint, &reader, &error);
+        preserved = error.eCode == XWORK_ERROR_LIMIT &&
+            strcmp(error.sMessage, "reader-probe-failure") == 0;
+        released = MdoAgentSessionLastSequence(session, &sequence, &error);
+        printf("checkpoint_reader_failure=ok:%d calls:%u preserved:%d released:%d\n",
+            ok, reader.Calls, preserved, released);
+        reader.Silent = true;
+        ok = MdoAgentSessionWithCheckpoint(session, ReadCheckpoint, &reader, &error);
+        preserved = error.eCode == XWORK_ERROR_IO;
+        released = MdoAgentSessionLastSequence(session, &sequence, &error);
+        printf("checkpoint_reader_silent=ok:%d calls:%u error:%d released:%d\n",
+            ok, reader.Calls, preserved, released);
+        if (!xworkAgentRunBegin(session->Agent, &error)) goto done;
+        ok = MdoAgentSessionWithCheckpoint(session, ReadCheckpoint, &reader, &error);
+        busy_skipped = !ok && reader.Calls == 3u;
+        /* A rejected nested capture must not release the preexisting claim. */
+        released = MdoAgentSessionLastSequence(session, &sequence, &error);
+        xworkAgentRunEnd(session->Agent);
+        printf("checkpoint_reader_busy=skipped:%d retained:%d released:%d\n",
+            busy_skipped, !released,
+            MdoAgentSessionLastSequence(session, &sequence, &error));
+        printf("checkpoint_reader_null_error=%d\n",
+            !MdoAgentSessionWithCheckpoint(session, ReadCheckpoint, &reader, NULL) &&
+            MdoAgentSessionLastSequence(session, &sequence, &error));
+    }}
     MdoAgentSessionRelease(session); session = NULL;
     if (!MdoConfigImport(MDO_CONFIG_SETTINGS,
             xrtStrView("{{\"schema_version\":1,\"patch\":{{\"agent\":{{\"user_instructions\":\"probe-custom-v2\"}}}}}}"))) {{
@@ -477,6 +539,17 @@ void ServiceInit(XS_HostInfo *host) {{
     printf("prompt_new=old:%d new:%d\n",
         strstr(session->SystemPrompt, "probe-custom-v1") != NULL ? 1 : 0,
         strstr(session->SystemPrompt, "probe-custom-v2") != NULL ? 1 : 0);
+    {{
+        CheckpointReaderProbe reader;
+        uint64 sequence;
+        bool ok, failed;
+        memset(&reader, 0, sizeof(reader)); reader.Session = session;
+        ok = MdoAgentSessionWithCheckpoint(session, ReadCheckpoint, &reader, &error);
+        failed = !ok && error.eCode != XWORK_ERROR_NONE;
+        printf("checkpoint_reader_no_snapshot=failed:%d skipped:%d released:%d\n",
+            failed, reader.Calls == 0u,
+            MdoAgentSessionLastSequence(session, &sequence, &error));
+    }}
     MdoAgentSessionRelease(session); session = NULL;
 done:
     MdoAgentRunDestroy(run);
@@ -672,6 +745,16 @@ def main() -> int:
         disabled_site = base / "site-memory-disabled"
         write_site(disabled_site, memory_enabled=False)
         disabled = run_probe(host, disabled_site, base / "home-memory-disabled")
+        for probe_output in (output, disabled):
+            for expected in (
+                "checkpoint_reader_success=ok:1 calls:1 busy:1 snapshot:1 released:1",
+                "checkpoint_reader_failure=ok:0 calls:2 preserved:1 released:1",
+                "checkpoint_reader_silent=ok:0 calls:3 error:1 released:1",
+                "checkpoint_reader_busy=skipped:1 retained:1 released:1",
+                "checkpoint_reader_null_error=1",
+                "checkpoint_reader_no_snapshot=failed:1 skipped:1 released:1",
+            ):
+                assert expected in probe_output, probe_output
         assert "init_error=" not in disabled, disabled
         assert "generations:1/1/1/0" in disabled, disabled
         assert "callback=calls:1 model:1 reasoning:1 system_v1:1 skill_v1:1 skill_v2:0 memory:0 instructions_v1:1" in disabled, disabled

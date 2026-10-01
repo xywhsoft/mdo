@@ -89,6 +89,19 @@ permission、hook 和 event 状态作为一个 owner 固定到最后一个物理
 注入的 `xllm_response` 必须遵守 xllm 的分配器契约，并能由
 `xllmResponseDestroy()` 释放。它不能用 xrt 私有堆分配后交给 xllm/CRT 释放。
 
+## Checkpoint 与有界读取
+
+账本导出使用 `MdoAgentSessionWithCheckpoint()`：先持有 Session 引用并取得
+与 Agent 运行相同的排他权，写入 checkpoint，再同步调用有界只读捕获函数，
+最后释放排他权与引用。运行或其他账本维护已占用窗口时立即失败；checkpoint
+失败时不调用捕获函数。捕获失败保留调用方错误，未给出错误时补充 I/O 错误，
+所有失败路径均释放本次取得的资源。普通 `MdoAgentSessionCheckpoint()` 复用
+这个实现，传空捕获函数。
+
+捕获函数不能重入该 Agent 的运行或账本维护 API，也不应执行网络操作或等待
+用户输入。它保护的是模型账本的 checkpoint 和读取；UI 事件、附件、草稿及
+队列仍有各自的写入边界，不能据此宣称全会话目录已经具备原子快照。
+
 ## 初始化与关闭顺序
 
 bootstrap 顺序保持为：

@@ -525,6 +525,11 @@ void ServiceInit(XS_HostInfo *host) {
     session = MdoSessionLoad("project-alpha", session_id, &error);
     printf("lease_loaded_handle=%d\n", LeaseBlocked("project-alpha",
         MDO_PROJECT_LEASE_EXCLUSIVE) ? 1 : 0);
+    export_size = 123u;
+    export_json = MdoSessionExportJson(session, &export_size, &error);
+    printf("export_unopened=failed:%d size:%zu context:%d\n",
+        export_json == NULL, export_size, error.eCode == XWORK_ERROR_CONTEXT);
+    xrtFree(export_json); export_json = NULL;
     if (session == NULL || !MdoSessionSetProfile(session, NULL, "low",
             "read-only", &open, &error)) {
         printf("profile_error=%s\n", error.sMessage); goto done;
@@ -554,6 +559,36 @@ void ServiceInit(XS_HostInfo *host) {
         export_json != NULL && strstr(export_json, "\"meta\":{") != NULL,
         export_json != NULL && strstr(export_json, "\"snapshot\":{") != NULL);
     xrtFree(export_json); export_json = NULL;
+    {
+        char meta_path[MDO_SESSION_PATH_CAPACITY];
+        bool failed, released;
+        memcpy(meta_path, session->MetaPath, sizeof(meta_path));
+        snprintf(session->MetaPath, sizeof(session->MetaPath), "%s",
+            "sessions/project-alpha/missing-export-meta.json");
+        export_size = 123u;
+        export_json = MdoSessionExportJson(session, &export_size, &error);
+        failed = export_json == NULL && export_size == 0u &&
+            error.eCode == XWORK_ERROR_IO;
+        xrtFree(export_json); export_json = NULL;
+        memcpy(session->MetaPath, meta_path, sizeof(meta_path));
+        released = MdoSessionLastSequence(session, &rewind_to, &error);
+        export_json = MdoSessionExportJson(session, &export_size, &error);
+        printf("export_read_failure=failed:%d released:%d retry:%d\n",
+            failed, released, export_json != NULL && export_size > 0u);
+        xrtFree(export_json); export_json = NULL;
+    }
+    stale = MdoSessionLoad("project-alpha", session_id, &error);
+    if (stale == NULL || !MdoSessionRename(stale, "Export revision probe", &error))
+        goto done;
+    export_size = 123u;
+    export_json = MdoSessionExportJson(session, &export_size, &error);
+    printf("export_stale=failed:%d size:%zu context:%d\n",
+        export_json == NULL, export_size, error.eCode == XWORK_ERROR_CONTEXT);
+    xrtFree(export_json); export_json = NULL;
+    MdoSessionRelease(stale); stale = NULL;
+    MdoSessionRelease(session); session = NULL;
+    session = MdoSessionOpen("project-alpha", session_id, &open, &error);
+    if (session == NULL) goto done;
     MdoSessionForkOptionsInit(&fork_options);
     fork_options.Title = "Forked durable session";
     fork_options.ThroughSequence = rewind_to;
@@ -844,6 +879,9 @@ def main() -> int:
         assert "run=0 text:durable-answer-five" in output, output
         assert "run=0 text:durable-answer-six" in output, output
         assert re.search(r"export=ok:1 size:[1-9]\d* schema:1 meta:1 snapshot:1", output), output
+        assert "export_unopened=failed:1 size:0 context:1" in output, output
+        assert "export_read_failure=failed:1 released:1 retry:1" in output, output
+        assert "export_stale=failed:1 size:0 context:1" in output, output
         created = re.search(r"created=id:([^ ]+) project:project-alpha", output)
         fork = re.search(
             r"fork=id:([^ ]+) parent:([^ ]+) through:([1-9]\d*) "

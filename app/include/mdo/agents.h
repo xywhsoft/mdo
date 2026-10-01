@@ -131,6 +131,14 @@ bool MdoAgentRecoverySnapshotToken(const xwork_recovery_snapshot* Snapshot,
  * It therefore fails while another run is active. Successful mutations are
  * checkpointed to the managed snapshot before returning. */
 bool MdoAgentSessionCheckpoint(MdoAgentSession* Session, xwork_error* Error);
+/* Checkpoint and perform a bounded, read-only capture before releasing the
+ * exclusive run window. Read is called synchronously only after a successful
+ * checkpoint; NULL Read performs just the checkpoint. A reader must not call
+ * run or ledger maintenance APIs for this Agent. Failure releases the window
+ * and preserves the reader's error. The caller must own Session on entry. */
+typedef bool (*MdoAgentCheckpointReadFn)(void* UserData, xwork_error* Error);
+bool MdoAgentSessionWithCheckpoint(MdoAgentSession* Session,
+    MdoAgentCheckpointReadFn Read, void* UserData, xwork_error* Error);
 bool MdoAgentSessionLastSequence(MdoAgentSession* Session,
     uint64* LastSequence, xwork_error* Error);
 /* Close a cancelled model turn without repeating it. Requires an exact ledger

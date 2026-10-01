@@ -128,10 +128,18 @@ journal、UI event、artifact 根和 runtime lease；模型历史是深拷贝的
 后续写入与父会话相互独立。子 meta 记录直接父会话和实际分叉序号。非法边界、
 Agent 恢复或元数据发布失败都会关闭 lease，并删除已知半成品目录。
 
-`MdoSessionExportJson()` 先占用排他窗口并 checkpoint，再返回 owned 的 export
+`MdoSessionExportJson()` 通过 `MdoAgentSessionWithCheckpoint()` 占用排他窗口、
+写入 checkpoint，并在同一窗口内完成有界文件读取，避免下一次运行在读取前
+改写 snapshot。metadata 的 revision 校验与读取另由 session manager 锁串行；
+陈旧 handle 拒绝导出，未打开的 handle 返回明确的 context 错误。最后返回 owned 的 export
 schema v1 JSON envelope，其中嵌入当前 `meta` 和 xllm `snapshot`。snapshot 读取
 上限为 32 MiB。artifact 与 `ui-events.jsonl` 具有独立的大小、隐私和回放语义，
 不混入该 envelope；调用方需要时应分别导出。
+
+2026-10-01 的确定性运行探针验证：捕获期间排他权持续有效；成功、带错误失败、
+无错误失败、checkpoint 路径缺失以及已占用窗口均正确处理；嵌套拒绝不会误放
+原有运行窗口，空 error 参数可以使用。会话探针另验证元数据读取失败后 size 为
+零、账本可继续访问并能重新导出。全部使用小型本地数据，不做压力测试。
 
 ## Catalog 与故障边界
 

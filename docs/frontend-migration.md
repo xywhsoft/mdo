@@ -4,6 +4,44 @@
 
 完成判据及尚缺的打包页证据见 [前端操作体验完成审计](frontend-completion-audit.md)。本文件继续记录每次实现和验证的细节。
 
+## 2026-10-01：JSON 导出保留 checkpoint 读取排他权
+
+完整备份审阅发现现有 `MdoSessionExportJson()` 在 checkpoint 返回时已释放
+Agent run claim，随后才读取 snapshot；持有 session handle 锁不能阻止已经
+取得 Agent 引用的其他调用者启动下一次运行。本轮增加同步有界捕获 API
+`MdoAgentSessionWithCheckpoint()`，使 checkpoint、读取和 owned 输出复制都
+位于同一排他运行窗口。它持有 Session 引用，checkpoint 失败不调用读函数，
+读函数失败保留错误，没有提供错误时补充 I/O 错误；窗口和引用在成功或失败
+时均释放。嵌套捕获拒绝不能释放外层已有的 claim。普通 checkpoint 共用实现。
+
+导出 callback 另在 manager 锁下核对 meta revision 并读取元数据，防止其他
+handle 修改导致不一致。陈旧或未打开的 handle 明确拒绝；失败时输出 size 为
+零。现有 `export_schema:1`、下载入口和前端操作保持兼容，未增添构建依赖。
+这是导出一致性修复，不能据此声称整个会话目录已经获得原子快照。
+
+真实 xs/TCC 小型探针在 memory 开启/关闭两种配置下验证：读函数执行期间再次
+申请窗口被拒绝，checkpoint 文件已经写好，成功/带错误失败/无错误失败后可
+访问账本，已占用窗口时不执行读函数且不误放 claim，空 error 和无 snapshot
+路径正确处理。会话探针验证未打开 handle、另一 handle 重命名后的陈旧导出、
+注入 metadata 读失败后输出清零、claim 释放及重新导出成功。没有依赖压力或
+高负载测试来复现竞态，也没有把此窗口问题归因为此前的 xrt future 崩溃。
+
+Windows 与独立 Linux ext4 镜像的完整有界门禁均通过 114 Python、227 Node、
+90 个前端模块解析、严格 C11、32 个运行探针、确定性 A/B、打包 Home 租约及
+队列恢复。Windows 另通过便携 WebView2 Home 和 20 秒单文件启动。日志为
+`.build/qa-checkpoint-capture-release.log` 与
+`.build/qa-checkpoint-capture-linux-release.log`。Windows 两次包及更新后的根目录
+`mdo.exe` SHA-256：
+`8e9b65dc0264254ad101b2ad0d44c799662b1920459c369f6e86f7f51ad0f79a`；
+Linux 包：`6817af1a0e7a63ba6e11146abf981b93f341b1dac127c6236bfcdad76ce3119e`。
+本轮未修改前端交互，不重复宣称上一阶段浏览器下载及图片 Blob 核对为本轮证据。
+
+新增 [完整备份实施记录](session-backup-plan.md)，列明模型账本、UI 日志、图片、
+artifact、todo、反馈、草稿和队列的写入边界，当前 256 KiB 请求/33 MiB 下载
+限制，以及独立 staging、校验、原子发布和不自动执行队列的恢复要求。JSON v1
+内容仍不完整，新的格式、恢复入口和两份 Home 间读回验证尚待实现；原生/实体
+设备及之前审计边界仍未关闭，长期目标保持进行中。
+
 ## 2026-10-01：Markdown 导出携带原图与原文件名
 
 上一阶段已确认真实下载完成，但新版 Markdown 仅输出附件 ID，无法像旧版一样离开原 Home 读取图片。本轮新增独立 `session-export-images.js`：从最终时间线投影选出实际导出的附件，按原项目/会话读取元数据和原图。重复编辑/重试引用只读取一次。元数据身份、版本、图片类型、名称和大小不一致时不内嵌；正文流按元数据大小有界读取，过长、过短或响应类型错误均拒绝，关闭未完成流。每次导出最多 16 个唯一附件、32 MiB 原始图片字节和 30 秒；失败下载也预留并消耗读取预算。没有新增构建依赖或请求外部图片。

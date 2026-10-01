@@ -1872,9 +1872,19 @@ bool MdoSessionTruncateAfter(MdoSession* Session, uint64 ThroughSequence,
     return MdoSessionsLedgerMutation(Session, false, ThroughSequence, Error);
 }
 
-str MdoSessionExportJson(MdoSession* Session, size_t* Size,
-    xwork_error* Error)
+typedef struct MdoSessionExportCapture {
+    MdoSession* Session;
+    str Data;
+    size_t Size;
+} MdoSessionExportCapture;
+
+/* The caller holds Session->Lock and the Agent run claim throughout this
+ * capture. Serialize metadata validation/read with mutations from other
+ * handles; release that manager lock before copying the bounded snapshot. */
+static bool MdoSessionsExportCapture(void* UserData, xwork_error* Error)
 {
+    MdoSessionExportCapture* Capture = (MdoSessionExportCapture*)UserData;
+    MdoSession* Session = Capture->Session;
     static const char Middle[] = ",\"snapshot\":";
     static const char Suffix[] = "}\n";
     char SnapshotPath[MDO_SESSION_PATH_CAPACITY];
@@ -1887,20 +1897,19 @@ str MdoSessionExportJson(MdoSession* Session, size_t* Size,
     size_t HeaderSize;
     size_t Total;
     int Written;
-    xworkErrorInit(Error);
-    if ( Size != NULL ) *Size = 0u;
-    if ( Session == NULL || Size == NULL ) {
-        MdoSessionsError(Error, XWORK_ERROR_INVALID_ARGUMENT,
-            "session and export size are required");
-        return NULL;
+    bool MetaOk;
+    xrtMutexLock(g_MdoSessions.Lock);
+    MetaOk = MdoSessionsValidateCurrent(Session, Error);
+    if ( MetaOk && !MdoSessionsReadBounded(Session->MetaPath,
+            MDO_SESSION_META_LIMIT, &Meta, &MetaSize) ) {
+        MdoSessionsXrtError(Error, XWORK_ERROR_IO,
+            "cannot read the session export metadata");
+        MetaOk = false;
     }
-    xrtMutexLock(Session->Lock);
-    if ( Session->Agent == NULL || Session->Info.Status != MDO_SESSION_ACTIVE ||
-         !MdoAgentSessionCheckpoint(Session->Agent, Error) ) goto done;
+    xrtMutexUnlock(g_MdoSessions.Lock);
+    if ( !MetaOk ) goto done;
     if ( !MdoSessionsPath(SnapshotPath, Session->Info.ProjectId,
             Session->Info.Id, "snapshot.json") ||
-         !MdoSessionsReadBounded(Session->MetaPath, MDO_SESSION_META_LIMIT,
-            &Meta, &MetaSize) ||
          !MdoSessionsReadBounded(SnapshotPath,
             MDO_SESSION_EXPORT_SNAPSHOT_LIMIT, &Snapshot, &SnapshotSize) ) {
         MdoSessionsXrtError(Error, XWORK_ERROR_IO,
@@ -1930,7 +1939,8 @@ str MdoSessionExportJson(MdoSession* Session, size_t* Size,
     memcpy(Result + Total - (sizeof(Suffix) - 1u), Suffix,
         sizeof(Suffix) - 1u);
     Result[Total] = '\0';
-    *Size = Total;
+    Capture->Data = Result;
+    Capture->Size = Total;
     goto done;
 memory:
     MdoSessionsError(Error, XWORK_ERROR_OUT_OF_MEMORY,
@@ -1940,8 +1950,32 @@ memory:
 done:
     xrtFree(Meta);
     xrtFree(Snapshot);
+    return Capture->Data != NULL;
+}
+
+str MdoSessionExportJson(MdoSession* Session, size_t* Size,
+    xwork_error* Error)
+{
+    MdoSessionExportCapture Capture;
+    xworkErrorInit(Error);
+    if ( Size != NULL ) *Size = 0u;
+    if ( Session == NULL || Size == NULL ) {
+        MdoSessionsError(Error, XWORK_ERROR_INVALID_ARGUMENT,
+            "session and export size are required");
+        return NULL;
+    }
+    memset(&Capture, 0, sizeof(Capture));
+    Capture.Session = Session;
+    xrtMutexLock(Session->Lock);
+    if ( Session->Agent == NULL || Session->Info.Status != MDO_SESSION_ACTIVE ) {
+        MdoSessionsError(Error, XWORK_ERROR_CONTEXT,
+            "an open active session is required for export");
+    } else if ( MdoAgentSessionWithCheckpoint(Session->Agent,
+            MdoSessionsExportCapture, &Capture, Error) ) {
+        *Size = Capture.Size;
+    }
     xrtMutexUnlock(Session->Lock);
-    return Result;
+    return Capture.Data;
 }
 
 static bool MdoSessionsCatalogDiagnostic(MdoSessionCatalog* Catalog,

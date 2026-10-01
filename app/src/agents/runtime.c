@@ -1458,14 +1458,36 @@ static bool MdoAgentLedgerCheckpoint(MdoAgentSession* Session,
 
 bool MdoAgentSessionCheckpoint(MdoAgentSession* Session, xwork_error* Error)
 {
+    return MdoAgentSessionWithCheckpoint(Session, NULL, NULL, Error);
+}
+
+bool MdoAgentSessionWithCheckpoint(MdoAgentSession* Session,
+    MdoAgentCheckpointReadFn Read, void* UserData, xwork_error* Error)
+{
+    xwork_error LocalError;
     xllm_error ModelError;
-    bool Ok;
+    bool Ok = false;
+    if ( Error == NULL ) Error = &LocalError;
     xworkErrorInit(Error);
-    if ( !MdoAgentLedgerBegin(Session, Error) ) return false;
-    Ok = MdoAgentLedgerCheckpoint(Session, &ModelError);
+    Session = MdoAgentSessionRef(Session);
+    if ( Session == NULL ) {
+        MdoAgentsError(Error, XWORK_ERROR_INVALID_ARGUMENT,
+            "an owned Agent session is required");
+        return false;
+    }
+    if ( !MdoAgentLedgerBegin(Session, Error) ) goto done;
+    if ( !MdoAgentLedgerCheckpoint(Session, &ModelError) ) {
+        MdoAgentsModelError(Error, &ModelError,
+            "cannot checkpoint the Agent session");
+    } else {
+        Ok = Read == NULL || Read(UserData, Error);
+        if ( !Ok && Error->eCode == XWORK_ERROR_NONE )
+            MdoAgentsError(Error, XWORK_ERROR_IO,
+                "cannot capture the checkpointed Agent session");
+    }
     xworkAgentRunEnd(Session->Agent);
-    if ( !Ok ) MdoAgentsModelError(Error, &ModelError,
-        "cannot checkpoint the Agent session");
+done:
+    MdoAgentSessionRelease(Session);
     return Ok;
 }
 
