@@ -11,7 +11,7 @@
 #define MDO_ATTACHMENT_ID_LENGTH (MDO_ATTACHMENT_ID_BYTES * 2u)
 #define MDO_ATTACHMENT_SESSION_MAX 16u
 #define MDO_ATTACHMENT_SESSION_BYTES (32u * 1024u * 1024u)
-#define MDO_ATTACHMENT_META_MAX 256u
+#define MDO_ATTACHMENT_META_MAX MDO_ATTACHMENT_META_MAX_BYTES
 #define MDO_ATTACHMENT_GRACE_US (24LL * 60LL * 60LL * 1000000LL)
 #define MDO_ATTACHMENT_SWEEP_MAX 128u
 
@@ -137,6 +137,38 @@ static bool MdoAttachmentType(const MdoApiContext* Context, xstrview* Type)
     return true;
 }
 
+static bool MdoAttachmentNameValid(xstrview Name)
+{
+    size_t i;
+    if ( Name.Size > MDO_ATTACHMENT_NAME_MAX_BYTES ||
+         !xrtUtf8Valid(Name, NULL) ) return false;
+    for ( i = 0u; i < Name.Size; ++i ) {
+        unsigned char Byte = (unsigned char)Name.Data[i];
+        if ( Byte < 0x20u || Byte == 0x7fu || Byte == '/' || Byte == '\\' )
+            return false;
+    }
+    return true;
+}
+
+static bool MdoAttachmentName(const MdoApiContext* Context,
+    char Output[MDO_ATTACHMENT_NAME_MAX_BYTES + 1u])
+{
+    const xhttpfield* Field = NULL;
+    size_t Size = 0u;
+    xhttpnext Next = xrtHttpFieldGetUnique(Context->Request->head->Fields,
+        Context->Request->head->FieldCount,
+        XRT_STR_LITERAL("X-Mdo-File-Name"), &Field);
+    Output[0] = '\0';
+    if ( Next == XHTTP_NEXT_END ) return true;
+    if ( Next != XHTTP_NEXT_ITEM || Field == NULL ||
+         Field->Value.Size > MDO_ATTACHMENT_NAME_MAX_BYTES * 3u ||
+         !xrtPercentDecode(xrtStrTrim(Field->Value), Output,
+            MDO_ATTACHMENT_NAME_MAX_BYTES, &Size) ||
+         !MdoAttachmentNameValid(xrtStrViewN(Output, Size)) ) return false;
+    Output[Size] = '\0';
+    return true;
+}
+
 static bool MdoAttachmentQuota(const char* Directory, size_t NewSize)
 {
     bool Exists = false;
@@ -200,8 +232,22 @@ static bool MdoAttachmentHexId(xstrview View,
     return true;
 }
 
-static bool MdoAttachmentCreatedAt(const char* Project,
-    const char* Session, const char* Id, xtime* CreatedAt)
+static bool MdoAttachmentMetaUInt(const xvalue* Root, cstr Key, uint64* Output)
+{
+    const xvalue* Value = xrtValueObjectGet(Root, xrtStrView(Key));
+    int64 Signed;
+    if ( xrtValueType(Value) == XVALUE_UINT )
+        return xrtValueGetUInt(Value, Output);
+    if ( xrtValueType(Value) != XVALUE_INT ||
+         !xrtValueGetInt(Value, &Signed) || Signed < 0 ) return false;
+    *Output = (uint64)Signed;
+    return true;
+}
+
+/* The caller owns the returned value. Old five-field v1 sidecars remain
+ * readable; named uploads use six-field v2 sidecars with bounded UTF-8. */
+static xvalue* MdoAttachmentMetadata(const char* Project,
+    const char* Session, const char* Id)
 {
     char Name[MDO_ATTACHMENT_ID_LENGTH + 6u];
     char Path[MDO_SESSION_PATH_CAPACITY];
@@ -213,8 +259,11 @@ static bool MdoAttachmentCreatedAt(const char* Project,
     xvalue* Root = NULL;
     const xvalue* Value;
     xstrview StoredId;
-    uint64 Unsigned;
-    int64 Signed;
+    xstrview Mime;
+    xstrview FileName;
+    uint64 Schema;
+    uint64 Size;
+    uint64 CreatedAt;
     bool Ok = false;
     snprintf(Name, sizeof(Name), "%s.json", Id);
     if ( !MdoAttachmentPath(Path, sizeof(Path), Project, Session, Name) ||
@@ -222,7 +271,7 @@ static bool MdoAttachmentCreatedAt(const char* Project,
          Info.Type != XFILE_TYPE_FILE ||
          (Info.Available & XFILE_INFO_SIZE) == 0u ||
          Info.Size == 0u || Info.Size > MDO_ATTACHMENT_META_MAX )
-        return false;
+        return NULL;
     File = MdoHomeOpenRead(Path);
     if ( File == NULL ||
          !xrtReadFull(File, Bytes, (size_t)Info.Size, NULL) ) goto done;
@@ -230,35 +279,47 @@ static bool MdoAttachmentCreatedAt(const char* Project,
     xrtJsonReadConfigInit(&Config);
     Config.MaxInputBytes = MDO_ATTACHMENT_META_MAX;
     Config.MaxDepth = 3u;
-    Config.MaxValues = 8u;
+    Config.MaxValues = 12u;
     Root = xrtJsonRead(xrtStrViewN(Bytes, (size_t)Info.Size), &Config);
     if ( xrtValueType(Root) != XVALUE_OBJECT ||
-         xrtValueCount(Root) != 5u ) goto done;
-    Value = xrtValueObjectGet(Root, XRT_STR_LITERAL("schema_version"));
-    if ( xrtValueType(Value) == XVALUE_UINT ) {
-        if ( !xrtValueGetUInt(Value, &Unsigned) || Unsigned != 1u )
-            goto done;
-    } else if ( xrtValueType(Value) == XVALUE_INT ) {
-        if ( !xrtValueGetInt(Value, &Signed) || Signed != 1 ) goto done;
-    } else goto done;
+         !MdoAttachmentMetaUInt(Root, "schema_version", &Schema) ||
+         (Schema != 1u && Schema != 2u) ||
+         xrtValueCount(Root) != (Schema == 1u ? 5u : 6u) ) goto done;
     Value = xrtValueObjectGet(Root, XRT_STR_LITERAL("id"));
     if ( !xrtValueGetString(Value, &StoredId) ||
          StoredId.Size != MDO_ATTACHMENT_ID_LENGTH ||
          memcmp(StoredId.Data, Id, MDO_ATTACHMENT_ID_LENGTH) != 0 )
         goto done;
-    Value = xrtValueObjectGet(Root, XRT_STR_LITERAL("created_at"));
-    if ( xrtValueType(Value) == XVALUE_UINT ) {
-        if ( !xrtValueGetUInt(Value, &Unsigned) ||
-             Unsigned == 0u || Unsigned > INT64_MAX ) goto done;
-        *CreatedAt = (xtime)Unsigned;
-    } else if ( xrtValueType(Value) == XVALUE_INT ) {
-        if ( !xrtValueGetInt(Value, &Signed) || Signed <= 0 ) goto done;
-        *CreatedAt = (xtime)Signed;
-    } else goto done;
+    Value = xrtValueObjectGet(Root, XRT_STR_LITERAL("mime_type"));
+    if ( !xrtValueGetString(Value, &Mime) ||
+         !((Mime.Size == 9u && memcmp(Mime.Data, "image/png", 9u) == 0) ||
+           (Mime.Size == 10u && memcmp(Mime.Data, "image/jpeg", 10u) == 0) ||
+           (Mime.Size == 10u && memcmp(Mime.Data, "image/webp", 10u) == 0)) ||
+         !MdoAttachmentMetaUInt(Root, "size", &Size) || Size == 0u ||
+         Size > MDO_API_IMAGE_MAX_BYTES ||
+         !MdoAttachmentMetaUInt(Root, "created_at", &CreatedAt) ||
+         CreatedAt == 0u || CreatedAt > INT64_MAX ) goto done;
+    if ( Schema == 2u ) {
+        Value = xrtValueObjectGet(Root, XRT_STR_LITERAL("file_name"));
+        if ( !xrtValueGetString(Value, &FileName) || FileName.Size == 0u ||
+             !MdoAttachmentNameValid(FileName) ) goto done;
+    }
     Ok = true;
 done:
-    xrtValueRelease(Root);
     if ( File != NULL && !xrtClose(File) ) Ok = false;
+    if ( !Ok ) { xrtValueRelease(Root); Root = NULL; }
+    return Root;
+}
+
+static bool MdoAttachmentCreatedAt(const char* Project,
+    const char* Session, const char* Id, xtime* CreatedAt)
+{
+    xvalue* Root = MdoAttachmentMetadata(Project, Session, Id);
+    uint64 Stamp;
+    bool Ok = Root != NULL &&
+        MdoAttachmentMetaUInt(Root, "created_at", &Stamp);
+    if ( Ok ) *CreatedAt = (xtime)Stamp;
+    xrtValueRelease(Root);
     return Ok;
 }
 
@@ -339,7 +400,7 @@ bool MdoApiAttachmentsRoute(MdoApiContext* Context)
     char MetaPath[MDO_SESSION_PATH_CAPACITY];
     char Name[MDO_ATTACHMENT_ID_LENGTH + 6u];
     char Id[MDO_ATTACHMENT_ID_LENGTH + 1u];
-    char Meta[256];
+    char FileName[MDO_ATTACHMENT_NAME_MAX_BYTES + 1u];
     char Url[2u * MDO_SESSION_PATH_CAPACITY];
     char* Data = NULL;
     size_t Size = 0u;
@@ -358,6 +419,9 @@ bool MdoApiAttachmentsRoute(MdoApiContext* Context)
     if ( !MdoAttachmentType(Context, &Type) )
         return MdoApiReplyError(Context, 415u, "unsupported_media_type",
             "Content-Type must be image/png, image/jpeg, or image/webp", NULL);
+    if ( !MdoAttachmentName(Context, FileName) )
+        return MdoApiReplyError(Context, 400u, "image_name_invalid",
+            "X-Mdo-File-Name must be one percent-encoded UTF-8 leaf name of at most 1024 bytes", NULL);
     Status = MdoApiBinaryBodyRead(Context, MDO_API_IMAGE_MAX_BYTES,
         &Data, &Size);
     if ( Status != MDO_API_BODY_OK )
@@ -415,17 +479,26 @@ bool MdoApiAttachmentsRoute(MdoApiContext* Context)
     }
     if ( Attempt == 4u ) Ok = false;
     if ( Ok ) {
-        Written = snprintf(Meta, sizeof(Meta),
-            "{\"schema_version\":1,\"id\":\"%s\",\"mime_type\":\"%s\","
-            "\"size\":%llu,\"created_at\":%lld}", Id, Mime,
-            (unsigned long long)Size, (long long)xrtNow());
-        Ok = Written > 0 && (size_t)Written < sizeof(Meta) &&
+        xvalue* Metadata = xrtValueObject();
+        char* Meta = NULL;
+        size_t MetaSize = 0u;
+        Ok = Metadata != NULL &&
+            MdoApiValueSetUInt(Metadata, "schema_version", FileName[0] ? 2u : 1u) &&
+            MdoApiValueSetString(Metadata, "id", Id) &&
+            MdoApiValueSetString(Metadata, "mime_type", Mime) &&
+            MdoApiValueSetUInt(Metadata, "size", Size) &&
+            MdoApiValueSetInt(Metadata, "created_at", xrtNow()) &&
+            (!FileName[0] || MdoApiValueSetString(Metadata, "file_name", FileName));
+        if ( Ok ) Meta = xrtJsonStringify(Metadata, false, &MetaSize);
+        Ok = Meta != NULL && MetaSize <= MDO_ATTACHMENT_META_MAX &&
             MdoHomeAtomicWrite(Path, Data, Size, false);
-        if ( Ok && !MdoHomeAtomicWrite(MetaPath, Meta, (size_t)Written,
+        if ( Ok && !MdoHomeAtomicWrite(MetaPath, Meta, MetaSize,
                 false) ) {
             (void)MdoHomeRemove(Path, false);
             Ok = false;
         }
+        xrtFree(Meta);
+        xrtValueRelease(Metadata);
     }
     (void)xrtMutexUnlock(g_MdoAttachmentLock);
     xrtFree(Data);
@@ -439,6 +512,7 @@ bool MdoApiAttachmentsRoute(MdoApiContext* Context)
     if ( Written <= 0 || (size_t)Written >= sizeof(Url) || Reply == NULL ||
          !MdoApiValueSetString(Reply, "id", Id) ||
          !MdoApiValueSetString(Reply, "mime_type", Mime) ||
+         !MdoApiValueSetString(Reply, "file_name", FileName) ||
          !MdoApiValueSetUInt(Reply, "size", Size) ||
          !MdoApiValueSetString(Reply, "url", Url) ) {
         xrtValueRelease(Reply);
@@ -671,6 +745,41 @@ bool MdoApiAttachmentSweepExpired(const char* ProjectId,
     MdoApiAttachmentUnlock();
     MdoProjectLeaseRelease(Lease);
     return Ok;
+}
+
+bool MdoApiAttachmentInfoRoute(MdoApiContext* Context)
+{
+    char Project[MDO_PROJECT_ID_CAPACITY];
+    char Session[MDO_SESSION_ID_CAPACITY];
+    char Id[MDO_ATTACHMENT_ID_LENGTH + 1u];
+    char Name[MDO_ATTACHMENT_ID_LENGTH + 6u];
+    char Path[MDO_SESSION_PATH_CAPACITY];
+    xvalue* Metadata;
+    uint64 Size;
+    bool Exists = false;
+    xfileinfo Info;
+    bool Ok;
+    if ( !MdoAttachmentSession(Context, Project, Session, false) ||
+         !MdoAttachmentHexId(Context->Params[2], Id) )
+        return MdoApiReplyError(Context, 404u, "attachment_not_found",
+            "The image does not exist in this session", NULL);
+    if ( !MdoApiAttachmentLock() )
+        return MdoApiReplyError(Context, 503u, "attachment_unavailable",
+            "Image storage is unavailable", NULL);
+    Metadata = MdoAttachmentMetadata(Project, Session, Id);
+    snprintf(Name, sizeof(Name), "%s.bin", Id);
+    Ok = Metadata != NULL && MdoAttachmentMetaUInt(Metadata, "size", &Size) &&
+        MdoAttachmentPath(Path, sizeof(Path), Project, Session, Name) &&
+        MdoHomeExternalStat(Path, &Exists, &Info) && Exists &&
+        Info.Type == XFILE_TYPE_FILE &&
+        (Info.Available & XFILE_INFO_SIZE) != 0u && Info.Size == Size;
+    MdoApiAttachmentUnlock();
+    if ( !Ok ) {
+        xrtValueRelease(Metadata);
+        return MdoApiReplyError(Context, 404u, "attachment_not_found",
+            "Valid image metadata is unavailable in this session", NULL);
+    }
+    return MdoApiReplySuccessTake(Context, 200u, Metadata, NULL);
 }
 
 bool MdoApiAttachmentRoute(MdoApiContext* Context)

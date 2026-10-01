@@ -15,6 +15,7 @@ const packs = Object.fromEntries(supportedLocales.map((name) => [
   name, JSON.parse(readFileSync(new URL(`lang/${name}.json`, root), "utf8")),
 ]));
 const localizedApiErrors = [
+  ["image_name_invalid", "error.imageNameInvalid"],
   ["write_token_required", "error.writeTokenRequired"],
   ["write_token_invalid", "error.writeTokenInvalid"],
   ["write_token_conflict", "error.writeTokenConflict"],

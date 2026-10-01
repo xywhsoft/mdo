@@ -13,6 +13,7 @@ import tempfile
 import threading
 import time
 from pathlib import Path
+from urllib.parse import quote
 
 from test_api_runtime import (ModelHandler, ModelServer, free_port, request,
                               wait_ready, write_site)
@@ -98,12 +99,45 @@ def probe(host: Path) -> None:
                     assert status == 415 and rejected["error"]["code"] == (
                         "image_type_invalid"), (status, rejected)
                     image_bytes = b"\x89PNG\r\n\x1a\n" + b"image-run-bytes"
+                    # Named sidecars can exceed the old fork-copy limit of
+                    # 512 bytes. The name is display metadata, never a path.
+                    image_name = "界" * 334 + ' % "图".png'
+                    assert len(image_name.encode()) <= 1024
+                    for invalid in ("%zz", "%", "%00", "%0D%0A", "a%2Fb.png",
+                                    "a%5Cb.png", "%ff", "%ED%A0%80",
+                                    quote("界" * 342)):
+                        status, _, body = request(port, "POST", route + "/attachments",
+                            body=image_bytes, headers={"Content-Type": "image/png",
+                                "X-Mdo-File-Name": invalid})
+                        assert status == 400 and json.loads(body)["error"]["code"] == (
+                            "image_name_invalid"), (invalid[:50], status, body)
+                    assert not list((home / "sessions/image-probe" / session_id /
+                                     "attachments").glob("*.bin"))
                     status, _, body = request(port, "POST",
                         route + "/attachments", body=image_bytes,
-                        headers={"Content-Type": "image/png"})
+                        headers={"Content-Type": "image/png",
+                                 "X-Mdo-File-Name": quote(image_name, safe="")})
                     document = json.loads(body)
                     assert status == 201, (status, document)
                     image_id = document["data"]["id"]
+                    assert document["data"]["file_name"] == image_name, document
+                    info_route = route + "/attachments/" + image_id + "/info"
+                    status, info_headers, body = request(port, "GET", info_route)
+                    named_metadata = json.loads(body)["data"]
+                    assert status == 200 and named_metadata["schema_version"] == 2 and (
+                        named_metadata["file_name"] == image_name), (status, body)
+                    status, head_headers, head = request(port, "HEAD", info_route)
+                    assert status == 200 and not head and head_headers["content-length"] == (
+                        info_headers["content-length"]), (status, head_headers, head)
+                    status, options_headers, _ = request(port, "OPTIONS", info_route)
+                    assert status == 200 and options_headers["allow"] == (
+                        "GET, HEAD, OPTIONS"), (status, options_headers)
+                    status, _, body = request(port, "POST", route + "/attachments",
+                        body=image_bytes, headers={"Content-Type": "image/png",
+                            "X-Mdo-File-Name": "first.png",
+                            "x-mdo-file-name": "second.png"})
+                    assert status == 400 and json.loads(body)["error"]["code"] == (
+                        "image_name_invalid"), (status, body)
                     completed: list[tuple[int, int]] = []
                     for refs, expected in (
                         (["0" * 32], "attachment_invalid"),
@@ -161,6 +195,9 @@ def probe(host: Path) -> None:
             # Simulate the two legacy run-ID records left by an older build.
             # New text and image runs reuse these IDs after host restart.
             attachment_root = home / "sessions/image-probe" / session_id / "attachments"
+            sidecar = attachment_root / f"{image_id}.json"
+            assert 512 < sidecar.stat().st_size <= 4096
+            original_metadata = sidecar.read_bytes()
             (attachment_root / "runs").mkdir(exist_ok=True)
             for event_id, agent_run_id in completed:
                 (attachment_root / "events" / f"{event_id}.json").replace(
@@ -175,6 +212,19 @@ def probe(host: Path) -> None:
                 )
                 try:
                     wait_ready(port, process)
+                    status, _, body = request(port, "GET", info_route)
+                    assert status == 200 and json.loads(body)["data"]["file_name"] == (
+                        image_name), (status, body)
+                    for field, value in (("id", "0" * 32), ("schema_version", 3),
+                                         ("file_name", "bad/name.png"), ("size", 1),
+                                         ("mime_type", "text/plain")):
+                        corrupt = {**named_metadata, field: value}
+                        sidecar.write_text(json.dumps(corrupt), encoding="utf-8")
+                        try:
+                            status, _, body = request(port, "GET", info_route)
+                            assert status == 404, (field, status, body)
+                        finally:
+                            sidecar.write_bytes(original_metadata)
                     status, _, body = request(port, "GET",
                         route + "/events?after=0&limit=32")
                     assert status == 200, (status, body)
@@ -192,6 +242,11 @@ def probe(host: Path) -> None:
                         headers={"Content-Type": "image/png"})
                     trimmed_id = json.loads(body)["data"]["id"]
                     assert status == 201 and trimmed_id != image_id, body
+                    status, _, body = request(port, "GET",
+                        route + "/attachments/" + trimmed_id + "/info")
+                    legacy_metadata = json.loads(body)["data"]
+                    assert status == 200 and legacy_metadata["schema_version"] == 1 and (
+                        "file_name" not in legacy_metadata), (status, body)
                     for prompt, refs in (("text after restart", []),
                                          ("image after restart", [trimmed_id])):
                         ModelHandler.calls = 0
@@ -257,6 +312,12 @@ def probe(host: Path) -> None:
                     child_root = home / "sessions/image-probe" / child_id
                     assert (child_root / "attachments" / f"{image_id}.bin").read_bytes() == (
                         image_bytes)
+                    assert (child_root / "attachments" / f"{image_id}.json").read_bytes() == (
+                        original_metadata)
+                    status, _, body = request(port, "GET",
+                        child_route + "/attachments/" + image_id + "/info")
+                    assert status == 200 and json.loads(body)["data"]["file_name"] == (
+                        image_name), (status, body)
                     # Forking must not leave the source runtime unable to
                     # accept another turn while the child remains open.
                     ModelHandler.calls = 0
@@ -294,6 +355,10 @@ def probe(host: Path) -> None:
                         child_route + "/attachments/" + image_id)
                     assert status == 200 and copied == image_bytes, (
                         status, copied[:100])
+                    status, _, body = request(port, "GET",
+                        child_route + "/attachments/" + image_id + "/info")
+                    assert status == 200 and json.loads(body)["data"]["file_name"] == (
+                        image_name), (status, body)
                 finally:
                     if process.poll() is None:
                         process.terminate()

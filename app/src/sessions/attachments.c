@@ -8,7 +8,7 @@
 
 #define MDO_IMAGE_RUN_RECORD_MAX 320u
 #define MDO_IMAGE_FILE_MAX (8u * 1024u * 1024u)
-#define MDO_IMAGE_META_MAX 512u
+#define MDO_IMAGE_META_MAX MDO_ATTACHMENT_META_MAX_BYTES
 #define MDO_IMAGE_TRIM_LIMIT 65536u
 
 typedef struct MdoImageRemovedRange {

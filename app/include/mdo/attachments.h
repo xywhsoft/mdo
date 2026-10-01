@@ -3,6 +3,11 @@
 
 #include <xsbase.h>
 
+/* Display names are UTF-8 metadata, never filesystem paths. Both API readers
+ * and fork copying use this bound for v1/v2 attachment sidecars. */
+#define MDO_ATTACHMENT_NAME_MAX_BYTES 1024u
+#define MDO_ATTACHMENT_META_MAX_BYTES 4096u
+
 /* New records use the durable UI event ID. Runtime run IDs restart at one
  * after a process restart and are not suitable as persistent identities.
  * Direct write/prune/rollback calls take a shared project lifecycle lease. */

@@ -518,6 +518,7 @@ export async function boot() {
   });
   createImagePreview({
     dialog: $("#image-preview"), image: $("#image-preview-content"),
+    caption: $("#image-preview-name"),
     closeButton: $("#close-image-preview"), navigation,
   });
   const tracePanel = createTracePanel({

@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="zh-CN">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>mdo attachment filename interaction probe</title>
+<link rel="stylesheet" href="/app/web/css/app.css">
+<style>body{padding:12px}pre{white-space:pre-wrap;overflow-wrap:anywhere}.composer{max-width:360px}#queue{max-width:360px}</style>
+<form class="composer"><textarea aria-label="Message">保留草稿</textarea>
+<button type="button">Add image</button><input type="file" hidden><div class="composer-images"></div></form>
+<div id="queue"></div>
+<dialog class="image-preview-dialog" id="preview"><button type="button" id="close">×</button>
+<img id="image" alt=""><bdi class="image-file-name image-preview-name" id="name"></bdi></dialog>
+<pre id="result"></pre>
+<script type="module">
+import { createComposerImages } from "/app/web/js/features/chat/composer-images.js";
+import { createPromptQueue } from "/app/web/js/features/chat/prompt-queue.js";
+import { createImagePreview } from "/app/web/js/features/chat/image-preview.js";
+import { loadLocale } from "/app/web/js/i18n.js";
+const originalFetch = window.fetch;
+const id = "a".repeat(32);
+const fileName = '截图 "1" 100% ' + "跨平台附件".repeat(40) + ".png";
+let reads = 0;
+let resolveName;
+const pending = new Promise((done) => { resolveName = done; });
+const pixel = "<svg xmlns='http://www.w3.org/2000/svg' width='64' height='64'><rect width='64' height='64' fill='#557ab4'/></svg>";
+window.fetch = async (url, options) => {
+  if (url.startsWith("/lang/")) return originalFetch(`/app/web${url}`, options);
+  if (url.endsWith("/info")) { reads += 1; return pending; }
+  return Response.json({ ok: true, data: { items: [
+    { id: "one", text: "保留这段选择", state: "pending", attachments: [id] },
+  ] } });
+};
+const navigation = { get: () => ({ projectId: "qa", sessionId: "one" }), subscribe() {} };
+const composer = document.querySelector(".composer");
+const strip = composer.querySelector(".composer-images");
+const prompt = composer.querySelector("textarea");
+const result = document.querySelector("#result");
+const frames = () => new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done)));
+try {
+  await loadLocale("zh-CN");
+  const images = createComposerImages({ composer, prompt, strip,
+    button: composer.querySelector("button"), input: composer.querySelector("input"), navigation,
+    modelsStore: { get: () => ({ data: { models: [] } }) },
+    sessionStore: { get: () => ({ data: null }) }, ensureSession() {},
+    onChange() {}, onUploading() {}, onError() {} });
+  createImagePreview({ dialog: document.querySelector("#preview"), image: document.querySelector("#image"),
+    caption: document.querySelector("#name"), closeButton: document.querySelector("#close"), navigation });
+  images.set([id]);
+  strip.querySelector("img").src = "data:image/svg+xml," + encodeURIComponent(pixel);
+  const origin = strip.querySelector("[data-image-preview]");
+  origin.focus(); origin.click();
+  const genericBefore = document.querySelector("#name").textContent === "图片 1";
+  const queue = createPromptQueue({ container: document.querySelector("#queue"), navigation,
+    stagedEntries: () => [], isRunActive: () => true });
+  await queue.select("qa", "one");
+  resolveName(Response.json({ ok: true, data: { id, schema_version: 2, file_name: fileName } }));
+  await frames();
+  const latePreview = document.querySelector("#name").textContent === fileName &&
+    document.querySelector("#image").alt === fileName;
+  document.querySelector("#close").click();
+  await frames();
+  const returnedFocus = document.activeElement === origin;
+  const card = document.querySelector(".prompt-queue-list li");
+  const text = card.querySelector(".prompt-queue-text").firstChild;
+  const range = document.createRange(); range.setStart(text, 0); range.setEnd(text, 4);
+  const selection = window.getSelection(); selection.removeAllRanges(); selection.addRange(range);
+  const chosen = selection.toString();
+  await queue.select("qa", "one");
+  const stableQueue = document.querySelector(".prompt-queue-list li") === card &&
+    selection.toString() === chosen && card.querySelector(".image-file-name").textContent === fileName;
+  strip.querySelector(".composer-image-remove").focus();
+  await loadLocale("en-US"); await frames();
+  const english = strip.querySelector(".composer-image-remove").getAttribute("aria-label") ===
+    `Remove image 1: ${fileName}` && document.activeElement.classList.contains("composer-image-remove");
+  await loadLocale("ru-RU"); await frames();
+  const russian = strip.querySelector(".composer-image-preview").getAttribute("aria-label") ===
+    `Открыть изображение 1: ${fileName}` && document.activeElement.classList.contains("composer-image-remove");
+  const bounds = strip.querySelector(".composer-image-remove").getBoundingClientRect();
+  const noOverflow = document.documentElement.scrollWidth <= innerWidth;
+  const passed = genericBefore && latePreview && returnedFocus && stableQueue && english && russian &&
+    reads === 1 && prompt.value === "保留草稿" && noOverflow &&
+    (innerWidth > 640 || (bounds.width >= 40 && bounds.height >= 40));
+  result.dataset.passed = String(passed);
+  result.textContent = JSON.stringify({ passed, genericBefore, latePreview, returnedFocus,
+    stableQueue, english, russian, reads, noOverflow, removeWidth: bounds.width }, null, 2);
+} catch (error) { result.dataset.passed = "false"; result.textContent = error.stack; }
+finally { window.fetch = originalFetch; }
+</script>
+</html>

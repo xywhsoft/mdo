@@ -2,6 +2,7 @@ import { api, attachmentUrl, resourceId } from "../../api/client.js";
 import { subscribeLocale, t } from "../../i18n.js";
 import { clear, element, errorMessage, toast } from "../../utils/dom.js";
 import { createUnusedImageCleanup } from "./unused-image-cleanup.js";
+import { labelImageName } from "./image-names.js";
 
 function sessionKey(projectId, sessionId) {
   return projectId && sessionId
@@ -303,14 +304,20 @@ export function createPromptQueue({ container, navigation, isRunActive, stagedEn
         const images = element("div", { className: "prompt-queue-images" });
         for (const [imageIndex, id] of entry.attachments.entries()) {
           if (typeof id !== "string" || !/^[0-9a-f]{32}$/.test(id)) continue;
-          images.append(element("button", { attrs: {
+          const caption = element("bdi", { className: "image-file-name",
+            text: t("queue.imageAlt", { number: imageIndex + 1 }) });
+          const preview = element("button", { attrs: {
             type: "button", "aria-label": t("queue.viewImage", { number: imageIndex + 1 }),
             "data-image-preview": "",
             "data-image-ref": `queue:${key}/${entry.id}/${id}/${imageIndex}`,
           } }, [element("img", { attrs: {
             src: attachmentUrl(projectId, sessionId, id),
             alt: t("queue.imageAlt", { number: imageIndex + 1 }), loading: "lazy",
-          } })]));
+          } }), caption]);
+          images.append(preview);
+          labelImageName({ preview, caption, owner: { projectId, sessionId }, id,
+            viewLabel: (name) => t("image.viewNamed", { number: imageIndex + 1, name },
+              `查看图片 ${imageIndex + 1}：${name}`) });
         }
         body.append(images);
       }

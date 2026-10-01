@@ -186,6 +186,7 @@ bool MdoApiSessionExportRoute(MdoApiContext* pContext);
 bool MdoApiRunStartRoute(MdoApiContext* pContext);
 bool MdoApiAttachmentsRoute(MdoApiContext* pContext);
 bool MdoApiAttachmentRoute(MdoApiContext* pContext);
+bool MdoApiAttachmentInfoRoute(MdoApiContext* pContext);
 bool MdoApiAttachmentsInit(void);
 void MdoApiAttachmentsUnit(void);
 bool MdoApiAttachmentLock(void);

@@ -10,25 +10,26 @@ button { min-height:40px; }
 #result { overflow-wrap:anywhere; }
 iframe { width:100%; height:100%; min-height:0; border:0; }
 </style>
-<header><button id="paste" type="button">粘贴两张图片</button><output id="result">等待工作台</output></header>
+<header><button id="paste" type="button">粘贴两张图片</button>
+<button id="queue" type="button">发送并排队图片任务</button><output id="result">等待工作台</output></header>
 <iframe id="mdo" title="打包版工作台"></iframe>
 <script type="module">
 const frame = document.querySelector("#mdo");
 const result = document.querySelector("#result");
 const button = document.querySelector("#paste");
 frame.src = "__MDO_QA_ROUTE__";
-button.addEventListener("click", () => {
+function pasteImages() {
   const child = frame.contentWindow;
   const prompt = frame.contentDocument.querySelector("#prompt");
   if (!prompt || frame.contentDocument.querySelector("#composer-attach")?.disabled) {
     result.textContent = "工作台尚未准备好";
-    return;
+    return false;
   }
   const bytes = Uint8Array.from(atob(
     "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/lZkAAAAASUVORK5CYII="),
     (character) => character.charCodeAt(0));
-  const first = new child.File([bytes], "first.png", { type: "image/png" });
-  const second = new child.File([bytes], "second.png", { type: "image/png" });
+  const first = new child.File([bytes], '截图 "1" 100%.png', { type: "image/png" });
+  const second = new child.File([bytes], "跨平台附件".repeat(40) + ".png", { type: "image/png" });
   const event = new child.Event("paste", { bubbles: true, cancelable: true });
   Object.defineProperty(event, "clipboardData", { value: {
     files: [first, second], items: [
@@ -40,6 +41,38 @@ button.addEventListener("click", () => {
   prompt.dispatchEvent(event);
   result.textContent = event.defaultPrevented ? "两张图片已交给实际输入区" : "粘贴未处理";
   button.disabled = true;
+  return event.defaultPrevented;
+}
+button.addEventListener("click", pasteImages);
+document.querySelector("#queue").addEventListener("click", async (event) => {
+  event.currentTarget.disabled = true;
+  try {
+    const doc = frame.contentDocument;
+    const prompt = doc.querySelector("#prompt");
+    prompt.value = "图片队列前置任务";
+    prompt.dispatchEvent(new frame.contentWindow.Event("input", { bubbles: true }));
+    doc.querySelector("#send").click();
+    const until = async (check) => {
+      const deadline = Date.now() + 4500;
+      while (!check()) {
+        if (Date.now() >= deadline) throw new Error("等待正式输入区状态超时");
+        await new Promise((done) => setTimeout(done, 20));
+      }
+    };
+    await until(() => doc.querySelector("#send").getAttribute("aria-label") === "加入待发送队列");
+    prompt.value = "待发图片也应显示原始名称";
+    prompt.dispatchEvent(new frame.contentWindow.Event("input", { bubbles: true }));
+    if (!pasteImages()) throw new Error("图片未交给正式上传逻辑");
+    await until(() => doc.querySelectorAll(".composer-image").length === 2 &&
+      !doc.querySelector("#composer-attach").disabled);
+    doc.querySelector("#send").click();
+    await until(() => {
+      const names = [...doc.querySelectorAll(".prompt-queue-images .image-file-name")];
+      return names.length === 2 && names[0].textContent === '截图 "1" 100%.png' &&
+        names[1].textContent === "跨平台附件".repeat(40) + ".png";
+    });
+    result.textContent = "正式待发队列已保存两个完整文件名（15 / 204 字符）";
+  } catch (error) { result.textContent = error.message; }
 });
 </script>
 </html>

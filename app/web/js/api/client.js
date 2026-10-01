@@ -62,6 +62,14 @@ export function attachmentUrl(projectId, sessionId, id) {
     `/sessions/${resourceId(sessionId, "session")}/attachments/${id}`);
 }
 
+// Display metadata only. Reject path separators, controls and malformed UTF-16
+// before encoding a header; the server separately validates decoded UTF-8.
+export function attachmentFileName(value) {
+  if (typeof value !== "string" || /[\x00-\x1f\x7f/\\]/.test(value)) return "";
+  try { encodeURIComponent(value); } catch { return ""; }
+  return new TextEncoder().encode(value).length <= 1024 ? value : "";
+}
+
 async function readEnvelope(response, path = "", method = "GET") {
   let envelope = null;
   try { envelope = await response.json(); }
@@ -137,12 +145,18 @@ async function uploadImage(projectId, sessionId, file, mime = file.type) {
 
 async function sendImage(path, file, mime) {
   const url = requestPath(path);
+  const headers = { Accept: "application/json", "Content-Type": mime,
+    ...(pageWriteToken ? { "X-Mdo-Write-Token": pageWriteToken } : {}) };
+  if (file.name) {
+    const name = attachmentFileName(file.name);
+    if (!name) throw new ApiError("Image filename is invalid", { code: "image_name_invalid" });
+    headers["X-Mdo-File-Name"] = encodeURIComponent(name);
+  }
   let response;
   try {
     response = await fetch(url, {
       method: "POST",
-      headers: { Accept: "application/json", "Content-Type": mime,
-        ...(pageWriteToken ? { "X-Mdo-Write-Token": pageWriteToken } : {}) },
+      headers,
       body: file,
       cache: "no-store",
       credentials: "same-origin",

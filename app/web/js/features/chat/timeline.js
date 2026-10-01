@@ -6,6 +6,7 @@ import { mountIcons } from "../../components/icons.js";
 import { renderMarkdown } from "./markdown.js";
 import { artifactPreviewNode } from "./artifact-preview.js";
 import { currentLocale, subscribeLocale, t } from "../../i18n.js";
+import { labelImageName } from "./image-names.js";
 
 function modelKey(event, epoch) {
   return `${event.run_id || event.agent_id || event.event_id}-${epoch}-${event.agent_turn || 0}`;
@@ -564,8 +565,10 @@ function timelineNode(item, handlers, feedback, projectId, sessionId, writable,
       item.attachments?.length) {
     const images = element("div", { className: "timeline-images" });
     for (const [index, id] of item.attachments.entries()) {
-      if (typeof id === "string" && /^[0-9a-f]{32}$/.test(id))
-        images.append(element("button", { className: "timeline-image-preview",
+      if (typeof id === "string" && /^[0-9a-f]{32}$/.test(id)) {
+        const caption = element("bdi", { className: "image-file-name",
+          text: t("timeline.userImage", { index: index + 1 }, `用户图片 ${index + 1}`) });
+        const preview = element("button", { className: "timeline-image-preview",
           attrs: { type: "button", "aria-label": t("timeline.viewImage",
             { index: index + 1 }, `查看用户图片 ${index + 1}`),
             "data-image-preview": "",
@@ -574,7 +577,12 @@ function timelineNode(item, handlers, feedback, projectId, sessionId, writable,
           attrs: { src: attachmentUrl(projectId, sessionId, id),
             alt: t("timeline.userImage", { index: index + 1 },
               `用户图片 ${index + 1}`), loading: "lazy" },
-        })]));
+        }), caption]);
+        images.append(preview);
+        labelImageName({ preview, caption, owner, id,
+          viewLabel: (name) => t("image.viewNamed", { number: index + 1, name },
+            `查看图片 ${index + 1}：${name}`) });
+      }
     }
     if (images.childElementCount) children.push(images);
   }

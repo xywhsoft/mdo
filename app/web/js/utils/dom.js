@@ -267,6 +267,8 @@ const API_ERROR_COPY = Object.freeze({
     "图片配额或磁盘空间不足，请清理空间后重试。"],
   attachment_response_failed: ["error.attachmentResponseFailed",
     "图片上传未完成，请重新选择图片后重试。"],
+  image_name_invalid: ["error.imageNameInvalid",
+    "图片文件名无效，请使用不含路径分隔符或控制字符、且不超过 1024 UTF-8 字节的名称。"],
   image_body_invalid: ["error.imageBodyInvalid",
     "无法读取图片内容，请重新选择图片。"],
   image_type_invalid: ["error.imageTypeInvalid",

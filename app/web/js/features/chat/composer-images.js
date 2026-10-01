@@ -1,6 +1,7 @@
 import { api, attachmentUrl } from "../../api/client.js";
 import { clear, element, toast } from "../../utils/dom.js";
 import { subscribeLocale, t } from "../../i18n.js";
+import { imageNames, labelImageName } from "./image-names.js";
 
 const TYPES = new Set(["image/png", "image/jpeg", "image/webp"]);
 const EXTENSION_TYPES = new Map([
@@ -175,8 +176,9 @@ export function createComposerImages({ composer, prompt, button, input, strip,
           }
         }
       });
-      strip.append(element("div", { className: "composer-image" }, [
-        element("button", { className: "composer-image-preview", attrs: {
+      const caption = element("bdi", { className: "image-file-name",
+        text: t("image.alt", { number: index + 1 }, `图片 ${index + 1}`) });
+      const preview = element("button", { className: "composer-image-preview", attrs: {
           type: "button", "aria-label": t("image.view", { number: index + 1 },
             `查看图片 ${index + 1}`),
           "data-image-preview": "",
@@ -184,9 +186,13 @@ export function createComposerImages({ composer, prompt, button, input, strip,
           "data-image-ref": `draft:${selected.projectId}/${selected.sessionId}/${id}/${index}`,
         } }, [element("img", { attrs: { src: attachmentUrl(selected.projectId,
           selected.sessionId, id), alt: t("image.alt", { number: index + 1 },
-          `图片 ${index + 1}`) } })]),
-        remove,
-      ]));
+          `图片 ${index + 1}`) } }), caption]);
+      strip.append(element("div", { className: "composer-image" }, [preview, remove]));
+      labelImageName({ preview, caption, remove, owner: selected, id,
+        viewLabel: (name) => t("image.viewNamed", { number: index + 1, name },
+          `查看图片 ${index + 1}：${name}`),
+        removeLabel: (name) => t("image.removeNamed", { number: index + 1, name },
+          `移除图片 ${index + 1}：${name}`) });
     }
     if (uploading) strip.append(element("span", {
       className: "composer-image-uploading",
@@ -258,6 +264,7 @@ export function createComposerImages({ composer, prompt, button, input, strip,
             job.reserved -= 1;
           }
           if (!stored) continue;
+          imageNames.remember(selected, stored.id, stored.file_name);
           if (scopeKey() !== job.key) {
             discarded = true;
             // The response arrived after this editor moved away. Give the

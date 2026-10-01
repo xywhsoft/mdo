@@ -573,7 +573,7 @@ select:focus-visible,
 }
 .timeline-item[data-kind="user"] .timeline-body:empty { display: none; }
 .timeline-images { display: flex; max-width: 86%; justify-content: flex-end; flex-wrap: wrap; gap: 6px; margin: 6px 0 0 auto; }
-.timeline-image-preview { display: block; max-width: 100%; padding: 0; border: 0; border-radius: 9px; background: transparent; cursor: zoom-in; }
+.timeline-image-preview { display: block; min-width: 0; width: fit-content; max-width: min(240px, 100%); padding: 0; border: 0; border-radius: 9px; background: transparent; cursor: zoom-in; }
 .timeline-images img { display: block; width: auto; max-width: min(240px, 100%); max-height: 240px; border: 1px solid var(--border); border-radius: 9px; object-fit: contain; background: var(--surface-raised); }
 .timeline-item[data-kind="assistant"] .timeline-body { font-size: 14px; line-height: 1.65; }
 .timeline-item[data-kind="assistant"] .timeline-body:empty { display: none; }
@@ -731,8 +731,8 @@ select:focus-visible,
 .prompt-queue-text { display: block; white-space: pre-wrap; overflow-wrap: anywhere; }
 .prompt-queue-profile { display: block; margin-top: 3px; color: var(--muted); overflow-wrap: anywhere; }
 .prompt-queue-images { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 6px; }
-.prompt-queue-images button { display: block; width: 42px; height: 42px; padding: 0; border-radius: 6px; cursor: zoom-in; }
-.prompt-queue-images img { width: 100%; height: 100%; border: 1px solid var(--border); border-radius: 6px; object-fit: cover; }
+.prompt-queue-images button { display: block; width: 68px; min-width: 0; padding: 0; border-radius: 6px; cursor: zoom-in; }
+.prompt-queue-images img { display: block; width: 42px; height: 42px; margin: 0 auto; border: 1px solid var(--border); border-radius: 6px; object-fit: cover; }
 .prompt-queue-list .prompt-queue-state { display: block; margin-top: 3px; color: var(--warning); }
 .prompt-queue-list li > button:last-child { flex: none; }
 .timeline-sentinel { height: 1px; }
@@ -793,9 +793,11 @@ select:focus-visible,
 .composer textarea::placeholder { color: var(--faint); }
 .composer-images { display: flex; min-height: 0; flex-wrap: wrap; gap: 7px; padding: 3px 12px 6px; }
 .composer-images[hidden] { display: none; }
-.composer-image { position: relative; width: 68px; height: 68px; }
-.composer-image img { width: 100%; height: 100%; border: 1px solid var(--border); border-radius: 8px; object-fit: cover; }
-.composer-image-preview { display: block; width: 100%; height: 100%; padding: 0; border: 0; border-radius: 8px; background: transparent; cursor: zoom-in; }
+.composer-image { position: relative; width: 68px; }
+.composer-image img { display: block; width: 68px; height: 68px; border: 1px solid var(--border); border-radius: 8px; object-fit: cover; }
+.composer-image-preview { display: block; width: 100%; padding: 0; border: 0; border-radius: 8px; background: transparent; cursor: zoom-in; }
+.image-file-name { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; margin-top: 4px; color: var(--muted); font-size: 11px; line-height: 16px; text-align: center; }
+.timeline-image-preview .image-file-name { width: 240px; }
 .composer-image-remove { position: absolute; top: -5px; right: -5px; display: grid; width: 19px; height: 19px; place-items: center; padding: 0; border: 0; border-radius: 50%; background: var(--ink); color: var(--surface-raised); cursor: pointer; }
 .composer-image-remove:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 .composer-image-uploading { align-self: center; color: var(--muted); font-size: 11px; }
@@ -1018,7 +1020,8 @@ select:focus-visible,
 :is(#new-session-dialog, #project-dialog) .dialog-error { flex: 0 0 auto; max-height: min(96px, 25dvh); overflow-y: auto; }
 .image-preview-dialog { position: fixed; min-width: 58px; max-width: calc(100vw - 24px); max-height: calc(100dvh - 24px); margin: auto; padding: 48px 8px 8px; border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--surface-raised); box-shadow: var(--shadow-dialog); }
 .image-preview-dialog::backdrop { background: rgb(0 0 0 / 72%); }
-.image-preview-dialog img { display: block; width: auto; height: auto; max-width: calc(100vw - 42px); max-height: calc(100dvh - 82px); object-fit: contain; }
+.image-preview-dialog img { display: block; width: auto; height: auto; max-width: calc(100vw - 42px); max-height: calc(100dvh - 106px); object-fit: contain; }
+.image-preview-name { width: min(480px, calc(100vw - 42px)); }
 .image-preview-close { position: absolute; top: 4px; right: 8px; display: grid; width: 40px; height: 40px; place-items: center; padding: 0; border: 1px solid var(--border-strong); border-radius: 50%; background: var(--surface-raised); color: var(--ink); font-size: 22px; line-height: 1; cursor: pointer; }
 .dialog-card > header { display: flex; align-items: flex-start; justify-content: space-between; padding: 20px 20px 15px; border-bottom: 1px solid var(--border); }
 .dialog-card h2 { margin: 0; font-size: 17px; }
@@ -1722,7 +1725,7 @@ select:focus-visible,
     :is(#new-session-dialog, #session-action-dialog, #message-edit-dialog, #project-dialog, #shortcuts-dialog)
     .dialog-card { max-height: calc(var(--app-visual-height) - 16px); }
   :root[data-visual-viewport-reduced] #image-preview img {
-    max-height: max(1px, calc(var(--app-visual-height) - 82px));
+    max-height: max(1px, calc(var(--app-visual-height) - 106px));
   }
   /* A software keyboard may shorten only visualViewport, leaving height media
      queries at the original layout height. Keep settings usable in that case. */
