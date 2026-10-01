@@ -16,6 +16,7 @@ import os
 from pathlib import Path
 import shutil
 import tempfile
+import zlib
 
 from test_backup_upload_runtime import CHUNK, CONTROL, PREFIX, ROOT, Probe as UploadProbe
 
@@ -66,6 +67,14 @@ class Probe(UploadProbe):
                                 "        (void)xrtCancelRequest(g_BackupHistoryProbeCancel);", 1)
         source = "static xcancel* g_BackupHistoryProbeCancel;\n" + source
         relations.write_text(source, encoding="utf-8", newline="\n")
+        snapshot = self.site / "src/sessions/backup_snapshot.c"
+        source = snapshot.read_text(encoding="utf-8")
+        hook = "    for ( i = 0u; i < Prefix; ) {"
+        assert source.count(hook) == 1
+        source = source.replace(hook, hook + "\n        if ( i != 0u && g_BackupSnapshotProbeCancel != NULL )\n"
+                                "            (void)xrtCancelRequest(g_BackupSnapshotProbeCancel);", 1)
+        snapshot.write_text("static xcancel* g_BackupSnapshotProbeCancel;\n" + source,
+                            encoding="utf-8", newline="\n")
         service = self.site / "src/bootstrap/service.c"
         text = service.read_text(encoding="utf-8")
         text = text.replace('#include "backup-upload.c"', '#include "backup-upload.c"\n#include "backup-decode.c"', 1)
@@ -129,6 +138,43 @@ class Probe(UploadProbe):
         # for the malformed-document cases below.
         replace(small, ARTIFACT, b"fixture artifact\x00\xff\n")
         raw_small = dump(small)
+        real_snapshot = base64.b64decode(next(f for f in small["files"]
+                                             if f["path"] == "snapshot.json")["data"])
+        snapshot_root = json.loads(real_snapshot)
+        def snapshot_bytes(root):
+            root = dict(root)
+            root.pop("checksum", None)
+            if root.get("version") != 3:
+                return dump(root)
+            prefix = dump(root)[:-1]
+            return prefix + b',"checksum":"' + f"{zlib.crc32(prefix):08x}".encode() + b'"}'
+        def with_snapshot(root):
+            document = copy.deepcopy(small)
+            replace(document, "snapshot.json", snapshot_bytes(root))
+            return document
+        populated = copy.deepcopy(snapshot_root)
+        populated.update(current_turn=1, next_sequence=3, entries=[
+            {"sequence": 1, "turn": 1, "flags": 0, "role": 1, "content": "Question 中文",
+             "reasoning": None, "tool_call_id": None, "tool_calls": []},
+            {"sequence": 2, "turn": 1, "flags": 0, "role": 2, "content": "Answer",
+             "reasoning": "Retained reasoning", "tool_call_id": None, "tool_calls": []}])
+        assert self.validate(dump(with_snapshot(populated)))["ok"]
+        # Older formats omit the v3 checksum and sequence-array additions.
+        for version in (1, 2):
+            older = copy.deepcopy(populated)
+            older["version"] = version
+            older["journal_sequence"] = older.pop("checkpoint_sequence")
+            for key in ("read_file_sequences", "modified_file_sequences", "config"):
+                older.pop(key, None)
+            assert self.validate(dump(with_snapshot(older)))["ok"], version
+        # Keep model arguments opaque: malformed input can legitimately remain
+        # in history after a rejected tool call. An empty provider ID is allowed.
+        opaque = copy.deepcopy(populated)
+        opaque["entries"][1]["tool_calls"] = [{"id": "", "name": "read", "arguments": "{invalid"}]
+        assert self.validate(dump(with_snapshot(opaque)))["ok"]
+        large_snapshot = copy.deepcopy(populated)
+        large_snapshot["entries"][0]["content"] = "Retained text " * 8192
+        assert self.validate(dump(with_snapshot(large_snapshot)), "snapshot-cancel")["code"] == 9
         for mode, code in (("files", 11), ("file", 11), ("total", 11), ("document", 11),
                            ("deadline", 11), ("cancel", 9), ("history-cancel", 9), ("budget", 1)):
             value = self.validate(raw_small, mode)
@@ -138,6 +184,43 @@ class Probe(UploadProbe):
             doc = copy.deepcopy(small)
             change(doc)
             cases.append((label, dump(doc)))
+        def bad_snapshot(label, change):
+            root = copy.deepcopy(populated)
+            change(root)
+            cases.append((label, dump(with_snapshot(root))))
+        for key, bad in (("format", "other"), ("version", 4), ("next_sequence", 0),
+                         ("next_sequence", True), ("current_turn", -1), ("entries", {}),
+                         ("summary", 7), ("fill_seen", 2), ("summary_generation", 2**32),
+                         ("compacted_through", 3), ("tail_floor", 3), ("checkpoint_sequence", "1")):
+            bad_snapshot(f"snapshot {key}={bad}", lambda root, key=key, bad=bad: root.update({key: bad}))
+        bad_snapshot("snapshot unknown field", lambda root: root.update(secret_path="ignored"))
+        bad_snapshot("snapshot unknown configuration", lambda root: root["config"].update(client="ignored"))
+        bad_snapshot("snapshot invalid config type", lambda root: root.update(config=None))
+        for key, bad in (("max_output_tokens", 2**32), ("max_input_tokens", -1),
+                         ("window_mode", 3), ("journal_durability", 2), ("prune_trigger", "0.75"),
+                         ("compact_trigger", 0.1), ("summary_style", "unknown"),
+                         ("context_window_tokens", 0), ("summary_min_tokens", 2**32-1)):
+            bad_snapshot(f"snapshot config {key}", lambda root, key=key, bad=bad: root["config"].update({key: bad}))
+        for key, bad in (("sequence", 0), ("sequence", 3), ("turn", 2), ("role", 4),
+                         ("flags", 4), ("content", {}), ("reasoning", False),
+                         ("tool_call_id", 1), ("tool_calls", None), ("content", "before\x00after")):
+            bad_snapshot(f"snapshot entry {key}", lambda root, key=key, bad=bad: root["entries"][1].update({key: bad}))
+        bad_snapshot("snapshot duplicate sequence", lambda root: root["entries"][1].update(sequence=1))
+        bad_snapshot("snapshot reversed entries", lambda root: root["entries"].reverse())
+        bad_snapshot("snapshot file list mismatch", lambda root: root.update(read_files=["source.c"], read_file_sequences=[]))
+        bad_snapshot("snapshot future file sequence", lambda root: root.update(read_files=["source.c"], read_file_sequences=[3]))
+        bad_snapshot("snapshot invalid file name", lambda root: root.update(read_files=[None], read_file_sequences=[0]))
+        bad_snapshot("snapshot tool name", lambda root: root["entries"][1].update(tool_calls=[{"name": ""}]))
+        bad_snapshot("snapshot tool args", lambda root: root["entries"][1].update(tool_calls=[{"name": "read", "arguments": {}}]))
+        damaged = copy.deepcopy(small)
+        # Mutate an existing checksum digit, independent of initial turn state.
+        damaged_bytes = real_snapshot[:-10] + (b"0" if real_snapshot[-10:-9] != b"0" else b"1") + real_snapshot[-9:]
+        assert damaged_bytes != real_snapshot
+        replace(damaged, "snapshot.json", damaged_bytes)
+        cases.append(("snapshot CRC mismatch", dump(damaged)))
+        empty_snapshot = copy.deepcopy(small)
+        replace(empty_snapshot, "snapshot.json", b"{}")
+        cases.append(("snapshot has no format", dump(empty_snapshot)))
         for key, new in (("export_schema", 99), ("format", "other"), ("file_count", 99),
                          ("total_bytes", 1), ("captured_at_us", -1), ("captured_at_us", 1.5),
                          ("restore_ready", True), ("queue_restore_policy", "resume"),

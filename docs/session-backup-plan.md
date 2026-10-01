@@ -59,7 +59,7 @@ manager 调用或库通过 native path 写入不能被它自动覆盖。不得�
    分别限制文件数、单文件、总字节、JSON/base64 膨胀和传输时间；定额失败需要
    明确反馈。导出完成即释放捕获锁，下载速度不能占用运行窗口。
 4. **进行中**：离线拥有解码、清单及 metadata/UI/todo、draft/queue/receipt/
-   feedback/消息绑定 schema 和保留 UI 的侧车关系校验已接入；模型账本及其
+   feedback/消息绑定 schema、模型 snapshot schema/CRC 和保留 UI 的侧车关系校验已接入；journal 及其
    与 UI 的关系、图片实际解码及生产预览 worker 未完成。先实现离线验证与预览，
    再做恢复事务。验证所有 schema、路径、ID、内容
    校验和引用；拒绝链接、绝对路径、`..`、重复文件和大小声明失真。v1 只能
@@ -78,6 +78,47 @@ manager 调用或库通过 native path 写入不能被它自动覆盖。不得�
 每项提交更新 [迁移记录](frontend-migration.md) 与
 [完成审计](frontend-completion-audit.md)。基础代码的回归不能代替完整备份的
 正式导出/恢复验证，也不能代替原生及实体设备验收。
+
+## 模型快照格式与原字节 CRC 校验
+
+2026-10-02 新增独立的 `backup_snapshot.c`，在共用的文件检查入口接入，
+捕获后的 v2 编码与拥有离线解码复用已解析的 JSON tree，不再二次解析快照。
+检查 xllm-session 1–3 的格式/字段、消息序号严格递增且小于 next_sequence、
+turn 不超过 current_turn、角色/flags 和 nullable 文本、工具调用字段类型，
+文件账本的名称/序号数组类型、长度和序号范围。未知字段和嵌入 NUL 拒绝；
+源路径及工具参数只是记录，不打开或执行。空 provider tool ID 和原始错误参数
+可合法保留，不能为了 schema 校验重写为“正确”内容。
+
+配置数值在窄化之前检查整数类型与位宽，压力阈值只接收数值，枚举按当前 ABI
+检查。未安装模型的身份保持来源数据；配置校验复用没有 client、路径、hook
+的内存 `xllmSessionCreate`，只验证库实际支持的配置，立即释放。不调用模型、
+shell、queue 或 catalog，不写 Home。v1/2 允许省略新增字段/配置，使用库默认；
+v3 快照须带配置及原字节校验和。
+
+v3 CRC-32/ISO-HDLC 核对原文件末尾 checksum 之前的精确字节，保持库的格式，
+不重新序列化来验 CRC。固定只读 nibble 表，每 64 KiB 检查取消/截止时间；
+消息、工具调用和文件账本之间也检查。解析器和一次文本检查仍是有界同步操作，
+不把协作截止时间当作可中断任何原生指令的硬超时。
+
+拥有解码探针使用真实 idle 会话快照，追加合法 v1/2、Unicode 消息/推理及
+原始错误工具参数；177 个小错误输入中包含非法配置、消息/文件序号、字段类型
+和重新计算外层 SHA-256 后的内部 CRC 损坏。分块 CRC 过程中取消返回空结果，
+失败后能重试，Home 原字节不变。首次 CRC 错误用例没有匹配初始 turn 值，
+已改为必定修改现存 checksum 字节；完整门禁另发现手写 session 探针漏掉新
+模块，已同步其 include 与复制清单，没有放宽产品校验。
+
+这完成快照格式边界；journal 严格 schema/CRC、实际 xllm 重放及模型/UI 关系
+仍需接入。图片实际解码、生产预览 worker、新 ID/原子 staging 恢复和正式菜单
+也未完成。manifest 保持 `restore_ready:false`，本阶段不开放导入或自动续行。
+
+Windows/Linux 完整有界门禁通过 114 Python、251 Node、90 模块、严格 C11、
+36 运行探针、独立 A/B 与三项 packed；Windows 另通过便携 WebView2 Home
+和打包启动 20 秒。当前 Ubuntu WSL 可用，Linux 在新 ext4 源拷贝中从同一
+锁定 SDK 新构建宿主，跳过 GUI。根目录程序与 Windows A/B SHA-256 为
+`cdfd1363200177be4b58bebcd0639b4a4a1d7fefc94231d1faeedbaa4975f55c`，
+Linux A/B 为
+`d769d8a556a94b0037550297b47f7ef67e40c6698fdecf7f533f44dfc23da785`。
+日志 `.build/qa-backup-snapshot-{final,linux-final}.log`；没有压力或高负载测试。
 
 ## 统一捕获边界与实际文件清单
 

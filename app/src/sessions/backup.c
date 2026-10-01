@@ -525,6 +525,11 @@ bool MdoBackupValidate(const MdoSessionBackup* Backup,
                 return MdoBackupError(Error, XWORK_ERROR_OUT_OF_MEMORY,
                     "cannot parse session backup file", File->Path);
             Ok = xrtValueType(Root) == XVALUE_OBJECT;
+            if ( Ok && strcmp(File->Path, "snapshot.json") == 0 &&
+                 !MdoBackupSnapshotValidate(File, Root, Limits, Cancel, Error) ) {
+                xrtValueRelease(Root);
+                return false;
+            }
             if ( Ok && strcmp(File->Path, "meta.json") == 0 ) {
                 MdoSessionInfo Meta;
                 Ok = MdoSessionsInternalMetaParse(Backup->Info.ProjectId, Backup->Info.Id,

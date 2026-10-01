@@ -4,6 +4,37 @@
 
 完成判据及尚缺的打包页证据见 [前端操作体验完成审计](frontend-completion-audit.md)。本文件继续记录每次实现和验证的细节。
 
+## 2026-10-02：备份模型快照格式与原字节校验
+
+`backup_snapshot.c` 在捕获后编码与离线拥有解码的共同入口检查模型快照。
+支持 xllm-session v1–3，核对格式、字段类型、消息序号/turn/角色/flags、
+文件账本的数组与序号范围，以及配置的位宽和库实际支持的范围。v3 对原始
+字节核对 CRC-32/ISO-HDLC；每 64 KiB 及消息/工具调用/文件引用之间检查
+取消和截止时间。配置只创建立即释放的无 client/path/hook 内存 session，
+原始工具参数及来源路径不执行、不打开，没有写入 Home 或调用模型。
+
+拥有解码的 HTTP/TLS 探针保留合法旧格式、Unicode/推理和错误工具参数，
+177 种错误输入包含非法快照配置/序号/字段及重算外层 SHA-256 后的内部 CRC
+损坏；分块 CRC 中取消、失败后重试、Home 原字节保持通过。首次 CRC 用例
+修改了不存在的 turn 字面量，现改为必定修改现存 checksum；手写 session
+运行夹具也补入新模块。产品校验没有放宽。详见
+[快照边界](session-backup-plan.md#模型快照格式与原字节-crc-校验)。
+
+Windows/Linux 完整有界门禁通过：114 Python、251 Node、90 前端模块、
+严格 C11、36 运行探针、独立 A/B 和三项 packed。Windows 另通过便携
+WebView2 Home 与 20 秒打包启动。当前 Ubuntu WSL 可用，Linux 使用新 ext4
+源拷贝与同一锁定 SDK 新构建宿主，跳过 GUI；测试专用 Node 放入该隔离目录，
+不成为生产构建依赖。日志 `.build/qa-backup-snapshot-{final,linux-final}.log`。
+根目录程序与 Windows A/B SHA-256 为
+`cdfd1363200177be4b58bebcd0639b4a4a1d7fefc94231d1faeedbaa4975f55c`，
+Linux A/B 为
+`d769d8a556a94b0037550297b47f7ef67e40c6698fdecf7f533f44dfc23da785`。
+此前待办/询问及图片改动也随本轮完整 Linux 门禁复验；没有压力/高负载测试。
+
+这完成快照格式边界，journal 校验、实际账本/UI 重放、图片解码、生产预览
+worker、原子恢复和正式菜单仍待完成。`restore_ready:false` 保持，完整恢复
+与原生/实体设备操作证据不升级为已完成。
+
 ## 2026-10-02：待办临时读取失败的有界恢复
 
 待办原先只对侧车落后于工具事件的情况重试；一次网络/503 失败后，已观察

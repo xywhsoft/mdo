@@ -85,17 +85,21 @@ static bool BackupDecodeFixtureControl(XS_HttpReq* Request)
         if ( MdoApiViewEqualText(Target, "/__fixture/backup-decode/deadline") ) Limits.Deadline = 1u;
         if ( MdoApiViewEqualText(Target, "/__fixture/backup-decode/budget") ) Limits.Files += 1u;
         if ( MdoApiViewEqualText(Target, "/__fixture/backup-decode/cancel") ||
-             MdoApiViewEqualText(Target, "/__fixture/backup-decode/history-cancel") ) {
+             MdoApiViewEqualText(Target, "/__fixture/backup-decode/history-cancel") ||
+             MdoApiViewEqualText(Target, "/__fixture/backup-decode/snapshot-cancel") ) {
             Cancel = xrtCancelCreate();
             if ( Cancel == NULL ) return false;
             if ( MdoApiViewEqualText(Target, "/__fixture/backup-decode/cancel") )
                 (void)xrtCancelRequest(Cancel);
-            else g_BackupHistoryProbeCancel = Cancel;
+            else if ( MdoApiViewEqualText(Target, "/__fixture/backup-decode/history-cancel") )
+                g_BackupHistoryProbeCancel = Cancel;
+            else g_BackupSnapshotProbeCancel = Cancel;
         }
         g_DecodeFixtureBackup = MdoSessionBackupDecode(MdoApiBackupUploadData(g_UploadFixturePin),
             MdoApiBackupUploadBytes(g_UploadFixturePin), &Limits, Cancel,
             MdoApiViewEqualText(Target, "/__fixture/backup-decode/null-error") ? NULL : &Error);
         g_BackupHistoryProbeCancel = NULL;
+        g_BackupSnapshotProbeCancel = NULL;
         xrtCancelDestroy(Cancel);
     }
     Preview.Size = sizeof(Preview);
