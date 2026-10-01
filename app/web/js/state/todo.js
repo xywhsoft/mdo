@@ -1,4 +1,4 @@
-import { api, resourceId } from "../api/client.js";
+import { api, resourceId, ApiError } from "../api/client.js";
 import { createResourceStore } from "./store.js";
 import { timelineStore, historyRemovalRange } from "../features/chat/timeline-store.js";
 import { t } from "../i18n.js";
@@ -13,11 +13,24 @@ let observedBoundaryId = 0;
 let observedBoundaryRange = null;
 let retryTimer = 0;
 let retryCount = 0;
+const MAX_RETRIES = 4;
 
 function stopRetry() {
   window.clearTimeout(retryTimer);
   retryTimer = 0;
   retryCount = 0;
+}
+
+// Projection lag and transient reads share one finite budget. A callback already
+// queued before cancellation must not alter a new selection's timer or budget.
+function scheduleRetry(token) {
+  if (token !== generation || retryTimer || retryCount >= MAX_RETRIES) return;
+  retryTimer = window.setTimeout(() => {
+    if (token !== generation) return;
+    retryTimer = 0;
+    retryCount += 1;
+    void refreshTodo(token);
+  }, 120 * (2 ** retryCount));
 }
 
 export function clearTodo() {
@@ -51,20 +64,14 @@ async function refreshTodo(token = generation) {
       `/projects/${selected.projectId}/sessions/${selected.sessionId}/todo`);
     if (token !== generation) return;
     const data = response.data;
-    if (!Array.isArray(data.items) || !Number.isSafeInteger(Number(data.event_id)))
+    if (!data || !Array.isArray(data.items) || !Number.isSafeInteger(Number(data.event_id)))
       throw new Error(t("todo.invalidResponse", {}, "计划响应无效"));
     const eventId = Number(data.event_id);
     if (eventId < observedEventId || (observedBoundaryRange &&
         eventId >= observedBoundaryRange.first && eventId < observedBoundaryRange.end)) {
-      if (retryCount >= 4) throw new Error(t("todo.notSynced", {},
+      if (retryCount >= MAX_RETRIES) throw new Error(t("todo.notSynced", {},
         "计划状态尚未同步，请检查工具结果"));
-      if (!retryTimer) {
-        retryTimer = window.setTimeout(() => {
-          retryTimer = 0;
-          retryCount += 1;
-          void refreshTodo(token);
-        }, 120 * (2 ** retryCount));
-      }
+      scheduleRetry(token);
       return;
     }
     stopRetry();
@@ -76,7 +83,11 @@ async function refreshTodo(token = generation) {
         items: data.items });
     }
   } catch (error) {
-    if (token === generation) todoStore.setError(error);
+    if (token !== generation) return;
+    todoStore.setError(error);
+    if (error instanceof ApiError && (error.code === "network_error" ||
+        error.status === 408 || error.status === 429 || error.status >= 500))
+      scheduleRetry(token);
   }
 }
 
@@ -105,6 +116,8 @@ function observeTimeline(state) {
     event.success && event.agent_depth === 0 &&
     Number(event.event_id) > observedEventId);
   if (latest) {
+    // A newer tool event supersedes pending reads as well as scheduled retries.
+    generation += 1;
     observedEventId = Number(latest.event_id);
     stopRetry();
     void refreshTodo();

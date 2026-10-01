@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="zh-CN">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>mdo todo refresh recovery probe</title>
+<link rel="stylesheet" href="/app/web/css/app.css">
+<style>
+body { display: block; overflow: auto; padding: 24px; }
+main { max-width: 720px; margin: auto; }
+#conversation-docks { position: static; max-height: none; }
+#controls { display: flex; flex-wrap: wrap; gap: 8px; margin: 16px 0; }
+#result { white-space: pre-wrap; overflow-wrap: anywhere; }
+</style>
+<main>
+<h1>待办读取恢复验证</h1>
+<p>聚焦待办标题，再验证临时失败恢复、旧读取隔离和清空取消。</p>
+<div id="conversation-docks"></div>
+<label>主输入框 <input id="prompt"></label>
+<div id="controls">
+<button id="recover" disabled>验证待办恢复</button>
+<button id="race" disabled>验证旧错误隔离</button>
+<button id="clear" disabled>清空并取消重试</button>
+</div>
+<pre id="result" aria-live="polite">准备中</pre>
+</main>
+<script type="module">
+import { createConversationDocks } from "/app/web/js/features/chat/conversation-docks.js";
+import { createResourceStore } from "/app/web/js/state/store.js";
+import { asksStore } from "/app/web/js/state/asks.js";
+import { todoStore, selectTodo } from "/app/web/js/state/todo.js";
+import { timelineStore } from "/app/web/js/features/chat/timeline-store.js";
+import { loadLocale } from "/app/web/js/i18n.js";
+
+await loadLocale("zh-CN");
+const result = document.querySelector("#result");
+const report = {};
+let calls = 0;
+let eventId = 2;
+let failOnce = false;
+let holdRead;
+const healthy = () => Response.json({ ok: true, data: { event_id: eventId,
+  items: eventId ? [{ text: "检查结果", done: eventId >= 7 },
+    { text: "继续执行", done: false }] : [] } });
+const failed = () => Response.json({ ok: false,
+  error: { code: "fixture_failure", message: "Temporary read failure" } }, { status: 503 });
+const originalFetch = window.fetch;
+window.fetch = (url, options) => {
+  if (!String(url).endsWith("/sessions/todo-refresh/todo")) return originalFetch(url, options);
+  calls += 1;
+  if (holdRead) return new Promise((resolve) => { holdRead(resolve); holdRead = null; });
+  if (failOnce) { failOnce = false; return Promise.resolve(failed()); }
+  return Promise.resolve(healthy());
+};
+const route = { view: "workspace", projectId: "qa", sessionId: "todo-refresh" };
+const navigation = { get: () => route,
+  subscribe(listener) { listener(route); return () => {}; } };
+const empty = () => createResourceStore({ items: [] });
+createConversationDocks({ container: document.querySelector("#conversation-docks"),
+  navigation, tasksStore: empty(), approvalsStore: empty(), runsStore: empty(),
+  asksStore, todoStore, onOpenTasks() {}, onChanged: async () => {},
+});
+const toggle = () => document.querySelector(".todo-toggle");
+const observe = (id, clear = false) => timelineStore.setData({ ...route,
+  cursor: id, latestEventId: id, historyLost: false, events: [clear
+    ? { event_id: id, kind: "history_truncated", source_event_id: 1 }
+    : { event_id: id, kind: "tool_done", tool_name: "mdo.todo", success: true, agent_depth: 0 }] });
+async function until(predicate) {
+  for (let attempt = 0; attempt < 200; attempt += 1) {
+    if (predicate()) return;
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  }
+  throw new Error("probe condition timed out");
+}
+function show() { report.reads = calls; result.textContent = JSON.stringify(report, null, 2); }
+for (const button of document.querySelectorAll("#controls button"))
+  button.addEventListener("mousedown", (event) => event.preventDefault());
+async function run(button, action) {
+  button.disabled = true;
+  try { await action(); }
+  catch (error) { report.error = error.stack ?? String(error); result.dataset.passed = "false"; }
+  show();
+}
+document.querySelector("#recover").addEventListener("click", (event) => void run(event.currentTarget, async () => {
+  const node = toggle();
+  const row = document.querySelector(".todo-dock-list li");
+  const expanded = node.getAttribute("aria-expanded");
+  failOnce = true;
+  eventId = 7;
+  observe(7);
+  await until(() => todoStore.get().status === "error");
+  report.oldPlanRetainedOnError = toggle() === node && row.isConnected &&
+    Boolean(document.querySelector(".todo-dock-error"));
+  await until(() => todoStore.get().status === "ready" && todoStore.get().data.eventId === 7);
+  report.recovered = !document.querySelector(".todo-dock-error") && calls === 3;
+  report.rowsRetained = document.querySelector(".todo-dock-list li") === row && row.className === "done";
+  report.expansionRetained = toggle() === node && node.getAttribute("aria-expanded") === expanded;
+  report.focusRetained = document.activeElement === node;
+}));
+document.querySelector("#race").addEventListener("click", (event) => void run(event.currentTarget, async () => {
+  let release;
+  holdRead = (resolve) => { release = resolve; };
+  observe(8);
+  eventId = 9;
+  observe(9);
+  await until(() => todoStore.get().status === "ready" && todoStore.get().data.eventId === 9);
+  release(failed());
+  await new Promise((resolve) => setTimeout(resolve, 30));
+  report.staleErrorIgnored = todoStore.get().status === "ready" && !document.querySelector(".todo-dock-error");
+}));
+document.querySelector("#clear").addEventListener("click", (event) => void run(event.currentTarget, async () => {
+  failOnce = true;
+  observe(10);
+  await until(() => todoStore.get().status === "error");
+  eventId = 0;
+  observe(11, true);
+  await until(() => todoStore.get().status === "ready" && todoStore.get().data.eventId === 0);
+  const afterClear = calls;
+  await new Promise((resolve) => setTimeout(resolve, 180));
+  report.canceledRetry = calls === afterClear;
+  report.cleared = toggle() === null && todoStore.get().data.items.length === 0;
+  report.mainInputFocused = document.activeElement === document.querySelector("#prompt");
+  report.passed = ["oldPlanRetainedOnError", "recovered", "rowsRetained", "expansionRetained",
+    "focusRetained", "staleErrorIgnored", "canceledRetry", "cleared", "mainInputFocused"]
+    .every((key) => report[key] === true);
+  result.dataset.passed = String(report.passed);
+}));
+await selectTodo("qa", "todo-refresh");
+for (const button of document.querySelectorAll("#controls button")) button.disabled = false;
+report.ready = true;
+show();
+</script>
+</html>
