@@ -31,6 +31,7 @@ import { loadSessionMarkdownImages } from "./features/sessions/session-export-im
 import { createSessionBackupExport } from "./features/sessions/session-backup-export.js";
 import { createSessionBackupImport } from "./features/sessions/session-backup-import.js";
 import { createProjectDialog } from "./features/sessions/project-dialog.js";
+import { createDirectoryPicker } from "./features/sessions/directory-picker.js";
 import { projectDefaultsFromWorkspace } from "./features/sessions/project-identity.js";
 import { timelineStore, selectTimeline, clearTimeline, refreshSelectedTimeline, reloadSelectedTimeline } from "./features/chat/timeline-store.js";
 import { todoStore, selectTodo, clearTodo } from "./state/todo.js";
@@ -250,9 +251,12 @@ export async function boot() {
       newTaskController?.isBusy() || newTaskController?.isPreparing() || newTaskController?.isMigrating();
   }
 
+  const directoryPicker = createDirectoryPicker({ dialog: $("#directory-dialog") });
   const projectDialog = createProjectDialog({
     dialog: $("#project-dialog"), form: $("#project-form"),
     error: $("#project-error"), submit: $("#create-project"), modelsStore,
+    browse: $("#project-browse"), status: $("#project-status"),
+    directoryPicker,
     onCreated(project) {
       showActiveSessions();
       navigation.newTask(project.id);
@@ -289,6 +293,7 @@ export async function boot() {
     },
     onAction: handleSessionAction,
     onAddProject: (workspaceRoot) => createProject(projectDefaultsFromWorkspace(workspaceRoot)),
+    onBrowseProject: (path, select) => directoryPicker.open(path, select),
     onManageProject(projectId) {
       navigation.openSettings("projects");
       closeDrawers();

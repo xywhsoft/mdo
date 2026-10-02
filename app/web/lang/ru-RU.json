@@ -1457,5 +1457,22 @@
   "error.restoreIdentityMismatch": "Ответ не совпадает с исходным ID восстановления. Сохраните ID и проверьте записи сервера.",
   "error.restoreObservationTimeout": "Время проверки истекло. Операция может ещё выполняться; проверьте исходный ID.",
   "backupImport.sourceFile": "Исходный файл",
-  "backupImport.sourceSession": "ID исходной сессии"
+  "backupImport.sourceSession": "ID исходной сессии",
+  "project.loading": "Загрузка проекта…",
+  "project.saving": "Сохранение проекта…",
+  "directory.browse": "Выбрать папку",
+  "directory.title": "Выбор рабочей папки",
+  "directory.description": "Папки на компьютере, где запущен mdo, в том числе при подключении с телефона.",
+  "directory.path": "Путь к папке",
+  "directory.go": "Перейти",
+  "directory.parent": "Выше",
+  "directory.home": "Домашняя папка",
+  "directory.cwd": "Папка запуска",
+  "directory.children": "Подпапки",
+  "directory.choose": "Выбрать папку",
+  "directory.loading": "Загрузка папок…",
+  "directory.empty": "В этой папке нет подпапок.",
+  "directory.truncated": "Показаны не все папки. Для перехода введите полный путь.",
+  "error.invalidDirectoryPath": "Введите допустимый путь к папке (до 2048 байт).",
+  "error.directoryUnavailable": "Не удалось открыть папку. Проверьте путь и права доступа."
 }

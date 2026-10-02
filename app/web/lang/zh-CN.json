@@ -1457,5 +1457,22 @@
   "error.restoreIdentityMismatch": "响应与原恢复身份不一致，请保留原请求 ID 并核对服务端记录。",
   "error.restoreObservationTimeout": "查询超时。操作可能仍在进行，请按原请求 ID 查询。",
   "backupImport.sourceFile": "来源文件",
-  "backupImport.sourceSession": "来源会话 ID"
+  "backupImport.sourceSession": "来源会话 ID",
+  "project.loading": "正在读取项目…",
+  "project.saving": "正在保存项目…",
+  "directory.browse": "选择目录",
+  "directory.title": "选择工作区目录",
+  "directory.description": "浏览运行 mdo 的电脑上的目录；手机连接时也是选择该电脑的目录。",
+  "directory.path": "目录路径",
+  "directory.go": "前往",
+  "directory.parent": "上一级",
+  "directory.home": "用户目录",
+  "directory.cwd": "启动目录",
+  "directory.children": "子目录",
+  "directory.choose": "使用此目录",
+  "directory.loading": "正在读取目录…",
+  "directory.empty": "此目录没有子目录。",
+  "directory.truncated": "部分目录未列出，可输入完整路径进入。",
+  "error.invalidDirectoryPath": "请输入有效的目录路径（不超过 2048 字节）。",
+  "error.directoryUnavailable": "无法打开此目录，请检查路径和访问权限。"
 }

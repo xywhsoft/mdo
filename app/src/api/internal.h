@@ -108,6 +108,7 @@ bool MdoApiSkillsRoute(MdoApiContext* pContext);
 bool MdoApiMcpRoute(MdoApiContext* pContext);
 bool MdoApiProjectsRoute(MdoApiContext* pContext);
 bool MdoApiProjectRoute(MdoApiContext* pContext);
+bool MdoApiDirectoriesRoute(MdoApiContext* pContext);
 bool MdoApiProjectPurgePreviewRoute(MdoApiContext* pContext);
 int MdoApiProjectExpectedRevision(const MdoApiContext* Context,
     const char* Id, uint64* Revision, bool* MatchesProject);

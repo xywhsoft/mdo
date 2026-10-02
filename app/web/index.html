@@ -597,17 +597,44 @@
         </button>
       </header>
       <div class="dialog-fields project-fields">
-        <label><span data-i18n="project.workspace">工作区目录</span> <input name="workspace_root" required maxlength="2048" autocomplete="off" placeholder="例如 /work/project 或 D:\work\project" data-i18n-placeholder="project.workspacePlaceholder"></label>
+        <div class="project-directory-field">
+          <label for="project-workspace" data-i18n="project.workspace">工作区目录</label>
+          <div class="project-directory-input">
+            <input id="project-workspace" name="workspace_root" required maxlength="2048" autocomplete="off" placeholder="例如 /work/project 或 D:\work\project" data-i18n-placeholder="project.workspacePlaceholder">
+            <button class="secondary-button" type="button" id="project-browse" data-i18n="directory.browse">选择目录</button>
+          </div>
+        </div>
         <label><span data-i18n="project.name">项目名称</span> <input name="name" required maxlength="256" autocomplete="off"></label>
         <label><span data-i18n="project.id">项目标识</span> <input name="id" required maxlength="64" pattern="[A-Za-z0-9_-][A-Za-z0-9._-]*" autocomplete="off"></label>
         <label><span data-i18n="project.defaultModel">默认模型</span> <select name="default_model_id"><option value="">跟随全局默认</option></select></label>
       </div>
+      <p class="project-dialog-status" id="project-status" role="status" hidden></p>
       <div class="dialog-error" id="project-error" role="alert" tabindex="-1" hidden></div>
       <footer>
         <button class="secondary-button" id="cancel-project" type="button" data-i18n="project.cancel">取消</button>
         <button class="primary-button" id="create-project" type="submit">添加项目</button>
       </footer>
     </form>
+  </dialog>
+
+  <dialog class="new-session-dialog directory-dialog" id="directory-dialog" aria-labelledby="directory-title">
+    <div class="dialog-card">
+      <header>
+        <div><h2 id="directory-title" data-i18n="directory.title">选择工作区目录</h2>
+          <p data-i18n="directory.description">浏览运行 mdo 的电脑上的目录；手机连接时也是选择该电脑的目录。</p></div>
+        <button class="icon-button" type="button" id="directory-close" aria-label="关闭" data-i18n-aria-label="project.close"><span class="icon" data-icon="close" aria-hidden="true"></span></button>
+      </header>
+      <div class="directory-body">
+        <form id="directory-form" class="directory-path-form">
+          <label for="directory-path" data-i18n="directory.path">目录路径</label>
+          <div class="project-directory-input"><input id="directory-path" maxlength="2048" autocomplete="off" spellcheck="false"><button class="secondary-button" type="submit" id="directory-go" data-i18n="directory.go">前往</button></div>
+        </form>
+        <div class="directory-navigation"><button class="secondary-button" type="button" id="directory-parent" data-i18n="directory.parent">上一级</button><div id="directory-shortcuts"></div></div>
+        <p id="directory-status" role="status"></p>
+        <div class="directory-list" id="directory-list" aria-label="子目录" data-i18n-aria-label="directory.children"></div>
+      </div>
+      <footer><button class="secondary-button" type="button" id="directory-cancel" data-i18n="project.cancel">取消</button><button class="primary-button" type="button" id="directory-choose" data-i18n="directory.choose">使用此目录</button></footer>
+    </div>
   </dialog>
 
   <dialog class="confirm-dialog" id="project-unregister-dialog" aria-labelledby="project-unregister-title">

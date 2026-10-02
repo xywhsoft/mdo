@@ -36,6 +36,20 @@ Read snapshots:
   `/projects/{project}/sessions/{session}/asks` and
   `/projects/{project}/sessions/{session}/workspace/files?q={query}`.
 
+`GET /workspace/directories?path={encoded_path}` serves the project directory
+picker. An omitted/empty path selects the host process's startup directory.
+The single decoded UTF-8 path is limited to 2048 bytes without controls. The
+response contains the absolute `path`, `parent` (empty at a filesystem root),
+native `separator`, `directories` (child names), `shortcuts` (`kind` and `path`
+for startup/home folders), and `truncated`. It lists at most 128 directories
+and inspects at most 4096 immediate entries; it does not recurse, read file
+content, change cwd or register a project. Directory links are followed when
+classifying children; inaccessible/broken children can be omitted with
+`truncated=true`. The host computer is browsed even from a mobile client.
+Invalid paths return `400 invalid_directory_path`; unreadable/missing/non-directory
+targets return `422 directory_unavailable`. Malformed wire escapes may instead
+be rejected by xs before the API. `HEAD` and `OPTIONS` are supported.
+
 Mutations:
 
 - preview, replace, or restore a settings domain;

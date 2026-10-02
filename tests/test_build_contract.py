@@ -175,6 +175,7 @@ class BuildContractTests(unittest.TestCase):
             "src/api/approvals.c",
             "src/api/asks.c",
             "src/api/workspace_files.c",
+            "src/api/directories.c",
             "src/api/runs.c",
             "src/api/recovery.c",
             "src/api/schedules.c",

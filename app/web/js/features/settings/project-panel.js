@@ -4,6 +4,7 @@ import { clear, element, errorMessage, toast } from "../../utils/dom.js";
 import { subscribeLocale, t } from "../../i18n.js";
 import { openMemoryPanel, openMemoryDirectory } from "./memory-panel.js";
 import { reviewedPurgeIntent, purgeBindingsMatch } from "./project-purge-contract.js";
+import { findModel } from "../../utils/models.js";
 
 export function createProjectPanel({ panel, projectsStore, modelsStore,
   projectDialog, navigation, purgeRecovery, purgeConfirmation }) {
@@ -207,12 +208,12 @@ export function createProjectPanel({ panel, projectsStore, modelsStore,
         for (const model of models)
           select.append(element("option", { text: model.name || model.id,
             attrs: { value: model.id } }));
-        if (project.default_model_id && !models.some((model) =>
-          model.id === project.default_model_id))
+        const selected = findModel(models, project.default_model_id)?.id ?? project.default_model_id;
+        if (selected && !models.some((model) => model.id === selected))
           select.append(element("option", { text: t("project.unavailableModel",
             { id: project.default_model_id }, `${project.default_model_id}（已不可用）`),
             attrs: { value: project.default_model_id } }));
-        select.value = project.default_model_id;
+        select.value = selected;
         select.addEventListener("change", async () => {
           select.disabled = true;
           try {

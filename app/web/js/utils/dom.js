@@ -66,6 +66,8 @@ export function formatClock(microseconds) {
 // Stable API codes describe user actions; server messages remain useful for
 // unknown failures, but should not determine the language of known failures.
 const API_ERROR_COPY = Object.freeze({
+  invalid_directory_path: ["error.invalidDirectoryPath", "请输入有效的目录路径（不超过 2048 字节）。"],
+  directory_unavailable: ["error.directoryUnavailable", "无法打开此目录，请检查路径和访问权限。"],
   write_token_required: ["error.writeTokenRequired", "请重新载入页面，取得当前服务的写入版本后再继续操作。"],
   write_token_invalid: ["error.writeTokenInvalid", "页面的写入版本无效，请重新载入后继续。"],
   write_token_conflict: ["error.writeTokenConflict", "项目已清除或服务已重启。请先复制尚未保存的草稿，再重新载入页面。"],

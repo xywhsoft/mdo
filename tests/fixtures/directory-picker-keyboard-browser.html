@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="zh-CN">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>mdo directory picker keyboard probe</title>
+<link rel="stylesheet" href="/app/web/css/app.css">
+<div class="app-shell" id="shell"><main class="workspace"></main></div>
+<pre id="result"></pre>
+<script type="module">
+import { trackMobileViewport } from "/app/web/js/features/shell/mobile-viewport.js";
+import { createDirectoryPicker } from "/app/web/js/features/sessions/directory-picker.js";
+// Reuse the shipped markup and component, rather than a simplified dialog.
+const markup = await (await fetch("/app/web/index.html")).text();
+const source = new DOMParser().parseFromString(markup, "text/html");
+const dialog = source.querySelector("#directory-dialog").cloneNode(true);
+document.body.append(dialog);
+const viewport = Object.assign(new EventTarget(), {height:innerHeight,offsetTop:0,scale:1});
+const win = Object.assign(new EventTarget(), {innerHeight,visualViewport:viewport});
+trackMobileViewport(document.querySelector("#shell"),
+  Object.assign(new EventTarget(), {matches:true}), win);
+const picker = createDirectoryPicker({ dialog, read:async () => ({path:"/work",parent:"/",
+  separator:"/",directories:["alpha","two words","中文"],truncated:false,
+  shortcuts:[{kind:"cwd",path:"/work"},{kind:"home",path:"/user"}]}) });
+await picker.open("/work", () => {});
+const frame = () => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+const geometry = () => ({top:dialog.getBoundingClientRect().top,
+  bottom:dialog.getBoundingClientRect().bottom,
+  footerBottom:dialog.querySelector("footer").getBoundingClientRect().bottom,
+  width:document.documentElement.scrollWidth,
+  controls:[...dialog.querySelectorAll("footer button")].map(node => node.getBoundingClientRect().height)});
+await frame();
+viewport.height=250; viewport.dispatchEvent(new Event("resize")); await frame();
+const visible=geometry();
+viewport.offsetTop=20; viewport.dispatchEvent(new Event("scroll")); await frame();
+const panned=geometry();
+viewport.offsetTop=0; viewport.height=innerHeight; viewport.dispatchEvent(new Event("resize")); await frame();
+const restored=geometry();
+document.querySelector("#result").textContent=JSON.stringify({visible,panned,restored,
+  passed:visible.top>=0 && visible.bottom<=250 && visible.footerBottom<=250 &&
+    panned.top>=20 && panned.footerBottom<=270 && restored.footerBottom<=innerHeight &&
+    visible.width<=innerWidth && visible.controls.every(height => height>=40)},null,2);
+dialog.close();
+</script>

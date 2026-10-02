@@ -1457,5 +1457,22 @@
   "error.restoreIdentityMismatch": "Response does not match the original restore identity. Keep the original ID and check server records.",
   "error.restoreObservationTimeout": "Query timed out. The operation may still be running; query the original ID.",
   "backupImport.sourceFile": "Source file",
-  "backupImport.sourceSession": "Source session ID"
+  "backupImport.sourceSession": "Source session ID",
+  "project.loading": "Loading project…",
+  "project.saving": "Saving project…",
+  "directory.browse": "Browse",
+  "directory.title": "Choose workspace directory",
+  "directory.description": "Browse directories on the computer running mdo, including when connected from a phone.",
+  "directory.path": "Directory path",
+  "directory.go": "Go",
+  "directory.parent": "Parent",
+  "directory.home": "Home folder",
+  "directory.cwd": "Startup folder",
+  "directory.children": "Subdirectories",
+  "directory.choose": "Use this directory",
+  "directory.loading": "Loading directories…",
+  "directory.empty": "This directory has no subdirectories.",
+  "directory.truncated": "Some directories are not listed. Enter a full path to open them.",
+  "error.invalidDirectoryPath": "Enter a valid directory path (up to 2048 bytes).",
+  "error.directoryUnavailable": "Cannot open this directory. Check its path and access permissions."
 }

@@ -3,7 +3,7 @@ import { currentLocale, subscribeLocale, t } from "../../i18n.js";
 import { sessionActionItems } from "./session-actions.js";
 
 export function createSessionList({ container, count, filter, searchInput, store, projectsStore,
-  navigation, onSelect, onAction, onNewInProject, onAddProject,
+  navigation, onSelect, onAction, onNewInProject, onAddProject, onBrowseProject,
   onManageProject }) {
   let query = "";
   let status = filter.value;
@@ -106,9 +106,23 @@ export function createSessionList({ container, count, filter, searchInput, store
     const cancel = element("button", { className: "project-quick-cancel",
       text: "×", attrs: { type: "button", "data-quick-project-focus": "cancel",
         "aria-label": t("project.cancel", {}, "取消") } });
+    const browse = onBrowseProject ? element("button", { className: "project-quick-browse",
+      text: t("directory.browse", {}, "选择目录"), attrs: {
+        type: "button", "data-quick-project-focus": "browse",
+      } }) : null;
+    browse?.addEventListener("click", () => {
+      if (quickProjectBusy) return;
+      const epoch = quickProjectEpoch;
+      void onBrowseProject(quickProjectPath, (path) => {
+        if (epoch !== quickProjectEpoch || !quickProjectOpen || quickProjectBusy) return;
+        quickProjectPath = path; quickProjectError = "";
+        render(); container.querySelector(".project-quick-add input")?.focus();
+      });
+    });
     const form = element("form", { className: "project-quick-add" },
-      [input, submit, cancel, error]);
+      [input, browse, submit, cancel, error]);
     input.disabled = submit.disabled = cancel.disabled = quickProjectBusy;
+    if (browse) browse.disabled = quickProjectBusy;
     function close() {
       if (quickProjectBusy) return;
       quickProjectEpoch += 1;

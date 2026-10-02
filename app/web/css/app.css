@@ -365,6 +365,7 @@ select:focus-visible,
 .project-list-heading { padding-top: 10px; }
 .project-list-heading .session-group-new { margin-left: auto; }
 .project-quick-add { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 4px; align-items: center; padding: 4px 9px 8px; }
+.project-quick-add:has(.project-quick-browse) input { grid-column: 1 / -1; }
 .project-quick-add input { min-width: 0; min-height: 32px; padding: 4px 7px; border: 1px solid var(--border-strong); border-radius: 6px; background: var(--surface-raised); color: var(--ink); font: inherit; font-size: 12px; }
 .project-quick-add button { min-height: 32px; padding: 0 8px; border: 0; border-radius: 6px; background: var(--surface-hover); color: var(--ink); font: inherit; font-size: 11px; cursor: pointer; }
 .project-quick-add button:hover { background: var(--surface-active); }
@@ -1063,6 +1064,28 @@ select:focus-visible,
 .message-edit-fields textarea { height: min(170px, 24dvh); min-height: 80px; max-height: min(50vh, 360px); resize: vertical; font: inherit; line-height: 1.5; }
 .dialog-error { margin: 0 20px 12px; color: var(--danger); font-size: 12px; }
 .dialog-card > footer { display: flex; justify-content: flex-end; gap: 8px; padding: 13px 20px; border-top: 1px solid var(--border); }
+.project-directory-field { grid-column: 1 / -1; display: grid; gap: 6px; min-width: 0; }
+.project-directory-input { display: flex; gap: 8px; min-width: 0; }
+.project-directory-input input { min-width: 0; flex: 1; }
+.project-directory-input button { flex: 0 0 auto; min-height: 40px; }
+.project-dialog-status { margin: 0 20px 12px; font-size: 12px; color: var(--muted); }
+.directory-dialog { max-height: calc(100dvh - 32px); overflow: hidden; }
+.directory-dialog .dialog-card { display: flex; flex-direction: column; min-height: 0; max-height: calc(100dvh - 32px); }
+.directory-dialog .dialog-card > :is(header, footer) { flex: 0 0 auto; }
+.directory-body { display: flex; flex-direction: column; gap: 12px; min-height: 0; padding: 16px 20px; }
+.directory-path-form { display: grid; gap: 6px; flex: 0 0 auto; }
+.directory-path-form label { color: var(--muted); font-size: 11px; }
+.directory-path-form input { width: 100%; padding: 7px 9px; border: 1px solid var(--border-strong); border-radius: var(--radius-sm); background: var(--bg); color: var(--ink); }
+.directory-navigation, #directory-shortcuts { display: flex; gap: 6px; flex-wrap: wrap; }
+.directory-navigation { flex: 0 0 auto; }
+#directory-status { margin: 0; font-size: 12px; color: var(--muted); }
+#directory-status:empty { display: none; }
+#directory-status.dialog-error-text { color: var(--danger); }
+.directory-list { min-height: 0; max-height: 300px; overflow-y: auto; overscroll-behavior: contain; }
+.directory-item { display: flex; align-items: center; gap: 10px; width: 100%; min-height: 40px; padding: 8px 10px; text-align: start; border: 0; border-bottom: 1px solid var(--border); background: transparent; color: var(--ink); }
+.directory-item:hover, .directory-item:focus-visible { background: var(--surface-hover); }
+.directory-item span:last-child { min-width: 0; overflow-wrap: anywhere; }
+.directory-dialog :is(.secondary-button, .primary-button, .icon-button) { min-height: 40px; }
 .backup-export-dialog { max-height: calc(100dvh - 24px); overflow: hidden; }
 .backup-export-dialog .dialog-card { display: flex; max-height: calc(100dvh - 24px); flex-direction: column; }
 .backup-export-dialog .dialog-card > header, .backup-export-dialog .dialog-card > footer { flex: 0 0 auto; }
@@ -1468,8 +1491,10 @@ select:focus-visible,
   .session-more { width: 40px; height: 40px; }
   .session-group-main { min-height: 40px; }
   .project-quick-add { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .project-quick-add:has(.project-quick-browse) { grid-template-columns: minmax(0, 1fr) auto auto; }
   .project-quick-add input { grid-column: 1 / -1; }
   .project-quick-add input, .project-quick-add button { min-height: 40px; }
+  .project-quick-add button { min-width: 40px; }
   .session-item-row { grid-template-columns: minmax(0, 1fr) 40px; }
   .session-menu button { min-height: 40px; }
   .model-config-layout { grid-template-columns: minmax(0, 1fr); }
@@ -1757,7 +1782,7 @@ select:focus-visible,
     min-height: 80px;
   }
   :root[data-visual-viewport-reduced]
-    :is(#new-session-dialog, #session-action-dialog, #message-edit-dialog, #project-dialog, #shortcuts-dialog, #image-preview) {
+    :is(#new-session-dialog, #session-action-dialog, #message-edit-dialog, #project-dialog, #directory-dialog, #shortcuts-dialog, #image-preview) {
     position: fixed;
     top: calc(var(--app-visual-top) + 8px);
     bottom: auto;
@@ -1765,7 +1790,7 @@ select:focus-visible,
     margin-block: 0;
   }
   :root[data-visual-viewport-reduced]
-    :is(#new-session-dialog, #session-action-dialog, #message-edit-dialog, #project-dialog, #shortcuts-dialog)
+    :is(#new-session-dialog, #session-action-dialog, #message-edit-dialog, #project-dialog, #directory-dialog, #shortcuts-dialog)
     .dialog-card { max-height: calc(var(--app-visual-height) - 16px); }
   :root[data-visual-viewport-reduced] #image-preview img {
     max-height: max(1px, calc(var(--app-visual-height) - 106px));
@@ -1864,4 +1889,14 @@ select:focus-visible,
     animation-iteration-count: 1 !important;
     transition-duration: .01ms !important;
   }
+}
+
+@media (max-width: 720px) {
+  .directory-body { padding: 10px 16px; gap: 8px; }
+  .directory-dialog .dialog-card > :is(header, footer) { padding: 10px 16px; }
+  .directory-dialog .dialog-card > header p { line-height: 1.5; }
+  :root[data-visual-viewport-reduced] .directory-dialog .dialog-card > header p { display: none; }
+  :root[data-visual-viewport-reduced] .directory-dialog .dialog-card > :is(header, footer) { padding: 4px 12px; }
+  :root[data-visual-viewport-reduced] .directory-body { padding: 4px 12px; gap: 4px; }
+  :root[data-visual-viewport-reduced] .directory-path-form label { display: none; }
 }
