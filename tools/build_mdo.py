@@ -23,6 +23,8 @@ UNITY_PATH = GENERATED / "mdo_unity.c"
 GENERATED_LOCK_PATH = GENERATED / "deps.lock"
 MODULE_HEADER_PATH = ROOT / "include" / "mdo" / "module.h"
 GENERATED_MODULE_HEADER_PATH = GENERATED / "module-sdk" / "mdo" / "module.h"
+BUILTIN_CONNECTION_PATH = ROOT / ".build" / "ornith-connection.json"
+BUILTIN_KEY_PATH = APP / "default-home" / "config" / "secrets" / "builtin-model.key"
 HEX40 = re.compile(r"[0-9a-f]{40}\Z")
 
 
@@ -258,7 +260,33 @@ def write_if_changed(path: Path, content: bytes) -> None:
     os.replace(temporary, path)
 
 
-def prepare(lock: dict) -> None:
+def prepare_builtin_credential(connection: Path | None = None) -> None:
+    """Provision the optional bundled credential without tracking or logging it.
+
+    A checkout can always build without credentials; its runtime then uses
+    MDO_ORNITH_API_KEY or a portable Home key file. Never reuse a stale key from
+    a previous provisioned build when its input has been removed.
+    """
+    source = connection if connection is not None else BUILTIN_CONNECTION_PATH
+    if not source.is_file():
+        if connection is not None:
+            raise BuildError("the explicit built-in credential input is unavailable")
+        BUILTIN_KEY_PATH.unlink(missing_ok=True)
+        return
+    try:
+        value = json.loads(source.read_text(encoding="utf-8"))
+        key = value.get("api_key") if isinstance(value, dict) else None
+    except (OSError, UnicodeError, json.JSONDecodeError):
+        raise BuildError("cannot read built-in credential input") from None
+    if not isinstance(key, str) or not key or len(key) > 4096 or any(
+        ord(char) < 0x21 or ord(char) > 0x7e for char in key
+    ):
+        raise BuildError("built-in credential must be nonempty printable ASCII below 4097 bytes")
+    write_if_changed(BUILTIN_KEY_PATH, key.encode("ascii"))
+
+
+def prepare(lock: dict, connection: Path | None = None) -> None:
+    prepare_builtin_credential(connection)
     write_if_changed(UNITY_PATH, generated_unity(lock, source_list()).encode("utf-8"))
     write_if_changed(GENERATED_LOCK_PATH, LOCK_PATH.read_bytes())
     write_if_changed(GENERATED_MODULE_HEADER_PATH, MODULE_HEADER_PATH.read_bytes())
@@ -306,6 +334,8 @@ def main(argv: list[str] | None = None) -> int:
                         help="xserver checkout at the exact revision in deps.lock")
     parser.add_argument("--output", type=Path, help="mdo executable path")
     parser.add_argument("--cc", default="gcc", help="C/C++ compiler used by xserver")
+    parser.add_argument("--builtin-connection", type=Path,
+                        help="local JSON with api_key for the bundled Ornith service (never logged)")
     parser.add_argument("--prepare-only", action="store_true",
                         help="verify dependencies and generate the unity source only")
     parser.add_argument("--skip-host-build", action="store_true",
@@ -319,7 +349,7 @@ def main(argv: list[str] | None = None) -> int:
             raise BuildError("deps.lock has an unsupported schema_version")
         xserver = find_xserver(args.xserver_root, lock)
         verify_dependencies(xserver, lock)
-        prepare(lock)
+        prepare(lock, args.builtin_connection)
         print(f"[mdo] dependencies verified at {lock['xserver']['commit'][:12]}", flush=True)
         print(f"[mdo] generated {UNITY_PATH.relative_to(ROOT)}", flush=True)
         if not args.prepare_only:

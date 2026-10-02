@@ -79,7 +79,7 @@ void ServiceInit(XS_HostInfo* Host)
         Create.ProjectId = "default"; Create.RequestedId = "home-artifact-probe";
         Create.Title = "External Home tool output";
         Create.Agent.WorkspaceRoot = HOME_ARTIFACT_WORKSPACE;
-        Create.Agent.AgentId = "mdo.default"; Create.Agent.ModelId = "ling-3.0-tiny";
+        Create.Agent.AgentId = "mdo.default"; Create.Agent.ModelId = "ornith-1.5-35b";
         Create.Agent.Protocol = MDO_MODEL_PROTOCOL_OPENAI_RESPONSES;
         Create.Agent.ReasoningEffort = "medium";
         Create.Agent.PermissionProfile = "read-only";

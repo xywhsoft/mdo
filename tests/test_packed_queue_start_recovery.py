@@ -29,8 +29,8 @@ def main() -> int:
         env = os.environ.copy()
         env["USERPROFILE"] = str(base)
         # Only localhost is used; the model call may fail after Agent Start.
-        env["MDO_LING_RESPONSES_URL"] = "http://127.0.0.1:9/v1"
-        env["MDO_LING_API_KEY"] = "bounded-queue-recovery-key"
+        env["MDO_ORNITH_RESPONSES_URL"] = "http://127.0.0.1:9/v1"
+        env["MDO_ORNITH_API_KEY"] = "bounded-queue-recovery-key"
         first = start(first_site, packed, home, env)
         second = None
         try:
@@ -39,7 +39,7 @@ def main() -> int:
             assert status == 200 and response["data"]["ready"], response
             status, response = request(first_port, "POST", "/api/v1/sessions", {
                 "project_id": "default", "title": "Queue start recovery QA",
-                "agent_id": "mdo.default", "model_id": "ling-3.0-tiny",
+                "agent_id": "mdo.default", "model_id": "ornith-1.5-35b",
                 "protocol": "openai-responses", "reasoning_effort": "medium",
                 "max_output_tokens": 1024,
             })

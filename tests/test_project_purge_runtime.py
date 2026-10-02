@@ -82,8 +82,8 @@ class Probe:
         self.log = self.log_path.open("ab")
         self.process = subprocess.Popen([str(self.host), str(self.config)], cwd=self.site,
             env=dict(os.environ, MDO_HOME=str(self.home),
-                     MDO_LING_RESPONSES_URL="https://example.invalid/v1",
-                     MDO_LING_API_KEY="bounded-purge-fixture"),
+                     MDO_ORNITH_RESPONSES_URL="https://example.invalid/v1",
+                     MDO_ORNITH_API_KEY="bounded-purge-fixture"),
             stdout=self.log, stderr=subprocess.STDOUT,
             creationflags=subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0)
         wait_ready(self.port, self.process)
@@ -131,7 +131,7 @@ class Probe:
                 ("purge-own-b", "purge-probe", False), ("purge-other", "purge-other", True)):
             self.api("POST", "/api/v1/schedules", {
                 "id": schedule, "label": schedule, "notify": "", "project_id": project,
-                "agent_id": "mdo.default", "model_id": "ling-3.0-tiny", "protocol": "openai-responses",
+                "agent_id": "mdo.default", "model_id": "ornith-1.5-35b", "protocol": "openai-responses",
                 "reasoning_effort": "medium", "max_output_tokens": 1024,
                 "workspace_root": str(workspace), "input": "Local future metadata only",
                 "frequency": "once", "interval": 1, "start_at": 4102444800000000,
@@ -150,7 +150,7 @@ class Probe:
         self.api("PUT", project_draft, {"revision": revision, "text": "Owned project input"})
         global_revision = self.api("GET", "/api/v1/draft")["revision"]
         new_task = {"project_id": "purge-probe", "session_id": "c" * 32, "title": "Pending task",
-            "agent_id": "mdo.default", "model_id": "ling-3.0-tiny", "reasoning_effort": "medium",
+            "agent_id": "mdo.default", "model_id": "ornith-1.5-35b", "reasoning_effort": "medium",
             "permission_profile": "balanced", "phase": "creating"} if own_references else None
         self.api("PUT", "/api/v1/draft", {"revision": global_revision, "text": "Retained unowned input",
             "new_task": new_task, "submissions": [], "attachments": [], "run_admission_uncertain": False})
@@ -262,7 +262,7 @@ def run_probe(host: Path) -> None:
             assert probe.api("GET", "/api/v1/workspace-state") == {"project_id": "", "session_id": ""}
             probe.api("PUT", "/api/v1/draft", {"revision": 0, "text": "late",
                 "new_task": {"project_id": "purge-probe", "session_id": "c" * 32,
-                    "title": "Late task", "agent_id": "mdo.default", "model_id": "ling-3.0-tiny",
+                    "title": "Late task", "agent_id": "mdo.default", "model_id": "ornith-1.5-35b",
                     "reasoning_effort": "medium", "permission_profile": "balanced", "phase": "creating"}}, 404)
             probe.api("PUT", "/api/v1/workspace-state", {"project_id": "purge-probe", "session_id": "a" * 32}, 404)
             assert probe.files() == probe.expected_after(before, targets)

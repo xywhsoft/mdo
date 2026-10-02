@@ -76,7 +76,7 @@ static xllm_response *Response(const char *text) {
     xllm_response *response = (xllm_response*)calloc(1u, sizeof(*response));
     if (response == NULL) return NULL;
     response->sContent = Copy(text);
-    response->sModel = Copy("ling-3.0-tiny");
+    response->sModel = Copy("ornith-1.5-35b");
     response->sRequestId = Copy("run-manager-probe");
     response->sFinishReason = Copy("stop");
     response->eFinish = XLLM_FINISH_STOP;

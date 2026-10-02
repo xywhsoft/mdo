@@ -44,7 +44,7 @@ def project_references_probe(port: int, home: Path, log_path: Path) -> None:
         new_task = None if owner is None else {
             "project_id": owner, "session_id": "f" * 32,
             "title": "Reference fixture", "agent_id": "mdo.default",
-            "model_id": "ling-3.0-tiny", "reasoning_effort": "medium",
+            "model_id": "ornith-1.5-35b", "reasoning_effort": "medium",
             "permission_profile": "balanced", "phase": "creating"}
         return api("PUT", draft_path, {"revision": revision, "text": text,
             "new_task": new_task, "submissions": [], "attachments": [],
@@ -221,8 +221,8 @@ def run_probe(host: Path) -> None:
         port = free_port()
         config = write_site(site, port)
         environment = dict(os.environ, MDO_HOME=str(home),
-            MDO_LING_RESPONSES_URL="https://example.invalid/v1",
-            MDO_LING_API_KEY="bounded-reference-fixture")
+            MDO_ORNITH_RESPONSES_URL="https://example.invalid/v1",
+            MDO_ORNITH_API_KEY="bounded-reference-fixture")
         with log_path.open("wb") as log:
             process = subprocess.Popen([str(host), str(config)], cwd=site,
                 env=environment, stdout=log, stderr=subprocess.STDOUT,

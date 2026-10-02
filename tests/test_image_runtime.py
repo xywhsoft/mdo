@@ -49,7 +49,7 @@ def probe(host: Path) -> None:
         defaults_path = site / "default-home/config/defaults.json"
         defaults = json.loads(defaults_path.read_text(encoding="utf-8"))
         model = defaults["models"]["items"][0]
-        model["capabilities"].append("media-input")
+        model["capabilities"] = list(dict.fromkeys(model["capabilities"] + ["media-input"]))
         model["attachments"] = ["image"]
         defaults_path.write_text(json.dumps(defaults), encoding="utf-8")
 
@@ -63,9 +63,9 @@ def probe(host: Path) -> None:
         environment = os.environ.copy()
         environment["USERPROFILE"] = str(base)
         environment["HOME"] = str(base)
-        environment["MDO_LING_RESPONSES_URL"] = (
+        environment["MDO_ORNITH_RESPONSES_URL"] = (
             f"http://127.0.0.1:{model_port}/v1")
-        environment["MDO_LING_API_KEY"] = "bounded-image-test-key"
+        environment["MDO_ORNITH_API_KEY"] = "bounded-image-test-key"
         log_path = base / "xs.log"
         try:
             with log_path.open("wb") as log:
@@ -81,7 +81,7 @@ def probe(host: Path) -> None:
                     payload = json.dumps({
                         "project_id": "image-probe",
                         "title": "Image probe",
-                        "model_id": "ling-3.0-tiny",
+                        "model_id": "ornith-1.5-35b",
                         "protocol": "openai-responses",
                         "workspace_root": str(base),
                     }).encode()

@@ -179,7 +179,7 @@ static bool MdoMigrationModelIdUsed(MdoMigrationContext* Context,
     const char* NewId)
 {
     size_t i;
-    if ( strcmp(NewId, "ling-3.0-tiny") == 0 ) return true;
+    if ( strcmp(NewId, "ornith-1.5-35b") == 0 ) return true;
     for ( i = 0u; i < Context->ModelCount; ++i )
         if ( strcmp(Context->Models[i].NewId, NewId) == 0 ) return true;
     return false;
@@ -265,9 +265,10 @@ static bool MdoMigrationAddCustomModel(MdoMigrationContext* Context,
     bool Ok = false;
     if ( OldId == NULL ) goto invalid;
     if ( strcmp(OldId, "ling-gpu") == 0 ||
-         strcmp(OldId, "ling-3.0-tiny") == 0 ) {
-        Ok = MdoMigrationModelMapAdd(Context, OldId, "ling-3.0-tiny",
-            MDO_MODEL_PROTOCOL_OPENAI_RESPONSES, 131072u, 16384u,
+         strcmp(OldId, "ling-3.0-tiny") == 0 ||
+         strcmp(OldId, "ornith-1.5-35b") == 0 ) {
+        Ok = MdoMigrationModelMapAdd(Context, OldId, "ornith-1.5-35b",
+            MDO_MODEL_PROTOCOL_OPENAI_RESPONSES, 240128u, 16384u,
             "medium", Error);
         goto done;
     }
@@ -275,8 +276,8 @@ static bool MdoMigrationAddCustomModel(MdoMigrationContext* Context,
     if ( Endpoint == NULL ) goto memory;
     if ( Endpoint[0] == '\0' ) {
         ++Context->Result->SkippedItems;
-        Ok = MdoMigrationModelMapAdd(Context, OldId, "ling-3.0-tiny",
-            MDO_MODEL_PROTOCOL_OPENAI_RESPONSES, 131072u, 16384u,
+        Ok = MdoMigrationModelMapAdd(Context, OldId, "ornith-1.5-35b",
+            MDO_MODEL_PROTOCOL_OPENAI_RESPONSES, 240128u, 16384u,
             "medium", Error);
         goto done;
     }
@@ -528,8 +529,8 @@ bool MdoMigrationConvertConfig(MdoMigrationContext* Context,
                 Error) ) goto done;
     }
     if ( MdoMigrationModelFind(Context, "ling-gpu") == NULL &&
-         !MdoMigrationModelMapAdd(Context, "ling-gpu", "ling-3.0-tiny",
-            MDO_MODEL_PROTOCOL_OPENAI_RESPONSES, 131072u, 16384u,
+         !MdoMigrationModelMapAdd(Context, "ling-gpu", "ornith-1.5-35b",
+            MDO_MODEL_PROTOCOL_OPENAI_RESPONSES, 240128u, 16384u,
             "medium", Error) ) goto done;
     DefaultModel = MdoMigrationStringCopy(Legacy, "defaultModel", "ling-gpu");
     if ( DefaultModel == NULL ) goto memory;

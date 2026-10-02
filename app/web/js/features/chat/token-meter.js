@@ -1,5 +1,6 @@
 import { clear, element, isImeKey } from "../../utils/dom.js";
 import { currentLocale, subscribeLocale, t } from "../../i18n.js";
+import { findModel } from "../../utils/models.js";
 
 export function estimateInputTokens(text) {
   const characters = String(text || "");
@@ -27,8 +28,7 @@ export function createTokenMeter({ root, trigger, ring, panel, estimate, prompt,
       : t("token.estimateTitle", {}, "按输入文本粗略估算");
     const session = sessionStore.get().data;
     const models = modelsStore.get().data?.models ?? [];
-    const model = models.find((item) => item.id ===
-      (modelSelect.value || session?.model_id)) || null;
+    const model = findModel(models, modelSelect.value || session?.model_id);
     const timeline = timelineStore.get().data;
     const calls = (session && timeline?.projectId === session.project_id &&
       timeline?.sessionId === session.id ? timeline.events ?? [] : []).filter((event) =>
@@ -45,7 +45,7 @@ export function createTokenMeter({ root, trigger, ring, panel, estimate, prompt,
     const matchingModels = models.filter((item) => latestCall?.model &&
       (item.id === latestCall.model || item.wire_model === latestCall.model));
     const latestModel = historicalModelId
-      ? models.find((item) => item.id === historicalModelId) || null
+      ? findModel(models, historicalModelId)
       : matchingModels.length === 1 ? matchingModels[0] : null;
     const lastModelName = latestModel?.name || historicalModelId ||
       latestCall?.model || "—";

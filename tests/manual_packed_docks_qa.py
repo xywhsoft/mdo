@@ -81,7 +81,7 @@ class Model(BaseHTTPRequestHandler):
             if stream_failure:
                 chunks = chunks[:2]
             payload = ("".join("data: " + json.dumps({"id": "chatcmpl-qa",
-                "object": "chat.completion.chunk", "model": "ling-3.0-tiny",
+                "object": "chat.completion.chunk", "model": "ornith-1.5-35b",
                 **chunk}) + "\n\n" for chunk in chunks) +
                 ("data: {malformed-json}\n\n" if stream_failure else
                  "data: [DONE]\n\n")).encode()
@@ -228,7 +228,7 @@ class Model(BaseHTTPRequestHandler):
             time.sleep(Model.slow_seconds)
         elif Model.model_delay_seconds:
             time.sleep(Model.model_delay_seconds)
-        body = json.dumps({"id": "resp_ui_fixture", "model": "ling-3.0-tiny",
+        body = json.dumps({"id": "resp_ui_fixture", "model": "ornith-1.5-35b",
                            "status": "completed", "output": output,
                            "usage": {"input_tokens": 7, "output_tokens": 3,
                                      "total_tokens": 10}}).encode()
@@ -1258,14 +1258,16 @@ if args.image_capable:
                           .read_text(encoding="utf-8"))
     model_config = defaults["models"]["items"][0]
     text_model = json.loads(json.dumps(model_config))
-    text_model["id"] = "ling-3.0-tiny-text-qa"
-    text_model["name"] = "Ling Text QA"
+    text_model["capabilities"] = [item for item in text_model["capabilities"] if item != "media-input"]
+    text_model["attachments"] = []
+    text_model["id"] = "ornith-1.5-35b-text-qa"
+    text_model["name"] = "Ornith Text QA"
     if args.second_model_context_tokens:
         text_model["window"]["context_tokens"] = args.second_model_context_tokens
         text_model["window"]["max_input_tokens"] = (
             args.second_model_context_tokens - 1)
     defaults["models"]["items"].append(text_model)
-    model_config["capabilities"].append("media-input")
+    model_config["capabilities"] = list(dict.fromkeys(model_config["capabilities"] + ["media-input"]))
     model_config["attachments"] = ["image"]
     override = base / "default-home/config/defaults.json"
     override.parent.mkdir(parents=True)
@@ -1317,11 +1319,11 @@ if args.agent_profile_fixture:
                  agent_dir / "agent-profile-qa.c")
 env = os.environ.copy()
 env["USERPROFILE"] = str(base)
-env["MDO_LING_RESPONSES_URL"] = f"http://127.0.0.1:{model.server_address[1]}/v1"
+env["MDO_ORNITH_RESPONSES_URL"] = f"http://127.0.0.1:{model.server_address[1]}/v1"
 if args.interleaved_chat_stream:
-    env["MDO_LING_CHAT_COMPLETIONS_URL"] = (
+    env["MDO_ORNITH_CHAT_COMPLETIONS_URL"] = (
         f"http://127.0.0.1:{model.server_address[1]}/v1")
-env["MDO_LING_API_KEY"] = "bounded-packed-docks-key"
+env["MDO_ORNITH_API_KEY"] = "bounded-packed-docks-key"
 process = None
 proxy = None
 try:
@@ -1334,7 +1336,7 @@ try:
     wait_ready(port, process)
     options = {
         "project_id": "default", "title": "Packed docks QA",
-        "agent_id": "mdo.default", "model_id": "ling-3.0-tiny",
+        "agent_id": "mdo.default", "model_id": "ornith-1.5-35b",
         "protocol": ("openai-chat-completions" if args.interleaved_chat_stream
                      else "openai-responses"), "reasoning_effort": "medium",
         "max_output_tokens": 1024,

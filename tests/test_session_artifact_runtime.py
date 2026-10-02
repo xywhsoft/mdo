@@ -44,7 +44,7 @@ def run_probe(host: Path) -> None:
             process = start_host(host, config, home, environment, log, port)
             status, body = request(port, "POST", "/api/v1/sessions", {
                 "project_id": "default", "title": "Artifact replay probe",
-                "agent_id": "mdo.default", "model_id": "ling-3.0-tiny",
+                "agent_id": "mdo.default", "model_id": "ornith-1.5-35b",
                 "protocol": "openai-responses", "reasoning_effort": "medium",
                 "max_output_tokens": 1024,
             })
@@ -52,7 +52,7 @@ def run_probe(host: Path) -> None:
             session_id = body["data"]["id"]
             status, body = request(port, "POST", "/api/v1/sessions", {
                 "project_id": "default", "title": "Other session",
-                "agent_id": "mdo.default", "model_id": "ling-3.0-tiny",
+                "agent_id": "mdo.default", "model_id": "ornith-1.5-35b",
                 "protocol": "openai-responses", "reasoning_effort": "medium",
                 "max_output_tokens": 1024,
             })

@@ -6,6 +6,7 @@
 #include "../../include/mdo/models.h"
 #include "../../include/mdo/modules.h"
 #include "../../include/mdo/skills.h"
+#include "../../include/mdo/builtin_model.h"
 
 static bool MdoApiCatalogReply(MdoApiContext* Context, xvalue* Data)
 {
@@ -99,6 +100,8 @@ bool MdoApiModelsRoute(MdoApiContext* Context)
             MdoApiValueSetString(Item, "name", Info.Name) &&
             MdoApiValueSetString(Item, "provider_id", Info.ProviderId) &&
             MdoApiValueSetString(Item, "wire_model", Info.WireModel) &&
+            MdoApiValueSetStrings(Item, "aliases", (const char* const[]){ MDO_LEGACY_BUILTIN_MODEL_ID, "ling-gpu" },
+                Info.Builtin && strcmp(Info.Id, MDO_BUILTIN_MODEL_ID) == 0 ? 2u : 0u) &&
             MdoApiValueSetUInt(Item, "generation", Info.Generation) &&
             MdoApiValueSetBool(Item, "builtin", Info.Builtin) &&
             MdoApiValueSetBool(Item, "free", Info.Free) &&

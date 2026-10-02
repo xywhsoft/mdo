@@ -68,7 +68,7 @@ class Probe(UploadProbe):
         vision = copy.deepcopy(defaults["models"]["items"][0])
         vision.update(id="backup-vision-fixture", name="Backup vision fixture", builtin=False,
                       free=False, editable=True, removable=True)
-        vision["capabilities"].append("media-input"); vision["attachments"] = ["image"]
+        vision["capabilities"] = list(dict.fromkeys(vision["capabilities"] + ["media-input"])); vision["attachments"] = ["image"]
         defaults["models"]["items"].append(vision)
         defaults_path.write_text(json.dumps(defaults), encoding="utf-8")
         shutil.copy2(ROOT / "tests/fixtures/backup-decode.c", self.site / "src/bootstrap/backup-decode.c")
@@ -162,7 +162,7 @@ class Probe(UploadProbe):
     def check(self):
         status, body = self.api("POST", "/api/v1/sessions", {
             "project_id": "default", "title": "Offline decode 便携", "agent_id": "mdo.default",
-            "model_id": "ling-3.0-tiny", "protocol": "openai-responses", "reasoning_effort": "medium",
+            "model_id": "ornith-1.5-35b", "protocol": "openai-responses", "reasoning_effort": "medium",
             "max_output_tokens": 1024,
         })
         assert status == 201, body

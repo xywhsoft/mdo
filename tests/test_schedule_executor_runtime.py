@@ -92,7 +92,7 @@ static xllm_response *Response(const char *text) {
     xllm_response *response = (xllm_response*)calloc(1u, sizeof(*response));
     if (response == NULL) return NULL;
     response->sContent = Copy(text);
-    response->sModel = Copy("ling-3.0-tiny");
+    response->sModel = Copy("ornith-1.5-35b");
     response->sRequestId = Copy("schedule-executor-probe");
     response->sFinishReason = Copy("stop");
     response->eFinish = XLLM_FINISH_STOP;
@@ -419,7 +419,7 @@ void ServiceInit(XS_HostInfo *host) {
     create.Label = "Agent review";
     create.ProjectId = "project-alpha";
     create.AgentId = "mdo.default";
-    create.ModelId = "ling-3.0-tiny";
+    create.ModelId = "ornith-1.5-35b";
     create.Protocol = MDO_MODEL_PROTOCOL_OPENAI_RESPONSES;
     create.ReasoningEffort = "medium";
     create.WorkspaceRoot = ".";
@@ -455,7 +455,7 @@ void ServiceInit(XS_HostInfo *host) {
     create.Label = "Manual review";
     create.ProjectId = "project-alpha";
     create.AgentId = "mdo.default";
-    create.ModelId = "ling-3.0-tiny";
+    create.ModelId = "ornith-1.5-35b";
     create.Protocol = MDO_MODEL_PROTOCOL_OPENAI_RESPONSES;
     create.WorkspaceRoot = ".";
     create.Input = "execute scheduled review";

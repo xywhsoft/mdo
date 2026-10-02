@@ -3,6 +3,7 @@ import { subscribeLocale, t } from "../../i18n.js";
 import { clear, element, errorMessage, toast } from "../../utils/dom.js";
 import { createUnusedImageCleanup } from "./unused-image-cleanup.js";
 import { labelImageName } from "./image-names.js";
+import { findModel } from "../../utils/models.js";
 
 function sessionKey(projectId, sessionId) {
   return projectId && sessionId
@@ -52,8 +53,7 @@ export function createPromptQueue({ container, navigation, isRunActive, stagedEn
 
   function profileLabel(profile) {
     if (!profile) return null;
-    const model = modelsStore?.get().data?.models?.find((item) =>
-      item.id === profile.model_id);
+    const model = findModel(modelsStore?.get().data?.models ?? [], profile.model_id);
     const permission = {
       "read-only": ["shell.permission.readOnly", "只读"],
       balanced: ["shell.permission.balanced", "询问"],

@@ -4,6 +4,9 @@ mdo 是基于 xrt、xs、xllm、xllm-session 与 xwork 的便携式 Agent 工作
 当前仓库正在按 [重构实施计划](docs/mdo-refactor-implementation-plan.md) 重建；
 `app_bak/` 只保留旧产品实现作为行为参考，新代码全部位于 `app/`。
 
+当前开发方向已调整为[基础 Agent 优先](docs/core-agent-priorities.md)：工具、
+聊天体验、项目/会话和设置先行。内建默认模型为 `ornith-1.5-35b`。
+
 ## 构建
 
 `deps.lock` 固定 xrt、xserver 和三库的完整提交、版本与生产源码树哈希。
@@ -35,7 +38,7 @@ python tools/qa_release.py --xserver-root D:\GIT\xserver-mdo-refactor
 严格 C11 编译、真实 TCC 低负载运行时探针、两次确定性 pack，
 以及 Windows 无窗口只读启动零写、原生窗口便携 Home 和打包启动回归。构建命令不依赖 Node.js，
 发布门禁运行前端检查时需要 Node.js。
-门禁范围、Linux 文件系统要求与 Ling 线上探针见[发布门禁](docs/release-gate.md)，
+门禁范围和 Linux 文件系统要求见[发布门禁](docs/release-gate.md)，
 当前功能和限制见[0.1.0-dev 发布说明](docs/release-notes-0.1.0-dev.md)。
 
 开发前先生成入口，再启动构建出的宿主：
@@ -76,7 +79,7 @@ mdo.exe -- --home D:\Portable\mdo-home
 内置 `config/defaults.json` 与外部 Home 中的 `settings.json`、`models.json`
 和 `permissions.json` 按键合并。外部文件只保存用户差异，使用 schema v1、
 原子替换和 `.bak` 备份；敏感值只允许保存 `secret_ref`。完整格式、运行时
-覆盖、导入预览和 Ling 3.0 Tiny 保护规则见
+覆盖、导入预览和内建 Ornith 模型规则见
 [配置合同](docs/configuration.md)。
 
 内建联网能力由 `web_search`、`web_open` 和 `web_find` 三个有界工具组成；

@@ -97,10 +97,10 @@ class ModelHandler(BaseHTTPRequestHandler):
             self.send_error(400)
             return
         payload = json.loads(self.rfile.read(size))
-        assert payload.get("model") == "ling-3.0-tiny", payload
+        assert payload.get("model") == "ornith-1.5-35b", payload
         self.server.hits += 1  # type: ignore[attr-defined]
         body = json.dumps({
-            "id": "proxy-local-fixture", "model": "ling-3.0-tiny",
+            "id": "proxy-local-fixture", "model": "ornith-1.5-35b",
             "status": "completed", "output": [{"type": "message", "content": [
                 {"type": "output_text", "text": "Local proxy request completed."},
             ]}], "usage": {"input_tokens": 2, "output_tokens": 3,
@@ -246,8 +246,8 @@ def main() -> int:
                     }), encoding="utf-8")
                     before = model.hits
                     output = run_probe(host, site, home, {
-                        "MDO_LING_RESPONSES_URL": f"https://127.0.0.1:{model.server_port}/v1",
-                        "MDO_LING_API_KEY": "bounded-local-model-key",
+                        "MDO_ORNITH_RESPONSES_URL": f"https://127.0.0.1:{model.server_port}/v1",
+                        "MDO_ORNITH_API_KEY": "bounded-local-model-key",
                         "MDO_TEST_PROXY_PASSWORD": "bounded-password",
                     })
                     assert "proxy_result=0 status=200" in output, (

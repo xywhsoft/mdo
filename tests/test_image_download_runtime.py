@@ -133,7 +133,7 @@ class Probe:
         self.log = (self.base / "xs.log").open("wb")
         self.process = subprocess.Popen([str(self.host), str(self.config)], cwd=self.site,
             env=dict(os.environ, MDO_HOME=str(self.home),
-                     MDO_LING_RESPONSES_URL="https://example.invalid/v1", MDO_LING_API_KEY="image-fixture"),
+                     MDO_ORNITH_RESPONSES_URL="https://example.invalid/v1", MDO_ORNITH_API_KEY="image-fixture"),
             stdout=self.log, stderr=subprocess.STDOUT,
             creationflags=subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0)
         deadline = time.monotonic() + 20
@@ -166,7 +166,7 @@ class Probe:
         digest = hashlib.sha256(payload).hexdigest()
         status, _, body = self.call("POST", "/api/v1/sessions", {
             "project_id": "default", "title": "Four composer thumbnails",
-            "agent_id": "mdo.default", "model_id": "ling-3.0-tiny",
+            "agent_id": "mdo.default", "model_id": "ornith-1.5-35b",
             "protocol": "openai-responses", "reasoning_effort": "medium", "max_output_tokens": 1024})
         assert status == 201, (status, body)
         session = json.loads(body)["data"]["id"]

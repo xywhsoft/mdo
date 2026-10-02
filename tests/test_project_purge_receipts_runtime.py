@@ -73,7 +73,7 @@ class ReceiptProbe(Probe):
         start_size = self.log_path.stat().st_size
         self.process = subprocess.Popen([str(self.host), str(self.config)], cwd=self.site,
             env=dict(os.environ, MDO_HOME=str(self.home),
-                MDO_LING_RESPONSES_URL="https://example.invalid/v1", MDO_LING_API_KEY="bounded-purge-fixture"),
+                MDO_ORNITH_RESPONSES_URL="https://example.invalid/v1", MDO_ORNITH_API_KEY="bounded-purge-fixture"),
             stdout=self.log, stderr=subprocess.STDOUT,
             creationflags=subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0)
         deadline = time.monotonic() + 3

@@ -184,7 +184,7 @@ class Probe(CoordinatorProbe):
         # or silently re-capturing its revision on confirmation.
         review = self.review(preview)
         assert self.api("PUT", "/api/v1/projects/restore-target", {
-            "name": "Changed", "workspace_root": str(self.workspace.resolve()), "default_model_id": "ling-3.0-tiny",
+            "name": "Changed", "workspace_root": str(self.workspace.resolve()), "default_model_id": "ornith-1.5-35b",
         }, {"If-Match": f'"mdo-project-restore-target-{review["project_revision"]}"'})[0] == 200
         state = self.apply(review["id"])
         assert not state["accepted"] and state["worker_finished"] and state["error_code"] == 7, state
@@ -200,7 +200,7 @@ class Probe(CoordinatorProbe):
             if change == "revision":
                 assert self.api("PUT", "/api/v1/projects/restore-target", {
                     "name": "Changed while queued", "workspace_root": str(self.workspace.resolve()),
-                    "default_model_id": "ling-3.0-tiny",
+                    "default_model_id": "ornith-1.5-35b",
                 }, {"If-Match": f'"mdo-project-restore-target-{review["project_revision"]}"'})[0] == 200
             else:
                 saved = self.workspace.with_name("saved-workspace")

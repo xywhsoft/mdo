@@ -7,6 +7,7 @@ mdo-home/
 *.log
 .build/
 app/generated/
+app/default-home/config/secrets/
 
 # 运行时状态与临时文件
 window-state-*.txt

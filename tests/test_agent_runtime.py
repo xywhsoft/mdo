@@ -240,7 +240,7 @@ static xllm_result Complete(void *data, const xllm_request *request,
     (void)callbacks; (void)error;
     ++owner->Calls;
     owner->SawModel = request->sModel != NULL &&
-        strcmp(request->sModel, "ling-3.0-tiny") == 0;
+        strcmp(request->sModel, "ornith-1.5-35b") == 0;
     owner->SawReasoning = request->sReasoningEffort != NULL &&
         strcmp(request->sReasoningEffort, "medium") == 0;
     for (i = 0u; i < request->iMessageCount; ++i) {{
@@ -729,8 +729,8 @@ def main() -> int:
         assert "reload_error=" not in output, output
         assert "run_create_error=" not in output, output
         assert "run_start_error=" not in output, output
-        assert "session=agent:probe.main module:probe.agents model:ling-3.0-tiny" in output, output
-        assert "wire:ling-3.0-tiny reasoning:medium permission:read-only" in output, output
+        assert "session=agent:probe.main module:probe.agents model:ornith-1.5-35b" in output, output
+        assert "wire:ornith-1.5-35b reasoning:medium permission:read-only" in output, output
         assert "output:4096" in output, output
         assert "skills:1 subagents:1 generations:1/1/1/2" in output, output
         assert "owner_after_create=refs:2 retains:1 releases:0" in output, output
@@ -741,7 +741,7 @@ def main() -> int:
         assert "selected Skill requires a tool unavailable to its Agent" in output, output
         assert "owner_after_session_release=refs:2 releases:0" in output, output
         assert "run=result:0 text:agent-runtime-ok" in output, output
-        assert "run_info=agent:probe.main model:ling-3.0-tiny reasoning:medium state:2 result:0 generations:1/1/1/2" in output, output
+        assert "run_info=agent:probe.main model:ornith-1.5-35b reasoning:medium state:2 result:0 generations:1/1/1/2" in output, output
         assert "callback=calls:1 model:1 reasoning:1 system_v1:1 skill_v1:1 skill_v2:0 memory:1 instructions_v1:1" in output, output
         assert "prompt_initial=1" in output, output
         assert "prompt_recovered=old:1 new:0" in output, output

@@ -376,7 +376,7 @@ test("multiple pending submissions keep their order and state across reload", as
 test("composer profile and per-message snapshots survive edits and reload", async () => {
   const originalWindow = globalThis.window;
   const originalFetch = globalThis.fetch;
-  const firstProfile = { model_id: "ling-3.0-tiny",
+  const firstProfile = { model_id: "ornith-1.5-35b",
     reasoning_effort: "medium", permission_profile: "balanced" };
   const secondProfile = { ...firstProfile, reasoning_effort: "high" };
   let saved = { revision: 1, text: "", attachments: [],

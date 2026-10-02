@@ -249,7 +249,7 @@ def main() -> int:
         assert "escaping_ca=0" in output, output
         assert "incomplete_proxy=0" in output, output
         assert "plain_proxy_password=0" in output, output
-        assert "Ling 3.0 Tiny is built-in" in output, output
+        assert "ornith-1.5-35b is built-in" in output, output
         assert "restore_preview=1 changes=1" in output, output
         assert "restore=1" in output, output
         assert not (home / "config/settings.json").exists()
@@ -275,7 +275,7 @@ def main() -> int:
         effective = json.loads(initial)
         assert effective["schema_version"] == 1
         assert effective["settings"]["appearance"]["theme"] == "light"
-        assert effective["models"]["items"][0]["id"] == "ling-3.0-tiny"
+        assert effective["models"]["items"][0]["id"] == "ornith-1.5-35b"
 
         damaged = base / "damaged"
         (damaged / "config").mkdir(parents=True)

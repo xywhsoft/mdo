@@ -396,7 +396,7 @@ void ServiceInit(XS_HostInfo *host) {
     options.Notify = "desktop";
     options.ProjectId = "project-alpha";
     options.AgentId = "reviewer";
-    options.ModelId = "ling-3.0-tiny";
+    options.ModelId = "ornith-1.5-35b";
     options.Protocol = MDO_MODEL_PROTOCOL_OPENAI_RESPONSES;
     options.ReasoningEffort = "medium";
     options.MaxOutputTokens = 2048u;
@@ -726,7 +726,7 @@ def main() -> int:
         assert "input:review the updated private release notes" in output, output
         assert "early_claim=claimed:0 wake:1700000000000000" in output, output
         assert "claimed=id:daily-review" in output and "occurrence:1700000000000000 revision:5" in output, output
-        assert "agent:reviewer model:ling-3.0-tiny input:review the updated private release notes" in output, output
+        assert "agent:reviewer model:ornith-1.5-35b input:review the updated private release notes" in output, output
         assert "finished=1" in output, output
         assert "skip_advanced=claimed:0 revision:2 next:1700000360000000 misfires:1" in output, output
         assert "catalog_claimed=count:1 diagnostics:0" in output, output

@@ -83,7 +83,7 @@ def main() -> int:
         wait_ready(port, process)
         project = "inventory-ui"
         api("POST", "projects", {"id": project, "name": "候选清单验证",
-            "workspace_root": str(workspace), "default_model_id": "ling-3.0-tiny"})
+            "workspace_root": str(workspace), "default_model_id": "ornith-1.5-35b"})
         api("PUT", f"projects/{project}/draft", {"revision": 0, "text": "尚未发送的新任务草稿"})
         session = api("POST", "sessions", {"project_id": project, "title": "清单里的会话"})
         if args.include_references:
@@ -91,7 +91,7 @@ def main() -> int:
             draft = api("GET", "draft")
             api("PUT", "draft", {"revision": draft["revision"], "text": "当前项目的全局待建任务草稿",
                 "new_task": {"project_id": project, "session_id": "f" * 32, "title": "待建任务",
-                    "agent_id": "mdo.default", "model_id": "ling-3.0-tiny", "reasoning_effort": "medium",
+                    "agent_id": "mdo.default", "model_id": "ornith-1.5-35b", "reasoning_effort": "medium",
                     "permission_profile": "balanced", "phase": "rejected"},
                 "submissions": [], "attachments": [], "run_admission_uncertain": False})
         _, headers, _ = request(port, "GET", f"/api/v1/memory/projects/{project}")
@@ -100,7 +100,7 @@ def main() -> int:
             **{"If-Match": headers["etag"]})
         api("POST", "schedules", {"id": "inventory-plan", "label": "已停用的核对计划",
             "notify": "", "project_id": project, "agent_id": "mdo.default",
-            "model_id": "ling-3.0-tiny", "protocol": "openai-responses",
+            "model_id": "ornith-1.5-35b", "protocol": "openai-responses",
             "reasoning_effort": "medium", "max_output_tokens": 1024,
             "workspace_root": str(workspace), "input": "Never run this fixture.",
             "frequency": "once", "interval": 1, "start_at": 4102444800000000,

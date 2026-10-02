@@ -112,7 +112,7 @@ class Probe(UploadProbe):
         assert self.api("DELETE", PREFIX + "/" + UPLOAD_ID)[0] == 200
         status, body = self.api("POST", "/api/v1/sessions", {
             "project_id": "default", "title": "Offline preview 中文", "agent_id": "mdo.default",
-            "model_id": "ling-3.0-tiny", "protocol": "openai-responses", "reasoning_effort": "medium",
+            "model_id": "ornith-1.5-35b", "protocol": "openai-responses", "reasoning_effort": "medium",
             "max_output_tokens": 1024})
         assert status == 201, body
         session = body["data"]["id"]

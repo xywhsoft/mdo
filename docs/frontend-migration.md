@@ -4,6 +4,44 @@
 
 完成判据及尚缺的打包页证据见 [前端操作体验完成审计](frontend-completion-audit.md)。本文件继续记录每次实现和验证的细节。
 
+## 2026-10-03：回到基础 Agent 主线，内建模型切换 Ornith
+
+按用户最新调整，后续优先工具闭环、聊天体验、项目与会话管理、设置；
+暂缓治理、追溯和备份恢复的细化。当前优先级见
+[基础 Agent 实施方向](core-agent-priorities.md)，优先于旧计划的扩展范围。
+
+内建免费模型换为 `ornith-1.5-35b`，默认 Responses，保留 Chat Completions
+和 Anthropic Messages。服务当前报告上下文 240128，支持图片；输入区和
+模型设置同步更新。旧 `ling-3.0-tiny` / `ling-gpu` 的会话、项目默认值、
+草稿及排队输入仍能解析到新模型。旧 Home 的完整内建配置在加载时替换，
+不主动改写文件或备份；自定义条目保留。新任务的固定 ID 重试兼容旧引用。
+
+连接密钥只放在本地忽略的构建输入中，由构建器加入内置 VFS 资源，
+不写入 Git 或公共模型 API。环境变量、外部 Home 密钥、内置资源依次
+优先；移除构建输入后不会沿用旧密钥资源。无凭据的新机器仍可生成程序，
+再通过环境或便携 Home 配置连接，详见 [配置说明](configuration.md)。
+
+隔离的真实 Windows 单文件包禁用所有模型环境覆盖，使用内置连接完成
+三个协议的对话；Responses 实际调用 `read` 读取合成测试文件并返回
+`ORNITH_PACKED_TOOL_OK`。打包页通过输入框完成中文介绍和红色测试图片
+问答，显示回复、消息操作、用量和 token/s。320×700 页面宽度为 320，
+发送按钮和模型/思考/权限控件可达，无浏览器 error/warn。
+截图为 `.build/qa-ornith-desktop.jpg`、`.build/qa-ornith-mobile.jpg`；
+网络和单文件结果见 `.build/qa-ornith-live-*.json`、
+`.build/qa-ornith-packed-live-proof.json`。图片为合成 16×16 PNG，未发送
+用户文件。本轮未覆盖实体移动设备或原生窗口内的完整交互。
+
+改动相关的 Windows/Linux 检查均通过：116 Python、284 Node、97 JS
+模块、严格 C11、10 个运行探针、两项 packed 与各自确定性 A/B。Windows
+另通过便携 WebView2 Home 和 20 秒启动。SDK 未改，复用已验证的构建宿主；
+59 份代码/探针按 LF 核对。本轮是相关回归，没有重跑所有发布探针，
+未做压力或高负载测试。日志 `.build/qa-ornith-{windows,linux}-final.log`。
+
+根目录 `mdo.exe` 已更新，6,468,759 字节，SHA-256
+`12d2129a5cc1cdf9b21dd2e632ec460d6c87a1a1b6eeb3fe536fe04f850fa76b`；
+Linux 候选 6,518,919 字节，SHA-256
+`ccee9c6f0b430773610a133babdc8ddf72629e93091a008dd32b37aa58ec13ec`。
+
 ## 2026-10-03：完整备份导入页面与刷新恢复
 
 新增侧栏和桌面/移动端会话菜单入口。原生文件选择器、分块 SHA/上传、

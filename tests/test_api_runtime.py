@@ -169,7 +169,7 @@ class ModelHandler(BaseHTTPRequestHandler):
                 }]
             response = json.dumps({
                 "id": "resp_api_probe",
-                "model": "ling-3.0-tiny",
+                "model": "ornith-1.5-35b",
                 "status": "completed",
                 "output": output,
                 "usage": {
@@ -203,6 +203,15 @@ def write_site(base: Path, port: int) -> Path:
     # application layout directly so /app/default-home has identical meaning
     # in the development and single-file paths.
     shutil.copytree(ROOT / "app", base, dirs_exist_ok=True)
+    # This API fixture deliberately uses a text-only built-in to keep testing
+    # capability rejection. Image-specific derived fixtures enable it again;
+    # the actual provisioned packed Ornith model is tested separately.
+    defaults_path = base / "default-home/config/defaults.json"
+    defaults = json.loads(defaults_path.read_text(encoding="utf-8"))
+    model = defaults["models"]["items"][0]
+    model["capabilities"] = [name for name in model["capabilities"] if name != "media-input"]
+    model["attachments"] = []
+    defaults_path.write_text(json.dumps(defaults), encoding="utf-8")
     service_path = base / "src/bootstrap/service.c"
     service_text = service_path.read_text(encoding="utf-8")
     fixture = r'''
@@ -488,7 +497,7 @@ static void MdoApiProbeCreateRecoverySession(bool* Created,
     Options.ProjectId = ProjectId;
     Options.Title = Title;
     Options.Agent.AgentId = "mdo.default";
-    Options.Agent.ModelId = "ling-3.0-tiny";
+    Options.Agent.ModelId = "ornith-1.5-35b";
     Options.Agent.Protocol = MDO_MODEL_PROTOCOL_OPENAI_RESPONSES;
     Session = MdoSessionCreate(&Options, &Error);
     if ( Session == NULL ) return;
@@ -1523,12 +1532,12 @@ def run_probe(host: Path) -> None:
         environment["USERPROFILE"] = str(base)
         environment["HOME"] = str(base)
         environment["MDO_HOME"] = str(base / "wrong-environment-home")
-        environment["MDO_LING_CHAT_COMPLETIONS_URL"] = (
+        environment["MDO_ORNITH_CHAT_COMPLETIONS_URL"] = (
             "https://example.invalid/v1")
-        environment["MDO_LING_RESPONSES_URL"] = (
+        environment["MDO_ORNITH_RESPONSES_URL"] = (
             f"http://127.0.0.1:{model_port}/v1")
-        environment["MDO_LING_ANTHROPIC_URL"] = "https://example.invalid"
-        environment["MDO_LING_API_KEY"] = "bounded-api-test-key"
+        environment["MDO_ORNITH_ANTHROPIC_URL"] = "https://example.invalid"
+        environment["MDO_ORNITH_API_KEY"] = "bounded-api-test-key"
         with log_path.open("wb") as log:
             process = subprocess.Popen(
                 [str(host), str(config_path), "--", "--home", str(home)],
@@ -1562,7 +1571,7 @@ def run_probe(host: Path) -> None:
                 status, headers, body = request(port, "GET", "/api/v1/models/config")
                 assert status == 200, (status, body)
                 model_config = json.loads(body)["data"]
-                assert model_config["default_model"] == "ling-3.0-tiny", model_config
+                assert model_config["default_model"] == "ornith-1.5-35b", model_config
                 assert model_config["items"][0]["editable"] is False, model_config
                 assert headers["etag"].startswith('"mdo-config-'), headers
                 status, _, body = request(port, "GET", "/api/v1/feedback")
@@ -1794,8 +1803,8 @@ def run_probe(host: Path) -> None:
                     assert b'"secret_ref"' not in lowered, (resource, lowered)
                     assert b'"authorization"' not in lowered, (resource, lowered)
                 model_catalog = json.loads(request(port, "GET", "/api/v1/models")[2])["data"]
-                assert model_catalog["models"][0]["id"] == "ling-3.0-tiny"
-                assert model_catalog["default_model_id"] == "ling-3.0-tiny"
+                assert model_catalog["models"][0]["id"] == "ornith-1.5-35b"
+                assert model_catalog["default_model_id"] == "ornith-1.5-35b"
 
                 project_workspace = base / "project-workspace"
                 project_workspace.mkdir()
@@ -1803,7 +1812,7 @@ def run_probe(host: Path) -> None:
                 project_input = {
                     "id": "ui-workspace", "name": "UI Workspace",
                     "workspace_root": project_relative,
-                    "default_model_id": "ling-3.0-tiny",
+                    "default_model_id": "ornith-1.5-35b",
                 }
                 status, headers, body = request(
                     port, "POST", "/api/v1/projects",
@@ -1876,7 +1885,7 @@ def run_probe(host: Path) -> None:
                 assert status == 201, (status, body)
                 project_session = json.loads(body)["data"]
                 assert project_session["project_id"] == "ui-workspace"
-                assert project_session["model_id"] == "ling-3.0-tiny"
+                assert project_session["model_id"] == "ornith-1.5-35b"
                 assert (Path(project_session["workspace_root"]).resolve() ==
                         project_workspace.resolve()), project_session
                 project_path = "/api/v1/projects/ui-workspace"
@@ -1912,7 +1921,7 @@ def run_probe(host: Path) -> None:
                 preview_schedule = {
                     "id": "purge-preview-schedule", "label": "Purge preview",
                     "notify": "", "project_id": "ui-workspace",
-                    "agent_id": "mdo.default", "model_id": "ling-3.0-tiny",
+                    "agent_id": "mdo.default", "model_id": "ornith-1.5-35b",
                     "protocol": "openai-responses", "reasoning_effort": "medium",
                     "max_output_tokens": 1024,
                     "workspace_root": str(project_workspace),
@@ -2876,7 +2885,7 @@ def run_probe(host: Path) -> None:
                     "project_id": "api-project",
                     "title": "API session",
                     "agent_id": "mdo.default",
-                    "model_id": "ling-3.0-tiny",
+                    "model_id": "ornith-1.5-35b",
                     "protocol": "openai-responses",
                     "reasoning_effort": "medium",
                     "max_output_tokens": 1024,
@@ -2893,7 +2902,7 @@ def run_probe(host: Path) -> None:
                 assert session["project_id"] == "api-project", session
                 assert session["title"] == "API session", session
                 assert session["agent_id"] == "mdo.default", session
-                assert session["model_id"] == "ling-3.0-tiny", session
+                assert session["model_id"] == "ornith-1.5-35b", session
                 assert session["protocol"] == "openai-responses", session
                 assert session["revision"] == 1, session
                 assert session["runtime_open"] is False, session
@@ -2915,7 +2924,7 @@ def run_probe(host: Path) -> None:
                     "client_session_id": client_session_id,
                     "title": "Recoverable first prompt",
                     "agent_id": "mdo.default",
-                    "model_id": "ling-3.0-tiny",
+                    "model_id": "ling-3.0-tiny",  # A restored pre-upgrade first prompt.
                     "reasoning_effort": "medium",
                     "workspace_root": str(base),
                 }
@@ -2926,6 +2935,7 @@ def run_probe(host: Path) -> None:
                 assert status == 201, (status, body)
                 requested_data = json.loads(body)["data"]
                 assert requested_data["id"] == client_session_id, requested_data
+                assert requested_data["model_id"] == "ornith-1.5-35b", requested_data
                 requested_meta = home / (
                     f"sessions/api-project/{client_session_id}/meta.json")
                 original_meta = requested_meta.read_bytes()
@@ -3154,7 +3164,7 @@ def run_probe(host: Path) -> None:
                 new_task = {
                     "project_id": "api-project", "session_id": "d" * 32,
                     "title": "Draft-backed new task", "agent_id": "mdo.default",
-                    "model_id": "ling-3.0-tiny",
+                    "model_id": "ornith-1.5-35b",
                     "reasoning_effort": "medium",
                     "permission_profile": "balanced", "phase": "creating",
                 }
@@ -3303,13 +3313,13 @@ def run_probe(host: Path) -> None:
                     "schema_version": 7, "revision": 1, "text": "old editor",
                     "attachments": [], "run_admission_uncertain": False,
                     "submissions": [], "composer_profile": {
-                        "model_id": "ling-3.0-tiny",
+                        "model_id": "ornith-1.5-35b",
                         "reasoning_effort": "medium",
                         "permission_profile": "balanced"}}), encoding="utf-8")
                 status, _, body = request(port, "GET",
                     "/api/v1/projects/legacy-profile/draft")
                 assert status == 200 and json.loads(body)["data"][
-                    "composer_profile"]["model_id"] == "ling-3.0-tiny"
+                    "composer_profile"]["model_id"] == "ornith-1.5-35b"
                 status, _, body = request(port, "PUT", "/api/v1/draft",
                     body=json.dumps({"revision": 0, "text": "",
                                      "composer_profile": override}).encode(),
@@ -3571,7 +3581,7 @@ def run_probe(host: Path) -> None:
                     headers={"Content-Type": "application/json"})
                 assert status == 200 and json.loads(stored_draft.read_text(
                     encoding="utf-8"))["schema_version"] == 7, (status, body)
-                snapshot = {"model_id": "ling-3.0-tiny",
+                snapshot = {"model_id": "ornith-1.5-35b",
                             "reasoning_effort": "high",
                             "permission_profile": "balanced"}
                 revision = json.loads(body)["data"]["revision"]
@@ -3841,7 +3851,7 @@ def run_probe(host: Path) -> None:
                 assert json.loads(request(port, "GET", queue_path)[2])[
                     "data"]["items"] == []
                 profile_item_id = "9" * 32
-                profile_snapshot = {"model_id": "ling-3.0-tiny",
+                profile_snapshot = {"model_id": "ornith-1.5-35b",
                                     "reasoning_effort": "high",
                                     "permission_profile": "balanced"}
                 profile_item = {"id": profile_item_id,
@@ -4478,7 +4488,7 @@ def run_probe(host: Path) -> None:
                     "notify": "desktop",
                     "project_id": "api-project",
                     "agent_id": "mdo.default",
-                    "model_id": "ling-3.0-tiny",
+                    "model_id": "ornith-1.5-35b",
                     "protocol": "openai-responses",
                     "reasoning_effort": "medium",
                     "max_output_tokens": 1024,
@@ -5301,7 +5311,7 @@ def run_probe(host: Path) -> None:
                 assert queue_request("POST", queue_path, {
                     "id": race_id, "text": "two page queue run",
                     "first": False, "stage": True,
-                    "profile": {"model_id": "ling-3.0-tiny",
+                    "profile": {"model_id": "ornith-1.5-35b",
                         "reasoning_effort": "medium",
                         "permission_profile": "balanced"},
                 })[0] == 201
@@ -5479,7 +5489,7 @@ def run_probe(host: Path) -> None:
 
                 profile_bound_id = "6" * 32
                 profile_bound_path = queue_path + "/" + profile_bound_id
-                run_profile = {"model_id": "ling-3.0-tiny",
+                run_profile = {"model_id": "ornith-1.5-35b",
                                "reasoning_effort": "high",
                                "permission_profile": "read-only"}
                 status, _, body = queue_request("POST", queue_path, {
@@ -5523,7 +5533,7 @@ def run_probe(host: Path) -> None:
 
                 next_profile_id = "4" * 32
                 next_profile_path = queue_path + "/" + next_profile_id
-                next_profile = {"model_id": "ling-3.0-tiny",
+                next_profile = {"model_id": "ornith-1.5-35b",
                                 "reasoning_effort": "medium",
                                 "permission_profile": "balanced"}
                 assert queue_request("POST", queue_path, {
@@ -5592,13 +5602,13 @@ def run_probe(host: Path) -> None:
                     "verify_peer": True, "timeout_ms": 5000,
                     "endpoints": {"responses":
                         f"http://127.0.0.1:{model_port}/v1/responses"},
-                    "credential": {"secret_ref": "env:MDO_LING_API_KEY"},
+                    "credential": {"secret_ref": "env:MDO_ORNITH_API_KEY"},
                 })
                 local_model = next(item for item in model_patch["items"]
-                    if item["id"] == "ling-3.0-tiny").copy()
+                    if item["id"] == "ornith-1.5-35b").copy()
                 local_model.update({"id": "queue-local-model",
                     "name": "Queue Local Model", "provider": "queue-local",
-                    "wire_model": "ling-3.0-tiny", "builtin": False,
+                    "wire_model": "ornith-1.5-35b", "builtin": False,
                     "free": False, "editable": True, "removable": True,
                     "protocols": ["openai-responses"],
                     "default_protocol": "openai-responses"})
@@ -5749,8 +5759,8 @@ def run_unconfigured_model_probe(host: Path) -> None:
         config_path.write_text(json.dumps(config), encoding="utf-8")
         environment = os.environ.copy()
         for name in (
-            "MDO_LING_CHAT_COMPLETIONS_URL", "MDO_LING_RESPONSES_URL",
-            "MDO_LING_ANTHROPIC_URL", "MDO_LING_API_KEY",
+            "MDO_ORNITH_CHAT_COMPLETIONS_URL", "MDO_ORNITH_RESPONSES_URL",
+            "MDO_ORNITH_ANTHROPIC_URL", "MDO_ORNITH_API_KEY",
         ):
             environment.pop(name, None)
         log_path = base / "xs.log"
@@ -5765,7 +5775,7 @@ def run_unconfigured_model_probe(host: Path) -> None:
                 wait_ready(port, process)
                 for body in (
                     {"project_id": "default", "title": "Unconfigured default model"},
-                    {"project_id": "default", "model_id": "ling-3.0-tiny",
+                    {"project_id": "default", "model_id": "ornith-1.5-35b",
                      "title": "Unconfigured selected model"},
                 ):
                     status, _, response = request(
@@ -5774,13 +5784,13 @@ def run_unconfigured_model_probe(host: Path) -> None:
                         headers={"Content-Type": "application/json"})
                     document = json.loads(response)
                     assert status == 201, (status, document)
-                    assert document["data"]["model_id"] == "ling-3.0-tiny", document
+                    assert document["data"]["model_id"] == "ornith-1.5-35b", document
                     assert (base / "home/sessions/default" /
                             document["data"]["id"] / "meta.json").is_file()
                 profile_path = ("/api/v1/projects/default/sessions/" +
                     document["data"]["id"] + "/profile")
                 profile_body = json.dumps({
-                    "model_id": "ling-3.0-tiny",
+                    "model_id": "ornith-1.5-35b",
                     "reasoning_effort": "low",
                     "permission_profile": "read-only",
                 }).encode()
@@ -5904,7 +5914,7 @@ def run_unconfigured_model_probe(host: Path) -> None:
                     body=json.dumps({"schema_version": 1, "patch": changed}).encode(),
                     headers={"Content-Type": "application/json"})
                 assert status == 422, (status, response)
-                changed["default_model"] = "ling-3.0-tiny"
+                changed["default_model"] = "ornith-1.5-35b"
                 changed["providers"] = [provider for provider in changed["providers"]
                     if provider["id"] != "test-provider"]
                 status, _, response = request(port, "PUT", "/api/v1/settings/models",
@@ -5915,9 +5925,9 @@ def run_unconfigured_model_probe(host: Path) -> None:
                 status, _, response = request(port, "GET", model_path)
                 assert status == 200, (status, response)
                 remaining = json.loads(response)["data"]
-                assert remaining["default_model"] == "ling-3.0-tiny", remaining
+                assert remaining["default_model"] == "ornith-1.5-35b", remaining
                 assert [item["id"] for item in remaining["items"]] == [
-                    "ling-3.0-tiny"], remaining
+                    "ornith-1.5-35b"], remaining
 
             except BaseException as error:
                 failure = error

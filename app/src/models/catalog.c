@@ -7,6 +7,7 @@
 #include "../../include/mdo/models.h"
 #include "../../include/mdo/secrets.h"
 #include "../../include/mdo/version.h"
+#include "../../include/mdo/builtin_model.h"
 
 #define MDO_MODELS_ERROR_DOMAIN "mdo.models"
 #define MDO_MODELS_MAX_CONFIG_BYTES (1024u * 1024u)
@@ -14,11 +15,8 @@
 #define MDO_MODELS_MAX_MODELS 512u
 #define MDO_MODELS_MAX_REASONING_EFFORTS 7u
 
-/* The bundled Ling service is a public product entitlement.  Keep these
- * values outside the editable provider descriptor; deployment overrides may
- * still replace them through MDO_LING_* environment variables. */
-static const char g_MdoLingEndpoint[] = "https://ai.xywhsoft.com:8444/v1";
-static const char g_MdoLingAccessToken[] = "a59048aa00184acc7a7d9540c95c84f8259ff21fc35110a7";
+/* Built-in credentials are provisioned locally by the builder, never stored
+ * in tracked source. Runtime environment/Home overrides take precedence. */
 
 typedef struct MdoProviderEntry {
     char* Id;
@@ -306,6 +304,18 @@ static MdoModelEntry* MdoModelsFindModel(MdoModelCatalog* pCatalog,
     for ( i = 0u; i < pCatalog->ModelCount; ++i )
         if ( strcmp(pCatalog->Models[i].Id, ModelId) == 0 )
             return &pCatalog->Models[i];
+    return NULL;
+}
+
+static const MdoModelEntry* MdoModelsLookup(const MdoModelCatalog* Catalog, cstr Id)
+{
+    size_t i;
+    for ( i = 0u; i < Catalog->ModelCount; ++i )
+        if ( strcmp(Catalog->Models[i].Id, Id) == 0 ) return &Catalog->Models[i];
+    if ( strcmp(Id, MDO_LEGACY_BUILTIN_MODEL_ID) != 0 && strcmp(Id, "ling-gpu") != 0 ) return NULL;
+    for ( i = 0u; i < Catalog->ModelCount; ++i )
+        if ( Catalog->Models[i].Builtin && strcmp(Catalog->Models[i].Id, MDO_BUILTIN_MODEL_ID) == 0 )
+            return &Catalog->Models[i];
     return NULL;
 }
 
@@ -767,12 +777,10 @@ bool MdoModelCatalogModelAt(const MdoModelCatalog* pCatalog,
 bool MdoModelCatalogModelFind(const MdoModelCatalog* pCatalog,
     const char* ModelId, MdoModelInfo* pInfo)
 {
-    size_t i;
+    const MdoModelEntry* Model;
     if ( pCatalog == NULL || ModelId == NULL ) return false;
-    for ( i = 0u; i < pCatalog->ModelCount; ++i )
-        if ( strcmp(pCatalog->Models[i].Id, ModelId) == 0 )
-            return MdoModelsModelInfo(pCatalog, &pCatalog->Models[i], pInfo);
-    return false;
+    Model = MdoModelsLookup(pCatalog, ModelId);
+    return Model != NULL && MdoModelsModelInfo(pCatalog, Model, pInfo);
 }
 
 bool MdoModelCatalogDefault(const MdoModelCatalog* pCatalog,
@@ -877,7 +885,6 @@ bool MdoModelCatalogProfile(const MdoModelCatalog* pCatalog,
 {
     const MdoModelEntry* pModel = NULL;
     MdoModelProtocolFlags Flag;
-    size_t i;
     if ( pCatalog == NULL || pProfile == NULL ) {
         MdoModelsProfileError(pError, "catalog and profile output are required");
         return false;
@@ -886,11 +893,7 @@ bool MdoModelCatalogProfile(const MdoModelCatalog* pCatalog,
         if ( pCatalog->DefaultModelIndex < pCatalog->ModelCount )
             pModel = &pCatalog->Models[pCatalog->DefaultModelIndex];
     } else {
-        for ( i = 0u; i < pCatalog->ModelCount; ++i )
-            if ( strcmp(pCatalog->Models[i].Id, ModelId) == 0 ) {
-                pModel = &pCatalog->Models[i];
-                break;
-            }
+        pModel = MdoModelsLookup(pCatalog, ModelId);
     }
     if ( pModel == NULL ) {
         MdoModelsProfileError(pError, "model was not found");
@@ -954,14 +957,14 @@ static char* MdoModelsResolveEndpoint(cstr Endpoint,
     MdoModelProtocol Protocol, xllm_error* pError)
 {
     static const char* const BuiltinEndpoints[] = {
-        "builtin:ling/openai/chat-completions",
-        "builtin:ling/openai/responses",
-        "builtin:ling/anthropic/messages"
+        "builtin:ornith/openai/chat-completions",
+        "builtin:ornith/openai/responses",
+        "builtin:ornith/anthropic/messages"
     };
     static const char* const EnvironmentNames[] = {
-        "MDO_LING_CHAT_COMPLETIONS_URL",
-        "MDO_LING_RESPONSES_URL",
-        "MDO_LING_ANTHROPIC_URL"
+        "MDO_ORNITH_CHAT_COMPLETIONS_URL",
+        "MDO_ORNITH_RESPONSES_URL",
+        "MDO_ORNITH_ANTHROPIC_URL"
     };
     size_t Index;
     char* Result = NULL;
@@ -979,7 +982,7 @@ static char* MdoModelsResolveEndpoint(cstr Endpoint,
              Result == NULL || Result[0] == '\0' ) {
             xrtFree(Result);
             xrtClearError();
-            Result = xrtStrDup(g_MdoLingEndpoint);
+            Result = xrtStrDup(MDO_BUILTIN_MODEL_ENDPOINT);
             if ( Result == NULL ) {
                 MdoModelsProfileError(pError,
                     "cannot allocate built-in model endpoint");
@@ -1005,6 +1008,42 @@ static char* MdoModelsResolveEndpoint(cstr Endpoint,
     return Result;
 }
 
+static char* MdoModelsBuiltinCredential(xllm_error* Error)
+{
+    xfile File = MdoResourceOpenRead(MDO_BUILTIN_MODEL_KEY_PATH);
+    xfileinfo Info;
+    char* Secret = NULL;
+    size_t Size = 0u, i;
+    bool Ok = false;
+    if ( File == NULL ) goto done;
+    if ( !xrtFileStat(File, &Info) || (Info.Available & XFILE_INFO_SIZE) == 0u ||
+         Info.Size == 0u || Info.Size > 4098u ) goto done;
+    Size = (size_t)Info.Size;
+    Secret = xrtMalloc(Size + 1u);
+    if ( Secret == NULL ) goto done;
+    Secret[Size] = '\0';
+    if ( !xrtReadFull(File, Secret, Size, NULL) ) goto done;
+    if ( Size != 0u && Secret[Size - 1u] == '\n' ) {
+        --Size;
+        if ( Size != 0u && Secret[Size - 1u] == '\r' ) --Size;
+    }
+    Secret[Size] = '\0';
+    if ( Size == 0u || Size > 4096u ) goto done;
+    for ( i = 0u; i < Size; ++i )
+        if ( (unsigned char)Secret[i] < 0x21u || (unsigned char)Secret[i] > 0x7eu ) goto done;
+    Ok = true;
+done:
+    if ( File != NULL && !xrtClose(File) ) Ok = false;
+    if ( !Ok ) {
+        if ( Secret != NULL ) { xrtSecureZero(Secret, (size_t)Info.Size); xrtFree(Secret); }
+        xrtClearError();
+        MdoModelsProfileError(Error, "Built-in model credential is unavailable; configure MDO_ORNITH_API_KEY or the portable Home key file");
+        if ( Error != NULL ) Error->eCode = XLLM_ERROR_AUTH;
+        Secret = NULL;
+    }
+    return Secret;
+}
+
 static char* MdoModelsResolveCredential(const MdoProviderEntry* pProvider,
     xllm_error* pError)
 {
@@ -1019,20 +1058,14 @@ static char* MdoModelsResolveCredential(const MdoProviderEntry* pProvider,
         }
         return Secret;
     }
-    if ( pProvider->Id != NULL && strcmp(pProvider->Id, "ling") == 0 &&
+    if ( pProvider->Id != NULL && strcmp(pProvider->Id, "ornith") == 0 &&
          strcmp(pProvider->CredentialReference,
-            "env:MDO_LING_API_KEY") == 0 ) {
-        if ( xrtEnvLookup("MDO_LING_API_KEY", &Secret) && Secret != NULL &&
+            "env:MDO_ORNITH_API_KEY") == 0 ) {
+        if ( xrtEnvLookup("MDO_ORNITH_API_KEY", &Secret) && Secret != NULL &&
              Secret[0] != '\0' ) return Secret;
         xrtFree(Secret);
         xrtClearError();
-        Secret = xrtStrDup(g_MdoLingAccessToken);
-        if ( Secret == NULL ) {
-            MdoModelsProfileError(pError,
-                "cannot allocate built-in model credential");
-            if ( pError != NULL ) pError->eCode = XLLM_ERROR_OUT_OF_MEMORY;
-        }
-        return Secret;
+        return MdoModelsBuiltinCredential(pError);
     }
     if ( MdoSecretResolve(xrtStrView(pProvider->CredentialReference),
             64u * 1024u, &Secret) ) return Secret;
@@ -1086,11 +1119,7 @@ xllm_client* MdoModelClientCreate(const MdoModelCatalog* pCatalog,
         if ( pCatalog->DefaultModelIndex < pCatalog->ModelCount )
             pModel = &pCatalog->Models[pCatalog->DefaultModelIndex];
     } else {
-        for ( i = 0u; i < pCatalog->ModelCount; ++i )
-            if ( strcmp(pCatalog->Models[i].Id, pOptions->ModelId) == 0 ) {
-                pModel = &pCatalog->Models[i];
-                break;
-            }
+        pModel = MdoModelsLookup(pCatalog, pOptions->ModelId);
     }
     if ( pModel == NULL ) {
         MdoModelsProfileError(pError, "model was not found");

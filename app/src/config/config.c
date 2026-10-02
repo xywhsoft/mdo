@@ -2,6 +2,7 @@
 #include <string.h>
 
 #include "../../include/mdo/config.h"
+#include "../../include/mdo/builtin_model.h"
 #include "../../include/mdo/home.h"
 
 #define MDO_CONFIG_ERROR_DOMAIN "mdo.config"
@@ -815,15 +816,15 @@ static bool MdoConfigModelsValidate(const xvalue* pModels,
          xrtValueType(pDefaultProviders) != XVALUE_ARRAY ||
          xrtValueType(pDefaultItems) != XVALUE_ARRAY ) goto invalid;
     pProtectedProvider = MdoConfigFindById(pDefaultProviders,
-        xrtStrView("ling"));
+        xrtStrView("ornith"));
     pProtectedModel = MdoConfigFindById(pDefaultItems,
-        xrtStrView("ling-3.0-tiny"));
+        xrtStrView("ornith-1.5-35b"));
     if ( pProtectedProvider == NULL || pProtectedModel == NULL ) goto invalid;
     for ( i = 0u; i < xrtValueCount(pProviders); ++i ) {
         const xvalue* pProvider = xrtValueArrayGet(pProviders, i);
         xstrview Id;
         if ( !MdoConfigProviderValidate(pProvider, &Id) ) goto invalid;
-        if ( MdoConfigViewEqual(Id, "ling") ) {
+        if ( MdoConfigViewEqual(Id, "ornith") ) {
             if ( bProtectedProviderFound ||
                  !xrtValueEqual(pProvider, pProtectedProvider) ) goto protected;
             bProtectedProviderFound = true;
@@ -843,7 +844,7 @@ static bool MdoConfigModelsValidate(const xvalue* pModels,
         if ( !MdoConfigModelItemValidate(pItem, pProviders, &Id) ) goto invalid;
         if ( Id.Size == DefaultId.Size &&
              memcmp(Id.Data, DefaultId.Data, Id.Size) == 0 ) bDefaultFound = true;
-        if ( MdoConfigViewEqual(Id, "ling-3.0-tiny") ) {
+        if ( MdoConfigViewEqual(Id, "ornith-1.5-35b") ) {
             if ( bProtectedModelFound ||
                  !xrtValueEqual(pItem, pProtectedModel) ) goto protected;
             bProtectedModelFound = true;
@@ -863,7 +864,7 @@ static bool MdoConfigModelsValidate(const xvalue* pModels,
 
 protected:
     MdoConfigErrorSet(XERR_PERMISSION, MDO_CONFIG_ERROR_PROTECTED,
-        "Ling 3.0 Tiny is built-in; its provider and model cannot be edited or removed");
+        "ornith-1.5-35b is built-in; its provider and model cannot be edited or removed");
     return false;
 
 invalid:
@@ -1053,6 +1054,8 @@ static bool MdoConfigEffectiveSize(const xvalue* pEffective, size_t* pSize)
     return true;
 }
 
+#include "builtin_model_upgrade.inc.c"
+
 static xvalue* MdoConfigLoadPatch(MdoConfigDomain Domain)
 {
     xfile File = MdoHomeOpenRead(g_MdoConfigDomainPath[Domain]);
@@ -1079,6 +1082,8 @@ static xvalue* MdoConfigLoadPatch(MdoConfigDomain Domain)
     pDocument = MdoConfigParseObject(
         (xstrview){ sText, iSize }, "user configuration must be a JSON object");
     if ( pDocument == NULL || !MdoConfigEnvelopeValidate(pDocument) ) goto done;
+    if ( Domain == MDO_CONFIG_MODELS && !MdoConfigUpgradeBuiltinPatch(
+            xrtValueObjectGet(pDocument, MdoConfigKey("patch"))) ) goto done;
     pPatch = MdoConfigNormalizePatch(Domain,
         xrtValueObjectGet(pDocument, MdoConfigKey("patch")));
     if ( pPatch == NULL ) goto done;

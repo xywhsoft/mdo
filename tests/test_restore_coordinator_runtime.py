@@ -104,7 +104,7 @@ class Probe(DecodeProbe):
     def setup_source(self):
         status, response = self.api("POST", "/api/v1/projects", {
             "id": "restore-target", "name": "Restore target", "workspace_root": str(self.workspace.resolve()),
-            "default_model_id": "ling-3.0-tiny",
+            "default_model_id": "ornith-1.5-35b",
         })
         assert status == 201, response
         status, response = self.api("POST", "/api/v1/sessions", {
@@ -197,7 +197,7 @@ class Probe(DecodeProbe):
         self.start_restore(document, "hold", identifier)
         status, response = self.api("PUT", "/api/v1/projects/restore-target", {
             "name": "Changed after review", "workspace_root": str(self.workspace.resolve()),
-            "default_model_id": "ling-3.0-tiny",
+            "default_model_id": "ornith-1.5-35b",
         }, {"If-Match": '"mdo-project-restore-target-1"'})
         assert status == 200 and response["data"]["revision"] == 2, response
         self.restore("resume")

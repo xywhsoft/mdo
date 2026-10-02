@@ -57,9 +57,9 @@ test("Token meter Escape closes the panel before the global stop shortcut", () =
   let meter;
   try {
     meter = createTokenMeter({ root, trigger, panel, prompt, estimate, ring,
-      modelSelect: { value: "ling" },
+      modelSelect: { value: "ornith" },
       sessionStore: resource(null), timelineStore: resource({ events: [] }),
-      modelsStore: resource({ models: [{ id: "ling", name: "Ling",
+      modelsStore: resource({ models: [{ id: "ornith", name: "Ling",
         context_window_tokens: 1024 }] }) });
     createKeyboardShortcuts({ dialog,
       navigation: { get: () => ({ view: "workspace", sessionId: "s" }) },
@@ -198,7 +198,7 @@ test("composer estimate names uncounted image tokens and restores text-only stat
   try {
     meter = createTokenMeter({ root, trigger, panel, prompt, estimate, ring,
       attachments: () => images,
-      modelSelect: { value: "ling" },
+      modelSelect: { value: "ornith" },
       sessionStore: resource(null), timelineStore: resource({ events: [] }),
       modelsStore: resource({ models: [] }) });
     assert.equal(estimate.textContent, "", "empty composer should stay quiet");

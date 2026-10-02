@@ -2,6 +2,7 @@ import { updateSessionProfile } from "../../state/sessions.js";
 import { projectDraftKey } from "./draft-store.js";
 import { clear, element, errorMessage, toast } from "../../utils/dom.js";
 import { subscribeLocale, t } from "../../i18n.js";
+import { findModel as selectedModel } from "../../utils/models.js";
 
 const EFFORT_LABEL = Object.freeze({
   none: ["reasoning.none", "无思考"],
@@ -12,10 +13,6 @@ const EFFORT_LABEL = Object.freeze({
   xhigh: ["reasoning.xhigh", "极高"],
   max: ["reasoning.max", "最大"],
 });
-
-function selectedModel(models, id) {
-  return models.find((model) => model.id === id) ?? null;
-}
 
 export function fillAgentOptions(select, agents) {
   const previous = select.value;
@@ -43,7 +40,7 @@ export function projectProfileDefaults(projectId, projects, agents, catalog) {
     catalog.default_model_id || catalog.models?.[0]?.id || "";
   const model = selectedModel(catalog.models ?? [], modelId);
   return {
-    model_id: modelId,
+    model_id: model?.id || modelId,
     reasoning_effort: defaultAgent?.reasoning_effort ||
       model?.default_reasoning_effort || "",
     permission_profile: defaultAgent?.permission_profile || "balanced",
@@ -69,6 +66,7 @@ export function fillReasoningOptions(select, model, preferred = "") {
 export function applyAgentProfileDefaults({ agent, fallback, models,
   modelSelect, reasoningSelect, permissionSelect }) {
   const profile = agentProfileDefaults(agent, fallback);
+  profile.model_id = selectedModel(models, profile.model_id)?.id || profile.model_id;
   if (profile.model_id && ![...modelSelect.options].some((option) =>
     option.value === profile.model_id)) {
     modelSelect.append(element("option", { text: profile.model_id,
@@ -166,8 +164,9 @@ export function createComposerProfile({ modelSelect, reasoningSelect,
     const deferred = session && draftStore?.composerProfile(key);
     const selected = changing.get(key) || deferred;
     const catalog = models();
-    const id = selected?.model_id || session?.model_id || pending.model_id ||
+    const requested = selected?.model_id || session?.model_id || pending.model_id ||
       defaultModelId();
+    const id = selectedModel(catalog, requested)?.id || requested;
     clear(modelSelect);
     for (const model of catalog) {
       const suffix = model.free ? t("model.freeSuffix", {}, " · 免费") : "";

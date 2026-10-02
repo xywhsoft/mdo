@@ -44,7 +44,7 @@ class ModelHandler(BaseHTTPRequestHandler):
         if first:
             time.sleep(2)
         payload = json.dumps({
-            "id": "resp_interrupt_probe", "model": "ling-3.0-tiny",
+            "id": "resp_interrupt_probe", "model": "ornith-1.5-35b",
             "status": "completed",
             "output": [{"type": "message", "content": [
                 {"type": "output_text", "text": "Priority reply complete"}]}],
@@ -168,9 +168,9 @@ def run_probe(host: Path) -> None:
         environment = os.environ.copy()
         environment["USERPROFILE"] = str(base)
         environment["HOME"] = str(base)
-        environment["MDO_LING_RESPONSES_URL"] = (
+        environment["MDO_ORNITH_RESPONSES_URL"] = (
             f"http://127.0.0.1:{model_port}/v1")
-        environment["MDO_LING_API_KEY"] = "bounded-interrupt-test-key"
+        environment["MDO_ORNITH_API_KEY"] = "bounded-interrupt-test-key"
         config = site / "xs.json"
         home = base / "home"
         log = base / "xs.log"
@@ -179,7 +179,7 @@ def run_probe(host: Path) -> None:
             process = start_host(host, config, home, environment, log, port)
             status, body = request(port, "POST", "/api/v1/sessions", {
                 "project_id": "default", "title": "Interrupt probe",
-                "agent_id": "mdo.default", "model_id": "ling-3.0-tiny",
+                "agent_id": "mdo.default", "model_id": "ornith-1.5-35b",
                 "protocol": "openai-responses", "reasoning_effort": "medium",
                 "max_output_tokens": 1024,
             })

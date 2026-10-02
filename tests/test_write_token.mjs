@@ -88,7 +88,7 @@ test("copying paused drafts includes image-only input and detached configuration
   const previousWindow = globalThis.window;
   const previousFetch = globalThis.fetch;
   const image = "c".repeat(32);
-  const profile = { model_id: "ling-3.0-tiny", reasoning_effort: "high", permission_profile: "read-only" };
+  const profile = { model_id: "ornith-1.5-35b", reasoning_effort: "high", permission_profile: "read-only" };
   globalThis.window = { setTimeout() { throw new Error("Paused draft scheduled a write"); },
     clearTimeout() {}, addEventListener() {} };
   globalThis.fetch = async (path, options) => {

@@ -150,7 +150,7 @@ static xllm_response *Response(const char *text) {
     xllm_response *response = (xllm_response*)calloc(1u, sizeof(*response));
     if (response == NULL) return NULL;
     response->sContent = Copy(text);
-    response->sModel = Copy("ling-3.0-tiny");
+    response->sModel = Copy("ornith-1.5-35b");
     response->sRequestId = Copy("session-probe");
     response->sFinishReason = Copy("stop");
     response->eFinish = XLLM_FINISH_STOP;
@@ -926,7 +926,7 @@ def main() -> int:
         assert "created=id:" in output and "project:project-alpha" in output, output
         assert "duplicate_open=0 code:7" in output, output
         assert "profile_busy=0 code:7" in output, output
-        assert re.search(r"profile=model:ling-3\.0-tiny reasoning:low "
+        assert re.search(r"profile=model:ornith-1\.5-35b reasoning:low "
             r"permission:read-only revision:[2-9]\d*", output), output
         assert "run=0 text:durable-answer-one" in output, output
         assert "run=0 text:durable-answer-two" in output, output

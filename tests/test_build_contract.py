@@ -7,6 +7,7 @@ import json
 import re
 import tempfile
 import unittest
+from unittest.mock import patch
 from pathlib import Path
 
 
@@ -20,6 +21,25 @@ SPEC.loader.exec_module(BUILD)
 class BuildContractTests(unittest.TestCase):
     def setUp(self) -> None:
         self.lock = json.loads((ROOT / "deps.lock").read_text(encoding="utf-8"))
+
+    def test_optional_built_in_credential_is_local_and_never_reuses_a_stale_key(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            source, target = Path(raw) / "connection.json", Path(raw) / "bundled.key"
+            with patch.object(BUILD, "BUILTIN_CONNECTION_PATH", source), patch.object(BUILD, "BUILTIN_KEY_PATH", target):
+                BUILD.prepare_builtin_credential()
+                self.assertFalse(target.exists())
+                source.write_text('{"api_key":"fixture-only-key"}', encoding="ascii")
+                BUILD.prepare_builtin_credential()
+                self.assertEqual(target.read_bytes(), b"fixture-only-key")
+                source.write_text('{"api_key":"bad\\nkey"}', encoding="ascii")
+                with self.assertRaises(BUILD.BuildError):
+                    BUILD.prepare_builtin_credential()
+                self.assertEqual(target.read_bytes(), b"fixture-only-key")
+                source.unlink()
+                BUILD.prepare_builtin_credential()
+                self.assertFalse(target.exists())
+                with self.assertRaises(BUILD.BuildError):
+                    BUILD.prepare_builtin_credential(source)
 
     def test_dependency_lock_is_complete_and_exact(self) -> None:
         self.assertEqual(self.lock["schema_version"], 1)
@@ -222,9 +242,9 @@ class BuildContractTests(unittest.TestCase):
             self.assertTrue((home / relative).is_file(), relative)
         defaults = json.loads((home / "config" / "defaults.json").read_text(encoding="utf-8"))
         self.assertEqual(defaults["schema_version"], 1)
-        self.assertEqual(defaults["models"]["default_model"], "ling-3.0-tiny")
+        self.assertEqual(defaults["models"]["default_model"], "ornith-1.5-35b")
         ling = defaults["models"]["items"][0]
-        self.assertEqual(ling["id"], "ling-3.0-tiny")
+        self.assertEqual(ling["id"], "ornith-1.5-35b")
         self.assertFalse(ling["editable"])
         self.assertTrue((ROOT / "app" / "web" / "index.html").is_file())
         self.assertIn("mdo-home/", (ROOT / ".gitignore").read_text(encoding="utf-8"))

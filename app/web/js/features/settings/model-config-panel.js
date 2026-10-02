@@ -247,7 +247,7 @@ export function createModelConfigPanel(container) {
     form.append(item?.name ? element("h3", { text: item.name })
       : copy("h3", "modelConfig.newModel", "新增模型"),
     builtin ? copy("p", "modelConfig.builtinModelNote",
-      "Ling 3.0 Tiny 是内置免费模型，参数不可编辑。")
+      "ornith-1.5-35b 是内置免费模型，参数不可编辑。")
       : copy("p", "modelConfig.providerNote",
         "模型引用 Provider；协议必须有对应的 Provider URL。"));
     if (builtin) return;

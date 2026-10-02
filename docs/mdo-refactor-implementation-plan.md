@@ -1,5 +1,9 @@
 # mdo 重构落地实施计划
 
+> 2026-10-03 方向调整：[基础 Agent 优先级](core-agent-priorities.md) 为当前
+> 产品增量的实施依据。用户已明确暂缓治理、追溯和备份恢复的精细化，
+> 优先工具、聊天体验、项目/会话及设置；内建模型改为 Ornith。
+
 > 状态：实施基线（方案已确定）
 > 日期：2026-09-21
 > 适用仓库：`xrt`、`xserver`、`xrt/extlibs/xllm`、`xrt/extlibs/xllm-session`、`xrt/extlibs/xwork`、`mdo`

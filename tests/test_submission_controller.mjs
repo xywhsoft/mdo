@@ -5,7 +5,7 @@ import { createDraftStore } from "../app/web/js/features/chat/draft-store.js";
 import { createSubmissionController } from "../app/web/js/features/chat/submission-controller.js";
 
 test("a queued ID with a changed profile cannot acknowledge a draft intent", async () => {
-  const profile = { model_id: "ling-3.0-tiny",
+  const profile = { model_id: "ornith-1.5-35b",
     reasoning_effort: "high", permission_profile: "balanced" };
   const intent = { id: "c".repeat(32), text: "profiled prompt",
     attachments: [], interrupt: false, state: "posting", profile };
@@ -49,9 +49,9 @@ test("a second Enter is durable while the first queue POST is still waiting", as
   const persisted = [];
   const promoted = [];
   const reviews = [];
-  const firstProfile = { model_id: "ling-3.0-tiny",
+  const firstProfile = { model_id: "ornith-1.5-35b",
     reasoning_effort: "high", permission_profile: "read-only" };
-  const secondProfile = { model_id: "ling-3.0-tiny",
+  const secondProfile = { model_id: "ornith-1.5-35b",
     reasoning_effort: "low", permission_profile: "balanced" };
   globalThis.window = { setTimeout, clearTimeout, addEventListener() {} };
   globalThis.fetch = async (path, options) => {

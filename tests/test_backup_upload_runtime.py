@@ -88,8 +88,8 @@ class Probe:
     def start(self):
         self.log = (self.base / "xs.log").open("wb")
         self.process = subprocess.Popen([str(self.host), str(self.config)], cwd=self.site,
-            env=dict(os.environ, MDO_HOME=str(self.home), MDO_LING_RESPONSES_URL="https://example.invalid/v1",
-                     MDO_LING_API_KEY="bounded-upload-fixture"), stdout=self.log, stderr=subprocess.STDOUT,
+            env=dict(os.environ, MDO_HOME=str(self.home), MDO_ORNITH_RESPONSES_URL="https://example.invalid/v1",
+                     MDO_ORNITH_API_KEY="bounded-upload-fixture"), stdout=self.log, stderr=subprocess.STDOUT,
             creationflags=subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0)
         deadline = time.monotonic() + 15
         while time.monotonic() < deadline:
@@ -117,7 +117,7 @@ class Probe:
     def check(self):
         status, body = self.api("POST", "/api/v1/sessions", {
             "project_id": "default", "title": "Upload source", "agent_id": "mdo.default",
-            "model_id": "ling-3.0-tiny", "protocol": "openai-responses", "reasoning_effort": "medium", "max_output_tokens": 1024,
+            "model_id": "ornith-1.5-35b", "protocol": "openai-responses", "reasoning_effort": "medium", "max_output_tokens": 1024,
         })
         assert status == 201, body
         session = body["data"]["id"]

@@ -9,6 +9,7 @@ import { createDraftStore, projectDraftKey } from
 import { createNewSessionProfile } from
   "../app/web/js/features/chat/new-session-profile.js";
 import { createResourceStore } from "../app/web/js/state/store.js";
+import { findModel } from "../app/web/js/utils/models.js";
 
 class Select extends EventTarget {
   constructor(values = []) {
@@ -63,6 +64,17 @@ const models = [
   { id: "code", name: "Code", reasoning_efforts: ["medium", "high"],
     default_reasoning_effort: "medium" },
 ];
+
+test("retired built-in references resolve in project defaults without shadowing a custom model", () => {
+  const builtin = { id: "ornith-1.5-35b", aliases: ["ling-3.0-tiny", "ling-gpu"], default_reasoning_effort: "medium" };
+  assert.equal(findModel([builtin], "ling-3.0-tiny"), builtin);
+  const custom = { id: "ling-gpu" };
+  assert.equal(findModel([builtin, custom], "ling-gpu"), custom);
+  assert.deepEqual(projectProfileDefaults("old", [{ id: "old", default_model_id: "ling-3.0-tiny" }], [],
+    { models: [builtin], default_model_id: builtin.id }), {
+    model_id: builtin.id, reasoning_effort: "medium", permission_profile: "balanced",
+  });
+});
 
 test("blank task follows the default Agent until the user chooses overrides", () => {
   const modelSelect = new Select();

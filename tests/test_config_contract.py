@@ -37,14 +37,14 @@ class ConfigContractTests(unittest.TestCase):
 
     def test_ling_is_protected_and_declares_all_online_protocols(self) -> None:
         provider = next(item for item in self.defaults["models"]["providers"]
-                        if item["id"] == "ling")
+                        if item["id"] == "ornith")
         ling = next(item for item in self.defaults["models"]["items"]
-                    if item["id"] == "ling-3.0-tiny")
+                    if item["id"] == "ornith-1.5-35b")
         self.assertTrue(provider["builtin"])
         self.assertFalse(provider["editable"])
         self.assertFalse(provider["removable"])
         self.assertEqual(provider["credential"]["secret_ref"],
-                         "env:MDO_LING_API_KEY")
+                         "env:MDO_ORNITH_API_KEY")
         self.assertEqual(set(provider["endpoints"]), {
             "chat_completions", "responses", "anthropic_messages",
         })
@@ -53,14 +53,14 @@ class ConfigContractTests(unittest.TestCase):
         self.assertFalse(ling["editable"])
         self.assertFalse(ling["removable"])
         self.assertEqual(ling["provider"], provider["id"])
-        self.assertEqual(ling["wire_model"], "ling-3.0-tiny")
+        self.assertEqual(ling["wire_model"], "ornith-1.5-35b")
         self.assertEqual(set(ling["protocols"]), {
             "openai-chat-completions",
             "openai-responses",
             "anthropic-messages",
         })
         self.assertIn(ling["default_protocol"], ling["protocols"])
-        self.assertEqual(ling["window"]["context_tokens"], 131072)
+        self.assertEqual(ling["window"]["context_tokens"], 240128)
         self.assertGreater(ling["window"]["max_output_tokens"], 0)
         self.assertIn("streaming", ling["capabilities"])
         self.assertIn(ling["default_reasoning_effort"],

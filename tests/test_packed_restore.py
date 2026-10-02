@@ -25,7 +25,7 @@ def inventory(directory):
 def restore(port, home):
     status, value = request(port, "POST", "/api/v1/sessions", {
         "project_id": "default", "title": "Packed restore 中文", "agent_id": "mdo.default",
-        "model_id": "ling-3.0-tiny", "protocol": "openai-responses", "reasoning_effort": "medium",
+        "model_id": "ornith-1.5-35b", "protocol": "openai-responses", "reasoning_effort": "medium",
         "max_output_tokens": 1024,
     })
     assert status == 201, value
@@ -115,8 +115,8 @@ def main():
         first_site, first_port = site(base, "first", packed)
         second_site, second_port = site(base, "moved", packed)
         home = base / "mdo-home"
-        env = dict(os.environ, USERPROFILE=str(base), MDO_LING_RESPONSES_URL="http://127.0.0.1:9/v1",
-                   MDO_LING_API_KEY="bounded-packed-restore-key")
+        env = dict(os.environ, USERPROFILE=str(base), MDO_ORNITH_RESPONSES_URL="http://127.0.0.1:9/v1",
+                   MDO_ORNITH_API_KEY="bounded-packed-restore-key")
         first, second = start(first_site, packed, home, env), None
         try:
             assert wait_bootstrap(first, first_port, first_site / "packed.log")[1]["data"]["ready"]

@@ -130,7 +130,7 @@ test("new-task inputs survive a delayed create and move in order", async () => {
       onReview(error) { reviews.push(error.message); },
       onChange() {},
     });
-    const profile = { model_id: "ling-3.0-tiny",
+    const profile = { model_id: "ornith-1.5-35b",
       reasoning_effort: "medium", permission_profile: "balanced" };
     assert.equal(await controller.submit({ projectId: "default",
       text: "first", profile }), true);
@@ -209,7 +209,7 @@ test("a rejected create can change profile without losing queued inputs", async 
       onPersisted() {}, onMigrated(key) { migrated = key; },
       onReview() { showReview(); }, onChange() {},
     });
-    const profile = { model_id: "ling-3.0-tiny",
+    const profile = { model_id: "ornith-1.5-35b",
       reasoning_effort: "medium", permission_profile: "balanced" };
     assert.equal(await controller.submit({ projectId: "default",
       text: "first", profile }), true);
@@ -264,7 +264,7 @@ test("a rejected create can change profile without losing queued inputs", async 
 
 test("a conflicting create response never attaches input to another session", async () => {
   const task = { project_id: "default", session_id: "a".repeat(32),
-    title: "first", agent_id: "mdo.default", model_id: "ling-3.0-tiny",
+    title: "first", agent_id: "mdo.default", model_id: "ornith-1.5-35b",
     reasoning_effort: "medium", permission_profile: "balanced",
     phase: "creating" };
   const item = { id: task.session_id, text: "first", attachments: [],
@@ -292,7 +292,7 @@ test("a conflicting create response never attaches input to another session", as
 
 test("an uncertain create keeps its original ID and profile on review", async () => {
   const task = { project_id: "default", session_id: "c".repeat(32),
-    title: "first", agent_id: "mdo.default", model_id: "ling-3.0-tiny",
+    title: "first", agent_id: "mdo.default", model_id: "ornith-1.5-35b",
     reasoning_effort: "medium", permission_profile: "balanced",
     phase: "creating" };
   const item = { id: task.session_id, text: "first", attachments: [],

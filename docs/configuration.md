@@ -42,7 +42,11 @@ mdo 配置 schema v1 由一份内置基线、三份可选用户 patch 和一层�
 
 `models.providers` 与 `models.items` 分开。provider 保存 endpoint、TLS 校验、超时和凭据引用；model 保存 provider ID、wire model、可选协议、默认协议、xllm 能力、上下文/输入/输出窗口、推理档位和附件类型。模型引用的每种协议必须在 provider 上有对应 endpoint，默认协议必须属于模型协议集。
 
-`ling-3.0-tiny` 是内置、免费、不可编辑且不可删除的模型，其 `ling` provider 同样受保护。服务端验证器逐字段核对两个完整 descriptor，并确认默认模型仍存在；前端禁用控件只是交互提示，不承担保护职责。内置 provider 声明 OpenAI Chat Completions、OpenAI Responses 和 Anthropic Messages 三种线上接口，模型默认选择 Responses。程序内置服务地址和随程序分发的公共访问令牌，因此普通用户无需配置；部署环境仍可分别用 `MDO_LING_CHAT_COMPLETIONS_URL`、`MDO_LING_RESPONSES_URL`、`MDO_LING_ANTHROPIC_URL` 和 `MDO_LING_API_KEY` 覆盖。该令牌可从客户端程序中提取，服务端必须独立实施配额、滥用防护与轮换。三种协议的真实线上探针仍需明确记录实际测试结果，离线 fixture 不作为线上成功证据。
+`ornith-1.5-35b` 是内建免费默认模型，`ornith` provider 和模型均不可编辑/删除。当前服务地址为 `http://222.186.10.53:8096/v1`；默认使用 Responses，同时提供 Chat Completions 和 Anthropic 接口。模型窗口按服务 `/models` 报告设为 240128 tokens，支持图片输入、工具和流式输出。
+
+凭据不进入 Git。构建器可从被忽略的 `.build/ornith-connection.json` 读取 `api_key`，或者显式传入 `--builtin-connection <本机文件>`，写入被忽略的内置资源 `app/default-home/config/secrets/builtin-model.key`。因此提供凭据的发布包仍可单文件对话。未提供凭据也能构建；运行时用 `MDO_ORNITH_API_KEY` 或 `mdo-home/config/secrets/builtin-model.key` 配置。环境变量优先，其次便携 Home 文件，最后内置资源。JSON 配置和公开目录只含凭据引用，不返回密钥。删除本机构建输入后的下一次构建会移除旧的内置密钥资源，避免误带旧凭据。
+
+部署可分别用 `MDO_ORNITH_CHAT_COMPLETIONS_URL`、`MDO_ORNITH_RESPONSES_URL`、`MDO_ORNITH_ANTHROPIC_URL` 覆盖连接地址。旧 `ling-3.0-tiny` / `ling-gpu` 会话引用由模型目录兼容解析到 Ornith；历史内容不被改写。已有 `config/models.json` 中的旧内建完整数组在读取时升级，保留自定义条目；这一步不写文件，下一次用户保存配置才落盘。新的配置修改继续验证内建 descriptor。
 
 模型目录是引用计数的不可变 generation。reload 构造完整候选后一次发布，已有运行可继续读取旧 generation。公开 provider 信息只返回 `HasCredentialReference`，不会返回 reference 文本或解析后的 key；`MdoModelCatalogProfile` 把选定协议映射为相应的 xllm provider，并生成经过 xllm 自身校验的非敏感 profile。
 

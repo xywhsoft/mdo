@@ -5,6 +5,7 @@
 #include "../../include/mdo/home.h"
 #include "../../include/mdo/projects.h"
 #include "../../include/mdo/sessions.h"
+#include "../../include/mdo/models.h"
 
 static xmutex* g_MdoApiSessionCreateLock;
 
@@ -32,6 +33,20 @@ static bool MdoApiClientSessionIdValid(const char* Id)
     return true;
 }
 
+static bool MdoApiSessionModelSame(cstr A, cstr B)
+{
+    MdoModelCatalog* Catalog;
+    MdoModelInfo First = {0}, Second = {0};
+    bool Same;
+    if ( strcmp(A, B) == 0 ) return true;
+    Catalog = MdoModelCatalogSnapshot();
+    First.Size = sizeof(First); Second.Size = sizeof(Second);
+    Same = MdoModelCatalogModelFind(Catalog, A, &First) &&
+        MdoModelCatalogModelFind(Catalog, B, &Second) && strcmp(First.Id, Second.Id) == 0;
+    MdoModelCatalogRelease(Catalog);
+    return Same;
+}
+
 static bool MdoApiSessionReplayMatches(const MdoSessionInfo* Info,
     const MdoSessionCreateOptions* Options)
 {
@@ -47,7 +62,7 @@ static bool MdoApiSessionReplayMatches(const MdoSessionInfo* Info,
         (Options->Agent.AgentId == NULL ||
          strcmp(Info->AgentId, Options->Agent.AgentId) == 0) &&
         (Options->Agent.ModelId == NULL ||
-         strcmp(Info->ModelId, Options->Agent.ModelId) == 0) &&
+         MdoApiSessionModelSame(Info->ModelId, Options->Agent.ModelId)) &&
         (Options->Agent.ReasoningEffort == NULL ||
          strcmp(Info->ReasoningEffort,
             Options->Agent.ReasoningEffort) == 0) &&

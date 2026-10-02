@@ -70,7 +70,7 @@ class ModelContractTests(unittest.TestCase):
         self.assertIn("MdoSecretResolve", self.source)
         self.assertIn("MdoSecretRelease(&Secret)", self.source)
         self.assertIn("xllmClientCreate(&Config", self.source)
-        self.assertIn("MDO_LING_RESPONSES_URL", self.source)
+        self.assertIn("MDO_ORNITH_RESPONSES_URL", self.source)
         self.assertIn("xrtSecureZero", secrets)
 
     def test_bootstrap_owns_model_manager_before_runtime(self) -> None:

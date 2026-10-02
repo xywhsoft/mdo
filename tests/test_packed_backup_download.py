@@ -116,8 +116,8 @@ def main() -> int:
         second_site, second_port = site(base, "moved", packed)
         home = base / "mdo-home"
         env = dict(os.environ, USERPROFILE=str(base),
-                   MDO_LING_RESPONSES_URL="http://127.0.0.1:9/v1",
-                   MDO_LING_API_KEY="bounded-packed-backup-key")
+                   MDO_ORNITH_RESPONSES_URL="http://127.0.0.1:9/v1",
+                   MDO_ORNITH_API_KEY="bounded-packed-backup-key")
         first = start(first_site, packed, home, env)
         second = None
         try:
@@ -125,7 +125,7 @@ def main() -> int:
             assert status == 200 and response["data"]["ready"], response
             status, response = request(first_port, "POST", "/api/v1/sessions", {
                 "project_id": "default", "title": "Packed backup 便携",
-                "agent_id": "mdo.default", "model_id": "ling-3.0-tiny",
+                "agent_id": "mdo.default", "model_id": "ornith-1.5-35b",
                 "protocol": "openai-responses", "reasoning_effort": "medium",
                 "max_output_tokens": 1024,
             })

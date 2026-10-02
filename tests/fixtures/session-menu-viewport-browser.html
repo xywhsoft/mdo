@@ -32,7 +32,7 @@ const { createSessionActionMenu } = await import(
   `/app/web/js/features/sessions/session-action-menu.js?fixture=${Date.now()}`);
 
 const session = { id: "test", project_id: "default", agent_id: "mdo.default",
-  model_id: "ling-3.0-tiny", title: "Clipped session", status: "active",
+  model_id: "ornith-1.5-35b", title: "Clipped session", status: "active",
   pinned: false, revision: 1, updated_at: Date.now() * 1000 };
 const state = { status: "ready", data: { items: [session] } };
 let publishSessions;
