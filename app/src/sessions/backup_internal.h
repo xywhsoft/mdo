@@ -49,6 +49,15 @@ const MdoBackupOwnedFile* MdoBackupFind(const MdoSessionBackup* Backup, const ch
  * is NULL for a subsequent disk read. Partial allocations always release. */
 MdoSessionBackup* MdoBackupClone(const MdoSessionBackup* Source, bool Data,
     const MdoSessionBackupLimits* Limits, const xcancel* Cancel, xwork_error* Error);
+bool MdoBackupReplaceJson(MdoSessionBackup* Copy, const char* Path, const xvalue* Root,
+    const MdoSessionBackupLimits* Limits, const xcancel* Cancel, xwork_error* Error);
+typedef enum MdoBackupAdmission { MDO_BACKUP_NOT_ACCEPTED, MDO_BACKUP_ACCEPTED,
+    MDO_BACKUP_ADMISSION_UNCERTAIN } MdoBackupAdmission;
+/* Validates the shared retained-history index, then classifies <=40 IDs. */
+bool MdoBackupClassifyInputs(const MdoSessionBackup* Backup,
+    const char Ids[MDO_SESSION_BACKUP_MAX_INPUTS][33], size_t Count,
+    MdoBackupAdmission* Admission, const MdoSessionBackupLimits* Limits,
+    const xcancel* Cancel, xwork_error* Error);
 bool MdoBackupUInt(const xvalue* Value, const char* Key, uint64* Number);
 bool MdoBackupView(const xvalue* Value, const char* Key, xstrview* Text);
 xvalue* MdoBackupJson(const void* Data, size_t Bytes);

@@ -54,6 +54,10 @@ UI/model 语义与图片像素仍由独立门禁检查；本层成功不代表�
 队列/提交意图待确认转换、完整产品 UI replay、非覆盖原子发布与 catalog
 通知。阶段性成功均不改变 `restore_ready:false`，不能自动发起模型或工具。
 
+2026-10-02 后续增量：[输入待确认转换](session-backup-inputs.md) 已提供
+独立 owning API，旧受理输入不重排，其他输入使用新 ID 的审核状态。
+持久 provenance、身份/产物重绑定及生产事务仍待接入。
+
 ## 有界证据
 
 扩展已有 HTTP/TLS staging 探针：真实三轮 mdo 模型/UI/inline PNG、草稿、

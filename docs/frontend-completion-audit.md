@@ -2,7 +2,28 @@
 
 本清单以 `app_bak/wwwroot` 的可操作行为为基线，而不是以页面长得相似或单元测试通过为完成标准。`docs/frontend-migration.md` 记录每次实现和验证；这里记录当前还需要什么证据。审计更新：2026-10-02，基线提交 `f9e2c4c`。
 
-2026-10-02 最新增量：恢复前的离线历史投影修复已实现，返回拥有副本。
+2026-10-02 最新增量：离线恢复输入的待确认转换已实现。旧受理输入不重排，
+其他队列项/草稿意图换新 ID 并进入既有 staged/rejected 审核操作；匹配
+副本合并，矛盾失败。原模型/UI/回执/图片/artifact 不变，源备份与源 Home
+字节不变。实际落盘 sidecar 经真实前端控制器刷新/reconcile/pump，仅 GET，
+没有自动提交、提升或运行。固定容量、取消、碰撞、配额失败/重试通过。
+详见 [输入转换合同](session-backup-inputs.md)。
+
+这仍不是正式恢复：需持久保存源意图及映射、重绑身份/产物，串接 worker、
+原子发布/catalog 和正式菜单，`restore_ready:false` 保持。后台逻辑探针
+不计作 DOM、原生/实体设备验收，Linux queued HEAD reset 仍待处理。
+
+最终 Windows/Linux 通过 115 Python、252 Node、90 JS 模块、严格 C11、40
+runtime、三项 packed 和独立 A/B；Windows 另通过便携 WebView2 Home 及
+20 秒启动。SDK 未变化，native host 复用已验证版本。Linux 新 ext4 staging
+的十份代码/清单/探针输入与 Windows 按 LF 归一化核对。根目录程序更新为
+6,402,466 字节、SHA-256
+`c2c76096fd0973a1d2ac371ae3e8074cf96fd9fa2c2b714585b30084ac6d261f`；
+Linux A/B 为 6,452,626 字节、SHA-256
+`49a769bbb80dd8a9d4d9ec4b93431b271bb669e339acbcdd9a946698371d6f41`。
+日志 `.build/qa-inputs-{windows,linux}-final.log`。没有压力或高负载测试。
+
+2026-10-02 增量：恢复前的离线历史投影修复已实现，返回拥有副本。
 明确删改区间使图片事件绑定/反馈移除，todo 从保留成功事件重建或按清空
 证据置空；未知前缀及旧 run 绑定仍保留并报告。未改文件、原备份和源 Home
 原字节核对通过，修复副本独立暂存及释放后重查通过。旧无 turn/工具 ID

@@ -2,6 +2,15 @@
 static MdoSessionBackupStage* g_StageFixture;
 static unsigned g_StageFixtureFault;
 static xcancel* g_StageFixtureCancel;
+static unsigned g_ReviewFixtureFault;
+
+void BackupReviewFixtureCandidate(str* Candidate, size_t Attempt)
+{
+    if ( g_ReviewFixtureFault == 1u && Attempt == 0u ) (void)xrtCancelRequest(g_StageFixtureCancel);
+    if ( g_ReviewFixtureFault == 2u ) {
+        xrtFree(*Candidate); *Candidate = xrtStrDup("bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb");
+    }
+}
 
 void BackupStageFixtureAfterWrite(const char* Path, size_t Offset)
 {
@@ -35,6 +44,7 @@ static bool BackupStageFixtureControl(XS_HttpReq* Request)
     MdoSessionBackupLimits Limits;
     MdoSessionBackupStageInfo Info = {0};
     MdoSessionBackupProjectionRepair Repair = {0};
+    MdoSessionBackupInputs Inputs = {0};
     xwork_error Error;
     xvalue* Value;
     xroot Parent = NULL;
@@ -83,6 +93,36 @@ static bool BackupStageFixtureControl(XS_HttpReq* Request)
         Ok = Repaired != NULL && MdoSessionBackupStagePrepare(Repaired, Parent, NULL, NULL, &g_StageFixture, &Error);
         if ( Parent ) (void)xrtRootClose(Parent);
         MdoSessionBackupRelease(Repaired);
+    } else if ( Target.Size >= sizeof(Prefix) - 1u + 13u &&
+                memcmp(Target.Data + sizeof(Prefix) - 1u, "review-inputs", 13u) == 0 ) {
+        MdoSessionBackup* Reviewed;
+        size_t BeforeBytes = 0u, AfterBytes = 0u;
+        str Before = MdoSessionBackupEncode(g_DecodeFixtureBackup, NULL, &BeforeBytes, NULL), After;
+        if ( MdoApiViewEqualText(Target, "/__fixture/backup-stage/review-inputs-cancel") ||
+             MdoApiViewEqualText(Target, "/__fixture/backup-stage/review-inputs-mid-cancel") ) {
+            Cancel = xrtCancelCreate();
+            if ( MdoApiViewEqualText(Target, "/__fixture/backup-stage/review-inputs-cancel") ) (void)xrtCancelRequest(Cancel);
+        }
+        g_StageFixtureCancel = Cancel;
+        g_ReviewFixtureFault = MdoApiViewEqualText(Target, "/__fixture/backup-stage/review-inputs-mid-cancel") ? 1u :
+            (MdoApiViewEqualText(Target, "/__fixture/backup-stage/review-inputs-collision") ? 2u : 0u);
+        if ( MdoApiViewEqualText(Target, "/__fixture/backup-stage/review-inputs-deadline") ) Limits.Deadline = 1u;
+        if ( MdoApiViewEqualText(Target, "/__fixture/backup-stage/review-inputs-growth") ) {
+            MdoSessionBackupPreview Preview = {0};
+            Preview.Size = sizeof(Preview);
+            if ( MdoSessionBackupPreviewGet(g_DecodeFixtureBackup, &Preview) ) Limits.TotalBytes = Preview.Bytes;
+        }
+        Inputs.Size = sizeof(Inputs);
+        Reviewed = MdoSessionBackupReviewInputs(g_DecodeFixtureBackup, &Limits, Cancel, &Inputs,
+            MdoApiViewEqualText(Target, "/__fixture/backup-stage/review-inputs-null-error") ? NULL : &Error);
+        g_ReviewFixtureFault = 0u; g_StageFixtureCancel = NULL; xrtCancelDestroy(Cancel);
+        After = MdoSessionBackupEncode(g_DecodeFixtureBackup, NULL, &AfterBytes, NULL);
+        OriginalUnchanged = Before != NULL && After != NULL && BeforeBytes == AfterBytes && memcmp(Before, After, BeforeBytes) == 0;
+        xrtFree(Before); xrtFree(After); BackupDecodeFixtureUnit();
+        Parent = xrtRootOpen(getenv("MDO_STAGE_FIXTURE_PARENT"));
+        Ok = Reviewed != NULL && MdoSessionBackupStagePrepare(Reviewed, Parent, NULL, NULL, &g_StageFixture, &Error);
+        if ( Parent ) (void)xrtRootClose(Parent);
+        MdoSessionBackupRelease(Reviewed);
     } else if ( !MdoApiViewEqualText(Target, "/__fixture/backup-stage/state") ) {
         g_StageFixtureFault = MdoApiViewEqualText(Target, "/__fixture/backup-stage/corrupt") ? 1u :
             MdoApiViewEqualText(Target, "/__fixture/backup-stage/foreign") ? 2u :
@@ -112,6 +152,8 @@ static bool BackupStageFixtureControl(XS_HttpReq* Request)
         memcmp(Small, Words, sizeof(Words)) == 0;
     SizeSafe = SizeSafe && MdoSessionBackupReconcileHistory(g_DecodeFixtureBackup, NULL, NULL,
         (MdoSessionBackupProjectionRepair*)Small, NULL) == NULL && memcmp(Small, Words, sizeof(Words)) == 0;
+    SizeSafe = SizeSafe && MdoSessionBackupReviewInputs(g_DecodeFixtureBackup, NULL, NULL,
+        (MdoSessionBackupInputs*)Small, NULL) == NULL && memcmp(Small, Words, sizeof(Words)) == 0;
     xrtFree(Small);
     Info.Size = sizeof(Info); (void)MdoSessionBackupStageInfoGet(g_StageFixture, &Info);
     Context.Request = Request; snprintf(Context.RequestId, sizeof(Context.RequestId), "stage-fixture");
@@ -136,6 +178,26 @@ static bool BackupStageFixtureControl(XS_HttpReq* Request)
     (void)MdoApiValueSetBool(Value, "repaired_todo", Repair.TodoRebuilt);
     (void)MdoApiValueSetUInt(Value, "unverified_refs", Info.Source.UnverifiedHistoryReferences);
     (void)MdoApiValueSetUInt(Value, "removed_refs", Info.Source.RemovedHistoryReferences);
+    {
+        xvalue* Rows = xrtValueArray();
+        size_t i;
+        for ( i = 0u; i < Inputs.Count; ++i ) {
+            xvalue* Row = xrtValueObject();
+            (void)MdoApiValueSetString(Row, "source_id", Inputs.Items[i].SourceId);
+            (void)MdoApiValueSetString(Row, "review_id", Inputs.Items[i].ReviewId);
+            (void)MdoApiValueSetUInt(Row, "disposition", Inputs.Items[i].Disposition);
+            (void)MdoApiValueSetBool(Row, "uncertain", Inputs.Items[i].AdmissionUncertain);
+            (void)MdoApiValueAppendTake(Rows, &Row);
+        }
+        (void)MdoApiValueSetTake(Value, "inputs", &Rows);
+    }
+    (void)MdoApiValueSetUInt(Value, "accepted_queue", Inputs.AcceptedQueue);
+    (void)MdoApiValueSetUInt(Value, "accepted_draft", Inputs.AcceptedDraft);
+    (void)MdoApiValueSetUInt(Value, "duplicate_draft", Inputs.DuplicateDraft);
+    (void)MdoApiValueSetUInt(Value, "queue_review", Inputs.QueueReview);
+    (void)MdoApiValueSetUInt(Value, "draft_review", Inputs.DraftReview);
+    (void)MdoApiValueSetUInt(Value, "discard_images", Inputs.ClearedDiscardImages);
+    (void)MdoApiValueSetBool(Value, "direct_uncertain", Inputs.DirectRunAdmissionUncertain);
     (void)MdoApiReplySuccessTake(&Context, 200u, Value, NULL);
     return true;
 }

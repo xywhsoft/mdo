@@ -401,6 +401,42 @@ fail:
     MdoSessionBackupRelease(Copy); return NULL;
 }
 
+/* Prepare the entire new JSON allocation before replacing an owned file.
+ * Limits apply to the resulting bundle as well as to the original input. */
+bool MdoBackupReplaceJson(MdoSessionBackup* Copy, const char* Path, const xvalue* Root,
+    const MdoSessionBackupLimits* Limits, const xcancel* Cancel, xwork_error* Error)
+{
+    MdoBackupOwnedFile* File = NULL;
+    size_t i, Bytes = 0u, Before = 0u;
+    str Json;
+    if ( !MdoBackupCheck(Limits, Cancel, Error) ) return false;
+    Json = xrtJsonStringify(Root, false, &Bytes);
+    if ( Json == NULL ) return MdoBackupError(Error, XWORK_ERROR_OUT_OF_MEMORY, "cannot encode backup sidecar", Path);
+    for ( i = 0u; i < Copy->Count; ++i )
+        if ( strcmp(Copy->Files[i].Path, Path) == 0 ) { File = &Copy->Files[i]; Before = File->Bytes; break; }
+    if ( MdoBackupPathLimit(Path, false) == 0u || Bytes > MdoBackupPathLimit(Path, false) || Bytes > Limits->FileBytes ||
+         Copy->Bytes - Before > Limits->TotalBytes || Bytes > Limits->TotalBytes - (Copy->Bytes - Before) ||
+         (File == NULL && Copy->Count >= Limits->Files) ) {
+        xrtFree(Json);
+        return MdoBackupError(Error, XWORK_ERROR_LIMIT, "updated sidecar exceeds backup budget", Path);
+    }
+    if ( !MdoBackupCheck(Limits, Cancel, Error) ) { xrtFree(Json); return false; }
+    if ( File == NULL ) {
+        if ( Copy->Count == Copy->Capacity ) {
+            MdoBackupOwnedFile* Files = (MdoBackupOwnedFile*)xrtRealloc(Copy->Files,
+                (Copy->Capacity + 1u) * sizeof(*Copy->Files));
+            if ( Files == NULL ) { xrtFree(Json); return MdoBackupError(Error, XWORK_ERROR_OUT_OF_MEMORY, "cannot grow updated backup", Path); }
+            Copy->Files = Files; ++Copy->Capacity;
+        }
+        File = &Copy->Files[Copy->Count++]; memset(File, 0, sizeof(*File));
+        snprintf(File->Path, sizeof(File->Path), "%s", Path);
+    }
+    xrtFree(File->Data); File->Data = Json; File->Bytes = Bytes;
+    Copy->Bytes = Copy->Bytes - Before + Bytes;
+    qsort(Copy->Files, Copy->Count, sizeof(*Copy->Files), MdoBackupCompare);
+    return true;
+}
+
 bool MdoSessionBackupFileGet(const MdoSessionBackup* Backup, size_t Index, MdoSessionBackupFile* File)
 {
     if ( File != NULL ) memset(File, 0, sizeof(*File));

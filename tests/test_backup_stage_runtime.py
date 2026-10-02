@@ -13,6 +13,7 @@ import json
 import os
 from pathlib import Path
 import shutil
+import subprocess
 import tempfile
 from unittest.mock import patch
 
@@ -40,6 +41,13 @@ class Probe(DecodeProbe):
                           'void BackupStageFixtureAfterWrite(const char*, size_t);\n'
                           'void BackupStageFixtureBeforeVerify(MdoSessionBackupStage*);\n' + text,
                           encoding="utf-8", newline="\n")
+        source = self.site / "src/sessions/backup_submissions.c"
+        text = source.read_text(encoding="utf-8")
+        hook = '        Candidate = xrtSecureStringFrom(XRT_STR_LITERAL("0123456789abcdef"), 32u);'
+        assert text.count(hook) == 1
+        text = text.replace(hook, hook + "\n        BackupReviewFixtureCandidate(&Candidate, Attempt);", 1)
+        source.write_text('#include <xsbase.h>\nvoid BackupReviewFixtureCandidate(str*, size_t);\n' + text,
+                          encoding="utf-8", newline="\n")
         service = self.site / "src/bootstrap/service.c"
         text = service.read_text(encoding="utf-8")
         text = text.replace('#include "backup-decode.c"', '#include "backup-decode.c"\n#include "backup-stage.c"', 1)
@@ -55,7 +63,8 @@ class Probe(DecodeProbe):
         return value
 
     def prepare(self, source, mode="prepare"):
-        assert self.validate(dump(source))["ok"]
+        decoded = self.validate(dump(source))
+        assert decoded["ok"], decoded
         return self.fixture(mode)
 
     def check(self):
@@ -124,6 +133,9 @@ class Probe(DecodeProbe):
         assert self.validate(legacy)["ok"]  # keep the snapshot's exact-byte CRC framing
         result = self.fixture("prepare")
         assert not result["ok"] and not result["retained"] and not list(self.parent.iterdir()), result
+        assert self.validate(legacy)["ok"]
+        result = self.fixture("review-inputs")
+        assert not result["ok"] and result["code"] == 1 and not result["retained"] and result["inputs"] == [], result
 
         # Unexpected content is rejected and left for the caller who owns it.
         result = self.prepare(source, "foreign")
@@ -165,7 +177,129 @@ class Probe(DecodeProbe):
         assert not result["ok"] and not result["retained"] and not list(self.parent.iterdir()), result
         assert self.prepare(source)["verified"] and self.fixture("discard")["ok"]
         self.check_projections(source, expected)
+        self.check_input_review(source, expected)
         assert inventory() == before  # no source Home, queue, model or catalog writes
+
+    def check_input_review(self, source, expected):
+        document = copy.deepcopy(source)
+        kinds = self.api("GET", DECODE + "kinds")[1]["data"]
+        events = [json.loads(row) for row in expected["ui-events.jsonl"].splitlines()]
+        start = next(row for row in events if row["kind"] == kinds["start"] and row["agent_depth"] == 0)
+        start["queue_item_id"] = "d" * 32
+        set_ui(document, events)
+        profile = {"model_id": "backup-vision-fixture", "reasoning_effort": "medium",
+                   "permission_profile": "read-only"}
+        image_id = "9" * 32
+        image = base64.b64decode("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+ip1sAAAAASUVORK5CYII=")
+        replace(document, f"attachments/{image_id}.bin", image)
+        replace(document, f"attachments/{image_id}.json", dump({"schema_version": 2, "id": image_id,
+                    "mime_type": "image/png", "size": len(image), "created_at": 1, "file_name": "review 中文.png"}))
+
+        def item(key, state, **fields):
+            return {"id": key * 32, "text": f"Input {key} 中文", "state": state,
+                    "attachments": [image_id], "priority": False, "profile": profile, **fields}
+
+        queue = {"schema_version": 7, "items": [item("a", "sending", run_id="run-completed"),
+                 item("b", "staged"), item("c", "sending"), item("d", "sending", text=start["text"]),
+                 item("e", "pending"), item("f", "sending", run_id="run-without-receipt")],
+                 "discard_images": [image_id]}
+
+        def submission(row, state):
+            return {"id": row["id"], "text": row["text"], "attachments": row["attachments"],
+                    "interrupt": row["priority"], "state": state, "profile": row["profile"]}
+
+        draft = {"schema_version": 7, "revision": 57, "text": "Keep composer 草稿",
+                 "attachments": [image_id], "composer_profile": profile, "run_admission_uncertain": True,
+                 "submissions": [submission(row, "posting") for row in queue["items"][:3]] +
+                    [submission(item("7", "staged"), "prepared"), submission(item("8", "sending"), "posting")]}
+        # The actual browser trims queue text while retaining the original intent.
+        draft["submissions"][1]["text"] = "\ufeff \t" + queue["items"][1]["text"] + "\u00a0\u3000"
+        replace(document, "queue.json", dump(queue)); replace(document, "draft.json", dump(draft))
+        receipts = [{"schema_version": 1, "id": "a" * 32, "run_id": "run-completed"},
+                    {"schema_version": 2, "id": "c" * 32, "state": "starting"},
+                    {"schema_version": 3, "id": "d" * 32, "state": "starting", "run_id": "run-retained",
+                     "agent_run_id": start["run_id"]},
+                    {"schema_version": 3, "id": "8" * 32, "state": "starting", "run_id": "run-unconfirmed", "agent_run_id": 77}]
+        for row in receipts:
+            replace(document, f'queue-receipts/{row["id"]}.json', dump(row))
+        original = {row["path"]: base64.b64decode(row["data"]) for row in document["files"]}
+        result = self.prepare(document, "review-inputs")
+        assert result["ok"] and result["verified"] and result["original_unchanged"], result
+        for key, value in dict(accepted_queue=2, accepted_draft=1, duplicate_draft=2,
+                               queue_review=4, draft_review=2, discard_images=1, direct_uncertain=True).items():
+            assert result[key] == value, result
+        mapped = {row["source_id"]: row for row in result["inputs"]}
+        assert len(mapped) == 8
+        fresh = [row["review_id"] for row in mapped.values() if row["review_id"]]
+        assert len(set(fresh)) == 6 and not set(fresh).intersection(mapped)
+        for identifier in ("a", "d"):
+            assert mapped[identifier * 32]["disposition"] == 1 and not mapped[identifier * 32]["review_id"]
+            assert not mapped[identifier * 32]["uncertain"]
+        for identifier in ("b", "c", "f", "8"):
+            assert mapped[identifier * 32]["uncertain"]
+        assert not mapped["e" * 32]["uncertain"] and not mapped["7" * 32]["uncertain"]
+        stage = self.parent / result["directory"]
+        actual = {p.relative_to(stage).as_posix(): p.read_bytes() for p in stage.rglob("*") if p.is_file()}
+        for name, raw in original.items():
+            if name not in ("queue.json", "draft.json"):
+                assert actual[name] == raw, name
+        reviewed_queue, reviewed_draft = json.loads(actual["queue.json"]), json.loads(actual["draft.json"])
+        assert reviewed_queue["schema_version"] == 7 and reviewed_queue["discard_images"] == []
+        assert [row["id"] for row in reviewed_queue["items"]] == [mapped[k * 32]["review_id"] for k in "bcef"]
+        assert all(row["state"] == "staged" and "run_id" not in row for row in reviewed_queue["items"])
+        assert reviewed_draft["revision"] == 1 and not reviewed_draft["run_admission_uncertain"]
+        for name in ("text", "attachments", "composer_profile"):
+            assert reviewed_draft[name] == draft[name]
+        assert [row["id"] for row in reviewed_draft["submissions"]] == [mapped[k * 32]["review_id"] for k in "78"]
+        for source_row, restored in zip(draft["submissions"][3:], reviewed_draft["submissions"]):
+            assert restored == {**source_row, "id": restored["id"], "state": "rejected"}
+        helper = ROOT / "tests/fixtures/backup-review-ui.mjs"
+        assert shutil.which("node"), "Node.js is required for live frontend controller proof"
+        subprocess.run(["node", str(helper), str(stage)], cwd=ROOT, check=True, timeout=20)
+        assert self.fixture("check")["verified"] and self.fixture("discard")["ok"]
+
+        for mode, code in (("review-inputs-cancel", 9), ("review-inputs-mid-cancel", 9),
+                           ("review-inputs-deadline", 11), ("review-inputs-collision", 11)):
+            rejected = self.prepare(document, mode)
+            assert not rejected["ok"] and not rejected["retained"] and rejected["code"] == code, rejected
+            assert rejected["original_unchanged"] and rejected["inputs"] == [] and not list(self.parent.iterdir())
+        assert self.prepare(document, "review-inputs-null-error")["verified"] and self.fixture("discard")["ok"]
+        conflicting = copy.deepcopy(document)
+        replace(conflicting, "draft.json", dump({**draft, "submissions": [{**draft["submissions"][1], "text": "Different text"}]}))
+        rejected = self.prepare(conflicting, "review-inputs")
+        assert not rejected["ok"] and rejected["original_unchanged"] and rejected["inputs"] == []
+        assert not list(self.parent.iterdir())
+
+        legacy = copy.deepcopy(source)
+        replace(legacy, "queue.json", dump({"schema_version": 1, "items": [{"id": "b" * 32, "text": "Legacy", "state": "pending"}]}))
+        replace(legacy, "draft.json", dump({"schema_version": 1, "revision": 1, "text": "Legacy 草稿"}))
+        rejected = self.prepare(legacy, "review-inputs-growth")
+        assert not rejected["ok"] and rejected["code"] == 11 and rejected["original_unchanged"] and rejected["inputs"] == []
+        assert not list(self.parent.iterdir())
+        assert self.prepare(legacy, "review-inputs")["verified"] and self.fixture("discard")["ok"]
+
+        # Ordinary fixed API capacity: keep all 20 queue + 20 draft inputs.
+        capacity = copy.deepcopy(source)
+        queue_rows = [{"id": f"{i:032x}", "text": f"Queue {i}", "state": "pending", "attachments": [], "priority": False}
+                      for i in range(1, 21)]
+        draft_rows = [{"id": f"{i:032x}", "text": f"Draft {i}", "state": "prepared", "attachments": [], "interrupt": False}
+                      for i in range(21, 41)]
+        replace(capacity, "queue.json", dump({"schema_version": 7, "items": queue_rows, "discard_images": []}))
+        replace(capacity, "draft.json", dump({"schema_version": 7, "revision": 1, "text": "", "attachments": [],
+                                             "run_admission_uncertain": False, "submissions": draft_rows}))
+        result = self.prepare(capacity, "review-inputs")
+        assert result["verified"] and len(result["inputs"]) == 40 and result["queue_review"] == result["draft_review"] == 20, result
+        assert len({row["review_id"] for row in result["inputs"]}) == 40
+        assert self.fixture("discard")["ok"]
+
+        no_inputs = copy.deepcopy(source)
+        no_inputs["files"] = [row for row in no_inputs["files"] if row["path"] not in ("draft.json", "queue.json")]
+        from test_backup_decode_runtime import recount
+        recount(no_inputs)
+        result = self.prepare(no_inputs, "review-inputs")
+        assert result["verified"] and result["inputs"] == []
+        assert not (self.parent / result["directory"] / "queue.json").exists()
+        assert self.fixture("discard")["ok"]
 
     def check_projections(self, source, expected):
         kinds = self.api("GET", DECODE + "kinds")[1]["data"]

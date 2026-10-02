@@ -355,6 +355,31 @@ bool MdoBackupRelationsValidate(const MdoSessionBackup* Backup,
     return Ok;
 }
 
+bool MdoBackupClassifyInputs(const MdoSessionBackup* Backup,
+    const char Ids[MDO_SESSION_BACKUP_MAX_INPUTS][33], size_t Count,
+    MdoBackupAdmission* Admission, const MdoSessionBackupLimits* Limits,
+    const xcancel* Cancel, xwork_error* Error)
+{
+    MdoBackupHistoryIndex Index = {0};
+    size_t i;
+    bool Ok;
+    if ( Count > MDO_SESSION_BACKUP_MAX_INPUTS )
+        return MdoBackupError(Error, XWORK_ERROR_LIMIT, "too many backup input identities", NULL);
+    Index.Backup = Backup; Index.Limits = Limits; Index.Cancel = Cancel; Index.Error = Error;
+    Index.Ui = MdoBackupFind(Backup, "ui-events.jsonl");
+    Ok = MdoBackupHistoryTime(&Index) && MdoBackupIndexRead(&Index) &&
+        MdoBackupBindings(&Index) && MdoBackupProjections(&Index) && MdoBackupQueueRelations(&Index);
+    for ( i = 0u; Ok && i < Count; ++i ) {
+        MdoBackupReceiptFact* Receipt = MdoBackupReceiptFind(&Index, Ids[i]);
+        Ok = MdoBackupHistoryTime(&Index);
+        Admission[i] = Receipt == NULL ? MDO_BACKUP_NOT_ACCEPTED :
+            ((Receipt->Value.Schema == 1u || Receipt->Seen) ? MDO_BACKUP_ACCEPTED :
+                MDO_BACKUP_ADMISSION_UNCERTAIN);
+    }
+    xrtFree(Index.Events); xrtFree(Index.Removed); xrtFree(Index.Receipts);
+    return Ok;
+}
+
 static void MdoBackupRepairDrop(MdoSessionBackup* Copy, const char* Path)
 {
     size_t i;
@@ -372,39 +397,6 @@ static bool MdoBackupRepairTake(xvalue* Root, const char* Name, xvalue* Value)
 {
     bool Ok = Root != NULL && Value != NULL && xrtValueObjectSetTake(Root, xrtStrView(Name), &Value);
     xrtValueRelease(Value); return Ok;
-}
-
-/* Prepare the entire new JSON allocation before replacing an owned file.
- * Limits apply to the resulting bundle as well as to the original input. */
-static bool MdoBackupRepairJson(MdoBackupHistoryIndex* Index, MdoSessionBackup* Copy,
-    const char* Path, const xvalue* Root)
-{
-    MdoBackupOwnedFile* File = NULL;
-    size_t i, Bytes = 0u, Before = 0u;
-    str Json = xrtJsonStringify(Root, false, &Bytes);
-    if ( Json == NULL ) return MdoBackupHistoryError(Index, "cannot encode repaired projection", Path);
-    for ( i = 0u; i < Copy->Count; ++i )
-        if ( strcmp(Copy->Files[i].Path, Path) == 0 ) { File = &Copy->Files[i]; Before = File->Bytes; break; }
-    if ( Bytes > MdoBackupPathLimit(Path, false) || Bytes > Index->Limits->FileBytes ||
-         Bytes > Index->Limits->TotalBytes - (Copy->Bytes - Before) ||
-         (File == NULL && Copy->Count >= Index->Limits->Files) ) {
-        xrtFree(Json);
-        return MdoBackupError(Index->Error, XWORK_ERROR_LIMIT, "repaired projection exceeds backup budget", Path);
-    }
-    if ( File == NULL ) {
-        if ( Copy->Count == Copy->Capacity ) {
-            MdoBackupOwnedFile* Files = (MdoBackupOwnedFile*)xrtRealloc(Copy->Files,
-                (Copy->Capacity + 1u) * sizeof(*Copy->Files));
-            if ( Files == NULL ) { xrtFree(Json); return MdoBackupHistoryError(Index, "cannot grow repaired backup", Path); }
-            Copy->Files = Files; ++Copy->Capacity;
-        }
-        File = &Copy->Files[Copy->Count++]; memset(File, 0, sizeof(*File));
-        snprintf(File->Path, sizeof(File->Path), "%s", Path);
-    }
-    xrtFree(File->Data); File->Data = Json; File->Bytes = Bytes;
-    Copy->Bytes = Copy->Bytes - Before + Bytes;
-    qsort(Copy->Files, Copy->Count, sizeof(*Copy->Files), MdoBackupCompare);
-    return true;
 }
 
 static bool MdoBackupRepairFeedback(MdoBackupHistoryIndex* Index, MdoSessionBackup* Copy,
@@ -432,7 +424,7 @@ static bool MdoBackupRepairFeedback(MdoBackupHistoryIndex* Index, MdoSessionBack
     }
     if ( Facts->RemovedFeedback != 0u ) {
         Ok = xrtValueObjectSetTake(Root, XRT_STR_LITERAL("items"), &Items) &&
-            MdoBackupRepairJson(Index, Copy, "feedback.json", Root);
+            MdoBackupReplaceJson(Copy, "feedback.json", Root, Index->Limits, Index->Cancel, Index->Error);
     }
 done:
     xrtValueRelease(Root); xrtValueRelease(Items);
@@ -485,7 +477,7 @@ static bool MdoBackupRepairTodo(MdoBackupHistoryIndex* Index, MdoSessionBackup* 
     }
     if ( !MdoBackupRepairTake(Latest, "schema_version", xrtValueUInt(1u)) ||
          !MdoBackupRepairTake(Latest, "event_id", xrtValueUInt(LatestId)) ||
-         !MdoBackupRepairJson(Index, Copy, "todo.json", Latest) ) goto done;
+         !MdoBackupReplaceJson(Copy, "todo.json", Latest, Index->Limits, Index->Cancel, Index->Error) ) goto done;
     Facts->TodoRebuilt = true; Ok = true;
 done:
     xrtValueRelease(Stored); xrtValueRelease(Latest);

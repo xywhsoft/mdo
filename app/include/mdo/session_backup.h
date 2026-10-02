@@ -176,6 +176,46 @@ MdoSessionBackup* MdoSessionBackupReconcileHistory(const MdoSessionBackup* Backu
     const MdoSessionBackupLimits* Limits, const xcancel* Cancel,
     MdoSessionBackupProjectionRepair* Facts, xwork_error* Error);
 
+#define MDO_SESSION_BACKUP_MAX_INPUTS 40u
+typedef enum MdoSessionBackupInputDisposition {
+    MDO_SESSION_BACKUP_INPUT_ACCEPTED = 1,
+    MDO_SESSION_BACKUP_INPUT_QUEUE_REVIEW,
+    MDO_SESSION_BACKUP_INPUT_DRAFT_REVIEW
+} MdoSessionBackupInputDisposition;
+
+typedef struct MdoSessionBackupInputReview {
+    char SourceId[33];
+    char ReviewId[33]; /* empty for already accepted input */
+    MdoSessionBackupInputDisposition Disposition;
+    bool AdmissionUncertain;
+} MdoSessionBackupInputReview;
+
+typedef struct MdoSessionBackupInputs {
+    uint32 Size;
+    size_t Count, AcceptedQueue, AcceptedDraft, DuplicateDraft;
+    size_t QueueReview, DraftReview, ClearedDiscardImages;
+    bool DirectRunAdmissionUncertain;
+    MdoSessionBackupInputReview Items[MDO_SESSION_BACKUP_MAX_INPUTS];
+} MdoSessionBackupInputs;
+
+/* Returns an independently owned decoded v2 copy. Keeps durable receipts and
+ * UI/model/resource bytes exact. Queue inputs with accepted receipts or a
+ * retained queue-bound Agent start do not re-enter the queue. Others receive
+ * fresh IDs and staged state. Draft submission intents receive fresh IDs and
+ * rejected state (the live UI's explicit review state); matching queue/draft
+ * duplicates are represented once. Conflicting same-ID payloads fail.
+ * Clears resumed discard work and direct-run admission tracking, preserving
+ * composer text/images/profile. No model/tool, queue manager, Home or catalog
+ * is accessed. Facts records source/review IDs and uncertain admission; the
+ * final restore transaction MUST preserve those facts and original source
+ * intent bytes as provenance before publication. This function alone is NOT
+ * publication permission or identity rebinding. Free with BackupRelease.
+ * Fresh thirty-second cooperative budget. Initialize Facts.Size; wrong size
+ * leaves memory untouched, other failure clears facts except Size. */
+MdoSessionBackup* MdoSessionBackupReviewInputs(const MdoSessionBackup* Backup,
+    const MdoSessionBackupLimits* Limits, const xcancel* Cancel,
+    MdoSessionBackupInputs* Facts, xwork_error* Error);
+
 typedef struct MdoSessionBackupStageInfo {
     uint32 Size;
     bool Verified;

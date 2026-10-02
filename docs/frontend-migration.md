@@ -4,6 +4,35 @@
 
 完成判据及尚缺的打包页证据见 [前端操作体验完成审计](frontend-completion-audit.md)。本文件继续记录每次实现和验证的细节。
 
+## 2026-10-02：恢复输入转成待确认
+
+新增独立 `backup_submissions.c` 和 filesystem-free
+`MdoSessionBackupReviewInputs`。复用历史索引及真实 queue/draft codec，
+有受理证据的旧输入不再入队；其他队列项用新 ID 转 staged，草稿意图用
+新 ID 转 rejected 审核状态，匹配副本合并，矛盾 payload 整体失败。
+保留 profile、图片、原文本及顺序，清空旧 discard/直接运行关联。原回执/
+模型/UI/资源文件不变，Facts 记录来源映射及不确定受理。后续事务必须
+保存源意图及 Facts 为 provenance；此副本单独不能发布。
+
+源备份前后编码一致、源 Home 不变、独立磁盘读回及实际前端控制器刷新
+只读探针通过。覆盖取消/截止/碰撞/增长失败与重试、固定 20+20 容量、
+Unicode trim 和未知起动状态。初始字段夹具修正及自身碰撞误判修复后
+重新验证，初始日志保留。详见 [输入转换合同](session-backup-inputs.md)。
+新身份、artifact 路径、持久 provenance/worker、原子发布、catalog 和
+正式页面仍待完成；`restore_ready:false` 保持。没有压力/高负载或新增
+原生/实体设备验收；Linux queued HEAD reset 仍待排查。
+
+最终 Windows/Linux 有界门禁通过 115 Python、252 Node、90 JS 模块、严格
+C11、40 runtime、三项 packed 和独立 A/B。新增断言及实际前端控制器检查
+扩展已有 runtime 探针，未增加探针数量。Windows 另通过便携 WebView2
+Home 和 20 秒启动。SDK 不变、native host 复用已验证版本；Linux 新 ext4
+源 staging 的十份代码/清单/探针输入与 Windows 按 LF 归一化核对。
+根目录 `mdo.exe` 已更新为 6,402,466 字节、SHA-256
+`c2c76096fd0973a1d2ac371ae3e8074cf96fd9fa2c2b714585b30084ac6d261f`；
+Linux A/B 为 6,452,626 字节、SHA-256
+`49a769bbb80dd8a9d4d9ec4b93431b271bb669e339acbcdd9a946698371d6f41`。
+日志 `.build/qa-inputs-{windows,linux}-final.log`。
+
 ## 2026-10-02：恢复前的历史侧车投影修复
 
 新增 filesystem-free `MdoSessionBackupReconcileHistory`，返回独立拥有的 v2

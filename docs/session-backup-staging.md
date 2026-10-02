@@ -94,3 +94,9 @@ Linux `8958084d30e58f5725df3b15dabdf2fbb608f7555bb788e1dc2df9619aba0e82`。
 [历史投影修复](session-backup-projections.md)，可在 StagePrepare 前生成
 拥有副本，再用本层落盘和验证。它仅处理有证据的侧车变化，仍保留来源
 身份和 queue 原字节；StagePrepare 不自动做转换，生产恢复事务待接入。
+
+同日已提供独立的 [输入待确认转换](session-backup-inputs.md)，可将新副本
+交给 StagePrepare。转换保留历史回执，使用新 ID 的 staged/rejected 状态，
+落盘后实际前端控制器的刷新/核对只读探针通过。StagePrepare 仍不自动
+执行转换，也不保存来源意图/Facts；最终恢复事务需持久 provenance、
+身份/产物重绑定及原子发布，不能直接将这个 Stage 纳入 live catalog。

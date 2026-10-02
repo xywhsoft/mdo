@@ -1,7 +1,7 @@
 # 会话 JSON 完整备份与恢复实施记录
 
 状态：专用下载/上传、离线解码、模型/UI 关系、静态图片像素检查及生产异步
-预览 API 已接入。独立 staging 的材料化/读回检查、离线历史投影修复已实现，身份及队列转换、
+预览 API 已接入。独立 staging 的材料化/读回检查、离线历史投影修复和输入待确认转换已实现，身份/provenance、
 原子发布与正式页面入口待实现。2026-10-02 已完成
 checkpoint 与有界读取共用排他运行窗口、统一捕获边界、v2 捕获/编码层和
 有界 HTTP/TLS 传输。现有页面仍使用 `export_schema:1`，只有 meta 和模型 snapshot。
@@ -77,7 +77,8 @@ manager 调用或库通过 native path 写入不能被它自动覆盖。不得�
 5. **进行中**：已实现独立 staging 的排他材料化、完整磁盘读回及实际无绑定
    xllm/UI 关系和像素检查；它仍保留来源身份及队列原字节，不能发布。
    离线历史投影修复已接入，共用正向删改证据，未知前缀仍保留并报告。
-   继续完成身份/产物重绑定及待确认转换。恢复到独立 staging，
+   离线队列/草稿待确认转换已接入，旧受理证据保留，新输入 ID 不重复调度。
+   继续完成身份/产物重绑定、持久 provenance 及恢复 worker。恢复到独立 staging，
    验证实际 xllm 恢复与 UI replay 后，以不覆盖的原子
    目录发布方式创建新的会话。保留原身份作为来源，明确处理 ID 冲突；失败
    只清理由本次事务拥有的文件。实际发布后才进入 catalog，导入不得立即
@@ -989,3 +990,25 @@ Linux A/B 为 6,447,831 字节、SHA-256
 `85f745d6d131f780fee766807ea388106c41375e3aed4e09c384778e01c53615`。
 日志 `.build/qa-projection-{windows,linux}-final.log`。没有压力/高负载或新增
 原生/实体设备验收；Linux queued HEAD reset 仍待排查。
+
+## 恢复输入的待确认转换
+
+步骤 5 的 `MdoSessionBackupReviewInputs` 已接入。历史索引/回执提供受理
+证据，旧受理输入不重排；其他队列/草稿意图换新 ID 并进入既有审核状态。
+匹配副本合并、矛盾整体失败。原始 UI/model/receipt/资源字节保持，源
+备份不可变。新副本的实际落盘 sidecar 经生产前端控制器刷新/reconcile/
+pump，只有 GET，没有自动提交或运行。原始意图和 Facts 尚未持久保存，
+必须在最终事务发布前作为 provenance 保留；身份/产物重绑定、worker、
+原子发布/catalog、正式导入菜单继续实施，`restore_ready:false` 保持。
+详见 [输入转换合同](session-backup-inputs.md)。
+
+最终 Windows/Linux 有界门禁通过 115 Python、252 Node、90 JS 模块、严格
+C11、40 runtime、三项 packed 和独立 A/B；Windows 另通过便携 WebView2
+Home 和 20 秒启动。SDK 不变，复用已验证 native host；Linux 新 ext4
+staging 的十份代码/清单/探针输入与 Windows 按 LF 归一化核对。根目录
+程序更新为 6,402,466 字节、SHA-256
+`c2c76096fd0973a1d2ac371ae3e8074cf96fd9fa2c2b714585b30084ac6d261f`；
+Linux A/B 为 6,452,626 字节、SHA-256
+`49a769bbb80dd8a9d4d9ec4b93431b271bb669e339acbcdd9a946698371d6f41`。
+日志 `.build/qa-inputs-{windows,linux}-final.log`。没有压力/高负载或新增
+DOM/原生/实体设备验收；Linux queued HEAD reset 仍待排查。
