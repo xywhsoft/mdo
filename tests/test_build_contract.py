@@ -126,6 +126,7 @@ class BuildContractTests(unittest.TestCase):
             "src/sessions/backup_model_history.c",
             "src/sessions/backup_images.c",
             "src/sessions/backup_stage.c",
+            "src/sessions/restore.c",
             "src/approvals/manager.c",
             "src/power/inhibitor.c",
             "src/power/manager.c",

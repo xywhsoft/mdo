@@ -24,6 +24,9 @@ typedef struct MdoProjectBinding {
  * Wrong Size leaves output untouched; other failure clears it except Size. */
 bool MdoProjectBindingGet(cstr ProjectId, MdoProjectBinding* Binding,
     xwork_error* Error);
+/* Pure bounded snapshot comparison; false for invalid sizes/text/identities.
+ * Match is advisory until WithBinding repeats the read under writer exclusion. */
+bool MdoProjectBindingMatches(const MdoProjectBinding* A, const MdoProjectBinding* B);
 
 typedef bool (*MdoProjectBindingCallback)(const MdoProjectBinding* Current,
     void* Data, xwork_error* Error);

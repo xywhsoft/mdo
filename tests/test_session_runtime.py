@@ -827,6 +827,7 @@ def write_site(site: Path) -> None:
         "src/sessions/sidecars/queue.c", "src/sessions/sidecars/queue.h",
         "src/sessions/internal.h",
         "src/sessions/manager.c",
+        "src/sessions/restore_reservation.inc.c",
         "src/sessions/backup.c",
         "src/sessions/backup_model.c",
         "src/sessions/backup_input_payload.c", "src/sessions/backup_inputs.h",

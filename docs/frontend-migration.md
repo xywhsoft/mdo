@@ -4,6 +4,37 @@
 
 完成判据及尚缺的打包页证据见 [前端操作体验完成审计](frontend-completion-audit.md)。本文件继续记录每次实现和验证的细节。
 
+## 2026-10-02：恢复会话 ID 预留与生产原子发布
+
+新增同步 `MdoSessionRestorePublish`，组合目标项目复核、pending ID/data
+排他租约、离线准备、Home journal、真实 Stage 验证及最终 binding 短回调。
+Create/Fork 的目标检查与 mkdir 进入同一 manager 边界；pending 会话及其
+native 别名不能被 Create/Open/Load 或 sidecar writer 接管。发布前目录
+不可见；实际 Commit 后只推进一次列表版本，队列保留待确认，不开 Agent。
+
+取消、目录/项目变更、目标碰撞保持来源和已有数据；关闭或清理失败后的
+Commit、verified facts 和列表版本仍可核对，Home 要求重启。真实生产入口
+经单 native worker 的 HTTP/TLS 夹具验证，包含模型/UI/inline PNG、2 MiB
+产物、实际 catalog 和历史 artifact 读回、旧 manager 预留生命周期。
+详见 [协调与发布合同](session-restore-coordinator.md)。初始夹具错误日志保留。
+
+正式恢复 worker、持久请求结果与前端导入仍待接入；`restore_ready:false`
+保持。本增量不作为旧版交互或实体设备验收的新证据。Linux 两项已保留
+间歇问题继续待排查；没有压力或高负载测试。
+
+最终 Windows/Linux 通过 115 Python、252 Node、90 JS 模块、严格 C11、
+43 runtime、三项 packed 和独立 A/B；Windows 另通过便携 WebView2 Home
+及 20 秒启动。SDK 未改，复用已验证 native host；Linux 新 ext4 staging
+的十三份改动代码/清单/探针按 LF 核对。根目录程序已更新为 6,432,061
+字节、SHA-256
+`8998f650af73e0398445ce1c9ff2e130cab61ee7f2f6e71fe9badf28e64cf391`；
+Linux A/B 为 6,482,221 字节、SHA-256
+`25fa200b1edfa90f3af66568b517903cf7e89bfdc374a1996bc7817ad6171bb8`。
+日志 `.build/qa-restore-coordinator-{windows,linux}-final.log` 和
+`.build/qa-restore-coordinator-source-equivalence.log`。覆盖根目录程序时
+没有正在运行的根目录窗口；不改用户 Home。这些结果不关闭既有 Linux
+间歇失败，也不替代正式导入页面或设备验收。
+
 ## 2026-10-02：项目定义写入与恢复发布目标复核
 
 发现 POSIX `fcntl` 文件锁不能互斥同进程两个项目 writer，新增非阻塞

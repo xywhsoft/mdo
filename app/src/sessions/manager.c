@@ -2,6 +2,7 @@
 #include <string.h>
 
 #include "../../include/mdo/home.h"
+#include "../../include/mdo/home_restore.h"
 #include "../../include/mdo/attachments.h"
 #include "../../include/mdo/sessions.h"
 #include "internal.h"
@@ -27,6 +28,8 @@ typedef struct MdoSessionManagerState {
     MdoSessionActive* Active;
     size_t ActiveCount;
     size_t ActiveCapacity;
+    MdoSessionRestoreReservation* Restores;
+    size_t RestoreCount;
     bool Initialized;
 } MdoSessionManagerState;
 
@@ -53,6 +56,7 @@ struct MdoSessionCatalog {
 };
 
 static MdoSessionManagerState g_MdoSessions;
+static bool MdoSessionsRestoreReserved(cstr ProjectId, cstr SessionId);
 
 static bool MdoSessionsValidateCurrent(MdoSession* Session,
     xwork_error* Error);
@@ -541,7 +545,8 @@ static bool MdoSessionsActiveAdd(const char* ProjectId,
     const char* SessionId)
 {
     MdoSessionActive* Active;
-    if ( MdoSessionsActiveFind(ProjectId, SessionId) != SIZE_MAX )
+    if ( MdoSessionsRestoreReserved(ProjectId, SessionId) ||
+         MdoSessionsActiveFind(ProjectId, SessionId) != SIZE_MAX )
         return false;
     if ( !MdoSessionsGrow((void**)&g_MdoSessions.Active,
             &g_MdoSessions.ActiveCapacity, g_MdoSessions.ActiveCount + 1u,
@@ -571,6 +576,8 @@ void MdoSessionsInternalActiveRelease(const char* ProjectId,
     xrtMutexUnlock(g_MdoSessions.Lock);
 }
 
+#include "restore_reservation.inc.c"
+
 bool MdoSessionManagerInit(xwork_runtime* Runtime)
 {
     if ( g_MdoSessions.Initialized ) return true;
@@ -590,6 +597,14 @@ bool MdoSessionManagerInit(xwork_runtime* Runtime)
 
 void MdoSessionManagerUnit(void)
 {
+    /* Callers drain storage transactions first. Detached inactive reservations
+     * remain caller-owned; their project/data pins survive closed registries. */
+    MdoSessionRestoreReservation* Restore = g_MdoSessions.Restores;
+    while ( Restore != NULL ) {
+        MdoSessionRestoreReservation* Next = Restore->Next;
+        Restore->Next = NULL;
+        Restore = Next;
+    }
     g_MdoSessions.Initialized = false;
     MdoSessionDataUnit();
     if ( g_MdoSessions.Runtime != NULL )
@@ -695,7 +710,6 @@ MdoSession* MdoSessionCreate(const MdoSessionCreateOptions* Options,
     char MetaPath[MDO_SESSION_PATH_CAPACITY];
     const char* Title;
     bool DirectoryCreated = false;
-    bool DirectoryExists = false;
 
     xworkErrorInit(Error);
     if ( Options == NULL ) {
@@ -750,23 +764,8 @@ MdoSession* MdoSessionCreate(const MdoSessionCreateOptions* Options,
     ArtifactPath = MdoHomeExternalPath(Relative);
     if ( SnapshotPath == NULL || JournalPath == NULL || ArtifactPath == NULL )
         goto memory;
-    if ( Options->RequestedId != NULL ) {
-        if ( !MdoHomeExternalStat(DirectoryPath, &DirectoryExists, NULL) ) {
-            MdoSessionsXrtError(Error, XWORK_ERROR_IO,
-                "cannot inspect the requested session directory");
-            goto done;
-        }
-        if ( DirectoryExists ) {
-            MdoSessionsError(Error, XWORK_ERROR_CONTEXT,
-                "the requested session ID already exists");
-            goto done;
-        }
-    }
-    if ( !MdoHomeCreateDirectory(DirectoryPath) ) {
-        MdoSessionsXrtError(Error, XWORK_ERROR_IO,
-            "cannot create the managed session directory");
-        goto done;
-    }
+    if ( !MdoSessionsCreateDirectory(Options->ProjectId, SessionId,
+            DirectoryPath, Error) ) goto done;
     DirectoryCreated = true;
     Bridge = MdoSessionEventBridgeCreate(Options->ProjectId, SessionId,
         ProjectLease,
@@ -921,6 +920,11 @@ MdoSession* MdoSessionOpen(const char* ProjectId, const char* SessionId,
         MDO_PROJECT_LEASE_SHARED, Error);
     if ( ProjectLease == NULL ) return NULL;
     xrtMutexLock(g_MdoSessions.Lock);
+    if ( MdoSessionsRestoreReserved(ProjectId, SessionId) ) {
+        xrtMutexUnlock(g_MdoSessions.Lock);
+        MdoSessionsError(Error, XWORK_ERROR_CONTEXT, "session ID is reserved for restore");
+        goto done;
+    }
     if ( !MdoSessionsMetaRead(ProjectId, SessionId, &Info) ) {
         xrtMutexUnlock(g_MdoSessions.Lock);
         MdoSessionsXrtError(Error, XWORK_ERROR_IO,
@@ -962,7 +966,8 @@ MdoSession* MdoSessionOpen(const char* ProjectId, const char* SessionId,
             "cannot revalidate session metadata");
         goto done;
     }
-    if ( Info.Status != MDO_SESSION_ACTIVE ||
+    if ( MdoSessionsRestoreReserved(ProjectId, SessionId) ||
+         Info.Status != MDO_SESSION_ACTIVE ||
          MdoSessionsActiveFind(ProjectId, SessionId) != SIZE_MAX ) {
         xrtMutexUnlock(g_MdoSessions.Lock);
         MdoSessionsError(Error, XWORK_ERROR_CONTEXT,
@@ -1165,11 +1170,7 @@ MdoSession* MdoSessionFork(MdoSession* Source,
     ArtifactPath = MdoHomeExternalPath(Relative);
     if ( SnapshotPath == NULL || JournalPath == NULL || ArtifactPath == NULL )
         goto memory;
-    if ( !MdoHomeCreateDirectory(DirectoryPath) ) {
-        MdoSessionsXrtError(Error, XWORK_ERROR_IO,
-            "cannot create the fork session directory");
-        goto done;
-    }
+    if ( !MdoSessionsCreateDirectory(ProjectId, SessionId, DirectoryPath, Error) ) goto done;
     DirectoryCreated = true;
     Bridge = MdoSessionEventBridgeCreate(ProjectId, SessionId, ProjectLease,
         Options->Runtime.OnEvent, Options->Runtime.EventUserData,
@@ -1334,6 +1335,12 @@ MdoSession* MdoSessionLoad(const char* ProjectId, const char* SessionId,
         MDO_PROJECT_LEASE_SHARED, Error);
     if ( ProjectLease == NULL ) return NULL;
     xrtMutexLock(g_MdoSessions.Lock);
+    if ( MdoSessionsRestoreReserved(ProjectId, SessionId) ) {
+        xrtMutexUnlock(g_MdoSessions.Lock);
+        MdoSessionsError(Error, XWORK_ERROR_CONTEXT, "session ID is reserved for restore");
+        MdoProjectLeaseRelease(ProjectLease);
+        return NULL;
+    }
     if ( !MdoSessionsMetaRead(ProjectId, SessionId, &Info) ) {
         xrtMutexUnlock(g_MdoSessions.Lock);
         MdoSessionsXrtError(Error, XWORK_ERROR_IO,

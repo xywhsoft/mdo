@@ -2,6 +2,26 @@
 
 本清单以 `app_bak/wwwroot` 的可操作行为为基线，而不是以页面长得相似或单元测试通过为完成标准。`docs/frontend-migration.md` 记录每次实现和验证；这里记录当前还需要什么证据。审计更新：2026-10-02，基线提交 `f9e2c4c`。
 
+2026-10-02 最新增量：生产同步恢复 coordinator 已组合项目 binding、ID/data
+预留、准备/Stage 与 Home journal，最终短回调原子发布并只增一次 catalog
+generation。真实 HTTP/TLS 夹具验证 pending 原拼写及别名、sidecar 竞态、
+取消/项目或目录变更、模型/UI/像素和产物、catalog 与提交后错误事实。
+详见 [协调发布合同](session-restore-coordinator.md)。正式 worker、持久请求
+结果和导入页面仍缺，保持 `restore_ready:false`；此增量不升级旧版交互、
+完整导入或实体设备验收行。Linux queued HEAD reset 和大备份响应首次
+间歇失败继续保留，没有压力或高负载测试。
+
+本增量最终两平台通过 115 Python、252 Node、90 JS 模块、严格 C11、
+43 runtime、三项 packed 和 A/B；Windows 另通过便携 Home/20 秒启动。
+SDK 不变，复用已验证 host；十三份改动输入按 LF 核对。根目录程序
+6,432,061 字节、SHA-256
+`8998f650af73e0398445ce1c9ff2e130cab61ee7f2f6e71fe9badf28e64cf391`；
+Linux A/B 6,482,221 字节、SHA-256
+`25fa200b1edfa90f3af66568b517903cf7e89bfdc374a1996bc7817ad6171bb8`。
+日志 `.build/qa-restore-coordinator-{windows,linux}-final.log`；源码比对
+日志 `.build/qa-restore-coordinator-source-equivalence.log`。结果只支持
+当前同步协调阶段及既有回归，不升级仍缺正式页面或设备证据的条目。
+
 2026-10-02 最新增量：项目定义新增全项目非阻塞 writer guard，修补同
 进程 POSIX 文件锁不足的竞态。恢复发布可在 guard/native lock 内复核
 项目版本/重建及物理 workspace 路径/目录身份；变化不执行 callback。

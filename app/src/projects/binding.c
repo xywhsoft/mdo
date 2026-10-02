@@ -20,9 +20,14 @@ static bool MdoProjectBindingText(cstr Text, size_t Capacity)
     return i != 0u && i < Capacity && xrtUtf8Valid(xrtStrViewN(Text, i), NULL);
 }
 
-static bool MdoProjectBindingSame(const MdoProjectBinding* A, const MdoProjectBinding* B)
+bool MdoProjectBindingMatches(const MdoProjectBinding* A, const MdoProjectBinding* B)
 {
-    return strcmp(A->ProjectId, B->ProjectId) == 0 && A->Revision == B->Revision && A->CreatedAt == B->CreatedAt &&
+    return A != NULL && B != NULL && A->Size == sizeof(*A) && B->Size == sizeof(*B) &&
+        MdoProjectBindingText(A->ProjectId, sizeof(A->ProjectId)) &&
+        MdoProjectBindingText(B->ProjectId, sizeof(B->ProjectId)) &&
+        MdoProjectBindingText(A->WorkspaceRoot, sizeof(A->WorkspaceRoot)) &&
+        MdoProjectBindingText(B->WorkspaceRoot, sizeof(B->WorkspaceRoot)) &&
+        strcmp(A->ProjectId, B->ProjectId) == 0 && A->Revision == B->Revision && A->CreatedAt == B->CreatedAt &&
         strcmp(A->WorkspaceRoot, B->WorkspaceRoot) == 0 &&
         (A->WorkspaceIdentity.Available & B->WorkspaceIdentity.Available & XFILE_INFO_IDENTITY) != 0u &&
         A->WorkspaceIdentity.Identity != 0u && A->WorkspaceIdentity.Type == XFILE_TYPE_DIRECTORY &&
@@ -93,7 +98,7 @@ bool MdoProjectWithBinding(const MdoProjectBinding* Expected, MdoProjectLease* O
     }
     Current.Size = sizeof(Current);
     if ( !MdoProjectBindingGet(Expected->ProjectId, &Current, Error) ) goto done;
-    if ( !MdoProjectBindingSame(Expected, &Current) ) {
+    if ( !MdoProjectBindingMatches(Expected, &Current) ) {
         (void)MdoProjectBindingError(Error, XWORK_ERROR_CONTEXT, "target project or workspace changed after review"); goto done;
     }
     Ok = Callback(&Current, Data, Error);

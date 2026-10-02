@@ -4,8 +4,9 @@
 预览 API 已接入。独立 staging 的材料化/读回检查、离线历史投影修复、输入
 待确认转换、持久来源记录和明确目标的 metadata/UI/产物路径准备已实现。
 Home 非覆盖目录提交、持久 journal 所有权和启动回收已实现，真实 Stage
-到 target Home 的历史产物读取通过。生产项目/workspace/ID 协调、catalog
-同步、恢复 worker 与正式页面入口待实现。2026-10-02 已完成
+到 target Home 的历史产物读取通过。生产同步 coordinator 已组合项目/
+workspace 复核、ID/data 预留、原子发布及一次 catalog 同步；恢复 worker、
+持久请求结果与正式页面入口待实现。2026-10-02 已完成
 checkpoint 与有界读取共用排他运行窗口、统一捕获边界、v2 捕获/编码层和
 有界 HTTP/TLS 传输。现有页面仍使用 `export_schema:1`，只有 meta 和模型 snapshot。
 格式/传输验证通过不表示正式页面已经导出完整备份，或恢复事务已经完成。
@@ -13,9 +14,10 @@ checkpoint 与有界读取共用排他运行窗口、统一捕获边界、v2 捕
 生产恢复的前置项目协调已接入 [发布绑定](project-publication-binding.md)：
 全项目 definition guard 修补 POSIX 同进程 writer 竞态，短发布回调在
 native lock 内复核 reviewed revision/incarnation 和物理 workspace 身份。
-它不替代 session ID 预留、catalog 同步或完整 restore coordinator，正式
-页面继续保持 `restore_ready:false`。下一步将该边界接入已准备的 Stage
-与 Home journal 事务，再接入 worker/取消/可查询结果和正式菜单。
+生产 [restore coordinator](session-restore-coordinator.md) 已将该边界接入
+session ID/data 预留、Stage 与 Home journal 事务，并按实际 Commit 通知
+catalog。正式页面继续保持 `restore_ready:false`。下一步接入拥有上传/
+预览副本的 worker、取消/持久可查询结果及正式菜单确认流程。
 旧版核心功能是 Markdown 导出，图片携带已经恢复；这里补齐新版现有 JSON
 备份入口，不将它冒充旧版已有的导入能力。
 
@@ -102,8 +104,9 @@ manager 调用或库通过 native path 写入不能被它自动覆盖。不得�
    离线队列/草稿待确认转换已接入，旧受理证据保留，新输入 ID 不重复调度。
    精确源 metadata/意图及映射已保存在随备份携带的 `restore-inputs.json`。
    目标 metadata/UI 身份与便携产物路径准备已接入，source/target metadata
-   和旧路径持久保存到 `restore-origin.json`。继续完成恢复 worker、真实
-   项目/workspace 验证和 ID 预留。恢复到独立 staging，
+   和旧路径持久保存到 `restore-origin.json`。生产同步 coordinator 已接入
+   真实项目/workspace 复核、ID/data 预留、原子发布与一次 catalog 通知；
+   worker 所有权/排空、持久可查询结果与正式页面继续待办。恢复到独立 staging，
    验证实际 xllm 恢复与 UI replay 后，以不覆盖的原子
    目录发布方式创建新的会话。保留原身份作为来源，明确处理 ID 冲突；失败
    只清理由本次事务拥有的文件。实际发布后才进入 catalog，导入不得立即

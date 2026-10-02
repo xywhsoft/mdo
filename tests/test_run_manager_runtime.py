@@ -284,7 +284,7 @@ def write_site(site: Path) -> None:
         "src/asks/manager.c",
         "src/sessions/todo.c", "src/sessions/attachments.c",
         "src/sessions/sidecars/binding.c", "src/sessions/sidecars/binding.h",
-        "src/sessions/internal.h", "src/sessions/manager.c", "src/runs/manager.c",
+        "src/sessions/internal.h", "src/sessions/manager.c", "src/sessions/restore_reservation.inc.c", "src/runs/manager.c",
     ):
         shutil.copy2(ROOT / "app" / relative, site / relative)
     for header in (ROOT / "app/include/mdo").glob("*.h"):

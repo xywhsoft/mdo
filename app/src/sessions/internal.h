@@ -7,6 +7,38 @@
 
 typedef struct MdoSessionEventBridge MdoSessionEventBridge;
 typedef struct MdoSessionEventTrimPlan MdoSessionEventTrimPlan;
+typedef struct MdoSessionRestoreReservation MdoSessionRestoreReservation;
+
+/* One synchronous owner per reservation. Acquire a current shared project
+ * lease first. Reserves a fresh 32-lowercase-hex target and owns its exclusive
+ * session-data lease: pending targets cannot be created, opened or loaded,
+ * including conservative native aliases. No Home write/runtime/catalog bump.
+ * At most eight pending identities; only Home's one journal may begin storage.
+ * Registry calls run before manager locks. Drain active calls/transactions
+ * before manager/Home Unit; inactive old reservations remain safely releasable.
+ * This is coordination, not project/workspace/semantic publication permission. */
+MdoSessionRestoreReservation* MdoSessionsRestoreReserve(cstr ProjectId,
+    cstr SessionId, MdoProjectLease* Owner, xwork_error* Error);
+/* Parent must initially be NULL; caller owns the returned anchor. The opaque
+ * reservation owns its Home transaction, never accepting another target's tx. */
+bool MdoSessionsRestoreStorageBegin(MdoSessionRestoreReservation* Reservation,
+    xroot* Parent, xwork_error* Error);
+/* Call only inside the reviewed MdoProjectWithBinding publication callback,
+ * after StageCheck and StageRelease and after closing caller anchors. On an
+ * actual commit advances catalog exactly once under the same manager lock as
+ * Home's atomic no-replace publication, including a false cleanup result.
+ * Committed/Generation are independent of bool success. Generation exhaustion
+ * prevents publication. The reservation stays pending until Release. */
+bool MdoSessionsRestorePublish(MdoSessionRestoreReservation* Reservation,
+    cstr DirectoryName, const xfileinfo* Identity, bool* Committed,
+    uint64* Generation, xwork_error* Error);
+/* Closes any uncommitted storage transaction and consumes *Reservation, then
+ * releases the data/project pins. Stage/caller anchors must already be closed.
+ * Cleanup failure freezes Home through its durable journal. Inactive objects
+ * from a closed manager may be released but never authorize new storage.
+ * Invalid stale active transactions retain the handle for diagnosis. */
+bool MdoSessionsRestoreRelease(MdoSessionRestoreReservation** Reservation,
+    xwork_error* Error);
 
 /* Pure parsing seams. Event strings are borrowed only during Visitor; neither
  * function reads Home or projects state. TodoParse returns an owned value. */
