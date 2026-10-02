@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="zh-CN">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>下载交付独立对照</title>
+<style>
+body { margin: 20px; font: 16px/1.5 sans-serif; }
+button, a { display: block; margin: 12px 0; min-height: 40px; }
+pre { white-space: pre-wrap; overflow-wrap: anywhere; }
+</style>
+<h1>下载交付独立对照</h1>
+<p>合成文件只含固定测试文字，不读取工作台模块、模型或会话数据。</p>
+<a href="/__qa/download-control/file.txt" download="mdo-qa-http.txt">HTTP 附件下载</a>
+<button type="button" id="sync">同步 Blob 下载</button>
+<button type="button" id="async">延迟 Blob 下载</button>
+<pre id="result" role="status">尚未交付 Blob</pre>
+<script type="module">
+const payload = "mdo independent download control\n";
+const output = document.querySelector("#result");
+const deliveries = [];
+function deliver(kind) {
+  const blob = new Blob([payload], { type: "text/plain;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url; link.download = `mdo-qa-${kind}.txt`;
+  document.body.append(link); link.click(); link.remove();
+  // Match the complete export's retention; do not retire the URL immediately.
+  setTimeout(() => URL.revokeObjectURL(url), 60000);
+  deliveries.push({ kind, bytes: blob.size, delivered: true });
+  output.textContent = JSON.stringify(deliveries, null, 2);
+}
+document.querySelector("#sync").addEventListener("click", () => deliver("sync"));
+document.querySelector("#async").addEventListener("click", async () => {
+  // One half-second delay distinguishes native user activation from async save.
+  await new Promise(resolve => setTimeout(resolve, 500));
+  deliver("async");
+});
+</script>
+</html>

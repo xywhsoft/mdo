@@ -5,6 +5,12 @@
 Markdown 快捷键和入口保持原操作。旧 `/export` v1 API 保留兼容，但正式
 JSON 菜单不再使用它。完整恢复入口尚未开放，`restore_ready:false` 保持。
 
+后续同日 [浏览器复验](browser-download-validation.md) 已在同一产品包
+的 Windows 桌面和 Linux 服务小屏页观察到 JSON/Markdown 完整字节
+completed，并读回 v2 UI/原图/原名。下文保留初始取消事实；此前原因
+仍未确认，下载等待接口也未给出磁盘路径，不能宣称初次问题已修复或
+原生/实体设备验收完成。
+
 ## 内容与接收边界
 
 `state/sessions.js` 将原项目/会话交给独立 `api/backup-download.js`。

@@ -27,7 +27,7 @@ frame.addEventListener("load", () => {
     // The backup API deliberately downloads JSON as application/octet-stream.
     const jsonCandidate = blob.type.includes("json") || blob.type === "application/octet-stream";
     if (markdown || jsonCandidate) {
-      void blob.text().then((text) => {
+      void blob.text().then(async (text) => {
         let document = null;
         if (!markdown) {
           try { document = JSON.parse(text); } catch { return; }
@@ -42,10 +42,18 @@ frame.addEventListener("load", () => {
             (text.match(/^\[mdo-image-[a-f0-9]{32}\]: data:image\//gm) || []).length };
         if (markdown) {
           const embedded = [...text.matchAll(/data:image\/(?:png|jpeg|webp);base64,([A-Za-z0-9+/]+={0,2})/g)];
-          const syntheticPng = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/lZkAAAAASUVORK5CYII=";
           capture.embeddedImageBytes = embedded.map((match) => atob(match[1]).length);
-          capture.allEmbeddedImagesMatchFixture = embedded.length > 0 &&
-            embedded.every((match) => match[1] === syntheticPng);
+          const previous = captures.findLast(entry => entry.schema === 2);
+          if (crypto.subtle && previous) {
+            capture.embeddedImageSha256 = await Promise.all(embedded.map(async match => {
+              const bytes = Uint8Array.from(atob(match[1]), character => character.charCodeAt(0));
+              const hash = new Uint8Array(await crypto.subtle.digest("SHA-256", bytes));
+              return Array.from(hash, value => value.toString(16).padStart(2, "0")).join("");
+            }));
+            const expected = previous.imageFiles.map(file => file.sha256).sort();
+            capture.imagesMatchPreviousBackup = embedded.length > 0 &&
+              JSON.stringify(capture.embeddedImageSha256.slice().sort()) === JSON.stringify(expected);
+          }
           capture.hasOriginalImageName = text.includes('截图 "1" 100%\\.png');
           capture.hasLongOriginalImageName = text.includes("跨平台附件".repeat(40) + "\\.png");
           capture.imagesIncomplete = text.includes("部分图片未包含");
@@ -56,8 +64,24 @@ frame.addEventListener("load", () => {
           if (document.export_schema === 2) {
             capture.schema = document.export_schema;
             capture.files = document.files.map((file) => ({ path: file.path, bytes: file.bytes, sha256: file.sha256 }));
+            const decodeText = file => new TextDecoder("utf-8", { fatal: true }).decode(
+              Uint8Array.from(atob(file.data), character => character.charCodeAt(0)));
+            const ui = document.files.find(file => file.path === "ui-events.jsonl");
+            // v2 stores text files as base64; searching the outer JSON cannot
+            // prove that the original input/reply was included. Read only the
+            // small owned fixture's UI and attachment metadata, never artifacts.
+            if (ui && ui.bytes <= 262144) {
+              const uiText = decodeText(ui);
+              capture.uiReadbackBytes = atob(ui.data).length;
+              capture.hasSyntheticPrompt = uiText.includes("EXPORT ");
+              capture.hasSyntheticReply = uiText.includes("UI fixture completed.");
+            }
             capture.imageFiles = document.files.filter((file) => /^attachments\/[a-f0-9]{32}\.bin$/.test(file.path))
-              .map((file) => ({ path: file.path, decodedBytes: atob(file.data).length }));
+              .map((file) => {
+                const meta = document.files.find(entry => entry.path === file.path.replace(/\.bin$/, ".json"));
+                return { path: file.path, decodedBytes: atob(file.data).length, sha256: file.sha256,
+                  fileName: meta && meta.bytes <= 4096 ? JSON.parse(decodeText(meta)).file_name : null };
+              });
             capture.restoreReady = document.restore_ready;
           }
         }

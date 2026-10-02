@@ -21,6 +21,7 @@ With --message-edit-fixture, /__qa/message-edit-enter serves the keyboard and
 IME component probe against the exact packed message editor module.
 With --export-download-fixture, /__qa/export-download observes the Blob passed
 by the real workbench's Markdown/JSON export without replacing its download.
+/__qa/download-control provides independent HTTP/sync/async synthetic files.
 """
 
 import argparse
@@ -322,6 +323,24 @@ Object.defineProperty(navigator, 'clipboard', {
                                        "reads": self.server.preview_image_reads}).encode()
                 self.preview_reply(200, body, "application/json")
                 return
+        if self.server.export_download_fixture and self.path == "/__qa/download-control":
+            self.preview_reply(200,
+                (ROOT / "tests/fixtures/download-control-browser.html").read_bytes(),
+                "text/html; charset=utf-8")
+            return
+        if self.server.export_download_fixture and self.path == "/__qa/download-control/file.txt":
+            payload = b"mdo independent download control\n"
+            self.send_response(200)
+            self.send_header("Content-Type", "text/plain; charset=utf-8")
+            self.send_header("Content-Length", str(len(payload)))
+            self.send_header("Content-Disposition", 'attachment; filename="mdo-qa-http.txt"')
+            self.send_header("Cache-Control", "no-store")
+            self.end_headers()
+            try:
+                self.wfile.write(payload)
+            except (BrokenPipeError, ConnectionResetError):
+                pass
+            return
         if (self.path == "/__qa/export-download" and
                 self.server.export_download_fixture):
             payload = (ROOT / "tests/fixtures/packed-export-download-browser.html").read_bytes()
