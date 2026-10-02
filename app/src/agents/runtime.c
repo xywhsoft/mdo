@@ -895,6 +895,35 @@ static void MdoAgentSessionFree(MdoAgentSession* Session)
     xrtFree(Session);
 }
 
+static xwork_artifact_store* MdoAgentsArtifactStore(const char* Directory,
+    xwork_error* Error)
+{
+    MdoHomeSnapshot Home = {0};
+    char* Relative = NULL;
+    xroot Root = NULL;
+    xwork_artifact_store* Store = NULL;
+    char* p;
+    Home.Size = sizeof(Home);
+    if ( !Directory || !MdoHomeGetSnapshot(&Home) || !Home.Path ) goto fail;
+    Relative = xrtPathIsAbs(Directory) ? xrtPathRel(Home.Path, Directory) :
+        xrtStrDup(Directory);
+    if ( Relative == NULL ) goto fail;
+    for ( p = Relative; *p; ++p ) if ( *p == '\\' ) *p = '/';
+    /* Invalid Home paths must never fall back to unrestricted native IO. */
+    Root = MdoHomeOpenStorageDirectory(Relative);
+    if ( Root == NULL ) goto fail;
+    Store = xworkArtifactStoreCreate(Root, Error);
+    (void)xrtRootClose(Root);
+    xrtFree(Relative);
+    return Store;
+fail:
+    if ( Root ) (void)xrtRootClose(Root);
+    xrtFree(Relative);
+    MdoAgentsError(Error, XWORK_ERROR_IO,
+        "cannot open the Agent artifact directory below Home");
+    return NULL;
+}
+
 MdoAgentSession* MdoAgentSessionCreateWithRuntime(xwork_runtime* Runtime,
     const MdoAgentSessionOptions* Options, xwork_error* Error)
 {
@@ -926,6 +955,7 @@ MdoAgentSession* MdoAgentSessionCreateWithRuntime(xwork_runtime* Runtime,
     uint64 MemoryGeneration = 0u;
     char* DefaultArtifacts = NULL;
     const char* Artifacts;
+    xwork_artifact_store* ArtifactStore = NULL;
     MdoHomeSnapshot Home;
 
     xworkErrorInit(Error);
@@ -1153,10 +1183,18 @@ MdoAgentSession* MdoAgentSessionCreateWithRuntime(xwork_runtime* Runtime,
     DefinitionConfig.bRegisterBuiltinTools = true;
     DefinitionConfig.bAutoSaveSession =
         Options->SessionPath != NULL && Options->SessionPath[0] != '\0';
-    DefinitionConfig.bAllowArtifactWrites =
-        (AllowedEffects & XWORK_TOOL_EFFECT_WORKSPACE_WRITE) != 0u;
+    /* Home-owned output storage is separate from permission to edit a project.
+     * Read-only runs still retain full tool results for the user to inspect. */
+    memset(&Home, 0, sizeof(Home));
+    Home.Size = sizeof(Home);
+    if ( !MdoHomeGetSnapshot(&Home) ) {
+        MdoAgentsError(Error, XWORK_ERROR_CONTEXT,
+            "cannot inspect Home artifact storage");
+        goto fail;
+    }
+    DefinitionConfig.bAllowArtifactWrites = Home.Persistence != MDO_PERSISTENCE_EPHEMERAL;
     DefinitionConfig.bRequireVerificationAfterWrite =
-        DefinitionConfig.bAllowArtifactWrites;
+        (AllowedEffects & XWORK_TOOL_EFFECT_WORKSPACE_WRITE) != 0u;
     DefinitionConfig.bInjectSystemPrompt = true;
     Definition = xworkAgentDefinitionCreate(&DefinitionConfig, Error);
     if ( Definition == NULL ) goto fail;
@@ -1173,12 +1211,16 @@ MdoAgentSession* MdoAgentSessionCreateWithRuntime(xwork_runtime* Runtime,
         }
         Artifacts = DefaultArtifacts;
     }
+    if ( DefinitionConfig.bAllowArtifactWrites ) {
+        ArtifactStore = MdoAgentsArtifactStore(Artifacts, Error);
+        if ( ArtifactStore == NULL ) goto fail;
+    }
     xworkAgentOptionsInit(&AgentOptions);
     AgentOptions.pSession = Owner->LlmSession;
     AgentOptions.sWorkspaceRoot = Options->WorkspaceRoot != NULL &&
         Options->WorkspaceRoot[0] != '\0' ? Options->WorkspaceRoot : ".";
     AgentOptions.sSessionPath = Options->SessionPath;
-    AgentOptions.sArtifactDirectory = Artifacts;
+    AgentOptions.pArtifactStore = ArtifactStore;
     AgentOptions.pCancel = Options->Cancel;
     AgentOptions.uDeadline = Options->Deadline;
     AgentOptions.OnApproval = Options->OnApproval;
@@ -1251,6 +1293,7 @@ MdoAgentSession* MdoAgentSessionCreateWithRuntime(xwork_runtime* Runtime,
     xrtFree(Instructions);
     xrtFree(MemoryPrompt);
     xrtFree(DefaultArtifacts);
+    xworkArtifactStoreRelease(ArtifactStore);
     return Session;
 
 fail:
@@ -1259,6 +1302,7 @@ fail:
     xrtFree(Instructions);
     xrtFree(MemoryPrompt);
     xrtFree(DefaultArtifacts);
+    xworkArtifactStoreRelease(ArtifactStore);
     if ( Session != NULL ) {
         if ( Session->Owner == NULL ) Session->Owner = Owner;
         else MdoAgentOwnerRelease(Owner);

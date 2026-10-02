@@ -4,6 +4,44 @@
 
 完成判据及尚缺的打包页证据见 [前端操作体验完成审计](frontend-completion-audit.md)。本文件继续记录每次实现和验证的细节。
 
+## 2026-10-02：外置 Home 与只读会话的完整工具输出
+
+上一阶段记录的 Home 在 workspace 外时产物保存失败，本阶段已修复。xwork
+3.8.0 / ABI 7 增加宿主显式传入的引用计数 artifact store，克隆已经锚定的
+xrt 目录，写入及 registry 读取都使用目录句柄和受控相对路径。显示路径仅
+用于追溯，目录移动或旧路径替换不会改变 registry IO。沿用非覆盖发布、
+碰撞预算与失败清理；普通模型文件工具的 workspace 范围不扩大。
+
+mdo 从 Home 锚定根创建每个会话的 store，拒绝 Home 外参数、非法路径、
+文件叶及重启冻结时新 store 获取。只读 profile 也保留 Home 内完整输出，
+项目写权限和写后验证仍由 profile 决定；ephemeral Home 继续关闭产物保存。
+宿主在 import/purge/Unit 前须先停止原生写入者。详见
+[宿主产物存储合同](host-artifact-store.md)。源库 `0f597d26`、xs `9bb75a5`
+已提交，20 个生产文件及树 SHA 锁定，TCC 注入 172 个 xwork 公开函数。
+ABI 升级要求调用方重编译，mdo 模块 ABI 1 和事件 schema 3 保持。
+
+新增真实 mdo xs/TCC 探针，连续三次启动同一只读会话、项目外 Home 和
+本地模拟模型：超过 inline 阈值的 read 经产品 event bridge 保存；项目外
+读取和项目内写入被拒绝。重启、关闭后移动 Home 再启动均保留每轮原字节，
+以持久 event ID 经真实历史产物 HTTP API 读回长度、SHA-256 和内容。库
+夹具另验证 caller root 关闭、目录移动/旧位置替代及 Agent 销毁后读取。
+Windows/Linux 库测试均通过；初始显示路径相对/绝对断言失败已修正并重跑，
+失败日志保留。Windows link 创建权限限制的既有夹具明确跳过。
+
+最终两平台门禁通过 115 Python、252 Node、90 模块解析、严格 C11、39
+runtime、三项 packed 与独立 A/B。Windows 另通过便携 WebView2 Home
+覆盖/移动重启和 20 秒启动。两平台均从锁定 SDK 重建 native host，八个
+变更源文件/锁/探针的 Linux staging 与 Windows 工作区内容核对一致。
+根目录 `mdo.exe` 已更新为 6,390,227 字节，与 Windows A/B 一致，SHA-256
+`c4a2e154553b7e8c244d08a606c919cfd0e35335d3a55416001e30ec005f1c27`；
+Linux 为 `2c7bfe3a2511a6013e653816b65fe69df60409740d895aec1cd0f4fee4ed1be1`。
+日志 `.build/qa-store-{library-windows,library-linux,windows-final,linux-final}.log`。
+
+便携优先：WebView2 缓存仍在 `mdo-home/data/cache/webview2`，首次窗口
+启动允许创建。正式导出/恢复菜单、staging 发布及完整恢复仍未完成，
+`restore_ready:false` 保持；既有 Linux queued HEAD reset 仍待排查。
+本阶段没有压力/高负载测试或原生点击/实体设备验收增量。
+
 
 ## 2026-10-02：重启后工具产物的非覆盖发布
 

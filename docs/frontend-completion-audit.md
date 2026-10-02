@@ -2,8 +2,29 @@
 
 本清单以 `app_bak/wwwroot` 的可操作行为为基线，而不是以页面长得相似或单元测试通过为完成标准。`docs/frontend-migration.md` 记录每次实现和验证；这里记录当前还需要什么证据。审计更新：2026-10-02，基线提交 `f9e2c4c`。
 
+2026-10-02 最新增量：Home 在项目外时的工具产物保存缺口已修复。xwork
+3.8.0 / ABI 7 的显式宿主 store 拥有锚定目录，读写不重新打开显示路径；
+mdo 通过 Home 根创建 store，只读会话仍保存内部完整输出，项目读写权限
+保持。源库 `0f597d26`、xs `9bb75a5` 已提交并锁定。真实 mdo 三次启动
+探针验证外置 Home、只读 profile、重启、Home 移动、历史 event ID 的
+HTTP 读回及越界读取/项目写入拒绝。后文旧缺口记录保留为阶段历史。
 
-2026-10-02 最新增量：修复 xwork 重启后同编号产物原子写入会替换旧内容的
+最终 Windows/Linux 通过 115 Python、252 Node、90 模块、严格 C11、39
+runtime、三项 packed 和独立 A/B；Windows 另通过便携 WebView2 Home
+及 20 秒启动。根目录程序已更新为 6,390,227 字节、SHA-256
+`c4a2e154553b7e8c244d08a606c919cfd0e35335d3a55416001e30ec005f1c27`；
+Linux 为 `2c7bfe3a2511a6013e653816b65fe69df60409740d895aec1cd0f4fee4ed1be1`。
+日志 `.build/qa-store-{windows,linux}-final.log`。详见
+[本轮迁移](frontend-migration.md#2026-10-02外置-home-与只读会话的完整工具输出)
+和 [存储合同](host-artifact-store.md)。便携缓存仍使用
+`mdo-home/data/cache/webview2`，首次窗口启动创建符合用户选择。
+
+staging、正式菜单、完整恢复和原生/实体设备证据仍待完成，
+`restore_ready:false` 保持。既有 Linux queued HEAD reset 未关闭。
+没有压力或高负载测试。下方增量保留各阶段当时的状态。
+
+
+2026-10-02 增量：修复 xwork 重启后同编号产物原子写入会替换旧内容的
 问题。3.7.1 用现有根内非覆盖改名发布完整临时文件，碰撞换编号并受预算
 约束，失败仅清理拥有的临时文件和配额。源库 `c91c563e`、xs `ed87394` 已
 提交，依赖锁定，两平台库夹具和真实 xs/TCC 三次异步 run 重启核对通过。

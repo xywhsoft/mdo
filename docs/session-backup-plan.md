@@ -907,3 +907,27 @@ C11、38 runtime、三项 packed 和独立 A/B；Windows 另通过便携 WebView
 Linux 为 `da4cc36f9650a885a5064cba3cd76a3ce20d0bed889308e2685e43bf44fa0761`。
 日志 `.build/qa-artifact-{windows,linux}-final.log`；没有压力/高负载测试，
 既有 Linux queued HEAD reset 和原生/实体设备证据仍单独待处理。
+
+## 外置 Home 与只读产物的接入修复
+
+步骤 5 的另一个前置缺口已修复：xwork 3.8.0 / ABI 7 引入显式宿主 store，
+引用保留已经锚定的目录，registry 读取也相对该根进行，显示路径不参与
+IO。mdo 从 Home 根创建 store，内部输出保存与项目写权限分离；只读会话
+保留完整输出，ephemeral Home 禁止保存。普通文件工具仍受 workspace
+范围限制，不能通过 artifact store 取得项目外文件权限。
+
+真实 mdo/TCC 小探针三次启动外置 Home 的同一只读会话，核对实际 Agent
+run、事件桥、历史 HTTP API、重启与关闭后 Home 移动，保存每轮完整字节
+和 SHA-256，项目外读取/项目内写入拒绝。源库夹具另核对活句柄移动、旧
+位置替代和 Agent 销毁后读取。宿主须在 import/purge/Unit 前停止原生写入。
+源库 `0f597d26`、xs `9bb75a5` 及 mdo 依赖均可追溯，详见
+[宿主产物存储](host-artifact-store.md)。前节的外置 Home 缺口是修复前记录。
+
+最终两平台有界门禁通过 115 Python、252 Node、90 模块、严格 C11、39
+runtime、三项 packed 和独立 A/B；Windows 另通过便携 WebView2 及 20 秒
+启动。root mdo.exe 和 native xs/xsw 已更新，Windows SHA-256
+`c4a2e154553b7e8c244d08a606c919cfd0e35335d3a55416001e30ec005f1c27`；
+Linux `2c7bfe3a2511a6013e653816b65fe69df60409740d895aec1cd0f4fee4ed1be1`。
+日志 `.build/qa-store-{windows,linux}-final.log`。没有压力/高负载或新增原生/
+实体设备验收；Linux queued HEAD reset 仍待排查。staging UI 重放、投影
+修复、原子发布及正式菜单仍按步骤 5–6 实施，`restore_ready:false` 保持。

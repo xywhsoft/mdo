@@ -26,7 +26,7 @@ typedef struct MdoAgentSessionOptions {
     const char* SessionPath;      /* optional xllm-session snapshot path. */
     const char* JournalPath;      /* optional write-ahead journal path. */
     bool Recover;                 /* recover snapshot + journal as one unit. */
-    const char* ArtifactDirectory;
+    const char* ArtifactDirectory; /* Home-relative, or an absolute path below Home. */
     xcancel* Cancel;
     uint64 Deadline;
     xwork_approval_fn OnApproval;

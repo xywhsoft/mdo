@@ -50,6 +50,12 @@ xdir MdoHomeOpenDirectory(cstr Path, uint32 Flags);
  * Home. The leaf is exclusive: an existing object makes the call fail. */
 bool MdoHomeCreateDirectory(cstr Path);
 
+/* Lazily creates a storage directory below the anchored Home and returns an
+ * independently owned directory handle. Existing non-directory leaves and
+ * checked link parents fail. The caller closes it with xrtRootClose(). Drain
+ * native storage writers before import/purge/Unit, as for native persistence. */
+xroot MdoHomeOpenStorageDirectory(cstr Path);
+
 /* Removes one empty directory below the anchored external Home. Missing
  * directories are a successful no-op. */
 bool MdoHomeRemoveEmptyDirectory(cstr Path);

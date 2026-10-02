@@ -633,6 +633,35 @@ done:
     return bOk;
 }
 
+xroot MdoHomeOpenStorageDirectory(cstr Path)
+{
+    xfileinfo Info;
+    xroot Result = NULL;
+    if ( !MdoHomePathValid(Path) || !g_MdoHome.Initialized ) {
+        MdoHomeErrorSet(XERR_ARGUMENT, MDO_HOME_ERROR_ARGUMENT,
+            "invalid external Home storage directory request");
+        return NULL;
+    }
+    xrtMutexLock(g_MdoHome.Lock);
+    if ( !MdoHomeEnsureLocked() ||
+         !MdoHomeEnsureParents(g_MdoHome.Root, Path) ) goto done;
+    if ( !xrtRootStat(g_MdoHome.Root, Path, false, &Info) ) {
+        if ( xrtErrorKind(xrtGetError()) != XERR_NOT_FOUND ) goto done;
+        if ( !xrtRootDirCreate(g_MdoHome.Root, Path, 0700u) &&
+             xrtErrorKind(xrtGetError()) != XERR_EXISTS ) goto done;
+        if ( !xrtRootStat(g_MdoHome.Root, Path, false, &Info) ) goto done;
+    }
+    if ( Info.Type != XFILE_TYPE_DIRECTORY ) {
+        MdoHomeErrorSet(XERR_TYPE, MDO_HOME_ERROR_PATH,
+            "Home storage path is not a directory");
+        goto done;
+    }
+    Result = xrtRootOpenIn(g_MdoHome.Root, Path);
+done:
+    xrtMutexUnlock(g_MdoHome.Lock);
+    return Result;
+}
+
 bool MdoHomeRemoveEmptyDirectory(cstr Path)
 {
     xfileinfo Info;

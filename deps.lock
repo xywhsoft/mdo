@@ -7,7 +7,7 @@
     "single_header_sha256": "1ea16b21f968d09e5084162f3919b7e6ae2412f9e13c3bbbdd4b322bcd5a26d2"
   },
   "xserver": {
-    "commit": "ed87394ab8857ea5da197002ff11b1bf1af65d26",
+    "commit": "9bb75a5ab18a97816abd561f571be410affd758d",
     "version": "1.0.0",
     "required_extensions": [
       "xwork",
@@ -34,10 +34,10 @@
       "persistence_schema_version": 4
     },
     "xwork": {
-      "version": "3.7.1",
-      "source_commit": "c91c563eb8ef7ea23e7409f55fd7a8f9c05c0d5e",
-      "production_tree_sha256": "1a5ea94e63a1f7e8e83eed5b63cd7d5d58e14e7142586868d8ec198b195262bd",
-      "abi_version": 6,
+      "version": "3.8.0",
+      "source_commit": "0f597d26749b98ab49b87f57e9945e6b1254f2c9",
+      "production_tree_sha256": "c16186fcaa7867b5bacdaae3b94e37aed462e2c508de6d4cb4ef48de456abc69",
+      "abi_version": 7,
       "event_schema_version": 3
     }
   },
