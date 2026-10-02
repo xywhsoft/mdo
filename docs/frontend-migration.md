@@ -4,6 +4,41 @@
 
 完成判据及尚缺的打包页证据见 [前端操作体验完成审计](frontend-completion-audit.md)。本文件继续记录每次实现和验证的细节。
 
+## 2026-10-03：设置资源按需读取，收敛聊天启动
+
+按基础 Agent 优先级取消启动时的七组管理数据读取，完整模型编辑配置
+也改为进入模型设置时才读取。扩展页读取 Module/Skill/MCP，权限页
+读取权限配置，诊断页读取存储/诊断/旧数据预览。普通聊天、常规、Agent
+和联网偏好不触发这八项额外请求；聊天必需的模型/Agent/项目目录继续
+读取。此项减少前端启动工作，不据此宣称服务端初始化或模型上下文减少。
+
+同一页来回切换共用未完成的读取，已成功的结果保留；显式刷新仍读取
+最新值，旧回复不能覆盖或清掉较新的请求。进入失败的页可重新读取，
+错误状态提供读取重试，不把尚未加载显示成“没有配置”。模型编辑表单
+在分类切换后保留输入。读取不增加工具，不连接 MCP，不修改用户数据；
+治理、追溯能力继续保留但暂缓细化。
+
+隔离 Windows 打包页记录普通聊天和常规设置八项读取均为零；MCP 回复
+挂起时两次切换仍只有一次请求，释放后恢复。权限和模型配置各一次
+预期失败，经“重新读取”恢复；模型新表单的标识/名称跨分类保留且未
+重复读配置。新页面直接进入 `#/settings/models` 正常加载，未触发
+诊断/存储/迁移读取，页面无 error/warn。320×700 无横向溢出，模型
+控件和读取重试均高 40px。图形范围为 Windows 打包服务/浏览器视口，
+不扩大为原生 IME、实体手机或 Linux 图形验收。
+
+Windows/Linux 均通过相关 18 Python、21 Node、101 JS 模块检查，独立
+A/B 打包及隔离单文件静态资源/八项 API 读取；10 份代码/夹具按 LF
+核对一致，SDK 未改。没有压力、高负载或无关完整发布探针。
+可复现夹具 `tests/manual_packed_settings_qa.py` 的 `arm` 增加只影响一次
+指定配置 GET 的路径参数。证据 `.build/qa-settings-resources-*-proof.json`、
+`qa-settings-resources-model-draft{,-counts}.json`、`qa-settings-resources-direct.json`
+及 `qa-settings-resources-mobile{,-error}.jpg`；日志
+`.build/qa-settings-resources-{windows,linux}.log`。
+Windows 根程序 6,483,397 字节，SHA-256
+`d83ff8f2d5341e344db83c738766febbb2caf700fe906f79d32b40cf7eb6fb45`；
+Linux 候选 6,533,557 字节，SHA-256
+`f9a797d09690a7ab1d49773a00842c8b2eb68458193b4ce65134608281f41887`。
+
 ## 2026-10-03：恢复常用设置自动保存
 
 对照旧版 `chrome.js` 的即时修改/保存模式，常规、Agent、联网设置的

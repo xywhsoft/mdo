@@ -1,6 +1,7 @@
-"""Run an isolated packed settings page with one delayed/failed save.
+"""Run an isolated packed settings page with one delayed/failed request.
 
 POST /__qa/arm?mode=hold or mode=fail affects the next settings PATCH only.
+An optional path= selects one GET for a Settings catalog or /models/config.
 GET /__qa/control reports its arrival and bounded request counts.
 POST /__qa/release releases the delayed reply. No model requests are made.
 """
@@ -22,6 +23,9 @@ from test_api_runtime import ROOT, free_port, wait_ready
 from test_interrupt_runtime import stop_host
 
 SETTINGS = "/api/v1/settings/settings"
+READ_PATHS = {"/api/v1/" + name for name in (
+    "models/config", "modules", "skills", "mcp", "permissions", "storage",
+    "diagnostics", "migrations/legacy")}
 
 
 class SettingsProxy(BaseHTTPRequestHandler):
@@ -57,17 +61,22 @@ class SettingsProxy(BaseHTTPRequestHandler):
         target = urlsplit(self.path)
         if target.path == "/__qa/control":
             with self.server.lock:
-                state = {"mode": self.server.mode, "arrived": self.server.arrived,
+                state = {"mode": self.server.mode, "target": self.server.target,
+                         "arrived": self.server.arrived,
                          "released": self.server.release.is_set(),
                          "counts": dict(self.server.counts), "patches": list(self.server.patches)}
             return self.reply(state)
         if target.path == "/__qa/arm" and self.command == "POST":
-            mode = parse_qs(target.query).get("mode", [""])[0]
+            query = parse_qs(target.query)
+            mode = query.get("mode", [""])[0]
             assert mode in ("hold", "fail")
+            path = query.get("path", [SETTINGS])[0]
+            assert path == SETTINGS or path in READ_PATHS
             with self.server.lock:
                 self.server.release.set()
                 self.server.release = threading.Event()
                 self.server.mode = mode
+                self.server.target = ("PATCH" if path == SETTINGS else "GET", path)
                 self.server.arrived = False
             return self.reply({"armed": mode})
         if target.path == "/__qa/release" and self.command == "POST":
@@ -83,6 +92,7 @@ class SettingsProxy(BaseHTTPRequestHandler):
             self.server.counts[key] = self.server.counts.get(key, 0) + 1
             if self.command == "PATCH" and target.path == SETTINGS:
                 self.server.patches.append(json.loads(body)["patch"])
+            if (self.command, target.path) == self.server.target:
                 mode = self.server.mode
                 self.server.mode = ""
                 if mode:
@@ -90,7 +100,7 @@ class SettingsProxy(BaseHTTPRequestHandler):
                     gate = self.server.release
         if mode == "fail":
             return self.reply({"ok": False, "error": {"code": "qa_save_failed",
-                "message": "Bounded fixture save failure"}}, 503)
+                "message": "Bounded fixture request failure"}}, 503)
         headers = {key: value for key, value in self.headers.items()
                    if key.lower() not in ("host", "connection", "content-length")}
         connection = http.client.HTTPConnection("127.0.0.1", self.server.upstream, timeout=8)
@@ -118,6 +128,8 @@ class SettingsProxy(BaseHTTPRequestHandler):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--packed-path", type=Path, required=True)
+    parser.add_argument("--metadata-output", type=Path,
+        default=ROOT / ".build/qa-settings-autosave-live.json")
     args = parser.parse_args()
     base = Path(tempfile.mkdtemp(prefix="qa-settings-live-", dir=ROOT / ".build"))
     exe = base / ("mdo.exe" if os.name == "nt" else "mdo")
@@ -144,10 +156,11 @@ def main():
         proxy.lock = threading.Lock()
         proxy.release = threading.Event()
         proxy.mode, proxy.arrived = "", False
+        proxy.target = ("PATCH", SETTINGS)
         proxy.counts, proxy.patches = {}, []
         threading.Thread(target=proxy.serve_forever, daemon=True).start()
         metadata = {"base": str(base), "port": proxy.server_address[1], "upstream": port}
-        (ROOT / ".build/qa-settings-autosave-live.json").write_text(json.dumps(metadata), encoding="utf-8")
+        args.metadata_output.write_text(json.dumps(metadata), encoding="utf-8")
         print("READY " + json.dumps(metadata), flush=True)
         input("Press Enter to stop isolated settings fixture.\n")
     finally:

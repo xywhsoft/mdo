@@ -658,6 +658,8 @@
   "resource.diagnosticsDescription": "Проверка переносимого Home, состояния программы и проблем, требующих действий.",
   "resource.catalogRefreshed": "Каталог {name} обновлён",
   "resource.refresh": "Обновить",
+  "resource.loading": "Загрузка…",
+  "resource.retryLoad": "Повторить загрузку",
   "resource.rebuild": "Пересобрать",
   "resource.reloadConfig": "Перезагрузить настройки",
   "resource.noMcp": "Серверы MCP не настроены",

@@ -1661,6 +1661,7 @@ select:focus-visible,
   .settings-actions button { min-height: 40px; }
   .resource-group-heading { flex-wrap: wrap; gap: 8px; }
   .resource-group-heading .secondary-button,
+  .resource-error button,
   .resource-actions :is(.secondary-button, .primary-button, .task-cancel) {
     min-width: 40px;
     min-height: 40px;

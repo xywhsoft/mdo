@@ -19,16 +19,38 @@ const STORES = Object.freeze({
   diagnostics: diagnosticsStore,
   migrations: migrationsStore,
 });
+const pendingReads = new Map();
+const SECTION_RESOURCES = Object.freeze({
+  extensions: ["modules", "skills", "mcp"],
+  permissions: ["permissions"],
+  diagnostics: ["storage", "diagnostics", "migrations"],
+});
 
 export function loadResource(name) {
   const store = STORES[name];
   if (!store) throw new TypeError("unknown resource store");
   const path = name === "migrations" ? "/migrations/legacy" : `/${name}`;
-  return store.load(async () => (await api.get(path)).data);
+  const read = store.load(async () => (await api.get(path)).data);
+  pendingReads.set(name, read);
+  const settled = () => {
+    // An explicit refresh may supersede this read. The store already ignores
+    // its old reply; keep tracking the newer read until it also settles.
+    if (pendingReads.get(name) === read) pendingReads.delete(name);
+  };
+  void read.then(settled, settled);
+  return read;
 }
 
-export function loadManagementResources() {
-  return Promise.all(Object.keys(STORES).map(loadResource));
+export function ensureSettingsResources(section) {
+  // These catalogs belong to their Settings page, not to ordinary chat boot.
+  // Re-entering a page shares in-flight reads and retains successful results;
+  // a failed read is retried only on explicit refresh or the next page visit.
+  const names = Object.hasOwn(SECTION_RESOURCES, section) ? SECTION_RESOURCES[section] : [];
+  return Promise.all(names.map((name) => {
+    if (pendingReads.has(name)) return pendingReads.get(name);
+    const store = STORES[name];
+    return store.get().status === "ready" ? store.get() : loadResource(name);
+  }));
 }
 
 async function awaitOperation(operation) {

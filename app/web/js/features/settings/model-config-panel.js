@@ -163,9 +163,32 @@ export function createModelConfigPanel(container) {
   let busy = false;
   let dirty = false;
 
+  function renderReadState(cause = null) {
+    clear(container);
+    const notice = element("div", { className: cause ? "resource-error" : "empty-state",
+      attrs: { role: cause ? "alert" : "status" } }, [cause
+      ? element("p", { text: errorMessage(cause) })
+      : copy("p", "resource.loading", "正在读取…")]);
+    if (cause) {
+      const retry = copy("button", "resource.retryLoad", "重新读取", {},
+        { className: "secondary-button", attrs: { type: "button" } });
+      retry.addEventListener("click", async () => {
+        if (busy) return;
+        await load();
+        if (container.isConnected && container.getClientRects().length &&
+            globalThis.document.activeElement === globalThis.document.body)
+          container.querySelector("button")?.focus({ preventScroll: true });
+      });
+      notice.append(retry);
+    }
+    container.append(notice);
+  }
+
   async function load(preferredKind = kind, preferredId = selectedId) {
     if (busy) return;
     busy = true;
+    container.setAttribute("aria-busy", "true");
+    if (!document) renderReadState();
     try {
       const response = await api.get("/models/config");
       document = response.data;
@@ -179,10 +202,11 @@ export function createModelConfigPanel(container) {
       dirty = false;
       render();
     } catch (cause) {
-      clear(container);
-      container.append(element("p", { className: "resource-error",
-        text: errorMessage(cause) }));
-    } finally { busy = false; }
+      renderReadState(cause);
+    } finally {
+      busy = false;
+      container.removeAttribute("aria-busy");
+    }
   }
 
   function collection() { return kind === "model" ? document.items : document.providers; }
@@ -510,7 +534,10 @@ export function createModelConfigPanel(container) {
     container.append(layout);
   }
 
-  subscribeLocale(() => translateCopy(container));
-  void load();
-  return Object.freeze({ reload: () => load() });
+  const unsubscribe = subscribeLocale(() => translateCopy(container));
+  return Object.freeze({
+    ensureLoaded: () => document ? Promise.resolve() : load(),
+    reload: () => load(),
+    destroy: unsubscribe,
+  });
 }

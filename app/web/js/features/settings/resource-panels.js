@@ -2,7 +2,7 @@ import { element, clear, errorMessage, toast } from "../../utils/dom.js";
 import { subscribeLocale, t } from "../../i18n.js";
 import {
   reloadCatalog, setMcpEnabled, disconnectMcp, refreshMcp,
-  applyLegacyMigration,
+  applyLegacyMigration, ensureSettingsResources,
 } from "../../state/resources.js";
 import { createModelConfigPanel } from "./model-config-panel.js";
 
@@ -47,7 +47,14 @@ function trackedActions(container, attribute) {
       catch (error) { toast(errorMessage(error), "error"); }
       finally {
         pending.delete(key);
-        find(key)?.removeAttribute("aria-disabled");
+        const next = find(key);
+        next?.removeAttribute("aria-disabled");
+        if (container.isConnected && container.getClientRects().length &&
+            document.activeElement === document.body) {
+          const target = next || container.querySelector("button") || container;
+          if (target === container) container.setAttribute("tabindex", "-1");
+          target.focus({ preventScroll: true });
+        }
       }
     });
     return button;
@@ -150,6 +157,7 @@ export function createResourcePanels({ agentsStore, stores, reload }) {
   const unsubscribers = [];
   const extensionActions = trackedActions(extensionsContainer, "data-extension-action");
   const diagnosticActions = trackedActions(diagnosticsContainer, "data-diagnostic-action");
+  const permissionActions = trackedActions(permissionsContainer, "data-permission-action");
   let confirmingSource = "";
   let migrationResult = null;
   let migrationBusy = false;
@@ -166,7 +174,24 @@ export function createResourcePanels({ agentsStore, stores, reload }) {
     toast(t("resource.catalogRefreshed", { name }, `${name} 目录已刷新`));
   }
 
-  createModelConfigPanel(modelsContainer);
+  const modelPanel = createModelConfigPanel(modelsContainer);
+
+  function showReadState(container, state, actions, name) {
+    if (state.status === "error") {
+      container.append(element("div", { className: "resource-error", attrs: { role: "alert" } }, [
+        element("p", { text: errorMessage(state.error) }),
+        actions.create(`${name}-retry`, t("resource.retryLoad", {}, "重新读取"),
+          () => reloadChecked(name)),
+      ]));
+      return false;
+    }
+    if (state.status !== "ready" && !state.updatedAt) {
+      container.append(element("div", { className: "empty-state",
+        text: t("resource.loading", {}, "正在读取…"), attrs: { role: "status" } }));
+      return false;
+    }
+    return true;
+  }
 
   function renderExtensions() {
     const focusedKey = extensionsContainer.contains(document.activeElement)
@@ -186,15 +211,15 @@ export function createResourcePanels({ agentsStore, stores, reload }) {
     }
     extensionsContainer.append(heading("Skill", extensionActions.create("skills-reload",
       t("resource.refresh", {}, "刷新"), () => refreshCatalog("skills"))));
-    if (skills.status === "error") extensionsContainer.append(empty(errorMessage(skills.error)));
-    for (const skill of skills.status === "error" ? [] : skills.data?.items ?? []) {
+    const skillsReady = showReadState(extensionsContainer, skills, extensionActions, "skills");
+    for (const skill of skillsReady ? skills.data?.items ?? [] : []) {
       extensionsContainer.append(card(skill.name || skill.id, resourceDescription("skill", skill),
         skillMetadata(skill)));
     }
     extensionsContainer.append(heading("Module", extensionActions.create("modules-reload",
       t("resource.rebuild", {}, "重新编译"), () => refreshCatalog("modules"))));
-    if (modules.status === "error") extensionsContainer.append(empty(errorMessage(modules.error)));
-    for (const module of modules.status === "error" ? [] : modules.data?.modules ?? []) {
+    const modulesReady = showReadState(extensionsContainer, modules, extensionActions, "modules");
+    for (const module of modulesReady ? modules.data?.modules ?? [] : []) {
       extensionsContainer.append(card(module.name || module.id, resourceDescription("module", module), [module.version,
         module.external ? t("resource.externalTcc", {}, "外部 TCC") : t("resource.builtin", {}, "内置"),
         t("resource.toolCount", { count: module.tool_count }, `${module.tool_count} tools`),
@@ -202,9 +227,9 @@ export function createResourcePanels({ agentsStore, stores, reload }) {
     }
     extensionsContainer.append(heading("MCP", extensionActions.create("mcp-reload",
       t("resource.reloadConfig", {}, "重载配置"), () => refreshCatalog("mcp"))));
-    if (mcp.status === "error") extensionsContainer.append(empty(errorMessage(mcp.error)));
-    else if (!(mcp.data?.items ?? []).length) extensionsContainer.append(empty(t("resource.noMcp", {}, "尚未配置 MCP 服务器")));
-    for (const server of mcp.status === "error" ? [] : mcp.data?.items ?? []) {
+    const mcpReady = showReadState(extensionsContainer, mcp, extensionActions, "mcp");
+    if (mcpReady && !(mcp.data?.items ?? []).length) extensionsContainer.append(empty(t("resource.noMcp", {}, "尚未配置 MCP 服务器")));
+    for (const server of mcpReady ? mcp.data?.items ?? [] : []) {
       const actions = [extensionActions.create(`mcp-toggle:${server.id}`, server.enabled ? t("resource.disable", {}, "停用") :
         t("resource.enable", {}, "启用"), async () => {
         await setMcpEnabled(server.id, !server.enabled);
@@ -223,8 +248,13 @@ export function createResourcePanels({ agentsStore, stores, reload }) {
   }
 
   function renderPermissions(state) {
+    const focusedKey = permissionsContainer.contains(document.activeElement)
+      ? document.activeElement?.getAttribute("data-permission-action") : "";
     clear(permissionsContainer);
-    if (state.status === "error") { permissionsContainer.append(empty(errorMessage(state.error))); return; }
+    if (!showReadState(permissionsContainer, state, permissionActions, "permissions")) {
+      if (focusedKey) permissionActions.find(focusedKey)?.focus({ preventScroll: true });
+      return;
+    }
     const config = state.data?.configuration;
     if (!config) { permissionsContainer.append(empty(t("resource.permissionsUnavailable", {}, "权限配置不可用"))); return; }
     const defaultProfileName = permissionProfile(config.default_profile);
@@ -248,8 +278,8 @@ export function createResourcePanels({ agentsStore, stores, reload }) {
     const storage = stores.storage.get();
     const diagnostics = stores.diagnostics.get();
     const migrations = stores.migrations.get();
-    if (storage.status === "error") diagnosticsContainer.append(empty(errorMessage(storage.error)));
-    else if (storage.data) diagnosticsContainer.append(card(t("resource.portableStorage", {}, "便携存储"),
+    if (showReadState(diagnosticsContainer, storage, diagnosticActions, "storage") && storage.data)
+      diagnosticsContainer.append(card(t("resource.portableStorage", {}, "便携存储"),
       storage.data.home_path || t("resource.builtinReadOnly", {}, "内置只读资源"),
       [resourceCode(storage.data.persistence),
         t("resource.sessionCount", { count: storage.data.session_count }, `${storage.data.session_count} sessions`),
@@ -269,11 +299,10 @@ export function createResourcePanels({ agentsStore, stores, reload }) {
       result.setAttribute("data-diagnostic-action", "migrations-result");
       diagnosticsContainer.append(result);
     }
-    if (migrations.status === "error") {
-      diagnosticsContainer.append(empty(errorMessage(migrations.error)));
-    } else if (!(migrations.data?.items ?? []).length) {
+    const migrationsReady = showReadState(diagnosticsContainer, migrations, diagnosticActions, "migrations");
+    if (migrationsReady && !(migrations.data?.items ?? []).length) {
       diagnosticsContainer.append(empty(t("resource.noLegacyScan", {}, "尚未完成旧数据检测")));
-    } else {
+    } else if (migrationsReady) {
       for (const source of migrations.data.items) {
         const label = source.source_id === "portable-data"
           ? t("resource.portableData", {}, "程序旁 data")
@@ -347,9 +376,9 @@ export function createResourcePanels({ agentsStore, stores, reload }) {
       }
     }
     diagnosticsContainer.append(heading(t("resource.diagnosticsCount", { count: diagnostics.data?.total ?? 0 }, `诊断 (${diagnostics.data?.total ?? 0})`)));
-    if (diagnostics.status === "error") diagnosticsContainer.append(empty(errorMessage(diagnostics.error)));
-    else if (!(diagnostics.data?.items ?? []).length) diagnosticsContainer.append(empty(t("resource.noDiagnostics", {}, "没有检测到诊断问题")));
-    for (const item of diagnostics.status === "error" ? [] : diagnostics.data?.items ?? []) {
+    const diagnosticsReady = showReadState(diagnosticsContainer, diagnostics, diagnosticActions, "diagnostics");
+    if (diagnosticsReady && !(diagnostics.data?.items ?? []).length) diagnosticsContainer.append(empty(t("resource.noDiagnostics", {}, "没有检测到诊断问题")));
+    for (const item of diagnosticsReady ? diagnostics.data?.items ?? [] : []) {
       diagnosticsContainer.append(card(`${item.domain} · ${item.stage}`, item.message, [item.subject_id || item.path || "runtime"]));
     }
     if (focusedKey) {
@@ -374,5 +403,14 @@ export function createResourcePanels({ agentsStore, stores, reload }) {
     renderDiagnostics();
   }));
 
-  return () => unsubscribers.forEach((unsubscribe) => unsubscribe());
+  return Object.freeze({
+    selectSection(section) {
+      if (section === "models") void modelPanel.ensureLoaded();
+      else void ensureSettingsResources(section);
+    },
+    destroy() {
+      modelPanel.destroy();
+      unsubscribers.forEach((unsubscribe) => unsubscribe());
+    },
+  });
 }

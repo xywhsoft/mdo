@@ -658,6 +658,8 @@
   "resource.diagnosticsDescription": "检查便携 Home、运行状态和可操作诊断。",
   "resource.catalogRefreshed": "{name} 目录已刷新",
   "resource.refresh": "刷新",
+  "resource.loading": "正在读取…",
+  "resource.retryLoad": "重新读取",
   "resource.rebuild": "重新编译",
   "resource.reloadConfig": "重载配置",
   "resource.noMcp": "尚未配置 MCP 服务器",

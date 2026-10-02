@@ -658,6 +658,8 @@
   "resource.diagnosticsDescription": "Inspect the portable Home, runtime status, and actionable diagnostics.",
   "resource.catalogRefreshed": "{name} catalog refreshed",
   "resource.refresh": "Refresh",
+  "resource.loading": "Loading…",
+  "resource.retryLoad": "Retry loading",
   "resource.rebuild": "Rebuild",
   "resource.reloadConfig": "Reload configuration",
   "resource.noMcp": "No MCP servers configured",

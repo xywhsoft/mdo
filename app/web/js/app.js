@@ -11,7 +11,7 @@ import {
 } from "./state/settings.js";
 import {
   modulesStore, skillsStore, mcpStore, permissionsStore, storageStore,
-  diagnosticsStore, migrationsStore, loadResource, loadManagementResources,
+  diagnosticsStore, migrationsStore, loadResource,
 } from "./state/resources.js";
 import {
   tasksStore, taskDetailStore, artifactPreviewStore, loadTasks,
@@ -1031,7 +1031,7 @@ export async function boot() {
   const feedbackPanel = createFeedbackPanel({
     panel: $('[data-settings-panel="feedback"]'), navigation,
   });
-  createResourcePanels({
+  const resourcePanels = createResourcePanels({
     modelsStore,
     agentsStore,
     stores: {
@@ -1612,6 +1612,7 @@ export async function boot() {
       skipLink.href = "#settings-content";
       skipLink.textContent = t("shell.skipSettings");
       settingsView.selectSection(settingsSection);
+      resourcePanels.selectSection(settingsSection);
       const standalonePage = !["general", "agent", "web"].includes(settingsSection);
       syncSettingsTitle(settingsSection);
       $("#settings-revision").hidden = standalonePage;
@@ -2587,14 +2588,13 @@ export async function boot() {
     initialLoadWarned = true;
     toast(t("resource.partialLoad", {}, "部分资源暂时无法载入，可继续重试。"), "error");
   }
-  // Host health, task, approval, and Settings catalogs populate their own
+  // Host health, task, and approval reads populate their own
   // subscribed views. A delayed health response must not cover an already
   // loaded conversation with the startup timeout overlay.
   // A slow unrelated resource must not keep an explicit conversation route on
   // the uninitialized new-task shell.
   void Promise.allSettled([
     loadBootstrap(),
-    loadManagementResources(),
     loadTasks(),
     loadApprovals(),
   ]).then(reportInitialLoad);
