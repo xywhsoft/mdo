@@ -14,6 +14,9 @@ import threading
 from pathlib import Path
 
 
+from runtime_sources import copy_app_source
+
+
 ROOT = Path(__file__).resolve().parent.parent
 
 
@@ -360,7 +363,7 @@ def write_site(site: Path, base: Path) -> tuple[Path, Path]:
         "src/storage/home.c", "src/storage/home_import.inc.c", "src/storage/home_purge.inc.c", "src/storage/home_restore.inc.c", "src/security/secrets.c", "src/mcp/manager.c",
         "include/mdo/home.h", "include/mdo/home_import.h", "include/mdo/home_purge.h", "include/mdo/home_restore.h", "include/mdo/session_file_policy.h", "include/mdo/secrets.h", "include/mdo/mcp.h",
     ):
-        shutil.copy2(ROOT / "app" / relative, site / relative)
+        copy_app_source(relative, site)
     (site / "probe.c").write_text(probe_source(
         valid, changed, missing, invalid_http, http, other, str(marker),
         sys.executable, str(script)), encoding="utf-8")

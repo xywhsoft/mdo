@@ -12,6 +12,8 @@ typedef struct MdoHomeRestoreRecord {
     char Project[65], Session[33], Name[41];
     xfileinfo Journal, Parent, Directory;
     bool Ready;
+    bool HasRequest;
+    MdoHomeSessionRestoreRequest Request;
 } MdoHomeRestoreRecord;
 
 struct MdoHomeSessionRestore { MdoHomeRestoreRecord Record; };
@@ -65,12 +67,16 @@ static xvalue* MdoHomeRestoreRead(cstr Base, cstr Name)
     xjsonreadconfig Config;
     snprintf(Path, sizeof(Path), "%s/%s", Base, Name);
     xrtJsonReadConfigInit(&Config); Config.MaxInputBytes = MDO_HOME_RESTORE_RECORD_BYTES;
-    Config.MaxDepth = 2u; Config.MaxValues = 16u; Config.MaxContainerItems = 8u;
+    Config.MaxDepth = 3u; Config.MaxValues = 48u; Config.MaxContainerItems = 8u;
     if ( MdoHomePurgeReadBounded(Path, MDO_HOME_RESTORE_RECORD_BYTES, &Text, &Bytes) )
         Value = xrtJsonRead(xrtStrViewN(Text, Bytes), &Config);
     xrtFree(Text);
     return Value;
 }
+
+static bool MdoHomeRestoreLoad(cstr Base, MdoHomeRestoreRecord* Record, bool Retired);
+static bool MdoHomeRestoreJournal(cstr Base, bool* Owner, bool* Ready);
+#include "home_restore_receipt.inc.c"
 
 static bool MdoHomeRestoreSave(cstr Name, const MdoHomeRestoreRecord* Record, bool Ready)
 {
@@ -79,7 +85,7 @@ static bool MdoHomeRestoreSave(cstr Name, const MdoHomeRestoreRecord* Record, bo
     size_t TextBytes = 0u;
     char Temporary[128], Target[128];
     bool Ok = Object != NULL &&
-        MdoHomePurgeTake(Object, "version", xrtValueInt(1));
+        MdoHomePurgeTake(Object, "version", xrtValueInt(!Ready && Record->HasRequest ? 2 : 1));
     if ( Ready ) Ok = Ok && MdoHomePurgeTake(Object, "directory",
         xrtValueString(xrtStrView(Record->Name))) &&
         MdoHomePurgePutIdentity(Object, "identity", &Record->Directory);
@@ -87,6 +93,8 @@ static bool MdoHomeRestoreSave(cstr Name, const MdoHomeRestoreRecord* Record, bo
         MdoHomePurgeTake(Object, "session", xrtValueString(xrtStrView(Record->Session))) &&
         MdoHomePurgePutIdentity(Object, "journal", &Record->Journal) &&
         MdoHomePurgePutIdentity(Object, "parent", &Record->Parent);
+    if ( Ok && !Ready && Record->HasRequest )
+        Ok = MdoHomePurgeTake(Object, "request", MdoHomeRestoreRequestValue(&Record->Request));
     if ( Ok ) Text = xrtJsonStringify(Object, false, &TextBytes);
     Ok = Text != NULL && TextBytes <= MDO_HOME_RESTORE_RECORD_BYTES;
     snprintf(Temporary, sizeof(Temporary), "%s/%s.tmp", MDO_HOME_RESTORE_DIR, Name);
@@ -108,25 +116,26 @@ static bool MdoHomeRestoreSave(cstr Name, const MdoHomeRestoreRecord* Record, bo
  * can authorize cleanup only while its staging parent is empty. */
 static bool MdoHomeRestoreJournal(cstr Base, bool* Owner, bool* Ready)
 {
-    static const char* const Names[] = { "owner", "owner.tmp", "ready", "ready.tmp", "payload" };
+    static const char* const Names[] = { "owner", "owner.tmp", "ready", "ready.tmp", "payload", "result.tmp" };
     xdir Dir = xrtRootDirOpen(g_MdoHome.Root, Base, XDIR_STAT);
     xdirentry Entry;
     xdirnext Next = XDIR_NEXT_ERROR;
-    bool Ok = false;
+    bool Ok = false, Scratch = false;
     size_t Count = 0u;
     *Owner = false; *Ready = false;
     if ( Dir == NULL ) return false;
     while ( (Next = xrtDirNext(Dir, &Entry)) == XDIR_NEXT_ITEM ) {
         size_t i;
-        if ( ++Count > 5u || (Entry.Flags & XDIR_ENTRY_UTF8) == 0u ) goto done;
-        for ( i = 0u; i < 5u; ++i ) if ( MdoHomeImportName(Entry.Name, Names[i]) ) break;
-        if ( i == 5u || Entry.Info.Type != (i == 4u ? XFILE_TYPE_DIRECTORY : XFILE_TYPE_FILE) ||
+        if ( ++Count > 6u || (Entry.Flags & XDIR_ENTRY_UTF8) == 0u ) goto done;
+        for ( i = 0u; i < 6u; ++i ) if ( MdoHomeImportName(Entry.Name, Names[i]) ) break;
+        if ( i == 6u || Entry.Info.Type != (i == 4u ? XFILE_TYPE_DIRECTORY : XFILE_TYPE_FILE) ||
              (i != 4u && ((Entry.Info.Available & XFILE_INFO_SIZE) == 0u ||
                 Entry.Info.Size > MDO_HOME_RESTORE_RECORD_BYTES)) ) goto done;
         if ( i == 0u ) *Owner = true;
         if ( i == 2u ) *Ready = true;
+        if ( i == 5u ) Scratch = true;
     }
-    Ok = Next == XDIR_NEXT_END && (!*Ready || *Owner);
+    Ok = Next == XDIR_NEXT_END && (!*Ready || *Owner) && (!Scratch || *Owner);
 done:
     if ( !xrtDirClose(Dir) ) Ok = false;
     return Ok;
@@ -141,8 +150,9 @@ static bool MdoHomeRestoreLoad(cstr Base, MdoHomeRestoreRecord* Record, bool Ret
     bool Exists, Ok;
     memset(Record, 0, sizeof(*Record));
     Record->Journal.Type = Record->Parent.Type = Record->Directory.Type = XFILE_TYPE_DIRECTORY;
-    Ok = Owner != NULL && xrtValueType(Owner) == XVALUE_OBJECT && xrtValueCount(Owner) == 5u &&
-        xrtValueGetInt(xrtValueObjectGet(Owner, XRT_STR_LITERAL("version")), &Version) && Version == 1 &&
+    Ok = Owner != NULL && xrtValueType(Owner) == XVALUE_OBJECT &&
+        xrtValueGetInt(xrtValueObjectGet(Owner, XRT_STR_LITERAL("version")), &Version) &&
+        (Version == 1 || Version == 2) && xrtValueCount(Owner) == (Version == 1 ? 5u : 6u) &&
         MdoHomeRestoreCopy(Owner, "project", Record->Project, sizeof(Record->Project)) &&
         MdoHomePurgeId(Record->Project) &&
         MdoHomeRestoreCopy(Owner, "session", Record->Session, sizeof(Record->Session)) &&
@@ -153,6 +163,12 @@ static bool MdoHomeRestoreLoad(cstr Base, MdoHomeRestoreRecord* Record, bool Ret
         MdoHomePurgeSame(&Actual, &Record->Journal) &&
         MdoHomeRestoreStat(Base, "payload", &Exists, &Actual) &&
         (Exists ? MdoHomePurgeSame(&Actual, &Record->Parent) : Retired);
+    if ( Ok && Version == 2 ) {
+        Record->HasRequest = true;
+        Ok = MdoHomeRestoreRequestParse(xrtValueObjectGet(Owner, XRT_STR_LITERAL("request")), &Record->Request) &&
+            strcmp(Record->Project, Record->Request.ProjectId) == 0 && strcmp(Record->Session, Record->Request.SessionId) == 0;
+    }
+    if ( Ok && !Record->HasRequest ) Ok = MdoHomeRestoreStat(Base, "result.tmp", &Exists, &Actual) && !Exists;
     if ( Ok ) Ok = MdoHomeRestoreStat(Base, "ready", &Record->Ready, &Actual);
     if ( Ok && Record->Ready ) {
         Ready = MdoHomeRestoreRead(Base, "ready");
@@ -255,7 +271,7 @@ done:
  * committed transaction into rollback, including interruption after retire. */
 static bool MdoHomeRestoreGc(void)
 {
-    static const char* const Names[] = { "ready.tmp", "owner.tmp", "ready", "owner" };
+    static const char* const Names[] = { "result.tmp", "ready.tmp", "owner.tmp", "ready", "owner" };
     MdoHomeRestoreRecord Record;
     xfileinfo Info, Directory;
     char Name[41], Path[160];
@@ -267,6 +283,13 @@ static bool MdoHomeRestoreGc(void)
     if ( !MdoHomeRestoreIdentity(&Info) || !MdoHomeRestoreJournal(MDO_HOME_RESTORE_GC, &Owner, &Ready) ||
          (Owner && !MdoHomeRestoreLoad(MDO_HOME_RESTORE_GC, &Record, true)) ||
          !MdoHomeRestorePayload(MDO_HOME_RESTORE_GC, Owner ? &Record : NULL, true, Name, &Directory) ) return false;
+    if ( Owner && Record.HasRequest ) {
+        MdoHomeSessionRestoreReceipt Receipt;
+        bool Found;
+        if ( !MdoHomeRestoreReceiptRead(Record.Request.SessionId, &Receipt, &Found) || !Found ||
+             !MdoHomeRestoreReceiptRetiredMatches(&Receipt, &Record) || (Receipt.Committed && Name[0] != '\0') ||
+             !MdoHomeRestoreResultScratchValid(MDO_HOME_RESTORE_GC, &Record) ) return false;
+    }
     if ( Name[0] != '\0' ) {
         snprintf(Path, sizeof(Path), "%s/payload/%s", MDO_HOME_RESTORE_GC, Name);
         if ( !MdoHomeRestoreStat(MDO_HOME_RESTORE_GC, "payload", &Exists, &Info) || !Exists ||
@@ -277,7 +300,7 @@ static bool MdoHomeRestoreGc(void)
     snprintf(Path, sizeof(Path), "%s/payload", MDO_HOME_RESTORE_GC);
     if ( !MdoHomeImportStat(Path, &Exists, &Info) ||
          (Exists && !xrtRootRemove(g_MdoHome.Root, Path)) ) return false;
-    for ( i = 0u; i < 4u; ++i ) {
+    for ( i = 0u; i < 5u; ++i ) {
         snprintf(Path, sizeof(Path), "%s/%s", MDO_HOME_RESTORE_GC, Names[i]);
         if ( !MdoHomeImportStat(Path, &Exists, &Info) ||
              (Exists && !xrtRootRemove(g_MdoHome.Root, Path)) ) return false;
@@ -296,7 +319,7 @@ static bool MdoHomeSessionRestoreRecoverLocked(bool* Committed)
         MDO_HOME_PURGE_DIR, MDO_HOME_PURGE_GC };
     MdoHomeRestoreRecord Record;
     xfileinfo Info, Journal, Directory;
-    bool Exists, Gc, Owner, Ready, Other;
+    bool Exists, Gc, Owner, Ready, Other, DidCommit = false;
     char Name[41], Target[128];
     size_t i;
     if ( Committed != NULL ) *Committed = false;
@@ -314,11 +337,13 @@ static bool MdoHomeSessionRestoreRecoverLocked(bool* Committed)
         if ( !MdoHomeImportStat(Target, &Exists, &Info) ) return false;
         if ( Name[0] == '\0' ) {
             if ( !Exists || !MdoHomePurgeSame(&Info, &Record.Directory) ) return false;
+            DidCommit = true;
             if ( Committed != NULL ) *Committed = true;
         } else if ( Exists && MdoHomePurgeSame(&Info, &Record.Directory) ) return false;
         /* Source retained, absent or foreign target: rename did not commit.
          * The foreign target is preserved; only our private source is retired. */
     }
+    if ( Owner && Record.HasRequest && !MdoHomeRestoreReceiptPublish(&Record, DidCommit) ) return false;
     return MdoHomeRestoreRetire(&Journal);
 }
 
@@ -329,14 +354,16 @@ static void MdoHomeRestoreFreeze(void)
         "session restore requires startup recovery; preserve its journal and target ID");
 }
 
-MdoHomeSessionRestore* MdoHomeSessionRestoreBegin(cstr Project, cstr Session, xroot* Parent)
+static MdoHomeSessionRestore* MdoHomeRestoreBegin(cstr Project, cstr Session,
+    const MdoHomeSessionRestoreRequest* Request, xroot* Parent)
 {
     static const char* const Journals[] = { MDO_HOME_RESTORE_DIR, MDO_HOME_RESTORE_GC,
         MDO_HOME_IMPORT_DIR, MDO_HOME_IMPORT_GC, MDO_HOME_PURGE_DIR, MDO_HOME_PURGE_GC };
     MdoHomeSessionRestore* Restore = NULL;
     xfileinfo Info;
     char Target[128];
-    bool Exists, Created = false;
+    bool Exists, Found, Created = false;
+    MdoHomeSessionRestoreReceipt Receipt;
     size_t i;
     if ( Parent == NULL || *Parent != NULL || !g_MdoHome.Initialized ||
          !MdoHomePurgeId(Project) || !MdoHomePurgeRequestIdValid(Session) ) {
@@ -345,6 +372,9 @@ MdoHomeSessionRestore* MdoHomeSessionRestoreBegin(cstr Project, cstr Session, xr
     xrtMutexLock(g_MdoHome.Lock);
     if ( g_MdoHome.Restore != NULL ) { (void)MdoHomeRestoreError("session restore is already in progress"); goto done; }
     if ( !MdoHomeEnsureLocked() ) goto done;
+    if ( !MdoHomeRestoreReceiptGetLocked(Session, &Receipt, &Found) ) goto done;
+    if ( Found ) { (void)MdoHomeRestoreError("session restore request ID has already been accepted; query the same result"); goto done; }
+    if ( Request != NULL && !MdoHomeRestoreReceiptCapacity() ) goto done;
     for ( i = 0u; i < 6u; ++i ) {
         if ( !MdoHomeImportStat(Journals[i], &Exists, &Info) ) goto done;
         if ( Exists ) { MdoHomeRestoreFreeze(); (void)MdoHomeRestoreError("pending Home transaction requires startup recovery"); goto done; }
@@ -353,6 +383,7 @@ MdoHomeSessionRestore* MdoHomeSessionRestoreBegin(cstr Project, cstr Session, xr
     if ( Restore == NULL ) goto done;
     snprintf(Restore->Record.Project, sizeof(Restore->Record.Project), "%s", Project);
     snprintf(Restore->Record.Session, sizeof(Restore->Record.Session), "%s", Session);
+    if ( Request != NULL ) { Restore->Record.HasRequest = true; Restore->Record.Request = *Request; }
     MdoHomeRestoreTarget(Target, &Restore->Record);
     if ( !MdoHomeImportStat(Target, &Exists, &Info) ) goto fail;
     if ( Exists ) { (void)MdoHomeRestoreError("restore target session ID already exists"); goto fail; }
@@ -384,6 +415,22 @@ done:
     return Restore;
 }
 
+MdoHomeSessionRestore* MdoHomeSessionRestoreBegin(cstr Project, cstr Session, xroot* Parent)
+{
+    return MdoHomeRestoreBegin(Project, Session, NULL, Parent);
+}
+
+MdoHomeSessionRestore* MdoHomeSessionRestoreBeginRequested(
+    const MdoHomeSessionRestoreRequest* Request, xroot* Parent)
+{
+    MdoHomeSessionRestoreRequest Owned;
+    if ( !MdoHomeRestoreRequestValid(Request) ) {
+        (void)MdoHomeRestoreError("invalid durable session restore request"); return NULL;
+    }
+    Owned = *Request;
+    return MdoHomeRestoreBegin(Owned.ProjectId, Owned.SessionId, &Owned, Parent);
+}
+
 bool MdoHomeSessionRestoreEnd(MdoHomeSessionRestore* Restore, cstr Name,
     const xfileinfo* Expected, bool Publish, bool* Committed)
 {
@@ -401,6 +448,8 @@ bool MdoHomeSessionRestoreEnd(MdoHomeSessionRestore* Restore, cstr Name,
     if ( !MdoHomeRestoreJournal(MDO_HOME_RESTORE_DIR, &Owner, &Ready) || !Owner || Ready ||
          !MdoHomeRestoreLoad(MDO_HOME_RESTORE_DIR, &Record, false) ||
          strcmp(Record.Project, Restore->Record.Project) != 0 || strcmp(Record.Session, Restore->Record.Session) != 0 ||
+         Record.HasRequest != Restore->Record.HasRequest ||
+         (Record.HasRequest && !MdoHomeRestoreRequestSame(&Record.Request, &Restore->Record.Request)) ||
          !MdoHomePurgeSame(&Record.Journal, &Restore->Record.Journal) ||
          !MdoHomePurgeSame(&Record.Parent, &Restore->Record.Parent) ||
          !MdoHomeRestorePayload(MDO_HOME_RESTORE_DIR, &Record, false, Directory, &Identity) ) goto done;

@@ -15,6 +15,9 @@ import threading
 from pathlib import Path
 
 
+from runtime_sources import copy_app_source
+
+
 ROOT = Path(__file__).resolve().parent.parent
 
 PROBE_SOURCE = r'''
@@ -496,7 +499,7 @@ def write_site(site: Path) -> None:
         "src/memory/manager.c",
         "src/memory/transfer.c",
     ):
-        shutil.copy2(ROOT / "app" / relative, site / relative)
+        copy_app_source(relative, site)
     shutil.copy2(
         ROOT / "app/src/memory/internal.h", site / "src/memory/internal.h"
     )

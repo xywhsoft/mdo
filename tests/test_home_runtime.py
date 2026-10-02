@@ -12,6 +12,7 @@ import sys
 import tempfile
 import threading
 from pathlib import Path
+from runtime_sources import copy_app_source
 
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -117,10 +118,7 @@ def write_site(site: Path) -> None:
     (site / "web" / "index.html").write_text("probe", encoding="utf-8")
     (site / "default-home" / "config" / "defaults.json").write_text(
         "builtin-default", encoding="utf-8")
-    for name in ("home.c", "home_import.inc.c", "home_purge.inc.c", "home_restore.inc.c"):
-        shutil.copy2(ROOT / "app/src/storage" / name, site / "src/storage" / name)
-    for name in ("home.h", "home_import.h", "home_purge.h", "home_restore.h", "session_file_policy.h"):
-        shutil.copy2(ROOT / "app/include/mdo" / name, site / "include/mdo" / name)
+    copy_app_source("src/storage/home.c", site)
     (site / "probe.c").write_text(PROBE_SOURCE, encoding="utf-8")
     with socket.socket() as listener:
         listener.bind(("127.0.0.1", 0))

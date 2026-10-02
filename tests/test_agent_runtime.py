@@ -14,6 +14,9 @@ import threading
 from pathlib import Path
 
 
+from runtime_sources import copy_app_source
+
+
 ROOT = Path(__file__).resolve().parent.parent
 
 SKILL_V1 = '''---
@@ -615,7 +618,7 @@ def write_site(site: Path, memory_enabled: bool = True) -> None:
         "src/agents/runtime.c",
         "src/asks/manager.c",
     ):
-        shutil.copy2(ROOT / "app" / relative, site / relative)
+        copy_app_source(relative, site)
     shutil.copy2(ROOT / "tests/fixtures/agent-capture.c", site / "agent-capture.c")
     for header in (ROOT / "app/include/mdo").glob("*.h"):
         shutil.copy2(header, site / "include/mdo" / header.name)

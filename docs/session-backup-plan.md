@@ -28,6 +28,15 @@ HTTP/TLS 双读者、原生最后释放与实例重建交错及独立文件 SHA 
 目标绑定和同一请求/会话 ID 下接入后台执行、取消及持久可查询结果，
 再开放确认页面。实例 Unit/TCC 卸载前必须 drain 所有消费引用的任务。
 
+2026-10-03 存储增量：
+[requested Home 恢复与持久结果](session-restore-receipts.md) 已支持 flush
+接受、固定目标/请求 ID、位置证明、永久 commit/abort 和启动补终态，
+结果确认后才 GC。真实原生小事务验证中断、同 ID、正确/外来前缀和
+冲突证据；公共 Home 写入保护回执 namespace。此接口尚未由现有同步
+coordinator 使用，下一步接接受/执行 handle，在 HTTP 返回已接受前
+取得该 durable owner；Run/跳过任务的 Drop 都消费它，查询优先持久
+事实，然后接预览/目标确认页面。`restore_ready:false` 继续保持。
+
 生产恢复的前置项目协调已接入 [发布绑定](project-publication-binding.md)：
 全项目 definition guard 修补 POSIX 同进程 writer 竞态，短发布回调在
 native lock 内复核 reviewed revision/incarnation 和物理 workspace 身份。

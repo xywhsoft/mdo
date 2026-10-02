@@ -15,6 +15,9 @@ import threading
 from pathlib import Path
 
 
+from runtime_sources import copy_app_source
+
+
 ROOT = Path(__file__).resolve().parent.parent
 
 PROBE_SOURCE = r'''
@@ -203,7 +206,7 @@ def write_site(site: Path) -> None:
         "default-home/config/defaults.json", "src/storage/home.c", "src/storage/home_import.inc.c", "src/storage/home_purge.inc.c", "src/storage/home_restore.inc.c",
         "src/config/config.c", "src/config/service.c",
     ):
-        shutil.copy2(ROOT / "app" / relative, site / relative)
+        copy_app_source(relative, site)
     for name in ("home.h", "home_import.h", "home_purge.h", "home_restore.h", "session_file_policy.h", "config.h", "models.h", "schedules.h",
                  "settings.h", "web.h"):
         shutil.copy2(ROOT / "app/include/mdo" / name,

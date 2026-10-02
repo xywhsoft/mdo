@@ -4,6 +4,33 @@
 
 完成判据及尚缺的打包页证据见 [前端操作体验完成审计](frontend-completion-audit.md)。本文件继续记录每次实现和验证的细节。
 
+## 2026-10-03：恢复请求的持久结果与中断判定
+
+新增 requested Home 恢复事务和只读 receipt 查询，接受时固定请求/目标
+ID、来源 SHA、项目版本与恢复时间。实际位置证明 commit/abort，永久
+结果发布并验证后才清理 journal；结果保存失败不能把已提交改成失败
+未执行。启动按同一 ID 补终态，GC 尾段中断及之后 target 删除也不丢
+历史事实。公共 Home 写入/rename 保护永久结果 namespace 和 native
+别名。旧事务兼容，缺失结果查询不创建 Home。详见
+[持久结果合同](session-restore-receipts.md)。
+
+新增原生存储探针以三个小文件验证接受/pending/commit/abort、结果前后
+与 GC 中断、前缀/外来/冲突证据、同 ID 不重做以及小配额。初次整体验证
+暴露手工源码复制漏带新 leaf，已共享 app 内 quoted include 依赖复制；
+业务断言不变。生产 coordinator 尚未传入 requested 请求，后台接受/
+执行、HTTP 查询与确认导入页面仍待接线，`restore_ready:false` 保持。
+本轮没有新增 DOM/原生窗口操作或实体移动设备证据，既有 Linux 间歇
+问题继续保留，没有压力或高负载测试；长期目标继续。
+
+最终 Windows/Linux 通过 115 Python、262 Node、93 JS、严格 C11、45
+runtime、三项 packed 和 A/B；Windows 另通过便携 Home/20 秒启动。
+SDK 不变，复用已验证 host；22 份代码/探针按 LF 核对。根目录程序
+6,445,190 字节、SHA-256
+`36e6c72bbc63605a94428b1753761dc44d6ab336df6bc94472c4ef6a75980d5b`；
+Linux A/B SHA-256 `1d874343e9bc31319fb6c7b5efe78e6eb5a313e7cd752843542628b780d3a288`。
+日志 `.build/qa-restore-receipts-{windows,linux}-final.log`。源码复制及初始
+夹具失败日志保留，不放宽原业务断言；更新时没有根目录窗口，不改用户 Home。
+
 ## 2026-10-02：恢复后台任务的预检结果引用
 
 内部预检接口增加拥有引用；删除/过期立即撤销后续获取，已取得的读者

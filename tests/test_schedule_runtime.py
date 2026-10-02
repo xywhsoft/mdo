@@ -15,6 +15,9 @@ import threading
 from pathlib import Path
 
 
+from runtime_sources import copy_app_source
+
+
 ROOT = Path(__file__).resolve().parent.parent
 
 PROBE_SOURCE = r'''
@@ -575,7 +578,7 @@ def write_site(site: Path) -> None:
         "src/config/config.c",
         "src/schedules/manager.c",
     ):
-        shutil.copy2(ROOT / "app" / relative, site / relative)
+        copy_app_source(relative, site)
     shutil.copy2(ROOT / "app/src/schedules/internal.h",
                  site / "src/schedules/internal.h")
     manager = site / "src/schedules/manager.c"

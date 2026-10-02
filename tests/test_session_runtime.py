@@ -17,6 +17,9 @@ import threading
 from pathlib import Path
 
 
+from runtime_sources import copy_app_source
+
+
 ROOT = Path(__file__).resolve().parent.parent
 
 PROBE_SOURCE = r'''
@@ -835,7 +838,7 @@ def write_site(site: Path) -> None:
         "src/sessions/backup_origin.c",
         "src/sessions/backup_internal.h",
     ):
-        shutil.copy2(ROOT / "app" / relative, site / relative)
+        copy_app_source(relative, site)
     shutil.copy2(ROOT / "tests/fixtures/session-capture.c", site / "session-capture.c")
     shutil.copy2(ROOT / "tests/fixtures/session-backup.c", site / "session-backup.c")
     for header in (ROOT / "app/include/mdo").glob("*.h"):

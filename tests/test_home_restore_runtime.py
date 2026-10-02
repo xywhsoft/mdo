@@ -160,9 +160,9 @@ def fixture(site: Path) -> None:
         '    if ( !MdoHomeImportStat(MDO_HOME_RESTORE_GC, &Exists, &Info) ) return false;':
             '    if ( !RestoreProbeStep("gc") ) return false;\n'
             '    if ( !MdoHomeImportStat(MDO_HOME_RESTORE_GC, &Exists, &Info) ) return false;',
-        '    for ( i = 0u; i < 4u; ++i ) {\n        snprintf(Path, sizeof(Path), "%s/%s", MDO_HOME_RESTORE_GC, Names[i]);':
-            '    for ( i = 0u; i < 4u; ++i ) {\n'
-            '        if ( i == 3u && !RestoreProbeStep("cleanup-tail") ) return false;\n'
+        '    for ( i = 0u; i < 5u; ++i ) {\n        snprintf(Path, sizeof(Path), "%s/%s", MDO_HOME_RESTORE_GC, Names[i]);':
+            '    for ( i = 0u; i < 5u; ++i ) {\n'
+            '        if ( i == 4u && !RestoreProbeStep("cleanup-tail") ) return false;\n'
             '        snprintf(Path, sizeof(Path), "%s/%s", MDO_HOME_RESTORE_GC, Names[i]);',
         '    /* Capability preflight moves only the empty owned directory. */':
             '    if ( !RestoreProbeStep("preflight") ) goto fail;\n'

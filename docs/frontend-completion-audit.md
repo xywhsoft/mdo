@@ -1,6 +1,22 @@
 # 前端操作体验完成审计
 
-本清单以 `app_bak/wwwroot` 的可操作行为为基线，而不是以页面长得相似或单元测试通过为完成标准。`docs/frontend-migration.md` 记录每次实现和验证；这里记录当前还需要什么证据。审计更新：2026-10-02，基线提交 `f9e2c4c`。
+本清单以 `app_bak/wwwroot` 的可操作行为为基线，而不是以页面长得相似或单元测试通过为完成标准。`docs/frontend-migration.md` 记录每次实现和验证；这里记录当前还需要什么证据。审计更新：2026-10-03，基线提交 `f9e2c4c`。
+
+2026-10-03 最新增量：requested Home 恢复有持久接受和固定 ID 的结果
+查询；位置证明后先发布不可变 commit/abort，再清理 journal，结果
+失败或 GC/重启不把已提交变成未执行。缺失查询零写入、native namespace
+别名保护，以及真实小事务中断/冲突/重放通过；详见
+[持久结果合同](session-restore-receipts.md)。coordinator/worker/HTTP 和
+确认页面尚未接 requested 事务，不升级完整导入、旧操作或设备验收行。
+长期目标继续；既有 Linux 间歇问题不由本增量关闭。
+
+两平台最终通过 115 Python、262 Node、93 JS、严格 C11、45 runtime、
+三项 packed 与 A/B；Windows 另通过便携 Home/20 秒启动。SDK 未改，
+22 份改动代码/探针按 LF 核对。根目录程序 6,445,190 字节，SHA-256
+`36e6c72bbc63605a94428b1753761dc44d6ab336df6bc94472c4ef6a75980d5b`；
+Linux A/B SHA-256 `1d874343e9bc31319fb6c7b5efe78e6eb5a313e7cd752843542628b780d3a288`。
+日志 `.build/qa-restore-receipts-{windows,linux}-final.log`。没有压力/高负载
+或新增交互验收证据，不因回归门禁通过升级仍缺实际操作证据的条目。
 
 2026-10-02 最新增量：预检备份已支持后台 owning pin，DELETE/TTL 后旧
 读者仍可读且占名额，最后释放清理完成后才允许下一份；引用绑定实例，

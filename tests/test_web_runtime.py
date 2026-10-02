@@ -13,6 +13,9 @@ import threading
 from pathlib import Path
 
 
+from runtime_sources import copy_app_source
+
+
 ROOT = Path(__file__).resolve().parent.parent
 
 PROBE_SOURCE = r'''
@@ -256,7 +259,7 @@ def write_site(site: Path) -> None:
         "src/web/manager.c", "include/mdo/home.h", "include/mdo/home_import.h", "include/mdo/home_purge.h", "include/mdo/home_restore.h", "include/mdo/session_file_policy.h", "include/mdo/config.h",
         "include/mdo/secrets.h", "include/mdo/web.h",
     ):
-        shutil.copy2(ROOT / "app" / relative, site / relative)
+        copy_app_source(relative, site)
     (site / "probe.c").write_text(PROBE_SOURCE, encoding="utf-8")
     with socket.socket() as listener:
         listener.bind(("127.0.0.1", 0))

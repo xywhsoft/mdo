@@ -14,6 +14,9 @@ import threading
 from pathlib import Path
 
 
+from runtime_sources import copy_app_source
+
+
 ROOT = Path(__file__).resolve().parent.parent
 
 PROBE_SOURCE = r'''
@@ -538,7 +541,7 @@ def write_site(site: Path, memory_enabled: bool = True) -> None:
         "src/asks/manager.c",
         "src/schedules/manager.c", "src/schedules/executor.c",
     ):
-        shutil.copy2(ROOT / "app" / relative, site / relative)
+        copy_app_source(relative, site)
     for header in (ROOT / "app/include/mdo").glob("*.h"):
         shutil.copy2(header, site / "include/mdo" / header.name)
     shutil.copy2(ROOT / "app/src/memory/internal.h", site / "src/memory/internal.h")

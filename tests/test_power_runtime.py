@@ -15,6 +15,9 @@ import threading
 from pathlib import Path
 
 
+from runtime_sources import copy_app_source
+
+
 ROOT = Path(__file__).resolve().parent.parent
 
 PROBE_SOURCE = r'''
@@ -145,7 +148,7 @@ def main() -> int:
         for relative in ("default-home/config/defaults.json", "src/storage/home.c", "src/storage/home_import.inc.c", "src/storage/home_purge.inc.c", "src/storage/home_restore.inc.c",
                          "src/config/config.c", "src/power/inhibitor.c",
                          "src/power/manager.c"):
-            shutil.copy2(ROOT / "app" / relative, site / relative)
+            copy_app_source(relative, site)
         for header in (ROOT / "app/include/mdo").glob("*.h"):
             shutil.copy2(header, site / "include/mdo" / header.name)
         (site / "probe.c").write_text(PROBE_SOURCE, encoding="utf-8")
