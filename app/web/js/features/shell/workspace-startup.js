@@ -31,7 +31,7 @@ function runningSessionCandidate(runs, sessions) {
 
 export async function startWorkspaceNavigation({ navigation, settingsStore,
   sessionsStore, runsStore, sessionDetailStore, dialog, title, continueButton, newButton,
-  prompt, entryHash }) {
+  prompt, entryHash, shouldRestore = () => true }) {
   let lastSavedKey = "";
   let savedReady = false;
   let target = null;
@@ -77,27 +77,8 @@ export async function startWorkspaceNavigation({ navigation, settingsStore,
     const projectId = session.project_id;
     const sessionId = session.id;
     navigation.select(projectId, sessionId, { replace: true });
-    let done = false;
-    let unsubscribeDetail = () => {};
-    let unsubscribeRoute = () => {};
-    function finish(focus) {
-      if (done) return;
-      done = true;
-      unsubscribeDetail();
-      unsubscribeRoute();
-      if (focus && !prompt.disabled) prompt.focus();
-    }
-    unsubscribeDetail = sessionDetailStore.subscribe((state) => {
-      if (state.status === "error") { finish(false); return; }
-      if (state.status === "ready" && state.data?.project_id === projectId &&
-          state.data?.id === sessionId) finish(true);
-    });
-    if (done) { unsubscribeDetail(); return; }
-    unsubscribeRoute = navigation.subscribe((route) => {
-      if (route.view !== "workspace" || route.projectId !== projectId ||
-          route.sessionId !== sessionId) finish(false);
-    });
-    if (done) unsubscribeRoute();
+    focusSessionComposerAfterNavigation({ navigation, sessionDetailStore,
+      prompt, projectId, sessionId, origin: document.body });
   }
 
   function focusExplicitWorkspace() {
@@ -116,7 +97,11 @@ export async function startWorkspaceNavigation({ navigation, settingsStore,
 
   // Hash routes are explicit user choices, including #/ for a blank task.
   if (entryHash || location.hash) { focusExplicitWorkspace(); return; }
+  if (!shouldRestore()) return;
   const saved = await savedPromise;
+  // Every await can outlive a user choice. Check before all branches, including
+  // "new" and live-session restoration, not only after the candidate lookup.
+  if (location.hash || !shouldRestore()) return;
   const mode = settingsStore.get().data?.workspace?.open_mode ?? "last";
   if (mode === "new") {
     navigation.newTask(saved?.project_id || "default", { replace: true });
@@ -132,7 +117,7 @@ export async function startWorkspaceNavigation({ navigation, settingsStore,
   }
   const candidate = await lastSessionCandidate(saved,
     sessionsStore.get().data?.items);
-  if (location.hash) { focusExplicitWorkspace(); return; }
+  if (location.hash || !shouldRestore()) return;
   if (!candidate) { navigation.clear(); prompt.focus(); return; }
   if (mode !== "ask") {
     openLastSession(candidate);

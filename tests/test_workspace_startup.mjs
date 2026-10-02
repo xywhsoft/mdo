@@ -32,6 +32,9 @@ function fakeNavigation() {
 test("startup focuses a ready composer without stealing focus after navigation", async () => {
   const originalFetch = globalThis.fetch;
   const originalLocation = globalThis.location;
+  const originalDocument = globalThis.document;
+  const body = { isConnected: true };
+  globalThis.document = { body, activeElement: body };
   const session = { project_id: "default", id: "S1", title: "Last task" };
   globalThis.location = { hash: "" };
   globalThis.fetch = async (url) => {
@@ -81,7 +84,75 @@ test("startup focuses a ready composer without stealing focus after navigation",
   } finally {
     globalThis.fetch = originalFetch;
     globalThis.location = originalLocation;
+    globalThis.document = originalDocument;
   }
+});
+
+test("late saved selection never overrides a newer route in any startup mode", async () => {
+  const previous = { fetch: globalThis.fetch, location: globalThis.location, document: globalThis.document };
+  const body = {isConnected:true}; globalThis.document = {body,activeElement:body};
+  const session = {project_id:"old",id:"saved",status:"active",title:"Saved"};
+  try {
+    for (const mode of ["new", "last", "ask"]) {
+      globalThis.location = {hash:""};
+      let resolveSaved, focused=0, shown=0;
+      const saved = new Promise(resolve => {resolveSaved=resolve;});
+      globalThis.fetch = async (_url, options) => options.method === "GET" ? saved :
+        Response.json({ok:true,data:{}});
+      const navigation = fakeNavigation();
+      const opening = startWorkspaceNavigation({navigation,
+        settingsStore:{get:()=>({data:{workspace:{open_mode:mode}}})},
+        sessionsStore:{get:()=>({data:{items:[session]}})},
+        runsStore:{get:()=>({data:{items:[{project_id:"old",session_id:"saved",terminal:false}]}})},
+        sessionDetailStore:createResourceStore(),dialog:{showModal(){shown++;}},
+        title:{},continueButton:{},newButton:{},entryHash:"",
+        prompt:{disabled:false,focus(){focused++;}}});
+      navigation.newTask("chosen"); globalThis.location.hash="#/projects/chosen/new";
+      resolveSaved(Response.json({ok:true,data:{project_id:"old",session_id:"saved"}}));
+      await opening;
+      assert.deepEqual([navigation.get().projectId,navigation.get().sessionId],["chosen",""]);
+      assert.equal(focused,0); assert.equal(shown,0);
+    }
+  } finally {Object.assign(globalThis,previous);}
+});
+
+test("typing or opening a drawer during a candidate read cancels fallback without a route change", async () => {
+  const previous = {fetch:globalThis.fetch,location:globalThis.location,document:globalThis.document};
+  const body={isConnected:true}; globalThis.document={body,activeElement:body};
+  globalThis.location={hash:""};
+  let allow=true, resolveCandidate, focused=0;
+  const candidate = new Promise(resolve => {resolveCandidate=resolve;});
+  globalThis.fetch = async url => String(url).endsWith("/workspace-state") ?
+    Response.json({ok:true,data:{project_id:"old",session_id:"saved"}}) : candidate;
+  const navigation=fakeNavigation();
+  try {
+    const opening=startWorkspaceNavigation({navigation,
+      settingsStore:{get:()=>({data:{workspace:{open_mode:"last"}}})},
+      sessionsStore:{get:()=>({data:{items:[]}})},sessionDetailStore:createResourceStore(),
+      dialog:{},title:{},continueButton:{},newButton:{},entryHash:"",shouldRestore:()=>allow,
+      prompt:{disabled:false,focus(){focused++;}}});
+    await new Promise(setImmediate); allow=false;
+    resolveCandidate(Response.json({ok:true,data:{project_id:"old",id:"saved"}}));
+    await opening; assert.equal(navigation.get().sessionId,""); assert.equal(focused,0);
+  } finally {Object.assign(globalThis,previous);}
+});
+
+test("restoring a session does not steal focus from a control used while its detail loads", async () => {
+  const previous={fetch:globalThis.fetch,location:globalThis.location,document:globalThis.document};
+  const body={isConnected:true}; globalThis.document={body,activeElement:body};
+  globalThis.location={hash:""};
+  const session={project_id:"p",id:"s",status:"active"};
+  globalThis.fetch=async url=>Response.json({ok:true,data:String(url).endsWith("/workspace-state")?
+    {project_id:"p",session_id:"s"}:session});
+  const navigation=fakeNavigation(),detail=createResourceStore(); let focused=0;
+  try {
+    await startWorkspaceNavigation({navigation,settingsStore:{get:()=>({data:{}})},
+      sessionsStore:{get:()=>({data:{items:[session]}})},sessionDetailStore:detail,
+      dialog:{},title:{},continueButton:{},newButton:{},entryHash:"",
+      prompt:{disabled:false,focus(){focused++;}}});
+    globalThis.document.activeElement={isConnected:true}; detail.setData(session);
+    assert.equal(focused,0);
+  } finally {Object.assign(globalThis,previous);}
 });
 
 test("an explicit session URL focuses after loading without stealing a newer focus", async () => {

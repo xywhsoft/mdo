@@ -73,6 +73,7 @@ import { createFeedbackPanel } from "./features/settings/feedback-panel.js";
 import { createKeyboardShortcuts } from "./features/shell/keyboard-shortcuts.js";
 import { createRunNotifications } from "./features/shell/run-notifications.js";
 import { startWorkspaceNavigation } from "./features/shell/workspace-startup.js";
+import { createStartupIntent } from "./features/shell/startup-intent.js";
 import { focusSessionComposerAfterNavigation } from "./features/shell/session-composer-focus.js";
 import { createProjectSwitcher } from "./features/shell/project-switcher.js";
 import { createSessionMetadataSync } from "./features/shell/session-metadata-sync.js";
@@ -114,6 +115,7 @@ function runStateText(state) {
 export async function boot() {
   mountIcons();
   const entryHash = location.hash;
+  const startupIntent = createStartupIntent({ root: $("#app-shell"), navigation });
   const purgeRecovery = createProjectPurgeRecovery({ transport: api,
     getWriteToken: currentPageWriteToken,
     onReload(projectId) {
@@ -1755,7 +1757,7 @@ export async function boot() {
     findActiveRun();
     void maybeCancelPriorityRun();
     void dispatchQueued();
-  });
+  }, { refresh: true });
 
   function hideComposerError() {
     composerErrorState = null;
@@ -2398,10 +2400,13 @@ export async function boot() {
   paneLayout = createPaneLayout({ shell, mobileLayout, wideLayout,
     sidebarHandle: $("#sidebar-resize"), inspectorHandle: $("#inspector-resize"),
     onLoaded(saved) {
-      setDrawer("sidebar", !mobileLayout.matches && saved.sidebar_open,
-        { persist: false });
-      setDrawer("inspector", !settingsActive && wideLayout.matches &&
-        saved.inspector_open, { persist: false });
+      // Saved geometry controls docked panels. A phone/tablet drawer is
+      // already owned by this page's current interaction and focus loop.
+      if (!mobileLayout.matches)
+        setDrawer("sidebar", saved.sidebar_open, { persist: false, focus: false });
+      if (wideLayout.matches)
+        setDrawer("inspector", !settingsActive && saved.inspector_open,
+          { persist: false, focus: false });
     },
   });
 
@@ -2620,13 +2625,19 @@ export async function boot() {
     await settingsView.localeReady();
 
   document.documentElement.dataset.mdoStartupStage = "navigation";
-  await startWorkspaceNavigation({ navigation, settingsStore, sessionsStore,
+  // Last-session restoration is a fallback, not a gate on the usable shell.
+  // Keep tracking intent while that read runs so a new action wins over it.
+  void startWorkspaceNavigation({ navigation, settingsStore, sessionsStore,
     runsStore,
     sessionDetailStore,
     dialog: $("#startup-choice-dialog"),
     title: $("#startup-last-title"),
     continueButton: $("#startup-continue"),
-    newButton: $("#startup-new"), prompt, entryHash });
+    newButton: $("#startup-new"), prompt, entryHash,
+    shouldRestore: startupIntent.allowsRestore }).catch(() => {
+      toast(t("startup.readFailed", {},
+        "无法读取上次会话，将使用当前会话列表。"), "error");
+    }).finally(() => startupIntent.destroy());
   if (!navigation.get().sessionId) void newTaskController.reconcile();
   scheduleTaskRefresh();
   scheduleSessionRefresh();

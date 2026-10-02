@@ -41,7 +41,7 @@ function parseHash() {
   }
 }
 
-function publish() {
+function publish({ refresh = false } = {}) {
   let next = parseHash();
   if (next.view === "workspace" && !next.sessionId && newTaskGuard) {
     const owner = newTaskGuard.owner();
@@ -54,10 +54,15 @@ function publish() {
       next = { ...next, projectId };
     }
   }
-  current = Object.freeze(next);
+  const changed = Object.keys(current).some((key) => current[key] !== next[key]);
+  if (!changed && !refresh) return;
+  if (changed) current = Object.freeze(next);
   if (current.view === "workspace")
     lastWorkspace = Object.freeze({ projectId: current.projectId, sessionId: current.sessionId });
-  for (const listener of listeners) listener(current);
+  // Reloading data in the current route is not leaving that route. Menus,
+  // search, previews and in-progress forms listen only for real navigation.
+  for (const subscription of listeners)
+    if (changed || subscription.refresh) subscription.listener(current);
 }
 
 window.addEventListener("hashchange", publish);
@@ -69,23 +74,24 @@ export const navigation = Object.freeze({
   setNewTaskGuard(owner, onRedirect) {
     newTaskGuard = { owner, onRedirect };
   },
-  revalidate: publish,
-  subscribe(listener) {
-    listeners.add(listener);
+  revalidate: () => publish({ refresh: true }),
+  subscribe(listener, { refresh = false } = {}) {
+    const subscription = { listener, refresh };
+    listeners.add(subscription);
     listener(current);
-    return () => listeners.delete(listener);
+    return () => listeners.delete(subscription);
   },
   select(projectId, sessionId, options = {}) {
     const hash = `#/projects/${resourceId(projectId, "project")}/sessions/${resourceId(sessionId, "session")}`;
     if (options.replace) history.replaceState(null, "", hash);
     else location.hash = hash;
-    publish();
+    publish({ refresh: true });
   },
   newTask(projectId = lastWorkspace.projectId || "default", options = {}) {
     const hash = `#/projects/${resourceId(projectId, "project")}/new`;
     if (options.replace) history.replaceState(null, "", hash);
     else location.hash = hash;
-    publish();
+    publish({ refresh: true });
   },
   openSettings(section = "general") {
     location.hash = `#/settings/${resourceId(section, "settings section")}`;
@@ -94,7 +100,7 @@ export const navigation = Object.freeze({
     const state = history.state && typeof history.state === "object"
       ? history.state : {};
     history.replaceState({ ...state, mdoWorkspace: lastWorkspace }, "");
-    publish();
+    publish({ refresh: true });
   },
   backToWorkspace() {
     if (lastWorkspace.sessionId)
@@ -104,6 +110,6 @@ export const navigation = Object.freeze({
   },
   clear() {
     history.replaceState(null, "", `${location.pathname}${location.search}#/`);
-    publish();
+    publish({ refresh: true });
   },
 });

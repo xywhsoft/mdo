@@ -14,7 +14,10 @@ function clamp(value, minimum, maximum) {
 export function createPaneLayout({ shell, mobileLayout, wideLayout,
   sidebarHandle, inspectorHandle, onLoaded }) {
   const preference = { ...defaults };
-  let touched = false;
+  const edited = new Set();
+  let ready = false;
+  let loading = null;
+  let dirty = false;
   let saveTimer = 0;
   let saving = false;
   let saveAgain = false;
@@ -52,16 +55,22 @@ export function createPaneLayout({ shell, mobileLayout, wideLayout,
   async function flush() {
     if (saving) { saveAgain = true; return; }
     saving = true;
+    // Do not send default values for untouched fields before their first read.
+    // A resize/toggle can happen while startup settings are still in flight.
+    if (!ready) await load();
+    if (!ready) { saving = false; return; }
     do {
       saveAgain = false;
       const snapshot = { ...preference };
+      dirty = false;
       try { await api.put("/pane-layout", snapshot); }
       catch (cause) {
+        dirty = true;
         const error = errorMessage(cause);
         toast(t("pane.saveFailed", { error }, `无法保存分栏布局：${error}`), "error");
         break;
       }
-    } while (saveAgain);
+    } while (saveAgain || dirty);
     saving = false;
   }
 
@@ -77,9 +86,10 @@ export function createPaneLayout({ shell, mobileLayout, wideLayout,
       return;
     }
     const key = side === "sidebar" ? "sidebar_open" : "inspector_open";
-    if (preference[key] !== open) {
+    edited.add(key);
+    if (preference[key] !== open || !ready) {
       preference[key] = open;
-      touched = true;
+      dirty = true;
       scheduleSave();
     }
     apply();
@@ -89,9 +99,16 @@ export function createPaneLayout({ shell, mobileLayout, wideLayout,
     const key = side === "sidebar" ? "sidebar_width" : "inspector_width";
     const range = bounds(side);
     preference[key] = clamp(width, range.min, range.max);
-    touched = true;
+    edited.add(key);
+    keepCurrentPanel(side);
     apply();
-    if (save) scheduleSave();
+    if (save) { dirty = true; scheduleSave(); }
+  }
+
+  function keepCurrentPanel(side) {
+    const key = side === "sidebar" ? "sidebar_open" : "inspector_open";
+    edited.add(key);
+    preference[key] = shell.dataset[side] === "open";
   }
 
   function wireHandle(handle, side) {
@@ -100,6 +117,7 @@ export function createPaneLayout({ shell, mobileLayout, wideLayout,
     handle.addEventListener("pointerdown", (event) => {
       if (mobileLayout.matches || (side === "inspector" && !wideLayout.matches)) return;
       event.preventDefault();
+      keepCurrentPanel(side);
       handle.focus({ preventScroll: true });
       startX = event.clientX;
       startWidth = Number(handle.getAttribute("aria-valuenow"));
@@ -147,17 +165,24 @@ export function createPaneLayout({ shell, mobileLayout, wideLayout,
   mobileLayout.addEventListener("change", apply);
   apply();
 
-  async function load() {
-    try {
-      const saved = (await api.get("/pane-layout")).data;
-      if (touched) return;
-      for (const key of Object.keys(defaults)) preference[key] = saved[key];
-      onLoaded({ ...preference });
-      apply();
-    } catch (cause) {
-      const error = errorMessage(cause);
-      toast(t("pane.loadFailed", { error }, `无法读取分栏布局：${error}`), "error");
-    }
+  function load() {
+    if (loading) return loading;
+    if (ready) return Promise.resolve();
+    loading = (async () => {
+      try {
+        const saved = (await api.get("/pane-layout")).data;
+        for (const key of Object.keys(defaults))
+          if (!edited.has(key)) preference[key] = saved[key];
+        ready = true;
+        onLoaded({ ...preference });
+        apply();
+        if (dirty && !saving) scheduleSave();
+      } catch (cause) {
+        const error = errorMessage(cause);
+        toast(t("pane.loadFailed", { error }, `无法读取分栏布局：${error}`), "error");
+      }
+    })().finally(() => { loading = null; });
+    return loading;
   }
 
   return Object.freeze({ apply, load, remember,
