@@ -122,6 +122,12 @@ size_t MdoApiBackupUploadBytes(const MdoBackupUploadDocument* Document)
     return Document != NULL ? Document->Bytes : 0u;
 }
 
+bool MdoApiBackupUploadHash(const MdoBackupUploadDocument* Document, char Hash[65])
+{
+    if ( Document == NULL || Hash == NULL ) return false;
+    memcpy(Hash, Document->Hash, 65u); return true;
+}
+
 void MdoApiBackupUploadRelease(MdoBackupUploadDocument* Document)
 {
     MdoBackupUploadStore* Store;

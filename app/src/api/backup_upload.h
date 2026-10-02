@@ -35,6 +35,8 @@ MdoBackupUploadDocument* MdoApiBackupUploadAcquire(cstr Id,
     MdoBackupUploadAccess* Access);
 const void* MdoApiBackupUploadData(const MdoBackupUploadDocument* Document);
 size_t MdoApiBackupUploadBytes(const MdoBackupUploadDocument* Document);
+/* Copies the sealed transport digest; no rehash, lock or borrowed string. */
+bool MdoApiBackupUploadHash(const MdoBackupUploadDocument* Document, char Hash[65]);
 void MdoApiBackupUploadRelease(MdoBackupUploadDocument* Document);
 
 #endif

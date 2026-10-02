@@ -1,7 +1,7 @@
 # 会话 JSON 完整备份与恢复实施记录
 
-状态：专用下载/上传、离线解码、独立模型重放和模型/UI 关系检查已接入，
-完整校验与恢复入口待实现。2026-10-02 已完成
+状态：专用下载/上传、离线解码、模型/UI 关系、静态图片像素检查及生产异步
+预览 API 已接入。独立 staging 发布与正式页面入口待实现。2026-10-02 已完成
 checkpoint 与有界读取共用排他运行窗口、统一捕获边界、v2 捕获/编码层和
 有界 HTTP/TLS 传输。现有页面仍使用 `export_schema:1`，只有 meta 和模型 snapshot。
 格式/传输验证通过不表示正式页面已经导出完整备份，或恢复事务已经完成。
@@ -65,7 +65,9 @@ manager 调用或库通过 native path 写入不能被它自动覆盖。不得�
    新模型 writer 已用 v4 保存完整消息 parts/native；旧文件的已丢失内容
    不能修复。助手 thinking/text 与签名转换已接入；其他 native 块未映射，
    已增加静态 PNG/JPEG/WebP 的实际像素解码；URL/空图片引用单独统计为
-   未验证，动画 PNG/WebP 明确拒绝。生产预览 worker 未完成。
+   未验证，动画 PNG/WebP 明确拒绝。生产单 worker 预览已接入，支持粗粒度
+   进度、取消、失败重试、过期回收与退出时 join；全部检查复用同一个 30 秒
+   协作预算。staging 中的 UI 投影恢复和正式页面证明仍在步骤 5–6 中完成。
    先实现离线验证与预览，
    再做恢复事务。验证所有 schema、路径、ID、内容
    校验和引用；拒绝链接、绝对路径、`..`、重复文件和大小声明失真。v1 只能
@@ -845,3 +847,36 @@ worker 必须拥有输入、输出和取消生命周期，先释放网络 upload
 
 这完成静态图片检查子项；生产预览 worker、staging、发布、菜单和设备
 验收仍未完成，保持 `restore_ready:false`，不得自动调用模型或派发队列。
+
+## 生产异步预览
+
+步骤 4 的生产 worker 已完成：seal 上传后 POST 获得预览 ID，查询三个完成
+门禁；共享从接受开始的 30 秒协作预算。单 worker/槽覆盖输入 pin、拥有
+decode、模型/UI 与像素门禁、结果保留及清理，不能并行展开第二份大备份。
+上传引用在 decode 后释放；失败、预取消跳过 Run 和退出均由 Drop 清理，
+Unit 取消/join 后才退休上传 store 和 TCC code。同步 Submit/Drop 的重入已
+用所有权预发布和非递归状态锁外提交处理，不在成功提交之后触碰 job；
+提交拒绝由调用方走同一清理路径并保留小终态回执。
+
+成功结果保持五分钟，过期在访问/退出时回收；DELETE 取消或丢弃 payload，
+保留小回执供查询。回收不持状态锁，也占有 admission。相同上传 ID+SHA-256
+重试复用，ID 改内容拒绝复用；失败可重新检查。没有 Home/catalog 写入、
+模型调用、工具执行或派发队列。已确认 schema/模型/UI/图片的事实与未验证
+缺口分别返回，v1 明确标为 partial，仍不授予完整恢复资格。
+
+有界 HTTP/TLS 探针通过实际后台接口，验证 2 MiB artifact、草稿、待确认
+队列、小 PNG、上传 pin 释放后删除/定额复用、HEAD/OPTIONS/token/body、
+语义/像素错误、deadline/取消/重试、终态过期和 Unit 后再初始化，比较整个
+Home 的原文件字节。没有压力或高负载测试。协议细节见
+[预览 API](session-backup-preview-api.md)。当前只完成步骤 4 的后台预览部分；
+staging UI 重放、投影修复、原子非覆盖发布及正式页面仍按步骤 5–6 实施。
+
+最终 Windows/Linux 有界门禁通过 115 Python、252 Node、90 模块、严格 C11、
+37 runtime、三项 packed 与独立 A/B；Windows 另通过便携 WebView2 Home
+和 20 秒启动。packed 探针直接使用内置 API 完成下载/上传/预览，并在移动
+程序后重启再检查，确认 source/原图统计/文件数量及 Home 原字节，队列不
+派发。根目录程序为 6,385,507 字节、SHA-256
+`bf135701deb7e04c4c1bad17a593c31a73ec505e15c71c96998954878c425271`；
+Linux A/B 为 `6f7b14a017bcc3b2915bbc778ea4184b815ba6e284c3a9839032ffe0ea8f1324`。
+日志 `.build/qa-preview-{windows,linux}-final.log`。没有压力/高负载测试，
+没有本轮原生点击或实体设备验收；既有 Linux queued HEAD reset 仍未定因。

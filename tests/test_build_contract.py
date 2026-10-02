@@ -128,6 +128,7 @@ class BuildContractTests(unittest.TestCase):
             "src/api/downloads.c",
             "src/api/image_downloads.c",
             "src/api/backup_upload.c",
+            "src/api/backup_preview.c",
             "src/api/write_admission.c",
             "src/api/body.c",
             "src/api/attachments.c",

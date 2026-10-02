@@ -2,7 +2,8 @@
 
 One ordinary 2 MiB artifact crosses the transport queue limit. No model, shell,
 queue execution, live user Home, pressure or high-load test is involved. This
-checks packed routing/TCC/VFS delivery; it is not a restore or GUI download test.
+checks packed routing/TCC/VFS delivery and offline preview; it is not a restore
+or GUI download test.
 """
 from __future__ import annotations
 
@@ -24,7 +25,7 @@ from test_packed_home_lease import (
 ARTIFACT = "artifacts/run-00000000000000000001/00000000000000000001-packed.txt"
 
 
-def download(port: int, path: str) -> dict[str, bytes]:
+def download(port: int, path: str, home: Path) -> dict[str, bytes]:
     # A fully received response can precede the executor's final slot release.
     # Retry only that documented busy result; other errors fail immediately.
     deadline = time.monotonic() + 3
@@ -70,7 +71,36 @@ def download(port: int, path: str) -> dict[str, bytes]:
     status, reply = request(port, "POST", upload_path + "/seal")
     assert status == 200 and reply["data"]["sha256"] == hashlib.sha256(data).hexdigest(), reply
     assert reply["data"]["restore_ready"] is False
+    def inventory():
+        return {str(p.relative_to(home)): p.read_bytes() for p in home.rglob("*")
+                if p.is_file() and p != home / ".mdo.lock"}
+    before = inventory()
+    status, accepted = request(port, "POST", upload_path + "/preview")
+    assert status == 202, accepted
+    preview = "/api/v1/session-backups/previews/" + accepted["data"]["id"]
+    deadline = time.monotonic() + 5
+    while True:
+        status, reply = request(port, "GET", preview)
+        assert status == 200, reply
+        if reply["data"]["terminal"]:
+            break
+        assert time.monotonic() < deadline, reply
+        time.sleep(0.01)
+    result = reply["data"]
+    assert result["state"] == "succeeded" and result["result_available"] and not result["restore_ready"], result
+    assert result["completed_steps"] == 3 and result["sha256"] == hashlib.sha256(data).hexdigest()
+    facts = result["result"]
+    assert facts["file_count"] == len(files) and facts["total_bytes"] == sum(map(len, files.values()))
+    assert facts["session_id"] == json.loads(files["meta.json"])["id"]
+    assert facts["image_attachments"] == 1 and facts["rgba_bytes"] == 768 * 1024 * 4
+    assert not facts["legacy_partial"] and facts["unverified_images"] == 0
+    status, repeated = request(port, "POST", upload_path + "/preview")
+    assert status == 200 and repeated["data"]["id"] == accepted["data"]["id"]
     assert request(port, "DELETE", upload_path)[0] == 200
+    assert request(port, "GET", preview)[1]["data"]["result"] == facts
+    assert request(port, "DELETE", preview)[1]["data"]["discarded"]
+    assert not request(port, "GET", preview)[1]["data"]["result_available"]
+    assert inventory() == before, "packed offline preview changed Home or ran pending work"
     return files
 
 
@@ -129,7 +159,7 @@ def main() -> int:
             assert headers["content-type"] == "image/png" and headers["connection"] == "close"
             status, headers, data = raw_request(first_port, "HEAD", image["url"])
             assert status == 200 and data == b"" and headers["content-length"] == str(len(png))
-            files = download(first_port, path)
+            files = download(first_port, path, home)
             assert files[ARTIFACT] == payload
             assert files[f"attachments/{image['id']}.bin"] == png
             assert json.loads(files["draft.json"])["text"] == "便携草稿 / portable draft"
@@ -141,7 +171,7 @@ def main() -> int:
             assert status == 200 and response["data"]["ready"], response
             status, _, data = raw_request(second_port, "GET", image["url"])
             assert status == 200 and data == png, (status, data[:512])
-            moved_files = download(second_port, path)
+            moved_files = download(second_port, path, home)
             # Checkpoint/capture timestamps can change; retained user content
             # must remain exact after loading the same Home at a new exe path.
             for name in (ARTIFACT, "draft.json", "queue.json", "meta.json",
@@ -158,7 +188,7 @@ def main() -> int:
                 stop(second)
             stop(first)
             release_packed_copies(first_site / packed.name, second_site / packed.name)
-    print("packed embedded VFS backup/restart probe: PASS")
+    print("packed embedded VFS backup/upload/preview/restart probe: PASS")
     return 0
 
 

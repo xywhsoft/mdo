@@ -5,6 +5,52 @@
 完成判据及尚缺的打包页证据见 [前端操作体验完成审计](frontend-completion-audit.md)。本文件继续记录每次实现和验证的细节。
 
 
+## 2026-10-02：生产离线备份预览 worker
+
+已 seal 上传可以通过生产 API 启动单 worker 预览，立即获得独立 ID，并查询
+decode → model/UI → images 三个门禁进度。检查共享 30 秒协作预算；查询和
+响应不等待完整解析、重放或解码。网络回调只取得 pin/复制摘要，解码后即
+释放上传 pin，后续持有独立备份；结果只保留文件字节和已复制事实，不保留
+模型、RGBA、连接或 Home/runtime。成功摘要报告旧 v1、未验证引用、无 UI
+投影和远程图片缺口，不将它们伪装为完整恢复。
+
+同一上传 ID 与 SHA-256 的 POST 重试复用现有预览；同 ID 改内容不复用旧
+成功。一个活动或保留结果占有槽，DELETE 协作取消/释放，终态小回执继续
+可查；失败可重新开始，结果五分钟过期后访问回收。大对象释放不持状态锁，
+回收期间仍阻止新解码。Unit 先取消/join 再关闭上传存储及允许 TCC 卸载。
+预取消探针发现 Submit 可以同步调用 Drop，已改为提交前发布 ownership，
+在非递归状态锁之外提交，成功后不再访问 job；未执行 Run 也释放 pin，
+拒绝提交走相同清理路径保留失败回执，取消在发布前赢过成功。
+
+HTTP/TLS 确定性小探针通过：真实 2 MiB artifact、草稿、待确认队列及小 PNG
+经过生产路由；传输 pin 释放/上传删除/定额复用后检查仍成功，Home 全文件
+原字节不变。覆盖 token/body/HEAD/OPTIONS、重复/冲突、解码/模型/像素阶段
+失败、deadline、三个阶段取消、预取消跳过 Run、Unit join/重新初始化和
+成功/过期清理；真实关闭池导致的提交拒绝、全部状态锁无递归失败及清理后
+成功重试。没有压力或高负载测试。
+
+接口合同见 [离线预览 API](session-backup-preview-api.md)。独立 staging、
+来源/新身份、原子非覆盖发布、catalog 与正式页面仍待实现，
+`restore_ready:false` 保持；本轮没有原生点击或实体设备验收。
+
+最终 Windows/Linux 有界门禁均通过 115 Python、252 Node、90 模块解析、
+严格 C11、37 运行探针、三项 packed 与独立 A/B；Windows 另通过便携
+WebView2 Home 覆盖/移动重启及 20 秒启动。新增 packed 证明直接使用单文件
+内置 API 完成下载/分段上传/预览，核对原图像素统计、源身份与精确文件数，
+移动程序后重启再做同一检查，期间 Home 原文件与待确认队列保持。
+
+根目录 `mdo.exe` 已更新为 6,385,507 字节（约 6.09 MiB），与 Windows A/B
+SHA-256 一致：
+`bf135701deb7e04c4c1bad17a593c31a73ec505e15c71c96998954878c425271`。
+Linux A/B 为 `6f7b14a017bcc3b2915bbc778ea4184b815ba6e284c3a9839032ffe0ea8f1324`，
+使用新 ext4 源目录 `/home/ubuntu/.cache/mdo-linux-preview-l0ned97r`，复用
+首轮新构建且已完整验证的同一锁定 SDK `0c8c533` 原生宿主；关键源文件
+11 项与 Windows 工作区 LF 归一后逐字节相同。日志
+`.build/qa-preview-{windows,linux}-final.log`，首轮成功日志保留为
+`.build/qa-preview-{windows,linux}-first-complete.log`。既有
+[Linux queued HEAD reset](linux-image-queued-head-reset.md) 仍为待排查项，
+本轮门禁通过不将其自动关闭。未做压力或高负载测试。
+
 ## 2026-10-02：备份图片的原生像素检查
 
 xs 增加可选 `image` 原生扩展，只向 TCC VFS 开放 `<xs-image.h>` 和三个

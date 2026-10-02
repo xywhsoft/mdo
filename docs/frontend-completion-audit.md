@@ -3,6 +3,26 @@
 本清单以 `app_bak/wwwroot` 的可操作行为为基线，而不是以页面长得相似或单元测试通过为完成标准。`docs/frontend-migration.md` 记录每次实现和验证；这里记录当前还需要什么证据。审计更新：2026-10-02，基线提交 `f9e2c4c`。
 
 
+2026-10-02 最新增量：生产离线预览单 worker 已接入。通过拥有上传字节
+进行 schema、实际模型重放/UI 关系及静态像素检查，支持 ID/校验和重试、
+粗粒度进度、取消、终态摘要/失败重试、五分钟过期及 Unit join。取消与
+成功发布竞争、跳过 Run 的清理和解码后释放上传 pin 均有确定性小探针。
+HTTP/TLS 核对原 Home 字节，未调用模型、工具或派发 pending 队列。
+
+正式页面仍未接入此入口；staging 发布、完整恢复及原生/实体设备证据待
+完成。完整恢复行不升级，`restore_ready:false` 保持。详见
+[本轮记录](frontend-migration.md#2026-10-02生产离线备份预览-worker) 与
+[API 合同](session-backup-preview-api.md)。下方增量保存各阶段当时的状态。
+
+本轮最终 Windows/Linux 门禁通过 115 Python、252 Node、90 模块、严格 C11、
+37 runtime、三项 packed 和 A/B。单文件内置预览与移动重启核对成功、原图
+统计及 Home 字节/待确认队列保持；Windows 另通过便携 WebView2 Home 和
+20 秒启动。根目录程序 SHA-256 为
+`bf135701deb7e04c4c1bad17a593c31a73ec505e15c71c96998954878c425271`；
+Linux 为 `6f7b14a017bcc3b2915bbc778ea4184b815ba6e284c3a9839032ffe0ea8f1324`。
+日志 `.build/qa-preview-{windows,linux}-final.log`；没有压力或高负载测试。
+既有 Linux queued HEAD reset 仍待排查，没有新增原生点击/实体设备证据。
+
 2026-10-02 增量：完整备份新增独立静态图片像素检查，覆盖附件及模型原始
 保留账本的 PNG/JPEG/WebP 内嵌图片。URL/空引用报告未验证，动画图片明确
 不支持；没有远程读取或文件修复。xs 原生扩展及解码源/许可证均锁定，

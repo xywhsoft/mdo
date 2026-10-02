@@ -5,6 +5,7 @@
 #include "purge_intent.h"
 #include "write_admission.h"
 #include "backup_upload.h"
+#include "backup_preview.h"
 #include "../../include/mdo/project_lifecycle.h"
 #include "../../include/mdo/projects.h"
 #include "../../include/mdo/home.h"
@@ -48,6 +49,12 @@ static const MdoApiRoute g_MdoApiRoutes[] = {
       "PUT, OPTIONS", MdoApiBackupUploadChunkRoute, false },
     { "/api/v1/session-backups/uploads/{upload}/seal", XHTTP_METHOD_POST,
       "POST, OPTIONS", MdoApiBackupUploadSealRoute, false },
+    { "/api/v1/session-backups/uploads/{upload}/preview", XHTTP_METHOD_POST,
+      "POST, OPTIONS", MdoApiBackupPreviewStartRoute, false },
+    { "/api/v1/session-backups/previews", XHTTP_METHOD_GET | XHTTP_METHOD_HEAD,
+      "GET, HEAD, OPTIONS", MdoApiBackupPreviewsRoute, false },
+    { "/api/v1/session-backups/previews/{preview}", XHTTP_METHOD_GET | XHTTP_METHOD_HEAD | XHTTP_METHOD_DELETE,
+      "GET, HEAD, DELETE, OPTIONS", MdoApiBackupPreviewRoute, false },
     { "/api/v1/modules", XHTTP_METHOD_GET | XHTTP_METHOD_HEAD,
       "GET, HEAD, OPTIONS", MdoApiModulesRoute, false },
     { "/api/v1/skills", XHTTP_METHOD_GET | XHTTP_METHOD_HEAD,
@@ -378,9 +385,10 @@ bool MdoApiInit(void)
         MdoApiSessionsUnit();
         return false;
     }
-    if ( !MdoApiBackupUploadsInit() || !MdoApiDownloadsInit() ||
+    if ( !MdoApiBackupUploadsInit() || !MdoApiBackupPreviewsInit() || !MdoApiDownloadsInit() ||
          !MdoApiImageDownloadsInit() ) {
         MdoApiImageDownloadsUnit(); MdoApiDownloadsUnit();
+        MdoApiBackupPreviewsUnit();
         MdoApiBackupUploadsUnit();
         MdoApiWriteUnit(); MdoApiPurgeIntentUnit(); MdoApiAttachmentsUnit();
         MdoApiWorkspaceStateUnit(); MdoApiQueueUnit(); MdoApiDraftUnit();
@@ -397,6 +405,7 @@ void MdoApiUnit(void)
     g_MdoApiInitialized = false;
     MdoApiDownloadsUnit();
     MdoApiImageDownloadsUnit();
+    MdoApiBackupPreviewsUnit();
     MdoApiBackupUploadsUnit();
     MdoApiWriteUnit();
     MdoApiPurgeIntentUnit();
