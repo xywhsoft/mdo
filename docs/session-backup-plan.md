@@ -880,3 +880,30 @@ staging UI 重放、投影修复、原子非覆盖发布及正式页面仍按步
 Linux A/B 为 `6f7b14a017bcc3b2915bbc778ea4184b815ba6e284c3a9839032ffe0ea8f1324`。
 日志 `.build/qa-preview-{windows,linux}-final.log`。没有压力/高负载测试，
 没有本轮原生点击或实体设备验收；既有 Linux queued HEAD reset 仍未定因。
+
+## 恢复后历史工具输出保护
+
+步骤 5 的前置修复已完成：xwork runtime 编号会在重启后重置，旧 atomic
+write 可能覆盖同路径产物。xwork 3.7.1 通过锚定目录、排他临时文件、完整
+flush/close 和 `xrtRootRenameNoReplace` 发布，碰撞换编号，预算/ID 耗尽时
+失败并保留原内容。registry 配额跨重试预约，所有元数据在发布前准备，
+成功文件不进入失败删除路径。目录格式/ABI/事件 schema 保持，xrt 核心不改。
+
+两平台库夹具及 native xs/TCC 三次真实异步 read run 核对旧文件原字节、
+SHA-256、不同编号和临时清理通过，无网络模型或用户数据，无压力/高负载
+测试。Windows link 创建权限不可用有明确 skip，Linux link 父目录拒绝通过。
+源库 `c91c563e`、xs `ed87394` 已提交，mdo 锁定相应 20 个生产文件。
+详见 [发布合同和界限](xwork-artifact-publication.md)。这个前置修复不是
+staging 导入完成证明，完整恢复仍保持 `restore_ready:false`。
+审查发现 Home 在项目 workspace 外时，当前 xwork 普通文件路径策略会拒绝
+mdo 指定的产物目录；后续必须为宿主产物存储设独立锚定边界并验证真实
+MdoAgentSession，不能通过放宽模型文件工具的 workspace 范围来修复。
+
+本轮最终 Windows/Linux 有界门禁通过 115 Python、252 Node、90 模块、严格
+C11、38 runtime、三项 packed 和独立 A/B；Windows 另通过便携 WebView2
+及 20 秒启动，native xs/xsw 与根目录 mdo.exe 已更新。Windows 程序为
+6,387,552 字节、SHA-256
+`0758820636dfb04107c0d92e5db369df658b7fa85559acc51a9563a5fcd098a1`；
+Linux 为 `da4cc36f9650a885a5064cba3cd76a3ce20d0bed889308e2685e43bf44fa0761`。
+日志 `.build/qa-artifact-{windows,linux}-final.log`；没有压力/高负载测试，
+既有 Linux queued HEAD reset 和原生/实体设备证据仍单独待处理。

@@ -5,6 +5,50 @@
 完成判据及尚缺的打包页证据见 [前端操作体验完成审计](frontend-completion-audit.md)。本文件继续记录每次实现和验证的细节。
 
 
+## 2026-10-02：重启后工具产物的非覆盖发布
+
+恢复发布前发现 xwork 的 runtime run/artifact 编号会重置，而旧产物写入调用
+`xrtFileWriteAtomic` 会替换已有同名文件。恢复后的会话或普通程序重启都有
+覆盖旧工具输出的风险。xwork 3.7.1 改为根内排他临时文件、完整写入/flush/
+close 后使用现有 `xrtRootRenameNoReplace`；碰撞只换编号，128 次或编号耗尽
+明确失败，其他 I/O 不重试。失败只清理本次拥有的临时文件和配额；全部
+登记内存在发布前准备，最后改名和 registry 登记共用锁，已发布目标不进入
+失败删除路径。目录格式、ABI 6、事件 schema 3 不变，没有修改 xrt 核心。
+
+源库提交 `c91c563e`，xs 同步 `ed87394`，20 个生产文件与上游一致，依赖及
+生产树 SHA 已锁定。Windows/Linux 库小型夹具核对独立 runtime、重启原字节、
+rename 瞬间的竞争目标、成功编号/单次事件、碰撞预算、I/O 立即失败、ID
+耗尽、空文件和目录目标。Linux link 父目录拒绝通过；Windows 创建 link 的
+权限不可用，明确跳过。两平台均没有临时文件/预约泄漏，没有压力测试。
+
+新增 xs/TCC 运行探针驱动本地模拟模型和一次真实异步 read run，每个平台
+连续启动三次，沿用 workspace/run 目录并改变输入；核对三份独立产物的 ID、
+SHA-256、每轮旧字节和无残余临时文件。没有网络模型或用户 Home 数据参与。
+首次夹具错误地用直接 executor 预期异步 run 号，已改为真实 run 并通过；
+锁版本断言同步为 3.7.1。原始失败日志保留，没有绕过产品检查。
+
+细节和取舍见 [工具产物发布](xwork-artifact-publication.md)。本轮是 staging
+恢复前的数据保护修复，正式导出/恢复菜单及完整恢复仍未完成，
+`restore_ready:false` 保持。便携 WebView2 路径仍是
+`mdo-home/data/cache/webview2`，按用户选择允许首次启动创建该目录。
+
+审查时还记录一个既有接入缺口：Home 在项目 workspace 外时，mdo 指定的
+产物目录会被 xwork 的普通 workspace 路径策略拒绝。后续要设计宿主产物
+存储的独立锚定边界并通过真实 MdoAgentSession 验证，不能放宽所有文件
+工具路径。本轮 native xwork 的同工作区探针不作为该缺口已修复的证据。
+
+最终 Windows/Linux 门禁通过 115 Python、252 Node、90 模块解析、严格 C11、
+38 runtime、三项 packed 与独立 A/B。Windows 另通过便携 WebView2 Home
+覆盖/移动重启和 20 秒启动。根目录 `mdo.exe` 已核对为 6,387,552 字节，与
+Windows A/B 完全相同，SHA-256
+`0758820636dfb04107c0d92e5db369df658b7fa85559acc51a9563a5fcd098a1`；
+Linux 为 `da4cc36f9650a885a5064cba3cd76a3ce20d0bed889308e2685e43bf44fa0761`。
+两平台重新生成 native host，xs/xsw 已更新到 mdo 工作区；Linux 完整重跑
+复用同一已验证新宿主，不沿用旧版本。日志
+`.build/qa-artifact-{library-windows,library-linux,windows-final,linux-final}.log`。
+既有 Linux queued HEAD reset 仍未定因，不因本轮通过而关闭该项。
+没有压力/高负载测试或原生点击/实体设备验收增量。
+
 ## 2026-10-02：生产离线备份预览 worker
 
 已 seal 上传可以通过生产 API 启动单 worker 预览，立即获得独立 ID，并查询

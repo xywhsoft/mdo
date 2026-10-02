@@ -3,7 +3,30 @@
 本清单以 `app_bak/wwwroot` 的可操作行为为基线，而不是以页面长得相似或单元测试通过为完成标准。`docs/frontend-migration.md` 记录每次实现和验证；这里记录当前还需要什么证据。审计更新：2026-10-02，基线提交 `f9e2c4c`。
 
 
-2026-10-02 最新增量：生产离线预览单 worker 已接入。通过拥有上传字节
+2026-10-02 最新增量：修复 xwork 重启后同编号产物原子写入会替换旧内容的
+问题。3.7.1 用现有根内非覆盖改名发布完整临时文件，碰撞换编号并受预算
+约束，失败仅清理拥有的临时文件和配额。源库 `c91c563e`、xs `ed87394` 已
+提交，依赖锁定，两平台库夹具和真实 xs/TCC 三次异步 run 重启核对通过。
+Windows link 夹具受平台权限限制明确跳过，Linux 拒绝 link 父目录通过。
+
+staging、正式菜单及完整恢复行仍未完成，`restore_ready:false` 保持。
+便携 WebView2 缓存使用 exe 旁的 `mdo-home/data/cache/webview2`；用户已选择
+便携优先，首次窗口启动允许创建缓存。详见
+[本轮迁移](frontend-migration.md#2026-10-02重启后工具产物的非覆盖发布) 与
+[发布合同](xwork-artifact-publication.md)。没有原生点击/实体设备验收增量。
+另记既有缺口：Home 在项目 workspace 外时，较大工具输出的产物目录受
+xwork 普通文件策略拒绝；宿主产物存储独立边界及真实 MdoAgentSession
+接入测试待完成。同 workspace 的 native xwork 探针不证明该路径已可用。
+
+本轮最终 Windows/Linux 门禁通过 115 Python、252 Node、90 模块、严格 C11、
+38 runtime、三项 packed 与独立 A/B；Windows 另通过便携 WebView2 Home
+及 20 秒启动。根目录程序 6,387,552 字节、SHA-256
+`0758820636dfb04107c0d92e5db369df658b7fa85559acc51a9563a5fcd098a1`；
+Linux 为 `da4cc36f9650a885a5064cba3cd76a3ce20d0bed889308e2685e43bf44fa0761`。
+日志 `.build/qa-artifact-{windows,linux}-final.log`。没有压力/高负载测试。
+既有 Linux queued HEAD reset 继续待排查，不用新通过结果推断旧 reset 原因。
+
+2026-10-02 增量：生产离线预览单 worker 已接入。通过拥有上传字节
 进行 schema、实际模型重放/UI 关系及静态像素检查，支持 ID/校验和重试、
 粗粒度进度、取消、终态摘要/失败重试、五分钟过期及 Unit join。取消与
 成功发布竞争、跳过 Run 的清理和解码后释放上传 pin 均有确定性小探针。
