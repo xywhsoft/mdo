@@ -131,24 +131,26 @@ class FrontendContractTests(unittest.TestCase):
         self.assertIn("/profile", sessions)
         self.assertIn("ifMatch: etag(session)", sessions)
 
-    def test_settings_use_preview_etag_and_server_side_merge(self) -> None:
+    def test_settings_autosave_uses_etag_and_server_side_merge(self) -> None:
         state = self.scripts["js/state/settings.js"]
         view = self.scripts["js/features/settings/settings-view.js"]
         navigation = self.scripts["js/state/navigation.js"]
         self.assertIn('api.patch("/settings/settings/preview"', state)
         self.assertIn('api.patch("/settings/settings"', state)
         self.assertIn("{ ifMatch: etag }", state)
-        self.assertIn("previewFingerprint", view)
+        self.assertIn("createSettingsAutosave", view)
+        self.assertIn("changedSettingsValues", view)
         self.assertIn("invalid.reportValidity()", view)
         self.assertNotIn("snapshot.web.secret_ref", view)
         self.assertNotIn("snapshot.transport.proxy.secret_ref", view)
         self.assertIn("form.elements.proxy_secret_ref.value.trim()", view)
         self.assertIn('#/settings/${resourceId(section', navigation)
         for marker in (
-            'id="settings-workspace"', 'id="preview-settings"',
+            'id="settings-workspace"',
             'id="apply-settings"', 'id="restore-confirm"',
         ):
             self.assertIn(marker, self.index)
+        self.assertNotIn('id="preview-settings"', self.index)
 
     def test_resource_management_is_split_into_bounded_stores(self) -> None:
         resources = self.scripts["js/state/resources.js"]

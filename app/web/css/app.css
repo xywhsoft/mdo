@@ -1681,7 +1681,7 @@ select:focus-visible,
 @media (max-width: 640px) {
   .settings-actions > .settings-action-buttons {
     display: grid;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
+    grid-template-columns: repeat(3, minmax(0, 1fr));
     width: 100%;
     gap: 6px;
     overflow: visible;
@@ -1698,7 +1698,7 @@ select:focus-visible,
   .settings-feedback { max-height: 30px; overflow-y: auto; }
   .settings-actions[data-short-state="empty"] { display: none; }
   .settings-actions[data-short-state="restore"] .settings-feedback,
-  .settings-actions[data-short-state="restore"] :is(#discard-settings, #preview-settings, #apply-settings) { display: none; }
+  .settings-actions[data-short-state="restore"] :is(#discard-settings, #apply-settings) { display: none; }
   .settings-actions[data-short-state="restore"] > .settings-action-buttons {
     display: flex;
     justify-content: flex-end;
@@ -1820,7 +1820,7 @@ select:focus-visible,
     .settings-actions[data-short-state="restore"] .settings-feedback,
   .app-shell[data-compact-visual-viewport]
     .settings-actions[data-short-state="restore"]
-    :is(#discard-settings, #preview-settings, #apply-settings) { display: none; }
+    :is(#discard-settings, #apply-settings) { display: none; }
   .app-shell[data-compact-visual-viewport]
     .settings-actions[data-short-state="restore"] > .settings-action-buttons {
     display: flex;

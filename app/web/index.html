@@ -275,8 +275,8 @@
             <p id="settings-revision">正在读取当前配置…</p>
           </div>
           <button class="settings-pending-link" id="settings-pending-link" type="button"
-            aria-label="返回未应用的设置" data-i18n-aria-label="settings.reviewPending"
-            data-i18n="settings.pendingBadge" hidden>未应用更改</button>
+            aria-label="返回未保存的设置" data-i18n-aria-label="settings.reviewPending"
+            data-i18n="settings.pendingBadge" hidden>未保存更改</button>
         </header>
         <div class="settings-layout">
           <nav class="settings-navigation" aria-label="设置分类" data-i18n-aria-label="settings.navigation">
@@ -302,7 +302,7 @@
                   <p data-i18n="settings.generalDescription">界面外观、输入方式和工作区打开方式。</p>
                 </div>
                 <div class="setting-row">
-                  <div><label for="setting-locale" data-i18n="settings.language">界面语言</label><p data-i18n="settings.languageDescription">切换界面语言；应用设置后在此设备上保留。</p></div>
+                  <div><label for="setting-locale" data-i18n="settings.language">界面语言</label><p data-i18n="settings.languageDescription">切换界面语言，自动保存。</p></div>
                   <select id="setting-locale" name="locale"><option value="zh-CN">简体中文</option><option value="en-US">English</option><option value="ru-RU">Русский</option></select>
                 </div>
                 <div class="setting-row">
@@ -484,7 +484,7 @@
         </div>
 
         <footer class="settings-actions" id="settings-actions">
-          <div class="settings-feedback" id="settings-feedback" role="status" tabindex="-1" data-i18n="settings.synced">配置与本地服务保持同步。</div>
+          <div class="settings-feedback" id="settings-feedback" role="status" tabindex="-1" data-i18n="settings.synced">设置已保存。</div>
           <div class="settings-action-buttons">
             <button class="danger-link" id="restore-settings" type="button" aria-label="恢复默认" data-i18n-aria-label="settings.restore" disabled>
               <span class="settings-action-full" data-i18n="settings.restore">恢复默认</span><span class="settings-action-compact" data-i18n="settings.restoreShort" aria-hidden="true">重置</span>
@@ -492,11 +492,8 @@
             <button class="secondary-button" id="discard-settings" type="button" aria-label="放弃更改" data-i18n-aria-label="settings.discard" disabled>
               <span class="settings-action-full" data-i18n="settings.discard">放弃更改</span><span class="settings-action-compact" data-i18n="settings.discardShort" aria-hidden="true">放弃</span>
             </button>
-            <button class="secondary-button" id="preview-settings" type="button" aria-label="预览更改" data-i18n-aria-label="settings.preview" disabled>
-              <span class="settings-action-full" data-i18n="settings.preview">预览更改</span><span class="settings-action-compact" data-i18n="settings.previewShort" aria-hidden="true">预览</span>
-            </button>
-            <button class="primary-button" id="apply-settings" type="button" aria-label="应用更改" data-i18n-aria-label="settings.apply" disabled>
-              <span class="settings-action-full" data-i18n="settings.apply">应用更改</span><span class="settings-action-compact" data-i18n="settings.applyShort" aria-hidden="true">应用</span>
+            <button class="primary-button" id="apply-settings" type="button" aria-label="保存设置" data-i18n-aria-label="settings.apply" disabled>
+              <span class="settings-action-full" data-i18n="settings.apply">保存设置</span><span class="settings-action-compact" data-i18n="settings.applyShort" aria-hidden="true">保存</span>
             </button>
           </div>
           <div class="restore-confirm" id="restore-confirm" hidden>

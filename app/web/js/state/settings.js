@@ -20,12 +20,14 @@ export async function previewSettings(patch) {
 
 export async function applySettings(patch, etag) {
   const result = (await api.patch("/settings/settings", documentFor(patch), { ifMatch: etag })).data;
-  await loadSettings();
+  const loaded = await loadSettings();
+  if (loaded.status !== "ready") throw loaded.error ?? new Error("Settings could not be read after saving");
   return result;
 }
 
 export async function restoreSettings(etag) {
   const result = (await api.delete("/settings/settings", { ifMatch: etag })).data;
-  await loadSettings();
+  const loaded = await loadSettings();
+  if (loaded.status !== "ready") throw loaded.error ?? new Error("Settings could not be read after restoring");
   return result;
 }

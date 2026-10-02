@@ -1,6 +1,7 @@
-import { previewSettings, applySettings, restoreSettings } from "../../state/settings.js";
+import { applySettings, loadSettings, restoreSettings } from "../../state/settings.js";
 import { errorMessage, toast } from "../../utils/dom.js";
 import { currentLocale, loadLocale, supportedLocales, t } from "../../i18n.js";
+import { createSettingsAutosave, changedSettingsValues } from "./settings-autosave.js";
 
 function number(form, name) {
   return Number(form.elements[name].value);
@@ -76,7 +77,6 @@ export function createSettingsView({ form, store, navigation, onApplied }) {
   const revision = document.querySelector("#settings-revision");
   const feedback = document.querySelector("#settings-feedback");
   const actions = document.querySelector("#settings-actions");
-  const previewButton = document.querySelector("#preview-settings");
   const applyButton = document.querySelector("#apply-settings");
   const discardButton = document.querySelector("#discard-settings");
   const restoreButton = document.querySelector("#restore-settings");
@@ -93,12 +93,20 @@ export function createSettingsView({ form, store, navigation, onApplied }) {
   const pendingLink = document.querySelector("#settings-pending-link");
   let snapshot = null;
   let baselineFingerprint = "";
-  let previewFingerprint = "";
+  let baselineValues = {};
+  let submittedValues = null;
+  let saveFailure = "";
   let busy = false;
   let selectedSection = "general";
   let lastEditedSection = "general";
   let localeReady = Promise.resolve();
   let previewActive = false;
+
+  function values() {
+    return Object.fromEntries([...form.elements].filter((field) => field.name)
+      .map((field) => [field.name,
+        field.type === "checkbox" ? field.checked : field.value]));
+  }
 
   function fingerprint() {
     return snapshot ? JSON.stringify(settingsPatch(form, snapshot)) : "";
@@ -122,7 +130,7 @@ export function createSettingsView({ form, store, navigation, onApplied }) {
     // Short mobile viewports can release the footer when it has no action.
     const idle = !busy && Boolean(snapshot) &&
       fingerprint() === baselineFingerprint &&
-      feedback.dataset.tone === "neutral";
+      feedback.dataset.tone !== "error";
     actions.dataset.shortState = !idle ? "active"
       : restoreButton.disabled ? "empty" : "restore";
   }
@@ -136,10 +144,7 @@ export function createSettingsView({ form, store, navigation, onApplied }) {
   function setBusy(value) {
     busy = value;
     const dirty = Boolean(snapshot) && fingerprint() !== baselineFingerprint;
-    previewButton.disabled = value || !dirty ||
-      !form.elements.user_instructions.validity.valid || !validateProxy() ||
-      !validatePower();
-    applyButton.disabled = value || !snapshot || previewFingerprint !== fingerprint();
+    applyButton.disabled = value || !dirty;
     discardButton.disabled = value || !dirty;
     restoreButton.disabled = value || !snapshot?.user_patches?.settings;
     syncShortActions();
@@ -225,9 +230,8 @@ export function createSettingsView({ form, store, navigation, onApplied }) {
   sectionResizeObserver?.observe(sectionLayout);
 
   function renderStatus(settings) {
-    revision.textContent = t("settings.revision", { revision: settings.revision },
-      `配置 revision ${settings.revision}`) +
-      (settings.runtime_override ? t("settings.runtimeOverride", {}, " · 含运行时覆盖") : "");
+    revision.textContent = t("settings.autosaveDescription", {},
+      "有效更改会自动保存；保存失败时可点击保存重试。");
     feedbackText(settings.transaction_service.runtime_consistent
       ? t("settings.synced", {}, "配置与本地服务保持同步。")
       : t("settings.runtimeError", { error: settings.transaction_service.last_error },
@@ -278,21 +282,16 @@ export function createSettingsView({ form, store, navigation, onApplied }) {
       form.elements.proxy_port.validity.valid && user.validity.valid;
   }
 
-  function fill(settings) {
+  function fill(settings, preserve = true) {
+    const field = document.activeElement;
+    const editing = form.contains(field) ? { field, value: field.value,
+      start: field.selectionStart, end: field.selectionEnd,
+      direction: field.selectionDirection, top: field.scrollTop, left: field.scrollLeft } : null;
+    const retained = preserve && snapshot
+      ? changedSettingsValues(submittedValues ?? baselineValues, values()) : {};
     snapshot = settings;
     form.elements.locale.value = supportedLocales.includes(settings.locale)
       ? settings.locale : "zh-CN";
-    const selectedLocale = form.elements.locale.value;
-    localeReady = loadLocale(selectedLocale).then((applied) => {
-      if (applied && snapshot === settings && form.elements.locale.value === selectedLocale) {
-        renderCredential(settings);
-        renderProxyCredential(settings);
-        renderPowerStatus(settings);
-        validateInstructions();
-        if (fingerprint() === baselineFingerprint) renderStatus(settings);
-        else markDirty();
-      }
-    }).catch((error) => toast(errorMessage(error), "error"));
     form.elements.theme.value = settings.appearance.theme;
     form.elements.font_size.value = settings.appearance.font_size;
     form.elements.density.value = settings.appearance.density;
@@ -335,28 +334,55 @@ export function createSettingsView({ form, store, navigation, onApplied }) {
     validateProxy();
     renderProxyCredential(settings);
     baselineFingerprint = fingerprint();
+    baselineValues = values();
+    for (const [name, value] of Object.entries(retained)) {
+      const field = form.elements[name];
+      if (field.type === "checkbox") field.checked = value;
+      else field.value = value;
+    }
+    // Assigning the accepted value and then a newer edit moves a text cursor.
+    // Keep the active editor's selection and scroll when its text is retained.
+    if (editing && document.activeElement === editing.field &&
+        editing.field.value === editing.value) {
+      if (typeof editing.start === "number")
+        editing.field.setSelectionRange(editing.start, editing.end, editing.direction);
+      editing.field.scrollTop = editing.top;
+      editing.field.scrollLeft = editing.left;
+    }
     renderCredential(settings);
-    previewFingerprint = "";
     syncPendingLink();
     restoreConfirm.hidden = true;
-    renderStatus(settings);
-    applyAppearance(settings);
-    setBusy(false);
+    validateInstructions();
+    validateProxy();
+    if (fingerprint() === baselineFingerprint && !busy && !saveFailure) renderStatus(settings);
+    else markDirty();
+    if (previewActive) previewAppearance();
+    else applyAppearance(settings);
+    setBusy(busy);
+    const selectedLocale = previewActive ? form.elements.locale.value : settings.locale;
+    localeReady = loadLocale(selectedLocale).then((applied) => {
+      if (applied && snapshot === settings) {
+        renderCredential(settings);
+        renderProxyCredential(settings);
+        renderPowerStatus(settings);
+        validateInstructions();
+        if (fingerprint() === baselineFingerprint && !busy && !saveFailure) renderStatus(settings);
+        else markDirty();
+      }
+    }).catch((error) => toast(errorMessage(error), "error"));
   }
 
   function markDirty(event) {
+    if (event) saveFailure = "";
     const section = event?.target?.closest?.("[data-settings-panel]")?.dataset.settingsPanel;
     if (["general", "agent", "web"].includes(section)) lastEditedSection = section;
-    previewAppearance();
+    if (previewActive) previewAppearance();
     const validInstructions = validateInstructions();
     const validProxy = validateProxy();
     const validPower = validatePower();
-    previewFingerprint = "";
     const dirty = Boolean(snapshot) && fingerprint() !== baselineFingerprint;
     syncPendingLink();
-    previewButton.disabled = busy || !dirty || !validInstructions ||
-      !validProxy || !validPower;
-    applyButton.disabled = true;
+    applyButton.disabled = busy || !dirty;
     discardButton.disabled = busy || !dirty;
     feedbackText(!validInstructions
       ? t("settings.instructionsTooLong", {}, "自定义指令不能超过 8192 字节。")
@@ -364,10 +390,15 @@ export function createSettingsView({ form, store, navigation, onApplied }) {
         ? t("settings.proxyInvalid", {}, "代理地址、端口或用户名需要检查。")
       : !validPower
         ? t("settings.preventSleepUnavailable")
+      : busy
+        ? t("settings.saving", {}, "正在保存…")
+      : saveFailure
+        ? saveFailure
       : dirty
-        ? t("settings.pending", {}, "有尚未预览的更改。先预览，确认后再应用。")
+        ? t("settings.pending", {}, "有未保存的更改；有效输入会自动保存。")
         : t("settings.synced", {}, "配置与本地服务保持同步。"),
-    validInstructions && validProxy && validPower ? "neutral" : "error");
+    validInstructions && validProxy && validPower && !saveFailure ? "neutral" : "error");
+    if (event) autosave.schedule();
   }
   form.addEventListener("input", markDirty);
   form.addEventListener("change", markDirty);
@@ -408,63 +439,80 @@ export function createSettingsView({ form, store, navigation, onApplied }) {
     }
   });
 
-  previewButton.addEventListener("click", async () => {
-    if (!snapshot || !reportSettingsValidity() || !validatePower()) return;
-    let nextFocus = previewButton;
-    setBusy(true);
-    try {
-      const patch = settingsPatch(form, snapshot);
-      const preview = await previewSettings(patch);
-      previewFingerprint = JSON.stringify(patch);
-      feedbackText(preview.changes
-        ? t("settings.previewBytes", { bytes: preview.patch_bytes },
-          `预览通过，将合并 ${preview.patch_bytes} 字节配置。`)
-        : t("settings.previewNoChange", {}, "预览通过，当前输入不会改变有效配置。"),
-      preview.changes ? "success" : "neutral");
-      applyButton.disabled = !preview.changes;
-      if (preview.changes) nextFocus = applyButton;
-    } catch (error) {
-      previewFingerprint = "";
-      feedbackText(errorMessage(error), "error");
-    } finally {
-      busy = false;
+  const autosave = createSettingsAutosave({
+    capture() {
+      if (!snapshot || busy || !restoreConfirm.hidden ||
+          fingerprint() === baselineFingerprint || !validateInstructions() ||
+          !validateProxy() || !validatePower() ||
+          [...form.elements].some((field) => field.willValidate && !field.validity.valid))
+        return null;
+      return { patch: settingsPatch(form, snapshot), etag: snapshot.etag, values: values() };
+    },
+    write: (submitted) => applySettings(submitted.patch, submitted.etag),
+    onStart(submitted) {
+      saveFailure = "";
+      submittedValues = submitted.values;
+      setBusy(true);
+      feedbackText(t("settings.saving", {}, "正在保存…"));
+    },
+    onSettled(error) {
+      saveFailure = "";
+      if (error?.status === 412) saveFailure = t("settings.saveConflict", {},
+        "设置已在其他窗口更新。你的修改仍保留，可点击保存重试。");
+      else if (error) saveFailure = t("settings.saveFailed", { error: errorMessage(error) },
+        `保存失败：${errorMessage(error)}。更改已保留，可点击保存重试。`);
+      submittedValues = null;
       setBusy(false);
-      focusAfterAction(nextFocus);
-    }
+      syncPendingLink();
+      if (error) feedbackText(saveFailure, "error");
+      else if (fingerprint() !== baselineFingerprint) markDirty();
+      else feedbackText(t("settings.saved", {}, "已保存"), "success");
+      if (!error) void Promise.resolve(onApplied?.()).catch(() => {});
+      if (error?.status === 412) {
+        // A second window changed settings. Read its values once, rebase the
+        // unsaved fields, and leave the retry to the user with a fresh ETag.
+        setBusy(true);
+        void loadSettings().then((loaded) => {
+          setBusy(false);
+          syncPendingLink();
+          if (loaded.status === "ready" && fingerprint() === baselineFingerprint) {
+            saveFailure = "";
+            feedbackText(t("settings.saved", {}, "已保存"), "success");
+          }
+          else if (saveFailure) feedbackText(saveFailure, "error");
+          else { markDirty(); autosave.schedule(); }
+        });
+      }
+    },
   });
-
-  applyButton.addEventListener("click", async () => {
-    if (!snapshot || !reportSettingsValidity() || !validatePower() ||
-        previewFingerprint !== fingerprint()) return;
-    setBusy(true);
-    try {
-      const result = await applySettings(settingsPatch(form, snapshot), snapshot.etag);
-      feedbackText(result.changed
-        ? t("settings.appliedRevision", { revision: result.revision },
-          `配置 revision ${result.revision} 已生效。`)
-        : t("settings.noChanges", {}, "配置没有变化。"), "success");
-      toast(t("settings.appliedToast", {}, "设置已应用"));
-      onApplied?.();
-    } catch (error) {
-      previewFingerprint = "";
-      feedbackText(errorMessage(error), "error");
-    } finally {
-      busy = false;
-      focusAfterAction();
-    }
+  form.addEventListener("compositionstart", () => autosave.composing(true));
+  form.addEventListener("compositionend", () => autosave.composing(false));
+  function saveNow() {
+    if (!snapshot || busy || !reportSettingsValidity() || !validatePower()) return;
+    void autosave.flush().then(() => focusAfterAction());
+  }
+  applyButton.addEventListener("click", saveNow);
+  form.noValidate = true;
+  form.addEventListener("submit", (event) => {
+    event.preventDefault();
+    saveNow();
   });
 
   discardButton.addEventListener("click", () => {
-    if (snapshot) fill(snapshot);
+    autosave.cancel();
+    saveFailure = "";
+    if (snapshot) fill(snapshot, false);
     // fill() disables the clicked button; move focus before the browser blurs it.
     visibleFeedbackTarget()?.focus({ preventScroll: true });
   });
   function closeRestoreConfirm() {
     restoreConfirm.hidden = true;
+    autosave.schedule();
     (restoreButton.disabled ? visibleFeedbackTarget() : restoreButton)
       ?.focus({ preventScroll: true });
   }
   restoreButton.addEventListener("click", () => {
+    autosave.cancel();
     restoreConfirm.hidden = false;
     cancelRestoreButton.focus({ preventScroll: true });
   });
@@ -478,22 +526,28 @@ export function createSettingsView({ form, store, navigation, onApplied }) {
     if (!snapshot || busy) return;
     cancelRestoreButton.disabled = true;
     confirmRestoreButton.disabled = true;
+    submittedValues = values();
+    saveFailure = "";
     setBusy(true);
+    let restored = false;
     try {
-      const result = await restoreSettings(snapshot.etag);
+      await restoreSettings(snapshot.etag);
+      restored = true;
       restoreConfirm.hidden = true;
-      feedbackText(t("settings.restoreAppliedRevision", { revision: result.revision },
-        `已恢复内置默认值，当前 revision ${result.revision}。`), "success");
+      feedbackText(t("settings.restored", {}, "已恢复默认设置。"), "success");
       toast(t("settings.restoreToast", {}, "已恢复默认设置"));
       onApplied?.();
     } catch (error) {
       feedbackText(errorMessage(error), "error");
     } finally {
       busy = false;
+      submittedValues = null;
+      setBusy(false);
       cancelRestoreButton.disabled = false;
       confirmRestoreButton.disabled = false;
       focusAfterAction(
         restoreConfirm.hidden ? feedback : confirmRestoreButton);
+      if (restored) autosave.schedule();
     }
   });
 
@@ -537,7 +591,7 @@ export function createSettingsView({ form, store, navigation, onApplied }) {
         renderProxyCredential(snapshot);
         renderPowerStatus(snapshot);
         validateInstructions();
-        if (fingerprint() === baselineFingerprint) renderStatus(snapshot);
+        if (fingerprint() === baselineFingerprint && !busy && !saveFailure) renderStatus(snapshot);
         else markDirty();
       }).catch((error) => toast(errorMessage(error), "error"));
     },
@@ -565,6 +619,7 @@ export function createSettingsView({ form, store, navigation, onApplied }) {
       syncPendingLink();
     },
     destroy() {
+      autosave.destroy();
       unsubscribe();
       window.removeEventListener("resize", syncResponsiveSettings);
       sectionResizeObserver?.disconnect();

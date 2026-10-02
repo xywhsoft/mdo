@@ -15,14 +15,13 @@
 import { createSettingsView } from "/app/web/js/features/settings/settings-view.js?settings-validity=1";
 import { createResourceStore } from "/app/web/js/state/store.js";
 const realFetch = window.fetch.bind(window);
-let previews = 0;
+let writes = 0;
 window.fetch = async (url, options) => {
   if (String(url).startsWith("/lang/"))
     return realFetch(`/app/web${url}`, { ...options, cache: "no-store" });
-  if (String(url) === "/api/v1/settings/settings/preview") {
-    previews++;
-    return new Response(JSON.stringify({ ok: true, data: { changes: true, patch_bytes: 123 } }),
-      { headers: { "Content-Type": "application/json" } });
+  if (String(url) === "/api/v1/settings/settings") {
+    writes++;
+    throw new Error("Invalid-panel fixture must not save");
   }
   if (String(url).startsWith("/api/")) throw new Error("Unexpected fixture API write");
   return realFetch(url, options);
@@ -66,7 +65,7 @@ function report() {
   const nav = document.querySelector(".settings-navigation").getBoundingClientRect();
   const invalid = [...form.elements].filter(e=>e.willValidate && !e.validity.valid);
   document.querySelector("#result").dataset.ready = "true";
-  document.querySelector("#result").textContent = JSON.stringify({ section, previews,
+  document.querySelector("#result").textContent = JSON.stringify({ section, writes,
     focused: field?.name || field?.id, invalid: invalid.map(e=>e.name),
     feedback: document.querySelector("#settings-feedback").textContent,
     tone: document.querySelector("#settings-feedback").dataset.tone,

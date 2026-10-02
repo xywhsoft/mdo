@@ -2455,7 +2455,7 @@ export async function boot() {
     if (themeToggleBusy) return;
     if (settingsView.hasPendingChanges()) {
       toast(t("settings.resolvePendingTheme", {},
-        "先预览、应用或放弃尚未保存的设置"), "error");
+        "先保存或放弃尚未保存的设置"), "error");
       return;
     }
     themeToggleBusy = true;

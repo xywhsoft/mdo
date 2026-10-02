@@ -27,8 +27,7 @@
         <div class="settings-action-buttons">
           <button class="danger-link" id="restore-settings" disabled>重置</button>
           <button class="secondary-button" id="discard-settings" disabled>放弃</button>
-          <button class="secondary-button" id="preview-settings" disabled>预览</button>
-          <button class="primary-button" id="apply-settings" disabled>应用</button>
+          <button class="primary-button" id="apply-settings" disabled>保存</button>
         </div>
       </footer>
     </section>
@@ -78,7 +77,7 @@ const result = { idle, dirty, restore, reopened,
     dirty.actionsBottom <= keyboardHeight &&
     restore.buttons.join(",") === "restore-settings" &&
     restore.actionsHeight <= 55 && !reopened.compact &&
-    reopened.visibleButtons === 4 && reopened.actionsHeight >= 70 };
+    reopened.visibleButtons === 3 && reopened.actionsHeight >= 70 };
 document.querySelector("#result").dataset.passed = String(result.passed);
 document.querySelector("#result").textContent = JSON.stringify(result, null, 2);
 </script>
