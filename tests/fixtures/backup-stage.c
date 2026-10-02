@@ -34,11 +34,12 @@ static bool BackupStageFixtureControl(XS_HttpReq* Request)
     MdoApiContext Context = {0};
     MdoSessionBackupLimits Limits;
     MdoSessionBackupStageInfo Info = {0};
+    MdoSessionBackupProjectionRepair Repair = {0};
     xwork_error Error;
     xvalue* Value;
     xroot Parent = NULL;
     xcancel* Cancel = NULL;
-    bool Ok = true, SizeSafe;
+    bool Ok = true, SizeSafe, OriginalUnchanged = true;
     uint32 Words[2] = { sizeof(uint32), UINT32_C(0x87654321) };
     void* Small;
     if ( Target.Size < sizeof(Prefix) - 1u || memcmp(Target.Data, Prefix, sizeof(Prefix) - 1u) != 0 ) return false;
@@ -57,6 +58,31 @@ static bool BackupStageFixtureControl(XS_HttpReq* Request)
     else if ( MdoApiViewEqualText(Target, "/__fixture/backup-stage/check-budget") ) {
         Limits.Files = 0u;
         Ok = MdoSessionBackupStageCheck(g_StageFixture, &Limits, NULL, &Error);
+    } else if ( Target.Size >= sizeof(Prefix) - 1u + 9u &&
+                memcmp(Target.Data + sizeof(Prefix) - 1u, "reconcile", 9u) == 0 ) {
+        MdoSessionBackup* Repaired;
+        size_t BeforeBytes = 0u, AfterBytes = 0u;
+        str Before = MdoSessionBackupEncode(g_DecodeFixtureBackup, NULL, &BeforeBytes, NULL);
+        str After;
+        if ( MdoApiViewEqualText(Target, "/__fixture/backup-stage/reconcile-growth") )
+            Limits.Files = MdoSessionBackupFileCount(g_DecodeFixtureBackup);
+        if ( MdoApiViewEqualText(Target, "/__fixture/backup-stage/reconcile-cancel") ) {
+            Cancel = xrtCancelCreate(); (void)xrtCancelRequest(Cancel);
+        }
+        if ( MdoApiViewEqualText(Target, "/__fixture/backup-stage/reconcile-deadline") ) Limits.Deadline = 1u;
+        Repair.Size = sizeof(Repair);
+        Repaired = MdoSessionBackupReconcileHistory(g_DecodeFixtureBackup, &Limits, Cancel, &Repair,
+            MdoApiViewEqualText(Target, "/__fixture/backup-stage/reconcile-null-error") ? NULL : &Error);
+        xrtCancelDestroy(Cancel);
+        After = MdoSessionBackupEncode(g_DecodeFixtureBackup, NULL, &AfterBytes, NULL);
+        OriginalUnchanged = Before != NULL && After != NULL && BeforeBytes == AfterBytes &&
+            memcmp(Before, After, BeforeBytes) == 0;
+        xrtFree(Before); xrtFree(After);
+        BackupDecodeFixtureUnit();
+        Parent = xrtRootOpen(getenv("MDO_STAGE_FIXTURE_PARENT"));
+        Ok = Repaired != NULL && MdoSessionBackupStagePrepare(Repaired, Parent, NULL, NULL, &g_StageFixture, &Error);
+        if ( Parent ) (void)xrtRootClose(Parent);
+        MdoSessionBackupRelease(Repaired);
     } else if ( !MdoApiViewEqualText(Target, "/__fixture/backup-stage/state") ) {
         g_StageFixtureFault = MdoApiViewEqualText(Target, "/__fixture/backup-stage/corrupt") ? 1u :
             MdoApiViewEqualText(Target, "/__fixture/backup-stage/foreign") ? 2u :
@@ -84,6 +110,8 @@ static bool BackupStageFixtureControl(XS_HttpReq* Request)
     memcpy(Small, Words, sizeof(Words));
     SizeSafe = !MdoSessionBackupStageInfoGet(g_StageFixture, (MdoSessionBackupStageInfo*)Small) &&
         memcmp(Small, Words, sizeof(Words)) == 0;
+    SizeSafe = SizeSafe && MdoSessionBackupReconcileHistory(g_DecodeFixtureBackup, NULL, NULL,
+        (MdoSessionBackupProjectionRepair*)Small, NULL) == NULL && memcmp(Small, Words, sizeof(Words)) == 0;
     xrtFree(Small);
     Info.Size = sizeof(Info); (void)MdoSessionBackupStageInfoGet(g_StageFixture, &Info);
     Context.Request = Request; snprintf(Context.RequestId, sizeof(Context.RequestId), "stage-fixture");
@@ -99,8 +127,15 @@ static bool BackupStageFixtureControl(XS_HttpReq* Request)
     (void)MdoApiValueSetUInt(Value, "bytes", Info.Source.Bytes);
     (void)MdoApiValueSetUInt(Value, "ui_records", Info.Source.UiRecords);
     (void)MdoApiValueSetUInt(Value, "matched", Info.ModelHistory.MatchedUiRecords);
+    (void)MdoApiValueSetUInt(Value, "model_unverified", Info.ModelHistory.UnverifiedUiRecords);
     (void)MdoApiValueSetUInt(Value, "inline_images", Info.Images.InlineImages);
     (void)MdoApiValueSetBool(Value, "restore_ready", false);
+    (void)MdoApiValueSetBool(Value, "original_unchanged", OriginalUnchanged);
+    (void)MdoApiValueSetUInt(Value, "repaired_bindings", Repair.RemovedImageBindings);
+    (void)MdoApiValueSetUInt(Value, "repaired_feedback", Repair.RemovedFeedback);
+    (void)MdoApiValueSetBool(Value, "repaired_todo", Repair.TodoRebuilt);
+    (void)MdoApiValueSetUInt(Value, "unverified_refs", Info.Source.UnverifiedHistoryReferences);
+    (void)MdoApiValueSetUInt(Value, "removed_refs", Info.Source.RemovedHistoryReferences);
     (void)MdoApiReplySuccessTake(&Context, 200u, Value, NULL);
     return true;
 }

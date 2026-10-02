@@ -44,6 +44,11 @@ bool MdoBackupDigits(const char* Text, size_t Size, bool Hex);
 size_t MdoBackupPathLimit(const char* Path, bool Directory);
 int MdoBackupCompare(const void* Left, const void* Right);
 const MdoBackupOwnedFile* MdoBackupFind(const MdoSessionBackup* Backup, const char* Path);
+/* Independently owned file index; optionally copies bytes in cancellable
+ * chunks. Callers first enforce budgets. With Data=false every data pointer
+ * is NULL for a subsequent disk read. Partial allocations always release. */
+MdoSessionBackup* MdoBackupClone(const MdoSessionBackup* Source, bool Data,
+    const MdoSessionBackupLimits* Limits, const xcancel* Cancel, xwork_error* Error);
 bool MdoBackupUInt(const xvalue* Value, const char* Key, uint64* Number);
 bool MdoBackupView(const xvalue* Value, const char* Key, xstrview* Text);
 xvalue* MdoBackupJson(const void* Data, size_t Bytes);

@@ -125,23 +125,6 @@ static bool MdoStageWrite(MdoSessionBackupStage* Stage, size_t Index,
     return Ok;
 }
 
-static MdoSessionBackup* MdoStageSkeleton(const MdoSessionBackup* Source)
-{
-    MdoSessionBackup* Copy = (MdoSessionBackup*)xrtCalloc(1u, sizeof(*Copy));
-    size_t i;
-    if ( Copy == NULL ) return NULL;
-    Copy->Files = (MdoBackupOwnedFile*)xrtCalloc(Source->Count, sizeof(*Copy->Files));
-    if ( Copy->Files == NULL ) { xrtFree(Copy); return NULL; }
-    Copy->Count = Copy->Capacity = Source->Count; Copy->Bytes = Source->Bytes;
-    Copy->Info = Source->Info; Copy->CapturedAt = Source->CapturedAt;
-    Copy->Limits = Source->Limits; Copy->Schema = Source->Schema; Copy->Decoded = true;
-    for ( i = 0u; i < Copy->Count; ++i ) {
-        snprintf(Copy->Files[i].Path, sizeof(Copy->Files[i].Path), "%s", Source->Files[i].Path);
-        Copy->Files[i].Bytes = Source->Files[i].Bytes;
-    }
-    return Copy;
-}
-
 static bool MdoStageRead(MdoSessionBackupStage* Stage, size_t Index,
     const MdoBackupOwnedFile* Expected, MdoBackupOwnedFile* Result,
     const MdoSessionBackupLimits* Limits, const xcancel* Cancel, xwork_error* Error)
@@ -253,10 +236,8 @@ static bool MdoStageVerify(MdoSessionBackupStage* Stage, const MdoSessionBackup*
     memset(&Stage->Info.Images, 0, sizeof(Stage->Info.Images));
     if ( !MdoBackupCheck(Limits, Cancel, Error) || !MdoStageBudget(Expected, Limits, Error) ) return false;
     if ( !MdoStageOpenDirectory(Stage) ) return MdoStageIO(Error, Stage->Root.Path);
-    Read = MdoStageSkeleton(Expected);
-    if ( Read == NULL ) {
-        (void)MdoBackupError(Error, XWORK_ERROR_OUT_OF_MEMORY, "cannot own staged backup", NULL); goto done;
-    }
+    Read = MdoBackupClone(Expected, false, Limits, Cancel, Error);
+    if ( Read == NULL ) goto done;
     for ( i = 0u; i < Read->Count; ++i )
         if ( !MdoStageRead(Stage, i, &Expected->Files[i], &Read->Files[i], Limits, Cancel, Error) ) goto done;
     if ( !MdoStageInventory(Stage, "", 0u, &Seen, Limits, Cancel, Error) ||

@@ -164,7 +164,113 @@ class Probe(DecodeProbe):
         result = self.prepare(bad)
         assert not result["ok"] and not result["retained"] and not list(self.parent.iterdir()), result
         assert self.prepare(source)["verified"] and self.fixture("discard")["ok"]
+        self.check_projections(source, expected)
         assert inventory() == before  # no source Home, queue, model or catalog writes
+
+    def check_projections(self, source, expected):
+        kinds = self.api("GET", DECODE + "kinds")[1]["data"]
+        events = [json.loads(line) for line in expected["ui-events.jsonl"].splitlines()]
+        last = events[-1]["event_id"]
+        completed = next(e["event_id"] for e in events if e["kind"] == kinds["model"] and e["success"])
+
+        def event(identifier, kind, **fields):
+            row = {**events[-1], "event_id": identifier, "kind": kind, "source_event_id": 0,
+                   "agent_turn": 0, "user_message_sequence": 0, "agent_depth": 0, "agent_id": 0,
+                   "run_id": 0, "parent_run_id": 0, "task_id": 0, "artifact_id": 0,
+                   "artifact_path": "", "queue_item_id": "", "text": "", "tool_name": "",
+                   "tool_call_id": "", "success": True, "effect_applied": False, "text_truncated": False}
+            row.update(fields)
+            return row
+
+        def files(document):
+            return {f["path"]: base64.b64decode(f["data"]) for f in document["files"]}
+
+        def repaired(document, **counts):
+            result = self.prepare(document, "reconcile")
+            assert result["ok"] and result["verified"] and result["original_unchanged"], result
+            for key, value in counts.items():
+                assert result[key] == value, result
+            if any(e["kind"] == kinds["tool_done"] and e["tool_call_id"] == "" and e["agent_turn"] == 0
+                   for e in map(json.loads, files(document)["ui-events.jsonl"].splitlines())):
+                assert result["model_unverified"] > 0, result  # legacy relation remains explicitly unverified
+            stage = self.parent / result["directory"]
+            actual = {p.relative_to(stage).as_posix(): p.read_bytes() for p in stage.rglob("*") if p.is_file()}
+            assert actual["snapshot.json"] == expected["snapshot.json"]
+            for name in ("journal.jsonl", "draft.json", "queue.json", ARTIFACT):
+                if name in expected:
+                    assert actual[name] == expected[name], name
+            assert actual["ui-events.jsonl"] == files(document)["ui-events.jsonl"]
+            assert self.fixture("check")["verified"] and self.fixture("discard")["ok"]
+            return actual
+
+        removed = last + 2
+        document = copy.deepcopy(source)
+        set_ui(document, events + [event(last + 5, kinds["removed"], source_event_id=last + 1)])
+        binding = f"attachments/events/{removed}.json"
+        replace(document, binding, dump({"schema_version": 1, "run_id": 1, "attachments": []}))
+        replace(document, "feedback.json", dump({"schema_version": 1, "items": [
+            {"event_id": completed, "value": "good"}, {"event_id": removed, "value": "bad"}]}))
+        replace(document, "todo.json", dump({"schema_version": 1, "event_id": removed,
+                                             "items": [{"text": "Removed plan", "done": False}]}))
+        actual = repaired(document, repaired_bindings=1, repaired_feedback=1, repaired_todo=True, removed_refs=0)
+        assert binding not in actual
+        assert json.loads(actual["feedback.json"])["items"] == [{"event_id": completed, "value": "good"}]
+        assert json.loads(actual["todo.json"]) == {"schema_version": 1, "event_id": 0, "items": []}
+
+        # The original input survives cancellation/failure with no repair facts.
+        for mode, code in (("reconcile-cancel", 9), ("reconcile-deadline", 11)):
+            result = self.prepare(document, mode)
+            assert not result["ok"] and not result["retained"] and result["code"] == code, result
+            assert result["original_unchanged"] and not result["repaired_todo"]
+            assert result["repaired_bindings"] == result["repaired_feedback"] == 0
+            assert not list(self.parent.iterdir())
+
+        # Evicted prefix evidence is unknown, not a removal authorization.
+        document = copy.deepcopy(source)
+        retained = [e for e in events if e["event_id"] > completed]
+        set_ui(document, retained)
+        binding = "attachments/events/1.json"
+        replace(document, binding, dump({"schema_version": 1, "run_id": 1, "attachments": []}))
+        replace(document, "feedback.json", dump({"schema_version": 1, "items": [{"event_id": completed, "value": "good"}]}))
+        replace(document, "todo.json", dump({"schema_version": 1, "event_id": 1,
+                                             "items": [{"text": "Unverified older plan", "done": False}]}))
+        actual = repaired(document, repaired_bindings=0, repaired_feedback=0, repaired_todo=False, unverified_refs=3)
+        for name in (binding, "feedback.json", "todo.json"):
+            assert actual[name] == files(document)[name]
+
+        # Legacy zero-source clear resets todo, preserving unrelated feedback.
+        document = copy.deepcopy(source)
+        set_ui(document, events + [event(last + 5, kinds["removed"])])
+        replace(document, "feedback.json", dump({"schema_version": 1, "items": [{"event_id": completed, "value": "bad"}]}))
+        replace(document, "todo.json", dump({"schema_version": 1, "event_id": removed,
+                                             "items": [{"text": "Pre-clear plan", "done": False}]}))
+        actual = repaired(document, repaired_bindings=0, repaired_feedback=0, repaired_todo=True)
+        assert json.loads(actual["todo.json"])["items"] == []
+        assert actual["feedback.json"] == files(document)["feedback.json"]
+
+        # Current sidecars can lag a successful tool event after a write error.
+        first = event(last + 1, kinds["tool_done"], tool_name="mdo.todo",
+                      text=dump({"items": [{"text": "Latest plan 中文", "done": False}]}).decode())
+        second = event(last + 2, kinds["tool_done"], tool_name="mdo.todo",
+                       text=dump({"items": [{"text": "Latest plan 中文", "done": True}]}).decode())
+        document = copy.deepcopy(source); set_ui(document, events + [first, second])
+        replace(document, "todo.json", dump({"schema_version": 1, "event_id": first["event_id"],
+                                             "items": json.loads(first["text"])["items"]}))
+        actual = repaired(document, repaired_todo=True)
+        assert json.loads(actual["todo.json"]) == {"schema_version": 1, "event_id": second["event_id"],
+                                                  "items": json.loads(second["text"])["items"]}
+        document = copy.deepcopy(source); set_ui(document, events + [second])
+        result = self.prepare(document, "reconcile-growth")
+        assert not result["ok"] and result["code"] == 11 and result["original_unchanged"], result
+        assert not result["repaired_todo"] and not list(self.parent.iterdir())
+        actual = repaired(document, repaired_todo=True)
+        assert json.loads(actual["todo.json"])["event_id"] == second["event_id"]
+
+        malformed = copy.deepcopy(source)
+        set_ui(malformed, events + [{**second, "text": "{"}])
+        result = self.prepare(malformed, "reconcile")
+        assert not result["ok"] and not result["retained"] and result["original_unchanged"], result
+        assert not result["repaired_todo"] and not list(self.parent.iterdir())
 
 
 def main():

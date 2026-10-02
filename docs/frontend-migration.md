@@ -4,6 +4,42 @@
 
 完成判据及尚缺的打包页证据见 [前端操作体验完成审计](frontend-completion-audit.md)。本文件继续记录每次实现和验证的细节。
 
+## 2026-10-02：恢复前的历史侧车投影修复
+
+新增 filesystem-free `MdoSessionBackupReconcileHistory`，返回独立拥有的 v2
+副本，只处理确有证据的侧车变化。复用 decoder 的历史索引和删改区间：
+移除已删除事件的图片绑定/反馈，重建落后、缺失或来源失效的 todo；未知
+retention 前缀和旧 run 绑定保留原字节及未验证报告。旧零来源 clear 仅
+作用于 todo，并丢弃 clear 前的候选，不能扩大成图片/反馈删除授权。
+
+未改的模型/UI 账本、metadata、图片原数据、artifact、draft/queue/receipt
+保持原字节。Stage 读回及投影复制共用取消感知的 owning clone，修复结果
+重新跑 schema/CRC/引用和历史关系检查。新增 todo 或编码增长仍受输出
+预算约束；失败只释放副本、清空 Facts，原备份不变。全部步骤共享 30 秒
+协作预算，不调用模型、工具、队列或 catalog。
+
+扩展现有 HTTP/TLS 小探针，核对三类删改投影、保留项、未知前缀原字节/
+计数、clear 限定作用、todo 落后/缺失、增长预算、末条坏 todo、取消及
+失败重试。原备份前后编码一致，原 Home 字节不变；释放修复副本后 Stage
+还能重查模型/UI 关系与静态像素。旧 todo 样例没有 turn/工具 ID，仍明确
+报告 model 未验证，不能算作完整工具运行证据。详见
+[投影合同](session-backup-projections.md)。
+
+新身份/provenance、artifact 重绑定、队列待确认转换、生产恢复 worker、
+原子发布、catalog 通知和正式页面仍待完成，`restore_ready:false` 保持。
+没有新增原生点击/实体设备证据或压力/高负载测试。
+
+最终 Windows/Linux 有界门禁通过 115 Python、252 Node、90 JS 模块、严格
+C11、40 runtime、三项 packed 和独立 A/B；Windows 另通过便携 WebView2
+Home 与 20 秒启动。SDK 未变化，复用已验证 native host；Linux 使用新的
+ext4 源 staging，七份生产/头文件/探针输入与 Windows 按 LF 归一化核对。
+根目录 `mdo.exe` 已更新为 6,397,671 字节、SHA-256
+`e05cb327c3da1b1b400cf4cdd37980a92a8127a580db04d9bfccd319474e23e1`；
+Linux A/B 为 6,447,831 字节、SHA-256
+`85f745d6d131f780fee766807ea388106c41375e3aed4e09c384778e01c53615`。
+日志 `.build/qa-projection-{windows,linux}-final.log`。Linux queued HEAD
+reset 及实体设备验收仍未闭环，本轮通过不改变其状态。
+
 ## 2026-10-02：完整备份的独立暂存材料化
 
 新增 `MdoSessionBackupStagePrepare/Check/InfoGet/Discard`，将拥有解码的

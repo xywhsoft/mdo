@@ -89,3 +89,8 @@ root mdo.exe 已更新为 6,395,308 字节，Windows SHA-256
 Linux `8958084d30e58f5725df3b15dabdf2fbb608f7555bb788e1dc2df9619aba0e82`。
 日志 `.build/qa-staging-{windows,linux}-final.log`，初始清单断言失败日志另存。
 本轮没有新增原生点击/实体设备证据；既有 Linux queued HEAD reset 未关闭。
+
+2026-10-02 后续增量：已增加独立的
+[历史投影修复](session-backup-projections.md)，可在 StagePrepare 前生成
+拥有副本，再用本层落盘和验证。它仅处理有证据的侧车变化，仍保留来源
+身份和 queue 原字节；StagePrepare 不自动做转换，生产恢复事务待接入。

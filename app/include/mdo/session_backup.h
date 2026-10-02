@@ -152,6 +152,30 @@ bool MdoSessionBackupCheckImages(const MdoSessionBackup* Backup,
     MdoSessionBackupImages* Images, xwork_error* Error);
 
 typedef struct MdoSessionBackupStage MdoSessionBackupStage;
+typedef struct MdoSessionBackupProjectionRepair {
+    uint32 Size;
+    size_t RemovedImageBindings, RemovedFeedback;
+    bool TodoRebuilt;
+    size_t UnverifiedHistoryReferences;
+} MdoSessionBackupProjectionRepair;
+
+/* Owns a new decoded v2 backup with reconciled history projections. Removes
+ * only event image bindings/feedback covered by positive removal ranges.
+ * Rebuilds todo from the latest retained successful main-Agent todo event, or
+ * resets it when an explicit removal/legacy clear invalidates its source.
+ * Unknown pruned-prefix references and legacy run bindings remain reported.
+ * Model/UI ledgers, image/artifact bytes, draft/queue/receipts and metadata
+ * stay exact. Original ownership/bytes are unchanged and can be released on
+ * return. Free the new backup with MdoSessionBackupRelease().
+ *
+ * Filesystem-free, single thirty-second cooperative budget; a bounded worker
+ * is required. Size mismatch leaves Facts untouched; other failure clears it
+ * except Size and returns NULL. Success is only projection reconciliation,
+ * not model/image validation, identity rebinding or publication permission. */
+MdoSessionBackup* MdoSessionBackupReconcileHistory(const MdoSessionBackup* Backup,
+    const MdoSessionBackupLimits* Limits, const xcancel* Cancel,
+    MdoSessionBackupProjectionRepair* Facts, xwork_error* Error);
+
 typedef struct MdoSessionBackupStageInfo {
     uint32 Size;
     bool Verified;

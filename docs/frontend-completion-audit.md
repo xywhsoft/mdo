@@ -2,7 +2,29 @@
 
 本清单以 `app_bak/wwwroot` 的可操作行为为基线，而不是以页面长得相似或单元测试通过为完成标准。`docs/frontend-migration.md` 记录每次实现和验证；这里记录当前还需要什么证据。审计更新：2026-10-02，基线提交 `f9e2c4c`。
 
-2026-10-02 最新增量：独立 staging 材料化已实现。真实 v2 字节排他落盘并
+2026-10-02 最新增量：恢复前的离线历史投影修复已实现，返回拥有副本。
+明确删改区间使图片事件绑定/反馈移除，todo 从保留成功事件重建或按清空
+证据置空；未知前缀及旧 run 绑定仍保留并报告。未改文件、原备份和源 Home
+原字节核对通过，修复副本独立暂存及释放后重查通过。旧无 turn/工具 ID
+记录的 model 关系仍报告未验证，未被提升为完整恢复证据。
+
+新身份/provenance、artifact 重绑定、队列待确认转换、生产恢复 worker、
+原子发布、catalog 及正式菜单仍待完成，`restore_ready:false` 保持。
+原生/实体设备和 Linux queued HEAD reset 仍单独待处理。没有压力/高负载
+测试。详见 [投影合同](session-backup-projections.md) 和
+[本轮迁移](frontend-migration.md#2026-10-02恢复前的历史侧车投影修复)。
+
+本轮最终 Windows/Linux 通过 115 Python、252 Node、90 JS 模块、严格 C11、
+40 runtime、三项 packed 与独立 A/B；Windows 另通过便携 WebView2 Home
+及 20 秒启动。SDK 不变，native host 复用已验证版本。根目录程序已更新为
+6,397,671 字节、SHA-256
+`e05cb327c3da1b1b400cf4cdd37980a92a8127a580db04d9bfccd319474e23e1`；
+Linux A/B 为 6,447,831 字节、SHA-256
+`85f745d6d131f780fee766807ea388106c41375e3aed4e09c384778e01c53615`。
+Linux 新 ext4 staging 的七份代码/探针输入与 Windows 按 LF 归一化核对。
+日志 `.build/qa-projection-{windows,linux}-final.log`。
+
+2026-10-02 增量：独立 staging 材料化已实现。真实 v2 字节排他落盘并
 独立读回，检查 identity、清单、实际模型/UI 关系和静态像素；释放原备份/
 上传和 caller root 后还能重查。取消/失败只清理拥有对象，外来文件及同
 字节替换身份被保留，清理受阻可显式重试。Windows 父目录移动在仅保留

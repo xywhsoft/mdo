@@ -365,6 +365,42 @@ size_t MdoSessionBackupFileCount(const MdoSessionBackup* Backup)
     return Backup != NULL ? Backup->Count : 0u;
 }
 
+MdoSessionBackup* MdoBackupClone(const MdoSessionBackup* Source, bool Data,
+    const MdoSessionBackupLimits* Limits, const xcancel* Cancel, xwork_error* Error)
+{
+    MdoSessionBackup* Copy = (MdoSessionBackup*)xrtCalloc(1u, sizeof(*Copy));
+    size_t i;
+    if ( Copy == NULL ) goto memory;
+    Copy->Files = (MdoBackupOwnedFile*)xrtCalloc(Source->Count, sizeof(*Copy->Files));
+    if ( Copy->Files == NULL ) goto memory;
+    Copy->Count = Copy->Capacity = Source->Count; Copy->Bytes = Source->Bytes;
+    Copy->Info = Source->Info; Copy->CapturedAt = Source->CapturedAt;
+    Copy->Limits = *Limits; Copy->Schema = Source->Schema; Copy->Decoded = Source->Decoded;
+    Copy->History = Source->History; Copy->Relations = Source->Relations;
+    for ( i = 0u; i < Copy->Count; ++i ) {
+        size_t Offset = 0u;
+        MdoBackupOwnedFile* File = &Copy->Files[i];
+        if ( !MdoBackupCheck(Limits, Cancel, Error) ) goto fail;
+        snprintf(File->Path, sizeof(File->Path), "%s", Source->Files[i].Path);
+        File->Bytes = Source->Files[i].Bytes;
+        if ( !Data ) continue;
+        File->Data = (char*)xrtMalloc(File->Bytes + 1u);
+        if ( File->Data == NULL ) goto memory;
+        while ( Offset < File->Bytes ) {
+            size_t Chunk = File->Bytes - Offset;
+            if ( Chunk > MDO_BACKUP_READ_CHUNK ) Chunk = MDO_BACKUP_READ_CHUNK;
+            if ( !MdoBackupCheck(Limits, Cancel, Error) ) goto fail;
+            memcpy(File->Data + Offset, Source->Files[i].Data + Offset, Chunk); Offset += Chunk;
+        }
+        File->Data[File->Bytes] = '\0';
+    }
+    return Copy;
+memory:
+    (void)MdoBackupError(Error, XWORK_ERROR_OUT_OF_MEMORY, "cannot clone owned session backup", NULL);
+fail:
+    MdoSessionBackupRelease(Copy); return NULL;
+}
+
 bool MdoSessionBackupFileGet(const MdoSessionBackup* Backup, size_t Index, MdoSessionBackupFile* File)
 {
     if ( File != NULL ) memset(File, 0, sizeof(*File));

@@ -354,3 +354,199 @@ bool MdoBackupRelationsValidate(const MdoSessionBackup* Backup,
     xrtFree(Index.Events); xrtFree(Index.Removed); xrtFree(Index.Receipts);
     return Ok;
 }
+
+static void MdoBackupRepairDrop(MdoSessionBackup* Copy, const char* Path)
+{
+    size_t i;
+    for ( i = 0u; i < Copy->Count; ++i ) {
+        MdoBackupOwnedFile* File = &Copy->Files[i];
+        if ( strcmp(File->Path, Path) != 0 ) continue;
+        Copy->Bytes -= File->Bytes; xrtFree(File->Data);
+        memmove(File, File + 1, (Copy->Count - i - 1u) * sizeof(*File));
+        --Copy->Count; memset(&Copy->Files[Copy->Count], 0, sizeof(*File));
+        return;
+    }
+}
+
+static bool MdoBackupRepairTake(xvalue* Root, const char* Name, xvalue* Value)
+{
+    bool Ok = Root != NULL && Value != NULL && xrtValueObjectSetTake(Root, xrtStrView(Name), &Value);
+    xrtValueRelease(Value); return Ok;
+}
+
+/* Prepare the entire new JSON allocation before replacing an owned file.
+ * Limits apply to the resulting bundle as well as to the original input. */
+static bool MdoBackupRepairJson(MdoBackupHistoryIndex* Index, MdoSessionBackup* Copy,
+    const char* Path, const xvalue* Root)
+{
+    MdoBackupOwnedFile* File = NULL;
+    size_t i, Bytes = 0u, Before = 0u;
+    str Json = xrtJsonStringify(Root, false, &Bytes);
+    if ( Json == NULL ) return MdoBackupHistoryError(Index, "cannot encode repaired projection", Path);
+    for ( i = 0u; i < Copy->Count; ++i )
+        if ( strcmp(Copy->Files[i].Path, Path) == 0 ) { File = &Copy->Files[i]; Before = File->Bytes; break; }
+    if ( Bytes > MdoBackupPathLimit(Path, false) || Bytes > Index->Limits->FileBytes ||
+         Bytes > Index->Limits->TotalBytes - (Copy->Bytes - Before) ||
+         (File == NULL && Copy->Count >= Index->Limits->Files) ) {
+        xrtFree(Json);
+        return MdoBackupError(Index->Error, XWORK_ERROR_LIMIT, "repaired projection exceeds backup budget", Path);
+    }
+    if ( File == NULL ) {
+        if ( Copy->Count == Copy->Capacity ) {
+            MdoBackupOwnedFile* Files = (MdoBackupOwnedFile*)xrtRealloc(Copy->Files,
+                (Copy->Capacity + 1u) * sizeof(*Copy->Files));
+            if ( Files == NULL ) { xrtFree(Json); return MdoBackupHistoryError(Index, "cannot grow repaired backup", Path); }
+            Copy->Files = Files; ++Copy->Capacity;
+        }
+        File = &Copy->Files[Copy->Count++]; memset(File, 0, sizeof(*File));
+        snprintf(File->Path, sizeof(File->Path), "%s", Path);
+    }
+    xrtFree(File->Data); File->Data = Json; File->Bytes = Bytes;
+    Copy->Bytes = Copy->Bytes - Before + Bytes;
+    qsort(Copy->Files, Copy->Count, sizeof(*Copy->Files), MdoBackupCompare);
+    return true;
+}
+
+static bool MdoBackupRepairFeedback(MdoBackupHistoryIndex* Index, MdoSessionBackup* Copy,
+    MdoSessionBackupProjectionRepair* Facts)
+{
+    const MdoBackupOwnedFile* File = MdoBackupFind(Index->Backup, "feedback.json");
+    xvalue *Root = NULL, *Items = NULL;
+    const xvalue* Before;
+    size_t i;
+    bool Ok = true;
+    if ( File == NULL ) return true;
+    Root = MdoBackupJson(File->Data, File->Bytes); Items = xrtValueArray();
+    if ( Root == NULL || Items == NULL ) { Ok = false; goto done; }
+    Before = xrtValueObjectGet(Root, XRT_STR_LITERAL("items"));
+    for ( i = 0u; i < xrtValueCount(Before); ++i ) {
+        const xvalue* Entry = xrtValueArrayGet(Before, i);
+        xvalue* Row;
+        uint64 Id;
+        if ( !MdoBackupHistoryTime(Index) ) { Ok = false; goto done; }
+        if ( !MdoBackupUInt(Entry, "event_id", &Id) ) { Ok = false; goto done; }
+        if ( MdoBackupReferenceRemoved(Index, Id) ) { ++Facts->RemovedFeedback; continue; }
+        Row = xrtValueClone(Entry);
+        Ok = Row != NULL && xrtValueArrayAppendTake(Items, &Row); xrtValueRelease(Row);
+        if ( !Ok ) goto done;
+    }
+    if ( Facts->RemovedFeedback != 0u ) {
+        Ok = xrtValueObjectSetTake(Root, XRT_STR_LITERAL("items"), &Items) &&
+            MdoBackupRepairJson(Index, Copy, "feedback.json", Root);
+    }
+done:
+    xrtValueRelease(Root); xrtValueRelease(Items);
+    if ( !Ok && Index->Error->eCode == XWORK_ERROR_NONE )
+        return MdoBackupHistoryError(Index, "cannot reconcile feedback projection", "feedback.json");
+    return Ok;
+}
+
+static bool MdoBackupRepairTodoEvent(const MdoSessionEventInfo* Event, void* Data)
+{
+    xvalue** Input = (xvalue**)Data;
+    *Input = MdoSessionsInternalTodoParse(xrtStrView(Event->Text), false);
+    return *Input != NULL;
+}
+
+static bool MdoBackupRepairTodo(MdoBackupHistoryIndex* Index, MdoSessionBackup* Copy,
+    MdoSessionBackupProjectionRepair* Facts)
+{
+    const MdoBackupOwnedFile* File = MdoBackupFind(Index->Backup, "todo.json");
+    xvalue *Stored = NULL, *Latest = NULL;
+    uint64 StoredId = 0u, LatestId = 0u;
+    size_t i;
+    bool Stale = false, Ok = false;
+    if ( File != NULL ) {
+        Stored = MdoSessionsInternalTodoParse(xrtStrViewN(File->Data, File->Bytes), true);
+        if ( Stored == NULL || !MdoBackupUInt(Stored, "event_id", &StoredId) ) goto done;
+        Stale = StoredId != 0u && MdoBackupReferenceRemoved(Index, StoredId);
+    }
+    for ( i = 0u; i < Index->Count; ++i ) {
+        const MdoBackupEventFact* Event = &Index->Events[i];
+        xvalue* Next = NULL;
+        if ( !MdoBackupHistoryTime(Index) ) goto done;
+        if ( Event->Kind == MDO_SESSION_EVENT_HISTORY_TRUNCATED && Event->Source == 0u ) {
+            /* Legacy clear is positive evidence for todo only. It must not
+             * erase unrelated feedback/images or resurrect a pre-clear plan. */
+            if ( StoredId != 0u && StoredId < Event->Id ) Stale = true;
+            xrtValueRelease(Latest); Latest = NULL; LatestId = 0u;
+        }
+        if ( !Event->Todo || Event->Truncated ) continue;
+        if ( !MdoSessionsInternalEventVisit(Index->Backup->Info.ProjectId, Index->Backup->Info.Id,
+                xrtStrViewN(Index->Ui->Data + Event->Offset, Event->Bytes), MdoBackupRepairTodoEvent, &Next) ) {
+            xrtValueRelease(Next); goto done;
+        }
+        xrtValueRelease(Latest); Latest = Next; LatestId = Event->Id;
+    }
+    if ( !Stale && (LatestId == 0u || (File != NULL && LatestId <= StoredId)) ) { Ok = true; goto done; }
+    if ( Latest == NULL ) {
+        Latest = xrtValueObject();
+        if ( !MdoBackupRepairTake(Latest, "items", xrtValueArray()) ) goto done;
+    }
+    if ( !MdoBackupRepairTake(Latest, "schema_version", xrtValueUInt(1u)) ||
+         !MdoBackupRepairTake(Latest, "event_id", xrtValueUInt(LatestId)) ||
+         !MdoBackupRepairJson(Index, Copy, "todo.json", Latest) ) goto done;
+    Facts->TodoRebuilt = true; Ok = true;
+done:
+    xrtValueRelease(Stored); xrtValueRelease(Latest);
+    if ( !Ok && Index->Error->eCode == XWORK_ERROR_NONE )
+        return MdoBackupHistoryError(Index, "cannot reconcile retained todo output", "todo.json");
+    return Ok;
+}
+
+MdoSessionBackup* MdoSessionBackupReconcileHistory(const MdoSessionBackup* Backup,
+    const MdoSessionBackupLimits* Limits, const xcancel* Cancel,
+    MdoSessionBackupProjectionRepair* Facts, xwork_error* Error)
+{
+    MdoBackupHistoryIndex Index = {0};
+    MdoSessionBackupProjectionRepair Result = {0};
+    MdoSessionBackupLimits Budget;
+    MdoSessionBackup* Copy = NULL;
+    xwork_error Local;
+    size_t i;
+    bool Ok = false;
+    if ( Error == NULL ) Error = &Local;
+    xworkErrorInit(Error);
+    if ( Facts == NULL || Facts->Size != sizeof(*Facts) ) {
+        (void)MdoBackupError(Error, XWORK_ERROR_INVALID_ARGUMENT, "projection repair facts have the wrong size", NULL); return NULL;
+    }
+    memset(Facts, 0, sizeof(*Facts)); Facts->Size = sizeof(*Facts);
+    if ( Backup == NULL || !Backup->Decoded || Backup->Schema != MDO_SESSION_BACKUP_SCHEMA ) {
+        (void)MdoBackupError(Error, XWORK_ERROR_INVALID_ARGUMENT, "projection repair requires a decoded v2 backup", NULL); return NULL;
+    }
+    if ( !MdoBackupLimits(Limits, &Budget, 30000000u, Error) || !MdoBackupCheck(&Budget, Cancel, Error) ) return NULL;
+    if ( Backup->Count > Budget.Files || Backup->Bytes > Budget.TotalBytes ) goto limit;
+    for ( i = 0u; i < Backup->Count; ++i ) if ( Backup->Files[i].Bytes > Budget.FileBytes ) goto limit;
+    Index.Backup = Backup; Index.Limits = &Budget; Index.Cancel = Cancel; Index.Error = Error;
+    Index.Ui = MdoBackupFind(Backup, "ui-events.jsonl");
+    if ( !MdoBackupIndexRead(&Index) || !MdoBackupBindings(&Index) ||
+         !MdoBackupProjections(&Index) || !MdoBackupQueueRelations(&Index) ) goto done;
+    Copy = MdoBackupClone(Backup, true, &Budget, Cancel, Error);
+    if ( Copy == NULL ) goto done;
+    Result.Size = sizeof(Result);
+    for ( i = 0u; i < Backup->Count; ++i ) {
+        const char* Path = Backup->Files[i].Path;
+        uint64 Id;
+        if ( !MdoBackupHistoryTime(&Index) ) goto done;
+        if ( strncmp(Path, "attachments/events/", 19u) != 0 ) continue;
+        if ( !MdoBackupHistoryNumber(Path + 19u, &Id) ) goto done;
+        if ( MdoBackupReferenceRemoved(&Index, Id) ) {
+            MdoBackupRepairDrop(Copy, Path); ++Result.RemovedImageBindings;
+        }
+    }
+    if ( !MdoBackupRepairFeedback(&Index, Copy, &Result) || !MdoBackupRepairTodo(&Index, Copy, &Result) ||
+         !MdoBackupValidate(Copy, &Budget, Cancel, &Copy->History, Error) ||
+         !MdoBackupRelationsValidate(Copy, &Budget, Cancel, &Copy->Relations, Error) ||
+         !MdoBackupCheck(&Budget, Cancel, Error) ) goto done;
+    Result.UnverifiedHistoryReferences = Copy->Relations.UnverifiedHistoryReferences;
+    *Facts = Result; Ok = true;
+done:
+    xrtFree(Index.Events); xrtFree(Index.Removed); xrtFree(Index.Receipts);
+    if ( !Ok ) {
+        MdoSessionBackupRelease(Copy); Copy = NULL;
+        if ( Error->eCode == XWORK_ERROR_NONE ) (void)MdoBackupHistoryError(&Index, "cannot reconcile backup projections", NULL);
+    }
+    return Copy;
+limit:
+    (void)MdoBackupError(Error, XWORK_ERROR_LIMIT, "backup exceeds projection repair budgets", NULL); return NULL;
+}
