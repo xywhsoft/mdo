@@ -6,7 +6,8 @@
 Home 非覆盖目录提交、持久 journal 所有权和启动回收已实现，真实 Stage
 到 target Home 的历史产物读取通过。生产同步 coordinator 已组合项目/
 workspace 复核、ID/data 预留、原子发布及一次 catalog 同步；恢复 worker、
-持久请求结果与正式导入页面入口待实现。2026-10-02 已完成
+持久请求结果和审核/apply/query/cancel HTTP 已接入，正式导入页面入口待实现。
+2026-10-02 已完成
 checkpoint 与有界读取共用排他运行窗口、统一捕获边界、v2 捕获/编码层和
 有界 HTTP/TLS 传输。正式 JSON 导出页面已接入 `export_schema:2`，接收
 校验、取消及同会话重试通过。旧 v1 `/export` 仅作为兼容 API 保留。
@@ -17,25 +18,25 @@ checkpoint 与有界读取共用排他运行窗口、统一捕获边界、v2 捕
 
 正式导出内容及证据见 [导出交互合同](session-backup-export-ui.md)，包括
 320×240 失败提示、实际键盘重试/取消，以及两平台最终门禁记录。下一步
-仍是拥有上传/预览副本的恢复 worker、持久结果和预览/确认/导入页面。
+是预览/目标确认/导入页面与真实打包交互验收。后台合同见
+[审核与 worker](session-restore-worker-api.md)。
 
 预检结果的后台拥有引用已接入
 [读者生命周期合同](session-backup-preview-api.md#后台读者的所有权)。
 删除或过期立即撤销后续获取，旧读者仍持有精确文件且占当前实例名额；
 最后释放在锁外清理，引用携带所属实例，迟到清理不访问新实例。真实
 HTTP/TLS 双读者、原生最后释放与实例重建交错及独立文件 SHA 已验证。
-此为 worker 的输入所有权前置层，尚未公开恢复 apply；接下来在已审核
-目标绑定和同一请求/会话 ID 下接入后台执行、取消及持久可查询结果，
-再开放确认页面。实例 Unit/TCC 卸载前必须 drain 所有消费引用的任务。
+生产 worker 已保有这份 pin，使用已审核目标和同一请求/会话 ID 接入
+后台执行、取消及持久可查询结果；正式确认页面继续实施。
+实例 Unit/TCC 卸载前必须 drain 所有消费引用的任务。
 
 2026-10-03 存储增量：
 [requested Home 恢复与持久结果](session-restore-receipts.md) 已支持 flush
 接受、固定目标/请求 ID、位置证明、永久 commit/abort 和启动补终态，
 结果确认后才 GC。真实原生小事务验证中断、同 ID、正确/外来前缀和
-冲突证据；公共 Home 写入保护回执 namespace。此接口尚未由现有同步
-coordinator 使用，下一步接接受/执行 handle，在 HTTP 返回已接受前
-取得该 durable owner；Run/跳过任务的 Drop 都消费它，查询优先持久
-事实，然后接预览/目标确认页面。`restore_ready:false` 继续保持。
+冲突证据；公共 Home 写入保护回执 namespace。生产 Accept 在 HTTP
+返回已接受前取得 durable owner，Execute/跳过任务的 Drop 都消费它，
+查询优先持久事实；预览/目标确认页面继续实施。`restore_ready:false` 保持。
 
 生产恢复的前置项目协调已接入 [发布绑定](project-publication-binding.md)：
 全项目 definition guard 修补 POSIX 同进程 writer 竞态，短发布回调在

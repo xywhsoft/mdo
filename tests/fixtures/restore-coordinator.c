@@ -200,7 +200,7 @@ static bool RestoreFixtureControl(XS_HttpReq* Request)
     MdoApiContext Context = {0};
     xvalue* Value;
     xwork_error Error;
-    bool Ok = true;
+    bool Ok = true, Done;
     if ( Target.Size < sizeof(Prefix) - 1u || memcmp(Target.Data, Prefix, sizeof(Prefix) - 1u) != 0 ) return false;
     xworkErrorInit(&Error);
     if ( Target.Size > sizeof(Prefix) - 1u + 6u && memcmp(Target.Data + sizeof(Prefix) - 1u, "start/", 6u) == 0 ) {
@@ -232,6 +232,10 @@ static bool RestoreFixtureControl(XS_HttpReq* Request)
         (void)xrtCancelRequest(g_RestoreJob->Cancel);
     else if ( MdoApiViewEqualText(Target, "/__fixture/restore-coordinator/reserved") ) Ok = RestoreFixtureReservedChecks(&Error);
     else if ( MdoApiViewEqualText(Target, "/__fixture/restore-coordinator/capacity") ) Ok = RestoreFixtureCapacity(&Error);
+    /* Acquire completion before sampling the catalog. The generation-limit
+     * worker restores its temporary injected MAX before publishing Done; the
+     * inverse order could combine that transient value with completed facts. */
+    Done = g_RestoreJob != NULL && xrtAtomic32Load(&g_RestoreJob->Done, XMEMORY_ACQUIRE) != 0u;
     Value = xrtValueObject();
     (void)MdoApiValueSetBool(Value, "ok", Ok);
     (void)MdoApiValueSetUInt(Value, "checks", g_RestoreChecks);
@@ -243,7 +247,6 @@ static bool RestoreFixtureControl(XS_HttpReq* Request)
     (void)MdoApiValueSetBool(Value, "restore_ready", false);
     if ( g_RestoreJob != NULL ) {
         RestoreFixtureJob* Job = g_RestoreJob;
-        bool Done = xrtAtomic32Load(&Job->Done, XMEMORY_ACQUIRE) != 0u;
         (void)MdoApiValueSetBool(Value, "ready", xrtAtomic32Load(&Job->Ready, XMEMORY_ACQUIRE) != 0u);
         (void)MdoApiValueSetBool(Value, "done", Done);
         if ( Done ) {

@@ -1,8 +1,9 @@
 # 单会话恢复协调与发布合同
 
-2026-10-02。生产同步入口为 `app/include/mdo/session_restore.h` 的
-`MdoSessionRestorePublish`；当前阶段没有正式恢复 HTTP route 或导入页面。
-后台 worker、上传/预览对象的所有权、持久请求回执及页面确认仍需接入。
+2026-10-03。`app/include/mdo/session_restore.h` 新增持久 Accept 与 owning
+Execute/Discard；旧 `MdoSessionRestorePublish` 共用执行核心并保留兼容。
+生产审核/apply/query/cancel HTTP 与有界 worker 已接入 requested 事务，
+详见 [worker 合同](session-restore-worker-api.md)。正式导入页面仍需接入。
 `restore_ready:false` 保持，不能把本阶段当成完整导入体验已经交付。
 
 ## 调用方与输入
@@ -20,7 +21,7 @@ Request/Result 使用精确 Size。Result Size 错误不改写其任何字节；
 一个最多 30 秒的协作 deadline 覆盖准备、磁盘 Stage、模型/UI/像素检查、
 再次读回和最终短回调；调用方可提供更小预算或取消。native I/O 不能被该
 deadline 强制中断。生命周期所有者必须先停止接纳并排空调用，再 Unit
-session manager、项目和 Home；后续生产 worker 必须落实该顺序。
+session manager、项目和 Home；生产 API Unit 已落实该顺序。
 
 ## ID 与数据预留
 
@@ -52,7 +53,7 @@ registry mutex 仅保护计数，不跨越 I/O 或 manager 边界。不存在目
 未开始 Home 事务的旧 reservation 可以在 manager Unit/重新 Init 后释放；
 旧地址不属于新 pending 集合，旧 data registry pin 也不能解锁新 registry。
 已开始事务的调用必须排空；违反排空合同的 stale active handle 保留诊断，
-不冒充已经释放。生产 worker 尚未接入，不声称非法并发 Unit 已被支持。
+不冒充已经释放。生产 worker 必须按顺序排空，不支持非法并发 manager Unit。
 
 ## 准备与一次发布
 

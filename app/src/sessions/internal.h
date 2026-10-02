@@ -4,6 +4,7 @@
 #include "../../include/mdo/sessions.h"
 #include "../../include/mdo/project_lifecycle.h"
 #include "data_gate.h"
+#include "../../include/mdo/home_restore.h"
 
 typedef struct MdoSessionEventBridge MdoSessionEventBridge;
 typedef struct MdoSessionEventTrimPlan MdoSessionEventTrimPlan;
@@ -23,6 +24,10 @@ MdoSessionRestoreReservation* MdoSessionsRestoreReserve(cstr ProjectId,
  * reservation owns its Home transaction, never accepting another target's tx. */
 bool MdoSessionsRestoreStorageBegin(MdoSessionRestoreReservation* Reservation,
     xroot* Parent, xwork_error* Error);
+/* Same reserved storage boundary with a durable request identity. The request
+ * must name this exact reservation; replay detection belongs to Home. */
+bool MdoSessionsRestoreStorageBeginRequested(MdoSessionRestoreReservation* Reservation,
+    const MdoHomeSessionRestoreRequest* Request, xroot* Parent, xwork_error* Error);
 /* Call only inside the reviewed MdoProjectWithBinding publication callback,
  * after StageCheck and StageRelease and after closing caller anchors. On an
  * actual commit advances catalog exactly once under the same manager lock as

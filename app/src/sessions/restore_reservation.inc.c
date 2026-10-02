@@ -137,16 +137,22 @@ invalid:
     return NULL;
 }
 
-bool MdoSessionsRestoreStorageBegin(MdoSessionRestoreReservation* Restore,
-    xroot* Parent, xwork_error* Error)
+static bool MdoSessionsRestoreStorageStart(MdoSessionRestoreReservation* Restore,
+    const MdoHomeSessionRestoreRequest* Request, xroot* Parent, xwork_error* Error)
 {
     bool Ok = false;
     xworkErrorInit(Error);
     if ( Restore == NULL || Parent == NULL || *Parent != NULL || !g_MdoSessions.Initialized ||
          !MdoProjectLeaseProtects(Restore->Owner, Restore->ProjectId, MDO_PROJECT_LEASE_SHARED) ) goto invalid;
+    if ( Request != NULL && (Request->Size != sizeof(*Request) ||
+         memchr(Request->ProjectId, '\0', sizeof(Request->ProjectId)) == NULL ||
+         memchr(Request->SessionId, '\0', sizeof(Request->SessionId)) == NULL ||
+         strcmp(Request->ProjectId, Restore->ProjectId) != 0 ||
+         strcmp(Request->SessionId, Restore->SessionId) != 0) ) goto invalid;
     xrtMutexLock(g_MdoSessions.Lock);
     if ( MdoSessionsRestoreMember(Restore) != NULL && !Restore->Settled && Restore->Storage == NULL ) {
-        Restore->Storage = MdoHomeSessionRestoreBegin(Restore->ProjectId, Restore->SessionId, Parent);
+        Restore->Storage = Request != NULL ? MdoHomeSessionRestoreBeginRequested(Request, Parent) :
+            MdoHomeSessionRestoreBegin(Restore->ProjectId, Restore->SessionId, Parent);
         Ok = Restore->Storage != NULL;
         if ( !Ok ) MdoSessionsXrtError(Error, XWORK_ERROR_IO, "cannot begin reserved restore storage");
     } else MdoSessionsError(Error, XWORK_ERROR_CONTEXT, "restore reservation is not current or already settled");
@@ -155,6 +161,22 @@ bool MdoSessionsRestoreStorageBegin(MdoSessionRestoreReservation* Restore,
 invalid:
     MdoSessionsError(Error, XWORK_ERROR_INVALID_ARGUMENT, "invalid current restore storage request");
     return false;
+}
+
+bool MdoSessionsRestoreStorageBegin(MdoSessionRestoreReservation* Restore,
+    xroot* Parent, xwork_error* Error)
+{
+    return MdoSessionsRestoreStorageStart(Restore, NULL, Parent, Error);
+}
+
+bool MdoSessionsRestoreStorageBeginRequested(MdoSessionRestoreReservation* Restore,
+    const MdoHomeSessionRestoreRequest* Request, xroot* Parent, xwork_error* Error)
+{
+    if ( Request == NULL ) {
+        MdoSessionsError(Error, XWORK_ERROR_INVALID_ARGUMENT, "restore request identity is required");
+        return false;
+    }
+    return MdoSessionsRestoreStorageStart(Restore, Request, Parent, Error);
 }
 
 bool MdoSessionsRestorePublish(MdoSessionRestoreReservation* Restore,

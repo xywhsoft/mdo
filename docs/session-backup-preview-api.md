@@ -3,7 +3,9 @@
 2026-10-02。生产入口检查拥有上传字节后的 schema、模型重放/UI 关系与静态
 图片像素，没有恢复写入、模型驱动、工具调用、队列执行或远程图片下载。
 本接口是完整恢复的前置检查，`restore_ready` 始终为 `false`；正式恢复事务和
-页面入口按 [实施记录](session-backup-plan.md) 继续开发。
+页面入口按 [实施记录](session-backup-plan.md) 继续开发。恢复审核与 worker
+已接 owning pin，见 [后台合同](session-restore-worker-api.md)；预览成功
+本身仍不代表目标检查、正式确认或完整恢复页面已经完成。
 
 ## 使用顺序
 

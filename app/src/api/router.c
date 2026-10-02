@@ -6,6 +6,7 @@
 #include "write_admission.h"
 #include "backup_upload.h"
 #include "backup_preview.h"
+#include "backup_restore.h"
 #include "../../include/mdo/project_lifecycle.h"
 #include "../../include/mdo/projects.h"
 #include "../../include/mdo/home.h"
@@ -55,6 +56,12 @@ static const MdoApiRoute g_MdoApiRoutes[] = {
       "GET, HEAD, OPTIONS", MdoApiBackupPreviewsRoute, false },
     { "/api/v1/session-backups/previews/{preview}", XHTTP_METHOD_GET | XHTTP_METHOD_HEAD | XHTTP_METHOD_DELETE,
       "GET, HEAD, DELETE, OPTIONS", MdoApiBackupPreviewRoute, false },
+    { "/api/v1/session-backups/previews/{preview}/restore-review", XHTTP_METHOD_POST,
+      "POST, OPTIONS", MdoApiBackupRestoreReviewRoute, false },
+    { "/api/v1/session-backups/restores/{request}/apply", XHTTP_METHOD_POST,
+      "POST, OPTIONS", MdoApiBackupRestoreApplyRoute, false },
+    { "/api/v1/session-backups/restores/{request}", XHTTP_METHOD_GET | XHTTP_METHOD_HEAD | XHTTP_METHOD_DELETE,
+      "GET, HEAD, DELETE, OPTIONS", MdoApiBackupRestoreRoute, false },
     { "/api/v1/modules", XHTTP_METHOD_GET | XHTTP_METHOD_HEAD,
       "GET, HEAD, OPTIONS", MdoApiModulesRoute, false },
     { "/api/v1/skills", XHTTP_METHOD_GET | XHTTP_METHOD_HEAD,
@@ -385,9 +392,10 @@ bool MdoApiInit(void)
         MdoApiSessionsUnit();
         return false;
     }
-    if ( !MdoApiBackupUploadsInit() || !MdoApiBackupPreviewsInit() || !MdoApiDownloadsInit() ||
+    if ( !MdoApiBackupUploadsInit() || !MdoApiBackupPreviewsInit() || !MdoApiBackupRestoresInit() || !MdoApiDownloadsInit() ||
          !MdoApiImageDownloadsInit() ) {
         MdoApiImageDownloadsUnit(); MdoApiDownloadsUnit();
+        MdoApiBackupRestoresUnit();
         MdoApiBackupPreviewsUnit();
         MdoApiBackupUploadsUnit();
         MdoApiWriteUnit(); MdoApiPurgeIntentUnit(); MdoApiAttachmentsUnit();
@@ -405,6 +413,7 @@ void MdoApiUnit(void)
     g_MdoApiInitialized = false;
     MdoApiDownloadsUnit();
     MdoApiImageDownloadsUnit();
+    MdoApiBackupRestoresUnit();
     MdoApiBackupPreviewsUnit();
     MdoApiBackupUploadsUnit();
     MdoApiWriteUnit();
@@ -434,7 +443,9 @@ static bool MdoApiRouteInvokeData(MdoApiContext* Context,
         if ( Home.RestartRequired && Route->Proc != MdoApiProjectPurgeRoute &&
              Route->Proc != MdoApiProjectPurgeCancelRoute &&
              Route->Proc != MdoApiProjectPurgeIntentPrepareRoute &&
-             Route->Proc != MdoApiProjectPurgeIntentRoute ) return MdoApiReplyError(Context, 503u,
+             Route->Proc != MdoApiProjectPurgeIntentRoute &&
+             Route->Proc != MdoApiBackupRestoreApplyRoute &&
+             Route->Proc != MdoApiBackupRestoreRoute ) return MdoApiReplyError(Context, 503u,
             "home_restart_required", "Restart mdo before changing imported data", NULL);
         if ( Home.ImportInProgress ) return MdoApiReplyError(Context, 409u,
             "home_import_busy", "Home import is in progress; wait before changing data", NULL);

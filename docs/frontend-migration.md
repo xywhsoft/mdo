@@ -4,6 +4,41 @@
 
 完成判据及尚缺的打包页证据见 [前端操作体验完成审计](frontend-completion-audit.md)。本文件继续记录每次实现和验证的细节。
 
+## 2026-10-03：会话恢复审核与生产后台执行
+
+新增 Accept/Execute/Discard owning operation：Accept 固定审核的项目/
+workspace、源摘要和新请求/会话 ID，在 requested Home owner flush 后
+才接受；Execute 复用准备、Stage 与最终 binding 发布；任务被取消、
+跳过或拒绝时 Drop 也消费 handle，留下永久 aborted，而不丢失提交事实。
+生产审核/apply/query/cancel HTTP 已接同一个 worker，状态查询优先存储
+结果，TTL/页面响应丢失或源 preview 删除都不能让同一个请求重做。
+审核不写恢复事务，不能自动选源 workspace；仍需页面明确确认后 apply。
+详见 [后台合同](session-restore-worker-api.md)。
+
+HTTP/TLS 对真实模型/UI/inline PNG、待审草稿/队列和 2 MiB 产物通过
+正常恢复、Size 不消费、预取消跳过 Run、拒绝任务、deadline、排队期间
+项目/物理 workspace 变化、Unit drain、旧 pin、一次 catalog 同步及源
+字节不变。固定 ID 在内存过期/重建、目标/项目删除后仍可查询；损坏
+回执明确拒绝。隔离 helper 中断后的启动回收不重跑任务；提交后取消和
+GC 失败/冻结 Home 都保持 committed。旧同步探针继续通过。初始探针
+HEAD/删除前置条件假设、空 cancellation payload 及 TCC submit 参数错误
+均已修正，失败日志保留，不放宽业务断言。
+
+前端代码未变化，正式预览/目标确认/导入页面仍待实施，manifest 保持
+`restore_ready:false`。没有新增原生点击/实体设备证据，也没有压力或
+高负载测试；Linux queued HEAD reset 等既有间歇问题独立保留。
+
+最终 Windows/Linux 完整门禁通过 115 Python、262 Node、93 JS 模块、
+严格 C11、46 runtime、四项 packed 及独立 A/B；新增单文件恢复/移动
+程序重启的真实 embedded TCC/VFS 探针。Windows 另通过便携 WebView2
+Home 和 20 秒启动。SDK 不变，复用已验证 native host；14 份改动代码/
+探针按 LF 核对。根目录 `mdo.exe` 已更新为 6,453,443 字节，SHA-256
+`d5e9d16545d4925834c1f50d12af0bac4fc729d6a8da2e19e54af946cbeb8332`；
+Linux A/B 6,503,603 字节，SHA-256
+`00aa612a1ae9887a592c22289b5b91a866157b608f7750843f8acdfcf99808b1`。
+日志 `.build/qa-restore-worker-{windows,linux}-final.log`，首轮 Windows
+夹具竞态失败和 Linux 首次通过日志另存 initial；不改用户 Home。
+
 ## 2026-10-03：恢复请求的持久结果与中断判定
 
 新增 requested Home 恢复事务和只读 receipt 查询，接受时固定请求/目标

@@ -23,6 +23,40 @@ typedef struct MdoSessionRestoreResult {
 void MdoSessionRestoreRequestInit(MdoSessionRestoreRequest* Request);
 void MdoSessionRestoreResultInit(MdoSessionRestoreResult* Result);
 
+typedef struct MdoSessionRestoreOperation MdoSessionRestoreOperation;
+
+/* Accept a reviewed v2 request before scheduling its expensive work. Copies
+ * request/budgets, pins the project and reserves the target, then flushes Home's
+ * immutable requested-owner record before returning. SourceSha256 is the
+ * transport digest associated with Backup by its trusted owner (e.g. a preview
+ * pin), not a caller-supplied replacement for decoding/semantic validation.
+ * This bounded storage admission does not replay a model or decode images.
+ *
+ * Backup is borrowed through consumption of the operation. The scheduler must
+ * retain its immutable owner, and must Execute or Discard even if Run is skipped.
+ * The thirty-second budget starts at acceptance and includes queue waiting.
+ * A failed acceptance can still leave recorded aborted/pending evidence: query
+ * the SAME SessionId before any further action; never silently mint a new ID.
+ * Acceptance is not user confirmation, upload ownership or an HTTP response. */
+MdoSessionRestoreOperation* MdoSessionRestoreAccept(const MdoSessionBackup* Backup,
+    const MdoSessionRestoreRequest* Request, cstr SourceSha256,
+    const MdoSessionBackupLimits* Limits, const xcancel* Cancel, xwork_error* Error);
+
+/* One exclusive owner calls these; no concurrent Execute/Discard on a handle.
+ * Execute belongs on a bounded worker and repeats the reviewed binding before
+ * preparation and in the final publication callback. Discard settles an
+ * accepted-but-skipped task without staging or publishing it. Both consume
+ * *Operation, including normal cancellation/IO failures, and report commit
+ * independently of success. Discard(NULL handle) succeeds with empty facts.
+ * Invalid arguments/Result.Size leave the operation untouched. A lifecycle
+ * violation (manager retired while storage is live) retains the handle for
+ * diagnosis; it cannot Execute again. Drain operations before manager/Home/TCC
+ * Unit. Discard of an executed handle only retries cleanup, never publication. */
+bool MdoSessionRestoreExecute(MdoSessionRestoreOperation** Operation,
+    const xcancel* Cancel, MdoSessionRestoreResult* Result, xwork_error* Error);
+bool MdoSessionRestoreDiscard(MdoSessionRestoreOperation** Operation,
+    MdoSessionRestoreResult* Result, xwork_error* Error);
+
 /* Synchronous production coordinator for a bounded worker, never a network
  * callback. Borrows immutable decoded v2 bytes and cancellation only until
  * return. Copies request/facts. One thirty-second cooperative budget covers

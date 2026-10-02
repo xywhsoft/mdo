@@ -291,6 +291,8 @@ def main(argv: list[str] | None = None) -> int:
              "--packed", str(first)])
         run([sys.executable, str(TESTS / "test_packed_backup_download.py"),
              "--packed", str(first)])
+        run([sys.executable, str(TESTS / "test_packed_restore.py"),
+             "--packed", str(first)])
 
         if os.name == "nt" and not args.skip_gui_smoke:
             windows_single_file(first, args.observe_seconds)

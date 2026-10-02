@@ -2,6 +2,21 @@
 
 本清单以 `app_bak/wwwroot` 的可操作行为为基线，而不是以页面长得相似或单元测试通过为完成标准。`docs/frontend-migration.md` 记录每次实现和验证；这里记录当前还需要什么证据。审计更新：2026-10-03，基线提交 `f9e2c4c`。
 
+2026-10-03 最新增量：生产恢复审核/apply/query/cancel HTTP 和单 worker
+已接 requested Home 事务；Accept flush 后才接任务，Execute/被跳过任务
+的 Drop 都消费 owning operation。HTTP/TLS 覆盖取消、拒绝、排队变更、
+pin 释放、一次提交与固定 ID replay；中断启动回收及提交后取消/GC 失败
+保留事实。详见 [后台恢复合同](session-restore-worker-api.md)。正式预览/
+目标确认/导入页面继续实施，manifest `restore_ready:false` 保持。
+这次没有改动前端，也不升级旧版交互或设备验收行。
+
+最终两平台通过 115 Python、262 Node、93 JS 模块、严格 C11、46
+runtime、四项 packed 和 A/B；Windows 另通过便携 Home/20 秒启动。
+SDK 未改，14 份代码/探针按 LF 核对。根目录程序 6,453,443 字节，SHA
+`d5e9d16545d4925834c1f50d12af0bac4fc729d6a8da2e19e54af946cbeb8332`；
+Linux A/B SHA `00aa612a1ae9887a592c22289b5b91a866157b608f7750843f8acdfcf99808b1`。
+日志 `.build/qa-restore-worker-{windows,linux}-final.log`，没有压力或高负载。
+
 2026-10-03 最新增量：requested Home 恢复有持久接受和固定 ID 的结果
 查询；位置证明后先发布不可变 commit/abort，再清理 journal，结果
 失败或 GC/重启不把已提交变成未执行。缺失查询零写入、native namespace
@@ -1586,7 +1601,7 @@ Markdown 会话导出补齐语言一致性。之前英语、俄语页面导出�
 9. **便携窗口旧数据导入：Windows 打包页及 Linux 原生文件系统的服务事务已通过。** 缓存保留 Home 事务已接入现有跨进程租约、写入冻结及启动恢复；固定根的目录身份与不可变阶段标记防止替换和歧义清理。xs/TCC 探针覆盖失败及进程中断，最终单文件页在 320×350 完成两步确认、键盘取消/提交及重启设置回放，旧来源与缓存字节保留。已有用户数据仍拒绝导入。真实 WebView2 便携路径已有门禁证据；原生窗口内完整导入点击、Linux/macOS 图形操作及实体设备仍待独立验收，不宣称断电持久性。WSL 挂载盘的事务退休尚有下一项限制。
 10. **Linux 挂载盘缺失原子能力：缓存 Home 导入现提前拒绝，完整兼容仍缺。** 当前 `/mnt/d` 拒绝 `renameat2(RENAME_NOREPLACE)`；缓存 Home 导入已先检查空事务目录移动，返回明确错误及三语提示，无 payload、事务残留或导入冻结。真实 Linux 单文件短屏点击验证此拒绝，Windows 正常导入和重启回放仍通过。原生文件系统全门禁通过，但这不是挂载盘的全门禁；其他 Home 写入/事务的能力边界和完整兼容仍需处理。不可放宽断言、普通 rename 覆盖或任意清掉事务残留。详见 [文件系统记录](linux-filesystem-atomic-rename.md)。
 
-11. **带图会话可携带导出：正式浏览器传输已复核，恢复与原生设备验收仍待完成。** Markdown 原图和原名、正式 JSON v2 的模型/UI、附件原字节与原名、产物和草稿队列已接入；范围、校验、取消、重试及短屏操作通过。HTTP/TLS 前端下载器真实文件经 C 解码读回，来源字节不变。同包 Windows 桌面正式页与 Linux ext4 单文件服务的 320×350 浏览器页均收到 JSON/Markdown 全量字节 completed；v2 原文/回复/原图/原名读回、Linux Markdown 图片哈希与同一 v2 一致。原始取消保留，原因未确认；下载等待接口在独立 Blob 完成时仍超时，未返回磁盘路径，不能凭它关闭原生/实体设备验收。正式恢复 worker、持久结果及预览/确认/导入页面仍缺，保持 restore_ready:false。详见 [交付复验](browser-download-validation.md)。
+11. **带图会话可携带导出：正式浏览器传输已复核，恢复页面与原生设备验收仍待完成。** Markdown 原图和原名、正式 JSON v2 的模型/UI、附件原字节与原名、产物和草稿队列已接入；范围、校验、取消、重试及短屏操作通过。HTTP/TLS 前端下载器真实文件经 C 解码读回，来源字节不变。同包 Windows 桌面正式页与 Linux ext4 单文件服务的 320×350 浏览器页均收到 JSON/Markdown 全量字节 completed；v2 原文/回复/原图/原名读回、Linux Markdown 图片哈希与同一 v2 一致。原始取消保留，原因未确认；下载等待接口在独立 Blob 完成时仍超时，未返回磁盘路径，不能凭它关闭原生/实体设备验收。正式恢复 worker、持久结果和审核/apply/query/cancel HTTP 已接通；预览/确认/导入页面仍缺，保持 restore_ready:false。详见 [交付复验](browser-download-validation.md) 与 [后台合同](session-restore-worker-api.md)。
 
 12. **外部历史修改的实时投影：Windows 打包链路已修复，跨平台细节待验。** 轮询按服务端标记的事件 ID 删除范围移除缓存，并拒绝迟到的旧读取。正式单文件 Home `.build/mdo-packed-docks-hsnpym5_` 在另一客户端截断后无需刷新即只保留第一轮，待办 2/2→1/2，正在编辑的文字与焦点保持，取消回到输入框；320×350 外部清空后旧消息和待办消失，下一条草稿及输入焦点保留。Node 覆盖反序轮询、待办读竞态和删除范围，两平台有界门禁验证生产模块；原生窗口/实体设备、阅读保留前缀时的滚动位置仍需核对。详见[迁移记录](frontend-migration.md#2026-10-01外部历史修改同步时间线和待办)。
 

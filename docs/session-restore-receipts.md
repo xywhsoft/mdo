@@ -1,7 +1,7 @@
 # 单会话恢复的持久请求与结果
 
-2026-10-03。此为正式恢复 worker 的存储前置协议。原有同步 coordinator
-尚未传入 requested 身份，HTTP apply/结果查询和确认页面仍待接入；
+2026-10-03。正式恢复 Accept/Execute/Discard 与 HTTP worker 已接入这个
+存储协议，见 [后台合同](session-restore-worker-api.md)；确认页面仍待接入。
 `restore_ready:false` 保持。不能将此阶段计为完整导入操作已经可用。
 
 ## 请求身份和接受
