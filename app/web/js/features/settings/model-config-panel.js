@@ -161,8 +161,10 @@ export function createModelConfigPanel(container) {
   let kind = "model";
   let selectedId = "";
   let busy = false;
+  let writing = false;
   let dirty = false;
   let editVersion = 0;
+  const rebaseForm = new WeakMap();
 
   function renderReadState(cause = null, keepForm = false) {
     if (keepForm) container.querySelector("[data-model-read-status]")?.remove();
@@ -240,27 +242,87 @@ export function createModelConfigPanel(container) {
   }
 
   async function transact(next, messageKey, messageFallback,
-    focusKind = kind, focusId = selectedId) {
+    focusKind = kind, focusId = selectedId, editableWhileSaving = false) {
     if (busy || !config || config.runtime_override) return;
+    const form = container.querySelector(".model-config-form");
+    const versionAtSave = editVersion;
+    const focusAtSave = globalThis.document.activeElement;
+    // Keep fields usable during Save, but serialize resource actions. Identity
+    // stays fixed until creation is acknowledged so a later Save updates it.
+    const locked = [...container.querySelectorAll(editableWhileSaving
+      ? "button" : "button, input, select")].map((node) => ({
+        node, disabled: node.disabled,
+      }));
+    const identity = form?.querySelector('input[name="id"]');
+    const identityReadOnly = identity?.readOnly;
+    for (const { node } of locked) node.disabled = true;
+    if (identity) identity.readOnly = true;
+    writing = true;
     busy = true;
+    container.setAttribute("aria-busy", "true");
+    let committed = false;
     try {
       const patch = { default_model: next.default_model,
         providers: next.providers, items: next.items };
       const body = { schema_version: 1, patch };
       await api.post("/settings/models/preview", body);
-      await api.put("/settings/models", body, { ifMatch: etag });
+      const saved = await api.put("/settings/models", body, { ifMatch: etag });
+      committed = true;
+      // The acknowledged patch and revision are already a valid baseline even
+      // if its follow-up read fails. Do not turn that failure into a failed Save.
+      config = next;
+      etag = saved.etag;
+      let readError = null;
+      try {
+        const response = await api.get("/models/config");
+        // Rebase on this acknowledged write, not another client's newer edit.
+        // A later Save must still hit the server's revision precondition.
+        if (response.etag === saved.etag) config = response.data;
+      } catch (cause) { readError = cause; }
       await loadModels();
-      busy = false;
-      await load(focusKind, focusId);
-      container.querySelector('.model-config-item[aria-current="true"]')?.focus();
+      const keepForm = editableWhileSaving && versionAtSave !== editVersion &&
+        form === container.querySelector(".model-config-form");
+      const focused = globalThis.document.activeElement;
+      const keepFocus = form?.contains(focused) && focused.matches("input, select");
+      const selection = keepFocus && typeof focused.selectionStart === "number"
+        ? [focused.selectionStart, focused.selectionEnd, focused.selectionDirection] : null;
+      kind = focusKind;
+      selectedId = focusId;
+      if (!collection().some((item) => item.id === selectedId))
+        selectedId = kind === "model" ? config.default_model : config.providers[0]?.id ?? "";
+      dirty = keepForm;
+      if (keepForm) rebaseForm.get(form)?.();
+      render(keepForm ? form : null);
+      if (keepFocus && container.isConnected && container.getClientRects().length) {
+        const target = keepForm ? focused :
+          [...container.querySelectorAll(".model-config-form input, .model-config-form select")]
+            .find((node) => node.name === focused.name && node.type === focused.type &&
+              (node.type !== "checkbox" || node.value === focused.value));
+        target?.focus({ preventScroll: true });
+        if (selection) target?.setSelectionRange(...selection);
+      } else if (container.isConnected && container.getClientRects().length &&
+          globalThis.document.activeElement === globalThis.document.body) {
+        container.querySelector('.model-config-item[aria-current="true"]')?.focus();
+      }
+      if (keepForm) container.prepend(copy("p", "modelConfig.savedKept",
+        "本次保存已完成；后续输入仍未保存。", {}, {
+          className: "model-config-status", attrs: { role: "status" },
+        }));
+      if (readError) renderReadState(readError, true);
       toast(t(messageKey, {}, messageFallback));
     } catch (cause) {
+      toast(cause?.status === 412 ? t("modelConfig.conflictKept", {},
+        "配置已在其他位置更新，当前输入已保留。放弃修改并刷新后可重新编辑。")
+        : errorMessage(cause), "error");
+    } finally {
+      writing = false;
       busy = false;
-      toast(errorMessage(cause), "error");
-      if (cause?.status === 412) {
-        dirty = false;
-        await load();
-      }
+      for (const { node, disabled } of locked) node.disabled = disabled;
+      if (identity && !committed) identity.readOnly = identityReadOnly;
+      container.removeAttribute("aria-busy");
+      if (!committed && focusAtSave?.isConnected && container.getClientRects().length &&
+          globalThis.document.activeElement === globalThis.document.body)
+        focusAtSave.focus({ preventScroll: true });
     }
   }
 
@@ -378,7 +440,7 @@ export function createModelConfigPanel(container) {
       attachments: selected(form, "attachment"), free: !data.has("billable") };
   }
 
-  function render() {
+  function render(preservedForm = null) {
     if (!config) return;
     clear(container);
     const controls = element("div", { className: "model-config-controls" });
@@ -443,13 +505,30 @@ export function createModelConfigPanel(container) {
       });
       list.append(button);
     }
-    const source = current();
-    const item = clone(source ?? (kind === "model" ?
+    if (preservedForm) {
+      layout.append(list, preservedForm);
+      container.append(layout);
+      return;
+    }
+    let source = current();
+    let item = clone(source ?? (kind === "model" ?
       modelDefault(config.providers.find((provider) => !provider.builtin) ||
         config.providers[0]) : providerDefault()));
     const form = element("form", { className: "model-config-form" });
     if (kind === "model") renderModel(form, item);
     else renderProvider(form, item);
+    rebaseForm.set(form, () => {
+      source = current();
+      item = clone(source ?? item);
+      const id = form.querySelector('input[name="id"]');
+      if (id) id.readOnly = Boolean(source);
+      const title = form.querySelector("h3");
+      if (source?.name && title) {
+        title.textContent = source.name;
+        for (const name of [...title.getAttributeNames()])
+          if (name.startsWith("data-model-copy-")) title.removeAttribute(name);
+      }
+    });
     if (kind === "model" && source?.builtin) form.append(copy("p",
       "modelConfig.builtinModelDetail",
       `${source.id} · 上下文 ${source.window.context_tokens} tokens · ${source.default_protocol}`,
@@ -476,10 +555,11 @@ export function createModelConfigPanel(container) {
           : container.querySelector('.model-config-controls .primary-button');
         target?.focus();
       });
-      form.addEventListener("input", () => { editVersion += 1; dirty = true; discard.hidden = false; save.disabled = false; });
-      form.addEventListener("change", () => { editVersion += 1; dirty = true; discard.hidden = false; save.disabled = false; });
+      form.addEventListener("input", () => { editVersion += 1; dirty = true; discard.hidden = false; save.disabled = writing; });
+      form.addEventListener("change", () => { editVersion += 1; dirty = true; discard.hidden = false; save.disabled = writing; });
       form.addEventListener("submit", (event) => {
         event.preventDefault();
+        if (busy) return;
         if (!form.reportValidity()) return;
         const next = clone(config);
         const value = kind === "model" ? readModel(form, item) : readProvider(form, item);
@@ -499,7 +579,7 @@ export function createModelConfigPanel(container) {
         if (source) next[key] = next[key].map((entry) => entry.id === source.id ? value : entry);
         else next[key].push(value);
         void transact(next, source ? "modelConfig.updated" : "modelConfig.added",
-          source ? "配置已更新" : "配置已添加", kind, value.id);
+          source ? "配置已更新" : "配置已添加", kind, value.id, true);
       });
       actions.append(save, discard);
       if (source?.removable) {

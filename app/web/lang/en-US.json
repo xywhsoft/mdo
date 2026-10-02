@@ -1015,6 +1015,8 @@
   "modelConfig.models": "Models",
   "modelConfig.providers": "Providers",
   "modelConfig.refresh": "Refresh",
+  "modelConfig.savedKept": "This save is complete. Later edits are still unsaved.",
+  "modelConfig.conflictKept": "The configuration changed elsewhere. Your input was kept. Discard your changes and refresh before editing again.",
   "modelConfig.refreshKept": "New input made during refresh was kept. Save or discard your changes before refreshing again.",
   "modelConfig.status": "Current default: {model} · configuration revision {revision}",
   "modelConfig.runtimeOverride": "Runtime overrides are active. Remove startup overrides before editing models here.",

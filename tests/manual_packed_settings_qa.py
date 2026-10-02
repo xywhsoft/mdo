@@ -1,7 +1,7 @@
 """Run an isolated packed settings page with one delayed/failed request.
 
-POST /__qa/arm?mode=hold or mode=fail affects the next settings PATCH only.
-An optional path= selects one GET for a Settings catalog or /models/config.
+POST /__qa/arm?mode=hold, fail, or conflict affects one bounded request.
+An optional path= selects a catalog GET, models PUT, or models preview POST.
 GET /__qa/control reports its arrival and bounded request counts.
 GET /__qa/session-menu serves the bounded menu/indicator component fixture with
 the exact packed assets; it does not change sessions or runs on the server.
@@ -28,6 +28,10 @@ SETTINGS = "/api/v1/settings/settings"
 READ_PATHS = {"/api/v1/" + name for name in (
     "models/config", "modules", "skills", "mcp", "permissions", "storage",
     "diagnostics", "migrations/legacy")}
+
+
+WRITE_PATHS = {"/api/v1/settings/models": "PUT",
+               "/api/v1/settings/models/preview": "POST"}
 
 
 class SettingsProxy(BaseHTTPRequestHandler):
@@ -81,14 +85,15 @@ class SettingsProxy(BaseHTTPRequestHandler):
         if target.path == "/__qa/arm" and self.command == "POST":
             query = parse_qs(target.query)
             mode = query.get("mode", [""])[0]
-            assert mode in ("hold", "fail")
+            assert mode in ("hold", "fail", "conflict")
             path = query.get("path", [SETTINGS])[0]
-            assert path == SETTINGS or path in READ_PATHS
+            assert path == SETTINGS or path in READ_PATHS or path in WRITE_PATHS
             with self.server.lock:
                 self.server.release.set()
                 self.server.release = threading.Event()
                 self.server.mode = mode
-                self.server.target = ("PATCH" if path == SETTINGS else "GET", path)
+                self.server.target = ("PATCH" if path == SETTINGS else
+                                      WRITE_PATHS.get(path, "GET"), path)
                 self.server.arrived = False
             return self.reply({"armed": mode})
         if target.path == "/__qa/release" and self.command == "POST":
@@ -110,9 +115,10 @@ class SettingsProxy(BaseHTTPRequestHandler):
                 if mode:
                     self.server.arrived = True
                     gate = self.server.release
-        if mode == "fail":
+        if mode in ("fail", "conflict"):
             return self.reply({"ok": False, "error": {"code": "qa_save_failed",
-                "message": "Bounded fixture request failure"}}, 503)
+                "message": "Bounded fixture request failure"}},
+                412 if mode == "conflict" else 503)
         headers = {key: value for key, value in self.headers.items()
                    if key.lower() not in ("host", "connection", "content-length")}
         connection = http.client.HTTPConnection("127.0.0.1", self.server.upstream, timeout=8)
