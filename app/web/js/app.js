@@ -3,7 +3,7 @@ import { bootstrapStore, loadBootstrap } from "./state/bootstrap.js";
 import {
   sessionsStore, sessionDetailStore, loadSessions, loadSession, readSession, createSession,
   patchSession, trashSession, restoreSession, loadSessionHistory, forkSession,
-  truncateSession, clearSession, exportSession, loadSessionTranscript,
+  truncateSession, clearSession, loadSessionTranscript,
 } from "./state/sessions.js";
 import { modelsStore, agentsStore, projectsStore, loadCatalogs, loadModels, loadAgents, loadProjects, createProject } from "./state/catalogs.js";
 import {
@@ -28,6 +28,7 @@ import { sessionActionDialogCopy, sessionActionToast, sessionForkTitle } from ".
 import { SESSION_TITLE_UTF8_LIMIT, sessionTitleUtf8Bytes } from "./features/sessions/session-title.js";
 import { formatSessionMarkdown, sessionMarkdownFilename } from "./features/sessions/session-export.js";
 import { loadSessionMarkdownImages } from "./features/sessions/session-export-images.js";
+import { createSessionBackupExport } from "./features/sessions/session-backup-export.js";
 import { createProjectDialog } from "./features/sessions/project-dialog.js";
 import { projectDefaultsFromWorkspace } from "./features/sessions/project-identity.js";
 import { timelineStore, selectTimeline, clearTimeline, refreshSelectedTimeline, reloadSelectedTimeline } from "./features/chat/timeline-store.js";
@@ -301,6 +302,8 @@ export async function boot() {
     control: $(control), button: $(button), menu: $(menu), navigation,
     store: sessionDetailStore, onAction: handleSessionAction,
   }));
+  const backupExport = createSessionBackupExport({ dialog: $("#session-backup-dialog"),
+    fallbackFocus: () => prompt });
   function switchToProject(projectId) {
     showActiveSessions();
     navigation.newTask(projectId);
@@ -2166,9 +2169,10 @@ export async function boot() {
   }
 
   async function handleSessionAction(action, session) {
-    if (action === "export" || action === "export_json") {
-      if (action === "export") toast(t("sessionAction.preparingMarkdown", {}, "正在整理 Markdown 会话记录…"));
-      const file = action === "export_json" ? await exportSession(session) : {
+    if (action === "export_json") { backupExport.open(session); return; }
+    if (action === "export") {
+      toast(t("sessionAction.preparingMarkdown", {}, "正在整理 Markdown 会话记录…"));
+      const file = {
         blob: new Blob([formatSessionMarkdown(session, await loadSessionMarkdownImages(
           session, await loadSessionTranscript(session)))],
           { type: "text/markdown;charset=utf-8" }),
@@ -2180,9 +2184,7 @@ export async function boot() {
       link.download = file.filename;
       link.click();
       window.setTimeout(() => URL.revokeObjectURL(url), 0);
-      toast(action === "export_json"
-        ? t("sessionAction.jsonDownloading", {}, "JSON 备份已开始下载")
-        : t("sessionAction.markdownDownloading", {}, "Markdown 已开始下载"));
+      toast(t("sessionAction.markdownDownloading", {}, "Markdown 已开始下载"));
       return;
     }
     if (!["rename", "trash", "fork", "truncate", "clear"].includes(action)) return applySessionAction(action, session);

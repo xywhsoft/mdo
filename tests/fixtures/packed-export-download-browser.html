@@ -32,7 +32,7 @@ frame.addEventListener("load", () => {
         if (!markdown) {
           try { document = JSON.parse(text); } catch { return; }
           if (!document || typeof document !== "object" ||
-              !("export_schema" in document && "snapshot" in document)) return;
+              !("export_schema" in document && ("snapshot" in document || document.export_schema === 2))) return;
         }
         const capture = { type:blob.type, bytes:blob.size,
           hasSyntheticPrompt:text.includes("EXPORT DOWNLOAD QA"),
@@ -53,6 +53,13 @@ frame.addEventListener("load", () => {
         if (document) {
           capture.keys = Object.keys(document);
           capture.snapshotType = typeof document.snapshot;
+          if (document.export_schema === 2) {
+            capture.schema = document.export_schema;
+            capture.files = document.files.map((file) => ({ path: file.path, bytes: file.bytes, sha256: file.sha256 }));
+            capture.imageFiles = document.files.filter((file) => /^attachments\/[a-f0-9]{32}\.bin$/.test(file.path))
+              .map((file) => ({ path: file.path, decodedBytes: atob(file.data).length }));
+            capture.restoreReady = document.restore_ready;
+          }
         }
         captures.push(capture);
         output.textContent = JSON.stringify(captures.slice(-4), null, 2);

@@ -1362,5 +1362,18 @@
   "error.purgeClientBusy": "请等待提交、图片上传和其他操作完成，并处理运行态或诊断项，再核对清除。",
   "error.purgeDraftUnsaved": "仍有未保存的草稿。请先保存，或复制草稿后重新载入，再核对清除结果。",
   "purgeConfirm.committedRestart": "原请求已提交清除，但宿主需要恢复。请关闭并重新启动 mdo，再核对原编号；仅刷新页面不能代替重启。",
-  "messageEdit.keyboardHelp": "Enter 保存并重新发送，Shift+Enter 换行。"
+  "messageEdit.keyboardHelp": "Enter 保存并重新发送，Shift+Enter 换行。",
+  "backupExport.title": "导出“{title}”",
+  "backupExport.scope": "包含已保存且仍保留的模型记录、消息、附件、产物、待办、反馈、草稿和队列。已清理的记录和未保存的输入不在备份中。",
+  "backupExport.preparing": "正在整理会话备份…",
+  "backupExport.receiving": "正在接收 {received} / {total} MiB…",
+  "backupExport.verifying": "正在校验备份…",
+  "backupExport.failed": "备份尚未导出",
+  "backupExport.retry": "重新导出",
+  "backupExport.progress": "备份接收进度",
+  "backupExport.downloading": "备份已校验，已交给浏览器下载",
+  "error.backupDownloadInvalid": "备份响应不完整或格式异常，没有生成下载文件，请重新导出。",
+  "error.backupDownloadChecksum": "备份校验和不一致，没有生成下载文件，请重新导出。",
+  "error.backupDownloadTimeout": "备份整理或下载超时，没有生成下载文件，请稍后重试。",
+  "error.backupDownloadFailed": "备份下载失败，原会话仍保留，请稍后重试。"
 }

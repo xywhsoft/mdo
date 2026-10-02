@@ -1362,5 +1362,18 @@
   "error.purgeClientBusy": "Wait for submissions, image uploads and other operations, and resolve active runs or diagnostics before reviewing removal.",
   "error.purgeDraftUnsaved": "Some drafts are unsaved. Save them, or copy them and reload before acknowledging the removal result.",
   "purgeConfirm.committedRestart": "The original removal was committed, but the host needs recovery. Close and restart mdo, then check the original ID; reloading this page does not restart the host.",
-  "messageEdit.keyboardHelp": "Enter saves and resends; Shift+Enter adds a new line."
+  "messageEdit.keyboardHelp": "Enter saves and resends; Shift+Enter adds a new line.",
+  "backupExport.title": "Export “{title}”",
+  "backupExport.scope": "Includes saved and retained model records, messages, attachments, artifacts, todos, feedback, drafts and queue. Deleted records and unsaved input are excluded.",
+  "backupExport.preparing": "Preparing session backup…",
+  "backupExport.receiving": "Receiving {received} / {total} MiB…",
+  "backupExport.verifying": "Verifying backup…",
+  "backupExport.failed": "Backup has not been exported",
+  "backupExport.retry": "Retry export",
+  "backupExport.progress": "Backup download progress",
+  "backupExport.downloading": "Backup verified and handed to the browser for download",
+  "error.backupDownloadInvalid": "The backup response is incomplete or invalid. No download was created. Retry the export.",
+  "error.backupDownloadChecksum": "The backup checksum does not match. No download was created. Retry the export.",
+  "error.backupDownloadTimeout": "Preparing or downloading the backup timed out. No download was created. Try again later.",
+  "error.backupDownloadFailed": "The backup download failed. The original session is preserved. Try again later."
 }

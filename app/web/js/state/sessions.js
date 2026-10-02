@@ -2,6 +2,7 @@ import { api, resourceId } from "../api/client.js";
 import { createResourceStore } from "./store.js";
 import { withSessionRuntime } from "./session-runtime.js";
 import { t } from "../i18n.js";
+import { downloadSessionBackup } from "../api/backup-download.js";
 
 export const sessionsStore = createResourceStore({ generation: 0, items: [] });
 export const sessionDetailStore = createResourceStore();
@@ -108,8 +109,8 @@ export async function clearSession(session) {
   return refreshAfter(await api.post(`${endpoint(session)}/clear`, undefined, { ifMatch: etag(session) }));
 }
 
-export function exportSession(session) {
-  return api.download(`${endpoint(session)}/export`);
+export function exportSession(session, options) {
+  return downloadSessionBackup(session.project_id, session.id, options);
 }
 
 // The event list stays small. A copy action may fetch one original event on

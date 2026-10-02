@@ -1052,6 +1052,16 @@ select:focus-visible,
 .message-edit-fields textarea { height: min(170px, 24dvh); min-height: 80px; max-height: min(50vh, 360px); resize: vertical; font: inherit; line-height: 1.5; }
 .dialog-error { margin: 0 20px 12px; color: var(--danger); font-size: 12px; }
 .dialog-card > footer { display: flex; justify-content: flex-end; gap: 8px; padding: 13px 20px; border-top: 1px solid var(--border); }
+.backup-export-dialog { max-height: calc(100dvh - 24px); overflow: hidden; }
+.backup-export-dialog .dialog-card { display: flex; max-height: calc(100dvh - 24px); flex-direction: column; }
+.backup-export-dialog .dialog-card > header, .backup-export-dialog .dialog-card > footer { flex: 0 0 auto; }
+.backup-export-dialog h2 { overflow-wrap: anywhere; min-width: 0; }
+.backup-export-body { padding: 12px 20px; min-height: 0; overflow-y: auto; font-size: 12px; line-height: 1.6; }
+.backup-export-body p { margin: 0 0 12px; }
+.backup-export-body [data-backup-scope] { color: var(--muted); }
+.backup-export-body progress { width: 100%; }
+.backup-export-dialog .dialog-error { margin: 0 0 12px; overflow-wrap: anywhere; }
+.backup-export-dialog footer button { min-height: 40px; }
 .shortcuts-dialog { width: min(540px, calc(100vw - 24px)); max-height: calc(100dvh - 32px); overflow: hidden; }
 .shortcuts-dialog .dialog-card { display: flex; max-height: calc(100dvh - 32px); min-height: 0; flex-direction: column; }
 .shortcuts-dialog .dialog-card > header, .shortcuts-dialog .dialog-card > footer { flex: 0 0 auto; }

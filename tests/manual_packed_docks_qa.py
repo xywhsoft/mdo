@@ -282,6 +282,18 @@ Object.defineProperty(navigator, 'clipboard', {
             pass  # Closing the preview may cancel an in-flight image request.
 
     def do_GET(self):
+        if (self.path.startswith("/api/v1/projects/") and "/sessions/" in self.path and self.path.endswith("/backup")):
+            with self.server.count_lock:
+                self.server.backup_reads += 1
+                count = self.server.backup_reads
+            print(f"QA backup GET #{count}", flush=True)
+            if count == 1:
+                time.sleep(self.server.backup_delay_seconds)
+                if self.server.fail_first_backup:
+                    self.preview_reply(503, json.dumps({"ok": False, "error": {
+                        "code": "session_backup_unavailable", "message": "Synthetic first backup failure"
+                    }}).encode(), "application/json")
+                    return
         if self.server.image_transfer_fixture:
             if self.path == "/__qa/image-preview-load":
                 body = ((ROOT / "tests/fixtures/image-preview-load-browser.html")
@@ -1085,6 +1097,10 @@ parser.add_argument("--image-transfer-fixture", action="store_true",
                     help="serve a partial-items clipboard probe against the real packed editor")
 parser.add_argument("--message-edit-fixture", action="store_true",
                     help="serve the keyboard/IME edit probe with packed production components")
+parser.add_argument("--backup-delay-ms", type=int, default=0,
+                    help="delay only the first backup GET by 0-5000 ms for cancellation QA")
+parser.add_argument("--fail-first-backup", action="store_true",
+                    help="reject only the first backup GET for export retry QA")
 parser.add_argument("--export-download-fixture", action="store_true",
                     help="observe Markdown/JSON export data and preserve the real packed download")
 parser.add_argument("--locale-hotkey", action="store_true",
@@ -1148,6 +1164,8 @@ if not 0 <= args.startup_catalog_delay_ms <= 30000:
     parser.error("--startup-catalog-delay-ms must be between 0 and 30000")
 if not 0 <= args.subsequent_sessions_delay_ms <= 30000:
     parser.error("--subsequent-sessions-delay-ms must be between 0 and 30000")
+if not 0 <= args.backup_delay_ms <= 5000:
+    parser.error("--backup-delay-ms must be between 0 and 5000")
 if not 0 <= args.startup_runs_delay_ms <= 30000:
     parser.error("--startup-runs-delay-ms must be between 0 and 30000")
 if not 0 <= args.startup_workspace_delay_ms <= 30000:
@@ -1338,6 +1356,7 @@ try:
             or args.task_questions_fixture or args.image_transfer_fixture
             or args.message_edit_fixture
             or args.export_download_fixture
+            or args.backup_delay_ms or args.fail_first_backup
             or args.fail_first_fork_invalid
             or args.fail_first_module or args.delay_first_module_ms
             or args.startup_task_delay_ms or args.startup_bootstrap_delay_ms
@@ -1353,6 +1372,9 @@ try:
         proxy.preview_image_reads = 0
         proxy.message_edit_fixture = args.message_edit_fixture
         proxy.export_download_fixture = args.export_download_fixture
+        proxy.backup_delay_seconds = args.backup_delay_ms / 1000
+        proxy.fail_first_backup = args.fail_first_backup
+        proxy.backup_reads = 0
         proxy.qa_session = session
         proxy.decision_expand_arrival_fixture = (
             args.decision_expand_arrival_fixture)
@@ -1447,6 +1469,7 @@ try:
     input("Press Enter to stop QA servers.\n")
 finally:
     if proxy:
+        print(f"QA backup GET total={proxy.backup_reads}", flush=True)
         print(f"QA attachment DELETE total={proxy.attachment_deletes}", flush=True)
         print(f"QA discard marker POST total={proxy.discard_markers}", flush=True)
         print(f"QA approval PUT total={proxy.approval_puts}", flush=True)

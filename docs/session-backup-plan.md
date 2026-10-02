@@ -6,10 +6,16 @@
 Home 非覆盖目录提交、持久 journal 所有权和启动回收已实现，真实 Stage
 到 target Home 的历史产物读取通过。生产同步 coordinator 已组合项目/
 workspace 复核、ID/data 预留、原子发布及一次 catalog 同步；恢复 worker、
-持久请求结果与正式页面入口待实现。2026-10-02 已完成
+持久请求结果与正式导入页面入口待实现。2026-10-02 已完成
 checkpoint 与有界读取共用排他运行窗口、统一捕获边界、v2 捕获/编码层和
-有界 HTTP/TLS 传输。现有页面仍使用 `export_schema:1`，只有 meta 和模型 snapshot。
-格式/传输验证通过不表示正式页面已经导出完整备份，或恢复事务已经完成。
+有界 HTTP/TLS 传输。正式 JSON 导出页面已接入 `export_schema:2`，接收
+校验、取消及同会话重试通过。旧 v1 `/export` 仅作为兼容 API 保留。
+本轮浏览器磁盘下载被取消，原因未知；真实前端下载器/C 解码读回与页面
+Blob 内容证据独立成立，不表示恢复事务或所有平台下载已经完成。
+
+正式导出内容及证据见 [导出交互合同](session-backup-export-ui.md)，包括
+320×240 失败提示、实际键盘重试/取消，以及两平台最终门禁记录。下一步
+仍是拥有上传/预览副本的恢复 worker、持久结果和预览/确认/导入页面。
 
 生产恢复的前置项目协调已接入 [发布绑定](project-publication-binding.md)：
 全项目 definition guard 修补 POSIX 同进程 writer 竞态，短发布回调在

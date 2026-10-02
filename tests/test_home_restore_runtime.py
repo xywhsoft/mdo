@@ -189,7 +189,10 @@ def launch(host: Path, site: Path, home: Path, mode: str, log: Path, *, checkpoi
                 text = log.read_text(encoding="utf-8", errors="replace")
                 needles = ("restore_checkpoint=1",) if checkpoint else (
                     "restore_end=", "restore_begin=", "restore_init=", "restore_invalid=")
-                if any(needle in text for needle in needles):
+                # A native printf can become visible in several writes. Wait for
+                # its complete record before stopping the owned fixture process.
+                if any(line.endswith("\n") and line.startswith(needles)
+                       for line in text.splitlines(keepends=True)):
                     assert process.poll() is None, text
                     break
                 if process.poll() is not None:

@@ -4,6 +4,31 @@
 
 完成判据及尚缺的打包页证据见 [前端操作体验完成审计](frontend-completion-audit.md)。本文件继续记录每次实现和验证的细节。
 
+## 2026-10-02：正式 JSON 完整备份菜单与可取消导出
+
+会话 JSON 菜单已接入完整 v2 文件，保留一次点击操作并补齐接收/校验、
+取消和同会话重试；校验与长度均通过才交给浏览器。原生 HTML/CSS/JS
+保持无额外构建依赖，Markdown 操作不变。真实 HTTP/TLS 前端下载器
+保存并经 C 解码读回模型/UI/原图原名/草稿队列/产物，来源字节未改变。
+320×240 打包工作区的错误裁切已修复，键盘重试和取消/重开实际通过。
+详见 [导出交互及证据边界](session-backup-export-ui.md)。
+
+本轮内嵌浏览器将 JSON 和既有 Markdown 对照下载都取消；未取得文件
+路径，原因未知。只确认页面交付的 v2 Blob、进度和取消/重试，不将它
+计为浏览器磁盘下载成功。正式恢复 worker/持久结果和导入页面仍待完成，
+`restore_ready:false` 保持；既有 Linux 间歇问题与实体设备验收继续保留。
+
+最终 Windows/Linux 通过 115 Python、262 Node、93 JS、严格 C11、44
+runtime、三项 packed 和独立 A/B；Windows 另通过便携 Home/20 秒启动。
+SDK 不变，复用已验证 host，21 份改动输入按 LF 核对。Windows 根目录
+程序 6,439,017 字节、SHA-256
+`5797aaf6f1d7b84bb80357b99f8b0a743404f9cf0b601dec00270b91c129bc81`；
+Linux A/B 6,489,177 字节、SHA-256
+`2d125b7e1d937a704161dae040005f2e03b1e02678d2214441d38d6999067c65`。
+日志 `.build/qa-backup-export-{windows,linux}-final.log`。旧静态合同定位和
+日志半行读取问题已修补，失败记录保留；覆盖时无根目录窗口，不改用户
+Home，没有压力或高负载测试。长期目标继续，不升级缺设备证据的条目。
+
 ## 2026-10-02：恢复会话 ID 预留与生产原子发布
 
 新增同步 `MdoSessionRestorePublish`，组合目标项目复核、pending ID/data

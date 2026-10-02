@@ -713,6 +713,22 @@
     </form>
   </dialog>
 
+  <dialog class="new-session-dialog backup-export-dialog" id="session-backup-dialog" aria-labelledby="session-backup-title" aria-describedby="session-backup-scope">
+    <div class="dialog-card">
+      <header><h2 id="session-backup-title" data-backup-title>导出会话备份</h2>
+        <button class="icon-button" type="button" data-backup-close aria-label="关闭"><span class="icon" data-icon="close" aria-hidden="true"></span></button>
+      </header>
+      <div class="backup-export-body">
+        <p class="dialog-error" data-backup-error role="alert" tabindex="-1" hidden></p>
+        <p id="session-backup-scope" data-backup-scope></p>
+        <p data-backup-status role="status" aria-live="polite"></p>
+        <progress aria-label="备份接收进度" data-i18n-aria-label="backupExport.progress"></progress>
+      </div>
+      <footer><button class="secondary-button" type="button" data-backup-cancel>取消</button>
+        <button class="primary-button" type="button" data-backup-retry hidden>重新导出</button></footer>
+    </div>
+  </dialog>
+
   <dialog class="new-session-dialog" id="message-edit-dialog" aria-labelledby="message-edit-title">
     <form class="dialog-card" id="message-edit-form">
       <header>
