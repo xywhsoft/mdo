@@ -11,6 +11,8 @@ APPROVAL NEXT UI, TASK UI, TASK SECOND UI, or ARTIFACT UI. The long
 ask has multiline question and options; the latter reads one bounded synthetic
 text file so the normal tool-output artifact path is used. The optional chat
 stream emits two bounded chunks with interleaved text and reasoning fields.
+With --file-tools-fixture, FILE TOOLS UI runs five bounded filesystem/process
+calls in the synthetic workspace, including a deliberate missing-file error.
 With --image-capable --image-transfer-fixture, /__qa/image-transfer serves a
 synthetic clipboard control for the actual packed editor and attachment API.
 It also exercises rapid close/reopen in the real workbench; the component route
@@ -55,6 +57,8 @@ class Model(BaseHTTPRequestHandler):
     task_seconds = 12
     artifact_file = None
     chat_stream = False
+    file_tools = False
+    file_tools_path = None
 
     def log_message(self, *_args):
         pass
@@ -113,7 +117,33 @@ class Model(BaseHTTPRequestHandler):
             slow = "SLOW UI" in wire and "slow" not in Model.sent
             if slow:
                 Model.sent.add("slow")
-            if "TODO REORDER UI" in wire and "todo-reorder" not in Model.sent:
+            if Model.file_tools and "FILE TOOLS UI" in wire:
+                step = sum(key.startswith("file-tools-step-") for key in Model.sent)
+                path = str(Model.file_tools_path)
+                content = "title: BEFORE\n" + "".join(
+                    f"{index:03d} synthetic file-tool content for UI reading and exact copying.\n"
+                    for index in range(110)) + "tail: ORIGINAL\n"
+                calls = [
+                    ("write", {"path": path, "content": content}),
+                    ("read", {"path": path, "max_lines": 180}),
+                    ("edit", {"path": path, "edits": [
+                        {"old_text": "title: BEFORE\n", "new_text": "title: AFTER\n"},
+                        {"old_text": "tail: ORIGINAL\n", "new_text": "tail: UPDATED\n"}]}),
+                    ("read", {"path": path + ".missing"}),
+                    ("exec", {"argv": [sys.executable, "-c",
+                        "from pathlib import Path; "
+                        f"text=Path({path!r}).read_text(encoding='utf-8'); "
+                        "assert text.startswith('title: AFTER\\n') and text.endswith('tail: UPDATED\\n'); "
+                        "print('FILE_TOOLS_OK')"], "timeout_ms": 5000}),
+                ]
+                if step < len(calls):
+                    Model.sent.add(f"file-tools-step-{step}")
+                    name, arguments = calls[step]
+                    output = [{"type": "function_call", "call_id": f"ui-file-tools-{step}",
+                               "name": name, "arguments": json.dumps(arguments)}]
+                else:
+                    output[0]["content"][0]["text"] = "FILE TOOLS QA completed: FILE_TOOLS_OK."
+            elif "TODO REORDER UI" in wire and "todo-reorder" not in Model.sent:
                 Model.sent.add("todo-reorder")
                 output = [{"type": "function_call", "call_id": "ui-todo-reorder-1",
                            "name": "mdo.todo", "arguments": json.dumps({"items": [
@@ -1166,6 +1196,8 @@ parser.add_argument("--second-model-context-tokens", type=int, default=0,
                     help="set the isolated second model context to 131072-262144 tokens")
 parser.add_argument("--interleaved-chat-stream", action="store_true",
                     help="serve a bounded Chat Completions stream with alternating text and reasoning")
+parser.add_argument("--file-tools-fixture", action="store_true",
+                    help="FILE TOOLS UI runs bounded write/read/edit/missing-read/exec in the isolated workspace")
 args = parser.parse_args()
 if not args.packed_path.is_file():
     parser.error(f"packed executable not found: {args.packed_path}")
@@ -1282,6 +1314,8 @@ Model.model_delay_seconds = args.model_delay_ms / 1000
 Model.task_seconds = args.task_ms / 1000
 Model.task_output_lines = args.task_output_lines
 Model.chat_stream = args.interleaved_chat_stream
+Model.file_tools = args.file_tools_fixture
+Model.file_tools_path = base / "tools-qa.txt"
 executable_name = "mdo.exe" if os.name == "nt" else "mdo"
 shutil.copy2(args.packed_path, base / executable_name)
 (base / "README.md").write_text("Synthetic workspace file for @ completion.\n",
@@ -1341,7 +1375,7 @@ try:
                      else "openai-responses"), "reasoning_effort": "medium",
         "max_output_tokens": 1024,
     }
-    if args.resume_verify:
+    if args.resume_verify or args.file_tools_fixture:
         options["permission_profile"] = "full-access"
     status, response = request(port, "POST", "/api/v1/sessions", options)
     if status != 201:

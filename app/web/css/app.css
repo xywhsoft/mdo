@@ -640,6 +640,17 @@ select:focus-visible,
 .timeline-fold-section-heading button { border: 0; border-radius: 5px; background: transparent; color: var(--muted); font: inherit; cursor: pointer; }
 .timeline-fold-section-heading button:hover { color: var(--ink); }
 .timeline-fold-section pre { max-height: 320px; margin: 0; overflow: auto; padding: 9px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface-raised); color: var(--ink); font: 11px/1.5 ui-monospace, SFMono-Regular, Consolas, monospace; overflow-wrap: anywhere; white-space: pre-wrap; }
+.timeline-tool-content { min-width: 0; outline-offset: 2px; }
+.timeline-tool-caption { margin: 6px 0; color: var(--muted); font-size: 11px; }
+.timeline-tool-diff span { display: block; white-space: pre-wrap; }
+.tool-diff-removed { color: var(--danger); background: color-mix(in srgb, var(--danger) 8%, transparent); }
+.tool-diff-added { color: var(--success); background: color-mix(in srgb, var(--success) 8%, transparent); }
+.tool-diff-added + .tool-diff-removed { margin-top: 5px; }
+.timeline-tool-raw { margin-top: 6px; }
+.timeline-tool-raw summary { width: fit-content; min-height: 30px; padding: 4px 2px; color: var(--muted); font-size: 11px; cursor: pointer; }
+.timeline-tool-more { min-height: 32px; margin-top: 6px; padding: 5px 9px; border: 1px solid var(--border); border-radius: 6px; color: var(--muted); background: transparent; font: inherit; font-size: 11px; cursor: pointer; }
+.timeline-tool-more[aria-disabled="true"] { opacity: .6; cursor: wait; }
+.timeline-tool-more:hover, .timeline-tool-more:focus-visible { color: var(--ink); background: var(--surface-hover); }
 .timeline-item[data-state="running"] .timeline-role::after { content: ""; display: inline-block; width: 5px; height: 5px; margin-left: 7px; border-radius: 50%; background: var(--warning); animation: pulse 1.5s infinite; }
 .timeline-meta { margin-top: 7px; color: var(--faint); font: 11px ui-monospace, SFMono-Regular, Consolas, monospace; }
 .timeline-artifact-preview { min-width: 0; margin-top: 8px; }
@@ -1445,6 +1456,8 @@ select:focus-visible,
 
 @media (max-width: 760px) {
   .composer-error-action { min-height: 40px; padding-block: 8px; }
+  .timeline-tool-more, .timeline-tool-raw summary { min-height: 40px; }
+  .timeline-fold-section-heading button { min-width: 40px; min-height: 40px; padding: 4px 8px; }
   .inspector-tab, .trace-event summary { min-height: 40px; }
   .timeline-actions button { width: 40px; height: 40px; }
   .md-code-head button { min-height: 40px; padding: 0 6px; }

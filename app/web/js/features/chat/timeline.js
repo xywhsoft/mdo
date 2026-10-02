@@ -7,6 +7,7 @@ import { renderMarkdown } from "./markdown.js";
 import { artifactPreviewNode } from "./artifact-preview.js";
 import { currentLocale, subscribeLocale, t } from "../../i18n.js";
 import { labelImageName } from "./image-names.js";
+import { toolCallSummary, toolSectionNode } from "./tool-content.js";
 
 export function searchResultTop(row, content, searchBottom, viewportBottom, lineHeight = 24) {
   const room = Math.max(0, viewportBottom - searchBottom);
@@ -188,6 +189,8 @@ export function eventsToTimeline(events, historyLost = false) {
           role: event.tool_name || t("timeline.tool", {}, "工具"),
           text: event.text || t("timeline.executing", {}, "正在执行…"),
           inputText: event.text || "",
+          inputEventId: event.event_id,
+          inputTruncated: event.text_truncated === true,
           outputText: "",
           runKey,
           runEpoch: epoch,
@@ -208,6 +211,8 @@ export function eventsToTimeline(events, historyLost = false) {
             ? t("timeline.executionDone", {}, "执行完成")
             : t("timeline.executionFailed", {}, "执行失败"));
           tool.text = tool.outputText;
+          tool.outputEventId = event.event_id;
+          tool.outputTruncated = event.text_truncated === true;
           tool.state = event.success ? "done" : "failed";
           // Tool start precedes ask/approval; this is wall time, not executor time.
           tool.durationSeconds = Math.max(0,
@@ -227,6 +232,8 @@ export function eventsToTimeline(events, historyLost = false) {
           items.push({ key: `tool-${event.event_id}`, kind: "tool",
             role: event.tool_name || t("timeline.tool", {}, "工具"), text: outputText,
             inputText: "", outputText,
+            outputEventId: event.event_id,
+            outputTruncated: event.text_truncated === true,
             artifactId: event.artifact_id, artifactPath: event.artifact_path,
             artifactEventId: event.event_id,
             state: event.success ? "done" : "failed", time: event.time });
@@ -412,24 +419,6 @@ function shortLine(value) {
   return line.length > 110 ? `${line.slice(0, 110)}…` : line;
 }
 
-function toolSummaryText(value) {
-  const raw = String(value ?? "");
-  try {
-    const args = JSON.parse(raw);
-    if (args && typeof args === "object" && !Array.isArray(args)) {
-      for (const name of ["command", "path", "file_path", "pattern",
-        "url", "query", "goal", "argv"]) {
-        const candidate = args[name];
-        if (typeof candidate === "string" && candidate.trim())
-          return shortLine(candidate);
-        if (Array.isArray(candidate) && candidate.every((part) =>
-          typeof part === "string")) return shortLine(candidate.join(" "));
-      }
-    }
-  } catch { /* tool start may already be a human-readable summary */ }
-  return shortLine(raw);
-}
-
 function foldSection(label, value, copy = false, actionRef = "") {
   const heading = element("div", { className: "timeline-fold-section-heading" }, [
     element("span", { text: label }),
@@ -450,7 +439,7 @@ function foldSection(label, value, copy = false, actionRef = "") {
   ]);
 }
 
-function foldableNode(item, openState, previewOpen, previewScroll, projectId, sessionId) {
+function foldableNode(item, openState, previewOpen, previewScroll, projectId, sessionId, toolTextCache) {
   const running = item.state === "running";
   const status = running ? t("timeline.running", {}, "运行中")
     : item.state === "failed" ? t("timeline.failed", {}, "失败")
@@ -459,7 +448,8 @@ function foldableNode(item, openState, previewOpen, previewScroll, projectId, se
   const lastLine = item.text?.trimEnd().split("\n").at(-1) || "";
   const preview = item.kind === "reasoning"
     ? (running ? shortLine(lastLine) : "")
-    : toolSummaryText(item.inputText || item.outputText || item.text);
+    : toolCallSummary(item.role, item.inputText || item.outputText || item.text,
+      Boolean(item.inputText && item.inputTruncated));
   const duration = Number.isFinite(item.durationSeconds) && item.durationSeconds > 0
     ? t("timeline.seconds", { seconds: new Intl.NumberFormat(currentLocale(),
       { minimumFractionDigits: 1, maximumFractionDigits: 1 }).format(item.durationSeconds) },
@@ -471,10 +461,11 @@ function foldableNode(item, openState, previewOpen, previewScroll, projectId, se
   const details = element("details", { className: "timeline-fold",
     attrs: { "data-timeline-key": item.key } });
   details.open = openState ?? running;
+  const summaryPreview = element("span", { className: "timeline-fold-preview", text: preview });
   details.append(element("summary", { className: "timeline-fold-summary" }, [
     element("span", { className: "timeline-fold-marker", attrs: { "aria-hidden": "true" } }),
     element("span", { className: "timeline-role", text: item.role }),
-    element("span", { className: "timeline-fold-preview", text: preview }),
+    summaryPreview,
     element("span", { className: "timeline-fold-status", text: foldStatus }),
     timeNode(item.time),
   ]));
@@ -491,12 +482,15 @@ function foldableNode(item, openState, previewOpen, previewScroll, projectId, se
       body.append(foldSection(t("timeline.reasoningProcess", {}, "思考过程"),
         item.text || t("timeline.thinking", {}, "正在思考…")));
     } else {
-      if (item.inputText) body.append(foldSection(t("timeline.call", {}, "调用"), item.inputText, true,
-        `${item.key}/tool-input`));
-      if (item.outputText) body.append(foldSection(
+      const owner = { projectId, sessionId };
+      if (item.inputText) body.append(toolSectionNode(t("timeline.call", {}, "调用"), item, "input", owner,
+        `${item.key}/tool-input`, toolTextCache, value => {
+          summaryPreview.textContent = toolCallSummary(item.role, value);
+        }));
+      if (item.outputText) body.append(toolSectionNode(
         item.state === "failed" ? t("timeline.errorOutput", {}, "错误输出")
-          : t("timeline.result", {}, "结果"), item.outputText, true,
-        `${item.key}/tool-output`));
+          : t("timeline.result", {}, "结果"), item, "output", owner,
+        `${item.key}/tool-output`, toolTextCache));
       if (!item.inputText && !item.outputText)
         body.append(foldSection(t("timeline.executingLabel", {}, "执行中"),
           item.text || t("timeline.executing", {}, "正在执行…")));
@@ -538,10 +532,10 @@ function commandButton(label, description, iconName, actionRef, handlers, sessio
 }
 
 function timelineNode(item, handlers, feedback, projectId, sessionId, writable,
-  openState, previewOpen, previewScroll) {
+  openState, previewOpen, previewScroll, toolTextCache) {
   if (item.kind === "reasoning" || item.kind === "tool")
     return foldableNode(item, openState, previewOpen, previewScroll,
-      projectId, sessionId);
+      projectId, sessionId, toolTextCache);
   const time = timeNode(item.time);
   const header = element("div", { className: "timeline-item-header" }, [
     element("span", { className: "timeline-role", text: item.role }),
@@ -724,6 +718,7 @@ export function createTimelineView({ container, welcome, toBottom, store, sessio
   const expanded = new Map();
   const previewExpanded = new Map();
   const previewScroll = new Map();
+  const toolTextCache = new Map();
   const scroller = container.closest(".conversation");
 
   function reconcileRows(entries, projectId, sessionId) {
@@ -737,7 +732,7 @@ export function createTimelineView({ container, welcome, toBottom, store, sessio
         const node = timelineNode(item, handlers, feedback, projectId,
           sessionId, writable, expanded.get(item.key),
           previewExpanded.get(`${item.key}/preview`) ?? false,
-          previewScroll.get(`${item.key}/preview`) ?? 0);
+          previewScroll.get(`${item.key}/preview`) ?? 0, toolTextCache);
         mountIcons(node);
         row = { node, signature };
         renderedRows.set(item.key, row);
@@ -795,6 +790,7 @@ export function createTimelineView({ container, welcome, toBottom, store, sessio
       expanded.clear();
       previewExpanded.clear();
       previewScroll.clear();
+      toolTextCache.clear();
       renderedRows.clear();
       clear(container);
       renderedSession = sessionKey;
