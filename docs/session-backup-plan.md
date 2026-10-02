@@ -9,6 +9,13 @@ Home 非覆盖目录提交、持久 journal 所有权和启动回收已实现，
 checkpoint 与有界读取共用排他运行窗口、统一捕获边界、v2 捕获/编码层和
 有界 HTTP/TLS 传输。现有页面仍使用 `export_schema:1`，只有 meta 和模型 snapshot。
 格式/传输验证通过不表示正式页面已经导出完整备份，或恢复事务已经完成。
+
+生产恢复的前置项目协调已接入 [发布绑定](project-publication-binding.md)：
+全项目 definition guard 修补 POSIX 同进程 writer 竞态，短发布回调在
+native lock 内复核 reviewed revision/incarnation 和物理 workspace 身份。
+它不替代 session ID 预留、catalog 同步或完整 restore coordinator，正式
+页面继续保持 `restore_ready:false`。下一步将该边界接入已准备的 Stage
+与 Home journal 事务，再接入 worker/取消/可查询结果和正式菜单。
 旧版核心功能是 Markdown 导出，图片携带已经恢复；这里补齐新版现有 JSON
 备份入口，不将它冒充旧版已有的导入能力。
 

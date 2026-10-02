@@ -366,6 +366,7 @@ bool MdoProjectCreate(const MdoProjectCreateOptions* Options,
     char Path[96];
     xfile Lock = NULL;
     MdoProjectLease* Lease = NULL;
+    MdoProjectDefinitionLease* Writer = NULL;
     xfileinfo Stat;
     char* Json = NULL;
     size_t Size = 0u;
@@ -387,6 +388,8 @@ bool MdoProjectCreate(const MdoProjectCreateOptions* Options,
     }
     if ( MdoProjectsLease(Options->Id, &Lease, Error) !=
             MDO_PROJECT_MUTATION_OK ) return false;
+    Writer = MdoProjectDefinitionAcquire(Lease, Error);
+    if ( Writer == NULL ) { MdoProjectLeaseRelease(Lease); return false; }
     Candidate.Revision = 1u;
     Candidate.CreatedAt = xrtNow();
     Candidate.UpdatedAt = Candidate.CreatedAt;
@@ -427,6 +430,7 @@ bool MdoProjectCreate(const MdoProjectCreateOptions* Options,
 done:
     if ( Lock != NULL ) (void)xrtClose(Lock);
     xrtFree(Json);
+    MdoProjectDefinitionRelease(Writer);
     MdoProjectLeaseRelease(Lease);
     return Ok;
 }
@@ -461,15 +465,18 @@ MdoProjectMutationResult MdoProjectReplace(
     const MdoProjectCreateOptions* Options, uint64 ExpectedRevision,
     MdoProjectInfo* Info, xwork_error* Error)
 {
+    xwork_error Local;
     MdoProjectInfo Current;
     MdoProjectInfo Candidate;
     char Path[96];
     char CheckPath[96];
     xfile Lock = NULL;
     MdoProjectLease* Lease = NULL;
+    MdoProjectDefinitionLease* Writer = NULL;
     char* Json = NULL;
     size_t Size = 0u;
     MdoProjectMutationResult Result;
+    if ( Error == NULL ) Error = &Local;
     xworkErrorInit(Error);
     if ( Options == NULL || Options->Size < sizeof(*Options) ||
          (Info != NULL && Info->Size < sizeof(*Info)) )
@@ -481,6 +488,12 @@ MdoProjectMutationResult MdoProjectReplace(
         return MDO_PROJECT_MUTATION_INVALID;
     Result = MdoProjectsLease(Options->Id, &Lease, Error);
     if ( Result != MDO_PROJECT_MUTATION_OK ) return Result;
+    Writer = MdoProjectDefinitionAcquire(Lease, Error);
+    if ( Writer == NULL ) {
+        MdoProjectLeaseRelease(Lease);
+        return Error->eCode == XWORK_ERROR_OUT_OF_MEMORY ?
+            MDO_PROJECT_MUTATION_UNAVAILABLE : MDO_PROJECT_MUTATION_BUSY;
+    }
     Result = MdoProjectsMutationBegin(Options->Id, ExpectedRevision,
         Path, &Lock, &Current, Error);
     if ( Result != MDO_PROJECT_MUTATION_OK ) goto done;
@@ -506,6 +519,7 @@ MdoProjectMutationResult MdoProjectReplace(
 done:
     if ( Lock != NULL ) (void)xrtClose(Lock);
     xrtFree(Json);
+    MdoProjectDefinitionRelease(Writer);
     MdoProjectLeaseRelease(Lease);
     return Result;
 }
@@ -513,22 +527,32 @@ done:
 MdoProjectMutationResult MdoProjectUnregister(const char* Id,
     uint64 ExpectedRevision, xwork_error* Error)
 {
+    xwork_error Local;
     MdoProjectInfo Current;
     char Path[96];
     xfile Lock = NULL;
     MdoProjectLease* Lease = NULL;
+    MdoProjectDefinitionLease* Writer = NULL;
     MdoProjectMutationResult Result;
+    if ( Error == NULL ) Error = &Local;
     xworkErrorInit(Error);
     if ( ExpectedRevision == 0u || !MdoProjectsId(Id) )
         return MDO_PROJECT_MUTATION_INVALID;
     Result = MdoProjectsLease(Id, &Lease, Error);
     if ( Result != MDO_PROJECT_MUTATION_OK ) return Result;
+    Writer = MdoProjectDefinitionAcquire(Lease, Error);
+    if ( Writer == NULL ) {
+        MdoProjectLeaseRelease(Lease);
+        return Error->eCode == XWORK_ERROR_OUT_OF_MEMORY ?
+            MDO_PROJECT_MUTATION_UNAVAILABLE : MDO_PROJECT_MUTATION_BUSY;
+    }
     Result = MdoProjectsMutationBegin(Id, ExpectedRevision, Path,
         &Lock, &Current, Error);
     if ( Result == MDO_PROJECT_MUTATION_OK &&
          !MdoHomeRemove(Path, true) )
         Result = MDO_PROJECT_MUTATION_UNAVAILABLE;
     if ( Lock != NULL ) (void)xrtClose(Lock);
+    MdoProjectDefinitionRelease(Writer);
     MdoProjectLeaseRelease(Lease);
     return Result;
 }

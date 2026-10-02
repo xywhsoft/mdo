@@ -4,6 +4,42 @@
 
 完成判据及尚缺的打包页证据见 [前端操作体验完成审计](frontend-completion-audit.md)。本文件继续记录每次实现和验证的细节。
 
+## 2026-10-02：项目定义写入与恢复发布目标复核
+
+发现 POSIX `fcntl` 文件锁不能互斥同进程两个项目 writer，新增非阻塞
+definition guard，创建/修改/注销均先取得 guard，再取得 native writer
+文件锁；HTTP 冲突返回 `409 project_busy`。新增 owning project binding，
+发布前在同一 guard 内重新检查 revision/incarnation/物理 workspace
+路径及目录 identity，变化时不执行 callback。所有错误/关闭路径释放
+guard；callback 已提交的事实不能因随后 close false 被撤销。
+
+实际 xs/TCC 定向探针通过 59 项检查、六次 callback：固定的第二线程
+冲突、零 Home、Unicode 相对/绝对目录、版本/重建/目录替换、回调失败/
+close false、旧 registry 生命周期及 Home 冻结。真实 HTTP/TLS 写入
+冲突与只读入口加入现有探针。详见 [发布绑定合同](project-publication-binding.md)。
+初始探针 API 参数与相对路径基准错误已修补，失败日志保留。
+
+本阶段修补生产恢复的前置协调边界。会话 ID 预留、catalog 同步、完整
+restore coordinator/worker 和正式页面继续实施，`restore_ready:false`
+保持。Linux queued HEAD reset、原生/实体设备待办不变；没有压力或
+高负载测试。本阶段不作为恢复导入已完成或新增交互验收证据。
+
+首轮 Linux 完整门禁的既有备份下载大响应断言失败，旧断言未记录
+状态/长度，原因尚未确认。只补充有界响应诊断，定向 HTTP/TLS 复查
+通过；未放宽成功条件或修改生产传输。初始完整日志及定向复查日志
+保留，该间歇失败仍单独待排查，不因后续通过而视为修复。
+
+最终 Windows/Linux 完整门禁通过 115 Python、252 Node、90 JS、严格
+C11、42 runtime、三项 packed 及独立 A/B；Windows 另通过便携
+WebView2 Home 和 20 秒启动。十三份改动代码/清单/探针跨平台按 LF
+核对，SDK/library pins 不变，复用已验证 native host。根目录程序
+更新为 6,425,304 字节、SHA-256
+`4607733ea1e995853274519491dcb44f32ac25ccd26545c09a88194620e2ab43`；
+Linux A/B 6,475,464 字节、SHA-256
+`eb76fa864e18e86e4b60cd2f20dc304868b96bee63f499e802e141e541169c9c`。
+日志 `.build/qa-project-binding-{windows,linux}-final.log`，源码核对
+`.build/qa-project-binding-source-equivalence.log`；更新时无根目录运行窗口。
+
 ## 2026-10-02：会话恢复的存储提交与启动回收
 
 新增 Home 单会话恢复 journal。持久 owner、Stage 验证身份、ready 与一次

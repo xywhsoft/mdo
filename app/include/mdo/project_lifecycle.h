@@ -5,6 +5,7 @@
 #include <xwork.h>
 
 typedef struct MdoProjectLease MdoProjectLease;
+typedef struct MdoProjectDefinitionLease MdoProjectDefinitionLease;
 
 typedef enum MdoProjectLeaseMode {
     MDO_PROJECT_LEASE_SHARED = 1,
@@ -39,5 +40,16 @@ void MdoProjectLeaseRelease(MdoProjectLease* Lease);
  * registries never authorize a new transaction. Does not create files. */
 bool MdoProjectLeaseProtects(const MdoProjectLease* Lease,
     const char* ProjectId, MdoProjectLeaseMode Mode);
+
+/* Nonblocking process-wide definition writer gate. POSIX fcntl file locks
+ * alone cannot exclude another thread in the same process. Acquire before
+ * opening projects/.writer.lock and before session/storage manager locks.
+ * Owner must be a live shared lifecycle lease; the guard pins it. A current
+ * registry admits one writer across all project definitions, matching the
+ * file lock namespace. Unit closes new acquisition; old guards remain safely
+ * releasable but can never authorize a new registry. Drain calls before Unit. */
+MdoProjectDefinitionLease* MdoProjectDefinitionAcquire(MdoProjectLease* Owner,
+    xwork_error* Error);
+void MdoProjectDefinitionRelease(MdoProjectDefinitionLease* Lease);
 
 #endif

@@ -188,7 +188,8 @@ class Probe:
         headers = {k.lower(): v for k, v in response.getheaders()}
         data = response.read()
         held.close()
-        assert response.status == 200 and len(data) > 1024 * 1024
+        assert response.status == 200 and len(data) > 1024 * 1024, (
+            response.status, len(data), headers, data[:1024])
         assert headers["content-length"] == str(len(data)) and headers["connection"] == "close"
         assert headers["content-type"] == "application/json; charset=utf-8"
         assert headers["content-disposition"] == f'attachment; filename="mdo-session-{ids[0]}.backup.json"'

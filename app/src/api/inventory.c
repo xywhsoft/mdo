@@ -209,7 +209,8 @@ static bool MdoApiProjectCreateRoute(MdoApiContext* Context)
             return MdoApiReplyError(Context, 409u, "project_exists",
                 "A project with this ID already exists", NULL);
         if ( Error.eCode == XWORK_ERROR_CONTEXT &&
-             strcmp(Error.sMessage, "project lifecycle is busy") == 0 )
+             (strcmp(Error.sMessage, "project lifecycle is busy") == 0 ||
+              strcmp(Error.sMessage, "project definition writer is busy") == 0) )
             return MdoApiReplyError(Context, 409u, "project_busy",
                 "Project data is being changed; try again later", NULL);
         return MdoApiReplyError(Context, 503u, "project_unavailable",

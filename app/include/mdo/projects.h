@@ -49,8 +49,9 @@ bool MdoProjectList(MdoProjectInfo* Items, size_t Capacity, size_t* Count,
     size_t* InvalidCount, bool* Truncated, xwork_error* Error);
 bool MdoProjectCreate(const MdoProjectCreateOptions* Options,
     MdoProjectInfo* Info, xwork_error* Error);
-/* All definition writes acquire a shared lifecycle lease before touching Home
- * or taking the project writer lock. Initialize the lifecycle service first.
+/* All definition writes acquire a shared lifecycle lease and the process-wide
+ * definition gate before touching Home or taking the native writer file lock.
+ * Initialize the lifecycle service first. Neither acquisition waits.
  * Replace and unregister require a revision read by the caller, re-read under
  * the writer lock, and report BUSY if lifecycle exclusion prevents the write. */
 MdoProjectMutationResult MdoProjectReplace(

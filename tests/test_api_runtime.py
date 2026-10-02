@@ -217,6 +217,7 @@ def write_site(base: Path, port: int) -> Path:
 static xthread* g_MdoApiProbeApprovalThread;
 static xmutex* g_MdoApiProbeLeaseLock;
 static MdoProjectLease* g_MdoApiProbeLease;
+static MdoProjectDefinitionLease* g_MdoApiProbeDefinition;
 static xatomic32 g_MdoApiProbeLeaseChecks, g_MdoApiProbeLeaseViolations;
 static xatomic32 g_MdoApiPurgeProbeSmallLimit;
 size_t MdoApiPurgeProbeLimit(void) {
@@ -267,7 +268,15 @@ static bool MdoApiProbeLeaseControl(XS_HttpReq* Request)
         Ok = g_MdoApiProbeLease != NULL;
     } else if ( MdoApiViewEqualText(Target,
             "/__fixture/project-lease/release") ) {
+        MdoProjectDefinitionRelease(g_MdoApiProbeDefinition); g_MdoApiProbeDefinition = NULL;
         MdoProjectLeaseRelease(g_MdoApiProbeLease); g_MdoApiProbeLease = NULL;
+    } else if ( MdoApiViewEqualText(Target,
+            "/__fixture/project-lease/definition") ) {
+        if ( g_MdoApiProbeLease == NULL ) g_MdoApiProbeLease =
+            MdoProjectLeaseAcquire("lease-probe", MDO_PROJECT_LEASE_SHARED, &Error);
+        if ( g_MdoApiProbeDefinition == NULL ) g_MdoApiProbeDefinition =
+            MdoProjectDefinitionAcquire(g_MdoApiProbeLease, &Error);
+        Ok = g_MdoApiProbeDefinition != NULL;
     } else if ( MdoApiViewEqualText(Target,
             "/__fixture/project-lease/free") ) {
         Exclusive = MdoProjectLeaseAcquire("lease-probe",
@@ -562,6 +571,8 @@ done:
     unit_replacement = (
         "    MdoApiReferenceProbeUnit();\n"
         "    MdoApiUnit();\n"
+        "    MdoProjectDefinitionRelease(g_MdoApiProbeDefinition);\n"
+        "    g_MdoApiProbeDefinition = NULL;\n"
         "    MdoProjectLeaseRelease(g_MdoApiProbeLease);\n"
         "    g_MdoApiProbeLease = NULL;\n"
         "    MdoProjectLeaseRelease(g_MdoMigrationProbeExclusive);\n"
@@ -969,6 +980,26 @@ def project_lease_roundtrip(port: int, home: Path) -> None:
             assert status == expected, (path, status, body)
             assert request(port, "GET", fixture + "free")[0] == 200
     project_lease_exclusion(port, home, session_id)
+    # A process definition guard protects native POSIX file locks without
+    # blocking readonly project/session use. Busy HTTP writes are retryable.
+    before_project = (home / "projects/lease-probe.json").read_bytes()
+    assert request(port, "POST", fixture + "definition")[0] == 200
+    try:
+        for method, path, payload, headers in (
+                ("POST", "/api/v1/projects", b'{"id":"definition-busy","name":"Refused"}',
+                    {"Content-Type": "application/json"}),
+                ("PUT", project, b'{"name":"Refused","workspace_root":".","default_model_id":""}',
+                    {"Content-Type": "application/json", "If-Match": '"mdo-project-lease-probe-1"'}),
+                ("DELETE", project, None, {"If-Match": '"mdo-project-lease-probe-1"'})):
+            status, _, body = request(port, method, path, body=payload, headers=headers)
+            assert status == 409 and json.loads(body)["error"]["code"] == "project_busy", (status, body)
+        assert request(port, "GET", project)[0] == 200
+        assert request(port, "GET", session)[0] == 200
+        assert (home / "projects/lease-probe.json").read_bytes() == before_project
+        assert not (home / "projects/definition-busy.json").exists()
+    finally:
+        assert request(port, "POST", fixture + "release")[0] == 200
+    assert request(port, "GET", fixture + "free")[0] == 200
     selected = {"project_id": "lease-probe", "session_id": session_id}
     status, _, body = request(port, "PUT", "/api/v1/workspace-state",
         body=json.dumps(selected).encode(), headers={"Content-Type": "application/json"})

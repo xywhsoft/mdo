@@ -17,6 +17,7 @@ typedef struct MdoProjectLeaseRegistry {
     MdoProjectLeaseEntry* Entries;
     size_t Refs; /* manager plus each independently acquired lease */
     bool Closed;
+    bool DefinitionWriter;
 } MdoProjectLeaseRegistry;
 
 struct MdoProjectLease {
@@ -25,6 +26,8 @@ struct MdoProjectLease {
     MdoProjectLeaseEntry* Entry;
     MdoProjectLeaseMode Mode;
 };
+
+struct MdoProjectDefinitionLease { MdoProjectLease* Owner; };
 
 static MdoProjectLeaseRegistry* g_MdoProjectLeases;
 
@@ -215,4 +218,47 @@ bool MdoProjectLeaseProtects(const MdoProjectLease* Lease,
     Protected = !Lease->Registry->Closed && strcmp(Lease->Entry->Key, Key) == 0;
     xrtMutexUnlock(Lease->Registry->Lock);
     return Protected;
+}
+
+MdoProjectDefinitionLease* MdoProjectDefinitionAcquire(MdoProjectLease* Owner,
+    xwork_error* Error)
+{
+    MdoProjectDefinitionLease* Lease;
+    MdoProjectLeaseRegistry* Registry;
+    bool Busy;
+    xworkErrorInit(Error);
+    if ( Owner == NULL || Owner->Mode != MDO_PROJECT_LEASE_SHARED ||
+         Owner->Registry != g_MdoProjectLeases ) {
+        MdoProjectLifecycleError(Error, XWORK_ERROR_CONTEXT, "project definition owner is not current");
+        return NULL;
+    }
+    Lease = (MdoProjectDefinitionLease*)xrtCalloc(1u, sizeof(*Lease));
+    if ( Lease == NULL || (Lease->Owner = MdoProjectLeaseRef(Owner)) == NULL ) {
+        xrtFree(Lease);
+        MdoProjectLifecycleError(Error, XWORK_ERROR_OUT_OF_MEMORY, "cannot pin project definition owner");
+        return NULL;
+    }
+    Registry = Owner->Registry;
+    xrtMutexLock(Registry->Lock);
+    Busy = Registry->Closed || Registry->DefinitionWriter;
+    if ( !Busy ) Registry->DefinitionWriter = true;
+    xrtMutexUnlock(Registry->Lock);
+    if ( Busy ) {
+        MdoProjectLeaseRelease(Lease->Owner); xrtFree(Lease);
+        MdoProjectLifecycleError(Error, XWORK_ERROR_CONTEXT, "project definition writer is busy");
+        return NULL;
+    }
+    return Lease;
+}
+
+void MdoProjectDefinitionRelease(MdoProjectDefinitionLease* Lease)
+{
+    MdoProjectLeaseRegistry* Registry;
+    if ( Lease == NULL ) return;
+    Registry = Lease->Owner->Registry;
+    xrtMutexLock(Registry->Lock);
+    if ( !Registry->DefinitionWriter ) abort();
+    Registry->DefinitionWriter = false;
+    xrtMutexUnlock(Registry->Lock);
+    MdoProjectLeaseRelease(Lease->Owner); xrtFree(Lease);
 }

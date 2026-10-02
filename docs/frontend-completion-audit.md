@@ -2,6 +2,30 @@
 
 本清单以 `app_bak/wwwroot` 的可操作行为为基线，而不是以页面长得相似或单元测试通过为完成标准。`docs/frontend-migration.md` 记录每次实现和验证；这里记录当前还需要什么证据。审计更新：2026-10-02，基线提交 `f9e2c4c`。
 
+2026-10-02 最新增量：项目定义新增全项目非阻塞 writer guard，修补同
+进程 POSIX 文件锁不足的竞态。恢复发布可在 guard/native lock 内复核
+项目版本/重建及物理 workspace 路径/目录身份；变化不执行 callback。
+实际 xs/TCC 59 项检查、六次 callback 和 HTTP/TLS 冲突用例已加入。
+详见 [项目发布绑定](project-publication-binding.md)。这仍是恢复的前置
+协调层，ID 预留、catalog、coordinator/worker 和正式页面继续待办；
+`restore_ready:false` 保持。Linux queued HEAD reset 和原生/实体设备
+待办不变，没有压力/高负载或新增 UI 验收证据。
+
+本阶段首轮 Linux 的备份大响应探针断言曾失败，旧断言缺少状态/长度
+诊断。已补有界诊断，定向 HTTP/TLS 复查通过，首次完整日志保存；原因
+仍未确认，作为独立待排查项保留，不能据后续通过声明修复。详见
+[发布绑定证据范围](project-publication-binding.md#有界验证)。
+
+最终两平台通过 115 Python、252 Node、90 JS、严格 C11、42 runtime、
+三项 packed 和独立 A/B；Windows 另通过便携 Home/20 秒启动。SDK
+未改，复用已验证 host，十三份改动源码/探针按 LF 核对。根目录
+程序 6,425,304 字节、SHA-256
+`4607733ea1e995853274519491dcb44f32ac25ccd26545c09a88194620e2ab43`；
+Linux A/B 6,475,464 字节、SHA-256
+`eb76fa864e18e86e4b60cd2f20dc304868b96bee63f499e802e141e541169c9c`。
+日志 `.build/qa-project-binding-{windows,linux}-final.log`。这些通过证据
+不升级完整恢复/设备验收行，也不关闭已保留的 Linux 间歇失败。
+
 2026-10-02 最新增量：Home 单会话恢复存储 journal 已接入非覆盖目录提交
 和管理器启动前的中断回收。目标碰撞保持原数据，已提交不回滚，清理
 失败隔离写入，矛盾/未知内容保留。真实 v2 独立 Stage/model/UI/pixel
