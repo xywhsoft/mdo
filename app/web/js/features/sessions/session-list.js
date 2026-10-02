@@ -2,7 +2,30 @@ import { element, clear, formatRelativeTime, errorMessage, isImeKey, toast } fro
 import { currentLocale, subscribeLocale, t } from "../../i18n.js";
 import { sessionActionItems } from "./session-actions.js";
 
-export function createSessionList({ container, count, filter, searchInput, store, projectsStore,
+export function sessionRunActivities(runs = []) {
+  const activities = new Map();
+  const rank = { created: 1, stopping: 2, running: 3 };
+  for (const run of runs) {
+    if (run?.terminal !== false || !["created", "running"].includes(run.state) ||
+        typeof run.project_id !== "string" || !run.project_id ||
+        typeof run.session_id !== "string" || !run.session_id) continue;
+    const key = `${run.project_id}/${run.session_id}`;
+    const activity = run.cancel_requested ? "stopping" : run.state;
+    // A finished older run must not hide a new one. If a snapshot contains
+    // several active runs, show ongoing work before a stopping/preparing run.
+    if (rank[activity] > (rank[activities.get(key)] ?? 0)) activities.set(key, activity);
+  }
+  return activities;
+}
+
+function activityText(activity) {
+  if (activity === "created") return t("run.created", {}, "准备中");
+  if (activity === "running") return t("run.running", {}, "运行中");
+  if (activity === "stopping") return t("task.stopping", {}, "正在停止…");
+  return "";
+}
+
+export function createSessionList({ container, count, filter, searchInput, store, projectsStore, runsStore,
   navigation, onSelect, onAction, onNewInProject, onAddProject, onBrowseProject,
   onManageProject }) {
   let query = "";
@@ -12,6 +35,7 @@ export function createSessionList({ container, count, filter, searchInput, store
   let state = store.get();
   let renderedStoreKey = null;
   let unread = new Set();
+  let activities = sessionRunActivities(runsStore?.get().data?.items);
   let openMenuNode = null;
   let openMenuButton = null;
   let quickProjectOpen = false;
@@ -44,6 +68,26 @@ export function createSessionList({ container, count, filter, searchInput, store
       time.dataset.relativeTime = String(session.updated_at);
       const label = formatRelativeTime(session.updated_at);
       if (time.textContent !== label) time.textContent = label;
+    }
+  }
+
+  function syncIndicators() {
+    // Polling changes only the status spans. Keep row/menu nodes, selection,
+    // scroll and any quick project form intact while another task finishes.
+    for (const button of container.querySelectorAll(".session-item")) {
+      const key = button.dataset.sessionKey;
+      const row = button.parentElement;
+      const activity = activities.get(key) || "";
+      if (activity) row.setAttribute("data-run-state", activity);
+      else row.removeAttribute("data-run-state");
+      if (unread.has(key)) row.setAttribute("data-unread", "true");
+      else row.removeAttribute("data-unread");
+      const indicator = button.querySelector(".session-item-activity");
+      const activityLabel = activity ? `${activityText(activity)} · ` : "";
+      if (indicator.textContent !== activityLabel) indicator.textContent = activityLabel;
+      const result = button.querySelector(".session-item-unread");
+      const resultLabel = unread.has(key) ? ` · ${t("nav.unread", {}, "有新结果")}` : "";
+      if (result.textContent !== resultLabel) result.textContent = resultLabel;
     }
   }
 
@@ -320,7 +364,11 @@ export function createSessionList({ container, count, filter, searchInput, store
         element("span", { className: "session-item-title", text: session.title || t("nav.untitled", {}, "未命名任务") }),
         element("time", { className: "session-item-time", text: formatRelativeTime(session.updated_at),
           attrs: { "data-relative-time": session.updated_at } }),
-        element("span", { className: "session-item-meta", text: `${showProject ? `${session.project_id} · ` : ""}${session.model_id || session.agent_id}${hasUnread ? ` · ${t("nav.unread", {}, "有新结果")}` : ""}` }),
+        element("span", { className: "session-item-meta" }, [
+          element("span", { className: "session-item-activity" }),
+          element("span", { text: `${showProject ? `${session.project_id} · ` : ""}${session.model_id || session.agent_id}` }),
+          element("span", { className: "session-item-unread" }),
+        ]),
       ]);
       button.addEventListener("click", (event) => {
         const current = currentSession(key);
@@ -385,6 +433,7 @@ export function createSessionList({ container, count, filter, searchInput, store
     if (!restoredFocus && (requestedFocus || retainedFocus))
       (container.querySelector(".session-item, .session-group-new") ?? filter).focus();
     restoreQuickProjectFocus();
+    syncIndicators();
   }
 
   const unsubscribeStore = store.subscribe((next) => {
@@ -408,6 +457,12 @@ export function createSessionList({ container, count, filter, searchInput, store
     render();
   });
   const unsubscribeLocale = subscribeLocale(render);
+  const unsubscribeRuns = runsStore?.subscribe((snapshot) => {
+    // An unreadable refresh is not evidence that a task has stopped.
+    if (snapshot.status !== "ready") return;
+    activities = sessionRunActivities(snapshot.data?.items);
+    syncIndicators();
+  });
   filter.addEventListener("change", () => {
     status = filter.value;
     openMenu = "";
@@ -523,13 +578,14 @@ export function createSessionList({ container, count, filter, searchInput, store
 
   return Object.freeze({
     setQuery(value) { query = value; render(); },
-    setUnread(keys) { unread = keys; render(); },
+    setUnread(keys) { unread = new Set(keys); syncIndicators(); },
     showActive() { status = "active"; query = ""; filter.value = status; openMenu = ""; render(); },
     destroy() {
       unsubscribeStore();
       unsubscribeProjects();
       unsubscribeNavigation();
       unsubscribeLocale();
+      unsubscribeRuns?.();
       openMenuNode?.remove();
       searchInput?.removeEventListener("keydown", onSearchKeyDown);
       container.removeEventListener("keydown", onSessionKeyDown);

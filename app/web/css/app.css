@@ -431,6 +431,10 @@ select:focus-visible,
 .session-item:hover { background: var(--surface-hover); }
 .session-item[aria-current="page"] { background: var(--surface-active); }
 .session-item-title { overflow: hidden; font-size: 13px; font-weight: 520; text-overflow: ellipsis; white-space: nowrap; }
+.session-item-row[data-run-state] .session-item-title::before { content: ""; display: inline-block; width: 6px; height: 6px; margin-right: 7px; border-radius: 50%; background: var(--warning); vertical-align: middle; }
+.session-item-row[data-run-state="running"] .session-item-title::before,
+.session-item-row[data-run-state="stopping"] .session-item-title::before { animation: pulse 1.5s ease-in-out infinite; }
+.session-item-activity { color: var(--warning); }
 .session-item-row[data-unread="true"] .session-item-title::after { content: "●"; margin-left: 6px; color: var(--success); font-size: 8px; vertical-align: middle; }
 .session-item-time { color: var(--faint); font-size: 11px; }
 .session-item-meta { grid-column: 1 / -1; overflow: hidden; color: var(--muted); font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }

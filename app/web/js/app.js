@@ -276,7 +276,7 @@ export async function boot() {
     count: $("#session-count"),
     searchInput: $("#session-search"),
     store: sessionsStore,
-    projectsStore,
+    projectsStore, runsStore,
     filter: $("#session-status-filter"),
     navigation,
     onSelect(session, event) {

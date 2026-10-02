@@ -3,6 +3,8 @@
 POST /__qa/arm?mode=hold or mode=fail affects the next settings PATCH only.
 An optional path= selects one GET for a Settings catalog or /models/config.
 GET /__qa/control reports its arrival and bounded request counts.
+GET /__qa/session-menu serves the bounded menu/indicator component fixture with
+the exact packed assets; it does not change sessions or runs on the server.
 POST /__qa/release releases the delayed reply. No model requests are made.
 """
 from __future__ import annotations
@@ -59,6 +61,16 @@ class SettingsProxy(BaseHTTPRequestHandler):
 
     def forward(self):
         target = urlsplit(self.path)
+        if self.command == "GET" and target.path == "/__qa/session-menu":
+            payload = (ROOT / "tests/fixtures/session-menu-viewport-browser.html").read_bytes()
+            payload = payload.replace(b"/app/web/", b"/")
+            self.send_response(200)
+            self.send_header("Content-Type", "text/html; charset=utf-8")
+            self.send_header("Content-Length", str(len(payload)))
+            self.send_header("Cache-Control", "no-store")
+            self.end_headers()
+            self.wfile.write(payload)
+            return
         if target.path == "/__qa/control":
             with self.server.lock:
                 state = {"mode": self.server.mode, "target": self.server.target,

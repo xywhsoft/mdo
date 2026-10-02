@@ -40,6 +40,12 @@ const store = { get: () => state,
   subscribe(listener) { publishSessions = listener; listener(state); return () => {}; } };
 const projectsStore = { get: () => ({ data: { items: [] } }),
   subscribe: () => () => {} };
+let publishRuns;
+const runsState = { status: "ready", data: { items: [] } };
+const runsStore = { get: () => runsState,
+  subscribe(listener) { publishRuns = listener; listener(runsState); return () => {}; } };
+const liveRun = { id: "live", project_id: "default", session_id: "test",
+  state: "running", terminal: false, cancel_requested: false };
 const navigation = { get: () => ({ projectId: "default", sessionId: "test" }),
   subscribe: () => () => {} };
 const output = document.querySelector("#result");
@@ -48,7 +54,7 @@ let actionRevision = 0;
 try {
   const list = createSessionList({ container: document.querySelector("#session-list"),
     count: document.querySelector("#session-count"),
-    filter: document.querySelector("#session-filter"), store, projectsStore,
+    filter: document.querySelector("#session-filter"), store, projectsStore, runsStore,
     navigation, onSelect() {}, onAction(name, selected) {
       action = name;
       actionRevision = selected.revision;
@@ -76,15 +82,28 @@ try {
   const selectedTitleText = selection.toString();
   const timestampUpdated = document.querySelector(".session-item-time")
     ?.dataset.relativeTime === String(newerTime);
+  runsState.data = { items: [liveRun] };
+  publishRuns(runsState);
+  const activityRunningShown = document.querySelector(".session-item-row")
+    .dataset.runState === "running" && document.querySelector(".session-item-activity")
+    .textContent.includes("运行中");
+  list.setUnread(new Set(["default/test"]));
+  const indicatorsKeepSelection = titleNode === document.querySelector(".session-item-title") &&
+    selection.toString() === "Clipped session" &&
+    document.querySelector(".session-item-row").dataset.unread === "true";
   selection.removeAllRanges();
   let more = document.querySelector(".session-more");
   more.scrollIntoView({ block: "nearest" });
   await new Promise(requestAnimationFrame);
   more.click();
+  // Read the painted layout after focus and scroll have settled.
+  await new Promise(requestAnimationFrame);
   await new Promise(requestAnimationFrame);
   more = document.querySelector(".session-more");
   let menu = document.querySelector("#sidebar-session-menu");
   const rect = menu.getBoundingClientRect();
+  const initialStyle = menu.getAttribute("style");
+  const initialAnchor = more.getBoundingClientRect().toJSON();
   const withinViewport = rect.top >= 0 && rect.left >= 0 &&
     rect.bottom <= innerHeight && rect.right <= innerWidth;
   const outsideClippingParent = !document.querySelector(".sidebar").contains(menu);
@@ -97,6 +116,23 @@ try {
   state.status = "ready";
   publishSessions(state);
   const menuReadingStable = menu === document.querySelector("#sidebar-session-menu") &&
+    menu.scrollTop === menuScroll && document.activeElement === menu.lastElementChild;
+  runsState.data = { items: [{ ...liveRun, cancel_requested: true }] };
+  publishRuns(runsState);
+  const activityStoppingShown = document.querySelector(".session-item-row")
+    .dataset.runState === "stopping";
+  runsState.status = "error";
+  runsState.data = { items: [] };
+  publishRuns(runsState);
+  const activityReadErrorKept = document.querySelector(".session-item-row")
+    .dataset.runState === "stopping";
+  runsState.status = "ready";
+  runsState.data = { items: [{ ...liveRun, terminal: true, state: "succeeded" }] };
+  publishRuns(runsState);
+  list.setUnread(new Set());
+  const activityFinishedCleared = !document.querySelector(".session-item-row")
+    .hasAttribute("data-run-state") && !document.querySelector(".session-item-activity").textContent;
+  const activityMenuStable = menu === document.querySelector("#sidebar-session-menu") &&
     menu.scrollTop === menuScroll && document.activeElement === menu.lastElementChild;
   function escape(options = {}) {
     const event = new KeyboardEvent("keydown", { key: "Escape", bubbles: true,
@@ -166,9 +202,12 @@ try {
     headerMenu.scrollTop === headerScroll && document.activeElement === headerLast;
   headerSession = { ...headerSession, status: "archived" };
   publishHeader();
-  const headerActionsChanged = headerMenu.querySelectorAll('[role="menuitem"]').length === 3 &&
-    [...headerMenu.querySelectorAll('[role="menuitem"]')]
-      .some((item) => item.dataset.sessionAction === "unarchive");
+  const archivedActions = [...headerMenu.querySelectorAll('[role="menuitem"]')]
+    .map((item) => item.dataset.sessionAction);
+  // The import entry was added after this fixture's original three-item menu.
+  // Verify its current actions explicitly, including removal of active-only ones.
+  const headerActionsChanged = JSON.stringify(archivedActions) ===
+    JSON.stringify(["rename", "unarchive", "import_json", "trash"]);
   headerSession = { ...headerSession, status: "active" };
   publishHeader();
   menuKey(headerMenu.lastElementChild, "ArrowDown");
@@ -189,7 +228,8 @@ try {
   topMenu.close(true);
   topMenu.destroy();
   const passed = withinViewport && outsideClippingParent && firstFocused &&
-    menuReadingStable &&
+    menuReadingStable && activityRunningShown && indicatorsKeepSelection &&
+    activityStoppingShown && activityReadErrorKept && activityFinishedCleared && activityMenuStable &&
     sidebarComposingKept && sidebarCandidateKept && escapeRestored &&
     lastReachable && actionWorked && headerComposingKept &&
     headerCandidateKept && headerEscapeRestored && headerEndFocused &&
@@ -202,10 +242,13 @@ try {
     titleSelectionStable, titleNodeStable, nodeAfterRefreshing, nodeAfterReady,
     selectedTitleText, timestampUpdated,
     firstFocused, menuReadingStable, sidebarComposingKept, sidebarCandidateKept, escapeRestored,
+    activityRunningShown, indicatorsKeepSelection, activityStoppingShown,
+    activityReadErrorKept, activityFinishedCleared, activityMenuStable,
     lastReachable, actionWorked, actionRevision, headerComposingKept, headerCandidateKept,
     headerEscapeRestored, headerEndFocused, headerEndVisible, headerEndScrolled,
-    headerPollStable, headerActionsChanged, headerReopensAtTop,
+    headerPollStable, headerActionsChanged, archivedActions, headerReopensAtTop,
     headerWrapFocused, headerWrapVisible, headerHomeFocused, headerHomeVisible,
+    initialStyle, initialAnchor,
     initialRect: { top: rect.top, bottom: rect.bottom, left: rect.left, right: rect.right },
     viewport: { width: innerWidth, height: innerHeight } }, null, 2);
 } catch (error) {
