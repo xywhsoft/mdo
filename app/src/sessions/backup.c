@@ -128,6 +128,7 @@ size_t MdoBackupPathLimit(const char* Path, bool Directory)
         return 256u * 1024u;
     if ( strcmp(Path, "feedback.json") == 0 ) return 32u * 1024u;
     if ( strcmp(Path, "restore-inputs.json") == 0 ) return 8u * 1024u * 1024u;
+    if ( strcmp(Path, "restore-origin.json") == 0 ) return 8u * 1024u * 1024u;
     if ( strncmp(Path, "attachments/", 12u) == 0 ) {
         Name = Path + 12u; Size = strlen(Name);
         if ( Size == 36u && MdoBackupDigits(Name, 32u, true) &&
@@ -402,40 +403,49 @@ fail:
     MdoSessionBackupRelease(Copy); return NULL;
 }
 
-/* Prepare the entire new JSON allocation before replacing an owned file.
- * Limits apply to the resulting bundle as well as to the original input. */
-bool MdoBackupReplaceJson(MdoSessionBackup* Copy, const char* Path, const xvalue* Root,
+bool MdoBackupReplaceOwned(MdoSessionBackup* Copy, const char* Path, char** Data, size_t Bytes,
     const MdoSessionBackupLimits* Limits, const xcancel* Cancel, xwork_error* Error)
 {
     MdoBackupOwnedFile* File = NULL;
-    size_t i, Bytes = 0u, Before = 0u;
-    str Json;
+    size_t i, Before = 0u;
+    if ( Data == NULL || *Data == NULL )
+        return MdoBackupError(Error, XWORK_ERROR_INVALID_ARGUMENT, "missing replacement allocation", Path);
     if ( !MdoBackupCheck(Limits, Cancel, Error) ) return false;
-    Json = xrtJsonStringify(Root, false, &Bytes);
-    if ( Json == NULL ) return MdoBackupError(Error, XWORK_ERROR_OUT_OF_MEMORY, "cannot encode backup sidecar", Path);
     for ( i = 0u; i < Copy->Count; ++i )
         if ( strcmp(Copy->Files[i].Path, Path) == 0 ) { File = &Copy->Files[i]; Before = File->Bytes; break; }
     if ( MdoBackupPathLimit(Path, false) == 0u || Bytes > MdoBackupPathLimit(Path, false) || Bytes > Limits->FileBytes ||
          Copy->Bytes - Before > Limits->TotalBytes || Bytes > Limits->TotalBytes - (Copy->Bytes - Before) ||
          (File == NULL && Copy->Count >= Limits->Files) ) {
-        xrtFree(Json);
         return MdoBackupError(Error, XWORK_ERROR_LIMIT, "updated sidecar exceeds backup budget", Path);
     }
-    if ( !MdoBackupCheck(Limits, Cancel, Error) ) { xrtFree(Json); return false; }
+    if ( !MdoBackupCheck(Limits, Cancel, Error) ) return false;
     if ( File == NULL ) {
         if ( Copy->Count == Copy->Capacity ) {
             MdoBackupOwnedFile* Files = (MdoBackupOwnedFile*)xrtRealloc(Copy->Files,
                 (Copy->Capacity + 1u) * sizeof(*Copy->Files));
-            if ( Files == NULL ) { xrtFree(Json); return MdoBackupError(Error, XWORK_ERROR_OUT_OF_MEMORY, "cannot grow updated backup", Path); }
+            if ( Files == NULL ) return MdoBackupError(Error, XWORK_ERROR_OUT_OF_MEMORY, "cannot grow updated backup", Path);
             Copy->Files = Files; ++Copy->Capacity;
         }
         File = &Copy->Files[Copy->Count++]; memset(File, 0, sizeof(*File));
         snprintf(File->Path, sizeof(File->Path), "%s", Path);
     }
-    xrtFree(File->Data); File->Data = Json; File->Bytes = Bytes;
+    xrtFree(File->Data); File->Data = *Data; File->Bytes = Bytes; *Data = NULL;
     Copy->Bytes = Copy->Bytes - Before + Bytes;
     qsort(Copy->Files, Copy->Count, sizeof(*Copy->Files), MdoBackupCompare);
     return true;
+}
+
+bool MdoBackupReplaceJson(MdoSessionBackup* Copy, const char* Path, const xvalue* Root,
+    const MdoSessionBackupLimits* Limits, const xcancel* Cancel, xwork_error* Error)
+{
+    size_t Bytes = 0u;
+    str Json;
+    bool Ok;
+    if ( !MdoBackupCheck(Limits, Cancel, Error) ) return false;
+    Json = xrtJsonStringify(Root, false, &Bytes);
+    if ( Json == NULL ) return MdoBackupError(Error, XWORK_ERROR_OUT_OF_MEMORY, "cannot encode backup sidecar", Path);
+    Ok = MdoBackupReplaceOwned(Copy, Path, &Json, Bytes, Limits, Cancel, Error);
+    xrtFree(Json); return Ok;
 }
 
 bool MdoSessionBackupFileGet(const MdoSessionBackup* Backup, size_t Index, MdoSessionBackupFile* File)
@@ -469,6 +479,22 @@ xvalue* MdoBackupJson(const void* Data, size_t Bytes)
     Config.MaxInputBytes = MDO_SESSION_BACKUP_MAX_FILE_BYTES;
     Config.MaxDepth = 32u; Config.MaxValues = MDO_BACKUP_JSON_VALUES;
     return xrtJsonRead(xrtStrViewN((const char*)Data, Bytes), &Config);
+}
+
+bool MdoBackupMetaRead(xstrview Text, MdoSessionInfo* Info)
+{
+    xvalue* Root = MdoBackupJson(Text.Data, Text.Size);
+    xstrview Project, Id;
+    char ProjectId[MDO_PROJECT_ID_CAPACITY], SessionId[MDO_SESSION_ID_CAPACITY];
+    bool Ok = false;
+    if ( !MdoBackupView(Root, "project_id", &Project) || !MdoBackupView(Root, "id", &Id) ||
+         Project.Size >= sizeof(ProjectId) || Id.Size >= sizeof(SessionId) ||
+         memchr(Project.Data, 0, Project.Size) != NULL || memchr(Id.Data, 0, Id.Size) != NULL ) goto done;
+    memcpy(ProjectId, Project.Data, Project.Size); ProjectId[Project.Size] = '\0';
+    memcpy(SessionId, Id.Data, Id.Size); SessionId[Id.Size] = '\0';
+    Ok = MdoSessionsInternalMetaParse(ProjectId, SessionId, Text, Info);
+done:
+    xrtValueRelease(Root); return Ok;
 }
 
 static bool MdoBackupImage(const MdoSessionBackup* Backup, xstrview Id)
@@ -542,12 +568,10 @@ static bool MdoBackupImageMeta(const MdoSessionBackup* Backup,
     return true;
 }
 
-static bool MdoBackupEventArtifact(const MdoSessionBackup* Backup, const xvalue* Event)
+bool MdoBackupArtifactRelative(xstrview Path, char Relative[MDO_SESSION_BACKUP_PATH_CAPACITY])
 {
-    xstrview Path;
-    char Relative[MDO_SESSION_BACKUP_PATH_CAPACITY];
     size_t i, Start = SIZE_MAX;
-    if ( !MdoBackupView(Event, "artifact_path", &Path) || Path.Size == 0u ) return true;
+    if ( Path.Size == 0u || memchr(Path.Data, 0, Path.Size) != NULL || !xrtUtf8Valid(Path, NULL) ) return false;
     /* The old event path is provenance, never a restore/write target. Accept
      * slash variants from either platform, match an exact manifest tail. */
     for ( i = 0u; i + 14u < Path.Size; ++i ) {
@@ -559,11 +583,19 @@ static bool MdoBackupEventArtifact(const MdoSessionBackup* Backup, const xvalue*
             Start = i;
         }
     }
-    if ( Start == SIZE_MAX || Path.Size - Start >= sizeof(Relative) ) return false;
+    if ( Start == SIZE_MAX || Path.Size - Start >= MDO_SESSION_BACKUP_PATH_CAPACITY ) return false;
     for ( i = 0u; i < Path.Size - Start; ++i )
         Relative[i] = Path.Data[Start + i] == '\\' ? '/' : Path.Data[Start + i];
     Relative[i] = '\0';
-    return MdoBackupPathLimit(Relative, false) != 0u && MdoBackupFind(Backup, Relative) != NULL;
+    return MdoBackupPathLimit(Relative, false) != 0u;
+}
+
+static bool MdoBackupEventArtifact(const MdoSessionBackup* Backup, const xvalue* Event)
+{
+    xstrview Path;
+    char Relative[MDO_SESSION_BACKUP_PATH_CAPACITY];
+    if ( !MdoBackupView(Event, "artifact_path", &Path) || Path.Size == 0u ) return true;
+    return MdoBackupArtifactRelative(Path, Relative) && MdoBackupFind(Backup, Relative) != NULL;
 }
 
 bool MdoBackupValidate(const MdoSessionBackup* Backup,
@@ -602,6 +634,10 @@ bool MdoBackupValidate(const MdoSessionBackup* Backup,
             Ok = xrtValueType(Root) == XVALUE_OBJECT;
             if ( Ok && strcmp(File->Path, "restore-inputs.json") == 0 &&
                  !MdoBackupInputsArchiveValid(Root, Limits, Cancel, Error) ) {
+                xrtValueRelease(Root); return false;
+            }
+            if ( Ok && strcmp(File->Path, "restore-origin.json") == 0 &&
+                 !MdoBackupOriginValid(Root, Limits, Cancel, Error) ) {
                 xrtValueRelease(Root); return false;
             }
             if ( Ok && strcmp(File->Path, "meta.json") == 0 ) {

@@ -1,8 +1,9 @@
 # 会话 JSON 完整备份与恢复实施记录
 
 状态：专用下载/上传、离线解码、模型/UI 关系、静态图片像素检查及生产异步
-预览 API 已接入。独立 staging 的材料化/读回检查、离线历史投影修复、输入待确认转换和持久输入来源记录已实现，身份/路径、
-原子发布与正式页面入口待实现。2026-10-02 已完成
+预览 API 已接入。独立 staging 的材料化/读回检查、离线历史投影修复、输入
+待确认转换、持久来源记录和明确目标的 metadata/UI/产物路径准备已实现。
+生产恢复 worker、原子发布与正式页面入口待实现。2026-10-02 已完成
 checkpoint 与有界读取共用排他运行窗口、统一捕获边界、v2 捕获/编码层和
 有界 HTTP/TLS 传输。现有页面仍使用 `export_schema:1`，只有 meta 和模型 snapshot。
 格式/传输验证通过不表示正式页面已经导出完整备份，或恢复事务已经完成。
@@ -79,7 +80,9 @@ manager 调用或库通过 native path 写入不能被它自动覆盖。不得�
    离线历史投影修复已接入，共用正向删改证据，未知前缀仍保留并报告。
    离线队列/草稿待确认转换已接入，旧受理证据保留，新输入 ID 不重复调度。
    精确源 metadata/意图及映射已保存在随备份携带的 `restore-inputs.json`。
-   继续完成身份/产物重绑定及恢复 worker。恢复到独立 staging，
+   目标 metadata/UI 身份与便携产物路径准备已接入，source/target metadata
+   和旧路径持久保存到 `restore-origin.json`。继续完成恢复 worker、真实
+   项目/workspace 验证和 ID 预留。恢复到独立 staging，
    验证实际 xllm 恢复与 UI replay 后，以不覆盖的原子
    目录发布方式创建新的会话。保留原身份作为来源，明确处理 ID 冲突；失败
    只清理由本次事务拥有的文件。实际发布后才进入 catalog，导入不得立即
@@ -1040,3 +1043,38 @@ Linux A/B 为 6,457,449 字节、SHA-256
 完整门禁后只移除新文件一行末尾空行，两平台再通过严格 C11、独立 A/B
 及三项 packed，Windows 重过便携 Home/20 秒启动。最终字节日志
 `.build/qa-input-origin-{windows,linux}-post-format.log`，完整行为门禁结果保留。
+
+## 明确目标的离线恢复准备
+
+步骤 5 新增 `MdoSessionBackupPrepareRestore`，以一个协作预算组合投影修复、
+输入审核和 metadata/UI/便携 artifact 路径重绑定。target 必须明确项目、
+新 32 位 hex ID、绝对 workspace 和恢复时间；当前源及历史 source/target
+ID 重用失败。新 revision/时间/active 状态、pin/fork/generation 按新会话
+生命周期处理，profile 保留为描述性内容，继续运行前验证。模型账本与
+资源原字节保持，UI 除顶层身份和产物路径外的字段逐条核对。
+
+`restore-origin.json` 持久保存 source/target metadata 精确字节及旧路径，
+复用捕获/编码/解码/Stage 的文件合同。源 UI 只存指纹和路径变更记录，
+不将历史指纹作为认证证据。16 条/8 MiB 和 caller 较小预算整体失败，
+不截断历史；UI 新分配受最终文件/总字节预算约束。取消、内层重算 SHA
+后的矛盾、历史碰撞、未知 Agent/model、不存在/空 UI、长读取路径、两
+平台路径语法及独立释放后重查通过。真实前端控制器刷新只有 GET。
+原生历史读取器路径计算通过，不冒充 target Home 的实际 HTTP 读回。
+
+初始前端探针对 composer-only 草稿的 submission 假设报 TypeError，已
+修正测试适配器并使用真实 target key。详见
+[准备合同](session-backup-restore-preparation.md)。下一步完成生产恢复 worker、
+项目/workspace 真实验证、ID 预留、持久事务所有权/异常回收、非覆盖原子
+发布/catalog 和正式页面；`restore_ready:false` 保持。没有压力/高负载或
+新增原生/实体设备证据，Linux queued HEAD reset 仍待处理。
+
+本轮最终 Windows/Linux 通过 115 Python、252 Node、90 JS 模块、严格 C11、
+40 runtime、三项 packed 及独立 A/B；Windows 另通过便携 WebView2 Home
+和 20 秒打包启动。SDK 未变化，复用已验证 native host；Linux 新 ext4
+staging 的十三份代码/清单/探针输入按 LF 归一化核对。根目录程序更新为
+6,414,192 字节、SHA-256
+`03e14cac3b5936c405f34729a199ed894518a2ddce7f3d02f036c856d856d228`；
+Linux A/B 为 6,464,352 字节、SHA-256
+`6ee02ce391ffe121f3754f53ea17dfa68d9441cf43bc064335a4702095d37f31`。
+日志 `.build/qa-restore-target-{windows,linux}-final.log`。没有压力/高负载或
+新增原生/实体设备验收；Linux queued HEAD reset 仍待处理。

@@ -449,6 +449,7 @@ static bool BackupDecodeFixtureControl(XS_HttpReq* Request)
         (void)MdoApiValueSetUInt(Value, "model", XWORK_EVENT_MODEL_DONE);
         (void)MdoApiValueSetUInt(Value, "tool_start", XWORK_EVENT_TOOL_START);
         (void)MdoApiValueSetUInt(Value, "tool_done", XWORK_EVENT_TOOL_DONE);
+        (void)MdoApiValueSetUInt(Value, "artifact", XWORK_EVENT_ARTIFACT_CREATED);
         (void)MdoApiValueSetUInt(Value, "recovery", XWORK_EVENT_RECOVERY_RESOLVED);
         (void)MdoApiValueSetUInt(Value, "removed", MDO_SESSION_EVENT_HISTORY_TRUNCATED);
         (void)MdoApiReplySuccessTake(&Context, 200u, Value, NULL);

@@ -48,22 +48,6 @@ static bool MdoArchiveHash(xstrview Text, char Hash[65], const MdoSessionBackupL
     Hash[64] = '\0'; return MdoBackupCheck(Limits, Cancel, Error);
 }
 
-static bool MdoArchiveMeta(xstrview Text, MdoSessionInfo* Info)
-{
-    xvalue* Root = MdoBackupJson(Text.Data, Text.Size);
-    xstrview Project, Id;
-    char ProjectId[MDO_PROJECT_ID_CAPACITY], SessionId[MDO_SESSION_ID_CAPACITY];
-    bool Ok = false;
-    if ( !MdoBackupView(Root, "project_id", &Project) || !MdoBackupView(Root, "id", &Id) ||
-         Project.Size >= sizeof(ProjectId) || Id.Size >= sizeof(SessionId) ||
-         memchr(Project.Data, 0, Project.Size) != NULL || memchr(Id.Data, 0, Id.Size) != NULL ) goto done;
-    memcpy(ProjectId, Project.Data, Project.Size); ProjectId[Project.Size] = '\0';
-    memcpy(SessionId, Id.Data, Id.Size); SessionId[Id.Size] = '\0';
-    Ok = MdoSessionsInternalMetaParse(ProjectId, SessionId, Text, Info);
-done:
-    xrtValueRelease(Root); return Ok;
-}
-
 static bool MdoArchiveSourceRead(const xvalue* Entry, MdoInputArchiveSource* Source,
     const MdoSessionBackupLimits* Limits, const xcancel* Cancel, xwork_error* Error)
 {
@@ -93,7 +77,7 @@ static bool MdoArchiveSourceRead(const xvalue* Entry, MdoInputArchiveSource* Sou
         Mask |= Bit;
         if ( !MdoArchiveHash(Data, Hash, Limits, Cancel, Error) ) return false;
         if ( memcmp(Hash, ClaimedHash.Data, 64u) != 0 ) goto invalid;
-        if ( (Bit == 1u && !MdoArchiveMeta(Data, &Source->Info)) ||
+        if ( (Bit == 1u && !MdoBackupMetaRead(Data, &Source->Info)) ||
              (Bit == 2u && !MdoQueueParse(Data, &Source->Queue)) ||
              (Bit == 4u && !MdoDraftParse(Data, MDO_DRAFT_SESSION, &Source->Draft)) ) goto invalid;
     }

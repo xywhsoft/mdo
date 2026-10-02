@@ -51,6 +51,20 @@ MdoSessionBackup* MdoBackupClone(const MdoSessionBackup* Source, bool Data,
     const MdoSessionBackupLimits* Limits, const xcancel* Cancel, xwork_error* Error);
 bool MdoBackupReplaceJson(MdoSessionBackup* Copy, const char* Path, const xvalue* Root,
     const MdoSessionBackupLimits* Limits, const xcancel* Cancel, xwork_error* Error);
+/* Transfers a complete Bytes+1 allocation only on success; on failure the
+ * caller still owns *Data. Resulting inventory/byte budgets are enforced. */
+bool MdoBackupReplaceOwned(MdoSessionBackup* Copy, const char* Path, char** Data,
+    size_t Bytes, const MdoSessionBackupLimits* Limits, const xcancel* Cancel, xwork_error* Error);
+bool MdoBackupMetaRead(xstrview Text, MdoSessionInfo* Info);
+/* Syntax only: normalize one unambiguous artifact manifest tail. */
+bool MdoBackupArtifactRelative(xstrview Path, char Relative[MDO_SESSION_BACKUP_PATH_CAPACITY]);
+#define MDO_BACKUP_ORIGIN_MAX_REFS (MDO_BACKUP_JSON_VALUES / 8u)
+bool MdoBackupWorkspaceAbsolute(xstrview Path);
+bool MdoBackupOriginValid(const xvalue* Root, const MdoSessionBackupLimits* Limits,
+    const xcancel* Cancel, xwork_error* Error);
+bool MdoBackupOriginAppend(const MdoSessionBackup* Source, MdoSessionBackup* Copy,
+    xvalue** ArtifactPaths, MdoSessionBackupRestoreInfo* Facts,
+    const MdoSessionBackupLimits* Limits, const xcancel* Cancel, xwork_error* Error);
 typedef enum MdoBackupAdmission { MDO_BACKUP_NOT_ACCEPTED, MDO_BACKUP_ACCEPTED,
     MDO_BACKUP_ADMISSION_UNCERTAIN } MdoBackupAdmission;
 /* Validates the shared retained-history index, then classifies <=40 IDs. */

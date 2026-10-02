@@ -5,9 +5,10 @@
 和转换副本后，Stage 仍独立拥有来源数据。后续普通 v2 capture/encode/decode
 会继续携带并验证该文件，不依赖浏览器缓存、外部数据库或其他目录。
 
-这是输入追溯的一环。新会话身份、目标 workspace、artifact 显示路径、
-恢复 worker、异常退出回收、非覆盖原子发布、catalog 和正式导入页面仍
-待接入，`restore_ready:false` 保持。
+这是输入追溯的一环。[明确目标的离线准备](session-backup-restore-preparation.md)
+现已重建 metadata/UI 身份和便携 artifact 路径。生产恢复 worker、真实
+项目/workspace 验证、异常退出回收、非覆盖原子发布、catalog 和正式导入
+页面仍待接入，`restore_ready:false` 保持。
 
 ## 便携文件合同
 

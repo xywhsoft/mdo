@@ -2,7 +2,27 @@
 
 本清单以 `app_bak/wwwroot` 的可操作行为为基线，而不是以页面长得相似或单元测试通过为完成标准。`docs/frontend-migration.md` 记录每次实现和验证；这里记录当前还需要什么证据。审计更新：2026-10-02，基线提交 `f9e2c4c`。
 
-2026-10-02 最新增量：输入副本新增可持续备份的来源文件，保留原 metadata/
+2026-10-02 最新增量：离线准备现在组合投影/输入审核、目标 metadata/UI
+身份重建和便携产物路径。新生命周期清除旧 pin/fork/generation，源/目标
+metadata 与旧路径持久保存到来源文件。实际账本/像素/逐条 UI 核对、
+独立 Stage 释放后读回、重复导入和失败重试通过；真实前端控制器刷新
+仅 GET，实际历史读取器路径计算一致。详见
+[准备合同](session-backup-restore-preparation.md)。生产 worker/异常回收、
+原子发布/catalog、正式页面和目标 Home 的实际 HTTP 读回仍待完成，
+`restore_ready:false` 保持。没有新增原生/实体设备证据，没有压力/高负载
+测试；Linux queued HEAD reset 仍单独待处理。
+
+最终 Windows/Linux 通过 115 Python、252 Node、90 JS 模块、严格 C11、40
+runtime、三项 packed 及独立 A/B；Windows 另通过便携 WebView2 Home 和
+20 秒打包启动。SDK 未变化，复用已验证 native host；Linux 新 ext4 staging
+的十三份代码/清单/探针输入按 LF 归一化核对。根目录程序为 6,414,192
+字节、SHA-256
+`03e14cac3b5936c405f34729a199ed894518a2ddce7f3d02f036c856d856d228`；
+Linux A/B 为 6,464,352 字节、SHA-256
+`6ee02ce391ffe121f3754f53ea17dfa68d9441cf43bc064335a4702095d37f31`。
+日志 `.build/qa-restore-target-{windows,linux}-final.log`。没有压力/高负载测试。
+
+2026-10-02 增量：输入副本新增可持续备份的来源文件，保留原 metadata/
 queue/draft 精确字节/SHA 和完整映射。真实 codec/映射校验、独立磁盘读回/
 原对象释放后的编码 round-trip、二次转换/不确定性继承和失败重试通过。
 历史 accepted 描述不消费/提升当前输入，真实前端控制器刷新仍仅 GET。

@@ -218,6 +218,43 @@ MdoSessionBackup* MdoSessionBackupReviewInputs(const MdoSessionBackup* Backup,
     const MdoSessionBackupLimits* Limits, const xcancel* Cancel,
     MdoSessionBackupInputs* Facts, xwork_error* Error);
 
+typedef struct MdoSessionBackupRestoreTarget {
+    uint32 Size;
+    const char* ProjectId;
+    const char* SessionId;       /* caller-reserved fresh 32-character hex ID */
+    const char* WorkspaceRoot;   /* explicit absolute target, never inferred */
+    int64 RestoredAt;            /* positive UTC microseconds */
+} MdoSessionBackupRestoreTarget;
+
+typedef struct MdoSessionBackupRestoreInfo {
+    uint32 Size;
+    MdoSessionInfo Source, Target;
+    MdoSessionBackupProjectionRepair Projections;
+    MdoSessionBackupInputs Inputs;
+    size_t UiRecords, ArtifactReferences, ProvenanceEntries;
+} MdoSessionBackupRestoreInfo;
+
+/* Owns a new decoded v2 preparation: reconciles projections, reviews input
+ * intents, then rebinds metadata and retained UI to the explicit target.
+ * Artifact display paths become validated session-relative manifest paths;
+ * IDs, model ledger/resource bytes and other event fields stay unchanged.
+ * Exact source/target metadata and old artifact paths are preserved in bounded
+ * restore-origin.json history. The new metadata has revision 1, active status,
+ * no pin/fork link or stale configuration generation; source profile fields
+ * remain descriptive until the live runtime validates them.
+ *
+ * Filesystem-free, one thirty-second cooperative budget. Target strings are
+ * copied synchronously. The caller must validate/reserve the target project,
+ * ID and canonical workspace under its real publication transaction; this
+ * function cannot check existence or collisions in Home/catalog. No model,
+ * tool, live queue or filesystem is opened. Still NOT publication permission.
+ * StagePrepare subsequently checks real model/UI replay and image pixels.
+ * Initialize Facts.Size; mismatch leaves it untouched, other failures clear
+ * it except Size. Source ownership/bytes remain unchanged. */
+MdoSessionBackup* MdoSessionBackupPrepareRestore(const MdoSessionBackup* Backup,
+    const MdoSessionBackupRestoreTarget* Target, const MdoSessionBackupLimits* Limits,
+    const xcancel* Cancel, MdoSessionBackupRestoreInfo* Facts, xwork_error* Error);
+
 typedef struct MdoSessionBackupStageInfo {
     uint32 Size;
     bool Verified;
@@ -236,9 +273,11 @@ typedef struct MdoSessionBackupStageInfo {
  *
  * Parent must be an application-owned private staging area on the eventual
  * target filesystem, outside the live session catalog. No Home, catalog,
- * executable profile, driver or queue manager is accessed. Source identity,
- * source artifact paths and queue bytes are retained for the later rebinding
- * transaction; this stage alone is NOT publishable or restoration permission.
+ * executable profile, driver or queue manager is accessed. All supplied bytes
+ * are retained exactly, including any offline target preparation. Source.Info
+ * identifies these supplied bytes; original identity is separate provenance.
+ * Unprepared bytes still require rebinding and input review. This stage alone
+ * is NOT publication permission or a complete restoration transaction.
  *
  * Output must point to NULL. Failure cleans only tracked, identity-matching
  * owned paths. If cleanup cannot finish, Output retains the stage for explicit

@@ -4,6 +4,35 @@
 
 完成判据及尚缺的打包页证据见 [前端操作体验完成审计](frontend-completion-audit.md)。本文件继续记录每次实现和验证的细节。
 
+## 2026-10-02：离线恢复的目标身份准备
+
+新增 `MdoSessionBackupPrepareRestore`，用同一个协作预算依次修复投影、
+把输入转为待确认、重建明确的目标 metadata/UI 身份并重绑产物路径。
+新 revision/时间/状态、pin/fork 和 generation 均按新会话生命周期处理，
+原 profile 与历史内容保持。来源不用于推断 workspace 或执行授权。
+`restore-origin.json` 保留 source/target metadata 精确字节、UI 指纹和
+旧/新产物路径，随备份及 Stage 保存，历史 ID 重用、schema/映射矛盾、
+配额和取消整体失败。
+
+真实模型/UI 账本和资源原字节、实际落盘副本/释放后重查及原生编码重放
+核对通过，实际历史读取器的路径计算与便携引用一致。真实前端控制器
+以新身份刷新仅 GET。初始探针对 composer-only 草稿的 submission 假设
+已修正，失败日志保留。详见 [准备合同](session-backup-restore-preparation.md)。
+生产 worker/异常回收、原子发布/catalog、正式页面及目标 Home 的实际
+HTTP 读回仍继续实施，`restore_ready:false` 保持。没有压力/高负载或新增
+原生/实体设备证据；Linux queued HEAD reset 仍待处理。
+
+本轮最终 Windows/Linux 通过 115 Python、252 Node、90 JS 模块、严格 C11、
+40 runtime、三项 packed 和独立 A/B；Windows 另通过便携 WebView2 Home
+及 20 秒打包启动。SDK 未变化，native host 复用已验证版本；Linux 新
+ext4 staging 的十三份代码/清单/探针输入与 Windows 按 LF 归一化核对。
+根目录 `mdo.exe` 已更新为 6,414,192 字节、SHA-256
+`03e14cac3b5936c405f34729a199ed894518a2ddce7f3d02f036c856d856d228`；
+Linux A/B 为 6,464,352 字节、SHA-256
+`6ee02ce391ffe121f3754f53ea17dfa68d9441cf43bc064335a4702095d37f31`。
+日志 `.build/qa-restore-target-{windows,linux}-final.log`，源码核对记录
+`.build/qa-restore-target-source-equivalence.log`。发布时无运行的根目录窗口。
+
 ## 2026-10-02：恢复输入的来源记录随副本保存
 
 输入转换现在自动新增/追加 `restore-inputs.json`，保留原 metadata/queue/

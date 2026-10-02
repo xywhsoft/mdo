@@ -55,6 +55,18 @@ class Probe(DecodeProbe):
         assert text.count(hook) == 1
         text = text.replace(hook, hook + "\n    BackupReviewFixtureArchiveHash();", 1)
         source.write_text('void BackupReviewFixtureArchiveHash(void);\n' + text, encoding="utf-8", newline="\n")
+        source = self.site / "src/sessions/backup_restore.c"
+        text = source.read_text(encoding="utf-8")
+        hook = "        Ok = false; ++Facts->UiRecords; Offset += Bytes + 1u;"
+        assert text.count(hook) == 1
+        source.write_text('void BackupRestoreFixtureAfterUi(void);\n' + text.replace(hook, hook + '\n        BackupRestoreFixtureAfterUi();', 1),
+                          encoding="utf-8", newline="\n")
+        source = self.site / "src/sessions/backup_origin.c"
+        text = source.read_text(encoding="utf-8")
+        hook = '    if ( !xrtSha256(Text.Data, Text.Size, Digest) ) return MdoOriginError(Error, "cannot hash restore origin bytes");'
+        assert text.count(hook) == 1
+        source.write_text('void BackupRestoreFixtureOriginHash(void);\n' + text.replace(hook, hook + '\n    BackupRestoreFixtureOriginHash();', 1),
+                          encoding="utf-8", newline="\n")
         service = self.site / "src/bootstrap/service.c"
         text = service.read_text(encoding="utf-8")
         text = text.replace('#include "backup-decode.c"', '#include "backup-decode.c"\n#include "backup-stage.c"', 1)
@@ -184,6 +196,7 @@ class Probe(DecodeProbe):
         assert not result["ok"] and not result["retained"] and not list(self.parent.iterdir()), result
         assert self.prepare(source)["verified"] and self.fixture("discard")["ok"]
         self.check_projections(source, expected)
+        self.check_restore(source, expected)
         self.check_input_review(source, expected)
         assert inventory() == before  # no source Home, queue, model or catalog writes
 
@@ -389,6 +402,157 @@ class Probe(DecodeProbe):
         assert not result["ok"] and result["code"] == 11 and result["original_unchanged"] and result["inputs"] == []
         assert result["provenance_entries"] == 0 and not list(self.parent.iterdir())
         invalid("too many entries", lambda p: p.update(imports=p["imports"] * 17))
+
+    def check_restore(self, source, expected):
+        document = copy.deepcopy(source)
+        meta = json.loads(expected["meta.json"])
+        meta.update(revision=9, pinned=True, status="archived", previous_status="archived",
+                    parent_session_id="a" * 32, forked_through_sequence=7,
+                    config_revision=3, model_generation=4, module_generation=5, skill_generation=6)
+        replace(document, "meta.json", dump(meta)); document["revision"] = 9
+        kinds = self.api("GET", DECODE + "kinds")[1]["data"]
+        events = [json.loads(row) for row in expected["ui-events.jsonl"].splitlines()]
+        old_path = f"D:\\old-home\\data\\sessions\\default\\{meta['id']}\\" + ARTIFACT.replace("/", "\\")
+        artifact = {**events[-1], "event_id": events[-1]["event_id"] + 1, "kind": kinds["artifact"],
+                    "run_id": 1, "artifact_id": 1, "artifact_path": old_path,
+                    "text": f"opaque saved path: {old_path}", "tool_name": "", "tool_call_id": "", "queue_item_id": ""}
+        events.append(artifact); set_ui(document, events)
+        original = {row["path"]: base64.b64decode(row["data"]) for row in document["files"]}
+        result = self.prepare(document, "restore")
+        assert result["verified"] and result["original_unchanged"] and result["artifact_reader_paths"], result
+        assert result["source_id"] == "1" * 32 and result["restore_project"] == "imported"
+        assert result["origin_entries"] == result["provenance_entries"] == 1 and result["restore_records"] == len(events)
+        assert result["artifact_references"] == 1
+        stage = self.parent / result["directory"]
+        actual = {p.relative_to(stage).as_posix(): p.read_bytes() for p in stage.rglob("*") if p.is_file()}
+        target = json.loads(actual["meta.json"])
+        assert target["id"] == "1" * 32 and target["project_id"] == "imported" and target["revision"] == 1
+        assert target["workspace_root"] == "/explicit/restore workspace 中文"
+        assert target["created_at_us"] == target["updated_at_us"] == 1790900000000000
+        assert not target["pinned"] and target["status"] == target["previous_status"] == "active"
+        assert target["parent_session_id"] == "" and target["forked_through_sequence"] == 0
+        for key in ("config_revision", "model_generation", "module_generation", "skill_generation"):
+            assert target[key] == 0
+        for key in ("title", "agent_id", "model_id", "protocol", "reasoning_effort", "permission_profile", "max_output_tokens"):
+            assert target[key] == meta[key], key
+        restored_events = [json.loads(row) for row in actual["ui-events.jsonl"].splitlines()]
+        for old, new in zip(events, restored_events, strict=True):
+            assert new == {**old, "project_id": "imported", "session_id": "1" * 32,
+                           "artifact_path": ARTIFACT if old["artifact_path"] else ""}
+        for name, raw in original.items():
+            if name not in ("meta.json", "ui-events.jsonl", "queue.json", "draft.json"):
+                assert actual[name] == raw, name
+        origin = json.loads(actual["restore-origin.json"])
+        entry = origin["imports"][0]
+        assert origin["schema_version"] == 1 and entry["captured_at_us"] == document["captured_at_us"]
+        assert entry["source_meta"]["data"].encode() == original["meta.json"]
+        assert entry["target_meta"]["data"].encode() == actual["meta.json"]
+        for record in (entry["source_meta"], entry["target_meta"]):
+            raw = record["data"].encode()
+            assert record["bytes"] == len(raw) and record["sha256"] == hashlib.sha256(raw).hexdigest()
+        assert entry["ui_present"] and entry["source_ui_sha256"] == hashlib.sha256(original["ui-events.jsonl"]).hexdigest()
+        assert entry["artifact_paths"] == [{"event_id": artifact["event_id"], "source_path": old_path, "target_path": ARTIFACT}]
+        subprocess.run(["node", str(ROOT / "tests/fixtures/backup-review-ui.mjs"), str(stage)], check=True, timeout=20)
+        assert self.api("GET", STAGE + "export")[1]["data"]  # native owning encode/decode, all exact file bytes
+        assert self.fixture("check")["verified"] and self.fixture("discard")["ok"]
+
+        exported = copy.deepcopy(document)
+        exported.update(project_id="imported", session_id="1" * 32, revision=1, source_workspace=target["workspace_root"])
+        exported["files"] = [file_entry(name, raw) for name, raw in actual.items()]; recount(exported)
+        replace(exported, ARTIFACT, b"small bounded artifact")
+        second = self.prepare(exported, "restore-second")
+        assert second["verified"] and second["origin_entries"] == second["provenance_entries"] == 2, second
+        second_stage = self.parent / second["directory"]
+        next_origin = json.loads((second_stage / "restore-origin.json").read_bytes())["imports"]
+        assert next_origin[0] == entry and next_origin[1]["source_meta"]["data"].encode() == actual["meta.json"]
+        assert next_origin[1]["artifact_paths"][0]["source_path"] == ARTIFACT
+        assert json.loads((second_stage / "meta.json").read_bytes())["id"] == "2" * 32
+        second_exported = copy.deepcopy(exported); second_exported["session_id"] = "2" * 32
+        second_exported["files"] = [file_entry(p.relative_to(second_stage).as_posix(), p.read_bytes())
+                                    for p in second_stage.rglob("*") if p.is_file()]; recount(second_exported)
+        assert self.fixture("discard")["ok"]
+        reused_history = self.prepare(second_exported, "restore")
+        assert not reused_history["ok"] and reused_history["code"] == 1 and reused_history["original_unchanged"]
+
+        small = copy.deepcopy(document); replace(small, ARTIFACT, b"small bounded artifact")
+        for mode, code in (("restore-project", 1), ("restore-id", 1), ("restore-source-id", 1), ("restore-missing-id", 1),
+                           ("restore-workspace", 1), ("restore-control", 1), ("restore-time", 1), ("restore-size", 1),
+                           ("restore-deadline", 11), ("restore-files", 11), ("restore-origin-files", 11), ("restore-growth", 11),
+                           ("restore-cancel", 9), ("restore-ui-cancel", 9), ("restore-origin-cancel", 9)):
+            rejected = self.prepare(small, mode)
+            assert not rejected["ok"] and not rejected["retained"] and rejected["code"] == code, (mode, rejected)
+            assert rejected["original_unchanged"] and rejected["origin_entries"] == rejected["restore_records"] == 0
+            assert rejected["artifact_references"] == 0 and rejected["inputs"] == [] and not list(self.parent.iterdir())
+        for mode, workspace in (("restore-windows", "C:\\explicit\\workspace 中文"),
+                                ("restore-unc", "\\\\host\\share\\workspace"),
+                                ("restore-null-error", "/explicit/restore workspace 中文")):
+            accepted = self.prepare(small, mode)
+            assert accepted["verified"] and accepted["artifact_reader_paths"]
+            assert json.loads((self.parent / accepted["directory"] / "meta.json").read_bytes())["workspace_root"] == workspace
+            assert self.fixture("discard")["ok"]
+        long_artifact = "artifacts/run-00000000000000000001/00000000000000000001-" + "x" * 128 + ".txt"
+        long_doc = copy.deepcopy(small); replace(long_doc, long_artifact, b"bounded")
+        long_events = copy.deepcopy(events); long_events[-1]["artifact_path"] = long_artifact; set_ui(long_doc, long_events)
+        too_long = self.prepare(long_doc, "restore-long-project")
+        assert not too_long["ok"] and too_long["code"] == 11 and too_long["original_unchanged"]
+        collision = self.prepare(exported, "restore-source-id")
+        assert not collision["ok"] and collision["code"] == 1 and collision["original_unchanged"]
+        no_inputs = copy.deepcopy(small)
+        no_inputs["files"] = [f for f in no_inputs["files"] if f["path"] not in ("queue.json", "draft.json", "ui-events.jsonl")]
+        no_inputs.update(ui_first_event_id=0, ui_last_event_id=0, ui_records=0); recount(no_inputs)
+        value = self.prepare(no_inputs, "restore")
+        assert value["verified"] and value["origin_entries"] == 1 and value["provenance_entries"] == 0
+        absent = json.loads((self.parent / value["directory"] / "restore-origin.json").read_bytes())["imports"][0]
+        assert not absent["ui_present"] and absent["source_ui_sha256"] == "" and absent["artifact_paths"] == []
+        assert self.fixture("discard")["ok"]
+        empty_ui = copy.deepcopy(no_inputs); replace(empty_ui, "ui-events.jsonl", b"")
+        value = self.prepare(empty_ui, "restore")
+        assert value["verified"] and value["restore_records"] == 0
+        empty = json.loads((self.parent / value["directory"] / "restore-origin.json").read_bytes())["imports"][0]
+        assert empty["ui_present"] and empty["source_ui_sha256"] == hashlib.sha256(b"").hexdigest() and empty["artifact_paths"] == []
+        assert self.fixture("discard")["ok"]
+        unavailable = copy.deepcopy(small)
+        unknown = {**meta, "agent_id": "uninstalled.agent", "model_id": "uninstalled-model"}
+        replace(unavailable, "meta.json", dump(unknown))
+        value = self.prepare(unavailable, "restore")
+        assert value["verified"]
+        kept = json.loads((self.parent / value["directory"] / "meta.json").read_bytes())
+        assert kept["agent_id"] == unknown["agent_id"] and kept["model_id"] == unknown["model_id"]
+        assert self.fixture("discard")["ok"]
+
+        def metadata(record, **changes):
+            value = json.loads(record["data"]); value.update(changes)
+            raw = dump(value); record.update(data=raw.decode(), bytes=len(raw), sha256=hashlib.sha256(raw).hexdigest())
+        def invalid(name, mutate):
+            doc = copy.deepcopy(exported); changed = copy.deepcopy(origin); mutate(changed)
+            replace(doc, "restore-origin.json", dump(changed))  # a correct outer SHA cannot hide invalid inner origin
+            value = self.validate(dump(doc))
+            assert not value["ok"], (name, value)
+            assert not list(self.parent.iterdir())
+        invalid("extra field", lambda p: p.update(extra=True))
+        invalid("empty history", lambda p: p.update(imports=[]))
+        invalid("schema", lambda p: p.update(schema_version=2))
+        invalid("source length", lambda p: p["imports"][0]["source_meta"].update(bytes=0))
+        invalid("source hash", lambda p: p["imports"][0]["source_meta"].update(sha256="0" * 64))
+        invalid("unknown live codec", lambda p: metadata(p["imports"][0]["source_meta"], schema_version=99))
+        invalid("target revision", lambda p: metadata(p["imports"][0]["target_meta"], revision=2))
+        invalid("target identity", lambda p: metadata(p["imports"][0]["target_meta"], id=meta["id"]))
+        invalid("stale fork", lambda p: metadata(p["imports"][0]["target_meta"], parent_session_id="a" * 32))
+        invalid("stale generation", lambda p: metadata(p["imports"][0]["target_meta"], model_generation=4))
+        invalid("changed profile", lambda p: metadata(p["imports"][0]["target_meta"], model_id="unrelated"))
+        invalid("relative target", lambda p: metadata(p["imports"][0]["target_meta"], workspace_root="relative"))
+        invalid("UI fingerprint", lambda p: p["imports"][0].update(source_ui_sha256="bad"))
+        invalid("false absence", lambda p: p["imports"][0].update(ui_present=False, source_ui_sha256=""))
+        invalid("target artifact path", lambda p: p["imports"][0]["artifact_paths"][0].update(target_path="../bad"))
+        invalid("ambiguous source tail", lambda p: p["imports"][0]["artifact_paths"][0].update(source_path="artifacts/run-x/" + old_path))
+        invalid("duplicate event", lambda p: p["imports"][0]["artifact_paths"].append(copy.deepcopy(p["imports"][0]["artifact_paths"][0])))
+        full = copy.deepcopy(exported); entries = []
+        for index in range(16):
+            row = copy.deepcopy(entry); metadata(row["target_meta"], id=f"{index + 1:032x}"); entries.append(row)
+        replace(full, "restore-origin.json", dump({"schema_version": 1, "imports": entries}))
+        value = self.prepare(full, "restore-second")
+        assert not value["ok"] and value["code"] == 11 and value["origin_entries"] == 0 and value["original_unchanged"]
+        invalid("17 entries", lambda p: p.update(imports=entries + [entry]))
 
     def check_projections(self, source, expected):
         kinds = self.api("GET", DECODE + "kinds")[1]["data"]
