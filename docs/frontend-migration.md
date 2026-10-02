@@ -4,6 +4,37 @@
 
 完成判据及尚缺的打包页证据见 [前端操作体验完成审计](frontend-completion-audit.md)。本文件继续记录每次实现和验证的细节。
 
+## 2026-10-03：配置保存期间接收发送操作
+
+旧包可复现：切换推理强度或权限后立即 Enter，只提示等待配置更新，
+输入没有发送，需要再按一次。现在正常输入及示例按钮在保存期间也
+接收发送；发送时固定模型、推理强度和权限，复用已有持久队列及会话
+运行串行化，等配置保存结束后自动派发。队列显示“等待会话配置更新”，
+期间隐藏手动重试，异步准备结束后再次检查保存状态。消息编辑/重试的
+替换操作仍沿用已有检查。本次不增加模型工具或模型上下文。
+
+隔离 Windows 单文件配本地模型验证：延迟回复时只按一次 Enter，
+队列接收并自动执行，无第二次发送；故意拒绝首次配置写入时，首次
+输入仍按其固定的 high 执行，而未保存的会话默认仍为 medium，后续
+输入按 medium 顺序执行，草稿保留且队列排空。切到 balanced 后立即
+发送，受控 exec 出现审批，允许一次后成功；随后 ask_user 选 Careful
+完成回答。待办卡片为 1/2，消息复制/点赞、文件补全 Enter 只选择文件
+均通过。320×700 无横向溢出，询问按钮高 40px；这是浏览器视口验证，
+不扩展为实体移动端或其他平台原生窗口验收。
+
+Windows/Linux 相关 18 Python、27 Node、101 JS 模块、独立 A/B 打包及
+隔离静态资源/runs/sessions 读取通过；6 份代码/夹具按 LF 核对一致，
+SDK 未改。未做压力、高负载或无关完整发布检查。夹具新增有界
+`--profile-delay-ms` 与 `--fail-first-profile`，只作用于隔离测试 Home；
+Responses 工具用例不与 `--interleaved-chat-stream` 混用。
+证据 `.build/qa-profile-send-{before,waiting,failure-api,positive-api}.json`、
+`qa-profile-send-mobile{,-finished}.json`、`qa-profile-send-mobile-ask.jpg`
+及 `qa-profile-send-{windows,linux}.log`。
+Windows 根程序 6,484,784 字节，SHA-256
+`e785bf155fec88052fb94b9daa00608beb757ee8b6df97949dca32ad53ce2a80`；
+Linux 候选 6,534,944 字节，SHA-256
+`680187b1c156a25d7b61637fa1d7d1b44c8c4c4b38748587d46609a20433c43d`。
+
 ## 2026-10-03：模型刷新保留正在操作的表单
 
 隔离旧包复现：点击刷新，在回复到达前新建模型并输入名称，迟到回复

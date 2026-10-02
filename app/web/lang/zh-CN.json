@@ -574,6 +574,7 @@
   "queue.retryUncertain": "确认未发送后重试",
   "queue.sendNext": "发送下一条",
   "queue.waitForRun": "当前任务结束后自动发送",
+  "queue.waitForProfile": "等待会话配置更新",
   "queue.restoreToSend": "恢复到进行中后继续发送",
   "queue.awaitingAdmission": "等待入队确认",
   "queue.rejected": "入队被拒绝 · 输入已保存",

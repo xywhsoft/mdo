@@ -11,6 +11,8 @@ APPROVAL NEXT UI, TASK UI, TASK SECOND UI, or ARTIFACT UI. The long
 ask has multiline question and options; the latter reads one bounded synthetic
 text file so the normal tool-output artifact path is used. The optional chat
 stream emits two bounded chunks with interleaved text and reasoning fields.
+--profile-delay-ms delays one preference reply; --fail-first-profile rejects it.
+These bounded controls test immediate Send without changing user data.
 With --file-tools-fixture, FILE TOOLS UI runs five bounded filesystem/process
 calls in the synthetic workspace, including a deliberate missing-file error.
 With --image-capable --image-transfer-fixture, /__qa/image-transfer serves a
@@ -931,6 +933,29 @@ Object.defineProperty(navigator, 'clipboard', {
                 self.wfile.write(payload)
                 self.close_connection = True
                 return
+        profile_reply_delay = 0
+        if (self.command == "PUT" and self.path.startswith("/api/v1/projects/")
+                and "/sessions/" in self.path and self.path.endswith("/profile")):
+            with self.server.count_lock:
+                self.server.profile_puts += 1
+                count = self.server.profile_puts
+            if count == 1:
+                profile_reply_delay = self.server.profile_delay_seconds
+                print("QA first profile request arrived", flush=True)
+                if self.server.fail_first_profile:
+                    time.sleep(profile_reply_delay)
+                    payload = json.dumps({"ok": False, "error": {
+                        "code": "profile_fixture_failure",
+                        "message": "Bounded profile update failure"
+                    }}).encode()
+                    self.send_response(503)
+                    self.send_header("Content-Type", "application/json")
+                    self.send_header("Content-Length", str(len(payload)))
+                    self.send_header("Connection", "close")
+                    self.end_headers()
+                    self.wfile.write(payload)
+                    self.close_connection = True
+                    return
         headers = {key: value for key, value in self.headers.items()
                    if key.lower() not in {"host", "connection", "content-length"}}
         headers["Host"] = f"127.0.0.1:{self.server.upstream_port}"
@@ -944,6 +969,9 @@ Object.defineProperty(navigator, 'clipboard', {
             response = upstream.getresponse()
             payload = response.read()
             response_status = response.status
+            if profile_reply_delay:
+                time.sleep(profile_reply_delay)
+                print("QA first profile reply released", flush=True)
             if (self.server.simulate_schedule_delete and self.command == "GET" and
                     self.path == "/api/v1/schedules" and response_status == 200):
                 with self.server.count_lock:
@@ -1058,6 +1086,10 @@ parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument("--packed-path", type=Path,
                     default=ROOT / ("mdo.exe" if os.name == "nt" else "mdo"),
                     help="packed executable to copy into the isolated QA Home")
+parser.add_argument("--profile-delay-ms", type=int, default=0,
+                    help="delay the first session profile reply by 0-5000 ms")
+parser.add_argument("--fail-first-profile", action="store_true",
+                    help="reject the first profile PUT while retaining queued input")
 parser.add_argument("--approval-delay-ms", type=int, default=0,
                     help="delay one approval PUT by 0-5000 ms for manual duplicate-click QA")
 parser.add_argument("--ask-delay-ms", type=int, default=0,
@@ -1203,6 +1235,8 @@ if not args.packed_path.is_file():
     parser.error(f"packed executable not found: {args.packed_path}")
 if args.agent_profile_fixture and not args.image_capable:
     parser.error("--agent-profile-fixture requires --image-capable")
+if not 0 <= args.profile_delay_ms <= 5000:
+    parser.error("--profile-delay-ms must be between 0 and 5000")
 if not 0 <= args.approval_delay_ms <= 5000:
     parser.error("--approval-delay-ms must be between 0 and 5000")
 if not 0 <= args.delay_first_module_ms <= 60000:
@@ -1382,7 +1416,8 @@ try:
         raise RuntimeError((status, response))
     session = response["data"]["id"]
     browser_port = port
-    if (args.approval_delay_ms or args.ask_delay_ms or args.task_cancel_delay_ms
+    if (args.profile_delay_ms or args.fail_first_profile
+            or args.approval_delay_ms or args.ask_delay_ms or args.task_cancel_delay_ms
             or args.run_cancel_delay_ms
             or args.queue_delay_ms or args.queue_read_delay_ms
             or args.fail_first_queue_read
@@ -1508,6 +1543,9 @@ try:
         proxy.reject_pane_layout = args.reject_pane_layout
         proxy.dropped_queue_response = False
         proxy.count_lock = threading.Lock()
+        proxy.profile_delay_seconds = args.profile_delay_ms / 1000
+        proxy.fail_first_profile = args.fail_first_profile
+        proxy.profile_puts = 0
         proxy.approval_puts = 0
         proxy.ask_puts = 0
         proxy.task_deletes = 0

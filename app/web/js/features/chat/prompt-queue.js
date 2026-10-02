@@ -33,6 +33,7 @@ function sameProfile(a, b) {
 }
 
 export function createPromptQueue({ container, navigation, isRunActive, stagedEntries,
+  isProfileBusy = () => false,
   isRunReviewPending = () => false, isSessionWritable = () => true,
   isSessionRunActive = () => false, modelsStore,
   onRetry, onRemoved }) {
@@ -206,7 +207,8 @@ export function createPromptQueue({ container, navigation, isRunActive, stagedEn
         "aria-controls": "prompt-queue-list", "data-queue-focus": "toggle" },
     });
     const waitingForRun = !uncertain && !stagedHead && isRunActive();
-    const retry = !writable || waitingForRun || !saved.length || reviewPending ||
+    const waitingForProfile = !waitingForRun && isProfileBusy();
+    const retry = !writable || waitingForRun || waitingForProfile || !saved.length || reviewPending ||
       sendingLocally ||
       acceptedRun || claimedRun ? null : element("button", {
       text: t(uncertain ? "queue.retryUncertain" : stagedHead
@@ -229,7 +231,7 @@ export function createPromptQueue({ container, navigation, isRunActive, stagedEn
         text: t(!writable ? "queue.restoreToSend" : sendingLocally ? "queue.sending" :
           acceptedRun ? "queue.runAccepted" : claimedRun
           ? "queue.runStarting" : reviewPending
-          ? "queue.reviewRun" : saved.length
+          ? "queue.reviewRun" : waitingForProfile ? "queue.waitForProfile" : saved.length
           ? "queue.waitForRun" : entries[0]?.rejected
             ? "queue.rejected" : "queue.awaitingAdmission") }),
     ]);

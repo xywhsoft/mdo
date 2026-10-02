@@ -627,9 +627,11 @@ export async function boot() {
   });
   let draftStore;
   let submissionController;
+  let composerProfile;
   const promptQueue = createPromptQueue({
     container: $("#prompt-queue"), navigation, modelsStore,
     isRunActive: () => Boolean(activeRun),
+    isProfileBusy: () => composerProfile?.isBusy() ?? false,
     isSessionRunActive: (key) => {
       const [projectId, sessionId] = key.split("/");
       return Boolean(activeRun && activeRun.project_id === projectId &&
@@ -831,7 +833,7 @@ export async function boot() {
   });
   draftStore.select("");
   if (!purgeRecovery.isPaused()) void projectDraftSelection.restoreLegacy();
-  const composerProfile = createComposerProfile({
+  composerProfile = createComposerProfile({
     modelSelect: $("#composer-model"), reasoningSelect: $("#composer-reasoning"),
     permissionSelect: $("#composer-permission"), navigation,
     sessionStore: sessionDetailStore, modelsStore, agentsStore, projectsStore,
@@ -845,7 +847,11 @@ export async function boot() {
           run.project_id === session.project_id && run.session_id === session.id &&
           !terminalState(run)));
     },
-    onBusyChange: () => setRun(activeRun),
+    onBusyChange(busy) {
+      setRun(activeRun);
+      promptQueue.render();
+      if (!busy) void dispatchQueued();
+    },
     onSelectionChange() {
       tokenMeter.refresh();
       composerImages?.refresh();
@@ -1094,7 +1100,7 @@ export async function boot() {
       (!sessionWritable && !creatingSession) || migratingNewTask;
     newTaskComposerFocus.restore();
     sendBlockedByState = serviceFailed || purgeRecovery.isPaused() || !(sessionWritable || creatingSession) ||
-      composerProfile.isBusy() || messageActionBusy ||
+      messageActionBusy ||
       !draftStore.isLoaded(selectedDraftKey) ||
       selectingProjectDraft ||
       draftStore.isRunUncertain(selectedDraftKey) ||
@@ -1493,7 +1499,7 @@ export async function boot() {
     const session = sessionDetailStore.get().data;
     if (!selected.sessionId || !session || session.project_id !== selected.projectId ||
         session.id !== selected.sessionId || session.status !== "active" ||
-        activeRun || messageActionBusy ||
+        activeRun || messageActionBusy || composerProfile.isBusy() ||
         queueBlocked.has(key) ||
         promptQueue.peek(selected.projectId, selected.sessionId)?.state !== "pending") return;
     if (!await draftStore.ensureLoaded(key) || draftStore.isRunUncertain(key)) return;
@@ -1509,7 +1515,7 @@ export async function boot() {
         try {
           await ensurePromptReady(selected.projectId, selected.sessionId,
             Boolean(entry.priority));
-          if (!stillSelected() || messageActionBusy ||
+          if (!stillSelected() || messageActionBusy || composerProfile.isBusy() ||
               draftStore.isRunUncertain(key)) return;
           await promptQueue.markSending(selected.projectId, selected.sessionId, entry.id);
           const run = await startRun(selected.projectId, selected.sessionId,
@@ -2004,6 +2010,11 @@ export async function boot() {
     const rawInput = fromComposer ? prompt.value : text;
     const origin = navigation.get();
     const originVersion = routeVersion;
+    // Freeze the choice at Send. A preference write can finish after queue
+    // admission; dispatch waits for it without dropping this input action.
+    const profile = composerProfile.selection();
+    const unsupportedAttachments = fromComposer && attachments.length &&
+      !composerImages.supportsCurrentModel();
     if (!draftStore.isLoaded(selectedDraftKey) &&
         !await draftStore.ensureLoaded(selectedDraftKey)) return;
     if (draftStore.isRunUncertain(selectedDraftKey)) {
@@ -2011,17 +2022,10 @@ export async function boot() {
       return;
     }
     if (routeVersion !== originVersion) return;
-    if (composerProfile.isBusy()) {
-      showComposerError(localComposerError("composer.profileBusy",
-        "请等待会话配置更新完成"));
-      return;
-    }
-    if (fromComposer && attachments.length &&
-        !composerImages.supportsCurrentModel()) {
+    if (unsupportedAttachments) {
       showComposerError(unsupportedModelError());
       return;
     }
-    const profile = composerProfile.selection();
     if (!origin.sessionId && !attachments.length) {
       hideComposerError();
       try {
@@ -2107,8 +2111,7 @@ export async function boot() {
 
   for (const starter of document.querySelectorAll("[data-prompt-key]")) {
     starter.addEventListener("click", () => {
-      if (submittingCurrent() || composerImages.isUploading() ||
-          composerProfile.isBusy()) return;
+      if (submittingCurrent() || composerImages.isUploading()) return;
       void submitPrompt({ text: t(starter.dataset.promptKey, {}, starter.dataset.prompt),
         fromComposer: false });
     });
