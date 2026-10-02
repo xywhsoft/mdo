@@ -4,6 +4,46 @@
 
 完成判据及尚缺的打包页证据见 [前端操作体验完成审计](frontend-completion-audit.md)。本文件继续记录每次实现和验证的细节。
 
+## 2026-10-02：完整备份的独立暂存材料化
+
+新增 `MdoSessionBackupStagePrepare/Check/InfoGet/Discard`，将拥有解码的
+v2 备份排他写入 caller 提供的私有目录锚定根，再从磁盘独立读回。文件
+身份、长度和原字节匹配，inventory 拒绝未知对象；真实保留 UI reader、
+xllm-session 模型/UI 关系及静态像素门禁检查读回数据。所有阶段共享 30
+秒协作预算，64 KiB IO 分块；没有模型、工具、队列或 catalog 调用。
+返回后可以释放原备份/上传和 caller root，Stage 保留自己的字节及父根。
+
+清理仅处理已登记且身份匹配的 owned 文件和空目录。发现外来文件或替换
+身份时留下该对象及 handle，由 caller 处理障碍后重试；取消不阻止清理。
+Windows 夹具发现长期打开子目录会阻止父目录移动，已改为只保留父锚定
+根，操作时按身份打开子根、返回前关闭，原生根内移动/旧路径替代后检查
+与清理通过。没有修改基础库或 ABI，也未增加默认 Agent 工具。
+
+HTTP/TLS 小型探针使用真实三轮 mdo run 的模型/UI/inline PNG、草稿、
+待确认队列和普通 2 MiB artifact，逐文件核对落盘原字节、全部 quota、
+预取消/第一块 artifact 后取消、同身份篡改/同字节外来身份、外来文件
+拒绝及清理重试。实际模型/UI 矛盾及损坏像素在对应门禁拒绝；旧 v1
+不能暂存，失败后重试可用，整个源 Home 原字节不变。初始夹具修正了
+queue 必需字段、array 断言和 v1 原字节 CRC framing；生产目录句柄
+生命周期修正后才通过移动探针。构建清单断言补上新模块，初始日志保留。
+
+细节见 [暂存合同](session-backup-staging.md)。本阶段保留来源 metadata、
+UI 身份、artifact 显示路径和 queue/receipt 原字节，只是后续恢复事务的
+输入。新身份/provenance、投影修复、队列待确认转换、产品 UI replay、
+原子发布、catalog 通知和正式页面仍未完成，`restore_ready:false` 保持。
+没有新增原生点击/实体设备证据或压力/高负载测试。
+
+最终 Windows/Linux 门禁通过 115 Python、252 Node、90 JS 模块、严格 C11、
+40 runtime、三项 packed 及独立 A/B；Windows 另通过便携 WebView2 Home
+与 20 秒启动。基础库/SDK 版本不变，复用上一阶段已经从锁定 SDK 新构建
+并验证的 native host；Linux 使用新的 ext4 源 staging，六个变更源/构建
+清单/探针文件与工作区内容一致。根目录 `mdo.exe` 已更新为 6,395,308 字节，
+SHA-256 `3c2c970924292a406394c376aecbe4b87bad5e3fda4eb9f358054327e2064eae`；
+Linux A/B `8958084d30e58f5725df3b15dabdf2fbb608f7555bb788e1dc2df9619aba0e82`。
+日志 `.build/qa-staging-{windows,linux}-final.log`；初始清单断言失败日志
+保留为 `.build/qa-staging-{windows,linux}-unit-initial.log`。既有 Linux
+queued HEAD reset 仍未定因，不能以本轮通过替代该项的原因及设备验收。
+
 ## 2026-10-02：外置 Home 与只读会话的完整工具输出
 
 上一阶段记录的 Home 在 workspace 外时产物保存失败，本阶段已修复。xwork

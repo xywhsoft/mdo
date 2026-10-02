@@ -1,7 +1,8 @@
 # 会话 JSON 完整备份与恢复实施记录
 
 状态：专用下载/上传、离线解码、模型/UI 关系、静态图片像素检查及生产异步
-预览 API 已接入。独立 staging 发布与正式页面入口待实现。2026-10-02 已完成
+预览 API 已接入。独立 staging 的材料化/读回检查已实现，身份及投影转换、
+原子发布与正式页面入口待实现。2026-10-02 已完成
 checkpoint 与有界读取共用排他运行窗口、统一捕获边界、v2 捕获/编码层和
 有界 HTTP/TLS 传输。现有页面仍使用 `export_schema:1`，只有 meta 和模型 snapshot。
 格式/传输验证通过不表示正式页面已经导出完整备份，或恢复事务已经完成。
@@ -73,7 +74,10 @@ manager 调用或库通过 native path 写入不能被它自动覆盖。不得�
    校验和引用；拒绝链接、绝对路径、`..`、重复文件和大小声明失真。v1 只能
    预览为模型快照，不能误报为完整带图备份。未知模型/Agent 的会话可保留
    原数据供查看，继续运行前重新选择并验证有效 profile。
-5. 恢复到独立 staging，验证实际 xllm 恢复与 UI replay 后，以不覆盖的原子
+5. **进行中**：已实现独立 staging 的排他材料化、完整磁盘读回及实际无绑定
+   xllm/UI 关系和像素检查；它仍保留来源身份及队列原字节，不能发布。
+   继续完成身份/产物重绑定、投影修复和待确认转换。恢复到独立 staging，
+   验证实际 xllm 恢复与 UI replay 后，以不覆盖的原子
    目录发布方式创建新的会话。保留原身份作为来源，明确处理 ID 冲突；失败
    只清理由本次事务拥有的文件。实际发布后才进入 catalog，导入不得立即
    调用模型或恢复执行队列。复用 Home 锚定和事务原则，但不要直接借用会
@@ -931,3 +935,33 @@ Linux `2c7bfe3a2511a6013e653816b65fe69df60409740d895aec1cd0f4fee4ed1be1`。
 日志 `.build/qa-store-{windows,linux}-final.log`。没有压力/高负载或新增原生/
 实体设备验收；Linux queued HEAD reset 仍待排查。staging UI 重放、投影
 修复、原子发布及正式菜单仍按步骤 5–6 实施，`restore_ready:false` 保持。
+
+## 独立 staging 材料化与磁盘读回
+
+步骤 5 已新增私有锚定目录的材料化入口。排他创建并分块写入/flush/close，
+重新打开文件核对身份、长度及每块原字节；inventory 只接受拥有索引中的
+对象。磁盘读回字节独立拥有，再通过共用 schema/CRC/引用、实际保留 UI
+reader、xllm-session 模型/UI 关系及图片像素门禁。所有阶段共享 30 秒预算。
+释放原 decoded backup/上传或关闭 caller root 后仍可重新检查与清理。
+
+Windows 长期持有子目录句柄会阻止祖先移动，已改为只长期保留父锚定根，
+每次操作按身份取得子根并及时关闭。原生根内父目录移动/旧位置替代通过。
+清理仅删除已跟踪且身份匹配的文件和空目录；外来对象会阻止清理，非 NULL
+handle 留给 caller 重试，不通过扫描递归删除，也不因取消而停止清理。
+
+本 Stage 保留来源 metadata、UI 身份、artifact 路径和 queue 原字节；后续
+新 ID/provenance、投影修复及待确认转换仍需完成，不能直接发布到 catalog。
+强制终止后的 staging ownership/回收、原子目录发布和正式页面也未完成。
+详见 [暂存合同](session-backup-staging.md)，保持 `restore_ready:false`。
+
+HTTP/TLS 小型探针核对真实三轮 run、inline PNG、草稿/队列、2 MiB artifact、
+每份落盘原字节和源 Home 不变。覆盖预算、预取消及第一块 artifact 后取消、
+内容/身份篡改、外来文件及清理重试、模型/UI 矛盾和损坏图片失败；v1 拒绝。
+最终 Windows/Linux 有界门禁通过 115 Python、252 Node、90 模块、严格 C11、
+40 runtime、三项 packed 和 A/B；Windows 另通过便携 WebView2 及 20 秒
+启动。SDK 不变且 native host 复用已验证版本，Linux 用新 ext4 源 staging。
+根目录程序已更新，Windows SHA-256
+`3c2c970924292a406394c376aecbe4b87bad5e3fda4eb9f358054327e2064eae`；
+Linux `8958084d30e58f5725df3b15dabdf2fbb608f7555bb788e1dc2df9619aba0e82`。
+日志 `.build/qa-staging-{windows,linux}-final.log`。没有压力/高负载或新增
+原生/实体设备验收；Linux queued HEAD reset 仍待排查。

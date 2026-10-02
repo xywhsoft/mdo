@@ -2,7 +2,31 @@
 
 本清单以 `app_bak/wwwroot` 的可操作行为为基线，而不是以页面长得相似或单元测试通过为完成标准。`docs/frontend-migration.md` 记录每次实现和验证；这里记录当前还需要什么证据。审计更新：2026-10-02，基线提交 `f9e2c4c`。
 
-2026-10-02 最新增量：Home 在项目外时的工具产物保存缺口已修复。xwork
+2026-10-02 最新增量：独立 staging 材料化已实现。真实 v2 字节排他落盘并
+独立读回，检查 identity、清单、实际模型/UI 关系和静态像素；释放原备份/
+上传和 caller root 后还能重查。取消/失败只清理拥有对象，外来文件及同
+字节替换身份被保留，清理受阻可显式重试。Windows 父目录移动在仅保留
+父锚定根、及时关闭子根后通过；没有修改基础库或 Agent 工具目录。
+
+HTTP/TLS 小型夹具核对真实三轮 run、2 MiB artifact、草稿/待确认队列、
+逐文件字节、取消/预算/篡改/外来对象、模型/UI 矛盾及损坏像素的失败，
+源 Home 原字节不变。详见 [暂存合同](session-backup-staging.md) 和
+[本轮迁移](frontend-migration.md#2026-10-02完整备份的独立暂存材料化)。
+
+这个 Stage 保留来源身份及队列原字节，不能进入 live catalog。身份/
+artifact 重绑定、投影修复、待确认转换、原子发布和正式菜单仍待完成，
+`restore_ready:false` 保持。原生/实体设备证据与 Linux queued HEAD reset
+继续单独待处理。没有压力或高负载测试。后文保留各阶段当时的状态。
+
+最终两平台门禁通过 115 Python、252 Node、90 模块、严格 C11、40 runtime、
+三项 packed 及独立 A/B；Windows 另通过便携 WebView2 和 20 秒启动。
+root mdo.exe 已更新为 6,395,308 字节、SHA-256
+`3c2c970924292a406394c376aecbe4b87bad5e3fda4eb9f358054327e2064eae`；
+Linux `8958084d30e58f5725df3b15dabdf2fbb608f7555bb788e1dc2df9619aba0e82`。
+SDK 不变，复用已验证 native host，Linux 使用新的 ext4 源 staging。
+日志 `.build/qa-staging-{windows,linux}-final.log`。
+
+2026-10-02 增量：Home 在项目外时的工具产物保存缺口已修复。xwork
 3.8.0 / ABI 7 的显式宿主 store 拥有锚定目录，读写不重新打开显示路径；
 mdo 通过 Home 根创建 store，只读会话仍保存内部完整输出，项目读写权限
 保持。源库 `0f597d26`、xs `9bb75a5` 已提交并锁定。真实 mdo 三次启动

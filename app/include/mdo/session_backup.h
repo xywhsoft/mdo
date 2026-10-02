@@ -151,4 +151,45 @@ bool MdoSessionBackupCheckImages(const MdoSessionBackup* Backup,
     const MdoSessionBackupLimits* Limits, const xcancel* Cancel,
     MdoSessionBackupImages* Images, xwork_error* Error);
 
+typedef struct MdoSessionBackupStage MdoSessionBackupStage;
+typedef struct MdoSessionBackupStageInfo {
+    uint32 Size;
+    bool Verified;
+    char DirectoryName[64]; /* relative to the supplied parent; never a Home path */
+    MdoSessionBackupPreview Source;
+    MdoSessionBackupModelHistory ModelHistory;
+    MdoSessionBackupImages Images;
+} MdoSessionBackupStageInfo;
+
+/* Materializes a decoded v2 backup into a new exclusive private directory
+ * below an existing anchor. Clones Parent; its caller may close Parent on
+ * return. Reopens every file, checks exact bytes/identity and inventory, then
+ * runs the real model/UI relation and pixel gates with one thirty-second
+ * cooperative budget. All retained bytes/facts are independently owned.
+ * Run on a bounded worker, never a network callback. One caller at a time.
+ *
+ * Parent must be an application-owned private staging area on the eventual
+ * target filesystem, outside the live session catalog. No Home, catalog,
+ * executable profile, driver or queue manager is accessed. Source identity,
+ * source artifact paths and queue bytes are retained for the later rebinding
+ * transaction; this stage alone is NOT publishable or restoration permission.
+ *
+ * Output must point to NULL. Failure cleans only tracked, identity-matching
+ * owned paths. If cleanup cannot finish, Output retains the stage for explicit
+ * retry/diagnosis; never lose that handle. Preflight failure leaves it NULL. */
+bool MdoSessionBackupStagePrepare(const MdoSessionBackup* Backup, xroot Parent,
+    const MdoSessionBackupLimits* Limits, const xcancel* Cancel,
+    MdoSessionBackupStage** Output, xwork_error* Error);
+bool MdoSessionBackupStageInfoGet(const MdoSessionBackupStage* Stage,
+    MdoSessionBackupStageInfo* Info);
+/* Reopens and verifies the current staged bytes/inventory again. A failed
+ * check revokes Verified and clears semantic facts. Never repairs source data. */
+bool MdoSessionBackupStageCheck(MdoSessionBackupStage* Stage,
+    const MdoSessionBackupLimits* Limits, const xcancel* Cancel, xwork_error* Error);
+/* Cancelling the operation never cancels cleanup. Removes only known owned
+ * files and empty directories, with identity checks and no recursive delete.
+ * Retains *Stage on an obstruction; caller can remove its own obstruction and
+ * retry. Successful discard closes anchors/frees bytes and sets *Stage=NULL. */
+bool MdoSessionBackupStageDiscard(MdoSessionBackupStage** Stage, xwork_error* Error);
+
 #endif
