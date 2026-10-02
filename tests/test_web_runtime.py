@@ -252,8 +252,8 @@ def write_site(site: Path) -> None:
     shutil.copy2(ROOT / "app/default-home/config/defaults.json",
                  site / "default-home/config/defaults.json")
     for relative in (
-        "src/storage/home.c", "src/storage/home_import.inc.c", "src/storage/home_purge.inc.c", "src/config/config.c", "src/security/secrets.c",
-        "src/web/manager.c", "include/mdo/home.h", "include/mdo/home_import.h", "include/mdo/home_purge.h", "include/mdo/config.h",
+        "src/storage/home.c", "src/storage/home_import.inc.c", "src/storage/home_purge.inc.c", "src/storage/home_restore.inc.c", "src/config/config.c", "src/security/secrets.c",
+        "src/web/manager.c", "include/mdo/home.h", "include/mdo/home_import.h", "include/mdo/home_purge.h", "include/mdo/home_restore.h", "include/mdo/session_file_policy.h", "include/mdo/config.h",
         "include/mdo/secrets.h", "include/mdo/web.h",
     ):
         shutil.copy2(ROOT / "app" / relative, site / relative)

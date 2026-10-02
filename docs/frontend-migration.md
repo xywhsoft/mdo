@@ -4,6 +4,38 @@
 
 完成判据及尚缺的打包页证据见 [前端操作体验完成审计](frontend-completion-audit.md)。本文件继续记录每次实现和验证的细节。
 
+## 2026-10-02：会话恢复的存储提交与启动回收
+
+新增 Home 单会话恢复 journal。持久 owner、Stage 验证身份、ready 与一次
+非覆盖目录重命名组成存储提交边界；按实际位置识别提交，已提交会话
+不回滚，清理失败隔离写入并在管理器启动前恢复。私有树与备份使用同一
+有界 whitelist，未知内容/链接/替换身份保持并拒绝猜测清理。Stage 增加
+验证身份和由已存在 journal 承担回收的 Release，不把显示路径用于打开。
+
+真实小文件 storage/crash/collision 用例和真实 v2 PrepareRestore/Stage/
+model/UI/pixel/Release/End 接入验证，发布目标从 Home 独立读回，生产
+历史 artifact reader 的 HTTP/TLS 首块/大小/完整 SHA 验证通过。第二次
+发布拒绝覆盖；未派发模型/工具。首次严格编译的 unity 同名冲突和可选
+journal 的探针假设已修正并保留初始日志。详见
+[存储合同与证据范围](session-restore-storage.md)。
+
+这是恢复存储阶段。生产项目/workspace/version 复核、ID 预留、catalog
+同步、异步 worker/取消/结果复用和正式页面继续实施；`restore_ready:false`
+保持。没有压力/高负载或新增设备验收，Linux queued HEAD reset 仍待办。
+
+最终 Windows/Linux 门禁通过 115 Python、252 Node、90 JS 模块解析、
+严格 C11、41 runtime、三项 packed 和独立 A/B；Windows 另通过便携
+WebView2 Home 和 20 秒启动。SDK 未变化，复用已验证 native host。首轮
+Windows cleanup 假设、Linux schedule 夹具缺 header 已修正，初始失败
+日志保留；确定性 cleanup 保留句柄/安全重试在 HTTP/TLS 两边通过。
+Linux 新 ext4 staging 的 27 份改动代码/探针按 LF 与 Windows 核对。
+根目录 `mdo.exe` 更新为 6,421,862 字节、SHA-256
+`309365856566514e9bc5cfb0fe7a3bafef903122774694e184152367579a69a5`；
+Linux A/B 为 6,472,022 字节、SHA-256
+`4b606e556d79e724eaee2c8557c9dd98c27fb9b4141f26d7d76033dd44a8aeef`。
+日志 `.build/qa-home-restore-{windows,linux}-final.log`，源码核对
+`.build/qa-home-restore-source-equivalence.log`。更新时无根目录运行窗口。
+
 ## 2026-10-02：离线恢复的目标身份准备
 
 新增 `MdoSessionBackupPrepareRestore`，用同一个协作预算依次修复投影、

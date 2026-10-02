@@ -16,6 +16,7 @@ from pathlib import Path
 import shutil
 import subprocess
 import tempfile
+import time
 from unittest.mock import patch
 
 from test_backup_decode_runtime import ROOT, DECODE, Probe as DecodeProbe, dump, replace, set_ui, file_entry, recount
@@ -38,8 +39,16 @@ class Probe(DecodeProbe):
         hook = "    if ( MdoStageVerify(Stage, Backup, &Budget, Cancel, Error) ) return true;"
         assert text.count(hook) == 1
         text = text.replace(hook, "    BackupStageFixtureBeforeVerify(Stage);\n" + hook)
+        hook = '        char Reason[256];'
+        assert text.count(hook) == 1
+        text = text.replace(hook, '        BackupStageFixtureCleanup(&Cleanup);\n' + hook)
+        hook = 'xrtRootRemove(Stage->Directory, Item->Path)'
+        assert text.count(hook) == 2
+        text = text.replace(hook, 'BackupStageFixtureRemove(Stage->Directory, Item->Path)')
         source.write_text('#include "../../include/mdo/session_backup.h"\n'
                           'void BackupStageFixtureAfterWrite(const char*, size_t);\n'
+                          'void BackupStageFixtureCleanup(const xwork_error*);\n'
+                          'bool BackupStageFixtureRemove(xroot, cstr);\n'
                           'void BackupStageFixtureBeforeVerify(MdoSessionBackupStage*);\n' + text,
                           encoding="utf-8", newline="\n")
         source = self.site / "src/sessions/backup_submissions.c"
@@ -86,6 +95,27 @@ class Probe(DecodeProbe):
         assert decoded["ok"], decoded
         return self.fixture(mode)
 
+    def settle_failed_stage(self, result):
+        """Honor the explicit retained-handle contract, with a small deadline.
+
+        Retry only this fixture's tracked cleanup. Foreign-content cases below
+        still assert that discard refuses until the fixture removes its object.
+        A persistent obstruction fails the gate with its original/cleanup cause.
+        """
+        assert not result["ok"], result
+        if result["retained"]:
+            print("private Stage retained cleanup handle: " + repr(result), flush=True)
+            deadline = time.monotonic() + 2
+            while True:
+                state = self.fixture("discard")
+                if not state["retained"]:
+                    assert state["ok"], state
+                    print("private Stage bounded cleanup retry: PASS", flush=True)
+                    break
+                assert time.monotonic() < deadline, (result, state)
+                time.sleep(0.05)
+        assert not list(self.parent.iterdir()), result
+
     def check(self):
         status, response = self.api("POST", "/api/v1/sessions", {
             "project_id": "default", "title": "Staging source 中文", "agent_id": "mdo.default",
@@ -112,6 +142,7 @@ class Probe(DecodeProbe):
         before = inventory()
         result = self.prepare(source)
         assert result["ok"] and result["verified"] and result["source_id"] == session, result
+        assert result["publication_identity"], result
         assert result["files"] == len(expected) and result["bytes"] == sum(map(len, expected.values()))
         assert result["matched"] >= 6 and result["inline_images"] == 1
         assert result["ui_records"] == source["ui_records"]
@@ -123,6 +154,7 @@ class Probe(DecodeProbe):
         assert not duplicate["ok"] and duplicate["verified"] and duplicate["directory"] == result["directory"]
         revoked = self.fixture("check-budget")
         assert not revoked["verified"] and revoked["matched"] == revoked["inline_images"] == 0
+        assert not revoked["publication_identity"], revoked
         assert self.fixture("check")["verified"]
 
         # An anchored parent can move. Replacing its old path cannot redirect IO.
@@ -135,10 +167,13 @@ class Probe(DecodeProbe):
         assert not list(moved.iterdir()) and (self.parent / "foreign.txt").read_bytes() == b"replacement parent"
         (self.parent / "foreign.txt").unlink()
 
-        for mode in ("deadline", "files", "file", "total", "cancel", "write-cancel", "corrupt", "null-parent"):
+        for mode in ("deadline", "files", "file", "total", "cancel", "write-cancel", "cleanup-cancel", "corrupt", "null-parent"):
             result = self.prepare(source, mode)
-            assert not result["ok"] and not result["retained"], (mode, result)
-            if mode in ("cancel", "write-cancel"):
+            if mode == "cleanup-cancel":
+                assert result["retained"] and result["cleanup_fault_pending"] == 0, result
+                assert result["cleanup_error"].endswith(ARTIFACT), result
+            self.settle_failed_stage(result)
+            if mode in ("cancel", "write-cancel", "cleanup-cancel"):
                 assert result["code"] == 9, result
             if mode in ("deadline", "files", "file", "total"):
                 assert result["code"] == 11, result
@@ -185,7 +220,7 @@ class Probe(DecodeProbe):
             raise AssertionError("fixture has no main Agent start")
         set_ui(bad, events)
         result = self.prepare(bad)
-        assert not result["ok"] and not result["retained"], result
+        self.settle_failed_stage(result)
         assert not list(self.parent.iterdir())
         bad = copy.deepcopy(source)
         image_id = "d" * 32
@@ -193,12 +228,56 @@ class Probe(DecodeProbe):
         replace(bad, f"attachments/{image_id}.json", dump({"schema_version": 1, "id": image_id,
                     "mime_type": "image/png", "size": 8, "created_at": 1}))
         result = self.prepare(bad)
-        assert not result["ok"] and not result["retained"] and not list(self.parent.iterdir()), result
+        self.settle_failed_stage(result)
         assert self.prepare(source)["verified"] and self.fixture("discard")["ok"]
         self.check_projections(source, expected)
         self.check_restore(source, expected)
         self.check_input_review(source, expected)
         assert inventory() == before  # no source Home, queue, model or catalog writes
+        self.check_home_publication(source, expected, before)
+
+    def check_home_publication(self, source, expected, before):
+        document = copy.deepcopy(source)
+        events = [json.loads(row) for row in expected["ui-events.jsonl"].splitlines()]
+        kind = self.api("GET", DECODE + "kinds")[1]["data"]["artifact"]
+        event_id = events[-1]["event_id"] + 1
+        events.append({**events[-1], "event_id": event_id, "kind": kind, "run_id": 1,
+                       "artifact_id": 1, "artifact_path": "D:/old-home/sessions/default/old/" + ARTIFACT,
+                       "text": "Imported artifact", "tool_name": "", "tool_call_id": "", "queue_item_id": ""})
+        set_ui(document, events)
+        result = self.prepare(document, "home-publish")
+        assert result["ok"] and not result["retained"], result
+        target = self.home / "sessions/imported" / ("3" * 32)
+        actual = {p.relative_to(target).as_posix(): p.read_bytes() for p in target.rglob("*") if p.is_file()}
+        for name in ("snapshot.json", "journal.jsonl", ARTIFACT):
+            if name in expected:
+                assert actual[name] == expected[name], name
+            else:
+                assert name not in actual, name
+        meta = json.loads(actual["meta.json"])
+        assert meta["id"] == "3" * 32 and meta["project_id"] == "imported" and meta["revision"] == 1
+        assert meta["workspace_root"] == str(self.parent.resolve())
+        assert json.loads(actual["queue.json"])["items"][0]["state"] == "staged"
+        assert json.loads(actual["restore-origin.json"])["imports"][0]["target_meta"]["data"].encode() == actual["meta.json"]
+        assert (target / "restore-inputs.json").is_file()
+        for name, raw in before.items():
+            assert (self.home / name).read_bytes() == raw, name
+        assert not (self.home / ".mdo-session-restore").exists()
+        assert not (self.home / ".mdo-session-restore-cleanup").exists()
+        assert self.api("GET", DECODE + "state")[1]["data"]["files"] == []
+        # Actual production artifact reader now opens the published target Home.
+        path = f"/api/v1/projects/imported/sessions/{'3' * 32}/artifacts/{event_id}"
+        status, response = self.api("GET", path + "?offset=0&limit=65536")
+        assert status == 200, response
+        data = response["data"]
+        assert data["total_size"] == len(expected[ARTIFACT]) and not data["eof"]
+        assert base64.b64decode(data["data"]) == expected[ARTIFACT][:65536]
+        assert data["sha256"] == hashlib.sha256(expected[ARTIFACT]).hexdigest()
+        assert data["event_id"] == event_id and data["artifact_id"] == 1
+        # A second attempt cannot overwrite the target or rewrite provenance.
+        result = self.prepare(document, "home-publish")
+        assert not result["ok"] and not result["retained"], result
+        assert {p.relative_to(target).as_posix(): p.read_bytes() for p in target.rglob("*") if p.is_file()} == actual
 
     def check_input_review(self, source, expected):
         document = copy.deepcopy(source)

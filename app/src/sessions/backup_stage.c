@@ -232,6 +232,7 @@ static bool MdoStageVerify(MdoSessionBackupStage* Stage, const MdoSessionBackup*
     size_t i, Seen = 0u;
     bool Ok = false;
     Stage->Info.Verified = false;
+    memset(&Stage->Info.DirectoryIdentity, 0, sizeof(Stage->Info.DirectoryIdentity));
     memset(&Stage->Info.ModelHistory, 0, sizeof(Stage->Info.ModelHistory));
     memset(&Stage->Info.Images, 0, sizeof(Stage->Info.Images));
     if ( !MdoBackupCheck(Limits, Cancel, Error) || !MdoStageBudget(Expected, Limits, Error) ) return false;
@@ -252,6 +253,7 @@ static bool MdoStageVerify(MdoSessionBackupStage* Stage, const MdoSessionBackup*
          !MdoBackupCheck(Limits, Cancel, Error) || !MdoStageMatches(Stage->Parent, &Stage->Root) ) goto done;
     if ( !MdoStageCloseDirectory(Stage) ) { (void)MdoStageIO(Error, Stage->Root.Path); goto done; }
     Facts.Verified = true;
+    Facts.DirectoryIdentity = Stage->Root.Identity;
     snprintf(Facts.DirectoryName, sizeof(Facts.DirectoryName), "%s", Stage->Root.Path);
     MdoSessionBackupRelease(Stage->Bytes); Stage->Bytes = Read; Read = NULL;
     Stage->Info = Facts; Ok = true;
@@ -280,17 +282,32 @@ bool MdoSessionBackupStageCheck(MdoSessionBackupStage* Stage,
     if ( Stage == NULL || Stage->Bytes == NULL )
         return MdoBackupError(Error, XWORK_ERROR_INVALID_ARGUMENT, "a prepared stage is required", NULL);
     Stage->Info.Verified = false;
+    memset(&Stage->Info.DirectoryIdentity, 0, sizeof(Stage->Info.DirectoryIdentity));
     memset(&Stage->Info.ModelHistory, 0, sizeof(Stage->Info.ModelHistory));
     memset(&Stage->Info.Images, 0, sizeof(Stage->Info.Images));
     if ( !MdoBackupLimits(Limits, &Budget, 30000000u, Error) ) return false;
     return MdoStageVerify(Stage, Stage->Bytes, &Budget, Cancel, Error);
 }
 
+bool MdoSessionBackupStageRelease(MdoSessionBackupStage** Pointer, xwork_error* Error)
+{
+    MdoSessionBackupStage* Stage;
+    bool Ok = true;
+    if ( Error != NULL ) xworkErrorInit(Error);
+    if ( Pointer == NULL ) return MdoBackupError(Error, XWORK_ERROR_INVALID_ARGUMENT, "stage pointer is required", NULL);
+    Stage = *Pointer;
+    if ( Stage == NULL ) return true;
+    if ( !MdoStageCloseDirectory(Stage) ) Ok = false;
+    if ( Stage->Parent != NULL && !xrtRootClose(Stage->Parent) ) Ok = false;
+    MdoSessionBackupRelease(Stage->Bytes); xrtFree(Stage->Files); xrtFree(Stage->Directories);
+    xrtFree(Stage); *Pointer = NULL;
+    return Ok || MdoStageIO(Error, NULL);
+}
+
 bool MdoSessionBackupStageDiscard(MdoSessionBackupStage** Pointer, xwork_error* Error)
 {
     MdoSessionBackupStage* Stage;
     size_t i;
-    bool Ok = true;
     if ( Error != NULL ) xworkErrorInit(Error);
     if ( Pointer == NULL ) return MdoBackupError(Error, XWORK_ERROR_INVALID_ARGUMENT, "stage pointer is required", NULL);
     Stage = *Pointer;
@@ -318,11 +335,7 @@ bool MdoSessionBackupStageDiscard(MdoSessionBackupStage** Pointer, xwork_error* 
              !xrtRootRemove(Stage->Parent, Stage->Root.Path) ) return MdoStageIO(Error, Stage->Root.Path);
         Stage->Root.Owned = false;
     }
-    if ( !MdoStageCloseDirectory(Stage) ) Ok = false;
-    if ( Stage->Parent != NULL && !xrtRootClose(Stage->Parent) ) Ok = false;
-    MdoSessionBackupRelease(Stage->Bytes); xrtFree(Stage->Files); xrtFree(Stage->Directories);
-    xrtFree(Stage); *Pointer = NULL;
-    return Ok || MdoStageIO(Error, NULL);
+    return MdoSessionBackupStageRelease(Pointer, Error);
 }
 
 bool MdoSessionBackupStagePrepare(const MdoSessionBackup* Backup, xroot Parent,

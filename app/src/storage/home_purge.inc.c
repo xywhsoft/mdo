@@ -883,6 +883,7 @@ static bool MdoHomePurgeAvailableLocked(void)
     bool Exists;
     xfileinfo Info;
     if ( !MdoHomeWritableLocked() ) return false;
+    if ( g_MdoHome.Restore != NULL ) return MdoHomePurgeError("session restore is in progress");
     if ( g_MdoHome.Root == NULL || g_MdoHome.LeaseFile == NULL )
         return MdoHomePurgeError("project purge requires an already-existing leased Home");
     for ( i = 0u; i < 2u; ++i ) {

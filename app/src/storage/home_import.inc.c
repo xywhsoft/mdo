@@ -104,7 +104,7 @@ bool MdoHomeImportInspect(bool* Available, bool* PreserveCache)
         *PreserveCache = true;
         goto done;
     }
-    if ( g_MdoHome.RestartRequired ||
+    if ( g_MdoHome.Restore != NULL || g_MdoHome.RestartRequired ||
          g_MdoHome.Persistence == MDO_PERSISTENCE_EPHEMERAL ) goto done;
     if ( g_MdoHome.Root != NULL ) {
         *Available = true;
@@ -473,7 +473,7 @@ MdoHomeImport* MdoHomeImportBegin(xroot* Stage, str* Path)
     }
     *Stage = NULL; *Path = NULL;
     xrtMutexLock(g_MdoHome.Lock);
-    if ( g_MdoHome.Root == NULL || g_MdoHome.LeaseFile == NULL ||
+    if ( g_MdoHome.Restore != NULL || g_MdoHome.Root == NULL || g_MdoHome.LeaseFile == NULL ||
          !MdoHomeWritableLocked() ||
          !MdoHomeImportCacheOnly(".", 0u, 0u, false, &Eligible) || !Eligible ) {
         (void)MdoHomeImportError("Home import requires an unused cache-only Home");

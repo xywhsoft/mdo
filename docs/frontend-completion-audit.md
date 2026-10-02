@@ -2,7 +2,27 @@
 
 本清单以 `app_bak/wwwroot` 的可操作行为为基线，而不是以页面长得相似或单元测试通过为完成标准。`docs/frontend-migration.md` 记录每次实现和验证；这里记录当前还需要什么证据。审计更新：2026-10-02，基线提交 `f9e2c4c`。
 
-2026-10-02 最新增量：离线准备现在组合投影/输入审核、目标 metadata/UI
+2026-10-02 最新增量：Home 单会话恢复存储 journal 已接入非覆盖目录提交
+和管理器启动前的中断回收。目标碰撞保持原数据，已提交不回滚，清理
+失败隔离写入，矛盾/未知内容保留。真实 v2 独立 Stage/model/UI/pixel
+检查到 Home 发布，以及生产历史 artifact HTTP/TLS 读回通过。共享
+whitelist 和 Stage 验证身份/Release 合同见
+[存储恢复记录](session-restore-storage.md)。生产项目/workspace/ID 协调、
+catalog 同步、worker 和正式页面尚缺，不能将此阶段视为正式导入已完成；
+`restore_ready:false` 保持。没有压力/高负载或新增原生/实体设备证据。
+Linux queued HEAD reset 仍待排查，长期目标继续。
+
+本增量最终 Windows/Linux 通过 115 Python、252 Node、90 JS、严格 C11、
+41 runtime、三项 packed、独立 A/B；Windows 另通过便携 Home/20 秒启动。
+SDK 不变，复用已验证 host，27 份改动代码/探针跨平台按 LF 核对。根目录
+程序 6,421,862 字节、SHA-256
+`309365856566514e9bc5cfb0fe7a3bafef903122774694e184152367579a69a5`；
+Linux A/B 6,472,022 字节、SHA-256
+`4b606e556d79e724eaee2c8557c9dd98c27fb9b4141f26d7d76033dd44a8aeef`。
+日志 `.build/qa-home-restore-{windows,linux}-final.log`。保留首轮失败日志；
+回收句柄假设和漏拷 header 已修补。此证据不新增正式导入页面或设备验收。
+
+2026-10-02 增量：离线准备现在组合投影/输入审核、目标 metadata/UI
 身份重建和便携产物路径。新生命周期清除旧 pin/fork/generation，源/目标
 metadata 与旧路径持久保存到来源文件。实际账本/像素/逐条 UI 核对、
 独立 Stage 释放后读回、重复导入和失败重试通过；真实前端控制器刷新

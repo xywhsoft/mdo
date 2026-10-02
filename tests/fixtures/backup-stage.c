@@ -4,6 +4,23 @@ static unsigned g_StageFixtureFault;
 static xcancel* g_StageFixtureCancel;
 static unsigned g_ReviewFixtureFault;
 static unsigned g_RestoreFixtureFault;
+static char g_StageCleanupError[512];
+static unsigned g_StageCleanupFault;
+
+bool BackupStageFixtureRemove(xroot Root, cstr Path)
+{
+    if ( g_StageCleanupFault != 0u ) {
+        --g_StageCleanupFault;
+        MdoHomeErrorSet(XERR_IO, MDO_HOME_ERROR_STORAGE, "synthetic one-shot Stage cleanup obstruction");
+        return false;
+    }
+    return xrtRootRemove(Root, Path);
+}
+
+void BackupStageFixtureCleanup(const xwork_error* Error)
+{
+    snprintf(g_StageCleanupError, sizeof(g_StageCleanupError), "%s", Error->sMessage);
+}
 
 void BackupRestoreFixtureAfterUi(void)
 {
@@ -98,6 +115,7 @@ static bool BackupStageFixtureControl(XS_HttpReq* Request)
         return MdoApiReplySuccessTake(&Context, 200u, xrtValueBool(Equal), NULL);
     }
     MdoSessionBackupLimitsInit(&Limits); xworkErrorInit(&Error);
+    g_StageCleanupError[0] = '\0';
     if ( MdoApiViewEqualText(Target, "/__fixture/backup-stage/discard") )
         Ok = MdoSessionBackupStageDiscard(&g_StageFixture, &Error);
     else if ( MdoApiViewEqualText(Target, "/__fixture/backup-stage/move-parent") ) {
@@ -109,6 +127,32 @@ static bool BackupStageFixtureControl(XS_HttpReq* Request)
     }
     else if ( MdoApiViewEqualText(Target, "/__fixture/backup-stage/check") )
         Ok = MdoSessionBackupStageCheck(g_StageFixture, NULL, NULL, &Error);
+    else if ( MdoApiViewEqualText(Target, "/__fixture/backup-stage/home-publish") ) {
+        MdoSessionBackupRestoreTarget Destination = {0};
+        MdoSessionBackup* Prepared = NULL;
+        MdoHomeSessionRestore* Transaction = NULL;
+        MdoSessionBackupStage* Private = NULL;
+        MdoSessionBackupStageInfo Verified = {0};
+        bool Commit = false, Released = true;
+        Destination.Size = sizeof(Destination); Destination.ProjectId = "imported";
+        Destination.SessionId = "33333333333333333333333333333333";
+        Destination.WorkspaceRoot = getenv("MDO_STAGE_FIXTURE_PARENT");
+        Destination.RestoredAt = INT64_C(1790900000000000); Restore.Size = sizeof(Restore);
+        Prepared = MdoSessionBackupPrepareRestore(g_DecodeFixtureBackup, &Destination, NULL, NULL, &Restore, &Error);
+        if ( Prepared != NULL ) Transaction = MdoHomeSessionRestoreBegin(Destination.ProjectId, Destination.SessionId, &Parent);
+        Ok = Transaction != NULL && MdoSessionBackupStagePrepare(Prepared, Parent, NULL, NULL, &Private, &Error);
+        if ( Parent != NULL && !xrtRootClose(Parent) ) Ok = false;
+        Parent = NULL; MdoSessionBackupRelease(Prepared); BackupDecodeFixtureUnit();
+        Verified.Size = sizeof(Verified);
+        Ok = Ok && MdoSessionBackupStageCheck(Private, NULL, NULL, &Error) &&
+            MdoSessionBackupStageInfoGet(Private, &Verified) && Verified.Verified;
+        if ( Private != NULL ) Released = MdoSessionBackupStageRelease(&Private, &Error);
+        if ( Transaction != NULL ) Ok = MdoHomeSessionRestoreEnd(Transaction, Verified.DirectoryName,
+            &Verified.DirectoryIdentity, Ok && Released, &Commit) && Ok && Released && Commit;
+        else Ok = false;
+        /* This fixture proves storage/replay only. It intentionally has no
+         * production project/workspace reservation or catalog notification. */
+    }
     else if ( MdoApiViewEqualText(Target, "/__fixture/backup-stage/check-budget") ) {
         Limits.Files = 0u;
         Ok = MdoSessionBackupStageCheck(g_StageFixture, &Limits, NULL, &Error);
@@ -227,7 +271,9 @@ static bool BackupStageFixtureControl(XS_HttpReq* Request)
     } else if ( !MdoApiViewEqualText(Target, "/__fixture/backup-stage/state") ) {
         g_StageFixtureFault = MdoApiViewEqualText(Target, "/__fixture/backup-stage/corrupt") ? 1u :
             MdoApiViewEqualText(Target, "/__fixture/backup-stage/foreign") ? 2u :
-            MdoApiViewEqualText(Target, "/__fixture/backup-stage/write-cancel") ? 3u : 0u;
+            (MdoApiViewEqualText(Target, "/__fixture/backup-stage/write-cancel") ||
+             MdoApiViewEqualText(Target, "/__fixture/backup-stage/cleanup-cancel")) ? 3u : 0u;
+        g_StageCleanupFault = MdoApiViewEqualText(Target, "/__fixture/backup-stage/cleanup-cancel") ? 1u : 0u;
         if ( MdoApiViewEqualText(Target, "/__fixture/backup-stage/deadline") ) Limits.Deadline = 1u;
         if ( MdoApiViewEqualText(Target, "/__fixture/backup-stage/files") ) Limits.Files = 1u;
         if ( MdoApiViewEqualText(Target, "/__fixture/backup-stage/file") ) Limits.FileBytes = 1u;
@@ -263,8 +309,11 @@ static bool BackupStageFixtureControl(XS_HttpReq* Request)
     Value = xrtValueObject();
     (void)MdoApiValueSetBool(Value, "ok", Ok); (void)MdoApiValueSetUInt(Value, "code", Error.eCode);
     (void)MdoApiValueSetString(Value, "error", Error.sMessage);
+    (void)MdoApiValueSetString(Value, "cleanup_error", g_StageCleanupError);
+    (void)MdoApiValueSetUInt(Value, "cleanup_fault_pending", g_StageCleanupFault);
     (void)MdoApiValueSetBool(Value, "retained", g_StageFixture != NULL);
     (void)MdoApiValueSetBool(Value, "verified", Info.Verified);
+    (void)MdoApiValueSetBool(Value, "publication_identity", Info.DirectoryIdentity.Identity != 0u);
     (void)MdoApiValueSetBool(Value, "size_safe", SizeSafe);
     (void)MdoApiValueSetString(Value, "directory", Info.DirectoryName);
     (void)MdoApiValueSetString(Value, "source_id", Info.Source.Info.Id);

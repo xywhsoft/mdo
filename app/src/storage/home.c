@@ -4,6 +4,8 @@
 #include "../../include/mdo/home.h"
 #include "../../include/mdo/home_import.h"
 #include "../../include/mdo/home_purge.h"
+#include "../../include/mdo/home_restore.h"
+#include "../../include/mdo/session_file_policy.h"
 
 #define MDO_RESOURCE_PREFIX "/app/default-home/"
 #define MDO_HOME_ERROR_DOMAIN "mdo.home"
@@ -30,6 +32,7 @@ typedef struct MdoHomeState {
     bool ExternalOverlay;
     bool Initialized;
     MdoHomeImport* Import;
+    MdoHomeSessionRestore* Restore;
     bool RestartRequired;
     char Message[256];
 } MdoHomeState;
@@ -38,6 +41,7 @@ static MdoHomeState g_MdoHome;
 
 static bool MdoHomeImportRecoverLocked(bool* Published);
 static bool MdoHomePurgeRecoverLocked(void);
+static bool MdoHomeSessionRestoreRecoverLocked(bool* Committed);
 
 static void MdoHomeErrorSet(xerrkind Kind, MdoHomeError Code, cstr Message)
 {
@@ -101,7 +105,8 @@ static bool MdoHomePathValid(cstr Path)
             if ( pSegment == (const unsigned char*)Path ) {
                 static const char* const Reserved[] = {
                     ".mdo-import", ".mdo-import-cleanup",
-                    ".mdo-purge", ".mdo-purge-cleanup"
+                    ".mdo-purge", ".mdo-purge-cleanup",
+                    ".mdo-session-restore", ".mdo-session-restore-cleanup"
                 };
                 size_t i, Length = iLength;
                 while ( Length != 0u && (pSegment[Length - 1u] == '.' ||
@@ -410,7 +415,7 @@ bool MdoHomeInit(void)
                 "external Home path exists but is not a directory");
             goto fail;
         }
-        if ( !MdoHomeMountLocked() || !MdoHomePurgeRecoverLocked() ||
+        if ( !MdoHomeMountLocked() || !MdoHomeSessionRestoreRecoverLocked(NULL) || !MdoHomePurgeRecoverLocked() ||
              !MdoHomeImportRecoverLocked(NULL) ) goto fail;
     } else {
         pError = xrtGetError();
@@ -1067,3 +1072,4 @@ done:
  * without exposing them to migration callers or depending on unity ordering. */
 #include "home_import.inc.c"
 #include "home_purge.inc.c"
+#include "home_restore.inc.c"

@@ -302,8 +302,8 @@ def write_site(site: Path) -> None:
     shutil.copy2(ROOT / "app/default-home/modules/agents/builtin_default.c",
                  site / "default-home/modules/agents/builtin_default.c")
     for relative in (
-        "src/storage/home.c", "src/storage/home_import.inc.c", "src/storage/home_purge.inc.c", "src/modules/manager.c",
-        "include/mdo/home.h", "include/mdo/home_import.h", "include/mdo/home_purge.h", "include/mdo/modules.h",
+        "src/storage/home.c", "src/storage/home_import.inc.c", "src/storage/home_purge.inc.c", "src/storage/home_restore.inc.c", "src/modules/manager.c",
+        "include/mdo/home.h", "include/mdo/home_import.h", "include/mdo/home_purge.h", "include/mdo/home_restore.h", "include/mdo/session_file_policy.h", "include/mdo/modules.h",
     ):
         shutil.copy2(ROOT / "app" / relative, site / relative)
     shutil.copy2(ROOT / "include/mdo/module.h",

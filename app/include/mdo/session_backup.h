@@ -259,6 +259,7 @@ typedef struct MdoSessionBackupStageInfo {
     uint32 Size;
     bool Verified;
     char DirectoryName[64]; /* relative to the supplied parent; never a Home path */
+    xfileinfo DirectoryIdentity; /* publication identity, supplied only when Verified */
     MdoSessionBackupPreview Source;
     MdoSessionBackupModelHistory ModelHistory;
     MdoSessionBackupImages Images;
@@ -296,5 +297,13 @@ bool MdoSessionBackupStageCheck(MdoSessionBackupStage* Stage,
  * Retains *Stage on an obstruction; caller can remove its own obstruction and
  * retry. Successful discard closes anchors/frees bytes and sets *Stage=NULL. */
 bool MdoSessionBackupStageDiscard(MdoSessionBackupStage** Stage, xwork_error* Error);
+/* Closes all Stage anchors and releases owned memory without deleting files.
+ * Consumes *Stage even on a native close error. Use only when a durable private
+ * storage transaction already owns recovery/cleanup of its payload (for
+ * example HomeSessionRestore); always end that transaction after this call.
+ * Standalone staging must use Discard, otherwise it leaves orphaned files.
+ * A saved verified StageInfo carries the exact directory identity required
+ * by Home's no-replace publication boundary. This is never authorization. */
+bool MdoSessionBackupStageRelease(MdoSessionBackupStage** Stage, xwork_error* Error);
 
 #endif

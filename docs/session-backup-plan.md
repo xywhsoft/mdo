@@ -3,12 +3,26 @@
 状态：专用下载/上传、离线解码、模型/UI 关系、静态图片像素检查及生产异步
 预览 API 已接入。独立 staging 的材料化/读回检查、离线历史投影修复、输入
 待确认转换、持久来源记录和明确目标的 metadata/UI/产物路径准备已实现。
-生产恢复 worker、原子发布与正式页面入口待实现。2026-10-02 已完成
+Home 非覆盖目录提交、持久 journal 所有权和启动回收已实现，真实 Stage
+到 target Home 的历史产物读取通过。生产项目/workspace/ID 协调、catalog
+同步、恢复 worker 与正式页面入口待实现。2026-10-02 已完成
 checkpoint 与有界读取共用排他运行窗口、统一捕获边界、v2 捕获/编码层和
 有界 HTTP/TLS 传输。现有页面仍使用 `export_schema:1`，只有 meta 和模型 snapshot。
 格式/传输验证通过不表示正式页面已经导出完整备份，或恢复事务已经完成。
 旧版核心功能是 Markdown 导出，图片携带已经恢复；这里补齐新版现有 JSON
 备份入口，不将它冒充旧版已有的导入能力。
+
+最新存储阶段详见 [单会话恢复合同](session-restore-storage.md)：Home journal
+与非覆盖目录提交/启动回收，以及真实 Stage 到 target Home 的 HTTP/TLS
+产物读回通过。最终两平台门禁通过 115 Python、252 Node、90 JS、严格 C11、
+41 runtime、三项 packed 和 A/B；Windows 另通过便携 Home/20 秒启动。SDK
+不变；27 份改动代码/探针按 LF 核对。根目录程序 SHA-256
+`309365856566514e9bc5cfb0fe7a3bafef903122774694e184152367579a69a5`，
+Linux A/B SHA-256
+`4b606e556d79e724eaee2c8557c9dd98c27fb9b4141f26d7d76033dd44a8aeef`。
+日志 `.build/qa-home-restore-{windows,linux}-final.log`。初始 cleanup 假设和
+手写夹具 header 漏拷已修正，失败日志保留；没有压力/高负载或新设备证据。
+生产项目/workspace/ID 协调、catalog 同步、worker、正式页面继续实施。
 
 ## 内容与完成判据
 
