@@ -1,7 +1,7 @@
 # 会话 JSON 完整备份与恢复实施记录
 
 状态：专用下载/上传、离线解码、模型/UI 关系、静态图片像素检查及生产异步
-预览 API 已接入。独立 staging 的材料化/读回检查、离线历史投影修复和输入待确认转换已实现，身份/provenance、
+预览 API 已接入。独立 staging 的材料化/读回检查、离线历史投影修复、输入待确认转换和持久输入来源记录已实现，身份/路径、
 原子发布与正式页面入口待实现。2026-10-02 已完成
 checkpoint 与有界读取共用排他运行窗口、统一捕获边界、v2 捕获/编码层和
 有界 HTTP/TLS 传输。现有页面仍使用 `export_schema:1`，只有 meta 和模型 snapshot。
@@ -78,7 +78,8 @@ manager 调用或库通过 native path 写入不能被它自动覆盖。不得�
    xllm/UI 关系和像素检查；它仍保留来源身份及队列原字节，不能发布。
    离线历史投影修复已接入，共用正向删改证据，未知前缀仍保留并报告。
    离线队列/草稿待确认转换已接入，旧受理证据保留，新输入 ID 不重复调度。
-   继续完成身份/产物重绑定、持久 provenance 及恢复 worker。恢复到独立 staging，
+   精确源 metadata/意图及映射已保存在随备份携带的 `restore-inputs.json`。
+   继续完成身份/产物重绑定及恢复 worker。恢复到独立 staging，
    验证实际 xllm 恢复与 UI replay 后，以不覆盖的原子
    目录发布方式创建新的会话。保留原身份作为来源，明确处理 ID 冲突；失败
    只清理由本次事务拥有的文件。实际发布后才进入 catalog，导入不得立即
@@ -1012,3 +1013,30 @@ Linux A/B 为 6,452,626 字节、SHA-256
 `49a769bbb80dd8a9d4d9ec4b93431b271bb669e339acbcdd9a946698371d6f41`。
 日志 `.build/qa-inputs-{windows,linux}-final.log`。没有压力/高负载或新增
 DOM/原生/实体设备验收；Linux queued HEAD reset 仍待排查。
+
+## 恢复输入的持久来源记录
+
+步骤 5 的输入转换副本现在携带 `restore-inputs.json`。原 metadata/queue/
+draft 精确 UTF-8 字节、内层 SHA、source/review ID 和受理不确定性随普通
+备份及私有 Stage 保存。历史描述不作为当前执行授权；再次转换保留旧
+条目、继承未确认输入的不确定性，新 ID 避开历史映射。真实 codec 和
+映射校验、独立磁盘读回、原生编码/解码、损坏/取消/配额失败重试通过。
+详见 [来源合同](session-backup-input-provenance.md)。身份/workspace/artifact
+重绑定、恢复 worker/异常回收、原子发布/catalog 与正式页面继续实施，
+`restore_ready:false` 保持。
+
+首次两平台完整门禁发现旧会话探针漏列来源验证器，已修补手写 TCC 清单
+并拆出共享纯函数。重新生成 unity 后定向及最终两平台门禁通过；初始
+失败日志保留。最终 Windows/Linux 通过 115 Python、252 Node、90 JS
+模块、严格 C11、40 runtime、三项 packed 和独立 A/B；Windows 另通过
+便携 WebView2 Home 及 20 秒打包启动。SDK 不变，复用已验证 native host；
+Linux 新 ext4 staging 的十二份代码/清单/探针输入按 LF 归一化核对。
+根目录程序为 6,407,289 字节、SHA-256
+`d909eac42fb3f7c6457dcf64457af89e715f1a3616431902c4c71e80c9473403`；
+Linux A/B 为 6,457,449 字节、SHA-256
+`c8de9cc2f786c3354a1d03709f91c5ff203b8485705554dc74d0c1d1889928af`。
+日志 `.build/qa-input-origin-{windows,linux}-final.log`。没有压力/高负载或
+新增 DOM/原生/实体设备验收；Linux queued HEAD reset 仍待处理。
+完整门禁后只移除新文件一行末尾空行，两平台再通过严格 C11、独立 A/B
+及三项 packed，Windows 重过便携 Home/20 秒启动。最终字节日志
+`.build/qa-input-origin-{windows,linux}-post-format.log`，完整行为门禁结果保留。

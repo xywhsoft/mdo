@@ -4,6 +4,42 @@
 
 完成判据及尚缺的打包页证据见 [前端操作体验完成审计](frontend-completion-audit.md)。本文件继续记录每次实现和验证的细节。
 
+## 2026-10-02：恢复输入的来源记录随副本保存
+
+输入转换现在自动新增/追加 `restore-inputs.json`，保留原 metadata/queue/
+draft 精确 UTF-8 字节、内层 SHA 和 source/review 映射。普通备份的共用
+白名单/验证器及私有 Stage 均携带该文件，旧 v2 的 absent 清单仍兼容。
+真实 codec、源长度/哈希和映射关系拒绝矛盾；历史受理描述不参与当前
+执行授权。二次转换保留来源并继承尚未确认输入的不确定性，新 ID 避开
+历史映射。16 条/8 MiB 及 caller 较小预算超限整体失败，不丢旧记录。
+
+独立落盘、释放源对象后重查、原生 encode/decode 原字节、二次转换、
+内层损坏/codec/映射拒绝、hash 后取消及配额失败/重试探针通过，源 Home
+不变。初始夹具同步发送大响应遇到超时，已改为进程内核对/返回小结果，
+生产传输门禁未改变。详见 [来源合同](session-backup-input-provenance.md)。
+身份/workspace/artifact 重绑定、worker/异常回收、原子发布/catalog 和
+正式页面仍继续实施，`restore_ready:false` 保持。没有压力/高负载或新增
+原生/实体设备验收；Linux queued HEAD reset 仍待处理。
+
+首次两平台门禁在旧会话探针报来源验证器未定义，已补齐其手写 TCC
+清单并拆出共享纯函数。生成 unity 清单刷新后的定向探针通过；初始失败
+日志保留，最终两平台结果在下文记录。
+
+最终 Windows/Linux 通过 115 Python、252 Node、90 JS 模块、严格 C11、40
+runtime、三项 packed 和独立 A/B；Windows 另通过便携 WebView2 Home 及
+20 秒打包启动。SDK 未变化，native host 复用已验证版本；Linux 使用新的
+ext4 staging，十二份代码/清单/探针输入与 Windows 按 LF 归一化核对。
+根目录 `mdo.exe` 已更新为 6,407,289 字节、SHA-256
+`d909eac42fb3f7c6457dcf64457af89e715f1a3616431902c4c71e80c9473403`；
+Linux A/B 为 6,457,449 字节、SHA-256
+`c8de9cc2f786c3354a1d03709f91c5ff203b8485705554dc74d0c1d1889928af`。
+日志 `.build/qa-input-origin-{windows,linux}-final.log`，源码核对记录
+`.build/qa-input-origin-source-equivalence.log`。发布时没有运行的根目录窗口。
+完整门禁后仅移除新纯函数文件的一行末尾空行，两平台再通过严格 C11、
+独立 A/B 和三项 packed，Windows 另重过便携 Home 及 20 秒启动。
+上面的最终字节来自 `.build/qa-input-origin-{windows,linux}-post-format.log`；
+完整行为门禁的日志保留，不将格式修整后的打包校验冒充重跑全部探针。
+
 ## 2026-10-02：恢复输入转成待确认
 
 新增独立 `backup_submissions.c` 和 filesystem-free

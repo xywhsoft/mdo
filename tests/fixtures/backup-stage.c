@@ -12,6 +12,11 @@ void BackupReviewFixtureCandidate(str* Candidate, size_t Attempt)
     }
 }
 
+void BackupReviewFixtureArchiveHash(void)
+{
+    if ( g_ReviewFixtureFault == 3u ) (void)xrtCancelRequest(g_StageFixtureCancel);
+}
+
 void BackupStageFixtureAfterWrite(const char* Path, size_t Offset)
 {
     if ( g_StageFixtureFault == 3u && strncmp(Path, "artifacts/", 10u) == 0 && Offset >= 65536u )
@@ -53,6 +58,23 @@ static bool BackupStageFixtureControl(XS_HttpReq* Request)
     uint32 Words[2] = { sizeof(uint32), UINT32_C(0x87654321) };
     void* Small;
     if ( Target.Size < sizeof(Prefix) - 1u || memcmp(Target.Data, Prefix, sizeof(Prefix) - 1u) != 0 ) return false;
+    if ( MdoApiViewEqualText(Target, "/__fixture/backup-stage/export") ) {
+        size_t Size = 0u;
+        str Json = g_StageFixture != NULL ? MdoSessionBackupEncode(g_StageFixture->Bytes, NULL, &Size, NULL) : NULL;
+        MdoSessionBackup* Decoded = Json != NULL ? MdoSessionBackupDecode(Json, Size, NULL, NULL, NULL) : NULL;
+        size_t i;
+        bool Equal = Decoded != NULL && MdoSessionBackupFileCount(Decoded) == MdoSessionBackupFileCount(g_StageFixture->Bytes);
+        xrtFree(Json);
+        for ( i = 0u; Equal && i < MdoSessionBackupFileCount(Decoded); ++i ) {
+            MdoSessionBackupFile A, B;
+            Equal = MdoSessionBackupFileGet(Decoded, i, &A) && MdoSessionBackupFileGet(g_StageFixture->Bytes, i, &B) &&
+                strcmp(A.Path, B.Path) == 0 && A.Bytes == B.Bytes && memcmp(A.Data, B.Data, A.Bytes) == 0;
+        }
+        MdoSessionBackupRelease(Decoded);
+        Context.Request = Request;
+        snprintf(Context.RequestId, sizeof(Context.RequestId), "stage-export");
+        return MdoApiReplySuccessTake(&Context, 200u, xrtValueBool(Equal), NULL);
+    }
     MdoSessionBackupLimitsInit(&Limits); xworkErrorInit(&Error);
     if ( MdoApiViewEqualText(Target, "/__fixture/backup-stage/discard") )
         Ok = MdoSessionBackupStageDiscard(&g_StageFixture, &Error);
@@ -99,14 +121,17 @@ static bool BackupStageFixtureControl(XS_HttpReq* Request)
         size_t BeforeBytes = 0u, AfterBytes = 0u;
         str Before = MdoSessionBackupEncode(g_DecodeFixtureBackup, NULL, &BeforeBytes, NULL), After;
         if ( MdoApiViewEqualText(Target, "/__fixture/backup-stage/review-inputs-cancel") ||
-             MdoApiViewEqualText(Target, "/__fixture/backup-stage/review-inputs-mid-cancel") ) {
+             MdoApiViewEqualText(Target, "/__fixture/backup-stage/review-inputs-mid-cancel") ||
+             MdoApiViewEqualText(Target, "/__fixture/backup-stage/review-inputs-origin-cancel") ) {
             Cancel = xrtCancelCreate();
             if ( MdoApiViewEqualText(Target, "/__fixture/backup-stage/review-inputs-cancel") ) (void)xrtCancelRequest(Cancel);
         }
         g_StageFixtureCancel = Cancel;
         g_ReviewFixtureFault = MdoApiViewEqualText(Target, "/__fixture/backup-stage/review-inputs-mid-cancel") ? 1u :
-            (MdoApiViewEqualText(Target, "/__fixture/backup-stage/review-inputs-collision") ? 2u : 0u);
+            (MdoApiViewEqualText(Target, "/__fixture/backup-stage/review-inputs-collision") ? 2u :
+             (MdoApiViewEqualText(Target, "/__fixture/backup-stage/review-inputs-origin-cancel") ? 3u : 0u));
         if ( MdoApiViewEqualText(Target, "/__fixture/backup-stage/review-inputs-deadline") ) Limits.Deadline = 1u;
+        if ( MdoApiViewEqualText(Target, "/__fixture/backup-stage/review-inputs-origin-files") ) Limits.Files = MdoSessionBackupFileCount(g_DecodeFixtureBackup);
         if ( MdoApiViewEqualText(Target, "/__fixture/backup-stage/review-inputs-growth") ) {
             MdoSessionBackupPreview Preview = {0};
             Preview.Size = sizeof(Preview);
@@ -198,6 +223,7 @@ static bool BackupStageFixtureControl(XS_HttpReq* Request)
     (void)MdoApiValueSetUInt(Value, "draft_review", Inputs.DraftReview);
     (void)MdoApiValueSetUInt(Value, "discard_images", Inputs.ClearedDiscardImages);
     (void)MdoApiValueSetBool(Value, "direct_uncertain", Inputs.DirectRunAdmissionUncertain);
+    (void)MdoApiValueSetUInt(Value, "provenance_entries", Inputs.ProvenanceEntries);
     (void)MdoApiReplySuccessTake(&Context, 200u, Value, NULL);
     return true;
 }

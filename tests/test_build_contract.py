@@ -116,6 +116,8 @@ class BuildContractTests(unittest.TestCase):
             "src/sessions/backup_model.c",
             "src/sessions/backup_relations.c",
             "src/sessions/backup_submissions.c",
+            "src/sessions/backup_input_payload.c",
+            "src/sessions/backup_input_archive.c",
             "src/sessions/backup_decode.c",
             "src/sessions/backup_replay.c",
             "src/sessions/backup_model_history.c",

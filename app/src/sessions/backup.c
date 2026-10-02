@@ -127,6 +127,7 @@ size_t MdoBackupPathLimit(const char* Path, bool Directory)
     if ( strcmp(Path, "draft.json") == 0 || strcmp(Path, "queue.json") == 0 )
         return 256u * 1024u;
     if ( strcmp(Path, "feedback.json") == 0 ) return 32u * 1024u;
+    if ( strcmp(Path, "restore-inputs.json") == 0 ) return 8u * 1024u * 1024u;
     if ( strncmp(Path, "attachments/", 12u) == 0 ) {
         Name = Path + 12u; Size = strlen(Name);
         if ( Size == 36u && MdoBackupDigits(Name, 32u, true) &&
@@ -599,6 +600,10 @@ bool MdoBackupValidate(const MdoSessionBackup* Backup,
                 return MdoBackupError(Error, XWORK_ERROR_OUT_OF_MEMORY,
                     "cannot parse session backup file", File->Path);
             Ok = xrtValueType(Root) == XVALUE_OBJECT;
+            if ( Ok && strcmp(File->Path, "restore-inputs.json") == 0 &&
+                 !MdoBackupInputsArchiveValid(Root, Limits, Cancel, Error) ) {
+                xrtValueRelease(Root); return false;
+            }
             if ( Ok && strcmp(File->Path, "meta.json") == 0 ) {
                 MdoSessionInfo Meta;
                 Ok = MdoSessionsInternalMetaParse(Backup->Info.ProjectId, Backup->Info.Id,

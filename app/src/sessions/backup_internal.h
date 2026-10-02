@@ -58,6 +58,14 @@ bool MdoBackupClassifyInputs(const MdoSessionBackup* Backup,
     const char Ids[MDO_SESSION_BACKUP_MAX_INPUTS][33], size_t Count,
     MdoBackupAdmission* Admission, const MdoSessionBackupLimits* Limits,
     const xcancel* Cancel, xwork_error* Error);
+/* Passive input provenance is captured/exported as an ordinary owned file.
+ * Validation checks exact source bytes/hash/codecs and mapping consistency;
+ * historical dispositions never participate in live admission decisions. */
+bool MdoBackupInputsArchive(const MdoSessionBackup* Source, MdoSessionBackup* Copy,
+    MdoSessionBackupInputs* Facts, const MdoSessionBackupLimits* Limits,
+    const xcancel* Cancel, xwork_error* Error);
+bool MdoBackupInputsArchiveValid(const xvalue* Root,
+    const MdoSessionBackupLimits* Limits, const xcancel* Cancel, xwork_error* Error);
 bool MdoBackupUInt(const xvalue* Value, const char* Key, uint64* Number);
 bool MdoBackupView(const xvalue* Value, const char* Key, xstrview* Text);
 xvalue* MdoBackupJson(const void* Data, size_t Bytes);

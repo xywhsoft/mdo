@@ -50,10 +50,11 @@ Unicode 空白按实际浏览器 trim 集合处理，只用于比较，不修改
 输入必须是成功拥有解码的 v2。最多 20 个队列项和 20 个草稿意图，Facts
 最多 40 条 source/review ID 映射，另记录 accepted/duplicate/review 数量、
 旧 discard 数量和 direct-run 不确定性。新 ID 避开所有源输入 ID、保留
-回执路径和本轮生成的其他 ID；重试最多 16 次，取消与碰撞失败不返回部分
+回执路径、历史来源/审核 ID 和本轮生成的其他 ID；重试最多 16 次，取消与碰撞失败不返回部分
 Facts。错误 Size 不写调用方对象，其他失败仅保留 Size。
 
-副本只重编码存在的 `queue.json` 和 `draft.json`，两者缺失时不凭空创建。
+对已有执行侧车只重编码存在的 `queue.json` 和 `draft.json`，两者缺失时不凭空创建。
+转换同时新增/追加 `restore-inputs.json`，保留精确源意图、metadata 及映射。
 模型 snapshot/journal、UI 日志、metadata、图片原字节/完整名称、artifact、
 todo/反馈和全部历史回执保持原字节。源备份不可变，能独立释放及重新尝试。
 结果用 `MdoSessionBackupRelease` 释放。
@@ -64,9 +65,9 @@ CRC/资源引用及保留历史关系检查。配额不允许为转换结果自�
 丢弃尾部输入的方式让预算通过。一次原生 JSON 或 UTF-8 比较不能被抢占，
 需在有界 worker 使用，协作截止时间不等于进程硬超时。
 
-**最终事务必须在发布前持久保留原输入文件及 Facts 作为 provenance。**
-本阶段没有新增 provenance 文件、身份重绑定、恢复 worker 或发布入口。
-原备份仍是追溯的实际来源；仅保存转换副本并丢掉源意图不符合发布合同。
+**原输入字节及映射已由转换副本持久携带。** 详见
+[来源合同](session-backup-input-provenance.md)。后续身份重绑定、恢复 worker
+及原子发布仍未实现，不能单凭来源文件存在发布。
 正式恢复预览及跨 Home 导出/导入闭环继续实施，不能把此 API 冒充它们。
 
 ## 有界证据

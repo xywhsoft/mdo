@@ -38,10 +38,15 @@ PROBE_SOURCE = r'''
 #include "src/sessions/events.c"
 #include "src/sessions/todo.c"
 #include "src/sessions/sidecars/binding.c"
+#include "src/sessions/sidecars/profile.c"
+#include "src/sessions/sidecars/draft.c"
+#include "src/sessions/sidecars/queue.c"
 #include "src/sessions/attachments.c"
 #include "src/sessions/manager.c"
 #include "src/sessions/backup.c"
 #include "src/sessions/backup_model.c"
+#include "src/sessions/backup_input_payload.c"
+#include "src/sessions/backup_input_archive.c"
 #include "session-capture.c"
 #include "session-backup.c"
 
@@ -816,10 +821,15 @@ def write_site(site: Path) -> None:
         "src/sessions/events.c",
         "src/sessions/todo.c", "src/sessions/attachments.c",
         "src/sessions/sidecars/binding.c", "src/sessions/sidecars/binding.h",
+        "src/sessions/sidecars/profile.c", "src/sessions/sidecars/profile.h",
+        "src/sessions/sidecars/draft.c", "src/sessions/sidecars/draft.h",
+        "src/sessions/sidecars/queue.c", "src/sessions/sidecars/queue.h",
         "src/sessions/internal.h",
         "src/sessions/manager.c",
         "src/sessions/backup.c",
         "src/sessions/backup_model.c",
+        "src/sessions/backup_input_payload.c", "src/sessions/backup_inputs.h",
+        "src/sessions/backup_input_archive.c",
         "src/sessions/backup_internal.h",
     ):
         shutil.copy2(ROOT / "app" / relative, site / relative)

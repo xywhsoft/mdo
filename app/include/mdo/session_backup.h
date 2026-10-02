@@ -194,6 +194,7 @@ typedef struct MdoSessionBackupInputs {
     uint32 Size;
     size_t Count, AcceptedQueue, AcceptedDraft, DuplicateDraft;
     size_t QueueReview, DraftReview, ClearedDiscardImages;
+    size_t ProvenanceEntries;
     bool DirectRunAdmissionUncertain;
     MdoSessionBackupInputReview Items[MDO_SESSION_BACKUP_MAX_INPUTS];
 } MdoSessionBackupInputs;
@@ -207,8 +208,9 @@ typedef struct MdoSessionBackupInputs {
  * Clears resumed discard work and direct-run admission tracking, preserving
  * composer text/images/profile. No model/tool, queue manager, Home or catalog
  * is accessed. Facts records source/review IDs and uncertain admission; the
- * final restore transaction MUST preserve those facts and original source
- * intent bytes as provenance before publication. This function alone is NOT
+ * copy preserves those facts and exact source metadata/intent bytes in
+ * restore-inputs.json, with bounded append-only import history. This is
+ * descriptive provenance, never execution authorization. This function alone is NOT
  * publication permission or identity rebinding. Free with BackupRelease.
  * Fresh thirty-second cooperative budget. Initialize Facts.Size; wrong size
  * leaves memory untouched, other failure clears facts except Size. */

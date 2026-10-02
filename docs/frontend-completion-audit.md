@@ -2,7 +2,31 @@
 
 本清单以 `app_bak/wwwroot` 的可操作行为为基线，而不是以页面长得相似或单元测试通过为完成标准。`docs/frontend-migration.md` 记录每次实现和验证；这里记录当前还需要什么证据。审计更新：2026-10-02，基线提交 `f9e2c4c`。
 
-2026-10-02 最新增量：离线恢复输入的待确认转换已实现。旧受理输入不重排，
+2026-10-02 最新增量：输入副本新增可持续备份的来源文件，保留原 metadata/
+queue/draft 精确字节/SHA 和完整映射。真实 codec/映射校验、独立磁盘读回/
+原对象释放后的编码 round-trip、二次转换/不确定性继承和失败重试通过。
+历史 accepted 描述不消费/提升当前输入，真实前端控制器刷新仍仅 GET。
+详见 [来源合同](session-backup-input-provenance.md)。
+
+本轮最终 Windows/Linux 通过 115 Python、252 Node、90 JS 模块、严格 C11、
+40 runtime、三项 packed 及独立 A/B；Windows 另通过便携 WebView2 Home
+和 20 秒打包启动。首次手写探针清单遗漏及生成 unity 未刷新已修复，失败
+日志保留。SDK 未变化，复用已验证 native host；Linux 使用新 ext4 staging，
+十二份代码/清单/探针输入按 LF 归一化核对。根目录 `mdo.exe` 为 6,407,289
+字节、SHA-256
+`d909eac42fb3f7c6457dcf64457af89e715f1a3616431902c4c71e80c9473403`；
+Linux A/B 为 6,457,449 字节、SHA-256
+`c8de9cc2f786c3354a1d03709f91c5ff203b8485705554dc74d0c1d1889928af`。
+日志 `.build/qa-input-origin-{windows,linux}-final.log`；没有压力/高负载测试。
+完整门禁后只删除新文件一行末尾空行，随后两平台重新严格编译、独立
+A/B 和三项 packed，Windows 重过便携 Home/20 秒启动；最终字节证据见
+`.build/qa-input-origin-{windows,linux}-post-format.log`。
+
+来源记录已实现，身份/workspace/产物重绑定、生产 worker/异常回收、原子
+发布/catalog 和正式菜单仍待完成，`restore_ready:false` 保持。没有新增
+原生/实体设备验收；Linux queued HEAD reset 仍单独待处理。
+
+2026-10-02 增量：离线恢复输入的待确认转换已实现。旧受理输入不重排，
 其他队列项/草稿意图换新 ID 并进入既有 staged/rejected 审核操作；匹配
 副本合并，矛盾失败。原模型/UI/回执/图片/artifact 不变，源备份与源 Home
 字节不变。实际落盘 sidecar 经真实前端控制器刷新/reconcile/pump，仅 GET，

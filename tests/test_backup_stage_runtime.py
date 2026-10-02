@@ -9,6 +9,7 @@ from __future__ import annotations
 import argparse
 import base64
 import copy
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -17,7 +18,7 @@ import subprocess
 import tempfile
 from unittest.mock import patch
 
-from test_backup_decode_runtime import ROOT, DECODE, Probe as DecodeProbe, dump, replace, set_ui
+from test_backup_decode_runtime import ROOT, DECODE, Probe as DecodeProbe, dump, replace, set_ui, file_entry, recount
 
 STAGE = "/__fixture/backup-stage/"
 ARTIFACT = "artifacts/run-00000000000000000001/00000000000000000001-stage.txt"
@@ -48,6 +49,12 @@ class Probe(DecodeProbe):
         text = text.replace(hook, hook + "\n        BackupReviewFixtureCandidate(&Candidate, Attempt);", 1)
         source.write_text('#include <xsbase.h>\nvoid BackupReviewFixtureCandidate(str*, size_t);\n' + text,
                           encoding="utf-8", newline="\n")
+        source = self.site / "src/sessions/backup_input_archive.c"
+        text = source.read_text(encoding="utf-8")
+        hook = '    if ( !xrtSha256(Text.Data, Text.Size, Digest) ) return MdoArchiveError(Error, "cannot hash archived input bytes");'
+        assert text.count(hook) == 1
+        text = text.replace(hook, hook + "\n    BackupReviewFixtureArchiveHash();", 1)
+        source.write_text('void BackupReviewFixtureArchiveHash(void);\n' + text, encoding="utf-8", newline="\n")
         service = self.site / "src/bootstrap/service.c"
         text = service.read_text(encoding="utf-8")
         text = text.replace('#include "backup-decode.c"', '#include "backup-decode.c"\n#include "backup-stage.c"', 1)
@@ -240,6 +247,17 @@ class Probe(DecodeProbe):
         assert not mapped["e" * 32]["uncertain"] and not mapped["7" * 32]["uncertain"]
         stage = self.parent / result["directory"]
         actual = {p.relative_to(stage).as_posix(): p.read_bytes() for p in stage.rglob("*") if p.is_file()}
+        assert result["provenance_entries"] == 1
+        provenance = json.loads(actual["restore-inputs.json"])
+        assert provenance["schema_version"] == 1 and len(provenance["imports"]) == 1
+        entry = provenance["imports"][0]
+        assert entry["inputs"] == result["inputs"]
+        assert entry["captured_at_us"] == document["captured_at_us"]
+        assert entry["direct_run_admission_uncertain"] and entry["cleared_discard_images"] == 1
+        for archived in entry["source_files"]:
+            raw = archived["data"].encode()
+            assert raw == original[archived["path"]]
+            assert archived["bytes"] == len(raw) and archived["sha256"] == hashlib.sha256(raw).hexdigest()
         for name, raw in original.items():
             if name not in ("queue.json", "draft.json"):
                 assert actual[name] == raw, name
@@ -256,13 +274,22 @@ class Probe(DecodeProbe):
         helper = ROOT / "tests/fixtures/backup-review-ui.mjs"
         assert shutil.which("node"), "Node.js is required for live frontend controller proof"
         subprocess.run(["node", str(helper), str(stage)], cwd=ROOT, check=True, timeout=20)
+        status, encoded = self.api("GET", STAGE + "export")
+        assert status == 200 and encoded["data"]  # native encode/decode retains every exact byte after releasing JSON
+        exported = copy.deepcopy(document)
+        exported["files"] = [file_entry(name, raw) for name, raw in actual.items()]
+        recount(exported)
+        assert self.validate(dump(exported))["ok"]
         assert self.fixture("check")["verified"] and self.fixture("discard")["ok"]
+        self.check_input_provenance(exported, provenance, original)
 
         for mode, code in (("review-inputs-cancel", 9), ("review-inputs-mid-cancel", 9),
-                           ("review-inputs-deadline", 11), ("review-inputs-collision", 11)):
+                           ("review-inputs-deadline", 11), ("review-inputs-collision", 11),
+                           ("review-inputs-origin-cancel", 9), ("review-inputs-origin-files", 11)):
             rejected = self.prepare(document, mode)
             assert not rejected["ok"] and not rejected["retained"] and rejected["code"] == code, rejected
             assert rejected["original_unchanged"] and rejected["inputs"] == [] and not list(self.parent.iterdir())
+            assert rejected["provenance_entries"] == 0
         assert self.prepare(document, "review-inputs-null-error")["verified"] and self.fixture("discard")["ok"]
         conflicting = copy.deepcopy(document)
         replace(conflicting, "draft.json", dump({**draft, "submissions": [{**draft["submissions"][1], "text": "Different text"}]}))
@@ -294,12 +321,74 @@ class Probe(DecodeProbe):
 
         no_inputs = copy.deepcopy(source)
         no_inputs["files"] = [row for row in no_inputs["files"] if row["path"] not in ("draft.json", "queue.json")]
-        from test_backup_decode_runtime import recount
         recount(no_inputs)
         result = self.prepare(no_inputs, "review-inputs")
         assert result["verified"] and result["inputs"] == []
         assert not (self.parent / result["directory"] / "queue.json").exists()
+        assert result["provenance_entries"] == 0 and not (self.parent / result["directory"] / "restore-inputs.json").exists()
         assert self.fixture("discard")["ok"]
+
+    def check_input_provenance(self, exported, provenance, original):
+        result = self.prepare(exported, "review-inputs")
+        assert result["verified"] and result["provenance_entries"] == 2 and result["original_unchanged"], result
+        path = self.parent / result["directory"] / "restore-inputs.json"
+        imports = json.loads(path.read_bytes())["imports"]
+        assert imports[0] == provenance["imports"][0]
+        assert imports[1]["source_files"][0]["data"].encode() == original["meta.json"]
+        for earlier in provenance["imports"][0]["inputs"]:
+            if earlier["review_id"] and earlier["uncertain"]:
+                inherited = next(row for row in result["inputs"] if row["source_id"] == earlier["review_id"])
+                assert inherited["uncertain"], inherited
+        assert self.fixture("discard")["ok"]
+
+        def invalid(name, mutate):
+            document = copy.deepcopy(exported)
+            changed = copy.deepcopy(provenance)
+            mutate(changed)
+            replace(document, "restore-inputs.json", dump(changed))  # recompute outer SHA; inner validation must still refuse
+            value = self.validate(dump(document))
+            assert not value["ok"], (name, value)
+            assert not list(self.parent.iterdir())
+
+        invalid("unknown field", lambda p: p.update(extra=True))
+        invalid("unknown schema", lambda p: p.update(schema_version=2))
+        invalid("empty history", lambda p: p.update(imports=[]))
+        invalid("length", lambda p: p["imports"][0]["source_files"][0].update(bytes=0))
+        invalid("inner SHA-256", lambda p: p["imports"][0]["source_files"][0].update(sha256="0" * 64))
+        invalid("source bytes hash", lambda p: p["imports"][0]["source_files"][0].update(data="{}"))
+        invalid("duplicate file", lambda p: p["imports"][0]["source_files"].__setitem__(1, p["imports"][0]["source_files"][0]))
+        invalid("path", lambda p: p["imports"][0]["source_files"][0].update(path="../meta.json"))
+        invalid("direct admission", lambda p: p["imports"][0].update(direct_run_admission_uncertain=False))
+        invalid("discard count", lambda p: p["imports"][0].update(cleared_discard_images=0))
+        invalid("missing map", lambda p: p["imports"][0]["inputs"].pop())
+        invalid("wrong source", lambda p: p["imports"][0]["inputs"][0].update(source_id="0" * 32))
+        invalid("accepted with fresh ID", lambda p: p["imports"][0]["inputs"][0].update(review_id="1" * 32))
+        invalid("unknown disposition", lambda p: p["imports"][0]["inputs"][1].update(disposition=99))
+        invalid("posting uncertainty lost", lambda p: p["imports"][0]["inputs"][1].update(uncertain=False))
+        invalid("fresh ID reuses source", lambda p: p["imports"][0]["inputs"][1].update(review_id="b" * 32))
+        invalid("duplicate fresh ID", lambda p: p["imports"][0]["inputs"][2].update(review_id=p["imports"][0]["inputs"][1]["review_id"]))
+
+        def bad_codec(p):
+            file = next(f for f in p["imports"][0]["source_files"] if f["path"] == "queue.json")
+            raw = dump({"schema_version": 99, "items": []})
+            file.update(data=raw.decode(), bytes=len(raw), sha256=hashlib.sha256(raw).hexdigest())
+        invalid("rehash cannot bypass live codec", bad_codec)
+        # Descriptive past acceptance cannot consume/promote a current staged ID.
+        passive = copy.deepcopy(exported)
+        altered = copy.deepcopy(provenance)
+        altered["imports"][0]["inputs"][2].update(disposition=1, review_id="", uncertain=False)
+        replace(passive, "restore-inputs.json", dump(altered))
+        result = self.prepare(passive, "review-inputs")
+        assert result["verified"] and result["accepted_queue"] == result["accepted_draft"] == 0, result
+        assert result["queue_review"] == 4 and result["draft_review"] == 2
+        assert self.fixture("discard")["ok"]
+        full = copy.deepcopy(exported)
+        history = {"schema_version": 1, "imports": provenance["imports"] * 16}
+        replace(full, "restore-inputs.json", dump(history))
+        result = self.prepare(full, "review-inputs")
+        assert not result["ok"] and result["code"] == 11 and result["original_unchanged"] and result["inputs"] == []
+        assert result["provenance_entries"] == 0 and not list(self.parent.iterdir())
+        invalid("too many entries", lambda p: p.update(imports=p["imports"] * 17))
 
     def check_projections(self, source, expected):
         kinds = self.api("GET", DECODE + "kinds")[1]["data"]

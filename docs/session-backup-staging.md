@@ -100,3 +100,8 @@ Linux `8958084d30e58f5725df3b15dabdf2fbb608f7555bb788e1dc2df9619aba0e82`。
 落盘后实际前端控制器的刷新/核对只读探针通过。StagePrepare 仍不自动
 执行转换，也不保存来源意图/Facts；最终恢复事务需持久 provenance、
 身份/产物重绑定及原子发布，不能直接将这个 Stage 纳入 live catalog。
+
+同日后续增量：输入转换已将精确源 metadata/意图及映射保存到普通 owned
+文件 `restore-inputs.json`，Stage 的现有排他材料化/磁盘读回/清理覆盖该
+文件，释放源对象后仍拥有追溯字节。详见 [来源合同](session-backup-input-provenance.md)。
+身份/路径重绑定、生产 worker、异常所有权恢复及原子发布仍待完成。
