@@ -4,6 +4,33 @@
 
 完成判据及尚缺的打包页证据见 [前端操作体验完成审计](frontend-completion-audit.md)。本文件继续记录每次实现和验证的细节。
 
+## 2026-10-02：恢复后台任务的预检结果引用
+
+内部预检接口增加拥有引用；删除/过期立即撤销后续获取，已取得的读者
+仍保有全部精确文件，最后释放和锁外清理完成后才能开启下一次预检。
+成功备份、上传与小状态回执独立。引用携带所属 store，Unit 停止/join
+预检后释放 owner，迟到释放不访问 Init 后的新实例。代码卸载仍须先
+drain 所有读者；此接口不保活 TCC 可执行代码。详见
+[后台读者合同](session-backup-preview-api.md#后台读者的所有权)。
+
+HTTP/TLS 专项覆盖双读者逐份释放、DELETE/TTL、全部文件 SHA 和原生
+最后释放与实例重建的交错。源 Home 内容保持不变。正式恢复 worker、
+目标确认、持久结果查询与导入页面还未接通，`restore_ready:false` 保持；
+这次改动不作为用户可操作的完整导入验收。原生/实体移动设备、Linux
+间歇问题继续待办。便携缓存选择保持，图形窗口首次启动创建
+`mdo-home/data/cache/webview2`；不做压力或高负载测试。
+
+最终 Windows/Linux 通过 115 Python、262 Node、93 JS 模块、严格 C11、
+44 runtime、三项 packed 和独立 A/B；Windows 另通过便携 Home/20 秒
+启动。SDK 不变，复用已验证 host，四份改动输入按 LF 核对。根目录
+程序 6,440,210 字节、SHA-256
+`1dcc13edf5d3bf22898ceb1fa97612cc555cf55020f246abb83820234eeb40a6`；
+Linux A/B 6,490,370 字节、SHA-256
+`352cf37196bbe0ae704e5f7abd87ec5f97a141c144b4a9ebb182fcbf5feb4418`。
+日志 `.build/qa-preview-pins-{windows,linux}-final.log`。更新时没有根目录
+窗口，不改用户 Home；首次 SHA 顺序断言失败的日志保留，详见预检合同。
+本轮未新增 DOM/实体设备交互证据；长期目标继续。
+
 ## 2026-10-02：完整导出浏览器交付复验
 
 新增不依赖产品前端的 HTTP/同步/延迟 Blob 对照，下载等待接口在独立

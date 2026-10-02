@@ -2,6 +2,21 @@
 
 本清单以 `app_bak/wwwroot` 的可操作行为为基线，而不是以页面长得相似或单元测试通过为完成标准。`docs/frontend-migration.md` 记录每次实现和验证；这里记录当前还需要什么证据。审计更新：2026-10-02，基线提交 `f9e2c4c`。
 
+2026-10-02 最新增量：预检备份已支持后台 owning pin，DELETE/TTL 后旧
+读者仍可读且占名额，最后释放清理完成后才允许下一份；引用绑定实例，
+不会由迟到释放操作新 Init 的全局锁。HTTP/TLS 验证双读者和原生清理
+暂停/实例重建交错，完整文件精确 SHA 和源 Home 不变。详见
+[预检读者合同](session-backup-preview-api.md#后台读者的所有权)。这是
+恢复 worker 的前置生命周期层；正式 worker/持久结果/确认导入页面仍
+未实现，`restore_ready:false` 保持，不升级完整导入或设备验收行。
+
+本增量两平台通过 115 Python、262 Node、93 JS、严格 C11、44 runtime、
+三项 packed 和 A/B；Windows 另通过便携 Home/20 秒启动。SDK 未改，
+四份改动代码/探针按 LF 核对。根目录包 6,440,210 字节，SHA-256
+`1dcc13edf5d3bf22898ceb1fa97612cc555cf55020f246abb83820234eeb40a6`；
+Linux A/B SHA-256 `352cf37196bbe0ae704e5f7abd87ec5f97a141c144b4a9ebb182fcbf5feb4418`。
+日志 `.build/qa-preview-pins-{windows,linux}-final.log`，没有压力或高负载测试。
+
 2026-10-02 最新复验：未改产品代码的 Windows 桌面正式页与 Linux
 ext4 单文件服务的 320×350 浏览器页均收到 JSON v2/Markdown 的全量
 字节 completed；v2 内小 UI/metadata 解码确认原文、回复、原图和原名，

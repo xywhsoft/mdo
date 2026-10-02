@@ -33,7 +33,18 @@ typedef struct MdoBackupPreviewInfo {
     MdoSessionBackupImages Images;
 } MdoBackupPreviewInfo;
 
+typedef struct MdoBackupPreviewStore MdoBackupPreviewStore;
+struct MdoBackupPreviewDocument {
+    MdoBackupPreviewStore* Store;
+    MdoSessionBackup* Backup;
+    char Hash[65];
+    size_t Pins;
+    bool Removed;
+};
+
 typedef struct MdoBackupPreviewJob {
+    MdoBackupPreviewStore* Store;
+    MdoBackupPreviewDocument* Document;
     MdoBackupUploadDocument* Upload;
     MdoSessionBackup* Backup;
     MdoSessionBackupLimits Limits;
@@ -41,17 +52,18 @@ typedef struct MdoBackupPreviewJob {
     bool Succeeded;
 } MdoBackupPreviewJob;
 
-typedef struct MdoBackupPreviewStore {
+struct MdoBackupPreviewStore {
     xmutex* Lock;
     xtaskpool* Pool;
     xcancel* Cancel;
     MdoBackupPreviewJob* Active;
-    MdoSessionBackup* Backup;
+    MdoBackupPreviewDocument* Slot;
     MdoBackupPreviewInfo Info;
+    size_t Users; /* manager owner + acquired pins, protected by Lock */
     bool Stopping, Releasing;
-} MdoBackupPreviewStore;
+};
 
-static MdoBackupPreviewStore g_MdoBackupPreviews;
+static MdoBackupPreviewStore* g_MdoBackupPreviews;
 
 static cstr MdoBackupPreviewStateText(MdoBackupPreviewState State)
 {
@@ -72,34 +84,48 @@ static bool MdoBackupPreviewTerminal(const MdoBackupPreviewInfo* Info)
 /* Lazily reclaim only terminal results. An accepted worker owns its slot
  * through Drop, including a skipped/cancelled task and all cleanup. Expiry is
  * never a reason to submit a second memory-heavy job while the first is alive. */
-static MdoSessionBackup* MdoBackupPreviewCollectLocked(void)
+static MdoBackupPreviewDocument* MdoBackupPreviewDetachLocked(MdoBackupPreviewStore* Store)
 {
-    MdoBackupPreviewStore* Store = &g_MdoBackupPreviews;
-    MdoSessionBackup* Backup = NULL;
+    MdoBackupPreviewDocument* Document = Store->Slot;
+    if ( Document == NULL || !Document->Removed || Document->Pins != 0u ) return NULL;
+    Store->Slot = NULL; Store->Releasing = true;
+    return Document;
+}
+
+static MdoBackupPreviewDocument* MdoBackupPreviewCollectLocked(MdoBackupPreviewStore* Store)
+{
     if ( Store->Active == NULL && Store->Info.Id[0] != '\0' &&
          xrtDeadlineExpired(Store->Info.ExpiresAt) ) {
-        Backup = Store->Backup; Store->Backup = NULL;
-        if ( Backup != NULL ) Store->Releasing = true;
+        if ( Store->Slot != NULL ) Store->Slot->Removed = true;
         memset(&Store->Info, 0, sizeof(Store->Info));
     }
-    return Backup;
+    return MdoBackupPreviewDetachLocked(Store);
 }
 
 /* Releasing a terminal result also owns admission until its bytes are freed.
  * A concurrent start cannot overlap a new decoded payload with stale cleanup,
  * and freeing a bundle never holds the short status mutex. */
-static void MdoBackupPreviewReleaseRetired(MdoSessionBackup* Backup)
+static void MdoBackupPreviewReleaseRetired(MdoBackupPreviewDocument* Document)
 {
-    if ( Backup == NULL ) return;
-    MdoSessionBackupRelease(Backup);
-    xrtMutexLock(g_MdoBackupPreviews.Lock); g_MdoBackupPreviews.Releasing = false;
-    xrtMutexUnlock(g_MdoBackupPreviews.Lock);
+    MdoBackupPreviewStore* Store;
+    if ( Document == NULL ) return;
+    /* The caller keeps its pin or the manager owner until after this returns.
+     * Cleanup targets the owning generation, never the current global store. */
+    Store = Document->Store;
+    MdoSessionBackupRelease(Document->Backup); xrtFree(Document);
+    xrtMutexLock(Store->Lock); Store->Releasing = false;
+    xrtMutexUnlock(Store->Lock);
+}
+
+static void MdoBackupPreviewStoreFree(MdoBackupPreviewStore* Store)
+{
+    xrtMutexDestroy(Store->Lock); xrtFree(Store);
 }
 
 static bool MdoBackupPreviewStep(MdoBackupPreviewJob* Job, xcancel* Cancel,
     unsigned Completed)
 {
-    MdoBackupPreviewStore* Store = &g_MdoBackupPreviews;
+    MdoBackupPreviewStore* Store = Job->Store;
     bool Live;
     xrtMutexLock(Store->Lock);
     Live = !Store->Stopping && !Store->Info.CancelRequested;
@@ -163,7 +189,7 @@ done:
 static void MdoBackupPreviewDrop(ptr Data, ptr Context)
 {
     MdoBackupPreviewJob* Job = (MdoBackupPreviewJob*)Data;
-    MdoBackupPreviewStore* Store = &g_MdoBackupPreviews;
+    MdoBackupPreviewStore* Store = Job->Store;
     bool Cancelled;
     (void)Context;
     MdoApiBackupUploadRelease(Job->Upload); Job->Upload = NULL;
@@ -185,7 +211,8 @@ static void MdoBackupPreviewDrop(ptr Data, ptr Context)
         snprintf(Store->Info.Error.sMessage, sizeof(Store->Info.Error.sMessage),
             "Backup inspection was cancelled");
     } else if ( Job->Succeeded ) {
-        Store->Backup = Job->Backup; Job->Backup = NULL;
+        Job->Document->Backup = Job->Backup; Job->Backup = NULL;
+        Store->Slot = Job->Document; Job->Document = NULL;
         Store->Info.State = MDO_BACKUP_PREVIEW_SUCCEEDED;
         Store->Info.Completed = MDO_BACKUP_PREVIEW_STEPS;
         Store->Info.Backup = Job->Info.Backup;
@@ -205,36 +232,98 @@ static void MdoBackupPreviewDrop(ptr Data, ptr Context)
     Store->Info.ExpiresAt = xrtDeadlineAfter(MDO_BACKUP_PREVIEW_TTL_US);
     Store->Active = NULL;
     xrtMutexUnlock(Store->Lock);
-    xrtFree(Job);
+    xrtFree(Job->Document); xrtFree(Job);
 }
 
 bool MdoApiBackupPreviewsInit(void)
 {
-    if ( g_MdoBackupPreviews.Lock != NULL ) return true;
-    memset(&g_MdoBackupPreviews, 0, sizeof(g_MdoBackupPreviews));
-    g_MdoBackupPreviews.Lock = xrtMutexCreate();
-    return g_MdoBackupPreviews.Lock != NULL;
+    MdoBackupPreviewStore* Store;
+    if ( g_MdoBackupPreviews != NULL ) return true;
+    Store = (MdoBackupPreviewStore*)xrtCalloc(1u, sizeof(*Store));
+    if ( Store == NULL ) return false;
+    Store->Lock = xrtMutexCreate();
+    if ( Store->Lock == NULL ) { xrtFree(Store); return false; }
+    Store->Users = 1u; g_MdoBackupPreviews = Store;
+    return true;
 }
 
 void MdoApiBackupPreviewsUnit(void)
 {
-    MdoBackupPreviewStore* Store = &g_MdoBackupPreviews;
-    xmutex* Lock = Store->Lock;
+    MdoBackupPreviewStore* Store = g_MdoBackupPreviews;
+    MdoBackupPreviewDocument* Retired;
     xtaskpool* Pool;
     xcancel* Cancel;
-    if ( Lock == NULL ) return;
-    xrtMutexLock(Lock); Store->Stopping = true;
+    bool Last;
+    if ( Store == NULL ) return;
+    g_MdoBackupPreviews = NULL;
+    xrtMutexLock(Store->Lock); Store->Stopping = true;
     Store->Info.CancelRequested = true;
+    if ( Store->Slot != NULL ) Store->Slot->Removed = true;
     Pool = Store->Pool; Cancel = xrtCancelRef(Store->Cancel);
-    xrtMutexUnlock(Lock);
+    xrtMutexUnlock(Store->Lock);
     if ( Cancel != NULL ) { (void)xrtCancelRequest(Cancel); xrtCancelDestroy(Cancel); }
     if ( Pool != NULL ) {
         (void)xrtTaskPoolCancel(Pool); (void)xrtTaskPoolWait(Pool);
         (void)xrtTaskPoolDestroy(Pool);
     }
-    MdoSessionBackupRelease(Store->Backup);
     xrtCancelDestroy(Store->Cancel);
-    memset(Store, 0, sizeof(*Store)); xrtMutexDestroy(Lock);
+    xrtMutexLock(Store->Lock); Retired = MdoBackupPreviewDetachLocked(Store);
+    xrtMutexUnlock(Store->Lock);
+    MdoBackupPreviewReleaseRetired(Retired);
+    xrtMutexLock(Store->Lock); Last = --Store->Users == 0u;
+    xrtMutexUnlock(Store->Lock);
+    if ( Last ) MdoBackupPreviewStoreFree(Store);
+}
+
+MdoBackupPreviewDocument* MdoApiBackupPreviewAcquire(cstr Id,
+    MdoBackupPreviewAccess* Access)
+{
+    MdoBackupPreviewStore* Store = g_MdoBackupPreviews;
+    MdoBackupPreviewDocument *Document = NULL, *Retired = NULL;
+    MdoBackupPreviewAccess Result = MDO_BACKUP_PREVIEW_ACCESS_UNAVAILABLE;
+    if ( Id != NULL && Store != NULL ) {
+        xrtMutexLock(Store->Lock); Retired = MdoBackupPreviewCollectLocked(Store);
+        if ( Store->Stopping ) Result = MDO_BACKUP_PREVIEW_ACCESS_UNAVAILABLE;
+        else if ( Store->Info.Id[0] == '\0' || strcmp(Store->Info.Id, Id) != 0 || Store->Info.Discarded )
+            Result = MDO_BACKUP_PREVIEW_ACCESS_MISSING;
+        else if ( Store->Slot == NULL || Store->Slot->Removed || !Store->Info.ResultAvailable )
+            Result = MDO_BACKUP_PREVIEW_ACCESS_NOT_READY;
+        else if ( Store->Slot->Pins != SIZE_MAX && Store->Users != SIZE_MAX ) {
+            Document = Store->Slot; ++Document->Pins; ++Store->Users;
+            Result = MDO_BACKUP_PREVIEW_ACCESS_OK;
+        }
+        xrtMutexUnlock(Store->Lock); MdoBackupPreviewReleaseRetired(Retired);
+    }
+    if ( Access != NULL ) *Access = Result;
+    return Document;
+}
+
+const MdoSessionBackup* MdoApiBackupPreviewData(const MdoBackupPreviewDocument* Document)
+{
+    return Document != NULL ? Document->Backup : NULL;
+}
+
+bool MdoApiBackupPreviewHash(const MdoBackupPreviewDocument* Document, char Hash[65])
+{
+    if ( Document == NULL || Hash == NULL ) return false;
+    memcpy(Hash, Document->Hash, 65u); return true;
+}
+
+void MdoApiBackupPreviewRelease(MdoBackupPreviewDocument* Document)
+{
+    MdoBackupPreviewStore* Store;
+    MdoBackupPreviewDocument* Retired;
+    bool Last;
+    if ( Document == NULL ) return;
+    Store = Document->Store;
+    xrtMutexLock(Store->Lock); --Document->Pins;
+    Retired = MdoBackupPreviewCollectLocked(Store);
+    xrtMutexUnlock(Store->Lock);
+    MdoBackupPreviewReleaseRetired(Retired);
+    /* This acquisition still owns one Store user through out-of-lock cleanup. */
+    xrtMutexLock(Store->Lock); Last = --Store->Users == 0u;
+    xrtMutexUnlock(Store->Lock);
+    if ( Last ) MdoBackupPreviewStoreFree(Store);
 }
 
 static bool MdoBackupPreviewNoBody(const MdoApiContext* Context)
@@ -331,10 +420,10 @@ static bool MdoBackupPreviewError(MdoApiContext* Context, uint16 Status, cstr Co
 
 bool MdoApiBackupPreviewStartRoute(MdoApiContext* Context)
 {
-    MdoBackupPreviewStore* Store = &g_MdoBackupPreviews;
+    MdoBackupPreviewStore* Store = g_MdoBackupPreviews;
     MdoBackupPreviewJob* Job = NULL;
     MdoBackupUploadDocument* Existing = NULL;
-    MdoSessionBackup* Retired = NULL;
+    MdoBackupPreviewDocument* Retired = NULL;
     MdoBackupPreviewInfo Info;
     MdoBackupUploadAccess Access;
     xfuture* Future = NULL;
@@ -347,16 +436,16 @@ bool MdoApiBackupPreviewStartRoute(MdoApiContext* Context)
     size_t i;
     if ( !MdoBackupPreviewId(Context, Id) || !MdoBackupPreviewNoBody(Context) )
         return MdoBackupPreviewError(Context, 400u, "backup_preview_invalid");
-    if ( Store->Lock == NULL ) return MdoBackupPreviewError(Context, 503u, "backup_preview_unavailable");
+    if ( Store == NULL ) return MdoBackupPreviewError(Context, 503u, "backup_preview_unavailable");
     xrtMutexLock(Store->Lock);
-    Retired = MdoBackupPreviewCollectLocked();
+    Retired = MdoBackupPreviewCollectLocked(Store);
     if ( Retired != NULL ) {
         xrtMutexUnlock(Store->Lock); MdoBackupPreviewReleaseRetired(Retired); Retired = NULL;
         xrtMutexLock(Store->Lock);
     }
     if ( Store->Stopping ) { Status = 503u; Code = "backup_preview_unavailable"; goto unlock; }
     if ( Store->Releasing ) { Status = 409u; Code = "backup_preview_busy"; goto unlock; }
-    if ( Store->Active != NULL || Store->Backup != NULL ) {
+    if ( Store->Active != NULL || Store->Slot != NULL ) {
         if ( strcmp(Store->Info.UploadId, Id) == 0 && !Store->Info.CancelRequested && !Store->Info.Discarded ) {
             char Hash[65];
             Existing = MdoApiBackupUploadAcquire(Id, &Access);
@@ -373,6 +462,10 @@ bool MdoApiBackupPreviewStartRoute(MdoApiContext* Context)
     }
     Job = (MdoBackupPreviewJob*)xrtCalloc(1u, sizeof(*Job));
     if ( Job == NULL || !xrtSecureRandom(Random, sizeof(Random)) ) goto unavailable;
+    Job->Store = Store;
+    Job->Document = (MdoBackupPreviewDocument*)xrtCalloc(1u, sizeof(*Job->Document));
+    if ( Job->Document == NULL ) goto unavailable;
+    Job->Document->Store = Store;
     Job->Upload = MdoApiBackupUploadAcquire(Id, &Access);
     if ( Job->Upload == NULL ) {
         Status = Access == MDO_BACKUP_UPLOAD_ACCESS_MISSING ? 404u :
@@ -394,6 +487,7 @@ bool MdoApiBackupPreviewStartRoute(MdoApiContext* Context)
     }
     memcpy(Job->Info.UploadId, Id, sizeof(Id));
     (void)MdoApiBackupUploadHash(Job->Upload, Job->Info.UploadHash);
+    memcpy(Job->Document->Hash, Job->Info.UploadHash, sizeof(Job->Document->Hash));
     Job->Info.CreatedAt = xrtNow(); Job->Info.State = MDO_BACKUP_PREVIEW_PENDING;
     MdoSessionBackupLimitsInit(&Job->Limits);
     Job->Limits.Deadline = xrtDeadlineAfter(MDO_BACKUP_PREVIEW_TIMEOUT_US);
@@ -427,7 +521,7 @@ unlock:
     xrtMutexUnlock(Store->Lock);
     MdoBackupPreviewReleaseRetired(Retired);
     MdoApiBackupUploadRelease(Existing);
-    if ( Job != NULL ) { MdoApiBackupUploadRelease(Job->Upload); xrtFree(Job); }
+    if ( Job != NULL ) { MdoApiBackupUploadRelease(Job->Upload); xrtFree(Job->Document); xrtFree(Job); }
     xrtFutureDestroy(Future);
     return Code != NULL ? MdoBackupPreviewError(Context, Status, Code) :
         MdoApiReplySuccessTake(Context, Status, MdoBackupPreviewValue(&Info), NULL);
@@ -439,24 +533,24 @@ unlock:
  * until the old task's Drop has finished cleaning up. */
 bool MdoApiBackupPreviewRoute(MdoApiContext* Context)
 {
-    MdoBackupPreviewStore* Store = &g_MdoBackupPreviews;
+    MdoBackupPreviewStore* Store = g_MdoBackupPreviews;
     MdoBackupPreviewInfo Info;
-    MdoSessionBackup *Retired, *Discarded = NULL;
+    MdoBackupPreviewDocument *Retired, *Discarded = NULL;
     xcancel* Cancel = NULL;
     char Id[33];
     bool Found;
     if ( !MdoBackupPreviewId(Context, Id) || !MdoBackupPreviewNoBody(Context) )
         return MdoBackupPreviewError(Context, 400u, "backup_preview_invalid");
-    if ( Store->Lock == NULL ) return MdoBackupPreviewError(Context, 503u, "backup_preview_unavailable");
-    xrtMutexLock(Store->Lock); Retired = MdoBackupPreviewCollectLocked();
+    if ( Store == NULL ) return MdoBackupPreviewError(Context, 503u, "backup_preview_unavailable");
+    xrtMutexLock(Store->Lock); Retired = MdoBackupPreviewCollectLocked(Store);
     Found = strcmp(Store->Info.Id, Id) == 0;
     if ( Found && Context->Request->head->MethodCode == XHTTP_METHOD_DELETE ) {
         Store->Info.Discarded = true; Store->Info.ResultAvailable = false;
         if ( Store->Active != NULL ) {
             Store->Info.CancelRequested = true; Cancel = xrtCancelRef(Store->Cancel);
         } else {
-            Discarded = Store->Backup; Store->Backup = NULL;
-            if ( Discarded != NULL ) Store->Releasing = true;
+            if ( Store->Slot != NULL ) Store->Slot->Removed = true;
+            Discarded = MdoBackupPreviewDetachLocked(Store);
         }
     }
     Info = Store->Info;
@@ -469,14 +563,14 @@ bool MdoApiBackupPreviewRoute(MdoApiContext* Context)
 
 bool MdoApiBackupPreviewsRoute(MdoApiContext* Context)
 {
-    MdoBackupPreviewStore* Store = &g_MdoBackupPreviews;
+    MdoBackupPreviewStore* Store = g_MdoBackupPreviews;
     MdoBackupPreviewInfo Info;
-    MdoSessionBackup* Retired;
+    MdoBackupPreviewDocument* Retired;
     xvalue* Value;
     bool Ok;
     if ( !MdoBackupPreviewNoBody(Context) ) return MdoBackupPreviewError(Context, 400u, "backup_preview_invalid");
-    if ( Store->Lock == NULL ) return MdoBackupPreviewError(Context, 503u, "backup_preview_unavailable");
-    xrtMutexLock(Store->Lock); Retired = MdoBackupPreviewCollectLocked(); Info = Store->Info;
+    if ( Store == NULL ) return MdoBackupPreviewError(Context, 503u, "backup_preview_unavailable");
+    xrtMutexLock(Store->Lock); Retired = MdoBackupPreviewCollectLocked(Store); Info = Store->Info;
     xrtMutexUnlock(Store->Lock); MdoBackupPreviewReleaseRetired(Retired);
     Value = xrtValueObject();
     Ok = Value != NULL && MdoApiValueSetUInt(Value, "workers", 1u) &&

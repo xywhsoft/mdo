@@ -47,12 +47,14 @@ class Probe(UploadProbe):
             ("    xrtMutexUnlock(Store->Lock);\n    if ( !Live", "    xrtMutexUnlock(Store->Lock);\n    BackupPreviewFixturePause(Completed, Cancel, Job->Limits.Deadline);\n    if ( !Live"),
             ("    Job->Info.ExpiresAt = Job->Limits.Deadline;", "    BackupPreviewFixtureBudget(&Job->Limits);\n    Job->Info.ExpiresAt = Job->Limits.Deadline;"),
             ("    Future = xrtTaskSubmit(Store->Pool", "    BackupPreviewFixtureBeforeSubmit(Store->Cancel, Store->Pool);\n    Future = xrtTaskSubmit(Store->Pool"),
+            ("    MdoSessionBackupRelease(Document->Backup);", "    BackupPreviewFixtureRetirePause();\n    MdoSessionBackupRelease(Document->Backup);"),
         ):
             assert text.count(old) == 1, old
             text = text.replace(old, new, 1)
         text = ('void BackupPreviewFixturePause(unsigned, xcancel*, xdeadline);\n'
                 'void BackupPreviewFixtureBudget(MdoSessionBackupLimits*);\n'
                 'void BackupPreviewFixtureBeforeSubmit(xcancel*, xtaskpool*);\n'
+                'void BackupPreviewFixtureRetirePause(void);\n'
                 'bool BackupPreviewFixtureLock(xmutex*);\n') + text
         # Prototypes need their declared SDK/product types first.
         text = '#include "../../include/mdo/session_backup.h"\n' + text
@@ -139,6 +141,7 @@ class Probe(UploadProbe):
         self.wait(lambda: self.fixture("state")["entered"] == 1)
         value = self.api("GET", preview)[1]["data"]
         assert value["state"] == "running" and value["phase"] == "decode" and value["completed_steps"] == 0
+        assert self.fixture("pin/" + accepted["id"])["access"] == 2  # not ready
         assert self.fixture("state")["upload_pins"] == 1
         status, same = self.api("POST", start)
         assert status == 200 and same["data"]["id"] == accepted["id"]
@@ -161,12 +164,35 @@ class Probe(UploadProbe):
         assert self.fixture("state")["upload_pins"] == 0
         assert self.fixture("state")["retained_files"] == len(source["files"])
         assert self.api("POST", start)[1]["data"]["id"] == result["id"]
+        held = self.fixture("pin/" + result["id"])
+        assert held["access"] == 0 and held["pins_held"] == 1
+        assert held["pin_hash"] == hashlib.sha256(data).hexdigest()
+        assert held["pin_files"] == len(source["files"]) and held["pin_bytes"] == source["total_bytes"]
+        digest = hashlib.sha256()
+        # The decoder exposes files in portable path order; the fixture added
+        # its PNG after capture, so the input manifest itself is not sorted.
+        for entry in sorted(source["files"], key=lambda entry: entry["path"]):
+            digest.update(entry["path"].encode() + b"\0")
+            digest.update(base64.b64decode(entry["data"]))
+        assert held["pin_content_sha256"] == digest.hexdigest()
+        assert held["pin_title"] == "Offline preview 中文"
+        assert self.fixture("pin-second/" + result["id"])["pins_held"] == 2
         # Reusing an upload ID with DIFFERENT bytes must not reuse old success.
         assert self.upload(b"different") == start
         assert self.api("POST", start)[0] == 409
         assert self.api("GET", preview)[1]["data"]["sha256"] == hashlib.sha256(data).hexdigest()
         assert self.api("DELETE", preview)[1]["data"]["discarded"]
         assert not self.api("GET", preview)[1]["data"]["result_available"]
+        pinned = self.fixture("state")
+        assert pinned["pins_held"] == 2 and pinned["pin_content_sha256"] == held["pin_content_sha256"]
+        assert self.api("POST", start)[1]["error"]["code"] == "backup_preview_busy"
+        # Dropping one acquisition cannot invalidate the other. A deleted
+        # preview cannot issue a new pin even though its immutable bytes live.
+        pinned = self.fixture("pin/" + result["id"])
+        assert pinned["access"] == 1 and pinned["pins_held"] == 1
+        assert pinned["pin_content_sha256"] == held["pin_content_sha256"]
+        assert self.api("POST", start)[0] == 409
+        self.fixture("release-second")
         assert self.fixture("state")["retained_files"] == 0
 
         # Ownership remains valid after the upload has been removed and its
@@ -247,6 +273,7 @@ class Probe(UploadProbe):
         failed = self.terminal(preview)
         assert failed["state"] == "failed" and failed["error_code"] == 6 and failed["completed_steps"] == 2, failed
         assert image_id in failed["message"] and "result" not in failed
+        assert self.fixture("pin/" + failed["id"])["access"] == 2
 
         # Legacy v1 is explicitly partial; a successful semantic inspection is
         # never an assertion that missing UI/images/sidecars have been restored.
@@ -256,10 +283,17 @@ class Probe(UploadProbe):
         result = self.terminal(preview)
         assert result["state"] == "succeeded" and result["result"]["legacy_partial"]
         assert result["result"]["file_count"] == 2 and not result["restore_ready"]
+        held = self.fixture("pin/" + result["id"])
+        assert held["pin_files"] == 2 and held["access"] == 0
         self.fixture("expire")
         assert self.api("GET", preview)[0] == 404
-        assert self.fixture("state")["retained_files"] == 0
+        pinned = self.fixture("state")
+        assert pinned["retained_files"] == 2 and pinned["pin_content_sha256"] == held["pin_content_sha256"]
         assert self.api("GET", PREVIEWS)[1]["data"]["preview"] is None
+        assert self.api("POST", PREFIX + "/" + UPLOAD_ID + "/preview")[0] == 409
+        assert self.fixture("pin-second/" + result["id"])["access"] == 1
+        self.fixture("release-first")
+        assert self.fixture("state")["retained_files"] == 0
 
         # Unit must cancel/join the live worker before Init publishes a new
         # store. Late cleanup cannot write into the new store generation.
@@ -271,12 +305,47 @@ class Probe(UploadProbe):
         assert self.fixture("state")["retained_files"] == 0
         self.fixture("resume")
         _, _, preview = self.begin(data)
-        assert self.terminal(preview)["state"] == "succeeded"
+        result = self.terminal(preview)
+        assert result["state"] == "succeeded"
+        held = self.fixture("pin/" + result["id"])
+        assert self.fixture("pin-second/" + result["id"])["pins_held"] == 2
+        self.fixture("reset")
+        pinned = self.fixture("state")
+        assert pinned["retained_files"] == 0 and pinned["pin_content_sha256"] == held["pin_content_sha256"]
+        start, _, new_preview = self.begin(legacy)
+        new_result = self.terminal(new_preview)
+        assert new_result["state"] == "succeeded" and new_result["result"]["file_count"] == 2
+        assert self.fixture("release-first")["pin_content_sha256"] == held["pin_content_sha256"]
+        pinned = self.fixture("release-second")
+        assert pinned["pins_held"] == 0 and pinned["retained_files"] == 2
+        assert self.api("GET", new_preview)[1]["data"]["result_available"]
+
+        # A native consumer's last release is held during large out-of-lock
+        # cleanup. Queries remain responsive and quota stays busy. Unit/Init
+        # can retire the owning generation without destroying its held mutex;
+        # resuming old cleanup must not clear or free the new store's result.
+        self.fixture("pin/" + new_result["id"])
+        self.fixture("hold-release")
+        assert self.api("DELETE", new_preview)[0] == 200
+        self.fixture("release-async")
+        self.wait(lambda: self.fixture("state")["release_entered"])
+        assert self.api("GET", new_preview)[1]["data"]["discarded"]
+        assert self.api("POST", start)[0] == 409
+        self.fixture("reset")
+        _, _, preview = self.begin(data)
+        result = self.terminal(preview)
+        assert result["state"] == "succeeded" and result["result"]["file_count"] == len(source["files"])
+        self.fixture("resume-release")
+        self.wait(lambda: self.fixture("state")["release_done"])
+        self.fixture("join-release")
+        pinned = self.fixture("pin/" + result["id"])
+        assert pinned["pin_content_sha256"] == digest.hexdigest() and pinned["retained_files"] == len(source["files"])
+        self.fixture("release-first")
         assert self.api("DELETE", preview)[0] == 200
         assert self.api("DELETE", PREFIX + "/" + UPLOAD_ID)[0] == 200
         assert before == inventory(), "offline preview changed Home or executed queued work"
         assert self.fixture("state")["lock_failures"] == 0, "preview tried to reacquire its non-recursive status mutex"
-        print(f"backup preview {'TLS' if self.secure else 'HTTP'}: production async gates, checksum identity, ownership, cancel, expiry, Unit/retry and zero Home writes PASS", flush=True)
+        print(f"backup preview {'TLS' if self.secure else 'HTTP'}: production async gates, immutable multi-reader pins, deletion/expiry quota, native last-release/Unit generations, cancel/retry and zero Home writes PASS", flush=True)
 
 
 def main():

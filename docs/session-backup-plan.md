@@ -19,6 +19,15 @@ checkpoint 与有界读取共用排他运行窗口、统一捕获边界、v2 捕
 320×240 失败提示、实际键盘重试/取消，以及两平台最终门禁记录。下一步
 仍是拥有上传/预览副本的恢复 worker、持久结果和预览/确认/导入页面。
 
+预检结果的后台拥有引用已接入
+[读者生命周期合同](session-backup-preview-api.md#后台读者的所有权)。
+删除或过期立即撤销后续获取，旧读者仍持有精确文件且占当前实例名额；
+最后释放在锁外清理，引用携带所属实例，迟到清理不访问新实例。真实
+HTTP/TLS 双读者、原生最后释放与实例重建交错及独立文件 SHA 已验证。
+此为 worker 的输入所有权前置层，尚未公开恢复 apply；接下来在已审核
+目标绑定和同一请求/会话 ID 下接入后台执行、取消及持久可查询结果，
+再开放确认页面。实例 Unit/TCC 卸载前必须 drain 所有消费引用的任务。
+
 生产恢复的前置项目协调已接入 [发布绑定](project-publication-binding.md)：
 全项目 definition guard 修补 POSIX 同进程 writer 竞态，短发布回调在
 native lock 内复核 reviewed revision/incarnation 和物理 workspace 身份。
