@@ -29,6 +29,7 @@ import { SESSION_TITLE_UTF8_LIMIT, sessionTitleUtf8Bytes } from "./features/sess
 import { formatSessionMarkdown, sessionMarkdownFilename } from "./features/sessions/session-export.js";
 import { loadSessionMarkdownImages } from "./features/sessions/session-export-images.js";
 import { createSessionBackupExport } from "./features/sessions/session-backup-export.js";
+import { createSessionBackupImport } from "./features/sessions/session-backup-import.js";
 import { createProjectDialog } from "./features/sessions/project-dialog.js";
 import { projectDefaultsFromWorkspace } from "./features/sessions/project-identity.js";
 import { timelineStore, selectTimeline, clearTimeline, refreshSelectedTimeline, reloadSelectedTimeline } from "./features/chat/timeline-store.js";
@@ -304,6 +305,15 @@ export async function boot() {
   }));
   const backupExport = createSessionBackupExport({ dialog: $("#session-backup-dialog"),
     fallbackFocus: () => prompt });
+  const backupImport = createSessionBackupImport({ dialog: $("#session-backup-import-dialog"),
+    projectsStore, preferredProject: () => navigation.preferredProject(), fallbackFocus: () => prompt,
+    async openSession(result) {
+      const loaded = await loadSessions();
+      if (loaded.status !== "ready") throw loaded.error;
+      navigation.select(result.project_id, result.session_id); closeDrawers();
+    },
+  });
+  $("#open-backup-import").addEventListener("click", () => backupImport.open());
   function switchToProject(projectId) {
     showActiveSessions();
     navigation.newTask(projectId);
@@ -2169,6 +2179,7 @@ export async function boot() {
   }
 
   async function handleSessionAction(action, session) {
+    if (action === "import_json") { backupImport.open(); return; }
     if (action === "export_json") { backupExport.open(session); return; }
     if (action === "export") {
       toast(t("sessionAction.preparingMarkdown", {}, "正在整理 Markdown 会话记录…"));
@@ -2615,4 +2626,5 @@ export async function boot() {
   scheduleTaskRefresh();
   scheduleSessionRefresh();
   scheduleApprovalRefresh();
+  backupImport.resume();
 }

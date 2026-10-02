@@ -60,6 +60,8 @@ static const MdoApiRoute g_MdoApiRoutes[] = {
       "POST, OPTIONS", MdoApiBackupRestoreReviewRoute, false },
     { "/api/v1/session-backups/restores/{request}/apply", XHTTP_METHOD_POST,
       "POST, OPTIONS", MdoApiBackupRestoreApplyRoute, false },
+    { "/api/v1/session-backups/restores", XHTTP_METHOD_GET | XHTTP_METHOD_HEAD,
+      "GET, HEAD, OPTIONS", MdoApiBackupRestoresRoute, false },
     { "/api/v1/session-backups/restores/{request}", XHTTP_METHOD_GET | XHTTP_METHOD_HEAD | XHTTP_METHOD_DELETE,
       "GET, HEAD, DELETE, OPTIONS", MdoApiBackupRestoreRoute, false },
     { "/api/v1/modules", XHTTP_METHOD_GET | XHTTP_METHOD_HEAD,

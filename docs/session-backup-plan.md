@@ -6,7 +6,10 @@
 Home 非覆盖目录提交、持久 journal 所有权和启动回收已实现，真实 Stage
 到 target Home 的历史产物读取通过。生产同步 coordinator 已组合项目/
 workspace 复核、ID/data 预留、原子发布及一次 catalog 同步；恢复 worker、
-持久请求结果和审核/apply/query/cancel HTTP 已接入，正式导入页面入口待实现。
+持久请求结果和审核/apply/query/cancel HTTP 已接入，正式页面已实现预览、
+明确目标、确认恢复及同 ID 的未知结果查询。详见
+[页面合同与设备边界](session-backup-import-ui.md)。归档的 `restore_ready:false`
+保留，归档本身不能批准目标恢复；实际执行须经服务器审核和用户确认。
 2026-10-02 已完成
 checkpoint 与有界读取共用排他运行窗口、统一捕获边界、v2 捕获/编码层和
 有界 HTTP/TLS 传输。正式 JSON 导出页面已接入 `export_schema:2`，接收

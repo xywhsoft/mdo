@@ -11,5 +11,6 @@ void MdoApiBackupRestoresUnit(void);
 bool MdoApiBackupRestoreReviewRoute(MdoApiContext* Context);
 bool MdoApiBackupRestoreApplyRoute(MdoApiContext* Context);
 bool MdoApiBackupRestoreRoute(MdoApiContext* Context);
+bool MdoApiBackupRestoresRoute(MdoApiContext* Context);
 
 #endif

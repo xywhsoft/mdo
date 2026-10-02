@@ -112,6 +112,8 @@ class Probe(CoordinatorProbe):
 
     def check(self):
         assert not self.home.exists()
+        assert self.api("GET", RESTORES.rstrip("/"))[1]["data"] == {"empty": True}
+        assert self.call("HEAD", RESTORES.rstrip("/"))[0] == 200
         assert self.api("GET", RESTORES + "a" * 32)[0] == 404
         assert self.call("HEAD", RESTORES + "a" * 32)[0] == 404
         assert self.api("POST", RESTORES + "a" * 32 + "/apply")[0] == 404
@@ -124,12 +126,14 @@ class Probe(CoordinatorProbe):
             assert self.api("POST", review_path, body)[0] >= 400
         review = self.review(preview)
         identifier = review["id"]
+        assert self.api("GET", RESTORES.rstrip("/"))[1]["data"] == review
         assert self.review(preview) == review
         assert review["source_sha256"] == digest and review["source_session_id"] == document["session_id"]
         assert not (self.home / ".mdo-session-restore").exists()
         assert self.api("POST", RESTORES + identifier + "/apply", token=False)[0] == 428
         assert self.api("POST", RESTORES + identifier + "/apply", {"confirm": True})[0] == 400
         self.discard(identifier)
+        assert self.api("GET", RESTORES.rstrip("/"))[1]["data"] == {"empty": True}
         assert self.api("GET", RESTORES + identifier)[0] == 404
         assert self.api("POST", RESTORES + identifier + "/apply")[0] == 404
         assert not (self.home / "data/session-restores").exists()

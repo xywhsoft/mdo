@@ -1062,6 +1062,18 @@ select:focus-visible,
 .backup-export-body progress { width: 100%; }
 .backup-export-dialog .dialog-error { margin: 0 0 12px; overflow-wrap: anywhere; }
 .backup-export-dialog footer button { min-height: 40px; }
+.backup-import-body label { display: grid; gap: 6px; margin: 0 0 12px; }
+.backup-import-body :is(input, select) { width: 100%; min-width: 0; min-height: 40px; }
+.backup-import-body dl { display: grid; grid-template-columns: minmax(80px, 1fr) minmax(0, 2fr); gap: 6px 12px; }
+.backup-import-body dt { color: var(--muted); }
+.backup-import-body dd { margin: 0; overflow-wrap: anywhere; }
+.backup-import-dialog footer { flex-wrap: wrap; gap: 6px; }
+.backup-import-dialog footer button { padding-inline: 10px; }
+.backup-import-body [data-import-target] { overflow-wrap: anywhere; }
+@media (max-height: 300px) {
+  .backup-import-dialog .dialog-card > :is(header, footer) { padding: 6px 12px; }
+  .backup-import-body { padding: 6px 12px; }
+}
 .shortcuts-dialog { width: min(540px, calc(100vw - 24px)); max-height: calc(100dvh - 32px); overflow: hidden; }
 .shortcuts-dialog .dialog-card { display: flex; max-height: calc(100dvh - 32px); min-height: 0; flex-direction: column; }
 .shortcuts-dialog .dialog-card > header, .shortcuts-dialog .dialog-card > footer { flex: 0 0 auto; }

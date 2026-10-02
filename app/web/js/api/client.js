@@ -193,3 +193,26 @@ export const api = Object.freeze({
   deleteImage,
   markImageDiscard,
 });
+
+// Dedicated bounded binary transport, sharing the page's write token, purge
+// admission and pending-write tracking. Never JSON stringify a file chunk.
+export async function uploadBackupChunk(id, offset, chunk, options = {}) {
+  if (!/^[0-9a-f]{32}$/.test(id) || !Number.isSafeInteger(offset) || offset < 0 ||
+      !(chunk instanceof Uint8Array) || !chunk.byteLength || chunk.byteLength > 262144)
+    throw new TypeError("Invalid backup chunk");
+  const path = `/session-backups/uploads/${id}/chunks/${offset}`;
+  checkWrite(path, { method: "PUT" });
+  return trackWrite(async () => {
+    let response;
+    try {
+      response = await fetch(apiUrl(path), { method: "PUT", body: chunk,
+        headers: { Accept: "application/json", "Content-Type": "application/octet-stream",
+          ...(pageWriteToken ? { "X-Mdo-Write-Token": pageWriteToken } : {}) },
+        cache: "no-store", credentials: "same-origin", redirect: "error", signal: options.signal });
+    } catch (error) {
+      if (error?.name === "AbortError") throw error;
+      throw new ApiError("Cannot upload backup chunk", { code: "network_error" });
+    }
+    return readEnvelope(response, path, "PUT");
+  });
+}

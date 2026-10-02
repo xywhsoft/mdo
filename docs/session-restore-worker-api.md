@@ -1,8 +1,9 @@
 # 会话恢复审核、持久接受与后台执行
 
-2026-10-03。生产路由和拥有句柄已接通；正式导入页面继续实施。
-现有备份 manifest 的 `restore_ready:false` 保持，不能将后台探针当成
-完整页面操作、原生 WebView 或实体移动端验收。
+2026-10-03。生产路由和拥有句柄已接通；正式导入页面已接预览、目标
+审核、显式 apply 和同 ID 查询。详见 [页面合同](session-backup-import-ui.md)。
+现有备份 manifest 的 `restore_ready:false` 保持，归档本身不含目标授权；
+后台探针与浏览器操作仍不能替代原生 WebView 或实体移动端验收。
 
 ## 调用流程
 
@@ -12,6 +13,7 @@
 
 | 方法与路径 | 输入与结果 |
 | --- | --- |
+| `GET/HEAD /api/v1/session-backups/restores` | 只读发现同进程 resident 小型审核/worker 事实，缺失为 `{empty:true}`；不扫描历史 receipts、不批准执行 |
 | `POST /api/v1/session-backups/previews/{preview}/restore-review` | JSON 仅含 `project_id`；固定源 pin/hash、目标项目版本/重建时间、物理 workspace、新请求/会话 ID 和恢复时间；201，重复同一未过期审核为 200 |
 | `GET/HEAD /api/v1/session-backups/restores/{request}` | 优先查询 Home 的不可变接受/终态证据，再附加当前审核或 worker 的小型事实；不读取当前项目、源上传或目标会话 |
 | `POST /api/v1/session-backups/restores/{request}/apply` | 空 body；使用审核保存的目标，不能在确认时重新捕获已变化的项目；接受持久化后才提交后台任务，202；已有持久请求直接 200 返回原事实 |

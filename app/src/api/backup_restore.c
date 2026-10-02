@@ -474,3 +474,27 @@ bool MdoApiBackupRestoreRoute(MdoApiContext* Context)
     }
     return MdoApiReplySuccessTake(Context, 200u, Value, NULL);
 }
+
+/* Discover a resident review after its response was lost. This is not a
+ * directory scan of historical receipts and never authorizes apply on GET. */
+bool MdoApiBackupRestoresRoute(MdoApiContext* Context)
+{
+    MdoBackupRestoreStore* Store = g_MdoBackupRestores;
+    MdoBackupRestoreJob* Retired;
+    char Id[33] = {0};
+    xvalue* Value;
+    if ( !MdoBackupRestoreNoBody(Context) ) return MdoApiReplyError(Context, 400u,
+        "restore_request_invalid", "Use an empty request body", NULL);
+    if ( Store != NULL ) {
+        xrtMutexLock(Store->Lock); Retired = MdoBackupRestoreCollectLocked(Store);
+        if ( Store->Slot != NULL ) memcpy(Id, Store->Slot->Info.Request.SessionId, sizeof(Id));
+        xrtMutexUnlock(Store->Lock); MdoBackupRestoreRetire(Store, Retired);
+    }
+    if ( Id[0] != '\0' ) return MdoBackupRestoreReply(Context, Id, 200u);
+    Value = xrtValueObject();
+    if ( Value == NULL || !MdoApiValueSetBool(Value, "empty", true) ) {
+        xrtValueRelease(Value);
+        return MdoApiReplyError(Context, 500u, "restore_result_unavailable", "Cannot serialize restore discovery", NULL);
+    }
+    return MdoApiReplySuccessTake(Context, 200u, Value, NULL);
+}

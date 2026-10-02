@@ -4,6 +4,46 @@
 
 完成判据及尚缺的打包页证据见 [前端操作体验完成审计](frontend-completion-audit.md)。本文件继续记录每次实现和验证的细节。
 
+## 2026-10-03：完整备份导入页面与刷新恢复
+
+新增侧栏和桌面/移动端会话菜单入口。原生文件选择器、分块 SHA/上传、
+异步 semantic preview、明确目标审核、确认恢复、原 ID 的结果查询和
+显式打开新会话已组合。窗口关闭只隐藏，取消必须显式请求并查询；未知
+结果不能新建恢复。更换目标先丢弃审核并证明它已消失，接受交错则沿用
+原 ID。URL 先保留身份后 apply，刷新只查询、不重做。详见
+[导入页面合同](session-backup-import-ui.md)。
+
+审核页优先目标，日期按服务端微秒转换，缺失统计不伪装为零；三语状态/
+错误、短屏独立滚动与固定操作栏已接入。上传共用页面 write token/
+清理 guard/pending-write。新增 resident 只读 discovery，能找回审核响应；
+不扫描历史 receipts 或授予执行权限。归档/preview 的 `restore_ready:false`
+保留，实际恢复仍需成功的 v2 预检、固定目标审核及用户确认。
+
+21 个新增 Node 行为测试及真实 HTTP/TLS 前端探针通过：完整模型/UI/
+图片/草稿/队列/2 MiB 产物的 apply 响应丢失后，重建 controller 只查询
+同一提交 ID；catalog 一次出现、来源字节不变、队列 staged、无模型启动。
+最初误用了旧 release host，随后统一 `.build/host`；夹具的默认 GBK 读
+中文及把全局 catalog 当作项目过滤列表的断言已修正，初次日志保留。
+
+Windows 实际隔离单文件页完成文件选择、预览/审核/确认、刷新找回结果、
+Esc 返回原草稿、320×240 菜单重新打开结果和主动打开新会话；消息操作/
+时间/token 速率及队列等待手动发送可见。run POST 为零，无 browser
+error/warn。候选截图/回执在 `.build/qa-backup-import-live-*` 和三个 jpg；
+该候选比最终源少了“不显示缺失字节总数”的一项修正，完整结果实测有
+该字段，不影响已验证的控件。不是实体设备/原生窗口内完整点击证明。
+
+最终两平台通过 115 Python、283 Node、96 JS 模块、严格 C11、47 runtime、
+四项 packed 与独立 A/B；Windows 另通过便携 Home/20 秒启动。22 份代码/
+探针按 LF 核对。锁定 SDK 未改；Windows 本轮重建 xs/xsw，Linux 复用
+已验证 native host。根目录 `mdo.exe` 已更新，6,466,469 字节，SHA-256
+`142a96c30e4845c9d0a7b7947baa64b0aa127641217a4acf83905db542b85d3b`；
+Linux A/B 6,516,629 字节，SHA-256
+`1d78be29ed58cdcd302cae51611bd72c7a56a877df8316a30ffbef6ca0517dd4`。
+日志 `.build/qa-backup-import-{windows,linux}-final.log`，发布时根窗口数零。
+没有压力或高负载测试，不改用户 Home；Linux 既有间歇问题独立保留。
+下一步补原生窗口重开后的最近结果提示/完成确认，以及其他系统和实体
+设备的实际交互证据；整体长期目标仍在推进。
+
 ## 2026-10-03：会话恢复审核与生产后台执行
 
 新增 Accept/Execute/Discard owning operation：Accept 固定审核的项目/

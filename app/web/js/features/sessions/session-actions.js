@@ -20,7 +20,8 @@ export function sessionActionItems(session) {
       item("export_json", "action.exportJson", "导出 JSON 备份"),
     );
   } else actions.push(item("unarchive", "action.unarchive", "移回进行中"));
-  actions.push(item("trash", "action.trash", "移到回收站", "danger"));
+  actions.push(item("import_json", "action.importJson", "导入会话备份"),
+    item("trash", "action.trash", "移到回收站", "danger"));
   return actions;
 }
 
