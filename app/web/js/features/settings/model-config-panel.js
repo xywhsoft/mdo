@@ -156,60 +156,82 @@ function modelDefault(provider) {
 }
 
 export function createModelConfigPanel(container) {
-  let document = null;
+  let config = null;
   let etag = "";
   let kind = "model";
   let selectedId = "";
   let busy = false;
   let dirty = false;
+  let editVersion = 0;
 
-  function renderReadState(cause = null) {
-    clear(container);
+  function renderReadState(cause = null, keepForm = false) {
+    if (keepForm) container.querySelector("[data-model-read-status]")?.remove();
+    else clear(container);
     const notice = element("div", { className: cause ? "resource-error" : "empty-state",
-      attrs: { role: cause ? "alert" : "status" } }, [cause
+      attrs: { role: cause ? "alert" : "status", "data-model-read-status": "" } }, [cause
       ? element("p", { text: errorMessage(cause) })
       : copy("p", "resource.loading", "正在读取…")]);
     if (cause) {
       const retry = copy("button", "resource.retryLoad", "重新读取", {},
         { className: "secondary-button", attrs: { type: "button" } });
       retry.addEventListener("click", async () => {
-        if (busy) return;
-        await load();
-        if (container.isConnected && container.getClientRects().length &&
+        if (busy || !allowChange()) return;
+        const applied = await load();
+        if (applied && container.isConnected && container.getClientRects().length &&
             globalThis.document.activeElement === globalThis.document.body)
           container.querySelector("button")?.focus({ preventScroll: true });
       });
       notice.append(retry);
     }
-    container.append(notice);
+    container.prepend(notice);
   }
 
   async function load(preferredKind = kind, preferredId = selectedId) {
-    if (busy) return;
+    if (busy) return false;
+    const formAtRead = container.querySelector(".model-config-form");
+    const versionAtRead = editVersion;
+    const focusAtRead = globalThis.document.activeElement;
     busy = true;
+    container.querySelector("[data-model-read-status]")?.remove();
     container.setAttribute("aria-busy", "true");
-    if (!document) renderReadState();
+    if (!config) renderReadState();
     try {
       const response = await api.get("/models/config");
-      document = response.data;
+      // A refresh is not permission to discard later edits or a newly selected
+      // editor. Retain its nodes, values, selection and original config/ETag.
+      if (versionAtRead !== editVersion ||
+          formAtRead !== container.querySelector(".model-config-form") ||
+          (formAtRead?.contains(globalThis.document.activeElement) &&
+            globalThis.document.activeElement !== focusAtRead)) {
+        container.prepend(copy("p", "modelConfig.refreshKept",
+          "刷新期间的新输入已保留；保存或放弃修改后可再次刷新。", {}, {
+            className: "model-config-status", attrs: {
+              role: "status", "data-model-read-status": "",
+            },
+          }));
+        return false;
+      }
+      config = response.data;
       etag = response.etag;
       kind = preferredKind;
       selectedId = preferredId;
       if (selectedId && !collection().some((item) => item.id === selectedId))
         selectedId = "";
-      if (!selectedId) selectedId = kind === "model" ? document.default_model :
-        document.providers[0]?.id ?? "";
+      if (!selectedId) selectedId = kind === "model" ? config.default_model :
+        config.providers[0]?.id ?? "";
       dirty = false;
       render();
+      return true;
     } catch (cause) {
-      renderReadState(cause);
+      renderReadState(cause, Boolean(config));
+      return false;
     } finally {
       busy = false;
       container.removeAttribute("aria-busy");
     }
   }
 
-  function collection() { return kind === "model" ? document.items : document.providers; }
+  function collection() { return kind === "model" ? config.items : config.providers; }
   function current() { return collection().find((item) => item.id === selectedId) ?? null; }
   function allowChange() {
     if (!dirty) return true;
@@ -219,7 +241,7 @@ export function createModelConfigPanel(container) {
 
   async function transact(next, messageKey, messageFallback,
     focusKind = kind, focusId = selectedId) {
-    if (busy || !document || document.runtime_override) return;
+    if (busy || !config || config.runtime_override) return;
     busy = true;
     try {
       const patch = { default_model: next.default_model,
@@ -280,7 +302,7 @@ export function createModelConfigPanel(container) {
         pattern: "[A-Za-z0-9_-][A-Za-z0-9._-]*" }),
       input("名称", "name", item.name, { required: true, maxLength: 256 }),
       input("Provider", "provider", item.provider, { kind: "select", choices:
-        document.providers.map((provider) => [provider.id, provider.name]) }),
+        config.providers.map((provider) => [provider.id, provider.name]) }),
       input("API 模型名", "wire_model", item.wire_model, { required: true, maxLength: 256 }),
       input("默认协议", "default_protocol", item.default_protocol,
         { kind: "select", choices: protocols.map(([key, label]) => [key, label]) }),
@@ -310,7 +332,7 @@ export function createModelConfigPanel(container) {
     const providerSelect = form.elements.provider;
     const defaultProtocol = form.elements.default_protocol;
     const syncProtocols = () => {
-      const provider = document.providers.find((entry) => entry.id === providerSelect.value);
+      const provider = config.providers.find((entry) => entry.id === providerSelect.value);
       for (const [key, , endpoint] of protocols) {
         const allowed = Boolean(provider?.endpoints?.[endpoint]);
         const checkbox = form.querySelector(`input[name="protocol"][value="${key}"]`);
@@ -357,7 +379,7 @@ export function createModelConfigPanel(container) {
   }
 
   function render() {
-    if (!document) return;
+    if (!config) return;
     clear(container);
     const controls = element("div", { className: "model-config-controls" });
     for (const [value, key, label] of [
@@ -377,17 +399,17 @@ export function createModelConfigPanel(container) {
       { className: "secondary-button", attrs: { type: "button" } });
     refresh.addEventListener("click", async () => {
       if (!allowChange()) return;
-      await load();
+      const applied = await load();
       // A successful reload replaces the clicked button. Leave later user
       // focus alone if they moved to another part of the app meanwhile.
-      if (container.isConnected && container.getClientRects().length &&
-          document.activeElement === document.body)
+      if (applied && container.isConnected && container.getClientRects().length &&
+          globalThis.document.activeElement === globalThis.document.body)
         container.querySelector('[data-model-copy-key="modelConfig.refresh"]')?.focus();
     });
     const add = copy("button", kind === "model" ? "modelConfig.newModel" :
       "modelConfig.newProvider", kind === "model" ? "新增模型" : "新增 Provider",
     {}, { className: "primary-button", attrs: { type: "button" } });
-    add.disabled = document.runtime_override;
+    add.disabled = config.runtime_override;
     add.addEventListener("click", () => {
       if (!allowChange()) return;
       selectedId = ""; render();
@@ -395,10 +417,10 @@ export function createModelConfigPanel(container) {
     });
     controls.append(refresh, add);
     container.append(copy("p", "modelConfig.status",
-      `当前默认：${document.default_model} · 配置 revision ${etag.replace(/\D/g, "")}`,
-      { model: document.default_model, revision: etag.replace(/\D/g, "") },
+      `当前默认：${config.default_model} · 配置 revision ${etag.replace(/\D/g, "")}`,
+      { model: config.default_model, revision: etag.replace(/\D/g, "") },
       { className: "model-config-status" }), controls);
-    if (document.runtime_override) container.append(copy("p", "modelConfig.runtimeOverride",
+    if (config.runtime_override) container.append(copy("p", "modelConfig.runtimeOverride",
       "当前配置含运行时覆盖；请移除启动覆盖后再用页面编辑模型。",
       {}, { className: "resource-error" }));
     const layout = element("div", { className: "model-config-layout" });
@@ -411,7 +433,7 @@ export function createModelConfigPanel(container) {
         element("strong", { text: item.name || item.id }),
         element("small", {}, [item.id,
           item.builtin ? copy("span", "modelConfig.builtinTag", " · 内置") : null,
-          kind === "model" && item.id === document.default_model
+          kind === "model" && item.id === config.default_model
             ? copy("span", "modelConfig.defaultTag", " · 默认") : null]),
       ]);
       button.addEventListener("click", () => {
@@ -423,8 +445,8 @@ export function createModelConfigPanel(container) {
     }
     const source = current();
     const item = clone(source ?? (kind === "model" ?
-      modelDefault(document.providers.find((provider) => !provider.builtin) ||
-        document.providers[0]) : providerDefault()));
+      modelDefault(config.providers.find((provider) => !provider.builtin) ||
+        config.providers[0]) : providerDefault()));
     const form = element("form", { className: "model-config-form" });
     if (kind === "model") renderModel(form, item);
     else renderProvider(form, item);
@@ -437,7 +459,7 @@ export function createModelConfigPanel(container) {
       "modelConfig.builtinProviderDetail", `${source.id} · 内置接口和凭据引用由程序管理`,
       { id: source.id }));
     const actions = element("div", { className: "model-config-actions" });
-    if (!source?.builtin && !document.runtime_override) {
+    if (!source?.builtin && !config.runtime_override) {
       const save = copy("button", "modelConfig.save", "保存", {},
         { className: "primary-button", attrs: { type: "submit" } });
       save.disabled = Boolean(source);
@@ -454,12 +476,12 @@ export function createModelConfigPanel(container) {
           : container.querySelector('.model-config-controls .primary-button');
         target?.focus();
       });
-      form.addEventListener("input", () => { dirty = true; discard.hidden = false; save.disabled = false; });
-      form.addEventListener("change", () => { dirty = true; discard.hidden = false; save.disabled = false; });
+      form.addEventListener("input", () => { editVersion += 1; dirty = true; discard.hidden = false; save.disabled = false; });
+      form.addEventListener("change", () => { editVersion += 1; dirty = true; discard.hidden = false; save.disabled = false; });
       form.addEventListener("submit", (event) => {
         event.preventDefault();
         if (!form.reportValidity()) return;
-        const next = clone(document);
+        const next = clone(config);
         const value = kind === "model" ? readModel(form, item) : readProvider(form, item);
         if (kind === "provider" && !Object.keys(value.endpoints).length) {
           toast(t("modelConfig.endpointRequired", {},
@@ -481,8 +503,8 @@ export function createModelConfigPanel(container) {
       });
       actions.append(save, discard);
       if (source?.removable) {
-        const used = kind === "provider" && document.items.some((model) => model.provider === source.id);
-        const isDefault = kind === "model" && source.id === document.default_model;
+        const used = kind === "provider" && config.items.some((model) => model.provider === source.id);
+        const isDefault = kind === "model" && source.id === config.default_model;
         const remove = copy("button", "modelConfig.remove", "删除", {},
           { className: "danger-link", attrs: { type: "button" } });
         if (used || isDefault) translatedAttribute(remove, "title",
@@ -508,7 +530,7 @@ export function createModelConfigPanel(container) {
           dismiss();
         });
         apply.addEventListener("click", () => {
-          const next = clone(document);
+          const next = clone(config);
           next[kind === "model" ? "items" : "providers"] = collection().filter((entry) => entry.id !== source.id);
           confirm.hidden = true;
           void transact(next, "modelConfig.removed", "配置已删除", kind, "");
@@ -519,12 +541,12 @@ export function createModelConfigPanel(container) {
         actions.append(remove, confirm);
       }
     }
-    if (kind === "model" && source && source.id !== document.default_model && !document.runtime_override) {
+    if (kind === "model" && source && source.id !== config.default_model && !config.runtime_override) {
       const setDefault = copy("button", "modelConfig.setDefault", "设为默认模型", {},
         { className: "secondary-button", attrs: { type: "button" } });
       setDefault.addEventListener("click", () => {
         if (!allowChange()) return;
-        const next = clone(document); next.default_model = source.id;
+        const next = clone(config); next.default_model = source.id;
         void transact(next, "modelConfig.defaultUpdated", "默认模型已更新");
       });
       actions.append(setDefault);
@@ -536,7 +558,7 @@ export function createModelConfigPanel(container) {
 
   const unsubscribe = subscribeLocale(() => translateCopy(container));
   return Object.freeze({
-    ensureLoaded: () => document ? Promise.resolve() : load(),
+    ensureLoaded: () => config ? Promise.resolve() : load(),
     reload: () => load(),
     destroy: unsubscribe,
   });

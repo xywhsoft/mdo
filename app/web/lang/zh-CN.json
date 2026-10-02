@@ -1014,6 +1014,7 @@
   "modelConfig.models": "模型",
   "modelConfig.providers": "Provider",
   "modelConfig.refresh": "刷新",
+  "modelConfig.refreshKept": "刷新期间的新输入已保留；保存或放弃修改后可再次刷新。",
   "modelConfig.status": "当前默认：{model} · 配置 revision {revision}",
   "modelConfig.runtimeOverride": "当前配置含运行时覆盖；请移除启动覆盖后再用页面编辑模型。",
   "modelConfig.modelList": "模型列表",

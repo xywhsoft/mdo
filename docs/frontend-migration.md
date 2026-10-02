@@ -4,6 +4,37 @@
 
 完成判据及尚缺的打包页证据见 [前端操作体验完成审计](frontend-completion-audit.md)。本文件继续记录每次实现和验证的细节。
 
+## 2026-10-03：模型刷新保留正在操作的表单
+
+隔离旧包复现：点击刷新，在回复到达前新建模型并输入名称，迟到回复
+切回内建模型、清掉草稿且把焦点跳回刷新。模型面板现按读取开始时的
+编辑版本、表单及焦点判断是否仍能替换；后来输入、切换表单或进入
+编辑器时保留现有节点和原配置/ETag，不用旧回复覆盖新操作。配置变量
+改名为 config，消除把配置对象当 DOM document 使用的焦点错误。
+
+已有配置的刷新失败就地显示错误/重新读取，原表单保持可用；未保存
+修改仍按既有保存/放弃规则处理，重试不静默清掉编辑。初次读取的加载
+和错误页、内建模型不可编辑规则保持。提示补齐中文、英语、俄语。
+
+最终单文件在隔离 Home 验证重复刷新一次请求、新模型草稿/名称选择
+保留并继续保存、已有模型仅移动焦点也保留选择、失败后就地重试、
+失败后输入再重试不清空内容。320×700 切到新增 Provider 后，迟到读取
+保持类别、标识、名称及焦点/选择，文本框均高 40px、无横向溢出，页面
+无 error/warn。实际 API 读回自定义模型，内建默认 Ornith 的免费/不可
+编辑/不可移除标志不变；未发送模型请求，测试只写隔离 Home。
+
+Windows/Linux 相关 18 Python、12 Node、101 JS 模块检查、独立 A/B
+打包及隔离模型配置/静态资源读取通过；4 份修改源按 LF 核对一致，SDK
+未改。未做压力、高负载或无关完整发布门禁。图形证据是 Windows 打包
+服务/浏览器视口，不扩大到实体设备或其他平台原生窗口。
+复现沿用 `tests/manual_packed_settings_qa.py`，`arm` 的 path 指定
+`/api/v1/models/config`。证据 `.build/qa-model-refresh-broken.json`、
+`qa-model-refresh-final-{kept,failure}.json`、`qa-model-refresh-focus-only.json`、
+`qa-model-refresh-retry-dirty.json`、`qa-model-refresh-mobile.{json,jpg}` 及
+`qa-model-refresh-{windows,linux}.log`。
+Windows 根程序 6,484,612 字节，SHA-256 `c4b0ef2688fce54d50c2e45bfb9e8714b96c781536945e22e28af4a393d2112c`；
+Linux 候选 6,534,772 字节，SHA-256 `6b2bfa747da48d7077ca3ae23b8273d1ac5f82d18236d0e2e9eb892dc192db3a`。
+
 ## 2026-10-03：恢复侧栏后台任务状态
 
 对照旧版侧栏运行标识，会话现在显示准备中、运行中、正在停止；切到

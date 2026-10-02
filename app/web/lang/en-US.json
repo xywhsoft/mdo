@@ -1014,6 +1014,7 @@
   "modelConfig.models": "Models",
   "modelConfig.providers": "Providers",
   "modelConfig.refresh": "Refresh",
+  "modelConfig.refreshKept": "New input made during refresh was kept. Save or discard your changes before refreshing again.",
   "modelConfig.status": "Current default: {model} · configuration revision {revision}",
   "modelConfig.runtimeOverride": "Runtime overrides are active. Remove startup overrides before editing models here.",
   "modelConfig.modelList": "Model list",

@@ -1014,6 +1014,7 @@
   "modelConfig.models": "Модели",
   "modelConfig.providers": "Провайдеры",
   "modelConfig.refresh": "Обновить",
+  "modelConfig.refreshKept": "Ввод, сделанный во время обновления, сохранён. Сохраните или отмените изменения перед повторным обновлением.",
   "modelConfig.status": "Модель по умолчанию: {model} · версия настроек {revision}",
   "modelConfig.runtimeOverride": "Действуют переопределения при запуске. Уберите их перед изменением моделей на странице.",
   "modelConfig.modelList": "Список моделей",
