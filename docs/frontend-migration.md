@@ -4,6 +4,69 @@
 
 完成判据及尚缺的打包页证据见 [前端操作体验完成审计](frontend-completion-audit.md)。本文件继续记录每次实现和验证的细节。
 
+
+## 2026-10-02：备份图片的原生像素检查
+
+xs 增加可选 `image` 原生扩展，只向 TCC VFS 开放 `<xs-image.h>` 和三个
+`xsImage*` 函数。stb_image 和 libwebp 解码源、许可证、版本和精确 commit
+均随源码锁定；只构建 PNG/JPEG 与标量 WebP 解码，不引入外部 DLL、图片
+程序、前端包管理器或 Agent 工具目录。SDK 功能提交 `bc61a55`，直接 TCC
+探针头文件修正提交 `a98e8af`；干净 checkout 的原生测试构建目录修正提交
+`0c8c533`，后者进入 mdo 依赖锁。锁还校验适配器、
+配置、全部 vendor 源及许可证字节，忽略 Windows/Linux 的换行差异。
+二进制内的 `/licenses/native-image.txt` 保存相关通知。
+
+`MdoSessionBackupCheckImages` 是独立离线检查：先重放未绑定模型，再逐张
+解码附件与原始保留账本的 IMAGE parts，包含被压缩/裁剪隐藏的旧条目。
+MIME 与内容必须相符；PNG 验证 chunk CRC，JPEG 验证 marker/EOI，WebP
+验证 RIFF/块边界，然后实际解码所有静态像素。RGBA 和临时内存随即释放，
+只返回附件/内嵌/未验证数量、RGBA 总字节及峰值内存。URL 或空引用不访问
+网络，单独报告未验证；动画 PNG/WebP 暂不支持。可解码不证明视觉内容、
+来源或所有有损熵损坏都无误，也不能代替模型/UI 关系或正式恢复资格。
+
+单张上限为 8 MiB 编码、单边 16384、16M 像素、128 MiB 解码堆；聚合
+上限为 1024 次图片操作、64 MiB 编码与 256 MiB RGBA，调用方仅可降低。
+逐张复用内存，线程局部适配器统计所有动态分配，包括对齐头和 resize
+期间的新/旧缓冲。WebP 使用非等待 gate 防止标量 DSP 初始化并发；重入
+或并行 WebP 返回 busy。取消/30 秒 deadline 在容器、分配和操作边界检查，
+不能抢占 codec 的纯 CPU 循环，生产入口须置于有界 worker。失败清理后
+仍可重试；输出 Size 不匹配时不触碰调用对象，其他失败清空结果事实。
+
+两平台原生探针均通过 173 项实际像素、边界、取消及逐处分配失败/重试
+检查；小 PNG 与无损 WebP 另核对精确像素 hash。声明超出像素预算的测试
+仅使用极小文件头，没有分配大图或进行压力/高负载测试。注册表 36 项通过
+（Windows 一项 Linux 专属 skip）；直接/嵌套 TCC 和缺失扩展的头/符号门禁
+已接入探针。mdo HTTP/TLS 覆盖实际源运行、附件四种编码、内嵌图片、URL、
+截断、取消、deadline、低预算、错误后重试及 Home/备份原字节保持。
+
+实际解码发现之前 68 字节 1×1 PNG 的 IDAT CRC 错误；该夹具曾用于原字节
+保真，不能证明其可解码。本次只修正夹具 CRC，保留独立“字节保真/像素
+解码”结果。初轮 SDK 探针缺少直接 include、错误码断言把 LIMIT 写成其他
+编号，已分别修正；Windows 发布曾遇自身运行探针占用，待其退出后使用同
+批已编译对象完成 GUI 链接和发布。首次 Linux 门禁失败与 Windows 发布
+失败日志保留，最终门禁另行记录。
+
+生产预览 worker、独立 staging、新身份/来源、原子非覆盖发布、catalog 与
+正式完整备份菜单仍待完成。manifest 保持 `restore_ready:false`；没有本轮
+原生点击或实体设备证据，不把此子阶段宣称为完整前端体验恢复。
+
+
+最终 Windows/Linux 有界门禁均通过 115 Python、252 Node、90 模块、严格
+C11、36 运行探针、三项 packed 与独立 A/B；Windows 另通过便携 WebView2
+Home 覆盖/移动重启及 20 秒启动。Windows 宿主为 5,598,720 字节，较上一
+阶段增加 246.5 KiB；完整程序为 6,379,380 字节（约 6.08 MiB）。
+Windows 根目录更新 SHA-256：
+`f94dade17344fd4ef159f2fc442ed055232dcc06f227a99e009aa5cf1762d034`；
+Linux：`ce772b36a7ce9f50702cc2690a4e8326816a8a04f6b2dc7d5c93bc0f42eb04cc`。
+最终记录为 `.build/qa-image-{windows,linux}-final.log`，native/TCC 分别保存
+在 `.build/qa-image-{codec,tcc}-{windows,linux}-final.log`。
+
+最终 Linux 门禁之前，普通图片 queued Unit 的第五个连接发送 HEAD 时出现
+一次 reset；未放宽测试，也未据此修改底层库。相同源/宿主的两次独立普通
+HTTP/TLS 验证及随后完整门禁均通过，但仍没有确定原因。该项保持待排查，
+见 [连接重置记录](linux-image-queued-head-reset.md)，不能把重跑通过写成
+根因已修复。本阶段没有压力/高负载或新增原生点击/实体设备测试。
+
 ## 2026-10-02：助手正文与逐块推理签名共同保存
 
 修复 xllmMessageFromResponse 在追加签名 part 时清掉 content 的问题。

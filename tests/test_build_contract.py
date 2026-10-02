@@ -28,7 +28,10 @@ class BuildContractTests(unittest.TestCase):
         self.assertRegex(self.lock["xrt"]["commit"], r"^[0-9a-f]{40}$")
         self.assertRegex(self.lock["xserver"]["commit"], r"^[0-9a-f]{40}$")
         self.assertEqual(self.lock["xserver"]["required_extensions"],
-                         ["xwork", "webview"])
+                         ["xwork", "webview", "image"])
+        image = self.lock["xserver"]["native_extensions"]["image"]
+        self.assertEqual(image["abi_version"], 1)
+        self.assertRegex(image["tree_sha256"], r"^[0-9a-f]{64}$")
         for name in ("xllm", "xllm-session", "xwork"):
             record = self.lock["libraries"][name]
             self.assertRegex(record["source_commit"], r"^[0-9a-f]{40}$")
@@ -49,6 +52,24 @@ class BuildContractTests(unittest.TestCase):
             crlf.write_bytes(b"one\r\ntwo\r\n")
             self.assertEqual(BUILD.source_file_sha256(lf),
                              BUILD.source_file_sha256(crlf))
+
+    def test_native_image_pin_covers_decoder_and_license_bytes(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            (root / "vendor").mkdir(); (root / "src").mkdir()
+            (root / "xs-image.c").write_bytes(b"wrapper\n")
+            (root / "src/config.h").write_bytes(b"scalar\n")
+            (root / "UPSTREAM.json").write_bytes(b"{}\n")
+            notice = root / "vendor/LICENSE"
+            notice.write_bytes(b"license\n")
+            first = BUILD.image_extension_sha256(root)
+            notice.write_bytes(b"license\r\n")
+            self.assertEqual(first, BUILD.image_extension_sha256(root))
+            notice.write_bytes(b"different license\n")
+            self.assertNotEqual(first, BUILD.image_extension_sha256(root))
+            notice.write_bytes(b"license\n")
+            (root / "vendor/decoder.c").write_bytes(b"added decoder\n")
+            self.assertNotEqual(first, BUILD.image_extension_sha256(root))
 
     def test_new_source_root_is_independent_from_legacy_app(self) -> None:
         sources = BUILD.source_list()
@@ -97,6 +118,7 @@ class BuildContractTests(unittest.TestCase):
             "src/sessions/backup_decode.c",
             "src/sessions/backup_replay.c",
             "src/sessions/backup_model_history.c",
+            "src/sessions/backup_images.c",
             "src/approvals/manager.c",
             "src/power/inhibitor.c",
             "src/power/manager.c",

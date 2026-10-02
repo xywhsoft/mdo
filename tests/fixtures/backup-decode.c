@@ -145,7 +145,7 @@ static bool BackupDecodeFixtureRun(MdoSession* Session, const char* Prompt, bool
     MdoAgentRunOptionsInit(&Options); Options.Prompt = Prompt;
     xllmMessageInit(&Message, XLLM_ROLE_USER);
     if ( WithImage ) {
-        static const char Png[] = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+a8Z8AAAAASUVORK5CYII=";
+        static const char Png[] = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+ip1sAAAAASUVORK5CYII=";
         size_t Bytes = 0u;
         void* Pixel = xrtBase64DecodeNew(Png, sizeof(Png) - 1u, &Bytes, NULL);
         xllm_part Part = {0};
@@ -379,6 +379,50 @@ static bool BackupDecodeFixtureModelHistory(XS_HttpReq* Request)
     return true;
 }
 
+static bool BackupDecodeFixtureImages(XS_HttpReq* Request)
+{
+    static const char Prefix[] = "/__fixture/backup-decode/images";
+    xstrview Target = Request->head->Target;
+    MdoApiContext Context = {0};
+    MdoSessionBackupLimits Limits;
+    MdoSessionBackupImages Images = {0};
+    xwork_error Error;
+    xcancel* Cancel = NULL;
+    xvalue* Value;
+    uint32 Words[2] = {sizeof(uint32), UINT32_C(0x12345678)};
+    bool Ok, SizeSafe;
+    if ( Target.Size < sizeof(Prefix) - 1u || memcmp(Target.Data, Prefix, sizeof(Prefix) - 1u) != 0 ) return false;
+    MdoSessionBackupLimitsInit(&Limits); Images.Size = sizeof(Images); xworkErrorInit(&Error);
+    if ( MdoApiViewEqualText(Target, "/__fixture/backup-decode/images-deadline") ) Limits.Deadline = 1u;
+    if ( MdoApiViewEqualText(Target, "/__fixture/backup-decode/images-file") ) Limits.FileBytes = 1u;
+    if ( MdoApiViewEqualText(Target, "/__fixture/backup-decode/images-cancel") ||
+         MdoApiViewEqualText(Target, "/__fixture/backup-decode/images-step-cancel") ) {
+        Cancel = xrtCancelCreate();
+        if ( Cancel == NULL ) return false;
+        if ( MdoApiViewEqualText(Target, "/__fixture/backup-decode/images-cancel") ) (void)xrtCancelRequest(Cancel);
+        else g_BackupImageProbeCancel = Cancel;
+    }
+    SizeSafe = !MdoSessionBackupCheckImages(g_DecodeFixtureBackup, NULL, NULL,
+        (MdoSessionBackupImages*)Words, NULL) && Words[0] == sizeof(uint32) && Words[1] == UINT32_C(0x12345678);
+    Ok = MdoSessionBackupCheckImages(g_DecodeFixtureBackup, &Limits, Cancel, &Images,
+        MdoApiViewEqualText(Target, "/__fixture/backup-decode/images-null-error") ? NULL : &Error);
+    g_BackupImageProbeCancel = NULL; g_BackupImageProbeSteps = 0u; xrtCancelDestroy(Cancel);
+    Value = xrtValueObject();
+    (void)MdoApiValueSetBool(Value, "ok", Ok);
+    (void)MdoApiValueSetUInt(Value, "code", Error.eCode);
+    (void)MdoApiValueSetString(Value, "error", Error.sMessage);
+    (void)MdoApiValueSetUInt(Value, "attachments", Images.Attachments);
+    (void)MdoApiValueSetUInt(Value, "inline_images", Images.InlineImages);
+    (void)MdoApiValueSetUInt(Value, "unverified", Images.UnverifiedImages);
+    (void)MdoApiValueSetUInt(Value, "rgba_bytes", Images.RgbaBytes);
+    (void)MdoApiValueSetUInt(Value, "peak_memory", Images.PeakDecoderMemoryBytes);
+    (void)MdoApiValueSetBool(Value, "size_safe", SizeSafe);
+    (void)MdoApiValueSetBool(Value, "restore_ready", false);
+    Context.Request = Request; snprintf(Context.RequestId, sizeof(Context.RequestId), "image-gate-fixture");
+    (void)MdoApiReplySuccessTake(&Context, 200u, Value, NULL);
+    return true;
+}
+
 static bool BackupDecodeFixtureControl(XS_HttpReq* Request)
 {
     static const char Prefix[] = "/__fixture/backup-decode/";
@@ -391,6 +435,7 @@ static bool BackupDecodeFixtureControl(XS_HttpReq* Request)
     xcancel* Cancel = NULL;
     size_t i;
     bool Encodable = false;
+    if ( BackupDecodeFixtureImages(Request) ) return true;
     if ( BackupDecodeFixtureReplay(Request) ) return true;
     if ( BackupDecodeFixtureModelHistory(Request) ) return true;
     if ( BackupDecodeFixtureJournal(Request) ) return true;

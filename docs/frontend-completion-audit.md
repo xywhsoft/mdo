@@ -2,6 +2,26 @@
 
 本清单以 `app_bak/wwwroot` 的可操作行为为基线，而不是以页面长得相似或单元测试通过为完成标准。`docs/frontend-migration.md` 记录每次实现和验证；这里记录当前还需要什么证据。审计更新：2026-10-02，基线提交 `f9e2c4c`。
 
+
+2026-10-02 增量：完整备份新增独立静态图片像素检查，覆盖附件及模型原始
+保留账本的 PNG/JPEG/WebP 内嵌图片。URL/空引用报告未验证，动画图片明确
+不支持；没有远程读取或文件修复。xs 原生扩展及解码源/许可证均锁定，
+不添加 Agent 工具目录或外部 DLL。两平台 173 项原生边界/取消/分配失败
+检查通过，HTTP/TLS 零写入/重试和 TCC 探针覆盖已接入。
+
+生产预览 worker、staging 发布、正式菜单与原生/实体设备仍待完成，完整
+恢复行继续未完成，`restore_ready:false` 保持。详见
+[本次迁移](frontend-migration.md#2026-10-02备份图片的原生像素检查)。
+
+同阶段最终 Windows/Linux 有界门禁均通过 115 Python、252 Node、90 模块、
+严格 C11、36 运行探针、三项 packed 与独立 A/B；Windows 另通过便携
+WebView2 Home 与 20 秒启动。Windows 程序为约 6.08 MiB，SHA-256 为
+`f94dade17344fd4ef159f2fc442ed055232dcc06f227a99e009aa5cf1762d034`；
+Linux 为 `ce772b36a7ce9f50702cc2690a4e8326816a8a04f6b2dc7d5c93bc0f42eb04cc`。
+普通 Linux 图片 HEAD 曾出现一次 reset，独立两次 HTTP/TLS 与完整重跑
+通过，仍无确定原因，保留为 [待排查项](linux-image-queued-head-reset.md)。
+没有压力/高负载或新增原生/实体设备证据；完整恢复继续未完成。
+
 2026-10-02 增量：助手响应的正文、逐块推理及 opaque 签名共同保存，空
 推理也能回放；session 共用 xllm 的响应转换并保持用量反馈。修复正文
 被 native part 清除、签名误用 joined reasoning、Completions 文字未转义

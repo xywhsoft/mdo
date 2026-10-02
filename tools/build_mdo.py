@@ -115,6 +115,17 @@ def production_tree_sha256(root: Path) -> str:
     return digest.hexdigest()
 
 
+def image_extension_sha256(root: Path) -> str:
+    """Pin wrapper/config and every decoder/license byte, using LF normalization."""
+    files = production_files(root) + [root / "UPSTREAM.json"]
+    files.extend(path for path in (root / "vendor").rglob("*") if path.is_file())
+    digest = hashlib.sha256()
+    for path in sorted(files, key=lambda path: path.relative_to(root).as_posix()):
+        digest.update(path.relative_to(root).as_posix().encode("utf-8"))
+        digest.update(b"\0"); digest.update(normalized_source_bytes(path)); digest.update(b"\0")
+    return digest.hexdigest()
+
+
 def macro(header: str, name: str) -> str:
     match = re.search(rf"^\s*#define\s+{re.escape(name)}\s+([^\s/]+)", header, re.MULTILINE)
     if match is None:
@@ -136,6 +147,12 @@ def verify_dependencies(xserver: Path, lock: dict) -> None:
     libraries = lock.get("libraries")
     if not isinstance(xrt, dict) or not isinstance(libraries, dict):
         raise BuildError("deps.lock must define xrt and libraries objects")
+    image_record = lock["xserver"].get("native_extensions", {}).get("image", {})
+    image_root = xserver / "lib/xs-image"
+    if image_record.get("tree_sha256") != image_extension_sha256(image_root):
+        raise BuildError("xs image extension/decoder source hash differs from deps.lock")
+    if int(macro((image_root / "xs-image.h").read_text(encoding="utf-8"), "XS_IMAGE_ABI_VERSION").rstrip("uU")) != image_record.get("abi_version"):
+        raise BuildError("xs image ABI differs from deps.lock")
     xrt_commit = locked_commit(xrt, "xrt")
     header = xserver / "lib" / "xrt.h"
     if source_file_sha256(header) != xrt.get("single_header_sha256"):

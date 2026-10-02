@@ -77,6 +77,7 @@ def strict_compile(cc: str, xserver: Path) -> None:
         xserver / "lib/xwork",
         xserver / "lib/xllm",
         xserver / "lib/xllm-session",
+        xserver / "lib/xs-image",
         xserver / "tcc",
         xserver,
     )
@@ -88,6 +89,7 @@ def strict_compile(cc: str, xserver: Path) -> None:
         "-DXS_USE_XLLM_SESSION=1",
         "-DXS_USE_XWORK=1",
         "-DXS_USE_WEBVIEW=1",
+        "-DXS_USE_IMAGE=1",
         str(ROOT / "app/generated/mdo_unity.c"),
     ))
     run(command)

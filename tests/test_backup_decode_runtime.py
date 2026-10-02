@@ -101,6 +101,14 @@ class Probe(UploadProbe):
                                 "        (void)xrtCancelRequest(g_BackupModelHistoryProbeCancel);", 1)
         history.write_text("static xcancel* g_BackupModelHistoryProbeCancel;\n" + source,
                            encoding="utf-8", newline="\n")
+        images = self.site / "src/sessions/backup_images.c"
+        source = images.read_text(encoding="utf-8")
+        hook = "    MdoBackupImageCheck* Check = Context;"
+        assert source.count(hook) == 1
+        source = source.replace(hook, hook + "\n    if ( g_BackupImageProbeCancel != NULL && ++g_BackupImageProbeSteps == 2u )\n"
+                                "        (void)xrtCancelRequest(g_BackupImageProbeCancel);", 1)
+        images.write_text("static xcancel* g_BackupImageProbeCancel;\nstatic size_t g_BackupImageProbeSteps;\n" + source,
+                          encoding="utf-8", newline="\n")
         service = self.site / "src/bootstrap/service.c"
         text = service.read_text(encoding="utf-8")
         text = text.replace('#include "backup-upload.c"', '#include "backup-upload.c"\n#include "backup-decode.c"', 1)
@@ -136,6 +144,19 @@ class Probe(UploadProbe):
         if mode != "replay-release":
             retained = self.api("GET", DECODE + "state")[1]["data"]
             assert retained["ok"] and retained["files"] == decoded["files"], retained
+        return value
+
+    def images(self, document, mode="images"):
+        decoded = self.validate(dump(document))
+        assert decoded["ok"], decoded
+        status, response = self.api("GET", DECODE + mode)
+        assert status == 200, response
+        value = response["data"]
+        assert value["size_safe"] and not value["restore_ready"], value
+        retained = self.api("GET", DECODE + "state")[1]["data"]
+        assert retained["files"] == decoded["files"], retained
+        if not value["ok"]:
+            assert value["attachments"] == value["inline_images"] == value["unverified"] == value["rgba_bytes"] == value["peak_memory"] == 0
         return value
 
     def check(self):
@@ -180,7 +201,14 @@ class Probe(UploadProbe):
             return {str(p.relative_to(self.home)): p.read_bytes() for p in self.home.rglob("*")
                     if p.is_file() and p != self.home / ".mdo.lock"}
         before = inventory()
-        expected_pixel = base64.b64decode("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+a8Z8AAAAASUVORK5CYII=")
+        expected_pixel = base64.b64decode("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+ip1sAAAAASUVORK5CYII=")
+        writer_images = self.images(writer_source)
+        assert writer_images["ok"] and writer_images["inline_images"] == 1 and writer_images["rgba_bytes"] == 4, writer_images
+        assert writer_images["attachments"] == writer_images["unverified"] == 0
+        for mode, code in [("images-deadline", 11), ("images-file", 11), ("images-cancel", 9), ("images-step-cancel", 9)]:
+            value = self.images(writer_source, mode)
+            assert not value["ok"] and value["code"] == code, (mode, value)
+        assert self.images(writer_source, "images-null-error")["ok"]
         writer_model = self.replay(writer_raw, "replay-release")
         assert writer_model["ok"] and writer_model["released"] and writer_model["unbound"], writer_model
         part_message = next(m for m in writer_model["messages"] if m["part_count"] == 2)
@@ -245,6 +273,32 @@ class Probe(UploadProbe):
              "reasoning": None, "tool_call_id": None, "tool_calls": [], "parts": [], "native": None},
             {"sequence": 2, "turn": 1, "flags": 0, "role": 2, "content": "Answer",
              "reasoning": "Retained reasoning", "tool_call_id": None, "tool_calls": [], "parts": [], "native": None}])
+        image_part = {"kind": 2, "text": None, "native_type": None, "media_type": "image/png",
+                      "source_url": None, "detail": None, "data": base64.b64encode(expected_pixel).decode(), "data_bytes": len(expected_pixel)}
+        image_model = copy.deepcopy(populated)
+        image_model["entries"][0].update(content=None, parts=[image_part])
+        value = self.images(with_snapshot(image_model))
+        assert value["ok"] and value["inline_images"] == 1 and value["rgba_bytes"] == 4, value
+        image_model["entries"][0]["parts"][0].update(data=None, data_bytes=0, source_url="https://image.invalid/must-never-fetch.png")
+        value = self.images(with_snapshot(image_model))
+        assert value["ok"] and value["unverified"] == 1 and value["rgba_bytes"] == 0, value
+        image_model["entries"][0]["parts"][0].update(data=base64.b64encode(expected_pixel[:-1]).decode(), data_bytes=len(expected_pixel) - 1)
+        value = self.images(with_snapshot(image_model))
+        assert not value["ok"] and value["code"] == 6, value
+        image_fixtures = json.loads((ROOT / "tests/fixtures/image-codec.json").read_text())
+        for name, item in image_fixtures.items():
+            document = with_snapshot(snapshot_root)
+            data = base64.b64decode(item["base64"]); image_id = "c" * 32
+            replace(document, f"attachments/{image_id}.bin", data)
+            replace(document, f"attachments/{image_id}.json", dump({"schema_version": 2, "id": image_id,
+                "mime_type": item["mime"], "size": len(data), "created_at": 1, "file_name": name + " 中文"}))
+            value = self.images(document)
+            assert value["ok"] and value["attachments"] == 1 and value["rgba_bytes"] == 24, (name, value)
+            replace(document, f"attachments/{image_id}.bin", data[:-1])
+            replace(document, f"attachments/{image_id}.json", dump({"schema_version": 1, "id": image_id,
+                "mime_type": item["mime"], "size": len(data) - 1, "created_at": 1}))
+            value = self.images(document)
+            assert not value["ok"] and value["code"] == 6 and image_id in value["error"], (name, value)
         assert self.validate(dump(with_snapshot(populated)))["ok"]
         part = {"kind": 0, "text": "Question 中文", "native_type": None, "media_type": None,
                 "source_url": None, "detail": None, "data_bytes": 0, "data": None}

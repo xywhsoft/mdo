@@ -129,4 +129,26 @@ bool MdoSessionBackupCheckModelHistory(const MdoSessionBackup* Backup,
     const MdoSessionBackupLimits* Limits, const xcancel* Cancel,
     MdoSessionBackupModelHistory* History, xwork_error* Error);
 
+typedef struct MdoSessionBackupImages {
+    uint32 Size;
+    size_t Attachments, InlineImages, UnverifiedImages;
+    size_t RgbaBytes, PeakDecoderMemoryBytes;
+} MdoSessionBackupImages;
+
+/* Separate offline pixel gate. Replays an owned, unbound model to inspect ALL
+ * retained IMAGE parts, including entries hidden by compaction/pruning. Decodes
+ * static PNG/JPEG/WebP attachments and inline image bytes one at a time through
+ * the optional native xs image extension. URL-only/empty references are counted
+ * as unverified; no remote resource is fetched. Animated PNG/WebP are unsupported.
+ * Per image: at most 8 MiB encoded, 16M pixels, 128 MiB decoder heap; aggregate:
+ * at most 1024 image operations, 64 MiB encoded and 256 MiB RGBA. Caller's backup
+ * file/total/count budgets only lower these limits. A fresh thirty-second bound
+ * also covers model replay. Cancellation/deadline cannot preempt CPU-only codec
+ * loops; run on a bounded worker. Decoded RGBA is discarded, backup bytes remain
+ * unchanged. Success does not authorize full restoration. Initialize Images.Size;
+ * mismatch leaves it untouched, other failures clear all facts except Size. */
+bool MdoSessionBackupCheckImages(const MdoSessionBackup* Backup,
+    const MdoSessionBackupLimits* Limits, const xcancel* Cancel,
+    MdoSessionBackupImages* Images, xwork_error* Error);
+
 #endif

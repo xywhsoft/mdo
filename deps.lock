@@ -7,12 +7,19 @@
     "single_header_sha256": "1ea16b21f968d09e5084162f3919b7e6ae2412f9e13c3bbbdd4b322bcd5a26d2"
   },
   "xserver": {
-    "commit": "ef0e00608827655818424af6731cac919200f552",
+    "commit": "0c8c533b7704a6f9ca614ad22f39eff761d92ddd",
     "version": "1.0.0",
     "required_extensions": [
       "xwork",
-      "webview"
-    ]
+      "webview",
+      "image"
+    ],
+    "native_extensions": {
+      "image": {
+        "abi_version": 1,
+        "tree_sha256": "2c454f809f8da1cc08bf9765deb2a2fa7e33c630abd0b1687c19dee2f5da90ee"
+      }
+    }
   },
   "libraries": {
     "xllm": {

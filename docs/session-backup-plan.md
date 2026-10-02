@@ -64,7 +64,8 @@ manager 调用或库通过 native path 写入不能被它自动覆盖。不得�
    连号、保留 UI 的侧车关系、独立模型上下文重放和模型/UI 关系检查已接入。
    新模型 writer 已用 v4 保存完整消息 parts/native；旧文件的已丢失内容
    不能修复。助手 thinking/text 与签名转换已接入；其他 native 块未映射，
-   图片实际解码及生产预览 worker 未完成。
+   已增加静态 PNG/JPEG/WebP 的实际像素解码；URL/空图片引用单独统计为
+   未验证，动画 PNG/WebP 明确拒绝。生产预览 worker 未完成。
    先实现离线验证与预览，
    再做恢复事务。验证所有 schema、路径、ID、内容
    校验和引用；拒绝链接、绝对路径、`..`、重复文件和大小声明失真。v1 只能
@@ -820,3 +821,27 @@ Windows 完整门禁复用已建宿主；Linux 使用新的 ext4 源副本并跳
 Linux 为 `6d95c732bc8d52f0abb755e412026530bff83aff504bbd81b481abd2c85e550a`。
 日志 `.build/qa-signed-{windows,linux}-final.log`。未做压力或高负载测试，
 本阶段不增加原生点击或实体设备证据。
+
+
+## 原生图片像素检查
+
+步骤 4 增加 `MdoSessionBackupCheckImages`，与拥有解码、模型重放、模型/UI
+关系检查保持独立结果。它遍历 attachment 原数据及重放后的所有保留 IMAGE
+parts，通过 xs 可选 `image` 扩展逐张解码 PNG/JPEG/静态 WebP。只复制统计
+事实，不保留 RGBA，不读 Home/网络、修改源字节或执行工具。URL/空引用
+单列未验证，动画 PNG/WebP 目前拒绝；不得把这些情况改写成完整图片通过。
+
+编码、尺寸、像素、全部 codec 动态内存、聚合操作/字节和 cancellation /
+deadline 预算见公开头与迁移记录。取消不能抢占纯 CPU 解码循环，后续生产
+worker 必须拥有输入、输出和取消生命周期，先释放网络 upload pin 后再做
+检查，采用单个图片执行槽处理 WebP busy，并在发布前保留所有检查结果。
+实际像素可解码不保证来源/视觉正确性，也不取代 SHA-256 或 ledger/UI 核对。
+
+源依赖、许可证和适配器随 `deps.lock` 精确锁定，构建不下载图片运行依赖。
+原生两平台检查包含精确 PNG/无损 WebP 像素 hash、JPEG/有损 WebP、极小
+超限头、截断、CRC、错误压缩流、重入、取消、每个实际分配点的失败/重试。
+产品探针检查附件及内嵌/URL，不在生产网络回调中解码。旧 1×1 PNG 夹具
+的错误 IDAT CRC 已修正，原字节保真与可解码仍是不同检查。
+
+这完成静态图片检查子项；生产预览 worker、staging、发布、菜单和设备
+验收仍未完成，保持 `restore_ready:false`，不得自动调用模型或派发队列。
