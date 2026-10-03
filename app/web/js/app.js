@@ -57,7 +57,6 @@ import { createSlashCommands } from "./features/chat/slash-commands.js";
 import { createFileMentions } from "./features/chat/file-mentions.js";
 import { trackComposerMenuRoom } from "./features/chat/composer-menu-room.js";
 import { createComposerProfile } from "./features/chat/composer-profile.js";
-import { createNewSessionProfile } from "./features/chat/new-session-profile.js";
 import { createTokenMeter } from "./features/chat/token-meter.js";
 import { createTaskPanel } from "./features/tasks/task-panel.js";
 import { createDecisionPanel } from "./features/approvals/decision-panel.js";
@@ -2120,10 +2119,6 @@ export async function boot() {
   document.querySelector("[data-starter-schedules]")?.addEventListener("click", () =>
     navigation.openSettings("schedules"));
 
-  const dialog = $("#new-session-dialog");
-  const dialogForm = $("#new-session-form");
-  const dialogError = $("#new-session-error");
-  const createButton = $("#create-session");
   const actionDialog = $("#session-action-dialog");
   const actionForm = $("#session-action-form");
   const actionFields = $("#session-action-fields");
@@ -2278,24 +2273,6 @@ export async function boot() {
     }
   });
 
-  const newSessionProfile = createNewSessionProfile({
-    projectInput: dialogForm.elements.project_id,
-    projectOptions: $("#new-session-projects"),
-    agentSelect: $("#agent-select"), modelSelect: $("#model-select"),
-    reasoningSelect: $("#new-session-reasoning"),
-    permissionSelect: $("#new-session-permission"),
-    projectsStore, agentsStore, modelsStore,
-    currentSelection: () => composerProfile.selection(),
-  });
-
-  function openNewSession() {
-    dialogError.hidden = true;
-    dialogError.textContent = "";
-    dialogForm.elements.project_id.value = navigation.get().projectId || navigation.preferredProject();
-    newSessionProfile.resetForOpen();
-    if (!dialog.open) dialog.showModal();
-    window.setTimeout(() => dialogForm.elements.title.focus(), 0);
-  }
   function openNewTask() {
     newTaskComposerFocus.cancel();
     showActiveSessions();
@@ -2304,37 +2281,6 @@ export async function boot() {
     prompt.focus();
   }
   $("#new-session").addEventListener("click", openNewTask);
-  $("#new-session-configure").addEventListener("click", openNewSession);
-  $("#close-new-session").addEventListener("click", () => dialog.close());
-  dialogForm.elements.title.addEventListener("input", () => { dialogError.hidden = true; });
-  dialogForm.addEventListener("submit", async (event) => {
-    event.preventDefault();
-    if (event.submitter?.value === "cancel") { dialog.close(); return; }
-    if (!dialogForm.reportValidity()) return;
-    if (!validateSessionTitle(dialogForm.elements.title, dialogError)) return;
-    createButton.disabled = true;
-    const values = Object.fromEntries(new FormData(dialogForm));
-    try {
-      const session = await createSession(values);
-      showActiveSessions();
-      dialog.close();
-      dialogForm.elements.title.value = "";
-      navigation.select(session.project_id, session.id);
-      closeDrawers();
-      cancelSessionComposerFocus();
-      cancelSessionComposerFocus = focusSessionComposerAfterNavigation({
-        navigation, sessionDetailStore, prompt,
-        projectId: session.project_id, sessionId: session.id,
-        origin: mobileLayout.matches ? $("#open-sidebar") : $("#new-session-configure"),
-      });
-    } catch (error) {
-      dialogError.textContent = errorMessage(error);
-      dialogError.hidden = false;
-      dialogError.focus();
-    } finally {
-      createButton.disabled = false;
-    }
-  });
 
   const drawerReturnFocus = { sidebar: null, inspector: null };
   function setDrawer(name, open, options = {}) {

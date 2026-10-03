@@ -14,39 +14,6 @@ const EFFORT_LABEL = Object.freeze({
   max: ["reasoning.max", "最大"],
 });
 
-export function fillAgentOptions(select, agents) {
-  const previous = select.value;
-  clear(select);
-  for (const agent of agents) select.append(element("option", {
-    text: agent.name || agent.id, attrs: { value: agent.id },
-  }));
-  const available = [...select.options].map((option) => option.value);
-  select.value = available.includes(previous) ? previous :
-    available.includes("mdo.default") ? "mdo.default" : available[0] || "";
-}
-
-export function agentProfileDefaults(agent, fallback) {
-  return {
-    model_id: agent?.model || fallback.model_id,
-    reasoning_effort: agent?.reasoning_effort || fallback.reasoning_effort,
-    permission_profile: agent?.permission_profile || fallback.permission_profile,
-  };
-}
-
-export function projectProfileDefaults(projectId, projects, agents, catalog) {
-  const project = projects.find((item) => item.id === projectId);
-  const defaultAgent = agents.find((item) => item.id === "mdo.default");
-  const modelId = project?.default_model_id || defaultAgent?.model ||
-    catalog.default_model_id || catalog.models?.[0]?.id || "";
-  const model = selectedModel(catalog.models ?? [], modelId);
-  return {
-    model_id: model?.id || modelId,
-    reasoning_effort: defaultAgent?.reasoning_effort ||
-      model?.default_reasoning_effort || "",
-    permission_profile: defaultAgent?.permission_profile || "balanced",
-  };
-}
-
 export function fillReasoningOptions(select, model, preferred = "") {
   const efforts = model?.reasoning_efforts?.length
     ? model.reasoning_efforts : (preferred ? [preferred] : []);
@@ -61,21 +28,6 @@ export function fillReasoningOptions(select, model, preferred = "") {
   select.value = chosen;
   select.disabled = efforts.length === 0;
   return chosen;
-}
-
-export function applyAgentProfileDefaults({ agent, fallback, models,
-  modelSelect, reasoningSelect, permissionSelect }) {
-  const profile = agentProfileDefaults(agent, fallback);
-  profile.model_id = selectedModel(models, profile.model_id)?.id || profile.model_id;
-  if (profile.model_id && ![...modelSelect.options].some((option) =>
-    option.value === profile.model_id)) {
-    modelSelect.append(element("option", { text: profile.model_id,
-      attrs: { value: profile.model_id } }));
-  }
-  modelSelect.value = profile.model_id;
-  fillReasoningOptions(reasoningSelect,
-    selectedModel(models, profile.model_id), profile.reasoning_effort);
-  permissionSelect.value = profile.permission_profile;
 }
 
 export function createComposerProfile({ modelSelect, reasoningSelect,

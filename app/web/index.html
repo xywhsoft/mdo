@@ -55,17 +55,11 @@
         </button>
       </div>
 
-      <div class="new-task-actions">
-        <button class="new-task-button" id="new-session" type="button">
-          <span class="icon" data-icon="compose" aria-hidden="true"></span>
-          <span data-i18n="shell.newTask">新建任务</span>
-          <kbd>Ctrl N</kbd>
-        </button>
-        <button class="icon-button new-task-configure" id="new-session-configure" type="button"
-          aria-label="配置后创建任务" data-i18n-aria-label="shell.newTask.configure" title="配置 Agent、项目和模型后创建任务" data-i18n-title="shell.newTask.configureTitle">
-          <span class="icon" data-icon="settings" aria-hidden="true"></span>
-        </button>
-      </div>
+      <button class="new-task-button" id="new-session" type="button">
+        <span class="icon" data-icon="compose" aria-hidden="true"></span>
+        <span data-i18n="shell.newTask">新建任务</span>
+        <kbd>Ctrl N</kbd>
+      </button>
 
       <label class="search-box" for="session-search">
         <span class="icon" data-icon="search" aria-hidden="true"></span>
@@ -567,7 +561,7 @@
     <button class="scrim" id="scrim" type="button" aria-label="关闭面板" data-i18n-aria-label="shell.closePanel" tabindex="-1"></button>
   </div>
 
-  <dialog class="new-session-dialog" id="startup-choice-dialog" aria-labelledby="startup-choice-title">
+  <dialog class="app-dialog" id="startup-choice-dialog" aria-labelledby="startup-choice-title">
     <div class="dialog-card">
       <header>
         <div>
@@ -582,7 +576,7 @@
     </div>
   </dialog>
 
-  <dialog class="new-session-dialog" id="project-dialog" aria-labelledby="project-dialog-title">
+  <dialog class="app-dialog" id="project-dialog" aria-labelledby="project-dialog-title">
     <form class="dialog-card" id="project-form">
       <header>
         <div>
@@ -614,7 +608,7 @@
     </form>
   </dialog>
 
-  <dialog class="new-session-dialog directory-dialog" id="directory-dialog" aria-labelledby="directory-title">
+  <dialog class="app-dialog directory-dialog" id="directory-dialog" aria-labelledby="directory-title">
     <div class="dialog-card">
       <header>
         <div><h2 id="directory-title" data-i18n="directory.title">选择工作区目录</h2>
@@ -686,39 +680,7 @@
     </div>
   </dialog>
 
-  <dialog class="new-session-dialog" id="new-session-dialog" aria-labelledby="new-session-title">
-    <form method="dialog" class="dialog-card" id="new-session-form">
-      <header>
-        <div>
-          <h2 id="new-session-title" data-i18n="shell.newTask">新建任务</h2>
-          <p data-i18n="newSession.description">选择 Agent 和模型。创建后即可发送第一条指令。</p>
-        </div>
-        <button class="icon-button" type="button" id="close-new-session" aria-label="关闭" data-i18n-aria-label="sessionAction.close">
-          <span class="icon" data-icon="close" aria-hidden="true"></span>
-        </button>
-      </header>
-      <div class="dialog-fields">
-        <label><span data-i18n="sessionAction.titleField">标题</span> <input name="title" maxlength="160" placeholder="可选，稍后也可修改" data-i18n-placeholder="newSession.titlePlaceholder"></label>
-        <label><span data-i18n="newSession.projectId">项目标识</span> <input name="project_id" required maxlength="63" value="default" pattern="[A-Za-z0-9_-][A-Za-z0-9._-]*" list="new-session-projects" autocomplete="off"></label>
-        <datalist id="new-session-projects"></datalist>
-        <label><span data-i18n="newSession.agent">Agent</span> <select name="agent_id" id="agent-select"></select></label>
-        <label><span data-i18n="shell.model">模型</span> <select name="model_id" id="model-select"></select></label>
-        <label><span data-i18n="shell.reasoning">推理强度</span> <select name="reasoning_effort" id="new-session-reasoning"></select></label>
-        <label><span data-i18n="shell.permission">权限</span> <select name="permission_profile" id="new-session-permission">
-          <option value="read-only" data-i18n="shell.permission.readOnly">只读</option>
-          <option value="balanced" data-i18n="shell.permission.balanced">询问</option>
-          <option value="full-access" data-i18n="shell.permission.fullAccess">完全访问</option>
-        </select></label>
-      </div>
-      <div class="dialog-error" id="new-session-error" role="alert" tabindex="-1" hidden></div>
-      <footer>
-        <button class="secondary-button" value="cancel" data-i18n="sessionAction.cancel">取消</button>
-        <button class="primary-button" id="create-session" value="default" data-i18n="newSession.create">创建会话</button>
-      </footer>
-    </form>
-  </dialog>
-
-  <dialog class="new-session-dialog" id="session-action-dialog" aria-labelledby="session-action-title">
+  <dialog class="app-dialog" id="session-action-dialog" aria-labelledby="session-action-title">
     <form class="dialog-card" id="session-action-form">
       <header>
         <div>
@@ -741,7 +703,7 @@
     </form>
   </dialog>
 
-  <dialog class="new-session-dialog backup-export-dialog" id="session-backup-dialog" aria-labelledby="session-backup-title" aria-describedby="session-backup-scope">
+  <dialog class="app-dialog backup-export-dialog" id="session-backup-dialog" aria-labelledby="session-backup-title" aria-describedby="session-backup-scope">
     <div class="dialog-card">
       <header><h2 id="session-backup-title" data-backup-title>导出会话备份</h2>
         <button class="icon-button" type="button" data-backup-close aria-label="关闭"><span class="icon" data-icon="close" aria-hidden="true"></span></button>
@@ -757,7 +719,7 @@
     </div>
   </dialog>
 
-  <dialog class="new-session-dialog backup-export-dialog backup-import-dialog" id="session-backup-import-dialog" aria-labelledby="session-backup-import-title" aria-describedby="session-backup-import-scope">
+  <dialog class="app-dialog backup-export-dialog backup-import-dialog" id="session-backup-import-dialog" aria-labelledby="session-backup-import-title" aria-describedby="session-backup-import-scope">
     <div class="dialog-card">
       <header><h2 id="session-backup-import-title" data-import-title>导入会话备份</h2>
         <button class="icon-button" type="button" data-import-close aria-label="关闭"><span class="icon" data-icon="close" aria-hidden="true"></span></button>
@@ -783,7 +745,7 @@
     </div>
   </dialog>
 
-  <dialog class="new-session-dialog" id="message-edit-dialog" aria-labelledby="message-edit-title">
+  <dialog class="app-dialog" id="message-edit-dialog" aria-labelledby="message-edit-title">
     <form class="dialog-card" id="message-edit-form">
       <header>
         <div>
@@ -811,7 +773,7 @@
     <button class="image-preview-retry" id="retry-image-preview" type="button" hidden>重新载入</button>
   </dialog>
 
-  <dialog class="new-session-dialog shortcuts-dialog" id="shortcuts-dialog" aria-labelledby="shortcuts-title">
+  <dialog class="app-dialog shortcuts-dialog" id="shortcuts-dialog" aria-labelledby="shortcuts-title">
     <form method="dialog" class="dialog-card">
       <header>
         <div><h2 id="shortcuts-title" data-i18n="shortcuts.title">快捷键与命令</h2><p data-i18n="shortcuts.intro">输入框外按 ? 打开，Esc 关闭；macOS 用 ⌘ 代替 Ctrl。</p></div>

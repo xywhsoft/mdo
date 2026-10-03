@@ -293,9 +293,9 @@ test("bundled language packs cover the annotated shell and switch without stale 
     assert.ok(referenceKeys.includes(`task.event.${kind}`));
 
   const node = {
-    dataset: { i18n: "shell.newTask", i18nAriaLabel: "shell.newTask.configure" },
+    dataset: { i18n: "shell.newTask", i18nAriaLabel: "shell.newTask" },
     textContent: "新建任务",
-    attributes: new Map([["aria-label", "配置后创建任务"]]),
+    attributes: new Map([["aria-label", "新建任务"]]),
     getAttribute(name) { return this.attributes.get(name); },
     setAttribute(name, value) { this.attributes.set(name, value); },
   };
@@ -330,7 +330,7 @@ test("bundled language packs cover the annotated shell and switch without stale 
     assert.equal(node.textContent, "Новая задача");
     assertApiErrorsLocalized("ru-RU");
     assertBuiltinDescriptionsLocalized("ru-RU");
-    assert.equal(node.getAttribute("aria-label"), "Настроить и создать задачу");
+    assert.equal(node.getAttribute("aria-label"), "Новая задача");
     assert.equal(t("nav.actionsFor", { title: "Тест" }), "Действия с сеансом Тест");
     assert.equal(t("composer.backgroundQueueFailed", { title: "Тест", error: "сбой" }),
       "Не удалось отправить сообщение из очереди фонового сеанса «Тест»: сбой");
