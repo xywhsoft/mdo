@@ -4,6 +4,43 @@
 
 完成判据及尚缺的打包页证据见 [前端操作体验完成审计](frontend-completion-audit.md)。本文件继续记录每次实现和验证的细节。
 
+## 2026-10-03：带图消息核心链两平台打包复验
+
+本阶段核对旧版的选择图片、预览、带图发送、消息编辑/重试/分叉和
+草稿切换；没有修改产品代码。当前 Windows 单文件通过浏览器实际
+filechooser 控件选取合成 PNG，原文件名显示且预览可打开/关闭；切到
+新任务再返回，原文字/图片草稿恢复，新任务文字草稿独立保存。
+
+在 Windows 与 Linux ext4 的各自单文件服务上，带图发送、编辑文字
+重新发送、回复重试各完成一次，随后从回复直接分叉。两端均由服务端
+确认三次成功运行，源与分支各有一轮最新用户/Agent 记录和图片引用，
+分支图片的原始字节与上传文件逐字节一致，文件名保持 fixture.png。
+320×350 刷新分支后图片加载、后续文字草稿及输入焦点保持，无横向
+溢出。Windows 另实际多选两张并逐项移除，最终服务端草稿图片为空，
+历史图片未受影响；Linux 实际移除新增草稿图片后焦点回到添加图片，
+文字及历史图片保持。两端页面 error/warn 日志为空。
+
+图形使用 Windows 浏览器的文件选择 API，Linux 运行的是 ext4 原生
+单文件服务；不据此宣称 Linux 原生 WebView、实体手机、软键盘或操作
+系统原生文件拖放已验收。模型由有界本地夹具提供，未向外部模型服务
+发送请求，没有修改真实用户数据。
+
+复现入口：`tests/manual_packed_docks_qa.py --packed-path mdo.exe
+--image-capable --image-transfer-fixture --slow-ms 1000`。READY 所示隔离
+目录包含 fixture.png；在页面选择文件、切新任务/返回、发送、编辑、
+重试、分叉、输入草稿并刷新，然后添加/移除草稿图片。Linux 在独立
+ext4 源树运行相同命令，packed-path 指向其原生候选。
+相关 Windows/Linux 18 Python、41 Node、101 JS 模块、独立 A/B 打包及
+隔离静态资源/模型配置读取通过，108 份前端源按 LF 核对一致，SDK
+未改。证据 `.build/qa-attachment-core-{windows,linux}-api.json`、
+`qa-attachment-core-{,linux-}branch.json`、`qa-attachment-core-linux-removed.json`、
+`qa-attachment-core-linux-proof.jpg` 及 `qa-attachment-core-{windows,linux}.log`。
+重新生成的 Windows 根程序仍为 6,485,898 字节，SHA-256
+`75cccb6819b87874c558c1ee2792948a02c0550b51d4bbc196bf0421ae0ef3de`；
+Linux 6,536,058 字节，SHA-256
+`21ea1a91f7c4b2682f8f33b2d3e7a6687f267e460b398d9437cb70a25b247668`。
+未做压力、高负载或无关完整发布检查。
+
 ## 2026-10-03：模型保存保留后续输入与焦点
 
 旧单文件复现：提交新模型后，在保存回复前继续改名称，迟到的保存
