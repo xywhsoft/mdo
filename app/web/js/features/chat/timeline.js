@@ -55,7 +55,8 @@ function appendOrCreate(items, streams, event, kind, role, key) {
   return item;
 }
 
-export function eventsToTimeline(events, historyLost = false) {
+export function eventsToTimeline(events, historyLost = false,
+  { showHistoryTruncations = true } = {}) {
   const items = [];
   const tools = new Map();
   const modelStarts = new Map();
@@ -335,12 +336,22 @@ export function eventsToTimeline(events, historyLost = false) {
         }
         break;
       }
-      case "history_truncated":
+      case "history_truncated": {
+        // Editing/retrying records the removed event range for replay. Keep
+        // those markers in exports, but avoid adding a chat card per retry.
+        // Clears, imported notes and unrecognized boundaries remain visible.
+        const first = Number(event.source_event_id);
+        const end = Number(event.event_id);
+        if (!showHistoryTruncations &&
+            (!event.text || event.text === "会话历史已截断") &&
+            Number.isSafeInteger(first) && first > 0 &&
+            Number.isSafeInteger(end) && first <= end) break;
         items.push({ key: `history-${event.event_id}`, kind: "system",
           role: t("timeline.history", {}, "历史"),
           text: historyBoundaryText(event),
           state: "done", time: event.time });
         break;
+      }
       case "model_start":
         modelStarts.set(modelKey(event, epoch), event.time);
         break;
@@ -798,7 +809,8 @@ export function createTimelineView({ container, welcome, toBottom, store, sessio
       // at the welcome heading; existing sessions open on their latest turn.
       followTail = true;
     }
-    const items = eventsToTimeline(data?.events ?? [], data?.historyLost);
+    const items = eventsToTimeline(data?.events ?? [], data?.historyLost,
+      { showHistoryTruncations: false });
     const foldKeys = new Set(items.filter((item) =>
       item.kind === "reasoning" || item.kind === "tool").map((item) => item.key));
     for (const key of expanded.keys()) if (!foldKeys.has(key)) expanded.delete(key);
@@ -812,7 +824,10 @@ export function createTimelineView({ container, welcome, toBottom, store, sessio
       `${item.role} ${item.inputText ?? ""} ${item.text} ${item.meta ?? ""}`
         .toLocaleLowerCase().includes(searchQuery)) : items;
     onSearchCount?.(searchQuery ? visible.length : 0, Boolean(data?.historyLost));
-    welcome.hidden = Boolean(data?.sessionId && items.length > 0);
+    // A replacement can briefly contain only its hidden history boundary.
+    // Keep this conversation open instead of flashing new-task examples.
+    welcome.hidden = Boolean(data?.sessionId &&
+      (items.length > 0 || data?.events?.length > 0));
     const entries = [];
     if (state.status === "error") {
       entries.push({ item: { key: "load-error", kind: "error",

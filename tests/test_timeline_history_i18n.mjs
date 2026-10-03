@@ -74,3 +74,49 @@ test("translated history boundaries retain the existing distinction from unexpla
   assert.equal(items[0].text, "Earlier events are no longer in this record.");
   assert.equal(items.at(-1).text, "Session history cleared");
 });
+
+test("chat omits repeated edit and retry boundaries without changing the export projection or messages", () => {
+  const events = [
+    { kind: "history_truncated", event_id: 8, source_event_id: 1,
+      text: "会话历史已截断" },
+    { kind: "history_truncated", event_id: 16, source_event_id: 9,
+      text: "会话历史已截断" },
+    { kind: "agent_start", event_id: 17, run_id: 3, agent_depth: 0,
+      schema_version: 5, user_message_sequence: 1, text: "edited prompt",
+      attachments: ["a".repeat(32)] },
+    { kind: "model_text_delta", event_id: 18, run_id: 3, text: "new reply" },
+    { kind: "agent_done", event_id: 19, run_id: 3, success: true },
+  ];
+  const original = structuredClone(events);
+  const transcript = eventsToTimeline(events);
+  const chat = eventsToTimeline(events, false, { showHistoryTruncations: false });
+  assert.deepEqual(chat, transcript.slice(2));
+  assert.deepEqual(chat.map(item => item.kind), ["user", "assistant"]);
+  assert.deepEqual(chat[1].retryPrompt.attachments, events[2].attachments);
+  assert.deepEqual(events, original);
+});
+
+test("chat keeps clear markers, custom history notes and malformed or unidentified boundaries", () => {
+  const events = [
+    { kind: "history_truncated", event_id: 4, source_event_id: 1,
+      text: "会话历史已清空" },
+    { kind: "history_truncated", event_id: 5, source_event_id: 1,
+      text: "imported history note" },
+    ...[undefined, 0, -1, 1.5, 99, NaN].map((source_event_id, index) => ({
+      kind: "history_truncated", event_id: 6 + index, source_event_id,
+      text: "会话历史已截断",
+    })),
+  ];
+  assert.deepEqual(eventsToTimeline(events, false, { showHistoryTruncations: false }),
+    eventsToTimeline(events));
+});
+
+test("silent intentional replacement does not add a false gap, while unexplained loss stays visible", () => {
+  const marker = { kind: "history_truncated", event_id: 8, source_event_id: 1,
+    text: "会话历史已截断" };
+  const options = { showHistoryTruncations: false };
+  assert.deepEqual(eventsToTimeline([marker], true, options), []);
+  assert.equal(eventsToTimeline([
+    { kind: "agent_start", event_id: 7, text: "retained prompt" }, marker,
+  ], true, options)[0].key, "history-gap");
+});
