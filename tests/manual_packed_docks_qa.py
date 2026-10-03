@@ -2,6 +2,8 @@
 
 With --interleaved-chat-stream, send STREAM FAIL UI for a deterministic parse
 failure after real text/reasoning deltas; all traffic stays on localhost.
+--chat-chunk-delay-ms separates SSE frames so partial replies and input can be
+reviewed while a bounded stream is still running (at most 15 seconds total).
 Run from the repository root after building mdo.exe, or pass --packed-path to
 inspect an isolated pack while the installed executable is running. The model
 endpoint only binds to localhost and returns deterministic tool calls for marker prompts:
@@ -59,6 +61,7 @@ class Model(BaseHTTPRequestHandler):
     task_seconds = 12
     artifact_file = None
     chat_stream = False
+    chat_chunk_delay_seconds = 0
     file_tools = False
     file_tools_path = None
 
@@ -86,16 +89,26 @@ class Model(BaseHTTPRequestHandler):
             # deltas. Only the owned localhost fixture supports this trigger.
             if stream_failure:
                 chunks = chunks[:2]
-            payload = ("".join("data: " + json.dumps({"id": "chatcmpl-qa",
+            frames = [("data: " + json.dumps({"id": "chatcmpl-qa",
                 "object": "chat.completion.chunk", "model": "ornith-1.5-35b",
-                **chunk}) + "\n\n" for chunk in chunks) +
+                **chunk}) + "\n\n").encode() for chunk in chunks]
+            frames.append(
                 ("data: {malformed-json}\n\n" if stream_failure else
-                 "data: [DONE]\n\n")).encode()
+                 "data: [DONE]\n\n").encode())
             self.send_response(200)
             self.send_header("Content-Type", "text/event-stream")
-            self.send_header("Content-Length", str(len(payload)))
+            self.send_header("Content-Length", str(sum(map(len, frames))))
             self.end_headers()
-            self.wfile.write(payload)
+            try:
+                for index, frame in enumerate(frames):
+                    if index and Model.chat_chunk_delay_seconds:
+                        time.sleep(Model.chat_chunk_delay_seconds)
+                    self.wfile.write(frame)
+                    self.wfile.flush()
+            except OSError:
+                # Cancellation closes the owned fixture connection mid-stream.
+                print("QA interleaved chat stream connection closed", flush=True)
+                return
             print("QA interleaved chat stream served", flush=True)
             return
         if self.path != "/v1/responses":
@@ -1228,6 +1241,8 @@ parser.add_argument("--second-model-context-tokens", type=int, default=0,
                     help="set the isolated second model context to 131072-262144 tokens")
 parser.add_argument("--interleaved-chat-stream", action="store_true",
                     help="serve a bounded Chat Completions stream with alternating text and reasoning")
+parser.add_argument("--chat-chunk-delay-ms", type=int, default=0,
+                    help="delay between local chat SSE frames, 0-5000 ms (at most 15 seconds total)")
 parser.add_argument("--file-tools-fixture", action="store_true",
                     help="FILE TOOLS UI runs bounded write/read/edit/missing-read/exec in the isolated workspace")
 args = parser.parse_args()
@@ -1297,6 +1312,10 @@ if not 0 <= args.slow_ms <= 30000:
     parser.error("--slow-ms must be between 0 and 30000")
 if not 0 <= args.model_delay_ms <= 5000:
     parser.error("--model-delay-ms must be between 0 and 5000")
+if not 0 <= args.chat_chunk_delay_ms <= 5000:
+    parser.error("--chat-chunk-delay-ms must be between 0 and 5000")
+if args.chat_chunk_delay_ms and not args.interleaved_chat_stream:
+    parser.error("--chat-chunk-delay-ms requires --interleaved-chat-stream")
 if not 0 <= args.task_ms <= 60000:
     parser.error("--task-ms must be between 0 and 60000")
 if not 1 <= args.task_output_lines <= 120:
@@ -1348,6 +1367,7 @@ Model.model_delay_seconds = args.model_delay_ms / 1000
 Model.task_seconds = args.task_ms / 1000
 Model.task_output_lines = args.task_output_lines
 Model.chat_stream = args.interleaved_chat_stream
+Model.chat_chunk_delay_seconds = args.chat_chunk_delay_ms / 1000
 Model.file_tools = args.file_tools_fixture
 Model.file_tools_path = base / "tools-qa.txt"
 executable_name = "mdo.exe" if os.name == "nt" else "mdo"

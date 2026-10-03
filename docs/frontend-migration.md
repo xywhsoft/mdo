@@ -4,6 +4,35 @@
 
 完成判据及尚缺的打包页证据见 [前端操作体验完成审计](frontend-completion-audit.md)。本文件继续记录每次实现和验证的细节。
 
+## 2026-10-03：流式输出期间的输入、排队与中断复验
+
+本阶段只改测试夹具与验证记录，没有修改产品代码。交错 Chat 流新增
+`--chat-chunk-delay-ms 0..5000`，逐帧 flush，在最多 15 秒的本地流里
+观察真实部分正文/思考及后续操作；默认仍不延迟，取消关闭连接正常
+结束。参数越界或未启用交错 Chat 时拒绝启动，不接外部模型服务。
+
+Windows 当前单文件先出现 Hello 部分回复，输入仍可用且保持焦点；
+切第二模型/high/只读后只按一次 Enter，消息固定新配置并排队。两次
+实际运行分别为原模型 medium/Chat、第二模型 high/Responses，均成功，
+队列为空，会话保留只读配置。Ctrl+K 新任务与原会话草稿独立，切回及
+320×700 刷新保留原草稿、模型/思考/权限、两轮正文、用量和速率。
+
+Linux ext4 原生单文件先显示 Hello 部分回复，再用 Ctrl+Enter 中断并
+优先发送；第一轮 cancelled/cancel_requested，保留部分正文与思考并
+显示已停止，第二轮 Chat 成功且队列为空。320×700 刷新保留后续草稿
+和输入焦点，两端 error/warn 为空。UI 使用 Windows 浏览器，不据此
+扩大为 Linux 原生 WebView 或实体移动设备验收。
+
+两端 18 Python、30 相关 Node、101 JS、夹具编译和独立 A/B 打包/隔离
+资源读取通过，108 份前端与新增夹具按 LF 一致；SDK 未改。部分输出
+期间的操作证据见 `.build/qa-stream-core-{,linux-}partial.json`、
+`qa-stream-core-{,linux-}refreshed.json`、两端 API/文件读取证据及门禁日志。
+复现命令 `tests/manual_packed_docks_qa.py --packed-path mdo.exe
+--interleaved-chat-stream --chat-chunk-delay-ms 5000 --slow-ms 500`；Windows
+另加 `--image-capable` 获得隔离第二模型。重新生成的 Windows 根程序
+仍为 6,486,171 字节、Linux 6,536,331 字节，与上一产品提交逐字一致。
+没有压力、高负载或无关完整发布检查。
+
 ## 2026-10-03：聊天区隐藏编辑/重试的内部历史边界
 
 旧打包页每次编辑/重试都追加“会话历史已截断”卡片，两次操作后占据
