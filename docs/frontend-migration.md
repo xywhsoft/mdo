@@ -4,6 +4,36 @@
 
 当前优先级以 [基础 Agent 优先级](core-agent-priorities.md) 为准；核心操作对照及历史证据见 [前端操作体验完成审计](frontend-completion-audit.md)。本文件记录各增量的实现和相关验证。
 
+## 2026-10-03：补齐打包页附件拖放处理的实际证据
+
+核对旧版 `ui.js` 的输入卡片 `dragover`、`dragleave`、`drop` 路径，
+新版保留文件拖入并支持多图。开发夹具增加两个可点击控件，以浏览器
+创建的 `File`、`DataTransfer` 和 `DragEvent` 进入正式打包页的监听器；
+不替换产品上传逻辑，也不把测试控件打进程序。
+
+Windows 单文件、隔离 Home `.build/mdo-packed-docks-reg0tm0z` 实测进入
+提示、拖离清除、两图松开上传和提示清除。输入区外松开被阻止，文字
+及附件不变。服务端回读两个完整名称及 PNG 原字节一致；320×700
+刷新后两图和“拖入附件后保留的草稿”保持，焦点为输入框、文档宽 320px。
+连续移除两图后焦点按现有合同回到“添加图片”，草稿不变；共享夹具的
+粘贴路径再次上传两图并回读通过。没有启动 Agent 或请求外部模型。
+证据为 `.build/qa-core-drop-live.json`、`qa-core-drop-paste-live.json`、
+`qa-core-drop-mobile.jpg`。
+
+夹具 iframe 加载时观察到一次 MutationObserver 异常，调试协议定位到
+511,961 字节的 Electron 宿主注入 CommonJS 脚本；生产前端不使用该
+观察器，正式页面窄屏刷新没有 Runtime 异常。来源片段及调用栈保存
+在 `qa-core-drop-ui.json`，不将宿主异常算为产品无错误证明。
+此验证是合成文件拖放处理，Windows 资源管理器的原生拖放仍未实测。
+
+Windows/Linux 各通过 18 Python 合同、19 项图片/窄屏 Node 检查、
+101 模块解析、夹具脚本解析、单文件资源/API 读取及 A/B 确定性打包。
+Linux 原生 ext4 工作区核对 282 份未改应用文件；SDK 未改。重新生成
+根目录程序，Windows SHA-256 仍为
+`dd2f13ce6d6287012ea31b60ab05b791421683e59b939931aaca4210a2e4a230`；
+本轮仅改测试夹具和文档，因此程序内容与上一已验证版本一致。
+没有压力、高负载或无关治理探针。
+
 ## 2026-10-03：模型刷新期间的保存正常执行
 
 旧单文件中实测：刷新 GET 被本机夹具延迟时，编辑名称并点击保存，

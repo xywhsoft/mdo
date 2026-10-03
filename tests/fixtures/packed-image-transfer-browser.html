@@ -11,6 +11,8 @@ button { min-height:40px; }
 iframe { width:100%; height:100%; min-width:0; min-height:0; border:0; }
 </style>
 <header><button id="paste" type="button">粘贴两张图片</button>
+<button id="drop" type="button">验证拖入两张图片</button>
+<button id="outside" type="button">验证输入区外松开</button>
 <button id="queue" type="button">发送并排队图片任务</button>
 <button id="preview" type="button">验证快速预览切换</button><output id="result">等待工作台</output></header>
 <iframe id="mdo" title="打包版工作台"></iframe>
@@ -19,6 +21,14 @@ const frame = document.querySelector("#mdo");
 const result = document.querySelector("#result");
 const button = document.querySelector("#paste");
 frame.src = "__MDO_QA_ROUTE__";
+function imageFiles(child) {
+  const bytes = Uint8Array.from(atob(
+    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/lZkAAAAASUVORK5CYII="),
+    (character) => character.charCodeAt(0));
+  const first = new child.File([bytes], '截图 "1" 100%.png', { type: "image/png" });
+  const second = new child.File([bytes], "跨平台附件".repeat(40) + ".png", { type: "image/png" });
+  return [first, second];
+}
 function pasteImages() {
   const child = frame.contentWindow;
   const prompt = frame.contentDocument.querySelector("#prompt");
@@ -26,11 +36,7 @@ function pasteImages() {
     result.textContent = "工作台尚未准备好";
     return false;
   }
-  const bytes = Uint8Array.from(atob(
-    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/lZkAAAAASUVORK5CYII="),
-    (character) => character.charCodeAt(0));
-  const first = new child.File([bytes], '截图 "1" 100%.png', { type: "image/png" });
-  const second = new child.File([bytes], "跨平台附件".repeat(40) + ".png", { type: "image/png" });
+  const [first, second] = imageFiles(child);
   const event = new child.Event("paste", { bubbles: true, cancelable: true });
   Object.defineProperty(event, "clipboardData", { value: {
     files: [first, second], items: [
@@ -45,6 +51,68 @@ function pasteImages() {
   return event.defaultPrevented;
 }
 button.addEventListener("click", pasteImages);
+
+// Developer probe only: browser-created File/DataTransfer objects exercise the
+// packed page's event and upload pipeline. These events are not OS file drags.
+function dragTransfer(child) {
+  const transfer = new child.DataTransfer();
+  for (const file of imageFiles(child)) transfer.items.add(file);
+  transfer.effectAllowed = "copy";
+  return transfer;
+}
+function dragEvent(child, target, type, transfer) {
+  const event = new child.DragEvent(type, {
+    bubbles: true, cancelable: true, dataTransfer: transfer,
+  });
+  target.dispatchEvent(event);
+  return event.defaultPrevented;
+}
+document.querySelector("#drop").addEventListener("click", async (event) => {
+  event.currentTarget.disabled = true;
+  try {
+    const child = frame.contentWindow;
+    const doc = frame.contentDocument;
+    const composer = doc.querySelector("#composer");
+    const prompt = doc.querySelector("#prompt");
+    if (!prompt || doc.querySelector("#composer-attach")?.disabled)
+      throw new Error("工作台尚未准备好");
+    const transfer = dragTransfer(child);
+    dragEvent(child, composer, "dragenter", transfer);
+    const enter = composer.hasAttribute("data-drag-over");
+    const over = dragEvent(child, composer, "dragover", transfer);
+    dragEvent(child, composer, "dragleave", transfer);
+    const leave = !composer.hasAttribute("data-drag-over");
+    dragEvent(child, composer, "dragenter", transfer);
+    const accepted = dragEvent(child, prompt, "drop", transfer);
+    const cleared = !composer.hasAttribute("data-drag-over");
+    const deadline = Date.now() + 4500;
+    while (doc.querySelectorAll(".composer-image").length !== 2 ||
+      doc.querySelector("#composer-attach").disabled) {
+      if (Date.now() >= deadline) throw new Error("实际图片上传未完成");
+      await new Promise((done) => setTimeout(done, 20));
+    }
+    const names = [...doc.querySelectorAll(".composer-image .image-file-name")]
+      .map((element) => element.textContent);
+    result.textContent = JSON.stringify({ kind: "drop", enter, over, leave,
+      accepted, cleared, names, text: prompt.value });
+  } catch (error) { result.textContent = error.message; }
+});
+document.querySelector("#outside").addEventListener("click", () => {
+  const child = frame.contentWindow;
+  const doc = frame.contentDocument;
+  const composer = doc.querySelector("#composer");
+  const prompt = doc.querySelector("#prompt");
+  if (!prompt) { result.textContent = "工作台尚未准备好"; return; }
+  const transfer = dragTransfer(child);
+  const before = prompt.value;
+  const count = doc.querySelectorAll(".composer-image").length;
+  dragEvent(child, composer, "dragenter", transfer);
+  const prevented = dragEvent(child, doc.querySelector("#timeline"), "drop", transfer);
+  result.textContent = JSON.stringify({ kind: "outside", prevented,
+    cleared: !composer.hasAttribute("data-drag-over"),
+    textPreserved: prompt.value === before,
+    countPreserved: doc.querySelectorAll(".composer-image").length === count });
+});
 document.querySelector("#queue").addEventListener("click", async (event) => {
   event.currentTarget.disabled = true;
   try {
