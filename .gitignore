@@ -4,6 +4,7 @@ mdo-home/
 
 # 构建产物与二进制
 *.exe
+*.apk
 *.log
 .build/
 app/generated/
@@ -22,4 +23,5 @@ __pycache__/
 tools/*
 !tools/README.md
 !tools/build_mdo.py
+!tools/build_android.py
 !tools/qa_release.py
