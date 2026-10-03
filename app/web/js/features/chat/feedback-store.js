@@ -7,6 +7,7 @@ export const feedbackStore = createResourceStore({
 });
 
 let generation = 0;
+let writeVersion = 0;
 const pending = new Set();
 
 function responseData(projectId, sessionId, response) {
@@ -22,13 +23,14 @@ export async function selectFeedback(projectId, sessionId) {
   const project = resourceId(projectId, "project");
   const session = resourceId(sessionId, "session");
   const token = ++generation;
+  const readVersion = writeVersion;
   feedbackStore.setData({ projectId: project, sessionId: session, items: new Map() });
   try {
     const response = await api.get(`/projects/${project}/sessions/${session}/feedback`);
-    if (token === generation)
+    if (token === generation && readVersion === writeVersion)
       feedbackStore.setData(responseData(project, session, response));
   } catch (error) {
-    if (token === generation) feedbackStore.setError(error);
+    if (token === generation && readVersion === writeVersion) feedbackStore.setError(error);
   }
 }
 
@@ -51,7 +53,11 @@ export async function setFeedback(projectId, sessionId, eventId, value) {
     const response = await api.put(`/projects/${project}/sessions/${session}/feedback`,
       { event_id: eventId, value });
     if (token === generation && feedbackStore.get().data?.projectId === project &&
-        feedbackStore.get().data?.sessionId === session)
+        feedbackStore.get().data?.sessionId === session) {
+      // The acknowledged vote is newer than any outstanding selection read.
+      // Failed writes leave that read useful for restoring persisted votes.
+      writeVersion += 1;
       feedbackStore.setData(responseData(project, session, response));
+    }
   } finally { pending.delete(key); }
 }

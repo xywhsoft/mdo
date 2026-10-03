@@ -4,6 +4,42 @@
 
 当前优先级以 [基础 Agent 优先级](core-agent-priorities.md) 为准；核心操作对照及历史证据见 [前端操作体验完成审计](frontend-completion-audit.md)。本文件记录各增量的实现和相关验证。
 
+## 2026-10-03：成功反馈不再被迟到读取覆盖，消息操作复验
+
+旧打包版隔离 Home `.build/mdo-packed-docks-1d57pimc` 复现：打开已有
+两轮回复的会话，延迟返回最初的空反馈快照，再点击第一条点赞。
+服务端已保存 good，按钮先选中；旧 GET 返回后却重新显示未选中。
+新的 `feedback-store.js` 记录成功写入的版本，读取的成功或失败仅在
+没有更新写入时生效。失败写入仍允许待返回读取恢复已保存反馈；
+原有跨会话隔离和消息命令串行规则保持。
+
+新增四个 Node 回归：迟到空读取、迟到失败、写入拒绝后读取仍有用、
+写入完成前切换会话。前两项修改前失败、修改后四项通过；完整前端
+门禁会自动发现该测试。手动打包夹具增加可选反馈读取延迟及显式
+arm/release/arm-fail 控件，捕获实际 HTTP 响应，未释放最多等待 40 秒。
+
+新包 Home `.build/mdo-packed-docks-fn0qm9c_` 实测：成功点赞后释放旧
+空快照仍选中；第二条点踩保存成功；320×700 下，在待失败读取期间
+点踩第一条，再释放 503，两条反馈都保持，返回源会话仍为 bad/bad。
+实际剪贴板核对用户原文、Markdown 回复和代码块内容；首次剪贴板
+读取曾返回上一轮内容，再次点击并读回用户原文后才记录复制通过。
+从第一条分叉仅保留一轮，源会话仍为两轮；分支重试、编辑重新发送
+均成功，刷新保留修改后的回合和下一条草稿，输入框获焦。消息时间、
+7 输入 / 3 输出 tokens、LLM 耗时及约 3.9 tok/s 可见；消息操作按钮
+均高 40px，文档宽 320px，浏览器 warn/error 为空。四次实际模型调用
+均为隔离 localhost 夹具，没有外部模型流量。证据
+`.build/qa-feedback-refresh-verified.json`、`qa-feedback-after-ui.json`、
+`qa-message-source-final.json`、`qa-message-branch-final.json` 和
+`qa-feedback-message-mobile.jpg`；测试服务已正常退出。
+
+Windows/Linux 各通过 18 Python 合同、26 项反馈/消息/键盘 Node 检查、
+101 模块解析、单文件资源/API 读取及 A/B 确定性打包。Linux 原生
+ext4 核对 282 份当前应用文件，SDK 未改；未做压力、高负载或无关
+治理探针。根目录程序重建：Windows 6,486,587 字节，SHA-256
+`0b92a3b62fff8de71be66b0beb58811ca8dc8f210baa0691fd9b70a7584e8f3f`；
+Linux 候选 SHA-256
+`ec1805a12c7001941150b16703ee64dd3c4918c2d30c23c0196773cb71d82e12`。
+
 ## 2026-10-03：补齐打包页附件拖放处理的实际证据
 
 核对旧版 `ui.js` 的输入卡片 `dragover`、`dragleave`、`drop` 路径，
