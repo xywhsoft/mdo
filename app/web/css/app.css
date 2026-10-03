@@ -818,16 +818,13 @@ select:focus-visible,
 .composer-image-unsupported { flex-basis: 100%; color: var(--danger); font-size: 12px; line-height: 1.4; }
 .composer-toolbar { display: flex; min-height: 46px; align-items: center; justify-content: space-between; gap: 10px; padding: 5px 9px 8px 10px; }
 .composer-options, .composer-actions { display: flex; min-width: 0; align-items: center; gap: 8px; }
-.composer-options { flex: 1 1 auto; overflow-x: auto; scrollbar-width: none; }
-.composer-options::-webkit-scrollbar { display: none; }
-.composer-options > .composer-select { flex: 0 0 auto; }
-.composer-actions { position: relative; flex: 0 0 auto; }
+.composer-options { flex: 0 0 auto; overflow: visible; gap: 4px; }
+.composer-actions { position: relative; flex: 0 1 auto; justify-content: flex-end; }
 .composer-attach { width: 34px; height: 34px; flex: 0 0 auto; padding: 0; border: 0; border-radius: 7px; background: transparent; color: var(--muted); font-size: 22px; line-height: 1; cursor: pointer; }
 .composer-attach:hover { background: var(--surface-hover); color: var(--ink); }
 .composer-attach:disabled { opacity: .4; cursor: default; }
 .composer-select { min-width: 0; max-width: 160px; height: 34px; padding: 0 6px; border: 0; border-radius: var(--radius-sm); background: transparent; color: var(--muted); font: inherit; font-size: 12px; cursor: pointer; }
 .composer-project[hidden] { display: none; }
-.composer-select-short { max-width: 92px; }
 .composer-select:hover, .composer-select:focus-visible { background: var(--surface-hover); color: var(--ink); }
 .composer-select:disabled { opacity: .55; cursor: default; }
 .composer-profile-reset { flex: 0 0 34px; width: 34px; height: 34px; padding: 0; border: 0; border-radius: var(--radius-sm); background: transparent; color: var(--muted); font: inherit; font-size: 20px; cursor: pointer; }
@@ -839,7 +836,8 @@ select:focus-visible,
 .composer-profile-status[hidden] { display: none; }
 .composer-profile-status[data-state="error"] { color: var(--danger); }
 .composer-input-estimate { color: var(--faint); font-size: 11px; white-space: nowrap; }
-.context-meter { position: static; }
+.composer-input-estimate[hidden] { display: none; }
+.context-meter { position: static; flex: 0 0 auto; }
 .context-meter > button { display: grid; width: 34px; height: 34px; place-items: center; padding: 0; border: 0; border-radius: 7px; background: transparent; cursor: pointer; }
 .context-meter > button:hover, .context-meter > button[aria-expanded="true"] { background: var(--surface-hover); }
 .context-meter-ring { width: 18px; height: 18px; border-radius: 50%; background: conic-gradient(var(--accent) var(--meter-percent, 0%), var(--border-strong) 0); mask: radial-gradient(transparent 48%, #000 51%); }
@@ -854,26 +852,7 @@ select:focus-visible,
 .context-meter-panel dt { color: var(--muted); }
 .context-meter-panel dd { margin: 0; font-variant-numeric: tabular-nums; }
 .context-meter-panel p { margin: 9px 0 0; color: var(--faint); font-size: 10px; line-height: 1.4; }
-.option-chip {
-  display: inline-flex;
-  max-width: 190px;
-  height: 30px;
-  align-items: center;
-  gap: 6px;
-  padding: 0 8px;
-  overflow: hidden;
-  border: 0;
-  border-radius: var(--radius-sm);
-  background: transparent;
-  color: var(--muted);
-  cursor: pointer;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.option-chip:hover { background: var(--surface-hover); color: var(--ink); }
-.option-chip .icon { width: 15px; height: 15px; }
-.composer-hint { color: var(--faint); font-size: 10px; }
-.composer-draft-status { color: var(--danger); font-size: 10px; }
+.composer-draft-status { position: absolute; left: 10px; right: 10px; bottom: calc(100% + 8px); padding: 7px 10px; border: 1px solid var(--danger); border-radius: var(--radius-sm); background: var(--surface-raised); color: var(--danger); font-size: 11px; overflow-wrap: anywhere; }
 .composer-draft-status[hidden] { display: none; }
 .send-button, .stop-button {
   display: grid;
@@ -1442,10 +1421,8 @@ select:focus-visible,
 /* Keep the model and permission controls legible. Shortcut guidance remains
    in the help panel; context remains in the conversation header drawer. */
 @media (min-width: 761px) {
-  .composer-hint { display: none; }
 }
 @media (min-width: 761px) and (max-width: 1050px) {
-  #workspace-chip { display: none; }
   .trace-header-button { width: 34px; padding: 0; }
   .trace-header-label { display: none; }
 }
@@ -1589,32 +1566,24 @@ select:focus-visible,
   .prompt-queue button { min-width: 40px; min-height: 40px; }
   .prompt-queue .prompt-queue-toggle { min-height: 40px; }
   .slash-option, .file-mention-option { min-height: 40px; }
-  .composer-hint { display: none; }
   .composer-images { gap: 12px; padding-top: 12px; }
   /* Reserve the caption in normal flow; a fixed tile height overlaps the
      next row's model compatibility message once image names are present. */
   .composer-image { width: 64px; }
   .composer-image img { width: 64px; height: 64px; }
   .composer-image-remove { top: -11px; right: -11px; width: 40px; height: 40px; border-radius: 50%; background: radial-gradient(circle 11px, var(--ink) 98%, transparent 100%); }
-  .composer-toolbar { flex-wrap: wrap; gap: 2px; }
+  .composer-toolbar { flex-wrap: nowrap; gap: 3px; }
   .composer textarea { min-height: 52px; padding: 12px 13px 6px; }
   .composer[data-new-task] textarea { min-height: 52px; }
-  .composer-options { flex: 1 1 100%; flex-wrap: wrap; gap: 3px; overflow-x: visible; }
-  .composer-region[data-decision-pending] .composer-options { flex: 0 0 auto; }
-  .composer-region[data-decision-pending] .composer-options > :is(.composer-select, .option-chip) { display: none; }
-  .composer-region[data-decision-pending] .composer-actions { flex: 1 1 auto; }
+  .composer-options { flex: 0 0 auto; flex-wrap: nowrap; gap: 3px; }
   .composer-attach, .composer-select, .context-meter > button,
   .composer-profile-reset, .send-button, .stop-button { height: 40px; }
   .composer-attach, .context-meter > button, .send-button,
   .composer-profile-reset, .stop-button { width: 40px; }
   .composer-profile-reset { flex-basis: 40px; }
   .composer-project-row .composer-project { height: 40px; }
-  .composer-options > #composer-model { flex: 1 1 0; max-width: 110px; }
-  .composer-select-short { max-width: 56px; }
-  .composer-actions { flex: 1 1 100%; justify-content: flex-end; }
+  .composer-actions { flex: 0 1 auto; justify-content: flex-end; gap: 3px; }
   .composer-input-estimate { font-size: 9px; }
-  .option-chip { max-width: 130px; padding: 0 6px; }
-  #workspace-chip { display: none; }
   .composer textarea { max-height: min(260px, 42vh); max-height: min(260px, 42dvh, max(72px, calc(var(--app-visible-height, 100dvh) - 220px))); }
   .composer-region[data-decision-pending] .composer textarea { max-height: 52px; overflow-y: auto; }
   .composer[data-slash-menu-open] textarea,
@@ -1708,13 +1677,10 @@ select:focus-visible,
   .composer-images { flex-wrap: nowrap; max-height: 82px; overflow-x: auto; overflow-y: hidden; scrollbar-width: thin; }
   .composer-image { flex: 0 0 64px; }
   .composer-image-unsupported { order: -1; flex: 0 0 140px; align-self: center; max-height: 64px; overflow-y: auto; font-size: 11px; line-height: 1.25; }
-  .composer-region[data-decision-pending] .composer-input-estimate { display: none; }
   .composer-region:not([data-decision-pending]) .composer textarea { min-height: 40px; max-height: 40px; }
   .composer-region:not([data-decision-pending]) .composer-toolbar { flex-wrap: nowrap; }
-  .composer-region:not([data-decision-pending]) .composer-options { flex: 1 1 auto; flex-wrap: nowrap; overflow-x: auto; }
-  .composer-region:not([data-decision-pending]) .composer-options > #composer-model { flex: 0 0 auto; min-width: 90px; }
-  .composer-region:not([data-decision-pending]) .composer-actions { flex: 0 0 auto; }
-  .composer-region:not([data-decision-pending]) .composer-input-estimate { display: none; }
+  .composer-region:not([data-decision-pending]) .composer-options { flex: 0 0 auto; flex-wrap: nowrap; }
+  .composer-region:not([data-decision-pending]) .composer-actions { flex: 0 1 auto; }
   .prompt-queue { display: flex; max-height: 100%; flex-direction: column; margin-bottom: 0; padding: 3px 6px; overflow: hidden; }
   .prompt-queue-header { flex: 0 0 auto; }
   .prompt-queue-list { min-height: 0; flex: 1 1 auto; margin-top: 0; overflow-y: auto; }
@@ -1841,19 +1807,11 @@ select:focus-visible,
     .composer-region:not([data-decision-pending]) .composer-toolbar { flex-wrap: nowrap; }
   .app-shell[data-compact-visual-viewport]
     .composer-region:not([data-decision-pending]) .composer-options {
-    flex: 1 1 auto;
-    flex-wrap: nowrap;
-    overflow-x: auto;
-  }
-  .app-shell[data-compact-visual-viewport]
-    .composer-region:not([data-decision-pending]) .composer-options > #composer-model {
     flex: 0 0 auto;
-    min-width: 90px;
+    flex-wrap: nowrap;
   }
   .app-shell[data-compact-visual-viewport]
-    .composer-region:not([data-decision-pending]) .composer-actions { flex: 0 0 auto; }
-  .app-shell[data-compact-visual-viewport]
-    .composer-region:not([data-decision-pending]) .composer-input-estimate { display: none; }
+    .composer-region:not([data-decision-pending]) .composer-actions { flex: 0 1 auto; }
 }
 
 @media (max-height: 300px) {
@@ -1872,8 +1830,6 @@ select:focus-visible,
 
 @media (max-width: 420px) {
   .new-task-button kbd { display: none; }
-  .workspace-label { display: none; }
-  .option-chip { max-width: 108px; }
   .welcome > p { font-size: 12px; }
   .timeline-item[data-kind="user"] .timeline-body { max-width: 92%; }
 }
@@ -1901,4 +1857,49 @@ select:focus-visible,
   :root[data-visual-viewport-reduced] .directory-dialog .dialog-card > :is(header, footer) { padding: 4px 12px; }
   :root[data-visual-viewport-reduced] .directory-body { padding: 4px 12px; gap: 4px; }
   :root[data-visual-viewport-reduced] .directory-path-form label { display: none; }
+}
+
+/* Left: attachments and permissions. Right: optional estimate, usage, model
+   and submit. Only the model label shrinks on very narrow screens. */
+.composer-model-trigger, .composer-permission-trigger { position: relative; display: inline-flex; height: 34px; padding: 0 7px; align-items: center; justify-content: center; gap: 4px; border: 0; border-radius: var(--radius-sm); background: transparent; color: var(--muted); font: inherit; font-size: 12px; cursor: pointer; }
+.composer-model-trigger { flex: 0 1 auto; min-width: 0; width: max-content; }
+#composer-model-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#composer-model-effort { flex: 0 1 auto; max-width: 50%; overflow: hidden; text-overflow: ellipsis; color: var(--faint); white-space: nowrap; }
+.composer-model-trigger .icon { flex: 0 0 14px; width: 14px; height: 14px; }
+.composer-permission-trigger { flex: 0 0 34px; width: 34px; padding: 0; }
+.composer-permission-trigger .icon { width: 18px; height: 18px; }
+.composer-permission-trigger[data-permission="full-access"], .composer-permission-panel [data-permission="full-access"] { color: var(--danger); }
+.composer-model-trigger:hover, .composer-permission-trigger:hover, .composer-model-trigger[aria-expanded="true"], .composer-permission-trigger[aria-expanded="true"] { background: var(--surface-hover); }
+.composer-model-trigger:focus-visible, .composer-permission-trigger:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px; }
+.composer-model-trigger:disabled, .composer-permission-trigger:disabled { opacity: .55; cursor: default; }
+#composer-profile-controls[data-profile-state]:not([data-profile-state=""]) .composer-model-trigger::after { content: ""; position: absolute; right: 5px; top: 4px; width: 5px; height: 5px; border-radius: 50%; background: var(--accent); }
+#composer-profile-controls[data-profile-state="error"] .composer-model-trigger::after { background: var(--danger); }
+.composer-config-panel { position: fixed; z-index: 65; width: min(320px, calc(100vw - 24px)); padding: 12px; overflow-y: auto; overscroll-behavior: contain; border: 1px solid var(--border-strong); border-radius: 14px; background: var(--surface-raised); color: var(--ink); box-shadow: 0 12px 36px rgb(0 0 0 / 22%); font-size: 12px; }
+.composer-config-panel[hidden] { display: none; }
+.composer-config-panel > header { display: flex; min-height: 36px; align-items: center; gap: 4px; margin: -5px -5px 9px 0; }
+.composer-config-panel h3 { flex: 1; margin: 0; font-size: 12px; font-weight: 600; }
+.composer-config-panel > label, .composer-effort-heading label { color: var(--muted); }
+.composer-config-panel .composer-select { display: block; width: 100%; max-width: none; height: 40px; margin-top: 5px; padding: 0 10px; border: 1px solid var(--border); background: var(--surface); color: var(--ink); }
+.composer-effort-heading { display: flex; justify-content: space-between; gap: 8px; align-items: center; margin-top: 16px; }
+.composer-effort-heading output { color: var(--focus); font-weight: 600; }
+#composer-effort-slider { display: block; width: 100%; height: 32px; margin: 5px 0 0; accent-color: var(--focus); cursor: pointer; }
+#composer-effort-slider:disabled { cursor: default; opacity: .5; }
+.composer-effort-scale { display: flex; justify-content: space-between; gap: 3px; color: var(--faint); font-size: 10px; }
+.composer-config-panel .composer-profile-status { display: block; margin-top: 12px; padding: 6px 8px; white-space: normal; }
+.composer-config-panel .composer-profile-status[hidden] { display: none; }
+.composer-permission-panel { padding: 6px; }
+.composer-permission-panel > button { display: flex; width: 100%; min-height: 58px; gap: 10px; align-items: center; padding: 9px 10px; border: 0; border-radius: 8px; background: transparent; color: var(--ink); text-align: start; font: inherit; cursor: pointer; }
+.composer-permission-panel > button:hover, .composer-permission-panel > button:focus-visible { background: var(--surface-hover); }
+.composer-permission-panel > button:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px; }
+.composer-permission-panel > button:disabled { cursor: default; opacity: .55; }
+.composer-permission-panel > button > .icon { flex: 0 0 18px; width: 18px; height: 18px; align-self: flex-start; margin-top: 2px; }
+.composer-permission-panel > button > span:nth-child(2) { flex: 1; min-width: 0; }
+.composer-permission-panel strong { display: block; font-weight: 500; }
+.composer-permission-panel small { display: block; margin-top: 5px; opacity: .65; line-height: 1.4; }
+.permission-check { visibility: hidden; }
+[aria-checked="true"] > .permission-check { visibility: visible; }
+@media (max-width: 760px) {
+  .composer-model-trigger, .composer-permission-trigger { height: 40px; }
+  .composer-permission-trigger { flex-basis: 40px; width: 40px; }
+  .composer-config-panel > header .icon-button { min-width: 40px; min-height: 40px; }
 }

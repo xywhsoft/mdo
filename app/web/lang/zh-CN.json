@@ -559,9 +559,6 @@
   "composer.shortcutEnterQueue": "发送；运行中加入待发送队列",
   "composer.shortcutControlGuide": "运行中加入待发送队列",
   "composer.shortcutControlQueue": "中断当前运行，优先发送输入",
-  "composer.localWorkspace": "本地工作区",
-  "composer.workspacePath": "当前工作目录：{path}",
-  "composer.workspace": "当前工作目录",
   "composer.readOnly": "该会话不可运行；请先恢复到进行中",
   "queue.count": "待发送 · {count}",
   "queue.retryUncertain": "确认未发送后重试",
@@ -1479,5 +1476,11 @@
   "settings.saved": "已保存",
   "settings.saveFailed": "保存失败：{error}。更改已保留，可点击保存重试。",
   "settings.saveConflict": "设置已在其他窗口更新。你的修改仍保留，可点击保存重试。",
-  "settings.restored": "已恢复默认设置。"
+  "settings.restored": "已恢复默认设置。",
+  "composer.modelSettings": "模型与思考深度",
+  "composer.permissionReadOnly": "读取与分析，禁止修改文件。",
+  "composer.permissionBalanced": "需要权限时先询问。",
+  "composer.permissionFullAccess": "允许工具直接执行。",
+  "composer.closeSettings": "关闭模型设置",
+  "composer.localWorkspace": "本地工作区"
 }

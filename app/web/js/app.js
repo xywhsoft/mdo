@@ -57,6 +57,7 @@ import { createSlashCommands } from "./features/chat/slash-commands.js";
 import { createFileMentions } from "./features/chat/file-mentions.js";
 import { trackComposerMenuRoom } from "./features/chat/composer-menu-room.js";
 import { createComposerProfile } from "./features/chat/composer-profile.js";
+import { createComposerControls } from "./features/chat/composer-controls.js";
 import { createTokenMeter } from "./features/chat/token-meter.js";
 import { createTaskPanel } from "./features/tasks/task-panel.js";
 import { createDecisionPanel } from "./features/approvals/decision-panel.js";
@@ -174,8 +175,6 @@ export async function boot() {
   const exportButtons = [$("#export-session"), $("#export-session-mobile")];
   const openTrace = $("#open-trace");
   const contextList = $("#context-list");
-  const workspaceChip = $("#workspace-chip");
-  const workspaceLabel = $("#workspace-label");
   const mobileActivity = $("#mobile-activity-dot");
   const settingsWorkspace = $("#settings-workspace");
   const skipLink = $(".skip-link");
@@ -833,6 +832,10 @@ export async function boot() {
   });
   draftStore.select("");
   if (!purgeRecovery.isPaused()) void projectDraftSelection.restoreLegacy();
+  const composerControls = createComposerControls({ root: $("#composer-profile-controls"),
+    modelSelect: $("#composer-model"), reasoningSelect: $("#composer-reasoning"),
+    permissionSelect: $("#composer-permission"), status: composerProfileStatus,
+    modelsStore, navigation });
   composerProfile = createComposerProfile({
     modelSelect: $("#composer-model"), reasoningSelect: $("#composer-reasoning"),
     permissionSelect: $("#composer-permission"), navigation,
@@ -853,6 +856,7 @@ export async function boot() {
       if (!busy) void dispatchQueued();
     },
     onSelectionChange() {
+      composerControls.sync();
       tokenMeter.refresh();
       composerImages?.refresh();
       if (composerError.dataset.code === "image_model_unsupported" &&
@@ -1167,16 +1171,6 @@ export async function boot() {
     return project?.managed ? project.workspace_root || "" : "";
   }
 
-  function syncWorkspaceChip() {
-    const root = currentWorkspace();
-    workspaceLabel.textContent = root
-      ? root.split(/[\\/]/).filter(Boolean).at(-1) || root
-      : t("composer.localWorkspace", {}, "本地工作区");
-    workspaceChip.title = root
-      ? t("composer.workspacePath", { path: root }, `当前工作目录：${root}`)
-      : t("composer.workspace", {}, "当前工作目录");
-  }
-
   function updateContext(state) {
     clear(contextList);
     const route = navigation.get();
@@ -1266,7 +1260,6 @@ export async function boot() {
       mobileTitle.textContent = title;
       mobileMeta.textContent = statusText;
     }
-    syncWorkspaceChip();
     updateContext(state);
   });
   createSessionLoadNotice({ navigation, store: sessionDetailStore,
@@ -1276,7 +1269,6 @@ export async function boot() {
     retry: $("#conversation-load-retry"), sessionTitle, sessionSubtitle,
     mobileTitle, mobileMeta, prompt });
   projectsStore.subscribe(() => {
-    syncWorkspaceChip();
     if (!navigation.get().sessionId) updateContext(sessionDetailStore.get());
   });
   subscribeLocale(() => {
@@ -1284,7 +1276,6 @@ export async function boot() {
     setRun(activeRun);
     updateContext(sessionDetailStore.get());
     syncPromptPlaceholder();
-    syncWorkspaceChip();
     syncRuntimeLabel();
     const focusedAction = composerError.contains(document.activeElement)
       ? [...composerError.querySelectorAll(".composer-error-action")]
@@ -1669,7 +1660,6 @@ export async function boot() {
       sessionSubtitle.textContent = t("shell.newTaskSubtitle", { project });
       mobileTitle.textContent = t("shell.newTask");
       mobileMeta.textContent = "";
-      syncWorkspaceChip();
     }
     // Returning from Settings may keep the same selected session, so refresh
     // the context before the same-session fast path below.
@@ -2416,7 +2406,6 @@ export async function boot() {
   $("#close-settings").addEventListener("click", () => {
     navigation.backToWorkspace();
   });
-  workspaceChip.addEventListener("click", () => { selectInspectorTab("context"); setDrawer("inspector", true); });
 
   async function toggleTheme() {
     if (themeToggleBusy) return;

@@ -559,9 +559,6 @@
   "composer.shortcutEnterQueue": "Send; queue while running",
   "composer.shortcutControlGuide": "Queue while running",
   "composer.shortcutControlQueue": "Interrupt the current run and send first",
-  "composer.localWorkspace": "Local workspace",
-  "composer.workspacePath": "Current workspace: {path}",
-  "composer.workspace": "Current workspace",
   "composer.readOnly": "This session cannot run; restore it to active first",
   "queue.count": "Pending · {count}",
   "queue.retryUncertain": "Retry after confirming it was not sent",
@@ -1479,5 +1476,11 @@
   "settings.saved": "Saved",
   "settings.saveFailed": "Could not save: {error}. Changes are kept; use Save to retry.",
   "settings.saveConflict": "Settings changed in another window. Your edits are kept; use Save to retry.",
-  "settings.restored": "Default settings restored."
+  "settings.restored": "Default settings restored.",
+  "composer.modelSettings": "Model and reasoning",
+  "composer.permissionReadOnly": "Read and analyze without changing files.",
+  "composer.permissionBalanced": "Ask when permission is needed.",
+  "composer.permissionFullAccess": "Allow tools to run directly.",
+  "composer.closeSettings": "Close model settings",
+  "composer.localWorkspace": "Local workspace"
 }

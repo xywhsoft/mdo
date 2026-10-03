@@ -213,6 +213,7 @@ test("bundled language packs cover the annotated shell and switch without stale 
     "js/features/sessions/session-export.js",
     "js/features/sessions/session-list.js",
     "js/features/chat/composer-profile.js",
+    "js/features/chat/composer-controls.js",
     "js/features/chat/composer-project.js",
     "js/features/chat/token-meter.js",
     "js/features/chat/timeline.js",

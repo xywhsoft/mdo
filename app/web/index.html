@@ -215,38 +215,52 @@
         </div>
         <form class="composer" id="composer">
           <label class="sr-only" for="prompt" data-i18n="composer.describe">向 Agent 描述任务</label>
-          <textarea id="prompt" name="prompt" rows="1" maxlength="65536" placeholder="向墨斗描述任务…" data-i18n-placeholder="shell.prompt" autocomplete="off"></textarea>
+          <textarea id="prompt" name="prompt" rows="1" maxlength="65536" placeholder="向墨斗描述任务…" data-i18n-placeholder="shell.prompt" autocomplete="off" aria-describedby="composer-hint"></textarea>
           <div class="composer-images" id="composer-images" aria-live="polite" hidden></div>
-          <div class="composer-toolbar">
+          <div class="composer-toolbar" id="composer-profile-controls">
             <div class="composer-options">
               <button class="composer-attach" id="composer-attach" type="button" aria-label="添加图片" data-i18n-aria-label="shell.attach" title="添加图片（PNG、JPEG、WebP）" data-i18n-title="composer.attachTypes">＋</button>
               <input id="composer-file" type="file" accept="image/png,image/jpeg,image/webp" multiple hidden>
-              <button class="option-chip" id="workspace-chip" type="button" title="当前工作目录" data-i18n-title="composer.workspace">
-                <span class="icon" data-icon="folder" aria-hidden="true"></span>
-                <span id="workspace-label" data-i18n="composer.localWorkspace">本地工作区</span>
-              </button>
-              <label class="sr-only" for="composer-model" data-i18n="shell.model">模型</label>
-              <select class="composer-select" id="composer-model" aria-label="模型" data-i18n-aria-label="shell.model"></select>
-              <label class="sr-only" for="composer-reasoning" data-i18n="shell.reasoning">推理强度</label>
-              <select class="composer-select composer-select-short" id="composer-reasoning" aria-label="推理强度" data-i18n-aria-label="shell.reasoning"></select>
-              <label class="sr-only" for="composer-permission" data-i18n="shell.permission">权限</label>
-              <select class="composer-select composer-select-short" id="composer-permission" aria-label="权限" data-i18n-aria-label="shell.permission">
-                <option value="read-only" data-i18n="shell.permission.readOnly">只读</option>
-                <option value="balanced" data-i18n="shell.permission.balanced">询问</option>
-                <option value="full-access" data-i18n="shell.permission.fullAccess">完全访问</option>
-              </select>
-              <button class="composer-profile-reset" id="composer-profile-reset" type="button" aria-label="跟随项目默认配置" data-i18n-aria-label="profile.followDefaults" title="跟随项目默认配置" data-i18n-title="profile.followDefaults" hidden>↺</button>
-              <span class="composer-profile-status" id="composer-profile-status" role="status" hidden></span>
+                <button class="composer-permission-trigger" id="composer-permission-trigger" type="button" aria-haspopup="menu" aria-expanded="false" aria-controls="composer-permission-panel">
+                  <span class="icon" id="composer-permission-icon" data-icon="shield" aria-hidden="true"></span>
+                </button>
+                <div class="composer-config-panel" id="composer-model-panel" role="dialog" aria-labelledby="composer-model-title" tabindex="-1" hidden>
+                  <header><h3 id="composer-model-title" data-i18n="composer.modelSettings">模型与思考深度</h3>
+                    <button class="composer-profile-reset" id="composer-profile-reset" type="button" aria-label="跟随项目默认配置" data-i18n-aria-label="profile.followDefaults" title="跟随项目默认配置" data-i18n-title="profile.followDefaults" hidden>↺</button>
+                    <button class="icon-button" type="button" data-profile-close aria-label="关闭模型设置" data-i18n-aria-label="composer.closeSettings"><span class="icon" data-icon="close" aria-hidden="true"></span></button>
+                  </header>
+                  <label for="composer-model" data-i18n="shell.model">模型</label>
+                  <select class="composer-select" id="composer-model" aria-label="模型" data-i18n-aria-label="shell.model"></select>
+                  <div class="composer-effort-heading"><label for="composer-effort-slider" data-i18n="shell.reasoning">推理强度</label><output id="composer-effort-label" for="composer-effort-slider"></output></div>
+                  <select id="composer-reasoning" hidden aria-label="推理强度" data-i18n-aria-label="shell.reasoning"></select>
+                  <input id="composer-effort-slider" type="range" min="0" max="0" step="1" value="0">
+                  <div class="composer-effort-scale" id="composer-effort-scale" aria-hidden="true"></div>
+                  <span class="composer-profile-status" id="composer-profile-status" role="status" hidden></span>
+                </div>
+                <div class="composer-config-panel composer-permission-panel" id="composer-permission-panel" role="menu" aria-label="权限" data-i18n-aria-label="shell.permission" tabindex="-1" hidden>
+                  <select id="composer-permission" hidden>
+                    <option value="read-only" data-i18n="shell.permission.readOnly">只读</option>
+                    <option value="balanced" data-i18n="shell.permission.balanced">询问</option>
+                    <option value="full-access" data-i18n="shell.permission.fullAccess">完全访问</option>
+                  </select>
+                  <button type="button" role="menuitemradio" data-permission="read-only" aria-checked="false"><span class="icon" data-icon="shield-check" aria-hidden="true"></span><span><strong data-i18n="shell.permission.readOnly">只读</strong><small data-i18n="composer.permissionReadOnly">读取与分析，禁止修改文件。</small></span><span class="permission-check" aria-hidden="true">✓</span></button>
+                  <button type="button" role="menuitemradio" data-permission="balanced" aria-checked="false"><span class="icon" data-icon="hand" aria-hidden="true"></span><span><strong data-i18n="shell.permission.balanced">询问</strong><small data-i18n="composer.permissionBalanced">需要权限时先询问。</small></span><span class="permission-check" aria-hidden="true">✓</span></button>
+                  <button type="button" role="menuitemradio" data-permission="full-access" aria-checked="false"><span class="icon" data-icon="shield-alert" aria-hidden="true"></span><span><strong data-i18n="shell.permission.fullAccess">完全访问</strong><small data-i18n="composer.permissionFullAccess">允许工具直接执行。</small></span><span class="permission-check" aria-hidden="true">✓</span></button>
+                  <span class="composer-profile-status" id="composer-permission-status" role="status" hidden></span>
+                </div>
             </div>
             <div class="composer-actions">
-              <span class="composer-input-estimate" id="composer-input-estimate" title="按输入文本粗略估算" data-i18n-title="token.estimateTitle">输入 ~0 tok</span>
+              <span class="composer-input-estimate" id="composer-input-estimate" title="按输入文本粗略估算" data-i18n-title="token.estimateTitle" hidden>输入 ~0 tok</span>
               <div class="context-meter" id="context-meter">
                 <button type="button" id="context-meter-trigger" aria-label="查看 token 用量" data-i18n-aria-label="token.view" aria-expanded="false" aria-controls="context-meter-panel">
                   <span class="context-meter-ring" id="context-meter-ring" aria-hidden="true"></span>
                 </button>
                 <div class="context-meter-panel" id="context-meter-panel" role="region" aria-labelledby="context-meter-title" tabindex="-1" hidden></div>
               </div>
-              <span class="composer-hint" id="composer-hint" data-i18n="composer.hintIdle">Enter 发送 · Shift Enter 换行</span>
+              <button class="composer-model-trigger" id="composer-model-trigger" type="button" aria-haspopup="dialog" aria-expanded="false" aria-controls="composer-model-panel">
+                <span id="composer-model-label"></span><span id="composer-model-effort"></span><span class="icon" data-icon="chevron-down" aria-hidden="true"></span>
+              </button>
+              <span class="sr-only" id="composer-hint" data-i18n="composer.hintIdle">Enter 发送 · Shift Enter 换行</span>
               <span class="composer-draft-status" id="draft-status" role="status" hidden></span>
               <button class="send-button" id="send" type="submit" aria-label="发送任务" data-i18n-aria-label="shell.send">
                 <span class="icon" data-icon="arrow-up" aria-hidden="true"></span>

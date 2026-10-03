@@ -559,9 +559,6 @@
   "composer.shortcutEnterQueue": "Отправить; во время работы добавить в очередь",
   "composer.shortcutControlGuide": "Во время работы добавить в очередь",
   "composer.shortcutControlQueue": "Прервать текущую задачу и отправить первым",
-  "composer.localWorkspace": "Локальная папка",
-  "composer.workspacePath": "Текущая рабочая папка: {path}",
-  "composer.workspace": "Текущая рабочая папка",
   "composer.readOnly": "Сеанс недоступен для запуска; сначала верните его в активные",
   "queue.count": "В очереди · {count}",
   "queue.retryUncertain": "Повторить после проверки доставки",
@@ -1479,5 +1476,11 @@
   "settings.saved": "Сохранено",
   "settings.saveFailed": "Не удалось сохранить: {error}. Изменения сохранены в форме; нажмите «Сохранить» для повтора.",
   "settings.saveConflict": "Настройки изменены в другом окне. Ваши изменения остались в форме; нажмите «Сохранить» для повтора.",
-  "settings.restored": "Настройки по умолчанию восстановлены."
+  "settings.restored": "Настройки по умолчанию восстановлены.",
+  "composer.modelSettings": "Модель и глубина рассуждений",
+  "composer.permissionReadOnly": "Чтение и анализ без изменения файлов.",
+  "composer.permissionBalanced": "Запрашивать разрешение при необходимости.",
+  "composer.permissionFullAccess": "Разрешить прямое выполнение инструментов.",
+  "composer.closeSettings": "Закрыть настройки модели",
+  "composer.localWorkspace": "Локальное рабочее пространство"
 }
