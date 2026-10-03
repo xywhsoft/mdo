@@ -15,8 +15,10 @@ text file so the normal tool-output artifact path is used. The optional chat
 stream emits two bounded chunks with interleaved text and reasoning fields.
 --profile-delay-ms delays one preference reply; --fail-first-profile rejects it.
 These bounded controls test immediate Send without changing user data.
-With --file-tools-fixture, FILE TOOLS UI runs five bounded filesystem/process
+With --file-tools-fixture, FILE TOOLS UI runs six bounded filesystem/process
 calls in the synthetic workspace, including a deliberate missing-file error.
+--tool-context-report records only tool names and UTF-8 byte counts in the
+isolated workspace, never prompts, tool arguments, schemas, or credentials.
 With --image-capable --image-transfer-fixture, /__qa/image-transfer serves a
 synthetic clipboard control for the actual packed editor and attachment API.
 It also exercises rapid close/reopen in the real workbench; the component route
@@ -64,6 +66,24 @@ class Model(BaseHTTPRequestHandler):
     chat_chunk_delay_seconds = 0
     file_tools = False
     file_tools_path = None
+    tool_context_report = None
+
+    def report_tool_context(self, payload):
+        if Model.tool_context_report is None:
+            return
+        tools = payload.get("tools", [])
+        compact_bytes = lambda value: len(json.dumps(value, ensure_ascii=False,
+            separators=(",", ":")).encode("utf-8"))
+        rows = []
+        for tool in tools:
+            definition = tool.get("function", tool)
+            rows.append({"name": definition.get("name"),
+                         "bytes": compact_bytes(tool)})
+        record = {"protocol_path": self.path, "tool_count": len(rows),
+                  "tools_bytes": compact_bytes(tools), "tools": rows}
+        with Model.lock:
+            with Model.tool_context_report.open("a", encoding="utf-8") as report:
+                report.write(json.dumps(record, ensure_ascii=False) + "\n")
 
     def log_message(self, *_args):
         pass
@@ -71,6 +91,7 @@ class Model(BaseHTTPRequestHandler):
     def do_POST(self):
         if self.path == "/v1/chat/completions" and Model.chat_stream:
             request_body = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
+            self.report_tool_context(request_body)
             if request_body.get("stream") is not True:
                 self.send_error(400, "streaming request required")
                 return
@@ -115,6 +136,7 @@ class Model(BaseHTTPRequestHandler):
             self.send_error(404)
             return
         payload = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
+        self.report_tool_context(payload)
         wire = json.dumps(payload)
         output = [{"type": "message", "content": [
             {"type": "output_text", "text": "UI fixture completed."}]}]
@@ -144,6 +166,8 @@ class Model(BaseHTTPRequestHandler):
                     ("edit", {"path": path, "edits": [
                         {"old_text": "title: BEFORE\n", "new_text": "title: AFTER\n"},
                         {"old_text": "tail: ORIGINAL\n", "new_text": "tail: UPDATED\n"}]}),
+                    ("grep", {"path": path, "pattern": "title: AFTER|tail: UPDATED",
+                              "regex": True}),
                     ("read", {"path": path + ".missing"}),
                     ("exec", {"argv": [sys.executable, "-c",
                         "from pathlib import Path; "
@@ -1244,7 +1268,9 @@ parser.add_argument("--interleaved-chat-stream", action="store_true",
 parser.add_argument("--chat-chunk-delay-ms", type=int, default=0,
                     help="delay between local chat SSE frames, 0-5000 ms (at most 15 seconds total)")
 parser.add_argument("--file-tools-fixture", action="store_true",
-                    help="FILE TOOLS UI runs bounded write/read/edit/missing-read/exec in the isolated workspace")
+                    help="FILE TOOLS UI runs bounded write/read/edit/grep/missing-read/exec in the isolated workspace")
+parser.add_argument("--tool-context-report", action="store_true",
+                    help="record tool names and compact UTF-8 byte counts only in the isolated workspace")
 args = parser.parse_args()
 if not args.packed_path.is_file():
     parser.error(f"packed executable not found: {args.packed_path}")
@@ -1370,6 +1396,8 @@ Model.chat_stream = args.interleaved_chat_stream
 Model.chat_chunk_delay_seconds = args.chat_chunk_delay_ms / 1000
 Model.file_tools = args.file_tools_fixture
 Model.file_tools_path = base / "tools-qa.txt"
+if args.tool_context_report:
+    Model.tool_context_report = base / "tool-context.jsonl"
 executable_name = "mdo.exe" if os.name == "nt" else "mdo"
 shutil.copy2(args.packed_path, base / executable_name)
 (base / "README.md").write_text("Synthetic workspace file for @ completion.\n",

@@ -2,7 +2,40 @@
 
 目标是保留 `app_bak/wwwroot` 经验证的操作逻辑，逐步迁到 `app/web` 的模块化实现。页面布局可改进；输入、运行、审批、消息操作必须以服务端状态为准。原生 HTML、CSS、JavaScript 保持无包管理器构建，随 `mdo.exe` 一起打包。
 
-完成判据及尚缺的打包页证据见 [前端操作体验完成审计](frontend-completion-audit.md)。本文件继续记录每次实现和验证的细节。
+当前优先级以 [基础 Agent 优先级](core-agent-priorities.md) 为准；核心操作对照及历史证据见 [前端操作体验完成审计](frontend-completion-audit.md)。本文件记录各增量的实现和相关验证。
+
+## 2026-10-03：完全访问遵循所选权限，基础工具闭环复验
+
+真实单文件复现：输入区与会话均为 `full-access`，写入仍弹审批。
+mdo 的产品回调先于 xwork 的 AUTO 策略阻塞了工具。现在运行作用域在
+发布前记录实际权限，完全访问回调返回 DEFAULT，由 xwork 应用 AUTO；
+询问继续等待决定，只读继续过滤/拒绝写工具。外接权限回调保持原绑定。
+
+新增有界运行探针，Windows/Linux 原生 xs/TCC 均通过五种情形：完全访问
+自动执行、询问后本轮允许、下一独立运行仍需询问并可拒绝、只读、声明
+只读的 Agent 在选择完全访问时仍不能写文件。核对实际文件内容和缺失，
+没有向外部模型发送测试。探针随现有发布门禁的 runtime 文件发现运行。
+
+打包页面在独立 Home `.build/mdo-packed-docks-btouiusv` 走通六次调用：
+写、读、两处替换、grep、预期缺失文件错误、命令验证。一次运行成功，
+五次工具成功、一次预期失败，没有权限弹层，结果为 `FILE_TOOLS_OK`。
+搜索结果复制与两条命中一致；320×700 刷新后可读结果与错误，页面宽度
+仍为 320px，浏览器 warn/error 为空。截图
+`.build/qa-permission-core-mobile.jpg`，API/文件断言记录
+`.build/qa-permission-core-verified.json`。
+
+夹具新增可选 `--tool-context-report`，只记工具名和字节数。解析默认
+Agent 的实际 Responses 请求后，以紧凑 UTF-8 JSON 计算：21 个工具，
+11,012 字节；这是工具定义的字节数，不是总上下文或模型 token 数。
+未配置 MCP 的本次默认请求没有展开 MCP 工具，也未增加产品工具。
+
+两系统通过严格 C11、23 Python 合同、9 Node、101 模块解析、五种权限
+运行探针、独立单文件 API/资源读取及 A/B 确定性打包。五份改动代码与
+测试按 LF 核对，SDK 未改；未运行压力/高负载及无关发布探针。
+Windows 程序 6,486,343 字节，SHA-256
+`3697149de220738ffe3be9226885485801c578119a7303b03bdfb86393d17829`；
+Linux 原生候选 6,536,503 字节，SHA-256
+`eccb22bdb213c3c862906c466d3914b34de4ae0798ee13bc3c1e4b3e0cc35670`。
 
 ## 2026-10-03：流式输出期间的输入、排队与中断复验
 

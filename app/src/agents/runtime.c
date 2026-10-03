@@ -1162,6 +1162,7 @@ MdoAgentSession* MdoAgentSessionCreateWithRuntime(xwork_runtime* Runtime,
             "Agent permission profile is unknown");
         goto fail;
     }
+    Owner->ApprovalScope.AutoApprove = Approval == XWORK_APPROVAL_AUTO;
     AllowedEffects = (xwork_tool_effects)AgentInfo.AllowedEffects;
     if ( Approval == XWORK_APPROVAL_READ_ONLY )
         AllowedEffects &= XWORK_TOOL_EFFECT_READ |

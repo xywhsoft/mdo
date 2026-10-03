@@ -176,11 +176,13 @@ xwork_permission_decision MdoApprovalOnPermission(void* UserData,
     xwork_permission_decision Result = XWORK_PERMISSION_DENY;
     size_t Index;
     MdoApprovalScope* Scope = (MdoApprovalScope*)UserData;
-    /* The configured profiles permit ordinary reads without a prompt.
-     * Returning DEFAULT lets xwork apply its read-only fallback policy. */
-    if ( Request != NULL &&
+    /* Use the runtime's effective full-access profile rather than creating a
+     * product prompt before xwork can apply AUTO. The callback remains bound
+     * for nested agents; xwork enforces read-only agents before invoking it.
+     * External permission callbacks keep their own policy and user data. */
+    if ( Request != NULL && ((Scope != NULL && Scope->AutoApprove) ||
          (Request->uEffects &
-          ~((xwork_tool_effects)XWORK_TOOL_EFFECT_READ)) == 0u )
+          ~((xwork_tool_effects)XWORK_TOOL_EFFECT_READ)) == 0u) )
         return XWORK_PERMISSION_DEFAULT;
     if ( !MdoApprovalCapture(&Captured, Request) ||
          !g_MdoApprovals.Initialized || g_MdoApprovals.Lock == NULL ||

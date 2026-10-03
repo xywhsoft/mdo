@@ -16,9 +16,12 @@
 typedef struct MdoApprovalSnapshot MdoApprovalSnapshot;
 
 /* Owned by one Agent runtime (one interactive turn or scheduled execution).
- * Only the approval manager may access AllowRun, under its lock. */
+ * AutoApprove is set from the effective profile before publishing the runtime
+ * and remains immutable. Only the approval manager may access AllowRun, under
+ * its lock. */
 typedef struct MdoApprovalScope {
     bool AllowRun;
+    bool AutoApprove;
 } MdoApprovalScope;
 
 typedef struct MdoApprovalResourceInfo {
