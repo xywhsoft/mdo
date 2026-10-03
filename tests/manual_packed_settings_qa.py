@@ -1,6 +1,7 @@
 """Run an isolated packed settings page with one delayed/failed request.
 
-POST /__qa/arm?mode=hold, fail, or conflict affects one bounded request.
+POST /__qa/arm?mode=hold, hold-fail, fail, or conflict affects one bounded request.
+hold-fail releases a delayed 503 instead of the captured upstream response.
 An optional path= selects a catalog GET, models PUT, or models preview POST.
 GET /__qa/control reports its arrival and bounded request counts.
 GET /__qa/session-menu serves the bounded menu/indicator component fixture with
@@ -85,7 +86,7 @@ class SettingsProxy(BaseHTTPRequestHandler):
         if target.path == "/__qa/arm" and self.command == "POST":
             query = parse_qs(target.query)
             mode = query.get("mode", [""])[0]
-            assert mode in ("hold", "fail", "conflict")
+            assert mode in ("hold", "hold-fail", "fail", "conflict")
             path = query.get("path", [SETTINGS])[0]
             assert path == SETTINGS or path in READ_PATHS or path in WRITE_PATHS
             with self.server.lock:
@@ -129,8 +130,11 @@ class SettingsProxy(BaseHTTPRequestHandler):
             status, result_headers = response.status, response.getheaders()
         finally:
             connection.close()
-        if mode == "hold" and not gate.wait(40):
+        if mode in ("hold", "hold-fail") and not gate.wait(40):
             print("Settings reply gate reached its bounded timeout", flush=True)
+        if mode == "hold-fail":
+            return self.reply({"ok": False, "error": {"code": "qa_delayed_read_failed",
+                "message": "Bounded delayed fixture failure"}}, 503)
         self.send_response(status)
         for key, value in result_headers:
             if key.lower() not in ("content-length", "connection", "transfer-encoding"):

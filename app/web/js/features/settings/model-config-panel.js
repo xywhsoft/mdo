@@ -160,11 +160,17 @@ export function createModelConfigPanel(container) {
   let etag = "";
   let kind = "model";
   let selectedId = "";
-  let busy = false;
+  let reading = false;
   let writing = false;
+  let readGeneration = 0;
   let dirty = false;
   let editVersion = 0;
   const rebaseForm = new WeakMap();
+
+  function updateBusyState() {
+    if (reading || writing) container.setAttribute("aria-busy", "true");
+    else container.removeAttribute("aria-busy");
+  }
 
   function renderReadState(cause = null, keepForm = false) {
     if (keepForm) container.querySelector("[data-model-read-status]")?.remove();
@@ -177,7 +183,7 @@ export function createModelConfigPanel(container) {
       const retry = copy("button", "resource.retryLoad", "重新读取", {},
         { className: "secondary-button", attrs: { type: "button" } });
       retry.addEventListener("click", async () => {
-        if (busy || !allowChange()) return;
+        if (reading || writing || !allowChange()) return;
         const applied = await load();
         if (applied && container.isConnected && container.getClientRects().length &&
             globalThis.document.activeElement === globalThis.document.body)
@@ -189,16 +195,20 @@ export function createModelConfigPanel(container) {
   }
 
   async function load(preferredKind = kind, preferredId = selectedId) {
-    if (busy) return false;
+    if (reading || writing) return false;
     const formAtRead = container.querySelector(".model-config-form");
     const versionAtRead = editVersion;
     const focusAtRead = globalThis.document.activeElement;
-    busy = true;
+    const generation = ++readGeneration;
+    reading = true;
     container.querySelector("[data-model-read-status]")?.remove();
-    container.setAttribute("aria-busy", "true");
+    updateBusyState();
     if (!config) renderReadState();
     try {
       const response = await api.get("/models/config");
+      // Save may start while this independent GET is pending. Its acknowledged
+      // patch/ETag becomes the baseline; an older read cannot replace it.
+      if (generation !== readGeneration) return false;
       // A refresh is not permission to discard later edits or a newly selected
       // editor. Retain its nodes, values, selection and original config/ETag.
       if (versionAtRead !== editVersion ||
@@ -225,11 +235,12 @@ export function createModelConfigPanel(container) {
       render();
       return true;
     } catch (cause) {
+      if (generation !== readGeneration) return false;
       renderReadState(cause, Boolean(config));
       return false;
     } finally {
-      busy = false;
-      container.removeAttribute("aria-busy");
+      reading = false;
+      updateBusyState();
     }
   }
 
@@ -243,7 +254,7 @@ export function createModelConfigPanel(container) {
 
   async function transact(next, messageKey, messageFallback,
     focusKind = kind, focusId = selectedId, editableWhileSaving = false) {
-    if (busy || !config || config.runtime_override) return;
+    if (writing || !config || config.runtime_override) return;
     const form = container.querySelector(".model-config-form");
     const versionAtSave = editVersion;
     const focusAtSave = globalThis.document.activeElement;
@@ -258,8 +269,8 @@ export function createModelConfigPanel(container) {
     for (const { node } of locked) node.disabled = true;
     if (identity) identity.readOnly = true;
     writing = true;
-    busy = true;
-    container.setAttribute("aria-busy", "true");
+    ++readGeneration;
+    updateBusyState();
     let committed = false;
     try {
       const patch = { default_model: next.default_model,
@@ -316,10 +327,9 @@ export function createModelConfigPanel(container) {
         : errorMessage(cause), "error");
     } finally {
       writing = false;
-      busy = false;
       for (const { node, disabled } of locked) node.disabled = disabled;
       if (identity && !committed) identity.readOnly = identityReadOnly;
-      container.removeAttribute("aria-busy");
+      updateBusyState();
       if (!committed && focusAtSave?.isConnected && container.getClientRects().length &&
           globalThis.document.activeElement === globalThis.document.body)
         focusAtSave.focus({ preventScroll: true });
@@ -559,7 +569,7 @@ export function createModelConfigPanel(container) {
       form.addEventListener("change", () => { editVersion += 1; dirty = true; discard.hidden = false; save.disabled = writing; });
       form.addEventListener("submit", (event) => {
         event.preventDefault();
-        if (busy) return;
+        if (writing) return;
         if (!form.reportValidity()) return;
         const next = clone(config);
         const value = kind === "model" ? readModel(form, item) : readProvider(form, item);
