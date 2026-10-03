@@ -24,4 +24,5 @@ tools/*
 !tools/README.md
 !tools/build_mdo.py
 !tools/build_android.py
+!tools/export_icons.py
 !tools/qa_release.py

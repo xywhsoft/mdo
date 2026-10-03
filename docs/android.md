@@ -32,6 +32,9 @@ WSL 方式的 SDK 和 JDK 参数为 Linux 路径，输出保留在 Windows 工�
 没有凭据时构建会明确失败。不要提交密钥。
 
 默认产物为根目录 `mdo-arm64-v8a.apk`。构建中间文件在 `.build/android/`。
+墨斗图标资源位于 `assets/branding/android/res/`，构建器会编译并写入 APK 的
+launcher/round icon；Android 8+ 使用自适应图标。Windows 的 ICO 和前端标识
+使用同一原图，见 `assets/branding/README.md`。导出资源已入库，普通构建不需要 Pillow。
 开发签名位于 `.build/android-signing/development.p12`，不入库；保留它才能原位升级
 保留已安装应用的数据。此构建器生成供安装验证的开发签名 APK，未发布应用商店。
 公开发行时使用自己的正式签名流程。默认不启用 debuggable；本地验证可添加

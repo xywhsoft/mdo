@@ -67,7 +67,8 @@ def main() -> int:
         if not args.skip_host_build:
             subprocess.run([sys.executable, str(sdk_source / "tools/build.py"), *lock["xserver"]["required_extensions"],
                 "--output", str(host.with_name("xs.exe" if os.name == "nt" else "xs")),
-                "--build-dir", str(ROOT / ".build/host-objects")], cwd=sdk_source, check=True)
+                "--build-dir", str(ROOT / ".build/host-objects"),
+                *(["--icon", str(build_mdo.ICON_PATH)] if os.name == "nt" else [])], cwd=sdk_source, check=True)
         if not host.is_file():
             raise build_mdo.BuildError("missing pack host: " + str(host))
         packed = directory / "app-packed"
@@ -91,6 +92,7 @@ def main() -> int:
         target_run(sdk_source / "tools/android/build_apk.py", ["--sdk", args.sdk, "--java-home", args.java_home,
             "--library", path(native / "libxs.so"), "--pack", path(pack), "--output", path(args.output),
             "--package", "org.xleaves.mdo", "--label", "墨斗 mdo", "--home-name", "mdo-home",
+            "--resources", path(ROOT / "assets/branding/android/res"),
             "--version", "0.1.0-dev", "--version-code", str(args.version_code), "--keystore", path(args.keystore),
             *(["--debuggable"] if args.debuggable else [])])
         print("[mdo] APK SHA256 " + hashlib.sha256(args.output.read_bytes()).hexdigest())

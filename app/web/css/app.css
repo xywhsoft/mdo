@@ -179,16 +179,13 @@ select:focus-visible,
 
 .brand-mark,
 .welcome-mark {
-  display: grid;
-  place-items: center;
+  display: block;
+  object-fit: cover;
   border-radius: 8px;
-  background: var(--accent);
-  color: var(--accent-ink);
-  font-family: ui-serif, "Songti SC", serif;
-  font-weight: 700;
+  background: #20201e;
 }
 
-.brand-mark { width: 28px; height: 28px; font-size: 14px; }
+.brand-mark { width: 28px; height: 28px; }
 
 .icon-button {
   position: relative;
@@ -531,7 +528,7 @@ select:focus-visible,
 .conversation-load h2 { margin: 0; font-size: 16px; }
 .conversation-load p { margin: 0; color: var(--muted); font-size: 13px; line-height: 1.5; }
 .conversation-load button { min-height: 40px; padding: 0 14px; }
-.welcome-mark { width: 42px; height: 42px; margin: 0 auto 18px; font-size: 18px; }
+.welcome-mark { width: 42px; height: 42px; margin: 0 auto 18px; }
 .welcome h2 { margin: 0; font-size: clamp(22px, 3vw, 30px); font-weight: 620; letter-spacing: -.025em; }
 .welcome > p { max-width: 530px; margin: 10px auto 18px; color: var(--muted); }
 .starter-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
@@ -1110,7 +1107,7 @@ select:focus-visible,
 .startup-loading, .startup-failure { position: fixed; z-index: 200; inset: 0; display: grid; place-items: center; padding: max(16px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right)) max(16px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left)); background: var(--bg); }
 .startup-loading-content { display: grid; justify-items: center; gap: 14px; color: var(--muted); text-align: center; }
 .startup-loading-content p { margin: 0; font-size: 13px; }
-.startup-loading-mark { display: grid; width: 42px; height: 42px; place-items: center; border-radius: 13px; background: var(--accent); color: var(--accent-ink); font-size: 18px; font-weight: 700; }
+.startup-loading-mark { display: block; width: 42px; height: 42px; object-fit: cover; border-radius: 13px; background: var(--accent); }
 .startup-failure-card { width: min(400px, 100%); max-height: 100%; overflow-y: auto; padding: 24px; border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--surface-raised); box-shadow: var(--shadow-dialog); }
 .startup-failure-card h2 { margin: 0 0 8px; font-size: 18px; }
 .startup-failure-card p { margin: 0 0 20px; color: var(--muted); font-size: 13px; line-height: 1.6; }

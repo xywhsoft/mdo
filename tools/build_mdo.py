@@ -25,6 +25,7 @@ MODULE_HEADER_PATH = ROOT / "include" / "mdo" / "module.h"
 GENERATED_MODULE_HEADER_PATH = GENERATED / "module-sdk" / "mdo" / "module.h"
 BUILTIN_CONNECTION_PATH = ROOT / ".build" / "ornith-connection.json"
 BUILTIN_KEY_PATH = APP / "default-home" / "config" / "secrets" / "builtin-model.key"
+ICON_PATH = ROOT / "assets" / "branding" / "mdo.ico"
 HEX40 = re.compile(r"[0-9a-f]{40}\Z")
 
 
@@ -317,6 +318,7 @@ def build(args: argparse.Namespace, xserver: Path, lock: dict) -> None:
             "--build-dir", str(ROOT / ".build" / "xserver"),
             "--output", str(host),
             "--cc", args.cc,
+            *(["--icon", str(ICON_PATH)] if os.name == "nt" else []),
         ], xserver, args.dry_run)
     elif not args.dry_run and not host.is_file():
         raise BuildError(f"--skip-host-build requested but {host} does not exist")
