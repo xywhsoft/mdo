@@ -4,6 +4,41 @@
 
 当前优先级以 [基础 Agent 优先级](core-agent-priorities.md) 为准；核心操作对照及历史证据见 [前端操作体验完成审计](frontend-completion-audit.md)。本文件记录各增量的实现和相关验证。
 
+## 2026-10-03：修复侧栏会话弹窗焦点，补齐项目与会话基本操作复验
+
+旧包 `.build/mdo-packed-docks-7oki29h4` 实测侧栏重命名后焦点落到 BODY：
+保存期间会话行重绘，原菜单按钮已移除，原生 dialog 无法返回它。
+新的 `session-action-focus.js` 在关闭时查找同一会话的现存操作按钮；
+会话已离开筛选列表则回到状态筛选器。路由变化、新的焦点选择和关闭
+抽屉均优先；稳定的顶栏按钮继续使用原生焦点返回。成功分叉不恢复旧
+按钮，并收起手机侧栏，避免输入框已获焦却仍被抽屉覆盖。
+
+本轮旧包先走通快速新任务、两次本地夹具回复、独立 A/B 草稿切换、
+顶栏改名、侧栏搜索、实际目录选择/项目创建、带空格文件的 @ 补全，
+以及手机归档、恢复、移入回收站和恢复。移动端点击会话后按既有合同
+关闭抽屉并返回导航按钮，不自动唤起键盘；桌面点击会话进入输入框。
+基础路径无需增加工具或管理 API。原始记录为
+`.build/qa-session-core-before-ui.json`。
+
+最终新包在复制的隔离 Home `.build/qa-session-focus-live` 复验：桌面
+改名返回侧栏按钮，320px 移入回收站返回状态筛选器；中间包还验证
+手机改名与取消弹窗返回按钮。最终包手机侧栏分叉后抽屉关闭、输入框
+获焦；刷新保留一轮原记录及“最终分支草稿”。切换 workspace/default
+分别恢复 Draft for B/A，服务端回读源会话、B 和分支均为 active、各一轮
+历史，三份草稿一致。新包这一复验未启动模型运行；页面 warn/error
+为空。证据为 `qa-session-focus-after-ui.json`、`qa-session-focus-api.json`、
+`qa-session-focus-verified.json` 和 `qa-session-focus-mobile.jpg`，均在
+`.build/`。验证服务已正常退出。
+
+新增五个焦点回归，覆盖重绘按钮、移出列表、新焦点/导航优先、不可达
+控件和稳定顶栏返回。Windows/Linux 各通过 18 Python 合同、13 项相关
+Node 检查、102 模块解析、单文件资源/API 读取及 A/B 确定性打包；Linux
+原生 ext4 对齐 283 份应用文件，SDK 未改。继续基础 Agent 主线，不做
+压力、高负载或治理扩展。根目录程序对应 Windows SHA-256
+`a18d1ae17e9f39d3d5b40d68606f7ca576b9c37122676d2f57cde70e6a3d73ab`；
+Linux 候选 SHA-256
+`d6d0a35a485a731a948d9ced996e8dda312af9ab0780e18aac2539599538e24b`。
+
 ## 2026-10-03：成功反馈不再被迟到读取覆盖，消息操作复验
 
 旧打包版隔离 Home `.build/mdo-packed-docks-1d57pimc` 复现：打开已有

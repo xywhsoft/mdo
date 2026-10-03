@@ -24,6 +24,7 @@ import { recoveryStore, selectRecovery, loadRecovery, readRecovery, abandonRecov
 import { navigation } from "./state/navigation.js";
 import { createSessionList } from "./features/sessions/session-list.js";
 import { createSessionActionMenu } from "./features/sessions/session-action-menu.js";
+import { rememberSessionActionFocus } from "./features/sessions/session-action-focus.js";
 import { sessionActionDialogCopy, sessionActionToast, sessionForkTitle } from "./features/sessions/session-actions.js";
 import { SESSION_TITLE_UTF8_LIMIT, sessionTitleUtf8Bytes } from "./features/sessions/session-title.js";
 import { formatSessionMarkdown, sessionMarkdownFilename } from "./features/sessions/session-export.js";
@@ -2133,6 +2134,14 @@ export async function boot() {
   const actionError = $("#session-action-error");
   const actionConfirm = $("#confirm-session-action");
   let pendingSessionAction = null;
+  let restoreSessionActionFocus = null;
+
+  actionDialog.addEventListener("close", () => {
+    if (actionDialog.open) return;
+    const restore = restoreSessionActionFocus;
+    restoreSessionActionFocus = null;
+    restore?.();
+  });
 
   function validateSessionTitle(field, error) {
     const bytes = sessionTitleUtf8Bytes(field.value.trim());
@@ -2227,7 +2236,12 @@ export async function boot() {
     actionForm.elements.through_sequence.max = hasSequence ? String(history.last_sequence) : "";
     actionConfirm.className = ["trash", "truncate", "clear"].includes(action) ? "danger-button" : "primary-button";
     actionError.hidden = true;
-    if (!actionDialog.open) actionDialog.showModal();
+    if (!actionDialog.open) {
+      restoreSessionActionFocus = rememberSessionActionFocus({
+        container: $("#session-list"), fallback: $("#session-status-filter"), navigation,
+      });
+      actionDialog.showModal();
+    }
     if (action === "rename" || action === "fork")
       window.setTimeout(() => actionForm.elements.title.select(), 0);
   }
@@ -2246,9 +2260,12 @@ export async function boot() {
       const action = pendingSessionAction.action;
       const updated = await applySessionAction(action, pendingSessionAction.session,
         actionForm.elements.title.value.trim());
+      // Forking deliberately moves to the new conversation's composer.
+      if (action === "fork") restoreSessionActionFocus = null;
       actionDialog.close();
       pendingSessionAction = null;
       if (action === "fork") {
+        closeDrawers();
         pendingForkComposerFocus = `${updated.project_id}/${updated.id}`;
         focusForkComposerWhenReady();
       }
