@@ -36,12 +36,12 @@ test("a newer push prevents an in-flight HTTP fallback overwriting it", async ()
   } finally { globalThis.fetch = oldFetch; }
 });
 
-test("clear markers and bounded retention use the existing HTTP merge semantics", () => {
+test("intentional clear removes its range but additional streaming never evicts earlier messages", () => {
   applyLiveTimeline(packet([event(2, { kind: "history_truncated", source_event_id: 1 }), event(3)]));
   assert.deepEqual(timelineStore.get().data.events.map((item) => item.event_id), [2, 3]);
   applyLiveTimeline(packet(Array.from({ length: 650 }, (_, i) => event(i + 4))));
-  assert.equal(timelineStore.get().data.events.length, 640);
-  assert.equal(timelineStore.get().data.historyLost, true);
+  assert.equal(timelineStore.get().data.events.length, 652);
+  assert.equal(timelineStore.get().data.historyLost, false);
 });
 
 test("wrong session and malformed cursors cannot mutate the timeline", () => {

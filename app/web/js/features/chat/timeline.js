@@ -8,6 +8,8 @@ import { artifactPreviewNode } from "./artifact-preview.js";
 import { currentLocale, subscribeLocale, t } from "../../i18n.js";
 import { labelImageName } from "./image-names.js";
 import { toolCallSummary, toolSectionNode } from "./tool-content.js";
+import { conversationGroups } from "./conversation-history.js";
+import { createConversationNavigation } from "./conversation-navigation.js";
 
 export function searchResultTop(row, content, searchBottom, viewportBottom, lineHeight = 24) {
   const room = Math.max(0, viewportBottom - searchBottom);
@@ -65,6 +67,7 @@ export function eventsToTimeline(events, historyLost = false,
   const streams = new Map();
   const promptsByRun = new Map();
   const runEpochs = new Map();
+  const terminalRuns = new Map();
   function settleStreams(runKey, epoch, state) {
     // ERROR is a terminal event in xwork, just like AGENT_DONE. Scope the
     // settlement to this execution: other Agents and reused run IDs survive.
@@ -82,6 +85,7 @@ export function eventsToTimeline(events, historyLost = false,
       state: "done", time: 0 });
   }
   for (const event of events) {
+    const itemCount = items.length;
     const runKey = String(event.run_id || event.agent_id || event.event_id);
     const epoch = runEpochs.get(runKey) ?? 0;
     switch (event.kind) {
@@ -276,6 +280,7 @@ export function eventsToTimeline(events, historyLost = false,
           state: event.kind === "recovery_required" ? "failed" : "done", time: event.time });
         break;
       case "error": {
+        terminalRuns.set(`${runKey}:${epoch}`, "failed");
         settleStreams(runKey, epoch, "failed");
         const answer = [...items].reverse().find((item) => item.kind === "assistant" &&
           item.runKey === runKey && item.runEpoch === epoch);
@@ -288,6 +293,7 @@ export function eventsToTimeline(events, historyLost = false,
       }
       case "agent_done": {
         const terminalState = event.success ? "done" : "cancelled";
+        terminalRuns.set(`${runKey}:${epoch}`, terminalState);
         settleStreams(runKey, epoch, terminalState);
         let answer = [...items].reverse().find((item) => item.kind === "assistant" &&
           item.runKey === runKey && item.runEpoch === epoch);
@@ -358,7 +364,14 @@ export function eventsToTimeline(events, historyLost = false,
           text: event.text || event.kind || t("timeline.unknownEvent", {}, "未知事件"),
           state: event.terminal ? "done" : "running", time: event.time });
     }
+    for (let index = itemCount; index < items.length; index += 1) {
+      items[index].runKey ??= runKey;
+      items[index].runEpoch ??= event.kind === "agent_start" ? Number(event.event_id) || 0 : epoch;
+      items[index].agentDepth ??= event.agent_depth || 0;
+    }
   }
+  for (const item of items)
+    item.turnState = terminalRuns.get(`${item.runKey}:${item.runEpoch}`) ?? "running";
   let nextUserSequence = null;
   for (let index = items.length - 1; index >= 0; index -= 1) {
     const item = items[index];
@@ -541,6 +554,39 @@ function commandButton(label, description, iconName, actionRef, handlers, sessio
 
 function timelineNode(item, handlers, projectId, sessionId, writable,
   openState, previewOpen, previewScroll, toolTextCache) {
+  if (item.kind === "process") {
+    const details = element("details", { className: "conversation-process", attrs: {
+      "data-timeline-key": item.key, "data-state": item.state } });
+    details.open = openState ?? item.state === "running";
+    const count = item.items.filter(child => child.kind === "tool").length;
+    const label = item.state === "running" ? t("timeline.processRunning", {}, "执行过程")
+      : t("timeline.processComplete", {}, "查看思考与执行过程");
+    const summary = element("summary", {}, [actionIcon("chevron-down"),
+      element("span", { text: label }), count ? element("span", {
+        className: "conversation-process-count", text: t("timeline.processTools", { count }, `${count} 次工具调用`) }) : null]);
+    details.append(summary);
+    function expand() {
+      if (!details.open || details.querySelector(".conversation-process-items")) return;
+      const children = element("ol", { className: "conversation-process-items" });
+      for (const child of item.items) children.append(timelineNode(child, handlers,
+        projectId, sessionId, false, undefined, false, 0, toolTextCache));
+      details.append(children);
+      mountIcons(children);
+    }
+    details.addEventListener("toggle", expand);
+    expand();
+    return element("li", { className: "timeline-item", attrs: { "data-kind": "process" } }, [details]);
+  }
+  if (item.kind === "history-more") {
+    const button = element("button", { className: "conversation-gap", text:
+      t("timeline.loadBetween", {}, "加载这之间的对话"), attrs: { type: "button" } });
+    button.addEventListener("click", async () => {
+      button.disabled = true;
+      try { await handlers.revealTurn?.(item.turnId, false); }
+      catch (error) { toast(errorMessage(error), "error"); button.disabled = false; }
+    });
+    return element("li", { className: "timeline-item" }, [button]);
+  }
   if (item.kind === "reasoning" || item.kind === "tool")
     return foldableNode(item, openState, previewOpen, previewScroll,
       projectId, sessionId, toolTextCache);
@@ -691,7 +737,7 @@ function timelineNode(item, handlers, projectId, sessionId, writable,
 }
 
 export function createTimelineView({ container, welcome, toBottom, store, sessionStore = null,
-  onFork, onEdit, onRetry, onSearchCount }) {
+  onFork, onEdit, onRetry, onSearchCount, onLoadOlder, onLoadIndex, onRevealTurn }) {
   const busySessions = new Set();
   const renderedRows = new Map();
   const handlers = {
@@ -716,7 +762,29 @@ export function createTimelineView({ container, welcome, toBottom, store, sessio
   const previewExpanded = new Map();
   const previewScroll = new Map();
   const toolTextCache = new Map();
+  const processStates = new Map();
   const scroller = container.closest(".conversation");
+  const historyButton = onLoadOlder ? element("button", { className: "conversation-history-load",
+    attrs: { type: "button" } }) : null;
+  if (historyButton) {
+    container.before(historyButton);
+    historyButton.addEventListener("click", () => { followTail = false; void onLoadOlder(); });
+  }
+  let jumpVersion = 0;
+  async function revealTurn(id, scroll = true) {
+    const version = ++jumpVersion;
+    const owner = renderedSession;
+    followTail = false;
+    if (searchQuery) { searchQuery = ""; onSearchCount?.(0, false); }
+    await onRevealTurn?.(id);
+    await new Promise(resolve => requestAnimationFrame(resolve));
+    if (version !== jumpVersion || owner !== renderedSession) return;
+    if (scroll) container.querySelector(`[data-turn-id="${id}"]`)?.scrollIntoView({ block: "start" });
+  }
+  handlers.revealTurn = revealTurn;
+  const historyNavigation = onRevealTurn ? createConversationNavigation({
+    scroller, container, onReveal: revealTurn, onLoadIndex,
+  }) : null;
 
   function reconcileRows(entries, projectId, sessionId) {
     const retained = new Set();
@@ -730,6 +798,8 @@ export function createTimelineView({ container, welcome, toBottom, store, sessio
           sessionId, writable, expanded.get(item.key),
           previewExpanded.get(`${item.key}/preview`) ?? false,
           previewScroll.get(`${item.key}/preview`) ?? 0, toolTextCache);
+        node.dataset.timelineRow = item.key;
+        if (item.kind === "user") node.dataset.turnId = item.sourceEventId;
         mountIcons(node);
         row = { node, signature };
         renderedRows.set(item.key, row);
@@ -762,6 +832,13 @@ export function createTimelineView({ container, welcome, toBottom, store, sessio
     const state = pendingState;
     const data = state.data;
     const sessionKey = `${data?.projectId ?? ""}/${data?.sessionId ?? ""}`;
+    let anchor = null;
+    let anchorTop = 0;
+    if (sessionKey === renderedSession && !followTail && !searchQuery) {
+      const top = scroller.getBoundingClientRect().top;
+      anchor = [...container.children].find(node => node.getBoundingClientRect().bottom > top + 8);
+      anchorTop = anchor?.getBoundingClientRect().top ?? 0;
+    }
     let focusedKey = "";
     let focusedAction = "";
     let focusedImage = "";
@@ -788,6 +865,8 @@ export function createTimelineView({ container, welcome, toBottom, store, sessio
       previewExpanded.clear();
       previewScroll.clear();
       toolTextCache.clear();
+      processStates.clear();
+      jumpVersion += 1;
       renderedRows.clear();
       clear(container);
       renderedSession = sessionKey;
@@ -797,8 +876,29 @@ export function createTimelineView({ container, welcome, toBottom, store, sessio
     }
     const items = eventsToTimeline(data?.events ?? [], data?.historyLost,
       { showHistoryTruncations: false });
-    const foldKeys = new Set(items.filter((item) =>
-      item.kind === "reasoning" || item.kind === "tool").map((item) => item.key));
+    const groups = conversationGroups(items);
+    const projected = [];
+    let previousTurn = 0;
+    for (const group of groups) {
+      if (group.standalone) { projected.push(group.standalone); continue; }
+      const skipped = (data?.turns ?? []).filter(turn => turn.first_event_id > previousTurn &&
+        turn.first_event_id < group.firstEventId && !groups.some(loaded => loaded.firstEventId === turn.first_event_id));
+      if (previousTurn && skipped.length) projected.push({ key: `gap-${group.firstEventId}`,
+        kind: "history-more", turnId: skipped.at(-1).first_event_id });
+      previousTurn = group.firstEventId;
+      projected.push(group.user);
+      if (group.process.length) {
+        const key = `process-${group.firstEventId}`;
+        if (processStates.has(key) && processStates.get(key) !== group.state)
+          expanded.set(key, group.state === "running");
+        processStates.set(key, group.state);
+        projected.push({ key, kind: "process", items: group.process, state: group.state });
+      }
+      if (group.answer) projected.push(group.answer);
+    }
+    const foldKeys = new Set([...items.filter((item) =>
+      item.kind === "reasoning" || item.kind === "tool").map((item) => item.key),
+      ...projected.filter(item => item.kind === "process").map(item => item.key)]);
     for (const key of expanded.keys()) if (!foldKeys.has(key)) expanded.delete(key);
     const previewKeys = new Set(items.filter((item) => item.artifactId)
       .map((item) => `${item.key}/preview`));
@@ -808,8 +908,8 @@ export function createTimelineView({ container, welcome, toBottom, store, sessio
       if (!previewKeys.has(key)) previewScroll.delete(key);
     const visible = searchQuery ? items.filter((item) =>
       `${item.role} ${item.inputText ?? ""} ${item.text} ${item.meta ?? ""}`
-        .toLocaleLowerCase().includes(searchQuery)) : items;
-    onSearchCount?.(searchQuery ? visible.length : 0, Boolean(data?.historyLost));
+        .toLocaleLowerCase().includes(searchQuery)) : projected;
+    onSearchCount?.(searchQuery ? visible.length : 0, Boolean(data?.historyLost || data?.hasOlder));
     // A replacement can briefly contain only its hidden history boundary.
     // Keep this conversation open instead of flashing new-task examples.
     welcome.hidden = Boolean(data?.sessionId &&
@@ -827,6 +927,14 @@ export function createTimelineView({ container, welcome, toBottom, store, sessio
         entries.push({ item, writable });
     }
     reconcileRows(entries, data?.projectId, data?.sessionId);
+    if (historyButton) {
+      historyButton.hidden = !data?.hasOlder;
+      historyButton.disabled = Boolean(data?.loadingHistory);
+      historyButton.textContent = data?.loadingHistory ? t("timeline.loadingOlder", {}, "正在加载更早对话…")
+        : data?.historyError ? t("timeline.retryOlder", {}, "加载失败，点击重试")
+          : t("timeline.loadOlder", {}, "加载更早的对话");
+    }
+    historyNavigation?.update(data);
     if ((focusedAction || focusedImage) && !container.contains(document.activeElement)) {
       const replacement = focusedAction
         ? [...container.querySelectorAll("[data-timeline-action]")].find((node) =>
@@ -853,6 +961,7 @@ export function createTimelineView({ container, welcome, toBottom, store, sessio
         scroller.scrollTop += target - bottom;
       } else scroller.scrollTop = 0;
     } else if (followTail && !searchQuery) scroller.scrollTop = scroller.scrollHeight;
+    else if (anchor?.isConnected) scroller.scrollTop += anchor.getBoundingClientRect().top - anchorTop;
     updateBottomButton();
   }
 
@@ -864,6 +973,8 @@ export function createTimelineView({ container, welcome, toBottom, store, sessio
   scroller.addEventListener("scroll", () => {
     followTail = scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight < 100;
     updateBottomButton();
+    if (!searchQuery && scroller.scrollTop < 100 && pendingState.data?.hasOlder &&
+        !pendingState.data?.loadingHistory && !followTail) void onLoadOlder?.();
   }, { passive: true });
   container.addEventListener("scroll", (event) => {
     const content = event.target;
@@ -902,6 +1013,7 @@ export function createTimelineView({ container, welcome, toBottom, store, sessio
     },
     destroy() {
       unsubscribe(); unsubscribeSession?.(); unsubscribeLocale();
+      historyNavigation?.destroy(); historyButton?.remove();
       if (frame) cancelAnimationFrame(frame);
     },
   });

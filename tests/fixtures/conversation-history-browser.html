@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="zh-CN" data-theme="dark">
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>mdo conversation history probe</title>
+<link rel="stylesheet" href="/app/web/css/app.css">
+<style>
+body { display: grid; grid-template-rows: 40px 1fr; height: 100dvh; margin: 0; }
+.probe-actions { display: flex; gap: 10px; align-items: center; padding: 0 32px; }
+.workspace { grid-column: 1; grid-template-rows: 58px minmax(0, 1fr) 130px; }
+.workspace-header { display: flex; align-items: center; }
+.workspace > .workspace-header { grid-row: 1; }
+.workspace > .conversation { grid-row: 2; }
+.workspace > .probe-composer { grid-row: 3; }
+.probe-composer { margin: 12px auto; width: min(800px, calc(100% - 48px)); border: 1px solid var(--border); border-radius: 16px; padding: 16px; }
+</style>
+<div class="probe-actions"><button id="start" type="button">开始运行</button>
+<button id="finish" type="button">完成运行</button><output id="result">准备</output></div>
+<main class="workspace"><header class="workspace-header">墨斗 / 对话历史</header>
+<section class="conversation"><div id="welcome"></div><ol class="timeline" id="timeline"></ol>
+<button class="to-bottom" id="to-bottom" type="button">回到底部</button></section>
+<div class="probe-composer"><textarea id="prompt" aria-label="描述任务" placeholder="向墨斗描述任务…"></textarea></div></main>
+<div id="toast-region"></div>
+<script type="module">
+import { createTimelineView } from "/app/web/js/features/chat/timeline.js";
+import { createResourceStore } from "/app/web/js/state/store.js";
+import { summarizeConversationEvents } from "/app/web/js/features/chat/conversation-history.js";
+const event = (id, run, kind, fields = {}) => ({ event_id: id, run_id: run, kind,
+  schema_version: 5, agent_depth: 0, time: id * 1000000, agent_turn: 1, ...fields });
+const all = Array.from({ length: 40 }, (_, i) => [
+  event(i * 6 + 1, i + 1, "agent_start", { user_message_sequence: i + 1, text: `第 ${i + 1} 轮：检查文件与实现情况` }),
+  event(i * 6 + 2, i + 1, "model_reasoning_delta", { text: "先核对目录和文件，再检查实现。历史内容始终保留，可以随时展开查看。" }),
+  event(i * 6 + 3, i + 1, "tool_start", { tool_name: "read", tool_call_id: `call-${i}`, text: '{"path":"README.md"}' }),
+  event(i * 6 + 4, i + 1, "tool_done", { tool_name: "read", tool_call_id: `call-${i}`, success: true, text: "检查完成，文件内容和接口一致。" }),
+  event(i * 6 + 5, i + 1, "model_text_delta", { text: `第 ${i + 1} 轮检查已完成。\n\n旧对话不会被新回复挤掉。向上滚动可以继续加载；左侧横线可以预览和跳转。` }),
+  event(i * 6 + 6, i + 1, "agent_done", { success: true }),
+]).flat();
+const store = createResourceStore();
+let events = all.slice(-24), first = 217;
+const state = () => ({ projectId: "qa", sessionId: "history", events,
+  turns: summarizeConversationEvents(all), firstLoadedTurn: first, hasOlder: first > 1 });
+const report = label => { document.querySelector("#result").textContent = `${label}；已加载 ${events.length} 条事件`; };
+createTimelineView({ container: document.querySelector("#timeline"), welcome: document.querySelector("#welcome"),
+  toBottom: document.querySelector("#to-bottom"), store,
+  async onLoadOlder() {
+    const end = first; first = Math.max(1, first - 24);
+    events = [...all.filter(item => item.event_id >= first && item.event_id < end), ...events];
+    store.setData(state()); report("已向前加载");
+  },
+  async onRevealTurn(id) {
+    if (!events.some(item => item.event_id === id)) {
+      events = [...all.filter(item => item.event_id >= id && item.event_id < id + 6), ...events]
+        .sort((a, b) => a.event_id - b.event_id);
+      first = Math.min(first, id); store.setData(state());
+    }
+    report(`已跳转 ${id}`);
+  },
+});
+store.setData(state()); report("准备就绪");
+document.querySelector("#start").addEventListener("click", () => {
+  events = events.filter(item => item.event_id < 240); store.setData(state()); report("运行中");
+});
+document.querySelector("#finish").addEventListener("click", () => {
+  if (!events.some(item => item.event_id === 240)) events.push(all.at(-1));
+  store.setData(state()); report("已完成");
+});
+</script>

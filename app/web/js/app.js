@@ -35,7 +35,8 @@ import { createSessionBackupExport } from "./features/sessions/session-backup-ex
 import { createSessionBackupImport } from "./features/sessions/session-backup-import.js";
 import { createProjectDialog } from "./features/sessions/project-dialog.js";
 import { createDirectoryPicker } from "./features/sessions/directory-picker.js";
-import { timelineStore, selectTimeline, clearTimeline, refreshSelectedTimeline, reloadSelectedTimeline } from "./features/chat/timeline-store.js";
+import { timelineStore, selectTimeline, clearTimeline, refreshSelectedTimeline, reloadSelectedTimeline,
+  loadOlderTimeline, loadOlderConversationIndex, revealConversationTurn } from "./features/chat/timeline-store.js";
 import { todoStore, selectTodo, clearTodo } from "./state/todo.js";
 import { createTimelineView } from "./features/chat/timeline.js";
 import { createQueueGate } from "./features/chat/queue-gate.js";
@@ -473,6 +474,8 @@ export async function boot() {
     container: $("#timeline"), welcome: $("#welcome"),
     toBottom: $("#to-bottom"), store: timelineStore,
     sessionStore: sessionDetailStore,
+    onLoadOlder: loadOlderTimeline, onLoadIndex: loadOlderConversationIndex,
+    onRevealTurn: revealConversationTurn,
     onSearchCount: (count, historyLost) => conversationSearch?.setCount(count, historyLost),
     onFork: async (throughSequence, owner) => {
       const version = routeVersion;

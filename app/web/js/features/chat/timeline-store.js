@@ -1,8 +1,9 @@
 import { liveConnection } from "../../api/live.js";
 import { api, resourceId } from "../../api/client.js";
 import { createResourceStore } from "../../state/store.js";
+import { mergeConversationTurns, summarizeConversationEvents } from "./conversation-history.js";
+import { t } from "../../i18n.js";
 
-const RETAINED_EVENTS = 640;
 const MAX_PAGES_PER_REFRESH = 4;
 const FALLBACK_POLL_MS = 2500;
 
@@ -13,12 +14,29 @@ export const timelineStore = createResourceStore({
   latestEventId: 0,
   historyLost: false,
   events: [],
+  turns: [],
 });
 
 let generation = 0;
 let refreshVersion = 0;
 let pollTimer = 0;
 let pollDelay = FALLBACK_POLL_MS;
+let historyRequest = null;
+let indexRequest = null;
+let selectionAbort = null;
+
+function endpoint(data) {
+  return `/projects/${data.projectId}/sessions/${data.sessionId}`;
+}
+
+function updateTurns(data, events, additions = []) {
+  const ranges = events.map(historyRemovalRange).filter(Boolean);
+  const retained = (data.turns ?? []).filter(turn => ranges.every(({ first, end }) =>
+    turn.first_event_id < first || turn.first_event_id >= end));
+  return mergeConversationTurns(mergeConversationTurns(retained, additions),
+    summarizeConversationEvents(events)).filter(turn => ranges.every(({ first, end }) =>
+    turn.first_event_id < first || turn.first_event_id >= end));
+}
 
 export function historyRemovalRange(event) {
   if (event.kind !== "history_truncated") return null;
@@ -29,7 +47,9 @@ export function historyRemovalRange(event) {
 }
 
 export function mergeTimelineEvents(retained, additions) {
-  const events = retained.concat(additions);
+  const unique = new Map(retained.map(event => [event.event_id, event]));
+  for (const event of additions) unique.set(event.event_id, event);
+  const events = [...unique.values()].sort((a, b) => a.event_id - b.event_id);
   const ranges = events.map(historyRemovalRange).filter(Boolean);
   // Durable markers identify discarded UI IDs, not reusable model sequences.
   // Apply them to cached events as well as records in the current replay page.
@@ -51,7 +71,7 @@ function schedulePoll(token) {
 
 async function refreshTimeline(token = generation) {
   const current = timelineStore.get().data;
-  if (!current?.sessionId || token !== generation) return;
+  if (!current?.sessionId || current.initializing || token !== generation) return;
   const request = ++refreshVersion;
   const isCurrent = () => token === generation && request === refreshVersion;
   let cursor = current.cursor;
@@ -71,13 +91,9 @@ async function refreshTimeline(token = generation) {
       if (replay.history_lost) {
         historyLost = true;
       }
-      const merged = mergeTimelineEvents(replay.history_lost ? [] : events, additions);
+      const merged = mergeTimelineEvents(events, additions);
       events = merged.events;
       if (merged.cleared) historyLost = false;
-      if (events.length > RETAINED_EVENTS) {
-        events = events.slice(-RETAINED_EVENTS);
-        historyLost = true;
-      }
       latestEventId = Number(replay.latest_event_id ?? latestEventId);
       const next = Number(replay.next_cursor ?? cursor);
       changed ||= additions.length > 0 || next !== cursor || replay.history_lost;
@@ -85,7 +101,10 @@ async function refreshTimeline(token = generation) {
       if (additions.length < 32 || cursor >= latestEventId) break;
     }
     if (changed) {
-      timelineStore.setData({ ...current, cursor, latestEventId, historyLost, events });
+      const latest = timelineStore.get().data;
+      events = mergeTimelineEvents(latest.events, events).events;
+      timelineStore.setData({ ...latest, cursor, latestEventId, historyLost, events,
+        turns: updateTurns(latest, events) });
       pollDelay = FALLBACK_POLL_MS;
     } else {
       pollDelay = Math.min(Math.round(pollDelay * 1.45), 8000);
@@ -106,11 +125,17 @@ export function selectTimeline(projectId, sessionId) {
   const session = resourceId(sessionId, "session");
   const current = timelineStore.get().data;
   if (current?.projectId === project && current?.sessionId === session) return;
-  void reloadTimeline(project, session);
+  return reloadTimeline(project, session);
 }
 
-function reloadTimeline(projectId, sessionId) {
+async function reloadTimeline(projectId, sessionId) {
   generation += 1;
+  const token = generation;
+  selectionAbort?.abort();
+  selectionAbort = new AbortController();
+  historyRequest = indexRequest = null;
+  liveConnection.select("", "");
+  stopTimer();
   pollDelay = FALLBACK_POLL_MS;
   timelineStore.setData({
     projectId,
@@ -119,9 +144,118 @@ function reloadTimeline(projectId, sessionId) {
     latestEventId: 0,
     historyLost: false,
     events: [],
+    turns: [],
+    initializing: true,
+    hasOlder: false,
   });
-  subscribeLiveTimeline();
-  return liveConnection.isConnected() ? Promise.resolve() : refreshTimeline(generation);
+  try {
+    const current = timelineStore.get().data;
+    const page = (await api.get(`${endpoint(current)}/turns?limit=64`,
+      { signal: selectionAbort.signal })).data;
+    if (token !== generation) return;
+    const selected = page.items.slice(-4);
+    const start = selected[0]?.first_event_id ?? Math.max(1, page.latest_event_id);
+    const events = await readHistoryRange(current, start, page.latest_event_id, token);
+    if (token !== generation) return;
+    timelineStore.setData({ ...current, initializing: false, cursor: page.latest_event_id,
+      latestEventId: page.latest_event_id, events, turns: page.items,
+      firstLoadedTurn: selected[0]?.first_event_id ?? 0,
+      hasOlder: Boolean(page.has_more || page.items.length > selected.length),
+      indexHasMore: page.has_more, indexBefore: page.next_before,
+      historyLost: Boolean(page.history_lost) });
+    subscribeLiveTimeline();
+    if (!liveConnection.isConnected()) await refreshTimeline(token);
+  } catch (error) {
+    if (token !== generation || error.name === "AbortError") return;
+    timelineStore.setError(error);
+  }
+}
+
+// Historical pages never advance the live cursor. New pushes may arrive while
+// older pages load; merge into the current state at commit, not its old copy.
+async function readHistoryRange(data, first, end, token) {
+  let cursor = first - 1;
+  const events = [];
+  while (cursor < end && token === generation) {
+    const page = (await api.get(`${endpoint(data)}/events?after=${cursor}&limit=32`,
+      { signal: selectionAbort?.signal })).data;
+    if (token !== generation) return [];
+    const next = Number(page.next_cursor);
+    if (!Number.isSafeInteger(next) || next <= cursor)
+      throw new Error(t("messageAction.historyChanged", {}, "消息已不在当前会话历史中，请刷新会话"));
+    events.push(...(page.items ?? []).filter(event => event.event_id >= first && event.event_id <= end));
+    cursor = next;
+  }
+  return events;
+}
+
+export function loadOlderTimeline() {
+  const data = timelineStore.get().data;
+  if (!data?.sessionId || !data.hasOlder || data.initializing) return Promise.resolve();
+  if (historyRequest) return historyRequest;
+  const token = generation;
+  timelineStore.setData({ ...data, loadingHistory: true, historyError: null });
+  const request = (async () => {
+    try {
+      const page = (await api.get(`${endpoint(data)}/turns?before=${data.firstLoadedTurn}&limit=4`,
+        { signal: selectionAbort?.signal })).data;
+      if (token !== generation) return;
+      const events = page.items.length ? await readHistoryRange(data,
+        page.items[0].first_event_id, data.firstLoadedTurn - 1, token) : [];
+      if (token !== generation) return;
+      const current = timelineStore.get().data;
+      const merged = mergeTimelineEvents(current.events, events).events;
+      const turns = updateTurns(current, merged, page.items);
+      const valid = page.items.filter(item => turns.some(turn => turn.first_event_id === item.first_event_id));
+      timelineStore.setData({ ...current, events: merged, turns,
+        firstLoadedTurn: valid[0]?.first_event_id ?? current.firstLoadedTurn,
+        hasOlder: page.items.length && !valid.length ? current.hasOlder : Boolean(page.has_more),
+        loadingHistory: false });
+    } catch (error) {
+      if (token === generation && error.name !== "AbortError")
+        timelineStore.setData({ ...timelineStore.get().data, loadingHistory: false, historyError: error });
+    } finally { if (historyRequest === request) historyRequest = null; }
+  })();
+  historyRequest = request;
+  return request;
+}
+
+export function loadOlderConversationIndex() {
+  const data = timelineStore.get().data;
+  if (!data?.indexHasMore || indexRequest) return indexRequest ?? Promise.resolve();
+  const token = generation;
+  const request = (async () => {
+    try {
+      const page = (await api.get(`${endpoint(data)}/turns?before=${data.indexBefore}&limit=64`,
+        { signal: selectionAbort?.signal })).data;
+      if (token !== generation) return;
+      const current = timelineStore.get().data;
+      const turns = updateTurns(current, current.events, page.items);
+      const stale = page.items.length && !page.items.some(item => turns.some(turn =>
+        turn.first_event_id === item.first_event_id));
+      timelineStore.setData({ ...current, turns,
+        indexHasMore: stale ? current.indexHasMore : page.has_more,
+        indexBefore: stale ? current.indexBefore : page.next_before });
+    } finally { if (indexRequest === request) indexRequest = null; }
+  })();
+  indexRequest = request;
+  return request;
+}
+
+export async function revealConversationTurn(id) {
+  const data = timelineStore.get().data;
+  const turn = data?.turns?.find(item => item.first_event_id === id);
+  if (!turn) return;
+  if (data.events.some(event => event.event_id === id)) return;
+  const token = generation;
+  const events = await readHistoryRange(data, id, turn.end_event_id, token);
+  if (token !== generation) return;
+  const current = timelineStore.get().data;
+  const merged = mergeTimelineEvents(current.events, events).events;
+  const first = Math.min(current.firstLoadedTurn || id, id);
+  timelineStore.setData({ ...current, events: merged, turns: updateTurns(current, merged),
+    firstLoadedTurn: first, hasOlder: Boolean(current.indexHasMore ||
+      current.turns.some(item => item.first_event_id < first)) });
 }
 
 export function reloadSelectedTimeline() {
@@ -131,6 +265,7 @@ export function reloadSelectedTimeline() {
 }
 
 export function refreshSelectedTimeline() {
+  if (timelineStore.get().data?.initializing) return Promise.resolve();
   if (liveConnection.isConnected()) { subscribeLiveTimeline(); return Promise.resolve(); }
   pollDelay = FALLBACK_POLL_MS;
   return refreshTimeline(generation);
@@ -140,8 +275,10 @@ export function clearTimeline() {
   generation += 1;
   refreshVersion += 1;
   stopTimer();
+  selectionAbort?.abort();
+  historyRequest = indexRequest = null;
   liveConnection.select("", "");
-  timelineStore.setData({ projectId: "", sessionId: "", cursor: 0, latestEventId: 0, historyLost: false, events: [] });
+  timelineStore.setData({ projectId: "", sessionId: "", cursor: 0, latestEventId: 0, historyLost: false, events: [], turns: [] });
 }
 
 function subscribeLiveTimeline() {
@@ -156,7 +293,7 @@ function subscribeLiveTimeline() {
 // A newer push invalidates in-flight fallback reads, preventing stale overwrites.
 export function applyLiveTimeline(replay) {
   const current = timelineStore.get().data;
-  if (!current?.sessionId || current.projectId !== replay.project_id || current.sessionId !== replay.session_id ||
+  if (!current?.sessionId || current.initializing || current.projectId !== replay.project_id || current.sessionId !== replay.session_id ||
       !Array.isArray(replay.items)) return;
   const next = Number(replay.next_cursor);
   const latest = Number(replay.latest_event_id);
@@ -164,13 +301,15 @@ export function applyLiveTimeline(replay) {
       !Number.isSafeInteger(latest) || latest < next) return;
   const additions = replay.items.filter((item) => Number.isSafeInteger(Number(item.event_id)) &&
     Number(item.event_id) > current.cursor && Number(item.event_id) <= next);
-  const merged = mergeTimelineEvents(replay.history_lost ? [] : current.events, additions);
+  const merged = mergeTimelineEvents(current.events, additions);
   let historyLost = merged.cleared ? false : current.historyLost || Boolean(replay.history_lost);
-  let events = merged.events;
-  if (events.length > RETAINED_EVENTS) { events = events.slice(-RETAINED_EVENTS); historyLost = true; }
+  const events = merged.events;
   refreshVersion += 1;
   stopTimer();
-  timelineStore.setData({ ...current, cursor: next, latestEventId: latest, historyLost, events });
+  const turns = updateTurns(current, events);
+  timelineStore.setData({ ...current, cursor: next, latestEventId: latest, historyLost, events, turns,
+    ...(merged.cleared ? { hasOlder: false, indexHasMore: false, indexBefore: 0,
+      firstLoadedTurn: turns[0]?.first_event_id ?? 0 } : {}) });
 }
 
 liveConnection.subscribe((event) => {

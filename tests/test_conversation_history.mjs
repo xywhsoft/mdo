@@ -1,0 +1,156 @@
+import assert from "node:assert/strict";
+import test, { after, beforeEach } from "node:test";
+import { conversationGroups, summarizeConversationEvents } from "../app/web/js/features/chat/conversation-history.js";
+import { eventsToTimeline } from "../app/web/js/features/chat/timeline.js";
+
+const previous = { window: globalThis.window, document: globalThis.document, fetch: globalThis.fetch };
+globalThis.window = { setTimeout: () => 1, clearTimeout() {} };
+globalThis.document = Object.assign(new EventTarget(), { hidden: false });
+const { timelineStore, selectTimeline, loadOlderTimeline, revealConversationTurn,
+  loadOlderConversationIndex, applyLiveTimeline, clearTimeline } = await import("../app/web/js/features/chat/timeline-store.js");
+const reply = data => Response.json({ ok: true, data });
+const e = (id, kind, fields = {}) => ({ event_id: id, kind, run_id: 1,
+  schema_version: 5, agent_depth: 0, time: id * 1000000, ...fields });
+const records = Array.from({ length: 12 }, (_, i) => [
+  e(i * 4 + 1, "agent_start", { run_id: i + 1, user_message_sequence: i + 1, text: `Question ${i}` }),
+  e(i * 4 + 2, "model_reasoning_delta", { run_id: i + 1, text: `Thought ${i}` }),
+  e(i * 4 + 3, "model_text_delta", { run_id: i + 1, text: `Answer ${i}` }),
+  e(i * 4 + 4, "agent_done", { run_id: i + 1, success: true }),
+]).flat();
+const summaries = summarizeConversationEvents(records);
+const calls = [];
+function respond(url) {
+  const parsed = new URL(url, "http://fixture");
+  const before = Number(parsed.searchParams.get("before"));
+  const limit = Number(parsed.searchParams.get("limit"));
+  if (parsed.pathname.endsWith("/turns")) {
+    const all = summaries.filter(turn => !before || turn.first_event_id < before);
+    const items = all.slice(-limit);
+    return reply({ items, has_more: all.length > items.length,
+      next_before: items[0]?.first_event_id ?? before, latest_event_id: 48 });
+  }
+  const after = Number(parsed.searchParams.get("after"));
+  const items = records.filter(event => event.event_id > after).slice(0, limit);
+  return reply({ items, next_cursor: items.at(-1)?.event_id ?? after, latest_event_id: 48 });
+}
+beforeEach(() => {
+  clearTimeline(); calls.length = 0;
+  globalThis.fetch = async url => { calls.push(url); return respond(url); };
+});
+after(() => { clearTimeline(); Object.assign(globalThis, previous); });
+
+test("opening a session loads only the last four turns, preserving the full navigation index", async () => {
+  await selectTimeline("qa", "a");
+  const data = timelineStore.get().data;
+  assert.equal(data.cursor, 48);
+  assert.equal(data.firstLoadedTurn, 33);
+  assert.equal(data.events.length, 16);
+  assert.equal(data.turns.length, 12);
+  assert.equal(data.hasOlder, true);
+  assert.ok(calls.filter(url => url.includes("/events")).length <= 2);
+  assert.ok(!calls.some(url => url.includes("after=0")));
+  assert.ok(calls.at(-1).includes("after=48") || calls.some(url => url.includes("after=32")));
+});
+
+test("prepending history cannot rewind the live cursor or replace concurrently arriving messages", async () => {
+  await selectTimeline("qa", "a");
+  let resolve;
+  globalThis.fetch = url => url.includes("/events") ? new Promise(done => { resolve = () => done(respond(url)); })
+    : Promise.resolve(respond(url));
+  const older = loadOlderTimeline();
+  await new Promise(done => setImmediate(done));
+  applyLiveTimeline({ project_id: "qa", session_id: "a", next_cursor: 50, latest_event_id: 50,
+    items: [e(49, "agent_start", { run_id: 20, user_message_sequence: 20, text: "New question" }),
+      e(50, "model_text_delta", { run_id: 20, text: "New answer" })] });
+  resolve(); await older;
+  const data = timelineStore.get().data;
+  assert.equal(data.cursor, 50);
+  assert.equal(data.firstLoadedTurn, 17);
+  assert.equal(data.events.at(-1).text, "New answer");
+  assert.equal(data.events[0].event_id, 17);
+});
+
+test("jumping loads just the selected range and leaves live subscription history intact", async () => {
+  await selectTimeline("qa", "a"); calls.length = 0;
+  await revealConversationTurn(1);
+  const data = timelineStore.get().data;
+  assert.equal(data.cursor, 48);
+  assert.equal(data.events.length, 20);
+  assert.equal(data.events[0].text, "Question 0");
+  assert.equal(data.events[4].event_id, 33);
+  assert.equal(calls.length, 1);
+  assert.ok(calls[0].includes("after=0&limit=32"));
+});
+
+test("history failure preserves the conversation and permits an explicit retry", async () => {
+  await selectTimeline("qa", "a");
+  globalThis.fetch = async () => { throw new Error("offline"); };
+  await loadOlderTimeline();
+  assert.equal(timelineStore.get().data.loadingHistory, false);
+  assert.equal(timelineStore.get().data.events.length, 16);
+  assert.ok(timelineStore.get().data.historyError);
+  globalThis.fetch = async url => respond(url);
+  await loadOlderTimeline();
+  assert.equal(timelineStore.get().data.events.length, 32);
+});
+
+test("earlier navigation summaries load independently without downloading their conversation text", async () => {
+  await selectTimeline("qa", "a");
+  const current = timelineStore.get().data;
+  timelineStore.setData({ ...current, turns: summaries.slice(4), indexHasMore: true, indexBefore: 17 });
+  calls.length = 0;
+  await loadOlderConversationIndex();
+  assert.equal(timelineStore.get().data.turns.length, 12);
+  assert.equal(timelineStore.get().data.events.length, 16);
+  assert.equal(timelineStore.get().data.cursor, 48);
+  assert.equal(calls.length, 1);
+  assert.ok(calls[0].endsWith("/turns?before=17&limit=64"));
+});
+
+test("switching sessions rejects a late historical response even when transport ignores abort", async () => {
+  await selectTimeline("qa", "a");
+  let finish;
+  globalThis.fetch = url => new Promise(resolve => { finish = () => resolve(respond(url)); });
+  const older = loadOlderTimeline();
+  clearTimeline(); finish(); await older;
+  assert.equal(timelineStore.get().data.sessionId, "");
+  assert.deepEqual(timelineStore.get().data.events, []);
+});
+
+test("a clear during historical loading removes obsolete records and summaries", async () => {
+  await selectTimeline("qa", "a");
+  let finish;
+  globalThis.fetch = url => url.includes("/events") ? new Promise(resolve => { finish = () => resolve(respond(url)); })
+    : Promise.resolve(respond(url));
+  const older = loadOlderTimeline(); await new Promise(done => setImmediate(done));
+  applyLiveTimeline({ project_id: "qa", session_id: "a", next_cursor: 49, latest_event_id: 49,
+    items: [e(49, "history_truncated", { source_event_id: 1 })] });
+  finish(); await older;
+  assert.deepEqual(timelineStore.get().data.events.map(item => item.event_id), [49]);
+  assert.deepEqual(timelineStore.get().data.turns, []);
+  assert.equal(timelineStore.get().data.hasOlder, false);
+});
+
+test("terminal grouping keeps the final reply separate and preserves reasoning, tools and intermediate answers", () => {
+  const events = [e(1, "agent_start", { user_message_sequence: 1, text: "Question" }),
+    e(2, "model_reasoning_delta", { agent_turn: 1, text: "Thought" }),
+    e(3, "model_text_delta", { agent_turn: 1, text: "Let me inspect" }),
+    e(4, "model_done", { agent_turn: 1, success: true }),
+    e(5, "tool_start", { tool_call_id: "read", tool_name: "read", text: "file.txt" }),
+    e(6, "tool_done", { tool_call_id: "read", success: true, text: "Data" }),
+    e(7, "model_text_delta", { agent_turn: 2, text: "Final answer" }),
+    e(8, "agent_done", { success: true })];
+  const [group] = conversationGroups(eventsToTimeline(events));
+  assert.equal(group.state, "done");
+  assert.equal(group.answer.text, "Final answer");
+  assert.deepEqual(group.process.map(item => item.kind), ["reasoning", "assistant", "tool"]);
+  assert.equal(group.process[0].text, "Thought");
+  assert.equal(group.process[2].outputText, "Data");
+});
+
+test("model completion alone cannot collapse a turn still awaiting a tool or further model call", () => {
+  const events = [e(1, "agent_start", { user_message_sequence: 1 }),
+    e(2, "model_text_delta", { text: "Planning" }), e(3, "model_done", { success: true }),
+    e(4, "tool_start", { tool_call_id: "work" })];
+  assert.equal(conversationGroups(eventsToTimeline(events))[0].state, "running");
+});

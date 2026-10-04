@@ -90,7 +90,9 @@ class FrontendContractTests(unittest.TestCase):
         view = self.scripts["js/features/chat/timeline.js"]
         self.assertIn("after=${cursor}&limit=32", replay)
         self.assertIn("MAX_PAGES_PER_REFRESH = 4", replay)
-        self.assertIn("RETAINED_EVENTS = 640", replay)
+        self.assertNotIn("RETAINED_EVENTS", replay)
+        self.assertIn("loadOlderTimeline", replay)
+        self.assertIn("readHistoryRange", replay)
         self.assertIn("history_lost", replay)
         self.assertIn("requestAnimationFrame", view)
         for event_kind in (
