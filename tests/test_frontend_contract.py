@@ -227,7 +227,7 @@ class FrontendContractTests(unittest.TestCase):
         self.assertIn('backup_download_checksum', backup)
         self.assertIn('id="session-sequence-field"', self.index)
         self.assertIn('if (action === "rename")', self.scripts["js/app.js"])
-        self.assertIn("max-height: min(320px, 70vh)", self.css)
+        self.assertIn("max-height: min(480px, 70vh)", self.css)
 
     def test_task_dialog_incrementally_replays_output_and_artifacts(self) -> None:
         tasks = self.scripts["js/state/tasks.js"]

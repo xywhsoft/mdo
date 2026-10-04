@@ -98,8 +98,8 @@ export function createSessionList({ container, count, filter, searchInput, store
     const margin = 8;
     const below = Math.max(0, window.innerHeight - anchor.bottom - margin);
     const above = Math.max(0, anchor.top - margin);
-    const placeAbove = below < Math.min(openMenuNode.scrollHeight, 320) && above > below;
-    openMenuNode.style.maxHeight = `${Math.max(40, Math.min(320,
+    const placeAbove = below < Math.min(openMenuNode.scrollHeight, 480) && above > below;
+    openMenuNode.style.maxHeight = `${Math.max(40, Math.min(480,
       placeAbove ? above : below))}px`;
     const box = openMenuNode.getBoundingClientRect();
     openMenuNode.style.top = `${placeAbove

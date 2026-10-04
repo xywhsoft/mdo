@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="zh-CN">
+<html lang="zh-CN" data-theme="dark">
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>mdo session menu viewport probe</title>
@@ -104,6 +104,9 @@ try {
   const rect = menu.getBoundingClientRect();
   const initialStyle = menu.getAttribute("style");
   const initialAnchor = more.getBoundingClientRect().toJSON();
+  const availableRoom = Math.max(initialAnchor.top - 8, innerHeight - initialAnchor.bottom - 8);
+  const noUnnecessaryScroll = availableRoom < menu.scrollHeight + 2 ||
+    menu.scrollHeight === menu.clientHeight;
   const withinViewport = rect.top >= 0 && rect.left >= 0 &&
     rect.bottom <= innerHeight && rect.right <= innerWidth;
   const outsideClippingParent = !document.querySelector(".sidebar").contains(menu);
@@ -248,7 +251,7 @@ try {
   const treeMoreFocus = !groupBody().querySelector(".session-show-more") &&
     groupBody().querySelectorAll(".session-item").length === 6 &&
     document.activeElement.dataset.sessionKey === "alpha/tree0";
-  const passed = withinViewport && outsideClippingParent && firstFocused &&
+  const passed = withinViewport && noUnnecessaryScroll && outsideClippingParent && firstFocused &&
     menuReadingStable && activityRunningShown && indicatorsKeepSelection &&
     activityStoppingShown && activityReadErrorKept && activityFinishedCleared && activityMenuStable &&
     sidebarComposingKept && sidebarCandidateKept && escapeRestored &&
@@ -260,7 +263,7 @@ try {
     headerHomeFocused && headerHomeVisible && titleSelectionStable && timestampUpdated &&
     treeWindowLimited && treeCollapsed && treeSearchReveals && treeSearchRestores && treeMoreFocus;
   output.dataset.passed = String(passed);
-  output.textContent = JSON.stringify({ passed, withinViewport, outsideClippingParent,
+  output.textContent = JSON.stringify({ passed, withinViewport, noUnnecessaryScroll, outsideClippingParent,
     titleSelectionStable, titleNodeStable, nodeAfterRefreshing, nodeAfterReady,
     selectedTitleText, timestampUpdated,
     firstFocused, menuReadingStable, sidebarComposingKept, sidebarCandidateKept, escapeRestored,
