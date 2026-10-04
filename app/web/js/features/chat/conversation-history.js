@@ -25,7 +25,8 @@ export function summarizeConversationEvents(events) {
     current.end_event_id = event.event_id;
     if (event.agent_depth > 0) continue;
     if (event.kind === "model_text_delta") {
-      if (event.agent_turn !== modelTurn) { current.answer = ""; modelTurn = event.agent_turn; }
+      const call = `${event.run_id}:${event.agent_turn}`;
+      if (call !== modelTurn) { current.answer = ""; modelTurn = call; }
       current.answer = (current.answer + (event.text ?? "")).slice(0, 200);
     } else if (event.kind === "agent_done" || event.kind === "error") {
       current.state = event.kind === "error" ? "failed" : event.success ? "done" : "cancelled";

@@ -60,7 +60,7 @@ xvalue* MdoSessionConversationTurns(const char* Project, const char* Session,
     xvalue* Result = NULL;
     xvalue* Items = NULL;
     xstrview Record;
-    uint64 End, Latest = 0u, FinalModelTurn = 0u;
+    uint64 End, Latest = 0u, FinalModelTurn = 0u, FinalRun = 0u;
     size_t Count = 0u, i;
     bool HasMore = false, Lost = false, HasAnswer = false;
     xworkErrorInit(Error);
@@ -115,9 +115,10 @@ xvalue* MdoSessionConversationTurns(const char* Project, const char* Session,
                 if ( !HasAnswer ) {
                     Turn.Answer[0] = '\0';
                     FinalModelTurn = Event->AgentTurn;
+                    FinalRun = Event->RunId;
                     HasAnswer = true;
                 }
-                if ( Event->AgentTurn == FinalModelTurn )
+                if ( Event->AgentTurn == FinalModelTurn && Event->RunId == FinalRun )
                     MdoConversationPrepend(Turn.Answer, Event->Text);
             } else if ( Event->Kind == XWORK_EVENT_AGENT_START &&
                         (Event->UserMessageSequence > 0u || Event->SchemaVersion < 3u) ) {

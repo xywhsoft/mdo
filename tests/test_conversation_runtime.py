@@ -20,13 +20,16 @@ from test_packed_home_lease import free_port, request, stop, wait_bootstrap
 ROOT = Path(__file__).resolve().parents[1]
 
 
-def probe(host: Path):
+def probe(host: Path | None, packed: Path | None = None):
     model = ThreadingHTTPServer(("127.0.0.1", 0), Model)
     threading.Thread(target=model.serve_forever, daemon=True).start()
     process = None
     with tempfile.TemporaryDirectory(prefix="conversation-history-", dir=ROOT / ".build") as raw:
         base = Path(raw); site = base / "site"; home = base / "home"
-        shutil.copytree(ROOT / "app", site)
+        if packed:
+            site.mkdir(); shutil.copy2(packed, site / packed.name)
+        else:
+            shutil.copytree(ROOT / "app", site)
         port = free_port()
         (site / "xs.json").write_text(json.dumps({"services": [{"class": "http", "name": "mdo",
             "ip": "127.0.0.1", "port": port, "enabled": True,
@@ -40,7 +43,9 @@ def probe(host: Path):
 
         def launch():
             with (site / "native.log").open("ab") as log:
-                value = subprocess.Popen([str(host), str(site / "xs.json"), "--", "--home", str(home)],
+                command = [str(site / packed.name), "--", "--home", str(home)] if packed else [
+                    str(host), str(site / "xs.json"), "--", "--home", str(home)]
+                value = subprocess.Popen(command,
                     cwd=site, env=env, stdout=log, stderr=subprocess.STDOUT,
                     creationflags=subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0)
             wait_bootstrap(value, port, site / "native.log")
@@ -105,6 +110,20 @@ def probe(host: Path):
             for query in ("limit=65", "limit=0", "before=-1", "limit=4&limit=4", "before=1&"):
                 status, _ = request(port, "GET", path + "/turns?" + query)
                 assert status == 400, query
+            # A recovery run reuses model turn 1 but has no new user input.
+            # It belongs to the last question; do not prepend the older run's
+            # text to its final-answer summary or invent a navigation entry.
+            stop(process); process = None
+            with journal.open("ab") as file:
+                for offset, template in enumerate([starts, delta, done]):
+                    event = {**template, "event_id": 421 + offset, "run_id": 900,
+                        "agent_depth": 0, "agent_turn": 1, "user_message_sequence": 0,
+                        "text": "Continuation" if offset == 1 else ""}
+                    file.write(json.dumps(event, separators=(",", ":")).encode() + b"\n")
+            process = launch()
+            _, doc = request(port, "GET", path + "/turns?limit=1")
+            assert doc["data"]["items"][0]["question"] == "Question 69"
+            assert doc["data"]["items"][0]["answer"] == "Continuation"
             run(path)
             assert journal.stat().st_size > original_size
             with journal.open("rb") as file: assert file.readline() == records[0], "append discarded old history"
@@ -120,5 +139,7 @@ def probe(host: Path):
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(); parser.add_argument("--host", type=Path, required=True)
-    probe(parser.parse_args().host.resolve())
+    parser = argparse.ArgumentParser(); source = parser.add_mutually_exclusive_group(required=True)
+    source.add_argument("--host", type=Path); source.add_argument("--packed", type=Path)
+    args = parser.parse_args()
+    probe(args.host.resolve() if args.host else None, args.packed.resolve() if args.packed else None)

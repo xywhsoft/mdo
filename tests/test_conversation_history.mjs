@@ -154,3 +154,15 @@ test("model completion alone cannot collapse a turn still awaiting a tool or fur
     e(4, "tool_start", { tool_call_id: "work" })];
   assert.equal(conversationGroups(eventsToTimeline(events))[0].state, "running");
 });
+
+test("resuming without a new user input summarizes only the last run's answer even if model turn IDs repeat", () => {
+  const events = [e(1, "agent_start", { user_message_sequence: 1, text: "Original question" }),
+    e(2, "model_text_delta", { agent_turn: 1, text: "Earlier partial answer" }),
+    e(3, "agent_done", { success: false }),
+    e(4, "agent_start", { run_id: 2, user_message_sequence: 0 }),
+    e(5, "model_text_delta", { run_id: 2, agent_turn: 1, text: "Continuation" }),
+    e(6, "agent_done", { run_id: 2, success: true })];
+  assert.equal(summarizeConversationEvents(events).length, 1);
+  assert.equal(summarizeConversationEvents(events)[0].answer, "Continuation");
+  assert.equal(conversationGroups(eventsToTimeline(events))[0].answer.text, "Continuation");
+});

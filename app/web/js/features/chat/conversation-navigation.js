@@ -20,9 +20,14 @@ export function createConversationNavigation({ scroller, container, onReveal, on
   let frame = 0;
   let hideTimer = 0;
   let selected = 0;
+  let previewFor = 0;
+  const rows = new Map();
+  const summaries = new Map();
 
-  function hide() { preview.hidden = true; }
+  function hide() { preview.hidden = true; previewFor = 0; }
   function show(button, turn) {
+    if (!turn) return;
+    previewFor = turn.first_event_id;
     window.clearTimeout(hideTimer);
     preview.replaceChildren(element("strong", { text: turn.question ||
       t("timeline.emptyPrompt", {}, "附件任务") }), element("p", {
@@ -36,7 +41,7 @@ export function createConversationNavigation({ scroller, container, onReveal, on
   function delayHide() { hideTimer = window.setTimeout(hide, 160); }
 
   async function jump(button, turn) {
-    if (button.disabled) return;
+    if (button.disabled || !turn) return;
     selected = turn.first_event_id;
     button.disabled = true;
     rail.setAttribute("aria-busy", "true");
@@ -72,23 +77,35 @@ export function createConversationNavigation({ scroller, container, onReveal, on
       const focused = marks.contains(document.activeElement) ? document.activeElement.dataset.turnId : "";
       const scroll = marks.scrollTop;
       const oldHeight = marks.scrollHeight;
-      marks.replaceChildren();
+      const retained = new Set();
+      let cursor = marks.firstChild;
       for (const turn of data?.turns ?? []) {
-        const button = element("button", { className: "conversation-history-mark", attrs: {
-          type: "button", "data-turn-id": turn.first_event_id,
-          "aria-label": (turn.question || t("timeline.emptyPrompt", {}, "附件任务")).slice(0, 200) } },
-        [element("span", { attrs: { "aria-hidden": "true" } })]);
-        button.addEventListener("pointerenter", () => show(button, turn));
-        button.addEventListener("pointerleave", delayHide);
-        button.addEventListener("focus", () => show(button, turn));
-        button.addEventListener("blur", delayHide);
-        button.addEventListener("click", () => { hide(); void jump(button, turn); });
-        marks.append(button);
+        const id = turn.first_event_id;
+        retained.add(id);
+        summaries.set(id, turn);
+        let button = rows.get(id);
+        if (!button) {
+          button = element("button", { className: "conversation-history-mark", attrs: {
+            type: "button", "data-turn-id": id } },
+          [element("span", { attrs: { "aria-hidden": "true" } })]);
+          button.addEventListener("pointerenter", () => show(button, summaries.get(id)));
+          button.addEventListener("pointerleave", delayHide);
+          button.addEventListener("focus", () => show(button, summaries.get(id)));
+          button.addEventListener("blur", delayHide);
+          button.addEventListener("click", () => { hide(); void jump(button, summaries.get(id)); });
+          rows.set(id, button);
+        }
+        button.setAttribute("aria-label", (turn.question || t("timeline.emptyPrompt", {}, "附件任务")).slice(0, 200));
+        if (button !== cursor) marks.insertBefore(button, cursor);
+        cursor = button.nextSibling;
       }
+      while (cursor) { const next = cursor.nextSibling; cursor.remove(); cursor = next; }
+      for (const id of rows.keys()) if (!retained.has(id)) { rows.delete(id); summaries.delete(id); }
       marks.scrollTop = signature ? scroll + Math.max(0, marks.scrollHeight - oldHeight) : marks.scrollHeight;
       if (focused) marks.querySelector(`[data-turn-id="${focused}"]`)?.focus({ preventScroll: true });
       signature = key;
-      hide();
+      if (previewFor && summaries.has(previewFor)) show(rows.get(previewFor), summaries.get(previewFor));
+      else hide();
     }
     schedule();
   }
@@ -109,7 +126,11 @@ export function createConversationNavigation({ scroller, container, onReveal, on
   window.addEventListener("resize", schedule);
   const observer = typeof ResizeObserver === "function" ? new ResizeObserver(schedule) : null;
   observer?.observe(scroller);
-  const locale = subscribeLocale(() => { signature = ""; update(data); });
+  const locale = subscribeLocale(() => {
+    rail.setAttribute("aria-label", t("timeline.historyNavigation", {}, "对话历史导航"));
+    older.setAttribute("aria-label", t("timeline.olderSummaries", {}, "更早的对话摘要"));
+    signature = ""; update(data);
+  });
   return Object.freeze({ update, destroy() {
     locale(); observer?.disconnect(); rail.remove(); window.clearTimeout(hideTimer);
     scroller.removeEventListener("scroll", schedule); window.removeEventListener("resize", schedule);
