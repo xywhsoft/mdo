@@ -3,6 +3,7 @@
 
 #include "../../include/mdo/runs.h"
 #include "../../include/mdo/attachments.h"
+#include "../../include/mdo/update.h"
 
 #define MDO_RUN_POLL_DEFAULT 50u
 #define MDO_RUN_POLL_MIN 25u
@@ -303,6 +304,10 @@ bool MdoRunManagerPump(size_t* Completed, xwork_error* Error)
         xwork_run_result Result;
         xwork_error WaitError;
         xwork_result WaitResult;
+        if ( !Entry->Info.Terminal && MdoUpdateBlocked() ) {
+            Entry->Info.CancelRequested = true;
+            (void)xrtCancelRequest(Entry->Cancel);
+        }
         if ( Entry->Starting || Entry->Run == NULL || Entry->Info.Terminal )
             continue;
         memset(&AgentInfo, 0, sizeof(AgentInfo));
@@ -529,6 +534,10 @@ bool MdoRunStartWithOutcome(const MdoRunStartOptions* Options,
     uint64 ImageRunId = 0u;
     if ( MayHaveExecuted != NULL ) *MayHaveExecuted = false;
     xworkErrorInit(Error);
+    if ( MdoUpdateBlocked() || MdoUpdateInstalling() ) {
+        MdoRunsError(Error, XWORK_ERROR_CONTEXT, "application update required before starting work");
+        return false;
+    }
     if ( Options == NULL || Options->Size < sizeof(*Options) ||
          !MdoRunsIdValid(Options->ProjectId, MDO_PROJECT_ID_CAPACITY) ||
          !MdoRunsIdValid(Options->SessionId, MDO_SESSION_ID_CAPACITY) ||
@@ -694,6 +703,11 @@ bool MdoRunStartWithOutcome(const MdoRunStartOptions* Options,
         MdoSessionAttachmentPendingClear(Session, ImageRunId);
         MdoRunsError(Error, XWORK_ERROR_IO,
             "cannot persist queue run identity before Agent Start");
+        goto publish;
+    }
+    if ( MdoUpdateBlocked() || MdoUpdateInstalling() ) {
+        MdoSessionAttachmentPendingClear(Session, ImageRunId);
+        MdoRunsError(Error, XWORK_ERROR_CONTEXT, "application update required before starting work");
         goto publish;
     }
     /* From this call onward a worker may have crossed the execution

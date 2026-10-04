@@ -44,6 +44,9 @@ PROBE_SOURCE = r'''
 #include "src/runs/manager.c"
 
 xwork_runtime *MdoBootstrapRuntime(void) { return NULL; }
+static bool UpdateRequired;
+bool MdoUpdateBlocked(void) { return UpdateRequired; }
+bool MdoUpdateInstalling(void) { return false; }
 
 typedef struct Owner {
     unsigned Refs;
@@ -195,6 +198,11 @@ void ServiceInit(XS_HostInfo *host) {
     start.Prompt = "managed interactive prompt";
     start.TimeoutMilliseconds = 5000u;
     memset(&first, 0, sizeof(first)); first.Size = sizeof(first);
+    UpdateRequired = true;
+    if (MdoRunStartWithOutcome(&start, &first, &error, &may_have_executed) || may_have_executed)
+        goto done;
+    UpdateRequired = false;
+    printf("mandatory_update_denies_start=1\n");
     if (!MdoRunStart(&start, &first, &error)) {
         printf("start_error=%s\n", error.sMessage); goto done;
     }
@@ -220,13 +228,16 @@ void ServiceInit(XS_HostInfo *host) {
 
     start.Prompt = "cancel this managed prompt";
     memset(&second, 0, sizeof(second)); second.Size = sizeof(second);
-    if (!MdoRunStart(&start, &second, &error) ||
-        !MdoRunCancel(second.Id, NULL, &error)) {
+    if (!MdoRunStart(&start, &second, &error)) {
         printf("cancel_error=%s\n", error.sMessage); goto done;
     }
+    UpdateRequired = true;
     if (!WaitForTerminal(second.Id, &found)) {
         printf("wait_error=second\n"); goto done;
     }
+    UpdateRequired = false;
+    if (!found.CancelRequested) goto done;
+    printf("mandatory_update_cancels_active_run=1\n");
     printf("second_done=state:%d result:%d terminal:%d cancel:%d refs:%u\n",
         (int)found.State, (int)found.Result, found.Terminal ? 1 : 0,
         found.CancelRequested ? 1 : 0, owner.Refs);

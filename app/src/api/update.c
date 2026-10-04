@@ -8,6 +8,9 @@ static bool MdoApiUpdateStatus(MdoApiContext* Context)
     xvalue* Data = xrtValueObject();
     bool Ok = Data && MdoApiValueSetBool(Data,"enabled",Status.Enabled) &&
         MdoApiValueSetBool(Data,"busy",Status.Busy) && MdoApiValueSetBool(Data,"ready",Status.Ready) &&
+        MdoApiValueSetBool(Data,"available",Status.Available) &&
+        MdoApiValueSetBool(Data,"required",Status.Required) &&
+        MdoApiValueSetBool(Data,"blocked",Status.Enabled && Status.Required && Status.Available) &&
         MdoApiValueSetString(Data,"status",Status.State) &&
         MdoApiValueSetString(Data,"platform",Status.Platform) &&
         MdoApiValueSetString(Data,"local_sha256",Status.LocalHash) &&
@@ -36,4 +39,9 @@ bool MdoApiUpdateInstallRoute(MdoApiContext* Context)
     MdoUpdateStatus Status; MdoUpdateGetStatus(&Status);
     xvalue* Data = xrtValueObject(); MdoApiValueSetString(Data,"status",Status.State);
     return MdoApiReplySuccessTake(Context,202,Data,NULL);
+}
+bool MdoApiUpdateExitRoute(MdoApiContext* Context)
+{
+    if (!MdoUpdateExit()) return MdoApiReplyError(Context,409,"update_busy","Exit is unavailable or an update operation is busy",NULL);
+    return MdoApiUpdateStatus(Context);
 }

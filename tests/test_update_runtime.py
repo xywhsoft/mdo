@@ -20,16 +20,21 @@ NEXT = b"MZ" + b"new package" * 20 + b"XRTPEND\0" + bytes(24)
 class Published(BaseHTTPRequestHandler):
     package = SOURCE
     mode = "normal"
+    required = None
     def log_message(self, *args): pass
     def do_GET(self):
         digest = hashlib.sha256(type(self).package).hexdigest()
         url = "/update/download/windows-x86_64/" + digest
         if self.path.startswith("/update/version?"):
+            if self.mode == "offline":
+                self.send_response(503); self.send_header("Content-Length", "0"); self.end_headers(); return
             if self.mode == "missing":
                 self.send_response(404); self.send_header("Content-Length", "0"); self.end_headers(); return
-            body = json.dumps(dict(platform="windows-x86_64", sha256=digest,
+            metadata = dict(platform="windows-x86_64", sha256=digest,
                                    size=len(self.package), notes="Test update",
-                                   url="https://invalid.example/package" if self.mode == "external" else url)).encode()
+                                   url="https://invalid.example/package" if self.mode == "external" else url)
+            if self.required is not None: metadata["required"] = self.required
+            body = json.dumps(metadata).encode()
         elif self.path == url:
             body = bytes(len(self.package)) if self.mode == "damaged" else self.package
             if self.mode == "slow": time.sleep(2)
@@ -54,6 +59,7 @@ def run(host):
             'void ServiceInit(XS_HostInfo* host) {\n ProductServiceInit(host); MdoUpdateUnit();\n'
             'g_MdoUpdate.Lock=xrtMutexCreate(); g_MdoUpdate.Source=xrtStrDup("' + (site / "fixture.exe").as_posix() + '");\n'
             'g_MdoUpdate.Status.Enabled=true; strcpy(g_MdoUpdate.Status.Platform,"windows-x86_64");\n'
+            'MdoUpdatePolicyLoad(&g_MdoUpdate.Status);\n'
             'g_MdoUpdate.Thread=xrtThreadCreate(MdoUpdateThread,NULL,0); MdoUpdateCheck();\n}\n'
             'XS_RequestResult RequestProc(XS_HttpReq* req) {\n'
             'if (MdoApiViewEqualText(req->head->Target,"/api/v1/update?fixture=pause") ||\n'
@@ -108,6 +114,7 @@ def run(host):
                 assert value["status"] == "ready" and proc.poll() is None
                 assert not (home / "data/update/install.go").exists()
                 print("PASS remote/headless request cannot stop host without native confirmation")
+                Published.package = NEXT[:2] + b"different" + NEXT[2:]
                 post(""); settled()
                 Published.mode = "slow"; post("/download")
                 st, _, _ = request(port, "DELETE", "/api/v1/update/download")
@@ -117,6 +124,46 @@ def run(host):
                 Published.mode = "missing"
                 post(""); assert settled()["status"] == "no-package"
                 print("PASS unpublished platform has no update prompt")
+                Published.mode = "normal"; Published.required = True
+                post(""); value = settled()
+                assert value["blocked"] and value["required"] and value["available"], value
+                cache = home / "data/update/policy.json"
+                assert json.loads(cache.read_text())["required"] is True
+                st, _, body = request(port,"POST","/api/v1/projects",body=b"{}")
+                assert st == 409 and json.loads(body)["error"]["code"] == "update_required", (st, body)
+                assert request(port,"GET","/api/v1/bootstrap")[0] == 200
+                print("PASS mandatory policy persists and backend blocks mutations")
+                for mode, required in (("external", True), ("normal", "true"), ("missing", True), ("offline", True)):
+                    Published.mode = mode; Published.required = required
+                    post(""); value = settled()
+                    assert value["blocked"] and value["required"] and value["status"] == "error", value
+                    assert json.loads(cache.read_text())["required"] is True
+                print("PASS invalid metadata, 404 and offline cannot revoke mandatory policy")
+                Published.mode = "damaged"; Published.required = True
+                post("/download"); assert settled()["blocked"]
+                Published.mode = "slow"; post("/download")
+                assert request(port,"DELETE","/api/v1/update/download")[0] == 200
+                assert settled()["blocked"]
+                Published.mode = "normal"; post("/download")
+                assert settled()["ready"]
+                post("/install"); value = settled()
+                assert value["blocked"] and value["ready"] and proc.poll() is None
+                print("PASS failed/cancelled download and missing native confirmation retain lock")
+                Published.mode = "offline"
+                proc.terminate(); proc.wait(timeout=5)
+                proc = subprocess.Popen([str(host), str(path), "--", "--home", str(home)], cwd=site,
+                                        stdout=log, stderr=log, creationflags=subprocess.CREATE_NO_WINDOW)
+                wait_ready(port,proc)
+                value = settled(); assert value["blocked"] and value["ready"], value
+                print("PASS cached mandatory policy and verified package survive offline restart")
+                Published.mode = "normal"; Published.required = False
+                post(""); assert not settled()["blocked"]
+                assert json.loads(cache.read_text())["required"] is False
+                print("PASS valid policy revocation releases lock without replacing package")
+                Published.package = SOURCE; Published.required = True
+                post(""); value = settled()
+                assert value["required"] and not value["blocked"] and not value["available"], value
+                print("PASS matching running hash is exempt from mandatory lock")
                 assert request(port,"GET","/api/v1/update?fixture=pause")[0] == 200
                 st, _, body = request(port,"POST","/api/v1/update",body=b"{}")
                 assert st == 409 and json.loads(body)["error"]["code"] == "update_installing", (st,body)

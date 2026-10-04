@@ -153,6 +153,8 @@ bool MdoBootstrapInit(XS_HostInfo* pHost)
         MdoBootstrapFail("ask manager initialization failed");
         return false;
     }
+    /* Load cached mandatory policy before any automatic executor can run. */
+    if (!MdoUpdateInit()) fprintf(stderr,"[mdo] update manager unavailable\n");
     MdoRunManagerOptionsInit(&RunOptions);
     RunOptions.OnPermission = MdoApprovalOnPermission;
     RunOptions.UseRunPermissionScope = true;
@@ -182,9 +184,6 @@ bool MdoBootstrapInit(XS_HostInfo* pHost)
         MdoBootstrapFail("power manager initialization failed");
         return false;
     }
-
-    /* Optional update failures never prevent the agent from starting. */
-    if (!MdoUpdateInit()) fprintf(stderr,"[mdo] update manager unavailable\n");
 
     memset(&Home, 0, sizeof(Home));
     Home.Size = sizeof(Home);

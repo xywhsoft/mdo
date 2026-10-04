@@ -33,6 +33,8 @@ static const MdoApiRoute g_MdoApiRoutes[] = {
       "POST, DELETE, OPTIONS", MdoApiUpdateDownloadRoute, false },
     { "/api/v1/update/install", XHTTP_METHOD_POST,
       "POST, OPTIONS", MdoApiUpdateInstallRoute, false },
+    { "/api/v1/update/exit", XHTTP_METHOD_POST,
+      "POST, OPTIONS", MdoApiUpdateExitRoute, false },
     { "/api/v1/account", XHTTP_METHOD_GET, "GET, OPTIONS", MdoApiAccountRoute, false },
     { "/api/v1/account/login", XHTTP_METHOD_POST, "POST, OPTIONS", MdoApiAccountRoute, false },
     { "/api/v1/account/callback", XHTTP_METHOD_GET | XHTTP_METHOD_POST, "GET, POST, OPTIONS", MdoApiAccountRoute, false },
@@ -486,14 +488,22 @@ static bool MdoApiRouteInvoke(MdoApiContext* Context, const MdoApiRoute* Route)
     bool Recovery = Route->Proc == MdoApiProjectPurgeCancelRoute ||
         Route->Proc == MdoApiProjectPurgeIntentRoute;
     bool Exclusive = Route->Proc == MdoApiProjectPurgeRoute || Route->Proc == MdoApiUpdateInstallRoute;
-    bool Stop = Route->Proc == MdoApiRunRoute && Method == XHTTP_METHOD_DELETE;
+    bool Stop = (Route->Proc == MdoApiRunRoute || Route->Proc == MdoApiTaskRoute) && Method == XHTTP_METHOD_DELETE;
+    bool Update = Route->Proc == MdoApiUpdateRoute || Route->Proc == MdoApiUpdateDownloadRoute ||
+        Route->Proc == MdoApiUpdateInstallRoute || Route->Proc == MdoApiUpdateExitRoute;
     bool Ok;
     if (!Read && MdoUpdateInstalling())
         return MdoApiReplyError(Context,409,"update_installing","Native update confirmation or installation is in progress",NULL);
+    if (!Read && !Update && !Stop && MdoUpdateBlocked())
+        return MdoApiReplyError(Context,409,"update_required","Install the required update before continuing",NULL);
     if ( !Read && !Recovery && !MdoApiWriteEnter(Context, Exclusive, Stop) ) return true;
     if (!Read && MdoUpdateInstalling()) {
         MdoApiWriteLeave(Context);
         return MdoApiReplyError(Context,409,"update_installing","Installation is in progress",NULL);
+    }
+    if (!Read && !Update && !Stop && MdoUpdateBlocked()) {
+        MdoApiWriteLeave(Context);
+        return MdoApiReplyError(Context,409,"update_required","Install the required update before continuing",NULL);
     }
     Ok = MdoApiRouteInvokeData(Context, Route);
     MdoApiWriteLeave(Context);

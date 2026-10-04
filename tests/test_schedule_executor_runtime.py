@@ -42,6 +42,8 @@ static void ShutdownLeaseCheckpoint(void);
 xwork_runtime *MdoBootstrapRuntime(void) { return NULL; }
 static bool UpdatePending;
 bool MdoUpdateInstalling(void) { return UpdatePending; }
+static bool UpdateRequired;
+bool MdoUpdateBlocked(void) { return UpdateRequired; }
 
 typedef struct Owner {
     unsigned Refs;
@@ -189,9 +191,9 @@ static bool ExecutorCancellationProbe(xwork_runtime *runtime) {
         error.eCode != XWORK_ERROR_INVALID_ARGUMENT) goto done;
     /* Model cancellation, generic task_cancel forwarding, and completion
      * before the user stops all run through the real Agent worker. */
-    for (mode = 0u; mode < 3u; ++mode) {
+    for (mode = 0u; mode < 4u; ++mode) {
         const char *id = mode == 0u ? "cancel-model" :
-            (mode == 1u ? "cancel-generic" : "cancel-completed");
+            (mode == 1u ? "cancel-generic" : mode == 2u ? "cancel-completed" : "cancel-update");
         xrtAtomic32Store(&probe.Entered, 0u, XMEMORY_RELEASE);
         xrtAtomic32Store(&probe.SawCancel, 0u, XMEMORY_RELEASE);
         xrtAtomic32Store(&probe.Release, 0u, XMEMORY_RELEASE);
@@ -231,9 +233,14 @@ static bool ExecutorCancellationProbe(xwork_runtime *runtime) {
                     !MdoScheduleExecutorTaskCancellationRequested(task_id) ||
                     ExecutorLeaseAvailable("project-alpha")) goto done;
                 xworkTaskSnapshotRelease(tasks); tasks = NULL;
-            } else {
+            } else if (mode == 1u) {
                 if (!xworkRuntimeCancelTask(runtime, task_id, &error) ||
                     !MdoScheduleExecutorPump(now, &started, &completed, &error) ||
+                    !MdoScheduleExecutorTaskCancellationRequested(task_id)) goto done;
+            } else {
+                UpdateRequired = true;
+                if (MdoScheduleExecutorRunNow(id, 1u, now, NULL, NULL, &error) ||
+                    !MdoScheduleExecutorPump(now, &started, &completed, &error) || started != 0u ||
                     !MdoScheduleExecutorTaskCancellationRequested(task_id)) goto done;
             }
             if (!WaitAtomic(&probe.SawCancel)) goto done;
@@ -246,6 +253,7 @@ static bool ExecutorCancellationProbe(xwork_runtime *runtime) {
             }
             if (completed != 1u || g_MdoScheduleExecutor.ActiveCount != 0u ||
                 !ExecutorLeaseAvailable("project-alpha")) goto done;
+            UpdateRequired = false;
         }
         tasks = xworkRuntimeTaskSnapshot(runtime, 0u, &error);
         xworkTaskInfoInit(&task);
@@ -259,6 +267,7 @@ static bool ExecutorCancellationProbe(xwork_runtime *runtime) {
     }
     ok = true;
 done:
+    UpdateRequired = false;
     xrtAtomic32Store(&probe.Release, 1u, XMEMORY_RELEASE);
     xworkTaskSnapshotRelease(tasks);
     MdoScheduleExecutorUnit();
