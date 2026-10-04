@@ -26,7 +26,12 @@ import { createResourceStore } from "/app/web/js/state/store.js";
 import { summarizeConversationEvents } from "/app/web/js/features/chat/conversation-history.js";
 const event = (id, run, kind, fields = {}) => ({ event_id: id, run_id: run, kind,
   schema_version: 5, agent_depth: 0, time: id * 1000000, agent_turn: 1, ...fields });
-const all = Array.from({ length: 40 }, (_, i) => [
+// Bounded fixtures cover short/scrolling rails and a narrow desktop column.
+const options = new URLSearchParams(location.search);
+const turnCount = Math.min(80, Math.max(1, Number(options.get("turns")) || 40));
+const column = Number(options.get("column"));
+if (column > 0) document.querySelector(".workspace").style.width = `${column}px`;
+const all = Array.from({ length: turnCount }, (_, i) => [
   event(i * 6 + 1, i + 1, "agent_start", { user_message_sequence: i + 1, text: `第 ${i + 1} 轮：检查文件与实现情况` }),
   event(i * 6 + 2, i + 1, "model_reasoning_delta", { text: "先核对目录和文件，再检查实现。历史内容始终保留，可以随时展开查看。" }),
   event(i * 6 + 3, i + 1, "tool_start", { tool_name: "read", tool_call_id: `call-${i}`, text: '{"path":"README.md"}' }),
@@ -35,7 +40,7 @@ const all = Array.from({ length: 40 }, (_, i) => [
   event(i * 6 + 6, i + 1, "agent_done", { success: true }),
 ]).flat();
 const store = createResourceStore();
-let events = all.slice(-24), first = 217;
+let events = all.slice(-24), first = events[0].event_id;
 const state = () => ({ projectId: "qa", sessionId: "history", events,
   turns: summarizeConversationEvents(all), firstLoadedTurn: first, hasOlder: first > 1 });
 const report = label => { document.querySelector("#result").textContent = `${label}；已加载 ${events.length} 条事件`; };
@@ -57,10 +62,10 @@ createTimelineView({ container: document.querySelector("#timeline"), welcome: do
 });
 store.setData(state()); report("准备就绪");
 document.querySelector("#start").addEventListener("click", () => {
-  events = events.filter(item => item.event_id < 240); store.setData(state()); report("运行中");
+  events = events.filter(item => item.event_id < all.at(-1).event_id); store.setData(state()); report("运行中");
 });
 document.querySelector("#finish").addEventListener("click", () => {
-  if (!events.some(item => item.event_id === 240)) events.push(all.at(-1));
+  if (!events.some(item => item.event_id === all.at(-1).event_id)) events.push(all.at(-1));
   store.setData(state()); report("已完成");
 });
 document.querySelector("#fail").addEventListener("click", () => {

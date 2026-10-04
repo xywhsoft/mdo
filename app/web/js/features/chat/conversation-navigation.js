@@ -21,21 +21,58 @@ export function createConversationNavigation({ scroller, container, onReveal, on
   let hideTimer = 0;
   let selected = 0;
   let previewFor = 0;
+  let emphasized = [];
+  const touchScreen = window.matchMedia("(hover: none), (pointer: coarse)");
   const rows = new Map();
   const summaries = new Map();
 
-  function hide() { preview.hidden = true; previewFor = 0; }
+  // Only the hovered/focused mark and its three neighbours on each side grow.
+  // Scroll position changes brightness, never the resting width of a mark.
+  function emphasize(button) {
+    for (const row of emphasized) row.removeAttribute("data-proximity");
+    emphasized = [];
+    if (!button) return;
+    button.dataset.proximity = "0";
+    emphasized.push(button);
+    let before = button.previousElementSibling;
+    let after = button.nextElementSibling;
+    for (let distance = 1; distance <= 3; distance++) {
+      for (const row of [before, after]) if (row) {
+        row.dataset.proximity = String(distance);
+        emphasized.push(row);
+      }
+      before = before?.previousElementSibling;
+      after = after?.nextElementSibling;
+    }
+  }
+  function hide() {
+    window.clearTimeout(hideTimer);
+    rows.get(previewFor)?.removeAttribute("aria-describedby");
+    preview.hidden = true;
+    previewFor = 0;
+    emphasize(null);
+  }
+  function positionPreview(button) {
+    const bounds = scroller.getBoundingClientRect();
+    const origin = rail.getBoundingClientRect().top;
+    const mark = button.getBoundingClientRect();
+    // Clamp to the conversation, rather than the shorter, centred rail. A
+    // single-turn tooltip can then stay centred on its mark without clipping.
+    const top = mark.top + mark.height / 2 - preview.offsetHeight / 2;
+    preview.style.top = `${Math.max(bounds.top + 12,
+      Math.min(top, bounds.bottom - 12 - preview.offsetHeight)) - origin}px`;
+  }
   function show(button, turn) {
-    if (!turn) return;
+    if (!turn || rail.hidden) return;
+    rows.get(previewFor)?.removeAttribute("aria-describedby");
     previewFor = turn.first_event_id;
     window.clearTimeout(hideTimer);
+    emphasize(button);
     preview.replaceChildren(element("strong", { text: turn.question ||
       t("timeline.emptyPrompt", {}, "附件任务") }), element("p", {
       text: turn.answer || t("timeline.noReplyYet", {}, "尚无回复") }));
     preview.hidden = false;
-    const top = button.getBoundingClientRect().top - rail.getBoundingClientRect().top;
-    preview.style.top = `${Math.max(0, Math.min(top - preview.offsetHeight / 2,
-      rail.clientHeight - preview.offsetHeight))}px`;
+    positionPreview(button);
     button.setAttribute("aria-describedby", preview.id);
   }
   function delayHide() { hideTimer = window.setTimeout(hide, 160); }
@@ -52,9 +89,15 @@ export function createConversationNavigation({ scroller, container, onReveal, on
   function layout() {
     const box = scroller.getBoundingClientRect();
     const parent = workspace.getBoundingClientRect();
-    rail.hidden = !data?.sessionId || !data.turns?.length || box.height < 1;
-    rail.style.top = `${box.top - parent.top + 8}px`;
-    rail.style.height = `${Math.max(0, box.height - 16)}px`;
+    // Leave enough room beside the 760px transcript, including its margins.
+    // Observe the column itself: an open sidebar can narrow a desktop window.
+    rail.hidden = !data?.sessionId || !data.turns?.length || box.width < 880
+      || box.height <= 48 || touchScreen.matches;
+    if (rail.hidden) { hide(); return; }
+    const height = Math.min(marks.children.length * 10 + (older.hidden ? 0 : 26), box.height - 48);
+    rail.style.top = `${box.top - parent.top + (box.height - height) / 2}px`;
+    rail.style.height = `${height}px`;
+    if (previewFor && rows.has(previewFor)) positionPreview(rows.get(previewFor));
   }
   function syncActive() {
     frame = 0;
@@ -70,7 +113,6 @@ export function createConversationNavigation({ scroller, container, onReveal, on
   function schedule() { if (!frame) frame = requestAnimationFrame(syncActive); }
   function update(next) {
     data = next;
-    rail.hidden = !data?.sessionId || !data.turns?.length;
     older.hidden = !data?.indexHasMore;
     const key = JSON.stringify([data?.projectId, data?.sessionId, data?.turns]);
     if (key !== signature) {
@@ -101,6 +143,7 @@ export function createConversationNavigation({ scroller, container, onReveal, on
       }
       while (cursor) { const next = cursor.nextSibling; cursor.remove(); cursor = next; }
       for (const id of rows.keys()) if (!retained.has(id)) { rows.delete(id); summaries.delete(id); }
+      layout();
       marks.scrollTop = signature ? scroll + Math.max(0, marks.scrollHeight - oldHeight) : marks.scrollHeight;
       if (focused) marks.querySelector(`[data-turn-id="${focused}"]`)?.focus({ preventScroll: true });
       signature = key;
@@ -121,9 +164,11 @@ export function createConversationNavigation({ scroller, container, onReveal, on
   });
   preview.addEventListener("pointerenter", () => window.clearTimeout(hideTimer));
   preview.addEventListener("pointerleave", delayHide);
+  marks.addEventListener("scroll", hide, { passive: true });
   rail.addEventListener("keydown", event => { if (event.key === "Escape") hide(); });
   scroller.addEventListener("scroll", schedule, { passive: true });
   window.addEventListener("resize", schedule);
+  touchScreen.addEventListener("change", schedule);
   const observer = typeof ResizeObserver === "function" ? new ResizeObserver(schedule) : null;
   observer?.observe(scroller);
   const locale = subscribeLocale(() => {
@@ -134,6 +179,7 @@ export function createConversationNavigation({ scroller, container, onReveal, on
   return Object.freeze({ update, destroy() {
     locale(); observer?.disconnect(); rail.remove(); window.clearTimeout(hideTimer);
     scroller.removeEventListener("scroll", schedule); window.removeEventListener("resize", schedule);
+    touchScreen.removeEventListener("change", schedule);
     if (frame) cancelAnimationFrame(frame);
   } });
 }
