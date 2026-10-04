@@ -17,6 +17,8 @@ typedef struct MdoApprovalEntry {
 
 typedef struct MdoApprovalManager {
     xmutex* Lock;
+    void (*Observer)(void*);
+    void* ObserverData;
     xcond* Changed;
     bool Initialized;
     bool Stopping;
@@ -31,6 +33,14 @@ struct MdoApprovalSnapshot {
 };
 
 static MdoApprovalManager g_MdoApprovals;
+
+void MdoApprovalObserve(void (*Changed)(void*), void* Data)
+{
+    if ( g_MdoApprovals.Lock == NULL ) return;
+    xrtMutexLock(g_MdoApprovals.Lock);
+    g_MdoApprovals.Observer = Changed; g_MdoApprovals.ObserverData = Data;
+    xrtMutexUnlock(g_MdoApprovals.Lock);
+}
 
 static void MdoApprovalError(xwork_error* Error, xwork_error_code Code,
     const char* Message)
@@ -159,6 +169,7 @@ void MdoApprovalManagerUnit(void)
         if ( g_MdoApprovals.Entries[Index].Used )
             g_MdoApprovals.Entries[Index].Decision = XWORK_PERMISSION_DENY;
     }
+    if ( g_MdoApprovals.Observer != NULL ) g_MdoApprovals.Observer(g_MdoApprovals.ObserverData);
     (void)xrtCondBroadcast(g_MdoApprovals.Changed);
     while ( g_MdoApprovals.ActiveCallbacks != 0u )
         (void)xrtCondWait(g_MdoApprovals.Changed, g_MdoApprovals.Lock);
@@ -207,6 +218,7 @@ xwork_permission_decision MdoApprovalOnPermission(void* UserData,
     Entry->Cancel = Request->pCancel;
     Entry->Info = Captured;
     ++g_MdoApprovals.ActiveCallbacks;
+    if ( g_MdoApprovals.Observer != NULL ) g_MdoApprovals.Observer(g_MdoApprovals.ObserverData);
     (void)xrtCondBroadcast(g_MdoApprovals.Changed);
     while ( Entry->Decision == XWORK_PERMISSION_DEFAULT ) {
         uint64 Now = xrtClock();
@@ -240,6 +252,7 @@ xwork_permission_decision MdoApprovalOnPermission(void* UserData,
         XWORK_PERMISSION_ALLOW : XWORK_PERMISSION_DENY;
     memset(Entry, 0, sizeof(*Entry));
     --g_MdoApprovals.ActiveCallbacks;
+    if ( g_MdoApprovals.Observer != NULL ) g_MdoApprovals.Observer(g_MdoApprovals.ObserverData);
     (void)xrtCondBroadcast(g_MdoApprovals.Changed);
 unlock:
     (void)xrtMutexUnlock(g_MdoApprovals.Lock);
@@ -388,6 +401,7 @@ bool MdoApprovalDecide(uint64 RequestId,
     } else {
         g_MdoApprovals.Entries[Index].Decision = Decision;
     }
+    if ( g_MdoApprovals.Observer != NULL ) g_MdoApprovals.Observer(g_MdoApprovals.ObserverData);
     (void)xrtCondBroadcast(g_MdoApprovals.Changed);
     (void)xrtMutexUnlock(g_MdoApprovals.Lock);
     return true;

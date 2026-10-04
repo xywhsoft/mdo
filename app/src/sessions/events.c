@@ -365,8 +365,13 @@ static bool MdoEventsAppend(MdoSessionEventBridge* Bridge,
     if ( Exists && (Info.Size > MDO_SESSION_EVENT_FILE_LIMIT - Size - 1u) )
         Ok = MdoEventsCompactAppend(Bridge->Path, Json, Size);
     else Ok = MdoEventsAppendBytes(Bridge->Path, Json, Size);
+    if ( Ok ) {
+        MdoSessionsInternalPublish(Bridge->ProjectId, Bridge->SessionId,
+            xrtStrViewN(Json, Size), Event->eKind != XWORK_EVENT_MODEL_TEXT_DELTA &&
+                Event->eKind != XWORK_EVENT_MODEL_REASONING_DELTA);
+        ++Bridge->NextEventId;
+    }
     xrtFree(Json);
-    if ( Ok ) ++Bridge->NextEventId;
     return Ok;
 }
 

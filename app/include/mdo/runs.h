@@ -147,4 +147,7 @@ bool MdoRunSnapshotResultAt(const MdoRunSnapshot* Snapshot, size_t Index,
 bool MdoRunSnapshotResult(const MdoRunSnapshot* Snapshot, const char* RunId,
     const char** Text, size_t* Size);
 
+/* Observer runs under the manager lock; enqueue only, never reenter. */
+void MdoRunObserve(void (*Changed)(void*), void* Data);
+
 #endif

@@ -26,6 +26,7 @@ static xatomic64 g_MdoApiFallbackId;
 static bool g_MdoApiInitialized;
 
 static const MdoApiRoute g_MdoApiRoutes[] = {
+    { "/api/v1/live", XHTTP_METHOD_GET, "GET, OPTIONS", MdoApiLiveRoute, false },
     { "/api/v1/update", XHTTP_METHOD_GET | XHTTP_METHOD_HEAD | XHTTP_METHOD_POST,
       "GET, HEAD, POST, OPTIONS", MdoApiUpdateRoute, false },
     { "/api/v1/update/download", XHTTP_METHOD_POST | XHTTP_METHOD_DELETE,
@@ -393,7 +394,8 @@ bool MdoApiInit(void)
         return false;
     }
     if ( !MdoApiBackupUploadsInit() || !MdoApiBackupPreviewsInit() || !MdoApiBackupRestoresInit() || !MdoApiDownloadsInit() ||
-         !MdoApiImageDownloadsInit() ) {
+         !MdoApiImageDownloadsInit() || !MdoApiLiveInit() ) {
+        MdoApiLiveUnit(); MdoApiLiveRelease();
         MdoApiImageDownloadsUnit(); MdoApiDownloadsUnit();
         MdoApiBackupRestoresUnit();
         MdoApiBackupPreviewsUnit();
@@ -411,6 +413,7 @@ bool MdoApiInit(void)
 void MdoApiUnit(void)
 {
     g_MdoApiInitialized = false;
+    MdoApiLiveUnit();
     MdoApiDownloadsUnit();
     MdoApiImageDownloadsUnit();
     MdoApiBackupRestoresUnit();
@@ -491,6 +494,8 @@ static bool MdoApiRouteInvoke(MdoApiContext* Context, const MdoApiRoute* Route)
     }
     Ok = MdoApiRouteInvokeData(Context, Route);
     MdoApiWriteLeave(Context);
+    if ( (Context->Request->head->MethodCode & (XHTTP_METHOD_GET | XHTTP_METHOD_HEAD)) == 0u )
+        MdoApiLiveChanged(NULL);
     return Ok;
 }
 

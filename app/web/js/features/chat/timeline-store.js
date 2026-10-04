@@ -1,8 +1,10 @@
+import { liveConnection } from "../../api/live.js";
 import { api, resourceId } from "../../api/client.js";
 import { createResourceStore } from "../../state/store.js";
 
 const RETAINED_EVENTS = 640;
 const MAX_PAGES_PER_REFRESH = 4;
+const FALLBACK_POLL_MS = 2500;
 
 export const timelineStore = createResourceStore({
   projectId: "",
@@ -16,7 +18,7 @@ export const timelineStore = createResourceStore({
 let generation = 0;
 let refreshVersion = 0;
 let pollTimer = 0;
-let pollDelay = 800;
+let pollDelay = FALLBACK_POLL_MS;
 
 export function historyRemovalRange(event) {
   if (event.kind !== "history_truncated") return null;
@@ -43,7 +45,7 @@ function stopTimer() {
 
 function schedulePoll(token) {
   stopTimer();
-  if (token !== generation || document.hidden) return;
+  if (token !== generation || document.hidden || liveConnection.isConnected()) return;
   pollTimer = window.setTimeout(() => refreshTimeline(token), pollDelay);
 }
 
@@ -84,15 +86,15 @@ async function refreshTimeline(token = generation) {
     }
     if (changed) {
       timelineStore.setData({ ...current, cursor, latestEventId, historyLost, events });
-      pollDelay = 700;
+      pollDelay = FALLBACK_POLL_MS;
     } else {
-      pollDelay = Math.min(Math.round(pollDelay * 1.45), 4000);
+      pollDelay = Math.min(Math.round(pollDelay * 1.45), 8000);
     }
   } catch (error) {
     if (!isCurrent()) return;
     if (error?.code !== "session_events_unavailable" && error?.code !== "session_not_found") {
       timelineStore.setError(error);
-      pollDelay = 2500;
+      pollDelay = FALLBACK_POLL_MS;
     }
   } finally {
     if (isCurrent()) schedulePoll(token);
@@ -109,7 +111,7 @@ export function selectTimeline(projectId, sessionId) {
 
 function reloadTimeline(projectId, sessionId) {
   generation += 1;
-  pollDelay = 700;
+  pollDelay = FALLBACK_POLL_MS;
   timelineStore.setData({
     projectId,
     sessionId,
@@ -118,7 +120,8 @@ function reloadTimeline(projectId, sessionId) {
     historyLost: false,
     events: [],
   });
-  return refreshTimeline(generation);
+  subscribeLiveTimeline();
+  return liveConnection.isConnected() ? Promise.resolve() : refreshTimeline(generation);
 }
 
 export function reloadSelectedTimeline() {
@@ -128,17 +131,57 @@ export function reloadSelectedTimeline() {
 }
 
 export function refreshSelectedTimeline() {
-  pollDelay = 500;
+  if (liveConnection.isConnected()) { subscribeLiveTimeline(); return Promise.resolve(); }
+  pollDelay = FALLBACK_POLL_MS;
   return refreshTimeline(generation);
 }
 
 export function clearTimeline() {
   generation += 1;
+  refreshVersion += 1;
   stopTimer();
+  liveConnection.select("", "");
   timelineStore.setData({ projectId: "", sessionId: "", cursor: 0, latestEventId: 0, historyLost: false, events: [] });
 }
 
+function subscribeLiveTimeline() {
+  const current = timelineStore.get().data;
+  if (!current?.sessionId) return;
+  refreshVersion += 1;
+  stopTimer();
+  liveConnection.select(current.projectId, current.sessionId, () => timelineStore.get().data?.cursor ?? 0);
+}
+
+// WebSocket and HTTP replay share the same merge rules, retention and renderer.
+// A newer push invalidates in-flight fallback reads, preventing stale overwrites.
+export function applyLiveTimeline(replay) {
+  const current = timelineStore.get().data;
+  if (!current?.sessionId || current.projectId !== replay.project_id || current.sessionId !== replay.session_id ||
+      !Array.isArray(replay.items)) return;
+  const next = Number(replay.next_cursor);
+  const latest = Number(replay.latest_event_id);
+  if (!Number.isSafeInteger(next) || next < current.cursor ||
+      !Number.isSafeInteger(latest) || latest < next) return;
+  const additions = replay.items.filter((item) => Number.isSafeInteger(Number(item.event_id)) &&
+    Number(item.event_id) > current.cursor && Number(item.event_id) <= next);
+  const merged = mergeTimelineEvents(replay.history_lost ? [] : current.events, additions);
+  let historyLost = merged.cleared ? false : current.historyLost || Boolean(replay.history_lost);
+  let events = merged.events;
+  if (events.length > RETAINED_EVENTS) { events = events.slice(-RETAINED_EVENTS); historyLost = true; }
+  refreshVersion += 1;
+  stopTimer();
+  timelineStore.setData({ ...current, cursor: next, latestEventId: latest, historyLost, events });
+}
+
+liveConnection.subscribe((event) => {
+  if (event.type === "events") applyLiveTimeline(event);
+  else if (event.type === "status") {
+    if (event.connected) stopTimer();
+    else { pollDelay = FALLBACK_POLL_MS; schedulePoll(generation); }
+  }
+});
+
 document.addEventListener("visibilitychange", () => {
-  if (!document.hidden) void refreshTimeline(generation);
+  if (!document.hidden && !liveConnection.isConnected()) void refreshTimeline(generation);
   else stopTimer();
 });

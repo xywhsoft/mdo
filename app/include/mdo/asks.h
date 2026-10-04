@@ -33,4 +33,7 @@ bool MdoAskList(const char* ProjectId, const char* SessionId,
 bool MdoAskAnswer(const char* ProjectId, const char* SessionId,
     uint64 Id, const char* Answer, xwork_error* Error);
 
+/* Observer runs under the manager lock; enqueue only, never reenter. */
+void MdoAskObserve(void (*Changed)(void*), void* Data);
+
 #endif

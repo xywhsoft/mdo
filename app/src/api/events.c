@@ -142,7 +142,7 @@ static bool MdoApiCaptureId(MdoApiContext* Context, size_t Index,
     return true;
 }
 
-static bool MdoApiSessionEventValue(const MdoSessionEventInfo* Event,
+bool MdoApiSessionEventValue(const MdoSessionEventInfo* Event,
     const char* ProjectId, const char* SessionId, bool FullText,
     xvalue** pValue)
 {

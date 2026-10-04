@@ -25,6 +25,8 @@ typedef struct MdoAskEntry {
 
 typedef struct MdoAskManager {
     xmutex* Lock;
+    void (*Observer)(void*);
+    void* ObserverData;
     xcond* Changed;
     uint64 NextId;
     size_t ActiveCallbacks;
@@ -34,6 +36,14 @@ typedef struct MdoAskManager {
 } MdoAskManager;
 
 static MdoAskManager g_MdoAsks;
+
+void MdoAskObserve(void (*Changed)(void*), void* Data)
+{
+    if ( g_MdoAsks.Lock == NULL ) return;
+    xrtMutexLock(g_MdoAsks.Lock);
+    g_MdoAsks.Observer = Changed; g_MdoAsks.ObserverData = Data;
+    xrtMutexUnlock(g_MdoAsks.Lock);
+}
 
 static void MdoAskError(xwork_error* Error, xwork_error_code Code,
     const char* Message)
@@ -123,6 +133,7 @@ void MdoAskManagerUnit(void)
     if ( !g_MdoAsks.Initialized || g_MdoAsks.Lock == NULL ||
          !xrtMutexLock(g_MdoAsks.Lock) ) return;
     g_MdoAsks.Stopping = true;
+    if ( g_MdoAsks.Observer != NULL ) g_MdoAsks.Observer(g_MdoAsks.ObserverData);
     (void)xrtCondBroadcast(g_MdoAsks.Changed);
     while ( g_MdoAsks.ActiveCallbacks != 0u )
         (void)xrtCondWait(g_MdoAsks.Changed, g_MdoAsks.Lock);
@@ -187,6 +198,7 @@ bool MdoAskAnswer(const char* ProjectId, const char* SessionId,
               xrtDeadlineExpired(Entry->Deadline)) ) break;
         memcpy(Entry->Answer, Answer, Length + 1u);
         Entry->Answered = true;
+        if ( g_MdoAsks.Observer != NULL ) g_MdoAsks.Observer(g_MdoAsks.ObserverData);
         (void)xrtCondBroadcast(g_MdoAsks.Changed);
         (void)xrtMutexUnlock(g_MdoAsks.Lock);
         return true;
@@ -246,6 +258,7 @@ static xwork_result MdoAskExecute(void* UserData,
     ExpiresAt = ExpiresAt > UINT64_MAX - MDO_ASK_TIMEOUT_US ?
         UINT64_MAX : ExpiresAt + MDO_ASK_TIMEOUT_US;
     Entry->ExpiresAt = ExpiresAt;
+    if ( g_MdoAsks.Observer != NULL ) g_MdoAsks.Observer(g_MdoAsks.ObserverData);
     (void)xrtCondBroadcast(g_MdoAsks.Changed);
     while ( !Entry->Answered ) {
         uint64 Now = xrtClock();
@@ -270,6 +283,7 @@ static xwork_result MdoAskExecute(void* UserData,
     snprintf(Answer, sizeof(Answer), "%s", Entry->Answer);
     memset(Entry, 0, sizeof(*Entry));
     --g_MdoAsks.ActiveCallbacks;
+    if ( g_MdoAsks.Observer != NULL ) g_MdoAsks.Observer(g_MdoAsks.ObserverData);
     (void)xrtCondBroadcast(g_MdoAsks.Changed);
     (void)xrtMutexUnlock(g_MdoAsks.Lock);
     if ( Cancelled ) {

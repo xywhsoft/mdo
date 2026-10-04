@@ -72,4 +72,7 @@ bool MdoApprovalSnapshotAt(const MdoApprovalSnapshot* Snapshot, size_t Index,
 bool MdoApprovalDecide(uint64 RequestId,
     xwork_permission_decision Decision, bool AllowRun, xwork_error* Error);
 
+/* Observer runs under the manager lock; enqueue only, never reenter. */
+void MdoApprovalObserve(void (*Changed)(void*), void* Data);
+
 #endif

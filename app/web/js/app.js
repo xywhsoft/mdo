@@ -1,3 +1,4 @@
+import { liveConnection } from "./api/live.js";
 import { createAccount } from "./features/account/account.js";
 import { mountIcons } from "./components/icons.js";
 import { bootstrapStore, loadBootstrap } from "./state/bootstrap.js";
@@ -1255,18 +1256,22 @@ export async function boot() {
       monitorRun(run);
       void maybeCancelPriorityRun();
     }
-    else if (!activeRun) {
-      setRun(null);
+    else if (!activeRun || (runsStore.get().status === "ready" &&
+        runsStore.get().data?.items?.some((item) => item.id === activeRun.id && terminalState(item)))) {
+      const finished = (runsStore.get().data?.items ?? []).find((item) => item.id === activeRun?.id);
+      setRun(finished ?? null);
       void dispatchQueued();
     }
   }
   runsStore.subscribe(findActiveRun);
   runsStore.subscribe(() => { void promptQueue.flushUnusedImages(); });
 
-  function scheduleRunPoll(delay = 750) {
+  function scheduleRunPoll(delay = 2500) {
     window.clearTimeout(runMonitor);
+    runMonitor = 0;
+    if (document.hidden || liveConnection.isConnected()) return;
     runMonitor = window.setTimeout(async () => {
-      if (!activeRun || document.hidden) return;
+      if (!activeRun || document.hidden || liveConnection.isConnected()) return;
       const runId = activeRun.id;
       const version = routeVersion;
       const key = selectedKey;
@@ -2282,19 +2287,19 @@ export async function boot() {
       await loadTasks();
       await refreshSelectedTask();
       scheduleTaskRefresh();
-    }, active ? 1400 : 5000);
+    }, liveConnection.isConnected() ? 30_000 : active ? 2500 : 8000);
   }
   tasksStore.subscribe(scheduleTaskRefresh);
   function scheduleRunsRefresh() {
     window.clearTimeout(runsTimer);
-    if (document.hidden) return;
+    if (document.hidden || liveConnection.isConnected()) return;
     const snapshot = runsStore.get();
     if (snapshot.status === "loading" || snapshot.status === "refreshing") return;
     runsTimer = window.setTimeout(async () => {
       await loadRuns();
       await refreshSelectedQueue();
     },
-      Number(snapshot.data?.active_runs ?? 0) > 0 ? 1500 : 8000);
+      Number(snapshot.data?.active_runs ?? 0) > 0 ? 2500 : 8000);
   }
   runsStore.subscribe(scheduleRunsRefresh);
   const sessionMetadataSync = createSessionMetadataSync({ navigation,
@@ -2302,7 +2307,7 @@ export async function boot() {
     onRestored: refreshSelectedQueue });
   function scheduleSessionRefresh() {
     window.clearTimeout(sessionTimer);
-    if (document.hidden) return;
+    if (document.hidden || liveConnection.isConnected()) return;
     sessionTimer = window.setTimeout(async () => {
       try { await sessionMetadataSync.refresh(); }
       catch { /* Keep the last known state until the next bounded check. */ }
@@ -2311,14 +2316,56 @@ export async function boot() {
   }
   function scheduleApprovalRefresh() {
     window.clearTimeout(approvalsTimer);
-    if (document.hidden) return;
+    if (document.hidden || liveConnection.isConnected()) return;
     const pending = Number(approvalsStore.get().data?.total ?? 0);
     approvalsTimer = window.setTimeout(async () => {
       await Promise.all([loadApprovals(), loadRecovery(), refreshSelectedAsks()]);
       scheduleApprovalRefresh();
     }, pending || asksStore.get().data?.items?.length ||
-      recoveryStore.get().data?.resume_required ? 1000 : 3000);
+      recoveryStore.get().data?.resume_required ? 2500 : 8000);
   }
+  let liveRefreshTimer = 0;
+  let liveRefreshing = false;
+  let liveRefreshPending = false;
+  function scheduleLiveRefresh() {
+    liveRefreshPending = true;
+    if (document.hidden || liveRefreshTimer || liveRefreshing) return;
+    liveRefreshTimer = window.setTimeout(async () => {
+      liveRefreshTimer = 0;
+      if (document.hidden || !liveConnection.isConnected()) return;
+      liveRefreshPending = false;
+      liveRefreshing = true;
+      const focusStop = document.activeElement === stop;
+      const version = routeVersion;
+      try {
+        await Promise.allSettled([loadRuns(), loadTasks(), loadApprovals(),
+          refreshSelectedAsks(), loadRecovery(), loadSessions(),
+          sessionMetadataSync.refresh(), refreshSelectedQueue(), refreshSelectedTask()]);
+        if (focusStop && !activeRun && version === routeVersion && !prompt.disabled &&
+            (document.activeElement === stop || document.activeElement === document.body) &&
+            shell.dataset.sidebar !== "open" && !document.querySelector("dialog[open]"))
+          prompt.focus({ preventScroll: true });
+      } finally {
+        liveRefreshing = false;
+        if (liveRefreshPending) scheduleLiveRefresh();
+      }
+    }, 120);
+  }
+  liveConnection.subscribe((event) => {
+    if (event.type === "changed") scheduleLiveRefresh();
+    else if (event.type === "status") {
+      scheduleTaskRefresh(); scheduleRunsRefresh();
+      scheduleSessionRefresh(); scheduleApprovalRefresh();
+      if (event.connected) {
+        window.clearTimeout(runMonitor); runMonitor = 0;
+        scheduleLiveRefresh();
+      } else if (activeRun) scheduleRunPoll();
+    }
+  });
+  liveConnection.pause(document.hidden);
+  liveConnection.start(currentPageWriteToken());
+  window.addEventListener("pagehide", () => liveConnection.pause(true));
+  window.addEventListener("pageshow", () => liveConnection.pause(document.hidden));
   approvalsStore.subscribe(scheduleApprovalRefresh);
   asksStore.subscribe(scheduleApprovalRefresh);
   recoveryStore.subscribe(scheduleApprovalRefresh);
@@ -2326,7 +2373,9 @@ export async function boot() {
     if (!document.hidden) refreshRelativeTimes();
   }, 30_000);
   document.addEventListener("visibilitychange", () => {
+    liveConnection.pause(document.hidden);
     if (document.hidden) {
+      window.clearTimeout(liveRefreshTimer); liveRefreshTimer = 0;
       window.clearTimeout(tasksTimer);
       window.clearTimeout(runsTimer);
       window.clearTimeout(sessionTimer);

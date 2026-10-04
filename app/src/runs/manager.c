@@ -30,6 +30,8 @@ typedef struct MdoRunCleanup {
 
 typedef struct MdoRunManagerState {
     xmutex* Lock;
+    void (*Observer)(void*);
+    void* ObserverData;
     xcond* Changed;
     xthread* Thread;
     xwork_runtime* Runtime;
@@ -59,6 +61,14 @@ struct MdoRunSnapshot {
 };
 
 static MdoRunManagerState g_MdoRuns;
+
+void MdoRunObserve(void (*Changed)(void*), void* Data)
+{
+    if ( g_MdoRuns.Lock == NULL ) return;
+    xrtMutexLock(g_MdoRuns.Lock);
+    g_MdoRuns.Observer = Changed; g_MdoRuns.ObserverData = Data;
+    xrtMutexUnlock(g_MdoRuns.Lock);
+}
 
 static void MdoRunsError(xwork_error* Error, xwork_error_code Code,
     const char* Message)
@@ -303,6 +313,8 @@ bool MdoRunManagerPump(size_t* Completed, xwork_error* Error)
             Ok = false;
             break;
         }
+        if ( Entry->Info.State != AgentInfo.Run.eState && g_MdoRuns.Observer != NULL )
+            g_MdoRuns.Observer(g_MdoRuns.ObserverData);
         Entry->Info.State = AgentInfo.Run.eState;
         Entry->Info.Result = AgentInfo.Run.eResult;
         Entry->Info.CreatedMicroseconds = AgentInfo.Run.uCreatedUs;
@@ -344,6 +356,7 @@ bool MdoRunManagerPump(size_t* Completed, xwork_error* Error)
         if ( WaitResult != XWORK_RESULT_OK &&
              g_MdoRuns.RunsFailed != UINT64_MAX ) ++g_MdoRuns.RunsFailed;
         ++CompletedValue;
+        if ( g_MdoRuns.Observer != NULL ) g_MdoRuns.Observer(g_MdoRuns.ObserverData);
     }
 unlock:
     (void)xrtMutexUnlock(g_MdoRuns.Lock);
@@ -447,6 +460,7 @@ void MdoRunManagerUnit(void)
         g_MdoRuns.Stopping = true;
         Thread = g_MdoRuns.Thread;
         g_MdoRuns.Thread = NULL;
+        if ( g_MdoRuns.Observer != NULL ) g_MdoRuns.Observer(g_MdoRuns.ObserverData);
         if ( g_MdoRuns.Changed != NULL )
             (void)xrtCondBroadcast(g_MdoRuns.Changed);
         (void)xrtMutexUnlock(g_MdoRuns.Lock);
@@ -727,6 +741,8 @@ publish:
         Entry->Info.StartedMicroseconds = AgentInfo.Run.uStartedUs;
         Entry->Info.EndedMicroseconds = AgentInfo.Run.uEndedUs;
         Entry->Info.StartedAt = xrtNow();
+        if ( Entry->Info.State != AgentInfo.Run.eState && g_MdoRuns.Observer != NULL )
+            g_MdoRuns.Observer(g_MdoRuns.ObserverData);
         Entry->Info.State = AgentInfo.Run.eState;
         Entry->Info.Result = AgentInfo.Run.eResult;
         Entry->Info.Protocol = AgentInfo.Protocol;
@@ -758,6 +774,7 @@ publish:
             MdoRunsError(Error, XWORK_ERROR_CANCELLED,
                 "interactive run manager stopped while starting the run");
     }
+    if ( g_MdoRuns.Observer != NULL ) g_MdoRuns.Observer(g_MdoRuns.ObserverData);
     (void)xrtCondBroadcast(g_MdoRuns.Changed);
     (void)xrtMutexUnlock(g_MdoRuns.Lock);
     if ( Published && Info != NULL ) {
@@ -776,6 +793,7 @@ done:
                 MdoRunsRemoveLocked(Index);
                 if ( g_MdoRuns.StartingCount != 0u )
                     --g_MdoRuns.StartingCount;
+                if ( g_MdoRuns.Observer != NULL ) g_MdoRuns.Observer(g_MdoRuns.ObserverData);
                 (void)xrtCondBroadcast(g_MdoRuns.Changed);
             }
             (void)xrtMutexUnlock(g_MdoRuns.Lock);

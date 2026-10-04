@@ -101,4 +101,13 @@ bool MdoSessionsInternalMetaParse(const char* ExpectedProject,
 bool MdoSessionsInternalEventValid(const char* ProjectId, const char* SessionId, xstrview Json);
 bool MdoSessionsInternalTodoValid(xstrview Json);
 
+/* Committed JSONL record, borrowed only during callback. The observer must
+ * enqueue/copy and must not call any manager. Register before serving reads;
+ * unregister before disposing its state. Publication holds the manager lock. */
+typedef void (*MdoSessionEventObserver)(cstr Project, cstr Session, xstrview Record,
+    bool StateChanged, void* Data);
+void MdoSessionsObserve(MdoSessionEventObserver Observer, void* Data);
+void MdoSessionsInternalPublish(cstr Project, cstr Session, xstrview Record,
+    bool StateChanged);
+
 #endif

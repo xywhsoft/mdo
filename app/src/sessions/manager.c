@@ -23,6 +23,8 @@ typedef struct MdoSessionActive {
 
 typedef struct MdoSessionManagerState {
     xmutex* Lock;
+    MdoSessionEventObserver Observer;
+    void* ObserverData;
     xwork_runtime* Runtime;
     uint64 Generation;
     MdoSessionActive* Active;
@@ -56,6 +58,26 @@ struct MdoSessionCatalog {
 };
 
 static MdoSessionManagerState g_MdoSessions;
+
+void MdoSessionsObserve(MdoSessionEventObserver Observer, void* Data)
+{
+    if ( g_MdoSessions.Lock == NULL ) return;
+    xrtMutexLock(g_MdoSessions.Lock);
+    g_MdoSessions.Observer = Observer; g_MdoSessions.ObserverData = Data;
+    xrtMutexUnlock(g_MdoSessions.Lock);
+}
+
+void MdoSessionsInternalPublish(cstr Project, cstr Session, xstrview Record,
+    bool StateChanged)
+{
+    if ( g_MdoSessions.Lock == NULL ) return;
+    xrtMutexLock(g_MdoSessions.Lock);
+    if ( g_MdoSessions.Observer != NULL )
+        g_MdoSessions.Observer(Project, Session, Record, StateChanged,
+            g_MdoSessions.ObserverData);
+    xrtMutexUnlock(g_MdoSessions.Lock);
+}
+
 static bool MdoSessionsRestoreReserved(cstr ProjectId, cstr SessionId);
 
 static bool MdoSessionsValidateCurrent(MdoSession* Session,

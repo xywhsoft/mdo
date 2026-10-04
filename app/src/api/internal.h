@@ -28,6 +28,15 @@ typedef struct MdoApiContext {
     bool Takeover;
 } MdoApiContext;
 
+struct MdoSessionEventInfo;
+bool MdoApiLiveInit(void);
+void MdoApiLiveUnit(void);
+void MdoApiLiveRelease(void);
+void MdoApiLiveChanged(void* Data);
+bool MdoApiLiveRoute(MdoApiContext* Context);
+bool MdoApiSessionEventValue(const struct MdoSessionEventInfo* Event,
+    const char* ProjectId, const char* SessionId, bool FullText, xvalue** Value);
+
 typedef bool (*MdoApiRouteProc)(MdoApiContext* pContext);
 bool MdoApiUpdateRoute(MdoApiContext* Context);
 bool MdoApiUpdateDownloadRoute(MdoApiContext* Context);

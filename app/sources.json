@@ -95,6 +95,7 @@
     "src/api/diagnostics.c",
     "src/api/migration.c",
     "src/api/events.c",
+    "src/api/live.c",
     "src/api/profile.c",
     "src/api/draft.c",
     "src/api/queue.c",
