@@ -227,6 +227,27 @@ try {
   const headerReopensAtTop = !headerMenu.hidden && headerMenu.scrollTop === 0;
   topMenu.close(true);
   topMenu.destroy();
+  // Tree changes must preserve both the search reveal and keyboard position.
+  state.data = { items: [session, ...Array.from({ length: 6 }, (_, index) => ({
+    ...session, id: `tree${index}`, project_id: "alpha", title: `Tree task ${index}`,
+    updated_at: session.updated_at + index,
+  }))] };
+  publishSessions(state);
+  const groupBody = () => document.querySelector(".session-project-body");
+  const treeWindowLimited = groupBody().querySelectorAll(".session-item").length === 5;
+  menuKey(document.querySelector(".session-group-main"), "ArrowLeft");
+  const treeCollapsed = groupBody().hidden;
+  list.setQuery("Tree task");
+  const treeSearchReveals = !groupBody().hidden &&
+    groupBody().querySelectorAll(".session-item").length === 6;
+  list.setQuery("");
+  const treeSearchRestores = groupBody().hidden;
+  document.querySelector(".session-group-main").click();
+  const showMore = groupBody().querySelector(".session-show-more");
+  showMore.focus(); showMore.click();
+  const treeMoreFocus = !groupBody().querySelector(".session-show-more") &&
+    groupBody().querySelectorAll(".session-item").length === 6 &&
+    document.activeElement.dataset.sessionKey === "alpha/tree0";
   const passed = withinViewport && outsideClippingParent && firstFocused &&
     menuReadingStable && activityRunningShown && indicatorsKeepSelection &&
     activityStoppingShown && activityReadErrorKept && activityFinishedCleared && activityMenuStable &&
@@ -236,7 +257,8 @@ try {
     headerEndVisible && headerEndScrolled && headerPollStable &&
     headerActionsChanged && headerReopensAtTop &&
     headerWrapFocused && headerWrapVisible &&
-    headerHomeFocused && headerHomeVisible && titleSelectionStable && timestampUpdated;
+    headerHomeFocused && headerHomeVisible && titleSelectionStable && timestampUpdated &&
+    treeWindowLimited && treeCollapsed && treeSearchReveals && treeSearchRestores && treeMoreFocus;
   output.dataset.passed = String(passed);
   output.textContent = JSON.stringify({ passed, withinViewport, outsideClippingParent,
     titleSelectionStable, titleNodeStable, nodeAfterRefreshing, nodeAfterReady,
@@ -248,6 +270,7 @@ try {
     headerEscapeRestored, headerEndFocused, headerEndVisible, headerEndScrolled,
     headerPollStable, headerActionsChanged, archivedActions, headerReopensAtTop,
     headerWrapFocused, headerWrapVisible, headerHomeFocused, headerHomeVisible,
+    treeWindowLimited, treeCollapsed, treeSearchReveals, treeSearchRestores, treeMoreFocus,
     initialStyle, initialAnchor,
     initialRect: { top: rect.top, bottom: rect.bottom, left: rect.left, right: rect.right },
     viewport: { width: innerWidth, height: innerHeight } }, null, 2);

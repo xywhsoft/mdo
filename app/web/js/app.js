@@ -288,6 +288,14 @@ export async function boot() {
       closeDrawers();
       projectPanel.focusProject(projectId);
     },
+    onManageProjects() {
+      navigation.openSettings("projects");
+      closeDrawers();
+    },
+    onProjectAction(action, projectId, origin) {
+      if (action === "edit") return projectDialog.open({ id: projectId }, origin);
+      if (action === "unregister") return projectPanel.openUnregister({ id: projectId }, origin);
+    },
     onNewInProject: switchToProject,
   });
   const actionMenus = [

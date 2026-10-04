@@ -46,6 +46,25 @@ const tick = async () => { await Promise.resolve(); await Promise.resolve(); };
 const definition = (id) => ({ id, name: id, workspace_root: `/work/${id}`,
   default_model_id: "ling-3.0-tiny", etag: `"${id}-1"` });
 
+test("saving from the sidebar restores the refreshed project menu button", async () => {
+  const ctx = setup();
+  let restored = false;
+  const origin = { isConnected: true, dataset: { sidebarFocus: "menu:project:a" } };
+  const replacement = { dataset: origin.dataset, getClientRects: () => [{}],
+    focus() { restored = true; } };
+  globalThis.document.querySelectorAll = () => [replacement];
+  try {
+    const open = ctx.view.open({ id: "a" }, origin);
+    ctx.reads[0].resolve(definition("a")); await open;
+    ctx.submitForm();
+    origin.isConnected = false; // The catalog refresh replaced the button.
+    ctx.calls[0].resolve({ id: "a", name: "Renamed" }); await tick();
+    ctx.closeEvents();
+    assert.equal(restored, true);
+    assert.equal(ctx.updated.length, 1);
+  } finally { ctx.finish(); }
+});
+
 test("late project reads and queued close events cannot overwrite a newly opened form", async () => {
   const ctx = setup();
   try {

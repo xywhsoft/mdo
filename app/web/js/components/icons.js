@@ -24,6 +24,8 @@ const ICONS = Object.freeze({
   activity: '<path d="M3 12h4l3-7 4 14 3-7h4"/>',
   spark: '<path d="m12 3 1.5 4.5L18 9l-4.5 1.5L12 15l-1.5-4.5L6 9l4.5-1.5ZM5 15l.7 2.3L8 18l-2.3.7L5 21l-.7-2.3L2 18l2.3-.7Z"/>',
   folder: '<path d="M3 6h7l2 2h9v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"/>',
+  "folder-open": '<path d="M3 10V6h7l2 2h9v3M3 10h18l-3 9H5Z"/>',
+  pin: '<path d="m8 3 8 0-1 6 3 3v2H6v-2l3-3Zm4 11v7"/>',
   brain: '<path d="M9.5 4A3.5 3.5 0 0 0 6 7.5v.3A3 3 0 0 0 4.5 13 3.5 3.5 0 0 0 8 18.5c.5 1 1.4 1.5 2.5 1.5V4Zm5 0A3.5 3.5 0 0 1 18 7.5v.3a3 3 0 0 1 1.5 5.2 3.5 3.5 0 0 1-3.5 5.5c-.5 1-1.4 1.5-2.5 1.5V4Z"/><path d="M7 9h3.5M14 13h4M8 16h2.5M13.5 8H17"/>',
   "arrow-up": '<path d="m12 19V5M6 11l6-6 6 6"/>',
   "arrow-left": '<path d="m19 12H5M11 18l-6-6 6-6"/>',

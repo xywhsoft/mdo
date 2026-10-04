@@ -19,6 +19,8 @@ export function createProjectDialog({ dialog, form, error, submit, modelsStore,
   let loading = false;
   let loadFailed = false;
   let saving = null;
+  let returnFocus = null;
+  let returnFocusKey = "";
   const title = dialog.querySelector("#project-dialog-title");
   const description = dialog.querySelector("#project-dialog-description");
 
@@ -121,11 +123,20 @@ export function createProjectDialog({ dialog, form, error, submit, modelsStore,
     if (dialog.open) return;
     ++generation; loading = false; error.hidden = true;
     directoryPicker?.close(); renderState();
+    // Saving can refresh the catalog and replace the original sidebar button.
+    // Restore its current counterpart rather than a detached DOM node.
+    const origin = returnFocus?.isConnected ? returnFocus : returnFocusKey
+      ? [...document.querySelectorAll("[data-sidebar-focus]")]
+        .find((node) => node.dataset.sidebarFocus === returnFocusKey) : null;
+    returnFocus = null; returnFocusKey = "";
+    if (origin?.getClientRects().length) origin.focus({ preventScroll: true });
   });
 
   return Object.freeze({
-    async open(project = null) {
+    async open(project = null, origin = document.activeElement) {
       const version = ++generation;
+      returnFocus = project ? origin : null;
+      returnFocusKey = returnFocus?.dataset?.sidebarFocus || "";
       directoryPicker?.close();
       form.reset();
       editing = project && { ...project };

@@ -22,10 +22,29 @@ export function createProjectPanel({ panel, projectsStore, modelsStore,
   const previewClose = previewDialog.querySelector("#project-purge-preview-close");
   const previewConfirm = previewDialog.querySelector("#project-purge-preview-confirm");
   let target = null;
+  let unregisterOrigin = null;
+  let unregisterEpoch = 0;
   let previewProject = null;
   let previewOrigin = null;
   let previewRequest = null;
   let previewData = null;
+
+  async function openUnregister(project, origin) {
+    const epoch = ++unregisterEpoch;
+    const current = await readProject(project.id);
+    if (epoch !== unregisterEpoch) return;
+    target = current;
+    unregisterOrigin = origin ?? document.activeElement;
+    const summary = projectsStore.get().data?.items?.find((item) => item.id === project.id) ?? project;
+    description.textContent = Number.isInteger(summary.session_count) && Number.isInteger(summary.schedule_count)
+      ? t("project.unregisterDescription", { name: current.name,
+        sessions: summary.session_count, schedules: summary.schedule_count })
+      : t("project.unregisterPreserveDescription", { name: current.name },
+        `“${current.name}” 的项目定义将移除，已有会话和计划会保留。`);
+    error.hidden = true;
+    dialog.showModal();
+    dialog.querySelector('[value="cancel"]')?.focus();
+  }
 
   function canConfirmPreview() {
     if (!previewData || purgeRecovery.get().busy || purgeRecovery.get().writeConflict || purgeRecovery.get().error) return false;
@@ -47,6 +66,7 @@ export function createProjectPanel({ panel, projectsStore, modelsStore,
 
   function focusProject(id, control = "edit") {
     window.requestAnimationFrame(() => {
+      if (!panel.getClientRects().length) return;
       const card = [...list.querySelectorAll("[data-project-id]")]
         .find((item) => item.dataset.projectId === id);
       const targetControl = card?.querySelector(`[data-project-action="${control}"]`) ??
@@ -248,15 +268,8 @@ export function createProjectPanel({ panel, projectsStore, modelsStore,
           text: t("project.unregister", {}, "取消注册"),
           attrs: { type: "button", "data-project-action": "unregister" } });
         remove.addEventListener("click", async () => {
-          try {
-            target = await readProject(project.id);
-            description.textContent = t("project.unregisterDescription", {
-              name: target.name, sessions: project.session_count,
-              schedules: project.schedule_count,
-            }, `“${target.name}” 的项目定义将移除，已有的 ${project.session_count} 个会话和 ${project.schedule_count} 项计划会保留。`);
-            error.hidden = true;
-            dialog.showModal();
-          } catch (cause) { toast(errorMessage(cause), "error"); }
+          try { await openUnregister(project, remove); }
+          catch (cause) { toast(errorMessage(cause), "error"); }
         });
         actions.append(remove);
       }
@@ -276,14 +289,22 @@ export function createProjectPanel({ panel, projectsStore, modelsStore,
       await unregisterProject(target.id, target.etag);
       dialog.close();
       toast(t("project.unregistered", {}, "项目已取消注册；会话和计划仍保留"));
-      panel.querySelector("#projects-add").focus();
+      if (panel.getClientRects().length) panel.querySelector("#projects-add").focus();
     } catch (cause) {
       error.textContent = errorMessage(cause);
       error.hidden = false;
       error.focus();
     } finally { confirm.disabled = false; }
   });
-  dialog.addEventListener("close", () => { target = null; });
+  dialog.addEventListener("close", () => {
+    if (dialog.open) return;
+    ++unregisterEpoch;
+    target = null;
+    if (unregisterOrigin?.isConnected && unregisterOrigin.getClientRects().length)
+      unregisterOrigin.focus({ preventScroll: true });
+    else if (!panel.getClientRects().length) document.querySelector("#session-search")?.focus();
+    unregisterOrigin = null;
+  });
   previewRefresh.addEventListener("click", () => { void loadPreview(); });
   previewClose.addEventListener("click", () => previewDialog.close());
   previewConfirm.addEventListener("click", () => {
@@ -329,6 +350,7 @@ export function createProjectPanel({ panel, projectsStore, modelsStore,
 
   return Object.freeze({
     focusProject,
+    openUnregister,
     openPurgeReview(intent, origin) {
       openPreview({ id: intent.project_id, name: intent.name }, origin);
     },

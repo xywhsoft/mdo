@@ -1123,6 +1123,8 @@ parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument("--packed-path", type=Path,
                     default=ROOT / ("mdo.exe" if os.name == "nt" else "mdo"),
                     help="packed executable to copy into the isolated QA Home")
+parser.add_argument("--sidebar-tree-fixture", action="store_true",
+                    help="seed three small project groups, a pin and default tasks for sidebar review")
 parser.add_argument("--profile-delay-ms", type=int, default=0,
                     help="delay the first session profile reply by 0-5000 ms")
 parser.add_argument("--fail-first-profile", action="store_true",
@@ -1463,6 +1465,37 @@ try:
     if status != 201:
         raise RuntimeError((status, response))
     session = response["data"]["id"]
+    if args.sidebar_tree_fixture:
+        from test_api_runtime import request as raw_request
+        definitions = [("mdo", "mdo", 8), ("xrt", "xrt", 3), ("empty-project", "空项目", 0)]
+        seeded = []
+        for project_id, name, total in definitions:
+            workspace = base / "workspaces" / project_id
+            workspace.mkdir(parents=True)
+            status, document = request(port, "POST", "/api/v1/projects", {
+                "id": project_id, "name": name, "workspace_root": str(workspace),
+            })
+            assert status == 201, (status, document)
+            for index in range(total):
+                status, document = request(port, "POST", "/api/v1/sessions", {
+                    **options, "project_id": project_id,
+                    "title": ("修复移动端设置布局" if index == 0 else
+                              f"分析项目目录和功能 · {index + 1}"),
+                })
+                assert status == 201, (status, document)
+                seeded.append((project_id, document["data"]["id"]))
+        project_id, pinned_id = seeded[-1]
+        path = f"/api/v1/projects/{project_id}/sessions/{pinned_id}"
+        _, headers, _ = raw_request(port, "GET", path)
+        _, bootstrap_headers, _ = raw_request(port, "GET", "/api/v1/bootstrap")
+        status, _, document = raw_request(port, "PATCH", path,
+            body=b'{"pinned":true}', headers={"Content-Type": "application/json",
+                "If-Match": headers["etag"], "X-Mdo-Write-Token": bootstrap_headers["x-mdo-write-token"]})
+        assert status == 200, (status, document)
+        for title in ("设置联网搜索", "整理待办任务"):
+            status, document = request(port, "POST", "/api/v1/sessions", {**options, "title": title})
+            assert status == 201, (status, document)
+        session = seeded[0][1]
     browser_port = port
     if (args.profile_delay_ms or args.fail_first_profile
             or args.approval_delay_ms or args.ask_delay_ms or args.task_cancel_delay_ms
@@ -1605,7 +1638,7 @@ try:
         proxy.project_posts = 0
         threading.Thread(target=proxy.serve_forever, daemon=True).start()
         browser_port = proxy.server_address[1]
-    print(f"READY url=http://127.0.0.1:{browser_port}/#/projects/default/"
+    print(f"READY url=http://127.0.0.1:{browser_port}/#/projects/{'mdo' if args.sidebar_tree_fixture else 'default'}/"
           f"sessions/{session} base={base}", flush=True)
     input("Press Enter to stop QA servers.\n")
 finally:
