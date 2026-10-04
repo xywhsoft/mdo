@@ -17,6 +17,7 @@ typedef struct MdoAccountLease {
     xcancel* Cancel;
     xcancelwatch* Watch;
     uint64 Generation;
+    uint64 MemberId;
     bool Managed;
 } MdoAccountLease;
 
@@ -34,6 +35,10 @@ bool MdoAccountSkipSearch(uint64 Id);
 cstr MdoAccountSearchEndpoint(void);
 bool MdoAccountAcquire(cstr Query, const xwork_tool_context* Context,
     MdoAccountLease* Lease);
+/* Background service lease: returns immediately, never creates a search
+ * prompt/waiter. An expired token queues refresh and returns unavailable.
+ * Logout/account switch cancels acquired leases through the same authority. */
+bool MdoAccountAcquireService(xcancel* Cancel, MdoAccountLease* Lease);
 void MdoAccountRelease(MdoAccountLease* Lease);
 bool MdoAccountRejectAccess(const MdoAccountLease* Lease);
 void MdoAccountSearchStatus(uint16 Status);

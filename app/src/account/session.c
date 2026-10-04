@@ -403,6 +403,35 @@ cstr MdoAccountSearchEndpoint(void)
 {
     return MDO_ACCOUNT_SERVICE_ORIGIN "/api/v1/search";
 }
+/* Lock held. The caller releases a partially created lease after unlocking,
+ * since unwatch can wait for a cancellation callback to finish. */
+static bool MdoAccountLeaseLocked(xcancel* Cancel, MdoAccountLease* Lease)
+{
+    if (!g_MdoAccount.Tokens.Access[0] || !g_MdoAccount.SessionCancel ||
+        g_MdoAccount.Tokens.Expires <= xrtDeadlineAfter(30000000) ||
+        (Cancel && xrtCancelRequested(Cancel))) return false;
+    Lease->AccessToken = xrtMalloc(strlen(g_MdoAccount.Tokens.Access) + 1);
+    Lease->Cancel = xrtCancelChild(Cancel);
+    if (!Lease->AccessToken || !Lease->Cancel) return false;
+    strcpy(Lease->AccessToken, g_MdoAccount.Tokens.Access);
+    Lease->Watch = xrtCancelWatch(g_MdoAccount.SessionCancel, MdoAccountCancelLease, Lease->Cancel);
+    if (!Lease->Watch) return false;
+    Lease->Generation = g_MdoAccount.Epoch; Lease->MemberId = g_MdoAccount.Tokens.MemberId;
+    Lease->Managed = true; return true;
+}
+bool MdoAccountAcquireService(xcancel* Cancel, MdoAccountLease* Lease)
+{
+    if (!Lease) return false;
+    memset(Lease,0,sizeof(*Lease));
+    if (!g_MdoAccount.Initialized) return false;
+    xrtMutexLock(g_MdoAccount.Lock);
+    bool ok = !g_MdoAccount.Stopping && MdoAccountLeaseLocked(Cancel,Lease);
+    if (!ok && !g_MdoAccount.Stopping && g_MdoAccount.Tokens.Refresh[0] &&
+        (!Cancel || !xrtCancelRequested(Cancel))) (void)MdoAccountQueueLocked(MDO_ACCOUNT_WORK_REFRESH);
+    xrtMutexUnlock(g_MdoAccount.Lock);
+    if (!ok) MdoAccountRelease(Lease);
+    return ok;
+}
 bool MdoAccountAcquire(cstr Query, const xwork_tool_context* Context, MdoAccountLease* Lease)
 {
     size_t slot = MDO_ACCOUNT_WAIT_MAX, i; bool ok = false;
@@ -417,13 +446,7 @@ bool MdoAccountAcquire(cstr Query, const xwork_tool_context* Context, MdoAccount
             (Context->uDeadline != XRT_DEADLINE_NEVER && xrtDeadlineExpired(Context->uDeadline)) ||
             (slot < MDO_ACCOUNT_WAIT_MAX && g_MdoAccount.Waiters[slot].Skipped)) break;
         if (g_MdoAccount.Tokens.Access[0] && g_MdoAccount.Tokens.Expires > xrtDeadlineAfter(30000000)) {
-            Lease->AccessToken = xrtMalloc(strlen(g_MdoAccount.Tokens.Access) + 1);
-            Lease->Cancel = xrtCancelChild(Context->pCancel);
-            if (!Lease->AccessToken || !Lease->Cancel || !g_MdoAccount.SessionCancel) break;
-            strcpy(Lease->AccessToken, g_MdoAccount.Tokens.Access);
-            Lease->Watch = xrtCancelWatch(g_MdoAccount.SessionCancel, MdoAccountCancelLease, Lease->Cancel);
-            if (!Lease->Watch) break;
-            Lease->Generation = g_MdoAccount.Epoch; Lease->Managed = true; ok = true; break;
+            ok = MdoAccountLeaseLocked(Context->pCancel,Lease); break;
         }
         if (g_MdoAccount.Tokens.Refresh[0]) (void)MdoAccountQueueLocked(MDO_ACCOUNT_WORK_REFRESH);
         if (slot == MDO_ACCOUNT_WAIT_MAX) {
