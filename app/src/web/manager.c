@@ -220,6 +220,27 @@ static bool MdoWebUnsigned(const xvalue* pValue, uint64* pNumber)
     return true;
 }
 
+/* Page links may contain browser-only fragments (for example share links).
+ * Keep them in search results, but permissions and HTTP requests use the same
+ * fragment-free URL. Validate the whole input before stripping anything;
+ * a fragment must not hide controls, credentials in the authority or a bad
+ * scheme. Service/configuration URLs retain MdoHttpUrlValid's strict policy. */
+static bool MdoWebPageUrl(xstrview Url, bool AllowHttp, xstrview* pRequestUrl)
+{
+    xstrview RequestUrl = Url;
+    size_t i;
+    if ( Url.Data == NULL || Url.Size == 0u || Url.Size > MDO_WEB_URL_LIMIT )
+        return false;
+    for ( i = 0u; i < Url.Size; ++i ) {
+        unsigned char c = (unsigned char)Url.Data[i];
+        if ( c <= 0x20u || c == 0x7fu || c == '\\' ) return false;
+        if ( c == '#' && RequestUrl.Size == Url.Size ) RequestUrl.Size = i;
+    }
+    if ( !MdoHttpUrlValid(RequestUrl, AllowHttp) ) return false;
+    if ( pRequestUrl != NULL ) *pRequestUrl = RequestUrl;
+    return true;
+}
+
 static bool MdoWebArguments(const char* Json, xvalue** ppRoot)
 {
     xjsonreadconfig Config;
@@ -738,7 +759,7 @@ static xwork_result MdoWebOpenExecute(void* pUserData,
          !MdoWebAllowedKeys(pArguments, Keys, 2u) ||
          !MdoWebString(xrtValueObjectGet(pArguments, xrtStrView("url")),
             1u, MDO_WEB_URL_LIMIT, &UrlView) ||
-         !MdoHttpUrlValid(UrlView, pState->Settings.AllowHttp) ) {
+         !MdoWebPageUrl(UrlView, pState->Settings.AllowHttp, &UrlView) ) {
         Result = MdoWebToolFail(pWriter, pError,
             "web_open requires an allowed HTTP(S) URL");
         goto done;
@@ -784,8 +805,8 @@ static xwork_result MdoWebOpenExecute(void* pUserData,
         else goto memory_failed;
         goto done;
     }
-    if ( !MdoHttpUrlValid(xrtStrView(Document.Url),
-            pState->Settings.AllowHttp) ) {
+    if ( !MdoWebPageUrl(xrtStrView(Document.Url),
+            pState->Settings.AllowHttp, NULL) ) {
         Result = MdoWebToolFail(pWriter, pError,
             "web_open final URL violates the URL policy");
         goto done;
@@ -1048,7 +1069,7 @@ static xwork_result MdoWebOpenPermissions(void* pUserData,
          !MdoWebAllowedKeys(pArguments, Keys, 2u) ||
          !MdoWebString(xrtValueObjectGet(pArguments, xrtStrView("url")),
             1u, MDO_WEB_URL_LIMIT, &Url) ||
-         !MdoHttpUrlValid(Url, pState->Settings.AllowHttp) ) {
+         !MdoWebPageUrl(Url, pState->Settings.AllowHttp, &Url) ) {
         Result = MdoWebFail(pError, XWORK_ERROR_INVALID_ARGUMENT,
             "web_open requires an allowed HTTP(S) URL");
         goto done;
