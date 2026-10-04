@@ -60,3 +60,23 @@ python tests/test_live_runtime.py --packed .build/mdo-ws.exe
 断线续传、HTTP 数据一致性、运行完成、ask、权限审核、错误帧和关闭。
 发布检查 `tools/qa_release.py` 已包含开发与打包版探针。无需访问线上模型，
 不执行压力或高负载测试。
+
+## 2026-10-05 验证记录
+
+- 363 项前端测试和 61 项相关契约检查通过；会话与运行管理器原生探针通过。
+- 开发宿主和最终单文件 EXE 的 WebSocket 探针通过。开发夹具仅降低缓存容量与
+  心跳时限，验证缓存淘汰补齐及静默连接释放，不生成高负载。
+- 实际浏览器确认逐段显示、思考、完成后恢复发送状态，控制台无错误；该页面
+  只有一次 WebSocket 握手及启动时的一次 HTTP 事件读取，没有后续消息轮询。
+- Windows WebView 的便携启动、迁移及正常退出检查通过。Windows GCC 与 Android
+  ARM64 NDK 编译检查通过，项目代码启用 `-Wall -Wextra -Werror`。
+- ARM64 APK 保留原开发签名，versionCode 为 `20261007`，签名与 16 KiB 对齐校验
+  通过。本次未安装到手机，未进行本次版本的真机交互验证。
+- 产物来自当前工作区，其他正在进行的未提交修改保持原状。
+
+最终产物 SHA-256：
+
+```text
+mdo.exe: d9fa61c0490215535c400738fc4fb45554f48471c8f03369c77a93437e5e7fbb
+mdo-arm64-v8a.apk: e3ee53e1ef727dbb2547c6eddb33132ce86f872f3c81af64fdd986fe7b3f3c6b
+```
