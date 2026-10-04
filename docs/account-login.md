@@ -35,6 +35,8 @@ xadmin 在私有 `db/identity.json` 的 `applications` 登记客户端；修改�
 
 Android 要求 `/.well-known/assetlinks.json` 返回 JSON 200。xadmin 为这一个标准路径注册公开、大小受限的路由，其他隐藏文件仍受 xs 的隐藏文件规则保护。
 
+网站还必须提供精确的 `/app/mdo/callback` 回调页面。部分手机域名验证未成功或浏览器不自动唤起应用时，页面显示「返回墨斗」，通过用户点击的 HTTPS Intent 将一次性授权结果交给指定 APK；PKCE、state 与有效期继续由原生后台校验。页面不交换令牌、不保存授权数据，并立即清除地址栏中的授权查询。缺失此页面会在浏览器中显示 404；修复网站即可供现有 APK 使用。站点实现和回归见 home 仓库的 `docs/mdo-android-login.md`。
+
 ## 功能验证
 
 ```powershell
