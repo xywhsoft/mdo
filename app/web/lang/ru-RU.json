@@ -26,7 +26,6 @@
   "timeline.subagentStarted": "Дочерний агент запущен",
   "timeline.recovery": "Восстановление",
   "timeline.resumed": "Продолжено после прерывания",
-  "timeline.you": "Вы",
   "timeline.reasoning": "Рассуждение",
   "timeline.tool": "Инструмент",
   "timeline.toolStageTime": "Инструменты и ожидание всего: {duration}",

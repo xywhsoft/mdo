@@ -26,7 +26,6 @@
   "timeline.subagentStarted": "子 Agent 已启动",
   "timeline.recovery": "恢复",
   "timeline.resumed": "从上次中断处继续运行",
-  "timeline.you": "你",
   "timeline.reasoning": "思考",
   "timeline.tool": "工具",
   "timeline.toolStageTime": "工具和等待合计 {duration}",

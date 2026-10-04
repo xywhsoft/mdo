@@ -5915,3 +5915,12 @@ staging HTTP/TLS 验证待办与图片投影仍正常；TLS 一次清理失败�
 没有评分按钮或新评分文件；设置桌面分类和 390px 手机下拉菜单均为九页，
 无反馈项、横向溢出或脚本错误。截图位于 .build/no-feedback-{desktop,settings,settings-mobile}.png。
 Windows 单文件包和 ARM64 Android APK 均重新生成，未进行压力/高负载测试。
+
+## 2026-10-04 删除用户消息身份标签
+
+用户消息不再生成或渲染“你”身份标签，移除三种语言的闲置 timeline.you 文案。
+消息时间仍靠右显示，复制、编辑与图片附件不变；Agent 和工具身份保持原有显示。
+32 项时间线/国际化测试和 18 项前端契约通过。隔离打包页用本地模型实际
+发送消息，在 1120px 与 390px 确认用户身份节点为零，时间、复制、编辑可见，
+无横向溢出或脚本错误。截图：.build/no-user-label-{desktop,mobile}.png。
+重新生成 Windows 单文件版与 ARM64 Android APK，无压力或高负载测试。

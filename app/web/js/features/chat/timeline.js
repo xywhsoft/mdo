@@ -115,7 +115,6 @@ export function eventsToTimeline(events, historyLost = false,
             time: event.time });
         } else {
           items.push({ key: `user-${event.event_id}`, kind: "user",
-            role: t("timeline.you", {}, "你"),
             text: event.text || "", state: "done", time: event.time,
             attachments: Array.isArray(event.attachments) ? event.attachments : [],
             userMessageSequence: Number(event.user_message_sequence || 0),
@@ -547,7 +546,8 @@ function timelineNode(item, handlers, projectId, sessionId, writable,
       projectId, sessionId, toolTextCache);
   const time = timeNode(item.time);
   const header = element("div", { className: "timeline-item-header" }, [
-    element("span", { className: "timeline-role", text: item.role }),
+    item.kind === "user" ? null :
+      element("span", { className: "timeline-role", text: item.role }),
     time,
   ]);
   if (item.kind === "assistant" && item.state === "cancelled")

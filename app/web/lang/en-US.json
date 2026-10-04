@@ -26,7 +26,6 @@
   "timeline.subagentStarted": "Sub-agent started",
   "timeline.recovery": "Recovery",
   "timeline.resumed": "Resumed from the previous interruption",
-  "timeline.you": "You",
   "timeline.reasoning": "Reasoning",
   "timeline.tool": "Tool",
   "timeline.toolStageTime": "Tools and waits total {duration}",
