@@ -22,6 +22,7 @@
     "src/account/credential.c",
     "src/account/authorization.c",
     "src/account/session.c",
+    "src/remote/websocket.c",
     "src/web/manager.c",
     "src/mcp/manager.c",
     "src/modules/manager.c",
