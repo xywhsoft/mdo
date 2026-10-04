@@ -205,32 +205,96 @@ select:focus-visible,
 .sidebar-close { display: none; }
 .desktop-sidebar-toggle { display: none; }
 
-.model-config-controls, .model-config-actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
-.model-config-controls { margin: 12px 0 16px; }
-.model-config-status { color: var(--muted); font-size: .84rem; }
-.model-config-layout { display: grid; grid-template-columns: minmax(190px, 250px) minmax(0, 1fr); gap: 14px; min-width: 0; }
-.model-config-list, .model-config-form { min-width: 0; border: 1px solid var(--border); border-radius: 12px; background: var(--surface); }
-.model-config-list { display: flex; flex-direction: column; gap: 3px; align-self: start; padding: 6px; max-height: min(68dvh, 700px); overflow: auto; }
-.model-config-item { display: grid; gap: 2px; width: 100%; padding: 10px; border: 0; border-radius: 8px; background: transparent; color: var(--ink); text-align: left; cursor: pointer; }
-.model-config-item small { color: var(--muted); overflow-wrap: anywhere; }
-.model-config-item:hover, .model-config-item[aria-current="true"] { background: var(--surface-hover); }
-.model-config-form { padding: 18px; }
-.model-config-form h3 { margin: 0 0 5px; }
-.model-config-form > p { color: var(--muted); }
-.model-form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin: 16px 0; }
-.model-field { display: grid; gap: 5px; min-width: 0; font-size: .84rem; }
-.model-field input:not([type="checkbox"]), .model-field select { width: 100%; min-width: 0; padding: 9px; border: 1px solid var(--border); border-radius: 7px; background: var(--surface); color: var(--ink); }
-.model-field:has(input[type="checkbox"]) { display: flex; flex-direction: row-reverse; justify-content: start; align-items: center; gap: 8px; }
-.model-checks { display: flex; gap: 8px 16px; flex-wrap: wrap; margin: 14px 0; border: 1px solid var(--border); border-radius: 8px; padding: 8px 12px 12px; }
-.model-checks legend { padding: 0 4px; font-size: .84rem; }
-.model-checks label { display: inline-flex; align-items: center; gap: 5px; font-size: .82rem; }
-.model-advanced { margin: 14px 0; }
-.model-advanced summary { cursor: pointer; }
-.model-config-actions { margin-top: 18px; }
-.model-delete-confirm { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; width: 100%; padding: 10px; border: 1px solid var(--danger); border-radius: 8px; }
-@media (max-width: 1250px) {
-  .model-config-layout { grid-template-columns: minmax(0, 1fr); }
-  .model-config-list { max-height: 180px; }
+/* Model management owns its editor layout. Scope the form rule so the
+   general settings form never overrides card width, margin or padding. */
+.settings-content > .resource-section[data-settings-panel="models"] { width: min(1000px, calc(100% - 48px)); }
+#settings-models-list { container: model-config / inline-size; }
+.model-config-status { margin: 0 0 16px; color: var(--muted); font-size: 12px; }
+.model-config-controls { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; margin-bottom: 20px; }
+.model-config-controls > .model-config-status { flex: 1; min-width: 0; margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.model-config-tabs { display: flex; gap: 3px; padding: 3px; border: 1px solid var(--border); border-radius: 9px; background: var(--surface); }
+.model-config-tabs button { min-height: 32px; padding: 5px 16px; border: 0; border-radius: 6px; background: transparent; color: var(--muted); font-size: 12px; }
+.model-config-tabs button[aria-pressed="true"] { background: var(--surface-raised); color: var(--ink); box-shadow: 0 1px 4px rgb(0 0 0 / 10%); }
+.model-toolbar-actions { display: flex; align-items: center; gap: 8px; }
+.model-toolbar-actions button { min-height: 36px; padding: 7px 14px; border-radius: 8px; font-size: 12px; }
+.model-config-layout { display: grid; grid-template-columns: 236px minmax(0, 1fr); align-items: start; gap: 20px; min-width: 0; }
+.model-config-list { display: flex; flex-direction: column; gap: 4px; min-width: 0; max-height: min(68dvh, 700px); padding: 8px; overflow: auto; border: 1px solid var(--border); border-radius: 13px; background: var(--surface); }
+.model-list-heading { display: flex; align-items: center; justify-content: space-between; padding: 4px 7px 10px; color: var(--muted); font-size: 11px; }
+.model-list-count { display: grid; min-width: 20px; height: 20px; padding: 0 5px; place-items: center; border-radius: 6px; background: var(--surface-hover); font-size: 10px; }
+.model-config-item { display: flex; align-items: start; gap: 10px; width: 100%; min-width: 0; padding: 12px 10px; border: 1px solid transparent; border-radius: 9px; background: transparent; color: var(--ink); text-align: left; cursor: pointer; }
+.model-config-item:hover { background: var(--surface-hover); }
+.model-config-item[aria-current="true"] { border-color: var(--border-strong); background: var(--surface-raised); box-shadow: 0 1px 3px rgb(0 0 0 / 4%); }
+.model-item-icon { display: grid; flex: 0 0 28px; width: 28px; height: 28px; padding: 5px; place-items: center; border: 1px solid var(--border); border-radius: 8px; color: var(--muted); background: var(--surface-raised); }
+.model-item-copy { display: grid; min-width: 0; gap: 4px; }
+.model-item-copy strong { overflow-wrap: anywhere; font-size: 12px; font-weight: 600; line-height: 1.5; }
+.model-item-copy small { color: var(--muted); font-size: 11px; overflow-wrap: anywhere; }
+.model-item-badges { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 3px; }
+.model-item-badges:empty { display: none; }
+.model-item-badges > span { padding: 2px 6px; border-radius: 5px; background: var(--surface-hover); color: var(--muted); font-size: 10px; line-height: 1.4; }
+.model-item-badges > .model-default-badge { background: color-mix(in srgb, var(--success) 10%, var(--surface-raised)); color: var(--success); }
+.settings-content .model-config-form { width: 100%; min-width: 0; margin: 0; padding: 0; overflow: hidden; border: 1px solid var(--border); border-radius: 13px; background: var(--surface-raised); }
+.model-editor-heading { display: flex; align-items: start; gap: 12px; padding: 18px 20px; border-bottom: 1px solid var(--border); }
+.model-editor-heading > div { min-width: 0; }
+.model-editor-icon { flex: 0 0 36px; width: 36px; height: 36px; padding: 8px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); color: var(--muted); }
+.model-editor-heading h3 { margin: 0; font-size: 16px; font-weight: 600; line-height: 1.5; overflow-wrap: anywhere; }
+.model-editor-heading p { margin: 5px 0 0; color: var(--muted); font-size: 12px; line-height: 1.7; }
+.model-section { padding: 16px 20px; }
+.model-section + .model-section { border-top: 1px solid var(--border); }
+.model-section h4 { margin: 0 0 12px; color: var(--ink); font-size: 12px; font-weight: 600; }
+.model-form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px 16px; }
+.model-section-wide .model-form-grid { grid-template-columns: minmax(0, 1fr); }
+.model-field { display: grid; align-content: start; gap: 6px; min-width: 0; font-size: 12px; }
+.model-field > span { color: var(--muted); }
+.model-field input:not([type="checkbox"]), .model-field select { width: 100%; min-width: 0; min-height: 40px; padding: 9px 11px; border: 1px solid var(--border-strong); border-radius: 8px; background: var(--bg); color: var(--ink); font: inherit; font-size: 13px; }
+.model-field input::placeholder { color: var(--faint); }
+.model-field input[readonly] { background: var(--surface); color: var(--muted); }
+.model-field:has(input[type="checkbox"]) { display: flex; grid-column: 1 / -1; flex-direction: row-reverse; justify-content: start; align-items: center; gap: 9px; }
+.model-field:has(input[type="checkbox"]) > span { color: var(--ink); }
+.model-checks { display: flex; flex-wrap: wrap; gap: 8px; min-width: 0; margin: 16px 0 0; padding: 0; border: 0; }
+.model-checks legend { margin-bottom: 8px; padding: 0; color: var(--muted); font-size: 12px; }
+.model-checks label { display: inline-flex; align-items: center; gap: 8px; min-width: 0; padding: 8px 10px; border: 1px solid var(--border); border-radius: 7px; color: var(--muted); font-size: 12px; cursor: pointer; }
+.model-checks label:has(input:checked) { border-color: color-mix(in srgb, var(--ink) 25%, var(--border)); background: var(--surface); color: var(--ink); }
+.model-checks label:has(input:disabled) { opacity: .45; cursor: default; }
+.model-checks input, .model-field input[type="checkbox"] { flex: 0 0 auto; margin: 0; accent-color: var(--accent); }
+.model-checks:has(input[name="capability"]) { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.model-checks label > span { overflow-wrap: anywhere; }
+.model-advanced { margin: 0; border-top: 1px solid var(--border); }
+.model-advanced summary { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 16px 20px; color: var(--muted); font-size: 12px; cursor: pointer; list-style: none; }
+.model-advanced summary::-webkit-details-marker { display: none; }
+.model-advanced summary::after { width: 6px; height: 6px; margin-right: 2px; border-right: 1.5px solid currentColor; border-bottom: 1.5px solid currentColor; content: ""; transform: rotate(45deg); }
+.model-advanced[open] summary::after { transform: rotate(225deg); }
+.model-advanced[open] summary { color: var(--ink); }
+.model-advanced-body { padding: 0 20px 20px; }
+.model-advanced-body > .model-checks:first-child { margin-top: 0; }
+.model-advanced-body > .model-form-grid { margin-top: 20px; }
+.model-info-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px 16px; margin: 0 0 22px; }
+.model-info-value { min-width: 0; }
+.model-info-value dt { margin-bottom: 7px; color: var(--muted); font-size: 11px; }
+.model-info-value dd { margin: 0; color: var(--ink); font-size: 13px; font-weight: 500; overflow-wrap: anywhere; }
+.model-summary-chips { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0; }
+.model-summary-chips span { padding: 6px 9px; border: 1px solid var(--border); border-radius: 6px; color: var(--muted); background: var(--surface); font-size: 11px; }
+.model-config-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; padding: 14px 20px; border-top: 1px solid var(--border); }
+.model-config-actions > .primary-button { order: 2; margin-left: auto; min-width: 76px; }
+.model-config-actions > .secondary-button { order: 1; }
+.model-config-actions > .secondary-button:only-child { margin-left: auto; }
+.model-config-actions > .danger-link { padding: 7px 0; font-size: 12px; }
+.model-delete-confirm { display: flex; order: 3; align-items: center; flex-wrap: wrap; gap: 8px; width: 100%; padding: 12px; border: 1px solid var(--danger); border-radius: 8px; font-size: 12px; }
+@container model-config (max-width: 680px) {
+  .model-config-controls > .model-config-status { display: none; }
+  .model-config-layout { grid-template-columns: minmax(0, 1fr); gap: 16px; }
+  .model-config-list { max-height: 220px; }
+}
+@container model-config (max-width: 440px) {
+  .model-editor-heading { padding: 18px 16px; }
+  .model-section { padding: 16px; }
+  .model-editor-heading h3 { font-size: 15px; }
+  .model-advanced summary { padding: 16px; }
+  .model-advanced-body { padding: 0 16px 18px; }
+  .model-config-actions { padding: 14px 16px; }
+  .model-config-controls { gap: 10px; }
+  .model-config-tabs button { padding: 5px 12px; }
+  .model-toolbar-actions button { padding: 7px 10px; }
+  .model-form-grid, .model-checks:has(input[name="capability"]) { grid-template-columns: minmax(0, 1fr); }
 }
 
 .pane-resize-handle { position: absolute; z-index: 12; top: 0; bottom: 0; width: 8px; transform: translateX(-50%); cursor: col-resize; touch-action: none; }
@@ -1444,8 +1508,6 @@ select:focus-visible,
   .session-item { min-height: 40px; padding-right: 43px; }
   .session-more { right: 0; }
   .session-menu button { min-height: 40px; }
-  .model-config-layout { grid-template-columns: minmax(0, 1fr); }
-  .model-config-list { max-height: 180px; }
   .model-form-grid { grid-template-columns: minmax(0, 1fr); }
   .model-config-controls button, .model-config-actions button,
   .model-config-item, .model-field:has(input[type="checkbox"]),
@@ -1581,6 +1643,7 @@ select:focus-visible,
   .settings-content { overflow: visible; }
   .settings-content form { width: calc(100% - 28px); padding-top: 22px; }
   .settings-content > .resource-section { width: calc(100% - 28px); padding-top: 22px; }
+  .settings-content > .resource-section[data-settings-panel="models"] { width: calc(100% - 28px); }
   .schedule-section { width: calc(100% - 28px); padding-top: 22px; }
   .schedule-card, #schedules-refresh { scroll-margin-top: 56px; }
   .schedule-card-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }

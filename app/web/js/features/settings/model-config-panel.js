@@ -1,3 +1,4 @@
+import { mountIcons } from "../../components/icons.js";
 import { api } from "../../api/client.js";
 import { loadModels } from "../../state/catalogs.js";
 import { clear, element, errorMessage, isImeKey, toast } from "../../utils/dom.js";
@@ -127,6 +128,38 @@ function checks(title, name, values, choices) {
     group.append(line);
   }
   return group;
+}
+
+function modelIcon(name, className = "model-config-icon") {
+  return element("span", { className, attrs: { "data-icon": name, "aria-hidden": "true" } });
+}
+
+function formSection(key, title, fields, className = "") {
+  return element("section", { className: `model-section ${className}`.trim() }, [
+    copy("h4", key, title), element("div", { className: "model-form-grid" }, fields),
+  ]);
+}
+
+function infoValue(key, label, value) {
+  return element("div", { className: "model-info-value" }, [
+    copy("dt", key, label), element("dd", { text: value || "—" }),
+  ]);
+}
+
+function formHeader(form, item, isModel) {
+  const title = item.name ? element("h3", { text: item.name }) : copy("h3",
+    isModel ? "modelConfig.newModel" : "modelConfig.newProvider",
+    isModel ? "新增模型" : "新增 Provider");
+  const note = item.builtin ? copy("p",
+    isModel ? "modelConfig.builtinModelNote" : "modelConfig.builtinProviderNote",
+    isModel ? "ornith-1.5-35b 是内置免费模型，参数不可编辑。" : "内置 Provider 由 mdo 提供，配置不可更改。")
+    : copy("p", isModel ? "modelConfig.providerNote" : "modelConfig.secretNote",
+      isModel ? "模型引用 Provider；协议必须有对应的 Provider URL。"
+        : "使用凭据引用，不在页面或配置中保存 API Key 明文。");
+  form.append(element("header", { className: "model-editor-heading" }, [
+    modelIcon(isModel ? "brain" : "code", "icon model-editor-icon"),
+    element("div", {}, [title, note]),
+  ]));
 }
 
 function selected(form, name) {
@@ -337,21 +370,29 @@ export function createModelConfigPanel(container) {
   }
 
   function renderProvider(form, item) {
-    const builtin = item?.builtin;
-    form.append(item?.name ? element("h3", { text: item.name })
-      : copy("h3", "modelConfig.newProvider", "新增 Provider"),
-    builtin ? copy("p", "modelConfig.builtinProviderNote",
-      "内置 Provider 由 mdo 提供，配置不可更改。")
-      : copy("p", "modelConfig.secretNote",
-        "使用凭据引用，不在页面或配置中保存 API Key 明文。"));
-    if (builtin) return;
-    form.append(element("div", { className: "model-form-grid" }, [
+    formHeader(form, item, false);
+    if (item.builtin) {
+      form.append(element("section", { className: "model-section" }, [
+        copy("h4", "modelConfig.endpoints", "协议接口"),
+        element("div", { className: "model-summary-chips" }, protocols
+          .filter(([, , endpoint]) => item.endpoints?.[endpoint])
+          .map(([, label]) => element("span", { text: label }))),
+        element("dl", { className: "model-info-grid" }, [
+          infoValue("modelConfig.id", "标识", item.id),
+          infoValue("modelConfig.timeout", "超时（毫秒）", String(item.timeout_ms)),
+        ]),
+      ]));
+      return;
+    }
+    form.append(formSection("modelConfig.basicInfo", "基本信息", [
+      input("名称", "name", item.name, { required: true, maxLength: 256 }),
       input("标识", "id", item.id, { required: true, readOnly: Boolean(selectedId), maxLength: 128,
         pattern: "[A-Za-z0-9_-][A-Za-z0-9._-]*" }),
-      input("名称", "name", item.name, { required: true, maxLength: 256 }),
-      input("Chat Completions URL", "chat_completions", item.endpoints?.chat_completions || "", { maxLength: 2048 }),
-      input("Responses URL", "responses", item.endpoints?.responses || "", { maxLength: 2048 }),
-      input("Anthropic Messages URL", "anthropic_messages", item.endpoints?.anthropic_messages || "", { maxLength: 2048 }),
+    ]), formSection("modelConfig.endpoints", "协议接口", [
+      input("Chat Completions URL", "chat_completions", item.endpoints?.chat_completions || "", { maxLength: 2048, placeholder: "https://api.example.com/v1/chat/completions" }),
+      input("Responses URL", "responses", item.endpoints?.responses || "", { maxLength: 2048, placeholder: "https://api.example.com/v1/responses" }),
+      input("Anthropic Messages URL", "anthropic_messages", item.endpoints?.anthropic_messages || "", { maxLength: 2048, placeholder: "https://api.example.com/v1/messages" }),
+    ], "model-section-wide"), formSection("modelConfig.connection", "连接设置", [
       input("凭据引用", "secret_ref", item.credential?.secret_ref || "",
         { placeholder: "env:MY_MODEL_API_KEY", maxLength: 2048 }),
       input("超时（毫秒）", "timeout_ms", item.timeout_ms,
@@ -361,43 +402,58 @@ export function createModelConfigPanel(container) {
   }
 
   function renderModel(form, item) {
-    const builtin = item?.builtin;
-    form.append(item?.name ? element("h3", { text: item.name })
-      : copy("h3", "modelConfig.newModel", "新增模型"),
-    builtin ? copy("p", "modelConfig.builtinModelNote",
-      "ornith-1.5-35b 是内置免费模型，参数不可编辑。")
-      : copy("p", "modelConfig.providerNote",
-        "模型引用 Provider；协议必须有对应的 Provider URL。"));
-    if (builtin) return;
-    form.append(element("div", { className: "model-form-grid" }, [
+    formHeader(form, item, true);
+    if (item.builtin) {
+      const provider = config.providers.find((entry) => entry.id === item.provider);
+      form.append(element("section", { className: "model-section" }, [
+        copy("h4", "modelConfig.basicInfo", "基本信息"),
+        element("dl", { className: "model-info-grid" }, [
+          infoValue("modelConfig.provider", "Provider", provider?.name || item.provider),
+          infoValue("modelConfig.wireModel", "API 模型名", item.wire_model),
+          infoValue("modelConfig.contextTokens", "上下文 token", item.window.context_tokens.toLocaleString()),
+          infoValue("modelConfig.maxOutputTokens", "最大输出 token", item.window.max_output_tokens.toLocaleString()),
+        ]),
+        copy("h4", "modelConfig.protocols", "支持的协议"),
+        element("div", { className: "model-summary-chips" }, protocols
+          .filter(([key]) => item.protocols.includes(key))
+          .map(([, label]) => element("span", { text: label }))),
+      ]));
+      return;
+    }
+    form.append(formSection("modelConfig.basicInfo", "基本信息", [
+      input("名称", "name", item.name, { required: true, maxLength: 256 }),
       input("标识", "id", item.id, { required: true, readOnly: Boolean(selectedId), maxLength: 128,
         pattern: "[A-Za-z0-9_-][A-Za-z0-9._-]*" }),
-      input("名称", "name", item.name, { required: true, maxLength: 256 }),
       input("Provider", "provider", item.provider, { kind: "select", choices:
         config.providers.map((provider) => [provider.id, provider.name]) }),
       input("API 模型名", "wire_model", item.wire_model, { required: true, maxLength: 256 }),
+    ]));
+    const defaults = formSection("modelConfig.defaults", "默认行为", [
       input("默认协议", "default_protocol", item.default_protocol,
         { kind: "select", choices: protocols.map(([key, label]) => [key, label]) }),
       input("默认思考强度", "default_reasoning_effort", item.default_reasoning_effort,
         { kind: "select", choices: efforts.map((value) => [value, value]) }),
       input("计费模型", "billable", !item.free, { type: "checkbox" }),
-    ]));
-    form.append(checks("支持的协议", "protocol", item.protocols, protocols));
+    ]);
+    defaults.append(checks("支持的协议", "protocol", item.protocols, protocols));
+    form.append(defaults);
     const advanced = element("details", { className: "model-advanced" }, [
       copy("summary", "modelConfig.advanced", "能力与上下文参数"),
-      checks("能力", "capability", item.capabilities, capabilities),
-      checks("思考强度", "effort", item.reasoning_efforts,
-        efforts.map((value) => [value, value])),
-      checks("附件", "attachment", item.attachments, attachments),
-      element("div", { className: "model-form-grid" }, [
-        input("窗口模式", "window_mode", item.window.mode,
-          { kind: "select", choices: [["shared-context", "共享上下文"],
-            ["split-input-output", "输入/输出分离"]] }),
-        ...[["context_tokens", "上下文 token"], ["max_input_tokens", "最大输入 token"],
-          ["max_output_tokens", "最大输出 token"], ["output_reserve_tokens", "输出预留 token"],
-          ["summary_tokens", "摘要 token"]].map(([key, label]) =>
-          input(label, key, item.window[key], { type: "number", required: true,
-            min: key === "output_reserve_tokens" || key === "summary_tokens" ? 0 : 1 })),
+      element("div", { className: "model-advanced-body" }, [
+        checks("能力", "capability", item.capabilities, capabilities),
+        checks("思考强度", "effort", item.reasoning_efforts,
+          efforts.map((value) => [value, value])),
+        checks("附件", "attachment", item.attachments, attachments),
+        element("div", { className: "model-form-grid" }, [
+          input("窗口模式", "window_mode", item.window.mode,
+            { kind: "select", choices: [["shared-context", "共享上下文"],
+              ["split-input-output", "输入/输出分离"]] }),
+          ...[["context_tokens", "上下文 token"], ["max_input_tokens", "最大输入 token"],
+            ["max_output_tokens", "最大输出 token"], ["output_reserve_tokens", "输出预留 token"],
+            ["summary_tokens", "摘要 token"]].map(([key, label]) =>
+            input(label, key, item.window[key], { type: "number", required: true,
+              min: key === "output_reserve_tokens" || key === "summary_tokens" ? 0 : 1 })),
+        ]),
       ]),
     ]);
     form.append(advanced);
@@ -454,6 +510,7 @@ export function createModelConfigPanel(container) {
     if (!config) return;
     clear(container);
     const controls = element("div", { className: "model-config-controls" });
+    const tabs = element("div", { className: "model-config-tabs" });
     for (const [value, key, label] of [
       ["model", "modelConfig.models", "模型"],
       ["provider", "modelConfig.providers", "Provider"],
@@ -465,7 +522,7 @@ export function createModelConfigPanel(container) {
         kind = value; selectedId = collection()[0]?.id ?? ""; render();
         container.querySelector('.model-config-controls [aria-pressed="true"]')?.focus();
       });
-      controls.append(button);
+      tabs.append(button);
     }
     const refresh = copy("button", "modelConfig.refresh", "刷新", {},
       { className: "secondary-button", attrs: { type: "button" } });
@@ -487,11 +544,13 @@ export function createModelConfigPanel(container) {
       selectedId = ""; render();
       container.querySelector('input[name="id"]')?.focus();
     });
-    controls.append(refresh, add);
-    container.append(copy("p", "modelConfig.status",
-      `当前默认：${config.default_model} · 配置 revision ${etag.replace(/\D/g, "")}`,
-      { model: config.default_model, revision: etag.replace(/\D/g, "") },
-      { className: "model-config-status" }), controls);
+    const defaultModel = config.items.find((item) => item.id === config.default_model);
+    controls.append(tabs, copy("p", "modelConfig.status",
+      `默认模型：${defaultModel?.name || config.default_model}`,
+      { model: defaultModel?.name || config.default_model },
+      { className: "model-config-status" }),
+      element("div", { className: "model-toolbar-actions" }, [refresh, add]));
+    container.append(controls);
     if (config.runtime_override) container.append(copy("p", "modelConfig.runtimeOverride",
       "当前配置含运行时覆盖；请移除启动覆盖后再用页面编辑模型。",
       {}, { className: "resource-error" }));
@@ -499,14 +558,26 @@ export function createModelConfigPanel(container) {
     const list = translatedAttribute(element("div", { className: "model-config-list" }),
       "aria-label", kind === "model" ? "modelConfig.modelList" : "modelConfig.providerList",
       kind === "model" ? "模型列表" : "Provider 列表");
+    list.append(element("div", { className: "model-list-heading" }, [
+      copy("span", kind === "model" ? "modelConfig.models" : "modelConfig.providers",
+        kind === "model" ? "模型" : "Provider"),
+      element("span", { className: "model-list-count", text: collection().length }),
+    ]));
     for (const item of collection()) {
+      const badges = element("span", { className: "model-item-badges" }, [
+        item.builtin ? copy("span", "modelConfig.builtinTag", "内置") : null,
+        kind === "model" && item.id === config.default_model
+          ? copy("span", "modelConfig.defaultTag", "默认", {}, { className: "model-default-badge" }) : null,
+      ]);
+      const providerName = kind === "model"
+        ? config.providers.find((entry) => entry.id === item.provider)?.name || item.provider : item.id;
       const button = element("button", { className: "model-config-item",
         attrs: { type: "button", "aria-current": selectedId === item.id ? "true" : "false" } }, [
-        element("strong", { text: item.name || item.id }),
-        element("small", {}, [item.id,
-          item.builtin ? copy("span", "modelConfig.builtinTag", " · 内置") : null,
-          kind === "model" && item.id === config.default_model
-            ? copy("span", "modelConfig.defaultTag", " · 默认") : null]),
+        modelIcon(kind === "model" ? "brain" : "code", "icon model-item-icon"),
+        element("span", { className: "model-item-copy" }, [
+          element("strong", { text: item.name || item.id }),
+          element("small", { text: providerName }), badges,
+        ]),
       ]);
       button.addEventListener("click", () => {
         if (!allowChange()) return;
@@ -518,6 +589,7 @@ export function createModelConfigPanel(container) {
     if (preservedForm) {
       layout.append(list, preservedForm);
       container.append(layout);
+      mountIcons(list);
       return;
     }
     let source = current();
@@ -539,14 +611,6 @@ export function createModelConfigPanel(container) {
           if (name.startsWith("data-model-copy-")) title.removeAttribute(name);
       }
     });
-    if (kind === "model" && source?.builtin) form.append(copy("p",
-      "modelConfig.builtinModelDetail",
-      `${source.id} · 上下文 ${source.window.context_tokens} tokens · ${source.default_protocol}`,
-      { id: source.id, tokens: source.window.context_tokens,
-        protocol: source.default_protocol }));
-    if (source?.builtin && kind === "provider") form.append(copy("p",
-      "modelConfig.builtinProviderDetail", `${source.id} · 内置接口和凭据引用由程序管理`,
-      { id: source.id }));
     const actions = element("div", { className: "model-config-actions" });
     if (!source?.builtin && !config.runtime_override) {
       const save = copy("button", "modelConfig.save", "保存", {},
@@ -641,9 +705,10 @@ export function createModelConfigPanel(container) {
       });
       actions.append(setDefault);
     }
-    form.append(actions);
+    if (actions.childElementCount) form.append(actions);
     layout.append(list, form);
     container.append(layout);
+    mountIcons(container);
   }
 
   const unsubscribe = subscribeLocale(() => translateCopy(container));
