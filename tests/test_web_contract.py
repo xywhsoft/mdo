@@ -17,10 +17,8 @@ class WebContractTests(unittest.TestCase):
         self.assertLessEqual(web["max_response_bytes"], 16 * 1024 * 1024)
         self.assertLessEqual(web["max_text_bytes"], 1024 * 1024)
         self.assertLessEqual(web["max_documents"], 128)
-        self.assertEqual(web["search"]["provider"], "brave")
-        self.assertTrue(web["search"]["endpoint"].startswith("https://"))
-        self.assertEqual(web["search"]["secret_ref"],
-                         "env:MDO_BRAVE_SEARCH_API_KEY")
+        self.assertEqual(web["search"], {
+            "endpoint": "https://ai.xywhsoft.com/api/v1/search"})
 
     def test_web_tools_are_native_bounded_tools(self) -> None:
         source = (ROOT / "app/src/web/manager.c").read_text(encoding="utf-8")
@@ -28,7 +26,9 @@ class WebContractTests(unittest.TestCase):
             self.assertIn(f'Definitions[', source)
             self.assertIn(f'"{name}"', source)
         self.assertIn("XS_FETCH_PUBLIC_ADDRESSES_ONLY", source)
-        self.assertIn("MdoSecretResolve", source)
+        adapter = (ROOT / "app/src/web/search_api.inc.c").read_text(encoding="utf-8")
+        self.assertIn("MdoSecretResolve", adapter)
+        self.assertIn('"untrusted"', adapter)
         self.assertIn("\"untrusted\"", source)
         self.assertIn("MDO_WEB_TOOL_RESULT_LIMIT", source)
         self.assertNotIn("system(", source)

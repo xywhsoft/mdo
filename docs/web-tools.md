@@ -26,23 +26,42 @@ Agent 目录会看到三个独立工具：
   "max_text_bytes": 262144,
   "max_documents": 16,
   "search": {
-    "provider": "brave",
-    "endpoint": "https://api.search.brave.com/res/v1/web/search",
-    "secret_ref": "env:MDO_BRAVE_SEARCH_API_KEY",
-    "max_results": 8
+    "endpoint": "https://ai.xywhsoft.com/api/v1/search"
   }
 }
 ```
 
 `settings.agent.web_search` 与 `settings.web.enabled` 必须同时为真才注册工具。
-搜索 provider 的凭据只保存 `secret_ref`；`web_search` 每次调用时解析，传输
-返回后立即安全清零。缺少凭据不会触发网络请求，而会返回明确的策略错误。
-当前生产适配器是 Brave，配置结构保留 provider、endpoint 和凭据的独立边界，
-后续增加 provider 不需要改变三个工具的模型侧合同。
+搜索设置页只配置完整 API 地址；其他预算保持内部默认值，模型网络代理设置仍独立。
+旧 Bing、Brave、SearXNG 配置在读取时迁移到新 API，移除 provider、secret_ref 和
+max_results，不会仅为启动而写入 Home。旧网页解析和搜索服务实现已删除。
+
+`web_search` 发送 `POST endpoint`，正文为 `{ "query": "...", "count": 5 }`，
+count 可省略，由服务端决定默认结果数；显式 count 允许 1–10，服务端可进一步限制。
+接收 xadmin 的 `{ code: 0, data: { provider, request_id, count, truncated, results } }`，
+结果保留 title、url、snippet、site、published_at 和 fetched_at，空数组为成功。
+外部结果不可信；HTML 验证页、错误封装、畸形字段和不安全 URL 均不伪装成搜索成功。
+
+博查和 z.ai 选择、平台密钥、账户校验和配额由 xadmin 管理。客户端既不保存平台密钥，
+也不自动回退到另一个搜索平台。xadmin 要求会员登录；目前 mdo 尚无账号登录界面，
+本阶段通过运行时环境变量 `MDO_SEARCH_ACCESS_TOKEN` 接入已登录会员的 access_token。
+这是短期会员 JWT，不是博查或 z.ai 的平台 key，不写入普通配置、工具结果或日志。
+每次调用解析，传输结束安全清零；缺少或非法令牌在联网前失败。过期时需重新登录，
+暂不自动刷新。正式账号 UI 与凭证生命周期后续独立接入，Android 同样需要该登录接入。
+
+API 地址可配置为本机或局域网以便联调，例如 `http://127.0.0.1:9081/api/v1/search`。
+此地址是明确授权的服务端点，拒绝 userinfo、查询参数与 fragment；线上应使用 HTTPS。
+搜索请求禁止重定向和自动重试，避免凭证转发或重复计费。普通网页仍使用独立的访问策略。
+401 提示重新登录，403 提示完成服务要求的联系方式验证，429 提示配额/并发限制，
+503 提示管理员启用平台并设置 key，502/504 提示上游失败/超时。原始上游错误正文不回显。
+
+联调测试：`python tests/test_search_api_runtime.py` 使用本地模拟 HTTP 服务，不消耗平台额度；
+`python tests/test_search_xadmin_integration.py --xadmin-root D:\GIT\x-admin` 使用独立 xadmin
+测试实例、真实登录 JWT 和上游模拟传输，覆盖客户端到插件的完整调用链。
 
 ## 网络与资源边界
 
-默认只接受 HTTPS URL，拒绝 userinfo、fragment、控制字符、反斜杠和非法端口。
+普通网页默认只接受 HTTPS URL，拒绝 userinfo、fragment、控制字符、反斜杠和非法端口。
 mdo 对每次请求设置总超时、空闲超时、正文上限、最多五次重定向和协作取消。
 xs 的 `XS_FETCH_PUBLIC_ADDRESSES_ONLY` 在 DNS 查询工作线程中筛掉回环、私网、
 链路本地、共享、文档、基准、过渡、组播和保留地址；TCP Dial 只能看到过滤后
@@ -51,8 +70,8 @@ xs 的 `XS_FETCH_PUBLIC_ADDRESSES_ONLY` 在 DNS 查询工作线程中筛掉回�
 
 只有显式把 `allow_private_networks` 改为真时才会关闭地址过滤；网络 effect
 仍进入 xwork 的结构化权限请求。`web_search` 声明 read、network、
-external-service 和 secrets 四种 effect，并分别描述 endpoint、provider 和
-secret reference；`web_open` 声明 read 与 network；`web_find` 是纯 read。
+external-service 和 secrets 四种 effect，分别描述 endpoint、xadmin.search 和
+固定的会员令牌引用；`web_open` 声明 read 与 network；`web_find` 是纯 read。
 
 ## 文档缓存与提取
 

@@ -358,23 +358,11 @@
               </section>
 
               <section class="settings-section" data-settings-panel="web" aria-labelledby="settings-web-title" hidden>
-                <div class="settings-section-heading"><h2 id="settings-web-title" data-i18n="settings.web">联网与搜索</h2><p data-i18n="settings.webDescription">限制网页访问范围、超时与响应预算。</p></div>
-                <label class="setting-switch"><span><strong data-i18n="settings.webEnabled">启用 Web 工具</strong><small data-i18n="settings.webEnabledDescription">统一控制搜索、打开和查找工具。</small></span><input name="web_enabled" type="checkbox"><span class="switch-control" aria-hidden="true"></span></label>
-                <label class="setting-switch"><span><strong data-i18n="settings.allowHttp">允许 HTTP</strong><small data-i18n="settings.allowHttpDescription">允许未加密的 HTTP 地址；默认关闭。</small></span><input name="allow_http" type="checkbox"><span class="switch-control" aria-hidden="true"></span></label>
-                <label class="setting-switch"><span><strong data-i18n="settings.allowPrivateNetworks">允许私有网络</strong><small data-i18n="settings.allowPrivateNetworksDescription">允许访问回环、局域网和私有地址；默认关闭。</small></span><input name="allow_private_networks" type="checkbox"><span class="switch-control" aria-hidden="true"></span></label>
-                <div class="settings-grid">
-                  <label><span data-i18n="settings.timeoutMs">请求超时（毫秒）</span><input name="timeout_ms" type="number" min="1000" max="300000" required></label>
-                  <label><span data-i18n="settings.idleTimeoutMs">空闲超时（毫秒）</span><input name="idle_timeout_ms" type="number" min="1000" max="300000" required></label>
-                  <label><span data-i18n="settings.maxResponseBytes">最大响应（字节）</span><input name="max_response_bytes" type="number" min="16384" max="16777216" required></label>
-                  <label><span data-i18n="settings.maxTextBytes">最大文本（字节）</span><input name="max_text_bytes" type="number" min="4096" max="1048576" required></label>
-                  <label><span data-i18n="settings.maxDocuments">缓存文档数</span><input name="max_documents" type="number" min="1" max="128" required></label>
-                  <label><span data-i18n="settings.maxResults">搜索结果数</span><input name="max_results" type="number" min="1" max="32" required></label>
-                </div>
+                <div class="settings-section-heading"><h2 id="settings-web-title" data-i18n="settings.web">联网与搜索</h2><p data-i18n="settings.webDescription">搜索通过统一 API 服务提供，搜索平台和密钥在服务端管理。</p></div>
                 <div class="setting-row setting-row-wide">
-                  <div><label for="setting-search-endpoint" data-i18n="settings.searchEndpoint">搜索服务地址</label><p data-i18n="settings.searchEndpointDescription">凭据仅通过 Home 文件或环境变量配置，页面不会读取 secret 引用。</p></div>
-                  <input id="setting-search-endpoint" name="endpoint" type="url" maxlength="2047" required>
+                  <div><label for="setting-search-endpoint" data-i18n="settings.searchEndpoint">搜索服务地址</label><p data-i18n="settings.searchEndpointDescription">填写完整的搜索 API 地址，例如 https://ai.xywhsoft.com/api/v1/search。</p></div>
+                  <input id="setting-search-endpoint" name="endpoint" type="url" maxlength="2047" placeholder="https://ai.xywhsoft.com/api/v1/search" autocomplete="off" spellcheck="false" required>
                 </div>
-                <div class="credential-state" id="search-credential-state" role="status"></div>
                 <div class="setting-row setting-row-wide">
                   <div><label for="setting-ca-pem" data-i18n="settings.caPem">自定义 CA 证书</label><p data-i18n="settings.caPemDescription">模型 HTTPS 请求信任便携 Home 中的 PEM 文件，例如 certs/company.pem；留空使用系统证书。</p></div>
                   <input id="setting-ca-pem" name="ca_pem_path" type="text" maxlength="511" placeholder="certs/company.pem" autocomplete="off" spellcheck="false">

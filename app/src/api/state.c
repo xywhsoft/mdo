@@ -184,25 +184,7 @@ bool MdoApiSettingsRoute(MdoApiContext* Context)
             Service.Agent.PermissionProfile) &&
         MdoApiValueSetTake(Data, "agent", &AgentValue);
     if ( Ok ) Ok =
-        MdoApiValueSetBool(WebValue, "enabled", Service.Web.Enabled) &&
-        MdoApiValueSetBool(WebValue, "allow_http", Service.Web.AllowHttp) &&
-        MdoApiValueSetBool(WebValue, "allow_private_networks",
-            Service.Web.AllowPrivateNetworks) &&
-        MdoApiValueSetUInt(WebValue, "timeout_ms",
-            Service.Web.TimeoutMilliseconds) &&
-        MdoApiValueSetUInt(WebValue, "idle_timeout_ms",
-            Service.Web.IdleTimeoutMilliseconds) &&
-        MdoApiValueSetUInt(WebValue, "max_response_bytes",
-            Service.Web.MaxResponseBytes) &&
-        MdoApiValueSetUInt(WebValue, "max_text_bytes",
-            Service.Web.MaxTextBytes) &&
-        MdoApiValueSetUInt(WebValue, "max_documents",
-            Service.Web.MaxDocuments) &&
-        MdoApiValueSetUInt(WebValue, "max_results", Service.Web.MaxResults) &&
-        MdoApiValueSetString(WebValue, "provider", Service.Web.Provider) &&
         MdoApiValueSetString(WebValue, "endpoint", Service.Web.Endpoint) &&
-        MdoApiValueSetBool(WebValue, "credential_configured",
-            Service.Web.SecretRef[0] != '\0') &&
         MdoApiValueSetTake(Data, "web", &WebValue);
     if ( Ok ) Ok =
         MdoApiValueSetString(TransportValue, "ca_pem_path",

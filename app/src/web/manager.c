@@ -6,6 +6,7 @@
 #include "../../include/mdo/config.h"
 #include "../../include/mdo/secrets.h"
 #include "../../include/mdo/web.h"
+#include "../../include/mdo/http_url.h"
 
 #define MDO_WEB_SOURCE "mdo.web"
 #define MDO_WEB_ARGUMENT_LIMIT (64u * 1024u)
@@ -98,6 +99,17 @@ static xwork_result MdoWebXrtFailure(xwork_tool_result_writer* pWriter,
     const xerror* pCause = xrtGetError();
     xerrkind Kind = pCause != NULL ? xrtErrorKind(pCause) : XERR_INTERNAL;
     const char* Message = pCause != NULL ? xrtErrorMessage(pCause) : Fallback;
+    char Details[768];
+    size_t Used = (size_t)snprintf(Details, sizeof(Details), "%s", Message);
+    const xerror* Nested = pCause != NULL ? xrtErrorCause(pCause) : NULL;
+    while ( Nested != NULL && Used < sizeof(Details) - 1u ) {
+        int Written = snprintf(Details + Used, sizeof(Details) - Used,
+            ": %s", xrtErrorMessage(Nested));
+        if ( Written < 0 || (size_t)Written >= sizeof(Details) - Used ) break;
+        Used += (size_t)Written;
+        Nested = xrtErrorCause(Nested);
+    }
+    Message = Details;
     if ( pContext != NULL && pContext->pCancel != NULL &&
          xrtCancelRequested(pContext->pCancel) )
         return MdoWebFail(pError, XWORK_ERROR_CANCELLED, Message);
@@ -269,62 +281,6 @@ static bool MdoWebAsciiEqual(const char* Left, const char* Right, size_t Size)
     for ( i = 0u; i < Size; ++i )
         if ( tolower((unsigned char)Left[i]) !=
              tolower((unsigned char)Right[i]) ) return false;
-    return true;
-}
-
-static bool MdoWebUrlValid(xstrview Url, bool AllowHttp)
-{
-    size_t Scheme;
-    size_t Authority;
-    size_t End;
-    size_t HostStart;
-    size_t HostEnd;
-    size_t i;
-    bool Https;
-    if ( Url.Size == 0u || Url.Size > MDO_WEB_URL_LIMIT ||
-         !MdoWebNoNul(Url) ) return false;
-    for ( i = 0u; i < Url.Size; ++i ) {
-        unsigned char c = (unsigned char)Url.Data[i];
-        if ( c <= 0x20u || c == 0x7fu || c == '\\' || c == '#' ) return false;
-    }
-    Https = Url.Size >= 8u && MdoWebAsciiEqual(Url.Data, "https://", 8u);
-    if ( Https ) Scheme = 8u;
-    else if ( AllowHttp && Url.Size >= 7u &&
-              MdoWebAsciiEqual(Url.Data, "http://", 7u) ) Scheme = 7u;
-    else return false;
-    Authority = Scheme;
-    End = Url.Size;
-    for ( i = Authority; i < Url.Size; ++i )
-        if ( Url.Data[i] == '/' || Url.Data[i] == '?' ) { End = i; break; }
-    if ( End == Authority ) return false;
-    for ( i = Authority; i < End; ++i )
-        if ( Url.Data[i] == '@' ) return false;
-    HostStart = Authority;
-    HostEnd = End;
-    if ( Url.Data[HostStart] == '[' ) {
-        const char* Close = (const char*)memchr(Url.Data + HostStart + 1u,
-            ']', End - HostStart - 1u);
-        if ( Close == NULL ) return false;
-        HostEnd = (size_t)(Close - Url.Data) + 1u;
-        if ( HostEnd < End && Url.Data[HostEnd] != ':' ) return false;
-    } else {
-        for ( i = HostStart; i < End; ++i ) {
-            if ( Url.Data[i] == ':' ) { HostEnd = i; break; }
-            if ( Url.Data[i] == '[' || Url.Data[i] == ']' ) return false;
-        }
-    }
-    if ( HostEnd == HostStart ||
-         (Url.Data[HostStart] == '[' && HostEnd == HostStart + 2u) ) return false;
-    if ( HostEnd < End ) {
-        uint32 Port = 0u;
-        if ( HostEnd + 1u == End ) return false;
-        for ( i = HostEnd + 1u; i < End; ++i ) {
-            if ( Url.Data[i] < '0' || Url.Data[i] > '9' ) return false;
-            Port = Port * 10u + (uint32)(Url.Data[i] - '0');
-            if ( Port > 65535u ) return false;
-        }
-        if ( Port == 0u ) return false;
-    }
     return true;
 }
 
@@ -673,6 +629,7 @@ static bool MdoWebWriteValue(xwork_tool_result_writer* pWriter,
 static bool MdoWebFetchRequest(MdoWebState* pState,
     const xwork_tool_context* pContext, const char* Url,
     const XS_FetchHeader* pHeaders, size_t HeaderCount,
+    bool SearchService, const char* Body, size_t BodySize,
     XS_FetchResponse* pResponse)
 {
     XS_FetchRequest Request;
@@ -689,14 +646,20 @@ static bool MdoWebFetchRequest(MdoWebState* pState,
     Request.Size = sizeof(Request);
     Request.Version = XS_FETCH_REQUEST_VERSION;
     Request.Url = Url;
+    Request.Method = SearchService ? "POST" : "GET";
+    Request.Body = Body;
+    Request.BodySize = BodySize;
     Request.Headers = pHeaders;
     Request.HeaderCount = HeaderCount;
     Request.Timeout = Timeout;
     Request.IdleTimeout = IdleTimeout;
     Request.MaxBodyBytes = pState->Settings.MaxResponseBytes;
-    Request.MaxRedirects = 5u;
-    Request.Flags = XS_FETCH_FOLLOW_REDIRECTS | XS_FETCH_DECOMPRESS;
-    if ( !pState->Settings.AllowPrivateNetworks )
+    /* The explicit API address may be local/LAN. Never redirect a request
+     * carrying account credentials. Ordinary pages retain public-only DNS. */
+    Request.MaxRedirects = SearchService ? 0u : 5u;
+    Request.Flags = XS_FETCH_DECOMPRESS;
+    if ( !SearchService ) Request.Flags |= XS_FETCH_FOLLOW_REDIRECTS;
+    if ( !pState->Settings.AllowPrivateNetworks && !SearchService )
         Request.Flags |= XS_FETCH_PUBLIC_ADDRESSES_ONLY;
     Request.Cancel = pContext->pCancel;
     return pState->Transport.Fetch(pState->Transport.Context,
@@ -711,206 +674,7 @@ static void MdoWebRequestFinished(MdoWebState* pState, bool Success)
     (void)xrtMutexUnlock(pState->Lock);
 }
 
-static char* MdoWebPercentEncode(xstrview Text)
-{
-    static const char Hex[] = "0123456789ABCDEF";
-    char* Result;
-    size_t Size = 0u;
-    size_t i;
-    if ( Text.Size > (SIZE_MAX - 1u) / 3u ) return NULL;
-    Result = (char*)xrtMalloc(Text.Size * 3u + 1u);
-    if ( Result == NULL ) return NULL;
-    for ( i = 0u; i < Text.Size; ++i ) {
-        unsigned char c = (unsigned char)Text.Data[i];
-        if ( isalnum(c) || c == '-' || c == '.' || c == '_' || c == '~' )
-            Result[Size++] = (char)c;
-        else {
-            Result[Size++] = '%';
-            Result[Size++] = Hex[c >> 4];
-            Result[Size++] = Hex[c & 15u];
-        }
-    }
-    Result[Size] = '\0';
-    return Result;
-}
-
-static char* MdoWebSearchUrl(MdoWebState* pState, xstrview Query,
-    uint32 Count)
-{
-    char* Encoded = MdoWebPercentEncode(Query);
-    size_t Base = strlen(pState->Settings.Endpoint);
-    size_t QuerySize;
-    char* Url;
-    int Written;
-    if ( Encoded == NULL ) return NULL;
-    QuerySize = strlen(Encoded);
-    if ( Base > MDO_WEB_URL_LIMIT || QuerySize > MDO_WEB_URL_LIMIT - Base ) {
-        xrtFree(Encoded);
-        return NULL;
-    }
-    Url = (char*)xrtMalloc(Base + QuerySize + 64u);
-    if ( Url == NULL ) { xrtFree(Encoded); return NULL; }
-    Written = snprintf(Url, Base + QuerySize + 64u, "%s%cq=%s&count=%u",
-        pState->Settings.Endpoint,
-        strchr(pState->Settings.Endpoint, '?') != NULL ? '&' : '?',
-        Encoded, (unsigned)Count);
-    xrtFree(Encoded);
-    if ( Written < 0 || (size_t)Written > MDO_WEB_URL_LIMIT ) {
-        xrtFree(Url);
-        return NULL;
-    }
-    return Url;
-}
-
-static bool MdoWebSearchItem(xvalue* pResults, const xvalue* pInput,
-    const MdoWebState* pState, int64 FetchedAt)
-{
-    xstrview Title;
-    xstrview Url;
-    xstrview Snippet = { "", 0u };
-    xvalue* pOutput;
-    xvalue* pDescription;
-    if ( pInput == NULL || xrtValueType(pInput) != XVALUE_OBJECT ||
-         !MdoWebString(xrtValueObjectGet(pInput, xrtStrView("title")),
-            1u, MDO_WEB_TITLE_LIMIT, &Title) ||
-         !MdoWebString(xrtValueObjectGet(pInput, xrtStrView("url")),
-            1u, MDO_WEB_URL_LIMIT, &Url) ||
-         !MdoWebUrlValid(Url, pState->Settings.AllowHttp) ) return true;
-    pDescription = xrtValueObjectGet(pInput, xrtStrView("description"));
-    if ( pDescription != NULL &&
-         !MdoWebString(pDescription, 0u, MDO_WEB_SNIPPET_LIMIT, &Snippet) )
-        return true;
-    pOutput = xrtValueObject();
-    if ( pOutput == NULL ||
-         !MdoWebObjectString(pOutput, "title", Title.Data, Title.Size) ||
-         !MdoWebObjectString(pOutput, "url", Url.Data, Url.Size) ||
-         !MdoWebObjectString(pOutput, "snippet", Snippet.Data, Snippet.Size) ||
-         !MdoWebObjectString(pOutput, "source", pState->Settings.Provider,
-            strlen(pState->Settings.Provider)) ||
-         !MdoWebObjectInt(pOutput, "fetched_at", FetchedAt) ||
-         !xrtValueArrayAppendTake(pResults, &pOutput) ) {
-        xrtValueRelease(pOutput);
-        return false;
-    }
-    return true;
-}
-
-static xwork_result MdoWebSearchExecute(void* pUserData,
-    const xwork_tool_context* pContext, const char* ArgumentsJson,
-    xwork_tool_result_writer* pWriter, xwork_error* pError)
-{
-    static const char* const Keys[] = { "query", "count" };
-    MdoWebState* pState = (MdoWebState*)pUserData;
-    xvalue* pArguments = NULL;
-    xvalue* pResponseValue = NULL;
-    xvalue* pOutput = NULL;
-    xvalue* pOutputResults = NULL;
-    const xvalue* pWeb;
-    const xvalue* pInputResults;
-    xstrview Query;
-    uint64 Requested = pState->Settings.MaxResults;
-    uint32 Count;
-    char* Secret = NULL;
-    char* Url = NULL;
-    XS_FetchHeader Headers[3];
-    XS_FetchResponse Response;
-    xjsonreadconfig JsonConfig;
-    size_t i;
-    bool FetchOk = false;
-    xwork_result Result = XWORK_RESULT_ERROR;
-    memset(&Response, 0, sizeof(Response));
-    if ( !MdoWebArguments(ArgumentsJson, &pArguments) ||
-         !MdoWebAllowedKeys(pArguments, Keys, 2u) ||
-         !MdoWebString(xrtValueObjectGet(pArguments, xrtStrView("query")),
-            1u, MDO_WEB_QUERY_LIMIT, &Query) ) {
-        Result = MdoWebToolFail(pWriter, pError,
-            "web_search requires a bounded query and optional count");
-        goto done;
-    }
-    if ( xrtValueObjectGet(pArguments, xrtStrView("count")) != NULL &&
-         (!MdoWebUnsigned(xrtValueObjectGet(pArguments,
-            xrtStrView("count")), &Requested) || Requested == 0u ||
-          Requested > pState->Settings.MaxResults) ) {
-        Result = MdoWebToolFail(pWriter, pError,
-            "web_search count exceeds the configured result limit");
-        goto done;
-    }
-    Count = (uint32)Requested;
-    if ( !MdoSecretResolve(xrtStrView(pState->Settings.SecretRef),
-            MDO_WEB_SECRET_LIMIT, &Secret) ) {
-        Result = MdoWebToolFail(pWriter, pError,
-            "web_search provider credential is unavailable");
-        goto done;
-    }
-    Url = MdoWebSearchUrl(pState, Query, Count);
-    if ( Url == NULL ) {
-        Result = MdoWebToolFail(pWriter, pError,
-            "web_search URL exceeds its limit");
-        goto done;
-    }
-    Headers[0].Name = "Accept"; Headers[0].Value = "application/json";
-    Headers[1].Name = "X-Subscription-Token"; Headers[1].Value = Secret;
-    Headers[2].Name = "User-Agent"; Headers[2].Value = "mdo/1 web_search";
-    FetchOk = MdoWebFetchRequest(pState, pContext, Url, Headers, 3u, &Response);
-    MdoWebRequestFinished(pState, FetchOk);
-    if ( !FetchOk ) { Result = MdoWebXrtFailure(pWriter, pError, pContext,
-        "web_search request failed"); goto done; }
-    if ( Response.Status < 200u || Response.Status >= 300u ) {
-        Result = MdoWebToolFail(pWriter, pError,
-            "web_search provider returned a non-success status");
-        goto done;
-    }
-    xrtJsonReadConfigInit(&JsonConfig);
-    JsonConfig.MaxInputBytes = pState->Settings.MaxResponseBytes;
-    JsonConfig.MaxDepth = 32u;
-    JsonConfig.MaxValues = 8192u;
-    JsonConfig.MaxContainerItems = 4096u;
-    pResponseValue = xrtJsonRead((xstrview){
-        (const char*)Response.Body, Response.BodySize }, &JsonConfig);
-    pWeb = pResponseValue != NULL ?
-        xrtValueObjectGet(pResponseValue, xrtStrView("web")) : NULL;
-    pInputResults = pWeb != NULL ?
-        xrtValueObjectGet(pWeb, xrtStrView("results")) : NULL;
-    if ( pResponseValue == NULL || xrtValueType(pResponseValue) != XVALUE_OBJECT ||
-         pInputResults == NULL || xrtValueType(pInputResults) != XVALUE_ARRAY ) {
-        Result = MdoWebToolFail(pWriter, pError,
-            "web_search provider returned an invalid response");
-        goto done;
-    }
-    pOutput = xrtValueObject();
-    pOutputResults = xrtValueArray();
-    if ( pOutput == NULL || pOutputResults == NULL ) goto memory_failed;
-    for ( i = 0u; i < xrtValueCount(pInputResults) &&
-         xrtValueCount(pOutputResults) < Count; ++i )
-        if ( !MdoWebSearchItem(pOutputResults,
-                xrtValueArrayGet(pInputResults, i), pState,
-                Response.FetchedAt) ) goto memory_failed;
-    if ( !MdoWebObjectString(pOutput, "type", "web_search_results", 18u) ||
-         !MdoWebObjectBool(pOutput, "untrusted", true) ||
-         !MdoWebObjectString(pOutput, "source", pState->Settings.Provider,
-            strlen(pState->Settings.Provider)) ||
-         !MdoWebObjectInt(pOutput, "fetched_at", Response.FetchedAt) ||
-         !MdoWebObjectTake(pOutput, "results", pOutputResults) )
-        goto memory_failed;
-    pOutputResults = NULL;
-    if ( !MdoWebWriteValue(pWriter, pOutput, pError) ) {
-        Result = XWORK_RESULT_LIMIT; goto done;
-    }
-    Result = XWORK_RESULT_OK;
-    goto done;
-memory_failed:
-    Result = MdoWebFail(pError, XWORK_ERROR_OUT_OF_MEMORY,
-        "cannot build web_search result");
-done:
-    MdoSecretRelease(&Secret);
-    xrtFree(Url);
-    pState->Transport.ResponseUnit(pState->Transport.Context, &Response);
-    xrtValueRelease(pOutputResults);
-    xrtValueRelease(pOutput);
-    xrtValueRelease(pResponseValue);
-    xrtValueRelease(pArguments);
-    return Result;
-}
+#include "search_api.inc.c"
 
 static bool MdoWebDocumentResult(xvalue* pOutput,
     const MdoWebDocument* pDocument, cstr Type, bool IncludeContent)
@@ -972,7 +736,7 @@ static xwork_result MdoWebOpenExecute(void* pUserData,
          !MdoWebAllowedKeys(pArguments, Keys, 2u) ||
          !MdoWebString(xrtValueObjectGet(pArguments, xrtStrView("url")),
             1u, MDO_WEB_URL_LIMIT, &UrlView) ||
-         !MdoWebUrlValid(UrlView, pState->Settings.AllowHttp) ) {
+         !MdoHttpUrlValid(UrlView, pState->Settings.AllowHttp) ) {
         Result = MdoWebToolFail(pWriter, pError,
             "web_open requires an allowed HTTP(S) URL");
         goto done;
@@ -990,7 +754,7 @@ static xwork_result MdoWebOpenExecute(void* pUserData,
     Headers[0].Name = "Accept";
     Headers[0].Value = "text/html,application/xhtml+xml,application/json,text/plain;q=0.9,*/*;q=0.1";
     Headers[1].Name = "User-Agent"; Headers[1].Value = "mdo/1 web_open";
-    FetchOk = MdoWebFetchRequest(pState, pContext, Url, Headers, 2u, &Response);
+    FetchOk = MdoWebFetchRequest(pState, pContext, Url, Headers, 2u, false, NULL, 0u, &Response);
     MdoWebRequestFinished(pState, FetchOk);
     if ( !FetchOk ) { Result = MdoWebXrtFailure(pWriter, pError, pContext,
         "web_open request failed"); goto done; }
@@ -1018,7 +782,7 @@ static xwork_result MdoWebOpenExecute(void* pUserData,
         else goto memory_failed;
         goto done;
     }
-    if ( !MdoWebUrlValid(xrtStrView(Document.Url),
+    if ( !MdoHttpUrlValid(xrtStrView(Document.Url),
             pState->Settings.AllowHttp) ) {
         Result = MdoWebToolFail(pWriter, pError,
             "web_open final URL violates the URL policy");
@@ -1239,25 +1003,24 @@ static xwork_result MdoWebSearchPermissions(void* pUserData,
     if ( !MdoWebArguments(ArgumentsJson, &pArguments) ||
          !MdoWebAllowedKeys(pArguments, Keys, 2u) ||
          !MdoWebString(xrtValueObjectGet(pArguments, xrtStrView("query")),
-            1u, MDO_WEB_QUERY_LIMIT, &Query) ) {
+            1u, MDO_WEB_QUERY_LIMIT, &Query) || !MdoWebSearchQueryValid(Query) ) {
         Result = MdoWebFail(pError, XWORK_ERROR_INVALID_ARGUMENT,
             "web_search requires a bounded query and optional count");
         goto done;
     }
     pCount = xrtValueObjectGet(pArguments, xrtStrView("count"));
     if ( pCount != NULL && (!MdoWebUnsigned(pCount, &Count) || Count == 0u ||
-         Count > pState->Settings.MaxResults) ) {
+         Count > MDO_WEB_SEARCH_MAX_RESULTS) ) {
         Result = MdoWebFail(pError, XWORK_ERROR_INVALID_ARGUMENT,
             "web_search count exceeds the configured result limit");
         goto done;
     }
     if ( !xworkPermissionResourceWriterAdd(pWriter, XWORK_RESOURCE_NETWORK,
             XWORK_RESOURCE_ACCESS_CONNECT, pState->Settings.Endpoint) ||
-         !xworkPermissionResourceWriterAdd(pWriter,
-            XWORK_RESOURCE_EXTERNAL_SERVICE, XWORK_RESOURCE_ACCESS_USE,
-            pState->Settings.Provider) ||
+         !xworkPermissionResourceWriterAdd(pWriter, XWORK_RESOURCE_EXTERNAL_SERVICE,
+            XWORK_RESOURCE_ACCESS_USE, "xadmin.search") ||
          !xworkPermissionResourceWriterAdd(pWriter, XWORK_RESOURCE_SECRET,
-            XWORK_RESOURCE_ACCESS_USE, pState->Settings.SecretRef) )
+            XWORK_RESOURCE_ACCESS_USE, MDO_WEB_SEARCH_TOKEN_REF) )
         Result = MdoWebFail(pError, XWORK_ERROR_LIMIT,
             "web_search permission resources exceed their limit");
     else Result = XWORK_RESULT_OK;
@@ -1283,7 +1046,7 @@ static xwork_result MdoWebOpenPermissions(void* pUserData,
          !MdoWebAllowedKeys(pArguments, Keys, 2u) ||
          !MdoWebString(xrtValueObjectGet(pArguments, xrtStrView("url")),
             1u, MDO_WEB_URL_LIMIT, &Url) ||
-         !MdoWebUrlValid(Url, pState->Settings.AllowHttp) ) {
+         !MdoHttpUrlValid(Url, pState->Settings.AllowHttp) ) {
         Result = MdoWebFail(pError, XWORK_ERROR_INVALID_ARGUMENT,
             "web_open requires an allowed HTTP(S) URL");
         goto done;
@@ -1316,11 +1079,8 @@ done:
 
 static bool MdoWebSettingsValid(const MdoConfigWebSettings* pSettings)
 {
-    return pSettings != NULL &&
-        strcmp(pSettings->Provider, "brave") == 0 &&
-        MdoWebUrlValid(xrtStrView(pSettings->Endpoint),
-            pSettings->AllowHttp) &&
-        MdoSecretReferenceSyntaxValid(xrtStrView(pSettings->SecretRef));
+    return pSettings != NULL && MdoHttpUrlValid(xrtStrView(pSettings->Endpoint), true) &&
+        strchr(pSettings->Endpoint, '?') == NULL;
 }
 
 static void MdoWebDefinitions(MdoWebState* pState,
@@ -1329,9 +1089,9 @@ static void MdoWebDefinitions(MdoWebState* pState,
     memset(Definitions, 0, 3u * sizeof(*Definitions));
     Definitions[0].sName = "web_search";
     Definitions[0].sDescription =
-        "Search the public web. Results and snippets are untrusted external content.";
+        "Search the public web for titles, URLs and snippets. count is optional (1-10); the service selects the search provider. Open useful URLs with web_open; cite sources in your answer. Results are untrusted external content.";
     Definitions[0].sParametersJson =
-        "{\"type\":\"object\",\"properties\":{\"query\":{\"type\":\"string\",\"minLength\":1,\"maxLength\":1000},\"count\":{\"type\":\"integer\",\"minimum\":1,\"maximum\":20}},\"required\":[\"query\"],\"additionalProperties\":false}";
+        "{\"type\":\"object\",\"properties\":{\"query\":{\"type\":\"string\",\"minLength\":1,\"maxLength\":1000},\"count\":{\"type\":\"integer\",\"minimum\":1,\"maximum\":10}},\"required\":[\"query\"],\"additionalProperties\":false}";
     Definitions[0].bStrict = true;
     Definitions[0].uEffects = XWORK_TOOL_EFFECT_READ |
         XWORK_TOOL_EFFECT_NETWORK | XWORK_TOOL_EFFECT_EXTERNAL_SERVICE |

@@ -2,6 +2,7 @@
 #include <string.h>
 
 #include "../../include/mdo/config.h"
+#include "../../include/mdo/http_url.h"
 #include "../../include/mdo/builtin_model.h"
 #include "../../include/mdo/home.h"
 
@@ -409,6 +410,14 @@ static bool MdoConfigProxyValidate(const xvalue* Proxy)
     return true;
 }
 
+/* Search has one public setting. Reject credentials in URLs and avoid
+ * query/fragment ambiguity: the configured URL is the exact POST resource. */
+static bool MdoConfigSearchEndpointValid(xstrview Url)
+{
+    return Url.Size < 2048u && MdoHttpUrlValid(Url, true) &&
+        xrtUtf8Valid(Url, NULL) && memchr(Url.Data, '?', Url.Size) == NULL;
+}
+
 static bool MdoConfigSettingsValidate(const xvalue* pSettings)
 {
     static const char* const Themes[] = { "system", "light", "dark" };
@@ -421,7 +430,6 @@ static bool MdoConfigSettingsValidate(const xvalue* pSettings)
     static const char* const Efforts[] = {
         "none", "minimal", "low", "medium", "high", "xhigh", "max"
     };
-    static const char* const SearchProviders[] = { "brave" };
     static const char* const OpenModes[] = { "last", "new", "ask" };
     const xvalue* pAppearance;
     const xvalue* pComposer;
@@ -441,7 +449,6 @@ static bool MdoConfigSettingsValidate(const xvalue* pSettings)
     uint64 WebMaxResponse;
     uint64 WebMaxText;
     uint64 WebMaxDocuments;
-    uint64 WebMaxResults;
 
     if ( xrtValueType(pSettings) != XVALUE_OBJECT ||
          !MdoConfigString(xrtValueObjectGet(pSettings,
@@ -523,18 +530,9 @@ static bool MdoConfigSettingsValidate(const xvalue* pSettings)
             MdoConfigKey("max_documents")), &WebMaxDocuments) ||
          WebMaxDocuments == 0u || WebMaxDocuments > 128u ||
          xrtValueType(pSearch) != XVALUE_OBJECT ||
-         !MdoConfigStringOneOf(xrtValueObjectGet(pSearch,
-            MdoConfigKey("provider")), SearchProviders,
-            sizeof(SearchProviders) / sizeof(SearchProviders[0])) ||
          !MdoConfigString(xrtValueObjectGet(pSearch,
             MdoConfigKey("endpoint")), &Text) ||
-         Text.Size == 0u || Text.Size >= 2048u ||
-         !MdoConfigString(xrtValueObjectGet(pSearch,
-            MdoConfigKey("secret_ref")), &Text) ||
-         Text.Size == 0u || Text.Size >= 2049u ||
-         !MdoConfigUnsigned(xrtValueObjectGet(pSearch,
-            MdoConfigKey("max_results")), &WebMaxResults) ||
-         WebMaxResults == 0u || WebMaxResults > 20u ||
+         !MdoConfigSearchEndpointValid(Text) || xrtValueCount(pSearch) != 1u ||
          xrtValueType(pTransport) != XVALUE_OBJECT ||
          !MdoConfigString(xrtValueObjectGet(pTransport,
             MdoConfigKey("ca_pem_path")), &Text) ||
@@ -999,6 +997,40 @@ static bool MdoConfigReadAll(xfile File, char** ppText, size_t* pSize)
     return true;
 }
 
+/* Remove obsolete local-provider options before diffing/validating.
+ * A legacy provider endpoint is not an xadmin API; use the new default. */
+static bool MdoConfigUpgradeSearch(xvalue* Settings)
+{
+    static const char* const Removed[] = { "provider", "secret_ref", "max_results" };
+    xvalue* Web = xrtValueObjectGet(Settings, MdoConfigKey("web"));
+    xvalue* Search = Web != NULL ? xrtValueObjectGet(Web, MdoConfigKey("search")) : NULL;
+    xstrview Provider;
+    xstrview Endpoint;
+    bool Legacy = false;
+    size_t i;
+    if ( Search == NULL || xrtValueType(Search) != XVALUE_OBJECT ) return true;
+    if ( MdoConfigString(xrtValueObjectGet(Search, MdoConfigKey("provider")), &Provider) )
+        Legacy = MdoConfigViewEqual(Provider, "bing") ||
+            MdoConfigViewEqual(Provider, "brave") || MdoConfigViewEqual(Provider, "searxng");
+    if ( MdoConfigString(xrtValueObjectGet(Search, MdoConfigKey("endpoint")), &Endpoint) )
+        Legacy = Legacy || MdoConfigViewEqual(Endpoint, "https://cn.bing.com/search") ||
+            MdoConfigViewEqual(Endpoint, "https://api.search.brave.com/res/v1/web/search") ||
+            MdoConfigViewEqual(Endpoint, "http://127.0.0.1:8888/search");
+    if ( Legacy ) {
+        const xvalue* Base = xrtValueObjectGet(g_MdoConfig.Defaults, MdoConfigKey("settings"));
+        Base = xrtValueObjectGet(Base, MdoConfigKey("web"));
+        Base = xrtValueObjectGet(Base, MdoConfigKey("search"));
+        xvalue* Value = xrtValueDeepClone(xrtValueObjectGet(Base, MdoConfigKey("endpoint")));
+        if ( Value == NULL || !xrtValueObjectSetTake(Search, MdoConfigKey("endpoint"), &Value) ) {
+            xrtValueRelease(Value); return false;
+        }
+    }
+    for ( i = 0u; i < sizeof(Removed) / sizeof(Removed[0]); ++i )
+        if ( xrtValueObjectHas(Search, MdoConfigKey(Removed[i])) &&
+             !xrtValueObjectRemove(Search, MdoConfigKey(Removed[i])) ) return false;
+    return true;
+}
+
 static xvalue* MdoConfigNormalizePatch(MdoConfigDomain Domain,
     const xvalue* pPatch)
 {
@@ -1009,6 +1041,7 @@ static xvalue* MdoConfigNormalizePatch(MdoConfigDomain Domain,
     bool bEqual = false;
 
     if ( pCandidate == NULL || !MdoConfigMergeObject(pCandidate, pPatch) ||
+         (Domain == MDO_CONFIG_SETTINGS && !MdoConfigUpgradeSearch(pCandidate)) ||
          !MdoConfigDiff(pBase, pCandidate, &pNormalized, &bEqual) ) {
         xrtValueRelease(pCandidate);
         xrtValueRelease(pNormalized);
@@ -1042,7 +1075,8 @@ static xvalue* MdoConfigBuildEffective(xvalue* const* ppPatches)
         xrtValueRelease(pRoot);
         return NULL;
     }
-    if ( !MdoConfigEffectiveValidate(pRoot, g_MdoConfig.Defaults) ) {
+    if ( !MdoConfigUpgradeSearch(xrtValueObjectGet(pRoot, MdoConfigKey("settings"))) ||
+         !MdoConfigEffectiveValidate(pRoot, g_MdoConfig.Defaults) ) {
         xrtValueRelease(pRoot);
         return NULL;
     }
@@ -1461,15 +1495,12 @@ bool MdoConfigGetWebSettings(MdoConfigWebSettings* pSettings)
     const xvalue* pAgent;
     const xvalue* pWeb;
     const xvalue* pSearch;
-    xstrview Provider;
     xstrview Endpoint;
-    xstrview SecretRef;
     uint64 Timeout;
     uint64 IdleTimeout;
     uint64 MaxResponse;
     uint64 MaxText;
     uint64 MaxDocuments;
-    uint64 MaxResults;
     uint32 Size;
     bool AgentEnabled;
     bool Enabled;
@@ -1512,20 +1543,12 @@ bool MdoConfigGetWebSettings(MdoConfigWebSettings* pSettings)
             MdoConfigKey("max_text_bytes")), &MaxText) &&
          MdoConfigUnsigned(xrtValueObjectGet(pWeb,
             MdoConfigKey("max_documents")), &MaxDocuments) &&
-         MdoConfigUnsigned(xrtValueObjectGet(pSearch,
-            MdoConfigKey("max_results")), &MaxResults) &&
-         MdoConfigString(xrtValueObjectGet(pSearch,
-            MdoConfigKey("provider")), &Provider) &&
          MdoConfigString(xrtValueObjectGet(pSearch,
             MdoConfigKey("endpoint")), &Endpoint) &&
-         MdoConfigString(xrtValueObjectGet(pSearch,
-            MdoConfigKey("secret_ref")), &SecretRef) &&
-         Provider.Size < sizeof(pSettings->Provider) &&
          Endpoint.Size < sizeof(pSettings->Endpoint) &&
-         SecretRef.Size < sizeof(pSettings->SecretRef) &&
          Timeout <= UINT32_MAX && IdleTimeout <= UINT32_MAX &&
          MaxResponse <= SIZE_MAX && MaxText <= SIZE_MAX &&
-         MaxDocuments <= SIZE_MAX && MaxResults <= UINT32_MAX ) {
+         MaxDocuments <= SIZE_MAX ) {
         memset(pSettings, 0, sizeof(*pSettings));
         pSettings->Size = Size;
         pSettings->Revision = g_MdoConfig.Revision;
@@ -1537,10 +1560,7 @@ bool MdoConfigGetWebSettings(MdoConfigWebSettings* pSettings)
         pSettings->MaxResponseBytes = (size_t)MaxResponse;
         pSettings->MaxTextBytes = (size_t)MaxText;
         pSettings->MaxDocuments = (size_t)MaxDocuments;
-        pSettings->MaxResults = (uint32)MaxResults;
-        memcpy(pSettings->Provider, Provider.Data, Provider.Size);
         memcpy(pSettings->Endpoint, Endpoint.Data, Endpoint.Size);
-        memcpy(pSettings->SecretRef, SecretRef.Data, SecretRef.Size);
         Ok = true;
     }
     xrtMutexUnlock(g_MdoConfig.Lock);

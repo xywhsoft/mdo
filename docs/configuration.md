@@ -31,9 +31,10 @@ mdo 配置 schema v1 由一份内置基线、三份可选用户 patch 和一层�
 
 普通 JSON 配置不能保存 `api_key`、token、password、client secret、private key 或 Authorization 等敏感值。模型凭据只能保存为 provider 的 `credential.secret_ref`，v1 接受 `env:`、`file:`、`keychain:` 和 `prompt:` 引用。secret resolver 在使用模型时解析引用，配置导入和导出始终只处理引用文本。
 
-`settings.web` 配置联机搜索 provider、HTTPS endpoint、凭据引用、超时、响应/
-文本/缓存上限以及是否允许 HTTP 或私网。默认 Brave 凭据使用
-`env:MDO_BRAVE_SEARCH_API_KEY`，只在调用 `web_search` 时解析。URL、地址解析和
+`settings.web.search` 只配置完整的搜索 API `endpoint`，默认
+`https://ai.xywhsoft.com/api/v1/search`。搜索平台和密钥由 xadmin 服务端管理。
+客户端使用会员 JWT，当前联调由 `MDO_SEARCH_ACCESS_TOKEN` 环境变量传入。
+`settings.web` 内部仍保留超时、响应/文本/缓存预算与网页访问策略。URL、地址解析和
 权限边界见 [Web 工具合同](web-tools.md)。
 
 `settings.transport.ca_pem_path` 可在“联网与搜索”页配置模型 HTTPS 请求使用的自定义 CA。路径必须相对于外部 `mdo-home/`，以 `/` 分隔，不允许盘符、反斜杠或 `..`；例如把 PEM 放到 `mdo-home/certs/company.pem`，设置值为 `certs/company.pem`。空值使用系统证书；非空值将 PEM 中的信任锚与系统证书合并后交给 xllm，不会关闭 TLS 校验，也不影响 Web 搜索工具。运行前读取并解析 PEM，文件缺失、超过 1 MiB 或无有效证书时模型启动明确失败。证书文件随 Home 一起搬移，单文件首次启动不要求创建该目录。

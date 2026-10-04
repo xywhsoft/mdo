@@ -35,10 +35,7 @@
       "max_text_bytes": 262144,
       "max_documents": 16,
       "search": {
-        "provider": "brave",
-        "endpoint": "https://api.search.brave.com/res/v1/web/search",
-        "secret_ref": "env:MDO_BRAVE_SEARCH_API_KEY",
-        "max_results": 8
+        "endpoint": "https://ai.xywhsoft.com/api/v1/search"
       }
     },
     "transport": {

@@ -8,7 +8,7 @@ function number(form, name) {
   return Number(form.elements[name].value);
 }
 
-function settingsPatch(form, snapshot) {
+function settingsPatch(form) {
   const proxySecretRef = form.elements.proxy_secret_ref.value.trim();
   return {
     locale: form.elements.locale.value,
@@ -30,21 +30,7 @@ function settingsPatch(form, snapshot) {
       max_parallel_tools: number(form, "max_parallel_tools"),
       max_parallel_subagents: number(form, "max_parallel_subagents"),
     },
-    web: {
-      enabled: form.elements.web_enabled.checked,
-      allow_http: form.elements.allow_http.checked,
-      allow_private_networks: form.elements.allow_private_networks.checked,
-      timeout_ms: number(form, "timeout_ms"),
-      idle_timeout_ms: number(form, "idle_timeout_ms"),
-      max_response_bytes: number(form, "max_response_bytes"),
-      max_text_bytes: number(form, "max_text_bytes"),
-      max_documents: number(form, "max_documents"),
-      search: {
-        provider: snapshot.web.provider,
-        endpoint: form.elements.endpoint.value.trim(),
-        max_results: number(form, "max_results"),
-      },
-    },
+    web: { search: { endpoint: form.elements.endpoint.value.trim() } },
     transport: {
       ca_pem_path: form.elements.ca_pem_path.value.trim(),
       proxy: {
@@ -87,7 +73,6 @@ export function createSettingsView({ form, store, navigation, onApplied }) {
   const pages = createSettingsPages({
     workspace: document.querySelector("#settings-workspace"), form, navigation,
   });
-  const credential = document.querySelector("#search-credential-state");
   const proxyCredential = document.querySelector("#proxy-credential-state");
   const powerStatus = document.querySelector("#settings-power-status");
   const instructionsCount = document.querySelector("#settings-instructions-count");
@@ -110,7 +95,7 @@ export function createSettingsView({ form, store, navigation, onApplied }) {
   }
 
   function fingerprint() {
-    return snapshot ? JSON.stringify(settingsPatch(form, snapshot)) : "";
+    return snapshot ? JSON.stringify(settingsPatch(form)) : "";
   }
 
   function syncPendingLink() {
@@ -190,14 +175,6 @@ export function createSettingsView({ form, store, navigation, onApplied }) {
     settings.transaction_service.runtime_consistent ? "neutral" : "error");
   }
 
-  function renderCredential(settings) {
-    credential.textContent = settings.web.credential_configured
-      ? t("settings.credentialConfigured", {},
-        "已配置搜索凭据引用。实际值仅在服务端调用时读取，此处不确认其是否可用。")
-      : t("settings.credentialMissing", {},
-        "尚未配置搜索凭据引用。请通过 mdo Home 文件或环境变量配置。");
-  }
-
   function renderProxyCredential(settings) {
     const configured = Boolean(settings.transport?.proxy?.credential_configured);
     document.querySelector("#proxy-clear-secret-row").hidden = !configured;
@@ -263,15 +240,6 @@ export function createSettingsView({ form, store, navigation, onApplied }) {
     form.elements.web_search.checked = settings.agent.web_search;
     form.elements.memory.checked = settings.agent.memory;
     form.elements.schedules.checked = settings.agent.schedules;
-    form.elements.web_enabled.checked = settings.web.enabled;
-    form.elements.allow_http.checked = settings.web.allow_http;
-    form.elements.allow_private_networks.checked = settings.web.allow_private_networks;
-    form.elements.timeout_ms.value = settings.web.timeout_ms;
-    form.elements.idle_timeout_ms.value = settings.web.idle_timeout_ms;
-    form.elements.max_response_bytes.value = settings.web.max_response_bytes;
-    form.elements.max_text_bytes.value = settings.web.max_text_bytes;
-    form.elements.max_documents.value = settings.web.max_documents;
-    form.elements.max_results.value = settings.web.max_results;
     form.elements.endpoint.value = settings.web.endpoint;
     form.elements.ca_pem_path.value = settings.transport?.ca_pem_path ?? "";
     const proxy = settings.transport?.proxy ?? {};
@@ -300,7 +268,6 @@ export function createSettingsView({ form, store, navigation, onApplied }) {
       editing.field.scrollTop = editing.top;
       editing.field.scrollLeft = editing.left;
     }
-    renderCredential(settings);
     syncPendingLink();
     restoreConfirm.hidden = true;
     validateInstructions();
@@ -313,7 +280,6 @@ export function createSettingsView({ form, store, navigation, onApplied }) {
     const selectedLocale = previewActive ? form.elements.locale.value : settings.locale;
     localeReady = loadLocale(selectedLocale).then((applied) => {
       if (applied && snapshot === settings) {
-        renderCredential(settings);
         renderProxyCredential(settings);
         renderPowerStatus(settings);
         validateInstructions();
@@ -376,7 +342,6 @@ export function createSettingsView({ form, store, navigation, onApplied }) {
       const applied = await loadLocale(form.elements.locale.value);
       if (!applied) return;
       if (snapshot) renderStatus(snapshot);
-      if (snapshot) renderCredential(snapshot);
       if (snapshot) renderProxyCredential(snapshot);
       if (snapshot) renderPowerStatus(snapshot);
       validateInstructions();
@@ -396,7 +361,7 @@ export function createSettingsView({ form, store, navigation, onApplied }) {
           !validateProxy() || !validatePower() ||
           [...form.elements].some((field) => field.willValidate && !field.validity.valid))
         return null;
-      return { patch: settingsPatch(form, snapshot), etag: snapshot.etag, values: values() };
+      return { patch: settingsPatch(form), etag: snapshot.etag, values: values() };
     },
     write: (submitted) => applySettings(submitted.patch, submitted.etag),
     onStart(submitted) {
@@ -533,7 +498,6 @@ export function createSettingsView({ form, store, navigation, onApplied }) {
       const selectedLocale = form.elements.locale.value;
       localeReady = loadLocale(selectedLocale).then((applied) => {
         if (!applied || !previewActive || form.elements.locale.value !== selectedLocale) return;
-        renderCredential(snapshot);
         renderProxyCredential(snapshot);
         renderPowerStatus(snapshot);
         validateInstructions();

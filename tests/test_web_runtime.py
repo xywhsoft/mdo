@@ -47,11 +47,11 @@ static unsigned char *Copy(const char *text, size_t *size) {
 static bool Fetch(void *data, const XS_FetchRequest *request,
     XS_FetchResponse *response) {
     static const char search[] =
-        "{\"web\":{\"results\":["
+        "{\"code\":0,\"message\":\"\",\"data\":{\"provider\":\"bocha\","
+        "\"request_id\":\"0123456789abcdef0123456789abcdef\",\"count\":1,"
+        "\"truncated\":false,\"results\":["
         "{\"title\":\"Result One\",\"url\":\"https://example.com/page\","
-        "\"description\":\"needle snippet\"},"
-        "{\"title\":\"Rejected\",\"url\":\"http://example.com/plain\","
-        "\"description\":\"http disabled\"}]}}";
+        "\"snippet\":\"needle snippet\",\"site\":\"example.com\",\"published_at\":\"2026-10-04\"}]}}";
     static const char page[] =
         "<!doctype html><html><head><title>Probe &amp; Page</title>"
         "<style>hidden style</style></head><body><h1>Alpha</h1>"
@@ -66,10 +66,15 @@ static bool Fetch(void *data, const XS_FetchRequest *request,
     if ((request->Flags & XS_FETCH_PUBLIC_ADDRESSES_ONLY) != 0u)
         ++probe->PublicOnly;
     for (i = 0u; i < request->HeaderCount; ++i)
-        if (strcmp(request->Headers[i].Name, "X-Subscription-Token") == 0 &&
-            strcmp(request->Headers[i].Value, "probe-secret") == 0)
+        if (strcmp(request->Headers[i].Name, "Authorization") == 0 &&
+            strcmp(request->Headers[i].Value, "Bearer probe-secret") == 0)
             ++probe->SawSecret;
-    if (strstr(request->Url, "api.search.brave.com") != NULL) {
+    if (strcmp(request->Url, "https://ai.xywhsoft.com/api/v1/search") == 0) {
+        if (strcmp(request->Method, "POST") != 0 || request->Body == NULL ||
+            request->BodySize != strlen("{\"query\":\"alpha beta\",\"count\":2}") ||
+            memcmp(request->Body, "{\"query\":\"alpha beta\",\"count\":2}", request->BodySize) != 0 ||
+            (request->Flags & XS_FETCH_FOLLOW_REDIRECTS) != 0u || request->MaxRedirects != 0u)
+            printf("request_contract_failed=1\n");
         body = search; content_type = "application/json";
         final_url = request->Url;
     } else if (strcmp(request->Url, "https://example.com/page") == 0) {
@@ -282,9 +287,11 @@ def write_site(site: Path) -> None:
     }), encoding="utf-8")
 
 
-def run_probe(host: Path, site: Path, home: Path) -> str:
+def run_probe(host: Path, site: Path, home: Path, token: str | None = "probe-secret") -> str:
     environment = os.environ.copy()
-    environment["MDO_BRAVE_SEARCH_API_KEY"] = "probe-secret"
+    environment.pop("MDO_SEARCH_ACCESS_TOKEN", None)
+    if token is not None:
+        environment["MDO_SEARCH_ACCESS_TOKEN"] = token
     command = [str(host), "xs.json", "--", "--home", str(home)]
     creationflags = subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0
     process = subprocess.Popen(
@@ -340,6 +347,8 @@ def main() -> int:
         assert "tool=web_find effects:1 source:mdo.web permissions:0" in output, output
         assert '"type":"web_search_results"' in output, output
         assert '"title":"Result One"' in output and "Rejected" not in output, output
+        assert '"published_at":"2026-10-04"' in output, output
+        assert "request_contract_failed" not in output, output
         assert '"document_id":"doc-0000000000000001"' in output, output
         assert '"title":"Probe & Page"' in output, output
         assert "hidden script" not in output and "hidden style" not in output, output
@@ -349,7 +358,7 @@ def main() -> int:
         assert "deterministic transport failure" in output, output
         assert "reload=1" in output, output
         assert "snapshot=generation:2 enabled:1 docs:1/16 completed:2 failed:1" in output, output
-        assert "probe=fetches:3 public:3 secret:1 permissions:5 resources:5" in output, output
+        assert "probe=fetches:3 public:2 secret:1 permissions:5 resources:5" in output, output
         assert "probe_done=1" in output, output
     print("PASS bounded Web search/open/find runtime")
     return 0
