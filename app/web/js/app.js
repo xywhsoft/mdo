@@ -5,7 +5,7 @@ import {
   patchSession, trashSession, restoreSession, loadSessionHistory, forkSession,
   truncateSession, clearSession, loadSessionTranscript,
 } from "./state/sessions.js";
-import { modelsStore, agentsStore, projectsStore, loadCatalogs, loadModels, loadAgents, loadProjects, createProject } from "./state/catalogs.js";
+import { modelsStore, agentsStore, projectsStore, loadCatalogs, loadModels, loadAgents, loadProjects } from "./state/catalogs.js";
 import {
   settingsStore, loadSettings, previewSettings, applySettings,
 } from "./state/settings.js";
@@ -33,7 +33,6 @@ import { createSessionBackupExport } from "./features/sessions/session-backup-ex
 import { createSessionBackupImport } from "./features/sessions/session-backup-import.js";
 import { createProjectDialog } from "./features/sessions/project-dialog.js";
 import { createDirectoryPicker } from "./features/sessions/directory-picker.js";
-import { projectDefaultsFromWorkspace } from "./features/sessions/project-identity.js";
 import { timelineStore, selectTimeline, clearTimeline, refreshSelectedTimeline, reloadSelectedTimeline } from "./features/chat/timeline-store.js";
 import { todoStore, selectTodo, clearTodo } from "./state/todo.js";
 import { createTimelineView } from "./features/chat/timeline.js";
@@ -241,6 +240,9 @@ export async function boot() {
     error: $("#project-error"), submit: $("#create-project"), modelsStore,
     browse: $("#project-browse"), status: $("#project-status"),
     directoryPicker,
+    folderUI: { zone: $("#project-folder-zone"), summary: $("#project-folder-summary"),
+      empty: $("#project-folder-empty"), name: $("#project-folder-name"), path: $("#project-folder-path"),
+      clear: $("#project-folder-clear"), browseLabel: $("#project-browse-label"), options: $("#project-options") },
     onCreated(project) {
       showActiveSessions();
       navigation.newTask(project.id);
@@ -275,8 +277,7 @@ export async function boot() {
         });
     },
     onAction: handleSessionAction,
-    onAddProject: (workspaceRoot) => createProject(projectDefaultsFromWorkspace(workspaceRoot)),
-    onBrowseProject: (path, select) => directoryPicker.open(path, select),
+    onAddProject: (origin) => projectDialog.open(null, origin),
     onRefreshProjects: loadProjects,
     onProjectAction(action, projectId, origin) {
       if (action === "edit") return projectDialog.open({ id: projectId }, origin);

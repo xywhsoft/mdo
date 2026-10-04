@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { createProjectDialog } from "../app/web/js/features/sessions/project-dialog.js";
 
-function setup() {
+function setup(overrides = {}) {
   const previous = { document: globalThis.document, FormData: globalThis.FormData };
   let focused = "";
   const node = (label) => Object.assign(new EventTarget(), { value: "", hidden: false,
@@ -35,7 +35,7 @@ function setup() {
     create(values) { return new Promise((resolve, reject) => calls.push({ kind: "create", values, resolve, reject })); },
     update(id, values, etag) { return new Promise((resolve, reject) => calls.push({ kind: "update", id, values, etag, resolve, reject })); },
     onCreated: (value) => created.push(value), onUpdated: (value) => updated.push(value),
-    notify: (...args) => notices.push(args) });
+    notify: (...args) => notices.push(args), ...overrides });
   return { view, fields, form, dialog, reads, calls, submit, error, status, browse, models,
     created, updated, notices, picked: () => picked, focused: () => focused,
     submitForm() { form.dispatchEvent(new Event("submit", { cancelable: true })); },
@@ -62,6 +62,28 @@ test("saving from the sidebar restores the refreshed project menu button", async
     ctx.closeEvents();
     assert.equal(restored, true);
     assert.equal(ctx.updated.length, 1);
+  } finally { ctx.finish(); }
+});
+
+test("a dropped folder is checked on the host and stale checks cannot fill a newer dialog", async () => {
+  const zone = Object.assign(new EventTarget(), { classList: { add() {}, remove() {} }, contains() { return false; } });
+  const checks = [];
+  const ctx = setup({ folderUI: { zone }, resolveDrop: async () => "D:\\dropped",
+    readDirectory(path, signal) { return new Promise((resolve) => checks.push({path,signal,resolve})); } });
+  const drop = () => zone.dispatchEvent(Object.assign(new Event("drop", {cancelable:true}), {dataTransfer:{}}));
+  try {
+    await ctx.view.open();
+    drop(); await tick();
+    assert.equal(checks[0].path, "D:\\dropped");
+    assert.equal(ctx.submit.disabled, true);
+    ctx.dialog.close(); ctx.closeEvents(); await ctx.view.open();
+    assert.equal(checks[0].signal.aborted, true);
+    checks[0].resolve({path:"D:\\stale"}); await tick();
+    assert.equal(ctx.fields.workspace_root.value, "");
+    drop(); await tick(); checks[1].resolve({path:"D:\\real folder"}); await tick();
+    assert.equal(ctx.fields.workspace_root.value, "D:\\real folder");
+    assert.equal(ctx.fields.name.value, "real folder");
+    assert.equal(ctx.submit.disabled, false);
   } finally { ctx.finish(); }
 });
 
@@ -94,7 +116,11 @@ test("an in-flight update keeps its owner and never closes or navigates a newer 
     assert.deepEqual(ctx.calls[0].values, { name: "Renamed", workspace_root: "/work/a", default_model_id: "ornith-1.5-35b" });
     assert.equal(ctx.calls[0].id, "a"); assert.equal(ctx.calls[0].etag, '"a-1"');
     ctx.dialog.close(); await ctx.view.open(); ctx.closeEvents();
-    ctx.fields.name.value = "New project"; ctx.submitForm();
+    ctx.fields.name.value = "New project";
+    ctx.fields.name.dispatchEvent(new Event("input"));
+    ctx.fields.workspace_root.value = "/work/new";
+    ctx.fields.workspace_root.dispatchEvent(new Event("input"));
+    ctx.submitForm();
     assert.equal(ctx.calls.length, 1); assert.equal(ctx.submit.disabled, true);
     ctx.calls[0].resolve({ name: "Renamed", id: "a" }); await tick();
     assert.equal(ctx.dialog.open, true); assert.equal(ctx.fields.name.value, "New project");

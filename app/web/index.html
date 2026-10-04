@@ -520,7 +520,7 @@
     <form class="dialog-card" id="project-form">
       <header>
         <div>
-          <h2 id="project-dialog-title">添加项目</h2>
+          <h2 id="project-dialog-title">创建项目</h2>
           <p id="project-dialog-description">指定工作区目录；项目会保留在侧栏，新任务将使用该目录。</p>
         </div>
         <button class="icon-button" type="button" id="close-project-dialog" aria-label="关闭" data-i18n-aria-label="project.close">
@@ -528,22 +528,39 @@
         </button>
       </header>
       <div class="dialog-fields project-fields">
-        <div class="project-directory-field">
-          <label for="project-workspace" data-i18n="project.workspace">工作区目录</label>
-          <div class="project-directory-input">
-            <input id="project-workspace" name="workspace_root" required maxlength="2048" autocomplete="off" placeholder="例如 /work/project 或 D:\work\project" data-i18n-placeholder="project.workspacePlaceholder">
-            <button class="secondary-button" type="button" id="project-browse" data-i18n="directory.browse">选择目录</button>
+        <label class="project-name-field">
+          <span class="icon" data-icon="folder" aria-hidden="true"></span>
+          <input name="name" required maxlength="256" autocomplete="off" aria-label="项目名称" data-i18n-aria-label="project.name" placeholder="项目名称" data-i18n-placeholder="project.name">
+        </label>
+        <section class="project-folder-section" aria-labelledby="project-folder-label">
+          <h3 id="project-folder-label" data-i18n="project.sourceFolder">工作文件夹</h3>
+          <div class="project-folder-zone" id="project-folder-zone">
+            <div id="project-folder-empty" class="project-folder-empty">
+              <p data-i18n="project.chooseFolderHint">选择运行墨斗的设备上的文件夹</p>
+              <span data-i18n="project.dropFolderHint">也可以将文件夹拖到这里</span>
+            </div>
+            <div class="project-folder-summary" id="project-folder-summary" hidden>
+              <span class="icon" data-icon="folder-open" aria-hidden="true"></span>
+              <div><strong id="project-folder-name"></strong><span id="project-folder-path"></span></div>
+              <button class="icon-button" type="button" id="project-folder-clear" aria-label="移除文件夹" data-i18n-aria-label="project.removeFolder"><span class="icon" data-icon="close" aria-hidden="true"></span></button>
+            </div>
+            <button class="secondary-button project-folder-browse" type="button" id="project-browse"><span class="icon" data-icon="plus" aria-hidden="true"></span><span id="project-browse-label" data-i18n="project.addFolder">添加文件夹</span></button>
           </div>
-        </div>
-        <label><span data-i18n="project.name">项目名称</span> <input name="name" required maxlength="256" autocomplete="off"></label>
-        <label><span data-i18n="project.id">项目标识</span> <input name="id" required maxlength="64" pattern="[A-Za-z0-9_-][A-Za-z0-9._-]*" autocomplete="off"></label>
-        <label><span data-i18n="project.defaultModel">默认模型</span> <select name="default_model_id"><option value="">跟随全局默认</option></select></label>
+        </section>
+        <details class="project-options" id="project-options">
+          <summary data-i18n="project.moreOptions">更多设置</summary>
+          <div class="project-options-fields">
+            <label><span data-i18n="project.workspace">工作区目录</span><input id="project-workspace" name="workspace_root" required maxlength="2048" autocomplete="off" spellcheck="false" placeholder="例如 /work/project 或 D:\work\project" data-i18n-placeholder="project.workspacePlaceholder"></label>
+            <label><span data-i18n="project.id">项目标识</span><input name="id" required maxlength="64" pattern="[A-Za-z0-9_-][A-Za-z0-9._-]*" autocomplete="off"></label>
+            <label><span data-i18n="project.defaultModel">默认模型</span><select name="default_model_id"><option value="">跟随全局默认</option></select></label>
+          </div>
+        </details>
       </div>
       <p class="project-dialog-status" id="project-status" role="status" hidden></p>
       <div class="dialog-error" id="project-error" role="alert" tabindex="-1" hidden></div>
       <footer>
         <button class="secondary-button" id="cancel-project" type="button" data-i18n="project.cancel">取消</button>
-        <button class="primary-button" id="create-project" type="submit">添加项目</button>
+        <button class="primary-button" id="create-project" type="submit">创建项目</button>
       </footer>
     </form>
   </dialog>

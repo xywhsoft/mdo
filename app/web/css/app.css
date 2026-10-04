@@ -430,13 +430,6 @@ select:focus-visible,
 .session-show-more { display: block; min-height: 30px; padding: 4px 8px; border: 0; background: transparent; color: var(--faint); font: inherit; font-size: 12px; cursor: pointer; }
 .session-show-more:hover, .session-show-more:focus-visible { color: var(--ink); }
 .sidebar-tasks > .sidebar-section-body { padding-left: 20px; }
-.project-quick-add { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 4px; align-items: center; padding: 4px 9px 8px; }
-.project-quick-add:has(.project-quick-browse) input { grid-column: 1 / -1; }
-.project-quick-add input { min-width: 0; min-height: 32px; padding: 4px 7px; border: 1px solid var(--border-strong); border-radius: 6px; background: var(--surface-raised); color: var(--ink); font: inherit; font-size: 12px; }
-.project-quick-add button { min-height: 32px; padding: 0 8px; border: 0; border-radius: 6px; background: var(--surface-hover); color: var(--ink); font: inherit; font-size: 11px; cursor: pointer; }
-.project-quick-add button:hover { background: var(--surface-active); }
-.project-quick-add button:disabled { opacity: .55; cursor: wait; }
-.project-quick-error { grid-column: 1 / -1; color: var(--danger); font-size: 11px; overflow-wrap: anywhere; }
 .session-group-empty { margin: 0; padding: 7px 8px; color: var(--faint); font-size: 12px; }
 
 .session-item {
@@ -1101,6 +1094,47 @@ select:focus-visible,
 .project-directory-input input { min-width: 0; flex: 1; }
 .project-directory-input button { flex: 0 0 auto; min-height: 40px; }
 .project-dialog-status { margin: 0 20px 12px; font-size: 12px; color: var(--muted); }
+/* One project dialog serves both creation and editing; sidebar polling never
+   replaces its fields. Keep the common path focused on name and folder. */
+#project-dialog { width: min(560px, calc(100vw - 32px)); border-radius: 18px; }
+#project-dialog .dialog-card > header { padding: 22px 22px 10px; border: 0; }
+#project-dialog .dialog-card > header h2 { font-size: 18px; }
+#project-dialog[data-mode="create"] #project-dialog-description { display: none; }
+#project-dialog .project-fields { grid-template-columns: minmax(0, 1fr); gap: 18px; padding: 10px 22px 6px; }
+.dialog-fields .project-name-field { display: flex; align-items: center; gap: 10px; padding: 0 13px; border: 1px solid var(--border-strong); border-radius: 10px; background: var(--bg); }
+.project-name-field > .icon { flex: 0 0 18px; color: var(--muted); }
+.dialog-fields .project-name-field input { min-height: 44px; padding: 10px 0; border: 0; background: transparent; font-size: 14px; }
+.project-name-field:focus-within { border-color: var(--focus); box-shadow: 0 0 0 2px color-mix(in srgb, var(--focus) 15%, transparent); }
+.project-folder-section { min-width: 0; }
+.project-folder-section h3 { margin: 0 0 9px; font-size: 12px; font-weight: 500; }
+.project-folder-zone { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; min-height: 152px; padding: 20px; border: 1px solid var(--border-strong); border-radius: 11px; background: var(--surface); transition: border-color .15s, background .15s; }
+.project-folder-zone.is-dragging { border-color: var(--focus); background: color-mix(in srgb, var(--focus) 8%, var(--surface)); }
+.project-folder-empty { display: grid; gap: 7px; color: var(--muted); text-align: center; }
+.project-folder-empty p { margin: 0; font-size: 13px; }
+.project-folder-empty > span { color: var(--faint); font-size: 11px; }
+.project-folder-browse { display: inline-flex; align-items: center; gap: 7px; min-height: 34px; padding: 6px 11px; border-radius: 8px; font-size: 12px; }
+.project-folder-browse .icon { width: 15px; height: 15px; }
+.project-folder-summary { display: flex; align-items: center; gap: 12px; min-width: 0; width: 100%; }
+.project-folder-summary > .icon { flex: 0 0 24px; width: 24px; height: 24px; color: var(--muted); }
+.project-folder-summary > div { display: grid; flex: 1; min-width: 0; gap: 5px; }
+.project-folder-summary strong { font-size: 14px; font-weight: 500; overflow-wrap: anywhere; }
+.project-folder-summary span:not(.icon) { color: var(--muted); font-size: 11px; line-height: 1.5; overflow-wrap: anywhere; }
+.project-folder-summary > button { flex: 0 0 auto; }
+.project-folder-empty[hidden], .project-folder-summary[hidden] { display: none; }
+.project-options summary { color: var(--muted); font-size: 11px; cursor: pointer; }
+.project-options-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin-top: 14px; }
+.project-options-fields > label:first-child { grid-column: 1 / -1; }
+#project-dialog .dialog-card > footer { padding: 22px; border: 0; gap: 12px; }
+#project-dialog .dialog-card > footer > button { min-height: 38px; padding: 8px 18px; border-radius: 9px; }
+#project-dialog .dialog-card > footer > .secondary-button { border-color: transparent; background: transparent; color: var(--muted); }
+#project-dialog .dialog-error, #project-dialog .project-dialog-status { margin: 12px 22px 0; }
+@media (max-width: 600px) {
+  #project-dialog .dialog-card > header { padding: 18px 18px 8px; }
+  #project-dialog .project-fields { padding: 10px 18px 6px; gap: 16px; }
+  #project-dialog .dialog-card > footer { padding: 18px; }
+  .project-options-fields { grid-template-columns: minmax(0, 1fr); }
+  .project-folder-zone { padding: 16px; }
+}
 .directory-dialog { max-height: calc(100dvh - 32px); overflow: hidden; }
 .directory-dialog .dialog-card { display: flex; flex-direction: column; min-height: 0; max-height: calc(100dvh - 32px); }
 .directory-dialog .dialog-card > :is(header, footer) { flex: 0 0 auto; }
@@ -1500,11 +1534,6 @@ select:focus-visible,
   .session-more { width: 40px; height: 40px; }
   .session-group-main, .sidebar-section-toggle, .session-show-more { min-height: 40px; }
   .session-group-main > .session-group-chevron { opacity: 1; }
-  .project-quick-add { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .project-quick-add:has(.project-quick-browse) { grid-template-columns: minmax(0, 1fr) auto auto; }
-  .project-quick-add input { grid-column: 1 / -1; }
-  .project-quick-add input, .project-quick-add button { min-height: 40px; }
-  .project-quick-add button { min-width: 40px; }
   .session-item { min-height: 40px; padding-right: 43px; }
   .session-more { right: 0; }
   .session-menu button { min-height: 40px; }

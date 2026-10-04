@@ -3,9 +3,13 @@ import { element, errorMessage, toast } from "../../utils/dom.js";
 import { subscribeLocale, t } from "../../i18n.js";
 import { projectDefaultsFromWorkspace, projectIdFromName } from "./project-identity.js";
 import { findModel } from "../../utils/models.js";
+import { droppedFolderPath } from "./folder-drop.js";
+import { api } from "../../api/client.js";
 
 export function createProjectDialog({ dialog, form, error, submit, modelsStore,
-  onCreated, onUpdated, directoryPicker, browse, status,
+  onCreated, onUpdated, directoryPicker, browse, status, folderUI = {},
+  resolveDrop = droppedFolderPath,
+  readDirectory = (path, signal) => api.get(`/workspace/directories?path=${encodeURIComponent(path)}`, { signal }).then((reply) => reply.data),
   read = readProject, create = createProject, update = updateProject,
   notify = toast }) {
   const workspace = form.elements.workspace_root;
@@ -21,6 +25,8 @@ export function createProjectDialog({ dialog, form, error, submit, modelsStore,
   let saving = null;
   let returnFocus = null;
   let returnFocusKey = "";
+  let dropController = null;
+  let selecting = false;
   const title = dialog.querySelector("#project-dialog-title");
   const description = dialog.querySelector("#project-dialog-description");
 
@@ -28,13 +34,14 @@ export function createProjectDialog({ dialog, form, error, submit, modelsStore,
     const defaults = projectDefaultsFromWorkspace(workspace.value);
     if (!nameEdited) name.value = defaults.name;
     if (!idEdited) id.value = nameEdited ? projectIdFromName(name.value) : defaults.id;
+    renderFolder(); renderState();
   }
   workspace.addEventListener("input", suggestIdentity);
   browse?.addEventListener("click", () => {
     const owner = generation;
     void directoryPicker.open(workspace.value, (path) => {
       if (owner !== generation || !dialog.open) return;
-      workspace.value = path; suggestIdentity(); workspace.focus();
+      workspace.value = path; suggestIdentity(); name.focus();
     });
   });
   name.addEventListener("input", () => {
@@ -42,6 +49,53 @@ export function createProjectDialog({ dialog, form, error, submit, modelsStore,
     if (!idEdited) id.value = projectIdFromName(name.value);
   });
   id.addEventListener("input", () => { idEdited = true; });
+
+  function renderFolder() {
+    const path = workspace.value.trim();
+    if (folderUI.summary) folderUI.summary.hidden = !path;
+    if (folderUI.empty) folderUI.empty.hidden = Boolean(path);
+    if (folderUI.name) folderUI.name.textContent = projectDefaultsFromWorkspace(path).name || path;
+    if (folderUI.path) folderUI.path.textContent = path;
+    if (folderUI.browseLabel) {
+      folderUI.browseLabel.removeAttribute("data-i18n");
+      folderUI.browseLabel.textContent = path ? t("project.changeFolder", {}, "更换文件夹")
+        : t("project.addFolder", {}, "添加文件夹");
+    }
+  }
+  folderUI.clear?.addEventListener("click", () => {
+    workspace.value = ""; suggestIdentity(); browse?.focus();
+  });
+  for (const type of ["dragenter", "dragover"]) folderUI.zone?.addEventListener(type, (event) => {
+    event.preventDefault(); event.stopPropagation();
+    if (loading || saving || selecting) return;
+    if (event.dataTransfer) event.dataTransfer.dropEffect = "copy";
+    folderUI.zone.classList.add("is-dragging");
+  });
+  folderUI.zone?.addEventListener("dragleave", (event) => {
+    if (!folderUI.zone.contains(event.relatedTarget)) folderUI.zone.classList.remove("is-dragging");
+  });
+  folderUI.zone?.addEventListener("drop", async (event) => {
+    event.preventDefault(); event.stopPropagation();
+    folderUI.zone.classList.remove("is-dragging");
+    if (loading || saving || selecting || !dialog.open) return;
+    const owner = generation;
+    dropController?.abort();
+    const controller = dropController = new AbortController();
+    selecting = true; error.hidden = true; renderState();
+    try {
+      const path = await resolveDrop(event.dataTransfer, { signal: controller.signal });
+      const directory = await readDirectory(path, controller.signal);
+      if (owner !== generation || !dialog.open || controller.signal.aborted) return;
+      workspace.value = directory.path; suggestIdentity(); name.focus();
+    } catch (cause) {
+      if (owner !== generation || !dialog.open || controller.signal.aborted) return;
+      const key = { folder_drop_one: "project.dropOneFolder", folder_drop_directory: "project.dropDirectoryOnly",
+        folder_drop_unavailable: "project.dropUnavailable" }[cause.code];
+      error.textContent = key ? t(key) : errorMessage(cause); error.hidden = false;
+    } finally {
+      if (owner === generation) { selecting = false; renderState(); }
+    }
+  });
 
   function fillModels(selected = model.value) {
     const models = modelsStore.get().data?.models ?? [];
@@ -58,30 +112,31 @@ export function createProjectDialog({ dialog, form, error, submit, modelsStore,
   }
   function renderText() {
     title.textContent = editing ? t("project.editTitle", {}, "编辑项目") :
-      t("project.add", {}, "添加项目");
+      t("project.create", {}, "创建项目");
     description.textContent = editing
       ? t("project.editDescription", {}, "修改只影响此后创建的任务；已有会话仍使用创建时的配置。")
       : t("project.addDescription", {}, "指定工作区目录；项目会保留在侧栏，新任务将使用该目录。");
     submit.textContent = editing ? t("project.save", {}, "保存项目") :
-      t("project.add", {}, "添加项目");
+      t("project.create", {}, "创建项目");
+    renderFolder();
     renderState();
   }
   function renderState() {
     const localSave = saving?.generation === generation;
-    submit.disabled = loading || loadFailed || Boolean(saving);
-    for (const field of [workspace, name, id, model, browse].filter(Boolean))
-      field.disabled = loading || localSave;
+    submit.disabled = loading || loadFailed || Boolean(saving) || selecting || !workspace.value.trim();
+    for (const field of [workspace, name, id, model, browse, folderUI.clear].filter(Boolean))
+      field.disabled = loading || localSave || selecting;
     if (status) {
-      status.hidden = !loading && !localSave;
+      status.hidden = !loading && !localSave && !selecting;
       status.textContent = loading ? t("project.loading", {}, "正在读取项目…") :
-        localSave ? t("project.saving", {}, "正在保存项目…") : "";
+        localSave ? t("project.saving", {}, "正在保存项目…") : selecting ? t("project.checkingFolder", {}, "正在确认文件夹…") : "";
     }
   }
   modelsStore.subscribe(() => fillModels());
   subscribeLocale(() => { fillModels(); renderText(); });
   form.addEventListener("submit", async (event) => {
     event.preventDefault();
-    if (loading || loadFailed || saving || !dialog.open || !form.reportValidity()) return;
+    if (loading || loadFailed || saving || selecting || !dialog.open || !form.reportValidity()) return;
     error.hidden = true;
     const values = Object.fromEntries(new FormData(form));
     // A save owns its submitted definition, even if the user closes the dialog
@@ -101,6 +156,9 @@ export function createProjectDialog({ dialog, form, error, submit, modelsStore,
       // Catalog writers already refresh the sidebar. A completed background
       // save must not close a newer form or navigate away from the user's task.
       if (owner.generation === generation && dialog.open) {
+        // Creating enters a new task; its composer owns focus. Cancellation
+        // still restores the sidebar button, as does editing an existing item.
+        if (!owner.editing) { returnFocus = null; returnFocusKey = ""; }
         dialog.close();
         if (!owner.editing) onCreated(result);
         else onUpdated?.(result);
@@ -122,6 +180,8 @@ export function createProjectDialog({ dialog, form, error, submit, modelsStore,
   dialog.addEventListener("close", () => {
     if (dialog.open) return;
     ++generation; loading = false; error.hidden = true;
+    dropController?.abort(); selecting = false;
+    folderUI.zone?.classList.remove("is-dragging");
     directoryPicker?.close(); renderState();
     // Saving can refresh the catalog and replace the original sidebar button.
     // Restore its current counterpart rather than a detached DOM node.
@@ -135,10 +195,14 @@ export function createProjectDialog({ dialog, form, error, submit, modelsStore,
   return Object.freeze({
     async open(project = null, origin = document.activeElement) {
       const version = ++generation;
-      returnFocus = project ? origin : null;
+      returnFocus = origin;
       returnFocusKey = returnFocus?.dataset?.sidebarFocus || "";
       directoryPicker?.close();
+      dropController?.abort(); selecting = false;
+      folderUI.zone?.classList.remove("is-dragging");
       form.reset();
+      if (folderUI.options) folderUI.options.open = Boolean(project);
+      dialog.dataset && (dialog.dataset.mode = project ? "edit" : "create");
       editing = project && { ...project };
       loading = Boolean(project);
       loadFailed = false;
@@ -169,7 +233,7 @@ export function createProjectDialog({ dialog, form, error, submit, modelsStore,
       }
       loading = false;
       renderText();
-      (editing ? name : workspace).focus();
+      name.focus();
     },
   });
 }
