@@ -9,7 +9,7 @@ const ICONS = Object.freeze({
   close: '<path d="m6 6 12 12M18 6 6 18"/>',
   compose: '<path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L8 18l-4 1 1-4Z"/>',
   copy: '<rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/>',
-  retry: '<path d="M20 12a8 8 0 1 1-2.343-5.657"/><path d="M20 4v8h-8"/>',
+  retry: '<path d="M4 12a8 8 0 1 0 2.343-5.657"/><path d="M6.343 3.343v3h3"/><path d="M12 7v5l3 2"/>',
   branch: '<circle cx="6" cy="5" r="2"/><circle cx="18" cy="8" r="2"/><circle cx="18" cy="19" r="2"/><path d="M6 7v9a3 3 0 0 0 3 3h7M16 8h-5a5 5 0 0 0-5 5"/>',
   search: '<circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/>',
   download: '<path d="M12 3v12m-5-5 5 5 5-5M4 17v3h16v-3"/>',
