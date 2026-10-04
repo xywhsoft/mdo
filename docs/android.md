@@ -42,6 +42,14 @@ launcher/round icon；Android 8+ 使用自适应图标。Windows 的 ICO 和前�
 
 ## 设备使用
 
+桌面应用名由 Android 系统语言决定：中文（含繁体）显示“墨斗”，其他语言显示
+“mdo”。首次打开界面时，以系统首选语言选择中文、俄文或英文；其他语言默认
+英文。选择会通过现有设置 API 保存到 `mdo-home/config/settings.json`，后续启动
+保留该选择，也可以在“设置 → 通用”手动修改。已有语言设置不会被升级覆盖。
+内置 `locale: "auto"` 仅代表尚未初始化；无界面的服务启动不写入语言设置。
+Android 首选语言从 xs 的只读 `XsPlatform.languages()` 桥接读取，避免 WebView
+的 `navigator.language` 与系统语言不同；普通浏览器仍使用 `navigator`。
+
 打开应用即启动本地服务；通知中的“停止”会取消服务并正常排空资源。切到后台和
 旋转屏幕保留后端。系统仍可能因省电策略停止应用，后台计划任务不保证准时唤醒。
 可变配置、项目、会话和模块都在应用私有的 `files/mdo-home/`；内置 pack 放在
