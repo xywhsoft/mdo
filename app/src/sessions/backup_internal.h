@@ -6,7 +6,7 @@
 /* Shared by capture/encode and the filesystem-free decoder. Keep one path
  * whitelist and one byte budget for both sides of the format boundary. */
 #define MDO_BACKUP_JSON_VALUES 262144u
-#define MDO_BACKUP_OPTIONAL_FILES 6u
+#define MDO_BACKUP_OPTIONAL_FILES 5u
 
 typedef struct MdoBackupOwnedFile {
     char Path[MDO_SESSION_BACKUP_PATH_CAPACITY];

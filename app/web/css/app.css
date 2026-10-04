@@ -662,7 +662,6 @@ select:focus-visible,
 .timeline-item[data-kind="user"] .timeline-actions { justify-content: flex-end; }
 .timeline-actions button { display: inline-grid; width: 32px; height: 32px; flex: 0 0 auto; place-items: center; padding: 0; border: 0; border-radius: 6px; background: transparent; color: var(--muted); cursor: pointer; }
 .timeline-actions .icon { width: 16px; height: 16px; }
-.timeline-action-dislike .icon { transform: rotate(180deg); }
 .timeline-actions button:hover, .timeline-actions button:focus-visible { background: var(--surface-hover); color: var(--ink); }
 .timeline-actions button:disabled, .timeline-actions button[aria-disabled="true"] { opacity: .55; cursor: wait; }
 .timeline-actions button[aria-pressed="true"] { background: var(--surface-hover); color: var(--ink); font-weight: 700; }
@@ -1296,15 +1295,6 @@ select:focus-visible,
 .resource-card { padding: 13px; border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--surface); }
 .resource-card h3 { margin: 0; font-size: 13px; }
 .resource-card p { margin: 5px 0 0; color: var(--muted); font-size: 11px; }
-.feedback-toolbar, .feedback-card-heading { display: flex; align-items: center; gap: 10px; }
-.feedback-toolbar { flex-wrap: wrap; padding-top: 18px; color: var(--muted); font-size: 12px; }
-.feedback-list { display: grid; gap: 10px; padding-top: 14px; }
-.feedback-card-heading { justify-content: space-between; }
-.feedback-card-heading h3 { min-width: 0; overflow-wrap: anywhere; }
-.feedback-card p { overflow-wrap: anywhere; }
-.feedback-card .secondary-button { margin-top: 10px; }
-.feedback-vote { color: var(--accent); font-size: 12px; font-weight: 650; }
-.feedback-vote.bad { color: var(--danger); }
 .project-panel-toolbar { display: flex; flex-wrap: wrap; gap: 8px; padding-top: 18px; }
 .project-settings-list { display: grid; gap: 10px; padding-top: 14px; }
 .project-settings-card { overflow-wrap: anywhere; }
@@ -1622,7 +1612,6 @@ select:focus-visible,
   #schedule-weekdays label { min-height: 40px; }
   .schedule-advanced summary { padding: 10px 0; }
   #schedule-weekdays input { width: 18px; height: 18px; }
-  .feedback-toolbar button, .feedback-list button, #feedback-more { min-height: 40px; }
   .setting-row { align-items: flex-start; flex-direction: column; gap: 10px; padding: 15px 0; }
   .setting-row select, .setting-row input { width: 100%; min-width: 0; }
   .setting-row select, .setting-row input:not([type="checkbox"]),

@@ -42,7 +42,6 @@ import { createQueueGate } from "./features/chat/queue-gate.js";
 import { createMessageEditDialog } from "./features/chat/message-edit-dialog.js";
 import { runMessageReplacement } from "./features/chat/message-replacement.js";
 import { createConversationSearch } from "./features/chat/conversation-search.js";
-import { feedbackStore, selectFeedback, clearFeedback, setFeedback } from "./features/chat/feedback-store.js";
 import { createConversationDocks } from "./features/chat/conversation-docks.js";
 import { createPromptQueue } from "./features/chat/prompt-queue.js";
 import { createDraftStore } from "./features/chat/draft-store.js";
@@ -70,7 +69,6 @@ import { createProjectPurgeConfirmation } from "./features/settings/project-purg
 import { createProjectPurgeRecovery } from "./features/settings/project-purge-recovery.js";
 import { createProjectPurgeRecoveryPanel } from "./features/settings/project-purge-recovery-panel.js";
 import { createResourcePanels } from "./features/settings/resource-panels.js";
-import { createFeedbackPanel } from "./features/settings/feedback-panel.js";
 import { createKeyboardShortcuts } from "./features/shell/keyboard-shortcuts.js";
 import { createRunNotifications } from "./features/shell/run-notifications.js";
 import { startWorkspaceNavigation } from "./features/shell/workspace-startup.js";
@@ -467,13 +465,7 @@ export async function boot() {
     container: $("#timeline"), welcome: $("#welcome"),
     toBottom: $("#to-bottom"), store: timelineStore,
     sessionStore: sessionDetailStore,
-    feedbackStore,
     onSearchCount: (count, historyLost) => conversationSearch?.setCount(count, historyLost),
-    onFeedback: async (eventId, value, owner) => {
-      if (!isCurrentMessageOwner(owner))
-        throw new Error(t("messageAction.ownerChanged", {}, "会话已切换，请重新选择消息"));
-      await setFeedback(owner.projectId, owner.sessionId, eventId, value);
-    },
     onFork: async (throughSequence, owner) => {
       const version = routeVersion;
       if (!isCurrentMessageOwner(owner, version))
@@ -1027,9 +1019,6 @@ export async function boot() {
   const schedulePanel = createSchedulePanel({
     panel: $('[data-settings-panel="schedules"]'),
     projectsStore, agentsStore, modelsStore,
-  });
-  const feedbackPanel = createFeedbackPanel({
-    panel: $('[data-settings-panel="feedback"]'), navigation,
   });
   const resourcePanels = createResourcePanels({
     modelsStore,
@@ -1602,7 +1591,6 @@ export async function boot() {
       const selectedSection = settingsView.selectSection(settingsSection);
       resourcePanels.selectSection(selectedSection);
       if (selectedSection === "schedules") void schedulePanel.refresh();
-      if (selectedSection === "feedback") void feedbackPanel.refresh();
       closeDrawers();
       setDrawer("inspector", false, { persist: false });
       if (enteringSettings) $("#settings-title").focus({ preventScroll: true });
@@ -1701,7 +1689,6 @@ export async function boot() {
       clearTimeline();
       clearTodo();
       clearAsks();
-      clearFeedback();
       sessionDetailStore.reset();
       void newTaskController?.reconcile();
       return;
@@ -1711,7 +1698,6 @@ export async function boot() {
     selectTimeline(projectId, sessionId);
     void selectTodo(projectId, sessionId);
     void selectAsks(projectId, sessionId);
-    void selectFeedback(projectId, sessionId);
     const finishLoad = queueBlocked.beginLoad(key, "runtime");
     try {
       const detailReady = waitForSelectedDetail({ navigation,

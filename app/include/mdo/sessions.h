@@ -220,8 +220,8 @@ str MdoSessionExportJson(MdoSession* Session, size_t* Size,
 
 /* Nonblocking session-owned capture: current metadata, quiescent checkpoint,
  * UI events, todo and direct attachment reference/fork writers are fixed for
- * the callback. API callers must additionally freeze attachment/draft/queue/
- * feedback storage with the API capture guard. Read performs bounded external
+ * the callback. API callers must additionally freeze attachment/draft/queue
+ * storage with the API capture guard. Read performs bounded external
  * Home reads/copies only; no network, manager APIs or callback reentry. */
 typedef bool (*MdoSessionCaptureReadFn)(const MdoSessionInfo* Info,
     void* UserData, xwork_error* Error);

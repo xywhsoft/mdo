@@ -6,7 +6,6 @@
 #include "internal.h"
 #include "sidecars/draft.h"
 #include "sidecars/queue.h"
-#include "sidecars/feedback.h"
 #include "sidecars/binding.h"
 
 /* SAX keeps only the small envelope and one in-progress file. The JSON reader
@@ -107,10 +106,6 @@ static bool MdoDecodeSidecar(MdoDecode* Decode, const MdoBackupOwnedFile* File)
     } else if ( strcmp(File->Path, "queue.json") == 0 ) {
         MdoQueue Queue;
         Ok = MdoQueueParse(Json, &Queue); MdoQueueRelease(&Queue);
-    } else if ( strcmp(File->Path, "feedback.json") == 0 ) {
-        MdoFeedbackItem Items[MDO_FEEDBACK_MAX_ITEMS];
-        size_t Count;
-        Ok = MdoFeedbackParse(Json, Items, &Count);
     } else if ( strncmp(File->Path, "queue-receipts/", 15u) == 0 ) {
         char Id[33];
         MdoQueueReceipt Receipt;
@@ -305,6 +300,10 @@ static xjsonvisitaction MdoDecodeVisit(const xjsonevent* Event, void* UserData)
             Decode->Mode = MDO_DECODE_ROOT; Ok = true;
         } else if ( Event->Depth == 2u && Event->Type == XJSON_EVENT_STRING ) {
             int Key = MdoDecodeKey(Event->Value.String, MdoBackupOptionalFiles, MDO_BACKUP_OPTIONAL_FILES);
+            /* Earlier v2 exports declared the now-retired ratings sidecar.
+             * Accept that declaration without reviving its data model. */
+            if ( Key < 0 && MdoDecodeEqual(Event->Value.String, "feedback.json") )
+                Key = MDO_BACKUP_OPTIONAL_FILES;
             if ( Key < 0 || (Decode->Absent & (1u << (unsigned)Key)) != 0u ) goto invalid;
             Decode->Absent |= 1u << (unsigned)Key; Ok = true;
         } else goto invalid;
@@ -368,6 +367,27 @@ done:
     return Ok || MdoDecodeSchemaFailure(Decode, "session backup metadata identity differs or is missing", "meta.json");
 }
 
+static bool MdoDecodeDiscardRetired(MdoDecode* Decode)
+{
+    size_t i;
+    for ( i = 0u; i < Decode->Backup->Count; ++i ) {
+        MdoBackupOwnedFile* File = &Decode->Backup->Files[i];
+        if ( strcmp(File->Path, "feedback.json") != 0 ) continue;
+        if ( (Decode->Absent & (1u << MDO_BACKUP_OPTIONAL_FILES)) != 0u )
+            return MdoDecodeInvalid(Decode, "retired file also declared absent", File->Path);
+        /* Length, checksum, path uniqueness and original envelope totals have
+         * already been checked. Discard owned bytes before schema validation
+         * or staging; the old payload is neither interpreted nor restored. */
+        Decode->Backup->Bytes -= File->Bytes;
+        xrtFree(File->Data);
+        --Decode->Backup->Count;
+        memmove(File, File + 1u, (Decode->Backup->Count - i) * sizeof(*File));
+        memset(&Decode->Backup->Files[Decode->Backup->Count], 0, sizeof(*File));
+        break;
+    }
+    return true;
+}
+
 static bool MdoDecodeManifest(MdoDecode* Decode)
 {
     uint64 Schema, Captured, Files, Bytes, First = 0u, Last = 0u, Records = 0u;
@@ -400,6 +420,7 @@ static bool MdoDecodeManifest(MdoDecode* Decode)
             if ( Absent != ((Decode->Absent & (1u << i)) != 0u) ) goto invalid;
         }
     }
+    if ( !MdoDecodeDiscardRetired(Decode) ) return false;
     if ( !MdoBackupValidate(Decode->Backup, &Decode->Backup->Limits, Decode->Cancel,
             &Decode->Backup->History, &Decode->Error) ) return false;
     /* Validate sidecars/UI with the exact live parsers without projecting state.

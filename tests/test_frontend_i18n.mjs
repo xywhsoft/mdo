@@ -129,11 +129,6 @@ const localizedApiErrors = [
   ["session_patch_invalid", "error.sessionPatchInvalid"],
   ["session_truncate_invalid", "error.sessionTruncateInvalid"],
   ["session_fork_invalid", "error.sessionForkInvalid"],
-  ["session_feedback_unavailable", "error.sessionFeedbackUnavailable"],
-  ["feedback_invalid", "error.feedbackInvalid"],
-  ["feedback_event_invalid", "error.feedbackEventInvalid"],
-  ["feedback_unavailable", "error.feedbackUnavailable"],
-  ["feedback_cursor_stale", "error.feedbackCursorStale"],
   ["attachment_invalid", "error.attachmentInvalid"],
   ["attachment_not_found", "error.attachmentNotFound"],
   ["attachment_in_use", "error.attachmentInUse"],
@@ -224,7 +219,6 @@ test("bundled language packs cover the annotated shell and switch without stale 
     "js/features/chat/composer-images.js",
     "js/features/chat/image-preview.js",
     "js/features/chat/draft-store.js",
-    "js/features/chat/feedback-store.js",
     "js/features/chat/message-edit-dialog.js",
     "js/features/chat/message-replacement.js",
     "js/features/chat/slash-commands.js",
@@ -232,7 +226,6 @@ test("bundled language packs cover the annotated shell and switch without stale 
     "js/features/settings/settings-view.js",
     "js/features/settings/resource-panels.js",
     "js/features/settings/schedule-panel.js",
-    "js/features/settings/feedback-panel.js",
     "js/features/settings/project-panel.js",
     "js/features/settings/memory-panel.js",
     "js/features/settings/model-config-panel.js",
@@ -271,9 +264,6 @@ test("bundled language packs cover the annotated shell and switch without stale 
     if (path.endsWith("schedule-panel.js"))
       for (const [, key] of source.matchAll(/"(schedule\.[^"]+)"/g))
         assert.ok(referenceKeys.includes(key), `missing schedule key: ${key}`);
-    if (path.endsWith("feedback-panel.js"))
-      for (const [, key] of source.matchAll(/"(feedback\.[^"]+)"/g))
-        assert.ok(referenceKeys.includes(key), `missing feedback key: ${key}`);
     if (path.endsWith("project-panel.js") || path.endsWith("project-dialog.js"))
       for (const [, key] of source.matchAll(/"(project\.[^"]+)"/g))
         assert.ok(referenceKeys.includes(key), `missing project key: ${key}`);

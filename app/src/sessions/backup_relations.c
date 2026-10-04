@@ -5,7 +5,6 @@
 #include "backup_internal.h"
 #include "internal.h"
 #include "sidecars/binding.h"
-#include "sidecars/feedback.h"
 #include "sidecars/queue.h"
 
 /* Keep only copied facts and offsets into the owned UI bytes. The fact index
@@ -254,21 +253,7 @@ static bool MdoBackupTodoEvent(const MdoSessionEventInfo* Event, void* Data)
 
 static bool MdoBackupProjections(MdoBackupHistoryIndex* Index)
 {
-    const MdoBackupOwnedFile* File = MdoBackupFind(Index->Backup, "feedback.json");
-    if ( File != NULL ) {
-        MdoFeedbackItem Items[MDO_FEEDBACK_MAX_ITEMS];
-        size_t Count, i;
-        xrtClearError();
-        if ( !MdoFeedbackParse(xrtStrViewN(File->Data, File->Bytes), Items, &Count) )
-            return MdoBackupHistoryError(Index, "invalid session backup feedback", File->Path);
-        for ( i = 0u; i < Count; ++i ) {
-            const MdoBackupEventFact* Event;
-            if ( !MdoBackupHistoryTime(Index) || !MdoBackupReferenceFind(Index, Items[i].EventId, File->Path, &Event) ) return false;
-            if ( Event != NULL && (Event->Kind != XWORK_EVENT_MODEL_DONE || !Event->Success) )
-                return MdoBackupError(Index->Error, XWORK_ERROR_IO, "session backup feedback does not match a completed model event", File->Path);
-        }
-    }
-    File = MdoBackupFind(Index->Backup, "todo.json");
+    const MdoBackupOwnedFile* File = MdoBackupFind(Index->Backup, "todo.json");
     if ( File != NULL ) {
         xvalue* Root;
         uint64 Id;
@@ -282,7 +267,7 @@ static bool MdoBackupProjections(MdoBackupHistoryIndex* Index)
             size_t i;
             bool LegacyClear = false;
             /* Todo reconciliation historically treats a zero-source history
-             * marker as a reset. Feedback/images require an explicit range. */
+             * marker as a reset. Images require an explicit range. */
             for ( i = 0u; i < Index->Count; ++i )
                 if ( Index->Events[i].Kind == MDO_SESSION_EVENT_HISTORY_TRUNCATED &&
                      Index->Events[i].Source == 0u && Id < Index->Events[i].Id ) { LegacyClear = true; break; }
@@ -399,40 +384,6 @@ static bool MdoBackupRepairTake(xvalue* Root, const char* Name, xvalue* Value)
     xrtValueRelease(Value); return Ok;
 }
 
-static bool MdoBackupRepairFeedback(MdoBackupHistoryIndex* Index, MdoSessionBackup* Copy,
-    MdoSessionBackupProjectionRepair* Facts)
-{
-    const MdoBackupOwnedFile* File = MdoBackupFind(Index->Backup, "feedback.json");
-    xvalue *Root = NULL, *Items = NULL;
-    const xvalue* Before;
-    size_t i;
-    bool Ok = true;
-    if ( File == NULL ) return true;
-    Root = MdoBackupJson(File->Data, File->Bytes); Items = xrtValueArray();
-    if ( Root == NULL || Items == NULL ) { Ok = false; goto done; }
-    Before = xrtValueObjectGet(Root, XRT_STR_LITERAL("items"));
-    for ( i = 0u; i < xrtValueCount(Before); ++i ) {
-        const xvalue* Entry = xrtValueArrayGet(Before, i);
-        xvalue* Row;
-        uint64 Id;
-        if ( !MdoBackupHistoryTime(Index) ) { Ok = false; goto done; }
-        if ( !MdoBackupUInt(Entry, "event_id", &Id) ) { Ok = false; goto done; }
-        if ( MdoBackupReferenceRemoved(Index, Id) ) { ++Facts->RemovedFeedback; continue; }
-        Row = xrtValueClone(Entry);
-        Ok = Row != NULL && xrtValueArrayAppendTake(Items, &Row); xrtValueRelease(Row);
-        if ( !Ok ) goto done;
-    }
-    if ( Facts->RemovedFeedback != 0u ) {
-        Ok = xrtValueObjectSetTake(Root, XRT_STR_LITERAL("items"), &Items) &&
-            MdoBackupReplaceJson(Copy, "feedback.json", Root, Index->Limits, Index->Cancel, Index->Error);
-    }
-done:
-    xrtValueRelease(Root); xrtValueRelease(Items);
-    if ( !Ok && Index->Error->eCode == XWORK_ERROR_NONE )
-        return MdoBackupHistoryError(Index, "cannot reconcile feedback projection", "feedback.json");
-    return Ok;
-}
-
 static bool MdoBackupRepairTodoEvent(const MdoSessionEventInfo* Event, void* Data)
 {
     xvalue** Input = (xvalue**)Data;
@@ -459,7 +410,7 @@ static bool MdoBackupRepairTodo(MdoBackupHistoryIndex* Index, MdoSessionBackup* 
         if ( !MdoBackupHistoryTime(Index) ) goto done;
         if ( Event->Kind == MDO_SESSION_EVENT_HISTORY_TRUNCATED && Event->Source == 0u ) {
             /* Legacy clear is positive evidence for todo only. It must not
-             * erase unrelated feedback/images or resurrect a pre-clear plan. */
+             * erase unrelated images or resurrect a pre-clear plan. */
             if ( StoredId != 0u && StoredId < Event->Id ) Stale = true;
             xrtValueRelease(Latest); Latest = NULL; LatestId = 0u;
         }
@@ -526,7 +477,7 @@ MdoSessionBackup* MdoSessionBackupReconcileHistory(const MdoSessionBackup* Backu
             MdoBackupRepairDrop(Copy, Path); ++Result.RemovedImageBindings;
         }
     }
-    if ( !MdoBackupRepairFeedback(&Index, Copy, &Result) || !MdoBackupRepairTodo(&Index, Copy, &Result) ||
+    if ( !MdoBackupRepairTodo(&Index, Copy, &Result) ||
          !MdoBackupValidate(Copy, &Budget, Cancel, &Copy->History, Error) ||
          !MdoBackupRelationsValidate(Copy, &Budget, Cancel, &Copy->Relations, Error) ||
          !MdoBackupCheck(&Budget, Cancel, Error) ) goto done;

@@ -20,8 +20,8 @@ static int32 MdoCaptureApiWriterThread(ptr data)
 
 static bool MdoApiCaptureProbe(XS_HttpReq* request)
 {
-    xmutex* locks[4] = {g_MdoAttachmentLock, g_MdoDraftLock,
-        g_MdoQueueLock, g_MdoFeedbackLock};
+    xmutex* locks[3] = {g_MdoAttachmentLock, g_MdoDraftLock,
+        g_MdoQueueLock};
     MdoApiSessionCaptureGuard guard, nested;
     MdoApiContext context = {0};
     xvalue* data;
@@ -32,7 +32,7 @@ static bool MdoApiCaptureProbe(XS_HttpReq* request)
             "/__fixture/session-capture")) return false;
     context.Request = request;
     snprintf(context.RequestId, sizeof(context.RequestId), "%s", "capture-probe");
-    for (i = 0u; i < 4u && ok; ++i) {
+    for (i = 0u; i < sizeof(locks) / sizeof(locks[0]) && ok; ++i) {
         MdoCaptureApiWriter writer = {0};
         xthread* thread = NULL;
         writer.Lock = locks[i];
@@ -44,8 +44,8 @@ static bool MdoApiCaptureProbe(XS_HttpReq* request)
             ok = false;
         if (ok) {
             ok = writer.Held && !MdoApiSessionCaptureAcquire(&guard) &&
-                !guard.Attachment && !guard.Draft && !guard.Queue && !guard.Feedback;
-            for (j = 0u; j < 4u; ++j) if (j != i) {
+                !guard.Attachment && !guard.Draft && !guard.Queue;
+            for (j = 0u; j < sizeof(locks) / sizeof(locks[0]); ++j) if (j != i) {
                 bool free_lock = xrtMutexTryLock(locks[j]);
                 if (free_lock) xrtMutexUnlock(locks[j]);
                 ok = ok && free_lock;
@@ -59,7 +59,7 @@ static bool MdoApiCaptureProbe(XS_HttpReq* request)
         ok = MdoApiSessionCaptureAcquire(&guard);
         if (ok) {
             ok = !MdoApiSessionCaptureAcquire(&nested);
-            for (j = 0u; j < 4u; ++j) {
+            for (j = 0u; j < sizeof(locks) / sizeof(locks[0]); ++j) {
                 bool escaped = xrtMutexTryLock(locks[j]);
                 if (escaped) xrtMutexUnlock(locks[j]);
                 ok = ok && !escaped;

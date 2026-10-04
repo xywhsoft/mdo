@@ -78,9 +78,9 @@ str MdoSessionBackupEncode(const MdoSessionBackup* Backup,
  * a network callback. Deadline/cancel checks are cooperative between bounded
  * operations; a single JSON token/hash/codec operation cannot be interrupted.
  *
- * Metadata/UI/todo and draft/queue/receipts/feedback/image bindings reuse live
+ * Metadata/UI/todo and draft/queue/receipts/image bindings reuse live
  * readers. Image metadata shares the export checker. Retained UI evidence is
- * checked against feedback/todo/bindings/queue receipts. Older or explicitly
+ * checked against todo/bindings/queue receipts. Older or explicitly
  * removed references are reported separately. Model snapshot/journal schemas,
  * exact-byte CRC and checkpoint/tail record numbering are checked. Actual
  * model context replay and pending projection repair remain separate stages.
@@ -154,13 +154,13 @@ bool MdoSessionBackupCheckImages(const MdoSessionBackup* Backup,
 typedef struct MdoSessionBackupStage MdoSessionBackupStage;
 typedef struct MdoSessionBackupProjectionRepair {
     uint32 Size;
-    size_t RemovedImageBindings, RemovedFeedback;
+    size_t RemovedImageBindings;
     bool TodoRebuilt;
     size_t UnverifiedHistoryReferences;
 } MdoSessionBackupProjectionRepair;
 
 /* Owns a new decoded v2 backup with reconciled history projections. Removes
- * only event image bindings/feedback covered by positive removal ranges.
+ * only event image bindings covered by positive removal ranges.
  * Rebuilds todo from the latest retained successful main-Agent todo event, or
  * resets it when an explicit removal/legacy clear invalidates its source.
  * Unknown pruned-prefix references and legacy run bindings remain reported.

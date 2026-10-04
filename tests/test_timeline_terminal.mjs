@@ -19,7 +19,6 @@ test("a fatal stream error ends partial reply, reasoning and tool cards without 
   assert.equal(answer.state, "failed");
   assert.equal(answer.text, "Partial answer");
   assert.equal(answer.retryPrompt.sequence, 7);
-  assert.equal(answer.feedbackEventId, undefined);
   assert.equal(answer.tokensPerSecond, undefined);
   assert.equal(answer.textTruncated, true);
   assert.equal(answer.copySpans[0].eventId, 3);

@@ -115,7 +115,7 @@ manager 调用或库通过 native path 写入不能被它自动覆盖。不得�
    分别限制文件数、单文件、总字节、JSON/base64 膨胀和传输时间；定额失败需要
    明确反馈。导出完成即释放捕获锁，下载速度不能占用运行窗口。
 4. **进行中**：离线拥有解码、清单及 metadata/UI/todo、draft/queue/receipt/
-   feedback/消息绑定 schema、模型 snapshot/journal schema/CRC、checkpoint 后记录
+   消息绑定 schema、模型 snapshot/journal schema/CRC、checkpoint 后记录
    连号、保留 UI 的侧车关系、独立模型上下文重放和模型/UI 关系检查已接入。
    新模型 writer 已用 v4 保存完整消息 parts/native；旧文件的已丢失内容
    不能修复。助手 thinking/text 与签名转换已接入；其他 native 块未映射，
@@ -249,13 +249,12 @@ Linux A/B 为
 | `attachments/events/<event-id>.json`、旧 `attachments/runs/<run-id>.json` | 消息图片引用；事件写入、剪枝和分叉/失败回收持 data 写租约 |
 | `draft.json` | 文本、图片引用、revision、提交意图/profile；API draft 锁 |
 | `queue.json`、`queue-receipts/<item-id>.json` | pending/派发身份/回执/图片回收记录；API queue 锁，覆盖 GET 核对及直接回执 helper |
-| `feedback.json` | 消息反馈及截断后的修复；API feedback 锁，包含全局 GET 清单触发的直接修复 |
 | `artifacts/run-<run-id>/<artifact-id>-<source>.txt` | xwork native 原子文件写入及引用；必须没有运行中/待执行的本会话后台任务或存活子 Agent |
 
 `.runtime.lock`、临时文件、缓存与服务凭据不导出；`.bak` 是实现侧回退文件，
 未来 manifest 仅收录当前逻辑内容。全局/项目新任务草稿不属于这个会话。
 
-API 捕获按 attachment → draft → queue → feedback 顺序尝试取得现有存储锁，
+API 捕获按 attachment → draft → queue 顺序尝试取得现有存储锁，
 失败立即逆序释放并返回 `409 session_capture_busy`，不等待某个文件操作。
 这些锁是现有全局锁，其他会话在写相同子系统时也可能使一次捕获需要重试。
 它们同时覆盖图片 GET 清理、队列 GET 修复和非路由 helper。
@@ -538,7 +537,7 @@ Windows A/B 同一包，SHA-256 为
 
 ## 共享侧车解析与离线 schema 校验
 
-新增 `sessions/sidecars/{profile,binding,draft,queue,feedback}.{h,c}`，只消费
+新增 `sessions/sidecars/{profile,binding,draft,queue}.{h,c}`，只消费
 内存 JSON/值，拥有 DTO 的文本与提交分配。头文件明确 Parse 输出与 Unit/
 Release 的生命周期；失败释放部分拥有对象，完整解析后不保留输入或 DOM
 视图。session 层不引用 api 层。旧 HTTP profile 类型保留为核心 DTO 的别名，

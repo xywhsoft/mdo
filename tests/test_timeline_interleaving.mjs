@@ -33,7 +33,6 @@ test("interleaved text, reasoning, and task events retain one card per model tur
   assert.equal(items.find((item) => item.kind === "assistant").text, "Hello world");
   assert.equal(items.find((item) => item.kind === "reasoning").text,
     "Think again");
-  assert.equal(items.find((item) => item.kind === "assistant").feedbackEventId, 9);
   assert.equal(items.find((item) => item.kind === "assistant").outputTokens, 3);
   assert.equal(items.find((item) => item.kind === "assistant").modelDurationSeconds, 1);
 });

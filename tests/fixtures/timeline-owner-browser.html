@@ -17,13 +17,10 @@ const calls = [];
 const store = createResourceStore();
 const sessionStore = createResourceStore({ project_id: "qa", id: "original",
   status: "active" });
-const feedbackStore = createResourceStore({ projectId: "qa", sessionId: "original",
-  items: new Map() });
 createTimelineView({ container: document.querySelector("#timeline"),
   welcome: document.querySelector("#welcome"),
-  toBottom: document.querySelector("#to-bottom"), store, sessionStore, feedbackStore,
+  toBottom: document.querySelector("#to-bottom"), store, sessionStore,
   onFork: (...args) => calls.push(["fork", ...args]),
-  onFeedback: (...args) => calls.push(["feedback", ...args]),
   onEdit: (...args) => calls.push(["edit", ...args]),
   onRetry: (...args) => calls.push(["retry", ...args]),
 });
@@ -38,13 +35,13 @@ store.setData({ projectId: "qa", sessionId: "original", events: [
 const output = document.querySelector("#result");
 try {
   await new Promise((resolve) => requestAnimationFrame(resolve));
-  for (const suffix of ["/edit", "/retry", "/fork", "/feedback-good"]) {
+  for (const suffix of ["/edit", "/retry", "/fork"]) {
     const button = document.querySelector(`[data-timeline-action$="${suffix}"]`);
     if (!button) throw new Error(`missing action ${suffix}`);
     button.click();
     await new Promise((resolve) => setTimeout(resolve, 0));
   }
-  const expected = ["edit", "retry", "fork", "feedback"];
+  const expected = ["edit", "retry", "fork"];
   let readOnly = true;
   for (const status of ["archived", "trash"]) {
     sessionStore.setData({ project_id: "qa", id: "original", status });

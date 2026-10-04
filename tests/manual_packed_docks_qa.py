@@ -15,9 +15,6 @@ text file so the normal tool-output artifact path is used. The optional chat
 stream emits two bounded chunks with interleaved text and reasoning fields.
 --profile-delay-ms delays one preference reply; --fail-first-profile rejects it.
 These bounded controls test immediate Send without changing user data.
-With --feedback-read-delay-ms enabled, POST /__qa/feedback-arm (or -arm-fail)
-holds the next captured feedback GET until POST /__qa/feedback-release;
-GET /__qa/feedback-control reports arrival. The hold times out after 40 seconds.
 With --file-tools-fixture, FILE TOOLS UI runs six bounded filesystem/process
 calls in the synthetic workspace, including a deliberate missing-file error.
 --tool-context-report records only tool names and UTF-8 byte counts in the
@@ -530,24 +527,6 @@ Object.defineProperty(navigator, 'clipboard', {
         self.forward()
 
     def forward(self):
-        # Explicit localhost-only controls for a captured feedback read. They
-        # are available only with the feedback delay option; no product route
-        # or event is changed, and an unreleased response times out in 40s.
-        if self.server.feedback_read_delay_seconds and self.path.startswith("/__qa/feedback-"):
-            with self.server.count_lock:
-                if self.command == "POST" and self.path in ("/__qa/feedback-arm", "/__qa/feedback-arm-fail"):
-                    self.server.feedback_gate.set()
-                    self.server.feedback_gate = threading.Event()
-                    self.server.feedback_hold = True
-                    self.server.feedback_fail = self.path.endswith("-fail")
-                    self.server.feedback_arrived = False
-                elif self.command == "POST" and self.path == "/__qa/feedback-release":
-                    self.server.feedback_gate.set()
-                state = {"arrived": self.server.feedback_arrived,
-                         "released": self.server.feedback_gate.is_set(),
-                         "reads": self.server.feedback_reads}
-            self.preview_reply(200, json.dumps(state).encode(), "application/json")
-            return
         if self.command == "GET" and self.path == "/api/v1/sessions":
             with self.server.count_lock:
                 self.server.session_list_reads += 1
@@ -991,19 +970,6 @@ Object.defineProperty(navigator, 'clipboard', {
                 self.wfile.write(payload)
                 self.close_connection = True
                 return
-        feedback_reply_delay = 0
-        feedback_gate = None
-        feedback_fail = False
-        if (self.command == "GET" and self.path.startswith("/api/v1/projects/")
-                and "/sessions/" in self.path and self.path.endswith("/feedback")):
-            with self.server.count_lock:
-                self.server.feedback_reads += 1
-                if self.server.feedback_reads == 1:
-                    feedback_reply_delay = self.server.feedback_read_delay_seconds
-                if self.server.feedback_hold:
-                    self.server.feedback_hold = False
-                    feedback_gate = self.server.feedback_gate
-                    feedback_fail = self.server.feedback_fail
         profile_reply_delay = 0
         if (self.command == "PUT" and self.path.startswith("/api/v1/projects/")
                 and "/sessions/" in self.path and self.path.endswith("/profile")):
@@ -1040,23 +1006,9 @@ Object.defineProperty(navigator, 'clipboard', {
             response = upstream.getresponse()
             payload = response.read()
             response_status = response.status
-            if feedback_gate is not None:
-                with self.server.count_lock:
-                    self.server.feedback_arrived = True
-                if not feedback_gate.wait(40):
-                    print("QA feedback gate reached its bounded timeout", flush=True)
-                if feedback_fail:
-                    self.preview_reply(503, json.dumps({"ok": False, "error": {
-                        "code": "feedback_fixture_failure",
-                        "message": "Bounded delayed feedback failure"}}).encode(), "application/json")
-                    return
             if profile_reply_delay:
                 time.sleep(profile_reply_delay)
                 print("QA first profile reply released", flush=True)
-            if feedback_reply_delay:
-                print("QA first feedback snapshot captured", flush=True)
-                time.sleep(feedback_reply_delay)
-                print("QA first feedback reply released", flush=True)
             if (self.server.simulate_schedule_delete and self.command == "GET" and
                     self.path == "/api/v1/schedules" and response_status == 200):
                 with self.server.count_lock:
@@ -1173,8 +1125,6 @@ parser.add_argument("--packed-path", type=Path,
                     help="packed executable to copy into the isolated QA Home")
 parser.add_argument("--profile-delay-ms", type=int, default=0,
                     help="delay the first session profile reply by 0-5000 ms")
-parser.add_argument("--feedback-read-delay-ms", type=int, default=0,
-                    help="delay the first captured feedback GET by 0-5000 ms")
 parser.add_argument("--fail-first-profile", action="store_true",
                     help="reject the first profile PUT while retaining queued input")
 parser.add_argument("--approval-delay-ms", type=int, default=0,
@@ -1352,8 +1302,6 @@ if not 1 <= args.startup_session_delay_reads <= 8:
     parser.error("--startup-session-delay-reads must be between 1 and 8")
 if not 0 <= args.fail_session_detail_reads <= 8:
     parser.error("--fail-session-detail-reads must be between 0 and 8")
-if not 0 <= args.feedback_read_delay_ms <= 5000:
-    parser.error("--feedback-read-delay-ms must be between 0 and 5000")
 if not 0 <= args.ask_delay_ms <= 5000:
     parser.error("--ask-delay-ms must be between 0 and 5000")
 if not 0 <= args.task_cancel_delay_ms <= 5000:
@@ -1516,7 +1464,7 @@ try:
         raise RuntimeError((status, response))
     session = response["data"]["id"]
     browser_port = port
-    if (args.profile_delay_ms or args.fail_first_profile or args.feedback_read_delay_ms
+    if (args.profile_delay_ms or args.fail_first_profile
             or args.approval_delay_ms or args.ask_delay_ms or args.task_cancel_delay_ms
             or args.run_cancel_delay_ms
             or args.queue_delay_ms or args.queue_read_delay_ms
@@ -1596,11 +1544,6 @@ try:
         proxy.startup_workspace_delay_seconds = args.startup_workspace_delay_ms / 1000
         proxy.startup_workspace_reads = 0
         proxy.approval_delay_seconds = args.approval_delay_ms / 1000
-        proxy.feedback_read_delay_seconds = args.feedback_read_delay_ms / 1000
-        proxy.feedback_reads = 0
-        proxy.feedback_gate = threading.Event()
-        proxy.feedback_gate.set()
-        proxy.feedback_hold = proxy.feedback_fail = proxy.feedback_arrived = False
         proxy.ask_delay_seconds = args.ask_delay_ms / 1000
         proxy.task_cancel_delay_seconds = args.task_cancel_delay_ms / 1000
         proxy.run_cancel_delay_seconds = args.run_cancel_delay_ms / 1000
@@ -1667,9 +1610,7 @@ try:
     input("Press Enter to stop QA servers.\n")
 finally:
     if proxy:
-        proxy.feedback_gate.set()
         print(f"QA backup GET total={proxy.backup_reads}", flush=True)
-        print(f"QA feedback GET total={proxy.feedback_reads}", flush=True)
         print(f"QA attachment DELETE total={proxy.attachment_deletes}", flush=True)
         print(f"QA discard marker POST total={proxy.discard_markers}", flush=True)
         print(f"QA approval PUT total={proxy.approval_puts}", flush=True)

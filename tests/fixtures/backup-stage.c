@@ -326,7 +326,6 @@ static bool BackupStageFixtureControl(XS_HttpReq* Request)
     (void)MdoApiValueSetBool(Value, "restore_ready", false);
     (void)MdoApiValueSetBool(Value, "original_unchanged", OriginalUnchanged);
     (void)MdoApiValueSetUInt(Value, "repaired_bindings", Repair.RemovedImageBindings);
-    (void)MdoApiValueSetUInt(Value, "repaired_feedback", Repair.RemovedFeedback);
     (void)MdoApiValueSetBool(Value, "repaired_todo", Repair.TodoRebuilt);
     (void)MdoApiValueSetUInt(Value, "unverified_refs", Info.Source.UnverifiedHistoryReferences);
     (void)MdoApiValueSetUInt(Value, "removed_refs", Info.Source.RemovedHistoryReferences);

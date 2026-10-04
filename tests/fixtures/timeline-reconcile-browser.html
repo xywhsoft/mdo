@@ -11,7 +11,7 @@
 <button id="extend" type="button">Extend live answer</button>
 <button id="select-extend" type="button">Extend while selecting old text</button>
 <button id="focused-extend" type="button">Extend focused answer</button>
-<button id="feedback" type="button">Update earlier feedback</button>
+<button id="refresh" type="button">Refresh unchanged history</button>
 <output id="result" role="status">Preparing</output>
 <textarea id="prompt" aria-label="Input"></textarea>
 <div class="conversation"><p id="welcome"></p><ol id="timeline"></ol></div>
@@ -35,12 +35,10 @@ let events = [
     text: "Live answer", time: 6000000 },
 ];
 const store = createResourceStore();
-const feedbackStore = createResourceStore({ projectId: "qa", sessionId: "timeline",
-  items: new Map() });
 createTimelineView({ container: document.querySelector("#timeline"),
   welcome: document.querySelector("#welcome"),
-  toBottom: document.querySelector("#to-bottom"), store, feedbackStore,
-  onFork() {}, onFeedback() {}, onEdit() {}, onRetry() {} });
+  toBottom: document.querySelector("#to-bottom"), store,
+  onFork() {}, onEdit() {}, onRetry() {} });
 store.setData({ projectId: "qa", sessionId: "timeline", events });
 const oldUser = () => document.querySelector('#timeline [data-kind="user"]');
 let originalUser;
@@ -65,11 +63,10 @@ document.querySelector("#extend").addEventListener("click", () => {
   store.setData({ projectId: "qa", sessionId: "timeline", events });
   report("stream");
 });
-document.querySelector("#feedback").addEventListener("click", () => {
+document.querySelector("#refresh").addEventListener("click", () => {
   oldUser().querySelector('[data-timeline-action$="/copy"]').focus();
-  feedbackStore.setData({ projectId: "qa", sessionId: "timeline",
-    items: new Map([[3, "good"]]) });
-  report("feedback");
+  store.setData({ projectId: "qa", sessionId: "timeline", events: [...events] });
+  report("refresh");
 });
 document.querySelector("#select-extend").addEventListener("click", () => {
   const range = document.createRange();

@@ -13,7 +13,7 @@
 #define MDO_BACKUP_EVENT_BYTES (96u * 1024u)
 
 const char* const MdoBackupOptionalFiles[MDO_BACKUP_OPTIONAL_FILES] = {
-    "journal.jsonl", "ui-events.jsonl", "todo.json", "draft.json", "queue.json", "feedback.json"
+    "journal.jsonl", "ui-events.jsonl", "todo.json", "draft.json", "queue.json"
 };
 
 bool MdoBackupError(xwork_error* Error, xwork_error_code Code,
@@ -100,7 +100,7 @@ static bool MdoBackupExcluded(const char* Path)
 {
     char Base[MDO_SESSION_BACKUP_PATH_CAPACITY];
     size_t Size = strlen(Path), Tail = 0u;
-    if ( strcmp(Path, ".runtime.lock") == 0 ) return true;
+    if ( strcmp(Path, ".runtime.lock") == 0 || strcmp(Path, "feedback.json") == 0 ) return true;
     if ( MdoBackupSuffix(Path, ".bak.tmp") ) Tail = 8u;
     else if ( MdoBackupSuffix(Path, ".bak") || MdoBackupSuffix(Path, ".tmp") ) Tail = 4u;
     if ( Tail == 0u || Size <= Tail || Size - Tail >= sizeof(Base) ) return false;

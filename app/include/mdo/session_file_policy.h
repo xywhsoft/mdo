@@ -60,6 +60,8 @@ static inline size_t MdoSessionFileLimit(const char* Path, bool Directory)
     if ( strcmp(Path, "todo.json") == 0 ) return 16u * 1024u;
     if ( strcmp(Path, "draft.json") == 0 || strcmp(Path, "queue.json") == 0 )
         return 256u * 1024u;
+    /* Retired sidecar: bounded legacy inventory/import only. Live writers,
+     * capture and restored sessions no longer retain message ratings. */
     if ( strcmp(Path, "feedback.json") == 0 ) return 32u * 1024u;
     if ( strcmp(Path, "restore-inputs.json") == 0 ) return 8u * 1024u * 1024u;
     if ( strcmp(Path, "restore-origin.json") == 0 ) return 8u * 1024u * 1024u;

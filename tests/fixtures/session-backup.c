@@ -31,7 +31,7 @@ static bool SessionBackupProbe(MdoSession* unused)
     static const char* const documents[] = {
         "{\"schema_version\":6,\"revision\":1,\"text\":\"draft\",\"attachments\":[\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"],\"submissions\":[]}",
         "{\"schema_version\":7,\"revision\":1,\"items\":[{\"id\":\"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"text\":\"wait for confirmation\",\"state\":\"pending\",\"attachments\":[\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"]}],\"discard_images\":[\"cccccccccccccccccccccccccccccccc\"]}",
-        "{\"schema_version\":1,\"items\":[{\"event_id\":1,\"vote\":1}]}",
+        "retired opaque data",
         NULL,
         "{\"schema_version\":2,\"id\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"mime_type\":\"image/png\",\"size\":8,\"created_at\":1,\"file_name\":\"original \\u56fe\\u7247.png\"}",
         "{\"schema_version\":1,\"run_id\":1,\"attachments\":[\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"]}",

@@ -20,7 +20,7 @@
 | --- | --- | --- |
 | 新任务与输入配置 | 首次发送创建任务；输入区切模型、思考和权限，显示输入估算及上下文用量。配置保存中也接收发送，固定本次选择。`composer-profile`、`new-task-controller`、`token-meter` 各负责一项行为。 | `qa-profile-send-positive-api.json`、`qa-stream-core-api.json`、`qa-ornith-packed-live-proof.json`。内建 Ornith 的 Responses、Chat、Anthropic 均完成真实单文件运行。 |
 | 输入、流式回复与队列 | Enter 发送/排队、Shift+Enter 换行、Ctrl/⌘+Enter 中断并优先发送；引导模式对调后两者。部分正文/思考、停止、恢复及排队反馈可见，下一条草稿与其他任务隔离。 | `qa-stream-core-api.json`、`qa-stream-core-linux-api.json` 和迁移记录中的引导/恢复打包链。Windows 两轮成功、Linux 一轮取消后一轮成功，队列排空；当前相关测试通过。 |
-| 消息操作与统计 | 用户/助手/代码复制、编辑、重试、回复分叉、点赞/点踩；显示时间、用量、LLM 耗时和 tok/s。更新保留旧节点及用户焦点，迟到反馈读取不覆盖成功写入。 | `qa-feedback-after-ui.json`、`qa-message-source-final.json`、`qa-message-branch-final.json`。原文/代码核对，源两轮、分支一轮，刷新保留反馈、修改后的回合和草稿。 |
+| 消息操作与统计 | 用户/助手/代码复制、编辑、重试、回复分叉；显示时间、用量、LLM 耗时和 tok/s。更新保留旧节点及用户焦点。 | `qa-message-source-final.json`、`qa-message-branch-final.json`。原文/代码核对，源两轮、分支一轮，刷新保留修改后的回合和草稿。 |
 | 工具与产物 | 调用参数、写入正文、修改片段、结果和错误可读，支持折叠与复制；大结果按原事件读产物，不用模型摘要或当前文件伪造历史结果。后台工具状态通过任务面板展示。 | `qa-tool-core-after.json`：六次调用、五次成功、一次预期失败；`qa-tool-content-live-proof.json`：原调用及 8,409 字节产物复制一致。当前工具内容、任务归属与取消、产物投影测试通过。 |
 | 待办、询问与审批 | 计划进度及折叠；选项与自由回答；拒绝、允许一次、本轮均允许。提交锁定双方入口，结束回到输入框。等待期间可保留草稿、切换任务；审批刷新恢复。 | 本轮 `qa-core-decisions-ui.json`、`qa-core-decisions-api.json`：五轮完成，两个实际回答，三个命令成功、两个按决定拒绝，待办 1/2→2/2，重启回读 59 条事件。 |
 | 附件 | 选择、粘贴、多图拖放处理、预览、移除；带图发送、编辑、重试、分叉和草稿恢复。最后一张移除后回到添加图片。 | `qa-attachment-core-{windows,linux}-api.json`：原图与分支历史引用一致；`qa-core-drop-live.json`、`qa-core-drop-verified.json`：实际双图上传、字节一致、区外松开保护及 320px 刷新。拖放为浏览器生成的文件事件。 |

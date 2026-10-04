@@ -42,11 +42,9 @@ const events = [
 ];
 const original = JSON.stringify(events);
 const store = createResourceStore();
-const feedbackStore = createResourceStore({ projectId: "qa", sessionId: "history-language",
-  items: new Map() });
 createTimelineView({ container: document.querySelector("#timeline"),
   welcome: document.querySelector("#welcome"),
-  toBottom: document.querySelector("#to-bottom"), store, feedbackStore });
+  toBottom: document.querySelector("#to-bottom"), store });
 store.setData({ projectId: "qa", sessionId: "history-language", events, historyLost: true });
 
 async function switchLanguage(name) {

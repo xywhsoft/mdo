@@ -112,8 +112,6 @@ static const MdoApiRoute g_MdoApiRoutes[] = {
     { "/api/v1/sessions",
       XHTTP_METHOD_GET | XHTTP_METHOD_HEAD | XHTTP_METHOD_POST,
       "GET, HEAD, POST, OPTIONS", MdoApiSessionsRoute, false },
-    { "/api/v1/feedback", XHTTP_METHOD_GET | XHTTP_METHOD_HEAD,
-      "GET, HEAD, OPTIONS", MdoApiFeedbackListRoute, false },
     { "/api/v1/draft",
       XHTTP_METHOD_GET | XHTTP_METHOD_HEAD | XHTTP_METHOD_PUT,
       "GET, HEAD, PUT, OPTIONS", MdoApiDraftRoute, false },
@@ -253,9 +251,6 @@ static const MdoApiRoute g_MdoApiRoutes[] = {
     { "/api/v1/projects/{project}/sessions/{session}/events",
       XHTTP_METHOD_GET | XHTTP_METHOD_HEAD, "GET, HEAD, OPTIONS",
       MdoApiSessionEventsRoute, false },
-    { "/api/v1/projects/{project}/sessions/{session}/feedback",
-      XHTTP_METHOD_GET | XHTTP_METHOD_HEAD | XHTTP_METHOD_PUT,
-      "GET, HEAD, PUT, OPTIONS", MdoApiFeedbackRoute, true },
     { "/api/v1/projects/{project}/sessions/{session}/draft",
       XHTTP_METHOD_GET | XHTTP_METHOD_HEAD | XHTTP_METHOD_PUT,
       "GET, HEAD, PUT, OPTIONS", MdoApiDraftRoute, true },
@@ -351,21 +346,14 @@ bool MdoApiInit(void)
         MdoApiSessionsUnit();
         return false;
     }
-    if ( !MdoApiFeedbackInit() ) {
-        MdoApiWorkspaceStateUnit();
-        MdoApiSessionsUnit();
-        return false;
-    }
     if ( !MdoApiDraftInit() ) {
         MdoApiWorkspaceStateUnit();
-        MdoApiFeedbackUnit();
         MdoApiSessionsUnit();
         return false;
     }
     if ( !MdoApiQueueInit() ) {
         MdoApiWorkspaceStateUnit();
         MdoApiDraftUnit();
-        MdoApiFeedbackUnit();
         MdoApiSessionsUnit();
         return false;
     }
@@ -373,7 +361,6 @@ bool MdoApiInit(void)
         MdoApiWorkspaceStateUnit();
         MdoApiQueueUnit();
         MdoApiDraftUnit();
-        MdoApiFeedbackUnit();
         MdoApiSessionsUnit();
         return false;
     }
@@ -382,7 +369,6 @@ bool MdoApiInit(void)
         MdoApiWorkspaceStateUnit();
         MdoApiQueueUnit();
         MdoApiDraftUnit();
-        MdoApiFeedbackUnit();
         MdoApiSessionsUnit();
         return false;
     }
@@ -392,7 +378,6 @@ bool MdoApiInit(void)
         MdoApiWorkspaceStateUnit();
         MdoApiQueueUnit();
         MdoApiDraftUnit();
-        MdoApiFeedbackUnit();
         MdoApiSessionsUnit();
         return false;
     }
@@ -404,7 +389,7 @@ bool MdoApiInit(void)
         MdoApiBackupUploadsUnit();
         MdoApiWriteUnit(); MdoApiPurgeIntentUnit(); MdoApiAttachmentsUnit();
         MdoApiWorkspaceStateUnit(); MdoApiQueueUnit(); MdoApiDraftUnit();
-        MdoApiFeedbackUnit(); MdoApiSessionsUnit();
+        MdoApiSessionsUnit();
         return false;
     }
     xrtAtomic64Init(&g_MdoApiFallbackId, 0u);
@@ -423,7 +408,6 @@ void MdoApiUnit(void)
     MdoApiWriteUnit();
     MdoApiPurgeIntentUnit();
     MdoApiWorkspaceStateUnit();
-    MdoApiFeedbackUnit();
     MdoApiDraftUnit();
     MdoApiQueueUnit();
     MdoApiAttachmentsUnit();

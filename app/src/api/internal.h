@@ -119,7 +119,6 @@ bool MdoApiMemoryCollectionRoute(MdoApiContext* pContext);
 bool MdoApiMemoryEntryRoute(MdoApiContext* pContext);
 bool MdoApiMemoryOpenDirectoryRoute(MdoApiContext* pContext);
 bool MdoApiSessionsRoute(MdoApiContext* pContext);
-bool MdoApiFeedbackListRoute(MdoApiContext* pContext);
 bool MdoApiRunsRoute(MdoApiContext* pContext);
 bool MdoApiSchedulesRoute(MdoApiContext* pContext);
 bool MdoApiPermissionsRoute(MdoApiContext* pContext);
@@ -143,10 +142,6 @@ bool MdoApiStorageRoute(MdoApiContext* pContext);
 bool MdoApiLegacyMigrationsRoute(MdoApiContext* pContext);
 bool MdoApiEventsRoute(MdoApiContext* pContext);
 bool MdoApiSessionEventsRoute(MdoApiContext* pContext);
-bool MdoApiFeedbackRoute(MdoApiContext* pContext);
-bool MdoApiFeedbackInit(void);
-void MdoApiFeedbackUnit(void);
-bool MdoApiFeedbackReconcile(const char* ProjectId, const char* SessionId);
 bool MdoApiDraftRoute(MdoApiContext* pContext);
 bool MdoApiDraftSubmissionAppendRoute(MdoApiContext* pContext);
 bool MdoApiDraftSubmissionRoute(MdoApiContext* pContext);
@@ -209,9 +204,8 @@ typedef struct MdoApiSessionCaptureGuard {
     bool Attachment;
     bool Draft;
     bool Queue;
-    bool Feedback;
 } MdoApiSessionCaptureGuard;
-/* All try-locks, fixed attachment -> draft -> queue -> feedback order. Covers
+/* All try-locks, fixed attachment -> draft -> queue order. Covers
  * GET-triggered repair and cleanup as well as background/direct API helpers.
  * Then call MdoSessionWithCapture/ExportJson; release before network output. */
 bool MdoApiSessionCaptureAcquire(MdoApiSessionCaptureGuard* Guard);
@@ -221,8 +215,6 @@ bool MdoApiDraftCaptureTryLock(void);
 void MdoApiDraftCaptureUnlock(void);
 bool MdoApiQueueCaptureTryLock(void);
 void MdoApiQueueCaptureUnlock(void);
-bool MdoApiFeedbackCaptureTryLock(void);
-void MdoApiFeedbackCaptureUnlock(void);
 bool MdoApiRunStartRoute(MdoApiContext* pContext);
 bool MdoApiAttachmentsRoute(MdoApiContext* pContext);
 bool MdoApiAttachmentRoute(MdoApiContext* pContext);

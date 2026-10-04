@@ -171,8 +171,6 @@ export function eventsToTimeline(events, historyLost = false,
         const answer = [...items].reverse().find((item) => item.key === `assistant-${modelKey(event, epoch)}`);
         if (answer) {
           answer.state = event.success ? "done" : "failed";
-          if (event.success && Number.isSafeInteger(Number(event.event_id)))
-            answer.feedbackEventId = Number(event.event_id);
           answer.inputTokens = Number(event.input_tokens || 0);
           answer.outputTokens = Number(event.output_tokens || 0);
           const startedAt = modelStarts.get(modelKey(event, epoch));
@@ -542,7 +540,7 @@ function commandButton(label, description, iconName, actionRef, handlers, sessio
   return button;
 }
 
-function timelineNode(item, handlers, feedback, projectId, sessionId, writable,
+function timelineNode(item, handlers, projectId, sessionId, writable,
   openState, previewOpen, previewScroll, toolTextCache) {
   if (item.kind === "reasoning" || item.kind === "tool")
     return foldableNode(item, openState, previewOpen, previewScroll,
@@ -667,18 +665,6 @@ function timelineNode(item, handlers, feedback, projectId, sessionId, writable,
             () => resolveTimelineActionText(retryPrompt, owner), retryPrompt.sourceEventId));
         actions.append(retry);
       }
-      if (item.feedbackEventId && item.state === "done") {
-        for (const [value, label] of [["good", t("timeline.like", {}, "点赞")],
-          ["bad", t("timeline.dislike", {}, "点踩")]]) {
-          const button = commandButton(label, label, "like",
-            `${item.key}/feedback-${value}`, handlers, sessionKey,
-            () => handlers.onFeedback(item.feedbackEventId,
-              feedback === value ? "none" : value, owner));
-          if (value === "bad") button.classList.add("timeline-action-dislike");
-          button.setAttribute("aria-pressed", String(feedback === value));
-          actions.append(button);
-        }
-      }
       const stats = [];
       if (item.runUsage)
         stats.push(t("timeline.runUsage", item.runUsage,
@@ -705,11 +691,11 @@ function timelineNode(item, handlers, feedback, projectId, sessionId, writable,
 }
 
 export function createTimelineView({ container, welcome, toBottom, store, sessionStore = null,
-  feedbackStore, onFork, onFeedback, onEdit, onRetry, onSearchCount }) {
+  onFork, onEdit, onRetry, onSearchCount }) {
   const busySessions = new Set();
   const renderedRows = new Map();
   const handlers = {
-    onFork, onFeedback, onEdit, onRetry,
+    onFork, onEdit, onRetry,
     isBusy: (key) => busySessions.has(key),
     async runAction(key, action) {
       if (busySessions.has(key)) return;
@@ -735,12 +721,12 @@ export function createTimelineView({ container, welcome, toBottom, store, sessio
   function reconcileRows(entries, projectId, sessionId) {
     const retained = new Set();
     let cursor = container.firstChild;
-    for (const { item, feedback, writable } of entries) {
+    for (const { item, writable } of entries) {
       retained.add(item.key);
-      const signature = JSON.stringify([item, feedback, writable]);
+      const signature = JSON.stringify([item, writable]);
       let row = renderedRows.get(item.key);
       if (!row || row.signature !== signature) {
-        const node = timelineNode(item, handlers, feedback, projectId,
+        const node = timelineNode(item, handlers, projectId,
           sessionId, writable, expanded.get(item.key),
           previewExpanded.get(`${item.key}/preview`) ?? false,
           previewScroll.get(`${item.key}/preview`) ?? 0, toolTextCache);
@@ -832,16 +818,13 @@ export function createTimelineView({ container, welcome, toBottom, store, sessio
     if (state.status === "error") {
       entries.push({ item: { key: "load-error", kind: "error",
         role: t("timeline.loadError", {}, "无法读取时间线"),
-        text: errorMessage(state.error), state: "failed", time: 0 }, feedback: "" });
+        text: errorMessage(state.error), state: "failed", time: 0 } });
     } else {
-      const selected = feedbackStore.get().data;
-      const feedback = selected?.projectId === data?.projectId &&
-        selected?.sessionId === data?.sessionId ? selected.items : new Map();
       const session = sessionStore?.get().data;
       const writable = !sessionStore || (session?.status === "active" &&
         session.project_id === data?.projectId && session.id === data?.sessionId);
       for (const item of visible)
-        entries.push({ item, feedback: feedback.get(item.feedbackEventId) ?? "", writable });
+        entries.push({ item, writable });
     }
     reconcileRows(entries, data?.projectId, data?.sessionId);
     if ((focusedAction || focusedImage) && !container.contains(document.activeElement)) {
@@ -896,7 +879,6 @@ export function createTimelineView({ container, welcome, toBottom, store, sessio
 
   const unsubscribe = store.subscribe(queueRender);
   const unsubscribeSession = sessionStore?.subscribe(() => queueRender(store.get()));
-  const unsubscribeFeedback = feedbackStore.subscribe(() => queueRender(store.get()));
   const unsubscribeLocale = subscribeLocale(() => {
     renderedRows.clear();
     queueRender(store.get());
@@ -919,7 +901,7 @@ export function createTimelineView({ container, welcome, toBottom, store, sessio
       queueRender(store.get());
     },
     destroy() {
-      unsubscribe(); unsubscribeSession?.(); unsubscribeFeedback(); unsubscribeLocale();
+      unsubscribe(); unsubscribeSession?.(); unsubscribeLocale();
       if (frame) cancelAnimationFrame(frame);
     },
   });

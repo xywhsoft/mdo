@@ -41,12 +41,10 @@ const events = [
     success: true, time: 3100000 },
 ];
 const store = createResourceStore();
-const feedbackStore = createResourceStore({ projectId: "qa", sessionId: "one",
-  items: new Map() });
 createTimelineView({ container: document.querySelector("#timeline"),
   welcome: document.querySelector("#welcome"),
-  toBottom: document.querySelector("#to-bottom"), store, feedbackStore,
-  onFork() {}, onFeedback() {}, onEdit() {}, onRetry() {} });
+  toBottom: document.querySelector("#to-bottom"), store,
+  onFork() {}, onEdit() {}, onRetry() {} });
 const nextFrame = () => new Promise((resolve) => requestAnimationFrame(resolve));
 try {
   store.setData({ projectId: "qa", sessionId: "one", events: events.slice(0, 7) });
@@ -66,7 +64,7 @@ try {
     timeline.querySelectorAll('[data-kind="reasoning"]').length === 1 &&
     timeline.querySelectorAll('[data-kind="task"]').length === 1 &&
     answer.querySelector(".timeline-body")?.textContent === "Hello world" &&
-    answer.querySelectorAll('[data-timeline-action*="feedback-"]').length === 2 &&
+    answer.querySelectorAll('[data-timeline-action*="feedback-"]').length === 0 &&
     answer.querySelector(".timeline-stats")?.textContent.includes("3") &&
     document.activeElement.dataset.timelineAction === focusKey;
   const result = document.querySelector("#result");

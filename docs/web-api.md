@@ -116,7 +116,7 @@ inserted into the prompt as a text reference, with quotes for spaces.
 ## Project lifecycle exclusion
 
 Project definition endpoints, project/session drafts and submission intents,
-queues, feedback, attachments, todos, project memory, and related session operations hold a
+queues, attachments, todos, project memory, and related session operations hold a
 shared project lease for the entire handler. An exclusive project operation
 causes these requests to return `409 project_busy` before running the handler.
 Definition creation also checks the lease in the direct C writer. A busy project
@@ -125,8 +125,7 @@ is distinct from `project_exists`, stale revisions, and invalid fields.
 their endpoint's validation response. Global drafts and other projects keep
 their own scope.
 
-The global feedback listing can repair stored feedback; that repair obtains its
-own project lease. Direct C memory writers and sidecar writers (todos, image
+Direct C memory writers and sidecar writers (todos, image
 records/pruning/rollback, queue receipts/claims, and expired upload cleanup) also
 obtain their own leases. Image copying retains both source and destination
 projects. Memory directory import retains every associated project before any
@@ -483,3 +482,12 @@ Catalog and diagnostic responses expose whether credentials are configured,
 but never return secret references, environment values, HTTP authorization
 headers, raw keys, or module environment entries. Errors do not echo request
 bodies or sensitive tool arguments.
+
+## Removed message ratings
+
+Message thumbs-up/down ratings and their settings page have been removed.
+`/api/v1/feedback` and session `/feedback` are unregistered and return 404
+for all methods, including HEAD and OPTIONS. No rating sidecar is written or
+reconciled. New session backups omit the retired file; old v2 imports validate
+its envelope and discard its opaque bytes before restoring session files.
+Existing files in user Home directories are left untouched.

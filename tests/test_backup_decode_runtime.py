@@ -41,7 +41,7 @@ def recount(document):
     document["total_bytes"] = sum(f["bytes"] for f in document["files"])
     present = {f["path"] for f in document["files"]}
     document["absent_files"] = [p for p in ("journal.jsonl", "ui-events.jsonl", "todo.json",
-                                           "draft.json", "queue.json", "feedback.json") if p not in present]
+                                           "draft.json", "queue.json") if p not in present]
     return document
 
 
@@ -627,7 +627,6 @@ class Probe(UploadProbe):
         receipt_path = "queue-receipts/" + "c" * 32 + ".json"
         receipt = {"schema_version": 3, "id": "c" * 32, "state": "starting",
                    "run_id": "run-prepared", "agent_run_id": 7}
-        feedback = {"schema_version": 1, "items": [{"event_id": 2, "value": "good"}]}
         binding = {"schema_version": 1, "run_id": 7, "attachments": []}
         # Shape/maximum cases refer to the evicted prefix. Surviving IDs have
         # stronger type/evidence requirements, tested separately below.
@@ -635,7 +634,7 @@ class Probe(UploadProbe):
         set_ui(historical, [{**event, "event_id": i + 1001} for i, event in enumerate(ui)])
         replace(historical, "todo.json", dump({**todo, "event_id": 1002}))
         samples = (("draft.json", draft), ("queue.json", queue), (receipt_path, receipt),
-                   ("feedback.json", feedback), ("attachments/runs/7.json", binding),
+                   ("attachments/runs/7.json", binding),
                    ("attachments/events/2.json", binding))
         for path, sample in samples:
             valid = copy.deepcopy(historical)
@@ -667,10 +666,6 @@ class Probe(UploadProbe):
                          ("agent_run_id", 0), ("agent_run_id", True)):
             altered("receipt " + key, lambda doc, k=key, n=new:
                     replace(doc, receipt_path, dump({**receipt, k: n})))
-        for new in ([{"event_id": 0, "value": "good"}], [{"event_id": 2, "value": "like"}],
-                    feedback["items"] * 2):
-            altered("feedback item", lambda doc, n=new:
-                    replace(doc, "feedback.json", dump({**feedback, "items": n})))
         altered("binding run filename mismatch", lambda doc: replace(doc, "attachments/runs/7.json",
                 dump({**binding, "run_id": 8})))
         altered("binding duplicate images", lambda doc: replace(doc, "attachments/runs/7.json",
@@ -705,10 +700,8 @@ class Probe(UploadProbe):
             replace(valid, receipt_path, dump(historical_receipt))
             assert self.validate(dump(valid))["ok"], historical_receipt
         # Declared maxima are ordinary bounded format cases, not load tests.
-        # Prior node caps rejected the 512th feedback or a combined full queue.
+        # Exercise the combined queue/draft format bounds.
         maximum = copy.deepcopy(historical)
-        replace(maximum, "feedback.json", dump({"schema_version": 1, "items": [
-            {"event_id": i + 1, "value": "good"} for i in range(512)]}))
         images = [f"{i + 1000:032x}" for i in range(4)]
         for image_id in images:
             # Pair/schema fixture only. It deliberately does not claim actual
@@ -729,8 +722,6 @@ class Probe(UploadProbe):
         replace(maximum, "draft.json", dump({**draft, "composer_profile": profile,
             "submissions": [{**submission, "id": f"{i + 1:032x}"} for i in range(20)]}))
         assert self.validate(dump(maximum))["ok"]
-        altered("over feedback count", lambda doc: replace(doc, "feedback.json", dump({
-            "schema_version": 1, "items": [{"event_id": i + 1, "value": "good"} for i in range(513)]})))
         altered("over queue count", lambda doc: replace(doc, "queue.json", dump({**queue,
             "items": [{**item, "id": f"{i + 1:032x}"} for i in range(21)]})))
         altered("over submissions count", lambda doc: replace(doc, "draft.json", dump({**draft,
@@ -745,7 +736,6 @@ class Probe(UploadProbe):
         related = copy.deepcopy(small)
         set_ui(related, [start, model, plan])
         replace(related, "todo.json", dump({**todo, "event_id": 3}))
-        replace(related, "feedback.json", dump(feedback))
         replace(related, "attachments/events/1.json", dump(binding))
         replace(related, receipt_path, dump(receipt))
         value = self.validate(dump(related))
@@ -754,10 +744,6 @@ class Probe(UploadProbe):
             doc = copy.deepcopy(related)
             change(doc)
             cases.append((label, dump(doc)))
-        for event_id in (1, 4):
-            related_bad("feedback wrong/missing target", lambda doc, n=event_id:
-                        replace(doc, "feedback.json", dump({**feedback, "items": [{"event_id": n, "value": "good"}]})))
-        related_bad("unsuccessful model feedback", lambda doc: set_ui(doc, [start, {**model, "success": False}, plan]))
         related_bad("binding wrong run", lambda doc: replace(doc, "attachments/events/1.json", dump({**binding, "run_id": 8})))
         related_bad("binding wrong target kind", lambda doc: replace(doc, "attachments/events/2.json", dump(binding)))
         related_bad("todo wrong event", lambda doc: replace(doc, "todo.json", dump({**todo, "event_id": 1})))
@@ -803,16 +789,16 @@ class Probe(UploadProbe):
         set_ui(prefix, [{**start, "event_id": 101}, {**model, "event_id": 102}, {**plan, "event_id": 103}])
         replace(prefix, "todo.json", dump({**todo, "event_id": 103}))
         value = self.validate(dump(prefix))
-        assert value["ok"] and value["unverified_refs"] == 2 and value["removed_refs"] == 0, value
+        assert value["ok"] and value["unverified_refs"] == 1 and value["removed_refs"] == 0, value
         removed = copy.deepcopy(related)
         set_ui(removed, [marker])
         value = self.validate(dump(removed))
-        assert value["ok"] and value["removed_refs"] == 3 and value["unverified_refs"] == 1, value
+        assert value["ok"] and value["removed_refs"] == 2 and value["unverified_refs"] == 1, value
         set_ui(removed, [start, {**marker, "source_event_id": 2}])
         value = self.validate(dump(removed))
-        assert value["ok"] and value["removed_refs"] == 2 and value["unverified_refs"] == 0, value
+        assert value["ok"] and value["removed_refs"] == 1 and value["unverified_refs"] == 0, value
         # A zero-source legacy marker has special todo reset semantics, not an
-        # invented image/feedback removal interval.
+        # invented image removal interval.
         legacy_clear = copy.deepcopy(historical)
         set_ui(legacy_clear, [{**marker, "event_id": 1003, "source_event_id": 0}])
         value = self.validate(dump(legacy_clear))
@@ -828,7 +814,7 @@ class Probe(UploadProbe):
         gap = copy.deepcopy(related)
         set_ui(gap, [{**start, "event_id": 10}, {**model, "event_id": 12}, {**plan, "event_id": 13}])
         replace(gap, "todo.json", dump({**todo, "event_id": 13}))
-        replace(gap, "feedback.json", dump({**feedback, "items": [{"event_id": 11, "value": "good"}]}))
+        replace(gap, "attachments/events/11.json", dump(binding))
         assert not self.validate(dump(gap))["ok"]
         altered("duplicate UI key", lambda doc: replace(doc, "ui-events.jsonl",
                 raw_ui.replace(b'"schema_version":5', b'"schema_version":5,"schema_version":5', 1)))
@@ -844,6 +830,31 @@ class Probe(UploadProbe):
             value = self.validate(data)
             assert not value["ok"] and value["code"] != 0 and value["files"] == [], (label, value)
         assert not self.validate(cases[0][1], "null-error")["ok"]
+        # Legacy v2 imports discard retired ratings after validating the raw
+        # envelope. The payload is opaque; no rating codec remains in product.
+        legacy = copy.deepcopy(small)
+        legacy["absent_files"].append("feedback.json")
+        assert self.validate(dump(legacy))["ok"]
+        legacy["absent_files"].append("feedback.json")
+        assert not self.validate(dump(legacy))["ok"]
+        legacy = copy.deepcopy(small)
+        replace(legacy, "feedback.json", b"retired opaque data")
+        value = self.validate(dump(legacy))
+        assert value["ok"] and all(f["path"] != "feedback.json" for f in value["files"]), value
+        assert value["encodable"] and value["bytes"] == small["total_bytes"], value
+        conflict = copy.deepcopy(legacy)
+        conflict["absent_files"].append("feedback.json")
+        assert not self.validate(dump(conflict))["ok"]
+        damaged = copy.deepcopy(legacy)
+        damaged["files"][-1]["sha256"] = "0" * 64
+        assert not self.validate(dump(damaged))["ok"]
+        duplicate = copy.deepcopy(legacy)
+        duplicate["files"].append(duplicate["files"][-1].copy())
+        recount(duplicate)
+        assert not self.validate(dump(duplicate))["ok"]
+        oversized = copy.deepcopy(small)
+        replace(oversized, "feedback.json", b"x" * (32 * 1024 + 1))
+        assert not self.validate(dump(oversized))["ok"]
         # Arbitrary member/file order is safe. Unknown model identity is data,
         # not permission to invoke a model during offline inspection.
         reorder = copy.deepcopy(small)

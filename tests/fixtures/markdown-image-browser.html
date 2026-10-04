@@ -37,12 +37,10 @@ const events = [
     time: 3000000 },
 ];
 const store = createResourceStore({ projectId: "qa", sessionId: "images", events });
-const feedbackStore = createResourceStore({ projectId: "qa", sessionId: "images",
-  items: new Map() });
 createTimelineView({ container: document.querySelector("#timeline"),
   welcome: document.querySelector("#welcome"),
-  toBottom: document.querySelector("#to-bottom"), store, feedbackStore,
-  onFork() {}, onFeedback() {}, onEdit() {}, onRetry() {} });
+  toBottom: document.querySelector("#to-bottom"), store,
+  onFork() {}, onEdit() {}, onRetry() {} });
 createImagePreview({ dialog: document.querySelector("#image-preview"),
   image: document.querySelector("#image-preview-content"),
   closeButton: document.querySelector("#close-image-preview"),

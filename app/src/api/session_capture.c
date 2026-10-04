@@ -5,7 +5,6 @@
 void MdoApiSessionCaptureRelease(MdoApiSessionCaptureGuard* Guard)
 {
     if ( Guard == NULL ) return;
-    if ( Guard->Feedback ) MdoApiFeedbackCaptureUnlock();
     if ( Guard->Queue ) MdoApiQueueCaptureUnlock();
     if ( Guard->Draft ) MdoApiDraftCaptureUnlock();
     if ( Guard->Attachment ) MdoApiAttachmentUnlock();
@@ -22,8 +21,6 @@ bool MdoApiSessionCaptureAcquire(MdoApiSessionCaptureGuard* Guard)
     if ( !Guard->Draft ) goto busy;
     Guard->Queue = MdoApiQueueCaptureTryLock();
     if ( !Guard->Queue ) goto busy;
-    Guard->Feedback = MdoApiFeedbackCaptureTryLock();
-    if ( !Guard->Feedback ) goto busy;
     return true;
 busy:
     MdoApiSessionCaptureRelease(Guard);

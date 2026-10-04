@@ -12,7 +12,6 @@ const ICONS = Object.freeze({
   copy: '<rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/>',
   retry: '<path d="M20 11a8 8 0 1 1-2.5-5.7"/><path d="M20 4v7h-7"/>',
   branch: '<circle cx="6" cy="5" r="2"/><circle cx="18" cy="8" r="2"/><circle cx="18" cy="19" r="2"/><path d="M6 7v9a3 3 0 0 0 3 3h7M16 8h-5a5 5 0 0 0-5 5"/>',
-  like: '<path d="M7 10v11H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3Zm0 0 4-7a2 2 0 0 1 3 2v4h5a2 2 0 0 1 2 2l-1 8a2 2 0 0 1-2 2H7"/>',
   search: '<circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/>',
   download: '<path d="M12 3v12m-5-5 5 5 5-5M4 17v3h16v-3"/>',
   more: '<circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/>',

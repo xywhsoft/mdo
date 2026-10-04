@@ -979,7 +979,8 @@ def main() -> int:
         assert json.loads(restored_files["draft.json"])["text"] == "draft"
         assert json.loads(restored_files["queue.json"])["items"][0]["state"] == "pending"
         assert json.loads(restored_files["todo.json"])["items"][0]["text"] == "Saved task"
-        assert json.loads(restored_files["feedback.json"])["items"][0]["vote"] == 1
+        assert "feedback.json" not in restored_files
+        assert "feedback.json" not in backup["absent_files"]
         assert "queue-receipts/" + "b" * 32 + ".json" in restored_files
         assert json.loads(restored_files["attachments/events/1.json"])["attachments"] == [image_id]
         assert json.loads(restored_files["attachments/runs/1.json"])["attachments"] == [image_id]

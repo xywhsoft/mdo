@@ -341,8 +341,7 @@ static bool MdoApiProbeLeaseControl(XS_HttpReq* Request)
             MdoProjectReplace(&Options, 1u, NULL, NULL) ==
                 MDO_PROJECT_MUTATION_BUSY &&
             MdoProjectUnregister("lease-probe", 1u, NULL) ==
-                MDO_PROJECT_MUTATION_BUSY &&
-            !MdoApiFeedbackReconcile("lease-probe", "lease-session");
+                MDO_PROJECT_MUTATION_BUSY;
     } else if ( MdoApiViewEqualText(Target,
             "/__fixture/project-lease/direct-sidecars") ) {
         const char* Project = "lease-probe";
@@ -897,7 +896,6 @@ def project_lease_exclusion(port: int, home: Path, session_id: str) -> None:
         ("PUT", session + "/queue/item"),
         ("DELETE", session + "/queue/item"),
         ("POST", session + "/queue/discard-images/image"),
-        ("GET", session + "/feedback"), ("PUT", session + "/feedback"),
         ("GET", session + "/todo"),
         ("GET", session + "/backup"),
         ("POST", session + "/attachments"),
@@ -1574,9 +1572,10 @@ def run_probe(host: Path) -> None:
                 assert model_config["default_model"] == "ornith-1.5-35b", model_config
                 assert model_config["items"][0]["editable"] is False, model_config
                 assert headers["etag"].startswith('"mdo-config-'), headers
-                status, _, body = request(port, "GET", "/api/v1/feedback")
-                assert status == 200 and json.loads(body)["data"]["items"] == [], (
-                    status, body)
+                # Retired endpoints must not recreate storage or expose Allow.
+                for method in ("GET", "HEAD", "PUT", "OPTIONS"):
+                    status, headers, body = request(port, method, "/api/v1/feedback")
+                    assert status == 404 and "allow" not in headers, (method, status, headers, body)
                 assert not home.exists(), home
 
                 project_lease_exclusion(port, home, "lease-session")
@@ -4087,82 +4086,13 @@ def run_probe(host: Path) -> None:
                 assert any(item["terminal"] for item in
                            event_document["data"]["items"]), event_document
 
-                # Feedback belongs to a completed model reply and survives a
-                # fresh read from the portable session sidecar.
-                feedback_path = session_path + "/feedback"
-                done_event = next(item for item in
-                                  event_document["data"]["items"]
-                                  if item["kind"] == "model_done" and
-                                  item["success"])
-                done_id = done_event["event_id"]
-                status, _, body = request(port, "GET", feedback_path)
-                assert status == 200 and json.loads(body)["data"]["items"] == [], (
-                    status, body)
-                feedback_body = json.dumps({"event_id": done_id,
-                                            "value": "good"}).encode()
-                status, _, body = request(
-                    port, "PUT", feedback_path, body=feedback_body,
-                    headers={"Content-Type": "application/json"})
-                assert status == 200, (status, body)
-                assert json.loads(body)["data"]["items"] == [
-                    {"event_id": done_id, "value": "good"}], body
-                sidecar = home / f"sessions/api-project/{session_id}/feedback.json"
-                assert json.loads(sidecar.read_text(encoding="utf-8")) == {
-                    "schema_version": 1,
-                    "items": [{"event_id": done_id, "value": "good"}],
-                }
-                assert json.loads(request(port, "GET", feedback_path)[2])[
-                    "data"]["items"][0]["value"] == "good"
-                status, headers, body = request(port, "GET", "/api/v1/feedback")
-                listed_feedback = json.loads(body)["data"]
-                assert status == 200 and listed_feedback["next_cursor"] == "", (
-                    status, body)
-                assert any(item["project_id"] == "api-project" and
-                           item["session_id"] == session_id and
-                           item["event_id"] == done_id and
-                           item["value"] == "good" and
-                           item["occurred_at"] > 0
-                           for item in listed_feedback["items"]), body
-                cursor = f'{listed_feedback["generation"]}.0.0'
-                status, _, body = request(port, "GET",
-                    f"/api/v1/feedback?cursor={cursor}")
-                assert status == 200 and json.loads(body)["data"]["items"], (
-                    status, body)
-                assert request(port, "HEAD", "/api/v1/feedback")[0] == 200
-                assert request(port, "OPTIONS", "/api/v1/feedback")[1][
-                    "allow"] == "GET, HEAD, OPTIONS"
-                status, _, body = request(port, "GET",
-                    "/api/v1/feedback?cursor=bad")
-                assert status == 400 and json.loads(body)["error"][
-                    "code"] == "invalid_query", (status, body)
-                status, _, body = request(port, "GET",
-                    "/api/v1/feedback?cursor=999.0.0")
-                assert status == 409 and json.loads(body)["error"][
-                    "code"] == "feedback_cursor_stale", (status, body)
-                status, _, body = request(
-                    port, "PUT", feedback_path,
-                    body=json.dumps({"event_id": done_id,
-                                     "value": "none"}).encode(),
-                    headers={"Content-Type": "application/json"})
-                assert status == 200 and json.loads(body)["data"]["items"] == [], (
-                    status, body)
-                assert not any(item["session_id"] == session_id for item in
-                    json.loads(request(port, "GET", "/api/v1/feedback")[2])[
-                        "data"]["items"])
-                status, _, body = request(
-                    port, "PUT", feedback_path, body=feedback_body,
-                    headers={"Content-Type": "application/json"})
-                assert status == 200, (status, body)
-                status, _, body = request(
-                    port, "PUT", feedback_path,
-                    body=b'{"event_id":999999999,"value":"bad"}',
-                    headers={"Content-Type": "application/json"})
-                assert status == 422 and json.loads(body)["error"][
-                    "code"] == "feedback_event_invalid", (status, body)
-
                 status, _, body = request(
                     port, "GET", "/api/v1/diagnostics?fixture=recovery")
                 assert status == 200, (status, body)
+                for method in ("GET", "HEAD", "PUT", "OPTIONS"):
+                    status, headers, body = request(port, method, session_path + "/feedback")
+                    assert status == 404 and "allow" not in headers, (method, status, headers, body)
+                assert not (home / f"sessions/api-project/{session_id}/feedback.json").exists()
                 all_sessions = json.loads(request(
                     port, "GET", "/api/v1/sessions")[2])["data"]["items"]
                 recovery_session = next(item for item in all_sessions
@@ -5037,15 +4967,6 @@ def run_probe(host: Path) -> None:
                     event["agent_depth"] == 0 and
                     event["text"] == "ASK probe")
                 assert cutoff_start["user_message_sequence"] > 1
-                removed_done_id = next(event["event_id"] for event in
-                    journal_before_trim if event["kind"] == "model_done" and
-                    event["success"] and
-                    event["event_id"] > cutoff_start["event_id"])
-                status, _, body = request(port, "PUT", feedback_path,
-                    body=json.dumps({"event_id": removed_done_id,
-                                     "value": "bad"}).encode(),
-                    headers={"Content-Type": "application/json"})
-                assert status == 200, (status, body)
                 # Simulate a newer projection belonging to a turn that the
                 # next truncate removes, while retaining the earlier TODO.
                 todo_file.write_text(json.dumps({
@@ -5058,7 +4979,7 @@ def run_probe(host: Path) -> None:
                 protected_files = (meta_path,
                     *(meta_path.parent / name for name in
                       ("snapshot.json", "journal.jsonl", "ui-events.jsonl")),
-                    sidecar, todo_file)
+                    todo_file)
                 # A checkpoint may have compacted away the model journal;
                 # refusal must preserve both existing bytes and absent files.
                 def protected_state():
@@ -5066,7 +4987,10 @@ def run_probe(host: Path) -> None:
                             for p in protected_files}
                 protected_before = protected_state()
                 for bad_source, boundary in (
-                    (removed_done_id, cutoff_start["user_message_sequence"] - 1),
+                    (next(event["event_id"] for event in journal_before_trim
+                        if event["kind"] == "model_done" and event["success"] and
+                        event["event_id"] > cutoff_start["event_id"]),
+                     cutoff_start["user_message_sequence"] - 1),
                     (cutoff_start["event_id"], cutoff_start["user_message_sequence"]),
                 ):
                     status, _, body = request(port, "POST", truncate_path,
@@ -5112,20 +5036,6 @@ def run_probe(host: Path) -> None:
                 assert retained_events[-1]["kind"] == "history_truncated" and (
                     retained_events[-1]["source_event_id"] ==
                     cutoff_start["event_id"]), retained_events[-1]
-                expected_feedback = [{"event_id": done_id, "value": "good"}]
-                assert json.loads(request(port, "GET", feedback_path)[2])[
-                    "data"]["items"] == expected_feedback
-                assert json.loads(sidecar.read_text(encoding="utf-8"))[
-                    "items"] == expected_feedback
-                # A GET repairs a stale sidecar left by an interrupted write.
-                sidecar.write_text(json.dumps({"schema_version": 1,
-                    "items": expected_feedback + [{"event_id": removed_done_id,
-                                                   "value": "bad"}]}),
-                    encoding="utf-8")
-                assert json.loads(request(port, "GET", feedback_path)[2])[
-                    "data"]["items"] == expected_feedback
-                assert json.loads(sidecar.read_text(encoding="utf-8"))[
-                    "items"] == expected_feedback
                 todo_file.write_text(json.dumps({
                     "schema_version": 1,
                     "event_id": cutoff_start["event_id"],
@@ -5172,10 +5082,6 @@ def run_probe(host: Path) -> None:
                 assert status == 200 and json.loads(body)["data"] == {
                     "schema_version": 1, "event_id": 0, "items": [],
                 }, (status, body)
-                assert json.loads(request(port, "GET", feedback_path)[2])[
-                    "data"]["items"] == []
-                assert json.loads(sidecar.read_text(encoding="utf-8"))[
-                    "items"] == []
                 cleared_events = json.loads(request(port, "GET",
                     session_path + "/events?after=0&limit=32")[2])[
                         "data"]["items"]

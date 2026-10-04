@@ -77,8 +77,7 @@ const timeline = createTimelineView({
     { event_id: 1, run_id: 3, kind: "agent_start", schema_version: 3,
       agent_depth: 0, user_message_sequence: 1, text: "Search target", time: 1000000 },
   ] }),
-  feedbackStore: store({ projectId: "qa", sessionId: "search", items: new Map() }),
-  onFork() {}, onFeedback() {}, onEdit() {}, onRetry() {},
+  onFork() {}, onEdit() {}, onRetry() {},
   onSearchCount: (count, limited) => search?.setCount(count, limited),
 });
 search = createConversationSearch({

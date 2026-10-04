@@ -25,7 +25,7 @@ test("chat and ordinary preferences do not load management catalogs", async () =
   const calls = [];
   await withFetch(async (url) => { calls.push(url); return reply(); }, async () => {
     for (const page of ["", "general", "agent", "web", "projects", "models",
-      "feedback", "schedules", "constructor", "toString", "unknown"])
+      "retired-page", "schedules", "constructor", "toString", "unknown"])
       assert.deepEqual(await ensureSettingsResources(page), []);
     assert.deepEqual(calls, []);
     assert.ok(stores.every((store) => store.get().status === "idle"));
