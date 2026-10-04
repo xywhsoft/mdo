@@ -314,7 +314,6 @@ export async function boot() {
       navigation.select(result.project_id, result.session_id); closeDrawers();
     },
   });
-  $("#open-backup-import").addEventListener("click", () => backupImport.open());
   function switchToProject(projectId) {
     showActiveSessions();
     navigation.newTask(projectId);
