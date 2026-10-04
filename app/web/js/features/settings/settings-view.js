@@ -30,7 +30,6 @@ function settingsPatch(form) {
       max_parallel_tools: number(form, "max_parallel_tools"),
       max_parallel_subagents: number(form, "max_parallel_subagents"),
     },
-    web: { search: { endpoint: form.elements.endpoint.value.trim() } },
     transport: {
       ca_pem_path: form.elements.ca_pem_path.value.trim(),
       proxy: {
@@ -240,7 +239,6 @@ export function createSettingsView({ form, store, navigation, onApplied }) {
     form.elements.web_search.checked = settings.agent.web_search;
     form.elements.memory.checked = settings.agent.memory;
     form.elements.schedules.checked = settings.agent.schedules;
-    form.elements.endpoint.value = settings.web.endpoint;
     form.elements.ca_pem_path.value = settings.transport?.ca_pem_path ?? "";
     const proxy = settings.transport?.proxy ?? {};
     form.elements.proxy_kind.value = proxy.kind ?? "none";

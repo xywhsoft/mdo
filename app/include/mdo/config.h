@@ -57,7 +57,6 @@ typedef struct MdoConfigWebSettings {
     size_t MaxResponseBytes;
     size_t MaxTextBytes;
     size_t MaxDocuments;
-    char Endpoint[2048];
 } MdoConfigWebSettings;
 
 typedef struct MdoConfigTransportSettings {

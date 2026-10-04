@@ -33,10 +33,7 @@
       "idle_timeout_ms": 10000,
       "max_response_bytes": 1048576,
       "max_text_bytes": 262144,
-      "max_documents": 16,
-      "search": {
-        "endpoint": "https://ai.xywhsoft.com/api/v1/search"
-      }
+      "max_documents": 16
     },
     "transport": {
       "ca_pem_path": "",

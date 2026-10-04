@@ -105,13 +105,12 @@ def run(args):
         print('PASS authenticated online quota and providers; default Bocha')
         shutil.copytree(ROOT/'app',site,dirs_exist_ok=True)
         home=site/'mdo-home'; (home/'config').mkdir(parents=True)
-        (home/'config/settings.json').write_text(json.dumps({'schema_version':1,'patch':{'web':{'search':{'endpoint':origin+'/api/v1/search'}}}}))
         with socket.socket() as sock: sock.bind(('127.0.0.1',0)); port=sock.getsockname()[1]
         config=json.loads((site/'xs.json').read_text(encoding='utf-8')); service=config['services'][0]
         service['class']='http'; service['port']=port; service.pop('window',None)
         (site/'xs.json').write_text(json.dumps(config))
         unity=site/'generated/mdo_unity.c'
-        unity.write_text('#include <xsbase.h>\nstatic bool TestOpenUrl(cstr s){(void)s;return true;}\n#define xsOpenExternalUrl TestOpenUrl\n'+unity.read_text(encoding='utf-8'),encoding='utf-8')
+        unity.write_text('#define MDO_ACCOUNT_SERVICE_ORIGIN '+json.dumps(origin)+'\n#include <xsbase.h>\nstatic bool TestOpenUrl(cstr s){(void)s;return true;}\n#define xsOpenExternalUrl TestOpenUrl\n'+unity.read_text(encoding='utf-8'),encoding='utf-8')
         router=site/'src/api/router.c'; source=router.read_text(encoding='utf-8')
         source=source.replace('static const MdoApiRoute g_MdoApiRoutes[]',HOOK+'\nstatic const MdoApiRoute g_MdoApiRoutes[]')
         source=source.replace('static const MdoApiRoute g_MdoApiRoutes[] = {','static const MdoApiRoute g_MdoApiRoutes[] = {\n {"/api/v1/test-online-search",XHTTP_METHOD_GET|XHTTP_METHOD_POST,"GET, POST",OnlineSearch,false},')

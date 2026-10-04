@@ -1,8 +1,8 @@
 /* xadmin is the only search protocol. Provider credentials stay on its server;
- * this client sends a member access token only to the explicitly configured URL.
+ * this client sends a member access token only to its account service.
  * No retry or redirect can duplicate billed searches or forward credentials. */
 #define MDO_WEB_SEARCH_MAX_RESULTS 10u
-#define MDO_WEB_SEARCH_TOKEN_REF "env:MDO_SEARCH_ACCESS_TOKEN"
+#define MDO_WEB_SEARCH_TOKEN_REF "account:search-access-token"
 
 static bool MdoWebSearchQueryValid(xstrview Query)
 {
@@ -23,8 +23,8 @@ static const char* MdoWebSearchServiceError(uint64 Status)
     case 400u: return "Search API rejected the request; check its query and result limit. Do not repeat the same request.";
     case 401u: return "Search requires a valid account login. Sign in again; repeating this query cannot renew the login.";
     case 403u: return "Search account access was denied. Complete the phone/email verification required by the service.";
-    case 404u: return "Search API was not found. Configure the full /api/v1/search URL and enable the xadmin search plugin.";
-    case 405u: return "Search API does not accept POST. Check the configured /api/v1/search URL.";
+    case 404u: return "Search service is unavailable. Its administrator must enable the search plugin.";
+    case 405u: return "Search service does not accept this request. Contact its administrator.";
     case 429u: return "Search quota or concurrency limit reached. Try later; do not repeatedly retry.";
     case 502u: return "Search provider is unavailable or returned an invalid response. Try later.";
     case 503u: return "Search service is not ready. Its administrator must enable a provider and configure its API key.";
@@ -125,7 +125,7 @@ static xwork_result MdoWebSearchExecute(void* pUserData,
         goto done;
     }
 acquire_account:
-    if (!MdoAccountAcquire(State->Settings.Endpoint, Query.Data, pContext, &Lease)) {
+    if (!MdoAccountAcquire(Query.Data, pContext, &Lease)) {
         Result = MdoWebToolFail(pWriter, pError,
             "Search needs an account login. The login wait was skipped, cancelled or expired; no search was sent. Do not retry until the user signs in.");
         goto done;
@@ -142,7 +142,7 @@ acquire_account:
     Headers[2] = (XS_FetchHeader){ "User-Agent", "mdo/1 web_search" };
     Headers[3] = (XS_FetchHeader){ "Authorization", Authorization };
     Attempted = true;
-    if ( !MdoWebFetchRequest(State, &FetchContext, State->Settings.Endpoint,
+    if ( !MdoWebFetchRequest(State, &FetchContext, MdoAccountSearchEndpoint(),
             Headers, 4u, true, Body, BodySize, &Response) ) {
         /* Transport diagnostics may contain headers. Never reflect them into
          * a model-visible result containing an account credential. */
@@ -153,7 +153,7 @@ acquire_account:
         else if ( Kind == XERR_TIMEOUT || (pContext->uDeadline != XRT_DEADLINE_NEVER &&
                     xrtDeadlineExpired(pContext->uDeadline)) )
             Result = MdoWebFail(pError, XWORK_ERROR_TIMEOUT, "Search request timed out");
-        else Result = MdoWebToolFail(pWriter, pError, "Cannot reach the search API. Check its address and network connection.");
+        else Result = MdoWebToolFail(pWriter, pError, "Cannot reach the search service. Check your network connection.");
         goto done;
     }
     if (Response.Status == 401 && !Renewed && MdoAccountRejectAccess(&Lease)) {

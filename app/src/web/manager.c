@@ -994,7 +994,7 @@ static xwork_result MdoWebSearchPermissions(void* pUserData,
     xwork_permission_resource_writer* pWriter, xwork_error* pError)
 {
     static const char* const Keys[] = { "query", "count" };
-    MdoWebState* pState = (MdoWebState*)pUserData;
+    (void)pUserData;
     xvalue* pArguments = NULL;
     xstrview Query;
     uint64 Count;
@@ -1017,7 +1017,7 @@ static xwork_result MdoWebSearchPermissions(void* pUserData,
         goto done;
     }
     if ( !xworkPermissionResourceWriterAdd(pWriter, XWORK_RESOURCE_NETWORK,
-            XWORK_RESOURCE_ACCESS_CONNECT, pState->Settings.Endpoint) ||
+            XWORK_RESOURCE_ACCESS_CONNECT, MdoAccountSearchEndpoint()) ||
          !xworkPermissionResourceWriterAdd(pWriter, XWORK_RESOURCE_EXTERNAL_SERVICE,
             XWORK_RESOURCE_ACCESS_USE, "xadmin.search") ||
          !xworkPermissionResourceWriterAdd(pWriter, XWORK_RESOURCE_SECRET,
@@ -1076,12 +1076,6 @@ done:
     xrtFree(Resource);
     xrtValueRelease(pArguments);
     return Result;
-}
-
-static bool MdoWebSettingsValid(const MdoConfigWebSettings* pSettings)
-{
-    return pSettings != NULL && MdoHttpUrlValid(xrtStrView(pSettings->Endpoint), true) &&
-        strchr(pSettings->Endpoint, '?') == NULL;
 }
 
 static void MdoWebDefinitions(MdoWebState* pState,
@@ -1152,8 +1146,7 @@ static MdoWebState* MdoWebStateCreate(xwork_runtime* pRuntime,
     pState->Settings.Size = sizeof(pState->Settings);
     pState->Transport = *pTransport;
     if ( pState->Runtime == NULL || pState->Lock == NULL ||
-         !MdoConfigGetWebSettings(&pState->Settings) ||
-         !MdoWebSettingsValid(&pState->Settings) ) goto failed;
+         !MdoConfigGetWebSettings(&pState->Settings) ) goto failed;
     pState->Documents = (MdoWebDocument*)xrtCalloc(
         pState->Settings.MaxDocuments, sizeof(*pState->Documents));
     if ( pState->Documents == NULL ) goto failed;

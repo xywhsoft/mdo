@@ -51,9 +51,8 @@ static bool AccountTestRoute(MdoApiContext* c) {
     xvalue* out = xrtValueObject();
     if (c->Target.Query.Size == 4 && !memcmp(c->Target.Query.Data,"take",4)) {
         MdoAccountRelease(&AccountTestLease);
-        MdoConfigWebSettings s = {0}; s.Size = sizeof(s); MdoConfigGetWebSettings(&s);
         xwork_tool_context context = {0}; context.uDeadline = XRT_DEADLINE_NEVER;
-        bool ok = MdoAccountAcquire(s.Endpoint,"local lease probe",&context,&AccountTestLease);
+        bool ok = MdoAccountAcquire("local lease probe",&context,&AccountTestLease);
         MdoAccountSetBool(out,"taken",ok);
     } else if (c->Target.Query.Size == 6 && !memcmp(c->Target.Query.Data,"expire",6)) {
         xrtMutexLock(g_MdoAccount.Lock); g_MdoAccount.Tokens.Expires = 0; xrtMutexUnlock(g_MdoAccount.Lock);
@@ -81,7 +80,7 @@ def run(host):
 
     def launch(directory, config, home=None, executable=None):
         log = (directory / 'account-test.log').open('ab'); logs.append(log)
-        env = dict(os.environ); env.pop('MDO_SEARCH_ACCESS_TOKEN', None)
+        env = dict(os.environ); env['MDO_SEARCH_ACCESS_TOKEN'] = 'obsolete-token-must-not-bypass-login'
         if home: env['MDO_HOME'] = str(home)
         process = subprocess.Popen([str(executable or host), str(config)], cwd=directory, env=env,
             stdout=log, stderr=subprocess.STDOUT)
@@ -150,12 +149,12 @@ def run(host):
             site = Path(raw); shutil.copytree(ROOT/'app', site, dirs_exist_ok=True)
             home = site/'mdo-home'; (home/'config').mkdir(parents=True)
             (home/'config/settings.json').write_text(json.dumps({'schema_version': 1, 'patch': {'web': {
-                'allow_http': True, 'allow_private_networks': True, 'search': {'endpoint': origin+'/api/v1/search'}}}}))
+                'allow_http': True, 'allow_private_networks': True, 'search': {'endpoint': 'https://obsolete.example/api/v1/search'}}}}))
             config = json.loads((site/'xs.json').read_text()); service = config['services'][0]
             service['class'] = 'http'; service['port'] = app_port; service.pop('window', None)
             (site/'xs.json').write_text(json.dumps(config))
             unity = site/'generated/mdo_unity.c'
-            unity.write_text('#include <xsbase.h>\nstatic bool TestOpenUrl(cstr s){(void)s;return true;}\n#define xsOpenExternalUrl TestOpenUrl\n'+unity.read_text())
+            unity.write_text('#define MDO_ACCOUNT_SERVICE_ORIGIN '+json.dumps(origin)+'\n#include <xsbase.h>\nstatic bool TestOpenUrl(cstr s){(void)s;return true;}\n#define xsOpenExternalUrl TestOpenUrl\n'+unity.read_text(encoding='utf-8'),encoding='utf-8')
             router = site/'src/api/router.c'; source = router.read_text(); source = source.replace('static const MdoApiRoute g_MdoApiRoutes[]',HOOK+'\nstatic const MdoApiRoute g_MdoApiRoutes[]')
             source = source.replace('static const MdoApiRoute g_MdoApiRoutes[] = {','static const MdoApiRoute g_MdoApiRoutes[] = {\n {"/api/v1/test-account", XHTTP_METHOD_GET, "GET", AccountTestRoute, false},')
             router.write_text(source)

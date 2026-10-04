@@ -28,22 +28,6 @@ static void MdoAccountNewSessionLocked(void)
     xrtCancelDestroy(g_MdoAccount.SessionCancel);
     g_MdoAccount.SessionCancel = next;
 }
-static void MdoAccountSyncOriginLocked(void)
-{
-    MdoConfigWebSettings settings; char origin[MDO_ACCOUNT_ORIGIN_LIMIT] = "";
-    memset(&settings, 0, sizeof(settings)); settings.Size = sizeof(settings);
-    if (MdoConfigGetWebSettings(&settings)) (void)MdoAccountOrigin(settings.Endpoint, origin);
-    if (!strcmp(origin, g_MdoAccount.Origin)) return;
-    ++g_MdoAccount.Epoch;
-    xrtCancelRequest(g_MdoAccount.WorkCancel);
-    xrtSecureZero(&g_MdoAccount.Work, sizeof(g_MdoAccount.Work));
-    MdoAccountNewSessionLocked();
-    MdoAccountClearTokensLocked(); MdoAccountClearAuthorizationLocked();
-    xrtValueRelease(g_MdoAccount.Profile); g_MdoAccount.Profile = NULL;
-    xrtValueRelease(g_MdoAccount.Usage); g_MdoAccount.Usage = NULL;
-    strcpy(g_MdoAccount.Origin, origin); g_MdoAccount.SearchStatus = 0;
-    g_MdoAccount.Message[0] = 0; MdoAccountChangedLocked();
-}
 static bool MdoAccountQueueLocked(unsigned Kind)
 {
     if (g_MdoAccount.Stopping || !g_MdoAccount.Origin[0]) return false;
@@ -200,9 +184,8 @@ bool MdoAccountInit(void)
     g_MdoAccount.SessionCancel = xrtCancelCreate();
     if (!g_MdoAccount.Lock || !g_MdoAccount.Changed || !g_MdoAccount.SessionCancel) goto failed;
     g_MdoAccount.Initialized = true; g_MdoAccount.Epoch = 1;
+    if (!MdoAccountOrigin(MDO_ACCOUNT_SERVICE_ORIGIN, g_MdoAccount.Origin)) goto failed;
     xrtMutexLock(g_MdoAccount.Lock);
-    MdoConfigWebSettings settings; memset(&settings, 0, sizeof(settings)); settings.Size = sizeof(settings);
-    if (MdoConfigGetWebSettings(&settings)) (void)MdoAccountOrigin(settings.Endpoint, g_MdoAccount.Origin);
     char origin[MDO_ACCOUNT_ORIGIN_LIMIT];
     xvalue* stored = MdoAccountCredentialRead(MDO_ACCOUNT_SESSION_PATH, origin);
     cstr refresh = MdoAccountText(stored, "refresh_token", 64); uint64 id = 0, schema = 0;
@@ -240,7 +223,7 @@ void MdoAccountUnit(void)
 xvalue* MdoAccountSnapshot(void)
 {
     if (!g_MdoAccount.Initialized) return NULL;
-    xrtMutexLock(g_MdoAccount.Lock); MdoAccountSyncOriginLocked();
+    xrtMutexLock(g_MdoAccount.Lock);
     bool live = g_MdoAccount.Tokens.Access[0] && !xrtDeadlineExpired(g_MdoAccount.Tokens.Expires);
     cstr state = g_MdoAccount.Authorization.State[0] ? "authorizing" :
         g_MdoAccount.Tokens.Refresh[0] && !live ? "refreshing" : live ? "signed_in" :
@@ -272,7 +255,7 @@ bool MdoAccountLoginStart(cstr LocalOrigin, bool Remember, xvalue** PublicResult
     MdoAccountAuthorization authorization; bool ok; xvalue* out = NULL;
     if (!g_MdoAccount.Initialized || !PublicResult) return false;
     *PublicResult = NULL; memset(&authorization, 0, sizeof(authorization));
-    xrtMutexLock(g_MdoAccount.Lock); MdoAccountSyncOriginLocked();
+    xrtMutexLock(g_MdoAccount.Lock);
     ok = MdoAccountAuthorizationStart(g_MdoAccount.Origin, LocalOrigin, Remember, &authorization) &&
         MdoAccountAuthorizationSave(&authorization);
     if (ok) {
@@ -325,12 +308,14 @@ bool MdoAccountCallback(cstr State, cstr Code, cstr Error)
         /* Pending PKCE is no longer reusable after exchange starts. */
         (void)MdoHomeRemove(MDO_ACCOUNT_PENDING_PATH, false);
     } else ok = false;
-    if (ok) MdoAccountChangedLocked(); xrtMutexUnlock(g_MdoAccount.Lock); return ok;
+    if (ok) MdoAccountChangedLocked();
+    xrtMutexUnlock(g_MdoAccount.Lock);
+    return ok;
 }
 bool MdoAccountRefresh(void)
 {
     if (!g_MdoAccount.Initialized) return false;
-    xrtMutexLock(g_MdoAccount.Lock); MdoAccountSyncOriginLocked();
+    xrtMutexLock(g_MdoAccount.Lock);
     bool ok = MdoAccountQueueLocked(MDO_ACCOUNT_WORK_REFRESH);
     xrtMutexUnlock(g_MdoAccount.Lock); return ok;
 }
@@ -355,28 +340,28 @@ bool MdoAccountSkipSearch(uint64 Id)
     for (i = 0; i < MDO_ACCOUNT_WAIT_MAX; i++) if (g_MdoAccount.Waiters[i].Id == Id && Id) {
         g_MdoAccount.Waiters[i].Skipped = true; ok = true; break;
     }
-    if (ok) MdoAccountChangedLocked(); xrtMutexUnlock(g_MdoAccount.Lock); return ok;
+    if (ok) MdoAccountChangedLocked();
+    xrtMutexUnlock(g_MdoAccount.Lock);
+    return ok;
 }
 static void MdoAccountCancelLease(void* Data)
 {
     xrtCancelRequest((xcancel*)Data);
 }
-bool MdoAccountAcquire(cstr Endpoint, cstr Query, const xwork_tool_context* Context, MdoAccountLease* Lease)
+cstr MdoAccountSearchEndpoint(void)
 {
-    char origin[MDO_ACCOUNT_ORIGIN_LIMIT]; size_t slot = MDO_ACCOUNT_WAIT_MAX, i; bool ok = false;
+    return MDO_ACCOUNT_SERVICE_ORIGIN "/api/v1/search";
+}
+bool MdoAccountAcquire(cstr Query, const xwork_tool_context* Context, MdoAccountLease* Lease)
+{
+    size_t slot = MDO_ACCOUNT_WAIT_MAX, i; bool ok = false;
     if (!Lease || !Context) return false;
     memset(Lease, 0, sizeof(*Lease));
-    /* Developer integration override is never exposed through the UI or saved. */
-    if (MdoSecretResolve(xrtStrView("env:MDO_SEARCH_ACCESS_TOKEN"), MDO_ACCOUNT_TOKEN_LIMIT - 1, &Lease->AccessToken)) {
-        if (MdoAccountTokenValid(Lease->AccessToken)) return true;
-        MdoSecretRelease(&Lease->AccessToken); return false;
-    }
-    if (!g_MdoAccount.Initialized || !MdoAccountOrigin(Endpoint, origin)) return false;
+    if (!g_MdoAccount.Initialized) return false;
     uint64 until = xrtDeadlineAfter(300000000);
-    xrtMutexLock(g_MdoAccount.Lock); ++g_MdoAccount.Acquirers; MdoAccountSyncOriginLocked();
-    if (strcmp(origin, g_MdoAccount.Origin)) goto done;
+    xrtMutexLock(g_MdoAccount.Lock); ++g_MdoAccount.Acquirers;
     for (;;) {
-        if (g_MdoAccount.Stopping || strcmp(origin, g_MdoAccount.Origin) ||
+        if (g_MdoAccount.Stopping ||
             (Context->pCancel && xrtCancelRequested(Context->pCancel)) || xrtDeadlineExpired(until) ||
             (Context->uDeadline != XRT_DEADLINE_NEVER && xrtDeadlineExpired(Context->uDeadline)) ||
             (slot < MDO_ACCOUNT_WAIT_MAX && g_MdoAccount.Waiters[slot].Skipped)) break;
@@ -399,10 +384,10 @@ bool MdoAccountAcquire(cstr Endpoint, cstr Query, const xwork_tool_context* Cont
         }
         xrtCondWaitFor(g_MdoAccount.Changed, g_MdoAccount.Lock, 100000);
     }
-done:
     if (slot < MDO_ACCOUNT_WAIT_MAX) { memset(&g_MdoAccount.Waiters[slot], 0, sizeof(g_MdoAccount.Waiters[slot])); MdoAccountChangedLocked(); }
     --g_MdoAccount.Acquirers; xrtCondBroadcast(g_MdoAccount.Changed); xrtMutexUnlock(g_MdoAccount.Lock);
-    if (!ok) MdoAccountRelease(Lease); return ok;
+    if (!ok) MdoAccountRelease(Lease);
+    return ok;
 }
 void MdoAccountRelease(MdoAccountLease* Lease)
 {

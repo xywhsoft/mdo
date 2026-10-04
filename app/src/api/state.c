@@ -184,7 +184,7 @@ bool MdoApiSettingsRoute(MdoApiContext* Context)
             Service.Agent.PermissionProfile) &&
         MdoApiValueSetTake(Data, "agent", &AgentValue);
     if ( Ok ) Ok =
-        MdoApiValueSetString(WebValue, "endpoint", Service.Web.Endpoint) &&
+        MdoApiValueSetBool(WebValue, "enabled", Service.Web.Enabled) &&
         MdoApiValueSetTake(Data, "web", &WebValue);
     if ( Ok ) Ok =
         MdoApiValueSetString(TransportValue, "ca_pem_path",

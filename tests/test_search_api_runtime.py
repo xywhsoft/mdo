@@ -11,6 +11,7 @@ import json
 from pathlib import Path
 import tempfile
 import threading
+from urllib.parse import urlsplit
 
 import test_web_runtime as web
 
@@ -93,19 +94,21 @@ static bool Fetch(void* data, const XS_FetchRequest* request, XS_FetchResponse* 
         calls.append(f'    if (Execute(agent, "web_search", {literal}, &search) != {str(success).lower()}) '
                      f'{{ printf("case_failed={index}\\n"); goto done; }}\n'
                      '    xrtFree(search); search = NULL;\n')
-    # Check old settings normalize before startup and configuration updates
-    # accept exact API resources, including local URLs, but no URL credentials.
+    # Obsolete standalone search options are ignored during import.
     if not external:
         calls.append(r'''
     {
-        MdoConfigPreview preview;
-        const char* invalid = "{\"schema_version\":1,\"patch\":{\"web\":{\"search\":{\"endpoint\":\"https://user:secret@example.com/api/v1/search\"}}}}";
-        const char* query = "{\"schema_version\":1,\"patch\":{\"web\":{\"search\":{\"endpoint\":\"https://example.com/api/v1/search?key=secret\"}}}}";
-        memset(&preview, 0, sizeof(preview)); preview.Size = sizeof(preview);
-        if (MdoConfigPreviewImport(MDO_CONFIG_SETTINGS, xrtStrView(invalid), &preview) ||
-            MdoConfigPreviewImport(MDO_CONFIG_SETTINGS, xrtStrView(query), &preview)) {
-            printf("invalid_endpoint_accepted=1\n"); goto done;
+        const char* legacy = "{\"schema_version\":1,\"patch\":{\"web\":{\"search\":{\"endpoint\":\"https://other.example/api/v1/search\",\"provider\":\"bing\"}}}}";
+        if (!MdoConfigImport(MDO_CONFIG_SETTINGS, xrtStrView(legacy))) {
+            printf("legacy_search_migration_failed=1\n"); goto done;
         }
+        char* effective = MdoConfigEffectiveJson(NULL);
+        xvalue* root = effective ? xrtJsonParse(xrtStrView(effective)) : NULL;
+        xvalue* settings = xrtValueObjectGet(root, xrtStrView("settings"));
+        xvalue* web = xrtValueObjectGet(settings, xrtStrView("web"));
+        bool clean = web && !xrtValueObjectHas(web, xrtStrView("search"));
+        xrtValueRelease(root); xrtFree(effective);
+        if (!clean) { printf("legacy_search_retained=1\n"); goto done; }
     }
 ''')
     text = text[:a] + ''.join(calls) + '    printf("probe_done=1\\n");\n' + text[b:]
@@ -120,15 +123,14 @@ def invoke(host: Path, endpoint: str, cases: list[tuple[str, bool]],
     with tempfile.TemporaryDirectory(prefix="search-api-", dir=web.ROOT / ".build") as raw:
         base = Path(raw)
         web.write_site(base / "site")
-        defaults_path = base / "site/default-home/config/defaults.json"
-        defaults = json.loads(defaults_path.read_text(encoding="utf-8"))
-        defaults["settings"]["web"]["search"]["endpoint"] = endpoint
-        defaults_path.write_text(json.dumps(defaults), encoding="utf-8")
-        (base / "site/probe.c").write_text(source(cases, external=external), encoding="utf-8")
+        url = urlsplit(endpoint)
+        assert url.scheme in ('http', 'https') and url.path == '/api/v1/search' and not url.query and not url.fragment and not url.username
+        origin = url.scheme+'://'+url.netloc
+        (base / "site/probe.c").write_text('#define MDO_ACCOUNT_SERVICE_ORIGIN '+json.dumps(origin)+'\n'+source(cases, external=external), encoding="utf-8")
         output = web.run_probe(host.resolve(), base / "site", base / "home", token)
         assert "probe_done=1" in output, output
         assert "case_failed=" not in output and "init_error=" not in output, output
-        assert "request_contract_failed=" not in output and "invalid_endpoint_accepted=" not in output, output
+        assert "request_contract_failed=" not in output and "legacy_search_migration_failed=" not in output and "legacy_search_retained=" not in output, output
         # Tokens and hostile upstream error bodies never reach the model.
         if token:
             assert token not in output, output

@@ -17,8 +17,8 @@ static bool MdoApiAccountCallbackQuery(xstrview Query)
         equal = at; while (equal < end && Query.Data[equal] != '=') equal++;
         if (equal == end) return false;
         size_t kn = 0, vn = 0;
-        key = xrtPercentDecodeNew((xstrview){Query.Data + at, equal - at}, &kn);
-        value = xrtPercentDecodeNew((xstrview){Query.Data + equal + 1, end - equal - 1}, &vn);
+        key = (char*)xrtPercentDecodeNew((xstrview){Query.Data + at, equal - at}, &kn);
+        value = (char*)xrtPercentDecodeNew((xstrview){Query.Data + equal + 1, end - equal - 1}, &vn);
         unsigned bit = 0; char* destination = NULL; size_t limit = 0;
         if (key && value && !memchr(key, 0, kn) && !memchr(value, 0, vn)) {
             if (!strcmp(key, "state")) { bit = 1; destination = state; limit = sizeof(state); }

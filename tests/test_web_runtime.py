@@ -20,6 +20,7 @@ ROOT = Path(__file__).resolve().parent.parent
 
 PROBE_SOURCE = r'''
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <xsbase.h>
 
@@ -30,6 +31,9 @@ PROBE_SOURCE = r'''
 #include "src/account/credential.c"
 #include "src/account/authorization.c"
 #include "src/account/session.c"
+/* This transport-only probe does not fetch account metadata from a real site. */
+static void ProbeSearchStatus(uint16 status) { (void)status; }
+#define MdoAccountSearchStatus ProbeSearchStatus
 #include "src/web/manager.c"
 
 typedef struct Probe {
@@ -170,8 +174,17 @@ void ServiceInit(XS_HostInfo *host) {
     size_t i;
     (void)host;
     memset(&probe, 0, sizeof(probe));
-    if (!MdoHomeInit() || !MdoConfigInit()) {
+    if (!MdoHomeInit() || !MdoConfigInit() || !MdoAccountInit()) {
         printf("init_error=config\n"); goto done;
+    }
+    /* Seed only this disposable composition; production has no token bypass. */
+    const char* token = getenv("MDO_TEST_SEARCH_ACCESS_TOKEN");
+    if (token && strlen(token) < sizeof(g_MdoAccount.Tokens.Access) && MdoAccountTokenValid(token)) {
+        xrtMutexLock(g_MdoAccount.Lock);
+        strcpy(g_MdoAccount.Tokens.Access, token);
+        g_MdoAccount.Tokens.Expires = xrtDeadlineAfter(600000000);
+        g_MdoAccount.Tokens.MemberId = 1;
+        xrtMutexUnlock(g_MdoAccount.Lock);
     }
     xworkRuntimeConfigInit(&runtime_config);
     runtime = xworkRuntimeCreate(&runtime_config, &error);
@@ -245,6 +258,7 @@ done:
     xworkAgentDefinitionRelease(definition);
     xworkToolCatalogRelease(catalog);
     MdoWebManagerUnit();
+    MdoAccountUnit();
     xworkRuntimeRelease(runtime);
     MdoConfigUnit();
     MdoHomeUnit();
@@ -295,9 +309,11 @@ def write_site(site: Path) -> None:
 
 def run_probe(host: Path, site: Path, home: Path, token: str | None = "probe-secret") -> str:
     environment = os.environ.copy()
-    environment.pop("MDO_SEARCH_ACCESS_TOKEN", None)
+    environment.pop("MDO_TEST_SEARCH_ACCESS_TOKEN", None)
+    # An obsolete environment token must not bypass production login.
+    environment["MDO_SEARCH_ACCESS_TOKEN"] = "legacy-bypass-token"
     if token is not None:
-        environment["MDO_SEARCH_ACCESS_TOKEN"] = token
+        environment["MDO_TEST_SEARCH_ACCESS_TOKEN"] = token
     command = [str(host), "xs.json", "--", "--home", str(home)]
     creationflags = subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0
     process = subprocess.Popen(

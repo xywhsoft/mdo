@@ -291,7 +291,7 @@
             <button type="button" data-settings-section="account" data-i18n="account.title">账号</button>
             <button type="button" data-settings-section="general" aria-current="page" data-i18n="settings.general">常规</button>
             <button type="button" data-settings-section="agent">Agent</button>
-            <button type="button" data-settings-section="web" data-i18n="settings.web">联网与搜索</button>
+            <button type="button" data-settings-section="web" data-i18n="settings.web">网络</button>
             <p data-i18n="settings.resources">资源</p>
             <button type="button" data-settings-section="memory" data-i18n="settings.memoryManagement">记忆管理</button>
             <button type="button" data-settings-section="schedules" data-i18n="settings.schedules">计划任务</button>
@@ -378,11 +378,7 @@
               </section>
 
               <section class="settings-section" data-settings-panel="web" aria-labelledby="settings-web-title" hidden>
-                <div class="settings-section-heading"><h2 id="settings-web-title" data-i18n="settings.web">联网与搜索</h2><p data-i18n="settings.webDescription">搜索通过统一 API 服务提供，搜索平台和密钥在服务端管理。</p></div>
-                <div class="setting-row setting-row-wide">
-                  <div><label for="setting-search-endpoint" data-i18n="settings.searchEndpoint">搜索服务地址</label><p data-i18n="settings.searchEndpointDescription">填写完整的搜索 API 地址，例如 https://ai.xywhsoft.com/api/v1/search。</p></div>
-                  <input id="setting-search-endpoint" name="endpoint" type="url" maxlength="2047" placeholder="https://ai.xywhsoft.com/api/v1/search" autocomplete="off" spellcheck="false" required>
-                </div>
+                <div class="settings-section-heading"><h2 id="settings-web-title" data-i18n="settings.web">网络</h2><p data-i18n="settings.webDescription">配置模型请求的代理和证书；联网搜索使用已登录账号，无需单独配置。</p></div>
                 <div class="setting-row setting-row-wide">
                   <div><label for="setting-ca-pem" data-i18n="settings.caPem">自定义 CA 证书</label><p data-i18n="settings.caPemDescription">模型 HTTPS 请求信任便携 Home 中的 PEM 文件，例如 certs/company.pem；留空使用系统证书。</p></div>
                   <input id="setting-ca-pem" name="ca_pem_path" type="text" maxlength="511" placeholder="certs/company.pem" autocomplete="off" spellcheck="false">
