@@ -47,3 +47,17 @@ python D:/GIT/xserver-mdo-refactor/tools/test_credentials.py --host .build/host/
 测试使用隔离目录和临时测试账号，不访问付费搜索、不修改用户数据库、不执行压力测试。原生联调用例覆盖授权码、PKCE、重复回调拒绝、本地写入校验、密文保存、重启恢复、刷新、账号切换、独立退出、取消、搜索等待与跳过。
 
 静态 musl 的脚本时间 API 必须绑定宿主 libc；独立重定位的 libc 没有进程初始化，首次 vDSO 查询会崩溃。xs 的 `tools/test_tcc_clock.py --host <xs>` 同时验证外层和嵌套 TCC 的首次/重复时钟调用。
+
+## 线上联调
+
+2026-10-05，`ai.xywhsoft.com` 已切换至服务器环境构建的 GCC 动态链接 xs。真实测试账号通过网站授权、原生 PKCE 交换、资料/额度读取，以及原生 Agent 线程执行的 `web_search`；博查返回三条结果。退出墨斗后，网站浏览器会话仍可独立使用。公开 Android 域名关联的包名与当前 APK 签名匹配；这些验证不替代手机上的 App Link / Keystore 实测。
+
+可选联调用例只在显式调用时连接指定网站，密码通过交互提示输入，不写入夹具或仓库：
+
+```powershell
+python tests/test_account_online.py --origin https://ai.xywhsoft.com --username your-test-user
+```
+
+加 `--search` 会额外提交一次真实博查搜索，可能消耗平台额度；没有该参数只验证账号与额度接口。用例在隔离 app 和临时 RAM 凭据中运行，通过测试线程调用原生工具，不给生产 API 增加测试入口，也不会重试结果不明的收费搜索。
+
+本次还修复 xadmin 的通用异步 HTTPS 发送：在写入排空前不能关闭接管的连接。服务器隔离测试覆盖入口 HTTPS、上游 HTTPS、CORS/缓存响应头、插件与宿主重载；Windows HTTP 回归通过。部署副本和动态程序已提交至 home 仓库，构建信息见该仓库的 `xs.build.json` 和 `docs/xs-server-build.md`。
