@@ -137,7 +137,8 @@ export async function boot() {
     canComplete: () => !localPurgeBusy() && !draftStore.hasUnsaved(),
   });
   setApiWriteConflictHandler((error) => purgeRecovery.markWriteConflict(error));
-  setApiWriteGuard((request) => purgeRecovery.allowsWrite(request));
+  setApiWriteGuard((request) => /^\/update(?:\/(?:download|install|exit))?$/.test(request.path) ||
+    purgeRecovery.allowsWrite(request));
   // Check portable recovery before restored drafts migrate or dispatch.
   // A failed read leaves a visible retry gate; read-only views still load.
   await purgeRecovery.refresh();
@@ -969,7 +970,7 @@ export async function boot() {
     onApplied: () => Promise.all([loadBootstrap(), loadCatalogs()]),
   });
   const updatePanel = createUpdatePanel({ root: $("#update-settings"),
-    notice: $("#update-notice"), navigation });
+    dialog: $("#update-dialog"), entries: document.querySelectorAll("[data-update-open]") });
   window.addEventListener("pagehide", () => updatePanel?.destroy(), { once: true });
   const purgeConfirmation = createProjectPurgeConfirmation({
     dialog: $("#project-purge-confirm-dialog"), recovery: purgeRecovery,

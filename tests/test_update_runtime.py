@@ -62,6 +62,8 @@ def run(host):
             'MdoUpdatePolicyLoad(&g_MdoUpdate.Status);\n'
             'g_MdoUpdate.Thread=xrtThreadCreate(MdoUpdateThread,NULL,0); MdoUpdateCheck();\n}\n'
             'XS_RequestResult RequestProc(XS_HttpReq* req) {\n'
+            'if(MdoApiViewEqualText(req->head->Target,"/api/v1/update?fixture=periodic")){\n'
+            'xrtMutexLock(g_MdoUpdate.Lock);g_MdoUpdate.NextCheck=xrtDeadlineAfter(0);xrtMutexUnlock(g_MdoUpdate.Lock);}\n'
             'if (MdoApiViewEqualText(req->head->Target,"/api/v1/update?fixture=pause") ||\n'
             '    MdoApiViewEqualText(req->head->Target,"/api/v1/update?fixture=resume")) {\n'
             ' xrtMutexLock(g_MdoUpdate.Lock); g_MdoUpdate.Status.Installing=\n'
@@ -92,7 +94,8 @@ def run(host):
                 assert st in (200,202), (st,body)
             try:
                 wait_ready(port, proc)
-                assert settled()["status"] == "current"
+                value = settled()
+                assert value["status"] == "current" and value["local_sha256"] == hashlib.sha256(SOURCE).hexdigest(), value
                 assert not home.exists(), "startup checks must not create Home"
                 print("PASS matching hash; startup is read only")
                 Published.package = NEXT
@@ -171,6 +174,13 @@ def run(host):
                 assert request(port,"GET","/api/v1/update?fixture=resume")[0] == 200
                 post(""); settled()
                 print("PASS installation pauses mutations while reads and resume remain available")
+                Published.package = NEXT; Published.required = True
+                assert request(port,"GET","/api/v1/update?fixture=periodic")[0] == 200
+                for _ in range(40):
+                    if state()["blocked"]: break
+                    time.sleep(.1)
+                assert settled()["blocked"]
+                print("PASS worker deadline triggers remote check without frontend polling POST")
             except BaseException:
                 log.flush(); print(log_path.read_text(errors="replace")[-5000:]); raise
             finally:

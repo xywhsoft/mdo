@@ -84,13 +84,14 @@ static void MdoUpdateComplete(MdoUpdateStatus* Status,cstr State,cstr Message)
 #include "policy.inc.c"
 static void MdoUpdateDoCheck(MdoUpdateStatus* Status)
 {
-    char Url[160]; MdoUpdateStatus Next = *Status;
+    char Url[160]; MdoUpdateStatus Next;
     XS_FetchResponse Response; xvalue* Root = NULL; xjsonreadconfig Config;
     bool Ok;
     if (!Status->LocalHash[0] &&
         !MdoUpdateFileHash(g_MdoUpdate.Source,Status->LocalHash,!strcmp(Status->Platform,"windows-x86_64"))) {
         MdoUpdateComplete(Status,"error","Cannot hash the running package"); return;
     }
+    Next = *Status;
     snprintf(Url,sizeof(Url),MDO_UPDATE_ORIGIN "/update/version?platform=%s",Status->Platform);
     Ok = MdoUpdateFetch(Url,8192,&Response);
     if (Ok && Response.Status == 404) {
@@ -206,13 +207,14 @@ static int32 MdoUpdateThread(ptr Data)
 {
     (void)Data; xdeadline NextStop = xrtDeadlineAfter(0);
     while (!xrtThreadStopping()) {
-        MdoUpdateStatus Status; unsigned Command;
+        MdoUpdateStatus Status; unsigned Command; xdeadline NextCheck;
         xrtMutexLock(g_MdoUpdate.Lock);
         Command = g_MdoUpdate.Command; g_MdoUpdate.Command = 0;
         Status = g_MdoUpdate.Status;
+        NextCheck = g_MdoUpdate.NextCheck;
         xrtMutexUnlock(g_MdoUpdate.Lock);
         if (!Command) {
-            if (xrtDeadlineExpired(g_MdoUpdate.NextCheck)) (void)MdoUpdateCheck();
+            if (xrtDeadlineExpired(NextCheck)) (void)MdoUpdateCheck();
             if (Status.Required && Status.Available && xrtDeadlineExpired(NextStop)) {
                 MdoUpdateStopTasks(); NextStop = xrtDeadlineAfter(UINT64_C(1000000));
             }
