@@ -80,17 +80,7 @@ static xvalue* MdoAccountUsage(const xvalue* Data)
 }
 static void MdoAccountSecretValueUnit(xvalue* Data)
 {
-    cstr access = MdoAccountText(Data, "access_token", MDO_ACCOUNT_TOKEN_LIMIT - 1);
-    cstr refresh = MdoAccountText(Data, "refresh_token", 64);
-    cstr verifier = MdoAccountText(Data, "code_verifier", 128);
-    cstr code = MdoAccountText(Data, "code", 64);
-    cstr password = MdoAccountText(Data, "password", 128);
-    if (access) xrtSecureZero((void*)access, strlen(access));
-    if (refresh) xrtSecureZero((void*)refresh, strlen(refresh));
-    if (verifier) xrtSecureZero((void*)verifier, strlen(verifier));
-    if (code) xrtSecureZero((void*)code, strlen(code));
-    if (password) xrtSecureZero((void*)password, strlen(password));
-    xrtValueRelease(Data);
+    MdoAccountSecretValueRelease(Data);
 }
 static int32 MdoAccountWorker(void* Unused)
 {

@@ -79,8 +79,15 @@ bool MdoAccountSetUInt(xvalue* Object, cstr Key, uint64 Value);
 bool MdoAccountSetBool(xvalue* Object, cstr Key, bool Value);
 bool MdoAccountGetUInt(const xvalue* Value, uint64* Output);
 cstr MdoAccountText(const xvalue* Value, cstr Key, size_t Limit);
+/* Only private parsed/constructed values: this clears string storage before
+ * release. Never pass a public snapshot or a clone sharing secret scalars. */
+void MdoAccountSecretValueRelease(xvalue* Value);
 xvalue* MdoAccountClient(cstr Origin, cstr Path, cstr Method, const xvalue* Body,
     cstr Access, xcancel* Cancel, uint16* Status);
+/* First-party service JSON. Fixed native authority, no redirect/retry; callers
+ * constrain their own paths and inspect 200/201, including null-data replies. */
+xvalue* MdoAccountServiceJson(cstr Path, cstr Method, const xvalue* Body,
+    const MdoAccountLease* Lease, uint16* Status);
 bool MdoAccountClientTokens(const xvalue* Data, MdoAccountTokens* Tokens);
 bool MdoAccountCredentialWrite(cstr Path, cstr Origin, const xvalue* Value);
 xvalue* MdoAccountCredentialRead(cstr Path, char Origin[MDO_ACCOUNT_ORIGIN_LIMIT]);

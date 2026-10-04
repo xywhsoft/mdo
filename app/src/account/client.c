@@ -63,8 +63,22 @@ bool MdoAccountOrigin(cstr Url, char Output[MDO_ACCOUNT_ORIGIN_LIMIT])
     if (scheme == 7 && end > 3 && !strcmp(Output + end - 3, ":80")) Output[end - 3] = 0;
     return true;
 }
-xvalue* MdoAccountClient(cstr Origin, cstr Path, cstr Method, const xvalue* Body,
-    cstr Access, xcancel* Cancel, uint16* Status)
+static void MdoAccountJsonSecretsClear(const xvalue* Value)
+{
+    static const char* const keys[] = {"access_token","refresh_token","code_verifier",
+        "code","password","device_secret","ticket"};
+    for (size_t i = 0u; i < sizeof(keys)/sizeof(keys[0]); i++) {
+        cstr text = MdoAccountText(Value,keys[i],8192u);
+        if (text) xrtSecureZero((void*)text,strlen(text));
+    }
+}
+void MdoAccountSecretValueRelease(xvalue* Value)
+{
+    MdoAccountJsonSecretsClear(Value);
+    xrtValueRelease(Value);
+}
+static xvalue* MdoAccountJsonClient(cstr Origin, cstr Path, cstr Method, const xvalue* Body,
+    cstr Access, xcancel* Cancel, uint16* Status, bool Service)
 {
     char url[1024], authorization[MDO_ACCOUNT_TOKEN_LIMIT + 8];
     XS_FetchRequest request; XS_FetchResponse response;
@@ -77,6 +91,7 @@ xvalue* MdoAccountClient(cstr Origin, cstr Path, cstr Method, const xvalue* Body
     if (Body && !(body = xrtJsonStringify(Body, false, &body_size))) return NULL;
     memset(&request, 0, sizeof(request)); memset(&response, 0, sizeof(response));
     memset(authorization, 0, sizeof(authorization));
+    if (body_size > 16384u || (Cancel && xrtCancelRequested(Cancel))) goto done;
     headers[count++] = (XS_FetchHeader){"Accept", "application/json"};
     headers[count++] = (XS_FetchHeader){"User-Agent", "mdo/1 account"};
     if (Body) headers[count++] = (XS_FetchHeader){"Content-Type", "application/json"};
@@ -92,9 +107,11 @@ xvalue* MdoAccountClient(cstr Origin, cstr Path, cstr Method, const xvalue* Body
     /* Never forward credentials across a redirect or retry an ambiguous POST. */
     if (!xsFetch(&request, &response)) goto done;
     if (Status) *Status = response.Status;
-    if (response.Status != 200 || !response.Body || !xrtUtf8Valid((xstrview){(cstr)response.Body, response.BodySize}, NULL)) goto done;
+    if ((response.Status != 200 && !(Service && response.Status == 201)) || !response.Body ||
+        !xrtUtf8Valid((xstrview){(cstr)response.Body, response.BodySize}, NULL)) goto done;
     xjsonreadconfig limits; xrtJsonReadConfigInit(&limits);
-    limits.MaxInputBytes = 64u * 1024u; limits.MaxDepth = 6; limits.MaxValues = 256; limits.MaxStringBytes = 8192;
+    limits.MaxInputBytes = 64u * 1024u; limits.MaxDepth = 6;
+    limits.MaxValues = Service ? 1024u : 256u; limits.MaxStringBytes = 8192;
     envelope = xrtJsonRead((xstrview){(cstr)response.Body, response.BodySize}, &limits);
     uint64 code = 1;
     if (!envelope || !MdoAccountGetUInt(xrtValueObjectGet(envelope, xrtStrView("code")), &code) || code != 0) {
@@ -103,12 +120,33 @@ xvalue* MdoAccountClient(cstr Origin, cstr Path, cstr Method, const xvalue* Body
     }
     const xvalue* value = xrtValueObjectGet(envelope, xrtStrView("data"));
     /* Logout may return null data; callers inspect the actual HTTP status. */
-    if (xrtValueType(value) == XVALUE_OBJECT) data = xrtValueClone(value);
+    /* ValueClone shares COW backing/scalars. Transfer this private parsed
+     * object instead, so clearing the envelope cannot zero the returned token. */
+    if (xrtValueType(value) == XVALUE_OBJECT) {
+        data = xrtValueObjectTake(envelope,XRT_STR_LITERAL("data"));
+        if (!data && Status) *Status = 502;
+    }
 done:
     if (body) { xrtSecureZero(body, body_size); xrtFree(body); }
     if (response.Body) xrtSecureZero(response.Body, response.BodySize);
-    xsFetchResponseUnit(&response); xrtValueRelease(envelope);
+    xsFetchResponseUnit(&response);
+    MdoAccountJsonSecretsClear(xrtValueObjectGet(envelope,XRT_STR_LITERAL("data")));
+    MdoAccountSecretValueRelease(envelope);
     xrtSecureZero(authorization, sizeof(authorization)); return data;
+}
+xvalue* MdoAccountClient(cstr Origin, cstr Path, cstr Method, const xvalue* Body,
+    cstr Access, xcancel* Cancel, uint16* Status)
+{
+    return MdoAccountJsonClient(Origin,Path,Method,Body,Access,Cancel,Status,false);
+}
+xvalue* MdoAccountServiceJson(cstr Path, cstr Method, const xvalue* Body,
+    const MdoAccountLease* Lease, uint16* Status)
+{
+    if (Status) *Status = 0u;
+    if (!Lease || !Lease->Managed || !Lease->MemberId || !Lease->AccessToken ||
+        !Lease->Cancel || xrtCancelRequested(Lease->Cancel)) return NULL;
+    return MdoAccountJsonClient(MDO_ACCOUNT_SERVICE_ORIGIN,Path,Method,Body,
+        Lease->AccessToken,Lease->Cancel,Status,true);
 }
 bool MdoAccountClientTokens(const xvalue* Data, MdoAccountTokens* Tokens)
 {
