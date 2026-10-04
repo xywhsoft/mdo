@@ -311,9 +311,10 @@ receive.
 
 ## Event replay
 
-`/events?after={event-id}&limit={count}` replays the bounded process event
-window. `/projects/{project}/sessions/{session}/events` replays the durable
-session UI journal. Every event identifies its schema, time, kind, terminal
+`/projects/{project}/sessions/{session}/events` replays the durable session UI
+journal for chat history and live updates. The global `/events` debug resource
+has been removed; offline inspection uses `tools/inspect_session.py`.
+Every event identifies its schema, time, kind, terminal
 state, and available session/run/task lineage. Responses return a next cursor
 and `history_lost` when the requested prefix is no longer retained.
 For a new `agent_start` event, schema 3 includes `user_message_sequence`,
@@ -395,8 +396,9 @@ The UI decodes `data` only after checking the top-level `encoding` value. A
 dropped cursor is explicit; clients never infer continuity from the returned
 length.
 
-`/tasks/{task}/events?after={revision}&limit={count}` replays the task-local
-state window. The maximum page is 64 events. Cancellation through
+The task-local `/tasks/{task}/events` debug resource has been removed.
+Task detail, incremental output, artifacts and questions remain available.
+Cancellation through
 `DELETE /tasks/{task}` is idempotent and returns the current task snapshot, including
 its revision and ETag. For a scheduled task owned by the product executor it
 requests cancellation of the actual Agent Run. The task stays `running` until

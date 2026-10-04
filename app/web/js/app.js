@@ -37,7 +37,6 @@ import { projectDefaultsFromWorkspace } from "./features/sessions/project-identi
 import { timelineStore, selectTimeline, clearTimeline, refreshSelectedTimeline, reloadSelectedTimeline } from "./features/chat/timeline-store.js";
 import { todoStore, selectTodo, clearTodo } from "./state/todo.js";
 import { createTimelineView } from "./features/chat/timeline.js";
-import { createTracePanel } from "./features/chat/trace-panel.js";
 import { createQueueGate } from "./features/chat/queue-gate.js";
 import { createMessageEditDialog } from "./features/chat/message-edit-dialog.js";
 import { runMessageReplacement } from "./features/chat/message-replacement.js";
@@ -59,8 +58,7 @@ import { createComposerProfile } from "./features/chat/composer-profile.js";
 import { createComposerControls } from "./features/chat/composer-controls.js";
 import { createTokenMeter } from "./features/chat/token-meter.js";
 import { createTaskPanel } from "./features/tasks/task-panel.js";
-import { createDecisionPanel } from "./features/approvals/decision-panel.js";
-import { createRecoveryPanel } from "./features/approvals/recovery-panel.js";
+import { createRecoveryDock } from "./features/chat/recovery-dock.js";
 import { recoveryMatchesWorkspace } from "./features/approvals/recovery-decisions.js";
 import { createSettingsView } from "./features/settings/settings-view.js";
 import { createSchedulePanel } from "./features/settings/schedule-panel.js";
@@ -173,8 +171,6 @@ export async function boot() {
   const mobileTitle = $("#mobile-session-title");
   const mobileMeta = $("#mobile-session-meta");
   const exportButtons = [$("#export-session"), $("#export-session-mobile")];
-  const openTrace = $("#open-trace");
-  const contextList = $("#context-list");
   const mobileActivity = $("#mobile-activity-dot");
   const settingsWorkspace = $("#settings-workspace");
   const skipLink = $(".skip-link");
@@ -557,53 +553,23 @@ export async function boot() {
     status: $("#image-preview-status"), retryButton: $("#retry-image-preview"),
     closeButton: $("#close-image-preview"), navigation,
   });
-  const tracePanel = createTracePanel({
-    panel: $("#trace-panel"), list: $("#trace-list"),
-    summary: $("#trace-summary"), store: timelineStore, navigation,
-  });
   createTaskPanel({
     container: $("#task-list"),
     detailContainer: $("#task-detail"),
-    summary: $("#task-summary"),
     store: tasksStore,
     detailStore: taskDetailStore,
     previewStore: artifactPreviewStore,
     onChanged: () => void loadRuns(),
   });
-  createDecisionPanel({
-    container: $("#approval-list"),
-    summary: $("#approval-summary"),
-    store: approvalsStore,
-    onChanged: () => Promise.all([loadTasks(), loadRuns()]),
-    onDrained: () => {
-      if (!mobileLayout.matches || shell.dataset.inspector !== "open" ||
-          $("#decisions-tab").getAttribute("aria-selected") !== "true" ||
-          document.activeElement !== $("#decisions-tab")) return;
-      setDrawer("inspector", false, { persist: false });
-      if (!prompt.disabled) prompt.focus({ preventScroll: true });
-    },
-  });
   const conversationDocks = createConversationDocks({
     container: $("#conversation-docks"), navigation, tasksStore, approvalsStore,
-    asksStore,
+    asksStore, recoveryStore,
     todoStore,
     runsStore,
-    onOpenTasks: () => { selectInspectorTab("tasks"); setDrawer("inspector", true); },
+    onOpenTasks: () => setDrawer("inspector", true),
     onChanged: () => Promise.all([loadTasks(), loadRuns(), refreshSelectedAsks()]),
-    onDecisionArrived: (card, kind) => {
+    onDecisionArrived: () => {
       if (!mobileLayout.matches) return;
-      if (kind === "approval" && shell.dataset.inspector === "open" &&
-          $("#decisions-tab").getAttribute("aria-selected") === "true") {
-        const target = [...$("#approval-list").children]
-          .find((item) => item.dataset.approvalId === card.dataset.approvalId);
-        if (target) {
-          const panel = $("#decisions-panel");
-          panel.scrollTop += target.getBoundingClientRect().top -
-            panel.getBoundingClientRect().top;
-          target.querySelector("h3")?.focus({ preventScroll: true });
-        }
-        return;
-      }
       const sidebarOpen = shell.dataset.sidebar === "open";
       const inspectorOpen = shell.dataset.inspector === "open";
       if (!sidebarOpen && !inspectorOpen &&
@@ -972,9 +938,8 @@ export async function boot() {
     onError: showComposerError,
   });
   composerImages.set(composerAttachments);
-  createRecoveryPanel({
-    container: $("#recovery-list"),
-    summary: $("#recovery-summary"),
+  createRecoveryDock({
+    ...conversationDocks.recovery,
     store: recoveryStore,
     onResume: (run, owner) => {
       const ownsView = recoveryMatchesWorkspace(owner, navigation.get());
@@ -990,18 +955,6 @@ export async function boot() {
     },
   });
 
-  function updateDecisionCount() {
-    const approvals = Number(approvalsStore.get().data?.total ?? 0);
-    const recovery = recoveryStore.get().data;
-    const interrupted = recovery?.resume_required
-      ? Math.max(1, Number(recovery.total ?? recovery.items?.length ?? 0)) : 0;
-    const total = approvals + interrupted;
-    const count = $("#approval-count");
-    count.textContent = String(total);
-    count.hidden = total === 0;
-  }
-  approvalsStore.subscribe(updateDecisionCount);
-  recoveryStore.subscribe(updateDecisionCount);
   const settingsView = createSettingsView({
     form: $("#settings-form"),
     store: settingsStore,
@@ -1165,54 +1118,6 @@ export async function boot() {
     return project?.managed ? project.workspace_root || "" : "";
   }
 
-  function updateContext(state) {
-    clear(contextList);
-    const route = navigation.get();
-    const session = state.data?.project_id === route.projectId &&
-      state.data?.id === route.sessionId ? state.data : null;
-    if (!session) {
-      contextList.append(
-        element("dt", { text: t("inspector.context.status", {}, "状态") }),
-        element("dd", { text: state.status === "loading"
-          ? t("inspector.context.loading", {}, "正在载入…")
-          : route.sessionId ? t("inspector.context.noSession", {}, "未选择会话")
-            : t("inspector.context.newTask", {}, "新任务") }),
-        element("dt", { text: t("inspector.context.project", {}, "项目") }),
-        element("dd", { text: route.projectId || "default" }),
-        element("dt", { text: t("inspector.context.workspace", {}, "工作区") }),
-        element("dd", { text: currentWorkspace() ||
-          t("composer.localWorkspace", {}, "本地工作区") }),
-      );
-      return;
-    }
-    const reasoningKeys = {
-      none: "settings.reasoningNone", minimal: "settings.reasoningMinimal",
-      low: "settings.reasoningLow", medium: "settings.reasoningMedium",
-      high: "settings.reasoningHigh", xhigh: "settings.reasoningXhigh",
-      max: "settings.reasoningMax",
-    };
-    const effort = session.reasoning_effort;
-    const reasoning = effort ? t(reasoningKeys[effort] || "", {}, effort)
-      : t("inspector.context.auto", {}, "自动");
-    const values = [
-      [t("inspector.context.project", {}, "项目"), session.project_id],
-      [t("inspector.context.agent", {}, "Agent"), session.agent_id],
-      [t("inspector.context.model", {}, "模型"), session.model_id],
-      [t("inspector.context.protocol", {}, "协议"), session.protocol],
-      [t("inspector.context.reasoning", {}, "推理"), reasoning],
-      [t("inspector.context.workspace", {}, "工作区"), session.workspace_root ||
-        t("inspector.context.default", {}, "默认")],
-      [t("inspector.context.outputLimit", {}, "输出上限"), session.max_output_tokens
-        ? `${session.max_output_tokens} tokens` : t("inspector.context.default", {}, "默认")],
-      [t("inspector.context.configRevision", {}, "配置版本"), session.config_revision],
-      [t("inspector.context.moduleGeneration", {}, "模块代次"), session.module_generation],
-      [t("inspector.context.skillGeneration", {}, "Skill 代次"), session.skill_generation],
-    ];
-    for (const [label, value] of values) {
-      contextList.append(element("dt", { text: label }), element("dd", { text: value || "—" }));
-    }
-  }
-
   function currentExportSession() {
     const route = navigation.get();
     const session = sessionDetailStore.get().data;
@@ -1223,7 +1128,6 @@ export async function boot() {
   function updateExportButtons() {
     const available = Boolean(currentExportSession());
     for (const button of exportButtons) button.disabled = !available;
-    openTrace.disabled = !available;
   }
 
   function syncPromptPlaceholder() {
@@ -1254,7 +1158,6 @@ export async function boot() {
       mobileTitle.textContent = title;
       mobileMeta.textContent = statusText;
     }
-    updateContext(state);
   });
   createSessionLoadNotice({ navigation, store: sessionDetailStore,
     conversation: $(".conversation"), notice: $("#conversation-load"),
@@ -1262,13 +1165,9 @@ export async function boot() {
     description: $("#conversation-load-description"),
     retry: $("#conversation-load-retry"), sessionTitle, sessionSubtitle,
     mobileTitle, mobileMeta, prompt });
-  projectsStore.subscribe(() => {
-    if (!navigation.get().sessionId) updateContext(sessionDetailStore.get());
-  });
   subscribeLocale(() => {
     renderDraftStatus();
     setRun(activeRun);
-    updateContext(sessionDetailStore.get());
     syncPromptPlaceholder();
     syncRuntimeLabel();
     const focusedAction = composerError.contains(document.activeElement)
@@ -1655,7 +1554,6 @@ export async function boot() {
     }
     // Returning from Settings may keep the same selected session, so refresh
     // the context before the same-session fast path below.
-    updateContext(sessionDetailStore.get());
     if (key === selectedKey && nextDraftKey === selectedDraftKey) {
       if (key) {
         const finishLoad = queueBlocked.beginLoad(key);
@@ -1911,16 +1809,13 @@ export async function boot() {
     if (error?.code === "recovery_required") {
       const openDecisions = element("button", {
         className: "composer-error-action",
-        text: t("composer.openRecovery", {}, "打开恢复决策"),
+        text: t("composer.openRecovery", {}, "查看中断恢复"),
         attrs: { type: "button" },
       });
       openDecisions.addEventListener("click", () => {
-        selectInspectorTab("decisions");
-        setDrawer("inspector", true);
-        const target = document.querySelector("#recovery-list .recovery-submit") ??
-          $("#decisions-tab");
-        target.focus();
-        target.scrollIntoView({ block: "nearest" });
+        conversationSearch.close();
+        closeDrawers();
+        conversationDocks.revealRecovery();
       });
       composerError.append(openDecisions);
     }
@@ -2357,40 +2252,6 @@ export async function boot() {
     },
   });
 
-  function selectInspectorTab(tabName) {
-    for (const name of ["tasks", "decisions", "trace", "context"]) {
-      const selected = tabName === name;
-      $(`#${name}-tab`).setAttribute("aria-selected", String(selected));
-      $(`#${name}-tab`).tabIndex = selected ? 0 : -1;
-      $(`#${name}-panel`).hidden = !selected;
-    }
-    if (tabName === "trace") tracePanel.render();
-  }
-  $("#tasks-tab").addEventListener("click", () => selectInspectorTab("tasks"));
-  $("#decisions-tab").addEventListener("click", () => selectInspectorTab("decisions"));
-  $("#trace-tab").addEventListener("click", () => selectInspectorTab("trace"));
-  $("#context-tab").addEventListener("click", () => selectInspectorTab("context"));
-  $(".inspector-header .tab-list").addEventListener("keydown", (event) => {
-    const names = ["tasks", "decisions", "trace", "context"];
-    const current = names.indexOf(event.target?.id?.replace(/-tab$/, ""));
-    if (current < 0) return;
-    let next = current;
-    if (event.key === "ArrowRight") next = (current + 1) % names.length;
-    else if (event.key === "ArrowLeft") next = (current - 1 + names.length) % names.length;
-    else if (event.key === "Home") next = 0;
-    else if (event.key === "End") next = names.length - 1;
-    else return;
-    event.preventDefault();
-    selectInspectorTab(names[next]);
-    const tab = $(`#${names[next]}-tab`);
-    tab.focus();
-    tab.scrollIntoView({ block: "nearest", inline: "nearest" });
-  });
-  openTrace.addEventListener("click", () => {
-    selectInspectorTab("trace");
-    setDrawer("inspector", true);
-    $("#trace-tab").scrollIntoView({ block: "nearest", inline: "nearest" });
-  });
   $("#open-settings").addEventListener("click", () => navigation.openSettings("general"));
   $("#open-schedules").addEventListener("click", () => navigation.openSettings("schedules"));
   $("#close-settings").addEventListener("click", () => {

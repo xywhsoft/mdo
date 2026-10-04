@@ -13,11 +13,6 @@ const STATE_LABELS = Object.freeze({
   cancelled: "已停止", timed_out: "已超时", lost: "已丢失",
 });
 const KIND_LABELS = Object.freeze({ process: "Shell", agent: "子 Agent", scheduled: "计划任务" });
-const EVENT_LABELS = Object.freeze({
-  created: "已创建", state_changed: "状态变化", cancel_requested: "请求停止",
-  restored: "已恢复", notice_taken: "已查看通知",
-});
-
 function stateLabel(value) {
   return t(`task.state.${value}`, {}, STATE_LABELS[value] || value);
 }
@@ -34,10 +29,6 @@ function taskStateLabel(item) {
 
 function kindLabel(value) {
   return t(`task.kind.${value}`, {}, KIND_LABELS[value] || value);
-}
-
-function eventLabel(value) {
-  return t(`task.event.${value}`, {}, EVENT_LABELS[value] || value);
 }
 
 function taskName(item) {
@@ -57,7 +48,7 @@ function detailPair(label, value) {
 }
 
 function captureView(container) {
-  const panel = container.closest('[role="tabpanel"]');
+  const panel = container.closest('.inspector-panel');
   return {
     panel, panelScroll: panel?.scrollTop ?? 0,
     focus: container.contains(document.activeElement)
@@ -79,7 +70,7 @@ function restoreView(container, view, fallback = null) {
   if (view.panel) view.panel.scrollTop = view.panelScroll;
 }
 
-export function createTaskPanel({ container, detailContainer, summary, store, detailStore, previewStore, onChanged }) {
+export function createTaskPanel({ container, detailContainer, store, detailStore, previewStore, onChanged }) {
   let listState = store.get();
   let detailState = detailStore.get();
   let previewState = previewStore.get();
@@ -223,7 +214,7 @@ export function createTaskPanel({ container, detailContainer, summary, store, de
         `[data-task-focus="open/${selected}"]`));
       return;
     }
-    const { detail: task, output, events, artifacts } = detailState.data;
+    const { detail: task, output, artifacts } = detailState.data;
     const owner = taskOwnerLocation(task.owner_session);
     const close = element("button", { className: "task-detail-close",
       text: t("task.backToList", {}, "返回任务列表"), attrs: {
@@ -242,19 +233,14 @@ export function createTaskPanel({ container, detailContainer, summary, store, de
     }
     const metadata = element("dl", { className: "task-detail-meta" });
     metadata.append(
-      ...detailPair(t("task.meta.id", {}, "任务 ID"), `#${task.id}`),
       ...detailPair(t("task.meta.kind", {}, "类型"), kindLabel(task.kind)),
       ...detailPair(t("task.meta.state", {}, "状态"), taskStateLabel(task)),
       ...detailPair(t("task.meta.session", {}, "会话"), owner
         ? `${owner.projectId} / ${owner.sessionId}` : task.owner_session),
-      ...detailPair("Run", task.owner_run_id ? `#${task.owner_run_id}` : "—"),
-      ...detailPair(t("task.meta.parent", {}, "父任务"),
-        task.parent_task_id ? `#${task.parent_task_id}` : "—"),
       ...detailPair(t("task.meta.started", {}, "开始"),
         formatRelativeTime(task.started_at || task.created_at)),
       ...detailPair(t("task.meta.exitCode", {}, "退出码"),
         task.exit_status_valid ? String(task.exit_code) : "—"),
-      ...detailPair(t("task.meta.revision", {}, "修订"), String(task.revision)),
     );
     const outputBody = element("div", { className: "task-output-list" });
     outputBody.append(
@@ -262,18 +248,6 @@ export function createTaskPanel({ container, detailContainer, summary, store, de
       outputSection("stderr", t("task.output.stderr", {}, "错误输出"), output.streams.stderr),
       outputSection("result", t("task.output.result", {}, "任务结果"), output.streams.result),
     );
-    const eventList = element("ol", { className: "task-event-list" });
-    if (events.historyLost) eventList.append(element("li", { className: "task-history-gap",
-      text: t("task.event.historyLost", {}, "较早的任务事件已被淘汰") }));
-    for (const event of events.items) {
-      eventList.append(element("li", {}, [
-        element("span", { text: eventLabel(event.kind) }),
-        element("span", { className: "task-event-state", text: stateLabel(event.state) }),
-        element("time", { text: formatRelativeTime(event.time) }),
-      ]));
-    }
-    if (!eventList.children.length) eventList.append(element("li", {
-      text: t("task.event.empty", {}, "暂无事件") }));
     const artifactList = element("div", { className: "task-artifact-list" });
     for (const artifact of artifacts) {
       const open = element("button", { className: "task-artifact", attrs: {
@@ -300,8 +274,6 @@ export function createTaskPanel({ container, detailContainer, summary, store, de
       element("section", { className: "task-detail-section" }, [element("h4", {
         text: t("task.output.title", {}, "输出") }), outputBody]),
       element("section", { className: "task-detail-section" }, [element("h4", {
-        text: t("task.event.title", {}, "事件") }), eventList]),
-      element("section", { className: "task-detail-section" }, [element("h4", {
         text: t("task.artifact.title", { count: artifacts.length },
           `产物 ${artifacts.length}`) }), artifactList]),
     );
@@ -312,28 +284,17 @@ export function createTaskPanel({ container, detailContainer, summary, store, de
   function renderList() {
     const view = captureView(container);
     const items = [...(listState.data?.items ?? [])].reverse();
-    const active = items.filter((item) => ACTIVE_STATES.has(item.state)).length;
-    const failed = items.filter((item) => ["failed", "timed_out", "lost"].includes(item.state)).length;
-    clear(summary);
-    summary.append(
-      element("span", { className: "summary-pill" }, [element("strong", { text: active }),
-        document.createTextNode(t("task.summary.active", {}, "活动"))]),
-      element("span", { className: "summary-pill" }, [element("strong", { text: items.length }),
-        document.createTextNode(t("task.summary.recent", {}, "最近"))]),
-      element("span", { className: "summary-pill" }, [element("strong", { text: failed }),
-        document.createTextNode(t("task.summary.failed", {}, "异常"))]),
-    );
     clear(container);
     if (listState.status === "error") {
       container.append(element("div", { className: "resource-error", text: errorMessage(listState.error) }));
-      restoreView(container, view, document.querySelector("#tasks-tab"));
+      restoreView(container, view, document.querySelector("#tasks-title"));
       return;
     }
     if (!items.length) {
       container.append(element("div", { className: "empty-state", text: listState.status === "loading"
         ? t("task.list.loading", {}, "正在载入任务…")
         : t("task.list.empty", {}, "暂无后台任务") }));
-      restoreView(container, view, document.querySelector("#tasks-tab"));
+      restoreView(container, view, document.querySelector("#tasks-title"));
       return;
     }
     for (const item of items.slice(0, 30)) {
@@ -373,7 +334,7 @@ export function createTaskPanel({ container, detailContainer, summary, store, de
       ]));
     }
     syncCancelButtons();
-    restoreView(container, view, document.querySelector("#tasks-tab"));
+    restoreView(container, view, document.querySelector("#tasks-title"));
   }
 
   const unsubscribers = [

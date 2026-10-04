@@ -206,7 +206,7 @@ function askCard(item, projectId, sessionId, deciding, answered, drafts,
 }
 
 export function createConversationDocks({ container, navigation, tasksStore, approvalsStore,
-  asksStore, todoStore, runsStore, onOpenTasks, onChanged, onDecisionArrived }) {
+  asksStore, recoveryStore, todoStore, runsStore, onOpenTasks, onChanged, onDecisionArrived }) {
   const composition = createCompositionTracker(container);
   const askDeciding = new Set();
   const askAnswered = new Set();
@@ -221,7 +221,18 @@ export function createConversationDocks({ container, navigation, tasksStore, app
   const approvalRoot = element("div", { className: "conversation-dock-stack" });
   const askRoot = element("div", { className: "conversation-dock-stack" });
   const otherRoot = element("div", { className: "conversation-dock-stack" });
-  container.append(approvalRoot, askRoot, otherRoot);
+  const recoveryTitle = element("h3", { text: t("recovery.title", {}, "中断恢复"),
+    attrs: { id: "recovery-title", tabindex: "-1" } });
+  const recoverySummary = element("div", { className: "approval-summary",
+    attrs: { id: "recovery-summary", "aria-live": "polite" } });
+  const recoveryList = element("div", { className: "approval-list",
+    attrs: { id: "recovery-list" } });
+  const recoveryRoot = element("section", { className: "conversation-dock recovery-dock",
+    attrs: { hidden: "", "aria-labelledby": "recovery-title" } }, [
+    decisionHeader(recoveryTitle, () => toggleDecisionExpanded(recoveryRoot)),
+    recoverySummary, recoveryList,
+  ]);
+  container.append(recoveryRoot, approvalRoot, askRoot, otherRoot);
   const composerRegion = container.parentElement?.classList.contains("composer-region")
     ? container.parentElement : null;
   const conversation = container.closest(".workspace")?.querySelector(".conversation");
@@ -321,7 +332,7 @@ export function createConversationDocks({ container, navigation, tasksStore, app
       return;
     }
     const decision = arrived ?? approvalRoot.querySelector("[data-approval-id]") ??
-      askRoot.querySelector(".ask-dock");
+      askRoot.querySelector(".ask-dock") ?? (!recoveryRoot.hidden ? recoveryRoot : null);
     if (!decision) return;
     const viewport = container.getBoundingClientRect();
     const title = decision.querySelector("h3");
@@ -422,9 +433,21 @@ export function createConversationDocks({ container, navigation, tasksStore, app
       todo?.projectId === selected.projectId && todo?.sessionId === sessionId;
     const todoItems = todo?.projectId === selected.projectId &&
       todo?.sessionId === sessionId ? todo.items : [];
+    const recoveryState = recoveryStore?.get();
+    const recovery = recoveryState?.data;
+    const needsRecovery = Boolean(sessionId && (recoveryState?.status === "error" ||
+      (recovery?.resume_required && !recovery.unavailable &&
+       recovery.project_id === selected.projectId && recovery.session_id === sessionId)));
+    recoveryRoot.hidden = !needsRecovery;
     const otherNodes = [];
     let newApproval = null;
     const nextDecisions = new Set();
+    let newRecovery = null;
+    if (needsRecovery) {
+      const key = `recovery/${selected.projectId}/${sessionId}/${recovery?.recovery_token || "error"}`;
+      nextDecisions.add(key);
+      if (!visibleDecisions.has(key)) newRecovery = recoveryRoot;
+    }
     if (todoItems.length) {
       const key = `${selected.projectId}/${sessionId}`;
       const open = expanded.get(key) !== false;
@@ -515,13 +538,13 @@ export function createConversationDocks({ container, navigation, tasksStore, app
     if (focusedAsk && !askRoot.contains(document.activeElement))
       document.querySelector("#prompt")?.focus({ preventScroll: true });
     container.hidden = searching || (!todoItems.length && !todoError && !tasks.length &&
-      !approvals.length && !asks.length);
+      !approvals.length && !asks.length && !needsRecovery);
     composerRegion?.toggleAttribute("data-decision-pending",
-      Boolean(approvals.length || asks.length));
-    setDecisionExpanded(Boolean(approvals.length || asks.length) &&
+      Boolean(approvals.length || asks.length || needsRecovery));
+    setDecisionExpanded(Boolean(approvals.length || asks.length || needsRecovery) &&
       composerRegion?.hasAttribute("data-decision-expanded"));
     syncAvailableHeight();
-    const arrived = newApproval ?? newAsk;
+    const arrived = newRecovery ?? newApproval ?? newAsk;
     const keepEditor = editor?.isConnected;
     if (keepEditor) {
       // An approval is inserted before asks. Anchor the active answer field
@@ -541,7 +564,7 @@ export function createConversationDocks({ container, navigation, tasksStore, app
     visibleDecisions.clear();
     for (const key of nextDecisions) visibleDecisions.add(key);
     if (arrived && !searching) {
-      onDecisionArrived?.(arrived, newApproval ? "approval" : "ask");
+      onDecisionArrived?.(arrived, newRecovery ? "recovery" : newApproval ? "approval" : "ask");
       if (!keepEditor) scheduleReveal(arrived, true);
     }
   }
@@ -551,12 +574,14 @@ export function createConversationDocks({ container, navigation, tasksStore, app
     approvalsStore.subscribe(render), runsStore.subscribe(render),
     approvalDecisionStore.subscribe(render),
     asksStore.subscribe(render),
+    ...(recoveryStore ? [recoveryStore.subscribe(render)] : []),
     todoStore.subscribe(render),
     subscribeLocale(() => {
       approvalCards.clear();
       todoView = null;
       todoErrorView = null;
       taskView = null;
+      recoveryTitle.textContent = t("recovery.title", {}, "中断恢复");
       render();
     }),
   ];
@@ -587,6 +612,15 @@ export function createConversationDocks({ container, navigation, tasksStore, app
     unsubscribers.forEach((unsubscribe) => unsubscribe());
   }
   return Object.freeze({
+    recovery: Object.freeze({ container: recoveryList, summary: recoverySummary }),
+    revealRecovery() {
+      searching = false;
+      render();
+      if (recoveryRoot.hidden) return;
+      if (composerRegion?.hasAttribute("data-decision-cramped")) setDecisionExpanded(true);
+      recoveryTitle.focus({ preventScroll: true });
+      scheduleReveal(recoveryRoot, true);
+    },
     setSearchActive(value) {
       const next = Boolean(value);
       if (next === searching) return;

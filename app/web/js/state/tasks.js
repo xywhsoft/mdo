@@ -5,7 +5,6 @@ import { t } from "../i18n.js";
 
 const OUTPUT_PAGE_BYTES = 32 * 1024;
 const OUTPUT_RETAINED_BYTES = 256 * 1024;
-const EVENT_RETAINED_ITEMS = 128;
 const ARTIFACT_PREVIEW_BYTES = 64 * 1024;
 const STREAM_NAMES = Object.freeze(["stdout", "stderr", "result"]);
 
@@ -56,16 +55,6 @@ function mergeOutput(previous, page) {
   return { complete: Boolean(page.complete), streams };
 }
 
-function mergeEvents(previous, page) {
-  const reset = !previous || page.history_lost;
-  const items = [...(reset ? [] : previous.items), ...(page.items ?? [])];
-  return {
-    items: items.slice(-EVENT_RETAINED_ITEMS),
-    nextRevision: Number(page.next_revision ?? 0),
-    historyLost: Boolean(page.history_lost) || Boolean(!reset && previous.historyLost),
-  };
-}
-
 export function loadTasks() {
   return tasksStore.load(async () => (await api.get("/tasks")).data);
 }
@@ -97,12 +86,10 @@ export function refreshSelectedTask() {
   const stdout = previous?.output?.streams?.stdout?.next ?? 0;
   const stderr = previous?.output?.streams?.stderr?.next ?? 0;
   const result = previous?.output?.streams?.result?.next ?? 0;
-  const after = previous?.events?.nextRevision ?? 0;
   return taskDetailStore.load(async () => {
-    const [detail, output, events, artifacts, asks] = await Promise.all([
+    const [detail, output, artifacts, asks] = await Promise.all([
       api.get(`/tasks/${id}`),
       api.get(`/tasks/${id}/output?stdout=${stdout}&stderr=${stderr}&result=${result}&limit=${OUTPUT_PAGE_BYTES}`),
-      api.get(`/tasks/${id}/events?after=${after}&limit=64`),
       api.get("/artifacts"),
       api.get(`/tasks/${id}/asks`),
     ]);
@@ -113,7 +100,6 @@ export function refreshSelectedTask() {
       detail: detail.data,
       asks: asks.data,
       output: mergeOutput(previous?.output, output.data),
-      events: mergeEvents(previous?.events, events.data),
       artifacts: (artifacts.data?.items ?? []).filter((item) => String(item.task_id) === id).reverse(),
     };
   });

@@ -1,10 +1,10 @@
 import { abandonRecovery, loadRecovery, resumeRecovery } from "../../state/recovery.js";
 import { clear, element, errorMessage, toast } from "../../utils/dom.js";
 import { subscribeLocale, t } from "../../i18n.js";
-import { effectList, formatArguments } from "./labels.js";
-import { createRecoveryDecisions } from "./recovery-decisions.js";
+import { effectList, formatArguments } from "../approvals/labels.js";
+import { createRecoveryDecisions } from "../approvals/recovery-decisions.js";
 
-export function createRecoveryPanel({ container, summary, store, onResume, onAbandon }) {
+export function createRecoveryDock({ container, summary, store, onResume, onAbandon }) {
   let state = store.get();
   const decisions = createRecoveryDecisions();
   const argumentsOpen = new Map();
@@ -79,7 +79,7 @@ export function createRecoveryPanel({ container, summary, store, onResume, onAba
     const tool = item.tool || t("decision.unknownTool", {}, "未知工具");
     const effects = effectList(item.effects ?? []) ||
       t("decision.noEffects", {}, "未声明影响");
-    const card = element("article", { className: "approval-card recovery-card" });
+    const card = element("article", { className: "recovery-card" });
     card.append(
       element("header", { className: "approval-heading" }, [
         element("div", {}, [
@@ -122,7 +122,7 @@ export function createRecoveryPanel({ container, summary, store, onResume, onAba
     const replacement = [...container.querySelectorAll("[data-recovery-focus]")]
       .find((node) => node.dataset.recoveryFocus === focused);
     (replacement && !replacement.disabled ? replacement
-      : document.querySelector("#decisions-tab"))?.focus({ preventScroll: true });
+      : document.querySelector("#recovery-title") ?? document.querySelector("#prompt"))?.focus({ preventScroll: true });
   }
 
   function render() {
@@ -140,6 +140,10 @@ export function createRecoveryPanel({ container, summary, store, onResume, onAba
     if (state.status === "error") {
       summary.textContent = t("recovery.unavailable", {}, "恢复状态不可用");
       container.append(element("div", { className: "resource-error", text: errorMessage(state.error) }));
+      const retry = element("button", { className: "secondary-button",
+        text: t("task.detail.retry", {}, "重试读取"), attrs: { type: "button" } });
+      retry.addEventListener("click", () => void loadRecovery());
+      container.append(retry);
       restoreFocus(focused);
       return;
     }

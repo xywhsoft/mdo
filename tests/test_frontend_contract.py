@@ -236,21 +236,25 @@ class FrontendContractTests(unittest.TestCase):
             self.assertIn(marker, tasks)
         self.assertIn("OUTPUT_PAGE_BYTES = 32 * 1024", tasks)
         self.assertIn("OUTPUT_RETAINED_BYTES = 256 * 1024", tasks)
-        self.assertIn("EVENT_RETAINED_ITEMS = 128", tasks)
         self.assertIn("stdout=${stdout}&stderr=${stderr}&result=${result}", tasks)
         self.assertIn("window.atob", tasks)
         self.assertIn("new TextDecoder()", tasks)
         self.assertIn("/artifacts/${id}?offset=0&limit=", tasks)
         self.assertIn('id="task-detail"', self.index)
-        for label in ("标准输出", "错误输出", "任务结果", "事件", "产物"):
+        for label in ("标准输出", "错误输出", "任务结果", "产物"):
             self.assertIn(label, panel)
+        self.assertNotIn("/events?", tasks)
+        self.assertNotIn("task-event-list", panel)
+        self.assertNotIn('id="task-summary"', self.index)
         self.assertNotIn("innerHTML", panel)
 
     def test_permission_decisions_are_visible_bounded_and_one_shot(self) -> None:
         state = self.scripts["js/state/approvals.js"]
-        panel = self.scripts["js/features/approvals/decision-panel.js"]
-        self.assertIn('id="decisions-tab"', self.index)
-        self.assertIn('id="decisions-panel"', self.index)
+        panel = self.scripts["js/features/chat/conversation-docks.js"]
+        self.assertNotIn('id="decisions-tab"', self.index)
+        self.assertNotIn('id="decisions-panel"', self.index)
+        self.assertNotIn('id="trace-panel"', self.index)
+        self.assertNotIn('id="context-panel"', self.index)
         self.assertIn('api.get("/approvals")', state)
         self.assertIn('api.put(`/approvals/${id}`, { decision })', state)
         self.assertIn('new Set(["allow", "allow_run", "deny"])', state)
@@ -259,21 +263,20 @@ class FrontendContractTests(unittest.TestCase):
         self.assertIn("approvalDecisionStore.subscribe(render)", panel)
         self.assertIn("approvalDecisionStore.subscribe(render)",
                       self.scripts["js/features/chat/conversation-docks.js"])
-        self.assertIn("text: formatArguments(item.arguments_json)", panel)
-        self.assertIn('text: t("decision.allowOnce"', panel)
-        self.assertIn('text: t("decision.allowRun"', panel)
-        self.assertIn('text: t("decision.deny"', panel)
+        self.assertIn("text: item.arguments_json", panel)
         self.assertIn('t("dock.approval.allowRun")',
                       self.scripts["js/features/chat/conversation-docks.js"])
-        self.assertIn(".approval-card", self.css)
         self.assertNotIn("innerHTML", panel)
 
     def test_interrupted_calls_require_explicit_recovery_decisions(self) -> None:
         state = self.scripts["js/state/recovery.js"]
-        panel = self.scripts["js/features/approvals/recovery-panel.js"]
+        panel = self.scripts["js/features/chat/recovery-dock.js"]
         app = self.scripts["js/app.js"]
-        self.assertIn('id="recovery-summary"', self.index)
-        self.assertIn('id="recovery-list"', self.index)
+        docks = self.scripts["js/features/chat/conversation-docks.js"]
+        self.assertIn('id: "recovery-summary"', docks)
+        self.assertIn('id: "recovery-list"', docks)
+        self.assertIn("!needsRecovery", docks)
+        self.assertIn("revealRecovery()", docks)
         self.assertIn("recoveryStore", state)
         self.assertIn("recovery_token", state)
         self.assertIn('new Set(["retry", "record_uncertain"])', state)

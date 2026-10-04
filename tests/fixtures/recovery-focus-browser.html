@@ -15,12 +15,12 @@
   <button id="resolve" type="button">解除恢复要求</button>
 </div>
 <p id="qa-status" role="status">提交次数：0</p>
-<button id="decisions-tab" type="button">决策</button>
+<button id="recovery-title" type="button">决策</button>
 <p id="recovery-summary"></p>
 <div id="recovery-list"></div>
 <div id="toast-region"></div>
 <script type="module">
-import { createRecoveryPanel } from "/app/web/js/features/approvals/recovery-panel.js";
+import { createRecoveryDock } from "/app/web/js/features/chat/recovery-dock.js";
 import { createResourceStore } from "/app/web/js/state/store.js";
 
 const pending = {
@@ -43,7 +43,7 @@ window.fetch = async (url, options = {}) => {
     JSON.stringify({ ok: true, data: { id: "qa-run", terminal: false } }),
     { status: 200, headers: { "Content-Type": "application/json" } })); });
 };
-createRecoveryPanel({ container: document.querySelector("#recovery-list"),
+createRecoveryDock({ container: document.querySelector("#recovery-list"),
   summary: document.querySelector("#recovery-summary"), store,
   onResume: () => {
     active = false;

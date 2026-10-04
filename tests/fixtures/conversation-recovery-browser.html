@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="zh-CN">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>mdo inline recovery probe</title>
+<link rel="stylesheet" href="/app/web/css/app.css">
+<style>
+body { height: 100dvh; overflow: hidden; }
+.workspace { height: 100%; max-width: 900px; margin: auto; }
+.probe-controls { display: flex; gap: 8px; flex-wrap: wrap; padding: 12px; }
+.conversation { min-height: 100px; padding: 20px; }
+</style>
+<main class="workspace">
+  <div class="probe-controls">
+    <button id="pending">待决工具</button><button id="no-calls">模型中断</button>
+    <button id="other">切换会话</button><button id="resolve">解除恢复</button>
+    <button id="failed">读取失败</button><button id="refresh">刷新</button>
+    <output id="submissions">提交次数：0</output>
+  </div>
+  <section class="conversation"><p>恢复操作应直接出现在当前对话，不需要右侧决策页面。</p></section>
+  <div class="composer-region">
+    <div id="conversation-docks" class="conversation-docks" hidden></div>
+    <form id="composer" class="composer"><textarea id="prompt" placeholder="输入消息"></textarea></form>
+  </div>
+</main>
+<div id="toast-region"></div>
+<script type="module">
+import { createConversationDocks } from "/app/web/js/features/chat/conversation-docks.js";
+import { createRecoveryDock } from "/app/web/js/features/chat/recovery-dock.js";
+import { createResourceStore } from "/app/web/js/state/store.js";
+import { loadLocale } from "/app/web/js/i18n.js";
+const nativeFetch = window.fetch.bind(window);
+window.fetch = (url, options) => nativeFetch(String(url).startsWith("/lang/")
+  ? "/app/web" + url : url, options);
+await loadLocale("zh-CN");
+const empty = () => createResourceStore({ items: [] });
+const selected = { view: "workspace", projectId: "qa", sessionId: "one" };
+const routeListeners = new Set();
+const navigation = { get: () => selected, subscribe(fn) {
+  routeListeners.add(fn); fn(selected); return () => routeListeners.delete(fn);
+} };
+const pending = { project_id: "qa", session_id: "one", resume_required: true,
+  recovery_token: "a".repeat(64), revision: 1, last_sequence: 1, total: 1,
+  items: [{ tool_call_id: "call", tool: "edit", turn: 1, tool_available: true,
+    effects: ["workspace_write"], automatic_retry_safe: false,
+    arguments_json: '{"path":"example.txt"}' }] };
+const store = createResourceStore(pending);
+const docks = createConversationDocks({ container: document.querySelector("#conversation-docks"),
+  navigation, recoveryStore: store, tasksStore: empty(), approvalsStore: empty(),
+  asksStore: empty(), todoStore: empty(), runsStore: empty() });
+const originalFetch = window.fetch.bind(window);
+let submissions = 0;
+window.fetch = async (url, options = {}) => {
+  if (url.endsWith("/resume") || url.endsWith("/abandon")) {
+    submissions += 1;
+    document.querySelector("#submissions").textContent = `提交次数：${submissions}`;
+    return Response.json({ ok: true, data: { id: "run", terminal: false } });
+  }
+  return originalFetch(url, options);
+};
+createRecoveryDock({ ...docks.recovery, store,
+  onResume() { store.setData({ resume_required: false, items: [] }); },
+  onAbandon() { store.setData({ resume_required: false, items: [] }); } });
+document.querySelector("#pending").onclick = () => {
+  selected.sessionId = "one"; routeListeners.forEach((fn) => fn());
+  store.setData({ ...pending, recovery_token: "b".repeat(64) });
+};
+document.querySelector("#no-calls").onclick = () =>
+  store.setData({ ...pending, items: [], total: 0, recovery_token: "c".repeat(64) });
+document.querySelector("#other").onclick = () => {
+  selected.sessionId = selected.sessionId === "one" ? "other" : "one";
+  routeListeners.forEach((fn) => fn());
+};
+document.querySelector("#resolve").onclick = () => store.setData({ resume_required: false, items: [] });
+document.querySelector("#failed").onclick = () => store.load(async () => { throw new Error("读取失败"); });
+document.querySelector("#refresh").onclick = () => store.setData({ ...store.get().data });
+window.qaReady = true;
+</script>
+</html>

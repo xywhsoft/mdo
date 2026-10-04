@@ -2211,25 +2211,6 @@ def run_probe(host: Path) -> None:
                     assert status == 400, (query, status, body)
                     assert json.loads(body)["error"]["code"] == "invalid_query"
 
-                events_path = task_path + "/events"
-                status, headers, body = request(
-                    port, "GET", events_path + "?after=0&limit=1")
-                events_document = json.loads(body)
-                assert status == 200, (status, body)
-                assert_common(headers, events_document)
-                events = events_document["data"]
-                assert len(events["items"]) == 1, events
-                assert events["items"][0]["kind"] == "created", events
-                assert events["next_revision"] == events["items"][0]["revision"]
-                status, _, body = request(
-                    port, "GET",
-                    events_path + f'?after={events["next_revision"]}&limit=64')
-                later_events = json.loads(body)["data"]
-                assert status == 200, (status, body)
-                assert later_events["items"][-1]["state"] == "succeeded", (
-                    later_events)
-                assert later_events["items"][-1]["terminal"] is True, later_events
-
                 cancel_path = f"/api/v1/tasks/{cancellable_id}"
                 status, _, body = request(
                     port, "DELETE", cancel_path, body=b"{}",
@@ -2245,15 +2226,7 @@ def run_probe(host: Path) -> None:
                 status, _, body = request(port, "DELETE", cancel_path)
                 assert status == 200, (status, body)
                 assert json.loads(body)["data"]["state"] == "cancelled"
-                status, _, body = request(
-                    port, "GET", cancel_path + "/events?after=0&limit=64")
-                cancel_events = json.loads(body)["data"]["items"]
-                assert status == 200, (status, body)
-                assert any(item["kind"] == "cancel_requested"
-                           for item in cancel_events), cancel_events
-                assert cancel_events[-1]["state"] == "cancelled", cancel_events
-
-                for path in (task_path, output_path, events_path):
+                for path in (task_path, output_path):
                     status, headers, body = request(port, "HEAD", path)
                     assert status == 200 and body == b"", (path, status, body)
                     status, headers, body = request(port, "OPTIONS", path)
@@ -2271,7 +2244,6 @@ def run_probe(host: Path) -> None:
                 for path in (
                     "/api/v1/tasks/999999999",
                     "/api/v1/tasks/999999999/output",
-                    "/api/v1/tasks/999999999/events",
                 ):
                     status, _, body = request(port, "GET", path)
                     assert status == 404, (path, status, body)
@@ -2302,24 +2274,10 @@ def run_probe(host: Path) -> None:
                 assert status == 200 and headers["allow"] == (
                     "GET, HEAD, OPTIONS"), (status, headers, body)
 
-                status, headers, body = request(
-                    port, "GET", "/api/v1/events?after=0&limit=1")
-                document = json.loads(body)
-                assert status == 200, (status, body)
-                assert_common(headers, document)
-                assert document["data"]["after"] == 0, document
-                assert isinstance(document["data"]["items"], list), document
-                for query in (
-                    "limit=0", "limit=33", "after=x", "after=0&after=1",
-                    "unknown=1", "after=0&",
-                ):
-                    status, headers, body = request(
-                        port, "GET", f"/api/v1/events?{query}")
-                    document = json.loads(body)
-                    assert status == 400, (query, status, body)
-                    assert_common(headers, document)
-                    assert document["error"]["code"] == "invalid_query", (
-                        query, document)
+                for retired in ("/api/v1/events", task_path + "/events"):
+                    for method in ("GET", "HEAD", "OPTIONS"):
+                        status, _, _ = request(port, method, retired)
+                        assert status == 404, (method, retired, status)
 
                 status, headers, body = request(
                     port, "GET",
@@ -5596,7 +5554,7 @@ def run_probe(host: Path) -> None:
                     assert request(port, "GET", session_path +
                         "/events" + suffix)[0] == 400, suffix
                 assert request(port, "GET",
-                    "/api/v1/events?after=0&limit=1&full_text=1")[0] == 400
+                    "/api/v1/events?after=0&limit=1&full_text=1")[0] == 404
 
                 meta_path.write_text("{broken", encoding="utf-8")
                 status, headers, body = request(

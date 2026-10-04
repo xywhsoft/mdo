@@ -45,15 +45,13 @@ window.fetch = async (input, options = {}) => {
     const chunk = { data: "", start: 0, next: 0, dropped: false };
     return reply({ complete: task.terminal, stdout: chunk, stderr: chunk, result: chunk });
   }
-  if (path.startsWith("/api/v1/tasks/9001/events?"))
-    return reply({ items: [], next_revision: task.revision, history_lost: false });
   if (path === "/api/v1/artifacts") return reply({ items: [] });
   return originalFetch(input, options);
 };
 const empty = () => createResourceStore({ items: [] });
 createTaskPanel({ container: document.querySelector("#tasks"),
   detailContainer: document.querySelector("#task-detail"),
-  summary: document.querySelector("#summary"), store: tasksStore,
+  store: tasksStore,
   detailStore: taskDetailStore, previewStore: artifactPreviewStore });
 const navigation = { get: () => ({ view: "workspace", projectId: "qa", sessionId: "cancel" }),
   subscribe(listener) { listener(this.get()); return () => {}; } };

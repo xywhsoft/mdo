@@ -8,7 +8,6 @@
   body { margin: 24px; background: var(--surface); color: var(--ink); }
   .probe-controls { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; }
   #conversation-docks { width: min(760px, 100%); margin: 12px 0; }
-  #approval-list { width: min(760px, 100%); }
 </style>
 <div class="probe-controls">
   <button id="refresh" type="button">刷新状态</button>
@@ -20,13 +19,9 @@
 <p id="qa-status" role="status">审批提交次数：0</p>
 <textarea id="prompt" aria-label="输入消息"></textarea>
 <div id="conversation-docks" class="conversation-docks"></div>
-<button id="decisions-tab" type="button">决策</button>
-<p id="approval-summary"></p>
-<div id="approval-list"></div>
 <div id="toast-region"></div>
 <script type="module">
 import { createConversationDocks } from "/app/web/js/features/chat/conversation-docks.js";
-import { createDecisionPanel } from "/app/web/js/features/approvals/decision-panel.js";
 import { approvalsStore } from "/app/web/js/state/approvals.js";
 import { asksStore } from "/app/web/js/state/asks.js";
 import { createResourceStore } from "/app/web/js/state/store.js";
@@ -93,9 +88,6 @@ async function onChanged() {
   if (document.querySelector("#fail-followup").checked)
     throw new Error("模拟刷新失败");
 }
-createDecisionPanel({ container: document.querySelector("#approval-list"),
-  summary: document.querySelector("#approval-summary"),
-  store: approvalsStore, onChanged });
 createConversationDocks({ container: document.querySelector("#conversation-docks"),
   navigation, tasksStore, approvalsStore, asksStore, todoStore, runsStore,
   onOpenTasks() {}, onChanged });

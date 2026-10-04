@@ -30,7 +30,7 @@ class ApiContractTests(unittest.TestCase):
             "bootstrap", "settings", "models", "agents", "modules",
             "skills", "mcp", "sessions", "schedules", "tasks",
             "projects", "runs", "artifacts", "approvals", "permissions", "diagnostics",
-            "storage", "events",
+            "storage",
             "operations", "migrations/legacy",
         ):
             self.assertIn(f'"/api/v1/{resource}"', self.router)
@@ -64,7 +64,8 @@ class ApiContractTests(unittest.TestCase):
         self.assertIn('"history_lost"', events)
         self.assertIn('"terminal"', events)
         self.assertIn("MdoSessionEventReplay", events)
-        self.assertIn("xworkRuntimeEventSnapshot", events)
+        self.assertNotIn("xworkRuntimeEventSnapshot", events)
+        self.assertNotIn('"/api/v1/events"', self.router)
         self.assertIn("MdoApiRouteMatch", self.router)
 
     def test_json_mutations_have_a_bounded_strict_body_reader(self) -> None:
@@ -234,23 +235,21 @@ class ApiContractTests(unittest.TestCase):
         self.assertIn('"revision_conflict"', schedules)
         self.assertNotIn("xworkSchedule", schedules)
 
-    def test_unified_tasks_have_detail_output_events_and_cancel_routes(self) -> None:
+    def test_unified_tasks_have_detail_output_and_cancel_routes(self) -> None:
         tasks = (ROOT / "app/src/api/tasks.c").read_text(encoding="utf-8")
         for path in (
             '"/api/v1/tasks/{task}"',
             '"/api/v1/tasks/{task}/output"',
-            '"/api/v1/tasks/{task}/events"',
         ):
             self.assertIn(path, self.router)
         self.assertIn("xworkRuntimeTaskSnapshot", tasks)
         self.assertIn("xworkRuntimeReadTaskOutput", tasks)
-        self.assertIn("xworkRuntimeReadTaskEvents", tasks)
+        self.assertNotIn("xworkRuntimeReadTaskEvents", tasks)
+        self.assertNotIn('"/api/v1/tasks/{task}/events"', self.router)
         self.assertIn("xworkRuntimeCancelTask", tasks)
         self.assertIn("MDO_API_TASK_OUTPUT_MAX_BYTES (64u * 1024u)", tasks)
-        self.assertIn("MDO_API_TASK_EVENT_MAX_LIMIT 64u", tasks)
         self.assertIn("xrtBase64EncodeNew", tasks)
         self.assertIn('"encoding", "base64"', tasks)
-        self.assertIn('"history_lost"', tasks)
         self.assertIn('"body_not_allowed"', tasks)
         self.assertNotIn("xworkRuntimeReleaseTask", tasks)
 

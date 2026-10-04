@@ -2,7 +2,6 @@
 
 #include "internal.h"
 #include "../../include/mdo/attachments.h"
-#include "../../include/mdo/bootstrap.h"
 #include "../../include/mdo/sessions.h"
 
 #define MDO_API_EVENT_DEFAULT_LIMIT 32u
@@ -119,100 +118,6 @@ static xstrview MdoApiEventText(cstr Text, size_t Size, size_t Limit,
         *pTruncated = true;
     }
     return xrtStrViewN(Text, Retained);
-}
-
-static bool MdoApiRuntimeEventValue(const xwork_event* Event, xvalue** pValue)
-{
-    xvalue* Item = xrtValueObject();
-    bool Truncated = Event->bTextTruncated;
-    xstrview Text = MdoApiEventText(Event->sText, Event->iTextLength,
-        MDO_API_EVENT_TEXT_BYTES,
-        &Truncated);
-    bool Ok = Item != NULL &&
-        MdoApiValueSetUInt(Item, "schema_version", Event->uSchemaVersion) &&
-        MdoApiValueSetUInt(Item, "event_id", Event->uEventId) &&
-        MdoApiValueSetInt(Item, "time", Event->iOccurredAtUs) &&
-        MdoApiValueSetString(Item, "kind", MdoApiEventKindText(Event->eKind)) &&
-        MdoApiValueSetUInt(Item, "kind_code", Event->eKind) &&
-        MdoApiValueSetBool(Item, "terminal", MdoApiEventTerminal(Event->eKind)) &&
-        MdoApiValueSetBool(Item, "success", Event->bSuccess) &&
-        MdoApiValueSetUInt(Item, "agent_id", Event->uAgentId) &&
-        MdoApiValueSetUInt(Item, "run_id", Event->uRunId) &&
-        MdoApiValueSetUInt(Item, "parent_run_id", Event->uParentRunId) &&
-        MdoApiValueSetUInt(Item, "task_id", Event->uTaskId) &&
-        MdoApiValueSetUInt(Item, "artifact_id", Event->uArtifactId) &&
-        MdoApiValueSetUInt(Item, "agent_turn", Event->uAgentTurn) &&
-        MdoApiValueSetUInt(Item, "user_message_sequence",
-            Event->uUserMessageSequence) &&
-        MdoApiValueSetUInt(Item, "agent_depth", Event->uAgentDepth) &&
-        MdoApiValueSetUInt(Item, "effects", Event->uEffects) &&
-        MdoApiValueSetBool(Item, "effect_applied", Event->bEffectApplied) &&
-        MdoApiValueSetBool(Item, "text_truncated", Truncated) &&
-        MdoApiValueSetUInt(Item, "original_text_bytes",
-            Event->iOriginalTextLength != 0u ? Event->iOriginalTextLength :
-            Event->iTextLength) &&
-        MdoApiValueSetStringView(Item, "text", Text) &&
-        MdoApiValueSetString(Item, "tool_name", Event->sToolName) &&
-        MdoApiValueSetString(Item, "tool_call_id", Event->sToolCallId) &&
-        MdoApiValueSetString(Item, "artifact_path", Event->sArtifactPath) &&
-        MdoApiValueSetString(Item, "model", Event->sModel) &&
-        MdoApiValueSetString(Item, "finish_reason", Event->sFinishReason) &&
-        MdoApiValueSetUInt(Item, "task_state", Event->eTaskState) &&
-        MdoApiValueSetUInt(Item, "task_revision", Event->uTaskRevision);
-    if ( !Ok ) { xrtValueRelease(Item); return false; }
-    *pValue = Item;
-    return true;
-}
-
-bool MdoApiEventsRoute(MdoApiContext* Context)
-{
-    xwork_runtime* Runtime = MdoBootstrapRuntime();
-    xwork_error Error;
-    xwork_event_snapshot* Snapshot;
-    xvalue* Data = xrtValueObject();
-    xvalue* Items = xrtValueArray();
-    uint64 After;
-    size_t Limit;
-    size_t Index;
-    bool Ok;
-
-    if ( !MdoApiEventQuery(Context->Target.Query, &After, &Limit, NULL) )
-        return MdoApiReplyError(Context, 400u, "invalid_query",
-            "Only bounded numeric after and limit parameters are accepted",
-            NULL);
-    if ( Runtime == NULL ) return MdoApiReplyError(Context, 503u,
-        "runtime_unavailable", "The event runtime is unavailable", NULL);
-    memset(&Error, 0, sizeof(Error));
-    Snapshot = xworkRuntimeEventSnapshot(Runtime, After, Limit, &Error);
-    Ok = Snapshot != NULL && Data != NULL && Items != NULL;
-    for ( Index = 0u; Ok && Index < xworkEventSnapshotCount(Snapshot);
-          Index++ ) {
-        xwork_event Event;
-        xvalue* Item = NULL;
-        memset(&Event, 0, sizeof(Event));
-        Ok = xworkEventSnapshotAt(Snapshot, Index, &Event) &&
-            MdoApiRuntimeEventValue(&Event, &Item) &&
-            MdoApiValueAppendTake(Items, &Item);
-        xrtValueRelease(Item);
-    }
-    if ( Ok ) Ok =
-        MdoApiValueSetString(Data, "stream", "runtime") &&
-        MdoApiValueSetUInt(Data, "after", After) &&
-        MdoApiValueSetUInt(Data, "next_cursor",
-            xworkEventSnapshotNextCursor(Snapshot)) &&
-        MdoApiValueSetUInt(Data, "latest_event_id",
-            xworkEventSnapshotLatestId(Snapshot)) &&
-        MdoApiValueSetUInt(Data, "dropped_count",
-            xworkEventSnapshotDroppedCount(Snapshot)) &&
-        MdoApiValueSetBool(Data, "history_lost",
-            xworkEventSnapshotHistoryLost(Snapshot)) &&
-        MdoApiValueSetTake(Data, "items", &Items);
-    xrtValueRelease(Items);
-    xworkEventSnapshotRelease(Snapshot);
-    if ( !Ok ) { xrtValueRelease(Data); Data = NULL; }
-    if ( Data == NULL ) return MdoApiReplyError(Context, 500u,
-        "events_unavailable", "Runtime events could not be replayed", NULL);
-    return MdoApiReplySuccessTake(Context, 200u, Data, NULL);
 }
 
 static bool MdoApiCaptureId(MdoApiContext* Context, size_t Index,

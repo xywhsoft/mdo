@@ -56,7 +56,6 @@ window.fetch = async (input, options = {}) => {
     const chunk = { data: "", start: 0, next: 0, dropped: false };
     return reply({ complete: false, stdout: chunk, stderr: chunk, result: chunk });
   }
-  if (suffix.startsWith("/events?")) return reply({ items: [], next_revision: 1 });
   throw new Error(`Unexpected fixture request: ${path}`);
 };
 const result = document.querySelector("#result");
@@ -72,7 +71,7 @@ try {
   await loadLocale("zh-CN");
   createTaskPanel({ container: document.querySelector("#tasks"),
     detailContainer: document.querySelector("#task-detail"),
-    summary: document.querySelector("#summary"), store: tasksStore,
+    store: tasksStore,
     detailStore: taskDetailStore, previewStore: artifactPreviewStore });
   await loadTasks(); await selectTask(1);
   const original = input();

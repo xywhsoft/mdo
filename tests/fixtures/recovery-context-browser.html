@@ -12,10 +12,10 @@
 </div>
 <p id="qa-owner" role="status"></p>
 <pre id="qa-status">[]</pre>
-<button id="decisions-tab">决策</button>
+<button id="recovery-title">决策</button>
 <p id="recovery-summary"></p><div id="recovery-list"></div><div id="toast-region"></div>
 <script type="module">
-const { createRecoveryPanel } = await import('/app/web/js/features/approvals/recovery-panel.js?fixture='+Date.now());
+const { createRecoveryDock } = await import('/app/web/js/features/chat/recovery-dock.js?fixture='+Date.now());
 import { recoveryStore, selectRecovery } from '/app/web/js/state/recovery.js';
 const contexts = Object.fromEntries(['a','b'].map(id=>[id,{
   project_id:'default',session_id:id,resume_required:true,recovery_token:id.repeat(64),
@@ -37,7 +37,7 @@ window.fetch=async (url,options={})=>{
     id:id.repeat(32),project_id:'default',session_id:id,terminal:false,
   }}))));
 };
-createRecoveryPanel({container:document.querySelector('#recovery-list'),summary:document.querySelector('#recovery-summary'),
+createRecoveryDock({container:document.querySelector('#recovery-list'),summary:document.querySelector('#recovery-summary'),
   store:recoveryStore,onResume:(run,owner)=>{requests.push({completed:run.session_id,owner:owner?.session_id??null});report();}});
 for(const id of ['a','b']){
   document.querySelector(`#select-${id}`).onclick=()=>{selected=id;publish()};

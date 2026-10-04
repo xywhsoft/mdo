@@ -232,8 +232,7 @@ test("bundled language packs cover the annotated shell and switch without stale 
     "js/features/settings/model-config-panel.js",
     "js/features/shell/pane-layout.js",
     "js/features/tasks/task-panel.js",
-    "js/features/approvals/decision-panel.js",
-    "js/features/approvals/recovery-panel.js",
+    "js/features/chat/recovery-dock.js",
     "js/features/approvals/labels.js",
     "js/features/sessions/project-dialog.js",
     "js/features/shell/workspace-startup.js",
@@ -280,9 +279,6 @@ test("bundled language packs cover the annotated shell and switch without stale 
     assert.ok(referenceKeys.includes(`task.state.${state}`));
   for (const kind of ["process", "agent", "scheduled"])
     assert.ok(referenceKeys.includes(`task.kind.${kind}`));
-  for (const kind of ["created", "state_changed", "cancel_requested",
-    "restored", "notice_taken"])
-    assert.ok(referenceKeys.includes(`task.event.${kind}`));
 
   const node = {
     dataset: { i18n: "shell.newTask", i18nAriaLabel: "shell.newTask" },

@@ -8,8 +8,6 @@
 #define MDO_API_TASK_LIST_LIMIT 100u
 #define MDO_API_TASK_OUTPUT_DEFAULT_BYTES (16u * 1024u)
 #define MDO_API_TASK_OUTPUT_MAX_BYTES (64u * 1024u)
-#define MDO_API_TASK_EVENT_DEFAULT_LIMIT 32u
-#define MDO_API_TASK_EVENT_MAX_LIMIT 64u
 
 typedef struct MdoApiTaskOutputQuery {
     uint64 StdoutOffset;
@@ -53,18 +51,6 @@ static bool MdoApiTaskTerminal(xwork_task_state State)
     return State == XWORK_TASK_SUCCEEDED || State == XWORK_TASK_FAILED ||
         State == XWORK_TASK_CANCELLED || State == XWORK_TASK_TIMED_OUT ||
         State == XWORK_TASK_LOST;
-}
-
-static cstr MdoApiTaskEventKindText(xwork_task_event_kind Kind)
-{
-    switch ( Kind ) {
-    case XWORK_TASK_EVENT_CREATED: return "created";
-    case XWORK_TASK_EVENT_STATE_CHANGED: return "state_changed";
-    case XWORK_TASK_EVENT_CANCEL_REQUESTED: return "cancel_requested";
-    case XWORK_TASK_EVENT_RESTORED: return "restored";
-    case XWORK_TASK_EVENT_NOTICE_TAKEN: return "notice_taken";
-    default: return "unknown";
-    }
 }
 
 static bool MdoApiTaskUnsigned(xstrview Text, uint64 Maximum, uint64* Value)
@@ -404,101 +390,5 @@ bool MdoApiTaskOutputRoute(MdoApiContext* Context)
     if ( !Ok ) { xrtValueRelease(Data); Data = NULL; }
     if ( Data == NULL ) return MdoApiReplyError(Context, 500u,
         "task_output_unavailable", "The task output could not be encoded", NULL);
-    return MdoApiReplySuccessTake(Context, 200u, Data, NULL);
-}
-
-static bool MdoApiTaskEventsQuery(xstrview Query, uint64* After, size_t* Limit)
-{
-    size_t Position = 0u;
-    unsigned Seen = 0u;
-    *After = 0u;
-    *Limit = MDO_API_TASK_EVENT_DEFAULT_LIMIT;
-    while ( Position < Query.Size ) {
-        xstrview Name;
-        xstrview Value;
-        uint64 Number;
-        unsigned Bit;
-        uint64 Maximum;
-        if ( !MdoApiTaskQueryPart(Query, &Position, &Name, &Value) )
-            return false;
-        if ( Name.Size == 5u && memcmp(Name.Data, "after", 5u) == 0 ) {
-            Bit = 1u; Maximum = UINT64_MAX;
-        } else if ( Name.Size == 5u &&
-                    memcmp(Name.Data, "limit", 5u) == 0 ) {
-            Bit = 2u; Maximum = MDO_API_TASK_EVENT_MAX_LIMIT;
-        } else return false;
-        if ( (Seen & Bit) != 0u ||
-             !MdoApiTaskUnsigned(Value, Maximum, &Number) ||
-             (Bit == 2u && Number == 0u) ) return false;
-        Seen |= Bit;
-        if ( Bit == 1u ) *After = Number;
-        else *Limit = (size_t)Number;
-    }
-    return true;
-}
-
-bool MdoApiTaskEventsRoute(MdoApiContext* Context)
-{
-    xwork_runtime* Runtime = MdoBootstrapRuntime();
-    xwork_error Error;
-    xwork_task_event Events[MDO_API_TASK_EVENT_MAX_LIMIT];
-    xvalue* Data = xrtValueObject();
-    xvalue* Items = xrtValueArray();
-    uint64 TaskId;
-    uint64 After;
-    uint64 Next;
-    size_t Limit;
-    size_t Count;
-    size_t Index;
-    bool HistoryLost;
-    bool Ok;
-    if ( !MdoApiTaskPath(Context, &TaskId) )
-        return MdoApiReplyError(Context, 400u, "invalid_path",
-            "The task identifier must be a nonzero decimal integer", NULL);
-    if ( !MdoApiTaskEventsQuery(Context->Target.Query, &After, &Limit) )
-        return MdoApiReplyError(Context, 400u, "invalid_query",
-            "Only unique numeric after and bounded limit parameters are accepted",
-            NULL);
-    if ( Runtime == NULL ) return MdoApiReplyError(Context, 503u,
-        "runtime_unavailable", "The task runtime is unavailable", NULL);
-    memset(&Error, 0, sizeof(Error));
-    if ( !xworkRuntimeReadTaskEvents(Runtime, TaskId, After, Events, Limit,
-            &Count, &Next, &HistoryLost, &Error) ) {
-        xrtValueRelease(Data); xrtValueRelease(Items);
-        if ( Error.eCode == XWORK_ERROR_INVALID_ARGUMENT )
-            return MdoApiReplyError(Context, 404u, "task_not_found",
-                "The requested task does not exist", NULL);
-        return MdoApiReplyError(Context, 500u, "task_events_unavailable",
-            "The task event stream could not be read", NULL);
-    }
-    Ok = Data != NULL && Items != NULL;
-    for ( Index = 0u; Ok && Index < Count; Index++ ) {
-        const xwork_task_event* Event = &Events[Index];
-        xvalue* Item = xrtValueObject();
-        Ok = Item != NULL &&
-            MdoApiValueSetUInt(Item, "task_id", Event->uTaskId) &&
-            MdoApiValueSetUInt(Item, "revision", Event->uRevision) &&
-            MdoApiValueSetString(Item, "kind",
-                MdoApiTaskEventKindText(Event->eKind)) &&
-            MdoApiValueSetUInt(Item, "kind_code", Event->eKind) &&
-            MdoApiValueSetString(Item, "state",
-                MdoApiTaskStateText(Event->eState)) &&
-            MdoApiValueSetBool(Item, "terminal",
-                MdoApiTaskTerminal(Event->eState)) &&
-            MdoApiValueSetInt(Item, "time", Event->iTimestampUs) &&
-            MdoApiValueAppendTake(Items, &Item);
-        xrtValueRelease(Item);
-    }
-    if ( Ok ) Ok =
-        MdoApiValueSetUInt(Data, "task_id", TaskId) &&
-        MdoApiValueSetUInt(Data, "after", After) &&
-        MdoApiValueSetUInt(Data, "next_revision", Next) &&
-        MdoApiValueSetBool(Data, "history_lost", HistoryLost) &&
-        MdoApiValueSetTake(Data, "items", &Items);
-    xrtValueRelease(Items);
-    if ( !Ok ) { xrtValueRelease(Data); Data = NULL; }
-    if ( Data == NULL ) return MdoApiReplyError(Context, 500u,
-        "task_events_unavailable", "The task event stream could not be encoded",
-        NULL);
     return MdoApiReplySuccessTake(Context, 200u, Data, NULL);
 }
