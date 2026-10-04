@@ -15,7 +15,7 @@ static bool MdoRemoteHttpIn(xstrview Name, const char* const* Names, size_t Coun
 }
 bool MdoRemoteHttpResponseField(xstrview Name)
 {
-    static const char* const allowed[] = {"Content-Type","Content-Disposition","Cache-Control",
+    static const char* const allowed[] = {"Content-Type","Content-Length","Content-Disposition","Cache-Control",
         "ETag","Last-Modified","Content-Range","Accept-Ranges","X-Mdo-Write-Token","Retry-After","Allow"};
     return MdoRemoteHttpIn(Name,allowed,sizeof(allowed)/sizeof(allowed[0]));
 }
@@ -154,7 +154,7 @@ bool MdoRemoteLoopbackCall(XS_ServerInfo* Server, const MdoRemoteHttpRequest* Re
         if (status != XHTTP1_MORE || end || !MdoRemoteHttpRead(stream,input,&input_size,&end,until,Cancel)) goto done;
     }
     xhttp1bodyplan plan; xhttp1body body; xhttp1bodylimits body_limits; xhttpfield trailers[16];
-    xrtHttp1BodyLimitsInit(&body_limits); body_limits.MaxBody = MDO_REMOTE_HTTP_BODY_MAX;
+    xrtHttp1BodyLimitsInit(&body_limits); body_limits.MaxBody = MDO_REMOTE_HTTP_RESPONSE_MAX;
     body_limits.MaxTrailer = 4096u; body_limits.MaxTrailers = 16u;
     if (head.Status < 200u || !xrtHttp1ResponseBodyPlan(&head,xrtStrView(Request->Method),&plan) ||
         plan.Mode == XHTTP1_BODY_TUNNEL || plan.Mode == XHTTP1_BODY_CLOSE ||

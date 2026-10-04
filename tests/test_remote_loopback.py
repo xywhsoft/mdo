@@ -62,7 +62,7 @@ static bool LoopTestResponseRoute(MdoApiContext* c) {
         bool ok = MdoApiConnectionSend(c,text,sizeof(text)-1u); xrtNetStreamClose(c->Request->tcp); return ok;
     }
     if (xrtStrEqual(c->Target.Query,XRT_STR_LITERAL("oversize"))) {
-        const char text[] = "HTTP/1.1 200 OK\r\nContent-Length: 34603009\r\nConnection: close\r\n\r\n";
+        const char text[] = "HTTP/1.1 200 OK\r\nContent-Length: 100663297\r\nConnection: close\r\n\r\n";
         return MdoApiConnectionSend(c,text,sizeof(text)-1u);
     }
     unsigned char bytes[20001]; for (size_t i=0u; i<sizeof(bytes); i++) bytes[i] = (uint8)i;

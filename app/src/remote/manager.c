@@ -465,7 +465,7 @@ static int32 MdoRemoteConnectionWorker(void* Data)
             MdoRemoteBridgeDestroy(bridge); bridge = NULL;
         }
         if (!bridge) {
-            bridge = MdoRemoteBridgeCreate(g_MdoRemote.Server);
+            bridge = MdoRemoteBridgeCreate(g_MdoRemote.Server,&net);
             if (bridge) { bridge_member = lease.MemberId; strcpy(bridge_device,identity.Id); }
         }
         if (!bridge) goto closed;

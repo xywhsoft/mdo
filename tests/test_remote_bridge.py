@@ -53,8 +53,9 @@ class Rpc:
             if opcode == 9: self.socket.send(10,payload); continue
             assert opcode in (1,2),(opcode,payload)
             if opcode == 1: return json.loads(payload)
-            assert len(payload) > 29 and payload[:5] == b'MDP1\x02'
-            return {'type':'chunk','id':payload[5:21].hex(),'offset':struct.unpack('!Q',payload[21:29])[0],'body':payload[29:]}
+            assert len(payload) > 29 and payload[:4] == b'MDP1' and payload[4] in (2,3)
+            return {'type':'chunk' if payload[4] == 2 else 'live_chunk','id':payload[5:21].hex(),
+                'offset':struct.unpack('!Q',payload[21:29])[0],'body':payload[29:]}
 
     def begin(self, method, path, body=b'', headers=(), request_id=None, sequence=None, runtime=None, digest=None):
         write = method not in ('GET','HEAD')

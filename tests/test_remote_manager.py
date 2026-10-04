@@ -21,13 +21,14 @@ from smoke import fixture, USER, PASSWORD, client_hash
 from channel_e2e import WebSocket
 
 
-def run(host: Path, website_host: Path, exercise=None, native_hook='', native_routes=''):
+def run(host: Path, website_host: Path, exercise=None, native_hook='', native_routes='', site_setup=None):
     port, website_port = free_port(), free_port()
     website = fixture(website_port,register_interval=0)
     (ROOT/'.build').mkdir(exist_ok=True)
     site = Path(tempfile.mkdtemp(prefix='remote-manager-',dir=ROOT/'.build'))
     shutil.copytree(ROOT/'app',site,dirs_exist_ok=True)
     home = site/'mdo-home'
+    if site_setup: site_setup(site,home)
     origin = f'http://127.0.0.1:{website_port}'
     unity = site/'generated/mdo_unity.c'
     unity.write_text('#define MDO_ACCOUNT_SERVICE_ORIGIN '+json.dumps(origin)+'\n'+unity.read_text(encoding='utf-8'),encoding='utf-8')

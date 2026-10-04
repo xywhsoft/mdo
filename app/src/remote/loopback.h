@@ -4,6 +4,8 @@
 #include <xsbase.h>
 
 #define MDO_REMOTE_HTTP_BODY_MAX (33u * 1024u * 1024u)
+/* Matches the existing session backup export cap; streamed, never retained. */
+#define MDO_REMOTE_HTTP_RESPONSE_MAX (96u * 1024u * 1024u)
 typedef struct MdoRemoteHttpRequest {
     cstr Method;
     cstr Target; /* Origin-form /api/v1 only; never a URL. */
