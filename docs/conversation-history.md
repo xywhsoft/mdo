@@ -47,3 +47,27 @@
 摘要单独分页、模型调用完成与 Agent 回合完成的区别，以及含 70 轮的单个离线
 JSONL 文件超过旧阈值后继续读取、追加和重启。浏览器夹具验证自动折叠、展开、
 未加载回合跳转及 1280 / 390 像素宽度。未运行压力或高负载测试。
+
+## 本次验证与交付
+
+2026-10-05：373 项前端测试、57 项相关合同检查通过；109 个原生 JS 模块语法
+检查通过。实际 xs/TCC 和 Windows 打包版验证摘要分页、随机事件定位、旧阈值以上
+继续追加、恢复回合使用相同模型 turn ID、重启后最早记录，以及原 WebSocket
+鉴权、增量推送、断线补齐、权限和 ask 流程。Windows 单文件 WebView 启动、
+便携目录和正常退出检查通过。Windows GCC / Android ARM64 clang 的项目源代码
+均通过 `-Wall -Wextra -Werror -fsyntax-only`；外部 SDK 作为系统头文件处理。
+
+浏览器验证完成后自动折叠、手动展开、未加载回合跳转、键盘摘要预览、手机宽度
+无横向溢出，以及读取错误时仍保留已有四轮消息。证据位于本机
+`.build/conversation-history-desktop.png` 和 `.build/conversation-history-mobile.png`。
+
+根目录产物已更新，旧产物备份在 `.build/mdo-before-conversation-history*`：
+
+- `mdo.exe`：SHA256 `1c10dfa4c4ea47938ef401cdd7fd63c331a51048751af95606a94f5a6dc953d6`。
+- `mdo-arm64-v8a.apk`：versionCode `20261010`，SHA256
+  `a93b28b5b1ee188f0f033b7f7268f192a63a5b100ab35d5ac445516a8c454f0a`。
+  APK 已通过现有开发签名的 v2 / v3 校验和 16 KiB ZIP 对齐；本次未安装到手机。
+
+历史存储和页面的主要提交为 `490cb06`、`a7614fe`、`485e81d`，错误保留和重试
+在 `9fece69`。该末次提交同时收录共享工作区当时已经暂存的账号 / 搜索整理，
+相关代码未被本任务回退。产物按构建时工作区生成，也包含现有的记忆管理修改。
