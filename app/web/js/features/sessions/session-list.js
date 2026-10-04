@@ -29,7 +29,7 @@ function activityText(activity) {
 
 export function createSessionList({ container, count, filter, searchInput, store, projectsStore, runsStore,
   navigation, onSelect, onAction, onNewInProject, onAddProject, onBrowseProject,
-  onManageProject, onManageProjects, onProjectAction }) {
+  onRefreshProjects, onProjectAction }) {
   let query = "";
   let status = filter.value;
   let openMenu = "";
@@ -471,7 +471,7 @@ export function createSessionList({ container, count, filter, searchInput, store
         for (const group of groups.projects) collapsed.add(`project:${group.id}`);
         render();
       }),
-      option(t("nav.manageProjects", {}, "管理项目"), "list-options", () => onManageProjects?.()),
+      option(t("project.refresh", {}, "刷新"), "list-options", () => onRefreshProjects?.()),
     ];
     const options = menuButton("list:options", t("nav.listOptions", {}, "列表选项"), "list-options", listOptions);
     const add = actionButton(t("nav.addProject", {}, "添加项目"), "plus", "add-project", () => {
@@ -499,8 +499,11 @@ export function createSessionList({ container, count, filter, searchInput, store
               (origin) => onProjectAction("edit", group.id, origin)),
             option(t("project.unregister", {}, "取消注册"), `menu:${key}`,
               (origin) => onProjectAction("unregister", group.id, origin), { tone: "danger" }),
+            option(t("project.preview", {}, "核对清除范围"), `menu:${key}`,
+              (origin) => onProjectAction("purge", group.id, origin)),
           ] : []),
-          option(t("nav.manageProjects", {}, "管理项目"), `menu:${key}`, () => onManageProject?.(group.id)),
+          ...(onProjectAction ? [option(t("project.memory", {}, "项目记忆"), `menu:${key}`,
+            () => onProjectAction("memory", group.id))] : []),
         ]);
       const heading = element("div", { className: "session-group-heading session-project-heading" },
         [toggle, create, projectOptions.button]);
@@ -706,6 +709,17 @@ export function createSessionList({ container, count, filter, searchInput, store
   return Object.freeze({
     setQuery(value) { query = value; container.scrollTop = 0; render(); },
     setUnread(keys) { unread = new Set(keys); syncIndicators(); },
+    focusProjects(projectId) {
+      status = "active"; filter.value = status; query = "";
+      if (searchInput) searchInput.value = "";
+      openMenu = "";
+      collapsed.delete("section:projects");
+      if (projectId) collapsed.delete(`project:${projectId}`);
+      render();
+      const control = sidebarFocus(projectId ? `menu:project:${projectId}` : "section:projects") ?? sidebarFocus("section:projects");
+      control?.focus();
+      control?.scrollIntoView({ block: "nearest" });
+    },
     showActive() { status = "active"; query = ""; filter.value = status; openMenu = ""; render(); },
     destroy() {
       unsubscribeStore();

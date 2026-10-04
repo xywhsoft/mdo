@@ -299,7 +299,7 @@
             <button type="button" data-settings-section="agent">Agent</button>
             <button type="button" data-settings-section="web" data-i18n="settings.web">联网与搜索</button>
             <p data-i18n="settings.resources">资源</p>
-            <button type="button" data-settings-section="projects" data-i18n="settings.projects">项目</button>
+            <button type="button" data-settings-section="memory" data-i18n="settings.memoryManagement">记忆管理</button>
             <button type="button" data-settings-section="schedules" data-i18n="settings.schedules">计划任务</button>
             <button type="button" data-settings-section="models" data-i18n="settings.models">模型</button>
             <button type="button" data-settings-section="extensions" data-i18n="settings.extensions">扩展与 MCP</button>
@@ -416,34 +416,26 @@
               <section class="settings-section resource-section" data-settings-panel="extensions" hidden><div class="settings-section-heading"><h2 data-i18n="settings.extensions">扩展与 MCP</h2><p data-i18n="resource.extensionsDescription">查看 Agent、Skill、Module 和 MCP 连接。</p></div><div id="settings-extensions-list"></div></section>
               <section class="settings-section resource-section" data-settings-panel="permissions" hidden><div class="settings-section-heading"><h2 data-i18n="settings.permissions">权限</h2><p data-i18n="resource.permissionsDescription">查看服务端生效的权限方案；运行时审批仍由 Agent 策略执行。</p></div><div id="settings-permissions-list"></div></section>
               <section class="settings-section resource-section" data-settings-panel="diagnostics" hidden><div class="settings-section-heading"><h2 data-i18n="settings.diagnostics">诊断与存储</h2><p data-i18n="resource.diagnosticsDescription">检查便携 Home、运行状态和可操作诊断。</p></div><div id="settings-diagnostics-list"></div></section>
-            <section class="settings-section resource-section project-section" data-settings-panel="projects" aria-labelledby="settings-projects-title" hidden>
+            <section class="settings-section resource-section memory-section" data-settings-panel="memory" aria-labelledby="settings-memory-title" hidden>
               <div class="settings-section-heading">
-                <h2 id="settings-projects-title" data-i18n="settings.projects">项目</h2>
-                <p data-i18n="project.description">管理工作区目录和默认模型。取消注册会保留已有会话与计划。</p>
+                <h2 id="settings-memory-title" data-i18n="settings.memoryManagement">记忆管理</h2>
+                <p data-i18n="memory.managementDescription">查看全局和项目的记忆文件，编辑 Markdown 内容或打开所在目录。</p>
               </div>
-              <div class="project-panel-toolbar"><button class="secondary-button" id="projects-add" type="button" data-i18n="project.add">添加项目</button><button class="secondary-button" id="projects-refresh" type="button" data-i18n="project.refresh">刷新</button><button class="secondary-button" id="global-memory" type="button" data-i18n="project.globalMemory">全局记忆</button><button class="secondary-button" id="global-memory-directory" type="button" data-i18n="project.openMemoryDirectory">打开记忆目录</button></div>
-              <div id="settings-projects-list" class="project-settings-list" aria-live="polite"></div>
-              <section id="project-purge-recovery" class="resource-card project-purge-recovery" aria-labelledby="project-purge-recovery-title" hidden>
-                <h3 id="project-purge-recovery-title" tabindex="-1"></h3>
-                <p data-purge-field="description"></p>
-                <dl>
-                  <dt data-purge-label="name"></dt><dd data-purge-field="name"></dd>
-                  <dt data-purge-label="project_id"></dt><dd data-purge-field="project_id"></dd>
-                  <dt data-purge-label="revision"></dt><dd data-purge-field="revision"></dd>
-                  <dt data-purge-label="purge_request_id"></dt><dd data-purge-field="purge_request_id"></dd>
-                </dl>
-                <p data-purge-field="status" role="status"></p>
-                <p data-purge-field="error" class="resource-error" role="alert" hidden></p>
-                <div class="project-settings-actions">
-                  <button class="secondary-button" type="button" data-purge-action="query"></button>
-                  <button class="secondary-button" type="button" data-purge-action="cancel" hidden></button>
-                  <button class="primary-button" type="button" data-purge-action="acknowledge" hidden></button>
-                  <button class="secondary-button" type="button" data-purge-action="copy" hidden></button>
-                  <button class="primary-button" type="button" data-purge-action="reload" hidden></button>
-                  <button class="secondary-button" type="button" data-purge-action="review" hidden></button>
-                  <button class="primary-button" type="button" data-purge-action="complete" hidden></button>
-                </div>
-              </section>
+              <div class="memory-page-toolbar">
+                <label><span data-i18n="memory.scope">记忆范围</span><select id="memory-scope"></select></label>
+                <button class="secondary-button" id="memory-page-refresh" type="button" data-i18n="memory.refresh">刷新</button>
+                <button class="secondary-button" id="memory-page-new" type="button" data-i18n="memory.newFile">新建文件</button>
+                <button class="secondary-button" id="memory-page-directory" type="button" data-i18n="memory.openDirectory">打开文件夹</button>
+              </div>
+              <p class="memory-page-status" id="memory-page-status" role="status"></p>
+              <div class="memory-page-layout">
+                <div class="memory-page-list" id="memory-page-files" aria-label="记忆文件" data-i18n-aria-label="memory.files"></div>
+                <article class="memory-file-view" aria-labelledby="memory-file-title">
+                  <header><div><h3 id="memory-file-title" data-i18n="memory.selectFile">选择记忆文件</h3><p id="memory-file-path"></p></div><button class="secondary-button" id="memory-page-edit" type="button" data-i18n="memory.editFile" disabled>编辑文件</button></header>
+                  <pre id="memory-file-content" tabindex="0"></pre>
+                </article>
+              </div>
+
             </section>
 
             <section class="settings-section schedule-section" data-settings-panel="schedules" aria-labelledby="schedules-title" hidden>
@@ -639,6 +631,31 @@
       </div>
       <footer><button class="secondary-button" type="button" id="directory-cancel" data-i18n="project.cancel">取消</button><button class="primary-button" type="button" id="directory-choose" data-i18n="directory.choose">使用此目录</button></footer>
     </div>
+  </dialog>
+
+  <dialog class="project-preview-dialog" id="project-purge-recovery-dialog" aria-labelledby="project-purge-recovery-title">
+    <button class="secondary-button" id="project-purge-recovery-close" type="button" data-i18n="project.close">关闭</button>
+  <section id="project-purge-recovery" class="resource-card project-purge-recovery" aria-labelledby="project-purge-recovery-title" hidden>
+    <h3 id="project-purge-recovery-title" tabindex="-1"></h3>
+    <p data-purge-field="description"></p>
+    <dl>
+      <dt data-purge-label="name"></dt><dd data-purge-field="name"></dd>
+      <dt data-purge-label="project_id"></dt><dd data-purge-field="project_id"></dd>
+      <dt data-purge-label="revision"></dt><dd data-purge-field="revision"></dd>
+      <dt data-purge-label="purge_request_id"></dt><dd data-purge-field="purge_request_id"></dd>
+    </dl>
+    <p data-purge-field="status" role="status"></p>
+    <p data-purge-field="error" class="resource-error" role="alert" hidden></p>
+    <div class="resource-actions">
+      <button class="secondary-button" type="button" data-purge-action="query"></button>
+      <button class="secondary-button" type="button" data-purge-action="cancel" hidden></button>
+      <button class="primary-button" type="button" data-purge-action="acknowledge" hidden></button>
+      <button class="secondary-button" type="button" data-purge-action="copy" hidden></button>
+      <button class="primary-button" type="button" data-purge-action="reload" hidden></button>
+      <button class="secondary-button" type="button" data-purge-action="review" hidden></button>
+      <button class="primary-button" type="button" data-purge-action="complete" hidden></button>
+    </div>
+  </section>
   </dialog>
 
   <dialog class="confirm-dialog" id="project-unregister-dialog" aria-labelledby="project-unregister-title">

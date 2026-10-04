@@ -64,10 +64,12 @@ import { createRecoveryPanel } from "./features/approvals/recovery-panel.js";
 import { recoveryMatchesWorkspace } from "./features/approvals/recovery-decisions.js";
 import { createSettingsView } from "./features/settings/settings-view.js";
 import { createSchedulePanel } from "./features/settings/schedule-panel.js";
-import { createProjectPanel } from "./features/settings/project-panel.js";
+import { createProjectManagement } from "./features/projects/project-management.js";
+import { createMemoryManagement } from "./features/settings/memory-management.js";
+import { openMemoryPanel, openMemoryDirectory } from "./features/settings/memory-panel.js";
 import { createProjectPurgeConfirmation } from "./features/settings/project-purge-confirmation.js";
 import { createProjectPurgeRecovery } from "./features/settings/project-purge-recovery.js";
-import { createProjectPurgeRecoveryPanel } from "./features/settings/project-purge-recovery-panel.js";
+import { createProjectPurgeRecoveryPanel } from "./features/projects/project-purge-recovery-panel.js";
 import { createResourcePanels } from "./features/settings/resource-panels.js";
 import { createKeyboardShortcuts } from "./features/shell/keyboard-shortcuts.js";
 import { createRunNotifications } from "./features/shell/run-notifications.js";
@@ -121,7 +123,7 @@ export async function boot() {
       const saved = history.state?.mdoWorkspace;
       const route = navigation.get();
       const url = route.view === "workspace" && (!projectId || route.projectId === projectId)
-        ? "#/settings/projects" : location.href;
+        ? "#/" : location.href;
       history.replaceState({ ...history.state,
         ...(!projectId || saved?.projectId === projectId ? { mdoWorkspace: null } : {}) }, "", url);
       window.location.reload();
@@ -252,7 +254,6 @@ export async function boot() {
       closeDrawers();
       prompt.focus();
     },
-    onUpdated(project) { projectPanel.focusProject(project.id); },
   });
   $("#close-project-dialog").addEventListener("click", () => $("#project-dialog").close());
   $("#cancel-project").addEventListener("click", () => $("#project-dialog").close());
@@ -283,18 +284,16 @@ export async function boot() {
     onAction: handleSessionAction,
     onAddProject: (workspaceRoot) => createProject(projectDefaultsFromWorkspace(workspaceRoot)),
     onBrowseProject: (path, select) => directoryPicker.open(path, select),
-    onManageProject(projectId) {
-      navigation.openSettings("projects");
-      closeDrawers();
-      projectPanel.focusProject(projectId);
-    },
-    onManageProjects() {
-      navigation.openSettings("projects");
-      closeDrawers();
-    },
+    onRefreshProjects: loadProjects,
     onProjectAction(action, projectId, origin) {
       if (action === "edit") return projectDialog.open({ id: projectId }, origin);
-      if (action === "unregister") return projectPanel.openUnregister({ id: projectId }, origin);
+      if (action === "unregister") return projectManagement.openUnregister({ id: projectId }, origin);
+      if (action === "purge") return projectManagement.openPreview({ id: projectId,
+        name: projectsStore.get().data?.items?.find((item) => item.id === projectId)?.name }, origin);
+      if (action === "memory") {
+        memoryManagement.selectScope(projectId);
+        navigation.openSettings("memory");
+      }
     },
     onNewInProject: switchToProject,
   });
@@ -327,14 +326,14 @@ export async function boot() {
     name: $("#header-project-name"), separator: $("#session-title-separator"),
     menu: $("#header-project-menu"), navigation, projectsStore,
     onSelectProject: switchToProject,
-    onManageProjects() { navigation.openSettings("projects"); },
+    onManageProjects: manageSidebarProjects,
   });
   const mobileProjectSwitcher = createProjectSwitcher({
     control: $("#mobile-project-control"), button: $("#mobile-project-switch"),
     name: $("#mobile-project-name"), menu: $("#mobile-project-menu"),
     navigation, projectsStore, includeNewTask: true,
     onSelectProject: switchToProject,
-    onManageProjects() { navigation.openSettings("projects"); },
+    onManageProjects: manageSidebarProjects,
   });
   mobileLayout.addEventListener("change", () => {
     for (const menu of actionMenus) menu.close();
@@ -344,6 +343,11 @@ export async function boot() {
   function showActiveSessions() {
     $("#session-search").value = "";
     sessionList.showActive();
+  }
+  function manageSidebarProjects(projectId) {
+    if (navigation.get().view === "settings") navigation.backToWorkspace();
+    setDrawer("sidebar", true, { focus: false });
+    sessionList.focusProjects(projectId);
   }
   $("#session-search").addEventListener("input", (event) => sessionList.setQuery(event.target.value));
   createComposerProject({ select: $("#composer-project"), row: $("#composer-project-row"),
@@ -1014,15 +1018,19 @@ export async function boot() {
       window.requestAnimationFrame(() => purgeRecoveryPanel.focus());
     },
   });
-  const projectPanel = createProjectPanel({
-    panel: $('[data-settings-panel="projects"]'), projectsStore,
-    modelsStore, projectDialog, navigation, purgeRecovery, purgeConfirmation,
+  const projectManagement = createProjectManagement({
+    projectsStore, purgeRecovery, purgeConfirmation, focusProject: manageSidebarProjects,
+  });
+  const memoryManagement = createMemoryManagement({
+    panel: $('[data-settings-panel="memory"]'), projectsStore,
+    openEditor: openMemoryPanel, openDirectory: openMemoryDirectory,
   });
   const purgeRecoveryPanel = createProjectPurgeRecoveryPanel({
+    dialog: $("#project-purge-recovery-dialog"),
     panel: $("#project-purge-recovery"), notice: $("#project-purge-notice"),
     recovery: purgeRecovery, navigation,
     unsentSnapshots: draftStore.unsentSnapshots,
-    onReview: (intent, origin) => projectPanel.openPurgeReview(intent, origin),
+    onReview: (intent, origin) => projectManagement.openPurgeReview(intent, origin),
   });
   const schedulePanel = createSchedulePanel({
     panel: $('[data-settings-panel="schedules"]'),
@@ -1597,6 +1605,7 @@ export async function boot() {
       skipLink.href = "#settings-content";
       skipLink.textContent = t("shell.skipSettings");
       const selectedSection = settingsView.selectSection(settingsSection);
+      memoryManagement.setActive(selectedSection === "memory");
       resourcePanels.selectSection(selectedSection);
       if (selectedSection === "schedules") void schedulePanel.refresh();
       closeDrawers();
@@ -1607,6 +1616,7 @@ export async function boot() {
     }
     const focusWasInSettings = settingsActive &&
       settingsWorkspace.contains(document.activeElement);
+    memoryManagement.setActive(false);
     settingsWorkspace.hidden = true;
     for (const region of agentWorkspaceRegions) region.hidden = false;
     if (settingsActive) settingsView.setActive(false);

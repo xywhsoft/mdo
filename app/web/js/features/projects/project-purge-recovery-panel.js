@@ -14,7 +14,7 @@ function statusCopy(state) {
 
 // Stable nodes keep keyboard focus while a query, locale change, or another
 // page changes the result. No filesystem names are interpreted as markup.
-export function createProjectPurgeRecoveryPanel({ panel, notice, recovery, navigation,
+export function createProjectPurgeRecoveryPanel({ panel, notice, recovery, navigation, dialog,
   unsentSnapshots = () => [], onReview = () => {} }) {
   const query = panel.querySelector('[data-purge-action="query"]');
   const cancel = panel.querySelector('[data-purge-action="cancel"]');
@@ -26,8 +26,13 @@ export function createProjectPurgeRecoveryPanel({ panel, notice, recovery, navig
   const error = panel.querySelector('[data-purge-field="error"]');
   const binding = panel.querySelector("dl");
   const jump = notice.querySelector("button");
+  const fallbackFocus = () => document.querySelector(navigation.get().view === "settings"
+    ? "#settings-title" : "#new-session")?.focus({ preventScroll: true });
 
   function focus() {
+    if (!recovery.isPaused()) { fallbackFocus(); return; }
+    if (!dialog.open) dialog.showModal();
+    render();
     panel.querySelector("h3").focus({ preventScroll: true });
     panel.scrollIntoView({ block: "nearest" });
   }
@@ -37,8 +42,8 @@ export function createProjectPurgeRecoveryPanel({ panel, notice, recovery, navig
     const active = document.activeElement;
     panel.hidden = !paused;
     panel.setAttribute("aria-busy", String(state.busy));
-    notice.hidden = !paused || (navigation.get().view === "settings" &&
-      navigation.get().settingsSection === "projects");
+    if (!paused && dialog.open) dialog.close();
+    notice.hidden = !paused || dialog.open;
     notice.querySelector("span").textContent = t("purgeRecovery.notice");
     jump.textContent = t("purgeRecovery.open");
     panel.querySelector("h3").textContent = t("purgeRecovery.title");
@@ -75,7 +80,7 @@ export function createProjectPurgeRecoveryPanel({ panel, notice, recovery, navig
     // If the clicked action disappears, return to the surviving query button.
     // Do not steal focus from a user's newer choice elsewhere on the page.
     if (active && panel.contains(active) && (panel.hidden || active.hidden)) {
-      if (panel.hidden) document.querySelector("#projects-refresh").focus();
+      if (panel.hidden) fallbackFocus();
       else query.focus();
     }
   }
@@ -85,7 +90,7 @@ export function createProjectPurgeRecoveryPanel({ panel, notice, recovery, navig
     // Disabling the clicked button while awaiting HTTP may move focus to
     // body before render sees it. Recover it after the operation settles.
     if (document.activeElement === document.body || document.activeElement === origin) {
-      if (panel.hidden) document.querySelector("#projects-refresh").focus();
+      if (panel.hidden) fallbackFocus();
       else (origin.hidden ? query : origin).focus();
     }
   }
@@ -93,7 +98,10 @@ export function createProjectPurgeRecoveryPanel({ panel, notice, recovery, navig
   cancel.addEventListener("click", () => { void act(cancel, recovery.cancel); });
   acknowledge.addEventListener("click", () => { void act(acknowledge, recovery.acknowledgeAbort); });
   reload.addEventListener("click", () => recovery.reload());
-  review.addEventListener("click", () => onReview(recovery.get().intent, review));
+  review.addEventListener("click", () => {
+    dialog.close();
+    onReview(recovery.get().intent, jump);
+  });
   complete.addEventListener("click", () => { void act(complete, recovery.completeCommitted); });
   copy.addEventListener("click", async () => {
     try {
@@ -101,10 +109,9 @@ export function createProjectPurgeRecoveryPanel({ panel, notice, recovery, navig
       toast(t("purgeRecovery.copiedDrafts"));
     } catch (cause) { toast(errorMessage(cause), "error"); }
   });
-  jump.addEventListener("click", () => {
-    navigation.openSettings("projects");
-    window.requestAnimationFrame(focus);
-  });
+  jump.addEventListener("click", focus);
+  dialog.querySelector("#project-purge-recovery-close").addEventListener("click", () => dialog.close());
+  dialog.addEventListener("close", () => { if (!dialog.open) render(); });
   recovery.subscribe(render);
   subscribeLocale(() => render());
   navigation.subscribe(() => render());

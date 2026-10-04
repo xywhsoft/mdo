@@ -21,6 +21,7 @@ let baseline = "";
 let busy = false;
 let requestSerial = 0;
 let returnFocus = null;
+let onClosed = null;
 let activeProject = null;
 let statusMessage = null;
 
@@ -207,9 +208,13 @@ dialog.addEventListener("cancel", (event) => {
     "有未保存的修改。请保存，或点击“放弃并关闭”。", "error");
 });
 dialog.addEventListener("close", () => {
+  if (dialog.open) return;
   ++requestSerial;
   returnFocus?.focus();
   returnFocus = null;
+  const notify = onClosed;
+  onClosed = null;
+  notify?.({ selectedId });
 });
 form.addEventListener("input", updateDirty);
 form.addEventListener("change", updateDirty);
@@ -281,7 +286,7 @@ dialog.querySelector("#memory-delete-apply").addEventListener("click", async () 
   } finally { setBusy(false); }
 });
 
-export function openMemoryPanel(project = null) {
+export function openMemoryPanel(project = null, { selectId = "", onClose = null } = {}) {
   if (dialog.open) return;
   activeProject = project;
   collectionPath = project ? `/memory/projects/${resourceId(project.id, "project")}`
@@ -290,6 +295,7 @@ export function openMemoryPanel(project = null) {
   selectedId = "";
   baseline = "";
   returnFocus = document.activeElement;
+  onClosed = onClose;
   renderTitle();
   pathLabel.textContent = project ? `Home/memory/projects/${project.id}.json`
     : "Home/memory/global.json";
@@ -297,7 +303,7 @@ export function openMemoryPanel(project = null) {
   clear(list);
   dialog.showModal();
   dialog.querySelector("#memory-close").focus();
-  void refresh({ discardDraft: true, selectId: "" });
+  void refresh({ discardDraft: true, selectId });
 }
 
 subscribeLocale(() => {

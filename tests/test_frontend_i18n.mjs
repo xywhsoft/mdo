@@ -226,7 +226,8 @@ test("bundled language packs cover the annotated shell and switch without stale 
     "js/features/settings/settings-view.js",
     "js/features/settings/resource-panels.js",
     "js/features/settings/schedule-panel.js",
-    "js/features/settings/project-panel.js",
+    "js/features/projects/project-management.js",
+    "js/features/settings/memory-management.js",
     "js/features/settings/memory-panel.js",
     "js/features/settings/model-config-panel.js",
     "js/features/shell/pane-layout.js",
@@ -264,7 +265,7 @@ test("bundled language packs cover the annotated shell and switch without stale 
     if (path.endsWith("schedule-panel.js"))
       for (const [, key] of source.matchAll(/"(schedule\.[^"]+)"/g))
         assert.ok(referenceKeys.includes(key), `missing schedule key: ${key}`);
-    if (path.endsWith("project-panel.js") || path.endsWith("project-dialog.js"))
+    if (path.endsWith("project-management.js") || path.endsWith("project-dialog.js"))
       for (const [, key] of source.matchAll(/"(project\.[^"]+)"/g))
         assert.ok(referenceKeys.includes(key), `missing project key: ${key}`);
     if (path.endsWith("memory-panel.js"))

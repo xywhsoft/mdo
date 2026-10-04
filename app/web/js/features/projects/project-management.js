@@ -1,14 +1,11 @@
-import { loadProjects, readProject, readProjectPurgePreview,
-  unregisterProject, updateProject } from "../../state/catalogs.js";
+import { readProject, readProjectPurgePreview,
+  unregisterProject } from "../../state/catalogs.js";
 import { clear, element, errorMessage, toast } from "../../utils/dom.js";
 import { subscribeLocale, t } from "../../i18n.js";
-import { openMemoryPanel, openMemoryDirectory } from "./memory-panel.js";
-import { reviewedPurgeIntent, purgeBindingsMatch } from "./project-purge-contract.js";
-import { findModel } from "../../utils/models.js";
+import { reviewedPurgeIntent, purgeBindingsMatch } from "../settings/project-purge-contract.js";
 
-export function createProjectPanel({ panel, projectsStore, modelsStore,
-  projectDialog, navigation, purgeRecovery, purgeConfirmation }) {
-  const list = panel.querySelector("#settings-projects-list");
+// Project operations belong to the workspace sidebar, independent of Settings.
+export function createProjectManagement({ projectsStore, purgeRecovery, purgeConfirmation, focusProject }) {
   const dialog = document.querySelector("#project-unregister-dialog");
   const description = dialog.querySelector("#project-unregister-description");
   const error = dialog.querySelector("#project-unregister-error");
@@ -62,18 +59,6 @@ export function createProjectPanel({ panel, projectsStore, modelsStore,
     previewConfirm.disabled = true;
     previewDialog.showModal(); previewClose.focus();
     void loadPreview();
-  }
-
-  function focusProject(id, control = "edit") {
-    window.requestAnimationFrame(() => {
-      if (!panel.getClientRects().length) return;
-      const card = [...list.querySelectorAll("[data-project-id]")]
-        .find((item) => item.dataset.projectId === id);
-      const targetControl = card?.querySelector(`[data-project-action="${control}"]`) ??
-        card?.querySelector("button");
-      targetControl?.focus();
-      card?.scrollIntoView({ block: "nearest" });
-    });
   }
 
   function showPreview(data) {
@@ -170,115 +155,6 @@ export function createProjectPanel({ panel, projectsStore, modelsStore,
     }
   }
 
-  function render() {
-    const snapshot = projectsStore.get();
-    const activeCard = document.activeElement?.closest?.("[data-project-id]");
-    const activeId = activeCard?.dataset.projectId;
-    const activeAction = document.activeElement?.dataset.projectAction;
-    clear(list);
-    if (snapshot.status === "error") {
-      list.append(element("p", { className: "resource-error",
-        text: errorMessage(snapshot.error) }));
-      return;
-    }
-    const projects = snapshot.data?.items ?? [];
-    if (!projects.length) {
-      list.append(element("p", { className: "empty-state",
-        text: t("project.empty", {}, "还没有项目。可以在这里或侧栏添加工作区。") }));
-      return;
-    }
-    const models = modelsStore.get().data?.models ?? [];
-    for (const project of projects) {
-      const card = element("article", { className: "resource-card project-settings-card",
-        attrs: { "data-project-id": project.id } });
-      card.append(element("h3", { text: project.name || project.id }));
-      card.append(element("p", { text: project.managed
-        ? project.workspace_root : t("project.discovered", {}, "从已有会话或计划中发现") }));
-      card.append(element("p", { text: t("project.counts", {
-        sessions: project.session_count, schedules: project.schedule_count, id: project.id,
-      }, `${project.session_count} 个会话 · ${project.schedule_count} 项计划 · ${project.id}`) }));
-      const actions = element("div", { className: "project-settings-actions" });
-      const task = element("button", { className: "secondary-button",
-        text: t("project.newTask", {}, "新任务"),
-        attrs: { type: "button", "data-project-action": "task" } });
-      task.addEventListener("click", () => navigation.newTask(project.id));
-      actions.append(task);
-      const memory = element("button", { className: "secondary-button",
-        text: t("project.memory", {}, "项目记忆"),
-        attrs: { type: "button", "data-project-action": "memory" } });
-      memory.addEventListener("click", () => openMemoryPanel(project));
-      actions.append(memory);
-      const memoryDirectory = element("button", { className: "secondary-button",
-        text: t("project.openMemoryDirectory", {}, "打开记忆目录"), attrs: {
-          type: "button", "data-project-action": "memory-directory",
-          "aria-label": t("project.openProjectMemoryDirectory",
-            { name: project.name || project.id },
-            `打开 ${project.name || project.id} 的记忆目录`),
-        } });
-      memoryDirectory.addEventListener("click", () => { void openMemoryDirectory(project); });
-      actions.append(memoryDirectory);
-      if (project.managed) {
-        const label = element("label", { text: t("project.defaultModel", {}, "默认模型") });
-        const select = element("select", { attrs: {
-          "aria-label": t("project.projectDefaultModel", { name: project.name },
-            `${project.name} 的默认模型`), "data-project-action": "model",
-        } });
-        select.append(element("option", { text: t("project.followGlobal", {}, "跟随全局默认"),
-          attrs: { value: "" } }));
-        for (const model of models)
-          select.append(element("option", { text: model.name || model.id,
-            attrs: { value: model.id } }));
-        const selected = findModel(models, project.default_model_id)?.id ?? project.default_model_id;
-        if (selected && !models.some((model) => model.id === selected))
-          select.append(element("option", { text: t("project.unavailableModel",
-            { id: project.default_model_id }, `${project.default_model_id}（已不可用）`),
-            attrs: { value: project.default_model_id } }));
-        select.value = selected;
-        select.addEventListener("change", async () => {
-          select.disabled = true;
-          try {
-            const current = await readProject(project.id);
-            await updateProject(project.id, {
-              name: current.name, workspace_root: current.workspace_root,
-              default_model_id: select.value,
-            }, current.etag);
-            toast(t("project.modelUpdated", {}, "项目默认模型已更新"));
-            focusProject(project.id, "model");
-          } catch (cause) {
-            toast(errorMessage(cause), "error");
-            render();
-          }
-        });
-        label.append(select);
-        actions.append(label);
-        const edit = element("button", { className: "secondary-button",
-          text: t("project.edit", {}, "编辑"),
-          attrs: { type: "button", "data-project-action": "edit" } });
-        edit.addEventListener("click", () => { void projectDialog.open(project); });
-        actions.append(edit);
-        const preview = element("button", { className: "secondary-button",
-          text: t("project.preview", {}, "核对清除范围"), attrs: {
-            type: "button", "data-project-action": "preview",
-            "aria-label": t("project.previewProject", { name: project.name || project.id },
-              `核对 ${project.name || project.id} 的清除范围`),
-          } });
-        preview.addEventListener("click", () => openPreview(project, preview));
-        actions.append(preview);
-        const remove = element("button", { className: "danger-link",
-          text: t("project.unregister", {}, "取消注册"),
-          attrs: { type: "button", "data-project-action": "unregister" } });
-        remove.addEventListener("click", async () => {
-          try { await openUnregister(project, remove); }
-          catch (cause) { toast(errorMessage(cause), "error"); }
-        });
-        actions.append(remove);
-      }
-      card.append(actions);
-      list.append(card);
-    }
-    if (activeId && activeAction) focusProject(activeId, activeAction);
-  }
-
   dialog.querySelector("form").addEventListener("submit", async (event) => {
     if (event.submitter?.value !== "unregister") return;
     event.preventDefault();
@@ -289,7 +165,6 @@ export function createProjectPanel({ panel, projectsStore, modelsStore,
       await unregisterProject(target.id, target.etag);
       dialog.close();
       toast(t("project.unregistered", {}, "项目已取消注册；会话和计划仍保留"));
-      if (panel.getClientRects().length) panel.querySelector("#projects-add").focus();
     } catch (cause) {
       error.textContent = errorMessage(cause);
       error.hidden = false;
@@ -299,10 +174,11 @@ export function createProjectPanel({ panel, projectsStore, modelsStore,
   dialog.addEventListener("close", () => {
     if (dialog.open) return;
     ++unregisterEpoch;
+    const projectId = target?.id;
     target = null;
     if (unregisterOrigin?.isConnected && unregisterOrigin.getClientRects().length)
       unregisterOrigin.focus({ preventScroll: true });
-    else if (!panel.getClientRects().length) document.querySelector("#session-search")?.focus();
+    else focusProject(projectId);
     unregisterOrigin = null;
   });
   previewRefresh.addEventListener("click", () => { void loadPreview(); });
@@ -319,27 +195,14 @@ export function createProjectPanel({ panel, projectsStore, modelsStore,
     const id = previewProject?.id;
     if (!document.querySelector("#project-purge-confirm-dialog").open) {
       if (previewOrigin?.isConnected) previewOrigin.focus();
-      else if (id) focusProject(id, "preview");
+      else if (id) focusProject(id);
     }
     previewProject = null;
     previewOrigin = null;
     previewData = null;
   });
-  panel.querySelector("#projects-add").addEventListener("click", () => {
-    void projectDialog.open();
-  });
-  panel.querySelector("#projects-refresh").addEventListener("click", () => {
-    void loadProjects();
-  });
-  panel.querySelector("#global-memory").addEventListener("click", () => openMemoryPanel());
-  panel.querySelector("#global-memory-directory").addEventListener("click", () => {
-    void openMemoryDirectory();
-  });
-  projectsStore.subscribe(render);
-  modelsStore.subscribe(render);
   purgeRecovery.subscribe(() => { previewConfirm.disabled = !canConfirmPreview(); });
   subscribeLocale(() => {
-    render();
     if (previewDialog.open && previewProject) {
       previewTitle.textContent = t("project.previewTitle",
         { name: previewProject.name || previewProject.id },
@@ -349,8 +212,8 @@ export function createProjectPanel({ panel, projectsStore, modelsStore,
   });
 
   return Object.freeze({
-    focusProject,
     openUnregister,
+    openPreview,
     openPurgeReview(intent, origin) {
       openPreview({ id: intent.project_id, name: intent.name }, origin);
     },

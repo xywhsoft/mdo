@@ -50,6 +50,16 @@ class FrontendContractTests(unittest.TestCase):
         self.assertNotIn("webpack", combined.lower())
         self.assertNotIn("vite", combined.lower())
 
+    def test_memory_settings_has_no_project_management_controls(self) -> None:
+        self.assertIn('data-settings-section="memory"', self.index)
+        self.assertNotIn('data-settings-panel="projects"', self.index)
+        panel = self.index.split('data-settings-panel="memory"', 1)[1].split('</section>', 1)[0]
+        for control in ('memory-scope', 'memory-page-files', 'memory-file-content', 'memory-page-edit'):
+            self.assertIn(f'id="{control}"', panel)
+        for retired in ('projects-add', 'settings-projects-list', 'project-purge-recovery'):
+            self.assertNotIn(retired, panel)
+        self.assertNotIn('navigation.openSettings("projects")', self.scripts['js/app.js'])
+
     def test_api_client_enforces_envelope_and_no_store(self) -> None:
         client = self.scripts["js/api/client.js"]
         self.assertIn('const API_ROOT = "/api/v1"', client)
