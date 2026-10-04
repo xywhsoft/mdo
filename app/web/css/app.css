@@ -817,7 +817,7 @@ select:focus-visible,
 .composer-options, .composer-actions { display: flex; min-width: 0; align-items: center; gap: 8px; }
 .composer-options { flex: 0 0 auto; overflow: visible; gap: 4px; }
 .composer-actions { position: relative; flex: 0 1 auto; justify-content: flex-end; }
-.composer-attach { width: 34px; height: 34px; flex: 0 0 auto; padding: 0; border: 0; border-radius: 7px; background: transparent; color: var(--muted); font-size: 22px; line-height: 1; cursor: pointer; }
+.composer-attach { display: grid; width: 34px; height: 34px; flex: 0 0 auto; place-items: center; padding: 0; border: 0; border-radius: 7px; background: transparent; color: var(--muted); cursor: pointer; }
 .composer-attach:hover { background: var(--surface-hover); color: var(--ink); }
 .composer-attach:disabled { opacity: .4; cursor: default; }
 .composer-select { min-width: 0; max-width: 160px; height: 34px; padding: 0 6px; border: 0; border-radius: var(--radius-sm); background: transparent; color: var(--muted); font: inherit; font-size: 12px; cursor: pointer; }
