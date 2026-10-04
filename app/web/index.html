@@ -904,10 +904,15 @@
     <h2 id="account-login-title" data-i18n="account.login">登录账号</h2>
     <p data-account-progress role="status"></p>
     <a data-account-link target="_blank" rel="noopener noreferrer" data-i18n="account.reopen" hidden>再次打开登录页面</a>
-    <label class="account-remember"><input type="checkbox" name="remember" checked><span data-i18n="account.remember">记住此设备</span></label>
+    <form id="account-password-form">
+      <label class="account-field"><span data-i18n="account.identifier">账号、手机号或邮箱</span><input name="identifier" autocomplete="username" autocapitalize="none" spellcheck="false" maxlength="254" required></label>
+      <label class="account-field"><span data-i18n="account.password">密码</span><input name="password" type="password" autocomplete="current-password" maxlength="128" required></label>
+      <label class="account-remember"><input type="checkbox" name="remember" checked><span data-i18n="account.remember">记住此设备</span></label>
+      <button class="primary-button account-password-submit" type="submit" data-i18n="account.login">登录账号</button>
+    </form>
     <p class="account-note" data-account-storage></p>
     <div class="account-actions">
-      <button class="primary-button" type="button" data-account-action="begin" data-i18n="account.begin">在浏览器中登录</button>
+      <button class="secondary-button" type="button" data-account-action="begin" data-i18n="account.begin">其他登录方式 / 注册</button>
       <button class="secondary-button" type="button" data-account-action="restart" data-i18n="account.restart" hidden>重新开始</button>
       <button class="secondary-button" type="button" data-account-action="cancel" data-i18n="account.cancel">取消</button>
     </div>

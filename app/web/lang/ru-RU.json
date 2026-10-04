@@ -23,13 +23,13 @@
   "account.logout": "Выйти",
   "account.storage": "Зашифрованные устройством данные хранятся в mdo-home. После переноса на другое устройство войдите снова.",
   "account.storageUnavailable": "Безопасное хранение недоступно. Вход временный.",
-  "account.browserDescription": "Войдите в системном браузере. Пароль не передаётся через mdo.",
+  "account.browserDescription": "Другие способы входа и регистрация открываются в системном браузере.",
   "account.searchWaiting": "Поиск ожидает входа. Войдите, чтобы продолжить, или пропустите этот поиск.",
   "account.skip": "Пропустить",
   "account.success": "Вход выполнен",
   "account.reopen": "Снова открыть страницу входа",
   "account.remember": "Запомнить устройство",
-  "account.begin": "Войти через браузер",
+  "account.begin": "Другие способы входа / Регистрация",
   "account.restart": "Начать заново",
   "account.search403": "Поиск запрещён. Проверьте требования подтверждения на сайте.",
   "account.search429": "Лимит поиска достигнут. Повторите позже.",
@@ -1438,5 +1438,11 @@
   "composer.permissionBalanced": "Запрашивать разрешение при необходимости.",
   "composer.permissionFullAccess": "Разрешить прямое выполнение инструментов.",
   "composer.closeSettings": "Закрыть настройки модели",
-  "composer.localWorkspace": "Локальное рабочее пространство"
+  "composer.localWorkspace": "Локальное рабочее пространство",
+  "account.identifier": "Имя пользователя, телефон или почта",
+  "account.password": "Пароль",
+  "account.directDescription": "Войдите напрямую. Пароль используется только для проверки, не сохраняется и не передаётся модели.",
+  "account.signingIn": "Выполняется вход…",
+  "account.invalid_credentials": "Неверный аккаунт или пароль. Попробуйте снова.",
+  "account.login_rate_limited": "Слишком много попыток входа. Повторите позже."
 }

@@ -17,4 +17,8 @@
 #account-login-dialog h2 { margin-top:0; font-size:19px; }
 #account-login-dialog p { line-height:1.6; }
 #account-login-dialog a { color:var(--focus); }
+.account-field { display:grid; gap:8px; margin:16px 0; font-size:14px; }
+.account-field input { width:100%; min-width:0; box-sizing:border-box; padding:11px 12px; border:1px solid var(--border); border-radius:var(--radius-md); background:var(--surface); color:var(--ink); font:inherit; }
+.account-field input:focus-visible { outline:2px solid var(--focus); outline-offset:2px; }
+.account-password-submit { width:100%; margin:12px 0 0; }
 .account-remember { display:flex; align-items:center; gap:8px; margin-top:18px; }

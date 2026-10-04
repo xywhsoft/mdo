@@ -2,14 +2,15 @@ import { api } from "../../api/client.js";
 import { subscribeLocale, t } from "../../i18n.js";
 import { toast, errorMessage } from "../../utils/dom.js";
 
-// Identity credentials never enter this module. It receives public snapshots
-// and an opaque, short-lived browser handoff URL from the local native host.
+// Tokens stay in the native host. Passwords are submitted once from the form,
+// then cleared; account rendering uses only filtered public snapshots.
 export function createAccount({ navigation }) {
   const panel = document.querySelector("#account-panel");
   const sidebar = document.querySelector("#open-account");
   const dialog = document.querySelector("#account-login-dialog");
   const notice = document.querySelector("#account-search-notice");
   const remember = dialog.querySelector("[name=remember]");
+  const loginForm = dialog.querySelector("#account-password-form");
   const link = dialog.querySelector("[data-account-link]");
   let snapshot = null, timer = null, fetching = false, acting = false, disposed = false;
   let authorizationUrl = "", returnFocus = null, returnOwner = null, returnAction = "", dialogLogin = false;
@@ -36,7 +37,7 @@ export function createAccount({ navigation }) {
     sidebar.querySelector("[data-account-avatar]").textContent = signedIn() ? [...displayName()][0]?.toUpperCase() : "◉";
     sidebar.title = signedIn() ? copy("title") : copy("login");
     const body = panel.querySelector("[data-account-body]");
-    const stateText = copy(snapshot.state === "signed_in" ? "signedIn" :
+    const stateText = copy(snapshot.state === "signing_in" ? "signingIn" : snapshot.state === "signed_in" ? "signedIn" :
       snapshot.state === "authorizing" ? "waitingBrowser" : snapshot.state === "refreshing" ? "refreshing" :
       snapshot.state === "expired" ? "expired" : "signedOut");
     const status = text("p", stateText, "account-state"); status.setAttribute("role", "status");
@@ -77,7 +78,10 @@ export function createAccount({ navigation }) {
     remember.disabled = !snapshot.persistence_available || acting;
     if (!snapshot.persistence_available) remember.checked = false;
     dialog.querySelector("[data-account-storage]").textContent = copy(snapshot.persistence_available ? "storage" : "storageUnavailable");
-    dialog.querySelector("[data-account-progress]").textContent = snapshot.state === "authorizing" ? copy("waitingBrowser") : copy("browserDescription");
+    dialog.querySelector("[data-account-progress]").textContent = snapshot.state === "signing_in" ? copy("signingIn") :
+      snapshot.state === "authorizing" ? copy("waitingBrowser") : dialogLogin && snapshot.message ? copy(snapshot.message) : copy("directDescription");
+    loginForm.hidden = snapshot.state === "authorizing";
+    loginForm.querySelector("[type=submit]").disabled = acting || snapshot.state === "signing_in";
     link.hidden = !authorizationUrl;
     if (authorizationUrl) link.href = authorizationUrl;
     dialog.querySelector("[data-account-action=begin]").hidden = snapshot.state === "authorizing";
@@ -95,8 +99,7 @@ export function createAccount({ navigation }) {
     if (focusOwner && focusAction) [...focusOwner.querySelectorAll("[data-account-action]")]
       .find((node) => node.dataset.accountAction === focusAction && node.dataset.id === focusId)?.focus({ preventScroll: true });
     if (dialog.open && dialogLogin && snapshot.state !== "authorizing" && !snapshot.busy) {
-      dialogLogin = false;
-      if (snapshot.state === "signed_in") { dialog.close(); toast(copy("success"), "success"); }
+      if (snapshot.state === "signed_in" && !snapshot.message) { dialogLogin = false; dialog.close(); toast(copy("success"), "success"); }
     }
   }
   function schedule() {
@@ -107,7 +110,14 @@ export function createAccount({ navigation }) {
   async function refresh() {
     if (fetching || disposed) return;
     fetching = true;
-    try { snapshot = (await api.get("/account")).data; render(); }
+    try {
+      snapshot = (await api.get("/account")).data;
+      if (!document.hidden && snapshot.state === "refreshing" && snapshot.refresh_available && !snapshot.busy) {
+        await api.post("/account/refresh", {});
+        snapshot = (await api.get("/account")).data;
+      }
+      render();
+    }
     catch { /* Local host reconnection uses the existing global connection UI. */ }
     finally { fetching = false; schedule(); }
   }
@@ -117,8 +127,22 @@ export function createAccount({ navigation }) {
     returnOwner = panel.contains(returnFocus) ? panel : notice.contains(returnFocus) ? notice : null;
     returnAction = returnFocus?.dataset?.accountAction || "";
     remember.checked = snapshot?.persistence_available !== false;
-    dialog.showModal(); render();
+    dialogLogin = false; loginForm.elements.password.value = "";
+    dialog.showModal(); render(); loginForm.elements.identifier.focus();
   }
+  loginForm.addEventListener("submit", async event => {
+    event.preventDefault();
+    if (acting || snapshot?.state === "signing_in") return;
+    acting = true; dialogLogin = true;
+    const password = loginForm.elements.password.value;
+    loginForm.elements.password.value = "";
+    try {
+      snapshot = (await api.post("/account/login", {identifier: loginForm.elements.identifier.value.trim(), password, remember: remember.checked})).data;
+      authorizationUrl = "";
+      render();
+    } catch (error) { dialogLogin = false; toast(errorMessage(error), "error"); }
+    finally { acting = false; await refresh(); }
+  });
   async function action(event) {
     const target = event.target.closest("[data-account-action]");
     if (!target || acting) return;
@@ -146,6 +170,7 @@ export function createAccount({ navigation }) {
     event.preventDefault(); void action({ target: dialog.querySelector("[data-account-action=cancel]") });
   });
   dialog.addEventListener("close", () => {
+    loginForm.elements.password.value = "";
     const replacement = returnOwner && returnAction ? [...returnOwner.querySelectorAll("[data-account-action]")]
       .find((node) => node.dataset.accountAction === returnAction) : null;
     const next = [returnFocus, replacement, document.querySelector("#prompt"), panel.querySelector("button"), sidebar]

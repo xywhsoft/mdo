@@ -37,6 +37,8 @@ typedef struct MdoAccountWork {
     MdoAccountTokens Tokens;
     MdoAccountAuthorization Authorization;
     char Code[65];
+    char Identifier[255], Password[129]; /* Transient worker input; never persisted. */
+    bool Remember;
 } MdoAccountWork;
 typedef struct MdoAccountWaiter {
     uint64 Id, RunId;
@@ -66,7 +68,7 @@ typedef struct MdoAccountManager {
 
 extern MdoAccountManager g_MdoAccount;
 enum { MDO_ACCOUNT_WORK_NONE, MDO_ACCOUNT_WORK_EXCHANGE, MDO_ACCOUNT_WORK_REFRESH,
-    MDO_ACCOUNT_WORK_PROFILE, MDO_ACCOUNT_WORK_LOGOUT };
+    MDO_ACCOUNT_WORK_PROFILE, MDO_ACCOUNT_WORK_LOGOUT, MDO_ACCOUNT_WORK_PASSWORD };
 
 bool MdoAccountOrigin(cstr Url, char Output[MDO_ACCOUNT_ORIGIN_LIMIT]);
 bool MdoAccountRandom(char Output[65]);

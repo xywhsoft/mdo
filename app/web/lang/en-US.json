@@ -23,13 +23,13 @@
   "account.logout": "Sign out",
   "account.storage": "Device-encrypted credentials are kept in mdo-home. Sign in again after moving to another device.",
   "account.storageUnavailable": "Secure storage is unavailable on this platform. This sign-in is temporary.",
-  "account.browserDescription": "Sign in with your system browser. Your password never passes through mdo.",
+  "account.browserDescription": "Other sign-in methods and registration open in your system browser.",
   "account.searchWaiting": "Web search is waiting for sign-in. Sign in to continue, or skip this search.",
   "account.skip": "Skip",
   "account.success": "Signed in successfully",
   "account.reopen": "Open sign-in page again",
   "account.remember": "Remember this device",
-  "account.begin": "Sign in with browser",
+  "account.begin": "Other sign-in methods / Register",
   "account.restart": "Start again",
   "account.search403": "Search access denied. Check the verification requirements on the website.",
   "account.search429": "Search quota or concurrency limit reached. Try later.",
@@ -1438,5 +1438,11 @@
   "composer.permissionBalanced": "Ask when permission is needed.",
   "composer.permissionFullAccess": "Allow tools to run directly.",
   "composer.closeSettings": "Close model settings",
-  "composer.localWorkspace": "Local workspace"
+  "composer.localWorkspace": "Local workspace",
+  "account.identifier": "Username, phone or email",
+  "account.password": "Password",
+  "account.directDescription": "Sign in directly. Your password is used only for verification, never saved or sent to a model.",
+  "account.signingIn": "Signing in…",
+  "account.invalid_credentials": "Incorrect account or password. Please try again.",
+  "account.login_rate_limited": "Too many sign-in attempts. Try again later."
 }

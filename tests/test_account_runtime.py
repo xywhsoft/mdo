@@ -98,7 +98,7 @@ def run(host):
     def call(port, method, path, body=None, headers=None, status=200):
         actual, head, raw = request(port, method, path, body, headers)
         assert actual == status, (path, actual, raw)
-        return json.loads(raw)['data'] if raw and raw.startswith(b'{') else raw, head
+        return json.loads(raw).get('data') if raw and raw.startswith(b'{') else raw, head
 
     def app(method, path='/account', body=None, status=200):
         head = {}
@@ -203,6 +203,22 @@ def run(host):
             assert state['message'] == 'authorization_cancelled', state
             app('POST','/account/login',{'remember':False}); app('POST','/account/cancel',{}); wait_state('signed_out')
             assert request(app_port,'GET',callback.path+'?'+callback.query)[0] == 400
+            # First-party password login never launches or returns a browser URL.
+            direct = app('POST','/account/login',{'identifier':'mdo_login_test','password':PASSWORD,'remember':True})
+            assert 'authorization_url' not in direct and 'password' not in json.dumps(direct)
+            state = wait_state('signed_in'); assert state['profile']['username'] == 'mdo_login_test'
+            assert state['remembered'] and PASSWORD.encode() not in saved.read_bytes()
+            app('POST','/account/login',{'identifier':'mdo_other_test','password':'wrong-password','remember':True})
+            state = wait_state('signed_in')
+            assert state['profile']['username'] == 'mdo_login_test' and state['message'] == 'invalid_credentials', state
+            app('POST','/account/login',{'identifier':'mdo_other_test','password':PASSWORD,'remember':False})
+            state = wait_state('signed_in'); assert state['profile']['username'] == 'mdo_other_test' and not saved.exists()
+            app('POST','/account/login',{'identifier':'mdo_other_test','password':PASSWORD,'remember':False,'endpoint':'https://evil.test'},status=409)
+            app('POST','/account/logout',{}); wait_state('signed_out')
+            app('POST','/account/login',{'identifier':'mdo_login_test','password':'wrong-password','remember':False})
+            state = wait_state('signed_out'); assert state['message'] == 'invalid_credentials'
+            assert not saved.exists()
+            print('PASS direct password login, private snapshots, encrypted/temporary credentials, failed switch preservation and strict input')
             print('PASS native browser login/PKCE/strict callback/CSRF/encrypted persistence/restart/refresh/switch/independent logout/cancel/search waiting and skip')
     finally:
         for process in reversed(processes):

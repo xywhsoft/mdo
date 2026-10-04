@@ -23,13 +23,13 @@
   "account.logout": "退出登录",
   "account.storage": "登录凭据由设备加密，保存在 mdo-home；移动到其他设备后需重新登录。",
   "account.storageUnavailable": "此平台暂不支持安全保存，本次使用临时登录。",
-  "account.browserDescription": "在系统浏览器中登录，密码不会经过墨斗。",
+  "account.browserDescription": "其他登录方式和注册将在系统浏览器中打开。",
   "account.searchWaiting": "联网搜索正在等待登录。登录后继续执行，或跳过此次搜索。",
   "account.skip": "跳过",
   "account.success": "登录成功",
   "account.reopen": "再次打开登录页面",
   "account.remember": "记住此设备",
-  "account.begin": "在浏览器中登录",
+  "account.begin": "其他登录方式 / 注册",
   "account.restart": "重新开始",
   "account.search403": "账号暂不能使用搜索，请检查网站要求的验证项。",
   "account.search429": "搜索额度或并发额度已用完，请稍后再试。",
@@ -1438,5 +1438,11 @@
   "composer.permissionBalanced": "需要权限时先询问。",
   "composer.permissionFullAccess": "允许工具直接执行。",
   "composer.closeSettings": "关闭模型设置",
-  "composer.localWorkspace": "本地工作区"
+  "composer.localWorkspace": "本地工作区",
+  "account.identifier": "账号、手机号或邮箱",
+  "account.password": "密码",
+  "account.directDescription": "直接登录网站账号，密码仅用于本次验证，不会保存或发送给模型。",
+  "account.signingIn": "正在登录…",
+  "account.invalid_credentials": "账号或密码不正确，请重新输入。",
+  "account.login_rate_limited": "登录尝试过于频繁，请稍后再试。"
 }

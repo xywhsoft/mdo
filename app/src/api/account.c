@@ -3,9 +3,17 @@
 
 static bool MdoApiAccountPathEquals(xstrview value, cstr text)
 { return value.Size == strlen(text) && !memcmp(value.Data, text, value.Size); }
+static void MdoApiAccountBodyUnit(MdoApiJsonBody* Body)
+{
+    xstrview password;
+    if (xrtValueGetString(xrtValueObjectGet(Body->Value, xrtStrView("password")), &password))
+        xrtSecureZero((void*)password.Data, password.Size);
+    if (Body->Document) xrtSecureZero(Body->Document, Body->Size);
+    MdoApiJsonBodyUnit(Body);
+}
 
-/* Callback data is parsed once, strictly. PKCE and the pending nonce are owned
- * by native code, so neither passwords nor bearer credentials enter the UI. */
+/* Browser callback data is parsed once, strictly. PKCE, the pending nonce and
+ * exchanged tokens remain owned by native code. */
 static bool MdoApiAccountCallbackQuery(xstrview Query)
 {
     char state[65] = "", code[65] = "", error[32] = "";
@@ -45,12 +53,17 @@ bool MdoApiAccountRoute(MdoApiContext* Context)
     MdoApiJsonBody body; MdoApiBodyStatus status = MdoApiJsonBodyRead(Context, &body);
     if (status != MDO_API_BODY_OK) return MdoApiReplyBodyError(Context, status);
     if (xrtValueType(body.Value) != XVALUE_OBJECT) {
-        MdoApiJsonBodyUnit(&body); return MdoApiReplyError(Context, 400, "invalid_account_request", "A JSON object is required", NULL);
+        MdoApiAccountBodyUnit(&body); return MdoApiReplyError(Context, 400, "invalid_account_request", "A JSON object is required", NULL);
     }
     bool ok = false; xvalue* out = NULL;
     if (MdoApiAccountPathEquals(Context->Target.Path, "/api/v1/account/login")) {
         bool remember = false; const xhttpfield* host = NULL; char origin[600] = "";
-        if (xrtValueCount(body.Value) == 1 && xrtValueGetBool(xrtValueObjectGet(body.Value, xrtStrView("remember")), &remember) &&
+        cstr identifier = MdoAccountText(body.Value, "identifier", 254);
+        cstr password = MdoAccountText(body.Value, "password", 128);
+        if (xrtValueCount(body.Value) == 3 && identifier && password &&
+            xrtValueGetBool(xrtValueObjectGet(body.Value, xrtStrView("remember")), &remember)) {
+            ok = MdoAccountLoginPassword(identifier, password, remember);
+        } else if (xrtValueCount(body.Value) == 1 && xrtValueGetBool(xrtValueObjectGet(body.Value, xrtStrView("remember")), &remember) &&
             xrtHttpFieldGetUnique(Context->Request->head->Fields, Context->Request->head->FieldCount,
                 XRT_STR_LITERAL("Host"), &host) == XHTTP_NEXT_ITEM && host && host->Value.Size < 550 &&
             !memchr(host->Value.Data, 0, host->Value.Size)) {
@@ -71,8 +84,8 @@ bool MdoApiAccountRoute(MdoApiContext* Context)
         else if (MdoApiAccountPathEquals(Context->Target.Path, "/api/v1/account/refresh")) ok = MdoAccountRefresh();
         else if (MdoApiAccountPathEquals(Context->Target.Path, "/api/v1/account/website")) ok = MdoAccountOpenWebsite("/account/index.html");
     }
-    MdoApiJsonBodyUnit(&body);
+    MdoApiAccountBodyUnit(&body);
     if (!ok) { xrtValueRelease(out); return MdoApiReplyError(Context, 409, "account_action_unavailable",
-        "Account action is unavailable; check the service address or start a new login", NULL); }
+        "Account action is unavailable; check the input or start a new login", NULL); }
     return MdoApiReplySuccessTake(Context, 200, out ? out : MdoAccountSnapshot(), NULL);
 }
