@@ -1,5 +1,6 @@
 #include "internal.h"
 #include "../account/internal.h"
+#include "../../include/mdo/web.h"
 
 static bool MdoApiAccountPathEquals(xstrview value, cstr text)
 { return value.Size == strlen(text) && !memcmp(value.Data, text, value.Size); }
@@ -41,8 +42,11 @@ static bool MdoApiAccountCallbackQuery(xstrview Query)
 }
 bool MdoApiAccountRoute(MdoApiContext* Context)
 {
-    if (MdoApiAccountPathEquals(Context->Target.Path, "/api/v1/account"))
-        return MdoApiReplySuccessTake(Context, 200, MdoAccountSnapshot(), NULL);
+    if (MdoApiAccountPathEquals(Context->Target.Path, "/api/v1/account")) {
+        xvalue* snapshot = MdoAccountSnapshot();
+        (void)MdoWebManagerSyncAccount();
+        return MdoApiReplySuccessTake(Context, 200, snapshot, NULL);
+    }
     if (MdoApiAccountPathEquals(Context->Target.Path, MDO_ACCOUNT_CALLBACK_PATH) &&
         Context->Request->head->MethodCode == XHTTP_METHOD_GET) {
         bool ok = MdoApiAccountCallbackQuery(Context->Target.Query);
@@ -87,5 +91,7 @@ bool MdoApiAccountRoute(MdoApiContext* Context)
     MdoApiAccountBodyUnit(&body);
     if (!ok) { xrtValueRelease(out); return MdoApiReplyError(Context, 409, "account_action_unavailable",
         "Account action is unavailable; check the input or start a new login", NULL); }
-    return MdoApiReplySuccessTake(Context, 200, out ? out : MdoAccountSnapshot(), NULL);
+    if (!out) out = MdoAccountSnapshot();
+    (void)MdoWebManagerSyncAccount();
+    return MdoApiReplySuccessTake(Context, 200, out, NULL);
 }

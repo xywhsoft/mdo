@@ -49,7 +49,16 @@ HOOK = r'''
 static MdoAccountLease AccountTestLease;
 static bool AccountTestRoute(MdoApiContext* c) {
     xvalue* out = xrtValueObject();
-    if (c->Target.Query.Size == 4 && !memcmp(c->Target.Query.Data,"take",4)) {
+    if (c->Target.Query.Size == 5 && !memcmp(c->Target.Query.Data,"tools",5)) {
+        xwork_tool_catalog* catalog = xworkRuntimeToolCatalogSnapshot(MdoBootstrapRuntime());
+        xwork_tool_info info; unsigned count = 0;
+        for (size_t i=0;i<xworkToolCatalogCount(catalog);i++) {
+            if (xworkToolCatalogToolAt(catalog,i,&info) && info.sSource && !strcmp(info.sSource,"mdo.web")) count++;
+        }
+        MdoAccountSetUInt(out,"web_count",count);
+        MdoAccountSetUInt(out,"generation",xworkToolCatalogGeneration(catalog));
+        xworkToolCatalogRelease(catalog);
+    } else if (c->Target.Query.Size == 4 && !memcmp(c->Target.Query.Data,"take",4)) {
         MdoAccountRelease(&AccountTestLease);
         xwork_tool_context context = {0}; context.uDeadline = XRT_DEADLINE_NEVER;
         bool ok = MdoAccountAcquire("local lease probe",&context,&AccountTestLease);
@@ -105,6 +114,9 @@ def run(host):
         if method != 'GET':
             _, headers, _ = request(app_port, 'GET', '/api/v1/account')
             head['X-Mdo-Write-Token'] = headers['X-Mdo-Write-Token']
+            if path.startswith('/settings/'):
+                _, metadata, _ = request(app_port,'GET','/api/v1/settings')
+                head['If-Match'] = metadata['ETag']
         return call(app_port, method, '/api/v1'+path, body, head, status)[0]
 
     def wait_state(state):
@@ -160,6 +172,7 @@ def run(host):
             router.write_text(source)
             running = launch(site, site/'xs.json', home); ready(app_port, running, '/api/v1/account')
             state = app('GET'); assert state['state'] == 'signed_out' and state['origin'] == origin, state
+            assert app('GET','/test-account?tools')['web_count'] == 0
             assert request(app_port, 'POST', '/api/v1/account/logout', {})[0] == 428
             # Forged callbacks cannot create a session.
             assert request(app_port, 'GET', '/api/v1/account/callback?'+urlencode({'state':'0'*64,'code':'1'*64}))[0] == 400
@@ -179,6 +192,14 @@ def run(host):
                 browser_tokens, callback = authorize('mdo_login_test')
                 assert waiting.result(timeout=5)['taken']
             state = wait_state('signed_in'); assert state['profile']['username'] == 'mdo_login_test', state
+            published = app('GET','/test-account?tools'); assert published['web_count'] == 3
+            app('GET'); assert app('GET','/test-account?tools')['generation'] == published['generation']
+            app('PATCH','/settings/settings',{'schema_version':1,'patch':{'agent':{'web_search':False}}})
+            assert app('GET','/test-account?tools')['web_count'] == 0
+            app('PATCH','/settings/settings',{'schema_version':1,'patch':{'agent':{'web_search':True},'web':{'enabled':False}}})
+            assert app('GET','/test-account?tools')['web_count'] == 3
+            persisted = json.loads((home/'config/settings.json').read_text())
+            assert 'enabled' not in persisted['patch'].get('web',{})
             assert state['remembered'] and state['persistence_available'], state
             assert 'access_token' not in json.dumps(state) and 'refresh_token' not in json.dumps(state)
             saved = home/'data/account/session.bin'; encrypted = saved.read_bytes()
@@ -215,6 +236,7 @@ def run(host):
             state = wait_state('signed_in'); assert state['profile']['username'] == 'mdo_other_test' and not saved.exists()
             app('POST','/account/login',{'identifier':'mdo_other_test','password':PASSWORD,'remember':False,'endpoint':'https://evil.test'},status=409)
             app('POST','/account/logout',{}); wait_state('signed_out')
+            assert app('GET','/test-account?tools')['web_count'] == 0
             app('POST','/account/login',{'identifier':'mdo_login_test','password':'wrong-password','remember':False})
             state = wait_state('signed_out'); assert state['message'] == 'invalid_credentials'
             assert not saved.exists()

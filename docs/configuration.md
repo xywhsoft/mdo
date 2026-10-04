@@ -31,13 +31,15 @@ mdo 配置 schema v1 由一份内置基线、三份可选用户 patch 和一层�
 
 普通 JSON 配置不能保存 `api_key`、token、password、client secret、private key 或 Authorization 等敏感值。模型凭据只能保存为 provider 的 `credential.secret_ref`，v1 接受 `env:`、`file:`、`keychain:` 和 `prompt:` 引用。secret resolver 在使用模型时解析引用，配置导入和导出始终只处理引用文本。
 
-`settings.web.search` 只配置完整的搜索 API `endpoint`，默认
+联网搜索只由账号登录和 `settings.agent.web_search` 决定，使用账号服务
 `https://ai.xywhsoft.com/api/v1/search`。搜索平台和密钥由 xadmin 服务端管理。
-客户端使用会员 JWT，当前联调由 `MDO_SEARCH_ACCESS_TOKEN` 环境变量传入。
+客户端从原生账号管理器取得会员令牌，不接受配置、工具参数或环境变量传入令牌。
+旧 `settings.web.enabled` 和 `settings.web.search` 在读取、导入和进程覆盖时清理；
+正常保存只写入清理后的 patch，启动本身不为迁移写入 Home。
 `settings.web` 内部仍保留超时、响应/文本/缓存预算与网页访问策略。URL、地址解析和
 权限边界见 [Web 工具合同](web-tools.md)。
 
-`settings.transport.ca_pem_path` 可在“联网与搜索”页配置模型 HTTPS 请求使用的自定义 CA。路径必须相对于外部 `mdo-home/`，以 `/` 分隔，不允许盘符、反斜杠或 `..`；例如把 PEM 放到 `mdo-home/certs/company.pem`，设置值为 `certs/company.pem`。空值使用系统证书；非空值将 PEM 中的信任锚与系统证书合并后交给 xllm，不会关闭 TLS 校验，也不影响 Web 搜索工具。运行前读取并解析 PEM，文件缺失、超过 1 MiB 或无有效证书时模型启动明确失败。证书文件随 Home 一起搬移，单文件首次启动不要求创建该目录。
+`settings.transport.ca_pem_path` 可在“网络”页配置模型 HTTPS 请求使用的自定义 CA。路径必须相对于外部 `mdo-home/`，以 `/` 分隔，不允许盘符、反斜杠或 `..`；例如把 PEM 放到 `mdo-home/certs/company.pem`，设置值为 `certs/company.pem`。空值使用系统证书；非空值将 PEM 中的信任锚与系统证书合并后交给 xllm，不会关闭 TLS 校验，也不影响 Web 搜索工具。运行前读取并解析 PEM，文件缺失、超过 1 MiB 或无有效证书时模型启动明确失败。证书文件随 Home 一起搬移，单文件首次启动不要求创建该目录。
 
 `settings.transport.proxy` 管理模型 HTTPS 请求的可选 HTTP CONNECT 或 SOCKS5 代理，字段为 `kind`（`none`、`http-connect`、`socks5`）、`host`、`port`、`user`、`bypass`。启用时须填写主机和 1–65535 端口；`bypass` 用逗号分隔目标主机模式，支持模式开头或结尾的 `*`。代理密码只能写在 `credential.secret_ref`，引用 `env:`、`file:`、`keychain:` 或 `prompt:`，若使用密码还须填写用户名。`GET /api/v1/settings` 只返回 `credential_configured`，不回传引用文本；设置页输入新引用可替换，勾选清除可移除引用，其他字段的局部更新会保留已有引用。密码在创建模型客户端时解析，读取后即释放临时副本。`kind: none` 保留参数供日后再启用。代理只作用于模型请求，不作用于 Web 搜索、MCP 或应用服务；xllm 当前仅允许 HTTPS 模型端点使用代理。
 

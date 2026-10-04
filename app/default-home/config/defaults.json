@@ -26,7 +26,6 @@
       "max_parallel_subagents": 2
     },
     "web": {
-      "enabled": true,
       "allow_http": false,
       "allow_private_networks": false,
       "timeout_ms": 30000,

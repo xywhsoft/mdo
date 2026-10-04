@@ -476,6 +476,7 @@ export async function boot() {
     sessionStore: sessionDetailStore,
     onLoadOlder: loadOlderTimeline, onLoadIndex: loadOlderConversationIndex,
     onRevealTurn: revealConversationTurn,
+    onReload: reloadSelectedTimeline,
     onSearchCount: (count, historyLost) => conversationSearch?.setCount(count, historyLost),
     onFork: async (throughSequence, owner) => {
       const version = routeVersion;

@@ -1333,6 +1333,11 @@ static bool MdoModulesRuntimeTool(cstr Id, xwork_tool_effects* pEffects)
         { "ls", XWORK_TOOL_EFFECT_READ },
         { "glob", XWORK_TOOL_EFFECT_READ },
         { "grep", XWORK_TOOL_EFFECT_READ },
+        /* Standard web capabilities may be inactive while signed out. */
+        { "web_search", XWORK_TOOL_EFFECT_READ | XWORK_TOOL_EFFECT_NETWORK |
+            XWORK_TOOL_EFFECT_EXTERNAL_SERVICE | XWORK_TOOL_EFFECT_SECRETS },
+        { "web_open", XWORK_TOOL_EFFECT_READ | XWORK_TOOL_EFFECT_NETWORK },
+        { "web_find", XWORK_TOOL_EFFECT_READ },
         { "write", XWORK_TOOL_EFFECT_WORKSPACE_WRITE },
         { "edit", XWORK_TOOL_EFFECT_WORKSPACE_WRITE },
         { "spawn", XWORK_TOOL_EFFECT_PROCESS },

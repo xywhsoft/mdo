@@ -78,7 +78,6 @@ bool MdoApiSettingsRoute(MdoApiContext* Context)
     xvalue* AgentValue = xrtValueObject();
     xvalue* TransportValue = xrtValueObject();
     xvalue* ProxyValue = xrtValueObject();
-    xvalue* WebValue = xrtValueObject();
     xvalue* WorkspaceValue = xrtValueObject();
     xvalue* ServiceValue = xrtValueObject();
     bool Ok;
@@ -114,7 +113,7 @@ bool MdoApiSettingsRoute(MdoApiContext* Context)
         ComposerValue != NULL && NotificationsValue != NULL &&
         PowerValue != NULL && PowerRuntimeValue != NULL &&
         AgentValue != NULL && TransportValue != NULL && ProxyValue != NULL &&
-        WebValue != NULL && WorkspaceValue != NULL &&
+        WorkspaceValue != NULL &&
         ServiceValue != NULL && EffectiveSettings != NULL &&
         MdoSettingsServiceGetSnapshot(&Service) &&
         MdoConfigGetTransportSettings(&Transport) &&
@@ -184,9 +183,6 @@ bool MdoApiSettingsRoute(MdoApiContext* Context)
             Service.Agent.PermissionProfile) &&
         MdoApiValueSetTake(Data, "agent", &AgentValue);
     if ( Ok ) Ok =
-        MdoApiValueSetBool(WebValue, "enabled", Service.Web.Enabled) &&
-        MdoApiValueSetTake(Data, "web", &WebValue);
-    if ( Ok ) Ok =
         MdoApiValueSetString(TransportValue, "ca_pem_path",
             Transport.CaPemPath) &&
         MdoApiValueSetString(ProxyValue, "kind", Transport.ProxyKind) &&
@@ -215,7 +211,7 @@ bool MdoApiSettingsRoute(MdoApiContext* Context)
     xrtValueRelease(Patches); xrtValueRelease(AppearanceValue);
     xrtValueRelease(ComposerValue); xrtValueRelease(NotificationsValue);
     xrtValueRelease(PowerValue); xrtValueRelease(PowerRuntimeValue);
-    xrtValueRelease(AgentValue); xrtValueRelease(WebValue);
+    xrtValueRelease(AgentValue);
     xrtValueRelease(TransportValue);
     xrtValueRelease(ProxyValue);
     xrtValueRelease(WorkspaceValue); xrtValueRelease(ServiceValue);

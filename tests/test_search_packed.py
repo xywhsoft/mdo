@@ -1,4 +1,4 @@
-"""Search URL settings and legacy migration using embedded VFS only."""
+"""Account-gated search preference and legacy migration through packed VFS."""
 from __future__ import annotations
 
 import argparse
@@ -23,7 +23,7 @@ def main() -> None:
         directory, port = site(base, "site", packed)
         home = base / "home"
         (home / "config").mkdir(parents=True)
-        legacy = {"schema_version": 1, "patch": {"web": {"search": {
+        legacy = {"schema_version": 1, "patch": {"web": {"enabled":False,"search": {
             "provider": "searxng", "endpoint": "http://127.0.0.1:8888/search",
             "secret_ref": "env:MDO_BRAVE_SEARCH_API_KEY", "max_results": 8,
         }}}}
@@ -35,25 +35,29 @@ def main() -> None:
             assert wait_bootstrap(process, port, directory / "packed.log")[1]["data"]["ready"]
             status, headers, raw = request(port, "GET", "/api/v1/settings")
             assert status == 200
-            expected = {"endpoint": "https://ai.xywhsoft.com/api/v1/search"}
-            assert json.loads(raw)["data"]["web"] == expected
+            data=json.loads(raw)["data"]
+            assert 'web' not in data and data['agent']['web_search'] is True
+            assert data['user_patches']['settings'] is False
             assert settings_file.read_bytes() == original, "startup must not rewrite user settings"
             status, _, raw = request(port, "GET", "/")
             assert status == 200
-            assert b'name="endpoint"' in raw
+            assert b'name="endpoint"' not in raw
+            assert b'name="web_search"' in raw
+            assert '仅登录账号后可用'.encode() in raw
             assert b'name="search_provider"' not in raw
             assert b'id="search-credential-state"' not in raw
             assert b'name="max_results"' not in raw
-            url = "http://127.0.0.1:9081/api/v1/search"
             status, _, raw = request(port, "PATCH", "/api/v1/settings/settings",
-                body=json.dumps({"schema_version": 1, "patch": {"web": {"search": {"endpoint": url}}}}).encode(),
+                body=json.dumps({"schema_version": 1, "patch": {"agent": {"web_search": False}}}).encode(),
                 headers={"Content-Type": "application/json", "If-Match": headers["etag"]})
             assert status == 200, raw
             status, _, raw = request(port, "GET", "/api/v1/settings")
-            assert status == 200 and json.loads(raw)["data"]["web"] == {"endpoint": url}
+            assert status == 200 and json.loads(raw)["data"]["agent"]["web_search"] is False
             stored = json.loads(settings_file.read_text())
-            assert stored["patch"]["web"]["search"] == {"endpoint": url}
-            print("PASS packed VFS startup/legacy migration/address-only settings/save", flush=True)
+            assert 'web' not in stored['patch'] and stored['patch']['agent']['web_search'] is False
+            status,_,raw=request(port,'GET','/api/v1/bootstrap')
+            assert status==200 and json.loads(raw)['data']['resources']['web']['enabled'] is False
+            print("PASS packed VFS startup/legacy flag removal/login-gated preference/save", flush=True)
             if args.preview:
                 state = ROOT / ".build/search-ui.json"
                 signal = ROOT / ".build/search-ui-stop"

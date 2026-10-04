@@ -232,6 +232,17 @@ void MdoAccountUnit(void)
     xrtCancelDestroy(g_MdoAccount.SessionCancel); xrtCondDestroy(g_MdoAccount.Changed);
     xrtMutexDestroy(g_MdoAccount.Lock); xrtSecureZero(&g_MdoAccount, sizeof(g_MdoAccount));
 }
+/* A refreshable login stays usable across short access-token expiry. No token
+ * or profile fields leave the account manager through this predicate. */
+bool MdoAccountHasSession(void)
+{
+    if (!g_MdoAccount.Initialized) return false;
+    xrtMutexLock(g_MdoAccount.Lock);
+    bool live = !g_MdoAccount.Stopping && g_MdoAccount.Tokens.MemberId &&
+        (g_MdoAccount.Tokens.Refresh[0] || (g_MdoAccount.Tokens.Access[0] &&
+        !xrtDeadlineExpired(g_MdoAccount.Tokens.Expires)));
+    xrtMutexUnlock(g_MdoAccount.Lock); return live;
+}
 xvalue* MdoAccountSnapshot(void)
 {
     if (!g_MdoAccount.Initialized) return NULL;

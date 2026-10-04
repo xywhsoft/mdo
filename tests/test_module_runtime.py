@@ -192,7 +192,7 @@ void ServiceInit(XS_HostInfo *host) {{
     if (MdoModuleCatalogToolAt(catalog, 0u, &tool_info) &&
         MdoModuleCatalogAgentFind(catalog, "mdo.default", &agent_info))
         printf("initial_tool=%s agent=%s permission=%s\n", tool_info.Id,
-            agent_info.Id, agent_info.PermissionProfile);
+            agent_info.Id, agent_info.PermissionProfile ? agent_info.PermissionProfile : "inherit");
     if (!ExecuteOne(runtime, "mdo.echo", "{{\"text\":\"hello\"}}",
             &agent, &session, &definition)) goto done;
     if (!ExecuteOne(runtime, "mdo.todo",
@@ -379,7 +379,7 @@ def main() -> int:
         assert "module_init_error=" not in output, output
         assert "initial_generation=1 modules=3 tools=2 agents=1" in output, output
         assert "initial_module=mdo.core.echo external=0" in output, output
-        assert "initial_tool=mdo.echo agent=mdo.default permission=balanced" in output, output
+        assert "initial_tool=mdo.echo agent=mdo.default permission=inherit" in output, output
         assert "execute_mdo.echo=infra:1 success:1" in output, output
         assert "execute_mdo.todo=infra:1 success:1" in output, output
         assert "reloaded_generation=2 modules=4 tools=3 old_modules=3" in output, output

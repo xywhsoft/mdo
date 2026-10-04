@@ -499,7 +499,6 @@ static bool MdoConfigSettingsValidate(const xvalue* pSettings)
             MdoConfigKey("max_parallel_subagents")), &iValue) ||
          iValue > 16u ||
          xrtValueType(pWeb) != XVALUE_OBJECT ||
-         !MdoConfigBool(pWeb, "enabled") ||
          !MdoConfigBool(pWeb, "allow_http") ||
          !MdoConfigBool(pWeb, "allow_private_networks") ||
          !MdoConfigUnsigned(xrtValueObjectGet(pWeb,
@@ -987,8 +986,13 @@ static bool MdoConfigReadAll(xfile File, char** ppText, size_t* pSize)
 static bool MdoConfigUpgradeSearch(xvalue* Settings)
 {
     xvalue* Web = xrtValueObjectGet(Settings, MdoConfigKey("web"));
-    return Web == NULL || !xrtValueObjectHas(Web, MdoConfigKey("search")) ||
-        xrtValueObjectRemove(Web, MdoConfigKey("search"));
+    if ( Web == NULL ) return true;
+    /* The visible Agent preference is the only user-controlled switch.
+     * An obsolete hidden switch must not suppress the logged-in tool set. */
+    return (!xrtValueObjectHas(Web, MdoConfigKey("search")) ||
+            xrtValueObjectRemove(Web, MdoConfigKey("search"))) &&
+        (!xrtValueObjectHas(Web, MdoConfigKey("enabled")) ||
+            xrtValueObjectRemove(Web, MdoConfigKey("enabled")));
 }
 
 static xvalue* MdoConfigNormalizePatch(MdoConfigDomain Domain,
@@ -1461,7 +1465,6 @@ bool MdoConfigGetWebSettings(MdoConfigWebSettings* pSettings)
     uint64 MaxDocuments;
     uint32 Size;
     bool AgentEnabled;
-    bool Enabled;
     bool AllowHttp;
     bool AllowPrivate;
     bool Ok = false;
@@ -1484,8 +1487,6 @@ bool MdoConfigGetWebSettings(MdoConfigWebSettings* pSettings)
          xrtValueGetBool(xrtValueObjectGet(pAgent,
             MdoConfigKey("web_search")), &AgentEnabled) &&
          xrtValueGetBool(xrtValueObjectGet(pWeb,
-            MdoConfigKey("enabled")), &Enabled) &&
-         xrtValueGetBool(xrtValueObjectGet(pWeb,
             MdoConfigKey("allow_http")), &AllowHttp) &&
          xrtValueGetBool(xrtValueObjectGet(pWeb,
             MdoConfigKey("allow_private_networks")), &AllowPrivate) &&
@@ -1505,7 +1506,7 @@ bool MdoConfigGetWebSettings(MdoConfigWebSettings* pSettings)
         memset(pSettings, 0, sizeof(*pSettings));
         pSettings->Size = Size;
         pSettings->Revision = g_MdoConfig.Revision;
-        pSettings->Enabled = AgentEnabled && Enabled;
+        pSettings->Enabled = AgentEnabled;
         pSettings->AllowHttp = AllowHttp;
         pSettings->AllowPrivateNetworks = AllowPrivate;
         pSettings->TimeoutMilliseconds = (uint32)Timeout;

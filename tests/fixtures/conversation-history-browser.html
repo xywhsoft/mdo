@@ -14,7 +14,7 @@ body { display: grid; grid-template-rows: 40px 1fr; height: 100dvh; margin: 0; }
 .probe-composer { margin: 12px auto; width: min(800px, calc(100% - 48px)); border: 1px solid var(--border); border-radius: 16px; padding: 16px; }
 </style>
 <div class="probe-actions"><button id="start" type="button">开始运行</button>
-<button id="finish" type="button">完成运行</button><output id="result">准备</output></div>
+<button id="finish" type="button">完成运行</button><button id="fail" type="button">读取错误</button><output id="result">准备</output></div>
 <main class="workspace"><header class="workspace-header">墨斗 / 对话历史</header>
 <section class="conversation"><div id="welcome"></div><ol class="timeline" id="timeline"></ol>
 <button class="to-bottom" id="to-bottom" type="button">回到底部</button></section>
@@ -62,5 +62,8 @@ document.querySelector("#start").addEventListener("click", () => {
 document.querySelector("#finish").addEventListener("click", () => {
   if (!events.some(item => item.event_id === 240)) events.push(all.at(-1));
   store.setData(state()); report("已完成");
+});
+document.querySelector("#fail").addEventListener("click", () => {
+  store.setError(new Error("连接暂时中断，已加载的对话继续保留。"));
 });
 </script>

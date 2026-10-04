@@ -237,7 +237,7 @@
   "settings.parallelSubagents": "Parallel subagents",
   "settings.parallelSubagentsDescription": "Set to 0 to disable parallel subagents.",
   "settings.webSearchEnabled": "Allow web search",
-  "settings.webSearchEnabledDescription": "The agent can use web search under its permission policy.",
+  "settings.webSearchEnabledDescription": "Available only when signed in. The agent uses web search under its permission policy.",
   "settings.memoryEnabled": "Enable memory",
   "settings.memoryEnabledDescription": "New sessions capture the current global and project memory.",
   "settings.schedulesEnabled": "Enable scheduled tasks",

@@ -23,6 +23,7 @@ typedef struct MdoAccountLease {
 bool MdoAccountInit(void);
 void MdoAccountUnit(void);
 xvalue* MdoAccountSnapshot(void);
+bool MdoAccountHasSession(void);
 bool MdoAccountLoginStart(cstr LocalOrigin, bool Remember, xvalue** PublicResult);
 bool MdoAccountLoginPassword(cstr Identifier, cstr Password, bool Remember);
 bool MdoAccountLoginCancel(void);

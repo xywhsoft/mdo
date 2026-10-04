@@ -174,9 +174,9 @@ def main() -> None:
             assert marker in output, output
         before = len(Handler.calls)
         missing = invoke(args.host, endpoint, [('{"query":"hello"}', False)], None)
-        assert "Search needs an account login" in missing
+        assert "catalog_count=0" in missing and '"web_search_results"' not in missing, missing
         invalid = invoke(args.host, endpoint, [('{"query":"hello"}', False)], "bad\r\ntoken")
-        assert "Search needs an account login" in invalid
+        assert "catalog_count=0" in invalid and '"web_search_results"' not in invalid, invalid
         assert len(Handler.calls) == before
     finally:
         server.shutdown()

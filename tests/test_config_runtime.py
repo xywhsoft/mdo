@@ -119,6 +119,12 @@ void ServiceInit(XS_HostInfo* pHost)
                 ProbePermissions();
                 return;
             }
+            if ( strcmp(xsAppArgument(i), "--search-switch-probe") == 0 ) {
+                MdoConfigWebSettings Web;
+                memset(&Web,0,sizeof(Web)); Web.Size=sizeof(Web);
+                printf("web_preference=%d\n",MdoConfigGetWebSettings(&Web) ? (int)Web.Enabled : -1);
+                printf("probe_done=1\n"); return;
+            }
             if ( strcmp(xsAppArgument(i), "--fault-write") == 0 ) {
                 printf("fault_import=%d\n", MdoConfigImport(
                     MDO_CONFIG_SETTINGS, xrtStrView(sSettingsOne)) ? 1 : 0);
@@ -319,6 +325,18 @@ def main() -> int:
         assert effective["models"]["items"][0]["id"] == "ornith-1.5-35b"
 
         legacy = base / "legacy-permission"
+        for allowed in (True,False):
+            stale = base / ('legacy-web-'+str(allowed))
+            (stale/'config').mkdir(parents=True)
+            original=json.dumps({'schema_version':1,'patch':{'web':{'enabled':False},'agent':{'web_search':allowed}}})
+            (stale/'config/settings.json').write_text(original,encoding='utf-8')
+            output=run_probe(host,site,stale,extra_args=('--search-switch-probe',),
+                             override='{"settings":{"web":{"enabled":false}}}')
+            assert 'probe_init_error=' not in output and f'web_preference={int(allowed)}' in output,output
+            effective=json.loads(output.split(' json=',1)[1].split('\nweb_preference=',1)[0])
+            assert 'enabled' not in effective['settings']['web']
+            assert (stale/'config/settings.json').read_text(encoding='utf-8')==original
+
         (legacy / "config").mkdir(parents=True)
         (legacy / "config/permissions.json").write_text(json.dumps({
             "schema_version": 1, "patch": {"default_profile": "read-only"},

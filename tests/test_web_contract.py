@@ -11,7 +11,8 @@ class WebContractTests(unittest.TestCase):
         defaults = json.loads((ROOT / "app/default-home/config/defaults.json").read_text(
             encoding="utf-8"))
         web = defaults["settings"]["web"]
-        self.assertTrue(web["enabled"])
+        self.assertNotIn("enabled", web)
+        self.assertTrue(defaults["settings"]["agent"]["web_search"])
         self.assertFalse(web["allow_http"])
         self.assertFalse(web["allow_private_networks"])
         self.assertLessEqual(web["max_response_bytes"], 16 * 1024 * 1024)

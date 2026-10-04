@@ -237,7 +237,7 @@
   "settings.parallelSubagents": "Параллельные субагенты",
   "settings.parallelSubagentsDescription": "Установите 0, чтобы отключить параллельных субагентов.",
   "settings.webSearchEnabled": "Разрешить веб-поиск",
-  "settings.webSearchEnabledDescription": "Агент может искать в сети согласно политике разрешений.",
+  "settings.webSearchEnabledDescription": "Доступно только после входа. Агент ищет в сети согласно политике разрешений.",
   "settings.memoryEnabled": "Включить память",
   "settings.memoryEnabledDescription": "Новый сеанс сохраняет снимок общей памяти и памяти проекта.",
   "settings.schedulesEnabled": "Включить задачи по расписанию",

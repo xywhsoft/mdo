@@ -36,6 +36,7 @@ bool MdoWebManagerInitWithTransport(xwork_runtime* pRuntime,
     const MdoWebTransport* pTransport);
 void MdoWebManagerUnit(void);
 bool MdoWebManagerReload(void);
+bool MdoWebManagerSyncAccount(void);
 bool MdoWebManagerGetSnapshot(MdoWebSnapshot* pSnapshot);
 
 #endif

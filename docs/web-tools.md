@@ -17,7 +17,6 @@ Agent 目录会看到三个独立工具：
 
 ```json
 {
-  "enabled": true,
   "allow_http": false,
   "allow_private_networks": false,
   "timeout_ms": 30000,
@@ -28,10 +27,14 @@ Agent 目录会看到三个独立工具：
 }
 ```
 
-`settings.agent.web_search` 与 `settings.web.enabled` 必须同时为真才注册工具。
+联网工具仅在存在可用登录会话且 `settings.agent.web_search` 为真时发布给 Agent。
+短期访问令牌过期但可刷新时保留工具；有效刷新失败、退出账号或关闭 Agent 开关后，
+新的任务不再看到这组工具。账号状态同步只在可用性变化时替换目录，保留已有文档缓存。
+`settings.web.enabled` 已移除，旧文件、导入及进程覆盖中的该字段都会清理，
+不能再暗中覆盖界面开关。
 「网络」设置页配置模型请求的代理与证书。联网搜索没有独立地址选项，
 使用原生账号管理器的服务来源 `https://ai.xywhsoft.com`。旧配置中的 `web.search`
-在读取和导入时移除，不会仅为启动而写入 Home。
+在读取和导入时移除，不会仅为启动而写入 Home。下次正常保存配置会写入清理后的 patch。
 
 `web_search` 向账号服务发送 `POST /api/v1/search`，正文为 `{ "query": "...", "count": 5 }`，
 count 可省略，由服务端决定默认结果数；显式 count 允许 1–10，服务端可进一步限制。
@@ -78,3 +81,15 @@ external-service 和 secrets 四种 effect，分别描述账号搜索端点、xa
 
 传输接口可注入仅用于确定性功能测试。生产入口固定使用 `xsFetch`，注入接口
 沿用同一请求/响应所有权合同，不能改变工具 schema 或权限声明。
+
+## 本次回归
+
+2026-10-05，实际会话 `a80f8d35cb7a6cb2766c643371fc1f59` 的 31 次 `exec` 调用确认来自
+旧 `web.enabled=false` 导致工具未发布。已移除该配置及设置 API 的对应字段，
+保留 Agent 页面可见开关；默认 Agent 和搜索工具说明优先引导使用 `web_search`，
+避免通过 shell 猜测搜索端点。
+
+隔离回归覆盖旧字段加载/导入/进程覆盖、启动不改写原文件、正常保存清理字段，
+以及未登录、登录后启用、关闭开关、重新启用、退出账号和目录无需重复发布。
+打包 VFS 回归覆盖真实设置页和配置保存。线上通过原生 xwork 执行
+`郑源 一万个理由 官方 歌词 页面` 查询，博查返回 2 条结果，测试会话随后独立退出。

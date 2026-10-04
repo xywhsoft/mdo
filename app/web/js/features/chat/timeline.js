@@ -737,7 +737,7 @@ function timelineNode(item, handlers, projectId, sessionId, writable,
 }
 
 export function createTimelineView({ container, welcome, toBottom, store, sessionStore = null,
-  onFork, onEdit, onRetry, onSearchCount, onLoadOlder, onLoadIndex, onRevealTurn }) {
+  onFork, onEdit, onRetry, onSearchCount, onLoadOlder, onLoadIndex, onRevealTurn, onReload }) {
   const busySessions = new Set();
   const renderedRows = new Map();
   const handlers = {
@@ -768,7 +768,11 @@ export function createTimelineView({ container, welcome, toBottom, store, sessio
     attrs: { type: "button" } }) : null;
   if (historyButton) {
     container.before(historyButton);
-    historyButton.addEventListener("click", () => { followTail = false; void onLoadOlder(); });
+    historyButton.addEventListener("click", () => {
+      followTail = false;
+      if (store.get().status === "error" && store.get().data?.initializing) void onReload?.();
+      else void onLoadOlder();
+    });
   }
   let jumpVersion = 0;
   async function revealTurn(id, scroll = true) {
@@ -913,13 +917,14 @@ export function createTimelineView({ container, welcome, toBottom, store, sessio
     // A replacement can briefly contain only its hidden history boundary.
     // Keep this conversation open instead of flashing new-task examples.
     welcome.hidden = Boolean(data?.sessionId &&
-      (items.length > 0 || data?.events?.length > 0));
+      (items.length > 0 || data?.events?.length > 0 || data?.initializing));
     const entries = [];
     if (state.status === "error") {
       entries.push({ item: { key: "load-error", kind: "error",
         role: t("timeline.loadError", {}, "无法读取时间线"),
         text: errorMessage(state.error), state: "failed", time: 0 } });
-    } else {
+    }
+    {
       const session = sessionStore?.get().data;
       const writable = !sessionStore || (session?.status === "active" &&
         session.project_id === data?.projectId && session.id === data?.sessionId);
@@ -928,10 +933,11 @@ export function createTimelineView({ container, welcome, toBottom, store, sessio
     }
     reconcileRows(entries, data?.projectId, data?.sessionId);
     if (historyButton) {
-      historyButton.hidden = !data?.hasOlder;
+      const failedInitialLoad = state.status === "error" && data?.initializing;
+      historyButton.hidden = !data?.hasOlder && !failedInitialLoad;
       historyButton.disabled = Boolean(data?.loadingHistory);
       historyButton.textContent = data?.loadingHistory ? t("timeline.loadingOlder", {}, "正在加载更早对话…")
-        : data?.historyError ? t("timeline.retryOlder", {}, "加载失败，点击重试")
+        : data?.historyError || failedInitialLoad ? t("timeline.retryOlder", {}, "加载失败，点击重试")
           : t("timeline.loadOlder", {}, "加载更早的对话");
     }
     historyNavigation?.update(data);
