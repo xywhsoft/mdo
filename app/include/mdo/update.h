@@ -1,0 +1,20 @@
+#ifndef MDO_UPDATE_H
+#define MDO_UPDATE_H
+#include <xsbase.h>
+typedef struct MdoUpdateStatus {
+    bool Enabled, Busy, Ready, Installing;
+    char State[24], Platform[32], LocalHash[65], Hash[65], Notes[1025], Message[256];
+    uint64 Bytes;
+    char LastInstallMessage[256];
+} MdoUpdateStatus;
+bool MdoUpdateInit(void);
+void MdoUpdateUnit(void);
+bool MdoUpdateGetStatus(MdoUpdateStatus* Status);
+bool MdoUpdateCheck(void);
+bool MdoUpdateDownload(void);
+bool MdoUpdateInstall(void);
+void MdoUpdateCancel(void);
+bool MdoUpdateInstalling(void);
+/* Called on the update worker, after native confirmation and idle checks. */
+bool MdoUpdateWindowsInstall(cstr Source, cstr Hash);
+#endif

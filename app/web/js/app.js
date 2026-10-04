@@ -60,6 +60,7 @@ import { createTaskDialog } from "./features/tasks/task-dialog.js";
 import { createRecoveryDock } from "./features/chat/recovery-dock.js";
 import { recoveryMatchesWorkspace } from "./features/approvals/recovery-decisions.js";
 import { createSettingsView } from "./features/settings/settings-view.js";
+import { createUpdatePanel } from "./features/update/update-panel.js";
 import { createSchedulePanel } from "./features/settings/schedule-panel.js";
 import { createProjectManagement } from "./features/projects/project-management.js";
 import { createMemoryManagement } from "./features/settings/memory-management.js";
@@ -960,6 +961,9 @@ export async function boot() {
     navigation,
     onApplied: () => Promise.all([loadBootstrap(), loadCatalogs()]),
   });
+  const updatePanel = createUpdatePanel({ root: $("#update-settings"),
+    notice: $("#update-notice"), navigation });
+  window.addEventListener("pagehide", () => updatePanel?.destroy(), { once: true });
   const purgeConfirmation = createProjectPurgeConfirmation({
     dialog: $("#project-purge-confirm-dialog"), recovery: purgeRecovery,
     onResolved: () => {

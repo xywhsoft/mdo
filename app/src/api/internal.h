@@ -29,6 +29,9 @@ typedef struct MdoApiContext {
 } MdoApiContext;
 
 typedef bool (*MdoApiRouteProc)(MdoApiContext* pContext);
+bool MdoApiUpdateRoute(MdoApiContext* Context);
+bool MdoApiUpdateDownloadRoute(MdoApiContext* Context);
+bool MdoApiUpdateInstallRoute(MdoApiContext* Context);
 
 typedef enum MdoApiBodyStatus {
     MDO_API_BODY_OK = 0,

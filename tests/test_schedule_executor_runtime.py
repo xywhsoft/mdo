@@ -40,6 +40,8 @@ static void ShutdownLeaseCheckpoint(void);
 #include "src/schedules/executor.c"
 
 xwork_runtime *MdoBootstrapRuntime(void) { return NULL; }
+static bool UpdatePending;
+bool MdoUpdateInstalling(void) { return UpdatePending; }
 
 typedef struct Owner {
     unsigned Refs;
@@ -438,6 +440,12 @@ void ServiceInit(XS_HostInfo *host) {
     if (!MdoScheduleExecutorInit(runtime, &executor_options, &error)) {
         printf("executor_error=%s\n", error.sMessage); goto done;
     }
+    UpdatePending = true;
+    if (!MdoScheduleExecutorPump(start, &started, &completed, &error) || started != 0u) {
+        printf("update_gate_error=1\n"); goto done;
+    }
+    UpdatePending = false;
+    printf("update_gate=paused\n");
     if (!MdoScheduleExecutorPump(start, &started, &completed, &error)) {
         printf("pump_error=%s\n", error.sMessage); goto done;
     }
@@ -658,6 +666,7 @@ def main() -> int:
         assert "init_error=" not in output, output
         assert "create_error=" not in output, output
         assert "executor_error=" not in output, output
+        assert "update_gate=paused" in output and "update_gate_error=" not in output, output
         assert "pump_error=" not in output and "harvest_error=" not in output, output
         assert "manual_error=" not in output and "manual_catalog_error=" not in output, output
         assert "manual_harvest_error=" not in output, output

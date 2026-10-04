@@ -36,8 +36,8 @@ class AdmissionProbe(ReceiptProbe):
              '#include "write-admission-probe.c"\nvoid ServiceInit(XS_HostInfo* pHost)'),
             ("src/api/router.c", '#include "write_admission.h"',
              '#include "write_admission.h"\nvoid MdoWriteFixtureDeferLeave(MdoApiContext*);'),
-            ("src/api/router.c", "    MdoApiWriteLeave(Context);",
-             "    MdoWriteFixtureDeferLeave(Context);\n    MdoApiWriteLeave(Context);"),
+            ("src/api/router.c", "    MdoApiWriteLeave(Context);\n    return Ok;",
+             "    MdoWriteFixtureDeferLeave(Context);\n    MdoApiWriteLeave(Context);\n    return Ok;"),
             ("src/bootstrap/service.c", "    MdoApiUnit();",
              "    MdoWriteFixtureUnit();\n    MdoApiUnit();"),
         )

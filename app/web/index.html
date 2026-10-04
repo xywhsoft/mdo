@@ -9,11 +9,16 @@
   <link rel="icon" href="/assets/favicon.ico" sizes="16x16 32x32 48x48">
   <link rel="apple-touch-icon" href="/assets/apple-touch-icon.png">
   <link rel="stylesheet" href="/css/app.css">
+  <link rel="stylesheet" href="/css/update.css">
 </head>
 <body>
   <a class="skip-link" href="#timeline" data-i18n="shell.skip" inert>跳到对话</a>
 
   <div class="app-shell" id="app-shell" data-sidebar="closed" inert>
+    <div id="update-notice" class="update-notice" role="status" hidden>
+      <span></span><button class="primary-button" type="button" data-update-open></button>
+      <button class="secondary-button" type="button" data-update-later></button>
+    </div>
     <div id="project-purge-notice" class="project-purge-notice" role="status" hidden>
       <span></span><button class="secondary-button" type="button"></button>
     </div>
@@ -327,6 +332,18 @@
                   <select id="setting-open-mode" name="open_mode"><option value="last" data-i18n="settings.openLast">上次会话</option><option value="new" data-i18n="settings.openNew">新任务</option><option value="ask" data-i18n="settings.openAsk">每次询问</option></select>
                 </div>
                 <label class="setting-switch"><span><strong data-i18n="settings.confirmExternal">外部写入前确认</strong><small data-i18n="settings.confirmExternalDescription">工作区之外的文件写入始终要求确认。</small></span><input name="confirm_external_write" type="checkbox"><span class="switch-control" aria-hidden="true"></span></label>
+                <div id="update-settings" class="update-card">
+                  <h3 data-update-label="title">应用更新</h3>
+                  <p data-update-label="description"></p>
+                  <p data-update-status role="status" aria-live="polite"></p>
+                  <p data-update-notes hidden></p>
+                  <div class="update-card-actions">
+                    <button class="secondary-button" type="button" data-update-action="check">检查更新</button>
+                    <button class="primary-button" type="button" data-update-action="download" hidden>下载更新</button>
+                    <button class="primary-button" type="button" data-update-action="install" hidden>安装更新</button>
+                    <button class="secondary-button" type="button" data-update-action="cancel" hidden>取消下载</button>
+                  </div>
+                </div>
               </section>
 
               <section class="settings-section" data-settings-panel="agent" aria-labelledby="settings-agent-title" hidden>

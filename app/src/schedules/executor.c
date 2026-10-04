@@ -1,5 +1,6 @@
 #include <stdlib.h>
 #include <string.h>
+#include "../../include/mdo/update.h"
 
 #include "../../include/mdo/agents.h"
 #include "../../include/mdo/asks.h"
@@ -323,6 +324,7 @@ bool MdoScheduleExecutorPump(int64 Now, size_t* Started, size_t* Completed,
     if ( !MdoScheduleExecutorForwardTaskCancels(Error) ||
          !MdoScheduleExecutorHarvest(&CompletedValue, Error) ) goto done;
     for ( i = 0u; i < g_MdoScheduleExecutor.Options.MaxClaimsPerPump; ++i ) {
+        if (MdoUpdateInstalling()) break;
         MdoScheduleClaim Claim;
         if ( !MdoScheduleExecutorGrow() ) {
             MdoScheduleExecutorError(Error, XWORK_ERROR_LIMIT,

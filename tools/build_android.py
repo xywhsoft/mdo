@@ -93,6 +93,7 @@ def main() -> int:
             "--library", path(native / "libxs.so"), "--pack", path(pack), "--output", path(args.output),
             "--package", "org.xleaves.mdo", "--label", "墨斗 mdo", "--home-name", "mdo-home",
             "--resources", path(ROOT / "assets/branding/android/res"),
+            "--package-install",
             "--version", "0.1.0-dev", "--version-code", str(args.version_code), "--keystore", path(args.keystore),
             *(["--debuggable"] if args.debuggable else [])])
         print("[mdo] APK SHA256 " + hashlib.sha256(args.output.read_bytes()).hexdigest())

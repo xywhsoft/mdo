@@ -10,6 +10,7 @@
 #include "../../include/mdo/modules.h"
 #include "../../include/mdo/operations.h"
 #include "../../include/mdo/power.h"
+#include "../../include/mdo/update.h"
 #include "../../include/mdo/project_lifecycle.h"
 #include "../../include/mdo/runs.h"
 #include "../../include/mdo/schedules.h"
@@ -178,6 +179,9 @@ bool MdoBootstrapInit(XS_HostInfo* pHost)
         return false;
     }
 
+    /* Optional update failures never prevent the agent from starting. */
+    if (!MdoUpdateInit()) fprintf(stderr,"[mdo] update manager unavailable\n");
+
     memset(&Home, 0, sizeof(Home));
     Home.Size = sizeof(Home);
     if ( MdoHomeGetSnapshot(&Home) ) {
@@ -221,6 +225,7 @@ bool MdoBootstrapInit(XS_HostInfo* pHost)
 
 void MdoBootstrapUnit(void)
 {
+    MdoUpdateUnit();
     MdoScheduleExecutorUnit();
     MdoRunManagerUnit();
     MdoPowerManagerUnit();

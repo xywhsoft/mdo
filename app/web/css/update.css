@@ -1,0 +1,8 @@
+.update-card { margin-top: 24px; padding: 20px; border: 1px solid var(--border); border-radius: 14px; background: var(--surface); }
+.update-card h3 { margin: 0 0 8px; font-size: 15px; }
+.update-card p { margin: 8px 0; color: var(--muted); line-height: 1.6; overflow-wrap: anywhere; }
+.update-card [data-update-notes] { white-space: pre-wrap; color: var(--ink); }
+.update-card-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 14px; }
+.update-notice { position: fixed; z-index: 80; bottom: 24px; right: 24px; display: flex; align-items: center; flex-wrap: wrap; gap: 12px; max-width: calc(100vw - 32px); padding: 16px; background: var(--surface-raised); color: var(--ink); border: 1px solid var(--border-strong); border-radius: 14px; box-shadow: 0 8px 32px #0003; }
+.update-notice[hidden] { display: none; }
+@media (max-width: 650px) { .update-notice { bottom: max(16px,env(safe-area-inset-bottom)); right: 16px; } .update-card { padding: 16px; } }

@@ -10,6 +10,7 @@
 #include "../../include/mdo/project_lifecycle.h"
 #include "../../include/mdo/projects.h"
 #include "../../include/mdo/home.h"
+#include "../../include/mdo/update.h"
 
 typedef struct MdoApiRoute {
     cstr Path;
@@ -25,6 +26,12 @@ static xatomic64 g_MdoApiFallbackId;
 static bool g_MdoApiInitialized;
 
 static const MdoApiRoute g_MdoApiRoutes[] = {
+    { "/api/v1/update", XHTTP_METHOD_GET | XHTTP_METHOD_HEAD | XHTTP_METHOD_POST,
+      "GET, HEAD, POST, OPTIONS", MdoApiUpdateRoute, false },
+    { "/api/v1/update/download", XHTTP_METHOD_POST | XHTTP_METHOD_DELETE,
+      "POST, DELETE, OPTIONS", MdoApiUpdateDownloadRoute, false },
+    { "/api/v1/update/install", XHTTP_METHOD_POST,
+      "POST, OPTIONS", MdoApiUpdateInstallRoute, false },
     { "/api/v1/bootstrap", XHTTP_METHOD_GET | XHTTP_METHOD_HEAD,
       "GET, HEAD, OPTIONS", MdoApiBootstrapRoute, false },
     { "/api/v1/settings", XHTTP_METHOD_GET | XHTTP_METHOD_HEAD,
@@ -464,10 +471,16 @@ static bool MdoApiRouteInvoke(MdoApiContext* Context, const MdoApiRoute* Route)
     bool Read = (Method & (XHTTP_METHOD_GET | XHTTP_METHOD_HEAD)) != 0u;
     bool Recovery = Route->Proc == MdoApiProjectPurgeCancelRoute ||
         Route->Proc == MdoApiProjectPurgeIntentRoute;
-    bool Exclusive = Route->Proc == MdoApiProjectPurgeRoute;
+    bool Exclusive = Route->Proc == MdoApiProjectPurgeRoute || Route->Proc == MdoApiUpdateInstallRoute;
     bool Stop = Route->Proc == MdoApiRunRoute && Method == XHTTP_METHOD_DELETE;
     bool Ok;
+    if (!Read && MdoUpdateInstalling())
+        return MdoApiReplyError(Context,409,"update_installing","Native update confirmation or installation is in progress",NULL);
     if ( !Read && !Recovery && !MdoApiWriteEnter(Context, Exclusive, Stop) ) return true;
+    if (!Read && MdoUpdateInstalling()) {
+        MdoApiWriteLeave(Context);
+        return MdoApiReplyError(Context,409,"update_installing","Installation is in progress",NULL);
+    }
     Ok = MdoApiRouteInvokeData(Context, Route);
     MdoApiWriteLeave(Context);
     return Ok;
