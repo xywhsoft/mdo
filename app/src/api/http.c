@@ -4,6 +4,7 @@
 #include "internal.h"
 #include "write_admission.h"
 #include "../../include/mdo/session_backup.h"
+#include "../account/internal.h"
 
 static bool MdoApiConnectionSend(MdoApiContext* Context, const void* pData,
     size_t Size)
@@ -185,6 +186,23 @@ bool MdoApiReplySuccessTake(MdoApiContext* pContext, uint16 Status,
         return MdoApiReplySerializationFailure(pContext, 500u);
     }
     return MdoApiReplyValue(pContext, Status, Envelope, Allow, NULL);
+}
+
+/* Private ticket reply: transfer, serialize once, then clear both the value
+ * and JSON buffer. No shared snapshot/scalar may be passed to this function. */
+bool MdoApiReplySecretSuccessTake(MdoApiContext* Context, xvalue* Data)
+{
+    xvalue* envelope = xrtValueObject(); size_t size = 0u; char* json = NULL;
+    if (!Data || !envelope || !MdoApiEnvelopeBase(envelope,Context,true)) {
+        MdoAccountSecretValueRelease(Data); xrtValueRelease(envelope);
+        return MdoApiReplySerializationFailure(Context,500u);
+    }
+    if (xrtValueObjectSetNew(envelope,XRT_STR_LITERAL("data"),Data)) json = xrtJsonStringify(envelope,false,&size);
+    MdoAccountSecretValueRelease(envelope);
+    bool ok = json && size <= MDO_API_RESPONSE_MAX_BYTES ?
+        MdoApiReplyRaw(Context,200u,json,size,NULL,NULL,NULL,NULL) : MdoApiReplySerializationFailure(Context,500u);
+    if (json) xrtSecureZero(json,size);
+    xrtFree(json); return ok;
 }
 
 bool MdoApiReplySuccessTakeEntityTag(MdoApiContext* pContext, uint16 Status,

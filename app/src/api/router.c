@@ -26,6 +26,12 @@ static xatomic64 g_MdoApiFallbackId;
 static bool g_MdoApiInitialized;
 
 static const MdoApiRoute g_MdoApiRoutes[] = {
+    { "/api/v1/remote", XHTTP_METHOD_GET | XHTTP_METHOD_POST,
+      "GET, POST, OPTIONS", MdoApiRemoteRoute, false },
+    { "/api/v1/connector/state", XHTTP_METHOD_GET, "GET, OPTIONS", MdoApiRemoteRoute, false },
+    { "/api/v1/connector/devices", XHTTP_METHOD_GET | XHTTP_METHOD_POST,
+      "GET, POST, OPTIONS", MdoApiRemoteRoute, false },
+    { "/api/v1/connector/ticket", XHTTP_METHOD_POST, "POST, OPTIONS", MdoApiRemoteRoute, false },
     { "/api/v1/live", XHTTP_METHOD_GET, "GET, OPTIONS", MdoApiLiveRoute, false },
     { "/api/v1/update", XHTTP_METHOD_GET | XHTTP_METHOD_HEAD | XHTTP_METHOD_POST,
       "GET, HEAD, POST, OPTIONS", MdoApiUpdateRoute, false },

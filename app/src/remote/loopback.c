@@ -35,6 +35,7 @@ static bool MdoRemoteHttpPath(xstrview Path, bool ReadOnly)
         }
     }
     if (ok && (xrtStrEqual(xrtStrViewN(path,size),XRT_STR_LITERAL("/api/v1/live")) ||
+        (size >= 17u && !memcmp(path,"/api/v1/connector",17u) && (size == 17u || path[17] == '/')) ||
         (ReadOnly && xrtStrEqual(xrtStrViewN(path,size),XRT_STR_LITERAL("/api/v1/account/callback"))))) ok = false;
     xrtFree(path); return ok;
 }

@@ -92,7 +92,8 @@ static int32 LoopTestRun(void* data) {
     MdoAccountSetBool(out,"write",ok);
     req.Method = "GET"; req.Body = (xbytesview){0}; req.Headers = NULL; req.HeaderCount = 0u;
     const char* invalid[] = {"https://other.test/api/v1/settings","//other.test/api/v1/settings",
-        "/admin","/api/v1/../admin","/api/v1/%2e%2e/admin","/api/v1/x\\y","/api/v1/live"};
+        "/admin","/api/v1/../admin","/api/v1/%2e%2e/admin","/api/v1/x\\y","/api/v1/live",
+        "/api/v1/connector","/api/v1/connector/ticket","/api/v1/%63onnector/ticket"};
     ok = true;
     for (size_t i=0u; i<sizeof(invalid)/sizeof(invalid[0]); i++) { req.Target = invalid[i]; if (MdoRemoteHttpRequestValid(&req)) ok = false; }
     req.Target = "/api/v1/account/callback?state=fake&code=fake"; req.ReadOnly = true;

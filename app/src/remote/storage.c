@@ -2,7 +2,7 @@
 #include <string.h>
 #include "storage.h"
 
-static bool MdoRemoteName(cstr Name)
+bool MdoRemoteNameValid(cstr Name)
 {
     if (!Name || !Name[0] || strlen(Name) > 96u || !xrtUtf8Valid(xrtStrView(Name),NULL)) return false;
     for (size_t i = 0u; Name[i]; i++)
@@ -11,7 +11,7 @@ static bool MdoRemoteName(cstr Name)
 }
 static bool MdoRemoteConfigValid(const MdoRemoteConfig* Config)
 {
-    return Config && MdoRemoteName(Config->Name) && (!Config->AllowRemote || Config->MemberId);
+    return Config && MdoRemoteNameValid(Config->Name) && (!Config->AllowRemote || Config->MemberId);
 }
 bool MdoRemoteConfigLoad(MdoRemoteConfig* Config)
 {
@@ -38,7 +38,7 @@ bool MdoRemoteConfigLoad(MdoRemoteConfig* Config)
     value = xrtJsonRead(xrtStrViewN(document,read),&limits);
     uint64 schema = 0u, member = 0u; bool allow = false;
     cstr name = MdoAccountText(value,"name",96u);
-    if (xrtValueType(value) != XVALUE_OBJECT || xrtValueCount(value) != 4u || !MdoRemoteName(name) ||
+    if (xrtValueType(value) != XVALUE_OBJECT || xrtValueCount(value) != 4u || !MdoRemoteNameValid(name) ||
         !MdoAccountGetUInt(xrtValueObjectGet(value,XRT_STR_LITERAL("schema_version")),&schema) || schema != 1u ||
         !MdoAccountGetUInt(xrtValueObjectGet(value,XRT_STR_LITERAL("member_id")),&member) ||
         !xrtValueGetBool(xrtValueObjectGet(value,XRT_STR_LITERAL("allow_remote")),&allow) || (allow && !member)) goto done;

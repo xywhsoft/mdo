@@ -22,6 +22,7 @@ typedef struct MdoRemoteIdentity {
  * a stable device ID without sharing its secret across account switches. */
 bool MdoRemoteConfigLoad(MdoRemoteConfig* Config);
 bool MdoRemoteConfigSave(const MdoRemoteConfig* Config);
+bool MdoRemoteNameValid(cstr Name);
 /* Create is only true for an explicit enable action. Existing unreadable
  * credentials are never replaced silently. Unsupported secure storage allows
  * a temporary in-memory identity; its enabled flag must not be persisted. */

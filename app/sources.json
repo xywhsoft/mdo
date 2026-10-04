@@ -26,6 +26,7 @@
     "src/remote/storage.c",
     "src/remote/service_client.c",
     "src/remote/loopback.c",
+    "src/remote/manager.c",
     "src/web/manager.c",
     "src/mcp/manager.c",
     "src/modules/manager.c",
@@ -109,6 +110,7 @@
     "src/api/sessions.c",
     "src/api/mutations.c",
     "src/api/account.c",
+    "src/api/remote.c",
     "src/api/router.c",
     "src/bootstrap/service.c"
   ]

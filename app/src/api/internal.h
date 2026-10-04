@@ -108,6 +108,8 @@ bool MdoApiSessionBackupRoute(MdoApiContext* Context);
 
 bool MdoApiBootstrapRoute(MdoApiContext* pContext);
 bool MdoApiAccountRoute(MdoApiContext* pContext);
+bool MdoApiRemoteRoute(MdoApiContext* Context);
+bool MdoApiReplySecretSuccessTake(MdoApiContext* Context, xvalue* Data);
 bool MdoApiReplyAccountHtml(MdoApiContext* Context, uint16 Status, cstr Html);
 bool MdoApiSettingsRoute(MdoApiContext* pContext);
 bool MdoApiWorkspaceStateRoute(MdoApiContext* pContext);
