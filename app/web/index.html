@@ -346,8 +346,8 @@
               <section class="settings-section" data-settings-panel="agent" aria-labelledby="settings-agent-title" hidden>
                 <div class="settings-section-heading"><h2 id="settings-agent-title">Agent</h2><p data-i18n="settings.agentDescription">默认交互、推理和并行执行策略。</p></div>
                 <div class="setting-row">
-                  <div><label for="setting-interaction" data-i18n="settings.interactionMode">交互模式</label><p data-i18n="settings.interactionModeDescription">Agent 直接执行，先计划，或每步询问。</p></div>
-                  <select id="setting-interaction" name="interaction_mode"><option value="agent">Agent</option><option value="plan" data-i18n="settings.interactionPlan">计划</option><option value="ask" data-i18n="settings.interactionAsk">询问</option></select>
+                  <div><label for="setting-default-permission" data-i18n="settings.defaultPermission">默认权限</label><p data-i18n="settings.defaultPermissionDescription">新任务默认使用此权限；已有会话和聊天中手动选择的权限不变。</p></div>
+                  <select id="setting-default-permission" name="permission_profile"><option value="read-only" data-i18n="shell.permission.readOnly">只读</option><option value="balanced" data-i18n="shell.permission.balanced">询问</option><option value="full-access" data-i18n="shell.permission.fullAccess">完全访问</option></select>
                 </div>
                 <div class="setting-row">
                   <div><label for="setting-reasoning" data-i18n="settings.reasoningDefault">默认推理强度</label><p data-i18n="settings.reasoningDefaultDescription">新会话可单独覆盖这个值。</p></div>

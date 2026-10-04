@@ -21,7 +21,7 @@ function settingsPatch(form, snapshot) {
     notifications: { sound: form.elements.completion_sound.checked },
     power: { prevent_sleep: form.elements.prevent_sleep.checked },
     agent: {
-      interaction_mode: form.elements.interaction_mode.value,
+      permission_profile: form.elements.permission_profile.value,
       reasoning_effort: form.elements.reasoning_effort.value,
       user_instructions: form.elements.user_instructions.value,
       web_search: form.elements.web_search.checked,
@@ -254,7 +254,7 @@ export function createSettingsView({ form, store, navigation, onApplied }) {
     form.elements.completion_sound.checked = Boolean(settings.notifications?.sound);
     form.elements.open_mode.value = settings.workspace.open_mode;
     form.elements.confirm_external_write.checked = settings.workspace.confirm_external_write;
-    form.elements.interaction_mode.value = settings.agent.interaction_mode;
+    form.elements.permission_profile.value = settings.agent.permission_profile ?? "balanced";
     form.elements.reasoning_effort.value = settings.agent.reasoning_effort;
     form.elements.user_instructions.value = settings.agent.user_instructions ?? "";
     validateInstructions();

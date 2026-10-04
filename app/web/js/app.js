@@ -833,7 +833,7 @@ export async function boot() {
   composerProfile = createComposerProfile({
     modelSelect: $("#composer-model"), reasoningSelect: $("#composer-reasoning"),
     permissionSelect: $("#composer-permission"), navigation,
-    sessionStore: sessionDetailStore, modelsStore, agentsStore, projectsStore,
+    sessionStore: sessionDetailStore, modelsStore, agentsStore, projectsStore, settingsStore,
     draftStore, status: composerProfileStatus, resetButton: composerProfileReset,
     isRunActive: () => Boolean(activeRun),
     hasPendingSubmission(session) {

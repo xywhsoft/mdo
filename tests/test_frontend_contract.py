@@ -298,6 +298,17 @@ class FrontendContractTests(unittest.TestCase):
         self.assertIn(":focus-visible", self.css)
         self.assertIn("env(safe-area-inset-bottom)", self.css)
 
+    def test_agent_default_permissions_share_the_chat_profiles(self) -> None:
+        settings_select = self.index.split('id="setting-default-permission"', 1)[1].split('</select>', 1)[0]
+        chat_select = self.index.split('id="composer-permission"', 1)[1].split('</select>', 1)[0]
+        for profile in ("read-only", "balanced", "full-access"):
+            self.assertIn(f'value="{profile}"', settings_select)
+            self.assertIn(f'value="{profile}"', chat_select)
+        self.assertNotIn('name="interaction_mode"', self.index)
+        settings = self.scripts["js/features/settings/settings-view.js"]
+        self.assertIn("form.elements.permission_profile.value", settings)
+        self.assertNotIn("interaction_mode", settings)
+
 
 if __name__ == "__main__":
     unittest.main()

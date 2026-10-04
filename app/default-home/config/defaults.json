@@ -17,7 +17,6 @@
       "prevent_sleep": false
     },
     "agent": {
-      "interaction_mode": "agent",
       "reasoning_effort": "medium",
       "user_instructions": "",
       "web_search": true,

@@ -693,7 +693,17 @@ bool MdoApiPermissionsRoute(MdoApiContext* Context)
     if ( Effective != NULL ) {
         const xvalue* Value = xrtValueObjectGet(Effective,
             XRT_STR_LITERAL("permissions"));
-        if ( Value != NULL ) Permissions = xrtValueRetain(Value);
+        if ( Value != NULL ) Permissions = xrtValueDeepClone(Value);
+        const xvalue* Settings = xrtValueObjectGet(Effective,
+            XRT_STR_LITERAL("settings"));
+        const xvalue* Agent = Settings != NULL ? xrtValueObjectGet(Settings,
+            XRT_STR_LITERAL("agent")) : NULL;
+        const xvalue* Default = Agent != NULL ? xrtValueObjectGet(Agent,
+            XRT_STR_LITERAL("permission_profile")) : NULL;
+        if ( Permissions != NULL && Default != NULL &&
+             !xrtValueObjectSet(Permissions, XRT_STR_LITERAL("default_profile"), Default) ) {
+            xrtValueRelease(Permissions); Permissions = NULL;
+        }
     }
     Ok = Data != NULL && Permissions != NULL &&
         MdoConfigGetSnapshot(&Snapshot) &&

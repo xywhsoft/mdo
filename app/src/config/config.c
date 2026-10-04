@@ -415,7 +415,9 @@ static bool MdoConfigSettingsValidate(const xvalue* pSettings)
     static const char* const FontSizes[] = { "small", "normal", "large" };
     static const char* const Densities[] = { "compact", "comfortable" };
     static const char* const SubmitModes[] = { "queue", "guide" };
-    static const char* const InteractionModes[] = { "ask", "agent", "plan" };
+    static const char* const PermissionProfiles[] = {
+        "read-only", "balanced", "full-access"
+    };
     static const char* const Efforts[] = {
         "none", "minimal", "low", "medium", "high", "xhigh", "max"
     };
@@ -478,9 +480,10 @@ static bool MdoConfigSettingsValidate(const xvalue* pSettings)
          xrtValueType(pPower) != XVALUE_OBJECT ||
          !MdoConfigBool(pPower, "prevent_sleep") ||
          xrtValueType(pAgent) != XVALUE_OBJECT ||
-         !MdoConfigStringOneOf(xrtValueObjectGet(pAgent,
-            MdoConfigKey("interaction_mode")), InteractionModes,
-            sizeof(InteractionModes) / sizeof(InteractionModes[0])) ||
+         (xrtValueObjectHas(pAgent, MdoConfigKey("permission_profile")) &&
+          !MdoConfigStringOneOf(xrtValueObjectGet(pAgent,
+            MdoConfigKey("permission_profile")), PermissionProfiles,
+            sizeof(PermissionProfiles) / sizeof(PermissionProfiles[0]))) ||
          !MdoConfigStringOneOf(xrtValueObjectGet(pAgent,
             MdoConfigKey("reasoning_effort")), Efforts,
             sizeof(Efforts) / sizeof(Efforts[0])) ||
@@ -1358,6 +1361,7 @@ bool MdoConfigGetAgentSettings(MdoConfigAgentSettings* pSettings)
     const xvalue* pSettingsValue;
     const xvalue* pAgent;
     const xvalue* pPermissions;
+    const xvalue* pPermission;
     xstrview Reasoning;
     xstrview Permission;
     uint64 MaxTools;
@@ -1381,11 +1385,17 @@ bool MdoConfigGetAgentSettings(MdoConfigAgentSettings* pSettings)
         xrtValueObjectGet(pSettingsValue, MdoConfigKey("agent")) : NULL;
     pPermissions = xrtValueObjectGet(g_MdoConfig.Effective,
         MdoConfigKey("permissions"));
+    /* Older Homes store their default in permissions.default_profile. Keep
+     * inheriting it until the user saves the new-task default in Settings. */
+    pPermission = pAgent != NULL ? xrtValueObjectGet(pAgent,
+        MdoConfigKey("permission_profile")) : NULL;
+    if ( pPermission == NULL && pPermissions != NULL )
+        pPermission = xrtValueObjectGet(pPermissions,
+            MdoConfigKey("default_profile"));
     if ( pAgent != NULL && pPermissions != NULL &&
          MdoConfigString(xrtValueObjectGet(pAgent,
             MdoConfigKey("reasoning_effort")), &Reasoning) &&
-         MdoConfigString(xrtValueObjectGet(pPermissions,
-            MdoConfigKey("default_profile")), &Permission) &&
+         MdoConfigString(pPermission, &Permission) &&
          xrtValueGetBool(xrtValueObjectGet(pAgent,
             MdoConfigKey("memory")), &MemoryEnabled) &&
          xrtValueGetBool(xrtValueObjectGet(pAgent,

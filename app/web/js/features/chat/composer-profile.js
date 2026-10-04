@@ -32,7 +32,7 @@ export function fillReasoningOptions(select, model, preferred = "") {
 
 export function createComposerProfile({ modelSelect, reasoningSelect,
   permissionSelect, navigation, sessionStore, modelsStore, agentsStore,
-  projectsStore, draftStore, status, resetButton, isRunActive,
+  projectsStore, settingsStore, draftStore, status, resetButton, isRunActive,
   hasPendingSubmission = () => false, onBusyChange,
   onSelectionChange }) {
   // Blank tasks have no session metadata. Keep manual choices per project, but
@@ -94,7 +94,10 @@ export function createComposerProfile({ modelSelect, reasoningSelect,
   function agentPermission(session) {
     const agent = agentsStore.get().data?.items?.find((item) =>
       item.id === (session?.agent_id || "mdo.default"));
-    return session?.permission_profile || agent?.permission_profile || "balanced";
+    // Existing sessions keep their recorded permission. Blank tasks inherit
+    // the global default unless the user has saved a chat-level override.
+    return session?.permission_profile || (!session &&
+      settingsStore?.get().data?.agent?.permission_profile) || agent?.permission_profile || "balanced";
   }
 
   function sessionProfile(session) {
@@ -323,6 +326,7 @@ export function createComposerProfile({ modelSelect, reasoningSelect,
   const unsubscribers = [modelsStore.subscribe(sync), agentsStore.subscribe(sync),
     projectsStore.subscribe(sync), sessionStore.subscribe(sync),
     navigation.subscribe(sync), subscribeLocale(sync)];
+  if (settingsStore) unsubscribers.push(settingsStore.subscribe(sync));
   return Object.freeze({
     selection: () => ({
       model_id: modelSelect.value,

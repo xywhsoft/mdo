@@ -34,6 +34,43 @@ static void PrintError(const char* sLabel)
     xrtClearError();
 }
 
+static void PrintPermission(const char* Label)
+{
+    MdoConfigAgentSettings Settings;
+    memset(&Settings, 0, sizeof(Settings)); Settings.Size = sizeof(Settings);
+    printf("%s=%s\n", Label, MdoConfigGetAgentSettings(&Settings) ?
+        Settings.PermissionProfile : "unavailable");
+}
+
+static void ProbePermissions(void)
+{
+    static const char* const Profiles[] = { "read-only", "full-access", "balanced" };
+    static const char Invalid[] =
+        "{\"schema_version\":1,\"patch\":{\"agent\":{\"permission_profile\":\"plan\"}}}";
+    char Document[256];
+    size_t i;
+    PrintPermission("permission_before");
+    for ( i = 0u; i < 3u; ++i ) {
+        snprintf(Document, sizeof(Document),
+            "{\"schema_version\":1,\"patch\":{\"agent\":{\"permission_profile\":\"%s\"}}}", Profiles[i]);
+        printf("permission_import_%s=%d\n", Profiles[i],
+            MdoConfigImport(MDO_CONFIG_SETTINGS, xrtStrView(Document)) ? 1 : 0);
+        PrintPermission("permission_saved");
+        if ( i == 1u ) {
+            MdoConfigUnit();
+            printf("permission_reinit=%d\n", MdoConfigInit() ? 1 : 0);
+            PrintPermission("permission_reloaded");
+        }
+    }
+    printf("invalid_permission=%d\n", MdoConfigImport(MDO_CONFIG_SETTINGS,
+        xrtStrView(Invalid)) ? 1 : 0);
+    xrtClearError();
+    PrintPermission("permission_after_invalid");
+    printf("permission_restore=%d\n", MdoConfigRestore(MDO_CONFIG_SETTINGS) ? 1 : 0);
+    PrintPermission("permission_restored");
+    printf("probe_done=1\n");
+}
+
 void ServiceInit(XS_HostInfo* pHost)
 {
     static const char sSettingsOne[] =
@@ -78,6 +115,10 @@ void ServiceInit(XS_HostInfo* pHost)
     {
         uint32 i;
         for ( i = 0u; i < xsAppArgumentCount(); i++ ) {
+            if ( strcmp(xsAppArgument(i), "--permission-probe") == 0 ) {
+                ProbePermissions();
+                return;
+            }
             if ( strcmp(xsAppArgument(i), "--fault-write") == 0 ) {
                 printf("fault_import=%d\n", MdoConfigImport(
                     MDO_CONFIG_SETTINGS, xrtStrView(sSettingsOne)) ? 1 : 0);
@@ -276,6 +317,27 @@ def main() -> int:
         assert effective["schema_version"] == 1
         assert effective["settings"]["appearance"]["theme"] == "light"
         assert effective["models"]["items"][0]["id"] == "ornith-1.5-35b"
+
+        legacy = base / "legacy-permission"
+        (legacy / "config").mkdir(parents=True)
+        (legacy / "config/permissions.json").write_text(json.dumps({
+            "schema_version": 1, "patch": {"default_profile": "read-only"},
+        }), encoding="utf-8")
+        (legacy / "config/settings.json").write_text(json.dumps({
+            "schema_version": 1, "patch": {"agent": {"interaction_mode": "agent"}},
+        }), encoding="utf-8")
+        output = run_probe(host, site, legacy, extra_args=("--permission-probe",))
+        assert "probe_init_error=" not in output, output
+        assert "permission_before=read-only" in output, output
+        for profile in ("read-only", "full-access", "balanced"):
+            assert f"permission_import_{profile}=1" in output, output
+            assert f"permission_saved={profile}" in output, output
+        assert "permission_reinit=1" in output, output
+        assert "permission_reloaded=full-access" in output, output
+        assert "invalid_permission=0" in output, output
+        assert "permission_after_invalid=balanced" in output, output
+        assert "permission_restore=1" in output, output
+        assert "permission_restored=read-only" in output, output
 
         damaged = base / "damaged"
         (damaged / "config").mkdir(parents=True)

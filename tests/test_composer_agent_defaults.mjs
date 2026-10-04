@@ -115,6 +115,42 @@ test("blank task follows the default Agent until the user chooses overrides", ()
   profile.destroy();
 });
 
+test("global permission changes affect blank tasks, preserve chat overrides, and never rewrite existing sessions", () => {
+  const route = { projectId: "default", sessionId: "" };
+  const navigation = { get: () => route, subscribe: () => () => {} };
+  const settingsStore = createResourceStore({ agent: { permission_profile: "read-only" } });
+  const sessionStore = createResourceStore(null);
+  const permissionSelect = new Select(["read-only", "balanced", "full-access"]);
+  const profile = createComposerProfile({
+    modelSelect: new Select(), reasoningSelect: new Select(), permissionSelect,
+    navigation, sessionStore, settingsStore,
+    modelsStore: createResourceStore({ default_model_id: "text", models }),
+    projectsStore: createResourceStore({ items: [] }),
+    agentsStore: createResourceStore({ items: [{ id: "mdo.default", permission_profile: "balanced" }] }),
+    onBusyChange() {},
+  });
+  assert.equal(profile.selection().permission_profile, "read-only");
+  settingsStore.setData({ agent: { permission_profile: "full-access" } });
+  assert.equal(profile.selection().permission_profile, "full-access");
+  permissionSelect.value = "balanced";
+  permissionSelect.dispatchEvent(new Event("change"));
+  settingsStore.setData({ agent: { permission_profile: "read-only" } });
+  assert.equal(profile.selection().permission_profile, "balanced");
+
+  route.projectId = "another"; profile.sync();
+  assert.equal(profile.selection().permission_profile, "read-only");
+  const savedSession = { project_id: "another", id: "saved", status: "active",
+    model_id: "text", reasoning_effort: "medium", permission_profile: "balanced" };
+  route.sessionId = "saved"; sessionStore.setData(savedSession);
+  assert.equal(profile.selection().permission_profile, "balanced");
+  settingsStore.setData({ agent: { permission_profile: "full-access" } });
+  assert.equal(profile.selection().permission_profile, "balanced");
+  assert.equal(sessionStore.get().data.permission_profile, "balanced");
+  route.sessionId = ""; profile.sync();
+  assert.equal(profile.selection().permission_profile, "full-access");
+  profile.destroy();
+});
+
 test("blank task choices survive refresh per project without freezing other defaults", async () => {
   const oldWindow = globalThis.window;
   const oldFetch = globalThis.fetch;

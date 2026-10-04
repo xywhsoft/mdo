@@ -1678,7 +1678,7 @@ def run_probe(host: Path) -> None:
                                                .read_text(encoding="utf-8"))
                 assert migrated_settings["patch"]["composer"]["submit_mode"] == "guide", migrated_settings
                 assert migrated_settings["patch"]["notifications"]["sound"] is True, migrated_settings
-                assert migrated_settings["patch"]["agent"]["interaction_mode"] == "agent", migrated_settings
+                assert "interaction_mode" not in migrated_settings["patch"].get("agent", {}), migrated_settings
                 assert (home / "config/models.json").is_file(), home
                 model_config = (home / "config/models.json").read_text(
                     encoding="utf-8")
@@ -2657,8 +2657,9 @@ def run_probe(host: Path) -> None:
                 assert settings_document["data"]["power_runtime"]["active"] is False
                 assert isinstance(settings_document["data"]["power_runtime"][
                     "available"], bool)
+                assert "interaction_mode" not in settings_document["data"]["agent"], settings_document
                 assert settings_document["data"]["agent"][
-                    "interaction_mode"] == "agent", settings_document
+                    "permission_profile"] == "balanced", settings_document
                 assert settings_document["data"]["agent"][
                     "web_search"] is True, settings_document
                 assert settings_document["data"]["agent"][

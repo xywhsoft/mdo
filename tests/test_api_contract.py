@@ -93,7 +93,7 @@ class ApiContractTests(unittest.TestCase):
         self.assertIn("XHTTP_METHOD_PATCH", self.router)
         self.assertIn("MdoApiReplySuccessTakeRevision", state)
         self.assertIn('"runtime_consistent"', state)
-        for field in ("appearance", "interaction_mode", "web_search",
+        for field in ("appearance", "permission_profile", "web_search",
                       "workspace", "confirm_external_write"):
             self.assertIn(f'"{field}"', state)
 

@@ -167,8 +167,6 @@ bool MdoApiSettingsRoute(MdoApiContext* Context)
             PowerRuntime.Active) &&
         MdoApiValueSetTake(Data, "power_runtime", &PowerRuntimeValue);
     if ( Ok ) Ok =
-        MdoApiSettingsStringField(AgentValue, "interaction_mode",
-            EffectiveAgent, "interaction_mode") &&
         MdoApiSettingsStringField(AgentValue, "user_instructions",
             EffectiveAgent, "user_instructions") &&
         MdoApiSettingsBoolField(AgentValue, "web_search", EffectiveAgent,
