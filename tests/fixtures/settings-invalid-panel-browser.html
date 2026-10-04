@@ -62,7 +62,9 @@ function report() {
   const field = document.activeElement;
   const bounds = field?.getBoundingClientRect();
   const layout = document.querySelector(".settings-layout").getBoundingClientRect();
-  const nav = document.querySelector(".settings-navigation").getBoundingClientRect();
+  const navElement = document.querySelector(matchMedia("(max-width: 760px)").matches
+    ? ".settings-page-picker" : ".settings-navigation");
+  const nav = navElement.getBoundingClientRect();
   const invalid = [...form.elements].filter(e=>e.willValidate && !e.validity.valid);
   document.querySelector("#result").dataset.ready = "true";
   document.querySelector("#result").textContent = JSON.stringify({ section, writes,

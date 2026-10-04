@@ -2,6 +2,7 @@ import { applySettings, loadSettings, restoreSettings } from "../../state/settin
 import { errorMessage, toast } from "../../utils/dom.js";
 import { currentLocale, loadLocale, supportedLocales, t } from "../../i18n.js";
 import { createSettingsAutosave, changedSettingsValues } from "./settings-autosave.js";
+import { createSettingsPages } from "./settings-pages.js";
 
 function number(form, name) {
   return Number(form.elements[name].value);
@@ -83,9 +84,9 @@ export function createSettingsView({ form, store, navigation, onApplied }) {
   const restoreConfirm = document.querySelector("#restore-confirm");
   const cancelRestoreButton = document.querySelector("#cancel-restore");
   const confirmRestoreButton = document.querySelector("#confirm-restore");
-  const sectionNavigation = document.querySelector(".settings-navigation");
-  const sectionLayout = document.querySelector(".settings-layout");
-  const sectionContent = document.querySelector(".settings-content");
+  const pages = createSettingsPages({
+    workspace: document.querySelector("#settings-workspace"), form, navigation,
+  });
   const credential = document.querySelector("#search-credential-state");
   const proxyCredential = document.querySelector("#proxy-credential-state");
   const powerStatus = document.querySelector("#settings-power-status");
@@ -114,7 +115,7 @@ export function createSettingsView({ form, store, navigation, onApplied }) {
 
   function syncPendingLink() {
     pendingLink.hidden = !snapshot || fingerprint() === baselineFingerprint ||
-      ["general", "agent", "web"].includes(selectedSection);
+      pages.usesPreferences(selectedSection);
   }
 
   function previewAppearance() {
@@ -176,58 +177,8 @@ export function createSettingsView({ form, store, navigation, onApplied }) {
 
   function visibleFeedbackTarget() {
     return feedback.getClientRects().length ? feedback :
-      sectionNavigation.querySelector('[aria-current="page"]');
+      pages.navigationTarget();
   }
-
-  function revealSectionButton(button) {
-    if (!button || !sectionNavigation.getClientRects().length) return;
-    const area = sectionNavigation.getBoundingClientRect();
-    const target = button.getBoundingClientRect();
-    const inset = 8;
-    if (sectionNavigation.scrollWidth > sectionNavigation.clientWidth) {
-      if (target.left < area.left + inset)
-        sectionNavigation.scrollLeft += target.left - area.left - inset;
-      else if (target.right > area.right - inset)
-        sectionNavigation.scrollLeft += target.right - area.right + inset;
-    }
-    if (sectionNavigation.scrollHeight > sectionNavigation.clientHeight) {
-      if (target.top < area.top + inset)
-        sectionNavigation.scrollTop += target.top - area.top - inset;
-      else if (target.bottom > area.bottom - inset)
-        sectionNavigation.scrollTop += target.bottom - area.bottom + inset;
-    }
-  }
-
-  function revealCurrentSection() {
-    revealSectionButton(sectionNavigation.querySelector('[aria-current="page"]'));
-  }
-  function keepFocusedSettingVisible() {
-    const field = document.activeElement;
-    if (!sectionContent.contains(field) ||
-        !["INPUT", "TEXTAREA", "SELECT"].includes(field.tagName) ||
-        document.querySelector("dialog[open]")?.contains(field) ||
-        getComputedStyle(sectionLayout).display !== "block") return;
-    const area = sectionLayout.getBoundingClientRect();
-    const nav = sectionNavigation.getBoundingClientRect();
-    const top = nav.top < area.bottom && nav.bottom > area.top
-      ? Math.max(area.top, nav.bottom) : area.top;
-    const target = field.getBoundingClientRect();
-    const inset = 8;
-    if (target.bottom > area.bottom - inset)
-      sectionLayout.scrollTop += target.bottom - area.bottom + inset;
-    else if (target.top < top + inset)
-      sectionLayout.scrollTop += target.top - top - inset;
-  }
-
-  function syncResponsiveSettings() {
-    revealCurrentSection();
-    keepFocusedSettingVisible();
-  }
-  window.addEventListener("resize", syncResponsiveSettings);
-  const sectionResizeObserver = typeof ResizeObserver === "function"
-    ? new ResizeObserver(syncResponsiveSettings) : null;
-  sectionResizeObserver?.observe(sectionNavigation);
-  sectionResizeObserver?.observe(sectionLayout);
 
   function renderStatus(settings) {
     revision.textContent = t("settings.autosaveDescription", {},
@@ -375,7 +326,7 @@ export function createSettingsView({ form, store, navigation, onApplied }) {
   function markDirty(event) {
     if (event) saveFailure = "";
     const section = event?.target?.closest?.("[data-settings-panel]")?.dataset.settingsPanel;
-    if (["general", "agent", "web"].includes(section)) lastEditedSection = section;
+    if (pages.usesPreferences(section)) lastEditedSection = section;
     if (previewActive) previewAppearance();
     const validInstructions = validateInstructions();
     const validProxy = validateProxy();
@@ -412,14 +363,13 @@ export function createSettingsView({ form, store, navigation, onApplied }) {
     if (section && section !== selectedSection) navigation.openSettings(section);
     feedbackText(t("settings.invalidInput"), "error");
     invalid.focus();
-    keepFocusedSettingVisible();
+    pages.keepFocusedFieldVisible();
     invalid.reportValidity();
     return false;
   }
   pendingLink.addEventListener("click", () => {
     navigation.openSettings(lastEditedSection);
-    sectionNavigation.querySelector(
-      `[data-settings-section="${lastEditedSection}"]`)?.focus({ preventScroll: true });
+    pages.focusNavigation();
   });
   form.elements.locale.addEventListener("change", async () => {
     try {
@@ -551,10 +501,6 @@ export function createSettingsView({ form, store, navigation, onApplied }) {
     }
   });
 
-  for (const button of document.querySelectorAll("[data-settings-section]")) {
-    button.addEventListener("click", () => navigation.openSettings(button.dataset.settingsSection));
-  }
-
   const unsubscribe = store.subscribe((state) => {
     if (state.status === "loading" && !state.data) {
       revision.textContent = t("settings.loading", {}, "正在读取当前配置…");
@@ -596,33 +542,14 @@ export function createSettingsView({ form, store, navigation, onApplied }) {
       }).catch((error) => toast(errorMessage(error), "error"));
     },
     selectSection(section) {
-      const available = [...document.querySelectorAll("[data-settings-panel]")];
-      const selected = available.some((panel) => panel.dataset.settingsPanel === section) ? section : "general";
-      selectedSection = selected;
-      const previous = sectionNavigation.querySelector('[aria-current="page"]')?.dataset.settingsSection;
-      for (const panel of available) panel.hidden = panel.dataset.settingsPanel !== selected;
-      form.hidden = !available.some((panel) => panel.dataset.settingsPanel === selected &&
-        form.contains(panel));
-      let activeButton = null;
-      for (const button of document.querySelectorAll("[data-settings-section]")) {
-        if (button.dataset.settingsSection === selected) {
-          button.setAttribute("aria-current", "page");
-          activeButton = button;
-        }
-        else button.removeAttribute("aria-current");
-      }
-      if (previous !== selected) {
-        sectionLayout.scrollTop = 0;
-        sectionContent.scrollTop = 0;
-      }
-      revealSectionButton(activeButton);
+      selectedSection = pages.selectSection(section);
       syncPendingLink();
+      return selectedSection;
     },
     destroy() {
       autosave.destroy();
       unsubscribe();
-      window.removeEventListener("resize", syncResponsiveSettings);
-      sectionResizeObserver?.disconnect();
+      pages.destroy();
     },
   });
 }

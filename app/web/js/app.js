@@ -214,16 +214,6 @@ export async function boot() {
   // repeating DELETE while its persisted priority queue item is still waiting.
   const priorityCancelAttempts = new Set();
 
-  function syncSettingsTitle(section = navigation.get().settingsSection) {
-    const titles = {
-      projects: ["settings.projects", "项目"],
-      schedules: ["settings.schedules", "计划任务"],
-      feedback: ["settings.feedback", "反馈"],
-    };
-    const [key, fallback] = titles[section] ?? ["shell.settings.title", "设置"];
-    $("#settings-title").textContent = t(key, {}, fallback);
-  }
-
   function focusForkComposerWhenReady() {
     if (!pendingForkComposerFocus) return;
     const route = navigation.get();
@@ -1297,7 +1287,6 @@ export async function boot() {
       (composerError.querySelectorAll(".composer-error-action")[focusedAction] ?? prompt)
         .focus({ preventScroll: true });
     skipLink.textContent = t(settingsActive ? "shell.skipSettings" : "shell.skip");
-    if (settingsActive) syncSettingsTitle();
     const session = sessionDetailStore.get().data;
     if (session && selectedKey === `${session.project_id}/${session.id}`) {
       const statusText = sessionStatusSuffix(session.status);
@@ -1590,6 +1579,8 @@ export async function boot() {
 
   navigation.subscribe(async ({ view, projectId, sessionId, settingsSection }) => {
     shell.toggleAttribute("data-settings-open", view === "settings");
+    for (const name of ["sidebar", "inspector"])
+      $(`#${name}`).inert = view === "settings" || shell.dataset[name] !== "open";
     updateExportButtons();
     if (pendingForkComposerFocus &&
         (view !== "workspace" || `${projectId}/${sessionId}` !== pendingForkComposerFocus))
@@ -1608,14 +1599,10 @@ export async function boot() {
       settingsView.setActive(true);
       skipLink.href = "#settings-content";
       skipLink.textContent = t("shell.skipSettings");
-      settingsView.selectSection(settingsSection);
-      resourcePanels.selectSection(settingsSection);
-      const standalonePage = !["general", "agent", "web"].includes(settingsSection);
-      syncSettingsTitle(settingsSection);
-      $("#settings-revision").hidden = standalonePage;
-      $("#settings-actions").hidden = standalonePage;
-      if (settingsSection === "schedules") void schedulePanel.refresh();
-      if (settingsSection === "feedback") void feedbackPanel.refresh();
+      const selectedSection = settingsView.selectSection(settingsSection);
+      resourcePanels.selectSection(selectedSection);
+      if (selectedSection === "schedules") void schedulePanel.refresh();
+      if (selectedSection === "feedback") void feedbackPanel.refresh();
       closeDrawers();
       setDrawer("inspector", false, { persist: false });
       if (enteringSettings) $("#settings-title").focus({ preventScroll: true });
@@ -2297,7 +2284,7 @@ export async function boot() {
         !opener.matches(":disabled") && !opener.closest("[hidden], [inert]");
       (reachable ? opener : button).focus();
     }
-    panel.inert = inactive;
+    panel.inert = inactive || shell.hasAttribute("data-settings-open");
     button.setAttribute("aria-expanded", String(open));
     if (name === "sidebar")
       $("#desktop-sidebar-toggle").setAttribute("aria-expanded", String(open));
@@ -2315,7 +2302,7 @@ export async function boot() {
     const panel = mobileLayout.matches && shell.dataset.sidebar === "open"
       ? $("#sidebar") : !wideLayout.matches && shell.dataset.inspector === "open"
         ? $("#inspector") : null;
-    if (!panel) return;
+    if (!panel || settingsActive) return;
     const items = [...panel.querySelectorAll(
       'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
     )].filter((item) => item.getClientRects().length &&

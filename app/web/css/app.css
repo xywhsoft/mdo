@@ -1151,6 +1151,7 @@ select:focus-visible,
 .settings-pending-link:hover { background: var(--surface-hover); }
 .settings-pending-link:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 .settings-layout { display: grid; min-width: 0; min-height: 0; grid-template-columns: 210px minmax(0, 1fr); }
+.settings-page-picker { display: none; }
 .settings-navigation { min-height: 0; overflow: auto; padding: 18px 12px; border-right: 1px solid var(--border); background: var(--surface); }
 .settings-navigation p { margin: 14px 9px 5px; color: var(--faint); font-size: 10px; font-weight: 650; letter-spacing: .04em; text-transform: uppercase; }
 .settings-navigation p:first-child { margin-top: 0; }
@@ -1604,10 +1605,11 @@ select:focus-visible,
   .settings-workspace { grid-row: 1 / -1; }
   .settings-pending-link { min-height: 40px; }
   .settings-layout { display: block; overflow: auto; }
-  .settings-navigation { position: sticky; top: 0; z-index: 2; display: flex; min-height: 48px; overflow-x: auto; scrollbar-width: none; padding: 4px 10px; border-right: 0; border-bottom: 1px solid var(--border); }
-  .settings-navigation::-webkit-scrollbar { display: none; }
-  .settings-navigation p { display: none; }
-  .settings-navigation button { width: auto; min-width: max-content; min-height: 40px; }
+  .settings-navigation { display: none; }
+  .settings-page-picker { position: sticky; top: 0; z-index: 2; display: flex; min-height: 56px; align-items: center; gap: 12px; padding: 8px 14px; border-bottom: 1px solid var(--border); background: var(--surface); }
+  .settings-page-picker label { flex: 0 0 auto; color: var(--muted); font-size: 11px; }
+  .settings-page-picker select { flex: 1 1 auto; width: 0; min-width: 0; min-height: 40px; padding: 6px 10px; border: 1px solid var(--border-strong); border-radius: var(--radius-sm); background: var(--surface-raised); color: var(--ink); font: inherit; }
+  .settings-page-picker select:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
   .settings-content { overflow: visible; }
   .settings-content form { width: calc(100% - 28px); padding-top: 22px; }
   .settings-content > .resource-section { width: calc(100% - 28px); padding-top: 22px; }
@@ -1661,7 +1663,7 @@ select:focus-visible,
 
 @media (max-width: 760px) and (max-height: 300px) {
   .settings-workspace { grid-template-rows: 44px minmax(0, 1fr) auto; }
-  .settings-navigation { min-height: 40px; padding: 0 6px; }
+  .settings-page-picker { min-height: 44px; padding-block: 2px; }
   .settings-actions { min-height: 0; gap: 4px; padding: 4px 8px; }
   .settings-feedback { max-height: 30px; overflow-y: auto; }
   .settings-actions[data-short-state="empty"] { display: none; }
@@ -1687,7 +1689,7 @@ select:focus-visible,
   #message-edit-dialog .dialog-fields { padding: 6px 12px; }
   #message-edit-dialog .message-edit-fields textarea { min-height: 60px; height: 60px; }
   #message-edit-dialog .dialog-card > footer { padding: 6px 12px; }
-  .settings-navigation { position: static; }
+  .settings-page-picker { position: static; }
   .setting-instructions textarea { min-height: 80px; height: 80px; }
 }
 
@@ -1765,10 +1767,10 @@ select:focus-visible,
   .app-shell[data-compact-visual-viewport] .settings-workspace {
     grid-template-rows: 44px minmax(0, 1fr) auto;
   }
-  .app-shell[data-compact-visual-viewport] .settings-navigation {
+  .app-shell[data-compact-visual-viewport] .settings-page-picker {
     position: static;
-    min-height: 40px;
-    padding: 0 6px;
+    min-height: 44px;
+    padding-block: 2px;
   }
   .app-shell[data-compact-visual-viewport] .settings-actions {
     min-height: 0;
@@ -1899,4 +1901,18 @@ select:focus-visible,
   .composer-model-trigger, .composer-permission-trigger { height: 40px; }
   .composer-permission-trigger { flex-basis: 40px; width: 40px; }
   .composer-config-panel > header .icon-button { min-width: 40px; min-height: 40px; }
+}
+
+/* Settings is an independent workspace. Saved conversation pane geometry
+   remains untouched, so returning restores the user's original layout. */
+#app-shell[data-settings-open] {
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
+}
+.app-shell[data-settings-open] > .workspace {
+  grid-column: 1 / -1;
+  grid-row: 1 / -1;
+}
+.app-shell[data-settings-open] > :is(.sidebar, .inspector, .mobile-bar, .pane-resize-handle, .scrim) {
+  display: none;
 }
