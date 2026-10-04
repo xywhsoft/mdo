@@ -10,6 +10,7 @@ bool MdoAccountAuthorizationStart(cstr Origin, cstr LocalOrigin, bool Remember,
         !MdoAccountRandom(Authorization->State) || !MdoAccountRandom(Authorization->Verifier)) return false;
     strcpy(Authorization->Origin, Origin);
 #if defined(__ANDROID__)
+    (void)LocalOrigin;
     strcpy(Authorization->Client, "mdo-android");
     /* Android App Links are bound to the published domain and package. A
      * self-hosted service must register its own signed Android client. */
