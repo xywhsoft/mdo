@@ -954,6 +954,7 @@ MdoAgentSession* MdoAgentSessionCreateWithRuntime(xwork_runtime* Runtime,
     size_t MemoryPromptBytes = 0u;
     uint64 MemoryGeneration = 0u;
     char* DefaultArtifacts = NULL;
+    char* DefaultWorkspace = NULL;
     const char* Artifacts;
     xwork_artifact_store* ArtifactStore = NULL;
     MdoHomeSnapshot Home;
@@ -1220,6 +1221,16 @@ MdoAgentSession* MdoAgentSessionCreateWithRuntime(xwork_runtime* Runtime,
     AgentOptions.pSession = Owner->LlmSession;
     AgentOptions.sWorkspaceRoot = Options->WorkspaceRoot != NULL &&
         Options->WorkspaceRoot[0] != '\0' ? Options->WorkspaceRoot : ".";
+    if ( (Options->WorkspaceRoot == NULL || Options->WorkspaceRoot[0] == '\0') &&
+         Options->ProjectId != NULL && strcmp(Options->ProjectId, "default") == 0 ) {
+        DefaultWorkspace = MdoHomeDefaultWorkspacePath(true);
+        if ( DefaultWorkspace == NULL ) {
+            MdoAgentsError(Error, XWORK_ERROR_IO,
+                "cannot prepare the default project workspace");
+            goto fail;
+        }
+        AgentOptions.sWorkspaceRoot = DefaultWorkspace;
+    }
     AgentOptions.sSessionPath = Options->SessionPath;
     AgentOptions.pArtifactStore = ArtifactStore;
     AgentOptions.pCancel = Options->Cancel;
@@ -1294,6 +1305,7 @@ MdoAgentSession* MdoAgentSessionCreateWithRuntime(xwork_runtime* Runtime,
     xrtFree(Instructions);
     xrtFree(MemoryPrompt);
     xrtFree(DefaultArtifacts);
+    xrtFree(DefaultWorkspace);
     xworkArtifactStoreRelease(ArtifactStore);
     return Session;
 
@@ -1303,6 +1315,7 @@ fail:
     xrtFree(Instructions);
     xrtFree(MemoryPrompt);
     xrtFree(DefaultArtifacts);
+    xrtFree(DefaultWorkspace);
     xworkArtifactStoreRelease(ArtifactStore);
     if ( Session != NULL ) {
         if ( Session->Owner == NULL ) Session->Owner = Owner;

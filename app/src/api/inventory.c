@@ -102,13 +102,17 @@ static bool MdoApiProjectListRoute(MdoApiContext* Context)
     }
     for ( Index = 0u; Ok && Index < Count; Index++ ) {
         xvalue* Item = xrtValueObject();
+        str DefaultWorkspace = !Projects[Index].Managed &&
+            strcmp(Projects[Index].Id, "default") == 0 ?
+            MdoHomeDefaultWorkspacePath(false) : NULL;
         Ok = Item != NULL &&
             MdoApiValueSetString(Item, "id", Projects[Index].Id) &&
             MdoApiValueSetString(Item, "name", Projects[Index].Managed ?
                 Projects[Index].Definition.Name : Projects[Index].Id) &&
             MdoApiValueSetString(Item, "workspace_root",
                 Projects[Index].Managed ?
-                Projects[Index].Definition.WorkspaceRoot : "") &&
+                Projects[Index].Definition.WorkspaceRoot :
+                (DefaultWorkspace != NULL ? DefaultWorkspace : "")) &&
             MdoApiValueSetString(Item, "default_model_id",
                 Projects[Index].Managed ?
                 Projects[Index].Definition.DefaultModelId : "") &&
@@ -121,6 +125,7 @@ static bool MdoApiProjectListRoute(MdoApiContext* Context)
                 Projects[Index].Schedules) &&
             MdoApiValueAppendTake(Items, &Item);
         xrtValueRelease(Item);
+        xrtFree(DefaultWorkspace);
     }
     if ( Ok ) Ok =
         MdoApiValueSetBool(Data, "derived", true) &&

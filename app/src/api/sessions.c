@@ -50,9 +50,13 @@ static bool MdoApiSessionModelSame(cstr A, cstr B)
 static bool MdoApiSessionReplayMatches(const MdoSessionInfo* Info,
     const MdoSessionCreateOptions* Options)
 {
-    char* Workspace = xrtPathAbs(Options->Agent.WorkspaceRoot != NULL &&
-        Options->Agent.WorkspaceRoot[0] != '\0' ?
-        Options->Agent.WorkspaceRoot : ".");
+    char* Workspace = (Options->Agent.WorkspaceRoot == NULL ||
+        Options->Agent.WorkspaceRoot[0] == '\0') &&
+        strcmp(Options->ProjectId, "default") == 0 ?
+        MdoHomeDefaultWorkspacePath(false) :
+        xrtPathAbs(Options->Agent.WorkspaceRoot != NULL &&
+            Options->Agent.WorkspaceRoot[0] != '\0' ?
+            Options->Agent.WorkspaceRoot : ".");
     bool Matches = Workspace != NULL &&
         strcmp(Info->ProjectId, Options->ProjectId) == 0 &&
         strcmp(Info->Id, Options->RequestedId) == 0 &&

@@ -743,7 +743,16 @@ MdoSession* MdoSessionCreate(const MdoSessionCreateOptions* Options,
     if ( ProjectLease == NULL ) return NULL;
     SessionId = Options->RequestedId != NULL ?
         xrtStrDup(Options->RequestedId) : xrtXidMakeString();
-    Workspace = xrtPathAbs(Options->Agent.WorkspaceRoot != NULL &&
+    if ( (Options->Agent.WorkspaceRoot == NULL ||
+          Options->Agent.WorkspaceRoot[0] == '\0') &&
+         strcmp(Options->ProjectId, "default") == 0 ) {
+        Workspace = MdoHomeDefaultWorkspacePath(true);
+        if ( Workspace == NULL ) {
+            MdoSessionsError(Error, XWORK_ERROR_IO,
+                "cannot prepare the default project workspace");
+            goto done;
+        }
+    } else Workspace = xrtPathAbs(Options->Agent.WorkspaceRoot != NULL &&
         Options->Agent.WorkspaceRoot[0] != '\0' ?
         Options->Agent.WorkspaceRoot : ".");
     if ( SessionId == NULL || Workspace == NULL ||

@@ -330,7 +330,7 @@ bool MdoApiBackupRestoreReviewRoute(MdoApiContext* Context)
     Job->Store = Store;
     memcpy(ProjectId, Job->Info.Request.Binding.ProjectId, sizeof(ProjectId));
     Owner = MdoProjectLeaseAcquire(ProjectId, MDO_PROJECT_LEASE_SHARED, &Error);
-    if ( Owner == NULL || !MdoProjectBindingGet(ProjectId, &Job->Info.Request.Binding, &Error) ) {
+    if ( Owner == NULL || !MdoProjectBindingPrepare(ProjectId, &Job->Info.Request.Binding, &Error) ) {
         Status = Error.eCode == XWORK_ERROR_INVALID_ARGUMENT ? 400u : 409u;
         Code = "restore_target_unavailable"; Message = "Select an available project with a physical workspace"; goto failed;
     }

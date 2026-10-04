@@ -90,8 +90,9 @@ void ServiceInit(XS_HostInfo* Host)
     xrtAtomic32Init(&g_BindingHold, 0u); xrtAtomic32Init(&g_BindingReady, 0u); xrtAtomic32Init(&g_BindingStop, 0u);
     BINDING_CHECK(MdoHomeInit() && MdoProjectLifecycleInit());
     Default.Size = sizeof(Default); Binding.Size = sizeof(Binding); Changed.Size = sizeof(Changed);
-    BINDING_CHECK(MdoProjectBindingGet("default", &Default, &Error) && Default.Revision == 0u && Default.CreatedAt == 0);
-    BINDING_CHECK(Default.WorkspaceIdentity.Type == XFILE_TYPE_DIRECTORY && xrtPathIsAbs(Default.WorkspaceRoot));
+    /* Pure default inspection cannot invent a physical directory or use cwd. */
+    BINDING_CHECK(!MdoProjectBindingGet("default", &Default, &Error) &&
+        Error.eCode == XWORK_ERROR_IO && Default.WorkspaceRoot[0] == '\0');
     memset(&Bad, 0x31, sizeof(Bad)); Bad.Size = sizeof(Bad) - 1u; Before = Bad;
     BINDING_CHECK(!MdoProjectBindingGet("default", &Bad, &Error) && memcmp(&Bad, &Before, sizeof(Bad)) == 0);
     BINDING_CHECK(!MdoProjectBindingGet("missing", &Binding, &Error) && Error.eCode == XWORK_ERROR_CONTEXT &&
@@ -110,6 +111,11 @@ void ServiceInit(XS_HostInfo* Host)
     BINDING_CHECK(Other != NULL && !MdoProjectWithBinding(&Default, Other, BindingProbeCommit, NULL, &Error) && g_BindingCalls == 0u);
     BINDING_CHECK(!MdoProjectWithBinding(&Bad, Owner, BindingProbeCommit, NULL, &Error));
     if ( strcmp(getenv("MDO_BINDING_MODE"), "readonly") == 0 ) { Ok = true; goto done; }
+
+    BINDING_CHECK(MdoProjectBindingPrepare("default", &Default, &Error) &&
+        Default.Revision == 0u && Default.CreatedAt == 0);
+    BINDING_CHECK(Default.WorkspaceIdentity.Type == XFILE_TYPE_DIRECTORY &&
+        xrtPathIsAbs(Default.WorkspaceRoot) && strstr(Default.WorkspaceRoot, "workspace") != NULL);
 
     MdoProjectLeaseRelease(Other); Other = NULL;
     MdoProjectLeaseRelease(Owner); Owner = NULL;

@@ -8,7 +8,7 @@
  * plus CreatedAt distinguish replacement from a new project incarnation.
  * WorkspaceRoot is the existing physical directory, never a source backup's
  * path. Revision/CreatedAt zero identify ONLY the absent virtual default
- * project's current working directory, matching session/workspace APIs. */
+ * project's Home/workspace directory, matching session/workspace APIs. */
 typedef struct MdoProjectBinding {
     uint32 Size;
     char ProjectId[MDO_PROJECT_ID_CAPACITY];
@@ -19,10 +19,14 @@ typedef struct MdoProjectBinding {
 } MdoProjectBinding;
 
 /* External-only project read; never creates Home. Relative configured paths
- * resolve against xsAppPath, virtual default against cwd. Missing nondefault
- * projects, nonexistent/non-directory workspaces and unstable identities fail.
+ * resolve against xsAppPath, virtual default against Home/workspace. Missing
+ * nondefault projects, nonexistent/non-directory workspaces and unstable identities fail.
  * Wrong Size leaves output untouched; other failure clears it except Size. */
 bool MdoProjectBindingGet(cstr ProjectId, MdoProjectBinding* Binding,
+    xwork_error* Error);
+/* Explicit restore preparation may lazily create the built-in workspace.
+ * Configured projects must already have their physical workspace. */
+bool MdoProjectBindingPrepare(cstr ProjectId, MdoProjectBinding* Binding,
     xwork_error* Error);
 /* Pure bounded snapshot comparison; false for invalid sizes/text/identities.
  * Match is advisory until WithBinding repeats the read under writer exclusion. */

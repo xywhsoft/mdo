@@ -747,6 +747,19 @@ str MdoHomeExternalPath(cstr Path)
     return Result;
 }
 
+str MdoHomeDefaultWorkspacePath(bool Create)
+{
+    str Path = MdoHomeExternalPath(MDO_DEFAULT_WORKSPACE_PATH);
+    xroot Directory;
+    if ( Path == NULL || !Create ) return Path;
+    Directory = MdoHomeOpenStorageDirectory(MDO_DEFAULT_WORKSPACE_PATH);
+    if ( Directory == NULL || !xrtRootClose(Directory) ) {
+        xrtFree(Path);
+        return NULL;
+    }
+    return Path;
+}
+
 xfile MdoHomeOpenWrite(cstr Path, uint32 Flags)
 {
     const uint32 Known = XFILE_READ | XFILE_WRITE | XFILE_CREATE |

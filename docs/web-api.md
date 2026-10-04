@@ -81,6 +81,12 @@ Home. Session creation inherits a managed project's workspace and default
 model when the request does not provide them.
 Relative project workspace paths resolve from the executable's directory,
 so a project placed beside `mdo.exe` remains portable when the folder moves.
+The unregistered built-in `default` project instead uses the selected Home's
+`workspace/` directory. It is created on the first new task or explicit restore
+preparation; project file completion before that returns an empty list without
+creating Home or scanning cwd. New scheduled runs with no explicit workspace
+use the same directory. Existing sessions retain their recorded absolute roots,
+and explicitly supplied or managed project workspace paths take precedence.
 `GET /projects/{id}` returns one managed definition and its strong ETag.
 `PUT /projects/{id}` replaces `name`, `workspace_root`, and
 `default_model_id` (all required; the model may be empty). `DELETE` unregisters

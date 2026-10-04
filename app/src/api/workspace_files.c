@@ -2,6 +2,7 @@
 #include <string.h>
 
 #include "internal.h"
+#include "../../include/mdo/home.h"
 #include "../../include/mdo/projects.h"
 #include "../../include/mdo/sessions.h"
 
@@ -229,7 +230,7 @@ static bool MdoWsReply(MdoApiContext* Context, MdoWsScan* Scan,
     xvalue* Items;
     size_t Index;
     bool Ok;
-    if ( !MdoWsWalk(Scan, Root, "", 0u) ) goto unavailable;
+    if ( Root != NULL && !MdoWsWalk(Scan, Root, "", 0u) ) goto unavailable;
     Data = xrtValueObject();
     Items = xrtValueArray();
     Ok = Data != NULL && Items != NULL &&
@@ -321,7 +322,23 @@ bool MdoApiProjectWorkspaceFilesRoute(MdoApiContext* Context)
         return MdoApiReplyError(Context, 503u, "project_unavailable",
             "The project definition is invalid or unavailable", NULL);
     }
-    if ( !Found ) Root = xrtPathAbs(".");
+    if ( !Found && strcmp(ProjectId, "default") == 0 ) {
+        xfileinfo Info;
+        bool Exists;
+        if ( !MdoHomeExternalStat(MDO_DEFAULT_WORKSPACE_PATH, &Exists, &Info) ||
+             (Exists && Info.Type != XFILE_TYPE_DIRECTORY) ) {
+            xrtFree(Scan);
+            goto unavailable;
+        }
+        if ( !Exists ) {
+            /* Before the first task there are no workspace files. Listing
+             * must not create Home or expose the launch directory's files. */
+            Ok = MdoWsReply(Context, Scan, NULL);
+            xrtFree(Scan);
+            return Ok;
+        }
+        Root = MdoHomeDefaultWorkspacePath(false);
+    } else if ( !Found ) Root = xrtPathAbs(".");
     else if ( xrtPathIsAbs(Project.WorkspaceRoot) )
         Root = xrtPathAbs(Project.WorkspaceRoot);
     else {

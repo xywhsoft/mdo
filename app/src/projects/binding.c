@@ -52,7 +52,18 @@ bool MdoProjectBindingGet(cstr ProjectId, MdoProjectBinding* Binding, xwork_erro
     if ( !Found && strcmp(ProjectId, "default") != 0 ) {
         (void)MdoProjectBindingError(Error, XWORK_ERROR_CONTEXT, "target project does not exist"); goto done;
     }
-    if ( !Found ) Real = xrtPathReal(".");
+    if ( !Found ) {
+        xfileinfo Stat;
+        bool Exists;
+        if ( !MdoHomeExternalStat(MDO_DEFAULT_WORKSPACE_PATH, &Exists, &Stat) ||
+             !Exists || Stat.Type != XFILE_TYPE_DIRECTORY ) {
+            (void)MdoProjectBindingError(Error, XWORK_ERROR_IO,
+                "default project workspace is not an existing directory");
+            goto done;
+        }
+        Relative = MdoHomeDefaultWorkspacePath(false);
+        if ( Relative != NULL ) Real = xrtPathReal(Relative);
+    }
     else if ( xrtPathIsAbs(Info.WorkspaceRoot) ) Real = xrtPathReal(Info.WorkspaceRoot);
     else {
         Relative = xrtPathJoin(xsAppPath(), Info.WorkspaceRoot);
@@ -75,6 +86,24 @@ done:
     xrtFree(Relative); xrtFree(Real);
     if ( Ok ) *Binding = Candidate;
     return Ok;
+}
+
+bool MdoProjectBindingPrepare(cstr ProjectId, MdoProjectBinding* Binding,
+    xwork_error* Error)
+{
+    MdoProjectInfo Info = {0};
+    bool Found;
+    if ( Binding == NULL || Binding->Size != sizeof(*Binding) )
+        return MdoProjectBindingGet(ProjectId, Binding, Error);
+    Info.Size = sizeof(Info);
+    if ( !MdoProjectGet(ProjectId, &Info, &Found, Error) ) return false;
+    if ( !Found && strcmp(ProjectId, "default") == 0 ) {
+        str Workspace = MdoHomeDefaultWorkspacePath(true);
+        if ( Workspace == NULL ) return MdoProjectBindingError(Error,
+            XWORK_ERROR_IO, "cannot prepare the default project workspace");
+        xrtFree(Workspace);
+    }
+    return MdoProjectBindingGet(ProjectId, Binding, Error);
 }
 
 bool MdoProjectWithBinding(const MdoProjectBinding* Expected, MdoProjectLease* Owner,

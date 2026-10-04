@@ -381,6 +381,51 @@ done:
     return ok;
 }
 
+static bool ExecutorDefaultWorkspaceProbe(xwork_runtime *runtime) {
+    const int64 start = 1700000000000000LL;
+    MdoScheduleCreateOptions create;
+    MdoScheduleExecutorOptions executor;
+    xwork_error error;
+    Owner owner = {0};
+    char *expected = NULL, *real = NULL, *actual = NULL;
+    bool exists, ok = false;
+    size_t started = 0u, completed = 0u;
+    unsigned i;
+    expected = MdoHomeDefaultWorkspacePath(false);
+    if (expected == NULL || !MdoHomeExternalStat(MDO_DEFAULT_WORKSPACE_PATH,
+            &exists, NULL) || exists) goto done;
+    MdoScheduleCreateOptionsInit(&create);
+    create.Id = "default-workspace";
+    create.Label = "Portable default workspace";
+    create.ProjectId = "default";
+    create.AgentId = "mdo.default";
+    create.ModelId = "ornith-1.5-35b";
+    create.Input = "execute scheduled review";
+    create.StartAt = start;
+    MdoScheduleExecutorOptionsInit(&executor);
+    executor.Automatic = false;
+    executor.OnModelComplete = Complete;
+    executor.ModelUserData = &owner;
+    if (!MdoScheduleCreate(&create, NULL, &error) ||
+        !MdoScheduleExecutorInit(runtime, &executor, &error) ||
+        !MdoScheduleExecutorPump(start, &started, &completed, &error) ||
+        started != 1u || g_MdoScheduleExecutor.ActiveCount != 1u) goto done;
+    real = xrtPathReal(expected);
+    actual = xrtPathReal(xworkAgentWorkspaceRoot(
+        g_MdoScheduleExecutor.Active[0].Run->Session->Agent));
+    if (real == NULL || actual == NULL || strcmp(real, actual) != 0) goto done;
+    for (i = 0u; i < 200u && completed == 0u; ++i) {
+        xrtSleep(5000u);
+        if (!MdoScheduleExecutorPump(start, &started, &completed, &error)) goto done;
+    }
+    ok = completed == 1u && owner.Calls == 1u && owner.SawPrompt;
+done:
+    MdoScheduleExecutorUnit();
+    xrtFree(actual); xrtFree(real); xrtFree(expected);
+    printf("schedule_default_workspace=%d\n", ok ? 1 : 0);
+    return ok;
+}
+
 void ServiceInit(XS_HostInfo *host) {
     const int64 start = 1700000000000000LL;
     xwork_runtime_config runtime_config;
@@ -407,6 +452,10 @@ void ServiceInit(XS_HostInfo *host) {
         !MdoMemoryManagerInit(runtime) || !MdoModuleManagerInit(runtime) ||
         !MdoScheduleManagerInit(runtime)) {
         printf("init_error=runtime\n"); goto done;
+    }
+    if (getenv("MDO_SCHEDULE_WORKSPACE_ONLY") != NULL) {
+        (void)ExecutorDefaultWorkspaceProbe(runtime);
+        printf("probe_done=1\n"); goto done;
     }
     if (getenv("MDO_SCHEDULE_OWNER_ONLY") != NULL) {
         if (!ExecutorOwnerLeaseProbe(runtime)) printf("owner_lease_error=1\n");
@@ -581,12 +630,14 @@ def write_site(site: Path, memory_enabled: bool = True) -> None:
 
 
 def run_probe(host: Path, site: Path, home: Path, owner_only: bool = False,
-              cancel_only: bool = False) -> str:
+              cancel_only: bool = False, workspace_only: bool = False) -> str:
     env = os.environ.copy()
     if owner_only:
         env["MDO_SCHEDULE_OWNER_ONLY"] = "1"
     if cancel_only:
         env["MDO_SCHEDULE_CANCEL_ONLY"] = "1"
+    if workspace_only:
+        env["MDO_SCHEDULE_WORKSPACE_ONLY"] = "1"
     process = subprocess.Popen(
         [str(host), "xs.json", "--", "--home", str(home)], cwd=site,
         stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
@@ -636,6 +687,10 @@ def main() -> int:
         owner_site = base / "owner-site"
         owner_home = base / "owner-home"
         write_site(owner_site, memory_enabled=False)
+        workspace_home = base / "workspace-home"
+        workspace_output = run_probe(host, site, workspace_home, workspace_only=True)
+        assert "schedule_default_workspace=1" in workspace_output, workspace_output
+        assert (workspace_home / "workspace").is_dir()
         cancel_home = base / "cancel-home"
         cancel_output = run_probe(host, site, cancel_home, cancel_only=True)
         assert "cancel_error=" not in cancel_output, cancel_output

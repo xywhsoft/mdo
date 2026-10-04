@@ -74,6 +74,11 @@ tools/build_mdo.py   验证、生成、宿主构建与打包入口
 mdo.exe -- --home D:\Portable\mdo-home
 ```
 
+默认项目的新任务使用 `mdo-home/workspace/` 作为专用工作目录，首次创建任务时
+自动建立，不再使用程序目录或启动目录。`--home`、`MDO_HOME` 会同时改变这个
+目录的位置；Android 上位于应用私有 Home 内。已有会话保留创建时记录的工作
+目录，显式指定的项目或会话路径仍优先；移动旧文件请自行复制到新工作目录。
+
 ## 配置
 
 内置 `config/defaults.json` 与外部 Home 中的 `settings.json`、`models.json`

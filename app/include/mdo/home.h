@@ -72,6 +72,12 @@ bool MdoHomeRenameNoReplace(cstr Source, cstr Target);
  * API accepts native paths rather than xfile handles. */
 str MdoHomeExternalPath(cstr Path);
 
+#define MDO_DEFAULT_WORKSPACE_PATH "workspace"
+/* Owned native path for the built-in default project, relative to the selected
+ * Home rather than cwd. Create=false only resolves the path; Create=true
+ * ensures a real directory through the anchored Home API. No VFS fallback. */
+str MdoHomeDefaultWorkspacePath(bool Create);
+
 /* Writes only below the external Home. The Home and required parent
  * directories are created lazily on the first call that needs them. */
 xfile MdoHomeOpenWrite(cstr Path, uint32 Flags);

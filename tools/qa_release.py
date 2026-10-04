@@ -286,6 +286,8 @@ def main(argv: list[str] | None = None) -> int:
             )
         run([sys.executable, str(TESTS / "test_packed_home_lease.py"),
              "--packed", str(first)])
+        run([sys.executable, str(TESTS / "test_packed_default_workspace.py"),
+             "--packed", str(first)])
         run([sys.executable,
              str(TESTS / "test_packed_queue_start_recovery.py"),
              "--packed", str(first)])
