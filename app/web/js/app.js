@@ -1,3 +1,4 @@
+import { createAccount } from "./features/account/account.js";
 import { mountIcons } from "./components/icons.js";
 import { bootstrapStore, loadBootstrap } from "./state/bootstrap.js";
 import {
@@ -955,6 +956,7 @@ export async function boot() {
     },
   });
 
+  const account = createAccount({ navigation });
   const settingsView = createSettingsView({
     form: $("#settings-form"),
     store: settingsStore,
@@ -1503,6 +1505,7 @@ export async function boot() {
       skipLink.href = "#settings-content";
       skipLink.textContent = t("shell.skipSettings");
       const selectedSection = settingsView.selectSection(settingsSection);
+      if (selectedSection === "account") void account.refresh();
       memoryManagement.setActive(selectedSection === "memory");
       resourcePanels.selectSection(selectedSection);
       if (selectedSection === "schedules") void schedulePanel.refresh();

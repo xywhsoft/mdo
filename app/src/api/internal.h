@@ -98,6 +98,8 @@ bool MdoApiSessionBackupStart(MdoApiContext* Context, struct MdoSession* Session
 bool MdoApiSessionBackupRoute(MdoApiContext* Context);
 
 bool MdoApiBootstrapRoute(MdoApiContext* pContext);
+bool MdoApiAccountRoute(MdoApiContext* pContext);
+bool MdoApiReplyAccountHtml(MdoApiContext* Context, uint16 Status, cstr Html);
 bool MdoApiSettingsRoute(MdoApiContext* pContext);
 bool MdoApiWorkspaceStateRoute(MdoApiContext* pContext);
 bool MdoApiWorkspaceStateInit(void);

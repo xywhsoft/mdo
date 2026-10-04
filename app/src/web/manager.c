@@ -5,6 +5,7 @@
 
 #include "../../include/mdo/config.h"
 #include "../../include/mdo/secrets.h"
+#include "../../include/mdo/account.h"
 #include "../../include/mdo/web.h"
 #include "../../include/mdo/http_url.h"
 

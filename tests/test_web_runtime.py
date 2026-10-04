@@ -26,6 +26,10 @@ PROBE_SOURCE = r'''
 #include "src/storage/home.c"
 #include "src/config/config.c"
 #include "src/security/secrets.c"
+#include "src/account/client.c"
+#include "src/account/credential.c"
+#include "src/account/authorization.c"
+#include "src/account/session.c"
 #include "src/web/manager.c"
 
 typedef struct Probe {
@@ -262,7 +266,9 @@ def write_site(site: Path) -> None:
     for relative in (
         "src/storage/home.c", "src/storage/home_import.inc.c", "src/storage/home_purge.inc.c", "src/storage/home_restore.inc.c", "src/config/config.c", "src/security/secrets.c",
         "src/web/manager.c", "include/mdo/home.h", "include/mdo/home_import.h", "include/mdo/home_purge.h", "include/mdo/home_restore.h", "include/mdo/session_file_policy.h", "include/mdo/config.h",
-        "include/mdo/secrets.h", "include/mdo/web.h",
+        "include/mdo/secrets.h", "include/mdo/web.h", "include/mdo/account.h",
+        "src/account/internal.h", "src/account/client.c", "src/account/credential.c",
+        "src/account/authorization.c", "src/account/session.c",
     ):
         copy_app_source(relative, site)
     (site / "probe.c").write_text(PROBE_SOURCE, encoding="utf-8")

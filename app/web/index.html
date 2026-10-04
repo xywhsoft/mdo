@@ -10,6 +10,7 @@
   <link rel="apple-touch-icon" href="/assets/apple-touch-icon.png">
   <link rel="stylesheet" href="/css/app.css">
   <link rel="stylesheet" href="/css/update.css">
+  <link rel="stylesheet" href="/css/account.css">
 </head>
 <body>
   <a class="skip-link" href="#timeline" data-i18n="shell.skip" inert>跳到对话</a>
@@ -105,6 +106,10 @@
           <span class="icon" data-icon="settings" aria-hidden="true"></span>
           <span data-i18n="shell.settings">设置</span>
         </button>
+        <button class="sidebar-link" id="open-account" type="button">
+          <span class="account-avatar" data-account-avatar aria-hidden="true">◉</span>
+          <span class="account-name" data-account-name>登录账号</span>
+        </button>
         <div class="runtime-state" id="runtime-state" role="status">
           <span class="status-dot" aria-hidden="true"></span>
           <span id="runtime-label">正在连接本地服务…</span>
@@ -199,6 +204,7 @@
 
       <section class="composer-region" aria-label="发送消息" data-i18n-aria-label="composer.region">
         <div class="conversation-docks" id="conversation-docks" aria-live="polite" hidden></div>
+        <div class="account-search-notice" id="account-search-notice" hidden aria-live="polite"></div>
         <div class="composer-error" id="composer-error" role="alert" hidden></div>
         <div class="composer-project-row" id="composer-project-row" hidden>
           <label class="sr-only" for="composer-project" data-i18n="composer.newTaskProject">新任务项目</label>
@@ -286,6 +292,7 @@
           </div>
           <nav class="settings-navigation" aria-label="设置分类" data-i18n-aria-label="settings.navigation">
             <p data-i18n="settings.preferences">偏好设置</p>
+            <button type="button" data-settings-section="account" data-i18n="account.title">账号</button>
             <button type="button" data-settings-section="general" aria-current="page" data-i18n="settings.general">常规</button>
             <button type="button" data-settings-section="agent">Agent</button>
             <button type="button" data-settings-section="web" data-i18n="settings.web">联网与搜索</button>
@@ -407,6 +414,10 @@
               <section class="settings-section resource-section" data-settings-panel="extensions" hidden><div class="settings-section-heading"><h2 data-i18n="settings.extensions">扩展与 MCP</h2><p data-i18n="resource.extensionsDescription">查看 Agent、Skill、Module 和 MCP 连接。</p></div><div id="settings-extensions-list"></div></section>
               <section class="settings-section resource-section" data-settings-panel="permissions" hidden><div class="settings-section-heading"><h2 data-i18n="settings.permissions">权限</h2><p data-i18n="resource.permissionsDescription">查看服务端生效的权限方案；运行时审批仍由 Agent 策略执行。</p></div><div id="settings-permissions-list"></div></section>
               <section class="settings-section resource-section" data-settings-panel="diagnostics" hidden><div class="settings-section-heading"><h2 data-i18n="settings.diagnostics">诊断与存储</h2><p data-i18n="resource.diagnosticsDescription">检查便携 Home、运行状态和可操作诊断。</p></div><div id="settings-diagnostics-list"></div></section>
+            <section class="settings-section resource-section account-panel" id="account-panel" data-settings-panel="account" hidden>
+              <div class="settings-section-heading"><h2 data-i18n="account.title">账号</h2><p data-i18n="account.description">登录网站账号以使用联网搜索。本地项目、会话和模型无需登录。</p></div>
+              <div data-account-body></div>
+            </section>
             <section class="settings-section resource-section memory-section" data-settings-panel="memory" aria-labelledby="settings-memory-title" hidden>
               <div class="settings-section-heading">
                 <h2 id="settings-memory-title" data-i18n="settings.memoryManagement">记忆管理</h2>
@@ -897,5 +908,17 @@
       showFailure("failed");
     });
   </script>
+  <dialog id="account-login-dialog" aria-labelledby="account-login-title">
+    <h2 id="account-login-title" data-i18n="account.login">登录账号</h2>
+    <p data-account-progress role="status"></p>
+    <a data-account-link target="_blank" rel="noopener noreferrer" data-i18n="account.reopen" hidden>再次打开登录页面</a>
+    <label class="account-remember"><input type="checkbox" name="remember" checked><span data-i18n="account.remember">记住此设备</span></label>
+    <p class="account-note" data-account-storage></p>
+    <div class="account-actions">
+      <button class="primary-button" type="button" data-account-action="begin" data-i18n="account.begin">在浏览器中登录</button>
+      <button class="secondary-button" type="button" data-account-action="restart" data-i18n="account.restart" hidden>重新开始</button>
+      <button class="secondary-button" type="button" data-account-action="cancel" data-i18n="account.cancel">取消</button>
+    </div>
+  </dialog>
 </body>
 </html>

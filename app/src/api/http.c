@@ -83,6 +83,12 @@ static bool MdoApiReplyRaw(MdoApiContext* pContext, uint16 Status,
     return true;
 }
 
+bool MdoApiReplyAccountHtml(MdoApiContext* Context, uint16 Status, cstr Html)
+{
+    return MdoApiReplyRaw(Context, Status, Html, strlen(Html), NULL, NULL,
+        "text/html; charset=utf-8", NULL);
+}
+
 static bool MdoApiEnvelopeBase(xvalue* pEnvelope, MdoApiContext* pContext,
     bool Ok)
 {

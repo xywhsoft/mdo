@@ -2,6 +2,7 @@
 #include <string.h>
 
 #include "../../include/mdo/approvals.h"
+#include "../../include/mdo/account.h"
 #include "../../include/mdo/asks.h"
 #include "../../include/mdo/bootstrap.h"
 #include "../../include/mdo/mcp.h"
@@ -112,6 +113,9 @@ bool MdoBootstrapInit(XS_HostInfo* pHost)
         return false;
     }
     g_MdoBootstrap.Stage = MDO_BOOTSTRAP_MEMORY_READY;
+    if (!MdoAccountInit()) {
+        MdoBootstrapFail("account manager initialization failed"); return false;
+    }
     if ( !MdoWebManagerInit(g_MdoBootstrap.Runtime) ) {
         MdoBootstrapFail("Web tool manager initialization failed");
         return false;
@@ -237,6 +241,7 @@ void MdoBootstrapUnit(void)
     MdoModuleManagerUnit();
     MdoMcpManagerUnit();
     MdoWebManagerUnit();
+    MdoAccountUnit();
     MdoMemoryManagerUnit();
     MdoSkillManagerUnit();
     if ( g_MdoBootstrap.Runtime != NULL )

@@ -101,6 +101,9 @@ static xwork_result MdoWebSearchExecute(void* pUserData,
     size_t BodySize = 0u;
     char* Body = NULL;
     char* Token = NULL;
+    MdoAccountLease Lease = {0};
+    xwork_tool_context FetchContext;
+    bool Renewed = false;
     char* Authorization = NULL;
     XS_FetchHeader Headers[4];
     XS_FetchResponse Response;
@@ -121,21 +124,17 @@ static xwork_result MdoWebSearchExecute(void* pUserData,
         Result = MdoWebToolFail(pWriter, pError, "web_search count must be an integer from 1 to 10");
         goto done;
     }
-    if ( !MdoSecretResolve(xrtStrView(MDO_WEB_SEARCH_TOKEN_REF), MDO_WEB_SECRET_LIMIT, &Token) ) {
+acquire_account:
+    if (!MdoAccountAcquire(State->Settings.Endpoint, Query.Data, pContext, &Lease)) {
         Result = MdoWebToolFail(pWriter, pError,
-            "Search account login is unavailable. Account UI integration is pending; for integration testing provide a member JWT via MDO_SEARCH_ACCESS_TOKEN. Provider API keys belong on the search server. Do not retry this query.");
+            "Search needs an account login. The login wait was skipped, cancelled or expired; no search was sent. Do not retry until the user signs in.");
         goto done;
     }
-    for ( i = 0u; Token[i] != '\0'; ++i ) {
-        unsigned char c = (unsigned char)Token[i];
-        if ( !((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') ||
-                (c >= '0' && c <= '9') || c == '-' || c == '_' || c == '.') ) {
-            Result = MdoWebToolFail(pWriter, pError, "Search account token is invalid; sign in again.");
-            goto done;
-        }
-    }
+    Token = Lease.AccessToken;
+    FetchContext = *pContext;
+    if (Lease.Cancel) FetchContext.pCancel = Lease.Cancel;
     Authorization = (char*)xrtMalloc(strlen(Token) + 8u);
-    Body = xrtJsonStringify(Arguments, false, &BodySize);
+    if (!Body) Body = xrtJsonStringify(Arguments, false, &BodySize);
     if ( Authorization == NULL || Body == NULL ) goto memory_failed;
     snprintf(Authorization, strlen(Token) + 8u, "Bearer %s", Token);
     Headers[0] = (XS_FetchHeader){ "Accept", "application/json" };
@@ -143,7 +142,7 @@ static xwork_result MdoWebSearchExecute(void* pUserData,
     Headers[2] = (XS_FetchHeader){ "User-Agent", "mdo/1 web_search" };
     Headers[3] = (XS_FetchHeader){ "Authorization", Authorization };
     Attempted = true;
-    if ( !MdoWebFetchRequest(State, pContext, State->Settings.Endpoint,
+    if ( !MdoWebFetchRequest(State, &FetchContext, State->Settings.Endpoint,
             Headers, 4u, true, Body, BodySize, &Response) ) {
         /* Transport diagnostics may contain headers. Never reflect them into
          * a model-visible result containing an account credential. */
@@ -157,6 +156,14 @@ static xwork_result MdoWebSearchExecute(void* pUserData,
         else Result = MdoWebToolFail(pWriter, pError, "Cannot reach the search API. Check its address and network connection.");
         goto done;
     }
+    if (Response.Status == 401 && !Renewed && MdoAccountRejectAccess(&Lease)) {
+        Renewed = true;
+        State->Transport.ResponseUnit(State->Transport.Context, &Response);
+        memset(&Response, 0, sizeof(Response));
+        MdoSecretRelease(&Authorization); MdoAccountRelease(&Lease); Token = NULL;
+        goto acquire_account;
+    }
+    if (Lease.Managed) MdoAccountSearchStatus(Response.Status);
     if ( Response.Status != 200u ) {
         Result = MdoWebToolFail(pWriter, pError, MdoWebSearchServiceError(Response.Status));
         goto done;
@@ -219,7 +226,7 @@ memory_failed:
 done:
     if ( Attempted ) MdoWebRequestFinished(State, Success);
     MdoSecretRelease(&Authorization);
-    MdoSecretRelease(&Token);
+    MdoAccountRelease(&Lease);
     xrtFree(Body);
     State->Transport.ResponseUnit(State->Transport.Context, &Response);
     xrtValueRelease(Results);

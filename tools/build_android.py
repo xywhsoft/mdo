@@ -91,6 +91,7 @@ def main() -> int:
                 "--sdk", args.sdk, "--out", path(native), "--cc", args.cc])
         target_run(sdk_source / "tools/android/build_apk.py", ["--sdk", args.sdk, "--java-home", args.java_home,
             "--library", path(native / "libxs.so"), "--pack", path(pack), "--output", path(args.output),
+            "--app-link", "https://ai.xywhsoft.com/app/mdo/callback",
             "--package", "org.xleaves.mdo", "--label", "墨斗 mdo", "--home-name", "mdo-home",
             "--resources", path(ROOT / "assets/branding/android/res"),
             "--package-install",

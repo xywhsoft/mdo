@@ -18,6 +18,10 @@
     "src/migration/schedules.c",
     "src/migration/report.c",
     "src/migration/apply.c",
+    "src/account/client.c",
+    "src/account/credential.c",
+    "src/account/authorization.c",
+    "src/account/session.c",
     "src/web/manager.c",
     "src/mcp/manager.c",
     "src/modules/manager.c",
@@ -99,6 +103,7 @@
     "src/api/session_capture.c",
     "src/api/sessions.c",
     "src/api/mutations.c",
+    "src/api/account.c",
     "src/api/router.c",
     "src/bootstrap/service.c"
   ]
