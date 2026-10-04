@@ -39,6 +39,9 @@ bool MdoRemoteSocketSend(MdoRemoteSocket* Socket, bool Binary, xbytesview Data);
  * Socket storage for the callback only. False is terminal; never reuse. */
 bool MdoRemoteSocketPoll(MdoRemoteSocket* Socket, MdoRemoteMessageProc Proc, void* Data);
 uint16 MdoRemoteSocketCloseCode(const MdoRemoteSocket* Socket);
+/* Distinguishes the peer's close (e.g. revoked authorization) from our local
+ * protocol/application rejection. Local 1008 must not revoke device consent. */
+bool MdoRemoteSocketPeerClosed(const MdoRemoteSocket* Socket);
 void MdoRemoteSocketDestroy(MdoRemoteSocket* Socket);
 
 #endif

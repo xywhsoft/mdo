@@ -4,6 +4,7 @@
 #include "../../include/mdo/remote.h"
 #include "../../include/mdo/version.h"
 #include "service_client.h"
+#include "bridge.h"
 
 /* Only the connection worker owns a socket. The service worker handles slow
  * HTTPS operations independently, so listing devices cannot starve heartbeats.
@@ -370,15 +371,22 @@ static int32 MdoRemoteServiceWorker(void* Data)
 
 typedef struct MdoRemoteConnectionContext {
     MdoRemoteSocket* Socket;
+    MdoRemoteBridge* Bridge;
+    xcancel* Cancel;
     uint64 Epoch;
     char Id[33];
 } MdoRemoteConnectionContext;
 static bool MdoRemoteConnectionMessage(bool Binary, xbytesview Message, void* Data)
 {
     MdoRemoteConnectionContext* context = Data;
-    /* Business messages will be admitted by the versioned dispatcher. There
-     * is deliberately no echo or arbitrary native execution fallback here. */
-    if (Binary) return false;
+    if (Binary) {
+        const uint8* bytes = Message.Data; char peer[33]; static const char hex[] = "0123456789abcdef";
+        if (Message.Size < MDO_REMOTE_RELAY_HEADER || memcmp(bytes,"MDR1",4u) || (bytes[20] != 1u && bytes[20] != 2u)) return false;
+        for (size_t i = 0u; i < 16u; i++) { peer[i*2u] = hex[bytes[4u+i] >> 4u]; peer[i*2u+1u] = hex[bytes[4u+i] & 15u]; }
+        peer[32] = 0;
+        return MdoRemoteBridgeInput(context->Bridge,peer,bytes[20] == 2u,
+            (xbytesview){bytes+MDO_REMOTE_RELAY_HEADER,Message.Size-MDO_REMOTE_RELAY_HEADER});
+    }
     xjsonreadconfig limits; xrtJsonReadConfigInit(&limits);
     limits.MaxInputBytes = 1024u; limits.MaxValues = 16u; limits.MaxDepth = 2u; limits.MaxStringBytes = 96u;
     xvalue* notice = xrtJsonRead(xrtStrViewN((cstr)Message.Data,Message.Size),&limits);
@@ -398,17 +406,27 @@ static bool MdoRemoteConnectionMessage(bool Binary, xbytesview Message, void* Da
             g_MdoRemote.Stage = "online"; g_MdoRemote.Error = ""; MdoRemoteChangedLocked();
         }
         xrtMutexUnlock(g_MdoRemote.Lock);
+    } else if (ok && !strcmp(type,"peer_open")) {
+        ok = MdoRemoteBridgePeerOpen(context->Bridge,peer,!strcmp(mode,"view"),context->Cancel);
+    } else if (ok && !strcmp(type,"peer_close")) {
+        MdoRemoteBridgePeerClose(context->Bridge,peer);
     }
     xrtValueRelease(notice); return ok;
 }
+static bool MdoRemoteConnectionEmit(xbytesview Envelope, void* Data)
+{ return MdoRemoteSocketSend((MdoRemoteSocket*)Data,true,Envelope); }
 static int32 MdoRemoteConnectionWorker(void* Data)
 {
     (void)Data;
-    MdoRemoteNet net = {0}; unsigned retry = 0u;
+    MdoRemoteNet net = {0}; MdoRemoteBridge* bridge = NULL; unsigned retry = 0u;
+    char bridge_device[33] = ""; uint64 bridge_member = 0u;
     for (;;) {
         xrtMutexLock(g_MdoRemote.Lock);
         while (!g_MdoRemote.Stopping && !xrtCancelRequested(g_MdoRemote.Stop) && !g_MdoRemote.Config.AllowRemote) {
             xrtCondWaitFor(g_MdoRemote.Changed,g_MdoRemote.Lock,250000u);
+            xrtMutexUnlock(g_MdoRemote.Lock);
+            if (bridge) (void)MdoRemoteBridgePump(bridge,NULL,NULL);
+            xrtMutexLock(g_MdoRemote.Lock);
             if (!MdoRemoteServerLive()) xrtCancelRequest(g_MdoRemote.Stop);
         }
         if (g_MdoRemote.Stopping || xrtCancelRequested(g_MdoRemote.Stop)) { xrtMutexUnlock(g_MdoRemote.Lock); break; }
@@ -441,17 +459,30 @@ static int32 MdoRemoteConnectionWorker(void* Data)
         MdoAccountSecretValueRelease(body); body = NULL;
         if (status == 403u || status == 404u) { off = "remote_revoked"; goto closed; }
         if (status == 401u) { (void)MdoAccountRejectAccess(&lease); goto closed; }
+        /* Receipts survive transport reconnects, but never migrate between
+         * account/device identities. A new binding gets a new runtime ID. */
+        if (bridge && (bridge_member != lease.MemberId || strcmp(bridge_device,identity.Id))) {
+            MdoRemoteBridgeDestroy(bridge); bridge = NULL;
+        }
+        if (!bridge) {
+            bridge = MdoRemoteBridgeCreate(g_MdoRemote.Server);
+            if (bridge) { bridge_member = lease.MemberId; strcpy(bridge_device,identity.Id); }
+        }
+        if (!bridge) goto closed;
         socket = MdoRemoteServiceConnect(&net,ticket,&lease,&status);
         MdoAccountSecretValueRelease(ticket); ticket = NULL;
         if (!socket) goto closed;
-        MdoRemoteConnectionContext context = {socket,epoch,""}; strcpy(context.Id,identity.Id);
+        MdoRemoteConnectionContext context = {socket,bridge,lease.Cancel,epoch,""}; strcpy(context.Id,identity.Id);
         while (!xrtCancelRequested(lease.Cancel) && MdoRemoteServerLive() &&
-            MdoRemoteSocketPoll(socket,MdoRemoteConnectionMessage,&context)) {
+            MdoRemoteSocketPoll(socket,MdoRemoteConnectionMessage,&context) &&
+            MdoRemoteBridgePump(bridge,MdoRemoteConnectionEmit,socket)) {
             retry = 0u; xrtSleep(5u);
         }
         close_code = MdoRemoteSocketCloseCode(socket);
-        if (close_code == 1008u) off = "remote_revoked";
+        if (close_code == 1008u && MdoRemoteSocketPeerClosed(socket)) off = "remote_revoked";
 closed:
+        MdoRemoteBridgeDisconnect(bridge);
+        if (bridge) (void)MdoRemoteBridgePump(bridge,NULL,NULL);
         xrtMutexLock(g_MdoRemote.Lock);
         bool current = !g_MdoRemote.Stopping && g_MdoRemote.Epoch == epoch && g_MdoRemote.Config.AllowRemote;
         /* Parent cancel belongs to disable/reconfigure/shutdown. A cancelled
@@ -476,6 +507,7 @@ closed:
             xrtCondWaitFor(g_MdoRemote.Changed,g_MdoRemote.Lock,delay);
         xrtMutexUnlock(g_MdoRemote.Lock);
     }
+    MdoRemoteBridgeDestroy(bridge);
     MdoRemoteNetUnit(&net);
     return 0;
 }

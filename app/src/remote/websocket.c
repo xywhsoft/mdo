@@ -3,7 +3,7 @@
 #include "net.h"
 
 #define MDO_REMOTE_HEAD 16384u
-#define MDO_REMOTE_MESSAGE_MAX 262144u
+#define MDO_REMOTE_MESSAGE_MAX (2u * 1024u * 1024u)
 #define MDO_REMOTE_SEND_US 2000000u
 #define MDO_REMOTE_OPEN_US 15000000u
 #define MDO_REMOTE_PING_US 20000000u
@@ -19,7 +19,7 @@ struct MdoRemoteSocket {
     xwsmessagestate State;
     uint64 LastRead, LastPing;
     uint16 CloseCode;
-    bool Ready, Failed, CloseSent;
+    bool Ready, Failed, CloseSent, PeerClosed;
 };
 
 void MdoRemoteNetUnit(MdoRemoteNet* Net)
@@ -226,6 +226,8 @@ uint16 MdoRemoteSocketCloseCode(const MdoRemoteSocket* Socket)
 {
     return Socket ? Socket->CloseCode : 0u;
 }
+bool MdoRemoteSocketPeerClosed(const MdoRemoteSocket* Socket)
+{ return Socket && Socket->PeerClosed; }
 bool MdoRemoteSocketPoll(MdoRemoteSocket* Socket, MdoRemoteMessageProc Proc, void* Data)
 {
     if (!Socket || !Socket->Ready || Socket->Failed || !Proc || xrtCancelRequested(Socket->Cancel)) return false;
@@ -253,6 +255,7 @@ bool MdoRemoteSocketPoll(MdoRemoteSocket* Socket, MdoRemoteMessageProc Proc, voi
             return MdoRemoteFail(Socket,error.CloseCode ? error.CloseCode : 1002u);
         Socket->LastRead = xrtClock();
         if (frame.Opcode == XWS_OPCODE_CLOSE) {
+            Socket->PeerClosed = true;
             Socket->CloseCode = size >= 2u ? ((uint16)(uint8)payload[0] << 8u) | (uint8)payload[1] : 1000u;
             Socket->CloseSent = true; (void)MdoRemoteFrame(Socket,XWS_OPCODE_CLOSE,payload,size);
             Socket->Failed = true; return false;

@@ -3,7 +3,8 @@
 #include "loopback.h"
 
 #define MDO_REMOTE_HTTP_HEAD 16384u
-#define MDO_REMOTE_HTTP_SEND 8192u
+/* 4 KiB target + 4 KiB custom fields + generated framing/Origin. */
+#define MDO_REMOTE_HTTP_SEND 12288u
 #define MDO_REMOTE_HTTP_FIELDS 64u
 #define MDO_REMOTE_HTTP_US 60000000u
 
@@ -42,7 +43,7 @@ static bool MdoRemoteHttpPath(xstrview Path, bool ReadOnly)
 bool MdoRemoteHttpRequestValid(const MdoRemoteHttpRequest* Request)
 {
     static const char* const headers[] = {"Accept","Content-Type","If-Match","If-None-Match",
-        "X-Mdo-Write-Token","Range"};
+        "X-Mdo-Write-Token","X-Mdo-File-Name","Range"};
     if (!Request || !Request->Method || !Request->Target || strlen(Request->Target) > 4096u ||
         strncmp(Request->Target,"/api/v1/",8u) || Request->HeaderCount > 16u ||
         (Request->HeaderCount && !Request->Headers) || Request->Body.Size > MDO_REMOTE_HTTP_BODY_MAX ||
@@ -61,7 +62,8 @@ bool MdoRemoteHttpRequestValid(const MdoRemoteHttpRequest* Request)
     size_t bytes = 0u;
     for (size_t i = 0u; i < Request->HeaderCount; i++) {
         const XS_FetchHeader* field = &Request->Headers[i];
-        if (!field->Name || !field->Value || strlen(field->Name) > 64u || strlen(field->Value) > 2048u ||
+        size_t value_limit = field->Name && xrtStrCaseEqual(xrtStrView(field->Name),XRT_STR_LITERAL("X-Mdo-File-Name")) ? 3072u : 2048u;
+        if (!field->Name || !field->Value || strlen(field->Name) > 64u || strlen(field->Value) > value_limit ||
             !MdoRemoteHttpIn(xrtStrView(field->Name),headers,sizeof(headers)/sizeof(headers[0]))) return false;
         bytes += strlen(field->Name)+strlen(field->Value);
         if (bytes > 4096u) return false;

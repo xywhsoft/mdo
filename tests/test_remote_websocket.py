@@ -37,9 +37,14 @@ static bool Message(bool binary, xbytesview data, void* unused) {
     (void)unused;
     const unsigned char raw[] = {0,255,'B'};
     const char text[] = "hello \xe2\x82\xac";
+    if (TEST_LARGE_EVENT) {
+        Valid = Valid && !binary && data.Size == 300000u;
+        for (size_t i=0u; i<data.Size; i++) if (data.Data[i] != 'k') Valid = false;
+        ++Messages; return true;
+    }
     Valid = Valid && (binary ? data.Size == sizeof(raw) && !memcmp(data.Data,raw,sizeof(raw)) :
         data.Size == sizeof(text)-1 && !memcmp(data.Data,text,sizeof(text)-1));
-    ++Messages; return true;
+    ++Messages; return !TEST_REJECT_MESSAGE;
 }
 static int32 CancelSoon(void* unused) {
     (void)unused; xrtSleep(250); xrtCancelRequest(Stop); return 0;
@@ -51,8 +56,8 @@ static int32 Run(void* data) {
         MdoRemoteNetInit(&net,server->Engine,store);
     xrtX509StoreFree(store);
     MdoRemoteSocketConfig config = {TEST_HOST,TEST_PORT,TEST_SECURE,"/connect",TEST_ORIGIN,
-        "test.remote.v1, test.proof.runtime-only","test.remote.v1",256u};
-    uint16 status = 0; uint16 closed = 0; bool opened = false, cancelled = false;
+        "test.remote.v1, test.proof.runtime-only","test.remote.v1",TEST_LARGE_EVENT ? 2097152u : 256u};
+    uint16 status = 0; uint16 closed = 0; bool opened = false, cancelled = false, peer_closed = false;
     uint64 start = xrtClock();
     if (TEST_CANCEL_OPEN) Canceller = xrtThreadCreate(CancelSoon,NULL,0);
     MdoRemoteSocket* socket = initialized ? MdoRemoteSocketOpen(&net,&config,Stop,&status) : NULL;
@@ -65,6 +70,7 @@ static int32 Run(void* data) {
         uint64 until = xrtDeadlineAfter(4000000u);
         while (!xrtDeadlineExpired(until) && MdoRemoteSocketPoll(socket,Message,NULL)) xrtSleep(5);
         closed = MdoRemoteSocketCloseCode(socket);
+        peer_closed = MdoRemoteSocketPeerClosed(socket);
         cancelled = xrtCancelRequested(Stop);
     }
     MdoRemoteSocketDestroy(socket);
@@ -72,9 +78,9 @@ static int32 Run(void* data) {
     MdoRemoteNetUnit(&net); xsServerRelease(server);
     FILE* file = fopen(TEST_RESULT,"wb");
     if (file) { fprintf(file,"{\"initialized\":%s,\"opened\":%s,\"status\":%u,\"valid\":%s,"
-        "\"messages\":%u,\"close_code\":%u,\"cancelled\":%s,\"elapsed_ms\":%llu}",
+        "\"messages\":%u,\"close_code\":%u,\"cancelled\":%s,\"peer_closed\":%s,\"elapsed_ms\":%llu}",
         initialized ? "true":"false",opened ? "true":"false",status,Valid ? "true":"false",
-        Messages,closed,cancelled ? "true":"false",(unsigned long long)((xrtClock()-start)/1000u)); fclose(file); }
+        Messages,closed,cancelled ? "true":"false",peer_closed ? "true":"false",(unsigned long long)((xrtClock()-start)/1000u)); fclose(file); }
     return 0;
 }
 void ServiceInit(XS_HostInfo* host) {
@@ -182,11 +188,17 @@ class Peer(socketserver.BaseRequestHandler):
                 assert self.recv() == (10,b'probe')
                 connection.sendall(frame(8,struct.pack('!H',1000)))
                 assert self.recv() == (8,struct.pack('!H',1000))
+            elif mode in ('remote-revoke','large-event'):
+                if mode == 'large-event': connection.sendall(frame(1,b'k'*300000))
+                code = 1008 if mode == 'remote-revoke' else 1000
+                connection.sendall(frame(8,struct.pack('!H',code)))
+                assert self.recv() == (8,struct.pack('!H',code))
             else:
                 if mode == 'invalid-utf8': wire,code = frame(1,b'\xff'),1007
                 elif mode == 'masked-server': wire,code = frame(1,b'hello',masked=True),1002
                 elif mode == 'oversize': wire,code = frame(2,b'x'*257),1009
                 elif mode == 'fragment-oversize': wire,code = frame(2,b'x'*200,final=False)+frame(0,b'y'*100),1009
+                elif mode == 'reject-message': wire,code = frame(1,b'hello \xe2\x82\xac'),1008
                 else: raise AssertionError(mode)
                 connection.sendall(wire)
                 opcode,payload = self.recv()
@@ -230,7 +242,7 @@ def run(host):
     cases = [('echo',False),('echo',True),('invalid-utf8',True),('masked-server',False),
              ('oversize',False),('fragment-oversize',True),('bad-accept',True),('bad-protocol',False),
              ('missing-protocol',True),('untrusted',True),('bad-host',True),
-             ('cancel-open',True),('cancel-poll',True)]
+             ('cancel-open',True),('cancel-poll',True),('reject-message',True),('remote-revoke',True),('large-event',True)]
     for index,(mode,secure) in enumerate(cases):
         with Server(('127.0.0.2' if mode == 'bad-host' else '127.0.0.1',0),Peer) as peer:
             peer.mode,peer.errors,peer.success = mode,[],False
@@ -249,7 +261,8 @@ def run(host):
             defines = {'TEST_CA':str(trust).replace('\\','/'),'TEST_HOST':targethost,
                        'TEST_PORT':peer.server_address[1], 'TEST_SECURE':secure,
                        'TEST_ORIGIN':peer.origin,'TEST_RESULT':str(result).replace('\\','/'),
-                       'TEST_CANCEL_OPEN':mode == 'cancel-open','TEST_CANCEL_POLL':mode == 'cancel-poll'}
+                       'TEST_CANCEL_OPEN':mode == 'cancel-open','TEST_CANCEL_POLL':mode == 'cancel-poll',
+                       'TEST_REJECT_MESSAGE':mode == 'reject-message','TEST_LARGE_EVENT':mode == 'large-event'}
             source = ''.join(f'#define {key} {json.dumps(value) if isinstance(value,str) else int(value)}\n'
                              for key,value in defines.items())+FIXTURE
             (site/'main.c').write_text(source,encoding='utf-8')
@@ -277,8 +290,9 @@ def run(host):
                     else:
                         assert value['opened'] and value['valid'],(mode,value)
                         assert value['close_code'] == {'echo':1000,'invalid-utf8':1007,'masked-server':1002,
-                            'oversize':1009,'fragment-oversize':1009}[mode],(mode,value)
-                        assert value['messages'] == (2 if mode == 'echo' else 0),value
+                            'oversize':1009,'fragment-oversize':1009,'reject-message':1008,'remote-revoke':1008,'large-event':1000}[mode],(mode,value)
+                        assert value['messages'] == (2 if mode == 'echo' else 1 if mode in ('reject-message','large-event') else 0),value
+                        assert value['peer_closed'] == (mode in ('echo','remote-revoke','large-event')),value
                         assert peer.success,(mode,'peer close not acknowledged')
                     print(f'PASS native {"WSS" if secure else "WS"} {mode}')
                 finally:

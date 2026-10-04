@@ -21,7 +21,7 @@ from smoke import fixture, USER, PASSWORD, client_hash
 from channel_e2e import WebSocket
 
 
-def run(host: Path, website_host: Path):
+def run(host: Path, website_host: Path, exercise=None, native_hook='', native_routes=''):
     port, website_port = free_port(), free_port()
     website = fixture(website_port,register_interval=0)
     (ROOT/'.build').mkdir(exist_ok=True)
@@ -43,10 +43,10 @@ def run(host: Path, website_host: Path):
             MdoApiReplyError(c,500u,"test_failed","Remote restart failed",NULL);
     }
     '''
-    source = source.replace('static const MdoApiRoute g_MdoApiRoutes[]',hook+'\nstatic const MdoApiRoute g_MdoApiRoutes[]')
+    source = source.replace('static const MdoApiRoute g_MdoApiRoutes[]',hook+'\n'+native_hook+'\nstatic const MdoApiRoute g_MdoApiRoutes[]')
     source = source.replace('static const MdoApiRoute g_MdoApiRoutes[] = {',
         'static const MdoApiRoute g_MdoApiRoutes[] = {\n'
-        ' {"/api/v1/test-remote-lifecycle",XHTTP_METHOD_GET,"GET",RemoteLifecycleTest,false},')
+        ' {"/api/v1/test-remote-lifecycle",XHTTP_METHOD_GET,"GET",RemoteLifecycleTest,false},'+native_routes)
     router.write_text(source)
     processes,logs,clients = [],[],[]
 
@@ -137,6 +137,10 @@ def run(host: Path, website_host: Path):
         client = WebSocket(website_port,{'Origin':'http://127.0.0.1:12345'},path=ticket['path'],
             protocol=ticket['protocol']+', xadmin.ticket.'+ticket['ticket']); clients.append(client)
         assert json.loads(client.recv()[1])['type'] == 'ready'
+        hello = json.loads(client.recv()[1]); assert hello['type'] == 'hello' and hello['version'] == 1,hello
+        if exercise:
+            client = exercise(client=client,hello=hello,app=app,device=device,call=call,
+                bearer=bearer,website_port=website_port,clients=clients)
         # Independently running listing job leaves the native connection alive.
         assert action('/connector/devices',{'action':'refresh'})['stage'] == 'online'
         client.close(); clients.remove(client)
@@ -174,6 +178,13 @@ def run(host: Path, website_host: Path):
         assert not app()['allow_remote']
         action('/remote',{'allow_remote':True,'name':'account switch test'})
         until(lambda v: v['stage'] == 'online')
+        job = action('/connector/devices',{'action':'connect','device_id':device,'mode':'control'})['job']['id']
+        ticket = app('POST','/connector/ticket',{'job_id':job})
+        old = WebSocket(website_port,{'Origin':'http://127.0.0.1:12345'},path=ticket['path'],
+            protocol=ticket['protocol']+', xadmin.ticket.'+ticket['ticket']); clients.append(old)
+        assert json.loads(old.recv()[1])['type'] == 'ready'
+        old_runtime = json.loads(old.recv()[1])['runtime_id']
+        old.close(); clients.remove(old)
         login('remote_manager_two')
         switched = until(lambda v: not v['allow_remote'],'account switch closes device')
         assert switched['error'] == 'remote_account_changed',switched
@@ -181,6 +192,13 @@ def run(host: Path, website_host: Path):
         action('/remote',{'allow_remote':True,'name':'second account'})
         second = until(lambda v: v['stage'] == 'online')
         assert second['device_id'] != device
+        job = action('/connector/devices',{'action':'connect','device_id':second['device_id'],'mode':'control'})['job']['id']
+        ticket = app('POST','/connector/ticket',{'job_id':job})
+        new = WebSocket(website_port,{'Origin':'http://127.0.0.1:12345'},path=ticket['path'],
+            protocol=ticket['protocol']+', xadmin.ticket.'+ticket['ticket']); clients.append(new)
+        assert json.loads(new.recv()[1])['type'] == 'ready'
+        assert json.loads(new.recv()[1])['runtime_id'] != old_runtime,'receipts cannot cross account bindings'
+        new.close(); clients.remove(new)
         app('POST','/account/logout',{})
         until(lambda v: not v['allow_remote'],'logout closes device')
         assert not json.loads((home/'config/remote.json').read_text())['allow_remote']
