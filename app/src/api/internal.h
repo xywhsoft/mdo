@@ -154,6 +154,7 @@ bool MdoApiDiagnosticsRoute(MdoApiContext* pContext);
 bool MdoApiStorageRoute(MdoApiContext* pContext);
 bool MdoApiLegacyMigrationsRoute(MdoApiContext* pContext);
 bool MdoApiSessionEventsRoute(MdoApiContext* pContext);
+bool MdoApiSessionTurnsRoute(MdoApiContext* pContext);
 bool MdoApiDraftRoute(MdoApiContext* pContext);
 bool MdoApiDraftSubmissionAppendRoute(MdoApiContext* pContext);
 bool MdoApiDraftSubmissionRoute(MdoApiContext* pContext);

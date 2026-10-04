@@ -46,15 +46,24 @@ ID、Unix 微秒时间、project/session、kind、Agent/run/task/artifact 血缘
 事件先完成持久化，再调用产品注入的 event callback；写盘失败会让 callback
 返回 false，请求 xwork 协作取消当前运行，不能在事件审计失败后静默继续。
 
-事件文件上限为 16 MiB。到达上限时在同目录原子保留最近约 8 MiB，再追加新
-事件；保留的 event ID 不重新编号，replay 因而能通过首个 ID 与 cursor 明确
-报告 `history_lost`。启动时不完整尾行会先以换行封口；损坏的完整记录在 replay
+事件文件不再有自动裁剪上限。历史保存在 `ui-events.jsonl`，仅用户明确清空、
+编辑或重试时才移除对应范围。模型上下文整理不会删除显示历史。旧版本已经
+裁掉的记录无法凭空恢复，replay 仍能通过首个 ID 与 cursor 明确报告
+`history_lost`。启动时不完整尾行会先以换行封口；损坏的完整记录在 replay
 中形成 history gap，但不阻止 xllm-session 恢复或后续事件继续使用更大的 ID。
 
 `MdoSessionEventReplay()` 返回引用计数 owned snapshot，字符串由 snapshot
 持有。调用方提供 `after_event_id` 与最多 1000 条的 limit；返回 next cursor、
-当前文件 latest ID 和 history-lost 标志。这样 Web API 可以按 cursor 重连，
-无需让前端读取文件或依赖进程内数组。
+当前文件 latest ID 和 history-lost 标志。读取按单行分段进行，按 event ID
+二分定位文件字节区间，内存与单次请求条数有关，不随整个历史文件大小增长。
+这样 Web API 可以按 cursor 重连，无需让前端读取文件或依赖进程内数组。
+
+`GET /api/v1/projects/{project}/sessions/{session}/turns?before=0&limit=64`
+反向读取最近的顶层用户回合摘要，返回 `first_event_id`、`end_event_id`、问题、
+最终回答前缀、状态和时间，以及 `next_before`、`has_more` 和 `latest_event_id`。
+`before=0` 表示最新页，其他值只返回起始 ID 更小的回合；limit 为 1–64，页内
+按时间正序。摘要由原始 JSONL 派生，不写额外索引或复制会话数据库。读取旧页
+同样从其字节位置开始，忽略子 Agent 起点和没有新用户输入的恢复起点。
 
 ## meta.json schema v2
 

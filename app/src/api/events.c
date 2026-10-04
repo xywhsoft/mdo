@@ -266,3 +266,50 @@ bool MdoApiSessionEventsRoute(MdoApiContext* Context)
         "events_unavailable", "Session events could not be replayed", NULL);
     return MdoApiReplySuccessTake(Context, 200u, Data, NULL);
 }
+
+bool MdoApiSessionTurnsRoute(MdoApiContext* Context)
+{
+    char Project[MDO_PROJECT_ID_CAPACITY], Session[MDO_SESSION_ID_CAPACITY];
+    uint64 Before = 0u, Limit = 4u;
+    bool HasBefore = false, HasLimit = false;
+    size_t Position = 0u;
+    xstrview Query = Context->Target.Query;
+    xwork_error Error;
+    MdoSession* Loaded;
+    xvalue* Data;
+    if ( !MdoApiCaptureId(Context, 0u, Project, sizeof(Project)) ||
+         !MdoApiCaptureId(Context, 1u, Session, sizeof(Session)) )
+        return MdoApiReplyError(Context, 400u, "invalid_path", "Invalid session identity", NULL);
+    while ( Position < Query.Size ) {
+        size_t End = Position, Equal = SIZE_MAX;
+        xstrview Name, Value;
+        uint64 Number;
+        while ( End < Query.Size && Query.Data[End] != '&' ) {
+            if ( Query.Data[End] == '=' && Equal == SIZE_MAX ) Equal = End;
+            ++End;
+        }
+        if ( Equal == SIZE_MAX || Equal <= Position || Equal + 1u >= End ) goto invalid;
+        Name = xrtStrViewN(Query.Data + Position, Equal - Position);
+        Value = xrtStrViewN(Query.Data + Equal + 1u, End - Equal - 1u);
+        if ( Name.Size == 6u && memcmp(Name.Data, "before", 6u) == 0 ) {
+            if ( HasBefore || !MdoApiUnsigned(Value, UINT64_MAX, &Number) ) goto invalid;
+            HasBefore = true; Before = Number;
+        } else if ( Name.Size == 5u && memcmp(Name.Data, "limit", 5u) == 0 ) {
+            if ( HasLimit || !MdoApiUnsigned(Value, 64u, &Number) || Number == 0u ) goto invalid;
+            HasLimit = true; Limit = Number;
+        } else goto invalid;
+        Position = End + (End < Query.Size ? 1u : 0u);
+        if ( Position == Query.Size && End < Query.Size ) goto invalid;
+    }
+    xworkErrorInit(&Error);
+    Loaded = MdoSessionLoad(Project, Session, &Error);
+    if ( Loaded == NULL ) return MdoApiReplyError(Context, 404u, "session_not_found",
+        "The requested session does not exist", NULL);
+    MdoSessionRelease(Loaded);
+    Data = MdoSessionConversationTurns(Project, Session, Before, (size_t)Limit, &Error);
+    if ( Data == NULL ) return MdoApiReplyError(Context, 500u, "conversation_unavailable",
+        "Conversation history cannot be read", NULL);
+    return MdoApiReplySuccessTake(Context, 200u, Data, NULL);
+invalid:
+    return MdoApiReplyError(Context, 400u, "invalid_query", "Only before and limit are accepted", NULL);
+}

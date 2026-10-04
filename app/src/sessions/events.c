@@ -8,8 +8,6 @@
 #include "../../include/mdo/home.h"
 
 #define MDO_SESSION_EVENT_SCHEMA 5u
-#define MDO_SESSION_EVENT_FILE_LIMIT (16u * 1024u * 1024u)
-#define MDO_SESSION_EVENT_RETAIN_BYTES (8u * 1024u * 1024u)
 #define MDO_SESSION_EVENT_RECORD_LIMIT (96u * 1024u)
 #define MDO_SESSION_EVENT_TEXT_LIMIT (64u * 1024u)
 #define MDO_SESSION_EVENT_METADATA_LIMIT 4096u
@@ -135,7 +133,6 @@ static bool MdoEventsRead(const char* Path, char** Data, size_t* Size)
     if ( File == NULL || !xrtFileStat(File, &Info) ||
          (Info.Available & XFILE_INFO_SIZE) == 0u ||
          Info.Type != XFILE_TYPE_FILE ||
-         Info.Size > MDO_SESSION_EVENT_FILE_LIMIT ||
          Info.Size > SIZE_MAX - 1u ) goto done;
     Bytes = (char*)xrtMalloc((size_t)Info.Size + 1u);
     if ( Bytes == NULL ||
@@ -308,34 +305,6 @@ static bool MdoEventsAppendBytes(const char* Path, const char* Json,
     return Ok;
 }
 
-static bool MdoEventsCompactAppend(const char* Path, const char* Json,
-    size_t JsonSize)
-{
-    char* Existing = NULL;
-    char* Combined = NULL;
-    size_t ExistingSize = 0u;
-    size_t Start;
-    size_t Keep;
-    bool Ok = false;
-    if ( !MdoEventsRead(Path, &Existing, &ExistingSize) ) return false;
-    Start = ExistingSize > MDO_SESSION_EVENT_RETAIN_BYTES ?
-        ExistingSize - MDO_SESSION_EVENT_RETAIN_BYTES : 0u;
-    while ( Start < ExistingSize && Existing[Start] != '\n' ) ++Start;
-    if ( Start < ExistingSize ) ++Start;
-    Keep = ExistingSize - Start;
-    if ( Keep > SIZE_MAX - JsonSize - 1u ) goto done;
-    Combined = (char*)xrtMalloc(Keep + JsonSize + 1u);
-    if ( Combined == NULL ) goto done;
-    memcpy(Combined, Existing + Start, Keep);
-    memcpy(Combined + Keep, Json, JsonSize);
-    Combined[Keep + JsonSize] = '\n';
-    Ok = MdoHomeAtomicWrite(Path, Combined, Keep + JsonSize + 1u, false);
-done:
-    xrtFree(Combined);
-    xrtFree(Existing);
-    return Ok;
-}
-
 static bool MdoEventsAppend(MdoSessionEventBridge* Bridge,
     const xwork_event* Event)
 {
@@ -362,9 +331,9 @@ static bool MdoEventsAppend(MdoSessionEventBridge* Bridge,
         xrtFree(Json);
         return false;
     }
-    if ( Exists && (Info.Size > MDO_SESSION_EVENT_FILE_LIMIT - Size - 1u) )
-        Ok = MdoEventsCompactAppend(Bridge->Path, Json, Size);
-    else Ok = MdoEventsAppendBytes(Bridge->Path, Json, Size);
+    /* Display history is independent of model context compaction. Only an
+     * explicit user clear/edit may remove records; append never evicts them. */
+    Ok = MdoEventsAppendBytes(Bridge->Path, Json, Size);
     if ( Ok ) {
         MdoSessionsInternalPublish(Bridge->ProjectId, Bridge->SessionId,
             xrtStrViewN(Json, Size), Event->eKind != XWORK_EVENT_MODEL_TEXT_DELTA &&
@@ -593,39 +562,24 @@ bool MdoSessionsInternalEventValid(const char* ProjectId, const char* SessionId,
     return MdoSessionsInternalEventVisit(ProjectId, SessionId, Json, NULL, NULL);
 }
 
-static bool MdoEventsScanLatest(const char* ProjectId, const char* SessionId,
-    const char* Data, size_t Size, uint64* Latest, bool* Incomplete)
+#include "event_reader.inc.c"
+#include "conversation_turns.inc.c"
+
+static bool MdoEventsScanLatestPath(const char* Project, const char* Session,
+    const char* Path, uint64* Latest, bool* Incomplete)
 {
-    size_t Start = 0u;
-    uint64 Last = 0u;
-    *Incomplete = false;
-    while ( Start < Size ) {
-        const char* End = (const char*)memchr(Data + Start, '\n', Size - Start);
-        MdoSessionEventOwned Event;
-        size_t Length;
-        if ( End == NULL ) {
-            *Incomplete = true;
-            break;
-        }
-        Length = (size_t)(End - (Data + Start));
-        if ( Length == 0u || Length > MDO_SESSION_EVENT_RECORD_LIMIT ||
-             !MdoEventsParse(ProjectId, SessionId,
-                xrtStrViewN(Data + Start, Length), &Event) ) {
-            xrtClearError();
-            Start += Length + 1u;
-            continue;
-        }
-        if ( Event.Info.EventId <= Last ) {
-            MdoEventsOwnedUnit(&Event);
-            Start += Length + 1u;
-            continue;
-        }
-        Last = Event.Info.EventId;
-        MdoEventsOwnedUnit(&Event);
-        Start += Length + 1u;
-    }
-    *Latest = Last;
-    return true;
+    MdoEventReader* Reader = MdoEventReaderOpen(Path);
+    uint64 LastNewline = 0u;
+    bool Lost = false;
+    bool Ok;
+    if ( Reader == NULL ) return false;
+    *Latest = MdoEventReaderLatest(Reader, Project, Session, &Lost);
+    *Incomplete = Reader->Size != 0u &&
+        (!MdoEventReaderNewline(Reader, Reader->Size, &LastNewline) ||
+         LastNewline + 1u != Reader->Size);
+    Ok = !Reader->Failed;
+    MdoEventReaderClose(Reader);
+    return Ok;
 }
 
 MdoSessionEventBridge* MdoSessionEventBridgeCreate(
@@ -638,8 +592,6 @@ MdoSessionEventBridge* MdoSessionEventBridgeCreate(
     MdoSessionEventBridge* Bridge;
     bool Exists = false;
     xfileinfo Info;
-    char* Data = NULL;
-    size_t Size = 0u;
     uint64 Latest = 0u;
     bool Incomplete = false;
     char RuntimeLockPath[MDO_SESSION_PATH_CAPACITY];
@@ -696,8 +648,7 @@ MdoSessionEventBridge* MdoSessionEventBridgeCreate(
     if ( Exists ) {
         if ( Info.Type != XFILE_TYPE_FILE ||
              (Info.Available & XFILE_INFO_SIZE) == 0u ||
-             !MdoEventsRead(Bridge->Path, &Data, &Size) ||
-             !MdoEventsScanLatest(ProjectId, SessionId, Data, Size,
+             !MdoEventsScanLatestPath(ProjectId, SessionId, Bridge->Path,
                 &Latest, &Incomplete) ) goto io;
         if ( Incomplete && !MdoEventsAppendBytes(Bridge->Path, "", 0u) )
             goto io;
@@ -708,7 +659,6 @@ MdoSessionEventBridge* MdoSessionEventBridgeCreate(
         goto fail;
     }
     Bridge->NextEventId = Latest + 1u;
-    xrtFree(Data);
     return Bridge;
 memory:
     MdoEventsError(Error, XWORK_ERROR_OUT_OF_MEMORY,
@@ -717,15 +667,14 @@ memory:
 io:
     MdoEventsXrtError(Error, "cannot inspect the session event journal");
 fail:
-    xrtFree(Data);
     MdoSessionEventBridgeRelease(Bridge);
     return NULL;
 }
 
 /* Forks are prepared before the child Agent is published. Rebuild the UI
  * journal under the child's identity, keeping only completed source runs
- * before the requested user-message boundary. The source journal is bounded
- * and the result is published in one atomic write. */
+ * before the requested user-message boundary. The result is published in one
+ * atomic write, without discarding an older prefix to meet a byte quota. */
 bool MdoSessionEventBridgeClonePrefix(MdoSessionEventBridge* Bridge,
     const char* SourceProjectId, const char* SourceSessionId,
     uint64 ThroughSequence, xwork_error* Error)
@@ -840,9 +789,7 @@ bool MdoSessionEventBridgeClonePrefix(MdoSessionEventBridge* Bridge,
                 "cannot serialize the fork event journal");
             goto done;
         }
-        if ( OutputSize >= MDO_SESSION_EVENT_FILE_LIMIT * 2u ||
-             JsonSize > MDO_SESSION_EVENT_FILE_LIMIT * 2u -
-                OutputSize - 1u ) {
+        if ( OutputSize > SIZE_MAX - JsonSize - 1u ) {
             xrtFree(Json);
             MdoEventsError(Error, XWORK_ERROR_LIMIT,
                 "fork event journal exceeds its bounded copy limit");
@@ -852,7 +799,10 @@ bool MdoSessionEventBridgeClonePrefix(MdoSessionEventBridge* Bridge,
         if ( Needed > Capacity ) {
             size_t Next = Capacity != 0u ? Capacity : 4096u;
             char* NewOutput;
-            while ( Next < Needed ) Next *= 2u;
+            while ( Next < Needed ) {
+                if ( Next > SIZE_MAX / 2u ) { Next = Needed; break; }
+                Next *= 2u;
+            }
             NewOutput = (char*)xrtRealloc(Output, Next);
             if ( NewOutput == NULL ) {
                 xrtFree(Json);
@@ -868,13 +818,6 @@ bool MdoSessionEventBridgeClonePrefix(MdoSessionEventBridge* Bridge,
         Output[OutputSize++] = '\n';
         ++Bridge->NextEventId;
         xrtFree(Json);
-    }
-    if ( OutputSize > MDO_SESSION_EVENT_FILE_LIMIT ) {
-        size_t Offset = OutputSize - MDO_SESSION_EVENT_RETAIN_BYTES;
-        while ( Offset < OutputSize && Output[Offset] != '\n' ) ++Offset;
-        if ( Offset < OutputSize ) ++Offset;
-        memmove(Output, Output + Offset, OutputSize - Offset);
-        OutputSize -= Offset;
     }
     if ( OutputSize != 0u &&
          !MdoHomeAtomicWrite(Bridge->Path, Output, OutputSize, false) )
@@ -1083,20 +1026,12 @@ bool MdoSessionEventTrimApply(MdoSessionEventTrimPlan* Plan,
     Marker.iTextLength = strlen(Marker.sText);
     Json = MdoEventsRecord(Bridge, Bridge->NextEventId,
         &Marker, "", 0u, &JsonSize);
-    if ( Json == NULL || JsonSize >= MDO_SESSION_EVENT_FILE_LIMIT ) {
+    if ( Json == NULL || Plan->Keep > SIZE_MAX - JsonSize - 1u ) {
         MdoEventsError(Error, XWORK_ERROR_OUT_OF_MEMORY,
             "cannot serialize the history boundary");
         goto done;
     }
     Keep = Plan->Keep;
-    if ( Keep > MDO_SESSION_EVENT_FILE_LIMIT - JsonSize - 1u ) {
-        size_t Offset = Keep - MDO_SESSION_EVENT_RETAIN_BYTES;
-        while ( Offset < Keep && Plan->Data[Offset] != '\n' ) ++Offset;
-        if ( Offset < Keep ) ++Offset;
-        Keep -= Offset;
-        /* The allocation base stays in Plan for release after publication. */
-        if ( Keep != 0u ) memmove(Plan->Data, Plan->Data + Offset, Keep);
-    }
     Total = Keep + JsonSize + 1u;
     Output = (char*)xrtMalloc(Total);
     if ( Output == NULL ) {
@@ -1412,14 +1347,10 @@ MdoSessionEventSnapshot* MdoSessionEventReplay(const char* ProjectId,
     xwork_error* Error)
 {
     MdoSessionEventSnapshot* Snapshot = NULL;
+    MdoEventReader* Reader = NULL;
     char Path[MDO_SESSION_PATH_CAPACITY];
-    char* Data = NULL;
-    size_t Size = 0u;
-    size_t Start = 0u;
-    uint64 First = 0u;
-    uint64 Previous = 0u;
-    bool Exists = false;
-    xfileinfo Info;
+    xstrview Record;
+    uint64 Previous = AfterEventId;
     xworkErrorInit(Error);
     if ( !MdoEventsIdValid(ProjectId, MDO_PROJECT_ID_CAPACITY) ||
          !MdoEventsIdValid(SessionId, MDO_SESSION_ID_CAPACITY) ||
@@ -1434,63 +1365,49 @@ MdoSessionEventSnapshot* MdoSessionEventReplay(const char* ProjectId,
     if ( Snapshot == NULL ) goto memory;
     xrtAtomic32Init(&Snapshot->Refs, 1u);
     Snapshot->NextCursor = AfterEventId;
-    if ( !MdoHomeExternalStat(Path, &Exists, &Info) ) goto io;
-    if ( !Exists ) return Snapshot;
-    if ( Info.Type != XFILE_TYPE_FILE ||
-         (Info.Available & XFILE_INFO_SIZE) == 0u ||
-         !MdoEventsRead(Path, &Data, &Size) ) goto io;
-    while ( Start < Size ) {
-        const char* End = (const char*)memchr(Data + Start, '\n', Size - Start);
+    Reader = MdoEventReaderOpen(Path);
+    if ( Reader == NULL ) goto io;
+    Snapshot->LatestId = MdoEventReaderLatest(Reader, ProjectId, SessionId,
+        &Snapshot->HistoryLost);
+    /* Retain compatibility with journals already evicted by older releases. */
+    Reader->Position = 0u;
+    if ( MdoEventReaderNext(Reader, &Record) ) {
+        MdoSessionEventOwned First;
+        if ( MdoEventsParse(ProjectId, SessionId, Record, &First) ) {
+            if ( First.Info.EventId > 1u && AfterEventId < First.Info.EventId - 1u )
+                Snapshot->HistoryLost = true;
+            MdoEventsOwnedUnit(&First);
+        } else { Snapshot->HistoryLost = true; xrtClearError(); }
+    }
+    MdoEventReaderAfter(Reader, ProjectId, SessionId, AfterEventId);
+    while ( Snapshot->Count < Limit && MdoEventReaderNext(Reader, &Record) ) {
         MdoSessionEventOwned Event;
-        size_t Length;
-        if ( End == NULL ) {
-            /* The writer appends the JSON and its newline separately. A
-             * reader may observe the uncommitted tail between those writes;
-             * only newline-terminated records belong to this snapshot. On
-             * recovery, a stranded tail is terminated and then reported as
-             * a malformed record by the normal path below. */
-            break;
-        }
-        Length = (size_t)(End - (Data + Start));
-        if ( Length == 0u || Length > MDO_SESSION_EVENT_RECORD_LIMIT ||
-             !MdoEventsParse(ProjectId, SessionId,
-                xrtStrViewN(Data + Start, Length), &Event) ) {
+        if ( !MdoEventsParse(ProjectId, SessionId, Record, &Event) ) {
             Snapshot->HistoryLost = true;
             xrtClearError();
-            Start += Length + 1u;
             continue;
         }
-        if ( Event.Info.EventId <= Previous ) {
-            Snapshot->HistoryLost = true;
-            MdoEventsOwnedUnit(&Event);
-            Start += Length + 1u;
-            continue;
-        }
-        if ( First == 0u ) First = Event.Info.EventId;
-        Previous = Event.Info.EventId;
-        Snapshot->LatestId = Previous;
-        if ( Event.Info.EventId > AfterEventId && Snapshot->Count < Limit ) {
+        if ( Event.Info.EventId > Previous ) {
             if ( !MdoEventsSnapshotGrow(Snapshot) ) {
                 MdoEventsOwnedUnit(&Event);
                 goto memory;
             }
+            Previous = Event.Info.EventId;
             Snapshot->Events[Snapshot->Count++] = Event;
-            Snapshot->NextCursor = Event.Info.EventId;
+            Snapshot->NextCursor = Previous;
         } else MdoEventsOwnedUnit(&Event);
-        Start += Length + 1u;
     }
-    if ( First > 1u && AfterEventId < First - 1u )
-        Snapshot->HistoryLost = true;
-    xrtFree(Data);
+    if ( Reader->Failed ) goto io;
+    MdoEventReaderClose(Reader);
     return Snapshot;
 memory:
-    xrtFree(Data);
+    MdoEventReaderClose(Reader);
     MdoSessionEventSnapshotRelease(Snapshot);
     MdoEventsError(Error, XWORK_ERROR_OUT_OF_MEMORY,
         "cannot allocate the session event replay");
     return NULL;
 io:
-    xrtFree(Data);
+    MdoEventReaderClose(Reader);
     MdoSessionEventSnapshotRelease(Snapshot);
     MdoEventsXrtError(Error, "cannot read the session event journal");
     return NULL;

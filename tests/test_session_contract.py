@@ -55,7 +55,9 @@ class SessionContractTests(unittest.TestCase):
         ):
             self.assertIn(symbol, header)
         self.assertIn("ui-events.jsonl", events)
-        self.assertIn("MDO_SESSION_EVENT_FILE_LIMIT", events)
+        self.assertNotIn("MDO_SESSION_EVENT_FILE_LIMIT", events)
+        self.assertIn("MdoEventReaderOpen", events)
+        self.assertIn("MdoSessionConversationTurns", header)
         self.assertIn("MDO_SESSION_EVENT_REPLAY_MAX", events)
         self.assertIn("MdoSessionEventBridgeOnEvent", manager)
         self.assertIn("session already has an active runtime", manager)

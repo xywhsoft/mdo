@@ -246,6 +246,12 @@ bool MdoSessionCatalogDiagnosticAt(const MdoSessionCatalog* Catalog,
 MdoSessionEventSnapshot* MdoSessionEventReplay(const char* ProjectId,
     const char* SessionId, uint64 AfterEventId, size_t Limit,
     xwork_error* Error);
+/* Reverse chronological pagination of top-level user turns. Returned JSON
+ * is owned; items are ordered oldest first. Before=0 selects the latest page.
+ * Limit is 1..64. Summaries are UTF-8 prefixes; complete events remain in the
+ * append-only journal and can be read separately using their stable IDs. */
+xvalue* MdoSessionConversationTurns(const char* ProjectId, const char* SessionId,
+    uint64 Before, size_t Limit, xwork_error* Error);
 MdoSessionEventSnapshot* MdoSessionEventSnapshotRef(
     MdoSessionEventSnapshot* Snapshot);
 void MdoSessionEventSnapshotRelease(MdoSessionEventSnapshot* Snapshot);
