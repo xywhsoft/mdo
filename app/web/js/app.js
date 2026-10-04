@@ -57,7 +57,7 @@ import { trackComposerMenuRoom } from "./features/chat/composer-menu-room.js";
 import { createComposerProfile } from "./features/chat/composer-profile.js";
 import { createComposerControls } from "./features/chat/composer-controls.js";
 import { createTokenMeter } from "./features/chat/token-meter.js";
-import { createTaskPanel } from "./features/tasks/task-panel.js";
+import { createTaskDialog } from "./features/tasks/task-dialog.js";
 import { createRecoveryDock } from "./features/chat/recovery-dock.js";
 import { recoveryMatchesWorkspace } from "./features/approvals/recovery-decisions.js";
 import { createSettingsView } from "./features/settings/settings-view.js";
@@ -140,10 +140,8 @@ export async function boot() {
   await purgeRecovery.refresh();
 
   const shell = $("#app-shell");
-  const wideLayout = window.matchMedia("(min-width: 1204px)");
   const mobileLayout = window.matchMedia("(max-width: 760px)");
   trackMobileViewport(shell, mobileLayout);
-  shell.dataset.inspector = "closed";
   const prompt = $("#prompt");
   const newTaskComposerFocus = createNewTaskComposerFocus({ prompt, navigation });
   const composer = $("#composer");
@@ -176,7 +174,6 @@ export async function boot() {
   const skipLink = $(".skip-link");
   const agentWorkspaceRegions = [$(".workspace-header"), $(".conversation"), $(".composer-region")];
   let settingsActive = false;
-  let inspectorBeforeSettings = shell.dataset.inspector;
   let paneLayout = null;
   let sessionWritable = true;
   let selectedSessionStatus = "active";
@@ -341,7 +338,7 @@ export async function boot() {
   }
   function manageSidebarProjects(projectId) {
     if (navigation.get().view === "settings") navigation.backToWorkspace();
-    setDrawer("sidebar", true, { focus: false });
+    setSidebar(true, { focus: false });
     sessionList.focusProjects(projectId);
   }
   $("#session-search").addEventListener("input", (event) => sessionList.setQuery(event.target.value));
@@ -553,7 +550,9 @@ export async function boot() {
     status: $("#image-preview-status"), retryButton: $("#retry-image-preview"),
     closeButton: $("#close-image-preview"), navigation,
   });
-  createTaskPanel({
+  const taskDialog = createTaskDialog({
+    dialog: $("#tasks-dialog"), closeButton: $("#close-tasks"), navigation,
+    fallbackFocus: () => prompt,
     container: $("#task-list"),
     detailContainer: $("#task-detail"),
     store: tasksStore,
@@ -566,18 +565,17 @@ export async function boot() {
     asksStore, recoveryStore,
     todoStore,
     runsStore,
-    onOpenTasks: () => setDrawer("inspector", true),
+    onOpenTasks: () => taskDialog.open(),
     onChanged: () => Promise.all([loadTasks(), loadRuns(), refreshSelectedAsks()]),
-    onDecisionArrived: () => {
+    onDecisionArrived: (card) => {
       if (!mobileLayout.matches) return;
       const sidebarOpen = shell.dataset.sidebar === "open";
-      const inspectorOpen = shell.dataset.inspector === "open";
-      if (!sidebarOpen && !inspectorOpen &&
+      if (document.querySelector("dialog[open]")) return;
+      if (!sidebarOpen &&
           (promptComposing || prompt.value.length || composerAttachments.length ||
            (document.activeElement !== prompt &&
             document.activeElement !== document.body))) return;
-      if (sidebarOpen) setDrawer("sidebar", false, { persist: false });
-      if (inspectorOpen) setDrawer("inspector", false, { persist: false });
+      if (sidebarOpen) setSidebar(false, { persist: false });
       const heading = card.querySelector("h3") ?? card;
       heading.tabIndex = -1;
       heading.focus({ preventScroll: true });
@@ -1299,7 +1297,6 @@ export async function boot() {
               (document.activeElement === stop ||
                 document.activeElement === document.body) &&
               !prompt.disabled &&
-              shell.dataset.inspector !== "open" &&
               shell.dataset.sidebar !== "open" &&
               !document.querySelector("dialog[open]"))
             prompt.focus({ preventScroll: true });
@@ -1482,8 +1479,7 @@ export async function boot() {
 
   navigation.subscribe(async ({ view, projectId, sessionId, settingsSection }) => {
     shell.toggleAttribute("data-settings-open", view === "settings");
-    for (const name of ["sidebar", "inspector"])
-      $(`#${name}`).inert = view === "settings" || shell.dataset[name] !== "open";
+    $("#sidebar").inert = view === "settings" || shell.dataset.sidebar !== "open";
     updateExportButtons();
     if (pendingForkComposerFocus &&
         (view !== "workspace" || `${projectId}/${sessionId}` !== pendingForkComposerFocus))
@@ -1495,7 +1491,6 @@ export async function boot() {
     }
     if (view === "settings") {
       const enteringSettings = !settingsActive;
-      if (!settingsActive) inspectorBeforeSettings = shell.dataset.inspector;
       settingsActive = true;
       settingsWorkspace.hidden = false;
       for (const region of agentWorkspaceRegions) region.hidden = true;
@@ -1507,7 +1502,6 @@ export async function boot() {
       resourcePanels.selectSection(selectedSection);
       if (selectedSection === "schedules") void schedulePanel.refresh();
       closeDrawers();
-      setDrawer("inspector", false, { persist: false });
       if (enteringSettings) $("#settings-title").focus({ preventScroll: true });
       if (!settingsStore.get().data) await loadSettings();
       return;
@@ -1522,12 +1516,7 @@ export async function boot() {
     timelineView.restorePreviewScroll();
     skipLink.href = "#timeline";
     skipLink.textContent = t("shell.skip");
-    if (settingsActive) {
-      settingsActive = false;
-      setDrawer("inspector", (paneLayout?.inspectorOpen() ??
-        inspectorBeforeSettings === "open") && wideLayout.matches,
-        { persist: false });
-    }
+    settingsActive = false;
     composer.toggleAttribute("data-new-task", !sessionId);
     const key = projectId && sessionId ? `${projectId}/${sessionId}` : "";
     const nextDraftKey = projectDraftSelection.key({ projectId, sessionId });
@@ -2069,6 +2058,7 @@ export async function boot() {
   }
 
   async function handleSessionAction(action, session) {
+    if (action === "tasks") { taskDialog.open(); return; }
     if (action === "import_json") { backupImport.open(); return; }
     if (action === "export_json") { backupExport.open(session); return; }
     if (action === "export") {
@@ -2157,49 +2147,34 @@ export async function boot() {
   }
   $("#new-session").addEventListener("click", openNewTask);
 
-  const drawerReturnFocus = { sidebar: null, inspector: null };
-  function setDrawer(name, open, options = {}) {
-    if (open && mobileLayout.matches) {
-      const other = name === "sidebar" ? "inspector" : "sidebar";
-      if (shell.dataset[other] === "open")
-        setDrawer(other, false, { persist: false });
-    }
-    shell.dataset[name] = open ? "open" : "closed";
-    const button = name === "sidebar" ?
-      (mobileLayout.matches ? $("#open-sidebar") : $("#desktop-sidebar-toggle"))
-      : (mobileLayout.matches ? $("#open-inspector") : $("#toggle-inspector"));
-    const panel = name === "sidebar" ? $("#sidebar") : $("#inspector");
+  let drawerReturnFocus = null;
+  function setSidebar(open, options = {}) {
+    shell.dataset.sidebar = open ? "open" : "closed";
+    const button = mobileLayout.matches ? $("#open-sidebar") : $("#desktop-sidebar-toggle");
+    const panel = $("#sidebar");
     if (open && panel.inert) {
       const opener = options.returnFocus ?? document.activeElement;
-      drawerReturnFocus[name] = opener instanceof HTMLElement &&
+      drawerReturnFocus = opener instanceof HTMLElement &&
         opener !== document.body && opener.tabIndex >= 0 &&
         !panel.contains(opener) ? opener : button;
     }
-    const inactive = !open;
-    if (inactive && panel.contains(document.activeElement)) {
-      const opener = drawerReturnFocus[name];
-      const reachable = opener?.isConnected && opener.getClientRects().length &&
-        !opener.matches(":disabled") && !opener.closest("[hidden], [inert]");
-      (reachable ? opener : button).focus();
+    if (!open && panel.contains(document.activeElement)) {
+      const reachable = drawerReturnFocus?.isConnected && drawerReturnFocus.getClientRects().length &&
+        !drawerReturnFocus.matches(":disabled") && !drawerReturnFocus.closest("[hidden], [inert]");
+      (reachable ? drawerReturnFocus : button).focus();
     }
-    panel.inert = inactive || shell.hasAttribute("data-settings-open");
-    button.setAttribute("aria-expanded", String(open));
-    if (name === "sidebar")
-      $("#desktop-sidebar-toggle").setAttribute("aria-expanded", String(open));
-    if (name === "inspector") $("#toggle-inspector").setAttribute("aria-expanded", String(open));
-    if (open && options.focus !== false &&
-        (name === "sidebar" ? mobileLayout.matches : !wideLayout.matches)) {
-      (name === "sidebar" ? $("#close-sidebar") :
-        panel.querySelector('[role="tab"][aria-selected="true"]'))?.focus();
-    }
+    panel.inert = !open || shell.hasAttribute("data-settings-open");
+    $("#open-sidebar").setAttribute("aria-expanded", String(open));
+    $("#desktop-sidebar-toggle").setAttribute("aria-expanded", String(open));
+    if (open && options.focus !== false && mobileLayout.matches)
+      $("#close-sidebar").focus();
     if (options.persist === false) paneLayout?.apply();
-    else paneLayout?.remember(name, open);
+    else paneLayout?.remember(open);
   }
   document.addEventListener("keydown", (event) => {
     if (event.key !== "Tab" || document.querySelector("dialog[open]")) return;
     const panel = mobileLayout.matches && shell.dataset.sidebar === "open"
-      ? $("#sidebar") : !wideLayout.matches && shell.dataset.inspector === "open"
-        ? $("#inspector") : null;
+      ? $("#sidebar") : null;
     if (!panel || settingsActive) return;
     const items = [...panel.querySelectorAll(
       'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
@@ -2216,39 +2191,23 @@ export async function boot() {
     }
   });
   function closeDrawers() {
-    if (mobileLayout.matches) setDrawer("sidebar", false, { persist: false });
-    if (!wideLayout.matches) setDrawer("inspector", false, { persist: false });
+    if (mobileLayout.matches) setSidebar(false, { persist: false });
   }
-  $("#open-sidebar").addEventListener("click", () => setDrawer("sidebar", true));
-  $("#close-sidebar").addEventListener("click", () => setDrawer("sidebar", false));
-  $("#desktop-sidebar-toggle").addEventListener("click", () => setDrawer("sidebar", true));
-  $("#open-inspector").addEventListener("click", () => setDrawer("inspector", true));
-  $("#close-inspector").addEventListener("click", () => setDrawer("inspector", false));
-  $("#toggle-inspector").addEventListener("click", () => setDrawer("inspector", shell.dataset.inspector !== "open"));
+  $("#open-sidebar").addEventListener("click", () => setSidebar(true));
+  $("#close-sidebar").addEventListener("click", () => setSidebar(false));
+  $("#desktop-sidebar-toggle").addEventListener("click", () => setSidebar(true));
   $("#scrim").addEventListener("click", closeDrawers);
-  wideLayout.addEventListener("change", (event) => setDrawer("inspector",
-    !settingsActive && event.matches && (paneLayout?.inspectorOpen() ?? false),
-    { persist: false }));
   mobileLayout.addEventListener("change", (event) => {
-    setDrawer("sidebar", !event.matches && (paneLayout?.sidebarOpen() ?? true),
+    setSidebar(!event.matches && (paneLayout?.sidebarOpen() ?? true),
       { persist: false });
-    // The inspector may stay open across this breakpoint. The visible opener
-    // changes from the desktop button to the mobile button (or back).
-    setDrawer("inspector", shell.dataset.inspector === "open",
-      { persist: false, focus: false });
   });
-  setDrawer("sidebar", !mobileLayout.matches, { persist: false });
-  setDrawer("inspector", false, { persist: false });
-  paneLayout = createPaneLayout({ shell, mobileLayout, wideLayout,
-    sidebarHandle: $("#sidebar-resize"), inspectorHandle: $("#inspector-resize"),
+  setSidebar(!mobileLayout.matches, { persist: false });
+  paneLayout = createPaneLayout({ shell, mobileLayout,
+    sidebarHandle: $("#sidebar-resize"),
     onLoaded(saved) {
-      // Saved geometry controls docked panels. A phone/tablet drawer is
-      // already owned by this page's current interaction and focus loop.
+      // A phone drawer's temporary state must not overwrite desktop preferences.
       if (!mobileLayout.matches)
-        setDrawer("sidebar", saved.sidebar_open, { persist: false, focus: false });
-      if (wideLayout.matches)
-        setDrawer("inspector", !settingsActive && saved.inspector_open,
-          { persist: false, focus: false });
+        setSidebar(saved.sidebar_open, { persist: false, focus: false });
     },
   });
 
@@ -2297,12 +2256,11 @@ export async function boot() {
       : $("#close-settings").click(),
     onToggleTheme: toggleTheme,
     onSessionSearch: () => {
-      if (shell.dataset.sidebar !== "open") setDrawer("sidebar", true);
+      if (shell.dataset.sidebar !== "open") setSidebar(true);
       $("#session-search").focus();
     },
     onStop: () => stop.click(), isRunning: () => Boolean(activeRun),
-    isDrawerOpen: () => (mobileLayout.matches && shell.dataset.sidebar === "open") ||
-      (!wideLayout.matches && shell.dataset.inspector === "open"),
+    isDrawerOpen: () => mobileLayout.matches && shell.dataset.sidebar === "open",
     closeDrawers,
   });
   $("#open-shortcuts").addEventListener("click", () => shortcuts.openHelp());

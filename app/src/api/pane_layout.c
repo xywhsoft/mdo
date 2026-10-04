@@ -8,17 +8,13 @@
 
 typedef struct MdoPaneLayout {
     uint32 SidebarWidth;
-    uint32 InspectorWidth;
     bool SidebarOpen;
-    bool InspectorOpen;
 } MdoPaneLayout;
 
 static void MdoPaneLayoutDefaults(MdoPaneLayout* Layout)
 {
     Layout->SidebarWidth = 272u;
-    Layout->InspectorWidth = 336u;
     Layout->SidebarOpen = true;
-    Layout->InspectorOpen = false;
 }
 
 static bool MdoPaneLayoutUInt(const xvalue* Object, cstr Key,
@@ -50,10 +46,7 @@ static bool MdoPaneLayoutFields(const xvalue* Object,
 {
     return MdoPaneLayoutUInt(Object, "sidebar_width", 264u, 420u,
             &Layout->SidebarWidth) &&
-        MdoPaneLayoutUInt(Object, "inspector_width", 300u, 520u,
-            &Layout->InspectorWidth) &&
-        MdoPaneLayoutBool(Object, "sidebar_open", &Layout->SidebarOpen) &&
-        MdoPaneLayoutBool(Object, "inspector_open", &Layout->InspectorOpen);
+        MdoPaneLayoutBool(Object, "sidebar_open", &Layout->SidebarOpen);
 }
 
 static bool MdoPaneLayoutRead(MdoPaneLayout* Layout)
@@ -86,9 +79,18 @@ static bool MdoPaneLayoutRead(MdoPaneLayout* Layout)
     Config.MaxContainerItems = 5u;
     Root = xrtJsonRead(xrtStrViewN(Bytes, (size_t)Info.Size), &Config);
     Ok = Root != NULL && xrtValueType(Root) == XVALUE_OBJECT &&
-        xrtValueCount(Root) == 5u &&
-        MdoPaneLayoutUInt(Root, "schema_version", 1u, 1u, &Version) &&
+        MdoPaneLayoutUInt(Root, "schema_version", 1u, 2u, &Version) &&
+        xrtValueCount(Root) == (Version == 1u ? 5u : 3u) &&
         MdoPaneLayoutFields(Root, Layout);
+    if ( Ok && Version == 1u ) {
+        // Read old geometry without rewriting it on startup. The next user
+        // change saves only the surviving sidebar preference in schema 2.
+        uint32 IgnoredWidth = 0u;
+        bool IgnoredOpen = false;
+        Ok = MdoPaneLayoutUInt(Root, "inspector_width", 300u, 520u,
+                &IgnoredWidth) &&
+            MdoPaneLayoutBool(Root, "inspector_open", &IgnoredOpen);
+    }
 done:
     xrtValueRelease(Root);
     if ( File != NULL && !xrtClose(File) ) Ok = false;
@@ -99,11 +101,9 @@ static bool MdoPaneLayoutValue(xvalue* Object,
     const MdoPaneLayout* Layout, bool IncludeSchema)
 {
     return (!IncludeSchema ||
-            MdoApiValueSetUInt(Object, "schema_version", 1u)) &&
+            MdoApiValueSetUInt(Object, "schema_version", 2u)) &&
         MdoApiValueSetUInt(Object, "sidebar_width", Layout->SidebarWidth) &&
-        MdoApiValueSetUInt(Object, "inspector_width", Layout->InspectorWidth) &&
-        MdoApiValueSetBool(Object, "sidebar_open", Layout->SidebarOpen) &&
-        MdoApiValueSetBool(Object, "inspector_open", Layout->InspectorOpen);
+        MdoApiValueSetBool(Object, "sidebar_open", Layout->SidebarOpen);
 }
 
 static bool MdoPaneLayoutWrite(const MdoPaneLayout* Layout)
@@ -134,7 +134,7 @@ bool MdoApiPaneLayoutRoute(MdoApiContext* Context)
             return MdoApiReplyBodyError(Context, BodyStatus);
         Ok = Body.Size <= MDO_PANE_LAYOUT_MAX_BYTES &&
             xrtValueType(Body.Value) == XVALUE_OBJECT &&
-            xrtValueCount(Body.Value) == 4u &&
+            xrtValueCount(Body.Value) == 2u &&
             MdoPaneLayoutFields(Body.Value, &Layout);
         MdoApiJsonBodyUnit(&Body);
         if ( !Ok ) return MdoApiReplyError(Context, 422u,

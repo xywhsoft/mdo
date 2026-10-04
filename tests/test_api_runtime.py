@@ -1563,8 +1563,7 @@ def run_probe(host: Path) -> None:
                 assert status == 200, (status, body)
                 layout_defaults = json.loads(body)["data"]
                 assert layout_defaults == {
-                    "sidebar_width": 272, "inspector_width": 336,
-                    "sidebar_open": True, "inspector_open": False,
+                    "sidebar_width": 272, "sidebar_open": True,
                 }, layout_defaults
                 status, headers, body = request(port, "GET", "/api/v1/models/config")
                 assert status == 200, (status, body)
@@ -1763,8 +1762,7 @@ def run_probe(host: Path) -> None:
 
                 layout_path = "/api/v1/pane-layout"
                 layout = {
-                    "sidebar_width": 354, "inspector_width": 412,
-                    "sidebar_open": False, "inspector_open": True,
+                    "sidebar_width": 354, "sidebar_open": False,
                 }
                 status, _, body = request(port, "PUT", layout_path,
                     body=json.dumps({**layout, "sidebar_width": 600}).encode(),
@@ -1778,7 +1776,7 @@ def run_probe(host: Path) -> None:
                 assert status == 200 and json.loads(body)["data"] == layout, body
                 saved_layout = json.loads((home / "data/pane-layout.json")
                     .read_text(encoding="utf-8"))
-                assert saved_layout["schema_version"] == 1, saved_layout
+                assert saved_layout["schema_version"] == 2, saved_layout
                 assert all(saved_layout[key] == value for key, value in layout.items()), saved_layout
 
                 resources = (

@@ -130,7 +130,7 @@ def main():
             "agent_id":"mdo.default","model_id":"ornith-1.5-35b","protocol":"openai-responses",
             "reasoning_effort":"medium","max_output_tokens":1024})
         for endpoint,body in [("/workspace-state",{"project_id":"default","session_id":session["id"]}),
-            ("/pane-layout",{"sidebar_width":348,"inspector_width":388,"sidebar_open":True,"inspector_open":False})]:
+            ("/pane-layout",{"sidebar_width":348,"sidebar_open":True})]:
             status,_,payload=request(port,"PUT","/api/v1"+endpoint,body=json.dumps(body).encode(),
                                      headers={"Content-Type":"application/json"})
             assert status==200,(status,payload)

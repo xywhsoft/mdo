@@ -69,6 +69,38 @@ def main():
                     assert json.loads(body)['error']['code'] == 'route_not_found', body
         status, response = request(port, 'GET', '/api/v1/tasks')
         assert status == 200 and isinstance(response['data']['items'], list)
+        # Removing the right column must not lose old left-sidebar preferences.
+        layout_path = '/api/v1/pane-layout'
+        status, response = request(port, 'GET', layout_path)
+        assert status == 200 and response['data'] == {
+            'sidebar_width': 272, 'sidebar_open': True}, response
+        layout_file = home / 'data/pane-layout.json'
+        assert not layout_file.exists(), 'reading defaults must not write layout'
+        # Activate the lazy Home through a real user preference write before
+        # injecting the historical layout into its already-open filesystem root.
+        status, response = request(port, 'PUT', layout_path, response['data'])
+        assert status == 200, response
+        legacy = {'schema_version': 1, 'sidebar_width': 354, 'sidebar_open': False,
+            'inspector_width': 412, 'inspector_open': True}
+        legacy_bytes = json.dumps(legacy).encode()
+        layout_file.write_bytes(legacy_bytes)
+        layout = {'sidebar_width': 354, 'sidebar_open': False}
+        status, response = request(port, 'GET', layout_path)
+        assert status == 200 and response['data'] == layout, response
+        assert layout_file.read_bytes() == legacy_bytes, 'startup must not rewrite old layout'
+        status, response = request(port, 'PUT', layout_path, layout)
+        assert status == 200 and response['data'] == layout, response
+        assert json.loads(layout_file.read_bytes()) == {'schema_version': 2, **layout}
+        for bad in ({**layout, 'inspector_width': 412, 'inspector_open': True},
+                    {**layout, 'sidebar_width': 600}, {**layout, 'sidebar_open': 'false'}):
+            status, response = request(port, 'PUT', layout_path, bad)
+            assert status == 422, response
+        status, response = request(port, 'GET', layout_path)
+        assert status == 200 and response['data'] == layout, response
+        status, _, body = raw_request(port, 'GET', '/')
+        assert status == 200, status
+        html = body.decode('utf-8')
+        assert 'id="tasks-dialog"' in html and 'id="inspector"' not in html
         status, response = request(port, 'GET', '/api/v1/models')
         assert status == 200, response
         model_id = response['data']['models'][0]['id']
@@ -100,9 +132,9 @@ def main():
         assert report['event_counts']['model_done'] >= 1, report
         assert report['model_usage']['input_tokens'] == 8, report
         html = (ROOT / 'app/web/index.html').read_text(encoding='utf-8')
-        for removed in ('trace-panel', 'decisions-panel', 'context-panel', 'task-summary'):
+        for removed in ('trace-panel', 'decisions-panel', 'context-panel', 'task-summary', 'inspector', 'inspector-resize', 'open-inspector', 'toggle-inspector'):
             assert f'id="{removed}"' not in html
-        print('Packed debug cleanup + chat replay + offline report: PASS', flush=True)
+        print('Packed debug cleanup + sidebar migration + chat replay + offline report: PASS', flush=True)
         if args.keep:
             static = ModelServer(('127.0.0.1', 0), partial(SimpleHTTPRequestHandler, directory=str(ROOT)))
             threading.Thread(target=static.serve_forever, daemon=True).start()

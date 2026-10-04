@@ -48,7 +48,7 @@ function detailPair(label, value) {
 }
 
 function captureView(container) {
-  const panel = container.closest('.inspector-panel');
+  const panel = container.closest('.tasks-dialog-body');
   return {
     panel, panelScroll: panel?.scrollTop ?? 0,
     focus: container.contains(document.activeElement)

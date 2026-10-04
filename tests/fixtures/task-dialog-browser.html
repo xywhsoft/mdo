@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="zh-CN">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>mdo task dialog interaction probe</title>
+<link rel="stylesheet" href="/app/web/css/app.css">
+<style>body { padding: 20px; overflow: auto; } #result { white-space: pre-wrap; }</style>
+<button id="open">查看后台任务</button>
+<button id="observe">检查关闭状态</button>
+<input id="prompt" aria-label="会话输入框" placeholder="关闭后可继续输入">
+<pre id="result"></pre>
+<dialog class="app-dialog tasks-dialog" id="tasks-dialog" aria-labelledby="tasks-title">
+  <div class="dialog-card">
+    <header><h2 id="tasks-title" tabindex="-1">后台任务</h2><button id="close-tasks">关闭后台任务</button></header>
+    <section class="tasks-dialog-body">
+      <div class="task-list" id="task-list"></div>
+      <section class="task-detail" id="task-detail" hidden></section>
+    </section>
+    <footer><button id="switch-session">模拟切换会话</button></footer>
+  </div>
+</dialog>
+<script type="module">
+import { loadLocale } from "/app/web/js/i18n.js";
+import { createResourceStore } from "/app/web/js/state/store.js";
+import { createTaskDialog } from "/app/web/js/features/tasks/task-dialog.js";
+import { tasksStore, taskDetailStore, artifactPreviewStore, selectedTask } from "/app/web/js/state/tasks.js";
+const originalFetch = window.fetch.bind(window);
+const task = { id: 7, kind: "process", state: "running", terminal: false,
+  label: "检查项目文件", owner_session: "/home/sessions/default/one/snapshot.json" };
+const reply = (data) => Response.json({ ok: true, data });
+window.fetch = async (input, options = {}) => {
+  const path = String(input);
+  if (path.startsWith("/lang/")) return originalFetch("/app/web" + path, options);
+  if (path === "/api/v1/tasks") return reply({ items: [{ ...task }], total: 1 });
+  if (path === "/api/v1/tasks/7") {
+    if (options.method === "DELETE") task.stop_requested = true;
+    return reply({ ...task });
+  }
+  if (path.startsWith("/api/v1/tasks/7/output?")) {
+    const empty = { data: "", start: 0, next: 0, dropped: false };
+    const text = "Checking project files...\napp/src/main.c: OK\napp/web/js/app.js: OK\n";
+    return reply({ complete: false, stdout: { ...empty, data: btoa(text), next: text.length },
+      stderr: empty, result: empty });
+  }
+  if (path === "/api/v1/tasks/7/asks" || path === "/api/v1/artifacts")
+    return reply({ items: [], total: 0 });
+  return originalFetch(input, options);
+};
+await loadLocale("zh-CN");
+const navigationState = createResourceStore({ view: "workspace", projectId: "default", sessionId: "one" });
+const navigation = { get: () => navigationState.get().data,
+  subscribe: (listener) => navigationState.subscribe((state) => listener(state.data)) };
+const dialog = document.querySelector("#tasks-dialog");
+const view = createTaskDialog({ dialog, closeButton: document.querySelector("#close-tasks"), navigation,
+  fallbackFocus: () => document.querySelector("#prompt"),
+  container: document.querySelector("#task-list"), detailContainer: document.querySelector("#task-detail"),
+  store: tasksStore, detailStore: taskDetailStore, previewStore: artifactPreviewStore });
+document.querySelector("#open").addEventListener("click", () => view.open());
+document.querySelector("#switch-session").addEventListener("click", () =>
+  navigationState.setData({ view: "workspace", projectId: "default", sessionId: "two" }));
+document.querySelector("#observe").addEventListener("click", () => {
+  document.querySelector("#result").textContent = JSON.stringify({ open: dialog.open,
+    selected: selectedTask(), state: task.state, stop_requested: Boolean(task.stop_requested),
+    route: navigation.get().sessionId }, null, 2);
+});
+</script>
+</html>

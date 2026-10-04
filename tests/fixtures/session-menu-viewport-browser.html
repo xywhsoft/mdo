@@ -207,7 +207,7 @@ try {
   // The import entry was added after this fixture's original three-item menu.
   // Verify its current actions explicitly, including removal of active-only ones.
   const headerActionsChanged = JSON.stringify(archivedActions) ===
-    JSON.stringify(["rename", "unarchive", "import_json", "trash"]);
+    JSON.stringify(["tasks", "rename", "unarchive", "import_json", "trash"]);
   headerSession = { ...headerSession, status: "active" };
   publishHeader();
   menuKey(headerMenu.lastElementChild, "ArrowDown");

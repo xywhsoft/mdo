@@ -323,7 +323,7 @@ test("bundled language packs cover the annotated shell and switch without stale 
     assert.equal(t("composer.backgroundQueueFailed", { title: "Тест", error: "сбой" }),
       "Не удалось отправить сообщение из очереди фонового сеанса «Тест»: сбой");
     assert.equal(t("ask.answerRequired"), "Введите ответ");
-    assert.equal(sessionActionItems({ status: "active", pinned: true })[1].label, "Открепить");
+    assert.equal(sessionActionItems({ status: "active", pinned: true }).find(item => item.name === "pin").label, "Открепить");
     assert.equal(sessionForkTitle({ title: "Тест" }), "Тест (ветка)");
     assert.equal(errorMessage({ code: "network_error" }),
       "Нет соединения с локальной службой. Проверьте, что mdo работает.");

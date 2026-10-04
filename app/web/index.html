@@ -13,7 +13,7 @@
 <body>
   <a class="skip-link" href="#timeline" data-i18n="shell.skip" inert>跳到对话</a>
 
-  <div class="app-shell" id="app-shell" data-sidebar="closed" data-inspector="closed" inert>
+  <div class="app-shell" id="app-shell" data-sidebar="closed" inert>
     <div id="project-purge-notice" class="project-purge-notice" role="status" hidden>
       <span></span><button class="secondary-button" type="button"></button>
     </div>
@@ -37,13 +37,10 @@
       <div class="session-action-control" id="session-action-control-mobile">
         <button class="icon-button" id="session-actions-mobile" type="button" aria-label="更多会话操作" data-i18n-aria-label="shell.more" aria-haspopup="menu" aria-controls="session-header-menu-mobile" aria-expanded="false" disabled>
           <span class="icon" data-icon="more" aria-hidden="true"></span>
+          <span class="activity-dot" id="mobile-activity-dot" hidden></span>
         </button>
         <div class="session-menu session-header-menu" id="session-header-menu-mobile" role="menu" hidden></div>
       </div>
-      <button class="icon-button" id="open-inspector" type="button" aria-label="打开后台任务" data-i18n-aria-label="shell.tasksPanel" aria-controls="inspector" aria-expanded="false">
-        <span class="icon" data-icon="panel-right" aria-hidden="true"></span>
-        <span class="activity-dot" id="mobile-activity-dot" hidden></span>
-      </button>
     </header>
 
     <aside class="sidebar" id="sidebar" aria-label="会话导航" data-i18n-aria-label="shell.sidebar.label">
@@ -145,9 +142,6 @@
             </button>
             <div class="session-menu session-header-menu" id="session-header-menu" role="menu" hidden></div>
           </div>
-          <button class="icon-button desktop-inspector-toggle" id="toggle-inspector" type="button" aria-label="切换后台任务" data-i18n-aria-label="shell.toggleTasksPanel" aria-controls="inspector" aria-expanded="false">
-            <span class="icon" data-icon="panel-right" aria-hidden="true"></span>
-          </button>
         </div>
       </header>
 
@@ -501,25 +495,23 @@
     </main>
 
     <div class="pane-resize-handle sidebar-resize-handle" id="sidebar-resize" role="separator" aria-label="调整会话导航宽度" data-i18n-aria-label="pane.sidebarResize" aria-orientation="vertical" aria-valuemin="264" aria-valuemax="420" aria-valuenow="272" tabindex="0"></div>
-    <div class="pane-resize-handle inspector-resize-handle" id="inspector-resize" role="separator" aria-label="调整任务面板宽度" data-i18n-aria-label="pane.inspectorResize" aria-orientation="vertical" aria-valuemin="300" aria-valuemax="520" aria-valuenow="336" tabindex="0"></div>
+    <button class="scrim" id="scrim" type="button" aria-label="关闭面板" data-i18n-aria-label="shell.closePanel" tabindex="-1"></button>
+  </div>
 
-    <aside class="inspector" id="inspector" aria-label="后台任务" data-i18n-aria-label="inspector.label">
-      <div class="inspector-header">
-        <h2 id="tasks-title" tabindex="-1" data-i18n="inspector.tab.tasks">任务</h2>
-        <button class="icon-button inspector-close" id="close-inspector" type="button" aria-label="关闭后台任务" data-i18n-aria-label="inspector.close">
+  <dialog class="app-dialog tasks-dialog" id="tasks-dialog" aria-labelledby="tasks-title">
+    <div class="dialog-card">
+      <header>
+        <h2 id="tasks-title" tabindex="-1" data-i18n="task.dialog.title">后台任务</h2>
+        <button class="icon-button" id="close-tasks" type="button" aria-label="关闭后台任务" data-i18n-aria-label="task.dialog.close">
           <span class="icon" data-icon="close" aria-hidden="true"></span>
         </button>
-      </div>
-
-      <section class="inspector-panel" id="tasks-panel" aria-labelledby="tasks-title">
+      </header>
+      <section class="tasks-dialog-body" aria-labelledby="tasks-title">
         <div class="task-list" id="task-list" aria-live="polite"></div>
         <section class="task-detail" id="task-detail" aria-live="polite" hidden></section>
       </section>
-
-    </aside>
-
-    <button class="scrim" id="scrim" type="button" aria-label="关闭面板" data-i18n-aria-label="shell.closePanel" tabindex="-1"></button>
-  </div>
+    </div>
+  </dialog>
 
   <dialog class="app-dialog" id="startup-choice-dialog" aria-labelledby="startup-choice-title">
     <div class="dialog-card">

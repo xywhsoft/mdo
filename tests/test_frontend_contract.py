@@ -22,10 +22,11 @@ class FrontendContractTests(unittest.TestCase):
             for path in (WEB / "js").rglob("*.js")
         }
 
-    def test_shell_uses_semantic_three_region_layout(self) -> None:
+    def test_shell_uses_navigation_and_chat_with_on_demand_tasks(self) -> None:
         self.assertIn('<aside class="sidebar"', self.index)
         self.assertIn('<main class="workspace"', self.index)
-        self.assertIn('<aside class="inspector"', self.index)
+        self.assertNotIn('id="inspector"', self.index)
+        self.assertIn('<dialog class="app-dialog tasks-dialog"', self.index)
         self.assertIn('id="timeline" aria-live="polite"', self.index)
         self.assertIn('id="composer"', self.index)
         self.assertIn('import("/js/main.js")', self.index)
@@ -226,7 +227,7 @@ class FrontendContractTests(unittest.TestCase):
         self.assertIn('if (action === "rename")', self.scripts["js/app.js"])
         self.assertIn("max-height: min(320px, 70vh)", self.css)
 
-    def test_task_inspector_incrementally_replays_output_and_artifacts(self) -> None:
+    def test_task_dialog_incrementally_replays_output_and_artifacts(self) -> None:
         tasks = self.scripts["js/state/tasks.js"]
         panel = self.scripts["js/features/tasks/task-panel.js"]
         for marker in (
@@ -291,10 +292,10 @@ class FrontendContractTests(unittest.TestCase):
         self.assertNotIn("innerHTML", panel)
 
     def test_responsive_and_accessibility_modes_are_explicit(self) -> None:
-        self.assertIn("grid-template-columns: var(--sidebar-column, var(--sidebar-width)) minmax(0, 1fr) var(--inspector-column, var(--inspector-width))", self.css)
+        self.assertIn("grid-template-columns: var(--sidebar-column, var(--sidebar-width)) minmax(0, 1fr)", self.css)
         self.assertIn('id="sidebar-resize" role="separator"', self.index)
-        self.assertIn('id="inspector-resize" role="separator"', self.index)
-        self.assertIn("@media (max-width: 1203px)", self.css)
+        self.assertNotIn('id="inspector-resize"', self.index)
+        self.assertNotIn("inspector", self.scripts["js/app.js"])
         self.assertIn("@media (max-width: 760px)", self.css)
         self.assertIn("@media (prefers-reduced-motion: reduce)", self.css)
         self.assertIn("[hidden] { display: none !important; }", self.css)

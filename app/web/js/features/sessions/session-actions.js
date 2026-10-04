@@ -7,7 +7,8 @@ export function sessionActionItems(session) {
   if (session.status === "trash")
     return [item("restore", "action.restore", "恢复")];
 
-  const actions = [item("rename", "action.rename", "重命名")];
+  const actions = [item("tasks", "action.tasks", "后台任务"),
+    item("rename", "action.rename", "重命名")];
   if (session.status === "active") {
     actions.push(
       session.pinned ? item("pin", "action.unpin", "取消置顶") :

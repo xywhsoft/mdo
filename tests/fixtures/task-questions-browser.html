@@ -7,13 +7,12 @@
 <style>
 body { height: auto; overflow: auto; padding: 12px; }
 #result { white-space: pre-wrap; overflow-wrap: anywhere; }
-.inspector { width: auto; min-width: 0; }
 #tasks-panel { overflow: auto; max-height: 80vh; }
 </style>
 <pre id="result">载入生产组件…</pre>
-<div class="inspector"><section id="tasks-panel" role="tabpanel">
+<section class="tasks-dialog-body" id="tasks-panel">
   <div id="summary"></div><div id="tasks"></div><div id="task-detail"></div>
-</section></div>
+</section>
 <script type="module">
 import { loadLocale } from "/app/web/js/i18n.js";
 import { createTaskPanel } from "/app/web/js/features/tasks/task-panel.js";
