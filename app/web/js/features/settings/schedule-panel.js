@@ -43,6 +43,11 @@ export function createSchedulePanel({ panel, projectsStore, agentsStore, modelsS
   const status = panel.querySelector("#schedules-status");
   const actionStatus = panel.querySelector("#schedule-action-status");
   const refreshButton = panel.querySelector("#schedules-refresh");
+  const newButton = panel.querySelector("#schedule-new");
+  const editorDialog = panel.querySelector("#schedule-editor-dialog");
+  const editorFields = panel.querySelector("#schedule-editor-fields");
+  const editorClose = panel.querySelector("#schedule-editor-close");
+  const editorCancel = panel.querySelector("#schedule-editor-cancel");
   const formStatus = panel.querySelector("#schedule-form-status");
   const title = panel.querySelector("#schedule-editor-title");
   const save = panel.querySelector("#schedule-save");
@@ -59,6 +64,8 @@ export function createSchedulePanel({ panel, projectsStore, agentsStore, modelsS
   let etag = "";
   let busy = false;
   let loadGeneration = 0;
+  let editorLoading = false;
+  let editorOrigin = null;
   let deleteTarget = null;
   let historyGeneration = 0;
   let historyItem = null;
@@ -67,6 +74,7 @@ export function createSchedulePanel({ panel, projectsStore, agentsStore, modelsS
   let actionFeedback = { message: "", id: "" };
 
   function renderEditorHeader() {
+    if (editorLoading) return;
     title.textContent = original
       ? t("schedule.editTitle", { label: original.label }, `编辑：${original.label}`)
       : t("schedule.newTitle", {}, "新建计划");
@@ -78,6 +86,23 @@ export function createSchedulePanel({ panel, projectsStore, agentsStore, modelsS
   function setFeedback(message, error = false) {
     formStatus.textContent = message;
     formStatus.dataset.tone = error ? "error" : "neutral";
+  }
+
+  function syncEditorState() {
+    editorFields.hidden = editorLoading;
+    editorFields.disabled = busy || editorLoading;
+    save.disabled = busy || editorLoading;
+    editorClose.disabled = busy;
+    editorCancel.disabled = busy;
+    newButton.disabled = busy;
+  }
+
+  function showEditor(origin) {
+    editorOrigin = origin;
+    syncEditorState();
+    editorDialog.showModal();
+    editorDialog.scrollTop = 0;
+    if (!editorLoading) fields.label.focus();
   }
 
   function setActionFeedback(message, error = false, id = "") {
@@ -165,7 +190,6 @@ export function createSchedulePanel({ panel, projectsStore, agentsStore, modelsS
     renderEditorHeader();
     setFeedback("");
     syncConditionalFields();
-    form.scrollIntoView({ behavior: "smooth", block: "start" });
     fields.label.focus({ preventScroll: true });
   }
 
@@ -197,24 +221,44 @@ export function createSchedulePanel({ panel, projectsStore, agentsStore, modelsS
       button.dataset.scheduleAction = action;
       actions.append(button);
     }
-    card.append(heading, element("p"), element("p"), feedback, actions);
+    const statistics = element("dl", { className: "schedule-card-stats" });
+    for (const name of ["next", "count", "last", "active"]) {
+      const stat = element("div");
+      stat.dataset.scheduleStat = name;
+      stat.append(element("dt"), element("dd"));
+      statistics.append(stat);
+    }
+    card.append(heading, element("p"), statistics, feedback, actions);
     return card;
   }
 
   function syncScheduleCard(card, item, data) {
     if (card.getAttribute("aria-label") !== item.label)
       card.setAttribute("aria-label", item.label);
-    const [heading, frequency, next, feedback, actions] = card.children;
+    const [heading, frequency, statistics, feedback, actions] = card.children;
     const [label, enabledBadge, runningBadge] = heading.children;
     syncText(label, item.label);
     syncText(enabledBadge, item.enabled
       ? t("schedule.enabled", {}, "已启用") : t("schedule.paused", {}, "已暂停"));
     runningBadge.hidden = !item.active_runs;
     if (item.active_runs) syncText(runningBadge, t("schedule.running", {}, "运行中"));
-    syncText(frequency, `${t(FREQUENCY_KEY[item.frequency], {}, item.frequency)} · ${item.project_id} · ${item.agent_id}`);
-    const nextTime = clockText(item.next_occurrence_at);
-    syncText(next, t("schedule.nextTrigger", { next: nextTime, count: item.claim_count },
-      `下次：${nextTime} · 已触发 ${item.claim_count} 次`));
+    const unit = t(FREQUENCY_KEY[item.frequency], {}, item.frequency);
+    const repeat = item.frequency === "once" ? unit : t("schedule.repeatEvery",
+      { interval: item.interval, unit }, `每 ${item.interval} ${unit}`);
+    syncText(frequency, `${repeat} · ${item.project_id} · ${item.agent_id}`);
+    const values = [
+      [t("schedule.nextRun", {}, "下次运行"), !item.enabled
+        ? t("schedule.paused", {}, "已暂停") : !data.enabled
+          ? t("schedule.executionOff", {}, "执行已关闭") : clockText(item.next_occurrence_at)],
+      [t("schedule.triggerCount", {}, "触发次数"), String(item.claim_count ?? 0)],
+      [t("schedule.lastTrigger", {}, "最近触发"), item.last_claimed_at
+        ? clockText(item.last_claimed_at) : t("schedule.neverTriggered", {}, "尚未触发")],
+      [t("schedule.activeRuns", {}, "正在运行"), String(item.active_runs ?? 0)],
+    ];
+    [...statistics.children].forEach((stat, index) => {
+      syncText(stat.children[0], values[index][0]);
+      syncText(stat.children[1], values[index][1]);
+    });
     const message = item.id === actionFeedback.id ? actionFeedback.message : "";
     feedback.hidden = !message;
     if (message) syncText(feedback, message);
@@ -241,7 +285,8 @@ export function createSchedulePanel({ panel, projectsStore, agentsStore, modelsS
 
   function render(state) {
     if (activeRefresh) { clearTimeout(activeRefresh); activeRefresh = 0; }
-    if (state.status === "loading") {
+    if (state.status === "idle" || state.status === "loading" ||
+        (state.status === "refreshing" && typeof state.data?.enabled !== "boolean")) {
       status.textContent = t("schedule.loading", {}, "正在读取计划任务…");
       return;
     }
@@ -253,11 +298,11 @@ export function createSchedulePanel({ panel, projectsStore, agentsStore, modelsS
     const items = data.items ?? [];
     const feedbackInCard = items.some((item) => item.id === actionFeedback.id);
     actionStatus.textContent = feedbackInCard ? "" : actionFeedback.message;
-    if (state.status !== "error" && visible() && items.some((item) => item.active_runs > 0))
+    if (state.status !== "error" && visible() && items.length)
       activeRefresh = setTimeout(() => {
         activeRefresh = 0;
         if (visible()) void loadSchedules();
-      }, 1000);
+      }, items.some((item) => item.active_runs > 0) ? 1000 : 15000);
     if (state.status !== "error")
       status.textContent = t("schedule.count", { count: data.total ?? items.length },
         `${data.total ?? items.length} 项计划`) +
@@ -274,7 +319,7 @@ export function createSchedulePanel({ panel, projectsStore, agentsStore, modelsS
     if (!items.length) {
       const empty = list.querySelector(".schedule-empty") ??
         element("p", { className: "schedule-empty" });
-      syncText(empty, t("schedule.empty", {}, "还没有计划任务。填写下方表单即可创建。"));
+      syncText(empty, t("schedule.empty", {}, "还没有计划任务。点击“新建计划”开始。"));
       if (list.firstChild !== empty) list.prepend(empty);
       kept.add(empty);
     }
@@ -373,7 +418,7 @@ export function createSchedulePanel({ panel, projectsStore, agentsStore, modelsS
     render(schedulesStore.get());
     if (visible() && (deletion || listTarget))
       focusSchedule((deletion || listTarget).id);
-    save.disabled = true;
+    syncEditorState();
     let savedId = "";
     let succeeded = false;
     try {
@@ -382,7 +427,8 @@ export function createSchedulePanel({ panel, projectsStore, agentsStore, modelsS
       toast(success);
       if (resetEditor) {
         savedId = result?.data?.id || "";
-        newSchedule();
+        editorOrigin = null;
+        editorDialog.close();
       }
       else if (result?.data?.id === original?.id && result?.etag) {
         original = result.data;
@@ -398,7 +444,7 @@ export function createSchedulePanel({ panel, projectsStore, agentsStore, modelsS
       if (error?.status === 412) await loadSchedules();
     } finally {
       busy = false;
-      save.disabled = false;
+      syncEditorState();
       render(schedulesStore.get());
       if (savedId && visible()) {
         if (!focusSchedule(savedId, "", true)) refreshButton.focus();
@@ -407,14 +453,24 @@ export function createSchedulePanel({ panel, projectsStore, agentsStore, modelsS
     }
   }
 
-  async function openEditor(id) {
+  async function openEditor(item, origin) {
     const generation = ++loadGeneration;
+    newSchedule();
+    editorLoading = true;
+    title.textContent = t("schedule.editTitle", { label: item.label }, `编辑：${item.label}`);
     setFeedback(t("schedule.loadingOne", {}, "正在读取计划…"));
+    showEditor(origin);
     try {
-      const result = await readSchedule(id);
-      if (generation === loadGeneration) editSchedule(result.data, result.etag);
+      const result = await readSchedule(item.id);
+      if (generation !== loadGeneration || !editorDialog.open) return;
+      editorLoading = false;
+      syncEditorState();
+      editSchedule(result.data, result.etag);
     } catch (error) {
-      if (generation === loadGeneration) setFeedback(errorMessage(error), true);
+      if (generation !== loadGeneration || !editorDialog.open) return;
+      editorDialog.close();
+      setActionFeedback(errorMessage(error), true, item.id);
+      render(schedulesStore.get());
     }
   }
 
@@ -473,7 +529,7 @@ export function createSchedulePanel({ panel, projectsStore, agentsStore, modelsS
     if (!button || busy) return;
     const item = schedulesStore.get().data?.items?.find((value) => value.id === button.dataset.scheduleId);
     if (!item) return;
-    if (button.dataset.scheduleAction === "edit") void openEditor(item.id);
+    if (button.dataset.scheduleAction === "edit") void openEditor(item, button);
     if (button.dataset.scheduleAction === "history") void openHistory(item);
     if (button.dataset.scheduleAction === "run")
       void mutate(() => runSchedule(item.id, item.revision),
@@ -512,7 +568,7 @@ export function createSchedulePanel({ panel, projectsStore, agentsStore, modelsS
   });
   form.addEventListener("submit", (event) => {
     event.preventDefault();
-    if (busy || !form.reportValidity()) return;
+    if (busy || editorLoading || !editorDialog.open || !form.reportValidity()) return;
     let definition;
     try { definition = body(); }
     catch (error) { setFeedback(errorMessage(error), true); return; }
@@ -524,16 +580,34 @@ export function createSchedulePanel({ panel, projectsStore, agentsStore, modelsS
   });
   fields.frequency.addEventListener("change", syncConditionalFields);
   fields.timezone.addEventListener("change", syncConditionalFields);
-  panel.querySelector("#schedule-new").addEventListener("click", () => {
+  newButton.addEventListener("click", () => {
+    if (busy) return;
     ++loadGeneration;
+    editorLoading = false;
     newSchedule();
-    fields.label.focus();
+    showEditor(newButton);
+  });
+  for (const button of [editorClose, editorCancel])
+    button.addEventListener("click", () => { if (!busy) editorDialog.close(); });
+  editorDialog.addEventListener("cancel", (event) => {
+    if (busy) event.preventDefault();
+  });
+  editorDialog.addEventListener("close", () => {
+    // Closing during a read invalidates its response; it must not refill a
+    // different editor opened before that request finishes.
+    ++loadGeneration;
+    editorLoading = false;
+    newSchedule();
+    syncEditorState();
+    if (visible() && editorOrigin?.isConnected) editorOrigin.focus({ preventScroll: true });
+    editorOrigin = null;
   });
   refreshButton.addEventListener("click", () => {
     setActionFeedback("");
     void loadSchedules();
   });
   document.addEventListener("visibilitychange", () => {
+    if (activeRefresh) { clearTimeout(activeRefresh); activeRefresh = 0; }
     if (visible()) void loadSchedules();
   });
   projectsStore.subscribe(fillCatalogs);

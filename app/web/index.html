@@ -440,37 +440,41 @@
 
             <section class="settings-section schedule-section" data-settings-panel="schedules" aria-labelledby="schedules-title" hidden>
               <div class="settings-section-heading schedule-heading">
-                <div><h2 id="schedules-title" data-i18n="settings.schedules">计划任务</h2><p data-i18n="schedule.description">创建定时运行的 Agent 任务，并管理已有计划。</p></div>
-                <button class="secondary-button" id="schedules-refresh" type="button" data-i18n="schedule.refresh">刷新</button>
+                <div><h2 id="schedules-title" data-i18n="settings.schedules">计划任务</h2><p data-i18n="schedule.description">查看计划任务和运行统计。</p></div>
+                <div class="schedule-toolbar"><button class="secondary-button" id="schedules-refresh" type="button" data-i18n="schedule.refresh">刷新</button><button class="primary-button" id="schedule-new" type="button" data-i18n="schedule.newTitle">新建计划</button></div>
               </div>
               <p id="schedules-status" class="schedule-status" role="status"></p>
               <p id="schedule-action-status" class="schedule-action-status" role="status"></p>
               <div id="schedules-list" class="schedule-list" aria-live="polite"></div>
-              <div class="schedule-editor-heading"><h3 id="schedule-editor-title">新建计划</h3><button class="secondary-button" id="schedule-new" type="button" data-i18n="schedule.new">新建</button></div>
-              <form id="schedule-form" class="schedule-form">
-                <label><span data-i18n="schedule.label">名称</span><input name="label" maxlength="256" required placeholder="例如：每天整理项目进展" data-i18n-placeholder="schedule.labelPlaceholder"></label>
-                <label><span data-i18n="schedule.input">任务内容</span><textarea name="input" rows="5" required maxlength="65536" placeholder="告诉 Agent 需要完成什么" data-i18n-placeholder="schedule.inputPlaceholder"></textarea></label>
-                <div class="schedule-form-grid">
-                  <label><span data-i18n="schedule.startAt">开始时间</span><input name="start_at" type="datetime-local" required></label>
-                  <label><span data-i18n="schedule.frequency">重复方式</span><select name="frequency"><option value="once" data-i18n="schedule.once">仅一次</option><option value="minutely" data-i18n="schedule.everyMinutes">每 N 分钟</option><option value="hourly" data-i18n="schedule.everyHours">每 N 小时</option><option value="daily" data-i18n="schedule.everyDays">每 N 天</option><option value="weekly" data-i18n="schedule.everyWeeks">每 N 周</option></select></label>
-                  <label id="schedule-interval-row"><span data-i18n="schedule.interval">间隔</span><input name="interval" type="number" min="1" max="1000000" value="1" required></label>
-                  <label><span data-i18n="schedule.project">项目</span><select name="project_id"></select></label>
-                  <label><span data-i18n="schedule.agent">Agent</span><select name="agent_id"></select></label>
-                  <label><span data-i18n="schedule.model">模型</span><select name="model_id"></select></label>
-                  <label><span data-i18n="schedule.reasoning">思考强度</span><select name="reasoning_effort"><option value="" data-i18n="schedule.modelDefault">模型默认</option><option value="none" data-i18n="schedule.reasoningNone">无</option><option value="minimal" data-i18n="schedule.reasoningMinimal">极低</option><option value="low" data-i18n="schedule.reasoningLow">低</option><option value="medium" data-i18n="schedule.reasoningMedium">中</option><option value="high" data-i18n="schedule.reasoningHigh">高</option><option value="xhigh" data-i18n="schedule.reasoningXhigh">极高</option><option value="max" data-i18n="schedule.reasoningMax">最大</option></select></label>
-                  <label><span data-i18n="schedule.timezone">时区</span><select name="timezone"><option value="system_local" data-i18n="schedule.timezoneLocal">设备本地时间</option><option value="utc">UTC</option><option value="fixed_offset" data-i18n="schedule.timezoneFixed">固定偏移</option></select></label>
-                  <label id="schedule-offset-row"><span data-i18n="schedule.offset">UTC 偏移（秒）</span><input name="utc_offset_seconds" type="number" min="-50400" max="50400" step="60" value="0"></label>
-                  <label><span data-i18n="schedule.notify">完成提示（可选）</span><input name="notify" maxlength="256" placeholder="任务完成时显示的提示文本" data-i18n-placeholder="schedule.notifyPlaceholder"></label>
-                </div>
-                <fieldset id="schedule-weekdays"><legend data-i18n="schedule.weekdays">每周运行日</legend><label><input type="checkbox" value="2"><span data-i18n="schedule.monday">周一</span></label><label><input type="checkbox" value="4"><span data-i18n="schedule.tuesday">周二</span></label><label><input type="checkbox" value="8"><span data-i18n="schedule.wednesday">周三</span></label><label><input type="checkbox" value="16"><span data-i18n="schedule.thursday">周四</span></label><label><input type="checkbox" value="32"><span data-i18n="schedule.friday">周五</span></label><label><input type="checkbox" value="64"><span data-i18n="schedule.saturday">周六</span></label><label><input type="checkbox" value="1"><span data-i18n="schedule.sunday">周日</span></label></fieldset>
-                <details class="schedule-advanced"><summary data-i18n="schedule.advanced">高级选项</summary><div class="schedule-form-grid">
-                  <label><span data-i18n="schedule.misfire">错过执行时</span><select name="misfire_policy"><option value="run_once" data-i18n="schedule.misfireOnce">补运行一次</option><option value="skip" data-i18n="schedule.skip">跳过</option><option value="catch_up" data-i18n="schedule.catchUp">追赶执行</option></select></label>
-                  <label><span data-i18n="schedule.overlap">重叠执行时</span><select name="overlap_policy"><option value="skip" data-i18n="schedule.skip">跳过</option><option value="queue_one" data-i18n="schedule.queueOne">排队一次</option></select></label>
-                  <label><span data-i18n="schedule.catchUpLimit">追赶上限</span><input name="max_catch_up" type="number" min="1" max="64" value="1"></label>
-                  <label><span data-i18n="schedule.maxConcurrent">最大并发</span><input name="max_concurrent_runs" type="number" min="1" max="16" value="1"></label>
-                </div></details>
-                <div class="schedule-form-actions"><span id="schedule-form-status" role="status"></span><button class="primary-button" id="schedule-save" type="submit">创建计划</button></div>
-              </form>
+              <dialog id="schedule-editor-dialog" class="schedule-editor-dialog" aria-labelledby="schedule-editor-title">
+                <div class="schedule-editor-heading"><h3 id="schedule-editor-title">新建计划</h3><button class="icon-button" id="schedule-editor-close" type="button" aria-label="关闭计划编辑器" data-i18n-aria-label="schedule.closeEditor"><span class="icon" data-icon="close" aria-hidden="true"></span></button></div>
+                <form id="schedule-form" class="schedule-form">
+                  <fieldset id="schedule-editor-fields" class="schedule-editor-fields">
+                    <label><span data-i18n="schedule.label">名称</span><input name="label" maxlength="256" required placeholder="例如：每天整理项目进展" data-i18n-placeholder="schedule.labelPlaceholder"></label>
+                    <label><span data-i18n="schedule.input">任务内容</span><textarea name="input" rows="5" required maxlength="65536" placeholder="告诉 Agent 需要完成什么" data-i18n-placeholder="schedule.inputPlaceholder"></textarea></label>
+                    <div class="schedule-form-grid">
+                      <label><span data-i18n="schedule.startAt">开始时间</span><input name="start_at" type="datetime-local" required></label>
+                      <label><span data-i18n="schedule.frequency">重复方式</span><select name="frequency"><option value="once" data-i18n="schedule.once">仅一次</option><option value="minutely" data-i18n="schedule.everyMinutes">每 N 分钟</option><option value="hourly" data-i18n="schedule.everyHours">每 N 小时</option><option value="daily" data-i18n="schedule.everyDays">每 N 天</option><option value="weekly" data-i18n="schedule.everyWeeks">每 N 周</option></select></label>
+                      <label id="schedule-interval-row"><span data-i18n="schedule.interval">间隔</span><input name="interval" type="number" min="1" max="1000000" value="1" required></label>
+                      <label><span data-i18n="schedule.project">项目</span><select name="project_id"></select></label>
+                      <label><span data-i18n="schedule.agent">Agent</span><select name="agent_id"></select></label>
+                      <label><span data-i18n="schedule.model">模型</span><select name="model_id"></select></label>
+                      <label><span data-i18n="schedule.reasoning">思考强度</span><select name="reasoning_effort"><option value="" data-i18n="schedule.modelDefault">模型默认</option><option value="none" data-i18n="schedule.reasoningNone">无</option><option value="minimal" data-i18n="schedule.reasoningMinimal">极低</option><option value="low" data-i18n="schedule.reasoningLow">低</option><option value="medium" data-i18n="schedule.reasoningMedium">中</option><option value="high" data-i18n="schedule.reasoningHigh">高</option><option value="xhigh" data-i18n="schedule.reasoningXhigh">极高</option><option value="max" data-i18n="schedule.reasoningMax">最大</option></select></label>
+                      <label><span data-i18n="schedule.timezone">时区</span><select name="timezone"><option value="system_local" data-i18n="schedule.timezoneLocal">设备本地时间</option><option value="utc">UTC</option><option value="fixed_offset" data-i18n="schedule.timezoneFixed">固定偏移</option></select></label>
+                      <label id="schedule-offset-row"><span data-i18n="schedule.offset">UTC 偏移（秒）</span><input name="utc_offset_seconds" type="number" min="-50400" max="50400" step="60" value="0"></label>
+                      <label><span data-i18n="schedule.notify">完成提示（可选）</span><input name="notify" maxlength="256" placeholder="任务完成时显示的提示文本" data-i18n-placeholder="schedule.notifyPlaceholder"></label>
+                    </div>
+                    <fieldset id="schedule-weekdays"><legend data-i18n="schedule.weekdays">每周运行日</legend><label><input type="checkbox" value="2"><span data-i18n="schedule.monday">周一</span></label><label><input type="checkbox" value="4"><span data-i18n="schedule.tuesday">周二</span></label><label><input type="checkbox" value="8"><span data-i18n="schedule.wednesday">周三</span></label><label><input type="checkbox" value="16"><span data-i18n="schedule.thursday">周四</span></label><label><input type="checkbox" value="32"><span data-i18n="schedule.friday">周五</span></label><label><input type="checkbox" value="64"><span data-i18n="schedule.saturday">周六</span></label><label><input type="checkbox" value="1"><span data-i18n="schedule.sunday">周日</span></label></fieldset>
+                    <details class="schedule-advanced"><summary data-i18n="schedule.advanced">高级选项</summary><div class="schedule-form-grid">
+                      <label><span data-i18n="schedule.misfire">错过执行时</span><select name="misfire_policy"><option value="run_once" data-i18n="schedule.misfireOnce">补运行一次</option><option value="skip" data-i18n="schedule.skip">跳过</option><option value="catch_up" data-i18n="schedule.catchUp">追赶执行</option></select></label>
+                      <label><span data-i18n="schedule.overlap">重叠执行时</span><select name="overlap_policy"><option value="skip" data-i18n="schedule.skip">跳过</option><option value="queue_one" data-i18n="schedule.queueOne">排队一次</option></select></label>
+                      <label><span data-i18n="schedule.catchUpLimit">追赶上限</span><input name="max_catch_up" type="number" min="1" max="64" value="1"></label>
+                      <label><span data-i18n="schedule.maxConcurrent">最大并发</span><input name="max_concurrent_runs" type="number" min="1" max="16" value="1"></label>
+                    </div></details>
+                  </fieldset>
+                  <div class="schedule-form-actions"><span id="schedule-form-status" role="status"></span><div class="schedule-editor-actions"><button class="secondary-button" id="schedule-editor-cancel" type="button" data-i18n="schedule.cancel">取消</button><button class="primary-button" id="schedule-save" type="submit">创建计划</button></div></div>
+                </form>
+              </dialog>
               <dialog id="schedule-delete-dialog" class="confirm-dialog"><form method="dialog"><h3 data-i18n="schedule.deletePrompt">删除计划任务？</h3><p id="schedule-delete-label"></p><div class="dialog-actions"><button class="secondary-button" value="cancel" data-i18n="schedule.cancel">取消</button><button class="danger-button" value="delete" data-i18n="schedule.deletePlan">删除计划</button></div></form></dialog>
               <dialog id="schedule-history-dialog" class="schedule-history-dialog" aria-labelledby="schedule-history-title">
                 <div class="schedule-history-heading"><h3 id="schedule-history-title" data-i18n="schedule.historyHeading">执行历史</h3><button class="icon-button" id="schedule-history-close" type="button" aria-label="关闭执行历史" data-i18n-aria-label="schedule.closeHistory"><span class="icon" data-icon="close" aria-hidden="true"></span></button></div>
