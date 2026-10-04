@@ -1,7 +1,8 @@
 # 墨斗自动更新：xadmin 上传插件与 hash 对比
 
-状态：设计方案，插件和客户端尚未实现。2026-10-04。
-本方案替代上一版发行序号、发布清单与原生更新器方案。
+状态：插件、客户端及 xs 原生接口已实现，2026-10-05。
+Windows 隔离安装测试、ARM64 真机系统升级已通过。本方案替代上一版发行序号、发布清单与原生更新器方案。
+站点工作区已部署插件及所需宿主代码；线上尚未启用并发布安装包，两个平台的公开接口仍返回 404。
 
 核心流程：上传整包 → 插件计算 SHA-256 → mdo 启动计算自身 SHA-256 →
 与线上比较 → 不同则提示 → 用户确认后下载、校验、安装。
@@ -12,9 +13,11 @@
 - 目标站点：D:\GIT\home\host\xywhsoft_ai。
 - 更新接口：https://ai.xywhsoft.com/update/version。
 
-已确认目标站点为 xadmin ABI v4，其 plugin_sdk/xs_plugin.h 与当前 x-admin
-源码一致，可直接使用插件路由、后台菜单、权限、CSRF 和 multipart 上传接口。
-实测新域名 HTTPS 校验通过，/update/version 目前返回 404，更新插件尚未部署。
+目标站点使用 xadmin ABI v4，本功能要求 4.2 SDK 的 XAdmin_ReplyBinary。
+已同步 plugin_sdk/xs_plugin.h、modules/plugin_host.h 和 src/net/plugin_async.c，
+复用插件路由、后台菜单、权限、CSRF 和 multipart 接口。二进制响应采用有期限的
+分块发送，避免较大 EXE/APK 超过普通响应的发送队列限制。
+此次只部署更新组件，没有把站点整体重新同步到 x-admin 主线。
 
 后台菜单名“墨斗更新”，页面只有 Windows、Android 两张上传卡片。支持点击
 选择或拖入文件，可选填写一句更新说明，显示当前文件名、大小、hash 和上传时间。
@@ -45,7 +48,8 @@ plugin_data/mdo-update/
 EXE 检查 x86_64 PE 与 xs 打包结构，APK 检查当前单体 ARM64 包的基本结构；
 APK 的包名、签名和安装兼容性在手机端进一步检查。
 包文件按 hash 固定，发布期间不覆写已有下载文件。默认保留当前和前一个包；
-更旧包在无下载占用时清理。旧链接不存在时返回 404，客户端重新检查。
+更旧包发布成功后清理；进行中的下载持有独立字节，不受清理影响。
+旧链接不存在时返回 404，客户端重新检查。
 
 ## 2. HTTP 接口
 
@@ -65,7 +69,8 @@ version 是沿用的路由名，更新判定只使用 hash。
   "sha256": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
   "size": 6570775,
   "url": "/update/download/windows-x86_64/0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
-  "updated_at": "2026-10-04T15:00:00Z",
+  "updated_at": 1791126000,
+  "filename": "mdo.exe",
   "notes": "优化项目创建体验"
 }
 ~~~
@@ -107,9 +112,10 @@ hash 不同只表示与线上当前包不同，不能判断版本先后。按此
 采用“下载并校验 → 确认重启 → 旧进程退出 → 替换 → 启动”的顺序。下载失败
 时旧程序继续运行，下载完成也不直接结束正在执行的 Agent 任务。
 
-缓存全部放在 mdo-home/data/update/：new.exe.part、校验后的 new.exe、
+缓存全部放在 mdo-home/data/update/：校验后的 new.exe、
 旧版备份 old.exe、固定 install.ps1 与脚本参数 JSON。脚本随 VFS 内置，安装时
 提取，使用 Windows 自带 PowerShell 隐藏启动，不需另带 update.exe。
+客户端复用 Home 的原子临时文件写入，落盘后再核对 hash，不维护单独的 .part 状态。
 
 脚本只做四件事：
 
@@ -132,8 +138,8 @@ Invoke-Expression；替换前再次核对新包 hash。命令行文件操作在 
 
 ## 5. APK：hash 检查与系统安装
 
-下载到应用私有的 mdo-home/data/update/new.apk.part，核对大小/hash 后
-发布 new.apk。手机端检查包名为 org.xleaves.mdo、签名支持原位升级，
+下载使用 Home 原子写入，保存到应用私有的 mdo-home/data/update/new.apk，
+核对大小/hash 后开放安装。手机端检查包名为 org.xleaves.mdo、当前签名一致，
 versionCode 不低于已安装版本；完整安装验证由安卓系统完成。
 
 xs Android 只补充两个通用能力：提供当前已安装 APK 的路径；让本机原生窗口
@@ -160,4 +166,41 @@ APK 不能通过命令行直接覆盖安装目录或绕过系统安装确认。h
 期间旧包下载；Windows 文件占用、脚本启动失败和中文路径；APK 安装取消、
 签名错误、同签名原位更新和更新后会话保留。不做压力或高负载测试。
 
-源站插件部署与客户端实现完成前，不把本方案描述为已经可用的自动更新功能。
+## 7. 部署、源码和验证记录
+
+在目标站点后台启用 mdo-update，给负责发布的管理员分配 mdo-update.manage，
+进入“墨斗更新”上传经过验证的整包。上传后用公开接口核对插件返回的 hash，
+再从不同 hash 的本地版本验证提示。若旧宿主仍在运行，先重新加载站点代际使
+4.2 SDK 和插件宿主实现生效；反向代理需允许至少 33 MiB 请求体。
+插件数据不得作为静态目录公开。此次未改管理员权限、未重启共享线上服务、未发布公开包。
+
+客户端主要文件：app/src/update/manager.c、windows.c、app/src/api/update.c、
+app/update/install.ps1、app/web/js/features/update/update-panel.js。
+xs 的 --package-install 为可选构建项，墨斗 APK 开启；普通 xs APK 不声明安装权限。
+生产客户端固定使用 https://ai.xywhsoft.com，没有运行时切换更新源的配置。
+测试通过编译宏覆盖更新源，仅存在于隔离测试包。
+
+本机验证命令（均为功能测试，无压力或高负载测试）：
+
+~~~text
+python D:/GIT/x-admin/tests/mdo_update_e2e.py --exe <候选EXE> --apk <候选APK>
+python tests/test_update_runtime.py --host <带新API的xs.exe>
+python tests/test_update_installer.py
+python tests/test_schedule_executor_runtime.py --host <xs.exe>
+python tests/test_run_manager_runtime.py --host <xs.exe>
+node --test tests/test_*.mjs
+~~~
+
+- 插件：42 项上传、下载、权限、CSRF、持久化、损坏拒绝和保留策略检查通过。
+- 客户端：8 组实际 xs/TCC/HTTP 测试通过，包括错 hash、取消、同源检查、安装期间写入暂停。
+- Windows：实际替换/备份/重启、Unicode 与特殊字符参数、文件占用、错误 hash、进程身份不匹配通过。
+- 前端：354 项 Node 测试通过；真机聊天首页正常显示。
+- Android：见 tests/android-update-device.md，覆盖原生和系统取消、签名/降级拒绝及原位更新。
+
+已有的 test_write_admission_runtime.py 在当前并行记忆重构工作区，因 fixture 仍期待
+memory/projects/purge-probe.json 而失败；这不是更新功能的通过项。更新写入暂停和
+计划任务暂停已分别由更新 HTTP fixture 与 executor fixture 验证。
+
+APK 签名文件仍在忽略目录 .build/android-signing/development.p12。必须另行备份，
+或通过 --keystore 指定保留的签名文件；不能换机器生成新签名后当作旧应用的更新包。
+公开发布前按实际已安装版本设置递增 --version-code；本次正式候选包为 20261006。
