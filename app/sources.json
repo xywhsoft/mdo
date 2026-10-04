@@ -26,6 +26,7 @@
     "src/remote/storage.c",
     "src/remote/service_client.c",
     "src/remote/loopback.c",
+    "src/remote/receipts.c",
     "src/remote/manager.c",
     "src/web/manager.c",
     "src/mcp/manager.c",
