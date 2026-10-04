@@ -17,11 +17,6 @@ function visualViewportFrame(layoutHeight, viewport) {
       bottom: Math.round(bottom) } : null;
 }
 
-export function visibleViewportBottom(layoutHeight, viewport) {
-  const frame = visualViewportFrame(layoutHeight, viewport);
-  return frame && layoutHeight - frame.bottom >= 40 ? frame.bottom : null;
-}
-
 export function trackMobileViewport(shell, mobileLayout, win = window) {
   const viewport = win.visualViewport;
   const root = shell.ownerDocument?.documentElement;

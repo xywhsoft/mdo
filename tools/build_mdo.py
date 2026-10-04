@@ -211,6 +211,32 @@ def verify_dependencies(xserver: Path, lock: dict) -> None:
         raise BuildError("xserver pack version does not match deps.lock")
 
 
+def validate_source_graph(sources: list[str]) -> None:
+    """Reject orphan application C files and private headers before packing.
+
+    TCC modules in default-home are discovered at runtime and have separate
+    entry points. SDK headers outside app/ are validated by the dependency lock.
+    """
+    application = APP.resolve()
+    pending = [(application / source).resolve() for source in sources]
+    reached: set[Path] = set()
+    quoted_include = re.compile(r'^\s*#\s*include\s*"([^"\r\n]+)"', re.MULTILINE)
+    while pending:
+        source = pending.pop()
+        if source in reached:
+            continue
+        reached.add(source)
+        for include in quoted_include.findall(source.read_text(encoding="utf-8")):
+            dependency = (source.parent / include).resolve()
+            if dependency.is_relative_to(application) and dependency.is_file():
+                pending.append(dependency)
+    owned = {path.resolve() for directory in (APP / "src", APP / "include")
+             for path in directory.rglob("*") if path.suffix in (".c", ".h") and path.is_file()}
+    orphans = sorted(path.relative_to(application).as_posix() for path in owned - reached)
+    if orphans:
+        raise BuildError("application files are not reachable from sources.json: " + ", ".join(orphans))
+
+
 def source_list() -> list[str]:
     manifest = load_object(SOURCES_PATH)
     if manifest.get("schema_version") != 1:
@@ -237,6 +263,7 @@ def source_list() -> list[str]:
             raise BuildError(f"missing application source: {value}")
         seen.add(key)
         result.append(normalized)
+    validate_source_graph(result)
     return result
 
 

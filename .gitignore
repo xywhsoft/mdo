@@ -19,11 +19,12 @@ crash_*.txt
 __pycache__/
 *.pyc
 
-# 随程序分发的第三方工具（约 112M，重建方法见 tools/README.md）
+# 本地可选工具与下载缓存；仓库维护的构建和检查脚本如下
 tools/*
 !tools/inspect_session.py
 !tools/README.md
 !tools/build_mdo.py
 !tools/build_android.py
+!tools/check_web_modules.mjs
 !tools/export_icons.py
 !tools/qa_release.py

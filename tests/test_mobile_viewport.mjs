@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { trackMobileViewport, visibleViewportBottom } from
+import { trackMobileViewport } from
   "../app/web/js/features/shell/mobile-viewport.js";
 
 test("visual viewport override follows keyboard occlusion and clears on restore", () => {
@@ -72,9 +72,18 @@ test("visual viewport override follows keyboard occlusion and clears on restore"
 });
 
 test("unavailable and nearly full visual viewports retain CSS dynamic height", () => {
-  assert.equal(visibleViewportBottom(700, undefined), null);
-  assert.equal(visibleViewportBottom(700, { height: 680, offsetTop: 0,
-    scale: 1 }), null);
-  assert.equal(visibleViewportBottom(700, { height: 390, offsetTop: 20,
-    scale: 1 }), 410);
+  for (const [viewport, expected] of [[undefined, undefined],
+    [{ height: 680, offsetTop: 0, scale: 1 }, undefined],
+    [{ height: 390, offsetTop: 20, scale: 1 }, "410px"]]) {
+    const values = new Map();
+    const shell = { style: {
+      setProperty: (key, value) => values.set(key, value),
+      removeProperty: (key) => values.delete(key),
+    }, toggleAttribute() {} };
+    const win = Object.assign(new EventTarget(), { innerHeight: 700,
+      visualViewport: viewport && Object.assign(new EventTarget(), viewport) });
+    const mobile = Object.assign(new EventTarget(), { matches: true });
+    trackMobileViewport(shell, mobile, win);
+    assert.equal(values.get("--app-visible-height"), expected);
+  }
 });

@@ -1,5 +1,8 @@
 #include "mdo/module.h"
 
+/* ABI/runtime fixture only. The production default Home must not publish
+ * demonstration tools to the model. */
+
 static mdo_result MdoEchoExecute(void* UserData,
     const mdo_tool_context_v1* Context, const char* ArgumentsJson,
     mdo_result_writer_v1* Writer, char* ErrorMessage,
@@ -50,8 +53,8 @@ static mdo_result MdoEchoRegister(const mdo_host_services_v1* Host,
 static const mdo_module_v1 g_MdoEchoModule = {
     MDO_V1_HEADER(mdo_module_v1),
     "mdo.core.echo",
-    "Built-in Echo Tool",
-    "A minimal built-in module used to verify the complete module ABI path.",
+    "Echo Test Module",
+    "An isolated fixture used to verify the complete module ABI path.",
     "1.0.0",
     0u,
     NULL,

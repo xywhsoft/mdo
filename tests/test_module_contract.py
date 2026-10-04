@@ -51,7 +51,7 @@ class ModuleContractTests(unittest.TestCase):
 
     def test_bootstrap_and_default_module_use_the_manager(self) -> None:
         bootstrap = BOOTSTRAP_C.read_text(encoding="utf-8")
-        module = (ROOT / "app/default-home/modules/tools/builtin_echo.c").read_text(
+        module = (ROOT / "tests/fixtures/modules/echo.c").read_text(
             encoding="utf-8")
         agent = (ROOT / "app/default-home/modules/agents/builtin_default.c").read_text(
             encoding="utf-8")

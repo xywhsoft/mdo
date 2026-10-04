@@ -1809,20 +1809,6 @@ bool MdoMcpManagerRefresh(cstr ServerId, xcancel* pCancel, uint64 Deadline,
             Deadline, pError);
 }
 
-bool MdoMcpManagerRegisterDiscoveryTools(xwork_agent* pAgent,
-    xwork_error* pError)
-{
-    return g_MdoMcp.Initialized &&
-        xworkAgentRegisterMcpDiscoveryTools(pAgent, pError);
-}
-
-bool MdoMcpManagerLoadTool(xwork_agent* pAgent, cstr ServerId,
-    cstr RemoteToolName, xwork_error* pError)
-{
-    return g_MdoMcp.Initialized && xworkAgentLoadMcpTool(pAgent, ServerId,
-        RemoteToolName, pError);
-}
-
 MdoMcpDiagnostics* MdoMcpDiagnosticsSnapshot(void)
 {
     MdoMcpDiagnostics* pDiagnostics = NULL;

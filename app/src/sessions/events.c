@@ -557,11 +557,6 @@ bool MdoSessionsInternalEventVisit(const char* ProjectId, const char* SessionId,
     return Ok;
 }
 
-bool MdoSessionsInternalEventValid(const char* ProjectId, const char* SessionId, xstrview Json)
-{
-    return MdoSessionsInternalEventVisit(ProjectId, SessionId, Json, NULL, NULL);
-}
-
 #include "event_reader.inc.c"
 #include "conversation_turns.inc.c"
 

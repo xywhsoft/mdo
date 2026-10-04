@@ -98,7 +98,6 @@ bool MdoSessionsInternalMetaParse(const char* ExpectedProject,
     const char* ExpectedId, xstrview Json, MdoSessionInfo* Info);
 /* Filesystem-free schema seams for offline backup inspection. They reuse the
  * live readers, release all parse allocations and never project/write state. */
-bool MdoSessionsInternalEventValid(const char* ProjectId, const char* SessionId, xstrview Json);
 bool MdoSessionsInternalTodoValid(xstrview Json);
 
 /* Committed JSONL record, borrowed only during callback. The observer must

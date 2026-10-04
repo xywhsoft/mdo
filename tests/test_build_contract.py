@@ -204,7 +204,23 @@ class BuildContractTests(unittest.TestCase):
         for path in (ROOT / "app").rglob("*"):
             if path.is_file() and path.suffix.lower() in {".c", ".h", ".json", ".js"}:
                 self.assertNotIn("app_bak", path.read_text(encoding="utf-8"))
-        self.assertTrue((ROOT / "app_bak" / "main.c").is_file())
+
+    def test_source_graph_rejects_orphan_sources_and_private_headers(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            app = Path(raw)
+            (app / "src").mkdir()
+            (app / "include").mkdir()
+            (app / "src/main.c").write_text('#include "helper.inc.c"\n')
+            (app / "src/helper.inc.c").write_text('#include "../include/helper.h"\n')
+            (app / "include/helper.h").write_text("/* reachable private header */\n")
+            with patch.object(BUILD, "APP", app):
+                BUILD.validate_source_graph(["src/main.c"])
+                for name in ("src/orphan.c", "include/orphan.h"):
+                    orphan = app / name
+                    orphan.write_text("/* no entry */\n")
+                    with self.assertRaisesRegex(BUILD.BuildError, "not reachable"):
+                        BUILD.validate_source_graph(["src/main.c"])
+                    orphan.unlink()
 
     def test_unity_generation_is_manifest_ordered_and_deterministic(self) -> None:
         first = BUILD.generated_unity(self.lock, BUILD.source_list())

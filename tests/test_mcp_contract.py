@@ -23,8 +23,6 @@ class McpContractTests(unittest.TestCase):
         self.assertIn("MdoMcpCatalogRelease", text)
         self.assertIn("MdoMcpManagerGetStatus", text)
         self.assertIn("MdoMcpManagerDisconnect", text)
-        self.assertIn("MdoMcpManagerRegisterDiscoveryTools", text)
-        self.assertIn("MdoMcpManagerLoadTool", text)
 
     def test_format_is_cold_lazy_and_secret_reference_only(self) -> None:
         text = FORMAT.read_text(encoding="utf-8")
