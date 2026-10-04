@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import importlib.util
+import hashlib
 import json
 import re
 import tempfile
@@ -21,6 +22,41 @@ SPEC.loader.exec_module(BUILD)
 class BuildContractTests(unittest.TestCase):
     def setUp(self) -> None:
         self.lock = json.loads((ROOT / "deps.lock").read_text(encoding="utf-8"))
+
+    def test_reused_host_requires_matching_profile_revision_icon_and_bytes(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            base = Path(raw)
+            host = base / "xs.exe"
+            host.write_bytes(b"fixture-host")
+            app = base / "app"
+            app.mkdir()
+            (app / "entry.c").write_text("void f(void) { xrtFree(0); }", encoding="utf-8")
+            receipt = {"schema_version": 1, "profile_sha256": BUILD.host_profile_digest(False),
+                       "revision": self.lock["xserver"]["commit"],
+                       "extensions": self.lock["xserver"]["required_extensions"],
+                       "icon_sha256": hashlib.sha256(BUILD.ICON_PATH.read_bytes()).hexdigest(),
+                       "binary_sha256": hashlib.sha256(host.read_bytes()).hexdigest(),
+                       "xrt_symbols": ["xrtFree"]}
+            path = host.with_name("xs.exe.build.json")
+            with patch.object(BUILD, "APP", app):
+                path.write_text(json.dumps(receipt))
+                BUILD.verify_host_receipt(host, self.lock, False, icon=True)
+                for key, value in (("profile_sha256", "full"), ("revision", "0000000"),
+                                   ("icon_sha256", "0" * 64), ("binary_sha256", "0" * 64),
+                                   ("extensions", []), ("xrt_symbols", [])):
+                    with self.subTest(key=key):
+                        path.write_text(json.dumps({**receipt, key: value}))
+                        with self.assertRaises(BUILD.BuildError):
+                            BUILD.verify_host_receipt(host, self.lock, False, icon=True)
+                path.unlink()
+                with self.assertRaises(BUILD.BuildError):
+                    BUILD.verify_host_receipt(host, self.lock, False)
+
+    def test_default_host_is_compact_and_full_mode_is_explicit(self) -> None:
+        self.assertEqual(BUILD.host_profile_arguments(False), ["--profile", str(BUILD.HOST_PROFILE_PATH)])
+        self.assertEqual(BUILD.host_profile_arguments(True), [])
+        self.assertEqual(BUILD.host_profile_digest(True), "full")
+        self.assertEqual(len(BUILD.host_profile_digest(False)), 64)
 
     def test_optional_built_in_credential_is_local_and_never_reuses_a_stale_key(self) -> None:
         with tempfile.TemporaryDirectory() as raw:

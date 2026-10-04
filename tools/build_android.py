@@ -48,6 +48,7 @@ def main() -> int:
     parser.add_argument("--cc", default="gcc", help="native Android build's host C compiler")
     parser.add_argument("--skip-host-build", action="store_true", help="reuse the existing packer after dependency verification")
     parser.add_argument("--skip-native-build", action="store_true", help="reuse this build directory's libxs.so")
+    parser.add_argument("--full-host", action="store_true", help="build the complete xs/xrt SDK instead of the mdo compact profile")
     parser.add_argument("--builtin-connection", type=Path)
     parser.add_argument("--output", type=Path, default=ROOT / "mdo-arm64-v8a.apk")
     parser.add_argument("--build-dir", type=Path, default=ROOT / ".build/android")
@@ -68,9 +69,11 @@ def main() -> int:
             subprocess.run([sys.executable, str(sdk_source / "tools/build.py"), *lock["xserver"]["required_extensions"],
                 "--output", str(host.with_name("xs.exe" if os.name == "nt" else "xs")),
                 "--build-dir", str(ROOT / ".build/host-objects"),
+                *build_mdo.host_profile_arguments(args.full_host),
                 *(["--icon", str(build_mdo.ICON_PATH)] if os.name == "nt" else [])], cwd=sdk_source, check=True)
         if not host.is_file():
             raise build_mdo.BuildError("missing pack host: " + str(host))
+        build_mdo.verify_host_receipt(host, lock, args.full_host, icon=os.name == "nt")
         packed = directory / "app-packed"
         subprocess.run([str(host), "pack", str(build_mdo.APP), "-o", str(packed)], cwd=ROOT, check=True)
         pack = directory / "app.xrtpack"; extract_pack(packed, pack)
@@ -88,7 +91,9 @@ def main() -> int:
         path = linux_path if args.wsl else lambda p: str(p.resolve())
         if not args.skip_native_build:
             target_run(sdk_source / "tools/android/build_native.py", [*lock["xserver"]["required_extensions"],
-                "--sdk", args.sdk, "--out", path(native), "--cc", args.cc])
+                "--sdk", args.sdk, "--out", path(native), "--cc", args.cc,
+                *([] if args.full_host else ["--profile", path(build_mdo.HOST_PROFILE_PATH)])])
+        build_mdo.verify_host_receipt(native / "libxs.so", lock, args.full_host)
         target_run(sdk_source / "tools/android/build_apk.py", ["--sdk", args.sdk, "--java-home", args.java_home,
             "--library", path(native / "libxs.so"), "--pack", path(pack), "--output", path(args.output),
             "--app-link", "https://ai.xywhsoft.com/app/mdo/callback",

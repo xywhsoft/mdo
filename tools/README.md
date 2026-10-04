@@ -7,12 +7,17 @@
 |------|------|
 | `build_mdo.py` | 验证依赖、检查 C 源码引用、生成 unity、构建宿主与打包 |
 | `build_android.py` | 构建 ARM64 Android 应用，复用相同应用源码与默认 Home |
+| `host-profile.json` | mdo 专用 xrt 根与 Windows SDK 选择；默认启用精简宿主 |
 | `qa_release.py` | Windows/Linux 有界发布门禁，不运行压力或高负载测试 |
 | `check_web_modules.mjs` | 检查前端语法、导入目标和页面入口的模块可达性 |
 | `inspect_session.py` | 离线读取会话事件与工具统计，不改写会话 |
 | `export_icons.py` | 从既有品牌图导出图标；普通构建不需要再次运行 |
 
 运行示例及工具链要求见根目录 README 和 `docs/android.md`。
+Windows/Android 构建默认使用精简配置；完整扩展 SDK 可加 `--full-host`。
+`--skip-host-build` / `--skip-native-build` 会验证源码版本、profile、图标和二进制
+指纹，不能混用旧宿主。新增 xrt 调用若未进入闭包，打包前会明确报错。
+配置范围、体积结果和验证见 `docs/compact-host.md`。
 仅用于模块 ABI 验证的 Echo 实现位于 `tests/fixtures/modules/echo.c`，由测试明确
 注入临时 Home，不进入正式工具目录。
 
