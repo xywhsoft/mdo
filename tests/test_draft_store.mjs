@@ -3,6 +3,42 @@ import test from "node:test";
 
 import { createDraftStore } from "../app/web/js/features/chat/draft-store.js";
 
+test("a lost remote submission response is reconciled by reads without repeating writes", async () => {
+  const originalWindow = globalThis.window, originalFetch = globalThis.fetch;
+  const id = "c".repeat(32);
+  let writes = 0, reads = 0;
+  let saved = { revision: 1, text: "", attachments: [],
+    submissions: [{ id, text: "remote intent", attachments: [],
+      interrupt: false, state: "prepared" }] };
+  globalThis.window = { setTimeout, clearTimeout, addEventListener() {} };
+  globalThis.fetch = async (_path, options) => {
+    if (options.method === "GET") {
+      ++reads; return Response.json({ ok: true, data: saved });
+    }
+    ++writes;
+    if (options.method === "PUT") saved = { ...saved,
+      revision: saved.revision + 1, submissions: [{ ...saved.submissions[0], state: "posting" }] };
+    else if (options.method === "DELETE") saved = { ...saved,
+      revision: saved.revision + 1, submissions: [] };
+    else throw new Error("Unexpected mutation");
+    throw Object.assign(new Error("Relay disconnected after acceptance"),
+      { code: "remote_result_unconfirmed" });
+  };
+  try {
+    const key = "default/remote-intent";
+    const store = createDraftStore({ onRestore() {}, onError(error) { throw error; }, onSaved() {} });
+    store.select(key); assert.equal(await store.ensureLoaded(key), true);
+    const initialReads = reads;
+    assert.equal(await store.changeSessionSubmissionState(key,id,"posting"), true);
+    assert.equal(writes,1); assert.equal(reads,initialReads+1);
+    assert.equal(await store.removeSessionSubmission(key,id), true);
+    assert.equal(writes,2); assert.equal(reads,initialReads+2);
+    assert.deepEqual(store.submissions(key),[]);
+  } finally {
+    globalThis.window = originalWindow; globalThis.fetch = originalFetch;
+  }
+});
+
 test("a queue refresh does not mistake the current tab's unsaved image edit for a peer conflict", async () => {
   const originalWindow = globalThis.window;
   const originalFetch = globalThis.fetch;

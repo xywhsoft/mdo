@@ -362,7 +362,7 @@ export function createDraftStore({ onRestore, onError, onSaved, onLoaded = () =>
     let response;
     try { response = await api.put(path, { state }); }
     catch (error) {
-      if (!["network_error", "draft_state_conflict",
+      if (!["network_error", "remote_result_unconfirmed", "draft_state_conflict",
             "draft_submission_not_found"].includes(error?.code)) throw error;
       response = await api.get(endpoint(key));
     }
@@ -377,7 +377,8 @@ export function createDraftStore({ onRestore, onError, onSaved, onLoaded = () =>
     let response;
     try { response = await api.delete(path); }
     catch (error) {
-      if (error?.code !== "network_error") throw error;
+      if (!["network_error", "remote_result_unconfirmed"].includes(error?.code))
+        throw error;
       response = await api.get(endpoint(key));
     }
     const items = applySessionResponse(key, response.data);

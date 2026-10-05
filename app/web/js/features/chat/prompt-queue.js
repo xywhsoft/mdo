@@ -21,7 +21,8 @@ function newId() {
 }
 
 function uncertainPost(error) {
-  return ["network_error", "invalid_response", "queue_unavailable"]
+  return ["network_error", "invalid_response", "queue_unavailable",
+    "remote_result_unconfirmed"]
     .includes(error?.code);
 }
 
