@@ -95,12 +95,20 @@ def strict_compile(cc: str, xserver: Path) -> None:
     run(command)
 
 
-def runtime_probes(host: Path) -> int:
+def runtime_probe_command(probe: Path, host: Path, packed: Path) -> list[str]:
+    # The cleanup regression exercises the product pack, not an unpacked host.
+    # Always pass this run's candidate instead of its default root mdo.exe.
+    if probe.name == "test_debug_cleanup_runtime.py":
+        return [sys.executable, str(probe), "--packed-path", str(packed)]
+    return [sys.executable, str(probe), "--host", str(host)]
+
+
+def runtime_probes(host: Path, packed: Path) -> int:
     probes = sorted(TESTS.glob("test_*_runtime.py"), key=lambda path: path.name)
     if not probes:
         raise GateError("no bounded runtime probes were found")
     for probe in probes:
-        run([sys.executable, str(probe), "--host", str(host)])
+        run(runtime_probe_command(probe, host, packed))
     return len(probes)
 
 
@@ -276,7 +284,7 @@ def main(argv: list[str] | None = None) -> int:
             build.append("--skip-host-build")
         run(build)
         strict_compile(args.cc, xserver)
-        probe_count = runtime_probes(host)
+        probe_count = runtime_probes(host, first)
         run([str(packer), "pack", str(ROOT / "app"), "-o", str(second)])
         first_hash = digest(first)
         second_hash = digest(second)
