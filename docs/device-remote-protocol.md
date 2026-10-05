@@ -26,7 +26,15 @@
 
 响应只转发允许的 HTTP 字段及解码后的正文。文件、图片和备份保持二进制；不使用 base64/巨大 JSON 包装。现有大备份上传 API 自身的分片机制继续复用。事件通过目标固定回环 `/api/v1/live` 订阅，携带目标令牌，连接断开后按已有 cursor 重放。
 
-HTTP 派发已接入。请求头为 `{type:"request",id,runtime_id,client_id,sequence,method,path,headers,bytes,sha256}`，`headers` 是二元素数组列表。无正文立即派发；有正文等待 `request_ready`，发送种类 1 的连续分块并等待 `upload_ack`。响应头为 `response`，正文为种类 2，控制端以 `download_ack` 确认已消费偏移；`end` 声明总长度。错误返回 `error` 及 `outcome`，不自动重试写入。`receipt` 查询携带运行代、控制端 ID、序号和请求 ID，只返回受理元数据。实时订阅将在实现后单独协商，不能通过普通 HTTP 访问 live 路由。
+HTTP 派发已接入。请求头为 `{type:"request",id,runtime_id,client_id,sequence,method,path,headers,bytes,sha256}`，`headers` 是二元素数组列表。无正文立即派发；有正文等待 `request_ready`，发送种类 1 的连续分块并等待 `upload_ack`。响应头为 `response`，正文为种类 2，控制端以 `download_ack` 确认已消费偏移；`end` 声明总长度。错误返回 `error` 及 `outcome`，不自动重试写入。`receipt` 查询携带运行代、控制端 ID、序号和请求 ID，只返回受理元数据。实时订阅单独协商，不能通过普通 HTTP 访问 live 路由。
+
+## 控制端页面边界
+
+`api/target.js` 是业务入口，API、备份、图片及 live 均通过选定目标的传输。普通静态资源和语言包继续来自当前安装包，连接器仅访问本机账号及设备元数据。原生浏览器授权回调和安装动作在远程页面明确不可用，不能落到控制端系统执行。
+
+设备选择和各设备上次路由仅保存在页面会话存储中，不保存票据、JWT、消息正文或写入回执。切换前等待正在进行的 API 写入并检查草稿及未保存的设置；草稿无法保存时可显式复制到当前终端剪贴板。切换会冻结旧传输并完整重载页面，清除旧业务 store、token、订阅及异步闭包。离线保持选择，重连只恢复读取和事件订阅，不重放已受理写入；运行代变更需保留草稿后重载。
+
+浏览器至多同时受理 3 个 HTTP 请求，待办与未确认写入元数据各有 64 个上限。下载使用 ReadableStream，确认只在消费分块后发送，不把整个备份放入传输队列。实时事件完整校验摘要后交给原有事件处理器。图片使用同一传输读取有界正文，脱离页面或关闭预览后释放对象 URL。
 
 实时订阅已接入，hello 声明 `live:true` 和 2 MiB 单事件上限。`live_open` 携带 ID、运行代、目标页面 token；固定回环 WS 验证 token 后返回 `live_opened`。`live_send` 只传送不超过 4096 字节的原有订阅/pong 命令；每个 peer 一个 live 连接、最多 8 条待发命令，与 8 个 HTTP 请求槽独立。只读角色可以订阅，不能借此执行业务写入。
 

@@ -1,6 +1,7 @@
 import { element, clear, formatClock, errorMessage, toast } from "../../utils/dom.js";
 import { copyText } from "../../utils/clipboard.js";
 import { attachmentUrl } from "../../api/client.js";
+import { targetImage } from "../../api/target-image.js";
 import { readCompleteSessionEventText } from "../../state/sessions.js";
 import { mountIcons } from "../../components/icons.js";
 import { renderMarkdown } from "./markdown.js";
@@ -642,10 +643,9 @@ function timelineNode(item, handlers, projectId, sessionId, writable,
             { index: index + 1 }, `查看用户图片 ${index + 1}`),
             "data-image-preview": "",
             "data-image-ref": `timeline:${projectId}/${sessionId}/${item.key}/${id}/${index}` },
-        }, [element("img", {
-          attrs: { src: attachmentUrl(projectId, sessionId, id),
+        }, [targetImage(attachmentUrl(projectId, sessionId, id), {
             alt: t("timeline.userImage", { index: index + 1 },
-              `用户图片 ${index + 1}`), loading: "lazy" },
+              `用户图片 ${index + 1}`), loading: "lazy",
         }), caption]);
         images.append(preview);
         labelImageName({ preview, caption, owner, id,

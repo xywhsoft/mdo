@@ -1,5 +1,6 @@
 import { ApiError, apiUrl, resourceId } from "./client.js";
 import { createSha256 } from "../utils/sha256.js";
+import { targetFetch } from "./target.js";
 
 export const BACKUP_MAX_BYTES = 96 * 1024 * 1024;
 const failure = (code, message) => new ApiError(message, { code });
@@ -24,7 +25,7 @@ export async function downloadSessionBackup(projectId, sessionId, {
   };
   try {
     check(); onProgress({ phase: "preparing", received: 0, total: 0 });
-    response = await fetch(apiUrl(`/projects/${project}/sessions/${session}/backup`), {
+    response = await targetFetch(apiUrl(`/projects/${project}/sessions/${session}/backup`), {
       cache: "no-store", credentials: "same-origin", redirect: "error", signal: controller.signal,
     });
     check();
@@ -80,6 +81,7 @@ export async function downloadSessionBackup(projectId, sessionId, {
     if (controller.signal.aborted || error?.name === "AbortError")
       throw new DOMException("Backup download cancelled", "AbortError");
     if (error instanceof ApiError) throw error;
+    if (error?.code) throw new ApiError(error.message, error);
     throw failure("network_error", "Cannot read backup from the local mdo service");
   } finally {
     clearTimeout(timer); signal?.removeEventListener("abort", cancel);

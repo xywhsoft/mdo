@@ -1,6 +1,7 @@
 import { api } from "../../api/client.js";
 import { subscribeLocale, t } from "../../i18n.js";
 import { toast, errorMessage } from "../../utils/dom.js";
+import { isRemoteTarget } from "../../api/target.js";
 
 // Tokens stay in the native host. Passwords are submitted once from the form,
 // then cleared; account rendering uses only filtered public snapshots.
@@ -84,8 +85,8 @@ export function createAccount({ navigation }) {
     loginForm.querySelector("[type=submit]").disabled = acting || snapshot.state === "signing_in";
     link.hidden = !authorizationUrl;
     if (authorizationUrl) link.href = authorizationUrl;
-    dialog.querySelector("[data-account-action=begin]").hidden = snapshot.state === "authorizing";
-    dialog.querySelector("[data-account-action=restart]").hidden = snapshot.state !== "authorizing";
+    dialog.querySelector("[data-account-action=begin]").hidden = isRemoteTarget() || snapshot.state === "authorizing";
+    dialog.querySelector("[data-account-action=restart]").hidden = isRemoteTarget() || snapshot.state !== "authorizing";
     const waits = snapshot.pending_searches || [];
     notice.hidden = !waits.length;
     if (waits.length) {
@@ -178,6 +179,7 @@ export function createAccount({ navigation }) {
     next?.focus({ preventScroll: true });
   });
   const receiveLink = async (event) => {
+    if (isRemoteTarget()) return;
     const callback = typeof event === "string" ? event : event.detail;
     if (typeof callback !== "string") return;
     try { await api.post("/account/callback", { callback_url: callback }); }
@@ -185,8 +187,8 @@ export function createAccount({ navigation }) {
     await refresh();
   };
   window.addEventListener("xs-app-link", receiveLink);
-  window.__xsAppLinksReady = true;
-  try { const pending = window.XsAppLinks?.take(); if (pending) void receiveLink(pending); } catch { /* Ordinary browser. */ }
+  window.__xsAppLinksReady = !isRemoteTarget();
+  try { const pending = !isRemoteTarget() && window.XsAppLinks?.take(); if (pending) void receiveLink(pending); } catch { /* Ordinary browser. */ }
   window.addEventListener("focus", refresh);
   document.addEventListener("visibilitychange", () => { if (!document.hidden) void refresh(); else schedule(); });
   subscribeLocale(render); void refresh();

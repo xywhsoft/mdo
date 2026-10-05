@@ -1,3 +1,5 @@
+import { targetFetch } from "./target.js";
+
 const API_ROOT = "/api/v1";
 let writeGuard = null;
 let pageWriteToken = null;
@@ -73,7 +75,9 @@ export function attachmentFileName(value) {
 async function readEnvelope(response, path = "", method = "GET") {
   let envelope = null;
   try { envelope = await response.json(); }
-  catch {
+  catch (error) {
+    if (error?.name === "AbortError") throw error;
+    if (error?.code) throw new ApiError(error.message, error);
     throw new ApiError("服务返回了无效响应", {
       status: response.status, code: "invalid_response",
     });
@@ -119,7 +123,7 @@ async function sendJson(path, options) {
 
   let response;
   try {
-    response = await fetch(apiUrl(path), {
+    response = await targetFetch(apiUrl(path), {
       method,
       headers,
       body: options.body === undefined ? undefined : JSON.stringify(options.body),
@@ -130,6 +134,7 @@ async function sendJson(path, options) {
     });
   } catch (error) {
     if (error?.name === "AbortError") throw error;
+    if (error?.code) throw new ApiError(error.message, error);
     throw new ApiError("无法连接本地 mdo 服务", { code: "network_error" });
   }
 
@@ -154,14 +159,16 @@ async function sendImage(path, file, mime) {
   }
   let response;
   try {
-    response = await fetch(url, {
+    response = await targetFetch(url, {
       method: "POST",
       headers,
       body: file,
       cache: "no-store",
       credentials: "same-origin",
     });
-  } catch {
+  } catch (error) {
+    if (error?.name === "AbortError") throw error;
+    if (error?.code) throw new ApiError(error.message, error);
     throw new ApiError("无法连接本地 mdo 服务", { code: "network_error" });
   }
   return (await readEnvelope(response)).data;
@@ -205,12 +212,13 @@ export async function uploadBackupChunk(id, offset, chunk, options = {}) {
   return trackWrite(async () => {
     let response;
     try {
-      response = await fetch(apiUrl(path), { method: "PUT", body: chunk,
+      response = await targetFetch(apiUrl(path), { method: "PUT", body: chunk,
         headers: { Accept: "application/json", "Content-Type": "application/octet-stream",
           ...(pageWriteToken ? { "X-Mdo-Write-Token": pageWriteToken } : {}) },
         cache: "no-store", credentials: "same-origin", redirect: "error", signal: options.signal });
     } catch (error) {
       if (error?.name === "AbortError") throw error;
+      if (error?.code) throw new ApiError(error.message, error);
       throw new ApiError("Cannot upload backup chunk", { code: "network_error" });
     }
     return readEnvelope(response, path, "PUT");

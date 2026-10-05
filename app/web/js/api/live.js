@@ -1,8 +1,10 @@
+import { targetLiveSocket } from "./target.js";
+
 // One authenticated, same-origin connection per page. Commands remain HTTP;
 // this channel only subscribes to events and announces changed resources.
 // Injected dependencies let reconnect/visibility behavior run without a browser.
 export function createLiveConnection({
-  socket = (...args) => new WebSocket(...args),
+  socket = targetLiveSocket,
   url = () => {
     const target = new URL("/api/v1/live", location.href);
     target.protocol = target.protocol === "https:" ? "wss:" : "ws:";

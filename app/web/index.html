@@ -11,8 +11,16 @@
   <link rel="stylesheet" href="/css/app.css">
   <link rel="stylesheet" href="/css/update.css">
   <link rel="stylesheet" href="/css/account.css">
+  <link rel="stylesheet" href="/css/remote.css">
 </head>
 <body>
+  <section class="target-connection-notice" id="target-connection-notice" role="status" hidden>
+    <p></p><div class="device-toolbar">
+      <button class="secondary-button" type="button" data-target-local data-i18n="devices.returnLocal">返回本机</button>
+      <button class="secondary-button" type="button" data-target-retry data-i18n="devices.retry">重新连接</button>
+      <button class="secondary-button" type="button" data-target-choose data-i18n="devices.choose">选择设备</button>
+    </div>
+  </section>
   <a class="skip-link" href="#timeline" data-i18n="shell.skip" inert>跳到对话</a>
 
   <div class="app-shell" id="app-shell" data-sidebar="closed" inert>
@@ -60,6 +68,9 @@
         </button>
       </div>
 
+      <button class="device-switch" id="open-devices" type="button" aria-haspopup="dialog" aria-controls="devices-dialog">
+        <span data-i18n="devices.local">本机</span><b aria-hidden="true">▾</b>
+      </button>
       <button class="new-task-button" id="new-session" type="button">
         <span class="icon" data-icon="compose" aria-hidden="true"></span>
         <span data-i18n="shell.newTask">新建任务</span>
@@ -277,6 +288,7 @@
             <h1 id="settings-title" tabindex="-1" data-i18n="shell.settings.title">设置</h1>
             <p id="settings-revision">正在读取当前配置…</p>
           </div>
+          <button class="settings-target secondary-button" id="settings-target" type="button" aria-haspopup="dialog" aria-controls="devices-dialog" hidden></button>
           <button class="settings-pending-link" id="settings-pending-link" type="button"
             aria-label="返回未保存的设置" data-i18n-aria-label="settings.reviewPending"
             data-i18n="settings.pendingBadge" hidden>未保存更改</button>
@@ -289,6 +301,7 @@
           <nav class="settings-navigation" aria-label="设置分类" data-i18n-aria-label="settings.navigation">
             <p data-i18n="settings.preferences">偏好设置</p>
             <button type="button" data-settings-section="account" data-i18n="account.title">账号</button>
+            <button type="button" data-settings-section="remote" data-i18n="devices.remoteTitle">远程控制</button>
             <button type="button" data-settings-section="general" aria-current="page" data-i18n="settings.general">常规</button>
             <button type="button" data-settings-section="agent">Agent</button>
             <button type="button" data-settings-section="web" data-i18n="settings.web">网络</button>
@@ -406,6 +419,16 @@
               <section class="settings-section resource-section" data-settings-panel="extensions" hidden><div class="settings-section-heading"><h2 data-i18n="settings.extensions">扩展与 MCP</h2><p data-i18n="resource.extensionsDescription">查看 Agent、Skill、Module 和 MCP 连接。</p></div><div id="settings-extensions-list"></div></section>
               <section class="settings-section resource-section" data-settings-panel="permissions" hidden><div class="settings-section-heading"><h2 data-i18n="settings.permissions">权限</h2><p data-i18n="resource.permissionsDescription">查看服务端生效的权限方案；运行时审批仍由 Agent 策略执行。</p></div><div id="settings-permissions-list"></div></section>
               <section class="settings-section resource-section" data-settings-panel="diagnostics" hidden><div class="settings-section-heading"><h2 data-i18n="settings.diagnostics">诊断与存储</h2><p data-i18n="resource.diagnosticsDescription">检查便携 Home、运行状态和可操作诊断。</p></div><div id="settings-diagnostics-list"></div></section>
+            <section class="settings-section resource-section" id="remote-panel" data-settings-panel="remote" hidden>
+              <div class="settings-section-heading"><h2 data-i18n="devices.remoteTitle">远程控制</h2><p data-remote-target></p></div>
+              <form class="remote-form">
+                <label><span data-i18n="devices.name">设备名称</span><input name="device_name" maxlength="96" autocomplete="off"></label>
+                <label><input name="allow_remote" type="checkbox"><span data-i18n="devices.allow">允许远程控制</span></label>
+                <p data-remote-status role="status"></p>
+                <button class="primary-button" type="submit" data-i18n="devices.save">保存远控设置</button>
+              </form>
+              <p data-i18n="devices.security">同账号设备可操作这里的项目、文件和设置。关闭或撤销授权会断开连接；Android 的后台在线状态受系统限制。</p>
+            </section>
             <section class="settings-section resource-section account-panel" id="account-panel" data-settings-panel="account" hidden>
               <div class="settings-section-heading"><h2 data-i18n="account.title">账号</h2><p data-i18n="account.description">登录网站账号以使用联网搜索。本地项目、会话和模型无需登录。</p></div>
               <div data-account-body></div>
@@ -802,6 +825,19 @@
   </dialog>
 
   <div class="toast-region" id="toast-region" aria-live="polite" aria-atomic="true"></div>
+  <dialog class="app-dialog" id="devices-dialog" aria-labelledby="devices-title">
+    <div class="dialog-heading"><h2 id="devices-title" data-i18n="devices.choose">选择设备</h2><button class="icon-button" type="button" data-device-close aria-label="关闭">×</button></div>
+    <p data-device-account></p>
+    <p data-i18n="devices.connectorDescription">连接器账号只用于选择设备；目标设备内的账号和所有设置均在目标上操作。</p>
+    <form class="device-login">
+      <label><span data-i18n="account.username">账号</span><input name="identifier" autocomplete="username" required></label>
+      <label><span data-i18n="account.password">密码</span><input name="password" type="password" autocomplete="current-password" required></label>
+      <label><input name="remember" type="checkbox" checked><span data-i18n="account.remember">记住登录</span></label>
+      <button class="primary-button" type="submit" data-i18n="account.login">登录账号</button>
+    </form>
+    <div class="device-toolbar"><button class="secondary-button" type="button" data-device-refresh data-i18n="devices.refresh">刷新设备列表</button></div>
+    <p class="device-feedback" data-device-feedback role="status"></p><div data-device-list></div>
+  </dialog>
   <div class="startup-loading" id="startup-loading" role="status" aria-live="polite">
     <div class="startup-loading-content">
       <img class="startup-loading-mark" src="/assets/mdo-icon.png" alt="" width="42" height="42" aria-hidden="true">

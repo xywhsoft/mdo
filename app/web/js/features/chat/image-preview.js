@@ -1,5 +1,6 @@
 import { subscribeLocale, t } from "../../i18n.js";
 import { previewImageName } from "./image-names.js";
+import { bindTargetImage, releaseTargetImage } from "../../api/target-image.js";
 
 export function createImagePreview({ dialog, image, caption, closeButton,
   status, retryButton, navigation }) {
@@ -57,12 +58,13 @@ export function createImagePreview({ dialog, image, caption, closeButton,
     next.addEventListener("error", () => finish(false), { once: true });
     showName(selected.name);
     renderLoadState();
-    next.src = selected.source;
+    bindTargetImage(next, selected.source);
   }
 
   function finishClose(restoreFocus = true) {
     const previous = active;
     active = null;
+    releaseTargetImage(currentImage);
     currentImage.removeAttribute("src");
     currentImage.alt = "";
     renderLoadState();
@@ -88,9 +90,9 @@ export function createImagePreview({ dialog, image, caption, closeButton,
       ? event.target.closest("button[data-image-preview]") : null;
     if (!trigger || dialog.open) return;
     const thumbnail = trigger.querySelector("img");
-    if (!thumbnail?.src) return;
+    if (!thumbnail || (!thumbnail.src && !thumbnail.dataset.mdoImagePath)) return;
     const selected = { trigger, reference: trigger.dataset.imageRef,
-      source: thumbnail.currentSrc || thumbnail.src, name: thumbnail.alt, retried: false };
+      source: thumbnail.dataset.mdoImagePath || thumbnail.currentSrc || thumbnail.src, name: thumbnail.alt, retried: false };
     active = selected;
     dialog.showModal();
     load(selected);

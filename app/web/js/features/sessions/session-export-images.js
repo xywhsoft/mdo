@@ -1,5 +1,6 @@
 import { api, attachmentFileName, attachmentUrl, resourceId } from "../../api/client.js";
 import { eventsToTimeline } from "../chat/timeline.js";
+import { targetFetch } from "../../api/target.js";
 
 const MAX_IMAGE_BYTES = 8 * 1024 * 1024;
 const MAX_IMAGES = 16;
@@ -80,7 +81,7 @@ export async function loadSessionMarkdownImages(session, transcript,
         // Reserve the budget before reading; failed downloads must not permit
         // unbounded additional transfers or allocations.
         remaining -= data.size;
-        const response = await fetch(url, { cache: "no-store",
+        const response = await targetFetch(url, { cache: "no-store",
           credentials: "same-origin", redirect: "error", signal: controller.signal });
         const bytes = await readImage(response, data.size, data.mime_type);
         images.set(id, { name, dataUrl: `data:${data.mime_type};base64,${base64(bytes)}` });

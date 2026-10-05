@@ -66,6 +66,14 @@ export function formatClock(microseconds) {
 // Stable API codes describe user actions; server messages remain useful for
 // unknown failures, but should not determine the language of known failures.
 const API_ERROR_COPY = Object.freeze({
+  remote_offline: ["error.remoteOffline", "目标设备离线，操作不会转到本机。"],
+  target_settings_pending: ["error.targetSettingsPending", "请先保存或放弃未保存的设置，再切换设备。"],
+  remote_result_unconfirmed: ["error.remoteUnconfirmed", "远程写入结果尚未确认，请核对目标状态，勿重复提交。"],
+  remote_runtime_changed: ["error.remoteRuntimeChanged", "目标设备已重启，请保留未保存草稿并重新载入页面。"],
+  remote_revoked: ["error.remoteRevoked", "设备授权已撤销，请返回本机或选择其他设备。"],
+  remote_native_unavailable: ["error.remoteNativeUnavailable", "此操作需要在目标设备的原生窗口中完成。"],
+  read_only: ["error.remoteReadOnly", "当前设备连接为只读模式。"],
+  target_switch_busy: ["error.targetSwitchBusy", "请等待操作完成，保存或复制未保存草稿后切换设备。"],
   invalid_directory_path: ["error.invalidDirectoryPath", "请输入有效的目录路径（不超过 2048 字节）。"],
   directory_unavailable: ["error.directoryUnavailable", "无法打开此目录，请检查路径和访问权限。"],
   write_token_required: ["error.writeTokenRequired", "请重新载入页面，取得当前服务的写入版本后再继续操作。"],

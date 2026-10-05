@@ -1,4 +1,6 @@
 import { liveConnection } from "./api/live.js";
+import { isRemoteTarget, targetState, subscribeTarget, setTargetSwitchGuard } from "./api/target.js";
+import { createRemotePanel } from "./features/settings/remote-panel.js";
 import { createAccount } from "./features/account/account.js";
 import { mountIcons } from "./components/icons.js";
 import { bootstrapStore, loadBootstrap } from "./state/bootstrap.js";
@@ -86,6 +88,7 @@ import { trackMobileViewport } from "./features/shell/mobile-viewport.js";
 import { api, ApiError, setApiWriteGuard, currentPageWriteToken, setApiWriteConflictHandler, hasPendingApiWrites } from "./api/client.js";
 import { clear, element, errorMessage, isImeKey, refreshRelativeTimes, toast } from "./utils/dom.js";
 import { subscribeLocale, t } from "./i18n.js";
+import { copyText } from "./utils/clipboard.js";
 
 const $ = (selector) => {
   const node = document.querySelector(selector);
@@ -962,6 +965,17 @@ export async function boot() {
   });
 
   const account = createAccount({ navigation });
+  const remotePanel = createRemotePanel();
+  setTargetSwitchGuard(async ({ copyDrafts = false } = {}) => {
+    if (settingsView.hasPendingChanges() || remotePanel.hasPendingChanges())
+      throw new ApiError("Save or discard settings before changing devices", { code: "target_settings_pending" });
+    if (hasPendingApiWrites()) return false;
+    if (copyDrafts) {
+      await copyText(JSON.stringify({ target: targetState().selected, drafts: draftStore.unsentSnapshots() }, null, 2));
+      return true;
+    }
+    return await draftStore.flushAll() && !draftStore.hasUnsaved() && !hasPendingApiWrites();
+  });
   const settingsView = createSettingsView({
     form: $("#settings-form"),
     store: settingsStore,
@@ -1024,6 +1038,7 @@ export async function boot() {
   }
 
   function syncStopBusy() {
+    stop.disabled = isRemoteTarget() && (!targetState().connected || targetState().runtimeChanged || targetState().selected.mode === "view");
     stop.setAttribute("aria-disabled", String(Boolean(activeRun &&
       (activeRun.cancel_requested || stoppingRunIds.has(activeRun.id)))));
   }
@@ -1051,16 +1066,17 @@ export async function boot() {
     const creatingSession = Boolean(creatingSessionKey) &&
       creatingSessionKey === `${route.projectId}/${route.sessionId}`;
     const serviceFailed = Boolean(bootstrapFailure());
+    const targetBlocked = isRemoteTarget() && (!targetState().connected || targetState().runtimeChanged || targetState().selected.mode === "view");
     if (newTaskController?.isPreparing() || migratingNewTask)
       newTaskComposerFocus.capture();
     // Keep keyboard focus while a newly created session loads its detail.
-    prompt.disabled = serviceFailed || messageActionBusy || purgeRecovery.isPaused() ||
+    prompt.disabled = serviceFailed || targetBlocked || messageActionBusy || purgeRecovery.isPaused() ||
       selectingProjectDraft ||
       projectDraftSelection?.isMigrating() ||
       newTaskController?.isPreparing() ||
       (!sessionWritable && !creatingSession) || migratingNewTask;
     newTaskComposerFocus.restore();
-    sendBlockedByState = serviceFailed || purgeRecovery.isPaused() || !(sessionWritable || creatingSession) ||
+    sendBlockedByState = serviceFailed || targetBlocked || purgeRecovery.isPaused() || !(sessionWritable || creatingSession) ||
       messageActionBusy ||
       !draftStore.isLoaded(selectedDraftKey) ||
       selectingProjectDraft ||
@@ -1072,7 +1088,7 @@ export async function boot() {
       migratingNewTask ||
       Boolean(submissionController?.isReleasing(selectedKey));
     syncSendDisabled();
-    composerImages?.setWritable(!serviceFailed && !messageActionBusy && !purgeRecovery.isPaused() &&
+    composerImages?.setWritable(!serviceFailed && !targetBlocked && !messageActionBusy && !purgeRecovery.isPaused() &&
       sessionWritable && !creatingSession && !pendingNewTask);
     composerProfile.setRunActive(Boolean(activeRun),
       creatingNewTask || messageActionBusy || purgeRecovery.isPaused());
@@ -1231,13 +1247,19 @@ export async function boot() {
 
   function syncRuntimeLabel() {
     const state = bootstrapStore.get();
+    if (isRemoteTarget() && (!targetState().connected || targetState().runtimeChanged)) {
+      runtimeState.dataset.state = "error";
+      runtimeLabel.textContent = `${targetState().selected.name} · ${t("devices.offlineShort", {}, "离线")}`;
+      return;
+    }
     const failure = bootstrapFailure();
     runtimeState.dataset.state = state.status === "error" || failure ? "error"
       : state.data?.ready ? "ready" : "loading";
     runtimeLabel.textContent = failure || (state.status === "error"
       ? errorMessage(state.error)
       : state.data?.ready
-        ? t("shell.localService", { version: state.data.version }, `本地服务 ${state.data.version}`)
+        ? isRemoteTarget() ? `${targetState().selected.name} · ${state.data.version}`
+          : t("shell.localService", { version: state.data.version }, `本地服务 ${state.data.version}`)
         : state.data?.message || t("shell.connecting", {}, "正在连接本地服务…"));
     if (failure || composerError.dataset.code === "bootstrap_failed") {
       hideComposerError();
@@ -1246,6 +1268,19 @@ export async function boot() {
     }
   }
   bootstrapStore.subscribe(syncRuntimeLabel);
+  let targetConnected = targetState().connected;
+  subscribeTarget(state => {
+    setRun(activeRun); syncRuntimeLabel();
+    if (!isRemoteTarget()) return;
+    if (state.connected && !targetConnected && !state.runtimeChanged) {
+      if (composerError.dataset.code === "remote_offline") hideComposerError();
+      void purgeRecovery.refresh().then(() => {
+        liveConnection.start(currentPageWriteToken());
+        return Promise.allSettled([loadBootstrap(), loadSettings(), loadCatalogs(), loadSessions(), loadRuns(), loadApprovals()]);
+      });
+    }
+    targetConnected = state.connected;
+  });
 
   tasksStore.subscribe((state) => {
     const active = (state.data?.items ?? []).some((item) => !item.terminal);

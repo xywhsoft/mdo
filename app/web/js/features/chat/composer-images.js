@@ -1,4 +1,5 @@
 import { api, attachmentUrl } from "../../api/client.js";
+import { targetImage } from "../../api/target-image.js";
 import { clear, element, toast } from "../../utils/dom.js";
 import { subscribeLocale, t } from "../../i18n.js";
 import { imageNames, labelImageName } from "./image-names.js";
@@ -184,9 +185,8 @@ export function createComposerImages({ composer, prompt, button, input, strip,
           "data-image-preview": "",
           "data-image-id": id, "data-image-index": String(index),
           "data-image-ref": `draft:${selected.projectId}/${selected.sessionId}/${id}/${index}`,
-        } }, [element("img", { attrs: { src: attachmentUrl(selected.projectId,
-          selected.sessionId, id), alt: t("image.alt", { number: index + 1 },
-          `图片 ${index + 1}`) } }), caption]);
+        } }, [targetImage(attachmentUrl(selected.projectId, selected.sessionId, id), {
+          alt: t("image.alt", { number: index + 1 }, `图片 ${index + 1}`) }), caption]);
       strip.append(element("div", { className: "composer-image" }, [preview, remove]));
       labelImageName({ preview, caption, remove, owner: selected, id,
         viewLabel: (name) => t("image.viewNamed", { number: index + 1, name },

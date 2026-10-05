@@ -1,0 +1,37 @@
+.device-switch {
+  display: flex; width: 100%; align-items: center; justify-content: space-between;
+  gap: 8px; margin: 0 0 8px; padding: 8px 12px; border: 1px solid var(--border);
+  border-radius: var(--radius-sm); background: transparent; color: var(--muted); text-align: left;
+}
+.device-switch span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.device-switch[data-remote="true"] { color: var(--focus); border-color: var(--focus); }
+.target-connection-notice {
+  position: fixed; z-index: 160; top: max(8px, env(safe-area-inset-top)); left: 50%; transform: translateX(-50%);
+  width: min(720px, calc(100% - 24px)); padding: 12px; background: var(--surface-raised);
+  border: 1px solid var(--warning); border-radius: var(--radius-md); box-shadow: var(--shadow-dialog);
+}
+.target-connection-notice[hidden] { display: none; }
+.target-connection-notice p { margin: 0 0 8px; overflow-wrap: anywhere; }
+.device-row { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 0; border-bottom: 1px solid var(--border); }
+.device-labels { display: grid; gap: 4px; min-width: 0; }
+.device-labels strong { overflow-wrap: anywhere; }
+.device-labels small { color: var(--muted); }
+.device-actions, .device-toolbar { display: flex; flex-wrap: wrap; gap: 8px; }
+.device-login { display: grid; gap: 8px; margin: 12px 0; }
+.device-login label { display: grid; gap: 4px; }
+.device-login label:last-of-type { display: flex; align-items: center; gap: 8px; }
+.device-login input:not([type="checkbox"]) { width: 100%; }
+.device-feedback { color: var(--danger); overflow-wrap: anywhere; }
+#devices-dialog { padding: 20px; max-height: calc(100dvh - 24px); overflow-y: auto; }
+.dialog-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.dialog-heading h2 { margin: 0; font-size: 17px; }
+.device-login input:not([type="checkbox"]), .remote-form input:not([type="checkbox"]) {
+  padding: 9px 10px; border: 1px solid var(--border-strong); border-radius: var(--radius-sm);
+  background: var(--bg); color: var(--ink); min-width: 0;
+}
+.remote-form { display: grid; gap: 16px; }
+.remote-form > label { display: grid; gap: 6px; }
+.remote-form > label:has(input[type="checkbox"]) { display: flex; align-items: center; gap: 8px; }
+.remote-form button { justify-self: start; }
+.settings-target { max-width: min(32vw, 300px); overflow-wrap: anywhere; font-size: 12px; }
+.settings-target[hidden] { display: none; }
