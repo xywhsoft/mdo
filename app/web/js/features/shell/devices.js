@@ -67,6 +67,7 @@ export function createDevices() {
     for (const device of snapshot?.listing?.devices || []) {
       const thisDevice = device.id === snapshot.device_id;
       const selected = targetState().selected?.id === device.id;
+      const currentMode = selected ? targetState().selected.mode : null;
       const available = device.online && device.allow_remote && !device.revoked;
       const row = element("div", { className: "device-row" });
       const labels = element("div", { className: "device-labels" });
@@ -76,8 +77,8 @@ export function createDevices() {
       const actions = element("div", { className: "device-actions" });
       const choose = mode => requestTargetSwitch({ id: device.id, name: device.name, mode, owner: String(account.profile.id) });
       if (!thisDevice) {
-        actions.append(actionButton(copy("connect", {}, "连接"), () => choose("control"), available && !device.controlled && !selected),
-          actionButton(copy("view", {}, "只读查看"), () => choose("view"), available && !selected && device.viewers < 3));
+        actions.append(actionButton(copy("connect", {}, "连接"), () => choose("control"), available && !device.controlled && currentMode !== "control"),
+          actionButton(copy("view", {}, "只读查看"), () => choose("view"), available && currentMode !== "view" && device.viewers < 3));
       }
       if (!device.revoked) actions.append(actionButton(copy("revoke", {}, "撤销远控"), async () => {
         await connectorJob({ action: "revoke", device_id: device.id }); await refresh();
