@@ -34,7 +34,7 @@ class Probe(UploadProbe):
         text = service.read_text(encoding="utf-8")
         for old, new in (
             ('#include "backup-upload.c"', '#include "backup-upload.c"\n#include "backup-preview.c"'),
-            ("    (void)MdoBootstrapInit(pHost);", "    BackupPreviewFixtureInit();\n    (void)MdoBootstrapInit(pHost);"),
+            ("    bool ready = MdoBootstrapInit(pHost);", "    BackupPreviewFixtureInit();\n    bool ready = MdoBootstrapInit(pHost);"),
             ("    MdoApiUnit();", "    MdoApiUnit();\n    BackupPreviewFixtureUnit();"),
             ("    if (BackupUploadFixtureControl(pRequest))", "    if (BackupPreviewFixtureControl(pRequest)) return XS_OK;\n    if (BackupUploadFixtureControl(pRequest))"),
         ):

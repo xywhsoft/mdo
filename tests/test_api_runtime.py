@@ -546,7 +546,8 @@ done:
 }
 
 '''
-    needle = "void ServiceInit(XS_HostInfo* pHost)\n{\n    (void)MdoBootstrapInit(pHost);\n"
+    declaration = "void ServiceInit(XS_HostInfo* pHost)\n"
+    needle = "    bool ready = MdoBootstrapInit(pHost);\n"
     shutil.copy2(ROOT / "tests/fixtures/migration-lifecycle.c",
                  base / "src/bootstrap/migration-lease-probe.c")
     fixture += '\n#include "migration-lease-probe.c"\n'
@@ -557,8 +558,7 @@ done:
                  base / "src/bootstrap/session-capture-probe.c")
     fixture += '\n#include "session-capture-probe.c"\n'
     replacement = (
-        fixture + "void ServiceInit(XS_HostInfo* pHost)\n{\n"
-        "    if ( MdoBootstrapInit(pHost) ) {\n"
+        needle + "    if ( ready ) {\n"
         "        g_MdoApiProbeLeaseLock = xrtMutexCreate();\n"
         "        xrtAtomic32Init(&g_MdoApiProbeLeaseChecks, 0u);\n"
         "        xrtAtomic32Init(&g_MdoApiProbeLeaseViolations, 0u);\n"
@@ -569,8 +569,9 @@ done:
         "        g_MdoApiProbeApprovalThread = xrtThreadCreate(\n"
         "            MdoApiProbeApprovals, NULL, 0u);\n"
         "    }\n")
-    if needle not in service_text:
+    if needle not in service_text or declaration not in service_text:
         raise RuntimeError("API task fixture could not patch ServiceInit")
+    service_text = service_text.replace(declaration,fixture + declaration,1)
     service_text = service_text.replace(needle, replacement, 1)
     unit_needle = (
         "    MdoApiUnit();\n"
@@ -598,14 +599,8 @@ done:
     if unit_needle not in service_text:
         raise RuntimeError("API approval fixture could not patch ServiceUnit")
     service_text = service_text.replace(unit_needle, unit_replacement, 1)
-    request_needle = (
-        "XS_RequestResult RequestProc(XS_HttpReq* pRequest)\n"
-        "{\n"
-        "    return MdoApiRequest(pRequest);\n"
-        "}")
+    request_needle = "    return MdoApiRequest(pRequest);\n"
     request_replacement = (
-        "XS_RequestResult RequestProc(XS_HttpReq* pRequest)\n"
-        "{\n"
         "    static const char Marker[] = \"fixture=recovery\";\n"
         "    static bool CreatedEdit, CreatedAsk;\n"
         "    size_t Index;\n"
@@ -631,8 +626,7 @@ done:
         "            }\n"
         "        }\n"
         "    }\n"
-        "    return MdoApiRequest(pRequest);\n"
-        "}")
+        "    return MdoApiRequest(pRequest);\n")
     if request_needle not in service_text:
         raise RuntimeError("API recovery fixture could not patch RequestProc")
     service_path.write_text(service_text.replace(
