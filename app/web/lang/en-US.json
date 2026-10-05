@@ -1525,5 +1525,9 @@
   "recovery.safeSummary": "When you continue, {count} read-only operations will run again without individual confirmation.",
   "recovery.continuing": "Continuing…",
   "recovery.syncing": "Request submitted. Syncing run status…",
-  "interaction.ask.freeHint": "Enter your answer. The task continues after you submit."
+  "interaction.ask.freeHint": "Enter your answer. The task continues after you submit.",
+  "devices.android.title": "Android background activity",
+  "devices.android.battery": "Allow mdo to run in the background under the phone's App info → Battery settings. Some devices require unrestricted background activity; the ordinary allow-background option may still impose additional limits.",
+  "devices.android.notification": "Allow mdo notifications to see the running service and its stop action. If the system offers app freezing or sleeping, disable those restrictions for mdo.",
+  "devices.android.limits": "Change these options in the target phone's system settings. Remote access uses more battery. Force stop, a restart or background restrictions may still take the device offline; reopen mdo to check its status."
 }

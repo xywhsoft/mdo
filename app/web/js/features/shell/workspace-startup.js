@@ -31,15 +31,15 @@ function runningSessionCandidate(runs, sessions) {
 
 export async function startWorkspaceNavigation({ navigation, settingsStore,
   sessionsStore, runsStore, sessionDetailStore, dialog, title, continueButton, newButton,
-  prompt, entryHash, shouldRestore = () => true }) {
+  prompt, entryHash, shouldRestore = () => true, canPersistSelection = () => true }) {
   let lastSavedKey = "";
   let savedReady = false;
   let target = null;
   let saving = false;
   async function flushSelection() {
-    if (!savedReady || saving) return;
+    if (!savedReady || saving || !canPersistSelection()) return;
     saving = true;
-    while (target && target.key !== lastSavedKey) {
+    while (target && target.key !== lastSavedKey && canPersistSelection()) {
       const next = target;
       try {
         await api.put(endpoint, {
@@ -47,7 +47,7 @@ export async function startWorkspaceNavigation({ navigation, settingsStore,
         });
         lastSavedKey = next.key;
       } catch {
-        toast(t("startup.saveFailed", {},
+        if (canPersistSelection()) toast(t("startup.saveFailed", {},
           "无法保存上次会话；下次启动可能打开其他任务。"), "error");
         break;
       }

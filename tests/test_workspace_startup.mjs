@@ -29,6 +29,35 @@ function fakeNavigation() {
   };
 }
 
+test("read-only or unavailable targets browse sessions without persisting selection", async () => {
+  const previous = { fetch: globalThis.fetch, location: globalThis.location, document: globalThis.document };
+  const requests = [];
+  const body = { isConnected: true };
+  globalThis.document = { body, activeElement: body };
+  globalThis.location = { hash: "#/projects/default/sessions/first" };
+  globalThis.fetch = async (url, options) => {
+    requests.push({ path: String(url), method: options.method });
+    return Response.json({ ok: true, data: { project_id: "default", session_id: "saved" } });
+  };
+  try {
+    const navigation = fakeNavigation();
+    navigation.select("default", "first");
+    await startWorkspaceNavigation({ navigation,
+      settingsStore: { get: () => ({ data: {} }) },
+      sessionsStore: { get: () => ({ data: { items: [] } }) },
+      sessionDetailStore: createResourceStore(), dialog: {}, title: {},
+      continueButton: {}, newButton: {}, prompt: { disabled: true },
+      entryHash: globalThis.location.hash, canPersistSelection: () => false });
+    navigation.select("default", "second");
+    await new Promise(resolve => setImmediate(resolve));
+    assert.equal(navigation.get().sessionId, "second");
+    assert.equal(requests.filter(r => r.method !== "GET").length, 0);
+    assert.equal(requests.filter(r => r.path.endsWith("/workspace-state")).length, 1);
+  } finally {
+    Object.assign(globalThis, previous);
+  }
+});
+
 test("startup focuses a ready composer without stealing focus after navigation", async () => {
   const originalFetch = globalThis.fetch;
   const originalLocation = globalThis.location;

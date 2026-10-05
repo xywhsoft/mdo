@@ -203,6 +203,7 @@ xvalue* MdoRemoteSnapshot(void)
     bool ok = value && job && MdoAccountSetBool(value,"allow_remote",g_MdoRemote.Config.AllowRemote) &&
         MdoAccountSetString(value,"name",g_MdoRemote.Config.Name) &&
         MdoAccountSetString(value,"device_id",g_MdoRemote.Identity.Id) &&
+        MdoAccountSetString(value,"platform",MdoRemotePlatform()) &&
         MdoAccountSetUInt(value,"member_id",g_MdoRemote.Config.MemberId) &&
         MdoAccountSetBool(value,"persistent",g_MdoRemote.Identity.Persistent) &&
         MdoAccountSetBool(value,"persistence_available",xsCredentialProtectionAvailable()) &&

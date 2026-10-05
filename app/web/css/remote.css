@@ -37,3 +37,7 @@
 .settings-target[hidden] { display: none; }
 #mobile-target-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; color: var(--focus); }
 #mobile-target-label[hidden] { display: none; }
+.remote-background-help { padding: 14px 16px; border: 1px solid var(--border); border-radius: 10px; }
+.remote-background-help h3 { margin: 0 0 10px; font-size: 14px; }
+.remote-background-help p { margin: 8px 0 0; line-height: 1.6; }
+.remote-background-help[hidden] { display: none; }

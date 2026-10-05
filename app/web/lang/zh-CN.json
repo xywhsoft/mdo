@@ -1525,5 +1525,9 @@
   "recovery.safeSummary": "继续任务时，将重新读取 {count} 项只读信息，无需逐项确认。",
   "recovery.continuing": "正在继续…",
   "recovery.syncing": "请求已提交，正在同步运行状态…",
-  "interaction.ask.freeHint": "输入你的回答；提交后会继续当前任务。"
+  "interaction.ask.freeHint": "输入你的回答；提交后会继续当前任务。",
+  "devices.android.title": "Android 后台运行说明",
+  "devices.android.battery": "在手机系统的“应用信息 → 电池／耗电管理”中允许墨斗后台运行。部分机型需选择“完全允许后台行为”或“不受限制”，普通的“允许后台活动”可能仍有额外限制。",
+  "devices.android.notification": "建议允许墨斗通知，以便查看常驻服务状态和停止入口。若系统提供应用速冻／休眠选项，请关闭墨斗对应的限制。",
+  "devices.android.limits": "这些选项需在目标手机的系统设置中操作。开启远控会增加耗电；系统强制停止、重启或后台限制仍可能导致离线，请重新打开墨斗确认状态。"
 }

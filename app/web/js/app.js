@@ -2488,7 +2488,9 @@ export async function boot() {
     title: $("#startup-last-title"),
     continueButton: $("#startup-continue"),
     newButton: $("#startup-new"), prompt, entryHash,
-    shouldRestore: startupIntent.allowsRestore }).catch(() => {
+    shouldRestore: startupIntent.allowsRestore,
+    canPersistSelection: () => !isRemoteTarget() || (targetState().connected &&
+      !targetState().runtimeChanged && targetState().selected.mode !== "view") }).catch(() => {
       toast(t("startup.readFailed", {},
         "无法读取上次会话，将使用当前会话列表。"), "error");
     }).finally(() => startupIntent.destroy());

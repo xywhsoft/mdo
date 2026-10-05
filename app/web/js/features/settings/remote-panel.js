@@ -9,6 +9,7 @@ export function createRemotePanel() {
   let snapshot = null, pending = false, timer = 0, dirty = false, failure = "";
   function render() {
     if (!snapshot) return;
+    panel.querySelector("[data-remote-android]").hidden = snapshot.platform !== "android";
     const stages = { disabled: "已关闭", connecting: "正在连接", reconnecting: "正在重连", online: "在线", revoked: "授权已撤销" };
     status.textContent = t(`devices.stage.${snapshot.stage}`, {}, stages[snapshot.stage] || snapshot.stage);
     if (snapshot.error) status.textContent += ` · ${snapshot.error}`;
