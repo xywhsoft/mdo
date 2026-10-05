@@ -7,7 +7,7 @@
     "single_header_sha256": "1ea16b21f968d09e5084162f3919b7e6ae2412f9e13c3bbbdd4b322bcd5a26d2"
   },
   "xserver": {
-    "commit": "f1416eb2e09e2bb12d5915fad0b53b20782203b4",
+    "commit": "7618299bb2d40dbedad932c6d51be6f395e77a90",
     "version": "1.0.0",
     "required_extensions": [
       "xwork",

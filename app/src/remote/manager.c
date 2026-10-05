@@ -415,14 +415,24 @@ static bool MdoRemoteConnectionMessage(bool Binary, xbytesview Message, void* Da
 }
 static bool MdoRemoteConnectionEmit(xbytesview Envelope, void* Data)
 { return MdoRemoteSocketSend((MdoRemoteSocket*)Data,true,Envelope); }
+static void MdoRemoteBackgroundRenew(uint64* Token, uint64* Next)
+{
+    uint64 now = xrtClock();
+    if (now < *Next) return;
+    if (*Token && !xsBackgroundLeaseRenew(*Token,60000u)) *Token = 0u;
+    if (!*Token) *Token = xsBackgroundLeaseAcquire(60000u);
+    *Next = now + UINT64_C(10000000);
+}
 static int32 MdoRemoteConnectionWorker(void* Data)
 {
     (void)Data;
     MdoRemoteNet net = {0}; MdoRemoteBridge* bridge = NULL; unsigned retry = 0u;
     char bridge_device[33] = ""; uint64 bridge_member = 0u;
+    uint64 background = 0u, next_background = 0u;
     for (;;) {
         xrtMutexLock(g_MdoRemote.Lock);
         while (!g_MdoRemote.Stopping && !xrtCancelRequested(g_MdoRemote.Stop) && !g_MdoRemote.Config.AllowRemote) {
+            xsBackgroundLeaseRelease(background); background = next_background = 0u;
             xrtCondWaitFor(g_MdoRemote.Changed,g_MdoRemote.Lock,250000u);
             xrtMutexUnlock(g_MdoRemote.Lock);
             if (bridge) (void)MdoRemoteBridgePump(bridge,NULL,NULL);
@@ -436,6 +446,9 @@ static int32 MdoRemoteConnectionWorker(void* Data)
         xcancel* cancel = xrtCancelChild(g_MdoRemote.Stop);
         g_MdoRemote.ConnectionCancel = cancel;
         xrtMutexUnlock(g_MdoRemote.Lock);
+        /* Only explicit remote availability opts into Android CPU execution.
+         * Timed leases also expire if a worker fails to run or release on Unit. */
+        MdoRemoteBackgroundRenew(&background,&next_background);
         MdoAccountLease lease = {0}; MdoRemoteSocket* socket = NULL;
         xvalue *body = NULL, *ticket = NULL; uint16 status = 0u, close_code = 0u;
         bool available = cancel && MdoAccountAcquireService(cancel,&lease);
@@ -476,6 +489,7 @@ static int32 MdoRemoteConnectionWorker(void* Data)
         while (!xrtCancelRequested(lease.Cancel) && MdoRemoteServerLive() &&
             MdoRemoteSocketPoll(socket,MdoRemoteConnectionMessage,&context) &&
             MdoRemoteBridgePump(bridge,MdoRemoteConnectionEmit,socket)) {
+            MdoRemoteBackgroundRenew(&background,&next_background);
             retry = 0u; xrtSleep(5u);
         }
         close_code = MdoRemoteSocketCloseCode(socket);
@@ -494,7 +508,9 @@ closed:
             g_MdoRemote.Status = status; MdoRemoteChangedLocked();
         }
         g_MdoRemote.ConnectionCancel = NULL;
+        bool keep_background = g_MdoRemote.Config.AllowRemote && !g_MdoRemote.Stopping;
         xrtMutexUnlock(g_MdoRemote.Lock);
+        if (!keep_background) { xsBackgroundLeaseRelease(background); background = next_background = 0u; }
         MdoRemoteSocketDestroy(socket);
         MdoAccountSecretValueRelease(body); MdoAccountSecretValueRelease(ticket);
         MdoAccountRelease(&lease); MdoRemoteIdentityClear(&identity); xrtCancelDestroy(cancel);
@@ -507,6 +523,7 @@ closed:
             xrtCondWaitFor(g_MdoRemote.Changed,g_MdoRemote.Lock,delay);
         xrtMutexUnlock(g_MdoRemote.Lock);
     }
+    xsBackgroundLeaseRelease(background);
     MdoRemoteBridgeDestroy(bridge);
     MdoRemoteNetUnit(&net);
     return 0;

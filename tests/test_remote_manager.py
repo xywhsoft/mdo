@@ -21,7 +21,7 @@ from smoke import fixture, USER, PASSWORD, client_hash
 from channel_e2e import WebSocket
 
 
-def run(host: Path, website_host: Path, exercise=None, native_hook='', native_routes='', site_setup=None):
+def run(host: Path, website_host: Path, exercise=None, native_hook='', native_routes='', site_setup=None, observe=None):
     port, website_port = free_port(), free_port()
     website = fixture(website_port,register_interval=0)
     (ROOT/'.build').mkdir(exist_ok=True)
@@ -114,6 +114,7 @@ def run(host: Path, website_host: Path, exercise=None, native_hook='', native_ro
         bearer = {'Authorization':'Bearer '+tokens['data']['access_token']}
         process = launch(site,host,home); ready(port,'/api/v1/remote',process)
         initial = app(); assert not initial['allow_remote'] and initial['stage'] == 'disabled',initial
+        if observe: observe('disabled',app)
         assert not (home/'config/remote.json').exists()
         # Core write/Origin gates apply to the connector too.
         call(port,'POST','/api/v1/remote',{'allow_remote':True,'name':'bad'},status=428)
@@ -124,6 +125,7 @@ def run(host: Path, website_host: Path, exercise=None, native_hook='', native_ro
         login('remote_manager_one')
         value = action('/remote',{'allow_remote':True,'name':'native manager'})
         online = until(lambda v: v['stage'] == 'online','native online')
+        if observe: observe('online',app)
         device = online['device_id']; assert len(device) == 32 and online['allow_remote'],online
         stored = json.loads((home/'config/remote.json').read_text())
         assert stored['allow_remote'] == online['persistent']
@@ -152,6 +154,7 @@ def run(host: Path, website_host: Path, exercise=None, native_hook='', native_ro
         reload,_ = call(website_port,'POST','/admin/plugin/reload',{'name':'device-relay'},admin)
         assert reload['result']
         until(lambda v: v['stage'] == 'online','relay reconnect')
+        if observe: observe('reconnect',app)
         for _ in range(150):
             listing,_ = call(website_port,'GET','/api/v1/devices',headers=bearer)
             current = next((v for v in listing['data']['devices'] if v['id'] == device),None)
@@ -161,6 +164,7 @@ def run(host: Path, website_host: Path, exercise=None, native_hook='', native_ro
         assert current['updated_at'] == updated,'reconnect must not register'
         # Unit joins both workers; restore is ticket-only and keeps the ID.
         restart = app(path='/test-remote-lifecycle')
+        if observe: observe('unit',app)
         if online['persistent']:
             assert restart['allow_remote']
             again = until(lambda v: v['stage'] == 'online','restore after native Unit')
@@ -181,6 +185,7 @@ def run(host: Path, website_host: Path, exercise=None, native_hook='', native_ro
         app('POST','/connector/devices',{'action':'refresh'},202)
         action('/remote',{'allow_remote':False})
         assert not app()['allow_remote']
+        if observe: observe('disabled',app)
         action('/remote',{'allow_remote':True,'name':'account switch test'})
         until(lambda v: v['stage'] == 'online')
         job = action('/connector/devices',{'action':'connect','device_id':device,'mode':'control'})['job']['id']
@@ -193,6 +198,7 @@ def run(host: Path, website_host: Path, exercise=None, native_hook='', native_ro
         login('remote_manager_two')
         switched = until(lambda v: not v['allow_remote'],'account switch closes device')
         assert switched['error'] == 'remote_account_changed',switched
+        if observe: observe('disabled',app)
         assert 'devices' not in app()['listing'],'old account list must be hidden'
         action('/remote',{'allow_remote':True,'name':'second account'})
         second = until(lambda v: v['stage'] == 'online')
@@ -206,6 +212,7 @@ def run(host: Path, website_host: Path, exercise=None, native_hook='', native_ro
         new.close(); clients.remove(new)
         app('POST','/account/logout',{})
         until(lambda v: not v['allow_remote'],'logout closes device')
+        if observe: observe('disabled',app)
         assert not json.loads((home/'config/remote.json').read_text())['allow_remote']
         if online['persistent']:
             for binary in (home/'data/remote/accounts').glob('*.bin'):
