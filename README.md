@@ -1,8 +1,9 @@
 # mdo 墨斗 — 原生 C 栈 Agent 工作台
 
 mdo 是基于 xrt、xs、xllm、xllm-session 与 xwork 的便携式 Agent 工作台。
-当前仓库正在按 [重构实施计划](docs/mdo-refactor-implementation-plan.md) 重建；
-`app_bak/` 只保留旧产品实现作为行为参考，新代码全部位于 `app/`。
+当前实现全部位于 `app/`，按 [重构实施计划](docs/mdo-refactor-implementation-plan.md) 开发。
+旧版参考源码已从工作树移除，需要对照历史行为时可读取 Git 提交 `ccb0f6c` 中的
+`app_bak/`，例如 `git show ccb0f6c:app_bak/wwwroot/src/ui.js`。
 
 当前开发方向已调整为[基础 Agent 优先](docs/core-agent-priorities.md)：工具、
 聊天体验、项目/会话和设置先行。内建默认模型为 `ornith-1.5-35b`。
@@ -11,7 +12,8 @@ mdo 是基于 xrt、xs、xllm、xllm-session 与 xwork 的便携式 Agent 工作
 
 `deps.lock` 固定 xrt、xserver 和三库的完整提交、版本与生产源码树哈希。
 构建器会先验证依赖，再从 `app/sources.json` 生成单个 TCC unity 入口，构建
-匹配的 xs 宿主并打包应用：
+匹配的 xs 宿主并打包应用。构建会拒绝没有入口引用的 C 源文件与私有头；
+前端发布检查也会拒绝缺失的导入与无法从页面入口到达的模块：
 
 ```powershell
 python tools/build_mdo.py
@@ -59,7 +61,6 @@ app/
   sources.json       unity 源清单
   xs.json            单文件应用配置
 include/mdo/         版本化外接模块 ABI（MDO-3）
-app_bak/             旧代码，只读参考
 deps.lock            跨仓库依赖与格式版本锁
 tools/build_mdo.py   验证、生成、宿主构建与打包入口
 ```

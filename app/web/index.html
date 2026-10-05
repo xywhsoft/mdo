@@ -24,10 +24,6 @@
   <a class="skip-link" href="#timeline" data-i18n="shell.skip" inert>跳到对话</a>
 
   <div class="app-shell" id="app-shell" data-sidebar="closed" inert>
-    <div id="update-notice" class="update-notice" role="status" hidden>
-      <span></span><button class="primary-button" type="button" data-update-open></button>
-      <button class="secondary-button" type="button" data-update-later></button>
-    </div>
     <div id="project-purge-notice" class="project-purge-notice" role="status" hidden>
       <span></span><button class="secondary-button" type="button"></button>
     </div>
@@ -35,6 +31,7 @@
       <button class="icon-button" id="open-sidebar" type="button" aria-label="打开会话导航" data-i18n-aria-label="shell.sidebar.open" aria-controls="sidebar" aria-expanded="false">
         <span class="icon" data-icon="menu" aria-hidden="true"></span>
       </button>
+      <button class="update-entry update-entry-text" type="button" data-update-open hidden>更新</button>
       <div class="mobile-title" id="mobile-project-control">
         <button class="mobile-title-project" id="mobile-project-switch" type="button" aria-label="切换项目" aria-describedby="mobile-session-title" aria-haspopup="menu" aria-controls="mobile-project-menu" aria-expanded="false">
           <strong id="mobile-session-title">墨斗</strong>
@@ -63,6 +60,7 @@
           <img class="brand-mark" src="/assets/mdo-icon.png" alt="" width="28" height="28" aria-hidden="true">
           <span>墨斗</span>
         </a>
+        <button class="update-entry update-entry-badge" type="button" data-update-open hidden>1</button>
         <button class="icon-button sidebar-close" id="close-sidebar" type="button" aria-label="关闭会话导航" data-i18n-aria-label="shell.sidebar.close">
           <span class="icon" data-icon="close" aria-hidden="true"></span>
         </button>
@@ -133,6 +131,7 @@
         <button class="icon-button desktop-sidebar-toggle" id="desktop-sidebar-toggle" type="button" aria-label="展开会话导航" data-i18n-aria-label="shell.sidebar.expand" aria-controls="sidebar" aria-expanded="false">
           <span class="icon" data-icon="menu" aria-hidden="true"></span>
         </button>
+        <button class="update-entry update-entry-text update-entry-desktop" type="button" data-update-open hidden>更新</button>
         <div class="session-heading">
           <div class="session-title-row">
             <div class="header-project-control" id="header-project-control" hidden>
@@ -936,6 +935,21 @@
       showFailure("failed");
     });
   </script>
+  <dialog id="update-dialog" class="app-dialog update-dialog" aria-labelledby="update-dialog-title" aria-describedby="update-dialog-description">
+    <div class="update-dialog-heading"><span class="update-dialog-mark" aria-hidden="true">↑</span><h2 id="update-dialog-title" data-update-title></h2></div>
+    <p id="update-dialog-description" data-update-description></p>
+    <p data-update-status role="status" aria-live="polite"></p>
+    <p data-update-notes hidden></p>
+    <div class="update-dialog-actions">
+      <button class="secondary-button" id="update-target" type="button" aria-haspopup="dialog" aria-controls="devices-dialog" hidden>切换设备</button>
+      <button class="secondary-button" type="button" data-update-later>稍后</button>
+      <button class="secondary-button" type="button" data-update-action="exit" hidden>退出墨斗</button>
+      <button class="secondary-button" type="button" data-update-action="check">重新检查</button>
+      <button class="secondary-button" type="button" data-update-action="cancel" hidden>取消下载</button>
+      <button class="primary-button" type="button" data-update-action="download" hidden>下载更新</button>
+      <button class="primary-button" type="button" data-update-action="install" hidden>安装更新</button>
+    </div>
+  </dialog>
   <dialog id="account-login-dialog" aria-labelledby="account-login-title">
     <h2 id="account-login-title" data-i18n="account.login">登录账号</h2>
     <p data-account-progress role="status"></p>

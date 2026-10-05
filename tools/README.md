@@ -1,19 +1,26 @@
-# tools/ — 随程序分发的第三方工具
+# 构建与维护工具
 
-本目录被 .gitignore 忽略（约 112M 二进制）。程序启动时 `MdoStoreInit` 把
-`tools`、`tools/python313`、`tools/git/cmd` 注入进程 PATH 最前，
-`exec/spawn` 直接用程序名即可命中；python 工具的 REPL 解释器固定用
-`tools/python313/python.exe`。
+这些脚本在开发机上运行，不会打包到 mdo。构建需要 Python、匹配 `deps.lock`
+的 xs 源码和本机 C 工具链；前端发布检查另外需要 Node.js。普通构建不依赖 Node.js。
 
-## 布局与重建
+| 脚本 | 用途 |
+|------|------|
+| `build_mdo.py` | 验证依赖、检查 C 源码引用、生成 unity、构建宿主与打包 |
+| `build_android.py` | 构建 ARM64 Android 应用，复用相同应用源码与默认 Home |
+| `host-profile.json` | mdo 专用 xrt 根与 Windows SDK 选择；默认启用精简宿主 |
+| `qa_release.py` | Windows/Linux 有界发布门禁，不运行压力或高负载测试 |
+| `check_web_modules.mjs` | 检查前端语法、导入目标和页面入口的模块可达性 |
+| `inspect_session.py` | 离线读取会话事件与工具统计，不改写会话 |
+| `export_icons.py` | 从既有品牌图导出图标；普通构建不需要再次运行 |
 
-| 内容 | 来源 | 说明 |
-|------|------|------|
-| `curl.exe` | 本机 System32 拷贝（696K） | Windows 自带 curl 即可 |
-| `git/` | MinGit-2.55.0.3 64-bit（GitHub Releases 解压，91M） | **必须从 `git/cmd` 调用**（PATH 注入的是该子目录）；MinGit 自带完整 mingw 运行时 |
-| `python313/` | python-3.13.7-embeddable-amd64.zip 解压（34 文件） | 标准库即单文件 `python313.zip`（zip 部署形态）；`._pth` 隔离不读系统 site-packages；pip 默认关闭（需要时去掉 `._pth` 里 `#import site` 的注释 + get-pip） |
+运行示例及工具链要求见根目录 README 和 `docs/android.md`。
+Windows/Android 构建默认使用精简配置；完整扩展 SDK 可加 `--full-host`。
+`--skip-host-build` / `--skip-native-build` 会验证源码版本、profile、图标和二进制
+指纹，不能混用旧宿主。新增 xrt 调用若未进入闭包，打包前会明确报错。
+配置范围、体积结果和验证见 `docs/compact-host.md`。
+仅用于模块 ABI 验证的 Echo 实现位于 `tests/fixtures/modules/echo.c`，由测试明确
+注入临时 Home，不进入正式工具目录。
 
-注意：下载 GitHub Releases 时 shell curl 可能报 SSL 35 错，用
-`python -c "import urllib.request; urllib.request.urlretrieve(url, dst)"` 可成。
-
-新增子目录程序时，须同步 `app/mdo_store.h` 里 MdoStoreInit 的 PATH 注入列表。
+本机可能还留有未跟踪的 `git/`、`python313/`、`curl.exe` 等旧开发工具。
+当前程序不再自动把这些目录加入 PATH，也不将它们作为发布依赖；Agent 的进程
+工具使用当前平台提供的运行环境。这里不存放模型凭据或用户会话数据。

@@ -17,7 +17,7 @@
 
 因此，这个打包崩溃不能作为 xrt Future 缺陷的证据。xrt/xllm 中已经独立确认
 并修复的 Future 发布与 Watch 生命周期问题仍然有效，但它们与本次旧 mdo
-启动崩溃是两件事。`app_bak` 作为历史参考保持不改；宿主回归改用
+启动崩溃是两件事。旧版参考源码现可从 Git 提交 `ccb0f6c` 中的 `app_bak/` 读取；宿主回归使用
 `tests/fixtures/packed-startup-app` 的最小 fixture。
 
 **日期**：2026-09-20 晚　**状态**：根因已定位到函数级，按「禁改 xrt 核心」约束呈报

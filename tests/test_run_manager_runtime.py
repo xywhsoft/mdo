@@ -14,7 +14,7 @@ import threading
 from pathlib import Path
 
 
-from runtime_sources import copy_app_source
+from runtime_sources import copy_app_source, copy_echo_module
 
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -44,6 +44,9 @@ PROBE_SOURCE = r'''
 #include "src/runs/manager.c"
 
 xwork_runtime *MdoBootstrapRuntime(void) { return NULL; }
+static bool UpdateRequired;
+bool MdoUpdateBlocked(void) { return UpdateRequired; }
+bool MdoUpdateInstalling(void) { return false; }
 
 typedef struct Owner {
     unsigned Refs;
@@ -195,6 +198,11 @@ void ServiceInit(XS_HostInfo *host) {
     start.Prompt = "managed interactive prompt";
     start.TimeoutMilliseconds = 5000u;
     memset(&first, 0, sizeof(first)); first.Size = sizeof(first);
+    UpdateRequired = true;
+    if (MdoRunStartWithOutcome(&start, &first, &error, &may_have_executed) || may_have_executed)
+        goto done;
+    UpdateRequired = false;
+    printf("mandatory_update_denies_start=1\n");
     if (!MdoRunStart(&start, &first, &error)) {
         printf("start_error=%s\n", error.sMessage); goto done;
     }
@@ -220,13 +228,16 @@ void ServiceInit(XS_HostInfo *host) {
 
     start.Prompt = "cancel this managed prompt";
     memset(&second, 0, sizeof(second)); second.Size = sizeof(second);
-    if (!MdoRunStart(&start, &second, &error) ||
-        !MdoRunCancel(second.Id, NULL, &error)) {
+    if (!MdoRunStart(&start, &second, &error)) {
         printf("cancel_error=%s\n", error.sMessage); goto done;
     }
+    UpdateRequired = true;
     if (!WaitForTerminal(second.Id, &found)) {
         printf("wait_error=second\n"); goto done;
     }
+    UpdateRequired = false;
+    if (!found.CancelRequested) goto done;
+    printf("mandatory_update_cancels_active_run=1\n");
     printf("second_done=state:%d result:%d terminal:%d cancel:%d refs:%u\n",
         (int)found.State, (int)found.Result, found.Terminal ? 1 : 0,
         found.CancelRequested ? 1 : 0, owner.Refs);
@@ -275,7 +286,6 @@ def write_site(site: Path) -> None:
     (site / "web/index.html").write_text("probe", encoding="utf-8")
     for relative in (
         "default-home/config/defaults.json",
-        "default-home/modules/tools/builtin_echo.c",
         "default-home/modules/agents/builtin_default.c",
         "default-home/skills/project-explorer/SKILL.md",
         "default-home/skills/project-explorer/templates/report.md",
@@ -290,6 +300,7 @@ def write_site(site: Path) -> None:
         "src/sessions/internal.h", "src/sessions/manager.c", "src/sessions/restore_reservation.inc.c", "src/runs/manager.c",
     ):
         copy_app_source(relative, site)
+    copy_echo_module(site)
     for header in (ROOT / "app/include/mdo").glob("*.h"):
         shutil.copy2(header, site / "include/mdo" / header.name)
     shutil.copy2(ROOT / "app/src/memory/internal.h", site / "src/memory/internal.h")

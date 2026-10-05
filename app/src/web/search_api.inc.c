@@ -50,7 +50,7 @@ static bool MdoWebSearchApiItem(xvalue* Results, const xvalue* Item,
     if ( Item == NULL || xrtValueType(Item) != XVALUE_OBJECT ||
          !MdoWebString(xrtValueObjectGet(Item, xrtStrView("title")), 1u, 512u, &Title) ||
          !MdoWebString(xrtValueObjectGet(Item, xrtStrView("url")), 1u, 2048u, &Url) ||
-         !MdoHttpUrlValid(Url, true) ||
+         !MdoWebPageUrl(Url, true, NULL) ||
          !MdoWebSearchOptionalText(Item, "snippet", 2048u, &Snippet) ||
          !MdoWebSearchOptionalText(Item, "site", 256u, &Site) ||
          !MdoWebSearchOptionalText(Item, "published_at", 64u, &Published) ) return false;
@@ -219,7 +219,7 @@ acquire_account:
     goto done;
 invalid_response:
     Result = MdoWebToolFail(pWriter, pError,
-        "Search API returned an invalid xadmin response. Check the API address and service; do not invent results.");
+        "Search API returned an invalid xadmin response. Do not repeat this query; report the service error to the user instead of inventing results.");
     goto done;
 memory_failed:
     Result = MdoWebFail(pError, XWORK_ERROR_OUT_OF_MEMORY, "Cannot build search request or result");

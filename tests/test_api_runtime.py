@@ -575,6 +575,7 @@ done:
     unit_needle = (
         "    MdoApiUnit();\n"
         "    MdoBootstrapUnit();\n"
+        "    MdoApiLiveRelease();\n"
         "}\n\nXS_RequestResult RequestProc")
     unit_replacement = (
         "    MdoApiReferenceProbeUnit();\n"
@@ -592,6 +593,7 @@ done:
         "        xrtThreadDestroy(g_MdoApiProbeApprovalThread);\n"
         "        g_MdoApiProbeApprovalThread = NULL;\n"
         "    }\n"
+        "    MdoApiLiveRelease();\n"
         "}\n\nXS_RequestResult RequestProc")
     if unit_needle not in service_text:
         raise RuntimeError("API approval fixture could not patch ServiceUnit")

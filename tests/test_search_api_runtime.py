@@ -56,6 +56,20 @@ class Handler(BaseHTTPRequestHandler):
         if query == "duplicate":
             response["data"]["results"] *= 2
             response["data"]["count"] = 2
+        if query == "fragment":
+            # A normal result plus a share link with a browser-only fragment.
+            # The previous parser rejected the entire successful envelope.
+            response["data"]["results"].append({
+                "title": "Share link", "url": "https://example.com/share.html#song",
+                "snippet": "", "site": "example.com", "published_at": "",
+            })
+            response["data"]["count"] = 2
+        if query == "fragmenthttp":
+            response["data"]["results"][0]["url"] = "http://example.com/share.html#song"
+        if query == "fragmentunsafe":
+            response["data"]["results"][0]["url"] = "https://example.com/share.html#song\nunsafe"
+        if query == "fragmentcredentials":
+            response["data"]["results"][0]["url"] = "https://user:password@example.com/share.html#song"
         body = (b"<html>login required probe-secret</html>" if query == "html"
                 else json.dumps(response, ensure_ascii=False).encode())
         if status != 200:
@@ -157,9 +171,9 @@ def main() -> None:
     thread.start()
     try:
         endpoint = f"http://127.0.0.1:{server.server_port}/api/v1/search"
-        queries = ["墨斗", "zai", "empty", "truncated", "duplicate"]
+        queries = ["墨斗", "zai", "empty", "truncated", "duplicate", "fragment", "fragmenthttp"]
         failures = [f"status{status}" for status in (400, 401, 403, 404, 405, 429, 502, 503, 504, 302)]
-        failures += ["business403", "html", "badcount", "badurl", "longtitle"]
+        failures += ["business403", "html", "badcount", "badurl", "longtitle", "fragmentunsafe", "fragmentcredentials"]
         cases = [(json.dumps({"query": query}, ensure_ascii=False), query in queries)
                  for query in queries + failures]
         # Argument failures are rejected before any network call.
@@ -170,7 +184,8 @@ def main() -> None:
         assert len(Handler.calls) == len(queries + failures), Handler.calls
         for marker in ('"source":"zai"', '"results":[]', '"truncated":true', '"count":1',
                        'valid account login', 'phone/email verification', 'quota or concurrency',
-                       'configure its API key', 'invalid xadmin response'):
+                       'configure its API key', 'invalid xadmin response',
+                       'https://example.com/share.html#song', 'http://example.com/share.html#song'):
             assert marker in output, output
         before = len(Handler.calls)
         missing = invoke(args.host, endpoint, [('{"query":"hello"}', False)], None)

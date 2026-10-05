@@ -176,7 +176,7 @@ static bool MdoScheduleExecutorForwardTaskCancels(xwork_error* Error)
         xwork_task_info Info;
         if ( Execution->CancelRequested ) continue;
         xworkTaskInfoInit(&Info);
-        if ( !xworkTaskSnapshotFind(Tasks, Execution->TaskId, &Info) ||
+        if ( MdoUpdateBlocked() || !xworkTaskSnapshotFind(Tasks, Execution->TaskId, &Info) ||
              Info.eState == XWORK_TASK_CANCELLED ) {
             if ( !MdoAgentRunCancel(Execution->Run) ) {
                 xworkTaskSnapshotRelease(Tasks);
@@ -258,6 +258,10 @@ static bool MdoScheduleExecutorStart(const MdoScheduleClaim* Claim,
     MdoAgentRunOptionsInit(&RunOptions);
     RunOptions.Prompt = Claim->Input;
     Run = MdoAgentRunCreate(Session, &RunOptions, Error);
+    if ( MdoUpdateBlocked() || MdoUpdateInstalling() ) {
+        MdoScheduleExecutorError(Error, XWORK_ERROR_CONTEXT, "application update required before starting work");
+        goto fail;
+    }
     if ( Run == NULL || !MdoAgentRunStart(Run, Error) ) goto fail;
     memset(&Info, 0, sizeof(Info));
     Info.Size = sizeof(Info);
@@ -324,7 +328,7 @@ bool MdoScheduleExecutorPump(int64 Now, size_t* Started, size_t* Completed,
     if ( !MdoScheduleExecutorForwardTaskCancels(Error) ||
          !MdoScheduleExecutorHarvest(&CompletedValue, Error) ) goto done;
     for ( i = 0u; i < g_MdoScheduleExecutor.Options.MaxClaimsPerPump; ++i ) {
-        if (MdoUpdateInstalling()) break;
+        if (MdoUpdateInstalling() || MdoUpdateBlocked()) break;
         MdoScheduleClaim Claim;
         if ( !MdoScheduleExecutorGrow() ) {
             MdoScheduleExecutorError(Error, XWORK_ERROR_LIMIT,
@@ -356,6 +360,10 @@ bool MdoScheduleExecutorRunNow(const char* ScheduleId,
     xworkErrorInit(Error);
     if ( TaskId != NULL ) *TaskId = 0u;
     if ( AgentRunId != NULL ) *AgentRunId = 0u;
+    if ( MdoUpdateBlocked() || MdoUpdateInstalling() ) {
+        MdoScheduleExecutorError(Error, XWORK_ERROR_CONTEXT, "application update required before starting work");
+        return false;
+    }
     if ( !g_MdoScheduleExecutor.Initialized || ScheduleId == NULL ||
          ExpectedRevision == 0u || Now <= 0 ) {
         MdoScheduleExecutorError(Error, XWORK_ERROR_INVALID_ARGUMENT,

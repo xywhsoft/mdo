@@ -103,8 +103,6 @@ typedef struct MdoAgentRunInfo {
 } MdoAgentRunInfo;
 
 void MdoAgentSessionOptionsInit(MdoAgentSessionOptions* Options);
-MdoAgentSession* MdoAgentSessionCreate(
-    const MdoAgentSessionOptions* Options, xwork_error* Error);
 /* A nonempty ProjectId pins the project until the final callback owner release,
  * including retained runtime Agent references, regardless of memory settings. */
 MdoAgentSession* MdoAgentSessionCreateWithRuntime(xwork_runtime* Runtime,

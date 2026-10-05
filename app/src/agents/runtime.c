@@ -5,7 +5,6 @@
 #include "../../include/mdo/agents.h"
 #include "../../include/mdo/approvals.h"
 #include "../../include/mdo/asks.h"
-#include "../../include/mdo/bootstrap.h"
 #include "../../include/mdo/config.h"
 #include "../../include/mdo/home.h"
 #include "../../include/mdo/memory.h"
@@ -1325,13 +1324,6 @@ fail:
         MdoAgentOwnerRelease(Owner);
     }
     return NULL;
-}
-
-MdoAgentSession* MdoAgentSessionCreate(
-    const MdoAgentSessionOptions* Options, xwork_error* Error)
-{
-    return MdoAgentSessionCreateWithRuntime(MdoBootstrapRuntime(), Options,
-        Error);
 }
 
 MdoAgentSession* MdoAgentSessionRef(MdoAgentSession* Session)

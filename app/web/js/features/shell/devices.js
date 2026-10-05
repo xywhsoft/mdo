@@ -117,6 +117,7 @@ export function createDevices() {
   });
   button.addEventListener("click", open);
   settingsTarget.addEventListener("click", open);
+  document.querySelector("#update-target")?.addEventListener("click", open);
   refreshButton.addEventListener("click", () => void perform(listDevices));
   dialog.querySelector("[data-device-close]").addEventListener("click", () => dialog.close());
   dialog.addEventListener("close", () => { form.elements.password.value = ""; clearTimeout(timer); returnFocus?.focus(); });

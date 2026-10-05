@@ -14,7 +14,7 @@ import threading
 from pathlib import Path
 
 
-from runtime_sources import copy_app_source
+from runtime_sources import copy_app_source, copy_echo_module
 
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -187,12 +187,15 @@ void ServiceInit(XS_HostInfo *host) {{
                 module_info.Id, module_info.External ? 1 : 0,
                 module_info.SourceHash);
     }}
-    memset(&tool_info, 0, sizeof(tool_info)); tool_info.Size = sizeof(tool_info);
-    memset(&agent_info, 0, sizeof(agent_info)); agent_info.Size = sizeof(agent_info);
-    if (MdoModuleCatalogToolAt(catalog, 0u, &tool_info) &&
-        MdoModuleCatalogAgentFind(catalog, "mdo.default", &agent_info))
-        printf("initial_tool=%s agent=%s permission=%s\n", tool_info.Id,
-            agent_info.Id, agent_info.PermissionProfile ? agent_info.PermissionProfile : "inherit");
+    for (i = 0u; i < MdoModuleCatalogToolCount(catalog); ++i) {{
+        memset(&tool_info, 0, sizeof(tool_info)); tool_info.Size = sizeof(tool_info);
+        memset(&agent_info, 0, sizeof(agent_info)); agent_info.Size = sizeof(agent_info);
+        if (MdoModuleCatalogToolAt(catalog, i, &tool_info) &&
+            strcmp(tool_info.Id, "mdo.echo") == 0 &&
+            MdoModuleCatalogAgentFind(catalog, "mdo.default", &agent_info))
+            printf("initial_tool=%s agent=%s permission=%s\n", tool_info.Id,
+                agent_info.Id, agent_info.PermissionProfile ? agent_info.PermissionProfile : "inherit");
+    }}
     if (!ExecuteOne(runtime, "mdo.echo", "{{\"text\":\"hello\"}}",
             &agent, &session, &definition)) goto done;
     if (!ExecuteOne(runtime, "mdo.todo",
@@ -298,8 +301,7 @@ def write_site(site: Path) -> None:
     (site / "web/index.html").write_text("probe", encoding="utf-8")
     shutil.copy2(ROOT / "app/default-home/config/defaults.json",
                  site / "default-home/config/defaults.json")
-    shutil.copy2(ROOT / "app/default-home/modules/tools/builtin_echo.c",
-                 site / "default-home/modules/tools/builtin_echo.c")
+    copy_echo_module(site)
     shutil.copy2(ROOT / "app/default-home/modules/tools/builtin_todo.c",
                  site / "default-home/modules/tools/builtin_todo.c")
     shutil.copy2(ROOT / "app/default-home/modules/agents/builtin_default.c",

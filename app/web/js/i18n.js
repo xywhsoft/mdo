@@ -4,8 +4,32 @@ export const supportedLocales = Object.freeze(["zh-CN", "en-US", "ru-RU"]);
 
 const packs = new Map();
 const listeners = new Set();
-let locale = "zh-CN";
+let locale = "en-US";
 let requestVersion = 0;
+
+// Only the primary system language chooses the initial UI. A secondary
+// supported language must not override an unsupported primary language.
+// Explicit preferences remain independent of later system language changes.
+export function resolveLocale(preference = "auto", system = systemLanguages()) {
+  if (supportedLocales.includes(preference)) return preference;
+  if (preference !== "auto") return "en-US";
+  const tag = system?.languages?.[0] || system?.language || "";
+  const language = typeof tag === "string" ? tag.trim().toLowerCase().split(/[-_]/)[0] : "";
+  if (language === "zh") return "zh-CN";
+  if (language === "ru") return "ru-RU";
+  return "en-US";
+}
+
+function systemLanguages() {
+  try {
+    // Android WebView may report English on a Chinese or Russian device.
+    // The xs bridge returns the actual native locale list as BCP 47 tags.
+    const languages = globalThis.XsPlatform?.languages();
+    if (typeof languages === "string" && languages.trim())
+      return { languages: languages.split(",") };
+  } catch { /* Browsers and older native shells use navigator below. */ }
+  return globalThis.navigator;
+}
 
 function validatePack(value) {
   if (!value || Array.isArray(value) || typeof value !== "object")

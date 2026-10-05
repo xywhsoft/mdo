@@ -14,7 +14,7 @@ import threading
 from pathlib import Path
 
 
-from runtime_sources import copy_app_source
+from runtime_sources import copy_app_source, copy_echo_module
 
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -603,7 +603,6 @@ def write_site(site: Path, memory_enabled: bool = True) -> None:
     (site / "web/index.html").write_text("probe", encoding="utf-8")
     for relative in (
         "default-home/config/defaults.json",
-        "default-home/modules/tools/builtin_echo.c",
         "default-home/modules/agents/builtin_default.c",
         "default-home/skills/project-explorer/SKILL.md",
         "default-home/skills/project-explorer/templates/report.md",
@@ -619,6 +618,7 @@ def write_site(site: Path, memory_enabled: bool = True) -> None:
         "src/asks/manager.c",
     ):
         copy_app_source(relative, site)
+    copy_echo_module(site)
     shutil.copy2(ROOT / "tests/fixtures/agent-capture.c", site / "agent-capture.c")
     for header in (ROOT / "app/include/mdo").glob("*.h"):
         shutil.copy2(header, site / "include/mdo" / header.name)

@@ -99,10 +99,6 @@ bool MdoMcpManagerSetEnabled(const char* ServerId, bool Enabled,
 bool MdoMcpManagerDisconnect(const char* ServerId, xwork_error* pError);
 bool MdoMcpManagerRefresh(const char* ServerId, xcancel* pCancel,
     uint64 Deadline, xwork_error* pError);
-bool MdoMcpManagerRegisterDiscoveryTools(xwork_agent* pAgent,
-    xwork_error* pError);
-bool MdoMcpManagerLoadTool(xwork_agent* pAgent, const char* ServerId,
-    const char* RemoteToolName, xwork_error* pError);
 
 MdoMcpDiagnostics* MdoMcpDiagnosticsSnapshot(void);
 MdoMcpDiagnostics* MdoMcpDiagnosticsRef(MdoMcpDiagnostics* pDiagnostics);

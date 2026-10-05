@@ -58,7 +58,7 @@ static bool Fetch(void *data, const XS_FetchRequest *request,
         "{\"code\":0,\"message\":\"\",\"data\":{\"provider\":\"bocha\","
         "\"request_id\":\"0123456789abcdef0123456789abcdef\",\"count\":1,"
         "\"truncated\":false,\"results\":["
-        "{\"title\":\"Result One\",\"url\":\"https://example.com/page\","
+        "{\"title\":\"Result One\",\"url\":\"https://example.com/page#needle\","
         "\"snippet\":\"needle snippet\",\"site\":\"example.com\",\"published_at\":\"2026-10-04\"}]}}";
     static const char page[] =
         "<!doctype html><html><head><title>Probe &amp; Page</title>"
@@ -119,6 +119,10 @@ static xwork_permission_decision Permission(void *data,
     Probe *probe = (Probe*)data;
     ++probe->Permissions;
     probe->PermissionResources += (unsigned)request->iResourceCount;
+    for (size_t i = 0u; i < request->iResourceCount; ++i)
+        if (strcmp(request->sToolName, "web_open") == 0 &&
+            request->pResources[i].eKind == XWORK_RESOURCE_NETWORK)
+            printf("open_resource=%s\n", request->pResources[i].sResource);
     return XWORK_PERMISSION_ALLOW;
 }
 
@@ -226,7 +230,7 @@ void ServiceInit(XS_HostInfo *host) {
     }
     if (!Execute(agent, "web_search", "{\"query\":\"alpha beta\",\"count\":2}",
             &search)) goto done;
-    if (!Execute(agent, "web_open", "{\"url\":\"https://example.com/page\",\"max_characters\":4096}",
+    if (!Execute(agent, "web_open", "{\"url\":\"https://example.com/page#needle\",\"max_characters\":4096}",
             &open)) goto done;
     if (!Execute(agent, "web_find", "{\"document_id\":\"doc-0000000000000001\",\"query\":\"needle\",\"max_results\":3,\"context_characters\":32}",
             &find)) goto done;
@@ -369,6 +373,9 @@ def main() -> int:
         assert "tool=web_find effects:1 source:mdo.web permissions:0" in output, output
         assert '"type":"web_search_results"' in output, output
         assert '"title":"Result One"' in output and "Rejected" not in output, output
+        assert '"url":"https://example.com/page#needle"' in output, output
+        assert "open_resource=https://example.com/page\n" in output, output
+        assert "open_resource=https://example.com/page#" not in output, output
         assert '"published_at":"2026-10-04"' in output, output
         assert "request_contract_failed" not in output, output
         assert '"document_id":"doc-0000000000000001"' in output, output

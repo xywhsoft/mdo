@@ -26,6 +26,7 @@ GENERATED_MODULE_HEADER_PATH = GENERATED / "module-sdk" / "mdo" / "module.h"
 BUILTIN_CONNECTION_PATH = ROOT / ".build" / "ornith-connection.json"
 BUILTIN_KEY_PATH = APP / "default-home" / "config" / "secrets" / "builtin-model.key"
 ICON_PATH = ROOT / "assets" / "branding" / "mdo.ico"
+HOST_PROFILE_PATH = ROOT / "tools" / "host-profile.json"
 HEX40 = re.compile(r"[0-9a-f]{40}\Z")
 
 
@@ -211,6 +212,32 @@ def verify_dependencies(xserver: Path, lock: dict) -> None:
         raise BuildError("xserver pack version does not match deps.lock")
 
 
+def validate_source_graph(sources: list[str]) -> None:
+    """Reject orphan application C files and private headers before packing.
+
+    TCC modules in default-home are discovered at runtime and have separate
+    entry points. SDK headers outside app/ are validated by the dependency lock.
+    """
+    application = APP.resolve()
+    pending = [(application / source).resolve() for source in sources]
+    reached: set[Path] = set()
+    quoted_include = re.compile(r'^\s*#\s*include\s*"([^"\r\n]+)"', re.MULTILINE)
+    while pending:
+        source = pending.pop()
+        if source in reached:
+            continue
+        reached.add(source)
+        for include in quoted_include.findall(source.read_text(encoding="utf-8")):
+            dependency = (source.parent / include).resolve()
+            if dependency.is_relative_to(application) and dependency.is_file():
+                pending.append(dependency)
+    owned = {path.resolve() for directory in (APP / "src", APP / "include")
+             for path in directory.rglob("*") if path.suffix in (".c", ".h") and path.is_file()}
+    orphans = sorted(path.relative_to(application).as_posix() for path in owned - reached)
+    if orphans:
+        raise BuildError("application files are not reachable from sources.json: " + ", ".join(orphans))
+
+
 def source_list() -> list[str]:
     manifest = load_object(SOURCES_PATH)
     if manifest.get("schema_version") != 1:
@@ -237,6 +264,7 @@ def source_list() -> list[str]:
             raise BuildError(f"missing application source: {value}")
         seen.add(key)
         result.append(normalized)
+    validate_source_graph(result)
     return result
 
 
@@ -303,6 +331,54 @@ def run(command: list[str], cwd: Path, dry_run: bool) -> None:
         subprocess.run(command, cwd=cwd, check=True)
 
 
+def host_profile_arguments(full_host: bool) -> list[str]:
+    return [] if full_host else ["--profile", str(HOST_PROFILE_PATH)]
+
+
+def host_profile_digest(full_host: bool) -> str:
+    if full_host:
+        return "full"
+    value = load_object(HOST_PROFILE_PATH)
+    value["xrt_modules"] = sorted(value["xrt_modules"])
+    if "windows_sdk_headers" in value:
+        value["windows_sdk_headers"] = sorted(value["windows_sdk_headers"])
+    return hashlib.sha256(json.dumps(value, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+
+
+def verify_host_receipt(host: Path, lock: dict, full_host: bool, *, icon: bool = False) -> None:
+    """A locked dependency alone cannot prove a reused binary matches it."""
+    receipt_path = host.with_name(host.name + ".build.json")
+    try:
+        receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
+        revision = receipt.get("revision", "")
+        valid = (receipt.get("schema_version") == 1
+                 and receipt.get("profile_sha256") == host_profile_digest(full_host)
+                 and re.fullmatch(r"[0-9a-f]{7,40}", revision) is not None
+                 and lock["xserver"]["commit"].startswith(revision)
+                 and set(lock["xserver"]["required_extensions"]).issubset(receipt.get("extensions", []))
+                 and receipt.get("binary_sha256") == hashlib.sha256(host.read_bytes()).hexdigest())
+        if icon:
+            valid = valid and receipt.get("icon_sha256") == hashlib.sha256(ICON_PATH.read_bytes()).hexdigest()
+        if not valid:
+            raise ValueError("binary, revision, profile, extensions or icon mismatch")
+    except (OSError, ValueError, TypeError, AttributeError) as error:
+        raise BuildError(f"cannot reuse {host}: {error}; rebuild without --skip-host-build/--skip-native-build") from error
+    if not full_host:
+        # Check actual application API references before creating a release.
+        # This also guards future mdo changes that need an additional xrt root.
+        available = set(receipt.get("xrt_symbols", []))
+        used = set()
+        for path in APP.rglob("*"):
+            if path.suffix not in (".c", ".h") or "generated" in path.relative_to(APP).parts:
+                continue
+            source = path.read_text(encoding="utf-8")
+            source = re.sub(r"/\*.*?\*/|//[^\n]*", " ", source, flags=re.DOTALL)
+            used.update(re.findall(r"\b(xrt[A-Za-z0-9_]+)\s*\(", source))
+        missing = sorted(used - available)
+        if missing:
+            raise BuildError("compact host is missing application APIs: " + ", ".join(missing) + "; extend tools/host-profile.json")
+
+
 def build(args: argparse.Namespace, xserver: Path, lock: dict) -> None:
     suffix = ".exe" if os.name == "nt" else ""
     output = (args.output or ROOT / ("mdo" + suffix)).resolve()
@@ -318,6 +394,7 @@ def build(args: argparse.Namespace, xserver: Path, lock: dict) -> None:
             "--build-dir", str(ROOT / ".build" / "xserver"),
             "--output", str(host),
             "--cc", args.cc,
+            *host_profile_arguments(args.full_host),
             *(["--icon", str(ICON_PATH)] if os.name == "nt" else []),
         ], xserver, args.dry_run)
     elif not args.dry_run and not host.is_file():
@@ -326,6 +403,8 @@ def build(args: argparse.Namespace, xserver: Path, lock: dict) -> None:
     packer = host.with_name("xsw.exe") if os.name == "nt" else host
     if not args.dry_run and not packer.is_file():
         raise BuildError(f"pack host was not built: {packer}")
+    if not args.dry_run:
+        verify_host_receipt(packer, lock, args.full_host, icon=os.name == "nt")
     run([str(packer), "pack", str(APP), "-o", str(output)], ROOT, args.dry_run)
     print(f"[mdo] {'would build' if args.dry_run else 'built'} {output}", flush=True)
 
@@ -342,6 +421,7 @@ def main(argv: list[str] | None = None) -> int:
                         help="verify dependencies and generate the unity source only")
     parser.add_argument("--skip-host-build", action="store_true",
                         help="reuse .build/host after dependency verification")
+    parser.add_argument("--full-host", action="store_true", help="use the complete xs/xrt/Windows SDK instead of the mdo compact profile")
     parser.add_argument("--dry-run", action="store_true",
                         help="print host and pack commands without executing them")
     args = parser.parse_args(argv)

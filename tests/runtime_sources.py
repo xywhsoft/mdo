@@ -12,6 +12,14 @@ APP = (Path(__file__).resolve().parents[1] / "app").resolve()
 QUOTED_INCLUDE = re.compile(r'^\s*#\s*include\s*"([^"\r\n]+)"', re.MULTILINE)
 
 
+def copy_echo_module(site: Path) -> None:
+    """Inject the test tool into a disposable Home, never the product tree."""
+    source = Path(__file__).resolve().parent / "fixtures/modules/echo.c"
+    target = site / "default-home/modules/tools/fixture_echo.c"
+    target.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(source, target)
+
+
 def copy_app_source(relative: str, site: Path) -> None:
     destination = site.resolve()
     seen: set[Path] = set()
