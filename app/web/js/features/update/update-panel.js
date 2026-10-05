@@ -1,5 +1,6 @@
 import { api } from "../../api/client.js";
 import { currentLocale, subscribeLocale } from "../../i18n.js";
+import { subscribeTarget, targetState } from "../../api/target.js";
 
 const labels = {
   "zh-CN": { title: "应用更新", description: "与线上安装包比较，确认后下载和安装。配置、项目和会话会保留。",
@@ -8,28 +9,33 @@ const labels = {
     disabled: "开发模式或当前平台不启用自动更新", checking: "正在检查更新…", current: "与线上版本一致",
     available: "有可用更新", downloading: "正在下载并校验…", ready: "更新包已校验，可以安装",
     installing: "请在原生窗口确认安装；结束前暂停新任务", error: "更新检查失败，不影响正常使用",
-    "no-package": "此平台尚未发布更新", failed: "操作失败，请重试", connection: "暂时无法连接本地服务" },
+    "no-package": "此平台尚未发布更新", failed: "操作失败，请重试", connection: "暂时无法连接目标服务",
+    native: "请在目标设备的原生窗口中确认安装" },
   "en-US": { title: "App updates", description: "Compare with the published package. Install after confirmation; your data is preserved.",
     check: "Check for updates", download: "Download update", install: "Install update", restart: "Install and restart",
     cancel: "Cancel download", later: "Later", notice: "An mdo update is available", open: "View update",
     disabled: "Updates are disabled in development or on this platform", checking: "Checking…", current: "Matches the published package",
     available: "Update available", downloading: "Downloading and verifying…", ready: "Verified update ready to install",
     installing: "Confirm in the native window; new tasks are paused", error: "Update check failed; normal use is unaffected",
-    "no-package": "No update published for this platform", failed: "Operation failed; please retry", connection: "Local service is temporarily unavailable" },
+    "no-package": "No update published for this platform", failed: "Operation failed; please retry", connection: "Target service is temporarily unavailable",
+    native: "Confirm installation in the target device's native window" },
   "ru-RU": { title: "Обновления", description: "Сравнение с опубликованным пакетом. Установка после подтверждения; данные сохранятся.",
     check: "Проверить", download: "Скачать", install: "Установить", restart: "Установить и перезапустить",
     cancel: "Отменить загрузку", later: "Позже", notice: "Доступно обновление mdo", open: "Показать",
     disabled: "Обновления отключены в режиме разработки или на этой платформе", checking: "Проверка…", current: "Соответствует опубликованному пакету",
     available: "Есть обновление", downloading: "Загрузка и проверка…", ready: "Пакет проверен и готов к установке",
     installing: "Подтвердите в окне приложения; новые задачи приостановлены", error: "Проверка не удалась; работа приложения не затронута",
-    "no-package": "Для этой платформы нет обновления", failed: "Не удалось; повторите попытку", connection: "Локальный сервис временно недоступен" },
+    "no-package": "Для этой платформы нет обновления", failed: "Не удалось; повторите попытку", connection: "Сервис устройства временно недоступен",
+    native: "Подтвердите установку в окне приложения на целевом устройстве" },
 };
-export function updateActions(status) {
+export function updateActions(status, context = {}) {
+  const writable = !context.selected || (context.connected &&
+    !context.runtimeChanged && context.selected.mode !== "view");
   return {
-    check: !!status?.enabled && !status.busy,
-    download: !!status?.enabled && !status.busy && status.status === "available",
-    install: !!status?.enabled && !status.busy && !!status.ready,
-    cancel: !!status?.busy && status.status === "downloading",
+    check: writable && !!status?.enabled && !status.busy,
+    download: writable && !!status?.enabled && !status.busy && status.status === "available",
+    install: writable && !context.selected && !!status?.enabled && !status.busy && !!status.ready,
+    cancel: writable && !!status?.busy && status.status === "downloading",
   };
 }
 export function createUpdatePanel({ root, notice, navigation, transport = api }) {
@@ -45,11 +51,12 @@ export function createUpdatePanel({ root, notice, navigation, transport = api })
     statusNode.textContent = status ? words[status.status] ?? words.failed : words.checking;
     if (status?.message) statusNode.textContent += " · " + status.message;
     if (status?.last_install_message) statusNode.textContent += " · " + status.last_install_message;
+    if (status?.ready && targetState().selected) statusNode.textContent += " · " + words.native;
     if (failure) statusNode.textContent += " · " + failure;
     else if (connectionLost) statusNode.textContent += " · " + words.connection;
     notes.textContent = status?.notes ?? "";
     notes.hidden = !notes.textContent;
-    const actions = updateActions(status);
+    const actions = updateActions(status,targetState());
     for (const button of root.querySelectorAll("[data-update-action]")) {
       const action = button.dataset.updateAction;
       button.disabled = pending || !actions[action];
@@ -69,14 +76,16 @@ export function createUpdatePanel({ root, notice, navigation, transport = api })
     if (destroyed || pending) return schedule();
     pending = true;
     try {
-      const latest = await transport.get("/update");
+      const latest = (await transport.get("/update")).data;
+      if (!latest || typeof latest.enabled !== "boolean" || typeof latest.status !== "string")
+        throw new Error("Invalid update status");
       if (!destroyed) { status = latest; connectionLost = false; render(); }
     } catch { if (!destroyed) connectionLost = true; }
     finally { pending = false; if (!destroyed) render(); schedule(); }
   }
   async function action(event) {
     const kind = event.target.closest("[data-update-action]")?.dataset.updateAction;
-    if (!kind || pending || !updateActions(status)[kind]) return;
+    if (!kind || pending || !updateActions(status,targetState())[kind]) return;
     pending = true; failure = ""; render();
     try {
       if (kind === "cancel") await transport.delete("/update/download");
@@ -90,9 +99,10 @@ export function createUpdatePanel({ root, notice, navigation, transport = api })
   notice.querySelector("[data-update-open]").addEventListener("click", open);
   notice.querySelector("[data-update-later]").addEventListener("click", later);
   const unsubscribe = subscribeLocale(render);
+  const unsubscribeTarget = subscribeTarget(render);
   render(); void refresh();
   return { refresh, destroy() {
-    destroyed = true; clearTimeout(timer); unsubscribe();
+    destroyed = true; clearTimeout(timer); unsubscribe(); unsubscribeTarget();
     root.removeEventListener("click", action);
     notice.querySelector("[data-update-open]").removeEventListener("click", open);
     notice.querySelector("[data-update-later]").removeEventListener("click", later);
