@@ -42,14 +42,34 @@ export async function connectorJob(body, { signal } = {}) {
   throw new Error("Device connection deadline exceeded");
 }
 export async function connectorTicket(deviceId, mode, signal, expectedOwner) {
-  const account = await connectorRequest("/account", undefined, { signal });
+  let account = await connectorRequest("/account", undefined, { signal });
+  const checkOwner = () => {
+    if (expectedOwner && account.profile?.id && String(account.profile.id) !== expectedOwner) {
+      const error = new Error("控制端账号已变化，请重新选择该账号的设备");
+      error.code = "connector_account_changed"; throw error;
+    }
+  };
+  checkOwner();
+  // The controller account is separate from target account polling. Renew a
+  // retained refresh token before treating an expired access token as logout.
+  if (account.state === "refreshing" && account.refresh_available) {
+    if (!account.busy) await connectorRequest("/account/refresh", {}, { signal });
+    const until = Date.now() + 20000;
+    while (account.state === "refreshing" && Date.now() < until) {
+      if (signal?.aborted) throw new DOMException("Connection cancelled", "AbortError");
+      await new Promise(resolve => setTimeout(resolve, 250));
+      account = await connectorRequest("/account", undefined, { signal });
+      checkOwner();
+    }
+    if (account.state === "refreshing") {
+      const error = new Error("控制端登录状态正在刷新，请稍后重新连接");
+      error.code = "connector_refresh_pending"; throw error;
+    }
+  }
   if (account.state !== "signed_in" || !Number.isSafeInteger(account.profile?.id)) {
     const error = new Error("请先登录控制端账号"); error.code = "connector_login_required"; throw error;
   }
-  if (expectedOwner && String(account.profile.id) !== expectedOwner) {
-    const error = new Error("控制端账号已变化，请重新选择该账号的设备");
-    error.code = "connector_account_changed"; throw error;
-  }
+  checkOwner();
   const state = await connectorJob({ action: "connect", device_id: deviceId, mode }, { signal });
   const ticket = await connectorRequest("/connector/ticket", { job_id: state.job.id }, { signal });
   return { origin: account.origin, owner: String(account.profile.id), ticket, deviceId, mode };
