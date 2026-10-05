@@ -114,17 +114,23 @@ bool MdoMemoryPreviewImportDirectory(const char* Directory,
 bool MdoMemoryImportDirectory(const MdoMemoryImportOptions* Options,
     MdoMemoryTransferSummary* Summary, xwork_error* Error);
 
-/* Builds a bounded owned prompt fragment from one atomic global/project view.
- * The caller releases it with xrtFree. Empty memory returns an empty string. */
+/* File memory uses the ordinary read/ls/glob/grep/write/edit tools. Only brief
+ * maintenance instructions and bounded MEMORY.md indices enter the prompt.
+ * Legacy JSON records remain available to the host UI and are copied into
+ * Markdown on first use, without replacing user-maintained Markdown files. */
 str MdoMemoryBuildPrompt(const char* ProjectId, size_t* Bytes,
     uint64* Generation, xwork_error* Error);
 
-/* Agent bindings provide project isolation and audit correlation to runtime
- * memory tools. Bind owns copies and a project lease; tool-catalog references
- * keep it alive until their final release, including after Unbind. Unbind is
- * an idempotent lifecycle action. */
-bool MdoMemoryAgentBind(xwork_agent* Agent, const char* ProjectId,
-    const char* SessionId, xwork_error* Error);
-void MdoMemoryAgentUnbind(xwork_agent* Agent);
+bool MdoMemoryConfigureFileTools(xwork_agent* Agent, const char* ProjectId,
+    xwork_error* Error);
+
+/* The UI edits the same Markdown files as the Agent. Content is the complete
+ * file, including optional frontmatter. Snapshot revisions fingerprint the
+ * files, so direct file-tool edits invalidate stale UI saves. */
+MdoMemorySnapshot* MdoMemoryFileSnapshotCreate(MdoMemoryScope Scope,
+    const char* ProjectId, xwork_error* Error);
+bool MdoMemoryFileWrite(MdoMemoryScope Scope, const char* ProjectId,
+    const char* Id, const char* Content, bool Remove, uint64 ExpectedRevision,
+    uint64* Revision, xwork_error* Error);
 
 #endif

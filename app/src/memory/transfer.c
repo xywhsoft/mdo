@@ -607,6 +607,10 @@ static bool MdoMemoryTransferGatherExport(MdoMemoryTransfer* Transfer,
         char Path[MDO_MEMORY_TRANSFER_PATH];
         bool Backup = false;
         int Written;
+        /* This compatibility exporter handles legacy JSON only. Portable
+         * Home backups include the Markdown directories maintained by Agents. */
+        if ( (Entry.Flags & XDIR_ENTRY_UTF8) != 0u &&
+             Entry.Info.Type == XFILE_TYPE_DIRECTORY ) continue;
         if ( (Entry.Flags & XDIR_ENTRY_UTF8) == 0u ||
              Entry.Info.Type != XFILE_TYPE_FILE ||
              !MdoMemoryTransferProjectName(Entry.Name, ProjectId, &Backup) )

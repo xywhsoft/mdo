@@ -14,6 +14,12 @@ const removeButton = dialog.querySelector("#memory-remove");
 const deleteConfirm = dialog.querySelector("#memory-delete-confirm");
 const encoder = new TextEncoder();
 
+// Edit complete Markdown, including optional frontmatter, in one file.
+for (const name of ["title", "tags", "pinned"]) {
+  form.elements[name].closest("label").hidden = true;
+  form.elements[name].required = false;
+}
+
 let collectionPath = "";
 let collection = null;
 let selectedId = "";
@@ -56,7 +62,7 @@ function renderTitle() {
 function fields() {
   return {
     id: form.elements.id.value.trim(),
-    title: form.elements.title.value.trim(),
+    title: form.elements.id.value.trim(),
     content: form.elements.content.value,
     tags: form.elements.tags.value.split(",").map((tag) => tag.trim()).filter(Boolean),
     pinned: form.elements.pinned.checked,
@@ -163,7 +169,7 @@ async function select(id) {
     fill(result.data);
     setLocalizedStatus("memory.editing", { title: result.data.title },
       `正在编辑“${result.data.title}”`);
-    form.elements.title.focus();
+    form.elements.content.focus();
   } catch (cause) {
     if (serial === requestSerial) setStatus(errorMessage(cause), "error");
   } finally {
@@ -173,9 +179,9 @@ async function select(id) {
 
 function validate(input) {
   if (!form.reportValidity()) return false;
-  if (encoder.encode(input.content).length > 16 * 1024) {
+  if (encoder.encode(input.content).length > 64 * 1024) {
     setLocalizedStatus("memory.contentLimit", {},
-      "内容最多 16 KiB（按 UTF-8 字节计算）。", "error");
+      "内容最多 64 KiB（按 UTF-8 字节计算）。", "error");
     return false;
   }
   if (input.tags.length > 16 || new Set(input.tags).size !== input.tags.length ||
@@ -297,8 +303,8 @@ export function openMemoryPanel(project = null, { selectId = "", onClose = null 
   returnFocus = document.activeElement;
   onClosed = onClose;
   renderTitle();
-  pathLabel.textContent = project ? `Home/memory/projects/${project.id}.json`
-    : "Home/memory/global.json";
+  pathLabel.textContent = project ? `mdo-home/memory/projects/${project.id}/`
+    : "mdo-home/memory/global/";
   fill();
   clear(list);
   dialog.showModal();

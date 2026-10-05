@@ -207,6 +207,10 @@ static bool MdoAgentsSessionConfig(const xllm_model_profile* Profile,
         Config->uMaxInputTokens = Config->uContextWindowTokens;
     }
     Config->uMaxOutputTokens = MaxOutputTokens;
+    /* Search snippets and normal file reads must fit before compaction. These
+     * are result bounds, not tool schemas added to every request. */
+    Config->uToolResultCapBytes = 16u * 1024u;
+    Config->uToolResultTotalCapBytes = 64u * 1024u;
     /* A narrower Agent window needs reserves derived from that same window;
      * retaining the provider recommendation can make recovery impossible. */
     if ( Config->uContextWindowTokens != Profile->uContextWindowTokens ||
@@ -877,7 +881,6 @@ void MdoAgentSessionOptionsInit(MdoAgentSessionOptions* Options)
 static void MdoAgentSessionFree(MdoAgentSession* Session)
 {
     if ( Session == NULL ) return;
-    MdoMemoryAgentUnbind(Session->Agent);
     xworkAgentDestroy(Session->Agent);
     MdoAskBindingDestroy(Session->AskBinding);
     MdoAgentOwnerRelease(Session->Owner);
@@ -1139,13 +1142,35 @@ MdoAgentSession* MdoAgentSessionCreateWithRuntime(xwork_runtime* Runtime,
                     strlen(Instructions), Error) ||
                   !MdoAgentsAppendPrompt(&Prompt, InstructionsFooter,
                     sizeof(InstructionsFooter) - 1u, Error)) ) goto fail;
-            if ( Settings.MemoryEnabled ) {
-                MemoryPrompt = MdoMemoryBuildPrompt(Options->ProjectId,
-                    &MemoryPromptBytes, &MemoryGeneration, Error);
-                if ( MemoryPrompt == NULL ||
-                     !MdoAgentsAppendPrompt(&Prompt, MemoryPrompt,
-                        MemoryPromptBytes, Error) ) goto fail;
+        }
+    }
+    /* Memory is a dynamic context section. Keep the recovered Agent/Skill/user
+     * instructions, but refresh memory paths and indices when a run is admitted.
+     * Remove the old structured-memory section as well during the transition. */
+    {
+        static const char* Starts[] = { "\n\n<file_memory>\n",
+            "\n\nMEMORY_REFERENCE_DATA_JSONL_BEGIN\n" };
+        static const char* Ends[] = { "</file_memory>\n",
+            "MEMORY_REFERENCE_DATA_JSONL_END\n" };
+        size_t i;
+        for ( i = 0u; i < 2u; ++i ) {
+            char* Begin = strstr(Prompt, Starts[i]);
+            if ( Begin != NULL ) {
+                char* End = strstr(Begin, Ends[i]);
+                if ( End != NULL ) memmove(Begin, End + strlen(Ends[i]),
+                    strlen(End + strlen(Ends[i])) + 1u);
             }
+        }
+        if ( Settings.MemoryEnabled ) {
+            MemoryPrompt = MdoMemoryBuildPrompt(Options->ProjectId,
+                &MemoryPromptBytes, &MemoryGeneration, Error);
+            if ( MemoryPrompt == NULL || !MdoAgentsAppendPrompt(&Prompt,
+                    MemoryPrompt, MemoryPromptBytes, Error) ) goto fail;
+        }
+        if ( Options->Recover && !xllmSessionSetSystemPrompt(Owner->LlmSession,
+                Prompt, &ModelError) ) {
+            MdoAgentsModelError(Error, &ModelError, "cannot refresh memory context");
+            goto fail;
         }
     }
     Permission = Options->PermissionProfile != NULL &&
@@ -1180,7 +1205,7 @@ MdoAgentSession* MdoAgentSessionCreateWithRuntime(xwork_runtime* Runtime,
     DefinitionConfig.uMaxConcurrentSubagents = Settings.MaxParallelSubagents;
     /* xllm-session admits at most 2000 bytes per tool result by default.
      * Leave room for xwork's status prefix and artifact locator. */
-    DefinitionConfig.iMaxInlineToolBytes = 1024u;
+    DefinitionConfig.iMaxInlineToolBytes = 12u * 1024u;
     DefinitionConfig.bRegisterBuiltinTools = true;
     DefinitionConfig.bAutoSaveSession =
         Options->SessionPath != NULL && Options->SessionPath[0] != '\0';
@@ -1257,8 +1282,8 @@ MdoAgentSession* MdoAgentSessionCreateWithRuntime(xwork_runtime* Runtime,
     if ( !MdoAskRegisterTool(Session->Agent, Options->ProjectId,
             Options->AskScopeId != NULL ? Options->AskScopeId :
                 Options->ProductSessionId, &Session->AskBinding, Error) ||
-         !MdoMemoryAgentBind(Session->Agent, Options->ProjectId,
-            Options->ProductSessionId, Error) ||
+         (Settings.MemoryEnabled &&
+          !MdoMemoryConfigureFileTools(Session->Agent, Options->ProjectId, Error)) ||
          !MdoAgentsPublishSubagents(Owner, Session->Agent, &AgentInfo, &Model,
             &Session->SubagentCount, Error) ||
          !MdoAgentsApplyToolPolicy(Session->Agent, &AgentInfo, AllowedEffects,

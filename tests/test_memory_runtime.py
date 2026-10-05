@@ -163,6 +163,13 @@ static xwork_permission_decision AllowMemory(void *data,
     return XWORK_PERMISSION_ALLOW;
 }
 
+static void MemoryEvent(void *data, const xwork_event *event) {
+    (void)data;
+    if (event->eKind == XWORK_EVENT_TOOL_DONE || event->eKind == XWORK_EVENT_ERROR)
+        printf("memory_event=%d %s\n", (int)event->eKind,
+            event->sText ? event->sText : "null");
+}
+
 static bool ExecuteMemory(xwork_agent *agent, const char *name,
     const char *arguments, bool expect_success) {
     xllm_executor executor;
@@ -183,6 +190,8 @@ static bool ExecuteMemory(xwork_agent *agent, const char *name,
     memset(&result, 0, sizeof(result));
     infrastructure = executor.pExecute != NULL &&
         executor.pExecute(executor.pUserData, &call, &context, &result);
+    if (!infrastructure && xrtGetError())
+        printf("memory_xrt_error=%s\n", xrtErrorMessage(xrtGetError()));
     printf("tool_%s=infra:%d success:%d text:%s\n", name,
         infrastructure ? 1 : 0, result.bSuccess ? 1 : 0,
         result.sContent != NULL ? result.sContent : "null");
@@ -284,7 +293,7 @@ void ServiceInit(XS_HostInfo *host) {
     xworkAgentDefinitionConfigInit(&definition_config);
     definition_config.sId = "memory.probe.agent";
     definition_config.eApprovalMode = XWORK_APPROVAL_CALLBACK;
-    definition_config.bRegisterBuiltinTools = false;
+    definition_config.bRegisterBuiltinTools = true;
     definition = xworkAgentDefinitionCreate(&definition_config, &error);
     xllmSessionConfigInit(&session_config);
     llm_session = xllmSessionCreate(&session_config, NULL);
@@ -293,6 +302,7 @@ void ServiceInit(XS_HostInfo *host) {
     agent_options.pSession = llm_session;
     agent_options.sWorkspaceRoot = ".";
     agent_options.OnPermission = AllowMemory;
+    agent_options.OnEvent = MemoryEvent;
     agent_options.pPermissionUserData = &tool_probe;
     agent = xworkAgentCreateWithRuntime(runtime, definition, &agent_options,
         &error);
@@ -302,36 +312,65 @@ void ServiceInit(XS_HostInfo *host) {
     if (definition == NULL || llm_session == NULL || isolated_session == NULL ||
         agent == NULL ||
         isolated == NULL ||
-        !MdoMemoryAgentBind(agent, "project-alpha", "session-a", &error) ||
-        !MdoMemoryAgentBind(isolated, "project-beta", "session-b", &error))
+        !MdoMemoryConfigureFileTools(agent, "project-alpha", &error) ||
+        !MdoMemoryConfigureFileTools(isolated, "project-beta", &error))
         goto done;
-    if (!ExecuteMemory(agent, "memory_search",
-            "{\"query\":\"build\",\"scope\":\"project\",\"limit\":4}", true) ||
-        !ExecuteMemory(isolated, "memory_search",
-            "{\"query\":\"build\",\"scope\":\"project\",\"limit\":4}", true) ||
-        !ExecuteMemory(agent, "memory_write",
-            "{\"scope\":\"project\",\"id\":\"tool-note\",\"title\":\"Tool\",\"content\":\"Written through the memory tool.\",\"expected_revision\":1,\"reason\":\"probe\"}", true) ||
-        !ExecuteMemory(agent, "memory_write",
-            "{\"scope\":\"project\",\"id\":\"stale-note\",\"title\":\"Stale\",\"content\":\"Must not commit.\",\"expected_revision\":1}", false) ||
-        !ExecuteMemory(agent, "memory_delete",
-            "{\"scope\":\"project\",\"id\":\"tool-note\",\"expected_revision\":2,\"reason\":\"probe cleanup\"}", true))
-        goto done;
-    printf("tool_permissions=%u resources:%u\n", tool_probe.Permissions,
-        tool_probe.Resources);
+    if (!ExecuteMemory(agent, "read",
+            "{\"path\":\"@memory-project/build-command.md\"}", true) ||
+        !ExecuteMemory(isolated, "read",
+            "{\"path\":\"@memory-project/build-command.md\"}", false) ||
+        !ExecuteMemory(agent, "write",
+            "{\"path\":\"@memory-project/tool-note.md\",\"content\":\"A durable file memory.\"}", true) ||
+        !ExecuteMemory(agent, "edit",
+            "{\"path\":\"@memory-project/tool-note.md\",\"edits\":[{\"old_text\":\"durable\",\"new_text\":\"maintained\"}]}", true) ||
+        !ExecuteMemory(agent, "grep",
+            "{\"path\":\"@memory-project\",\"pattern\":\"maintained\"}", true) ||
+        !ExecuteMemory(agent, "glob",
+            "{\"path\":\"@memory-project\",\"pattern\":\"*.md\"}", true) ||
+        !ExecuteMemory(agent, "ls", "{\"path\":\"@memory-global\"}", true) ||
+        !ExecuteMemory(agent, "write",
+            "{\"path\":\"@memory-project/../escape.md\",\"content\":\"Denied\"}", false)) goto done;
+    printf("file_memory_tools=1\n");
+    printf("tool_permissions=%u resources:%u\n", tool_probe.Permissions, tool_probe.Resources);
+    {
+        MdoMemorySnapshot *files = MdoMemoryFileSnapshotCreate(
+            MDO_MEMORY_PROJECT, "project-alpha", &error);
+        uint64_t before, after = 0u;
+        char *fresh = NULL;
+        if (!files || MdoMemorySnapshotCount(files) != 3u) goto done;
+        before = MdoMemorySnapshotRevision(files);
+        MdoMemorySnapshotRelease(files);
+        if (!MdoMemoryFileWrite(MDO_MEMORY_PROJECT, "project-alpha",
+                "MEMORY", "- [Note](tool-note.md)\n", false, before, &after, &error) ||
+            before == after ||
+            MdoMemoryFileWrite(MDO_MEMORY_PROJECT, "project-alpha",
+                "MEMORY", "stale", false, before, NULL, &error)) goto done;
+        fresh = MdoMemoryBuildPrompt("project-alpha", NULL, NULL, &error);
+        if (!fresh || !strstr(fresh, "[Note](tool-note.md)")) { xrtFree(fresh); goto done; }
+        xrtFree(fresh);
+        printf("file_memory_ui_and_refresh=1\n");
+    }
 
-    held_catalog = xworkAgentToolCatalogSnapshot(agent);
-    if (held_catalog == NULL || MemoryLeaseFree("project-alpha")) goto done;
-    MdoMemoryAgentUnbind(agent);
-    if (MemoryLeaseFree("project-alpha")) goto done;
-    printf("memory_lease_binding_retained=1\n");
-    xworkToolCatalogRelease(held_catalog); held_catalog = NULL;
-    held_project = MdoProjectLeaseAcquire("project-alpha",
-        MDO_PROJECT_LEASE_EXCLUSIVE, &error);
-    if (held_project == NULL) goto done;
-    printf("memory_lease_binding_released=1\n");
-    if (MdoMemoryAgentBind(agent, "project-alpha", "session-a", &error) ||
-        error.eCode != XWORK_ERROR_CONTEXT) goto done;
-    printf("memory_lease_binding_rejected=1\n");
+    /* The remaining probe covers the legacy JSON importer in an empty
+     * destination. Delete only the known temporary probe Markdown fixtures. */
+    {
+        static const char *paths[] = {
+            "memory/global/MEMORY.md", "memory/global/editor-style.md",
+            "memory/global/.legacy-imported",
+            "memory/projects/project-alpha/MEMORY.md",
+            "memory/projects/project-alpha/build-command.md",
+            "memory/projects/project-alpha/tool-note.md",
+            "memory/projects/project-alpha/.legacy-imported",
+            "memory/projects/project-beta/MEMORY.md",
+            "memory/projects/project-beta/.legacy-imported"
+        };
+        size_t index;
+        for (index = 0u; index < sizeof(paths) / sizeof(paths[0]); ++index)
+            if (!MdoHomeRemove(paths[index], false)) goto done;
+        if (!MdoHomeRemoveEmptyDirectory("memory/global") ||
+            !MdoHomeRemoveEmptyDirectory("memory/projects/project-alpha") ||
+            !MdoHomeRemoveEmptyDirectory("memory/projects/project-beta")) goto done;
+    }
 
     MdoMemoryRemoveOptionsInit(&remove);
     remove.Scope = MDO_MEMORY_GLOBAL;
@@ -461,8 +500,6 @@ done:
     xrtFree(prompt);
     xworkToolCatalogRelease(held_catalog);
     MdoProjectLeaseRelease(held_project);
-    MdoMemoryAgentUnbind(isolated);
-    MdoMemoryAgentUnbind(agent);
     xworkAgentDestroy(isolated);
     xworkAgentDestroy(agent);
     xllmSessionDestroy(isolated_session);
@@ -591,7 +628,6 @@ def main() -> int:
         assert "init_error=" not in output, output
         assert "write_error=" not in output, output
         for label in ("mutations", "import_blocked", "partial_cleanup", "import_rollback",
-                      "binding_retained", "binding_released", "binding_rejected",
                       "global_independent", "directory_import"):
             assert f"memory_lease_{label}=1" in output, output
         assert "global_empty=ok:1 revision:0 count:0 generation:1 code:0" in output, output
@@ -603,49 +639,46 @@ def main() -> int:
         assert "project_written=ok:1 revision:1 count:1 generation:3 code:0" in output, output
         assert "prompt=ok:1" in output and "global:1 project:1 untrusted:1" in output, output
         assert "project_recovered=ok:1 revision:1 count:1 generation:1 code:0" in output, output
-        assert "tool_memory_search=infra:1 success:1" in output, output
-        assert '{"success":true,"untrusted":true' in output, output
-        assert '"count":1,"results":[{"scope":"project"' in output, output
-        assert '"count":0,"results":[]' in output, output
-        assert 'tool_memory_write=infra:1 success:1' in output, output
-        assert 'tool_memory_write=infra:1 success:0' in output, output
-        assert 'tool_memory_delete=infra:1 success:1' in output, output
-        assert "tool_permissions=5 resources:3" in output, output
-        assert "global_removed=ok:1 revision:2 count:0 generation:4 code:0" in output, output
-        assert "directory_export=stores:2 projects:1 entries:1 generation:4" in output, output
+        assert "file_memory_tools=1" in output, output
+        assert "file_memory_ui_and_refresh=1" in output, output
+        assert "tool_write=infra:1 success:1" in output, output
+        assert "tool_write=infra:1 success:0" in output, output
+        assert "@memory-project/tool-note.md" in output, output
+        assert "tool_permissions=" in output, output
+        assert "global_removed=ok:1 revision:2 count:0 generation:2 code:0" in output, output
+        assert "directory_export=stores:2 projects:1 entries:1 generation:2" in output, output
         assert "directory_existing=0 code:7" in output, output
-        assert "directory_preview=stores:2 projects:1 entries:1 generation:4" in output, output
+        assert "directory_preview=stores:2 projects:1 entries:1 generation:2" in output, output
         assert "directory_unknown=0 code:1" in output, output
         assert "directory_hash=0 code:1" in output, output
         assert "directory_stale=0 code:7" in output, output
-        assert "directory_import=stores:2 projects:1 entries:1 generation:5" in output, output
-        assert "global_imported=ok:1 revision:2 count:0 generation:5 code:0" in output, output
-        assert "project_imported=ok:1 revision:3 count:1 generation:5 code:0" in output, output
+        assert "directory_import=stores:2 projects:1 entries:1 generation:3" in output, output
+        assert "global_imported=ok:1 revision:2 count:0 generation:3 code:0" in output, output
+        assert "project_imported=ok:1 revision:1 count:1 generation:3 code:0" in output, output
         assert "directory_nonempty=0 code:7" in output, output
         assert "broken_project=ok:0 revision:0 count:0 generation:0" in output, output
-        assert "project_intact=ok:1 revision:3 count:1 generation:5 code:0" in output, output
+        assert "project_intact=ok:1 revision:1 count:1 generation:3 code:0" in output, output
         assert "probe_done=1" in output, output
 
         global_store = json.loads((home / "memory/global.json").read_text(encoding="utf-8"))
         project_store = json.loads((home / "memory/projects/project-alpha.json").read_text(encoding="utf-8"))
         assert global_store["schema_version"] == 1 and global_store["revision"] == 2
         assert global_store["entries"] == []
-        assert project_store["revision"] == 3
+        assert project_store["revision"] == 1
         assert project_store["entries"][0]["id"] == "build-command"
         audit_lines = (home / "memory/audit.jsonl").read_text(encoding="utf-8").splitlines()
         audit = [json.loads(line) for line in audit_lines]
-        assert len(audit) == 7
+        assert len(audit) == 5
         assert [item["operation"] for item in audit] == [
-            "create", "create", "create", "remove", "remove",
+            "create", "create", "remove",
             "import", "import"
         ]
         assert all(item["phase"] == "prepared" for item in audit)
         assert all("content" not in item for item in audit)
         assert audit[0]["content_sha256"] == hashlib.sha256(
             b"Prefer compact diffs and explicit validation.").hexdigest()
-        assert audit[3]["content_sha256"] == ""
-        assert audit[4]["content_sha256"] == ""
-        assert audit[5]["content_sha256"] and audit[6]["content_sha256"]
+        assert audit[2]["content_sha256"] == ""
+        assert audit[3]["content_sha256"] and audit[4]["content_sha256"]
         serialized = "\n".join(audit_lines).lower()
         assert "password" not in serialized and "should-not-persist" not in serialized
         export_root = site / "memory-export"

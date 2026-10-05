@@ -41,8 +41,7 @@ MODULE_V1 = r'''
 #include "mdo/module.h"
 
 static const mdo_host_services_v1 *g_Host;
-static const char *MainTools[] = {"read", "ls", "glob", "grep", "agent",
-    "memory_search", "memory_write", "memory_delete"};
+static const char *MainTools[] = {"read", "ls", "glob", "grep", "agent"};
 static const char *ChildTools[] = {"read", "grep"};
 static const char *Skills[] = {"probe-skill"};
 
@@ -66,7 +65,7 @@ static const mdo_agent_v1 Main = {
     .Id = "probe.main", .Name = "Probe Main",
     .Description = "Bounded main Agent fixture.",
     .SystemPrompt = "probe-system-v1", .PermissionProfile = "read-only",
-    .Tools = MainTools, .ToolCount = 8u,
+    .Tools = MainTools, .ToolCount = 5u,
     .Skills = Skills, .SkillCount = 1u,
     .MaxOutputTokens = 4096u, .MaxTurns = 4u,
     .TimeoutMilliseconds = 5000u, .MaxFinalBytes = 4096u,
@@ -134,7 +133,7 @@ MODULE_V2 = (
 
 MODULE_V1_NO_MEMORY = (
     MODULE_V1.replace(
-        ',\n    "memory_search", "memory_write", "memory_delete"', ""
+        ',\n    "ls", "glob", "grep"', ""
     )
     .replace(".Tools = MainTools, .ToolCount = 8u,",
              ".Tools = MainTools, .ToolCount = 5u,")
@@ -146,7 +145,7 @@ MODULE_V1_NO_MEMORY = (
 )
 MODULE_V2_NO_MEMORY = (
     MODULE_V2.replace(
-        ',\n    "memory_search", "memory_write", "memory_delete"', ""
+        ',\n    "ls", "glob", "grep"', ""
     )
     .replace(".Tools = MainTools, .ToolCount = 8u,",
              ".Tools = MainTools, .ToolCount = 5u,")
@@ -734,7 +733,7 @@ def main() -> int:
         assert "output:4096" in output, output
         assert "skills:1 subagents:1 generations:1/1/1/2" in output, output
         assert "owner_after_create=refs:2 retains:1 releases:0" in output, output
-        assert "memory_tools=search:1 write:0 delete:0" in output, output
+        assert "memory_tools=search:0 write:0 delete:0" in output, output
         assert "reloaded=modules:2 skills:2 pinned:1/1" in output, output
         assert "invalid_reasoning=0" in output, output
         assert "invalid_skill_tools=0" in output, output

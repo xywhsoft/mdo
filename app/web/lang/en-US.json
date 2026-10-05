@@ -970,7 +970,7 @@
   "memory.cancel": "Cancel",
   "memory.close": "Close",
   "memory.content": "Content",
-  "memory.contentLimit": "Content must be at most 16 KiB in UTF-8.",
+  "memory.contentLimit": "Markdown content must be at most 64 KiB in UTF-8.",
   "memory.count": "{count} memory entries · revision {revision}",
   "memory.delete": "Delete",
   "memory.deleted": "Memory entry deleted",
@@ -1527,7 +1527,7 @@
   "recovery.syncing": "Request submitted. Syncing run status…",
   "interaction.ask.freeHint": "Enter your answer. The task continues after you submit.",
   "devices.android.title": "Android background activity",
-  "devices.android.battery": "Allow mdo to run in the background under the phone's App info → Battery settings. Some devices require unrestricted background activity; the ordinary allow-background option may still impose additional limits.",
   "devices.android.notification": "Allow mdo notifications to see the running service and its stop action. If the system offers app freezing or sleeping, disable those restrictions for mdo.",
-  "devices.android.limits": "Change these options in the target phone's system settings. Remote access uses more battery. Force stop, a restart or background restrictions may still take the device offline; reopen mdo to check its status."
+  "devices.android.limits": "Change these options in the target phone's system settings. Remote access uses more battery. Force stop, a restart or background restrictions may still take the device offline; reopen mdo to check its status.",
+  "devices.android.battery": "Allow mdo to run in the background under the phone's App info → Battery settings. Some devices require unrestricted background activity; the ordinary allow-background option may still impose additional limits."
 }

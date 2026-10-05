@@ -5,7 +5,7 @@
 #include "../../include/mdo/home.h"
 #include "../memory/internal.h"
 
-#define MDO_API_MEMORY_CONTENT_CAPACITY (16u * 1024u + 1u)
+#define MDO_API_MEMORY_CONTENT_CAPACITY (64u * 1024u + 1u)
 #define MDO_API_MEMORY_TAG_LIMIT 16u
 
 static bool MdoApiMemoryPath(MdoApiContext* Context, bool Entry,
@@ -231,18 +231,19 @@ static bool MdoApiMemoryWrite(MdoApiContext* Context,
     Options.Pinned = Pinned;
     Options.ExpectedRevision = Revision;
     Options.Actor = "web-ui";
-    Valid = MdoMemoryUpsert(&Options, &Error);
+    Valid = MdoMemoryFileWrite(Scope, Options.ProjectId, Id, Content, false,
+        Revision, &Revision, &Error);
     MdoApiJsonBodyUnit(&Body);
     if ( !Valid ) return MdoApiMemoryFailure(Context, &Error);
     Data = xrtValueObject();
     Valid = Data != NULL && MdoApiValueSetString(Data, "id", Id) &&
-        MdoApiValueSetUInt(Data, "revision", Revision + 1u);
+        MdoApiValueSetUInt(Data, "revision", Revision);
     if ( !Valid ) {
         xrtValueRelease(Data);
         return MdoApiReplyError(Context, 500u, "memory_response_unavailable",
             "Memory was saved but its response is unavailable", NULL);
     }
-    MdoApiMemoryTag(Tag, Revision + 1u);
+    MdoApiMemoryTag(Tag, Revision);
     return MdoApiReplySuccessTakeEntityTag(Context, 200u, Data, Tag);
 }
 
@@ -259,7 +260,7 @@ static bool MdoApiMemoryRoute(MdoApiContext* Context, bool Entry)
     if ( !MdoApiMemoryPath(Context, Entry, &Scope, Project, Id) )
         return MdoApiReplyError(Context, 400u, "invalid_memory_path",
             "Memory path is invalid", NULL);
-    Snapshot = MdoMemorySnapshotCreate(Scope,
+    Snapshot = MdoMemoryFileSnapshotCreate(Scope,
         Scope == MDO_MEMORY_PROJECT ? Project : NULL, &Error);
     if ( Snapshot == NULL ) return MdoApiMemoryFailure(Context, &Error);
     if ( Context->Request->head->MethodCode == XHTTP_METHOD_GET ||
@@ -284,19 +285,20 @@ static bool MdoApiMemoryRoute(MdoApiContext* Context, bool Entry)
         Options.Id = Id;
         Options.ExpectedRevision = Revision;
         Options.Actor = "web-ui";
-        if ( !MdoMemoryRemove(&Options, &Error) )
+        if ( !MdoMemoryFileWrite(Scope, Options.ProjectId, Id, NULL, true,
+                Revision, &Revision, &Error) )
             return MdoApiMemoryFailure(Context, &Error);
         Data = xrtValueObject();
         Result = Data != NULL && MdoApiValueSetString(Data, "id", Id) &&
             MdoApiValueSetBool(Data, "removed", true) &&
-            MdoApiValueSetUInt(Data, "revision", Revision + 1u);
+            MdoApiValueSetUInt(Data, "revision", Revision);
         if ( !Result ) {
             xrtValueRelease(Data);
             return MdoApiReplyError(Context, 500u,
                 "memory_response_unavailable",
                 "Memory was removed but its response is unavailable", NULL);
         }
-        MdoApiMemoryTag(Tag, Revision + 1u);
+        MdoApiMemoryTag(Tag, Revision);
         return MdoApiReplySuccessTakeEntityTag(Context, 200u, Data, Tag);
     }
 }
@@ -319,7 +321,7 @@ bool MdoApiMemoryOpenDirectoryRoute(MdoApiContext* Context)
     MdoMemoryScope Scope;
     char Project[MDO_MEMORY_PROJECT_CAPACITY];
     char Id[MDO_MEMORY_ID_CAPACITY];
-    const char* Directory;
+    char Directory[256];
     MdoApiJsonBody Body;
     MdoApiBodyStatus BodyStatus;
     xfileinfo Info;
@@ -341,7 +343,8 @@ bool MdoApiMemoryOpenDirectoryRoute(MdoApiContext* Context)
     if ( !Opened ) return MdoApiReplyError(Context, 400u,
         "invalid_request", "An empty JSON object is required", NULL);
 
-    Directory = Scope == MDO_MEMORY_GLOBAL ? "memory" : "memory/projects";
+    if ( Scope == MDO_MEMORY_GLOBAL ) snprintf(Directory, sizeof(Directory), "memory/global");
+    else snprintf(Directory, sizeof(Directory), "memory/projects/%s", Project);
     if ( !MdoHomeExternalStat(Directory, &Exists, &Info) )
         return MdoApiReplyError(Context, 503u, "memory_directory_unavailable",
             "Memory directory could not be inspected", NULL);

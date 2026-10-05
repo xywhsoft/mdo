@@ -290,6 +290,7 @@ MdoProjectPurgeInventory* MdoProjectPurgeInventoryCreate(const char* ProjectId,
         { "projects/%s.json", false }, { "projects/%s.json.bak", false },
         { "data/project-drafts/%s.json", false }, { "data/project-drafts/%s.json.bak", false },
         { "memory/projects/%s.json", false }, { "memory/projects/%s.json.bak", false },
+        { "memory/projects/%s", true },
         { "sessions/%s", true }, { "migration/session-prompts/%s", true }
     };
     MdoProjectLease* Lease = NULL;
