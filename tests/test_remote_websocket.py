@@ -67,7 +67,7 @@ static int32 Run(void* data) {
         Valid = Valid && MdoRemoteSocketSend(socket,false,(xbytesview){(const uint8*)"client text",11u}) &&
             MdoRemoteSocketSend(socket,true,(xbytesview){binary,sizeof(binary)});
         if (TEST_CANCEL_POLL) xrtCancelRequest(Stop);
-        uint64 until = xrtDeadlineAfter(4000000u);
+        uint64 until = xrtDeadlineAfter(TEST_KEEPALIVE ? 45000000u : 4000000u);
         while (!xrtDeadlineExpired(until) && MdoRemoteSocketPoll(socket,Message,NULL)) xrtSleep(5);
         closed = MdoRemoteSocketCloseCode(socket);
         peer_closed = MdoRemoteSocketPeerClosed(socket);
@@ -193,6 +193,16 @@ class Peer(socketserver.BaseRequestHandler):
                 code = 1008 if mode == 'remote-revoke' else 1000
                 connection.sendall(frame(8,struct.pack('!H',code)))
                 assert self.recv() == (8,struct.pack('!H',code))
+            elif mode == 'keepalive':
+                # Two native timer heartbeats exercise a quiet persistent
+                # connection. One peer, no request loop or load generation.
+                connection.settimeout(25)
+                for _ in range(2):
+                    opcode,payload = self.recv()
+                    assert opcode == 9 and payload == b'', (opcode,len(payload))
+                    connection.sendall(frame(10,payload))
+                connection.sendall(frame(8,struct.pack('!H',1000)))
+                assert self.recv() == (8,struct.pack('!H',1000))
             else:
                 if mode == 'invalid-utf8': wire,code = frame(1,b'\xff'),1007
                 elif mode == 'masked-server': wire,code = frame(1,b'hello',masked=True),1002
@@ -234,7 +244,7 @@ class Server(socketserver.ThreadingTCPServer):
     allow_reuse_address = True
 
 
-def run(host):
+def run(host, keepalive=False):
     (ROOT/'.build').mkdir(exist_ok=True)
     site = Path(tempfile.mkdtemp(prefix='remote-ws-',dir=ROOT/'.build'))
     certificates(site)
@@ -243,6 +253,7 @@ def run(host):
              ('oversize',False),('fragment-oversize',True),('bad-accept',True),('bad-protocol',False),
              ('missing-protocol',True),('untrusted',True),('bad-host',True),
              ('cancel-open',True),('cancel-poll',True),('reject-message',True),('remote-revoke',True),('large-event',True)]
+    if keepalive: cases = [('keepalive',False),('keepalive',True)]
     for index,(mode,secure) in enumerate(cases):
         with Server(('127.0.0.2' if mode == 'bad-host' else '127.0.0.1',0),Peer) as peer:
             peer.mode,peer.errors,peer.success = mode,[],False
@@ -262,7 +273,8 @@ def run(host):
                        'TEST_PORT':peer.server_address[1], 'TEST_SECURE':secure,
                        'TEST_ORIGIN':peer.origin,'TEST_RESULT':str(result).replace('\\','/'),
                        'TEST_CANCEL_OPEN':mode == 'cancel-open','TEST_CANCEL_POLL':mode == 'cancel-poll',
-                       'TEST_REJECT_MESSAGE':mode == 'reject-message','TEST_LARGE_EVENT':mode == 'large-event'}
+                       'TEST_REJECT_MESSAGE':mode == 'reject-message','TEST_LARGE_EVENT':mode == 'large-event',
+                       'TEST_KEEPALIVE':mode == 'keepalive'}
             source = ''.join(f'#define {key} {json.dumps(value) if isinstance(value,str) else int(value)}\n'
                              for key,value in defines.items())+FIXTURE
             (site/'main.c').write_text(source,encoding='utf-8')
@@ -274,7 +286,7 @@ def run(host):
             with (site/f'host-{index}.log').open('wb') as log:
                 process = subprocess.Popen([str(host),str(site/'xs.json')],cwd=site,stdout=log,stderr=log)
                 try:
-                    for _ in range(200):
+                    for _ in range(1000 if mode == 'keepalive' else 200):
                         if result.exists(): break
                         if process.poll() is not None: raise AssertionError(f'host exited: {site}/host-{index}.log')
                         time.sleep(.05)
@@ -290,9 +302,9 @@ def run(host):
                     else:
                         assert value['opened'] and value['valid'],(mode,value)
                         assert value['close_code'] == {'echo':1000,'invalid-utf8':1007,'masked-server':1002,
-                            'oversize':1009,'fragment-oversize':1009,'reject-message':1008,'remote-revoke':1008,'large-event':1000}[mode],(mode,value)
+                            'oversize':1009,'fragment-oversize':1009,'reject-message':1008,'remote-revoke':1008,'large-event':1000,'keepalive':1000}[mode],(mode,value)
                         assert value['messages'] == (2 if mode == 'echo' else 1 if mode in ('reject-message','large-event') else 0),value
-                        assert value['peer_closed'] == (mode in ('echo','remote-revoke','large-event')),value
+                        assert value['peer_closed'] == (mode in ('echo','remote-revoke','large-event','keepalive')),value
                         assert peer.success,(mode,'peer close not acknowledged')
                     print(f'PASS native {"WSS" if secure else "WS"} {mode}')
                 finally:
@@ -304,4 +316,6 @@ def run(host):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--host',type=Path,default=ROOT/'.build/host/xs.exe')
-    run(parser.parse_args().host.resolve())
+    parser.add_argument('--keepalive',action='store_true',help='quiet WS/WSS connections across two timer heartbeats')
+    args = parser.parse_args()
+    run(args.host.resolve(),args.keepalive)
