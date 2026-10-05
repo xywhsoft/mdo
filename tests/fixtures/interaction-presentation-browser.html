@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="zh-CN" data-theme="dark">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>mdo interaction presentation QA</title>
+<link rel="stylesheet" href="/app/web/css/app.css">
+<style>
+  body { height: 100dvh; overflow: hidden; }
+  .workspace { height: 100%; width: 100%; max-width: 1100px; margin: auto; }
+  .probe-controls { display: flex; gap: 6px; flex-wrap: wrap; padding: 12px; }
+  .probe-controls button { min-height: 36px; }
+  .conversation { padding: 24px; }
+  #result { display: block; margin: 12px 0; font-size: 12px; overflow-wrap: anywhere; }
+</style>
+<main class="workspace">
+  <header class="probe-controls">
+    <button id="permission">权限确认</button><button id="question">Agent 提问</button>
+    <button id="unknown">结果未知</button><button id="read-only">只读恢复</button>
+    <button id="unfinished">回复中断</button><button id="refresh">刷新状态</button>
+  </header>
+  <section class="conversation">
+    <p>用户：请检查项目，并运行测试。</p>
+    <p>Agent：已找到测试入口，准备在项目目录执行。</p>
+    <output id="result">尚未提交任何操作</output>
+  </section>
+  <section class="composer-region">
+    <div id="conversation-docks" class="conversation-docks" hidden></div>
+    <form class="composer">
+      <textarea id="prompt" placeholder="向墨斗描述任务…"></textarea>
+      <div class="composer-toolbar"><span>输入内容始终可以编辑</span></div>
+    </form>
+  </section>
+</main>
+<div id="toast-region"></div>
+<script type="module">
+import { createConversationDocks } from "/app/web/js/features/chat/conversation-docks.js";
+import { createRecoveryDock } from "/app/web/js/features/chat/recovery-dock.js";
+import { createResourceStore } from "/app/web/js/state/store.js";
+import { loadLocale } from "/app/web/js/i18n.js";
+
+const fetchFile = window.fetch.bind(window);
+window.fetch = (url, options) => fetchFile(String(url).startsWith("/lang/") ? "/app/web" + url : url, options);
+await loadLocale("zh-CN");
+const store = data => createResourceStore(data);
+const empty = () => store({ items: [] });
+const route = { view: "workspace", projectId: "qa", sessionId: "presentation" };
+const navigation = { get: () => route, subscribe(fn) { fn(route); return () => {}; } };
+const recoveryStore = store({ resume_required: false, items: [] });
+const approvalsStore = empty(), asksStore = empty();
+const calls = [];
+const action = { tool_call_id: "call", tool: "exec", tool_available: true,
+  automatic_retry_safe: false, effects: ["process"],
+  arguments_json: JSON.stringify({ argv: ["python", "-m", "pytest", "tests"], cwd: "D:/GIT/mdo" }) };
+let generation = 0;
+function setScenario(kind) {
+  generation += 1;
+  approvalsStore.setData({ items: [] }); asksStore.setData({ items: [] });
+  const base = { project_id: "qa", session_id: "presentation", revision: 1, last_sequence: 1,
+    recovery_token: generation.toString(16).padStart(64, "0"), resume_required: true };
+  const items = kind === "read-only" ? [{ ...action, tool: "read", automatic_retry_safe: true,
+    effects: ["read"], arguments_json: '{"path":"README.md"}' }] : [action];
+  recoveryStore.setData(["unknown", "read-only", "unfinished"].includes(kind)
+    ? { ...base, items: kind === "unfinished" ? [] : items } : { resume_required: false, items: [] });
+  if (kind === "permission") approvalsStore.setData({ items: [{ ...action, id: 1, run_id: 3,
+    expires_in_ms: 240000, resources: [{ kind: "command", resource: "python -m pytest tests" }] }] });
+  if (kind === "question") asksStore.setData({ projectId: "qa", sessionId: "presentation",
+    items: [{ id: 2, question: "你希望先修复哪些问题？", options: ["先修复对话体验", "先完善工具执行"] }] });
+}
+window.fetch = async (url, options = {}) => {
+  if (String(url).startsWith("/api/v1/")) {
+    if (options.method && options.method !== "GET") {
+      calls.push({ url, body: JSON.parse(options.body) });
+      document.querySelector("#result").textContent = JSON.stringify(calls.at(-1));
+      approvalsStore.setData({ items: [] }); asksStore.setData({ items: [] });
+      recoveryStore.setData({ project_id: "qa", session_id: "presentation", resume_required: false, items: [] });
+    }
+    return Response.json({ ok: true, data: { id: "run", items: [], terminal: false } });
+  }
+  return fetchFile(url, options);
+};
+const docks = createConversationDocks({ container: document.querySelector("#conversation-docks"),
+  navigation, recoveryStore, approvalsStore, asksStore, tasksStore: empty(), todoStore: empty(),
+  runsStore: store({ items: [{ agent_run_id: 3, project_id: "qa", session_id: "presentation" }] }),
+  onChanged: async () => {}, onOpenTasks() {} });
+createRecoveryDock({ ...docks.recovery, store: recoveryStore });
+for (const kind of ["permission", "question", "unknown", "read-only", "unfinished"])
+  document.getElementById(kind).onclick = () => setScenario(kind);
+document.getElementById("refresh").onclick = () => recoveryStore.setData({ ...recoveryStore.get().data });
+window.qa = { calls, setScenario, check() {
+  const root = document.querySelector("#conversation-docks");
+  const buttons = [...root.querySelectorAll("button")].filter(button => button.getBoundingClientRect().height > 0);
+  return { calls: calls.length, overflow: document.documentElement.scrollWidth > innerWidth,
+    minTarget: Math.min(...buttons.map(button => button.getBoundingClientRect().height)),
+    selected: root.querySelector('.recovery-option[aria-pressed="true"]')?.textContent,
+    promptEditable: !document.querySelector("#prompt").disabled,
+    rawArgumentsOpen: [...root.querySelectorAll(".approval-arguments")].some(details => details.open) };
+} };
+setScenario("permission");
+</script>

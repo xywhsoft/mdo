@@ -1,8 +1,8 @@
 import { abandonRecovery, loadRecovery, resumeRecovery } from "../../state/recovery.js";
 import { clear, element, errorMessage, toast } from "../../utils/dom.js";
 import { subscribeLocale, t } from "../../i18n.js";
-import { effectList, formatArguments } from "../approvals/labels.js";
-import { createRecoveryDecisions } from "../approvals/recovery-decisions.js";
+import { renderToolPreview, renderToolArguments } from "../approvals/tool-preview.js";
+import { createRecoveryDecisions, defaultRecoveryAction } from "../approvals/recovery-decisions.js";
 
 export function createRecoveryDock({ container, summary, store, onResume, onAbandon }) {
   let state = store.get();
@@ -21,7 +21,7 @@ export function createRecoveryDock({ container, summary, store, onResume, onAban
     try {
       const run = await resumeRecovery(operation.data, operation.choices);
       accepted = true;
-      if (decisions.isCurrent(data)) toast(t("recovery.submitted", {}, "恢复决定已提交，正在继续会话"));
+      if (decisions.isCurrent(data)) toast(t("recovery.submitted", {}, "正在继续任务"));
       onResume?.(run, operation.data);
       if (decisions.isCurrent(data)) await loadRecovery();
     } catch (error) {
@@ -44,10 +44,13 @@ export function createRecoveryDock({ container, summary, store, onResume, onAban
       await abandonRecovery(operation.data);
       accepted = true;
       if (decisions.isCurrent(data)) {
-        toast(t("recovery.abandoned", {}, "已结束中断的轮次"));
+        toast(t("recovery.abandoned", {}, "已结束本次回复，可以发送新消息"));
         await loadRecovery();
       }
       await onAbandon?.(operation.data);
+      const current = store.get().data;
+      if (current?.project_id === data.project_id && current?.session_id === data.session_id)
+        document.querySelector("#prompt")?.focus({ preventScroll: true });
     } catch (error) {
       if (decisions.isCurrent(data)) {
         toast(errorMessage(error), "error");
@@ -66,7 +69,7 @@ export function createRecoveryDock({ container, summary, store, onResume, onAban
       className: selected ? "recovery-option selected" : "recovery-option",
       text: label,
       attrs: { type: "button", "aria-pressed": String(selected),
-        "aria-disabled": String(decisions.isBusy(data)),
+        "aria-disabled": String(decisions.isBusy(data) || decisions.isSubmitted(data)),
         "data-recovery-focus": `${id}/${action}` },
     });
     button.disabled = action === "retry" && !item.tool_available;
@@ -76,40 +79,27 @@ export function createRecoveryDock({ container, summary, store, onResume, onAban
 
   function renderCard(data, item) {
     const id = String(item.tool_call_id);
-    const tool = item.tool || t("decision.unknownTool", {}, "未知工具");
-    const effects = effectList(item.effects ?? []) ||
-      t("decision.noEffects", {}, "未声明影响");
+    const tool = item.tool || t("decision.unknownTool", {}, "工具");
     const card = element("article", { className: "recovery-card" });
+    const argumentsView = renderToolArguments(item, {
+      "data-recovery-arguments": id, open: argumentsOpen.get(id) ? "" : null,
+    }, { "data-recovery-focus": `${id}/arguments` });
     card.append(
-      element("header", { className: "approval-heading" }, [
-        element("div", {}, [
-          element("h3", { text: tool }),
-          element("p", { text: `${effects} · ${t("recovery.turn", { number: item.turn },
-            `第 ${item.turn} 轮`)}` }),
-        ]),
-        element("span", { className: "approval-timeout", text: item.automatic_retry_safe
-          ? t("recovery.safeRetry", {}, "可安全重试")
-          : t("recovery.needsDecision", {}, "需明确决定") }),
-      ]),
+      renderToolPreview(item),
       element("p", {
         className: "recovery-warning",
         text: item.tool_available
-          ? t("recovery.retryWarning", {},
-            "上次进程可能已执行此调用。再次执行采用至少一次语义。")
-          : t("recovery.toolUnavailable", {},
-            "当前工具不可用，只能记录为不确定并让模型继续处理。"),
+          ? t(decisions.choice(id) === "retry" ? "recovery.retryWarning" : "recovery.unknownResult")
+          : t("recovery.toolUnavailable"),
       }),
-      element("details", { className: "approval-arguments", attrs: {
-        "data-recovery-arguments": id, open: argumentsOpen.get(id) ? "" : null } }, [
-        element("summary", { text: t("recovery.viewArguments", {}, "查看原调用参数"), attrs: {
-          "data-recovery-focus": `${id}/arguments` } }),
-        element("pre", { text: formatArguments(item.arguments_json) }),
-      ]),
+      argumentsView,
+    );
+    if (item.tool_available) card.append(
       element("div", { className: "recovery-options", attrs: { role: "group",
         "aria-label": t("recovery.group", { tool },
-          `${tool} 的恢复决定`) } }, [
-        optionButton(data, item, "record_uncertain", t("recovery.recordUncertain", {}, "记录为不确定")),
-        optionButton(data, item, "retry", t("recovery.retry", {}, "重新执行")),
+          `${tool} 的处理方式`) } }, [
+        optionButton(data, item, "record_uncertain", t("recovery.recordUncertain")),
+        optionButton(data, item, "retry", t("recovery.retry")),
       ]),
     );
     const details = card.querySelector("details");
@@ -159,18 +149,24 @@ export function createRecoveryDock({ container, summary, store, onResume, onAban
       restoreFocus(focused);
       return;
     }
-    summary.append(
-      element("strong", { text: items.length }),
-      document.createTextNode(items.length
-        ? t("recovery.pendingCallsSuffix", {}, " 个持久化调用需要处理")
-        : t("recovery.modelRetrySuffix", {}, " 个工具调用；需要重新请求模型")),
-    );
-    for (const item of items) container.append(renderCard(data, item));
+    if (decisions.isSubmitted(data)) {
+      summary.textContent = t("recovery.syncing");
+      restoreFocus(focused);
+      return;
+    }
+    const safeCalls = [], uncertainCalls = [];
+    for (const item of items)
+      (defaultRecoveryAction(item) === "retry" ? safeCalls : uncertainCalls).push(item);
+    summary.textContent = t(uncertainCalls.length ? "recovery.pendingSummary" :
+      safeCalls.length ? "recovery.safeSummary" : "recovery.noPendingCalls", { count: items.length });
+    for (const item of uncertainCalls) container.append(renderCard(data, item));
+    if (safeCalls.length && uncertainCalls.length) container.append(element("p", {
+      className: "interaction-hint", text: t("recovery.safeSummary", { count: safeCalls.length }),
+    }));
     const ready = decisions.ready(data);
     const submitButton = element("button", {
       className: "primary-button recovery-submit",
-      text: items.length ? t("recovery.resumeWithChoices", {}, "按以上决定恢复会话")
-        : t("recovery.resume", {}, "继续恢复会话"),
+      text: decisions.isBusy(data) ? t("recovery.continuing") : t("recovery.resume"),
       attrs: { type: "button", "data-recovery-focus": "submit",
         "aria-disabled": String(decisions.isBusy(data)) },
     });
@@ -178,13 +174,9 @@ export function createRecoveryDock({ container, summary, store, onResume, onAban
     submitButton.addEventListener("click", () => void submitRecovery(data));
     if (items.length) container.append(submitButton);
     else {
-      container.append(element("p", { className: "recovery-warning",
-        text: t("recovery.noPendingCalls", {},
-          "上一轮没有待决工具调用。可以继续请求模型，也可以结束该轮并发送后续消息。"),
-      }));
       const abandonButton = element("button", {
         className: "recovery-abandon",
-        text: t("recovery.endTurn", {}, "结束中断轮次"),
+        text: t("recovery.endTurn", {}, "结束本次回复"),
         attrs: { type: "button", "data-recovery-focus": "abandon",
           "aria-disabled": String(decisions.isBusy(data)) },
       });

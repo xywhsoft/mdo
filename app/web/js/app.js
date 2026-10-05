@@ -1703,7 +1703,7 @@ export async function boot() {
   }
   function recoveryRequiredError() {
     const error = new Error(t("composer.recoveryRequired", {},
-      "上轮运行尚未恢复，请先在“决策”中处理；输入和待发送消息会保留。"));
+      "上次回复未完成。请在上方继续任务或结束本次回复；输入内容已保留。"));
     error.code = "recovery_required";
     return error;
   }
@@ -1732,11 +1732,9 @@ export async function boot() {
     const required = !activeRun && recovery?.resume_required === true &&
       !recovery.unavailable && recovery.project_id === selected.projectId &&
       recovery.session_id === selected.sessionId;
-    if (required) {
-      if (composerError.hidden) {
-        showComposerError(recoveryRequiredError());
-      }
-    } else if (state.status === "ready" &&
+    // The inline unfinished-response card already explains the next step.
+    // Reserve the composer notice for an actual blocked Send attempt.
+    if (!required && state.status === "ready" &&
                composerError.dataset.code === "recovery_required") {
       hideComposerError();
     }
@@ -1851,7 +1849,7 @@ export async function boot() {
     if (error?.code === "recovery_required") {
       const openDecisions = element("button", {
         className: "composer-error-action",
-        text: t("composer.openRecovery", {}, "查看中断恢复"),
+        text: t("composer.openRecovery", {}, "查看处理选项"),
         attrs: { type: "button" },
       });
       openDecisions.addEventListener("click", () => {

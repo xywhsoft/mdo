@@ -79,6 +79,8 @@ export function createAskCard({ item, key, deciding, answered, drafts,
   const title = element("h3", { text: t("dock.ask.title"), attrs: { tabindex: "-1" } });
   card.append(renderHeader ? renderHeader(title, card) : title,
     element("p", { className: "ask-dock-question", text: item.question }),
+    element("p", { className: "interaction-hint", text: t((item.options ?? []).length
+      ? "interaction.ask.hint" : "interaction.ask.freeHint") }),
     actions, element("div", { className: "ask-dock-free" }, [input, submit]),
     hint);
   return { node: card, sync() {
