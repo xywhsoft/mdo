@@ -5,10 +5,10 @@ const previous = { document: globalThis.document, window: globalThis.window };
 globalThis.document = Object.assign(new EventTarget(), { hidden: false });
 let nextTimer = 0;
 const timers = new Map();
-globalThis.window = {
+globalThis.window = Object.assign(new EventTarget(), {
   clearTimeout(id) { timers.delete(id); },
   setTimeout(callback, delay) { const id = ++nextTimer; timers.set(id, { callback, delay }); return id; },
-};
+});
 const { timelineStore, clearTimeline } = await import("../app/web/js/features/chat/timeline-store.js");
 const { todoStore, selectTodo, clearTodo } = await import("../app/web/js/state/todo.js");
 const empty = () => Response.json({ ok: true, data: { event_id: 0, items: [] } });

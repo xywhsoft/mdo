@@ -5,8 +5,8 @@ const previous = { document: globalThis.document, window: globalThis.window };
 globalThis.document = Object.assign(new EventTarget(), { hidden: false });
 let timer = 0;
 const timers = new Map();
-globalThis.window = { clearTimeout(id) { timers.delete(id); },
-  setTimeout(fn) { timers.set(++timer, fn); return timer; } };
+globalThis.window = Object.assign(new EventTarget(), { clearTimeout(id) { timers.delete(id); },
+  setTimeout(fn) { timers.set(++timer, fn); return timer; } });
 const { mergeTimelineEvents, timelineStore, refreshSelectedTimeline, clearTimeline } =
   await import("../app/web/js/features/chat/timeline-store.js");
 const { todoStore, selectTodo, clearTodo } = await import("../app/web/js/state/todo.js");

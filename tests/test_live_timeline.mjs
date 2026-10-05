@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test, { after, beforeEach } from "node:test";
 
 const previous = { window: globalThis.window, document: globalThis.document };
-globalThis.window = { setTimeout: () => 1, clearTimeout() {} };
+globalThis.window = Object.assign(new EventTarget(), { setTimeout: () => 1, clearTimeout() {} });
 globalThis.document = Object.assign(new EventTarget(), { hidden: false });
 const { timelineStore, applyLiveTimeline, refreshSelectedTimeline, clearTimeline } =
   await import("../app/web/js/features/chat/timeline-store.js");
