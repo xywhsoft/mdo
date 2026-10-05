@@ -5614,6 +5614,9 @@ def run_unconfigured_model_probe(host: Path) -> None:
         config["services"][0]["port"] = port
         # This is a server/API probe. Native WebView2 has its own GUI gate;
         # loading it here would leave browser cache handles in this temp Home.
+        # class=app starts a window even when the explicit window object is
+        # absent; the UI can then race this probe's configuration transactions.
+        config["services"][0]["class"] = "http"
         config["services"][0].pop("window", None)
         config_path.write_text(json.dumps(config), encoding="utf-8")
         environment = os.environ.copy()
