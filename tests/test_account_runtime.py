@@ -103,7 +103,8 @@ def run(host):
     origin = f'http://127.0.0.1:{website_port}'
     website = fixture(website_port, register_interval=0)
     config = json.loads((website / 'xs.json').read_text())
-    config['services'][0]['host_default']['devfile'] = str(XADMIN / 'main.c')
+    # The website fixture owns its source tree; keep compilation inside AppRoot.
+    config['services'][0]['host_default']['devfile'] = 'main.c'
     (website / 'xs.json').write_text(json.dumps(config))
     (website / 'db/identity.json').write_text(json.dumps({'public_origin': origin, 'applications': [{
         'client_id': 'mdo-desktop', 'name': 'mdo test',
