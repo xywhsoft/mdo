@@ -48,8 +48,9 @@ class Probe:
                 '#include "backup-download.c"\nvoid ServiceInit(XS_HostInfo* pHost)')
         replace(self.site, "src/bootstrap/service.c", "    (void)MdoApiInit();",
                 "    (void)MdoApiInit();\n    BackupDownloadFixtureInit();")
-        replace(self.site, "src/bootstrap/service.c", "    MdoBootstrapUnit();",
-                "    BackupDownloadFixtureUnit();\n    MdoBootstrapUnit();")
+        replace(self.site, "src/bootstrap/service.c",
+                "    MdoBootstrapUnit();\n    MdoApiLiveRelease();",
+                "    BackupDownloadFixtureUnit();\n    MdoBootstrapUnit();\n    MdoApiLiveRelease();")
         replace(self.site, "src/bootstrap/service.c", "    return MdoApiRequest(pRequest);",
                 "    if ( BackupDownloadFixtureControl(pRequest) ) return XS_OK;\n"
                 "    return MdoApiRequest(pRequest);")

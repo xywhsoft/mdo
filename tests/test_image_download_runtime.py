@@ -40,8 +40,9 @@ class Probe:
                 '#include "image-download.c"\nvoid ServiceInit(XS_HostInfo* pHost)')
         replace(self.site, "src/bootstrap/service.c", "    (void)MdoApiInit();",
                 "    (void)MdoApiInit();\n    ImageDownloadFixtureInit();")
-        replace(self.site, "src/bootstrap/service.c", "    MdoBootstrapUnit();",
-                "    ImageDownloadFixtureUnit();\n    MdoBootstrapUnit();")
+        replace(self.site, "src/bootstrap/service.c",
+                "    MdoBootstrapUnit();\n    MdoApiLiveRelease();",
+                "    ImageDownloadFixtureUnit();\n    MdoBootstrapUnit();\n    MdoApiLiveRelease();")
         replace(self.site, "src/bootstrap/service.c", "    return MdoApiRequest(pRequest);",
                 "    if ( ImageDownloadFixtureControl(pRequest) ) return XS_OK;\n"
                 "    return MdoApiRequest(pRequest);")
