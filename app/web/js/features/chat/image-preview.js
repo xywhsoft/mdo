@@ -47,6 +47,7 @@ export function createImagePreview({ dialog, image, caption, closeButton,
     const previous = currentImage;
     currentImage = next;
     previous.replaceWith(next);
+    releaseTargetImage(previous);
     previous.removeAttribute("src");
     const finish = (loaded) => {
       if (active !== selected || currentImage !== next || !dialog.open ||
@@ -58,7 +59,11 @@ export function createImagePreview({ dialog, image, caption, closeButton,
     next.addEventListener("error", () => finish(false), { once: true });
     showName(selected.name);
     renderLoadState();
-    bindTargetImage(next, selected.source);
+    if (selected.targetImage) bindTargetImage(next, selected.source);
+    else {
+      delete next.dataset.mdoImagePath;
+      next.setAttribute("src", selected.source);
+    }
   }
 
   function finishClose(restoreFocus = true) {
@@ -92,7 +97,8 @@ export function createImagePreview({ dialog, image, caption, closeButton,
     const thumbnail = trigger.querySelector("img");
     if (!thumbnail || (!thumbnail.src && !thumbnail.dataset.mdoImagePath)) return;
     const selected = { trigger, reference: trigger.dataset.imageRef,
-      source: thumbnail.dataset.mdoImagePath || thumbnail.currentSrc || thumbnail.src, name: thumbnail.alt, retried: false };
+      source: thumbnail.dataset.mdoImagePath || thumbnail.currentSrc || thumbnail.src,
+      targetImage: Boolean(thumbnail.dataset.mdoImagePath), name: thumbnail.alt, retried: false };
     active = selected;
     dialog.showModal();
     load(selected);
