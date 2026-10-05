@@ -6,23 +6,9 @@ import { createCompositionTracker } from "../../utils/composition.js";
 import { createAskCard } from "../asks/ask-card.js";
 import { reconcileCards } from "../../utils/reconcile.js";
 import { taskBelongsToSession } from "../tasks/task-owner.js";
+import { renderToolPreview, renderToolArguments } from "../approvals/tool-preview.js";
 
 const STATE_KEYS = Object.freeze({ pending: "dock.task.pending", running: "dock.task.running" });
-const EFFECT_KEYS = Object.freeze({
-  read: "dock.effect.read", workspace_write: "dock.effect.workspaceWrite",
-  process: "dock.effect.process", network: "dock.effect.network",
-  external_service: "dock.effect.externalService", secrets: "dock.effect.secrets",
-  schedule: "dock.effect.schedule", agent_delegation: "dock.effect.agentDelegation",
-});
-const RISK_KEYS = Object.freeze({
-  low: "dock.risk.low", medium: "dock.risk.medium", high: "dock.risk.high",
-});
-const RESOURCE_KEYS = Object.freeze({
-  path: "dock.resource.path", command: "dock.resource.command",
-  process: "dock.resource.process", network: "dock.resource.network",
-  external_service: "dock.resource.externalService", secret: "dock.resource.secret",
-  schedule: "dock.resource.schedule", agent: "dock.resource.agent",
-});
 
 function taskCard(onOpenTasks) {
   const list = element("ul", { className: "conversation-dock-list" });
@@ -114,13 +100,12 @@ function approvalContentKey({ expires_in_ms, ...content }) {
 }
 
 function approvalSummary(item) {
-  return t("dock.approval.summary", {
-    risk: RISK_KEYS[item.risk] ? t(RISK_KEYS[item.risk]) :
-      item.risk || t("dock.approval.unknownRisk"),
-    effects: (item.effects ?? []).map((effect) => EFFECT_KEYS[effect]
-      ? t(EFFECT_KEYS[effect]) : effect).join(", ") || t("dock.approval.noEffects"),
-    seconds: Math.ceil(Number(item.expires_in_ms || 0) / 1000),
-  });
+  const seconds = Math.ceil(Number(item.expires_in_ms || 0) / 1000);
+  if (approvalDecisionStatus(String(item.id)) !== "idle")
+    return t("interaction.approval.submitted");
+  return seconds > 0 && seconds <= 60
+    ? t("interaction.approval.expiresSoon", { seconds })
+    : t("interaction.approval.waiting");
 }
 
 function decisionHeader(title, onExpand) {
@@ -135,18 +120,11 @@ function decisionHeader(title, onExpand) {
 
 function approvalCard(item, argumentsOpen, onChanged, onExpand) {
   const key = String(item.id);
-  const card = element("section", { className: "conversation-dock",
+  const card = element("section", { className: "conversation-dock approval-dock",
     attrs: { "data-approval-id": key } });
-  const resources = element("ul", { className: "conversation-dock-list" });
-  for (const resource of item.resources ?? []) resources.append(element("li", {}, [
-    element("span", { className: "conversation-dock-state",
-      text: RESOURCE_KEYS[resource.kind] ? t(RESOURCE_KEYS[resource.kind]) :
-        resource.kind || t("dock.approval.resource") }),
-    element("span", { text: resource.resource }),
-  ]));
   const deny = element("button", { text: t("dock.approval.deny"), attrs: {
     type: "button", "data-dock-focus": `approval/${key}/deny` } });
-  const allow = element("button", { text: t("dock.approval.allowOnce"), attrs: {
+  const allow = element("button", { className: "interaction-primary", text: t("dock.approval.allowOnce"), attrs: {
     type: "button", "data-dock-focus": `approval/${key}/allow` } });
   const allowRun = element("button", { text: t("dock.approval.allowRun"), attrs: {
     type: "button", "data-dock-focus": `approval/${key}/allow_run` } });
@@ -163,27 +141,29 @@ function approvalCard(item, argumentsOpen, onChanged, onExpand) {
       }
     });
   }
-  const argumentsView = element("details", { className: "approval-arguments",
-    attrs: { "data-approval-arguments": key,
-      open: argumentsOpen.get(key) ? "" : null } }, [
-    element("summary", { text: t("dock.approval.arguments"), attrs: {
-      "data-dock-focus": `approval/${key}/arguments` } }),
-    element("pre", { text: item.arguments_json || "{}" }),
-  ]);
+  const argumentsView = renderToolArguments(item, {
+    "data-approval-arguments": key, open: argumentsOpen.get(key) ? "" : null,
+  }, { "data-dock-focus": `approval/${key}/arguments` });
   argumentsView.addEventListener("toggle", () => {
     if (argumentsView.isConnected) argumentsOpen.set(key, argumentsView.open);
   });
-  const summary = element("p", { text: approvalSummary(item) });
-  const title = element("h3", { text: t("dock.approval.title",
-    { tool: item.tool || t("dock.approval.tool") }),
+  const summary = element("p", { className: "interaction-hint", text: approvalSummary(item) });
+  const title = element("h3", { text: t("interaction.approval.title"),
     attrs: { tabindex: "-1", "data-dock-focus": `approval/${key}/title` } });
+  const more = element("details", { className: "approval-scope" }, [
+    element("summary", { text: t("interaction.approval.more"),
+      attrs: { "data-dock-focus": `approval/${key}/scope` } }),
+    element("p", { text: t("interaction.approval.scopeHint") }),
+    element("div", { className: "conversation-dock-actions" }, [allowRun]),
+  ]);
   card.append(
     decisionHeader(title, () => onExpand(card)),
+    renderToolPreview(item),
     summary,
-    resources,
     argumentsView,
+    more,
     element("div", { className: "conversation-dock-actions" },
-      [deny, allow, allowRun]),
+      [deny, allow]),
   );
   return { node: card, sync(next) {
     item = next;
@@ -221,7 +201,7 @@ export function createConversationDocks({ container, navigation, tasksStore, app
   const approvalRoot = element("div", { className: "conversation-dock-stack" });
   const askRoot = element("div", { className: "conversation-dock-stack" });
   const otherRoot = element("div", { className: "conversation-dock-stack" });
-  const recoveryTitle = element("h3", { text: t("recovery.title", {}, "中断恢复"),
+  const recoveryTitle = element("h3", { text: t("recovery.title", {}, "上次回复未完成"),
     attrs: { id: "recovery-title", tabindex: "-1" } });
   const recoverySummary = element("div", { className: "approval-summary",
     attrs: { id: "recovery-summary", "aria-live": "polite" } });
@@ -336,7 +316,7 @@ export function createConversationDocks({ container, navigation, tasksStore, app
     if (!decision) return;
     const viewport = container.getBoundingClientRect();
     const title = decision.querySelector("h3");
-    const approvalAction = decision.querySelector(".conversation-dock-actions button");
+    const approvalAction = decision.querySelector(":scope > .conversation-dock-actions button");
     // On a very short screen, the title and even one action cannot share the
     // dock. Start at the decision context instead of its middle arguments row.
     const crampedApproval = approvalAction && title &&
@@ -581,7 +561,7 @@ export function createConversationDocks({ container, navigation, tasksStore, app
       todoView = null;
       todoErrorView = null;
       taskView = null;
-      recoveryTitle.textContent = t("recovery.title", {}, "中断恢复");
+      recoveryTitle.textContent = t("recovery.title", {}, "上次回复未完成");
       render();
     }),
   ];

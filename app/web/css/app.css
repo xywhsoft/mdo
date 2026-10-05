@@ -2019,3 +2019,39 @@ select:focus-visible,
 .recovery-dock .recovery-warning { font-size: 12px; }
 .recovery-dock .approval-heading p, .recovery-dock .approval-arguments summary { font-size: 11px; }
 .recovery-dock .recovery-option { font-size: 12px; }
+
+/* Pending interactions share one compact surface. Concrete actions stay
+ * visible; raw arguments and broader grants are secondary disclosures. */
+.approval-dock, .ask-dock, .recovery-dock { padding: 14px 16px; border-radius: 14px; }
+.interaction-preview { min-width: 0; }
+.conversation-dock .interaction-operation { margin: 0 0 8px; color: var(--ink); font-size: 13px; font-weight: 600; }
+.interaction-command { max-height: 144px; margin: 0 0 8px; padding: 10px 12px; overflow: auto; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); color: var(--ink); font: 12px/1.55 ui-monospace, "Cascadia Code", Consolas, monospace; white-space: pre-wrap; overflow-wrap: anywhere; }
+.conversation-dock .interaction-target { margin: 4px 0; font: 12px/1.5 ui-monospace, "Cascadia Code", Consolas, monospace; }
+.conversation-dock .interaction-hint { margin: 9px 0; font-size: 12px; line-height: 1.55; }
+.approval-dock .approval-arguments { margin-top: 8px; }
+.approval-dock .approval-arguments summary, .recovery-dock .approval-arguments summary { font-size: 12px; }
+.approval-dock .approval-arguments pre, .recovery-dock .approval-arguments pre { font-size: 11px; line-height: 1.55; }
+.approval-scope { margin-top: 8px; }
+.approval-scope > summary { width: fit-content; padding: 6px 0; color: var(--muted); font-size: 12px; cursor: pointer; }
+.approval-scope p { margin-top: 7px; line-height: 1.55; }
+.approval-scope .conversation-dock-actions { justify-content: flex-start; }
+.approval-scope .conversation-dock-actions button:last-child { border-color: var(--border-strong); background: var(--surface); color: var(--ink); }
+.approval-dock > .conversation-dock-actions .interaction-primary { border-color: var(--accent); background: var(--accent); color: var(--accent-ink); }
+.recovery-dock .approval-summary { display: block; margin: 8px 0 12px; font-size: 12px; line-height: 1.55; }
+.recovery-dock .recovery-card { padding: 12px; border-radius: 10px; }
+.recovery-dock .recovery-warning { margin: 8px 0; color: var(--muted); line-height: 1.55; }
+.recovery-options { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+.recovery-option { padding: 8px; overflow-wrap: anywhere; }
+.recovery-dock .recovery-submit, .recovery-dock .recovery-abandon { font-size: 12px; }
+.recovery-actions { justify-content: flex-end; }
+.recovery-actions button { flex: 0 1 auto; padding-inline: 14px; }
+.ask-dock .ask-dock-question { color: var(--ink); font-size: 14px; line-height: 1.6; }
+.ask-dock-options button { border-radius: 9px; }
+.composer-error[data-code="recovery_required"] { border-color: var(--border-strong); background: var(--surface-raised); color: var(--muted); }
+@media (max-width: 640px) {
+  .approval-dock, .ask-dock, .recovery-dock { padding: 12px; }
+  .approval-scope > summary { min-height: 40px; padding-block: 11px; }
+  .recovery-dock .recovery-option, .recovery-dock .recovery-submit,
+  .recovery-dock .recovery-abandon { min-height: 40px; }
+  .recovery-options { gap: 6px; }
+}
