@@ -256,7 +256,8 @@ bool MdoRemoteSocketPoll(MdoRemoteSocket* Socket, MdoRemoteMessageProc Proc, voi
         Socket->LastRead = xrtClock();
         if (frame.Opcode == XWS_OPCODE_CLOSE) {
             Socket->PeerClosed = true;
-            Socket->CloseCode = size >= 2u ? ((uint16)(uint8)payload[0] << 8u) | (uint8)payload[1] : 1000u;
+            Socket->CloseCode = size >= 2u ?
+                (uint16)(((uint32)(uint8)payload[0] << 8u) | (uint8)payload[1]) : (uint16)1000u;
             Socket->CloseSent = true; (void)MdoRemoteFrame(Socket,XWS_OPCODE_CLOSE,payload,size);
             Socket->Failed = true; return false;
         } else if (frame.Opcode == XWS_OPCODE_PING) {

@@ -99,5 +99,6 @@ bool MdoRemoteIdentityLoad(uint64 MemberId, bool Create, MdoRemoteIdentity* Iden
     Identity->Persistent = ok;
 done:
     MdoAccountSecretValueRelease(value);
-    if (!ok) MdoRemoteIdentityClear(Identity); return ok;
+    if (!ok) MdoRemoteIdentityClear(Identity);
+    return ok;
 }
