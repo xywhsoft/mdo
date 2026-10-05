@@ -140,8 +140,11 @@ def run(host: Path, website_host: Path, exercise=None, native_hook='', native_ro
         assert json.loads(client.recv()[1])['type'] == 'ready'
         hello = json.loads(client.recv()[1]); assert hello['type'] == 'hello' and hello['version'] == 1,hello
         if exercise:
-            client = exercise(client=client,hello=hello,app=app,device=device,call=call,
+            outcome = exercise(client=client,hello=hello,app=app,device=device,call=call,
                 bearer=bearer,website_port=website_port,clients=clients)
+            if isinstance(outcome,dict):
+                client,device,updated = outcome['client'],outcome['device'],outcome['updated_at']
+            else: client = outcome
         # Independently running listing job leaves the native connection alive.
         assert action('/connector/devices',{'action':'refresh'})['stage'] == 'online'
         client.close(); clients.remove(client)
@@ -151,10 +154,11 @@ def run(host: Path, website_host: Path, exercise=None, native_hook='', native_ro
         until(lambda v: v['stage'] == 'online','relay reconnect')
         for _ in range(150):
             listing,_ = call(website_port,'GET','/api/v1/devices',headers=bearer)
-            if listing['data']['devices'][0]['online']: break
+            current = next((v for v in listing['data']['devices'] if v['id'] == device),None)
+            if current and current['online']: break
             time.sleep(.04)
         else: raise AssertionError(('relay reconnect',listing))
-        assert listing['data']['devices'][0]['updated_at'] == updated,'reconnect must not register'
+        assert current['updated_at'] == updated,'reconnect must not register'
         # Unit joins both workers; restore is ticket-only and keeps the ID.
         restart = app(path='/test-remote-lifecycle')
         if online['persistent']:
