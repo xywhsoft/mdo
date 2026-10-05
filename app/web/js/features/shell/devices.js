@@ -16,6 +16,10 @@ export function createDevices() {
     const state = targetState(), name = state.selected?.name || copy("local", {}, "本机");
     const title = copy("target", { name }, `目标设备：${name}`);
     const readonly = state.selected?.mode === "view";
+    const mobileTarget = document.querySelector("#mobile-target-label");
+    mobileTarget.hidden = !state.selected;
+    mobileTarget.textContent = state.selected ? name + (readonly ? ` · ${copy("view", {}, "只读查看")}` : "") : "";
+    mobileTarget.title = title;
     button.querySelector("span").textContent = name + (readonly ? ` · ${copy("view", {}, "只读查看")}` : "");
     settingsTarget.hidden = !state.selected;
     settingsTarget.textContent = title + (readonly ? ` · ${copy("view", {}, "只读查看")}` : "");

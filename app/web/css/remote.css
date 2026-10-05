@@ -35,3 +35,5 @@
 .remote-form button { justify-self: start; }
 .settings-target { max-width: min(32vw, 300px); overflow-wrap: anywhere; font-size: 12px; }
 .settings-target[hidden] { display: none; }
+#mobile-target-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; color: var(--focus); }
+#mobile-target-label[hidden] { display: none; }
