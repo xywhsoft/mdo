@@ -13,7 +13,17 @@
 `python tools/export_icons.py`。Windows 重建宿主会传入此 ICO；
 `--skip-host-build` 应只复用已经带此图标的 `.build/host`。
 
-## 文字标识
+## 图标重设计候选
+
+`proposals/` 保存去除漏斗造型、保留 M 主体的新设计，尚未替换平台图标：
+
+- `proposals/mdo-icon-square.png`：尺规 M，横向校准构件和垂直墨线。
+- `proposals/mdo-icon-joinery.png`：榫卯 M，暖白构件以青铜接合件呼应文字标识。
+
+两款均为正方形 PNG。使用内建 imagegen，以当前主图标作为重设计参考，
+提示词见 [`proposals/prompts.md`](proposals/prompts.md)。
+
+## 文字标识（已定版）
 
 文字标识只包含横排艺术字“墨斗”，供与主图标组合使用。文件名沿用
 `D:/GIT/home/host/xywhsoft/wwwroot/res/img` 的 `*_text.png` 形式。
