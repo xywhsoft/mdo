@@ -19,8 +19,10 @@
 
 - `proposals/mdo-icon-square.png`：尺规 M，横向校准构件和垂直墨线。
 - `proposals/mdo-icon-joinery.png`：榫卯 M，暖白构件以青铜接合件呼应文字标识。
+- `proposals/mdo-icon-mdo-rulers.png`：1254 × 1254 RGBA 透明素材；上方为普通 M，
+  下方由直尺、半圆量角器组成 D，圆规与圆环组成 O。墨色主体搭配青铜圆规，适合浅色背景。
 
-两款均为正方形 PNG。使用内建 imagegen，以当前主图标作为重设计参考，
+候选素材均为正方形 PNG。使用内建 imagegen，早期设计以当前主图标作为重设计参考，
 提示词见 [`proposals/prompts.md`](proposals/prompts.md)。
 
 ## 文字标识（已定版）
