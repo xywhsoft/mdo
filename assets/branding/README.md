@@ -1,21 +1,35 @@
 # 墨斗图标
 
-墨色底与暖白色墨仓、墨线组合，轮廓呼应 mdo 的 M。原图通过内建 imagegen
-生成，位于 `mdo-icon.png`（1254 × 1254）；平台导出不改变图案，仅调整尺寸与编码。
+当前定版素材由用户提供，已从
+`D:/GIT/home/host/xywhsoft/wwwroot/res/img` 导入本目录。五份原始 PNG 保留透明通道和原始字节；
+构建和重新导出只依赖本仓库，不依赖该外部目录。
 
-- `mdo.ico`：Windows EXE、窗口和任务栏图标，16–256px 共九个尺寸。
+| 文件 | 尺寸 | 用途 |
+| --- | --- | --- |
+| `mdo_miniicon.png` | 720 × 720 | 简化 M，用于窗口、小尺寸 ICO、favicon 和页面侧栏 |
+| `mdo_logo.png` | 1254 × 1254 | 方形 MDO，用于大尺寸 ICO、Android、欢迎和启动标志 |
+| `mdo.png` | 2633 × 1128 | 图形与艺术字的横排组合标识 |
+| `mdo_text.png` | 1774 × 887 | 定版艺术字 |
+| `mdo_link.png` | 166 × 44 | 小尺寸横排链接标识 |
+
+`mdo-icon.png` 是由方形素材导出的 512px 深色底预览，不再作为导出源。
+
+- `mdo.ico`：Windows EXE、窗口和任务栏图标，共九帧。16–48px 使用简化 M，
+  64、128、256px 使用方形 MDO；每帧均合成 `#20201e` 深色底，避免浅色桌面下失去对比。
 - `android/res/`：五种密度的 launcher PNG，以及 Android 8+ 自适应图标。
-  原图留有安全边距，由系统完成圆形、圆角方形等裁切；foreground 是完整色彩图层。
-- `../../app/web/assets/`：浏览器 favicon、Apple touch icon 和页面标志。
+  普通 launcher 合成深色底；自适应前景保留透明，将图案置于 108dp 图层的中央 66dp 区域，
+  背景由系统使用同一深色提供，避免圆形和圆角方形裁切。
+- `../../app/web/assets/`：favicon 和侧栏 `mdo-icon.png` 使用简化 M；
+  `mdo-app-icon.png` 和 Apple touch icon 使用方形 MDO，均带深色底。
 
 所有平台导出均已入库，正常构建不依赖 Pillow 或图片生成服务。
 仅重新导出时需要 `python -m pip install Pillow==12.3.0`，然后执行
 `python tools/export_icons.py`。Windows 重建宿主会传入此 ICO；
 `--skip-host-build` 应只复用已经带此图标的 `.build/host`。
 
-## 图标重设计候选
+## 历史图标设计候选
 
-`proposals/` 保存去除漏斗造型、保留 M 主体的新设计，尚未替换平台图标：
+`proposals/` 保存设计过程中的候选图。当前平台图标采用上面的定版素材：
 
 - `proposals/mdo-icon-square.png`：尺规 M，横向校准构件和垂直墨线。
 - `proposals/mdo-icon-joinery.png`：榫卯 M，暖白构件以青铜接合件呼应文字标识。
@@ -27,20 +41,17 @@
 
 ## 文字标识（已定版）
 
-文字标识只包含横排艺术字“墨斗”，供与主图标组合使用。文件名沿用
-`D:/GIT/home/host/xywhsoft/wwwroot/res/img` 的 `*_text.png` 形式。
+当前 `mdo_text.png` 与其他四种规格一并从用户提供的目录导入，
+横排组合版本为 `mdo.png`，小尺寸组合版本为 `mdo_link.png`。
 
-- `mdo_text.png`：1774 × 887，墨色字身与青铜榫卯细节，适合浅色背景。
-- `mdo_text_ivory.png`：2128 × 739，暖白雕刻字形，适合深色背景。
+- `mdo_text_ivory.png`：2128 × 739，保留的早期暖白雕刻方案。
 
-两款均为 RGBA PNG，已检查 Alpha 通道包含完全透明和完全不透明像素，
-四角透明，保留笔画间的透明间隙。它们是独立文字素材，没有合入主图标或替换
-应用中现有图标。组合时按文字实际可见边界对齐，保留原始宽高比。
+原始文字素材为 RGBA PNG。组合时按实际可见边界对齐，并保留原始宽高比。
 
-文字通过内建 imagegen 生成；最终两款素材的提示词记录在
+早期文字方案通过内建 imagegen 生成，其提示词记录在
 [`wordmark-prompts.md`](wordmark-prompts.md)。
 
-## 主图标生成提示词
+## 历史初版图标生成提示词
 
 生成方式：内建 imagegen。
 
