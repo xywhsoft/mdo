@@ -33,7 +33,7 @@ import { sessionActionDialogCopy, sessionActionToast, sessionForkTitle } from ".
 import { SESSION_TITLE_UTF8_LIMIT, sessionTitleUtf8Bytes } from "./features/sessions/session-title.js";
 import { formatSessionMarkdown, sessionMarkdownFilename } from "./features/sessions/session-export.js";
 import { loadSessionMarkdownImages } from "./features/sessions/session-export-images.js";
-import { createSessionBackupExport } from "./features/sessions/session-backup-export.js";
+import { createSessionBackupExport, saveBackupFile } from "./features/sessions/session-backup-export.js";
 import { createSessionBackupImport } from "./features/sessions/session-backup-import.js";
 import { createProjectDialog } from "./features/sessions/project-dialog.js";
 import { createDirectoryPicker } from "./features/sessions/directory-picker.js";
@@ -2122,12 +2122,7 @@ export async function boot() {
           { type: "text/markdown;charset=utf-8" }),
         filename: sessionMarkdownFilename(session),
       };
-      const url = URL.createObjectURL(file.blob);
-      const link = document.createElement("a");
-      link.href = url;
-      link.download = file.filename;
-      link.click();
-      window.setTimeout(() => URL.revokeObjectURL(url), 0);
+      saveBackupFile(file);
       toast(t("sessionAction.markdownDownloading", {}, "Markdown 已开始下载"));
       return;
     }
