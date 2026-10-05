@@ -1482,7 +1482,7 @@
   "devices.save": "Save remote settings",
   "devices.refresh": "Refresh devices",
   "devices.connectorDescription": "The connector account selects devices. The target account and all settings act on the target device.",
-  "devices.security": "Devices on your account can operate projects, files and settings here. Disabling or revoking access disconnects them. Android keeps the CPU awake while remote access is enabled, using more battery; background availability still depends on the system.",
+  "devices.security": "Devices on your account can operate projects, files and settings here. Disabling or revoking access disconnects them. Android keeps the CPU awake while remote access is enabled, using more battery. Allow background activity in the app's system battery settings; some devices require unrestricted background activity. Background availability still depends on the system.",
   "devices.temporary": "Authorization lasts only for this run on this platform",
   "devices.targetSettings": "These settings apply to {name}.",
   "devices.localSettings": "This device connects to the relay when enabled. Your other devices can control it.",

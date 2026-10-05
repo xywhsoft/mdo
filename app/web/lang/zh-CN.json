@@ -1482,7 +1482,7 @@
   "devices.save": "保存远控设置",
   "devices.refresh": "刷新设备列表",
   "devices.connectorDescription": "连接器账号只用于选择设备；目标设备内的账号和所有设置均在目标上操作。",
-  "devices.security": "同账号设备可操作这里的项目、文件和设置。关闭或撤销授权会断开连接；Android 开启远控时会保持 CPU 运行，增加耗电，后台在线仍受系统限制。",
+  "devices.security": "同账号设备可操作这里的项目、文件和设置。关闭或撤销授权会断开连接。Android 开启远控会保持 CPU 运行并增加耗电；请在系统应用的电池设置中允许后台运行，部分机型需选择“完全允许后台行为”，后台在线仍受系统限制。",
   "devices.temporary": "此平台只在本次运行中保持授权",
   "devices.targetSettings": "这些设置作用于目标设备 {name}。",
   "devices.localSettings": "开启后，此设备主动连接中继；同账号的其他设备可以控制它。",
