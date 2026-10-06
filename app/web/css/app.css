@@ -540,7 +540,10 @@ select:focus-visible,
 .resource-error button { margin-top: 8px; }
 
 .sidebar-footer { padding-top: 9px; border-top: 1px solid var(--border); }
-.runtime-state { display: flex; align-items: center; gap: 8px; padding: 8px 11px 3px; color: var(--muted); font-size: 11px; }
+.sidebar-status-row { display: flex; align-items: center; gap: 6px; margin-top: 4px; }
+.runtime-state { display: flex; flex: 1; min-width: 0; align-items: center; gap: 8px; padding: 4px 11px; color: var(--muted); font-size: 11px; }
+#runtime-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sidebar-theme-toggle { flex: 0 0 auto; margin-right: 4px; }
 
 .status-dot {
   width: 7px;
@@ -1311,6 +1314,7 @@ select:focus-visible,
   border-bottom: 1px solid var(--border);
 }
 .setting-row > div, .setting-switch > span:first-child { min-width: 0; }
+.settings-shortcuts-button { display: inline-flex; flex: 0 0 auto; min-height: 40px; align-items: center; gap: 7px; white-space: nowrap; }
 .setting-row label, .setting-switch strong { display: block; font-size: 13px; font-weight: 600; }
 .setting-row p, .setting-switch small { display: block; margin: 3px 0 0; color: var(--muted); font-size: 11px; font-weight: 400; }
 .setting-row select, .setting-row input, .settings-grid input {

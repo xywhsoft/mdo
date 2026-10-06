@@ -74,6 +74,10 @@
         <span data-i18n="shell.newTask">新建任务</span>
         <kbd>Ctrl N</kbd>
       </button>
+      <button class="sidebar-link" id="open-schedules" type="button">
+        <span class="icon" data-icon="clock" aria-hidden="true"></span>
+        <span data-i18n="shell.schedules">计划任务</span>
+      </button>
 
       <label class="search-box" for="session-search">
         <span class="icon" data-icon="search" aria-hidden="true"></span>
@@ -99,18 +103,6 @@
       </nav>
 
       <div class="sidebar-footer">
-        <button class="sidebar-link" id="open-schedules" type="button">
-          <span class="icon" data-icon="clock" aria-hidden="true"></span>
-          <span data-i18n="shell.schedules">计划任务</span>
-        </button>
-        <button class="sidebar-link" id="open-shortcuts" type="button">
-          <span class="icon" data-icon="help" aria-hidden="true"></span>
-          <span data-i18n="shell.shortcuts">快捷键帮助</span>
-        </button>
-        <button class="sidebar-link" id="toggle-theme" type="button">
-          <span class="icon" data-icon="theme" aria-hidden="true"></span>
-          <span data-i18n="shell.theme">切换主题</span>
-        </button>
         <button class="sidebar-link" id="open-settings" type="button">
           <span class="icon" data-icon="settings" aria-hidden="true"></span>
           <span data-i18n="shell.settings">设置</span>
@@ -119,9 +111,14 @@
           <span class="account-avatar" data-account-avatar aria-hidden="true">◉</span>
           <span class="account-name" data-account-name>登录账号</span>
         </button>
-        <div class="runtime-state" id="runtime-state" role="status">
-          <span class="status-dot" aria-hidden="true"></span>
-          <span id="runtime-label">正在连接本地服务…</span>
+        <div class="sidebar-status-row">
+          <div class="runtime-state" id="runtime-state" role="status">
+            <span class="status-dot" aria-hidden="true"></span>
+            <span id="runtime-label">正在连接本地服务…</span>
+          </div>
+          <button class="icon-button sidebar-theme-toggle" id="toggle-theme" type="button" aria-label="切换主题" title="切换主题">
+            <span class="icon" data-icon="theme" aria-hidden="true"></span>
+          </button>
         </div>
       </div>
     </aside>
@@ -327,6 +324,13 @@
                 <div class="setting-row">
                   <div><label for="setting-theme" data-i18n="settings.theme">主题</label><p data-i18n="settings.themeDescription">跟随系统，或固定使用浅色和深色外观。</p></div>
                   <select id="setting-theme" name="theme"><option value="system" data-i18n="settings.themeSystem">跟随系统</option><option value="light" data-i18n="settings.themeLight">浅色</option><option value="dark" data-i18n="settings.themeDark">深色</option></select>
+                </div>
+                <div class="setting-row">
+                  <div><label for="open-shortcuts" data-i18n="shell.shortcuts">快捷键帮助</label><p data-i18n="shortcuts.intro">输入框外按 ? 打开，Esc 关闭；macOS 用 ⌘ 代替 Ctrl。</p></div>
+                  <button class="secondary-button settings-shortcuts-button" id="open-shortcuts" type="button" aria-haspopup="dialog" aria-controls="shortcuts-dialog">
+                    <span class="icon" data-icon="help" aria-hidden="true"></span>
+                    <span data-i18n="settings.openShortcuts">查看快捷键</span>
+                  </button>
                 </div>
                 <div class="setting-row">
                   <div><label for="setting-font-size" data-i18n="settings.fontSize">文字大小</label><p data-i18n="settings.fontSizeDescription">调整工作台的基础字号。</p></div>

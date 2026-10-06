@@ -75,6 +75,7 @@ import { createProjectPurgeRecovery } from "./features/settings/project-purge-re
 import { createProjectPurgeRecoveryPanel } from "./features/projects/project-purge-recovery-panel.js";
 import { createResourcePanels } from "./features/settings/resource-panels.js";
 import { createKeyboardShortcuts } from "./features/shell/keyboard-shortcuts.js";
+import { createThemeToggle } from "./features/shell/theme-toggle.js";
 import { createRunNotifications } from "./features/shell/run-notifications.js";
 import { startWorkspaceNavigation } from "./features/shell/workspace-startup.js";
 import { createStartupIntent } from "./features/shell/startup-intent.js";
@@ -2259,6 +2260,7 @@ export async function boot() {
     navigation.backToWorkspace();
   });
 
+  const themeToggle = createThemeToggle({ button: $("#toggle-theme") });
   async function toggleTheme() {
     if (themeToggleBusy) return;
     if (settingsView.hasPendingChanges()) {
@@ -2271,7 +2273,7 @@ export async function boot() {
       const settings = settingsStore.get().data ?? (await loadSettings()).data;
       if (!settings?.appearance || !settings.etag)
         throw new Error(t("settings.notLoaded", {}, "当前设置尚未载入"));
-      const theme = settings.appearance.theme === "dark" ? "light" : "dark";
+      const theme = themeToggle.isDark() ? "light" : "dark";
       const patch = { appearance: { theme } };
       await previewSettings(patch);
       await applySettings(patch, settings.etag);
