@@ -2616,6 +2616,8 @@ def run_probe(host: Path) -> None:
                     "web_search"] is True, settings_document
                 assert settings_document["data"]["agent"][
                     "user_instructions"] == "", settings_document
+                assert settings_document["data"]["agent"][
+                    "reply_language"] == "", settings_document
                 assert settings_document["data"]["workspace"] == {
                     "open_mode": "last",
                     "confirm_external_write": True,

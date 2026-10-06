@@ -168,6 +168,8 @@ bool MdoApiSettingsRoute(MdoApiContext* Context)
     if ( Ok ) Ok =
         MdoApiSettingsStringField(AgentValue, "user_instructions",
             EffectiveAgent, "user_instructions") &&
+        MdoApiValueSetString(AgentValue, "reply_language",
+            Service.Agent.ReplyLanguage) &&
         MdoApiSettingsBoolField(AgentValue, "web_search", EffectiveAgent,
             "web_search") &&
         MdoApiValueSetBool(AgentValue, "memory", Service.Agent.MemoryEnabled) &&
