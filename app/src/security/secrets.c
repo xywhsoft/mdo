@@ -1,4 +1,5 @@
 #include <string.h>
+#include <stdio.h>
 
 #include "../../include/mdo/home.h"
 #include "../../include/mdo/secrets.h"
@@ -43,10 +44,75 @@ bool MdoSecretReferenceSyntaxValid(xstrview Reference)
          Reference.Size > MDO_SECRET_REFERENCE_LIMIT ||
          MdoSecretBytesContainZero(Reference.Data, Reference.Size) )
         return false;
+    if ( MdoSecretPrefix(Reference, "vault:") ) {
+        size_t i;
+        if ( Reference.Size != 70u ) return false;
+        for ( i = 6u; i < Reference.Size; i++ )
+            if ( !((Reference.Data[i] >= '0' && Reference.Data[i] <= '9') ||
+                   (Reference.Data[i] >= 'a' && Reference.Data[i] <= 'f')) ) return false;
+        return true;
+    }
     return MdoSecretPrefix(Reference, "env:") ||
         MdoSecretPrefix(Reference, "file:") ||
         MdoSecretPrefix(Reference, "keychain:") ||
         MdoSecretPrefix(Reference, "prompt:");
+}
+
+static bool MdoSecretVaultPath(cstr Reference, char Path[112])
+{
+    if ( Reference == NULL || strncmp(Reference, "vault:", 6u) != 0 ||
+         !MdoSecretReferenceSyntaxValid(xrtStrView(Reference)) ) return false;
+    snprintf(Path, 112u, "config/secrets/models/%s.key", Reference + 6u);
+    return true;
+}
+
+bool MdoSecretStore(cstr Value, char Reference[MDO_SECRET_VAULT_REFERENCE_CAPACITY])
+{
+    unsigned char Random[32]; char Path[112]; bytes Envelope = NULL;
+    size_t Size, EnvelopeSize = 0u, i; bool Ok;
+    if ( Value == NULL || Reference == NULL || (Size = strlen(Value)) == 0u || Size > 4096u ) return false;
+    Reference[0] = '\0';
+    for ( i = 0u; i < Size; i++ ) if ((unsigned char)Value[i] < 33u || (unsigned char)Value[i] > 126u) return false;
+    if ( !xrtSecureRandom(Random, sizeof(Random)) ) return false;
+    strcpy(Reference, "vault:");
+    for ( i = 0u; i < sizeof(Random); i++ ) snprintf(Reference + 6u + i * 2u, 3u, "%02x", Random[i]);
+    xrtSecureZero(Random, sizeof(Random));
+    Ok = MdoSecretVaultPath(Reference, Path) &&
+        xsCredentialSeal(Reference, Value, Size, &Envelope, &EnvelopeSize) &&
+        MdoHomeAtomicWrite(Path, Envelope, EnvelopeSize, false);
+    xrtFree(Envelope);
+    if ( !Ok ) Reference[0] = '\0';
+    return Ok;
+}
+
+bool MdoSecretDiscard(cstr Reference)
+{
+    char Path[112];
+    return MdoSecretVaultPath(Reference, Path) && MdoHomeRemove(Path, false);
+}
+
+static bool MdoSecretReadVault(cstr Reference, size_t Limit, char** Value)
+{
+    char Path[112]; xfile File = NULL; xfileinfo Info = {0};
+    bytes Envelope = NULL, Plain = NULL; size_t Size = 0u; bool Ok = false;
+    if ( !MdoSecretVaultPath(Reference, Path) ) goto done;
+    File = MdoHomeOpenRead(Path);
+    if ( File == NULL || !xrtFileStat(File, &Info) || Info.Size == 0u ||
+         Info.Size > XS_CREDENTIAL_ENVELOPE_LIMIT ) goto done;
+    Envelope = xrtMalloc((size_t)Info.Size);
+    if ( Envelope == NULL || !xrtReadFull(File, Envelope, (size_t)Info.Size, NULL) ||
+         !xsCredentialUnseal(Reference, Envelope, (size_t)Info.Size, &Plain, &Size) ||
+         Size == 0u || Size > Limit || MdoSecretBytesContainZero(Plain, Size) ||
+         !xrtUtf8Valid((xstrview){(cstr)Plain, Size}, NULL) ) goto done;
+    *Value = xrtStrDupN((cstr)Plain, Size);
+    Ok = *Value != NULL;
+done:
+    if ( File != NULL && !xrtClose(File) ) Ok = false;
+    if ( Plain != NULL ) { xrtSecureZero(Plain, Size); xrtFree(Plain); }
+    xrtFree(Envelope);
+    if ( !Ok ) { MdoSecretRelease(Value); MdoSecretSetError(XERR_NOT_FOUND,
+        MDO_SECRET_ERROR_UNAVAILABLE, "saved API key is unavailable on this device; enter it again"); }
+    return Ok;
 }
 
 static bool MdoSecretPortablePath(cstr Path)
@@ -156,7 +222,9 @@ bool MdoSecretResolve(xstrview Reference, size_t Limit, char** ppValue)
     *ppValue = NULL;
     Text = xrtStrDupN(Reference.Data, Reference.Size);
     if ( Text == NULL ) return false;
-    if ( strncmp(Text, "env:", 4u) == 0 ) {
+    if ( strncmp(Text, "vault:", 6u) == 0 ) {
+        Ok = MdoSecretReadVault(Text, Limit, ppValue);
+    } else if ( strncmp(Text, "env:", 4u) == 0 ) {
         cstr Name = Text + 4u;
         if ( Name[0] == '\0' || strlen(Name) > 256u ||
              strchr(Name, '=') != NULL || !xrtEnvLookup(Name, &Value) ||

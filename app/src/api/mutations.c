@@ -7,6 +7,7 @@
 #include "../../include/mdo/models.h"
 #include "../../include/mdo/settings.h"
 #include "../../include/mdo/skills.h"
+#include "../../include/mdo/secrets.h"
 
 static bool MdoApiConfigDomain(xstrview Name, MdoConfigDomain* Domain,
     cstr* Canonical)
@@ -454,3 +455,5 @@ bool MdoApiMcpReloadRoute(MdoApiContext* Context)
     }
     return MdoApiReplySuccessTake(Context, 200u, Data, NULL);
 }
+#include "model_setup.inc.c"
+#include "model_probe.inc.c"

@@ -64,6 +64,9 @@ static const MdoApiRoute g_MdoApiRoutes[] = {
       "GET, HEAD, OPTIONS", MdoApiModelsRoute, false },
     { "/api/v1/models/config", XHTTP_METHOD_GET | XHTTP_METHOD_HEAD,
       "GET, HEAD, OPTIONS", MdoApiModelConfigRoute, false },
+    { "/api/v1/models/setup", XHTTP_METHOD_POST, "POST, OPTIONS", MdoApiModelSetupRoute, false },
+    { "/api/v1/models/discover", XHTTP_METHOD_POST, "POST, OPTIONS", MdoApiModelDiscoverRoute, false },
+    { "/api/v1/models/test", XHTTP_METHOD_POST, "POST, OPTIONS", MdoApiModelTestRoute, false },
     { "/api/v1/agents", XHTTP_METHOD_GET | XHTTP_METHOD_HEAD,
       "GET, HEAD, OPTIONS", MdoApiAgentsRoute, false },
     { "/api/v1/session-backups/uploads", XHTTP_METHOD_GET | XHTTP_METHOD_HEAD | XHTTP_METHOD_POST,
@@ -406,7 +409,8 @@ bool MdoApiInit(void)
         return false;
     }
     if ( !MdoApiBackupUploadsInit() || !MdoApiBackupPreviewsInit() || !MdoApiBackupRestoresInit() || !MdoApiDownloadsInit() ||
-         !MdoApiImageDownloadsInit() || !MdoApiLiveInit() ) {
+         !MdoApiImageDownloadsInit() || !MdoApiLiveInit() || !MdoApiModelProbesInit() ) {
+        MdoApiModelProbesUnit();
         MdoApiLiveUnit(); MdoApiLiveRelease();
         MdoApiImageDownloadsUnit(); MdoApiDownloadsUnit();
         MdoApiBackupRestoresUnit();
@@ -425,6 +429,7 @@ bool MdoApiInit(void)
 void MdoApiUnit(void)
 {
     g_MdoApiInitialized = false;
+    MdoApiModelProbesUnit();
     MdoApiLiveUnit();
     MdoApiDownloadsUnit();
     MdoApiImageDownloadsUnit();

@@ -243,12 +243,19 @@ static void MdoConfigCanonicalKey(xstrview Key, char* Output,
 static bool MdoConfigSecretReferenceValid(const xvalue* pValue)
 {
     static const char* const Prefixes[] = {
-        "env:", "file:", "keychain:", "prompt:"
+        "env:", "file:", "keychain:", "prompt:", "vault:"
     };
     xstrview Text;
     size_t i;
 
     if ( !MdoConfigString(pValue, &Text) || Text.Size == 0u ) return false;
+    if ( Text.Size >= 6u && memcmp(Text.Data, "vault:", 6u) == 0 ) {
+        if ( Text.Size != 70u ) return false;
+        for ( i = 6u; i < Text.Size; i++ )
+            if ( !((Text.Data[i] >= '0' && Text.Data[i] <= '9') ||
+                   (Text.Data[i] >= 'a' && Text.Data[i] <= 'f')) ) return false;
+        return true;
+    }
     for ( i = 0u; i < sizeof(Prefixes) / sizeof(Prefixes[0]); i++ ) {
         size_t iPrefix = strlen(Prefixes[i]);
         if ( Text.Size > iPrefix &&

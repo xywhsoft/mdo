@@ -1,0 +1,7677 @@
+/*
+ * MIT License
+ *
+ * Copyright (c) 2025 xLeaves [xywhsoft] <xywhsoft@qq.com>
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in all
+ * copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+ * SOFTWARE.
+ */
+
+/* Generated public SDK bridge. Source: xs b5ab39c926c282e8912d1488eed0be55ce16a360.
+ * Regenerate with tools/model_http_sdk.py; contains no implementation. */
+#ifndef MDO_MODEL_HTTP_SDK_H
+#define MDO_MODEL_HTTP_SDK_H
+#include <xsbase.h>
+#define XHTTP_MODULE_HTTP_CLIENT_EASY_FUTURE
+#define XHTTP_MODULE_HTTP_CLIENT_HTTPS
+#define XHTTP_MODULE_HTTP_CLIENT_REDIRECT
+#define XHTTP_MODULE_HTTP_CLIENT_DECOMPRESS
+#define XHTTP_MODULE_HTTP_SSE_PARSER
+#define XHTTP_SINGLE_HEADER 1
+#ifndef XRT_FEATURE_ATOMIC
+#define XRT_FEATURE_ATOMIC
+#endif
+#ifndef XRT_FEATURE_CANCEL
+#define XRT_FEATURE_CANCEL
+#endif
+#ifndef XRT_FEATURE_CODEC_HEX
+#define XRT_FEATURE_CODEC_HEX
+#endif
+#ifndef XRT_FEATURE_FUTURE_BRIDGE
+#define XRT_FEATURE_FUTURE_BRIDGE
+#endif
+#ifndef XRT_FEATURE_HTTP
+#define XRT_FEATURE_HTTP
+#endif
+#ifndef XRT_FEATURE_HTTP1_BODY
+#define XRT_FEATURE_HTTP1_BODY
+#endif
+#ifndef XRT_FEATURE_HTTP1_HEAD
+#define XRT_FEATURE_HTTP1_HEAD
+#endif
+#ifndef XRT_FEATURE_HTTP_CONNECTION
+#define XRT_FEATURE_HTTP_CONNECTION
+#endif
+#ifndef XRT_FEATURE_HTTP_ENCODING
+#define XRT_FEATURE_HTTP_ENCODING
+#endif
+#ifndef XRT_FEATURE_HTTP_EXPECT
+#define XRT_FEATURE_HTTP_EXPECT
+#endif
+#ifndef XRT_FEATURE_HTTP_HOST
+#define XRT_FEATURE_HTTP_HOST
+#endif
+#ifndef XRT_FEATURE_HTTP_PARAM
+#define XRT_FEATURE_HTTP_PARAM
+#endif
+#ifndef XRT_FEATURE_HTTP_PARAM_HOST
+#define XRT_FEATURE_HTTP_PARAM_HOST
+#endif
+#ifndef XRT_FEATURE_HTTP_TARGET
+#define XRT_FEATURE_HTTP_TARGET
+#endif
+#ifndef XRT_FEATURE_HTTP_TE
+#define XRT_FEATURE_HTTP_TE
+#endif
+#ifndef XRT_FEATURE_HTTP_TRAILER
+#define XRT_FEATURE_HTTP_TRAILER
+#endif
+#ifndef XRT_FEATURE_INFLATE
+#define XRT_FEATURE_INFLATE
+#endif
+#ifndef XRT_FEATURE_MAP
+#define XRT_FEATURE_MAP
+#endif
+#ifndef XRT_FEATURE_MUTEX
+#define XRT_FEATURE_MUTEX
+#endif
+#ifndef XRT_FEATURE_NET_PROXY_DIAL
+#define XRT_FEATURE_NET_PROXY_DIAL
+#endif
+#ifndef XRT_FEATURE_NET_TCP
+#define XRT_FEATURE_NET_TCP
+#endif
+#ifndef XRT_FEATURE_NET_TCP_DIAL
+#define XRT_FEATURE_NET_TCP_DIAL
+#endif
+#ifndef XRT_FEATURE_RANDOM
+#define XRT_FEATURE_RANDOM
+#endif
+#ifndef XRT_FEATURE_RANDOM_SECURE
+#define XRT_FEATURE_RANDOM_SECURE
+#endif
+#ifndef XRT_FEATURE_SPIN
+#define XRT_FEATURE_SPIN
+#endif
+#ifndef XRT_FEATURE_TIME_TEXT
+#define XRT_FEATURE_TIME_TEXT
+#endif
+#ifndef XRT_FEATURE_TLS_CLIENT_RESUME
+#define XRT_FEATURE_TLS_CLIENT_RESUME
+#endif
+#ifndef XRT_FEATURE_TLS_CLIENT_VERIFY
+#define XRT_FEATURE_TLS_CLIENT_VERIFY
+#endif
+#ifndef XRT_FEATURE_TLS_STREAM
+#define XRT_FEATURE_TLS_STREAM
+#endif
+#ifndef XRT_FEATURE_TLS_STREAM_DIAL
+#define XRT_FEATURE_TLS_STREAM_DIAL
+#endif
+#ifndef XRT_FEATURE_X509_STORE_SYSTEM
+#define XRT_FEATURE_X509_STORE_SYSTEM
+#endif
+
+
+/* 此文件由 tools/generate_extension_features.py 生成，请勿直接修改。 */
+#ifndef XHTTP_FEATURES_H
+#define XHTTP_FEATURES_H
+
+/* http_server_router_tls 及其直接依赖。 */
+#if defined(XHTTP_MODULE_ALL) || defined(XHTTP_MODULE_HTTP_SERVER_ROUTER_TLS)
+#ifndef XHTTP_FEATURE_HTTP_SERVER_ROUTER_TLS
+#define XHTTP_FEATURE_HTTP_SERVER_ROUTER_TLS
+#endif
+#ifndef XHTTP_MODULE_HTTP_SERVER_ROUTER
+#define XHTTP_MODULE_HTTP_SERVER_ROUTER
+#endif
+#ifndef XHTTP_MODULE_HTTP_SERVER_TLS
+#define XHTTP_MODULE_HTTP_SERVER_TLS
+#endif
+#endif
+
+/* http_server_mux_tls 及其直接依赖。 */
+#if defined(XHTTP_MODULE_ALL) || defined(XHTTP_MODULE_HTTP_SERVER_MUX_TLS)
+#ifndef XHTTP_FEATURE_HTTP_SERVER_MUX_TLS
+#define XHTTP_FEATURE_HTTP_SERVER_MUX_TLS
+#endif
+#ifndef XHTTP_MODULE_HTTP_SERVER_MUX
+#define XHTTP_MODULE_HTTP_SERVER_MUX
+#endif
+#ifndef XHTTP_MODULE_HTTP_SERVER_TLS
+#define XHTTP_MODULE_HTTP_SERVER_TLS
+#endif
+#endif
+
+/* http_server_mux 及其直接依赖。 */
+#if defined(XHTTP_MODULE_ALL) || defined(XHTTP_MODULE_HTTP_SERVER_MUX)
+#ifndef XHTTP_FEATURE_HTTP_SERVER_MUX
+#define XHTTP_FEATURE_HTTP_SERVER_MUX
+#endif
+#ifndef XHTTP_MODULE_HTTP_SERVER_ROUTER
+#define XHTTP_MODULE_HTTP_SERVER_ROUTER
+#endif
+#ifndef XRT_MODULE_RWLOCK
+#define XRT_MODULE_RWLOCK
+#endif
+#endif
+
+/* http_server_middleware 及其直接依赖。 */
+#if defined(XHTTP_MODULE_ALL) || defined(XHTTP_MODULE_HTTP_SERVER_MIDDLEWARE)
+#ifndef XHTTP_FEATURE_HTTP_SERVER_MIDDLEWARE
+#define XHTTP_FEATURE_HTTP_SERVER_MIDDLEWARE
+#endif
+#ifndef XHTTP_MODULE_HTTP_SERVER_ROUTER
+#define XHTTP_MODULE_HTTP_SERVER_ROUTER
+#endif
+#endif
+
+/* http_server_router 及其直接依赖。 */
+#if defined(XHTTP_MODULE_ALL) || defined(XHTTP_MODULE_HTTP_SERVER_ROUTER)
+#ifndef XHTTP_FEATURE_HTTP_SERVER_ROUTER
+#define XHTTP_FEATURE_HTTP_SERVER_ROUTER
+#endif
+#ifndef XHTTP_MODULE_HTTP_ROUTER
+#define XHTTP_MODULE_HTTP_ROUTER
+#endif
+#ifndef XHTTP_MODULE_HTTP_SERVER
+#define XHTTP_MODULE_HTTP_SERVER
+#endif
+#endif
+
+/* http_server_compress 及其直接依赖。 */
+#if defined(XHTTP_MODULE_ALL) || defined(XHTTP_MODULE_HTTP_SERVER_COMPRESS)
+#ifndef XHTTP_FEATURE_HTTP_SERVER_COMPRESS
+#define XHTTP_FEATURE_HTTP_SERVER_COMPRESS
+#endif
+#ifndef XHTTP_MODULE_HTTP_REPLY_COMPRESS
+#define XHTTP_MODULE_HTTP_REPLY_COMPRESS
+#endif
+#ifndef XHTTP_MODULE_HTTP_SERVER_REQUEST
+#define XHTTP_MODULE_HTTP_SERVER_REQUEST
+#endif
+#endif
+
+/* http_reply_compress 及其直接依赖。 */
+#if defined(XHTTP_MODULE_ALL) || defined(XHTTP_MODULE_HTTP_REPLY_COMPRESS)
+#ifndef XHTTP_FEATURE_HTTP_REPLY_COMPRESS
+#define XHTTP_FEATURE_HTTP_REPLY_COMPRESS
+#endif
+#ifndef XHTTP_MODULE_HTTP_SERVER_REPLY
+#define XHTTP_MODULE_HTTP_SERVER_REPLY
+#endif
+#ifndef XRT_MODULE_HTTP_ENCODING
+#define XRT_MODULE_HTTP_ENCODING
+#endif
+#ifndef XHTTP_MODULE_HTTP_VARY
+#define XHTTP_MODULE_HTTP_VARY
+#endif
+#ifndef XHTTP_MODULE_HTTP_CACHE
+#define XHTTP_MODULE_HTTP_CACHE
+#endif
+#ifndef XHTTP_MODULE_HTTP_BODY_DEFLATE
+#define XHTTP_MODULE_HTTP_BODY_DEFLATE
+#endif
+#ifndef XHTTP_MODULE_MIME
+#define XHTTP_MODULE_MIME
+#endif
+#ifndef XHTTP_MODULE_HTTP_ETAG
+#define XHTTP_MODULE_HTTP_ETAG
+#endif
+#endif
+
+/* http_router 及其直接依赖。 */
+#if defined(XHTTP_MODULE_ALL) || defined(XHTTP_MODULE_HTTP_ROUTER)
+#ifndef XHTTP_FEATURE_HTTP_ROUTER
+#define XHTTP_FEATURE_HTTP_ROUTER
+#endif
+#ifndef XHTTP_MODULE_HTTP_ROUTE
+#define XHTTP_MODULE_HTTP_ROUTE
+#endif
+#endif
+
+/* http_route 及其直接依赖。 */
+#if defined(XHTTP_MODULE_ALL) || defined(XHTTP_MODULE_HTTP_ROUTE)
+#ifndef XHTTP_FEATURE_HTTP_ROUTE
+#define XHTTP_FEATURE_HTTP_ROUTE
+#endif
+#ifndef XRT_MODULE_HTTP
+#define XRT_MODULE_HTTP
+#endif
+#endif
+
+/* http_server_static 及其直接依赖。 */
+#if defined(XHTTP_MODULE_ALL) || defined(XHTTP_MODULE_HTTP_SERVER_STATIC)
+#ifndef XHTTP_FEATURE_HTTP_SERVER_STATIC
+#define XHTTP_FEATURE_HTTP_SERVER_STATIC
+#endif
+#ifndef XRT_MODULE_CODEC_HEX
+#define XRT_MODULE_CODEC_HEX
+#endif
+#ifndef XHTTP_MODULE_HTTP_SERVER_FUTURE
+#define XHTTP_MODULE_HTTP_SERVER_FUTURE
+#endif
+#ifndef XHTTP_MODULE_HTTP_SERVER_BODY_ASYNC
+#define XHTTP_MODULE_HTTP_SERVER_BODY_ASYNC
+#endif
+#ifndef XHTTP_MODULE_HTTP_STATIC_PATH
+#define XHTTP_MODULE_HTTP_STATIC_PATH
+#endif
+#ifndef XHTTP_MODULE_HTTP_STATIC_FILE
+#define XHTTP_MODULE_HTTP_STATIC_FILE
+#endif
+#ifndef XHTTP_MODULE_HTTP_STATIC_PLAN
+#define XHTTP_MODULE_HTTP_STATIC_PLAN
+#endif
+#ifndef XHTTP_MODULE_HTTP_STATIC_RESPONSE
+#define XHTTP_MODULE_HTTP_STATIC_RESPONSE
+#endif
+#ifndef XHTTP_MODULE_HTTP_STATIC_MULTIPART_BODY
+#define XHTTP_MODULE_HTTP_STATIC_MULTIPART_BODY
+#endif
+#ifndef XHTTP_MODULE_MIME_TYPES
+#define XHTTP_MODULE_MIME_TYPES
+#endif
+#ifndef XRT_MODULE_RANDOM_SECURE
+#define XRT_MODULE_RANDOM_SECURE
+#endif
+#endif
+
+/* http_server_file 及其直接依赖。 */
+#if defined(XHTTP_MODULE_ALL) || defined(XHTTP_MODULE_HTTP_SERVER_FILE)
+#ifndef XHTTP_FEATURE_HTTP_SERVER_FILE
+#define XHTTP_FEATURE_HTTP_SERVER_FILE
+#endif
+#ifndef XHTTP_MODULE_HTTP_SERVER_FUTURE
+#define XHTTP_MODULE_HTTP_SERVER_FUTURE
+#endif
+#ifndef XHTTP_MODULE_HTTP_BODY_FILE
+#define XHTTP_MODULE_HTTP_BODY_FILE
+#endif
+#ifndef XHTTP_MODULE_HTTP_SERVER_BODY_ASYNC
+#define XHTTP_MODULE_HTTP_SERVER_BODY_ASYNC
+#endif
+#endif
+
+/* http_server_future 及其直接依赖。 */
+#if defined(XHTTP_MODULE_ALL) || defined(XHTTP_MODULE_HTTP_SERVER_FUTURE)
+#ifndef XHTTP_FEATURE_HTTP_SERVER_FUTURE
+#define XHTTP_FEATURE_HTTP_SERVER_FUTURE
+#endif
+#ifndef XHTTP_MODULE_HTTP_SERVER
+#define XHTTP_MODULE_HTTP_SERVER
+#endif
+#ifndef XRT_MODULE_FUTURE_CONTINUE
+#define XRT_MODULE_FUTURE_CONTINUE
+#endif
+#endif
+
+/* http_server_upgrade 及其直接依赖。 */
+#if defined(XHTTP_MODULE_ALL) || defined(XHTTP_MODULE_HTTP_SERVER_UPGRADE)
+#ifndef XHTTP_FEATURE_HTTP_SERVER_UPGRADE
+#define XHTTP_FEATURE_HTTP_SERVER_UPGRADE
+#endif
+#ifndef XHTTP_MODULE_HTTP_SERVER
+#define XHTTP_MODULE_HTTP_SERVER
+#endif
+#endif
+
+/* http_server_raw 及其直接依赖。 */
+#if defined(XHTTP_MODULE_ALL) || defined(XHTTP_MODULE_HTTP_SERVER_RAW)
+#ifndef XHTTP_FEATURE_HTTP_SERVER_RAW
+#define XHTTP_FEATURE_HTTP_SERVER_RAW
+#endif
+#ifndef XHTTP_MODULE_HTTP_SERVER
+#define XHTTP_MODULE_HTTP_SERVER
+#endif
+#endif
+
+/* http_server_body_async 及其直接依赖。 */
+#if defined(XHTTP_MODULE_ALL) || defined(XHTTP_MODULE_HTTP_SERVER_BODY_ASYNC)
+#ifndef XHTTP_FEATURE_HTTP_SERVER_BODY_ASYNC
+#define XHTTP_FEATURE_HTTP_SERVER_BODY_ASYNC
+#endif
+#ifndef XHTTP_MODULE_HTTP_SERVER
+#define XHTTP_MODULE_HTTP_SERVER
+#endif
+#ifndef XHTTP_MODULE_HTTP_SERVER_RESPONSE_ASYNC
+#define XHTTP_MODULE_HTTP_SERVER_RESPONSE_ASYNC
+#endif
+#endif
+
+/* http_server_tls 及其直接依赖。 */
+#if defined(XHTTP_MODULE_ALL) || defined(XHTTP_MODULE_HTTP_SERVER_TLS)
+#ifndef XHTTP_FEATURE_HTTP_SERVER_TLS
+#define XHTTP_FEATURE_HTTP_SERVER_TLS
+#endif
+#ifndef XHTTP_MODULE_HTTP_SERVER
+#define XHTTP_MODULE_HTTP_SERVER
+#endif
+#ifndef XRT_MODULE_TLS_STREAM
+#define XRT_MODULE_TLS_STREAM
+#endif
+#endif
+
+/* http_server 及其直接依赖。 */
+#if defined(XHTTP_MODULE_ALL) || defined(XHTTP_MODULE_HTTP_SERVER)
+#ifndef XHTTP_FEATURE_HTTP_SERVER
+#define XHTTP_FEATURE_HTTP_SERVER
+#endif
+#ifndef XHTTP_MODULE_HTTP_SERVER_EXCHANGE
+#define XHTTP_MODULE_HTTP_SERVER_EXCHANGE
+#endif
+#ifndef XHTTP_MODULE_HTTP_SERVER_RESPONSE
+#define XHTTP_MODULE_HTTP_SERVER_RESPONSE
+#endif
+#ifndef XRT_MODULE_NET_TCP_SERVER
+#define XRT_MODULE_NET_TCP_SERVER
+#endif
+#endif
+
+/* mime_types 及其直接依赖。 */
+#if defined(XHTTP_MODULE_ALL) || defined(XHTTP_MODULE_MIME_TYPES)
+#ifndef XHTTP_FEATURE_MIME_TYPES
+#define XHTTP_FEATURE_MIME_TYPES
+#endif
+#endif
+
+/* http_body_decode 及其直接依赖。 */
+#if defined(XHTTP_MODULE_ALL) || defined(XHTTP_MODULE_HTTP_BODY_DECODE)
+#ifndef XHTTP_FEATURE_HTTP_BODY_DECODE
+#define XHTTP_FEATURE_HTTP_BODY_DECODE
+#endif
+#ifndef XHTTP_MODULE_HTTP_BODY_INFLATE
+#define XHTTP_MODULE_HTTP_BODY_INFLATE
+#endif
+#ifndef XRT_MODULE_HTTP_ENCODING
+#define XRT_MODULE_HTTP_ENCODING
+#endif
+#endif
+
+/* http_body_inflate 及其直接依赖。 */
+#if defined(XHTTP_MODULE_ALL) || defined(XHTTP_MODULE_HTTP_BODY_INFLATE)
+#ifndef XHTTP_FEATURE_HTTP_BODY_INFLATE
+#define XHTTP_FEATURE_HTTP_BODY_INFLATE
+#endif
+#ifndef XHTTP_MODULE_HTTP_BODY_TRANSFORM
+#define XHTTP_MODULE_HTTP_BODY_TRANSFORM
+#endif
+#ifndef XRT_MODULE_INFLATE
+#define XRT_MODULE_INFLATE
+#endif
+#endif
+
+/* http_body_deflate 及其直接依赖。 */
+#if defined(XHTTP_MODULE_ALL) || defined(XHTTP_MODULE_HTTP_BODY_DEFLATE)
+#ifndef XHTTP_FEATURE_HTTP_BODY_DEFLATE
+#define XHTTP_FEATURE_HTTP_BODY_DEFLATE
+#endif
+#ifndef XHTTP_MODULE_HTTP_BODY_TRANSFORM
+#define XHTTP_MODULE_HTTP_BODY_TRANSFORM
+#endif
+#ifndef XRT_MODULE_DEFLATE
+#define XRT_MODULE_DEFLATE
+#endif
+#endif
+
+/* http_body_transform 及其直接依赖。 */
+#if defined(XHTTP_MODULE_ALL) || defined(XHTTP_MODULE_HTTP_BODY_TRANSFORM)
+#ifndef XHTTP_FEATURE_HTTP_BODY_TRANSFORM
+#define XHTTP_FEATURE_HTTP_BODY_TRANSFORM
+#endif
+#ifndef XHTTP_MODULE_HTTP_BODY
+#define XHTTP_MODULE_HTTP_BODY
+#endif
+#endif
+
+/* http_server_response_async 及其直接依赖。 */
+#if defined(XHTTP_MODULE_ALL) || defined(XHTTP_MODULE_HTTP_SERVER_RESPONSE_ASYNC)
+#ifndef XHTTP_FEATURE_HTTP_SERVER_RESPONSE_ASYNC
+#define XHTTP_FEATURE_HTTP_SERVER_RESPONSE_ASYNC
+#endif
+#ifndef XHTTP_MODULE_HTTP_SERVER_RESPONSE
+#define XHTTP_MODULE_HTTP_SERVER_RESPONSE
+#endif
+#ifndef XHTTP_MODULE_HTTP_BODY_ASYNC
+#define XHTTP_MODULE_HTTP_BODY_ASYNC
+#endif
+#endif
+
+/* http_client_stream_async 及其直接依赖。 */
+#if defined(XHTTP_MODULE_ALL) || defined(XHTTP_MODULE_HTTP_CLIENT_STREAM_ASYNC)
+#ifndef XHTTP_FEATURE_HTTP_CLIENT_STREAM_ASYNC
+#define XHTTP_FEATURE_HTTP_CLIENT_STREAM_ASYNC
+#endif
+#ifndef XHTTP_MODULE_HTTP_CLIENT_STREAM
+#define XHTTP_MODULE_HTTP_CLIENT_STREAM
+#endif
+#ifndef XHTTP_MODULE_HTTP_EXCHANGE_ASYNC
+#define XHTTP_MODULE_HTTP_EXCHANGE_ASYNC
+#endif
+#endif
+
+/* http_exchange_async 及其直接依赖。 */
+#if defined(XHTTP_MODULE_ALL) || defined(XHTTP_MODULE_HTTP_EXCHANGE_ASYNC)
+#ifndef XHTTP_FEATURE_HTTP_EXCHANGE_ASYNC
+#define XHTTP_FEATURE_HTTP_EXCHANGE_ASYNC
+#endif
+#ifndef XHTTP_MODULE_HTTP_EXCHANGE
+#define XHTTP_MODULE_HTTP_EXCHANGE
+#endif
+#ifndef XHTTP_MODULE_HTTP_BODY_ASYNC
+#define XHTTP_MODULE_HTTP_BODY_ASYNC
+#endif
+#endif
+
+/* http_server_response 及其直接依赖。 */
+#if defined(XHTTP_MODULE_ALL) || defined(XHTTP_MODULE_HTTP_SERVER_RESPONSE)
+#ifndef XHTTP_FEATURE_HTTP_SERVER_RESPONSE
+#define XHTTP_FEATURE_HTTP_SERVER_RESPONSE
+#endif
+#ifndef XHTTP_MODULE_HTTP_SERVER_REQUEST
+#define XHTTP_MODULE_HTTP_SERVER_REQUEST
+#endif
+#ifndef XHTTP_MODULE_HTTP_SERVER_REPLY
+#define XHTTP_MODULE_HTTP_SERVER_REPLY
+#endif
+#ifndef XRT_MODULE_HTTP1_BODY
+#define XRT_MODULE_HTTP1_BODY
+#endif
+#ifndef XRT_MODULE_HTTP_TRAILER
+#define XRT_MODULE_HTTP_TRAILER
+#endif
+#endif
+
+/* http_server_exchange 及其直接依赖。 */
+#if defined(XHTTP_MODULE_ALL) || defined(XHTTP_MODULE_HTTP_SERVER_EXCHANGE)
+#ifndef XHTTP_FEATURE_HTTP_SERVER_EXCHANGE
+#define XHTTP_FEATURE_HTTP_SERVER_EXCHANGE
+#endif
+#ifndef XHTTP_MODULE_HTTP_SERVER_REQUEST
+#define XHTTP_MODULE_HTTP_SERVER_REQUEST
+#endif
+#ifndef XRT_MODULE_HTTP_HOST
+#define XRT_MODULE_HTTP_HOST
+#endif
+#ifndef XRT_MODULE_HTTP_TARGET
+#define XRT_MODULE_HTTP_TARGET
+#endif
+#ifndef XRT_MODULE_HTTP_EXPECT
+#define XRT_MODULE_HTTP_EXPECT
+#endif
+#ifndef XRT_MODULE_HTTP_TE
+#define XRT_MODULE_HTTP_TE
+#endif
+#ifndef XRT_MODULE_HTTP_CONNECTION
+#define XRT_MODULE_HTTP_CONNECTION
+#endif
+#ifndef XRT_MODULE_HTTP_TRAILER
+#define XRT_MODULE_HTTP_TRAILER
+#endif
+#endif
+
+/* http_server_form_data 及其直接依赖。 */
+#if defined(XHTTP_MODULE_ALL) || defined(XHTTP_MODULE_HTTP_SERVER_FORM_DATA)
+#ifndef XHTTP_FEATURE_HTTP_SERVER_FORM_DATA
+#define XHTTP_FEATURE_HTTP_SERVER_FORM_DATA
+#endif
+#ifndef XHTTP_MODULE_HTTP_SERVER_CONTENT_TYPE
+#define XHTTP_MODULE_HTTP_SERVER_CONTENT_TYPE
+#endif
+#ifndef XHTTP_MODULE_FORM_DATA_PARSE
+#define XHTTP_MODULE_FORM_DATA_PARSE
+#endif
+#endif
+
+/* http_server_form 及其直接依赖。 */
+#if defined(XHTTP_MODULE_ALL) || defined(XHTTP_MODULE_HTTP_SERVER_FORM)
+#ifndef XHTTP_FEATURE_HTTP_SERVER_FORM
+#define XHTTP_FEATURE_HTTP_SERVER_FORM
+#endif
+#ifndef XHTTP_MODULE_HTTP_SERVER_CONTENT_TYPE
+#define XHTTP_MODULE_HTTP_SERVER_CONTENT_TYPE
+#endif
+#ifndef XHTTP_MODULE_QUERY_PARAMS
+#define XHTTP_MODULE_QUERY_PARAMS
+#endif
+#endif
+
+/* http_server_content_type 及其直接依赖。 */
+#if defined(XHTTP_MODULE_ALL) || defined(XHTTP_MODULE_HTTP_SERVER_CONTENT_TYPE)
+#ifndef XHTTP_FEATURE_HTTP_SERVER_CONTENT_TYPE
+#define XHTTP_FEATURE_HTTP_SERVER_CONTENT_TYPE
+#endif
+#ifndef XHTTP_MODULE_HTTP_SERVER_REQUEST
+#define XHTTP_MODULE_HTTP_SERVER_REQUEST
+#endif
+#ifndef XHTTP_MODULE_MIME
+#define XHTTP_MODULE_MIME
+#endif
+#endif
+
+/* http_server_cookie 及其直接依赖。 */
+#if defined(XHTTP_MODULE_ALL) || defined(XHTTP_MODULE_HTTP_SERVER_COOKIE)
+#ifndef XHTTP_FEATURE_HTTP_SERVER_COOKIE
+#define XHTTP_FEATURE_HTTP_SERVER_COOKIE
+#endif
+#ifndef XHTTP_MODULE_HTTP_SERVER_REQUEST
+#define XHTTP_MODULE_HTTP_SERVER_REQUEST
+#endif
+#ifndef XHTTP_MODULE_COOKIE
+#define XHTTP_MODULE_COOKIE
+#endif
+#endif
+
+/* http_server_query 及其直接依赖。 */
+#if defined(XHTTP_MODULE_ALL) || defined(XHTTP_MODULE_HTTP_SERVER_QUERY)
+#ifndef XHTTP_FEATURE_HTTP_SERVER_QUERY
+#define XHTTP_FEATURE_HTTP_SERVER_QUERY
+#endif
+#ifndef XHTTP_MODULE_HTTP_SERVER_REQUEST
+#define XHTTP_MODULE_HTTP_SERVER_REQUEST
+#endif
+#ifndef XHTTP_MODULE_QUERY_PARAMS
+#define XHTTP_MODULE_QUERY_PARAMS
+#endif
+#endif
+
+/* http_client_set_cookie 及其直接依赖。 */
+#if defined(XHTTP_MODULE_ALL) || defined(XHTTP_MODULE_HTTP_CLIENT_SET_COOKIE)
+#ifndef XHTTP_FEATURE_HTTP_CLIENT_SET_COOKIE
+#define XHTTP_FEATURE_HTTP_CLIENT_SET_COOKIE
+#endif
+#ifndef XHTTP_MODULE_HTTP_CLIENT_RESPONSE
+#define XHTTP_MODULE_HTTP_CLIENT_RESPONSE
+#endif
+#ifndef XHTTP_MODULE_SET_COOKIE
+#define XHTTP_MODULE_SET_COOKIE
+#endif
+#endif
+
+/* http_client_content_type 及其直接依赖。 */
+#if defined(XHTTP_MODULE_ALL) || defined(XHTTP_MODULE_HTTP_CLIENT_CONTENT_TYPE)
+#ifndef XHTTP_FEATURE_HTTP_CLIENT_CONTENT_TYPE
+#define XHTTP_FEATURE_HTTP_CLIENT_CONTENT_TYPE
+#endif
+#ifndef XHTTP_MODULE_HTTP_CLIENT_RESPONSE
+#define XHTTP_MODULE_HTTP_CLIENT_RESPONSE
+#endif
+#ifndef XHTTP_MODULE_MIME
+#define XHTTP_MODULE_MIME
+#endif
+#endif
+
+/* http_client_request_form_data_random 及其直接依赖。 */
+#if defined(XHTTP_MODULE_ALL) || defined(XHTTP_MODULE_HTTP_CLIENT_REQUEST_FORM_DATA_RANDOM)
+#ifndef XHTTP_FEATURE_HTTP_CLIENT_REQUEST_FORM_DATA_RANDOM
+#define XHTTP_FEATURE_HTTP_CLIENT_REQUEST_FORM_DATA_RANDOM
+#endif
+#ifndef XHTTP_MODULE_HTTP_CLIENT_REQUEST_FORM_DATA
+#define XHTTP_MODULE_HTTP_CLIENT_REQUEST_FORM_DATA
+#endif
+#ifndef XHTTP_MODULE_FORM_DATA_RANDOM
+#define XHTTP_MODULE_FORM_DATA_RANDOM
+#endif
+#endif
+
+/* http_client_request_form_data 及其直接依赖。 */
+#if defined(XHTTP_MODULE_ALL) || defined(XHTTP_MODULE_HTTP_CLIENT_REQUEST_FORM_DATA)
+#ifndef XHTTP_FEATURE_HTTP_CLIENT_REQUEST_FORM_DATA
+#define XHTTP_FEATURE_HTTP_CLIENT_REQUEST_FORM_DATA
+#endif
+#ifndef XHTTP_MODULE_HTTP_CLIENT_REQUEST
+#define XHTTP_MODULE_HTTP_CLIENT_REQUEST
+#endif
+#ifndef XHTTP_MODULE_FORM_DATA_MULTIPART
+#define XHTTP_MODULE_FORM_DATA_MULTIPART
+#endif
+#endif
+
+/* http_client_request_form 及其直接依赖。 */
+#if defined(XHTTP_MODULE_ALL) || defined(XHTTP_MODULE_HTTP_CLIENT_REQUEST_FORM)
+#ifndef XHTTP_FEATURE_HTTP_CLIENT_REQUEST_FORM
+#define XHTTP_FEATURE_HTTP_CLIENT_REQUEST_FORM
+#endif
+#ifndef XHTTP_MODULE_HTTP_CLIENT_REQUEST
+#define XHTTP_MODULE_HTTP_CLIENT_REQUEST
+#endif
+#ifndef XHTTP_MODULE_QUERY_PARAMS
+#define XHTTP_MODULE_QUERY_PARAMS
+#endif
+#endif
+
+/* http_client_request_query 及其直接依赖。 */
+#if defined(XHTTP_MODULE_ALL) || defined(XHTTP_MODULE_HTTP_CLIENT_REQUEST_QUERY)
+#ifndef XHTTP_FEATURE_HTTP_CLIENT_REQUEST_QUERY
+#define XHTTP_FEATURE_HTTP_CLIENT_REQUEST_QUERY
+#endif
+#ifndef XHTTP_MODULE_HTTP_CLIENT_REQUEST
+#define XHTTP_MODULE_HTTP_CLIENT_REQUEST
+#endif
+#ifndef XHTTP_MODULE_QUERY_PARAMS
+#define XHTTP_MODULE_QUERY_PARAMS
+#endif
+#endif
+
+/* form_data_random 及其直接依赖。 */
+#if defined(XHTTP_MODULE_ALL) || defined(XHTTP_MODULE_FORM_DATA_RANDOM)
+#ifndef XHTTP_FEATURE_FORM_DATA_RANDOM
+#define XHTTP_FEATURE_FORM_DATA_RANDOM
+#endif
+#ifndef XHTTP_MODULE_FORM_DATA_MULTIPART
+#define XHTTP_MODULE_FORM_DATA_MULTIPART
+#endif
+#ifndef XHTTP_MODULE_MULTIPART_RANDOM
+#define XHTTP_MODULE_MULTIPART_RANDOM
+#endif
+#endif
+
+/* form_data_parse 及其直接依赖。 */
+#if defined(XHTTP_MODULE_ALL) || defined(XHTTP_MODULE_FORM_DATA_PARSE)
+#ifndef XHTTP_FEATURE_FORM_DATA_PARSE
+#define XHTTP_FEATURE_FORM_DATA_PARSE
+#endif
+#ifndef XHTTP_MODULE_FORM_DATA
+#define XHTTP_MODULE_FORM_DATA
+#endif
+#ifndef XHTTP_MODULE_MULTIPART
+#define XHTTP_MODULE_MULTIPART
+#endif
+#endif
+
+/* form_data_multipart 及其直接依赖。 */
+#if defined(XHTTP_MODULE_ALL) || defined(XHTTP_MODULE_FORM_DATA_MULTIPART)
+#ifndef XHTTP_FEATURE_FORM_DATA_MULTIPART
+#define XHTTP_FEATURE_FORM_DATA_MULTIPART
+#endif
+#ifndef XHTTP_MODULE_FORM_DATA
+#define XHTTP_MODULE_FORM_DATA
+#endif
+#ifndef XHTTP_MODULE_MULTIPART_WRITE
+#define XHTTP_MODULE_MULTIPART_WRITE
+#endif
+#ifndef XHTTP_MODULE_HTTP_BODY_COMPOSE
+#define XHTTP_MODULE_HTTP_BODY_COMPOSE
+#endif
+#endif
+
+/* form_data 及其直接依赖。 */
+#if defined(XHTTP_MODULE_ALL) || defined(XHTTP_MODULE_FORM_DATA)
+#ifndef XHTTP_FEATURE_FORM_DATA
+#define XHTTP_FEATURE_FORM_DATA
+#endif
+#ifndef XHTTP_MODULE_MIME
+#define XHTTP_MODULE_MIME
+#endif
+#ifndef XHTTP_MODULE_HTTP_BODY
+#define XHTTP_MODULE_HTTP_BODY
+#endif
+#endif
+
+/* http_body_compose 及其直接依赖。 */
+#if defined(XHTTP_MODULE_ALL) || defined(XHTTP_MODULE_HTTP_BODY_COMPOSE)
+#ifndef XHTTP_FEATURE_HTTP_BODY_COMPOSE
+#define XHTTP_FEATURE_HTTP_BODY_COMPOSE
+#endif
+#ifndef XHTTP_MODULE_HTTP_BODY
+#define XHTTP_MODULE_HTTP_BODY
+#endif
+#endif
+
+/* multipart_random 及其直接依赖。 */
+#if defined(XHTTP_MODULE_ALL) || defined(XHTTP_MODULE_MULTIPART_RANDOM)
+#ifndef XHTTP_FEATURE_MULTIPART_RANDOM
+#define XHTTP_FEATURE_MULTIPART_RANDOM
+#endif
+#ifndef XHTTP_MODULE_MULTIPART
+#define XHTTP_MODULE_MULTIPART
+#endif
+#ifndef XRT_MODULE_RANDOM_SECURE
+#define XRT_MODULE_RANDOM_SECURE
+#endif
+#endif
+
+/* multipart_stream 及其直接依赖。 */
+#if defined(XHTTP_MODULE_ALL) || defined(XHTTP_MODULE_MULTIPART_STREAM)
+#ifndef XHTTP_FEATURE_MULTIPART_STREAM
+#define XHTTP_FEATURE_MULTIPART_STREAM
+#endif
+#ifndef XHTTP_MODULE_MULTIPART
+#define XHTTP_MODULE_MULTIPART
+#endif
+#endif
+
+/* multipart_write 及其直接依赖。 */
+#if defined(XHTTP_MODULE_ALL) || defined(XHTTP_MODULE_MULTIPART_WRITE)
+#ifndef XHTTP_FEATURE_MULTIPART_WRITE
+#define XHTTP_FEATURE_MULTIPART_WRITE
+#endif
+#ifndef XHTTP_MODULE_MULTIPART
+#define XHTTP_MODULE_MULTIPART
+#endif
+#endif
+
+/* query_params 及其直接依赖。 */
+#if defined(XHTTP_MODULE_ALL) || defined(XHTTP_MODULE_QUERY_PARAMS)
+#ifndef XHTTP_FEATURE_QUERY_PARAMS
+#define XHTTP_FEATURE_QUERY_PARAMS
+#endif
+#ifndef XHTTP_MODULE_QUERY
+#define XHTTP_MODULE_QUERY
+#endif
+#ifndef XHTTP_MODULE_FORM_URLENCODED
+#define XHTTP_MODULE_FORM_URLENCODED
+#endif
+#endif
+
+/* form_urlencoded 及其直接依赖。 */
+#if defined(XHTTP_MODULE_ALL) || defined(XHTTP_MODULE_FORM_URLENCODED)
+#ifndef XHTTP_FEATURE_FORM_URLENCODED
+#define XHTTP_FEATURE_FORM_URLENCODED
+#endif
+#ifndef XRT_MODULE_CODEC_PERCENT
+#define XRT_MODULE_CODEC_PERCENT
+#endif
+#ifndef XHTTP_MODULE_QUERY
+#define XHTTP_MODULE_QUERY
+#endif
+#endif
+
+/* query_codec 及其直接依赖。 */
+#if defined(XHTTP_MODULE_ALL) || defined(XHTTP_MODULE_QUERY_CODEC)
+#ifndef XHTTP_FEATURE_QUERY_CODEC
+#define XHTTP_FEATURE_QUERY_CODEC
+#endif
+#ifndef XHTTP_MODULE_QUERY
+#define XHTTP_MODULE_QUERY
+#endif
+#ifndef XRT_MODULE_CODEC_PERCENT
+#define XRT_MODULE_CODEC_PERCENT
+#endif
+#endif
+
+/* query 及其直接依赖。 */
+#if defined(XHTTP_MODULE_ALL) || defined(XHTTP_MODULE_QUERY)
+#ifndef XHTTP_FEATURE_QUERY
+#define XHTTP_FEATURE_QUERY
+#endif
+#endif
+
+/* http_sse_server 及其直接依赖。 */
+#if defined(XHTTP_MODULE_ALL) || defined(XHTTP_MODULE_HTTP_SSE_SERVER)
+#ifndef XHTTP_FEATURE_HTTP_SSE_SERVER
+#define XHTTP_FEATURE_HTTP_SSE_SERVER
+#endif
+#ifndef XHTTP_MODULE_HTTP_SSE_HTTP
+#define XHTTP_MODULE_HTTP_SSE_HTTP
+#endif
+#ifndef XHTTP_MODULE_HTTP_BODY_STREAM
+#define XHTTP_MODULE_HTTP_BODY_STREAM
+#endif
+#ifndef XHTTP_MODULE_HTTP_SERVER_REPLY
+#define XHTTP_MODULE_HTTP_SERVER_REPLY
+#endif
+#endif
+
+/* http_body_stream 及其直接依赖。 */
+#if defined(XHTTP_MODULE_ALL) || defined(XHTTP_MODULE_HTTP_BODY_STREAM)
+#ifndef XHTTP_FEATURE_HTTP_BODY_STREAM
+#define XHTTP_FEATURE_HTTP_BODY_STREAM
+#endif
+#ifndef XHTTP_MODULE_HTTP_BODY_ASYNC
+#define XHTTP_MODULE_HTTP_BODY_ASYNC
+#endif
+#ifndef XRT_MODULE_MUTEX
+#define XRT_MODULE_MUTEX
+#endif
+#endif
+
+/* http_sse_client 及其直接依赖。 */
+#if defined(XHTTP_MODULE_ALL) || defined(XHTTP_MODULE_HTTP_SSE_CLIENT)
+#ifndef XHTTP_FEATURE_HTTP_SSE_CLIENT
+#define XHTTP_FEATURE_HTTP_SSE_CLIENT
+#endif
+#ifndef XHTTP_MODULE_HTTP_SSE_HTTP
+#define XHTTP_MODULE_HTTP_SSE_HTTP
+#endif
+#ifndef XHTTP_MODULE_HTTP_SSE_PARSER
+#define XHTTP_MODULE_HTTP_SSE_PARSER
+#endif
+#ifndef XHTTP_MODULE_HTTP_CLIENT_REDIRECT
+#define XHTTP_MODULE_HTTP_CLIENT_REDIRECT
+#endif
+#endif
+
+/* http_sse_parser 及其直接依赖。 */
+#if defined(XHTTP_MODULE_ALL) || defined(XHTTP_MODULE_HTTP_SSE_PARSER)
+#ifndef XHTTP_FEATURE_HTTP_SSE_PARSER
+#define XHTTP_FEATURE_HTTP_SSE_PARSER
+#endif
+#ifndef XHTTP_MODULE_HTTP_SSE
+#define XHTTP_MODULE_HTTP_SSE
+#endif
+#ifndef XRT_MODULE_BUFFER
+#define XRT_MODULE_BUFFER
+#endif
+#endif
+
+/* http_sse_http 及其直接依赖。 */
+#if defined(XHTTP_MODULE_ALL) || defined(XHTTP_MODULE_HTTP_SSE_HTTP)
+#ifndef XHTTP_FEATURE_HTTP_SSE_HTTP
+#define XHTTP_FEATURE_HTTP_SSE_HTTP
+#endif
+#ifndef XHTTP_MODULE_HTTP_SSE
+#define XHTTP_MODULE_HTTP_SSE
+#endif
+#ifndef XHTTP_MODULE_HTTP_HEADERS
+#define XHTTP_MODULE_HTTP_HEADERS
+#endif
+#ifndef XHTTP_MODULE_MIME
+#define XHTTP_MODULE_MIME
+#endif
+#endif
+
+/* http_sse 及其直接依赖。 */
+#if defined(XHTTP_MODULE_ALL) || defined(XHTTP_MODULE_HTTP_SSE)
+#ifndef XHTTP_FEATURE_HTTP_SSE
+#define XHTTP_FEATURE_HTTP_SSE
+#endif
+#ifndef XRT_MODULE_HTTP
+#define XRT_MODULE_HTTP
+#endif
+#ifndef XRT_MODULE_UNICODE
+#define XRT_MODULE_UNICODE
+#endif
+#endif
+
+/* http_static_multipart_body 及其直接依赖。 */
+#if defined(XHTTP_MODULE_ALL) || defined(XHTTP_MODULE_HTTP_STATIC_MULTIPART_BODY)
+#ifndef XHTTP_FEATURE_HTTP_STATIC_MULTIPART_BODY
+#define XHTTP_FEATURE_HTTP_STATIC_MULTIPART_BODY
+#endif
+#ifndef XHTTP_MODULE_HTTP_RANGE_MULTIPART
+#define XHTTP_MODULE_HTTP_RANGE_MULTIPART
+#endif
+#ifndef XHTTP_MODULE_HTTP_STATIC_FILE
+#define XHTTP_MODULE_HTTP_STATIC_FILE
+#endif
+#ifndef XHTTP_MODULE_HTTP_BODY_FILE
+#define XHTTP_MODULE_HTTP_BODY_FILE
+#endif
+#endif
+
+/* http_static_file 及其直接依赖。 */
+#if defined(XHTTP_MODULE_ALL) || defined(XHTTP_MODULE_HTTP_STATIC_FILE)
+#ifndef XHTTP_FEATURE_HTTP_STATIC_FILE
+#define XHTTP_FEATURE_HTTP_STATIC_FILE
+#endif
+#ifndef XRT_MODULE_ATOMIC
+#define XRT_MODULE_ATOMIC
+#endif
+#ifndef XRT_MODULE_FILE_ROOT
+#define XRT_MODULE_FILE_ROOT
+#endif
+#ifndef XHTTP_MODULE_HTTP_BODY_FILE
+#define XHTTP_MODULE_HTTP_BODY_FILE
+#endif
+#ifndef XHTTP_MODULE_HTTP_PRECONDITION
+#define XHTTP_MODULE_HTTP_PRECONDITION
+#endif
+#endif
+
+/* http_body_file 及其直接依赖。 */
+#if defined(XHTTP_MODULE_ALL) || defined(XHTTP_MODULE_HTTP_BODY_FILE)
+#ifndef XHTTP_FEATURE_HTTP_BODY_FILE
+#define XHTTP_FEATURE_HTTP_BODY_FILE
+#endif
+#ifndef XHTTP_MODULE_HTTP_BODY_ASYNC
+#define XHTTP_MODULE_HTTP_BODY_ASYNC
+#endif
+#ifndef XRT_MODULE_FILE_ASYNC
+#define XRT_MODULE_FILE_ASYNC
+#endif
+#endif
+
+/* http_body_async 及其直接依赖。 */
+#if defined(XHTTP_MODULE_ALL) || defined(XHTTP_MODULE_HTTP_BODY_ASYNC)
+#ifndef XHTTP_FEATURE_HTTP_BODY_ASYNC
+#define XHTTP_FEATURE_HTTP_BODY_ASYNC
+#endif
+#ifndef XHTTP_MODULE_HTTP_BODY
+#define XHTTP_MODULE_HTTP_BODY
+#endif
+#ifndef XRT_MODULE_FUTURE
+#define XRT_MODULE_FUTURE
+#endif
+#endif
+
+/* http_static_response 及其直接依赖。 */
+#if defined(XHTTP_MODULE_ALL) || defined(XHTTP_MODULE_HTTP_STATIC_RESPONSE)
+#ifndef XHTTP_FEATURE_HTTP_STATIC_RESPONSE
+#define XHTTP_FEATURE_HTTP_STATIC_RESPONSE
+#endif
+#ifndef XHTTP_MODULE_HTTP_STATIC_PLAN
+#define XHTTP_MODULE_HTTP_STATIC_PLAN
+#endif
+#ifndef XHTTP_MODULE_HTTP_RANGE_MULTIPART
+#define XHTTP_MODULE_HTTP_RANGE_MULTIPART
+#endif
+#endif
+
+/* http_static_plan 及其直接依赖。 */
+#if defined(XHTTP_MODULE_ALL) || defined(XHTTP_MODULE_HTTP_STATIC_PLAN)
+#ifndef XHTTP_FEATURE_HTTP_STATIC_PLAN
+#define XHTTP_FEATURE_HTTP_STATIC_PLAN
+#endif
+#ifndef XHTTP_MODULE_HTTP_PRECONDITION
+#define XHTTP_MODULE_HTTP_PRECONDITION
+#endif
+#ifndef XHTTP_MODULE_HTTP_RANGE
+#define XHTTP_MODULE_HTTP_RANGE
+#endif
+#endif
+
+/* http_static_path 及其直接依赖。 */
+#if defined(XHTTP_MODULE_ALL) || defined(XHTTP_MODULE_HTTP_STATIC_PATH)
+#ifndef XHTTP_FEATURE_HTTP_STATIC_PATH
+#define XHTTP_FEATURE_HTTP_STATIC_PATH
+#endif
+#ifndef XRT_MODULE_CODEC_PERCENT
+#define XRT_MODULE_CODEC_PERCENT
+#endif
+#ifndef XRT_MODULE_PATH_SAFE
+#define XRT_MODULE_PATH_SAFE
+#endif
+#endif
+
+/* http_via_write 及其直接依赖。 */
+#if defined(XHTTP_MODULE_ALL) || defined(XHTTP_MODULE_HTTP_VIA_WRITE)
+#ifndef XHTTP_FEATURE_HTTP_VIA_WRITE
+#define XHTTP_FEATURE_HTTP_VIA_WRITE
+#endif
+#ifndef XHTTP_MODULE_HTTP_VIA
+#define XHTTP_MODULE_HTTP_VIA
+#endif
+#endif
+
+/* http_via 及其直接依赖。 */
+#if defined(XHTTP_MODULE_ALL) || defined(XHTTP_MODULE_HTTP_VIA)
+#ifndef XHTTP_FEATURE_HTTP_VIA
+#define XHTTP_FEATURE_HTTP_VIA
+#endif
+#ifndef XRT_MODULE_HTTP
+#define XRT_MODULE_HTTP
+#endif
+#endif
+
+/* http_origin_write 及其直接依赖。 */
+#if defined(XHTTP_MODULE_ALL) || defined(XHTTP_MODULE_HTTP_ORIGIN_WRITE)
+#ifndef XHTTP_FEATURE_HTTP_ORIGIN_WRITE
+#define XHTTP_FEATURE_HTTP_ORIGIN_WRITE
+#endif
+#ifndef XHTTP_MODULE_HTTP_ORIGIN
+#define XHTTP_MODULE_HTTP_ORIGIN
+#endif
+#endif
+
+/* http_forwarded_write 及其直接依赖。 */
+#if defined(XHTTP_MODULE_ALL) || defined(XHTTP_MODULE_HTTP_FORWARDED_WRITE)
+#ifndef XHTTP_FEATURE_HTTP_FORWARDED_WRITE
+#define XHTTP_FEATURE_HTTP_FORWARDED_WRITE
+#endif
+#ifndef XHTTP_MODULE_HTTP_FORWARDED
+#define XHTTP_MODULE_HTTP_FORWARDED
+#endif
+#endif
+
+/* http_forwarded 及其直接依赖。 */
+#if defined(XHTTP_MODULE_ALL) || defined(XHTTP_MODULE_HTTP_FORWARDED)
+#ifndef XHTTP_FEATURE_HTTP_FORWARDED
+#define XHTTP_FEATURE_HTTP_FORWARDED
+#endif
+#ifndef XRT_MODULE_HTTP_PARAM_HOST
+#define XRT_MODULE_HTTP_PARAM_HOST
+#endif
+#endif
+
+/* http_link_write 及其直接依赖。 */
+#if defined(XHTTP_MODULE_ALL) || defined(XHTTP_MODULE_HTTP_LINK_WRITE)
+#ifndef XHTTP_FEATURE_HTTP_LINK_WRITE
+#define XHTTP_FEATURE_HTTP_LINK_WRITE
+#endif
+#ifndef XHTTP_MODULE_HTTP_LINK
+#define XHTTP_MODULE_HTTP_LINK
+#endif
+#endif
+
+/* http_link 及其直接依赖。 */
+#if defined(XHTTP_MODULE_ALL) || defined(XHTTP_MODULE_HTTP_LINK)
+#ifndef XHTTP_FEATURE_HTTP_LINK
+#define XHTTP_FEATURE_HTTP_LINK
+#endif
+#ifndef XHTTP_MODULE_HTTP_EXT_VALUE
+#define XHTTP_MODULE_HTTP_EXT_VALUE
+#endif
+#ifndef XHTTP_MODULE_HTTP_LANGUAGE
+#define XHTTP_MODULE_HTTP_LANGUAGE
+#endif
+#ifndef XHTTP_MODULE_URL_PARAM
+#define XHTTP_MODULE_URL_PARAM
+#endif
+#endif
+
+/* http_client_cache 及其直接依赖。 */
+#if defined(XHTTP_MODULE_ALL) || defined(XHTTP_MODULE_HTTP_CLIENT_CACHE)
+#ifndef XHTTP_FEATURE_HTTP_CLIENT_CACHE
+#define XHTTP_FEATURE_HTTP_CLIENT_CACHE
+#endif
+#ifndef XHTTP_MODULE_HTTP_CLIENT
+#define XHTTP_MODULE_HTTP_CLIENT
+#endif
+#ifndef XHTTP_MODULE_HTTP_CACHE_STORE
+#define XHTTP_MODULE_HTTP_CACHE_STORE
+#endif
+#ifndef XHTTP_MODULE_HTTP_CACHE_RANGE
+#define XHTTP_MODULE_HTTP_CACHE_RANGE
+#endif
+#ifndef XHTTP_MODULE_HTTP_RANGE_MULTIPART
+#define XHTTP_MODULE_HTTP_RANGE_MULTIPART
+#endif
+#ifndef XHTTP_MODULE_MULTIPART
+#define XHTTP_MODULE_MULTIPART
+#endif
+#ifndef XRT_MODULE_CODEC_HEX
+#define XRT_MODULE_CODEC_HEX
+#endif
+#ifndef XRT_MODULE_RANDOM_SECURE
+#define XRT_MODULE_RANDOM_SECURE
+#endif
+#endif
+
+/* multipart 及其直接依赖。 */
+#if defined(XHTTP_MODULE_ALL) || defined(XHTTP_MODULE_MULTIPART)
+#ifndef XHTTP_FEATURE_MULTIPART
+#define XHTTP_FEATURE_MULTIPART
+#endif
+#ifndef XHTTP_MODULE_HTTP_CONTENT_DISPOSITION
+#define XHTTP_MODULE_HTTP_CONTENT_DISPOSITION
+#endif
+#endif
+
+/* http_content_disposition 及其直接依赖。 */
+#if defined(XHTTP_MODULE_ALL) || defined(XHTTP_MODULE_HTTP_CONTENT_DISPOSITION)
+#ifndef XHTTP_FEATURE_HTTP_CONTENT_DISPOSITION
+#define XHTTP_FEATURE_HTTP_CONTENT_DISPOSITION
+#endif
+#ifndef XHTTP_MODULE_MIME
+#define XHTTP_MODULE_MIME
+#endif
+#ifndef XHTTP_MODULE_HTTP_EXT_VALUE
+#define XHTTP_MODULE_HTTP_EXT_VALUE
+#endif
+#ifndef XRT_MODULE_UNICODE
+#define XRT_MODULE_UNICODE
+#endif
+#endif
+
+/* http_range_multipart 及其直接依赖。 */
+#if defined(XHTTP_MODULE_ALL) || defined(XHTTP_MODULE_HTTP_RANGE_MULTIPART)
+#ifndef XHTTP_FEATURE_HTTP_RANGE_MULTIPART
+#define XHTTP_FEATURE_HTTP_RANGE_MULTIPART
+#endif
+#ifndef XHTTP_MODULE_HTTP_RANGE
+#define XHTTP_MODULE_HTTP_RANGE
+#endif
+#endif
+
+/* http_client_decompress 及其直接依赖。 */
+#if defined(XHTTP_MODULE_ALL) || defined(XHTTP_MODULE_HTTP_CLIENT_DECOMPRESS)
+#ifndef XHTTP_FEATURE_HTTP_CLIENT_DECOMPRESS
+#define XHTTP_FEATURE_HTTP_CLIENT_DECOMPRESS
+#endif
+#ifndef XHTTP_MODULE_HTTP_CLIENT
+#define XHTTP_MODULE_HTTP_CLIENT
+#endif
+#ifndef XRT_MODULE_HTTP_ENCODING
+#define XRT_MODULE_HTTP_ENCODING
+#endif
+#ifndef XRT_MODULE_INFLATE
+#define XRT_MODULE_INFLATE
+#endif
+#endif
+
+/* http_client_cookies 及其直接依赖。 */
+#if defined(XHTTP_MODULE_ALL) || defined(XHTTP_MODULE_HTTP_CLIENT_COOKIES)
+#ifndef XHTTP_FEATURE_HTTP_CLIENT_COOKIES
+#define XHTTP_FEATURE_HTTP_CLIENT_COOKIES
+#endif
+#ifndef XHTTP_MODULE_HTTP_CLIENT
+#define XHTTP_MODULE_HTTP_CLIENT
+#endif
+#ifndef XHTTP_MODULE_COOKIE_JAR_HEADERS
+#define XHTTP_MODULE_COOKIE_JAR_HEADERS
+#endif
+#endif
+
+/* cookie_jar_headers 及其直接依赖。 */
+#if defined(XHTTP_MODULE_ALL) || defined(XHTTP_MODULE_COOKIE_JAR_HEADERS)
+#ifndef XHTTP_FEATURE_COOKIE_JAR_HEADERS
+#define XHTTP_FEATURE_COOKIE_JAR_HEADERS
+#endif
+#ifndef XHTTP_MODULE_COOKIE_JAR
+#define XHTTP_MODULE_COOKIE_JAR
+#endif
+#ifndef XHTTP_MODULE_HTTP_HEADERS
+#define XHTTP_MODULE_HTTP_HEADERS
+#endif
+#endif
+
+/* cookie_jar 及其直接依赖。 */
+#if defined(XHTTP_MODULE_ALL) || defined(XHTTP_MODULE_COOKIE_JAR)
+#ifndef XHTTP_FEATURE_COOKIE_JAR
+#define XHTTP_FEATURE_COOKIE_JAR
+#endif
+#ifndef XHTTP_MODULE_SET_COOKIE
+#define XHTTP_MODULE_SET_COOKIE
+#endif
+#ifndef XHTTP_MODULE_URL
+#define XHTTP_MODULE_URL
+#endif
+#ifndef XRT_MODULE_MUTEX
+#define XRT_MODULE_MUTEX
+#endif
+#endif
+
+/* set_cookie 及其直接依赖。 */
+#if defined(XHTTP_MODULE_ALL) || defined(XHTTP_MODULE_SET_COOKIE)
+#ifndef XHTTP_FEATURE_SET_COOKIE
+#define XHTTP_FEATURE_SET_COOKIE
+#endif
+#ifndef XHTTP_MODULE_COOKIE
+#define XHTTP_MODULE_COOKIE
+#endif
+#ifndef XRT_MODULE_TIME_TEXT
+#define XRT_MODULE_TIME_TEXT
+#endif
+#endif
+
+/* cookie 及其直接依赖。 */
+#if defined(XHTTP_MODULE_ALL) || defined(XHTTP_MODULE_COOKIE)
+#ifndef XHTTP_FEATURE_COOKIE
+#define XHTTP_FEATURE_COOKIE
+#endif
+#ifndef XRT_MODULE_HTTP
+#define XRT_MODULE_HTTP
+#endif
+#endif
+
+/* http_client_pool 及其直接依赖。 */
+#if defined(XHTTP_MODULE_ALL) || defined(XHTTP_MODULE_HTTP_CLIENT_POOL)
+#ifndef XHTTP_FEATURE_HTTP_CLIENT_POOL
+#define XHTTP_FEATURE_HTTP_CLIENT_POOL
+#endif
+#ifndef XHTTP_MODULE_HTTP_CLIENT
+#define XHTTP_MODULE_HTTP_CLIENT
+#endif
+#ifndef XRT_MODULE_MUTEX
+#define XRT_MODULE_MUTEX
+#endif
+#endif
+
+/* http_client_proxy 及其直接依赖。 */
+#if defined(XHTTP_MODULE_ALL) || defined(XHTTP_MODULE_HTTP_CLIENT_PROXY)
+#ifndef XHTTP_FEATURE_HTTP_CLIENT_PROXY
+#define XHTTP_FEATURE_HTTP_CLIENT_PROXY
+#endif
+#ifndef XHTTP_MODULE_HTTP_CLIENT
+#define XHTTP_MODULE_HTTP_CLIENT
+#endif
+#ifndef XRT_MODULE_NET_PROXY_DIAL
+#define XRT_MODULE_NET_PROXY_DIAL
+#endif
+#endif
+
+/* http_client_request_trailers 及其直接依赖。 */
+#if defined(XHTTP_MODULE_ALL) || defined(XHTTP_MODULE_HTTP_CLIENT_REQUEST_TRAILERS)
+#ifndef XHTTP_FEATURE_HTTP_CLIENT_REQUEST_TRAILERS
+#define XHTTP_FEATURE_HTTP_CLIENT_REQUEST_TRAILERS
+#endif
+#ifndef XHTTP_MODULE_HTTP_CLIENT_REQUEST
+#define XHTTP_MODULE_HTTP_CLIENT_REQUEST
+#endif
+#endif
+
+/* http_client_request_te 及其直接依赖。 */
+#if defined(XHTTP_MODULE_ALL) || defined(XHTTP_MODULE_HTTP_CLIENT_REQUEST_TE)
+#ifndef XHTTP_FEATURE_HTTP_CLIENT_REQUEST_TE
+#define XHTTP_FEATURE_HTTP_CLIENT_REQUEST_TE
+#endif
+#ifndef XHTTP_MODULE_HTTP_CLIENT_REQUEST
+#define XHTTP_MODULE_HTTP_CLIENT_REQUEST
+#endif
+#ifndef XRT_MODULE_HTTP_CONNECTION
+#define XRT_MODULE_HTTP_CONNECTION
+#endif
+#ifndef XRT_MODULE_HTTP_TE
+#define XRT_MODULE_HTTP_TE
+#endif
+#endif
+
+/* http_client_easy_future 及其直接依赖。 */
+#if defined(XHTTP_MODULE_ALL) || defined(XHTTP_MODULE_HTTP_CLIENT_EASY_FUTURE)
+#ifndef XHTTP_FEATURE_HTTP_CLIENT_EASY_FUTURE
+#define XHTTP_FEATURE_HTTP_CLIENT_EASY_FUTURE
+#endif
+#ifndef XHTTP_MODULE_HTTP_CLIENT_EASY
+#define XHTTP_MODULE_HTTP_CLIENT_EASY
+#endif
+#ifndef XHTTP_MODULE_HTTP_CLIENT_FUTURE
+#define XHTTP_MODULE_HTTP_CLIENT_FUTURE
+#endif
+#endif
+
+/* http_client_future 及其直接依赖。 */
+#if defined(XHTTP_MODULE_ALL) || defined(XHTTP_MODULE_HTTP_CLIENT_FUTURE)
+#ifndef XHTTP_FEATURE_HTTP_CLIENT_FUTURE
+#define XHTTP_FEATURE_HTTP_CLIENT_FUTURE
+#endif
+#ifndef XHTTP_MODULE_HTTP_CLIENT
+#define XHTTP_MODULE_HTTP_CLIENT
+#endif
+#ifndef XRT_MODULE_FUTURE_BRIDGE
+#define XRT_MODULE_FUTURE_BRIDGE
+#endif
+#ifndef XRT_MODULE_SPIN
+#define XRT_MODULE_SPIN
+#endif
+#endif
+
+/* http_client_easy 及其直接依赖。 */
+#if defined(XHTTP_MODULE_ALL) || defined(XHTTP_MODULE_HTTP_CLIENT_EASY)
+#ifndef XHTTP_FEATURE_HTTP_CLIENT_EASY
+#define XHTTP_FEATURE_HTTP_CLIENT_EASY
+#endif
+#ifndef XHTTP_MODULE_HTTP_CLIENT
+#define XHTTP_MODULE_HTTP_CLIENT
+#endif
+#endif
+
+/* http_client_resume 及其直接依赖。 */
+#if defined(XHTTP_MODULE_ALL) || defined(XHTTP_MODULE_HTTP_CLIENT_RESUME)
+#ifndef XHTTP_FEATURE_HTTP_CLIENT_RESUME
+#define XHTTP_FEATURE_HTTP_CLIENT_RESUME
+#endif
+#ifndef XHTTP_MODULE_HTTP_CLIENT_HTTPS
+#define XHTTP_MODULE_HTTP_CLIENT_HTTPS
+#endif
+#ifndef XRT_MODULE_TLS_CLIENT_RESUME
+#define XRT_MODULE_TLS_CLIENT_RESUME
+#endif
+#ifndef XRT_MODULE_MUTEX
+#define XRT_MODULE_MUTEX
+#endif
+#endif
+
+/* http_client_https 及其直接依赖。 */
+#if defined(XHTTP_MODULE_ALL) || defined(XHTTP_MODULE_HTTP_CLIENT_HTTPS)
+#ifndef XHTTP_FEATURE_HTTP_CLIENT_HTTPS
+#define XHTTP_FEATURE_HTTP_CLIENT_HTTPS
+#endif
+#ifndef XHTTP_MODULE_HTTP_CLIENT
+#define XHTTP_MODULE_HTTP_CLIENT
+#endif
+#ifndef XHTTP_MODULE_HTTP_CLIENT_TLS
+#define XHTTP_MODULE_HTTP_CLIENT_TLS
+#endif
+#ifndef XRT_MODULE_TLS_STREAM_DIAL
+#define XRT_MODULE_TLS_STREAM_DIAL
+#endif
+#ifndef XRT_MODULE_TLS_CLIENT_VERIFY
+#define XRT_MODULE_TLS_CLIENT_VERIFY
+#endif
+#ifndef XRT_MODULE_X509_STORE_SYSTEM
+#define XRT_MODULE_X509_STORE_SYSTEM
+#endif
+#endif
+
+/* http_client_tls 及其直接依赖。 */
+#if defined(XHTTP_MODULE_ALL) || defined(XHTTP_MODULE_HTTP_CLIENT_TLS)
+#ifndef XHTTP_FEATURE_HTTP_CLIENT_TLS
+#define XHTTP_FEATURE_HTTP_CLIENT_TLS
+#endif
+#ifndef XHTTP_MODULE_HTTP_CLIENT_STREAM
+#define XHTTP_MODULE_HTTP_CLIENT_STREAM
+#endif
+#ifndef XRT_MODULE_TLS_STREAM
+#define XRT_MODULE_TLS_STREAM
+#endif
+#endif
+
+/* http_client_retry 及其直接依赖。 */
+#if defined(XHTTP_MODULE_ALL) || defined(XHTTP_MODULE_HTTP_CLIENT_RETRY)
+#ifndef XHTTP_FEATURE_HTTP_CLIENT_RETRY
+#define XHTTP_FEATURE_HTTP_CLIENT_RETRY
+#endif
+#ifndef XHTTP_MODULE_HTTP_CLIENT
+#define XHTTP_MODULE_HTTP_CLIENT
+#endif
+#ifndef XHTTP_MODULE_HTTP_RETRY
+#define XHTTP_MODULE_HTTP_RETRY
+#endif
+#ifndef XRT_MODULE_RANDOM
+#define XRT_MODULE_RANDOM
+#endif
+#endif
+
+/* http_client_redirect 及其直接依赖。 */
+#if defined(XHTTP_MODULE_ALL) || defined(XHTTP_MODULE_HTTP_CLIENT_REDIRECT)
+#ifndef XHTTP_FEATURE_HTTP_CLIENT_REDIRECT
+#define XHTTP_FEATURE_HTTP_CLIENT_REDIRECT
+#endif
+#ifndef XHTTP_MODULE_HTTP_CLIENT
+#define XHTTP_MODULE_HTTP_CLIENT
+#endif
+#ifndef XHTTP_MODULE_URL
+#define XHTTP_MODULE_URL
+#endif
+#endif
+
+/* http_client 及其直接依赖。 */
+#if defined(XHTTP_MODULE_ALL) || defined(XHTTP_MODULE_HTTP_CLIENT)
+#ifndef XHTTP_FEATURE_HTTP_CLIENT
+#define XHTTP_FEATURE_HTTP_CLIENT
+#endif
+#ifndef XHTTP_MODULE_HTTP_CLIENT_STREAM
+#define XHTTP_MODULE_HTTP_CLIENT_STREAM
+#endif
+#ifndef XRT_MODULE_NET_TCP_DIAL
+#define XRT_MODULE_NET_TCP_DIAL
+#endif
+#ifndef XRT_MODULE_CANCEL
+#define XRT_MODULE_CANCEL
+#endif
+#ifndef XRT_MODULE_SPIN
+#define XRT_MODULE_SPIN
+#endif
+#endif
+
+/* http_client_stream 及其直接依赖。 */
+#if defined(XHTTP_MODULE_ALL) || defined(XHTTP_MODULE_HTTP_CLIENT_STREAM)
+#ifndef XHTTP_FEATURE_HTTP_CLIENT_STREAM
+#define XHTTP_FEATURE_HTTP_CLIENT_STREAM
+#endif
+#ifndef XHTTP_MODULE_HTTP_EXCHANGE
+#define XHTTP_MODULE_HTTP_EXCHANGE
+#endif
+#ifndef XRT_MODULE_NET_TCP
+#define XRT_MODULE_NET_TCP
+#endif
+#ifndef XRT_MODULE_SPIN
+#define XRT_MODULE_SPIN
+#endif
+#endif
+
+/* http_exchange 及其直接依赖。 */
+#if defined(XHTTP_MODULE_ALL) || defined(XHTTP_MODULE_HTTP_EXCHANGE)
+#ifndef XHTTP_FEATURE_HTTP_EXCHANGE
+#define XHTTP_FEATURE_HTTP_EXCHANGE
+#endif
+#ifndef XHTTP_MODULE_HTTP_CLIENT_PREPARE
+#define XHTTP_MODULE_HTTP_CLIENT_PREPARE
+#endif
+#ifndef XHTTP_MODULE_HTTP_CLIENT_RESPONSE
+#define XHTTP_MODULE_HTTP_CLIENT_RESPONSE
+#endif
+#ifndef XRT_MODULE_HTTP1_BODY
+#define XRT_MODULE_HTTP1_BODY
+#endif
+#ifndef XRT_MODULE_HTTP_TRAILER
+#define XRT_MODULE_HTTP_TRAILER
+#endif
+#endif
+
+/* http_retry 及其直接依赖。 */
+#if defined(XHTTP_MODULE_ALL) || defined(XHTTP_MODULE_HTTP_RETRY)
+#ifndef XHTTP_FEATURE_HTTP_RETRY
+#define XHTTP_FEATURE_HTTP_RETRY
+#endif
+#ifndef XRT_MODULE_HTTP
+#define XRT_MODULE_HTTP
+#endif
+#ifndef XRT_MODULE_TIME_TEXT
+#define XRT_MODULE_TIME_TEXT
+#endif
+#endif
+
+/* http_server_reply_auth_digest_info 及其直接依赖。 */
+#if defined(XHTTP_MODULE_ALL) || defined(XHTTP_MODULE_HTTP_SERVER_REPLY_AUTH_DIGEST_INFO)
+#ifndef XHTTP_FEATURE_HTTP_SERVER_REPLY_AUTH_DIGEST_INFO
+#define XHTTP_FEATURE_HTTP_SERVER_REPLY_AUTH_DIGEST_INFO
+#endif
+#ifndef XHTTP_MODULE_HTTP_SERVER_REPLY_AUTH
+#define XHTTP_MODULE_HTTP_SERVER_REPLY_AUTH
+#endif
+#ifndef XHTTP_MODULE_HTTP_AUTH_DIGEST_INFO
+#define XHTTP_MODULE_HTTP_AUTH_DIGEST_INFO
+#endif
+#endif
+
+/* http_server_reply_auth_digest 及其直接依赖。 */
+#if defined(XHTTP_MODULE_ALL) || defined(XHTTP_MODULE_HTTP_SERVER_REPLY_AUTH_DIGEST)
+#ifndef XHTTP_FEATURE_HTTP_SERVER_REPLY_AUTH_DIGEST
+#define XHTTP_FEATURE_HTTP_SERVER_REPLY_AUTH_DIGEST
+#endif
+#ifndef XHTTP_MODULE_HTTP_SERVER_REPLY_AUTH
+#define XHTTP_MODULE_HTTP_SERVER_REPLY_AUTH
+#endif
+#ifndef XHTTP_MODULE_HTTP_AUTH_DIGEST_CHALLENGE
+#define XHTTP_MODULE_HTTP_AUTH_DIGEST_CHALLENGE
+#endif
+#endif
+
+/* http_server_reply_auth_bearer 及其直接依赖。 */
+#if defined(XHTTP_MODULE_ALL) || defined(XHTTP_MODULE_HTTP_SERVER_REPLY_AUTH_BEARER)
+#ifndef XHTTP_FEATURE_HTTP_SERVER_REPLY_AUTH_BEARER
+#define XHTTP_FEATURE_HTTP_SERVER_REPLY_AUTH_BEARER
+#endif
+#ifndef XHTTP_MODULE_HTTP_SERVER_REPLY_AUTH
+#define XHTTP_MODULE_HTTP_SERVER_REPLY_AUTH
+#endif
+#ifndef XHTTP_MODULE_HTTP_AUTH_BEARER_CHALLENGE
+#define XHTTP_MODULE_HTTP_AUTH_BEARER_CHALLENGE
+#endif
+#endif
+
+/* http_server_reply_auth_basic 及其直接依赖。 */
+#if defined(XHTTP_MODULE_ALL) || defined(XHTTP_MODULE_HTTP_SERVER_REPLY_AUTH_BASIC)
+#ifndef XHTTP_FEATURE_HTTP_SERVER_REPLY_AUTH_BASIC
+#define XHTTP_FEATURE_HTTP_SERVER_REPLY_AUTH_BASIC
+#endif
+#ifndef XHTTP_MODULE_HTTP_SERVER_REPLY_AUTH
+#define XHTTP_MODULE_HTTP_SERVER_REPLY_AUTH
+#endif
+#ifndef XHTTP_MODULE_HTTP_AUTH_BASIC
+#define XHTTP_MODULE_HTTP_AUTH_BASIC
+#endif
+#endif
+
+/* http_server_reply_auth 及其直接依赖。 */
+#if defined(XHTTP_MODULE_ALL) || defined(XHTTP_MODULE_HTTP_SERVER_REPLY_AUTH)
+#ifndef XHTTP_FEATURE_HTTP_SERVER_REPLY_AUTH
+#define XHTTP_FEATURE_HTTP_SERVER_REPLY_AUTH
+#endif
+#ifndef XHTTP_MODULE_HTTP_SERVER_REPLY
+#define XHTTP_MODULE_HTTP_SERVER_REPLY
+#endif
+#ifndef XHTTP_MODULE_HTTP_AUTH
+#define XHTTP_MODULE_HTTP_AUTH
+#endif
+#endif
+
+/* http_server_reply 及其直接依赖。 */
+#if defined(XHTTP_MODULE_ALL) || defined(XHTTP_MODULE_HTTP_SERVER_REPLY)
+#ifndef XHTTP_FEATURE_HTTP_SERVER_REPLY
+#define XHTTP_FEATURE_HTTP_SERVER_REPLY
+#endif
+#ifndef XHTTP_MODULE_HTTP_HEADERS
+#define XHTTP_MODULE_HTTP_HEADERS
+#endif
+#ifndef XHTTP_MODULE_HTTP_BODY
+#define XHTTP_MODULE_HTTP_BODY
+#endif
+#endif
+
+/* http_server_request_auth_digest 及其直接依赖。 */
+#if defined(XHTTP_MODULE_ALL) || defined(XHTTP_MODULE_HTTP_SERVER_REQUEST_AUTH_DIGEST)
+#ifndef XHTTP_FEATURE_HTTP_SERVER_REQUEST_AUTH_DIGEST
+#define XHTTP_FEATURE_HTTP_SERVER_REQUEST_AUTH_DIGEST
+#endif
+#ifndef XHTTP_MODULE_HTTP_SERVER_REQUEST_AUTH
+#define XHTTP_MODULE_HTTP_SERVER_REQUEST_AUTH
+#endif
+#ifndef XHTTP_MODULE_HTTP_AUTH_DIGEST_CREDENTIALS
+#define XHTTP_MODULE_HTTP_AUTH_DIGEST_CREDENTIALS
+#endif
+#endif
+
+/* http_server_request_auth_bearer 及其直接依赖。 */
+#if defined(XHTTP_MODULE_ALL) || defined(XHTTP_MODULE_HTTP_SERVER_REQUEST_AUTH_BEARER)
+#ifndef XHTTP_FEATURE_HTTP_SERVER_REQUEST_AUTH_BEARER
+#define XHTTP_FEATURE_HTTP_SERVER_REQUEST_AUTH_BEARER
+#endif
+#ifndef XHTTP_MODULE_HTTP_SERVER_REQUEST_AUTH
+#define XHTTP_MODULE_HTTP_SERVER_REQUEST_AUTH
+#endif
+#ifndef XHTTP_MODULE_HTTP_AUTH_BEARER
+#define XHTTP_MODULE_HTTP_AUTH_BEARER
+#endif
+#endif
+
+/* http_server_request_auth_basic 及其直接依赖。 */
+#if defined(XHTTP_MODULE_ALL) || defined(XHTTP_MODULE_HTTP_SERVER_REQUEST_AUTH_BASIC)
+#ifndef XHTTP_FEATURE_HTTP_SERVER_REQUEST_AUTH_BASIC
+#define XHTTP_FEATURE_HTTP_SERVER_REQUEST_AUTH_BASIC
+#endif
+#ifndef XHTTP_MODULE_HTTP_SERVER_REQUEST_AUTH
+#define XHTTP_MODULE_HTTP_SERVER_REQUEST_AUTH
+#endif
+#ifndef XHTTP_MODULE_HTTP_AUTH_BASIC
+#define XHTTP_MODULE_HTTP_AUTH_BASIC
+#endif
+#endif
+
+/* http_server_request_auth 及其直接依赖。 */
+#if defined(XHTTP_MODULE_ALL) || defined(XHTTP_MODULE_HTTP_SERVER_REQUEST_AUTH)
+#ifndef XHTTP_FEATURE_HTTP_SERVER_REQUEST_AUTH
+#define XHTTP_FEATURE_HTTP_SERVER_REQUEST_AUTH
+#endif
+#ifndef XHTTP_MODULE_HTTP_SERVER_REQUEST
+#define XHTTP_MODULE_HTTP_SERVER_REQUEST
+#endif
+#ifndef XHTTP_MODULE_HTTP_AUTH
+#define XHTTP_MODULE_HTTP_AUTH
+#endif
+#endif
+
+/* http_server_request 及其直接依赖。 */
+#if defined(XHTTP_MODULE_ALL) || defined(XHTTP_MODULE_HTTP_SERVER_REQUEST)
+#ifndef XHTTP_FEATURE_HTTP_SERVER_REQUEST
+#define XHTTP_FEATURE_HTTP_SERVER_REQUEST
+#endif
+#ifndef XRT_MODULE_HTTP1_BODY
+#define XRT_MODULE_HTTP1_BODY
+#endif
+#ifndef XRT_MODULE_HTTP_TARGET
+#define XRT_MODULE_HTTP_TARGET
+#endif
+#endif
+
+/* http_client_response_auth_digest_session 及其直接依赖。 */
+#if defined(XHTTP_MODULE_ALL) || defined(XHTTP_MODULE_HTTP_CLIENT_RESPONSE_AUTH_DIGEST_SESSION)
+#ifndef XHTTP_FEATURE_HTTP_CLIENT_RESPONSE_AUTH_DIGEST_SESSION
+#define XHTTP_FEATURE_HTTP_CLIENT_RESPONSE_AUTH_DIGEST_SESSION
+#endif
+#ifndef XHTTP_MODULE_HTTP_CLIENT_RESPONSE_AUTH_DIGEST_INFO
+#define XHTTP_MODULE_HTTP_CLIENT_RESPONSE_AUTH_DIGEST_INFO
+#endif
+#ifndef XHTTP_MODULE_HTTP_AUTH_DIGEST_SESSION
+#define XHTTP_MODULE_HTTP_AUTH_DIGEST_SESSION
+#endif
+#endif
+
+/* http_client_response_auth_digest_info 及其直接依赖。 */
+#if defined(XHTTP_MODULE_ALL) || defined(XHTTP_MODULE_HTTP_CLIENT_RESPONSE_AUTH_DIGEST_INFO)
+#ifndef XHTTP_FEATURE_HTTP_CLIENT_RESPONSE_AUTH_DIGEST_INFO
+#define XHTTP_FEATURE_HTTP_CLIENT_RESPONSE_AUTH_DIGEST_INFO
+#endif
+#ifndef XHTTP_MODULE_HTTP_CLIENT_RESPONSE_AUTH
+#define XHTTP_MODULE_HTTP_CLIENT_RESPONSE_AUTH
+#endif
+#ifndef XHTTP_MODULE_HTTP_AUTH_DIGEST_INFO
+#define XHTTP_MODULE_HTTP_AUTH_DIGEST_INFO
+#endif
+#endif
+
+/* http_client_response_auth_digest_choose 及其直接依赖。 */
+#if defined(XHTTP_MODULE_ALL) || defined(XHTTP_MODULE_HTTP_CLIENT_RESPONSE_AUTH_DIGEST_CHOOSE)
+#ifndef XHTTP_FEATURE_HTTP_CLIENT_RESPONSE_AUTH_DIGEST_CHOOSE
+#define XHTTP_FEATURE_HTTP_CLIENT_RESPONSE_AUTH_DIGEST_CHOOSE
+#endif
+#ifndef XHTTP_MODULE_HTTP_CLIENT_RESPONSE_AUTH_DIGEST
+#define XHTTP_MODULE_HTTP_CLIENT_RESPONSE_AUTH_DIGEST
+#endif
+#ifndef XHTTP_MODULE_HTTP_AUTH_DIGEST_CLIENT
+#define XHTTP_MODULE_HTTP_AUTH_DIGEST_CLIENT
+#endif
+#endif
+
+/* http_client_response_auth_digest 及其直接依赖。 */
+#if defined(XHTTP_MODULE_ALL) || defined(XHTTP_MODULE_HTTP_CLIENT_RESPONSE_AUTH_DIGEST)
+#ifndef XHTTP_FEATURE_HTTP_CLIENT_RESPONSE_AUTH_DIGEST
+#define XHTTP_FEATURE_HTTP_CLIENT_RESPONSE_AUTH_DIGEST
+#endif
+#ifndef XHTTP_MODULE_HTTP_CLIENT_RESPONSE_AUTH
+#define XHTTP_MODULE_HTTP_CLIENT_RESPONSE_AUTH
+#endif
+#ifndef XHTTP_MODULE_HTTP_AUTH_DIGEST_CHALLENGE
+#define XHTTP_MODULE_HTTP_AUTH_DIGEST_CHALLENGE
+#endif
+#endif
+
+/* http_client_response_auth_bearer 及其直接依赖。 */
+#if defined(XHTTP_MODULE_ALL) || defined(XHTTP_MODULE_HTTP_CLIENT_RESPONSE_AUTH_BEARER)
+#ifndef XHTTP_FEATURE_HTTP_CLIENT_RESPONSE_AUTH_BEARER
+#define XHTTP_FEATURE_HTTP_CLIENT_RESPONSE_AUTH_BEARER
+#endif
+#ifndef XHTTP_MODULE_HTTP_CLIENT_RESPONSE_AUTH
+#define XHTTP_MODULE_HTTP_CLIENT_RESPONSE_AUTH
+#endif
+#ifndef XHTTP_MODULE_HTTP_AUTH_BEARER_CHALLENGE
+#define XHTTP_MODULE_HTTP_AUTH_BEARER_CHALLENGE
+#endif
+#endif
+
+/* http_client_response_auth_basic 及其直接依赖。 */
+#if defined(XHTTP_MODULE_ALL) || defined(XHTTP_MODULE_HTTP_CLIENT_RESPONSE_AUTH_BASIC)
+#ifndef XHTTP_FEATURE_HTTP_CLIENT_RESPONSE_AUTH_BASIC
+#define XHTTP_FEATURE_HTTP_CLIENT_RESPONSE_AUTH_BASIC
+#endif
+#ifndef XHTTP_MODULE_HTTP_CLIENT_RESPONSE_AUTH
+#define XHTTP_MODULE_HTTP_CLIENT_RESPONSE_AUTH
+#endif
+#ifndef XHTTP_MODULE_HTTP_AUTH_BASIC
+#define XHTTP_MODULE_HTTP_AUTH_BASIC
+#endif
+#endif
+
+/* http_client_response_auth 及其直接依赖。 */
+#if defined(XHTTP_MODULE_ALL) || defined(XHTTP_MODULE_HTTP_CLIENT_RESPONSE_AUTH)
+#ifndef XHTTP_FEATURE_HTTP_CLIENT_RESPONSE_AUTH
+#define XHTTP_FEATURE_HTTP_CLIENT_RESPONSE_AUTH
+#endif
+#ifndef XHTTP_MODULE_HTTP_CLIENT_RESPONSE
+#define XHTTP_MODULE_HTTP_CLIENT_RESPONSE
+#endif
+#ifndef XHTTP_MODULE_HTTP_AUTH
+#define XHTTP_MODULE_HTTP_AUTH
+#endif
+#endif
+
+/* http_client_response 及其直接依赖。 */
+#if defined(XHTTP_MODULE_ALL) || defined(XHTTP_MODULE_HTTP_CLIENT_RESPONSE)
+#ifndef XHTTP_FEATURE_HTTP_CLIENT_RESPONSE
+#define XHTTP_FEATURE_HTTP_CLIENT_RESPONSE
+#endif
+#ifndef XHTTP_MODULE_HTTP_HEADERS
+#define XHTTP_MODULE_HTTP_HEADERS
+#endif
+#endif
+
+/* http_client_prepare_auth_digest_session 及其直接依赖。 */
+#if defined(XHTTP_MODULE_ALL) || defined(XHTTP_MODULE_HTTP_CLIENT_PREPARE_AUTH_DIGEST_SESSION)
+#ifndef XHTTP_FEATURE_HTTP_CLIENT_PREPARE_AUTH_DIGEST_SESSION
+#define XHTTP_FEATURE_HTTP_CLIENT_PREPARE_AUTH_DIGEST_SESSION
+#endif
+#ifndef XHTTP_MODULE_HTTP_CLIENT_PREPARE
+#define XHTTP_MODULE_HTTP_CLIENT_PREPARE
+#endif
+#ifndef XHTTP_MODULE_HTTP_AUTH_DIGEST_SESSION
+#define XHTTP_MODULE_HTTP_AUTH_DIGEST_SESSION
+#endif
+#endif
+
+/* http_client_prepare 及其直接依赖。 */
+#if defined(XHTTP_MODULE_ALL) || defined(XHTTP_MODULE_HTTP_CLIENT_PREPARE)
+#ifndef XHTTP_FEATURE_HTTP_CLIENT_PREPARE
+#define XHTTP_FEATURE_HTTP_CLIENT_PREPARE
+#endif
+#ifndef XHTTP_MODULE_HTTP_CLIENT_REQUEST
+#define XHTTP_MODULE_HTTP_CLIENT_REQUEST
+#endif
+#ifndef XRT_MODULE_HTTP1_BODY
+#define XRT_MODULE_HTTP1_BODY
+#endif
+#ifndef XRT_MODULE_HTTP_HOST
+#define XRT_MODULE_HTTP_HOST
+#endif
+#ifndef XRT_MODULE_HTTP_TARGET
+#define XRT_MODULE_HTTP_TARGET
+#endif
+#ifndef XRT_MODULE_HTTP_EXPECT
+#define XRT_MODULE_HTTP_EXPECT
+#endif
+#ifndef XRT_MODULE_HTTP_TE
+#define XRT_MODULE_HTTP_TE
+#endif
+#ifndef XRT_MODULE_HTTP_CONNECTION
+#define XRT_MODULE_HTTP_CONNECTION
+#endif
+#ifndef XRT_MODULE_HTTP_TRAILER
+#define XRT_MODULE_HTTP_TRAILER
+#endif
+#endif
+
+/* http_client_request_auth_digest 及其直接依赖。 */
+#if defined(XHTTP_MODULE_ALL) || defined(XHTTP_MODULE_HTTP_CLIENT_REQUEST_AUTH_DIGEST)
+#ifndef XHTTP_FEATURE_HTTP_CLIENT_REQUEST_AUTH_DIGEST
+#define XHTTP_FEATURE_HTTP_CLIENT_REQUEST_AUTH_DIGEST
+#endif
+#ifndef XHTTP_MODULE_HTTP_CLIENT_REQUEST_AUTH
+#define XHTTP_MODULE_HTTP_CLIENT_REQUEST_AUTH
+#endif
+#ifndef XHTTP_MODULE_HTTP_AUTH_DIGEST_CREDENTIALS
+#define XHTTP_MODULE_HTTP_AUTH_DIGEST_CREDENTIALS
+#endif
+#endif
+
+/* http_client_request_auth_bearer 及其直接依赖。 */
+#if defined(XHTTP_MODULE_ALL) || defined(XHTTP_MODULE_HTTP_CLIENT_REQUEST_AUTH_BEARER)
+#ifndef XHTTP_FEATURE_HTTP_CLIENT_REQUEST_AUTH_BEARER
+#define XHTTP_FEATURE_HTTP_CLIENT_REQUEST_AUTH_BEARER
+#endif
+#ifndef XHTTP_MODULE_HTTP_CLIENT_REQUEST_AUTH
+#define XHTTP_MODULE_HTTP_CLIENT_REQUEST_AUTH
+#endif
+#ifndef XHTTP_MODULE_HTTP_AUTH_BEARER
+#define XHTTP_MODULE_HTTP_AUTH_BEARER
+#endif
+#endif
+
+/* http_client_request_auth_basic 及其直接依赖。 */
+#if defined(XHTTP_MODULE_ALL) || defined(XHTTP_MODULE_HTTP_CLIENT_REQUEST_AUTH_BASIC)
+#ifndef XHTTP_FEATURE_HTTP_CLIENT_REQUEST_AUTH_BASIC
+#define XHTTP_FEATURE_HTTP_CLIENT_REQUEST_AUTH_BASIC
+#endif
+#ifndef XHTTP_MODULE_HTTP_CLIENT_REQUEST_AUTH
+#define XHTTP_MODULE_HTTP_CLIENT_REQUEST_AUTH
+#endif
+#ifndef XHTTP_MODULE_HTTP_AUTH_BASIC
+#define XHTTP_MODULE_HTTP_AUTH_BASIC
+#endif
+#endif
+
+/* http_client_request_auth 及其直接依赖。 */
+#if defined(XHTTP_MODULE_ALL) || defined(XHTTP_MODULE_HTTP_CLIENT_REQUEST_AUTH)
+#ifndef XHTTP_FEATURE_HTTP_CLIENT_REQUEST_AUTH
+#define XHTTP_FEATURE_HTTP_CLIENT_REQUEST_AUTH
+#endif
+#ifndef XHTTP_MODULE_HTTP_CLIENT_REQUEST
+#define XHTTP_MODULE_HTTP_CLIENT_REQUEST
+#endif
+#ifndef XHTTP_MODULE_HTTP_AUTH
+#define XHTTP_MODULE_HTTP_AUTH
+#endif
+#endif
+
+/* http_client_request 及其直接依赖。 */
+#if defined(XHTTP_MODULE_ALL) || defined(XHTTP_MODULE_HTTP_CLIENT_REQUEST)
+#ifndef XHTTP_FEATURE_HTTP_CLIENT_REQUEST
+#define XHTTP_FEATURE_HTTP_CLIENT_REQUEST
+#endif
+#ifndef XHTTP_MODULE_URL
+#define XHTTP_MODULE_URL
+#endif
+#ifndef XHTTP_MODULE_HTTP_HEADERS
+#define XHTTP_MODULE_HTTP_HEADERS
+#endif
+#ifndef XHTTP_MODULE_HTTP_BODY
+#define XHTTP_MODULE_HTTP_BODY
+#endif
+#endif
+
+/* http_body 及其直接依赖。 */
+#if defined(XHTTP_MODULE_ALL) || defined(XHTTP_MODULE_HTTP_BODY)
+#ifndef XHTTP_FEATURE_HTTP_BODY
+#define XHTTP_FEATURE_HTTP_BODY
+#endif
+#ifndef XRT_MODULE_ATOMIC
+#define XRT_MODULE_ATOMIC
+#endif
+#endif
+
+/* http_headers 及其直接依赖。 */
+#if defined(XHTTP_MODULE_ALL) || defined(XHTTP_MODULE_HTTP_HEADERS)
+#ifndef XHTTP_FEATURE_HTTP_HEADERS
+#define XHTTP_FEATURE_HTTP_HEADERS
+#endif
+#ifndef XRT_MODULE_HTTP
+#define XRT_MODULE_HTTP
+#endif
+#endif
+
+/* http_auth_digest_replay 及其直接依赖。 */
+#if defined(XHTTP_MODULE_ALL) || defined(XHTTP_MODULE_HTTP_AUTH_DIGEST_REPLAY)
+#ifndef XHTTP_FEATURE_HTTP_AUTH_DIGEST_REPLAY
+#define XHTTP_FEATURE_HTTP_AUTH_DIGEST_REPLAY
+#endif
+#ifndef XHTTP_MODULE_HTTP_AUTH_DIGEST
+#define XHTTP_MODULE_HTTP_AUTH_DIGEST
+#endif
+#ifndef XRT_MODULE_CRYPTO_SHA256
+#define XRT_MODULE_CRYPTO_SHA256
+#endif
+#ifndef XRT_MODULE_MUTEX
+#define XRT_MODULE_MUTEX
+#endif
+#endif
+
+/* http_auth_digest_session 及其直接依赖。 */
+#if defined(XHTTP_MODULE_ALL) || defined(XHTTP_MODULE_HTTP_AUTH_DIGEST_SESSION)
+#ifndef XHTTP_FEATURE_HTTP_AUTH_DIGEST_SESSION
+#define XHTTP_FEATURE_HTTP_AUTH_DIGEST_SESSION
+#endif
+#ifndef XHTTP_MODULE_HTTP_AUTH_DIGEST_CLIENT
+#define XHTTP_MODULE_HTTP_AUTH_DIGEST_CLIENT
+#endif
+#ifndef XRT_MODULE_MUTEX
+#define XRT_MODULE_MUTEX
+#endif
+#endif
+
+/* http_auth_digest_client 及其直接依赖。 */
+#if defined(XHTTP_MODULE_ALL) || defined(XHTTP_MODULE_HTTP_AUTH_DIGEST_CLIENT)
+#ifndef XHTTP_FEATURE_HTTP_AUTH_DIGEST_CLIENT
+#define XHTTP_FEATURE_HTTP_AUTH_DIGEST_CLIENT
+#endif
+#ifndef XHTTP_MODULE_HTTP_AUTH_DIGEST_CHALLENGE
+#define XHTTP_MODULE_HTTP_AUTH_DIGEST_CHALLENGE
+#endif
+#ifndef XHTTP_MODULE_HTTP_AUTH_DIGEST_CREDENTIALS
+#define XHTTP_MODULE_HTTP_AUTH_DIGEST_CREDENTIALS
+#endif
+#ifndef XHTTP_MODULE_HTTP_AUTH_DIGEST_INFO
+#define XHTTP_MODULE_HTTP_AUTH_DIGEST_INFO
+#endif
+#ifndef XHTTP_MODULE_HTTP_AUTH_DIGEST_SHA2
+#define XHTTP_MODULE_HTTP_AUTH_DIGEST_SHA2
+#endif
+#endif
+
+/* http_auth_digest_verify 及其直接依赖。 */
+#if defined(XHTTP_MODULE_ALL) || defined(XHTTP_MODULE_HTTP_AUTH_DIGEST_VERIFY)
+#ifndef XHTTP_FEATURE_HTTP_AUTH_DIGEST_VERIFY
+#define XHTTP_FEATURE_HTTP_AUTH_DIGEST_VERIFY
+#endif
+#ifndef XHTTP_MODULE_HTTP_AUTH_DIGEST_CHALLENGE
+#define XHTTP_MODULE_HTTP_AUTH_DIGEST_CHALLENGE
+#endif
+#ifndef XHTTP_MODULE_HTTP_AUTH_DIGEST_CREDENTIALS
+#define XHTTP_MODULE_HTTP_AUTH_DIGEST_CREDENTIALS
+#endif
+#ifndef XHTTP_MODULE_HTTP_AUTH_DIGEST_SHA2
+#define XHTTP_MODULE_HTTP_AUTH_DIGEST_SHA2
+#endif
+#ifndef XHTTP_MODULE_HTTP_AUTH_DIGEST_NONCE
+#define XHTTP_MODULE_HTTP_AUTH_DIGEST_NONCE
+#endif
+#endif
+
+/* http_auth_digest_nonce_random 及其直接依赖。 */
+#if defined(XHTTP_MODULE_ALL) || defined(XHTTP_MODULE_HTTP_AUTH_DIGEST_NONCE_RANDOM)
+#ifndef XHTTP_FEATURE_HTTP_AUTH_DIGEST_NONCE_RANDOM
+#define XHTTP_FEATURE_HTTP_AUTH_DIGEST_NONCE_RANDOM
+#endif
+#ifndef XHTTP_MODULE_HTTP_AUTH_DIGEST_NONCE
+#define XHTTP_MODULE_HTTP_AUTH_DIGEST_NONCE
+#endif
+#ifndef XRT_MODULE_RANDOM_SECURE
+#define XRT_MODULE_RANDOM_SECURE
+#endif
+#endif
+
+/* http_auth_digest_nonce 及其直接依赖。 */
+#if defined(XHTTP_MODULE_ALL) || defined(XHTTP_MODULE_HTTP_AUTH_DIGEST_NONCE)
+#ifndef XHTTP_FEATURE_HTTP_AUTH_DIGEST_NONCE
+#define XHTTP_FEATURE_HTTP_AUTH_DIGEST_NONCE
+#endif
+#ifndef XHTTP_MODULE_HTTP_AUTH_DIGEST
+#define XHTTP_MODULE_HTTP_AUTH_DIGEST
+#endif
+#ifndef XRT_MODULE_CODEC_BASE64
+#define XRT_MODULE_CODEC_BASE64
+#endif
+#ifndef XRT_MODULE_CRYPTO_HMAC_SHA256
+#define XRT_MODULE_CRYPTO_HMAC_SHA256
+#endif
+#endif
+
+/* http_auth_digest_md5 及其直接依赖。 */
+#if defined(XHTTP_MODULE_ALL) || defined(XHTTP_MODULE_HTTP_AUTH_DIGEST_MD5)
+#ifndef XHTTP_FEATURE_HTTP_AUTH_DIGEST_MD5
+#define XHTTP_FEATURE_HTTP_AUTH_DIGEST_MD5
+#endif
+#ifndef XHTTP_MODULE_HTTP_AUTH_DIGEST_SHA2
+#define XHTTP_MODULE_HTTP_AUTH_DIGEST_SHA2
+#endif
+#ifndef XRT_MODULE_CRYPTO_MD5
+#define XRT_MODULE_CRYPTO_MD5
+#endif
+#endif
+
+/* http_auth_digest_sha2 及其直接依赖。 */
+#if defined(XHTTP_MODULE_ALL) || defined(XHTTP_MODULE_HTTP_AUTH_DIGEST_SHA2)
+#ifndef XHTTP_FEATURE_HTTP_AUTH_DIGEST_SHA2
+#define XHTTP_FEATURE_HTTP_AUTH_DIGEST_SHA2
+#endif
+#ifndef XHTTP_MODULE_HTTP_AUTH_DIGEST
+#define XHTTP_MODULE_HTTP_AUTH_DIGEST
+#endif
+#ifndef XRT_MODULE_CRYPTO_SHA256
+#define XRT_MODULE_CRYPTO_SHA256
+#endif
+#ifndef XRT_MODULE_CRYPTO_SHA512_256
+#define XRT_MODULE_CRYPTO_SHA512_256
+#endif
+#endif
+
+/* http_auth_digest_info 及其直接依赖。 */
+#if defined(XHTTP_MODULE_ALL) || defined(XHTTP_MODULE_HTTP_AUTH_DIGEST_INFO)
+#ifndef XHTTP_FEATURE_HTTP_AUTH_DIGEST_INFO
+#define XHTTP_FEATURE_HTTP_AUTH_DIGEST_INFO
+#endif
+#ifndef XHTTP_MODULE_HTTP_AUTH_DIGEST
+#define XHTTP_MODULE_HTTP_AUTH_DIGEST
+#endif
+#endif
+
+/* http_auth_digest_credentials 及其直接依赖。 */
+#if defined(XHTTP_MODULE_ALL) || defined(XHTTP_MODULE_HTTP_AUTH_DIGEST_CREDENTIALS)
+#ifndef XHTTP_FEATURE_HTTP_AUTH_DIGEST_CREDENTIALS
+#define XHTTP_FEATURE_HTTP_AUTH_DIGEST_CREDENTIALS
+#endif
+#ifndef XHTTP_MODULE_HTTP_AUTH_DIGEST
+#define XHTTP_MODULE_HTTP_AUTH_DIGEST
+#endif
+#ifndef XHTTP_MODULE_HTTP_EXT_VALUE
+#define XHTTP_MODULE_HTTP_EXT_VALUE
+#endif
+#endif
+
+/* http_ext_value 及其直接依赖。 */
+#if defined(XHTTP_MODULE_ALL) || defined(XHTTP_MODULE_HTTP_EXT_VALUE)
+#ifndef XHTTP_FEATURE_HTTP_EXT_VALUE
+#define XHTTP_FEATURE_HTTP_EXT_VALUE
+#endif
+#ifndef XHTTP_MODULE_HTTP_LANGUAGE_CORE
+#define XHTTP_MODULE_HTTP_LANGUAGE_CORE
+#endif
+#ifndef XRT_MODULE_CODEC_PERCENT
+#define XRT_MODULE_CODEC_PERCENT
+#endif
+#endif
+
+/* http_auth_digest_challenge 及其直接依赖。 */
+#if defined(XHTTP_MODULE_ALL) || defined(XHTTP_MODULE_HTTP_AUTH_DIGEST_CHALLENGE)
+#ifndef XHTTP_FEATURE_HTTP_AUTH_DIGEST_CHALLENGE
+#define XHTTP_FEATURE_HTTP_AUTH_DIGEST_CHALLENGE
+#endif
+#ifndef XHTTP_MODULE_HTTP_AUTH_DIGEST
+#define XHTTP_MODULE_HTTP_AUTH_DIGEST
+#endif
+#endif
+
+/* http_auth_digest 及其直接依赖。 */
+#if defined(XHTTP_MODULE_ALL) || defined(XHTTP_MODULE_HTTP_AUTH_DIGEST)
+#ifndef XHTTP_FEATURE_HTTP_AUTH_DIGEST
+#define XHTTP_FEATURE_HTTP_AUTH_DIGEST
+#endif
+#ifndef XHTTP_MODULE_HTTP_AUTH
+#define XHTTP_MODULE_HTTP_AUTH
+#endif
+#endif
+
+/* http_auth_bearer_challenge 及其直接依赖。 */
+#if defined(XHTTP_MODULE_ALL) || defined(XHTTP_MODULE_HTTP_AUTH_BEARER_CHALLENGE)
+#ifndef XHTTP_FEATURE_HTTP_AUTH_BEARER_CHALLENGE
+#define XHTTP_FEATURE_HTTP_AUTH_BEARER_CHALLENGE
+#endif
+#ifndef XHTTP_MODULE_HTTP_AUTH_BEARER
+#define XHTTP_MODULE_HTTP_AUTH_BEARER
+#endif
+#ifndef XHTTP_MODULE_URL_PARAM
+#define XHTTP_MODULE_URL_PARAM
+#endif
+#endif
+
+/* url_param 及其直接依赖。 */
+#if defined(XHTTP_MODULE_ALL) || defined(XHTTP_MODULE_URL_PARAM)
+#ifndef XHTTP_FEATURE_URL_PARAM
+#define XHTTP_FEATURE_URL_PARAM
+#endif
+#ifndef XHTTP_MODULE_URL
+#define XHTTP_MODULE_URL
+#endif
+#ifndef XRT_MODULE_HTTP_PARAM_HOST
+#define XRT_MODULE_HTTP_PARAM_HOST
+#endif
+#endif
+
+/* http_auth_bearer 及其直接依赖。 */
+#if defined(XHTTP_MODULE_ALL) || defined(XHTTP_MODULE_HTTP_AUTH_BEARER)
+#ifndef XHTTP_FEATURE_HTTP_AUTH_BEARER
+#define XHTTP_FEATURE_HTTP_AUTH_BEARER
+#endif
+#ifndef XHTTP_MODULE_HTTP_AUTH
+#define XHTTP_MODULE_HTTP_AUTH
+#endif
+#endif
+
+/* http_auth_basic 及其直接依赖。 */
+#if defined(XHTTP_MODULE_ALL) || defined(XHTTP_MODULE_HTTP_AUTH_BASIC)
+#ifndef XHTTP_FEATURE_HTTP_AUTH_BASIC
+#define XHTTP_FEATURE_HTTP_AUTH_BASIC
+#endif
+#ifndef XHTTP_MODULE_HTTP_AUTH
+#define XHTTP_MODULE_HTTP_AUTH
+#endif
+#ifndef XRT_MODULE_CODEC_BASE64
+#define XRT_MODULE_CODEC_BASE64
+#endif
+#endif
+
+/* http_auth 及其直接依赖。 */
+#if defined(XHTTP_MODULE_ALL) || defined(XHTTP_MODULE_HTTP_AUTH)
+#ifndef XHTTP_FEATURE_HTTP_AUTH
+#define XHTTP_FEATURE_HTTP_AUTH
+#endif
+#ifndef XRT_MODULE_HTTP_PARAM
+#define XRT_MODULE_HTTP_PARAM
+#endif
+#endif
+
+/* http_proxy_status_write 及其直接依赖。 */
+#if defined(XHTTP_MODULE_ALL) || defined(XHTTP_MODULE_HTTP_PROXY_STATUS_WRITE)
+#ifndef XHTTP_FEATURE_HTTP_PROXY_STATUS_WRITE
+#define XHTTP_FEATURE_HTTP_PROXY_STATUS_WRITE
+#endif
+#ifndef XHTTP_MODULE_HTTP_PROXY_STATUS
+#define XHTTP_MODULE_HTTP_PROXY_STATUS
+#endif
+#ifndef XHTTP_MODULE_HTTP_STRUCTURED_WRITE
+#define XHTTP_MODULE_HTTP_STRUCTURED_WRITE
+#endif
+#endif
+
+/* http_proxy_alias_write 及其直接依赖。 */
+#if defined(XHTTP_MODULE_ALL) || defined(XHTTP_MODULE_HTTP_PROXY_ALIAS_WRITE)
+#ifndef XHTTP_FEATURE_HTTP_PROXY_ALIAS_WRITE
+#define XHTTP_FEATURE_HTTP_PROXY_ALIAS_WRITE
+#endif
+#ifndef XHTTP_MODULE_HTTP_PROXY_ALIAS
+#define XHTTP_MODULE_HTTP_PROXY_ALIAS
+#endif
+#endif
+
+/* http_proxy_alias 及其直接依赖。 */
+#if defined(XHTTP_MODULE_ALL) || defined(XHTTP_MODULE_HTTP_PROXY_ALIAS)
+#ifndef XHTTP_FEATURE_HTTP_PROXY_ALIAS
+#define XHTTP_FEATURE_HTTP_PROXY_ALIAS
+#endif
+#ifndef XHTTP_MODULE_HTTP_PROXY_STATUS
+#define XHTTP_MODULE_HTTP_PROXY_STATUS
+#endif
+#ifndef XRT_MODULE_CODEC_PERCENT
+#define XRT_MODULE_CODEC_PERCENT
+#endif
+#endif
+
+/* http_proxy_status 及其直接依赖。 */
+#if defined(XHTTP_MODULE_ALL) || defined(XHTTP_MODULE_HTTP_PROXY_STATUS)
+#ifndef XHTTP_FEATURE_HTTP_PROXY_STATUS
+#define XHTTP_FEATURE_HTTP_PROXY_STATUS
+#endif
+#ifndef XHTTP_MODULE_HTTP_STRUCTURED
+#define XHTTP_MODULE_HTTP_STRUCTURED
+#endif
+#endif
+
+/* http_cache_status_write 及其直接依赖。 */
+#if defined(XHTTP_MODULE_ALL) || defined(XHTTP_MODULE_HTTP_CACHE_STATUS_WRITE)
+#ifndef XHTTP_FEATURE_HTTP_CACHE_STATUS_WRITE
+#define XHTTP_FEATURE_HTTP_CACHE_STATUS_WRITE
+#endif
+#ifndef XHTTP_MODULE_HTTP_CACHE_STATUS
+#define XHTTP_MODULE_HTTP_CACHE_STATUS
+#endif
+#ifndef XHTTP_MODULE_HTTP_STRUCTURED_WRITE
+#define XHTTP_MODULE_HTTP_STRUCTURED_WRITE
+#endif
+#endif
+
+/* http_cache_status 及其直接依赖。 */
+#if defined(XHTTP_MODULE_ALL) || defined(XHTTP_MODULE_HTTP_CACHE_STATUS)
+#ifndef XHTTP_FEATURE_HTTP_CACHE_STATUS
+#define XHTTP_FEATURE_HTTP_CACHE_STATUS
+#endif
+#ifndef XHTTP_MODULE_HTTP_STRUCTURED
+#define XHTTP_MODULE_HTTP_STRUCTURED
+#endif
+#endif
+
+/* http_cache_store 及其直接依赖。 */
+#if defined(XHTTP_MODULE_ALL) || defined(XHTTP_MODULE_HTTP_CACHE_STORE)
+#ifndef XHTTP_FEATURE_HTTP_CACHE_STORE
+#define XHTTP_FEATURE_HTTP_CACHE_STORE
+#endif
+#ifndef XHTTP_MODULE_HTTP_CACHE_VALIDATE
+#define XHTTP_MODULE_HTTP_CACHE_VALIDATE
+#endif
+#ifndef XHTTP_MODULE_HTTP_VARY
+#define XHTTP_MODULE_HTTP_VARY
+#endif
+#ifndef XRT_MODULE_MAP
+#define XRT_MODULE_MAP
+#endif
+#ifndef XRT_MODULE_MUTEX
+#define XRT_MODULE_MUTEX
+#endif
+#endif
+
+/* http_vary 及其直接依赖。 */
+#if defined(XHTTP_MODULE_ALL) || defined(XHTTP_MODULE_HTTP_VARY)
+#ifndef XHTTP_FEATURE_HTTP_VARY
+#define XHTTP_FEATURE_HTTP_VARY
+#endif
+#ifndef XRT_MODULE_HTTP
+#define XRT_MODULE_HTTP
+#endif
+#endif
+
+/* http_cache_range 及其直接依赖。 */
+#if defined(XHTTP_MODULE_ALL) || defined(XHTTP_MODULE_HTTP_CACHE_RANGE)
+#ifndef XHTTP_FEATURE_HTTP_CACHE_RANGE
+#define XHTTP_FEATURE_HTTP_CACHE_RANGE
+#endif
+#ifndef XHTTP_MODULE_HTTP_CACHE_VALIDATE
+#define XHTTP_MODULE_HTTP_CACHE_VALIDATE
+#endif
+#ifndef XHTTP_MODULE_HTTP_RANGE
+#define XHTTP_MODULE_HTTP_RANGE
+#endif
+#endif
+
+/* http_range 及其直接依赖。 */
+#if defined(XHTTP_MODULE_ALL) || defined(XHTTP_MODULE_HTTP_RANGE)
+#ifndef XHTTP_FEATURE_HTTP_RANGE
+#define XHTTP_FEATURE_HTTP_RANGE
+#endif
+#ifndef XRT_MODULE_HTTP
+#define XRT_MODULE_HTTP
+#endif
+#endif
+
+/* http_cache_validate 及其直接依赖。 */
+#if defined(XHTTP_MODULE_ALL) || defined(XHTTP_MODULE_HTTP_CACHE_VALIDATE)
+#ifndef XHTTP_FEATURE_HTTP_CACHE_VALIDATE
+#define XHTTP_FEATURE_HTTP_CACHE_VALIDATE
+#endif
+#ifndef XHTTP_MODULE_HTTP_CACHE_POLICY
+#define XHTTP_MODULE_HTTP_CACHE_POLICY
+#endif
+#ifndef XHTTP_MODULE_HTTP_FORWARD
+#define XHTTP_MODULE_HTTP_FORWARD
+#endif
+#ifndef XHTTP_MODULE_HTTP_ORIGIN
+#define XHTTP_MODULE_HTTP_ORIGIN
+#endif
+#ifndef XHTTP_MODULE_HTTP_PRECONDITION
+#define XHTTP_MODULE_HTTP_PRECONDITION
+#endif
+#ifndef XHTTP_MODULE_URL
+#define XHTTP_MODULE_URL
+#endif
+#endif
+
+/* http_precondition 及其直接依赖。 */
+#if defined(XHTTP_MODULE_ALL) || defined(XHTTP_MODULE_HTTP_PRECONDITION)
+#ifndef XHTTP_FEATURE_HTTP_PRECONDITION
+#define XHTTP_FEATURE_HTTP_PRECONDITION
+#endif
+#ifndef XHTTP_MODULE_HTTP_ETAG
+#define XHTTP_MODULE_HTTP_ETAG
+#endif
+#ifndef XRT_MODULE_TIME_TEXT
+#define XRT_MODULE_TIME_TEXT
+#endif
+#endif
+
+/* http_etag 及其直接依赖。 */
+#if defined(XHTTP_MODULE_ALL) || defined(XHTTP_MODULE_HTTP_ETAG)
+#ifndef XHTTP_FEATURE_HTTP_ETAG
+#define XHTTP_FEATURE_HTTP_ETAG
+#endif
+#ifndef XRT_MODULE_HTTP
+#define XRT_MODULE_HTTP
+#endif
+#endif
+
+/* http_origin 及其直接依赖。 */
+#if defined(XHTTP_MODULE_ALL) || defined(XHTTP_MODULE_HTTP_ORIGIN)
+#ifndef XHTTP_FEATURE_HTTP_ORIGIN
+#define XHTTP_FEATURE_HTTP_ORIGIN
+#endif
+#ifndef XHTTP_MODULE_URL
+#define XHTTP_MODULE_URL
+#endif
+#endif
+
+/* url 及其直接依赖。 */
+#if defined(XHTTP_MODULE_ALL) || defined(XHTTP_MODULE_URL)
+#ifndef XHTTP_FEATURE_URL
+#define XHTTP_FEATURE_URL
+#endif
+#ifndef XRT_MODULE_HTTP_HOST
+#define XRT_MODULE_HTTP_HOST
+#endif
+#endif
+
+/* http_forward 及其直接依赖。 */
+#if defined(XHTTP_MODULE_ALL) || defined(XHTTP_MODULE_HTTP_FORWARD)
+#ifndef XHTTP_FEATURE_HTTP_FORWARD
+#define XHTTP_FEATURE_HTTP_FORWARD
+#endif
+#ifndef XRT_MODULE_HTTP_CONNECTION
+#define XRT_MODULE_HTTP_CONNECTION
+#endif
+#endif
+
+/* http_cache_policy 及其直接依赖。 */
+#if defined(XHTTP_MODULE_ALL) || defined(XHTTP_MODULE_HTTP_CACHE_POLICY)
+#ifndef XHTTP_FEATURE_HTTP_CACHE_POLICY
+#define XHTTP_FEATURE_HTTP_CACHE_POLICY
+#endif
+#ifndef XHTTP_MODULE_HTTP_CACHE_TIME
+#define XHTTP_MODULE_HTTP_CACHE_TIME
+#endif
+#endif
+
+/* http_cache_time 及其直接依赖。 */
+#if defined(XHTTP_MODULE_ALL) || defined(XHTTP_MODULE_HTTP_CACHE_TIME)
+#ifndef XHTTP_FEATURE_HTTP_CACHE_TIME
+#define XHTTP_FEATURE_HTTP_CACHE_TIME
+#endif
+#ifndef XHTTP_MODULE_HTTP_CACHE
+#define XHTTP_MODULE_HTTP_CACHE
+#endif
+#ifndef XRT_MODULE_TIME_TEXT
+#define XRT_MODULE_TIME_TEXT
+#endif
+#endif
+
+/* http_cache 及其直接依赖。 */
+#if defined(XHTTP_MODULE_ALL) || defined(XHTTP_MODULE_HTTP_CACHE)
+#ifndef XHTTP_FEATURE_HTTP_CACHE
+#define XHTTP_FEATURE_HTTP_CACHE
+#endif
+#ifndef XRT_MODULE_HTTP_PARAM
+#define XRT_MODULE_HTTP_PARAM
+#endif
+#endif
+
+/* http_priority_write 及其直接依赖。 */
+#if defined(XHTTP_MODULE_ALL) || defined(XHTTP_MODULE_HTTP_PRIORITY_WRITE)
+#ifndef XHTTP_FEATURE_HTTP_PRIORITY_WRITE
+#define XHTTP_FEATURE_HTTP_PRIORITY_WRITE
+#endif
+#ifndef XHTTP_MODULE_HTTP_PRIORITY
+#define XHTTP_MODULE_HTTP_PRIORITY
+#endif
+#ifndef XHTTP_MODULE_HTTP_STRUCTURED_WRITE
+#define XHTTP_MODULE_HTTP_STRUCTURED_WRITE
+#endif
+#endif
+
+/* http_priority 及其直接依赖。 */
+#if defined(XHTTP_MODULE_ALL) || defined(XHTTP_MODULE_HTTP_PRIORITY)
+#ifndef XHTTP_FEATURE_HTTP_PRIORITY
+#define XHTTP_FEATURE_HTTP_PRIORITY
+#endif
+#ifndef XHTTP_MODULE_HTTP_STRUCTURED
+#define XHTTP_MODULE_HTTP_STRUCTURED
+#endif
+#endif
+
+/* http_digest_sha2 及其直接依赖。 */
+#if defined(XHTTP_MODULE_ALL) || defined(XHTTP_MODULE_HTTP_DIGEST_SHA2)
+#ifndef XHTTP_FEATURE_HTTP_DIGEST_SHA2
+#define XHTTP_FEATURE_HTTP_DIGEST_SHA2
+#endif
+#ifndef XHTTP_MODULE_HTTP_DIGEST_WRITE
+#define XHTTP_MODULE_HTTP_DIGEST_WRITE
+#endif
+#ifndef XRT_MODULE_CRYPTO_SHA256
+#define XRT_MODULE_CRYPTO_SHA256
+#endif
+#ifndef XRT_MODULE_CRYPTO_SHA512
+#define XRT_MODULE_CRYPTO_SHA512
+#endif
+#endif
+
+/* http_digest_write 及其直接依赖。 */
+#if defined(XHTTP_MODULE_ALL) || defined(XHTTP_MODULE_HTTP_DIGEST_WRITE)
+#ifndef XHTTP_FEATURE_HTTP_DIGEST_WRITE
+#define XHTTP_FEATURE_HTTP_DIGEST_WRITE
+#endif
+#ifndef XHTTP_MODULE_HTTP_DIGEST
+#define XHTTP_MODULE_HTTP_DIGEST
+#endif
+#ifndef XHTTP_MODULE_HTTP_STRUCTURED_WRITE
+#define XHTTP_MODULE_HTTP_STRUCTURED_WRITE
+#endif
+#endif
+
+/* http_digest 及其直接依赖。 */
+#if defined(XHTTP_MODULE_ALL) || defined(XHTTP_MODULE_HTTP_DIGEST)
+#ifndef XHTTP_FEATURE_HTTP_DIGEST
+#define XHTTP_FEATURE_HTTP_DIGEST
+#endif
+#ifndef XHTTP_MODULE_HTTP_STRUCTURED
+#define XHTTP_MODULE_HTTP_STRUCTURED
+#endif
+#endif
+
+/* http_structured_write 及其直接依赖。 */
+#if defined(XHTTP_MODULE_ALL) || defined(XHTTP_MODULE_HTTP_STRUCTURED_WRITE)
+#ifndef XHTTP_FEATURE_HTTP_STRUCTURED_WRITE
+#define XHTTP_FEATURE_HTTP_STRUCTURED_WRITE
+#endif
+#ifndef XHTTP_MODULE_HTTP_STRUCTURED
+#define XHTTP_MODULE_HTTP_STRUCTURED
+#endif
+#endif
+
+/* http_structured 及其直接依赖。 */
+#if defined(XHTTP_MODULE_ALL) || defined(XHTTP_MODULE_HTTP_STRUCTURED)
+#ifndef XHTTP_FEATURE_HTTP_STRUCTURED
+#define XHTTP_FEATURE_HTTP_STRUCTURED
+#endif
+#ifndef XRT_MODULE_HTTP
+#define XRT_MODULE_HTTP
+#endif
+#ifndef XRT_MODULE_CODEC_BASE64
+#define XRT_MODULE_CODEC_BASE64
+#endif
+#ifndef XRT_MODULE_UNICODE
+#define XRT_MODULE_UNICODE
+#endif
+#endif
+
+/* http_language 及其直接依赖。 */
+#if defined(XHTTP_MODULE_ALL) || defined(XHTTP_MODULE_HTTP_LANGUAGE)
+#ifndef XHTTP_FEATURE_HTTP_LANGUAGE
+#define XHTTP_FEATURE_HTTP_LANGUAGE
+#endif
+#ifndef XHTTP_MODULE_HTTP_LANGUAGE_CORE
+#define XHTTP_MODULE_HTTP_LANGUAGE_CORE
+#endif
+#endif
+
+/* http_language_core 及其直接依赖。 */
+#if defined(XHTTP_MODULE_ALL) || defined(XHTTP_MODULE_HTTP_LANGUAGE_CORE)
+#ifndef XHTTP_FEATURE_HTTP_LANGUAGE_CORE
+#define XHTTP_FEATURE_HTTP_LANGUAGE_CORE
+#endif
+#ifndef XRT_MODULE_HTTP
+#define XRT_MODULE_HTTP
+#endif
+#endif
+
+/* http_accept 及其直接依赖。 */
+#if defined(XHTTP_MODULE_ALL) || defined(XHTTP_MODULE_HTTP_ACCEPT)
+#ifndef XHTTP_FEATURE_HTTP_ACCEPT
+#define XHTTP_FEATURE_HTTP_ACCEPT
+#endif
+#ifndef XHTTP_MODULE_MIME
+#define XHTTP_MODULE_MIME
+#endif
+#endif
+
+/* mime 及其直接依赖。 */
+#if defined(XHTTP_MODULE_ALL) || defined(XHTTP_MODULE_MIME)
+#ifndef XHTTP_FEATURE_MIME
+#define XHTTP_FEATURE_MIME
+#endif
+#ifndef XRT_MODULE_HTTP_PARAM
+#define XRT_MODULE_HTTP_PARAM
+#endif
+#endif
+
+#endif /* XHTTP_FEATURES_H */
+
+
+/* public: extlibs/xhttp/include/xrt/mime.h */
+
+
+#ifndef XRT_MIME_H
+#define XRT_MIME_H
+
+
+
+
+#if defined(XHTTP_FEATURE_MIME) && !defined(XRT_FEATURE_HTTP_PARAM)
+	#error "XRT MIME support requires XRT_FEATURE_HTTP_PARAM"
+#endif
+
+#if defined(XHTTP_FEATURE_MIME_TYPES)
+
+XRT_EXTERN_C_BEGIN
+
+
+
+/*
+	按扩展名查找内置媒体类型；扩展名可以带前导点。
+	比较仅对 ASCII 字母忽略大小写，未知扩展名返回空视图且不修改线程错误。
+	输入文本范围必须完整且不回绕；返回文本借用进程期静态存储。
+*/
+XRT_API xstrview xrtMimeByExt(
+	xstrview Extension
+);
+
+
+
+/*
+	按路径最后一段的最后一个扩展名查找内置媒体类型。
+	Path 不要求零结尾；隐藏文件名本身不作为扩展名。
+	输入文本范围必须完整且不回绕；返回文本借用进程期静态存储。
+*/
+XRT_API xstrview xrtMimeByPath(
+	xstrview Path
+);
+
+
+
+/*
+	按零结尾路径返回内置媒体类型。
+	路径为空、没有扩展名或扩展名未知时返回 application/octet-stream。
+*/
+XRT_API cstr xrtMime(
+	cstr sPath
+);
+
+
+
+XRT_EXTERN_C_END
+
+#endif
+
+
+
+#if defined(XHTTP_FEATURE_MIME)
+
+/* 媒体类型保留完整 subtype；Parameters 不含第一个分号。 */
+typedef struct xmediatype {
+	xstrview Type;
+	xstrview Subtype;
+	xstrview Parameters;
+} xmediatype;
+
+
+
+XRT_EXTERN_C_BEGIN
+
+
+
+/* 严格解析媒体类型和全部参数，重复参数名称视为无效。 */
+XRT_API bool xrtHttpMediaTypeParse(
+	xstrview Text,
+	xmediatype* pType
+);
+
+
+
+/* 按 ASCII 大小写不敏感规则比较媒体类型，不比较参数。 */
+XRT_API bool xrtHttpMediaTypeEqual(
+	const xmediatype* pType,
+	xstrview Type,
+	xstrview Subtype
+);
+
+
+
+/* 返回最后一个加号后的结构化语法后缀；不存在时返回空视图。 */
+XRT_API xstrview xrtHttpMediaTypeSuffix(
+	const xmediatype* pType
+);
+
+
+
+/*
+	判断已解析媒体类型是否适合通用内容编码压缩。
+	函数不会把 WOFF、图像、音视频和归档等已压缩格式误判为可压缩。
+*/
+XRT_API bool xrtHttpMediaTypeCompressible(
+	const xmediatype* pType
+);
+
+
+
+/*
+	解析 Content-Type 值并判断是否适合通用内容编码压缩。
+	合法但不可压缩的媒体类型返回 false，且不修改线程原有错误。
+*/
+XRT_API bool xrtHttpContentTypeCompressible(
+	xstrview Text
+);
+
+
+
+/* 严格查找媒体类型参数。 */
+XRT_API xhttpnext xrtHttpMediaTypeParam(
+	const xmediatype* pType,
+	xstrview Name,
+	xhttpparam* pParam
+);
+
+
+
+/* 规范写出媒体类型；结果不附加零字符。 */
+XRT_API bool xrtHttpMediaTypeWrite(
+	const xmediatype* pType,
+	void* pOutput,
+	size_t iCapacity,
+	size_t* pSize
+);
+
+
+
+/* 构建零结尾媒体类型，返回值由 xrtFree 释放。 */
+XRT_API str xrtHttpMediaTypeBuild(
+	const xmediatype* pType,
+	size_t* pSize
+);
+
+
+
+XRT_EXTERN_C_END
+
+#endif
+
+#endif
+
+
+/* public: extlibs/xhttp/include/xrt/url.h */
+
+
+#ifndef XRT_URL_H
+#define XRT_URL_H
+
+
+#if defined(XHTTP_FEATURE_URL_PARAM)
+#endif
+
+
+
+#if defined(XHTTP_FEATURE_URL) && !defined(XRT_FEATURE_HTTP_HOST)
+	#error "xhttp URL support requires HTTP Host support"
+#endif
+
+#if defined(XHTTP_FEATURE_URL_PARAM) && \
+	(!defined(XHTTP_FEATURE_URL) || \
+	 !defined(XRT_FEATURE_HTTP_PARAM_HOST))
+	#error "xhttp URL parameter support requires URL and HTTP parameter Host support"
+#endif
+
+
+
+#if defined(XHTTP_FEATURE_URL)
+
+/* URL 包含 scheme，Scheme 可以直接用于协议判断。 */
+#define XURL_HAS_SCHEME		UINT32_C(0x00000001)
+
+/* URL 包含双斜杠引入的 authority，包括显式空 authority。 */
+#define XURL_HAS_AUTHORITY	UINT32_C(0x00000002)
+
+/* authority 包含 @ 引入的 userinfo，包括显式空 userinfo。 */
+#define XURL_HAS_USERINFO	UINT32_C(0x00000004)
+
+/* authority 已解析出 host；RFC 3986 允许 host 为空。 */
+#define XURL_HAS_HOST		UINT32_C(0x00000008)
+
+/* authority 包含冒号引入的端口，包括显式空端口。 */
+#define XURL_HAS_PORT		UINT32_C(0x00000010)
+
+/* URL 包含问号引入的 query，包括显式空 query。 */
+#define XURL_HAS_QUERY		UINT32_C(0x00000020)
+
+/* URL 包含井号引入的 fragment，包括显式空 fragment。 */
+#define XURL_HAS_FRAGMENT	UINT32_C(0x00000040)
+
+/* Host 是 IPv6 或 IPvFuture 字面地址，Host 视图不包含方括号。 */
+#define XURL_HOST_IP_LITERAL	UINT32_C(0x00000080)
+
+/* 显式端口只有冒号而没有数字；该标志必须与 XURL_HAS_PORT 同时存在。 */
+#define XURL_PORT_EMPTY		UINT32_C(0x00000100)
+
+/* 非空端口已经无损转换为 uint16；超出网络端口范围的协议文本不设置该位。 */
+#define XURL_PORT_VALUE		UINT32_C(0x00000200)
+
+
+
+/* URL 视图借用原始文本；修改或释放输入会使全部非空视图失效。 */
+typedef struct xurl {
+	/* 组件存在位；空组件是否存在只能由这些标志判断。 */
+	uint32 Flags;
+
+	/* 仅在 XURL_PORT_VALUE 存在时保存可直接用于网络层的数值端口。 */
+	uint16 Port;
+
+	/* 以下视图全部借用输入，Authority 保留原始 authority 文本。 */
+	xstrview Scheme;
+	xstrview Authority;
+	xstrview UserInfo;
+	xstrview Host;
+
+	/* PortText 保留端口数字的词法形式，因此 :00080 可以精确往返。 */
+	xstrview PortText;
+	xstrview Path;
+	xstrview Query;
+	xstrview Fragment;
+} xurl;
+
+#endif
+
+
+
+XRT_EXTERN_C_BEGIN
+
+
+
+#if defined(XHTTP_FEATURE_URL)
+
+/*
+	严格解析 ASCII RFC 3986 URI-reference；结果全部借用 Text。
+	pUrl 可使用未对齐存储，但完整可写区间不得回绕或覆盖 Text。
+*/
+XRT_API bool xrtUrlParse(xstrview Text, xurl* pUrl);
+
+
+
+/*
+	独立解析 authority；允许空 host 与空端口，结果全部借用 Authority。
+	pUrl 可使用未对齐存储，但完整可写区间不得回绕或覆盖 Authority。
+*/
+XRT_API bool xrtUrlAuthorityParse(xstrview Authority, xurl* pUrl);
+
+
+
+/* 返回 HTTP、HTTPS、WS 或 WSS 的默认端口，其他 scheme 返回零。 */
+XRT_API uint16 xrtUrlDefaultPort(xstrview Scheme);
+
+
+
+/* 取得可用网络端口；省略或空端口使用已知默认值，超出 uint16 范围失败。 */
+XRT_API bool xrtUrlPort(const xurl* pUrl, uint16* pPort);
+
+
+
+/* 按 ASCII 大小写不敏感规则判断 scheme。 */
+XRT_API bool xrtUrlSchemeIs(const xurl* pUrl, xstrview Scheme);
+
+
+
+/* 判断 URL 是否使用 HTTPS 或 WSS。 */
+XRT_API bool xrtUrlSecure(const xurl* pUrl);
+
+
+
+/* 判断显式端口对已知 scheme 为空或等于默认端口。 */
+XRT_API bool xrtUrlPortIsDefault(const xurl* pUrl);
+
+
+
+/*
+	精确写出 URI-reference；不写零结尾，空输出可查询长度。
+	pSize 可使用未对齐存储；输出区间回绕或覆盖输入、借用视图或 pSize 时失败。
+*/
+XRT_API bool xrtUrlWrite(
+	const xurl* pUrl,
+	void* pOutput,
+	size_t iCapacity,
+	size_t* pSize
+);
+
+
+
+/*
+	分配并构建零结尾 URI-reference；返回值由 xrtFree 释放。
+	pSize 可使用未对齐存储，但不得覆盖输入对象或其借用视图。
+*/
+XRT_API str xrtUrlBuild(const xurl* pUrl, size_t* pSize);
+
+
+
+/* 写出 authority，不含前导双斜杠或零结尾；空输出可查询长度。 */
+XRT_API bool xrtUrlAuthorityWrite(
+	const xurl* pUrl,
+	void* pOutput,
+	size_t iCapacity,
+	size_t* pSize
+);
+
+
+
+/* 写出 host 与显式端口，不含 userinfo 或零结尾；保留显式默认端口。 */
+XRT_API bool xrtUrlHostWrite(
+	const xurl* pUrl,
+	void* pOutput,
+	size_t iCapacity,
+	size_t* pSize
+);
+
+
+
+/* 写出 HTTP origin-form target：空路径变为斜杠，query 保留，fragment 丢弃。 */
+XRT_API bool xrtUrlTargetWrite(
+	const xurl* pUrl,
+	void* pOutput,
+	size_t iCapacity,
+	size_t* pSize
+);
+
+
+
+/* 按 RFC 3986 零分配规范化 path；原地或前向重叠可用，失败不修改输出。 */
+XRT_API bool xrtUrlPathNormalize(
+	xstrview Path,
+	void* pOutput,
+	size_t iCapacity,
+	size_t* pSize
+);
+
+
+
+/* 分配零结尾的规范化 URL path；返回值由 xrtFree 释放。 */
+XRT_API str xrtUrlPathNormalizeBuild(
+	xstrview Path,
+	size_t* pSize
+);
+
+
+
+/* 零分配解析 RFC 3986 引用；Base 必须含 scheme，输出不得覆盖输入。 */
+XRT_API bool xrtUrlResolve(
+	const xurl* pBase,
+	xstrview Reference,
+	void* pOutput,
+	size_t iCapacity,
+	size_t* pSize
+);
+
+
+
+/* 单次分配零结尾的解析结果；返回值由 xrtFree 释放。 */
+XRT_API str xrtUrlResolveBuild(
+	const xurl* pBase,
+	xstrview Reference,
+	size_t* pSize
+);
+
+#endif
+
+
+
+#if defined(XHTTP_FEATURE_URL_PARAM)
+
+/* 无分配验证 HTTP 参数解码后的语义值是完整 RFC 3986 URI-reference。 */
+XRT_API bool xrtUrlParamValid(const xhttpparam* pParam);
+
+#endif
+
+
+
+XRT_EXTERN_C_END
+
+#endif
+
+
+/* public: extlibs/xhttp/include/xrt/http_cache_store.h */
+
+
+#ifndef XRT_HTTP_CACHE_STORE_H
+#define XRT_HTTP_CACHE_STORE_H
+
+
+
+
+#if defined(XHTTP_FEATURE_HTTP_CACHE_STORE) && \
+	(!defined(XHTTP_FEATURE_HTTP_CACHE_VALIDATE) || \
+	 !defined(XHTTP_FEATURE_HTTP_VARY) || \
+	 !defined(XRT_FEATURE_MAP) || \
+	 !defined(XRT_FEATURE_MUTEX))
+	#error "XRT HTTP cache store requires cache validation, Vary, Map and Mutex"
+#endif
+
+
+
+#if defined(XHTTP_FEATURE_HTTP_CACHE_STORE)
+
+#define XHTTP_CACHE_ENTRIES_DEFAULT		1024u
+#define XHTTP_CACHE_BYTES_DEFAULT		(UINT64_C(64) * 1024u * 1024u)
+#define XHTTP_CACHE_ENTRY_BYTES_DEFAULT	(UINT64_C(8) * 1024u * 1024u)
+
+
+
+/* Cache 是引用计数、线程安全且按容量淘汰的内存响应存储。 */
+typedef struct xhttpcache xhttpcache;
+
+
+
+/* CacheRecord 是可跨线程持有的不可变响应快照。 */
+typedef struct xhttpcacherecord xhttpcacherecord;
+
+
+
+/*
+	主键至少包含方法和目标 URI；Partition 用于站点、用户或租户隔离。
+	Fields 是产生响应时的有效请求字段，Record 只保存 Vary 实际引用的字段。
+*/
+typedef struct xhttpcachekey {
+	xstrview Method;
+	xstrview URI;
+	xstrview Partition;
+	const xhttpfield* Fields;
+	size_t FieldCount;
+} xhttpcachekey;
+
+
+
+/* Part 保存表示正文中的一段连续字节，Offset 使用完整表示的零基偏移。 */
+typedef struct xhttpcachepart {
+	uint64 Offset;
+	xbytesview Data;
+} xhttpcachepart;
+
+
+
+typedef enum xhttpcacherecordflag {
+	XHTTP_CACHE_RECORD_NONE = 0,
+
+	/* Length 是已知的完整表示长度。 */
+	XHTTP_CACHE_RECORD_HAS_LENGTH = UINT32_C(0x00000001),
+
+	/* Parts 已经无空洞覆盖 [0, Length)，空表示允许 Length 为零。 */
+	XHTTP_CACHE_RECORD_COMPLETE = UINT32_C(0x00000002)
+} xhttpcacherecordflag;
+
+
+
+/*
+	RecordInput 全部借用调用方数据，创建成功后得到完全独立的紧凑副本。
+	RequestClock 和 ResponseClock 来自同一单调时钟，ResponseTime 是墙钟时间。
+*/
+typedef struct xhttpcacherecordinput {
+	xhttpcachekey Key;
+	xhttpversion Version;
+	uint16 Status;
+	uint32 Flags;
+	xstrview Reason;
+	const xhttpfield* Fields;
+	size_t FieldCount;
+	const xhttpfield* Trailers;
+	size_t TrailerCount;
+	const xhttpcachepart* Parts;
+	size_t PartCount;
+	uint64 Length;
+	xtime ResponseTime;
+	uint64 RequestClock;
+	uint64 ResponseClock;
+} xhttpcacherecordinput;
+
+
+
+/*
+	所有限额都是硬逻辑限额；MaxBytes 计算不可变 Record 的实际分配大小。
+	MaxEntries 独立约束索引和 LRU 元数据，零值配置无效，应先调用 ConfigInit。
+*/
+typedef struct xhttpcacheconfig {
+	size_t InitialEntries;
+	size_t MaxEntries;
+	size_t MaxBytes;
+	size_t MaxEntryBytes;
+} xhttpcacheconfig;
+
+
+
+/* Lookup 把正常未命中与执行错误分开。 */
+typedef enum xhttpcachelookup {
+	XHTTP_CACHE_LOOKUP_ERROR = -1,
+	XHTTP_CACHE_LOOKUP_MISS = 0,
+	XHTTP_CACHE_LOOKUP_HIT = 1
+} xhttpcachelookup;
+
+
+
+/*
+	写入结果把并发冲突、容量拒绝、首次保存和变体替换分开。
+	普通 Put 不返回 CONFLICT；条件 Insert 和 Replace 可以返回 CONFLICT。
+*/
+typedef enum xhttpcacheput {
+	XHTTP_CACHE_PUT_ERROR = -1,
+	XHTTP_CACHE_PUT_CONFLICT = 0,
+	XHTTP_CACHE_PUT_REJECTED = 1,
+	XHTTP_CACHE_PUT_STORED = 2,
+	XHTTP_CACHE_PUT_REPLACED = 3
+} xhttpcacheput;
+
+
+
+/* 按不可变 Record 身份删除时区分错误、并发冲突和成功删除。 */
+typedef enum xhttpcachechange {
+	XHTTP_CACHE_CHANGE_ERROR = -1,
+	XHTTP_CACHE_CHANGE_CONFLICT = 0,
+	XHTTP_CACHE_CHANGE_APPLIED = 1
+} xhttpcachechange;
+
+
+
+/* Stats 是锁内取得的一次一致快照，累计计数从 Cache 创建起单调递增。 */
+typedef struct xhttpcachestats {
+	size_t Entries;
+	size_t Bytes;
+	uint64 Lookups;
+	uint64 Hits;
+	uint64 Misses;
+	uint64 Stores;
+	uint64 Replacements;
+	uint64 Rejected;
+	uint64 Conflicts;
+	uint64 Evictions;
+	uint64 Removals;
+} xhttpcachestats;
+
+
+
+/*
+	Ops 为持久化、跨进程或应用自定义存储提供统一后端契约。
+	除 Close 外的回调均为必需项，并且必须自行保证并发调用安全。
+	Get 命中时转移一个独立 Record 引用；写入回调均不接管调用方引用。
+	Insert 必须把“不存在”判断和插入作为一个不可分割的操作。
+	Replace 的 Expected 是先前 Get 返回的不可变版本；后端只有确认该版本仍是
+	对应变体的当前值时，才能原子提交 Replacement。持久化后端可以把 Expected
+	映射为自己的修订号，但不能把比较和写入拆开。
+	RemoveRecord 使用相同的当前版本条件并把比较和删除作为一个原子操作。
+	条件不成立返回 CONFLICT，不得覆盖更新者，也不应伪装成执行错误。
+	Remove、RemoveURI 和 Clear 用 false 报告失败，删除数量输出不能代替状态。
+	统一句柄会验证 Get 命中的 Record 与查询 Key 匹配；Stats 失败时输出保持全零。
+*/
+typedef struct xhttpcacheops {
+	xhttpcachelookup (*Get)(
+		ptr pContext,
+		const xhttpcachekey* pKey,
+		xhttpcacherecord** ppRecord
+	);
+	xhttpcacheput (*Put)(
+		ptr pContext,
+		xhttpcacherecord* pRecord
+	);
+	xhttpcacheput (*Insert)(
+		ptr pContext,
+		xhttpcacherecord* pRecord
+	);
+	xhttpcacheput (*Replace)(
+		ptr pContext,
+		const xhttpcacherecord* pExpected,
+		xhttpcacherecord* pReplacement
+	);
+	xhttpcachechange (*RemoveRecord)(
+		ptr pContext,
+		const xhttpcacherecord* pExpected
+	);
+	bool (*Remove)(
+		ptr pContext,
+		const xhttpcachekey* pKey,
+		size_t* pRemoved
+	);
+	bool (*RemoveURI)(
+		ptr pContext,
+		xstrview URI,
+		xstrview Partition,
+		size_t* pRemoved
+	);
+	bool (*Clear)(ptr pContext);
+	bool (*Stats)(
+		ptr pContext,
+		xhttpcachestats* pStats
+	);
+	void (*Close)(ptr pContext);
+} xhttpcacheops;
+
+#endif
+
+
+
+XRT_EXTERN_C_BEGIN
+
+
+
+#if defined(XHTTP_FEATURE_HTTP_CACHE_STORE)
+
+/* 初始化默认缓存限额；固定配置描述符支持未对齐存储。 */
+XRT_API void xrtHttpCacheConfigInit(xhttpcacheconfig* pConfig);
+
+
+
+/* 初始化没有分区和请求字段的主键；未对齐输出在返回前一次性发布。 */
+XRT_API bool xrtHttpCacheKeyInit(
+	xhttpcachekey* pKey,
+	xstrview Method,
+	xstrview URI
+);
+
+
+
+/* 初始化 HTTP/1.1 响应输入；Key 与输出描述符都支持未对齐存储。 */
+XRT_API bool xrtHttpCacheRecordInputInit(
+	xhttpcacherecordinput* pInput,
+	const xhttpcachekey* pKey,
+	uint16 iStatus
+);
+
+
+
+/*
+	创建完全拥有输入内容的不可变 Record。
+	Vary 星号被正常响应语义允许，但不能形成可复用记录，因此返回不支持错误。
+	RecordInput 与正文片段数组可以未对齐，返回前已复制全部借用内容。
+*/
+XRT_API xhttpcacherecord* xrtHttpCacheRecordCreate(
+	const xhttpcacherecordinput* pInput
+);
+
+
+
+/* 增加 Record 引用并返回原指针；引用溢出时返回空指针。 */
+XRT_API xhttpcacherecord* xrtHttpCacheRecordRetain(
+	const xhttpcacherecord* pRecord
+);
+
+
+
+/* 释放 Record 引用；空指针是安全的空操作。 */
+XRT_API void xrtHttpCacheRecordRelease(xhttpcacherecord* pRecord);
+
+
+
+/* 返回 Record 拥有的主键；Fields 只包含 Vary 引用的原请求字段。 */
+XRT_API const xhttpcachekey* xrtHttpCacheRecordKey(
+	const xhttpcacherecord* pRecord
+);
+
+
+
+/* 返回响应协议版本。 */
+XRT_API xhttpversion xrtHttpCacheRecordVersion(
+	const xhttpcacherecord* pRecord
+);
+
+
+
+/* 返回最终响应状态码。 */
+XRT_API uint16 xrtHttpCacheRecordStatus(
+	const xhttpcacherecord* pRecord
+);
+
+
+
+/* 返回 Record 标志。 */
+XRT_API uint32 xrtHttpCacheRecordFlags(
+	const xhttpcacherecord* pRecord
+);
+
+
+
+/* 返回借用的 reason phrase。 */
+XRT_API xstrview xrtHttpCacheRecordReason(
+	const xhttpcacherecord* pRecord
+);
+
+
+
+/* 返回响应 Header 数量。 */
+XRT_API size_t xrtHttpCacheRecordFieldCount(
+	const xhttpcacherecord* pRecord
+);
+
+
+
+/* 返回指定响应 Header，越界返回空指针且不设置错误。 */
+XRT_API const xhttpfield* xrtHttpCacheRecordFieldAt(
+	const xhttpcacherecord* pRecord,
+	size_t iIndex
+);
+
+
+
+/* 返回首个同名响应 Header，未找到返回空指针。 */
+XRT_API const xhttpfield* xrtHttpCacheRecordField(
+	const xhttpcacherecord* pRecord,
+	xstrview Name
+);
+
+
+
+/* 返回响应 Trailer 数量。 */
+XRT_API size_t xrtHttpCacheRecordTrailerCount(
+	const xhttpcacherecord* pRecord
+);
+
+
+
+/* 返回指定响应 Trailer，越界返回空指针且不设置错误。 */
+XRT_API const xhttpfield* xrtHttpCacheRecordTrailerAt(
+	const xhttpcacherecord* pRecord,
+	size_t iIndex
+);
+
+
+
+/* 返回正文片段数量。 */
+XRT_API size_t xrtHttpCacheRecordPartCount(
+	const xhttpcacherecord* pRecord
+);
+
+
+
+/* 返回指定不可变正文片段，越界返回空指针且不设置错误。 */
+XRT_API const xhttpcachepart* xrtHttpCacheRecordPartAt(
+	const xhttpcacherecord* pRecord,
+	size_t iIndex
+);
+
+
+
+/* 返回全部片段有效载荷字节数。 */
+XRT_API uint64 xrtHttpCacheRecordBodyBytes(
+	const xhttpcacherecord* pRecord
+);
+
+
+
+/* 返回完整表示长度；未知时返回零并由 HAS_LENGTH 标志区分。 */
+XRT_API uint64 xrtHttpCacheRecordLength(
+	const xhttpcacherecord* pRecord
+);
+
+
+
+/* 返回响应接收墙钟时间。 */
+XRT_API xtime xrtHttpCacheRecordResponseTime(
+	const xhttpcacherecord* pRecord
+);
+
+
+
+/* 返回发出请求时的单调时钟。 */
+XRT_API uint64 xrtHttpCacheRecordRequestClock(
+	const xhttpcacherecord* pRecord
+);
+
+
+
+/* 返回收到响应时的单调时钟。 */
+XRT_API uint64 xrtHttpCacheRecordResponseClock(
+	const xhttpcacherecord* pRecord
+);
+
+
+
+/* 返回 Record 单次紧凑分配的实际字节数。 */
+XRT_API size_t xrtHttpCacheRecordCharge(
+	const xhttpcacherecord* pRecord
+);
+
+
+
+/* 返回去重后的 Vary 选择字段数量。 */
+XRT_API size_t xrtHttpCacheRecordVaryCount(
+	const xhttpcacherecord* pRecord
+);
+
+
+
+/* 返回指定 Vary 字段名，越界返回空视图且不设置错误。 */
+XRT_API xstrview xrtHttpCacheRecordVaryAt(
+	const xhttpcacherecord* pRecord,
+	size_t iIndex
+);
+
+
+
+/*
+	判断主键和 Vary 原请求字段是否匹配。
+	字段值按顺序比较并忽略两端 OWS；缺失字段只匹配缺失字段。
+*/
+XRT_API bool xrtHttpCacheRecordMatches(
+	const xhttpcacherecord* pRecord,
+	const xhttpcachekey* pKey
+);
+
+
+
+/* 构造验证协议层可直接使用的借用 Entry 视图；输出支持未对齐存储。 */
+XRT_API bool xrtHttpCacheRecordEntry(
+	const xhttpcacherecord* pRecord,
+	xhttpcacheentry* pEntry
+);
+
+
+
+/* 创建线程安全的有界内存缓存；可选配置在返回前从未对齐存储快照。 */
+XRT_API xhttpcache* xrtHttpCacheCreate(
+	const xhttpcacheconfig* pConfig
+);
+
+
+
+/*
+	用自定义线程安全后端创建统一 Cache 句柄。
+	句柄从可未对齐存储复制 Ops；除 Close 外的全部回调都必须存在。
+	最后一个引用释放时调用可选 Close，Context 由后端定义。
+*/
+XRT_API xhttpcache* xrtHttpCacheOpen(
+	const xhttpcacheops* pOps,
+	ptr pContext
+);
+
+
+
+/* 增加 Cache 引用并返回原指针；引用溢出时返回空指针。 */
+XRT_API xhttpcache* xrtHttpCacheRetain(const xhttpcache* pCache);
+
+
+
+/* 释放 Cache 引用；空指针是安全的空操作。 */
+XRT_API void xrtHttpCacheRelease(xhttpcache* pCache);
+
+
+
+/*
+	查找最新匹配记录并返回独立引用。
+	未命中和错误都会把输出清空，命中记录由调用方 Release。
+	Key 与记录指针输出支持未对齐存储，但彼此及借用内容不得重叠。
+*/
+XRT_API xhttpcachelookup xrtHttpCacheGet(
+	xhttpcache* pCache,
+	const xhttpcachekey* pKey,
+	xhttpcacherecord** ppRecord
+);
+
+
+
+/*
+	保存 Record 的独立引用，函数不接管调用方引用。
+	相同主键、Vary 维度和原请求值替换旧记录；容量不足是正常拒绝。
+	该无条件接口使用最后写入者获胜，不返回 CONFLICT。
+*/
+XRT_API xhttpcacheput xrtHttpCachePut(
+	xhttpcache* pCache,
+	xhttpcacherecord* pRecord
+);
+
+
+
+/*
+	仅在相同主键和 Vary 变体尚不存在时原子插入 Record。
+	已有当前记录时返回 CONFLICT，不以旧快照覆盖并发写入。
+	函数不接管调用方引用；成功后 Cache 独立持有 Record。
+*/
+XRT_API xhttpcacheput xrtHttpCacheInsert(
+	xhttpcache* pCache,
+	xhttpcacherecord* pRecord
+);
+
+
+
+/*
+	仅在 Expected 仍是对应 Vary 变体的当前 Record 时原子提交 Replacement。
+	两个 Record 的方法、URI 和 Partition 必须相同；Vary 可以按新元数据变化。
+	Expected 应来自先前 Get；函数不接管任何引用，成功后 Cache 独立持有
+	Replacement。并发更新使条件失效时返回 CONFLICT。
+*/
+XRT_API xhttpcacheput xrtHttpCacheReplace(
+	xhttpcache* pCache,
+	const xhttpcacherecord* pExpected,
+	xhttpcacherecord* pReplacement
+);
+
+
+
+/*
+	仅在 Expected 仍是当前 Record 时原子删除。
+	记录已经被替换、删除或淘汰时返回 CONFLICT，不把正常竞态报告为执行错误。
+	函数不接管 Expected 引用。
+*/
+XRT_API xhttpcachechange xrtHttpCacheRemoveRecord(
+	xhttpcache* pCache,
+	const xhttpcacherecord* pExpected
+);
+
+
+
+/*
+	删除与完整 Key 和 Vary 选择匹配的全部记录。
+	pRemoved 可以为空或未对齐；成功且没有匹配记录与后端失败保持可区分。
+*/
+XRT_API bool xrtHttpCacheRemove(
+	xhttpcache* pCache,
+	const xhttpcachekey* pKey,
+	size_t* pRemoved
+);
+
+
+
+/*
+	删除 URI 和 Partition 下的全部方法与 Vary 变体。
+	pRemoved 可以为空或未对齐；失败时输出保持为零。
+*/
+XRT_API bool xrtHttpCacheRemoveURI(
+	xhttpcache* pCache,
+	xstrview URI,
+	xstrview Partition,
+	size_t* pRemoved
+);
+
+
+
+/* 删除全部记录并保留 Map 桶容量供后续复用。 */
+XRT_API bool xrtHttpCacheClear(xhttpcache* pCache);
+
+
+
+/* 取得一致统计快照；未对齐输出受支持，失败时输出全零。 */
+XRT_API bool xrtHttpCacheStats(
+	xhttpcache* pCache,
+	xhttpcachestats* pStats
+);
+
+#endif
+
+
+
+XRT_EXTERN_C_END
+
+#endif
+
+
+/* public: extlibs/xhttp/include/xrt/http_headers.h */
+
+
+#ifndef XRT_HTTP_HEADERS_H
+#define XRT_HTTP_HEADERS_H
+
+
+
+
+#if defined(XHTTP_FEATURE_HTTP_HEADERS) && !defined(XRT_FEATURE_HTTP)
+	#error "xhttp owned Headers require XRT HTTP protocol support"
+#endif
+
+
+
+#if defined(XHTTP_FEATURE_HTTP_HEADERS)
+
+typedef struct xhttpheaders xhttpheaders;
+
+
+
+/* 零上限不表示无限；默认配置由初始化函数给出明确的安全边界。 */
+typedef struct xhttpheadersconfig {
+	size_t InitialFields;
+	size_t InitialBytes;
+	size_t MaxFields;
+	size_t MaxName;
+	size_t MaxValue;
+	size_t MaxBytes;
+} xhttpheadersconfig;
+
+#endif
+
+
+
+XRT_EXTERN_C_BEGIN
+
+
+
+#if defined(XHTTP_FEATURE_HTTP_HEADERS)
+
+/* 验证 Header 容量、字段和字节限额能够形成有效容器。 */
+XRT_API bool xrtHttpHeadersConfigValid(
+	const xhttpheadersconfig* pConfig
+);
+
+
+
+/* 初始化拥有型 Header 容器的默认容量与安全上限。 */
+XRT_API void xrtHttpHeadersConfigInit(xhttpheadersconfig* pConfig);
+
+
+
+/* 创建拥有全部名称和值副本的 Header 容器。 */
+XRT_API xhttpheaders* xrtHttpHeadersCreate(
+	const xhttpheadersconfig* pConfig
+);
+
+
+
+/* 释放 Header 容器；空指针安全。 */
+XRT_API void xrtHttpHeadersDestroy(xhttpheaders* pHeaders);
+
+
+
+/* 清空内容并保留容量供后续报文复用。 */
+XRT_API void xrtHttpHeadersClear(xhttpheaders* pHeaders);
+
+
+
+/* 预留字段数量和名称、值的逻辑字节容量。 */
+XRT_API bool xrtHttpHeadersReserve(
+	xhttpheaders* pHeaders,
+	size_t iFields,
+	size_t iBytes
+);
+
+
+
+/* 回收删除和替换遗留的字符串空洞。 */
+XRT_API bool xrtHttpHeadersCompact(xhttpheaders* pHeaders);
+
+
+
+/* 返回字段数量。 */
+XRT_API size_t xrtHttpHeadersCount(const xhttpheaders* pHeaders);
+
+
+
+/* 返回全部有效名称和值的总字节数。 */
+XRT_API size_t xrtHttpHeadersBytes(const xhttpheaders* pHeaders);
+
+
+
+/* 返回连续、借用的字段数组；容器修改后失效。 */
+XRT_API const xhttpfield* xrtHttpHeadersData(
+	const xhttpheaders* pHeaders
+);
+
+
+
+/* 返回指定位置的借用字段，越界返回空指针。 */
+XRT_API const xhttpfield* xrtHttpHeadersAt(
+	const xhttpheaders* pHeaders,
+	size_t iIndex
+);
+
+
+
+/* 追加允许重名的字段并拥有名称和值副本。 */
+XRT_API bool xrtHttpHeadersAdd(
+	xhttpheaders* pHeaders,
+	xstrview Name,
+	xstrview Value
+);
+
+
+
+/* 替换首个同名字段并移除其余同名字段。 */
+XRT_API bool xrtHttpHeadersSet(
+	xhttpheaders* pHeaders,
+	xstrview Name,
+	xstrview Value
+);
+
+
+
+/* 移除全部同名字段并返回移除数量。 */
+XRT_API size_t xrtHttpHeadersRemove(
+	xhttpheaders* pHeaders,
+	xstrview Name
+);
+
+
+
+/* 判断是否存在同名字段。 */
+XRT_API bool xrtHttpHeadersHas(
+	const xhttpheaders* pHeaders,
+	xstrview Name
+);
+
+
+
+/* 返回同名字段数量。 */
+XRT_API size_t xrtHttpHeadersCountName(
+	const xhttpheaders* pHeaders,
+	xstrview Name
+);
+
+
+
+/* 返回首个同名借用字段。 */
+XRT_API const xhttpfield* xrtHttpHeadersGet(
+	const xhttpheaders* pHeaders,
+	xstrview Name
+);
+
+
+
+/* 只在同名字段唯一时返回条目，重复字段报告值错误。 */
+XRT_API xhttpnext xrtHttpHeadersGetUnique(
+	const xhttpheaders* pHeaders,
+	xstrview Name,
+	const xhttpfield** ppField
+);
+
+
+
+/* 返回第 N 个同名借用字段。 */
+XRT_API const xhttpfield* xrtHttpHeadersGetNth(
+	const xhttpheaders* pHeaders,
+	xstrview Name,
+	size_t iIndex
+);
+
+
+
+/* 有界复制同名字段值，并始终返回完整匹配数量。 */
+XRT_API size_t xrtHttpHeadersGetAll(
+	const xhttpheaders* pHeaders,
+	xstrview Name,
+	xstrview* pValues,
+	size_t iCapacity
+);
+
+
+
+/* 深复制 Header 容器及其配置。 */
+XRT_API xhttpheaders* xrtHttpHeadersClone(
+	const xhttpheaders* pHeaders
+);
+
+
+
+/* 不分配地交换两个容器拥有的完整状态。 */
+XRT_API bool xrtHttpHeadersSwap(
+	xhttpheaders* pLeft,
+	xhttpheaders* pRight
+);
+
+
+
+/* 事务性解析并追加字段块，失败时保留原内容。 */
+XRT_API bool xrtHttpHeadersAddBlock(
+	xhttpheaders* pHeaders,
+	xstrview Block,
+	size_t* pErrorOffset
+);
+
+
+
+/* 创建容器并解析完整字段块。 */
+XRT_API xhttpheaders* xrtHttpHeadersParse(
+	xstrview Block,
+	const xhttpheadersconfig* pConfig,
+	size_t* pErrorOffset
+);
+
+
+
+/* 写出字段行和最终空行；空输出用于查询精确长度。 */
+XRT_API bool xrtHttpHeadersWrite(
+	const xhttpheaders* pHeaders,
+	void* pOutput,
+	size_t iCapacity,
+	size_t* pSize
+);
+
+
+
+/* 分配并构建带零结尾的完整字段块。 */
+XRT_API str xrtHttpHeadersBuild(
+	const xhttpheaders* pHeaders,
+	size_t* pSize
+);
+
+#endif
+
+
+
+XRT_EXTERN_C_END
+
+#endif
+
+
+/* public: extlibs/xhttp/include/xrt/http_body.h */
+
+
+#ifndef XRT_HTTP_BODY_H
+#define XRT_HTTP_BODY_H
+
+
+#if defined(XHTTP_FEATURE_HTTP_BODY_ASYNC)
+#endif
+
+
+
+#if defined(XHTTP_FEATURE_HTTP_BODY_ASYNC) && \
+	!defined(XHTTP_FEATURE_HTTP_BODY)
+	#error "XRT async HTTP body support requires HTTP body support"
+#endif
+
+#if defined(XHTTP_FEATURE_HTTP_BODY) && \
+	!defined(XRT_FEATURE_ATOMIC)
+	#error "XRT HTTP body support requires atomic support"
+#endif
+
+#if defined(XHTTP_FEATURE_HTTP_BODY_TRANSFORM) && \
+	!defined(XHTTP_FEATURE_HTTP_BODY)
+	#error "XRT HTTP body transform support requires HTTP body support"
+#endif
+
+
+
+#if defined(XHTTP_FEATURE_HTTP_BODY)
+
+/* 未知正文长度使用完整 uint64 范围之外的哨兵值。 */
+#define XHTTP_BODY_UNKNOWN UINT64_MAX
+
+
+
+typedef struct xhttpbody xhttpbody;
+typedef struct xhttpbodyreader xhttpbodyreader;
+struct xfuture;
+
+
+
+/* 正文源标志只描述可以由正文对象保证的稳定能力。 */
+typedef enum xhttpbodyflag {
+	XHTTP_BODY_NONE = 0,
+	XHTTP_BODY_REPLAYABLE = UINT32_C(0x00000001)
+} xhttpbodyflag;
+
+
+
+/* 正文读取结果把正常结束、暂不可读和真正失败分开表达。 */
+typedef enum xhttpbodystatus {
+	XHTTP_BODY_ERROR = -1,
+	XHTTP_BODY_EOF = 0,
+	XHTTP_BODY_DATA = 1,
+	XHTTP_BODY_AGAIN = 2
+} xhttpbodystatus;
+
+
+
+/* HTTP 正文域错误用于识别来源违反契约和长度不一致。 */
+typedef enum xhttpbodyerror {
+	XHTTP_BODY_ERROR_REOPEN = 1,
+	XHTTP_BODY_ERROR_SOURCE,
+	XHTTP_BODY_ERROR_CONTRACT,
+	XHTTP_BODY_ERROR_LENGTH
+} xhttpbodyerror;
+
+
+
+/* Chunk 释放过程必须只释放本次数据租约，不能销毁 Reader。 */
+typedef void (*xhttpbodyreleaseproc)(
+	ptr pContext,
+	cbytes pData,
+	size_t iSize
+);
+
+
+
+/*
+	Chunk 在 DATA 时拥有一个独立数据租约。
+	调用方必须执行 xrtHttpBodyChunkRelease，Reader 可以先于 Chunk 销毁。
+*/
+typedef struct xhttpbodychunk {
+	cbytes Data;
+	size_t Size;
+	xhttpbodyreleaseproc Release;
+	ptr Context;
+} xhttpbodychunk;
+
+
+
+/*
+	Next 每次最多返回 MaxBytes；ERROR 时应设置当前执行上下文错误。
+	DATA 必须返回非空数据、非零长度和释放过程。
+*/
+typedef xhttpbodystatus (*xhttpbodynextproc)(
+	ptr pContext,
+	size_t iMaxBytes,
+	xhttpbodychunk* pChunk
+);
+
+
+
+/* Reader 关闭过程只执行一次；其错误不会覆盖销毁调用方的当前错误。 */
+typedef void (*xhttpbodycloseproc)(ptr pContext);
+
+
+
+/*
+	Wait 在 Reader 返回 AGAIN 后返回一个调用方拥有的可读性 Future。
+	Future 完成只表示应重试 Next，不保证下一次读取一定产生 DATA。
+	返回引用必须独立于 Reader，并在 Reader 关闭后继续保持有效。
+	回调槽始终存在以保持独立编译模块的 ABI；同步源应设置为 NULL。
+*/
+typedef struct xfuture* (*xhttpbodywaitproc)(ptr pContext);
+
+
+
+/* 每次 Open 返回独立 Reader 操作和上下文。 */
+typedef struct xhttpbodyreaderops {
+	xhttpbodynextproc Next;
+	xhttpbodycloseproc Close;
+	xhttpbodywaitproc Wait;
+} xhttpbodyreaderops;
+
+
+
+/*
+	Open 必须是快速、非阻塞操作。
+	REPLAYABLE 正文允许并发 Open，因此工厂必须同步自身共享状态。
+	Open 返回失败时必须自行回收本次尝试创建的全部 Reader 资源。
+*/
+typedef bool (*xhttpbodyopenproc)(
+	ptr pFactory,
+	xhttpbodyreaderops* pOps,
+	ptr* ppReader
+);
+
+
+
+/* 工厂销毁过程只执行一次；其错误不会覆盖销毁调用方的当前错误。 */
+typedef void (*xhttpbodydestroyproc)(ptr pFactory);
+
+
+
+/* 正文工厂操作在 Create 时复制，调用方无需长期保存结构。 */
+typedef struct xhttpbodyops {
+	xhttpbodyopenproc Open;
+	xhttpbodydestroyproc Destroy;
+} xhttpbodyops;
+
+#endif
+
+
+
+XRT_EXTERN_C_BEGIN
+
+
+
+#if defined(XHTTP_FEATURE_HTTP_BODY)
+
+/*
+	创建自定义正文源；成功后接管 Factory 的 Destroy 责任。
+	Length 可以是 XHTTP_BODY_UNKNOWN，Flags 只接受公开标志。
+*/
+XRT_API xhttpbody* xrtHttpBodyCreate(
+	const xhttpbodyops* pOps,
+	ptr pFactory,
+	uint64 iLength,
+	uint32 iFlags
+);
+
+
+
+/* 创建可重放的空正文。 */
+XRT_API xhttpbody* xrtHttpBodyEmpty(void);
+
+
+
+/* 创建拥有正文副本的可重放正文。 */
+XRT_API xhttpbody* xrtHttpBodyCopy(xbytesview Data);
+
+
+
+/* 创建借用外部内存的可重放正文，外部内存必须覆盖正文对象使用期。 */
+XRT_API xhttpbody* xrtHttpBodyBorrow(xbytesview Data);
+
+
+
+/* 成功时接管由 xrtMalloc 分配的数据，失败时所有权仍归调用方。 */
+XRT_API xhttpbody* xrtHttpBodyTake(ptr pData, size_t iSize);
+
+
+
+/*
+	创建带自定义释放过程的可重放正文。
+	Release 不得为空；成功后在最后一个正文或 Chunk 引用释放时执行一次。
+*/
+XRT_API xhttpbody* xrtHttpBodyReference(
+	xbytesview Data,
+	xhttpbodyreleaseproc pRelease,
+	ptr pContext
+);
+
+
+
+/* 增加正文对象引用并返回原指针。 */
+XRT_API xhttpbody* xrtHttpBodyRef(xhttpbody* pBody);
+
+
+
+/* 释放正文对象引用；空指针安全，清理回调不会改变当前错误。 */
+XRT_API void xrtHttpBodyDestroy(xhttpbody* pBody);
+
+
+
+/* 返回正文线性字节长度或 XHTTP_BODY_UNKNOWN。 */
+XRT_API uint64 xrtHttpBodyLength(const xhttpbody* pBody);
+
+
+
+/* 返回正文源公开能力标志。 */
+XRT_API uint32 xrtHttpBodyFlags(const xhttpbody* pBody);
+
+
+
+/* 判断正文能否重新 Open 并从头读取。 */
+XRT_API bool xrtHttpBodyReplayable(const xhttpbody* pBody);
+
+
+
+/*
+	借用固定正文的连续字节视图。
+	自定义或流式正文返回 false、清空 Data，且不修改线程原有错误。
+	输出描述符不得覆盖正文对象或固定正文的底层字节。
+*/
+XRT_API bool xrtHttpBodyView(
+	const xhttpbody* pBody,
+	xbytesview* pData
+);
+
+
+
+/* 打开独立 Reader；非可重放正文一生最多尝试一次。 */
+XRT_API xhttpbodyreader* xrtHttpBodyOpen(xhttpbody* pBody);
+
+
+
+/*
+	读取下一个拥有型 Chunk。
+	已失败 Reader 稳定重放同一个错误，已结束 Reader 稳定返回 EOF。
+	输出 Chunk 不得覆盖 Reader、Body 或固定正文的底层字节。
+*/
+XRT_API xhttpbodystatus xrtHttpBodyNext(
+	xhttpbodyreader* pReader,
+	size_t iMaxBytes,
+	xhttpbodychunk* pChunk
+);
+
+
+
+/*
+	复制读取一个 Chunk 并立即释放，适合不需要零复制的调用方。
+	输出缓冲与 Size 不得相互覆盖，也不得覆盖 Reader、Body 或固定正文。
+	别名参数错误不会推进 Reader，也不会改写 Size。
+*/
+XRT_API xhttpbodystatus xrtHttpBodyRead(
+	xhttpbodyreader* pReader,
+	void* pOutput,
+	size_t iCapacity,
+	size_t* pSize
+);
+
+
+
+/* 先清空再释放 Chunk 租约；空结构安全，回调不会改变当前错误。 */
+XRT_API void xrtHttpBodyChunkRelease(xhttpbodychunk* pChunk);
+
+
+
+/* 返回 Reader 已发布的正文总字节数。 */
+XRT_API uint64 xrtHttpBodyReaderBytes(const xhttpbodyreader* pReader);
+
+
+
+/* 返回失败 Reader 借用的稳定错误，其他状态返回空指针。 */
+XRT_API const xerror* xrtHttpBodyReaderError(
+	const xhttpbodyreader* pReader
+);
+
+
+
+/* 关闭 Reader 并释放正文引用；未释放 Chunk 仍保持有效。 */
+XRT_API void xrtHttpBodyReaderDestroy(xhttpbodyreader* pReader);
+
+#endif
+
+
+
+#if defined(XHTTP_FEATURE_HTTP_BODY_ASYNC)
+
+/*
+	在 AGAIN 后取得一次可读性 Future；每个 AGAIN 只能成功取得一次。
+	调用方拥有返回引用，Future 完成后必须重新调用 Next。
+*/
+XRT_API xfuture* xrtHttpBodyReaderWait(xhttpbodyreader* pReader);
+
+#endif
+
+
+
+XRT_EXTERN_C_END
+
+#endif
+
+
+/* public: extlibs/xhttp/include/xrt/cookie.h */
+
+
+#ifndef XRT_COOKIE_H
+#define XRT_COOKIE_H
+
+
+#if defined(XHTTP_FEATURE_SET_COOKIE)
+#endif
+
+
+
+#if defined(XHTTP_FEATURE_COOKIE) && !defined(XRT_FEATURE_HTTP)
+	#error "XRT cookie requires XRT_FEATURE_HTTP"
+#endif
+
+#if defined(XHTTP_FEATURE_SET_COOKIE) && \
+	(!defined(XHTTP_FEATURE_COOKIE) || !defined(XRT_FEATURE_TIME_TEXT))
+	#error "XRT set-cookie requires cookie and time_text"
+#endif
+
+
+
+#if defined(XHTTP_FEATURE_COOKIE)
+
+/* Cookie 请求字段中的名称和值均为不要求零结尾的借用视图。 */
+typedef struct xcookiepair {
+	xstrview Name;
+	xstrview Value;
+} xcookiepair;
+
+
+
+/* Cookie 扫描结果明确区分字段项、正常结束和语法错误。 */
+typedef enum xcookienext {
+	XCOOKIE_NEXT_ERROR = -1,
+	XCOOKIE_NEXT_END = 0,
+	XCOOKIE_NEXT_ITEM = 1
+} xcookienext;
+
+
+
+/* Cookie 限额中的零表示不限制，Bytes 约束完整字段值的原始长度。 */
+typedef struct xcookielimits {
+	size_t MaxPairs;
+	size_t MaxName;
+	size_t MaxValue;
+	size_t MaxBytes;
+} xcookielimits;
+
+#endif
+
+
+
+#if defined(XHTTP_FEATURE_SET_COOKIE)
+
+/* RFC 6265 用户代理接收算法允许的 name/value 总长度。 */
+#define XSET_COOKIE_MAX_PAIR_BYTES		4096u
+
+/* RFC 6265 用户代理接收算法允许处理的单个属性值长度。 */
+#define XSET_COOKIE_MAX_ATTRIBUTE_VALUE	1024u
+
+
+
+/* SameSite 的 Default 表示缺失或无法识别的属性值。 */
+typedef enum xcookiesamesite {
+	XCOOKIE_SAME_SITE_DEFAULT = 0,
+	XCOOKIE_SAME_SITE_LAX,
+	XCOOKIE_SAME_SITE_STRICT,
+	XCOOKIE_SAME_SITE_NONE
+} xcookiesamesite;
+
+
+
+/* Priority 是已部署的扩展属性；Unspecified 表示没有有效属性。 */
+typedef enum xcookiepriority {
+	XCOOKIE_PRIORITY_UNSPECIFIED = 0,
+	XCOOKIE_PRIORITY_LOW,
+	XCOOKIE_PRIORITY_MEDIUM,
+	XCOOKIE_PRIORITY_HIGH
+} xcookiepriority;
+
+
+
+#define XCOOKIE_ATTRIBUTE_HAS_VALUE	UINT32_C(0x00000001)
+
+/* Set-Cookie 属性保留值存在位，因此 Foo 与 Foo= 不会混淆。 */
+typedef struct xcookieattribute {
+	uint32 Flags;
+	xstrview Name;
+	xstrview Value;
+} xcookieattribute;
+
+
+
+/* Set-Cookie 属性扫描结果明确区分属性、正常结束和输入错误。 */
+typedef enum xcookieattributenext {
+	XCOOKIE_ATTRIBUTE_ERROR = -1,
+	XCOOKIE_ATTRIBUTE_END = 0,
+	XCOOKIE_ATTRIBUTE_ITEM = 1
+} xcookieattributenext;
+
+
+
+#define XSET_COOKIE_HAS_DOMAIN		UINT32_C(0x00000001)
+#define XSET_COOKIE_HAS_PATH			UINT32_C(0x00000002)
+#define XSET_COOKIE_HAS_EXPIRES		UINT32_C(0x00000004)
+#define XSET_COOKIE_HAS_MAX_AGE		UINT32_C(0x00000008)
+#define XSET_COOKIE_HAS_SAME_SITE	UINT32_C(0x00000010)
+#define XSET_COOKIE_SECURE			UINT32_C(0x00000020)
+#define XSET_COOKIE_HTTP_ONLY		UINT32_C(0x00000040)
+#define XSET_COOKIE_PARTITIONED		UINT32_C(0x00000080)
+#define XSET_COOKIE_HAS_PRIORITY	UINT32_C(0x00000100)
+
+
+
+/*
+	解析结果借用输入并把原始属性区保存在 RawAttributes 中。
+	构建时 RawAttributes 必须为空，Extensions 则提供受校验的扩展属性。
+*/
+typedef struct xsetcookie {
+	uint32 Flags;
+	xstrview Name;
+	xstrview Value;
+	xstrview Domain;
+	xstrview Path;
+	xstrview RawAttributes;
+	xtime Expires;
+	int64 MaxAge;
+	xcookiesamesite SameSite;
+	xcookiepriority Priority;
+	const xcookieattribute* Extensions;
+	size_t ExtensionCount;
+} xsetcookie;
+
+#endif
+
+
+
+XRT_EXTERN_C_BEGIN
+
+
+
+#if defined(XHTTP_FEATURE_COOKIE)
+
+/* 逐项扫描完整 Cookie 字段值；成功项和失败均只在返回时提交 Offset。 */
+XRT_API xcookienext xrtCookieNext(
+	xstrview Text,
+	size_t* pOffset,
+	xcookiepair* pPair
+);
+
+
+
+/* 完整校验 Cookie 字段值并应用显式限额；成功时可返回 pair 数量。 */
+XRT_API bool xrtCookieValidate(
+	xstrview Text,
+	const xcookielimits* pLimits,
+	size_t* pCount
+);
+
+
+
+/*
+	完整校验字段后，从 Offset 开始查找下一个区分大小写的 Cookie 名称。
+	重复调用可遍历同名 Cookie，未找到返回 XCOOKIE_NEXT_END。
+*/
+XRT_API xcookienext xrtCookieFind(
+	xstrview Text,
+	xstrview Name,
+	size_t* pOffset,
+	xcookiepair* pPair
+);
+
+
+
+/*
+	完整预检后把借用 pair 写入调用方数组；Pairs 为空可查询数量。
+	容量不足时 Count 返回所需数量，数组保持不变。
+*/
+XRT_API bool xrtCookieParse(
+	xstrview Text,
+	xcookiepair* pPairs,
+	size_t iCapacity,
+	size_t* pCount,
+	const xcookielimits* pLimits
+);
+
+
+
+/* 写出不含字段名和零结尾的规范 Cookie 字段值；空输出可查询精确长度。 */
+XRT_API bool xrtCookieWrite(
+	const xcookiepair* pPairs,
+	size_t iCount,
+	void* pOutput,
+	size_t iCapacity,
+	size_t* pSize
+);
+
+
+
+/* 分配并构建零结尾 Cookie 字段值；返回值由 xrtFree 释放。 */
+XRT_API str xrtCookieBuild(
+	const xcookiepair* pPairs,
+	size_t iCount,
+	size_t* pSize
+);
+
+#endif
+
+
+
+#if defined(XHTTP_FEATURE_SET_COOKIE)
+
+/* 扫描 xsetcookie.RawAttributes；未知属性和值存在位会原样暴露。 */
+XRT_API xcookieattributenext xrtSetCookieAttributeNext(
+	xstrview Text,
+	size_t* pOffset,
+	xcookieattribute* pAttribute
+);
+
+
+
+/* 按 RFC 6265 宽松 cookie-date 算法解析 UTC 时间。 */
+XRT_API bool xrtCookieDateParse(xstrview Text, xtime* pTime);
+
+
+
+/* 按 RFC 6265 服务器生成语法严格校验一个 Set-Cookie 字段值。 */
+XRT_API bool xrtSetCookieValidate(xstrview Text);
+
+
+
+/*
+	按 RFC 6265 用户代理接收算法宽松解析 Set-Cookie 字段值。
+	无效的单个已知属性被忽略，禁止控制字节和超长 cookie-pair 会使整体失败。
+*/
+XRT_API bool xrtSetCookieParse(xstrview Text, xsetcookie* pCookie);
+
+
+
+/*
+	从结构化数据写出不含字段名和零结尾的 Set-Cookie 字段值。
+	结构化构建器执行前缀、SameSite=None 与 Partitioned 的安全约束。
+*/
+XRT_API bool xrtSetCookieWrite(
+	const xsetcookie* pCookie,
+	void* pOutput,
+	size_t iCapacity,
+	size_t* pSize
+);
+
+
+
+/* 分配并构建零结尾 Set-Cookie 字段值；返回值由 xrtFree 释放。 */
+XRT_API str xrtSetCookieBuild(
+	const xsetcookie* pCookie,
+	size_t* pSize
+);
+
+#endif
+
+
+
+XRT_EXTERN_C_END
+
+#endif
+
+
+/* public: extlibs/xhttp/include/xrt/http_client.h */
+
+
+#ifndef XRT_HTTP_CLIENT_H
+#define XRT_HTTP_CLIENT_H
+
+
+#if defined(XHTTP_FEATURE_HTTP_CLIENT_REQUEST) || \
+	defined(XHTTP_FEATURE_HTTP_CLIENT_RESPONSE)
+#endif
+
+#if defined(XHTTP_FEATURE_HTTP_CLIENT_REQUEST_AUTH) || \
+	defined(XHTTP_FEATURE_HTTP_CLIENT_RESPONSE_AUTH) || \
+	defined(XHTTP_FEATURE_HTTP_CLIENT_PREPARE_AUTH_DIGEST_SESSION)
+#endif
+
+#if defined(XHTTP_FEATURE_HTTP_CLIENT_PREPARE)
+#endif
+
+#if defined(XHTTP_FEATURE_HTTP_CLIENT_CONTENT_TYPE)
+#endif
+
+#if defined(XHTTP_FEATURE_HTTP_CLIENT_SET_COOKIE)
+#endif
+
+#if defined(XHTTP_FEATURE_HTTP_CLIENT_REQUEST_QUERY) || \
+	defined(XHTTP_FEATURE_HTTP_CLIENT_REQUEST_FORM)
+#endif
+
+#if defined(XHTTP_FEATURE_HTTP_CLIENT_REQUEST_FORM_DATA) || \
+	defined(XHTTP_FEATURE_HTTP_CLIENT_REQUEST_FORM_DATA_RANDOM)
+#endif
+
+
+
+#if defined(XHTTP_FEATURE_HTTP_CLIENT_REQUEST) && \
+	!defined(XHTTP_FEATURE_URL)
+	#error "XRT HTTP client request support requires URL support"
+#endif
+
+#if defined(XHTTP_FEATURE_HTTP_CLIENT_REQUEST) && \
+	!defined(XHTTP_FEATURE_HTTP_HEADERS)
+	#error "XRT HTTP client request support requires HTTP Headers support"
+#endif
+
+#if defined(XHTTP_FEATURE_HTTP_CLIENT_REQUEST) && \
+	!defined(XHTTP_FEATURE_HTTP_BODY)
+	#error "XRT HTTP client request support requires HTTP body support"
+#endif
+
+#if defined(XHTTP_FEATURE_HTTP_CLIENT_REQUEST_TRAILERS) && \
+	!defined(XHTTP_FEATURE_HTTP_CLIENT_REQUEST)
+	#error "XRT HTTP client request Trailer support requires request support"
+#endif
+
+#if defined(XHTTP_FEATURE_HTTP_CLIENT_REQUEST_TE) && \
+	(!defined(XHTTP_FEATURE_HTTP_CLIENT_REQUEST) || \
+	 !defined(XRT_FEATURE_HTTP_TE) || \
+	 !defined(XRT_FEATURE_HTTP_CONNECTION))
+	#error "XRT HTTP client request TE support requires request, TE and Connection support"
+#endif
+
+#if defined(XHTTP_FEATURE_HTTP_CLIENT_REQUEST_AUTH) && \
+	(!defined(XHTTP_FEATURE_HTTP_CLIENT_REQUEST) || \
+	 !defined(XHTTP_FEATURE_HTTP_AUTH))
+	#error "XRT HTTP client request authentication requires request and authentication support"
+#endif
+
+#if defined(XHTTP_FEATURE_HTTP_CLIENT_REQUEST_AUTH_BASIC) && \
+	(!defined(XHTTP_FEATURE_HTTP_CLIENT_REQUEST_AUTH) || \
+	 !defined(XHTTP_FEATURE_HTTP_AUTH_BASIC))
+	#error "XRT HTTP client Basic authentication requires request authentication and Basic support"
+#endif
+
+#if defined(XHTTP_FEATURE_HTTP_CLIENT_REQUEST_AUTH_BEARER) && \
+	(!defined(XHTTP_FEATURE_HTTP_CLIENT_REQUEST_AUTH) || \
+	 !defined(XHTTP_FEATURE_HTTP_AUTH_BEARER))
+	#error "XRT HTTP client Bearer authentication requires request authentication and Bearer support"
+#endif
+
+#if defined(XHTTP_FEATURE_HTTP_CLIENT_REQUEST_AUTH_DIGEST) && \
+	(!defined(XHTTP_FEATURE_HTTP_CLIENT_REQUEST_AUTH) || \
+	 !defined(XHTTP_FEATURE_HTTP_AUTH_DIGEST_CREDENTIALS))
+	#error "XRT HTTP client Digest authentication requires request authentication and Digest credentials"
+#endif
+
+#if defined(XHTTP_FEATURE_HTTP_CLIENT_PREPARE) && \
+	(!defined(XHTTP_FEATURE_HTTP_CLIENT_REQUEST) || \
+	 !defined(XRT_FEATURE_HTTP_EXPECT) || \
+	 !defined(XRT_FEATURE_HTTP_TE) || \
+	 !defined(XRT_FEATURE_HTTP_CONNECTION) || \
+	 !defined(XRT_FEATURE_HTTP_TRAILER))
+	#error "XRT HTTP client prepare support requires request, Expect, TE, Connection and Trailer support"
+#endif
+
+#if defined(XHTTP_FEATURE_HTTP_CLIENT_PREPARE) && \
+	!defined(XRT_FEATURE_HTTP1_HEAD)
+	#error "XRT HTTP client prepare support requires HTTP/1 head support"
+#endif
+
+#if defined(XHTTP_FEATURE_HTTP_CLIENT_PREPARE) && \
+	!defined(XRT_FEATURE_HTTP1_BODY)
+	#error "XRT HTTP client prepare support requires HTTP/1 body support"
+#endif
+
+#if defined(XHTTP_FEATURE_HTTP_CLIENT_PREPARE) && \
+	!defined(XRT_FEATURE_HTTP_HOST)
+	#error "XRT HTTP client prepare support requires HTTP Host support"
+#endif
+
+#if defined(XHTTP_FEATURE_HTTP_CLIENT_PREPARE) && \
+	!defined(XRT_FEATURE_HTTP_TARGET)
+	#error "XRT HTTP client prepare support requires HTTP target support"
+#endif
+
+#if defined(XHTTP_FEATURE_HTTP_CLIENT_PREPARE_AUTH_DIGEST_SESSION) && \
+	(!defined(XHTTP_FEATURE_HTTP_CLIENT_PREPARE) || \
+	 !defined(XHTTP_FEATURE_HTTP_AUTH_DIGEST_SESSION))
+	#error "XRT HTTP/1 Digest prepare support requires request prepare and Digest session support"
+#endif
+
+#if defined(XHTTP_FEATURE_HTTP_CLIENT_REQUEST_QUERY) && \
+	(!defined(XHTTP_FEATURE_HTTP_CLIENT_REQUEST) || \
+	 !defined(XHTTP_FEATURE_QUERY_PARAMS))
+	#error "XRT HTTP client request query support requires request and QueryParams support"
+#endif
+
+#if defined(XHTTP_FEATURE_HTTP_CLIENT_REQUEST_FORM) && \
+	(!defined(XHTTP_FEATURE_HTTP_CLIENT_REQUEST) || \
+	 !defined(XHTTP_FEATURE_QUERY_PARAMS))
+	#error "XRT HTTP client request form support requires request and QueryParams support"
+#endif
+
+#if defined(XHTTP_FEATURE_HTTP_CLIENT_REQUEST_FORM_DATA) && \
+	(!defined(XHTTP_FEATURE_HTTP_CLIENT_REQUEST) || \
+	 !defined(XHTTP_FEATURE_FORM_DATA_MULTIPART))
+	#error "XRT HTTP client request FormData support requires request and FormData multipart support"
+#endif
+
+#if defined(XHTTP_FEATURE_HTTP_CLIENT_REQUEST_FORM_DATA_RANDOM) && \
+	(!defined(XHTTP_FEATURE_HTTP_CLIENT_REQUEST_FORM_DATA) || \
+	 !defined(XHTTP_FEATURE_FORM_DATA_RANDOM))
+	#error "XRT HTTP client random FormData support requires request FormData and random FormData support"
+#endif
+
+
+
+#if defined(XHTTP_FEATURE_HTTP_CLIENT_REQUEST)
+
+/* 客户端请求是拥有型可修改构建器，执行时由客户端取得独立快照。 */
+typedef struct xhttprequest xhttprequest;
+
+
+
+/* 请求构建错误用于区分方法、URL 和客户端可发送范围。 */
+typedef enum xhttprequesterror {
+	XHTTP_REQUEST_ERROR_METHOD = 1,
+	XHTTP_REQUEST_ERROR_URL,
+	XHTTP_REQUEST_ERROR_SCHEME,
+	XHTTP_REQUEST_ERROR_HOST,
+	XHTTP_REQUEST_ERROR_USERINFO,
+	XHTTP_REQUEST_ERROR_TARGET,
+	XHTTP_REQUEST_ERROR_HOST_HEADER,
+	XHTTP_REQUEST_ERROR_CONTENT_LENGTH,
+	XHTTP_REQUEST_ERROR_TRANSFER_ENCODING,
+	XHTTP_REQUEST_ERROR_TRAILER,
+	XHTTP_REQUEST_ERROR_TRACE_BODY,
+	XHTTP_REQUEST_ERROR_EXPECT,
+	XHTTP_REQUEST_ERROR_TE,
+	XHTTP_REQUEST_ERROR_CONNECTION,
+	XHTTP_REQUEST_ERROR_QUERY,
+	XHTTP_REQUEST_ERROR_FORM,
+	XHTTP_REQUEST_ERROR_FORM_DATA
+} xhttprequesterror;
+
+#endif
+
+
+
+#if defined(XHTTP_FEATURE_HTTP_CLIENT_PREPARE)
+
+/* HTTP/1 request-target 形式覆盖直连、正向代理、CONNECT 与 OPTIONS 星号目标。 */
+typedef enum xhttp1targetform {
+	XHTTP1_TARGET_AUTO = 0,
+	XHTTP1_TARGET_ORIGIN,
+	XHTTP1_TARGET_ABSOLUTE,
+	XHTTP1_TARGET_AUTHORITY,
+	XHTTP1_TARGET_ASTERISK,
+	XHTTP1_TARGET_CUSTOM
+} xhttp1targetform;
+
+
+
+/* 请求准备选项只决定线路 target，不承载连接、超时或重定向策略。 */
+typedef struct xhttp1requestoptions {
+	xhttp1targetform TargetForm;
+	xstrview CustomTarget;
+} xhttp1requestoptions;
+
+
+
+/* 准备后的请求计划拥有线路 Header，并保留一个独立正文引用。 */
+typedef struct xhttp1requestplan xhttp1requestplan;
+
+
+
+/* 客户端发送正文只使用无正文、定长和 chunked 三种明确模式。 */
+typedef enum xhttprequestbodymode {
+	XHTTP_REQUEST_BODY_NONE = 0,
+	XHTTP_REQUEST_BODY_FIXED,
+	XHTTP_REQUEST_BODY_CHUNKED
+} xhttprequestbodymode;
+
+#endif
+
+
+
+#if defined(XHTTP_FEATURE_HTTP_CLIENT_RESPONSE) && \
+	!defined(XHTTP_FEATURE_HTTP_HEADERS)
+	#error "XRT HTTP client response support requires HTTP Headers support"
+#endif
+
+#if defined(XHTTP_FEATURE_HTTP_CLIENT_CONTENT_TYPE) && \
+	(!defined(XHTTP_FEATURE_HTTP_CLIENT_RESPONSE) || \
+	 !defined(XHTTP_FEATURE_MIME))
+	#error "XRT HTTP client Content-Type support requires response and MIME support"
+#endif
+
+#if defined(XHTTP_FEATURE_HTTP_CLIENT_SET_COOKIE) && \
+	(!defined(XHTTP_FEATURE_HTTP_CLIENT_RESPONSE) || \
+	 !defined(XHTTP_FEATURE_SET_COOKIE))
+	#error "XRT HTTP client Set-Cookie support requires response and Set-Cookie support"
+#endif
+
+#if defined(XHTTP_FEATURE_HTTP_CLIENT_RESPONSE_AUTH) && \
+	(!defined(XHTTP_FEATURE_HTTP_CLIENT_RESPONSE) || \
+	 !defined(XHTTP_FEATURE_HTTP_AUTH))
+	#error "XRT HTTP client response authentication requires response and authentication support"
+#endif
+
+#if defined(XHTTP_FEATURE_HTTP_CLIENT_RESPONSE_AUTH_BASIC) && \
+	(!defined(XHTTP_FEATURE_HTTP_CLIENT_RESPONSE_AUTH) || \
+	 !defined(XHTTP_FEATURE_HTTP_AUTH_BASIC))
+	#error "XRT HTTP client response Basic authentication requires response authentication and Basic support"
+#endif
+
+#if defined(XHTTP_FEATURE_HTTP_CLIENT_RESPONSE_AUTH_BEARER) && \
+	(!defined(XHTTP_FEATURE_HTTP_CLIENT_RESPONSE_AUTH) || \
+	 !defined(XHTTP_FEATURE_HTTP_AUTH_BEARER_CHALLENGE))
+	#error "XRT HTTP client response Bearer authentication requires response authentication and Bearer challenge support"
+#endif
+
+#if defined(XHTTP_FEATURE_HTTP_CLIENT_RESPONSE_AUTH_DIGEST) && \
+	(!defined(XHTTP_FEATURE_HTTP_CLIENT_RESPONSE_AUTH) || \
+	 !defined(XHTTP_FEATURE_HTTP_AUTH_DIGEST_CHALLENGE))
+	#error "XRT HTTP client Digest challenge support requires response authentication and Digest challenge support"
+#endif
+
+#if defined(XHTTP_FEATURE_HTTP_CLIENT_RESPONSE_AUTH_DIGEST_CHOOSE) && \
+	(!defined(XHTTP_FEATURE_HTTP_CLIENT_RESPONSE_AUTH_DIGEST) || \
+	 !defined(XHTTP_FEATURE_HTTP_AUTH_DIGEST_CLIENT))
+	#error "XRT HTTP client Digest selection requires response Digest and client protocol support"
+#endif
+
+#if defined(XHTTP_FEATURE_HTTP_CLIENT_RESPONSE_AUTH_DIGEST_INFO) && \
+	(!defined(XHTTP_FEATURE_HTTP_CLIENT_RESPONSE_AUTH) || \
+	 !defined(XHTTP_FEATURE_HTTP_AUTH_DIGEST_INFO))
+	#error "XRT HTTP client Digest info support requires response authentication and Digest info support"
+#endif
+
+#if defined(XHTTP_FEATURE_HTTP_CLIENT_RESPONSE_AUTH_DIGEST_SESSION) && \
+	(!defined(XHTTP_FEATURE_HTTP_CLIENT_RESPONSE_AUTH_DIGEST_INFO) || \
+	 !defined(XHTTP_FEATURE_HTTP_AUTH_DIGEST_SESSION))
+	#error "XRT HTTP client Digest session response support requires Digest info and session support"
+#endif
+
+
+
+#if defined(XHTTP_FEATURE_HTTP_CLIENT_RESPONSE)
+
+/* 客户端响应是执行结果拥有的只读对象。 */
+typedef struct xhttpresponse xhttpresponse;
+
+
+
+/* 响应标志描述正文交付和协议升级后的稳定事实。 */
+typedef enum xhttpresponseflag {
+	XHTTP_RESPONSE_NONE = 0,
+	XHTTP_RESPONSE_STREAMED = UINT32_C(0x00000001),
+	XHTTP_RESPONSE_DECOMPRESSED = UINT32_C(0x00000002),
+	XHTTP_RESPONSE_UPGRADED = UINT32_C(0x00000004)
+} xhttpresponseflag;
+
+
+
+/* 响应读取错误稳定区分参数、索引、Header 与结构化字段值。 */
+typedef enum xhttpresponseerror {
+	XHTTP_RESPONSE_ERROR_ARGUMENT = 1,
+	XHTTP_RESPONSE_ERROR_INDEX,
+	XHTTP_RESPONSE_ERROR_HEADER,
+	XHTTP_RESPONSE_ERROR_CONTENT_TYPE,
+	XHTTP_RESPONSE_ERROR_SET_COOKIE,
+	XHTTP_RESPONSE_ERROR_AUTH
+} xhttpresponseerror;
+
+#endif
+
+
+
+XRT_EXTERN_C_BEGIN
+
+
+
+#if defined(XHTTP_FEATURE_HTTP_CLIENT_REQUEST)
+
+/*
+	创建拥有 Method、Url、Header 和正文引用的客户端请求。
+	Url 必须是带非空 host 的绝对 HTTP 或 HTTPS URL，userinfo 不被接受。
+*/
+XRT_API xhttprequest* xrtHttpRequestCreate(
+	xstrview Method,
+	xstrview Url
+);
+
+
+
+/* 使用指定动态 Header 容量和限额创建客户端请求。 */
+XRT_API xhttprequest* xrtHttpRequestCreateWithHeaders(
+	xstrview Method,
+	xstrview Url,
+	const xhttpheadersconfig* pHeaders
+);
+
+
+
+/* 创建内容和所有动态存储独立的请求副本；正文增加一个共享引用。 */
+XRT_API xhttprequest* xrtHttpRequestClone(
+	const xhttprequest* pRequest
+);
+
+
+
+/* 销毁请求及其 Header、URL、方法和正文引用；空指针是安全的空操作。 */
+XRT_API void xrtHttpRequestDestroy(xhttprequest* pRequest);
+
+
+
+/* 失败原子地替换请求方法；Method 必须是非空 HTTP token。 */
+XRT_API bool xrtHttpRequestSetMethod(
+	xhttprequest* pRequest,
+	xstrview Method
+);
+
+
+
+/* 返回借用的请求方法视图。 */
+XRT_API xstrview xrtHttpRequestMethod(
+	const xhttprequest* pRequest
+);
+
+
+
+/* 失败原子地替换绝对 HTTP 或 HTTPS URL。 */
+XRT_API bool xrtHttpRequestSetUrl(
+	xhttprequest* pRequest,
+	xstrview Url
+);
+
+
+
+/* 返回借用的原始 URL 文本；fragment 保留在文本中但不会进入请求 target。 */
+XRT_API xstrview xrtHttpRequestUrlText(
+	const xhttprequest* pRequest
+);
+
+
+
+/* 返回借用请求 URL 存储的解析结果。 */
+XRT_API const xurl* xrtHttpRequestUrl(
+	const xhttprequest* pRequest
+);
+
+
+
+/* 追加一个拥有型 Header，允许同名字段。 */
+XRT_API bool xrtHttpRequestAddHeader(
+	xhttprequest* pRequest,
+	xstrview Name,
+	xstrview Value
+);
+
+
+
+/* 设置首个同名 Header 并删除其余同名字段。 */
+XRT_API bool xrtHttpRequestSetHeader(
+	xhttprequest* pRequest,
+	xstrview Name,
+	xstrview Value
+);
+
+
+
+/* 删除全部同名 Header 并返回删除数量。 */
+XRT_API size_t xrtHttpRequestRemoveHeader(
+	xhttprequest* pRequest,
+	xstrview Name
+);
+
+
+
+/* 返回首个同名借用 Header，未找到返回空指针。 */
+XRT_API const xhttpfield* xrtHttpRequestHeader(
+	const xhttprequest* pRequest,
+	xstrview Name
+);
+
+
+
+/* 返回 Header 数量。 */
+XRT_API size_t xrtHttpRequestHeaderCount(
+	const xhttprequest* pRequest
+);
+
+
+
+/* 返回连续只读 Header 数组；空请求或无字段返回空指针。 */
+XRT_API const xhttpfield* xrtHttpRequestHeaderData(
+	const xhttprequest* pRequest
+);
+
+
+
+/* 返回指定位置的借用 Header，越界返回空指针。 */
+XRT_API const xhttpfield* xrtHttpRequestHeaderAt(
+	const xhttprequest* pRequest,
+	size_t iIndex
+);
+
+
+
+/*
+	返回请求借用的可变 Header 容器。
+	容器与请求同寿命，调用方不得销毁。
+*/
+XRT_API xhttpheaders* xrtHttpRequestHeaders(
+	xhttprequest* pRequest
+);
+
+
+
+#if defined(XHTTP_FEATURE_HTTP_CLIENT_REQUEST_AUTH)
+
+/* 校验并设置唯一 Authorization 字段。 */
+XRT_API bool xrtHttpRequestSetAuth(
+	xhttprequest* pRequest,
+	xstrview Scheme,
+	xstrview Data
+);
+
+
+
+/* 校验并设置唯一 Proxy-Authorization 字段。 */
+XRT_API bool xrtHttpRequestSetProxyAuth(
+	xhttprequest* pRequest,
+	xstrview Scheme,
+	xstrview Data
+);
+
+
+
+/* 删除全部 Authorization 字段并返回删除数量。 */
+XRT_API size_t xrtHttpRequestClearAuth(xhttprequest* pRequest);
+
+
+
+/* 删除全部 Proxy-Authorization 字段并返回删除数量。 */
+XRT_API size_t xrtHttpRequestClearProxyAuth(xhttprequest* pRequest);
+
+#endif
+
+
+
+#if defined(XHTTP_FEATURE_HTTP_CLIENT_REQUEST_AUTH_BASIC)
+
+/* 从用户名和密码设置唯一 Basic Authorization 字段。 */
+XRT_API bool xrtHttpRequestSetBasicAuth(
+	xhttprequest* pRequest,
+	xstrview User,
+	xstrview Password
+);
+
+
+
+/* 从用户名和密码设置唯一 Basic Proxy-Authorization 字段。 */
+XRT_API bool xrtHttpRequestSetProxyBasicAuth(
+	xhttprequest* pRequest,
+	xstrview User,
+	xstrview Password
+);
+
+#endif
+
+
+
+#if defined(XHTTP_FEATURE_HTTP_CLIENT_REQUEST_AUTH_BEARER)
+
+/* 从 b64token 设置唯一 Bearer Authorization 字段。 */
+XRT_API bool xrtHttpRequestSetBearerAuth(
+	xhttprequest* pRequest,
+	xstrview Token
+);
+
+
+
+/* 从 b64token 设置唯一 Bearer Proxy-Authorization 字段。 */
+XRT_API bool xrtHttpRequestSetProxyBearerAuth(
+	xhttprequest* pRequest,
+	xstrview Token
+);
+
+#endif
+
+
+
+#if defined(XHTTP_FEATURE_HTTP_CLIENT_REQUEST_AUTH_DIGEST)
+
+/* 规范写出并设置唯一 Digest Authorization 字段。 */
+XRT_API bool xrtHttpRequestSetDigestAuth(
+	xhttprequest* pRequest,
+	const xhttpdigestauth* pDigest
+);
+
+
+
+/* 规范写出并设置唯一 Digest Proxy-Authorization 字段。 */
+XRT_API bool xrtHttpRequestSetProxyDigestAuth(
+	xhttprequest* pRequest,
+	const xhttpdigestauth* pDigest
+);
+
+#endif
+
+
+
+/*
+	替换正文引用；请求保留独立引用，空 Body 清除正文。
+	该函数不自动改写 Content-Type、Content-Length 或 Transfer-Encoding。
+*/
+XRT_API bool xrtHttpRequestSetBody(
+	xhttprequest* pRequest,
+	xhttpbody* pBody
+);
+
+
+
+/*
+	复制字节并设置正文；ContentType 非空时同时失败原子地设置 Content-Type。
+	长度分帧由客户端执行层根据正文元数据生成。
+*/
+XRT_API bool xrtHttpRequestSetBytes(
+	xhttprequest* pRequest,
+	xbytesview Data,
+	xstrview ContentType
+);
+
+
+
+/* 返回请求借用的正文对象，可能为空。 */
+XRT_API xhttpbody* xrtHttpRequestBody(
+	const xhttprequest* pRequest
+);
+
+#endif
+
+
+
+#if defined(XHTTP_FEATURE_HTTP_CLIENT_REQUEST_TE)
+
+/*
+	失败原子地声明 HTTP/1 响应 Trailer 接收能力。
+	函数保留已有字段并按需补充 TE: trailers 与 Connection: TE。
+*/
+XRT_API bool xrtHttp1RequestAcceptTrailers(
+	xhttprequest* pRequest
+);
+
+#endif
+
+
+
+#if defined(XHTTP_FEATURE_HTTP_CLIENT_REQUEST_TRAILERS)
+
+/* 追加一个拥有型 Trailer，并保留同名字段。 */
+XRT_API bool xrtHttpRequestAddTrailer(
+	xhttprequest* pRequest,
+	xstrview Name,
+	xstrview Value
+);
+
+
+
+/* 设置首个同名 Trailer，并删除其余同名字段。 */
+XRT_API bool xrtHttpRequestSetTrailer(
+	xhttprequest* pRequest,
+	xstrview Name,
+	xstrview Value
+);
+
+
+
+/* 删除全部同名 Trailer 并返回删除数量。 */
+XRT_API size_t xrtHttpRequestRemoveTrailer(
+	xhttprequest* pRequest,
+	xstrview Name
+);
+
+
+
+/* 返回首个同名借用 Trailer，未找到返回空指针。 */
+XRT_API const xhttpfield* xrtHttpRequestTrailer(
+	const xhttprequest* pRequest,
+	xstrview Name
+);
+
+
+
+/* 返回 Trailer 数量。 */
+XRT_API size_t xrtHttpRequestTrailerCount(
+	const xhttprequest* pRequest
+);
+
+
+
+/* 返回连续只读 Trailer 数组；空请求或无字段返回空指针。 */
+XRT_API const xhttpfield* xrtHttpRequestTrailerData(
+	const xhttprequest* pRequest
+);
+
+
+
+/* 返回指定位置的借用 Trailer，越界返回空指针。 */
+XRT_API const xhttpfield* xrtHttpRequestTrailerAt(
+	const xhttprequest* pRequest,
+	size_t iIndex
+);
+
+
+
+/* 返回只读 Trailer 容器；从未添加字段时返回空指针且不分配。 */
+XRT_API const xhttpheaders* xrtHttpRequestTrailers(
+	const xhttprequest* pRequest
+);
+
+
+
+/* 返回可修改 Trailer 容器并在首次调用时创建它。 */
+XRT_API xhttpheaders* xrtHttpRequestEditTrailers(
+	xhttprequest* pRequest
+);
+
+#endif
+
+
+
+#if defined(XHTTP_FEATURE_HTTP_CLIENT_REQUEST_QUERY)
+
+/* 编码并失败原子地替换 URL 查询组件；空容器生成显式空查询。 */
+XRT_API bool xrtHttpRequestSetQueryParams(
+	xhttprequest* pRequest,
+	const xqueryparams* pParams
+);
+
+#endif
+
+
+
+#if defined(XHTTP_FEATURE_HTTP_CLIENT_REQUEST_FORM)
+
+/* 编码 QueryParams 并失败原子地设置 urlencoded 正文和 Content-Type。 */
+XRT_API bool xrtHttpRequestSetForm(
+	xhttprequest* pRequest,
+	const xqueryparams* pParams
+);
+
+#endif
+
+
+
+#if defined(XHTTP_FEATURE_HTTP_CLIENT_REQUEST_FORM_DATA)
+
+/* 使用给定 boundary 设置可流式 multipart/form-data 正文与 Content-Type。 */
+XRT_API bool xrtHttpRequestSetFormData(
+	xhttprequest* pRequest,
+	const xformdata* pForm,
+	const xmultipartboundary* pBoundary
+);
+
+#endif
+
+
+
+#if defined(XHTTP_FEATURE_HTTP_CLIENT_REQUEST_FORM_DATA_RANDOM)
+
+/*
+	生成安全随机 boundary 并失败原子地设置 multipart/form-data 请求。
+	boundary 输出存储可以未对齐，但不得覆盖请求、FormData 或其借用数据。
+*/
+XRT_API bool xrtHttpRequestSetFormDataRandom(
+	xhttprequest* pRequest,
+	const xformdata* pForm,
+	xmultipartboundary* pBoundary
+);
+
+#endif
+
+
+
+#if defined(XHTTP_FEATURE_HTTP_CLIENT_PREPARE)
+
+/* 初始化默认准备选项；接受未对齐的完整存储并拒绝回绕地址。 */
+XRT_API void xrtHttp1RequestOptionsInit(
+	xhttp1requestoptions* pOptions
+);
+
+
+
+/*
+	冻结请求并生成完整 HTTP/1.1 Header。
+	用户 Header 与正文长度冲突时在任何网络操作前失败。
+*/
+XRT_API xhttp1requestplan* xrtHttp1RequestPrepare(
+	const xhttprequest* pRequest,
+	const xhttp1requestoptions* pOptions
+);
+
+
+
+#if defined(XHTTP_FEATURE_HTTP_CLIENT_PREPARE_AUTH_DIGEST_SESSION)
+
+/*
+	使用最终 request-target 生成源站 Digest 凭据并冻结请求计划。
+	成功时发布由调用方释放的 Exchange；失败时请求对象不变且输出为空。
+	ppExchange 允许未对齐，但不得覆盖请求或 Digest session 拥有的存储。
+*/
+XRT_API xhttp1requestplan* xrtHttp1RequestPrepareDigest(
+	const xhttprequest* pRequest,
+	const xhttp1requestoptions* pOptions,
+	xhttpdigestsession* pSession,
+	xstrview EntityHash,
+	xhttpdigestexchange** ppExchange
+);
+
+
+
+/* 使用同一准备契约生成 Proxy-Authorization Digest 字段。 */
+XRT_API xhttp1requestplan* xrtHttp1RequestPrepareProxyDigest(
+	const xhttprequest* pRequest,
+	const xhttp1requestoptions* pOptions,
+	xhttpdigestsession* pSession,
+	xstrview EntityHash,
+	xhttpdigestexchange** ppExchange
+);
+
+#endif
+
+
+
+/* 销毁请求计划、线路 Header 和正文引用；空指针是安全的空操作。 */
+XRT_API void xrtHttp1RequestPlanDestroy(
+	xhttp1requestplan* pPlan
+);
+
+
+
+/* 返回拥有型计划中的完整 HTTP/1.1 Header 字节。 */
+XRT_API xbytesview xrtHttp1RequestPlanHead(
+	const xhttp1requestplan* pPlan
+);
+
+
+
+/* 返回 chunked 计划冻结的完整 last-chunk；其他模式返回空视图。 */
+XRT_API xbytesview xrtHttp1RequestPlanEnd(
+	const xhttp1requestplan* pPlan
+);
+
+
+
+/* 返回计划拥有的请求方法。 */
+XRT_API xstrview xrtHttp1RequestPlanMethod(
+	const xhttp1requestplan* pPlan
+);
+
+
+
+/* 返回计划拥有的完整原始 URL；fragment 保留但不进入自动 target。 */
+XRT_API xstrview xrtHttp1RequestPlanUrl(
+	const xhttp1requestplan* pPlan
+);
+
+
+
+/* 返回计划拥有的实际 request-target。 */
+XRT_API xstrview xrtHttp1RequestPlanTarget(
+	const xhttp1requestplan* pPlan
+);
+
+
+
+/* 返回连接端点使用的无方括号 URL host，不受 Host Header 覆盖影响。 */
+XRT_API xstrview xrtHttp1RequestPlanHost(
+	const xhttp1requestplan* pPlan
+);
+
+
+
+/* 返回连接端点的显式端口或 scheme 默认端口。 */
+XRT_API uint16 xrtHttp1RequestPlanPort(
+	const xhttp1requestplan* pPlan
+);
+
+
+
+/* 判断连接端点是否要求 TLS。 */
+XRT_API bool xrtHttp1RequestPlanSecure(
+	const xhttp1requestplan* pPlan
+);
+
+
+
+/* 返回计划保留的借用正文对象，可能为空。 */
+XRT_API xhttpbody* xrtHttp1RequestPlanBody(
+	const xhttp1requestplan* pPlan
+);
+
+
+
+/* 返回发送正文的唯一分帧模式。 */
+XRT_API xhttprequestbodymode xrtHttp1RequestPlanBodyMode(
+	const xhttp1requestplan* pPlan
+);
+
+
+
+/* 返回正文源声明长度；未知 chunked 正文返回 XHTTP_BODY_UNKNOWN。 */
+XRT_API uint64 xrtHttp1RequestPlanBodyLength(
+	const xhttp1requestplan* pPlan
+);
+
+
+
+/* 判断请求是否显式要求发送后关闭连接。 */
+XRT_API bool xrtHttp1RequestPlanClose(
+	const xhttp1requestplan* pPlan
+);
+
+
+
+/* 判断事务是否必须先等待 100 Continue 或最终响应。 */
+XRT_API bool xrtHttp1RequestPlanExpectContinue(
+	const xhttp1requestplan* pPlan
+);
+
+#endif
+
+
+
+#if defined(XHTTP_FEATURE_HTTP_CLIENT_RESPONSE)
+
+/* 销毁响应拥有的 Header、trailer、正文和文本；空指针是安全的空操作。 */
+XRT_API void xrtHttpResponseDestroy(xhttpresponse* pResponse);
+
+
+
+/* 返回 HTTP 版本；空响应返回零。 */
+XRT_API xhttpversion xrtHttpResponseVersion(
+	const xhttpresponse* pResponse
+);
+
+
+
+/* 返回三位响应状态码；空响应返回零。 */
+XRT_API uint16 xrtHttpResponseStatus(
+	const xhttpresponse* pResponse
+);
+
+
+
+/* 判断响应状态是否属于 200 到 299。 */
+XRT_API bool xrtHttpResponseSuccess(
+	const xhttpresponse* pResponse
+);
+
+
+
+/* 返回借用的 reason phrase，不包含前导空格。 */
+XRT_API xstrview xrtHttpResponseReason(
+	const xhttpresponse* pResponse
+);
+
+
+
+/* 返回响应稳定标志。 */
+XRT_API uint32 xrtHttpResponseFlags(
+	const xhttpresponse* pResponse
+);
+
+
+
+/* 返回首个同名借用 Header，未找到返回空指针。 */
+XRT_API const xhttpfield* xrtHttpResponseHeader(
+	const xhttpresponse* pResponse,
+	xstrview Name
+);
+
+
+
+/* 返回 Header 数量。 */
+XRT_API size_t xrtHttpResponseHeaderCount(
+	const xhttpresponse* pResponse
+);
+
+
+
+/* 返回连续只读 Header 数组；空响应或无字段返回空指针。 */
+XRT_API const xhttpfield* xrtHttpResponseHeaderData(
+	const xhttpresponse* pResponse
+);
+
+
+
+/* 返回指定位置的借用 Header，越界返回空指针。 */
+XRT_API const xhttpfield* xrtHttpResponseHeaderAt(
+	const xhttpresponse* pResponse,
+	size_t iIndex
+);
+
+
+
+/*
+	返回响应借用的只读 Header 容器。
+	容器与响应同寿命，调用方不得修改或销毁。
+*/
+XRT_API const xhttpheaders* xrtHttpResponseHeaders(
+	const xhttpresponse* pResponse
+);
+
+
+
+#if defined(XHTTP_FEATURE_HTTP_CLIENT_RESPONSE_AUTH)
+
+/*
+	跨全部 WWW-Authenticate 字段迭代服务端 challenge。
+	结构输出允许未对齐，但必须互不覆盖且不得覆盖响应拥有的存储。
+*/
+XRT_API xhttpnext xrtHttpResponseChallengeNext(
+	const xhttpresponse* pResponse,
+	xhttpauthcursor* pCursor,
+	xhttpauth* pChallenge
+);
+
+
+
+/* 跨全部 Proxy-Authenticate 字段迭代代理 challenge；输出契约与源站一致。 */
+XRT_API xhttpnext xrtHttpResponseProxyChallengeNext(
+	const xhttpresponse* pResponse,
+	xhttpauthcursor* pCursor,
+	xhttpauth* pChallenge
+);
+
+#endif
+
+
+
+#if defined(XHTTP_FEATURE_HTTP_CLIENT_RESPONSE_AUTH_BASIC)
+
+/*
+	迭代并解码源站 Basic challenge；查询和失败不推进游标。
+	查询模式只发布所需 realm 字节数，实际成功时 realm 借用 Output。
+*/
+XRT_API xhttpnext xrtHttpResponseBasicChallengeNext(
+	const xhttpresponse* pResponse,
+	xhttpauthcursor* pCursor,
+	void* pOutput,
+	size_t iCapacity,
+	size_t* pSize,
+	xhttpbasicchallenge* pChallenge
+);
+
+
+
+/* 迭代并解码代理 Basic challenge，缓冲与游标契约和源站入口一致。 */
+XRT_API xhttpnext xrtHttpResponseProxyBasicChallengeNext(
+	const xhttpresponse* pResponse,
+	xhttpauthcursor* pCursor,
+	void* pOutput,
+	size_t iCapacity,
+	size_t* pSize,
+	xhttpbasicchallenge* pChallenge
+);
+
+#endif
+
+
+
+#if defined(XHTTP_FEATURE_HTTP_CLIENT_RESPONSE_AUTH_BEARER)
+
+/*
+	迭代并解码源站 Bearer challenge；查询和失败不推进游标。
+	实际成功时标准参数视图借用 Output，未知扩展参数由协议层忽略。
+*/
+XRT_API xhttpnext xrtHttpResponseBearerChallengeNext(
+	const xhttpresponse* pResponse,
+	xhttpauthcursor* pCursor,
+	void* pOutput,
+	size_t iCapacity,
+	size_t* pSize,
+	xhttpbearerchallenge* pChallenge
+);
+
+
+
+/* 迭代并解码代理 Bearer challenge，缓冲与游标契约和源站入口一致。 */
+XRT_API xhttpnext xrtHttpResponseProxyBearerChallengeNext(
+	const xhttpresponse* pResponse,
+	xhttpauthcursor* pCursor,
+	void* pOutput,
+	size_t iCapacity,
+	size_t* pSize,
+	xhttpbearerchallenge* pChallenge
+);
+
+#endif
+
+
+
+#if defined(XHTTP_FEATURE_HTTP_CLIENT_RESPONSE_AUTH_DIGEST)
+
+/* 迭代并解码源站 Digest challenge；查询和失败不推进游标。 */
+XRT_API xhttpnext xrtHttpResponseDigestChallengeNext(
+	const xhttpresponse* pResponse,
+	xhttpauthcursor* pCursor,
+	void* pOutput,
+	size_t iCapacity,
+	size_t* pSize,
+	xhttpdigestchallenge* pChallenge
+);
+
+
+
+/* 迭代并解码代理 Digest challenge；契约与源站入口一致。 */
+XRT_API xhttpnext xrtHttpResponseProxyDigestChallengeNext(
+	const xhttpresponse* pResponse,
+	xhttpauthcursor* pCursor,
+	void* pOutput,
+	size_t iCapacity,
+	size_t* pSize,
+	xhttpdigestchallenge* pChallenge
+);
+
+#endif
+
+
+
+#if defined(XHTTP_FEATURE_HTTP_CLIENT_RESPONSE_AUTH_DIGEST_CHOOSE)
+
+/*
+	按线路顺序选择首个满足本地策略的源站 Digest challenge。
+	查询模式完成全部候选验证并返回所选项的精确解码长度。
+	全部写出区允许未对齐，但必须互不覆盖且不得覆盖响应拥有的存储。
+*/
+XRT_API xhttpnext xrtHttpResponseDigestChallengeChoose(
+	const xhttpresponse* pResponse,
+	const xhttpdigestpolicy* pPolicy,
+	void* pOutput,
+	size_t iCapacity,
+	size_t* pSize,
+	xhttpdigestchallenge* pChallenge,
+	xhttpdigestchoice* pChoice
+);
+
+
+
+/* 选择首个满足本地策略的代理 Digest challenge；契约与源站入口一致。 */
+XRT_API xhttpnext xrtHttpResponseProxyDigestChallengeChoose(
+	const xhttpresponse* pResponse,
+	const xhttpdigestpolicy* pPolicy,
+	void* pOutput,
+	size_t iCapacity,
+	size_t* pSize,
+	xhttpdigestchallenge* pChallenge,
+	xhttpdigestchoice* pChoice
+);
+
+#endif
+
+
+
+#if defined(XHTTP_FEATURE_HTTP_CLIENT_RESPONSE_AUTH_DIGEST_INFO)
+
+/*
+	解析唯一 Authentication-Info；缺失返回 END，重复或无效返回 ERROR。
+	全部写出区允许未对齐，但必须互不覆盖且不得覆盖响应拥有的存储。
+*/
+XRT_API xhttpnext xrtHttpResponseDigestInfo(
+	const xhttpresponse* pResponse,
+	xhttpdigestalgorithm Algorithm,
+	void* pOutput,
+	size_t iCapacity,
+	size_t* pSize,
+	xhttpdigestinfo* pInfo
+);
+
+
+
+/* 解析唯一 Proxy-Authentication-Info；算法由原请求上下文提供。 */
+XRT_API xhttpnext xrtHttpResponseProxyDigestInfo(
+	const xhttpresponse* pResponse,
+	xhttpdigestalgorithm Algorithm,
+	void* pOutput,
+	size_t iCapacity,
+	size_t* pSize,
+	xhttpdigestinfo* pInfo
+);
+
+#endif
+
+
+
+#if defined(XHTTP_FEATURE_HTTP_CLIENT_RESPONSE_AUTH_DIGEST_SESSION)
+
+/*
+	解析并验证源站 Digest 回执。
+	END 表示字段缺失；ITEM 时 pCheck 区分无效、有效、更新与已取代状态。
+	pCheck 允许未对齐，但不得覆盖响应、会话或 Exchange 拥有的存储。
+*/
+XRT_API xhttpnext xrtHttpResponseDigestSessionAccept(
+	const xhttpresponse* pResponse,
+	xhttpdigestsession* pSession,
+	const xhttpdigestexchange* pExchange,
+	xstrview ResponseEntityHash,
+	xstrview NextCnonce,
+	xhttpdigestsessioncheck* pCheck
+);
+
+
+
+/* 解析并验证代理 Digest 回执；返回与状态契约和源站入口一致。 */
+XRT_API xhttpnext xrtHttpResponseProxyDigestSessionAccept(
+	const xhttpresponse* pResponse,
+	xhttpdigestsession* pSession,
+	const xhttpdigestexchange* pExchange,
+	xstrview ResponseEntityHash,
+	xstrview NextCnonce,
+	xhttpdigestsessioncheck* pCheck
+);
+
+#endif
+
+
+
+#if defined(XHTTP_FEATURE_HTTP_CLIENT_CONTENT_TYPE)
+
+/*
+	解析唯一 Content-Type；字段缺失返回 END，重复或无效返回 ERROR。
+	输出存储可以未对齐，但不得覆盖响应拥有或借用的数据。
+*/
+XRT_API xhttpnext xrtHttpResponseContentType(
+	const xhttpresponse* pResponse,
+	xmediatype* pType
+);
+
+#endif
+
+
+
+#if defined(XHTTP_FEATURE_HTTP_CLIENT_SET_COOKIE)
+
+/*
+	按线路顺序解析下一条独立 Set-Cookie 字段，不执行逗号合并。
+	游标和输出可以未对齐，但必须互不覆盖且不得覆盖响应数据。
+*/
+XRT_API xhttpnext xrtHttpResponseSetCookieNext(
+	const xhttpresponse* pResponse,
+	size_t* pHeaderIndex,
+	xsetcookie* pCookie
+);
+
+#endif
+
+
+
+/* 返回首个同名借用 trailer，未找到返回空指针。 */
+XRT_API const xhttpfield* xrtHttpResponseTrailer(
+	const xhttpresponse* pResponse,
+	xstrview Name
+);
+
+
+
+/* 返回 trailer 数量。 */
+XRT_API size_t xrtHttpResponseTrailerCount(
+	const xhttpresponse* pResponse
+);
+
+
+
+/* 返回连续只读 trailer 数组；空响应或无字段返回空指针。 */
+XRT_API const xhttpfield* xrtHttpResponseTrailerData(
+	const xhttpresponse* pResponse
+);
+
+
+
+/* 返回指定位置的借用 trailer，越界返回空指针。 */
+XRT_API const xhttpfield* xrtHttpResponseTrailerAt(
+	const xhttpresponse* pResponse,
+	size_t iIndex
+);
+
+
+
+/*
+	返回响应借用的只读 Trailer 容器。
+	容器与响应同寿命，调用方不得修改或销毁。
+*/
+XRT_API const xhttpheaders* xrtHttpResponseTrailers(
+	const xhttpresponse* pResponse
+);
+
+
+
+/* 返回缓冲模式下的连续正文；流式模式返回空视图。 */
+XRT_API xbytesview xrtHttpResponseBody(
+	const xhttpresponse* pResponse
+);
+
+
+
+/* 返回已缓冲或已通过流式回调交付的正文总字节数。 */
+XRT_API uint64 xrtHttpResponseBodyBytes(
+	const xhttpresponse* pResponse
+);
+
+
+
+/* 返回收到的编码正文载荷字节数，不包含 HTTP/1 chunk 元数据。 */
+XRT_API uint64 xrtHttpResponseWireBodyBytes(
+	const xhttpresponse* pResponse
+);
+
+
+
+#if defined(XHTTP_FEATURE_HTTP_CLIENT_DECOMPRESS)
+
+/*
+	返回自动解码前合并后的 Content-Encoding；未解码时返回空视图。
+	Header 值按收到顺序用逗号和空格连接，并由响应拥有。
+*/
+XRT_API xstrview xrtHttpResponseOriginalEncoding(
+	const xhttpresponse* pResponse
+);
+
+#endif
+
+
+
+/* 复制正文并附加零字符；返回值由 xrtFree 释放，二进制零字节原样保留。 */
+XRT_API str xrtHttpResponseBodyText(
+	const xhttpresponse* pResponse
+);
+
+
+
+/* 返回借用的最终有效 URL 文本。 */
+XRT_API xstrview xrtHttpResponseUrl(
+	const xhttpresponse* pResponse
+);
+
+
+
+/* 返回到达最终响应前实际跟随的重定向跳数。 */
+XRT_API size_t xrtHttpResponseRedirects(
+	const xhttpresponse* pResponse
+);
+
+#endif
+
+
+
+XRT_EXTERN_C_END
+
+#endif
+
+
+/* public: extlibs/xhttp/include/xrt/http_exchange.h */
+
+
+#ifndef XRT_HTTP_EXCHANGE_H
+#define XRT_HTTP_EXCHANGE_H
+
+
+
+
+#if defined(XHTTP_FEATURE_HTTP_EXCHANGE) && \
+	(!defined(XHTTP_FEATURE_HTTP_CLIENT_PREPARE) || \
+	 !defined(XHTTP_FEATURE_HTTP_CLIENT_RESPONSE) || \
+	 !defined(XRT_FEATURE_HTTP1_BODY) || \
+	 !defined(XRT_FEATURE_HTTP_TRAILER))
+	#error "XRT HTTP exchange support requires request prepare, response, HTTP/1 body and Trailer support"
+#endif
+
+
+
+#if defined(XHTTP_FEATURE_HTTP_EXCHANGE)
+
+/* Exchange 拥有一个请求计划并独立推进出站与入站状态机。 */
+typedef struct xhttp1exchange xhttp1exchange;
+
+
+
+/* 出站状态区分正文源暂不可读与 100 Continue 策略等待。 */
+typedef enum xhttp1outputstatus {
+	XHTTP1_OUTPUT_ERROR = -1,
+	XHTTP1_OUTPUT_AGAIN = 0,
+	XHTTP1_OUTPUT_DATA = 1,
+	XHTTP1_OUTPUT_DONE = 2,
+	XHTTP1_OUTPUT_CONTINUE = 3
+} xhttp1outputstatus;
+
+
+
+/* 入站状态只终结一条响应；升级后的字节不再按 HTTP 解释。 */
+typedef enum xhttp1feedstatus {
+	XHTTP1_FEED_ERROR = -1,
+	XHTTP1_FEED_MORE = 0,
+	XHTTP1_FEED_PAUSED = 1,
+	XHTTP1_FEED_DONE = 2,
+	XHTTP1_FEED_UPGRADED = 3
+} xhttp1feedstatus;
+
+
+
+/* Exchange 错误码稳定标识请求正文、响应协议和用户回调失败。 */
+typedef enum xhttp1exchangeerror {
+	XHTTP1_EXCHANGE_ERROR_ARGUMENT = 1,
+	XHTTP1_EXCHANGE_ERROR_STATE,
+	XHTTP1_EXCHANGE_ERROR_INPUT_LIMIT,
+	XHTTP1_EXCHANGE_ERROR_RESPONSE_HEAD,
+	XHTTP1_EXCHANGE_ERROR_RESPONSE_FRAMING,
+	XHTTP1_EXCHANGE_ERROR_INFORMATIONAL_LIMIT,
+	XHTTP1_EXCHANGE_ERROR_HEADER_CALLBACK,
+	XHTTP1_EXCHANGE_ERROR_BODY_CALLBACK,
+	XHTTP1_EXCHANGE_ERROR_REQUEST_BODY,
+	XHTTP1_EXCHANGE_ERROR_REQUEST_LENGTH,
+	XHTTP1_EXCHANGE_ERROR_UNEXPECTED_EOF
+} xhttp1exchangeerror;
+
+
+
+/*
+	Informational 的响应只在回调期间借用。
+	Headers 和 Body 回调借用最终响应；返回 false 会终止 Exchange。
+	回调返回 false 时，Exchange 会保留回调设置的当前错误作为原因。
+	所有回调都由 Feed 同步调用，不得递归 Feed 或销毁当前 Exchange。
+*/
+typedef bool (*xhttp1informationalproc)(
+	const xhttpresponse* pResponse,
+	ptr pData
+);
+
+typedef bool (*xhttp1headersproc)(
+	const xhttpresponse* pResponse,
+	ptr pData
+);
+
+typedef bool (*xhttp1bodyproc)(
+	const xhttpresponse* pResponse,
+	xbytesview Data,
+	ptr pData
+);
+
+
+
+/* Body 为空时缓冲正文，非空时流式交付且响应不保存正文副本。 */
+typedef struct xhttp1exchangeevents {
+	xhttp1informationalproc Informational;
+	xhttp1headersproc Headers;
+	xhttp1bodyproc Body;
+	ptr Data;
+} xhttp1exchangeevents;
+
+
+
+/* 各限额分别约束线路解析和最终拥有型 Header 存储。 */
+typedef struct xhttp1exchangeconfig {
+	xhttp1limits Head;
+	xhttp1bodylimits Body;
+	xhttpheadersconfig Headers;
+	xhttpheadersconfig Trailers;
+	uint32 MaxInformational;
+	bool AllowRawTransferCodings;
+} xhttp1exchangeconfig;
+
+
+
+XRT_EXTERN_C_BEGIN
+
+
+
+/* 初始化公网安全限额；输出可位于合法的未对齐存储。 */
+XRT_API void xrtHttp1ExchangeConfigInit(
+	xhttp1exchangeconfig* pConfig
+);
+
+
+
+/*
+	创建无 I/O 的单次 HTTP/1.1 Exchange。
+	成功时接管 Plan；失败时 Plan 所有权仍属于调用方。
+	非空配置和事件表会在返回前复制，不要求自然对齐。
+*/
+XRT_API xhttp1exchange* xrtHttp1ExchangeCreate(
+	xhttp1requestplan* pPlan,
+	const xhttp1exchangeconfig* pConfig,
+	const xhttp1exchangeevents* pEvents
+);
+
+
+
+/* 销毁 Exchange、未取走的响应、请求计划和正文 Reader。 */
+XRT_API void xrtHttp1ExchangeDestroy(
+	xhttp1exchange* pExchange
+);
+
+
+
+/*
+	借出下一段线路数据，大小不超过 MaxBytes。
+	DATA 必须通过 OutputConsume 推进；AGAIN 表示正文源暂不可读。
+*/
+XRT_API xhttp1outputstatus xrtHttp1ExchangeOutput(
+	xhttp1exchange* pExchange,
+	size_t iMaxBytes,
+	xbytesview* pData
+);
+
+
+
+/* 消费最近一次 Output 借出的前缀；允许短写。 */
+XRT_API bool xrtHttp1ExchangeOutputConsume(
+	xhttp1exchange* pExchange,
+	size_t iSize
+);
+
+
+
+/* 允许 Expect: 100-continue 请求开始发送正文；重复调用是安全的。 */
+XRT_API bool xrtHttp1ExchangeContinue(
+	xhttp1exchange* pExchange
+);
+
+
+
+/* 暂停响应输入交付；可在 Headers 或 Body 回调内调用。 */
+XRT_API bool xrtHttp1ExchangePause(xhttp1exchange* pExchange);
+
+
+
+/* 恢复响应输入交付；重复恢复未暂停 Exchange 是安全的。 */
+XRT_API bool xrtHttp1ExchangeResume(xhttp1exchange* pExchange);
+
+
+
+/* 判断响应输入是否由应用暂停。 */
+XRT_API bool xrtHttp1ExchangePaused(
+	const xhttp1exchange* pExchange
+);
+
+
+
+/*
+	同步消费一段响应输入；Accepted 返回已经处理或内部保留的前缀。
+	End 表示本段之后可靠传输正常结束。
+	若 Feed 提前终止请求输出，先前借出的 DATA 仍有效到 Consume 或 Destroy。
+*/
+XRT_API xhttp1feedstatus xrtHttp1ExchangeFeed(
+	xhttp1exchange* pExchange,
+	xbytesview Input,
+	bool bEnd,
+	size_t* pAccepted
+);
+
+
+
+/* 返回最终响应的借用指针；最终 Header 到达前返回空指针。 */
+XRT_API const xhttpresponse* xrtHttp1ExchangeResponse(
+	const xhttp1exchange* pExchange
+);
+
+
+
+/* 在 DONE 或 UPGRADED 后取走最终响应；其他状态失败。 */
+XRT_API xhttpresponse* xrtHttp1ExchangeTakeResponse(
+	xhttp1exchange* pExchange
+);
+
+
+
+/* 返回因跨输入边界而内部保留的升级或多余后缀。 */
+XRT_API xbytesview xrtHttp1ExchangeRemainder(
+	const xhttp1exchange* pExchange
+);
+
+
+
+/* 返回终态错误；非失败状态返回空指针。 */
+XRT_API const xerror* xrtHttp1ExchangeError(
+	const xhttp1exchange* pExchange
+);
+
+
+
+/* 判断请求 Header 和完整正文是否已经全部被调用方消费。 */
+XRT_API bool xrtHttp1ExchangeRequestComplete(
+	const xhttp1exchange* pExchange
+);
+
+
+
+/* 判断最终响应是否已经完整结束。 */
+XRT_API bool xrtHttp1ExchangeResponseComplete(
+	const xhttp1exchange* pExchange
+);
+
+
+
+/* 判断响应是否已经切换为升级协议或 CONNECT 隧道。 */
+XRT_API bool xrtHttp1ExchangeUpgraded(
+	const xhttp1exchange* pExchange
+);
+
+
+
+/*
+	判断连接在协议层是否可复用。
+	调用方还必须确认 Feed 返回后没有尚未提交的外部输入。
+*/
+XRT_API bool xrtHttp1ExchangeReusable(
+	const xhttp1exchange* pExchange
+);
+
+
+
+/* 返回已经消费的信息响应数量。 */
+XRT_API uint32 xrtHttp1ExchangeInformationalCount(
+	const xhttp1exchange* pExchange
+);
+
+
+
+/* 返回调用方通过 OutputConsume 确认发送的线路字节数。 */
+XRT_API uint64 xrtHttp1ExchangeRequestWireBytes(
+	const xhttp1exchange* pExchange
+);
+
+
+
+XRT_EXTERN_C_END
+
+#endif
+
+#endif
+
+
+/* public: extlibs/xhttp/include/xrt/http_client_stream.h */
+
+
+#ifndef XRT_HTTP_CLIENT_STREAM_H
+#define XRT_HTTP_CLIENT_STREAM_H
+
+
+
+
+#if defined(XHTTP_FEATURE_HTTP_CLIENT_STREAM) && \
+	(!defined(XHTTP_FEATURE_HTTP_EXCHANGE) || \
+	 !defined(XRT_FEATURE_NET_TCP) || \
+	 !defined(XRT_FEATURE_SPIN))
+	#error "XRT HTTP client stream support requires HTTP exchange, TCP and spin support"
+#endif
+
+#if defined(XHTTP_FEATURE_HTTP_CLIENT_TLS) && \
+	(!defined(XHTTP_FEATURE_HTTP_CLIENT_STREAM) || \
+	 !defined(XRT_FEATURE_TLS_STREAM))
+	#error "XRT HTTPS client stream support requires HTTP client stream and TLS stream support"
+#endif
+
+#if defined(XHTTP_FEATURE_HTTP_CLIENT_STREAM_ASYNC) && \
+	(!defined(XHTTP_FEATURE_HTTP_CLIENT_STREAM) || \
+	 !defined(XHTTP_FEATURE_HTTP_EXCHANGE_ASYNC))
+	#error "XRT async HTTP client stream support requires stream and async exchange support"
+#endif
+
+
+
+#if defined(XHTTP_FEATURE_HTTP_CLIENT_STREAM)
+
+/* 单次 HTTP/1 调用在已打开的 TCP 或 TLS Stream 上驱动一个 Exchange。 */
+typedef struct xhttp1call xhttp1call;
+
+
+
+/* 调用状态只从 RUNNING 进入一个不可变终态。 */
+typedef enum xhttp1callstate {
+	XHTTP1_CALL_RUNNING = 0,
+	XHTTP1_CALL_SUCCEEDED,
+	XHTTP1_CALL_FAILED,
+	XHTTP1_CALL_CANCELLED
+} xhttp1callstate;
+
+
+
+/* 调用错误位于 xrt.http.call 域，区分状态、传输和 Exchange 失败。 */
+typedef enum xhttp1callerror {
+	XHTTP1_CALL_ERROR_ARGUMENT = 1,
+	XHTTP1_CALL_ERROR_STATE,
+	XHTTP1_CALL_ERROR_TRANSPORT,
+	XHTTP1_CALL_ERROR_EXCHANGE,
+	XHTTP1_CALL_ERROR_CANCELLED
+} xhttp1callerror;
+
+
+
+/* Progress 只在真实接受输出、消费输入或完整发送请求时产生。 */
+typedef enum xhttp1progress {
+	XHTTP1_PROGRESS_WRITE = 1,
+	XHTTP1_PROGRESS_READ,
+	XHTTP1_PROGRESS_REQUEST_DONE
+} xhttp1progress;
+
+
+
+/* WriteSize 只限制单次借出和发送，不建立固定缓冲。 */
+typedef struct xhttp1callconfig {
+	size_t WriteSize;
+} xhttp1callconfig;
+
+
+
+/*
+	完成结果只在回调期间借用。成功时 Response 非空；失败时正文和传输均为空。
+	Reusable 与 Upgraded 互斥，任一为真时 Tcp/Tls 中恰有一个调用方引用转移给回调。
+	Reusable 时 Buffered 为零；Buffered 只表示 Upgrade 后仍留在传输中的协议外字节。
+*/
+typedef struct xhttp1callresult {
+	xnetresult Result;
+	xhttpresponse* Response;
+	xnetstream* Tcp;
+	xtlsstream* Tls;
+	const xerror* Error;
+	size_t Buffered;
+	bool Reusable;
+	bool Upgraded;
+} xhttp1callresult;
+
+
+
+/*
+	完成回调在底层 Stream 所属 Worker 上同步执行且至多一次。
+	构造函数成功返回之前不会执行完成回调。
+*/
+typedef void (*xhttp1callproc)(
+	xhttp1call* pCall,
+	const xhttp1callresult* pResult,
+	ptr pData
+);
+
+
+
+/*
+	进度回调在 Stream 所属 Worker 上同步执行。
+	Bytes 只对 WRITE 和 READ 有效，REQUEST_DONE 的 Bytes 为零且至多出现一次。
+*/
+typedef void (*xhttp1progressproc)(
+	xhttp1call* pCall,
+	xhttp1progress Progress,
+	size_t iBytes,
+	ptr pData
+);
+
+
+
+/* Done 必须非空；Progress 为空时调用热路径没有额外回调。 */
+typedef struct xhttp1callevents {
+	xhttp1callproc Done;
+	xhttp1progressproc Progress;
+	ptr Data;
+} xhttp1callevents;
+
+
+
+XRT_EXTERN_C_BEGIN
+
+
+
+/*
+	初始化 16 KiB 单次输出上限；不会预分配对应大小的缓冲。
+	配置允许位于未对齐存储，Call 创建时会先复制完整快照。
+*/
+XRT_API void xrtHttp1CallConfigInit(xhttp1callconfig* pConfig);
+
+
+
+/*
+	初始化空进度观察器；调用方必须随后设置 Done。
+	事件表允许位于未对齐存储，Call 创建时会先复制完整快照。
+*/
+XRT_API void xrtHttp1CallEventsInit(xhttp1callevents* pEvents);
+
+
+
+/*
+	接管一个已打开 TCP Stream 调用方引用和一个 Exchange。
+	必须在 Stream 所属 Worker 上调用；失败时两个输入仍归调用方。
+*/
+XRT_API xhttp1call* xrtHttp1CallTcp(
+	xnetstream* pStream,
+	xhttp1exchange* pExchange,
+	const xhttp1callconfig* pConfig,
+	const xhttp1callevents* pEvents
+);
+
+
+
+#if defined(XHTTP_FEATURE_HTTP_CLIENT_TLS)
+
+/*
+	接管一个已完成握手的 TLS Stream 调用方引用和一个 Exchange。
+	必须在 Stream 所属 Worker 上调用；失败时两个输入仍归调用方。
+*/
+XRT_API xhttp1call* xrtHttp1CallTls(
+	xtlsstream* pStream,
+	xhttp1exchange* pExchange,
+	const xhttp1callconfig* pConfig,
+	const xhttp1callevents* pEvents
+);
+
+#endif
+
+
+
+/* 增加调用引用并返回原指针。 */
+XRT_API xhttp1call* xrtHttp1CallRef(xhttp1call* pCall);
+
+
+
+/* 释放调用引用；空指针视为空操作。 */
+XRT_API void xrtHttp1CallDestroy(xhttp1call* pCall);
+
+
+
+/*
+	从任意线程协作取消调用并异常关闭尚未交出的传输。
+	返回 true 表示取消已被接纳，最终状态必为 CANCELLED；
+	返回 false 表示已有取消或终态已经提交。
+*/
+XRT_API bool xrtHttp1CallCancel(xhttp1call* pCall);
+
+
+
+/* 在所属 Worker 上立即暂停响应输入和底层传输读取；重复调用安全。 */
+XRT_API bool xrtHttp1CallPause(xhttp1call* pCall);
+
+
+
+/* 从任意线程提交恢复；返回 false 表示未暂停、已提交恢复或已有终态。 */
+XRT_API bool xrtHttp1CallResume(xhttp1call* pCall);
+
+
+
+/* 返回响应输入暂停门的并发快照；调用进入任意终态后始终返回 false。 */
+XRT_API bool xrtHttp1CallPaused(const xhttp1call* pCall);
+
+
+
+/* 返回调用状态的并发快照。 */
+XRT_API xhttp1callstate xrtHttp1CallState(const xhttp1call* pCall);
+
+
+
+/* 返回失败或取消终态的借用错误；其他状态返回空。 */
+XRT_API const xerror* xrtHttp1CallError(const xhttp1call* pCall);
+
+
+
+XRT_EXTERN_C_END
+
+#endif
+
+#endif
+
+
+/* public: extlibs/xhttp/include/xrt/cookie_jar.h */
+
+
+#ifndef XRT_COOKIE_JAR_H
+#define XRT_COOKIE_JAR_H
+
+
+#if defined(XHTTP_FEATURE_COOKIE_JAR)
+#endif
+
+#if defined(XHTTP_FEATURE_COOKIE_JAR_HEADERS)
+#endif
+
+
+
+#if defined(XHTTP_FEATURE_COOKIE_JAR) && \
+	(!defined(XHTTP_FEATURE_SET_COOKIE) || !defined(XHTTP_FEATURE_URL) || \
+	 !defined(XRT_FEATURE_MUTEX))
+	#error "XRT cookie jar requires set_cookie, url and mutex"
+#endif
+
+#if defined(XHTTP_FEATURE_COOKIE_JAR_HEADERS) && \
+	(!defined(XHTTP_FEATURE_COOKIE_JAR) || !defined(XHTTP_FEATURE_HTTP_HEADERS))
+	#error "XRT cookie jar headers require cookie_jar and http_headers"
+#endif
+
+
+
+#if defined(XHTTP_FEATURE_COOKIE_JAR)
+
+/* RFC 6265 要求用户代理把持久 Cookie 的生存期限制在最多 400 天。 */
+#define XCOOKIE_JAR_MAX_LIFETIME \
+	((xtime)(INT64_C(400) * XRT_TIME_DAY))
+
+
+
+/* CookieJar 是引用计数、线程安全的用户代理 Cookie 存储。 */
+typedef struct xcookiejar xcookiejar;
+
+
+
+/* CookieSnapshot 拥有不可变文本，借用视图在快照销毁前保持有效。 */
+typedef struct xcookiesnapshot xcookiesnapshot;
+
+
+
+/* 回调接收已经转为小写 ASCII 的域名；返回 true 表示公共后缀。 */
+typedef bool (*xcookiepublicsuffixfn)(ptr pContext, xstrview Domain);
+
+
+
+/*
+ * 高风险显式选项：没有公共后缀回调时仍接受跨子域 Domain Cookie。
+ * 这可能把公共后缀误作 Domain 并形成 supercookie；普通客户端不应启用。
+ */
+#define XCOOKIE_JAR_ALLOW_DOMAIN_WITHOUT_PSL UINT32_C(0x00000001)
+
+
+
+/* CookieJar 限额全部约束有效数据；零值配置无效，应先调用 ConfigInit。 */
+typedef struct xcookiejarconfig {
+	uint32 Flags;
+	size_t InitialCookies;
+	size_t MaxCookies;
+	size_t MaxCookiesPerDomain;
+	size_t MaxCookieBytes;
+	size_t MaxNameBytes;
+	size_t MaxValueBytes;
+	size_t MaxDomainBytes;
+	size_t MaxPathBytes;
+	size_t MaxPartitionKeyBytes;
+
+	/* Default SameSite 的跨站顶层非安全请求兼容窗口；零表示禁用。 */
+	xtime LaxUnsafeAge;
+
+	/* 公共后缀策略是数据驱动的真实扩展点，回调上下文由调用方管理。 */
+	xcookiepublicsuffixfn IsPublicSuffix;
+	ptr PublicSuffixContext;
+} xcookiejarconfig;
+
+
+
+#define XCOOKIE_STORE_HTTP_API	UINT32_C(0x00000001)
+#define XCOOKIE_STORE_HAS_NOW	UINT32_C(0x00000002)
+#define XCOOKIE_STORE_SAME_SITE	UINT32_C(0x00000004)
+#define XCOOKIE_STORE_TOP_LEVEL	UINT32_C(0x00000008)
+
+/* 接收上下文显式表达来源、站点关系和分区键，URL 必须是 HTTP(S) 或 WS(S) 绝对 URL。 */
+typedef struct xcookiestorecontext {
+	uint32 Flags;
+	xstrview URL;
+	xstrview PartitionKey;
+	xtime Now;
+} xcookiestorecontext;
+
+
+
+#define XCOOKIE_REQUEST_HTTP_API		UINT32_C(0x00000001)
+#define XCOOKIE_REQUEST_HAS_NOW		UINT32_C(0x00000002)
+#define XCOOKIE_REQUEST_SAME_SITE	UINT32_C(0x00000004)
+#define XCOOKIE_REQUEST_TOP_LEVEL	UINT32_C(0x00000008)
+#define XCOOKIE_REQUEST_SAFE_METHOD	UINT32_C(0x00000010)
+
+/* 请求上下文由上层导航或调用模型给出，CookieJar 不猜测跨站关系。 */
+typedef struct xcookierequestcontext {
+	uint32 Flags;
+	xstrview URL;
+	xstrview PartitionKey;
+	xtime Now;
+} xcookierequestcontext;
+
+
+
+/* 策略拒绝不是运行时错误，调用方可稳定区分具体原因。 */
+typedef enum xcookiereject {
+	XCOOKIE_REJECT_NONE = 0,
+	XCOOKIE_REJECT_SYNTAX,
+	XCOOKIE_REJECT_LIMIT,
+	XCOOKIE_REJECT_EMPTY,
+	XCOOKIE_REJECT_DOMAIN,
+	XCOOKIE_REJECT_PUBLIC_SUFFIX,
+	XCOOKIE_REJECT_SECURE,
+	XCOOKIE_REJECT_HTTP_ONLY,
+	XCOOKIE_REJECT_SAME_SITE,
+	XCOOKIE_REJECT_PREFIX,
+	XCOOKIE_REJECT_PARTITION,
+	XCOOKIE_REJECT_SECURE_OVERWRITE
+} xcookiereject;
+
+
+
+/* Store 结果把策略拒绝、有效更新、删除和无变化分开。 */
+typedef enum xcookiestorestatus {
+	XCOOKIE_STORE_ERROR = -1,
+	XCOOKIE_STORE_REJECTED = 0,
+	XCOOKIE_STORE_STORED = 1,
+	XCOOKIE_STORE_REMOVED = 2,
+	XCOOKIE_STORE_IGNORED = 3
+} xcookiestorestatus;
+
+
+
+#define XCOOKIE_INFO_HOST_ONLY		UINT32_C(0x00000001)
+#define XCOOKIE_INFO_SECURE			UINT32_C(0x00000002)
+#define XCOOKIE_INFO_HTTP_ONLY		UINT32_C(0x00000004)
+#define XCOOKIE_INFO_PERSISTENT		UINT32_C(0x00000008)
+#define XCOOKIE_INFO_PARTITIONED	UINT32_C(0x00000010)
+
+/* CookieInfo 只借用所属快照，时间使用与 xrt 时间模块一致的微秒。 */
+typedef struct xcookieinfo {
+	uint32 Flags;
+	xcookiesamesite SameSite;
+	xcookiepriority Priority;
+	xtime Expires;
+	xtime Created;
+	xtime Accessed;
+	xstrview Name;
+	xstrview Value;
+	xstrview Domain;
+	xstrview Path;
+	xstrview PartitionKey;
+} xcookieinfo;
+
+#endif
+
+
+
+#if defined(XHTTP_FEATURE_COOKIE_JAR_HEADERS)
+
+/* 批量接收 Set-Cookie 字段时返回逐类计数，错误前已经提交的字段不会回滚。 */
+typedef struct xcookiestorereport {
+	size_t Fields;
+	size_t Stored;
+	size_t Removed;
+	size_t Ignored;
+	size_t Rejected;
+} xcookiestorereport;
+
+#endif
+
+
+
+XRT_EXTERN_C_BEGIN
+
+
+
+#if defined(XHTTP_FEATURE_COOKIE_JAR)
+
+/* 初始化安全、适合通用 HTTP 客户端的配置；输出可位于合法的未对齐存储。 */
+XRT_API void xrtCookieJarConfigInit(xcookiejarconfig* pConfig);
+
+
+
+/* 创建线程安全 CookieJar；配置为空时使用默认值，非空配置会立即复制。 */
+XRT_API xcookiejar* xrtCookieJarCreate(const xcookiejarconfig* pConfig);
+
+
+
+/* 增加 CookieJar 引用；失效对象返回空指针。 */
+XRT_API xcookiejar* xrtCookieJarRetain(const xcookiejar* pJar);
+
+
+
+/* 释放 CookieJar 引用；空指针是安全的空操作。 */
+XRT_API void xrtCookieJarRelease(xcookiejar* pJar);
+
+
+
+/* 删除全部 Cookie，但保留已经分配的数组容量。 */
+XRT_API void xrtCookieJarClear(xcookiejar* pJar);
+
+
+
+/* 返回当前条目数；不会隐式清理过期条目。 */
+XRT_API size_t xrtCookieJarCount(const xcookiejar* pJar);
+
+
+
+/* 删除在指定时间已经过期的 Cookie，并返回删除数量。 */
+XRT_API size_t xrtCookieJarPurge(xcookiejar* pJar, xtime iNow);
+
+
+
+/* 使用已解析 Set-Cookie 更新存储；策略拒绝通过 Reject 返回。 */
+XRT_API xcookiestorestatus xrtCookieJarSet(
+	xcookiejar* pJar,
+	const xcookiestorecontext* pContext,
+	const xsetcookie* pCookie,
+	xcookiereject* pReject
+);
+
+
+
+/* 宽松解析 Set-Cookie 字段值后更新存储。 */
+XRT_API xcookiestorestatus xrtCookieJarStore(
+	xcookiejar* pJar,
+	const xcookiestorecontext* pContext,
+	xstrview SetCookie,
+	xcookiereject* pReject
+);
+
+
+
+/* 使用当前时间和 HTTP API 语义接收一个普通、非分区 Cookie。 */
+XRT_API xcookiestorestatus xrtCookieJarStoreUrl(
+	xcookiejar* pJar,
+	xstrview URL,
+	xstrview SetCookie,
+	xcookiereject* pReject
+);
+
+
+
+/* 按请求上下文写出不含字段名和零结尾的 Cookie 字段值。 */
+XRT_API bool xrtCookieJarWrite(
+	xcookiejar* pJar,
+	const xcookierequestcontext* pContext,
+	void* pOutput,
+	size_t iCapacity,
+	size_t* pSize
+);
+
+
+
+/* 按请求上下文分配并构建零结尾 Cookie 字段值。 */
+XRT_API str xrtCookieJarBuild(
+	xcookiejar* pJar,
+	const xcookierequestcontext* pContext,
+	size_t* pSize
+);
+
+
+
+/* 使用当前时间、同站和 HTTP API 语义写出普通请求 Cookie。 */
+XRT_API bool xrtCookieJarWriteUrl(
+	xcookiejar* pJar,
+	xstrview URL,
+	void* pOutput,
+	size_t iCapacity,
+	size_t* pSize
+);
+
+
+
+/* 使用当前时间、同站和 HTTP API 语义构建普通请求 Cookie。 */
+XRT_API str xrtCookieJarBuildUrl(
+	xcookiejar* pJar,
+	xstrview URL,
+	size_t* pSize
+);
+
+
+
+/* 在锁内复制全部未过期条目，返回并发稳定的不可变快照。 */
+XRT_API xcookiesnapshot* xrtCookieJarSnapshot(
+	xcookiejar* pJar,
+	xtime iNow
+);
+
+
+
+/* 销毁快照；空指针是安全的空操作。 */
+XRT_API void xrtCookieSnapshotDestroy(xcookiesnapshot* pSnapshot);
+
+
+
+/* 返回快照中的 Cookie 数量。 */
+XRT_API size_t xrtCookieSnapshotCount(const xcookiesnapshot* pSnapshot);
+
+
+
+/* 返回稳定借用条目，越界返回空指针且不设置错误。 */
+XRT_API const xcookieinfo* xrtCookieSnapshotAt(
+	const xcookiesnapshot* pSnapshot,
+	size_t iIndex
+);
+
+#endif
+
+
+
+#if defined(XHTTP_FEATURE_COOKIE_JAR_HEADERS)
+
+/* 分别处理每个 Set-Cookie 字段，绝不把同名字段合并。 */
+XRT_API bool xrtCookieJarStoreHeaders(
+	xcookiejar* pJar,
+	const xcookiestorecontext* pContext,
+	const xhttpheaders* pHeaders,
+	xcookiestorereport* pReport
+);
+
+
+
+/* 构建并设置单个 Cookie 字段；没有可发送条目时删除已有字段。 */
+XRT_API bool xrtCookieJarApply(
+	xcookiejar* pJar,
+	const xcookierequestcontext* pContext,
+	xhttpheaders* pHeaders
+);
+
+#endif
+
+
+
+XRT_EXTERN_C_END
+
+#endif
+
+
+/* public: extlibs/xhttp/include/xrt/http_client_runtime.h */
+
+
+#ifndef XRT_HTTP_CLIENT_RUNTIME_H
+#define XRT_HTTP_CLIENT_RUNTIME_H
+
+
+#if defined(XHTTP_FEATURE_HTTP_CLIENT_RETRY)
+#endif
+
+#if defined(XHTTP_FEATURE_HTTP_CLIENT_CACHE)
+#endif
+
+#if defined(XHTTP_FEATURE_HTTP_CLIENT_DECOMPRESS)
+#endif
+
+#if defined(XHTTP_FEATURE_HTTP_CLIENT_PROXY)
+#endif
+
+#if defined(XHTTP_FEATURE_HTTP_CLIENT_COOKIES)
+#endif
+
+#if defined(XHTTP_FEATURE_HTTP_CLIENT_HTTPS)
+#endif
+
+
+
+#if defined(XHTTP_FEATURE_HTTP_CLIENT) && \
+	(!defined(XHTTP_FEATURE_HTTP_CLIENT_STREAM) || \
+	 !defined(XRT_FEATURE_NET_TCP_DIAL) || \
+	 !defined(XRT_FEATURE_CANCEL) || \
+	 !defined(XRT_FEATURE_SPIN))
+	#error "XRT HTTP client support requires HTTP stream, TCP Dial, cancellation and spin support"
+#endif
+
+#if defined(XHTTP_FEATURE_HTTP_CLIENT_CACHE) && \
+	(!defined(XHTTP_FEATURE_HTTP_CACHE_STORE) || \
+	 !defined(XHTTP_FEATURE_HTTP_CACHE_RANGE) || \
+	 !defined(XHTTP_FEATURE_HTTP_RANGE_MULTIPART) || \
+	 !defined(XHTTP_FEATURE_MULTIPART) || \
+	 !defined(XRT_FEATURE_CODEC_HEX) || \
+	 !defined(XRT_FEATURE_RANDOM_SECURE))
+	#error "XRT HTTP client cache requires cache storage, ranges, range multipart, generic multipart, hexadecimal codec and secure random"
+#endif
+
+#if defined(XHTTP_FEATURE_HTTP_CLIENT_HTTPS) && \
+	(!defined(XHTTP_FEATURE_HTTP_CLIENT) || \
+	 !defined(XHTTP_FEATURE_HTTP_CLIENT_TLS) || \
+	 !defined(XRT_FEATURE_TLS_STREAM_DIAL) || \
+	 !defined(XRT_FEATURE_TLS_CLIENT_VERIFY) || \
+	 !defined(XRT_FEATURE_X509_STORE_SYSTEM))
+	#error "XRT HTTPS client support requires HTTP client, TLS Dial, verification and system trust"
+#endif
+
+#if defined(XHTTP_FEATURE_HTTP_CLIENT_RESUME) && \
+	(!defined(XHTTP_FEATURE_HTTP_CLIENT_HTTPS) || \
+	 !defined(XRT_FEATURE_TLS_CLIENT_RESUME) || \
+	 !defined(XRT_FEATURE_MUTEX))
+	#error "XRT HTTP client resumption requires HTTPS, TLS client resumption and mutex"
+#endif
+
+#if defined(XHTTP_FEATURE_HTTP_CLIENT_POOL) && \
+	!defined(XHTTP_FEATURE_HTTP_CLIENT)
+	#error "XRT HTTP client pool support requires the high-level HTTP client"
+#endif
+
+#if defined(XHTTP_FEATURE_HTTP_CLIENT_REDIRECT) && \
+	!defined(XHTTP_FEATURE_HTTP_CLIENT)
+	#error "XRT HTTP client redirect support requires the high-level HTTP client"
+#endif
+
+#if defined(XHTTP_FEATURE_HTTP_CLIENT_RETRY) && \
+	(!defined(XHTTP_FEATURE_HTTP_CLIENT) || \
+	 !defined(XHTTP_FEATURE_HTTP_RETRY) || \
+	 !defined(XRT_FEATURE_RANDOM))
+	#error "XRT HTTP client retry requires the HTTP client, HTTP retry protocol and random support"
+#endif
+
+#if defined(XHTTP_FEATURE_HTTP_CLIENT_PROXY) && \
+	(!defined(XHTTP_FEATURE_HTTP_CLIENT) || \
+	 !defined(XRT_FEATURE_NET_PROXY_DIAL))
+	#error "XRT HTTP client proxy support requires the HTTP client and proxy Dial"
+#endif
+
+#if defined(XHTTP_FEATURE_HTTP_CLIENT_COOKIES) && \
+	(!defined(XHTTP_FEATURE_HTTP_CLIENT) || \
+	 !defined(XHTTP_FEATURE_COOKIE_JAR_HEADERS))
+	#error "XRT HTTP client cookies require the HTTP client and CookieJar Header integration"
+#endif
+
+#if defined(XHTTP_FEATURE_HTTP_CLIENT_DECOMPRESS) && \
+	(!defined(XHTTP_FEATURE_HTTP_CLIENT) || \
+	 !defined(XRT_FEATURE_HTTP_ENCODING) || \
+	 !defined(XRT_FEATURE_INFLATE))
+	#error "XRT HTTP client decompression requires the HTTP client, HTTP Encoding and Inflate"
+#endif
+
+#if defined(XHTTP_FEATURE_HTTP_CLIENT_CACHE) && \
+	(!defined(XHTTP_FEATURE_HTTP_CLIENT) || \
+	 !defined(XHTTP_FEATURE_HTTP_CACHE_STORE))
+	#error "XRT HTTP client cache requires the HTTP client and cache store"
+#endif
+
+
+
+#if defined(XHTTP_FEATURE_HTTP_CLIENT)
+
+#define XHTTP_CLIENT_TIMEOUT_DEFAULT UINT64_C(30000000)
+#define XHTTP_CLIENT_IDLE_TIMEOUT_DEFAULT UINT64_C(30000000)
+#define XHTTP_CLIENT_TIMEOUT_NONE UINT64_MAX
+
+
+
+/* 可选实现只裁剪代码，公开配置中的借用句柄声明始终可见。 */
+typedef struct xhttpcache xhttpcache;
+typedef struct xnetproxy xnetproxy;
+typedef struct xcookiejar xcookiejar;
+typedef struct xtlscontext xtlscontext;
+typedef struct xtlsverifier xtlsverifier;
+
+
+
+/* Client 保存共享网络策略、解析缓存和可选 TLS 信任快照。 */
+typedef struct xhttpclient xhttpclient;
+
+
+
+/* Call 表示从请求快照到最终响应或升级传输的一次完整执行。 */
+typedef struct xhttpcall xhttpcall;
+
+
+
+/*
+	高层 Call 事件始终携带当前 Call，避免异步提交返回值与首个回调之间的发布竞态。
+	Response 只在回调期间借用；返回 false 会终止当前 Call，并保留当前线程错误作为原因。
+*/
+typedef bool (*xhttpcallinformationalproc)(
+	xhttpcall* pCall,
+	const xhttpresponse* pResponse,
+	ptr pData
+);
+
+typedef bool (*xhttpcallheadersproc)(
+	xhttpcall* pCall,
+	const xhttpresponse* pResponse,
+	ptr pData
+);
+
+typedef bool (*xhttpcallbodyproc)(
+	xhttpcall* pCall,
+	const xhttpresponse* pResponse,
+	xbytesview Data,
+	ptr pData
+);
+
+
+
+/*
+	Body 为空时缓冲正文；非空时流式交付，Data 必须覆盖 Call 生命周期。
+	Body 回调内 WireBodyBytes 已包含当前块，BodyBytes 在回调成功返回后累计。
+*/
+typedef struct xhttpcallevents {
+	xhttpcallinformationalproc Informational;
+	xhttpcallheadersproc Headers;
+	xhttpcallbodyproc Body;
+	ptr Data;
+} xhttpcallevents;
+
+
+
+#define XHTTP_CLIENT_CACHE_BODY_DEFAULT \
+	(UINT64_C(8) * 1024u * 1024u)
+#define XHTTP_CLIENT_CACHE_HEURISTIC_MAX_DEFAULT \
+	(UINT64_C(24) * 60u * 60u * 1000000u)
+#define XHTTP_CLIENT_CACHE_HEURISTIC_PERCENT_DEFAULT \
+	UINT32_C(10)
+#define XHTTP_CLIENT_CACHE_MAX_RANGES_DEFAULT 16u
+
+
+
+/* 每次调用可以继承、禁用、强制验证或禁止回源。 */
+typedef enum xhttpclientcachemode {
+	XHTTP_CLIENT_CACHE_DEFAULT = 0,
+	XHTTP_CLIENT_CACHE_DISABLED,
+	XHTTP_CLIENT_CACHE_RELOAD,
+	XHTTP_CLIENT_CACHE_ONLY
+} xhttpclientcachemode;
+
+
+
+/* Cache 结果描述最终可见响应的来源，不混入具体存储后端状态。 */
+typedef enum xhttpclientcacheoutcome {
+	XHTTP_CLIENT_CACHE_NONE = 0,
+	XHTTP_CLIENT_CACHE_MISS,
+	XHTTP_CLIENT_CACHE_HIT,
+	XHTTP_CLIENT_CACHE_STALE,
+	XHTTP_CLIENT_CACHE_REVALIDATED,
+	XHTTP_CLIENT_CACHE_UPDATED,
+	XHTTP_CLIENT_CACHE_ONLY_MISS,
+	XHTTP_CLIENT_CACHE_BYPASS
+} xhttpclientcacheoutcome;
+
+
+
+/*
+	Store 为空时禁用 Client 自动缓存；创建 Client 时增加一个引用。
+	MaxBody 是单次回源允许暂存的编码正文上限，避免无界中间内存。
+	MaxRanges 限制一次本地 Range 解析的输入项数，防止多范围放大。
+	Heuristic 使用 Last-Modified 的相对年龄并受百分比和最大寿命共同限制。
+	Strict 让存储后端错误终止调用；默认采用不中断网络响应的 fail-open。
+*/
+typedef struct xhttpclientcacheconfig {
+	xhttpcache* Store;
+	uint64 MaxBody;
+	uint64 HeuristicMax;
+	size_t MaxRanges;
+	uint32 HeuristicPercent;
+	bool Shared;
+	bool Heuristic;
+	bool Strict;
+} xhttpclientcacheconfig;
+
+
+
+/* PartitionKey 隔离用户、站点或租户；空视图表示未分区缓存。 */
+typedef struct xhttpclientcacheoptions {
+	xhttpclientcachemode Mode;
+	xstrview PartitionKey;
+} xhttpclientcacheoptions;
+
+/* Client 状态单向进入排空、终止和关闭终态。 */
+typedef enum xhttpclientstate {
+	XHTTP_CLIENT_RUNNING = 0,
+	XHTTP_CLIENT_DRAINING,
+	XHTTP_CLIENT_ABORTING,
+	XHTTP_CLIENT_CLOSED
+} xhttpclientstate;
+
+
+
+/* Call 状态只向前进入一个不可变终态。 */
+typedef enum xhttpcallstate {
+	XHTTP_CALL_QUEUED = 0,
+	XHTTP_CALL_DIALING,
+	XHTTP_CALL_HANDSHAKING,
+	XHTTP_CALL_EXCHANGING,
+	XHTTP_CALL_SUCCEEDED,
+	XHTTP_CALL_FAILED,
+	XHTTP_CALL_CANCELLED
+} xhttpcallstate;
+
+
+
+/* Phase 表示最近开始的实际阶段，终态后保留成功或失败发生的位置。 */
+typedef enum xhttpcallphase {
+	XHTTP_CALL_PHASE_QUEUED = 0,
+	#if defined(XHTTP_FEATURE_HTTP_CLIENT_CACHE)
+		XHTTP_CALL_PHASE_CACHE = 1,
+	#endif
+	#if defined(XHTTP_FEATURE_HTTP_CLIENT_RETRY)
+		XHTTP_CALL_PHASE_RETRY = 2,
+	#endif
+	XHTTP_CALL_PHASE_POOL = 3,
+	XHTTP_CALL_PHASE_CONNECT = 4,
+	XHTTP_CALL_PHASE_PROXY = 5,
+	XHTTP_CALL_PHASE_TLS = 6,
+	XHTTP_CALL_PHASE_REQUEST = 7,
+	XHTTP_CALL_PHASE_RESPONSE_HEADERS = 8,
+	XHTTP_CALL_PHASE_RESPONSE_BODY = 9
+} xhttpcallphase;
+
+
+
+/* 客户端错误按请求、传输、响应处理、协议和策略阶段稳定分类。 */
+typedef enum xhttpclienterror {
+	XHTTP_CLIENT_ERROR_NONE = 0,
+	XHTTP_CLIENT_ERROR_ARGUMENT = 1,
+	XHTTP_CLIENT_ERROR_STATE = 2,
+	XHTTP_CLIENT_ERROR_CONFIG = 3,
+	XHTTP_CLIENT_ERROR_REQUEST = 4,
+	XHTTP_CLIENT_ERROR_RESPONSE = 5,
+	#if defined(XHTTP_FEATURE_HTTP_CLIENT_CACHE)
+		XHTTP_CLIENT_ERROR_CACHE = 6,
+	#endif
+	XHTTP_CLIENT_ERROR_POOL = 7,
+	XHTTP_CLIENT_ERROR_DIAL = 8,
+	XHTTP_CLIENT_ERROR_PROXY = 9,
+	XHTTP_CLIENT_ERROR_TLS = 10,
+	XHTTP_CLIENT_ERROR_TRANSPORT = 11,
+	XHTTP_CLIENT_ERROR_PROTOCOL = 12,
+	XHTTP_CLIENT_ERROR_CALLBACK = 13,
+	XHTTP_CLIENT_ERROR_TIMEOUT_TOTAL = 14,
+	XHTTP_CLIENT_ERROR_TIMEOUT_IDLE = 15,
+	XHTTP_CLIENT_ERROR_CANCELLED = 16,
+	XHTTP_CLIENT_ERROR_REDIRECT = 17,
+	XHTTP_CLIENT_ERROR_REDIRECT_LIMIT = 18,
+	XHTTP_CLIENT_ERROR_REDIRECT_REPLAY = 19,
+	XHTTP_CLIENT_ERROR_REDIRECT_DOWNGRADE = 20,
+	XHTTP_CLIENT_ERROR_RETRY = 21,
+	XHTTP_CLIENT_ERROR_COOKIE = 22,
+	XHTTP_CLIENT_ERROR_DECOMPRESSION = 23,
+	XHTTP_CLIENT_ERROR_INTERNAL = 24
+} xhttpclienterror;
+
+
+
+/*
+	Info 是可并发读取的单调时钟快照，时间单位均为微秒。
+	未到达的时间点为零；Result 在运行期间为 AGAIN，终态后不再变化。
+*/
+typedef struct xhttpcallinfo {
+	/* 当前生命周期、实际阶段和稳定客户端错误。 */
+	xhttpcallstate State;
+	xhttpcallphase Phase;
+	xnetresult Result;
+	xhttpclienterror Error;
+
+	/* 完整 Call 的单调时间点。 */
+	uint64 Submitted;
+	uint64 Started;
+	uint64 TransportReady;
+	uint64 RequestSent;
+	uint64 FirstByte;
+	uint64 Headers;
+	uint64 LastProgress;
+	uint64 Completed;
+
+	/* 线路累计量与最终可见响应正文量。 */
+	uint64 RequestWireBytes;
+	uint64 ResponseWireBytes;
+	uint64 ResponseBodyBytes;
+
+	/* 完整调用的重定向、复用和最终传输事实。 */
+	size_t Redirects;
+	size_t Retries;
+	bool ReusedConnection;
+	bool Secure;
+	xhttpclientcacheoutcome Cache;
+} xhttpcallinfo;
+
+
+
+/*
+	DEFAULT 继承 Client 默认代理，DIRECT 显式绕过默认代理，
+	EXPLICIT 使用本次 Call 提供的不可变代理对象。
+*/
+typedef enum xhttpproxymode {
+	XHTTP_PROXY_DEFAULT = 0,
+	XHTTP_PROXY_DIRECT,
+	XHTTP_PROXY_EXPLICIT
+} xhttpproxymode;
+
+
+
+/* EXPLICIT 要求 Proxy 非空；其他模式要求 Proxy 为空，避免忽略配置。 */
+typedef struct xhttpproxyoptions {
+	xhttpproxymode Mode;
+	const xnetproxy* Proxy;
+} xhttpproxyoptions;
+
+
+
+#define XHTTP_REDIRECT_MAX_DEFAULT UINT32_C(10)
+
+#define XHTTP_REDIRECT_POST_TO_GET \
+	UINT32_C(0x00000001)
+#define XHTTP_REDIRECT_FORWARD_CREDENTIALS \
+	UINT32_C(0x00000002)
+#define XHTTP_REDIRECT_ALLOW_DOWNGRADE \
+	UINT32_C(0x00000004)
+
+
+
+/* 重定向配置用零跳明确关闭自动跟随，其余字段只调整安全策略。 */
+typedef struct xhttpredirectconfig {
+	uint32 Flags;
+	uint32 MaxHops;
+} xhttpredirectconfig;
+
+
+
+/* 每次调用可以继承客户端策略、强制跟随、返回原响应或拒绝重定向。 */
+typedef enum xhttpredirectmode {
+	XHTTP_REDIRECT_DEFAULT = 0,
+	XHTTP_REDIRECT_FOLLOW,
+	XHTTP_REDIRECT_MANUAL,
+	XHTTP_REDIRECT_ERROR
+} xhttpredirectmode;
+
+
+
+#define XHTTP_RETRY_MAX_DEFAULT UINT32_C(2)
+#define XHTTP_RETRY_BASE_DEFAULT UINT64_C(250000)
+#define XHTTP_RETRY_DELAY_MAX_DEFAULT UINT64_C(30000000)
+
+#define XHTTP_RETRY_STATUS UINT32_C(0x00000001)
+#define XHTTP_RETRY_TRANSPORT UINT32_C(0x00000002)
+#define XHTTP_RETRY_RESPECT_AFTER UINT32_C(0x00000004)
+#define XHTTP_RETRY_JITTER UINT32_C(0x00000008)
+
+#define XHTTP_RETRY_UNSAFE UINT32_C(0x00000001)
+
+
+
+/*
+	MaxRetries 为零时关闭 Client 默认重试。
+	BaseDelay 与 MaxDelay 使用微秒；Flags 分别控制状态、传输、服务端建议和抖动。
+*/
+typedef struct xhttpretryconfig {
+	uint64 BaseDelay;
+	uint64 MaxDelay;
+	uint32 Flags;
+	uint32 MaxRetries;
+} xhttpretryconfig;
+
+
+
+/* 单次调用可以继承、显式启用或显式关闭 Client 重试策略。 */
+typedef enum xhttpretrymode {
+	XHTTP_RETRY_DEFAULT = 0,
+	XHTTP_RETRY_ENABLED,
+	XHTTP_RETRY_DISABLED
+} xhttpretrymode;
+
+
+
+/* UNSAFE 只对本次调用显式允许非幂等方法重放。 */
+typedef struct xhttpretryoptions {
+	xhttpretrymode Mode;
+	uint32 Flags;
+} xhttpretryoptions;
+
+
+
+#define XHTTP_COOKIE_DISABLED	UINT32_C(0x00000001)
+#define XHTTP_COOKIE_SAME_SITE	UINT32_C(0x00000002)
+#define XHTTP_COOKIE_TOP_LEVEL	UINT32_C(0x00000004)
+
+
+
+/*
+	默认按普通同站 HTTP API 请求选择 Cookie。
+	PartitionKey 由 Call 复制，空视图表示未分区请求。
+*/
+typedef struct xhttpcookieoptions {
+	uint32 Flags;
+	xstrview PartitionKey;
+} xhttpcookieoptions;
+
+
+
+/*
+	连接上限的零值表示不限制，等待上限的零值也表示不限制。
+	任一 Idle 上限为零都会关闭复用；IdleTimeout 为零只关闭过期清扫。
+*/
+typedef struct xhttpclientpoolconfig {
+	/* 全 Client 正在拨号、使用或保留配额的连接上限；零表示不限制。 */
+	size_t MaxConnections;
+	/* 单 Origin 连接上限；零表示不限制。 */
+	size_t MaxConnectionsPerOrigin;
+	/* 全 Client 等待 Call 上限；零表示不限制。 */
+	size_t MaxWaiting;
+	/* 单 Origin 等待 Call 上限；零表示不限制。 */
+	size_t MaxWaitingPerOrigin;
+	/* 全 Client 可复用空闲连接上限；零表示不保留。 */
+	size_t MaxIdle;
+	/* 单 Origin 可复用空闲连接上限；零表示不保留。 */
+	size_t MaxIdlePerOrigin;
+	/* 空闲连接保留时间，单位为微秒；零表示不按时间清扫。 */
+	uint64 IdleTimeout;
+} xhttpclientpoolconfig;
+
+
+
+/*
+	当前数量和累计计数都可并发读取，但不承诺来自同一个全局时刻。
+	累计计数从 Client 创建起单调递增。
+*/
+typedef struct xhttpclientstats {
+	/* 正在拨号、使用或已保留配额，但尚未进入空闲 LRU 的连接。 */
+	size_t ActiveConnections;
+	/* 当前位于空闲 LRU 的可复用连接。 */
+	size_t IdleConnections;
+	/* 已释放池配额、正在异步关闭的空闲连接。 */
+	size_t ClosingConnections;
+	/* 尚未取得连接或连接配额的 Call。 */
+	size_t WaitingCalls;
+	/* 已经被 Client 接受的 Call 总数。 */
+	uint64 RequestsStarted;
+	/* 已经进入唯一终态的 Call 总数。 */
+	uint64 RequestsCompleted;
+	/* 已经完成 TCP 或 TLS 建立的物理连接总数。 */
+	uint64 ConnectionsOpened;
+	/* 从空闲池或同源直交取得传输的次数。 */
+	uint64 ConnectionsReused;
+	/* 由池确认关闭或淘汰的物理连接总数。 */
+	uint64 ConnectionsClosed;
+	/* 曾经进入连接等待队列的 Call 总数。 */
+	uint64 PoolWaits;
+	/* 因全局或单 Origin 等待上限被拒绝的 Call 总数。 */
+	uint64 PoolRejected;
+	/* 全部 Call 实际已经跟随的重定向跳数。 */
+	uint64 RedirectsFollowed;
+} xhttpclientstats;
+
+#define XHTTP_RESUME_ENTRIES_DEFAULT ((size_t)64u)
+#define XHTTP_RESUME_ORIGIN_DEFAULT ((size_t)4u)
+
+
+
+/*
+	票据按验证 host、目标端口和代理对象身份隔离。
+	任一上限为零都会关闭缓存，但不关闭基础 HTTPS。
+*/
+typedef struct xhttpresumeconfig {
+	size_t MaxEntries;
+	size_t MaxEntriesPerOrigin;
+} xhttpresumeconfig;
+
+
+
+/* 所有字段在同一缓存锁内读取，构成一致快照。 */
+typedef struct xhttpresumestats {
+	size_t Entries;
+	uint64 Hits;
+	uint64 Misses;
+	uint64 Stored;
+	uint64 Evicted;
+	uint64 Expired;
+	uint64 Dropped;
+} xhttpresumestats;
+
+#define XHTTP_DECOMPRESS_BODY_DEFAULT UINT64_C(67108864)
+#define XHTTP_DECOMPRESS_CODINGS_DEFAULT UINT32_C(4)
+#define XHTTP_DECOMPRESS_CODINGS_MAX UINT32_C(16)
+
+
+
+/* 单次调用可继承 Client、强制自动解码或保留线路正文。 */
+typedef enum xhttpdecompressmode {
+	XHTTP_DECOMPRESS_DEFAULT = 0,
+	XHTTP_DECOMPRESS_AUTO,
+	XHTTP_DECOMPRESS_RAW
+} xhttpdecompressmode;
+
+
+
+/*
+	Enabled 控制 Client 默认行为；MaxBody 约束最终和中间解码层的输出。
+	MaxCodings 限制可自动处理的 Content-Encoding 叠加层数。
+*/
+typedef struct xhttpdecompressconfig {
+	uint64 MaxBody;
+	uint32 MaxCodings;
+	bool Enabled;
+} xhttpdecompressconfig;
+
+
+
+/*
+	Timeout 覆盖排队、DNS、TCP、代理、TLS 和 HTTP I/O 的总时长。
+	IdleTimeout 限制没有传输进度的连续时长；两者单位均为微秒。
+	Resolver 只在 xrtHttpClientCreate 创建私有解析器时使用。
+*/
+typedef struct xhttpclientconfig {
+	xnetresolverconfig Resolver;
+	xnetdialconfig Dial;
+	xhttp1callconfig Call;
+	xhttp1exchangeconfig Exchange;
+	uint64 Timeout;
+	uint64 IdleTimeout;
+	/* Client 创建时保留默认代理；空指针表示默认直连。 */
+	const xnetproxy* Proxy;
+	xhttpredirectconfig Redirect;
+	xhttpretryconfig Retry;
+	/* 可选共享 Jar 在 Client 创建时增加引用。 */
+	xcookiejar* Cookies;
+	xhttpdecompressconfig Decompress;
+	xhttpclientcacheconfig Cache;
+	xhttpclientpoolconfig Pool;
+	xtlsstreamconfig TlsStream;
+	const xtlscontext* TlsContext;
+	const xtlsverifier* TlsVerifier;
+	bool SystemTrust;
+	xhttpresumeconfig Resume;
+} xhttpclientconfig;
+
+
+
+/*
+	Timeout 和 IdleTimeout 为零时分别继承 Client，NONE 显式关闭对应限制。
+	Cancel 在构造期间增加引用；Events 回调数据必须覆盖 Call 生命周期。
+*/
+typedef struct xhttpcalloptions {
+	xhttp1requestoptions Request;
+	xhttpcallevents Events;
+	xcancel* Cancel;
+	uint64 Timeout;
+	uint64 IdleTimeout;
+	/* 零值继承 Client；限制解码前表示正文，UINT64_MAX 允许无界流。 */
+	uint64 ResponseBodyLimit;
+	xhttpproxyoptions Proxy;
+	xhttpredirectmode Redirect;
+	xhttpretryoptions Retry;
+	xhttpcookieoptions Cookies;
+	xhttpdecompressmode Decompress;
+	xhttpclientcacheoptions Cache;
+} xhttpcalloptions;
+
+
+
+/*
+	结果只在完成回调期间借用。
+	Response 及升级后的 Tcp/Tls 调用方引用在回调入口转移给调用方。
+*/
+typedef struct xhttpcallresult {
+	xnetresult Result;
+	xhttpresponse* Response;
+	xnetstream* Tcp;
+	xtlsstream* Tls;
+	const xerror* Error;
+	xhttpcallinfo Info;
+	size_t Buffered;
+	bool Upgraded;
+} xhttpcallresult;
+
+
+
+/*
+	完成回调在本次 Call 选择的网络 Worker 上执行且至多一次。
+	回调可能与提交线程并发执行，必须使用参数中的 pCall 识别本次调用。
+*/
+typedef void (*xhttpcallproc)(
+	xhttpcall* pCall,
+	const xhttpcallresult* pResult,
+	ptr pData
+);
+
+
+
+XRT_EXTERN_C_BEGIN
+
+
+
+/* 初始化安全公网限额、两类 30 秒超时、Happy Eyeballs 和可选系统信任；允许未对齐存储。 */
+XRT_API void xrtHttpClientConfigInit(xhttpclientconfig* pConfig);
+
+
+
+/* 初始化 origin-form、无回调、无取消并继承 Client 的两类超时；允许未对齐存储。 */
+XRT_API void xrtHttpCallOptionsInit(xhttpcalloptions* pOptions);
+
+
+
+#if defined(XHTTP_FEATURE_HTTP_CLIENT_PROXY)
+
+/* 初始化为继承 Client 默认代理；允许未对齐完整存储并拒绝地址回绕。 */
+XRT_API void xrtHttpProxyOptionsInit(
+	xhttpproxyoptions* pOptions
+);
+
+#endif
+
+
+
+#if defined(XHTTP_FEATURE_HTTP_CLIENT_REDIRECT)
+
+/* 初始化十跳上限和安全重定向策略；允许未对齐完整存储并拒绝地址回绕。 */
+XRT_API void xrtHttpRedirectConfigInit(
+	xhttpredirectconfig* pConfig
+);
+
+#endif
+
+
+
+#if defined(XHTTP_FEATURE_HTTP_CLIENT_RETRY)
+
+/* 初始化为零次自动重试及完整安全策略；允许未对齐完整存储并拒绝地址回绕。 */
+XRT_API void xrtHttpRetryConfigInit(
+	xhttpretryconfig* pConfig
+);
+
+
+
+/* 初始化为继承 Client 且不允许非幂等重放；允许未对齐完整存储并拒绝地址回绕。 */
+XRT_API void xrtHttpRetryOptionsInit(
+	xhttpretryoptions* pOptions
+);
+
+#endif
+
+
+
+#if defined(XHTTP_FEATURE_HTTP_CLIENT_COOKIES)
+
+/* 初始化默认 Cookie 策略；接受未对齐的完整存储并拒绝回绕地址。 */
+XRT_API void xrtHttpCookieOptionsInit(
+	xhttpcookieoptions* pOptions
+);
+
+#endif
+
+
+
+#if defined(XHTTP_FEATURE_HTTP_CLIENT_DECOMPRESS)
+
+/* 初始化自动解码、64 MiB 正文上限和四层编码上限；允许未对齐存储。 */
+XRT_API void xrtHttpDecompressConfigInit(
+	xhttpdecompressconfig* pConfig
+);
+
+#endif
+
+
+
+#if defined(XHTTP_FEATURE_HTTP_CLIENT_CACHE)
+
+/* 初始化默认缓存策略；接受未对齐的完整存储并拒绝回绕地址。 */
+XRT_API void xrtHttpClientCacheConfigInit(
+	xhttpclientcacheconfig* pConfig
+);
+
+
+
+/* 初始化继承且未分区的缓存选项；存储可以未对齐但必须完整。 */
+XRT_API void xrtHttpClientCacheOptionsInit(
+	xhttpclientcacheoptions* pOptions
+);
+
+#endif
+
+
+
+#if defined(XHTTP_FEATURE_HTTP_CLIENT_POOL)
+
+/*
+	初始化无连接硬上限、128/8 空闲上限和 90 秒空闲过期。
+	输出允许未对齐，但必须是完整且不发生地址环绕的结构存储。
+*/
+XRT_API void xrtHttpClientPoolConfigInit(
+	xhttpclientpoolconfig* pConfig
+);
+
+#endif
+
+
+
+#if defined(XHTTP_FEATURE_HTTP_CLIENT_RESUME)
+
+/* 初始化默认恢复缓存；接受未对齐的完整存储并拒绝回绕地址。 */
+XRT_API void xrtHttpResumeConfigInit(
+	xhttpresumeconfig* pConfig
+);
+
+#endif
+
+
+
+/*
+	创建拥有私有异步 Resolver 的 Client。
+	Client 占用运行中的 Engine 生命周期，直到最后一个 Client/Call 引用释放。
+*/
+XRT_API xhttpclient* xrtHttpClientCreate(
+	xnetengine* pEngine,
+	const xhttpclientconfig* pConfig
+);
+
+
+
+#if defined(XHTTP_FEATURE_HTTP_CLIENT_HTTPS)
+
+/*
+	使用默认 HTTP 策略和显式 TLS 对象创建 Client。
+	Context 为空时创建默认上下文；Verifier 为空时使用系统信任。
+*/
+XRT_API xhttpclient* xrtHttpClientCreateTls(
+	xnetengine* pEngine,
+	const xtlscontext* pContext,
+	const xtlsverifier* pVerifier
+);
+
+#endif
+
+
+
+/*
+	创建借用共享 Resolver 的 Client。
+	Resolver 必须保持有效到最后一个 Client/Call 引用释放。
+*/
+XRT_API xhttpclient* xrtHttpClientCreateWithResolver(
+	xnetengine* pEngine,
+	xnetresolver* pResolver,
+	const xhttpclientconfig* pConfig
+);
+
+
+
+/* 增加 Client 公开所有者引用并返回原指针。 */
+XRT_API xhttpclient* xrtHttpClientRef(xhttpclient* pClient);
+
+
+
+/*
+	释放 Client 公开所有者引用。
+	最后一个所有者会隐式开始平滑排空，但不会等待排空完成。
+*/
+XRT_API void xrtHttpClientDestroy(xhttpclient* pClient);
+
+
+
+/* 停止接收新 Call，关闭空闲连接并让全部已提交 Call 自然完成。 */
+XRT_API bool xrtHttpClientDrain(xhttpclient* pClient);
+
+
+
+/* 停止接收新 Call，关闭空闲连接并协作取消全部已提交 Call。 */
+XRT_API bool xrtHttpClientAbort(xhttpclient* pClient);
+
+
+
+/* 返回 Client 当前生命周期状态。 */
+XRT_API xhttpclientstate xrtHttpClientState(
+	const xhttpclient* pClient
+);
+
+
+
+/* 返回 Client 生命周期绑定的借用网络 Engine；空 Client 返回空指针。 */
+XRT_API xnetengine* xrtHttpClientEngine(
+	const xhttpclient* pClient
+);
+
+
+
+/*
+	冻结 Request 并异步执行一次 HTTP/1 请求。
+	成功后 Call 独立于 Request；同步失败不接管 Request，也不会调用 Done。
+*/
+XRT_API xhttpcall* xrtHttpClientDo(
+	xhttpclient* pClient,
+	const xhttprequest* pRequest,
+	const xhttpcalloptions* pOptions,
+	xhttpcallproc pDone,
+	ptr pData
+);
+
+
+
+/* 增加 Call 引用并返回原指针。 */
+XRT_API xhttpcall* xrtHttpCallRef(xhttpcall* pCall);
+
+
+
+/* 释放 Call 引用；空指针视为空操作。 */
+XRT_API void xrtHttpCallDestroy(xhttpcall* pCall);
+
+
+
+/*
+	从任意线程协作取消 DNS、TCP、TLS 或 HTTP/1 阶段。
+	返回 true 表示取消已被接纳，最终结果必为 CANCELLED；
+	返回 false 表示已经接纳过取消或不可变终态已经提交。
+*/
+XRT_API bool xrtHttpCallCancel(xhttpcall* pCall);
+
+
+
+/* 在当前网络 Worker 上暂停正在交付的响应正文和传输读取。 */
+XRT_API bool xrtHttpCallPause(xhttpcall* pCall);
+
+
+
+/* 从任意线程恢复当前 HTTP/1 响应输入。 */
+XRT_API bool xrtHttpCallResume(xhttpcall* pCall);
+
+
+
+/* 返回当前 HTTP/1 响应输入暂停门的并发快照。 */
+XRT_API bool xrtHttpCallPaused(const xhttpcall* pCall);
+
+
+
+/* 返回 Call 从提交到终态始终所属的借用网络 Worker。 */
+XRT_API xnetworker* xrtHttpCallWorker(const xhttpcall* pCall);
+
+
+
+/* 从任意线程克隆 Call 当前有效请求；调用方负责销毁返回的拥有型快照。 */
+XRT_API xhttprequest* xrtHttpCallRequestClone(
+	const xhttpcall* pCall
+);
+
+
+
+/* 返回 Call 当前阶段或不可变终态的并发快照。 */
+XRT_API xhttpcallstate xrtHttpCallState(const xhttpcall* pCall);
+
+
+
+/* 失败、超时或取消后返回借用的稳定错误原因链。 */
+XRT_API const xerror* xrtHttpCallError(const xhttpcall* pCall);
+
+
+
+/* 复制 Call 快照；输出存储可以未对齐但必须完整且地址不回绕。 */
+XRT_API bool xrtHttpCallInfo(
+	const xhttpcall* pCall,
+	xhttpcallinfo* pInfo
+);
+
+
+
+#if defined(XHTTP_FEATURE_HTTP_CLIENT_PROXY)
+
+/*
+	返回 Client 借用的默认代理。
+	未配置默认代理时返回空指针且不设置错误。
+*/
+XRT_API const xnetproxy* xrtHttpClientProxy(
+	const xhttpclient* pClient
+);
+
+#endif
+
+
+
+#if defined(XHTTP_FEATURE_HTTP_CLIENT_COOKIES)
+
+/*
+	返回 Client 借用的共享 CookieJar。
+	未配置自动 Cookie 时返回空指针且不设置错误。
+*/
+XRT_API xcookiejar* xrtHttpClientCookieJar(
+	const xhttpclient* pClient
+);
+
+#endif
+
+
+
+#if defined(XHTTP_FEATURE_HTTP_CLIENT_CACHE)
+
+/*
+	返回 Client 借用的统一 Cache 句柄。
+	未配置自动缓存时返回空指针且不设置错误。
+*/
+XRT_API xhttpcache* xrtHttpClientCache(
+	const xhttpclient* pClient
+);
+
+#endif
+
+
+
+#if defined(XHTTP_FEATURE_HTTP_CLIENT_POOL)
+
+/* 关闭当前全部空闲连接并返回从池中摘除的数量，不影响活动 Call。 */
+XRT_API size_t xrtHttpClientCloseIdle(xhttpclient* pClient);
+
+
+
+/* 读取并发快照；输出存储可以未对齐但必须完整且地址不回绕。 */
+XRT_API bool xrtHttpClientStats(
+	const xhttpclient* pClient,
+	xhttpclientstats* pStats
+);
+
+#endif
+
+
+
+#if defined(XHTTP_FEATURE_HTTP_CLIENT_RESUME)
+
+/* 清空尚未被连接取用的 TLS 恢复票据，并返回释放数量。 */
+XRT_API size_t xrtHttpClientResumeClear(xhttpclient* pClient);
+
+
+
+/* 读取恢复缓存一致快照；输出存储可以未对齐但必须完整。 */
+XRT_API bool xrtHttpClientResumeStats(
+	const xhttpclient* pClient,
+	xhttpresumestats* pStats
+);
+
+#endif
+
+
+
+XRT_EXTERN_C_END
+
+#endif
+
+#endif
+
+
+/* public: extlibs/xhttp/include/xrt/http_client_future.h */
+
+
+#ifndef XRT_HTTP_CLIENT_FUTURE_H
+#define XRT_HTTP_CLIENT_FUTURE_H
+
+
+
+
+#if defined(XHTTP_FEATURE_HTTP_CLIENT_FUTURE) && \
+	(!defined(XHTTP_FEATURE_HTTP_CLIENT) || \
+	 !defined(XRT_FEATURE_FUTURE_BRIDGE) || \
+	 !defined(XRT_FEATURE_SPIN))
+	#error "XRT HTTP client Future support requires HTTP client, Future bridge and spin support"
+#endif
+
+
+
+#if defined(XHTTP_FEATURE_HTTP_CLIENT_FUTURE)
+
+/*
+	Future 成功值是拥有型 HTTP 结果。
+	结果同时覆盖普通响应与 Upgrade，避免异步便利层形成能力死角。
+*/
+typedef struct xhttpresult xhttpresult;
+
+
+
+XRT_EXTERN_C_BEGIN
+
+
+
+/*
+	等待 Client 进入 CLOSED；Future 取消只放弃当前等待，不改变 Client 生命周期。
+	Future 在活动 Call 回调、池传输和池 Timer 全部退出后才成功完成。
+*/
+XRT_API xfuture* xrtHttpClientWaitAsync(xhttpclient* pClient);
+
+
+
+/* 增加有效结果引用并返回原指针；空指针或引用计数耗尽时失败。 */
+XRT_API xhttpresult* xrtHttpResultRef(xhttpresult* pResult);
+
+
+
+/*
+	释放结果引用。
+	最后一个引用会销毁尚未取走的响应，并中止、释放尚未取走的 Upgrade 传输。
+*/
+XRT_API void xrtHttpResultDestroy(xhttpresult* pResult);
+
+
+
+/* 返回结果借用的响应；结果保持有效且响应未被取走期间可用。 */
+XRT_API const xhttpresponse* xrtHttpResultResponse(
+	const xhttpresult* pResult
+);
+
+
+
+/*
+	取走响应所有权并清空结果中的响应。
+	同一结果的 Take 与借用访问不可并发。
+*/
+XRT_API xhttpresponse* xrtHttpResultTakeResponse(
+	xhttpresult* pResult
+);
+
+
+
+/* 返回结果借用的明文 Upgrade Stream，普通响应或 HTTPS Upgrade 返回空。 */
+XRT_API xnetstream* xrtHttpResultTcp(
+	const xhttpresult* pResult
+);
+
+
+
+/* 取走明文 Upgrade Stream 所有权；同一传输至多成功取走一次。 */
+XRT_API xnetstream* xrtHttpResultTakeTcp(
+	xhttpresult* pResult
+);
+
+
+
+#if defined(XHTTP_FEATURE_HTTP_CLIENT_HTTPS)
+
+/* 返回结果借用的 TLS Upgrade Stream，普通响应或明文 Upgrade 返回空。 */
+XRT_API xtlsstream* xrtHttpResultTls(
+	const xhttpresult* pResult
+);
+
+
+
+/* 取走 TLS Upgrade Stream 所有权；同一传输至多成功取走一次。 */
+XRT_API xtlsstream* xrtHttpResultTakeTls(
+	xhttpresult* pResult
+);
+
+#endif
+
+
+
+/* 返回 Upgrade 后已经留在传输接收缓冲中的协议外字节数。 */
+XRT_API size_t xrtHttpResultBuffered(
+	const xhttpresult* pResult
+);
+
+
+
+/* 返回本次调用已经跟随的重定向次数。 */
+XRT_API size_t xrtHttpResultRedirects(
+	const xhttpresult* pResult
+);
+
+
+
+/* 判断结果是否已经把传输从 HTTP/1 交付给调用方。 */
+XRT_API bool xrtHttpResultUpgraded(
+	const xhttpresult* pResult
+);
+
+
+
+/* 复制不可变 Call 快照；输出存储可以未对齐但必须完整。 */
+XRT_API bool xrtHttpResultInfo(
+	const xhttpresult* pResult,
+	xhttpcallinfo* pInfo
+);
+
+
+
+/*
+	以 Future 执行一次高层 HTTP 调用。
+	Future 成功值是其拥有的 xhttpresult；失败错误由 Future 持有。
+	取消 Future 会协作取消底层 Call，外部 Call 取消也会反映为 Future 取消终态。
+*/
+XRT_API xfuture* xrtHttpClientDoAsync(
+	xhttpclient* pClient,
+	const xhttprequest* pRequest,
+	const xhttpcalloptions* pOptions
+);
+
+
+
+/*
+	阻塞执行一次高层 HTTP 调用并返回拥有型结果。
+	网络 Worker 不允许调用此函数；协程应使用 DoAsync 与 xrtFutureAwait。
+*/
+XRT_API xhttpresult* xrtHttpClientDoSync(
+	xhttpclient* pClient,
+	const xhttprequest* pRequest,
+	const xhttpcalloptions* pOptions
+);
+
+
+
+XRT_EXTERN_C_END
+
+#endif
+
+#endif
+
+
+/* public: extlibs/xhttp/include/xrt/http_client_easy.h */
+
+
+#ifndef XRT_HTTP_CLIENT_EASY_H
+#define XRT_HTTP_CLIENT_EASY_H
+
+
+#if defined(XHTTP_FEATURE_HTTP_CLIENT_EASY_FUTURE)
+#endif
+
+
+
+#if defined(XHTTP_FEATURE_HTTP_CLIENT_EASY) && \
+	!defined(XHTTP_FEATURE_HTTP_CLIENT)
+	#error "XRT HTTP client convenience support requires HTTP client support"
+#endif
+
+#if defined(XHTTP_FEATURE_HTTP_CLIENT_EASY_FUTURE) && \
+	(!defined(XHTTP_FEATURE_HTTP_CLIENT_EASY) || \
+	 !defined(XHTTP_FEATURE_HTTP_CLIENT_FUTURE))
+	#error "XRT HTTP client Future convenience support requires convenience and Future support"
+#endif
+
+
+
+XRT_EXTERN_C_BEGIN
+
+
+
+#if defined(XHTTP_FEATURE_HTTP_CLIENT_EASY)
+
+/* 构造并提交一条无正文 GET；返回的 Call 所有权与 xrtHttpClientDo 相同。 */
+XRT_API xhttpcall* xrtHttpClientGet(
+	xhttpclient* pClient,
+	xstrview Url,
+	const xhttpcalloptions* pOptions,
+	xhttpcallproc pDone,
+	ptr pData
+);
+
+
+
+/* 复制正文并构造一条 POST；ContentType 为空时不生成 Content-Type。 */
+XRT_API xhttpcall* xrtHttpClientPost(
+	xhttpclient* pClient,
+	xstrview Url,
+	xbytesview Body,
+	xstrview ContentType,
+	const xhttpcalloptions* pOptions,
+	xhttpcallproc pDone,
+	ptr pData
+);
+
+
+
+/* 复制正文并以任意合法 HTTP 方法提交，适合 PUT、PATCH 等固定正文请求。 */
+XRT_API xhttpcall* xrtHttpClientSendBytes(
+	xhttpclient* pClient,
+	xstrview Method,
+	xstrview Url,
+	xbytesview Body,
+	xstrview ContentType,
+	const xhttpcalloptions* pOptions,
+	xhttpcallproc pDone,
+	ptr pData
+);
+
+#endif
+
+
+
+#if defined(XHTTP_FEATURE_HTTP_CLIENT_EASY_FUTURE)
+
+/* 构造并异步提交一条无正文 GET，返回拥有型 Future。 */
+XRT_API xfuture* xrtHttpClientGetAsync(
+	xhttpclient* pClient,
+	xstrview Url,
+	const xhttpcalloptions* pOptions
+);
+
+
+
+/* 复制正文并异步提交一条 POST，返回拥有型 Future。 */
+XRT_API xfuture* xrtHttpClientPostAsync(
+	xhttpclient* pClient,
+	xstrview Url,
+	xbytesview Body,
+	xstrview ContentType,
+	const xhttpcalloptions* pOptions
+);
+
+
+
+/* 复制正文并以任意合法 HTTP 方法异步提交，返回拥有型 Future。 */
+XRT_API xfuture* xrtHttpClientSendBytesAsync(
+	xhttpclient* pClient,
+	xstrview Method,
+	xstrview Url,
+	xbytesview Body,
+	xstrview ContentType,
+	const xhttpcalloptions* pOptions
+);
+
+
+
+/* 构造并阻塞执行一条无正文 GET，返回拥有型结果。 */
+XRT_API xhttpresult* xrtHttpClientGetSync(
+	xhttpclient* pClient,
+	xstrview Url,
+	const xhttpcalloptions* pOptions
+);
+
+
+
+/* 复制正文并阻塞执行一条 POST，返回拥有型结果。 */
+XRT_API xhttpresult* xrtHttpClientPostSync(
+	xhttpclient* pClient,
+	xstrview Url,
+	xbytesview Body,
+	xstrview ContentType,
+	const xhttpcalloptions* pOptions
+);
+
+
+
+/* 复制正文并以任意合法 HTTP 方法阻塞执行，返回拥有型结果。 */
+XRT_API xhttpresult* xrtHttpClientSendBytesSync(
+	xhttpclient* pClient,
+	xstrview Method,
+	xstrview Url,
+	xbytesview Body,
+	xstrview ContentType,
+	const xhttpcalloptions* pOptions
+);
+
+#endif
+
+
+
+XRT_EXTERN_C_END
+
+#endif
+
+
+
+#endif

@@ -800,7 +800,7 @@ static void MdoModelsProfileError(xllm_error* pError, cstr Message)
     snprintf(pError->sMessage, sizeof(pError->sMessage), "%s", Message);
 }
 
-static xx509store* MdoModelsLoadCaStore(cstr Path, xllm_error* Error)
+xx509store* MdoModelLoadCaStore(cstr Path, xllm_error* Error)
 {
     xfile File = NULL;
     xfileinfo Info;
@@ -1176,7 +1176,7 @@ xllm_client* MdoModelClientCreate(const MdoModelCatalog* pCatalog,
         goto done;
     }
     if ( Transport.CaPemPath[0] != '\0' ) {
-        CaStore = MdoModelsLoadCaStore(Transport.CaPemPath, pError);
+        CaStore = MdoModelLoadCaStore(Transport.CaPemPath, pError);
         if ( CaStore == NULL ) goto done;
     }
     if ( strcmp(Transport.ProxyKind, "none") != 0 &&

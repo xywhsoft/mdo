@@ -208,6 +208,9 @@ void MdoApiJsonBodyUnit(MdoApiJsonBody* Body)
 {
     if ( Body == NULL ) return;
     xrtValueRelease(Body->Value);
+    /* Login and model setup bodies can contain credentials, including invalid
+     * JSON. Clear their original bytes before releasing the shared buffer. */
+    if (Body->Document) xrtSecureZero(Body->Document, Body->Size);
     xrtFree(Body->Document);
     memset(Body, 0, sizeof(*Body));
 }
