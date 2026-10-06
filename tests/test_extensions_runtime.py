@@ -83,7 +83,10 @@ def main():
                 for kind in ('subagents', 'skills', 'mcp', 'commands'):
                     status, data = call('GET', kind)
                     assert status == 200, data
-                assert not (base / 'home').exists(), 'read-only lists created Home'
+                # Startup tool preflight can persist its own notification. Reads
+                # must never materialize extension files or enablement settings.
+                for name in ('subagents', 'skills', 'mcp', 'commands', 'config/extensions.json'):
+                    assert not (base / 'home' / name).exists(), 'read-only list wrote ' + name
                 command = '---\ndescription: Review changes\nargument-hint: <path>\n---\nReview $ARGUMENTS carefully.'
                 status, data = call('PUT', 'commands/review', {'content': command}, 'new')
                 assert status == 200, data
