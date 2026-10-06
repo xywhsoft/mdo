@@ -1529,5 +1529,12 @@
   "devices.android.title": "Android background activity",
   "devices.android.notification": "Allow mdo notifications to see the running service and its stop action. If the system offers app freezing or sleeping, disable those restrictions for mdo.",
   "devices.android.limits": "Change these options in the target phone's system settings. Remote access uses more battery. Force stop, a restart or background restrictions may still take the device offline; reopen mdo to check its status.",
-  "devices.android.battery": "Allow mdo to run in the background under the phone's App info → Battery settings. Some devices require unrestricted background activity; the ordinary allow-background option may still impose additional limits."
+  "devices.android.battery": "Allow mdo to run in the background under the phone's App info → Battery settings. Some devices require unrestricted background activity; the ordinary allow-background option may still impose additional limits.",
+  "settings.replyLanguage": "AI reply language",
+  "settings.replyLanguageDescription": "Applies to every reply, including existing sessions, independently of the interface language. Explicit translation or language requests are still followed.",
+  "settings.replyLanguageAuto": "Match your message",
+  "settings.replyLanguageCustom": "Enter manually",
+  "settings.replyLanguageCustomLabel": "Language name",
+  "settings.replyLanguageCustomDescription": "For example: 日本語, Deutsch, Cantonese. Up to 128 bytes.",
+  "settings.replyLanguageInvalid": "Enter a language name (up to 128 bytes, without line breaks or angle brackets)."
 }

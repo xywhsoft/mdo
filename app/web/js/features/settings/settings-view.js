@@ -24,6 +24,8 @@ function settingsPatch(form) {
       permission_profile: form.elements.permission_profile.value,
       reasoning_effort: form.elements.reasoning_effort.value,
       user_instructions: form.elements.user_instructions.value,
+      reply_language: form.elements.reply_language.value === "custom"
+        ? form.elements.reply_language_custom.value.trim() : form.elements.reply_language.value,
       web_search: form.elements.web_search.checked,
       memory: form.elements.memory.checked,
       schedules: form.elements.schedules.checked,
@@ -184,6 +186,14 @@ export function createSettingsView({ form, store, navigation, onApplied }) {
   }
 
   function validateInstructions() {
+    const customLanguage = form.elements.reply_language_custom;
+    const custom = form.elements.reply_language.value === "custom";
+    document.querySelector("#setting-reply-language-custom-row").hidden = !custom;
+    customLanguage.required = custom;
+    customLanguage.setCustomValidity(custom &&
+      (!customLanguage.value.trim() || new TextEncoder().encode(customLanguage.value.trim()).length > 128 ||
+        /[\x00-\x1f\x7f<>]/u.test(customLanguage.value))
+      ? t("settings.replyLanguageInvalid") : "");
     const field = form.elements.user_instructions;
     const bytes = new TextEncoder().encode(field.value).length;
     field.setCustomValidity(bytes > 8192
@@ -191,7 +201,7 @@ export function createSettingsView({ form, store, navigation, onApplied }) {
     instructionsCount.textContent = t("settings.instructionsBytes",
       { bytes }, `${bytes} / 8192 字节`);
     instructionsCount.dataset.tone = bytes > 8192 ? "error" : "neutral";
-    return bytes <= 8192;
+    return bytes <= 8192 && customLanguage.validity.valid;
   }
 
   function validateProxy() {
@@ -233,6 +243,10 @@ export function createSettingsView({ form, store, navigation, onApplied }) {
     form.elements.permission_profile.value = settings.agent.permission_profile ?? "balanced";
     form.elements.reasoning_effort.value = settings.agent.reasoning_effort;
     form.elements.user_instructions.value = settings.agent.user_instructions ?? "";
+    const replyLanguage = settings.agent.reply_language ?? "";
+    form.elements.reply_language.value = ["", "zh-CN", "en-US", "ru-RU"].includes(replyLanguage)
+      ? replyLanguage : "custom";
+    form.elements.reply_language_custom.value = form.elements.reply_language.value === "custom" ? replyLanguage : "";
     validateInstructions();
     form.elements.max_parallel_tools.value = settings.agent.max_parallel_tools;
     form.elements.max_parallel_subagents.value = settings.agent.max_parallel_subagents;
@@ -300,7 +314,8 @@ export function createSettingsView({ form, store, navigation, onApplied }) {
     applyButton.disabled = busy || !dirty;
     discardButton.disabled = busy || !dirty;
     feedbackText(!validInstructions
-      ? t("settings.instructionsTooLong", {}, "自定义指令不能超过 8192 字节。")
+      ? !form.elements.reply_language_custom.validity.valid
+        ? t("settings.replyLanguageInvalid") : t("settings.instructionsTooLong", {}, "自定义指令不能超过 8192 字节。")
       : !validProxy
         ? t("settings.proxyInvalid", {}, "代理地址、端口或用户名需要检查。")
       : !validPower

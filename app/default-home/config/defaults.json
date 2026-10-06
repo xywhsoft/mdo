@@ -19,6 +19,7 @@
     "agent": {
       "reasoning_effort": "medium",
       "user_instructions": "",
+      "reply_language": "",
       "web_search": true,
       "memory": true,
       "schedules": true,

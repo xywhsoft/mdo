@@ -512,12 +512,13 @@ void ServiceInit(XS_HostInfo *host) {{
     if (!QuiescentCaptureProbe(session)) goto done;
     MdoAgentSessionRelease(session); session = NULL;
     if (!MdoConfigImport(MDO_CONFIG_SETTINGS,
-            xrtStrView("{{\"schema_version\":1,\"patch\":{{\"agent\":{{\"user_instructions\":\"probe-custom-v2\"}}}}}}"))) {{
+            xrtStrView("{{\"schema_version\":1,\"patch\":{{\"agent\":{{\"user_instructions\":\"probe-custom-v2\",\"reply_language\":\"ru-RU\"}}}}}}"))) {{
         printf("prompt_config_error=1\n"); goto done;
     }}
     options.Recover = true;
     session = MdoAgentSessionCreateWithRuntime(runtime, &options, &error);
     if (session == NULL) {{ PrintRuntimeError("prompt_recover_error", &error); goto done; }}
+    printf("reply_language_recovered=%d\n", strstr(session->SystemPrompt, "Russian") != NULL);
     printf("prompt_recovered=old:%d new:%d\n",
         strstr(session->SystemPrompt, "probe-custom-v1") != NULL ? 1 : 0,
         strstr(session->SystemPrompt, "probe-custom-v2") != NULL ? 1 : 0);
@@ -743,6 +744,7 @@ def main() -> int:
         assert "run_info=agent:probe.main model:ornith-1.5-35b reasoning:medium state:2 result:0 generations:1/1/1/2" in output, output
         assert "callback=calls:1 model:1 reasoning:1 system_v1:1 skill_v1:1 skill_v2:0 memory:1 instructions_v1:1" in output, output
         assert "prompt_initial=1" in output, output
+        assert "reply_language_recovered=1" in output, output
         assert "prompt_recovered=old:1 new:0" in output, output
         assert "prompt_after_clear=old:1 new:0" in output, output
         assert "prompt_after_truncate=old:1 new:0" in output, output

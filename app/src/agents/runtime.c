@@ -596,6 +596,42 @@ static bool MdoAgentsAppendPrompt(char** Prompt, const char* Fragment,
     return true;
 }
 
+/* A dynamic preference: replace only our own section in recovered prompts,
+ * preserving the original Agent, Skill and user instructions. */
+static bool MdoAgentsReplyLanguage(char** Prompt, xwork_error* Error)
+{
+    static const char Header[] = "\n\n<mdo_reply_language>\n";
+    static const char Footer[] = "\n</mdo_reply_language>\n";
+    MdoConfigAgentSettings Settings;
+    char Fragment[768];
+    const char* Language;
+    char* Begin = strstr(*Prompt, Header);
+    if ( Begin != NULL ) {
+        char* End = strstr(Begin + sizeof(Header) - 1u, Footer);
+        if ( End != NULL ) memmove(Begin, End + sizeof(Footer) - 1u,
+            strlen(End + sizeof(Footer) - 1u) + 1u);
+    }
+    memset(&Settings, 0, sizeof(Settings));
+    Settings.Size = sizeof(Settings);
+    if ( !MdoConfigGetAgentSettings(&Settings) ) {
+        MdoAgentsError(Error, XWORK_ERROR_CONTEXT,
+            "reply language preference is unavailable");
+        return false;
+    }
+    Language = Settings.ReplyLanguage;
+    if ( strcmp(Language, "zh-CN") == 0 ) Language = "Chinese (Simplified)";
+    else if ( strcmp(Language, "en-US") == 0 ) Language = "English";
+    else if ( strcmp(Language, "ru-RU") == 0 ) Language = "Russian";
+    snprintf(Fragment, sizeof(Fragment), "%s%s%s%s", Header,
+        Language[0] != '\0' ? "Keep replying to the user in " :
+            "Keep replying in the language of the user's latest message",
+        Language[0] != '\0' ? Language : "",
+        ". Follow explicit translation or language requests. Do not switch "
+        "languages because of older replies, quoted text or tool results. "
+        "Preserve code, paths and exact quotations as needed.\n</mdo_reply_language>\n");
+    return MdoAgentsAppendPrompt(Prompt, Fragment, strlen(Fragment), Error);
+}
+
 static xwork_approval_mode MdoAgentsApproval(const char* Profile,
     bool ReadOnly, bool* Valid)
 {
@@ -779,6 +815,7 @@ static bool MdoAgentsPublishSubagents(MdoAgentOwner* Owner,
             Error);
         if ( Prompts[Count] == NULL ) goto done;
         ++PromptCount;
+        if ( !MdoAgentsReplyLanguage(&Prompts[Count], Error) ) goto done;
         ModelId = Subagent.Model != NULL && Subagent.Model[0] != '\0' ?
             Subagent.Model : MainModel->Info.Id;
         Reasoning = Subagent.ReasoningEffort != NULL &&
@@ -1144,6 +1181,7 @@ MdoAgentSession* MdoAgentSessionCreateWithRuntime(xwork_runtime* Runtime,
                     sizeof(InstructionsFooter) - 1u, Error)) ) goto fail;
         }
     }
+    if ( !MdoAgentsReplyLanguage(&Prompt, Error) ) goto fail;
     /* Memory is a dynamic context section. Keep the recovered Agent/Skill/user
      * instructions, but refresh memory paths and indices when a run is admitted.
      * Remove the old structured-memory section as well during the transition. */

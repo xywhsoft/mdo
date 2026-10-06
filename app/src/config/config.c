@@ -410,6 +410,22 @@ static bool MdoConfigProxyValidate(const xvalue* Proxy)
     return true;
 }
 
+static bool MdoConfigReplyLanguageValid(const xvalue* Value)
+{
+    xstrview Text;
+    size_t Index;
+    /* Optional for external defaults from older portable Homes. */
+    if ( Value == NULL ) return true;
+    if ( !MdoConfigString(Value, &Text) || Text.Size > 128u ||
+         !xrtUtf8Valid(Text, NULL) ) return false;
+    for ( Index = 0u; Index < Text.Size; ++Index ) {
+        unsigned char Byte = (unsigned char)Text.Data[Index];
+        if ( Byte < 32u || Byte == 127u || Byte == '<' || Byte == '>' )
+            return false;
+    }
+    return true;
+}
+
 static bool MdoConfigSettingsValidate(const xvalue* pSettings)
 {
     static const char* const Themes[] = { "system", "light", "dark" };
@@ -489,6 +505,8 @@ static bool MdoConfigSettingsValidate(const xvalue* pSettings)
          (Text.Size != 0u &&
           memchr(Text.Data, '\0', Text.Size) != NULL) ||
          !xrtUtf8Valid(Text, NULL) ||
+         !MdoConfigReplyLanguageValid(xrtValueObjectGet(pAgent,
+            MdoConfigKey("reply_language"))) ||
          !MdoConfigBool(pAgent, "web_search") ||
          !MdoConfigBool(pAgent, "memory") ||
          !MdoConfigBool(pAgent, "schedules") ||
@@ -1362,6 +1380,7 @@ bool MdoConfigGetAgentSettings(MdoConfigAgentSettings* pSettings)
     const xvalue* pPermission;
     xstrview Reasoning;
     xstrview Permission;
+    xstrview ReplyLanguage = { 0 };
     uint64 MaxTools;
     uint64 MaxSubagents;
     bool MemoryEnabled;
@@ -1391,6 +1410,10 @@ bool MdoConfigGetAgentSettings(MdoConfigAgentSettings* pSettings)
         pPermission = xrtValueObjectGet(pPermissions,
             MdoConfigKey("default_profile"));
     if ( pAgent != NULL && pPermissions != NULL &&
+         (xrtValueObjectGet(pAgent, MdoConfigKey("reply_language")) == NULL ||
+          MdoConfigString(xrtValueObjectGet(pAgent,
+            MdoConfigKey("reply_language")), &ReplyLanguage)) &&
+         ReplyLanguage.Size < sizeof(pSettings->ReplyLanguage) &&
          MdoConfigString(xrtValueObjectGet(pAgent,
             MdoConfigKey("reasoning_effort")), &Reasoning) &&
          MdoConfigString(pPermission, &Permission) &&
@@ -1414,6 +1437,8 @@ bool MdoConfigGetAgentSettings(MdoConfigAgentSettings* pSettings)
         pSettings->MaxParallelSubagents = (uint32)MaxSubagents;
         memcpy(pSettings->ReasoningEffort, Reasoning.Data, Reasoning.Size);
         memcpy(pSettings->PermissionProfile, Permission.Data, Permission.Size);
+        if ( ReplyLanguage.Size != 0u )
+            memcpy(pSettings->ReplyLanguage, ReplyLanguage.Data, ReplyLanguage.Size);
         Ok = true;
     }
     xrtMutexUnlock(g_MdoConfig.Lock);
