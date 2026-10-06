@@ -99,6 +99,7 @@ bool MdoMcpManagerSetEnabled(const char* ServerId, bool Enabled,
 bool MdoMcpManagerDisconnect(const char* ServerId, xwork_error* pError);
 bool MdoMcpManagerRefresh(const char* ServerId, xcancel* pCancel,
     uint64 Deadline, xwork_error* pError);
+bool MdoMcpValidateText(const char* Id, const char* Text, char* Error, size_t Capacity);
 
 MdoMcpDiagnostics* MdoMcpDiagnosticsSnapshot(void);
 MdoMcpDiagnostics* MdoMcpDiagnosticsRef(MdoMcpDiagnostics* pDiagnostics);

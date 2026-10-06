@@ -6,6 +6,7 @@
 
 #include "../../include/mdo/home.h"
 #include "../../include/mdo/modules.h"
+#include "../../include/mdo/subagent_file.h"
 
 #define MDO_MODULE_SOURCE_LIMIT (1024u * 1024u)
 #define MDO_MODULE_HEADER_LIMIT (512u * 1024u)
@@ -129,6 +130,7 @@ struct MdoModuleDiagnostics {
 typedef struct MdoModuleSource {
     MdoModuleKind Kind;
     bool External;
+    bool Declarative;
     char* VirtualPath;
     char* RelativePath;
 } MdoModuleSource;
@@ -514,9 +516,22 @@ static bool MdoModulesDiscoverDirectory(MdoModuleKind Kind, cstr Directory,
         size_t iVirtual = strlen(Directory);
         size_t iRelative = strlen(RelativeDirectory);
 
+        bool Declarative = strcmp(RelativeDirectory, "subagents") == 0;
         if ( (Entry.Flags & XDIR_ENTRY_UTF8) == 0u ||
-             Entry.Info.Type != XFILE_TYPE_FILE || iName <= 2u ||
-             strcmp(Entry.Name.Data + iName - 2u, ".c") != 0 ) continue;
+             Entry.Info.Type != XFILE_TYPE_FILE || iName <= (Declarative ? 3u : 2u) ||
+             strcmp(Entry.Name.Data + iName - (Declarative ? 3u : 2u),
+                 Declarative ? ".md" : ".c") != 0 ) continue;
+        if (Declarative) {
+            char Id[65];
+            bool Enabled;
+            if (iName - 3u >= sizeof(Id)) continue;
+            memcpy(Id, Entry.Name.Data, iName - 3u); Id[iName - 3u] = '\0';
+            if (!MdoExtensionIdValid(Id)) continue;
+            if (!MdoExtensionEnabled("subagents", Id, &Enabled)) {
+                (void)xrtDirClose(Dir); return false;
+            }
+            if (!Enabled) continue;
+        }
         if ( *pCount >= MDO_MODULE_COUNT_LIMIT ||
              iVirtual > SIZE_MAX - iName - 2u ||
              iRelative > SIZE_MAX - iName - 2u ||
@@ -531,6 +546,7 @@ static bool MdoModulesDiscoverDirectory(MdoModuleKind Kind, cstr Directory,
         pSource = &(*ppSources)[*pCount];
         memset(pSource, 0, sizeof(*pSource));
         pSource->Kind = Kind;
+        pSource->Declarative = Declarative;
         pSource->VirtualPath = (char*)xrtMalloc(iVirtual + iName + 2u);
         pSource->RelativePath = (char*)xrtMalloc(iRelative + iName + 2u);
         if ( pSource->VirtualPath == NULL || pSource->RelativePath == NULL ) {
@@ -593,6 +609,9 @@ static bool MdoModulesDiscover(MdoModuleSource** ppSources, size_t* pCount,
             ppSources, pCount, &iCapacity, pDiagnostics) ||
          !MdoModulesDiscoverDirectory(MDO_MODULE_SUBAGENTS,
             "/app/default-home/modules/subagents", "modules/subagents",
+            ppSources, pCount, &iCapacity, pDiagnostics) ||
+         !MdoModulesDiscoverDirectory(MDO_MODULE_SUBAGENTS,
+            "/app/default-home/subagents", "subagents",
             ppSources, pCount, &iCapacity, pDiagnostics) ) {
         MdoModulesSourcesUnit(*ppSources, *pCount);
         *ppSources = NULL;
@@ -1330,6 +1349,7 @@ static bool MdoModulesRuntimeTool(cstr Id, xwork_tool_effects* pEffects)
         xwork_tool_effects Effects;
     } Builtins[] = {
         { "read", XWORK_TOOL_EFFECT_READ },
+        { "skill", XWORK_TOOL_EFFECT_READ },
         { "ls", XWORK_TOOL_EFFECT_READ },
         { "glob", XWORK_TOOL_EFFECT_READ },
         { "grep", XWORK_TOOL_EFFECT_READ },
@@ -1680,6 +1700,46 @@ static xwork_tool_definition* MdoModulesDefinitions(
     return pDefinitions;
 }
 
+static MdoModuleGeneration* MdoModulesReadSubagent(const MdoModuleSource* Source,
+    uint64 Generation, MdoModuleDiagnostics* Diagnostics)
+{
+    char Id[65], Error[MDO_MODULE_ERROR_LIMIT] = {0};
+    const char* Base = strrchr(Source->RelativePath, '/');
+    char* Text = MdoExtensionRead(Source->RelativePath, false, MDO_EXTENSION_TEXT_LIMIT, NULL);
+    MdoModuleGeneration* Module = NULL;
+    MdoSubagentFile File;
+    MdoModuleRegistrarContext Registrar;
+    size_t Length = Base != NULL ? strlen(Base + 1) : 0u;
+    bool Parsed = false;
+    memset(&File, 0, sizeof(File));
+    if (Length < 4u || Length - 3u >= sizeof(Id) || Text == NULL) goto failed;
+    memcpy(Id, Base + 1, Length - 3u); Id[Length - 3u] = '\0';
+    if (!MdoSubagentFileParse(Id, Text, &File, Error, sizeof(Error))) goto failed;
+    Parsed = true;
+    Module = (MdoModuleGeneration*)xrtCalloc(1u, sizeof(*Module));
+    if (Module == NULL) goto failed;
+    xrtAtomic32Init(&Module->Refs, 1u);
+    Module->Generation = Generation; Module->Kind = MDO_MODULE_SUBAGENTS;
+    Module->External = Source->External;
+    Module->Id = xrtStrDup(File.Id); Module->Name = xrtStrDup(File.Name);
+    Module->Description = xrtStrDup(File.Description);
+    Module->Version = xrtStrDup("1");
+    Module->SourcePath = xrtStrDup(Source->VirtualPath);
+    if (Module->Id == NULL || Module->Name == NULL || Module->Description == NULL ||
+        Module->Version == NULL || Module->SourcePath == NULL ||
+        !MdoExtensionHash(Text, Module->SourceHash)) goto failed;
+    memset(&Registrar, 0, sizeof(Registrar)); Registrar.Generation = Module;
+    if (MdoModulesRegistrarAddAgent(&Registrar, &File.Agent, Error, sizeof(Error)) != MDO_RESULT_OK)
+        goto failed;
+    MdoSubagentFileUnit(&File); xrtFree(Text); return Module;
+failed:
+    if (Parsed) MdoSubagentFileUnit(&File);
+    xrtFree(Text); MdoModulesGenerationRelease(Module);
+    (void)MdoModulesDiagnosticAdd(Diagnostics, MDO_MODULE_DIAGNOSTIC_VALIDATE,
+        Source->VirtualPath, NULL, Error[0] != '\0' ? Error : "Cannot read SubAgent definition");
+    return NULL;
+}
+
 static MdoModuleCatalog* MdoModulesBuildCandidate(uint64 Generation,
     MdoModuleDiagnostics* pDiagnostics)
 {
@@ -1716,15 +1776,18 @@ static MdoModuleCatalog* MdoModulesBuildCandidate(uint64 Generation,
         if ( pRegisters == NULL ) goto memory_failed;
     }
     for ( i = 0u; i < iSourceCount; ++i ) {
-        pCatalog->Modules[i] = MdoModulesCompile(&pSources[i], Generation,
-            pHeader, iHeader, &pRegisters[i], pDiagnostics);
+        pCatalog->Modules[i] = pSources[i].Declarative
+            ? MdoModulesReadSubagent(&pSources[i], Generation, pDiagnostics)
+            : MdoModulesCompile(&pSources[i], Generation,
+                pHeader, iHeader, &pRegisters[i], pDiagnostics);
         if ( pCatalog->Modules[i] == NULL ) goto failed;
     }
     if ( !MdoModulesRegistrationOrder(pCatalog, pOrder, pDiagnostics) )
         goto failed;
     for ( i = 0u; i < iSourceCount; ++i ) {
         size_t iModule = pOrder[i];
-        if ( !MdoModulesRegister(pCatalog->Modules[iModule],
+        if ( !pSources[iModule].Declarative &&
+             !MdoModulesRegister(pCatalog->Modules[iModule],
                 pRegisters[iModule], pDiagnostics) ) goto failed;
     }
     if ( !MdoModulesValidateCatalog(pCatalog, pDiagnostics) ) {

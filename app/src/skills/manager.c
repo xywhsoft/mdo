@@ -4,6 +4,7 @@
 
 #include "../../include/mdo/home.h"
 #include "../../include/mdo/skills.h"
+#include "../../include/mdo/prompt_file.h"
 
 #define MDO_SKILL_COUNT_LIMIT 256u
 #define MDO_SKILL_DIAGNOSTIC_LIMIT 256u
@@ -35,6 +36,7 @@ typedef struct MdoSkillResource {
 
 typedef struct MdoSkillEntry {
     bool External;
+    bool AutoResources;
     char* Id;
     char* Name;
     char* Description;
@@ -208,7 +210,7 @@ static xstrview MdoSkillsTrim(xstrview View)
     return View;
 }
 
-static xstrview MdoSkillsTrimRight(xstrview View)
+static inline xstrview MdoSkillsTrimRight(xstrview View)
 {
     while ( View.Size != 0u &&
             (View.Data[View.Size - 1u] == ' ' ||
@@ -753,7 +755,7 @@ static MdoSkillField MdoSkillsField(xstrview Key)
 
 static bool MdoSkillsPathValid(cstr Path, MdoSkillResourceKind Kind)
 {
-    cstr Prefix = Kind == MDO_SKILL_RESOURCE_SCRIPT ? "scripts/" :
+    cstr Prefix = Kind == MDO_SKILL_RESOURCE_REFERENCE ? "" : Kind == MDO_SKILL_RESOURCE_SCRIPT ? "scripts/" :
         (Kind == MDO_SKILL_RESOURCE_TEMPLATE ? "templates/" : "assets/");
     size_t PrefixLength = strlen(Prefix);
     size_t Length;
@@ -906,90 +908,73 @@ static bool MdoSkillsScalarField(MdoSkillEntry* pEntry,
     return MdoSkillsScalar(Value, Limit, pTarget);
 }
 
-static bool MdoSkillsParseFrontmatter(MdoSkillEntry* pEntry,
-    const unsigned char* pHeader, size_t Start, size_t End,
-    char* Error, size_t ErrorCapacity)
+static bool MdoSkillsParseMetadata(MdoSkillEntry* Entry, const xvalue* Document,
+    char* Error, size_t Capacity)
 {
-    bool Seen[MDO_SKILL_FIELD_COUNT];
-    MdoSkillField ActiveList = MDO_SKILL_FIELD_NONE;
-    size_t Position = Start;
-
-    memset(Seen, 0, sizeof(Seen));
-    while ( Position < End ) {
-        size_t LineEnd = Position;
-        xstrview Line;
-        while ( LineEnd < End && pHeader[LineEnd] != '\n' ) LineEnd++;
-        Line.Data = (const char*)pHeader + Position;
-        Line.Size = LineEnd - Position;
-        if ( MdoSkillsContainsByte(Line.Data, Line.Size, '\t') ) {
-            MdoSkillsCopyError(Error, ErrorCapacity,
-                "Skill front matter must not contain tabs");
+    static const char* const Keys[] = {
+        "name", "description", "version", "license", "compatibility",
+        "tools", "mcp", "permissions", "scripts", "templates", "assets"
+    };
+    size_t i;
+    Entry->AutoResources = xrtValueObjectGet(Document, XRT_STR_LITERAL("scripts")) == NULL &&
+        xrtValueObjectGet(Document, XRT_STR_LITERAL("templates")) == NULL &&
+        xrtValueObjectGet(Document, XRT_STR_LITERAL("assets")) == NULL;
+    for (i = 0u; i < sizeof(Keys) / sizeof(Keys[0]); ++i) {
+        const xvalue* Value = xrtValueObjectGet(Document, xrtStrView(Keys[i]));
+        MdoSkillField Field = MdoSkillsField(xrtStrView(Keys[i]));
+        char* Json;
+        bool Ok;
+        if (Value == NULL) continue;
+        Json = xrtJsonStringify(Value, false, NULL);
+        if (Json == NULL) return false;
+        if (Field <= MDO_SKILL_FIELD_COMPATIBILITY) {
+            Ok = xrtValueType(Value) == XVALUE_STRING &&
+                MdoSkillsScalarField(Entry, Field, xrtStrView(Json));
+        } else {
+            xstrview String;
+            Ok = xrtValueGetString(Value, &String)
+                ? MdoSkillsInlineList(Entry, Field, String, Error, Capacity)
+                : MdoSkillsInlineList(Entry, Field, xrtStrView(Json), Error, Capacity);
+        }
+        xrtFree(Json);
+        if (!Ok) {
+            MdoSkillsCopyError(Error, Capacity, "Invalid Skill metadata field or resource path");
             return false;
-        }
-        Line = MdoSkillsTrimRight(Line);
-        Position = LineEnd < End ? LineEnd + 1u : End;
-        if ( Line.Size == 0u || Line.Data[0] == '#' ) continue;
-        if ( Line.Size >= 3u && Line.Data[0] == ' ' &&
-             Line.Data[1] == ' ' && Line.Data[2] == '-' ) {
-            xstrview Item;
-            if ( ActiveList == MDO_SKILL_FIELD_NONE ||
-                 (Line.Size > 3u && Line.Data[3] != ' ') ) {
-                MdoSkillsCopyError(Error, ErrorCapacity,
-                    "Skill list item has invalid indentation");
-                return false;
-            }
-            Item.Data = Line.Data + 3u;
-            Item.Size = Line.Size - 3u;
-            if ( !MdoSkillsListValue(pEntry, ActiveList, Item,
-                    Error, ErrorCapacity) ) return false;
-            continue;
-        }
-        if ( Line.Data[0] == ' ' ) {
-            MdoSkillsCopyError(Error, ErrorCapacity,
-                "Skill front matter supports only top-level keys and two-space lists");
-            return false;
-        }
-        {
-            size_t Colon = 0u;
-            xstrview Key;
-            xstrview Value;
-            MdoSkillField Field;
-            while ( Colon < Line.Size && Line.Data[Colon] != ':' ) Colon++;
-            if ( Colon == Line.Size ) {
-                MdoSkillsCopyError(Error, ErrorCapacity,
-                    "Skill front matter line is missing ':'");
-                return false;
-            }
-            Key = MdoSkillsTrim((xstrview){ Line.Data, Colon });
-            Value = MdoSkillsTrim((xstrview){ Line.Data + Colon + 1u,
-                Line.Size - Colon - 1u });
-            Field = MdoSkillsField(Key);
-            if ( Field == MDO_SKILL_FIELD_NONE || Seen[Field] ) {
-                MdoSkillsCopyError(Error, ErrorCapacity,
-                    "Skill front matter has an unknown or duplicate key");
-                return false;
-            }
-            Seen[Field] = true;
-            ActiveList = MDO_SKILL_FIELD_NONE;
-            if ( Field <= MDO_SKILL_FIELD_COMPATIBILITY ) {
-                if ( !MdoSkillsScalarField(pEntry, Field, Value) ) {
-                    MdoSkillsCopyError(Error, ErrorCapacity,
-                        "Skill scalar field is empty, malformed, or too long");
-                    return false;
-                }
-            } else if ( Value.Size == 0u ) {
-                ActiveList = Field;
-            } else if ( !MdoSkillsInlineList(pEntry, Field, Value,
-                    Error, ErrorCapacity) ) return false;
         }
     }
-    if ( !Seen[MDO_SKILL_FIELD_NAME] ||
-         !Seen[MDO_SKILL_FIELD_DESCRIPTION] ) {
-        MdoSkillsCopyError(Error, ErrorCapacity,
-            "Skill front matter requires name and description");
+    if (Entry->Name == NULL || Entry->Description == NULL) {
+        MdoSkillsCopyError(Error, Capacity, "Skill requires name and description");
         return false;
     }
     return true;
+}
+
+static bool MdoSkillsParseFrontmatter(MdoSkillEntry* Entry,
+    const unsigned char* Bytes, size_t Start, size_t End, char* Error, size_t Capacity)
+{
+    size_t Length = End - Start;
+    char* Text = (char*)xrtMalloc(Length + 10u);
+    xvalue* Document;
+    bool Ok;
+    if (Text == NULL) return false;
+    memcpy(Text, "---\n", 4u); memcpy(Text + 4u, Bytes + Start, Length);
+    memcpy(Text + Length + 4u, "---\n", 5u);
+    Document = MdoPromptParse(Text, true, Error, Capacity);
+    xrtFree(Text);
+    Ok = Document != NULL && MdoSkillsParseMetadata(Entry, Document, Error, Capacity);
+    xrtValueRelease(Document);
+    return Ok;
+}
+
+bool MdoSkillValidateText(cstr Text, char* Error, size_t Capacity)
+{
+    xvalue* Document = MdoPromptParse(Text, true, Error, Capacity);
+    MdoSkillEntry Entry;
+    bool Ok;
+    memset(&Entry, 0, sizeof(Entry));
+    Ok = Document != NULL && MdoSkillsParseMetadata(&Entry, Document, Error, Capacity);
+    xrtValueRelease(Document); MdoSkillsEntryUnit(&Entry);
+    return Ok;
 }
 
 static bool MdoSkillsHash(const void* Data, size_t Size, char Output[65])
@@ -1004,6 +989,51 @@ static bool MdoSkillsHash(const void* Data, size_t Size, char Output[65])
     }
     Output[64] = '\0';
     return true;
+}
+
+/* Standard Skills need no resource manifest. Discover names and stat only;
+ * contents remain lazy and links are never followed. Legacy manifests stay exact. */
+static bool MdoSkillsScanResources(const MdoSkillSource* Source,
+    MdoSkillEntry* Entry, cstr Prefix, unsigned Depth)
+{
+    char Directory[MDO_SKILL_PATH_LIMIT + 128u];
+    xdir Dir;
+    xdirentry Item;
+    xdirnext Next;
+    bool Ok = true;
+    if (Depth > 8u) return false;
+    snprintf(Directory, sizeof(Directory), "%s%s%s", Source->External ?
+        Source->RelativeDirectory : Source->VirtualDirectory,
+        Prefix[0] ? "/" : "", Prefix);
+    Dir = Source->External ? MdoHomeOpenDirectory(Directory, XDIR_STAT) :
+        xrtVfsDirOpen(xsApplicationVfs(), Directory, XDIR_STAT);
+    if (Dir == NULL) return false;
+    while ((Next = xrtDirNext(Dir, &Item)) == XDIR_NEXT_ITEM) {
+        char Path[MDO_SKILL_PATH_LIMIT + 1u];
+        int Length;
+        MdoSkillResourceKind Kind;
+        char* Owned;
+        if (!(Item.Flags & XDIR_ENTRY_UTF8) || Item.Name.Size == 0u ||
+            Item.Name.Data[0] == '.') continue;
+        Length = snprintf(Path, sizeof(Path), "%s%s%.*s", Prefix,
+            Prefix[0] ? "/" : "", (int)Item.Name.Size, Item.Name.Data);
+        if (Length < 0 || (size_t)Length >= sizeof(Path)) { Ok = false; break; }
+        if (Item.Info.Type == XFILE_TYPE_DIRECTORY) {
+            if (!MdoSkillsScanResources(Source, Entry, Path, Depth + 1u)) { Ok = false; break; }
+        } else if (Item.Info.Type == XFILE_TYPE_FILE && strcmp(Path, "SKILL.md") != 0) {
+            Kind = strncmp(Path, "scripts/", 8u) == 0 ? MDO_SKILL_RESOURCE_SCRIPT :
+                strncmp(Path, "templates/", 10u) == 0 ? MDO_SKILL_RESOURCE_TEMPLATE :
+                strncmp(Path, "assets/", 7u) == 0 ? MDO_SKILL_RESOURCE_ASSET : MDO_SKILL_RESOURCE_REFERENCE;
+            if (!MdoSkillsPathValid(Path, Kind)) { Ok = false; break; }
+            Owned = xrtStrDup(Path);
+            if (Owned == NULL || !MdoSkillsResourceAdd(Entry, Kind, Owned)) {
+                xrtFree(Owned); Ok = false; break;
+            }
+        }
+    }
+    if (Next == XDIR_NEXT_ERROR) Ok = false;
+    if (!xrtDirClose(Dir)) Ok = false;
+    return Ok;
 }
 
 static MdoSkillLoadStatus MdoSkillsOpenResources(
@@ -1107,6 +1137,11 @@ static MdoSkillLoadStatus MdoSkillsLoad(const MdoSkillSource* pSource,
     }
     pEntry->BodyBytes = FileSize - pEntry->BodyOffset;
     pEntry->EstimatedTokens = (pEntry->BodyBytes + 3u) / 4u;
+    if (pEntry->AutoResources && !MdoSkillsScanResources(pSource, pEntry, "", 0u)) {
+        (void)MdoSkillsDiagnosticAdd(pDiagnostics, MDO_SKILL_DIAGNOSTIC_RESOURCE,
+            pEntry->Id, pEntry->SourcePath, "Skill resources exceed safe path, depth or count limits");
+        return MDO_SKILL_LOAD_INVALID;
+    }
     Status = MdoSkillsOpenResources(pSource, pEntry, pDiagnostics);
     return Status;
 }
@@ -1125,6 +1160,9 @@ static MdoSkillCatalog* MdoSkillsBuildCandidate(uint64 Generation,
     if ( pCatalog == NULL ) goto fatal;
     for ( i = 0u; i < SourceCount; ++i ) {
         MdoSkillEntry Entry;
+        bool Enabled;
+        if (!MdoExtensionEnabled("skills", pSources[i].Id, &Enabled)) goto fatal;
+        if (!Enabled) continue;
         MdoSkillLoadStatus Status = MdoSkillsLoad(&pSources[i], &Entry,
             pDiagnostics);
         if ( Status == MDO_SKILL_LOAD_FATAL ) {

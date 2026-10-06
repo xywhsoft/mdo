@@ -8,6 +8,7 @@
     "src/security/secrets.c",
     "src/models/catalog.c",
     "src/skills/manager.c",
+    "src/skills/tools.c",
     "src/memory/manager.c",
     "src/memory/transfer.c",
     "src/migration/manager.c",

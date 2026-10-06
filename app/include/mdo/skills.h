@@ -2,6 +2,7 @@
 #define MDO_SKILLS_H
 
 #include <xsbase.h>
+#include <xwork.h>
 
 #define MDO_SKILL_FORMAT_VERSION 1u
 
@@ -16,7 +17,8 @@ typedef enum MdoSkillTrust {
 typedef enum MdoSkillResourceKind {
     MDO_SKILL_RESOURCE_SCRIPT = 1,
     MDO_SKILL_RESOURCE_TEMPLATE,
-    MDO_SKILL_RESOURCE_ASSET
+    MDO_SKILL_RESOURCE_ASSET,
+    MDO_SKILL_RESOURCE_REFERENCE
 } MdoSkillResourceKind;
 
 typedef enum MdoSkillDiagnosticStage {
@@ -91,6 +93,8 @@ typedef struct MdoSkillDiagnosticInfo {
 bool MdoSkillManagerInit(void);
 void MdoSkillManagerUnit(void);
 bool MdoSkillManagerReload(void);
+bool MdoSkillValidateText(const char* Text, char* Error, size_t Capacity);
+bool MdoSkillToolsRegister(xwork_runtime* Runtime);
 uint64 MdoSkillManagerGeneration(void);
 
 MdoSkillCatalog* MdoSkillCatalogSnapshot(void);

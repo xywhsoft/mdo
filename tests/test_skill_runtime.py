@@ -39,7 +39,7 @@ EXTERNAL_V2 = EXTERNAL_V1.replace("2.0.0", "2.1.0").replace(
 INVALID_EXTERNAL = '''---
 name: Broken
 description: Must not reveal the built-in Skill.
-unknown-key: rejected
+name: duplicate-name
 ---
 broken
 '''

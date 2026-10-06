@@ -104,7 +104,7 @@ bool MdoBootstrapInit(XS_HostInfo* pHost)
         return false;
     }
     g_MdoBootstrap.Stage = MDO_BOOTSTRAP_RUNTIME_READY;
-    if ( !MdoSkillManagerInit() ) {
+    if ( !MdoSkillManagerInit() || !MdoSkillToolsRegister(g_MdoBootstrap.Runtime) ) {
         MdoBootstrapFail("Skill manager initialization failed");
         return false;
     }

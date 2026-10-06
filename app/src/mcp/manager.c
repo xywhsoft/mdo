@@ -1398,6 +1398,24 @@ static bool MdoMcpCatalogAppend(MdoMcpCatalog* pCatalog,
     return true;
 }
 
+/* Parse only; editing a server never launches its program or sends a request. */
+bool MdoMcpValidateText(cstr Id, cstr Text, char* Error, size_t Capacity)
+{
+    MdoMcpSource Source;
+    MdoMcpServerEntry Entry;
+    MdoMcpDiagnosticStage Stage;
+    char Message[MDO_MCP_ERROR_LIMIT] = {0};
+    bool Ok;
+    memset(&Source, 0, sizeof(Source)); memset(&Entry, 0, sizeof(Entry));
+    Source.Id = (char*)Id;
+    Ok = Id != NULL && Text != NULL && MdoMcpParseServer(&Source, Text,
+        strlen(Text), &Entry, &Stage, Message);
+    MdoMcpServerUnit(&Entry);
+    if (!Ok && Error != NULL && Capacity != 0u)
+        snprintf(Error, Capacity, "%s", Message[0] != '\0' ? Message : "Invalid MCP definition");
+    return Ok;
+}
+
 static bool MdoMcpBuildCandidate(uint64 Generation,
     MdoMcpCatalog** ppCatalog, MdoMcpDiagnostics** ppDiagnostics)
 {
