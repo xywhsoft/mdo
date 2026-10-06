@@ -24,7 +24,7 @@ import {
 import { runsStore, loadRuns, startRun, readRun, cancelRun } from "./state/runs.js";
 import { approvalsStore, loadApprovals } from "./state/approvals.js";
 import { asksStore, selectAsks, clearAsks, refreshSelectedAsks } from "./state/asks.js";
-import { recoveryStore, selectRecovery, loadRecovery, readRecovery, abandonRecovery } from "./state/recovery.js";
+import { recoveryStore, selectRecovery, loadRecovery, readRecovery } from "./state/recovery.js";
 import { navigation } from "./state/navigation.js";
 import { createSessionList } from "./features/sessions/session-list.js";
 import { createSessionActionMenu } from "./features/sessions/session-action-menu.js";
@@ -1404,15 +1404,11 @@ export async function boot() {
   async function ensurePromptReady(projectId, sessionId, priority = false) {
     for (let attempt = 0; attempt < 4; attempt += 1) {
       try {
-        const recovery = await readRecovery(projectId, sessionId);
-        if (!recovery?.resume_required) return;
-        if (priority && recovery.total === 0) {
-          await abandonRecovery(recovery);
-          await loadRecovery();
-          return;
-        }
-        void loadRecovery();
-        throw recoveryRequiredError();
+        await readRecovery(projectId, sessionId);
+        // The server admits new input atomically with closing the unfinished
+        // response. This read only waits for the cancelled worker to release
+        // its runtime; it does not turn a normal Send into a recovery workflow.
+        return;
       } catch (error) {
         if (!priority || attempt === 3 ||
             !["recovery_state_conflict", "session_busy"].includes(error?.code))

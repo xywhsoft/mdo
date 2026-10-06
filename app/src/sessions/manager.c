@@ -916,6 +916,7 @@ MdoSession* MdoSessionOpen(const char* ProjectId, const char* SessionId,
     char* JournalPath = NULL;
     char* ArtifactPath = NULL;
     bool ProfileChanged = false;
+    bool InterruptedClosed = false;
     bool RecoveryRequired = false;
     bool Committed;
 
@@ -1064,7 +1065,19 @@ MdoSession* MdoSessionOpen(const char* ProjectId, const char* SessionId,
             "cannot inspect the opened Agent session");
         goto done;
     }
-    if ( ProfileChanged ) {
+    if ( Options->PrepareNewTurn ) {
+        uint64 Sequence = 0u;
+        uint64 FinishedSequence = 0u;
+        if ( !MdoAgentSessionRecoveryRequired(Agent, &RecoveryRequired,
+                Error) ) goto done;
+        if ( RecoveryRequired ) {
+            if ( !MdoAgentSessionLastSequence(Agent, &Sequence, Error) ||
+                 !MdoAgentSessionFinishInterrupted(Agent, Sequence,
+                    &FinishedSequence, Error) ) goto done;
+            InterruptedClosed = true;
+        }
+    }
+    if ( ProfileChanged || InterruptedClosed ) {
         if ( !MdoAgentSessionRecoveryRequired(Agent, &RecoveryRequired,
                 Error) ) goto done;
         if ( RecoveryRequired ) {
@@ -1097,7 +1110,7 @@ MdoSession* MdoSessionOpen(const char* ProjectId, const char* SessionId,
     Session = MdoSessionsHandleCreate(Agent, Bridge, ProjectLease, &Info, MetaPath);
     if ( Session == NULL ) goto memory;
     Agent = NULL;
-    if ( ProfileChanged ) {
+    if ( ProfileChanged || InterruptedClosed ) {
         xrtMutexLock(Session->Lock);
         xrtMutexLock(g_MdoSessions.Lock);
         Committed = MdoSessionsValidateCurrent(Session, Error) &&

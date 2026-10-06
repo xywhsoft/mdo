@@ -1148,7 +1148,7 @@
   "recovery.modelRetrySuffix": " 个工具调用；需要重新请求模型",
   "recovery.resumeWithChoices": "按以上决定恢复会话",
   "recovery.resume": "继续任务",
-  "recovery.noPendingCalls": "可以继续完成上次回复，也可以结束本次回复后发送新消息。已有内容和文件修改都会保留。",
+  "recovery.noPendingCalls": "可以继续上次回复，或直接发送新消息。已有内容和文件修改都会保留。",
   "recovery.endTurn": "结束本次回复",
   "error.network": "无法连接本地服务，请确认 mdo 仍在运行。",
   "error.sessionBusy": "这个会话仍有任务在运行。",

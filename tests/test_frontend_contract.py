@@ -266,7 +266,7 @@ class FrontendContractTests(unittest.TestCase):
         self.assertIn("approvalDecisionStore.subscribe(render)", panel)
         self.assertIn("approvalDecisionStore.subscribe(render)",
                       self.scripts["js/features/chat/conversation-docks.js"])
-        self.assertIn("text: item.arguments_json", panel)
+        self.assertIn("renderToolArguments(item", panel)
         self.assertIn('t("dock.approval.allowRun")',
                       self.scripts["js/features/chat/conversation-docks.js"])
         self.assertNotIn("innerHTML", panel)
@@ -284,10 +284,10 @@ class FrontendContractTests(unittest.TestCase):
         self.assertIn("recovery_token", state)
         self.assertIn('new Set(["retry", "record_uncertain"])', state)
         self.assertIn("every pending call needs a recovery decision", state)
-        self.assertIn('"记录为不确定"', panel)
-        self.assertIn('"重新执行"', panel)
+        self.assertIn('t("recovery.recordUncertain")', panel)
+        self.assertIn('t("recovery.retry")', panel)
         self.assertIn("!item.tool_available", panel)
-        self.assertIn("至少一次语义", panel)
+        self.assertIn('"recovery.retryWarning"', panel)
         self.assertIn("loadRecovery()", app)
         self.assertIn("monitorRun(run)", app)
         self.assertIn(".recovery-option.selected", self.css)

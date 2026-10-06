@@ -64,6 +64,9 @@ typedef struct MdoSessionRuntimeOptions {
     const char* ProfileModelId;
     const char* ProfileReasoningEffort;
     const char* ProfilePermissionProfile;
+    /* A new user message closes an interrupted response under the exclusive
+     * runtime reservation. Resume/inspection leave it available for retry. */
+    bool PrepareNewTurn;
 } MdoSessionRuntimeOptions;
 
 typedef struct MdoSessionForkOptions {

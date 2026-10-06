@@ -4092,7 +4092,7 @@ def run_probe(host: Path) -> None:
                 status, _, body = request(
                     port, "POST", abandon_path,
                     body=json.dumps({"revision": recovery["revision"],
-                                     "last_sequence": recovery["last_sequence"]}).encode(),
+                                     "last_sequence": recovery["last_sequence"] - 1}).encode(),
                     headers={"Content-Type": "application/json"})
                 assert status == 409, (status, body)
                 assert json.loads(body)["error"]["code"] == (

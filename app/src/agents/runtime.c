@@ -1507,10 +1507,10 @@ static bool MdoAgentRecoveryHashString(xsha256* Hash, const char* Text)
 }
 
 bool MdoAgentRecoverySnapshotToken(const xwork_recovery_snapshot* Snapshot,
-    bool ResumeRequired,
+    bool ResumeRequired, uint64 LastSequence,
     char Token[MDO_AGENT_RECOVERY_TOKEN_CAPACITY])
 {
-    static const char Domain[] = "mdo-recovery-view-v1";
+    static const char Domain[] = "mdo-recovery-view-v2";
     static const char Hex[] = "0123456789abcdef";
     xsha256 Hash;
     uint8 Digest[XRT_SHA256_SIZE];
@@ -1521,6 +1521,7 @@ bool MdoAgentRecoverySnapshotToken(const xwork_recovery_snapshot* Snapshot,
     xrtSha256Init(&Hash);
     if ( !xrtSha256Update(&Hash, Domain, sizeof(Domain) - 1u) ||
          !MdoAgentRecoveryHashUInt64(&Hash, ResumeRequired ? 1u : 0u) ||
+         !MdoAgentRecoveryHashUInt64(&Hash, LastSequence) ||
          !MdoAgentRecoveryHashUInt64(&Hash, (uint64)Count) ) return false;
     for ( Index = 0u; Index < Count; ++Index ) {
         xwork_recovery_call_info Info;
@@ -1692,13 +1693,35 @@ bool MdoAgentSessionFinishInterrupted(MdoAgentSession* Session,
     if ( !MdoAgentLedgerBegin(Session, Error) ) return false;
     Ledger = Session->Owner->LlmSession;
     if ( xllmSessionLastSequence(Ledger) != ExpectedLastSequence ||
-         xllmSessionPendingToolCallCount(Ledger) != 0u ||
          !xllmSessionGetTail(Ledger, &Tail) || !Tail.bHasMessage ||
-         (Tail.eRole != XLLM_ROLE_USER && Tail.eRole != XLLM_ROLE_TOOL) ) {
+         (xllmSessionPendingToolCallCount(Ledger) == 0u &&
+          Tail.eRole != XLLM_ROLE_USER && Tail.eRole != XLLM_ROLE_TOOL) ) {
         MdoAgentsError(Error, XWORK_ERROR_CONTEXT,
-            "the interrupted turn changed or has unresolved tool calls");
-    } else if ( !xllmSessionAddText(Ledger, Tail.uTurn,
-            XLLM_ROLE_ASSISTANT, "[Response interrupted by user.]",
+            "the interrupted turn changed or is already complete");
+        goto done;
+    }
+    /* Closing a response must pair every durable call with a result. Never
+     * replay a process/write/service operation merely to admit new input.
+     * Completed results remain intact; only missing results are uncertain.
+     * Each append is journaled, so partial failure is recoverable on retry. */
+    while ( xllmSessionPendingToolCallCount(Ledger) != 0u ) {
+        xllm_pending_tool_call Call;
+        if ( !xllmSessionPendingToolCallAt(Ledger, 0u, &Call) ||
+             !xllmSessionAddToolResult(Ledger, Call.uTurn, Call.sId,
+                "status: uncertain\nrecovery: not_retried\n"
+                "The previous response ended before this tool's result was "
+                "recorded. This call has not been executed again. Inspect "
+                "external state before relying on its result or repeating it.") ) {
+            MdoAgentsError(Error, XWORK_ERROR_CONTEXT,
+                "cannot close an interrupted tool call");
+            goto done;
+        }
+    }
+    if ( !xllmSessionAddText(Ledger, Tail.uTurn,
+            XLLM_ROLE_ASSISTANT,
+            "[Previous response ended before completion. Follow the latest "
+            "user message using the existing conversation. Any partial "
+            "output may already be visible to the user.]",
             XLLM_SESSION_ENTRY_SYNTHETIC) ) {
         xllmErrorInit(&ModelError);
         (void)xllmSessionGetLastPersistenceError(Ledger, &ModelError);
@@ -1711,6 +1734,7 @@ bool MdoAgentSessionFinishInterrupted(MdoAgentSession* Session,
         *FinishedSequence = xllmSessionLastSequence(Ledger);
         Ok = true;
     }
+done:
     xworkAgentRunEnd(Session->Agent);
     return Ok;
 }

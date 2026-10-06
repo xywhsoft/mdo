@@ -138,7 +138,7 @@ static bool MdoApiRecoveryReply(MdoApiContext* Context,
     size_t Index;
     bool Ok = Data != NULL && Items != NULL &&
         Count <= MDO_API_RECOVERY_CALL_MAX &&
-        MdoAgentRecoverySnapshotToken(Snapshot, ResumeRequired,
+        MdoAgentRecoverySnapshotToken(Snapshot, ResumeRequired, LastSequence,
             RecoveryToken);
 
     for ( Index = 0u; Ok && Index < Count; ++Index ) {

@@ -91,3 +91,24 @@ test("late recovery callbacks belong only to the original workspace, including a
     assert.equal(recoveryMatchesWorkspace(data,{...route,...patch}),false);
   assert.equal(recoveryMatchesWorkspace(null,route),false);
 });
+
+test("a failed resumed run can be retried after a fresh idle inspection with the same token", () => {
+  const state = createRecoveryDecisions();
+  const data = { ...pending(), inspection_id: 1 };
+  state.select(data);
+  const first = state.begin(data);
+  state.finish(first, true);
+  state.select({ ...data, unavailable: true });
+  assert.equal(state.begin(data), null);
+  state.select({ ...data }); // Cached view is not evidence of completion.
+  assert.equal(state.begin(data), null);
+  const fresh = { ...data, inspection_id: 2 };
+  state.select(fresh);
+  const second = state.begin(fresh);
+  assert.ok(second);
+  state.finish(second, true);
+  state.select(data); // A late read must not unlock the newer submission.
+  assert.equal(state.begin(data), null);
+  state.select({ ...fresh, inspection_id: 3 });
+  assert.ok(state.begin({ ...fresh, inspection_id: 3 }));
+});

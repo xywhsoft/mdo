@@ -26,15 +26,20 @@
 - 工具已不可用：不提供重跑按钮。
 
 用户可以为结果未知且仍可用的工具选择“再次执行”。界面明确提示可能重复产生效果。
-选择始终绑定会话及恢复令牌；新令牌不会继承重跑授权。已接受的请求即使刷新失败或
-切换会话后返回，也不会再次提交。
+选择始终绑定会话及恢复令牌；令牌包含账本序列，新状态不会继承重跑授权。已接受的请求
+不会被缓存、刷新失败或切换会话重新解锁。只有后端重新成功检查空闲会话，确认上次运行
+仍未完成，才允许再次提交；同一状态连续请求模型失败后，也可以再次点击“继续任务”。
 
-没有待处理工具调用时，还可选择“结束本次回复”，再发送新消息。
-这不会删除已有内容、撤销文件修改，或伪造工具执行成功。
+未完成回复不阻挡正常输入：用户可以点击“继续任务”，或者直接发送新的消息。
+直接发送会在会话的独占运行窗口中结束上一轮，将缺少结果的工具调用记录为
+`uncertain / not_retried`，然后追加新消息；不会删除旧内容、撤销文件修改或执行旧工具。
+“结束本次回复”采用同样的收尾方式，也适用于仍有未决工具调用的情况。
 未完成状态通过卡片提示；只有实际发送被阻止时才显示输入区提示，避免重复警告。
 
-本次改动调整呈现及默认恢复选择。停止原因分类、模型重试策略和审批等待期限属于运行时机制，
-不由这些前端组件改变。
+恢复普通聊天不再触发“文件修改后必须运行验证命令”的规则。xwork 从本轮账本和工具效果
+判断是否发生过写入；真实写入仍保留验证要求。xllm-session 的会话尾部排除系统消息，更新
+AI 回复语言或记忆上下文不会让未完成会话被误判为已完成；稳定的待工具结果状态也允许更新
+系统上下文，但模型调用和压缩进行中仍拒绝修改。
 
 ## 维护与验证
 
@@ -45,6 +50,8 @@
 ```powershell
 node --test tests/test_recovery_decisions.mjs tests/test_tool_preview.mjs tests/test_frontend_approval_decisions.mjs tests/test_ask_refresh.mjs tests/test_frontend_i18n.mjs
 node --experimental-vm-modules tools/check_web_modules.mjs
+python tests/test_conversation_resume_runtime.py --host .build/host/xs.exe
+python tests/test_interrupt_runtime.py --host .build/host/xs.exe
 ```
 
 浏览器验证页面：`tests/fixtures/interaction-presentation-browser.html`。

@@ -1148,7 +1148,7 @@
   "recovery.modelRetrySuffix": " tool calls; the model must be requested again",
   "recovery.resumeWithChoices": "Resume with these decisions",
   "recovery.resume": "Continue task",
-  "recovery.noPendingCalls": "Continue the previous response, or end it and send a new message. Existing content and file changes are kept.",
+  "recovery.noPendingCalls": "Continue the previous reply or send a new message directly. Existing content and file changes are preserved.",
   "recovery.endTurn": "End this response",
   "error.network": "Cannot connect to the local service. Check that mdo is still running.",
   "error.sessionBusy": "A task is still running in this session.",

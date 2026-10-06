@@ -25,6 +25,7 @@ export function createRecoveryDecisions() {
   const choices = new Map();
   const flights = new Map();
   const submittedBindings = new Map();
+  const submittedInspections = new Map();
   const isCurrent = (data) => bindingKey(data) === binding;
   const isBusy = (data) => flights.has(sessionKey(data));
   const isSubmitted = (data) => submittedBindings.get(sessionKey(data)) === bindingKey(data);
@@ -32,7 +33,16 @@ export function createRecoveryDecisions() {
     (data?.items ?? []).every(item => choices.has(String(item.tool_call_id)));
   function select(data) {
     const next = bindingKey(data);
-    if (next !== binding) {
+    const key = sessionKey(data);
+    const inspection = submittedInspections.get(key);
+    const refreshed = submittedBindings.get(key) === next &&
+      Number.isSafeInteger(inspection) && Number.isSafeInteger(data?.inspection_id) &&
+      data.inspection_id > inspection;
+    if (refreshed) {
+      submittedBindings.delete(key);
+      submittedInspections.delete(key);
+    }
+    if (next !== binding || refreshed) {
       choices.clear();
       // Continue never blindly repeats an operation with unknown effects.
       // Only the host's explicit read-only descriptor permits retry by default.
@@ -73,6 +83,7 @@ export function createRecoveryDecisions() {
         // Keep a confirmed request locked even if refreshing its status fails
         // or the user leaves this session and returns to an older snapshot.
         submittedBindings.set(operation.session, operation.binding);
+        submittedInspections.set(operation.session, operation.data.inspection_id);
         if (operation.binding === binding) choices.clear();
       }
       return true;

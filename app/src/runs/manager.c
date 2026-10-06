@@ -122,15 +122,17 @@ static bool MdoRunsRecoveryTokenValid(MdoAgentSession* Agent,
     xwork_recovery_snapshot* Snapshot;
     char CurrentToken[MDO_AGENT_RECOVERY_TOKEN_CAPACITY];
     bool ResumeRequired = false;
+    uint64 LastSequence = 0u;
 
     Snapshot = MdoAgentSessionRecoverySnapshot(Agent, Error);
     if ( Snapshot == NULL ) return false;
-    if ( !MdoAgentSessionRecoveryRequired(Agent, &ResumeRequired, Error) ) {
+    if ( !MdoAgentSessionRecoveryRequired(Agent, &ResumeRequired, Error) ||
+         !MdoAgentSessionLastSequence(Agent, &LastSequence, Error) ) {
         xworkRecoverySnapshotRelease(Snapshot);
         return false;
     }
     if ( !ResumeRequired || !MdoAgentRecoverySnapshotToken(Snapshot,
-            ResumeRequired, CurrentToken) ) {
+            ResumeRequired, LastSequence, CurrentToken) ) {
         xworkRecoverySnapshotRelease(Snapshot);
         MdoRunsError(Error, ResumeRequired ? XWORK_ERROR_CONTEXT :
             XWORK_ERROR_POLICY, ResumeRequired ?
@@ -638,6 +640,7 @@ bool MdoRunStartWithOutcome(const MdoRunStartOptions* Options,
         xrtDeadlineAfter((uint64)Options->TimeoutMilliseconds *
             UINT64_C(1000)) : XRT_DEADLINE_NEVER;
     MdoSessionRuntimeOptionsInit(&RuntimeOptions);
+    RuntimeOptions.PrepareNewTurn = !Options->Resume;
     RuntimeOptions.Cancel = StartCancel;
     RuntimeOptions.Deadline = Deadline;
     RuntimeOptions.OnApproval = g_MdoRuns.Options.OnApproval;

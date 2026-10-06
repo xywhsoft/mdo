@@ -172,8 +172,7 @@ export function createRecoveryDock({ container, summary, store, onResume, onAban
     });
     submitButton.disabled = !ready;
     submitButton.addEventListener("click", () => void submitRecovery(data));
-    if (items.length) container.append(submitButton);
-    else {
+    {
       const abandonButton = element("button", {
         className: "recovery-abandon",
         text: t("recovery.endTurn", {}, "结束本次回复"),

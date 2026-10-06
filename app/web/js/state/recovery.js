@@ -4,6 +4,7 @@ import { withSessionRuntime } from "./session-runtime.js";
 
 const EMPTY = Object.freeze({ resume_required: false, total: 0, items: [] });
 let selection = Object.freeze({ projectId: "", sessionId: "" });
+let inspectionSequence = 0;
 
 export const recoveryStore = createResourceStore(EMPTY);
 
@@ -19,8 +20,12 @@ export function selectRecovery(projectId, sessionId) {
 export function readRecovery(projectId, sessionId) {
   const project = resourceId(projectId, "project");
   const session = resourceId(sessionId, "session");
-  return withSessionRuntime(project, session, async () =>
-    (await api.get(`/projects/${project}/sessions/${session}/recovery`)).data);
+  return withSessionRuntime(project, session, async () => {
+    const data = (await api.get(`/projects/${project}/sessions/${session}/recovery`)).data;
+    // Only a fresh successful inspection proves the previous runtime exited.
+    // Cached snapshots and failed/busy reads must not unlock a submitted retry.
+    return { ...data, inspection_id: ++inspectionSequence };
+  });
 }
 
 export function loadRecovery() {
@@ -70,8 +75,8 @@ export async function abandonRecovery(data) {
   const lastSequence = Number(data?.last_sequence);
   if (!Number.isSafeInteger(revision) || revision < 1 ||
       !Number.isSafeInteger(lastSequence) || lastSequence < 1 ||
-      data?.resume_required !== true || (data?.items ?? []).length !== 0)
-    throw new TypeError("only an unchanged interrupted model turn can be ended");
+      data?.resume_required !== true)
+    throw new TypeError("only an unchanged interrupted response can be ended");
   return withSessionRuntime(project, session, async () =>
     (await api.post(`/projects/${project}/sessions/${session}/abandon`, {
       revision, last_sequence: lastSequence,
