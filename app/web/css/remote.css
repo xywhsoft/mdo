@@ -1,9 +1,10 @@
 .device-switch {
-  display: flex; width: 100%; align-items: center; justify-content: space-between;
-  gap: 8px; margin: 0 0 8px; padding: 8px 12px; border: 1px solid var(--border);
+  display: flex; flex: 1 1 0; min-width: 0; min-height: 40px; align-items: center; justify-content: space-between;
+  gap: 8px; padding: 8px 12px; border: 1px solid var(--border);
   border-radius: var(--radius-sm); background: transparent; color: var(--muted); text-align: left;
 }
-.device-switch span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.device-switch span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.device-switch b { flex: 0 0 auto; }
 .device-switch[data-remote="true"] { color: var(--focus); border-color: var(--focus); }
 .target-connection-notice {
   position: fixed; z-index: 160; top: max(8px, env(safe-area-inset-top)); left: 50%; transform: translateX(-50%);

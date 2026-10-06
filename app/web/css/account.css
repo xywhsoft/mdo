@@ -1,5 +1,7 @@
 .account-avatar { display:grid; place-items:center; flex-shrink:0; width:25px; height:25px; border-radius:50%; background:var(--surface-active); font-size:12px; }
-.account-name { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.account-name { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.sidebar-account { display:flex; flex:0 1 auto; align-items:center; gap:7px; min-width:0; max-width:60%; min-height:40px; padding:4px 6px; border:0; border-radius:var(--radius-sm); background:transparent; text-align:left; cursor:pointer; }
+.sidebar-account:hover { background:var(--surface-hover); }
 .account-panel { max-width:680px; }
 .account-origin, .account-note { color:var(--muted); overflow-wrap:anywhere; font-size:13px; }
 .account-state { font-weight:600; }

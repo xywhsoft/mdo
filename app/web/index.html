@@ -66,9 +66,15 @@
         </button>
       </div>
 
-      <button class="device-switch" id="open-devices" type="button" aria-haspopup="dialog" aria-controls="devices-dialog">
-        <span data-i18n="devices.local">本机</span><b aria-hidden="true">▾</b>
-      </button>
+      <div class="sidebar-identity-row">
+        <button class="sidebar-account" id="open-account" type="button">
+          <span class="account-avatar" data-account-avatar aria-hidden="true">◉</span>
+          <span class="account-name" data-account-name>登录账号</span>
+        </button>
+        <button class="device-switch" id="open-devices" type="button" aria-haspopup="dialog" aria-controls="devices-dialog">
+          <span data-i18n="devices.local">本机</span><b aria-hidden="true">▾</b>
+        </button>
+      </div>
       <button class="new-task-button" id="new-session" type="button">
         <span class="icon" data-icon="compose" aria-hidden="true"></span>
         <span data-i18n="shell.newTask">新建任务</span>
@@ -106,10 +112,6 @@
         <button class="sidebar-link" id="open-settings" type="button">
           <span class="icon" data-icon="settings" aria-hidden="true"></span>
           <span data-i18n="shell.settings">设置</span>
-        </button>
-        <button class="sidebar-link" id="open-account" type="button">
-          <span class="account-avatar" data-account-avatar aria-hidden="true">◉</span>
-          <span class="account-name" data-account-name>登录账号</span>
         </button>
         <div class="sidebar-status-row">
           <div class="runtime-state" id="runtime-state" role="status">

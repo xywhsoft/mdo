@@ -162,6 +162,7 @@ select:focus-visible,
 }
 
 .brand-row { min-height: 40px; padding: 0 3px 8px 7px; }
+.sidebar-identity-row { display: flex; align-items: stretch; gap: 6px; min-width: 0; margin-bottom: 8px; }
 
 .brand {
   display: inline-flex;
