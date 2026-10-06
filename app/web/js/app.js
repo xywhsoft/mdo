@@ -66,7 +66,8 @@ import { createRecoveryDock } from "./features/chat/recovery-dock.js";
 import { recoveryMatchesWorkspace } from "./features/approvals/recovery-decisions.js";
 import { createSettingsView } from "./features/settings/settings-view.js";
 import { createUpdatePanel } from "./features/update/update-panel.js";
-import { createSchedulePanel } from "./features/settings/schedule-panel.js";
+import { createSchedulePanel } from "./features/schedules/schedule-panel.js";
+import { createSidebarSchedules } from "./features/shell/sidebar-schedules.js";
 import { createProjectManagement } from "./features/projects/project-management.js";
 import { createMemoryManagement } from "./features/settings/memory-management.js";
 import { openMemoryPanel, openMemoryDirectory } from "./features/settings/memory-panel.js";
@@ -1011,8 +1012,14 @@ export async function boot() {
     onReview: (intent, origin) => projectManagement.openPurgeReview(intent, origin),
   });
   const schedulePanel = createSchedulePanel({
-    panel: $('[data-settings-panel="schedules"]'),
+    panel: $("#sidebar-schedules"),
     projectsStore, agentsStore, modelsStore,
+  });
+  const sidebarSchedules = createSidebarSchedules({
+    panel: $("#sidebar-schedules"), button: $("#open-schedules"),
+    closeButton: $("#close-schedules"),
+    sessionNavigation: $(".session-navigation"), search: $(".search-box"),
+    schedulePanel, showSidebar: () => setSidebar(true, { focus: false }),
   });
   const resourcePanels = createResourcePanels({
     modelsStore,
@@ -1529,6 +1536,8 @@ export async function boot() {
   navigation.subscribe(async ({ view, projectId, sessionId, settingsSection }) => {
     shell.toggleAttribute("data-settings-open", view === "settings");
     $("#sidebar").inert = view === "settings" || shell.dataset.sidebar !== "open";
+    schedulePanel.setActive(view !== "settings" &&
+      shell.dataset.sidebar === "open" && sidebarSchedules.isOpen());
     updateExportButtons();
     if (pendingForkComposerFocus &&
         (view !== "workspace" || `${projectId}/${sessionId}` !== pendingForkComposerFocus))
@@ -1550,7 +1559,6 @@ export async function boot() {
       if (selectedSection === "account") void account.refresh();
       memoryManagement.setActive(selectedSection === "memory");
       resourcePanels.selectSection(selectedSection);
-      if (selectedSection === "schedules") void schedulePanel.refresh();
       closeDrawers();
       if (enteringSettings) $("#settings-title").focus({ preventScroll: true });
       if (!settingsStore.get().data) await loadSettings();
@@ -2029,7 +2037,7 @@ export async function boot() {
     });
   }
   document.querySelector("[data-starter-schedules]")?.addEventListener("click", () =>
-    navigation.openSettings("schedules"));
+    sidebarSchedules.open());
 
   const actionDialog = $("#session-action-dialog");
   const actionForm = $("#session-action-form");
@@ -2182,6 +2190,7 @@ export async function boot() {
   });
 
   function openNewTask() {
+    sidebarSchedules.close({ focus: false });
     newTaskComposerFocus.cancel();
     showActiveSessions();
     navigation.newTask(navigation.get().projectId || navigation.preferredProject());
@@ -2207,6 +2216,7 @@ export async function boot() {
       (reachable ? drawerReturnFocus : button).focus();
     }
     panel.inert = !open || shell.hasAttribute("data-settings-open");
+    schedulePanel.setActive(!panel.inert && sidebarSchedules.isOpen());
     $("#open-sidebar").setAttribute("aria-expanded", String(open));
     $("#desktop-sidebar-toggle").setAttribute("aria-expanded", String(open));
     if (open && options.focus !== false && mobileLayout.matches)
@@ -2255,7 +2265,6 @@ export async function boot() {
   });
 
   $("#open-settings").addEventListener("click", () => navigation.openSettings("general"));
-  $("#open-schedules").addEventListener("click", () => navigation.openSettings("schedules"));
   $("#close-settings").addEventListener("click", () => {
     navigation.backToWorkspace();
   });
@@ -2300,6 +2309,7 @@ export async function boot() {
       : $("#close-settings").click(),
     onToggleTheme: toggleTheme,
     onSessionSearch: () => {
+      sidebarSchedules.close({ focus: false });
       if (shell.dataset.sidebar !== "open") setSidebar(true);
       $("#session-search").focus();
     },

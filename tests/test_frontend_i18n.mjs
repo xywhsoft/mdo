@@ -225,7 +225,7 @@ test("bundled language packs cover the annotated shell and switch without stale 
     "js/features/chat/file-mentions.js",
     "js/features/settings/settings-view.js",
     "js/features/settings/resource-panels.js",
-    "js/features/settings/schedule-panel.js",
+    "js/features/schedules/schedule-panel.js",
     "js/features/projects/project-management.js",
     "js/features/settings/memory-management.js",
     "js/features/settings/memory-panel.js",

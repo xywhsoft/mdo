@@ -71,6 +71,7 @@ export function createSchedulePanel({ panel, projectsStore, agentsStore, modelsS
   let historyItem = null;
   let historyLoading = false;
   let activeRefresh = 0;
+  let active = false;
   let actionFeedback = { message: "", id: "" };
 
   function renderEditorHeader() {
@@ -116,7 +117,8 @@ export function createSchedulePanel({ panel, projectsStore, agentsStore, modelsS
   }
 
   function visible() {
-    return !document.hidden && panel.getClientRects().length > 0;
+    return active && !document.hidden && !panel.closest("[inert]") &&
+      panel.getClientRects().length > 0;
   }
 
   function syncConditionalFields() {
@@ -621,5 +623,12 @@ export function createSchedulePanel({ panel, projectsStore, agentsStore, modelsS
     render(schedulesStore.get());
   });
   newSchedule();
-  return Object.freeze({ refresh: loadSchedules });
+  return Object.freeze({ refresh: loadSchedules,
+    setActive(value) {
+      if (active === value) return;
+      active = value;
+      if (active) void loadSchedules();
+      else if (activeRefresh) { clearTimeout(activeRefresh); activeRefresh = 0; }
+    },
+  });
 }
