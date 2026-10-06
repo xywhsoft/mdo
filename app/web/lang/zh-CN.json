@@ -1670,5 +1670,7 @@
   "modelSetup.rateLimited": "供应商限制了请求频率，请稍后重试。",
   "modelSetup.probeBusy": "另一个模型测试正在进行，请稍后重试。",
   "modelSetup.testFailed": "模型请求失败，请检查模型 ID、余额、协议和网络；超时上限为 30 秒。",
-  "modelSetup.toolTestFailed": "模型没有完成预期的工具调用，请检查该模型是否支持工具和所选协议。"
+  "modelSetup.toolTestFailed": "模型没有完成预期的工具调用，请检查该模型是否支持工具和所选协议。",
+  "modelSetup.keyConfigured": "凭据已配置 · 更换 API Key",
+  "modelSetup.configureKey": "设置 API Key"
 }

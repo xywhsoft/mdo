@@ -240,11 +240,15 @@ export function createModelConfigPanel(container) {
     else {
       body.append(element("p", { className: "model-config-status supplier-address", text: Object.values(entry.endpoints)[0] || "" }));
       const keyForm = element("form", { className: "supplier-key-form" }); let key = keyDrafts.get(entry.id) || "";
-      const keyField = field(text("replaceKeyOptional", "API Key（留空使用已保存的凭据）"), "replacement-key", key, (value) => { key = value; keyDrafts.set(entry.id, value); }, { type: "password" });
-      keyForm.append(keyField, button(text("saveKey", "保存 Key"), async () => { if (!key.trim()) return; if (await save(clone(config), [{ provider: entry.id, value: key.trim() }])) key = ""; }),
+      const keySave = button(text("saveKey", "保存 Key"), async () => { if (!key.trim()) return; if (await save(clone(config), [{ provider: entry.id, value: key.trim() }])) key = ""; });
+      keySave.disabled = !key.trim();
+      const keyField = field(text("replaceKeyOptional", "API Key（留空使用已保存的凭据）"), "replacement-key", key, (value) => { key = value; keyDrafts.set(entry.id, value); keySave.disabled = !value.trim(); }, { type: "password" });
+      keyForm.append(keyField, keySave,
         button(text("cancel", "取消"), () => { keyDrafts.delete(entry.id); render(); }));
       keyForm.addEventListener("submit", (event) => { event.preventDefault(); keyForm.querySelector("button").click(); });
-      body.append(keyForm, button(text("addModels", "添加模型"), () => {
+      const credentials = element("details", { className: "supplier-connection-advanced", attrs: { open: key ? "" : null } }, [
+        element("summary", { text: entry.credential?.secret_ref ? text("keyConfigured", "凭据已配置 · 更换 API Key") : text("configureKey", "设置 API Key") }), keyForm]);
+      body.append(credentials, button(text("addModels", "添加模型"), () => {
         if (blocked()) return;
         const preset = providerPresets.find((item) => item.id === entry.template_id) || providerPresets[10];
         choose(preset, presetVariant(preset.id, entry.template_variant)); draft.provider = entry; render();

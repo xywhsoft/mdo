@@ -56,6 +56,7 @@ Key 更换使用新的不可变文件，旧文件继续为配置备份和正在�
 node tests/test_provider_presets.mjs
 node tests/test_frontend_i18n.mjs
 python tests/test_model_setup_runtime.py --host .build/host/xs.exe
+python tests/test_model_setup_runtime.py --packed mdo.exe
 python tests/test_model_runtime.py --host .build/host/xs.exe
 python tests/test_settings_runtime.py --host .build/host/xs.exe
 python tools/model_http_sdk.py --check .build/implementation-xs

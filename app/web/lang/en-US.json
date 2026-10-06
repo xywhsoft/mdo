@@ -1670,5 +1670,7 @@
   "modelSetup.rateLimited": "The supplier is rate limiting requests. Try again later.",
   "modelSetup.probeBusy": "Another model test is running. Try again shortly.",
   "modelSetup.testFailed": "Model request failed. Check model ID, balance, protocol and network. The timeout is 30 seconds.",
-  "modelSetup.toolTestFailed": "The model did not make the expected tool call. Check its tool and protocol support."
+  "modelSetup.toolTestFailed": "The model did not make the expected tool call. Check its tool and protocol support.",
+  "modelSetup.keyConfigured": "Credentials configured · change API key",
+  "modelSetup.configureKey": "Set API key"
 }

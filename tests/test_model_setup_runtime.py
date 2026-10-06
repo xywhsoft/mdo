@@ -56,18 +56,25 @@ class Supplier(BaseHTTPRequestHandler):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--host', type=Path, default=ROOT / '.build/host/xs.exe')
+    parser.add_argument('--packed', type=Path, help='run the same probes against a standalone packed executable')
     args = parser.parse_args()
     server = ThreadingHTTPServer(('127.0.0.1', 0), Supplier)
     threading.Thread(target=server.serve_forever, daemon=True).start()
     with tempfile.TemporaryDirectory(prefix='mdo-model-setup-') as temporary:
         base = Path(temporary)
-        shutil.copytree(ROOT / 'app', base, dirs_exist_ok=True)
+        if args.packed:
+            executable = base / args.packed.name
+            shutil.copyfile(args.packed.resolve(), executable)
+            command = [str(executable), '--', '--home', str(base / 'mdo-home')]
+        else:
+            shutil.copytree(ROOT / 'app', base, dirs_exist_ok=True)
+            command = [str(args.host.resolve()), str(base / 'xs.json')]
         port = free_port()
         (base / 'xs.json').write_text(json.dumps({'engine': {'workers': 1}, 'services': [{
             'enabled': True, 'class': 'http', 'name': 'model-setup', 'ip': '127.0.0.1',
             'port': port, 'host_default': {'enabled': True, 'name': 'mdo', 'path': 'web',
                                           'devlang': 'c', 'devfile': 'generated/mdo_unity.c'}}]}))
-        env = dict(os.environ, MDO_HOME=str(base / 'mdo-home'))
+        env = dict(os.environ, MDO_HOME=str(base / 'mdo-home'), USE_WEBVIEW='0')
         process = None
         def get():
             status, headers, body = request(port, 'GET', '/api/v1/models/config')
@@ -81,7 +88,7 @@ def main():
             return status, json.loads(raw)
         with (base / 'host.log').open('wb') as log:
             try:
-                process = subprocess.Popen([str(args.host.resolve()), str(base / 'xs.json')],
+                process = subprocess.Popen(command,
                     cwd=base, env=env, stdin=subprocess.PIPE, stdout=log, stderr=log)
                 wait_ready(port, process)
                 config, etag = get()
@@ -132,7 +139,7 @@ def main():
                 assert post('test', {'model_id': 'fixture-agent', 'tools': 'true'})[0] == 422
                 assert len(Supplier.calls) == before
                 stop_host(process); process = None
-                process = subprocess.Popen([str(args.host.resolve()), str(base / 'xs.json')],
+                process = subprocess.Popen(command,
                     cwd=base, env=env, stdin=subprocess.PIPE, stdout=log, stderr=log)
                 wait_ready(port, process)
                 status, result = post('test', {'model_id': 'fixture-agent'})
@@ -155,6 +162,9 @@ def main():
                 raise
             finally:
                 stop_host(process)
+                if args.packed:
+                    from test_packed_home_lease import release_packed_copies
+                    release_packed_copies(executable)
     server.shutdown(); server.server_close()
 
 
