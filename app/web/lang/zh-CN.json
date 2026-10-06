@@ -1575,7 +1575,7 @@
   "ecosystem.arguments": "参数（JSON 数组）",
   "ecosystem.workingDirectory": "工作目录（可选）",
   "ecosystem.environment": "环境变量（JSON）",
-  "ecosystem.secretHint": "使用 secret_ref 引用 env:、file: 或已保存的 vault: 凭据。导入普通配置中的凭据会自动加密保存。",
+  "ecosystem.secretHint": "普通 JSON 对象的值会自动加密保存；原生数组使用 secret_ref 引用 env:、file: 或 vault: 凭据。",
   "ecosystem.endpoint": "服务器地址",
   "ecosystem.headers": "请求头（JSON）",
   "ecosystem.model": "模型",

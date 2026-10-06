@@ -62,6 +62,22 @@ export function newMcp(id = "server") {
     security: { default_effects: ["external-service"], permission_profile: "balanced", trust_read_only_annotations: false },
     auto_reconnect: true };
 }
+// Forms accept either ordinary credential maps or native reference arrays.
+// Convert maps only at save time so editing a key remains a visible draft change.
+export function prepareMcpCredentials(document, inputs = []) {
+  const doc = structuredClone(document), secrets = [...inputs];
+  for (const key of ["environment", "headers"]) {
+    const values = doc.transport?.[key];
+    if (values == null || Array.isArray(values)) continue;
+    if (typeof values !== "object") throw new Error(`Invalid MCP ${key}`);
+    doc.transport[key] = Object.entries(values).map(([name, value]) => {
+      if (typeof value !== "string" || !value || value.includes("\0")) throw new Error("Invalid MCP credential");
+      const secret_ref = `input:${secrets.length}`; secrets.push(value);
+      return { name, secret_ref };
+    });
+  }
+  return { content: JSON.stringify(doc, null, 2), secrets };
+}
 export function mcpImportDocuments(text) {
   const root = JSON.parse(text);
   if (root.schema_version === 1 && root.transport) return [{ id: root.id, content: JSON.stringify(root, null, 2), secrets: [] }];

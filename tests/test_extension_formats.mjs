@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { editPrompt, promptFields, splitPrompt, portableId, mcpImportDocuments, expandCommand } from "../app/web/js/features/settings/extension-formats.js";
+import { editPrompt, promptFields, splitPrompt, portableId, newMcp, prepareMcpCredentials, mcpImportDocuments, expandCommand } from "../app/web/js/features/settings/extension-formats.js";
 
 test("editing common fields preserves unrelated Skill metadata and references", () => {
   const source = '---\nname: research\ndescription: >\n  Inspect before\n  editing.\nmetadata:\n  author: someone\nallowed-tools: Read Bash\n---\nRead references/guide.md.\n';
@@ -35,4 +35,19 @@ test("command arguments are literal prompt text, including dollar replacement se
   assert.equal(expandCommand("Review $ARGUMENTS twice: $ARGUMENTS", "$& $1 `cmd`"), "Review $& $1 `cmd` twice: $& $1 `cmd`");
   assert.equal(expandCommand("Review changes", "app.c"), "Review changes\n\napp.c");
   assert.equal(expandCommand("Review $ARGUMENTS", ""), "Review ");
+});
+test("MCP form credentials seal at save time without replacing existing references", () => {
+  const doc = newMcp('server');
+  doc.transport.environment = { TOKEN: 'new key 中文' };
+  const first = prepareMcpCredentials(doc, ['imported key']);
+  assert.deepEqual(first.secrets, ['imported key', 'new key 中文']);
+  assert.equal(JSON.parse(first.content).transport.environment[0].secret_ref, 'input:1');
+  assert.deepEqual(doc.transport.environment, { TOKEN: 'new key 中文' });
+  doc.transport = { type: 'streamable-http', endpoint: 'https://example.invalid/mcp',
+    headers: { Authorization: 'Bearer new key' } };
+  const next = prepareMcpCredentials(doc);
+  assert.equal(next.content.includes('Bearer new key'), false);
+  assert.deepEqual(next.secrets, ['Bearer new key']);
+  doc.transport.headers = [{ name: 'Authorization', secret_ref: 'vault:'+'a'.repeat(64) }];
+  assert.deepEqual(JSON.parse(prepareMcpCredentials(doc).content).transport.headers, doc.transport.headers);
 });

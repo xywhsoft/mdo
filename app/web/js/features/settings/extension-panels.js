@@ -4,7 +4,7 @@ import { subscribeLocale, t } from "../../i18n.js";
 import { clear, element, errorMessage, toast } from "../../utils/dom.js";
 import { loadAgents } from "../../state/catalogs.js";
 import { refreshMcp, disconnectMcp, reloadCatalog } from "../../state/resources.js";
-import { EXTENSION_KINDS, portableId, promptFields, editPrompt, newMcp, mcpImportDocuments, bytesToBase64 } from "./extension-formats.js";
+import { EXTENSION_KINDS, portableId, promptFields, editPrompt, newMcp, prepareMcpCredentials, mcpImportDocuments, bytesToBase64 } from "./extension-formats.js";
 
 const label = (key, fallback, args = {}) => t(`ecosystem.${key}`, args, fallback);
 const title = kind => ({ subagents: "SubAgent", skills: "Skill", mcp: "MCP", commands: label("commands", "命令") })[kind];
@@ -192,7 +192,7 @@ export function createExtensionPanels() {
       inputField(stdio, "environment", label("environment", "环境变量（JSON）"), JSON.stringify(transport.environment || [], null, 2), { area: true, hint: label("secretHint", "使用 secret_ref 引用 env:、file: 或已保存的 vault: 凭据。导入普通配置中的凭据会自动加密保存。") });
       const http = element("div", { className: "extension-transport" });
       inputField(http, "endpoint", label("endpoint", "服务器地址"), transport.endpoint || "", { type: "url" });
-      inputField(http, "headers", label("headers", "请求头（JSON）"), JSON.stringify(transport.headers || [], null, 2), { area: true });
+      inputField(http, "headers", label("headers", "请求头（JSON）"), JSON.stringify(transport.headers || [], null, 2), { area: true, hint: label("secretHint", "普通 JSON 对象的值会自动加密保存；原生数组使用 secret_ref 引用 env:、file: 或 vault: 凭据。") });
       editing.form.append(stdio, http);
       const sync = () => { stdio.hidden = select.value !== "stdio"; http.hidden = !stdio.hidden; };
       select.addEventListener("change", sync); sync(); return;
@@ -261,10 +261,14 @@ export function createExtensionPanels() {
       const id = editor.id.value.trim();
       if (!portableId(id)) throw new Error(label("idInvalid", "请填写有效的文件 ID。"));
       let content = currentSource();
-      if (editor.kind === "mcp") { const doc = JSON.parse(content); doc.id = id; content = JSON.stringify(doc, null, 2); }
+      let secrets = editor.secrets;
+      if (editor.kind === "mcp") {
+        const doc = JSON.parse(content); doc.id = id;
+        ({ content, secrets } = prepareMcpCredentials(doc, secrets));
+      }
       const body = { content };
       if (editor.files.length) body.files = editor.files;
-      if (editor.secrets.length) body.secrets = editor.secrets;
+      if (secrets.length) body.secrets = secrets;
       if (new TextEncoder().encode(JSON.stringify(body)).length > 250000) throw new Error(label("importLimit", "导入内容过大；请直接复制资源目录到 mdo-home 后刷新。"));
       editor.saving = true; editor.dialog.querySelectorAll("input,textarea,select,button").forEach(node => { node.disabled = true; });
       editor.status.textContent = label("saving", "正在保存…");

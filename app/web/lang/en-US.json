@@ -1575,7 +1575,7 @@
   "ecosystem.arguments": "Arguments (JSON array)",
   "ecosystem.workingDirectory": "Working directory (optional)",
   "ecosystem.environment": "Environment (JSON)",
-  "ecosystem.secretHint": "Use secret_ref with env:, file:, or saved vault: credentials. Credentials imported from ordinary configs are sealed automatically.",
+  "ecosystem.secretHint": "Values in ordinary JSON objects are sealed automatically. Native arrays use secret_ref with env:, file:, or vault: credentials.",
   "ecosystem.endpoint": "Server URL",
   "ecosystem.headers": "Headers (JSON)",
   "ecosystem.model": "Model",

@@ -1575,7 +1575,7 @@
   "ecosystem.arguments": "Аргументы (массив JSON)",
   "ecosystem.workingDirectory": "Рабочая папка (необязательно)",
   "ecosystem.environment": "Переменные среды (JSON)",
-  "ecosystem.secretHint": "Используйте secret_ref с env:, file: или сохранёнными vault:. Импортированные данные доступа сохраняются в зашифрованном виде.",
+  "ecosystem.secretHint": "Значения обычных объектов JSON сохраняются в зашифрованном виде. В массивах используйте secret_ref с env:, file: или vault:.",
   "ecosystem.endpoint": "Адрес сервера",
   "ecosystem.headers": "Заголовки (JSON)",
   "ecosystem.model": "Модель",

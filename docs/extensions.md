@@ -56,7 +56,7 @@ Read references/checklist.md when reviewing changes.
 
 支持导入常见 `{"mcpServers":{"name":{"command":"npx","args":["..."],"env":{"TOKEN":"..."}}}}` 或带 `url`、`headers` 的配置，也支持本程序的原生 JSON。多服务器导入逐个保存，不覆盖同名文件；失败会明确报告已经保存的数量。旧 SSE 传输不支持。
 
-普通配置中的凭据进入现有本机密钥库，配置只存 `vault:` 引用；也可手动填写 `env:` 和 Home 相对 `file:` 引用。导出不含凭据值，换设备后需要重新配置凭据。源文件模式可调整超时、工具过滤和权限等已有配置项；保存走现有完整校验。
+普通配置中的凭据进入现有本机密钥库，配置只存 `vault:` 引用。表单的环境变量/请求头支持普通 JSON 对象（如 `{"Authorization":"Bearer …"}`）和原生引用数组，也可手动填写 `env:` 和 Home 相对 `file:` 引用。导出不含凭据值，换设备后需要重新配置凭据。源文件模式可调整超时、工具过滤和权限等已有配置项；保存走现有完整校验。
 
 ## 命令
 
@@ -80,6 +80,7 @@ Review $ARGUMENTS and report concrete defects.
 
 ```text
 python tests/test_extensions_runtime.py
+python tests/test_extensions_runtime.py --packed mdo.exe
 python tests/test_skill_runtime.py
 python tests/test_module_runtime.py
 node --test tests/test_extension_formats.mjs tests/test_frontend_i18n.mjs

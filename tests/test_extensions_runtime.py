@@ -48,11 +48,15 @@ class SkillModel(BaseHTTPRequestHandler):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--host', type=Path, default=ROOT / '.build/host/xs.exe')
+    parser.add_argument('--packed', type=Path, help='verify a standalone package without external app files')
     args = parser.parse_args()
     with tempfile.TemporaryDirectory(prefix='extensions-', dir=ROOT / '.build') as raw:
         base = Path(raw)
         site = base / 'site'
-        shutil.copytree(ROOT / 'app', site)
+        if args.packed:
+            site.mkdir(); shutil.copy2(args.packed, site / args.packed.name)
+        else:
+            shutil.copytree(ROOT / 'app', site)
         port = free_port()
         config = {'engine': {'workers': 1}, 'services': [{'enabled': True,
             'class': 'http', 'name': 'extension-probe', 'ip': '127.0.0.1', 'port': port,
@@ -62,9 +66,10 @@ def main():
         model_server = ThreadingHTTPServer(('127.0.0.1', 0), SkillModel)
         thread = threading.Thread(target=model_server.serve_forever, daemon=True); thread.start()
         env = dict(os.environ, MDO_HOME=str(base / 'home'), MDO_ORNITH_API_KEY='bounded-fixture-key',
-            MDO_ORNITH_RESPONSES_URL=f'http://127.0.0.1:{model_server.server_port}/v1/responses')
+            USE_WEBVIEW='0', MDO_ORNITH_RESPONSES_URL=f'http://127.0.0.1:{model_server.server_port}/v1/responses')
         with (base / 'log.txt').open('wb') as log:
-            process = subprocess.Popen([str(args.host.resolve()), str(site / 'xs.json')],
+            command = [str(site / args.packed.name), '--', '--home', str(base / 'home')] if args.packed else [str(args.host.resolve()), str(site / 'xs.json')]
+            process = subprocess.Popen(command,
                 cwd=site, env=env, stdout=log, stderr=subprocess.STDOUT,
                 creationflags=subprocess.CREATE_NO_WINDOW if os.name == 'nt' else 0)
             try:
@@ -212,6 +217,9 @@ def main():
                 try: process.wait(timeout=5)
                 except subprocess.TimeoutExpired: process.kill(); process.wait()
                 model_server.shutdown(); model_server.server_close(); thread.join(timeout=2)
+                if args.packed:
+                    from test_packed_home_lease import release_packed_copies
+                    release_packed_copies(site / args.packed.name)
     return 0
 
 if __name__ == '__main__':
