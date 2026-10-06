@@ -1,720 +1,327 @@
-import { mountIcons } from "../../components/icons.js";
-import { api } from "../../api/client.js";
+import { api, ApiError } from "../../api/client.js";
 import { loadModels } from "../../state/catalogs.js";
-import { clear, element, errorMessage, isImeKey, toast } from "../../utils/dom.js";
+import { clear, element, errorMessage, toast } from "../../utils/dom.js";
 import { subscribeLocale, t } from "../../i18n.js";
+import { createAdvancedModelConfigPanel } from "./model-config-advanced.js";
+import { providerPresets, presetVariant, presetProvider, presetModel, suggestedModels } from "./provider-presets.js";
+import { sameModelConfig } from "./model-config-state.js";
 
-const protocols = [
-  ["openai-chat-completions", "Chat Completions", "chat_completions"],
-  ["openai-responses", "Responses", "responses"],
-  ["anthropic-messages", "Anthropic Messages", "anthropic_messages"],
-];
-const capabilities = [
-  ["text-input", "文本输入"], ["tool-result-input", "工具结果"],
-  ["text-output", "文本输出"], ["json-output", "JSON 输出"],
-  ["tool-call-output", "工具调用"], ["reasoning-output", "思考输出"],
-  ["streaming", "流式输出"], ["reasoning-control", "思考强度"],
-  ["parallel-tool-calls", "并行工具"], ["max-completion-tokens", "max_completion_tokens"],
-  ["developer-role", "Developer 角色"], ["media-input", "媒体输入"],
-];
-const efforts = ["none", "minimal", "low", "medium", "high", "xhigh", "max"];
-const attachments = [["image", "图片"], ["audio", "音频"], ["file", "文件"]];
 const clone = (value) => structuredClone(value);
-
-// Translate by stable form names and option values, never by display copy.
-// The latter changes with the locale and makes new fields easy to miss.
-const fieldKeys = Object.freeze({
-  id: "modelConfig.id", name: "modelConfig.name",
-  chat_completions: "modelConfig.chatUrl",
-  responses: "modelConfig.responsesUrl",
-  anthropic_messages: "modelConfig.anthropicUrl",
-  secret_ref: "modelConfig.secretRef", timeout_ms: "modelConfig.timeout",
-  verify_peer: "modelConfig.verifyTls", provider: "modelConfig.provider",
-  wire_model: "modelConfig.wireModel",
-  default_protocol: "modelConfig.defaultProtocol",
-  default_reasoning_effort: "modelConfig.defaultEffort",
-  billable: "modelConfig.billable", protocol: "modelConfig.protocols",
-  capability: "modelConfig.capabilities", effort: "modelConfig.efforts",
-  attachment: "modelConfig.attachments", window_mode: "modelConfig.windowMode",
-  context_tokens: "modelConfig.contextTokens",
-  max_input_tokens: "modelConfig.maxInputTokens",
-  max_output_tokens: "modelConfig.maxOutputTokens",
-  output_reserve_tokens: "modelConfig.outputReserveTokens",
-  summary_tokens: "modelConfig.summaryTokens",
-});
-const optionKeys = Object.freeze({
-  "shared-context": "modelConfig.sharedContext",
-  "split-input-output": "modelConfig.splitWindow",
-  "text-input": "modelConfig.textInput",
-  "tool-result-input": "modelConfig.toolResultInput",
-  "text-output": "modelConfig.textOutput",
-  "json-output": "modelConfig.jsonOutput",
-  "tool-call-output": "modelConfig.toolCallOutput",
-  "reasoning-output": "modelConfig.reasoningOutput",
-  "reasoning-control": "modelConfig.reasoningControl",
-  streaming: "modelConfig.streaming",
-  "parallel-tool-calls": "modelConfig.parallelTools",
-  "max-completion-tokens": "modelConfig.maxCompletionTokens",
-  "developer-role": "modelConfig.developerRole",
-  "media-input": "modelConfig.mediaInput",
-  image: "modelConfig.image", audio: "modelConfig.audio",
-  file: "modelConfig.file",
-  none: "settings.reasoningNone", minimal: "settings.reasoningMinimal",
-  low: "settings.reasoningLow", medium: "settings.reasoningMedium",
-  high: "settings.reasoningHigh", xhigh: "settings.reasoningXhigh",
-  max: "settings.reasoningMax",
-});
-
-function copy(tag, key, fallback, params = {}, options = {}) {
-  return element(tag, { ...options, text: t(key, params, fallback), attrs: {
-    ...options.attrs, "data-model-copy-key": key,
-    "data-model-copy-params": JSON.stringify(params),
-    "data-model-copy-fallback": fallback,
-  } });
+const text = (key, fallback, params = {}) => t(`modelSetup.${key}`, params, fallback);
+const probeErrorKeys = { authentication_failed: "authFailed", credential_unavailable: "credentialUnavailable",
+  connection_failed: "connectionFailed", catalog_invalid: "catalogInvalid", supplier_rate_limited: "rateLimited",
+  probe_busy: "probeBusy", model_test_failed: "testFailed", model_tools_test_failed: "toolTestFailed" };
+const probeError = (cause) => probeErrorKeys[cause.code] ? text(probeErrorKeys[cause.code], errorMessage(cause)) : errorMessage(cause);
+const button = (label, action, primary = false) => {
+  const node = element("button", { text: label, className: primary ? "primary-button" : "secondary-button", attrs: { type: "button" } });
+  node.addEventListener("click", action); return node;
+};
+function field(label, name, value, onChange, { type = "text", required = false } = {}) {
+  const control = element("input", { attrs: { name, type, required: required ? "" : null, autoComplete: type === "password" ? "new-password" : "off", maxLength: type === "password" ? 4096 : 2048 } });
+  control.value = value || ""; control.addEventListener("input", () => onChange(control.value));
+  return element("label", { className: "model-field" }, [element("span", { text: label }), control]);
 }
 
-function translateCopy(container) {
-  for (const node of container.querySelectorAll("[data-model-copy-key]"))
-    node.textContent = t(node.dataset.modelCopyKey,
-      JSON.parse(node.dataset.modelCopyParams), node.dataset.modelCopyFallback);
-  for (const node of container.querySelectorAll("[data-model-attr-key]"))
-    node.setAttribute(node.dataset.modelAttrName,
-      t(node.dataset.modelAttrKey, {}, node.dataset.modelAttrFallback));
-}
-
-function translatedAttribute(node, name, key, fallback) {
-  node.setAttribute(name, t(key, {}, fallback));
-  node.dataset.modelAttrName = name;
-  node.dataset.modelAttrKey = key;
-  node.dataset.modelAttrFallback = fallback;
-  return node;
-}
-
-function input(label, name, value, options = {}) {
-  const field = element("label", { className: "model-field" }, [
-    fieldKeys[name] ? copy("span", fieldKeys[name], label) : element("span", { text: label }),
-  ]);
-  const control = element(options.kind === "select" ? "select" : "input", {
-    attrs: { name, type: options.type || "text", required: options.required ? "" : null,
-      min: options.min, max: options.max, maxLength: options.maxLength,
-      pattern: options.pattern,
-      readOnly: options.readOnly ? "" : null, placeholder: options.placeholder },
-  });
-  if (options.kind === "select") {
-    for (const [key, text] of options.choices ?? []) {
-      const optionKey = name === "default_reasoning_effort" || name === "window_mode"
-        ? optionKeys[key] : null;
-      control.append(optionKey
-        ? copy("option", optionKey, text, {}, { attrs: { value: key } })
-        : element("option", { text, attrs: { value: key } }));
-    }
-  }
-  if (options.type === "checkbox") control.checked = Boolean(value);
-  else control.value = value ?? "";
-  field.append(control);
-  return field;
-}
-
-function checks(title, name, values, choices) {
-  const group = element("fieldset", { className: "model-checks" });
-  group.append(fieldKeys[name] ? copy("legend", fieldKeys[name], title)
-    : element("legend", { text: title }));
-  for (const [key, label] of choices) {
-    const line = element("label");
-    const box = element("input", { attrs: { type: "checkbox", name, value: key } });
-    box.checked = values?.includes(key) ?? false;
-    line.append(box, optionKeys[key] ? copy("span", optionKeys[key], label)
-      : element("span", { text: label }));
-    group.append(line);
-  }
-  return group;
-}
-
-function modelIcon(name, className = "model-config-icon") {
-  return element("span", { className, attrs: { "data-icon": name, "aria-hidden": "true" } });
-}
-
-function formSection(key, title, fields, className = "") {
-  return element("section", { className: `model-section ${className}`.trim() }, [
-    copy("h4", key, title), element("div", { className: "model-form-grid" }, fields),
-  ]);
-}
-
-function infoValue(key, label, value) {
-  return element("div", { className: "model-info-value" }, [
-    copy("dt", key, label), element("dd", { text: value || "—" }),
-  ]);
-}
-
-function formHeader(form, item, isModel) {
-  const title = item.name ? element("h3", { text: item.name }) : copy("h3",
-    isModel ? "modelConfig.newModel" : "modelConfig.newProvider",
-    isModel ? "新增模型" : "新增 Provider");
-  const note = item.builtin ? copy("p",
-    isModel ? "modelConfig.builtinModelNote" : "modelConfig.builtinProviderNote",
-    isModel ? "ornith-1.5-35b 是内置免费模型，参数不可编辑。" : "内置 Provider 由 mdo 提供，配置不可更改。")
-    : copy("p", isModel ? "modelConfig.providerNote" : "modelConfig.secretNote",
-      isModel ? "模型引用 Provider；协议必须有对应的 Provider URL。"
-        : "使用凭据引用，不在页面或配置中保存 API Key 明文。");
-  form.append(element("header", { className: "model-editor-heading" }, [
-    modelIcon(isModel ? "brain" : "code", "icon model-editor-icon"),
-    element("div", {}, [title, note]),
-  ]));
-}
-
-function selected(form, name) {
-  return [...form.querySelectorAll(`input[name="${name}"]:checked`)]
-    .map((control) => control.value);
-}
-
-function providerDefault() {
-  return { id: "", name: "", builtin: false, editable: true,
-    removable: true, verify_peer: true, timeout_ms: 120000,
-    endpoints: { chat_completions: "" }, credential: { secret_ref: "" } };
-}
-
-function modelDefault(provider) {
-  const protocol = protocols.find(([, , endpoint]) => provider?.endpoints?.[endpoint])?.[0]
-    || "openai-chat-completions";
-  return { id: "", name: "", provider: provider?.id || "", wire_model: "",
-    builtin: false, free: false, editable: true, removable: true,
-    protocols: [protocol], default_protocol: protocol,
-    capabilities: ["text-input", "tool-result-input", "text-output",
-      "tool-call-output", "streaming"],
-    window: { mode: "shared-context", context_tokens: 128000,
-      max_input_tokens: 112000, max_output_tokens: 16000,
-      output_reserve_tokens: 8000, summary_tokens: 4000 },
-    reasoning_efforts: ["none", "low", "medium", "high"],
-    default_reasoning_effort: "medium", attachments: [] };
-}
-
+// Supplier setup and the expert editor share the native config transaction.
+// Draft keys exist only in this page's memory, never browser storage or URLs.
 export function createModelConfigPanel(container) {
-  let config = null;
-  let etag = "";
-  let kind = "model";
-  let selectedId = "";
-  let reading = false;
-  let writing = false;
-  let readGeneration = 0;
-  let dirty = false;
-  let editVersion = 0;
-  const rebaseForm = new WeakMap();
+  let config = null, etag = "", selectedId = "", view = "list", busy = false;
+  let draft = null, advanced = null, advancedChanged = false, needsRead = false;
+  let notice = "", failed = false, disposed = false, loading = null;
+  const verified = new Map();
+  const keyDrafts = new Map();
 
-  function updateBusyState() {
-    if (reading || writing) container.setAttribute("aria-busy", "true");
-    else container.removeAttribute("aria-busy");
-  }
-
-  function renderReadState(cause = null, keepForm = false) {
-    if (keepForm) container.querySelector("[data-model-read-status]")?.remove();
-    else clear(container);
-    const notice = element("div", { className: cause ? "resource-error" : "empty-state",
-      attrs: { role: cause ? "alert" : "status", "data-model-read-status": "" } }, [cause
-      ? element("p", { text: errorMessage(cause) })
-      : copy("p", "resource.loading", "正在读取…")]);
-    if (cause) {
-      const retry = copy("button", "resource.retryLoad", "重新读取", {},
-        { className: "secondary-button", attrs: { type: "button" } });
-      retry.addEventListener("click", async () => {
-        if (reading || writing || !allowChange()) return;
-        const applied = await load();
-        if (applied && container.isConnected && container.getClientRects().length &&
-            globalThis.document.activeElement === globalThis.document.body)
-          container.querySelector("button")?.focus({ preventScroll: true });
-      });
-      notice.append(retry);
-    }
-    container.prepend(notice);
-  }
-
-  async function load(preferredKind = kind, preferredId = selectedId) {
-    if (reading || writing) return false;
-    const formAtRead = container.querySelector(".model-config-form");
-    const versionAtRead = editVersion;
-    const focusAtRead = globalThis.document.activeElement;
-    const generation = ++readGeneration;
-    reading = true;
-    container.querySelector("[data-model-read-status]")?.remove();
-    updateBusyState();
-    if (!config) renderReadState();
-    try {
-      const response = await api.get("/models/config");
-      // Save may start while this independent GET is pending. Its acknowledged
-      // patch/ETag becomes the baseline; an older read cannot replace it.
-      if (generation !== readGeneration) return false;
-      // A refresh is not permission to discard later edits or a newly selected
-      // editor. Retain its nodes, values, selection and original config/ETag.
-      if (versionAtRead !== editVersion ||
-          formAtRead !== container.querySelector(".model-config-form") ||
-          (formAtRead?.contains(globalThis.document.activeElement) &&
-            globalThis.document.activeElement !== focusAtRead)) {
-        container.prepend(copy("p", "modelConfig.refreshKept",
-          "刷新期间的新输入已保留；保存或放弃修改后可再次刷新。", {}, {
-            className: "model-config-status", attrs: {
-              role: "status", "data-model-read-status": "",
-            },
-          }));
-        return false;
-      }
-      config = response.data;
-      etag = response.etag;
-      kind = preferredKind;
-      selectedId = preferredId;
-      if (selectedId && !collection().some((item) => item.id === selectedId))
-        selectedId = "";
-      if (!selectedId) selectedId = kind === "model" ? config.default_model :
-        config.providers[0]?.id ?? "";
-      dirty = false;
-      render();
-      return true;
-    } catch (cause) {
-      if (generation !== readGeneration) return false;
-      renderReadState(cause, Boolean(config));
-      return false;
-    } finally {
-      reading = false;
-      updateBusyState();
+  function provider() { return config?.providers.find((item) => item.id === selectedId); }
+  function setBusy(value) {
+    busy = value; container.toggleAttribute("aria-busy", value);
+    for (const node of container.querySelectorAll("button, input, select")) {
+      if (value) { node.dataset.beforeBusy = String(node.disabled); node.disabled = true; }
+      else if (node.dataset.beforeBusy != null) { node.disabled = node.dataset.beforeBusy === "true"; delete node.dataset.beforeBusy; }
     }
   }
-
-  function collection() { return kind === "model" ? config.items : config.providers; }
-  function current() { return collection().find((item) => item.id === selectedId) ?? null; }
-  function allowChange() {
-    if (!dirty) return true;
-    toast(t("modelConfig.unsaved", {}, "当前表单有未保存的修改，请先保存或放弃。"), "error");
+  function status(message, error = false) {
+    notice = message; failed = error;
+    const line = container.querySelector(".supplier-notice");
+    if (line) { line.textContent = message; line.classList.toggle("resource-error", error); line.hidden = !message; }
+  }
+  function blocked() {
+    if (busy) return true;
+    if (draft || [...keyDrafts.values()].some(Boolean) || advanced?.hasUnsaved()) { toast(t("modelConfig.unsaved"), "error"); return true; }
     return false;
   }
-
-  async function transact(next, messageKey, messageFallback,
-    focusKind = kind, focusId = selectedId, editableWhileSaving = false) {
-    if (writing || !config || config.runtime_override) return;
-    const form = container.querySelector(".model-config-form");
-    const versionAtSave = editVersion;
-    const focusAtSave = globalThis.document.activeElement;
-    // Keep fields usable during Save, but serialize resource actions. Identity
-    // stays fixed until creation is acknowledged so a later Save updates it.
-    const locked = [...container.querySelectorAll(editableWhileSaving
-      ? "button" : "button, input, select")].map((node) => ({
-        node, disabled: node.disabled,
-      }));
-    const identity = form?.querySelector('input[name="id"]');
-    const identityReadOnly = identity?.readOnly;
-    for (const { node } of locked) node.disabled = true;
-    if (identity) identity.readOnly = true;
-    writing = true;
-    ++readGeneration;
-    updateBusyState();
-    let committed = false;
-    try {
-      const patch = { default_model: next.default_model,
-        providers: next.providers, items: next.items };
-      const body = { schema_version: 1, patch };
-      await api.post("/settings/models/preview", body);
-      const saved = await api.put("/settings/models", body, { ifMatch: etag });
-      committed = true;
-      // The acknowledged patch and revision are already a valid baseline even
-      // if its follow-up read fails. Do not turn that failure into a failed Save.
-      config = next;
-      etag = saved.etag;
-      let readError = null;
+  async function reload() {
+    if (disposed || busy || draft || [...keyDrafts.values()].some(Boolean) || advanced) return;
+    if (loading) return loading;
+    loading = (async () => {
+      setBusy(true);
       try {
-        const response = await api.get("/models/config");
-        // Rebase on this acknowledged write, not another client's newer edit.
-        // A later Save must still hit the server's revision precondition.
-        if (response.etag === saved.etag) config = response.data;
-      } catch (cause) { readError = cause; }
-      await loadModels();
-      const keepForm = editableWhileSaving && versionAtSave !== editVersion &&
-        form === container.querySelector(".model-config-form");
-      const focused = globalThis.document.activeElement;
-      const keepFocus = form?.contains(focused) && focused.matches("input, select");
-      const selection = keepFocus && typeof focused.selectionStart === "number"
-        ? [focused.selectionStart, focused.selectionEnd, focused.selectionDirection] : null;
-      kind = focusKind;
-      selectedId = focusId;
-      if (!collection().some((item) => item.id === selectedId))
-        selectedId = kind === "model" ? config.default_model : config.providers[0]?.id ?? "";
-      dirty = keepForm;
-      if (keepForm) rebaseForm.get(form)?.();
-      render(keepForm ? form : null);
-      if (keepFocus && container.isConnected && container.getClientRects().length) {
-        const target = keepForm ? focused :
-          [...container.querySelectorAll(".model-config-form input, .model-config-form select")]
-            .find((node) => node.name === focused.name && node.type === focused.type &&
-              (node.type !== "checkbox" || node.value === focused.value));
-        target?.focus({ preventScroll: true });
-        if (selection) target?.setSelectionRange(...selection);
-      } else if (container.isConnected && container.getClientRects().length &&
-          globalThis.document.activeElement === globalThis.document.body) {
-        container.querySelector('.model-config-item[aria-current="true"]')?.focus();
-      }
-      if (keepForm) container.prepend(copy("p", "modelConfig.savedKept",
-        "本次保存已完成；后续输入仍未保存。", {}, {
-          className: "model-config-status", attrs: { role: "status" },
-        }));
-      if (readError) renderReadState(readError, true);
-      toast(t(messageKey, {}, messageFallback));
+        const response = await api.get("/models/config"); if (disposed) return;
+        config = response.data; etag = response.etag; needsRead = false;
+        if (!provider()) selectedId = config.providers.find((entry) => config.items.some((item) => item.id === config.default_model && item.provider === entry.id))?.id || config.providers[0]?.id || "";
+        notice = ""; failed = false; render();
+      } catch (cause) { if (!disposed) { notice = errorMessage(cause); failed = true; render(); } }
+      finally { loading = null; setBusy(false); }
+    })(); return loading;
+  }
+  async function save(next, keys = []) {
+    if (busy || needsRead || config.runtime_override) return false;
+    setBusy(true); let committed = false;
+    try {
+      const latest = await api.get("/models/config");
+      if (!sameModelConfig(config, latest.data)) throw new ApiError("Model settings changed", { status: 412 });
+      etag = latest.etag;
+      const patch = { default_model: next.default_model, providers: next.providers, items: next.items };
+      const saved = keys.length
+        ? await api.post("/models/setup", { patch, keys }, { ifMatch: etag })
+        : await api.put("/settings/models", { schema_version: 1, patch }, { ifMatch: etag });
+      committed = true; config = next; etag = saved.etag;
+      for (const key of keys) { keyDrafts.delete(key.provider); verified.clear(); }
+      if (draft) draft.key = "";
+      draft = null; needsRead = true;
+      try {
+        const current = await api.get("/models/config"); config = current.data; etag = current.etag; needsRead = false;
+        notice = text("saved", "配置已保存，模型尚未测试。"); failed = false;
+      } catch { notice = text("savedReadFailed", "已保存，但重新读取失败。请刷新后继续编辑。"); failed = true; }
+      try { await loadModels(); } catch { /* Native save remains acknowledged. */ }
+      view = "detail"; render();
     } catch (cause) {
-      toast(cause?.status === 412 ? t("modelConfig.conflictKept", {},
-        "配置已在其他位置更新，当前输入已保留。放弃修改并刷新后可重新编辑。")
-        : errorMessage(cause), "error");
-    } finally {
-      writing = false;
-      for (const { node, disabled } of locked) node.disabled = disabled;
-      if (identity && !committed) identity.readOnly = identityReadOnly;
-      updateBusyState();
-      if (!committed && focusAtSave?.isConnected && container.getClientRects().length &&
-          globalThis.document.activeElement === globalThis.document.body)
-        focusAtSave.focus({ preventScroll: true });
-    }
+      status(cause.status === 412 ? t("modelConfig.conflictKept") : errorMessage(cause), true);
+    } finally { setBusy(false); }
+    return committed;
   }
-
-  function renderProvider(form, item) {
-    formHeader(form, item, false);
-    if (item.builtin) {
-      form.append(element("section", { className: "model-section" }, [
-        copy("h4", "modelConfig.endpoints", "协议接口"),
-        element("div", { className: "model-summary-chips" }, protocols
-          .filter(([, , endpoint]) => item.endpoints?.[endpoint])
-          .map(([, label]) => element("span", { text: label }))),
-        element("dl", { className: "model-info-grid" }, [
-          infoValue("modelConfig.id", "标识", item.id),
-          infoValue("modelConfig.timeout", "超时（毫秒）", String(item.timeout_ms)),
-        ]),
-      ]));
-      return;
-    }
-    form.append(formSection("modelConfig.basicInfo", "基本信息", [
-      input("名称", "name", item.name, { required: true, maxLength: 256 }),
-      input("标识", "id", item.id, { required: true, readOnly: Boolean(selectedId), maxLength: 128,
-        pattern: "[A-Za-z0-9_-][A-Za-z0-9._-]*" }),
-    ]), formSection("modelConfig.endpoints", "协议接口", [
-      input("Chat Completions URL", "chat_completions", item.endpoints?.chat_completions || "", { maxLength: 2048, placeholder: "https://api.example.com/v1/chat/completions" }),
-      input("Responses URL", "responses", item.endpoints?.responses || "", { maxLength: 2048, placeholder: "https://api.example.com/v1/responses" }),
-      input("Anthropic Messages URL", "anthropic_messages", item.endpoints?.anthropic_messages || "", { maxLength: 2048, placeholder: "https://api.example.com/v1/messages" }),
-    ], "model-section-wide"), formSection("modelConfig.connection", "连接设置", [
-      input("凭据引用", "secret_ref", item.credential?.secret_ref || "",
-        { placeholder: "env:MY_MODEL_API_KEY", maxLength: 2048 }),
-      input("超时（毫秒）", "timeout_ms", item.timeout_ms,
-        { type: "number", required: true, min: 1, max: 600000 }),
-      input("验证 TLS 证书", "verify_peer", item.verify_peer, { type: "checkbox" }),
-    ]));
+  function showAdvanced(kind, id) {
+    if (blocked()) return;
+    advanced?.destroy(); advanced = null; view = "advanced"; advancedChanged = false;
+    render(); advanced = createAdvancedModelConfigPanel(container.querySelector(".supplier-advanced-host"), {
+      kind, id, onSaved: () => { advancedChanged = true; verified.clear(); },
+    }); void advanced.ensureLoaded();
   }
-
-  function renderModel(form, item) {
-    formHeader(form, item, true);
-    if (item.builtin) {
-      const provider = config.providers.find((entry) => entry.id === item.provider);
-      form.append(element("section", { className: "model-section" }, [
-        copy("h4", "modelConfig.basicInfo", "基本信息"),
-        element("dl", { className: "model-info-grid" }, [
-          infoValue("modelConfig.provider", "Provider", provider?.name || item.provider),
-          infoValue("modelConfig.wireModel", "API 模型名", item.wire_model),
-          infoValue("modelConfig.contextTokens", "上下文 token", item.window.context_tokens.toLocaleString()),
-          infoValue("modelConfig.maxOutputTokens", "最大输出 token", item.window.max_output_tokens.toLocaleString()),
-        ]),
-        copy("h4", "modelConfig.protocols", "支持的协议"),
-        element("div", { className: "model-summary-chips" }, protocols
-          .filter(([key]) => item.protocols.includes(key))
-          .map(([, label]) => element("span", { text: label }))),
-      ]));
-      return;
+  async function back() {
+    if (blocked()) return;
+    advanced?.destroy(); advanced = null; view = "list";
+    if (advancedChanged) { advancedChanged = false; await reload(); } else render();
+  }
+  function add() {
+    if (blocked()) return;
+    view = "templates"; render();
+  }
+  function choose(preset, choice = preset.variants[0]) {
+    draft = { preset, choice, key: "", base: choice.base, name: preset.name, provider: null,
+      items: [...choice.models], selected: new Set(choice.models.slice(0, 2)), queried: false,
+      ref: "", query: "", manual: "", default: false };
+    view = "setup"; notice = ""; failed = false; render();
+  }
+  function connection() {
+    if (draft.provider) return clone(draft.provider);
+    const entry = presetProvider(draft.preset, draft.choice, config.providers, draft.base);
+    entry.name = draft.name.trim() || draft.preset.name;
+    if (draft.ref.trim()) entry.credential = { secret_ref: draft.ref.trim() };
+    return entry;
+  }
+  async function discover() {
+    if (busy) return;
+    const form = container.querySelector(".supplier-setup-form");
+    if (!form.reportValidity()) return;
+    if (!draft.preset.local && !draft.provider && !draft.key.trim() && !draft.ref.trim()) {
+      status(text("keyRequired", "请输入 API Key，或在高级设置中填写凭据引用。"), true); return;
     }
-    form.append(formSection("modelConfig.basicInfo", "基本信息", [
-      input("名称", "name", item.name, { required: true, maxLength: 256 }),
-      input("标识", "id", item.id, { required: true, readOnly: Boolean(selectedId), maxLength: 128,
-        pattern: "[A-Za-z0-9_-][A-Za-z0-9._-]*" }),
-      input("Provider", "provider", item.provider, { kind: "select", choices:
-        config.providers.map((provider) => [provider.id, provider.name]) }),
-      input("API 模型名", "wire_model", item.wire_model, { required: true, maxLength: 256 }),
-    ]));
-    const defaults = formSection("modelConfig.defaults", "默认行为", [
-      input("默认协议", "default_protocol", item.default_protocol,
-        { kind: "select", choices: protocols.map(([key, label]) => [key, label]) }),
-      input("默认思考强度", "default_reasoning_effort", item.default_reasoning_effort,
-        { kind: "select", choices: efforts.map((value) => [value, value]) }),
-      input("计费模型", "billable", !item.free, { type: "checkbox" }),
-    ]);
-    defaults.append(checks("支持的协议", "protocol", item.protocols, protocols));
-    form.append(defaults);
-    const advanced = element("details", { className: "model-advanced" }, [
-      copy("summary", "modelConfig.advanced", "能力与上下文参数"),
-      element("div", { className: "model-advanced-body" }, [
-        checks("能力", "capability", item.capabilities, capabilities),
-        checks("思考强度", "effort", item.reasoning_efforts,
-          efforts.map((value) => [value, value])),
-        checks("附件", "attachment", item.attachments, attachments),
-        element("div", { className: "model-form-grid" }, [
-          input("窗口模式", "window_mode", item.window.mode,
-            { kind: "select", choices: [["shared-context", "共享上下文"],
-              ["split-input-output", "输入/输出分离"]] }),
-          ...[["context_tokens", "上下文 token"], ["max_input_tokens", "最大输入 token"],
-            ["max_output_tokens", "最大输出 token"], ["output_reserve_tokens", "输出预留 token"],
-            ["summary_tokens", "摘要 token"]].map(([key, label]) =>
-            input(label, key, item.window[key], { type: "number", required: true,
-              min: key === "output_reserve_tokens" || key === "summary_tokens" ? 0 : 1 })),
-        ]),
-      ]),
-    ]);
-    form.append(advanced);
-    const providerSelect = form.elements.provider;
-    const defaultProtocol = form.elements.default_protocol;
-    const syncProtocols = () => {
-      const provider = config.providers.find((entry) => entry.id === providerSelect.value);
-      for (const [key, , endpoint] of protocols) {
-        const allowed = Boolean(provider?.endpoints?.[endpoint]);
-        const checkbox = form.querySelector(`input[name="protocol"][value="${key}"]`);
-        checkbox.disabled = !allowed;
-        if (!allowed) checkbox.checked = false;
-        defaultProtocol.querySelector(`option[value="${key}"]`).disabled = !allowed;
+    setBusy(true); status(text("connecting", "正在读取模型列表…"));
+    try {
+      const entry = connection();
+      const payload = { provider: entry }; if (draft.key.trim()) payload.key = draft.key.trim();
+      const result = await api.post("/models/discover", payload);
+      if (disposed) return;
+      draft.items = [...new Set(result.data.items)];
+      draft.selected = new Set(suggestedModels(draft.items, draft.choice.models).filter((id) =>
+        !config.items.some((model) => model.provider === draft.provider?.id && model.wire_model === id))); draft.queried = true;
+      notice = text("catalogConnected", "模型列表连接成功；选择模型后添加，实际可用性需单独测试。"); failed = false; render();
+    } catch (cause) {
+      if (cause.code === "catalog_unsupported") {
+        draft.queried = true; notice = text("catalogFallback", "此服务不提供模型列表。可选用模板模型或手动填写模型 ID；保存后请测试。"); failed = false; render();
+      } else status(probeError(cause), true);
+    } finally { setBusy(false); }
+  }
+  async function addSelected() {
+    if (busy) return;
+    const form = container.querySelector(".supplier-setup-form"); if (!form.reportValidity()) return;
+    if (!draft.preset.local && !draft.provider && !draft.key.trim() && !draft.ref.trim()) {
+      status(text("keyRequired", "请输入 API Key，或在高级设置中填写凭据引用。"), true); return;
+    }
+    const entry = connection(), next = clone(config);
+    if (!draft.provider) next.providers.push(entry);
+    const manual = draft.manual.split(/[\n,;]+/).map((id) => id.trim()).filter(Boolean);
+    const ids = [...new Set([...draft.selected, ...manual])];
+    let added = 0;
+    for (const id of ids) {
+      if (id.length > 256) { status(text("idTooLong", "模型 ID 最多 256 个字符。"), true); return; }
+      if (next.items.some((item) => item.provider === entry.id && item.wire_model === id)) continue;
+      const model = presetModel(entry, id, next.items); next.items.push(model); added++;
+      if (draft.default && added === 1) next.default_model = model.id;
+    }
+    if (!added) { status(text("selectModels", "请至少选择一个尚未添加的模型，或填写模型 ID。"), true); return; }
+    selectedId = entry.id;
+    const keys = draft.key.trim() ? [{ provider: entry.id, value: draft.key.trim() }] : [];
+    await save(next, keys);
+  }
+  function renderTemplates(body) {
+    body.append(element("h3", { text: text("chooseSupplier", "选择供应商") }), element("p", { className: "model-config-status", text: text("templateHelp", "选择服务并填写 API Key。自己的供应商 Key 无需登录墨斗账号。") }));
+    const grid = element("div", { className: "supplier-templates" });
+    for (const preset of providerPresets) grid.append(button(preset.id === "openai-compatible" ? text("compatibleOpenai", "OpenAI 兼容服务") : preset.id === "anthropic-compatible" ? text("compatibleAnthropic", "Anthropic 兼容服务") : preset.name, () => choose(preset)));
+    body.append(grid);
+  }
+  function renderSelection(body) {
+    const selectedCount = element("span", { className: "model-config-status", text: text("selected", "已选 {count} 个模型", { count: draft.selected.size }) });
+    const list = element("div", { className: "supplier-candidates" });
+    function fill(query = "") {
+      clear(list);
+      const ids = draft.items.filter((id) => id.toLowerCase().includes(query.toLowerCase()));
+      for (const id of ids.slice(0, 100)) {
+        const enabled = config.items.some((model) => model.provider === draft.provider?.id && model.wire_model === id);
+        const checkbox = element("input", { attrs: { type: "checkbox", value: id } });
+        checkbox.checked = draft.selected.has(id); checkbox.disabled = enabled;
+        checkbox.addEventListener("change", () => { if (checkbox.checked) draft.selected.add(id); else draft.selected.delete(id); selectedCount.textContent = text("selected", "已选 {count} 个模型", { count: draft.selected.size }); });
+        list.append(element("label", {}, [checkbox, element("span", { text: id }), enabled ? element("small", { text: text("alreadyAdded", "已添加") }) : null]));
       }
-      const enabled = [...form.querySelectorAll('input[name="protocol"]:not(:disabled)')];
-      if (enabled.length && !enabled.some((checkbox) => checkbox.checked))
-        enabled[0].checked = true;
-      if (defaultProtocol.selectedOptions[0]?.disabled)
-        defaultProtocol.value = enabled.find((checkbox) => checkbox.checked)?.value || "";
-    };
-    providerSelect.addEventListener("change", syncProtocols);
-    syncProtocols();
+      if (ids.length > 100) list.append(element("small", { text: text("filterMore", "请搜索缩小范围；当前显示前 100 项。") }));
+    }
+    const search = field(text("findModel", "搜索模型"), "model-query", draft.query, (value) => { draft.query = value; fill(value); });
+    body.append(search, selectedCount, list); fill(draft.query);
   }
-
-  function readProvider(form, old) {
-    const data = new FormData(form);
-    const endpoints = Object.fromEntries(["chat_completions", "responses", "anthropic_messages"]
-      .map((name) => [name, String(data.get(name) || "").trim()])
-      .filter(([, value]) => value));
-    const secret = String(data.get("secret_ref") || "").trim();
-    return { ...old, id: String(data.get("id") || "").trim(),
-      name: String(data.get("name") || "").trim(), endpoints,
-      credential: secret ? { secret_ref: secret } : undefined,
-      timeout_ms: Number(data.get("timeout_ms")),
-      verify_peer: data.has("verify_peer") };
+  function renderSetup(body) {
+    const form = element("form", { className: "supplier-setup-form" });
+    form.addEventListener("invalid", (event) => { const details = event.target.closest("details"); if (details) details.open = true; }, true);
+    form.addEventListener("submit", (event) => { event.preventDefault(); void (draft.queried ? addSelected() : discover()); });
+    form.append(element("h3", { text: draft.provider ? text("addModels", "添加模型") : draft.preset.name }));
+    if (!draft.provider && draft.preset.variants.length > 1) {
+      const select = element("select", { attrs: { name: "service-variant" } });
+      for (const choice of draft.preset.variants) select.append(element("option", { text: text(choice.label, choice.label), attrs: { value: choice.id } }));
+      select.value = draft.choice.id; select.addEventListener("change", () => {
+        const key = draft.key, name = draft.name; choose(draft.preset, draft.preset.variants.find((item) => item.id === select.value)); draft.key = key; draft.name = name; render();
+      });
+      form.append(element("label", { className: "model-field" }, [element("span", { text: text("apiProduct", "API 产品") }), select]));
+    }
+    if (!draft.provider && draft.preset.custom) form.append(field(text("baseUrl", "服务地址（含 /v1）"), "base-url", draft.base, (value) => { draft.base = value; draft.queried = false; }, { type: "url", required: true }));
+    if (!draft.provider || draft.provider.credential) {
+      form.append(field(draft.provider ? text("replaceKeyOptional", "API Key（留空使用已保存的凭据）") : text("apiKey", "API Key"), "api-key", draft.key, (value) => { draft.key = value; draft.queried = false; }, { type: "password" }));
+      if (draft.preset.keyUrl && !draft.provider) form.append(element("a", { className: "supplier-key-link", text: text("getKey", "获取 API Key"), attrs: { href: draft.preset.keyUrl, target: "_blank", rel: "noopener noreferrer" } }));
+      form.append(element("p", { className: "model-config-status", text: text("keyPrivacy", "Key 仅在本机加密保存，不写入模型配置。复制到其他设备后需重新填写。") }));
+    }
+    if (!draft.provider) form.append(element("details", { className: "supplier-connection-advanced" }, [element("summary", { text: text("advancedConnection", "高级连接设置") }),
+      field(text("connectionName", "供应商名称"), "connection-name", draft.name, (value) => { draft.name = value; }),
+      !draft.preset.custom ? field(text("baseUrl", "服务地址（含 /v1）"), "base-url", draft.base, (value) => { draft.base = value; draft.queried = false; }, { type: "url", required: true }) : null,
+      field(text("credentialReference", "凭据引用（可代替 Key）"), "credential-ref", draft.ref, (value) => { draft.ref = value; draft.queried = false; })]));
+    if (draft.queried) renderSelection(form);
+    form.append(field(text("manualIds", "手动添加模型 ID（多个用逗号分隔）"), "manual-models", draft.manual, (value) => { draft.manual = value; }));
+    const makeDefault = element("input", { attrs: { type: "checkbox", name: "make-default" } });
+    makeDefault.checked = draft.default; makeDefault.addEventListener("change", () => { draft.default = makeDefault.checked; });
+    form.append(element("label", { className: "supplier-inline-check" }, [makeDefault, element("span", { text: text("useDefault", "将首个新增模型设为默认") })]));
+    const actions = element("div", { className: "supplier-actions" }, [
+      button(text("cancel", "取消"), () => { draft.key = ""; draft = null; view = "detail"; notice = ""; render(); }),
+      button(draft.queried ? text("refreshList", "刷新模型列表") : text("connect", "连接并读取模型"), () => void discover()),
+      button(draft.queried ? text("addSelected", "添加所选模型") : text("saveUnverified", "直接保存，稍后测试"), () => void addSelected(), true),
+    ]);
+    form.append(actions); body.append(form);
   }
-
-  function readModel(form, old) {
-    const data = new FormData(form);
-    const window = { mode: data.get("window_mode") };
-    for (const key of ["context_tokens", "max_input_tokens", "max_output_tokens",
-      "output_reserve_tokens", "summary_tokens"]) window[key] = Number(data.get(key));
-    return { ...old, id: String(data.get("id") || "").trim(),
-      name: String(data.get("name") || "").trim(),
-      provider: data.get("provider"), wire_model: String(data.get("wire_model") || "").trim(),
-      protocols: selected(form, "protocol"), default_protocol: data.get("default_protocol"),
-      capabilities: selected(form, "capability"), window,
-      reasoning_efforts: selected(form, "effort"),
-      default_reasoning_effort: data.get("default_reasoning_effort"),
-      attachments: selected(form, "attachment"), free: !data.has("billable") };
+  async function testModel(model, node, line, tools = false) {
+    if (busy) return;
+    setBusy(true); line.classList.remove("resource-error"); line.textContent = text("testing", "正在请求模型…");
+    try {
+      const result = await api.post("/models/test", { model_id: model.id, tools });
+      const message = tools ? text("toolsTested", "工具调用测试通过 · {ms} ms", { ms: result.data.latency_ms }) : text("tested", "回复测试通过 · {ms} ms", { ms: result.data.latency_ms });
+      verified.set(model.id, message); line.textContent = message;
+    } catch (cause) { verified.delete(model.id); line.textContent = probeError(cause); line.classList.add("resource-error"); }
+    finally { setBusy(false); node.focus({ preventScroll: true }); }
   }
-
-  function render(preservedForm = null) {
-    if (!config) return;
+  function renderDetail(body) {
+    const entry = provider(); if (!entry) return;
+    body.append(element("header", { className: "supplier-detail-heading" }, [element("h3", { text: entry.name }),
+      entry.builtin ? element("span", { text: t("modelConfig.builtinTag") }) : button(text("advancedEditor", "高级编辑"), () => showAdvanced("provider", entry.id))]));
+    if (entry.builtin) body.append(element("p", { className: "model-config-status", text: t("modelConfig.builtinModelNote") }));
+    else {
+      body.append(element("p", { className: "model-config-status supplier-address", text: Object.values(entry.endpoints)[0] || "" }));
+      const keyForm = element("form", { className: "supplier-key-form" }); let key = keyDrafts.get(entry.id) || "";
+      const keyField = field(text("replaceKeyOptional", "API Key（留空使用已保存的凭据）"), "replacement-key", key, (value) => { key = value; keyDrafts.set(entry.id, value); }, { type: "password" });
+      keyForm.append(keyField, button(text("saveKey", "保存 Key"), async () => { if (!key.trim()) return; if (await save(clone(config), [{ provider: entry.id, value: key.trim() }])) key = ""; }),
+        button(text("cancel", "取消"), () => { keyDrafts.delete(entry.id); render(); }));
+      keyForm.addEventListener("submit", (event) => { event.preventDefault(); keyForm.querySelector("button").click(); });
+      body.append(keyForm, button(text("addModels", "添加模型"), () => {
+        if (blocked()) return;
+        const preset = providerPresets.find((item) => item.id === entry.template_id) || providerPresets[10];
+        choose(preset, presetVariant(preset.id, entry.template_variant)); draft.provider = entry; render();
+      }));
+    }
+    const models = config.items.filter((item) => item.provider === entry.id);
+    body.append(element("p", { className: "model-config-status", text: text("testHelp", "测试会发送简短请求，可能消耗少量 Token；工具调用测试不会执行任何工具。") }));
+    const list = element("div", { className: "supplier-models" });
+    for (const model of models) {
+      const line = element("p", { className: "supplier-model-status", text: verified.get(model.id) || (model.builtin ? text("builtinAvailable", "内置服务") : text("untested", "已配置 · 尚未测试")), attrs: { role: "status" } });
+      const row = element("article", { className: "supplier-model" }, [element("div", { className: "supplier-model-title" }, [element("strong", { text: model.name }), model.id === config.default_model ? element("span", { className: "model-default-badge", text: t("modelConfig.defaultTag") }) : null]), element("small", { text: model.wire_model }), line]);
+      const actions = element("div", { className: "supplier-actions" });
+      const test = button(text("testReply", "测试回复"), () => void testModel(model, test, line)); actions.append(test);
+      if (model.enabled !== false && model.capabilities.includes("tool-call-output")) {
+        const toolTest = button(text("testTools", "测试工具调用"), () => void testModel(model, toolTest, line, true)); actions.append(toolTest);
+      }
+      if (!model.builtin) actions.append(button(text("advancedEditor", "高级编辑"), () => showAdvanced("model", model.id)));
+      if (model.id !== config.default_model && model.enabled !== false) actions.append(button(t("modelConfig.setDefault"), () => { const next = clone(config); next.default_model = model.id; void save(next); }));
+      if (!model.builtin && model.id !== config.default_model) {
+        actions.append(button(model.enabled === false ? text("enable", "启用") : text("disable", "停用"), () => {
+          const next = clone(config); next.items.find((item) => item.id === model.id).enabled = model.enabled === false; void save(next);
+        }));
+        const confirm = element("div", { className: "model-delete-confirm", attrs: { hidden: "" } }, [element("span", { text: t("modelConfig.removePrompt", { name: model.name }) })]);
+        confirm.append(button(text("cancel", "取消"), () => { confirm.hidden = true; }), button(t("modelConfig.confirmRemove"), () => {
+          const next = clone(config); next.items = next.items.filter((item) => item.id !== model.id); void save(next);
+        }));
+        actions.append(button(t("modelConfig.remove"), () => { confirm.hidden = false; })); row.append(confirm);
+      }
+      if (model.enabled === false) { line.textContent = text("disabled", "已停用；启用后可用于会话。"); test.disabled = true; }
+      row.append(actions); list.append(row);
+    }
+    body.append(list);
+  }
+  function render() {
+    if (disposed) return;
+    const active = document.activeElement;
+    const hadFocus = container.contains(active), focusName = active?.name;
+    const selection = hadFocus && typeof active.selectionStart === "number" ? [active.selectionStart, active.selectionEnd] : null;
     clear(container);
-    const controls = element("div", { className: "model-config-controls" });
-    const tabs = element("div", { className: "model-config-tabs" });
-    for (const [value, key, label] of [
-      ["model", "modelConfig.models", "模型"],
-      ["provider", "modelConfig.providers", "Provider"],
-    ]) {
-      const button = copy("button", key, label, {}, { className: "secondary-button",
-        attrs: { type: "button", "aria-pressed": kind === value } });
-      button.addEventListener("click", () => {
-        if (!allowChange()) return;
-        kind = value; selectedId = collection()[0]?.id ?? ""; render();
-        container.querySelector('.model-config-controls [aria-pressed="true"]')?.focus();
-      });
-      tabs.append(button);
+    const header = element("div", { className: "supplier-toolbar" }, [element("p", { className: "model-config-status", text: config ? text("default", "默认模型：{model}", { model: config.items.find((item) => item.id === config.default_model)?.name || config.default_model }) : t("resource.loading") }),
+      button(t("modelConfig.refresh"), () => void reload()), button(text("addSupplier", "添加供应商"), add, true)]);
+    container.append(header, element("p", { className: `supplier-notice ${failed ? "resource-error" : "model-config-status"}`, text: notice, attrs: { role: failed ? "alert" : "status", hidden: notice ? null : "" } }));
+    if (!config) return;
+    if (config.runtime_override || needsRead) {
+      const line = element("p", { className: "resource-error", text: config.runtime_override ? t("modelConfig.runtimeOverride") : notice }); container.append(line);
     }
-    const refresh = copy("button", "modelConfig.refresh", "刷新", {},
-      { className: "secondary-button", attrs: { type: "button" } });
-    refresh.addEventListener("click", async () => {
-      if (!allowChange()) return;
-      const applied = await load();
-      // A successful reload replaces the clicked button. Leave later user
-      // focus alone if they moved to another part of the app meanwhile.
-      if (applied && container.isConnected && container.getClientRects().length &&
-          globalThis.document.activeElement === globalThis.document.body)
-        container.querySelector('[data-model-copy-key="modelConfig.refresh"]')?.focus();
-    });
-    const add = copy("button", kind === "model" ? "modelConfig.newModel" :
-      "modelConfig.newProvider", kind === "model" ? "新增模型" : "新增 Provider",
-    {}, { className: "primary-button", attrs: { type: "button" } });
-    add.disabled = config.runtime_override;
-    add.addEventListener("click", () => {
-      if (!allowChange()) return;
-      selectedId = ""; render();
-      container.querySelector('input[name="id"]')?.focus();
-    });
-    const defaultModel = config.items.find((item) => item.id === config.default_model);
-    controls.append(tabs, copy("p", "modelConfig.status",
-      `默认模型：${defaultModel?.name || config.default_model}`,
-      { model: defaultModel?.name || config.default_model },
-      { className: "model-config-status" }),
-      element("div", { className: "model-toolbar-actions" }, [refresh, add]));
-    container.append(controls);
-    if (config.runtime_override) container.append(copy("p", "modelConfig.runtimeOverride",
-      "当前配置含运行时覆盖；请移除启动覆盖后再用页面编辑模型。",
-      {}, { className: "resource-error" }));
-    const layout = element("div", { className: "model-config-layout" });
-    const list = translatedAttribute(element("div", { className: "model-config-list" }),
-      "aria-label", kind === "model" ? "modelConfig.modelList" : "modelConfig.providerList",
-      kind === "model" ? "模型列表" : "Provider 列表");
-    list.append(element("div", { className: "model-list-heading" }, [
-      copy("span", kind === "model" ? "modelConfig.models" : "modelConfig.providers",
-        kind === "model" ? "模型" : "Provider"),
-      element("span", { className: "model-list-count", text: collection().length }),
-    ]));
-    for (const item of collection()) {
-      const badges = element("span", { className: "model-item-badges" }, [
-        item.builtin ? copy("span", "modelConfig.builtinTag", "内置") : null,
-        kind === "model" && item.id === config.default_model
-          ? copy("span", "modelConfig.defaultTag", "默认", {}, { className: "model-default-badge" }) : null,
-      ]);
-      const providerName = kind === "model"
-        ? config.providers.find((entry) => entry.id === item.provider)?.name || item.provider : item.id;
-      const button = element("button", { className: "model-config-item",
-        attrs: { type: "button", "aria-current": selectedId === item.id ? "true" : "false" } }, [
-        modelIcon(kind === "model" ? "brain" : "code", "icon model-item-icon"),
-        element("span", { className: "model-item-copy" }, [
-          element("strong", { text: item.name || item.id }),
-          element("small", { text: providerName }), badges,
-        ]),
-      ]);
-      button.addEventListener("click", () => {
-        if (!allowChange()) return;
-        selectedId = item.id; render();
-        container.querySelector('.model-config-item[aria-current="true"]')?.focus();
-      });
-      list.append(button);
+    const layout = element("div", { className: `supplier-layout supplier-view-${view}` });
+    const list = element("nav", { className: "supplier-list", attrs: { "aria-label": t("modelConfig.providerList") } });
+    for (const entry of config.providers) {
+      const item = button(entry.name, () => { if (blocked()) return; selectedId = entry.id; view = "detail"; notice = ""; render(); });
+      item.className = "model-config-item"; item.setAttribute("aria-current", entry.id === selectedId && view === "detail" ? "true" : "false");
+      item.append(element("small", { text: text("modelCount", "{count} 个模型", { count: config.items.filter((model) => model.provider === entry.id).length }) })); list.append(item);
     }
-    if (preservedForm) {
-      layout.append(list, preservedForm);
-      container.append(layout);
-      mountIcons(list);
-      return;
+    const body = element("div", { className: "supplier-body" });
+    if (view !== "list") body.append(button(view === "setup" ? text("cancel", "取消") : view === "advanced" ? text("backSuppliers", "返回供应商") : text("back", "返回"), () => {
+      if (view === "setup") { draft.key = ""; draft = null; }
+      void back();
+    }));
+    if (view === "templates") renderTemplates(body);
+    else if (view === "setup") renderSetup(body);
+    else if (view === "advanced") body.append(element("div", { className: "supplier-advanced-host" }));
+    else renderDetail(body);
+    layout.append(list, body); container.append(layout);
+    if (config.runtime_override || needsRead) for (const node of container.querySelectorAll("button"))
+      if (node !== header.children[1]) node.disabled = true;
+    // The expert editor owns its revision and drafts until the user returns.
+    // Keep the outer navigation from detaching a still-live editor.
+    if (view === "advanced") { header.children[1].disabled = true; header.children[2].disabled = true; }
+    if (busy) setBusy(true);
+    if (hadFocus) {
+      const field = focusName && [...container.querySelectorAll("input, select")].find((node) => node.name === focusName);
+      const heading = body.querySelector("h3");
+      const target = field || (view === "list" ? [...list.querySelectorAll("button")].find((node) => node.textContent.startsWith(provider()?.name || "")) : heading);
+      if (target) { const details = target.closest("details"); if (details) details.open = true; if (target === heading) target.tabIndex = -1; target.focus(); if (field && selection) field.setSelectionRange?.(...selection); }
     }
-    let source = current();
-    let item = clone(source ?? (kind === "model" ?
-      modelDefault(config.providers.find((provider) => !provider.builtin) ||
-        config.providers[0]) : providerDefault()));
-    const form = element("form", { className: "model-config-form" });
-    if (kind === "model") renderModel(form, item);
-    else renderProvider(form, item);
-    rebaseForm.set(form, () => {
-      source = current();
-      item = clone(source ?? item);
-      const id = form.querySelector('input[name="id"]');
-      if (id) id.readOnly = Boolean(source);
-      const title = form.querySelector("h3");
-      if (source?.name && title) {
-        title.textContent = source.name;
-        for (const name of [...title.getAttributeNames()])
-          if (name.startsWith("data-model-copy-")) title.removeAttribute(name);
-      }
-    });
-    const actions = element("div", { className: "model-config-actions" });
-    if (!source?.builtin && !config.runtime_override) {
-      const save = copy("button", "modelConfig.save", "保存", {},
-        { className: "primary-button", attrs: { type: "submit" } });
-      save.disabled = Boolean(source);
-      const discard = copy("button", "modelConfig.discard", "放弃修改", {},
-        { className: "secondary-button", attrs: { type: "button" } });
-      discard.hidden = true;
-      discard.addEventListener("click", () => {
-        dirty = false;
-        render();
-        // Replacing the form removes the activated button. Return keyboard
-        // focus to the saved resource, or to Add for an unsaved new item.
-        const target = source
-          ? container.querySelector('.model-config-item[aria-current="true"]')
-          : container.querySelector('.model-config-controls .primary-button');
-        target?.focus();
-      });
-      form.addEventListener("input", () => { editVersion += 1; dirty = true; discard.hidden = false; save.disabled = writing; });
-      form.addEventListener("change", () => { editVersion += 1; dirty = true; discard.hidden = false; save.disabled = writing; });
-      form.addEventListener("submit", (event) => {
-        event.preventDefault();
-        if (writing) return;
-        if (!form.reportValidity()) return;
-        const next = clone(config);
-        const value = kind === "model" ? readModel(form, item) : readProvider(form, item);
-        if (kind === "provider" && !Object.keys(value.endpoints).length) {
-          toast(t("modelConfig.endpointRequired", {},
-            "至少填写一个协议接口 URL。"), "error");
-          return;
-        }
-        if (kind === "model" && (!value.protocols.length ||
-            !value.protocols.includes(value.default_protocol) ||
-            !value.reasoning_efforts.includes(value.default_reasoning_effort))) {
-          toast(t("modelConfig.selectionRequired", {},
-            "选择至少一个协议和思考强度，并确认默认项属于所选范围。"), "error");
-          return;
-        }
-        const key = kind === "model" ? "items" : "providers";
-        if (source) next[key] = next[key].map((entry) => entry.id === source.id ? value : entry);
-        else next[key].push(value);
-        void transact(next, source ? "modelConfig.updated" : "modelConfig.added",
-          source ? "配置已更新" : "配置已添加", kind, value.id, true);
-      });
-      actions.append(save, discard);
-      if (source?.removable) {
-        const used = kind === "provider" && config.items.some((model) => model.provider === source.id);
-        const isDefault = kind === "model" && source.id === config.default_model;
-        const remove = copy("button", "modelConfig.remove", "删除", {},
-          { className: "danger-link", attrs: { type: "button" } });
-        if (used || isDefault) translatedAttribute(remove, "title",
-          used ? "modelConfig.providerInUse" : "modelConfig.defaultInUse",
-          used ? "先将引用它的模型移到其他 Provider" : "先设置其他默认模型");
-        remove.disabled = used || isDefault;
-        const confirm = element("div", { className: "model-delete-confirm", attrs: { role: "group" } }, [
-          copy("span", "modelConfig.removePrompt",
-            `删除“${source.name || source.id}”？使用它的已有会话可能无法继续。`,
-            { name: source.name || source.id }),
-        ]);
-        translatedAttribute(confirm, "aria-label", "modelConfig.removeGroup", "确认删除");
-        const cancel = copy("button", "modelConfig.cancel", "取消", {},
-          { className: "secondary-button", attrs: { type: "button" } });
-        const apply = copy("button", "modelConfig.confirmRemove", "确认删除", {},
-          { className: "danger-button", attrs: { type: "button" } });
-        const dismiss = () => { confirm.hidden = true; remove.focus(); };
-        cancel.addEventListener("click", dismiss);
-        confirm.addEventListener("keydown", (event) => {
-          if (event.key !== "Escape" || isImeKey(event)) return;
-          event.preventDefault();
-          event.stopPropagation();
-          dismiss();
-        });
-        apply.addEventListener("click", () => {
-          const next = clone(config);
-          next[kind === "model" ? "items" : "providers"] = collection().filter((entry) => entry.id !== source.id);
-          confirm.hidden = true;
-          void transact(next, "modelConfig.removed", "配置已删除", kind, "");
-        });
-        confirm.append(cancel, apply);
-        confirm.hidden = true;
-        remove.addEventListener("click", () => { if (allowChange()) { confirm.hidden = false; cancel.focus(); } });
-        actions.append(remove, confirm);
-      }
-    }
-    if (kind === "model" && source && source.id !== config.default_model && !config.runtime_override) {
-      const setDefault = copy("button", "modelConfig.setDefault", "设为默认模型", {},
-        { className: "secondary-button", attrs: { type: "button" } });
-      setDefault.addEventListener("click", () => {
-        if (!allowChange()) return;
-        const next = clone(config); next.default_model = source.id;
-        void transact(next, "modelConfig.defaultUpdated", "默认模型已更新");
-      });
-      actions.append(setDefault);
-    }
-    if (actions.childElementCount) form.append(actions);
-    layout.append(list, form);
-    container.append(layout);
-    mountIcons(container);
   }
-
-  const unsubscribe = subscribeLocale(() => translateCopy(container));
-  return Object.freeze({
-    ensureLoaded: () => config ? Promise.resolve() : load(),
-    reload: () => load(),
-    destroy: unsubscribe,
-  });
+  const unsubscribe = subscribeLocale(() => { if (!advanced && !busy) render(); });
+  return Object.freeze({ ensureLoaded: () => config ? Promise.resolve() : reload(), reload,
+    destroy() { disposed = true; if (draft) draft.key = ""; keyDrafts.clear(); advanced?.destroy(); unsubscribe(); } });
 }

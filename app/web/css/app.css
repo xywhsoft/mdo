@@ -1,3 +1,5 @@
+@import url("./model-settings.css");
+
 :root {
   color-scheme: light;
   --bg: #ffffff;

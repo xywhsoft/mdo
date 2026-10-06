@@ -729,6 +729,7 @@ static bool MdoConfigModelItemValidate(const xvalue* pItem,
          !MdoConfigBool(pItem, "free") ||
          !MdoConfigBool(pItem, "editable") ||
          !MdoConfigBool(pItem, "removable") ) return false;
+    if (xrtValueObjectHas(pItem, MdoConfigKey("enabled")) && !MdoConfigBool(pItem, "enabled")) return false;
     pProvider = MdoConfigFindById(pProviders, ProviderId);
     if ( pProvider == NULL ) return false;
     pEndpoints = xrtValueObjectGet(pProvider, MdoConfigKey("endpoints"));
@@ -853,7 +854,12 @@ static bool MdoConfigModelsValidate(const xvalue* pModels,
         xstrview Id;
         if ( !MdoConfigModelItemValidate(pItem, pProviders, &Id) ) goto invalid;
         if ( Id.Size == DefaultId.Size &&
-             memcmp(Id.Data, DefaultId.Data, Id.Size) == 0 ) bDefaultFound = true;
+             memcmp(Id.Data, DefaultId.Data, Id.Size) == 0 ) {
+            bool Enabled = true;
+            (void)xrtValueGetBool(xrtValueObjectGet(pItem, MdoConfigKey("enabled")), &Enabled);
+            if (!Enabled) goto invalid;
+            bDefaultFound = true;
+        }
         if ( MdoConfigViewEqual(Id, "ornith-1.5-35b") ) {
             if ( bProtectedModelFound ||
                  !xrtValueEqual(pItem, pProtectedModel) ) goto protected;

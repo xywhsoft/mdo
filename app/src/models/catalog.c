@@ -561,18 +561,22 @@ static MdoModelCatalog* MdoModelsBuildCandidate(uint64 Generation)
              MdoModelsFindProvider(pCatalog, pCatalog->Providers[i].Id) !=
                 &pCatalog->Providers[i] ) goto fail;
     }
-    pCatalog->ModelCount = xrtValueCount(pItems);
-    pCatalog->Models = (MdoModelEntry*)xrtCalloc(pCatalog->ModelCount,
+    pCatalog->Models = (MdoModelEntry*)xrtCalloc(xrtValueCount(pItems),
         sizeof(*pCatalog->Models));
     if ( pCatalog->Models == NULL ) goto fail;
-    for ( i = 0u; i < pCatalog->ModelCount; ++i ) {
-        MdoModelEntry* pModel = &pCatalog->Models[i];
+    for ( i = 0u; i < xrtValueCount(pItems); ++i ) {
+        bool Enabled = true;
+        const xvalue* Item = xrtValueArrayGet(pItems, i);
+        if (xrtValueObjectHas(Item, MdoModelsKey("enabled")) &&
+            (!xrtValueGetBool(xrtValueObjectGet(Item, MdoModelsKey("enabled")), &Enabled) || !Enabled)) continue;
+        size_t Index = pCatalog->ModelCount++;
+        MdoModelEntry* pModel = &pCatalog->Models[Index];
         if ( !MdoModelsParseModel(xrtValueArrayGet(pItems, i), pCatalog,
                 pModel) || MdoModelsFindModel(pCatalog, pModel->Id) != pModel )
             goto fail;
         if ( strlen(pModel->Id) == DefaultId.Size &&
              memcmp(pModel->Id, DefaultId.Data, DefaultId.Size) == 0 )
-            pCatalog->DefaultModelIndex = i;
+            pCatalog->DefaultModelIndex = Index;
     }
     if ( pCatalog->DefaultModelIndex == SIZE_MAX ) goto fail;
     xrtValueRelease(pRoot);
@@ -800,7 +804,7 @@ static void MdoModelsProfileError(xllm_error* pError, cstr Message)
     snprintf(pError->sMessage, sizeof(pError->sMessage), "%s", Message);
 }
 
-xx509store* MdoModelLoadCaStore(cstr Path, xllm_error* Error)
+xx509store* MdoModelsLoadCaStore(cstr Path, xllm_error* Error)
 {
     xfile File = NULL;
     xfileinfo Info;
@@ -1176,7 +1180,7 @@ xllm_client* MdoModelClientCreate(const MdoModelCatalog* pCatalog,
         goto done;
     }
     if ( Transport.CaPemPath[0] != '\0' ) {
-        CaStore = MdoModelLoadCaStore(Transport.CaPemPath, pError);
+        CaStore = MdoModelsLoadCaStore(Transport.CaPemPath, pError);
         if ( CaStore == NULL ) goto done;
     }
     if ( strcmp(Transport.ProxyKind, "none") != 0 &&

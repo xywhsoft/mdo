@@ -31,6 +31,11 @@ export function createComposerControls({ root, modelSelect, reasoningSelect,
   // Body-owned fixed panels stay above the composer and inside the keyboard
   // viewport, independent of any ancestor's containment or overflow rules.
   doc.body.append(modelPanel, permissionPanel);
+  const manageModels = doc.createElement("a");
+  manageModels.className = "composer-manage-models";
+  manageModels.href = "#/settings/models";
+  manageModels.addEventListener("click", close);
+  modelPanel.append(manageModels);
 
   function fitEstimate() {
     // Try the optional text at its natural width. Keep it only if all controls
@@ -78,6 +83,7 @@ export function createComposerControls({ root, modelSelect, reasoningSelect,
   }
 
   function sync() {
+    manageModels.textContent = t("modelSetup.manageModels", {}, "管理模型");
     const model = findModel(modelsStore.get().data?.models ?? [], modelSelect.value);
     modelLabel.textContent = model?.name || modelSelect.value || t("shell.model", {}, "模型");
     const efforts = [...reasoningSelect.options];

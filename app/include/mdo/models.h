@@ -118,7 +118,7 @@ xllm_client* MdoModelClientCreate(const MdoModelCatalog* pCatalog,
 
 const char* MdoModelProtocolName(MdoModelProtocol Protocol);
 /* Caller owns the combined system/custom trust store. */
-xx509store* MdoModelLoadCaStore(cstr Path, xllm_error* Error);
+xx509store* MdoModelsLoadCaStore(cstr Path, xllm_error* Error);
 xllm_provider MdoModelProtocolProvider(MdoModelProtocol Protocol);
 
 #endif

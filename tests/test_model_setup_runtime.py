@@ -42,6 +42,11 @@ class Supplier(BaseHTTPRequestHandler):
         Supplier.calls.append((data['model'], self.headers.get('Authorization')))
         if self.headers.get('Authorization') != 'Bearer fixture-model-key':
             return self.reply({}, 401)
+        if data.get('tools'):
+            return self.reply({'id': 'fixture', 'object': 'chat.completion', 'model': data['model'],
+                'choices': [{'index': 0, 'message': {'role': 'assistant', 'content': None,
+                    'tool_calls': [{'id': 'probe', 'type': 'function', 'function': {
+                        'name': 'mdo_connection_probe', 'arguments': '{}'}}]}, 'finish_reason': 'tool_calls'}]})
         self.reply({'id': 'fixture', 'object': 'chat.completion', 'model': data['model'],
                     'choices': [{'index': 0, 'message': {'role': 'assistant', 'content': 'OK'},
                                  'finish_reason': 'stop'}],
@@ -121,12 +126,28 @@ def main():
                 status, result = post('test', {'model_id': 'fixture-agent'})
                 assert status == 200 and result['data']['verified'], result
                 assert Supplier.calls[-1] == ('fixture-agent', 'Bearer fixture-model-key')
+                status, result = post('test', {'model_id': 'fixture-agent', 'tools': True})
+                assert status == 200 and result['data']['verified'], result
+                before = len(Supplier.calls)
+                assert post('test', {'model_id': 'fixture-agent', 'tools': 'true'})[0] == 422
+                assert len(Supplier.calls) == before
                 stop_host(process); process = None
                 process = subprocess.Popen([str(args.host.resolve()), str(base / 'xs.json')],
                     cwd=base, env=env, stdin=subprocess.PIPE, stdout=log, stderr=log)
                 wait_ready(port, process)
                 status, result = post('test', {'model_id': 'fixture-agent'})
                 assert status == 200, result
+                saved, current_etag = get()
+                disabled = {key: saved[key] for key in ('providers', 'items', 'default_model')}
+                disabled['items'][-1]['enabled'] = False
+                assert post('setup', {'patch': disabled, 'keys': []}, current_etag)[0] == 200
+                assert post('test', {'model_id': 'fixture-agent'})[0] == 404
+                saved, current_etag = get()
+                invalid_default = copy.deepcopy(disabled); invalid_default['default_model'] = 'fixture-agent'
+                assert post('setup', {'patch': invalid_default, 'keys': []}, current_etag)[0] == 422
+                disabled['items'][-1]['enabled'] = True
+                assert post('setup', {'patch': disabled, 'keys': []}, current_etag)[0] == 200
+                assert post('test', {'model_id': 'fixture-agent'})[0] == 200
                 print('PASS model discovery, credential transaction, conflict, encrypted restart and actual request')
             except BaseException:
                 log.flush()

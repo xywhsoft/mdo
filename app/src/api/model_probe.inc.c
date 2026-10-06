@@ -47,7 +47,7 @@ static xhttpclient* MdoApiModelDiscoveryClient(MdoApiContext* Context, cstr Url,
     if (!Verify || Transport.CaPemPath[0]) {
         xrtTlsVerifierConfigInit(&Tls);
         if (!Verify) Tls.Verify = MdoApiModelAcceptTls;
-        else { Store = MdoModelLoadCaStore(Transport.CaPemPath, &Error); if (!Store) goto done; Tls.Store = Store; }
+        else { Store = MdoModelsLoadCaStore(Transport.CaPemPath, &Error); if (!Store) goto done; Tls.Store = Store; }
         Verifier = xrtTlsVerifierCreate(&Tls); if (!Verifier) goto done;
         Config.TlsVerifier = Verifier; Config.SystemTrust = false;
     }
@@ -141,8 +141,11 @@ static bool MdoApiModelTestRun(MdoApiContext* Context, MdoApiJsonBody Body)
 {
     MdoModelCatalog* Catalog = NULL; xllm_client* Client = NULL; xllm_response* Response = NULL;
     xllm_request Request; xllm_error Error = {0}; MdoModelClientOptions Options;
-    MdoModelInfo Info = {0}; xvalue* Data = NULL; bool Ok = false; uint64 Started = xrtClock();
+    MdoModelInfo Info = {0}; xvalue* Data = NULL; bool Ok = false, Tools = false; uint64 Started = xrtClock();
     cstr Id = MdoApiModelText(Body.Value, "model_id", 128u);
+    xvalue* ToolMode = xrtValueObjectGet(Body.Value, XRT_STR_LITERAL("tools"));
+    if (ToolMode && !xrtValueGetBool(ToolMode, &Tools))
+        return MdoApiReplyError(Context, 422u, "probe_invalid", "tools must be a boolean", NULL);
     Catalog = MdoModelCatalogSnapshot(); Info.Size = sizeof(Info);
     xllmRequestInit(&Request); MdoModelClientOptionsInit(&Options); Options.ModelId = Id;
     if (!Id || !MdoModelCatalogModelFind(Catalog, Id, &Info)) {
@@ -154,9 +157,16 @@ static bool MdoApiModelTestRun(MdoApiContext* Context, MdoApiJsonBody Body)
     Request.bStream = false; Request.bParallelToolCalls = false;
     Request.uDeadline = Context->SendDeadline;
     xllmRequestSetCancel(&Request, Context->SendCancel);
-    if (Client && xllmRequestAddTextMessage(&Request, XLLM_ROLE_USER, "Reply briefly with OK."))
+    if (Tools) {
+        Request.eToolChoice = XLLM_TOOL_CHOICE_REQUIRED;
+        if (!xllmRequestAddTool(&Request, "mdo_connection_probe", "Return a connection check. This tool is never executed.",
+            "{\"type\":\"object\",\"properties\":{},\"additionalProperties\":false}", false)) { xllmClientDestroy(Client); Client = NULL; }
+    }
+    if (Client && xllmRequestAddTextMessage(&Request, XLLM_ROLE_USER, Tools ? "Call mdo_connection_probe once." : "Reply briefly with OK."))
         Ok = xllmClientComplete(Client, &Request, NULL, &Response, &Error) == XLLM_RESULT_OK;
-    if (Ok && (!Response || ((!Response->sContent || !Response->sContent[0]) && (!Response->sReasoningContent || !Response->sReasoningContent[0])))) Ok = false;
+    if (Tools) Ok = Ok && Response && Response->iToolCallCount == 1u && Response->pToolCalls[0].sName &&
+        strcmp(Response->pToolCalls[0].sName, "mdo_connection_probe") == 0;
+    else if (Ok && (!Response || ((!Response->sContent || !Response->sContent[0]) && (!Response->sReasoningContent || !Response->sReasoningContent[0])))) Ok = false;
     if (Ok) {
         Data = xrtValueObject(); Ok = Data && MdoApiValueSetBool(Data, "verified", true) &&
             MdoApiValueSetUInt(Data, "latency_ms", (xrtClock() - Started) / 1000u);
@@ -165,7 +175,7 @@ static bool MdoApiModelTestRun(MdoApiContext* Context, MdoApiJsonBody Body)
     MdoModelCatalogRelease(Catalog); xrtClearError();
     if (Ok) return MdoApiReplySuccessTake(Context, 200u, Data, NULL);
     xrtValueRelease(Data);
-    return MdoApiReplyError(Context, 422u, "model_test_failed",
+    return MdoApiReplyError(Context, 422u, Tools ? "model_tools_test_failed" : "model_test_failed",
         Error.eCode == XLLM_ERROR_AUTH ? "The supplier rejected this model key" :
         Error.eCode == XLLM_ERROR_TIMEOUT ? "The model did not respond within 30 seconds" :
         "The model request failed; check model ID, balance, API protocol and network settings", NULL);
