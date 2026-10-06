@@ -26,6 +26,12 @@ static xatomic64 g_MdoApiFallbackId;
 static bool g_MdoApiInitialized;
 
 static const MdoApiRoute g_MdoApiRoutes[] = {
+    { "/api/v1/extensions/{kind}", XHTTP_METHOD_GET | XHTTP_METHOD_HEAD, "GET, HEAD, OPTIONS", MdoApiExtensionsRoute, false },
+    { "/api/v1/extensions/{kind}/{id}", XHTTP_METHOD_GET | XHTTP_METHOD_HEAD | XHTTP_METHOD_PUT | XHTTP_METHOD_DELETE,
+      "GET, HEAD, PUT, DELETE, OPTIONS", MdoApiExtensionsRoute, false },
+    { "/api/v1/extensions/{kind}/{id}/bundle", XHTTP_METHOD_GET, "GET, OPTIONS", MdoApiExtensionsRoute, false },
+    { "/api/v1/extensions/{kind}/{id}/enabled", XHTTP_METHOD_POST,
+      "POST, OPTIONS", MdoApiExtensionsRoute, false },
     { "/api/v1/distribution", XHTTP_METHOD_GET | XHTTP_METHOD_POST, "GET, POST, OPTIONS", MdoApiDistributionRoute, false },
     { "/api/v1/remote", XHTTP_METHOD_GET | XHTTP_METHOD_POST,
       "GET, POST, OPTIONS", MdoApiRemoteRoute, false },
@@ -409,8 +415,9 @@ bool MdoApiInit(void)
         return false;
     }
     if ( !MdoApiBackupUploadsInit() || !MdoApiBackupPreviewsInit() || !MdoApiBackupRestoresInit() || !MdoApiDownloadsInit() ||
-         !MdoApiImageDownloadsInit() || !MdoApiLiveInit() || !MdoApiModelProbesInit() ) {
+         !MdoApiImageDownloadsInit() || !MdoApiLiveInit() || !MdoApiExtensionsInit() || !MdoApiModelProbesInit() ) {
         MdoApiModelProbesUnit();
+        MdoApiExtensionsUnit();
         MdoApiLiveUnit(); MdoApiLiveRelease();
         MdoApiImageDownloadsUnit(); MdoApiDownloadsUnit();
         MdoApiBackupRestoresUnit();
@@ -430,6 +437,7 @@ void MdoApiUnit(void)
 {
     g_MdoApiInitialized = false;
     MdoApiModelProbesUnit();
+    MdoApiExtensionsUnit();
     MdoApiLiveUnit();
     MdoApiDownloadsUnit();
     MdoApiImageDownloadsUnit();

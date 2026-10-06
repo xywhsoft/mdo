@@ -133,7 +133,7 @@ static inline bool MdoSubagentFileParse(cstr Id, cstr Text,
     File->Agent.AllowedEffects = (File->Agent.Flags & MDO_AGENT_READ_ONLY)
         ? MDO_TOOL_EFFECT_READ : MDO_TOOL_EFFECT_ALL;
     File->Agent.MaxTurns = 64u; File->Agent.TimeoutMilliseconds = 120000u;
-    File->Agent.MaxFinalBytes = 64u * 1024u; File->Agent.MaxDepth = 1u;
+    File->Agent.MaxFinalBytes = 64u * 1024u; File->Agent.MaxDepth = (File->Agent.Flags & MDO_AGENT_ALLOW_DELEGATION) ? 2u : 1u;
     xrtValueRelease(Document);
     if (!Ok) {
         if (Error != NULL && Capacity != 0u)
