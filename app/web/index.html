@@ -332,7 +332,7 @@
           <button class="icon-button" id="close-settings" type="button" aria-label="返回 Agent 工作区" data-i18n-aria-label="shell.settings.back">
             <span class="icon" data-icon="arrow-left" aria-hidden="true"></span>
           </button>
-          <div>
+          <div class="settings-heading">
             <h1 id="settings-title" tabindex="-1" data-i18n="shell.settings.title">设置</h1>
             <p id="settings-revision">正在读取当前配置…</p>
           </div>
@@ -340,6 +340,11 @@
           <button class="settings-pending-link" id="settings-pending-link" type="button"
             aria-label="返回未保存的设置" data-i18n-aria-label="settings.reviewPending"
             data-i18n="settings.pendingBadge" hidden>未保存更改</button>
+          <button class="secondary-button settings-shortcuts-button" id="open-shortcuts" type="button" aria-haspopup="dialog" aria-controls="shortcuts-dialog"
+            aria-label="查看快捷键" data-i18n-aria-label="settings.openShortcuts" title="查看快捷键" data-i18n-title="settings.openShortcuts">
+            <span class="icon" data-icon="help" aria-hidden="true"></span>
+            <span data-i18n="settings.openShortcuts">查看快捷键</span>
+          </button>
         </header>
         <div class="settings-layout">
           <div class="settings-page-picker">
@@ -375,13 +380,6 @@
                 <div class="setting-row">
                   <div><label for="setting-theme" data-i18n="settings.theme">主题</label><p data-i18n="settings.themeDescription">跟随系统，或固定使用浅色和深色外观。</p></div>
                   <select id="setting-theme" name="theme"><option value="system" data-i18n="settings.themeSystem">跟随系统</option><option value="light" data-i18n="settings.themeLight">浅色</option><option value="dark" data-i18n="settings.themeDark">深色</option></select>
-                </div>
-                <div class="setting-row">
-                  <div><label for="open-shortcuts" data-i18n="shell.shortcuts">快捷键帮助</label><p data-i18n="shortcuts.intro">输入框外按 ? 打开，Esc 关闭；macOS 用 ⌘ 代替 Ctrl。</p></div>
-                  <button class="secondary-button settings-shortcuts-button" id="open-shortcuts" type="button" aria-haspopup="dialog" aria-controls="shortcuts-dialog">
-                    <span class="icon" data-icon="help" aria-hidden="true"></span>
-                    <span data-i18n="settings.openShortcuts">查看快捷键</span>
-                  </button>
                 </div>
                 <div class="setting-row">
                   <div><label for="setting-font-size" data-i18n="settings.fontSize">文字大小</label><p data-i18n="settings.fontSizeDescription">调整工作台的基础字号。</p></div>

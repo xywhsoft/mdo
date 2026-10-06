@@ -1269,6 +1269,9 @@ select:focus-visible,
 
 .settings-header h1 { margin: 0; font-size: 14px; }
 .settings-header p { margin: 1px 0 0; color: var(--muted); font-size: 10px; }
+.settings-heading { flex: 1; min-width: 0; }
+.settings-heading p { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.settings-shortcuts-button { display: inline-flex; flex: 0 0 auto; min-height: 40px; align-items: center; gap: 7px; white-space: nowrap; }
 .settings-pending-link {
   min-height: 35px;
   margin-left: auto;
@@ -1316,7 +1319,6 @@ select:focus-visible,
   border-bottom: 1px solid var(--border);
 }
 .setting-row > div, .setting-switch > span:first-child { min-width: 0; }
-.settings-shortcuts-button { display: inline-flex; flex: 0 0 auto; min-height: 40px; align-items: center; gap: 7px; white-space: nowrap; }
 .setting-row label, .setting-switch strong { display: block; font-size: 13px; font-weight: 600; }
 .setting-row p, .setting-switch small { display: block; margin: 3px 0 0; color: var(--muted); font-size: 11px; font-weight: 400; }
 .setting-row select, .setting-row input, .settings-grid input {
@@ -1711,6 +1713,8 @@ select:focus-visible,
   .shortcuts-content dl > div { align-items: flex-start; flex-direction: column; gap: 4px; }
   .shortcuts-content dd { text-align: left; }
   .settings-workspace { grid-row: 1 / -1; }
+  .settings-shortcuts-button { width: 40px; justify-content: center; padding: 0; }
+  .settings-shortcuts-button > [data-i18n] { display: none; }
   .settings-pending-link { min-height: 40px; }
   .settings-layout { display: block; overflow: auto; }
   .settings-navigation { display: none; }
