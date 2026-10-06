@@ -379,7 +379,10 @@ def verify_host_receipt(host: Path, lock: dict, full_host: bool, *, icon: bool =
             if path.suffix not in (".c", ".h") or "generated" in path.relative_to(APP).parts:
                 continue
             source = path.read_text(encoding="utf-8")
-            source = re.sub(r"/\*.*?\*/|//[^\n]*", " ", source, flags=re.DOTALL)
+            # SDK headers declare the entire public API; declarations and text
+            # are not references from the application to a runtime symbol.
+            source = re.sub(r'"(?:\\.|[^"\\])*"|\'(?:\\.|[^\'\\])*\'|/\*.*?\*/|//[^\n]*', " ", source, flags=re.DOTALL)
+            source = re.sub(r"\bXRT_API\b[^;{}]*;", " ", source)
             used.update(re.findall(r"\b(xrt[A-Za-z0-9_]+)\s*\(", source))
         missing = sorted(used - available)
         if missing:
