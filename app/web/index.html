@@ -353,18 +353,25 @@
             <select id="settings-page-select" aria-controls="settings-content"></select>
           </div>
           <nav class="settings-navigation" aria-label="设置分类" data-i18n-aria-label="settings.navigation">
-            <p data-i18n="settings.preferences">偏好设置</p>
-            <button type="button" data-settings-section="account" data-i18n="account.title">账号</button>
-            <button type="button" data-settings-section="remote" data-i18n="devices.remoteTitle">远程控制</button>
-            <button type="button" data-settings-section="general" aria-current="page" data-i18n="settings.general">常规</button>
-            <button type="button" data-settings-section="agent">Agent</button>
-            <button type="button" data-settings-section="web" data-i18n="settings.web">网络</button>
-            <p data-i18n="settings.resources">资源</p>
-            <button type="button" data-settings-section="memory" data-i18n="settings.memoryManagement">记忆管理</button>
-            <button type="button" data-settings-section="models" data-i18n="settings.models">模型</button>
-            <button type="button" data-settings-section="extensions" data-i18n="settings.extensions">扩展与 MCP</button>
-            <button type="button" data-settings-section="permissions" data-i18n="settings.permissions">权限</button>
-            <button type="button" data-settings-section="diagnostics" data-i18n="settings.diagnostics">诊断与存储</button>
+            <div data-settings-group>
+              <p data-settings-group-label data-i18n="settings.basic">基础设置</p>
+              <button type="button" data-settings-section="general" aria-current="page" data-i18n="settings.general">常规</button>
+              <button type="button" data-settings-section="agent">Agent</button>
+              <button type="button" data-settings-section="web" data-i18n="settings.web">网络</button>
+            </div>
+            <div data-settings-group>
+              <p data-settings-group-label data-i18n="settings.extended">扩展能力</p>
+              <button type="button" data-settings-section="memory" data-i18n="settings.memoryManagement">记忆管理</button>
+              <button type="button" data-settings-section="models" data-i18n="settings.models">模型</button>
+              <button type="button" data-settings-section="extensions" data-i18n="settings.extensions">扩展与 MCP</button>
+              <button type="button" data-settings-section="permissions" data-i18n="settings.permissions">权限</button>
+              <button type="button" data-settings-section="diagnostics" data-i18n="settings.diagnostics">诊断与存储</button>
+            </div>
+            <div data-settings-group>
+              <p data-settings-group-label data-i18n="settings.accountStatistics">账号与统计</p>
+              <button type="button" data-settings-section="account" data-i18n="account.title">账号</button>
+              <button type="button" data-settings-section="remote" data-i18n="devices.remoteTitle">远程控制</button>
+            </div>
           </nav>
 
           <div class="settings-content" id="settings-content" tabindex="-1">

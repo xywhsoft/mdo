@@ -10,6 +10,7 @@ export function createSettingsPages({ workspace, form, navigation }) {
   const layout = workspace.querySelector(".settings-layout");
   const content = workspace.querySelector(".settings-content");
   const pages = new Map();
+  const groups = new Map();
   for (const button of nav.querySelectorAll("[data-settings-section]")) {
     const id = button.dataset.settingsSection;
     const panel = [...content.querySelectorAll("[data-settings-panel]")]
@@ -17,7 +18,14 @@ export function createSettingsPages({ workspace, form, navigation }) {
     if (!panel || pages.has(id)) throw new Error(`Invalid settings page: ${id}`);
     const option = document.createElement("option");
     option.value = id;
-    picker.append(option);
+    const heading = button.closest("[data-settings-group]")
+      ?.querySelector("[data-settings-group-label]");
+    if (heading && !groups.has(heading)) {
+      const group = document.createElement("optgroup");
+      groups.set(heading, group);
+      picker.append(group);
+    }
+    (groups.get(heading) ?? picker).append(option);
     pages.set(id, { button, panel, option, preferences: form.contains(panel) });
   }
   if (!pages.size) throw new Error("Settings needs at least one page");
@@ -27,6 +35,7 @@ export function createSettingsPages({ workspace, form, navigation }) {
   const currentNavigation = () => visible(picker) ? picker : pages.get(selected)?.button;
 
   function syncLabels() {
+    for (const [heading, group] of groups) group.label = heading.textContent;
     for (const { button, option } of pages.values()) option.textContent = button.textContent;
     const page = pages.get(selected);
     if (page) workspace.querySelector("#settings-title").textContent = page.preferences

@@ -24,10 +24,10 @@ class Element extends EventTarget {
   setAttribute(key, value) { this.attributes[key] = value; }
   removeAttribute(key) { delete this.attributes[key]; }
   focus() { document.activeElement = this; }
-  closest() { return this; }
+  closest(selector) { return selector === "[data-settings-group]" ? this.group ?? null : this; }
 }
 
-function fixture() {
+function fixture({ grouped = false } = {}) {
   const original = { document: globalThis.document, window: globalThis.window,
     getComputedStyle: globalThis.getComputedStyle, fetch: globalThis.fetch };
   const document = new Element({ title: "墨斗", documentElement: new Element() });
@@ -37,6 +37,10 @@ function fixture() {
   globalThis.window = new EventTarget();
   globalThis.getComputedStyle = () => ({ display: "grid" });
   const form = new Element(), nav = new Element(), content = new Element({ panels: [] });
+  const groups = ["基础设置", "扩展能力"].map((textContent) => {
+    const heading = new Element({ textContent });
+    return new Element({ nodes: { "[data-settings-group-label]": heading } });
+  });
   const picker = new Element({ shown: false }), pickerRow = new Element({ shown: false });
   const workspace = new Element({ nodes: {
     ".settings-navigation": nav, "#settings-page-select": picker,
@@ -47,7 +51,8 @@ function fixture() {
   // A new preference page needs no hardcoded list in the shell or app router.
   for (const [id, label, preferences] of [["general", "常规", true],
     ["future", "未来配置页", true], ["models", "模型", false]]) {
-    nav.append(new Element({ dataset: { settingsSection: id }, textContent: label }));
+    nav.append(new Element({ dataset: { settingsSection: id }, textContent: label,
+      group: grouped ? groups[id === "models" ? 1 : 0] : null }));
     const panel = new Element({ dataset: { settingsPanel: id } });
     content.panels.push(panel);
     if (preferences) form.append(panel);
@@ -57,7 +62,7 @@ function fixture() {
   const calls = [];
   const pages = createSettingsPages({ workspace, form,
     navigation: { openSettings(section) { calls.push(section); pages.selectSection(section); } } });
-  return { pages, form, nav, picker, pickerRow, workspace, content, calls,
+  return { pages, form, nav, picker, pickerRow, workspace, content, calls, groups,
     mobile() { nav.shown = false; picker.shown = pickerRow.shown = true; },
     close() { pages.destroy(); Object.assign(globalThis, original); } };
 }
@@ -132,5 +137,27 @@ test("locale changes refresh dropdown labels without resetting the selected page
     assert.equal(f.picker.value, "models");
     assert.equal(f.picker.children[2].textContent, "Models");
     assert.equal(f.workspace.nodes["#settings-title"].textContent, "Models");
+  } finally { f.close(); }
+});
+
+test("mobile groups follow desktop labels without changing the selected page or route", async () => {
+  const f = fixture({ grouped: true });
+  try {
+    assert.deepEqual(f.picker.children.map((group) => group.label), ["基础设置", "扩展能力"]);
+    assert.deepEqual(f.picker.children.map((group) => group.children.map((option) => option.value)),
+      [["general", "future"], ["models"]]);
+    f.mobile();
+    f.picker.value = "models";
+    f.picker.dispatchEvent(new Event("change"));
+    assert.deepEqual(f.calls, ["models"]);
+    globalThis.fetch = async () => Response.json({ "shell.settings.title": "Settings" });
+    f.groups[0].nodes["[data-settings-group-label]"].textContent = "Basic settings";
+    f.groups[1].nodes["[data-settings-group-label]"].textContent = "Extended capabilities";
+    f.nav.children[2].textContent = "Models";
+    await loadLocale("en-US");
+    assert.deepEqual(f.picker.children.map((group) => group.label), ["Basic settings", "Extended capabilities"]);
+    assert.equal(f.picker.children[1].children[0].textContent, "Models");
+    assert.equal(f.picker.value, "models");
+    assert.deepEqual(f.calls, ["models"]);
   } finally { f.close(); }
 });
