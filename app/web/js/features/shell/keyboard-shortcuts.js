@@ -27,6 +27,9 @@ export function createKeyboardShortcuts({ dialog, navigation, search, onNew,
       if (search.isOpen()) { search.close(true); return; }
       if (navigation.get().view === "settings") { onSettings(false); return; }
       if (isDrawerOpen()) { closeDrawers(); return; }
+      if (navigation.get().view === "schedules") {
+        event.preventDefault(); navigation.backToWorkspace(); return;
+      }
       if (isRunning()) { event.preventDefault(); onStop(); }
       return;
     }

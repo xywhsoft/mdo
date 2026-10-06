@@ -319,7 +319,8 @@ select:focus-visible,
   cursor: pointer;
 }
 
-.new-task-button { border: 1px solid var(--border-strong); background: var(--surface-active); font-weight: 600; }
+.new-task-button { font-weight: 400; }
+.new-task-button[aria-pressed="true"], #open-schedules[aria-pressed="true"] { background: var(--surface-active); font-weight: 500; }
 .new-task-button:hover, .sidebar-link:hover { background: var(--surface-hover); }
 .new-task-button .icon, .sidebar-link .icon { width: 17px; height: 17px; }
 .new-task-button kbd, .search-box kbd {
@@ -1373,15 +1374,12 @@ select:focus-visible,
 .restore-confirm { position: absolute; right: 18px; bottom: calc(100% + 8px); max-width: 520px; padding: 12px; border: 1px solid var(--border-strong); border-radius: var(--radius-md); background: var(--surface-raised); box-shadow: var(--shadow-dialog); font-size: 11px; }
 .resource-section > div:last-child { display: grid; gap: 10px; padding-top: 18px; }
 .settings-content > .resource-section { width: min(820px, calc(100% - 40px)); margin: 0 auto; padding: 34px 0 48px; }
-.sidebar-schedules { flex: 1; min-height: 0; overflow-y: auto; overflow-x: hidden; margin: 6px 0; padding: 0 2px 10px; }
-.sidebar-schedules-heading { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
-.sidebar-schedules-heading h2 { margin: 0; font-size: 13px; }
-.sidebar-schedules .schedule-toolbar { justify-content: space-between; margin-top: 6px; }
-.sidebar-schedules .schedule-toolbar .primary-button { min-height: 34px; padding: 6px 10px; font-size: 12px; }
-.sidebar-schedules .schedule-card { padding: 10px; }
-.sidebar-schedules .schedule-card-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin-top: 10px; }
-.sidebar-schedules .schedule-card-actions { gap: 5px; }
-#open-schedules[aria-expanded="true"] { background: var(--surface-active); }
+.schedules-workspace { display: grid; grid-column: 1; grid-row: 1 / -1; grid-template-rows: auto minmax(0, 1fr); min-width: 0; min-height: 0; }
+.schedules-workspace-header { display: flex; align-items: center; gap: 10px; padding: 12px 18px; border-bottom: 1px solid var(--border); }
+.schedules-workspace-header h1 { flex: 1; min-width: 0; margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 15px; }
+.schedules-content { min-width: 0; min-height: 0; padding: 18px 24px 36px; overflow-y: auto; }
+.schedules-content > :is(.schedule-list, .schedule-status, .schedule-action-status) { max-width: 900px; margin-inline: auto; }
+.mobile-schedules-title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; }
 .schedule-editor-heading { display: flex; align-items: center; justify-content: space-between; gap: 14px; }
 .schedule-toolbar { display: flex; gap: 8px; flex: 0 0 auto; }
 .schedule-status, .schedule-empty { color: var(--muted); font-size: 12px; }
@@ -1725,6 +1723,9 @@ select:focus-visible,
   .settings-content > .resource-section { width: calc(100% - 28px); padding-top: 22px; }
   .settings-content > .resource-section[data-settings-panel="models"] { width: calc(100% - 28px); }
   .schedule-card, #schedules-refresh { scroll-margin-top: 56px; }
+  .schedules-workspace-header { gap: 6px; padding: 8px 10px; }
+  .schedules-workspace-header .primary-button { padding-inline: 10px; }
+  .schedules-content { padding: 10px 14px 24px; }
   .schedule-card-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .schedule-form-grid { grid-template-columns: 1fr; }
   .schedule-section button,

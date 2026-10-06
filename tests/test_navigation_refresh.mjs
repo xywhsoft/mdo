@@ -25,3 +25,27 @@ test("hash navigation loads once while in-place refresh leaves route-owned contr
     stop(); navigation.newTask("other"); assert.deepEqual([changes,loads],[4,8]);
   } finally {Object.assign(globalThis,previous);}
 });
+
+test("scheduled tasks retain the exact conversation when refreshed", async () => {
+  const previous = { window: globalThis.window, location: globalThis.location,
+    history: globalThis.history };
+  globalThis.window = { addEventListener() {} };
+  globalThis.location = { hash: "#/projects/work/sessions/original", pathname: "/", search: "" };
+  globalThis.history = { state: null, replaceState(state, _title, url) {
+    this.state = state;
+    if (url?.includes("#")) location.hash = url.slice(url.indexOf("#"));
+  } };
+  try {
+    const { navigation } = await import("../app/web/js/state/navigation.js?schedules-open-test");
+    navigation.openSchedules();
+    assert.equal(navigation.get().view, "schedules");
+    assert.equal(location.hash, "#/schedules");
+    assert.deepEqual(history.state.mdoWorkspace, { projectId: "work", sessionId: "original" });
+    const { navigation: refreshed } = await import(
+      "../app/web/js/state/navigation.js?schedules-reload-test");
+    assert.equal(refreshed.get().view, "schedules");
+    refreshed.backToWorkspace();
+    assert.equal(location.hash, "#/projects/work/sessions/original");
+    assert.equal(refreshed.get().sessionId, "original");
+  } finally { Object.assign(globalThis, previous); }
+});

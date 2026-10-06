@@ -18,6 +18,8 @@ let lastWorkspace = Object.freeze(workspaceFromHistory() ??
   { projectId: "", sessionId: "" });
 
 function parseHash() {
+  if (location.hash === "#/schedules")
+    return { view: "schedules", projectId: "", sessionId: "", settingsSection: "" };
   const settings = /^#\/settings\/([a-z][a-z0-9-]*)$/.exec(location.hash);
   if (settings) return { view: "settings", projectId: "", sessionId: "", settingsSection: settings[1] };
   const newTask = /^#\/projects\/([^/]+)\/new$/.exec(location.hash);
@@ -68,6 +70,16 @@ function publish({ refresh = false } = {}) {
 window.addEventListener("hashchange", publish);
 publish();
 
+function openPage(hash) {
+  location.hash = hash;
+  // Retain the conversation on this history entry so returning still works
+  // after refreshing a utility page.
+  const state = history.state && typeof history.state === "object"
+    ? history.state : {};
+  history.replaceState({ ...state, mdoWorkspace: lastWorkspace }, "");
+  publish({ refresh: true });
+}
+
 export const navigation = Object.freeze({
   get: () => current,
   preferredProject: () => lastWorkspace.projectId || "default",
@@ -94,14 +106,9 @@ export const navigation = Object.freeze({
     publish({ refresh: true });
   },
   openSettings(section = "general") {
-    location.hash = `#/settings/${resourceId(section, "settings section")}`;
-    // Hash navigation survives a refresh, but module state does not. Remember
-    // the workspace on this history entry so Close can return to its origin.
-    const state = history.state && typeof history.state === "object"
-      ? history.state : {};
-    history.replaceState({ ...state, mdoWorkspace: lastWorkspace }, "");
-    publish({ refresh: true });
+    openPage(`#/settings/${resourceId(section, "settings section")}`);
   },
+  openSchedules: () => openPage("#/schedules"),
   backToWorkspace() {
     if (lastWorkspace.sessionId)
       navigation.select(lastWorkspace.projectId, lastWorkspace.sessionId);

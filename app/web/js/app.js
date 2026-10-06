@@ -67,7 +67,6 @@ import { recoveryMatchesWorkspace } from "./features/approvals/recovery-decision
 import { createSettingsView } from "./features/settings/settings-view.js";
 import { createUpdatePanel } from "./features/update/update-panel.js";
 import { createSchedulePanel } from "./features/schedules/schedule-panel.js";
-import { createSidebarSchedules } from "./features/shell/sidebar-schedules.js";
 import { createProjectManagement } from "./features/projects/project-management.js";
 import { createMemoryManagement } from "./features/settings/memory-management.js";
 import { openMemoryPanel, openMemoryDirectory } from "./features/settings/memory-panel.js";
@@ -180,9 +179,20 @@ export async function boot() {
   const exportButtons = [$("#export-session"), $("#export-session-mobile")];
   const mobileActivity = $("#mobile-activity-dot");
   const settingsWorkspace = $("#settings-workspace");
+  const schedulesWorkspace = $("#schedules-workspace");
   const skipLink = $(".skip-link");
+  skipLink.addEventListener("click", (event) => {
+    // Content anchors share the hash with the router; move focus without
+    // replacing the current conversation or utility page route.
+    const target = document.getElementById(skipLink.getAttribute("href").slice(1));
+    if (!target) return;
+    event.preventDefault();
+    target.focus({ preventScroll: true });
+    target.scrollIntoView({ block: "nearest" });
+  });
   const agentWorkspaceRegions = [$(".workspace-header"), $(".conversation"), $(".composer-region")];
   let settingsActive = false;
+  let schedulesActive = false;
   let paneLayout = null;
   let sessionWritable = true;
   let selectedSessionStatus = "active";
@@ -1012,14 +1022,8 @@ export async function boot() {
     onReview: (intent, origin) => projectManagement.openPurgeReview(intent, origin),
   });
   const schedulePanel = createSchedulePanel({
-    panel: $("#sidebar-schedules"),
+    panel: schedulesWorkspace,
     projectsStore, agentsStore, modelsStore,
-  });
-  const sidebarSchedules = createSidebarSchedules({
-    panel: $("#sidebar-schedules"), button: $("#open-schedules"),
-    closeButton: $("#close-schedules"),
-    sessionNavigation: $(".session-navigation"), search: $(".search-box"),
-    schedulePanel, showSidebar: () => setSidebar(true, { focus: false }),
   });
   const resourcePanels = createResourcePanels({
     modelsStore,
@@ -1224,7 +1228,8 @@ export async function boot() {
     if (focusedAction >= 0)
       (composerError.querySelectorAll(".composer-error-action")[focusedAction] ?? prompt)
         .focus({ preventScroll: true });
-    skipLink.textContent = t(settingsActive ? "shell.skipSettings" : "shell.skip");
+    skipLink.textContent = t(settingsActive ? "shell.skipSettings" :
+      schedulesActive ? "shell.skipSchedules" : "shell.skip");
     const session = sessionDetailStore.get().data;
     if (session && selectedKey === `${session.project_id}/${session.id}`) {
       const statusText = sessionStatusSuffix(session.status);
@@ -1536,8 +1541,17 @@ export async function boot() {
   navigation.subscribe(async ({ view, projectId, sessionId, settingsSection }) => {
     shell.toggleAttribute("data-settings-open", view === "settings");
     $("#sidebar").inert = view === "settings" || shell.dataset.sidebar !== "open";
-    schedulePanel.setActive(view !== "settings" &&
-      shell.dataset.sidebar === "open" && sidebarSchedules.isOpen());
+    const focusWasInSchedules = schedulesWorkspace.contains(document.activeElement);
+    const enteringSchedules = view === "schedules" && !schedulesActive;
+    schedulesActive = view === "schedules";
+    schedulesWorkspace.hidden = !schedulesActive;
+    schedulePanel.setActive(schedulesActive);
+    $("#new-session").setAttribute("aria-pressed", String(view === "workspace" && !sessionId));
+    $("#open-schedules").setAttribute("aria-pressed", String(schedulesActive));
+    $("#mobile-schedules-title").hidden = !schedulesActive;
+    for (const control of [$(".mobile-title"), $("#open-find-mobile"),
+      $("#export-session-mobile"), $("#session-action-control-mobile")])
+      control.hidden = schedulesActive;
     updateExportButtons();
     if (pendingForkComposerFocus &&
         (view !== "workspace" || `${projectId}/${sessionId}` !== pendingForkComposerFocus))
@@ -1546,6 +1560,18 @@ export async function boot() {
     if (nextSignature !== routeSignature) {
       routeSignature = nextSignature;
       routeVersion += 1;
+    }
+    if (schedulesActive) {
+      settingsWorkspace.hidden = true;
+      for (const region of agentWorkspaceRegions) region.hidden = true;
+      settingsView.setActive(false);
+      memoryManagement.setActive(false);
+      settingsActive = false;
+      skipLink.href = "#schedules-content";
+      skipLink.textContent = t("shell.skipSchedules");
+      closeDrawers();
+      if (enteringSchedules) $("#schedules-title").focus({ preventScroll: true });
+      return;
     }
     if (view === "settings") {
       const enteringSettings = !settingsActive;
@@ -1570,7 +1596,7 @@ export async function boot() {
     settingsWorkspace.hidden = true;
     for (const region of agentWorkspaceRegions) region.hidden = false;
     if (settingsActive) settingsView.setActive(false);
-    if (focusWasInSettings) prompt.focus();
+    if (focusWasInSettings || focusWasInSchedules) prompt.focus();
     timelineView.restorePreviewScroll();
     skipLink.href = "#timeline";
     skipLink.textContent = t("shell.skip");
@@ -2037,7 +2063,7 @@ export async function boot() {
     });
   }
   document.querySelector("[data-starter-schedules]")?.addEventListener("click", () =>
-    sidebarSchedules.open());
+    navigation.openSchedules());
 
   const actionDialog = $("#session-action-dialog");
   const actionForm = $("#session-action-form");
@@ -2190,7 +2216,6 @@ export async function boot() {
   });
 
   function openNewTask() {
-    sidebarSchedules.close({ focus: false });
     newTaskComposerFocus.cancel();
     showActiveSessions();
     navigation.newTask(navigation.get().projectId || navigation.preferredProject());
@@ -2216,7 +2241,6 @@ export async function boot() {
       (reachable ? drawerReturnFocus : button).focus();
     }
     panel.inert = !open || shell.hasAttribute("data-settings-open");
-    schedulePanel.setActive(!panel.inert && sidebarSchedules.isOpen());
     $("#open-sidebar").setAttribute("aria-expanded", String(open));
     $("#desktop-sidebar-toggle").setAttribute("aria-expanded", String(open));
     if (open && options.focus !== false && mobileLayout.matches)
@@ -2265,6 +2289,8 @@ export async function boot() {
   });
 
   $("#open-settings").addEventListener("click", () => navigation.openSettings("general"));
+  $("#open-schedules").addEventListener("click", () => navigation.openSchedules());
+  $("#close-schedules").addEventListener("click", () => navigation.backToWorkspace());
   $("#close-settings").addEventListener("click", () => {
     navigation.backToWorkspace();
   });
@@ -2309,7 +2335,6 @@ export async function boot() {
       : $("#close-settings").click(),
     onToggleTheme: toggleTheme,
     onSessionSearch: () => {
-      sidebarSchedules.close({ focus: false });
       if (shell.dataset.sidebar !== "open") setSidebar(true);
       $("#session-search").focus();
     },

@@ -10,8 +10,10 @@ test("a pending new task keeps new-task routes in its owning project", async () 
   globalThis.location = location;
   globalThis.history = { state: null, replaceState(state, _title, url) {
     this.state = state;
-    location.hash = String(url).slice(String(url).indexOf("#"));
-    replacements.push(location.hash);
+    if (url?.includes("#")) {
+      location.hash = url.slice(url.indexOf("#"));
+      replacements.push(location.hash);
+    }
   } };
   globalThis.window = { addEventListener() {} };
   try {
@@ -26,6 +28,13 @@ test("a pending new task keeps new-task routes in its owning project", async () 
       ["default", "#/projects/default/new"]);
     assert.equal(redirects, 1);
     assert.deepEqual(replacements, ["#/projects/default/new"]);
+
+    navigation.openSchedules();
+    assert.equal(navigation.get().view, "schedules");
+    assert.equal(redirects, 1);
+    navigation.backToWorkspace();
+    assert.equal(location.hash, "#/projects/default/new");
+    assert.equal(redirects, 1);
 
     navigation.select("other", "existing-session");
     assert.equal(navigation.get().projectId, "other");

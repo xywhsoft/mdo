@@ -158,3 +158,33 @@ test("slash search only claims keys in the workspace outside composition", () =>
     globalThis.Element = originalElement;
   }
 });
+
+test("Escape leaves scheduled tasks without stopping the background conversation", () => {
+  const previous = globalThis.document;
+  const document = new EventTarget();
+  let modalOpen = true, drawerOpen = false;
+  document.querySelector = () => modalOpen ? {} : null;
+  globalThis.document = document;
+  let returns = 0, stops = 0, drawerCloses = 0;
+  try {
+    createKeyboardShortcuts({ dialog: new EventTarget(),
+      navigation: { get: () => ({ view: "schedules" }),
+        backToWorkspace: () => { returns += 1; } },
+      search: { isOpen: () => false }, onNew() {}, onExport() {},
+      onSettings() {}, onToggleTheme() {}, onStop: () => { stops += 1; },
+      isRunning: () => true, isDrawerOpen: () => drawerOpen,
+      closeDrawers: () => { drawerCloses += 1; } });
+    document.dispatchEvent(targetedEvent("keydown", {}, { key: "Escape" }));
+    assert.equal(returns, 0);
+    modalOpen = false; drawerOpen = true;
+    document.dispatchEvent(targetedEvent("keydown", {}, { key: "Escape" }));
+    assert.equal(drawerCloses, 1);
+    assert.equal(returns, 0);
+    drawerOpen = false;
+    const event = targetedEvent("keydown", {}, { key: "Escape" });
+    document.dispatchEvent(event);
+    assert.equal(returns, 1);
+    assert.equal(stops, 0);
+    assert.equal(event.defaultPrevented, true);
+  } finally { globalThis.document = previous; }
+});
