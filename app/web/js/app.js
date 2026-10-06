@@ -673,7 +673,7 @@ export async function boot() {
     },
   });
   const slashCommands = createSlashCommands({
-    composer, input: prompt,
+    composer, input: prompt, contextKey: () => String(routeVersion),
     onExecute: async (command) => {
       const session = sessionDetailStore.get().data;
       if (command === "/new") openNewTask();
@@ -981,7 +981,7 @@ export async function boot() {
   const account = createAccount({ navigation });
   const remotePanel = createRemotePanel();
   setTargetSwitchGuard(async ({ copyDrafts = false } = {}) => {
-    if (settingsView.hasPendingChanges() || remotePanel.hasPendingChanges())
+    if (settingsView.hasPendingChanges() || remotePanel.hasPendingChanges() || resourcePanels.hasPendingChanges())
       throw new ApiError("Save or discard settings before changing devices", { code: "target_settings_pending" });
     if (hasPendingApiWrites()) return false;
     if (copyDrafts) {
@@ -1954,6 +1954,10 @@ export async function boot() {
     // Commands act on the UI and keep an unsent image draft. They must stay
     // usable while an attachment is still being stored.
     if (fromComposer && slashCommands.consumeExact(text)) return;
+    if (fromComposer && text.startsWith("/")) {
+      try { if (await slashCommands.expandIntoComposer(text)) return; }
+      catch (error) { showComposerError(error); return; }
+    }
     if ((!text && !attachments.length) || composerImages.isUploading()) return;
     const rawInput = fromComposer ? prompt.value : text;
     const origin = navigation.get();

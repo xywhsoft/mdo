@@ -41,14 +41,16 @@ test("rapid extension page visits share reads and keep the loaded catalog", asyn
   }, async () => {
     const first = ensureSettingsResources("extensions");
     const second = ensureSettingsResources("extensions");
-    assert.deepEqual(calls, ["/api/v1/modules", "/api/v1/skills", "/api/v1/mcp"]);
+    assert.deepEqual(calls, ["/api/v1/modules"]);
     assert.equal(modulesStore.get().status, "refreshing");
     assert.equal(permissionsStore.get().status, "idle");
     for (const [path, gate] of gates) gate.resolve(reply({ items: [{ id: path }] }));
     await Promise.all([first, second]);
     await ensureSettingsResources("extensions");
-    assert.equal(calls.length, 3);
-    assert.equal(skillsStore.get().data.items[0].id, "/api/v1/skills");
+    assert.equal(calls.length, 1);
+    assert.equal(modulesStore.get().data.items[0].id, "/api/v1/modules");
+    assert.equal(skillsStore.get().status, "idle");
+    assert.equal(mcpStore.get().status, "idle");
   });
 });
 
@@ -67,12 +69,12 @@ test("a failed read is visible and retries only on a new visit or explicit reloa
     assert.equal(modulesStore.get().status, "error");
     assert.equal(modulesStore.get().error.status, 503);
     await ensureSettingsResources("general");
-    assert.equal(calls.length, 3);
+    assert.equal(calls.length, 1);
     await ensureSettingsResources("extensions");
-    assert.equal(calls.length, 4);
+    assert.equal(calls.length, 2);
     assert.equal(modulesStore.get().status, "ready");
     await loadResource("skills");
-    assert.equal(calls.length, 5);
+    assert.equal(calls.length, 3);
     assert.equal(calls.at(-1), "/api/v1/skills");
   });
 });

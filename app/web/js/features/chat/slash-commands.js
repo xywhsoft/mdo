@@ -1,4 +1,5 @@
 import { subscribeLocale, t } from "../../i18n.js";
+import { loadCommands, subscribeCommands, commandExpansion } from "./extension-commands.js";
 import { clear, element, errorMessage, isImeKey, revealListOption, toast } from "../../utils/dom.js";
 
 const COMMANDS = Object.freeze([
@@ -17,7 +18,7 @@ function exactCommand(value) {
   return COMMANDS.find((item) => item.name === value);
 }
 
-export function createSlashCommands({ composer, input, onExecute }) {
+export function createSlashCommands({ composer, input, onExecute, contextKey = () => "" }) {
   const list = element("div", {
     className: "slash-menu",
     attrs: { id: "slash-menu", role: "listbox", "aria-label": t("slash.label", {}, "斜杠命令") },
@@ -30,6 +31,9 @@ export function createSlashCommands({ composer, input, onExecute }) {
   let matches = [];
   let active = 0;
   let composing = false;
+  let custom = [];
+  let expanding = false;
+  const stopCommands = subscribeCommands(items => { custom = items; if (document.activeElement === input && input.value.startsWith("/")) update(false); });
 
   function hide() {
     composer.removeAttribute("data-slash-menu-open");
@@ -52,7 +56,7 @@ export function createSlashCommands({ composer, input, onExecute }) {
           "aria-selected": String(index === active) },
       }, [
         element("code", { text: command.name }),
-        element("span", { text: t(command.descriptionKey, {}, command.fallback) }),
+        element("span", { text: command.custom ? `${command.description}${command.argument_hint ? " · " + command.argument_hint : ""}` : t(command.descriptionKey, {}, command.fallback) }),
       ]);
       option.addEventListener("pointerdown", (event) => {
         event.preventDefault();
@@ -74,6 +78,20 @@ export function createSlashCommands({ composer, input, onExecute }) {
   }
 
   async function execute(command) {
+    if (command.custom) {
+      if (expanding) return;
+      const before = input.value, key = contextKey();
+      expanding = true; hide();
+      try {
+        const result = await commandExpansion(command.id, "");
+        if (input.value !== before || contextKey() !== key) return;
+        input.value = result.takesArguments ? `${command.name} ` : result.text;
+        input.dispatchEvent(new Event("input", { bubbles: true }));
+        input.focus();
+      } catch (error) { toast(errorMessage(error), "error"); }
+      finally { expanding = false; }
+      return;
+    }
     hide();
     input.value = "";
     input.dispatchEvent(new Event("input", { bubbles: true }));
@@ -81,12 +99,13 @@ export function createSlashCommands({ composer, input, onExecute }) {
     catch (error) { toast(errorMessage(error), "error"); }
   }
 
-  function update() {
+  function update(fetch = true) {
     if (composing) { hide(); return; }
     const value = input.value;
     if (!value.startsWith("/") || /[\s]/.test(value)) { hide(); return; }
-    matches = COMMANDS.filter((command) => command.name.startsWith(value));
-    if (!matches.some((command) => command.name !== value)) { hide(); return; }
+    if (fetch) void loadCommands().then(items => { custom = items; if (input.value === value && document.activeElement === input) update(false); }).catch(() => {});
+    matches = [...COMMANDS, ...custom].filter((command) => command.name.startsWith(value));
+    if (!matches.some((command) => command.custom || command.name !== value)) { hide(); return; }
     active = 0;
     render();
   }
@@ -127,6 +146,20 @@ export function createSlashCommands({ composer, input, onExecute }) {
       }
       return false;
     },
+    async expandIntoComposer(value) {
+      const match = /^\/([a-z0-9_.-]+)(?:\s+([\s\S]*))?$/.exec(value);
+      if (!match || exactCommand(`/${match[1]}`)) return false;
+      const key = contextKey();
+      const commands = await loadCommands();
+      const command = commands.find(item => item.id === match[1]);
+      if (!command) return false;
+      const result = await commandExpansion(command.id, match[2] || "");
+      if (input.value !== value || contextKey() !== key) return true;
+      hide(); input.value = result.text;
+      input.dispatchEvent(new Event("input", { bubbles: true })); input.focus();
+      return true;
+    },
+    destroy() { stopCommands(); hide(); },
     consumeExact(value) {
       const command = exactCommand(value);
       if (!command) return false;

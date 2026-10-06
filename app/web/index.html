@@ -13,6 +13,7 @@
   <link rel="stylesheet" href="/css/notifications.css">
   <link rel="stylesheet" href="/css/account.css">
   <link rel="stylesheet" href="/css/remote.css">
+  <link rel="stylesheet" href="/css/extensions.css">
 </head>
 <body>
   <section class="target-connection-notice" id="target-connection-notice" role="status" hidden>
@@ -364,7 +365,11 @@
             </div>
             <div data-settings-group>
               <p data-settings-group-label data-i18n="settings.extended">扩展能力</p>
-              <button type="button" data-settings-section="extensions" data-i18n="settings.extensions">扩展与 MCP</button>
+              <button type="button" data-settings-section="subagents">SubAgent</button>
+              <button type="button" data-settings-section="skills">Skill</button>
+              <button type="button" data-settings-section="mcp">MCP</button>
+              <button type="button" data-settings-section="commands" data-i18n="ecosystem.commands">命令</button>
+              <button type="button" data-settings-section="extensions" data-i18n="settings.extensions">Agent 与模块</button>
               <button type="button" data-settings-section="permissions" data-i18n="settings.permissions">权限</button>
             </div>
             <div data-settings-group>
@@ -485,7 +490,11 @@
             </form>
 
               <section class="settings-section resource-section" data-settings-panel="models" hidden><div class="settings-section-heading"><h2 data-i18n="settings.models">模型</h2><p data-i18n="modelConfig.description">管理 Provider、模型能力与默认模型。ornith-1.5-35b 始终保留为内置免费模型。</p></div><div id="settings-models-list"></div></section>
-              <section class="settings-section resource-section" data-settings-panel="extensions" hidden><div class="settings-section-heading"><h2 data-i18n="settings.extensions">扩展与 MCP</h2><p data-i18n="resource.extensionsDescription">查看 Agent、Skill、Module 和 MCP 连接。</p></div><div id="settings-extensions-list"></div></section>
+              <section class="settings-section resource-section" data-settings-panel="subagents" hidden><div class="settings-section-heading"><h2>SubAgent</h2></div><div data-extension-manager="subagents"></div></section>
+              <section class="settings-section resource-section" data-settings-panel="skills" hidden><div class="settings-section-heading"><h2>Skill</h2></div><div data-extension-manager="skills"></div></section>
+              <section class="settings-section resource-section" data-settings-panel="mcp" hidden><div class="settings-section-heading"><h2>MCP</h2></div><div data-extension-manager="mcp"></div></section>
+              <section class="settings-section resource-section" data-settings-panel="commands" hidden><div class="settings-section-heading"><h2 data-i18n="ecosystem.commands">命令</h2></div><div data-extension-manager="commands"></div></section>
+              <section class="settings-section resource-section" data-settings-panel="extensions" hidden><div class="settings-section-heading"><h2 data-i18n="settings.extensions">Agent 与模块</h2><p data-i18n="resource.extensionsDescription">查看现有主 Agent 和 C 模块。SubAgent、Skill、MCP 与命令在各自的管理页编辑。</p></div><div id="settings-extensions-list"></div></section>
               <section class="settings-section resource-section" data-settings-panel="permissions" hidden><div class="settings-section-heading"><h2 data-i18n="settings.permissions">权限</h2><p data-i18n="resource.permissionsDescription">查看服务端生效的权限方案；运行时审批仍由 Agent 策略执行。</p></div><div id="settings-permissions-list"></div></section>
               <section class="settings-section resource-section" data-settings-panel="diagnostics" hidden><div class="settings-section-heading"><h2 data-i18n="settings.diagnostics">诊断与存储</h2><p data-i18n="resource.diagnosticsDescription">检查便携 Home、运行状态和可操作诊断。</p></div><div id="settings-diagnostics-list"></div></section>
             <section class="settings-section resource-section" id="remote-panel" data-settings-panel="remote" hidden>

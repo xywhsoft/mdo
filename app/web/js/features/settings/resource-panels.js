@@ -1,10 +1,11 @@
 import { element, clear, errorMessage, toast } from "../../utils/dom.js";
 import { subscribeLocale, t } from "../../i18n.js";
 import {
-  reloadCatalog, setMcpEnabled, disconnectMcp, refreshMcp,
+  reloadCatalog,
   applyLegacyMigration, ensureSettingsResources,
 } from "../../state/resources.js";
 import { createModelConfigPanel } from "./model-config-panel.js";
+import { createExtensionPanels } from "./extension-panels.js";
 
 function card(title, description, meta = [], actions = []) {
   const body = [element("h3", { text: title }), element("p", {
@@ -138,18 +139,8 @@ export function resourceDescription(kind, item) {
     ? t(entry[1], {}, entry[0]) : item?.description;
 }
 
-function skillMetadata(skill) {
-  const meta = [resourceCode(skill.trust)];
-  if (skill.external && skill.trust !== "external_reference")
-    meta.push(t("resource.external", {}, "外部"));
-  if (!skill.external && skill.trust !== "builtin")
-    meta.push(t("resource.builtin", {}, "内置"));
-  meta.push(t("resource.tokenCount", { count: skill.estimated_tokens },
-    `${skill.estimated_tokens} tokens`));
-  return meta;
-}
-
 export function createResourcePanels({ agentsStore, stores, reload }) {
+  const extensionPanels = createExtensionPanels();
   const modelsContainer = document.querySelector("#settings-models-list");
   const extensionsContainer = document.querySelector("#settings-extensions-list");
   const permissionsContainer = document.querySelector("#settings-permissions-list");
@@ -198,8 +189,6 @@ export function createResourcePanels({ agentsStore, stores, reload }) {
       ? document.activeElement?.dataset.extensionAction : "";
     clear(extensionsContainer);
     const modules = stores.modules.get();
-    const skills = stores.skills.get();
-    const mcp = stores.mcp.get();
     extensionsContainer.append(heading("Agent"));
     for (const agent of agentsStore.get().data?.items ?? []) {
       const toolSummary = agent.tools?.length
@@ -208,13 +197,6 @@ export function createResourcePanels({ agentsStore, stores, reload }) {
       extensionsContainer.append(card(agent.name || agent.id, resourceDescription("agent", agent), [agent.id, permissionProfile(agent.permission_profile),
         toolSummary,
         t("resource.skillCount", { count: agent.skills?.length ?? 0 }, `${agent.skills?.length ?? 0} Skills`)]));
-    }
-    extensionsContainer.append(heading("Skill", extensionActions.create("skills-reload",
-      t("resource.refresh", {}, "刷新"), () => refreshCatalog("skills"))));
-    const skillsReady = showReadState(extensionsContainer, skills, extensionActions, "skills");
-    for (const skill of skillsReady ? skills.data?.items ?? [] : []) {
-      extensionsContainer.append(card(skill.name || skill.id, resourceDescription("skill", skill),
-        skillMetadata(skill)));
     }
     extensionsContainer.append(heading("Module", extensionActions.create("modules-reload",
       t("resource.rebuild", {}, "重新编译"), () => refreshCatalog("modules"))));
@@ -225,26 +207,7 @@ export function createResourcePanels({ agentsStore, stores, reload }) {
         t("resource.toolCount", { count: module.tool_count }, `${module.tool_count} tools`),
         t("resource.agentCount", { count: module.agent_count }, `${module.agent_count} agents`)]));
     }
-    extensionsContainer.append(heading("MCP", extensionActions.create("mcp-reload",
-      t("resource.reloadConfig", {}, "重载配置"), () => refreshCatalog("mcp"))));
-    const mcpReady = showReadState(extensionsContainer, mcp, extensionActions, "mcp");
-    if (mcpReady && !(mcp.data?.items ?? []).length) extensionsContainer.append(empty(t("resource.noMcp", {}, "尚未配置 MCP 服务器")));
-    for (const server of mcpReady ? mcp.data?.items ?? [] : []) {
-      const actions = [extensionActions.create(`mcp-toggle:${server.id}`, server.enabled ? t("resource.disable", {}, "停用") :
-        t("resource.enable", {}, "启用"), async () => {
-        await setMcpEnabled(server.id, !server.enabled);
-        await reload("mcp");
-      })];
-      if (server.enabled) actions.push(extensionActions.create(`mcp-refresh:${server.id}`,
-        t("resource.refreshTools", {}, "刷新工具"), async () => { await refreshMcp(server.id); await reload("mcp"); }));
-      if (server.connected) actions.push(extensionActions.create(`mcp-disconnect:${server.id}`,
-        t("resource.disconnect", {}, "断开"), async () => { await disconnectMcp(server.id); await reload("mcp"); }, "danger"));
-      extensionsContainer.append(card(server.name || server.id, server.description, [server.transport, resourceCode(server.state),
-        t("resource.toolCount", { count: server.discovered_tool_count ?? 0 }, `${server.discovered_tool_count ?? 0} tools`)], actions));
-    }
-    if (focusedKey) (extensionActions.find(focusedKey) ||
-      (focusedKey.startsWith("mcp-") ? extensionActions.find("mcp-reload") : null))
-      ?.focus({ preventScroll: true });
+    if (focusedKey) extensionActions.find(focusedKey)?.focus({ preventScroll: true });
   }
 
   function renderPermissions(state) {
@@ -391,8 +354,6 @@ export function createResourcePanels({ agentsStore, stores, reload }) {
 
   unsubscribers.push(agentsStore.subscribe(renderExtensions));
   unsubscribers.push(stores.modules.subscribe(renderExtensions));
-  unsubscribers.push(stores.skills.subscribe(renderExtensions));
-  unsubscribers.push(stores.mcp.subscribe(renderExtensions));
   unsubscribers.push(stores.permissions.subscribe(renderPermissions));
   unsubscribers.push(stores.storage.subscribe(renderDiagnostics));
   unsubscribers.push(stores.diagnostics.subscribe(renderDiagnostics));
@@ -404,11 +365,14 @@ export function createResourcePanels({ agentsStore, stores, reload }) {
   }));
 
   return Object.freeze({
+    hasPendingChanges: () => extensionPanels.hasPendingChanges(),
     selectSection(section) {
+      extensionPanels.selectSection(section);
       if (section === "models") void modelPanel.ensureLoaded();
       else void ensureSettingsResources(section);
     },
     destroy() {
+      extensionPanels.destroy();
       modelPanel.destroy();
       unsubscribers.forEach((unsubscribe) => unsubscribe());
     },

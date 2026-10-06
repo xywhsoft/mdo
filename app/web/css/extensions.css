@@ -1,0 +1,23 @@
+/* The editor is an ordinary native dialog; the list stays usable on narrow screens. */
+.extension-toolbar, .extension-editor-heading, .extension-editor-footer { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.extension-toolbar { margin: 0 0 12px; }
+.extension-search { width: 100%; margin: 0 0 8px; }
+.extension-help { color: var(--muted); font-size: 12px; line-height: 1.6; margin: 8px 0 16px; }
+.extension-list { display: grid; gap: 12px; }
+.extension-list .resource-meta code { overflow-wrap: anywhere; }
+.extension-error { color: var(--danger, #c94343) !important; white-space: pre-wrap; overflow-wrap: anywhere; }
+.extension-editor { width: min(680px, calc(100vw - 24px)); max-height: calc(100dvh - 32px); padding: 20px; margin: auto; box-sizing: border-box; border: 1px solid var(--border); border-radius: 14px; background: var(--surface); color: var(--text); overflow-y: auto; overscroll-behavior: contain; }
+.extension-editor::backdrop { background: #0007; }
+.extension-editor-heading { justify-content: space-between; margin-bottom: 16px; }
+.extension-editor-heading h2 { font-size: 18px; margin: 0; }
+.extension-editor input:not([type="checkbox"]), .extension-editor select, .extension-editor textarea, .extension-search { border: 1px solid var(--border); border-radius: 7px; padding: 9px 11px; background: var(--surface); color: inherit; box-sizing: border-box; min-width: 0; font: inherit; }
+.extension-field { display: grid; gap: 6px; margin-bottom: 14px; font-size: 13px; }
+.extension-field small { color: var(--muted); font-size: 11px; line-height: 1.6; }
+.extension-check { display: flex; align-items: center; gap: 8px; margin: 10px 0; }
+.extension-form textarea[name="prompt"] { min-height: 180px; resize: vertical; line-height: 1.6; }
+.extension-source { width: 100%; min-height: 300px; font-family: var(--font-mono, monospace) !important; line-height: 1.6; resize: vertical; }
+.extension-editor-status { color: var(--danger, #c94343); white-space: pre-wrap; overflow-wrap: anywhere; font-size: 12px; }
+.extension-editor-footer { justify-content: flex-end; margin-top: 16px; }
+.extension-transport textarea { min-height: 90px; font-family: var(--font-mono, monospace); }
+.extension-editor [hidden] { display: none !important; }
+@media (max-width: 600px) { .extension-editor { padding: 14px; max-height: calc(100dvh - 16px); } .extension-list .resource-actions { flex-wrap: wrap; } .extension-toolbar .secondary-button { padding: 7px 10px; } }

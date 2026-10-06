@@ -19,16 +19,27 @@ ROOT = Path(__file__).resolve().parent.parent
 class SkillModel(BaseHTTPRequestHandler):
     calls = 0
     payloads = []
+    delegation_payloads = []
     def log_message(self, *_): pass
     def do_POST(self):
         payload = json.loads(self.rfile.read(int(self.headers['Content-Length'])))
-        type(self).payloads.append(payload)
-        type(self).calls += 1
-        calls = type(self).calls
-        arguments = ({}, {'name': 'research'}, {'name': 'research', 'path': 'references/guide.txt'})
-        output = [{'type': 'function_call', 'call_id': 'skill-' + str(calls),
-            'name': 'skill', 'arguments': json.dumps(arguments[calls-1])}] if calls <= 3 else [
-                {'type': 'message', 'content': [{'type': 'output_text', 'text': 'Skill probe complete'}]}]
+        if 'EXTENSION delegation probe' in json.dumps(payload) or 'EXTENSION reviewer child' in json.dumps(payload):
+            type(self).delegation_payloads.append(payload)
+            calls = len(type(self).delegation_payloads)
+            if calls == 1:
+                output = [{'type': 'function_call', 'call_id': 'delegate-fixture', 'name': 'agent',
+                    'arguments': json.dumps({'name': 'subagent.reviewer', 'prompt': 'EXTENSION reviewer child'})}]
+            else:
+                output = [{'type': 'message', 'content': [{'type': 'output_text',
+                    'text': 'Reviewer child report' if calls == 2 else 'Delegation probe complete'}]}]
+        else:
+            type(self).payloads.append(payload)
+            type(self).calls += 1
+            calls = type(self).calls
+            arguments = ({}, {'name': 'research'}, {'name': 'research', 'path': 'references/guide.txt'})
+            output = [{'type': 'function_call', 'call_id': 'skill-' + str(calls),
+                'name': 'skill', 'arguments': json.dumps(arguments[calls-1])}] if calls <= 3 else [
+                    {'type': 'message', 'content': [{'type': 'output_text', 'text': 'Skill probe complete'}]}]
         response = json.dumps({'id': 'resp_skill_' + str(calls), 'model': 'ornith-1.5-35b',
             'status': 'completed', 'output': output, 'usage': {'input_tokens': 10, 'output_tokens': 5, 'total_tokens': 15}}).encode()
         self.send_response(200); self.send_header('Content-Type', 'application/json')
@@ -104,12 +115,12 @@ def main():
                 assert 'subagent.reviewer' in request(port, 'GET', '/api/v1/agents')[2].decode()
                 assert call('POST', 'subagents/reviewer/enabled', {'enabled': False}, agent_revision)[0] == 200
                 assert 'subagent.reviewer' not in request(port, 'GET', '/api/v1/agents')[2].decode()
-                assert call('DELETE', 'subagents/reviewer', revision=agent_revision)[0] == 200
+                assert call('POST', 'subagents/reviewer/enabled', {'enabled': True}, agent_revision)[0] == 200
                 badfile = {'path': '../escape.txt', 'base64': file['base64']}
                 assert call('PUT', 'skills/escape', {'content': skill, 'files': [badfile]}, 'new')[0] != 200
                 assert not (base / 'home/escape.txt').exists()
                 status, _, raw_session = request(port, 'POST', '/api/v1/sessions',
-                    body=json.dumps({'project_id': 'default', 'title': 'Extension Skill probe'}).encode(),
+                    body=json.dumps({'project_id': 'default', 'title': 'Extension Skill probe', 'permission_profile': 'full-access'}).encode(),
                     headers={'Content-Type': 'application/json'})
                 assert status == 201, raw_session
                 session = json.loads(raw_session)['data']['id']
@@ -126,6 +137,22 @@ def main():
                 assert SkillModel.calls == 4, SkillModel.payloads
                 assert 'Use references/guide.txt.' not in json.dumps(SkillModel.payloads[0]), 'Skill body eagerly injected'
                 assert 'Inspect first' in json.dumps(SkillModel.payloads[-1]), SkillModel.payloads[-1]
+                status, _, raw_run = request(port, 'POST', '/api/v1/projects/default/sessions/' + session + '/runs',
+                    body=json.dumps({'prompt': 'EXTENSION delegation probe', 'timeout_ms': 5000}).encode(),
+                    headers={'Content-Type': 'application/json'})
+                assert status == 202, raw_run
+                run = json.loads(raw_run)['data']; deadline = time.monotonic() + 8
+                while not run['terminal'] and time.monotonic() < deadline:
+                    time.sleep(.05)
+                    status, _, raw_run = request(port, 'GET', '/api/v1/runs/' + run['id'])
+                    run = json.loads(raw_run)['data']
+                assert run['state'] == 'succeeded', run
+                assert len(SkillModel.delegation_payloads) == 3, SkillModel.delegation_payloads
+                child = SkillModel.delegation_payloads[1]
+                assert 'Inspect changes and report bugs.' in json.dumps(child), child
+                assert {tool['name'] for tool in child['tools']} == {'read', 'grep', 'skill'}, child['tools']
+                assert 'Reviewer child report' in json.dumps(SkillModel.delegation_payloads[-1])
+                assert call('DELETE', 'subagents/reviewer', revision=agent_revision)[0] == 200
                 assert call('DELETE', 'skills/research', revision=skill_revision)[0] == 200
                 assert not (base / 'home/skills/research').exists()
                 assert call('DELETE', 'commands/review', revision=revision)[0] == 200

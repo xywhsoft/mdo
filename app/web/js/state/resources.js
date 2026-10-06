@@ -21,7 +21,7 @@ const STORES = Object.freeze({
 });
 const pendingReads = new Map();
 const SECTION_RESOURCES = Object.freeze({
-  extensions: ["modules", "skills", "mcp"],
+  extensions: ["modules"],
   permissions: ["permissions"],
   diagnostics: ["storage", "diagnostics", "migrations"],
 });
