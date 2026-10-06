@@ -12,7 +12,7 @@ const labels = {
     available: "有可用更新", downloading: "正在下载并校验…", ready: "更新包已校验，可以安装",
     installing: "请在原生窗口确认安装；结束前暂停新任务", error: "更新检查失败，不影响正常使用",
     "no-package": "此平台尚未发布更新", failed: "操作失败，请重试", connection: "暂时无法连接目标服务",
-    native: "请在目标设备的原生窗口中确认安装", devices: "切换设备" },
+    native: "请在目标设备的原生窗口中确认安装", devices: "切换设备", lite: "Android 精简版", full: "Android 完整版（含扩展工具）" },
   "en-US": { title: "App updates", description: "Compare with the published package. Install after confirmation; your data is preserved.",
     check: "Check for updates", download: "Download update", install: "Install update", restart: "Install and restart",
     cancel: "Cancel download", later: "Later", notice: "An mdo update is available", open: "View update", badge: "Update", exit: "Exit mdo",
@@ -22,7 +22,7 @@ const labels = {
     available: "Update available", downloading: "Downloading and verifying…", ready: "Verified update ready to install",
     installing: "Confirm in the native window; new tasks are paused", error: "Update check failed; normal use is unaffected",
     "no-package": "No update published for this platform", failed: "Operation failed; please retry", connection: "Target service is temporarily unavailable",
-    native: "Confirm installation in the target device's native window", devices: "Switch device" },
+    native: "Confirm installation in the target device's native window", devices: "Switch device", lite: "Android lite", full: "Android full (with tools)" },
   "ru-RU": { title: "Обновления", description: "Сравнение с опубликованным пакетом. Установка после подтверждения; данные сохранятся.",
     check: "Проверить", download: "Скачать", install: "Установить", restart: "Установить и перезапустить",
     cancel: "Отменить загрузку", later: "Позже", notice: "Доступно обновление mdo", open: "Показать", badge: "Обновить", exit: "Выйти",
@@ -32,7 +32,7 @@ const labels = {
     available: "Есть обновление", downloading: "Загрузка и проверка…", ready: "Пакет проверен и готов к установке",
     installing: "Подтвердите в окне приложения; новые задачи приостановлены", error: "Проверка не удалась; работа приложения не затронута",
     "no-package": "Для этой платформы нет обновления", failed: "Не удалось; повторите попытку", connection: "Сервис устройства временно недоступен",
-    native: "Подтвердите установку в окне приложения на целевом устройстве", devices: "Выбрать устройство" },
+    native: "Подтвердите установку в окне приложения на целевом устройстве", devices: "Выбрать устройство", lite: "Android: облегчённая версия", full: "Android: полная версия с инструментами" },
 };
 export function updateActions(status, context = {}) {
   const writable = !context.selected || (context.connected &&
@@ -52,16 +52,18 @@ export function createUpdatePanel({ root, dialog, entries = [], transport = api 
   if (!root || !dialog) return null;
   let status = null, pending = false, destroyed = false, timer, failure = "", connectionLost = false;
   const text = () => labels[currentLocale()] ?? labels["en-US"];
-  let forced = false, requiredFocus = null;
+  let forced = false, requiredFocus = null, toolManager = null;
   function open() {
     if (!dialog.open) dialog.showModal();
   }
   function render() {
     const words = text();
+    toolManager?.render(dialog.querySelector("[data-update-toolpacks]"));
     for (const node of root.querySelectorAll("[data-update-label]"))
       node.textContent = words[node.dataset.updateLabel];
     const blocked = !!status?.blocked;
     let stateText = status ? (blocked && status.status === "error" ? words.requiredError : words[status.status]) ?? words.failed : words.checking;
+    if (status?.available && words[status.edition]) stateText += " · " + words[status.edition] + (status.build_id ? " · " + status.build_id : "");
     if (status?.message) stateText += " · " + status.message;
     if (status?.last_install_message) stateText += " · " + status.last_install_message;
     if (status?.ready && targetState().selected) stateText += " · " + words.native;
@@ -72,7 +74,7 @@ export function createUpdatePanel({ root, dialog, entries = [], transport = api 
       const notes = surface.querySelector("[data-update-notes]");
       notes.textContent = status?.notes ?? ""; notes.hidden = !notes.textContent;
     }
-    dialog.querySelector("[data-update-title]").textContent = blocked ? words.requiredTitle : words.notice;
+    dialog.querySelector("[data-update-title]").textContent = blocked ? words.requiredTitle : toolManager?.title() ?? words.notice;
     dialog.querySelector("[data-update-description]").textContent = blocked ? words.requiredDescription : words.description;
     const later = dialog.querySelector("[data-update-later]");
     later.hidden = blocked; later.textContent = words.later;
@@ -159,7 +161,7 @@ export function createUpdatePanel({ root, dialog, entries = [], transport = api 
   const unsubscribe = subscribeLocale(render);
   const unsubscribeTarget = subscribeTarget(render);
   render(); void refresh();
-  return { refresh, destroy() {
+  return { refresh, open, destroy() {
     destroyed = true; clearTimeout(timer); unsubscribe(); unsubscribeTarget();
     root.removeEventListener("click", action);
     dialog.removeEventListener("click", action); dialog.removeEventListener("click", backdrop);

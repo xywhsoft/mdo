@@ -38,6 +38,7 @@ bool MdoApiSessionEventValue(const struct MdoSessionEventInfo* Event,
     const char* ProjectId, const char* SessionId, bool FullText, xvalue** Value);
 
 typedef bool (*MdoApiRouteProc)(MdoApiContext* pContext);
+bool MdoApiDistributionRoute(MdoApiContext* Context);
 bool MdoApiUpdateRoute(MdoApiContext* Context);
 bool MdoApiUpdateDownloadRoute(MdoApiContext* Context);
 bool MdoApiUpdateInstallRoute(MdoApiContext* Context);

@@ -1,3 +1,4 @@
+#include "../../include/mdo/distribution.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -1181,7 +1182,7 @@ MdoAgentSession* MdoAgentSessionCreateWithRuntime(xwork_runtime* Runtime,
                     sizeof(InstructionsFooter) - 1u, Error)) ) goto fail;
         }
     }
-    if ( !MdoAgentsReplyLanguage(&Prompt, Error) ) goto fail;
+    if ( !MdoAgentsReplyLanguage(&Prompt, Error) || !MdoToolPrompt(&Prompt) ) goto fail;
     /* Memory is a dynamic context section. Keep the recovered Agent/Skill/user
      * instructions, but refresh memory paths and indices when a run is admitted.
      * Remove the old structured-memory section as well during the transition. */

@@ -1,3 +1,4 @@
+import { createNotificationCenter } from "./features/notifications/center.js";
 import { liveConnection } from "./api/live.js";
 import { isRemoteTarget, targetState, subscribeTarget, setTargetSwitchGuard } from "./api/target.js";
 import { createRemotePanel } from "./features/settings/remote-panel.js";
@@ -996,8 +997,9 @@ export async function boot() {
     onApplied: () => Promise.all([loadBootstrap(), loadCatalogs()]),
   });
   const updatePanel = createUpdatePanel({ root: $("#update-settings"),
-    dialog: $("#update-dialog"), entries: document.querySelectorAll("[data-update-open]") });
-  window.addEventListener("pagehide", () => updatePanel?.destroy(), { once: true });
+    dialog: $("#update-dialog"), entries: [] });
+  const notificationCenter = createNotificationCenter({ updatePanel, navigation });
+  window.addEventListener("pagehide", () => { notificationCenter.destroy(); updatePanel?.destroy(); }, { once: true });
   const purgeConfirmation = createProjectPurgeConfirmation({
     dialog: $("#project-purge-confirm-dialog"), recovery: purgeRecovery,
     onResolved: () => {
@@ -2418,7 +2420,7 @@ export async function boot() {
     }, 120);
   }
   liveConnection.subscribe((event) => {
-    if (event.type === "changed") scheduleLiveRefresh();
+    if (event.type === "changed") { scheduleLiveRefresh(); void notificationCenter.refresh(); }
     else if (event.type === "status") {
       scheduleTaskRefresh(); scheduleRunsRefresh();
       scheduleSessionRefresh(); scheduleApprovalRefresh();

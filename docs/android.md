@@ -31,7 +31,11 @@ WSL 方式的 SDK 和 JDK 参数为 Linux 路径，输出保留在 Windows 工�
 `--builtin-connection`、环境变量或被忽略的 `.build/ornith-connection.json` 注入，
 没有凭据时构建会明确失败。不要提交密钥。
 
-默认产物为根目录 `mdo-arm64-v8a.apk`。构建中间文件在 `.build/android/`。
+默认产物为根目录 `mdo-arm64-v8a.apk`。`--edition lite`（默认）为精简版，
+`--edition full` 包含 BusyBox、curl、jq、SSH/SCP/SFTP 和 Python。两版使用相同
+应用 ID 和签名；每个发布产物使用 `app/release.json` 中各自的递增内部编号。
+工具通过 Android 原生库安装目录执行，数据留在应用私有目录；完整流程及产物
+位置见 `docs/distribution.md`。构建中间文件在 `.build/android/`。
 墨斗图标资源位于 `assets/branding/android/res/`，构建器会编译并写入 APK 的
 launcher/round icon；Android 8+ 使用自适应图标。Windows 的 ICO 和前端标识
 使用同一原图，见 `assets/branding/README.md`。导出资源已入库，普通构建不需要 Pillow。
@@ -64,8 +68,9 @@ codeCache，WebView 浏览器数据也受 Android 应用沙箱管理。卸载会
 
 Android 的目录权限与 PC 不同：项目应使用应用可访问的实际目录。附件通过系统
 文件选择器导入，导出通过系统保存窗口。`content://` 目录不能直接当作 C 文件系统
-路径。Shell 使用设备已有的 `/system/bin/sh` 和 Toybox；Bash、PowerShell、Git
-及依赖外部可执行程序的 MCP 需要设备实际具备相应程序。
+路径。精简版 Shell 使用设备已有的 `/system/bin/sh` 和 Toybox；完整版提供
+额外工具并自动注入经过探测的绝对路径。Bash、PowerShell、Git 及其他依赖外部
+可执行程序的 MCP 仍需要设备实际具备相应程序。
 
 USB 验证：
 

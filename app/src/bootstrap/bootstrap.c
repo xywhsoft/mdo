@@ -1,3 +1,4 @@
+#include "../../include/mdo/distribution.h"
 #include <stdio.h>
 #include <string.h>
 
@@ -154,6 +155,8 @@ bool MdoBootstrapInit(XS_HostInfo* pHost)
         return false;
     }
     /* Load cached mandatory policy before any automatic executor can run. */
+    MdoUpdateSetEngine(pHost->Server->Engine);
+    (void)MdoDistributionInit(pHost->Server);
     if (!MdoUpdateInit()) fprintf(stderr,"[mdo] update manager unavailable\n");
     MdoRunManagerOptionsInit(&RunOptions);
     RunOptions.OnPermission = MdoApprovalOnPermission;
@@ -228,6 +231,7 @@ bool MdoBootstrapInit(XS_HostInfo* pHost)
 
 void MdoBootstrapUnit(void)
 {
+    MdoDistributionUnit();
     MdoUpdateUnit();
     MdoScheduleExecutorUnit();
     MdoRunManagerUnit();

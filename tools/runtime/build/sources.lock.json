@@ -1,0 +1,92 @@
+[
+  {
+    "file": "busybox-1.38.0.tar.bz2",
+    "url": "https://busybox.net/downloads/busybox-1.38.0.tar.bz2",
+    "size": 2695723,
+    "sha256": "34f9ea6ff8636f2c9241153b9114eefa9e65674a45318ae1ef95bb5f31c53bb2"
+  },
+  {
+    "file": "busybox-1.38.0.tar.bz2.sha256",
+    "url": "https://busybox.net/downloads/busybox-1.38.0.tar.bz2.sha256",
+    "size": 89,
+    "sha256": "d87b1e6731a133d7960c0644d73697ce78a0d1988af0e1a4ac7a758661f72edd"
+  },
+  {
+    "file": "busybox-w32-FRP-6075-g169694ebd.tgz",
+    "url": "https://frippery.org/files/busybox/busybox-w32-FRP-6075-g169694ebd.tgz",
+    "size": 3690927,
+    "sha256": "44401413c86a839deeec3eba088af244a1594f18ff9fd0622811100e4cc2e7b4"
+  },
+  {
+    "file": "busybox64u.exe",
+    "url": "https://frippery.org/files/busybox/busybox-w64u-FRP-6075-g169694ebd.exe",
+    "size": 675840,
+    "sha256": "6e263d154d8548d1eb936f65d1d8312c80df31c45974e48d6335e4dcc0f4f34c"
+  },
+  {
+    "file": "cacert.pem",
+    "url": "https://curl.se/ca/cacert.pem",
+    "size": 188900,
+    "sha256": "a41b5d356aea97a529fe27e0f7316d2f9d946d75927476cf9cf1b90637d00505"
+  },
+  {
+    "file": "curl-8.22.0.tar.xz",
+    "url": "https://curl.se/download/curl-8.22.0.tar.xz",
+    "size": 2953092,
+    "sha256": "f7ef3ae8a22e521f289803fe93543eb64c329b58aa73a9e224dfd915a2a5f4f7"
+  },
+  {
+    "file": "curl-windows-COPYING",
+    "url": "https://raw.githubusercontent.com/curl/curl/curl-8_13_0/COPYING",
+    "size": 1088,
+    "sha256": "e18f1989333b70044b2adfb7dc2f905d0119dbdcac3bc9f4bc9d540e3a29de5b"
+  },
+  {
+    "file": "jq-1.8.2.tar.gz",
+    "url": "https://github.com/jqlang/jq/releases/download/jq-1.8.2/jq-1.8.2.tar.gz",
+    "size": 1959950,
+    "sha256": "71b8d6e8f5fe81f6c6d0d110e3892251f6ce76ed095abd315e26e6e1193af3af"
+  },
+  {
+    "file": "jq-sha256sum.txt",
+    "url": "https://raw.githubusercontent.com/jqlang/jq/master/sig/v1.8.2/sha256sum.txt",
+    "size": 2302,
+    "sha256": "dc86824a41c165ece971ff691aff6e08bbfe6e1d1f531688b47ee78c283a85cd"
+  },
+  {
+    "file": "jq-windows-amd64.exe",
+    "url": "https://github.com/jqlang/jq/releases/download/jq-1.8.2/jq-windows-amd64.exe",
+    "size": 1035264,
+    "sha256": "a6fc67fedaf9128a3309a1e2ebb8b986aeccf70122ee46d2cb4849e423f0c627"
+  },
+  {
+    "file": "openssh-10.3p1.tar.gz",
+    "url": "https://cdn.openbsd.org/pub/OpenBSD/OpenSSH/portable/openssh-10.3p1.tar.gz",
+    "size": 2007369,
+    "sha256": "56682a36bb92dcf4b4f016fd8ec8e74059b79a8de25c15d670d731e7d18e45f4"
+  },
+  {
+    "file": "openssl-3.5.9.tar.gz",
+    "url": "https://github.com/openssl/openssl/releases/download/openssl-3.5.9/openssl-3.5.9.tar.gz",
+    "size": 53279637,
+    "sha256": "603f5602e2eef00d77fbd429d34dcd5822bb301757a1bc9cdb24c670f1eb859a"
+  },
+  {
+    "file": "openssl-3.5.9.tar.gz.sha256",
+    "url": "https://github.com/openssl/openssl/releases/download/openssl-3.5.9/openssl-3.5.9.tar.gz.sha256",
+    "size": 87,
+    "sha256": "f482705825eb43b47ce08d5cf4287ae062cdbada1a142d728a8d89c387300bf0"
+  },
+  {
+    "file": "python-3.14.8-aarch64-linux-android.tar.gz",
+    "url": "https://www.python.org/ftp/python/3.14.8/python-3.14.8-aarch64-linux-android.tar.gz",
+    "size": 22915536,
+    "sha256": "11324313957da3736f44e90257304d288864321a4dd376ed0cc35a54eacf9a33"
+  },
+  {
+    "file": "zlib-1.3.1.tar.gz",
+    "url": "https://zlib.net/fossils/zlib-1.3.1.tar.gz",
+    "size": 1512791,
+    "sha256": "9a93b2b7dfdac77ceba5a558a580e74667dd6fede4585b91eefb60f03b72df23"
+  }
+]

@@ -1,0 +1,537 @@
+{
+  "release": "2026-10-06",
+  "windows": {
+    "passed_checks": 13,
+    "checks": [
+      {
+        "check": "busybox_version",
+        "exit_code": 0,
+        "output": "BusyBox v1.38.0-FRP-6075-g169694ebd (2026-05-06 12:57:04 UTC)\n(mingw64-gcc 15.2.1-2.fc43; mingw64-crt 13.0.0-2.fc43; glob; Unicode)\n\nBusyBox is copyrighted by many authors between 1998-2026.\nLicensed "
+      },
+      {
+        "check": "busybox_shell_pipeline",
+        "exit_code": 0,
+        "output": "a\nB\n"
+      },
+      {
+        "check": "busybox_unicode_path",
+        "exit_code": 0,
+        "output": "alpha\nbeta\n"
+      },
+      {
+        "check": "jq_json",
+        "exit_code": 0,
+        "output": "{\"ok\":true,\"sum\":6}\n"
+      },
+      {
+        "check": "curl_version",
+        "exit_code": 0,
+        "output": "curl 8.13.0 (Windows) libcurl/8.13.0 Schannel zlib/1.3.1 WinIDN\nRelease-Date: 2025-04-02\nProtocols: dict file ftp ftps http https imap imaps ipfs ipns mqtt pop3 pop3s smb smbs smtp smtps telnet tftp w"
+      },
+      {
+        "check": "curl_https",
+        "exit_code": 0,
+        "output": "HTTP/1.1 200 OK\nConnection: keep-alive\nContent-Length: 13875\nServer: nginx/1.31.3\nContent-Type: text/html\nLast-Modified: Tue, 06 Oct 2026 10:07:50 GMT\nETag: \"3633-65d292bcbf1e3\"\nCache-Control: max-age"
+      },
+      {
+        "check": "python_stdlib",
+        "exit_code": 0,
+        "output": "{\"ok\": true, \"sqlite\": \"3.50.4\", \"tls\": \"OpenSSL 3.0.16 11 Feb 2025\"}\n"
+      },
+      {
+        "check": "git_version",
+        "exit_code": 0,
+        "output": "git version 2.55.0.windows.3\n"
+      },
+      {
+        "check": "ssh_version",
+        "exit_code": 0,
+        "output": "OpenSSH_10.3p1, OpenSSL 3.5.7 9 Jun 2026\n"
+      },
+      {
+        "check": "ssh_config",
+        "exit_code": 0,
+        "output": "host fixture.invalid\nuser Administrator\nhostname fixture.invalid\nport 2222\naddressfamily any\nbatchmode no\ncanonicalizefallbacklocal yes\ncanonicalizehostname false\ncheckhostip no\ncompression no\ncontrol"
+      },
+      {
+        "check": "scp_usage",
+        "exit_code": 1,
+        "output": "scp: unknown option -- h\nusage: scp [-346ABCOpqRrsTv] [-c cipher] [-D sftp_server_path] [-F ssh_config]\n           [-i identity_file] [-J destination] [-l limit] [-o ssh_option]\n           [-P port] ["
+      },
+      {
+        "check": "sftp_usage",
+        "exit_code": 1,
+        "output": "usage: sftp [-46AaCfNpqrv] [-B buffer_size] [-b batchfile] [-c cipher]\n          [-D sftp_server_command] [-F ssh_config] [-i identity_file]\n          [-J destination] [-l limit] [-o ssh_option] [-P p"
+      },
+      {
+        "check": "ssh_fingerprint",
+        "exit_code": 0,
+        "output": "256 SHA256:KW3gDsKIjKwq50RM7YrmfFSpN1yQw4yNfKwUqvVWh9g Administrator@DESKTOP-DQCMPS1 (ED25519)\n"
+      }
+    ]
+  },
+  "android": {
+    "passed_checks": 18,
+    "device": {
+      "abi": "arm64-v8a",
+      "api": 36,
+      "model": "RMX5090"
+    },
+    "context": "adb shell, isolated /data/local/tmp directory",
+    "checks": [
+      {
+        "check": "busybox_version",
+        "passed": true,
+        "output": "BusyBox v1.38.0 (2026-10-06 23:29:33 CST) multi-call binary.\nBusyBox is copyrighted by many authors between 1998-2015.\nLicensed under GPLv2. See source distribution for detailed\ncopyright notices.\n\nUsage: busybox [function [arguments]...]\n   or: busybox --list\n   or: function [arguments]...\n\n\tBusyBox is a multi-call binary that combines many common Unix\n\tutilities into a single executable.  The shell in this build\n\tis configured to run built-in utilities without $PATH search.\n\tYou don't need to "
+      },
+      {
+        "check": "busybox_pipeline_unicode",
+        "passed": true,
+        "output": "alpha\nBETA"
+      },
+      {
+        "check": "busybox_archive",
+        "passed": true,
+        "output": "中文 空格.txt"
+      },
+      {
+        "check": "jq_json_regex",
+        "passed": true,
+        "output": "{\"ok\":true,\"sum\":6,\"regex\":true}"
+      },
+      {
+        "check": "curl_version",
+        "passed": true,
+        "output": "curl 8.22.0 (aarch64-unknown-linux-android) libcurl/8.22.0 OpenSSL/3.5.9 zlib/1.3.1\nRelease-Date: 2026-09-02\nProtocols: dict file ftp ftps http https ipfs ipns ws wss\nFeatures: alt-svc AsynchDNS HSTS HTTPS-proxy IPv6 Largefile libz SSL threadsafe UnixSockets"
+      },
+      {
+        "check": "curl_https",
+        "passed": true,
+        "output": "HTTP/1.1 200 OK\n\nConnection: keep-alive\n\nContent-Length: 13875\n\nServer: nginx/1.31.3\n\nContent-Type: text/html\n\nLast-Modified: Tue, 06 Oct 2026 10:07:50 GMT\n\nETag: \"3633-65d292bcbf1e3\"\n\nCache-Control: max-age=60\n\nExpires: Tue, 06 Oct 2026 10:09:22 GMT\n\nContent-Security-Policy: upgrade-insecure-requests; default-src 'none'; base-uri 'none'; img-src 'self'; style-src 'unsafe-inline' 'self'; form-action 'self'; frame-ancestors 'none'; require-trusted-types-for 'script';\n\nCross-Origin-Embedder-Policy"
+      },
+      {
+        "check": "python_stdlib",
+        "passed": true,
+        "output": "{\"ok\": true, \"version\": \"3.14.8 (tags/v3.14.8-dirty:8e6e75d, Sep 30 2026, 18:00:15) [Clang 18.0.4 (https://android.googlesource.com/toolchain/llvm-project d8003a456\", \"sqlite\": \"3.53.4\", \"tls\": \"OpenSSL 3.5.9 29 Sep 2026\", \"platform\": \"android-24-arm64_v8a\"}"
+      },
+      {
+        "check": "python_script_unicode_sqlite",
+        "passed": true,
+        "output": "script+unicode+sqlite: OK"
+      },
+      {
+        "check": "python_https",
+        "passed": true,
+        "output": "HTTPS 200"
+      },
+      {
+        "check": "ssh_version",
+        "passed": true,
+        "output": "OpenSSH_10.3p1, OpenSSL 3.5.9 29 Sep 2026"
+      },
+      {
+        "check": "ssh_config",
+        "passed": true,
+        "output": "host fixture.invalid\nuser shell\nhostname fixture.invalid\nport 2222\naddressfamily any\nbatchmode no\ncanonicalizefallbacklocal yes\ncanonicalizehostname false\ncheckhostip no\ncompression no\ncontrolmaster false\nenablesshkeysign no\nclearallforwardings no\nexitonforwardfailure no\nfingerprinthash SHA256\nforwardx11 no\nforwardx11trusted no\ngatewayports no\nhashknownhosts no\nhostbasedauthentication no\nidentitiesonly no\nkbdinteractiveauthentication yes\nnohostauthenticationforlocalhost no\npasswordauthentication"
+      },
+      {
+        "check": "ssh_keygen",
+        "passed": true,
+        "output": ""
+      },
+      {
+        "check": "ssh_fingerprint",
+        "passed": true,
+        "output": "256 SHA256:TuxqqTAtPmXjoWrIKIJXJKaNVv0CrB14MLEfAEBf/kk shell@localhost (ED25519)"
+      },
+      {
+        "check": "ssh_keyscan",
+        "passed": true,
+        "output": "# 127.0.0.1:56308 SSH-2.0-paramiko_5.0.0\n[127.0.0.1]:56308 ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQC0XnKh5cfMrx93ovlQp9SK7uoMuiOnnoLbgo521z6IozEkba9C8BYdV3/T5Ta1vt4PMEKFq7H6II4sfqrO2cuZM13lfzT+aQ31vGfYojjDWo8LuuR8A6EprlE+E6qZ3rAICyAP4g5XU1LHaY40UWKY4dR98bZyG/cqOw77yLR53wU/Tx2AKSi0R5Ydxe2vL+winYyQhfsqLu5tR0uMhOaIDHaUgwGX0JHssmmUXGwC8a8Ua0GKL1ZUh7IJJTTy8TjpA0mib1NsPyaDlXw5Jq/04FGDexwYXpjEhPJYcG4+GMacDBrS5YfsG/Zp63QdgEcz8Ro/ICOTFW1mDUYiufmN"
+      },
+      {
+        "check": "ssh_authenticated_exec",
+        "passed": true,
+        "output": "mdo SSH fixture: OK\n** WARNING: connection is not using a post-quantum key exchange algorithm.\n\n** This session may be vulnerable to \"store now, decrypt later\" attacks.\n\n** The server may need to be upgraded. See https://openssh.com/pq.html"
+      },
+      {
+        "check": "scp_upload",
+        "passed": true,
+        "output": "** WARNING: connection is not using a post-quantum key exchange algorithm.\n\n** This session may be vulnerable to \"store now, decrypt later\" attacks.\n\n** The server may need to be upgraded. See https://openssh.com/pq.html"
+      },
+      {
+        "check": "sftp_download",
+        "passed": true,
+        "output": "sftp> get /uploaded.txt /data/local/tmp/mdo-runtime-tools-20261006/downloaded.txt\n\n** WARNING: connection is not using a post-quantum key exchange algorithm.\n\n** This session may be vulnerable to \"store now, decrypt later\" attacks.\n\n** The server may need to be upgraded. See https://openssh.com/pq.html"
+      },
+      {
+        "check": "ssh_transfer_sha256",
+        "passed": true,
+        "sha256": "924fbdc7f4192a35aa40744bcc99284f2467c8059f43e473d6db4be5f7e79076"
+      }
+    ]
+  },
+  "packages": {
+    "passed": true,
+    "packages": 11,
+    "verified_files": 529,
+    "android_elf": [
+      {
+        "file": "android-arm64-v8a/busybox/busybox",
+        "machine": "AArch64",
+        "minimum_load_alignment": 16384
+      },
+      {
+        "file": "android-arm64-v8a/curl/curl",
+        "machine": "AArch64",
+        "minimum_load_alignment": 16384
+      },
+      {
+        "file": "android-arm64-v8a/jq/jq",
+        "machine": "AArch64",
+        "minimum_load_alignment": 16384
+      },
+      {
+        "file": "android-arm64-v8a/openssh/scp",
+        "machine": "AArch64",
+        "minimum_load_alignment": 16384
+      },
+      {
+        "file": "android-arm64-v8a/openssh/sftp",
+        "machine": "AArch64",
+        "minimum_load_alignment": 16384
+      },
+      {
+        "file": "android-arm64-v8a/openssh/ssh",
+        "machine": "AArch64",
+        "minimum_load_alignment": 16384
+      },
+      {
+        "file": "android-arm64-v8a/openssh/ssh-keygen",
+        "machine": "AArch64",
+        "minimum_load_alignment": 16384
+      },
+      {
+        "file": "android-arm64-v8a/openssh/ssh-keyscan",
+        "machine": "AArch64",
+        "minimum_load_alignment": 16384
+      },
+      {
+        "file": "android-arm64-v8a/python/bin/python3",
+        "machine": "AArch64",
+        "minimum_load_alignment": 16384
+      },
+      {
+        "file": "android-arm64-v8a/python/lib/libcrypto_python.so",
+        "machine": "AArch64",
+        "minimum_load_alignment": 16384
+      },
+      {
+        "file": "android-arm64-v8a/python/lib/libpython3.14.so",
+        "machine": "AArch64",
+        "minimum_load_alignment": 16384
+      },
+      {
+        "file": "android-arm64-v8a/python/lib/libpython3.so",
+        "machine": "AArch64",
+        "minimum_load_alignment": 16384
+      },
+      {
+        "file": "android-arm64-v8a/python/lib/libsqlite3_python.so",
+        "machine": "AArch64",
+        "minimum_load_alignment": 16384
+      },
+      {
+        "file": "android-arm64-v8a/python/lib/libssl_python.so",
+        "machine": "AArch64",
+        "minimum_load_alignment": 16384
+      },
+      {
+        "file": "android-arm64-v8a/python/lib/python3.14/lib-dynload/_asyncio.cpython-314-aarch64-linux-android.so",
+        "machine": "AArch64",
+        "minimum_load_alignment": 16384
+      },
+      {
+        "file": "android-arm64-v8a/python/lib/python3.14/lib-dynload/_bisect.cpython-314-aarch64-linux-android.so",
+        "machine": "AArch64",
+        "minimum_load_alignment": 16384
+      },
+      {
+        "file": "android-arm64-v8a/python/lib/python3.14/lib-dynload/_blake2.cpython-314-aarch64-linux-android.so",
+        "machine": "AArch64",
+        "minimum_load_alignment": 16384
+      },
+      {
+        "file": "android-arm64-v8a/python/lib/python3.14/lib-dynload/_bz2.cpython-314-aarch64-linux-android.so",
+        "machine": "AArch64",
+        "minimum_load_alignment": 16384
+      },
+      {
+        "file": "android-arm64-v8a/python/lib/python3.14/lib-dynload/_codecs_cn.cpython-314-aarch64-linux-android.so",
+        "machine": "AArch64",
+        "minimum_load_alignment": 16384
+      },
+      {
+        "file": "android-arm64-v8a/python/lib/python3.14/lib-dynload/_codecs_hk.cpython-314-aarch64-linux-android.so",
+        "machine": "AArch64",
+        "minimum_load_alignment": 16384
+      },
+      {
+        "file": "android-arm64-v8a/python/lib/python3.14/lib-dynload/_codecs_iso2022.cpython-314-aarch64-linux-android.so",
+        "machine": "AArch64",
+        "minimum_load_alignment": 16384
+      },
+      {
+        "file": "android-arm64-v8a/python/lib/python3.14/lib-dynload/_codecs_jp.cpython-314-aarch64-linux-android.so",
+        "machine": "AArch64",
+        "minimum_load_alignment": 16384
+      },
+      {
+        "file": "android-arm64-v8a/python/lib/python3.14/lib-dynload/_codecs_kr.cpython-314-aarch64-linux-android.so",
+        "machine": "AArch64",
+        "minimum_load_alignment": 16384
+      },
+      {
+        "file": "android-arm64-v8a/python/lib/python3.14/lib-dynload/_codecs_tw.cpython-314-aarch64-linux-android.so",
+        "machine": "AArch64",
+        "minimum_load_alignment": 16384
+      },
+      {
+        "file": "android-arm64-v8a/python/lib/python3.14/lib-dynload/_csv.cpython-314-aarch64-linux-android.so",
+        "machine": "AArch64",
+        "minimum_load_alignment": 16384
+      },
+      {
+        "file": "android-arm64-v8a/python/lib/python3.14/lib-dynload/_ctypes.cpython-314-aarch64-linux-android.so",
+        "machine": "AArch64",
+        "minimum_load_alignment": 16384
+      },
+      {
+        "file": "android-arm64-v8a/python/lib/python3.14/lib-dynload/_decimal.cpython-314-aarch64-linux-android.so",
+        "machine": "AArch64",
+        "minimum_load_alignment": 16384
+      },
+      {
+        "file": "android-arm64-v8a/python/lib/python3.14/lib-dynload/_elementtree.cpython-314-aarch64-linux-android.so",
+        "machine": "AArch64",
+        "minimum_load_alignment": 16384
+      },
+      {
+        "file": "android-arm64-v8a/python/lib/python3.14/lib-dynload/_hashlib.cpython-314-aarch64-linux-android.so",
+        "machine": "AArch64",
+        "minimum_load_alignment": 16384
+      },
+      {
+        "file": "android-arm64-v8a/python/lib/python3.14/lib-dynload/_heapq.cpython-314-aarch64-linux-android.so",
+        "machine": "AArch64",
+        "minimum_load_alignment": 16384
+      },
+      {
+        "file": "android-arm64-v8a/python/lib/python3.14/lib-dynload/_hmac.cpython-314-aarch64-linux-android.so",
+        "machine": "AArch64",
+        "minimum_load_alignment": 16384
+      },
+      {
+        "file": "android-arm64-v8a/python/lib/python3.14/lib-dynload/_interpchannels.cpython-314-aarch64-linux-android.so",
+        "machine": "AArch64",
+        "minimum_load_alignment": 16384
+      },
+      {
+        "file": "android-arm64-v8a/python/lib/python3.14/lib-dynload/_interpqueues.cpython-314-aarch64-linux-android.so",
+        "machine": "AArch64",
+        "minimum_load_alignment": 16384
+      },
+      {
+        "file": "android-arm64-v8a/python/lib/python3.14/lib-dynload/_interpreters.cpython-314-aarch64-linux-android.so",
+        "machine": "AArch64",
+        "minimum_load_alignment": 16384
+      },
+      {
+        "file": "android-arm64-v8a/python/lib/python3.14/lib-dynload/_json.cpython-314-aarch64-linux-android.so",
+        "machine": "AArch64",
+        "minimum_load_alignment": 16384
+      },
+      {
+        "file": "android-arm64-v8a/python/lib/python3.14/lib-dynload/_lsprof.cpython-314-aarch64-linux-android.so",
+        "machine": "AArch64",
+        "minimum_load_alignment": 16384
+      },
+      {
+        "file": "android-arm64-v8a/python/lib/python3.14/lib-dynload/_lzma.cpython-314-aarch64-linux-android.so",
+        "machine": "AArch64",
+        "minimum_load_alignment": 16384
+      },
+      {
+        "file": "android-arm64-v8a/python/lib/python3.14/lib-dynload/_md5.cpython-314-aarch64-linux-android.so",
+        "machine": "AArch64",
+        "minimum_load_alignment": 16384
+      },
+      {
+        "file": "android-arm64-v8a/python/lib/python3.14/lib-dynload/_multibytecodec.cpython-314-aarch64-linux-android.so",
+        "machine": "AArch64",
+        "minimum_load_alignment": 16384
+      },
+      {
+        "file": "android-arm64-v8a/python/lib/python3.14/lib-dynload/_pickle.cpython-314-aarch64-linux-android.so",
+        "machine": "AArch64",
+        "minimum_load_alignment": 16384
+      },
+      {
+        "file": "android-arm64-v8a/python/lib/python3.14/lib-dynload/_posixsubprocess.cpython-314-aarch64-linux-android.so",
+        "machine": "AArch64",
+        "minimum_load_alignment": 16384
+      },
+      {
+        "file": "android-arm64-v8a/python/lib/python3.14/lib-dynload/_queue.cpython-314-aarch64-linux-android.so",
+        "machine": "AArch64",
+        "minimum_load_alignment": 16384
+      },
+      {
+        "file": "android-arm64-v8a/python/lib/python3.14/lib-dynload/_random.cpython-314-aarch64-linux-android.so",
+        "machine": "AArch64",
+        "minimum_load_alignment": 16384
+      },
+      {
+        "file": "android-arm64-v8a/python/lib/python3.14/lib-dynload/_remote_debugging.cpython-314-aarch64-linux-android.so",
+        "machine": "AArch64",
+        "minimum_load_alignment": 16384
+      },
+      {
+        "file": "android-arm64-v8a/python/lib/python3.14/lib-dynload/_sha1.cpython-314-aarch64-linux-android.so",
+        "machine": "AArch64",
+        "minimum_load_alignment": 16384
+      },
+      {
+        "file": "android-arm64-v8a/python/lib/python3.14/lib-dynload/_sha2.cpython-314-aarch64-linux-android.so",
+        "machine": "AArch64",
+        "minimum_load_alignment": 16384
+      },
+      {
+        "file": "android-arm64-v8a/python/lib/python3.14/lib-dynload/_sha3.cpython-314-aarch64-linux-android.so",
+        "machine": "AArch64",
+        "minimum_load_alignment": 16384
+      },
+      {
+        "file": "android-arm64-v8a/python/lib/python3.14/lib-dynload/_socket.cpython-314-aarch64-linux-android.so",
+        "machine": "AArch64",
+        "minimum_load_alignment": 16384
+      },
+      {
+        "file": "android-arm64-v8a/python/lib/python3.14/lib-dynload/_sqlite3.cpython-314-aarch64-linux-android.so",
+        "machine": "AArch64",
+        "minimum_load_alignment": 16384
+      },
+      {
+        "file": "android-arm64-v8a/python/lib/python3.14/lib-dynload/_ssl.cpython-314-aarch64-linux-android.so",
+        "machine": "AArch64",
+        "minimum_load_alignment": 16384
+      },
+      {
+        "file": "android-arm64-v8a/python/lib/python3.14/lib-dynload/_statistics.cpython-314-aarch64-linux-android.so",
+        "machine": "AArch64",
+        "minimum_load_alignment": 16384
+      },
+      {
+        "file": "android-arm64-v8a/python/lib/python3.14/lib-dynload/_struct.cpython-314-aarch64-linux-android.so",
+        "machine": "AArch64",
+        "minimum_load_alignment": 16384
+      },
+      {
+        "file": "android-arm64-v8a/python/lib/python3.14/lib-dynload/_xxtestfuzz.cpython-314-aarch64-linux-android.so",
+        "machine": "AArch64",
+        "minimum_load_alignment": 16384
+      },
+      {
+        "file": "android-arm64-v8a/python/lib/python3.14/lib-dynload/_zoneinfo.cpython-314-aarch64-linux-android.so",
+        "machine": "AArch64",
+        "minimum_load_alignment": 16384
+      },
+      {
+        "file": "android-arm64-v8a/python/lib/python3.14/lib-dynload/_zstd.cpython-314-aarch64-linux-android.so",
+        "machine": "AArch64",
+        "minimum_load_alignment": 16384
+      },
+      {
+        "file": "android-arm64-v8a/python/lib/python3.14/lib-dynload/array.cpython-314-aarch64-linux-android.so",
+        "machine": "AArch64",
+        "minimum_load_alignment": 16384
+      },
+      {
+        "file": "android-arm64-v8a/python/lib/python3.14/lib-dynload/binascii.cpython-314-aarch64-linux-android.so",
+        "machine": "AArch64",
+        "minimum_load_alignment": 16384
+      },
+      {
+        "file": "android-arm64-v8a/python/lib/python3.14/lib-dynload/cmath.cpython-314-aarch64-linux-android.so",
+        "machine": "AArch64",
+        "minimum_load_alignment": 16384
+      },
+      {
+        "file": "android-arm64-v8a/python/lib/python3.14/lib-dynload/fcntl.cpython-314-aarch64-linux-android.so",
+        "machine": "AArch64",
+        "minimum_load_alignment": 16384
+      },
+      {
+        "file": "android-arm64-v8a/python/lib/python3.14/lib-dynload/math.cpython-314-aarch64-linux-android.so",
+        "machine": "AArch64",
+        "minimum_load_alignment": 16384
+      },
+      {
+        "file": "android-arm64-v8a/python/lib/python3.14/lib-dynload/mmap.cpython-314-aarch64-linux-android.so",
+        "machine": "AArch64",
+        "minimum_load_alignment": 16384
+      },
+      {
+        "file": "android-arm64-v8a/python/lib/python3.14/lib-dynload/pyexpat.cpython-314-aarch64-linux-android.so",
+        "machine": "AArch64",
+        "minimum_load_alignment": 16384
+      },
+      {
+        "file": "android-arm64-v8a/python/lib/python3.14/lib-dynload/resource.cpython-314-aarch64-linux-android.so",
+        "machine": "AArch64",
+        "minimum_load_alignment": 16384
+      },
+      {
+        "file": "android-arm64-v8a/python/lib/python3.14/lib-dynload/select.cpython-314-aarch64-linux-android.so",
+        "machine": "AArch64",
+        "minimum_load_alignment": 16384
+      },
+      {
+        "file": "android-arm64-v8a/python/lib/python3.14/lib-dynload/syslog.cpython-314-aarch64-linux-android.so",
+        "machine": "AArch64",
+        "minimum_load_alignment": 16384
+      },
+      {
+        "file": "android-arm64-v8a/python/lib/python3.14/lib-dynload/termios.cpython-314-aarch64-linux-android.so",
+        "machine": "AArch64",
+        "minimum_load_alignment": 16384
+      },
+      {
+        "file": "android-arm64-v8a/python/lib/python3.14/lib-dynload/unicodedata.cpython-314-aarch64-linux-android.so",
+        "machine": "AArch64",
+        "minimum_load_alignment": 16384
+      },
+      {
+        "file": "android-arm64-v8a/python/lib/python3.14/lib-dynload/xxlimited.cpython-314-aarch64-linux-android.so",
+        "machine": "AArch64",
+        "minimum_load_alignment": 16384
+      },
+      {
+        "file": "android-arm64-v8a/python/lib/python3.14/lib-dynload/xxlimited_35.cpython-314-aarch64-linux-android.so",
+        "machine": "AArch64",
+        "minimum_load_alignment": 16384
+      },
+      {
+        "file": "android-arm64-v8a/python/lib/python3.14/lib-dynload/xxsubtype.cpython-314-aarch64-linux-android.so",
+        "machine": "AArch64",
+        "minimum_load_alignment": 16384
+      },
+      {
+        "file": "android-arm64-v8a/python/lib/python3.14/lib-dynload/zlib.cpython-314-aarch64-linux-android.so",
+        "machine": "AArch64",
+        "minimum_load_alignment": 16384
+      }
+    ]
+  },
+  "scope": "Standalone runtime preparation; mdo app UID/APK integration and ai.xywhsoft.com deployment were not performed."
+}

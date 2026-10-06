@@ -13,6 +13,7 @@ static bool MdoApiUpdateStatus(MdoApiContext* Context)
         MdoApiValueSetBool(Data,"blocked",Status.Enabled && Status.Required && Status.Available) &&
         MdoApiValueSetString(Data,"status",Status.State) &&
         MdoApiValueSetString(Data,"platform",Status.Platform) &&
+        MdoApiValueSetString(Data,"edition",Status.Edition) && MdoApiValueSetUInt(Data,"build_id",Status.BuildId) &&
         MdoApiValueSetString(Data,"local_sha256",Status.LocalHash) &&
         MdoApiValueSetString(Data,"sha256",Status.Hash) &&
         MdoApiValueSetUInt(Data,"size",Status.Bytes) && MdoApiValueSetString(Data,"notes",Status.Notes) &&
@@ -23,8 +24,16 @@ static bool MdoApiUpdateStatus(MdoApiContext* Context)
 }
 bool MdoApiUpdateRoute(MdoApiContext* Context)
 {
-    if (Context->Request->head->MethodCode == XHTTP_METHOD_POST && !MdoUpdateCheck())
-        return MdoApiReplyError(Context,409,"update_busy","Update is disabled or busy",NULL);
+    if(Context->Request->head->MethodCode==XHTTP_METHOD_POST) {
+        MdoApiJsonBody Body={0};MdoApiBodyStatus Read=MdoApiJsonBodyRead(Context,&Body);char Edition[16]={0};xstrview View;
+        bool Ok=Read==MDO_API_BODY_OK||Read==MDO_API_BODY_MISSING;
+        if(Read==MDO_API_BODY_OK&&xrtValueObjectGet(Body.Value,XRT_STR_LITERAL("edition"))) {
+            Ok=xrtValueGetString(xrtValueObjectGet(Body.Value,XRT_STR_LITERAL("edition")),&View)&&View.Size<16&&!memchr(View.Data,0,View.Size);
+            if(Ok)memcpy(Edition,View.Data,View.Size);
+        }
+        MdoApiJsonBodyUnit(&Body);Ok=Ok&&(Edition[0]?MdoUpdateCheckEdition(Edition):MdoUpdateCheck());
+        if(!Ok)return MdoApiReplyError(Context,409,"update_busy","Update is disabled or busy",NULL);
+    }
     return MdoApiUpdateStatus(Context);
 }
 bool MdoApiUpdateDownloadRoute(MdoApiContext* Context)

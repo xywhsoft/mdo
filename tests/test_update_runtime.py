@@ -54,11 +54,12 @@ def run(host):
         (site / "fixture.exe").write_bytes(SOURCE)
         port = free_port()
         (site / "probe.c").write_text(
+            '#define MDO_DISTRIBUTION_HOST \"127.0.0.1\"\n#define MDO_DISTRIBUTION_SECURE false\n#define MDO_DISTRIBUTION_PORT ' + str(publisher.server_port) + '\n'
             '#define MDO_UPDATE_ORIGIN "http://127.0.0.1:' + str(publisher.server_port) + '"\n'
             '#define RequestProc ProductRequestProc\n#define ServiceInit ProductServiceInit\n#include "generated/mdo_unity.c"\n#undef ServiceInit\n#undef RequestProc\n'
-            'void ServiceInit(XS_HostInfo* host) {\n ProductServiceInit(host); MdoUpdateUnit();\n'
+            'void ServiceInit(XS_HostInfo* host) {\n ProductServiceInit(host); MdoUpdateUnit(); MdoUpdateSetEngine(host->Server->Engine);\n'
             'g_MdoUpdate.Lock=xrtMutexCreate(); g_MdoUpdate.Source=xrtStrDup("' + (site / "fixture.exe").as_posix() + '");\n'
-            'g_MdoUpdate.Status.Enabled=true; strcpy(g_MdoUpdate.Status.Platform,"windows-x86_64");\n'
+            'g_MdoUpdate.Status.Enabled=true; strcpy(g_MdoUpdate.Status.Platform,"windows-x86_64"); strcpy(g_MdoUpdate.Status.Edition,"desktop");\n'
             'MdoUpdatePolicyLoad(&g_MdoUpdate.Status);\n'
             'g_MdoUpdate.Thread=xrtThreadCreate(MdoUpdateThread,NULL,0); MdoUpdateCheck();\n}\n'
             'XS_RequestResult RequestProc(XS_HttpReq* req) {\n'
@@ -96,6 +97,7 @@ def run(host):
                 wait_ready(port, proc)
                 value = settled()
                 assert value["status"] == "current" and value["local_sha256"] == hashlib.sha256(SOURCE).hexdigest(), value
+                assert value["edition"] == "desktop", value
                 assert not home.exists(), "startup checks must not create Home"
                 print("PASS matching hash; startup is read only")
                 Published.package = NEXT

@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import argparse
-import datetime
 import hashlib
 import os
 from pathlib import Path
@@ -53,9 +52,13 @@ def main() -> int:
     parser.add_argument("--output", type=Path, default=ROOT / "mdo-arm64-v8a.apk")
     parser.add_argument("--build-dir", type=Path, default=ROOT / ".build/android")
     parser.add_argument("--keystore", type=Path, default=ROOT / ".build/android-signing/development.p12")
-    parser.add_argument("--version-code", type=int, default=int(datetime.date.today().strftime("%Y%m%d")))
+    parser.add_argument("--version-code", type=int, default=None)
     parser.add_argument("--debuggable", action="store_true")
+    parser.add_argument("--edition", choices=("lite", "full"), default="lite")
     args = parser.parse_args()
+    release = build_mdo.load_object(ROOT / "app/release.json")
+    if args.version_code is None: args.version_code = release["android_" + args.edition + "_build_id"]
+    if not 10000000 <= args.version_code <= 99999999: parser.error("version-code must be an eight-digit build ID")
     try:
         if args.wsl and os.name != "nt":
             raise build_mdo.BuildError("--wsl is a Windows driver option")
@@ -82,11 +85,11 @@ def main() -> int:
 
         def target_run(script: Path, arguments: list[str]) -> None:
             if args.wsl:
-                command = ["wsl", "-e", "env", "XS_BUILD_COMMIT=" + revision, "python3", linux_path(script), *arguments]
+                command = ["wsl", "-e", "env", "XS_BUILD_COMMIT=" + revision, "MDO_ANDROID_XSERVER_ROOT=" + linux_path(sdk_source), "MDO_ANDROID_EDITION=" + args.edition, "python3", linux_path(script), *arguments]
                 subprocess.run(command, cwd=ROOT, check=True)
             else:
                 subprocess.run([sys.executable, str(script), *arguments], cwd=ROOT, check=True,
-                               env={**os.environ, "XS_BUILD_COMMIT": revision})
+                               env={**os.environ, "XS_BUILD_COMMIT": revision, "MDO_ANDROID_XSERVER_ROOT": str(sdk_source), "MDO_ANDROID_EDITION": args.edition})
 
         path = linux_path if args.wsl else lambda p: str(p.resolve())
         if not args.skip_native_build:
@@ -94,13 +97,13 @@ def main() -> int:
                 "--sdk", args.sdk, "--out", path(native), "--cc", args.cc,
                 *([] if args.full_host else ["--profile", path(build_mdo.HOST_PROFILE_PATH)])])
         build_mdo.verify_host_receipt(native / "libxs.so", lock, args.full_host)
-        target_run(sdk_source / "tools/android/build_apk.py", ["--sdk", args.sdk, "--java-home", args.java_home,
+        target_run(ROOT / "tools/android/build_apk.py", ["--sdk", args.sdk, "--java-home", args.java_home,
             "--library", path(native / "libxs.so"), "--pack", path(pack), "--output", path(args.output),
             "--app-link", "https://ai.xywhsoft.com/app/mdo/callback",
             "--package", "org.xleaves.mdo", "--label", "@string/app_name", "--home-name", "mdo-home",
             "--resources", path(ROOT / "assets/branding/android/res"),
             "--package-install",
-            "--version", "0.1.0-dev", "--version-code", str(args.version_code), "--keystore", path(args.keystore),
+            "--version", release["version_name"], "--version-code", str(args.version_code), "--keystore", path(args.keystore),
             *(["--debuggable"] if args.debuggable else [])])
         print("[mdo] APK SHA256 " + hashlib.sha256(args.output.read_bytes()).hexdigest())
         return 0

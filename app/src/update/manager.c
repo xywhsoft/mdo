@@ -1,3 +1,4 @@
+#include "../../include/mdo/distribution.h"
 #include <stdio.h>
 #include <string.h>
 #include "../../include/mdo/update.h"
@@ -9,11 +10,12 @@
 #ifndef MDO_UPDATE_ORIGIN
 #define MDO_UPDATE_ORIGIN "https://ai.xywhsoft.com"
 #endif
-#define MDO_UPDATE_LIMIT (32u*1024u*1024u)
+#define MDO_UPDATE_LIMIT (512u*1024u*1024u)
 #ifndef MDO_UPDATE_CHECK_INTERVAL
 #define MDO_UPDATE_CHECK_INTERVAL UINT64_C(600000000)
 #endif
 static struct {
+    xnetengine* Engine;
     xmutex* Lock;
     xthread* Thread;
     xcancel* Cancel;
@@ -92,7 +94,7 @@ static void MdoUpdateDoCheck(MdoUpdateStatus* Status)
         MdoUpdateComplete(Status,"error","Cannot hash the running package"); return;
     }
     Next = *Status;
-    snprintf(Url,sizeof(Url),MDO_UPDATE_ORIGIN "/update/version?platform=%s",Status->Platform);
+    snprintf(Url,sizeof(Url),MDO_UPDATE_ORIGIN "/update/version?platform=%s&edition=%s&build_id=%llu",Status->Platform,Status->Edition,(unsigned long long)MdoBuildId());
     Ok = MdoUpdateFetch(Url,8192,&Response);
     if (Ok && Response.Status == 404) {
         /* Absence is not an authenticated policy revocation. Keep a known
@@ -111,9 +113,9 @@ static void MdoUpdateDoCheck(MdoUpdateStatus* Status)
     xrtJsonReadConfigInit(&Config); Config.MaxInputBytes = 8192;
     Config.MaxDepth = 4; Config.MaxValues = 64;
     Root = xrtJsonRead(xrtStrViewN((cstr)Response.Body,Response.BodySize),&Config);
-    Ok = MdoUpdatePolicyParse(Root,&Next);
+    Ok = MdoUpdatePolicyParse(Root,&Next) && !strcmp(Next.Edition,Status->Edition);
     if (!Ok) { MdoUpdateComplete(Status,"error","Invalid update metadata"); goto done; }
-    Next.Available = strcmp(Status->LocalHash,Next.Hash) != 0;
+    Next.Available = strcmp(Status->LocalHash,Next.Hash) != 0 && (!Next.BuildId || Next.BuildId>MdoBuildId());
     Next.Ready = Next.Available && Status->Ready && !strcmp(Status->Hash,Next.Hash);
     Ok = MdoUpdatePolicySave(&Next);
     *Status = Next;
@@ -124,29 +126,18 @@ done:
 }
 static void MdoUpdateDoDownload(MdoUpdateStatus* Status)
 {
-    char Url[256], Hash[65]; uint8 Digest[32]; XS_FetchResponse Response; bool Ok;
-    snprintf(Url,sizeof(Url),MDO_UPDATE_ORIGIN "/update/download/%s/%s",Status->Platform,Status->Hash);
-    Ok = MdoUpdateFetch(Url,(size_t)Status->Bytes,&Response);
-    Ok = Ok && Response.Status == 200 && Response.BodySize == Status->Bytes &&
-        xrtSha256(Response.Body,Response.BodySize,Digest);
-    if (Ok) { MdoUpdateHex(Digest,Hash); Ok = !strcmp(Hash,Status->Hash); }
-    if (Ok && !strcmp(Status->Platform,"windows-x86_64"))
-        Ok = Response.BodySize > 32 && !memcmp(Response.Body,"MZ",2) &&
-            !memcmp(Response.Body+Response.BodySize-32,"XRTPEND\0",8);
-    if (Ok && !xrtCancelRequested(g_MdoUpdate.Cancel))
-        Ok = MdoHomeAtomicWrite(!strcmp(Status->Platform,"windows-x86_64") ?
-            "data/update/new.exe" : "data/update/new.apk",Response.Body,Response.BodySize,false);
-    else Ok = false;
-    if (Ok) {
-        str Path = MdoHomeExternalPath(!strcmp(Status->Platform,"windows-x86_64") ?
-            "data/update/new.exe" : "data/update/new.apk");
-        Ok = Path && MdoUpdateFileHash(Path,Hash,false) && !strcmp(Hash,Status->Hash); xrtFree(Path);
-    }
-    Status->Ready = Ok;
-    MdoUpdateComplete(Status,Ok ? "ready" : "available",Ok ? "" :
-        "Download failed or checksum mismatch; the running package was not changed");
-    xsFetchResponseUnit(&Response);
+    char Path[160], Hash[65];
+    snprintf(Path,sizeof(Path),"%s",Status->DownloadPath);
+    if(!Path[0])snprintf(Path,sizeof(Path),"/update/download/%s/%s",Status->Platform,Status->Hash);
+    cstr Relative=!strcmp(Status->Platform,"windows-x86_64")?"data/update/new.exe":"data/update/new.apk";
+    bool Ok=MdoTransferDownload(g_MdoUpdate.Engine,Path,Relative,Status->Bytes,Status->Hash,g_MdoUpdate.Cancel);
+    str Native=Ok?MdoHomeExternalPath(Relative):NULL;
+    if(Ok)Ok=Native&&MdoUpdateFileHash(Native,Hash,!strcmp(Status->Platform,"windows-x86_64"))&&!strcmp(Hash,Status->Hash);
+    xrtFree(Native); if(!Ok)MdoHomeRemove(Relative,false);
+    Status->Ready=Ok;
+    MdoUpdateComplete(Status,Ok?"ready":"available",Ok?"":"Download failed or checksum mismatch");
 }
+
 static bool MdoUpdateIdle(void)
 {
     MdoRunManagerStatus Runs = {0}; MdoScheduleExecutorSnapshot Schedules = {0};
@@ -259,6 +250,13 @@ static bool MdoUpdateRequest(unsigned Command)
     xrtMutexUnlock(g_MdoUpdate.Lock); return Ok;
 }
 bool MdoUpdateCheck(void) { return MdoUpdateRequest(1); }
+bool MdoUpdateCheckEdition(cstr Edition)
+{
+    if(!g_MdoUpdate.Lock||!Edition||strcmp(MdoToolPlatform(),"android-arm64-v8a")||(strcmp(Edition,"lite")&&strcmp(Edition,"full")))return false;
+    xrtMutexLock(g_MdoUpdate.Lock);bool Ok=!g_MdoUpdate.Status.Busy&&!(g_MdoUpdate.Status.Required&&g_MdoUpdate.Status.Available);
+    if(Ok)snprintf(g_MdoUpdate.Status.Edition,sizeof(g_MdoUpdate.Status.Edition),"%s",Edition);
+    xrtMutexUnlock(g_MdoUpdate.Lock);return Ok&&MdoUpdateRequest(1);
+}
 bool MdoUpdateDownload(void) { return MdoUpdateRequest(2); }
 bool MdoUpdateInstall(void) { return MdoUpdateRequest(3); }
 bool MdoUpdateExit(void) { return MdoUpdateRequest(4); }
@@ -283,12 +281,14 @@ bool MdoUpdateBlocked(void)
     MdoUpdateStatus Status;
     return MdoUpdateGetStatus(&Status) && Status.Enabled && Status.Required && Status.Available;
 }
+void MdoUpdateSetEngine(xnetengine* Engine) {g_MdoUpdate.Engine=Engine;}
 bool MdoUpdateInit(void)
 {
     if (g_MdoUpdate.Lock) return true;
     g_MdoUpdate.Lock = xrtMutexCreate();
     if (!g_MdoUpdate.Lock) return false;
     snprintf(g_MdoUpdate.Status.State,sizeof(g_MdoUpdate.Status.State),"disabled");
+    snprintf(g_MdoUpdate.Status.Edition,sizeof(g_MdoUpdate.Status.Edition),"%s",MdoEdition());
     xfile ResultFile = MdoHomeOpenRead("data/update/install-result.json");
     if (ResultFile) {
         char Text[2048]; size_t Bytes = 0; uint64 Length = 0;
