@@ -284,7 +284,7 @@ static bool ExtensionMcpCredentials(char** Text,const xvalue* Inputs,
                     n=n*10u+(size_t)(Ref.Data[j]-'0');
                 }
                 if (!Ok || !Inputs || n>=xrtValueCount(Inputs) || *Count>=32u ||
-                    !xrtValueGetString(xrtValueArrayGet(Inputs,n),&Value) || Value.Size==0u || Value.Size>8192u ||
+                    !xrtValueGetString(xrtValueArrayGet(Inputs,n),&Value) || Value.Size==0u || Value.Size>4096u ||
                     memchr(Value.Data,0,Value.Size)) { Ok=false; break; }
                 Owned=xrtStrDupN(Value.Data,Value.Size); if (!Owned) { Ok=false; break; }
                 Ok=MdoSecretStore(Owned,References[*Count]);

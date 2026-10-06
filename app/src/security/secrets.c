@@ -72,7 +72,9 @@ bool MdoSecretStore(cstr Value, char Reference[MDO_SECRET_VAULT_REFERENCE_CAPACI
     size_t Size, EnvelopeSize = 0u, i; bool Ok;
     if ( Value == NULL || Reference == NULL || (Size = strlen(Value)) == 0u || Size > 4096u ) return false;
     Reference[0] = '\0';
-    for ( i = 0u; i < Size; i++ ) if ((unsigned char)Value[i] < 33u || (unsigned char)Value[i] > 126u) return false;
+    /* Consumers validate their own syntax: HTTP auth can contain spaces,
+     * and environment credentials can contain non-ASCII text. */
+    if ( !xrtUtf8Valid((xstrview){ Value, Size }, NULL) ) return false;
     if ( !xrtSecureRandom(Random, sizeof(Random)) ) return false;
     strcpy(Reference, "vault:");
     for ( i = 0u; i < sizeof(Random); i++ ) snprintf(Reference + 6u + i * 2u, 3u, "%02x", Random[i]);

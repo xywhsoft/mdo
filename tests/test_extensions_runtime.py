@@ -131,7 +131,8 @@ def main():
                 assert call('DELETE', 'commands/review', revision=revision)[0] == 200
                 marker = base / 'mcp-started.txt'
                 mock = base / 'mcp_mock.py'
-                mock.write_text('from pathlib import Path\nPath(' + repr(str(marker)) + ").write_text('started')\n" + MCP_MOCK_SERVER)
+                credential = 'fixture MCP key with spaces 中文'
+                mock.write_text('import os\nfrom pathlib import Path\nassert os.environ["MOCK_KEY"] == ' + repr(credential) + '\nPath(' + repr(str(marker)) + ").write_text('started')\n" + MCP_MOCK_SERVER, encoding='utf-8')
                 mcp = {'schema_version': 1, 'id': 'mock', 'name': 'Local mock',
                     'description': 'Bounded connection test', 'enabled': True,
                     'transport': {'type': 'stdio', 'program': sys.executable,
@@ -142,12 +143,20 @@ def main():
                     'tools': {'allow': [], 'deny': []}, 'security': {
                         'default_effects': ['external-service'], 'permission_profile': 'balanced',
                         'trust_read_only_annotations': False}, 'auto_reconnect': True}
-                status, data = call('PUT', 'mcp/mock', {'content': json.dumps(mcp), 'secrets': ['fixture-mcp-key']}, 'new')
+                status, data = call('PUT', 'mcp/mock', {'content': json.dumps(mcp), 'secrets': [credential]}, 'new')
                 assert status == 200, data
                 mcp_revision = data['data']['revision']
                 assert not marker.exists(), 'Saving launched an MCP program'
                 stored = (base / 'home/mcp/mock.json').read_text()
-                assert 'fixture-mcp-key' not in stored and 'vault:' in stored, stored
+                assert 'fixture MCP' not in stored and 'vault:' in stored, stored
+                http_mcp = {**mcp, 'id': 'http-mock', 'transport': {
+                    'type': 'streamable-http', 'endpoint': 'https://example.com/mcp',
+                    'headers': [{'name': 'Authorization', 'secret_ref': 'input:0'}]}}
+                status, data = call('PUT', 'mcp/http-mock', {'content': json.dumps(http_mcp), 'secrets': ['Bearer fixture token']}, 'new')
+                assert status == 200, data
+                http_revision = data['data']['revision']
+                assert 'Bearer fixture' not in (base / 'home/mcp/http-mock.json').read_text()
+                assert call('DELETE', 'mcp/http-mock', revision=http_revision)[0] == 200
                 status, _, raw_op = request(port, 'POST', '/api/v1/mcp/mock/refresh')
                 assert status == 202, raw_op
                 op = json.loads(raw_op)['data']

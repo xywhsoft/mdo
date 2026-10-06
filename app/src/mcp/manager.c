@@ -925,6 +925,9 @@ static bool MdoMcpSecretReferenceSyntaxValid(xstrview Reference)
         "env:", "file:", "keychain:", "prompt:"
     };
     size_t i;
+    if ( Reference.Data != NULL && Reference.Size >= 6u &&
+         memcmp(Reference.Data, "vault:", 6u) == 0 )
+        return MdoSecretReferenceSyntaxValid(Reference);
     if ( Reference.Data == NULL || Reference.Size == 0u ||
          Reference.Size > MDO_MCP_STRING_LIMIT ||
          MdoMcpBytesContainZero(Reference.Data, Reference.Size) ) return false;

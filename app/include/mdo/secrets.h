@@ -6,7 +6,8 @@
 bool MdoSecretReferenceSyntaxValid(xstrview Reference);
 
 #define MDO_SECRET_VAULT_REFERENCE_CAPACITY 71u
-/* A new immutable, device-sealed credential. Never overwrites an existing key.
+/* A new immutable, device-sealed credential: nonempty UTF-8, up to 4096 bytes.
+ * Consumers validate protocol-specific syntax. Never overwrites an existing key.
  * Call Discard only when the enclosing config transaction did not commit. */
 bool MdoSecretStore(cstr Value, char Reference[MDO_SECRET_VAULT_REFERENCE_CAPACITY]);
 bool MdoSecretDiscard(cstr Reference);
