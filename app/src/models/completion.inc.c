@@ -6,7 +6,9 @@
 #endif
 #define MDO_MODEL_MAX_ATTEMPTS 6u
 #define MDO_MODEL_RETRY_MAX_MS 30000u
+#ifndef MDO_MODEL_RECOVERY_MS
 #define MDO_MODEL_RECOVERY_MS 120000u
+#endif
 
 static bool MdoModelsCode(const xllm_error* Error, const char* Code)
 {
@@ -23,6 +25,8 @@ const char* MdoModelErrorKind(const xllm_error* Error)
     if (Error->eCode == XLLM_ERROR_CANCELLED) return "cancelled";
     if (Error->eCode == XLLM_ERROR_TIMEOUT) return "timeout";
     if (Error->eCode == XLLM_ERROR_OUTPUT_LIMIT) return "output_limit";
+    if (MdoModelsCode(Error, "upstream_quota_exceeded")) return "service_quota_exceeded";
+    if (MdoModelsCode(Error, "upstream_configuration_error")) return "service_configuration";
     if (MdoModelsCode(Error, "daily_token_limit")) return "daily_token_limit";
     if (MdoModelsCode(Error, "insufficient_balance")) return "insufficient_balance";
     if (MdoModelsCode(Error, "insufficient_quota") ||
@@ -67,6 +71,10 @@ const char* MdoModelErrorMessage(const xllm_error* Error)
         "The account has insufficient available balance for this request. Check the account balance or choose another model.";
     if (!strcmp(Kind, "quota_exceeded")) return
         "The model service's request or spending allowance has been reached. Check account usage or choose another model.";
+    if (!strcmp(Kind, "service_quota_exceeded")) return
+        "The upstream model provider's allowance is exhausted. Choose another model or wait for its allowance to reset.";
+    if (!strcmp(Kind, "service_configuration")) return
+        "The model service's credentials, permissions or subscription are unavailable. Choose another model or contact the service administrator.";
     if (!strcmp(Kind, "membership_required")) return
         "Your membership does not include this model. Choose an available model or update your membership.";
     if (!strcmp(Kind, "login_required")) return
@@ -199,10 +207,17 @@ static xllm_result MdoModelsComplete(xllm_client* Client, const xllm_request* Re
         xrtAtomic32Init(&Guard.Stopped, 0u);
         Stream.pUserData = &Guard;
         Stream.OnEvent = MdoModelsStream;
+        xllm_request AttemptRequest = *ActiveRequest;
+        if (RecoveryStarted) {
+            uint64 RecoveryEnd = RecoveryStarted + (uint64)MDO_MODEL_RECOVERY_MS * 1000u;
+            if (AttemptRequest.uDeadline == XRT_DEADLINE_NEVER ||
+                AttemptRequest.uDeadline > RecoveryEnd)
+                AttemptRequest.uDeadline = RecoveryEnd;
+        }
         Result = MdoModelsScope(Request, &Error);
         if (Result != XLLM_RESULT_OK) { Retryable = false; break; }
         ++AttemptsMade;
-        Result = xllmClientComplete(Client, ActiveRequest, Callbacks ? &Stream : NULL,
+        Result = xllmClientComplete(Client, &AttemptRequest, Callbacks ? &Stream : NULL,
             Response, &Error);
         if (Result == XLLM_RESULT_OK) break;
         if (MdoModelsScope(Request, &Error) != XLLM_RESULT_OK) {

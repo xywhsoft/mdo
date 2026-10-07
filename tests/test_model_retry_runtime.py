@@ -10,6 +10,7 @@ from pathlib import Path
 import socket
 import tempfile
 import threading
+import time
 
 from test_model_runtime import ROOT, run_probe, write_site
 
@@ -19,6 +20,7 @@ PROBE = r'''
 #include <string.h>
 #include <xsbase.h>
 #define MDO_MODEL_RETRY_BASE_MS 10u
+#define MDO_MODEL_RECOVERY_MS 1200u
 #include "src/storage/home.c"
 #include "src/config/config.c"
 #include "src/security/secrets.c"
@@ -53,10 +55,10 @@ void ServiceInit(XS_HostInfo* Host) {
     xllm_client* Client=MdoModelClientCreate(Catalog,&Options,NULL,&Error);
     if (!Client) {printf("client_failed=%s\nprobe_done=1\n",Error.sMessage); return;}
     const char* Names[]={"transient","network","daily","balance","quota",
-        "membership","authentication","invalid","exhausted","retry-after",
+        "membership","authentication","service-quota","service-config","invalid","exhausted","retry-after",
         "cancel","deadline","partial","hook-stop","partial-recover",
         "eof-protected","eof-recover","eof-exhausted",
-        "output-protected","output-recover","output-exhausted","malformed-recover"};
+        "output-protected","output-recover","output-exhausted","malformed-recover","recovery-budget"};
     for (unsigned i=0;i<sizeof(Names)/sizeof(Names[0]);++i) {
         Observer O={0}; xllm_request Request; xllmRequestInit(&Request);
         xllmRequestAddTextMessage(&Request,XLLM_ROLE_USER,Names[i]);
@@ -73,6 +75,7 @@ void ServiceInit(XS_HostInfo* Host) {
         if (!strcmp(Names[i],"hook-stop")) O.Stop=true;
         xllm_response* Response=NULL;
         uint64 Started=xrtClock();
+        uint64 OriginalDeadline=Request.uDeadline;
         bool Restartable=strstr(Names[i],"recover") || strstr(Names[i],"exhausted");
         xllm_result Result=Restartable?
             MdoModelCompleteRestartable(Client,&Request,&Stream,&Response,&Error):
@@ -81,7 +84,7 @@ void ServiceInit(XS_HostInfo* Host) {
             Names[i],Result,MdoModelErrorKind(&Error),Error.tDiagnostics.uAttemptCount,
             O.Retries,O.Deltas,Error.tDiagnostics.bRetryExhausted?1:0,
             (unsigned long long)((xrtClock()-Started)/1000u));
-        if (Request.iMessageCount!=1u || Request.uMaxOutputTokens!=128u)
+        if (Request.iMessageCount!=1u || Request.uMaxOutputTokens!=128u || Request.uDeadline!=OriginalDeadline)
             printf("request_mutated=1\n");
         if (!strcmp(Names[i],"daily") && strstr(Error.sMessage,"00:00 Asia/Shanghai"))
             printf("daily_message=accurate\n");
@@ -140,6 +143,8 @@ class Model(BaseHTTPRequestHandler):
             self.close_connection = True
             self.connection.shutdown(socket.SHUT_RDWR)
             return
+        if name == 'recovery-budget' and attempt > 1:
+            time.sleep(2)
         if name == 'partial' or (name == 'partial-recover' and attempt == 1):
             self.send_response(200)
             self.send_header('Content-Type', 'text/event-stream')
@@ -172,6 +177,8 @@ class Model(BaseHTTPRequestHandler):
             'quota': (429, 'insufficient_quota'),
             'membership': (403, 'membership_required'),
             'authentication': (401, 'invalid_api_key'),
+            'service-quota': (429, 'upstream_quota_exceeded'),
+            'service-config': (401, 'upstream_configuration_error'),
             'invalid': (400, 'invalid_request'),
             'exhausted': (503, 'service_unavailable'),
             'cancel': (429, 'rate_limit_exceeded'),
@@ -182,6 +189,8 @@ class Model(BaseHTTPRequestHandler):
             failure = (429 if attempt == 1 else 503, 'rate_limit_exceeded')
         if name == 'retry-after' and attempt == 1:
             failure = (429, 'rate_limit_exceeded')
+        if name == 'recovery-budget' and attempt == 1:
+            failure = (503, 'service_unavailable')
         if failure:
             status, code = failure
             payload = {'error': {'code': code, 'type': code, 'message': 'fixture-only'}}
@@ -198,7 +207,7 @@ class Model(BaseHTTPRequestHandler):
         if name == 'retry-after' and attempt == 1:
             self.send_header('Retry-After-Ms', '80')
         if name in ('cancel', 'deadline'):
-            self.send_header('Retry-After', '60')
+            self.send_header('Retry-After', '1')
         self.end_headers()
         self.wfile.write(raw)
 
@@ -226,7 +235,10 @@ def main():
             expected = {'transient': (0, 'unknown', 3), 'network': (0, 'unknown', 2),
                         'daily': (-1, 'daily_token_limit', 1), 'balance': (-1, 'insufficient_balance', 1),
                         'quota': (-1, 'quota_exceeded', 1), 'membership': (-1, 'membership_required', 1),
-                        'authentication': (-1, 'authentication_failed', 1), 'invalid': (-1, 'invalid_request', 1),
+                        'authentication': (-1, 'authentication_failed', 1),
+                        'service-quota': (-1, 'service_quota_exceeded', 1),
+                        'service-config': (-1, 'service_configuration', 1),
+                        'invalid': (-1, 'invalid_request', 1),
                         'exhausted': (-1, 'service_unavailable', 6), 'retry-after': (0, 'unknown', 2),
                         'cancel': (-3, 'cancelled', 1), 'deadline': (-2, 'timeout', 1),
                         'partial': (-1, 'network', 1), 'hook-stop': (-3, 'cancelled', 1),
@@ -237,7 +249,8 @@ def main():
                         'output-protected': (-1, 'output_limit', 1),
                         'output-recover': (0, 'unknown', 2),
                         'output-exhausted': (-1, 'output_limit', 6),
-                        'malformed-recover': (0, 'unknown', 2)}
+                        'malformed-recover': (0, 'unknown', 2),
+                        'recovery-budget': (-2, 'timeout', 2)}
             for name, (result, kind, count) in expected.items():
                 assert f'case={name} result={result} kind={kind} attempts={count}' in output, output
                 assert Model.calls[name] == count, (name, Model.calls, output)
@@ -249,6 +262,8 @@ def main():
             assert int(after.split('ms=')[1]) >= 80, output
             cancelled = next(line for line in output.splitlines() if line.startswith('case=cancel '))
             assert int(cancelled.split('ms=')[1]) < 1000 and 'exhausted=0' in cancelled, output
+            budget = next(line for line in output.splitlines() if line.startswith('case=recovery-budget '))
+            assert 1000 <= int(budget.split('ms=')[1]) < 1800 and 'exhausted=1' in budget, output
             print(output[output.find('case='):output.find('probe_done=')])
         print('Model retry, business classification, deadline, cancellation and partial-output protection: PASS')
     finally:

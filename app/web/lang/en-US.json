@@ -1855,6 +1855,8 @@
   "model.error.timeout": "The model did not finish within the allowed time. Your conversation is saved; continue when the service recovers.",
   "model.error.network": "The model service connection could not be restored. Check the network; your conversation is saved and can be continued.",
   "model.error.service_unavailable": "The model service is temporarily unavailable. Your conversation is saved; continue later.",
+  "model.error.service_quota_exceeded": "The upstream model provider's allowance is exhausted. Choose another model or wait for its allowance to reset.",
+  "model.error.service_configuration": "The model service's credentials, permissions or subscription are unavailable. Choose another model or contact the service administrator.",
   "model.error.output_limit": "The model reached its output limit before completing a tool call. Automatic recovery did not succeed; increase the output limit or ask for smaller steps. Your conversation is saved.",
   "model.error.invalid_response": "The model service returned an incomplete or invalid response. Your conversation is saved; continue or choose another model.",
   "model.error.invalid_request": "The model service rejected the request settings. Check the model, API protocol and supported options."

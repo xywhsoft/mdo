@@ -7,6 +7,7 @@ const kinds = new Set([
   "model_unavailable", "context_limit", "request_too_large", "rate_limited",
   "timeout", "network", "service_unavailable", "invalid_response", "invalid_request",
   "output_limit",
+  "service_quota_exceeded", "service_configuration",
 ]);
 
 // Classifications come from the server; unknown/older records retain their

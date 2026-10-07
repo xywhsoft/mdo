@@ -23,6 +23,10 @@ test("final model errors use the UI language and preserve unknown explanations",
       assert.notEqual(limit, "raw");
       assert.match(limit, locale === "zh-CN" ? /输出上限/ :
         locale === "ru-RU" ? /лимита вывода/ : /output limit/);
+      assert.match(errorMessage({ code: "model_service_quota_exceeded", message: "raw" }),
+        locale === "zh-CN" ? /提供方/ : locale === "ru-RU" ? /поставщика/ : /upstream/);
+      assert.match(errorMessage({ code: "model_service_configuration", message: "raw" }),
+        locale === "zh-CN" ? /管理员/ : locale === "ru-RU" ? /администратору/ : /administrator/);
       assert.equal(eventsToTimeline([{ kind: "error", event_id: 9,
         run_id: "b", model_error_kind: "future_kind", text: "Specific new cause" }])[0].text,
       "Specific new cause");
