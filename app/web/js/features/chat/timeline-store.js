@@ -1,5 +1,6 @@
 import { liveConnection } from "../../api/live.js";
 import { api, resourceId } from "../../api/client.js";
+import { isTransientReadError } from "../../api/read-recovery.js";
 import { createResourceStore } from "../../state/store.js";
 import { mergeConversationTurns, summarizeConversationEvents } from "./conversation-history.js";
 import { t } from "../../i18n.js";
@@ -24,6 +25,11 @@ let pollDelay = FALLBACK_POLL_MS;
 let historyRequest = null;
 let indexRequest = null;
 let selectionAbort = null;
+let initialRequest = null;
+
+// These are background reads, never mutation retries. Temporary transport or
+// service failures keep the last conversation visible and retry with a cap.
+export const isTransientTimelineError = isTransientReadError;
 
 function endpoint(data) {
   return `/projects/${data.projectId}/sessions/${data.sessionId}`;
@@ -65,8 +71,11 @@ function stopTimer() {
 
 function schedulePoll(token) {
   stopTimer();
-  if (token !== generation || document.hidden || liveConnection.isConnected()) return;
-  pollTimer = window.setTimeout(() => refreshTimeline(token), pollDelay);
+  const current = timelineStore.get().data;
+  if (token !== generation || document.hidden ||
+      (liveConnection.isConnected() && !current?.initializing)) return;
+  pollTimer = window.setTimeout(() => current?.initializing
+    ? loadInitialTimeline(token) : refreshTimeline(token), pollDelay);
 }
 
 async function refreshTimeline(token = generation) {
@@ -100,7 +109,7 @@ async function refreshTimeline(token = generation) {
       cursor = next;
       if (additions.length < 32 || cursor >= latestEventId) break;
     }
-    if (changed) {
+    if (changed || timelineStore.get().status === "error") {
       const latest = timelineStore.get().data;
       events = mergeTimelineEvents(latest.events, events).events;
       timelineStore.setData({ ...latest, cursor, latestEventId, historyLost, events,
@@ -112,8 +121,8 @@ async function refreshTimeline(token = generation) {
   } catch (error) {
     if (!isCurrent()) return;
     if (error?.code !== "session_events_unavailable" && error?.code !== "session_not_found") {
-      timelineStore.setError(error);
-      pollDelay = FALLBACK_POLL_MS;
+      if (!isTransientTimelineError(error)) timelineStore.setError(error);
+      pollDelay = Math.min(pollDelay * 2, 15_000);
     }
   } finally {
     if (isCurrent()) schedulePoll(token);
@@ -134,6 +143,7 @@ async function reloadTimeline(projectId, sessionId) {
   selectionAbort?.abort();
   selectionAbort = new AbortController();
   historyRequest = indexRequest = null;
+  initialRequest = null;
   liveConnection.select("", "");
   stopTimer();
   pollDelay = FALLBACK_POLL_MS;
@@ -148,27 +158,43 @@ async function reloadTimeline(projectId, sessionId) {
     initializing: true,
     hasOlder: false,
   });
-  try {
-    const current = timelineStore.get().data;
-    const page = (await api.get(`${endpoint(current)}/turns?limit=64`,
-      { signal: selectionAbort.signal })).data;
+  return loadInitialTimeline(token);
+}
+
+function loadInitialTimeline(token) {
+  if (token !== generation) return Promise.resolve();
+  if (initialRequest) return initialRequest;
+  const request = Promise.resolve().then(async () => {
     if (token !== generation) return;
-    const selected = page.items.slice(-4);
-    const start = selected[0]?.first_event_id ?? Math.max(1, page.latest_event_id);
-    const events = await readHistoryRange(current, start, page.latest_event_id, token);
-    if (token !== generation) return;
-    timelineStore.setData({ ...current, initializing: false, cursor: page.latest_event_id,
-      latestEventId: page.latest_event_id, events, turns: page.items,
-      firstLoadedTurn: selected[0]?.first_event_id ?? 0,
-      hasOlder: Boolean(page.has_more || page.items.length > selected.length),
-      indexHasMore: page.has_more, indexBefore: page.next_before,
-      historyLost: Boolean(page.history_lost) });
-    subscribeLiveTimeline();
-    if (!liveConnection.isConnected()) await refreshTimeline(token);
-  } catch (error) {
-    if (token !== generation || error.name === "AbortError") return;
-    timelineStore.setError(error);
-  }
+    try {
+      const current = timelineStore.get().data;
+      const page = (await api.get(`${endpoint(current)}/turns?limit=64`,
+        { signal: selectionAbort.signal })).data;
+      if (token !== generation) return;
+      const selected = page.items.slice(-4);
+      const start = selected[0]?.first_event_id ?? Math.max(1, page.latest_event_id);
+      const events = await readHistoryRange(current, start, page.latest_event_id, token);
+      if (token !== generation) return;
+      timelineStore.setData({ ...current, initializing: false, cursor: page.latest_event_id,
+        latestEventId: page.latest_event_id, events, turns: page.items,
+        firstLoadedTurn: selected[0]?.first_event_id ?? 0,
+        hasOlder: Boolean(page.has_more || page.items.length > selected.length),
+        indexHasMore: page.has_more, indexBefore: page.next_before,
+        historyLost: Boolean(page.history_lost) });
+      subscribeLiveTimeline();
+      if (!liveConnection.isConnected()) await refreshTimeline(token);
+    } catch (error) {
+      if (token !== generation || error.name === "AbortError") return;
+      if (isTransientTimelineError(error)) {
+        pollDelay = Math.min(pollDelay * 2, 15_000);
+        schedulePoll(token);
+      } else timelineStore.setError(error);
+    } finally {
+      if (initialRequest === request) initialRequest = null;
+    }
+  });
+  initialRequest = request;
+  return request;
 }
 
 // Historical pages never advance the live cursor. New pushes may arrive while
@@ -277,6 +303,7 @@ export function clearTimeline() {
   stopTimer();
   selectionAbort?.abort();
   historyRequest = indexRequest = null;
+  initialRequest = null;
   liveConnection.select("", "");
   timelineStore.setData({ projectId: "", sessionId: "", cursor: 0, latestEventId: 0, historyLost: false, events: [], turns: [] });
 }
@@ -315,12 +342,16 @@ export function applyLiveTimeline(replay) {
 liveConnection.subscribe((event) => {
   if (event.type === "events") applyLiveTimeline(event);
   else if (event.type === "status") {
-    if (event.connected) stopTimer();
+    if (event.connected) {
+      stopTimer();
+      if (timelineStore.get().data?.initializing) void loadInitialTimeline(generation);
+    }
     else { pollDelay = FALLBACK_POLL_MS; schedulePoll(generation); }
   }
 });
 
 document.addEventListener("visibilitychange", () => {
-  if (!document.hidden && !liveConnection.isConnected()) void refreshTimeline(generation);
+  if (!document.hidden && timelineStore.get().data?.initializing) void loadInitialTimeline(generation);
+  else if (!document.hidden && !liveConnection.isConnected()) void refreshTimeline(generation);
   else stopTimer();
 });

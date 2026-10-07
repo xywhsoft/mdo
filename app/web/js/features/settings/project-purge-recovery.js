@@ -55,7 +55,8 @@ export function createProjectPurgeRecovery({ transport, timeoutMs = 8000,
     const response = await request("get", "/project-purge-intent");
     const remote = readIntent(response);
     if (getWriteToken() && response.writeToken && response.writeToken !== getWriteToken())
-      publish({ writeConflict: true });
+      publish({ writeConflict: true, writeConflictReason:
+        response.writeToken.split("-")[0] === getWriteToken().split("-")[0] ? "purge" : "restart" });
     const known = state.intent;
     if (known && !matches(known, remote)) {
       // An immutable abort may safely retire this page's old binding. A
@@ -221,7 +222,8 @@ export function createProjectPurgeRecovery({ transport, timeoutMs = 8000,
 
   return Object.freeze({
     get: () => state, refresh, cancel, acknowledgeAbort, prepare, execute, completeCommitted,
-    markWriteConflict(error) { publish({ writeConflict: true, error }); },
+    markWriteConflict(error) { publish({ writeConflict: true, error,
+      ...(error?.code === "service_restarted" ? { writeConflictReason: "restart" } : {}) }); },
     reload() { onReload(state.intent?.project_id ?? null); },
     subscribe(listener) { listeners.add(listener); listener(state);
       return () => listeners.delete(listener); },

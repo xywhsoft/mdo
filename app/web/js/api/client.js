@@ -4,6 +4,7 @@ const API_ROOT = "/api/v1";
 let writeGuard = null;
 let pageWriteToken = null;
 let writeConflictHandler = null;
+let networkErrorHandler = null;
 let pendingWrites = 0;
 export function hasPendingApiWrites() { return pendingWrites !== 0; }
 
@@ -15,6 +16,7 @@ async function trackWrite(operation) {
 
 export function currentPageWriteToken() { return pageWriteToken; }
 export function setApiWriteConflictHandler(handler) { writeConflictHandler = handler; }
+export function setApiNetworkErrorHandler(handler) { networkErrorHandler = handler; }
 
 // A recovery gate is local to this page. The server remains authoritative;
 // this prevents restored drafts/queues from writing before recovery is read.
@@ -135,6 +137,7 @@ async function sendJson(path, options) {
   } catch (error) {
     if (error?.name === "AbortError") throw error;
     if (error?.code) throw new ApiError(error.message, error);
+    networkErrorHandler?.();
     throw new ApiError("无法连接本地 mdo 服务", { code: "network_error" });
   }
 
@@ -169,6 +172,7 @@ async function sendImage(path, file, mime) {
   } catch (error) {
     if (error?.name === "AbortError") throw error;
     if (error?.code) throw new ApiError(error.message, error);
+    networkErrorHandler?.();
     throw new ApiError("无法连接本地 mdo 服务", { code: "network_error" });
   }
   return (await readEnvelope(response)).data;
@@ -219,6 +223,7 @@ export async function uploadBackupChunk(id, offset, chunk, options = {}) {
     } catch (error) {
       if (error?.name === "AbortError") throw error;
       if (error?.code) throw new ApiError(error.message, error);
+      networkErrorHandler?.();
       throw new ApiError("Cannot upload backup chunk", { code: "network_error" });
     }
     return readEnvelope(response, path, "PUT");

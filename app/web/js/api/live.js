@@ -1,4 +1,5 @@
 import { targetLiveSocket } from "./target.js";
+import { api } from "./client.js";
 
 // One authenticated, same-origin connection per page. Commands remain HTTP;
 // this channel only subscribes to events and announces changed resources.
@@ -13,6 +14,7 @@ export function createLiveConnection({
   setTimer = (...args) => window.setTimeout(...args),
   clearTimer = (id) => window.clearTimeout(id),
   random = Math.random,
+  refreshToken = null,
 } = {}) {
   const listeners = new Set();
   let connection = null;
@@ -23,6 +25,8 @@ export function createLiveConnection({
   let watchdog = 0;
   let attempts = 0;
   let selection = 0;
+  let lifecycle = 0;
+  let tokenCheck = null;
   let selected = { projectId: "", sessionId: "", cursor: () => 0 };
   const publish = (event) => { for (const listener of listeners) listener(event); };
   function status(value) {
@@ -31,6 +35,8 @@ export function createLiveConnection({
     publish({ type: "status", connected: healthy });
   }
   function close() {
+    lifecycle += 1;
+    tokenCheck = null;
     clearTimer(retry); retry = 0;
     clearTimer(watchdog); watchdog = 0;
     const previous = connection;
@@ -53,7 +59,36 @@ export function createLiveConnection({
   function reconnect() {
     if (!token || paused || retry) return;
     const delay = Math.min(500 * (2 ** Math.min(attempts++, 5)), 15_000);
-    retry = setTimer(() => { retry = 0; connect(); }, delay + Math.round(random() * delay * 0.2));
+    retry = setTimer(() => { retry = 0; void reconnectWithToken(); }, delay + Math.round(random() * delay * 0.2));
+  }
+  async function reconnectWithToken() {
+    if (!refreshToken) { connect(); return; }
+    if (!token || paused || connection || tokenCheck) return;
+    const check = { lifecycle };
+    tokenCheck = check;
+    try {
+      const value = await refreshToken();
+      if (check.lifecycle !== lifecycle || paused || !token) return;
+      if (!/^[0-9a-f]{32}-(0|[1-9][0-9]{0,19})$/.test(value ?? ""))
+        throw new Error("Invalid live token");
+      if (value !== token) {
+        const reason = value.split("-")[0] === token.split("-")[0] ? "purge" : "restart";
+        token = value;
+        // This renews only the read subscription. The page's mutation token
+        // stays fenced so old drafts/actions cannot run after a purge/restart.
+        publish({ type: "runtime_changed", reason });
+      }
+      tokenCheck = null;
+      publish({ type: "reachable", connected: true });
+      connect();
+    } catch {
+      if (check.lifecycle !== lifecycle || paused || !token) return;
+      tokenCheck = null;
+      publish({ type: "reachable", connected: false });
+      reconnect();
+    } finally {
+      if (tokenCheck === check) tokenCheck = null;
+    }
   }
   function fail(current) {
     if (current !== connection) return;
@@ -64,7 +99,7 @@ export function createLiveConnection({
     watchdog = setTimer(() => fail(current), delay);
   }
   function connect() {
-    if (!token || paused || connection) return;
+    if (!token || paused || connection || tokenCheck) return;
     let current;
     try { current = socket(url(), ["mdo.live.v1", `mdo.token.${token}`]); }
     catch { reconnect(); return; }
@@ -94,6 +129,9 @@ export function createLiveConnection({
   }
   return {
     isConnected: () => healthy,
+    // An HTTP request may fail while an existing WebSocket still looks open.
+    // Recheck its origin through the same bounded retry loop, never a write.
+    recheck() { if (connection) fail(connection); },
     subscribe(listener) { listeners.add(listener); return () => listeners.delete(listener); },
     start(value) {
       if (!/^[0-9a-f]{32}-(0|[1-9][0-9]{0,19})$/.test(value ?? "")) return;
@@ -111,4 +149,11 @@ export function createLiveConnection({
   };
 }
 
-export const liveConnection = createLiveConnection();
+export const liveConnection = createLiveConnection({
+  async refreshToken() {
+    const controller = new AbortController();
+    const timer = window.setTimeout(() => controller.abort(), 8000);
+    try { return (await api.get("/project-purge-intent", { signal: controller.signal })).writeToken; }
+    finally { window.clearTimeout(timer); }
+  },
+});

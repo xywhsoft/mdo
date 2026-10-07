@@ -3,6 +3,7 @@ import { clear, element, errorMessage, toast } from "../../utils/dom.js";
 import { subscribeLocale, t } from "../../i18n.js";
 import { renderToolPreview, renderToolArguments } from "../approvals/tool-preview.js";
 import { createRecoveryDecisions, defaultRecoveryAction } from "../approvals/recovery-decisions.js";
+import { isTransientReadError } from "../../api/read-recovery.js";
 
 export function createRecoveryDock({ container, summary, store, onResume, onAbandon }) {
   let state = store.get();
@@ -127,6 +128,11 @@ export function createRecoveryDock({ container, summary, store, onResume, onAban
     for (const id of argumentsOpen.keys()) if (!activeIds.has(id)) argumentsOpen.delete(id);
     clear(summary);
     clear(container);
+    if (state.status === "error" && isTransientReadError(state.error)) {
+      summary.textContent = t("shell.connecting", {}, "正在连接本地服务…");
+      restoreFocus(focused);
+      return;
+    }
     if (state.status === "error") {
       summary.textContent = t("recovery.unavailable", {}, "恢复状态不可用");
       container.append(element("div", { className: "resource-error", text: errorMessage(state.error) }));

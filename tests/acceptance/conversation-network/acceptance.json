@@ -1,0 +1,99 @@
+{
+  "date": "2026-10-08",
+  "model_network": "loopback fixture only",
+  "network": {
+    "calls": {
+      "BEFORE NETWORK QA": 1,
+      "OFFLINE EDIT QA": 1
+    },
+    "requests": [
+      {
+        "prompt": "BEFORE NETWORK QA",
+        "image_parts": 0,
+        "user_messages": 1,
+        "tool_results": 0
+      },
+      {
+        "prompt": "OFFLINE EDIT QA",
+        "image_parts": 1,
+        "user_messages": 2,
+        "tool_results": 0
+      }
+    ],
+    "event_counts": {
+      "0": 2,
+      "1": 2,
+      "2": 2,
+      "4": 2,
+      "10": 2
+    },
+    "final_error_events": 0,
+    "host_restarts": 1,
+    "candidate_sha256": "d023db75aab008fe44c96d6e9af4be5729aab8dc750e37b6a41fcb4151afa5ce"
+  },
+  "restart": {
+    "calls": {
+      "BEFORE SERVICE RESTART QA": 1,
+      "AFTER SERVICE RESTART QA": 1
+    },
+    "requests": [
+      {
+        "prompt": "BEFORE SERVICE RESTART QA",
+        "image_parts": 0,
+        "user_messages": 1,
+        "tool_results": 0
+      },
+      {
+        "prompt": "AFTER SERVICE RESTART QA",
+        "image_parts": 1,
+        "user_messages": 2,
+        "tool_results": 0
+      }
+    ],
+    "event_counts": {
+      "0": 2,
+      "1": 2,
+      "2": 2,
+      "4": 2,
+      "10": 2
+    },
+    "final_error_events": 0,
+    "host_restarts": 1,
+    "candidate_sha256": "297153933e71e861bcc7bbb558383fa68ec7f645da64b06a9cad2f079fd22b86"
+  },
+  "latest_unsent_draft": "LATEST OFFLINE EDIT",
+  "checks": [
+    "tab-scoped network interruption retains conversation history and an editable image draft",
+    "offline input changes are automatically saved after connectivity returns",
+    "temporary background read failures do not invent an unfinished response",
+    "confirmed read reachability clears old draft network warnings before saving resumes",
+    "a changed host token renews only the read subscription and fences old mutations",
+    "the service restart notice is accurate and does not cover retained history",
+    "the product reload action keeps the selected conversation and restores its text and image draft",
+    "manual continuation after restart succeeds once, with one image and no duplicate user messages",
+    "final candidate network recovery leaves the next unsent edit intact without an error card"
+  ],
+  "limitations": [
+    "a real host restart still requires an explicit reload before new mutations; ordinary transient disconnection reconnects automatically",
+    "browser network simulation was reset; no system network settings were changed",
+    "Android real-device lifecycle and keyboard behavior remain pending",
+    "candidate builds include existing unrelated worktree changes; this is not a website release"
+  ],
+  "candidate_builds": [
+    {
+      "file": "mdo-reconnect-final.exe",
+      "bytes": 4378166,
+      "sha256": "297153933e71e861bcc7bbb558383fa68ec7f645da64b06a9cad2f079fd22b86"
+    },
+    {
+      "file": "mdo-reconnect-arm64-v8a.apk",
+      "bytes": 4007149,
+      "sha256": "9cd939837c6a2db9bd48866bf5617d946d1fc561533246e6f147f73290970d06"
+    },
+    {
+      "file": "mdo-reconnect-arm64-v8a-full.apk",
+      "bytes": 60760910,
+      "sha256": "e4d7dc5de43968edf534a54c4bf0183c886b92103e39f532c07c052a23be77ec"
+    }
+  ]
+}

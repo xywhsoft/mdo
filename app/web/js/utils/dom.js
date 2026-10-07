@@ -80,6 +80,7 @@ const API_ERROR_COPY = Object.freeze({
   write_token_required: ["error.writeTokenRequired", "请重新载入页面，取得当前服务的写入版本后再继续操作。"],
   write_token_invalid: ["error.writeTokenInvalid", "页面的写入版本无效，请重新载入后继续。"],
   write_token_conflict: ["error.writeTokenConflict", "项目已清除或服务已重启。请先复制尚未保存的草稿，再重新载入页面。"],
+  service_restarted: ["shell.serviceRestarted", "本地服务已重启。请先保留未保存的草稿，再重新载入继续。"],
   purge_client_busy: ["error.purgeClientBusy", "请等待提交、图片上传和其他操作完成，并处理运行态或诊断项，再核对清除。"],
   purge_draft_unsaved: ["error.purgeDraftUnsaved", "仍有未保存的草稿。请先保存，或复制草稿后重新载入，再核对清除结果。"],
   write_admission_busy: ["error.writeAdmissionBusy", "已有写入或项目清除仍在处理，请等待完成后重新核对原请求。"],

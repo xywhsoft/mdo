@@ -3,7 +3,7 @@ import test from "node:test";
 import { createLiveConnection } from "../app/web/js/api/live.js";
 
 const token = `${"a".repeat(32)}-0`;
-function fixture() {
+function fixture(options = {}) {
   const sockets = [], timers = new Map(), events = [];
   let timer = 0;
   const live = createLiveConnection({
@@ -17,12 +17,13 @@ function fixture() {
     },
     setTimer(fn, delay) { timers.set(++timer, { fn, delay }); return timer; },
     clearTimer(id) { timers.delete(id); }, random: () => 0,
+    ...options,
   });
   live.subscribe((event) => events.push(event));
   const fire = (delay) => {
     const entry = [...timers].find(([, item]) => item.delay === delay);
     assert.ok(entry, `missing ${delay} ms timer`);
-    timers.delete(entry[0]); entry[1].fn();
+    timers.delete(entry[0]); return entry[1].fn();
   };
   return { live, sockets, timers, events, fire };
 }
@@ -38,6 +39,67 @@ test("same-origin token and ready gate protect a single connection", () => {
   assert.equal(live.isConnected(), true);
   assert.deepEqual(events, [{ type: "status", connected: true }]);
   live.stop(); assert.equal(live.isConnected(), false);
+});
+
+test("restart renews only the read socket and announces the stale page before connecting", async () => {
+  const fresh = `${"b".repeat(32)}-0`;
+  let reads = 0;
+  const f = fixture({ refreshToken: async () => { reads += 1; return fresh; } });
+  f.live.start(token); f.sockets[0].message({ type: "ready", version: 1 });
+  f.sockets[0].onclose(); f.fire(500);
+  await Promise.resolve(); await Promise.resolve();
+  assert.equal(reads, 1);
+  assert.equal(f.sockets.length, 2);
+  assert.deepEqual(f.sockets[1].protocols, ["mdo.live.v1", `mdo.token.${fresh}`]);
+  assert.deepEqual(f.events.slice(-2), [
+    { type: "runtime_changed", reason: "restart" }, { type: "reachable", connected: true },
+  ]);
+  f.live.stop();
+});
+
+test("unreachable read-token probe backs off without opening stale sockets", async () => {
+  let reachable = false;
+  const f = fixture({ refreshToken: async () => {
+    if (!reachable) throw new TypeError("offline");
+    return token;
+  } });
+  f.live.start(token); f.sockets[0].message({ type: "ready", version: 1 });
+  f.sockets[0].onclose(); f.fire(500);
+  await Promise.resolve(); await Promise.resolve();
+  assert.equal(f.sockets.length, 1);
+  assert.deepEqual(f.events.at(-1), { type: "reachable", connected: false });
+  reachable = true; f.fire(1000);
+  await Promise.resolve(); await Promise.resolve();
+  assert.equal(f.sockets.length, 2);
+  assert.ok(!f.events.some(event => event.type === "runtime_changed"));
+  f.live.stop();
+});
+
+test("an HTTP transport failure rechecks a seemingly open socket only once", async () => {
+  const f = fixture({ refreshToken: async () => token });
+  f.live.start(token); f.sockets[0].message({ type: "ready", version: 1 });
+  f.live.recheck(); f.live.recheck();
+  assert.equal(f.live.isConnected(), false);
+  assert.equal(f.sockets[0].closed, true);
+  assert.deepEqual(f.events.at(-1), { type: "status", connected: false });
+  f.fire(500); await Promise.resolve(); await Promise.resolve();
+  assert.equal(f.sockets.length, 2);
+  f.live.stop();
+});
+
+test("pause or stop invalidates delayed token probes and never reconnects in the background", async () => {
+  for (const action of ["pause", "stop"]) {
+    let resolve;
+    const f = fixture({ refreshToken: () => new Promise(done => { resolve = done; }) });
+    f.live.start(token); f.sockets[0].message({ type: "ready", version: 1 });
+    f.sockets[0].onclose(); f.fire(500);
+    if (action === "pause") f.live.pause(true); else f.live.stop();
+    resolve(`${"b".repeat(32)}-0`);
+    await Promise.resolve(); await Promise.resolve();
+    assert.equal(f.sockets.length, 1);
+    assert.ok(!f.events.some(event => event.type === "runtime_changed"));
+    f.live.stop();
+  }
 });
 
 test("reconnect reads the latest offline cursor and ignores the old socket", () => {

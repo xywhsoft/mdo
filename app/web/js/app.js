@@ -1,5 +1,6 @@
 import { createNotificationCenter } from "./features/notifications/center.js";
 import { liveConnection } from "./api/live.js";
+import { isTransientReadError } from "./api/read-recovery.js";
 import { isRemoteTarget, targetState, subscribeTarget, setTargetSwitchGuard } from "./api/target.js";
 import { createRemotePanel } from "./features/settings/remote-panel.js";
 import { createAccount } from "./features/account/account.js";
@@ -87,7 +88,7 @@ import { createSessionLoadNotice } from "./features/shell/session-load-notice.js
 import { waitForSelectedDetail } from "./features/shell/session-detail-wait.js";
 import { createPaneLayout } from "./features/shell/pane-layout.js";
 import { trackMobileViewport } from "./features/shell/mobile-viewport.js";
-import { api, ApiError, setApiWriteGuard, currentPageWriteToken, setApiWriteConflictHandler, hasPendingApiWrites } from "./api/client.js";
+import { api, ApiError, setApiWriteGuard, currentPageWriteToken, setApiWriteConflictHandler, setApiNetworkErrorHandler, hasPendingApiWrites } from "./api/client.js";
 import { clear, element, errorMessage, isImeKey, refreshRelativeTimes, toast } from "./utils/dom.js";
 import { subscribeLocale, t } from "./i18n.js";
 import { copyText } from "./utils/clipboard.js";
@@ -128,10 +129,12 @@ export async function boot() {
     onReload(projectId) {
       const saved = history.state?.mdoWorkspace;
       const route = navigation.get();
-      const url = route.view === "workspace" && (!projectId || route.projectId === projectId)
+      // Leave only a known purged project. A host restart must keep the
+      // selected conversation and its saved draft instead of opening Home.
+      const url = projectId && route.view === "workspace" && route.projectId === projectId
         ? "#/" : location.href;
       history.replaceState({ ...history.state,
-        ...(!projectId || saved?.projectId === projectId ? { mdoWorkspace: null } : {}) }, "", url);
+        ...(projectId && saved?.projectId === projectId ? { mdoWorkspace: null } : {}) }, "", url);
       window.location.reload();
     },
     async beforePrepare() {
@@ -142,6 +145,7 @@ export async function boot() {
     canComplete: () => !localPurgeBusy() && !draftStore.hasUnsaved(),
   });
   setApiWriteConflictHandler((error) => purgeRecovery.markWriteConflict(error));
+  setApiNetworkErrorHandler(() => { if (!isRemoteTarget()) liveConnection.recheck(); });
   setApiWriteGuard((request) => /^\/update(?:\/(?:download|install|exit))?$/.test(request.path) ||
     purgeRecovery.allowsWrite(request));
   // Check portable recovery before restored drafts migrate or dispatch.
@@ -164,8 +168,10 @@ export async function boot() {
   const composerProfileReset = $("#composer-profile-reset");
   const draftStatus = $("#draft-status");
   let draftError = null;
+  let localServiceReconnecting = false;
   function renderDraftStatus() {
-    draftStatus.hidden = !draftError || Boolean(bootstrapFailure());
+    draftStatus.hidden = !draftError || Boolean(bootstrapFailure()) ||
+      (localServiceReconnecting && draftError.code === "network_error");
     const reason = draftError ? errorMessage(draftError) : "";
     draftStatus.textContent = draftError ? t("draft.saveFailed",
       { error: reason }, `草稿未保存：${reason}`) : "";
@@ -721,7 +727,7 @@ export async function boot() {
     sessionStore: sessionDetailStore, timelineStore, modelsStore, runsStore,
   });
   draftStore = createDraftStore({
-    isWritePaused: purgeRecovery.isPaused,
+    isWritePaused: () => purgeRecovery.isPaused() || localServiceReconnecting,
     onRestore(text, attachments, uncertainRun, submission) {
       prompt.value = text;
       composerAttachments = attachments;
@@ -1091,7 +1097,7 @@ export async function boot() {
       newTaskController?.isPreparing() ||
       (!sessionWritable && !creatingSession) || migratingNewTask;
     newTaskComposerFocus.restore();
-    sendBlockedByState = serviceFailed || targetBlocked || purgeRecovery.isPaused() || !(sessionWritable || creatingSession) ||
+    sendBlockedByState = serviceFailed || targetBlocked || localServiceReconnecting || purgeRecovery.isPaused() || !(sessionWritable || creatingSession) ||
       messageActionBusy ||
       !draftStore.isLoaded(selectedDraftKey) ||
       selectingProjectDraft ||
@@ -1103,14 +1109,16 @@ export async function boot() {
       migratingNewTask ||
       Boolean(submissionController?.isReleasing(selectedKey));
     syncSendDisabled();
-    composerImages?.setWritable(!serviceFailed && !targetBlocked && !messageActionBusy && !purgeRecovery.isPaused() &&
+    composerImages?.setWritable(!serviceFailed && !targetBlocked && !localServiceReconnecting && !messageActionBusy && !purgeRecovery.isPaused() &&
       sessionWritable && !creatingSession && !pendingNewTask);
     composerProfile.setRunActive(Boolean(activeRun),
       creatingNewTask || messageActionBusy || purgeRecovery.isPaused());
     send.setAttribute("aria-label", activeRun || creatingNewTask
       ? t("composer.queue", {}, "加入待发送队列")
       : t("shell.send", {}, "发送任务"));
-    composerHint.textContent = purgeRecovery.isPaused() ? t("error.purgeReviewRequired") : messageActionBusy
+    composerHint.textContent = purgeRecovery.isPaused()
+      ? t(purgeRecovery.get().writeConflictReason === "restart" ? "shell.serviceRestartedTitle" : "error.purgeReviewRequired")
+      : localServiceReconnecting ? t("shell.connecting", {}, "正在连接本地服务…") : messageActionBusy
       ? t("messageAction.busy", {}, "请等待当前消息操作完成")
       : draftStore.isRunUncertain(selectedDraftKey)
       ? t("composer.hintReviewRun") : (selectingProjectDraft ||
@@ -1269,6 +1277,11 @@ export async function boot() {
       return;
     }
     const failure = bootstrapFailure();
+    if (!failure && !isRemoteTarget() && localServiceReconnecting) {
+      runtimeState.dataset.state = "loading";
+      runtimeLabel.textContent = t("shell.connecting", {}, "正在连接本地服务…");
+      return;
+    }
     runtimeState.dataset.state = state.status === "error" || failure ? "error"
       : state.data?.ready ? "ready" : "loading";
     runtimeLabel.textContent = failure || (state.status === "error"
@@ -1376,8 +1389,12 @@ export async function boot() {
           resumeCurrentRun();
           return;
         }
-        setRun(null);
-        showComposerError(error);
+        if (isTransientReadError(error)) {
+          if (stillPollingRun()) scheduleRunPoll(Math.min(delay * 2, 15_000));
+        } else {
+          setRun(null);
+          showComposerError(error);
+        }
       }
     }, delay);
   }
@@ -1436,7 +1453,7 @@ export async function boot() {
   }
 
   async function dispatchQueued() {
-    if (purgeRecovery.isPaused()) return;
+    if (purgeRecovery.isPaused() || localServiceReconnecting) return;
     const selected = navigation.get();
     const key = `${selected.projectId}/${selected.sessionId}`;
     const session = sessionDetailStore.get().data;
@@ -1815,6 +1832,8 @@ export async function boot() {
   }
   function showComposerError(error, note = "") {
     if (bootstrapFailure()) { hideComposerError(); return; }
+    if (localServiceReconnecting && error?.code === "network_error" &&
+        !error.runAdmissionUncertain) return;
     composerErrorState = { error, note };
     composerError.textContent = error?.localizedMessageKey
       ? t(error.localizedMessageKey, {}, error.localizedMessageFallback || error.message)
@@ -2423,13 +2442,33 @@ export async function boot() {
       }
     }, 120);
   }
+  function syncLocalConnection(connected) {
+    if (isRemoteTarget()) return;
+    localServiceReconnecting = !connected;
+    if (connected && draftError?.code === "network_error") draftError = null;
+    if (composerErrorState?.error?.code === "network_error" &&
+        !composerErrorState.error.runAdmissionUncertain) hideComposerError();
+    syncRuntimeLabel(); setRun(activeRun); renderDraftStatus();
+    if (connected && !purgeRecovery.isPaused()) draftStore.resumeSaves();
+  }
   liveConnection.subscribe((event) => {
     if (event.type === "changed") { scheduleLiveRefresh(); void notificationCenter.refresh(); }
+    else if (event.type === "runtime_changed") {
+      purgeRecovery.markWriteConflict(new ApiError("Service generation changed", {
+        code: event.reason === "restart" ? "service_restarted" : "write_token_conflict",
+      }));
+    } else if (event.type === "reachable") {
+      syncLocalConnection(event.connected);
+    }
     else if (event.type === "status") {
+      syncLocalConnection(event.connected);
       scheduleTaskRefresh(); scheduleRunsRefresh();
       scheduleSessionRefresh(); scheduleApprovalRefresh();
       if (event.connected) {
         window.clearTimeout(runMonitor); runMonitor = 0;
+        void loadBootstrap();
+        void refreshSelectedTimeline();
+        if (!purgeRecovery.isPaused()) draftStore.resumeSaves();
         scheduleLiveRefresh();
       } else if (activeRun) scheduleRunPoll();
     }

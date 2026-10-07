@@ -63,6 +63,7 @@ test("an empty intent after another page's ACK or host restart still fences this
     remote = token;
     await recovery.refresh();
     assert.equal(recovery.get().writeConflict, true);
+    assert.equal(recovery.get().writeConflictReason, token === restarted ? "restart" : "purge");
     assert.equal(recovery.isPaused(), true);
     assert.equal(recovery.allowsWrite({ method: "PUT", path: "/draft" }), false);
     assert.equal(recovery.allowsWrite({ method: "DELETE", path: `/runs/${"c".repeat(32)}` }), true);

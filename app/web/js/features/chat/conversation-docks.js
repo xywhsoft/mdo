@@ -7,6 +7,7 @@ import { createAskCard } from "../asks/ask-card.js";
 import { reconcileCards } from "../../utils/reconcile.js";
 import { taskBelongsToSession } from "../tasks/task-owner.js";
 import { renderToolPreview, renderToolArguments } from "../approvals/tool-preview.js";
+import { needsRecoveryCard } from "../../api/read-recovery.js";
 
 const STATE_KEYS = Object.freeze({ pending: "dock.task.pending", running: "dock.task.running" });
 
@@ -415,9 +416,7 @@ export function createConversationDocks({ container, navigation, tasksStore, app
       todo?.sessionId === sessionId ? todo.items : [];
     const recoveryState = recoveryStore?.get();
     const recovery = recoveryState?.data;
-    const needsRecovery = Boolean(sessionId && (recoveryState?.status === "error" ||
-      (recovery?.resume_required && !recovery.unavailable &&
-       recovery.project_id === selected.projectId && recovery.session_id === sessionId)));
+    const needsRecovery = needsRecoveryCard(recoveryState, selected.projectId, sessionId);
     recoveryRoot.hidden = !needsRecovery;
     const otherNodes = [];
     let newApproval = null;

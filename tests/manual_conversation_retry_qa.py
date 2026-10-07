@@ -105,6 +105,8 @@ def main():
     parser.add_argument('--directory',type=Path,default=ROOT/'.build/conversation-retry-qa')
     parser.add_argument('--duration',type=int,default=1200)
     parser.add_argument('--permission',choices=['read-only','balanced'],default='read-only')
+    parser.add_argument('--restart-wait',type=float,default=5,
+        help='Seconds offline when the disposable restart marker is created (0.5–15)')
     args=parser.parse_args()
     base=args.directory.resolve()
     if base.exists():
@@ -122,8 +124,18 @@ def main():
     stop=base/'stop'; log=(base/'host.log').open('wb')
     env=dict(os.environ,USE_WEBVIEW='0',MDO_HOME=str(base/'home'),
         MDO_CONVERSATION_FIXTURE_KEY='loopback-fixture-key')
-    process=subprocess.Popen([str(exe)],cwd=base,env=env,stdout=log,stderr=log,
-        creationflags=getattr(subprocess,'CREATE_NO_WINDOW',0))
+    def start_host():
+        return subprocess.Popen([str(exe)],cwd=base,env=env,stdout=log,stderr=log,
+            creationflags=getattr(subprocess,'CREATE_NO_WINDOW',0))
+
+    def stop_host(child):
+        if child.poll() is None:
+            child.terminate()
+            try: child.wait(timeout=10)
+            except subprocess.TimeoutExpired: child.kill();child.wait()
+
+    process=start_host()
+    lifecycle=[]
     try:
         wait_ready(port,process)
         status,headers,raw=request(port,'GET','/api/v1/models/config')
@@ -155,20 +167,38 @@ def main():
         assert status==201,raw
         session=json.loads(raw)['data']['id']
         url=f'http://127.0.0.1:{port}/#/projects/default/sessions/{session}'
-        (base/'state.json').write_text(json.dumps({'port':port,'session':session,
-            'pid':process.pid,'url':url},indent=2),encoding='utf-8')
+        state={'port':port,'session':session,'pid':process.pid,'url':url}
+        (base/'state.json').write_text(json.dumps(state,indent=2),encoding='utf-8')
         print(url,flush=True)
         end=time.monotonic()+max(1,min(args.duration,3600))
         while not stop.exists() and time.monotonic()<end and process.poll() is None:
+            # Only our copied host and disposable data are affected. Keep the
+            # model fixture alive across a bounded interruption so a real UI
+            # can verify reconnect, draft preservation and a subsequent turn.
+            restart=base/'restart'
+            if restart.exists():
+                restart.unlink()
+                stop_host(process)
+                lifecycle.append({'event':'stopped','pid':process.pid})
+                print('Fixture host offline',flush=True)
+                resume=min(end,time.monotonic()+max(.5,min(args.restart_wait,15)))
+                while not stop.exists() and time.monotonic()<resume:
+                    time.sleep(.05)
+                if stop.exists() or time.monotonic()>=end:
+                    break
+                process=start_host()
+                wait_ready(port,process)
+                state['pid']=process.pid
+                (base/'state.json').write_text(json.dumps(state,indent=2),encoding='utf-8')
+                lifecycle.append({'event':'restarted','pid':process.pid})
+                print('Fixture host reconnected',flush=True)
             time.sleep(.2)
     finally:
-        if process.poll() is None:
-            process.terminate()
-            try: process.wait(timeout=10)
-            except subprocess.TimeoutExpired: process.kill();process.wait()
+        stop_host(process)
         log.close();model.shutdown();model.server_close();thread.join(timeout=2)
         (base/'calls.json').write_text(json.dumps(Model.calls,indent=2),encoding='utf-8')
         (base/'requests.json').write_text(json.dumps(Model.markers,indent=2),encoding='utf-8')
+        (base/'lifecycle.json').write_text(json.dumps(lifecycle,indent=2),encoding='utf-8')
 
 
 if __name__=='__main__':

@@ -59,6 +59,7 @@ const localizedApiErrors = [
   ["write_token_required", "error.writeTokenRequired"],
   ["write_token_invalid", "error.writeTokenInvalid"],
   ["write_token_conflict", "error.writeTokenConflict"],
+  ["service_restarted", "shell.serviceRestarted"],
   ["write_admission_busy", "error.writeAdmissionBusy"],
   ["write_admission_unavailable", "error.writeAdmissionUnavailable"],
   ["purge_review_required", "error.purgeReviewRequired"],
