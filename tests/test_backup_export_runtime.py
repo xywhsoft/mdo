@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import argparse
 import base64
+import json
 from pathlib import Path
 import os
 import shutil
@@ -52,7 +53,33 @@ class Probe(DecodeProbe):
         assert history["ok"] and history["matched"] >= 6, history
         pixels = self.api("GET", DECODE + "images")[1]["data"]
         assert pixels["ok"] and pixels["attachments"] == pixels["inline_images"] == 1, pixels
-        assert {p.relative_to(directory).as_posix(): p.read_bytes() for p in directory.rglob("*") if p.is_file()} == before
+        after = {p.relative_to(directory).as_posix(): p.read_bytes()
+            for p in directory.rglob("*") if p.is_file()}
+        changed = sorted(name for name in before.keys() | after.keys()
+            if before.get(name) != after.get(name))
+        def json_changes(left, right, path=""):
+            if left == right:
+                return []
+            if isinstance(left, dict) and isinstance(right, dict):
+                return [item for key in left.keys() | right.keys()
+                    for item in json_changes(left.get(key), right.get(key), path + "/" + key)]
+            return [path]
+        if "snapshot.json" in changed:
+            previous = json.loads(before["snapshot.json"])
+            current = json.loads(after["snapshot.json"])
+            fields = json_changes(previous, current)
+            # Cold capture recovers the ledger and reapplies its committed
+            # model profile. That invalidates prior exact-usage feedback by
+            # contract; checkpointing persists fill_seen=0 and its checksum.
+            # Allow only that projection change, never messages or budgets.
+            assert set(fields) == {"/fill_seen", "/checksum"}, fields
+            assert (previous["fill_seen"], current["fill_seen"]) == (1, 0)
+            changed.remove("snapshot.json")
+        assert not changed, {"changed_files": changed,
+            "snapshot_fields": json_changes(json.loads(before["snapshot.json"]),
+                json.loads(after["snapshot.json"])),
+            "sizes": {name: [len(before.get(name, b"")), len(after.get(name, b""))]
+                for name in changed}}
 
 
 def main():

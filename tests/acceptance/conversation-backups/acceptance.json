@@ -1,0 +1,59 @@
+{
+  "date": "2026-10-08",
+  "model_network": "loopback fixture only",
+  "calls": {
+    "EXPORT DOWNLOAD QA": 1,
+    "IMPORT CONTINUE QA": 1
+  },
+  "requests": [
+    {
+      "prompt": "EXPORT DOWNLOAD QA",
+      "image_parts": 1,
+      "user_messages": 1,
+      "tool_results": 0
+    },
+    {
+      "prompt": "IMPORT CONTINUE QA",
+      "image_parts": 1,
+      "user_messages": 2,
+      "tool_results": 0
+    }
+  ],
+  "backup": {
+    "schema": 2,
+    "bytes": 15171,
+    "file_count": 9,
+    "source_files_unchanged": 9,
+    "original_ui_records": 5,
+    "restored_ui_records_after_continue": 10
+  },
+  "markdown": {
+    "bytes": 727,
+    "embedded_images": 1,
+    "image_bytes": 256
+  },
+  "image": {
+    "path": "attachments/cd7f1b511f1a635557ced645ae87e97d.bin",
+    "decodedBytes": 256,
+    "sha256": "9409d5b9ef5eab71b27b136e0c1b9f2a5bdd043bc93fc81af4ecf45409f620b1",
+    "fileName": "截图 100%.png"
+  },
+  "draft_text": "保留这份未发送草稿",
+  "final_error_events": 0,
+  "checks": [
+    "actual workbench JSON export produces a verified complete backup Blob",
+    "actual Markdown export embeds exactly the same PNG bytes",
+    "real file chooser uploads and validates the complete backup",
+    "review and explicit confirmation create a separate session",
+    "all nine source files are byte-identical after import and continuation",
+    "import rewrites only the original UI records session owner",
+    "draft and image remain visible after opening the restored session",
+    "import alone calls no model; manual continuation adds one successful request",
+    "reload of the formal restored-session URL retains both turns and its image"
+  ],
+  "limitations": [
+    "browser Blob creation verified; operating-system download completion not confirmed",
+    "fixture queue is empty; nonempty staged-queue restore covered by native runtime tests",
+    "Android real-device import/export interaction remains pending"
+  ]
+}
