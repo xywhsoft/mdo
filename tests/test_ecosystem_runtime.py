@@ -18,8 +18,12 @@ HOME=ROOT.parent/"home"
 sys.path.insert(0,str(HOME/"tests"))
 from test_mdo_delivery import fixture,request
 
-def run(ui=False):
-    assert (ROOT/"app/include/mdo/ecosystem_package.h").read_bytes()==(HOME/"host/xywhsoft_ai/plugin/mdo/modules/ecosystem/ecosystem_package.h").read_bytes()
+def run(ui=False,host=None,website_host=None):
+    host=(host or ROOT/".build/host/xs.exe").resolve()
+    website_host=(website_host or Path(os.environ.get("XS_TEST_EXE",str(HOME/"xs.exe")))).resolve()
+    # Text must match across repositories, independent of Git's CRLF policy.
+    assert (ROOT/"app/include/mdo/ecosystem_package.h").read_text(encoding="utf-8")==\
+        (HOME/"host/xywhsoft_ai/plugin/mdo/modules/ecosystem/ecosystem_package.h").read_text(encoding="utf-8")
     base,website,port,user,password=fixture("mdo-ecosystem-ui" if ui else "mdo-ecosystem-native")
     origin=f"http://127.0.0.1:{port}"
     (website/"db/identity.json").write_text(json.dumps({"public_origin":origin}),encoding="utf-8")
@@ -41,7 +45,7 @@ def run(ui=False):
         actual,head,raw=request(port,method,path,body,cookie,headers);assert actual==status,(path,actual,raw)
         return json.loads(raw).get("data"),head
     try:
-        server=start(HOME/"xs.exe",website/"xs.json",HOME);ready(server,port,"/mdo/catalog")
+        server=start(website_host,website/"xs.json",HOME);ready(server,port,"/mdo/catalog")
         web("POST","/api/v1/register",{"username":"eco_native","password":"Fixture-2026-password"},status=201)
         _,head=web("POST","/admin/login",{"username":user,"password":password});admin="; ".join(v.split(";",1)[0] for v in head["_cookies"])
         review,_=web("GET","/admin/api/mdo/ecosystem",cookie=admin);csrf={"X-CSRF-Token":review["csrf"]}
@@ -51,7 +55,7 @@ def run(ui=False):
         app_port=free_port();home=isolated/"native-home";home.mkdir()
         config={"services":[{"class":"http","enabled":True,"name":"eco-native","ip":"127.0.0.1","port":app_port,"host_default":{"enabled":True,"name":"mdo","path":"web","devlang":"c","devfile":"generated/mdo_unity.c"}}]}
         (client/"xs.json").write_text(json.dumps(config),encoding="utf-8")
-        native=start(ROOT/".build/host/xs.exe",client/"xs.json",client,home);ready(native,app_port,"/api/v1/account")
+        native=start(host,client/"xs.json",client,home);ready(native,app_port,"/api/v1/account")
         def app(method,path,body=None,status=200):
             headers={}
             if method!="GET":headers["X-Mdo-Write-Token"]=request(app_port,"GET","/api/v1/account")[1]["X-Mdo-Write-Token"]
@@ -134,7 +138,7 @@ def run(ui=False):
         target=home/"commands/recovery.md";target.write_text("Interrupted write")
         journal={"receipts":{},"files":[{"path":"commands/recovery.md","old":base64.b64encode(b"Original draft").decode(),"new":base64.b64encode(b"Interrupted write").decode()}]}
         (home/"data/extensions/pending.json").write_text(json.dumps(journal))
-        native=start(ROOT/".build/host/xs.exe",client/"xs.json",client,home);ready(native,app_port,"/api/v1/account")
+        native=start(host,client/"xs.json",client,home);ready(native,app_port,"/api/v1/account")
         assert target.read_text()=="Original draft" and not (home/"data/extensions/pending.json").exists()
         print("PASS native login, publish/review/install bundle, C trust, Skill attachments, edited-file conflict, compile rollback, update, uninstall preservation and startup recovery")
         if ui:
@@ -154,4 +158,9 @@ def run(ui=False):
         for log in logs:log.close()
 
 if __name__=="__main__":
-    parser=argparse.ArgumentParser();parser.add_argument("--ui",action="store_true");run(parser.parse_args().ui)
+    parser=argparse.ArgumentParser()
+    parser.add_argument("--ui",action="store_true")
+    parser.add_argument("--host",type=Path)
+    parser.add_argument("--website-host",type=Path)
+    args=parser.parse_args()
+    run(args.ui,args.host,args.website_host)

@@ -77,8 +77,8 @@ def main():
         (site / 'xs.json').write_text(json.dumps(config), encoding='utf-8')
         model_server = ThreadingHTTPServer(('127.0.0.1', 0), SkillModel)
         thread = threading.Thread(target=model_server.serve_forever, daemon=True); thread.start()
-        env = dict(os.environ, MDO_HOME=str(base / 'home'), MDO_ORNITH_API_KEY='bounded-fixture-key',
-            USE_WEBVIEW='0', MDO_ORNITH_RESPONSES_URL=f'http://127.0.0.1:{model_server.server_port}/v1/responses')
+        env = dict(os.environ, MDO_HOME=str(base / 'home'), MDO_EXTENSION_MODEL_KEY='bounded-fixture-key',
+            USE_WEBVIEW='0')
         with (base / 'log.txt').open('wb') as log:
             command = [str(site / args.packed.name), '--', '--home', str(base / 'home')] if args.packed else [str(args.host.resolve()), str(site / 'xs.json')]
             process = subprocess.Popen(command,
@@ -99,6 +99,27 @@ def main():
                 # must never materialize extension files or enablement settings.
                 for name in ('agents', 'subagents', 'skills', 'mcp', 'commands', 'tools', 'config/extensions.json'):
                     assert not (base / 'home' / name).exists(), 'read-only list wrote ' + name
+                # Use the normal model configuration API. The built-in online
+                # model requires login and must not bypass that requirement.
+                status, headers, raw = request(port, 'GET', '/api/v1/models/config')
+                assert status == 200, raw
+                config = json.loads(raw)['data']
+                config.pop('runtime_override', None)
+                provider = json.loads(json.dumps(config['providers'][0]))
+                provider.update(id='extension-fixture', name='Extension fixture',
+                    builtin=False, editable=True, removable=True,
+                    endpoints={'responses':f'http://127.0.0.1:{model_server.server_port}/v1'},
+                    credential={'secret_ref':'env:MDO_EXTENSION_MODEL_KEY'})
+                profile = json.loads(json.dumps(config['items'][0]))
+                profile.update(id='extension-fixture', name='Extension fixture',
+                    provider='extension-fixture', builtin=False, free=False,
+                    editable=True, removable=True, protocols=['openai-responses'],
+                    default_protocol='openai-responses')
+                config['providers'].append(provider); config['items'].append(profile)
+                status, _, raw = request(port,'PUT','/api/v1/settings/models',
+                    body=json.dumps({'schema_version':1,'patch':config}).encode(),
+                    headers={'Content-Type':'application/json','If-Match':headers['etag']})
+                assert status == 200, raw
                 def tool_catalog():
                     status, _, raw = request(port, 'GET', '/api/v1/tools')
                     assert status == 200, raw
@@ -171,7 +192,8 @@ def main():
                 assert call('PUT', 'skills/escape', {'content': skill, 'files': [badfile]}, 'new')[0] != 200
                 assert not (base / 'home/escape.txt').exists()
                 status, _, raw_session = request(port, 'POST', '/api/v1/sessions',
-                    body=json.dumps({'project_id': 'default', 'title': 'Extension Skill probe', 'permission_profile': 'full-access'}).encode(),
+                    body=json.dumps({'project_id': 'default', 'model_id':'extension-fixture',
+                        'title': 'Extension Skill probe', 'permission_profile': 'full-access'}).encode(),
                     headers={'Content-Type': 'application/json'})
                 assert status == 201, raw_session
                 session = json.loads(raw_session)['data']['id']
@@ -272,7 +294,8 @@ def main():
                 assert call('DELETE', 'tools/fixture', revision=tool_revision)[0] == 409, 'dependency was removed'
                 assert 'user.fixture' in tool_catalog()
                 status, _, raw_profile = request(port, 'POST', '/api/v1/sessions',
-                    body=json.dumps({'project_id': 'default', 'title': 'Profile probe', 'permission_profile': 'full-access'}).encode(),
+                    body=json.dumps({'project_id': 'default', 'model_id':'extension-fixture',
+                        'title': 'Profile probe', 'permission_profile': 'full-access'}).encode(),
                     headers={'Content-Type': 'application/json'})
                 assert status == 201, raw_profile
                 profile_session = json.loads(raw_profile)['data']['id']
@@ -305,7 +328,7 @@ def main():
                 assert call('POST', 'agents/researcher/enabled', {'enabled': True}, coded['data']['revision'])[0] == 200
                 def profile_probe(agent_id):
                     status, _, raw = request(port, 'POST', '/api/v1/sessions',
-                        body=json.dumps({'project_id': 'default', 'agent_id': agent_id,
+                        body=json.dumps({'project_id': 'default', 'model_id':'extension-fixture', 'agent_id': agent_id,
                             'title': 'Generated prompt probe', 'permission_profile': 'full-access'}).encode(), headers={'Content-Type': 'application/json'})
                     assert status == 201, raw
                     sid = json.loads(raw)['data']['id']

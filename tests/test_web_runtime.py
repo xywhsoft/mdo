@@ -27,6 +27,7 @@ PROBE_SOURCE = r'''
 #include "src/storage/home.c"
 #include "src/config/config.c"
 #include "src/security/secrets.c"
+#include "src/models/catalog.c"
 #include "src/account/client.c"
 #include "src/account/credential.c"
 #include "src/account/authorization.c"
@@ -287,6 +288,7 @@ def write_site(site: Path) -> None:
         "include/mdo/secrets.h", "include/mdo/web.h", "include/mdo/account.h",
         "src/account/internal.h", "src/account/client.c", "src/account/credential.c",
         "src/account/authorization.c", "src/account/session.c",
+        "src/models/catalog.c",
     ):
         copy_app_source(relative, site)
     (site / "probe.c").write_text(PROBE_SOURCE, encoding="utf-8")

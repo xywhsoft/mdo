@@ -39,6 +39,9 @@ PROBE_SOURCE = r'''
 static void ShutdownLeaseCheckpoint(void);
 #include "src/schedules/executor.c"
 
+/* Tool environment prompt generation has its own distribution probe. */
+bool MdoToolPrompt(char **prompt) { return prompt != NULL && *prompt != NULL; }
+
 xwork_runtime *MdoBootstrapRuntime(void) { return NULL; }
 static bool UpdatePending;
 bool MdoUpdateInstalling(void) { return UpdatePending; }
