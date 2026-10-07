@@ -1,0 +1,31 @@
+{
+  "date": "2026-10-08",
+  "model_network": "loopback fixture only",
+  "calls": {
+    "retry": 3,
+    "partial": 2,
+    "quota": 1,
+    "stop": 1,
+    "continue": 1
+  },
+  "final_error_events": 1,
+  "final_error_kind": "daily_token_limit",
+  "visible_error_title": "模型额度不足",
+  "recovery_restart_markers": 1,
+  "checks": [
+    "429 retries stay in running state and produce one successful reply",
+    "interrupted reply draft is replaced without losing earlier history",
+    "daily allowance is terminal and produces one accurate final explanation",
+    "Ctrl+Enter cancels Retry-After waiting and automatically sends the next input",
+    "stopped request makes no later retries; continuation succeeds",
+    "reloading preserves the final error classification and updated localized title"
+  ],
+  "event_counts": {
+    "0": 5,
+    "1": 6,
+    "2": 4,
+    "4": 3,
+    "10": 4,
+    "11": 1
+  }
+}

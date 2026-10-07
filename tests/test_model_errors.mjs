@@ -18,6 +18,12 @@ test("final model errors use the UI language and preserve unknown explanations",
         { kind: "error", event_id: 2, run_id: "a", text: "raw provider prose",
           model_error_kind: "daily_token_limit", model_http_status: 429, model_attempts: 1 }];
       assert.match(eventsToTimeline(events).find(i => i.kind === "error").text, pattern);
+      const expectedTitle = locale === "zh-CN" ? "模型额度不足"
+        : locale === "en-US" ? "Model allowance exhausted" : "Лимит модели исчерпан";
+      assert.equal(eventsToTimeline(events).find(i => i.kind === "error").role, expectedTitle);
+      const duplicate = eventsToTimeline([...events, { ...events[1], event_id: 3 }]);
+      assert.equal(duplicate.filter(i => i.kind === "error").length, 1);
+      assert.equal(duplicate.find(i => i.kind === "error").role, expectedTitle);
       assert.match(errorMessage({ code: "model_daily_token_limit", message: "raw" }), pattern);
       const limit = errorMessage({ code: "model_output_limit", message: "raw" });
       assert.notEqual(limit, "raw");

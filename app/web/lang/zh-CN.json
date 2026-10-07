@@ -1859,5 +1859,14 @@
   "model.error.service_configuration": "模型服务的凭据、权限或订阅不可用。请切换模型或联系服务管理员。",
   "model.error.output_limit": "模型达到输出上限，未能完成工具调用。自动恢复未成功，请提高输出上限或让任务分成更小的步骤。会话已保留。",
   "model.error.invalid_response": "模型服务返回了不完整或无效的回复。会话已保留，可继续运行或切换模型。",
-  "model.error.invalid_request": "模型服务不支持本次请求配置。请检查模型、API 协议及相关选项。"
+  "model.error.invalid_request": "模型服务不支持本次请求配置。请检查模型、API 协议及相关选项。",
+  "model.errorTitle.allowance": "模型额度不足",
+  "model.errorTitle.balance": "账户余额不足",
+  "model.errorTitle.signIn": "需要登录账号",
+  "model.errorTitle.access": "模型访问不可用",
+  "model.errorTitle.pending": "已有请求尚未结算",
+  "model.errorTitle.requestLimit": "请求超出模型限制",
+  "model.errorTitle.outputLimit": "工具调用未完成",
+  "model.errorTitle.configuration": "模型配置不可用",
+  "model.errorTitle.temporary": "暂时无法继续"
 }

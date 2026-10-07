@@ -11,7 +11,7 @@ import { labelImageName } from "./image-names.js";
 import { toolCallSummary, toolSectionNode } from "./tool-content.js";
 import { conversationGroups } from "./conversation-history.js";
 import { createConversationNavigation } from "./conversation-navigation.js";
-import { modelErrorMessage } from "../../utils/model-errors.js";
+import { modelErrorMessage, modelErrorTitle } from "../../utils/model-errors.js";
 
 export function searchResultTop(row, content, searchBottom, viewportBottom, lineHeight = 24) {
   const room = Math.max(0, viewportBottom - searchBottom);
@@ -290,12 +290,19 @@ export function eventsToTimeline(events, historyLost = false,
         if (answer) answer.state = "failed";
         const text = modelErrorMessage(event.model_error_kind,
           event.text || t("timeline.agentFailed", {}, "Agent 运行失败"));
+        const role = modelErrorTitle(event.model_error_kind,
+          t("timeline.runError", {}, "运行错误"));
         const errorKey = `${runKey}:${epoch}`;
         const previous = finalErrors.get(errorKey);
-        if (previous) { previous.text = text; previous.time = event.time; break; }
+        if (previous) {
+          previous.text = text;
+          previous.role = role;
+          previous.time = event.time;
+          break;
+        }
         const failure = { key: `error-${event.event_id}`,
           kind: event.agent_depth > 0 ? "task" : "error",
-          role: t("timeline.runError", {}, "运行错误"),
+          role,
           text, state: "failed", time: event.time };
         finalErrors.set(errorKey, failure);
         items.push(failure);

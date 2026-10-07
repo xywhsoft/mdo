@@ -15,3 +15,21 @@ const kinds = new Set([
 export function modelErrorMessage(kind, fallback) {
   return kinds.has(kind) ? t(`model.error.${kind}`, {}, fallback) : fallback;
 }
+
+const titles = {
+  daily_token_limit: "allowance", quota_exceeded: "allowance",
+  service_quota_exceeded: "allowance", insufficient_balance: "balance",
+  login_required: "signIn", authentication_failed: "access",
+  membership_required: "access", permission_denied: "access",
+  account_restricted: "access", service_configuration: "access",
+  request_pending: "pending", context_limit: "requestLimit",
+  request_too_large: "requestLimit", output_limit: "outputLimit",
+  model_changed: "configuration", model_unavailable: "configuration",
+  invalid_request: "configuration",
+};
+
+export function modelErrorTitle(kind, fallback) {
+  return kinds.has(kind)
+    ? t(`model.errorTitle.${titles[kind] || "temporary"}`, {}, fallback)
+    : fallback;
+}
