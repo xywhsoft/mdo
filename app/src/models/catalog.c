@@ -68,9 +68,11 @@ struct MdoModelCatalog {
 typedef struct MdoModelState {
     xmutex* Lock;
     xmutex* ReloadLock;
+    xmutex* OnlineLock;
     MdoModelCatalog* Catalog;
     uint64 NextGeneration;
     bool Initialized;
+    xvalue* OnlineCatalog;
 } MdoModelState;
 
 typedef struct MdoCapabilityName {
@@ -79,6 +81,7 @@ typedef struct MdoCapabilityName {
 } MdoCapabilityName;
 
 static MdoModelState g_MdoModels;
+static MdoModelOnlineAuthority g_MdoModelsOnline;
 
 static const MdoCapabilityName g_MdoCapabilities[] = {
     { "text-input", XLLM_CAP_TEXT_IN },
@@ -514,6 +517,7 @@ static bool MdoModelsParseModel(const xvalue* pValue,
     return true;
 }
 
+#include "online_catalog.inc.c"
 static MdoModelCatalog* MdoModelsBuildCandidate(uint64 Generation)
 {
     xjsonreadconfig JsonConfig;
@@ -579,6 +583,10 @@ static MdoModelCatalog* MdoModelsBuildCandidate(uint64 Generation)
             pCatalog->DefaultModelIndex = Index;
     }
     if ( pCatalog->DefaultModelIndex == SIZE_MAX ) goto fail;
+    xrtMutexLock(g_MdoModels.Lock);
+    xvalue* Online=g_MdoModels.OnlineCatalog?xrtValueClone(g_MdoModels.OnlineCatalog):NULL;
+    xrtMutexUnlock(g_MdoModels.Lock);
+    bool Merged=MdoModelsMergeOnline(pCatalog,Online);xrtValueRelease(Online);if(!Merged)goto fail;
     xrtValueRelease(pRoot);
     return pCatalog;
 
@@ -647,8 +655,9 @@ bool MdoModelManagerInit(void)
     memset(&g_MdoModels, 0, sizeof(g_MdoModels));
     g_MdoModels.Lock = xrtMutexCreate();
     g_MdoModels.ReloadLock = xrtMutexCreate();
+    g_MdoModels.OnlineLock=xrtMutexCreate();
     g_MdoModels.Catalog = MdoModelsCatalogCreate(0u);
-    if ( g_MdoModels.Lock == NULL || g_MdoModels.ReloadLock == NULL ||
+    if ( g_MdoModels.Lock == NULL || g_MdoModels.ReloadLock == NULL || g_MdoModels.OnlineLock==NULL ||
          g_MdoModels.Catalog == NULL ) {
         MdoModelManagerUnit();
         MdoModelsSetError(XERR_MEMORY, "cannot allocate model manager state");
@@ -667,10 +676,13 @@ void MdoModelManagerUnit(void)
     MdoModelCatalog* pCatalog = g_MdoModels.Catalog;
     xmutex* pLock = g_MdoModels.Lock;
     xmutex* pReloadLock = g_MdoModels.ReloadLock;
+    xmutex* pOnlineLock=g_MdoModels.OnlineLock;
+    xrtValueRelease(g_MdoModels.OnlineCatalog);
     memset(&g_MdoModels, 0, sizeof(g_MdoModels));
     MdoModelCatalogRelease(pCatalog);
     if ( pLock != NULL ) xrtMutexDestroy(pLock);
     if ( pReloadLock != NULL ) xrtMutexDestroy(pReloadLock);
+    if(pOnlineLock)xrtMutexDestroy(pOnlineLock);
 }
 
 uint64 MdoModelManagerGeneration(void)
@@ -935,6 +947,8 @@ static bool MdoModelsReasoningSupported(const MdoModelEntry* pModel,
     cstr Effort)
 {
     size_t i;
+    if ( pModel->ReasoningEffortCount == 0u )
+        return Effort == NULL || Effort[0] == '\0';
     for ( i = 0u; i < pModel->ReasoningEffortCount; ++i )
         if ( strcmp(pModel->ReasoningEfforts[i], Effort) == 0 ) return true;
     return false;
@@ -1082,9 +1096,9 @@ static char* MdoModelsResolveCredential(const MdoProviderEntry* pProvider,
     return NULL;
 }
 
-xllm_client* MdoModelClientCreate(const MdoModelCatalog* pCatalog,
+static xllm_client* MdoModelClientCreateAuth(const MdoModelCatalog* pCatalog,
     const MdoModelClientOptions* pOptions, MdoModelClientInfo* pInfo,
-    xllm_error* pError)
+    xllm_error* pError,const char* Access)
 {
     MdoModelClientOptions Defaults;
     const MdoModelEntry* pModel = NULL;
@@ -1168,10 +1182,12 @@ xllm_client* MdoModelClientCreate(const MdoModelCatalog* pCatalog,
     }
     if ( !MdoModelCatalogProfile(pCatalog, pModel->Id, Protocol,
             &Profile, pError) ) return NULL;
-    Endpoint = MdoModelsResolveEndpoint(pProvider->Endpoints[EndpointIndex],
-        Protocol, pError);
+    bool Online=MdoModelIsOnline(pCatalog,pModel->Id);
+    if(Online&&!Access){MdoModelsProfileError(pError,"Sign in to use online models");if(pError)pError->eCode=XLLM_ERROR_AUTH;goto done;}
+    static const char* const Paths[]={"/api/v1/ai/chat/completions","/api/v1/ai/responses","/api/v1/ai/messages"};
+    Endpoint=Online?MdoModelsOnlineJoin(g_MdoModelsOnline.Origin,Paths[EndpointIndex]):MdoModelsResolveEndpoint(pProvider->Endpoints[EndpointIndex],Protocol,pError);
     if ( Endpoint == NULL ) goto done;
-    Secret = MdoModelsResolveCredential(pProvider, pError);
+    Secret=Online?xrtStrDup(Access):MdoModelsResolveCredential(pProvider,pError);
     if ( Secret == NULL ) goto done;
     memset(&Transport, 0, sizeof(Transport));
     Transport.Size = sizeof(Transport);
@@ -1202,6 +1218,7 @@ xllm_client* MdoModelClientCreate(const MdoModelCatalog* pCatalog,
     Config.uMaxOutputTokens = MaxOutputTokens;
     Config.uTimeoutMs = pProvider->TimeoutMilliseconds;
     Config.bVerifyPeer = pProvider->VerifyPeer;
+    if(Online){Config.uMaxAttempts=1;Config.bVerifyPeer=!strncmp(g_MdoModelsOnline.Origin,"https://",8);}
     Config.pX509Store = CaStore;
     if ( strcmp(Transport.ProxyKind, "none") != 0 ) {
         Config.eProxyKind = strcmp(Transport.ProxyKind, "socks5") == 0
@@ -1232,3 +1249,4 @@ done:
     xrtFree(Endpoint);
     return pClient;
 }
+#include "online_access.inc.c"

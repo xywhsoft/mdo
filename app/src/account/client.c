@@ -111,7 +111,7 @@ static xvalue* MdoAccountJsonClient(cstr Origin, cstr Path, cstr Method, const x
         !xrtUtf8Valid((xstrview){(cstr)response.Body, response.BodySize}, NULL)) goto done;
     xjsonreadconfig limits; xrtJsonReadConfigInit(&limits);
     limits.MaxInputBytes = 64u * 1024u; limits.MaxDepth = 6;
-    limits.MaxValues = Service ? 1024u : 256u; limits.MaxStringBytes = 8192;
+    limits.MaxValues=Service||!strncmp(Path,"/api/v1/ai/",11)?2048u:256u;limits.MaxStringBytes=8192;
     envelope = xrtJsonRead((xstrview){(cstr)response.Body, response.BodySize}, &limits);
     uint64 code = 1;
     if (!envelope || !MdoAccountGetUInt(xrtValueObjectGet(envelope, xrtStrView("code")), &code) || code != 0) {

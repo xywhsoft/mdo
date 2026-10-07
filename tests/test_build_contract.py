@@ -58,24 +58,24 @@ class BuildContractTests(unittest.TestCase):
         self.assertEqual(BUILD.host_profile_digest(True), "full")
         self.assertEqual(len(BUILD.host_profile_digest(False)), 64)
 
-    def test_optional_built_in_credential_is_local_and_never_reuses_a_stale_key(self) -> None:
+    def test_online_models_never_bundle_a_provider_credential(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
             source, target = Path(raw) / "connection.json", Path(raw) / "bundled.key"
             with patch.object(BUILD, "BUILTIN_CONNECTION_PATH", source), patch.object(BUILD, "BUILTIN_KEY_PATH", target):
                 BUILD.prepare_builtin_credential()
                 self.assertFalse(target.exists())
                 source.write_text('{"api_key":"fixture-only-key"}', encoding="ascii")
+                target.write_bytes(b"stale-provider-key")
                 BUILD.prepare_builtin_credential()
-                self.assertEqual(target.read_bytes(), b"fixture-only-key")
+                self.assertFalse(target.exists())
                 source.write_text('{"api_key":"bad\\nkey"}', encoding="ascii")
-                with self.assertRaises(BUILD.BuildError):
-                    BUILD.prepare_builtin_credential()
-                self.assertEqual(target.read_bytes(), b"fixture-only-key")
+                BUILD.prepare_builtin_credential()
+                self.assertFalse(target.exists())
                 source.unlink()
                 BUILD.prepare_builtin_credential()
                 self.assertFalse(target.exists())
-                with self.assertRaises(BUILD.BuildError):
-                    BUILD.prepare_builtin_credential(source)
+                BUILD.prepare_builtin_credential(source)
+                self.assertFalse(target.exists())
 
     def test_dependency_lock_is_complete_and_exact(self) -> None:
         self.assertEqual(self.lock["schema_version"], 1)
@@ -137,6 +137,7 @@ class BuildContractTests(unittest.TestCase):
             "src/security/secrets.c",
             "src/models/catalog.c",
             "src/skills/manager.c",
+            "src/skills/tools.c",
             "src/memory/manager.c",
             "src/memory/transfer.c",
             "src/migration/manager.c",
@@ -215,6 +216,8 @@ class BuildContractTests(unittest.TestCase):
             "src/api/value.c",
             "src/api/resources.c",
             "src/api/catalogs.c",
+            "src/api/extensions.c",
+            "src/api/ecosystem.c",
             "src/api/state.c",
             "src/api/workspace_state.c",
             "src/api/pane_layout.c",

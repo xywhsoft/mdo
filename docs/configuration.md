@@ -45,11 +45,13 @@ mdo 配置 schema v1 由一份内置基线、三份可选用户 patch 和一层�
 
 `models.providers` 与 `models.items` 分开。provider 保存 endpoint、TLS 校验、超时和凭据引用；model 保存 provider ID、wire model、可选协议、默认协议、xllm 能力、上下文/输入/输出窗口、推理档位和附件类型。模型引用的每种协议必须在 provider 上有对应 endpoint，默认协议必须属于模型协议集。
 
-`ornith-1.5-35b` 是内建免费默认模型，`ornith` provider 和模型均不可编辑/删除。当前服务地址为 `http://222.186.10.53:8096/v1`；默认使用 Responses，同时提供 Chat Completions 和 Anthropic 接口。模型窗口按服务 `/models` 报告设为 240128 tokens，支持图片输入、工具和流式输出。
+`ornith-1.5-35b` 是内建默认模型，登录后通过 ai.xywhsoft.com 模型网关使用。内建模型不可编辑/删除；网站发布的其他可用模型（例如 VIP 的 GLM）随账号目录加载，退出登录后移除。个人配置的模型保持独立。网站目录提供窗口、协议、工具、图片和推理档位等能力，客户端不会把在线目录写入用户配置。
 
-凭据不进入 Git。构建器可从被忽略的 `.build/ornith-connection.json` 读取 `api_key`，或者显式传入 `--builtin-connection <本机文件>`，写入被忽略的内置资源 `app/default-home/config/secrets/builtin-model.key`。因此提供凭据的发布包仍可单文件对话。未提供凭据也能构建；运行时用 `MDO_ORNITH_API_KEY` 或 `mdo-home/config/secrets/builtin-model.key` 配置。环境变量优先，其次便携 Home 文件，最后内置资源。JSON 配置和公开目录只含凭据引用，不返回密钥。删除本机构建输入后的下一次构建会移除旧的内置密钥资源，避免误带旧凭据。
+发布包不携带上游模型密钥，构建器会删除旧的内置密钥资源；旧 `--builtin-connection` 参数仅兼容命令行，不再读取或打包该文件。上游连接与密钥只由网站管理员维护。每次在线模型请求从原生账号服务取得当前登录凭证，自动等待续期，退出或切换账号会取消旧调用；模型生成请求不会因刷新而自动重发。JS 只能读取过滤后的账号、额度和模型信息。
 
-部署可分别用 `MDO_ORNITH_CHAT_COMPLETIONS_URL`、`MDO_ORNITH_RESPONSES_URL`、`MDO_ORNITH_ANTHROPIC_URL` 覆盖连接地址。旧 `ling-3.0-tiny` / `ling-gpu` 会话引用由模型目录兼容解析到 Ornith；历史内容不被改写。已有 `config/models.json` 中的旧内建完整数组在读取时升级，保留自定义条目；这一步不写文件，下一次用户保存配置才落盘。新的配置修改继续验证内建 descriptor。
+旧 `ling-3.0-tiny` / `ling-gpu` 会话引用继续解析到 Ornith；历史内容不被改写。已有 `config/models.json` 中的旧内建数组在读取时升级，保留自定义条目；这一步不写文件。生产程序中的内建模型不会通过旧环境变量绕过网站登录与额度。
+
+左栏显示用户组、VIP 头像标识和各模型剩余额度百分比；账号设置显示剩余/总量、请求中预留量和每日北京时间 00:00 重置说明。无限额度显示“无限制”，不会显示虚构百分比。后台快照每 30 秒更新，模型调用结束后主动刷新；过期快照显示正在更新。日 token 计量包含输入（缓存仅计一次）与输出（包含推理），由网站完成，与上游供应商的套餐额度独立。
 
 模型目录是引用计数的不可变 generation。reload 构造完整候选后一次发布，已有运行可继续读取旧 generation。公开 provider 信息只返回 `HasCredentialReference`，不会返回 reference 文本或解析后的 key；`MdoModelCatalogProfile` 把选定协议映射为相应的 xllm provider，并生成经过 xllm 自身校验的非敏感 profile。
 

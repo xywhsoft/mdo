@@ -133,6 +133,8 @@ static bool MdoAgentsReasoningSupported(const MdoModelInfo* Model,
     const char* Reasoning)
 {
     size_t i;
+    if ( Model->ReasoningEffortCount == 0u )
+        return Reasoning == NULL || Reasoning[0] == '\0';
     if ( Reasoning == NULL || Reasoning[0] == '\0' ) return false;
     for ( i = 0u; i < Model->ReasoningEffortCount; ++i )
         if ( strcmp(Model->ReasoningEfforts[i], Reasoning) == 0 ) return true;
@@ -177,6 +179,9 @@ static bool MdoAgentsResolveModel(const MdoModelCatalog* Catalog,
     }
     Result->ReasoningEffort = Reasoning != NULL && Reasoning[0] != '\0' ?
         Reasoning : Result->Info.DefaultReasoningEffort;
+    /* A shared preference must not add unsupported wire fields to a model
+     * whose service catalog has no reasoning controls. */
+    if ( Result->Info.ReasoningEffortCount == 0u ) Result->ReasoningEffort = "";
     if ( !MdoAgentsReasoningSupported(&Result->Info,
             Result->ReasoningEffort) ) {
         MdoAgentsError(Error, XWORK_ERROR_MODEL,
@@ -324,6 +329,11 @@ static xllm_result MdoAgentsComplete(void* UserData,
                 "model route is unavailable");
         }
         return XLLM_RESULT_ERROR;
+    }
+    if(MdoModelIsOnline(Owner->Models,Match->ModelId)){
+        MdoModelClientOptionsInit(&Options);Options.ModelId=Match->ModelId;Options.Protocol=Match->Protocol;
+        Options.ReasoningEffort=Match->ReasoningEffort;Options.MaxOutputTokens=Match->MaxOutputTokens;
+        return MdoModelOnlineComplete(Owner->Models,&Options,Request,Callbacks,Response,Error);
     }
     if ( Owner->RouteLock == NULL || !xrtMutexLock(Owner->RouteLock) ) {
         if ( Error != NULL ) {

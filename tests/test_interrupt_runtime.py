@@ -103,6 +103,19 @@ def until(predicate, seconds: float = 5.0):
 
 def start_host(host: Path, config: Path, home: Path, environment: dict,
                log: Path, port: int) -> subprocess.Popen:
+    # These pre-account runtime probes isolate conversation mechanics with a
+    # loopback provider. Replace the authority callback only in their disposable
+    # source copy; the product has no environment switch that bypasses login.
+    # The normal authority is exercised separately by online_model_runtime.
+    endpoint = environment.get("MDO_ORNITH_RESPONSES_URL", "")
+    if endpoint.startswith("http://127.0.0.1:"):
+        source = config.parent / "src/models/online_access.inc.c"
+        if source.is_file():
+            assert config.parent.resolve().is_relative_to((ROOT / ".build").resolve())
+            text = source.read_text(encoding="utf-8")
+            text = text.replace("{g_MdoModelsOnline=Authority?*Authority:(MdoModelOnlineAuthority){0};}",
+                "{(void)Authority;g_MdoModelsOnline=(MdoModelOnlineAuthority){0};}")
+            source.write_text(text,encoding="utf-8")
     output = log.open("ab")
     try:
         process = subprocess.Popen(

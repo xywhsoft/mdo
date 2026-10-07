@@ -297,28 +297,12 @@ def write_if_changed(path: Path, content: bytes) -> None:
 
 
 def prepare_builtin_credential(connection: Path | None = None) -> None:
-    """Provision the optional bundled credential without tracking or logging it.
+    """Remove legacy bundled keys; online models now use the user's login.
 
-    A checkout can always build without credentials; its runtime then uses
-    MDO_ORNITH_API_KEY or a portable Home key file. Never reuse a stale key from
-    a previous provisioned build when its input has been removed.
+    Keep the legacy argument accepted by shared desktop/Android build callers,
+    but never read or embed its provider secret in a client artifact.
     """
-    source = connection if connection is not None else BUILTIN_CONNECTION_PATH
-    if not source.is_file():
-        if connection is not None:
-            raise BuildError("the explicit built-in credential input is unavailable")
-        BUILTIN_KEY_PATH.unlink(missing_ok=True)
-        return
-    try:
-        value = json.loads(source.read_text(encoding="utf-8"))
-        key = value.get("api_key") if isinstance(value, dict) else None
-    except (OSError, UnicodeError, json.JSONDecodeError):
-        raise BuildError("cannot read built-in credential input") from None
-    if not isinstance(key, str) or not key or len(key) > 4096 or any(
-        ord(char) < 0x21 or ord(char) > 0x7e for char in key
-    ):
-        raise BuildError("built-in credential must be nonempty printable ASCII below 4097 bytes")
-    write_if_changed(BUILTIN_KEY_PATH, key.encode("ascii"))
+    BUILTIN_KEY_PATH.unlink(missing_ok=True)
 
 
 def prepare(lock: dict, connection: Path | None = None) -> None:
@@ -426,7 +410,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--output", type=Path, help="mdo executable path")
     parser.add_argument("--cc", default="gcc", help="C/C++ compiler used by xserver")
     parser.add_argument("--builtin-connection", type=Path,
-                        help="local JSON with api_key for the bundled Ornith service (never logged)")
+                        help="obsolete compatibility argument; online provider keys are never bundled")
     parser.add_argument("--prepare-only", action="store_true",
                         help="verify dependencies and generate the unity source only")
     parser.add_argument("--skip-host-build", action="store_true",

@@ -11,7 +11,7 @@
   "timeline.emptyPrompt": "Задача с вложением",
   "timeline.noReplyYet": "Ответа пока нет",
   "account.title": "Аккаунт",
-  "account.description": "Войдите для поиска в интернете. Локальные проекты, сессии и модели работают без входа.",
+  "account.description": "Войдите для использования онлайн-моделей, поиска и магазина расширений. Локальные проекты, сессии и собственные провайдеры моделей доступны без входа.",
   "account.login": "Войти",
   "account.signedIn": "Вход выполнен",
   "account.signedOut": "Вход не выполнен",
@@ -1810,5 +1810,18 @@
   "store.draftForkConfirm": "Черновик изменён в другом месте. Сохранить введённые данные в новый черновик?",
   "store.draftSaveFailed": "Не удалось сохранить черновик. Повторите попытку или экспортируйте пакет.",
   "ecosystem.localImport": "Локальный импорт",
-  "ecosystem.returnPackage": "Вернуться к расширению"
+  "ecosystem.returnPackage": "Вернуться к расширению",
+  "account.userGroup": "Группа",
+  "account.freeGroup": "Бесплатная",
+  "account.groupLoading": "Загрузка группы…",
+  "account.modelAllowance": "Лимит токенов модели",
+  "account.modelRemaining": "Остаток {model} на сегодня",
+  "account.allowanceLoading": "Загрузка лимита…",
+  "account.allowanceUnavailable": "Лимит временно недоступен",
+  "account.quotaUpdating": "Обновление",
+  "account.unlimited": "Без лимита ∞",
+  "account.tokensUsed": "Сегодня использовано: {count} токенов",
+  "account.tokensRemaining": "Осталось {remaining} / {limit} токенов",
+  "account.tokensReserved": "Выполняющиеся запросы резервируют {count} токенов",
+  "account.tokenReset": "Сброс ежедневно в 00:00 по Пекину; входные и выходные токены вместе"
 }

@@ -11,7 +11,7 @@
   "timeline.emptyPrompt": "附件任务",
   "timeline.noReplyYet": "尚无回复",
   "account.title": "账号",
-  "account.description": "登录网站账号以使用联网搜索。本地项目、会话和模型无需登录。",
+  "account.description": "登录网站账号以使用在线模型、联网搜索和扩展商店。本地项目、会话及个人配置的模型无需登录。",
   "account.login": "登录账号",
   "account.signedIn": "已登录",
   "account.signedOut": "未登录",
@@ -1810,5 +1810,18 @@
   "store.draftForkConfirm": "草稿已被其他操作修改。将当前内容另存为新草稿？",
   "store.draftSaveFailed": "草稿保存失败，请重试或导出插件包。",
   "ecosystem.localImport": "本地导入",
-  "ecosystem.returnPackage": "返回插件"
+  "ecosystem.returnPackage": "返回插件",
+  "account.userGroup": "用户组",
+  "account.freeGroup": "免费用户",
+  "account.groupLoading": "读取用户组…",
+  "account.modelAllowance": "模型 token 额度",
+  "account.modelRemaining": "{model} 今日剩余额度",
+  "account.allowanceLoading": "正在读取额度…",
+  "account.allowanceUnavailable": "额度暂时不可用",
+  "account.quotaUpdating": "更新中",
+  "account.unlimited": "不限额度 ∞",
+  "account.tokensUsed": "今日已用 {count} token",
+  "account.tokensRemaining": "剩余 {remaining} / {limit} token",
+  "account.tokensReserved": "在途预留 {count} token",
+  "account.tokenReset": "北京时间每日 00:00 重置，输入与输出合计"
 }

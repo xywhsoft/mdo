@@ -84,6 +84,19 @@ typedef struct MdoModelClientInfo {
     uint32 MaxOutputTokens;
 } MdoModelClientInfo;
 
+/* Account-owned authentication and cancellation for one online model call. */
+typedef struct MdoModelOnlineAccess { const char* Token; xcancel* Cancel; void* Handle; } MdoModelOnlineAccess;
+typedef struct MdoModelOnlineAuthority {
+    const char* Origin;
+    bool (*Acquire)(xcancel*,MdoModelOnlineAccess*);
+    void (*Release)(MdoModelOnlineAccess*,int);
+} MdoModelOnlineAuthority;
+void MdoModelManagerSetOnlineAuthority(const MdoModelOnlineAuthority* Authority);
+bool MdoModelManagerSetOnlineCatalog(const xvalue* Catalog);
+bool MdoModelIsOnline(const MdoModelCatalog*,const char* ModelId);
+xllm_result MdoModelOnlineComplete(const MdoModelCatalog*,const MdoModelClientOptions*,
+    const xllm_request*,const xllm_stream_callbacks*,xllm_response**,xllm_error*);
+
 bool MdoModelManagerInit(void);
 void MdoModelManagerUnit(void);
 bool MdoModelManagerReload(void);

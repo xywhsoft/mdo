@@ -27,9 +27,8 @@ python tools/build_android.py --xserver-root D:\GIT\xserver-mdo-refactor --wsl `
 ```
 
 WSL 方式的 SDK 和 JDK 参数为 Linux 路径，输出保留在 Windows 工作区。更换机器时
-先安装 JDK 17，再运行工具链 setup；路径可以任意指定。内建模型凭据仍通过现有
-`--builtin-connection`、环境变量或被忽略的 `.build/ornith-connection.json` 注入，
-没有凭据时构建会明确失败。不要提交密钥。
+先安装 JDK 17，再运行工具链 setup；路径可以任意指定。APK 不包含上游模型密钥，
+内建在线模型使用网站账号登录和模型网关；构建无需模型凭据。
 
 默认产物为根目录 `mdo-arm64-v8a.apk`。`--edition lite`（默认）为精简版，
 `--edition full` 包含 BusyBox、curl、jq、SSH/SCP/SFTP 和 Python。两版使用相同

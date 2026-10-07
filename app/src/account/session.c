@@ -1,4 +1,8 @@
 #include "internal.h"
+#include "../../include/mdo/models.h"
+static bool MdoAccountLeaseLocked(xcancel*,MdoAccountLease*);
+static bool MdoAccountQueueLocked(unsigned);
+#include "model_allowance.inc.c"
 
 MdoAccountManager g_MdoAccount;
 
@@ -14,6 +18,7 @@ static void MdoAccountClearTokensLocked(void)
 {
     xrtSecureZero(&g_MdoAccount.Tokens, sizeof(g_MdoAccount.Tokens));
     g_MdoAccount.Saved = false;
+    MdoAccountClearModelsLocked();
     (void)MdoHomeRemove(MDO_ACCOUNT_SESSION_PATH, false);
 }
 static void MdoAccountClearAuthorizationLocked(void)
@@ -87,11 +92,15 @@ static int32 MdoAccountWorker(void* Unused)
     (void)Unused;
     for (;;) {
         MdoAccountWork work; xcancel* cancel; uint16 status = 0, usage_status = 0;
-        xvalue *body = NULL, *data = NULL, *profile = NULL, *usage = NULL;
+        xvalue *body=NULL,*data=NULL,*profile=NULL,*usage=NULL,*allowance=NULL,*catalog=NULL;
+        uint16 models_status=0;
         MdoAccountTokens tokens; bool ok = false;
         memset(&work, 0, sizeof(work)); memset(&tokens, 0, sizeof(tokens));
         xrtMutexLock(g_MdoAccount.Lock);
         while (!g_MdoAccount.Stopping && !g_MdoAccount.Work.Kind) {
+            if(g_MdoAccount.Tokens.Access[0]&&!xrtDeadlineExpired(g_MdoAccount.Tokens.Expires)&&
+                xrtDeadlineExpired(g_MdoAccount.NextProfile)&&!g_MdoAccount.Authorization.State[0]){
+                (void)MdoAccountQueueLocked(MDO_ACCOUNT_WORK_PROFILE);break;}
             if (g_MdoAccount.Authorization.Expires && g_MdoAccount.Authorization.Expires <= xrtNow()/1000000) {
                 MdoAccountClearAuthorizationLocked(); strcpy(g_MdoAccount.Message, "authorization_expired");
                 MdoAccountChangedLocked();
@@ -100,6 +109,7 @@ static int32 MdoAccountWorker(void* Unused)
         }
         if (g_MdoAccount.Stopping) { xrtMutexUnlock(g_MdoAccount.Lock); break; }
         work = g_MdoAccount.Work; xrtSecureZero(&g_MdoAccount.Work, sizeof(g_MdoAccount.Work));
+        if(work.Kind==MDO_ACCOUNT_WORK_PROFILE)g_MdoAccount.NextProfile=xrtDeadlineAfter(30000000);
         g_MdoAccount.Busy = true; g_MdoAccount.BusyKind = work.Kind;
         cancel = xrtCancelCreate(); g_MdoAccount.WorkCancel = cancel;
         if (work.Kind == MDO_ACCOUNT_WORK_REFRESH) {
@@ -133,6 +143,12 @@ static int32 MdoAccountWorker(void* Unused)
             profile = MdoAccountProfile(data, work.Tokens.MemberId); xrtValueRelease(data); data = NULL;
             data = MdoAccountClient(work.Origin, "/api/v1/search/usage", "GET", NULL, work.Tokens.Access, cancel, &usage_status);
             usage = MdoAccountUsage(data); xrtValueRelease(data); data = NULL;
+            data=MdoAccountClient(work.Origin,"/api/v1/ai/allowance","GET",NULL,work.Tokens.Access,cancel,&models_status);
+            allowance=MdoAccountAllowance(data,work.Tokens.MemberId);xrtValueRelease(data);data=NULL;
+            if(!allowance&&models_status==200)models_status=502;
+            uint16 catalog_status=0;
+            catalog=MdoAccountClient(work.Origin,"/api/v1/ai/catalog","GET",NULL,work.Tokens.Access,cancel,&catalog_status);
+            if(catalog_status!=200){xrtValueRelease(catalog);catalog=NULL;}
         } else if (cancel && work.Kind == MDO_ACCOUNT_WORK_LOGOUT) {
             data = MdoAccountClient(work.Origin, "/api/v1/logout", "POST", NULL, work.Tokens.Access, cancel, &status);
             xrtValueRelease(data); data = NULL;
@@ -148,6 +164,7 @@ static int32 MdoAccountWorker(void* Unused)
                         MdoAccountNewSessionLocked();
                         xrtValueRelease(g_MdoAccount.Profile); g_MdoAccount.Profile = NULL;
                         xrtValueRelease(g_MdoAccount.Usage); g_MdoAccount.Usage = NULL;
+                        MdoAccountClearModelsLocked();
                         g_MdoAccount.Remember = work.Kind == MDO_ACCOUNT_WORK_PASSWORD ? work.Remember : work.Authorization.Remember;
                     }
                     g_MdoAccount.Tokens = tokens; g_MdoAccount.Message[0] = 0;
@@ -165,6 +182,10 @@ static int32 MdoAccountWorker(void* Unused)
                 if (profile) { xrtValueRelease(g_MdoAccount.Profile); g_MdoAccount.Profile = profile; profile = NULL; }
                 if (usage) { xrtValueRelease(g_MdoAccount.Usage); g_MdoAccount.Usage = usage; usage = NULL; }
                 if (usage_status) g_MdoAccount.SearchStatus = usage_status;
+                if(allowance){xrtValueRelease(g_MdoAccount.Allowance);g_MdoAccount.Allowance=allowance;allowance=NULL;}
+                g_MdoAccount.ModelsStatus=models_status;
+                cstr version=MdoAccountText(catalog,"version",64);
+                if(version&&strlen(version)==64&&strcmp(version,g_MdoAccount.OnlineVersion)&&MdoModelManagerSetOnlineCatalog(catalog))strcpy(g_MdoAccount.OnlineVersion,version);
                 /* Profile reads never invalidate a working token on transient
                  * network failures. Search handles a real 401 with one refresh. */
             } else if (work.Kind == MDO_ACCOUNT_WORK_LOGOUT && status != 200) {
@@ -173,7 +194,7 @@ static int32 MdoAccountWorker(void* Unused)
             MdoAccountChangedLocked();
         }
         xrtMutexUnlock(g_MdoAccount.Lock);
-        xrtCancelDestroy(cancel); xrtValueRelease(profile); xrtValueRelease(usage);
+        xrtCancelDestroy(cancel);xrtValueRelease(profile);xrtValueRelease(usage);xrtValueRelease(allowance);xrtValueRelease(catalog);
         xrtSecureZero(&work, sizeof(work)); xrtSecureZero(&tokens, sizeof(tokens));
     }
     return 0;
@@ -203,6 +224,8 @@ bool MdoAccountInit(void)
     (void)MdoAccountAuthorizationLoad(&g_MdoAccount.Authorization);
     if (g_MdoAccount.Authorization.State[0]) xrtSecureZero(&g_MdoAccount.Work, sizeof(g_MdoAccount.Work));
     xrtMutexUnlock(g_MdoAccount.Lock);
+    MdoModelOnlineAuthority authority={MDO_ACCOUNT_SERVICE_ORIGIN,MdoAccountModelAccess,MdoAccountModelRelease};
+    MdoModelManagerSetOnlineAuthority(&authority);
     g_MdoAccount.Worker = xrtThreadCreate(MdoAccountWorker, NULL, 0);
     if (g_MdoAccount.Worker) return true;
 failed:
@@ -218,6 +241,7 @@ void MdoAccountUnit(void)
         xrtMutexUnlock(g_MdoAccount.Lock);
     }
     if (g_MdoAccount.Worker) { xrtThreadWait(g_MdoAccount.Worker); xrtThreadDestroy(g_MdoAccount.Worker); }
+    xrtValueRelease(g_MdoAccount.Allowance);MdoModelManagerSetOnlineAuthority(NULL);
     xrtValueRelease(g_MdoAccount.Profile); xrtValueRelease(g_MdoAccount.Usage);
     xrtCancelDestroy(g_MdoAccount.SessionCancel); xrtCondDestroy(g_MdoAccount.Changed);
     xrtMutexDestroy(g_MdoAccount.Lock); xrtSecureZero(&g_MdoAccount, sizeof(g_MdoAccount));
@@ -255,6 +279,8 @@ xvalue* MdoAccountSnapshot(void)
         MdoAccountSetUInt(out, "search_status", g_MdoAccount.SearchStatus);
     if (ok && g_MdoAccount.Profile) ok = xrtValueObjectSetNew(out, xrtStrView("profile"), xrtValueClone(g_MdoAccount.Profile));
     if (ok && g_MdoAccount.Usage) ok = xrtValueObjectSetNew(out, xrtStrView("usage"), xrtValueClone(g_MdoAccount.Usage));
+    if(ok&&g_MdoAccount.Allowance)ok=xrtValueObjectSetNew(out,XRT_STR_LITERAL("model_allowance"),xrtValueClone(g_MdoAccount.Allowance));
+    if(ok)ok=MdoAccountSetUInt(out,"models_status",g_MdoAccount.ModelsStatus)&&MdoAccountSetUInt(out,"model_generation",MdoModelManagerGeneration());
     for (i = 0; ok && i < MDO_ACCOUNT_WAIT_MAX; i++) if (g_MdoAccount.Waiters[i].Id && !g_MdoAccount.Waiters[i].Skipped) {
         xvalue* item = xrtValueObject();
         ok = item && MdoAccountSetUInt(item, "id", g_MdoAccount.Waiters[i].Id) &&

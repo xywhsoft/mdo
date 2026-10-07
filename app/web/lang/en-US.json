@@ -11,7 +11,7 @@
   "timeline.emptyPrompt": "Attachment task",
   "timeline.noReplyYet": "No reply yet",
   "account.title": "Account",
-  "account.description": "Sign in to use web search. Local projects, sessions and models work without an account.",
+  "account.description": "Sign in for online models, web search and the extension store. Local projects, sessions and your own model providers do not require sign-in.",
   "account.login": "Sign in",
   "account.signedIn": "Signed in",
   "account.signedOut": "Signed out",
@@ -1810,5 +1810,18 @@
   "store.draftForkConfirm": "The draft was changed elsewhere. Save your current input as a new draft?",
   "store.draftSaveFailed": "Draft could not be saved. Retry or export the package.",
   "ecosystem.localImport": "Local import",
-  "ecosystem.returnPackage": "Return to extension"
+  "ecosystem.returnPackage": "Return to extension",
+  "account.userGroup": "User group",
+  "account.freeGroup": "Free",
+  "account.groupLoading": "Loading group…",
+  "account.modelAllowance": "Model token allowance",
+  "account.modelRemaining": "{model} remaining today",
+  "account.allowanceLoading": "Loading allowance…",
+  "account.allowanceUnavailable": "Allowance temporarily unavailable",
+  "account.quotaUpdating": "Updating",
+  "account.unlimited": "Unlimited ∞",
+  "account.tokensUsed": "Used today: {count} tokens",
+  "account.tokensRemaining": "{remaining} / {limit} tokens remaining",
+  "account.tokensReserved": "{count} tokens reserved by active requests",
+  "account.tokenReset": "Resets daily at 00:00 Beijing time; input and output combined"
 }

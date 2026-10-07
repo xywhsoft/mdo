@@ -2,12 +2,22 @@ import { api } from "../../api/client.js";
 import { subscribeLocale, t } from "../../i18n.js";
 import { toast, errorMessage } from "../../utils/dom.js";
 import { isRemoteTarget } from "../../api/target.js";
+import { allowanceView } from "./allowance.js";
 
 // Tokens stay in the native host. Passwords are submitted once from the form,
 // then cleared; account rendering uses only filtered public snapshots.
-export function createAccount({ navigation }) {
+export function createAccount({ navigation, onModelsChange = () => {} }) {
   const panel = document.querySelector("#account-panel");
   const sidebar = document.querySelector("#open-account");
+  const sidebarQuota = document.createElement("button");
+  sidebarQuota.className = "sidebar-model-allowance"; sidebarQuota.type = "button"; sidebarQuota.hidden = true;
+  sidebar.closest(".sidebar-identity-row").after(sidebarQuota);
+  const identity = document.createElement("span"); identity.className = "account-identity";
+  const name = sidebar.querySelector("[data-account-name]"); name.replaceWith(identity); identity.append(name);
+  const group = document.createElement("span"); group.className = "account-group"; identity.append(group);
+  const vipBadge = document.createElement("span"); vipBadge.className = "account-vip-badge"; vipBadge.textContent = "VIP";
+  vipBadge.setAttribute("aria-hidden", "true"); sidebar.querySelector("[data-account-avatar]").append(vipBadge);
+  let modelGeneration = null;
   const dialog = document.querySelector("#account-login-dialog");
   const notice = document.querySelector("#account-search-notice");
   const remember = dialog.querySelector("[name=remember]");
@@ -35,7 +45,14 @@ export function createAccount({ navigation }) {
     const focusOwner = panel.contains(focused) ? panel : notice.contains(focused) ? notice : null;
     const focusAction = focused?.dataset?.accountAction, focusId = focused?.dataset?.id;
     sidebar.querySelector("[data-account-name]").textContent = signedIn() ? displayName() : copy("login");
-    sidebar.querySelector("[data-account-avatar]").textContent = signedIn() ? [...displayName()][0]?.toUpperCase() : "◉";
+    const avatar = sidebar.querySelector("[data-account-avatar]");
+    avatar.replaceChildren(document.createTextNode(signedIn() ? [...displayName()][0]?.toUpperCase() || "◉" : "◉"), vipBadge);
+    const allowance = signedIn() ? allowanceView(snapshot.model_allowance) : null;
+    const vip = Boolean(allowance?.vip); sidebar.classList.toggle("is-vip", vip); vipBadge.hidden = !vip;
+    group.hidden = !signedIn(); group.textContent = !allowance ? copy("groupLoading") : allowance.group === "vip" ? "VIP" :
+      allowance.group === "free" ? copy("freeGroup") : allowance.group;
+    renderQuotas(sidebarQuota, allowance, true);
+    sidebarQuota.hidden = !signedIn();
     sidebar.title = signedIn() ? copy("title") : copy("login");
     const body = panel.querySelector("[data-account-body]");
     const stateText = copy(snapshot.state === "signing_in" ? "signingIn" : snapshot.state === "signed_in" ? "signedIn" :
@@ -53,6 +70,10 @@ export function createAccount({ navigation }) {
       for (const [key, value] of [["phoneVerified", snapshot.profile.phone_verified], ["emailVerified", snapshot.profile.email_verified]])
         details.append(text("dt", copy(key)), text("dd", copy(value ? "verified" : "unverified")));
       nodes.push(details);
+      if (allowance) {
+        details.append(text("dt", copy("userGroup")), text("dd", group.textContent));
+        const meters = text("section", "", "account-model-allowance"); renderQuotas(meters, allowance, false); nodes.push(meters);
+      }
     }
     if (snapshot.message) nodes.push(text("p", copy(snapshot.message), "account-hint"));
     if ([403, 429, 503].includes(snapshot.search_status))
@@ -103,6 +124,31 @@ export function createAccount({ navigation }) {
       if (snapshot.state === "signed_in" && !snapshot.message) { dialogLogin = false; dialog.close(); toast(copy("success"), "success"); }
     }
   }
+  function renderQuotas(parent, allowance, compact) {
+    parent.replaceChildren(); parent.setAttribute("aria-label", copy("modelAllowance"));
+    if (!allowance) { parent.append(text("span", copy(snapshot?.models_status && snapshot.models_status !== 200 ? "allowanceUnavailable" : "allowanceLoading"), "account-quota-note")); return; }
+    if (!compact) parent.append(text("h3", copy("modelAllowance")), text("p", copy("tokenReset"), "account-note"));
+    for (const q of allowance.quotas) {
+      const row = text("div", "", "account-quota-row"), header = text("div", "", "account-quota-heading");
+      header.append(text("span", q.title), text("strong", q.stale ? copy("quotaUpdating") : q.unlimited ? copy("unlimited") : q.percentText));
+      row.append(header); row.classList.toggle("is-low", !q.unlimited && q.percentage < 10);
+      if (!q.unlimited) {
+        const bar = text("div", "", "account-quota-bar"); bar.setAttribute("role", "progressbar");
+        bar.setAttribute("aria-label", copy("modelRemaining", { model: q.title })); bar.setAttribute("aria-valuemin", "0"); bar.setAttribute("aria-valuemax", "100");
+        bar.setAttribute("aria-valuenow", String(q.percentage)); bar.setAttribute("aria-valuetext", q.stale ? copy("quotaUpdating") : q.percentText);
+        const fill = text("span", ""); fill.style.width = `${q.percentage}%`; bar.append(fill); row.append(bar);
+      }
+      const counts = q.unlimited ? copy("tokensUsed", { count: q.used_tokens.toLocaleString() }) :
+        copy("tokensRemaining", { remaining: q.remaining_tokens.toLocaleString(), limit: q.limit_tokens.toLocaleString() });
+      row.title = counts + " · " + copy("tokenReset");
+      if (!compact) {
+        row.append(text("p", counts, "account-note"));
+        if (q.reserved_tokens) row.append(text("p", copy("tokensReserved", { count: q.reserved_tokens.toLocaleString() }), "account-note"));
+      }
+      parent.append(row);
+    }
+    if (!allowance.quotas.length) parent.append(text("span", copy("allowanceUnavailable"), "account-quota-note"));
+  }
   function schedule() {
     clearTimeout(timer);
     if (!disposed) timer = setTimeout(refresh, document.hidden ? 30000 :
@@ -118,6 +164,9 @@ export function createAccount({ navigation }) {
         snapshot = (await api.get("/account")).data;
       }
       render();
+      if (modelGeneration !== snapshot.model_generation) {
+        modelGeneration = snapshot.model_generation; void Promise.resolve(onModelsChange()).catch(() => {});
+      }
     }
     catch { /* Local host reconnection uses the existing global connection UI. */ }
     finally { fetching = false; schedule(); }
@@ -166,6 +215,7 @@ export function createAccount({ navigation }) {
     finally { acting = false; await refresh(); }
   }
   sidebar.addEventListener("click", () => navigation.openSettings("account"));
+  sidebarQuota.addEventListener("click", () => navigation.openSettings("account"));
   panel.addEventListener("click", action); dialog.addEventListener("click", action); notice.addEventListener("click", action);
   dialog.addEventListener("cancel", (event) => {
     event.preventDefault(); void action({ target: dialog.querySelector("[data-account-action=cancel]") });

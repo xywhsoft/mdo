@@ -2,6 +2,26 @@
 .account-name { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .sidebar-account { display:flex; flex:0 1 auto; align-items:center; gap:7px; min-width:0; max-width:60%; min-height:40px; padding:4px 6px; border:0; border-radius:var(--radius-sm); background:transparent; text-align:left; cursor:pointer; }
 .sidebar-account:hover { background:var(--surface-hover); }
+.account-identity { display:grid; min-width:0; gap:1px; }
+.account-group { color:var(--muted); font-size:10px; line-height:1.2; }
+.account-avatar { position:relative; }
+.is-vip .account-avatar { outline:2px solid #d6ab53; outline-offset:2px; background:color-mix(in srgb,#d6ab53 18%,var(--surface)); }
+.is-vip .account-group { color:#b6811a; font-weight:700; }
+.account-vip-badge { position:absolute; bottom:-6px; left:50%; transform:translateX(-50%); padding:1px 3px; border-radius:4px; background:#d6ab53; color:#211b11; font-size:8px; font-weight:800; line-height:1; }
+.sidebar-model-allowance { width:100%; display:grid; gap:8px; padding:8px 10px; margin:3px 0 7px; border:1px solid var(--border); border-radius:var(--radius-sm); background:transparent; color:var(--ink); text-align:left; cursor:pointer; }
+.sidebar-model-allowance:hover { background:var(--surface-hover); }
+.sidebar-model-allowance[hidden] { display:none; }
+.account-quota-heading { display:flex; justify-content:space-between; align-items:baseline; gap:10px; font-size:11px; }
+.account-quota-heading>span { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; min-width:0; }
+.account-quota-heading strong { flex-shrink:0; font-size:11px; font-variant-numeric:tabular-nums; }
+.account-quota-bar { height:4px; margin-top:5px; border-radius:4px; overflow:hidden; background:var(--surface-active); }
+.account-quota-bar>span { display:block; height:100%; background:var(--focus); border-radius:inherit; }
+.account-quota-row.is-low .account-quota-bar>span { background:var(--warning); }
+.account-quota-note { color:var(--muted); font-size:11px; }
+.account-model-allowance { display:grid; gap:16px; padding:16px; border:1px solid var(--border); border-radius:var(--radius-md); margin-top:20px; }
+.account-model-allowance h3,.account-model-allowance p { margin:0; }
+.account-model-allowance .account-quota-heading,.account-model-allowance .account-quota-heading strong { font-size:13px; }
+.account-model-allowance .account-note { margin-top:7px; }
 .account-panel { max-width:680px; }
 .account-origin, .account-note { color:var(--muted); overflow-wrap:anywhere; font-size:13px; }
 .account-state { font-weight:600; }

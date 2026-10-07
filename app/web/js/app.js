@@ -978,7 +978,7 @@ export async function boot() {
     },
   });
 
-  const account = createAccount({ navigation });
+  const account = createAccount({ navigation, onModelsChange: loadModels });
   const remotePanel = createRemotePanel();
   setTargetSwitchGuard(async ({ copyDrafts = false } = {}) => {
     if (settingsView.hasPendingChanges() || remotePanel.hasPendingChanges() || resourcePanels.hasPendingChanges())
