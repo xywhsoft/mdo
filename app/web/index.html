@@ -11,6 +11,7 @@
   <link rel="stylesheet" href="/css/app.css">
   <link rel="stylesheet" href="/css/update.css">
   <link rel="stylesheet" href="/css/notifications.css">
+  <link rel="stylesheet" href="/css/store.css">
   <link rel="stylesheet" href="/css/account.css">
   <link rel="stylesheet" href="/css/remote.css">
   <link rel="stylesheet" href="/css/extensions.css">
@@ -366,6 +367,7 @@
             <div data-settings-group>
               <p data-settings-group-label data-i18n="settings.extended">扩展能力</p>
               <button type="button" data-settings-section="agents">Agent</button>
+              <button type="button" data-settings-section="store" data-i18n="store.title">扩展中心</button>
               <button type="button" data-settings-section="subagents">SubAgent</button>
               <button type="button" data-settings-section="tools" data-i18n="ecosystem.toolTitle">工具</button>
               <button type="button" data-settings-section="skills">Skill</button>
@@ -492,6 +494,7 @@
             </form>
 
               <section class="settings-section resource-section" data-settings-panel="models" hidden><div class="settings-section-heading"><h2 data-i18n="settings.models">模型管理</h2><p data-i18n="modelConfig.description">管理 Provider、模型能力与默认模型。ornith-1.5-35b 始终保留为内置免费模型。</p></div><div id="settings-models-list"></div></section>
+              <section class="settings-section resource-section" data-settings-panel="store" hidden><div class="settings-section-heading"><h2 data-i18n="store.title">扩展中心</h2></div><div data-extension-store></div></section>
               <section class="settings-section resource-section" data-settings-panel="agents" hidden><div class="settings-section-heading"><h2>Agent</h2></div><div data-extension-manager="agents"></div></section>
               <section class="settings-section resource-section" data-settings-panel="tools" hidden><div class="settings-section-heading"><h2 data-i18n="ecosystem.toolTitle">工具</h2></div><div data-extension-manager="tools"></div></section>
               <section class="settings-section resource-section" data-settings-panel="subagents" hidden><div class="settings-section-heading"><h2>SubAgent</h2></div><div data-extension-manager="subagents"></div></section>

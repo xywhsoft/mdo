@@ -6,6 +6,7 @@ import {
 } from "../../state/resources.js";
 import { createModelConfigPanel } from "./model-config-panel.js";
 import { createExtensionPanels } from "./extension-panels.js";
+import { createStorePanel } from "./store-panel.js";
 
 function card(title, description, meta = [], actions = []) {
   const body = [element("h3", { text: title }), element("p", {
@@ -141,6 +142,7 @@ export function resourceDescription(kind, item) {
 
 export function createResourcePanels({ agentsStore, stores, reload }) {
   const extensionPanels = createExtensionPanels();
+  const storePanel = createStorePanel();
   const modelsContainer = document.querySelector("#settings-models-list");
   const extensionsContainer = document.querySelector("#settings-extensions-list");
   const permissionsContainer = document.querySelector("#settings-permissions-list");
@@ -357,14 +359,16 @@ export function createResourcePanels({ agentsStore, stores, reload }) {
   }));
 
   return Object.freeze({
-    hasPendingChanges: () => extensionPanels.hasPendingChanges(),
+    hasPendingChanges: () => extensionPanels.hasPendingChanges() || storePanel.hasPendingChanges(),
     selectSection(section) {
       extensionPanels.selectSection(section);
+      storePanel.selectSection(section);
       if (section === "models") void modelPanel.ensureLoaded();
       else void ensureSettingsResources(section);
     },
     destroy() {
       extensionPanels.destroy();
+      storePanel.destroy();
       modelPanel.destroy();
       unsubscribers.forEach((unsubscribe) => unsubscribe());
     },

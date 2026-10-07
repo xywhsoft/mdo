@@ -414,6 +414,8 @@ export function createExtensionPanels() {
     } catch (error) { toast(errorMessage(error), "error"); }
   }
   const unsubscribeLocale = subscribeLocale(() => { for (const kind of EXTENSION_KINDS) render(kind); });
+  const invalidate = event => { const state = states.get(event.detail?.kind);if (state) state.loaded = false; };
+  window.addEventListener("mdo-extensions-changed", invalidate);
   const unsubscribeTarget = subscribeTarget(() => {
     if (activeTarget === targetKey()) return;
     activeTarget = targetKey(); closeEditor(true);
@@ -423,6 +425,6 @@ export function createExtensionPanels() {
   return Object.freeze({
     selectSection(kind) { selected = EXTENSION_KINDS.includes(kind) ? kind : ""; if (selected && (!states.get(kind).loaded || kind === "tools") && !states.get(kind).busy) void load(kind); },
     hasPendingChanges: dirty,
-    destroy() { closeEditor(true); unsubscribeLocale(); unsubscribeTarget(); },
+    destroy() { closeEditor(true); unsubscribeLocale(); unsubscribeTarget();window.removeEventListener("mdo-extensions-changed", invalidate); },
   });
 }
