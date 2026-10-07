@@ -64,6 +64,7 @@ static bool MdoPackageValidate(const xvalue* package,char* error,size_t capacity
     const char* format=MdoPackageText(package,"format",32),*slug=MdoPackageText(m,"slug",64);
     const char* name=MdoPackageText(m,"name",100),*version=MdoPackageText(m,"version",32);
     const char* description=MdoPackageText(m,"description",600),*readme=MdoPackageText(m,"readme",32768),*license=MdoPackageText(m,"license",80);
+    if(xrtValueObjectGet(m,XRT_STR_LITERAL("changelog"))&&!MdoPackageText(m,"changelog",8192))goto bad;
     if(!format||strcmp(format,MDO_PACKAGE_FORMAT)||!MdoPackageId(slug)||!name||!name[0]||!version||!version[0]||
        !description||!description[0]||!readme||!readme[0]||!license||!license[0]||
        xrtValueType(resources)!=XVALUE_ARRAY||!xrtValueCount(resources)||xrtValueCount(resources)>16)goto bad;

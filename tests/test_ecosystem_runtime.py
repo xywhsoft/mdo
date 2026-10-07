@@ -83,6 +83,31 @@ def run(ui=False):
         assert (home/"skills/eco-skill/references/check.md").read_bytes()==b"Check the build."
         assert str(identity) in app("GET","/ecosystem")
         exported=store("export",references=[{"kind":"skills","id":"eco-skill"},{"kind":"commands","id":"eco-review"}]);assert len(exported["resources"])==2 and exported["resources"][0]["files"]
+        # Partial publication drafts are portable and protected by revision CAS.
+        draft={"id":"fixture-draft","fields":{"slug":"draft-test","name":"","version":"1.0.0","description":"","readme":"Draft work","license":"MIT","changelog":"","platforms":[]},"references":[]}
+        saved=store("draft_save",draft=draft,revision="")
+        assert store("drafts")["items"][0]["id"]==draft["id"]
+        loaded=store("draft_read",id=draft["id"]);assert loaded["fields"]==draft["fields"]
+        draft["fields"]["readme"]="Continued work"
+        updated=store("draft_save",draft=draft,revision=saved["revision"])
+        app("POST","/ecosystem",{"action":"draft_save","draft":draft,"revision":saved["revision"]},status=412)
+        assert store("draft_read",id=draft["id"])["fields"]["readme"]=="Continued work"
+        app("POST","/ecosystem",{"action":"draft_read","id":"../outside"},status=422)
+        store("draft_delete",id=draft["id"],revision=updated["revision"]);assert not store("drafts")["items"]
+        # Offline files are distinct from reviewed online receipts, and use the
+        # same update conflict/rollback policy. Preview/import cannot skip trust.
+        app("POST","/ecosystem",{"action":"import","package":p},status=409)
+        offline=copy.deepcopy(p);offline["manifest"]["slug"]="local-fixture";offline["resources"]=[{"kind":"commands","id":"eco-offline","content":"Offline $ARGUMENTS"}]
+        store("import",package=offline)
+        receipt=app("GET","/ecosystem")["local:local-fixture"]
+        assert receipt["source"]=="local" and receipt["resources"]==[{"kind":"commands","id":"eco-offline"}]
+        offline["manifest"]["version"]="1.1.0";offline["resources"][0]["content"]="Updated offline $ARGUMENTS"
+        store("import",package=offline)
+        (home/"commands/eco-offline.md").write_text("Local edit")
+        app("POST","/ecosystem",{"action":"import","package":offline},status=409)
+        store("uninstall",entry={"source":"local","slug":"local-fixture"})
+        assert (home/"commands/eco-offline.md").read_text()=="Local edit"
+        (home/"commands/eco-offline.md").unlink()
         p2=copy.deepcopy(p);p2["manifest"]["version"]="1.1.0";p2["resources"][0]["content"]+=" Updated."
         second=store("submit",package=p2)["id"];approve(second)
         original=(home/"commands/eco-review.md").read_text();(home/"commands/eco-review.md").write_text(original+" Local edit.")

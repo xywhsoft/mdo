@@ -3,4 +3,5 @@
 #include <xsbase.h>
 /* Recover a pending install before any resource manager compiles user code. */
 bool MdoEcosystemRecover(void);
+bool MdoEcosystemPackageCompatible(const xvalue* package,const xvalue* input,char* error,size_t capacity);
 #endif

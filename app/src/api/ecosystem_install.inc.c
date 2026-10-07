@@ -106,14 +106,15 @@ static bool EcoLocalCurrent(cstr path,xvalue* change,const xvalue* owned,char er
 }
 static bool EcoLocalApply(const xvalue* entry,bool uninstall,char error[1024])
 {
-    const xvalue* package=xrtValueObjectGet(entry,XRT_STR_LITERAL("package"));char key[32];int64 id=0;
-    if(!MdoPackageNumber(entry,"id",&id)||id<=0)return false;
-    snprintf(key,sizeof(key),"%lld",(long long)id);
+    const xvalue* package=xrtValueObjectGet(entry,XRT_STR_LITERAL("package"));char key[80];int64 id=0;
+    cstr source=MdoPackageText(entry,"source",16);bool local=source&&!strcmp(source,"local");
+    if(local){cstr slug=MdoPackageText(entry,"slug",64);if(!MdoPackageId(slug))return false;snprintf(key,sizeof(key),"local:%s",slug);}
+    else {if(!MdoPackageNumber(entry,"id",&id)||id<=0)return false;snprintf(key,sizeof(key),"%lld",(long long)id);}
     xvalue* receipts=EcoLocalRead(ECO_RECEIPTS,1024u*1024u,true);if(!receipts||xrtValueType(receipts)!=XVALUE_OBJECT){xrtValueRelease(receipts);return false;}
     /* Versions have distinct server IDs; updates replace the receipt owned by
      * the same authenticated author and slug, preserving canonical paths. */
-    const xvalue* prior=NULL;char priorKey[32]={0};xvalueiter it={0};xvaluekey k;xvalue* value;
-    if(xrtValueIterBegin(receipts,&it)){while((value=xrtValueIterNext(&it,&k))){bool same=uninstall?xrtStrEqual(k.String,xrtStrView(key)):
+    const xvalue* prior=NULL;char priorKey[80]={0};xvalueiter it={0};xvaluekey k;xvalue* value;
+    if(xrtValueIterBegin(receipts,&it)){while((value=xrtValueIterNext(&it,&k))){cstr storedSource=MdoPackageText(value,"source",16);bool storedLocal=storedSource&&!strcmp(storedSource,"local");bool same=uninstall?xrtStrEqual(k.String,xrtStrView(key)):local==storedLocal&&
         MdoPackageText(value,"slug",64)&&MdoPackageText(entry,"slug",64)&&!strcmp(MdoPackageText(value,"slug",64),MdoPackageText(entry,"slug",64))&&
         EcoLocalNumber(value,"owner")==EcoLocalNumber(entry,"owner");
         if(same&&k.String.Size<sizeof(priorKey)){prior=value;memcpy(priorKey,k.String.Data,k.String.Size);priorKey[k.String.Size]=0;break;}}xrtValueIterEnd(&it);}
@@ -140,6 +141,11 @@ static bool EcoLocalApply(const xvalue* entry,bool uninstall,char error[1024])
     if(ok)ok=journal&&next&&record&&inventory&&xrtValueObjectSet(journal,XRT_STR_LITERAL("files"),files)&&xrtValueObjectSet(journal,XRT_STR_LITERAL("receipts"),receipts);
     if(ok&&priorKey[0])xrtValueObjectRemove(next,xrtStrView(priorKey));
     if(ok&&!uninstall){const char* keys[]={"id","owner","slug","name","version","author","sha256"};for(size_t i=0;ok&&i<7;i++)ok=xrtValueObjectSet(record,xrtStrView(keys[i]),xrtValueObjectGet(entry,xrtStrView(keys[i])));
+        const xvalue* manifest=xrtValueObjectGet(package,XRT_STR_LITERAL("manifest"));
+        ok=ok&&MdoApiValueSetString(record,"key",key)&&MdoApiValueSetString(record,"source",local?"local":"store")&&xrtValueObjectSet(record,XRT_STR_LITERAL("manifest"),manifest);
+        xvalue* refs=xrtValueArray();const xvalue* rs=xrtValueObjectGet(package,XRT_STR_LITERAL("resources"));
+        for(size_t i=0;ok&&i<xrtValueCount(rs);i++){const xvalue* r=xrtValueArrayGet(rs,i);xvalue* ref=xrtValueObject();ok=ref&&xrtValueObjectSet(ref,XRT_STR_LITERAL("kind"),xrtValueObjectGet(r,XRT_STR_LITERAL("kind")))&&xrtValueObjectSet(ref,XRT_STR_LITERAL("id"),xrtValueObjectGet(r,XRT_STR_LITERAL("id")))&&xrtValueArrayAppend(refs,ref);xrtValueRelease(ref);}
+        if(ok)ok=xrtValueObjectSet(record,XRT_STR_LITERAL("resources"),refs);xrtValueRelease(refs);
         for(size_t i=0;ok&&i<xrtValueCount(files);i++){const xvalue* f=xrtValueArrayGet(files,i);if(xrtValueType(xrtValueObjectGet(f,XRT_STR_LITERAL("new")))==XVALUE_NULL)continue;
             xvalue* item=xrtValueObject();ok=item&&xrtValueObjectSet(item,XRT_STR_LITERAL("path"),xrtValueObjectGet(f,XRT_STR_LITERAL("path")))&&xrtValueObjectSet(item,XRT_STR_LITERAL("sha256"),xrtValueObjectGet(f,XRT_STR_LITERAL("sha256")))&&xrtValueArrayAppend(inventory,item);xrtValueRelease(item);}
         if(ok)ok=xrtValueObjectSet(record,XRT_STR_LITERAL("files"),inventory)&&xrtValueObjectSet(next,xrtStrView(key),record);}
@@ -151,11 +157,26 @@ static bool EcoLocalApply(const xvalue* entry,bool uninstall,char error[1024])
     if(!ok&&!error[0])snprintf(error,1024,"Package installation failed; previous resources restored. Check configuration and tool references.");
     xrtValueRelease(receipts);xrtValueRelease(files);xrtValueRelease(journal);xrtValueRelease(next);xrtValueRelease(record);xrtValueRelease(inventory);return ok;
 }
+#include "ecosystem_drafts.inc.c"
 bool MdoApiEcosystemLocal(MdoApiContext* c,const xvalue* input)
 {
     cstr action=MdoPackageText(input,"action",16);char error[1024]={0};bool ok=false;
     xrtMutexLock(g_MdoExtensionLock);
-    if(action&&!strcmp(action,"installed")){xvalue* records=EcoLocalRead(ECO_RECEIPTS,1024u*1024u,true);ok=records?MdoApiReplySuccessTake(c,200,records,NULL):MdoApiReplyError(c,503,"ecosystem_receipts","Cannot read installed packages",NULL);}
+    if(action&&(!strcmp(action,"drafts")||!strcmp(action,"draft_read")||!strcmp(action,"draft_save")||!strcmp(action,"draft_delete")))ok=EcoDraftAction(c,input);
+    else if(action&&!strcmp(action,"installed")){xvalue* records=EcoLocalRead(ECO_RECEIPTS,1024u*1024u,true);ok=records?MdoApiReplySuccessTake(c,200,records,NULL):MdoApiReplyError(c,503,"ecosystem_receipts","Cannot read installed packages",NULL);}
+    else if(action&&!strcmp(action,"import")){
+        const xvalue* package=xrtValueObjectGet(input,XRT_STR_LITERAL("package"));
+        ok=MdoEcosystemPackageCompatible(package,input,error,sizeof(error));
+        xvalue* entry=xrtValueObject();const xvalue* manifest=xrtValueObjectGet(package,XRT_STR_LITERAL("manifest"));
+        size_t n=0;char* json=ok?xrtJsonStringify(package,false,&n):NULL;char hash[65];
+        ok=ok&&entry&&json&&n<=MDO_PACKAGE_LIMIT&&MdoExtensionHashBytes(json,n,hash)&&
+           xrtValueObjectSet(entry,XRT_STR_LITERAL("package"),package)&&MdoApiValueSetString(entry,"source","local")&&
+           MdoApiValueSetString(entry,"author","")&&MdoApiValueSetUInt(entry,"id",0)&&MdoApiValueSetUInt(entry,"owner",0)&&MdoApiValueSetString(entry,"sha256",hash);
+        const char* keys[]={"slug","name","version"};for(size_t i=0;ok&&i<3;i++)ok=xrtValueObjectSet(entry,xrtStrView(keys[i]),xrtValueObjectGet(manifest,xrtStrView(keys[i])));
+        if(ok)ok=EcoLocalApply(entry,false,error);xrtFree(json);xrtValueRelease(entry);
+        if(!ok&&!error[0])snprintf(error,sizeof(error),"Invalid local package");
+        ok=ok?MdoApiReplySuccessTake(c,200,xrtValueObject(),NULL):MdoApiReplyError(c,409,"ecosystem_import_failed",error,NULL);
+    }
     else if(action&&!strcmp(action,"c_sources")){
         xvalue* items=xrtValueArray();const char* directories[]={"modules/agents","modules/subagents"};
         ok=items!=NULL;
