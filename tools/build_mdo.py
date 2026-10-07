@@ -61,6 +61,56 @@ def git_head(root: Path) -> str | None:
         return None
 
 
+def restore_bundled_xserver(candidates: list[Path], lock: dict) -> Path | None:
+    """Restore a locked compatibility commit without changing any user checkout.
+
+    The small Git bundle carries only the conversation repair commits; the
+    normal xs repository supplies their historical base. It also lets a fresh
+    machine build before the compatible branch is published upstream.
+    """
+    bundle = lock["xserver"].get("source_bundle")
+    if bundle is None:
+        return None
+    if not isinstance(bundle, dict):
+        raise BuildError("xserver.source_bundle must be an object")
+    relative, digest, ref = bundle.get("path"), bundle.get("sha256"), bundle.get("ref")
+    if (not isinstance(relative, str) or not isinstance(digest, str)
+            or not re.fullmatch(r"[0-9a-f]{64}", digest)
+            or not isinstance(ref, str) or not ref.startswith("refs/heads/")):
+        raise BuildError("xserver source bundle path/hash is invalid")
+    path = (ROOT / relative).resolve()
+    # Binary Git bundles must be hashed byte-for-byte, not normalized.
+    if (not path.is_relative_to(ROOT.resolve()) or not path.is_file()
+            or hashlib.sha256(path.read_bytes()).hexdigest() != digest):
+        raise BuildError("xserver source bundle is missing or has the wrong SHA-256")
+    expected = locked_commit(lock["xserver"], "xserver")
+    destination = ROOT / ".build" / "locked-xs" / expected
+    if destination.exists():
+        if git_head(destination) == expected:
+            return destination
+        raise BuildError(f"existing locked xserver checkout has a different revision: {destination}")
+    for candidate in candidates:
+        root = candidate.expanduser().resolve()
+        if not root.is_dir() or git_head(root) is None:
+            continue
+        exists = subprocess.run(["git", "cat-file", "-e", expected + "^{commit}"],
+            cwd=root, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL).returncode == 0
+        if not exists:
+            if subprocess.run(["git", "bundle", "verify", str(path)], cwd=root,
+                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL).returncode:
+                continue  # This clone does not have the bundle's base yet.
+            subprocess.run(["git", "fetch", str(path), ref], cwd=root, check=True,
+                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            exists = subprocess.run(["git", "cat-file", "-e", expected + "^{commit}"],
+                cwd=root, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL).returncode == 0
+        if exists:
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            subprocess.run(["git", "worktree", "add", "--detach", str(destination), expected],
+                cwd=root, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            return destination
+    return None
+
+
 def find_xserver(explicit: Path | None, lock: dict) -> Path:
     expected = locked_commit(lock["xserver"], "xserver")
     if explicit is not None:
@@ -70,7 +120,8 @@ def find_xserver(explicit: Path | None, lock: dict) -> Path:
         configured = os.environ.get("MDO_XSERVER_ROOT", "").strip()
         if configured:
             candidates.append(Path(configured))
-        candidates.extend((ROOT.parent / "xserver", ROOT.parent / "xserver-mdo-refactor"))
+        candidates.extend((ROOT.parent / "xserver", ROOT.parent / "xserver-mdo-refactor",
+                           ROOT / ".build" / "implementation-xs"))
     checked: list[str] = []
     seen: set[Path] = set()
     for candidate in candidates:
@@ -84,6 +135,10 @@ def find_xserver(explicit: Path | None, lock: dict) -> Path:
             return root
         if explicit is not None:
             break
+    if explicit is None:
+        recovered = restore_bundled_xserver(candidates, lock)
+        if recovered is not None:
+            return recovered
     detail = "; ".join(checked) if checked else "no candidates"
     raise BuildError(f"locked xserver {expected} was not found ({detail})")
 

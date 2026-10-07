@@ -19,6 +19,11 @@
         "abi_version": 1,
         "tree_sha256": "2c454f809f8da1cc08bf9765deb2a2fa7e33c630abd0b1687c19dee2f5da90ee"
       }
+    },
+    "source_bundle": {
+      "path": "tools/dependencies/xs-conversation-recovery.bundle",
+      "sha256": "2389e39c3c931a6558206df16d4ee0d06efbeba1f7ba2f7e3ad8acdd46acdc32",
+      "ref": "refs/heads/codex/mdo-conversation-recovery"
     }
   },
   "libraries": {

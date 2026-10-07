@@ -46,3 +46,6 @@ tools/runtime/**
 !tools/android/*.py
 !tools/android/*.java
 !tools/prepare_release.py
+!tools/dependencies/
+!tools/dependencies/README.md
+!tools/dependencies/*.bundle
