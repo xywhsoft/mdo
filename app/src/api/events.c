@@ -189,6 +189,10 @@ bool MdoApiSessionEventValue(const MdoSessionEventInfo* Event,
     if (Ok) Ok = MdoApiValueSetUInt(Item, "input_tokens", Event->InputTokens) &&
         MdoApiValueSetUInt(Item, "output_tokens", Event->OutputTokens) &&
         MdoApiValueSetUInt(Item, "total_tokens", Event->TotalTokens);
+    if (Ok && Event->Kind == XWORK_EVENT_ERROR)
+        Ok = MdoApiValueSetString(Item, "model_error_kind", Event->ModelErrorKind) &&
+            MdoApiValueSetUInt(Item, "model_http_status", Event->ModelHttpStatus) &&
+            MdoApiValueSetUInt(Item, "model_attempts", Event->ModelAttempts);
     if ( Ok && Event->Kind == XWORK_EVENT_AGENT_START &&
          Event->AgentDepth == 0u )
         Ok = MdoSessionAttachmentEventRead(ProjectId, SessionId,

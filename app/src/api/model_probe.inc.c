@@ -177,8 +177,10 @@ static bool MdoApiModelTestRun(MdoApiContext* Context, MdoApiJsonBody Body)
     MdoModelCatalogRelease(Catalog); xrtClearError();
     if (Ok) return MdoApiReplySuccessTake(Context, 200u, Data, NULL);
     xrtValueRelease(Data);
+    char Code[64];
+    snprintf(Code, sizeof(Code), "model_%s", MdoModelErrorKind(&Error));
     return MdoApiReplyError(Context, 422u, Error.eCode == XLLM_ERROR_NONE ?
-        (Tools ? "model_tools_test_failed" : "model_test_failed") : MdoModelErrorKind(&Error),
+        (Tools ? "model_tools_test_failed" : "model_test_failed") : Code,
         Error.eCode == XLLM_ERROR_NONE ? "The model response did not satisfy the connection test" :
         MdoModelErrorMessage(&Error), NULL);
 }

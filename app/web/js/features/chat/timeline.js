@@ -11,6 +11,7 @@ import { labelImageName } from "./image-names.js";
 import { toolCallSummary, toolSectionNode } from "./tool-content.js";
 import { conversationGroups } from "./conversation-history.js";
 import { createConversationNavigation } from "./conversation-navigation.js";
+import { modelErrorMessage } from "../../utils/model-errors.js";
 
 export function searchResultTop(row, content, searchBottom, viewportBottom, lineHeight = 24) {
   const room = Math.max(0, viewportBottom - searchBottom);
@@ -69,6 +70,7 @@ export function eventsToTimeline(events, historyLost = false,
   const promptsByRun = new Map();
   const runEpochs = new Map();
   const terminalRuns = new Map();
+  const finalErrors = new Map();
   function settleStreams(runKey, epoch, state) {
     // ERROR is a terminal event in xwork, just like AGENT_DONE. Scope the
     // settlement to this execution: other Agents and reused run IDs survive.
@@ -286,13 +288,23 @@ export function eventsToTimeline(events, historyLost = false,
         const answer = [...items].reverse().find((item) => item.kind === "assistant" &&
           item.runKey === runKey && item.runEpoch === epoch);
         if (answer) answer.state = "failed";
-        items.push({ key: `error-${event.event_id}`, kind: "error",
+        const text = modelErrorMessage(event.model_error_kind,
+          event.text || t("timeline.agentFailed", {}, "Agent 运行失败"));
+        const errorKey = `${runKey}:${epoch}`;
+        const previous = finalErrors.get(errorKey);
+        if (previous) { previous.text = text; previous.time = event.time; break; }
+        const failure = { key: `error-${event.event_id}`,
+          kind: event.agent_depth > 0 ? "task" : "error",
           role: t("timeline.runError", {}, "运行错误"),
-          text: event.text || t("timeline.agentFailed", {}, "Agent 运行失败"),
-          state: "failed", time: event.time });
+          text, state: "failed", time: event.time };
+        finalErrors.set(errorKey, failure);
+        items.push(failure);
         break;
       }
       case "agent_done": {
+        // Some hosts report both a final error and cleanup completion. Keep
+        // the failure and partial reply instead of adding a cancellation card.
+        if (terminalRuns.get(`${runKey}:${epoch}`) === "failed") break;
         const terminalState = event.success ? "done" : "cancelled";
         terminalRuns.set(`${runKey}:${epoch}`, terminalState);
         settleStreams(runKey, epoch, terminalState);

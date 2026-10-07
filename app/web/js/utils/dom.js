@@ -1,4 +1,5 @@
 import { currentLocale, t } from "../i18n.js";
+import { modelErrorMessage } from "./model-errors.js";
 
 export function element(tag, options = {}, children = []) {
   const node = document.createElement(tag);
@@ -341,6 +342,8 @@ const API_ERROR_COPY = Object.freeze({
 });
 
 export function errorMessage(error) {
+  if (typeof error?.code === "string" && error.code.startsWith("model_"))
+    return modelErrorMessage(error.code.slice(6), error.message || t("error.generic"));
   const known = Object.hasOwn(API_ERROR_COPY, error?.code)
     ? API_ERROR_COPY[error.code] : null;
   if (known) return t(known[0], {}, known[1]);

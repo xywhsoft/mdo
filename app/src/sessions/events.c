@@ -6,8 +6,9 @@
 #include "internal.h"
 #include "../../include/mdo/attachments.h"
 #include "../../include/mdo/home.h"
+#include "../../include/mdo/models.h"
 
-#define MDO_SESSION_EVENT_SCHEMA 5u
+#define MDO_SESSION_EVENT_SCHEMA 6u
 #define MDO_SESSION_EVENT_RECORD_LIMIT (96u * 1024u)
 #define MDO_SESSION_EVENT_TEXT_LIMIT (64u * 1024u)
 #define MDO_SESSION_EVENT_METADATA_LIMIT 4096u
@@ -282,6 +283,20 @@ static char* MdoEventsRecord(const MdoSessionEventBridge* Bridge,
          !MdoEventsObjectTake(Object, "context_window_tokens",
             xrtValueUInt(ContextWindowTokens)) )
         goto done;
+    if (Event->eKind == XWORK_EVENT_ERROR) {
+        xllm_error Error = {0};
+        Error.eCode = Event->eModelErrorCode;
+        Error.iHttpStatus = (int32)Event->uHttpStatus;
+        if (Event->sProviderCode)
+            snprintf(Error.sProviderCode, sizeof(Error.sProviderCode), "%s",
+                Event->sProviderCode);
+        const char* Kind = Error.eCode != XLLM_ERROR_NONE ?
+            MdoModelErrorKind(&Error) : "";
+        if (!MdoEventsObjectString(Object, "model_error_kind", Kind, strlen(Kind)) ||
+            !MdoEventsObjectTake(Object, "model_http_status", xrtValueUInt(Event->uHttpStatus)) ||
+            !MdoEventsObjectTake(Object, "model_attempts", xrtValueUInt(Event->tDiagnostics.uAttemptCount)))
+            goto done;
+    }
     Json = xrtJsonStringify(Object, false, Size);
     if ( Json != NULL && *Size > MDO_SESSION_EVENT_RECORD_LIMIT ) {
         xrtFree(Json);
@@ -437,20 +452,21 @@ static bool MdoEventsParse(const char* ProjectId, const char* SessionId,
     xrtJsonReadConfigInit(&Config);
     Config.MaxInputBytes = MDO_SESSION_EVENT_RECORD_LIMIT;
     Config.MaxDepth = 6u;
-    Config.MaxValues = 40u;
-    Config.MaxContainerItems = 32u;
+    Config.MaxValues = 44u;
+    Config.MaxContainerItems = 35u;
     Root = xrtJsonRead(Json, &Config);
     if ( Root == NULL || xrtValueType(Root) != XVALUE_OBJECT ||
          (xrtValueCount(Root) != 25u && xrtValueCount(Root) != 28u &&
           xrtValueCount(Root) != 29u && xrtValueCount(Root) != 31u &&
-          xrtValueCount(Root) != 32u) ||
+          xrtValueCount(Root) != 32u && xrtValueCount(Root) != 35u) ||
          !MdoEventsValueUInt(Root, "schema_version", &Schema) ||
          !((Schema == 1u && xrtValueCount(Root) == 25u) ||
            (Schema == 2u && xrtValueCount(Root) == 28u) ||
            (Schema == 3u && xrtValueCount(Root) == 29u) ||
            (Schema == 4u && xrtValueCount(Root) == 31u) ||
+           (Schema == 5u && xrtValueCount(Root) == 32u) ||
            (Schema == MDO_SESSION_EVENT_SCHEMA &&
-            xrtValueCount(Root) == 32u)) ||
+            (xrtValueCount(Root) == 32u || xrtValueCount(Root) == 35u))) ||
          !MdoEventsValueUInt(Root, "event_id", &Result->Info.EventId) ||
          Result->Info.EventId == 0u ||
          !MdoEventsValueUInt(Root, "source_event_id",
@@ -506,6 +522,20 @@ static bool MdoEventsParse(const char* ProjectId, const char* SessionId,
           (!MdoEventsValueString(Root, "model_id", &ModelId) ||
            !MdoEventsValueUInt(Root, "context_window_tokens",
               &Result->Info.ContextWindowTokens))) ) goto done;
+    if (Schema >= 6u && xrtValueCount(Root) == 35u) {
+        xstrview ErrorKind;
+        uint64 HttpStatus, Attempts;
+        if (Kind != (uint64)XWORK_EVENT_ERROR ||
+            !MdoEventsValueString(Root, "model_error_kind", &ErrorKind) ||
+            ErrorKind.Size >= sizeof(Result->Info.ModelErrorKind) ||
+            !MdoEventsValueUInt(Root, "model_http_status", &HttpStatus) ||
+            HttpStatus > 599u ||
+            !MdoEventsValueUInt(Root, "model_attempts", &Attempts) ||
+            Attempts > UINT32_MAX) goto done;
+        memcpy(Result->Info.ModelErrorKind, ErrorKind.Data, ErrorKind.Size);
+        Result->Info.ModelHttpStatus = (uint32)HttpStatus;
+        Result->Info.ModelAttempts = (uint32)Attempts;
+    } else if (Schema >= 6u && Kind == (uint64)XWORK_EVENT_ERROR) goto done;
     if ( QueueItemId.Size != 0u ) {
         size_t Index;
         for ( Index = 0u; Index < QueueItemId.Size; ++Index ) {

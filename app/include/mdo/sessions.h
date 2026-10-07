@@ -155,6 +155,9 @@ typedef struct MdoSessionEventInfo {
     const char* Model;
     const char* ModelId;
     uint64 ContextWindowTokens;
+    char ModelErrorKind[48]; /* Empty for non-model errors and older records. */
+    uint32 ModelHttpStatus;
+    uint32 ModelAttempts;
 } MdoSessionEventInfo;
 
 /* Product bootstrap (or an embedder) initializes MdoProjectLifecycle before

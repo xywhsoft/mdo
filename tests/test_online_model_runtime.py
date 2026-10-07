@@ -37,7 +37,7 @@ static bool OnlineTestRoute(MdoApiContext* Context) {
 }
 '''
 
-def run(host):
+def run(host, website_host):
     base,website,port,user,password=fixture('online-model-client-test')
     config=json.loads((website/'xs.json').read_text());config['services'][0]['host_default']['devfile']='main.c';(website/'xs.json').write_text(json.dumps(config))
     origin=f'http://127.0.0.1:{port}';(website/'db/identity.json').write_text(json.dumps({'public_origin':origin}))
@@ -60,7 +60,7 @@ def run(host):
             time.sleep(.1)
         raise AssertionError('readiness timeout')
     try:
-        web=launch(HOME/'xs.exe',website);ready(port,web,'/mdo/catalog')
+        web=launch(website_host,website);ready(port,web,'/mdo/catalog')
         _,h=call(port,'POST','/admin/login',dict(username=user,password=password));cookie='; '.join(c.split(';')[0] for c in h['_cookies'])
         state=call(port,'GET','/admin/model-gateway/state',cookie=cookie)[0]['data'];ah={'X-CSRF-Token':state['csrf_token'],'Origin':origin}
         def mutate(path,body):return call(port,'POST',path,body,cookie,ah)[0]
@@ -213,4 +213,7 @@ def run(host):
 if __name__=='__main__':
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--host',type=Path,default=ROOT/'.build/host/xs.exe')
-    run(parser.parse_args().host.resolve())
+    parser.add_argument('--website-host',type=Path,default=HOME/'xs.exe',
+        help='xs matching the website source; independent of the pinned mdo host')
+    args=parser.parse_args()
+    run(args.host.resolve(),args.website_host.resolve())
