@@ -357,7 +357,7 @@
             <div data-settings-group>
               <p data-settings-group-label data-i18n="settings.basic">基础设置</p>
               <button type="button" data-settings-section="general" aria-current="page" data-i18n="settings.general">常规</button>
-              <button type="button" data-settings-section="agent">Agent</button>
+              <button type="button" data-settings-section="agent" data-i18n="settings.agentBehavior">Agent 行为</button>
               <button type="button" data-settings-section="models" data-i18n="settings.models">模型管理</button>
               <button type="button" data-settings-section="memory" data-i18n="settings.memoryManagement">记忆管理</button>
               <button type="button" data-settings-section="web" data-i18n="settings.web">网络</button>
@@ -365,11 +365,13 @@
             </div>
             <div data-settings-group>
               <p data-settings-group-label data-i18n="settings.extended">扩展能力</p>
+              <button type="button" data-settings-section="agents">Agent</button>
               <button type="button" data-settings-section="subagents">SubAgent</button>
+              <button type="button" data-settings-section="tools" data-i18n="ecosystem.toolTitle">工具</button>
               <button type="button" data-settings-section="skills">Skill</button>
               <button type="button" data-settings-section="mcp">MCP</button>
               <button type="button" data-settings-section="commands" data-i18n="ecosystem.commands">命令</button>
-              <button type="button" data-settings-section="extensions" data-i18n="settings.extensions">Agent 与模块</button>
+              <button type="button" data-settings-section="extensions" data-i18n="settings.extensions">C 模块</button>
               <button type="button" data-settings-section="permissions" data-i18n="settings.permissions">权限</button>
             </div>
             <div data-settings-group>
@@ -429,7 +431,7 @@
               </section>
 
               <section class="settings-section" data-settings-panel="agent" aria-labelledby="settings-agent-title" hidden>
-                <div class="settings-section-heading"><h2 id="settings-agent-title">Agent</h2><p data-i18n="settings.agentDescription">默认交互、推理和并行执行策略。</p></div>
+                <div class="settings-section-heading"><h2 id="settings-agent-title" data-i18n="settings.agentBehavior">Agent 行为</h2><p data-i18n="settings.agentDescription">默认交互、推理和并行执行策略。</p></div>
                 <div class="setting-row">
                   <div><label for="setting-default-permission" data-i18n="settings.defaultPermission">默认权限</label><p data-i18n="settings.defaultPermissionDescription">新任务默认使用此权限；已有会话和聊天中手动选择的权限不变。</p></div>
                   <select id="setting-default-permission" name="permission_profile"><option value="read-only" data-i18n="shell.permission.readOnly">只读</option><option value="balanced" data-i18n="shell.permission.balanced">询问</option><option value="full-access" data-i18n="shell.permission.fullAccess">完全访问</option></select>
@@ -490,11 +492,13 @@
             </form>
 
               <section class="settings-section resource-section" data-settings-panel="models" hidden><div class="settings-section-heading"><h2 data-i18n="settings.models">模型管理</h2><p data-i18n="modelConfig.description">管理 Provider、模型能力与默认模型。ornith-1.5-35b 始终保留为内置免费模型。</p></div><div id="settings-models-list"></div></section>
+              <section class="settings-section resource-section" data-settings-panel="agents" hidden><div class="settings-section-heading"><h2>Agent</h2></div><div data-extension-manager="agents"></div></section>
+              <section class="settings-section resource-section" data-settings-panel="tools" hidden><div class="settings-section-heading"><h2 data-i18n="ecosystem.toolTitle">工具</h2></div><div data-extension-manager="tools"></div></section>
               <section class="settings-section resource-section" data-settings-panel="subagents" hidden><div class="settings-section-heading"><h2>SubAgent</h2></div><div data-extension-manager="subagents"></div></section>
               <section class="settings-section resource-section" data-settings-panel="skills" hidden><div class="settings-section-heading"><h2>Skill</h2></div><div data-extension-manager="skills"></div></section>
               <section class="settings-section resource-section" data-settings-panel="mcp" hidden><div class="settings-section-heading"><h2>MCP</h2></div><div data-extension-manager="mcp"></div></section>
               <section class="settings-section resource-section" data-settings-panel="commands" hidden><div class="settings-section-heading"><h2 data-i18n="ecosystem.commands">命令</h2></div><div data-extension-manager="commands"></div></section>
-              <section class="settings-section resource-section" data-settings-panel="extensions" hidden><div class="settings-section-heading"><h2 data-i18n="settings.extensions">Agent 与模块</h2><p data-i18n="resource.extensionsDescription">查看现有主 Agent 和 C 模块。SubAgent、Skill、MCP 与命令在各自的管理页编辑。</p></div><div id="settings-extensions-list"></div></section>
+              <section class="settings-section resource-section" data-settings-panel="extensions" hidden><div class="settings-section-heading"><h2 data-i18n="settings.extensions">C 模块</h2><p data-i18n="resource.extensionsDescription">查看和重新编译高级 C 模块；Agent、SubAgent、工具等在各自的管理页配置。</p></div><div id="settings-extensions-list"></div></section>
               <section class="settings-section resource-section" data-settings-panel="permissions" hidden><div class="settings-section-heading"><h2 data-i18n="settings.permissions">权限</h2><p data-i18n="resource.permissionsDescription">查看服务端生效的权限方案；运行时审批仍由 Agent 策略执行。</p></div><div id="settings-permissions-list"></div></section>
               <section class="settings-section resource-section" data-settings-panel="diagnostics" hidden><div class="settings-section-heading"><h2 data-i18n="settings.diagnostics">诊断与存储</h2><p data-i18n="resource.diagnosticsDescription">检查便携 Home、运行状态和可操作诊断。</p></div><div id="settings-diagnostics-list"></div></section>
             <section class="settings-section resource-section" id="remote-panel" data-settings-panel="remote" hidden>

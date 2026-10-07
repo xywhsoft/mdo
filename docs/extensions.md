@@ -1,19 +1,21 @@
-# 扩展能力：SubAgent、Skill、MCP 与命令
+# 扩展能力：Agent、SubAgent、工具、Skill、MCP 与命令
 
-管理入口：设置 → 扩展能力。四种资源分别有列表、新建、编辑、导入、导出、启停和删除；MCP 另有测试连接。界面使用原生 HTML/JavaScript，手机端使用同一套页面。
+管理入口：设置 → 扩展能力。资源分别有列表、新建、编辑、导入和导出；自定义资源可启停、删除，默认 Agent 可编辑、恢复默认，内建工具清单只读；MCP 另有测试连接。界面使用原生 HTML/JavaScript，手机端使用同一套页面。工具与主 Agent 的详细约定见 [本地工具与 Agent 配置](local-tools.md)。
 
 ## 文件与运行方式
 
-所有持久文件都在当前设备的 `mdo-home` 中；外部文件覆盖打包内置资源。只查看资源列表不会写入资源配置。内置资源可停用，也可保存外部自定义版本；删除外部覆盖后，内置资源会重新出现。
+所有持久文件都在当前设备的 `mdo-home` 中；外部文件覆盖打包内置资源。只查看资源列表不会写入资源配置。内置 Skill 等文件资源可停用或保存外部自定义版本，内建工具清单只读，默认 Agent 保持启用；删除外部覆盖后，内置资源会重新出现。
 
 | 类型 | 路径 | 运行方式 |
 | --- | --- | --- |
+| Agent | `agents/<id>.md` | 系统生成普通提示词，可选同 ID C Agent |
 | SubAgent | `subagents/<id>.md` | 转成现有 Agent 描述符，使用已有委派运行器 |
+| 自定义工具 | `tools/<id>.c` | TCC 注册，按回调执行和收集结果 |
 | Skill | `skills/<id>/SKILL.md` | 元数据发现；指令和附属文件按需读取 |
 | MCP | `mcp/<id>.json` | 现有 stdio / Streamable HTTP 连接管理 |
 | 命令 | `commands/<id>.md` | 展开普通聊天草稿，确认后发送 |
 
-ID 使用 1–64 个小写字母、数字、点、短横线或下划线，不允许 Windows 保留文件名、连续点或路径分隔符。已有 C SubAgent 继续使用 `modules/subagents`，本轮不会迁移或改变主 Agent。
+ID 使用 1–64 个小写字母、数字、点、短横线或下划线，不允许 Windows 保留文件名、连续点或路径分隔符。已有 C Agent、SubAgent 继续使用 `modules/agents`、`modules/subagents`。
 
 ## SubAgent
 

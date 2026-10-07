@@ -1,8 +1,14 @@
 # mdo Module ABI v1
 
-Each source below `modules/tools`, `modules/agents`, or `modules/subagents` is
+Each C source below `tools`, `modules/tools`, `modules/agents`, or `modules/subagents` is
 one independently compiled module. It includes `mdo/module.h` and exports the
 fixed `mdoModuleEntry` function. The entry returns a static `mdo_module_v1`.
+
+The user-facing local tool editor manages `tools/<id>.c`; legacy module paths
+continue to work. Built-in tool IDs cannot be replaced by managed C tools.
+Ordinary Agent/SubAgent Markdown profiles use the same descriptor catalog and
+runtime. Main profiles can optionally use a same-ID C Agent for their base
+prompt/lifecycle while retaining the UI tool scope. See [local tools](local-tools.md).
 
 Every descriptor and host table starts with `Size` and `AbiVersion`. A module
 sets them with `MDO_V1_HEADER(type)`. The host copies every descriptor string

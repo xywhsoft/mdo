@@ -8,7 +8,6 @@
 #include "../../include/mdo/skills.h"
 #include "../../include/mdo/builtin_model.h"
 #include "../../include/mdo/tool_catalog.h"
-#include "../../include/mdo/bootstrap.h"
 #include "../../include/mdo/account.h"
 #include "../../include/mdo/settings.h"
 #include "../../include/mdo/web.h"
@@ -30,12 +29,11 @@ static xvalue* MdoApiToolItem(cstr Id,cstr Name,cstr Description,cstr Source,
  * allowlists. This endpoint never executes or discovers third-party code. */
 bool MdoApiToolsRoute(MdoApiContext* Context)
 {
-    xwork_tool_catalog* Runtime=xworkRuntimeToolCatalogSnapshot(MdoBootstrapRuntime());
     MdoModuleCatalog* Modules=MdoModuleCatalogSnapshot();
     MdoMcpCatalog* Mcp=MdoMcpCatalogSnapshot();
     MdoSettingsServiceSnapshot Settings={0}; MdoWebSnapshot Web={0};
     xvalue* Data=xrtValueObject(); xvalue* Items=xrtValueArray();
-    bool Ok=Runtime && Modules && Mcp && Data && Items,HasSubagent=false,HasMcp=false;
+    bool Ok=Modules && Mcp && Data && Items,HasSubagent=false,HasMcp=false;
     bool SignedIn=MdoAccountHasSession(); size_t i,j;
     Settings.Size=sizeof(Settings); Web.Size=sizeof(Web);
     Ok=Ok && MdoSettingsServiceGetSnapshot(&Settings) && MdoWebManagerGetSnapshot(&Web);
@@ -56,24 +54,19 @@ bool MdoApiToolsRoute(MdoApiContext* Context)
         Item=MdoApiToolItem(Builtin->Id,Builtin->Id,Builtin->Description,"builtin",Builtin->Effects,Builtin->MemberOnly,Availability);
         Ok=Item && MdoApiValueAppendTake(Items,&Item); xrtValueRelease(Item);
     }
-    for (i=0u;Ok && i<xworkToolCatalogCount(Runtime);++i) {
-        xwork_tool_info Info={0}; xvalue* Item; cstr Path="";
-        if (!xworkToolCatalogToolAt(Runtime,i,&Info)) { Ok=false; break; }
-        if (MdoBuiltinToolFind(Info.sName)) continue;
-        for (j=0u;j<MdoModuleCatalogToolCount(Modules);++j) {
-            MdoModuleToolInfo Tool={0}; size_t k; Tool.Size=sizeof(Tool);
-            if (!MdoModuleCatalogToolAt(Modules,j,&Tool) || strcmp(Tool.Id,Info.sName)) continue;
-            for (k=0u;k<MdoModuleCatalogModuleCount(Modules);++k) {
-                MdoModuleInfo Module={0}; Module.Size=sizeof(Module);
-                if (MdoModuleCatalogModuleAt(Modules,k,&Module) && !strcmp(Module.Id,Tool.ModuleId)) { Path=Module.SourcePath; break; }
-            }
-            break;
+    for (i=0u;Ok && i<MdoModuleCatalogToolCount(Modules);++i) {
+        MdoModuleToolInfo Tool={0}; xvalue* Item; cstr Path=""; Tool.Size=sizeof(Tool);
+        if (!MdoModuleCatalogToolAt(Modules,i,&Tool)) { Ok=false; break; }
+        if (MdoBuiltinToolFind(Tool.Id)) continue;
+        for (j=0u;j<MdoModuleCatalogModuleCount(Modules);++j) {
+            MdoModuleInfo Module={0}; Module.Size=sizeof(Module);
+            if (MdoModuleCatalogModuleAt(Modules,j,&Module) && !strcmp(Module.Id,Tool.ModuleId)) { Path=Module.SourcePath; break; }
         }
-        Item=MdoApiToolItem(Info.sName,Info.sName,Info.sDescription,Path[0]?"c":"mcp",Info.uEffects,false,"available");
+        Item=MdoApiToolItem(Tool.Id,Tool.Name,Tool.Description,"c",Tool.Effects,false,"available");
         Ok=Item && MdoApiValueSetString(Item,"source_path",Path) && MdoApiValueAppendTake(Items,&Item); xrtValueRelease(Item);
     }
-    if (Ok) Ok=MdoApiValueSetTake(Data,"items",&Items) && MdoApiValueSetUInt(Data,"generation",xworkToolCatalogGeneration(Runtime));
-    xrtValueRelease(Items); MdoModuleCatalogRelease(Modules); MdoMcpCatalogRelease(Mcp); xworkToolCatalogRelease(Runtime);
+    if (Ok) Ok=MdoApiValueSetTake(Data,"items",&Items) && MdoApiValueSetUInt(Data,"generation",MdoModuleManagerGeneration());
+    xrtValueRelease(Items); MdoModuleCatalogRelease(Modules); MdoMcpCatalogRelease(Mcp);
     if (!Ok) { xrtValueRelease(Data); return MdoApiReplyError(Context,503,"tools_unavailable","Tool catalog is unavailable",NULL); }
     return MdoApiReplySuccessTake(Context,200,Data,NULL);
 }

@@ -1,6 +1,6 @@
 // These editors preserve unknown frontmatter. This is a bounded field editor,
 // not a YAML engine: native validation remains authoritative for imported files.
-export const EXTENSION_KINDS = Object.freeze(["subagents", "skills", "mcp", "commands"]);
+export const EXTENSION_KINDS = Object.freeze(["agents", "subagents", "tools", "skills", "mcp", "commands"]);
 export const BUILTIN_COMMAND_NAMES = Object.freeze(["new", "model", "fork", "export", "clear", "stop", "settings", "theme", "help"]);
 export function portableId(id) {
   return /^[a-z0-9_-][a-z0-9._-]{0,63}$/.test(id) && !id.endsWith(".") && !id.includes("..") &&

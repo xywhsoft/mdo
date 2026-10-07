@@ -189,19 +189,11 @@ export function createResourcePanels({ agentsStore, stores, reload }) {
       ? document.activeElement?.dataset.extensionAction : "";
     clear(extensionsContainer);
     const modules = stores.modules.get();
-    extensionsContainer.append(heading("Agent"));
-    for (const agent of agentsStore.get().data?.items ?? []) {
-      const toolSummary = agent.tools?.length
-        ? t("resource.toolCount", { count: agent.tools.length }, `${agent.tools.length} tools`)
-        : t("resource.toolsByPermission", {}, "未设工具白名单 · 仍受权限约束");
-      extensionsContainer.append(card(agent.name || agent.id, resourceDescription("agent", agent), [agent.id, permissionProfile(agent.permission_profile),
-        toolSummary,
-        t("resource.skillCount", { count: agent.skills?.length ?? 0 }, `${agent.skills?.length ?? 0} Skills`)]));
-    }
     extensionsContainer.append(heading("Module", extensionActions.create("modules-reload",
       t("resource.rebuild", {}, "重新编译"), () => refreshCatalog("modules"))));
     const modulesReady = showReadState(extensionsContainer, modules, extensionActions, "modules");
     for (const module of modulesReady ? modules.data?.modules ?? [] : []) {
+      if (!module.source_path?.endsWith(".c")) continue;
       extensionsContainer.append(card(module.name || module.id, resourceDescription("module", module), [module.version,
         module.external ? t("resource.externalTcc", {}, "外部 TCC") : t("resource.builtin", {}, "内置"),
         t("resource.toolCount", { count: module.tool_count }, `${module.tool_count} tools`),
