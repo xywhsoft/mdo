@@ -1,20 +1,32 @@
 import { api, resourceId } from "../api/client.js";
 import { createResourceStore } from "./store.js";
+import { isTransientReadError } from "../api/read-recovery.js";
 
-export const modelsStore = createResourceStore({ providers: [], models: [] });
-export const agentsStore = createResourceStore({ items: [] });
-export const projectsStore = createResourceStore({ items: [] });
+const readOptions = { recoverRead: isTransientReadError };
+export const modelsStore = createResourceStore({ providers: [], models: [] }, readOptions);
+export const agentsStore = createResourceStore({ items: [] }, readOptions);
+export const projectsStore = createResourceStore({ items: [] }, readOptions);
 
 export function loadModels() {
-  return modelsStore.load(async () => (await api.get("/models")).data);
+  return modelsStore.load(async signal => (await api.get("/models", { signal })).data);
 }
 
 export function loadAgents() {
-  return agentsStore.load(async () => (await api.get("/agents")).data);
+  return agentsStore.load(async signal => (await api.get("/agents", { signal })).data);
 }
 
 export function loadProjects() {
-  return projectsStore.load(async () => (await api.get("/projects")).data);
+  return projectsStore.load(async signal => (await api.get("/projects", { signal })).data);
+}
+
+// A fresh foreground/reconnect may resume an exhausted transient read. Do not
+// disturb successful catalogs, active recovery or permanent access failures.
+export function recoverCatalogs() {
+  return Promise.all([[modelsStore, loadModels], [agentsStore, loadAgents],
+    [projectsStore, loadProjects]].filter(([store]) => {
+      const state = store.get();
+      return state.status === "error" && isTransientReadError(state.error);
+    }).map(([, load]) => load()));
 }
 
 export async function createProject(input) {

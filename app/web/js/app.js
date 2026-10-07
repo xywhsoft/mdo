@@ -12,7 +12,7 @@ import {
   patchSession, trashSession, restoreSession, loadSessionHistory, forkSession,
   truncateSession, clearSession, loadSessionTranscript,
 } from "./state/sessions.js";
-import { modelsStore, agentsStore, projectsStore, loadCatalogs, loadModels, loadAgents, loadProjects } from "./state/catalogs.js";
+import { modelsStore, agentsStore, projectsStore, loadCatalogs, loadModels, loadAgents, loadProjects, recoverCatalogs } from "./state/catalogs.js";
 import {
   settingsStore, loadSettings, previewSettings, applySettings,
 } from "./state/settings.js";
@@ -1113,6 +1113,8 @@ export async function boot() {
     const creatingSession = Boolean(creatingSessionKey) &&
       creatingSessionKey === `${route.projectId}/${route.sessionId}`;
     const serviceFailed = Boolean(bootstrapFailure());
+    const pendingCatalog = [modelsStore, agentsStore].map(store => store.get())
+      .find(state => state.updatedAt === 0 && state.status !== "ready");
     const targetBlocked = isRemoteTarget() && (!targetState().connected || targetState().runtimeChanged || targetState().selected.mode === "view");
     if (newTaskController?.isPreparing() || migratingNewTask)
       newTaskComposerFocus.capture();
@@ -1123,7 +1125,7 @@ export async function boot() {
       newTaskController?.isPreparing() ||
       (!sessionWritable && !creatingSession) || migratingNewTask;
     newTaskComposerFocus.restore();
-    sendBlockedByState = serviceFailed || targetBlocked || localServiceReconnecting || purgeRecovery.isPaused() || !(sessionWritable || creatingSession) ||
+    sendBlockedByState = Boolean(pendingCatalog) || serviceFailed || targetBlocked || localServiceReconnecting || purgeRecovery.isPaused() || !(sessionWritable || creatingSession) ||
       messageActionBusy ||
       !draftStore.isLoaded(selectedDraftKey) ||
       selectingProjectDraft ||
@@ -1146,6 +1148,9 @@ export async function boot() {
       ? t(purgeRecovery.get().writeConflictReason === "restart" ? "shell.serviceRestartedTitle" : "error.purgeReviewRequired")
       : localServiceReconnecting ? t("shell.connecting", {}, "正在连接本地服务…") : messageActionBusy
       ? t("messageAction.busy", {}, "请等待当前消息操作完成")
+      : pendingCatalog ? pendingCatalog.status === "error"
+        ? errorMessage(pendingCatalog.error)
+        : t("resource.loading", {}, "正在载入资源…")
       : draftStore.isRunUncertain(selectedDraftKey)
       ? t("composer.hintReviewRun") : (selectingProjectDraft ||
           !draftStore.isLoaded(selectedDraftKey))
@@ -1169,6 +1174,8 @@ export async function boot() {
     mobileActivity.hidden = !activeRun && !creatingNewTask;
   }
   settingsStore.subscribe(() => setRun(activeRun));
+  modelsStore.subscribe(() => setRun(activeRun));
+  agentsStore.subscribe(() => setRun(activeRun));
   let purgeWasPaused = purgeRecovery.isPaused();
   purgeRecovery.subscribe(() => {
     const paused = purgeRecovery.isPaused();
@@ -2467,6 +2474,7 @@ export async function boot() {
       draftStore.resumeSaves({ retryReads: recovering });
     if (recovering && !purgeRecovery.isPaused())
       void projectDraftSelection.restoreLegacy();
+    if (recovering) void recoverCatalogs();
     if (connected) runStops.resume();
   }
   liveConnection.subscribe((event) => {
@@ -2513,6 +2521,7 @@ export async function boot() {
     }
     else {
       refreshRelativeTimes();
+      void recoverCatalogs();
       scheduleTaskRefresh();
       void loadRuns().then(refreshSelectedQueue);
       void loadSessions();
