@@ -63,9 +63,7 @@ def probe(host: Path) -> None:
         environment = os.environ.copy()
         environment["USERPROFILE"] = str(base)
         environment["HOME"] = str(base)
-        environment["MDO_ORNITH_RESPONSES_URL"] = (
-            f"http://127.0.0.1:{model_port}/v1")
-        environment["MDO_ORNITH_API_KEY"] = "bounded-image-test-key"
+        environment["MDO_IMAGE_MODEL_KEY"] = "bounded-image-test-key"
         log_path = base / "xs.log"
         try:
             with log_path.open("wb") as log:
@@ -78,10 +76,31 @@ def probe(host: Path) -> None:
                 )
                 try:
                     wait_ready(port, process)
+                    # Exercise the ordinary configurable provider API. The
+                    # built-in member model deliberately requires login.
+                    status, headers, raw = request(port, "GET", "/api/v1/models/config")
+                    assert status == 200, raw
+                    models = json.loads(raw)["data"]
+                    models.pop("runtime_override", None)
+                    provider = json.loads(json.dumps(models["providers"][0]))
+                    provider.update(id="image-fixture", name="Image fixture",
+                        builtin=False, editable=True, removable=True,
+                        endpoints={"responses": f"http://127.0.0.1:{model_port}/v1"},
+                        credential={"secret_ref": "env:MDO_IMAGE_MODEL_KEY"})
+                    item = json.loads(json.dumps(models["items"][0]))
+                    item.update(id="image-fixture", name="Image fixture",
+                        provider="image-fixture", builtin=False, free=False,
+                        editable=True, removable=True, protocols=["openai-responses"],
+                        default_protocol="openai-responses")
+                    models["providers"].append(provider); models["items"].append(item)
+                    status, _, raw = request(port, "PUT", "/api/v1/settings/models",
+                        body=json.dumps({"schema_version": 1, "patch": models}).encode(),
+                        headers={"Content-Type": "application/json", "If-Match": headers["etag"]})
+                    assert status == 200, raw
                     payload = json.dumps({
                         "project_id": "image-probe",
                         "title": "Image probe",
-                        "model_id": "ornith-1.5-35b",
+                        "model_id": "image-fixture",
                         "protocol": "openai-responses",
                         "workspace_root": str(base),
                     }).encode()

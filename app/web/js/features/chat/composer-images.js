@@ -75,7 +75,7 @@ function selectionError(key, fallback) {
 export function createComposerImages({ composer, prompt, button, input, strip,
   modelSelect, navigation, modelsStore, sessionStore, ensureSession, onChange,
   onBeforeRemove, onRemove,
-  onUploading, onError, onDiscardedUpload }) {
+  onUploading, onError, onDiscardedUpload, uploadImage = api.uploadImage }) {
   let ids = [];
   const uploadJobs = new Map();
   const removals = new Set();
@@ -264,8 +264,9 @@ export function createComposerImages({ composer, prompt, button, input, strip,
           if (scopeKey() !== job.key) { discarded = true; break; }
           let stored;
           try {
-            stored = await api.uploadImage(selected.projectId,
-              selected.sessionId, file, mime);
+            stored = await uploadImage(selected.projectId,
+              selected.sessionId, file, mime,
+              { canContinue: () => scopeKey() === job.key });
           } catch (error) {
             if (scopeKey() === job.key) onError(error);
             else { discarded = true; break; }

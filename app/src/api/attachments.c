@@ -92,7 +92,8 @@ static bool MdoAttachmentSession(const MdoApiContext* Context,
     MdoSessionInfo Info;
     xwork_error Error;
     bool Ok;
-    if ( Context->ParamCount != (Upload ? 2u : 3u) ||
+    if ( Context->ParamCount != (Upload &&
+            Context->Request->head->MethodCode != XHTTP_METHOD_PUT ? 2u : 3u) ||
          !MdoAttachmentCaptureId(Context->Params[0], Project,
             MDO_PROJECT_ID_CAPACITY) ||
          !MdoAttachmentCaptureId(Context->Params[1], Session,
@@ -250,6 +251,17 @@ static bool MdoAttachmentMetaUInt(const xvalue* Root, cstr Key, uint64* Output)
     return true;
 }
 
+/* A client keeps this random identity for one upload, including retries.
+ * The identity is scoped to a session and never permits an overwrite. */
+static bool MdoAttachmentUploadId(const MdoApiContext* Context,
+    char Output[MDO_ATTACHMENT_ID_LENGTH + 1u])
+{
+    Output[0] = '\0';
+    if ( Context->Request->head->MethodCode != XHTTP_METHOD_PUT ) return true;
+    return Context->ParamCount == 3u &&
+        MdoAttachmentHexId(Context->Params[2], Output);
+}
+
 /* The caller owns the returned value. Old five-field v1 sidecars remain
  * readable; named uploads use six-field v2 sidecars with bounded UTF-8. */
 static xvalue* MdoAttachmentMetadata(const char* Project,
@@ -329,6 +341,40 @@ static bool MdoAttachmentCreatedAt(const char* Project,
     return Ok;
 }
 
+/* Called under the attachment lock, before quota admission. A replay must
+ * match bytes, MIME and display name; size alone cannot prove identity. */
+static bool MdoAttachmentUploadMatches(const char* Project,
+    const char* Session, const char* Id, const char* Data, size_t Size,
+    const char* Mime, const char* FileName)
+{
+    xvalue* Metadata = MdoAttachmentMetadata(Project, Session, Id);
+    char* Stored = NULL;
+    size_t StoredSize = 0u;
+    cstr StoredMime = NULL;
+    xstrview MetaMime = {0};
+    xstrview StoredName = {0};
+    uint64 MetaSize = 0u;
+    const xvalue* Value;
+    bool Ok = Metadata != NULL &&
+        MdoAttachmentMetaUInt(Metadata, "size", &MetaSize) && MetaSize == Size &&
+        xrtValueGetString(xrtValueObjectGet(Metadata,
+            XRT_STR_LITERAL("mime_type")), &MetaMime) &&
+        MetaMime.Size == strlen(Mime) &&
+        memcmp(MetaMime.Data, Mime, MetaMime.Size) == 0;
+    Value = Metadata == NULL ? NULL :
+        xrtValueObjectGet(Metadata, XRT_STR_LITERAL("file_name"));
+    if ( Ok && Value != NULL ) Ok = xrtValueGetString(Value, &StoredName);
+    if ( Ok ) Ok = StoredName.Size == strlen(FileName) &&
+        (StoredName.Size == 0u ||
+         memcmp(StoredName.Data, FileName, StoredName.Size) == 0) &&
+        MdoAttachmentReadForRun(Project, Session, Id, &Stored, &StoredSize,
+            &StoredMime) && StoredSize == Size && strcmp(StoredMime, Mime) == 0 &&
+        memcmp(Stored, Data, Size) == 0;
+    xrtFree(Stored);
+    xrtValueRelease(Metadata);
+    return Ok;
+}
+
 bool MdoAttachmentIdsRead(const xvalue* Array, char Ids[4][33], size_t* Count)
 {
     return MdoImageIdsRead(Array, Ids, Count);
@@ -400,6 +446,9 @@ bool MdoApiAttachmentsRoute(MdoApiContext* Context)
     xvalue* Reply;
     bool Ok;
     bool Exists;
+    bool FixedId;
+    bool Replay = false;
+    bool Conflict = false;
     xfileinfo Existing;
     size_t Attempt;
     int Written;
@@ -412,6 +461,10 @@ bool MdoApiAttachmentsRoute(MdoApiContext* Context)
     if ( !MdoAttachmentName(Context, FileName) )
         return MdoApiReplyError(Context, 400u, "image_name_invalid",
             "X-Mdo-File-Name must be one percent-encoded UTF-8 leaf name of at most 1024 bytes", NULL);
+    if ( !MdoAttachmentUploadId(Context, Id) )
+        return MdoApiReplyError(Context, 400u, "image_upload_id_invalid",
+            "The upload identity must be 32 lowercase hexadecimal characters", NULL);
+    FixedId = Id[0] != '\0';
     Status = MdoApiBinaryBodyRead(Context, MDO_API_IMAGE_MAX_BYTES,
         &Data, &Size);
     if ( Status != MDO_API_BODY_OK )
@@ -441,11 +494,31 @@ bool MdoApiAttachmentsRoute(MdoApiContext* Context)
         return MdoApiReplyError(Context, 503u, "attachment_unavailable",
             "Image storage is unavailable", NULL);
     }
-    Ok = MdoAttachmentQuota(Directory, Size);
-    if ( !Ok && MdoAttachmentCollectExpired(Project, Session, Directory) )
+    Ok = true;
+    if ( FixedId ) {
+        bool DataExists = false;
+        bool MetaExists = false;
+        snprintf(Name, sizeof(Name), "%s.bin", Id);
+        Ok = MdoAttachmentPath(Path, sizeof(Path), Project, Session, Name) &&
+            MdoHomeExternalStat(Path, &DataExists, &Existing);
+        snprintf(Name, sizeof(Name), "%s.json", Id);
+        Ok = Ok && MdoAttachmentPath(MetaPath, sizeof(MetaPath), Project,
+            Session, Name) && MdoHomeExternalStat(MetaPath, &MetaExists, &Existing);
+        if ( Ok && (DataExists || MetaExists) ) {
+            Replay = DataExists && MetaExists &&
+                MdoAttachmentUploadMatches(Project, Session, Id, Data, Size,
+                    Mime, FileName);
+            Conflict = !Replay;
+            Ok = Replay;
+        }
+    }
+    if ( Ok && !Replay ) {
         Ok = MdoAttachmentQuota(Directory, Size);
-    for ( Attempt = 0u; Ok && Attempt < 4u; ++Attempt ) {
-        Ok = MdoAttachmentNewId(Id);
+        if ( !Ok && MdoAttachmentCollectExpired(Project, Session, Directory) )
+            Ok = MdoAttachmentQuota(Directory, Size);
+    }
+    for ( Attempt = 0u; Ok && !Replay && Attempt < 4u; ++Attempt ) {
+        if ( !FixedId ) Ok = MdoAttachmentNewId(Id);
         if ( !Ok ) break;
         Written = snprintf(Name, sizeof(Name), "%s.bin", Id);
         Ok = Written > 0 && (size_t)Written < sizeof(Name) &&
@@ -468,7 +541,7 @@ bool MdoApiAttachmentsRoute(MdoApiContext* Context)
         if ( !Exists ) break;
     }
     if ( Attempt == 4u ) Ok = false;
-    if ( Ok ) {
+    if ( Ok && !Replay ) {
         xvalue* Metadata = xrtValueObject();
         char* Meta = NULL;
         size_t MetaSize = 0u;
@@ -492,6 +565,9 @@ bool MdoApiAttachmentsRoute(MdoApiContext* Context)
     }
     (void)xrtMutexUnlock(g_MdoAttachmentLock);
     xrtFree(Data);
+    if ( Conflict ) return MdoApiReplyError(Context, 409u,
+        "image_upload_conflict",
+        "This upload identity already has different or incomplete image data", NULL);
     if ( !Ok ) return MdoApiReplyError(Context, 507u,
         "attachment_storage_full",
         "The session image quota or storage limit was reached", NULL);
@@ -506,13 +582,17 @@ bool MdoApiAttachmentsRoute(MdoApiContext* Context)
          !MdoApiValueSetUInt(Reply, "size", Size) ||
          !MdoApiValueSetString(Reply, "url", Url) ) {
         xrtValueRelease(Reply);
-        (void)MdoHomeRemove(MetaPath, false);
-        (void)MdoHomeRemove(Path, false);
+        // A keyed upload remains readable if acknowledgement construction
+        // fails. Removing it here could erase another successful replay.
+        if ( !FixedId && !Replay ) {
+            (void)MdoHomeRemove(MetaPath, false);
+            (void)MdoHomeRemove(Path, false);
+        }
         return MdoApiReplyError(Context, 500u, "attachment_response_failed",
             "The image was stored but its response could not be created",
             NULL);
     }
-    return MdoApiReplySuccessTake(Context, 201u, Reply, NULL);
+    return MdoApiReplySuccessTake(Context, Replay ? 200u : 201u, Reply, NULL);
 }
 
 bool MdoAttachmentReadForRun(const char* Project, const char* Session,
@@ -774,6 +854,8 @@ bool MdoApiAttachmentInfoRoute(MdoApiContext* Context)
 
 bool MdoApiAttachmentRoute(MdoApiContext* Context)
 {
+    if ( Context->Request->head->MethodCode == XHTTP_METHOD_PUT )
+        return MdoApiAttachmentsRoute(Context);
     char Project[MDO_PROJECT_ID_CAPACITY];
     char Session[MDO_SESSION_ID_CAPACITY];
     char Id[MDO_ATTACHMENT_ID_LENGTH + 1u];

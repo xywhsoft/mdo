@@ -3026,7 +3026,7 @@ def run_probe(host: Path) -> None:
                             f"attachments/{half_orphan['id']}.bin").exists()
                 status, headers, body = request(port, "OPTIONS", image["url"])
                 assert status == 200 and headers["allow"] == (
-                    "GET, HEAD, DELETE, OPTIONS"), (status, headers, body)
+                    "GET, HEAD, PUT, DELETE, OPTIONS"), (status, headers, body)
                 status, _, response = request(
                     port, "POST", attachments_path, body=b"not an image",
                     headers={"Content-Type": "image/png"})

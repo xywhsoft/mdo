@@ -1,5 +1,6 @@
 import { createNotificationCenter } from "./features/notifications/center.js";
 import { liveConnection } from "./api/live.js";
+import { uploadImageWithRecovery } from "./api/image-upload.js";
 import { isTransientReadError } from "./api/read-recovery.js";
 import { isRemoteTarget, targetState, subscribeTarget, setTargetSwitchGuard } from "./api/target.js";
 import { createRemotePanel } from "./features/settings/remote-panel.js";
@@ -921,6 +922,7 @@ export async function boot() {
     },
   });
   composerImages = createComposerImages({
+    uploadImage: uploadImageWithRecovery,
     composer, prompt, button: $("#composer-attach"), input: $("#composer-file"),
     strip: $("#composer-images"), modelSelect: $("#composer-model"),
     navigation, modelsStore,

@@ -144,14 +144,18 @@ async function sendJson(path, options) {
   return readEnvelope(response, path, method);
 }
 
-async function uploadImage(projectId, sessionId, file, mime = file.type) {
+async function uploadImage(projectId, sessionId, file, mime = file.type, options = {}) {
+  if (options.uploadId && !/^[0-9a-f]{32}$/.test(options.uploadId))
+    throw new TypeError("Invalid image upload identity");
   const path = `/projects/${resourceId(projectId, "project")}` +
-    `/sessions/${resourceId(sessionId, "session")}/attachments`;
-  checkWrite(path, { method: "POST" });
-  return trackWrite(() => sendImage(path, file, mime));
+    `/sessions/${resourceId(sessionId, "session")}/attachments` +
+    (options.uploadId ? `/${options.uploadId}` : "");
+  const method = options.uploadId ? "PUT" : "POST";
+  checkWrite(path, { method });
+  return trackWrite(() => sendImage(path, file, mime, method, options.signal));
 }
 
-async function sendImage(path, file, mime) {
+async function sendImage(path, file, mime, method, signal) {
   const url = apiUrl(path);
   const headers = { Accept: "application/json", "Content-Type": mime,
     ...(pageWriteToken ? { "X-Mdo-Write-Token": pageWriteToken } : {}) };
@@ -163,11 +167,12 @@ async function sendImage(path, file, mime) {
   let response;
   try {
     response = await targetFetch(url, {
-      method: "POST",
+      method,
       headers,
       body: file,
       cache: "no-store",
       credentials: "same-origin",
+      signal,
     });
   } catch (error) {
     if (error?.name === "AbortError") throw error;

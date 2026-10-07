@@ -151,6 +151,10 @@ def main():
     config={'services':[{'class':'http','enabled':True,'name':'retry-qa',
         'ip':'127.0.0.1','port':port,'host_default':{'enabled':True,'name':'mdo',
             'path':'web','devlang':'c','devfile':'generated/mdo_unity.c'}}]}
+    # Match the real application's bounded image receiver, rather than xs's
+    # smaller generic default. An ordinary image can exceed the JSON limit.
+    production=json.loads((ROOT/'app/xs.json').read_text(encoding='utf-8'))
+    config['services'][0]['recv_limit']=production['services'][0]['recv_limit']
     (base/'xs.json').write_text(json.dumps(config),encoding='utf-8')
     stop=base/'stop'; log=(base/'host.log').open('wb')
     env=dict(os.environ,USE_WEBVIEW='0',MDO_HOME=str(base/'home'),
