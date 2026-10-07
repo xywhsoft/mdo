@@ -18,13 +18,16 @@
 .account-quota-bar>span { display:block; height:100%; background:var(--focus); border-radius:inherit; }
 .account-quota-row.is-low .account-quota-bar>span { background:var(--warning); }
 .account-quota-note { color:var(--muted); font-size:11px; }
-.account-model-allowance { display:grid; gap:16px; padding:16px; border:1px solid var(--border); border-radius:var(--radius-md); margin-top:20px; }
-.account-model-allowance h3,.account-model-allowance p { margin:0; }
-.account-model-allowance .account-quota-heading,.account-model-allowance .account-quota-heading strong { font-size:13px; }
-.account-model-allowance .account-note { margin-top:7px; }
+.account-model-allowance, .account-search-allowance { display:grid; gap:16px; padding:16px; border:1px solid var(--border); border-radius:var(--radius-md); margin-top:20px; }
+:is(.account-model-allowance,.account-search-allowance) :is(h3,p) { margin:0; }
+:is(.account-model-allowance,.account-search-allowance) .account-quota-heading,
+:is(.account-model-allowance,.account-search-allowance) .account-quota-heading strong { font-size:13px; }
+:is(.account-model-allowance,.account-search-allowance) .account-note { margin-top:7px; }
+.account-search-allowance .account-quota-count { margin-top:10px; font-size:14px; font-variant-numeric:tabular-nums; }
 .account-panel { max-width:680px; }
-.account-origin, .account-note { color:var(--muted); overflow-wrap:anywhere; font-size:13px; }
-.account-state { font-weight:600; }
+.account-note { color:var(--muted); overflow-wrap:anywhere; font-size:13px; }
+.account-state { font-size:16px; font-weight:600; overflow-wrap:anywhere; }
+.account-benefits { line-height:1.6; }
 .account-details { display:grid; grid-template-columns:minmax(90px,auto) 1fr; gap:10px 22px; font-size:14px; }
 .account-details dt { color:var(--muted); }
 .account-details dd { margin:0; overflow-wrap:anywhere; }

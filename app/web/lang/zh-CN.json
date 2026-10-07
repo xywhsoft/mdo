@@ -45,8 +45,6 @@
   "account.search403": "账号暂不能使用搜索，请检查网站要求的验证项。",
   "account.search429": "搜索额度或并发额度已用完，请稍后再试。",
   "account.search503": "搜索服务暂未配置或不可用。",
-  "account.quotaUsed": "今日已用",
-  "account.quotaLimit": "每日额度",
   "account.quotaRemaining": "今日剩余",
   "account.credential_save_failed": "无法安全保存登录。当前仍可使用，下次启动需要重新登录。",
   "account.authorization_expired": "授权已过期，请重新开始登录。",
@@ -1823,5 +1821,10 @@
   "account.tokensUsed": "今日已用 {count} token",
   "account.tokensRemaining": "剩余 {remaining} / {limit} token",
   "account.tokensReserved": "在途预留 {count} token",
-  "account.tokenReset": "北京时间每日 00:00 重置，输入与输出合计"
+  "account.tokenReset": "北京时间每日 00:00 重置，输入与输出合计",
+  "account.greeting": "您好，{name}：",
+  "account.searchAllowance": "网络搜索额度",
+  "account.searchesRemaining": "{remaining} / {limit} 次可用",
+  "account.searchesUsed": "今日已用 {count} 次",
+  "account.searchReset": "下次重置：{time}"
 }

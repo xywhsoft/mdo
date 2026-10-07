@@ -19,3 +19,15 @@ export function allowanceView(value, now = Date.now() / 1000) {
   });
   return { vip, group, quotas, stale };
 }
+
+// Search has its own server reset time; do not reuse the model's Beijing day.
+export function searchAllowanceView(value, now = Date.now() / 1000) {
+  if (!value || ![value.daily_used, value.daily_limit, value.daily_reset_at]
+    .every(n => Number.isSafeInteger(n) && n >= 0) || value.daily_limit === 0 ||
+    value.daily_reset_at === 0 || value.daily_reset_at > 8640000000000) return null;
+  const remaining = Math.max(0, value.daily_limit - value.daily_used);
+  const percentage = remaining / value.daily_limit * 100;
+  return { used: value.daily_used, limit: value.daily_limit, remaining, percentage,
+    percentText: percentage > 0 && percentage < 1 ? "<1%" : `${Math.floor(percentage)}%`,
+    resets_at: value.daily_reset_at, stale: value.daily_reset_at <= now, unlimited: false };
+}

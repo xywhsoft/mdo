@@ -1,13 +1,15 @@
 import { api } from "../../api/client.js";
-import { subscribeLocale, t } from "../../i18n.js";
+import { currentLocale, subscribeLocale, t } from "../../i18n.js";
 import { toast, errorMessage } from "../../utils/dom.js";
 import { isRemoteTarget } from "../../api/target.js";
-import { allowanceView } from "./allowance.js";
+import { allowanceView, searchAllowanceView } from "./allowance.js";
 
 // Tokens stay in the native host. Passwords are submitted once from the form,
 // then cleared; account rendering uses only filtered public snapshots.
 export function createAccount({ navigation, onModelsChange = () => {} }) {
   const panel = document.querySelector("#account-panel");
+  // Benefits belong to the signed-out state, below its status line.
+  panel.querySelector("[data-i18n='account.description']")?.remove();
   const sidebar = document.querySelector("#open-account");
   const sidebarQuota = document.createElement("button");
   sidebarQuota.className = "sidebar-model-allowance"; sidebarQuota.type = "button"; sidebarQuota.hidden = true;
@@ -58,10 +60,11 @@ export function createAccount({ navigation, onModelsChange = () => {} }) {
     const stateText = copy(snapshot.state === "signing_in" ? "signingIn" : snapshot.state === "signed_in" ? "signedIn" :
       snapshot.state === "authorizing" ? "waitingBrowser" : snapshot.state === "refreshing" ? "refreshing" :
       snapshot.state === "expired" ? "expired" : "signedOut");
-    const status = text("p", stateText, "account-state"); status.setAttribute("role", "status");
-    const nodes = [status, text("p", snapshot.origin || copy("invalidService"), "account-origin")];
+    const status = text("p", signedIn() ? copy("greeting", { name: displayName() }) : stateText, "account-state");
+    status.setAttribute("role", "status");
+    const nodes = [status];
+    if (!signedIn()) nodes.push(text("p", copy("description"), "account-note account-benefits"));
     if (snapshot.profile) {
-      nodes.push(text("h3", displayName()));
       const details = text("dl", "", "account-details");
       for (const [key, value] of [["username", snapshot.profile.username], ["phone", snapshot.profile.phone], ["email", snapshot.profile.email]]) {
         if (!value) continue;
@@ -78,16 +81,7 @@ export function createAccount({ navigation, onModelsChange = () => {} }) {
     if (snapshot.message) nodes.push(text("p", copy(snapshot.message), "account-hint"));
     if ([403, 429, 503].includes(snapshot.search_status))
       nodes.push(text("p", copy(`search${snapshot.search_status}`), "account-hint"));
-    if (snapshot.usage) {
-      // Only personal quota facts are displayed; server/vendor configuration
-      // and unknown fields are deliberately excluded from the UI.
-      const quota = text("dl", "", "account-details");
-      for (const [key, label] of [["daily_used", "quotaUsed"], ["daily_limit", "quotaLimit"]])
-        if (Number.isSafeInteger(snapshot.usage[key])) quota.append(text("dt", copy(label)), text("dd", String(snapshot.usage[key])));
-      if (Number.isSafeInteger(snapshot.usage.daily_limit) && Number.isSafeInteger(snapshot.usage.daily_used))
-        quota.append(text("dt", copy("quotaRemaining")), text("dd", String(Math.max(0, snapshot.usage.daily_limit - snapshot.usage.daily_used))));
-      if (quota.childElementCount) nodes.push(quota);
-    }
+    if (signedIn()) nodes.push(renderSearchQuota());
     if (signedIn() || snapshot.state === "refreshing")
       nodes.push(text("p", copy(snapshot.remembered ? "remembered" : "temporary"), "account-note"));
     const actions = text("div", "", "account-actions");
@@ -129,17 +123,9 @@ export function createAccount({ navigation, onModelsChange = () => {} }) {
     if (!allowance) { parent.append(text("span", copy(snapshot?.models_status && snapshot.models_status !== 200 ? "allowanceUnavailable" : "allowanceLoading"), "account-quota-note")); return; }
     if (!compact) parent.append(text("h3", copy("modelAllowance")), text("p", copy("tokenReset"), "account-note"));
     for (const q of allowance.quotas) {
-      const row = text("div", "", "account-quota-row"), header = text("div", "", "account-quota-heading");
-      header.append(text("span", q.title), text("strong", q.stale ? copy("quotaUpdating") : q.unlimited ? copy("unlimited") : q.percentText));
-      row.append(header); row.classList.toggle("is-low", !q.unlimited && q.percentage < 10);
-      if (!q.unlimited) {
-        const bar = text("div", "", "account-quota-bar"); bar.setAttribute("role", "progressbar");
-        bar.setAttribute("aria-label", copy("modelRemaining", { model: q.title })); bar.setAttribute("aria-valuemin", "0"); bar.setAttribute("aria-valuemax", "100");
-        bar.setAttribute("aria-valuenow", String(q.percentage)); bar.setAttribute("aria-valuetext", q.stale ? copy("quotaUpdating") : q.percentText);
-        const fill = text("span", ""); fill.style.width = `${q.percentage}%`; bar.append(fill); row.append(bar);
-      }
       const counts = q.unlimited ? copy("tokensUsed", { count: q.used_tokens.toLocaleString() }) :
         copy("tokensRemaining", { remaining: q.remaining_tokens.toLocaleString(), limit: q.limit_tokens.toLocaleString() });
+      const row = quotaRow(q, copy("modelRemaining", { model: q.title }));
       row.title = counts + " · " + copy("tokenReset");
       if (!compact) {
         row.append(text("p", counts, "account-note"));
@@ -148,6 +134,31 @@ export function createAccount({ navigation, onModelsChange = () => {} }) {
       parent.append(row);
     }
     if (!allowance.quotas.length) parent.append(text("span", copy("allowanceUnavailable"), "account-quota-note"));
+  }
+  function quotaRow(quota, label) {
+    const row = text("div", "", "account-quota-row"), header = text("div", "", "account-quota-heading");
+    header.append(text("span", quota.title), text("strong", quota.stale ? copy("quotaUpdating") : quota.unlimited ? copy("unlimited") : quota.percentText));
+    row.append(header); row.classList.toggle("is-low", !quota.unlimited && quota.percentage < 10);
+    if (!quota.unlimited) {
+      const bar = text("div", "", "account-quota-bar"); bar.setAttribute("role", "progressbar");
+      bar.setAttribute("aria-label", label); bar.setAttribute("aria-valuemin", "0"); bar.setAttribute("aria-valuemax", "100");
+      bar.setAttribute("aria-valuenow", String(quota.percentage)); bar.setAttribute("aria-valuetext", quota.stale ? copy("quotaUpdating") : quota.percentText);
+      const fill = text("span", ""); fill.style.width = `${quota.percentage}%`; bar.append(fill); row.append(bar);
+    }
+    return row;
+  }
+  function renderSearchQuota() {
+    const meters = text("section", "", "account-search-allowance");
+    meters.append(text("h3", copy("searchAllowance")));
+    const quota = searchAllowanceView(snapshot.usage);
+    if (!quota) { meters.append(text("p", copy(snapshot.search_status && snapshot.search_status !== 200 ? "allowanceUnavailable" : "allowanceLoading"), "account-quota-note")); return meters; }
+    quota.title = copy("quotaRemaining"); quota.stale ||= snapshot.search_status !== 200;
+    const row = quotaRow(quota, copy("searchAllowance"));
+    row.append(text("p", copy("searchesRemaining", { remaining: quota.remaining.toLocaleString(), limit: quota.limit.toLocaleString() }), "account-quota-count"));
+    row.append(text("p", copy("searchesUsed", { count: quota.used.toLocaleString() }), "account-note"));
+    meters.append(row, text("p", copy("searchReset", { time: new Date(quota.resets_at * 1000).toLocaleString(currentLocale(),
+      { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" }) }), "account-note"));
+    return meters;
   }
   function schedule() {
     clearTimeout(timer);

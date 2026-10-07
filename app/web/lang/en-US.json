@@ -45,8 +45,6 @@
   "account.search403": "Search access denied. Check the verification requirements on the website.",
   "account.search429": "Search quota or concurrency limit reached. Try later.",
   "account.search503": "Search service is unavailable or not configured.",
-  "account.quotaUsed": "Used today",
-  "account.quotaLimit": "Daily quota",
   "account.quotaRemaining": "Remaining today",
   "account.credential_save_failed": "Could not securely save sign-in. It works now, but the next launch requires sign-in.",
   "account.authorization_expired": "Authorization expired. Start sign-in again.",
@@ -1823,5 +1821,10 @@
   "account.tokensUsed": "Used today: {count} tokens",
   "account.tokensRemaining": "{remaining} / {limit} tokens remaining",
   "account.tokensReserved": "{count} tokens reserved by active requests",
-  "account.tokenReset": "Resets daily at 00:00 Beijing time; input and output combined"
+  "account.tokenReset": "Resets daily at 00:00 Beijing time; input and output combined",
+  "account.greeting": "Hello, {name}:",
+  "account.searchAllowance": "Web search allowance",
+  "account.searchesRemaining": "{remaining} / {limit} searches available",
+  "account.searchesUsed": "Used today: {count} searches",
+  "account.searchReset": "Next reset: {time}"
 }
