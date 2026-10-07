@@ -71,6 +71,7 @@ typedef struct MdoModelClientOptions {
     MdoModelProtocol Protocol;    /* zero selects the model default. */
     const char* ReasoningEffort;  /* NULL or empty selects the model default. */
     uint32 MaxOutputTokens;       /* zero selects the model maximum. */
+    bool RestartableStream;       /* Agent drafts can be replaced on recovery. */
 } MdoModelClientOptions;
 
 typedef struct MdoModelClientInfo {
@@ -100,6 +101,10 @@ xllm_result MdoModelOnlineComplete(const MdoModelCatalog*,const MdoModelClientOp
  * retries transient failures before content delivery and returns one final
  * structured error. Cancellation and request deadlines remain authoritative. */
 xllm_result MdoModelComplete(xllm_client*, const xllm_request*,
+    const xllm_stream_callbacks*, xllm_response**, xllm_error*);
+/* Only for consumers that replace their draft after RESPONSE_START. Tools
+ * must be dispatched after this function successfully returns a response. */
+xllm_result MdoModelCompleteRestartable(xllm_client*, const xllm_request*,
     const xllm_stream_callbacks*, xllm_response**, xllm_error*);
 const char* MdoModelErrorKind(const xllm_error*);
 const char* MdoModelErrorMessage(const xllm_error*);

@@ -22,6 +22,7 @@ const char* MdoModelErrorKind(const xllm_error* Error)
     /* Scope termination supersedes the last failed transport response. */
     if (Error->eCode == XLLM_ERROR_CANCELLED) return "cancelled";
     if (Error->eCode == XLLM_ERROR_TIMEOUT) return "timeout";
+    if (Error->eCode == XLLM_ERROR_OUTPUT_LIMIT) return "output_limit";
     if (MdoModelsCode(Error, "daily_token_limit")) return "daily_token_limit";
     if (MdoModelsCode(Error, "insufficient_balance")) return "insufficient_balance";
     if (MdoModelsCode(Error, "insufficient_quota") ||
@@ -49,7 +50,8 @@ const char* MdoModelErrorKind(const xllm_error* Error)
         Error->tCause.eDomain != XLLM_ERROR_DOMAIN_RESOURCE) return "network";
     if (Error->iHttpStatus >= 500 && Error->iHttpStatus <= 599)
         return "service_unavailable";
-    if (Error->eCode == XLLM_ERROR_PARSE || Error->eCode == XLLM_ERROR_PROTOCOL)
+    if (Error->eCode == XLLM_ERROR_PARSE || Error->eCode == XLLM_ERROR_PROTOCOL ||
+        Error->eCode == XLLM_ERROR_INCOMPLETE_RESPONSE)
         return "invalid_response";
     if (Error->iHttpStatus == 400 || Error->iHttpStatus == 422 ||
         Error->eCode == XLLM_ERROR_INVALID_ARGUMENT) return "invalid_request";
@@ -95,6 +97,8 @@ const char* MdoModelErrorMessage(const xllm_error* Error)
         "The model service is temporarily unavailable and automatic recovery did not succeed. Your conversation is saved; try again later.";
     if (!strcmp(Kind, "invalid_response")) return
         "The model service returned an incomplete or invalid response. Your conversation is saved; you can continue or choose another model.";
+    if (!strcmp(Kind, "output_limit")) return
+        "The model reached its output limit before completing a tool call. Automatic recovery did not succeed; increase the output limit or ask for smaller steps. Your conversation is saved.";
     if (!strcmp(Kind, "invalid_request")) return
         "The model service rejected the request settings. Check the model, API protocol and supported options.";
     if (!strcmp(Kind, "cancelled")) return "The model request was cancelled.";
@@ -127,7 +131,8 @@ static bool MdoModelsRetryable(const xllm_error* Error)
 {
     const char* Kind = MdoModelErrorKind(Error);
     return !strcmp(Kind, "rate_limited") || !strcmp(Kind, "network") ||
-        !strcmp(Kind, "service_unavailable") || !strcmp(Kind, "timeout");
+        !strcmp(Kind, "service_unavailable") || !strcmp(Kind, "timeout") ||
+        Error->eCode == XLLM_ERROR_INCOMPLETE_RESPONSE;
 }
 
 static xllm_result MdoModelsScope(const xllm_request* Request, xllm_error* Error)
@@ -164,9 +169,9 @@ static uint32 MdoModelsRetryDelay(uint32 Attempt, uint32 RetryAfter,
     return Delay > UINT32_MAX ? UINT32_MAX : (uint32)Delay;
 }
 
-xllm_result MdoModelComplete(xllm_client* Client, const xllm_request* Request,
+static xllm_result MdoModelsComplete(xllm_client* Client, const xllm_request* Request,
     const xllm_stream_callbacks* Callbacks, xllm_response** Response,
-    xllm_error* OutError)
+    xllm_error* OutError, bool Restartable)
 {
     xllm_error Error;
     xllm_result Result = XLLM_RESULT_ERROR;
@@ -177,6 +182,9 @@ xllm_result MdoModelComplete(xllm_client* Client, const xllm_request* Request,
     uint32 Attempt = 0u;
     uint32 AttemptsMade = 0u;
     bool Retryable = false;
+    xllm_request RepairRequest = {0};
+    xllm_message* RepairMessages = NULL;
+    const xllm_request* ActiveRequest = Request;
     if (Response) *Response = NULL;
     xllmErrorInit(&Error);
     if (!Client || !Request || !Response) {
@@ -194,7 +202,7 @@ xllm_result MdoModelComplete(xllm_client* Client, const xllm_request* Request,
         Result = MdoModelsScope(Request, &Error);
         if (Result != XLLM_RESULT_OK) { Retryable = false; break; }
         ++AttemptsMade;
-        Result = xllmClientComplete(Client, Request, Callbacks ? &Stream : NULL,
+        Result = xllmClientComplete(Client, ActiveRequest, Callbacks ? &Stream : NULL,
             Response, &Error);
         if (Result == XLLM_RESULT_OK) break;
         if (MdoModelsScope(Request, &Error) != XLLM_RESULT_OK) {
@@ -203,11 +211,48 @@ xllm_result MdoModelComplete(xllm_client* Client, const xllm_request* Request,
                 XLLM_RESULT_CANCELLED : XLLM_RESULT_TIMEOUT;
             break;
         }
-        Retryable = MdoModelsRetryable(&Error) &&
-            !Error.tDiagnostics.bModelDataDelivered && !*Response &&
-            !xrtAtomic32Load(&Guard.Delivered, XMEMORY_ACQUIRE) &&
+        /* Invalid streamed drafts are also replaceable at the Agent boundary:
+         * no tools execute until a valid complete response is returned. */
+        Retryable = (MdoModelsRetryable(&Error) || (Restartable &&
+            (!strcmp(MdoModelErrorKind(&Error), "invalid_response") ||
+             Error.eCode == XLLM_ERROR_OUTPUT_LIMIT))) &&
+            !*Response && (Restartable ||
+            (!Error.tDiagnostics.bModelDataDelivered &&
+             !xrtAtomic32Load(&Guard.Delivered, XMEMORY_ACQUIRE))) &&
             !xrtAtomic32Load(&Guard.Stopped, XMEMORY_ACQUIRE);
         if (!Retryable || Attempt == MDO_MODEL_MAX_ATTEMPTS) break;
+        if (Error.eCode == XLLM_ERROR_OUTPUT_LIMIT && !RepairMessages) {
+            /* Add one ephemeral instruction to a borrowed message overlay.
+             * Keep the user's token limit and persisted history unchanged;
+             * the failed draft has never committed or dispatched tools. */
+            if (Request->iMessageCount >= SIZE_MAX / sizeof(*RepairMessages) - 1u ||
+                !(RepairMessages = calloc(Request->iMessageCount + 1u,
+                    sizeof(*RepairMessages)))) {
+                Error.eCode = XLLM_ERROR_OUT_OF_MEMORY;
+                snprintf(Error.sMessage, sizeof(Error.sMessage),
+                    "Cannot prepare model output-limit recovery");
+                Retryable = false;
+                break;
+            }
+            if (Request->iMessageCount) memcpy(RepairMessages, Request->pMessages,
+                Request->iMessageCount * sizeof(*RepairMessages));
+            RepairMessages[Request->iMessageCount].eRole = XLLM_ROLE_SYSTEM;
+            RepairMessages[Request->iMessageCount].sContent =
+                "The previous generation hit the output token limit before completing "
+                "its tool calls. None of those draft calls executed. Keep reasoning "
+                "brief and emit only one small, complete tool call at a time. Split "
+                "large file writes or edits into smaller steps. Do not repeat already "
+                "completed work. The original output limit still applies.";
+            RepairRequest = *Request;
+            RepairRequest.pMessages = RepairMessages;
+            RepairRequest.iMessageCount = Request->iMessageCount + 1u;
+            RepairRequest.iMessageCap = RepairRequest.iMessageCount;
+            RepairRequest.pbMessageBorrowed = NULL;
+            RepairRequest.pStablePrefixOwner = NULL;
+            RepairRequest.uStablePrefixStamp = 0u;
+            RepairRequest.iStableMessages = 0u;
+            ActiveRequest = &RepairRequest;
+        }
         uint64 Now = xrtClock();
         if (!RecoveryStarted) RecoveryStarted = Now;
         uint64 RecoveryEnd = RecoveryStarted + (uint64)MDO_MODEL_RECOVERY_MS * 1000u;
@@ -235,6 +280,8 @@ xllm_result MdoModelComplete(xllm_client* Client, const xllm_request* Request,
         }
     }
 done:
+    /* The overlay owns only its array; every string is borrowed. */
+    free(RepairMessages);
     Error.tDiagnostics.uAttemptCount = AttemptsMade;
     Error.tDiagnostics.uMaxAttempts = MDO_MODEL_MAX_ATTEMPTS;
     Error.tDiagnostics.bRetryable = false;
@@ -248,9 +295,26 @@ done:
     }
     if (Result != XLLM_RESULT_OK) {
         const char* Message = MdoModelErrorMessage(&Error);
-        if (Message != Error.sMessage)
+        /* Parser/protocol prose is generated locally and explains the exact
+         * defect to diagnostics. The timeline translates the structured kind;
+         * provider prose/credentials are still replaced by a safe summary. */
+        if (Message != Error.sMessage && Error.eCode != XLLM_ERROR_PARSE &&
+            Error.eCode != XLLM_ERROR_PROTOCOL &&
+            Error.eCode != XLLM_ERROR_INCOMPLETE_RESPONSE)
             snprintf(Error.sMessage, sizeof(Error.sMessage), "%s", Message);
     }
     if (OutError) *OutError = Error;
     return Result;
+}
+
+xllm_result MdoModelComplete(xllm_client* Client, const xllm_request* Request,
+    const xllm_stream_callbacks* Callbacks, xllm_response** Response, xllm_error* Error)
+{
+    return MdoModelsComplete(Client, Request, Callbacks, Response, Error, false);
+}
+
+xllm_result MdoModelCompleteRestartable(xllm_client* Client, const xllm_request* Request,
+    const xllm_stream_callbacks* Callbacks, xllm_response** Response, xllm_error* Error)
+{
+    return MdoModelsComplete(Client, Request, Callbacks, Response, Error, true);
 }

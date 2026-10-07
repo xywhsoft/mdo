@@ -6,6 +6,7 @@ const kinds = new Set([
   "permission_denied", "account_restricted", "request_pending", "model_changed",
   "model_unavailable", "context_limit", "request_too_large", "rate_limited",
   "timeout", "network", "service_unavailable", "invalid_response", "invalid_request",
+  "output_limit",
 ]);
 
 // Classifications come from the server; unknown/older records retain their

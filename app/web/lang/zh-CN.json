@@ -1855,6 +1855,7 @@
   "model.error.timeout": "模型未能在允许的时间内完成回复。会话已保留，服务恢复后可继续。",
   "model.error.network": "与模型服务的连接未能恢复。请检查网络；会话已保留，恢复后可继续。",
   "model.error.service_unavailable": "模型服务暂不可用，稍后可继续。会话已保留。",
+  "model.error.output_limit": "模型达到输出上限，未能完成工具调用。自动恢复未成功，请提高输出上限或让任务分成更小的步骤。会话已保留。",
   "model.error.invalid_response": "模型服务返回了不完整或无效的回复。会话已保留，可继续运行或切换模型。",
   "model.error.invalid_request": "模型服务不支持本次请求配置。请检查模型、API 协议及相关选项。"
 }

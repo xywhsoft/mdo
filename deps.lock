@@ -7,7 +7,7 @@
     "single_header_sha256": "1ea16b21f968d09e5084162f3919b7e6ae2412f9e13c3bbbdd4b322bcd5a26d2"
   },
   "xserver": {
-    "commit": "bd7831704482cc7dd418260281a37c6bdb222b23",
+    "commit": "907744aac65e093a48a4a3192780dc36fd2fe430",
     "version": "1.0.0",
     "required_extensions": [
       "xwork",
@@ -25,7 +25,7 @@
     "xllm": {
       "version": "3.1.0",
       "source_commit": "5d16ece2b049fd73eee1d8e79551d6d70c6be216",
-      "production_tree_sha256": "605bcc5d36bc66308a47325d115d713dfb7d1ddb7641319c57c00e67fcb29d66"
+      "production_tree_sha256": "9440111d52c9c7f7178efd632e0d09efa32280a59deba6c97b8c195d9624dceb"
     },
     "xllm-session": {
       "version": "3.0.0-dev",
@@ -36,7 +36,7 @@
     "xwork": {
       "version": "3.8.0",
       "source_commit": "7f31cbb41022c7b98a6fc8278aac36a0c5033c54",
-      "production_tree_sha256": "61b04a82c42b79fbe606ae055ac1679184b9602c8e70154a1affbe82d941c998",
+      "production_tree_sha256": "03fac0e3bb6ccfbfe44e49a15ce037f041afd967033c74365cf666090894aa6c",
       "abi_version": 7,
       "event_schema_version": 3
     }

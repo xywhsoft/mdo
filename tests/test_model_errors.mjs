@@ -19,6 +19,10 @@ test("final model errors use the UI language and preserve unknown explanations",
           model_error_kind: "daily_token_limit", model_http_status: 429, model_attempts: 1 }];
       assert.match(eventsToTimeline(events).find(i => i.kind === "error").text, pattern);
       assert.match(errorMessage({ code: "model_daily_token_limit", message: "raw" }), pattern);
+      const limit = errorMessage({ code: "model_output_limit", message: "raw" });
+      assert.notEqual(limit, "raw");
+      assert.match(limit, locale === "zh-CN" ? /输出上限/ :
+        locale === "ru-RU" ? /лимита вывода/ : /output limit/);
       assert.equal(eventsToTimeline([{ kind: "error", event_id: 9,
         run_id: "b", model_error_kind: "future_kind", text: "Specific new cause" }])[0].text,
       "Specific new cause");
@@ -52,4 +56,25 @@ test("a child failure stays in task details while its parent continues", () => {
   assert.equal(items.filter(i => i.kind === "error").length, 0);
   assert.equal(items.find(i => i.kind === "task" && i.state === "failed").text, "child unavailable");
   assert.equal(items.find(i => i.kind === "assistant").state, "done");
+});
+
+test("stream recovery replaces only the interrupted turn's draft", () => {
+  const events = [
+    { kind: "agent_start", event_id: 1, run_id: "a", text: "request" },
+    { kind: "model_start", event_id: 2, run_id: "a", agent_turn: 1, time: 1000000 },
+    { kind: "model_text_delta", event_id: 3, run_id: "a", agent_turn: 1, text: "previous work" },
+    { kind: "model_done", event_id: 4, run_id: "a", agent_turn: 1, time: 2000000 },
+    { kind: "model_start", event_id: 5, run_id: "a", agent_turn: 2, time: 3000000 },
+    { kind: "model_reasoning_delta", event_id: 6, run_id: "a", agent_turn: 2, text: "discarded thought" },
+    { kind: "model_text_delta", event_id: 7, run_id: "a", agent_turn: 2, text: "discarded reply" },
+    { kind: "model_start", event_id: 8, run_id: "a", agent_turn: 2, text: "stream_restart", time: 4000000 },
+    { kind: "model_text_delta", event_id: 9, run_id: "a", agent_turn: 2, text: "replacement" },
+    { kind: "model_done", event_id: 10, run_id: "a", agent_turn: 2, time: 5000000 },
+    { kind: "agent_done", event_id: 11, run_id: "a", success: true },
+  ];
+  const items = eventsToTimeline(events);
+  assert.equal(items.filter(i => i.kind === "error").length, 0);
+  assert.equal(items.filter(i => i.kind === "reasoning").length, 0);
+  assert.deepEqual(items.filter(i => i.kind === "assistant").map(i => i.text),
+    ["previous work", "replacement"]);
 });

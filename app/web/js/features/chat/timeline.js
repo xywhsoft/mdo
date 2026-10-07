@@ -369,7 +369,19 @@ export function eventsToTimeline(events, historyLost = false,
         break;
       }
       case "model_start":
-        modelStarts.set(modelKey(event, epoch), event.time);
+        if (event.text === "stream_restart") {
+          // A failed generation has not committed a response or dispatched
+          // tools. Replace only its transient draft, keeping earlier work.
+          const key = modelKey(event, epoch);
+          for (const prefix of ["reasoning-", "assistant-"]) {
+            const draft = streams.get(prefix + key);
+            if (draft) {
+              const index = items.indexOf(draft);
+              if (index !== -1) items.splice(index, 1);
+              streams.delete(prefix + key);
+            }
+          }
+        } else modelStarts.set(modelKey(event, epoch), event.time);
         break;
       default:
         items.push({ key: `event-${event.event_id}`, kind: "system",

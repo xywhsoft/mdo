@@ -54,7 +54,9 @@ xllm_result MdoModelOnlineComplete(const MdoModelCatalog* Catalog,const MdoModel
                 if(!Ready)MdoModelsProfileError(Error,"cannot prepare GLM reasoning controls");
             }
         }
-        if(Ready)Result=MdoModelComplete(Client,&Borrowed,Callbacks,Response,Error);
+        if(Ready)Result=Options->RestartableStream?
+            MdoModelCompleteRestartable(Client,&Borrowed,Callbacks,Response,Error):
+            MdoModelComplete(Client,&Borrowed,Callbacks,Response,Error);
         xrtFree(ExtraJson);xllmClientDestroy(Client);
     }
     g_MdoModelsOnline.Release(&Access,Error?Error->iHttpStatus:0);return Result;

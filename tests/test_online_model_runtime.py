@@ -21,6 +21,29 @@ sys.path.insert(0,str(HOME/'tests'))
 from test_mdo_delivery import fixture, request
 from model_gateway_fixture import Upstream
 
+class RecoveringUpstream(Upstream):
+    fail_next=False
+    def do_POST(self):
+        if not type(self).fail_next:
+            return super().do_POST()
+        type(self).fail_next=False
+        body=json.loads(self.rfile.read(int(self.headers['Content-Length'])))
+        self.calls.append((self.path,body,dict(self.headers)))
+        self.send_response(200)
+        self.send_header('Content-Type','text/event-stream')
+        self.send_header('Transfer-Encoding','chunked')
+        self.end_headers()
+        # Even a complete draft tool's JSON is not executable before the
+        # generation terminates. A broken HTTP stream must be replaced.
+        partial={'choices':[{'delta':{'content':'discarded reply',
+            'reasoning_content':'discarded thought','tool_calls':[{'index':0,
+            'id':'discarded-ls','type':'function','function':{'name':'ls',
+            'arguments':'{"path":".","max_results":1}'}}]},'finish_reason':None}]}
+        raw=('data: '+json.dumps(partial)+'\n\n').encode()
+        self.wfile.write(f'{len(raw):x}\r\n'.encode()+raw+b'\r\n')
+        self.wfile.flush()
+        self.close_connection=True
+
 HOOK=r'''
 static bool OnlineTestRoute(MdoApiContext* Context) {
     MdoModelCatalog* Catalog=MdoModelCatalogSnapshot();
@@ -41,7 +64,7 @@ def run(host, website_host):
     base,website,port,user,password=fixture('online-model-client-test')
     config=json.loads((website/'xs.json').read_text());config['services'][0]['host_default']['devfile']='main.c';(website/'xs.json').write_text(json.dumps(config))
     origin=f'http://127.0.0.1:{port}';(website/'db/identity.json').write_text(json.dumps({'public_origin':origin}))
-    upstream=ThreadingHTTPServer(('127.0.0.1',0),Upstream);threading.Thread(target=upstream.serve_forever,daemon=True).start();Upstream.calls=[]
+    upstream=ThreadingHTTPServer(('127.0.0.1',0),RecoveringUpstream);threading.Thread(target=upstream.serve_forever,daemon=True).start();Upstream.calls=[]
     processes=[];logs=[]
     def launch(exe,site,home=None):
         log=(site/'test.log').open('wb');logs.append(log);env=dict(os.environ)
@@ -128,6 +151,7 @@ def run(host, website_host):
             session=app('POST','/sessions',dict(project_id='default',title='Online agent fixture',agent_id='mdo.default',
                 model_id='mdo-online.glm-test',protocol='openai-chat-completions',reasoning_effort='high',max_output_tokens=128),status=201)
             route='/projects/default/sessions/'+session['id']
+            RecoveringUpstream.fail_next=True
             run=app('POST',route+'/runs',dict(prompt='Return the fixture reply'),status=202)
             end=time.monotonic()+10
             while time.monotonic()<end:
@@ -135,6 +159,11 @@ def run(host, website_host):
                 if result['terminal']:break
                 time.sleep(.1)
             assert result['state']=='succeeded',(result,app('GET',route+'/events?after=0&limit=32'))
+            events=app('GET',route+'/events?after=0&limit=32')['items']
+            assert not any(e['kind']=='error' for e in events),events
+            assert sum(e['kind']=='model_start' and e['text']=='stream_restart' for e in events)==1,events
+            assert sum(e['kind']=='tool_start' and e['tool_call_id']=='fixture-ls' for e in events)==1,events
+            assert not any(e['kind']=='tool_start' and e['tool_call_id']=='discarded-ls' for e in events),events
             run=app('POST',route+'/runs',dict(prompt='Continue the fixture conversation'),status=202)
             end=time.monotonic()+10
             while time.monotonic()<end:

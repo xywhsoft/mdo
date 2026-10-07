@@ -54,11 +54,15 @@ void ServiceInit(XS_HostInfo* Host) {
     if (!Client) {printf("client_failed=%s\nprobe_done=1\n",Error.sMessage); return;}
     const char* Names[]={"transient","network","daily","balance","quota",
         "membership","authentication","invalid","exhausted","retry-after",
-        "cancel","deadline","partial","hook-stop"};
+        "cancel","deadline","partial","hook-stop","partial-recover",
+        "eof-protected","eof-recover","eof-exhausted",
+        "output-protected","output-recover","output-exhausted","malformed-recover"};
     for (unsigned i=0;i<sizeof(Names)/sizeof(Names[0]);++i) {
         Observer O={0}; xllm_request Request; xllmRequestInit(&Request);
         xllmRequestAddTextMessage(&Request,XLLM_ROLE_USER,Names[i]);
-        Request.bStream=!strcmp(Names[i],"partial");
+        Request.uMaxOutputTokens=128u;
+        Request.bStream=!strncmp(Names[i],"partial",7) || !strncmp(Names[i],"eof",3) ||
+            !strncmp(Names[i],"output",6) || !strncmp(Names[i],"malformed",9);
         xllm_stream_callbacks Stream={&O,Event};
         xllm_hooks Hooks={0}; Hooks.pOnRetry=Retry; Hooks.pUserData=&O;
         Request.pHooks=&Hooks;
@@ -69,11 +73,16 @@ void ServiceInit(XS_HostInfo* Host) {
         if (!strcmp(Names[i],"hook-stop")) O.Stop=true;
         xllm_response* Response=NULL;
         uint64 Started=xrtClock();
-        xllm_result Result=MdoModelComplete(Client,&Request,&Stream,&Response,&Error);
+        bool Restartable=strstr(Names[i],"recover") || strstr(Names[i],"exhausted");
+        xllm_result Result=Restartable?
+            MdoModelCompleteRestartable(Client,&Request,&Stream,&Response,&Error):
+            MdoModelComplete(Client,&Request,&Stream,&Response,&Error);
         printf("case=%s result=%d kind=%s attempts=%u retries=%u deltas=%u exhausted=%u ms=%llu\n",
             Names[i],Result,MdoModelErrorKind(&Error),Error.tDiagnostics.uAttemptCount,
             O.Retries,O.Deltas,Error.tDiagnostics.bRetryExhausted?1:0,
             (unsigned long long)((xrtClock()-Started)/1000u));
+        if (Request.iMessageCount!=1u || Request.uMaxOutputTokens!=128u)
+            printf("request_mutated=1\n");
         if (!strcmp(Names[i],"daily") && strstr(Error.sMessage,"00:00 Asia/Shanghai"))
             printf("daily_message=accurate\n");
         if (Result==XLLM_RESULT_OK && Response &&
@@ -106,15 +115,32 @@ class Model(BaseHTTPRequestHandler):
 
     def do_POST(self):
         body = json.loads(self.rfile.read(int(self.headers['Content-Length'])))
-        name = body['messages'][-1]['content']
+        name = next(m['content'] for m in body['messages'] if m['role'] == 'user')
         with self.lock:
             self.calls[name] += 1
             attempt = self.calls[name]
+        if name.startswith('output'):
+            assert body.get('max_tokens', body.get('max_completion_tokens')) == 128, body
+            if attempt > 1:
+                assert len(body['messages']) == 2 and body['messages'][-1]['role'] == 'system', body
+                assert 'only one small, complete tool call' in body['messages'][-1]['content']
+        if name in ('output-protected', 'output-exhausted') or (
+            name in ('output-recover', 'malformed-recover') and attempt == 1):
+            chunk = {'choices': [{'delta': {'tool_calls': [{'index': 0, 'id': 'draft',
+                'function': {'name': 'write', 'arguments': '{"content":"unfinished'}}]},
+                'finish_reason': 'tool_calls' if name == 'malformed-recover' else 'length'}]}
+            raw = ('data: ' + json.dumps(chunk) + '\n\n').encode()
+            self.send_response(200)
+            self.send_header('Content-Type', 'text/event-stream')
+            self.send_header('Content-Length', str(len(raw)))
+            self.end_headers()
+            self.wfile.write(raw)
+            return
         if name == 'network' and attempt == 1:
             self.close_connection = True
             self.connection.shutdown(socket.SHUT_RDWR)
             return
-        if name == 'partial':
+        if name == 'partial' or (name == 'partial-recover' and attempt == 1):
             self.send_response(200)
             self.send_header('Content-Type', 'text/event-stream')
             self.send_header('Transfer-Encoding', 'chunked')
@@ -125,6 +151,19 @@ class Model(BaseHTTPRequestHandler):
             raw = ('data: ' + json.dumps(chunk) + '\n\n').encode()
             self.wfile.write(f'{len(raw):x}\r\n'.encode() + raw + b'\r\n')
             self.wfile.flush()
+            self.close_connection = True
+            return
+        if name in ('eof-protected', 'eof-exhausted') or (name == 'eof-recover' and attempt == 1):
+            # Valid HTTP framing and valid JSON are insufficient: the model
+            # never declared this generation complete.
+            chunk = {'choices': [{'delta': {'content': 'incomplete draft'}, 'finish_reason': None}]}
+            raw = ('data: ' + json.dumps(chunk) + '\n\n').encode()
+            self.send_response(200)
+            self.send_header('Content-Type', 'text/event-stream')
+            self.send_header('Content-Length', str(len(raw)))
+            self.send_header('Connection', 'close')
+            self.end_headers()
+            self.wfile.write(raw)
             self.close_connection = True
             return
         failure = {
@@ -190,13 +229,22 @@ def main():
                         'authentication': (-1, 'authentication_failed', 1), 'invalid': (-1, 'invalid_request', 1),
                         'exhausted': (-1, 'service_unavailable', 6), 'retry-after': (0, 'unknown', 2),
                         'cancel': (-3, 'cancelled', 1), 'deadline': (-2, 'timeout', 1),
-                        'partial': (-1, 'network', 1), 'hook-stop': (-3, 'cancelled', 1)}
+                        'partial': (-1, 'network', 1), 'hook-stop': (-3, 'cancelled', 1),
+                        'partial-recover': (0, 'unknown', 2),
+                        'eof-protected': (-1, 'invalid_response', 1),
+                        'eof-recover': (0, 'unknown', 2),
+                        'eof-exhausted': (-1, 'invalid_response', 6),
+                        'output-protected': (-1, 'output_limit', 1),
+                        'output-recover': (0, 'unknown', 2),
+                        'output-exhausted': (-1, 'output_limit', 6),
+                        'malformed-recover': (0, 'unknown', 2)}
             for name, (result, kind, count) in expected.items():
                 assert f'case={name} result={result} kind={kind} attempts={count}' in output, output
                 assert Model.calls[name] == count, (name, Model.calls, output)
             assert 'case=exhausted result=-1 kind=service_unavailable attempts=6 retries=5' in output, output
             assert 'daily_message=accurate' in output, output
             assert 'response_attempts_mismatch' not in output, output
+            assert 'request_mutated' not in output, output
             after = next(line for line in output.splitlines() if line.startswith('case=retry-after '))
             assert int(after.split('ms=')[1]) >= 80, output
             cancelled = next(line for line in output.splitlines() if line.startswith('case=cancel '))

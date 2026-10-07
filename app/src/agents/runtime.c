@@ -333,6 +333,7 @@ static xllm_result MdoAgentsComplete(void* UserData,
     if(MdoModelIsOnline(Owner->Models,Match->ModelId)){
         MdoModelClientOptionsInit(&Options);Options.ModelId=Match->ModelId;Options.Protocol=Match->Protocol;
         Options.ReasoningEffort=Match->ReasoningEffort;Options.MaxOutputTokens=Match->MaxOutputTokens;
+        Options.RestartableStream=true;
         return MdoModelOnlineComplete(Owner->Models,&Options,Request,Callbacks,Response,Error);
     }
     if ( Owner->RouteLock == NULL || !xrtMutexLock(Owner->RouteLock) ) {
@@ -359,7 +360,7 @@ static xllm_result MdoAgentsComplete(void* UserData,
     Client = Match->Client;
     (void)xrtMutexUnlock(Owner->RouteLock);
     if ( Client == NULL ) return XLLM_RESULT_ERROR;
-    return MdoModelComplete(Client, Request, Callbacks, Response, Error);
+    return MdoModelCompleteRestartable(Client, Request, Callbacks, Response, Error);
 }
 
 static bool MdoAgentOwnerAcquireAgent(MdoAgentOwner* Owner,
