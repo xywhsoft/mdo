@@ -58,11 +58,13 @@ test("an unchanged successful replay clears a previous read error", async () => 
   } finally { globalThis.fetch = oldFetch; }
 });
 
-test("cold timeline loading retries a temporary failure and then restores its history", async () => {
+for (const code of ["network_error", "remote_timeout"])
+test(`cold timeline loading recovers ${code} and then restores its history`, async () => {
   const oldFetch = globalThis.fetch;
   let offline = true;
   globalThis.fetch = async path => {
-    if (offline) throw new TypeError("offline");
+    if (offline) throw code === "network_error" ? new TypeError("offline")
+      : Object.assign(new Error("Remote request deadline exceeded"), { code });
     return Response.json({ ok: true, data: path.includes("/turns?")
       ? { items: [{ first_event_id: 1, end_event_id: 1 }], latest_event_id: 1, has_more: false }
       : { items: path.includes("after=0") ? [event(1)] : [], next_cursor: 1, latest_event_id: 1 } });
