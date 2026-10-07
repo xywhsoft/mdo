@@ -1453,6 +1453,7 @@
   "settings.saving": "Saving…",
   "settings.saved": "Saved",
   "settings.saveFailed": "Could not save: {error}. Changes are kept; use Save to retry.",
+  "error.settingsConfirmationFailed": "Changes were saved, but the latest settings could not be read. Restore the connection or reload the page to check them.",
   "settings.saveConflict": "Settings changed in another window. Your edits are kept; use Save to retry.",
   "settings.restored": "Default settings restored.",
   "composer.modelSettings": "Model and reasoning",

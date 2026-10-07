@@ -1453,6 +1453,7 @@
   "settings.saving": "正在保存…",
   "settings.saved": "已保存",
   "settings.saveFailed": "保存失败：{error}。更改已保留，可点击保存重试。",
+  "error.settingsConfirmationFailed": "更改已保存，但暂时无法读取最新设置。请恢复连接或重新载入页面后核对。",
   "settings.saveConflict": "设置已在其他窗口更新。你的修改仍保留，可点击保存重试。",
   "settings.restored": "已恢复默认设置。",
   "composer.modelSettings": "模型与思考深度",

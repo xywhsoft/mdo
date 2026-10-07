@@ -148,8 +148,8 @@ class FrontendContractTests(unittest.TestCase):
         state = self.scripts["js/state/settings.js"]
         view = self.scripts["js/features/settings/settings-view.js"]
         navigation = self.scripts["js/state/navigation.js"]
-        self.assertIn('api.patch("/settings/settings/preview"', state)
-        self.assertIn('api.patch("/settings/settings"', state)
+        self.assertIn('client.patch("/settings/settings/preview"', state)
+        self.assertIn('client.patch("/settings/settings"', state)
         self.assertIn("{ ifMatch: etag }", state)
         self.assertIn("createSettingsAutosave", view)
         self.assertIn("changedSettingsValues", view)

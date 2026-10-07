@@ -284,6 +284,9 @@ export function createSettingsView({ form, store, navigation, onApplied }) {
     restoreConfirm.hidden = true;
     validateInstructions();
     validateProxy();
+    // A later confirmed read may prove an earlier save already succeeded.
+    // Clear its stale warning only if no local field remains unsaved.
+    if (!busy && fingerprint() === baselineFingerprint) saveFailure = "";
     if (fingerprint() === baselineFingerprint && !busy && !saveFailure) renderStatus(settings);
     else markDirty();
     if (previewActive) previewAppearance();
@@ -385,8 +388,10 @@ export function createSettingsView({ form, store, navigation, onApplied }) {
     },
     onSettled(error) {
       saveFailure = "";
-      if (error?.status === 412) saveFailure = t("settings.saveConflict", {},
+      const saveConflict = error?.status === 412 && error?.code !== "settings_confirmation_failed";
+      if (saveConflict) saveFailure = t("settings.saveConflict", {},
         "设置已在其他窗口更新。你的修改仍保留，可点击保存重试。");
+      else if (error?.code === "settings_confirmation_failed") saveFailure = errorMessage(error);
       else if (error) saveFailure = t("settings.saveFailed", { error: errorMessage(error) },
         `保存失败：${errorMessage(error)}。更改已保留，可点击保存重试。`);
       submittedValues = null;
@@ -396,7 +401,7 @@ export function createSettingsView({ form, store, navigation, onApplied }) {
       else if (fingerprint() !== baselineFingerprint) markDirty();
       else feedbackText(t("settings.saved", {}, "已保存"), "success");
       if (!error) void Promise.resolve(onApplied?.()).catch(() => {});
-      if (error?.status === 412) {
+      if (saveConflict) {
         // A second window changed settings. Read its values once, rebase the
         // unsaved fields, and leave the retry to the user with a fresh ETag.
         setBusy(true);
@@ -466,6 +471,10 @@ export function createSettingsView({ form, store, navigation, onApplied }) {
       toast(t("settings.restoreToast", {}, "已恢复默认设置"));
       onApplied?.();
     } catch (error) {
+      if (error?.code === "settings_confirmation_failed") {
+        restoreConfirm.hidden = true;
+        saveFailure = errorMessage(error);
+      }
       feedbackText(errorMessage(error), "error");
     } finally {
       busy = false;
@@ -485,7 +494,9 @@ export function createSettingsView({ form, store, navigation, onApplied }) {
       return;
     }
     if (state.status === "error") {
-      feedbackText(errorMessage(state.error), "error");
+      // The write handler knows whether this was a failed save or only a
+      // failed confirmation read, and publishes its final result once.
+      if (!busy) feedbackText(errorMessage(state.error), "error");
       return;
     }
     if (state.status === "ready" && state.data) fill(state.data);

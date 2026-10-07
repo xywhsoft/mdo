@@ -14,7 +14,7 @@ import {
 } from "./state/sessions.js";
 import { modelsStore, agentsStore, projectsStore, loadCatalogs, loadModels, loadAgents, loadProjects, recoverCatalogs } from "./state/catalogs.js";
 import {
-  settingsStore, loadSettings, previewSettings, applySettings,
+  settingsStore, loadSettings, recoverSettings, previewSettings, applySettings,
 } from "./state/settings.js";
 import {
   modulesStore, skillsStore, mcpStore, permissionsStore, storageStore,
@@ -1115,6 +1115,7 @@ export async function boot() {
     const serviceFailed = Boolean(bootstrapFailure());
     const pendingCatalog = [modelsStore, agentsStore].map(store => store.get())
       .find(state => state.updatedAt === 0 && state.status !== "ready");
+    const pendingSettings = settingsStore.get().data === null ? settingsStore.get() : null;
     const targetBlocked = isRemoteTarget() && (!targetState().connected || targetState().runtimeChanged || targetState().selected.mode === "view");
     if (newTaskController?.isPreparing() || migratingNewTask)
       newTaskComposerFocus.capture();
@@ -1125,7 +1126,7 @@ export async function boot() {
       newTaskController?.isPreparing() ||
       (!sessionWritable && !creatingSession) || migratingNewTask;
     newTaskComposerFocus.restore();
-    sendBlockedByState = Boolean(pendingCatalog) || serviceFailed || targetBlocked || localServiceReconnecting || purgeRecovery.isPaused() || !(sessionWritable || creatingSession) ||
+    sendBlockedByState = Boolean(pendingCatalog || pendingSettings) || serviceFailed || targetBlocked || localServiceReconnecting || purgeRecovery.isPaused() || !(sessionWritable || creatingSession) ||
       messageActionBusy ||
       !draftStore.isLoaded(selectedDraftKey) ||
       selectingProjectDraft ||
@@ -1151,6 +1152,9 @@ export async function boot() {
       : pendingCatalog ? pendingCatalog.status === "error"
         ? errorMessage(pendingCatalog.error)
         : t("resource.loading", {}, "正在载入资源…")
+      : pendingSettings ? pendingSettings.status === "error"
+        ? errorMessage(pendingSettings.error)
+        : t("settings.loading", {}, "正在读取当前配置…")
       : draftStore.isRunUncertain(selectedDraftKey)
       ? t("composer.hintReviewRun") : (selectingProjectDraft ||
           !draftStore.isLoaded(selectedDraftKey))
@@ -2475,6 +2479,7 @@ export async function boot() {
     if (recovering && !purgeRecovery.isPaused())
       void projectDraftSelection.restoreLegacy();
     if (recovering) void recoverCatalogs();
+    if (recovering) void recoverSettings();
     if (connected) runStops.resume();
   }
   liveConnection.subscribe((event) => {
@@ -2522,6 +2527,7 @@ export async function boot() {
     else {
       refreshRelativeTimes();
       void recoverCatalogs();
+      void recoverSettings();
       scheduleTaskRefresh();
       void loadRuns().then(refreshSelectedQueue);
       void loadSessions();
@@ -2535,12 +2541,16 @@ export async function boot() {
   // Begin restoring panel geometry as soon as settings choose the locale;
   // unrelated resource requests must not hold it behind their completion.
   const settingsReady = loadSettings();
-  void settingsReady.then(() => settingsView.localeReady())
-    .then(() => {
-      if (settingsStore.get().status === "ready")
+  settingsStore.subscribe(state => {
+    if (state.status !== "ready") return;
+    const snapshot = state.data;
+    void settingsView.localeReady().then(() => {
+      if (settingsStore.get().data === snapshot)
         document.documentElement.dataset.mdoConfiguredLocale = document.documentElement.lang;
-      return paneLayout.load();
     });
+  });
+  void settingsReady.then(() => settingsView.localeReady())
+    .then(() => paneLayout.load());
   let initialLoadWarned = false;
   function reportInitialLoad(results) {
     if (initialLoadWarned ||

@@ -88,6 +88,8 @@ const API_ERROR_COPY = Object.freeze({
   purge_review_required: ["error.purgeReviewRequired", "请先核对项目清除请求，再继续修改或发送任务。"],
   network_error: ["error.network",
     "无法连接本地服务，请确认 mdo 仍在运行。"],
+  settings_confirmation_failed: ["error.settingsConfirmationFailed",
+    "更改已保存，但暂时无法读取最新设置。请恢复连接或重新载入页面后核对。"],
   session_busy: ["error.sessionBusy", "这个会话仍有任务在运行。"],
   session_capture_busy: ["error.sessionCaptureBusy", "会话数据正在保存或清理，请稍后重新导出。"],
   session_backup_busy: ["error.sessionBackupBusy", "另一个会话备份正在进行，请稍后重试。"],

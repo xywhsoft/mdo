@@ -1,56 +1,98 @@
-import { api } from "../api/client.js";
+import { api, ApiError } from "../api/client.js";
 import { createResourceStore } from "./store.js";
 import { resolveLocale } from "../i18n.js";
-
-export const settingsStore = createResourceStore();
-
-async function readSettings() {
-  const response = await api.get("/settings");
-  return { ...response.data, etag: response.etag };
-}
-
-export function loadSettings() {
-  return settingsStore.load(async () => {
-    let settings = await readSettings();
-    if (settings.locale !== "auto") return settings;
-    const locale = resolveLocale();
-    // Initialize only the language field, through the ordinary guarded,
-    // revisioned API. Headless startup and existing preferences do not write.
-    if (settings.etag) {
-      try {
-        await api.patch("/settings/settings", documentFor({ locale }), { ifMatch: settings.etag });
-      } catch (error) {
-        if (error?.status !== 409)
-          console.warn("Initial language preference could not be saved", error);
-      }
-      // Re-read even after a lost reply or revision conflict. Another page's
-      // accepted preference wins; never repeat a possibly committed write.
-      try { settings = await readSettings(); }
-      catch (error) { console.warn("Initial language preference could not be read back", error); }
-    }
-    // Read-only recovery or an unavailable disk must not block the UI.
-    return { ...settings, locale: resolveLocale(settings.locale) };
-  });
-}
+import { isTransientReadError } from "../api/read-recovery.js";
 
 function documentFor(patch) {
   return { schema_version: 1, patch };
 }
 
-export async function previewSettings(patch) {
-  return (await api.patch("/settings/settings/preview", documentFor(patch))).data;
+// Startup settles its first read promptly. An accepted save instead waits for
+// the final confirmed snapshot; background recovery never repeats that write.
+function waitForSettingsRead(store) {
+  return new Promise((resolve, reject) => {
+    let unsubscribe;
+    let finished = false;
+    const observe = state => {
+      if (!["ready", "error", "idle"].includes(state.status)) return;
+      finished = true;
+      unsubscribe?.();
+      if (state.status === "idle") reject(new DOMException("Settings read cancelled", "AbortError"));
+      else resolve(state);
+    };
+    unsubscribe = store.subscribe(observe);
+    if (finished) unsubscribe();
+  });
 }
 
-export async function applySettings(patch, etag) {
-  const result = (await api.patch("/settings/settings", documentFor(patch), { ifMatch: etag })).data;
-  const loaded = await loadSettings();
-  if (loaded.status !== "ready") throw loaded.error ?? new Error("Settings could not be read after saving");
-  return result;
+export function createSettingsState({
+  store = createResourceStore(null, { recoverRead: isTransientReadError }),
+  client = api, resolveLanguage = resolveLocale,
+} = {}) {
+  async function readSettings(signal) {
+    const response = await client.get("/settings", { signal });
+    if (signal?.aborted) throw new DOMException("Settings read cancelled", "AbortError");
+    return { ...response.data, etag: response.etag };
+  }
+  async function load({ waitForRecovery = false, initializeLocale = true } = {}) {
+    let initializationAttempted = false;
+    await store.load(async signal => {
+      let settings = await readSettings(signal);
+      if (initializeLocale && !initializationAttempted &&
+          settings.locale === "auto" && settings.etag) {
+        // One optional, revisioned initialization per load. If its reply or
+        // the following read is lost, subsequent attempts only read settings.
+        initializationAttempted = true;
+        try {
+          await client.patch("/settings/settings", documentFor({ locale: resolveLanguage() }),
+            { ifMatch: settings.etag, signal });
+        } catch (error) {
+          if (![409, 412].includes(error?.status) && error?.name !== "AbortError" &&
+              !isTransientReadError(error))
+            console.warn("Initial language preference could not be saved", error);
+        }
+        settings = await readSettings(signal);
+      }
+      return settings.locale === "auto"
+        ? { ...settings, locale: resolveLanguage() } : settings;
+    });
+    return waitForRecovery ? waitForSettingsRead(store) : store.get();
+  }
+  async function confirmRead() {
+    const loaded = await load({ waitForRecovery: true, initializeLocale: false });
+    if (loaded.status !== "ready")
+      throw new ApiError("Settings were saved, but the latest snapshot could not be read", {
+        code: "settings_confirmation_failed", status: loaded.error?.status,
+        details: { read_error: loaded.error?.code ?? "request_failed" },
+      });
+  }
+  return Object.freeze({
+    store, load,
+    recover() {
+      const state = store.get();
+      return state.status === "error" && isTransientReadError(state.error)
+        ? load({ initializeLocale: false }) : Promise.resolve(state);
+    },
+    async preview(patch) {
+      return (await client.patch("/settings/settings/preview", documentFor(patch))).data;
+    },
+    async apply(patch, etag) {
+      const result = (await client.patch("/settings/settings", documentFor(patch), { ifMatch: etag })).data;
+      await confirmRead();
+      return result;
+    },
+    async restore(etag) {
+      const result = (await client.delete("/settings/settings", { ifMatch: etag })).data;
+      await confirmRead();
+      return result;
+    },
+  });
 }
 
-export async function restoreSettings(etag) {
-  const result = (await api.delete("/settings/settings", { ifMatch: etag })).data;
-  const loaded = await loadSettings();
-  if (loaded.status !== "ready") throw loaded.error ?? new Error("Settings could not be read after restoring");
-  return result;
-}
+const settings = createSettingsState();
+export const settingsStore = settings.store;
+export const loadSettings = settings.load;
+export const recoverSettings = settings.recover;
+export const previewSettings = settings.preview;
+export const applySettings = settings.apply;
+export const restoreSettings = settings.restore;

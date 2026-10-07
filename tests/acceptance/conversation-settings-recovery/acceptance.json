@@ -1,0 +1,45 @@
+{
+  "baseline_source_commit": "076c9fa",
+  "baseline_windows_sha256": "d809d425309569327557f05af11890e4c107e54e7b21e1f8770ace0c944fa43b",
+  "browser_tested_windows_sha256": "abd920854571381a7927381808e6999269c10c70b52b68bab7bc7056b1264a80",
+  "startup_fault": {
+    "method": "GET",
+    "path": "/api/v1/settings",
+    "server_status": 200,
+    "failure": "ConnectionClosed"
+  },
+  "save_echo_loss": {
+    "patches": 1,
+    "reads": 2,
+    "network_events_truncated": false,
+    "final_feedback": "Saved"
+  },
+  "save_confirmation_exhaustion": {
+    "patches": 1,
+    "failed_reads": 6,
+    "recovery_reads": 1,
+    "network_events_truncated": false,
+    "intermediate_feedback": "Saving",
+    "final_feedback": "Changes were saved, but the latest settings could not be read",
+    "reconfirmed_feedback": "Settings saved"
+  },
+  "confirmed_preferences": {
+    "locale": "ru-RU",
+    "appearance": {
+      "theme": "dark",
+      "font_size": "small",
+      "density": "compact"
+    },
+    "submit_mode": "guide"
+  },
+  "retained_draft": "SETTINGS_FINAL_RECOVERY_DRAFT",
+  "draft_revision": 1,
+  "baseline_model_calls": {},
+  "model_calls": {},
+  "model_requests": [],
+  "node_tests_passed": 54,
+  "frontend_contract_tests_passed": 20,
+  "reachable_modules_parsed": 138,
+  "real_android_device_tested": false,
+  "stress_or_high_load_tests": false
+}
