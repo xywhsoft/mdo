@@ -1,0 +1,27 @@
+{
+  "date": "2026-10-08",
+  "session": "V-OSG1pspj9Ifp-ApjlOscul5CwJsxVk",
+  "model": "mdo-online.glm-5.3",
+  "model_calls": 72,
+  "tool_calls": 80,
+  "final_errors": 0,
+  "source": "Created and revised by the running mdo Agent; reference headers/fonts copied from xge SDK",
+  "xge_commit": "b174863da7937d1574562b0dbb6e8cbe6762760e",
+  "files": {
+    ".gitignore": "aaccb1a00557171b31d00a99a6a2666856e417964732490685cdcba9f02de491",
+    "build.bat": "3b04f483687b46f02bf84e3107dcd80c8a84a1fafe19f8c33ca6a330abcdae2b",
+    "LICENSE.katex": "766ccc1f306c885aa45542a9846bbd0a505b27a0374f146778171c2254ce18e3",
+    "README.md": "db1e048874082c6af353661683b89941aefb545054ccb609bb4624512b10eadb",
+    "res_font_KaTeX_Main-Regular.ttf": "d0332f52868370fd83ae7fa46470f90c8f2eab2fcf12bc4f88080b340c95a830",
+    "smoke_window.png": "c44ad1ad286fbbce7b20e7c9e2941b077594eab5acf96d6c5ca116ced2e25047",
+    "src/app.c": "d7d6b87cfc0e868cc7a79a06ba2355a2239510ddbb35de852fab3beac154002d",
+    "src/editor.c": "5e60c33504921c33dadb3117b9dad08b1e8c3235a887822c815dd05da4a7e514",
+    "src/editor.h": "b3c2d3e834b9701219e6e2c257ff5714822313bb7009a7201b86ce5bfacd9186",
+    "src/main.c": "5d8ce41b18a1a3eb0ebe458d75b1bfba6f6f2c79a882b75353a157c380257046",
+    "src/paths.c": "f1226bb889b384ac25b8948a98054c200fc9d8b21ecc7e11b69b79816e793fe1",
+    "src/paths.h": "49da4d96e4d1891542e7eb0c575fd592744e1dcd69c859f61fd3458ce752a938"
+  },
+  "completed_runs": 3,
+  "queue_note": "The API-only priority item waited until the frontend connected; it was then executed as a third successful run. This is the existing frontend-driven queue contract.",
+  "hash_convention": "SHA-256; normalize CRLF to LF for .c, .h, .md, .bat, .gitignore and LICENSE.katex; hash binary files unchanged."
+}

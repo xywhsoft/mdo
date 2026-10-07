@@ -15,6 +15,7 @@ import threading
 import time
 from http.server import ThreadingHTTPServer
 from test_live_runtime import Model
+from test_api_runtime import request as raw_request
 from test_packed_home_lease import free_port, request, stop, wait_bootstrap
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -37,6 +38,7 @@ def probe(host: Path | None, packed: Path | None = None):
                 "devlang": "c", "devfile": "generated/mdo_unity.c"}}]}), encoding="utf-8")
         env = os.environ.copy()
         env.update(MDO_ORNITH_API_KEY="history-fixture-key",
+            MDO_HISTORY_MODEL_KEY="history-fixture-key",
             MDO_ORNITH_CHAT_COMPLETIONS_URL=f"http://127.0.0.1:{model.server_port}/v1",
             MDO_ORNITH_RESPONSES_URL=f"http://127.0.0.1:{model.server_port}/v1",
             MDO_ORNITH_ANTHROPIC_URL="https://example.invalid")
@@ -57,14 +59,40 @@ def probe(host: Path | None, packed: Path | None = None):
             deadline = time.monotonic() + 6
             while time.monotonic() < deadline:
                 _, state = request(port, "GET", f"/api/v1/runs/{doc['data']['id']}")
-                if state["data"]["terminal"]: return
+                if state["data"]["terminal"]:
+                    if state["data"]["state"] != "succeeded":
+                        _, events = request(port, "GET", path + "/events?limit=32")
+                        raise AssertionError((state, events))
+                    return
                 time.sleep(.05)
             raise AssertionError("ordinary fixture reply did not complete")
 
         try:
             process = launch()
+            # The built-in model now requires membership login. Install a
+            # normal loopback provider through the settings API, including in
+            # the packed test; no product authentication bypass is needed.
+            status, headers, raw = raw_request(port, "GET", "/api/v1/models/config")
+            assert status == 200, raw
+            config = json.loads(raw)["data"]
+            config.pop("runtime_override", None)
+            provider = json.loads(json.dumps(config["providers"][0]))
+            provider.update(id="history-fixture", name="History fixture",
+                builtin=False, editable=True, removable=True,
+                endpoints={"chat_completions":f"http://127.0.0.1:{model.server_port}/v1"},
+                credential={"secret_ref":"env:MDO_HISTORY_MODEL_KEY"})
+            profile = json.loads(json.dumps(config["items"][0]))
+            profile.update(id="history-fixture", name="History fixture", provider="history-fixture",
+                builtin=False, free=False, editable=True, removable=True,
+                protocols=["openai-chat-completions"],default_protocol="openai-chat-completions")
+            config["providers"].append(provider); config["items"].append(profile)
+            status, _, raw = raw_request(port,"PUT","/api/v1/settings/models",
+                body=json.dumps({"schema_version":1,"patch":config}).encode(),
+                headers={"Content-Type":"application/json","If-Match":headers["etag"],
+                    "X-Mdo-Write-Token":headers["x-mdo-write-token"]})
+            assert status == 200, raw
             status, doc = request(port, "POST", "/api/v1/sessions", {"project_id": "default",
-                "title": "History fixture", "agent_id": "mdo.default", "model_id": "ornith-1.5-35b",
+                "title": "History fixture", "agent_id": "mdo.default", "model_id": "history-fixture",
                 "reasoning_effort": "medium", "permission_profile": "read-only",
                 "protocol": "openai-chat-completions", "max_output_tokens": 1024})
             assert status == 201, doc
