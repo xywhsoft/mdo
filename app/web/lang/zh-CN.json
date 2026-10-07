@@ -180,7 +180,7 @@
   "settings.extended": "扩展能力",
   "settings.memoryManagement": "记忆管理",
   "settings.schedules": "计划任务",
-  "settings.models": "模型",
+  "settings.models": "模型管理",
   "settings.extensions": "Agent 与模块",
   "settings.permissions": "权限",
   "settings.diagnostics": "诊断与存储",
