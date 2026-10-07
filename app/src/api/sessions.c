@@ -94,20 +94,29 @@ typedef enum MdoApiSessionPatchKind {
     MDO_API_SESSION_PATCH_ARCHIVED
 } MdoApiSessionPatchKind;
 
-static bool MdoApiSessionString(const xvalue* Object, cstr Name,
-    char* Output, size_t Capacity, bool Required, size_t* Present)
+static bool MdoApiSessionText(const xvalue* Object, cstr Name,
+    char* Output, size_t Capacity, bool Required, bool EmptyAllowed,
+    size_t* Present)
 {
     const xvalue* Value = xrtValueObjectGet(Object, xrtStrView(Name));
     xstrview Text;
     if ( Value == NULL ) return !Required;
     (*Present)++;
     if ( xrtValueType(Value) != XVALUE_STRING ||
-         !xrtValueGetString(Value, &Text) || Text.Size == 0u ||
-         Text.Size >= Capacity || memchr(Text.Data, 0, Text.Size) != NULL )
+         !xrtValueGetString(Value, &Text) || (!EmptyAllowed && Text.Size == 0u) ||
+         Text.Size >= Capacity ||
+         (Text.Size != 0u && memchr(Text.Data, 0, Text.Size) != NULL) )
         return false;
-    memcpy(Output, Text.Data, Text.Size);
+    if ( Text.Size != 0u ) memcpy(Output, Text.Data, Text.Size);
     Output[Text.Size] = '\0';
     return true;
+}
+
+static bool MdoApiSessionString(const xvalue* Object, cstr Name,
+    char* Output, size_t Capacity, bool Required, size_t* Present)
+{
+    return MdoApiSessionText(Object, Name, Output, Capacity, Required,
+        false, Present);
 }
 
 static bool MdoApiSessionUnsigned(const xvalue* Object, cstr Name,
@@ -535,8 +544,8 @@ bool MdoApiSessionProfileRoute(MdoApiContext* Context)
     Valid = xrtValueType(Body.Value) == XVALUE_OBJECT &&
         MdoApiSessionString(Body.Value, "model_id", Model,
             sizeof(Model), true, &Present) &&
-        MdoApiSessionString(Body.Value, "reasoning_effort", Reasoning,
-            sizeof(Reasoning), true, &Present) &&
+        MdoApiSessionText(Body.Value, "reasoning_effort", Reasoning,
+            sizeof(Reasoning), true, true, &Present) &&
         MdoApiSessionString(Body.Value, "permission_profile", Permission,
             sizeof(Permission), true, &Present) &&
         Present == xrtValueCount(Body.Value);
@@ -626,8 +635,8 @@ bool MdoApiSessionCreateRoute(MdoApiContext* Context)
             sizeof(Model), false, &Present) &&
         MdoApiSessionString(Body.Value, "protocol", Protocol,
             sizeof(Protocol), false, &Present) &&
-        MdoApiSessionString(Body.Value, "reasoning_effort", Reasoning,
-            sizeof(Reasoning), false, &Present) &&
+        MdoApiSessionText(Body.Value, "reasoning_effort", Reasoning,
+            sizeof(Reasoning), false, true, &Present) &&
         MdoApiSessionString(Body.Value, "permission_profile", Permission,
             sizeof(Permission), false, &Present) &&
         MdoApiSessionString(Body.Value, "workspace_root", Workspace,

@@ -55,6 +55,9 @@ PROBE_SOURCE = r'''
 #include "session-backup.c"
 
 xwork_runtime *MdoBootstrapRuntime(void) { return NULL; }
+/* Optional executable discovery is covered by the distribution probe. This
+ * standalone session fixture has no initialized toolpack manager. */
+bool MdoToolPrompt(char **prompt) { return prompt != NULL && *prompt != NULL; }
 
 typedef struct Probe {
     unsigned Calls;

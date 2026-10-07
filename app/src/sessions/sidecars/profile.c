@@ -25,7 +25,7 @@ bool MdoComposerProfileParse(const xvalue* Value, bool Partial,
     if ( xrtValueType(Value) == XVALUE_NULL ) return true;
     if ( xrtValueType(Value) != XVALUE_OBJECT || xrtValueCount(Value) != 3u ||
          !MdoComposerProfileString(Value, "model_id", Parsed.ModelId, sizeof(Parsed.ModelId), Partial) ||
-         !MdoComposerProfileString(Value, "reasoning_effort", Parsed.ReasoningEffort, sizeof(Parsed.ReasoningEffort), Partial) ||
+         !MdoComposerProfileString(Value, "reasoning_effort", Parsed.ReasoningEffort, sizeof(Parsed.ReasoningEffort), true) ||
          !MdoComposerProfileString(Value, "permission_profile", Parsed.PermissionProfile, sizeof(Parsed.PermissionProfile), Partial) ||
          ((!Partial || Parsed.PermissionProfile[0] != '\0') &&
           strcmp(Parsed.PermissionProfile, "read-only") != 0 &&

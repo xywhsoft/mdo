@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { createComposerProfile } from
+import { createComposerProfile, fillReasoningOptions } from
   "../app/web/js/features/chat/composer-profile.js";
 import { createDraftStore, projectDraftKey } from
   "../app/web/js/features/chat/draft-store.js";
@@ -55,6 +55,14 @@ const models = [
   { id: "code", name: "Code", reasoning_efforts: ["medium", "high"],
     default_reasoning_effort: "medium" },
 ];
+
+test("a known non-reasoning model clears a previous thinking preference", () => {
+  const select = new Select();
+  assert.equal(fillReasoningOptions(select, { reasoning_efforts: [] }, "high"), "");
+  assert.equal(select.options.length, 0);
+  assert.equal(select.disabled, true);
+  assert.equal(fillReasoningOptions(select, null, "high"), "high");
+});
 
 test("retired built-in references resolve in project defaults without shadowing a custom model", () => {
   const builtin = { id: "ornith-1.5-35b", aliases: ["ling-3.0-tiny", "ling-gpu"], default_reasoning_effort: "medium" };

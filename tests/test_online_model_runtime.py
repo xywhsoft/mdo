@@ -72,7 +72,7 @@ def run(host):
             tool_calling=True,vision=False,reasoning_efforts='',output_limit_field='max_tokens',default_protocol='chat',sale_rates=rates,cost_rates=None,
             daily_tokens=100000000,member_daily_tokens=0,routes=[dict(protocol='chat',channel_id='fixture',wire_model='ornith-wire',priority=0)])
         mutate('/admin/model-gateway/model',model)
-        mutate('/admin/model-gateway/model',dict(model,id='glm-test',title='GLM test · VIP',member_only=True,member_daily_tokens=100000000,token_pool='glm',token_weight_bps=10000,token_peak_multiplier_bps=10000,reasoning_efforts='low,high,max',
+        mutate('/admin/model-gateway/model',dict(model,id='glm-test',title='GLM test · VIP',context_window=1000000,max_output=65536,member_only=True,member_daily_tokens=100000000,token_pool='glm',token_weight_bps=10000,token_peak_multiplier_bps=10000,reasoning_efforts='low,high,max',
             routes=[dict(protocol='chat',channel_id='fixture',wire_model='glm-test',priority=0)]))
         mutate('/admin/model-gateway/model',dict(model,id='glm-flash-test',title='Flash test',member_only=True,member_daily_tokens=100000000,token_pool='glm',token_weight_bps=4000,token_peak_multiplier_bps=10000,routes=[dict(protocol='chat',channel_id='fixture',wire_model='glm-flash-test',priority=0)]))
         mutate('/admin/billing/plan',dict(id='vip',title='VIP',duration_days=30,period_days=30,credit_micros=0,discount_bps=10000,concurrency_limit=2,model_ids='ornith-1.5-35b,glm-test,glm-flash-test',enabled=True))
@@ -85,10 +85,11 @@ def run(host):
             unity=site/'generated/mdo_unity.c';unity.write_text('#define MDO_ACCOUNT_SERVICE_ORIGIN '+json.dumps(origin)+'\n'+unity.read_text(encoding='utf-8'),encoding='utf-8')
             router=site/'src/api/router.c';source=router.read_text();source=source.replace('static const MdoApiRoute g_MdoApiRoutes[]',HOOK+'\nstatic const MdoApiRoute g_MdoApiRoutes[]').replace('static const MdoApiRoute g_MdoApiRoutes[] = {','static const MdoApiRoute g_MdoApiRoutes[] = {\n {"/api/v1/test-model",XHTTP_METHOD_GET,"GET",OnlineTestRoute,false},');router.write_text(source)
             native=launch(host,site,site/'mdo-home');ready(app_port,native,'/api/v1/account')
-            def app(method,path='/account',body=None,status=200):
-                headers={}
+            def app(method,path='/account',body=None,status=200,headers=None):
+                headers=dict(headers or {})
                 if method!='GET':headers['X-Mdo-Write-Token']=request(app_port,'GET','/api/v1/account')[1]['X-Mdo-Write-Token']
-                return call(app_port,method,'/api/v1'+path,body,headers=headers,status=status)[0]['data']
+                reply=call(app_port,method,'/api/v1'+path,body,headers=headers,status=status)[0]
+                return reply.get('data',reply)
             def wait(predicate):
                 end=time.monotonic()+25
                 while time.monotonic()<end:
@@ -99,6 +100,14 @@ def run(host):
             assert not app('GET','/test-model')['success'] and not Upstream.calls
             app('POST','/account/login',dict(identifier='online_model_user',password='Fixture-only-2026',remember=False))
             state=wait(lambda v:v.get('model_allowance',{}).get('group_id')=='free' and not v['busy'])
+            assert state['balance_status']==200 and state['balance']['available_micros']==0,state
+            mutate('/admin/billing/adjust',dict(member_id=owner,amount_micros=12345000,operation_id='fixture-cash',reason='Fixture balance'))
+            mutate('/admin/billing/grant',dict(member_id=owner,amount_micros=5000000,expires_at=0,operation_id='fixture-credit',reason='Fixture credit'))
+            app('POST','/account/refresh',{})
+            state=wait(lambda v:v.get('balance',{}).get('available_micros')==17345000 and not v['busy'])
+            assert state['balance']['cash_micros']==12345000 and state['balance']['credit_micros']==5000000
+            assert state['balance']['member_id']==owner and state['balance']['amount_scale']==1000000
+            assert 'plan_id' not in state['balance']
             assert 'fixture-only-secret' not in json.dumps(state) and 'access_token' not in json.dumps(state)
             assert app('GET','/models')['models'][0]['provider_id']=='mdo-online'
             result=app('GET','/test-model');assert result['success'],result
@@ -138,14 +147,63 @@ def run(host):
             assert any(m.get('role')=='assistant' and m.get('reasoning_content')=='agent fixture thought' for m in glm_requests[-1]['messages'])
             assert any(m.get('role')=='tool' and m.get('tool_call_id')=='fixture-ls' for m in glm_requests[-1]['messages'])
             assert any(body.get('tool_stream') is True for body in glm_requests)
+            # The composer sends an empty effort for a non-reasoning model.
+            # Switching must retain the completed conversation and reopen it.
+            current=app('GET',route)
+            profile=dict(model_id='mdo-online.glm-flash-test',reasoning_effort='',permission_profile=current['permission_profile'])
+            changed=app('PUT',route+'/profile',profile,headers={'If-Match':f'"mdo-session-{current["id"]}-{current["revision"]}"'})
+            assert changed['model_id']==profile['model_id'] and changed['reasoning_effort']==''
+            assert app('GET',route)['model_id']==profile['model_id']
+            # Metadata owns model selection even before a new checkpoint is
+            # saved. Restart between switching and the next model dispatch.
+            native.terminate();native.wait(timeout=10);logs[-1].close()
+            native=launch(host,site,site/'mdo-home');ready(app_port,native,'/api/v1/account')
+            app('POST','/account/login',dict(identifier='online_model_user',password='Fixture-only-2026',remember=False))
+            wait(lambda v:v.get('model_allowance',{}).get('is_vip') and not v['busy'])
+            assert app('GET',route)['reasoning_effort']==''
+            run=app('POST',route+'/runs',dict(prompt='Continue after switching to Flash'),status=202)
+            end=time.monotonic()+10
+            while time.monotonic()<end:
+                result=app('GET','/runs/'+str(run['id']))
+                if result['terminal']:break
+                time.sleep(.1)
+            assert result['state']=='succeeded',(result,[(e['kind'],e['text']) for e in app('GET',route+'/events?after=0&limit=32')['items'] if e['kind'] in ('error','agent_error','agent_done')])
+            flash_requests=[body for _,body,_ in Upstream.calls if body.get('model')=='glm-flash-test']
+            assert flash_requests and any(m.get('content')=='Continue the fixture conversation' for m in flash_requests[-1]['messages'])
+            assert all('reasoning_effort' not in body for body in flash_requests)
+            for model_id,effort,wire in [('mdo-online.glm-test','max','glm-test'),('ornith-1.5-35b','','ornith-wire')]:
+                current=app('GET',route)
+                headers={'If-Match':f'"mdo-session-{current["id"]}-{current["revision"]}"'}
+                profile=dict(model_id=model_id,reasoning_effort=effort,permission_profile=current['permission_profile'])
+                changed=app('PUT',route+'/profile',profile,headers=headers)
+                assert changed['model_id']==model_id and changed['reasoning_effort']==effort
+                run=app('POST',route+'/runs',dict(prompt='Continue with '+wire),status=202)
+                end=time.monotonic()+10
+                while time.monotonic()<end:
+                    result=app('GET','/runs/'+str(run['id']))
+                    if result['terminal']:break
+                    time.sleep(.1)
+                assert result['state']=='succeeded',result
+                body=Upstream.calls[-1][1];assert body['model']==wire
+                assert any(m.get('content')=='Continue after switching to Flash' for m in body['messages'])
+                if effort:assert body['reasoning_effort']==effort
+                else:assert 'reasoning_effort' not in body
+            # Invalid identity/effort values must still reject without changing
+            # the accepted model/revision or losing the completed conversation.
+            current=app('GET',route)
+            for model_id,effort in [('', ''),('missing-model', ''),('mdo-online.glm-test','invalid-effort')]:
+                app('PUT',route+'/profile',dict(model_id=model_id,reasoning_effort=effort,permission_profile=current['permission_profile']),
+                    status=422,headers={'If-Match':f'"mdo-session-{current["id"]}-{current["revision"]}"'})
+                after=app('GET',route);assert (after['model_id'],after['revision'])==(current['model_id'],current['revision'])
             Upstream.agent_mode=False
             app('POST','/account/logout',{});state=wait(lambda v:v['state']=='signed_out' and not v['busy'])
             assert 'model_allowance' not in state
+            assert 'balance' not in state and state['balance_status']==0
             assert not any(m['id']=='mdo-online.glm-test' for m in app('GET','/models')['models'])
             before=len(Upstream.calls);assert not app('GET','/test-model')['success'] and len(Upstream.calls)==before
             assert all(headers['Authorization']=='Bearer fixture-only-secret' for _,_,headers in Upstream.calls)
             native.terminate();native.wait(timeout=10);logs[-1].close()
-        print('PASS native login -> model gateway -> token allowance, VIP model catalog, group display, logout and secret isolation')
+        print('PASS native login, billing balance, token allowance, VIP catalog, model switching with history, logout and secret isolation')
     finally:
         for proc in reversed(processes):
             if proc.poll() is None:proc.terminate();proc.wait(timeout=10)

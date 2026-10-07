@@ -15,7 +15,7 @@ const EFFORT_LABEL = Object.freeze({
 });
 
 export function fillReasoningOptions(select, model, preferred = "") {
-  const efforts = model?.reasoning_efforts?.length
+  const efforts = Array.isArray(model?.reasoning_efforts)
     ? model.reasoning_efforts : (preferred ? [preferred] : []);
   clear(select);
   for (const effort of efforts)

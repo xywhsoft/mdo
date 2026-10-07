@@ -43,11 +43,15 @@ xllm_result MdoModelOnlineComplete(const MdoModelCatalog* Catalog,const MdoModel
              * merge this without losing the caller's other extra fields. */
             const MdoModelEntry* Model=MdoModelsLookup(Catalog,Profile.sId);
             const char* Effort=Options->ReasoningEffort&&Options->ReasoningEffort[0]?Options->ReasoningEffort:Model->DefaultReasoningEffort;
-            xvalue* Extra=Request->sExtraBodyJson?xrtJsonParse(xrtStrView(Request->sExtraBodyJson)):xrtValueObject();
-            Ready=xrtValueType(Extra)==XVALUE_OBJECT&&xrtValueObjectSetNew(Extra,XRT_STR_LITERAL("reasoning_effort"),xrtValueString(xrtStrView(Effort)));
-            if(Ready)ExtraJson=xrtJsonStringify(Extra,false,NULL);
-            xrtValueRelease(Extra);Ready=Ready&&ExtraJson!=NULL;Borrowed.sExtraBodyJson=ExtraJson;
-            if(!Ready)MdoModelsProfileError(Error,"cannot prepare GLM reasoning controls");
+            /* An empty effort is meaningful: do not send an unsupported
+             * reasoning_effort field to non-reasoning GLM profiles. */
+            if(Model->ReasoningEffortCount){
+                xvalue* Extra=Request->sExtraBodyJson?xrtJsonParse(xrtStrView(Request->sExtraBodyJson)):xrtValueObject();
+                Ready=xrtValueType(Extra)==XVALUE_OBJECT&&xrtValueObjectSetNew(Extra,XRT_STR_LITERAL("reasoning_effort"),xrtValueString(xrtStrView(Effort)));
+                if(Ready)ExtraJson=xrtJsonStringify(Extra,false,NULL);
+                xrtValueRelease(Extra);Ready=Ready&&ExtraJson!=NULL;Borrowed.sExtraBodyJson=ExtraJson;
+                if(!Ready)MdoModelsProfileError(Error,"cannot prepare GLM reasoning controls");
+            }
         }
         if(Ready)Result=xllmClientComplete(Client,&Borrowed,Callbacks,Response,Error);
         xrtFree(ExtraJson);xllmClientDestroy(Client);

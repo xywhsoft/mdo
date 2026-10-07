@@ -985,7 +985,6 @@ MdoAgentSession* MdoAgentSessionCreateWithRuntime(xwork_runtime* Runtime,
     MdoAgentSession* Session = NULL;
     xllm_model_profile Profile;
     xllm_session_config SessionConfig;
-    xllm_session_config RecoveredConfig;
     xllm_error ModelError;
     xwork_agent_definition_config DefinitionConfig;
     xwork_agent_definition* Definition = NULL;
@@ -1127,20 +1126,10 @@ MdoAgentSession* MdoAgentSessionCreateWithRuntime(xwork_runtime* Runtime,
         Owner->LlmSession = xllmSessionRecover(Options->SessionPath,
             Options->JournalPath, &SessionConfig, &ModelError);
         if ( Owner->LlmSession != NULL &&
-             (!xllmSessionGetConfig(Owner->LlmSession, &RecoveredConfig) ||
-              RecoveredConfig.eWindowMode != SessionConfig.eWindowMode ||
-              RecoveredConfig.uContextWindowTokens >
-                SessionConfig.uContextWindowTokens ||
-              RecoveredConfig.uMaxInputTokens >
-                SessionConfig.uMaxInputTokens ||
-              RecoveredConfig.uMaxOutputTokens >
-                SessionConfig.uMaxOutputTokens) ) {
+             !xllmSessionApplyProfile(Owner->LlmSession, &SessionConfig,
+                &Profile, &ModelError) ) {
             xllmSessionDestroy(Owner->LlmSession);
             Owner->LlmSession = NULL;
-            xllmErrorInit(&ModelError);
-            ModelError.eCode = XLLM_ERROR_INVALID_ARGUMENT;
-            snprintf(ModelError.sMessage, sizeof(ModelError.sMessage), "%s",
-                "recovered session exceeds the selected model profile");
         }
     } else {
         SessionConfig.sSnapshotPath = Options->SessionPath;

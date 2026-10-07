@@ -437,7 +437,7 @@ bool MdoSessionsInternalMetaParse(const char* ExpectedProject,
          !MdoSessionsCopy(Info->AgentId, sizeof(Info->AgentId), Agent, false) ||
          !MdoSessionsCopy(Info->ModelId, sizeof(Info->ModelId), Model, false) ||
          !MdoSessionsCopy(Info->ReasoningEffort,
-            sizeof(Info->ReasoningEffort), Reasoning, false) ||
+            sizeof(Info->ReasoningEffort), Reasoning, true) ||
          !MdoSessionsCopy(Info->WorkspaceRoot,
             sizeof(Info->WorkspaceRoot), Workspace, false) ) goto done;
     if ( Schema >= 2u ) {
@@ -938,7 +938,7 @@ MdoSession* MdoSessionOpen(const char* ProjectId, const char* SessionId,
           (!MdoSessionsTextValid(Options->ProfileModelId,
                 MDO_SESSION_IDENTITY_CAPACITY, false) ||
            !MdoSessionsTextValid(Options->ProfileReasoningEffort,
-                MDO_SESSION_REASONING_CAPACITY, false) ||
+                MDO_SESSION_REASONING_CAPACITY, true) ||
            (strcmp(Options->ProfilePermissionProfile, "read-only") != 0 &&
             strcmp(Options->ProfilePermissionProfile, "balanced") != 0 &&
             strcmp(Options->ProfilePermissionProfile,
@@ -1541,7 +1541,7 @@ bool MdoSessionSetProfile(MdoSession* Session, const char* ModelId,
             MDO_SESSION_IDENTITY_CAPACITY, false)) ||
          (ReasoningEffort != NULL &&
           !MdoSessionsTextValid(ReasoningEffort,
-            MDO_SESSION_REASONING_CAPACITY, false)) ||
+            MDO_SESSION_REASONING_CAPACITY, true)) ||
          (PermissionProfile != NULL &&
           strcmp(PermissionProfile, "read-only") != 0 &&
           strcmp(PermissionProfile, "balanced") != 0 &&
