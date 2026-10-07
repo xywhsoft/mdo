@@ -3,6 +3,7 @@
 static bool MdoAccountLeaseLocked(xcancel*,MdoAccountLease*);
 static bool MdoAccountQueueLocked(unsigned);
 #include "model_allowance.inc.c"
+#include "balance.inc.c"
 
 MdoAccountManager g_MdoAccount;
 
@@ -19,6 +20,7 @@ static void MdoAccountClearTokensLocked(void)
     xrtSecureZero(&g_MdoAccount.Tokens, sizeof(g_MdoAccount.Tokens));
     g_MdoAccount.Saved = false;
     MdoAccountClearModelsLocked();
+    MdoAccountClearBalanceLocked();
     (void)MdoHomeRemove(MDO_ACCOUNT_SESSION_PATH, false);
 }
 static void MdoAccountClearAuthorizationLocked(void)
@@ -92,8 +94,9 @@ static int32 MdoAccountWorker(void* Unused)
     (void)Unused;
     for (;;) {
         MdoAccountWork work; xcancel* cancel; uint16 status = 0, usage_status = 0;
-        xvalue *body=NULL,*data=NULL,*profile=NULL,*usage=NULL,*allowance=NULL,*catalog=NULL;
+        xvalue *body=NULL,*data=NULL,*profile=NULL,*usage=NULL,*allowance=NULL,*catalog=NULL,*balance=NULL;
         uint16 models_status=0;
+        uint16 balance_status=0;
         MdoAccountTokens tokens; bool ok = false;
         memset(&work, 0, sizeof(work)); memset(&tokens, 0, sizeof(tokens));
         xrtMutexLock(g_MdoAccount.Lock);
@@ -149,6 +152,11 @@ static int32 MdoAccountWorker(void* Unused)
             uint16 catalog_status=0;
             catalog=MdoAccountClient(work.Origin,"/api/v1/ai/catalog","GET",NULL,work.Tokens.Access,cancel,&catalog_status);
             if(catalog_status!=200){xrtValueRelease(catalog);catalog=NULL;}
+            data = MdoAccountClient(work.Origin, "/api/v1/billing/account", "GET", NULL,
+                work.Tokens.Access, cancel, &balance_status);
+            if ( balance_status == 200u ) balance = MdoAccountBalance(data, work.Tokens.MemberId);
+            xrtValueRelease(data); data = NULL;
+            if ( !balance && balance_status == 200u ) balance_status = 502u;
         } else if (cancel && work.Kind == MDO_ACCOUNT_WORK_LOGOUT) {
             data = MdoAccountClient(work.Origin, "/api/v1/logout", "POST", NULL, work.Tokens.Access, cancel, &status);
             xrtValueRelease(data); data = NULL;
@@ -165,6 +173,7 @@ static int32 MdoAccountWorker(void* Unused)
                         xrtValueRelease(g_MdoAccount.Profile); g_MdoAccount.Profile = NULL;
                         xrtValueRelease(g_MdoAccount.Usage); g_MdoAccount.Usage = NULL;
                         MdoAccountClearModelsLocked();
+                        MdoAccountClearBalanceLocked();
                         g_MdoAccount.Remember = work.Kind == MDO_ACCOUNT_WORK_PASSWORD ? work.Remember : work.Authorization.Remember;
                     }
                     g_MdoAccount.Tokens = tokens; g_MdoAccount.Message[0] = 0;
@@ -184,6 +193,8 @@ static int32 MdoAccountWorker(void* Unused)
                 if (usage_status) g_MdoAccount.SearchStatus = usage_status;
                 if(allowance){xrtValueRelease(g_MdoAccount.Allowance);g_MdoAccount.Allowance=allowance;allowance=NULL;}
                 g_MdoAccount.ModelsStatus=models_status;
+                if ( balance ) { xrtValueRelease(g_MdoAccount.Balance); g_MdoAccount.Balance = balance; balance = NULL; }
+                g_MdoAccount.BalanceStatus = balance_status;
                 cstr version=MdoAccountText(catalog,"version",64);
                 if(version&&strlen(version)==64&&strcmp(version,g_MdoAccount.OnlineVersion)&&MdoModelManagerSetOnlineCatalog(catalog))strcpy(g_MdoAccount.OnlineVersion,version);
                 /* Profile reads never invalidate a working token on transient
@@ -194,7 +205,7 @@ static int32 MdoAccountWorker(void* Unused)
             MdoAccountChangedLocked();
         }
         xrtMutexUnlock(g_MdoAccount.Lock);
-        xrtCancelDestroy(cancel);xrtValueRelease(profile);xrtValueRelease(usage);xrtValueRelease(allowance);xrtValueRelease(catalog);
+        xrtCancelDestroy(cancel);xrtValueRelease(profile);xrtValueRelease(usage);xrtValueRelease(allowance);xrtValueRelease(catalog);xrtValueRelease(balance);
         xrtSecureZero(&work, sizeof(work)); xrtSecureZero(&tokens, sizeof(tokens));
     }
     return 0;
@@ -242,6 +253,7 @@ void MdoAccountUnit(void)
     }
     if (g_MdoAccount.Worker) { xrtThreadWait(g_MdoAccount.Worker); xrtThreadDestroy(g_MdoAccount.Worker); }
     xrtValueRelease(g_MdoAccount.Allowance);MdoModelManagerSetOnlineAuthority(NULL);
+    MdoAccountClearBalanceLocked();
     xrtValueRelease(g_MdoAccount.Profile); xrtValueRelease(g_MdoAccount.Usage);
     xrtCancelDestroy(g_MdoAccount.SessionCancel); xrtCondDestroy(g_MdoAccount.Changed);
     xrtMutexDestroy(g_MdoAccount.Lock); xrtSecureZero(&g_MdoAccount, sizeof(g_MdoAccount));
@@ -280,6 +292,8 @@ xvalue* MdoAccountSnapshot(void)
     if (ok && g_MdoAccount.Profile) ok = xrtValueObjectSetNew(out, xrtStrView("profile"), xrtValueClone(g_MdoAccount.Profile));
     if (ok && g_MdoAccount.Usage) ok = xrtValueObjectSetNew(out, xrtStrView("usage"), xrtValueClone(g_MdoAccount.Usage));
     if(ok&&g_MdoAccount.Allowance)ok=xrtValueObjectSetNew(out,XRT_STR_LITERAL("model_allowance"),xrtValueClone(g_MdoAccount.Allowance));
+    if(ok&&live&&g_MdoAccount.Balance)ok=xrtValueObjectSetNew(out,XRT_STR_LITERAL("balance"),xrtValueClone(g_MdoAccount.Balance));
+    if(ok)ok=MdoAccountSetUInt(out,"balance_status",g_MdoAccount.BalanceStatus);
     if(ok)ok=MdoAccountSetUInt(out,"models_status",g_MdoAccount.ModelsStatus)&&MdoAccountSetUInt(out,"model_generation",MdoModelManagerGeneration());
     for (i = 0; ok && i < MDO_ACCOUNT_WAIT_MAX; i++) if (g_MdoAccount.Waiters[i].Id && !g_MdoAccount.Waiters[i].Skipped) {
         xvalue* item = xrtValueObject();

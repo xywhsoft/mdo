@@ -3,6 +3,7 @@ import { currentLocale, subscribeLocale, t } from "../../i18n.js";
 import { toast, errorMessage } from "../../utils/dom.js";
 import { isRemoteTarget } from "../../api/target.js";
 import { allowanceView, searchAllowanceView } from "./allowance.js";
+import { balanceView, formatBalance } from "./balance.js";
 
 // Tokens stay in the native host. Passwords are submitted once from the form,
 // then cleared; account rendering uses only filtered public snapshots.
@@ -63,6 +64,7 @@ export function createAccount({ navigation, onModelsChange = () => {} }) {
     const status = text("p", signedIn() ? copy("greeting", { name: displayName() }) : stateText, "account-state");
     status.setAttribute("role", "status");
     const nodes = [status];
+    if (signedIn()) nodes.push(renderBalance());
     if (!signedIn()) nodes.push(text("p", copy("description"), "account-note account-benefits"));
     if (snapshot.profile) {
       const details = text("dl", "", "account-details");
@@ -117,6 +119,28 @@ export function createAccount({ navigation, onModelsChange = () => {} }) {
     if (dialog.open && dialogLogin && snapshot.state !== "authorizing" && !snapshot.busy) {
       if (snapshot.state === "signed_in" && !snapshot.message) { dialogLogin = false; dialog.close(); toast(copy("success"), "success"); }
     }
+  }
+  function renderBalance() {
+    const card = text("section", "", "account-balance");
+    card.setAttribute("aria-label", copy("balance"));
+    card.append(text("h3", copy("balance")));
+    const balance = balanceView(snapshot.balance, snapshot.balance_status);
+    if (!balance) {
+      card.append(text("p", copy(snapshot.busy && !snapshot.balance_status
+        ? "balanceLoading" : "balanceUnavailable"), "account-note"));
+      return card;
+    }
+    const money = amount => formatBalance(amount, currentLocale());
+    const heading = text("div", "", "account-balance-heading");
+    heading.append(text("span", copy("availableBalance")), text("strong", money(balance.available)));
+    card.append(heading);
+    const details = text("dl", "", "account-balance-details");
+    for (const [key, amount] of [["cashBalance", balance.cash], ["creditBalance", balance.credit],
+      ...(balance.reserved ? [["reservedBalance", balance.reserved]] : [])])
+      details.append(text("dt", copy(key)), text("dd", money(amount)));
+    card.append(details);
+    if (balance.stale) card.append(text("p", copy("balanceStale"), "account-hint"));
+    return card;
   }
   function renderQuotas(parent, allowance, compact) {
     parent.replaceChildren(); parent.setAttribute("aria-label", copy("modelAllowance"));

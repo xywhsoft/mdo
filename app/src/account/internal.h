@@ -57,8 +57,10 @@ typedef struct MdoAccountManager {
     xvalue* Profile;
     xvalue* Usage;
     xvalue* Allowance;
+    xvalue* Balance;
     uint64 NextProfile;
     uint16 ModelsStatus;
+    uint16 BalanceStatus;
     char OnlineVersion[65];
     char Origin[MDO_ACCOUNT_ORIGIN_LIMIT];
     char Message[96];
