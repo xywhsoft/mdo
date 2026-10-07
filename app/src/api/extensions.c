@@ -1,7 +1,7 @@
 #include <stdio.h>
 #include <string.h>
 #include "internal.h"
-#include "../../include/mdo/subagent_file.h"
+#include "../../include/mdo/agent_file.h"
 #include "../../include/mdo/skills.h"
 #include "../../include/mdo/mcp.h"
 #include "../../include/mdo/secrets.h"
@@ -14,7 +14,7 @@ void MdoApiExtensionsUnit(void) { if (g_MdoExtensionLock) xrtMutexDestroy(g_MdoE
 
 static bool ExtensionKind(cstr Kind)
 {
-    return strcmp(Kind,"subagents") == 0 || strcmp(Kind,"skills") == 0 ||
+    return strcmp(Kind,"agents") == 0 || strcmp(Kind,"subagents") == 0 || strcmp(Kind,"skills") == 0 ||
         strcmp(Kind,"mcp") == 0 || strcmp(Kind,"commands") == 0 || strcmp(Kind,"tools") == 0;
 }
 static bool ExtensionParams(MdoApiContext* C, char Kind[16], char Id[65])
@@ -51,10 +51,10 @@ static bool ExtensionValidate(cstr Kind,cstr Id,cstr Text,char Error[1024])
     }
     if (strcmp(Kind,"skills")==0) return MdoSkillValidateText(Text,Error,1024u);
     if (strcmp(Kind,"mcp")==0) return MdoMcpValidateText(Id,Text,Error,1024u);
-    if (strcmp(Kind,"subagents")==0) {
-        MdoSubagentFile File;
-        Ok=MdoSubagentFileParse(Id,Text,&File,Error,1024u);
-        MdoSubagentFileUnit(&File); return Ok;
+    if (strcmp(Kind,"subagents")==0 || !strcmp(Kind,"agents")) {
+        MdoAgentFile File;
+        Ok=MdoAgentFileParse(Id,Text,!strcmp(Kind,"agents"),&File,Error,1024u);
+        MdoAgentFileUnit(&File); return Ok;
     }
     /* Built-ins always own their names; a saved prompt cannot shadow /stop. */
     {
@@ -87,11 +87,11 @@ static bool ExtensionReload(cstr Kind,cstr Id,bool Expected)
             }
         }
         MdoModuleCatalogRelease(Catalog);
-    } else if (!strcmp(Kind,"subagents")) {
+    } else if (!strcmp(Kind,"subagents") || !strcmp(Kind,"agents")) {
         MdoModuleAgentInfo Info={0}; MdoModuleCatalog* Catalog;
         char Agent[96]; Info.Size=sizeof(Info);
         if (!MdoModuleManagerReload()) return false;
-        Catalog=MdoModuleCatalogSnapshot(); snprintf(Agent,sizeof(Agent),"subagent.%s",Id);
+        Catalog=MdoModuleCatalogSnapshot(); snprintf(Agent,sizeof(Agent),"%s.%s",!strcmp(Kind,"agents")?(!strcmp(Id,"default")?"mdo":"agent"):"subagent",Id);
         Found=MdoModuleCatalogAgentFind(Catalog,Agent,&Info); MdoModuleCatalogRelease(Catalog);
     } else if (!strcmp(Kind,"skills")) {
         MdoSkillInfo Info={0}; MdoSkillCatalog* Catalog; Info.Size=sizeof(Info);
@@ -145,8 +145,7 @@ static xvalue* ExtensionItem(cstr Kind,cstr Id,bool IncludeSource)
                 MdoModuleToolInfo Tool={0}; xvalue* Export=xrtValueObject(); Tool.Size=sizeof(Tool);
                 if (!MdoModuleCatalogToolAt(Catalog,j,&Tool) || strcmp(Tool.ModuleId,Module.Id)) { xrtValueRelease(Export); continue; }
                 Ok=Export && MdoApiValueSetString(Export,"id",Tool.Id) && MdoApiValueSetString(Export,"name",Tool.Name) &&
-                    MdoApiValueSetString(Export,"description",Tool.Description) && MdoApiValueSetUInt(Export,"effects",Tool.Effects) &&
-                    MdoApiValueSetString(Export,"parameters_json",Tool.ParametersJson) && MdoApiValueAppendTake(Tools,&Export);
+                    MdoApiValueSetString(Export,"description",Tool.Description) && MdoApiValueSetUInt(Export,"effects",Tool.Effects) && MdoApiValueAppendTake(Tools,&Export);
                 xrtValueRelease(Export);
             }
             break;
@@ -445,6 +444,9 @@ static bool ExtensionEnable(MdoApiContext* C,cstr Kind,cstr Id)
     if (Status!=MDO_API_BODY_OK) return MdoApiReplyBodyError(C,Status);
     if (!xrtValueGetBool(xrtValueObjectGet(Body.Value,XRT_STR_LITERAL("enabled")),&Enabled)) {
         ExtensionBodyUnit(&Body); return MdoApiReplyError(C,422,"extension_invalid","enabled must be boolean",NULL);
+    }
+    if (!strcmp(Kind,"agents") && !strcmp(Id,"default") && !Enabled) {
+        ExtensionBodyUnit(&Body); return MdoApiReplyError(C,422,"extension_invalid","Default Agent must remain enabled; edit its profile instead",NULL);
     }
     if (!strcmp(Kind,"mcp")) { ExtensionBodyUnit(&Body); return ExtensionMcpEnable(C,Id,Enabled); }
     Old=MdoExtensionRead("config/extensions.json",true,64u*1024u,&Missing);

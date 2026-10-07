@@ -66,17 +66,22 @@ static inline char* MdoExtensionRead(cstr Path, bool External, size_t Limit,
     return Text;
 }
 
-static inline bool MdoExtensionHash(cstr Text, char Output[65])
+static inline bool MdoExtensionHashBytes(const void* Bytes,size_t Length,char Output[65])
 {
     static const char Hex[] = "0123456789abcdef";
     unsigned char Digest[32];
     size_t i;
-    if (Text == NULL || !xrtSha256(Text, strlen(Text), Digest)) return false;
+    if (Bytes == NULL || !xrtSha256(Bytes, Length, Digest)) return false;
     for (i = 0u; i < sizeof(Digest); ++i) {
         Output[2u * i] = Hex[Digest[i] >> 4u];
         Output[2u * i + 1u] = Hex[Digest[i] & 15u];
     }
     Output[64] = '\0'; return true;
+}
+
+static inline bool MdoExtensionHash(cstr Text,char Output[65])
+{
+    return Text != NULL && MdoExtensionHashBytes(Text,strlen(Text),Output);
 }
 
 static inline bool MdoExtensionEnabled(cstr Kind, cstr Id, bool* Enabled)

@@ -6,7 +6,7 @@
 
 #include "../../include/mdo/home.h"
 #include "../../include/mdo/modules.h"
-#include "../../include/mdo/subagent_file.h"
+#include "../../include/mdo/agent_file.h"
 #include "../../include/mdo/tool_catalog.h"
 
 #define MDO_MODULE_SOURCE_LIMIT (1024u * 1024u)
@@ -79,6 +79,8 @@ struct MdoModuleGeneration {
     MdoModuleKind Kind;
     bool External;
     TCCState* Tcc;
+    bool Profile;
+    bool UseCode;
     char* Id;
     char* Name;
     char* Description;
@@ -518,7 +520,7 @@ static bool MdoModulesDiscoverDirectory(MdoModuleKind Kind, cstr Directory,
         size_t iVirtual = strlen(Directory);
         size_t iRelative = strlen(RelativeDirectory);
 
-        bool Declarative = strcmp(RelativeDirectory, "subagents") == 0;
+        bool Declarative = strcmp(RelativeDirectory, "subagents") == 0 || strcmp(RelativeDirectory,"agents")==0;
         if ( (Entry.Flags & XDIR_ENTRY_UTF8) == 0u ||
              Entry.Info.Type != XFILE_TYPE_FILE || iName <= (Declarative ? 3u : 2u) ||
              strcmp(Entry.Name.Data + iName - (Declarative ? 3u : 2u),
@@ -530,7 +532,7 @@ static bool MdoModulesDiscoverDirectory(MdoModuleKind Kind, cstr Directory,
             if (iName - Suffix >= sizeof(Id)) continue;
             memcpy(Id, Entry.Name.Data, iName - Suffix); Id[iName - Suffix] = '\0';
             if (!MdoExtensionIdValid(Id)) continue;
-            if (!MdoExtensionEnabled(Declarative ? "subagents" : "tools", Id, &Enabled)) {
+            if (!MdoExtensionEnabled(Declarative ? RelativeDirectory : "tools", Id, &Enabled)) {
                 (void)xrtDirClose(Dir); return false;
             }
             if (!Enabled) continue;
@@ -611,6 +613,9 @@ static bool MdoModulesDiscover(MdoModuleSource** ppSources, size_t* pCount,
             "/app/default-home/tools", "tools",
             ppSources, pCount, &iCapacity, pDiagnostics) ||
          !MdoModulesDiscoverDirectory(MDO_MODULE_AGENTS,
+            "/app/default-home/agents", "agents",
+            ppSources, pCount, &iCapacity, pDiagnostics) ||
+         !MdoModulesDiscoverDirectory(MDO_MODULE_AGENTS,
             "/app/default-home/modules/agents", "modules/agents",
             ppSources, pCount, &iCapacity, pDiagnostics) ||
          !MdoModulesDiscoverDirectory(MDO_MODULE_SUBAGENTS,
@@ -658,13 +663,6 @@ static bool MdoModulesSourceHash(cstr Path, const void* pSource,
     }
     Output[64] = '\0';
     return true;
-}
-
-static bool MdoModulesSourceRevision(const void* Bytes,size_t Length,char Output[65])
-{
-    char* Text=xrtStrDupN((cstr)Bytes,Length);
-    bool Ok=Text && MdoExtensionHash(Text,Output);
-    xrtFree(Text); return Ok;
 }
 
 static void MdoModulesTccError(void* pOpaque, const char* Message)
@@ -858,7 +856,7 @@ static MdoModuleGeneration* MdoModulesCompile(const MdoModuleSource* pSource,
     pGeneration->External = pSource->External;
     pGeneration->SourcePath = xrtStrDup(pSource->VirtualPath);
     if ( pGeneration->SourcePath == NULL ||
-         !MdoModulesSourceRevision(pBytes,iBytes,pGeneration->SourceRevision) ||
+         !MdoExtensionHashBytes(pBytes,iBytes,pGeneration->SourceRevision) ||
          !MdoModulesSourceHash(pSource->VirtualPath, pBytes, iBytes,
             pHeader, iHeader, pGeneration->SourceHash) ) goto memory_failed;
 
@@ -1395,6 +1393,12 @@ static bool MdoModulesValidateCatalog(MdoModuleCatalog* pCatalog,
 
     for ( i = 0u; i < pCatalog->ModuleCount; ++i ) {
         MdoModuleGeneration* pModule = pCatalog->Modules[i];
+        if (pModule->Kind==MDO_MODULE_TOOLS && pModule->ToolCount==0u &&
+            !strncmp(pModule->SourcePath,"/app/default-home/tools/",sizeof("/app/default-home/tools/")-1u)) {
+            (void)MdoModulesDiagnosticAdd(pDiagnostics,MDO_MODULE_DIAGNOSTIC_VALIDATE,pModule->SourcePath,pModule->SourceHash,
+                "A managed C tool file must register at least one tool");
+            return false;
+        }
         if ( pModule->ToolCount > MDO_MODULE_TOOL_LIMIT - iTool ||
              pModule->AgentCount > MDO_MODULE_AGENT_LIMIT - iAgent ) {
             (void)MdoModulesDiagnosticAdd(pDiagnostics,
@@ -1694,28 +1698,31 @@ static xwork_tool_definition* MdoModulesDefinitions(
     return pDefinitions;
 }
 
-static MdoModuleGeneration* MdoModulesReadSubagent(const MdoModuleSource* Source,
+static MdoModuleGeneration* MdoModulesReadAgentProfile(const MdoModuleSource* Source,
     uint64 Generation, MdoModuleDiagnostics* Diagnostics)
 {
     char Id[65], Error[MDO_MODULE_ERROR_LIMIT] = {0};
     const char* Base = strrchr(Source->RelativePath, '/');
     char* Text = MdoExtensionRead(Source->RelativePath, false, MDO_EXTENSION_TEXT_LIMIT, NULL);
     MdoModuleGeneration* Module = NULL;
-    MdoSubagentFile File;
+    MdoAgentFile File;
     MdoModuleRegistrarContext Registrar;
     size_t Length = Base != NULL ? strlen(Base + 1) : 0u;
     bool Parsed = false;
     memset(&File, 0, sizeof(File));
     if (Length < 4u || Length - 3u >= sizeof(Id) || Text == NULL) goto failed;
     memcpy(Id, Base + 1, Length - 3u); Id[Length - 3u] = '\0';
-    if (!MdoSubagentFileParse(Id, Text, &File, Error, sizeof(Error))) goto failed;
+    if (!MdoAgentFileParse(Id, Text,Source->Kind==MDO_MODULE_AGENTS, &File, Error, sizeof(Error))) goto failed;
     Parsed = true;
     Module = (MdoModuleGeneration*)xrtCalloc(1u, sizeof(*Module));
     if (Module == NULL) goto failed;
     xrtAtomic32Init(&Module->Refs, 1u);
-    Module->Generation = Generation; Module->Kind = MDO_MODULE_SUBAGENTS;
+    Module->Generation = Generation; Module->Kind = Source->Kind;
+    Module->Profile=Source->Kind==MDO_MODULE_AGENTS; Module->UseCode=File.UseCode;
     Module->External = Source->External;
-    Module->Id = xrtStrDup(File.Id); Module->Name = xrtStrDup(File.Name);
+    { char ModuleId[128]; snprintf(ModuleId,sizeof(ModuleId),"%s%s",Module->Profile?"profile.":"",File.Id);
+      Module->Id = xrtStrDup(ModuleId); }
+    Module->Name = xrtStrDup(File.Name);
     Module->Description = xrtStrDup(File.Description);
     Module->Version = xrtStrDup("1");
     Module->SourcePath = xrtStrDup(Source->VirtualPath);
@@ -1725,13 +1732,70 @@ static MdoModuleGeneration* MdoModulesReadSubagent(const MdoModuleSource* Source
     memset(&Registrar, 0, sizeof(Registrar)); Registrar.Generation = Module;
     if (MdoModulesRegistrarAddAgent(&Registrar, &File.Agent, Error, sizeof(Error)) != MDO_RESULT_OK)
         goto failed;
-    MdoSubagentFileUnit(&File); xrtFree(Text); return Module;
+    MdoAgentFileUnit(&File); xrtFree(Text); return Module;
 failed:
-    if (Parsed) MdoSubagentFileUnit(&File);
+    if (Parsed) MdoAgentFileUnit(&File);
     xrtFree(Text); MdoModulesGenerationRelease(Module);
     (void)MdoModulesDiagnosticAdd(Diagnostics, MDO_MODULE_DIAGNOSTIC_VALIDATE,
-        Source->VirtualPath, NULL, Error[0] != '\0' ? Error : "Cannot read SubAgent definition");
+        Source->VirtualPath, NULL, Error[0] != '\0' ? Error : "Cannot read Agent definition");
     return NULL;
+}
+
+static bool MdoModulesApplyProfiles(MdoModuleCatalog* Catalog,MdoModuleDiagnostics* Diagnostics)
+{
+    size_t i,j,k;
+    for (i=0u;i<Catalog->ModuleCount;++i) {
+        MdoModuleGeneration* Profile=Catalog->Modules[i]; MdoModuleAgentBinding* Config;
+        MdoModuleAgentBinding* Native=NULL; MdoModuleGeneration* Owner=NULL;
+        if (!Profile->Profile || Profile->AgentCount!=1u) continue;
+        Config=&Profile->Agents[0];
+        for (j=0u;j<Catalog->ModuleCount;++j) {
+            if (Catalog->Modules[j]->Profile) continue;
+            for (k=0u;k<Catalog->Modules[j]->AgentCount;++k)
+                if (!strcmp(Catalog->Modules[j]->Agents[k].Id,Config->Id)) {
+                    if (Native) goto invalid;
+                    Native=&Catalog->Modules[j]->Agents[k]; Owner=Catalog->Modules[j];
+                }
+        }
+        if (!Native) { if (Profile->UseCode) goto invalid; continue; }
+        if (!(Native->Flags&MDO_AGENT_MAIN)) goto invalid;
+        /* Both descriptors are owned by this unpublished candidate. Move the
+         * ordinary profile onto its C owner so callbacks keep their TCC lifetime.
+         * C mode owns the base prompt/lifecycle/budgets; the UI owns tool scope. */
+        if (Profile->UseCode) {
+            xrtFree(Config->SystemPrompt); Config->SystemPrompt=Native->SystemPrompt; Native->SystemPrompt=NULL;
+            Config->UserData=Native->UserData; Config->Acquire=Native->Acquire; Config->Release=Native->Release;
+            Config->ContextWindowTokens=Native->ContextWindowTokens; Config->MaxInputTokens=Native->MaxInputTokens;
+            Config->MaxOutputTokens=Native->MaxOutputTokens; Config->MaxTurns=Native->MaxTurns;
+            Config->TimeoutMilliseconds=Native->TimeoutMilliseconds; Config->MaxFinalBytes=Native->MaxFinalBytes;
+            Config->AllowedEffects &= Native->AllowedEffects;
+            if (Native->MaxDepth<Config->MaxDepth) Config->MaxDepth=Native->MaxDepth;
+        }
+        MdoModulesAgentUnit(Native); *Native=*Config; Native->Owner=Owner;
+        memset(Config,0,sizeof(*Config)); Profile->AgentCount=0u;
+        continue;
+invalid:
+        (void)MdoModulesDiagnosticAdd(Diagnostics,MDO_MODULE_DIAGNOSTIC_VALIDATE,Profile->SourcePath,Profile->SourceHash,
+            "C mode requires exactly one C Agent with the same ID; check modules/agents and the Agent role");
+        return false;
+    }
+    /* A disabled canonical main profile must also suppress its C counterpart;
+     * otherwise disabling a restrictive profile could expose a broader Agent. */
+    for (i=0u;i<Catalog->ModuleCount;++i) {
+        MdoModuleGeneration* Module=Catalog->Modules[i];
+        for (j=0u;j<Module->AgentCount;) {
+            MdoModuleAgentBinding* Agent=&Module->Agents[j];
+            cstr Id=!strcmp(Agent->Id,"mdo.default")?"default":!strncmp(Agent->Id,"agent.",6u)?Agent->Id+6u:NULL;
+            bool Enabled=true;
+            if (Id && (Agent->Flags&MDO_AGENT_MAIN) && !MdoExtensionEnabled("agents",Id,&Enabled)) return false;
+            if (Enabled) { ++j; continue; }
+            MdoModulesAgentUnit(Agent);
+            --Module->AgentCount;
+            memmove(Agent,Agent+1u,(Module->AgentCount-j)*sizeof(*Agent));
+            memset(&Module->Agents[Module->AgentCount],0,sizeof(*Agent));
+        }
+    }
+    return true;
 }
 
 static MdoModuleCatalog* MdoModulesBuildCandidate(uint64 Generation,
@@ -1771,7 +1835,7 @@ static MdoModuleCatalog* MdoModulesBuildCandidate(uint64 Generation,
     }
     for ( i = 0u; i < iSourceCount; ++i ) {
         pCatalog->Modules[i] = pSources[i].Declarative
-            ? MdoModulesReadSubagent(&pSources[i], Generation, pDiagnostics)
+            ? MdoModulesReadAgentProfile(&pSources[i], Generation, pDiagnostics)
             : MdoModulesCompile(&pSources[i], Generation,
                 pHeader, iHeader, &pRegisters[i], pDiagnostics);
         if ( pCatalog->Modules[i] == NULL ) goto failed;
@@ -1784,7 +1848,7 @@ static MdoModuleCatalog* MdoModulesBuildCandidate(uint64 Generation,
              !MdoModulesRegister(pCatalog->Modules[iModule],
                 pRegisters[iModule], pDiagnostics) ) goto failed;
     }
-    if ( !MdoModulesValidateCatalog(pCatalog, pDiagnostics) ) {
+    if ( !MdoModulesApplyProfiles(pCatalog,pDiagnostics) || !MdoModulesValidateCatalog(pCatalog, pDiagnostics) ) {
         if ( pDiagnostics->Count == 0u )
             (void)MdoModulesDiagnosticAdd(pDiagnostics,
                 MDO_MODULE_DIAGNOSTIC_VALIDATE, NULL, NULL,

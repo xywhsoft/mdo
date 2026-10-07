@@ -14,15 +14,14 @@
 #include "../../include/mdo/web.h"
 
 static xvalue* MdoApiToolItem(cstr Id,cstr Name,cstr Description,cstr Source,
-    uint64 Effects,bool MemberOnly,cstr Availability,cstr Parameters)
+    uint64 Effects,bool MemberOnly,cstr Availability)
 {
     xvalue* Item=xrtValueObject();
     if (Item && MdoApiValueSetString(Item,"id",Id) && MdoApiValueSetString(Item,"name",Name) &&
         MdoApiValueSetString(Item,"description",Description) && MdoApiValueSetString(Item,"source",Source) &&
         MdoApiValueSetUInt(Item,"effects",Effects) && MdoApiValueSetBool(Item,"member_only",MemberOnly) &&
         MdoApiValueSetBool(Item,"available",!strcmp(Availability,"available")) &&
-        MdoApiValueSetString(Item,"availability",Availability) &&
-        MdoApiValueSetString(Item,"parameters_json",Parameters)) return Item;
+        MdoApiValueSetString(Item,"availability",Availability)) return Item;
     xrtValueRelease(Item); return NULL;
 }
 
@@ -49,16 +48,12 @@ bool MdoApiToolsRoute(MdoApiContext* Context)
         if (MdoMcpCatalogAt(Mcp,i,&Info) && Info.Enabled) HasMcp=true;
     }
     for (i=0u;Ok && i<sizeof(MDO_BUILTIN_TOOLS)/sizeof(MDO_BUILTIN_TOOLS[0]);++i) {
-        const MdoBuiltinTool* Builtin=&MDO_BUILTIN_TOOLS[i]; cstr Availability="available",Parameters="";
+        const MdoBuiltinTool* Builtin=&MDO_BUILTIN_TOOLS[i]; cstr Availability="available";
         xvalue* Item;
         if (Builtin->Requirement==MDO_TOOL_WEB) Availability=!SignedIn?"sign_in_required":!Settings.Web.Enabled?"web_disabled":!Web.Enabled?"unavailable":"available";
         else if (Builtin->Requirement==MDO_TOOL_SUBAGENT && !HasSubagent) Availability="no_subagents";
         else if (Builtin->Requirement==MDO_TOOL_MCP && !HasMcp) Availability="no_mcp_servers";
-        for (j=0u;j<xworkToolCatalogCount(Runtime);++j) {
-            xwork_tool_info Info={0};
-            if (xworkToolCatalogToolAt(Runtime,j,&Info) && !strcmp(Info.sName,Builtin->Id)) { Parameters=Info.sParametersJson; break; }
-        }
-        Item=MdoApiToolItem(Builtin->Id,Builtin->Id,Builtin->Description,"builtin",Builtin->Effects,Builtin->MemberOnly,Availability,Parameters);
+        Item=MdoApiToolItem(Builtin->Id,Builtin->Id,Builtin->Description,"builtin",Builtin->Effects,Builtin->MemberOnly,Availability);
         Ok=Item && MdoApiValueAppendTake(Items,&Item); xrtValueRelease(Item);
     }
     for (i=0u;Ok && i<xworkToolCatalogCount(Runtime);++i) {
@@ -74,7 +69,7 @@ bool MdoApiToolsRoute(MdoApiContext* Context)
             }
             break;
         }
-        Item=MdoApiToolItem(Info.sName,Info.sName,Info.sDescription,Path[0]?"c":"mcp",Info.uEffects,false,"available",Info.sParametersJson);
+        Item=MdoApiToolItem(Info.sName,Info.sName,Info.sDescription,Path[0]?"c":"mcp",Info.uEffects,false,"available");
         Ok=Item && MdoApiValueSetString(Item,"source_path",Path) && MdoApiValueAppendTake(Items,&Item); xrtValueRelease(Item);
     }
     if (Ok) Ok=MdoApiValueSetTake(Data,"items",&Items) && MdoApiValueSetUInt(Data,"generation",xworkToolCatalogGeneration(Runtime));

@@ -21,12 +21,16 @@ class SkillModel(BaseHTTPRequestHandler):
     payloads = []
     delegation_payloads = []
     tool_payloads = []
+    profile_payloads = []
     def log_message(self, *_): pass
     def do_POST(self):
         payload = json.loads(self.rfile.read(int(self.headers['Content-Length'])))
         users = [item for item in payload.get('input', []) if item.get('role') == 'user']
         latest = json.dumps(users[-1] if users else payload)
-        if 'EXTENSION local tool probe' in latest:
+        if 'EXTENSION profile probe' in latest:
+            type(self).profile_payloads.append(payload); calls = len(type(self).profile_payloads)
+            output = [{'type': 'message', 'content': [{'type': 'output_text', 'text': 'Profile probe complete'}]}]
+        elif 'EXTENSION local tool probe' in latest:
             type(self).tool_payloads.append(payload)
             calls = len(type(self).tool_payloads)
             output = [{'type': 'function_call', 'call_id': 'local-tool', 'name': 'user.fixture', 'arguments': '{}'}] if calls == 1 else [
@@ -88,12 +92,12 @@ def main():
                     status, _, data = request(port, method, '/api/v1/extensions/' + path,
                         body=None if body is None else json.dumps(body).encode(), headers=headers)
                     return status, json.loads(data)
-                for kind in ('subagents', 'skills', 'mcp', 'commands', 'tools'):
+                for kind in ('agents', 'subagents', 'skills', 'mcp', 'commands', 'tools'):
                     status, data = call('GET', kind)
                     assert status == 200, data
                 # Startup tool preflight can persist its own notification. Reads
                 # must never materialize extension files or enablement settings.
-                for name in ('subagents', 'skills', 'mcp', 'commands', 'tools', 'config/extensions.json'):
+                for name in ('agents', 'subagents', 'skills', 'mcp', 'commands', 'tools', 'config/extensions.json'):
                     assert not (base / 'home' / name).exists(), 'read-only list wrote ' + name
                 def tool_catalog():
                     status, _, raw = request(port, 'GET', '/api/v1/tools')
@@ -111,11 +115,15 @@ def main():
                 assert tool_catalog()['user.fixture']['source'] == 'c'
                 assert call('PUT', 'tools/fixture', {'content': tool_source}, 'new')[0] == 412
                 status, rejected = call('PUT', 'tools/fixture', {'content': tool_source + '\ninvalid C source!'}, tool_revision)
-                assert status == 503 and 'error' in json.dumps(rejected).lower(), rejected
+                assert status == 503 and 'fixture.c' in json.dumps(rejected), rejected
                 assert call('GET', 'tools/fixture')[1]['data']['content'] == tool_source
                 assert 'user.fixture' in tool_catalog()
                 assert call('PUT', 'tools/collision', {'content': tool_source.replace('user.fixture', 'read')}, 'new')[0] == 503
                 assert not (base / 'home/tools/collision.c').exists()
+                empty = tool_source.replace('return Registrar->AddTool(Registrar->Context, &Tool, Error, Capacity);',
+                    '(void)Registrar; (void)Tool; (void)Error; (void)Capacity; return MDO_RESULT_OK;')
+                assert call('PUT', 'tools/fixture', {'content': empty}, tool_revision)[0] == 503
+                assert 'user.fixture' in tool_catalog()
                 unsafe = tool_source.replace('MDO_TOOL_EFFECT_READ', 'MDO_TOOL_EFFECT_PROCESS')
                 assert call('PUT', 'tools/fixture', {'content': unsafe}, tool_revision)[0] == 503
                 assert call('POST', 'tools/fixture/enabled', {'enabled': False}, tool_revision)[0] == 200
@@ -254,6 +262,80 @@ def main():
                 status, state = call('POST', 'mcp/mock/enabled', {'enabled': True}, mcp_revision)
                 assert status == 200 and state['data']['enabled'], state
                 assert call('DELETE', 'mcp/mock', revision=state['data']['revision'])[0] == 200
+                status, default = call('GET', 'agents/default')
+                assert status == 200 and not default['data']['external'], default
+                default_text = '---\nname: Default\ndescription: Configured default\nmodel: inherit\ntools: [read, grep, user.fixture]\nallow_delegation: true\ncode: false\n---\nPROFILE SYSTEM INSTRUCTIONS'
+                status, edited = call('PUT', 'agents/default', {'content': default_text}, default['data']['revision'])
+                assert status == 200, edited
+                edited_revision = edited['data']['revision']
+                assert call('DELETE', 'tools/fixture', revision=tool_revision)[0] == 409, 'dependency was removed'
+                assert 'user.fixture' in tool_catalog()
+                status, _, raw_profile = request(port, 'POST', '/api/v1/sessions',
+                    body=json.dumps({'project_id': 'default', 'title': 'Profile probe', 'permission_profile': 'full-access'}).encode(),
+                    headers={'Content-Type': 'application/json'})
+                assert status == 201, raw_profile
+                profile_session = json.loads(raw_profile)['data']['id']
+                status, _, raw_run = request(port, 'POST', f'/api/v1/projects/default/sessions/{profile_session}/runs',
+                    body=json.dumps({'prompt': 'EXTENSION profile probe', 'timeout_ms': 5000}).encode(), headers={'Content-Type': 'application/json'})
+                assert status == 202, raw_run
+                run = json.loads(raw_run)['data']; deadline = time.monotonic() + 8
+                while not run['terminal'] and time.monotonic() < deadline:
+                    time.sleep(.05); run = json.loads(request(port, 'GET', '/api/v1/runs/' + run['id'])[2])['data']
+                assert run['state'] == 'succeeded', run
+                sent = SkillModel.profile_payloads[-1]
+                assert {tool['name'] for tool in sent['tools']} == {'read', 'grep', 'user.fixture'}, sent
+                assert 'PROFILE SYSTEM INSTRUCTIONS' in json.dumps(sent), sent
+                assert call('POST', 'agents/default/enabled', {'enabled': False}, edited_revision)[0] == 422
+                assert call('DELETE', 'agents/default', revision=edited_revision)[0] == 200
+                # No C profile is required; an ordinary Markdown main Agent works.
+                basic = '---\nname: Researcher\ndescription: Read projects\nmodel: inherit\ntools: [read, ask_user]\n---\n'
+                status, basic_item = call('PUT', 'agents/researcher', {'content': basic}, 'new')
+                assert status == 200, basic_item
+                assert 'agent.researcher' in request(port, 'GET', '/api/v1/agents')[2].decode()
+                bad_code = basic.replace('model: inherit', 'model: inherit\ncode: true')
+                assert call('PUT', 'agents/researcher', {'content': bad_code}, basic_item['data']['revision'])[0] == 503
+                code_directory = base / 'home/modules/agents'
+                code_directory.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(ROOT / 'tests/fixtures/modules/generated-agent.c', code_directory / 'generated.c')
+                status, coded = call('PUT', 'agents/researcher', {'content': bad_code}, basic_item['data']['revision'])
+                assert status == 200, coded
+                assert call('POST', 'agents/researcher/enabled', {'enabled': False}, coded['data']['revision'])[0] == 200
+                assert 'agent.researcher' not in request(port, 'GET', '/api/v1/agents')[2].decode()
+                assert call('POST', 'agents/researcher/enabled', {'enabled': True}, coded['data']['revision'])[0] == 200
+                def profile_probe(agent_id):
+                    status, _, raw = request(port, 'POST', '/api/v1/sessions',
+                        body=json.dumps({'project_id': 'default', 'agent_id': agent_id,
+                            'title': 'Generated prompt probe', 'permission_profile': 'full-access'}).encode(), headers={'Content-Type': 'application/json'})
+                    assert status == 201, raw
+                    sid = json.loads(raw)['data']['id']
+                    status, _, raw = request(port, 'POST', f'/api/v1/projects/default/sessions/{sid}/runs',
+                        body=json.dumps({'prompt': 'EXTENSION profile probe', 'timeout_ms': 5000}).encode(), headers={'Content-Type': 'application/json'})
+                    assert status == 202, raw
+                    run = json.loads(raw)['data']; deadline = time.monotonic() + 8
+                    while not run['terminal'] and time.monotonic() < deadline:
+                        time.sleep(.05); run = json.loads(request(port, 'GET', '/api/v1/runs/' + run['id'])[2])['data']
+                    assert run['state'] == 'succeeded', run
+                    return SkillModel.profile_payloads[-1]
+                generated = profile_probe('agent.researcher')
+                assert 'CODE GENERATED AGENT INSTRUCTIONS' in json.dumps(generated), generated
+                assert {tool['name'] for tool in generated['tools']} == {'read', 'ask_user'}, generated
+                # Restoring ordinary mode works even with a C implementation present.
+                status, ordinary = call('PUT', 'agents/researcher', {'content': basic}, coded['data']['revision'])
+                assert status == 200, ordinary
+                generated = profile_probe('agent.researcher')
+                assert 'CODE GENERATED AGENT INSTRUCTIONS' not in json.dumps(generated), generated
+                assert 'careful coding and general task Agent' in json.dumps(generated), generated
+                (code_directory / 'generated.c').unlink()
+                assert call('DELETE', 'agents/researcher', revision=basic_item['data']['revision'])[0] == 200
+                c_profile = default_text.replace('code: false', 'code: true')
+                status, default = call('GET', 'agents/default')
+                status, c_item = call('PUT', 'agents/default', {'content': c_profile}, default['data']['revision'])
+                assert status == 200, c_item
+                live = json.loads(request(port, 'GET', '/api/v1/agents')[2])['data']['items']
+                main_agent = next(agent for agent in live if agent['id'] == 'mdo.default')
+                # The base prompt stays code-owned, while the UI tool list remains effective.
+                assert main_agent['tools'] == ['read', 'grep', 'user.fixture'], main_agent
+                assert call('DELETE', 'agents/default', revision=c_item['data']['revision'])[0] == 200
                 assert call('DELETE', 'tools/fixture', revision=tool_revision)[0] == 200
                 assert 'user.fixture' not in tool_catalog()
                 print('extension HTTP probe: PASS')
