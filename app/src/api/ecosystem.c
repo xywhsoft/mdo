@@ -32,7 +32,8 @@ static xvalue* EcoService(cstr path,cstr method,const xvalue* body,MdoAccountLea
     headers[0]=(XS_FetchHeader){"Authorization",auth};headers[1]=(XS_FetchHeader){"Accept","application/json"};headers[2]=(XS_FetchHeader){"Content-Type","application/json"};
     req.Size=sizeof(req);req.Version=XS_FETCH_REQUEST_VERSION;req.Url=url;req.Method=method;req.Headers=headers;req.HeaderCount=3;req.Body=json;req.BodySize=size;
     req.Timeout=20000000;req.IdleTimeout=10000000;req.MaxBodyBytes=MDO_PACKAGE_LIMIT+65536;req.Cancel=lease->Cancel;resp.Size=sizeof(resp);
-    if(!xsFetch(&req,&resp))goto done;*status=resp.Status;
+    if(!xsFetch(&req,&resp))goto done;
+    *status=resp.Status;
     if(!resp.Body||!xrtUtf8Valid((xstrview){(cstr)resp.Body,resp.BodySize},NULL))goto done;
     xjsonreadconfig limits;xrtJsonReadConfigInit(&limits);limits.MaxInputBytes=MDO_PACKAGE_LIMIT+65536;limits.MaxDepth=16;limits.MaxValues=24000;limits.MaxStringBytes=MDO_PACKAGE_LIMIT;
     envelope=xrtJsonRead((xstrview){(cstr)resp.Body,resp.BodySize},&limits);int64 code=-1;
@@ -50,7 +51,8 @@ static bool EcoHandleInput(MdoApiContext* c,xvalue* input)
         const xvalue* v=xrtValueObjectGet(input,XRT_STR_LITERAL("before"));if(v&&!MdoPackageNumber(input,"before",&before))valid=false;if(before<0)valid=false;
         if(kind&&kind[0]&&!MdoPackageKind(kind))valid=false;
         size_t n=0;char* encoded=xrtPercentEncodeNew(query?query:"",query?strlen(query):0,xrtStrView(""),&n);
-        if(!encoded)valid=false;snprintf(path,sizeof(path),"/api/v1/mdo/ecosystem/packages?q=%s&kind=%s%s%s%lld",encoded?encoded:"",kind?kind:"",!strcmp(action,"mine")?"&mine=1":"",before?"&before=":"&unused=",(long long)before);xrtFree(encoded);
+        if(!encoded)valid=false;
+        snprintf(path,sizeof(path),"/api/v1/mdo/ecosystem/packages?q=%s&kind=%s%s%s%lld",encoded?encoded:"",kind?kind:"",!strcmp(action,"mine")?"&mine=1":"",before?"&before=":"&unused=",(long long)before);xrtFree(encoded);
     }else if(valid&&(!strcmp(action,"detail")||!strcmp(action,"latest")||!strcmp(action,"install")||!strcmp(action,"history"))){valid=MdoPackageNumber(input,"id",&id)&&id>0;
         int64 before=0;if(xrtValueObjectGet(input,XRT_STR_LITERAL("before"))&&(!MdoPackageNumber(input,"before",&before)||before<0))valid=false;
         snprintf(path,sizeof(path),"/api/v1/mdo/ecosystem/%s?id=%lld%s&before=%lld",!strcmp(action,"history")?"history":"package",(long long)id,!strcmp(action,"latest")?"&latest=1":"",(long long)(before?before:INT64_MAX));
@@ -103,7 +105,8 @@ static xtaskoutcome EcoApiRun(xcancel* cancel,ptr value,xtaskvalue* out)
 }
 void MdoApiEcosystemUnit(void)
 {
-    if(!EcoApi.Lock)return;xrtMutexLock(EcoApi.Lock);EcoApi.Stopping=true;xtaskpool* pool=EcoApi.Pool;xrtMutexUnlock(EcoApi.Lock);
+    if(!EcoApi.Lock)return;
+    xrtMutexLock(EcoApi.Lock);EcoApi.Stopping=true;xtaskpool* pool=EcoApi.Pool;xrtMutexUnlock(EcoApi.Lock);
     if(pool){xrtTaskPoolCancel(pool);xrtTaskPoolWait(pool);xrtTaskPoolDestroy(pool);}
     xrtMutexDestroy(EcoApi.Lock);memset(&EcoApi,0,sizeof(EcoApi));
 }

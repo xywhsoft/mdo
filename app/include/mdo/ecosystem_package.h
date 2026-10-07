@@ -49,7 +49,8 @@ static bool MdoPackagePath(const char* path)
         size_t b=strcspn(lower,".");lower[b]=0;
         if(!strcmp(lower,"con")||!strcmp(lower,"prn")||!strcmp(lower,"aux")||!strcmp(lower,"nul")||
            (b==4&&(!strncmp(lower,"com",3)||!strncmp(lower,"lpt",3))&&lower[3]>='1'&&lower[3]<='9'))return false;
-        if(!slash)break;p=slash+1;
+        if(!slash)break;
+        p=slash+1;
     }return true;
 }
 static bool MdoPackageSamePath(const char* a,const char* b)

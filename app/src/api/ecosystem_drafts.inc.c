@@ -43,7 +43,8 @@ static xvalue* EcoDraftList(void)
         ok=ok&&xrtValueArrayAppend(items,row);xrtValueRelease(row);xrtValueRelease(doc);
         if(!ok||xrtValueCount(items)>ECO_DRAFT_COUNT){ok=false;break;}
     }
-    if(next==XDIR_NEXT_ERROR)ok=false;xrtDirClose(dir);if(!ok){xrtValueRelease(items);return NULL;}return items;
+    if(next==XDIR_NEXT_ERROR)ok=false;
+    xrtDirClose(dir);if(!ok){xrtValueRelease(items);return NULL;}return items;
 }
 static bool EcoDraftAction(MdoApiContext* c,const xvalue* input)
 {

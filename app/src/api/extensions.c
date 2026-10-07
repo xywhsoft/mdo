@@ -196,7 +196,8 @@ static bool ExtensionList(MdoApiContext* C,cstr Kind)
         if (!(Entry.Flags&XDIR_ENTRY_UTF8)) continue;
         if (Skill) { if (Entry.Info.Type!=XFILE_TYPE_DIRECTORY) continue; }
         else { if (Entry.Info.Type!=XFILE_TYPE_FILE || Length<=SuffixSize ||
-            memcmp(Entry.Name.Data+Length-SuffixSize,Suffix,SuffixSize)) continue; Length-=SuffixSize; }
+            memcmp(Entry.Name.Data+Length-SuffixSize,Suffix,SuffixSize)) continue;
+            Length-=SuffixSize; }
         if (Length==0u || Length>64u) continue;
         memcpy(Id,Entry.Name.Data,Length); Id[Length]=0;
         if (!MdoExtensionIdValid(Id)) continue;

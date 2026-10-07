@@ -10,7 +10,8 @@ static bool EcoLocalPath(cstr kind,cstr id,char path[256])
 {
     if(!MdoPackageKind(kind)||!MdoExtensionIdValid(id)||(!strcmp(kind,"agents")&&!strcmp(id,"default")))return false;
     if(!strcmp(kind,"c-agents")||!strcmp(kind,"c-subagents"))snprintf(path,256,"modules/%s/%s.c",!strcmp(kind,"c-agents")?"agents":"subagents",id);
-    else ExtensionPath(kind,id,path);return true;
+    else ExtensionPath(kind,id,path);
+    return true;
 }
 static bool EcoLocalAllowed(cstr path)
 {
@@ -35,7 +36,8 @@ bool MdoEcosystemRecover(void)
     for(size_t i=0;ok&&i<xrtValueCount(files);i++){const xvalue* f=xrtValueArrayGet(files,i);cstr path=MdoPackageText(f,"path",255);
         const xvalue* old=xrtValueObjectGet(f,XRT_STR_LITERAL("old"));ok=old&&xrtValueType(old)!=XVALUE_NULL?EcoLocalPut(path,old):MdoHomeRemove(path,false);}
     if(ok){const xvalue* old=xrtValueObjectGet(journal,XRT_STR_LITERAL("receipts"));ok=old&&xrtValueType(old)==XVALUE_OBJECT&&EcoLocalSave(ECO_RECEIPTS,old);}
-    if(ok)ok=MdoHomeRemove(ECO_JOURNAL,false);xrtValueRelease(journal);return ok;
+    if(ok)ok=MdoHomeRemove(ECO_JOURNAL,false);
+    xrtValueRelease(journal);return ok;
 }
 static bool EcoLocalReload(void)
 {return MdoModuleManagerReload()&&MdoSkillManagerReload()&&MdoMcpManagerReload();}
@@ -84,7 +86,8 @@ static bool EcoLocalUnchanged(const xvalue* owned)
     if(!MdoHomeExternalStat(path,&exists,&info)||!exists||info.Type!=XFILE_TYPE_FILE||!(info.Available&XFILE_INFO_SIZE)||info.Size>MDO_EXTENSION_TEXT_LIMIT)return false;
     xfile file=MdoHomeOpenRead(path);size_t size=(size_t)info.Size;bytes data=xrtMalloc(size+1);char hash[65];
     bool same=file&&data&&xrtReadFull(file,data,size,NULL)&&MdoExtensionHashBytes(data,size,hash)&&!strcmp(hash,expected);
-    if(file)xrtClose(file);xrtFree(data);return same;
+    if(file)xrtClose(file);
+    xrtFree(data);return same;
 }
 static bool EcoLocalSkillPrefix(cstr path,char prefix[256])
 {
@@ -145,7 +148,8 @@ static bool EcoLocalApply(const xvalue* entry,bool uninstall,char error[1024])
         ok=ok&&MdoApiValueSetString(record,"key",key)&&MdoApiValueSetString(record,"source",local?"local":"store")&&xrtValueObjectSet(record,XRT_STR_LITERAL("manifest"),manifest);
         xvalue* refs=xrtValueArray();const xvalue* rs=xrtValueObjectGet(package,XRT_STR_LITERAL("resources"));
         for(size_t i=0;ok&&i<xrtValueCount(rs);i++){const xvalue* r=xrtValueArrayGet(rs,i);xvalue* ref=xrtValueObject();ok=ref&&xrtValueObjectSet(ref,XRT_STR_LITERAL("kind"),xrtValueObjectGet(r,XRT_STR_LITERAL("kind")))&&xrtValueObjectSet(ref,XRT_STR_LITERAL("id"),xrtValueObjectGet(r,XRT_STR_LITERAL("id")))&&xrtValueArrayAppend(refs,ref);xrtValueRelease(ref);}
-        if(ok)ok=xrtValueObjectSet(record,XRT_STR_LITERAL("resources"),refs);xrtValueRelease(refs);
+        if(ok)ok=xrtValueObjectSet(record,XRT_STR_LITERAL("resources"),refs);
+        xrtValueRelease(refs);
         for(size_t i=0;ok&&i<xrtValueCount(files);i++){const xvalue* f=xrtValueArrayGet(files,i);if(xrtValueType(xrtValueObjectGet(f,XRT_STR_LITERAL("new")))==XVALUE_NULL)continue;
             xvalue* item=xrtValueObject();ok=item&&xrtValueObjectSet(item,XRT_STR_LITERAL("path"),xrtValueObjectGet(f,XRT_STR_LITERAL("path")))&&xrtValueObjectSet(item,XRT_STR_LITERAL("sha256"),xrtValueObjectGet(f,XRT_STR_LITERAL("sha256")))&&xrtValueArrayAppend(inventory,item);xrtValueRelease(item);}
         if(ok)ok=xrtValueObjectSet(record,XRT_STR_LITERAL("files"),inventory)&&xrtValueObjectSet(next,xrtStrView(key),record);}
@@ -173,7 +177,8 @@ bool MdoApiEcosystemLocal(MdoApiContext* c,const xvalue* input)
            xrtValueObjectSet(entry,XRT_STR_LITERAL("package"),package)&&MdoApiValueSetString(entry,"source","local")&&
            MdoApiValueSetString(entry,"author","")&&MdoApiValueSetUInt(entry,"id",0)&&MdoApiValueSetUInt(entry,"owner",0)&&MdoApiValueSetString(entry,"sha256",hash);
         const char* keys[]={"slug","name","version"};for(size_t i=0;ok&&i<3;i++)ok=xrtValueObjectSet(entry,xrtStrView(keys[i]),xrtValueObjectGet(manifest,xrtStrView(keys[i])));
-        if(ok)ok=EcoLocalApply(entry,false,error);xrtFree(json);xrtValueRelease(entry);
+        if(ok)ok=EcoLocalApply(entry,false,error);
+        xrtFree(json);xrtValueRelease(entry);
         if(!ok&&!error[0])snprintf(error,sizeof(error),"Invalid local package");
         ok=ok?MdoApiReplySuccessTake(c,200,xrtValueObject(),NULL):MdoApiReplyError(c,409,"ecosystem_import_failed",error,NULL);
     }
@@ -184,7 +189,8 @@ bool MdoApiEcosystemLocal(MdoApiContext* c,const xvalue* input)
             while((next=xrtDirNext(dir,&entry))==XDIR_NEXT_ITEM){size_t n=entry.Name.Size;if(entry.Info.Type!=XFILE_TYPE_FILE||n<3||n>66||memcmp(entry.Name.Data+n-2,".c",2))continue;
                 char id[65];memcpy(id,entry.Name.Data,n-2);id[n-2]=0;if(!MdoExtensionIdValid(id))continue;
                 xvalue* item=xrtValueObject();ok=item&&MdoApiValueSetString(item,"kind",k?"c-subagents":"c-agents")&&MdoApiValueSetString(item,"id",id)&&MdoApiValueSetString(item,"name",id)&&xrtValueArrayAppend(items,item);xrtValueRelease(item);if(!ok)break;}
-            if(next==XDIR_NEXT_ERROR)ok=false;xrtDirClose(dir);
+            if(next==XDIR_NEXT_ERROR)ok=false;
+            xrtDirClose(dir);
         }
         if(ok){xvalue* data=xrtValueObject();xrtValueObjectSet(data,XRT_STR_LITERAL("items"),items);ok=MdoApiReplySuccessTake(c,200,data,NULL);}
         else ok=MdoApiReplyError(c,503,"ecosystem_export_failed","Cannot enumerate custom C profiles",NULL);
@@ -198,12 +204,14 @@ bool MdoApiEcosystemLocal(MdoApiContext* c,const xvalue* input)
             ok=content&&resource&&MdoApiValueSetString(resource,"kind",kind)&&MdoApiValueSetString(resource,"id",id);
             if(ok&&!strcmp(kind,"mcp")){xvalue* doc=xrtJsonParse(xrtStrView(content));xvalue* transport=(xvalue*)xrtValueObjectGet(doc,XRT_STR_LITERAL("transport"));const char* keys[]={"environment","headers"};size_t index=0;
                 ok=doc&&transport;for(size_t k=0;ok&&k<2;k++){const xvalue* values=xrtValueObjectGet(transport,xrtStrView(keys[k]));for(size_t j=0;ok&&j<xrtValueCount(values);j++){xvalue* v=(xvalue*)xrtValueArrayGet(values,j);char placeholder[24];snprintf(placeholder,sizeof(placeholder),"input:%zu",index++);ok=MdoApiValueSetString(v,"secret_ref",placeholder);}}
-                if(ok)xrtValueObjectRemove(transport,XRT_STR_LITERAL("working_directory"));char* redacted=ok?xrtJsonStringify(doc,true,NULL):NULL;xrtValueRelease(doc);xrtFree(content);content=redacted;ok=content!=NULL;
+                if(ok)xrtValueObjectRemove(transport,XRT_STR_LITERAL("working_directory"));
+                char* redacted=ok?xrtJsonStringify(doc,true,NULL):NULL;xrtValueRelease(doc);xrtFree(content);content=redacted;ok=content!=NULL;
             }
             if(ok)ok=MdoApiValueSetString(resource,"content",content);
             if(ok&&!strcmp(kind,"skills")){xvalue* extras=xrtValueArray();char directory[160];bool external=false;xfileinfo info;size_t total=0;snprintf(directory,sizeof(directory),"skills/%s",id);
                 ok=extras&&MdoHomeExternalStat(directory,&external,&info)&&ExtensionBundleFiles(directory,"",external,extras,&total,0)&&xrtValueObjectSet(resource,XRT_STR_LITERAL("files"),extras);xrtValueRelease(extras);}
-            if(ok)ok=xrtValueArrayAppend(resources,resource);xrtFree(content);xrtValueRelease(resource);
+            if(ok)ok=xrtValueArrayAppend(resources,resource);
+            xrtFree(content);xrtValueRelease(resource);
         }
         if(ok){xvalue* out=xrtValueObject();xrtValueObjectSet(out,XRT_STR_LITERAL("resources"),resources);ok=MdoApiReplySuccessTake(c,200,out,NULL);}
         else ok=MdoApiReplyError(c,422,"ecosystem_export_failed","Select 1–16 valid resources. Default Agent must be duplicated before publishing; Skill export is limited to 128 KiB of attachments.",NULL);
