@@ -1826,5 +1826,8 @@
   "account.searchAllowance": "Лимит веб-поиска",
   "account.searchesRemaining": "Доступно {remaining} из {limit} поисков",
   "account.searchesUsed": "Использовано сегодня: {count}",
-  "account.searchReset": "Сброс: {time}"
+  "account.searchReset": "Сброс: {time}",
+  "account.sharedAllowance": "Общий лимит моделей",
+  "account.standardTokensRemaining": "Осталось {remaining} / {limit} базовых токенов",
+  "account.modelEquivalent": "{model} · сейчас {weight}× · до {count} токенов"
 }

@@ -125,10 +125,13 @@ export function createAccount({ navigation, onModelsChange = () => {} }) {
     for (const q of allowance.quotas) {
       const counts = q.unlimited ? copy("tokensUsed", { count: q.used_tokens.toLocaleString() }) :
         copy("tokensRemaining", { remaining: q.remaining_tokens.toLocaleString(), limit: q.limit_tokens.toLocaleString() });
-      const row = quotaRow(q, copy("modelRemaining", { model: q.title }));
+      const title = q.models ? copy("sharedAllowance") : q.title;
+      const row = quotaRow({ ...q, title }, copy("modelRemaining", { model: title }));
       row.title = counts + " · " + copy("tokenReset");
       if (!compact) {
-        row.append(text("p", counts, "account-note"));
+        row.append(text("p", q.models && !q.unlimited ? copy("standardTokensRemaining", { remaining: q.remaining_tokens.toLocaleString(), limit: q.limit_tokens.toLocaleString() }) : counts, "account-note"));
+        for (const model of q.models || []) row.append(text("p", copy("modelEquivalent", { model: model.title, weight: model.token_weight_bps / 10000,
+          count: model.unlimited ? copy("unlimited") : model.available_model_tokens.toLocaleString() }), "account-note"));
         if (q.reserved_tokens) row.append(text("p", copy("tokensReserved", { count: q.reserved_tokens.toLocaleString() }), "account-note"));
       }
       parent.append(row);

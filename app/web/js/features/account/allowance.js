@@ -6,7 +6,7 @@ export function allowanceView(value, now = Date.now() / 1000) {
   const group = vip ? "vip" : value.group_id === "vip" ? "free" : value.group_id || "free";
   const stale = Boolean(value.plan_id && value.plan_expires_at <= now) ||
     !Number.isSafeInteger(value.updated_at) || now - value.updated_at > 90 || value.updated_at > now + 60;
-  const quotas = value.daily_quotas.flatMap(q => {
+  const modelQuotas = value.daily_quotas.flatMap(q => {
     if (!q || typeof q.model_id !== "string" || typeof q.title !== "string") return [];
     if (![q.used_tokens, q.reserved_tokens, q.resets_at].every(n => Number.isSafeInteger(n) && n >= 0)) return [];
     const unlimited = q.unlimited === true;
@@ -17,6 +17,17 @@ export function allowanceView(value, now = Date.now() / 1000) {
       percentText: ratio === null ? "∞" : ratio > 0 && ratio < 1 ? "<1%" : `${Math.floor(ratio)}%`,
       stale: stale || q.resets_at <= now }];
   });
+  // Render each shared pot once. Model equivalents describe the SAME balance,
+  // never independent grants. Unweighted servers retain their previous view.
+  const quotas = [], pools = new Map();
+  for (const q of modelQuotas) {
+    if (!q.token_pool) { quotas.push(q); continue; }
+    if (typeof q.token_pool !== "string" || ![q.token_weight_bps, q.base_token_weight_bps, q.token_peak_multiplier_bps]
+      .every(n => Number.isSafeInteger(n) && n > 0) || !q.unlimited && (!Number.isSafeInteger(q.available_model_tokens) || q.available_model_tokens < 0)) continue;
+    const previous = pools.get(q.token_pool);
+    if (previous) { previous.models.push(q); previous.stale ||= q.stale; }
+    else { const shared = { ...q, models: [q] }; pools.set(q.token_pool, shared); quotas.push(shared); }
+  }
   return { vip, group, quotas, stale };
 }
 

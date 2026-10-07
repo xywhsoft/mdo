@@ -1826,5 +1826,8 @@
   "account.searchAllowance": "Web search allowance",
   "account.searchesRemaining": "{remaining} / {limit} searches available",
   "account.searchesUsed": "Used today: {count} searches",
-  "account.searchReset": "Next reset: {time}"
+  "account.searchReset": "Next reset: {time}",
+  "account.sharedAllowance": "Shared model allowance",
+  "account.standardTokensRemaining": "{remaining} / {limit} standard tokens remaining",
+  "account.modelEquivalent": "{model} · {weight}× now · up to {count} tokens"
 }

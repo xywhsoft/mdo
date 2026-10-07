@@ -1826,5 +1826,8 @@
   "account.searchAllowance": "网络搜索额度",
   "account.searchesRemaining": "{remaining} / {limit} 次可用",
   "account.searchesUsed": "今日已用 {count} 次",
-  "account.searchReset": "下次重置：{time}"
+  "account.searchReset": "下次重置：{time}",
+  "account.sharedAllowance": "共享模型额度",
+  "account.standardTokensRemaining": "剩余 {remaining} / {limit} 基准 token",
+  "account.modelEquivalent": "{model} · 当前 {weight} 倍 · 最多可用 {count} token"
 }

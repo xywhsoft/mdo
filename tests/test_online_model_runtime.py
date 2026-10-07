@@ -72,9 +72,10 @@ def run(host):
             tool_calling=True,vision=False,reasoning_efforts='',output_limit_field='max_tokens',default_protocol='chat',sale_rates=rates,cost_rates=None,
             daily_tokens=100000000,member_daily_tokens=0,routes=[dict(protocol='chat',channel_id='fixture',wire_model='ornith-wire',priority=0)])
         mutate('/admin/model-gateway/model',model)
-        mutate('/admin/model-gateway/model',dict(model,id='glm-test',title='GLM test · VIP',member_only=True,member_daily_tokens=100000000,reasoning_efforts='low,high,max',
+        mutate('/admin/model-gateway/model',dict(model,id='glm-test',title='GLM test · VIP',member_only=True,member_daily_tokens=100000000,token_pool='glm',token_weight_bps=10000,token_peak_multiplier_bps=10000,reasoning_efforts='low,high,max',
             routes=[dict(protocol='chat',channel_id='fixture',wire_model='glm-test',priority=0)]))
-        mutate('/admin/billing/plan',dict(id='vip',title='VIP',duration_days=30,period_days=30,credit_micros=0,discount_bps=10000,concurrency_limit=2,model_ids='ornith-1.5-35b,glm-test',enabled=True))
+        mutate('/admin/model-gateway/model',dict(model,id='glm-flash-test',title='Flash test',member_only=True,member_daily_tokens=100000000,token_pool='glm',token_weight_bps=4000,token_peak_multiplier_bps=10000,routes=[dict(protocol='chat',channel_id='fixture',wire_model='glm-flash-test',priority=0)]))
+        mutate('/admin/billing/plan',dict(id='vip',title='VIP',duration_days=30,period_days=30,credit_micros=0,discount_bps=10000,concurrency_limit=2,model_ids='ornith-1.5-35b,glm-test,glm-flash-test',enabled=True))
         owner=call(port,'POST','/api/v1/register',dict(username='online_model_user',password='Fixture-only-2026'),status=201)[0]['data']['id']
         with tempfile.TemporaryDirectory(prefix='online-model-',dir=ROOT/'.build',ignore_cleanup_errors=True) as directory:
             site=Path(directory);shutil.copytree(ROOT/'app',site,dirs_exist_ok=True)
@@ -107,6 +108,9 @@ def run(host):
             app('POST','/account/refresh',{})
             state=wait(lambda v:v.get('model_allowance',{}).get('is_vip') and not v['busy'])
             assert any(q['unlimited'] for q in state['model_allowance']['daily_quotas'])
+            pooled=[q for q in state['model_allowance']['daily_quotas'] if q.get('token_pool')=='glm']
+            assert len(pooled)==2 and sorted(q['token_weight_bps'] for q in pooled)==[4000,10000]
+            assert next(q for q in pooled if q['model_id']=='glm-flash-test')['available_model_tokens']==250000000
             assert any(m['id']=='mdo-online.glm-test' for m in app('GET','/models')['models'])
             result=app('GET','/test-model?glm');assert result['success'],result
             # Exercise the real Agent callback route and streamed completion,

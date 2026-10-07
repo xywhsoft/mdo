@@ -28,6 +28,17 @@ static xvalue* MdoAccountAllowance(const xvalue* Data,uint64 Id)
             MdoAccountSetUInt(Q,"used_tokens",Used)&&MdoAccountSetUInt(Q,"reserved_tokens",Held)&&MdoAccountSetUInt(Q,"resets_at",Reset)&&MdoAccountSetBool(Q,"unlimited",Unlimited);
         if(Ok)Ok=xrtValueObjectSetNew(Q,XRT_STR_LITERAL("limit_tokens"),Unlimited?xrtValueNull():xrtValueUInt(Limit))&&
             xrtValueObjectSetNew(Q,XRT_STR_LITERAL("remaining_tokens"),Unlimited?xrtValueNull():xrtValueUInt(Remaining));
+        const xvalue* Pool=xrtValueObjectGet(Item,XRT_STR_LITERAL("token_pool"));
+        if(Ok&&Pool){cstr Name=MdoAccountText(Item,"token_pool",64);uint64 Weight,Base,Peak,Available=0;bool Active=false;
+            Ok=Name&&*Name&&MdoAccountGetUInt(xrtValueObjectGet(Item,XRT_STR_LITERAL("token_weight_bps")),&Weight)&&Weight>0&&Weight<=10000000&&
+                MdoAccountGetUInt(xrtValueObjectGet(Item,XRT_STR_LITERAL("base_token_weight_bps")),&Base)&&Base>0&&Base<=1000000&&
+                MdoAccountGetUInt(xrtValueObjectGet(Item,XRT_STR_LITERAL("token_peak_multiplier_bps")),&Peak)&&Peak>=10000&&Peak<=100000&&
+                xrtValueGetBool(xrtValueObjectGet(Item,XRT_STR_LITERAL("peak_active")),&Active)&&
+                (Unlimited||(MdoAccountGetUInt(xrtValueObjectGet(Item,XRT_STR_LITERAL("available_model_tokens")),&Available)&&Available<=9007199254740991ULL));
+            if(Ok)Ok=MdoAccountSetString(Q,"token_pool",Name)&&MdoAccountSetUInt(Q,"token_weight_bps",Weight)&&
+                MdoAccountSetUInt(Q,"base_token_weight_bps",Base)&&MdoAccountSetUInt(Q,"token_peak_multiplier_bps",Peak)&&MdoAccountSetBool(Q,"peak_active",Active)&&
+                xrtValueObjectSetNew(Q,XRT_STR_LITERAL("available_model_tokens"),Unlimited?xrtValueNull():xrtValueUInt(Available));
+        }
         if(Ok)Ok=xrtValueArrayAppendNew(List,Q);else xrtValueRelease(Q);
     }
     if(Ok)Ok=xrtValueObjectSetNew(Out,XRT_STR_LITERAL("daily_quotas"),List);else xrtValueRelease(List);
