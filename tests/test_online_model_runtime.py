@@ -83,10 +83,10 @@ def run(host):
             unity=site/'generated/mdo_unity.c';unity.write_text('#define MDO_ACCOUNT_SERVICE_ORIGIN '+json.dumps(origin)+'\n'+unity.read_text(encoding='utf-8'),encoding='utf-8')
             router=site/'src/api/router.c';source=router.read_text();source=source.replace('static const MdoApiRoute g_MdoApiRoutes[]',HOOK+'\nstatic const MdoApiRoute g_MdoApiRoutes[]').replace('static const MdoApiRoute g_MdoApiRoutes[] = {','static const MdoApiRoute g_MdoApiRoutes[] = {\n {"/api/v1/test-model",XHTTP_METHOD_GET,"GET",OnlineTestRoute,false},');router.write_text(source)
             native=launch(host,site,site/'mdo-home');ready(app_port,native,'/api/v1/account')
-            def app(method,path='/account',body=None):
+            def app(method,path='/account',body=None,status=200):
                 headers={}
                 if method!='GET':headers['X-Mdo-Write-Token']=request(app_port,'GET','/api/v1/account')[1]['X-Mdo-Write-Token']
-                return call(app_port,method,'/api/v1'+path,body,headers=headers)[0]['data']
+                return call(app_port,method,'/api/v1'+path,body,headers=headers,status=status)[0]['data']
             def wait(predicate):
                 end=time.monotonic()+25
                 while time.monotonic()<end:
@@ -108,6 +108,20 @@ def run(host):
             assert any(q['unlimited'] for q in state['model_allowance']['daily_quotas'])
             assert any(m['id']=='mdo-online.glm-test' for m in app('GET','/models')['models'])
             result=app('GET','/test-model?glm');assert result['success'],result
+            # Exercise the real Agent callback route and streamed completion,
+            # rather than only the direct model adapter above.
+            Upstream.agent_mode=True
+            session=app('POST','/sessions',dict(project_id='default',title='Online agent fixture',agent_id='mdo.default',
+                model_id='mdo-online.glm-test',protocol='openai-chat-completions',reasoning_effort='high',max_output_tokens=128),status=201)
+            route='/projects/default/sessions/'+session['id']
+            run=app('POST',route+'/runs',dict(prompt='Return the fixture reply'),status=202)
+            end=time.monotonic()+10
+            while time.monotonic()<end:
+                result=app('GET','/runs/'+str(run['id']))
+                if result['terminal']:break
+                time.sleep(.1)
+            assert result['state']=='succeeded',result
+            Upstream.agent_mode=False
             app('POST','/account/logout',{});state=wait(lambda v:v['state']=='signed_out' and not v['busy'])
             assert 'model_allowance' not in state
             assert not any(m['id']=='mdo-online.glm-test' for m in app('GET','/models')['models'])
