@@ -120,6 +120,7 @@ def main():
                 assert 'user.fixture' in tool_catalog()
                 assert call('PUT', 'tools/collision', {'content': tool_source.replace('user.fixture', 'read')}, 'new')[0] == 503
                 assert not (base / 'home/tools/collision.c').exists()
+                assert call('PUT', 'tools/alias-collision', {'content': tool_source.replace('user.fixture', 'Read')}, 'new')[0] == 503
                 empty = tool_source.replace('return Registrar->AddTool(Registrar->Context, &Tool, Error, Capacity);',
                     '(void)Registrar; (void)Tool; (void)Error; (void)Capacity; return MDO_RESULT_OK;')
                 assert call('PUT', 'tools/fixture', {'content': empty}, tool_revision)[0] == 503

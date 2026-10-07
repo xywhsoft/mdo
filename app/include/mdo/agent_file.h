@@ -3,6 +3,7 @@
 
 #include "modules.h"
 #include "prompt_file.h"
+#include "tool_catalog.h"
 
 typedef struct MdoAgentFile {
     mdo_agent_v1 Agent;
@@ -113,19 +114,11 @@ static inline bool MdoAgentFileParse(cstr Id, cstr Text, bool Main,
         MdoAgentFileList(Document, "tools", File->Tools, &File->Agent.ToolCount) &&
         MdoAgentFileList(Document, "skills", File->Skills, &File->Agent.SkillCount);
     for (i = 0u; Ok && i < File->Agent.ToolCount; ++i) {
-        static const char* const Aliases[][2] = {
-            {"Read", "read"}, {"Grep", "grep"}, {"Glob", "glob"},
-            {"Bash", "exec"}, {"Edit", "edit"}, {"Write", "write"},
-            {"WebSearch", "web_search"}, {"WebFetch", "web_open"},
-            {"TodoWrite", "mdo.todo"}, {"Skill", "skill"}
-        };
-        size_t j;
-        for (j = 0u; j < sizeof(Aliases) / sizeof(Aliases[0]); ++j) {
-            if (strcmp(File->Tools[i], Aliases[j][0]) == 0) {
-                char* Replacement = xrtStrDup(Aliases[j][1]);
-                if (Replacement == NULL) { Ok = false; break; }
-                xrtFree(File->Tools[i]); File->Tools[i] = Replacement; break;
-            }
+        cstr Canonical=MdoBuiltinToolCanonicalId(File->Tools[i]);
+        if (strcmp(File->Tools[i],Canonical)) {
+            char* Replacement=xrtStrDup(Canonical);
+            if (!Replacement) { Ok=false; break; }
+            xrtFree(File->Tools[i]); File->Tools[i]=Replacement;
         }
     }
     File->Agent.Id = File->Id;

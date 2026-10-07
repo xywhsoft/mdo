@@ -11,7 +11,7 @@
 
 文件保存于 `mdo-home/tools/<id>.c`。ID 为 1–64 个小写字母、数字、点、短横线或下划线，不允许路径分隔符、连续点和 Windows 保留名。清单保存在源码 `app/include/mdo/tool_catalog.h`，没有另一份用户可改写的内建工具注册表。
 
-点击“新建”会生成可直接编译的 JSON 回显工具。先填写文件 ID，再修改 C 实现；未改过的模板会自动跟随文件 ID 更新工具名。建议工具 ID 使用 `user.<id>`，模块 ID 使用 `user.tools.<id>`。文件 ID 和导出的工具 ID 可以不同，模型和 Agent 工具配置使用导出的工具 ID。
+点击“新建”会生成可直接编译的 JSON 回显工具。先填写文件 ID，再修改 C 实现；未改过的模板会自动跟随文件 ID 更新工具名。建议工具 ID 使用 `user.<id>`，模块 ID 使用 `user.tools.<id>`。文件 ID 和导出的工具 ID 可以不同，模型和 Agent 工具配置使用导出的工具 ID。内建 ID 及兼容导入别名（如 `Read`、`Bash`）保留，避免导入 Agent 时指向不同工具。
 
 保存通过现有 TCC 与 Module ABI 编译和注册，不要求用户另装编译器，Windows 和 Android 使用相同源文件。单个管理文件最多 128 KiB，JSON 请求另有 256 KiB 上限。C 是进程内可信扩展，并非隔离沙箱；只导入已审阅的代码。
 

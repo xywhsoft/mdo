@@ -1431,7 +1431,7 @@ static bool MdoModulesValidateCatalog(MdoModuleCatalog* pCatalog,
     for ( i = 0u; i < pCatalog->ToolCount; ++i ) {
         size_t j;
         if (strncmp(pCatalog->Tools[i]->Owner->SourcePath, "/app/default-home/tools/", sizeof("/app/default-home/tools/") - 1u) == 0 &&
-            MdoBuiltinToolFind(pCatalog->Tools[i]->Id) != NULL) {
+            MdoBuiltinToolFind(MdoBuiltinToolCanonicalId(pCatalog->Tools[i]->Id)) != NULL) {
             (void)MdoModulesDiagnosticAdd(pDiagnostics, MDO_MODULE_DIAGNOSTIC_VALIDATE,
                 pCatalog->Tools[i]->Owner->SourcePath, pCatalog->Tools[i]->Owner->SourceHash,
                 "Custom tools cannot replace built-in tool IDs");

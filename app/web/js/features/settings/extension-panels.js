@@ -173,7 +173,7 @@ export function createExtensionPanels() {
     const editor = editing, target = targetKey();
     const raw = Array.isArray(value) ? value : String(value || "").replace(/^\[|\]$/g, "").replace(/["']/g, "").split(/[,\s]+/).filter(Boolean);
     const aliases = { Read: "read", Grep: "grep", Glob: "glob", Bash: "exec", Edit: "edit", Write: "write", WebSearch: "web_search", WebFetch: "web_open", TodoWrite: "mdo.todo", Skill: "skill" };
-    const chosen = new Set(raw.map(id => aliases[id] || id));
+    const chosen = new Set(raw.map(id => Object.hasOwn(aliases,id) ? aliases[id] : id));
     const group = element("fieldset", { className: "agent-tool-picker" }, [element("legend", { text: label("tools", "工具") })]);
     const inherit = element("input", { attrs: { type: "checkbox" } }); inherit.checked = chosen.size === 0;
     const filter = element("input", { attrs: { type: "search", placeholder: label("filterTools", "筛选工具"), "aria-label": label("filterTools", "筛选工具") } });

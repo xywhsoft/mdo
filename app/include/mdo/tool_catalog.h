@@ -51,4 +51,18 @@ static inline const MdoBuiltinTool* MdoBuiltinToolFind(cstr Id)
     return NULL;
 }
 
+/* Import compatibility names are reserved alongside their real tool IDs. */
+static inline cstr MdoBuiltinToolCanonicalId(cstr Id)
+{
+    static const char* const Aliases[][2] = {
+        {"Read","read"}, {"Grep","grep"}, {"Glob","glob"}, {"Bash","exec"},
+        {"Edit","edit"}, {"Write","write"}, {"WebSearch","web_search"},
+        {"WebFetch","web_open"}, {"TodoWrite","mdo.todo"}, {"Skill","skill"}
+    };
+    size_t i;
+    for (i=0u;i<sizeof(Aliases)/sizeof(Aliases[0]);++i)
+        if (!strcmp(Id,Aliases[i][0])) return Aliases[i][1];
+    return Id;
+}
+
 #endif
