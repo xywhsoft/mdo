@@ -26,6 +26,7 @@ static xatomic64 g_MdoApiFallbackId;
 static bool g_MdoApiInitialized;
 
 static const MdoApiRoute g_MdoApiRoutes[] = {
+    { "/api/v1/ecosystem", XHTTP_METHOD_GET | XHTTP_METHOD_POST, "GET, POST, OPTIONS", MdoApiEcosystemRoute, false },
     { "/api/v1/extensions/{kind}", XHTTP_METHOD_GET | XHTTP_METHOD_HEAD, "GET, HEAD, OPTIONS", MdoApiExtensionsRoute, false },
     { "/api/v1/extensions/{kind}/{id}", XHTTP_METHOD_GET | XHTTP_METHOD_HEAD | XHTTP_METHOD_PUT | XHTTP_METHOD_DELETE,
       "GET, HEAD, PUT, DELETE, OPTIONS", MdoApiExtensionsRoute, false },
@@ -417,7 +418,7 @@ bool MdoApiInit(void)
         return false;
     }
     if ( !MdoApiBackupUploadsInit() || !MdoApiBackupPreviewsInit() || !MdoApiBackupRestoresInit() || !MdoApiDownloadsInit() ||
-         !MdoApiImageDownloadsInit() || !MdoApiLiveInit() || !MdoApiExtensionsInit() || !MdoApiModelProbesInit() ) {
+         !MdoApiImageDownloadsInit() || !MdoApiLiveInit() || !MdoApiEcosystemInit() || !MdoApiExtensionsInit() || !MdoApiModelProbesInit() ) {
         MdoApiModelProbesUnit();
         MdoApiExtensionsUnit();
         MdoApiLiveUnit(); MdoApiLiveRelease();
@@ -439,6 +440,7 @@ void MdoApiUnit(void)
 {
     g_MdoApiInitialized = false;
     MdoApiModelProbesUnit();
+    MdoApiEcosystemUnit();
     MdoApiExtensionsUnit();
     MdoApiLiveUnit();
     MdoApiDownloadsUnit();

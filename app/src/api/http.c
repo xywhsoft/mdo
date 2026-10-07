@@ -128,7 +128,11 @@ static bool MdoApiReplyValue(MdoApiContext* pContext, uint16 Status,
         return MdoApiReplySerializationFailure(pContext, 500u);
     Json = xrtJsonStringify(pEnvelope, false, &JsonSize);
     xrtValueRelease(pEnvelope);
-    if ( Json == NULL || JsonSize > MDO_API_RESPONSE_MAX_BYTES ) {
+    /* Community source downloads are bounded separately from ordinary API
+     * envelopes; all other routes retain their existing small response cap. */
+    size_t Limit = xrtStrEqual(pContext->Target.Path,xrtStrView("/api/v1/ecosystem"))
+        ? 1152u * 1024u : MDO_API_RESPONSE_MAX_BYTES;
+    if ( Json == NULL || JsonSize > Limit ) {
         xrtFree(Json);
         return MdoApiReplySerializationFailure(pContext, 500u);
     }

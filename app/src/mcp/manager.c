@@ -446,7 +446,7 @@ static int MdoMcpSourceCompare(const void* Left, const void* Right)
 static bool MdoMcpDiscover(MdoMcpSource** ppSources, size_t* pCount,
     MdoMcpDiagnostics* pDiagnostics)
 {
-    xvfs Vfs = xsApplicationVfs();
+    xvfs Vfs = MdoHomeApplicationVfs();
     xdir Directory;
     xdirentry Entry;
     xdirnext Next;

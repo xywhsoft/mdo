@@ -495,7 +495,7 @@ static bool MdoModulesDiscoverDirectory(MdoModuleKind Kind, cstr Directory,
     cstr RelativeDirectory, MdoModuleSource** ppSources, size_t* pCount,
     size_t* pCapacity, MdoModuleDiagnostics* pDiagnostics)
 {
-    xvfs Vfs = xsApplicationVfs();
+    xvfs Vfs = MdoHomeApplicationVfs();
     xdir Dir;
     xdirentry Entry;
     xdirnext Next;
@@ -836,7 +836,7 @@ static MdoModuleGeneration* MdoModulesCompile(const MdoModuleSource* pSource,
     } EntryCast;
 
     *pRegister = NULL;
-    pBytes = xrtVfsReadAllLimit(xsApplicationVfs(), pSource->VirtualPath,
+    pBytes = xrtVfsReadAllLimit(MdoHomeApplicationVfs(), pSource->VirtualPath,
         MDO_MODULE_SOURCE_LIMIT, &iBytes);
     if ( pBytes == NULL || MdoModulesContainsZero(pBytes, iBytes) ) {
         const xerror* pError = xrtGetError();
@@ -861,8 +861,8 @@ static MdoModuleGeneration* MdoModulesCompile(const MdoModuleSource* pSource,
             pHeader, iHeader, pGeneration->SourceHash) ) goto memory_failed;
 
     xsTccConfigInit(&Config);
-    Config.ApplicationVfs = xsApplicationVfs();
-    Config.ApplicationRoot = xsAppPath();
+    Config.ApplicationVfs = MdoHomeApplicationVfs();
+    Config.ApplicationRoot = MdoHomeApplicationRoot();
     Config.Flags = XS_TCC_RESTRICT_HOST_SYMBOLS;
     pGeneration->Tcc = xsCreateTCCEx(&Config, &pTccError);
     if ( pGeneration->Tcc == NULL ) {
@@ -1810,7 +1810,7 @@ static MdoModuleCatalog* MdoModulesBuildCandidate(uint64 Generation,
     size_t pOrder[MDO_MODULE_COUNT_LIMIT];
     size_t i;
 
-    pHeader = xrtVfsReadAllLimit(xsApplicationVfs(),
+    pHeader = xrtVfsReadAllLimit(MdoHomeApplicationVfs(),
         "/app/generated/module-sdk/mdo/module.h",
         MDO_MODULE_HEADER_LIMIT, &iHeader);
     if ( pHeader == NULL ) {

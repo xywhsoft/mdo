@@ -21,6 +21,7 @@ typedef enum MdoHomeError {
 typedef struct MdoHomeState {
     xmutex* Lock;
     xvfs ApplicationVfs;
+    str ApplicationRoot;
     xvfsdisk OverlayDisk;
     xvfsmount OverlayMount;
     xroot Root;
@@ -405,6 +406,8 @@ bool MdoHomeInit(void)
     if ( g_MdoHome.Lock == NULL || ApplicationVfs == NULL ) goto fail;
     xrtVfsRef(ApplicationVfs);
     g_MdoHome.ApplicationVfs = ApplicationVfs;
+    g_MdoHome.ApplicationRoot = xrtStrDup(xsAppPath());
+    if (!g_MdoHome.ApplicationRoot) goto fail;
 
     if ( !MdoHomeCaptureBuiltinDefaults() ) goto fail;
 
@@ -455,6 +458,7 @@ void MdoHomeUnit(void)
     if ( g_MdoHome.Root != NULL ) (void)xrtRootClose(g_MdoHome.Root);
     if ( g_MdoHome.ApplicationVfs != NULL )
         xrtVfsDestroy(g_MdoHome.ApplicationVfs);
+    xrtFree(g_MdoHome.ApplicationRoot);
     xrtFree(g_MdoHome.Path);
     xrtFree(g_MdoHome.BuiltinDefaults);
     if ( g_MdoHome.Lock != NULL ) xrtMutexDestroy(g_MdoHome.Lock);
@@ -1090,3 +1094,7 @@ done:
 #include "home_import.inc.c"
 #include "home_purge.inc.c"
 #include "home_restore.inc.c"
+
+/* The Home lease and VFS mount have the same generation lifetime. */
+xvfs MdoHomeApplicationVfs(void) { return g_MdoHome.ApplicationVfs; }
+cstr MdoHomeApplicationRoot(void) { return g_MdoHome.ApplicationRoot; }

@@ -5,6 +5,7 @@
 
 #include "../../include/mdo/api.h"
 #include "profile.h"
+#include "../../include/mdo/ecosystem.h"
 
 #define MDO_API_RESPONSE_MAX_BYTES (256u * 1024u)
 #define MDO_API_REQUEST_MAX_BYTES (256u * 1024u)
@@ -109,6 +110,9 @@ bool MdoApiSessionBackupStart(MdoApiContext* Context, struct MdoSession* Session
 bool MdoApiSessionBackupRoute(MdoApiContext* Context);
 
 bool MdoApiBootstrapRoute(MdoApiContext* pContext);
+bool MdoApiEcosystemRoute(MdoApiContext* pContext);
+bool MdoApiEcosystemInit(void);
+void MdoApiEcosystemUnit(void);
 bool MdoApiAccountRoute(MdoApiContext* pContext);
 bool MdoApiRemoteRoute(MdoApiContext* Context);
 bool MdoApiReplySecretSuccessTake(MdoApiContext* Context, xvalue* Data);

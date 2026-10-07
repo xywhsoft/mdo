@@ -88,6 +88,7 @@
     "src/api/resources.c",
     "src/api/catalogs.c",
     "src/api/extensions.c",
+    "src/api/ecosystem.c",
     "src/api/state.c",
     "src/api/workspace_state.c",
     "src/api/pane_layout.c",

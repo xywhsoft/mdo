@@ -438,7 +438,7 @@ static bool MdoSkillsDiscover(MdoSkillSource** ppSources, size_t* pCount,
     MdoSkillSource* pSources = NULL;
     size_t Count = 0u;
     size_t Capacity = 0u;
-    xdir Dir = xrtVfsDirOpen(xsApplicationVfs(), VirtualRoot, XDIR_STAT);
+    xdir Dir = xrtVfsDirOpen(MdoHomeApplicationVfs(), VirtualRoot, XDIR_STAT);
     xdirentry Entry;
     xdirnext Next;
     char* Relative = NULL;
@@ -553,7 +553,7 @@ static xfile MdoSkillsOpen(const MdoSkillSource* pSource, cstr Path,
     } else {
         xrtFileOptionsInit(&Options);
         Options.Flags = XFILE_READ;
-        File = xrtVfsOpen(xsApplicationVfs(), Virtual, &Options);
+        File = xrtVfsOpen(MdoHomeApplicationVfs(), Virtual, &Options);
     }
     *pVirtualPath = Virtual;
     Virtual = NULL;
@@ -1006,7 +1006,7 @@ static bool MdoSkillsScanResources(const MdoSkillSource* Source,
         Source->RelativeDirectory : Source->VirtualDirectory,
         Prefix[0] ? "/" : "", Prefix);
     Dir = Source->External ? MdoHomeOpenDirectory(Directory, XDIR_STAT) :
-        xrtVfsDirOpen(xsApplicationVfs(), Directory, XDIR_STAT);
+        xrtVfsDirOpen(MdoHomeApplicationVfs(), Directory, XDIR_STAT);
     if (Dir == NULL) return false;
     while ((Next = xrtDirNext(Dir, &Item)) == XDIR_NEXT_ITEM) {
         char Path[MDO_SKILL_PATH_LIMIT + 1u];

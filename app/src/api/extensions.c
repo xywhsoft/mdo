@@ -5,6 +5,8 @@
 #include "../../include/mdo/skills.h"
 #include "../../include/mdo/mcp.h"
 #include "../../include/mdo/secrets.h"
+#include "../../include/mdo/ecosystem.h"
+#include "../../include/mdo/ecosystem_package.h"
 
 /* File-backed editors share only storage/HTTP mechanics. Runtime ownership,
  * transport, execution and permissions remain with their existing managers. */
@@ -183,7 +185,7 @@ static bool ExtensionList(MdoApiContext* C,cstr Kind)
     xvalue* Data=xrtValueObject(); xvalue* Items=xrtValueArray();
     size_t Count=0u; bool Ok=Data != NULL && Items != NULL;
     snprintf(Root,sizeof(Root),"/app/default-home/%s",Kind);
-    Dir=xrtVfsDirOpen(xsApplicationVfs(),Root,XDIR_STAT);
+    Dir=xrtVfsDirOpen(MdoHomeApplicationVfs(),Root,XDIR_STAT);
     if (Dir==NULL) {
         const xerror* E=xrtGetError();
         if (E && xrtErrorKind(E)==XERR_NOT_FOUND) xrtClearError(); else Ok=false;
@@ -508,7 +510,7 @@ static bool ExtensionBundleFiles(cstr Directory,cstr Prefix,bool External,
     if (Depth>8u) return false;
     snprintf(Root,sizeof(Root),"%s%s%s",Directory,Prefix[0]?"/":"",Prefix);
     if (External) Dir=MdoHomeOpenDirectory(Root,XDIR_STAT);
-    else { char Virtual[1280]; snprintf(Virtual,sizeof(Virtual),"/app/default-home/%s",Root); Dir=xrtVfsDirOpen(xsApplicationVfs(),Virtual,XDIR_STAT); }
+    else { char Virtual[1280]; snprintf(Virtual,sizeof(Virtual),"/app/default-home/%s",Root); Dir=xrtVfsDirOpen(MdoHomeApplicationVfs(),Virtual,XDIR_STAT); }
     if (!Dir) return false;
     while ((Next=xrtDirNext(Dir,&Item))==XDIR_NEXT_ITEM) {
         char Path[1025],Full[1200]; int Length;
@@ -550,6 +552,8 @@ static bool ExtensionBundle(MdoApiContext* C,cstr Id)
     }
     xrtValueRelease(Files); return MdoApiReplySuccessTake(C,200,Item,NULL);
 }
+
+#include "ecosystem_install.inc.c"
 
 bool MdoApiExtensionsRoute(MdoApiContext* C)
 {

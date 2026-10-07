@@ -1,5 +1,6 @@
 #include "../../include/mdo/distribution.h"
 #include <stdio.h>
+#include "../../include/mdo/ecosystem.h"
 #include <string.h>
 
 #include "../../include/mdo/approvals.h"
@@ -56,6 +57,10 @@ bool MdoBootstrapInit(XS_HostInfo* pHost)
         return g_MdoBootstrap.Stage == MDO_BOOTSTRAP_EXECUTOR_READY;
     if ( !MdoHomeInit() ) {
         MdoBootstrapFail("Home initialization failed");
+        return false;
+    }
+    if ( !MdoEcosystemRecover() ) {
+        MdoBootstrapFail("Extension installation recovery failed");
         return false;
     }
     if ( !MdoProjectLifecycleInit() ) {

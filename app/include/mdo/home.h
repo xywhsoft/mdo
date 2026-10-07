@@ -22,6 +22,10 @@ typedef struct MdoHomeSnapshot {
 bool MdoHomeInit(void);
 void MdoHomeUnit(void);
 bool MdoHomeGetSnapshot(MdoHomeSnapshot* pSnapshot);
+/* Generation-owned application view, including this Home's overlay. Worker
+ * threads must not fall back to xs's unscoped process VFS. Borrow until Unit. */
+xvfs MdoHomeApplicationVfs(void);
+cstr MdoHomeApplicationRoot(void);
 /* Freeze ordinary and native-path writes after an application consistency
  * failure. Does not create Home or repair data. Stop writers before Unit;
  * a fresh Init recovers storage before managers reload their state. */
