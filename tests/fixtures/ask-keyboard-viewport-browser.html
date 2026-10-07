@@ -54,7 +54,9 @@ const geometry = () => ({ shell: rect("#shell"),
   conversation: rect(".conversation"), dock: rect("#conversation-docks"),
   title: rect(".ask-dock h3"), question: rect(".ask-dock-question"),
   input: rect(".ask-dock-input"), submit: rect(".ask-dock-free button"),
-  toggle: rect(".decision-dock-expand"),
+  // Recovery and approval cards also own expansion controls but are hidden
+  // in this case. Measure the visible question's button, not the first card.
+  toggle: rect(".ask-dock .decision-dock-expand"),
   cramped: document.querySelector(".composer-region").hasAttribute("data-decision-cramped"),
   expanded: document.querySelector(".composer-region").hasAttribute("data-decision-expanded"),
   compact: shell.hasAttribute("data-compact-visual-viewport"),

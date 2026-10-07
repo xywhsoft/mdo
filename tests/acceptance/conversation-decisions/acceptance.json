@@ -1,0 +1,41 @@
+{
+  "date": "2026-10-08",
+  "model_network": "loopback fixture only",
+  "viewport": {
+    "width": 390,
+    "height": 844
+  },
+  "model_calls": 7,
+  "tool_calls": 6,
+  "deliberate_tool_failures": 1,
+  "final_error_events": 0,
+  "verified_file": "home/workspace/approval-proof.txt",
+  "verification_output": "FIXTURE_VERIFIED",
+  "checks": [
+    "actual packed UI displays and updates the todo to 2/2",
+    "answering the question resumes the same run",
+    "one-shot approval precedes each write and verification command",
+    "workspace boundary rejects the deliberately incorrect path",
+    "model receives the failed tool result and corrects the path",
+    "verification runs after the successful write; run finishes without a final error",
+    "small-screen decision expansion, new arrivals, keyboard and IME keep the active answer"
+  ],
+  "browser_probes": {
+    "ask-arrival-while-editing": true,
+    "conversation-todo-card": true,
+    "decision-expand-arrival": {
+      "passed": true,
+      "width": 390,
+      "height": 250
+    },
+    "ask-keyboard-viewport": {
+      "passed": true,
+      "keyboard_height": 250
+    },
+    "decision-escape-ime": true
+  },
+  "state_tests_passed": 18,
+  "limitations": [
+    "Browser viewport and synthetic keyboard checks do not replace Android device testing"
+  ]
+}

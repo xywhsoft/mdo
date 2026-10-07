@@ -5,6 +5,9 @@ leave loopback; the fixture uses a normal editable model and a separate Home.
 Prompts: retry (two 429s), partial (one interrupted draft), quota (daily limit),
 stop (long Retry-After), continue (successful next turn). The editable fixture
 model accepts images, so attachment/edit/fork checks use the same environment.
+With --permission balanced, decisions updates a todo, asks a question, then
+attempts a write outside its workspace (still inside the disposable directory)
+and corrects the rejected path. Both writes require normal one-shot approval.
 """
 import argparse
 import json
@@ -13,6 +16,7 @@ from pathlib import Path
 import shutil
 import socket
 import subprocess
+import sys
 import threading
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -24,6 +28,7 @@ class Model(BaseHTTPRequestHandler):
     calls = {}
     markers = []
     lock = threading.Lock()
+    workspace = None
 
     def log_message(self, *_):
         pass
@@ -39,7 +44,8 @@ class Model(BaseHTTPRequestHandler):
         with self.lock:
             attempt = self.calls[prompt] = self.calls.get(prompt,0)+1
             self.markers.append({'prompt':prompt,'image_parts':images,
-                'user_messages':sum(row['role']=='user' for row in body['messages'])})
+                'user_messages':sum(row['role']=='user' for row in body['messages']),
+                'tool_results':sum(row['role']=='tool' for row in body['messages'])})
         if prompt in ('quota','stop') or (prompt=='retry' and attempt<=2):
             self.send_response(429)
             self.send_header('Content-Type','application/json')
@@ -55,15 +61,40 @@ class Model(BaseHTTPRequestHandler):
         self.send_response(200)
         self.send_header('Content-Type','text/event-stream')
         self.end_headers()
+        delta = {'role':'assistant','content':text}
+        finish = 'stop'
+        if prompt == 'decisions' and attempt <= 6:
+            name, arguments = [
+                ('mdo.todo', {'items':[
+                    {'text':'Inspect the fixture', 'done':True},
+                    {'text':'Verify the question and approval', 'done':False}]}),
+                ('ask_user', {'question':'Which fixture route should be checked?',
+                    'options':['Inspect locally','Continue carefully']}),
+                ('write', {'path':str(self.workspace/'approval-proof.txt'),
+                    'content':'mdo decision fixture\n'}),
+                ('write', {'path':'approval-proof.txt',
+                    'content':'mdo decision fixture\n'}),
+                ('exec', {'argv':[sys.executable,'-c',
+                    "from pathlib import Path; "
+                    "assert Path('approval-proof.txt').read_text() == 'mdo decision fixture\\n'; "
+                    "print('FIXTURE_VERIFIED')"], 'timeout_ms':5000}),
+                ('mdo.todo', {'items':[
+                    {'text':'Inspect the fixture', 'done':True},
+                    {'text':'Verify the question and approval', 'done':True}]}),
+            ][attempt-1]
+            delta = {'role':'assistant','tool_calls':[{'index':0,
+                'id':f'fixture-decision-{attempt}','type':'function',
+                'function':{'name':name,'arguments':json.dumps(arguments)}}]}
+            finish = 'tool_calls'
         data = {'id':'fixture-response','model':'conversation-fixture',
-            'choices':[{'index':0,'delta':{'role':'assistant','content':text}}]}
+            'choices':[{'index':0,'delta':delta}]}
         self.wfile.write(('data: '+json.dumps(data)+'\n\n').encode())
         self.wfile.flush()
         if partial:
             self.close_connection = True
             self.connection.shutdown(socket.SHUT_RDWR)
             return
-        done = {'choices':[{'index':0,'delta':{},'finish_reason':'stop'}],
+        done = {'choices':[{'index':0,'delta':{},'finish_reason':finish}],
             'usage':{'prompt_tokens':10,'completion_tokens':4,'total_tokens':14}}
         self.wfile.write(('data: '+json.dumps(done)+'\n\ndata: [DONE]\n\n').encode())
 
@@ -73,11 +104,13 @@ def main():
     parser.add_argument('--packed',type=Path,required=True)
     parser.add_argument('--directory',type=Path,default=ROOT/'.build/conversation-retry-qa')
     parser.add_argument('--duration',type=int,default=1200)
+    parser.add_argument('--permission',choices=['read-only','balanced'],default='read-only')
     args=parser.parse_args()
     base=args.directory.resolve()
     if base.exists():
         raise RuntimeError('Choose a new disposable directory; existing data is retained')
     base.mkdir(parents=True)
+    Model.workspace = base
     exe=base/'mdo.exe';shutil.copy2(args.packed.resolve(),exe)
     model=ThreadingHTTPServer(('127.0.0.1',0),Model)
     thread=threading.Thread(target=model.serve_forever,daemon=True);thread.start()
@@ -117,7 +150,7 @@ def main():
         status,_,raw=request(port,'POST','/api/v1/sessions',
             body=json.dumps({'project_id':'default','title':'对话恢复浏览器验收',
                 'model_id':'conversation-fixture','reasoning_effort':'none',
-                'permission_profile':'read-only','max_output_tokens':2048}).encode(),
+                'permission_profile':args.permission,'max_output_tokens':2048}).encode(),
             headers={'Content-Type':'application/json'})
         assert status==201,raw
         session=json.loads(raw)['data']['id']
