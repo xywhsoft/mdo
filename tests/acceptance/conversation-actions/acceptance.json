@@ -1,0 +1,45 @@
+{
+  "date": "2026-10-08",
+  "model_network": "loopback fixture only",
+  "calls": {
+    "image": 1,
+    "edited-image": 2
+  },
+  "requests": [
+    {
+      "prompt": "image",
+      "image_parts": 1,
+      "user_messages": 1
+    },
+    {
+      "prompt": "edited-image",
+      "image_parts": 1,
+      "user_messages": 1
+    },
+    {
+      "prompt": "edited-image",
+      "image_parts": 1,
+      "user_messages": 1
+    }
+  ],
+  "final_error_events": 0,
+  "original_final_reply": "FIXTURE_OK: image",
+  "branch_final_reply": "FIXTURE_OK: edited-image",
+  "saved_draft": {
+    "text": "unsent-draft",
+    "image_count": 1
+  },
+  "checks": [
+    "image sends and displays with its original filename",
+    "fork preserves reply, attachment and editable model profile",
+    "editing the fork keeps its image and leaves the original reply intact",
+    "retry replaces the fork reply and carries one image once",
+    "unsent text and image survive switching away, back and page reload",
+    "model catalogue or selection loading does not claim images unsupported",
+    "loaded text-only models still warn; loaded vision models restore the picker"
+  ],
+  "limitations": [
+    "clipboard contents and completed Markdown download could not be confirmed by the in-app browser connector",
+    "Android real-device interaction remains pending"
+  ]
+}

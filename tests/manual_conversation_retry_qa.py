@@ -3,7 +3,8 @@
 Run this alongside a browser pointed at the printed URL. Model requests never
 leave loopback; the fixture uses a normal editable model and a separate Home.
 Prompts: retry (two 429s), partial (one interrupted draft), quota (daily limit),
-stop (long Retry-After), continue (successful next turn).
+stop (long Retry-After), continue (successful next turn). The editable fixture
+model accepts images, so attachment/edit/fork checks use the same environment.
 """
 import argparse
 import json
@@ -21,6 +22,7 @@ from test_api_runtime import ROOT, free_port, request, wait_ready
 
 class Model(BaseHTTPRequestHandler):
     calls = {}
+    markers = []
     lock = threading.Lock()
 
     def log_message(self, *_):
@@ -30,8 +32,14 @@ class Model(BaseHTTPRequestHandler):
         body = json.loads(self.rfile.read(int(self.headers['Content-Length'])))
         prompt = next((row.get('content','') for row in reversed(body['messages'])
             if row['role']=='user'), '')
+        if isinstance(prompt,list):
+            prompt=''.join(part.get('text','') for part in prompt if part.get('type')=='text')
+        images=sum(part.get('type')=='image_url' for row in body['messages']
+            if isinstance(row.get('content'),list) for part in row['content'])
         with self.lock:
             attempt = self.calls[prompt] = self.calls.get(prompt,0)+1
+            self.markers.append({'prompt':prompt,'image_parts':images,
+                'user_messages':sum(row['role']=='user' for row in body['messages'])})
         if prompt in ('quota','stop') or (prompt=='retry' and attempt<=2):
             self.send_response(429)
             self.send_header('Content-Type','application/json')
@@ -98,6 +106,9 @@ def main():
             provider='conversation-fixture',builtin=False,free=False,editable=True,
             removable=True,protocols=['openai-chat-completions'],
             default_protocol='openai-chat-completions')
+        if 'media-input' not in item['capabilities']:
+            item['capabilities'].append('media-input')
+        item['attachments']=['image']
         config['providers'].append(provider);config['items'].append(item)
         status,_,raw=request(port,'PUT','/api/v1/settings/models',
             body=json.dumps({'schema_version':1,'patch':config}).encode(),
@@ -124,6 +135,7 @@ def main():
             except subprocess.TimeoutExpired: process.kill();process.wait()
         log.close();model.shutdown();model.server_close();thread.join(timeout=2)
         (base/'calls.json').write_text(json.dumps(Model.calls,indent=2),encoding='utf-8')
+        (base/'requests.json').write_text(json.dumps(Model.markers,indent=2),encoding='utf-8')
 
 
 if __name__=='__main__':

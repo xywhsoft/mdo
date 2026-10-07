@@ -207,12 +207,12 @@ export function createComposerImages({ composer, prompt, button, input, strip,
       className: "composer-image-uploading",
       text: t("image.removing", {}, "正在移除图片…"),
     }));
-    if (ids.length && !imageCapable()) strip.append(element("span", {
+    if (hasUnsupportedDraft()) strip.append(element("span", {
       className: "composer-image-unsupported",
       text: t("image.draftUnsupported", {},
         "当前模型不支持图片；切换模型或移除图片后再发送"),
     }));
-    button.disabled = !writable || uploading || removing;
+    button.disabled = !writable || uploading || removing || !currentModel();
     if (focusedKind && !removing) {
       const candidates = [...strip.querySelectorAll(focusedKind === "remove"
         ? ".composer-image-remove" : "[data-image-preview]")];
@@ -223,16 +223,25 @@ export function createComposerImages({ composer, prompt, button, input, strip,
     }
   }
 
-  function imageCapable() {
+  function currentModel() {
     const route = navigation.get();
     const session = sessionStore.get().data;
     // The editor may already target a different model for the next queued
     // message while the current run still owns the session's old model.
     const modelId = modelSelect?.value || (session?.id === route.sessionId &&
       session?.project_id === route.projectId ? session.model_id : "");
-    const model = modelsStore.get().data?.models?.find((item) =>
-      item.id === modelId);
-    return Boolean(Number(model?.attachments ?? 0) & 1);
+    return modelsStore.get().data?.models?.find((item) => item.id === modelId);
+  }
+
+  function imageCapable() {
+    return Boolean(Number(currentModel()?.attachments ?? 0) & 1);
+  }
+
+  function hasUnsupportedDraft() {
+    // A loading catalogue/selection is unknown, not a text-only model. Keep
+    // the saved images visible without flashing a false compatibility error.
+    const model = currentModel();
+    return ids.length > 0 && Boolean(model) && !(Number(model.attachments ?? 0) & 1);
   }
 
   async function runUpload(job) {
@@ -430,7 +439,7 @@ export function createComposerImages({ composer, prompt, button, input, strip,
     isUploading: () => uploadingCurrent() || removingCurrent(),
     hasInFlight: () => Boolean(uploadJobs.size || removals.size),
     supportsCurrentModel: imageCapable,
-    hasUnsupportedDraft: () => ids.length > 0 && !imageCapable(),
+    hasUnsupportedDraft,
     refresh: render,
     setWritable(value) { writable = Boolean(value); render(); },
   });

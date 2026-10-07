@@ -31,6 +31,7 @@ const models = [
   { id: "text", attachments: 0 },
   { id: "vision", attachments: 1 },
 ];
+let catalog = { models };
 const session = { id: "image", project_id: "qa", model_id: "text" };
 const errors = [];
 const uploads = [];
@@ -52,7 +53,7 @@ try {
   const images = createComposerImages({ composer, prompt, button, input, strip,
     modelSelect,
     navigation: { get: () => ({ projectId: "qa", sessionId: "image" }) },
-    modelsStore: { get: () => ({ data: { models } }) },
+    modelsStore: { get: () => ({ data: catalog }) },
     sessionStore: { get: () => ({ data: session }) },
     ensureSession: async () => { throw new Error("existing session expected"); },
     onChange() {}, onUploading() {}, onError(error) { errors.push(error.code); },
@@ -85,13 +86,33 @@ try {
   images.refresh();
   const restored = images.supportsCurrentModel() &&
     !strip.querySelector(".composer-image-unsupported");
+  catalog = null;
+  images.refresh();
+  const loadingCatalogueQuiet = button.disabled && !images.hasUnsupportedDraft() &&
+    !strip.querySelector(".composer-image-unsupported") && images.get()[0] === imageId;
+  catalog = { models };
+  modelSelect.value = "";
+  session.model_id = "";
+  images.refresh();
+  const loadingSelectionQuiet = button.disabled && !images.hasUnsupportedDraft() &&
+    !strip.querySelector(".composer-image-unsupported");
+  modelSelect.value = "text";
+  images.refresh();
+  const loadedTextWarns = !button.disabled && images.hasUnsupportedDraft() &&
+    Boolean(strip.querySelector(".composer-image-unsupported"));
+  modelSelect.value = "vision";
+  images.refresh();
+  const loadedVisionRestored = !button.disabled && images.supportsCurrentModel() &&
+    !images.hasUnsupportedDraft() && !strip.querySelector(".composer-image-unsupported");
   const passed = currentTextBlocked && deferredVisionAllowed && uploaded &&
     deferredTextBlocked && blockedPicker && restored &&
+    loadingCatalogueQuiet && loadingSelectionQuiet && loadedTextWarns && loadedVisionRestored &&
     document.documentElement.scrollWidth <= window.innerWidth;
   output.dataset.passed = String(passed);
   output.textContent = JSON.stringify({ passed, currentTextBlocked,
     deferredVisionAllowed, uploaded, deferredTextBlocked, blockedPicker,
-    restored, uploads, errors }, null, 2);
+    restored, loadingCatalogueQuiet, loadingSelectionQuiet, loadedTextWarns,
+    loadedVisionRestored, uploads, errors }, null, 2);
 } catch (error) {
   output.dataset.passed = "false";
   output.textContent = error.stack ?? String(error);
