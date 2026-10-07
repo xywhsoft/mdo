@@ -44,6 +44,7 @@ import { timelineStore, selectTimeline, clearTimeline, refreshSelectedTimeline, 
 import { todoStore, selectTodo, clearTodo } from "./state/todo.js";
 import { createTimelineView } from "./features/chat/timeline.js";
 import { createQueueGate } from "./features/chat/queue-gate.js";
+import { createRunStopController } from "./features/chat/run-stop-controller.js";
 import { createMessageEditDialog } from "./features/chat/message-edit-dialog.js";
 import { runMessageReplacement } from "./features/chat/message-replacement.js";
 import { createConversationSearch } from "./features/chat/conversation-search.js";
@@ -204,7 +205,21 @@ export async function boot() {
   let sessionWritable = true;
   let selectedSessionStatus = "active";
   let activeRun = null;
-  const stoppingRunIds = new Set();
+  const runStops = createRunStopController({ cancel: cancelRun, read: readRun,
+    canWrite: () => !purgeRecovery.isPaused() && !localServiceReconnecting &&
+      (!isRemoteTarget() || (targetState().connected && !targetState().runtimeChanged &&
+        targetState().selected.mode === "control")),
+    onChange: () => setRun(activeRun),
+    onAccepted: onRunStopAccepted,
+    onError(error, owner) {
+      if (error?.code === "run_stop_invalid_response")
+        error = localComposerError("error.invalidResponse", "", error.code);
+      const route = navigation.get();
+      if (route.projectId === owner.project_id && route.sessionId === owner.session_id)
+        showComposerError(error);
+      else toast(errorMessage(error), "error");
+    },
+  });
   let runMonitor = 0;
   let selectedKey = "";
   let selectedDraftKey = "";
@@ -1059,9 +1074,15 @@ export async function boot() {
   }
 
   function syncStopBusy() {
-    stop.disabled = isRemoteTarget() && (!targetState().connected || targetState().runtimeChanged || targetState().selected.mode === "view");
+    stop.disabled = purgeRecovery.isPaused() || (isRemoteTarget() &&
+      (targetState().runtimeChanged || targetState().selected.mode === "view"));
+    const phase = runStops.phase(activeRun?.id);
+    const label = phase === "waiting" ? t("shell.stopWaiting", {}, "连接恢复后停止任务")
+      : phase || activeRun?.cancel_requested ? t("task.stopping", {}, "正在停止…") : t("shell.stop");
+    stop.title = label;
+    stop.setAttribute("aria-label", label);
     stop.setAttribute("aria-disabled", String(Boolean(activeRun &&
-      (activeRun.cancel_requested || stoppingRunIds.has(activeRun.id)))));
+      (activeRun.cancel_requested || runStops.has(activeRun.id)))));
   }
 
   function setRun(run) {
@@ -1071,7 +1092,10 @@ export async function boot() {
     const guide = settingsStore.get().data?.composer?.submit_mode === "guide";
     const shown = run ?? { state: sessionWritable ? "idle" : selectedSessionStatus };
     runStatus.dataset.state = shown.state;
-    runStatus.lastElementChild.textContent = runStateText(shown.state);
+    const stopPhase = runStops.phase(activeRun?.id);
+    runStatus.lastElementChild.textContent = stopPhase === "waiting"
+      ? t("shell.stopWaiting", {}, "连接恢复后停止任务")
+      : stopPhase || activeRun?.cancel_requested ? t("task.stopping", {}, "正在停止…") : runStateText(shown.state);
     send.hidden = false;
     stop.hidden = !activeRun;
     syncStopBusy();
@@ -1301,10 +1325,12 @@ export async function boot() {
   subscribeTarget(state => {
     setRun(activeRun); syncRuntimeLabel();
     if (!isRemoteTarget()) return;
+    if (state.runtimeChanged) runStops.clear();
     if (state.connected && !targetConnected && !state.runtimeChanged) {
       if (composerError.dataset.code === "remote_offline") hideComposerError();
       void purgeRecovery.refresh().then(() => {
         liveConnection.start(currentPageWriteToken());
+        runStops.resume();
         return Promise.allSettled([loadBootstrap(), loadSettings(), loadCatalogs(), loadSessions(), loadRuns(), loadApprovals()]);
       });
     }
@@ -1317,6 +1343,7 @@ export async function boot() {
   });
 
   function findActiveRun() {
+    for (const run of runsStore.get().data?.items ?? []) runStops.observe(run);
     const selected = navigation.get();
     const run = [...(runsStore.get().data?.items ?? [])].reverse().find((item) =>
       item.project_id === selected.projectId && item.session_id === selected.sessionId && !terminalState(item));
@@ -1417,20 +1444,7 @@ export async function boot() {
         entry?.state !== "pending" || !entry.priority ||
         priorityCancelAttempts.has(run.id)) return;
     priorityCancelAttempts.add(run.id);
-    try {
-      const cancelled = await cancelRun(run.id);
-      if (navigation.get().projectId !== selected.projectId ||
-          navigation.get().sessionId !== selected.sessionId) return;
-      if (terminalState(cancelled)) {
-        setRun(cancelled);
-        await Promise.all([refreshSelectedTimeline(), loadTasks(), loadRuns()]);
-        await dispatchQueued();
-      } else monitorRun(cancelled);
-    } catch (error) {
-      // Keep the attempt recorded so polling does not hammer a failed request.
-      // The normal Stop action remains available for an explicit retry.
-      showComposerError(error);
-    }
+    runStops.request(run);
   }
 
   async function ensurePromptReady(projectId, sessionId, priority = false) {
@@ -1456,6 +1470,7 @@ export async function boot() {
     if (purgeRecovery.isPaused() || localServiceReconnecting) return;
     const selected = navigation.get();
     const key = `${selected.projectId}/${selected.sessionId}`;
+    if (runStops.hasSession(selected.projectId, selected.sessionId)) return;
     const session = sessionDetailStore.get().data;
     if (!selected.sessionId || !session || session.project_id !== selected.projectId ||
         session.id !== selected.sessionId || session.status !== "active" ||
@@ -2020,36 +2035,28 @@ export async function boot() {
       attachments: [...composerAttachments], interrupt });
   });
 
-  stop.addEventListener("click", async () => {
-    if (!activeRun || activeRun.cancel_requested ||
-        stoppingRunIds.has(activeRun.id)) return;
-    const runId = activeRun.id;
-    const { projectId, sessionId } = navigation.get();
+  function onRunStopAccepted(run, owner) {
+    const runId = owner.id;
     const stillSelected = () => {
       const route = navigation.get();
-      return route.projectId === projectId && route.sessionId === sessionId &&
+      return route.projectId === owner.project_id && route.sessionId === owner.session_id &&
         (!activeRun || activeRun.id === runId);
     };
-    stoppingRunIds.add(runId);
-    syncStopBusy();
-    try {
-      const run = await cancelRun(runId);
-      if (stillSelected()) {
-        const returnFocus = document.activeElement === stop;
-        if (activeRun?.id === runId) setRun(run);
-        if (returnFocus && stop.hidden && !prompt.disabled)
-          prompt.focus({ preventScroll: true });
-        await Promise.all([refreshSelectedTimeline(), loadTasks(), loadRuns(),
-          ...(terminalState(run) ? [loadRecovery()] : [])]);
-        if (terminalState(run)) await dispatchQueued();
-      } else await Promise.all([loadTasks(), loadRuns()]);
-    } catch (error) {
-      if (stillSelected()) showComposerError(error);
-      else toast(errorMessage(error), "error");
-    } finally {
-      stoppingRunIds.delete(runId);
-      syncStopBusy();
+    if (stillSelected()) {
+      if (activeRun?.id === runId) setRun(run);
+      if (owner.returnFocus && document.activeElement === stop && !prompt.disabled)
+        prompt.focus({ preventScroll: true });
     }
+    // The stop is already acknowledged. Failed background refreshes must not
+    // convert it back into a failed stop or replay the cancellation.
+    void Promise.allSettled([loadTasks(), loadRuns(),
+      ...(stillSelected() ? [refreshSelectedTimeline(),
+        ...(terminalState(run) ? [loadRecovery()] : [])] : [])])
+      .then(() => { if (stillSelected() && terminalState(run)) void dispatchQueued(); });
+  }
+  stop.addEventListener("click", () => {
+    if (activeRun && !stop.disabled)
+      runStops.request(activeRun, document.activeElement === stop);
   });
 
   function resizePrompt() {
@@ -2450,10 +2457,12 @@ export async function boot() {
         !composerErrorState.error.runAdmissionUncertain) hideComposerError();
     syncRuntimeLabel(); setRun(activeRun); renderDraftStatus();
     if (connected && !purgeRecovery.isPaused()) draftStore.resumeSaves();
+    if (connected) runStops.resume();
   }
   liveConnection.subscribe((event) => {
     if (event.type === "changed") { scheduleLiveRefresh(); void notificationCenter.refresh(); }
     else if (event.type === "runtime_changed") {
+      runStops.clear();
       purgeRecovery.markWriteConflict(new ApiError("Service generation changed", {
         code: event.reason === "restart" ? "service_restarted" : "write_token_conflict",
       }));
@@ -2475,7 +2484,7 @@ export async function boot() {
   });
   liveConnection.pause(document.hidden);
   liveConnection.start(currentPageWriteToken());
-  window.addEventListener("pagehide", () => liveConnection.pause(true));
+  window.addEventListener("pagehide", () => { runStops.dispose(); liveConnection.pause(true); });
   window.addEventListener("pageshow", () => liveConnection.pause(document.hidden));
   approvalsStore.subscribe(scheduleApprovalRefresh);
   asksStore.subscribe(scheduleApprovalRefresh);

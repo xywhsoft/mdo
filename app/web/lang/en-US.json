@@ -359,6 +359,7 @@
   "shell.prompt": "Describe a task for Mdo…",
   "shell.send": "Send task",
   "shell.stop": "Stop current task",
+  "shell.stopWaiting": "Stop when connection returns",
   "shell.model": "Model",
   "shell.reasoning": "Reasoning effort",
   "shell.permission": "Permissions",

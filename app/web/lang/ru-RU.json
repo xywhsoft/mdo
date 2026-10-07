@@ -359,6 +359,7 @@
   "shell.prompt": "Опишите задачу для Mdo…",
   "shell.send": "Отправить задачу",
   "shell.stop": "Остановить текущую задачу",
+  "shell.stopWaiting": "Остановить после восстановления соединения",
   "shell.model": "Модель",
   "shell.reasoning": "Уровень рассуждений",
   "shell.permission": "Разрешения",

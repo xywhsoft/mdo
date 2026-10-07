@@ -359,6 +359,7 @@
   "shell.prompt": "向墨斗描述任务…",
   "shell.send": "发送任务",
   "shell.stop": "停止当前任务",
+  "shell.stopWaiting": "连接恢复后停止任务",
   "shell.model": "模型",
   "shell.reasoning": "推理强度",
   "shell.permission": "权限",

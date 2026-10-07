@@ -119,7 +119,7 @@ class FrontendContractTests(unittest.TestCase):
         app = self.scripts["js/app.js"]
         runs = self.scripts["js/state/runs.js"]
         self.assertIn("await startRun", app)
-        self.assertIn("await cancelRun", app)
+        self.assertIn("cancel: cancelRun, read: readRun", app)
         self.assertIn("await readRun", app)
         self.assertIn("if ((!text && !attachments.length) || composerImages.isUploading())", app)
         self.assertIn("await newTaskController.submit", app)
