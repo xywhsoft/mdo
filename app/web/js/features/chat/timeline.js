@@ -68,6 +68,7 @@ export function eventsToTimeline(events, historyLost = false,
   const runUsages = new Map();
   const streams = new Map();
   const promptsByRun = new Map();
+  let latestMainPrompt = null;
   const runEpochs = new Map();
   const terminalRuns = new Map();
   const finalErrors = new Map();
@@ -97,8 +98,8 @@ export function eventsToTimeline(events, historyLost = false,
         runUsages.set(`${runKey}:${Number(event.event_id) || 0}`,
           { calls: 0, input: 0, output: 0, modelSeconds: 0,
             valid: true, durationValid: true });
-        if (event.agent_depth === 0 && Number(event.user_message_sequence) > 0)
-          promptsByRun.set(runKey, {
+        if (event.agent_depth === 0 && Number(event.user_message_sequence) > 0) {
+          latestMainPrompt = {
             sourceEventId: Number(event.event_id),
             sequence: Number(event.user_message_sequence),
             text: event.text || "",
@@ -106,7 +107,17 @@ export function eventsToTimeline(events, historyLost = false,
             copySpans: event.text_truncated ? [{ eventId: event.event_id,
               kind: event.kind, start: 0, end: (event.text || "").length }] : [],
             attachments: event.attachments || [],
-          });
+          };
+          promptsByRun.set(runKey, latestMainPrompt);
+        } else if (!(event.agent_depth > 0)) {
+          // Resume adds no user message. Its reply still belongs to the most
+          // recent retained main-Agent input, including its images and full
+          // text reference. Missing history must never invent an action target.
+          if (!(Number(event.schema_version) >= 3 &&
+                Number(event.user_message_sequence || 0) === 0)) latestMainPrompt = null;
+          if (latestMainPrompt) promptsByRun.set(runKey, latestMainPrompt);
+          else promptsByRun.delete(runKey);
+        }
         if (event.agent_depth > 0) {
           items.push({ key: `subagent-${event.event_id}`, kind: "task",
             role: t("timeline.subagent", {}, "子 Agent"),
@@ -365,6 +376,14 @@ export function eventsToTimeline(events, historyLost = false,
         // Clears, imported notes and unrecognized boundaries remain visible.
         const first = Number(event.source_event_id);
         const end = Number(event.event_id);
+        if (Number.isSafeInteger(first) && first > 0 &&
+            Number.isSafeInteger(end) && first <= end) {
+          const discarded = prompt => prompt &&
+            prompt.sourceEventId >= first && prompt.sourceEventId < end;
+          if (discarded(latestMainPrompt)) latestMainPrompt = null;
+          for (const [key, prompt] of promptsByRun)
+            if (discarded(prompt)) promptsByRun.delete(key);
+        }
         if (!showHistoryTruncations &&
             (!event.text || event.text === "会话历史已截断") &&
             Number.isSafeInteger(first) && first > 0 &&

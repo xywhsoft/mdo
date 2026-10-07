@@ -1,0 +1,57 @@
+{
+  "date": "2026-10-08",
+  "model_network": "loopback fixtures only",
+  "streaming_network_calls": {
+    "streaming": 1,
+    "ACTIVE_STREAM_DRAFT": 1,
+    "stream-stop": 2
+  },
+  "resume_fork_retry_queue_calls": {
+    "stream-stop": 3,
+    "streaming": 1,
+    "QUEUED_AFTER_STREAM": 1
+  },
+  "request_user_message_counts": [
+    1,
+    1,
+    1,
+    2,
+    3
+  ],
+  "original_source_records": 10,
+  "branch_records_after_retry": 18,
+  "source_event_counts": {
+    "0": 2,
+    "1": 2,
+    "2": 3,
+    "10": 2,
+    "4": 1
+  },
+  "branch_event_counts": {
+    "16": 1,
+    "0": 3,
+    "1": 3,
+    "2": 5,
+    "4": 3,
+    "10": 3
+  },
+  "final_error_events": 0,
+  "unsent_draft": "UNSENT_AFTER_QUEUE",
+  "candidate_sha256": "52be8ba285a5ef330b79ace37ccb8ff5001ce8254888188f937a9ee27f2a8951",
+  "checks": [
+    "offline during active streaming preserves the partial answer and the next draft",
+    "reconnection replays the completed answer once and permits manual continuation",
+    "stopping preserves partial output and exposes the normal continue action",
+    "continuing adds no duplicate user input and completes the same conversational turn",
+    "a resumed answer exposes fork and retry with the original durable input",
+    "actual fork preserves the full resumed reply in a new session",
+    "actual retry replaces the branch turn using the original input and leaves its source unchanged",
+    "an already queued message dispatches exactly once after offline streaming completion",
+    "queued dispatch does not consume another unsent draft, including after reload"
+  ],
+  "limitations": [
+    "desktop browser over the packed Windows host; Android real-device lifecycle remains pending",
+    "network simulation reset and isolated fixture hosts stopped; system settings unchanged",
+    "candidate includes existing unrelated working-tree changes and is not a website release"
+  ]
+}

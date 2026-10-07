@@ -5,6 +5,10 @@ leave loopback; the fixture uses a normal editable model and a separate Home.
 Prompts: retry (two 429s), partial (one interrupted draft), quota (daily limit),
 stop (long Retry-After), continue (successful next turn). The editable fixture
 model accepts images, so attachment/edit/fork checks use the same environment.
+streaming and stream-stop flush a first chunk, then wait for the disposable
+release-streaming-N / release-stream-stop-N marker (request number N), or
+--stream-wait (at most 60s). Each marker owns one request, including after stop.
+They exercise offline replay and cancellation while a reply is still running.
 With --permission balanced, decisions updates a todo, asks a question, then
 attempts a write outside its workspace (still inside the disposable directory)
 and corrects the rejected path. Both writes require normal one-shot approval.
@@ -29,9 +33,19 @@ class Model(BaseHTTPRequestHandler):
     markers = []
     lock = threading.Lock()
     workspace = None
+    stream_wait = 30
+    shutdown_requested = threading.Event()
 
     def log_message(self, *_):
         pass
+
+    def handle(self):
+        try:
+            super().handle()
+        except (BrokenPipeError, ConnectionResetError, ConnectionAbortedError):
+            # A normal cancellation closes the model connection. Do not turn
+            # that expected fixture outcome into a misleading server traceback.
+            pass
 
     def do_POST(self):
         body = json.loads(self.rfile.read(int(self.headers['Content-Length'])))
@@ -57,7 +71,12 @@ class Model(BaseHTTPRequestHandler):
             self.end_headers(); self.wfile.write(raw)
             return
         partial = prompt=='partial' and attempt==1
-        text = 'DISCARDED_FIXTURE_DRAFT' if partial else 'FIXTURE_OK: '+prompt
+        streaming = prompt in ('streaming', 'stream-stop')
+        release = self.workspace / f'release-{prompt}-{attempt}' if streaming else None
+        if release is not None:
+            release.unlink(missing_ok=True)
+        text = ('DISCARDED_FIXTURE_DRAFT' if partial else
+            'FIXTURE_STREAM: '+prompt if streaming else 'FIXTURE_OK: '+prompt)
         self.send_response(200)
         self.send_header('Content-Type','text/event-stream')
         self.end_headers()
@@ -94,6 +113,15 @@ class Model(BaseHTTPRequestHandler):
             self.close_connection = True
             self.connection.shutdown(socket.SHUT_RDWR)
             return
+        if streaming:
+            end = time.monotonic() + self.stream_wait
+            while not release.exists() and time.monotonic() < end:
+                if self.shutdown_requested.wait(.05):
+                    return
+            release.unlink(missing_ok=True)
+            data['choices'][0]['delta'] = {'content':' — completed.'}
+            self.wfile.write(('data: '+json.dumps(data)+'\n\n').encode())
+            self.wfile.flush()
         done = {'choices':[{'index':0,'delta':{},'finish_reason':finish}],
             'usage':{'prompt_tokens':10,'completion_tokens':4,'total_tokens':14}}
         self.wfile.write(('data: '+json.dumps(done)+'\n\ndata: [DONE]\n\n').encode())
@@ -107,12 +135,15 @@ def main():
     parser.add_argument('--permission',choices=['read-only','balanced'],default='read-only')
     parser.add_argument('--restart-wait',type=float,default=5,
         help='Seconds offline when the disposable restart marker is created (0.5–15)')
+    parser.add_argument('--stream-wait',type=float,default=30,
+        help='Maximum pause after a streaming first chunk (0.5–60 seconds)')
     args=parser.parse_args()
     base=args.directory.resolve()
     if base.exists():
         raise RuntimeError('Choose a new disposable directory; existing data is retained')
     base.mkdir(parents=True)
     Model.workspace = base
+    Model.stream_wait = max(.5, min(args.stream_wait, 60))
     exe=base/'mdo.exe';shutil.copy2(args.packed.resolve(),exe)
     model=ThreadingHTTPServer(('127.0.0.1',0),Model)
     thread=threading.Thread(target=model.serve_forever,daemon=True);thread.start()
@@ -194,6 +225,7 @@ def main():
                 print('Fixture host reconnected',flush=True)
             time.sleep(.2)
     finally:
+        Model.shutdown_requested.set()
         stop_host(process)
         log.close();model.shutdown();model.server_close();thread.join(timeout=2)
         (base/'calls.json').write_text(json.dumps(Model.calls,indent=2),encoding='utf-8')
