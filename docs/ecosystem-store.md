@@ -8,11 +8,16 @@
 
 - 设置 → 扩展能力 → 扩展中心。浏览、安装、发布都要求登录 ai.xywhsoft.com。
 - 发现：按作者、名称、用途搜索，按资源类型筛选，详情显示说明、许可证、平台及源码。
-- 发布插件：勾选本地资源，填写名称、ID、版本、描述、说明、许可证和实测平台；
-  可预览、导出源码包，或直接提交审核。默认 Agent 须先复制为自定义 Agent。
-- 我的发布：查看审核状态及退回原因，选择当前本地资源发布新版本。
-- 已安装：检查更新、卸载。没有自动更新 C 代码，每次安装均需明确确认信任。
-- 网站 `/mdo/ecosystem` 也支持登录、查看、下载和上传源码包；它不会运行代码。
+- 新建插件：勾选本地资源，填写名称、ID、版本、描述、Markdown 说明、许可证和实测平台；
+  可填写更新说明、预览、导出源码包，或直接提交审核。默认 Agent 须先复制为自定义 Agent。
+- 本地草稿：输入后自动保存，不完整表单也能保存，重新打开继续编辑。投稿后仍保留草稿。
+- 我的发布：查看审核状态、退回原因、版本历史及更新说明，发布新版本或撤回指定版本。
+- 已安装：管理资源、编辑插件包、检查更新、卸载。资源编辑页可返回所属插件。
+  没有自动更新 C 代码，每次安装均需明确确认信任。
+- 导入插件包：无需连接商店，安装本地 `.mdo-extension.json`，仍执行平台、冲突和代码信任检查。
+  本地导入独立登记，不冒充已审核插件或网站作者；登录会话要求仍适用。
+- 网站 `/mdo/ecosystem` 支持登录、账号显示、退出、查看、下载、上传、撤回及版本历史；
+  首页和账号页均有入口。网站不会运行扩展代码。
 
 ## 最小源码包
 
@@ -61,6 +66,8 @@ MCP 导出将凭据引用变成 `input:N` 占位符并移除工作目录；安�
 | GET `/api/v1/mdo/ecosystem/packages` | 已审核公开列表；q/kind/before 分页，mine=1 读取本人投稿 |
 | GET `/api/v1/mdo/ecosystem/package?id=N` | 详情和源码；待审核、退回、下架版本仅作者可见；latest=1 返回同一作者、同一 ID 的最新公开版本 |
 | POST `/api/v1/mdo/ecosystem/submit` | 上传源码包，初始状态 pending |
+| GET `/api/v1/mdo/ecosystem/history?id=N&before=N` | 同一作者、同一 ID 的版本历史；其他会员只看到公开版本 |
+| POST `/api/v1/mdo/ecosystem/withdraw` | 作者撤回指定版本；提交 id/revision，不能覆盖或删除源码历史 |
 | GET/POST `/admin/api/mdo/ecosystem` | 查询、approve/reject/hide；提交 id/revision/action/reason |
 | `/admin/mdo/ecosystem` | 后台“墨斗管理 → 生态资源”，要求 mdo.ecosystem.review 权限 |
 
@@ -76,7 +83,8 @@ MCP 导出将凭据引用变成 `input:N` 占位符并移除工作目录；安�
 ## 安装事务与生命周期
 
 客户端 `/api/v1/ecosystem` 将请求转给当前账号的网站：GET 返回本机安装记录；
-POST action 为 catalog/mine/detail/latest/submit/install/uninstall/export/c_sources。
+POST action 为 catalog/mine/detail/latest/history/submit/withdraw/install/import/uninstall/export/c_sources，
+以及 drafts/draft_read/draft_save/draft_delete。本地导入及草稿操作不会调用网站。
 联网操作由有界线程池执行，拥有连接、请求和账号引用；卸载应用时先取消并等待。
 
 安装按现有资源解析器校验 → 检查平台/哈希/明确 C 信任 → 检查本地冲突 →
@@ -85,6 +93,10 @@ POST action 为 catalog/mine/detail/latest/submit/install/uninstall/export/c_sou
 资源管理器使用 Home 持有的应用 VFS，避免工作线程读到缺少便携覆盖层的进程 VFS。
 
 安装记录为 `mdo-home/data/extensions/installed.json`，未完成事务日志为 `pending.json`。
+草稿在 `mdo-home/data/extensions/drafts/<id>.json`，只保存表单及资源引用，源码仍由本地
+资源管理器维护。每台设备最多 64 份、每份 64 KiB；更新和删除必须携带当前 SHA 修订值。
+并发修改返回 412，界面允许另存为新草稿。尚未输入内容的新建空表单不会自动写文件。
+本地包安装记录使用 `local:<slug>`，与网站数字 ID 分离，避免撞库或覆盖网站版本。
 更新不覆盖本地修改或已删除的文件，也不覆盖其他插件的同名资源。
 卸载保留修改过的文件；Skill 任一已登记文件有修改时保留整个 Skill，防止附件失去
 SKILL.md。回退失败时要求重启，不继续发布可能不一致的资源状态。
@@ -96,6 +108,7 @@ SKILL.md。回退失败时要求重启，不继续发布可能不一致的资源
 python tools/build_mdo.py --xserver-root .build/implementation-xs --prepare-only
 python tests/test_ecosystem_runtime.py
 node --test tests/test_store_formats.mjs
+node --test tests/test_store_draft.mjs tests/test_source_markdown.mjs
 python D:/GIT/home/tests/test_mdo_ecosystem.py
 ```
 
@@ -108,6 +121,7 @@ python D:/GIT/home/tests/test_mdo_ecosystem.py
 `examples/extensions/project-review.mdo-extension.json`。它组合只读 SubAgent、按需读取的
 Skill 和命令，不含 C 或外部服务；作者显示会员昵称，示例可直接用于准备新的投稿。
 
-部署只更新统一插件源码和页面。先用服务器实际 xs 在隔离站点运行联调，再停止服务、
-备份相关代码和主库、原子替换选定文件并重启。保留线上身份密钥、账号、余额、
-搜索/模型配置以及既有发布目录；生态数据库由首次启动创建。失败恢复代码和主库。
+部署更新统一插件源码、页面及网站入口。先用服务器实际 xs 在隔离站点运行联调，再停止服务、
+备份相关代码、主库和生态库、原子替换选定文件并重启。保留线上身份密钥、账号、余额、
+搜索/模型配置以及既有发布目录；生态库 v1→v2 为事务内添加字段，保留旧版本数据。
+失败恢复代码和数据库。Markdown 仅用 DOM 创建文本与元素，不执行 HTML，不加载图片。
