@@ -106,7 +106,7 @@ export function createModelConfigPanel(container) {
     view = "templates"; render();
   }
   function choose(preset, choice = preset.variants[0]) {
-    draft = { preset, choice, key: "", base: choice.base, name: preset.name, provider: null,
+    draft = { preset, choice, key: "", base: choice.base, name: preset.labelKey ? text(preset.labelKey, preset.name) : preset.name, provider: null,
       items: [...choice.models], selected: new Set(choice.models.slice(0, 2)), queried: false,
       ref: "", query: "", manual: "", default: false };
     view = "setup"; notice = ""; failed = false; render();
@@ -166,7 +166,7 @@ export function createModelConfigPanel(container) {
   function renderTemplates(body) {
     body.append(element("h3", { text: text("chooseSupplier", "选择供应商") }), element("p", { className: "model-config-status", text: text("templateHelp", "选择服务并填写 API Key。自己的供应商 Key 无需登录墨斗账号。") }));
     const grid = element("div", { className: "supplier-templates" });
-    for (const preset of providerPresets) grid.append(button(preset.id === "openai-compatible" ? text("compatibleOpenai", "OpenAI 兼容服务") : preset.id === "anthropic-compatible" ? text("compatibleAnthropic", "Anthropic 兼容服务") : preset.name, () => choose(preset)));
+    for (const preset of providerPresets.filter((item) => !item.hidden)) grid.append(button(preset.labelKey ? text(preset.labelKey, preset.name) : preset.name, () => choose(preset)));
     body.append(grid);
   }
   function renderSelection(body) {
@@ -191,14 +191,20 @@ export function createModelConfigPanel(container) {
     const form = element("form", { className: "supplier-setup-form" });
     form.addEventListener("invalid", (event) => { const details = event.target.closest("details"); if (details) details.open = true; }, true);
     form.addEventListener("submit", (event) => { event.preventDefault(); void (draft.queried ? addSelected() : discover()); });
-    form.append(element("h3", { text: draft.provider ? text("addModels", "添加模型") : draft.preset.name }));
+    form.append(element("h3", { text: draft.provider ? text("addModels", "添加模型") : draft.preset.labelKey ? text(draft.preset.labelKey, draft.preset.name) : draft.preset.name }));
     if (!draft.provider && draft.preset.variants.length > 1) {
       const select = element("select", { attrs: { name: "service-variant" } });
       for (const choice of draft.preset.variants) select.append(element("option", { text: text(choice.label, choice.label), attrs: { value: choice.id } }));
       select.value = draft.choice.id; select.addEventListener("change", () => {
-        const key = draft.key, name = draft.name; choose(draft.preset, draft.preset.variants.find((item) => item.id === select.value)); draft.key = key; draft.name = name; render();
+        const previous = draft;
+        choose(previous.preset, previous.preset.variants.find((item) => item.id === select.value));
+        draft.key = previous.key; draft.name = previous.name;
+        if (previous.preset.custom) {
+          draft.base = previous.base; draft.ref = previous.ref; draft.manual = previous.manual; draft.default = previous.default;
+        }
+        render();
       });
-      form.append(element("label", { className: "model-field" }, [element("span", { text: text("apiProduct", "API 产品") }), select]));
+      form.append(element("label", { className: "model-field" }, [element("span", { text: draft.preset.custom ? text("protocol", "接口协议") : text("apiProduct", "API 产品") }), select]));
     }
     if (!draft.provider && draft.preset.custom) form.append(field(text("baseUrl", "服务地址（含 /v1）"), "base-url", draft.base, (value) => { draft.base = value; draft.queried = false; }, { type: "url", required: true }));
     if (!draft.provider || draft.provider.credential) {
@@ -250,7 +256,7 @@ export function createModelConfigPanel(container) {
         element("summary", { text: entry.credential?.secret_ref ? text("keyConfigured", "凭据已配置 · 更换 API Key") : text("configureKey", "设置 API Key") }), keyForm]);
       body.append(credentials, button(text("addModels", "添加模型"), () => {
         if (blocked()) return;
-        const preset = providerPresets.find((item) => item.id === entry.template_id) || providerPresets[10];
+        const preset = providerPresets.find((item) => item.id === entry.template_id) || providerPresets.find((item) => item.id === "custom");
         choose(preset, presetVariant(preset.id, entry.template_variant)); draft.provider = entry; render();
       }));
     }

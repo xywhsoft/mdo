@@ -29,8 +29,13 @@ export const providerPresets = Object.freeze([
     variant("api", "regular", "https://api.anthropic.com/v1", ["claude-sonnet-4-6"], messages)] },
   { id: "openrouter", name: "OpenRouter", keyUrl: "https://openrouter.ai/settings/keys", variants: [
     variant("api", "regular", "https://openrouter.ai/api/v1", ["anthropic/claude-sonnet-4.6", "openai/gpt-5.4"])] },
-  { id: "openai-compatible", name: "OpenAI Compatible", custom: true, variants: [variant("api", "custom", "", [])] },
-  { id: "anthropic-compatible", name: "Anthropic Compatible", custom: true, variants: [variant("api", "custom", "", [], messages)] },
+  { id: "custom", name: "Custom supplier", labelKey: "customSupplier", custom: true, variants: [
+    variant("chat", "chatCompletions", "", []),
+    variant("responses", "responses", "", [], "openai-responses"),
+    variant("messages", "anthropicMessages", "", [], messages)] },
+  // Keep saved template IDs usable without duplicating the custom setup card.
+  { id: "openai-compatible", name: "OpenAI Compatible", custom: true, hidden: true, variants: [variant("api", "custom", "", [])] },
+  { id: "anthropic-compatible", name: "Anthropic Compatible", custom: true, hidden: true, variants: [variant("api", "custom", "", [], messages)] },
   { id: "ollama", name: "Ollama", local: true, custom: true, variants: [variant("local", "local", "http://127.0.0.1:11434/v1", [])] },
   { id: "llamacpp", name: "llama.cpp", local: true, custom: true, variants: [variant("local", "local", "http://127.0.0.1:8080/v1", [])] },
 ]);
@@ -50,7 +55,7 @@ export function uniqueId(hint, entries) {
 export function presetProvider(preset, selected, entries = [], base = selected.base) {
   base = base.trim().replace(/\/+$/, "");
   const endpoints = selected.protocol === messages ? { anthropic_messages: `${base}/messages` }
-    : selected.protocol === "openai-responses" ? { responses: `${base}/responses`, chat_completions: `${base}/chat/completions` }
+    : selected.protocol === "openai-responses" ? { responses: `${base}/responses`, ...(!preset.custom ? { chat_completions: `${base}/chat/completions` } : {}) }
       : { chat_completions: `${base}/chat/completions` };
   return { id: uniqueId(preset.id, entries), name: preset.name, builtin: false,
     editable: true, removable: true, verify_peer: true, timeout_ms: 120000,

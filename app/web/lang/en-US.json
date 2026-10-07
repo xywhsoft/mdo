@@ -1672,5 +1672,10 @@
   "modelSetup.testFailed": "Model request failed. Check model ID, balance, protocol and network. The timeout is 30 seconds.",
   "modelSetup.toolTestFailed": "The model did not make the expected tool call. Check its tool and protocol support.",
   "modelSetup.keyConfigured": "Credentials configured · change API key",
-  "modelSetup.configureKey": "Set API key"
+  "modelSetup.configureKey": "Set API key",
+  "modelSetup.customSupplier": "Custom supplier",
+  "modelSetup.protocol": "API protocol",
+  "modelSetup.chatCompletions": "Chat Completions (OpenAI compatible)",
+  "modelSetup.responses": "Responses (OpenAI compatible)",
+  "modelSetup.anthropicMessages": "Anthropic Messages (Anthropic compatible)"
 }

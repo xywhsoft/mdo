@@ -39,9 +39,20 @@ class Supplier(BaseHTTPRequestHandler):
         self.reply({'data': [{'id': 'fixture-agent'}, {'id': 'fixture-other'}]})
     def do_POST(self):
         data = json.loads(self.rfile.read(int(self.headers['Content-Length'])))
-        Supplier.calls.append((data['model'], self.headers.get('Authorization')))
-        if self.headers.get('Authorization') != 'Bearer fixture-model-key':
+        authorization = self.headers.get('Authorization') or ('Bearer ' + (self.headers.get('x-api-key') or ''))
+        Supplier.calls.append((data['model'], authorization))
+        if authorization != 'Bearer fixture-model-key':
             return self.reply({}, 401)
+        if self.path.endswith('/responses'):
+            return self.reply({'id': 'resp_fixture', 'object': 'response', 'status': 'completed',
+                'model': data['model'], 'output': [{'id': 'msg_fixture', 'type': 'message',
+                    'role': 'assistant', 'status': 'completed', 'content': [
+                        {'type': 'output_text', 'text': 'OK', 'annotations': []}]}],
+                'usage': {'input_tokens': 6, 'output_tokens': 1, 'total_tokens': 7}})
+        if self.path.endswith('/messages'):
+            return self.reply({'id': 'msg_fixture', 'type': 'message', 'role': 'assistant',
+                'model': data['model'], 'content': [{'type': 'text', 'text': 'OK'}],
+                'stop_reason': 'end_turn', 'usage': {'input_tokens': 6, 'output_tokens': 1}})
         if data.get('tools'):
             return self.reply({'id': 'fixture', 'object': 'chat.completion', 'model': data['model'],
                 'choices': [{'index': 0, 'message': {'role': 'assistant', 'content': None,
@@ -155,7 +166,23 @@ def main():
                 disabled['items'][-1]['enabled'] = True
                 assert post('setup', {'patch': disabled, 'keys': []}, current_etag)[0] == 200
                 assert post('test', {'model_id': 'fixture-agent'})[0] == 200
-                print('PASS model discovery, credential transaction, conflict, encrypted restart and actual request')
+                for suffix, protocol, endpoint in [
+                    ('responses', 'openai-responses', 'responses'),
+                    ('messages', 'anthropic-messages', 'anthropic_messages')]:
+                    saved, current_etag = get()
+                    extra_supplier = copy.deepcopy(supplier)
+                    extra_supplier['id'] = 'fixture-' + suffix
+                    extra_supplier['endpoints'] = {endpoint: f'http://127.0.0.1:{server.server_port}/v1/{suffix}'}
+                    extra_model = copy.deepcopy(model)
+                    extra_model.update(id='fixture-' + suffix, provider=extra_supplier['id'],
+                        protocols=[protocol], default_protocol=protocol)
+                    extra = {key: saved[key] for key in ('providers', 'items', 'default_model')}
+                    extra['providers'].append(extra_supplier); extra['items'].append(extra_model)
+                    assert post('setup', {'patch': extra, 'keys': [
+                        {'provider': extra_supplier['id'], 'value': 'fixture-model-key'}]}, current_etag)[0] == 200
+                    status, result = post('test', {'model_id': extra_model['id']})
+                    assert status == 200 and result['data']['verified'], result
+                print('PASS discovery, encrypted restart, conflict, enablement and all three model protocols')
             except BaseException:
                 log.flush()
                 print((base / 'host.log').read_text(errors='replace')[-8000:])

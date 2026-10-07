@@ -16,6 +16,20 @@ for (const preset of providerPresets) for (const variant of preset.variants) {
   }
 }
 const products = providerPresets.filter((item) => ["bigmodel", "zai", "dashscope"].includes(item.id));
+const custom = providerPresets.find((item) => item.id === "custom");
+assert.equal(custom.hidden, undefined);
+assert.deepEqual(custom.variants.map((item) => item.protocol), ["openai-chat-completions", "openai-responses", "anthropic-messages"]);
+for (const variant of custom.variants) {
+  const provider = presetProvider(custom, variant, [], "https://example.test/v1/");
+  const model = presetModel(provider, "custom-agent");
+  assert.equal(model.default_protocol, variant.protocol);
+  assert.deepEqual(model.protocols, [variant.protocol]);
+  assert.equal(Object.keys(provider.endpoints).length, 1, "custom setup must not invent another supported protocol");
+  const endpoint = { "openai-chat-completions": "chat/completions", "openai-responses": "responses", "anthropic-messages": "messages" }[variant.protocol];
+  assert.equal(Object.values(provider.endpoints)[0], `https://example.test/v1/${endpoint}`);
+}
+assert.ok(providerPresets.find((item) => item.id === "openai-compatible").hidden);
+assert.ok(providerPresets.find((item) => item.id === "anthropic-compatible").hidden);
 for (const preset of products) {
   const regular = presetProvider(preset, preset.variants[0]);
   const coding = presetProvider(preset, preset.variants.find((item) => item.id === "coding"));

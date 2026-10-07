@@ -1672,5 +1672,10 @@
   "modelSetup.testFailed": "Ошибка запроса к модели. Проверьте ID, баланс, протокол и сеть. Время ожидания — 30 секунд.",
   "modelSetup.toolTestFailed": "Модель не вызвала нужный инструмент. Проверьте поддержку инструментов и протокола.",
   "modelSetup.keyConfigured": "Ключ настроен · изменить API-ключ",
-  "modelSetup.configureKey": "Настроить API-ключ"
+  "modelSetup.configureKey": "Настроить API-ключ",
+  "modelSetup.customSupplier": "Свой поставщик",
+  "modelSetup.protocol": "Протокол API",
+  "modelSetup.chatCompletions": "Chat Completions (совместимый с OpenAI)",
+  "modelSetup.responses": "Responses (совместимый с OpenAI)",
+  "modelSetup.anthropicMessages": "Anthropic Messages (совместимый с Anthropic)"
 }
