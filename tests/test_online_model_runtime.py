@@ -17,9 +17,9 @@ import time
 from http.server import ThreadingHTTPServer
 
 ROOT=Path(__file__).resolve().parents[1];HOME=ROOT.parent/'home'
-sys.path.insert(0,str(HOME/'tests'));sys.path.insert(0,str(ROOT.parent/'x-admin/tests'))
+sys.path.insert(0,str(HOME/'tests'))
 from test_mdo_delivery import fixture, request
-from model_gateway_e2e import Upstream
+from model_gateway_fixture import Upstream
 
 HOOK=r'''
 static bool OnlineTestRoute(MdoApiContext* Context) {
