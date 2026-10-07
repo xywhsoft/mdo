@@ -20,10 +20,18 @@ class SkillModel(BaseHTTPRequestHandler):
     calls = 0
     payloads = []
     delegation_payloads = []
+    tool_payloads = []
     def log_message(self, *_): pass
     def do_POST(self):
         payload = json.loads(self.rfile.read(int(self.headers['Content-Length'])))
-        if 'EXTENSION delegation probe' in json.dumps(payload) or 'EXTENSION reviewer child' in json.dumps(payload):
+        users = [item for item in payload.get('input', []) if item.get('role') == 'user']
+        latest = json.dumps(users[-1] if users else payload)
+        if 'EXTENSION local tool probe' in latest:
+            type(self).tool_payloads.append(payload)
+            calls = len(type(self).tool_payloads)
+            output = [{'type': 'function_call', 'call_id': 'local-tool', 'name': 'user.fixture', 'arguments': '{}'}] if calls == 1 else [
+                {'type': 'message', 'content': [{'type': 'output_text', 'text': 'Tool probe complete'}]}]
+        elif 'EXTENSION delegation probe' in json.dumps(payload) or 'EXTENSION reviewer child' in json.dumps(payload):
             type(self).delegation_payloads.append(payload)
             calls = len(type(self).delegation_payloads)
             if calls == 1:
@@ -80,13 +88,39 @@ def main():
                     status, _, data = request(port, method, '/api/v1/extensions/' + path,
                         body=None if body is None else json.dumps(body).encode(), headers=headers)
                     return status, json.loads(data)
-                for kind in ('subagents', 'skills', 'mcp', 'commands'):
+                for kind in ('subagents', 'skills', 'mcp', 'commands', 'tools'):
                     status, data = call('GET', kind)
                     assert status == 200, data
                 # Startup tool preflight can persist its own notification. Reads
                 # must never materialize extension files or enablement settings.
-                for name in ('subagents', 'skills', 'mcp', 'commands', 'config/extensions.json'):
+                for name in ('subagents', 'skills', 'mcp', 'commands', 'tools', 'config/extensions.json'):
                     assert not (base / 'home' / name).exists(), 'read-only list wrote ' + name
+                def tool_catalog():
+                    status, _, raw = request(port, 'GET', '/api/v1/tools')
+                    assert status == 200, raw
+                    return {item['id']: item for item in json.loads(raw)['data']['items']}
+                builtins = tool_catalog()
+                assert len(builtins) == 21 and 'ask_user' in builtins, builtins
+                assert builtins['web_search']['member_only'] and builtins['web_search']['availability'] == 'sign_in_required'
+                assert builtins['agent']['availability'] == 'no_subagents'
+                tool_source = (ROOT / 'tests/fixtures/modules/local-tool.c').read_text()
+                status, tool = call('PUT', 'tools/fixture', {'content': tool_source}, 'new')
+                assert status == 200 and tool['data']['loaded'], tool
+                tool_revision = tool['data']['revision']
+                assert tool['data']['tools'][0]['id'] == 'user.fixture', tool
+                assert tool_catalog()['user.fixture']['source'] == 'c'
+                assert call('PUT', 'tools/fixture', {'content': tool_source}, 'new')[0] == 412
+                status, rejected = call('PUT', 'tools/fixture', {'content': tool_source + '\ninvalid C source!'}, tool_revision)
+                assert status == 503 and 'error' in json.dumps(rejected).lower(), rejected
+                assert call('GET', 'tools/fixture')[1]['data']['content'] == tool_source
+                assert 'user.fixture' in tool_catalog()
+                assert call('PUT', 'tools/collision', {'content': tool_source.replace('user.fixture', 'read')}, 'new')[0] == 503
+                assert not (base / 'home/tools/collision.c').exists()
+                unsafe = tool_source.replace('MDO_TOOL_EFFECT_READ', 'MDO_TOOL_EFFECT_PROCESS')
+                assert call('PUT', 'tools/fixture', {'content': unsafe}, tool_revision)[0] == 503
+                assert call('POST', 'tools/fixture/enabled', {'enabled': False}, tool_revision)[0] == 200
+                assert 'user.fixture' not in tool_catalog()
+                assert call('POST', 'tools/fixture/enabled', {'enabled': True}, tool_revision)[0] == 200
                 command = '---\ndescription: Review changes\nargument-hint: <path>\n---\nReview $ARGUMENTS carefully.'
                 status, data = call('PUT', 'commands/review', {'content': command}, 'new')
                 assert status == 200, data
@@ -132,6 +166,16 @@ def main():
                     headers={'Content-Type': 'application/json'})
                 assert status == 201, raw_session
                 session = json.loads(raw_session)['data']['id']
+                status, _, raw_run = request(port, 'POST', '/api/v1/projects/default/sessions/' + session + '/runs',
+                    body=json.dumps({'prompt': 'EXTENSION local tool probe', 'timeout_ms': 5000}).encode(),
+                    headers={'Content-Type': 'application/json'})
+                assert status == 202, raw_run
+                run = json.loads(raw_run)['data']; deadline = time.monotonic() + 8
+                while not run['terminal'] and time.monotonic() < deadline:
+                    time.sleep(.05)
+                    run = json.loads(request(port, 'GET', '/api/v1/runs/' + run['id'])[2])['data']
+                assert run['state'] == 'succeeded', run
+                assert 'LOCAL TOOL CALLBACK RESULT' in json.dumps(SkillModel.tool_payloads[-1]), SkillModel.tool_payloads
                 status, _, raw_run = request(port, 'POST', '/api/v1/projects/default/sessions/' + session + '/runs',
                     body=json.dumps({'prompt': 'EXTENSION skill probe', 'timeout_ms': 5000}).encode(),
                     headers={'Content-Type': 'application/json'})
@@ -210,6 +254,8 @@ def main():
                 status, state = call('POST', 'mcp/mock/enabled', {'enabled': True}, mcp_revision)
                 assert status == 200 and state['data']['enabled'], state
                 assert call('DELETE', 'mcp/mock', revision=state['data']['revision'])[0] == 200
+                assert call('DELETE', 'tools/fixture', revision=tool_revision)[0] == 200
+                assert 'user.fixture' not in tool_catalog()
                 print('extension HTTP probe: PASS')
             except BaseException:
                 log.flush()

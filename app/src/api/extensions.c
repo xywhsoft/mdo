@@ -15,7 +15,7 @@ void MdoApiExtensionsUnit(void) { if (g_MdoExtensionLock) xrtMutexDestroy(g_MdoE
 static bool ExtensionKind(cstr Kind)
 {
     return strcmp(Kind,"subagents") == 0 || strcmp(Kind,"skills") == 0 ||
-        strcmp(Kind,"mcp") == 0 || strcmp(Kind,"commands") == 0;
+        strcmp(Kind,"mcp") == 0 || strcmp(Kind,"commands") == 0 || strcmp(Kind,"tools") == 0;
 }
 static bool ExtensionParams(MdoApiContext* C, char Kind[16], char Id[65])
 {
@@ -34,7 +34,7 @@ static bool ExtensionParams(MdoApiContext* C, char Kind[16], char Id[65])
 }
 static void ExtensionPath(cstr Kind, cstr Id, char Path[160])
 {
-    snprintf(Path,160u,"%s/%s%s",Kind,Id,strcmp(Kind,"skills")==0?"/SKILL.md":strcmp(Kind,"mcp")==0?".json":".md");
+    snprintf(Path,160u,"%s/%s%s",Kind,Id,strcmp(Kind,"skills")==0?"/SKILL.md":strcmp(Kind,"mcp")==0?".json":strcmp(Kind,"tools")==0?".c":".md");
 }
 static bool ExtensionString(const xvalue* Object,cstr Key,xstrview* Text)
 {
@@ -45,6 +45,10 @@ static bool ExtensionValidate(cstr Kind,cstr Id,cstr Text,char Error[1024])
 {
     bool Ok;
     Error[0]=0;
+    if (!strcmp(Kind,"tools")) {
+        if (xrtStrTrim(xrtStrView(Text)).Size) return true;
+        snprintf(Error,1024u,"C source must not be empty"); return false;
+    }
     if (strcmp(Kind,"skills")==0) return MdoSkillValidateText(Text,Error,1024u);
     if (strcmp(Kind,"mcp")==0) return MdoMcpValidateText(Id,Text,Error,1024u);
     if (strcmp(Kind,"subagents")==0) {
@@ -71,7 +75,19 @@ static bool ExtensionValidate(cstr Kind,cstr Id,cstr Text,char Error[1024])
 static bool ExtensionReload(cstr Kind,cstr Id,bool Expected)
 {
     bool Found=false;
-    if (!strcmp(Kind,"subagents")) {
+    if (!strcmp(Kind,"tools")) {
+        MdoModuleCatalog* Catalog; size_t i; char Path[192];
+        if (!MdoModuleManagerReload()) return false;
+        snprintf(Path,sizeof(Path),"/app/default-home/tools/%s.c",Id);
+        Catalog=MdoModuleCatalogSnapshot();
+        for (i=0u;i<MdoModuleCatalogModuleCount(Catalog);++i) {
+            MdoModuleInfo Info={0}; Info.Size=sizeof(Info);
+            if (MdoModuleCatalogModuleAt(Catalog,i,&Info) && !strcmp(Info.SourcePath,Path)) {
+                Found=Info.Kind==MDO_MODULE_TOOLS && Info.ToolCount!=0u; break;
+            }
+        }
+        MdoModuleCatalogRelease(Catalog);
+    } else if (!strcmp(Kind,"subagents")) {
         MdoModuleAgentInfo Info={0}; MdoModuleCatalog* Catalog;
         char Agent[96]; Info.Size=sizeof(Info);
         if (!MdoModuleManagerReload()) return false;
@@ -105,7 +121,7 @@ static xvalue* ExtensionItem(cstr Kind,cstr Id,bool IncludeSource)
     if (!strcmp(Kind,"mcp")) {
         Doc=xrtJsonParse(xrtStrView(Text));
         if (Doc) (void)xrtValueGetBool(xrtValueObjectGet(Doc,XRT_STR_LITERAL("enabled")),&Enabled);
-    } else Doc=MdoPromptParse(Text,strcmp(Kind,"commands")!=0,NULL,0u);
+    } else if (strcmp(Kind,"tools")) Doc=MdoPromptParse(Text,strcmp(Kind,"commands")!=0,NULL,0u);
     if (Doc) { (void)ExtensionString(Doc,"name",&Name); (void)ExtensionString(Doc,"description",&Description); }
     if (!MdoExtensionHash(Text,Hash) || !MdoApiValueSetString(Item,"id",Id) ||
         !MdoApiValueSetString(Item,"kind",Kind) || !MdoApiValueSetStringView(Item,"name",Name.Size?Name:xrtStrView(Id)) ||
@@ -114,6 +130,34 @@ static xvalue* ExtensionItem(cstr Kind,cstr Id,bool IncludeSource)
         !MdoApiValueSetBool(Item,"enabled",Enabled) || !MdoApiValueSetBool(Item,"valid",Valid) ||
         !MdoApiValueSetString(Item,"error",Valid?"":Error) ||
         (IncludeSource && !MdoApiValueSetString(Item,"content",Text))) goto fail;
+    if (!strcmp(Kind,"tools")) {
+        MdoModuleCatalog* Catalog=MdoModuleCatalogSnapshot();
+        xvalue* Tools=xrtValueArray(); size_t i,j; bool Loaded=false,Ok=Tools!=NULL;
+        char Virtual[192]; snprintf(Virtual,sizeof(Virtual),"/app/default-home/%s",Path);
+        /* GET never compiles or invokes user callbacks. Only a published,
+         * matching source revision supplies names and exported descriptors. */
+        for (i=0u;Ok && i<MdoModuleCatalogModuleCount(Catalog);++i) {
+            MdoModuleInfo Module={0}; Module.Size=sizeof(Module);
+            if (!MdoModuleCatalogModuleAt(Catalog,i,&Module) || strcmp(Module.SourcePath,Virtual) || strcmp(Module.SourceRevision,Hash)) continue;
+            Loaded=true;
+            Ok=MdoApiValueSetString(Item,"name",Module.Name) && MdoApiValueSetString(Item,"description",Module.Description);
+            for (j=0u;Ok && j<MdoModuleCatalogToolCount(Catalog);++j) {
+                MdoModuleToolInfo Tool={0}; xvalue* Export=xrtValueObject(); Tool.Size=sizeof(Tool);
+                if (!MdoModuleCatalogToolAt(Catalog,j,&Tool) || strcmp(Tool.ModuleId,Module.Id)) { xrtValueRelease(Export); continue; }
+                Ok=Export && MdoApiValueSetString(Export,"id",Tool.Id) && MdoApiValueSetString(Export,"name",Tool.Name) &&
+                    MdoApiValueSetString(Export,"description",Tool.Description) && MdoApiValueSetUInt(Export,"effects",Tool.Effects) &&
+                    MdoApiValueSetString(Export,"parameters_json",Tool.ParametersJson) && MdoApiValueAppendTake(Tools,&Export);
+                xrtValueRelease(Export);
+            }
+            break;
+        }
+        MdoModuleCatalogRelease(Catalog);
+        Ok=Ok && MdoApiValueSetBool(Item,"loaded",Loaded) && MdoApiValueSetTake(Item,"tools",&Tools);
+        xrtValueRelease(Tools);
+        if (Enabled && !Loaded) Ok=Ok && MdoApiValueSetBool(Item,"valid",false) &&
+            MdoApiValueSetString(Item,"error","Source is not registered. Save or refresh to compile it.");
+        if (!Ok) goto fail;
+    }
     if (!strcmp(Kind,"mcp")) {
         MdoMcpServerStatus Status={0}; Status.Size=sizeof(Status);
         if (MdoMcpManagerGetStatus(Id,&Status)) {
@@ -147,7 +191,7 @@ static bool ExtensionList(MdoApiContext* C,cstr Kind)
     }
     while (Ok && Dir && (Next=xrtDirNext(Dir,&Entry))==XDIR_NEXT_ITEM) {
         char Id[65]; size_t Length=Entry.Name.Size; bool Skill=!strcmp(Kind,"skills"); xvalue* Item;
-        cstr Suffix=!strcmp(Kind,"mcp")?".json":".md"; size_t SuffixSize=strlen(Suffix);
+        cstr Suffix=!strcmp(Kind,"mcp")?".json":!strcmp(Kind,"tools")?".c":".md"; size_t SuffixSize=strlen(Suffix);
         if (!(Entry.Flags&XDIR_ENTRY_UTF8)) continue;
         if (Skill) { if (Entry.Info.Type!=XFILE_TYPE_DIRECTORY) continue; }
         else { if (Entry.Info.Type!=XFILE_TYPE_FILE || Length<=SuffixSize ||
@@ -340,7 +384,21 @@ static bool ExtensionWrite(MdoApiContext* C,cstr Kind,cstr Id,cstr Path,char* Ol
         Published=true;
     }
     Ok=ExtensionReload(Kind,Id,Enabled);
-    if (!Ok) goto failed;
+    if (!Ok) {
+        if (!strcmp(Kind,"tools")) {
+            MdoModuleDiagnostics* Diagnostics=MdoModuleDiagnosticsSnapshot(); size_t n;
+            /* Retain the rejection before rollback replaces diagnostics. */
+            for (n=0u;n<MdoModuleDiagnosticsCount(Diagnostics);++n) {
+                MdoModuleDiagnosticInfo Info={0}; Info.Size=sizeof(Info);
+                if (MdoModuleDiagnosticsAt(Diagnostics,n,&Info) && Info.Message && Info.Message[0]) {
+                    snprintf(Error,sizeof(Error),"%s: %s",Info.SourcePath?Info.SourcePath:"C module",Info.Message); break;
+                }
+            }
+            MdoModuleDiagnosticsRelease(Diagnostics);
+            if (!Error[0]) snprintf(Error,sizeof(Error),"C file must register at least one tool; check module and tool references.");
+        }
+        goto failed;
+    }
     xrtFree(Text); ExtensionBodyUnit(&Body);
     return MdoApiReplySuccessTake(C,200,ExtensionItem(Kind,Id,true),NULL);
 invalid:
@@ -358,7 +416,7 @@ failed:
     }
     for (i=0u;i<ReferenceCount;++i) (void)MdoSecretDiscard(References[i]);
     xrtFree(Text); ExtensionBodyUnit(&Body);
-    return MdoApiReplyError(C,503,"extension_publish_failed","Resource could not be published; previous files restored. Check resource references and filesystem permissions.",NULL);
+    return MdoApiReplyError(C,503,"extension_publish_failed",Error[0]?Error:"Resource could not be published; previous files restored. Check resource references and filesystem permissions.",NULL);
 }
 static bool ExtensionMcpEnable(MdoApiContext* C,cstr Id,bool Enabled)
 {

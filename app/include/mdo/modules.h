@@ -36,6 +36,7 @@ typedef struct MdoModuleInfo {
     const char* Version;
     const char* SourcePath;
     const char* SourceHash;
+    const char* SourceRevision; /* SHA-256 of source only, for file editor revisions. */
     mdo_capabilities Capabilities;
     size_t ToolCount;
     size_t AgentCount;

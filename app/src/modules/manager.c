@@ -7,6 +7,7 @@
 #include "../../include/mdo/home.h"
 #include "../../include/mdo/modules.h"
 #include "../../include/mdo/subagent_file.h"
+#include "../../include/mdo/tool_catalog.h"
 
 #define MDO_MODULE_SOURCE_LIMIT (1024u * 1024u)
 #define MDO_MODULE_HEADER_LIMIT (512u * 1024u)
@@ -84,6 +85,7 @@ struct MdoModuleGeneration {
     char* Version;
     char* SourcePath;
     char SourceHash[65];
+    char SourceRevision[65];
     mdo_capabilities Capabilities;
     char** Dependencies;
     size_t DependencyCount;
@@ -521,13 +523,14 @@ static bool MdoModulesDiscoverDirectory(MdoModuleKind Kind, cstr Directory,
              Entry.Info.Type != XFILE_TYPE_FILE || iName <= (Declarative ? 3u : 2u) ||
              strcmp(Entry.Name.Data + iName - (Declarative ? 3u : 2u),
                  Declarative ? ".md" : ".c") != 0 ) continue;
-        if (Declarative) {
+        if (Declarative || strcmp(RelativeDirectory, "tools") == 0) {
             char Id[65];
             bool Enabled;
-            if (iName - 3u >= sizeof(Id)) continue;
-            memcpy(Id, Entry.Name.Data, iName - 3u); Id[iName - 3u] = '\0';
+            size_t Suffix = Declarative ? 3u : 2u;
+            if (iName - Suffix >= sizeof(Id)) continue;
+            memcpy(Id, Entry.Name.Data, iName - Suffix); Id[iName - Suffix] = '\0';
             if (!MdoExtensionIdValid(Id)) continue;
-            if (!MdoExtensionEnabled("subagents", Id, &Enabled)) {
+            if (!MdoExtensionEnabled(Declarative ? "subagents" : "tools", Id, &Enabled)) {
                 (void)xrtDirClose(Dir); return false;
             }
             if (!Enabled) continue;
@@ -604,6 +607,9 @@ static bool MdoModulesDiscover(MdoModuleSource** ppSources, size_t* pCount,
     if ( !MdoModulesDiscoverDirectory(MDO_MODULE_TOOLS,
             "/app/default-home/modules/tools", "modules/tools",
             ppSources, pCount, &iCapacity, pDiagnostics) ||
+         !MdoModulesDiscoverDirectory(MDO_MODULE_TOOLS,
+            "/app/default-home/tools", "tools",
+            ppSources, pCount, &iCapacity, pDiagnostics) ||
          !MdoModulesDiscoverDirectory(MDO_MODULE_AGENTS,
             "/app/default-home/modules/agents", "modules/agents",
             ppSources, pCount, &iCapacity, pDiagnostics) ||
@@ -652,6 +658,13 @@ static bool MdoModulesSourceHash(cstr Path, const void* pSource,
     }
     Output[64] = '\0';
     return true;
+}
+
+static bool MdoModulesSourceRevision(const void* Bytes,size_t Length,char Output[65])
+{
+    char* Text=xrtStrDupN((cstr)Bytes,Length);
+    bool Ok=Text && MdoExtensionHash(Text,Output);
+    xrtFree(Text); return Ok;
 }
 
 static void MdoModulesTccError(void* pOpaque, const char* Message)
@@ -845,6 +858,7 @@ static MdoModuleGeneration* MdoModulesCompile(const MdoModuleSource* pSource,
     pGeneration->External = pSource->External;
     pGeneration->SourcePath = xrtStrDup(pSource->VirtualPath);
     if ( pGeneration->SourcePath == NULL ||
+         !MdoModulesSourceRevision(pBytes,iBytes,pGeneration->SourceRevision) ||
          !MdoModulesSourceHash(pSource->VirtualPath, pBytes, iBytes,
             pHeader, iHeader, pGeneration->SourceHash) ) goto memory_failed;
 
@@ -1344,44 +1358,17 @@ static MdoModuleToolBinding* MdoModulesFindTool(
 
 static bool MdoModulesRuntimeTool(cstr Id, xwork_tool_effects* pEffects)
 {
-    static const struct {
-        const char* Id;
-        xwork_tool_effects Effects;
-    } Builtins[] = {
-        { "read", XWORK_TOOL_EFFECT_READ },
-        { "skill", XWORK_TOOL_EFFECT_READ },
-        { "ls", XWORK_TOOL_EFFECT_READ },
-        { "glob", XWORK_TOOL_EFFECT_READ },
-        { "grep", XWORK_TOOL_EFFECT_READ },
-        /* Standard web capabilities may be inactive while signed out. */
-        { "web_search", XWORK_TOOL_EFFECT_READ | XWORK_TOOL_EFFECT_NETWORK |
-            XWORK_TOOL_EFFECT_EXTERNAL_SERVICE | XWORK_TOOL_EFFECT_SECRETS },
-        { "web_open", XWORK_TOOL_EFFECT_READ | XWORK_TOOL_EFFECT_NETWORK },
-        { "web_find", XWORK_TOOL_EFFECT_READ },
-        { "write", XWORK_TOOL_EFFECT_WORKSPACE_WRITE },
-        { "edit", XWORK_TOOL_EFFECT_WORKSPACE_WRITE },
-        { "spawn", XWORK_TOOL_EFFECT_PROCESS },
-        { "poll", XWORK_TOOL_EFFECT_READ },
-        { "wait", XWORK_TOOL_EFFECT_READ },
-        { "stdin", XWORK_TOOL_EFFECT_PROCESS },
-        { "stop", XWORK_TOOL_EFFECT_PROCESS },
-        { "exec", XWORK_TOOL_EFFECT_PROCESS },
-        { "tool_search", XWORK_TOOL_EFFECT_EXTERNAL_SERVICE },
-        { "tool_load", XWORK_TOOL_EFFECT_EXTERNAL_SERVICE },
-        { "agent", XWORK_TOOL_EFFECT_AGENT_DELEGATION }
-    };
+    const MdoBuiltinTool* Builtin = MdoBuiltinToolFind(Id);
     xwork_tool_catalog* pCatalog =
         xworkRuntimeToolCatalogSnapshot(g_MdoModules.Runtime);
     xwork_tool_info Info;
     bool bFound = false;
     size_t i;
 
-    for ( i = 0u; i < sizeof(Builtins) / sizeof(Builtins[0]); ++i ) {
-        if ( strcmp(Builtins[i].Id, Id) == 0 ) {
-            *pEffects = Builtins[i].Effects;
-            xworkToolCatalogRelease(pCatalog);
-            return true;
-        }
+    if ( Builtin != NULL ) {
+        *pEffects = Builtin->Effects;
+        xworkToolCatalogRelease(pCatalog);
+        return true;
     }
     if ( pCatalog == NULL ) return false;
     for ( i = 0u; i < xworkToolCatalogCount(pCatalog); ++i ) {
@@ -1439,6 +1426,13 @@ static bool MdoModulesValidateCatalog(MdoModuleCatalog* pCatalog,
     }
     for ( i = 0u; i < pCatalog->ToolCount; ++i ) {
         size_t j;
+        if (strncmp(pCatalog->Tools[i]->Owner->SourcePath, "/app/default-home/tools/", sizeof("/app/default-home/tools/") - 1u) == 0 &&
+            MdoBuiltinToolFind(pCatalog->Tools[i]->Id) != NULL) {
+            (void)MdoModulesDiagnosticAdd(pDiagnostics, MDO_MODULE_DIAGNOSTIC_VALIDATE,
+                pCatalog->Tools[i]->Owner->SourcePath, pCatalog->Tools[i]->Owner->SourceHash,
+                "Custom tools cannot replace built-in tool IDs");
+            return false;
+        }
         for ( j = 0u; j < i; ++j ) {
             if ( strcmp(pCatalog->Tools[i]->Id,
                     pCatalog->Tools[j]->Id) == 0 ) {
@@ -1727,7 +1721,7 @@ static MdoModuleGeneration* MdoModulesReadSubagent(const MdoModuleSource* Source
     Module->SourcePath = xrtStrDup(Source->VirtualPath);
     if (Module->Id == NULL || Module->Name == NULL || Module->Description == NULL ||
         Module->Version == NULL || Module->SourcePath == NULL ||
-        !MdoExtensionHash(Text, Module->SourceHash)) goto failed;
+        !MdoExtensionHash(Text, Module->SourceHash) || !MdoExtensionHash(Text,Module->SourceRevision)) goto failed;
     memset(&Registrar, 0, sizeof(Registrar)); Registrar.Generation = Module;
     if (MdoModulesRegistrarAddAgent(&Registrar, &File.Agent, Error, sizeof(Error)) != MDO_RESULT_OK)
         goto failed;
@@ -2026,6 +2020,7 @@ bool MdoModuleCatalogModuleAt(const MdoModuleCatalog* pCatalog,
     pInfo->Version = pModule->Version;
     pInfo->SourcePath = pModule->SourcePath;
     pInfo->SourceHash = pModule->SourceHash;
+    pInfo->SourceRevision = pModule->SourceRevision;
     pInfo->Capabilities = pModule->Capabilities;
     pInfo->ToolCount = pModule->ToolCount;
     pInfo->AgentCount = pModule->AgentCount;

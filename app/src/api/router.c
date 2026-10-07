@@ -100,6 +100,8 @@ static const MdoApiRoute g_MdoApiRoutes[] = {
       "GET, HEAD, DELETE, OPTIONS", MdoApiBackupRestoreRoute, false },
     { "/api/v1/modules", XHTTP_METHOD_GET | XHTTP_METHOD_HEAD,
       "GET, HEAD, OPTIONS", MdoApiModulesRoute, false },
+    { "/api/v1/tools", XHTTP_METHOD_GET | XHTTP_METHOD_HEAD,
+      "GET, HEAD, OPTIONS", MdoApiToolsRoute, false },
     { "/api/v1/skills", XHTTP_METHOD_GET | XHTTP_METHOD_HEAD,
       "GET, HEAD, OPTIONS", MdoApiSkillsRoute, false },
     { "/api/v1/mcp", XHTTP_METHOD_GET | XHTTP_METHOD_HEAD,
