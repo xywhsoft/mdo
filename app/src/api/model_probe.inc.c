@@ -153,7 +153,8 @@ static bool MdoApiModelTestRun(MdoApiContext* Context, MdoApiJsonBody Body)
         return MdoApiReplyError(Context, 404u, "model_not_found", "Save the model before testing it", NULL);
     }
     Options.MaxOutputTokens = Info.MaxOutputTokens < 256u ? Info.MaxOutputTokens : 256u;
-    Client = MdoModelClientCreate(Catalog, &Options, NULL, &Error);
+    bool Online = MdoModelIsOnline(Catalog, Id);
+    if (!Online) Client = MdoModelClientCreate(Catalog, &Options, NULL, &Error);
     Request.bStream = false; Request.bParallelToolCalls = false;
     Request.uDeadline = Context->SendDeadline;
     xllmRequestSetCancel(&Request, Context->SendCancel);
@@ -162,8 +163,9 @@ static bool MdoApiModelTestRun(MdoApiContext* Context, MdoApiJsonBody Body)
         if (!xllmRequestAddTool(&Request, "mdo_connection_probe", "Return a connection check. This tool is never executed.",
             "{\"type\":\"object\",\"properties\":{},\"additionalProperties\":false}", false)) { xllmClientDestroy(Client); Client = NULL; }
     }
-    if (Client && xllmRequestAddTextMessage(&Request, XLLM_ROLE_USER, Tools ? "Call mdo_connection_probe once." : "Reply briefly with OK."))
-        Ok = xllmClientComplete(Client, &Request, NULL, &Response, &Error) == XLLM_RESULT_OK;
+    if ((Client || Online) && xllmRequestAddTextMessage(&Request, XLLM_ROLE_USER, Tools ? "Call mdo_connection_probe once." : "Reply briefly with OK."))
+        Ok = (Online ? MdoModelOnlineComplete(Catalog, &Options, &Request, NULL, &Response, &Error) :
+            MdoModelComplete(Client, &Request, NULL, &Response, &Error)) == XLLM_RESULT_OK;
     if (Tools) Ok = Ok && Response && Response->iToolCallCount == 1u && Response->pToolCalls[0].sName &&
         strcmp(Response->pToolCalls[0].sName, "mdo_connection_probe") == 0;
     else if (Ok && (!Response || ((!Response->sContent || !Response->sContent[0]) && (!Response->sReasoningContent || !Response->sReasoningContent[0])))) Ok = false;
@@ -175,10 +177,10 @@ static bool MdoApiModelTestRun(MdoApiContext* Context, MdoApiJsonBody Body)
     MdoModelCatalogRelease(Catalog); xrtClearError();
     if (Ok) return MdoApiReplySuccessTake(Context, 200u, Data, NULL);
     xrtValueRelease(Data);
-    return MdoApiReplyError(Context, 422u, Tools ? "model_tools_test_failed" : "model_test_failed",
-        Error.eCode == XLLM_ERROR_AUTH ? "The supplier rejected this model key" :
-        Error.eCode == XLLM_ERROR_TIMEOUT ? "The model did not respond within 30 seconds" :
-        "The model request failed; check model ID, balance, API protocol and network settings", NULL);
+    return MdoApiReplyError(Context, 422u, Error.eCode == XLLM_ERROR_NONE ?
+        (Tools ? "model_tools_test_failed" : "model_test_failed") : MdoModelErrorKind(&Error),
+        Error.eCode == XLLM_ERROR_NONE ? "The model response did not satisfy the connection test" :
+        MdoModelErrorMessage(&Error), NULL);
 }
 
 typedef struct MdoModelProbeJob {

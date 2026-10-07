@@ -1224,7 +1224,10 @@ static xllm_client* MdoModelClientCreateAuth(const MdoModelCatalog* pCatalog,
     Config.uMaxOutputTokens = MaxOutputTokens;
     Config.uTimeoutMs = pProvider->TimeoutMilliseconds;
     Config.bVerifyPeer = pProvider->VerifyPeer;
-    if(Online){Config.uMaxAttempts=1;Config.bVerifyPeer=!strncmp(g_MdoModelsOnline.Origin,"https://",8);}
+    /* One transport attempt: product completion owns classification, backoff
+     * and the recovery budget for both online and configured providers. */
+    Config.uMaxAttempts = 1u;
+    if(Online){Config.bVerifyPeer=!strncmp(g_MdoModelsOnline.Origin,"https://",8);}
     Config.pX509Store = CaStore;
     if ( strcmp(Transport.ProxyKind, "none") != 0 ) {
         Config.eProxyKind = strcmp(Transport.ProxyKind, "socks5") == 0
@@ -1255,4 +1258,5 @@ done:
     xrtFree(Endpoint);
     return pClient;
 }
+#include "completion.inc.c"
 #include "online_access.inc.c"

@@ -359,7 +359,7 @@ static xllm_result MdoAgentsComplete(void* UserData,
     Client = Match->Client;
     (void)xrtMutexUnlock(Owner->RouteLock);
     if ( Client == NULL ) return XLLM_RESULT_ERROR;
-    return xllmClientComplete(Client, Request, Callbacks, Response, Error);
+    return MdoModelComplete(Client, Request, Callbacks, Response, Error);
 }
 
 static bool MdoAgentOwnerAcquireAgent(MdoAgentOwner* Owner,

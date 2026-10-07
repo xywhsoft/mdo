@@ -31,7 +31,8 @@ xllm_result MdoModelOnlineComplete(const MdoModelCatalog* Catalog,const MdoModel
     MdoModelOnlineAccess Access={0};xllm_result Result=XLLM_RESULT_ERROR;xllm_client* Client=NULL;
     if(!Request||!Response||!Options||!g_MdoModelsOnline.Acquire||!g_MdoModelsOnline.Release)return Result;
     if(!g_MdoModelsOnline.Acquire(Request->pCancel,&Access)){
-        MdoModelsProfileError(Error,"Sign in to use online models, or wait for login renewal");if(Error)Error->eCode=XLLM_ERROR_AUTH;return Result;}
+        MdoModelsProfileError(Error,"Sign in to use online models, or wait for login renewal");
+        if(Error){Error->eCode=XLLM_ERROR_AUTH;snprintf(Error->sProviderCode,sizeof(Error->sProviderCode),"%s","login_required");}return Result;}
     Client=MdoModelClientCreateAuth(Catalog,Options,NULL,Error,Access.Token);
     if(Client){
         xllm_request Borrowed=*Request;Borrowed.pCancel=Access.Cancel;
@@ -53,7 +54,7 @@ xllm_result MdoModelOnlineComplete(const MdoModelCatalog* Catalog,const MdoModel
                 if(!Ready)MdoModelsProfileError(Error,"cannot prepare GLM reasoning controls");
             }
         }
-        if(Ready)Result=xllmClientComplete(Client,&Borrowed,Callbacks,Response,Error);
+        if(Ready)Result=MdoModelComplete(Client,&Borrowed,Callbacks,Response,Error);
         xrtFree(ExtraJson);xllmClientDestroy(Client);
     }
     g_MdoModelsOnline.Release(&Access,Error?Error->iHttpStatus:0);return Result;

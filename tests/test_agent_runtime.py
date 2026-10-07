@@ -178,6 +178,9 @@ PROBE_SOURCE = rf'''
 #include "src/asks/manager.c"
 
 xwork_runtime *MdoBootstrapRuntime(void) {{ return NULL; }}
+/* This isolated Agent fixture has no executable distribution manager. The
+ * complete application/online tests cover its prompt augmentation. */
+bool MdoToolPrompt(char **prompt) {{ return prompt && *prompt; }}
 
 static const char sSkillV1[] = {c_literal(SKILL_V1)};
 static const char sSkillV2[] = {c_literal(SKILL_V2)};

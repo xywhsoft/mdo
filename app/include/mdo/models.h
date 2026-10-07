@@ -96,6 +96,13 @@ bool MdoModelManagerSetOnlineCatalog(const xvalue* Catalog);
 bool MdoModelIsOnline(const MdoModelCatalog*,const char* ModelId);
 xllm_result MdoModelOnlineComplete(const MdoModelCatalog*,const MdoModelClientOptions*,
     const xllm_request*,const xllm_stream_callbacks*,xllm_response**,xllm_error*);
+/* Clients created by the product perform one transport attempt. This boundary
+ * retries transient failures before content delivery and returns one final
+ * structured error. Cancellation and request deadlines remain authoritative. */
+xllm_result MdoModelComplete(xllm_client*, const xllm_request*,
+    const xllm_stream_callbacks*, xllm_response**, xllm_error*);
+const char* MdoModelErrorKind(const xllm_error*);
+const char* MdoModelErrorMessage(const xllm_error*);
 
 bool MdoModelManagerInit(void);
 void MdoModelManagerUnit(void);
