@@ -72,7 +72,8 @@ def run(host):
             tool_calling=True,vision=False,reasoning_efforts='',output_limit_field='max_tokens',default_protocol='chat',sale_rates=rates,cost_rates=None,
             daily_tokens=100000000,member_daily_tokens=0,routes=[dict(protocol='chat',channel_id='fixture',wire_model='ornith-wire',priority=0)])
         mutate('/admin/model-gateway/model',model)
-        mutate('/admin/model-gateway/model',dict(model,id='glm-test',title='GLM test · VIP',member_only=True,member_daily_tokens=100000000,reasoning_efforts='low,high,max'))
+        mutate('/admin/model-gateway/model',dict(model,id='glm-test',title='GLM test · VIP',member_only=True,member_daily_tokens=100000000,reasoning_efforts='low,high,max',
+            routes=[dict(protocol='chat',channel_id='fixture',wire_model='glm-test',priority=0)]))
         mutate('/admin/billing/plan',dict(id='vip',title='VIP',duration_days=30,period_days=30,credit_micros=0,discount_bps=10000,concurrency_limit=2,model_ids='ornith-1.5-35b,glm-test',enabled=True))
         owner=call(port,'POST','/api/v1/register',dict(username='online_model_user',password='Fixture-only-2026'),status=201)[0]['data']['id']
         with tempfile.TemporaryDirectory(prefix='online-model-',dir=ROOT/'.build',ignore_cleanup_errors=True) as directory:
@@ -120,7 +121,19 @@ def run(host):
                 result=app('GET','/runs/'+str(run['id']))
                 if result['terminal']:break
                 time.sleep(.1)
-            assert result['state']=='succeeded',result
+            assert result['state']=='succeeded',(result,app('GET',route+'/events?after=0&limit=32'))
+            run=app('POST',route+'/runs',dict(prompt='Continue the fixture conversation'),status=202)
+            end=time.monotonic()+10
+            while time.monotonic()<end:
+                result=app('GET','/runs/'+str(run['id']))
+                if result['terminal']:break
+                time.sleep(.1)
+            assert result['state']=='succeeded',(result,app('GET',route+'/events?after=0&limit=32'))
+            glm_requests=[body for _,body,_ in Upstream.calls if body.get('model')=='glm-test']
+            assert all(body.get('thinking',{}).get('type')=='enabled' and body.get('reasoning_effort')=='high' for body in glm_requests)
+            assert any(m.get('role')=='assistant' and m.get('reasoning_content')=='agent fixture thought' for m in glm_requests[-1]['messages'])
+            assert any(m.get('role')=='tool' and m.get('tool_call_id')=='fixture-ls' for m in glm_requests[-1]['messages'])
+            assert any(body.get('tool_stream') is True for body in glm_requests)
             Upstream.agent_mode=False
             app('POST','/account/logout',{});state=wait(lambda v:v['state']=='signed_out' and not v['busy'])
             assert 'model_allowance' not in state

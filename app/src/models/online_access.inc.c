@@ -33,7 +33,24 @@ xllm_result MdoModelOnlineComplete(const MdoModelCatalog* Catalog,const MdoModel
     if(!g_MdoModelsOnline.Acquire(Request->pCancel,&Access)){
         MdoModelsProfileError(Error,"Sign in to use online models, or wait for login renewal");if(Error)Error->eCode=XLLM_ERROR_AUTH;return Result;}
     Client=MdoModelClientCreateAuth(Catalog,Options,NULL,Error,Access.Token);
-    if(Client){xllm_request Borrowed=*Request;Borrowed.pCancel=Access.Cancel;
-        Result=xllmClientComplete(Client,&Borrowed,Callbacks,Response,Error);xllmClientDestroy(Client);}
+    if(Client){
+        xllm_request Borrowed=*Request;Borrowed.pCancel=Access.Cancel;
+        xllm_model_profile Profile;char* ExtraJson=NULL;bool Ready=true;
+        Ready=MdoModelCatalogProfile(Catalog,Options->ModelId,Options->Protocol,&Profile,Error);
+        if(Ready&&Profile.eProvider==XLLM_PROVIDER_GLM){
+            /* xllm's GLM dialect preserves reasoning_content and enables
+             * thinking. GLM-5.3 additionally accepts low/high/max effort;
+             * merge this without losing the caller's other extra fields. */
+            const MdoModelEntry* Model=MdoModelsLookup(Catalog,Profile.sId);
+            const char* Effort=Options->ReasoningEffort&&Options->ReasoningEffort[0]?Options->ReasoningEffort:Model->DefaultReasoningEffort;
+            xvalue* Extra=Request->sExtraBodyJson?xrtJsonParse(xrtStrView(Request->sExtraBodyJson)):xrtValueObject();
+            Ready=xrtValueType(Extra)==XVALUE_OBJECT&&xrtValueObjectSetNew(Extra,XRT_STR_LITERAL("reasoning_effort"),xrtValueString(xrtStrView(Effort)));
+            if(Ready)ExtraJson=xrtJsonStringify(Extra,false,NULL);
+            xrtValueRelease(Extra);Ready=Ready&&ExtraJson!=NULL;Borrowed.sExtraBodyJson=ExtraJson;
+            if(!Ready)MdoModelsProfileError(Error,"cannot prepare GLM reasoning controls");
+        }
+        if(Ready)Result=xllmClientComplete(Client,&Borrowed,Callbacks,Response,Error);
+        xrtFree(ExtraJson);xllmClientDestroy(Client);
+    }
     g_MdoModelsOnline.Release(&Access,Error?Error->iHttpStatus:0);return Result;
 }

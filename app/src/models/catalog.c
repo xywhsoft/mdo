@@ -925,6 +925,12 @@ bool MdoModelCatalogProfile(const MdoModelCatalog* pCatalog,
     pProfile->sId = pModel->Id;
     pProfile->sModel = pModel->WireModel;
     pProfile->eProvider = MdoModelProtocolProvider(Protocol);
+    /* GLM shares Chat's endpoint but requires assistant reasoning replay and
+     * thinking/tool-stream fields. The gateway preserves that wire contract. */
+    if ( Protocol == MDO_MODEL_PROTOCOL_OPENAI_CHAT_COMPLETIONS &&
+         !strcmp(pModel->ProviderId, "mdo-online") &&
+         !strncmp(pModel->WireModel, "glm-", 4u) )
+        pProfile->eProvider = XLLM_PROVIDER_GLM;
     pProfile->uCapabilities = pModel->Capabilities;
     pProfile->eWindowMode = pModel->WindowMode;
     pProfile->uContextWindowTokens = pModel->ContextWindowTokens;
@@ -1229,7 +1235,7 @@ static xllm_client* MdoModelClientCreateAuth(const MdoModelCatalog* pCatalog,
         Config.sProxyPass = ProxyPassword;
         Config.sProxyBypass = Transport.ProxyBypass;
     }
-    Config.eProvider = MdoModelProtocolProvider(Protocol);
+    Config.eProvider = Profile.eProvider;
     Config.pModelProfile = &Profile;
     pClient = xllmClientCreate(&Config, pError);
     if ( pClient != NULL && pInfo != NULL ) {
