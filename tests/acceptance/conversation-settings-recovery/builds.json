@@ -1,0 +1,33 @@
+{
+  "source_commit": "8df71604d3d00d0a5ae883e068438833119224b6",
+  "workspace_changes_outside_this_stage_included": true,
+  "native_xs_commit": "907744aac65e093a48a4a3192780dc36fd2fe430",
+  "windows_packed_ui_verified": true,
+  "real_android_device_tested": false,
+  "stress_or_high_load_tests": false,
+  "artifacts": {
+    "windows": {
+      "path": ".build/conversation-acceptance/mdo-settings-final.exe",
+      "bytes": 4385591,
+      "sha256": "abd920854571381a7927381808e6999269c10c70b52b68bab7bc7056b1264a80"
+    },
+    "android_lite": {
+      "path": ".build/conversation-acceptance/mdo-settings-arm64-v8a.apk",
+      "bytes": 4011245,
+      "sha256": "94760e5e1915b5d8482ad929e24a35ec8494c0bcc1a8c9938738ce5e49a3ece4",
+      "app_xrtpack_sha256": "cc4ea4a7ebace85cb98f096de62a74cc52e80be88ba47ee60f299f6a26cdfa44",
+      "signature_v2": true,
+      "signature_v3": true,
+      "page_alignment_16k": true
+    },
+    "android_full": {
+      "path": ".build/conversation-acceptance/mdo-settings-full-arm64-v8a.apk",
+      "bytes": 60777294,
+      "sha256": "ff0fdd75f3d2b610d7d4d17ad81318029f5e43cfe0542e751e88c1baf8536969",
+      "app_xrtpack_sha256": "cc4ea4a7ebace85cb98f096de62a74cc52e80be88ba47ee60f299f6a26cdfa44",
+      "signature_v2": true,
+      "signature_v3": true,
+      "page_alignment_16k": true
+    }
+  }
+}
