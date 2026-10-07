@@ -59,7 +59,7 @@ MCP 导出将凭据引用变成 `input:N` 占位符并移除工作目录；安�
 | 接口 | 用途 |
 | --- | --- |
 | GET `/api/v1/mdo/ecosystem/packages` | 已审核公开列表；q/kind/before 分页，mine=1 读取本人投稿 |
-| GET `/api/v1/mdo/ecosystem/package?id=N` | 详情和源码；待审核、退回、下架版本仅作者可见 |
+| GET `/api/v1/mdo/ecosystem/package?id=N` | 详情和源码；待审核、退回、下架版本仅作者可见；latest=1 返回同一作者、同一 ID 的最新公开版本 |
 | POST `/api/v1/mdo/ecosystem/submit` | 上传源码包，初始状态 pending |
 | GET/POST `/admin/api/mdo/ecosystem` | 查询、approve/reject/hide；提交 id/revision/action/reason |
 | `/admin/mdo/ecosystem` | 后台“墨斗管理 → 生态资源”，要求 mdo.ecosystem.review 权限 |
@@ -76,7 +76,7 @@ MCP 导出将凭据引用变成 `input:N` 占位符并移除工作目录；安�
 ## 安装事务与生命周期
 
 客户端 `/api/v1/ecosystem` 将请求转给当前账号的网站：GET 返回本机安装记录；
-POST action 为 catalog/mine/detail/submit/install/uninstall/export/c_sources。
+POST action 为 catalog/mine/detail/latest/submit/install/uninstall/export/c_sources。
 联网操作由有界线程池执行，拥有连接、请求和账号引用；卸载应用时先取消并等待。
 
 安装按现有资源解析器校验 → 检查平台/哈希/明确 C 信任 → 检查本地冲突 →
@@ -103,6 +103,10 @@ python D:/GIT/home/tests/test_mdo_ecosystem.py
 隔离、审核权限/CSRF、版本冲突、恶意路径、安装/更新、C 编译失败回退、Skill 附件、
 本地修改保留及崩溃日志恢复。`--ui` 保留临时页面供人工检查桌面和手机布局。
 不进行压力和高负载测试。
+
+首个公开资源为“项目审查入门包”，源码位于
+`examples/extensions/project-review.mdo-extension.json`。它组合只读 SubAgent、按需读取的
+Skill 和命令，不含 C 或外部服务；作者显示会员昵称，示例可直接用于准备新的投稿。
 
 部署只更新统一插件源码和页面。先用服务器实际 xs 在隔离站点运行联调，再停止服务、
 备份相关代码和主库、原子替换选定文件并重启。保留线上身份密钥、账号、余额、
