@@ -1777,6 +1777,13 @@
       "published": "Published",
       "rejected": "Returned",
       "hidden": "Withdrawn"
+    },
+    "validation": {
+      "id": "Use a lowercase portable package ID.",
+      "version": "Use letters, numbers, dots, hyphens and underscores in the version.",
+      "fields": "Enter a name, description, documentation and license.",
+      "selection": "Select resources and platforms you have tested.",
+      "size": "Source package exceeds 1 MiB. Select fewer resources or attachments."
     }
   }
 }

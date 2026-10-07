@@ -10,6 +10,12 @@ const text = (key, fallback, args = {}) => t(`store.${key}`, args, fallback);
 const kindName = kind => ({ agents: "Agent", subagents: "SubAgent", tools: text("tools", "工具"),
   skills: "Skill", mcp: "MCP", commands: text("commands", "命令"), "c-agents": "C Agent", "c-subagents": "C SubAgent" })[kind] || kind;
 const node = (tag, value, className) => element(tag, { text: value, className });
+const publicationMessage = error => {
+  const key = ({ "Invalid package ID": "id", "Invalid version": "version",
+    "Name, description, documentation and license are required": "fields",
+    "Select resources and supported platforms": "selection", "Package exceeds 1 MiB": "size" })[error.message];
+  return key ? text(`validation.${key}`, error.message) : errorMessage(error);
+};
 
 export function createStorePanel() {
   const root = document.querySelector("[data-extension-store]");
@@ -173,20 +179,20 @@ export function createStorePanel() {
       const previewButton = button(text("preview", "预览发布内容"), async () => {
         previewButton.disabled = true;message.textContent = "";
         try { if (!form.reportValidity()) return;prepared = await build();preview.textContent = JSON.stringify(prepared, null, 2);preview.hidden = false; }
-        catch (e) { message.textContent = errorMessage(e); }finally { previewButton.disabled = false; }
+        catch (e) { message.textContent = publicationMessage(e); }finally { previewButton.disabled = false; }
       });
       const exportButton = button(text("export", "导出插件包"), async () => {
         exportButton.disabled = true;
         try { if (!form.reportValidity()) return;const p = await build();const url = URL.createObjectURL(new Blob([JSON.stringify(p, null, 2)], { type: "application/json" }));
           const a = element("a", { attrs: { href: url, download: `${p.manifest.slug}-${p.manifest.version}.mdo-extension.json` } });a.click();setTimeout(() => URL.revokeObjectURL(url), 1000);
-        } catch (e) { message.textContent = errorMessage(e); }finally { exportButton.disabled = false; }
+        } catch (e) { message.textContent = publicationMessage(e); }finally { exportButton.disabled = false; }
       });
       const submit = element("button", { text: text("submit", "提交审核"), className: "primary-button", attrs: { type: "submit" } });
       form.onsubmit = async e => {
         e.preventDefault();if (busy) return;busy = true;submit.disabled = true;previewButton.disabled = true;message.textContent = text("submitting", "正在提交…");
         const controls = [...form.querySelectorAll("input,textarea,button")];controls.forEach(control => { control.disabled = true; });
         try { prepared = await build();await call({ action: "submit", package: prepared });editor.saved = true;editor.dirty = false;closeDialog();view = "mine";busy = false;await load();toast(text("submitted", "投稿已提交，审核通过后会公开显示。")); }
-        catch (e) { message.textContent = errorMessage(e); }
+        catch (e) { message.textContent = publicationMessage(e); }
         finally { busy = false;controls.forEach(control => { control.disabled = false; }); }
       };
       actions.append(previewButton, exportButton, submit);form.append(actions, message, preview);d.append(form);busy = false;d.showModal();
