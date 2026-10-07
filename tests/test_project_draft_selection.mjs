@@ -103,3 +103,21 @@ test("a conflicting project draft leaves both copies and keeps project ownership
     assert.equal(env.failures.length, 1);
   } finally { env.restore(); }
 });
+
+test("a cold global draft edited offline migrates durably after reconnect", async () => {
+  const env = fixture(), onlineFetch = globalThis.fetch;
+  globalThis.fetch = async () => { throw new TypeError("offline"); };
+  try {
+    env.draftStore.select("");
+    assert.equal(await env.selector.restoreLegacy(), false);
+    env.draftStore.edit("", "offline first task");
+    globalThis.fetch = onlineFetch;
+    env.draftStore.resumeSaves({ retryReads: true });
+    assert.equal(await env.selector.restoreLegacy(), true);
+    assert.equal(env.documents.get("/api/v1/projects/alpha/draft").text,
+      "offline first task");
+    assert.equal(env.documents.get("/api/v1/draft").text, "");
+    assert.equal(env.selector.key(), projectDraftKey("alpha"));
+    assert.equal(env.draftStore.hasUnsaved(), false);
+  } finally { env.restore(); }
+});

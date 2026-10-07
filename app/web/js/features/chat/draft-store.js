@@ -1,4 +1,5 @@
 import { api, resourceId } from "../../api/client.js";
+import { isTransientReadError } from "../../api/read-recovery.js";
 import { t } from "../../i18n.js";
 
 const SAVE_DELAY_MS = 300;
@@ -123,7 +124,7 @@ export function projectDraftKey(projectId) {
 }
 
 export function createDraftStore({ onRestore, onError, onSaved, onLoaded = () => {},
-  isWritePaused = () => false }) {
+  isWritePaused = () => false, random = Math.random }) {
   const entries = new Map();
   const encoder = new TextEncoder();
   let selected = "";
@@ -135,7 +136,7 @@ export function createDraftStore({ onRestore, onError, onSaved, onLoaded = () =>
         uncertainRun: false, submissions: [], newTask: null,
         composerProfile: null, profileEdited: false, conflict: false,
         unpersisted: new Set(), error: null, oversized: false, loading: null,
-        saving: null, timer: 0 };
+        saving: null, timer: 0, readTimer: 0, readRetries: 0 };
       entries.set(key, value);
     }
     return value;
@@ -145,14 +146,33 @@ export function createDraftStore({ onRestore, onError, onSaved, onLoaded = () =>
     const current = entry(key);
     window.clearTimeout(current.timer);
     if (current.conflict || isWritePaused()) return;
+    if (!current.loaded && current.error) {
+      scheduleRead(key);
+      return;
+    }
     current.timer = window.setTimeout(() => { void flush(key); },
       immediate ? 0 : SAVE_DELAY_MS);
+  }
+
+  function scheduleRead(key) {
+    const current = entry(key);
+    if (current.loaded || current.conflict || current.readTimer ||
+        isWritePaused() || !isTransientReadError(current.error)) return;
+    // Reading the saved revision is required before a cold editor can save.
+    // Keep local edits in memory while retrying that read, without polling at
+    // the much shorter typing debounce or repeating an uncertain submission.
+    const delay = Math.min(1000 * 2 ** Math.min(current.readRetries++, 4), 15000);
+    current.readTimer = window.setTimeout(() => {
+      current.readTimer = 0;
+      if (!isWritePaused()) void load(key);
+    }, delay + Math.floor(delay * .2 * random()));
   }
 
   async function load(key) {
     const current = entry(key);
     if (current.loaded) return;
     if (current.loading) return current.loading;
+    window.clearTimeout(current.readTimer); current.readTimer = 0;
     current.loading = (async () => {
       try {
         const response = await api.get(endpoint(key));
@@ -181,6 +201,7 @@ export function createDraftStore({ onRestore, onError, onSaved, onLoaded = () =>
           throw new Error(t("draft.submissionConflict"));
         }
         current.loaded = true;
+        current.readRetries = 0;
         current.error = null;
         if (!current.submissions.length) current.submissions = storedSubmissions;
         for (const item of storedSubmissions) current.unpersisted.delete(item.id);
@@ -198,7 +219,10 @@ export function createDraftStore({ onRestore, onError, onSaved, onLoaded = () =>
       } catch (error) {
         current.error = error;
         if (selected === key) onError(error);
-      } finally { current.loading = null; }
+      } finally {
+        current.loading = null;
+        scheduleRead(key);
+      }
     })();
     return current.loading;
   }
@@ -613,11 +637,17 @@ export function createDraftStore({ onRestore, onError, onSaved, onLoaded = () =>
       return ![...entries.values()].some(current => current.dirty || current.saving);
     },
     hasUnsaved: () => [...entries.values()].some(current => current.dirty || current.saving),
-    resumeSaves() {
+    resumeSaves({ retryReads = false } = {}) {
       if (isWritePaused()) return;
-      for (const [key, current] of entries)
-        if (current.dirty && current.loaded && !current.conflict && !current.oversized)
+      for (const [key, current] of entries) {
+        if (!current.loaded && !current.conflict &&
+            (key === selected || current.dirty) &&
+            (!current.error || isTransientReadError(current.error)) &&
+            (!current.readTimer || retryReads))
+          void load(key);
+        else if (current.dirty && current.loaded && !current.conflict && !current.oversized)
           schedule(key);
+      }
     },
     unsentSnapshots() {
       return [...entries].filter(([, current]) => current.text || current.attachments.length ||

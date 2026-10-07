@@ -1331,6 +1331,10 @@ export async function boot() {
       void purgeRecovery.refresh().then(() => {
         liveConnection.start(currentPageWriteToken());
         runStops.resume();
+        if (!purgeRecovery.isPaused()) {
+          draftStore.resumeSaves({ retryReads: true });
+          void projectDraftSelection.restoreLegacy();
+        }
         return Promise.allSettled([loadBootstrap(), loadSettings(), loadCatalogs(), loadSessions(), loadRuns(), loadApprovals()]);
       });
     }
@@ -2451,12 +2455,16 @@ export async function boot() {
   }
   function syncLocalConnection(connected) {
     if (isRemoteTarget()) return;
+    const recovering = connected && localServiceReconnecting;
     localServiceReconnecting = !connected;
     if (connected && draftError?.code === "network_error") draftError = null;
     if (composerErrorState?.error?.code === "network_error" &&
         !composerErrorState.error.runAdmissionUncertain) hideComposerError();
     syncRuntimeLabel(); setRun(activeRun); renderDraftStatus();
-    if (connected && !purgeRecovery.isPaused()) draftStore.resumeSaves();
+    if (connected && !purgeRecovery.isPaused())
+      draftStore.resumeSaves({ retryReads: recovering });
+    if (recovering && !purgeRecovery.isPaused())
+      void projectDraftSelection.restoreLegacy();
     if (connected) runStops.resume();
   }
   liveConnection.subscribe((event) => {

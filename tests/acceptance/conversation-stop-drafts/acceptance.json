@@ -1,0 +1,52 @@
+{
+  "date": "2026-10-08",
+  "environment": "packed Windows host, isolated portable home, loopback model",
+  "stop_fixture_calls": {
+    "stream-stop": 3,
+    "streaming": 1,
+    "PRIORITY_AFTER_STOP": 1
+  },
+  "request_user_message_counts": [
+    1,
+    1,
+    2,
+    3,
+    4
+  ],
+  "stop_fixture_records": 23,
+  "final_error_events": 0,
+  "native_run_results": [
+    "cancelled",
+    "succeeded",
+    "cancelled",
+    "succeeded",
+    "cancelled"
+  ],
+  "fully_captured_offline_stop_delete_requests": 1,
+  "cold_draft_model_calls": 0,
+  "cold_draft_documents": {
+    "project": {
+      "revision": 1,
+      "text": "COLD_NEW_TASK_DRAFT",
+      "run_admission_uncertain": false,
+      "submissions": []
+    },
+    "session": {
+      "revision": 1,
+      "text": "SAVED_SESSION_DRAFT",
+      "run_admission_uncertain": false,
+      "submissions": []
+    }
+  },
+  "browser_tested_windows_sha256": "a2b5fdcb99e3072bc18b6de65c04baa1cf1b1fe06230beadcaf93c01688bbd67",
+  "automated_checks": {
+    "node": 62,
+    "frontend_contract": 20
+  },
+  "limitations": [
+    "real Android lifecycle, sleep and keyboard interaction are pending",
+    "remote cold-read deadlines and mutation guards were verified with the real transport and bounded-clock tests",
+    "isolated fixture hosts stopped and browser network simulation reset",
+    "existing unrelated working-tree changes are present in candidates; no website publication"
+  ]
+}
