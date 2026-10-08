@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { approvalDecisionStatus, decideApproval, loadApprovals } from
+import { approvalsStore, approvalDecisionStatus, decideApproval, loadApprovals } from
   "../app/web/js/state/approvals.js";
 
 function deferred() {
@@ -9,6 +9,7 @@ function deferred() {
   const promise = new Promise((done) => { resolve = done; });
   return { promise, resolve };
 }
+const tick = () => new Promise(resolve => setImmediate(resolve));
 
 test("both approval surfaces share one in-flight submission", async () => {
   const entered = deferred();
@@ -33,9 +34,11 @@ test("both approval surfaces share one in-flight submission", async () => {
     assert.equal(puts, 1);
     release.resolve();
     assert.equal(await first, true);
+    await tick();
     assert.equal(approvalDecisionStatus("1"), "idle");
   } finally {
     release.resolve();
+    approvalsStore.reset();
     globalThis.fetch = originalFetch;
   }
 });
@@ -56,13 +59,15 @@ test("a committed decision stays locked when the refresh fails", async () => {
     return Response.json({ ok: true, data: { total: 0, items: [] } });
   };
   try {
-    await assert.rejects(decideApproval("2", "deny"), /refresh failed/);
+    assert.equal(await decideApproval("2", "deny"), true);
+    await tick();
     assert.equal(approvalDecisionStatus("2"), "submitted");
     assert.equal(await decideApproval("2", "allow"), false);
     assert.equal(puts, 1);
-    await loadApprovals();
+    await loadApprovals({ retry: true });
     assert.equal(approvalDecisionStatus("2"), "idle");
   } finally {
+    approvalsStore.reset();
     globalThis.fetch = originalFetch;
   }
 });
@@ -88,10 +93,12 @@ test("run grant shares the one-shot lock across both approval surfaces", async (
     assert.equal(await decideApproval("3", "allow"), false);
     release.resolve();
     assert.equal(await first, true);
+    await tick();
     assert.deepEqual(decisions, ["allow_run"]);
     assert.equal(approvalDecisionStatus("3"), "idle");
   } finally {
     release.resolve();
+    approvalsStore.reset();
     globalThis.fetch = originalFetch;
   }
 });

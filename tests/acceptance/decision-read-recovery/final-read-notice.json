@@ -1,0 +1,8 @@
+{
+  "draft": "读取恢复后继续",
+  "errorToasts": [],
+  "readNotice": "暂时无法读取权限审核，请检查连接后重试。重试读取",
+  "readNotices": 1,
+  "reviewDisabled": "true",
+  "time": 1791455509733
+}

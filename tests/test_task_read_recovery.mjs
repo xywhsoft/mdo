@@ -23,7 +23,8 @@ test("task list retains its snapshot and recovers transient reads without a visi
   };
   try {
     const first = await loadTasks();
-    assert.equal(first.status, "refreshing"); assert.equal(first.error, null);
+    assert.equal(first.status, "ready"); assert.equal(first.error, null);
+    assert.equal(tasksStore.isPending(), true);
     assert.equal(first.data, saved);
     await loadTasks(); await loadTasks();
     assert.equal(reads, 1, "polling and live events must share the ongoing recovery budget");
@@ -58,7 +59,8 @@ test("failed task detail batches abort sibling reads and append recovered output
   try {
     assert.equal((await selectTask(9)).data.output.streams.stdout.text, "A");
     const failed = await refreshSelectedTask();
-    assert.equal(failed.status, "refreshing"); assert.equal(failed.error, null);
+    assert.equal(failed.status, "ready"); assert.equal(failed.error, null);
+    assert.equal(taskDetailStore.isPending(), true);
     await tick(); assert.equal(abortedSibling, 1);
     await refreshSelectedTask(); await refreshSelectedTask();
     assert.equal(outputReads, 2, "detail polling must not cancel an ongoing retry");

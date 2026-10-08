@@ -25,10 +25,12 @@ test("a healthy unchanged question snapshot clears a transient read error", asyn
     const previous = asksStore.get().data;
     fail = true;
     await refreshSelectedAsks();
-    assert.equal(asksStore.get().status, "error");
+    assert.equal(asksStore.get().status, "ready");
+    assert.equal(asksStore.isPending(), true);
+    assert.equal(asksStore.get().error, null);
     assert.equal(asksStore.get().data, previous);
     fail = false;
-    await refreshSelectedAsks();
+    await refreshSelectedAsks({ retry: true });
     assert.equal(asksStore.get().status, "ready");
     assert.equal(asksStore.get().error, null);
     assert.deepEqual(asksStore.get().data.items, pending.items);
@@ -46,7 +48,7 @@ test("a late question snapshot cannot redisplay a question absent from the newer
     next = () => late.promise;
     const stale = refreshSelectedAsks();
     next = () => ready({ total: 0, items: [] });
-    await refreshSelectedAsks();
+    await refreshSelectedAsks({ retry: true });
     assert.equal(asksStore.get().data.total, 0);
     late.resolve(ready());
     await stale;
@@ -66,7 +68,7 @@ test("an older failure cannot replace a newer healthy read in the same session",
     next = () => late.promise;
     const stale = refreshSelectedAsks();
     next = ready;
-    await refreshSelectedAsks();
+    await refreshSelectedAsks({ retry: true });
     late.resolve(failed());
     await stale;
     assert.equal(asksStore.get().status, "ready");

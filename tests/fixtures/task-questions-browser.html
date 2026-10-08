@@ -101,7 +101,7 @@ try {
   await until(() => Boolean(acknowledge));
   checks.repeatGuard = replies.length === 1 && answering.readOnly && document.activeElement === answering;
   acknowledge();
-  await until(() => taskDetailStore.get().status === "refreshing" && answering.readOnly);
+  await until(() => taskDetailStore.isPending() && answering.readOnly);
   checks.acceptedRefreshFailure = input() === answering && answering.readOnly &&
     document.querySelector(".ask-dock-validation").textContent.includes("已提交") &&
     !document.querySelector("#task-detail .resource-error");

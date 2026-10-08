@@ -1,0 +1,41 @@
+{
+  "source_base": "457ec93",
+  "candidate": "D:\\GIT\\mdo\\.build\\conversation-acceptance\\mdo-decision-reads-final.exe",
+  "bytes": 4444532,
+  "sha256": "08b8596b032f95f03e4d7e864b2d462341e83317dd6084d19fbf851092dff5e1",
+  "host_receipt": {
+    "schema_version": 1,
+    "profile_sha256": "2829d871dac1a12a70503f9b6116adaa2aa9556a53ea139df60aaa81cbb7a19b",
+    "revision": "0b7e041",
+    "extensions": [
+      "xllm",
+      "xllm-session",
+      "xwork",
+      "webview",
+      "image"
+    ],
+    "icon_sha256": "f54b7fb936f5e15f9b7d10842c294d3c4c5c4de7fff17acaa0fa29d04f0070f2",
+    "binary_sha256": "5f125504c3f2fbebf38ba65acf2e4355f3426a5840117b510a44436a314eb7bb",
+    "binary_bytes": 3153408
+  },
+  "host_reused": true,
+  "native_sources_changed": false,
+  "unrelated_worktree_changes_included": false,
+  "packed_files_verified": {
+    "js/state/store.js": "2e561e4f5298fe7051d3a9aef900e02ed880f0a95225ccdd09f15b6ceb16cb7a",
+    "js/state/asks.js": "e5dfb27016514b06cf001b221b1bc60040496ef6f0ddfb5a70bc93ec6cd28dca",
+    "js/state/approvals.js": "2ada86b4cd03e23fce49c0df7e36ae9295c6b0d5b2e4cf069fd63df56368d6c0",
+    "js/state/runs.js": "27727a5d25259841ba98e54866cb8d1a9efad9d6573fa8d100e3479b5bc7a84f",
+    "js/features/chat/conversation-docks.js": "4c7ce007d78ab506ecdff7838be842d4725ef81a9db25cc01198daa3452da72b",
+    "js/features/chat/decision-read-notice.js": "6b33d460c5ceb64c80db0e461c40d685a5b8027bc4ad78501df07297c16bad27",
+    "lang/zh-CN.json": "589663c1c0ac63dc9c17a4c59013bbd354c2b4cd7464cc106e473fa6a7e3a367",
+    "lang/en-US.json": "60b6198998cb76bdc827743a3be3fe2ae5cdbcc155c61e3e30525a543ace668a",
+    "lang/ru-RU.json": "c17a6a9002561f55103fa00093902756fb1290b0478f4d50f8d319e236015861"
+  },
+  "node_passed": 74,
+  "question_component_checks": 11,
+  "focused_frontend_contract_passed": 3,
+  "android_device_tested": false,
+  "daily_installation_replaced": false,
+  "website_release_updated": false
+}

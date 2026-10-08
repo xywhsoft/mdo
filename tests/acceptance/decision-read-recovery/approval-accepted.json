@@ -1,0 +1,25 @@
+{
+  "draft": "读取恢复后继续",
+  "errorToasts": [],
+  "readNotice": null,
+  "review": "需要确认展开查看运行命令\"C:\\\\Program Files\\\\Python312\\\\python.exe\" -c \"print('DECISION_VERIFIED')\"工作目录：D:\\GIT\\mdo\\.build\\conversation-acceptance\\decision-reads-fixed\\home\\workspace已收到你的选择，正在同步状态…查看操作详情{\n  \"argv\": [\n    \"C:\\\\Program Files\\\\Python312\\\\python.exe\",\n    \"-c\",\n    \"print('DECISION_VERIFIED')\"\n  ],\n  \"timeout_ms\": 5000\n}更多授权选项允许本次运行中的所有后续工具操作。本次运行结束后失效，不会改变会话默认权限。本次运行均允许拒绝此次操作允许此次操作",
+  "reviewButtons": [
+    {
+      "disabled": null,
+      "text": "展开查看"
+    },
+    {
+      "disabled": "true",
+      "text": "本次运行均允许"
+    },
+    {
+      "disabled": "true",
+      "text": "拒绝此次操作"
+    },
+    {
+      "disabled": "true",
+      "text": "允许此次操作"
+    }
+  ],
+  "time": 1791455492236
+}

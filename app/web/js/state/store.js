@@ -62,12 +62,13 @@ export function createResourceStore(initialData = null, {
     const generation = ++requestGeneration;
     cancelRead();
     readPending = true;
-    if (!probing) publish({ status: state.data === null ? "loading" : "refreshing", error: null });
+    if (!probing && !(background && state.status === "ready"))
+      publish({ status: state.data === null ? "loading" : "refreshing", error: null });
     if (generation !== requestGeneration) return state;
-    return read(generation, loader, 1, now() + 60000, probing);
+    return read(generation, loader, 1, now() + 60000, { probing, background });
   }
 
-  async function read(generation, loader, attempt, deadline, probing = false) {
+  async function read(generation, loader, attempt, deadline, { probing, background }) {
     const controller = recoverRead ? new AbortController() : null;
     requestController = controller;
     let expired = false;
@@ -78,6 +79,7 @@ export function createResourceStore(initialData = null, {
       const data = await loader(controller?.signal);
       if (generation !== requestGeneration) return state;
       readPending = false; recheckAt = 0;
+      if (background && state.status === "ready" && state.data === data) return state;
       return publish({ status: "ready", data, error: null, updatedAt: now() });
     } catch (error) {
       if (generation !== requestGeneration) return state;
@@ -93,7 +95,7 @@ export function createResourceStore(initialData = null, {
           retryTimer = setTimer(() => {
             retryTimer = 0;
             if (generation === requestGeneration)
-              void read(generation, loader, attempt + 1, deadline);
+              void read(generation, loader, attempt + 1, deadline, { probing, background });
           }, wait);
           return state;
         }

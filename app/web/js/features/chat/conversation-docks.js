@@ -1,5 +1,6 @@
-import { approvalDecisionStatus, approvalDecisionStore, decideApproval } from "../../state/approvals.js";
-import { answerAsk } from "../../state/asks.js";
+import { approvalDecisionStatus, approvalDecisionStore, decideApproval, loadApprovals } from "../../state/approvals.js";
+import { answerAsk, selectedAsks, refreshSelectedAsks } from "../../state/asks.js";
+import { loadRuns } from "../../state/runs.js";
 import { subscribeLocale, t } from "../../i18n.js";
 import { element, errorMessage, isImeKey, toast } from "../../utils/dom.js";
 import { createCompositionTracker } from "../../utils/composition.js";
@@ -8,6 +9,7 @@ import { reconcileCards } from "../../utils/reconcile.js";
 import { taskBelongsToSession } from "../tasks/task-owner.js";
 import { renderToolPreview, renderToolArguments } from "../approvals/tool-preview.js";
 import { needsRecoveryCard } from "../../api/read-recovery.js";
+import { createDecisionReadNotice } from "./decision-read-notice.js";
 
 const STATE_KEYS = Object.freeze({ pending: "dock.task.pending", running: "dock.task.running" });
 
@@ -197,6 +199,7 @@ export function createConversationDocks({ container, navigation, tasksStore, app
   let todoView = null;
   let todoErrorView = null;
   let taskView = null;
+  const readNotice = createDecisionReadNotice();
   const drafts = new Map();
   const askNodes = new Map();
   const approvalRoot = element("div", { className: "conversation-dock-stack" });
@@ -407,6 +410,7 @@ export function createConversationDocks({ container, navigation, tasksStore, app
     const approvals = sessionId ? (approvalsStore.get().data?.items ?? []).filter((item) =>
       runIds.has(String(item.run_id))) : [];
     const askData = asksStore.get().data;
+    const askScope = askData?.projectId ? askData : selectedAsks();
     const asks = askData?.projectId === selected.projectId &&
       askData?.sessionId === sessionId ? askData.items : [];
     const todo = todoStore.get().data;
@@ -418,7 +422,14 @@ export function createConversationDocks({ container, navigation, tasksStore, app
     const recovery = recoveryState?.data;
     const needsRecovery = needsRecoveryCard(recoveryState, selected.projectId, sessionId);
     recoveryRoot.hidden = !needsRecovery;
-    const otherNodes = [];
+    const readFailures = sessionId ? [
+      { kind: "runs", state: runsStore.get(), retry: () => loadRuns({ retry: true }) },
+      { kind: "approvals", state: approvalsStore.get(), retry: () => loadApprovals({ retry: true }) },
+      ...(askScope.projectId === selected.projectId && askScope.sessionId === sessionId ?
+        [{ kind: "asks", state: asksStore.get(), retry: () => refreshSelectedAsks({ retry: true }) }] : []),
+    ].filter(item => item.state.status === "error").map(item => ({ ...item, error: item.state.error })) : [];
+    readNotice.sync(readFailures);
+    const otherNodes = readFailures.length ? [readNotice.node] : [];
     let newApproval = null;
     const nextDecisions = new Set();
     let newRecovery = null;
@@ -517,7 +528,7 @@ export function createConversationDocks({ container, navigation, tasksStore, app
     if (focusedAsk && !askRoot.contains(document.activeElement))
       document.querySelector("#prompt")?.focus({ preventScroll: true });
     container.hidden = searching || (!todoItems.length && !todoError && !tasks.length &&
-      !approvals.length && !asks.length && !needsRecovery);
+      !approvals.length && !asks.length && !needsRecovery && !readFailures.length);
     composerRegion?.toggleAttribute("data-decision-pending",
       Boolean(approvals.length || asks.length || needsRecovery));
     setDecisionExpanded(Boolean(approvals.length || asks.length || needsRecovery) &&

@@ -1,11 +1,15 @@
 import { api, resourceId } from "../api/client.js";
 import { createResourceStore } from "./store.js";
 import { withSessionRuntime } from "./session-runtime.js";
+import { isTransientReadError } from "../api/read-recovery.js";
 
-export const runsStore = createResourceStore({ active_runs: 0, items: [] });
+export const runsStore = createResourceStore({ active_runs: 0, items: [] },
+  { recoverRead: isTransientReadError, retainDataOnError: isTransientReadError });
 
-export function loadRuns() {
-  return runsStore.load(async () => (await api.get("/runs")).data);
+export function loadRuns({ retry = false } = {}) {
+  if (!retry && runsStore.isPending()) return Promise.resolve(runsStore.get());
+  return runsStore.load(async signal => (await api.get("/runs", { signal })).data,
+    { background: !retry });
 }
 
 export async function startRun(projectId, sessionId, prompt, attachments = [],

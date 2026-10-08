@@ -1,0 +1,34 @@
+{
+  "model_calls": {
+    "decisions": 3,
+    "读取恢复后继续": 1
+  },
+  "faults": {
+    "asks_failed_reads": 2,
+    "approvals_failed_reads": 8,
+    "runs_failed_reads": 2,
+    "answer_puts": 1,
+    "approval_puts": 1
+  },
+  "final_errors": 0,
+  "event_kinds": {
+    "agent_start": 2,
+    "model_start": 4,
+    "model_text_delta": 4,
+    "model_done": 4,
+    "tool_start": 2,
+    "tool_done": 2,
+    "agent_done": 2
+  },
+  "tool_results": [
+    {
+      "tool_call_id": "decision-read-1",
+      "text": "status: success\ntool: ask_user\nContinue carefully"
+    },
+    {
+      "tool_call_id": "decision-read-2",
+      "text": "status: success\ntool: exec\n$ C:\\Program Files\\Python312\\python.exe -c print('DECISION_VERIFIED')\nexit_code: 0\nexit_expected: true\nduration_ms: 54\n--- stdout ---\nDECISION_VERIFIED\r\n\n"
+    }
+  ],
+  "tool_results_source": "Persisted xllm-session snapshot entries after the same native run; original fixture selected a nonexistent event kind."
+}
