@@ -57,3 +57,41 @@ python tests/manual_task_stop_recovery_qa.py --packed .build/conversation-accept
 
 访问打印的本地地址，依次停止任务 1、2，再点击“停止确认耗尽（重复点击）”，
 等待最终提示并查看验证记录。创建打印的 `stop_file` 可退出夹具并清理其子进程。
+
+## 后台快照与附加读取补充
+
+同日进一步复现两项问题：后台列表已确认停止但动作仍然报结果不确定；
+停止已确认后，动作仍等待列表/详情刷新，慢速读取会拖住控件。
+现使用来自正式读取、带正确宿主令牌的任务快照确认，不把 `setData()` 或其他
+宿主的列表当作凭据。任务不可变归属和操作代次仍必须一致；明确拒绝不会被快照覆盖。
+已确认的停止立即返回，列表、输出和询问刷新继续在后台进行。
+
+新的候选 `mdo-task-observation-final.exe` 使用相同宿主重新打包。
+两个新增真实任务各只有一次停止请求：
+
+- `observed`：停止响应体丢失，详情接口被设置为不可读。通过“刷新后台任务快照”
+  调用正式 `loadTasks()` 后，等待静默结束，没有详情读取和错误提示。
+- `secondary`：停止确认成功，附加列表读取被代理保持未完成；确认提示已显示，
+  操作已经返回。释放附加读取后两个任务均显示已停止。
+
+[`observations.json`](observations.json) 在附加读取仍挂起时保存核对结果：
+四次模型调用、两次实际停止、零最终模型错误、零错误 toast；
+[`observed.png`](observed.png)、[`secondary.png`](secondary.png) 与
+[`observations-released.png`](observations-released.png) 保存三个页面阶段。
+其中挂起阶段的任务状态仍可能显示上一次原生确认快照，释放后刷新为终态；
+没有把陈旧显示伪装成已经读到的新结果。
+
+新增测试先复现四个失败断言；修复后共 48 项 Node 检查及四项相关干净前端合约通过。
+补充保护包含其他宿主、复用 ID、未验证数据和最后一次读取恰好更新快照。
+原生宿主未改变，前一阶段的模型/队列/摘要回归不重复执行。
+构建见 [`observations-build.json`](observations-build.json)。手机、网站及日常程序未更新。
+
+补充复现：
+
+```powershell
+python tests/manual_task_stop_recovery_qa.py --packed .build/conversation-acceptance/mdo-task-observation-final.exe --directory .build/conversation-acceptance/task-stop-observations-fresh --observations-only
+```
+
+停止任务 1，再刷新后台快照；停止任务 2，查看验证记录并确认附加读取仍挂起，
+随后点击“释放附加读取”。该模式仍是正式组件/存储与真实 API 的验证，
+没有宣称完整主页面 WebSocket 或真机验证通过。

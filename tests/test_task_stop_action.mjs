@@ -150,3 +150,34 @@ test("page exit cancels the request or its backoff without a late read or stop",
     assert.equal(deletes, 1); assert.equal(reads, 0); assert.equal(env.timers.size, 0);
   }
 });
+
+test("a matching authoritative task snapshot confirms an uncertain stop without another read", async () => {
+  const env = environment(); let observed = null, deletes = 0, reads = 0;
+  assert.equal(await env.settle(action(env, {
+    observe: () => observed,
+    cancel: async () => { ++deletes; observed = reply(stopped); throw lost(); },
+    inspect: async () => { ++reads; throw lost(); },
+  })), stopped);
+  assert.equal(deletes, 1); assert.equal(reads, 0);
+});
+
+test("stale host, reused task or active observations never confirm a stop", async () => {
+  for (const observed of [{ data: stopped, writeToken: "old-host" },
+    reply({ ...stopped, created_at: 99 }), reply({ ...stopped, id: 3 }), reply(task)]) {
+    const env = environment(); let deletes = 0, reads = 0;
+    assert.equal(await env.settle(action(env, { observe: () => observed,
+      cancel: async () => { ++deletes; throw lost(); },
+      inspect: async () => { ++reads; return reply(stopped); },
+    })), stopped);
+    assert.equal(deletes, 1); assert.equal(reads, 1);
+  }
+});
+
+test("a snapshot received with the final failed confirmation suppresses a false final error", async () => {
+  const env = environment(); let observed = null, deletes = 0, reads = 0;
+  assert.equal(await env.settle(action(env, { observe: () => observed,
+    cancel: async () => { ++deletes; throw lost(); },
+    inspect: async () => { if (++reads === 5) observed = reply(stopped); throw lost(); },
+  })), stopped);
+  assert.equal(deletes, 1); assert.equal(reads, 5);
+});

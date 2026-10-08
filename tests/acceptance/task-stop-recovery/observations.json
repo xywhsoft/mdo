@@ -1,0 +1,46 @@
+{
+  "notices": [
+    {
+      "text": "已请求停止任务 #1",
+      "tone": "neutral"
+    },
+    {
+      "text": "已请求停止任务 #2",
+      "tone": "neutral"
+    }
+  ],
+  "proof": {
+    "faults": {
+      "observed": {
+        "http_deletes": 1,
+        "native_deletes": 1,
+        "reads_after_delete": 0
+      },
+      "secondary": {
+        "held_list_reads": 1,
+        "http_deletes": 1,
+        "native_deletes": 1,
+        "reads_after_delete": 0
+      }
+    },
+    "final_model_errors": 0,
+    "model_calls": {
+      "observed": 2,
+      "secondary": 2
+    },
+    "native_tasks": [
+      {
+        "id": 1,
+        "state": "cancelled",
+        "terminal": true
+      },
+      {
+        "id": 2,
+        "state": "cancelled",
+        "terminal": true
+      }
+    ],
+    "secondary_read_pending": true
+  },
+  "remainingStopButtons": 1
+}

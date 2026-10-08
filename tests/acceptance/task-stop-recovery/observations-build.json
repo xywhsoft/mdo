@@ -1,0 +1,19 @@
+{
+  "source_base": "7450b84",
+  "packed_candidate": ".build/conversation-acceptance/mdo-task-observation-final.exe",
+  "bytes": 4439886,
+  "sha256": "9333adcdc6e672201ad3dcd229330eca3b90a44b4a446069750b3107692e3a34",
+  "xs_revision": "eeda3565e869e522e26c38a434a9576b598ec361",
+  "host_profile": "2829d871dac1a12a70503f9b6116adaa2aa9556a53ea139df60aaa81cbb7a19b",
+  "host_binary_sha256": "68aa94b7410c2af2cfd6dded4100d3d3ffde45a4b4ba73020b869fe99100aeb0",
+  "unrelated_worktree_changes_included": false,
+  "checks": {
+    "node_task_and_recovery_tests": 48,
+    "focused_frontend_contract_tests": 4,
+    "browser_authoritative_background_confirmation": true,
+    "browser_acknowledgement_during_blocked_secondary_read": true
+  },
+  "android_device_tested": false,
+  "daily_installation_replaced": false,
+  "website_release_updated": false
+}

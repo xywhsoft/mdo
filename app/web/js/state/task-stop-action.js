@@ -16,6 +16,7 @@ const identity = task => JSON.stringify([String(task.id), task.kind, task.owner_
 export async function runTaskStopAction({ id, task = null,
   cancel = (value, options) => api.delete(`/tasks/${value}`, options),
   inspect = (value, options) => api.get(`/tasks/${value}`, options),
+  observe = () => null,
   epoch = stamp, token = currentPageWriteToken(), recoveryOptions } = {}) {
   id = String(id ?? "");
   if (!/^[1-9][0-9]*$/.test(id) || (task && String(task.id) !== id))
@@ -40,9 +41,23 @@ export async function runTaskStopAction({ id, task = null,
     owner = next;
     return current;
   }
+  function confirmedObservation() {
+    assertOwner();
+    if (!checking || owner === null) return null;
+    const reply = observe(), current = reply?.data;
+    // Only a verified read from this host and this immutable task can settle
+    // the intent. Stale stores and manually replaced data carry no authority.
+    if (!current || String(current.id) !== id || identity(current) !== owner ||
+        (reply.writeToken ?? "") !== (token ?? "") ||
+        typeof current.terminal !== "boolean" || typeof current.stop_requested !== "boolean" ||
+        (!current.terminal && !current.stop_requested)) return null;
+    return current;
+  }
   try {
     return await recovery.request(async signal => {
       assertOwner();
+      const observed = confirmedObservation();
+      if (observed) return observed;
       if (checking || owner === null) {
         const current = snapshot(await inspect(id, { signal }));
         if (current.terminal || current.stop_requested) return current;
@@ -54,6 +69,8 @@ export async function runTaskStopAction({ id, task = null,
     }, { mutation: true });
   } catch (error) {
     if (submitted && uncertain(error)) {
+      const observed = confirmedObservation();
+      if (observed) return observed;
       const final = new ApiError("Task stop acknowledgement could not be confirmed", {
         code: "task_stop_unconfirmed",
       });

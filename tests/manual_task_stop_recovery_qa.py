@@ -57,6 +57,7 @@ pre{white-space:pre-wrap;overflow-wrap:anywhere}.tasks-dialog-body{height:auto;o
 </style><main><h1>任务停止恢复验收</h1><p>真实打包程序与生产任务面板，故障只注入回环测试请求。</p>
 <button id="proof">查看验证记录</button><pre id="result">尚未核对</pre>
 <button id="duplicate">停止确认耗尽（重复点击）</button><pre id="notices">[]</pre>
+<button id="refresh">刷新后台任务快照</button><button id="release">释放附加读取</button>
 <section class="tasks-dialog-body"><div id="tasks"></div><div id="detail"></div></section></main>
 <div id="toast-region" class="toast-region" role="status" aria-live="polite"></div>
 <script type="module">
@@ -77,6 +78,8 @@ document.querySelector('#duplicate').addEventListener('click',()=>{
 const button=document.querySelector('[data-task-cancel="3"]');button?.focus();button?.click();button?.click();});
 document.querySelector('#proof').addEventListener('click',async()=>{
 document.querySelector('#result').textContent=JSON.stringify((await api.get('/qa-stop-proof')).data,null,2);});
+document.querySelector('#refresh').addEventListener('click',()=>void loadTasks());
+document.querySelector('#release').addEventListener('click',()=>void api.post('/qa-stop-release',{}));
 </script></html>'''
 
 
@@ -109,9 +112,22 @@ class Proxy(BaseHTTPRequestHandler):
                 for e in session_events(self.server.native, path))
             proof = {"model_calls": dict(Model.calls), "faults": self.server.counts,
                 "native_tasks": [{"id": t["id"], "state": t["state"], "terminal": t["terminal"]} for t in tasks],
-                "final_model_errors": errors}
+                "final_model_errors": errors, "secondary_read_pending": self.server.secondary_pending}
             self.reply(200, json.dumps({"ok": True, "data": proof}).encode())
             return
+        if self.path == "/api/v1/qa-stop-release" and self.command == "POST":
+            self.rfile.read(int(self.headers.get("Content-Length", "0")))
+            self.server.secondary_release.set()
+            self.reply(200, b'{"ok":true,"data":{}}')
+            return
+        if (self.path == "/api/v1/tasks" and "secondary" in self.server.counts and
+            self.server.counts["secondary"]["http_deletes"] and not self.server.secondary_release.is_set()):
+            self.server.counts["secondary"]["held_list_reads"] += 1
+            self.server.secondary_pending = True
+            try:
+                self.server.secondary_release.wait(timeout=45)
+            finally:
+                self.server.secondary_pending = False
         mode = self.server.modes.get(self.path)
         counts = self.server.counts.get(mode)
         if mode and self.command == "DELETE":
@@ -121,7 +137,7 @@ class Proxy(BaseHTTPRequestHandler):
                 return
         if mode and self.command == "GET" and counts["http_deletes"]:
             counts["reads_after_delete"] += 1
-            if mode == "unconfirmed":
+            if mode in ("unconfirmed", "observed"):
                 self.reply(503, b'{"ok":false,"error":{"code":"task_unavailable","message":"fixture read unavailable"}}')
                 return
         body = self.rfile.read(int(self.headers.get("Content-Length", "0")))
@@ -136,7 +152,7 @@ class Proxy(BaseHTTPRequestHandler):
             if mode and self.command == "DELETE":
                 counts["native_deletes"] += 1
                 assert response.status == 200, raw
-                if mode in ("lost", "unconfirmed"):
+                if mode in ("lost", "unconfirmed", "observed"):
                     # Chromium may transparently replay an idempotent DELETE
                     # if no response headers arrive. Lose the body after the
                     # headers to isolate the application's confirmation path.
@@ -166,6 +182,8 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--packed", type=Path, required=True)
     parser.add_argument("--directory", type=Path, required=True)
+    parser.add_argument("--observations-only", action="store_true",
+        help="Prepare two tasks for background confirmation and blocked secondary reads")
     args = parser.parse_args()
     base = args.directory.resolve()
     assert not base.exists(), "Choose a fresh fixture directory"
@@ -174,6 +192,8 @@ def main():
     model = ThreadingHTTPServer(("127.0.0.1", 0), Model)
     proxy = ThreadingHTTPServer(("127.0.0.1", 0), Proxy)
     proxy.native, proxy.modes, proxy.counts, proxy.sessions = port, {}, {}, []
+    proxy.secondary_release = threading.Event()
+    proxy.secondary_pending = False
     model_thread = threading.Thread(target=model.serve_forever, daemon=True)
     proxy_thread = threading.Thread(target=proxy.serve_forever, daemon=True)
     model_thread.start()
@@ -183,7 +203,8 @@ def main():
         status, document = wait_bootstrap(process, port, native_site / "packed.log")
         assert status == 200 and document["data"]["ready"], document
         configure_model(port, f"http://127.0.0.1:{model.server_port}/v1")
-        for mode in ("lost", "before", "unconfirmed"):
+        modes = ("observed", "secondary") if args.observations_only else ("lost", "before", "unconfirmed")
+        for mode in modes:
             def call(method, path, body=None, expected=200):
                 status, _, raw = request(port, method, path, body=None if body is None else json.dumps(body).encode(),
                     headers={"Content-Type": "application/json"})
@@ -204,6 +225,7 @@ def main():
             assert not task["terminal"], task
             proxy.modes["/api/v1/tasks/" + str(task["id"])] = mode
             proxy.counts[mode] = {"http_deletes": 0, "native_deletes": 0, "reads_after_delete": 0}
+            if mode == "secondary": proxy.counts[mode]["held_list_reads"] = 0
         proxy_thread.start()
         print(json.dumps({"url": f"http://127.0.0.1:{proxy.server_port}/", "stop_file": str(base / "stop")}), flush=True)
         end = time.monotonic() + 1200
@@ -211,6 +233,7 @@ def main():
             assert process.poll() is None, "Task fixture exited"
             time.sleep(.2)
     finally:
+        proxy.secondary_release.set()
         for path in proxy.modes:
             if process.poll() is None:
                 request(port, "DELETE", path)

@@ -14,6 +14,9 @@ export const taskDetailStore = createResourceStore();
 export const artifactPreviewStore = createResourceStore();
 
 let selectedTaskId = "";
+// Attach transport provenance to the exact published objects without adding
+// metadata to server DTOs. setData()/reset() cannot invent a verified read.
+const taskReadTokens = new WeakMap();
 
 function taskId(value) {
   const id = String(value ?? "");
@@ -57,7 +60,11 @@ function mergeOutput(previous, page) {
 }
 
 export function loadTasks() {
-  return tasksStore.load(async () => (await api.get("/tasks")).data);
+  return tasksStore.load(async () => {
+    const reply = await api.get("/tasks");
+    if (reply.data && typeof reply.data === "object") taskReadTokens.set(reply.data, reply.writeToken);
+    return reply.data;
+  });
 }
 
 export function selectedTask() {
@@ -96,13 +103,15 @@ export function refreshSelectedTask() {
     ]);
     if (!Array.isArray(asks.data?.items))
       throw new TypeError(t("ask.invalidResponse", {}, "询问响应无效"));
-    return {
+    const data = {
       id,
       detail: detail.data,
       asks: asks.data,
       output: mergeOutput(previous?.output, output.data),
       artifacts: (artifacts.data?.items ?? []).filter((item) => String(item.task_id) === id).reverse(),
     };
+    taskReadTokens.set(data, detail.writeToken);
+    return data;
   });
 }
 
@@ -141,7 +150,16 @@ export async function cancelTask(value) {
   const id = taskId(value);
   const known = tasksStore.get().data?.items?.find(item => String(item.id) === id) ??
     (taskDetailStore.get().data?.id === id ? taskDetailStore.get().data.detail : null);
-  const stopped = await runTaskStopAction({ id, task: known });
+  const stopped = await runTaskStopAction({ id, task: known, observe: () => {
+    const list = tasksStore.get().data, detail = taskDetailStore.get().data;
+    if (list && taskReadTokens.has(list)) {
+      const item = list.items?.find(item => String(item.id) === id);
+      if (item?.terminal || item?.stop_requested)
+        return { data: item, writeToken: taskReadTokens.get(list) };
+    }
+    return detail?.id === id && taskReadTokens.has(detail)
+      ? { data: detail.detail, writeToken: taskReadTokens.get(detail) } : null;
+  } });
   // The acknowledged snapshot remains authoritative even if the subsequent
   // read fails. Do not make an accepted stop look available for resubmission.
   const list = tasksStore.get().data;
@@ -149,7 +167,10 @@ export async function cancelTask(value) {
     items: list.items.map((item) => String(item.id) === id ? stopped : item) });
   const detail = taskDetailStore.get().data;
   if (detail?.id === id) taskDetailStore.setData({ ...detail, detail: stopped });
-  await loadTasks();
-  if (selectedTaskId === id) await refreshSelectedTask();
+  // Confirmation must not wait for secondary list/output/ask reads. Those
+  // stores preserve the acknowledged data if a later refresh is unavailable.
+  void loadTasks().then(() => {
+    if (selectedTaskId === id) return refreshSelectedTask();
+  });
   return stopped;
 }
