@@ -1,0 +1,165 @@
+{
+  "passed": true,
+  "restarted": true,
+  "calls": {
+    "normal": 6,
+    "summary": 6
+  },
+  "requests": [
+    {
+      "kind": "normal",
+      "message_bytes": 15665,
+      "has_marker": true,
+      "tool_count": 9,
+      "max_tokens": 1024
+    },
+    {
+      "kind": "summary",
+      "message_bytes": 14215,
+      "has_marker": true,
+      "tool_count": 0,
+      "max_tokens": 1024
+    },
+    {
+      "kind": "summary",
+      "message_bytes": 14215,
+      "has_marker": true,
+      "tool_count": 0,
+      "max_tokens": 1024
+    },
+    {
+      "kind": "summary",
+      "message_bytes": 14461,
+      "has_marker": true,
+      "tool_count": 0,
+      "max_tokens": 1024
+    },
+    {
+      "kind": "normal",
+      "message_bytes": 16505,
+      "has_marker": true,
+      "tool_count": 9,
+      "max_tokens": 1024
+    },
+    {
+      "kind": "summary",
+      "message_bytes": 14968,
+      "has_marker": true,
+      "tool_count": 0,
+      "max_tokens": 1024
+    },
+    {
+      "kind": "normal",
+      "message_bytes": 16505,
+      "has_marker": true,
+      "tool_count": 9,
+      "max_tokens": 1024
+    },
+    {
+      "kind": "summary",
+      "message_bytes": 14968,
+      "has_marker": true,
+      "tool_count": 0,
+      "max_tokens": 1024
+    },
+    {
+      "kind": "normal",
+      "message_bytes": 16505,
+      "has_marker": true,
+      "tool_count": 9,
+      "max_tokens": 1024
+    },
+    {
+      "kind": "summary",
+      "message_bytes": 14968,
+      "has_marker": true,
+      "tool_count": 0,
+      "max_tokens": 1024
+    },
+    {
+      "kind": "normal",
+      "message_bytes": 16505,
+      "has_marker": true,
+      "tool_count": 9,
+      "max_tokens": 1024
+    },
+    {
+      "kind": "normal",
+      "message_bytes": 16721,
+      "has_marker": true,
+      "tool_count": 9,
+      "max_tokens": 1024
+    }
+  ],
+  "run_compactions": [
+    0,
+    1,
+    1,
+    1,
+    1,
+    0
+  ],
+  "events": [
+    {
+      "kind": "model_done",
+      "text": "Reply complete; PIXEL_KEEP: dimensions32 palette8 output pixels.png."
+    },
+    {
+      "kind": "compaction_start",
+      "text": ""
+    },
+    {
+      "kind": "compaction_rejected",
+      "text": ""
+    },
+    {
+      "kind": "compaction_done",
+      "text": ""
+    },
+    {
+      "kind": "model_done",
+      "text": "Reply complete; PIXEL_KEEP: dimensions32 palette8 output pixels.png."
+    },
+    {
+      "kind": "compaction_start",
+      "text": ""
+    },
+    {
+      "kind": "compaction_done",
+      "text": ""
+    },
+    {
+      "kind": "model_done",
+      "text": "Reply complete; PIXEL_KEEP: dimensions32 palette8 output pixels.png."
+    },
+    {
+      "kind": "compaction_start",
+      "text": ""
+    },
+    {
+      "kind": "compaction_done",
+      "text": ""
+    },
+    {
+      "kind": "model_done",
+      "text": "Reply complete; PIXEL_KEEP: dimensions32 palette8 output pixels.png."
+    },
+    {
+      "kind": "compaction_start",
+      "text": ""
+    },
+    {
+      "kind": "compaction_done",
+      "text": ""
+    },
+    {
+      "kind": "model_done",
+      "text": "Reply complete; PIXEL_KEEP: dimensions32 palette8 output pixels.png."
+    },
+    {
+      "kind": "model_done",
+      "text": "Reply complete; PIXEL_KEEP: dimensions32 palette8 output pixels.png."
+    }
+  ],
+  "final_errors": 0
+}

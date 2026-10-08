@@ -1,0 +1,9 @@
+{
+  "passed": true,
+  "rendered_replies": 7,
+  "has_error": false,
+  "has_recovery_banner": false,
+  "composer_empty": true,
+  "browser_continuation_visible": true,
+  "scope": "Packed desktop browser; one explicit continuation after restart"
+}

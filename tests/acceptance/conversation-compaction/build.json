@@ -1,0 +1,31 @@
+{
+  "passed": true,
+  "source_base": "c1e42bf",
+  "applied_product_commits": [
+    "26a5f2e",
+    "e5018b2"
+  ],
+  "xserver_commit": "eeda3565e869e522e26c38a434a9576b598ec361",
+  "xwork_source_commit": "7cb61fb6d4cf62a5db69db38d2031eccc59bc4fa",
+  "xrt_mainline_fix": "f66d721b2895c71cdc1841b0f9a2021945561a70",
+  "xs_mainline_sync": "b5be562d76fa2a7bd407a765ecace2bc52bb9fb3",
+  "packed_bytes": 4419381,
+  "packed_sha256": "782889e2fc1e2cffab52373e4864abb8fa9f65c94a3f231b5cdf5f588f8433f6",
+  "host_profile_sha256": "8a35d04162302781601b4e8b8c173721bf0d92a6dedb7b1da0e3d6a39fac6d86",
+  "checks": {
+    "native_mainline": true,
+    "native_compatible": true,
+    "xs_snapshot_tests": 5,
+    "xs_extension_tests": 26,
+    "build_contract_tests": 13,
+    "model_retry_cases": 25,
+    "auth_adapter_cases": 12,
+    "account_worker_cases": 5,
+    "packed_restore": true,
+    "packed_edit_recovery": true,
+    "bundled_dependency_recovery": true
+  },
+  "stress_or_high_load": false,
+  "published": false,
+  "phone_tested": false
+}

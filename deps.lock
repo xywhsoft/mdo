@@ -7,7 +7,7 @@
     "single_header_sha256": "1ea16b21f968d09e5084162f3919b7e6ae2412f9e13c3bbbdd4b322bcd5a26d2"
   },
   "xserver": {
-    "commit": "907744aac65e093a48a4a3192780dc36fd2fe430",
+    "commit": "eeda3565e869e522e26c38a434a9576b598ec361",
     "version": "1.0.0",
     "required_extensions": [
       "xwork",
@@ -22,8 +22,8 @@
     },
     "source_bundle": {
       "path": "tools/dependencies/xs-conversation-recovery.bundle",
-      "sha256": "2389e39c3c931a6558206df16d4ee0d06efbeba1f7ba2f7e3ad8acdd46acdc32",
-      "ref": "refs/heads/codex/mdo-conversation-recovery"
+      "sha256": "b1bbdcd2192bd543883ee79ce16b48c43edde6ef83e768e93af03f152b8a10c7",
+      "ref": "refs/heads/codex/mdo-compaction-style"
     }
   },
   "libraries": {
@@ -40,8 +40,8 @@
     },
     "xwork": {
       "version": "3.8.0",
-      "source_commit": "7f31cbb41022c7b98a6fc8278aac36a0c5033c54",
-      "production_tree_sha256": "03fac0e3bb6ccfbfe44e49a15ce037f041afd967033c74365cf666090894aa6c",
+      "source_commit": "7cb61fb6d4cf62a5db69db38d2031eccc59bc4fa",
+      "production_tree_sha256": "4cb7bd564a1a33aa81c6e53bf65c9c36964e4559f673cb623fa9b533c1c40e3d",
       "abi_version": 7,
       "event_schema_version": 3
     }
