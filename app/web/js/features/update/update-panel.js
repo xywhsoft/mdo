@@ -10,7 +10,8 @@ const labels = {
     requiredError: "暂时无法完成更新，请重试；更新完成前不能继续使用。",
     disabled: "开发模式或当前平台不启用自动更新", checking: "正在检查更新…", current: "与线上版本一致",
     available: "有可用更新", downloading: "正在下载并校验…", ready: "更新包已校验，可以安装",
-    installing: "请在原生窗口确认安装；结束前暂停新任务", error: "更新检查失败，不影响正常使用",
+    installing: "正在安装更新；结束前暂停新任务", error: "更新检查失败，不影响正常使用",
+    confirmLinux: "安装更新并重启墨斗？配置、项目和会话会保留，页面会短暂断开连接。",
     "no-package": "此平台尚未发布更新", failed: "操作失败，请重试", connection: "暂时无法连接目标服务",
     native: "请在目标设备的原生窗口中确认安装", devices: "切换设备", lite: "Android 精简版", full: "Android 完整版（含扩展工具）" },
   "en-US": { title: "App updates", description: "Compare with the published package. Install after confirmation; your data is preserved.",
@@ -20,7 +21,8 @@ const labels = {
     requiredError: "Update unavailable. Please retry; install the required update to continue.",
     disabled: "Updates are disabled in development or on this platform", checking: "Checking…", current: "Matches the published package",
     available: "Update available", downloading: "Downloading and verifying…", ready: "Verified update ready to install",
-    installing: "Confirm in the native window; new tasks are paused", error: "Update check failed; normal use is unaffected",
+    installing: "Installing update; new tasks are paused", error: "Update check failed; normal use is unaffected",
+    confirmLinux: "Install the update and restart mdo? Your data is preserved; this page will briefly disconnect.",
     "no-package": "No update published for this platform", failed: "Operation failed; please retry", connection: "Target service is temporarily unavailable",
     native: "Confirm installation in the target device's native window", devices: "Switch device", lite: "Android lite", full: "Android full (with tools)" },
   "ru-RU": { title: "Обновления", description: "Сравнение с опубликованным пакетом. Установка после подтверждения; данные сохранятся.",
@@ -30,7 +32,8 @@ const labels = {
     requiredError: "Обновление недоступно. Повторите попытку; для продолжения требуется обновление.",
     disabled: "Обновления отключены в режиме разработки или на этой платформе", checking: "Проверка…", current: "Соответствует опубликованному пакету",
     available: "Есть обновление", downloading: "Загрузка и проверка…", ready: "Пакет проверен и готов к установке",
-    installing: "Подтвердите в окне приложения; новые задачи приостановлены", error: "Проверка не удалась; работа приложения не затронута",
+    installing: "Установка обновления; новые задачи приостановлены", error: "Проверка не удалась; работа приложения не затронута",
+    confirmLinux: "Установить обновление и перезапустить mdo? Данные сохранятся; соединение ненадолго прервётся.",
     "no-package": "Для этой платформы нет обновления", failed: "Не удалось; повторите попытку", connection: "Сервис устройства временно недоступен",
     native: "Подтвердите установку в окне приложения на целевом устройстве", devices: "Выбрать устройство", lite: "Android: облегчённая версия", full: "Android: полная версия с инструментами" },
 };
@@ -87,7 +90,7 @@ export function createUpdatePanel({ root, dialog, entries = [], transport = api 
       const action = button.dataset.updateAction;
       button.disabled = pending || !actions[action];
       if (action !== "check") button.hidden = !actions[action];
-      button.textContent = words[action === "install" && status?.platform === "windows-x86_64" ? "restart" : action];
+      button.textContent = words[action === "install" && (status?.platform === "windows-x86_64" || status?.platform?.startsWith("linux-")) ? "restart" : action];
     }
     for (const button of entries) {
       button.hidden = !updateAvailable(status);
@@ -121,6 +124,7 @@ export function createUpdatePanel({ root, dialog, entries = [], transport = api 
   async function action(event) {
     const kind = event.target.closest("[data-update-action]")?.dataset.updateAction;
     if (!kind || pending || !updateActions(status,targetState())[kind]) return;
+    if (kind === "install" && status?.platform?.startsWith("linux-") && !window.confirm(text().confirmLinux)) return;
     pending = true; failure = ""; render();
     try {
       if (kind === "cancel") await transport.delete("/update/download");
@@ -161,7 +165,7 @@ export function createUpdatePanel({ root, dialog, entries = [], transport = api 
   const unsubscribe = subscribeLocale(render);
   const unsubscribeTarget = subscribeTarget(render);
   render(); void refresh();
-  return { refresh, open, destroy() {
+  return { refresh, open, setToolManager(manager) { toolManager=manager;render(); }, renderTools:render, destroy() {
     destroyed = true; clearTimeout(timer); unsubscribe(); unsubscribeTarget();
     root.removeEventListener("click", action);
     dialog.removeEventListener("click", action); dialog.removeEventListener("click", backdrop);

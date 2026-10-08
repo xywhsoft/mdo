@@ -1,9 +1,10 @@
+const toolpackSupported = d => d.edition === "desktop" || d.platform?.startsWith("linux-");
 export function toolActions(distribution, id, target = {}) {
   const pack = distribution.toolpacks?.find(p => p.id === id && p.status !== "withdrawn"), installed = distribution.installed ?? {};
   const writable = !target.selected || (target.connected && !target.runtimeChanged && target.selected.mode !== "view");
   const compatible = pack && (!pack.min_build || distribution.build_id >= pack.min_build) && (!pack.max_build || distribution.build_id < pack.max_build)
     && (pack.dependencies ?? []).every(d => installed[d.id] && installed[d.id + "_revision"] >= d.revision);
-  const enabled = writable && !distribution.busy && distribution.edition === "desktop";
+  const enabled = writable && !distribution.busy && toolpackSupported(distribution);
   return { install: !!(enabled && compatible && (!installed[id] || pack.revision > installed[id + "_revision"])),
     repair: !!(enabled && compatible && installed[id]), uninstall: !!(enabled && installed[id]),
     rollback: !!(enabled && installed.retired?.some(p => p.id === id)), cleanup: !!(enabled && distribution.cleanup_available),
@@ -19,7 +20,7 @@ export function createToolPanel({copy,target,command,openFull}) {
     const context=target(),c=copy(),signature=JSON.stringify([d,context.selected?.id,context.selected?.mode,context.connected,context.runtimeChanged,c,updatesOnly]);
     if(signatures.get(body)===signature)return;signatures.set(body,signature);body.replaceChildren();
     body.append(node("h3",updatesOnly?c.toolsUpdate:c.tools));
-    if(d.edition!=="desktop") {
+    if(!toolpackSupported(d)) {
       body.append(node("p",c.android));
       if(!updatesOnly)body.append(button(c.full,openFull,!toolActions(d,"",context).check));
     } else {

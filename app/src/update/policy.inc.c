@@ -5,6 +5,8 @@ static bool MdoUpdatePolicyParse(xvalue* Root,MdoUpdateStatus* Status)
     char Platform[32], Download[160], Expected[160]; uint64 Size = 0; int64 Signed;
     xvalue* Number = xrtValueObjectGet(Root,XRT_STR_LITERAL("size"));
     xvalue* Required = xrtValueObjectGet(Root,XRT_STR_LITERAL("required"));
+    if(!strncmp(Status->Platform,"linux-",6) &&
+       (!xrtValueObjectGet(Root,XRT_STR_LITERAL("edition")) || !xrtValueObjectGet(Root,XRT_STR_LITERAL("build_id"))))return false;
     bool Force = false;
     bool Ok = xrtValueGetUInt(Number,&Size) ||
         (xrtValueGetInt(Number,&Signed) && Signed > 0 && (Size=(uint64)Signed)!=0);
@@ -27,7 +29,7 @@ static bool MdoUpdatePolicyParse(xvalue* Root,MdoUpdateStatus* Status)
     char Edition[16];
     if(xrtValueObjectGet(Root,XRT_STR_LITERAL("edition"))) {
         if(!MdoUpdateText(Root,"edition",Edition,sizeof(Edition)) ||
-           (!strcmp(Status->Platform,"windows-x86_64")?strcmp(Edition,"desktop"):(strcmp(Edition,"lite")&&strcmp(Edition,"full"))))return false;
+           (!strncmp(Status->Platform,"linux-",6)?strcmp(Edition,Status->Edition):!strcmp(Status->Platform,"windows-x86_64")?strcmp(Edition,"desktop"):(strcmp(Edition,"lite")&&strcmp(Edition,"full"))))return false;
         snprintf(Status->Edition,sizeof(Status->Edition),"%s",Edition);
     }
     Status->Required = Force; Status->Bytes = Size; return true;
@@ -70,8 +72,7 @@ static void MdoUpdatePolicyLoad(MdoUpdateStatus* Status)
             !strcmp(Next.Platform,"windows-x86_64"));
         Next.Available = (!HasHash || strcmp(Next.LocalHash,Next.Hash) != 0) && (!Next.BuildId || Next.BuildId>MdoBuildId());
         /* Reuse a downloaded package only after independently checking disk. */
-        str Path = MdoHomeExternalPath(!strcmp(Next.Platform,"windows-x86_64") ?
-            "data/update/new.exe" : "data/update/new.apk"); char Hash[65];
+        str Path = MdoHomeExternalPath(MdoUpdateDownloadRelative()); char Hash[65];
         Next.Ready = Next.Available && Path && MdoUpdateFileHash(Path,Hash,false) && !strcmp(Hash,Next.Hash);
         xrtFree(Path); *Status = Next;
         MdoUpdateComplete(Status,Next.Available ? (Next.Ready ? "ready" : "available") : "current","");

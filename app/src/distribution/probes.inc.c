@@ -1,8 +1,28 @@
 /* Offline functional probes: never contact a user's SSH host or use credentials. */
 static bool MdoDistToolProbe(size_t Index,cstr Path,char Version[257])
 {
-    const cstr VersionArgs[]={Index==0?"--help":Index==3?"-V":Index>4?"-h":"--version"};
-    if(!MdoDistRun(Path,VersionArgs,1,NULL,Index>4?1:0,Version))return false;
+    const cstr VersionArgs[]={Index==0?"--help":Index==3?"-V":Index==5||Index==6?"-h":Index==9?"i":"--version"};
+    if(!MdoDistRun(Path,VersionArgs,1,NULL,Index==5||Index==6?1:0,Version))return false;
+#if defined(__linux__) && !defined(__ANDROID__)
+    if(Index==7)return MdoDistRunCheck(Path,VersionArgs,1,NULL,0,NULL,"HTTPS");
+    if(Index==8||Index==9) {
+        char Relative[128],Input[160],Archive[160],Output[160],Directory[160];
+        snprintf(Relative,sizeof(Relative),"data/toolpacks/extra-probe-%llu",(unsigned long long)xrtClock());
+        if(!MdoHomeCreateDirectory(Relative))return false;
+        snprintf(Input,sizeof(Input),"%s/input",Relative);snprintf(Archive,sizeof(Archive),"%s/probe.7z",Relative);
+        snprintf(Output,sizeof(Output),"%s/out/input",Relative);snprintf(Directory,sizeof(Directory),"%s/out",Relative);
+        cstr Body="mdo_probe\n中文内容\n";str Work=MdoHomeExternalPath(Relative);
+        bool Ok=MdoHomeAtomicWrite(Input,Body,strlen(Body),false);
+        if(Index==8) {const cstr Args[]={"--no-config","--json","--fixed-strings","中文内容","input"};Ok=Ok&&MdoDistRunCheck(Path,Args,5,Work,0,NULL,"中文内容");}
+        else {
+            const cstr Create[]={"a","-t7z","-mx=1","-y","probe.7z","input"},Test[]={"t","-y","probe.7z"},Extract[]={"x","-y","-oout","probe.7z"};
+            Ok=Ok&&MdoDistRun(Path,Create,6,Work,0,NULL)&&MdoDistRun(Path,Test,3,Work,0,NULL)&&MdoDistRun(Path,Extract,4,Work,0,NULL);
+            xfile File=Ok?MdoHomeOpenRead(Output):NULL;char Buffer[64]={0};size_t Got=0;
+            Ok=File&&xrtRead(File,Buffer,sizeof(Buffer),&Got)&&Got==strlen(Body)&&!memcmp(Buffer,Body,Got);xrtClose(File);
+        }
+        MdoHomeRemove(Output,false);MdoHomeRemoveEmptyDirectory(Directory);MdoHomeRemove(Archive,false);MdoHomeRemove(Input,false);MdoHomeRemoveEmptyDirectory(Relative);xrtFree(Work);return Ok;
+    }
+#endif
     if(Index==0) {const cstr Args[]={"sh","-c","printf mdo_probe | cat"};char Out[257]={0};return MdoDistRun(Path,Args,3,NULL,0,Out)&&!strcmp(Out,"mdo_probe");}
     if(Index==1)return MdoDistRunCheck(Path,VersionArgs,1,NULL,0,NULL,"https");
     if(Index==2) {const cstr Args[]={"-n","-e","{verified:true}.verified"};char Out[257]={0};return MdoDistRun(Path,Args,3,NULL,0,Out)&&!strcmp(Out,"true");}
@@ -23,7 +43,7 @@ static bool MdoDistToolProbe(size_t Index,cstr Path,char Version[257])
     }
     if(Index==6&&!strstr(Version,"usage:"))return false;
     str Parent=xrtPathParent(Path);
-#if defined(__ANDROID__)
+#if defined(__ANDROID__) || defined(__linux__)
     str Ssh=Parent?xrtPathJoin(Parent,"ssh"):NULL;
 #else
     str Ssh=Parent?xrtPathJoin(Parent,"ssh.exe"):NULL;

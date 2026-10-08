@@ -91,16 +91,23 @@ static bool MdoDistRun(cstr Path,const cstr* Args,size_t Count,cstr WorkDir,int 
 #include "probes.inc.c"
 static xvalue* MdoDistDetect(xvalue* Active)
 {
+#if defined(__linux__) && !defined(__ANDROID__)
+    static cstr Names[]={"busybox","curl","jq","ssh","python","scp","sftp","aria2c","rg","7zip"};
+#else
     static cstr Names[]={"busybox","curl","jq","ssh","python","scp","sftp"};
+#endif
 #if defined(__ANDROID__)
     static cstr Files[]={"busybox/busybox","curl/curl","jq/jq","openssh/ssh","python/bin/python3","openssh/scp","openssh/sftp"};
     str Root=xrtEnvGet("MDO_TOOLS_ROOT");
+#elif defined(__linux__)
+    static cstr Files[]={"busybox/busybox","curl/curl","jq/jq","openssh/ssh","python/bin/python3","openssh/scp","openssh/sftp","aria2/aria2c","ripgrep/rg","7zip/7zz"};
+    str Root=NULL;
 #else
     static cstr Files[]={"busybox/busybox.exe","curl/curl.exe","jq/jq.exe","openssh/ssh.exe","python/python.exe","openssh/scp.exe","openssh/sftp.exe"};
     str Root=NULL;
 #endif
     xvalue* Tools=xrtValueArray();
-    for(size_t i=0;i<7;i++) {
+    for(size_t i=0;i<sizeof(Names)/sizeof(Names[0]);i++) {
         str Base=Root?xrtStrDup(Root):MdoHomeExternalPath(MdoDistText(Active,i==4?"python":"core"));
         str Path=Base?xrtPathJoin(Base,Files[i]):NULL; char Version[257]={0};
         if(Path && ((Root!=NULL)||MdoDistText(Active,i==4?"python":"core")[0]) &&
@@ -146,7 +153,7 @@ static bool MdoDistExtract(cstr Id,xvalue* Package,char Target[128])
         cstr Path=MdoDistText(xrtValueArrayGet(Files,i),"path"); uint64 Expected=MdoDistNumber(xrtValueArrayGet(Files,i),"size");
         cstr Hash=MdoDistText(xrtValueArrayGet(Files,i),"sha256");
         char Virtual[256],Relative[384],Hex[65]; xfile Input=NULL,Output=NULL; uint8 Buffer[65536],Digest[32]; uint64 Total=0; xsha256 Sha;
-        if(!MdoDistValidRelative(Path)||!Expected||Expected>268435456||strlen(Hash)!=64)goto done;
+        if(!MdoDistValidRelative(Path)||(!Expected && strncmp(MdoToolPlatform(),"linux-",6))||Expected>268435456||strlen(Hash)!=64)goto done;
         snprintf(Virtual,sizeof(Virtual),"/%s",Path); snprintf(Relative,sizeof(Relative),"%s/%s",Target,Path);
         xfileoptions FileOptions; xrtFileOptionsInit(&FileOptions); FileOptions.Flags=XFILE_READ;
         Input=xrtVfsOpen(Vfs,Virtual,&FileOptions); Output=MdoHomeOpenWrite(Relative,XFILE_WRITE|XFILE_CREATE|XFILE_TRUNCATE);
@@ -159,6 +166,15 @@ static bool MdoDistExtract(cstr Id,xvalue* Package,char Target[128])
         Copied=Copied&&Total==Expected&&xrtSha256Final(&Sha,Digest)&&xrtFlush(Output);
         if(Copied) {for(size_t j=0;j<32;j++)snprintf(Hex+j*2,3,"%02x",Digest[j]); Copied=!strcmp(Hex,Hash);}
         xrtClose(Input); xrtClose(Output); if(!Copied)goto done;
+#if defined(__linux__) && !defined(__ANDROID__)
+        /* XRTPACK has no native mode metadata. Honor only the two permitted
+         * manifest modes after byte verification, before any functional probe. */
+        uint64 Mode=MdoDistNumber(xrtValueArrayGet(Files,i),"mode");
+        str Native=MdoHomeExternalPath(Relative);
+        bool ModeOk=(Mode==0644 || Mode==0755) && Native && xrtPathSetMode(Native,false,(uint32)Mode);
+        xrtFree(Native);
+        if(!ModeOk){Code="file_mode";Detail="Invalid or unwritable Linux file permissions";goto done;}
+#endif
         MdoDistProgress(i+1,xrtValueCount(Files),"extracting");
     }
     char Receipt[160];snprintf(Receipt,sizeof(Receipt),"%s/toolpack.receipt.json",Target);
@@ -267,7 +283,8 @@ bool MdoDistributionRequest(cstr Action,cstr Id)
     if(!g_MdoDistribution.Lock)return false;
     if(!strcmp(Action,"cancel")) {xrtMutexLock(g_MdoDistribution.Lock); xrtCancelRequest(g_MdoDistribution.Operation); xrtMutexUnlock(g_MdoDistribution.Lock); return true;}
     unsigned Command=!strcmp(Action,"check")?1:(!strcmp(Action,"install")||!strcmp(Action,"repair"))?2:!strcmp(Action,"uninstall")?3:!strcmp(Action,"rollback")?4:!strcmp(Action,"cleanup")?5:0;
-    if(!Command || (Command>=2 && (strcmp(MdoEdition(),"desktop") || (Command!=5&&strcmp(Id,"core")&&strcmp(Id,"python")))))return false;
+    bool Installable=!strcmp(MdoToolPlatform(),"windows-x86_64")||!strncmp(MdoToolPlatform(),"linux-",6);
+    if(!Command || (Command>=2 && (!Installable || (Command!=5&&strcmp(Id,"core")&&strcmp(Id,"python")))))return false;
     xrtMutexLock(g_MdoDistribution.Lock); bool Ok=!g_MdoDistribution.Busy&&!xrtCancelRequested(g_MdoDistribution.Cancel);
     if(Ok && Command>=2) {g_MdoDistribution.Operation=xrtCancelChild(g_MdoDistribution.Cancel); Ok=g_MdoDistribution.Operation!=NULL;}
     if(Ok) {g_MdoDistribution.Busy=true; g_MdoDistribution.Done=g_MdoDistribution.Total=0;snprintf(g_MdoDistribution.Stage,sizeof(g_MdoDistribution.Stage),"queued"); g_MdoDistribution.Command=Command; snprintf(g_MdoDistribution.Id,sizeof(g_MdoDistribution.Id),"%s",Id);}

@@ -24,4 +24,5 @@ bool MdoUpdateBlocked(void);
 bool MdoUpdateExit(void);
 /* Called on the update worker, after native confirmation and idle checks. */
 bool MdoUpdateWindowsInstall(cstr Source, cstr Hash);
+bool MdoUpdateLinuxInstall(cstr Source, cstr Hash);
 #endif

@@ -67,6 +67,16 @@ static bool MdoUpdateFileHash(cstr Path,char Hash[65],bool Packed)
 done:
     xrtClose(File); return Ok;
 }
+static cstr MdoUpdateDownloadRelative(void)
+{
+#if defined(__linux__) && !defined(__ANDROID__)
+    return "data/update/new.bin";
+#elif defined(__ANDROID__)
+    return "data/update/new.apk";
+#else
+    return "data/update/new.exe";
+#endif
+}
 static bool MdoUpdateFetch(cstr Url,size_t Limit,XS_FetchResponse* Response)
 {
     XS_FetchRequest Request = {0};
@@ -129,7 +139,7 @@ static void MdoUpdateDoDownload(MdoUpdateStatus* Status)
     char Path[160], Hash[65];
     snprintf(Path,sizeof(Path),"%s",Status->DownloadPath);
     if(!Path[0])snprintf(Path,sizeof(Path),"/update/download/%s/%s",Status->Platform,Status->Hash);
-    cstr Relative=!strcmp(Status->Platform,"windows-x86_64")?"data/update/new.exe":"data/update/new.apk";
+    cstr Relative=MdoUpdateDownloadRelative();
     bool Ok=MdoTransferDownload(g_MdoUpdate.Engine,Path,Relative,Status->Bytes,Status->Hash,g_MdoUpdate.Cancel);
     str Native=Ok?MdoHomeExternalPath(Relative):NULL;
     if(Ok)Ok=Native&&MdoUpdateFileHash(Native,Hash,!strcmp(Status->Platform,"windows-x86_64"))&&!strcmp(Hash,Status->Hash);
@@ -185,6 +195,8 @@ static void MdoUpdateDoInstall(MdoUpdateStatus* Status)
             MdoUpdateComplete(Status,"ready","Installation cancelled or native window unavailable"); return;
         }
         Ok = MdoUpdateWindowsInstall(g_MdoUpdate.Source,Status->Hash);
+    } else if (!strncmp(Status->Platform,"linux-",6)) {
+        Ok = MdoUpdateLinuxInstall(g_MdoUpdate.Source,Status->Hash);
     } else {
         str Path = MdoHomeExternalPath("data/update/new.apk");
         Ok = Path && xsAppInstallPackage(Path,Status->Hash); xrtFree(Path);
@@ -215,7 +227,7 @@ static int32 MdoUpdateThread(ptr Data)
         else if (Command == 2) MdoUpdateDoDownload(&Status);
         else if (Command == 3) MdoUpdateDoInstall(&Status);
         else {
-            bool Ok = MdoUpdateIdle() && xsAppConfirm("退出墨斗？当前配置和会话会保留。");
+            bool Ok = MdoUpdateIdle() && (!strncmp(Status.Platform,"linux-",6) || xsAppConfirm("退出墨斗？当前配置和会话会保留。"));
             MdoUpdateComplete(&Status,Status.Ready ? "ready" : "available",Ok ? "" :
                 "Close the native application window to exit");
             if (Ok) xsAppRequestStop();
@@ -317,6 +329,15 @@ bool MdoUpdateInit(void)
     xrtClose(File);
     if (!Packed) { xrtFree(g_MdoUpdate.Source); g_MdoUpdate.Source = NULL; }
     else snprintf(g_MdoUpdate.Status.Platform,sizeof(g_MdoUpdate.Status.Platform),"windows-x86_64");
+#elif defined(__linux__) && defined(MDO_PRODUCT_LIBC)
+    g_MdoUpdate.Source = xrtPathExecutable();
+    xfile File = g_MdoUpdate.Source ? xrtOpen(g_MdoUpdate.Source,XFILE_READ) : NULL;
+    char Tail[8]; size_t Got = 0;
+    bool Packed = File && xrtSeek(File,-32,XSEEK_END,NULL) && xrtRead(File,Tail,8,&Got) &&
+        Got == 8 && !memcmp(Tail,"XRTPEND\0",8);
+    xrtClose(File);
+    if (!Packed) { xrtFree(g_MdoUpdate.Source); g_MdoUpdate.Source = NULL; }
+    else snprintf(g_MdoUpdate.Status.Platform,sizeof(g_MdoUpdate.Status.Platform),"%s-%s",MdoToolPlatform(),MDO_PRODUCT_LIBC);
 #endif
     if (!g_MdoUpdate.Source) return true;
     g_MdoUpdate.Status.Enabled = true;
