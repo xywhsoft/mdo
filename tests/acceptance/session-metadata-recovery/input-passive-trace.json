@@ -1,0 +1,128 @@
+[
+  {
+    "level": "info",
+    "message": "QA_INPUT {\"type\":\"assignment\",\"text\":\"\",\"hash\":\"#/projects/default/sessions/V-OSJiWLPrjWyhb6lGQS3hI4WRDehrZf\",\"stack\":[\"    at onRestore (http://127.0.0.1:50568/js/app.js:771:109)\",\"    at Object.select (http://127.0.0.1:50568/js/features/chat/draft-store.js:427:5)\",\"    at boot (http://127.0.0.1:50568/js/app.js:862:14)\"]}",
+    "timestamp": "2026-10-08T11:55:46.647Z",
+    "url": "http://127.0.0.1:50568/js/app.js"
+  },
+  {
+    "level": "info",
+    "message": "QA_INPUT {\"type\":\"assignment\",\"text\":\"\",\"hash\":\"#/projects/default/sessions/V-OSJiWLPrjWyhb6lGQS3hI4WRDehrZf\",\"stack\":[\"    at onRestore (http://127.0.0.1:50568/js/app.js:771:109)\",\"    at Object.select (http://127.0.0.1:50568/js/features/chat/draft-store.js:427:5)\",\"    at navigation.subscribe.refresh (http://127.0.0.1:50568/js/app.js:1758:16)\"]}",
+    "timestamp": "2026-10-08T11:55:46.706Z",
+    "url": "http://127.0.0.1:50568/js/app.js"
+  },
+  {
+    "level": "info",
+    "message": "QA_INPUT {\"type\":\"assignment\",\"text\":\"\",\"hash\":\"#/projects/default/sessions/V-OSJiWLPrjWyhb6lGQS3hI4WRDehrZf\",\"stack\":[\"    at onRestore (http://127.0.0.1:50568/js/app.js:771:109)\",\"    at http://127.0.0.1:50568/js/features/chat/draft-store.js:214:31\"]}",
+    "timestamp": "2026-10-08T11:55:46.797Z",
+    "url": "http://127.0.0.1:50568/js/app.js"
+  },
+  {
+    "level": "info",
+    "message": "QA_INPUT {\"type\":\"input\",\"inputType\":\"\",\"composing\":false,\"data\":null,\"text\":\"中文输入保持原始内容\",\"hash\":\"#/projects/default/sessions/V-OSJiWLPrjWyhb6lGQS3hI4WRDehrZf\"}",
+    "timestamp": "2026-10-08T11:56:07.303Z",
+    "url": "http://127.0.0.1:50568/js/qa-input-trace.js"
+  },
+  {
+    "level": "info",
+    "message": "QA_INPUT {\"type\":\"blur\",\"text\":\"中文输入保持原始内容\",\"hash\":\"#/projects/default/sessions/V-OSJiWLPrjWyhb6lGQS3hI4WRDehrZf\"}",
+    "timestamp": "2026-10-08T11:56:07.406Z",
+    "url": "http://127.0.0.1:50568/js/qa-input-trace.js"
+  },
+  {
+    "level": "info",
+    "message": "QA_INPUT {\"type\":\"assignment\",\"text\":\"\",\"hash\":\"#/projects/default/sessions/V-OSJiWM-T21kKzRF4t6HR8xIW1CTSs2\",\"stack\":[\"    at onRestore (http://127.0.0.1:50568/js/app.js:771:109)\",\"    at Object.select (http://127.0.0.1:50568/js/features/chat/draft-store.js:427:5)\",\"    at navigation.subscribe.refresh [as listener] (http://127.0.0.1:50568/js/app.js:1758:16)\"]}",
+    "timestamp": "2026-10-08T11:56:07.414Z",
+    "url": "http://127.0.0.1:50568/js/app.js"
+  },
+  {
+    "level": "info",
+    "message": "QA_INPUT {\"type\":\"assignment\",\"text\":\"\",\"hash\":\"#/projects/default/sessions/V-OSJiWM-T21kKzRF4t6HR8xIW1CTSs2\",\"stack\":[\"    at onRestore (http://127.0.0.1:50568/js/app.js:771:109)\",\"    at http://127.0.0.1:50568/js/features/chat/draft-store.js:214:31\"]}",
+    "timestamp": "2026-10-08T11:56:07.463Z",
+    "url": "http://127.0.0.1:50568/js/app.js"
+  },
+  {
+    "level": "info",
+    "message": "QA_INPUT {\"type\":\"input\",\"inputType\":\"\",\"composing\":false,\"data\":null,\"text\":\"english-only-once\",\"hash\":\"#/projects/default/sessions/V-OSJiWM-T21kKzRF4t6HR8xIW1CTSs2\"}",
+    "timestamp": "2026-10-08T11:56:24.820Z",
+    "url": "http://127.0.0.1:50568/js/qa-input-trace.js"
+  },
+  {
+    "level": "info",
+    "message": "QA_INPUT {\"type\":\"blur\",\"text\":\"english-only-once\",\"hash\":\"#/projects/default/sessions/V-OSJiWM-T21kKzRF4t6HR8xIW1CTSs2\"}",
+    "timestamp": "2026-10-08T11:56:24.887Z",
+    "url": "http://127.0.0.1:50568/js/qa-input-trace.js"
+  },
+  {
+    "level": "info",
+    "message": "QA_INPUT {\"type\":\"assignment\",\"text\":\"中文输入保持原始内容\",\"hash\":\"#/projects/default/sessions/V-OSJiWLPrjWyhb6lGQS3hI4WRDehrZf\",\"stack\":[\"    at onRestore (http://127.0.0.1:50568/js/app.js:771:109)\",\"    at Object.select (http://127.0.0.1:50568/js/features/chat/draft-store.js:427:5)\",\"    at navigation.subscribe.refresh [as listener] (http://127.0.0.1:50568/js/app.js:1758:16)\"]}",
+    "timestamp": "2026-10-08T11:56:24.894Z",
+    "url": "http://127.0.0.1:50568/js/app.js"
+  },
+  {
+    "level": "info",
+    "message": "QA_INPUT {\"type\":\"blur\",\"text\":\"中文输入保持原始内容\",\"hash\":\"#/projects/default/sessions/V-OSJiWLPrjWyhb6lGQS3hI4WRDehrZf\"}",
+    "timestamp": "2026-10-08T11:56:57.953Z",
+    "url": "http://127.0.0.1:50568/js/qa-input-trace.js"
+  },
+  {
+    "level": "info",
+    "message": "QA_INPUT {\"type\":\"input\",\"inputType\":\"\",\"composing\":false,\"data\":null,\"text\":\"侧栏恢复期间输入一次\",\"hash\":\"#/projects/default/sessions/V-OSJiWLPrjWyhb6lGQS3hI4WRDehrZf\"}",
+    "timestamp": "2026-10-08T11:56:58.514Z",
+    "url": "http://127.0.0.1:50568/js/qa-input-trace.js"
+  },
+  {
+    "level": "info",
+    "message": "QA_INPUT {\"type\":\"blur\",\"text\":\"侧栏恢复期间输入一次\",\"hash\":\"#/projects/default/sessions/V-OSJiWLPrjWyhb6lGQS3hI4WRDehrZf\"}",
+    "timestamp": "2026-10-08T12:03:06.328Z",
+    "url": "http://127.0.0.1:50568/js/qa-input-trace.js"
+  },
+  {
+    "level": "info",
+    "message": "QA_INPUT {\"type\":\"assignment\",\"text\":\"english-only-once\",\"hash\":\"#/projects/default/sessions/V-OSJiWM-T21kKzRF4t6HR8xIW1CTSs2\",\"stack\":[\"    at onRestore (http://127.0.0.1:50568/js/app.js:771:109)\",\"    at Object.select (http://127.0.0.1:50568/js/features/chat/draft-store.js:427:5)\",\"    at navigation.subscribe.refresh [as listener] (http://127.0.0.1:50568/js/app.js:1758:16)\"]}",
+    "timestamp": "2026-10-08T12:03:06.338Z",
+    "url": "http://127.0.0.1:50568/js/app.js"
+  },
+  {
+    "level": "info",
+    "message": "QA_INPUT {\"type\":\"input\",\"inputType\":\"\",\"composing\":false,\"data\":null,\"text\":\"冷读重试只输入一次\",\"hash\":\"#/projects/default/sessions/V-OSJiWM-T21kKzRF4t6HR8xIW1CTSs2\"}",
+    "timestamp": "2026-10-08T12:03:08.230Z",
+    "url": "http://127.0.0.1:50568/js/qa-input-trace.js"
+  },
+  {
+    "level": "info",
+    "message": "QA_INPUT {\"type\":\"blur\",\"text\":\"冷读重试只输入一次\",\"hash\":\"#/projects/default/sessions/V-OSJiWM-T21kKzRF4t6HR8xIW1CTSs2\"}",
+    "timestamp": "2026-10-08T12:03:13.400Z",
+    "url": "http://127.0.0.1:50568/js/qa-input-trace.js"
+  },
+  {
+    "level": "info",
+    "message": "QA_INPUT {\"type\":\"assignment\",\"text\":\"\",\"hash\":\"#/projects/default/sessions/V-OSJiWM-T21kKzRF4t6HR8xIW1CTSs2\",\"stack\":[\"    at clearSubmittedComposer (http://127.0.0.1:50568/js/app.js:2012:105)\",\"    at onPersisted (http://127.0.0.1:50568/js/app.js:816:7)\",\"    at acknowledge (http://127.0.0.1:50568/js/features/chat/submission-controller.js:36:5)\"]}",
+    "timestamp": "2026-10-08T12:03:13.460Z",
+    "url": "http://127.0.0.1:50568/js/app.js"
+  },
+  {
+    "level": "info",
+    "message": "QA_INPUT {\"type\":\"blur\",\"text\":\"\",\"hash\":\"#/projects/default/sessions/V-OSJiWM-T21kKzRF4t6HR8xIW1CTSs2\"}",
+    "timestamp": "2026-10-08T12:03:29.064Z",
+    "url": "http://127.0.0.1:50568/js/qa-input-trace.js"
+  },
+  {
+    "level": "info",
+    "message": "QA_INPUT {\"type\":\"assignment\",\"text\":\"侧栏恢复期间输入一次\",\"hash\":\"#/projects/default/sessions/V-OSJiWLPrjWyhb6lGQS3hI4WRDehrZf\",\"stack\":[\"    at onRestore (http://127.0.0.1:50568/js/app.js:771:109)\",\"    at Object.select (http://127.0.0.1:50568/js/features/chat/draft-store.js:427:5)\",\"    at navigation.subscribe.refresh [as listener] (http://127.0.0.1:50568/js/app.js:1758:16)\"]}",
+    "timestamp": "2026-10-08T12:03:29.072Z",
+    "url": "http://127.0.0.1:50568/js/app.js"
+  },
+  {
+    "level": "info",
+    "message": "QA_INPUT {\"type\":\"blur\",\"text\":\"侧栏恢复期间输入一次\",\"hash\":\"#/projects/default/sessions/V-OSJiWLPrjWyhb6lGQS3hI4WRDehrZf\"}",
+    "timestamp": "2026-10-08T12:03:29.181Z",
+    "url": "http://127.0.0.1:50568/js/qa-input-trace.js"
+  },
+  {
+    "level": "info",
+    "message": "QA_INPUT {\"type\":\"assignment\",\"text\":\"\",\"hash\":\"#/projects/default/sessions/V-OSJiWLPrjWyhb6lGQS3hI4WRDehrZf\",\"stack\":[\"    at clearSubmittedComposer (http://127.0.0.1:50568/js/app.js:2012:105)\",\"    at onPersisted (http://127.0.0.1:50568/js/app.js:816:7)\",\"    at acknowledge (http://127.0.0.1:50568/js/features/chat/submission-controller.js:36:5)\"]}",
+    "timestamp": "2026-10-08T12:03:29.199Z",
+    "url": "http://127.0.0.1:50568/js/app.js"
+  }
+]

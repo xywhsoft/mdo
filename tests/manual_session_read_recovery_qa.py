@@ -1,7 +1,8 @@
 """Bounded session list/detail faults in an isolated real packed page.
 
 Open the printed URL. The QA-only GET arm endpoint accepts list or detail,
-with two transient faults or six exhaustion faults. Profile writes stay real.
+with two transient faults or six exhaustion faults. detail/hold delays one
+detail read by 12 seconds. Profile writes stay real.
 Create the printed stop file when done. Nothing is added to the release app.
 """
 import argparse
@@ -9,6 +10,7 @@ from collections import Counter
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
 import os
+import re
 from pathlib import Path
 import shutil
 import subprocess
@@ -22,15 +24,6 @@ from test_packed_queue_start_recovery import configure_model
 ROOT = Path(__file__).resolve().parents[1]
 INPUT_TRACE = r'''
 const prompt = document.querySelector("#prompt");
-const value = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value");
-Object.defineProperty(prompt, "value", { configurable: true,
-    get() { return value.get.call(this); },
-    set(text) {
-        console.info("QA_INPUT", JSON.stringify({ type: "restore", text, hash: location.hash,
-            stack: new Error().stack.split("\n").slice(1, 5) }));
-        value.set.call(this, text);
-    }
-});
 for (const type of ["beforeinput", "input", "compositionstart", "compositionend", "blur"])
     prompt.addEventListener(type, event => console.info("QA_INPUT", JSON.stringify({ type,
         inputType: event.inputType, composing: event.isComposing, data: event.data,
@@ -39,6 +32,7 @@ for (const type of ["beforeinput", "input", "compositionstart", "compositionend"
 SEAM = r'''
 static xmutex* g_SessionReadProbeLock;
 static unsigned g_ListLeft, g_ListFailed, g_DetailLeft, g_DetailFailed, g_ProfileWrites;
+static unsigned g_HoldLeft, g_DetailHeld;
 static bool SessionProbeTarget(xstrview Target, const char* Text)
 { return Target.Size == strlen(Text) && memcmp(Target.Data, Text, Target.Size) == 0; }
 static bool SessionReadProbe(XS_HttpReq* Request)
@@ -57,18 +51,23 @@ static bool SessionReadProbe(XS_HttpReq* Request)
     bool ArmList6 = Get && SessionProbeTarget(Target, "/api/v1/qa-session-arm/list/6");
     bool ArmDetail2 = Get && SessionProbeTarget(Target, "/api/v1/qa-session-arm/detail/2");
     bool ArmDetail6 = Get && SessionProbeTarget(Target, "/api/v1/qa-session-arm/detail/6");
-    bool Arm = ArmList2 || ArmList6 || ArmDetail2 || ArmDetail6;
+    bool ArmHold = Get && SessionProbeTarget(Target, "/api/v1/qa-session-arm/detail/hold");
+    bool Arm = ArmList2 || ArmList6 || ArmDetail2 || ArmDetail6 || ArmHold;
     bool Proof = Get && SessionProbeTarget(Target, "/api/v1/qa-session-proof");
-    bool Fail = false;
+    bool Fail = false, Hold = false;
     xrtMutexLock(g_SessionReadProbeLock);
     if (ArmList2 || ArmList6) { g_ListLeft = ArmList2 ? 2u : 6u; g_ListFailed = 0u; }
     if (ArmDetail2 || ArmDetail6) { g_DetailLeft = ArmDetail2 ? 2u : 6u; g_DetailFailed = 0u; }
+    if (ArmHold) { g_HoldLeft = 1u; g_DetailHeld = 0u; }
     if (List && g_ListLeft) { --g_ListLeft; ++g_ListFailed; Fail = true; }
     if (Detail && g_DetailLeft) { --g_DetailLeft; ++g_DetailFailed; Fail = true; }
+    if (Detail && g_HoldLeft) { --g_HoldLeft; ++g_DetailHeld; Hold = true; }
     if (Profile) ++g_ProfileWrites;
     unsigned ListLeft = g_ListLeft, ListFailed = g_ListFailed;
     unsigned DetailLeft = g_DetailLeft, DetailFailed = g_DetailFailed, Writes = g_ProfileWrites;
+    unsigned Held = g_DetailHeld;
     xrtMutexUnlock(g_SessionReadProbeLock);
+    if (Hold) xrtSleep(12000u);
     if (!Arm && !Proof && !Fail) return false;
     MdoApiContext Context = {0}; Context.Request = Request; MdoApiRequestId(Context.RequestId);
     if (Fail) MdoApiReplyError(&Context, 503u, "fixture_session_read", "Fixture session read unavailable", NULL);
@@ -77,6 +76,7 @@ static bool SessionReadProbe(XS_HttpReq* Request)
         MdoApiValueSetUInt(Data, "list_remaining", ListLeft); MdoApiValueSetUInt(Data, "list_failed", ListFailed);
         MdoApiValueSetUInt(Data, "detail_remaining", DetailLeft); MdoApiValueSetUInt(Data, "detail_failed", DetailFailed);
         MdoApiValueSetUInt(Data, "profile_writes", Writes);
+        MdoApiValueSetUInt(Data, "detail_held", Held);
         MdoApiReplySuccessTake(&Context, 200u, Data, NULL);
     }
     return true;
@@ -103,7 +103,7 @@ class Model(BaseHTTPRequestHandler):
         self.wfile.write(raw)
 
 
-def fixture(base, host, trace_input=False):
+def fixture(base, host, trace_input=False, trace_metadata=False):
     app = base / "app"
     shutil.copytree(ROOT / "app", app)
     if trace_input:
@@ -113,6 +113,31 @@ def fixture(base, host, trace_input=False):
         index.write_text(text.replace("</body>", '<script src="/js/qa-input-trace.js"></script>\n</body>'),
             encoding="utf-8", newline="\n")
         (app / "web/js/qa-input-trace.js").write_text(INPUT_TRACE, encoding="utf-8", newline="\n")
+        # Keep the native textarea accessor intact: overriding it can change
+        # an automation driver's fill strategy and hide the original symptom.
+        script = app / "web/js/app.js"
+        text = script.read_text(encoding="utf-8")
+        def trace_assignment(match):
+            indent, value = match.groups()
+            return indent + 'console.info("QA_INPUT", JSON.stringify({ type: "assignment", text: ' + value + \
+                ', hash: location.hash, stack: new Error().stack.split("\\n").slice(1, 4) }));\n' + match[0]
+        text, assignments = re.subn(r'^(\s*)prompt\.value = (.*);$', trace_assignment, text, flags=re.MULTILINE)
+        assert assignments >= 3, "Composer assignment markers changed"
+        script.write_text(text, encoding="utf-8", newline="\n")
+    if trace_metadata:
+        script = app / "web/js/features/shell/session-metadata-sync.js"
+        text = script.read_text(encoding="utf-8")
+        marker = "  const inFlight = new Map();"
+        assert text.count(marker) == 1
+        trace = '''  const originalReadSession = readSession;
+  readSession = (projectId, sessionId, options) => {
+    console.info("QA_METADATA", JSON.stringify({ type: "read", projectId, sessionId }));
+    options?.signal?.addEventListener("abort", () =>
+      console.info("QA_METADATA", JSON.stringify({ type: "abort", projectId, sessionId })), { once: true });
+    return originalReadSession(projectId, sessionId, options);
+  };
+'''
+        script.write_text(text.replace(marker, trace + marker), encoding="utf-8", newline="\n")
     service = app / "src/bootstrap/service.c"
     text = service.read_text(encoding="utf-8")
     markers = ("void ServiceInit(XS_HostInfo* pHost)\n", "    bool ready = MdoBootstrapInit(pHost);\n",
@@ -133,12 +158,13 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--host", type=Path, required=True)
     parser.add_argument("--directory", type=Path, required=True)
-    parser.add_argument("--trace-input", action="store_true", help="Log synthetic input events only in this isolated fixture")
+    parser.add_argument("--trace-input", action="store_true", help="Log input events and existing composer assignments only in this isolated fixture")
+    parser.add_argument("--trace-metadata", action="store_true", help="Log background detail reads and cancellation only in this isolated fixture")
     args = parser.parse_args()
     base = args.directory.resolve()
     assert not base.exists(), "Choose a fresh isolated directory"
     base.mkdir(parents=True)
-    packed = fixture(base, args.host.resolve(), args.trace_input)
+    packed = fixture(base, args.host.resolve(), args.trace_input, args.trace_metadata)
     native, port = site(base, "native", packed)
     model = ThreadingHTTPServer(("127.0.0.1", 0), Model)
     worker = threading.Thread(target=model.serve_forever, daemon=True)

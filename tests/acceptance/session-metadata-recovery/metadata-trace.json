@@ -1,0 +1,104 @@
+[
+  {
+    "level": "info",
+    "message": "QA_METADATA {\"type\":\"read\",\"projectId\":\"default\",\"sessionId\":\"V-OSJlgV5P76xkQMbrwYfZbleRZdGtZ6\"}",
+    "timestamp": "2026-10-08T12:09:56.202Z",
+    "url": "http://127.0.0.1:52056/js/features/shell/session-metadata-sync.js"
+  },
+  {
+    "level": "info",
+    "message": "QA_METADATA {\"type\":\"read\",\"projectId\":\"default\",\"sessionId\":\"V-OSJlgV5P76xkQMbrwYfZbleRZdGtZ6\"}",
+    "timestamp": "2026-10-08T12:10:35.830Z",
+    "url": "http://127.0.0.1:52056/js/features/shell/session-metadata-sync.js"
+  },
+  {
+    "level": "info",
+    "message": "QA_METADATA {\"type\":\"abort\",\"projectId\":\"default\",\"sessionId\":\"V-OSJlgV5P76xkQMbrwYfZbleRZdGtZ6\"}",
+    "timestamp": "2026-10-08T12:10:43.843Z",
+    "url": "http://127.0.0.1:52056/js/features/shell/session-metadata-sync.js"
+  },
+  {
+    "level": "info",
+    "message": "QA_METADATA {\"type\":\"read\",\"projectId\":\"default\",\"sessionId\":\"V-OSJlgV5P76xkQMbrwYfZbleRZdGtZ6\"}",
+    "timestamp": "2026-10-08T12:10:44.421Z",
+    "url": "http://127.0.0.1:52056/js/features/shell/session-metadata-sync.js"
+  },
+  {
+    "level": "info",
+    "message": "QA_METADATA {\"type\":\"read\",\"projectId\":\"default\",\"sessionId\":\"V-OSJlgV5P76xkQMbrwYfZbleRZdGtZ6\"}",
+    "timestamp": "2026-10-08T12:10:45.591Z",
+    "url": "http://127.0.0.1:52056/js/features/shell/session-metadata-sync.js"
+  },
+  {
+    "level": "info",
+    "message": "QA_METADATA {\"type\":\"read\",\"projectId\":\"default\",\"sessionId\":\"V-OSJlgV5P76xkQMbrwYfZbleRZdGtZ6\"}",
+    "timestamp": "2026-10-08T12:10:45.755Z",
+    "url": "http://127.0.0.1:52056/js/features/shell/session-metadata-sync.js"
+  },
+  {
+    "level": "info",
+    "message": "QA_METADATA {\"type\":\"read\",\"projectId\":\"default\",\"sessionId\":\"V-OSJlgV5P76xkQMbrwYfZbleRZdGtZ6\"}",
+    "timestamp": "2026-10-08T12:11:00.843Z",
+    "url": "http://127.0.0.1:52056/js/features/shell/session-metadata-sync.js"
+  },
+  {
+    "level": "info",
+    "message": "QA_METADATA {\"type\":\"abort\",\"projectId\":\"default\",\"sessionId\":\"V-OSJlgV5P76xkQMbrwYfZbleRZdGtZ6\"}",
+    "timestamp": "2026-10-08T12:11:08.212Z",
+    "url": "http://127.0.0.1:52056/js/features/shell/session-metadata-sync.js"
+  },
+  {
+    "level": "info",
+    "message": "QA_METADATA {\"type\":\"read\",\"projectId\":\"default\",\"sessionId\":\"V-OSJlgVXaq4y7PglZgoFY9JYslZBH5b\"}",
+    "timestamp": "2026-10-08T12:11:08.391Z",
+    "url": "http://127.0.0.1:52056/js/features/shell/session-metadata-sync.js"
+  },
+  {
+    "level": "info",
+    "message": "QA_METADATA {\"type\":\"read\",\"projectId\":\"default\",\"sessionId\":\"V-OSJlgVXaq4y7PglZgoFY9JYslZBH5b\"}",
+    "timestamp": "2026-10-08T12:11:08.601Z",
+    "url": "http://127.0.0.1:52056/js/features/shell/session-metadata-sync.js"
+  },
+  {
+    "level": "info",
+    "message": "QA_METADATA {\"type\":\"read\",\"projectId\":\"default\",\"sessionId\":\"V-OSJlgVXaq4y7PglZgoFY9JYslZBH5b\"}",
+    "timestamp": "2026-10-08T12:11:15.777Z",
+    "url": "http://127.0.0.1:52056/js/features/shell/session-metadata-sync.js"
+  },
+  {
+    "level": "info",
+    "message": "QA_METADATA {\"type\":\"read\",\"projectId\":\"default\",\"sessionId\":\"V-OSJlgVXaq4y7PglZgoFY9JYslZBH5b\"}",
+    "timestamp": "2026-10-08T12:11:15.918Z",
+    "url": "http://127.0.0.1:52056/js/features/shell/session-metadata-sync.js"
+  },
+  {
+    "level": "info",
+    "message": "QA_METADATA {\"type\":\"read\",\"projectId\":\"default\",\"sessionId\":\"V-OSJlgV5P76xkQMbrwYfZbleRZdGtZ6\"}",
+    "timestamp": "2026-10-08T12:11:33.416Z",
+    "url": "http://127.0.0.1:52056/js/features/shell/session-metadata-sync.js"
+  },
+  {
+    "level": "info",
+    "message": "QA_METADATA {\"type\":\"read\",\"projectId\":\"default\",\"sessionId\":\"V-OSJlgV5P76xkQMbrwYfZbleRZdGtZ6\"}",
+    "timestamp": "2026-10-08T12:12:09.271Z",
+    "url": "http://127.0.0.1:52056/js/features/shell/session-metadata-sync.js"
+  },
+  {
+    "level": "info",
+    "message": "QA_METADATA {\"type\":\"read\",\"projectId\":\"default\",\"sessionId\":\"V-OSJlgV5P76xkQMbrwYfZbleRZdGtZ6\"}",
+    "timestamp": "2026-10-08T12:12:09.885Z",
+    "url": "http://127.0.0.1:52056/js/features/shell/session-metadata-sync.js"
+  },
+  {
+    "level": "info",
+    "message": "QA_METADATA {\"type\":\"read\",\"projectId\":\"default\",\"sessionId\":\"V-OSJlgV5P76xkQMbrwYfZbleRZdGtZ6\"}",
+    "timestamp": "2026-10-08T12:12:10.950Z",
+    "url": "http://127.0.0.1:52056/js/features/shell/session-metadata-sync.js"
+  },
+  {
+    "level": "info",
+    "message": "QA_METADATA {\"type\":\"read\",\"projectId\":\"default\",\"sessionId\":\"V-OSJlgV5P76xkQMbrwYfZbleRZdGtZ6\"}",
+    "timestamp": "2026-10-08T12:12:18.151Z",
+    "url": "http://127.0.0.1:52056/js/features/shell/session-metadata-sync.js"
+  }
+]

@@ -1,0 +1,19 @@
+{
+  "node_checks": 53,
+  "metadata_checks": 14,
+  "frontend_contract_checks": 3,
+  "stress_tests": false,
+  "phone_tested": false,
+  "daily_binary_updated_by_this_stage": false,
+  "website_updated_by_this_stage": false,
+  "cases": {
+    "metadata_hung_attempt_timeout": "passed in real packed page",
+    "metadata_cancel_on_navigation": "passed in real packed page before timeout",
+    "metadata_two_transient_failures": "passed in real packed page",
+    "metadata_hang_ignoring_abort": "passed with deterministic clock",
+    "metadata_exhaustion_cooldown_probe": "passed with deterministic clock",
+    "metadata_local_revision_and_foreground_read_supersede": "passed",
+    "continued_conversations": "three actual model requests; zero final errors",
+    "input_integrity": "two additional requests preserved exact inputs; earlier intermittent anomaly remains unconfirmed"
+  }
+}

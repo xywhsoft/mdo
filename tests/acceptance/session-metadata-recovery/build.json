@@ -1,0 +1,17 @@
+{
+  "qa_base": "50a0f8e5918f1812511e2713d44023d2feb99470",
+  "candidate": "D:\\GIT\\mdo\\.build\\conversation-acceptance\\mdo-metadata-recovery.exe",
+  "size": 4447648,
+  "sha256": "dc5732ccba5759a52caf2c3f5b6ef30ee5051eb0efc05afa854de2facf651a4a",
+  "xs_pin": "858a6ad1dde41dd43b6fd7028a8d2303ebc6f696",
+  "host_sha256": "fac7c5f62cae91e104205af20749aa84ee1afd65cb01abb15e7fed41edf2e50e",
+  "frontend_sha256": {
+    "js/features/shell/session-metadata-sync.js": "29c79d85c7094804b349709cde87886dc7b4fe6da5cc8fc47f64cf940f5989c0",
+    "js/api/request-recovery.js": "17f9567ba86faf444b892ae1a2b0dc28fbdfe2007efd0dab5c71429ce04309ad",
+    "js/state/sessions.js": "302289a02020286192cedcc9949b22f46748b3c6647e0400f74cc1053caee9be",
+    "js/state/store.js": "c17b411cbab087b8c0d91c59016c65977981b0b6bdb63261178bc0ce7b5e5654",
+    "js/app.js": "f719ee0ba0b1e2a8d66a0302c2f382be1859c1e857bf8e056cf563f75bf06b3c",
+    "index.html": "2ae8fcdfe0f5148f90871ae49358d88e2233e2a43d7fce4dfe9630236d46dde1"
+  },
+  "qa_seam_absent": true
+}
