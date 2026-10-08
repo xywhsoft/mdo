@@ -1,0 +1,112 @@
+{
+  "candidate": {
+    "path": ".build/conversation-acceptance/mdo-recovery-ack-final.exe",
+    "bytes": 4394410,
+    "sha256": "ce25b72df7ffb41e91e75bd9816265bc4e90db2f95b351694dbaee929af9969b"
+  },
+  "runtime_probes_passed": [
+    "test_skill_runtime.py",
+    "test_agent_runtime.py",
+    "test_mcp_runtime.py",
+    "test_schedule_runtime.py",
+    "test_schedule_executor_runtime.py",
+    "test_ecosystem_runtime.py",
+    "test_packed_module_catalog.py"
+  ],
+  "extension_http": {
+    "passed": true,
+    "model_requests": {
+      "custom_tool": 2,
+      "skill": 4,
+      "delegation": 3,
+      "profiles": 3,
+      "mcp": 4
+    },
+    "final_model_errors": 0,
+    "mcp_2025_methods": [
+      "initialize",
+      "notifications/initialized",
+      "tools/list",
+      "tools/call"
+    ],
+    "mcp_schemas_lazy": true,
+    "packed_sha256": "ce25b72df7ffb41e91e75bd9816265bc4e90db2f95b351694dbaee929af9969b"
+  },
+  "node": {
+    "tests": 18,
+    "passed": 18,
+    "failed": 0
+  },
+  "browser": {
+    "created": [
+      "SubAgent",
+      "Skill",
+      "command",
+      "MCP",
+      "C tool"
+    ],
+    "subagent_tools": [
+      "read",
+      "grep",
+      "user.qa-echo"
+    ],
+    "subagent_read_only": true,
+    "subagent_disabled": true,
+    "form_source_roundtrip": true,
+    "command_expanded": "只读审阅 src/main.c，按严重程度报告具体问题。",
+    "command_auto_sent": false,
+    "mcp_saved_without_start": true,
+    "mcp_connected_tools": 1,
+    "mcp_disconnected": true,
+    "mobile_viewport": [
+      390,
+      844
+    ],
+    "schedule_model_calls": {
+      "schedule-ui-proof": 1
+    },
+    "schedule_final_state": "paused",
+    "schedule_history": {
+      "schema_version": 1,
+      "task_id": 1,
+      "agent_run_id": 1,
+      "schedule_id": "V-OSI1v0kluHl_1jq4pSLaVmLP4qEQbc",
+      "scheduled_at_us": 1791431653310285,
+      "finished_at_us": 1791431653398383,
+      "result": 0,
+      "text": "FIXTURE_OK: schedule-ui-proof"
+    },
+    "console_errors": 0,
+    "restart_persistence_native_checks_passed": true,
+    "stale_page_notice": "本地服务已重启。请先保留未保存的草稿，再重新载入继续。"
+  },
+  "browser_mcp_rpc": [
+    {
+      "method": "initialize",
+      "params": {
+        "protocolVersion": "2025-11-25",
+        "capabilities": {},
+        "clientInfo": {
+          "name": "xwork",
+          "version": "3.8.0"
+        }
+      }
+    },
+    {
+      "method": "notifications/initialized",
+      "params": {}
+    },
+    {
+      "method": "tools/list",
+      "params": {}
+    }
+  ],
+  "resource_sha256": {
+    "subagents/qa-reviewer.md": "a91b82a8089850d8cefbfe6fbf10b59ec2fae96fa6975dfcb22f5e93c87dcec4",
+    "skills/qa-checklist/SKILL.md": "d13145ad9239f08d99e8a9be4dd0c0ef2f1428300925f1c4d97cf4ddf7b7887d",
+    "commands/qa-review.md": "a793ce5a9983a1cb8d004769bd385ab321eee3b1f806368117bfb465bf4915d7",
+    "tools/qa-echo.c": "b818d95ee60867ae2b37ce6fbd7c3a0d0242811fda2eaf0623858d3223835d28",
+    "mcp/qa-mcp.json": "7b28c809b36055bef08354bd69bc2a59b9bb5bd17361f10716582e2de655cb82"
+  },
+  "scope": "Isolated loopback fixtures and portable Home; no stress tests, paid models, device installation or public deployment. HTTP MCP behavior and Android device UI are not established by this stdio/browser check."
+}

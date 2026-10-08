@@ -2,6 +2,7 @@
 """Small real HTTP probe for the four file-backed extension editors."""
 import argparse
 import base64
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -22,12 +23,26 @@ class SkillModel(BaseHTTPRequestHandler):
     delegation_payloads = []
     tool_payloads = []
     profile_payloads = []
+    mcp_payloads = []
     def log_message(self, *_): pass
     def do_POST(self):
         payload = json.loads(self.rfile.read(int(self.headers['Content-Length'])))
         users = [item for item in payload.get('input', []) if item.get('role') == 'user']
         latest = json.dumps(users[-1] if users else payload)
-        if 'EXTENSION profile probe' in latest:
+        if 'EXTENSION MCP probe' in latest:
+            type(self).mcp_payloads.append(payload)
+            calls = len(type(self).mcp_payloads)
+            if calls <= 2:
+                name = 'tool_search' if calls == 1 else 'tool_load'
+                arguments = {'server': 'legacy', 'query': 'echo'} if calls == 1 else {'server': 'legacy', 'tool': 'echo'}
+            elif calls == 3:
+                loaded = [tool for tool in payload['tools'] if tool['name'].startswith('mcp__')]
+                assert len(loaded) == 1, 'only the requested MCP schema is loaded'
+                name, arguments = loaded[0]['name'], {'text': 'MCP_CALLBACK_RESULT'}
+            output = [{'type': 'function_call', 'call_id': f'mcp-{calls}', 'name': name,
+                'arguments': json.dumps(arguments)}] if calls <= 3 else [
+                {'type': 'message', 'content': [{'type': 'output_text', 'text': 'MCP probe complete'}]}]
+        elif 'EXTENSION profile probe' in latest:
             type(self).profile_payloads.append(payload); calls = len(type(self).profile_payloads)
             output = [{'type': 'message', 'content': [{'type': 'output_text', 'text': 'Profile probe complete'}]}]
         elif 'EXTENSION local tool probe' in latest:
@@ -61,6 +76,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--host', type=Path, default=ROOT / '.build/host/xs.exe')
     parser.add_argument('--packed', type=Path, help='verify a standalone package without external app files')
+    parser.add_argument('--record', type=Path, help='save a compact successful verification receipt')
     args = parser.parse_args()
     with tempfile.TemporaryDirectory(prefix='extensions-', dir=ROOT / '.build') as raw:
         base = Path(raw)
@@ -267,6 +283,31 @@ def main():
                 http_revision = data['data']['revision']
                 assert 'Bearer fixture' not in (base / 'home/mcp/http-mock.json').read_text()
                 assert call('DELETE', 'mcp/http-mock', revision=http_revision)[0] == 200
+                # Exercise the default 2025 protocol through the actual model
+                # tool loop, not merely discovery. Schemas must stay lazy.
+                legacy_log = base / 'legacy-mcp.jsonl'
+                legacy = {**mcp, 'id': 'legacy', 'protocol_version': '2025-11-25',
+                    'transport': {**mcp['transport'], 'environment': [],
+                        'arguments': [str(ROOT / 'tests/fixtures/mcp-2025.py'), str(legacy_log)]}}
+                status, legacy_item = call('PUT', 'mcp/legacy', {'content': json.dumps(legacy)}, 'new')
+                assert status == 200 and not legacy_log.exists(), legacy_item
+                status, _, raw = request(port, 'POST', f'/api/v1/projects/default/sessions/{session}/runs',
+                    body=json.dumps({'prompt': 'EXTENSION MCP probe', 'timeout_ms': 5000}).encode(),
+                    headers={'Content-Type': 'application/json'})
+                assert status == 202, raw
+                run = json.loads(raw)['data']; deadline = time.monotonic() + 8
+                while not run['terminal'] and time.monotonic() < deadline:
+                    time.sleep(.05)
+                    run = json.loads(request(port, 'GET', '/api/v1/runs/' + run['id'])[2])['data']
+                assert run['state'] == 'succeeded', run
+                assert len(SkillModel.mcp_payloads) == 4, 'discover, load, call, then final reply'
+                for payload in SkillModel.mcp_payloads[:2]:
+                    assert not any(tool['name'].startswith('mcp__') for tool in payload['tools']), 'schema loaded eagerly'
+                assert 'MCP_CALLBACK_RESULT' in json.dumps(SkillModel.mcp_payloads[-1])
+                rpc = [json.loads(line) for line in legacy_log.read_text().splitlines()]
+                assert [row['method'] for row in rpc] == ['initialize', 'notifications/initialized', 'tools/list', 'tools/call'], rpc
+                assert rpc[-1]['params'] == {'name': 'echo', 'arguments': {'text': 'MCP_CALLBACK_RESULT'}}, rpc
+                assert call('DELETE', 'mcp/legacy', revision=legacy_item['data']['revision'])[0] == 200
                 status, _, raw_op = request(port, 'POST', '/api/v1/mcp/mock/refresh')
                 assert status == 202, raw_op
                 op = json.loads(raw_op)['data']
@@ -362,6 +403,18 @@ def main():
                 assert call('DELETE', 'agents/default', revision=c_item['data']['revision'])[0] == 200
                 assert call('DELETE', 'tools/fixture', revision=tool_revision)[0] == 200
                 assert 'user.fixture' not in tool_catalog()
+                events = [json.loads(line) for file in (base / 'home/sessions').rglob('ui-events.jsonl')
+                    for line in file.read_text(encoding='utf-8').splitlines()]
+                assert not any('model_error_kind' in event for event in events), 'unexpected final model error'
+                if args.record:
+                    receipt = {'passed': True, 'model_requests': {
+                        'custom_tool': len(SkillModel.tool_payloads), 'skill': len(SkillModel.payloads),
+                        'delegation': len(SkillModel.delegation_payloads), 'profiles': len(SkillModel.profile_payloads),
+                        'mcp': len(SkillModel.mcp_payloads)}, 'final_model_errors': 0,
+                        'mcp_2025_methods': [row['method'] for row in rpc],
+                        'mcp_schemas_lazy': True, 'packed_sha256': hashlib.sha256(args.packed.read_bytes()).hexdigest() if args.packed else None}
+                    args.record.parent.mkdir(parents=True, exist_ok=True)
+                    args.record.write_text(json.dumps(receipt, indent=2) + '\n', encoding='utf-8')
                 print('extension HTTP probe: PASS')
             except BaseException:
                 log.flush()
