@@ -248,7 +248,7 @@ def verify_dependencies(xserver: Path, lock: dict) -> None:
             )
         root = xserver / "lib" / name
         upstream = (root / "UPSTREAM.txt").read_text(encoding="utf-8")
-        if f"鍩虹嚎: xrt@{source_commit}" not in upstream:
+        if f"基线: xrt@{source_commit}" not in upstream:
             raise BuildError(
                 f"{name}/UPSTREAM.txt does not pin {source_commit}"
             )
