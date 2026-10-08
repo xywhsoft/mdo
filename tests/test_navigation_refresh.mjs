@@ -49,3 +49,37 @@ test("scheduled tasks retain the exact conversation when refreshed", async () =>
     assert.equal(refreshed.get().sessionId, "original");
   } finally { Object.assign(globalThis, previous); }
 });
+
+test("utility pages retain the composer owner while a real workspace selection changes it", async () => {
+  const previous = { window: globalThis.window, location: globalThis.location,
+    history: globalThis.history };
+  globalThis.window = { addEventListener() {} };
+  globalThis.location = { hash: "#/projects/work/sessions/first", pathname: "/", search: "" };
+  globalThis.history = { state: null, replaceState(state, _title, url) {
+    this.state = state;
+    if (url?.includes("#")) location.hash = url.slice(url.indexOf("#"));
+  } };
+  try {
+    const { navigation } = await import("../app/web/js/state/navigation.js?composer-owner-test");
+    const first = { projectId: "work", sessionId: "first" };
+    assert.deepEqual(navigation.workspace(), first);
+    navigation.openSettings("models");
+    assert.equal(navigation.get().sessionId, "");
+    assert.deepEqual(navigation.workspace(), first);
+    navigation.openSchedules();
+    assert.deepEqual(navigation.workspace(), first);
+    const { navigation: refreshed } = await import(
+      "../app/web/js/state/navigation.js?composer-owner-reload-test");
+    assert.deepEqual(refreshed.workspace(), first);
+    refreshed.backToWorkspace();
+    refreshed.select("other", "second");
+    assert.deepEqual(refreshed.workspace(), { projectId: "other", sessionId: "second" });
+    refreshed.openSettings();
+    assert.deepEqual(refreshed.workspace(), { projectId: "other", sessionId: "second" });
+    refreshed.newTask("third");
+    assert.deepEqual(refreshed.workspace(), { projectId: "third", sessionId: "" });
+    refreshed.clear();
+    assert.deepEqual(refreshed.workspace(), { projectId: "", sessionId: "" });
+    assert.equal(Object.isFrozen(refreshed.workspace()), true);
+  } finally { Object.assign(globalThis, previous); }
+});

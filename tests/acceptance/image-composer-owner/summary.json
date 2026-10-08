@@ -1,0 +1,15 @@
+{
+  "passed": true,
+  "model_calls": 4,
+  "final_errors": 0,
+  "uploaded_ids": 4,
+  "retained_images": 3,
+  "discarded_old_uploads": 1,
+  "image_counts_per_call": [
+    1,
+    1,
+    1,
+    0
+  ],
+  "draft_preserved_after_reload": true
+}

@@ -1,0 +1,77 @@
+{
+  "cases": [
+    {
+      "busy": true,
+      "changes": [
+        {
+          "ids": [
+            "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          ],
+          "owner": "first"
+        }
+      ],
+      "discarded": [],
+      "errors": [],
+      "label": "Upload through settings",
+      "passed": true
+    },
+    {
+      "changes": [
+        {
+          "ids": [],
+          "owner": "first"
+        }
+      ],
+      "errors": [],
+      "label": "Remove through settings",
+      "passed": true,
+      "removing": true
+    },
+    {
+      "busy": true,
+      "changes": [
+        {
+          "ids": [
+            "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          ],
+          "owner": "first"
+        }
+      ],
+      "discarded": [],
+      "errors": [],
+      "label": "Upload through schedules",
+      "passed": true
+    },
+    {
+      "changes": [
+        {
+          "ids": [],
+          "owner": "first"
+        }
+      ],
+      "errors": [],
+      "label": "Remove through schedules",
+      "passed": true,
+      "removing": true
+    },
+    {
+      "changes": [
+        {
+          "ids": [
+            "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+          ],
+          "owner": "second"
+        }
+      ],
+      "discarded": [
+        {
+          "id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "owner": "first"
+        }
+      ],
+      "label": "Different workspace remains isolated",
+      "passed": true
+    }
+  ],
+  "passed": "true"
+}

@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<title>mdo retained image owner probe</title>
+<div id="cases"></div>
+<script type="module">
+import { createComposerImages } from "/app/web/js/features/chat/composer-images.js";
+
+const root = document.querySelector("#cases");
+const firstId = "a".repeat(32), secondId = "b".repeat(32);
+const results = [];
+const until = async (check) => {
+  for (let n = 0; n < 30 && !check(); n++)
+    await new Promise(resolve => requestAnimationFrame(resolve));
+  if (!check()) throw new Error("Owned operation did not finish");
+};
+function fixture(label) {
+  const section = document.createElement("section");
+  section.innerHTML = `<h2></h2><form><textarea></textarea><button type="button">Add</button>` +
+    `<input type="file" hidden><select><option value="vision">Vision</option></select><div></div></form><pre></pre>`;
+  section.querySelector("h2").textContent = label;
+  root.append(section);
+  const composer = section.querySelector("form");
+  const prompt = section.querySelector("textarea");
+  let route = { view: "workspace", projectId: "qa", sessionId: "first" };
+  let workspace = route, finishUpload, finishRemove;
+  const changes = [], errors = [], discarded = [], uploads = [];
+  const images = createComposerImages({ composer, prompt,
+    button: section.querySelector("button"), input: section.querySelector("input"),
+    strip: section.querySelector("div"), modelSelect: section.querySelector("select"),
+    navigation: { get: () => route, workspace: () => workspace },
+    modelsStore: { get: () => ({ data: { models: [{ id: "vision", attachments: 1 }] } }) },
+    sessionStore: { get: () => ({ data: null }) }, ensureSession: async () => workspace,
+    onChange: value => changes.push({ owner: workspace.sessionId, ids: value }),
+    onUploading() {}, onError: error => errors.push(error.message),
+    onDiscardedUpload: (owner, id) => discarded.push({ owner: owner.sessionId, id }),
+    onBeforeRemove: () => new Promise(resolve => { finishRemove = resolve; }),
+    onRemove: async () => true,
+    uploadImage: async (_project, session) => {
+      uploads.push(session);
+      return session === "first" ? new Promise(resolve => {
+        finishUpload = () => resolve({ id: firstId, file_name: "owner.png" });
+      }) : { id: secondId, file_name: "owner.png" };
+    },
+  });
+  return { images, changes, errors, discarded, uploads, section,
+    add() {
+      const transfer = new DataTransfer();
+      transfer.items.add(new File([new Uint8Array([1])], "owner.png", { type: "image/png" }));
+      const input = section.querySelector("input");
+      input.files = transfer.files;
+      input.dispatchEvent(new Event("change"));
+    },
+    open(view) { route = { view, projectId: "", sessionId: "" }; images.refresh(); },
+    selectSecond() {
+      workspace = route = { view: "workspace", projectId: "qa", sessionId: "second" };
+      images.set([]);
+    },
+    releaseUpload: () => finishUpload(), releaseRemove: () => finishRemove(),
+    result(passed, detail) {
+      results.push({ label, passed, ...detail });
+      section.querySelector("pre").textContent = JSON.stringify(results.at(-1), null, 2);
+    },
+  };
+}
+try {
+  for (const view of ["settings", "schedules"]) {
+    const ctx = fixture(`Upload through ${view}`);
+    ctx.add(); ctx.open(view);
+    const busy = ctx.images.isUploading();
+    ctx.releaseUpload();
+    await until(() => !ctx.images.hasInFlight());
+    ctx.result(busy && ctx.images.get().join() === firstId &&
+      ctx.discarded.length === 0 && ctx.errors.length === 0,
+      { busy, changes: ctx.changes, discarded: ctx.discarded, errors: ctx.errors });
+    const remove = fixture(`Remove through ${view}`);
+    remove.images.set([firstId]);
+    remove.section.querySelector(".composer-image-remove").click();
+    remove.open(view);
+    const removing = remove.images.isUploading();
+    remove.releaseRemove();
+    await until(() => !remove.images.hasInFlight());
+    remove.result(removing && remove.images.get().length === 0 &&
+      remove.changes.length === 1 && remove.changes[0].owner === "first" &&
+      remove.errors.length === 0, { removing, changes: remove.changes, errors: remove.errors });
+  }
+  const switched = fixture("Different workspace remains isolated");
+  switched.add(); switched.selectSecond(); switched.add();
+  await until(() => switched.images.get().join() === secondId);
+  switched.open("settings"); switched.releaseUpload();
+  await until(() => !switched.images.hasInFlight());
+  switched.result(switched.images.get().join() === secondId &&
+    switched.changes.length === 1 && switched.changes[0].owner === "second" &&
+    switched.discarded[0]?.owner === "first" && switched.discarded[0]?.id === firstId &&
+    switched.errors.length === 0, { changes: switched.changes, discarded: switched.discarded });
+  document.body.dataset.passed = String(results.length === 5 && results.every(row => row.passed));
+} catch (error) {
+  document.body.dataset.passed = "false";
+  const output = document.createElement("pre");
+  output.textContent = error.stack ?? String(error); root.append(output);
+}
+</script>
+</html>

@@ -88,12 +88,12 @@ export function createComposerImages({ composer, prompt, button, input, strip,
   }
 
   function owner() {
-    const { projectId, sessionId } = navigation.get();
+    const { projectId, sessionId } = navigation.workspace?.() ?? navigation.get();
     return projectId && sessionId ? { projectId, sessionId } : null;
   }
 
   function scopeKey() {
-    const { projectId, sessionId } = navigation.get();
+    const { projectId, sessionId } = navigation.workspace?.() ?? navigation.get();
     return `${projectId || "default"}/${sessionId || "@new"}`;
   }
 

@@ -1,0 +1,26 @@
+{
+  "baseline": {
+    "app/web/js/state/navigation.js": {
+      "sha256": "1475634de93c2d2d973a1c8343a8871b2089b7815a419dbefc12352a4aebfc81",
+      "bytes": 5271,
+      "matches_source": true
+    },
+    "app/web/js/features/chat/composer-images.js": {
+      "sha256": "dce42f31d7635eca06729c88aadf2f8627078b0f5deb765eae3488239ad71583",
+      "bytes": 18431,
+      "matches_source": true
+    }
+  },
+  "fixed": {
+    "app/web/js/state/navigation.js": {
+      "sha256": "a623fdfe90a0a15999b01fdd28c76762f6fdbda23d658d52d2a9a31c83a1cd8b",
+      "bytes": 5333,
+      "matches_source": true
+    },
+    "app/web/js/features/chat/composer-images.js": {
+      "sha256": "a04e43dcc2b92ae8e9d98dc15a5efd2b4faffe56a3c9778a46a1816d435a62f6",
+      "bytes": 18461,
+      "matches_source": true
+    }
+  }
+}

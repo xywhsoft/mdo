@@ -1,0 +1,55 @@
+{
+  "uploads": [
+    {
+      "path": "/api/v1/projects/default/sessions/V-OSLK5ePUHRirvqZP6hZJTKmBbuj8zm/attachments/0d153f0068cb410367db815466cb60a7",
+      "held": true,
+      "status": 201,
+      "sha256": "c44ad1ad286fbbce7b20e7c9e2941b077594eab5acf96d6c5ca116ced2e25047",
+      "saved_at": 888.453,
+      "released_at": 894.64
+    }
+  ],
+  "model_calls": [],
+  "websockets": [
+    {
+      "started": 881.203,
+      "status": 101,
+      "upstream_bytes": 232,
+      "downstream_bytes": 572,
+      "opened": 881.203,
+      "closed": 902.515
+    }
+  ],
+  "V-OSLK5ePUHRirvqZP6hZJTKmBbuj8zm": {
+    "draft": {
+      "revision": 1,
+      "text": "进入设置后图片应保留",
+      "attachments": [],
+      "run_admission_uncertain": false,
+      "submission": null,
+      "submissions": []
+    },
+    "queue": {
+      "items": [],
+      "discard_images": []
+    },
+    "events": [],
+    "files": {}
+  },
+  "V-OSLK5ewTq4Aer22UeG32VZhxdoYcXG": {
+    "draft": {
+      "revision": 0,
+      "text": "",
+      "attachments": [],
+      "run_admission_uncertain": false,
+      "submission": null,
+      "submissions": []
+    },
+    "queue": {
+      "items": [],
+      "discard_images": []
+    },
+    "events": [],
+    "files": {}
+  }
+}

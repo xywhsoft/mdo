@@ -1,0 +1,64 @@
+{
+  "baseline": {
+    "schema_version": 1,
+    "platform": "windows",
+    "edition": "gui",
+    "libc": "mingw",
+    "xs_commit": "3232f7b8efb02fdd6bf63a508ed1e69654d6759c",
+    "mdo_commit": "a63ce4cf5bdbe46277e8c837511b100b6492da1c",
+    "packaged_app_sha256": "11f854626215d23de74b7603a644bac8230d8df1e8fff5ded718bf72dacc7c2a",
+    "mdo_worktree_dirty": false,
+    "sha256": "e93c4690e65ad5281793509120afba7da972a8ea665390f55f1ec6c10f333fb0",
+    "bytes": 4461589,
+    "host": {
+      "schema_version": 1,
+      "profile_sha256": "2829d871dac1a12a70503f9b6116adaa2aa9556a53ea139df60aaa81cbb7a19b",
+      "revision": "3232f7b8efb02fdd6bf63a508ed1e69654d6759c",
+      "extensions": [
+        "xllm",
+        "xllm-session",
+        "xwork",
+        "webview",
+        "image"
+      ],
+      "icon_sha256": "f54b7fb936f5e15f9b7d10842c294d3c4c5c4de7fff17acaa0fa29d04f0070f2",
+      "binary_sha256": "8b53d6328e7689530de8b4fb55d5b3ae64d5189eff574b49533feb3e7872d9b1",
+      "binary_bytes": 3154944,
+      "frontend": "native",
+      "compiler": "gcc",
+      "compile_extra": "",
+      "link_extra": ""
+    }
+  },
+  "fixed": {
+    "schema_version": 1,
+    "platform": "windows",
+    "edition": "gui",
+    "libc": "mingw",
+    "xs_commit": "3232f7b8efb02fdd6bf63a508ed1e69654d6759c",
+    "mdo_commit": "a63ce4cf5bdbe46277e8c837511b100b6492da1c",
+    "packaged_app_sha256": "4b68b3bc8591d093473a301ef5bb8bc098d11107056da9362108e19c17fbb8e8",
+    "mdo_worktree_dirty": true,
+    "sha256": "94f5cfd6623c6aefe28e2270fef6c0076bdc4d98ad8360e02a85e3d3c349169a",
+    "bytes": 4461705,
+    "host": {
+      "schema_version": 1,
+      "profile_sha256": "2829d871dac1a12a70503f9b6116adaa2aa9556a53ea139df60aaa81cbb7a19b",
+      "revision": "3232f7b8efb02fdd6bf63a508ed1e69654d6759c",
+      "extensions": [
+        "xllm",
+        "xllm-session",
+        "xwork",
+        "webview",
+        "image"
+      ],
+      "icon_sha256": "f54b7fb936f5e15f9b7d10842c294d3c4c5c4de7fff17acaa0fa29d04f0070f2",
+      "binary_sha256": "8b53d6328e7689530de8b4fb55d5b3ae64d5189eff574b49533feb3e7872d9b1",
+      "binary_bytes": 3154944,
+      "frontend": "native",
+      "compiler": "gcc",
+      "compile_extra": "",
+      "link_extra": ""
+    }
+  }
+}

@@ -84,6 +84,9 @@ function openPage(hash) {
 
 export const navigation = Object.freeze({
   get: () => current,
+  // Utility pages hide the composer without selecting a different draft.
+  // In-flight attachment operations still belong to this retained workspace.
+  workspace: () => lastWorkspace,
   preferredProject: () => lastWorkspace.projectId || "default",
   setNewTaskGuard(owner, onRedirect) {
     newTaskGuard = { owner, onRedirect };
