@@ -1,0 +1,42 @@
+{
+  "node": {
+    "tests": 32,
+    "pass": 32,
+    "fail": 0,
+    "cancelled": 0,
+    "skipped": 0
+  },
+  "files": [
+    "test_keyboard_shortcuts",
+    "test_message_edit_dialog",
+    "test_session_composer_focus",
+    "test_new_task_composer_focus",
+    "test_startup_intent",
+    "test_conversation_search_lifecycle"
+  ],
+  "frontend": {
+    "tests": 4,
+    "exit_code": 0,
+    "methods": [
+      "test_local_module_graph_is_closed",
+      "test_frontend_has_no_package_manager_or_generated_bundle",
+      "test_composer_profile_has_idle_update_and_queued_snapshot_paths",
+      "test_agent_default_permissions_share_the_chat_profiles"
+    ]
+  },
+  "packed_browser": {
+    "synthetic_composition_events": true,
+    "trusted_os_ime_verified": false,
+    "baseline_model_calls": 0,
+    "fixed_model_calls": 2,
+    "final_model_errors": 0,
+    "exact_input_order": true,
+    "search_closed": true,
+    "focus_returned_to_composer": true
+  },
+  "menus_browser": {
+    "baseline_passed": false,
+    "fixed_passed": true,
+    "mock_workspace_results": true
+  }
+}

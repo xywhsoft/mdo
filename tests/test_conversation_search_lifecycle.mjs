@@ -14,6 +14,8 @@ function fixture(check) {
   const bar = node("bar");
   bar.hidden = true;
   const input = node("search");
+  const view = new EventTarget();
+  input.ownerDocument = { defaultView: view };
   const prompt = node("prompt");
   const count = node("count");
   let route = { view: "workspace", sessionId: "" };
@@ -35,7 +37,7 @@ function fixture(check) {
     input.dispatchEvent(event);
     return event;
   }
-  check({ calls, bar, input, count, search, navigation, key });
+  check({ calls, bar, input, view, count, search, navigation, key });
 }
 
 test("search reveals history before focus and restores cards before the composer", () => {
@@ -82,5 +84,27 @@ test("IME candidate cancellation keeps search and cards in the same lifecycle", 
     key();
     assert.equal(search.isOpen(), false);
     assert.deepEqual(calls.slice(-3), ["query:", "restore-docks", "focus:prompt"]);
+  });
+});
+
+test("window blur releases unfinished search composition while candidate Escape stays protected", () => {
+  fixture(({ calls, input, view, search, navigation, key }) => {
+    navigation.select("one"); search.open();
+    input.dispatchEvent(new Event("compositionstart"));
+    view.dispatchEvent(new Event("blur"));
+    key({ isComposing: true }); key({ keyCode: 229 });
+    assert.equal(search.isOpen(), true);
+    assert.equal(calls.includes("restore-docks"), false);
+    key(); assert.equal(search.isOpen(), false);
+    assert.deepEqual(calls.slice(-3), ["query:", "restore-docks", "focus:prompt"]);
+  });
+});
+
+test("an unfinished composition cannot block Escape after an explicit search close and reopen", () => {
+  fixture(({ input, search, navigation, key }) => {
+    navigation.select("one"); search.open();
+    input.dispatchEvent(new Event("compositionstart"));
+    search.close(); search.open();
+    key(); assert.equal(search.isOpen(), false);
   });
 });

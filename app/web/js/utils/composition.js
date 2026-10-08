@@ -15,6 +15,7 @@ export function createCompositionTracker(scope) {
   view?.addEventListener("blur", reset);
   return Object.freeze({
     isComposing: (target) => targets.has(target),
+    reset,
     dispose() {
       scope.removeEventListener("compositionstart", start, capture);
       scope.removeEventListener("compositionend", end, capture);

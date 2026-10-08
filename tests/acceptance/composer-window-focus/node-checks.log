@@ -1,0 +1,202 @@
+TAP version 13
+# Subtest: search reveals history before focus and restores cards before the composer
+ok 1 - search reveals history before focus and restores cards before the composer
+  ---
+  duration_ms: 3.8645
+  type: 'test'
+  ...
+# Subtest: navigation releases hidden cards without focusing the previous conversation
+ok 2 - navigation releases hidden cards without focusing the previous conversation
+  ---
+  duration_ms: 0.3908
+  type: 'test'
+  ...
+# Subtest: IME candidate cancellation keeps search and cards in the same lifecycle
+ok 3 - IME candidate cancellation keeps search and cards in the same lifecycle
+  ---
+  duration_ms: 0.6748
+  type: 'test'
+  ...
+# Subtest: window blur releases unfinished search composition while candidate Escape stays protected
+ok 4 - window blur releases unfinished search composition while candidate Escape stays protected
+  ---
+  duration_ms: 0.4417
+  type: 'test'
+  ...
+# Subtest: an unfinished composition cannot block Escape after an explicit search close and reopen
+ok 5 - an unfinished composition cannot block Escape after an explicit search close and reopen
+  ---
+  duration_ms: 0.2603
+  type: 'test'
+  ...
+# Subtest: composition in a removed or different editor cannot block new-task shortcuts
+ok 6 - composition in a removed or different editor cannot block new-task shortcuts
+  ---
+  duration_ms: 2.0226
+  type: 'test'
+  ...
+# Subtest: window focus loss releases an unfinished composition before shortcuts resume
+ok 7 - window focus loss releases an unfinished composition before shortcuts resume
+  ---
+  duration_ms: 0.5244
+  type: 'test'
+  ...
+# Subtest: IME candidate keys cannot submit a composer turn
+ok 8 - IME candidate keys cannot submit a composer turn
+  ---
+  duration_ms: 0.1631
+  type: 'test'
+  ...
+# Subtest: Escape respects a composer menu before handling a run or drawer
+ok 9 - Escape respects a composer menu before handling a run or drawer
+  ---
+  duration_ms: 0.5222
+  type: 'test'
+  ...
+# Subtest: slash search only claims keys in the workspace outside composition
+ok 10 - slash search only claims keys in the workspace outside composition
+  ---
+  duration_ms: 0.4163
+  type: 'test'
+  ...
+# Subtest: Escape leaves scheduled tasks without stopping the background conversation
+ok 11 - Escape leaves scheduled tasks without stopping the background conversation
+  ---
+  duration_ms: 0.409
+  type: 'test'
+  ...
+# Subtest: a queued close from a cancelled edit cannot cancel a reopened image-only edit
+ok 12 - a queued close from a cancelled edit cannot cancel a reopened image-only edit
+  ---
+  duration_ms: 3.5805
+  type: 'test'
+  ...
+# Subtest: an externally closed current dialog still cancels and restores its own opener
+ok 13 - an externally closed current dialog still cancels and restores its own opener
+  ---
+  duration_ms: 0.7776
+  type: 'test'
+  ...
+# Subtest: plain Enter saves one edit and returns focus to its message action
+ok 14 - plain Enter saves one edit and returns focus to its message action
+  ---
+  duration_ms: 0.5645
+  type: 'test'
+  ...
+# Subtest: Shift+Enter and modified Enter keep the editor's native input behavior
+ok 15 - Shift+Enter and modified Enter keep the editor's native input behavior
+  ---
+  duration_ms: 0.5406
+  type: 'test'
+  ...
+# Subtest: IME candidates never resend, and input or window blur releases composition
+ok 16 - IME candidates never resend, and input or window blur releases composition
+  ---
+  duration_ms: 1.963
+  type: 'test'
+  ...
+# Subtest: Enter uses the button's validation and permits an image-only edit
+ok 17 - Enter uses the button's validation and permits an image-only edit
+  ---
+  duration_ms: 0.751
+  type: 'test'
+  ...
+# Subtest: disabled, readonly, and previously consumed Enter cannot submit
+ok 18 - disabled, readonly, and previously consumed Enter cannot submit
+  ---
+  duration_ms: 0.3546
+  type: 'test'
+  ...
+# Subtest: a delayed commit keeps the editor open and rejects duplicate submission and cancellation
+ok 19 - a delayed commit keeps the editor open and rejects duplicate submission and cancellation
+  ---
+  duration_ms: 0.3307
+  type: 'test'
+  ...
+# Subtest: a refused message edit preserves text and attachments for correction or cancellation
+ok 20 - a refused message edit preserves text and attachments for correction or cancellation
+  ---
+  duration_ms: 8.188
+  type: 'test'
+  ...
+# Subtest: a late commit response cannot close or change a newer editor
+ok 21 - a late commit response cannot close or change a newer editor
+  ---
+  duration_ms: 0.7721
+  type: 'test'
+  ...
+# Subtest: closing an editor whose opener was removed returns focus through its owner-checked fallback
+ok 22 - closing an editor whose opener was removed returns focus through its owner-checked fallback
+  ---
+  duration_ms: 1.6937
+  type: 'test'
+  ...
+# Subtest: new-task focus survives disabling and returns once in the created session
+ok 23 - new-task focus survives disabling and returns once in the created session
+  ---
+  duration_ms: 2.3737
+  type: 'test'
+  ...
+# Subtest: background recovery and existing sessions never acquire composer focus
+ok 24 - background recovery and existing sessions never acquire composer focus
+  ---
+  duration_ms: 3.3812
+  type: 'test'
+  ...
+# Subtest: a newer focus or non-focusable click cannot be undone by migration
+ok 25 - a newer focus or non-focusable click cannot be undone by migration
+  ---
+  duration_ms: 0.4545
+  type: 'test'
+  ...
+# Subtest: leaving the original project, task or workspace cancels pending focus
+ok 26 - leaving the original project, task or workspace cancels pending focus
+  ---
+  duration_ms: 0.5052
+  type: 'test'
+  ...
+# Subtest: a hidden page or unfocused window never reopens its composer
+ok 27 - a hidden page or unfocused window never reopens its composer
+  ---
+  duration_ms: 1.7327
+  type: 'test'
+  ...
+# Subtest: only the acknowledged migration target can receive saved focus
+ok 28 - only the acknowledged migration target can receive saved focus
+  ---
+  duration_ms: 0.2345
+  type: 'test'
+  ...
+# Subtest: an explicit new-task action or failed preparation can cancel saved focus
+ok 29 - an explicit new-task action or failed preparation can cancel saved focus
+  ---
+  duration_ms: 0.1938
+  type: 'test'
+  ...
+# Subtest: pointer-selected session focuses only after its detail is ready
+ok 30 - pointer-selected session focuses only after its detail is ready
+  ---
+  duration_ms: 1.5549
+  type: 'test'
+  ...
+# Subtest: startup fallback yields to input, composition, pointer and meaningful keyboard intent
+ok 31 - startup fallback yields to input, composition, pointer and meaningful keyboard intent
+  ---
+  duration_ms: 1.6104
+  type: 'test'
+  ...
+# Subtest: modifiers and data refresh do not claim startup; a route change does and teardown removes listeners
+ok 32 - modifiers and data refresh do not claim startup; a route change does and teardown removes listeners
+  ---
+  duration_ms: 0.3173
+  type: 'test'
+  ...
+1..32
+# tests 32
+# suites 0
+# pass 32
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 289.7204

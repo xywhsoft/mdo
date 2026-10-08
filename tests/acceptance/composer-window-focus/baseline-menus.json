@@ -1,0 +1,20 @@
+{
+  "passed": false,
+  "quietDuringFileComposition": true,
+  "fileReady": true,
+  "fileImeIgnored": true,
+  "inserted": true,
+  "quietDuringSlashComposition": true,
+  "slashReady": true,
+  "slashImeIgnored": true,
+  "quietAfterBlur": true,
+  "clearedAfterSlash": true,
+  "slashReadyAfterWindowBlur": false,
+  "slashCandidateStillProtected": true,
+  "fileReadyAfterWindowBlur": false,
+  "fileCandidateStillProtected": true,
+  "searches": 1,
+  "executed": [
+    "/model"
+  ]
+}

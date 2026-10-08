@@ -1,0 +1,62 @@
+TAP version 13
+# Subtest: search reveals history before focus and restores cards before the composer
+ok 1 - search reveals history before focus and restores cards before the composer
+  ---
+  duration_ms: 2.6194
+  type: 'test'
+  ...
+# Subtest: navigation releases hidden cards without focusing the previous conversation
+ok 2 - navigation releases hidden cards without focusing the previous conversation
+  ---
+  duration_ms: 0.4444
+  type: 'test'
+  ...
+# Subtest: IME candidate cancellation keeps search and cards in the same lifecycle
+ok 3 - IME candidate cancellation keeps search and cards in the same lifecycle
+  ---
+  duration_ms: 0.5454
+  type: 'test'
+  ...
+# Subtest: window blur releases unfinished search composition while candidate Escape stays protected
+not ok 4 - window blur releases unfinished search composition while candidate Escape stays protected
+  ---
+  duration_ms: 1.4314
+  type: 'test'
+  location: 'C:\\Users\\Administrator\\.codex\\worktrees\\conversation-composer-focus-qa\\mdo\\tests\\test_conversation_search_lifecycle.mjs:90:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly equal:
+
+    true !== false
+
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: false
+  actual: true
+  operator: 'strictEqual'
+  stack: |-
+    file:///C:/Users/Administrator/.codex/worktrees/conversation-composer-focus-qa/mdo/tests/test_conversation_search_lifecycle.mjs:98:19
+    fixture (file:///C:/Users/Administrator/.codex/worktrees/conversation-composer-focus-qa/mdo/tests/test_conversation_search_lifecycle.mjs:40:3)
+    TestContext.<anonymous> (file:///C:/Users/Administrator/.codex/worktrees/conversation-composer-focus-qa/mdo/tests/test_conversation_search_lifecycle.mjs:91:3)
+    Test.runInAsyncScope (node:async_hooks:227:14)
+    Test.run (node:internal/test_runner/test:1382:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:960:18)
+    Test.postRun (node:internal/test_runner/test:1522:19)
+    Test.run (node:internal/test_runner/test:1447:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:960:7)
+  ...
+# Subtest: an unfinished composition cannot block Escape after an explicit search close and reopen
+ok 5 - an unfinished composition cannot block Escape after an explicit search close and reopen
+  ---
+  duration_ms: 0.2573
+  type: 'test'
+  ...
+1..5
+# tests 5
+# suites 0
+# pass 4
+# fail 1
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 132.0366

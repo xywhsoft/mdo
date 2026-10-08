@@ -1,0 +1,32 @@
+[
+  {
+    "path": "js/app.js",
+    "bytes": 128091,
+    "sha256": "73aee6cb624a3831b851138b79c579672f7d7b9db54f39b393516ed9f03c12ad",
+    "equal": true
+  },
+  {
+    "path": "js/utils/composition.js",
+    "bytes": 1268,
+    "sha256": "c7343cdac1c24935a9d7480b7bee576b18fb6097fef7d2faf173d7a64301aeb9",
+    "equal": true
+  },
+  {
+    "path": "js/features/chat/file-mentions.js",
+    "bytes": 7236,
+    "sha256": "dc518e00772754e5049e3c12b10c2d1a0124a316df25ca8c8c2aefafea7323ad",
+    "equal": true
+  },
+  {
+    "path": "js/features/chat/slash-commands.js",
+    "bytes": 7453,
+    "sha256": "498a8dbb9e29d5d906b4c9224022df80db55db67095f71a09d698e39bc3281f9",
+    "equal": true
+  },
+  {
+    "path": "js/features/chat/conversation-search.js",
+    "bytes": 2309,
+    "sha256": "79870e9068f5bff5399165402ce51c6655fd6673fbb5cec5e1562afeab620de5",
+    "equal": true
+  }
+]

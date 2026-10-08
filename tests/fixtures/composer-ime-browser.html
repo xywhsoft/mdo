@@ -80,14 +80,37 @@ try {
   input.dispatchEvent(new CompositionEvent("compositionend", { bubbles: true }));
   await wait();
   const quietAfterBlur = fileMenu.hidden && searches === 1;
+  input.focus();
+  input.value = "/m";
+  input.dispatchEvent(new CompositionEvent("compositionstart", { bubbles: true }));
+  inputEvent();
+  window.dispatchEvent(new Event("blur"));
+  window.dispatchEvent(new Event("focus"));
+  input.dispatchEvent(new InputEvent("input", { bubbles: true }));
+  const slashReadyAfterWindowBlur = !slashMenu.hidden && slashMenu.textContent.includes("/model");
+  const slashCandidateStillProtected = !slash.onKeyDown(imeEnter) && executed.length === 1;
+  input.value = "@中文";
+  input.setSelectionRange(input.value.length, input.value.length);
+  input.dispatchEvent(new CompositionEvent("compositionstart", { bubbles: true }));
+  inputEvent();
+  window.dispatchEvent(new Event("blur"));
+  window.dispatchEvent(new Event("focus"));
+  input.dispatchEvent(new InputEvent("input", { bubbles: true }));
+  await wait();
+  const fileReadyAfterWindowBlur = searches === 2 && !fileMenu.hidden &&
+    fileMenu.textContent.includes("notes/中文 文件.txt");
+  const fileCandidateStillProtected = !mentions.onKeyDown(imeEnter) && input.value === "@中文";
   const passed = quietDuringFileComposition && fileReady && fileImeIgnored &&
     inserted && quietDuringSlashComposition && slashReady && slashImeIgnored && quietAfterBlur &&
+    slashReadyAfterWindowBlur && slashCandidateStillProtected &&
+    fileReadyAfterWindowBlur && fileCandidateStillProtected &&
     clearedAfterSlash && executed.join() === "/model";
   output.dataset.passed = String(passed);
   output.textContent = JSON.stringify({ passed, quietDuringFileComposition,
     fileReady, fileImeIgnored, inserted, quietDuringSlashComposition,
     slashReady, slashImeIgnored, quietAfterBlur,
-    clearedAfterSlash,
+    clearedAfterSlash, slashReadyAfterWindowBlur, slashCandidateStillProtected,
+    fileReadyAfterWindowBlur, fileCandidateStillProtected,
     searches, executed }, null, 2);
 } catch (error) {
   output.dataset.passed = "false";

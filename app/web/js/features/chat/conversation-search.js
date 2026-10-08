@@ -1,12 +1,13 @@
 import { subscribeLocale, t } from "../../i18n.js";
 import { isImeKey } from "../../utils/dom.js";
+import { createCompositionTracker } from "../../utils/composition.js";
 
 export function createConversationSearch({ bar, input, count, openButtons, closeButton,
   navigation, prompt, onQuery, onOpen, onClose }) {
   let available = false;
   let matchCount = 0;
   let olderHistoryMissing = false;
-  let composing = false;
+  const composition = createCompositionTracker(input);
 
   function renderCount() {
     if (bar.hidden) return;
@@ -18,7 +19,7 @@ export function createConversationSearch({ bar, input, count, openButtons, close
   function close(restoreFocus = false) {
     if (bar.hidden) return;
     bar.hidden = true;
-    composing = false;
+    composition.reset();
     input.value = "";
     onQuery("");
     count.textContent = "";
@@ -42,11 +43,9 @@ export function createConversationSearch({ bar, input, count, openButtons, close
   for (const button of openButtons) button.addEventListener("click", open);
   closeButton.addEventListener("click", () => close(true));
   input.addEventListener("input", () => onQuery(input.value));
-  input.addEventListener("compositionstart", () => { composing = true; });
-  input.addEventListener("compositionend", () => { composing = false; });
   input.addEventListener("keydown", (event) => {
     if (event.key === "Escape" && !event.defaultPrevented &&
-        !isImeKey(event, composing)) {
+        !isImeKey(event, composition.isComposing(input))) {
       event.preventDefault();
       event.stopPropagation();
       close(true);

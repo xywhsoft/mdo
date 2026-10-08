@@ -2,6 +2,7 @@ import { api } from "../../api/client.js";
 import { subscribeLocale, t } from "../../i18n.js";
 import { clear, element, isImeKey, revealListOption } from "../../utils/dom.js";
 import { replaceInputText } from "../../utils/text-edit.js";
+import { createCompositionTracker } from "../../utils/composition.js";
 
 const WAIT_MS = 180;
 const VISIBLE_MAX = 8;
@@ -40,7 +41,7 @@ export function createFileMentions({ composer, input, navigation }) {
   let timer = 0;
   let controller = null;
   let serial = 0;
-  let composing = false;
+  const composition = createCompositionTracker(input);
 
   function hide() {
     composer.removeAttribute("data-file-menu-open");
@@ -113,8 +114,8 @@ export function createFileMentions({ composer, input, navigation }) {
     input.focus();
   }
 
-  function update() {
-    if (composing) { hide(); return; }
+  function update(event) {
+    if (composition.isComposing(input) || event?.isComposing) { hide(); return; }
     const token = mentionAtCaret(input);
     const selected = navigation.get();
     if (!token || selected.view !== "workspace" || !selected.projectId) {
@@ -149,9 +150,8 @@ export function createFileMentions({ composer, input, navigation }) {
     }, WAIT_MS);
   }
 
-  input.addEventListener("compositionstart", () => { composing = true; hide(); });
+  input.addEventListener("compositionstart", hide);
   input.addEventListener("compositionend", () => {
-    composing = false;
     if (document.activeElement === input) update();
     else hide();
   });
@@ -161,16 +161,16 @@ export function createFileMentions({ composer, input, navigation }) {
     if (["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) update();
   });
   input.addEventListener("blur", () => {
-    composing = false;
     window.setTimeout(hide, 0);
   });
+  input.ownerDocument?.defaultView?.addEventListener("blur", hide);
   navigation.subscribe(() => { hide(); update(); });
   subscribeLocale(() => list.setAttribute("aria-label", t("mention.label", {}, "工作区文件")));
 
   return Object.freeze({
     hide,
     onKeyDown(event) {
-      if (list.hidden || isImeKey(event, composing)) return false;
+      if (list.hidden || isImeKey(event, composition.isComposing(input))) return false;
       if (event.key === "Escape") {
         event.preventDefault();
         event.stopPropagation();

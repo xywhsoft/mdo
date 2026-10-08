@@ -1,0 +1,9 @@
+{
+  "result": {
+    "type": "object",
+    "value": {
+      "replies": 1,
+      "value": "选词保护测试：结束组合后只发送一次。"
+    }
+  }
+}

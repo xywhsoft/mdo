@@ -53,6 +53,7 @@ import { createConversationSearch } from "./features/chat/conversation-search.js
 import { createConversationDocks } from "./features/chat/conversation-docks.js";
 import { createPromptQueue } from "./features/chat/prompt-queue.js";
 import { createDraftStore } from "./features/chat/draft-store.js";
+import { createCompositionTracker } from "./utils/composition.js";
 import { createProjectDraftSelection } from "./features/chat/project-draft-selection.js";
 import { createSubmissionController } from "./features/chat/submission-controller.js";
 import { createNewTaskController, taskTitle } from "./features/chat/new-task-controller.js";
@@ -250,7 +251,7 @@ export async function boot() {
   let interruptRequested = false;
   let themeToggleBusy = false;
   let composerAttachments = [];
-  let promptComposing = false;
+  const promptComposition = createCompositionTracker(prompt);
   let composerImages = null;
   let newTaskController = null;
   let projectDraftSelection = null;
@@ -652,7 +653,7 @@ export async function boot() {
       const sidebarOpen = shell.dataset.sidebar === "open";
       if (document.querySelector("dialog[open]")) return;
       if (!sidebarOpen &&
-          (promptComposing || prompt.value.length || composerAttachments.length ||
+          (promptComposition.isComposing(prompt) || prompt.value.length || composerAttachments.length ||
            (document.activeElement !== prompt &&
             document.activeElement !== document.body))) return;
       if (sidebarOpen) setSidebar(false, { persist: false });
@@ -2134,9 +2135,6 @@ export async function boot() {
     prompt.style.height = `${Math.min(prompt.scrollHeight, 336)}px`;
   }
   window.addEventListener("resize", resizePrompt);
-  prompt.addEventListener("compositionstart", () => { promptComposing = true; });
-  prompt.addEventListener("compositionend", () => { promptComposing = false; });
-  prompt.addEventListener("blur", () => { promptComposing = false; });
   prompt.addEventListener("input", () => {
     resizePrompt();
     draftStore.edit(selectedDraftKey, prompt.value, composerAttachments);
@@ -2147,7 +2145,7 @@ export async function boot() {
     if (slashCommands.onKeyDown(event)) return;
     if (fileMentions.onKeyDown(event)) return;
     if (event.key === "Enter" && !event.shiftKey &&
-        !isImeKey(event, promptComposing)) {
+        !isImeKey(event, promptComposition.isComposing(prompt))) {
       event.preventDefault();
       const modified = event.ctrlKey || event.metaKey;
       const guide = settingsStore.get().data?.composer?.submit_mode === "guide";

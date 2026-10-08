@@ -1,6 +1,7 @@
 import { subscribeLocale, t } from "../../i18n.js";
 import { loadCommands, subscribeCommands, commandExpansion } from "./extension-commands.js";
 import { clear, element, errorMessage, isImeKey, revealListOption, toast } from "../../utils/dom.js";
+import { createCompositionTracker } from "../../utils/composition.js";
 
 const COMMANDS = Object.freeze([
   { name: "/new", descriptionKey: "slash.new", fallback: "新建任务" },
@@ -30,7 +31,7 @@ export function createSlashCommands({ composer, input, onExecute, contextKey = (
   input.setAttribute("aria-expanded", "false");
   let matches = [];
   let active = 0;
-  let composing = false;
+  const composition = createCompositionTracker(input);
   let custom = [];
   let expanding = false;
   const stopCommands = subscribeCommands(items => { custom = items; if (document.activeElement === input && input.value.startsWith("/")) update(false); });
@@ -100,7 +101,7 @@ export function createSlashCommands({ composer, input, onExecute, contextKey = (
   }
 
   function update(fetch = true) {
-    if (composing) { hide(); return; }
+    if (composition.isComposing(input) || fetch?.isComposing) { hide(); return; }
     const value = input.value;
     if (!value.startsWith("/") || /[\s]/.test(value)) { hide(); return; }
     if (fetch) void loadCommands().then(items => { custom = items; if (input.value === value && document.activeElement === input) update(false); }).catch(() => {});
@@ -110,24 +111,24 @@ export function createSlashCommands({ composer, input, onExecute, contextKey = (
     render();
   }
 
-  input.addEventListener("compositionstart", () => { composing = true; hide(); });
+  input.addEventListener("compositionstart", hide);
   input.addEventListener("compositionend", () => {
-    composing = false;
     if (document.activeElement === input) update();
     else hide();
   });
   input.addEventListener("input", update);
   input.addEventListener("blur", () => {
-    composing = false;
     window.setTimeout(hide, 0);
   });
+  const view = input.ownerDocument?.defaultView;
+  view?.addEventListener("blur", hide);
   subscribeLocale(() => {
     list.setAttribute("aria-label", t("slash.label", {}, "斜杠命令"));
     if (!list.hidden) render();
   });
   return Object.freeze({
     onKeyDown(event) {
-      if (list.hidden || isImeKey(event, composing)) return false;
+      if (list.hidden || isImeKey(event, composition.isComposing(input))) return false;
       if (event.key === "Escape") {
         event.preventDefault();
         event.stopPropagation();
@@ -159,7 +160,7 @@ export function createSlashCommands({ composer, input, onExecute, contextKey = (
       input.dispatchEvent(new Event("input", { bubbles: true })); input.focus();
       return true;
     },
-    destroy() { stopCommands(); hide(); },
+    destroy() { stopCommands(); composition.dispose(); view?.removeEventListener("blur", hide); hide(); },
     consumeExact(value) {
       const command = exactCommand(value);
       if (!command) return false;

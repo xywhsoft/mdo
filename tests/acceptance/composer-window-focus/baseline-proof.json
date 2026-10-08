@@ -1,0 +1,52 @@
+{
+  "resumed": false,
+  "session_id": "V-OSL5nwoYxiNG5gOwYgcmqWOXoUlJZH",
+  "uploads": [],
+  "confirmations": [],
+  "websockets": [
+    {
+      "started": 2499312.093,
+      "status": 101,
+      "upstream_bytes": 253,
+      "downstream_bytes": 549,
+      "opened": 2499312.093,
+      "closed": 2499371.234
+    }
+  ],
+  "model_calls": [],
+  "draft_reads": [],
+  "draft_writes": [
+    {
+      "path": "/api/v1/projects/default/sessions/V-OSL5nwoYxiNG5gOwYgcmqWOXoUlJZH/draft",
+      "at": 2499312.75
+    }
+  ],
+  "user_inputs": [],
+  "final_model_errors": 0,
+  "event_kinds": {},
+  "attachment_files": {},
+  "queue": {
+    "items": [],
+    "discard_images": []
+  },
+  "draft": {
+    "revision": 1,
+    "text": "\u7a97\u53e3\u7126\u70b9\u6062\u590d\u6d4b\u8bd5\uff1a\u8f93\u5165\u540e\u6309 Enter \u53d1\u9001\u3002\n",
+    "attachments": [],
+    "run_admission_uncertain": false,
+    "submission": null,
+    "submissions": []
+  },
+  "runs": {
+    "automatic": true,
+    "active_runs": 0,
+    "starting_runs": 0,
+    "retained_runs": 0,
+    "max_active": 8,
+    "max_retained": 64,
+    "runs_started": 0,
+    "runs_completed": 0,
+    "runs_failed": 0,
+    "items": []
+  }
+}
