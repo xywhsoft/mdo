@@ -1,0 +1,210 @@
+TAP version 13
+# Subtest: saved PUT with a hanging body confirms quietly and saves a newer edit separately
+not ok 1 - saved PUT with a hanging body confirms quietly and saves a newer edit separately
+  ---
+  duration_ms: 33.2139
+  type: 'test'
+  location: 'D:\\GIT\\mdo\\.build\\conversation-acceptance\\draft-write-baseline-node\\tests\\test_draft_write_recovery.mjs:44:1'
+  failureType: 'testCodeFailure'
+  error: 'every pending draft operation must have a deadline'
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: true
+  operator: '=='
+  stack: |-
+    Object.step (file:///D:/GIT/mdo/.build/conversation-acceptance/draft-write-baseline-node/tests/test_draft_write_recovery.mjs:29:14)
+    Object.run (file:///D:/GIT/mdo/.build/conversation-acceptance/draft-write-baseline-node/tests/test_draft_write_recovery.mjs:36:47)
+    async TestContext.<anonymous> (file:///D:/GIT/mdo/.build/conversation-acceptance/draft-write-baseline-node/tests/test_draft_write_recovery.mjs:60:56)
+    async Test.run (node:internal/test_runner/test:1389:7)
+    async startSubtestAfterBootstrap (node:internal/test_runner/harness:387:3)
+  ...
+# Subtest: a write which did not arrive retries the identical versioned snapshot
+not ok 2 - a write which did not arrive retries the identical versioned snapshot
+  ---
+  duration_ms: 3.5098
+  type: 'test'
+  location: 'D:\\GIT\\mdo\\.build\\conversation-acceptance\\draft-write-baseline-node\\tests\\test_draft_write_recovery.mjs:69:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly equal:
+
+    false !== true
+
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: true
+  actual: false
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///D:/GIT/mdo/.build/conversation-acceptance/draft-write-baseline-node/tests/test_draft_write_recovery.mjs:79:53)
+    async Test.run (node:internal/test_runner/test:1389:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:960:7)
+  ...
+# Subtest: late original acceptance between read and CAS retry causes one logical save
+not ok 3 - late original acceptance between read and CAS retry causes one logical save
+  ---
+  duration_ms: 2.7254
+  type: 'test'
+  location: 'D:\\GIT\\mdo\\.build\\conversation-acceptance\\draft-write-baseline-node\\tests\\test_draft_write_recovery.mjs:87:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly equal:
+
+    false !== true
+
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: true
+  actual: false
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///D:/GIT/mdo/.build/conversation-acceptance/draft-write-baseline-node/tests/test_draft_write_recovery.mjs:100:12)
+    async Test.run (node:internal/test_runner/test:1389:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:960:7)
+  ...
+# Subtest: a newer peer draft remains protected after an uncertain local write
+not ok 4 - a newer peer draft remains protected after an uncertain local write
+  ---
+  duration_ms: 2.6975
+  type: 'test'
+  location: 'D:\\GIT\\mdo\\.build\\conversation-acceptance\\draft-write-baseline-node\\tests\\test_draft_write_recovery.mjs:105:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly deep-equal:
+    + actual - expected
+
+      [
+        {
+    +     code: 'network_error',
+    -     code: 'draft_conflict',
+          operation: 'save'
+        }
+      ]
+
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+    0:
+      code: 'draft_conflict'
+      operation: 'save'
+  actual:
+    0:
+      code: 'network_error'
+      operation: 'save'
+    1:
+      code: 'network_error'
+      operation: 'save'
+  operator: 'deepStrictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///D:/GIT/mdo/.build/conversation-acceptance/draft-write-baseline-node/tests/test_draft_write_recovery.mjs:115:12)
+    async Test.run (node:internal/test_runner/test:1389:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:960:7)
+  ...
+# Subtest: unreadable confirmations settle and later confirm the same save without another PUT
+not ok 5 - unreadable confirmations settle and later confirm the same save without another PUT
+  ---
+  duration_ms: 1.6135
+  type: 'test'
+  location: 'D:\\GIT\\mdo\\.build\\conversation-acceptance\\draft-write-baseline-node\\tests\\test_draft_write_recovery.mjs:119:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly deep-equal:
+    + actual - expected
+
+      [
+        {
+    +     code: 'network_error',
+    +     operation: 'save'
+    -     code: 'draft_save_unconfirmed',
+    -     operation: 'confirm'
+        }
+      ]
+
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+    0:
+      code: 'draft_save_unconfirmed'
+      operation: 'confirm'
+  actual:
+    0:
+      code: 'network_error'
+      operation: 'save'
+    1:
+      code: 'network_error'
+      operation: 'save'
+  operator: 'deepStrictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///D:/GIT/mdo/.build/conversation-acceptance/draft-write-baseline-node/tests/test_draft_write_recovery.mjs:128:37)
+    async Test.run (node:internal/test_runner/test:1389:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:960:7)
+  ...
+# Subtest: page exit cancels a saved PUT wait and returning confirms before writing
+not ok 6 - page exit cancels a saved PUT wait and returning confirms before writing
+  ---
+  duration_ms: 1.3734
+  type: 'test'
+  location: 'D:\\GIT\\mdo\\.build\\conversation-acceptance\\draft-write-baseline-node\\tests\\test_draft_write_recovery.mjs:135:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly equal:
+
+    false !== true
+
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: true
+  actual: false
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///D:/GIT/mdo/.build/conversation-acceptance/draft-write-baseline-node/tests/test_draft_write_recovery.mjs:146:12)
+    async Test.run (node:internal/test_runner/test:1389:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:960:7)
+  ...
+# Subtest: a hung submission refresh uses bounded read recovery without replaying a write
+not ok 7 - a hung submission refresh uses bounded read recovery without replaying a write
+  ---
+  duration_ms: 1.2181
+  type: 'test'
+  location: 'D:\\GIT\\mdo\\.build\\conversation-acceptance\\draft-write-baseline-node\\tests\\test_draft_write_recovery.mjs:153:1'
+  failureType: 'testCodeFailure'
+  error: 'every pending draft operation must have a deadline'
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: true
+  operator: '=='
+  stack: |-
+    Object.step (file:///D:/GIT/mdo/.build/conversation-acceptance/draft-write-baseline-node/tests/test_draft_write_recovery.mjs:29:14)
+    Object.run (file:///D:/GIT/mdo/.build/conversation-acceptance/draft-write-baseline-node/tests/test_draft_write_recovery.mjs:36:47)
+    async TestContext.<anonymous> (file:///D:/GIT/mdo/.build/conversation-acceptance/draft-write-baseline-node/tests/test_draft_write_recovery.mjs:162:18)
+    async Test.run (node:internal/test_runner/test:1389:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:960:7)
+  ...
+# Subtest: submission state and removal with hung acknowledgements confirm by exact ID
+not ok 8 - submission state and removal with hung acknowledgements confirm by exact ID
+  ---
+  duration_ms: 1.2904
+  type: 'test'
+  location: 'D:\\GIT\\mdo\\.build\\conversation-acceptance\\draft-write-baseline-node\\tests\\test_draft_write_recovery.mjs:168:1'
+  failureType: 'testCodeFailure'
+  error: 'every pending draft operation must have a deadline'
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: true
+  operator: '=='
+  stack: |-
+    Object.step (file:///D:/GIT/mdo/.build/conversation-acceptance/draft-write-baseline-node/tests/test_draft_write_recovery.mjs:29:14)
+    Object.run (file:///D:/GIT/mdo/.build/conversation-acceptance/draft-write-baseline-node/tests/test_draft_write_recovery.mjs:36:47)
+    async TestContext.<anonymous> (file:///D:/GIT/mdo/.build/conversation-acceptance/draft-write-baseline-node/tests/test_draft_write_recovery.mjs:181:20)
+    async Test.run (node:internal/test_runner/test:1389:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:960:7)
+  ...
+1..8
+# tests 8
+# suites 0
+# pass 0
+# fail 8
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 149.3153

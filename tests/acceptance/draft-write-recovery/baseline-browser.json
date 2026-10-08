@@ -1,0 +1,7 @@
+{
+  "hint": "正在保存发送意图 · 可继续编辑下一条",
+  "prompt": "SAVE_ACK_BASELINE\n保存确认卡住时仍应继续对话。",
+  "sendDisabled": false,
+  "status": "",
+  "statusHidden": true
+}

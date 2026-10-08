@@ -1,0 +1,86 @@
+{
+  "uploads": [],
+  "confirmations": [],
+  "draft_reads": [
+    {
+      "path": "/api/v1/projects/default/sessions/V-OSL3BsJjw6g5d04fKUu2GYA0aLkay8/draft",
+      "at": 2498625.203,
+      "fault": true
+    },
+    {
+      "path": "/api/v1/projects/default/sessions/V-OSL3BsJjw6g5d04fKUu2GYA0aLkay8/draft",
+      "at": 2498625.75,
+      "fault": true
+    },
+    {
+      "path": "/api/v1/projects/default/sessions/V-OSL3BsJjw6g5d04fKUu2GYA0aLkay8/draft",
+      "at": 2498626.781,
+      "fault": false
+    },
+    {
+      "path": "/api/v1/projects/default/sessions/V-OSL3BsJjw6g5d04fKUu2GYA0aLkay8/draft",
+      "at": 2498626.812,
+      "fault": false
+    },
+    {
+      "path": "/api/v1/projects/default/sessions/V-OSL3BsJjw6g5d04fKUu2GYA0aLkay8/draft",
+      "at": 2498626.812,
+      "fault": false
+    },
+    {
+      "path": "/api/v1/projects/default/sessions/V-OSL3BsJjw6g5d04fKUu2GYA0aLkay8/draft",
+      "at": 2498626.968,
+      "fault": false
+    },
+    {
+      "path": "/api/v1/projects/default/sessions/V-OSL3BsJjw6g5d04fKUu2GYA0aLkay8/draft",
+      "at": 2498627.109,
+      "fault": false
+    },
+    {
+      "path": "/api/v1/projects/default/sessions/V-OSL3BsJjw6g5d04fKUu2GYA0aLkay8/draft",
+      "at": 2498676.468,
+      "fault": false
+    },
+    {
+      "path": "/api/v1/projects/default/sessions/V-OSL3BsJjw6g5d04fKUu2GYA0aLkay8/draft",
+      "at": 2498733.312,
+      "fault": false
+    }
+  ],
+  "draft_writes": [
+    {
+      "path": "/api/v1/projects/default/sessions/V-OSL3BsJjw6g5d04fKUu2GYA0aLkay8/draft",
+      "at": 2498617.234,
+      "body": {
+        "revision": 0,
+        "text": "\u8349\u7a3f\u4fdd\u5b58\u786e\u8ba4\u6d4b\u8bd5\uff1a\u8bf7\u56de\u590d\u4e00\u53e5\u5df2\u6536\u5230\u3002",
+        "attachments": [],
+        "run_admission_uncertain": false,
+        "submissions": [
+          {
+            "id": "109d6630dd0029840e16a3c6fd7cb53b",
+            "text": "\u8349\u7a3f\u4fdd\u5b58\u786e\u8ba4\u6d4b\u8bd5\uff1a\u8bf7\u56de\u590d\u4e00\u53e5\u5df2\u6536\u5230\u3002",
+            "attachments": [],
+            "interrupt": false,
+            "state": "prepared",
+            "profile": {
+              "model_id": "queue-fixture",
+              "reasoning_effort": "none",
+              "permission_profile": "balanced"
+            }
+          }
+        ],
+        "composer_profile": null
+      },
+      "status": 200,
+      "saved_at": 2498617.234,
+      "revision": 1,
+      "released_at": 2498652.25
+    },
+    {
+      "path": "/api/v1/projects/default/sessions/V-OSL3BsJjw6g5d04fKUu2GYA0aLkay8/draft",
+      "at": 2498626.796
+    }
+  ]
+}

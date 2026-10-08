@@ -177,8 +177,11 @@ test("draining drafts saves existing edits across owners without creating untouc
   const puts = [];
   globalThis.window = { setTimeout() { return 1; }, clearTimeout() {}, addEventListener() {} };
   globalThis.fetch = async (path, options) => {
-    if (options.method === "PUT") puts.push([path, JSON.parse(options.body)]);
-    return Response.json({ ok: true, data: { revision: options.method === "PUT" ? 2 : 1,
+    if (options.method === "PUT") {
+      const body = JSON.parse(options.body); puts.push([path, body]);
+      return Response.json({ ok: true, data: { ...body, revision: body.revision + 1 } });
+    }
+    return Response.json({ ok: true, data: { revision: 1,
       text: "", attachments: [], submissions: [] } });
   };
   try {

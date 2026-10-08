@@ -238,26 +238,25 @@ test("paused drafts retain local edits without retry loops or pagehide writes, t
   const previousWindow = globalThis.window;
   const previousFetch = globalThis.fetch;
   let paused = true;
-  let pagehide;
   let timers = 0;
   const puts = [];
-  globalThis.window = { setTimeout() { timers += 1; return timers; }, clearTimeout() {},
-    addEventListener(_event, callback) { pagehide = callback; } };
+  globalThis.window = Object.assign(new EventTarget(), {
+    setTimeout() { timers += 1; return timers; }, clearTimeout() {} });
   globalThis.fetch = async (_path, options) => {
     if (options.method === "GET") return Response.json({ ok: true,
       data: { revision: 1, text: "original", attachments: [], submissions: [] } });
-    puts.push(JSON.parse(options.body));
-    return Response.json({ ok: true, data: { revision: 2 } });
+    const body = JSON.parse(options.body); puts.push(body);
+    return Response.json({ ok: true, data: { ...body, revision: body.revision + 1 } });
   };
   try {
     const draft = createDraftStore({ onRestore() {}, onError() {}, onSaved() {},
       isWritePaused: () => paused });
     await draft.ensureLoaded("project:demo");
     draft.edit("project:demo", "kept input");
-    assert.equal(await draft.flush("project:demo"), false); pagehide();
+    assert.equal(await draft.flush("project:demo"), false); window.dispatchEvent(new Event("pagehide"));
     assert.equal(timers, 0); assert.equal(puts.length, 0);
     assert.equal(draft.text("project:demo"), "kept input");
-    paused = false; draft.resumeSaves(); assert.equal(timers, 1);
+    paused = false; window.dispatchEvent(new Event("pageshow")); assert.equal(timers, 1);
     assert.equal(await draft.flush("project:demo"), true);
     assert.equal(puts[0].text, "kept input");
   } finally { globalThis.window = previousWindow; globalThis.fetch = previousFetch; }
@@ -266,19 +265,19 @@ test("paused drafts retain local edits without retry loops or pagehide writes, t
 test("a pause during an in-flight save stops later dirty iterations without losing edits", async () => {
   const previousWindow = globalThis.window;
   const previousFetch = globalThis.fetch;
-  let paused = false; let finish; let puts = 0; let timers = 0;
+  let paused = false; let finish; let saved; let puts = 0; let timers = 0;
   globalThis.window = { setTimeout() { timers += 1; return timers; }, clearTimeout() {}, addEventListener() {} };
   globalThis.fetch = async (_path, options) => {
     if (options.method === "GET") return Response.json({ ok: true,
       data: { revision: 1, text: "", attachments: [], submissions: [] } });
-    puts += 1; return new Promise((done) => { finish = done; });
+    puts += 1; saved = JSON.parse(options.body); return new Promise((done) => { finish = done; });
   };
   try {
     const draft = createDraftStore({ onRestore() {}, onError() {}, onSaved() {}, isWritePaused: () => paused });
     await draft.ensureLoaded("project:demo"); draft.edit("project:demo", "first");
     const saving = draft.flush("project:demo"); await Promise.resolve();
     paused = true; draft.edit("project:demo", "later"); const before = timers;
-    finish(Response.json({ ok: true, data: { revision: 2 } })); await saving;
+    finish(Response.json({ ok: true, data: { ...saved, revision: saved.revision + 1 } })); await saving;
     assert.equal(puts, 1); assert.equal(timers, before);
     assert.equal(draft.text("project:demo"), "later");
     paused = false; draft.resumeSaves(); assert.equal(timers, before + 1);

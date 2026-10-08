@@ -1,0 +1,153 @@
+{
+  "resumed": false,
+  "session_id": "V-OSKzdkFRq6BGqw7cRRzA2IJC-6SxVJ",
+  "uploads": [],
+  "confirmations": [],
+  "websockets": [
+    {
+      "started": 2497396.296,
+      "status": 101,
+      "upstream_bytes": 619,
+      "downstream_bytes": 4480,
+      "opened": 2497396.296,
+      "closed": 2497494.406
+    }
+  ],
+  "model_calls": [
+    {
+      "text": "SAVE_ACK_BASELINE\n\u4fdd\u5b58\u786e\u8ba4\u5361\u4f4f\u65f6\u4ecd\u5e94\u7ee7\u7eed\u5bf9\u8bdd\u3002",
+      "images": []
+    }
+  ],
+  "draft_reads": [
+    {
+      "path": "/api/v1/projects/default/sessions/V-OSKzdkFRq6BGqw7cRRzA2IJC-6SxVJ/draft",
+      "at": 2497431.609,
+      "fault": true
+    },
+    {
+      "path": "/api/v1/projects/default/sessions/V-OSKzdkFRq6BGqw7cRRzA2IJC-6SxVJ/draft",
+      "at": 2497431.625,
+      "fault": true
+    },
+    {
+      "path": "/api/v1/projects/default/sessions/V-OSKzdkFRq6BGqw7cRRzA2IJC-6SxVJ/draft",
+      "at": 2497431.812,
+      "fault": false
+    },
+    {
+      "path": "/api/v1/projects/default/sessions/V-OSKzdkFRq6BGqw7cRRzA2IJC-6SxVJ/draft",
+      "at": 2497431.828,
+      "fault": false
+    },
+    {
+      "path": "/api/v1/projects/default/sessions/V-OSKzdkFRq6BGqw7cRRzA2IJC-6SxVJ/draft",
+      "at": 2497432.109,
+      "fault": false
+    }
+  ],
+  "draft_writes": [
+    {
+      "path": "/api/v1/projects/default/sessions/V-OSKzdkFRq6BGqw7cRRzA2IJC-6SxVJ/draft",
+      "at": 2497396.593,
+      "body": {
+        "revision": 0,
+        "text": "SAVE_ACK_BASELINE\n\u4fdd\u5b58\u786e\u8ba4\u5361\u4f4f\u65f6\u4ecd\u5e94\u7ee7\u7eed\u5bf9\u8bdd\u3002",
+        "attachments": [],
+        "run_admission_uncertain": false,
+        "submissions": [
+          {
+            "id": "6896c7729cff4eb0c994e596fbf8dd72",
+            "text": "SAVE_ACK_BASELINE\n\u4fdd\u5b58\u786e\u8ba4\u5361\u4f4f\u65f6\u4ecd\u5e94\u7ee7\u7eed\u5bf9\u8bdd\u3002",
+            "attachments": [],
+            "interrupt": false,
+            "state": "prepared",
+            "profile": {
+              "model_id": "queue-fixture",
+              "reasoning_effort": "none",
+              "permission_profile": "balanced"
+            }
+          }
+        ],
+        "composer_profile": null
+      },
+      "status": 200,
+      "saved_at": 2497396.609,
+      "revision": 1,
+      "released_at": 2497431.609
+    },
+    {
+      "path": "/api/v1/projects/default/sessions/V-OSKzdkFRq6BGqw7cRRzA2IJC-6SxVJ/draft",
+      "at": 2497431.625
+    }
+  ],
+  "user_inputs": [
+    "SAVE_ACK_BASELINE\n\u4fdd\u5b58\u786e\u8ba4\u5361\u4f4f\u65f6\u4ecd\u5e94\u7ee7\u7eed\u5bf9\u8bdd\u3002"
+  ],
+  "final_model_errors": 0,
+  "event_kinds": {
+    "agent_start": 1,
+    "model_start": 1,
+    "model_text_delta": 1,
+    "model_done": 1,
+    "agent_done": 1
+  },
+  "attachment_files": {},
+  "queue": {
+    "items": [],
+    "discard_images": []
+  },
+  "draft": {
+    "revision": 4,
+    "text": "",
+    "attachments": [],
+    "run_admission_uncertain": false,
+    "submission": null,
+    "submissions": []
+  },
+  "runs": {
+    "automatic": true,
+    "active_runs": 0,
+    "starting_runs": 0,
+    "retained_runs": 1,
+    "max_active": 8,
+    "max_retained": 64,
+    "runs_started": 1,
+    "runs_completed": 1,
+    "runs_failed": 0,
+    "items": [
+      {
+        "id": "run-V-OSKzuQlcgiNKXqqe04alDg3bXNsZ-q",
+        "project_id": "default",
+        "session_id": "V-OSKzdkFRq6BGqw7cRRzA2IJC-6SxVJ",
+        "agent_run_id": 1,
+        "agent_id": "mdo.default",
+        "model_id": "queue-fixture",
+        "protocol": "openai-chat-completions",
+        "reasoning_effort": "none",
+        "state": "succeeded",
+        "result": "ok",
+        "error_code": "none",
+        "terminal": true,
+        "cancel_requested": false,
+        "resume": false,
+        "client_resume_id": "",
+        "created_at": 1791482375423620,
+        "started_at": 1791482375429715,
+        "ended_at": 1791482375456493,
+        "config_revision": 4,
+        "model_generation": 3,
+        "module_generation": 1,
+        "skill_generation": 1,
+        "memory_generation": 1,
+        "agent_turns": 1,
+        "model_calls": 1,
+        "tool_calls": 0,
+        "compactions": 0,
+        "final_text_available": true,
+        "final_text_truncated": false,
+        "final_text_bytes": 92
+      }
+    ]
+  }
+}

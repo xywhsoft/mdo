@@ -1,0 +1,47 @@
+{
+  "baseline": {
+    "tests": 8,
+    "pass": 0,
+    "fail": 8
+  },
+  "node": {
+    "tests": 101,
+    "pass": 101,
+    "fail": 0,
+    "cancelled": 0,
+    "skipped": 0
+  },
+  "files": [
+    "test_draft_write_recovery",
+    "test_draft_read_deadline",
+    "test_draft_read_recovery",
+    "test_draft_store",
+    "test_new_task_controller",
+    "test_project_draft_selection",
+    "test_submission_controller",
+    "test_write_token",
+    "test_composer_agent_defaults",
+    "test_project_purge_execution",
+    "test_project_purge_recovery"
+  ],
+  "frontend": {
+    "tests": 4,
+    "exit_code": 0,
+    "methods": [
+      "test_local_module_graph_is_closed",
+      "test_frontend_has_no_package_manager_or_generated_bundle",
+      "test_composer_profile_has_idle_update_and_queued_snapshot_paths",
+      "test_agent_default_permissions_share_the_chat_profiles"
+    ]
+  },
+  "browser": {
+    "model_calls": 2,
+    "final_model_errors": 0,
+    "exact_input_order": true,
+    "next_draft_preserved_after_reload": true,
+    "quiet_confirmation_seconds": 9.547,
+    "late_response_seconds": 35.016,
+    "draft_error_observed": false,
+    "scope": "Selected draft status from typing through first reply; second turn verified after reload."
+  }
+}

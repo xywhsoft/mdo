@@ -1,0 +1,49 @@
+{
+  "installed_before_typing_and_send": true,
+  "has_more": false,
+  "truncated": false,
+  "observations": [
+    {
+      "at": 887.5,
+      "draft": "",
+      "hidden": true,
+      "hint": "Enter 发送 · Shift Enter 换行",
+      "value": "草稿保存确认测试：请回复一句已收到。"
+    },
+    {
+      "at": 995.8000001907349,
+      "draft": "",
+      "hidden": true,
+      "hint": "正在保存发送意图 · 可继续编辑下一条",
+      "value": "草稿保存确认测试：请回复一句已收到。"
+    },
+    {
+      "at": 1209.4000000953674,
+      "draft": "",
+      "hidden": true,
+      "hint": "正在保存发送意图 · 可继续编辑下一条",
+      "value": "下一条草稿：不应被上一条迟到回包覆盖。"
+    },
+    {
+      "at": 10618.5,
+      "draft": "",
+      "hidden": true,
+      "hint": "Enter 发送 · Shift Enter 换行",
+      "value": "下一条草稿：不应被上一条迟到回包覆盖。"
+    },
+    {
+      "at": 10696.60000038147,
+      "draft": "",
+      "hidden": true,
+      "hint": "Enter 排队 · Ctrl Enter 中断并发送",
+      "value": "下一条草稿：不应被上一条迟到回包覆盖。"
+    },
+    {
+      "at": 10717.10000038147,
+      "draft": "",
+      "hidden": true,
+      "hint": "Enter 发送 · Shift Enter 换行",
+      "value": "下一条草稿：不应被上一条迟到回包覆盖。"
+    }
+  ]
+}

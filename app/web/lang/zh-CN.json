@@ -1350,6 +1350,7 @@
   "todo.notSynced": "计划状态尚未同步，请检查工具结果",
   "draft.tooLarge": "草稿超过 64 KiB 保存上限",
   "draft.saveFailed": "草稿未保存：{error}",
+  "draft.saveUnconfirmed": "暂时无法确认草稿保存结果，输入已保留：{reason}",
   "draft.readFailed": "无法读取草稿，输入已保留：{error}",
   "pane.saveFailed": "无法保存分栏布局：{error}",
   "pane.loadFailed": "无法读取分栏布局：{error}",

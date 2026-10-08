@@ -1,0 +1,616 @@
+TAP version 13
+# Subtest: a known non-reasoning model clears a previous thinking preference
+ok 1 - a known non-reasoning model clears a previous thinking preference
+  ---
+  duration_ms: 1.619
+  type: 'test'
+  ...
+# Subtest: retired built-in references resolve in project defaults without shadowing a custom model
+ok 2 - retired built-in references resolve in project defaults without shadowing a custom model
+  ---
+  duration_ms: 2.246
+  type: 'test'
+  ...
+# Subtest: blank task follows the default Agent until the user chooses overrides
+ok 3 - blank task follows the default Agent until the user chooses overrides
+  ---
+  duration_ms: 1.567
+  type: 'test'
+  ...
+# Subtest: global permission changes affect blank tasks, preserve chat overrides, and never rewrite existing sessions
+ok 4 - global permission changes affect blank tasks, preserve chat overrides, and never rewrite existing sessions
+  ---
+  duration_ms: 0.807
+  type: 'test'
+  ...
+# Subtest: blank task choices survive refresh per project without freezing other defaults
+ok 5 - blank task choices survive refresh per project without freezing other defaults
+  ---
+  duration_ms: 91.7712
+  type: 'test'
+  ...
+# Subtest: a hanging cold body retries quietly and preserves input before its late completion
+ok 6 - a hanging cold body retries quietly and preserves input before its late completion
+  ---
+  duration_ms: 40.0921
+  type: 'test'
+  ...
+# Subtest: six ignored cold reads finish one minute with one read failure and no writes
+ok 7 - six ignored cold reads finish one minute with one read failure and no writes
+  ---
+  duration_ms: 4.2918
+  type: 'test'
+  ...
+# Subtest: temporary cold errors use quiet exponential waits while permanent denial stays exact
+ok 8 - temporary cold errors use quiet exponential waits while permanent denial stays exact
+  ---
+  duration_ms: 2.6165
+  type: 'test'
+  ...
+# Subtest: page exit releases a cold read without an error and returning reads the preserved editor
+ok 9 - page exit releases a cold read without an error and returning reads the preserved editor
+  ---
+  duration_ms: 4.1824
+  type: 'test'
+  ...
+# Subtest: an edited cold draft loads once on reconnect and survives a new store
+ok 10 - an edited cold draft loads once on reconnect and survives a new store
+  ---
+  duration_ms: 51.2759
+  type: 'test'
+  ...
+# Subtest: cold reads back off with a cap and typing does not bypass their timer
+ok 11 - cold reads back off with a cap and typing does not bypass their timer
+  ---
+  duration_ms: 7.2094
+  type: 'test'
+  ...
+# Subtest: a cold read restores a saved reply guard and queue before saving a local edit
+ok 12 - a cold read restores a saved reply guard and queue before saving a local edit
+  ---
+  duration_ms: 17.4303
+  type: 'test'
+  ...
+# Subtest: permanent access errors do not automatically retry cold reads or save edits
+ok 13 - permanent access errors do not automatically retry cold reads or save edits
+  ---
+  duration_ms: 12.7371
+  type: 'test'
+  ...
+# Subtest: a cold remote timeout restores its saved editor on a read retry without writing
+ok 14 - a cold remote timeout restores its saved editor on a read retry without writing
+  ---
+  duration_ms: 2.2495
+  type: 'test'
+  ...
+# Subtest: a late cold recovery saves its owner without replacing another selected editor
+ok 15 - a late cold recovery saves its owner without replacing another selected editor
+  ---
+  duration_ms: 1.6055
+  type: 'test'
+  ...
+# Subtest: a peer write after cold recovery is still protected by the saved revision
+ok 16 - a peer write after cold recovery is still protected by the saved revision
+  ---
+  duration_ms: 1.2493
+  type: 'test'
+  ...
+# Subtest: a lost saved-text acknowledgement is confirmed by one read without another draft write
+ok 17 - a lost saved-text acknowledgement is confirmed by one read without another draft write
+  ---
+  duration_ms: 45.1122
+  type: 'test'
+  ...
+# Subtest: a lost remote submission response is reconciled by reads without repeating writes
+ok 18 - a lost remote submission response is reconciled by reads without repeating writes
+  ---
+  duration_ms: 3.6073
+  type: 'test'
+  ...
+# Subtest: a queue refresh does not mistake the current tab's unsaved image edit for a peer conflict
+ok 19 - a queue refresh does not mistake the current tab's unsaved image edit for a peer conflict
+  ---
+  duration_ms: 1.9235
+  type: 'test'
+  ...
+# Subtest: a newer peer draft still blocks an unsaved image edit
+ok 20 - a newer peer draft still blocks an unsaved image edit
+  ---
+  duration_ms: 1.2665
+  type: 'test'
+  ...
+# Subtest: an oversized draft stays unsaved without repeated retries and recovers after editing
+ok 21 - an oversized draft stays unsaved without repeated retries and recovers after editing
+  ---
+  duration_ms: 703.6158
+  type: 'test'
+  ...
+# Subtest: a failed send restores its text and images ahead of a newer saved draft
+ok 22 - a failed send restores its text and images ahead of a newer saved draft
+  ---
+  duration_ms: 1.8452
+  type: 'test'
+  ...
+# Subtest: an edit before draft loading keeps the persisted run review guard
+ok 23 - an edit before draft loading keeps the persisted run review guard
+  ---
+  duration_ms: 0.7056
+  type: 'test'
+  ...
+# Subtest: an uncertain run blocks retry across draft edits and reload until acknowledged
+ok 24 - an uncertain run blocks retry across draft edits and reload until acknowledged
+  ---
+  duration_ms: 15.4503
+  type: 'test'
+  ...
+# Subtest: an in-flight submission survives refresh while the next draft stays editable
+ok 25 - an in-flight submission survives refresh while the next draft stays editable
+  ---
+  duration_ms: 1.9801
+  type: 'test'
+  ...
+# Subtest: multiple pending submissions keep their order and state across reload
+ok 26 - multiple pending submissions keep their order and state across reload
+  ---
+  duration_ms: 1.4993
+  type: 'test'
+  ...
+# Subtest: composer profile and per-message snapshots survive edits and reload
+ok 27 - composer profile and per-message snapshots survive edits and reload
+  ---
+  duration_ms: 2.2176
+  type: 'test'
+  ...
+# Subtest: saved PUT with a hanging body confirms quietly and saves a newer edit separately
+ok 28 - saved PUT with a hanging body confirms quietly and saves a newer edit separately
+  ---
+  duration_ms: 71.591
+  type: 'test'
+  ...
+# Subtest: a write which did not arrive retries the identical versioned snapshot
+ok 29 - a write which did not arrive retries the identical versioned snapshot
+  ---
+  duration_ms: 4.7656
+  type: 'test'
+  ...
+# Subtest: late original acceptance between read and CAS retry causes one logical save
+ok 30 - late original acceptance between read and CAS retry causes one logical save
+  ---
+  duration_ms: 2.0595
+  type: 'test'
+  ...
+# Subtest: a newer peer draft remains protected after an uncertain local write
+ok 31 - a newer peer draft remains protected after an uncertain local write
+  ---
+  duration_ms: 1.4597
+  type: 'test'
+  ...
+# Subtest: unreadable confirmations settle and later confirm the same save without another PUT
+ok 32 - unreadable confirmations settle and later confirm the same save without another PUT
+  ---
+  duration_ms: 22.7356
+  type: 'test'
+  ...
+# Subtest: page exit cancels a saved PUT wait and returning confirms before writing
+ok 33 - page exit cancels a saved PUT wait and returning confirms before writing
+  ---
+  duration_ms: 4.2654
+  type: 'test'
+  ...
+# Subtest: a hung submission refresh uses bounded read recovery without replaying a write
+ok 34 - a hung submission refresh uses bounded read recovery without replaying a write
+  ---
+  duration_ms: 1.6293
+  type: 'test'
+  ...
+# Subtest: submission state and removal with hung acknowledgements confirm by exact ID
+ok 35 - submission state and removal with hung acknowledgements confirm by exact ID
+  ---
+  duration_ms: 2.5224
+  type: 'test'
+  ...
+# Subtest: a target change while confirming cannot retry the old save on another device
+ok 36 - a target change while confirming cannot retry the old save on another device
+  ---
+  duration_ms: 2.7562
+  type: 'test'
+  ...
+# Subtest: cancelling a submission refresh releases an ignored abort without another read
+ok 37 - cancelling a submission refresh releases an ignored abort without another read
+  ---
+  duration_ms: 1.0377
+  type: 'test'
+  ...
+# Subtest: permanent access and quota refusals preserve input without retries or confirmation reads
+ok 38 - permanent access and quota refusals preserve input without retries or confirmation reads
+  ---
+  duration_ms: 1.9781
+  type: 'test'
+  ...
+# Subtest: a permanent confirmation refusal retains the uncertain snapshot without background retries
+ok 39 - a permanent confirmation refusal retains the uncertain snapshot without background retries
+  ---
+  duration_ms: 1.3963
+  type: 'test'
+  ...
+# Subtest: an oversized next edit cannot prevent confirmation of an already saved submission
+ok 40 - an oversized next edit cannot prevent confirmation of an already saved submission
+  ---
+  duration_ms: 2.6461
+  type: 'test'
+  ...
+# Subtest: new-task titles stay within the UTF-8 session title limit
+ok 41 - new-task titles stay within the UTF-8 session title limit
+  ---
+  duration_ms: 1.5385
+  type: 'test'
+  ...
+# Subtest: attachment-first creation recovers a lost create response
+ok 42 - attachment-first creation recovers a lost create response
+  ---
+  duration_ms: 77.9703
+  type: 'test'
+  ...
+# Subtest: new-task inputs survive a delayed create and move in order
+ok 43 - new-task inputs survive a delayed create and move in order
+  ---
+  duration_ms: 8.0656
+  type: 'test'
+  ...
+# Subtest: a rejected create can change profile without losing queued inputs
+ok 44 - a rejected create can change profile without losing queued inputs
+  ---
+  duration_ms: 4.6858
+  type: 'test'
+  ...
+# Subtest: a conflicting create response never attaches input to another session
+ok 45 - a conflicting create response never attaches input to another session
+  ---
+  duration_ms: 0.4656
+  type: 'test'
+  ...
+# Subtest: an uncertain create keeps its original ID and profile on review
+ok 46 - an uncertain create keeps its original ID and profile on review
+  ---
+  duration_ms: 0.4402
+  type: 'test'
+  ...
+# Subtest: blank tasks keep independent portable drafts for each project
+ok 47 - blank tasks keep independent portable drafts for each project
+  ---
+  duration_ms: 62.3421
+  type: 'test'
+  ...
+# Subtest: an old global draft moves to its project before the global file clears
+ok 48 - an old global draft moves to its project before the global file clears
+  ---
+  duration_ms: 2.2979
+  type: 'test'
+  ...
+# Subtest: a conflicting project draft leaves both copies and keeps project ownership
+ok 49 - a conflicting project draft leaves both copies and keeps project ownership
+  ---
+  duration_ms: 1.082
+  type: 'test'
+  ...
+# Subtest: a cold global draft edited offline migrates durably after reconnect
+ok 50 - a cold global draft edited offline migrates durably after reconnect
+  ---
+  duration_ms: 16789.1897
+  type: 'test'
+  ...
+# Subtest: explicit confirmation drains, saves one binding, executes it and ACKs without unlocking old memory
+ok 51 - explicit confirmation drains, saves one binding, executes it and ACKs without unlocking old memory
+  ---
+  duration_ms: 5.2235
+  type: 'test'
+  ...
+# Subtest: an in-flight or failed draft drain creates no ID or saved request
+ok 52 - an in-flight or failed draft drain creates no ID or saved request
+  ---
+  duration_ms: 0.7089
+  type: 'test'
+  ...
+# Subtest: a lost preparation keeps its original proposed ID and cannot execute until publication is read back
+ok 53 - a lost preparation keeps its original proposed ID and cannot execute until publication is read back
+  ---
+  duration_ms: 1.4682
+  type: 'test'
+  ...
+# Subtest: lost execution replies query the same original receipt and preserve verified commit facts
+ok 54 - lost execution replies query the same original receipt and preserve verified commit facts
+  ---
+  duration_ms: 0.7506
+  type: 'test'
+  ...
+# Subtest: reloaded saved intent may be explicitly reviewed, but revision/incarnation changes never execute
+ok 55 - reloaded saved intent may be explicitly reviewed, but revision/incarnation changes never execute
+  ---
+  duration_ms: 0.9203
+  type: 'test'
+  ...
+# Subtest: a missing/different portable intent cannot authorize execution from cached review
+ok 56 - a missing/different portable intent cannot authorize execution from cached review
+  ---
+  duration_ms: 0.7423
+  type: 'test'
+  ...
+# Subtest: lost ACK validates absence/new ownership, never erases known commit facts and reloads only explicitly
+ok 57 - lost ACK validates absence/new ownership, never erases known commit facts and reloads only explicitly
+  ---
+  duration_ms: 0.9613
+  type: 'test'
+  ...
+# Subtest: unsaved local edits, pending results and restart requirements cannot ACK a committed request
+ok 58 - unsaved local edits, pending results and restart requirements cannot ACK a committed request
+  ---
+  duration_ms: 28.713
+  type: 'test'
+  ...
+# Subtest: advisory inventory rejects invalid headers, paths, unsafe numbers and active/diagnostic counts
+ok 59 - advisory inventory rejects invalid headers, paths, unsafe numbers and active/diagnostic counts
+  ---
+  duration_ms: 0.7347
+  type: 'test'
+  ...
+# Subtest: API activity counts mutations through envelope parsing and releases on invalid response or upload failure
+ok 60 - API activity counts mutations through envelope parsing and releases on invalid response or upload failure
+  ---
+  duration_ms: 82.4594
+  type: 'test'
+  ...
+# Subtest: draining drafts saves existing edits across owners without creating untouched empty drafts
+ok 61 - draining drafts saves existing edits across owners without creating untouched empty drafts
+  ---
+  duration_ms: 5.0078
+  type: 'test'
+  ...
+# Subtest: cold empty reads unlock without creating or executing a request
+ok 62 - cold empty reads unlock without creating or executing a request
+  ---
+  duration_ms: 4.0483
+  type: 'test'
+  ...
+# Subtest: abort acknowledgement on a stale page does not resume saves or discard unsent input via automatic reload
+ok 63 - abort acknowledgement on a stale page does not resume saves or discard unsent input via automatic reload
+  ---
+  duration_ms: 1.1885
+  type: 'test'
+  ...
+# Subtest: unknown saved requests cancel with the original binding and need explicit abort acknowledgement
+ok 64 - unknown saved requests cancel with the original binding and need explicit abort acknowledgement
+  ---
+  duration_ms: 1.1403
+  type: 'test'
+  ...
+# Subtest: lost cancellation responses inspect the same ID without a new cancellation
+ok 65 - lost cancellation responses inspect the same ID without a new cancellation
+  ---
+  duration_ms: 1.5534
+  type: 'test'
+  ...
+# Subtest: an HTTP failure carrying committed facts never becomes cancelled or acknowledged
+ok 66 - an HTTP failure carrying committed facts never becomes cancelled or acknowledged
+  ---
+  duration_ms: 0.6878
+  type: 'test'
+  ...
+# Subtest: pending/committed results cannot trigger cancel or acknowledgement
+ok 67 - pending/committed results cannot trigger cancel or acknowledgement
+  ---
+  duration_ms: 0.8585
+  type: 'test'
+  ...
+# Subtest: lost acknowledgement verifies portable absence before releasing the gate
+ok 68 - lost acknowledgement verifies portable absence before releasing the gate
+  ---
+  duration_ms: 0.7499
+  type: 'test'
+  ...
+# Subtest: a failed acknowledgement preserves the same abort and can be retried
+ok 69 - a failed acknowledgement preserves the same abort and can be retried
+  ---
+  duration_ms: 0.6117
+  type: 'test'
+  ...
+# Subtest: other-page acknowledgement never drops a known committed request
+ok 70 - other-page acknowledgement never drops a known committed request
+  ---
+  duration_ms: 0.4083
+  type: 'test'
+  ...
+# Subtest: a verified abort can hand over to another page's subsequent intent
+ok 71 - a verified abort can hand over to another page's subsequent intent
+  ---
+  duration_ms: 0.5953
+  type: 'test'
+  ...
+# Subtest: corrupt intent/ETag/unsafe numbers fail closed without a mutation
+ok 72 - corrupt intent/ETag/unsafe numbers fail closed without a mutation
+  ---
+  duration_ms: 1.2463
+  type: 'test'
+  ...
+# Subtest: mismatched receipts and contradictory commit facts keep the original binding
+ok 73 - mismatched receipts and contradictory commit facts keep the original binding
+  ---
+  duration_ms: 1.1115
+  type: 'test'
+  ...
+# Subtest: later contradictory results do not erase a known committed fact
+ok 74 - later contradictory results do not erase a known committed fact
+  ---
+  duration_ms: 0.3051
+  type: 'test'
+  ...
+# Subtest: repeated clicks coalesce; a failed initial read remains paused during retry
+ok 75 - repeated clicks coalesce; a failed initial read remains paused during retry
+  ---
+  duration_ms: 0.3166
+  type: 'test'
+  ...
+# Subtest: page write guard covers JSON writes and raw uploads, but permits reads and stopping a run
+ok 76 - page write guard covers JSON writes and raw uploads, but permits reads and stopping a run
+  ---
+  duration_ms: 38.3191
+  type: 'test'
+  ...
+# Subtest: paused drafts retain local edits without retry loops or pagehide writes, then resume
+ok 77 - paused drafts retain local edits without retry loops or pagehide writes, then resume
+  ---
+  duration_ms: 4.7046
+  type: 'test'
+  ...
+# Subtest: a pause during an in-flight save stops later dirty iterations without losing edits
+ok 78 - a pause during an in-flight save stops later dirty iterations without losing edits
+  ---
+  duration_ms: 1.4122
+  type: 'test'
+  ...
+# Subtest: new-task and submission recovery do not touch restored state while paused
+ok 79 - new-task and submission recovery do not touch restored state while paused
+  ---
+  duration_ms: 0.8321
+  type: 'test'
+  ...
+# Subtest: a failed recheck of a formerly empty Home does not unlock writes while retrying
+ok 80 - a failed recheck of a formerly empty Home does not unlock writes while retrying
+  ---
+  duration_ms: 0.3192
+  type: 'test'
+  ...
+# Subtest: a bounded read timeout preserves the startup recovery gate
+ok 81 - a bounded read timeout preserves the startup recovery gate
+  ---
+  duration_ms: 6.735
+  type: 'test'
+  ...
+# Subtest: a queued ID with a changed profile cannot acknowledge a draft intent
+ok 82 - a queued ID with a changed profile cannot acknowledge a draft intent
+  ---
+  duration_ms: 3.8385
+  type: 'test'
+  ...
+# Subtest: a second Enter is durable while the first queue POST is still waiting
+ok 83 - a second Enter is durable while the first queue POST is still waiting
+  ---
+  duration_ms: 91.5362
+  type: 'test'
+  ...
+# Subtest: a stale tab appends its stable intent without replacing another tab's intent
+ok 84 - a stale tab appends its stable intent without replacing another tab's intent
+  ---
+  duration_ms: 6.2642
+  type: 'test'
+  ...
+# Subtest: a lost draft PUT response reuses the same saved submission ID
+ok 85 - a lost draft PUT response reuses the same saved submission ID
+  ---
+  duration_ms: 2.1301
+  type: 'test'
+  ...
+# Subtest: a submission with no durable acknowledgement keeps the composer text
+ok 86 - a submission with no durable acknowledgement keeps the composer text
+  ---
+  duration_ms: 35445.8634
+  type: 'test'
+  ...
+# Subtest: a peer-observed intent still confirms its original submitter
+ok 87 - a peer-observed intent still confirms its original submitter
+  ---
+  duration_ms: 1.7312
+  type: 'test'
+  ...
+# Subtest: an in-flight composer clear is not undone by an older draft response
+ok 88 - an in-flight composer clear is not undone by an older draft response
+  ---
+  duration_ms: 1.2228
+  type: 'test'
+  ...
+# Subtest: an accepted receipt confirms a submitter after its draft intent was consumed
+ok 89 - an accepted receipt confirms a submitter after its draft intent was consumed
+  ---
+  duration_ms: 0.4127
+  type: 'test'
+  ...
+# Subtest: a late receipt clears the original input after an initially uncertain submit
+ok 90 - a late receipt clears the original input after an initially uncertain submit
+  ---
+  duration_ms: 0.852
+  type: 'test'
+  ...
+# Subtest: review restores text after removing an uncertain submission
+ok 91 - review restores text after removing an uncertain submission
+  ---
+  duration_ms: 1.621
+  type: 'test'
+  ...
+# Subtest: a recovered staged predecessor holds later submissions until continued
+ok 92 - a recovered staged predecessor holds later submissions until continued
+  ---
+  duration_ms: 0.6764
+  type: 'test'
+  ...
+# Subtest: polling an uncertain queue admission asks for review only once
+ok 93 - polling an uncertain queue admission asks for review only once
+  ---
+  duration_ms: 0.3552
+  type: 'test'
+  ...
+# Subtest: a second tab does not warn or enqueue while another tab claims the intent
+ok 94 - a second tab does not warn or enqueue while another tab claims the intent
+  ---
+  duration_ms: 0.3051
+  type: 'test'
+  ...
+# Subtest: a consumed queue receipt releases only its matching saved intent
+ok 95 - a consumed queue receipt releases only its matching saved intent
+  ---
+  duration_ms: 0.82
+  type: 'test'
+  ...
+# Subtest: receipt read failure cannot turn review into a duplicate queue POST
+ok 96 - receipt read failure cannot turn review into a duplicate queue POST
+  ---
+  duration_ms: 0.4976
+  type: 'test'
+  ...
+# Subtest: a definite queue-full rejection stays blocked across reconciliation
+ok 97 - a definite queue-full rejection stays blocked across reconciliation
+  ---
+  duration_ms: 0.712
+  type: 'test'
+  ...
+# Subtest: the page adopts its first startup token once, sends it on JSON/uploads and never silently renews
+ok 98 - the page adopts its first startup token once, sends it on JSON/uploads and never silently renews
+  ---
+  duration_ms: 44.1605
+  type: 'test'
+  ...
+# Subtest: an empty intent after another page's ACK or host restart still fences this page
+ok 99 - an empty intent after another page's ACK or host restart still fences this page
+  ---
+  duration_ms: 1.7151
+  type: 'test'
+  ...
+# Subtest: a rejected mutation retains the fence even if later reads have no intent
+ok 100 - a rejected mutation retains the fence even if later reads have no intent
+  ---
+  duration_ms: 0.5866
+  type: 'test'
+  ...
+# Subtest: copying paused drafts includes image-only input and detached configuration/intent snapshots
+ok 101 - copying paused drafts includes image-only input and detached configuration/intent snapshots
+  ---
+  duration_ms: 3.5401
+  type: 'test'
+  ...
+1..101
+# tests 101
+# suites 0
+# pass 101
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 35862.5606

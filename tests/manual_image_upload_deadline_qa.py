@@ -7,6 +7,8 @@ follow-up. Create the printed stop file to collect evidence and stop this copy.
 Only loopback services and a disposable Home; no external model or credentials.
 With --draft-read-fault, only the selected session's cold draft read has a
 35-second held body and two failed retry GETs. Type before it finishes.
+With --draft-write-fault, its first draft PUT is really saved before its reply
+body is held for 35 seconds. Two following confirmation GETs return 503.
 """
 import argparse
 import base64
@@ -65,7 +67,38 @@ class Proxy(ForwardProxy):
                     "draft_reads": self.server.draft_reads, "draft_writes": self.server.draft_writes})
         draft = self.path.startswith("/api/v1/") and self.path.endswith("/draft")
         if draft and self.command == "PUT":
-            with self.server.lock: self.server.draft_writes.append({"path": self.path, "at": time.monotonic()})
+            with self.server.lock:
+                record = {"path": self.path, "at": time.monotonic()}
+                self.server.draft_writes.append(record)
+                hold = self.server.draft_write_fault and self.path == self.server.draft_fault_path and not self.server.draft_write_held
+                if hold: self.server.draft_write_held = True
+            if hold:
+                body = self.rfile.read(int(self.headers["Content-Length"]))
+                record["body"] = json.loads(body)
+                upstream = http.client.HTTPConnection("127.0.0.1", self.server.native, timeout=10)
+                try:
+                    headers = dict(self.headers); headers["Host"] = f"127.0.0.1:{self.server.native}"
+                    if headers.get("Origin") == f"http://127.0.0.1:{self.server.server_port}":
+                        headers["Origin"] = f"http://127.0.0.1:{self.server.native}"
+                    upstream.request("PUT", self.path, body, headers)
+                    response = upstream.getresponse(); raw = response.read()
+                    assert response.status == 200, raw
+                    record["status"] = response.status; record["saved_at"] = time.monotonic()
+                    record["revision"] = json.loads(raw)["data"]["revision"]
+                    with self.server.lock: self.server.draft_confirm_faults = 2
+                    self.send_response(response.status)
+                    for name, value in response.getheaders():
+                        if name.lower() not in ("content-length", "connection", "transfer-encoding"): self.send_header(name, value)
+                    self.send_header("Content-Length", str(len(raw))); self.end_headers(); self.wfile.flush()
+                    self.server.stopped.wait(35); record["released_at"] = time.monotonic(); self.wfile.write(raw)
+                finally: upstream.close()
+                return
+        if self.path == self.server.draft_fault_path and self.command == "GET" and self.server.draft_write_held:
+            with self.server.lock:
+                fault = self.server.draft_confirm_faults > 0
+                if fault: self.server.draft_confirm_faults -= 1
+                self.server.draft_reads.append({"path": self.path, "at": time.monotonic(), "fault": fault})
+            if fault: return self.reply(503, {"ok": False, "error": {"code": "temporary_unavailable", "message": "owned draft confirmation fault"}})
         if self.path == self.server.draft_fault_path and self.command == "GET" and self.server.draft_fault_enabled:
             with self.server.lock:
                 number = len(self.server.draft_reads) + 1
@@ -128,7 +161,9 @@ def main():
     parser.add_argument("--directory", type=Path, required=True)
     parser.add_argument("--resume", action="store_true", help="Reopen this fixture's validated previous Home")
     parser.add_argument("--draft-read-fault", action="store_true", help="Hold the first cold draft body for 35 seconds, then fail two retry GETs")
+    parser.add_argument("--draft-write-fault", action="store_true", help="Really save one draft PUT, hold its body for 35 seconds, then fail two confirmation GETs")
     args = parser.parse_args(); base = args.directory.resolve()
+    assert not (args.draft_read_fault and args.draft_write_fault), "Choose one isolated draft fault"
     packed = args.packed.resolve()
     if args.resume:
         assert (base / "proof.json").is_file(), "Only resume a completed fixture"
@@ -148,6 +183,7 @@ def main():
     proxy.uploads = []; proxy.confirmations = []; proxy.failures = 0 if args.resume else 2
     proxy.draft_fault_enabled = args.draft_read_fault
     proxy.draft_fault_path = None
+    proxy.draft_write_fault = args.draft_write_fault; proxy.draft_write_held = False; proxy.draft_confirm_faults = 0
     proxy.draft_reads = []; proxy.draft_writes = []
     threads = [threading.Thread(target=server.serve_forever, daemon=True) for server in (model, proxy)]
     for thread in threads: thread.start()
@@ -178,7 +214,7 @@ def main():
             task = call("GET", "/api/v1/projects/default/sessions/" + identifier)
         else:
             task = call("POST", "/api/v1/sessions", {"project_id": "default",
-                "title": "Draft read deadline" if args.draft_read_fault else "Image deadline",
+                "title": "Draft save deadline" if args.draft_write_fault else "Draft read deadline" if args.draft_read_fault else "Image deadline",
                 "model_id": "queue-fixture", "reasoning_effort": "none", "permission_profile": "balanced"}, 201)
         path = "/api/v1/projects/default/sessions/" + task["id"]
         proxy.draft_fault_path = path + "/draft"

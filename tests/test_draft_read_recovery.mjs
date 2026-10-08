@@ -20,7 +20,7 @@ function fixture() {
     isWritePaused: () => paused, random: () => 1,
     // These checks isolate the outer scheduler after one recovery has ended.
     // test_draft_read_deadline exercises the production bounded recovery.
-    createRecovery: () => ({ request: read => read(), dispose() {} }) };
+    createRecovery: () => ({ request: read => read(), assertActive() {}, dispose() {} }) };
   const store = createDraftStore(options);
   return { store, timers, restores, errors, requests, options,
     set respond(fn) { respond = fn; }, set paused(value) { paused = value; },

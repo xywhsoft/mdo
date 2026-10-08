@@ -1,6 +1,7 @@
-import { api, resourceId } from "../../api/client.js";
+import { ApiError, api, resourceId } from "../../api/client.js";
 import { isTransientReadError } from "../../api/read-recovery.js";
 import { createRequestRecovery } from "../../api/request-recovery.js";
+import { createDraftTransport, draftEndpoint as endpoint } from "./draft-transport.js";
 import { t } from "../../i18n.js";
 
 const SAVE_DELAY_MS = 300;
@@ -111,13 +112,20 @@ function sameNewTask(a, b) {
     Object.keys(a).every((key) => a[key] === b[key]));
 }
 
-function endpoint(key) {
-  if (!key) return "/draft";
-  if (key.startsWith("project:"))
-    return `/projects/${resourceId(key.slice("project:".length), "project")}/draft`;
-  const [projectId, sessionId, extra] = key.split("/");
-  if (extra !== undefined) throw new TypeError("Invalid draft owner");
-  return `/projects/${resourceId(projectId, "project")}/sessions/${resourceId(sessionId, "session")}/draft`;
+function matchesSnapshot(key, data, body) {
+  const items = submissions(data?.submissions ?? []);
+  const savedProfile = profile(data?.composer_profile, key.startsWith("project:"));
+  const savedNewTask = newTask(data?.new_task);
+  if (typeof data?.text !== "string" || !Array.isArray(data.attachments) ||
+      imageIds(data.attachments).length !== data.attachments.length || !items ||
+      savedProfile === undefined || (Object.hasOwn(body, "new_task") && savedNewTask === undefined) ||
+      (Object.hasOwn(data, "run_admission_uncertain") && typeof data.run_admission_uncertain !== "boolean"))
+    throw new ApiError("Invalid draft save confirmation", { code: "invalid_response" });
+  return data.text === body.text && sameIds(data.attachments, body.attachments) &&
+    (data.run_admission_uncertain === true) === body.run_admission_uncertain &&
+    items && sameSubmissions(items, body.submissions) &&
+    savedProfile !== undefined && sameProfile(savedProfile, body.composer_profile) &&
+    (!Object.hasOwn(body, "new_task") || (savedNewTask !== undefined && sameNewTask(savedNewTask, body.new_task)));
 }
 
 export function projectDraftKey(projectId) {
@@ -129,6 +137,7 @@ export function createDraftStore({ onRestore, onError, onSaved, onLoaded = () =>
   createRecovery = createRequestRecovery }) {
   const entries = new Map();
   const reads = new Set();
+  const transport = createDraftTransport({ matchesSnapshot, createRecovery });
   const encoder = new TextEncoder();
   let selected = "";
   let readPaused = false;
@@ -140,7 +149,7 @@ export function createDraftStore({ onRestore, onError, onSaved, onLoaded = () =>
         uncertainRun: false, submissions: [], newTask: null,
         composerProfile: null, profileEdited: false, conflict: false,
         unpersisted: new Set(), error: null, oversized: false, loading: null,
-        saving: null, timer: 0, readTimer: 0, readRetries: 0 };
+        saving: null, timer: 0, readTimer: 0, readRetries: 0, saveRetries: 0 };
       entries.set(key, value);
     }
     return value;
@@ -149,13 +158,15 @@ export function createDraftStore({ onRestore, onError, onSaved, onLoaded = () =>
   function schedule(key, immediate = false) {
     const current = entry(key);
     window.clearTimeout(current.timer);
-    if (readPaused || current.conflict || isWritePaused()) return;
+    if (readPaused || current.conflict || isWritePaused() ||
+        (current.error && !transport.canRetrySave(current.error))) return;
     if (!current.loaded && current.error) {
       scheduleRead(key);
       return;
     }
     current.timer = window.setTimeout(() => { void flush(key); },
-      immediate ? 0 : SAVE_DELAY_MS);
+      transport.hasPendingSave(key) ? Math.min(1000 * 2 ** Math.min(current.saveRetries++, 4), 15000)
+        : immediate ? 0 : SAVE_DELAY_MS);
   }
 
   function scheduleRead(key) {
@@ -259,7 +270,9 @@ export function createDraftStore({ onRestore, onError, onSaved, onLoaded = () =>
         const stagedNewTask = current.newTask && { ...current.newTask };
         const stagedProfile = current.composerProfile &&
           { ...current.composerProfile };
-        if (encoder.encode(text).length > MAX_DRAFT_BYTES) {
+        // Confirm the older immutable save before validating a newer edit.
+        // Its durable submission must not depend on the next draft's size.
+        if (!transport.hasPendingSave(key) && encoder.encode(text).length > MAX_DRAFT_BYTES) {
           current.oversized = true;
           current.error = Object.assign(new Error(t("draft.tooLarge", {},
             "草稿超过 64 KiB 保存上限")), { code: "draft_too_large" });
@@ -275,25 +288,31 @@ export function createDraftStore({ onRestore, onError, onSaved, onLoaded = () =>
             composer_profile: stagedProfile };
           if (!key) body.new_task = stagedNewTask;
           const keepalive = encoder.encode(JSON.stringify(body)).length <= 60 * 1024;
-          const response = await api.put(endpoint(key), body, { keepalive });
+          const saved = await transport.save(key, body, { keepalive });
+          const response = saved.response;
+          // A previous uncertain save may be confirmed before this newer
+          // edit. Acknowledge its actual snapshot, then persist the new edit.
+          const confirmed = saved.body;
           current.revision = Number(response.data.revision);
+          current.saveRetries = 0;
           current.error = null;
-          if (sameProfile(current.composerProfile, stagedProfile))
+          if (sameProfile(current.composerProfile, confirmed.composer_profile))
             current.profileEdited = false;
-          for (const item of stagedSubmissions)
+          for (const item of confirmed.submissions)
             current.unpersisted.delete(item.id);
-          if (current.text !== text || !sameIds(current.attachments, attachments) ||
-              current.uncertainRun !== uncertainRun ||
-              !sameSubmissions(current.submissions, stagedSubmissions) ||
-              !sameProfile(current.composerProfile, stagedProfile) ||
-              !sameNewTask(current.newTask, stagedNewTask))
+          if (current.text !== confirmed.text || !sameIds(current.attachments, confirmed.attachments) ||
+              current.uncertainRun !== confirmed.run_admission_uncertain ||
+              !sameSubmissions(current.submissions, confirmed.submissions) ||
+              !sameProfile(current.composerProfile, confirmed.composer_profile) ||
+              !sameNewTask(current.newTask, confirmed.new_task ?? null))
             current.dirty = true;
           if (selected === key && !current.dirty) onSaved();
         } catch (error) {
           current.dirty = true;
+          if (error?.name === "AbortError") return;
           current.error = error;
           if (error?.code === "draft_conflict") current.conflict = true;
-          if (selected === key) onError(error);
+          if (selected === key) onError(error, error?.code === "draft_save_unconfirmed" ? "confirm" : "save");
           return;
         }
       }
@@ -319,6 +338,7 @@ export function createDraftStore({ onRestore, onError, onSaved, onLoaded = () =>
         imageIds(data.attachments).length !== data.attachments.length)
       throw new Error(t("draft.submissionConflict"));
     if (revision < current.revision) return [...current.submissions];
+    transport.observe(key, data);
     const sameRevision = revision === current.revision;
     const remoteAttachments = imageIds(data.attachments);
     const localOnly = current.submissions.filter((item) =>
@@ -385,7 +405,7 @@ export function createDraftStore({ onRestore, onError, onSaved, onLoaded = () =>
     if (current.saving) await current.saving;
     if (!current.loaded) await load(key);
     if (!current.loaded) return false;
-    const response = await api.get(endpoint(key), options);
+    const response = await transport.read(key, options);
     applySessionResponse(key, response.data);
     return true;
   }
@@ -394,13 +414,8 @@ export function createDraftStore({ onRestore, onError, onSaved, onLoaded = () =>
     const current = entry(key);
     if (current.saving) await current.saving;
     const path = `${endpoint(key)}/submissions/${resourceId(id, "submission")}`;
-    let response;
-    try { response = await api.put(path, { state }); }
-    catch (error) {
-      if (!["network_error", "remote_result_unconfirmed", "draft_state_conflict",
-            "draft_submission_not_found"].includes(error?.code)) throw error;
-      response = await api.get(endpoint(key));
-    }
+    const response = await transport.mutate(key, signal => api.put(path, { state }, { signal }),
+      ["draft_state_conflict", "draft_submission_not_found"]);
     const items = applySessionResponse(key, response.data);
     return items.some((item) => item.id === id && item.state === state);
   }
@@ -409,13 +424,7 @@ export function createDraftStore({ onRestore, onError, onSaved, onLoaded = () =>
     const current = entry(key);
     if (current.saving) await current.saving;
     const path = `${endpoint(key)}/submissions/${resourceId(id, "submission")}`;
-    let response;
-    try { response = await api.delete(path); }
-    catch (error) {
-      if (!["network_error", "remote_result_unconfirmed"].includes(error?.code))
-        throw error;
-      response = await api.get(endpoint(key));
-    }
+    const response = await transport.mutate(key, signal => api.delete(path, { signal }));
     const items = applySessionResponse(key, response.data);
     return !items.some((item) => item.id === id);
   }
@@ -423,8 +432,9 @@ export function createDraftStore({ onRestore, onError, onSaved, onLoaded = () =>
   function edit(key, text, attachments = entry(key).attachments, immediate = false) {
     const current = entry(key);
     const ids = key ? imageIds(attachments) : [];
-    if (current.text === text && sameIds(current.attachments, ids) &&
-        !current.dirty) return;
+    const changed = current.text !== text || !sameIds(current.attachments, ids);
+    if (!changed && !current.dirty) return;
+    if (changed && current.loaded && !current.conflict) current.error = null;
     current.text = text;
     current.attachments = ids;
     current.dirty = true;
@@ -437,7 +447,8 @@ export function createDraftStore({ onRestore, onError, onSaved, onLoaded = () =>
     const current = entry(key);
     onRestore(current.text, [...current.attachments], current.uncertainRun,
       current.submissions[0] ?? null, [...current.submissions]);
-    if (current.error) onError(current.error, current.loaded ? "save" : "read");
+    if (current.error) onError(current.error, current.error.code === "draft_save_unconfirmed"
+      ? "confirm" : current.loaded ? "save" : "read");
     else onSaved();
     if (!current.loaded) void load(key);
     else if (current.dirty && !current.oversized) schedule(key, true);
@@ -445,6 +456,7 @@ export function createDraftStore({ onRestore, onError, onSaved, onLoaded = () =>
 
   window.addEventListener("pagehide", () => {
     readPaused = true;
+    transport.cancel();
     for (const recovery of reads) recovery.dispose();
     for (const [key, current] of entries) {
       window.clearTimeout(current.readTimer); current.readTimer = 0;
@@ -586,7 +598,7 @@ export function createDraftStore({ onRestore, onError, onSaved, onLoaded = () =>
       let response;
       // Another tab may already have saved and advanced this ID. Check the
       // durable record even if a concurrent refresh cleared unpersisted.
-      try { response = await api.get(endpoint(key)); }
+      try { response = await transport.read(key, { retry: false }); }
       catch { /* The keyed append below is safe to retry after a lost GET. */ }
       if (response) {
         const existing = submissions(response.data?.submissions)?.find(
@@ -598,12 +610,14 @@ export function createDraftStore({ onRestore, onError, onSaved, onLoaded = () =>
         }
       }
       if (!current.unpersisted.has(value.id)) return false;
-      try { response = await api.post(path, value); }
+      // The exact-ID append stays single attempt; its lost acknowledgement
+      // is checked by the transport's bounded draft read before returning.
+      try { response = await transport.mutate(key, signal => api.post(path, value, { signal })); }
       catch (error) {
-        // A failed draft PUT or a lost append response may already have
-        // committed. Inspect the same ID before making any new intent.
-        try { response = await api.get(endpoint(key)); }
-        catch { current.error = error; if (selected === key) onError(error); return false; }
+        current.error = error;
+        // SubmissionController still checks its queue/receipt before one
+        // final review notice. Do not announce a failure partway through it.
+        return false;
       }
       const remote = response.data;
       const persisted = submissions(remote?.submissions);

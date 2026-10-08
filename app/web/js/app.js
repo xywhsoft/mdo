@@ -178,7 +178,10 @@ export async function boot() {
     draftStatus.hidden = !draftError || Boolean(bootstrapFailure()) ||
       (localServiceReconnecting && draftError.code === "network_error");
     const reason = draftError ? errorMessage(draftError) : "";
-    draftStatus.textContent = draftError ? t(draftErrorOperation === "read"
+    draftStatus.textContent = draftErrorOperation === "confirm" && draftError
+      ? t("draft.saveUnconfirmed", { reason: errorMessage(draftError.confirmationError ?? draftError) },
+        "暂时无法确认草稿保存结果，输入已保留：{reason}")
+      : draftError ? t(draftErrorOperation === "read"
       ? "draft.readFailed" : "draft.saveFailed", { error: reason },
       draftErrorOperation === "read" ? `无法读取草稿，输入已保留：${reason}`
         : `草稿未保存：${reason}`) : "";

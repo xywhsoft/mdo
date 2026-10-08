@@ -1,0 +1,38 @@
+[
+  {
+    "path": "js/app.js",
+    "bytes": 128190,
+    "sha256": "c4eb5b4eb7cb669b186ef055c793c792c6651117825259c1e00a2e12eb4d518d",
+    "equal": true
+  },
+  {
+    "path": "js/features/chat/draft-store.js",
+    "bytes": 32004,
+    "sha256": "5b11ac3a6bb9d2670c99a815379e45c2777969d8b17b881666ea08dec4f91c9e",
+    "equal": true
+  },
+  {
+    "path": "js/features/chat/draft-transport.js",
+    "bytes": 7029,
+    "sha256": "fdf01746c099ce7d816493db76c1cd6637402ad2e050b52f8cce1924de836b14",
+    "equal": true
+  },
+  {
+    "path": "lang/zh-CN.json",
+    "bytes": 122765,
+    "sha256": "54868dd0f60980791b3a09f1e3c95cd7b3d36d55f133ad097dcdd1a541e9fe03",
+    "equal": true
+  },
+  {
+    "path": "lang/en-US.json",
+    "bytes": 128385,
+    "sha256": "0c5da48b513e7c0b1fbe93c1762e7f8389273ab5d304ba78afb59d481eaaaf6e",
+    "equal": true
+  },
+  {
+    "path": "lang/ru-RU.json",
+    "bytes": 195710,
+    "sha256": "c3f2360cd4110cc2d264e7c67846e4cb8c5f422455288daf141a52559f1b1ec8",
+    "equal": true
+  }
+]

@@ -1,0 +1,9 @@
+{
+  "session_id": "V-OSL3oGURig2gojrdxXFSSKv2OceTuI",
+  "first_status": 200,
+  "repeated_status": 409,
+  "repeated_code": "draft_conflict",
+  "before_revision": 0,
+  "after_revision": 1,
+  "after_text": "one versioned logical save"
+}

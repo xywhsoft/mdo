@@ -19,8 +19,8 @@ test("a lost saved-text acknowledgement is confirmed by one read without another
     const store = createDraftStore({ onRestore() {}, onError() {}, onSaved() {} });
     store.select(key); assert.equal(await store.ensureLoaded(key), true);
     store.edit(key, "replacement input", [image], true);
-    assert.equal(await store.flush(key), false);
-    assert.equal(store.isDraftDurable(key, "replacement input", [image]), false);
+    assert.equal(await store.flush(key), true);
+    assert.equal(store.isDraftDurable(key, "replacement input", [image]), true);
     assert.equal(await store.refreshSessionSubmissions(key), true);
     assert.equal(store.isDraftDurable(key, "replacement input", [image]), true);
     assert.equal(store.isDraftDurable(key, "other input", [image]), false);
@@ -250,7 +250,7 @@ test("an edit before draft loading keeps the persisted run review guard", async 
         text: "prior text", attachments: [], run_admission_uncertain: true } });
     }
     saved = JSON.parse(options.body);
-    return Response.json({ ok: true, data: { revision: 2, ...saved } });
+    return Response.json({ ok: true, data: { ...saved, revision: 2 } });
   };
   try {
     const key = "default/slow-load";
