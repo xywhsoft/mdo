@@ -1,0 +1,302 @@
+{
+  "scope": "real ARM64 app C/TCC + HTTP API; browser/native UI separately",
+  "package": "org.xleaves.mdo.qa.conversation",
+  "stress_or_high_load": false,
+  "cases": [
+    {
+      "name": "retry",
+      "requests": 3,
+      "state": "succeeded",
+      "errors": 0
+    },
+    {
+      "name": "network",
+      "requests": 2,
+      "state": "succeeded",
+      "errors": 0
+    },
+    {
+      "name": "partial",
+      "requests": 2,
+      "state": "succeeded",
+      "errors": 0
+    },
+    {
+      "name": "quota",
+      "requests": 1,
+      "state": "failed",
+      "errors": 1,
+      "error_kind": "daily_token_limit"
+    },
+    {
+      "name": "cancel_backoff",
+      "requests_before_resume": 1,
+      "state": "cancelled",
+      "cancel_ms": 97
+    },
+    {
+      "name": "resume_continue_restart",
+      "resumed": true,
+      "credential_retained": true,
+      "draft_retained": true,
+      "errors": 0
+    }
+  ],
+  "calls": {
+    "retry": 3,
+    "network": 2,
+    "partial": 2,
+    "quota": 1,
+    "stop": 2,
+    "continue": 1,
+    "after-restart": 1
+  },
+  "requests": [
+    {
+      "prompt": "retry",
+      "attempt": 1,
+      "at": 2501077.046,
+      "users": [
+        "retry"
+      ]
+    },
+    {
+      "prompt": "retry",
+      "attempt": 2,
+      "at": 2501078.234,
+      "users": [
+        "retry"
+      ]
+    },
+    {
+      "prompt": "retry",
+      "attempt": 3,
+      "at": 2501080.437,
+      "users": [
+        "retry"
+      ]
+    },
+    {
+      "prompt": "network",
+      "attempt": 1,
+      "at": 2501080.546,
+      "users": [
+        "retry",
+        "network"
+      ]
+    },
+    {
+      "prompt": "network",
+      "attempt": 2,
+      "at": 2501081.75,
+      "users": [
+        "retry",
+        "network"
+      ]
+    },
+    {
+      "prompt": "partial",
+      "attempt": 1,
+      "at": 2501081.875,
+      "users": [
+        "retry",
+        "network",
+        "partial"
+      ]
+    },
+    {
+      "prompt": "partial",
+      "attempt": 2,
+      "at": 2501082.984,
+      "users": [
+        "retry",
+        "network",
+        "partial"
+      ]
+    },
+    {
+      "prompt": "quota",
+      "attempt": 1,
+      "at": 2501083.156,
+      "users": [
+        "quota"
+      ]
+    },
+    {
+      "prompt": "stop",
+      "attempt": 1,
+      "at": 2501083.296,
+      "users": [
+        "retry",
+        "network",
+        "partial",
+        "stop"
+      ]
+    },
+    {
+      "prompt": "stop",
+      "attempt": 2,
+      "at": 2501084.703,
+      "users": [
+        "retry",
+        "network",
+        "partial",
+        "stop"
+      ]
+    },
+    {
+      "prompt": "continue",
+      "attempt": 1,
+      "at": 2501084.843,
+      "users": [
+        "retry",
+        "network",
+        "partial",
+        "stop",
+        "continue"
+      ]
+    },
+    {
+      "prompt": "after-restart",
+      "attempt": 1,
+      "at": 2501085.843,
+      "users": [
+        "retry",
+        "network",
+        "partial",
+        "stop",
+        "continue",
+        "after-restart"
+      ]
+    }
+  ],
+  "url": "http://127.0.0.1:55286/#/projects/default/sessions/V-OSLCUo6NNPvrM56liLEScPfvrcjpL6",
+  "calls_after_browser": {
+    "retry": 3,
+    "network": 2,
+    "partial": 2,
+    "quota": 1,
+    "stop": 2,
+    "continue": 1,
+    "after-restart": 1
+  },
+  "requests_after_browser": [
+    {
+      "prompt": "retry",
+      "attempt": 1,
+      "at": 2501077.046,
+      "users": [
+        "retry"
+      ]
+    },
+    {
+      "prompt": "retry",
+      "attempt": 2,
+      "at": 2501078.234,
+      "users": [
+        "retry"
+      ]
+    },
+    {
+      "prompt": "retry",
+      "attempt": 3,
+      "at": 2501080.437,
+      "users": [
+        "retry"
+      ]
+    },
+    {
+      "prompt": "network",
+      "attempt": 1,
+      "at": 2501080.546,
+      "users": [
+        "retry",
+        "network"
+      ]
+    },
+    {
+      "prompt": "network",
+      "attempt": 2,
+      "at": 2501081.75,
+      "users": [
+        "retry",
+        "network"
+      ]
+    },
+    {
+      "prompt": "partial",
+      "attempt": 1,
+      "at": 2501081.875,
+      "users": [
+        "retry",
+        "network",
+        "partial"
+      ]
+    },
+    {
+      "prompt": "partial",
+      "attempt": 2,
+      "at": 2501082.984,
+      "users": [
+        "retry",
+        "network",
+        "partial"
+      ]
+    },
+    {
+      "prompt": "quota",
+      "attempt": 1,
+      "at": 2501083.156,
+      "users": [
+        "quota"
+      ]
+    },
+    {
+      "prompt": "stop",
+      "attempt": 1,
+      "at": 2501083.296,
+      "users": [
+        "retry",
+        "network",
+        "partial",
+        "stop"
+      ]
+    },
+    {
+      "prompt": "stop",
+      "attempt": 2,
+      "at": 2501084.703,
+      "users": [
+        "retry",
+        "network",
+        "partial",
+        "stop"
+      ]
+    },
+    {
+      "prompt": "continue",
+      "attempt": 1,
+      "at": 2501084.843,
+      "users": [
+        "retry",
+        "network",
+        "partial",
+        "stop",
+        "continue"
+      ]
+    },
+    {
+      "prompt": "after-restart",
+      "attempt": 1,
+      "at": 2501085.843,
+      "users": [
+        "retry",
+        "network",
+        "partial",
+        "stop",
+        "continue",
+        "after-restart"
+      ]
+    }
+  ]
+}

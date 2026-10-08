@@ -1,0 +1,40 @@
+{
+  "source_commit": "b64de81fc9bda77b98c2473be0ef3e0155af4c23",
+  "xs_commit": "3232f7b8efb02fdd6bf63a508ed1e69654d6759c",
+  "native": {
+    "schema_version": 1,
+    "profile_sha256": "2829d871dac1a12a70503f9b6116adaa2aa9556a53ea139df60aaa81cbb7a19b",
+    "revision": "3232f7b8efb02fdd6bf63a508ed1e69654d6759c",
+    "extensions": [
+      "xllm",
+      "xllm-session",
+      "xwork",
+      "webview",
+      "image"
+    ],
+    "icon_sha256": null,
+    "binary_sha256": "60c1cc4206624f251ba24a7734311576f23e9430736aa671831e963abf48f75e",
+    "binary_bytes": 2641480
+  },
+  "package": "org.xleaves.mdo.qa.conversation",
+  "version_code": 30000030,
+  "debuggable": true,
+  "edition": "lite",
+  "app_xrtpack_sha256": "76f04be852232cd8bb003514147fad44e2b021fc55c3b2fa30efe80f2fc168b3",
+  "apk": {
+    "path": ".build/conversation-acceptance/android-current/mdo-conversation-qa.apk",
+    "bytes": 4089069,
+    "sha256": "3eb8b011e081b3de65ccd514eb855512c1095a47e2aba5c2e7fe36241d76b1b0"
+  },
+  "device": {
+    "abi": "arm64-v8a",
+    "model": "RMX5090",
+    "webview": "138.0.7204.179"
+  },
+  "signature_v2": true,
+  "signature_v3": true,
+  "page_alignment_16k": true,
+  "native_ui_tested": false,
+  "daily_app_overwritten": false,
+  "later_browser_connection": "ERR_EMPTY_RESPONSE; subsequent package list did not contain the QA package; cause not established"
+}
