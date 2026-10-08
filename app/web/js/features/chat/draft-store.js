@@ -1,5 +1,6 @@
 import { api, resourceId } from "../../api/client.js";
 import { isTransientReadError } from "../../api/read-recovery.js";
+import { createRequestRecovery } from "../../api/request-recovery.js";
 import { t } from "../../i18n.js";
 
 const SAVE_DELAY_MS = 300;
@@ -124,10 +125,13 @@ export function projectDraftKey(projectId) {
 }
 
 export function createDraftStore({ onRestore, onError, onSaved, onLoaded = () => {},
-  isWritePaused = () => false, random = Math.random }) {
+  isWritePaused = () => false, random = Math.random,
+  createRecovery = createRequestRecovery }) {
   const entries = new Map();
+  const reads = new Set();
   const encoder = new TextEncoder();
   let selected = "";
+  let readPaused = false;
 
   function entry(key) {
     let value = entries.get(key);
@@ -145,7 +149,7 @@ export function createDraftStore({ onRestore, onError, onSaved, onLoaded = () =>
   function schedule(key, immediate = false) {
     const current = entry(key);
     window.clearTimeout(current.timer);
-    if (current.conflict || isWritePaused()) return;
+    if (readPaused || current.conflict || isWritePaused()) return;
     if (!current.loaded && current.error) {
       scheduleRead(key);
       return;
@@ -156,7 +160,7 @@ export function createDraftStore({ onRestore, onError, onSaved, onLoaded = () =>
 
   function scheduleRead(key) {
     const current = entry(key);
-    if (current.loaded || current.conflict || current.readTimer ||
+    if (readPaused || current.loaded || current.conflict || current.readTimer ||
         isWritePaused() || !isTransientReadError(current.error)) return;
     // Reading the saved revision is required before a cold editor can save.
     // Keep local edits in memory while retrying that read, without polling at
@@ -170,12 +174,17 @@ export function createDraftStore({ onRestore, onError, onSaved, onLoaded = () =>
 
   async function load(key) {
     const current = entry(key);
-    if (current.loaded) return;
+    if (readPaused || current.loaded) return;
     if (current.loading) return current.loading;
     window.clearTimeout(current.readTimer); current.readTimer = 0;
+    // The editor stays usable while this cold read recovers. Its revision and
+    // saved submission guards must be known before saving or sending input.
+    // One bounded recovery owns fetch and JSON; never retry a draft write here.
+    const recovery = createRecovery({ eventTarget: null });
+    reads.add(recovery);
     current.loading = (async () => {
       try {
-        const response = await api.get(endpoint(key));
+        const response = await recovery.request(signal => api.get(endpoint(key), { signal }));
         current.revision = Number(response.data.revision);
         // A local edit may precede the GET response. Never clear a persisted
         // review guard while saving that edit.
@@ -217,9 +226,11 @@ export function createDraftStore({ onRestore, onError, onSaved, onLoaded = () =>
         if (selected === key && !current.dirty) onSaved();
         if (selected === key) onLoaded();
       } catch (error) {
+        if (error?.name === "AbortError") return;
         current.error = error;
-        if (selected === key) onError(error);
+        if (selected === key) onError(error, "read");
       } finally {
+        reads.delete(recovery); recovery.dispose();
         current.loading = null;
         scheduleRead(key);
       }
@@ -426,16 +437,38 @@ export function createDraftStore({ onRestore, onError, onSaved, onLoaded = () =>
     const current = entry(key);
     onRestore(current.text, [...current.attachments], current.uncertainRun,
       current.submissions[0] ?? null, [...current.submissions]);
-    if (current.error) onError(current.error);
+    if (current.error) onError(current.error, current.loaded ? "save" : "read");
     else onSaved();
     if (!current.loaded) void load(key);
     else if (current.dirty && !current.oversized) schedule(key, true);
   }
 
   window.addEventListener("pagehide", () => {
-    for (const key of entries.keys())
-      if (entry(key).dirty) void flush(key);
+    readPaused = true;
+    for (const recovery of reads) recovery.dispose();
+    for (const [key, current] of entries) {
+      window.clearTimeout(current.readTimer); current.readTimer = 0;
+      window.clearTimeout(current.timer); current.timer = 0;
+      if (current.loaded && current.dirty) void flush(key);
+    }
   });
+  window.addEventListener("pageshow", () => {
+    readPaused = false;
+    resumeSaves({ retryReads: true });
+  });
+
+  function resumeSaves({ retryReads = false } = {}) {
+    if (readPaused || isWritePaused()) return;
+    for (const [key, current] of entries) {
+      if (!current.loaded && !current.conflict &&
+          (key === selected || current.dirty) &&
+          (!current.error || isTransientReadError(current.error)) &&
+          (!current.readTimer || retryReads))
+        void load(key);
+      else if (current.dirty && current.loaded && !current.conflict && !current.oversized)
+        schedule(key);
+    }
+  }
 
   function insertSubmission(key, value, index = entry(key).submissions.length) {
     const current = entry(key);
@@ -643,18 +676,7 @@ export function createDraftStore({ onRestore, onError, onSaved, onLoaded = () =>
       return ![...entries.values()].some(current => current.dirty || current.saving);
     },
     hasUnsaved: () => [...entries.values()].some(current => current.dirty || current.saving),
-    resumeSaves({ retryReads = false } = {}) {
-      if (isWritePaused()) return;
-      for (const [key, current] of entries) {
-        if (!current.loaded && !current.conflict &&
-            (key === selected || current.dirty) &&
-            (!current.error || isTransientReadError(current.error)) &&
-            (!current.readTimer || retryReads))
-          void load(key);
-        else if (current.dirty && current.loaded && !current.conflict && !current.oversized)
-          schedule(key);
-      }
-    },
+    resumeSaves,
     unsentSnapshots() {
       return [...entries].filter(([, current]) => current.text || current.attachments.length ||
           current.newTask || current.composerProfile || current.uncertainRun || current.submissions.length)

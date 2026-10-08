@@ -1350,6 +1350,7 @@
   "todo.notSynced": "Task plan has not synchronized. Check the tool result.",
   "draft.tooLarge": "Draft exceeds the 64 KiB save limit",
   "draft.saveFailed": "Draft not saved: {error}",
+  "draft.readFailed": "Could not read the draft; your input is kept: {error}",
   "pane.saveFailed": "Could not save panel layout: {error}",
   "pane.loadFailed": "Could not load panel layout: {error}",
   "pane.sidebarResize": "Resize session navigation",

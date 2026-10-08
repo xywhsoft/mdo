@@ -5,6 +5,8 @@ PUT saves it before its response body is held; two metadata reads return 503.
 Keep typing while recovery runs, send once the thumbnail appears, then send a
 follow-up. Create the printed stop file to collect evidence and stop this copy.
 Only loopback services and a disposable Home; no external model or credentials.
+With --draft-read-fault, only the selected session's cold draft read has a
+35-second held body and two failed retry GETs. Type before it finishes.
 """
 import argparse
 import base64
@@ -59,7 +61,33 @@ class Proxy(ForwardProxy):
         if self.headers.get("Upgrade", "").lower() == "websocket": return self.tunnel()
         if self.command == "GET" and self.path == "/__qa/image-state":
             with self.server.lock:
-                return self.reply(200, {"uploads": self.server.uploads, "confirmations": self.server.confirmations})
+                return self.reply(200, {"uploads": self.server.uploads, "confirmations": self.server.confirmations,
+                    "draft_reads": self.server.draft_reads, "draft_writes": self.server.draft_writes})
+        draft = self.path.startswith("/api/v1/") and self.path.endswith("/draft")
+        if draft and self.command == "PUT":
+            with self.server.lock: self.server.draft_writes.append({"path": self.path, "at": time.monotonic()})
+        if self.path == self.server.draft_fault_path and self.command == "GET" and self.server.draft_fault_enabled:
+            with self.server.lock:
+                number = len(self.server.draft_reads) + 1
+                record = {"path": self.path, "at": time.monotonic(), "number": number}
+                self.server.draft_reads.append(record)
+            if number in (2, 3):
+                record["status"] = 503
+                return self.reply(503, {"ok": False, "error": {"code": "temporary_unavailable", "message": "owned draft read fault"}})
+            if number == 1:
+                upstream = http.client.HTTPConnection("127.0.0.1", self.server.native, timeout=10)
+                try:
+                    upstream.request("GET", self.path)
+                    response = upstream.getresponse(); raw = response.read()
+                    record["status"] = response.status
+                    self.send_response(response.status)
+                    self.send_header("Content-Type", "application/json")
+                    self.send_header("Content-Length", str(len(raw))); self.end_headers(); self.wfile.flush()
+                    self.server.stopped.wait(35)
+                    record["released_at"] = time.monotonic()
+                    self.wfile.write(raw)
+                finally: upstream.close()
+                return
         keyed = re.fullmatch(r"/api/v1/projects/default/sessions/[^/]+/attachments/[0-9a-f]{32}", self.path)
         info = re.fullmatch(r"/api/v1/projects/default/sessions/[^/]+/attachments/[0-9a-f]{32}/info", self.path)
         if self.command == "GET" and info:
@@ -99,6 +127,7 @@ def main():
     parser.add_argument("--packed", type=Path, required=True)
     parser.add_argument("--directory", type=Path, required=True)
     parser.add_argument("--resume", action="store_true", help="Reopen this fixture's validated previous Home")
+    parser.add_argument("--draft-read-fault", action="store_true", help="Hold the first cold draft body for 35 seconds, then fail two retry GETs")
     args = parser.parse_args(); base = args.directory.resolve()
     packed = args.packed.resolve()
     if args.resume:
@@ -117,6 +146,9 @@ def main():
     proxy.native = port; proxy.lock = threading.Lock(); proxy.phase = None; proxy.phases = []
     proxy.tunnels = {}; proxy.websockets = []; proxy.stopped = threading.Event()
     proxy.uploads = []; proxy.confirmations = []; proxy.failures = 0 if args.resume else 2
+    proxy.draft_fault_enabled = args.draft_read_fault
+    proxy.draft_fault_path = None
+    proxy.draft_reads = []; proxy.draft_writes = []
     threads = [threading.Thread(target=server.serve_forever, daemon=True) for server in (model, proxy)]
     for thread in threads: thread.start()
     process = start(native, args.packed.resolve(), base / "home",
@@ -145,9 +177,11 @@ def main():
             identifier = previous.get("session_id") or previous["runs"]["items"][0]["session_id"]
             task = call("GET", "/api/v1/projects/default/sessions/" + identifier)
         else:
-            task = call("POST", "/api/v1/sessions", {"project_id": "default", "title": "Image deadline",
+            task = call("POST", "/api/v1/sessions", {"project_id": "default",
+                "title": "Draft read deadline" if args.draft_read_fault else "Image deadline",
                 "model_id": "queue-fixture", "reasoning_effort": "none", "permission_profile": "balanced"}, 201)
         path = "/api/v1/projects/default/sessions/" + task["id"]
+        proxy.draft_fault_path = path + "/draft"
         print(json.dumps({"url": f"http://127.0.0.1:{proxy.server_port}/#/projects/default/sessions/{task['id']}",
             "native_port": port, "proxy_port": proxy.server_port, "stop_file": str(base / "stop")}), flush=True)
         deadline = time.monotonic() + 600
@@ -158,6 +192,7 @@ def main():
         attachments = base / "home/sessions/default" / task["id"] / "attachments"
         proof = {"resumed": args.resume, "session_id": task["id"], "uploads": proxy.uploads, "confirmations": proxy.confirmations,
             "websockets": proxy.websockets, "model_calls": Model.calls,
+            "draft_reads": proxy.draft_reads, "draft_writes": proxy.draft_writes,
             "user_inputs": [event.get("text", "") for event in events if event["kind"] == "agent_start"],
             "final_model_errors": sum(event["kind"] == "error" for event in events),
             "event_kinds": dict(Counter(event["kind"] for event in events)),

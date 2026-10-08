@@ -1,0 +1,249 @@
+{
+  "resumed": false,
+  "session_id": "V-OSKvtL05voigNrTCH8_ZJIjZ2KsPbF",
+  "uploads": [],
+  "confirmations": [],
+  "websockets": [
+    {
+      "started": 2496372.296,
+      "status": 101,
+      "upstream_bytes": 293,
+      "downstream_bytes": 583,
+      "opened": 2496372.296,
+      "closed": 2496455.656
+    },
+    {
+      "started": 2496456.015,
+      "status": 101,
+      "upstream_bytes": 719,
+      "downstream_bytes": 9486,
+      "opened": 2496456.015,
+      "closed": 2496522.375
+    }
+  ],
+  "model_calls": [
+    {
+      "text": "DRAFT_RECOVERED_INPUT\n\u8349\u7a3f\u6062\u590d\u65f6\uff0c\u4fdd\u7559\u8fd9\u6761\u4e2d\u6587\u8f93\u5165\u3002",
+      "images": []
+    },
+    {
+      "text": "DRAFT_READ_FOLLOWUP\n\u7ee7\u7eed\u6b63\u5e38\u5bf9\u8bdd\u3002",
+      "images": []
+    }
+  ],
+  "draft_reads": [
+    {
+      "path": "/api/v1/projects/default/sessions/V-OSKvtL05voigNrTCH8_ZJIjZ2KsPbF/draft",
+      "at": 2496372.359,
+      "number": 1,
+      "status": 200,
+      "released_at": 2496407.375
+    },
+    {
+      "path": "/api/v1/projects/default/sessions/V-OSKvtL05voigNrTCH8_ZJIjZ2KsPbF/draft",
+      "at": 2496380.89,
+      "number": 2,
+      "status": 503
+    },
+    {
+      "path": "/api/v1/projects/default/sessions/V-OSKvtL05voigNrTCH8_ZJIjZ2KsPbF/draft",
+      "at": 2496381.953,
+      "number": 3,
+      "status": 503
+    },
+    {
+      "path": "/api/v1/projects/default/sessions/V-OSKvtL05voigNrTCH8_ZJIjZ2KsPbF/draft",
+      "at": 2496384.296,
+      "number": 4
+    },
+    {
+      "path": "/api/v1/projects/default/sessions/V-OSKvtL05voigNrTCH8_ZJIjZ2KsPbF/draft",
+      "at": 2496384.296,
+      "number": 5
+    },
+    {
+      "path": "/api/v1/projects/default/sessions/V-OSKvtL05voigNrTCH8_ZJIjZ2KsPbF/draft",
+      "at": 2496384.296,
+      "number": 6
+    },
+    {
+      "path": "/api/v1/projects/default/sessions/V-OSKvtL05voigNrTCH8_ZJIjZ2KsPbF/draft",
+      "at": 2496384.312,
+      "number": 7
+    },
+    {
+      "path": "/api/v1/projects/default/sessions/V-OSKvtL05voigNrTCH8_ZJIjZ2KsPbF/draft",
+      "at": 2496384.453,
+      "number": 8
+    },
+    {
+      "path": "/api/v1/projects/default/sessions/V-OSKvtL05voigNrTCH8_ZJIjZ2KsPbF/draft",
+      "at": 2496456.031,
+      "number": 9
+    },
+    {
+      "path": "/api/v1/projects/default/sessions/V-OSKvtL05voigNrTCH8_ZJIjZ2KsPbF/draft",
+      "at": 2496456.109,
+      "number": 10
+    },
+    {
+      "path": "/api/v1/projects/default/sessions/V-OSKvtL05voigNrTCH8_ZJIjZ2KsPbF/draft",
+      "at": 2496456.14,
+      "number": 11
+    },
+    {
+      "path": "/api/v1/projects/default/sessions/V-OSKvtL05voigNrTCH8_ZJIjZ2KsPbF/draft",
+      "at": 2496456.187,
+      "number": 12
+    },
+    {
+      "path": "/api/v1/projects/default/sessions/V-OSKvtL05voigNrTCH8_ZJIjZ2KsPbF/draft",
+      "at": 2496476.14,
+      "number": 13
+    },
+    {
+      "path": "/api/v1/projects/default/sessions/V-OSKvtL05voigNrTCH8_ZJIjZ2KsPbF/draft",
+      "at": 2496476.265,
+      "number": 14
+    },
+    {
+      "path": "/api/v1/projects/default/sessions/V-OSKvtL05voigNrTCH8_ZJIjZ2KsPbF/draft",
+      "at": 2496476.437,
+      "number": 15
+    },
+    {
+      "path": "/api/v1/projects/default/sessions/V-OSKvtL05voigNrTCH8_ZJIjZ2KsPbF/draft",
+      "at": 2496507.25,
+      "number": 16
+    },
+    {
+      "path": "/api/v1/projects/default/sessions/V-OSKvtL05voigNrTCH8_ZJIjZ2KsPbF/draft",
+      "at": 2496507.406,
+      "number": 17
+    }
+  ],
+  "draft_writes": [
+    {
+      "path": "/api/v1/projects/default/sessions/V-OSKvtL05voigNrTCH8_ZJIjZ2KsPbF/draft",
+      "at": 2496384.296
+    },
+    {
+      "path": "/api/v1/projects/default/sessions/V-OSKvtL05voigNrTCH8_ZJIjZ2KsPbF/draft",
+      "at": 2496476.093
+    },
+    {
+      "path": "/api/v1/projects/default/sessions/V-OSKvtL05voigNrTCH8_ZJIjZ2KsPbF/draft",
+      "at": 2496476.14
+    },
+    {
+      "path": "/api/v1/projects/default/sessions/V-OSKvtL05voigNrTCH8_ZJIjZ2KsPbF/draft",
+      "at": 2496507.187
+    },
+    {
+      "path": "/api/v1/projects/default/sessions/V-OSKvtL05voigNrTCH8_ZJIjZ2KsPbF/draft",
+      "at": 2496507.265
+    }
+  ],
+  "user_inputs": [
+    "DRAFT_RECOVERED_INPUT\n\u8349\u7a3f\u6062\u590d\u65f6\uff0c\u4fdd\u7559\u8fd9\u6761\u4e2d\u6587\u8f93\u5165\u3002",
+    "DRAFT_READ_FOLLOWUP\n\u7ee7\u7eed\u6b63\u5e38\u5bf9\u8bdd\u3002"
+  ],
+  "final_model_errors": 0,
+  "event_kinds": {
+    "agent_start": 2,
+    "model_start": 2,
+    "model_text_delta": 2,
+    "model_done": 2,
+    "agent_done": 2
+  },
+  "attachment_files": {},
+  "queue": {
+    "items": [],
+    "discard_images": []
+  },
+  "draft": {
+    "revision": 9,
+    "text": "",
+    "attachments": [],
+    "run_admission_uncertain": false,
+    "submission": null,
+    "submissions": []
+  },
+  "runs": {
+    "automatic": true,
+    "active_runs": 0,
+    "starting_runs": 0,
+    "retained_runs": 2,
+    "max_active": 8,
+    "max_retained": 64,
+    "runs_started": 2,
+    "runs_completed": 2,
+    "runs_failed": 0,
+    "items": [
+      {
+        "id": "run-V-OSKwSy1QsNXmajH6QVWm6RBH_wlEiK",
+        "project_id": "default",
+        "session_id": "V-OSKvtL05voigNrTCH8_ZJIjZ2KsPbF",
+        "agent_run_id": 2,
+        "agent_id": "mdo.default",
+        "model_id": "queue-fixture",
+        "protocol": "openai-chat-completions",
+        "reasoning_effort": "none",
+        "state": "succeeded",
+        "result": "ok",
+        "error_code": "none",
+        "terminal": true,
+        "cancel_requested": false,
+        "resume": false,
+        "client_resume_id": "",
+        "created_at": 1791481450727865,
+        "started_at": 1791481450734101,
+        "ended_at": 1791481450764781,
+        "config_revision": 4,
+        "model_generation": 3,
+        "module_generation": 1,
+        "skill_generation": 1,
+        "memory_generation": 1,
+        "agent_turns": 1,
+        "model_calls": 1,
+        "tool_calls": 0,
+        "compactions": 0,
+        "final_text_available": true,
+        "final_text_truncated": false,
+        "final_text_bytes": 73
+      },
+      {
+        "id": "run-V-OSKwLYY5cQraisSomMR0Q60XZQ2m2C",
+        "project_id": "default",
+        "session_id": "V-OSKvtL05voigNrTCH8_ZJIjZ2KsPbF",
+        "agent_run_id": 1,
+        "agent_id": "mdo.default",
+        "model_id": "queue-fixture",
+        "protocol": "openai-chat-completions",
+        "reasoning_effort": "none",
+        "state": "succeeded",
+        "result": "ok",
+        "error_code": "none",
+        "terminal": true,
+        "cancel_requested": false,
+        "resume": false,
+        "client_resume_id": "",
+        "created_at": 1791481419631716,
+        "started_at": 1791481419637141,
+        "ended_at": 1791481419659909,
+        "config_revision": 4,
+        "model_generation": 3,
+        "module_generation": 1,
+        "skill_generation": 1,
+        "memory_generation": 1,
+        "agent_turns": 1,
+        "model_calls": 1,
+        "tool_calls": 0,
+        "compactions": 0,
+        "final_text_available": true,
+        "final_text_truncated": false,
+        "final_text_bytes": 99
+      }
+    ]
+  }
+}

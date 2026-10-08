@@ -1,0 +1,213 @@
+{
+  "recording_started_after_recovery": true,
+  "trusted_ime_test_available": false,
+  "trusted_ime_limitation": "Input.imeSetComposition is unsupported by the available in-app browser",
+  "first_events": [
+    {
+      "kind": "MDO_DRAFT_QA",
+      "type": "input",
+      "at": 19873.599999904633,
+      "trusted": false,
+      "composing": false,
+      "data": null,
+      "value": "DRAFT_READ_AUTO_RECOVERY\n\u8bfb\u53d6\u6062\u590d\u540e\uff0c\u8bf7\u786e\u8ba4\u8fd9\u6761\u8349\u7a3f\u3002"
+    },
+    {
+      "kind": "MDO_DRAFT_STATUS",
+      "at": 19878.900000095367,
+      "hidden": true,
+      "text": "",
+      "sendDisabled": false
+    },
+    {
+      "kind": "MDO_DRAFT_STATUS",
+      "at": 20375.099999904633,
+      "hidden": true,
+      "text": "",
+      "sendDisabled": false
+    },
+    {
+      "kind": "MDO_DRAFT_STATUS",
+      "at": 20526.199999809265,
+      "hidden": true,
+      "text": "",
+      "sendDisabled": false
+    },
+    {
+      "kind": "MDO_DRAFT_STATUS",
+      "at": 20533.199999809265,
+      "hidden": true,
+      "text": "",
+      "sendDisabled": false
+    },
+    {
+      "kind": "MDO_DRAFT_STATUS",
+      "at": 20535,
+      "hidden": true,
+      "text": "",
+      "sendDisabled": false
+    },
+    {
+      "kind": "MDO_DRAFT_STATUS",
+      "at": 74252.59999990463,
+      "hidden": true,
+      "text": "",
+      "sendDisabled": false
+    },
+    {
+      "kind": "MDO_DRAFT_STATUS",
+      "at": 74252.90000009537,
+      "hidden": true,
+      "text": "",
+      "sendDisabled": false
+    },
+    {
+      "kind": "MDO_DRAFT_STATUS",
+      "at": 74289.09999990463,
+      "hidden": true,
+      "text": "",
+      "sendDisabled": false
+    },
+    {
+      "kind": "MDO_DRAFT_STATUS",
+      "at": 74295,
+      "hidden": true,
+      "text": "",
+      "sendDisabled": false
+    },
+    {
+      "kind": "MDO_DRAFT_SETTER",
+      "old": "DRAFT_READ_AUTO_RECOVERY\n\u8bfb\u53d6\u6062\u590d\u540e\uff0c\u8bf7\u786e\u8ba4\u8fd9\u6761\u8349\u7a3f\u3002",
+      "next": "",
+      "at": 74295.2999997139,
+      "stack": "Error\n    at HTMLTextAreaElement.set (<anonymous>:1:592)\n    at clearSubmittedComposer (http://127.0.0.1:55838/js/app.js:2025:18)\n    at onPersisted (http://127.0.0.1:55838/js/app.js:823:7)\n    at acknowledge (http://127.0.0.1:55838/js/features/chat/submission-controller.js:36:5)\n    at Object.submit (http://127.0.0.1:55838/js/features/chat/submission-controller.js:253:7)\n    at async submitExistingSession (http://127.0.0.1:55838/js/app.js:2038:7)\n    at async submitPrompt (http://127.0.0.1:55838/js/app.js:2093:7)"
+    },
+    {
+      "kind": "MDO_DRAFT_STATUS",
+      "at": 74302.90000009537,
+      "hidden": true,
+      "text": "",
+      "sendDisabled": false
+    },
+    {
+      "kind": "MDO_DRAFT_STATUS",
+      "at": 74311.19999980927,
+      "hidden": true,
+      "text": "",
+      "sendDisabled": false
+    },
+    {
+      "kind": "MDO_DRAFT_STATUS",
+      "at": 74318.90000009537,
+      "hidden": true,
+      "text": "",
+      "sendDisabled": false
+    },
+    {
+      "kind": "MDO_DRAFT_STATUS",
+      "at": 74350.5,
+      "hidden": true,
+      "text": "",
+      "sendDisabled": true
+    },
+    {
+      "kind": "MDO_DRAFT_STATUS",
+      "at": 74369.7999997139,
+      "hidden": true,
+      "text": "",
+      "sendDisabled": true
+    },
+    {
+      "kind": "MDO_DRAFT_STATUS",
+      "at": 74372,
+      "hidden": true,
+      "text": "",
+      "sendDisabled": false
+    },
+    {
+      "kind": "MDO_DRAFT_STATUS",
+      "at": 74382.40000009537,
+      "hidden": true,
+      "text": "",
+      "sendDisabled": false
+    },
+    {
+      "kind": "MDO_DRAFT_STATUS",
+      "at": 74421.69999980927,
+      "hidden": true,
+      "text": "",
+      "sendDisabled": false
+    },
+    {
+      "kind": "MDO_DRAFT_STATUS",
+      "at": 74431.90000009537,
+      "hidden": true,
+      "text": "",
+      "sendDisabled": false
+    },
+    {
+      "kind": "MDO_DRAFT_STATUS",
+      "at": 74434.09999990463,
+      "hidden": true,
+      "text": "",
+      "sendDisabled": false
+    },
+    {
+      "kind": "MDO_DRAFT_STATUS",
+      "at": 74449.59999990463,
+      "hidden": true,
+      "text": "",
+      "sendDisabled": false
+    },
+    {
+      "kind": "MDO_DRAFT_STATUS",
+      "at": 74455.69999980927,
+      "hidden": true,
+      "text": "",
+      "sendDisabled": false
+    },
+    {
+      "kind": "MDO_DRAFT_STATUS",
+      "at": 74469.90000009537,
+      "hidden": true,
+      "text": "",
+      "sendDisabled": false
+    },
+    {
+      "kind": "MDO_DRAFT_STATUS",
+      "at": 74525.19999980927,
+      "hidden": true,
+      "text": "",
+      "sendDisabled": false
+    },
+    {
+      "kind": "MDO_DRAFT_STATUS",
+      "at": 74534.7999997139,
+      "hidden": true,
+      "text": "",
+      "sendDisabled": false
+    },
+    {
+      "kind": "MDO_DRAFT_STATUS",
+      "at": 74565.5,
+      "hidden": true,
+      "text": "",
+      "sendDisabled": false
+    },
+    {
+      "kind": "MDO_DRAFT_STATUS",
+      "at": 74571.2999997139,
+      "hidden": true,
+      "text": "",
+      "sendDisabled": false
+    },
+    {
+      "kind": "MDO_DRAFT_STATUS",
+      "at": 74572.59999990463,
+      "hidden": true,
+      "text": "",
+      "sendDisabled": false
+    }
+  ],
+  "final_events": []
+}

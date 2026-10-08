@@ -172,13 +172,16 @@ export async function boot() {
   const composerProfileReset = $("#composer-profile-reset");
   const draftStatus = $("#draft-status");
   let draftError = null;
+  let draftErrorOperation = "save";
   let localServiceReconnecting = false;
   function renderDraftStatus() {
     draftStatus.hidden = !draftError || Boolean(bootstrapFailure()) ||
       (localServiceReconnecting && draftError.code === "network_error");
     const reason = draftError ? errorMessage(draftError) : "";
-    draftStatus.textContent = draftError ? t("draft.saveFailed",
-      { error: reason }, `草稿未保存：${reason}`) : "";
+    draftStatus.textContent = draftError ? t(draftErrorOperation === "read"
+      ? "draft.readFailed" : "draft.saveFailed", { error: reason },
+      draftErrorOperation === "read" ? `无法读取草稿，输入已保留：${reason}`
+        : `草稿未保存：${reason}`) : "";
   }
   const runStatus = $("#run-status");
   const runtimeState = $("#runtime-state");
@@ -794,8 +797,9 @@ export async function boot() {
           navigation.get().projectId !== pendingProject)
         navigation.revalidate();
     },
-    onError(error) {
+    onError(error, operation = "save") {
       draftError = error;
+      draftErrorOperation = operation;
       renderDraftStatus();
     },
     onSaved() {

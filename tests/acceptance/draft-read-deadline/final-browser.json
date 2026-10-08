@@ -1,0 +1,13 @@
+{
+  "focused": "prompt",
+  "hint": "Enter 发送 · Shift Enter 换行",
+  "prompt": "",
+  "sendDisabled": false,
+  "status": "",
+  "statusHidden": true,
+  "unmatched_reply_selector_probe": {
+    "selector": ".message-content",
+    "matches": [],
+    "validation": "Replies were confirmed by continued.png and native session events instead."
+  }
+}

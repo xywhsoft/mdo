@@ -1,0 +1,7 @@
+{
+  "hint": "正在恢复草稿…",
+  "prompt": "DRAFT_READ_TYPED_WHILE_LOADING\n草稿读取卡住时，保留这条输入。",
+  "sendDisabled": true,
+  "status": "",
+  "statusHidden": true
+}

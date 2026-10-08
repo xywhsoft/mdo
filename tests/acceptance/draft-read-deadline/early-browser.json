@@ -1,0 +1,8 @@
+{
+  "focused": "prompt",
+  "hint": "正在恢复草稿…",
+  "prompt": "DRAFT_RECOVERED_INPUT\n草稿恢复时，保留这条中文输入。",
+  "sendDisabled": true,
+  "status": "",
+  "statusHidden": true
+}

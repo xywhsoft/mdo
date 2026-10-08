@@ -1,0 +1,42 @@
+{
+  "baseline": {
+    "tests": 4,
+    "pass": 0,
+    "fail": 4
+  },
+  "node": {
+    "tests": 88,
+    "pass": 88,
+    "fail": 0,
+    "cancelled": 0,
+    "skipped": 0
+  },
+  "files": [
+    "test_draft_read_deadline",
+    "test_draft_read_recovery",
+    "test_draft_store",
+    "test_new_task_controller",
+    "test_project_draft_selection",
+    "test_submission_controller",
+    "test_write_token",
+    "test_composer_agent_defaults",
+    "test_project_purge_execution",
+    "test_project_purge_recovery"
+  ],
+  "frontend_contracts": {
+    "tests": 4,
+    "pass": 4
+  },
+  "browser": {
+    "typed_during_cold_wait": true,
+    "text_preserved": true,
+    "reload_after_save_preserved": true,
+    "final_draft_empty": true,
+    "queue_empty": true,
+    "model_calls": 3,
+    "final_model_errors": 0,
+    "recovery_seconds": 11.937,
+    "late_response_seconds": 35.016,
+    "trusted_ime_root_cause_resolved": false
+  }
+}

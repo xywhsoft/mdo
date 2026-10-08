@@ -1,0 +1,82 @@
+{
+  "resumed": false,
+  "session_id": "V-OSKuLuWbdZy4fd1hzXxxSXHZQgKrDV",
+  "uploads": [],
+  "confirmations": [],
+  "websockets": [
+    {
+      "started": 2495955.703,
+      "status": 101,
+      "upstream_bytes": 400,
+      "downstream_bytes": 668,
+      "opened": 2495955.703,
+      "closed": 2496154.75
+    }
+  ],
+  "model_calls": [],
+  "draft_reads": [
+    {
+      "path": "/api/v1/projects/default/sessions/V-OSKuLuWbdZy4fd1hzXxxSXHZQgKrDV/draft",
+      "at": 2495955.687,
+      "number": 1,
+      "status": 200,
+      "released_at": 2495990.687
+    },
+    {
+      "path": "/api/v1/projects/default/sessions/V-OSKuLuWbdZy4fd1hzXxxSXHZQgKrDV/draft",
+      "at": 2495990.718,
+      "number": 2,
+      "status": 503
+    },
+    {
+      "path": "/api/v1/projects/default/sessions/V-OSKuLuWbdZy4fd1hzXxxSXHZQgKrDV/draft",
+      "at": 2495990.718,
+      "number": 3,
+      "status": 503
+    },
+    {
+      "path": "/api/v1/projects/default/sessions/V-OSKuLuWbdZy4fd1hzXxxSXHZQgKrDV/draft",
+      "at": 2495990.718,
+      "number": 4
+    },
+    {
+      "path": "/api/v1/projects/default/sessions/V-OSKuLuWbdZy4fd1hzXxxSXHZQgKrDV/draft",
+      "at": 2495990.859,
+      "number": 5
+    }
+  ],
+  "draft_writes": [
+    {
+      "path": "/api/v1/projects/default/sessions/V-OSKuLuWbdZy4fd1hzXxxSXHZQgKrDV/draft",
+      "at": 2495990.703
+    }
+  ],
+  "user_inputs": [],
+  "final_model_errors": 0,
+  "event_kinds": {},
+  "attachment_files": {},
+  "queue": {
+    "items": [],
+    "discard_images": []
+  },
+  "draft": {
+    "revision": 1,
+    "text": "DRAFT_READ_TYPED_WHILE_LOADING\n\u8349\u7a3f\u8bfb\u53d6\u5361\u4f4f\u65f6\uff0c\u4fdd\u7559\u8fd9\u6761\u8f93\u5165\u3002",
+    "attachments": [],
+    "run_admission_uncertain": false,
+    "submission": null,
+    "submissions": []
+  },
+  "runs": {
+    "automatic": true,
+    "active_runs": 0,
+    "starting_runs": 0,
+    "retained_runs": 0,
+    "max_active": 8,
+    "max_retained": 64,
+    "runs_started": 0,
+    "runs_completed": 0,
+    "runs_failed": 0,
+    "items": []
+  }
+}

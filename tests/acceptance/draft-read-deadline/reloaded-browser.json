@@ -1,0 +1,7 @@
+{
+  "focused": "prompt",
+  "hint": "Enter 发送 · Shift Enter 换行",
+  "prompt": "DRAFT_RECOVERED_INPUT\n草稿恢复时，保留这条中文输入。",
+  "sendDisabled": false,
+  "statusHidden": true
+}

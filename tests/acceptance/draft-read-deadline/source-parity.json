@@ -1,0 +1,32 @@
+[
+  {
+    "path": "js/app.js",
+    "bytes": 127952,
+    "sha256": "466dcff5fe1de90fc990d32146b8f22bef623367545e3fbc34605fe610c3d62c",
+    "equal": true
+  },
+  {
+    "path": "js/features/chat/draft-store.js",
+    "bytes": 30286,
+    "sha256": "ff10ea1dec0c047514ecf259dd681a81332285392179f56b37405ac2f874ed8a",
+    "equal": true
+  },
+  {
+    "path": "lang/zh-CN.json",
+    "bytes": 124586,
+    "sha256": "38c8ea7d09ef784d4f9aec6d502271097101c2650fab4963138eedd0437f8f5c",
+    "equal": true
+  },
+  {
+    "path": "lang/en-US.json",
+    "bytes": 130204,
+    "sha256": "67e066c203bb91bf6e1594aa614bbd88e0438de86aad8a164714dfe33bead4de",
+    "equal": true
+  },
+  {
+    "path": "lang/ru-RU.json",
+    "bytes": 197453,
+    "sha256": "fb24b7e683c8e72214d867be3a0ba283e4df72fc83cb270e114c346c851cec37",
+    "equal": true
+  }
+]

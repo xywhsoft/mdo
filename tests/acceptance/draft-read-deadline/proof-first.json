@@ -1,0 +1,166 @@
+{
+  "resumed": false,
+  "session_id": "V-OSKvQgK_2PHTR06dmPr8GbCyrr0G2j",
+  "uploads": [],
+  "confirmations": [],
+  "websockets": [
+    {
+      "started": 2496243.546,
+      "status": 101,
+      "upstream_bytes": 498,
+      "downstream_bytes": 3840,
+      "opened": 2496243.546,
+      "closed": 2496335.171
+    }
+  ],
+  "model_calls": [
+    {
+      "text": "DRAFT_READ_AUTO_RECOVERY\n\u8bfb\u53d6\u6062\u590d\u540e\uff0c\u8bf7\u786e\u8ba4\u8fd9\u6761\u8349\u7a3f\u3002",
+      "images": []
+    }
+  ],
+  "draft_reads": [
+    {
+      "path": "/api/v1/projects/default/sessions/V-OSKvQgK_2PHTR06dmPr8GbCyrr0G2j/draft",
+      "at": 2496243.609,
+      "number": 1,
+      "status": 200,
+      "released_at": 2496278.625
+    },
+    {
+      "path": "/api/v1/projects/default/sessions/V-OSKvQgK_2PHTR06dmPr8GbCyrr0G2j/draft",
+      "at": 2496252.093,
+      "number": 2,
+      "status": 503
+    },
+    {
+      "path": "/api/v1/projects/default/sessions/V-OSKvQgK_2PHTR06dmPr8GbCyrr0G2j/draft",
+      "at": 2496253.203,
+      "number": 3,
+      "status": 503
+    },
+    {
+      "path": "/api/v1/projects/default/sessions/V-OSKvQgK_2PHTR06dmPr8GbCyrr0G2j/draft",
+      "at": 2496255.562,
+      "number": 4
+    },
+    {
+      "path": "/api/v1/projects/default/sessions/V-OSKvQgK_2PHTR06dmPr8GbCyrr0G2j/draft",
+      "at": 2496255.578,
+      "number": 5
+    },
+    {
+      "path": "/api/v1/projects/default/sessions/V-OSKvQgK_2PHTR06dmPr8GbCyrr0G2j/draft",
+      "at": 2496255.578,
+      "number": 6
+    },
+    {
+      "path": "/api/v1/projects/default/sessions/V-OSKvQgK_2PHTR06dmPr8GbCyrr0G2j/draft",
+      "at": 2496255.578,
+      "number": 7
+    },
+    {
+      "path": "/api/v1/projects/default/sessions/V-OSKvQgK_2PHTR06dmPr8GbCyrr0G2j/draft",
+      "at": 2496263.64,
+      "number": 8
+    },
+    {
+      "path": "/api/v1/projects/default/sessions/V-OSKvQgK_2PHTR06dmPr8GbCyrr0G2j/draft",
+      "at": 2496317.406,
+      "number": 9
+    },
+    {
+      "path": "/api/v1/projects/default/sessions/V-OSKvQgK_2PHTR06dmPr8GbCyrr0G2j/draft",
+      "at": 2496317.531,
+      "number": 10
+    },
+    {
+      "path": "/api/v1/projects/default/sessions/V-OSKvQgK_2PHTR06dmPr8GbCyrr0G2j/draft",
+      "at": 2496317.671,
+      "number": 11
+    }
+  ],
+  "draft_writes": [
+    {
+      "path": "/api/v1/projects/default/sessions/V-OSKvQgK_2PHTR06dmPr8GbCyrr0G2j/draft",
+      "at": 2496263.296
+    },
+    {
+      "path": "/api/v1/projects/default/sessions/V-OSKvQgK_2PHTR06dmPr8GbCyrr0G2j/draft",
+      "at": 2496317.375
+    },
+    {
+      "path": "/api/v1/projects/default/sessions/V-OSKvQgK_2PHTR06dmPr8GbCyrr0G2j/draft",
+      "at": 2496317.406
+    }
+  ],
+  "user_inputs": [
+    "DRAFT_READ_AUTO_RECOVERY\n\u8bfb\u53d6\u6062\u590d\u540e\uff0c\u8bf7\u786e\u8ba4\u8fd9\u6761\u8349\u7a3f\u3002"
+  ],
+  "final_model_errors": 0,
+  "event_kinds": {
+    "agent_start": 1,
+    "model_start": 1,
+    "model_text_delta": 1,
+    "model_done": 1,
+    "agent_done": 1
+  },
+  "attachment_files": {},
+  "queue": {
+    "items": [],
+    "discard_images": []
+  },
+  "draft": {
+    "revision": 5,
+    "text": "",
+    "attachments": [],
+    "run_admission_uncertain": false,
+    "submission": null,
+    "submissions": []
+  },
+  "runs": {
+    "automatic": true,
+    "active_runs": 0,
+    "starting_runs": 0,
+    "retained_runs": 1,
+    "max_active": 8,
+    "max_retained": 64,
+    "runs_started": 1,
+    "runs_completed": 1,
+    "runs_failed": 0,
+    "items": [
+      {
+        "id": "run-V-OSKvki5Ah9e3e3GkzIrE8UtSMT8iK1",
+        "project_id": "default",
+        "session_id": "V-OSKvQgK_2PHTR06dmPr8GbCyrr0G2j",
+        "agent_run_id": 1,
+        "agent_id": "mdo.default",
+        "model_id": "queue-fixture",
+        "protocol": "openai-chat-completions",
+        "reasoning_effort": "none",
+        "state": "succeeded",
+        "result": "ok",
+        "error_code": "none",
+        "terminal": true,
+        "cancel_requested": false,
+        "resume": false,
+        "client_resume_id": "",
+        "created_at": 1791481260939446,
+        "started_at": 1791481260945729,
+        "ended_at": 1791481260975296,
+        "config_revision": 4,
+        "model_generation": 3,
+        "module_generation": 1,
+        "skill_generation": 1,
+        "memory_generation": 1,
+        "agent_turns": 1,
+        "model_calls": 1,
+        "tool_calls": 0,
+        "compactions": 0,
+        "final_text_available": true,
+        "final_text_truncated": false,
+        "final_text_bytes": 99
+      }
+    ]
+  }
+}
