@@ -32,6 +32,6 @@
   "limitations": [
     "No real Android file picker or saved-file verification",
     "Oversized fixture supplies size metadata instead of allocating a large file",
-    "No new packaged executable or APK built in this stage"
+    "Component-only record; the later Windows candidate is recorded separately in builds.json"
   ]
 }

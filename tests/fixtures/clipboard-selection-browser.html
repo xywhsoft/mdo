@@ -11,12 +11,22 @@ pre { white-space: pre-wrap; overflow-wrap: anywhere; }
 <p id="message">回复正文：保留正在阅读的选择范围。</p>
 <button id="copy" type="button">验证兼容复制与文字选择</button>
 <pre id="result">等待验证</pre>
+<label for="paste">粘贴核对</label>
+<textarea id="paste" placeholder="复制后在这里按 Ctrl+V"></textarea>
+<pre id="paste-result" role="status">尚未核对剪贴板内容</pre>
 <script type="module">
 import { copyText } from "/app/web/js/utils/clipboard.js?selection-probe";
 
 const copy = document.querySelector("#copy");
 const message = document.querySelector("#message");
 const output = document.querySelector("#result");
+const paste = document.querySelector("#paste");
+paste.addEventListener("input", () => {
+  const matched = paste.value === "mdo clipboard compatibility QA";
+  const result = document.querySelector("#paste-result");
+  result.dataset.passed = String(matched);
+  result.textContent = matched ? "剪贴板内容正确" : "粘贴内容不匹配";
+});
 // This owned fixture models WebViews without the asynchronous Clipboard API.
 Object.defineProperty(navigator, "clipboard", { configurable: true, value: undefined });
 copy.addEventListener("click", async () => {

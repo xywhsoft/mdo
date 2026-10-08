@@ -18,4 +18,14 @@ python tests/test_frontend_contract.py
 
 重现页面：复制 `app/web` 到独立临时目录，把 `tests/fixtures/file-download-browser.html` 放到其根目录，以 `python -m http.server --bind 127.0.0.1 --directory <临时目录>` 启动后访问该文件。该页面使用正式模块、语言包及样式，模拟监听器只读小文件，不写手机文件。
 
-限制：真实 Android 文件选择器、保存落盘和剪贴板仍待真机验证；本阶段没有生成或发布新安装包，不修改锁定的 XS 依赖。
+限制：真实 Android 文件选择器、保存落盘和剪贴板仍待真机验证；没有安装或发布新程序，不修改锁定的 XS 依赖。
+
+## 已提交源码的独立打包补充
+
+修复提交 `ee47023` 后，从干净工作区重新构建精简 Windows 宿主与 `mdo-export-final.exe`，未纳入主工作区其他未提交更改。记录见 `builds.json`。依赖锁、宿主配置及二进制哈希均已校验，七个内置前端文件与提交源码一致。
+
+该候选版通过真实 HTTP/TCC 恢复关联与重启围栏、历史编辑幂等重放、内置 VFS 完整备份/上传/预览/重启检查。真实工作台完成一轮回环模型回复和正式备份导出交接，一次模型请求，一次成功终态，零最终错误或浏览器控制台错误。`packed-conversation.jpg` 展示候选版工作台。
+
+剪贴板组件再次确认复制后的逆向文字选择与按钮焦点保持；内置浏览器使用独立虚拟剪贴板，真实 Ctrl+V 核对被连接器拒绝，系统剪贴板内容仍未确认。`clipboard-selection-browser.html` 增加普通浏览器可手动使用的粘贴核对区域，不改变生产复制行为。
+
+候选程序位于 `.build/conversation-acceptance/mdo-export-final.exe`，没有覆盖根目录日常版本或公开发布。实际下载落盘、Android 保存/粘贴以及同签名覆盖升级继续留待验证。

@@ -1,0 +1,104 @@
+{
+  "date": "2026-10-08",
+  "source_commit": "ee470236daee5109f98ee7e3cf9af39182fd8e5d",
+  "isolated_clean_source": true,
+  "locked_xserver_commit": "907744aac65e093a48a4a3192780dc36fd2fe430",
+  "candidate_path": ".build/conversation-acceptance/mdo-export-final.exe",
+  "candidate_bytes": 4417796,
+  "candidate_sha256": "bad591f784f878ee9c1a92dfd52c021b69816762039dffaf54a51e9c2cf4dd14",
+  "host_profile_sha256": "8a35d04162302781601b4e8b8c173721bf0d92a6dedb7b1da0e3d6a39fac6d86",
+  "host_sha256": "457a00f1b7471fe87aa6f44c01d0a98d1d85a4229e91970ec9207cb301b6c452",
+  "assets": [
+    {
+      "path": "/js/utils/file-download.js",
+      "status": 200,
+      "sha256": "32563c856f31c0d6e2be83e111207e7f0018e300da12fcd040e22becccf9e83e",
+      "source_match": true
+    },
+    {
+      "path": "/js/features/sessions/session-backup-export.js",
+      "status": 200,
+      "sha256": "27442158da85c660f91bf9a44721c94a041da45f17b0424120d7a93993b1ec1e",
+      "source_match": true
+    },
+    {
+      "path": "/js/features/settings/extension-panels.js",
+      "status": 200,
+      "sha256": "77634cea49b9c3660a799a090b1e565ef2de6979a1a0c81775b2c2c4327dd24c",
+      "source_match": true
+    },
+    {
+      "path": "/js/features/settings/store-panel.js",
+      "status": 200,
+      "sha256": "fa4b6d766ba6e1eabfe2a5730be861b8d6e9ec964248e5f5baabc014edd8297f",
+      "source_match": true
+    },
+    {
+      "path": "/lang/zh-CN.json",
+      "status": 200,
+      "sha256": "5b38c0c4fc73df76b066e6493b23dcaa7e06d79328b4fc526a310f22b045d670",
+      "source_match": true
+    },
+    {
+      "path": "/lang/en-US.json",
+      "status": 200,
+      "sha256": "6e03c2488f2d5dd74cd009e20f279107a659c62308b84fc03e866d95ad9e538a",
+      "source_match": true
+    },
+    {
+      "path": "/lang/ru-RU.json",
+      "status": 200,
+      "sha256": "c15f3f72204aa391d199ee4a2d94922055d815a36933fff98d229c2ad8021ab0",
+      "source_match": true
+    }
+  ],
+  "recovery_protocol": {
+    "passed": true,
+    "model_requests": 3,
+    "packed_sha256": "bad591f784f878ee9c1a92dfd52c021b69816762039dffaf54a51e9c2cf4dd14",
+    "checks": [
+      "invalid correlation IDs do not change history or start a model",
+      "accepted resume has the same correlation in the reply, run detail and run list",
+      "a busy/stale recovery is refused without another model call",
+      "legacy resume without a client ID still works",
+      "ending advances a closed recovery boundary; repeating its old guard changes nothing",
+      "host restart fences the old page and preserves files"
+    ]
+  },
+  "edit_protocol": {
+    "passed": true,
+    "checks": [
+      "invalid inputs, missing preconditions and source guards leave all session files unchanged",
+      "two replays return the original successful response without a second cut or revision change",
+      "changed replay parameters, a new ID with an old revision and a removed source are refused",
+      "a later session change invalidates cached replies; legacy guarded cuts still work",
+      "host restart fences the old page instead of replaying its writes",
+      "only the two explicitly started loopback model turns executed"
+    ],
+    "model_requests": 2,
+    "packed_sha256": "bad591f784f878ee9c1a92dfd52c021b69816762039dffaf54a51e9c2cf4dd14"
+  },
+  "packed_backup_probe": "PASS: embedded VFS backup/upload/preview/restart",
+  "browser": {
+    "model_calls": {
+      "EXPORT CANDIDATE QA": 1
+    },
+    "successful_run_end_events": 1,
+    "final_error_events": 0,
+    "console_errors": [],
+    "formal_backup_handoff": true,
+    "saved_file_confirmed": false
+  },
+  "clipboard": {
+    "legacy_copy_returned_success": true,
+    "backwards_selection_preserved": true,
+    "focus_preserved": true,
+    "actual_contents_verified": false,
+    "reason": "Browser Use virtual clipboard has no data to paste"
+  },
+  "limitations": [
+    "No real Android device detected",
+    "Android picker, saved files and clipboard remain pending",
+    "No user executable replaced; no APK or public website release in this stage"
+  ]
+}
