@@ -54,7 +54,8 @@ function appendOrCreate(items, streams, event, kind, role, key) {
   if (event.text_truncated) {
     item.textTruncated = true;
     (item.copySpans ??= []).push({ eventId: event.event_id,
-      kind: event.kind, start, end: item.text.length });
+      kind: event.kind, start, end: item.text.length,
+      ...(event.aggregate_end_id ? { endEventId: event.aggregate_end_id, epoch: event.projection_epoch } : {}) });
   }
   return item;
 }
@@ -453,7 +454,7 @@ export async function resolveTimelineCopyText(item, owner,
           span.start < offset || span.end < span.start || span.end > visible.length)
         return { text: visible, complete: false };
       const full = await readEventText(owner.projectId, owner.sessionId,
-        span.eventId, span.kind);
+        span.eventId, span.kind, { endEventId: span.endEventId, epoch: span.epoch });
       if (typeof full !== "string" || !full.startsWith(
         visible.slice(span.start, span.end)))
         return { text: visible, complete: false };
@@ -681,6 +682,20 @@ function timelineNode(item, handlers, projectId, sessionId, writable,
   }
   const sessionKey = `${projectId ?? ""}/${sessionId ?? ""}`;
   const owner = { projectId, sessionId };
+  if (item.textTruncated && ["assistant", "user"].includes(item.kind)) {
+    const full = element("button", { className: "conversation-gap", text: t("toolContent.loadFull"), attrs: { type: "button" } });
+    full.addEventListener("click", async () => {
+      full.disabled = true;
+      try {
+        const text = await resolveTimelineActionText(item, owner);
+        if (!body.isConnected) return;
+        clear(body);
+        if (item.kind === "assistant") body.append(renderMarkdown(text)); else body.textContent = text;
+        full.remove();
+      } catch (error) { toast(errorMessage(error), "error"); full.disabled = false; }
+    });
+    children.push(full);
+  }
   if (item.kind === "user" && projectId && sessionId &&
       item.attachments?.length) {
     const images = element("div", { className: "timeline-images" });

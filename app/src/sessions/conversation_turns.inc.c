@@ -63,6 +63,7 @@ xvalue* MdoSessionConversationTurns(const char* Project, const char* Session,
     uint64 End, Latest = 0u, FinalModelTurn = 0u, FinalRun = 0u;
     size_t Count = 0u, i;
     bool HasMore = false, Lost = false, HasAnswer = false;
+    char Epoch[65];
     xworkErrorInit(Error);
     if ( Limit == 0u || Limit > 64u ||
          !MdoEventsIdValid(Project, MDO_PROJECT_ID_CAPACITY) ||
@@ -73,6 +74,7 @@ xvalue* MdoSessionConversationTurns(const char* Project, const char* Session,
     }
     Reader = MdoEventReaderOpen(Path);
     if ( Reader == NULL ) goto fail;
+    if (!MdoViewEpoch(Reader, Epoch)) goto fail;
     memset(&Turn, 0, sizeof(Turn));
     Turn.State = "running";
     End = Reader->Size;
@@ -148,6 +150,7 @@ xvalue* MdoSessionConversationTurns(const char* Project, const char* Session,
         if ( !Ok ) goto fail;
     }
     if ( !MdoEventsObjectTake(Result, "latest_event_id", xrtValueUInt(Latest)) ||
+         !MdoEventsObjectString(Result, "epoch", Epoch, strlen(Epoch)) ||
          !MdoEventsObjectTake(Result, "next_before", xrtValueUInt(Count != 0u ? Turns[Count - 1u].First : Before)) ||
          !MdoEventsObjectTake(Result, "has_more", xrtValueBool(HasMore)) ||
          !MdoEventsObjectTake(Result, "history_lost", xrtValueBool(Lost)) ||

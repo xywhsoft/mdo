@@ -6,6 +6,7 @@ typedef struct MdoEventReader {
     xfile File;
     uint64 Size;
     uint64 Position;
+    xfileinfo Info;
     bool Failed;
     char Block[8192];
     char Record[MDO_SESSION_EVENT_RECORD_LIMIT + 1u];
@@ -24,6 +25,7 @@ static MdoEventReader* MdoEventReaderOpen(const char* Path)
          Info.Type != XFILE_TYPE_FILE || !(Info.Available & XFILE_INFO_SIZE) ||
          Info.Size > INT64_MAX ) goto fail;
     Reader->Size = Info.Size;
+    Reader->Info = Info;
     return Reader;
 fail:
     if ( Reader->File != NULL ) xrtClose(Reader->File);

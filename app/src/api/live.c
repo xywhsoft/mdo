@@ -39,6 +39,7 @@ typedef struct MdoLiveClient {
     char Project[MDO_PROJECT_ID_CAPACITY];
     char Session[MDO_SESSION_ID_CAPACITY];
     uint64 Selection, Cursor, Revision, StateRevision;
+    char Epoch[65];
     uint64 LastRead, LastPing;
     size_t Slot;
     bool Replay;
@@ -350,6 +351,7 @@ static bool MdoLiveEvents(MdoLiveClient* Client)
         Ok = Snapshot != NULL;
         if ( Ok ) {
             Batch.Latest = MdoSessionEventSnapshotLatestId(Snapshot);
+            snprintf(Client->Epoch, sizeof(Client->Epoch), "%s", MdoSessionEventSnapshotEpoch(Snapshot));
             Lost = Client->ReplayFirst && MdoSessionEventSnapshotHistoryLost(Snapshot);
             Client->ReplayFirst = false;
             for ( i = 0u; Ok && i < MdoSessionEventSnapshotCount(Snapshot); ++i ) {
@@ -363,6 +365,15 @@ static bool MdoLiveEvents(MdoLiveClient* Client)
         for ( i = 0u; Ok && i < Count; ++i ) Ok = MdoSessionsInternalEventVisit(Client->Project, Client->Session,
             xrtStrViewN(Copies[i].Json, Copies[i].Size), MdoLiveVisit, &Batch);
         Batch.Latest = Client->Cursor;
+        /* Replacements (clear/trim/restore) change the file identity. Reads
+         * and pushes must share its epoch before the next content is merged. */
+        if (Ok && Count) {
+            MdoSessionEventSnapshot* Snapshot = MdoSessionEventReplay(Client->Project, Client->Session,
+                Client->Cursor, 1u, &Error);
+            Ok = Snapshot != NULL;
+            if (Ok) snprintf(Client->Epoch, sizeof(Client->Epoch), "%s", MdoSessionEventSnapshotEpoch(Snapshot));
+            MdoSessionEventSnapshotRelease(Snapshot);
+        }
     }
     for ( i = 0u; i < Count; ++i ) xrtFree(Copies[i].Json);
     MdoProjectLeaseRelease(Lease);
@@ -373,6 +384,7 @@ static bool MdoLiveEvents(MdoLiveClient* Client)
         MdoApiValueSetUInt(Value, "selection", Client->Selection) &&
         MdoApiValueSetString(Value, "project_id", Client->Project) &&
         MdoApiValueSetString(Value, "session_id", Client->Session) &&
+        MdoApiValueSetString(Value, "epoch", Client->Epoch) &&
         MdoApiValueSetUInt(Value, "after", After) &&
         MdoApiValueSetUInt(Value, "next_cursor", Client->Cursor) &&
         MdoApiValueSetUInt(Value, "latest_event_id", Batch.Latest) &&

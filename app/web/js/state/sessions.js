@@ -125,11 +125,33 @@ export function exportSession(session, options) {
 // The event list stays small. A copy action may fetch one original event on
 // demand, but must never accept a neighbouring event after journal compaction.
 export async function readCompleteSessionEventText(projectId, sessionId,
-  eventId, kind) {
+  eventId, kind, { endEventId = eventId, epoch = "" } = {}) {
   if (!Number.isSafeInteger(eventId) || eventId < 1 || typeof kind !== "string")
     throw new TypeError("session event identity is invalid");
   const path = `${endpoint({ project_id: projectId, id: sessionId })}/events`;
-  const data = (await api.get(`${path}?after=${eventId - 1}&limit=1&full_text=1`)).data;
+  const fence = epoch ? `&epoch=${resourceId(epoch, "history epoch")}` : "";
+  if (endEventId !== undefined && endEventId > eventId) {
+    if (!Number.isSafeInteger(endEventId) || endEventId - eventId > 4096 || !/^[0-9a-f]{64}$/.test(epoch)) return null;
+    let cursor = eventId - 1, first = null, last = null, text = "";
+    while (cursor < endEventId) {
+      const page = (await api.get(`${path}?after=${cursor}&limit=32${fence}`)).data;
+      if (page.epoch !== epoch || !page.items?.length || page.next_cursor <= cursor) return null;
+      for (const event of page.items) {
+        if (event.event_id > endEventId) break;
+        first ??= event;
+        if (first.event_id !== eventId || first.kind !== kind) return null;
+        if (event.kind !== kind || event.run_id !== first.run_id || event.agent_id !== first.agent_id ||
+            event.agent_turn !== first.agent_turn || event.agent_depth !== first.agent_depth) continue;
+        const part = event.text_truncated
+          ? await readCompleteSessionEventText(projectId, sessionId, event.event_id, kind, { epoch }) : event.text;
+        if (typeof part !== "string" || text.length + part.length > 1048576) return null;
+        text += part; last = event;
+      }
+      cursor = page.next_cursor;
+    }
+    return last?.event_id === endEventId ? text : null;
+  }
+  const data = (await api.get(`${path}?after=${eventId - 1}&limit=1&full_text=1${fence}`)).data;
   const [event] = data?.items ?? [];
   if (data?.items?.length !== 1 || event?.event_id !== eventId ||
       event?.kind !== kind || event?.text_truncated !== false ||

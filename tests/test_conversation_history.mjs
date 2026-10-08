@@ -7,7 +7,7 @@ const previous = { window: globalThis.window, document: globalThis.document, fet
 globalThis.window = { setTimeout: () => 1, clearTimeout() {} };
 globalThis.document = Object.assign(new EventTarget(), { hidden: false });
 const { timelineStore, selectTimeline, loadOlderTimeline, revealConversationTurn,
-  loadOlderConversationIndex, applyLiveTimeline, clearTimeline } = await import("../app/web/js/features/chat/timeline-store.js");
+  loadOlderConversationIndex, applyLiveTimeline, clearTimeline, clearTimelineCache } = await import("../app/web/js/features/chat/timeline-store.js");
 const reply = data => Response.json({ ok: true, data });
 const e = (id, kind, fields = {}) => ({ event_id: id, kind, run_id: 1,
   schema_version: 5, agent_depth: 0, time: id * 1000000, ...fields });
@@ -20,6 +20,7 @@ const records = Array.from({ length: 12 }, (_, i) => [
 const summaries = summarizeConversationEvents(records);
 const calls = [];
 function respond(url) {
+  if (url.includes("/conversation?")) return Response.json({ ok: false, error: { code: "route_not_found" } }, { status: 404 });
   const parsed = new URL(url, "http://fixture");
   const before = Number(parsed.searchParams.get("before"));
   const limit = Number(parsed.searchParams.get("limit"));
@@ -34,7 +35,7 @@ function respond(url) {
   return reply({ items, next_cursor: items.at(-1)?.event_id ?? after, latest_event_id: 48 });
 }
 beforeEach(() => {
-  clearTimeline(); calls.length = 0;
+  clearTimeline(); clearTimelineCache(); calls.length = 0;
   globalThis.fetch = async url => { calls.push(url); return respond(url); };
 });
 after(() => { clearTimeline(); Object.assign(globalThis, previous); });

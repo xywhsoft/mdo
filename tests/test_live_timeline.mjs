@@ -10,7 +10,7 @@ globalThis.window = Object.assign(new EventTarget(), {
 });
 globalThis.document = Object.assign(new EventTarget(), { hidden: false });
 const { timelineStore, applyLiveTimeline, refreshSelectedTimeline, clearTimeline,
-  selectTimeline, isTransientTimelineError } =
+  selectTimeline, clearTimelineCache, isTransientTimelineError } =
   await import("../app/web/js/features/chat/timeline-store.js");
 const event = (id, fields = {}) => ({ event_id: id, kind: "model_text_delta", text: `part ${id}`, ...fields });
 function packet(items, fields = {}) {
@@ -18,7 +18,7 @@ function packet(items, fields = {}) {
     next_cursor: items.at(-1)?.event_id ?? 0, latest_event_id: items.at(-1)?.event_id ?? 0, ...fields };
 }
 beforeEach(() => {
-  clearTimeline(); timers.clear();
+  clearTimeline(); clearTimelineCache(); timers.clear();
   timelineStore.setData({ projectId: "qa", sessionId: "a", cursor: 1,
     latestEventId: 1, historyLost: false, events: [event(1)] });
 });
@@ -65,6 +65,8 @@ test(`cold timeline loading recovers ${code} and then restores its history`, asy
   globalThis.fetch = async path => {
     if (offline) throw code === "network_error" ? new TypeError("offline")
       : Object.assign(new Error("Remote request deadline exceeded"), { code });
+    if (path.includes("/conversation?")) return Response.json({ ok: false,
+      error: { code: "route_not_found" } }, { status: 404 });
     return Response.json({ ok: true, data: path.includes("/turns?")
       ? { items: [{ first_event_id: 1, end_event_id: 1 }], latest_event_id: 1, has_more: false }
       : { items: path.includes("after=0") ? [event(1)] : [], next_cursor: 1, latest_event_id: 1 } });

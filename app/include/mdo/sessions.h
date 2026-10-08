@@ -127,6 +127,9 @@ typedef struct MdoSessionEventInfo {
     uint32 Size;
     uint32 SchemaVersion;
     uint64 EventId;
+    /* Read projection only: last original delta represented by this event.
+     * Zero in journal records and ordinary event replay. */
+    uint64 AggregateEndId;
     uint64 SourceEventId;
     int64 OccurredAt;
     xwork_event_kind Kind;
@@ -258,6 +261,19 @@ MdoSessionEventSnapshot* MdoSessionEventReplay(const char* ProjectId,
  * append-only journal and can be read separately using their stable IDs. */
 xvalue* MdoSessionConversationTurns(const char* ProjectId, const char* SessionId,
     uint64 Before, size_t Limit, xwork_error* Error);
+typedef struct MdoConversationPageInfo {
+    char Epoch[65];
+    uint64 NextBefore;
+    bool HasMore;
+    bool Delta;
+} MdoConversationPageInfo;
+/* One anchored journal view. Before pages backwards; After + matching Epoch
+ * pages forwards. Text deltas are aggregated, tool bodies remain previews.
+ * The file generation changes on atomic history replacement, independently
+ * of ordinary append, profile edits and session titles. */
+MdoSessionEventSnapshot* MdoSessionConversationPage(const char* ProjectId,
+    const char* SessionId, uint64 Before, uint64 After, const char* Epoch,
+    size_t Turns, MdoConversationPageInfo* Page, xwork_error* Error);
 MdoSessionEventSnapshot* MdoSessionEventSnapshotRef(
     MdoSessionEventSnapshot* Snapshot);
 void MdoSessionEventSnapshotRelease(MdoSessionEventSnapshot* Snapshot);
@@ -268,6 +284,7 @@ uint64 MdoSessionEventSnapshotNextCursor(
     const MdoSessionEventSnapshot* Snapshot);
 uint64 MdoSessionEventSnapshotLatestId(
     const MdoSessionEventSnapshot* Snapshot);
+const char* MdoSessionEventSnapshotEpoch(const MdoSessionEventSnapshot* Snapshot);
 bool MdoSessionEventSnapshotHistoryLost(
     const MdoSessionEventSnapshot* Snapshot);
 /* Positive evidence only: a missing or trimmed event leaves the start

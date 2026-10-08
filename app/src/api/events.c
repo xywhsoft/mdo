@@ -1,3 +1,4 @@
+#include <stdio.h>
 #include <string.h>
 
 #include "internal.h"
@@ -48,7 +49,7 @@ static bool MdoApiUnsigned(xstrview Text, uint64 Maximum, uint64* pValue)
         uint64 Digit;
         if ( Text.Data[Index] < '0' || Text.Data[Index] > '9' ) return false;
         Digit = (uint64)(Text.Data[Index] - '0');
-        if ( Value > (Maximum - Digit) / 10u ) return false;
+        if ( Digit > Maximum || Value > (Maximum - Digit) / 10u ) return false;
         Value = Value * 10u + Digit;
     }
     *pValue = Value;
@@ -56,7 +57,7 @@ static bool MdoApiUnsigned(xstrview Text, uint64 Maximum, uint64* pValue)
 }
 
 static bool MdoApiEventQuery(xstrview Query, uint64* pAfter, size_t* pLimit,
-    bool* pFullText)
+    bool* pFullText, char Epoch[65])
 {
     size_t Position = 0u;
     bool HasAfter = false;
@@ -66,6 +67,7 @@ static bool MdoApiEventQuery(xstrview Query, uint64* pAfter, size_t* pLimit,
     *pAfter = 0u;
     *pLimit = MDO_API_EVENT_DEFAULT_LIMIT;
     if ( pFullText != NULL ) *pFullText = false;
+    Epoch[0] = '\0';
     while ( Position < Query.Size ) {
         size_t End = Position;
         size_t Equal = SIZE_MAX;
@@ -97,6 +99,12 @@ static bool MdoApiEventQuery(xstrview Query, uint64* pAfter, size_t* pLimit,
                  Value.Data[0] != '1' ) return false;
             *pFullText = true;
             HasFullText = true;
+        } else if (xrtStrEqual(Name, XRT_STR_LITERAL("epoch"))) {
+            if (Epoch[0] || Value.Size != 64u) return false;
+            for (size_t i = 0u; i < Value.Size; ++i)
+                if (!((Value.Data[i] >= '0' && Value.Data[i] <= '9') ||
+                      (Value.Data[i] >= 'a' && Value.Data[i] <= 'f'))) return false;
+            memcpy(Epoch, Value.Data, 64u); Epoch[64] = '\0';
         } else return false;
         Position = End + (End < Query.Size ? 1u : 0u);
         if ( Position == Query.Size && End < Query.Size ) return false;
@@ -157,6 +165,7 @@ bool MdoApiSessionEventValue(const MdoSessionEventInfo* Event,
     bool Ok = Item != NULL &&
         MdoApiValueSetUInt(Item, "schema_version", Event->SchemaVersion) &&
         MdoApiValueSetUInt(Item, "event_id", Event->EventId) &&
+        MdoApiValueSetUInt(Item, "aggregate_end_id", Event->AggregateEndId) &&
         MdoApiValueSetUInt(Item, "source_event_id", Event->SourceEventId) &&
         MdoApiValueSetInt(Item, "time", Event->OccurredAt) &&
         MdoApiValueSetString(Item, "kind", MdoApiEventKindText(Event->Kind)) &&
@@ -205,6 +214,7 @@ bool MdoApiSessionEventValue(const MdoSessionEventInfo* Event,
 
 bool MdoApiSessionEventsRoute(MdoApiContext* Context)
 {
+    char Epoch[65];
     char ProjectId[MDO_PROJECT_ID_CAPACITY];
     char SessionId[MDO_SESSION_ID_CAPACITY];
     xwork_error Error;
@@ -223,7 +233,7 @@ bool MdoApiSessionEventsRoute(MdoApiContext* Context)
         return MdoApiReplyError(Context, 400u, "invalid_path",
             "Project and session identifiers are invalid", NULL);
     if ( !MdoApiEventQuery(Context->Target.Query, &After, &Limit,
-            &FullText) )
+            &FullText, Epoch) )
         return MdoApiReplyError(Context, 400u, "invalid_query",
             "Only bounded event queries are accepted",
             NULL);
@@ -238,6 +248,10 @@ bool MdoApiSessionEventsRoute(MdoApiContext* Context)
         xrtValueRelease(Data); xrtValueRelease(Items);
         return MdoApiReplyError(Context, 404u, "session_events_unavailable",
             "The session event stream does not exist or cannot be read", NULL);
+    }
+    if (Epoch[0] && strcmp(Epoch, MdoSessionEventSnapshotEpoch(Snapshot))) {
+        xrtValueRelease(Data); xrtValueRelease(Items); MdoSessionEventSnapshotRelease(Snapshot);
+        return MdoApiReplyError(Context, 409u, "conversation_changed", "Conversation history changed", NULL);
     }
     Ok = Data != NULL && Items != NULL;
     for ( Index = 0u; Ok && Index < MdoSessionEventSnapshotCount(Snapshot);
@@ -255,6 +269,7 @@ bool MdoApiSessionEventsRoute(MdoApiContext* Context)
         MdoApiValueSetString(Data, "stream", "session") &&
         MdoApiValueSetString(Data, "project_id", ProjectId) &&
         MdoApiValueSetString(Data, "session_id", SessionId) &&
+        MdoApiValueSetString(Data, "epoch", MdoSessionEventSnapshotEpoch(Snapshot)) &&
         MdoApiValueSetUInt(Data, "after", After) &&
         MdoApiValueSetUInt(Data, "next_cursor",
             MdoSessionEventSnapshotNextCursor(Snapshot)) &&
@@ -316,4 +331,99 @@ bool MdoApiSessionTurnsRoute(MdoApiContext* Context)
     return MdoApiReplySuccessTake(Context, 200u, Data, NULL);
 invalid:
     return MdoApiReplyError(Context, 400u, "invalid_query", "Only before and limit are accepted", NULL);
+}
+
+static bool MdoApiConversationHash(xstrview Bytes, char Hex[65])
+{
+    xsha256 Hash; uint8 Digest[32]; xrtSha256Init(&Hash);
+    if (!xrtSha256Update(&Hash, Bytes.Data, Bytes.Size) || !xrtSha256Final(&Hash, Digest)) return false;
+    for (size_t i = 0u; i < 32u; ++i) snprintf(Hex+i*2u, 3u, "%02x", Digest[i]);
+    return true;
+}
+
+bool MdoApiSessionConversationRoute(MdoApiContext* Context)
+{
+    char Project[MDO_PROJECT_ID_CAPACITY], Session[MDO_SESSION_ID_CAPACITY], Epoch[65] = "", Hash[65];
+    uint64 Before = 0u, After = 0u, Limit = 4u; unsigned Seen = 0u;
+    xstrview Query = Context->Target.Query;
+    xwork_error Error; MdoConversationPageInfo Page;
+    MdoSession* Loaded = NULL; MdoSessionEventSnapshot* Snapshot = NULL;
+    xvalue *Items = NULL, *Data = NULL; char* Json = NULL; size_t JsonSize = 0u;
+    if (Context->ParamCount != 2u ||
+        !MdoApiCaptureId(Context, 0u, Project, sizeof(Project)) ||
+        !MdoApiCaptureId(Context, 1u, Session, sizeof(Session))) goto invalid;
+    for (size_t Position = 0u; Position < Query.Size;) {
+        size_t End = Position, Equal;
+        while (End < Query.Size && Query.Data[End] != '&') ++End;
+        Equal = Position;
+        while (Equal < End && Query.Data[Equal] != '=') ++Equal;
+        if (Equal == Position || Equal == End || Equal+1u == End) goto invalid;
+        xstrview Name = xrtStrViewN(Query.Data+Position, Equal-Position);
+        xstrview Value = xrtStrViewN(Query.Data+Equal+1u, End-Equal-1u);
+        unsigned Bit = xrtStrEqual(Name, XRT_STR_LITERAL("before")) ? 1u :
+            xrtStrEqual(Name, XRT_STR_LITERAL("after")) ? 2u :
+            xrtStrEqual(Name, XRT_STR_LITERAL("limit")) ? 4u :
+            xrtStrEqual(Name, XRT_STR_LITERAL("epoch")) ? 8u : 0u;
+        if (!Bit || (Seen & Bit)) goto invalid;
+        Seen |= Bit;
+        if (Bit == 8u) {
+            if (Value.Size != 64u) goto invalid;
+            for (size_t i = 0u; i < Value.Size; ++i)
+                if (!((Value.Data[i] >= '0' && Value.Data[i] <= '9') ||
+                      (Value.Data[i] >= 'a' && Value.Data[i] <= 'f'))) goto invalid;
+            memcpy(Epoch, Value.Data, Value.Size);
+        } else {
+            uint64 Number;
+            if (!MdoApiUnsigned(Value, Bit == 4u ? 4u : UINT64_MAX, &Number) ||
+                (Bit == 4u && !Number)) goto invalid;
+            if (Bit == 1u) Before = Number; else if (Bit == 2u) After = Number; else Limit = Number;
+        }
+        Position = End + (End < Query.Size ? 1u : 0u);
+        if (Position == Query.Size && End < Query.Size) goto invalid;
+    }
+    if (Before && After) goto invalid;
+    Loaded = MdoSessionLoad(Project, Session, &Error);
+    if (!Loaded) return MdoApiReplyError(Context, 404u, "session_not_found", "The requested session does not exist", NULL);
+    Snapshot = MdoSessionConversationPage(Project, Session, Before, After, Epoch, (size_t)Limit, &Page, &Error);
+    MdoSessionRelease(Loaded);
+    if (!Snapshot) return MdoApiReplyError(Context, Error.eCode == XWORK_ERROR_CONTEXT ? 409u : 503u,
+        "conversation_changed", "Conversation changed while reading; retry the snapshot", NULL);
+    Items = xrtValueArray(); Data = xrtValueObject();
+    if (!Items || !Data) goto fail;
+    for (size_t i = 0u; i < MdoSessionEventSnapshotCount(Snapshot); ++i) {
+        MdoSessionEventInfo Event; xvalue* Item = NULL; char Node[256];
+        Event.Size = sizeof(Event);
+        if (!MdoSessionEventSnapshotAt(Snapshot, i, &Event) ||
+            !MdoApiSessionEventValue(&Event, Project, Session,
+                Event.Kind == XWORK_EVENT_MODEL_TEXT_DELTA || Event.Kind == XWORK_EVENT_MODEL_REASONING_DELTA, &Item)) goto fail;
+        if (!MdoApiValueSetString(Item, "projection_epoch", Page.Epoch)) { xrtValueRelease(Item); goto fail; }
+        snprintf(Node, sizeof(Node), "%s:%s:%llu", Session, Page.Epoch, (unsigned long long)Event.EventId);
+        size_t Size = 0u; char* Encoded = xrtJsonStringify(Item, false, &Size);
+        bool Ok = Encoded && MdoApiConversationHash(xrtStrViewN(Encoded, Size), Hash) &&
+            MdoApiValueSetString(Item, "content_hash", Hash) && MdoApiValueSetString(Item, "node_id", Node);
+        xrtFree(Encoded);
+        if (Ok) Ok = MdoApiValueAppendTake(Items, &Item);
+        xrtValueRelease(Item);
+        if (!Ok) goto fail;
+    }
+    Json = xrtJsonStringify(Items, false, &JsonSize);
+    if (!Json || !MdoApiConversationHash(xrtStrViewN(Json, JsonSize), Hash) ||
+        !MdoApiValueSetString(Data, "project_id", Project) ||
+        !MdoApiValueSetString(Data, "session_id", Session) ||
+        !MdoApiValueSetString(Data, "epoch", Page.Epoch) ||
+        !MdoApiValueSetString(Data, "items_hash", Hash) ||
+        !MdoApiValueSetStringView(Data, "items_json", xrtStrViewN(Json, JsonSize)) ||
+        !MdoApiValueSetUInt(Data, "latest_event_id", MdoSessionEventSnapshotLatestId(Snapshot)) ||
+        !MdoApiValueSetUInt(Data, "next_cursor", MdoSessionEventSnapshotNextCursor(Snapshot)) ||
+        !MdoApiValueSetUInt(Data, "next_before", Page.NextBefore) ||
+        !MdoApiValueSetBool(Data, "delta", Page.Delta) ||
+        !MdoApiValueSetBool(Data, "has_more", Page.HasMore) ||
+        !MdoApiValueSetBool(Data, "history_lost", MdoSessionEventSnapshotHistoryLost(Snapshot))) goto fail;
+    xrtFree(Json); xrtValueRelease(Items); MdoSessionEventSnapshotRelease(Snapshot);
+    return MdoApiReplySuccessTake(Context, 200u, Data, NULL);
+invalid:
+    return MdoApiReplyError(Context, 400u, "invalid_query", "Only bounded before, after, epoch and limit are accepted", NULL);
+fail:
+    xrtFree(Json); xrtValueRelease(Items); xrtValueRelease(Data); MdoSessionEventSnapshotRelease(Snapshot);
+    return MdoApiReplyError(Context, 500u, "conversation_unavailable", "Conversation snapshot could not be serialized", NULL);
 }

@@ -33,6 +33,7 @@ struct MdoSessionEventSnapshot {
     uint64 NextCursor;
     uint64 LatestId;
     bool HistoryLost;
+    char Epoch[65];
 };
 
 struct MdoSessionEventBridge {
@@ -588,6 +589,7 @@ bool MdoSessionsInternalEventVisit(const char* ProjectId, const char* SessionId,
 }
 
 #include "event_reader.inc.c"
+static bool MdoViewEpoch(MdoEventReader* Reader, char Output[65]);
 #include "conversation_turns.inc.c"
 
 static bool MdoEventsScanLatestPath(const char* Project, const char* Session,
@@ -1367,6 +1369,11 @@ static bool MdoEventsSnapshotGrow(MdoSessionEventSnapshot* Snapshot)
     return true;
 }
 
+#include "conversation_page.inc.c"
+
+const char* MdoSessionEventSnapshotEpoch(const MdoSessionEventSnapshot* Snapshot)
+{ return Snapshot ? Snapshot->Epoch : ""; }
+
 MdoSessionEventSnapshot* MdoSessionEventReplay(const char* ProjectId,
     const char* SessionId, uint64 AfterEventId, size_t Limit,
     xwork_error* Error)
@@ -1392,6 +1399,7 @@ MdoSessionEventSnapshot* MdoSessionEventReplay(const char* ProjectId,
     Snapshot->NextCursor = AfterEventId;
     Reader = MdoEventReaderOpen(Path);
     if ( Reader == NULL ) goto io;
+    if (!MdoViewEpoch(Reader, Snapshot->Epoch)) goto io;
     Snapshot->LatestId = MdoEventReaderLatest(Reader, ProjectId, SessionId,
         &Snapshot->HistoryLost);
     /* Retain compatibility with journals already evicted by older releases. */

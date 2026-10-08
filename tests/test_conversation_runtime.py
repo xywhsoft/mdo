@@ -5,6 +5,7 @@ old 16 MiB eviction boundary, using the real xs/TCC API and a local model.
 """
 from __future__ import annotations
 import argparse
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -120,6 +121,24 @@ def probe(host: Path | None, packed: Path | None = None):
             original_size = journal.stat().st_size
             assert original_size > 16 * 1024 * 1024
             process = launch()
+            status, doc = request(port, "GET", path + "/conversation?limit=4")
+            assert status == 200, doc
+            snapshot = doc["data"]
+            epoch = snapshot["epoch"]
+            assert len(epoch) == 64 and snapshot["delta"] is False
+            assert hashlib.sha256(snapshot["items_json"].encode()).hexdigest() == snapshot["items_hash"]
+            compact = json.loads(snapshot["items_json"])
+            assert len(compact) == 12, compact
+            assert [e["text"] for e in compact if e["kind"] == "agent_start"] == [f"Question {i}" for i in range(66,70)]
+            assert len(snapshot["items_json"].encode()) < 96 * 1024
+            assert all(e["node_id"] == f"{session}:{epoch}:{e['event_id']}" for e in compact)
+            answer = next(e for e in compact if e["kind"] == "model_text_delta")
+            assert answer["text_truncated"] and answer["aggregate_end_id"] == answer["event_id"] + 3
+            _, doc = request(port, "GET", path + f"/conversation?after=420&epoch={epoch}")
+            assert doc["data"]["delta"] and json.loads(doc["data"]["items_json"]) == []
+            _, doc = request(port, "GET", path + f"/conversation?before={snapshot['next_before']}&limit=4")
+            assert doc["data"]["epoch"] == epoch
+            assert json.loads(doc["data"]["items_json"])[0]["text"] == "Question 62"
             _, doc = request(port, "GET", path + "/turns?limit=4")
             page = doc["data"]
             assert [item["question"] for item in page["items"]] == [f"Question {i}" for i in range(66, 70)]
@@ -149,6 +168,9 @@ def probe(host: Path | None, packed: Path | None = None):
                         "text": "Continuation" if offset == 1 else ""}
                     file.write(json.dumps(event, separators=(",", ":")).encode() + b"\n")
             process = launch()
+            _, doc = request(port, "GET", path + f"/conversation?after=420&epoch={epoch}")
+            assert doc["data"]["delta"] and doc["data"]["epoch"] == epoch
+            assert json.loads(doc["data"]["items_json"])[1]["text"] == "Continuation"
             _, doc = request(port, "GET", path + "/turns?limit=1")
             assert doc["data"]["items"][0]["question"] == "Question 69"
             assert doc["data"]["items"][0]["answer"] == "Continuation"
@@ -160,6 +182,17 @@ def probe(host: Path | None, packed: Path | None = None):
             _, doc = request(port, "GET", path + "/events?after=0&limit=1")
             assert doc["data"]["items"][0]["text"] == "Question 0"
             assert doc["data"]["latest_event_id"] > 420
+            # Atomic history replacement cannot reuse cached pages, even if
+            # all record bytes and IDs happen to be identical.
+            replacement = journal.with_suffix(".replacement")
+            replacement.write_bytes(journal.read_bytes()); os.replace(replacement, journal)
+            _, doc = request(port, "GET", path + f"/conversation?after=420&epoch={epoch}")
+            assert not doc["data"]["delta"] and doc["data"]["epoch"] != epoch
+            status, _ = request(port, "GET", path + f"/events?after=420&epoch={epoch}")
+            assert status == 409
+            for query in ("limit=5", "epoch=bad", "after=1&before=2", "limit=4&limit=4"):
+                status, _ = request(port, "GET", path + "/conversation?" + query)
+                assert status == 400, query
         finally:
             if process: stop(process)
             model.shutdown(); model.server_close()

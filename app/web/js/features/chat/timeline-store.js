@@ -6,6 +6,7 @@ import { mergeConversationTurns, summarizeConversationEvents } from "./conversat
 import { t } from "../../i18n.js";
 import { targetState, subscribeTarget } from "../../api/target.js";
 import { createSessionCache } from "./session-cache.js";
+import { decodeConversationPage } from "./conversation-page.js";
 
 const MAX_PAGES_PER_REFRESH = 4;
 const FALLBACK_POLL_MS = 2500;
@@ -28,6 +29,7 @@ let historyRequest = null;
 let indexRequest = null;
 let selectionAbort = null;
 let initialRequest = null;
+let snapshotAvailable = true;
 const sessionCache = createSessionCache({ maxBytes:
   globalThis.navigator?.userAgent?.includes("Android") ? 12 * 1024 * 1024 : 24 * 1024 * 1024 });
 function cacheKey(data) {
@@ -90,7 +92,7 @@ function schedulePoll(token) {
   stopTimer();
   const current = timelineStore.get().data;
   if (token !== generation || document.hidden ||
-      (liveConnection.isConnected() && !current?.initializing)) return;
+      (liveConnection.isConnected() && !current?.initializing && !current?.syncing && !current?.syncError)) return;
   pollTimer = window.setTimeout(() => current?.initializing
     ? loadInitialTimeline(token) : refreshTimeline(token), pollDelay);
 }
@@ -98,6 +100,7 @@ function schedulePoll(token) {
 async function refreshTimeline(token = generation) {
   const current = timelineStore.get().data;
   if (!current?.sessionId || current.initializing || token !== generation) return;
+  if (current.epoch) return refreshSnapshot(token);
   const request = ++refreshVersion;
   const isCurrent = () => token === generation && request === refreshVersion;
   let cursor = current.cursor;
@@ -150,6 +153,42 @@ async function refreshTimeline(token = generation) {
   }
 }
 
+async function readConversation(data, query, signal = selectionAbort?.signal) {
+  const raw = (await api.get(`${endpoint(data)}/conversation?${query}`, { signal })).data;
+  return decodeConversationPage(raw, data);
+}
+
+function snapshotData(current, page) {
+  const events = page.delta ? mergeTimelineEvents(current.events, page.items).events : page.items;
+  const turns = page.delta ? updateTurns(current, events) : summarizeConversationEvents(events);
+  return { ...current, epoch: page.epoch, events, turns, initializing: false,
+    cursor: page.next_cursor, latestEventId: page.latest_event_id, historyLost: page.history_lost,
+    syncing: Boolean(page.delta && page.has_more), syncError: null,
+    ...(page.delta ? {} : { firstLoadedTurn: page.next_before, hasOlder: page.has_more,
+      indexHasMore: page.has_more, indexBefore: turns[0]?.first_event_id || page.next_before }) };
+}
+
+async function refreshSnapshot(token) {
+  const request = ++refreshVersion;
+  const isCurrent = () => token === generation && request === refreshVersion;
+  try {
+    for (let i = 0; i < MAX_PAGES_PER_REFRESH; ++i) {
+      const current = timelineStore.get().data;
+      const page = await readConversation(current, `after=${current.cursor}&epoch=${current.epoch}&limit=4`);
+      if (!isCurrent()) return;
+      if (page.delta && page.next_cursor < current.cursor) throw new Error("Conversation cursor moved backwards");
+      timelineStore.setData(snapshotData(current, page));
+      if (!page.delta || !page.has_more) break;
+      if (page.next_cursor === current.cursor) throw new Error("Conversation cursor did not advance");
+    }
+    pollDelay = FALLBACK_POLL_MS;
+  } catch (error) {
+    if (!isCurrent() || error.name === "AbortError") return;
+    timelineStore.setData({ ...timelineStore.get().data, syncing: false, syncError: error });
+    pollDelay = Math.min(pollDelay * 2, 15_000);
+  } finally { if (isCurrent()) schedulePoll(token); }
+}
+
 export function selectTimeline(projectId, sessionId) {
   const project = resourceId(projectId, "project");
   const session = resourceId(sessionId, "session");
@@ -186,6 +225,8 @@ async function reloadTimeline(projectId, sessionId, force = false) {
     turns: [],
     initializing: true,
     hasOlder: false,
+    ...(force && timelineStore.get().data?.projectId === projectId && timelineStore.get().data?.sessionId === sessionId
+      ? { events: timelineStore.get().data.events, cached: true, syncing: true } : {}),
   });
   return loadInitialTimeline(token);
 }
@@ -197,6 +238,19 @@ function loadInitialTimeline(token) {
     if (token !== generation) return;
     try {
       const current = timelineStore.get().data;
+      if (snapshotAvailable) {
+        try {
+          const page = await readConversation(current, "limit=4", selectionAbort.signal);
+          if (token !== generation) return;
+          timelineStore.setData(snapshotData(current, page));
+          subscribeLiveTimeline();
+          if (!liveConnection.isConnected()) await refreshTimeline(token);
+          return;
+        } catch (error) {
+          if (error.status !== 404 || error.code === "session_not_found") throw error;
+          snapshotAvailable = false;
+        }
+      }
       const page = (await api.get(`${endpoint(current)}/turns?limit=64`,
         { signal: selectionAbort.signal })).data;
       if (token !== generation) return;
@@ -233,7 +287,7 @@ async function readHistoryRange(data, first, end, token) {
   let cursor = first - 1;
   const events = [];
   while (cursor < end && token === generation) {
-    const page = (await api.get(`${endpoint(data)}/events?after=${cursor}&limit=32`,
+    const page = (await api.get(`${endpoint(data)}/events?after=${cursor}&limit=32${data.epoch ? `&epoch=${data.epoch}` : ""}`,
       { signal: selectionAbort?.signal })).data;
     if (token !== generation) return [];
       const next = Number(page.next_cursor);
@@ -253,6 +307,16 @@ export function loadOlderTimeline() {
   timelineStore.setData({ ...data, loadingHistory: true, historyError: null });
   const request = (async () => {
     try {
+      if (data.epoch) {
+        const page = await readConversation(data, `before=${data.firstLoadedTurn}&limit=4`);
+        if (token !== generation) return;
+        if (page.epoch !== data.epoch) { await reloadSelectedTimeline(); return; }
+        const current = timelineStore.get().data;
+        const events = mergeTimelineEvents(current.events, page.items).events;
+        timelineStore.setData({ ...current, events, turns: updateTurns(current, events),
+          firstLoadedTurn: page.next_before || current.firstLoadedTurn, hasOlder: page.has_more, loadingHistory: false });
+        return;
+      }
       const page = (await api.get(`${endpoint(data)}/turns?before=${data.firstLoadedTurn}&limit=4`,
         { signal: selectionAbort?.signal })).data;
       if (token !== generation) return;
@@ -285,6 +349,7 @@ export function loadOlderConversationIndex() {
       const page = (await api.get(`${endpoint(data)}/turns?before=${data.indexBefore}&limit=64`,
         { signal: selectionAbort?.signal })).data;
       if (token !== generation) return;
+      if (data.epoch && page.epoch !== data.epoch) { await reloadSelectedTimeline(); return; }
       const current = timelineStore.get().data;
       const turns = updateTurns(current, current.events, page.items);
       const stale = page.items.length && !page.items.some(item => turns.some(turn =>
@@ -345,6 +410,7 @@ function subscribeLiveTimeline() {
   refreshVersion += 1;
   stopTimer();
   liveConnection.select(current.projectId, current.sessionId, () => timelineStore.get().data?.cursor ?? 0);
+  if (current.syncing || current.syncError) schedulePoll(generation);
 }
 
 // WebSocket and HTTP replay share the same merge rules, retention and renderer.
@@ -353,6 +419,9 @@ export function applyLiveTimeline(replay) {
   const current = timelineStore.get().data;
   if (!current?.sessionId || current.initializing || current.projectId !== replay.project_id || current.sessionId !== replay.session_id ||
       !Array.isArray(replay.items)) return;
+  if (current.epoch && replay.epoch && replay.epoch !== current.epoch) {
+    void reloadSelectedTimeline(); return;
+  }
   const next = Number(replay.next_cursor);
   const latest = Number(replay.latest_event_id);
   if (!Number.isSafeInteger(next) || next < current.cursor ||
@@ -366,6 +435,7 @@ export function applyLiveTimeline(replay) {
   stopTimer();
   const turns = updateTurns(current, events);
   timelineStore.setData({ ...current, cursor: next, latestEventId: latest, historyLost, events, turns,
+    syncing: next < latest, syncError: null,
     ...(merged.cleared ? { hasOlder: false, indexHasMore: false, indexBefore: 0,
       firstLoadedTurn: turns[0]?.first_event_id ?? 0 } : {}) });
 }
