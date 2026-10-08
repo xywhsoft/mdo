@@ -1,0 +1,226 @@
+{
+  "schema_version": 1,
+  "date": "2026-10-08",
+  "origin": "https://ai.xywhsoft.com",
+  "xs_commit": "3232f7b8efb02fdd6bf63a508ed1e69654d6759c",
+  "website_commit": "b41e509546c70f69b88fdf2c6b232de515f9ddd9",
+  "products": [
+    {
+      "product": "linux-x86_64-glibc-gui",
+      "binary": "linux-x86_64-glibc-gui/mdo",
+      "binary_bytes": 3972091,
+      "binary_sha256": "3059c3d56b53d6bd033be396a50e6c54039b258453e0311874bee3091f4f5157",
+      "archive": "packages/linux-x86_64-glibc-gui.tar.gz",
+      "archive_bytes": 2747156,
+      "archive_sha256": "6aef99a7af991266a0c6b03392a31e911b7973724865861ad2cfc4fa8f00010d",
+      "build_id": 30000037,
+      "mdo_commit": "b0d440b5c947b1d3808e7be4da394b102a0f79e7",
+      "mdo_worktree_dirty": true,
+      "packaged_app_sha256": "40072e633c45646beb99418a19969c7736ca9f2269dc6df97183ccddb085956c"
+    },
+    {
+      "product": "linux-x86_64-glibc-server",
+      "binary": "linux-x86_64-glibc-server/mdo-server",
+      "binary_bytes": 3943184,
+      "binary_sha256": "9ab68bc1af44d55372a9fb1243d9042432f15dc543ebaef1aa067586e360d963",
+      "archive": "packages/linux-x86_64-glibc-server.tar.gz",
+      "archive_bytes": 2737638,
+      "archive_sha256": "310703df29434058fd0cc25f329df4e197b393a87cd843074e47b18c2314e787",
+      "build_id": 30000038,
+      "mdo_commit": "b0d440b5c947b1d3808e7be4da394b102a0f79e7",
+      "mdo_worktree_dirty": true,
+      "packaged_app_sha256": "321d014500cbaf70b4c04dbceed4ee9a5ad5b467d97154bbeb64ac64721654ee"
+    },
+    {
+      "product": "linux-x86_64-musl-gui",
+      "binary": "linux-x86_64-musl-gui/mdo",
+      "binary_bytes": 6084326,
+      "binary_sha256": "e010efb92ee6e3d8aad4a4018fb752a90cd23eb6761306c0a58bae8c73ae2124",
+      "archive": "packages/linux-x86_64-musl-gui.tar.gz",
+      "archive_bytes": 4788408,
+      "archive_sha256": "7c82a2ed6889e0689ca4c966d18702ff33caea132d956e21e7fb1b0b9c2191f5",
+      "build_id": 30000039,
+      "mdo_commit": "b0d440b5c947b1d3808e7be4da394b102a0f79e7",
+      "mdo_worktree_dirty": true,
+      "packaged_app_sha256": "885a9b789ee6070ece85773e7dfb1596dcb4ff57aa6d7637d75db6edcd5ee741"
+    },
+    {
+      "product": "linux-x86_64-musl-server",
+      "binary": "linux-x86_64-musl-server/mdo-server",
+      "binary_bytes": 6055484,
+      "binary_sha256": "f7ec747999a126b6b143dd7875558761e6ad3f452f5a32e4a2d556092f418ed2",
+      "archive": "packages/linux-x86_64-musl-server.tar.gz",
+      "archive_bytes": 4776564,
+      "archive_sha256": "e2a0bb0521ae8e56442d2bb5fc985b05fb9fb0de5bb5c5c83181d0360b3f92ab",
+      "build_id": 30000040,
+      "mdo_commit": "b0d440b5c947b1d3808e7be4da394b102a0f79e7",
+      "mdo_worktree_dirty": true,
+      "packaged_app_sha256": "d6daef66966e7f833448b75d97d90e013b9123e3a2ddb575e5463a48c399fe87"
+    }
+  ],
+  "toolpacks": [
+    {
+      "id": "core",
+      "platform": "linux-x86_64",
+      "revision": 2,
+      "min_build": 30000037,
+      "sha256": "5e9aef677de00348f8fd58d236c98076e0d60fd6814dca39766d6c13b4162051",
+      "size": 19864103
+    },
+    {
+      "id": "python",
+      "platform": "linux-x86_64",
+      "revision": 2,
+      "min_build": 30000037,
+      "sha256": "0db44a14e981369a616a84413dba18f68cf0d3e00b6f2e7f2129c3d7b5d110d4",
+      "size": 27168630
+    }
+  ],
+  "publication": {
+    "passed": true,
+    "releases": [
+      "linux-glibc-gui",
+      "linux-glibc-server",
+      "linux-musl-gui",
+      "linux-musl-server"
+    ],
+    "toolpacks": 2,
+    "origin": "https://ai.xywhsoft.com",
+    "downloads": [
+      "linux-x86_64-glibc-gui.bin",
+      "linux-x86_64-glibc-server.bin",
+      "linux-x86_64-musl-gui.bin",
+      "linux-x86_64-musl-server.bin",
+      "core.xrtpack",
+      "python.xrtpack"
+    ]
+  },
+  "online_client": {
+    "passed": true,
+    "origin": "https://ai.xywhsoft.com",
+    "products": [
+      {
+        "passed": true,
+        "libc": "glibc",
+        "binary_sha256": "9ab68bc1af44d55372a9fb1243d9042432f15dc543ebaef1aa067586e360d963",
+        "build_id": 30000038,
+        "platform": "linux-x86_64-glibc",
+        "toolpacks": [
+          {
+            "id": "core",
+            "revision": 2,
+            "sha256": "5e9aef677de00348f8fd58d236c98076e0d60fd6814dca39766d6c13b4162051"
+          },
+          {
+            "id": "python",
+            "revision": 2,
+            "sha256": "0db44a14e981369a616a84413dba18f68cf0d3e00b6f2e7f2129c3d7b5d110d4"
+          }
+        ],
+        "checks": [
+          "packed standalone startup",
+          "public HTTPS update check",
+          "correct libc/edition",
+          "published binary hash",
+          "Linux-only tool catalog",
+          "SIGTERM"
+        ]
+      },
+      {
+        "passed": true,
+        "libc": "musl",
+        "binary_sha256": "f7ec747999a126b6b143dd7875558761e6ad3f452f5a32e4a2d556092f418ed2",
+        "build_id": 30000040,
+        "platform": "linux-x86_64-musl",
+        "toolpacks": [
+          {
+            "id": "core",
+            "revision": 2,
+            "sha256": "5e9aef677de00348f8fd58d236c98076e0d60fd6814dca39766d6c13b4162051"
+          },
+          {
+            "id": "python",
+            "revision": 2,
+            "sha256": "0db44a14e981369a616a84413dba18f68cf0d3e00b6f2e7f2129c3d7b5d110d4"
+          }
+        ],
+        "checks": [
+          "packed standalone startup",
+          "public HTTPS update check",
+          "correct libc/edition",
+          "published binary hash",
+          "Linux-only tool catalog",
+          "SIGTERM"
+        ]
+      }
+    ]
+  },
+  "acceptance": {
+    "glibc_distribution": {
+      "passed": true,
+      "checks": [
+        "core+Python SHA256 extraction",
+        "POSIX modes",
+        "10 functional probes",
+        "edition mismatch rejected",
+        "damaged update rejected",
+        "atomic executable replacement",
+        "previous binary retained",
+        "PID-preserving restart",
+        "offline tool persistence",
+        "SIGTERM"
+      ]
+    },
+    "musl_distribution": {
+      "passed": true,
+      "checks": [
+        "core+Python SHA256 extraction",
+        "POSIX modes",
+        "10 functional probes",
+        "edition mismatch rejected",
+        "damaged update rejected",
+        "atomic executable replacement",
+        "previous binary retained",
+        "PID-preserving restart",
+        "offline tool persistence",
+        "SIGTERM"
+      ]
+    },
+    "glibc_gui": {
+      "passed": true,
+      "binary_sha256": "3059c3d56b53d6bd033be396a50e6c54039b258453e0311874bee3091f4f5157",
+      "helper_sha256": "d14940cf3e835095e904163aa2f0062ddfcbe590c94c02715d015c126376e506",
+      "checks": [
+        "packed native startup",
+        "real frontend screenshot",
+        "portable window cache",
+        "native window close stops service"
+      ]
+    },
+    "musl_gui": {
+      "passed": true,
+      "binary_sha256": "e010efb92ee6e3d8aad4a4018fb752a90cd23eb6761306c0a58bae8c73ae2124",
+      "helper_sha256": "d14940cf3e835095e904163aa2f0062ddfcbe590c94c02715d015c126376e506",
+      "checks": [
+        "packed native startup",
+        "real frontend screenshot",
+        "portable window cache",
+        "native window close stops service"
+      ]
+    }
+  },
+  "additional_checks": [
+    "12 frontend update/notification tests passed",
+    "Linux build contracts passed (Windows-only checks skipped)",
+    "website delivery regression passed",
+    "Linux ELF/product/platform catalog validation passed",
+    "private CA HTTPS curl passed"
+  ],
+  "limitations": [
+    "x86_64 only",
+    "GUI verified with Xvfb; physical Wayland not tested",
+    "real systemd unit not tested",
+    "musl GUI core is static; window helper requires system GTK3/WebKitGTK 4.1",
+    "products include existing working-tree changes recorded by build receipts"
+  ]
+}

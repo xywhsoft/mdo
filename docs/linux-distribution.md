@@ -55,3 +55,15 @@ xs 的 `xsAppRequestRestart()` 在关闭窗口、排空任务及释放 Home 后�
 十项运行探测、权限、损坏更新、错误 edition、原子替换、保留旧程序及 PID 不变的
 重启。网站的 `tests/test_mdo_linux_delivery.py` 验证 ELF 发布、版本隔离、不同平台
 同名工具包、修订号回退和跨平台依赖拒绝。仅执行有界功能测试。
+
+`tests/manual_linux_online_qa.py` 启动实际打包的 glibc／musl 服务版，使用隔离 Home
+查询公网更新和工具包目录，确认平台、edition、线上 SHA-256 与当前程序一致。
+不登录、不调用模型、不安装工具包，也不改动网站数据。
+
+2026-10-08 已发布四种 Linux 程序（构建编号 30000037～30000040）及常用／Python
+工具包（revision 2）。六个文件均通过公网 HTTPS 完整下载校验，实际服务版的线上
+更新检查通过；两种 libc 的工具安装、程序替换和重启通过，两个 GUI 的虚拟桌面
+启动及窗口关闭通过。发布清单和验收记录见
+[`releases/linux-distribution-2026-10-08.json`](releases/linux-distribution-2026-10-08.json)。
+本轮仅覆盖 x86_64；尚未实测 ARM64、物理 Wayland 桌面或真实 systemd 单元。
+musl GUI 的程序核心为静态链接，窗口仍通过系统 GTK3／WebKitGTK 4.1 运行。
