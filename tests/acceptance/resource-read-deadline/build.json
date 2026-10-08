@@ -1,0 +1,33 @@
+{
+  "baseline": "bf5b857",
+  "xs_commit": "3232f7b8efb02fdd6bf63a508ed1e69654d6759c",
+  "candidate_sha256": "f469b944e854ae3726491216b14aba0bfe0e4ace75b5ce4ffa5199b6e5f00f3b",
+  "candidate_size": 4456207,
+  "resources": [
+    {
+      "path": "js/state/store.js",
+      "size": 6661,
+      "sha256": "8780b9482cc2c4764d9cc4adcbb7cbab7e02372fd499ab4fe3a9e63007a38533",
+      "served_matches_isolated_source": true
+    },
+    {
+      "path": "js/app.js",
+      "size": 127873,
+      "sha256": "3a8f22505c6f40ff888c4e71d078bec67a4ddcd2f903e55323fa0956a1e06a03",
+      "served_matches_isolated_source": true
+    },
+    {
+      "path": "js/state/settings.js",
+      "size": 4509,
+      "sha256": "b177aba3c1032eb58c27eb8dc6cc89ef45ea098fa8e87553f1996593132bd621",
+      "served_matches_isolated_source": true
+    },
+    {
+      "path": "js/state/catalogs.js",
+      "size": 2478,
+      "sha256": "e248cd812fc318242db619e268f57377b4a742f853136abc9d87e58484051b75",
+      "served_matches_isolated_source": true
+    }
+  ],
+  "product_qa_injection": false
+}

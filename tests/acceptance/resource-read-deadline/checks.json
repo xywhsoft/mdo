@@ -1,0 +1,39 @@
+{
+  "node_tests": {
+    "passed": 100,
+    "failed": 0
+  },
+  "frontend_contracts": {
+    "passed": 4,
+    "failed": 0
+  },
+  "delayed_resource_recovery": {
+    "/api/v1/models": {
+      "reads": 2,
+      "next_read_seconds": 0.047,
+      "old_response_release_seconds": 12.015
+    },
+    "/api/v1/projects/default/sessions/V-OSKPfXK_GE2axPL6_jGIp_q5INj2MW": {
+      "reads": 7,
+      "next_read_seconds": 0.078,
+      "old_response_release_seconds": 12.016
+    },
+    "/api/v1/sessions": {
+      "reads": 2,
+      "next_read_seconds": 8.594,
+      "old_response_release_seconds": 12.015
+    },
+    "/api/v1/settings": {
+      "reads": 3,
+      "next_read_seconds": 8.578,
+      "old_response_release_seconds": 12.015
+    }
+  },
+  "model_calls_once_each": true,
+  "empty_queues_and_drafts": true,
+  "no_final_model_errors": true,
+  "no_active_runs": true,
+  "sampled_alerts": [],
+  "browser_warning_error_logs": [],
+  "scope": "isolated Windows packed app, local model, no stress/high-load tests; uncooperative transport proven separately in Node"
+}

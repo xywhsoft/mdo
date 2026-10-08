@@ -72,11 +72,23 @@ export function createResourceStore(initialData = null, {
     const controller = recoverRead ? new AbortController() : null;
     requestController = controller;
     let expired = false;
+    let onAbort = null;
     const timer = controller ? setTimer(() => {
       expired = true; controller.abort();
     }, Math.max(1, Math.min(8000, deadline - now()))) : 0;
     try {
-      const data = await loader(controller?.signal);
+      // Abort asks the transport to stop; it does not guarantee that its
+      // promise settles. Own the wait too, so deadlines, reset and page exit
+      // release callers even while a response body or adapter ignores abort.
+      // Invoke the loader synchronously as before, and handle both its late
+      // resolution and rejection without applying either to a newer read.
+      const data = controller ? await new Promise((resolve, reject) => {
+        onAbort = () => reject(new DOMException("Resource read cancelled", "AbortError"));
+        controller.signal.addEventListener("abort", onAbort, { once: true });
+        if (controller.signal.aborted) { onAbort(); return; }
+        try { Promise.resolve(loader(controller.signal)).then(resolve, reject); }
+        catch (error) { reject(error); }
+      }) : await loader(undefined);
       if (generation !== requestGeneration) return state;
       readPending = false; recheckAt = 0;
       if (background && state.status === "ready" && state.data === data) return state;
@@ -108,6 +120,7 @@ export function createResourceStore(initialData = null, {
         updatedAt: discard ? 0 : state.updatedAt });
     } finally {
       clearTimer(timer);
+      if (onAbort) controller.signal.removeEventListener("abort", onAbort);
       // A parallel read may fail before its siblings settle. Abort only this
       // attempt's controller so those pure reads cannot outlive its retry.
       controller?.abort();
