@@ -6,6 +6,7 @@ const FALLBACKS = Object.freeze({
   asks: "暂时无法读取对话询问，请检查连接后重试。",
   approvals: "暂时无法读取权限审核，请检查连接后重试。",
   runs: "暂时无法读取运行状态，请检查连接后重试。",
+  todo: "暂时无法读取待办列表，请检查连接后重试。",
 });
 
 export function decisionReadError(error, kind) {

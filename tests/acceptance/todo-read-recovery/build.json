@@ -1,0 +1,38 @@
+{
+  "source_base": "2c3b832",
+  "candidate": "D:\\GIT\\mdo\\.build\\conversation-acceptance\\mdo-todo-reads-final.exe",
+  "bytes": 4444526,
+  "sha256": "212b272a4de343325c5e5bff4348b0e08a2cd2dd617821423bb6a8fc1ad2b876",
+  "host_receipt": {
+    "schema_version": 1,
+    "profile_sha256": "2829d871dac1a12a70503f9b6116adaa2aa9556a53ea139df60aaa81cbb7a19b",
+    "revision": "0b7e041",
+    "extensions": [
+      "xllm",
+      "xllm-session",
+      "xwork",
+      "webview",
+      "image"
+    ],
+    "icon_sha256": "f54b7fb936f5e15f9b7d10842c294d3c4c5c4de7fff17acaa0fa29d04f0070f2",
+    "binary_sha256": "5f125504c3f2fbebf38ba65acf2e4355f3426a5840117b510a44436a314eb7bb",
+    "binary_bytes": 3153408
+  },
+  "host_reused": true,
+  "native_sources_changed": false,
+  "unrelated_worktree_changes_included": false,
+  "packed_files_verified": {
+    "js/state/todo.js": "3a1f986e9a172445e5a594215fb65e5c28eef5494daf58fdbfe85a232f7cea17",
+    "js/features/chat/conversation-docks.js": "bfbaa36652bd1dd88ee1881a989abfa9a2cd8b8e7405db8cd197797b68fd3ac1",
+    "js/features/chat/decision-read-notice.js": "846c5b08c16393f70b49593bd64b7df7fc2a8b0e180cb26a1da25ddec11515fe",
+    "lang/zh-CN.json": "ba8cd1a340cbbe86ef3379b092de48a68e03a3288d9df2bd6e56f71da4b63496",
+    "lang/en-US.json": "ef32e8541a8ace9a5fb4e35eaac4b8f08413fbce7a17e5597f672a5aaca353a2",
+    "lang/ru-RU.json": "cac333217954d70b351c85256ced7d5e853c6f99b9f632289d41c4b9a72d7820"
+  },
+  "node_passed": 85,
+  "todo_component_checks": 9,
+  "focused_frontend_contract_passed": 3,
+  "android_device_tested": false,
+  "daily_installation_replaced": false,
+  "website_release_updated": false
+}

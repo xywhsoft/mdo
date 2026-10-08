@@ -697,6 +697,7 @@
   "dock.read.asks": "暂时无法读取对话询问，请检查连接后重试。",
   "dock.read.approvals": "暂时无法读取权限审核，请检查连接后重试。",
   "dock.read.runs": "暂时无法读取运行状态，请检查连接后重试。",
+  "dock.read.todo": "暂时无法读取待办列表，请检查连接后重试。",
   "approval.invalidResponse": "权限审核响应无效，请重新读取审核状态。",
   "dock.ask.title": "需要回答",
   "run.created": "准备中",

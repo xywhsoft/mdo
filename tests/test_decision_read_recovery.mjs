@@ -126,7 +126,7 @@ test("final read errors describe reading, not submitting, in every interface lan
     for (const locale of ["zh-CN", "en-US", "ru-RU"]) {
       const messages = JSON.parse(await readFile(new URL(`../app/web/lang/${locale}.json`, import.meta.url), "utf8"));
       await loadLocale(locale);
-      for (const kind of ["asks", "approvals", "runs"]) {
+      for (const kind of ["asks", "approvals", "runs", "todo"]) {
         const copy = decisionReadError({ code: kind + "_unavailable", status: 503, message: "internal transport failure" }, kind);
         assert.equal(copy, messages[`dock.read.${kind}`]);
         assert.notEqual(copy, messages["error.asksUnavailable"]);

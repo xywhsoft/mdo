@@ -31,7 +31,6 @@ import { todoStore, selectTodo } from "/app/web/js/state/todo.js";
 import { timelineStore } from "/app/web/js/features/chat/timeline-store.js";
 import { loadLocale } from "/app/web/js/i18n.js";
 
-await loadLocale("zh-CN");
 const result = document.querySelector("#result");
 const report = {};
 let calls = 0;
@@ -45,12 +44,14 @@ const failed = () => Response.json({ ok: false,
   error: { code: "fixture_failure", message: "Temporary read failure" } }, { status: 503 });
 const originalFetch = window.fetch;
 window.fetch = (url, options) => {
+  if (String(url).startsWith("/lang/")) return originalFetch("/app/web" + url, options);
   if (!String(url).endsWith("/sessions/todo-refresh/todo")) return originalFetch(url, options);
   calls += 1;
   if (holdRead) return new Promise((resolve) => { holdRead(resolve); holdRead = null; });
   if (failOnce) { failOnce = false; return Promise.resolve(failed()); }
   return Promise.resolve(healthy());
 };
+await loadLocale("zh-CN");
 const route = { view: "workspace", projectId: "qa", sessionId: "todo-refresh" };
 const navigation = { get: () => route,
   subscribe(listener) { listener(route); return () => {}; } };
@@ -87,9 +88,9 @@ document.querySelector("#recover").addEventListener("click", (event) => void run
   failOnce = true;
   eventId = 7;
   observe(7);
-  await until(() => todoStore.get().status === "error");
-  report.oldPlanRetainedOnError = toggle() === node && row.isConnected &&
-    Boolean(document.querySelector(".todo-dock-error"));
+  await until(() => todoStore.isPending());
+  report.oldPlanRetainedQuietly = toggle() === node && row.isConnected &&
+    !document.querySelector(".todo-dock-error") && !todoStore.get().error;
   await until(() => todoStore.get().status === "ready" && todoStore.get().data.eventId === 7);
   report.recovered = !document.querySelector(".todo-dock-error") && calls === 3;
   report.rowsRetained = document.querySelector(".todo-dock-list li") === row && row.className === "done";
@@ -110,16 +111,16 @@ document.querySelector("#race").addEventListener("click", (event) => void run(ev
 document.querySelector("#clear").addEventListener("click", (event) => void run(event.currentTarget, async () => {
   failOnce = true;
   observe(10);
-  await until(() => todoStore.get().status === "error");
+  await until(() => todoStore.isPending());
   eventId = 0;
   observe(11, true);
   await until(() => todoStore.get().status === "ready" && todoStore.get().data.eventId === 0);
   const afterClear = calls;
-  await new Promise((resolve) => setTimeout(resolve, 180));
+  await new Promise((resolve) => setTimeout(resolve, 700));
   report.canceledRetry = calls === afterClear;
   report.cleared = toggle() === null && todoStore.get().data.items.length === 0;
   report.mainInputFocused = document.activeElement === document.querySelector("#prompt");
-  report.passed = ["oldPlanRetainedOnError", "recovered", "rowsRetained", "expansionRetained",
+  report.passed = ["oldPlanRetainedQuietly", "recovered", "rowsRetained", "expansionRetained",
     "focusRetained", "staleErrorIgnored", "canceledRetry", "cleared", "mainInputFocused"]
     .every((key) => report[key] === true);
   result.dataset.passed = String(report.passed);

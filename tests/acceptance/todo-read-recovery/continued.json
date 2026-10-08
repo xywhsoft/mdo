@@ -1,0 +1,7 @@
+{
+  "draft": "",
+  "errorToasts": [],
+  "plan": "计划 · 2/2✓Inspect pixel tools✓Verify the result",
+  "readNotices": [],
+  "timeline": "18:49baseline查看思考与执行过程1 次工具调用Agent18:49The plan can continue.本轮 2 次模型调用 · 100 输入 / 40 输出 tokens · LLM <0.1 秒 · 工具和等待合计 <0.1 秒 · 1840.5 tok/s18:49update查看思考与执行过程1 次工具调用Agent18:49The plan can continue.本轮 2 次模型调用 · 100 输入 / 40 输出 tokens · LLM <0.1 秒 · 工具和等待合计 <0.1 秒 · 1886.9 tok/s18:50update-final查看思考与执行过程1 次工具调用Agent18:50The plan can continue.本轮 2 次模型调用 · 100 输入 / 40 输出 tokens · LLM <0.1 秒 · 工具和等待合计 <0.1 秒 · 1546.9 tok/s18:51待办恢复后继续Agent18:51The plan can continue.50 输入 / 20 输出 tokens · LLM <0.1 秒 · 1317.9 tok/s"
+}

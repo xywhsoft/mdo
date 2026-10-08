@@ -1,6 +1,7 @@
 import { approvalDecisionStatus, approvalDecisionStore, decideApproval, loadApprovals } from "../../state/approvals.js";
 import { answerAsk, selectedAsks, refreshSelectedAsks } from "../../state/asks.js";
 import { loadRuns } from "../../state/runs.js";
+import { selectedTodo, refreshSelectedTodo } from "../../state/todo.js";
 import { subscribeLocale, t } from "../../i18n.js";
 import { element, errorMessage, isImeKey, toast } from "../../utils/dom.js";
 import { createCompositionTracker } from "../../utils/composition.js";
@@ -197,7 +198,6 @@ export function createConversationDocks({ container, navigation, tasksStore, app
   const argumentsOpen = new Map();
   const approvalCards = new Map();
   let todoView = null;
-  let todoErrorView = null;
   let taskView = null;
   const readNotice = createDecisionReadNotice();
   const drafts = new Map();
@@ -414,8 +414,7 @@ export function createConversationDocks({ container, navigation, tasksStore, app
     const asks = askData?.projectId === selected.projectId &&
       askData?.sessionId === sessionId ? askData.items : [];
     const todo = todoStore.get().data;
-    const todoError = todoStore.get().status === "error" &&
-      todo?.projectId === selected.projectId && todo?.sessionId === sessionId;
+    const todoScope = todo?.projectId ? todo : selectedTodo();
     const todoItems = todo?.projectId === selected.projectId &&
       todo?.sessionId === sessionId ? todo.items : [];
     const recoveryState = recoveryStore?.get();
@@ -427,6 +426,8 @@ export function createConversationDocks({ container, navigation, tasksStore, app
       { kind: "approvals", state: approvalsStore.get(), retry: () => loadApprovals({ retry: true }) },
       ...(askScope.projectId === selected.projectId && askScope.sessionId === sessionId ?
         [{ kind: "asks", state: asksStore.get(), retry: () => refreshSelectedAsks({ retry: true }) }] : []),
+      ...(todoScope.projectId === selected.projectId && todoScope.sessionId === sessionId ?
+        [{ kind: "todo", state: todoStore.get(), retry: () => refreshSelectedTodo({ retry: true }) }] : []),
     ].filter(item => item.state.status === "error").map(item => ({ ...item, error: item.state.error })) : [];
     readNotice.sync(readFailures);
     const otherNodes = readFailures.length ? [readNotice.node] : [];
@@ -449,15 +450,6 @@ export function createConversationDocks({ container, navigation, tasksStore, app
       todoView.sync(todoItems, open);
       otherNodes.push(todoView.node);
     } else todoView = null;
-    if (todoError) {
-      const message = t("dock.todo.loadFailed", { error: errorMessage(todoStore.get().error) });
-      const contentKey = JSON.stringify([selected.projectId, sessionId, message]);
-      if (!todoErrorView || todoErrorView.contentKey !== contentKey)
-        todoErrorView = { contentKey, node: element("p", {
-          className: "todo-dock-error", text: message,
-        }) };
-      otherNodes.push(todoErrorView.node);
-    } else todoErrorView = null;
     if (tasks.length) {
       const key = `${selected.projectId}/${sessionId}`;
       if (!taskView || taskView.key !== key)
@@ -527,7 +519,7 @@ export function createConversationDocks({ container, navigation, tasksStore, app
     }
     if (focusedAsk && !askRoot.contains(document.activeElement))
       document.querySelector("#prompt")?.focus({ preventScroll: true });
-    container.hidden = searching || (!todoItems.length && !todoError && !tasks.length &&
+    container.hidden = searching || (!todoItems.length && !tasks.length &&
       !approvals.length && !asks.length && !needsRecovery && !readFailures.length);
     composerRegion?.toggleAttribute("data-decision-pending",
       Boolean(approvals.length || asks.length || needsRecovery));
@@ -569,7 +561,6 @@ export function createConversationDocks({ container, navigation, tasksStore, app
     subscribeLocale(() => {
       approvalCards.clear();
       todoView = null;
-      todoErrorView = null;
       taskView = null;
       recoveryTitle.textContent = t("recovery.title", {}, "上次回复未完成");
       render();

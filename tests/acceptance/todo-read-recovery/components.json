@@ -1,0 +1,14 @@
+{
+  "ready": true,
+  "reads": 7,
+  "oldPlanRetainedQuietly": true,
+  "recovered": true,
+  "rowsRetained": true,
+  "expansionRetained": true,
+  "focusRetained": true,
+  "staleErrorIgnored": true,
+  "canceledRetry": true,
+  "cleared": true,
+  "mainInputFocused": true,
+  "passed": true
+}

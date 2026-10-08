@@ -1,126 +1,85 @@
-import { api, resourceId, ApiError } from "../api/client.js";
+import { api, resourceId } from "../api/client.js";
 import { createResourceStore } from "./store.js";
 import { timelineStore, historyRemovalRange } from "../features/chat/timeline-store.js";
+import { isTransientReadError } from "../api/read-recovery.js";
 import { t } from "../i18n.js";
 
-export const todoStore = createResourceStore({
-  projectId: "", sessionId: "", eventId: 0, items: [],
+const EMPTY = Object.freeze({ projectId: "", sessionId: "", eventId: 0, items: [] });
+const recover = error => isTransientReadError(error) || error?.code === "todo_not_synced";
+export const todoStore = createResourceStore(EMPTY, {
+  recoverRead: recover, retainDataOnError: recover,
 });
-
-let generation = 0;
+let selection = EMPTY;
 let observedEventId = 0;
 let observedBoundaryId = 0;
 let observedBoundaryRange = null;
-let retryTimer = 0;
-let retryCount = 0;
-const MAX_RETRIES = 4;
-
-function stopRetry() {
-  window.clearTimeout(retryTimer);
-  retryTimer = 0;
-  retryCount = 0;
-}
-
-// Projection lag and transient reads share one finite budget. A callback already
-// queued before cancellation must not alter a new selection's timer or budget.
-function scheduleRetry(token) {
-  if (token !== generation || retryTimer || retryCount >= MAX_RETRIES) return;
-  retryTimer = window.setTimeout(() => {
-    if (token !== generation) return;
-    retryTimer = 0;
-    retryCount += 1;
-    void refreshTodo(token);
-  }, 120 * (2 ** retryCount));
-}
+export const selectedTodo = () => selection;
 
 export function clearTodo() {
-  generation += 1;
-  observedEventId = 0;
-  observedBoundaryId = 0;
+  selection = EMPTY;
+  observedEventId = observedBoundaryId = 0;
   observedBoundaryRange = null;
-  stopRetry();
-  todoStore.setData({ projectId: "", sessionId: "", eventId: 0, items: [] });
+  todoStore.reset();
 }
 
 export async function selectTodo(projectId, sessionId) {
-  const project = resourceId(projectId, "project");
-  const session = resourceId(sessionId, "session");
-  const token = ++generation;
-  observedEventId = 0;
-  observedBoundaryId = 0;
+  selection = Object.freeze({ projectId: resourceId(projectId, "project"),
+    sessionId: resourceId(sessionId, "session") });
+  observedEventId = observedBoundaryId = 0;
   observedBoundaryRange = null;
-  stopRetry();
-  todoStore.setData({ projectId: project, sessionId: session,
-    eventId: 0, items: [] });
-  await refreshTodo(token);
+  todoStore.reset({ ...EMPTY, ...selection });
+  await refreshSelectedTodo({ retry: true });
   observeTimeline(timelineStore.get());
 }
 
-async function refreshTodo(token = generation) {
-  const selected = todoStore.get().data;
-  if (!selected?.sessionId || token !== generation) return;
-  try {
-    const response = await api.get(
-      `/projects/${selected.projectId}/sessions/${selected.sessionId}/todo`);
-    if (token !== generation) return;
-    const data = response.data;
-    if (!data || !Array.isArray(data.items) || !Number.isSafeInteger(Number(data.event_id)))
+export function refreshSelectedTodo({ retry = false } = {}) {
+  const selected = selection;
+  if (!selected.sessionId || (!retry && todoStore.isPending()))
+    return Promise.resolve(todoStore.get());
+  return todoStore.load(async signal => {
+    const data = (await api.get(
+      `/projects/${selected.projectId}/sessions/${selected.sessionId}/todo`, { signal })).data;
+    // The store cancels obsolete reads before another selection/tool event.
+    // Never let their results mutate the projection floor either.
+    if (signal.aborted) throw new DOMException("Todo read cancelled", "AbortError");
+    const eventId = Number(data?.event_id);
+    if (!Array.isArray(data?.items) || data.event_id === null || !Number.isSafeInteger(eventId) || eventId < 0)
       throw new Error(t("todo.invalidResponse", {}, "计划响应无效"));
-    const eventId = Number(data.event_id);
     if (eventId < observedEventId || (observedBoundaryRange &&
-        eventId >= observedBoundaryRange.first && eventId < observedBoundaryRange.end)) {
-      if (retryCount >= MAX_RETRIES) throw new Error(t("todo.notSynced", {},
-        "计划状态尚未同步，请检查工具结果"));
-      scheduleRetry(token);
-      return;
-    }
-    stopRetry();
+        eventId >= observedBoundaryRange.first && eventId < observedBoundaryRange.end))
+      // Projection lag and transport errors share the same finite read budget.
+      throw Object.assign(new Error(t("todo.notSynced", {}, "计划状态尚未同步，请检查工具结果")),
+        { code: "todo_not_synced" });
+    observedEventId = Math.max(observedEventId, eventId);
     const previous = todoStore.get().data;
-    if (Number(data.event_id) >= Number(previous.eventId)) {
-      observedEventId = Math.max(observedEventId, Number(data.event_id));
-      todoStore.setData({ projectId: selected.projectId,
-        sessionId: selected.sessionId, eventId: Number(data.event_id),
-        items: data.items });
-    }
-  } catch (error) {
-    if (token !== generation) return;
-    todoStore.setError(error);
-    if (error instanceof ApiError && (error.code === "network_error" ||
-        error.status === 408 || error.status === 429 || error.status >= 500))
-      scheduleRetry(token);
-  }
+    return previous?.projectId === selected.projectId && previous.sessionId === selected.sessionId &&
+      previous.eventId === eventId && JSON.stringify(previous.items) === JSON.stringify(data.items)
+      ? previous : { ...selected, eventId, items: data.items };
+  }, { background: !retry });
 }
 
 function observeTimeline(state) {
-  const data = state.data;
-  const selected = todoStore.get().data;
-  if (!selected?.sessionId || selected.projectId !== data?.projectId ||
+  const data = state.data, selected = selection;
+  if (!selected.sessionId || selected.projectId !== data?.projectId ||
       selected.sessionId !== data?.sessionId) return;
-  const boundary = [...(data.events ?? [])].reverse().find((event) =>
+  const boundary = [...(data.events ?? [])].reverse().find(event =>
     historyRemovalRange(event) && Number(event.event_id) > observedBoundaryId);
   if (boundary) {
-    // A restored plan can have a lower event ID, including zero after clear.
-    // Invalidate older reads and their monotonic-plan floor before reloading.
+    // Restoring history may lower the plan's event ID, including zero after
+    // clear. Cancel old requests and remove their monotonic floor first.
     observedBoundaryId = Number(boundary.event_id);
     observedBoundaryRange = historyRemovalRange(boundary);
-    generation += 1;
     observedEventId = 0;
-    stopRetry();
-    todoStore.setData({ projectId: selected.projectId, sessionId: selected.sessionId,
-      eventId: 0, items: [] });
-    void refreshTodo();
+    todoStore.reset({ ...EMPTY, ...selected });
+    void refreshSelectedTodo({ retry: true });
     return;
   }
-  const latest = [...(data.events ?? [])].reverse().find((event) =>
-    event.kind === "tool_done" && event.tool_name === "mdo.todo" &&
-    event.success && event.agent_depth === 0 &&
-    Number(event.event_id) > observedEventId);
+  const latest = [...(data.events ?? [])].reverse().find(event =>
+    event.kind === "tool_done" && event.tool_name === "mdo.todo" && event.success &&
+    event.agent_depth === 0 && Number(event.event_id) > observedEventId);
   if (latest) {
-    // A newer tool event supersedes pending reads as well as scheduled retries.
-    generation += 1;
     observedEventId = Number(latest.event_id);
-    stopRetry();
-    void refreshTodo();
+    void refreshSelectedTodo({ retry: true });
   }
 }
 

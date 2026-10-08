@@ -697,6 +697,7 @@
   "dock.read.asks": "Conversation questions are temporarily unavailable. Check the connection and retry.",
   "dock.read.approvals": "Permission reviews are temporarily unavailable. Check the connection and retry.",
   "dock.read.runs": "Run status is temporarily unavailable. Check the connection and retry.",
+  "dock.read.todo": "The to-do list is temporarily unavailable. Check the connection and retry.",
   "approval.invalidResponse": "The permission review response is invalid. Read the review status again.",
   "dock.ask.title": "Answer needed",
   "run.created": "Preparing",
