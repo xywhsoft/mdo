@@ -1,0 +1,17 @@
+{
+  "command": "python tests/test_backup_stage_runtime.py --host .build/host/xsw.exe",
+  "host_revision": "3232f7b8efb02fdd6bf63a508ed1e69654d6759c",
+  "first_attempt": {
+    "exit_code": 1,
+    "failure": "tests/test_backup_stage_runtime.py:236: assert inventory() == before",
+    "live_frontend_controller_checks_passed": 2
+  },
+  "diagnostic_retry": {
+    "exit_code": 0,
+    "http_tls_probe": "PASS",
+    "live_frontend_controller_checks_passed": 4,
+    "diagnostic_only": true,
+    "inventory_differences_observed": false
+  },
+  "initial_inventory_difference": "unresolved; no production fix claimed"
+}

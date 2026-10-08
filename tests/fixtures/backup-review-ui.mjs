@@ -14,7 +14,7 @@ const meta = JSON.parse(await readFile(join(stage, "meta.json"), "utf8"));
 const project = meta.project_id, session = meta.id;
 const key = `${project}/${session}`;
 const requests = [], reviews = [];
-globalThis.window = { clearTimeout, setTimeout, addEventListener() {} };
+globalThis.window = { clearTimeout, setTimeout, addEventListener() {}, removeEventListener() {} };
 globalThis.document = { activeElement: null };
 globalThis.fetch = async (path, options = {}) => {
   const method = options.method ?? "GET";
@@ -23,7 +23,7 @@ globalThis.fetch = async (path, options = {}) => {
   if (path.endsWith("/draft")) return Response.json({ ok: true, data: draft });
   if (path.endsWith("/queue")) return Response.json({ ok: true, data: queue });
   if (path.includes("/queue/")) return Response.json({ ok: false, error: {
-    code: "queue_item_not_found", message: "No receipt for the fresh review ID" } }, { status: 404 });
+    code: "queue_receipt_not_found", message: "No receipt for the fresh review ID" } }, { status: 404 });
   assert.fail(`unexpected request ${path}`);
 };
 const drafts = createDraftStore({ onRestore() {}, onError(error) { throw error; }, onSaved() {} });

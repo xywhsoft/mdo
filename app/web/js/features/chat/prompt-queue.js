@@ -1,4 +1,5 @@
-import { api, attachmentUrl, resourceId } from "../../api/client.js";
+import { ApiError, api, attachmentUrl, resourceId } from "../../api/client.js";
+import { createRequestRecovery } from "../../api/request-recovery.js";
 import { subscribeLocale, t } from "../../i18n.js";
 import { clear, element, errorMessage, toast } from "../../utils/dom.js";
 import { createUnusedImageCleanup } from "./unused-image-cleanup.js";
@@ -33,7 +34,22 @@ function sameProfile(a, b) {
     a.permission_profile === b.permission_profile);
 }
 
+function queueResponse(response) {
+  const items = response?.data?.items;
+  const ids = new Set();
+  if (!Array.isArray(items) || items.length > 20 || items.some(item => {
+    if (typeof item?.id !== "string" || !/^[A-Za-z0-9_-][A-Za-z0-9._-]*$/.test(item.id) ||
+        ids.has(item.id) || typeof item.text !== "string" ||
+        !["pending", "staged", "sending"].includes(item.state) ||
+        typeof item.priority !== "boolean" || !Array.isArray(item.attachments) ||
+        item.attachments.some(id => typeof id !== "string" || !/^[0-9a-f]{32}$/.test(id))) return true;
+    ids.add(item.id); return false;
+  })) throw new ApiError("Invalid prompt queue response", { code: "invalid_response" });
+  return response;
+}
+
 export function createPromptQueue({ container, navigation, isRunActive, stagedEntries,
+  createRecovery = createRequestRecovery,
   isProfileBusy = () => false,
   isRunReviewPending = () => false, isSessionWritable = () => true,
   isSessionRunActive = () => false, modelsStore,
@@ -74,6 +90,7 @@ export function createPromptQueue({ container, navigation, isRunActive, stagedEn
   }
 
   function update(key, response) {
+    queueResponse(response);
     versions.set(key, (versions.get(key) ?? 0) + 1);
     const items = response.data?.items ?? [];
     if (!(queues.get(key)?.length) && items.length) expanded.set(key, true);
@@ -81,13 +98,21 @@ export function createPromptQueue({ container, navigation, isRunActive, stagedEn
     render();
   }
 
+  async function read(operation) {
+    const recovery = createRecovery();
+    try { return await recovery.request(operation); }
+    finally { recovery.dispose(); }
+  }
+
+  const readQueue = key => read(async signal => queueResponse(await api.get(path(key), { signal })));
+
   async function load(key, force = false) {
     if (!key) return;
     if (!force && queues.has(key)) return;
     if (loads.has(key)) return loads.get(key);
     const version = versions.get(key) ?? 0;
     const request = (async () => {
-      const response = await api.get(path(key));
+      const response = await readQueue(key);
       if ((versions.get(key) ?? 0) === version) {
         update(key, response);
         unusedImages.remember(key, response.data?.discard_images);
@@ -111,7 +136,7 @@ export function createPromptQueue({ container, navigation, isRunActive, stagedEn
     if (profile) body.profile = profile;
     const keepalive = new TextEncoder().encode(JSON.stringify(body)).length <= 60 * 1024;
     const reconcile = async () => {
-      const response = await api.get(path(key));
+      const response = await readQueue(key);
       update(key, response);
       if ((response.data?.items ?? []).some((item) =>
         item.id === body.id && item.text === body.text &&
@@ -136,13 +161,18 @@ export function createPromptQueue({ container, navigation, isRunActive, stagedEn
   }
 
   async function readReceipt(key, id) {
+    const expectedId = resourceId(id, "queue item");
     try {
-      const receipt = (await api.get(path(key, id))).data;
-      return receipt?.id === id && receipt.state === "accepted" &&
-        /^run-[A-Za-z0-9_.-]+$/.test(receipt.run_id ?? "")
-        ? receipt : null;
+      return await read(async signal => {
+        const receipt = (await api.get(path(key, expectedId), { signal })).data;
+        if (receipt?.id === expectedId && receipt.state === "starting") return null;
+        if (receipt?.id !== expectedId || receipt.state !== "accepted" ||
+            !/^run-[A-Za-z0-9_.-]+$/.test(receipt.run_id ?? ""))
+          throw new ApiError("Invalid prompt queue receipt", { code: "invalid_response" });
+        return receipt;
+      });
     } catch (error) {
-      if (error?.status === 404) return null;
+      if (error?.status === 404 && error.code === "queue_receipt_not_found") return null;
       throw error;
     }
   }

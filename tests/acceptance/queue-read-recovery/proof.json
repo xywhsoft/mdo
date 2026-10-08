@@ -1,0 +1,131 @@
+{
+  "proxy_phases": [
+    {
+      "mode": "queue-read",
+      "queue_posts": 1,
+      "run_posts": 1,
+      "native_run_accepts": 1,
+      "lost_responses": 0,
+      "delayed_responses": 0,
+      "recovery_failed": 0,
+      "receipt_failed": 0,
+      "receipt_reads": 0,
+      "queue_reads": 6,
+      "queue_failed": 2,
+      "delayed_reads": 0,
+      "recovery_left": 0,
+      "receipt_left": 0,
+      "queue_left": 0,
+      "queue_hold_left": 0,
+      "armed": true
+    },
+    {
+      "mode": "queue-hold",
+      "queue_posts": 2,
+      "run_posts": 2,
+      "native_run_accepts": 2,
+      "lost_responses": 0,
+      "delayed_responses": 0,
+      "recovery_failed": 0,
+      "receipt_failed": 0,
+      "receipt_reads": 0,
+      "queue_reads": 31,
+      "queue_failed": 0,
+      "delayed_reads": 1,
+      "recovery_left": 0,
+      "receipt_left": 0,
+      "queue_left": 0,
+      "queue_hold_left": 0,
+      "armed": true
+    }
+  ],
+  "model_calls": {
+    "\u961f\u5217\u8bfb\u53d6\u77ed\u6682\u6545\u969c\u540e\u53d1\u9001 \u2014 QUEUE_READ_1008": 1,
+    "\u5207\u6362\u4f1a\u8bdd\u4fdd\u6301\u6b63\u786e\u8f93\u5165 \u2014 QUEUE_OTHER_1008": 1,
+    "\u6302\u8d77\u8bfb\u53d6\u6062\u590d\u540e\u7ee7\u7eed \u2014 QUEUE_HOLD_1008": 1
+  },
+  "sessions": [
+    {
+      "id": "V-OSJx-dntchKdmd-nypKFv68XEocmYr",
+      "title": "Start queue-read",
+      "user_inputs": [
+        "\u961f\u5217\u8bfb\u53d6\u77ed\u6682\u6545\u969c\u540e\u53d1\u9001 \u2014 QUEUE_READ_1008"
+      ],
+      "final_errors": 0,
+      "event_kinds": {
+        "agent_start": 1,
+        "model_start": 1,
+        "model_text_delta": 1,
+        "model_done": 1,
+        "agent_done": 1
+      },
+      "queue": {
+        "items": [],
+        "discard_images": []
+      },
+      "draft": {
+        "revision": 4,
+        "text": "",
+        "attachments": [],
+        "run_admission_uncertain": false,
+        "submission": null,
+        "submissions": []
+      }
+    },
+    {
+      "id": "V-OSJx-ePLy-q7EcqpY0Np8Q96b9dUAX",
+      "title": "Start queue-hold",
+      "user_inputs": [
+        "\u6302\u8d77\u8bfb\u53d6\u6062\u590d\u540e\u7ee7\u7eed \u2014 QUEUE_HOLD_1008"
+      ],
+      "final_errors": 0,
+      "event_kinds": {
+        "agent_start": 1,
+        "model_start": 1,
+        "model_text_delta": 1,
+        "model_done": 1,
+        "agent_done": 1
+      },
+      "queue": {
+        "items": [],
+        "discard_images": []
+      },
+      "draft": {
+        "revision": 4,
+        "text": "",
+        "attachments": [],
+        "run_admission_uncertain": false,
+        "submission": null,
+        "submissions": []
+      }
+    },
+    {
+      "id": "V-OSJx-erwaoYtGd_UtMPR9qN_9a16ae",
+      "title": "Start queue-other",
+      "user_inputs": [
+        "\u5207\u6362\u4f1a\u8bdd\u4fdd\u6301\u6b63\u786e\u8f93\u5165 \u2014 QUEUE_OTHER_1008"
+      ],
+      "final_errors": 0,
+      "event_kinds": {
+        "agent_start": 1,
+        "model_start": 1,
+        "model_text_delta": 1,
+        "model_done": 1,
+        "agent_done": 1
+      },
+      "queue": {
+        "items": [],
+        "discard_images": []
+      },
+      "draft": {
+        "revision": 4,
+        "text": "",
+        "attachments": [],
+        "run_admission_uncertain": false,
+        "submission": null,
+        "submissions": []
+      }
+    }
+  ],
+  "websocket_unavailable": true
+}

@@ -4,6 +4,8 @@ The loopback proxy forwards real writes before losing/delaying their response.
 It can fail two recovery or receipt GETs. WebSocket is unavailable here so the
 real polling fallback is exercised. No source, clipboard or download mocking.
 Arm /__qa/arm/preflight, /lost or /slow, then send in the matching printed task.
+With --scenario queue, arm /queue-read before opening the first URL, then arm
+/queue-hold before selecting its task and navigate to the third task meanwhile.
 Create the printed stop file when finished; the fixture lasts ten minutes.
 """
 import argparse
@@ -58,21 +60,25 @@ class Proxy(BaseHTTPRequestHandler):
     def proxy(self):
         if self.path.startswith("/__qa/arm/") and self.command == "GET":
             mode = self.path.rsplit("/", 1)[-1]
-            assert mode in ("preflight", "lost", "slow")
+            assert mode in ("preflight", "lost", "slow", "queue-read", "queue-hold")
             with self.server.lock:
                 self.server.phase = {"mode": mode, "queue_posts": 0, "run_posts": 0,
                     "native_run_accepts": 0, "lost_responses": 0, "delayed_responses": 0,
                     "recovery_failed": 0, "receipt_failed": 0, "receipt_reads": 0,
-                    "recovery_left": 0, "receipt_left": 0, "armed": True}
+                    "queue_reads": 0, "queue_failed": 0, "delayed_reads": 0,
+                    "recovery_left": 0, "receipt_left": 0,
+                    "queue_left": 2 if mode == "queue-read" else 0,
+                    "queue_hold_left": 1 if mode == "queue-hold" else 0, "armed": True}
                 self.server.phases.append(self.server.phase)
             return self.reply(200, self.server.phase)
         if self.headers.get("Upgrade", "").lower() == "websocket":
             return self.reply(503, {"ok": False, "error": {"code": "fixture_live_unavailable"}})
         run_post = self.command == "POST" and self.path.startswith("/api/v1/projects/") and self.path.endswith("/runs")
         queue_post = self.command == "POST" and self.path.startswith("/api/v1/projects/") and self.path.endswith("/queue")
+        queue_get = self.command == "GET" and self.path.startswith("/api/v1/projects/") and self.path.endswith("/queue")
         recovery_get = self.command == "GET" and self.path.endswith("/recovery")
         receipt_get = self.command == "GET" and "/queue/" in self.path
-        lose = delay = fail = False
+        lose = delay = fail = hold_queue = False
         with self.server.lock:
             phase = self.server.phase
             if phase:
@@ -86,7 +92,11 @@ class Proxy(BaseHTTPRequestHandler):
                     delay = phase["mode"] == "slow" and phase["armed"]
                     if lose or delay: phase["armed"] = False
                 if receipt_get: phase["receipt_reads"] += 1
-                for matched, field in ((recovery_get, "recovery"), (receipt_get, "receipt")):
+                if queue_get:
+                    phase["queue_reads"] += 1
+                    if phase["queue_hold_left"]:
+                        phase["queue_hold_left"] -= 1; phase["delayed_reads"] += 1; hold_queue = True
+                for matched, field in ((recovery_get, "recovery"), (receipt_get, "receipt"), (queue_get, "queue")):
                     if matched and phase[field + "_left"]:
                         phase[field + "_left"] -= 1; phase[field + "_failed"] += 1; fail = True
         if fail:
@@ -105,7 +115,7 @@ class Proxy(BaseHTTPRequestHandler):
                     phase["native_run_accepts"] += 1
                     if lose: phase["receipt_left"] = 2; phase["lost_responses"] += 1
                     if delay: phase["delayed_responses"] += 1
-            if delay: self.server.stopped.wait(12)
+            if delay or hold_queue: self.server.stopped.wait(12)
             self.send_response(response.status)
             for key, value in response.getheaders():
                 if key.lower() not in ("content-length", "connection", "transfer-encoding"):
@@ -123,6 +133,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--packed", type=Path, required=True)
     parser.add_argument("--directory", type=Path, required=True)
+    parser.add_argument("--scenario", choices=("admission", "queue"), default="admission")
     args = parser.parse_args(); base = args.directory.resolve()
     assert not base.exists(), "Choose a fresh isolated directory"
     base.mkdir(parents=True); native, port = site(base, "native", args.packed.resolve())
@@ -145,7 +156,8 @@ def main():
         configure_model(port, f"http://127.0.0.1:{model.server_port}/v1")
         sessions = [call("POST", "/api/v1/sessions", {"project_id": "default", "title": "Start " + mode,
             "model_id": "queue-fixture", "reasoning_effort": "none", "permission_profile": "balanced"}, 201)
-            for mode in ("preflight", "lost", "slow")]
+            for mode in (("preflight", "lost", "slow") if args.scenario == "admission" else
+                ("queue-read", "queue-hold", "queue-other"))]
         print(json.dumps({"urls": [f"http://127.0.0.1:{proxy.server_port}/#/projects/default/sessions/" + item["id"] for item in sessions],
             "proxy_port": proxy.server_port, "native_port": port, "stop_file": str(base / "stop")}), flush=True)
         deadline = time.monotonic() + 600
