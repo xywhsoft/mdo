@@ -3,22 +3,35 @@ import { createResourceStore } from "./store.js";
 import { withSessionRuntime } from "./session-runtime.js";
 import { t } from "../i18n.js";
 import { downloadSessionBackup } from "../api/backup-download.js";
+import { isTransientReadError } from "../api/read-recovery.js";
 
-export const sessionsStore = createResourceStore({ generation: 0, items: [] });
-export const sessionDetailStore = createResourceStore();
+const readRecovery = { recoverRead: isTransientReadError,
+  retainDataOnError: isTransientReadError };
+export const sessionsStore = createResourceStore({ generation: 0, items: [] }, readRecovery);
+export const sessionDetailStore = createResourceStore(null, readRecovery);
 
-export function loadSessions() {
-  return sessionsStore.load(async () => (await api.get("/sessions")).data);
+export function loadSessions({ retry = false } = {}) {
+  return sessionsStore.load(async signal => {
+    const data = (await api.get("/sessions", { signal })).data;
+    if (!Array.isArray(data?.items))
+      throw new Error(t("sessionList.invalidResponse", {}, "会话列表响应无效"));
+    return data;
+  }, { background: !retry });
 }
 
 export function loadSession(projectId, sessionId) {
-  return sessionDetailStore.load(() => readSession(projectId, sessionId));
+  const previous = sessionDetailStore.get().data;
+  if (previous && (previous.project_id !== projectId || previous.id !== sessionId))
+    sessionDetailStore.reset();
+  return sessionDetailStore.load(signal => readSession(projectId, sessionId, { signal }));
 }
 
-export async function readSession(projectId, sessionId) {
+export async function readSession(projectId, sessionId, options = {}) {
   const project = resourceId(projectId, "project");
   const session = resourceId(sessionId, "session");
-  const response = await api.get(`/projects/${project}/sessions/${session}`);
+  const response = await api.get(`/projects/${project}/sessions/${session}`, options);
+  if (response.data?.project_id !== projectId || response.data?.id !== sessionId)
+    throw new Error(t("sessionLoad.invalidDetail", {}, "会话响应与当前任务不符，请重新读取"));
   return { ...response.data, etag: response.etag };
 }
 
@@ -29,7 +42,7 @@ export async function createSession(input) {
     if (input[key]) body[key] = input[key];
   }
   const response = await api.post("/sessions", body);
-  await loadSessions();
+  void loadSessions({ retry: true });
   return response.data;
 }
 
@@ -47,8 +60,10 @@ function etag(session) {
   return `"mdo-session-${id}-${revision}"`;
 }
 
-async function refreshAfter(response) {
-  await loadSessions();
+function refreshAfter(response) {
+  // The write is already acknowledged. Sidebar recovery must not delay it,
+  // and this fresh read supersedes any snapshot started before the write.
+  void loadSessions({ retry: true });
   return { ...response.data, etag: response.etag };
 }
 
@@ -91,7 +106,7 @@ export async function forkSession(session, input) {
   const body = { through_sequence: sequence(input.through_sequence) };
   if (input.title) body.title = input.title;
   const response = await api.post(`${endpoint(session)}/fork`, body, { ifMatch: etag(session) });
-  await loadSessions();
+  void loadSessions({ retry: true });
   return { ...response.data, etag: response.etag };
 }
 
@@ -110,7 +125,7 @@ export async function truncateSession(session, throughSequence, sourceEventId, o
     { ifMatch: etag(session), signal: options.signal });
   // The acknowledged cut is enough to continue. A sidebar refresh must not
   // delay the next run or convert a successful history edit into a timeout.
-  void loadSessions();
+  void loadSessions({ retry: true });
   return { ...response.data, etag: response.etag };
 }
 

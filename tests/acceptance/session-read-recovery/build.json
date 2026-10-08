@@ -1,0 +1,18 @@
+{
+  "qa_base": "4306f3d",
+  "candidate": "D:\\GIT\\mdo\\.build\\conversation-acceptance\\mdo-session-read-final.exe",
+  "size": 4445947,
+  "sha256": "f5769c2eddc396b6381124047428fca11986f5cae52816ee5499151b23525101",
+  "frontend_sha256": {
+    "js/state/sessions.js": "a8ebe528cffffd0cc05e6980078c052ad6aa264dd1848350d1cefa6650238e16",
+    "js/app.js": "29b5e58045eb9c86f5f112a744b6b2d314916c797c15f84816c7414c049173b9",
+    "js/features/sessions/session-list.js": "0fd738dcfbca0a43b7a5f8f8a12b943c18c06ed3703b874a5781b227488c9c2b",
+    "js/features/shell/session-load-notice.js": "ed280a23ab6b77a58341e5f2dc2fe20362a732906c710695efb9c1db7c3774be",
+    "js/features/shell/session-metadata-sync.js": "38fae8aa2ad5a9b3fb100904f5f5a08491c972aa2bc806225f7e1fae94e919be",
+    "lang/zh-CN.json": "cdd136ce8cbfb5b494d6caf8fb86bbafb584c9cf68e58100436274ef9b768802",
+    "lang/en-US.json": "e119e6a045b102aacb9ed552676671eea7baa56ef55c50e65da338ea840cef58",
+    "lang/ru-RU.json": "a057272a39bf23175218fa50ec80706a20070d0536aa4124a9275b6ca5df78ef"
+  },
+  "qa_seam_absent": true,
+  "xs_pin": "0b7e041b16f06bf1cd07833bb008c53bc19351ad"
+}

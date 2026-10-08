@@ -1,4 +1,6 @@
 import { subscribeLocale, t } from "../../i18n.js";
+import { errorMessage } from "../../utils/dom.js";
+import { isTransientReadError } from "../../api/read-recovery.js";
 
 // A direct session URL may finish shell startup before its detail request.
 // Keep that destination visible and recoverable while the request is pending.
@@ -40,7 +42,7 @@ export function createSessionLoadNotice({ navigation, store, conversation,
     const pendingHistory = timeline && (!matching || history.data.initializing || history.data.syncing);
     const historyError = matching && (history.data.syncError ||
       (history.status === "error" ? history.error : null));
-    if (!key || (hasDetail && !pendingHistory && !historyError)) {
+    if (!key || (hasDetail && state.status !== "error" && !pendingHistory && !historyError)) {
       clearTimer();
       notice.hidden = true;
       delete conversation.dataset.sessionLoad;
@@ -63,7 +65,9 @@ export function createSessionLoadNotice({ navigation, store, conversation,
       : t("sessionLoad.syncing", {}, "正在同步对话…") : failed
       ? t("sessionLoad.failedTitle", {}, "任务暂时无法载入")
       : t("sessionLoad.loadingTitle", {}, "正在载入任务…");
-    const body = hasDetail ? history?.data?.events?.length
+    const body = state.status === "error" ? isTransientReadError(state.error)
+      ? t("sessionLoad.detailUnavailable", {}, "暂时无法读取任务信息，请检查连接后重试；会话记录和草稿会保留。")
+      : errorMessage(state.error) : hasDetail ? history?.data?.events?.length
       ? t("sessionLoad.cached", {}, "已显示保留的对话，正在检查最新内容。")
       : t("sessionLoad.history", {}, "正在读取最近的对话，较早历史将在向上滚动时加载。") : failed
       ? t("sessionLoad.failedDescription", {}, "请重试读取当前任务；会话记录和草稿不会被删除。")
@@ -103,7 +107,8 @@ export function createSessionLoadNotice({ navigation, store, conversation,
     delayed = false;
     clearTimer();
     const route = navigation.get(), data = store.get().data;
-    if (onRetryHistory && data?.project_id === route.projectId && data?.id === route.sessionId)
+    if (store.get().status !== "error" && onRetryHistory &&
+        data?.project_id === route.projectId && data?.id === route.sessionId)
       void onRetryHistory();
     else navigation.revalidate();
     render();

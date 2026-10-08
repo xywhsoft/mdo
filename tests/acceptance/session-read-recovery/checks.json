@@ -1,0 +1,20 @@
+{
+  "node_checks": 54,
+  "frontend_contract_checks": 3,
+  "stress_tests": false,
+  "phone_tested": false,
+  "daily_binary_updated_by_this_stage": false,
+  "website_updated_by_this_stage": false,
+  "input_integrity": "pending follow-up: earlier untraced UI showed duplicated text; focused input tracing did not reproduce it",
+  "cases": {
+    "list_transient_two": "passed",
+    "list_exhaustion_six": "passed",
+    "detail_transient_two": "passed",
+    "warm_detail_exhaustion_six": "passed",
+    "explicit_list_retry_focus": "passed",
+    "explicit_detail_retry_continue": "passed",
+    "acknowledged_profile_does_not_wait_for_sidebar": "passed",
+    "cold_detail_loading_copy": "passed",
+    "distinct_wire_model_dispatch": "passed in instrumented QA fixture"
+  }
+}

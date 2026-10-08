@@ -78,3 +78,28 @@ test("remote restore rechecks the pending queue once", async () => {
   assert.equal(reads, 1);
   assert.equal(restores, 1);
 });
+
+test("background metadata does not compete with the selected task's pending read", async () => {
+  const route = { view: "workspace", projectId: "default", sessionId: "one" };
+  const store = createResourceStore(); store.setData(session("one", 1));
+  const detail = deferred(); const pending = store.load(() => detail.promise);
+  const sync = createSessionMetadataSync({ navigation: { get: () => route }, store,
+    readSession: async () => { throw new Error("duplicate metadata request"); },
+    loadSessions: async () => {}, onRestored: async () => {} });
+  assert.equal(await sync.refresh(), false);
+  detail.resolve(session("one", 2)); await pending;
+});
+
+test("an observed restore can release the queue before a stalled sidebar read", async () => {
+  const route = { view: "workspace", projectId: "default", sessionId: "one" };
+  const store = createResourceStore(); store.setData(session("one", 1, "archived"));
+  const sidebar = deferred(); let restores = 0;
+  const sync = createSessionMetadataSync({ navigation: { get: () => route }, store,
+    readSession: async () => session("one", 2), loadSessions: () => sidebar.promise,
+    onRestored: async () => { restores++; } });
+  const pending = sync.refresh(); let finished = false;
+  void pending.then(() => { finished = true; });
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(restores, 1); assert.equal(finished, true);
+  sidebar.resolve(); assert.equal(await pending, true);
+});

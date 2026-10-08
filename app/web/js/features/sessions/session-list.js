@@ -3,6 +3,7 @@ import { currentLocale, subscribeLocale, t } from "../../i18n.js";
 import { sessionActionItems } from "./session-actions.js";
 import { mountIcons } from "../../components/icons.js";
 import { recentSessions, sidebarGroups, sidebarWindow } from "./sidebar-tree.js";
+import { isTransientReadError } from "../../api/read-recovery.js";
 
 export function sessionRunActivities(runs = []) {
   const activities = new Map();
@@ -29,7 +30,7 @@ function activityText(activity) {
 
 export function createSessionList({ container, count, filter, searchInput, store, projectsStore, runsStore,
   navigation, onSelect, onAction, onNewInProject, onAddProject,
-  onRefreshProjects, onProjectAction }) {
+  onRefreshProjects, onProjectAction, onRetrySessions }) {
   let query = "";
   let status = filter.value;
   let openMenu = "";
@@ -48,11 +49,47 @@ export function createSessionList({ container, count, filter, searchInput, store
   const sessionKey = (session) => `${session.project_id}/${session.id}`;
   const currentSession = (key) => (state.data?.items ?? [])
     .find((session) => sessionKey(session) === key);
+  let readError = null;
+  const readMessage = element("p");
+  const readRetry = element("button", { className: "text-button session-read-retry",
+    attrs: { type: "button" } });
+  const readNotice = element("div", { className: "resource-error session-read-notice",
+    attrs: { role: "status" } }, [readMessage, readRetry]);
+  readRetry.addEventListener("click", () => {
+    if (store.isPending?.()) return;
+    void onRetrySessions?.();
+    syncReadNotice();
+  });
+
+  function syncReadNotice() {
+    if (state.status === "error") readError = state.error;
+    else if (state.status === "ready" || state.status === "idle") readError = null;
+    if (!readError) {
+      const hadFocus = readNotice.contains(document.activeElement);
+      readNotice.remove();
+      if (hadFocus) (container.querySelector('.session-item[aria-current="page"]') ??
+        searchInput ?? filter).focus({ preventScroll: true });
+      return;
+    }
+    readMessage.textContent = isTransientReadError(readError)
+      ? t("sessionList.readFailed", {}, "暂时无法读取会话列表，请检查连接后重试。")
+      : errorMessage(readError);
+    const pending = Boolean(store.isPending?.());
+    readRetry.textContent = pending ? t("sessionLoad.retrying") : t("sessionLoad.retry");
+    readRetry.setAttribute("aria-disabled", String(pending));
+    readRetry.hidden = !onRetrySessions;
+    if (!readNotice.isConnected) container.prepend(readNotice);
+  }
+
+  function coldRead(snapshot) {
+    return !snapshot.updatedAt && !snapshot.data?.items?.length &&
+      ["loading", "refreshing"].includes(snapshot.status);
+  }
 
   function storeContentKey(snapshot) {
     const items = snapshot.data?.items ?? [];
-    if (snapshot.status === "error") return JSON.stringify(["error", errorMessage(snapshot.error)]);
-    if (snapshot.status === "loading" && items.length === 0) return '"loading"';
+    if (snapshot.status === "error" && !snapshot.updatedAt && !items.length) return '"unavailable"';
+    if (coldRead(snapshot)) return '"loading"';
     // A revision or timestamp can change without changing any visible row.
     // Keep the row mounted so polling cannot clear selection or menu focus.
     return JSON.stringify(recentSessions(items).map(({ project_id, id, title, status, pinned,
@@ -144,6 +181,7 @@ export function createSessionList({ container, count, filter, searchInput, store
     const requestedFocus = focusRequest;
     focusRequest = null;
     const focused = document.activeElement;
+    const retainedReadFocus = readNotice.contains(focused);
     const scrollTop = container.scrollTop;
     const retainedSidebarFocus = container.contains(focused)
       ? focused.dataset.sidebarFocus : "";
@@ -166,18 +204,20 @@ export function createSessionList({ container, count, filter, searchInput, store
       locale: currentLocale(), projectSort, defaultProjectName: t("nav.defaultProject") });
     const searching = Boolean(query.trim());
     count.textContent = String(groups.total);
-    container.setAttribute("aria-busy", String(state.status === "loading"));
+    container.setAttribute("aria-busy", String(coldRead(state)));
     clear(container);
+    syncReadNotice();
 
-    if (state.status === "error") {
+    if (state.status === "error" && !state.updatedAt && !state.data?.items?.length) {
       openMenu = "";
-      container.append(element("div", { className: "resource-error", text: errorMessage(state.error) }));
+      if (retainedReadFocus) readRetry.focus({ preventScroll: true });
       return;
     }
-    if (state.status === "loading" && !state.data?.items?.length) {
+    if (coldRead(state)) {
       openMenu = "";
       container.append(element("div", { className: "empty-state",
         text: t("nav.loading", {}, "正在载入会话…") }));
+      if (retainedReadFocus && readNotice.isConnected) readRetry.focus({ preventScroll: true });
       return;
     }
 
@@ -432,6 +472,10 @@ export function createSessionList({ container, count, filter, searchInput, store
         container.querySelector(".session-item, .sidebar-section-toggle") ?? filter).focus();
     }
     syncIndicators();
+    if (retainedReadFocus && !restoredFocus)
+      (readNotice.isConnected ? readRetry :
+        container.querySelector('.session-item[aria-current="page"]') ?? searchInput ?? filter)
+        .focus({ preventScroll: true });
   }
 
   const unsubscribeStore = store.subscribe((next) => {
@@ -441,9 +485,10 @@ export function createSessionList({ container, count, filter, searchInput, store
       renderedStoreKey = key;
       render();
     } else {
-      container.setAttribute("aria-busy", String(next.status === "loading"));
+      container.setAttribute("aria-busy", String(coldRead(next)));
       syncTimes();
     }
+    syncReadNotice();
   });
   const unsubscribeProjects = projectsStore.subscribe(render);
   const unsubscribeNavigation = navigation.subscribe(() => {

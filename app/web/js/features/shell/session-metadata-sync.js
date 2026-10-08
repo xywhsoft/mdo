@@ -6,7 +6,8 @@ export function createSessionMetadataSync({ navigation, store, readSession,
     const { view, projectId, sessionId } = navigation.get();
     const session = store.get().data;
     if (view !== "workspace" || !projectId || !sessionId ||
-        session?.project_id !== projectId || session.id !== sessionId) return false;
+        session?.project_id !== projectId || session.id !== sessionId ||
+        store.isPending?.()) return false;
     const key = `${projectId}/${sessionId}`;
     if (inFlight.has(key)) return inFlight.get(key);
     const request = (async () => {
@@ -20,7 +21,7 @@ export function createSessionMetadataSync({ navigation, store, readSession,
           !Number.isSafeInteger(fresh.revision) ||
           fresh.revision <= current.revision) return false;
       store.setData(fresh);
-      await loadSessions();
+      void loadSessions();
       if (fresh.status === "active" && current.status !== "active" &&
           navigation.get().projectId === projectId &&
           navigation.get().sessionId === sessionId &&

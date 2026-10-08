@@ -115,6 +115,7 @@ const RUN_STATE_LABEL = Object.freeze({
   archived: ["run.archived", "已归档"],
   trash: ["run.trash", "回收站"],
   loading: ["run.loading", "载入中"],
+  unavailable: ["sessionLoad.failedTitle", "任务暂时无法载入"],
 });
 
 function runStateText(state) {
@@ -322,6 +323,7 @@ export async function boot() {
     onAction: handleSessionAction,
     onAddProject: (origin) => projectDialog.open(null, origin),
     onRefreshProjects: loadProjects,
+    onRetrySessions: () => loadSessions({ retry: true }),
     onProjectAction(action, projectId, origin) {
       if (action === "edit") return projectDialog.open({ id: projectId }, origin);
       if (action === "unregister") return projectManagement.openUnregister({ id: projectId }, origin);
@@ -346,8 +348,9 @@ export async function boot() {
   const backupImport = createSessionBackupImport({ dialog: $("#session-backup-import-dialog"),
     projectsStore, preferredProject: () => navigation.preferredProject(), fallbackFocus: () => prompt,
     async openSession(result) {
-      const loaded = await loadSessions();
-      if (loaded.status !== "ready") throw loaded.error;
+      // Import has been confirmed. Opening its task must not depend on the
+      // sidebar catalog being available at that same moment.
+      void loadSessions({ retry: true });
       navigation.select(result.project_id, result.session_id); closeDrawers();
     },
   });
@@ -1236,6 +1239,8 @@ export async function boot() {
 
   function syncPromptPlaceholder() {
     prompt.placeholder = sessionWritable ? t("shell.prompt", {}, "向墨斗描述任务…")
+      : selectedSessionStatus === "loading" ? t("sessionLoad.loadingTitle")
+      : selectedSessionStatus === "unavailable" ? t("sessionLoad.failedTitle")
       : t("composer.readOnly", {}, "该会话不可运行；请先恢复到进行中");
   }
 
@@ -1249,7 +1254,8 @@ export async function boot() {
     const session = state.data;
     updateExportButtons();
     sessionWritable = session ? session.status === "active" : !navigation.get().sessionId;
-    selectedSessionStatus = session?.status ?? (navigation.get().sessionId ? "loading" : "active");
+    selectedSessionStatus = session?.status ?? (navigation.get().sessionId
+      ? state.status === "error" ? "unavailable" : "loading" : "active");
     promptQueue.render();
     syncPromptPlaceholder();
     setRun(activeRun);
@@ -1705,7 +1711,11 @@ export async function boot() {
       if (key) {
         const finishLoad = queueBlocked.beginLoad(key);
         try {
-          const detail = await loadSession(projectId, sessionId);
+          // load() settles its first attempt. Wait for the selected resource
+          // to finish recovery before releasing the queue's context gate.
+          void loadSession(projectId, sessionId);
+          const detail = await waitForSelectedDetail({ navigation,
+            store: sessionDetailStore, isSelected: stillSelected });
           if (!stillSelected()) return;
           if (detail.status !== "ready" || detail.data?.project_id !== projectId ||
               detail.data.id !== sessionId) {

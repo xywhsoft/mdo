@@ -1,0 +1,84 @@
+{
+  "model_calls": {
+    "ornith-1.5-35b": 4
+  },
+  "faults": {
+    "list_remaining": 0,
+    "list_failed": 6,
+    "detail_remaining": 0,
+    "detail_failed": 2,
+    "profile_writes": 1
+  },
+  "sessions": [
+    {
+      "id": "V-OSJcfDJZiLlRgQy6xpD7Pqwq8ig5db",
+      "detail": {
+        "id": "V-OSJcfDJZiLlRgQy6xpD7Pqwq8ig5db",
+        "project_id": "default",
+        "parent_session_id": "",
+        "title": "Session read recovery",
+        "agent_id": "mdo.default",
+        "model_id": "queue-fixture-two",
+        "protocol": "openai-chat-completions",
+        "reasoning_effort": "medium",
+        "permission_profile": "balanced",
+        "workspace_root": "D:\\GIT\\mdo\\.build\\conversation-acceptance\\session-read-native-v3\\home\\workspace",
+        "status": "active",
+        "revision": 2,
+        "created_at": 1791458957763104,
+        "updated_at": 1791459115497551,
+        "pinned": false,
+        "runtime_open": false,
+        "config_revision": 4,
+        "model_generation": 3,
+        "module_generation": 1,
+        "skill_generation": 1,
+        "max_output_tokens": 16384,
+        "forked_through_sequence": 0
+      },
+      "final_errors": 0,
+      "event_kinds": {
+        "agent_start": 3,
+        "model_start": 3,
+        "model_text_delta": 3,
+        "model_done": 3,
+        "agent_done": 3
+      }
+    },
+    {
+      "id": "V-OSJcfDgkIW5vFg0TbbgUHCyPwojN4n",
+      "detail": {
+        "id": "V-OSJcfDgkIW5vFg0TbbgUHCyPwojN4n",
+        "project_id": "default",
+        "parent_session_id": "",
+        "title": "Second saved task",
+        "agent_id": "mdo.default",
+        "model_id": "queue-fixture",
+        "protocol": "openai-chat-completions",
+        "reasoning_effort": "none",
+        "permission_profile": "balanced",
+        "workspace_root": "D:\\GIT\\mdo\\.build\\conversation-acceptance\\session-read-native-v3\\home\\workspace",
+        "status": "active",
+        "revision": 1,
+        "created_at": 1791458957773541,
+        "updated_at": 1791458957773541,
+        "pinned": false,
+        "runtime_open": false,
+        "config_revision": 3,
+        "model_generation": 3,
+        "module_generation": 1,
+        "skill_generation": 1,
+        "max_output_tokens": 16384,
+        "forked_through_sequence": 0
+      },
+      "final_errors": 0,
+      "event_kinds": {
+        "agent_start": 1,
+        "model_start": 1,
+        "model_text_delta": 1,
+        "model_done": 1,
+        "agent_done": 1
+      }
+    }
+  ]
+}

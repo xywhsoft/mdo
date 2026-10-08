@@ -1,0 +1,100 @@
+{
+  "model_calls": {
+    "ornith-1.5-35b": 1,
+    "session-read-alternate": 1
+  },
+  "faults": {
+    "list_remaining": 0,
+    "list_failed": 0,
+    "detail_remaining": 0,
+    "detail_failed": 0,
+    "profile_writes": 1
+  },
+  "sessions": [
+    {
+      "id": "V-OSJfMQjCkMO-QLqSsPgKP4pOj0Sbtt",
+      "detail": {
+        "id": "V-OSJfMQjCkMO-QLqSsPgKP4pOj0Sbtt",
+        "project_id": "default",
+        "parent_session_id": "",
+        "title": "Session read recovery",
+        "agent_id": "mdo.default",
+        "model_id": "queue-fixture-two",
+        "protocol": "openai-chat-completions",
+        "reasoning_effort": "medium",
+        "permission_profile": "balanced",
+        "workspace_root": "D:\\GIT\\mdo\\.build\\conversation-acceptance\\session-read-input-trace\\home\\workspace",
+        "status": "active",
+        "revision": 2,
+        "created_at": 1791459680064192,
+        "updated_at": 1791459786185661,
+        "pinned": false,
+        "runtime_open": false,
+        "config_revision": 4,
+        "model_generation": 3,
+        "module_generation": 1,
+        "skill_generation": 1,
+        "max_output_tokens": 16384,
+        "forked_through_sequence": 0
+      },
+      "user_inputs": [
+        "\u4e2d\u6587\u8349\u7a3f\u53ea\u8f93\u5165\u4e00\u6b21",
+        "selected-model-after-save"
+      ],
+      "draft": {
+        "revision": 10,
+        "text": "",
+        "attachments": [],
+        "run_admission_uncertain": false,
+        "submission": null,
+        "submissions": []
+      },
+      "final_errors": 0,
+      "event_kinds": {
+        "agent_start": 2,
+        "model_start": 2,
+        "model_text_delta": 2,
+        "model_done": 2,
+        "agent_done": 2
+      }
+    },
+    {
+      "id": "V-OSJfMR7y5T2yhXb_7uAR271ToDQVqu",
+      "detail": {
+        "id": "V-OSJfMR7y5T2yhXb_7uAR271ToDQVqu",
+        "project_id": "default",
+        "parent_session_id": "",
+        "title": "Second saved task",
+        "agent_id": "mdo.default",
+        "model_id": "queue-fixture",
+        "protocol": "openai-chat-completions",
+        "reasoning_effort": "none",
+        "permission_profile": "balanced",
+        "workspace_root": "D:\\GIT\\mdo\\.build\\conversation-acceptance\\session-read-input-trace\\home\\workspace",
+        "status": "active",
+        "revision": 1,
+        "created_at": 1791459680075144,
+        "updated_at": 1791459680075144,
+        "pinned": false,
+        "runtime_open": false,
+        "config_revision": 3,
+        "model_generation": 3,
+        "module_generation": 1,
+        "skill_generation": 1,
+        "max_output_tokens": 16384,
+        "forked_through_sequence": 0
+      },
+      "user_inputs": [],
+      "draft": {
+        "revision": 0,
+        "text": "",
+        "attachments": [],
+        "run_admission_uncertain": false,
+        "submission": null,
+        "submissions": []
+      },
+      "final_errors": 0,
+      "event_kinds": {}
+    }
+  ]
+}

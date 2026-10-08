@@ -1,0 +1,122 @@
+[
+  {
+    "level": "info",
+    "message": "QA_INPUT {\"type\":\"restore\",\"text\":\"\",\"hash\":\"#/projects/default/sessions/V-OSJfMQjCkMO-QLqSsPgKP4pOj0Sbtt\",\"stack\":[\"    at HTMLTextAreaElement.set (http://127.0.0.1:65529/js/qa-input-trace.js:8:20)\",\"    at onRestore (http://127.0.0.1:65529/js/app.js:769:20)\",\"    at Object.select (http://127.0.0.1:65529/js/features/chat/draft-store.js:427:5)\",\"    at boot (http://127.0.0.1:65529/js/app.js:858:14)\"]}",
+    "timestamp": "2026-10-08T11:41:35.874Z",
+    "url": "http://127.0.0.1:65529/js/qa-input-trace.js"
+  },
+  {
+    "level": "info",
+    "message": "QA_INPUT {\"type\":\"restore\",\"text\":\"\",\"hash\":\"#/projects/default/sessions/V-OSJfMQjCkMO-QLqSsPgKP4pOj0Sbtt\",\"stack\":[\"    at HTMLTextAreaElement.set (http://127.0.0.1:65529/js/qa-input-trace.js:8:20)\",\"    at onRestore (http://127.0.0.1:65529/js/app.js:769:20)\",\"    at Object.select (http://127.0.0.1:65529/js/features/chat/draft-store.js:427:5)\",\"    at navigation.subscribe.refresh (http://127.0.0.1:65529/js/app.js:1754:16)\"]}",
+    "timestamp": "2026-10-08T11:41:35.921Z",
+    "url": "http://127.0.0.1:65529/js/qa-input-trace.js"
+  },
+  {
+    "level": "info",
+    "message": "QA_INPUT {\"type\":\"restore\",\"text\":\"\",\"hash\":\"#/projects/default/sessions/V-OSJfMQjCkMO-QLqSsPgKP4pOj0Sbtt\",\"stack\":[\"    at HTMLTextAreaElement.set (http://127.0.0.1:65529/js/qa-input-trace.js:8:20)\",\"    at onRestore (http://127.0.0.1:65529/js/app.js:769:20)\",\"    at http://127.0.0.1:65529/js/features/chat/draft-store.js:214:31\"]}",
+    "timestamp": "2026-10-08T11:41:36.033Z",
+    "url": "http://127.0.0.1:65529/js/qa-input-trace.js"
+  },
+  {
+    "level": "info",
+    "message": "QA_INPUT {\"type\":\"input\",\"inputType\":\"\",\"composing\":false,\"data\":null,\"text\":\"trace-navigation-once\",\"hash\":\"#/projects/default/sessions/V-OSJfMQjCkMO-QLqSsPgKP4pOj0Sbtt\"}",
+    "timestamp": "2026-10-08T11:41:56.511Z",
+    "url": "http://127.0.0.1:65529/js/qa-input-trace.js"
+  },
+  {
+    "level": "info",
+    "message": "QA_INPUT {\"type\":\"blur\",\"text\":\"trace-navigation-once\",\"hash\":\"#/projects/default/sessions/V-OSJfMQjCkMO-QLqSsPgKP4pOj0Sbtt\"}",
+    "timestamp": "2026-10-08T11:41:56.585Z",
+    "url": "http://127.0.0.1:65529/js/qa-input-trace.js"
+  },
+  {
+    "level": "info",
+    "message": "QA_INPUT {\"type\":\"restore\",\"text\":\"\",\"hash\":\"#/projects/default/sessions/V-OSJfMR7y5T2yhXb_7uAR271ToDQVqu\",\"stack\":[\"    at HTMLTextAreaElement.set (http://127.0.0.1:65529/js/qa-input-trace.js:8:20)\",\"    at onRestore (http://127.0.0.1:65529/js/app.js:769:20)\",\"    at Object.select (http://127.0.0.1:65529/js/features/chat/draft-store.js:427:5)\",\"    at navigation.subscribe.refresh [as listener] (http://127.0.0.1:65529/js/app.js:1754:16)\"]}",
+    "timestamp": "2026-10-08T11:41:56.598Z",
+    "url": "http://127.0.0.1:65529/js/qa-input-trace.js"
+  },
+  {
+    "level": "info",
+    "message": "QA_INPUT {\"type\":\"restore\",\"text\":\"\",\"hash\":\"#/projects/default/sessions/V-OSJfMR7y5T2yhXb_7uAR271ToDQVqu\",\"stack\":[\"    at HTMLTextAreaElement.set (http://127.0.0.1:65529/js/qa-input-trace.js:8:20)\",\"    at onRestore (http://127.0.0.1:65529/js/app.js:769:20)\",\"    at http://127.0.0.1:65529/js/features/chat/draft-store.js:214:31\"]}",
+    "timestamp": "2026-10-08T11:41:56.674Z",
+    "url": "http://127.0.0.1:65529/js/qa-input-trace.js"
+  },
+  {
+    "level": "info",
+    "message": "QA_INPUT {\"type\":\"blur\",\"text\":\"\",\"hash\":\"#/projects/default/sessions/V-OSJfMR7y5T2yhXb_7uAR271ToDQVqu\"}",
+    "timestamp": "2026-10-08T11:42:16.270Z",
+    "url": "http://127.0.0.1:65529/js/qa-input-trace.js"
+  },
+  {
+    "level": "info",
+    "message": "QA_INPUT {\"type\":\"restore\",\"text\":\"trace-navigation-once\",\"hash\":\"#/projects/default/sessions/V-OSJfMQjCkMO-QLqSsPgKP4pOj0Sbtt\",\"stack\":[\"    at HTMLTextAreaElement.set (http://127.0.0.1:65529/js/qa-input-trace.js:8:20)\",\"    at onRestore (http://127.0.0.1:65529/js/app.js:769:20)\",\"    at Object.select (http://127.0.0.1:65529/js/features/chat/draft-store.js:427:5)\",\"    at navigation.subscribe.refresh [as listener] (http://127.0.0.1:65529/js/app.js:1754:16)\"]}",
+    "timestamp": "2026-10-08T11:42:16.279Z",
+    "url": "http://127.0.0.1:65529/js/qa-input-trace.js"
+  },
+  {
+    "level": "info",
+    "message": "QA_INPUT {\"type\":\"input\",\"inputType\":\"\",\"composing\":false,\"data\":null,\"text\":\"中文草稿只输入一次\",\"hash\":\"#/projects/default/sessions/V-OSJfMQjCkMO-QLqSsPgKP4pOj0Sbtt\"}",
+    "timestamp": "2026-10-08T11:42:29.960Z",
+    "url": "http://127.0.0.1:65529/js/qa-input-trace.js"
+  },
+  {
+    "level": "info",
+    "message": "QA_INPUT {\"type\":\"blur\",\"text\":\"中文草稿只输入一次\",\"hash\":\"#/projects/default/sessions/V-OSJfMQjCkMO-QLqSsPgKP4pOj0Sbtt\"}",
+    "timestamp": "2026-10-08T11:42:30.051Z",
+    "url": "http://127.0.0.1:65529/js/qa-input-trace.js"
+  },
+  {
+    "level": "info",
+    "message": "QA_INPUT {\"type\":\"restore\",\"text\":\"\",\"hash\":\"#/projects/default/sessions/V-OSJfMR7y5T2yhXb_7uAR271ToDQVqu\",\"stack\":[\"    at HTMLTextAreaElement.set (http://127.0.0.1:65529/js/qa-input-trace.js:8:20)\",\"    at onRestore (http://127.0.0.1:65529/js/app.js:769:20)\",\"    at Object.select (http://127.0.0.1:65529/js/features/chat/draft-store.js:427:5)\",\"    at navigation.subscribe.refresh [as listener] (http://127.0.0.1:65529/js/app.js:1754:16)\"]}",
+    "timestamp": "2026-10-08T11:42:30.060Z",
+    "url": "http://127.0.0.1:65529/js/qa-input-trace.js"
+  },
+  {
+    "level": "info",
+    "message": "QA_INPUT {\"type\":\"blur\",\"text\":\"\",\"hash\":\"#/projects/default/sessions/V-OSJfMR7y5T2yhXb_7uAR271ToDQVqu\"}",
+    "timestamp": "2026-10-08T11:42:39.595Z",
+    "url": "http://127.0.0.1:65529/js/qa-input-trace.js"
+  },
+  {
+    "level": "info",
+    "message": "QA_INPUT {\"type\":\"restore\",\"text\":\"中文草稿只输入一次\",\"hash\":\"#/projects/default/sessions/V-OSJfMQjCkMO-QLqSsPgKP4pOj0Sbtt\",\"stack\":[\"    at HTMLTextAreaElement.set (http://127.0.0.1:65529/js/qa-input-trace.js:8:20)\",\"    at onRestore (http://127.0.0.1:65529/js/app.js:769:20)\",\"    at Object.select (http://127.0.0.1:65529/js/features/chat/draft-store.js:427:5)\",\"    at navigation.subscribe.refresh [as listener] (http://127.0.0.1:65529/js/app.js:1754:16)\"]}",
+    "timestamp": "2026-10-08T11:42:39.603Z",
+    "url": "http://127.0.0.1:65529/js/qa-input-trace.js"
+  },
+  {
+    "level": "info",
+    "message": "QA_INPUT {\"type\":\"blur\",\"text\":\"中文草稿只输入一次\",\"hash\":\"#/projects/default/sessions/V-OSJfMQjCkMO-QLqSsPgKP4pOj0Sbtt\"}",
+    "timestamp": "2026-10-08T11:43:05.599Z",
+    "url": "http://127.0.0.1:65529/js/qa-input-trace.js"
+  },
+  {
+    "level": "info",
+    "message": "QA_INPUT {\"type\":\"restore\",\"text\":\"\",\"hash\":\"#/projects/default/sessions/V-OSJfMQjCkMO-QLqSsPgKP4pOj0Sbtt\",\"stack\":[\"    at HTMLTextAreaElement.set (http://127.0.0.1:65529/js/qa-input-trace.js:8:20)\",\"    at clearSubmittedComposer (http://127.0.0.1:65529/js/app.js:2008:18)\",\"    at onPersisted (http://127.0.0.1:65529/js/app.js:813:7)\",\"    at acknowledge (http://127.0.0.1:65529/js/features/chat/submission-controller.js:36:5)\"]}",
+    "timestamp": "2026-10-08T11:43:05.647Z",
+    "url": "http://127.0.0.1:65529/js/qa-input-trace.js"
+  },
+  {
+    "level": "info",
+    "message": "QA_INPUT {\"type\":\"blur\",\"text\":\"\",\"hash\":\"#/projects/default/sessions/V-OSJfMQjCkMO-QLqSsPgKP4pOj0Sbtt\"}",
+    "timestamp": "2026-10-08T11:43:05.940Z",
+    "url": "http://127.0.0.1:65529/js/qa-input-trace.js"
+  },
+  {
+    "level": "info",
+    "message": "QA_INPUT {\"type\":\"input\",\"inputType\":\"\",\"composing\":false,\"data\":null,\"text\":\"selected-model-after-save\",\"hash\":\"#/projects/default/sessions/V-OSJfMQjCkMO-QLqSsPgKP4pOj0Sbtt\"}",
+    "timestamp": "2026-10-08T11:43:14.431Z",
+    "url": "http://127.0.0.1:65529/js/qa-input-trace.js"
+  },
+  {
+    "level": "info",
+    "message": "QA_INPUT {\"type\":\"blur\",\"text\":\"selected-model-after-save\",\"hash\":\"#/projects/default/sessions/V-OSJfMQjCkMO-QLqSsPgKP4pOj0Sbtt\"}",
+    "timestamp": "2026-10-08T11:43:14.572Z",
+    "url": "http://127.0.0.1:65529/js/qa-input-trace.js"
+  },
+  {
+    "level": "info",
+    "message": "QA_INPUT {\"type\":\"restore\",\"text\":\"\",\"hash\":\"#/projects/default/sessions/V-OSJfMQjCkMO-QLqSsPgKP4pOj0Sbtt\",\"stack\":[\"    at HTMLTextAreaElement.set (http://127.0.0.1:65529/js/qa-input-trace.js:8:20)\",\"    at clearSubmittedComposer (http://127.0.0.1:65529/js/app.js:2008:18)\",\"    at onPersisted (http://127.0.0.1:65529/js/app.js:813:7)\",\"    at acknowledge (http://127.0.0.1:65529/js/features/chat/submission-controller.js:36:5)\"]}",
+    "timestamp": "2026-10-08T11:43:14.587Z",
+    "url": "http://127.0.0.1:65529/js/qa-input-trace.js"
+  }
+]

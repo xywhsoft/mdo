@@ -1907,5 +1907,9 @@
   "sessionLoad.syncFailed": "同步暂未完成",
   "sessionLoad.syncing": "正在同步对话…",
   "sessionLoad.cached": "已显示保留的对话，正在检查最新内容。",
-  "sessionLoad.history": "正在读取最近的对话，较早历史将在向上滚动时加载。"
+  "sessionLoad.history": "正在读取最近的对话，较早历史将在向上滚动时加载。",
+  "sessionList.readFailed": "暂时无法读取会话列表，请检查连接后重试。",
+  "sessionList.invalidResponse": "会话列表响应无效，请重新读取。",
+  "sessionLoad.invalidDetail": "会话响应与当前任务不符，请重新读取。",
+  "sessionLoad.detailUnavailable": "暂时无法读取任务信息，请检查连接后重试；会话记录和草稿会保留。"
 }

@@ -113,3 +113,34 @@ test("a direct task has visible loading, retry, and focus recovery", () => {
     globalThis.window = originalWindow;
   }
 });
+
+test("a final detail error stays visible with cached history and retries task metadata", () => {
+  const originalWindow = globalThis.window;
+  globalThis.window = { setTimeout: () => 1, clearTimeout() {} };
+  const route = { view: "workspace", projectId: "default", sessionId: "A" };
+  const detail = { project_id: "default", id: "A" };
+  let state = { status: "ready", data: detail }, listener;
+  let revalidations = 0, historyRetries = 0;
+  const notice = node(), heading = node(), description = node(), retry = node();
+  const store = { get: () => state, subscribe(callback) { listener = callback; callback(); } };
+  const navigation = { get: () => route, subscribe(callback) { callback(); },
+    revalidate() { revalidations++; state = { status: "refreshing", data: detail }; listener(); } };
+  const history = { status: "ready", data: { projectId: "default", sessionId: "A",
+    events: [{ text: "Saved reply" }], initializing: false, syncing: false } };
+  try {
+    createSessionLoadNotice({ navigation, store, notice, heading, description, retry,
+      conversation: node(), sessionTitle: node(), sessionSubtitle: node(),
+      mobileTitle: node(), mobileMeta: node(), prompt: node(),
+      timeline: { get: () => history, subscribe(callback) { callback(); } },
+      onRetryHistory() { historyRetries++; } });
+    assert.equal(notice.hidden, true);
+    state = { status: "error", data: detail, error: Object.assign(new Error("internal server message"), { status: 503 }) };
+    listener(); assert.equal(notice.hidden, false); assert.equal(retry.hidden, false);
+    assert.match(description.textContent, /任务信息/); assert.doesNotMatch(description.textContent, /internal/);
+    retry.click(); assert.equal(revalidations, 1); assert.equal(historyRetries, 0);
+    state = { status: "error", data: null,
+      error: Object.assign(new Error("internal permission message"), { code: "permission_denied", status: 403 }) };
+    listener(); assert.match(description.textContent, /无权/);
+    assert.doesNotMatch(description.textContent, /internal/);
+  } finally { globalThis.window = originalWindow; }
+});
