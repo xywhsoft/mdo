@@ -1,0 +1,47 @@
+{
+  "wall_ms": 1791475511134.5894,
+  "monotonic_seconds": 2490567.734,
+  "state": {
+    "reads": {
+      "/api/v1/project-purge-intent": [
+        {
+          "started": 2490494.687,
+          "held": true,
+          "captured": 2490494.687,
+          "native_status": 200,
+          "released": 2490506.687
+        },
+        {
+          "started": 2490503.796,
+          "held": false
+        }
+      ],
+      "/api/v1/projects/default/sessions/V-OSK_uSDHztT2EVwNzZymfyY05QrUwY/conversation?after=5&epoch=98611f1609c804ef2d8c4581c9bef11a853ff2d21b671cf94c1cadc9f25bedc0&limit=4": [
+        {
+          "started": 2490496.671,
+          "held": true,
+          "captured": 2490496.671,
+          "native_status": 200,
+          "released": 2490508.671
+        }
+      ]
+    },
+    "writes": [
+      {
+        "method": "PATCH",
+        "path": "/api/v1/settings/settings",
+        "started": 2490471.796
+      },
+      {
+        "method": "PUT",
+        "path": "/api/v1/workspace-state",
+        "started": 2490471.937
+      },
+      {
+        "method": "PUT",
+        "path": "/api/v1/projects/default/sessions/V-OSK_uSDHztT2EVwNzZymfyY05QrUwY/draft",
+        "started": 2490557.453
+      }
+    ]
+  }
+}

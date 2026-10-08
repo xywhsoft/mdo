@@ -4,6 +4,8 @@ Open the first URL, GET /__qa/live-arm to drop its real WebSocket and hold
 the next project-purge-intent reply for twelve seconds. Check that the draft
 survives and the connection reopens, then send the saved draft and a follow-up
 in the second task. Standard-library loopback tunnel; no product QA injection.
+With --slow-replay, seed a reply and delay its incremental history read too:
+reconnecting live replay should supersede that pending HTTP refresh.
 Create the printed stop file to save proof and stop only this copied program.
 """
 import argparse
@@ -29,8 +31,8 @@ class Proxy(SlowProxy):
         if self.command == "GET" and self.path == "/__qa/live-arm":
             with self.server.lock:
                 assert self.server.tunnels, "Open a real live connection before arming"
-                self.server.resources = {"/api/v1/project-purge-intent"}
-                self.server.reads = {"/api/v1/project-purge-intent": []}
+                self.server.resources = {"/api/v1/project-purge-intent", *self.server.replay_paths}
+                self.server.reads = {path: [] for path in self.server.resources}
                 self.server.armed_at = time.monotonic()
                 pairs = list(self.server.tunnels.values())
             for pair in pairs:
@@ -92,6 +94,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--packed", type=Path, required=True)
     parser.add_argument("--directory", type=Path, required=True)
+    parser.add_argument("--slow-replay", action="store_true")
     args = parser.parse_args(); base = args.directory.resolve()
     assert not base.exists(), "Choose a fresh isolated directory"
     base.mkdir(parents=True); native, port = site(base, "native", args.packed.resolve())
@@ -100,6 +103,7 @@ def main():
     proxy.native = port; proxy.lock = threading.Lock(); proxy.phase = None; proxy.phases = []
     proxy.resources = set(); proxy.reads = {}; proxy.writes = []
     proxy.tunnels = {}; proxy.websockets = []; proxy.armed_at = None
+    proxy.replay_paths = []
     proxy.stopped = threading.Event()
     threads = [threading.Thread(target=server.serve_forever, daemon=True) for server in (model, proxy)]
     for thread in threads: thread.start()
@@ -118,6 +122,14 @@ def main():
             "model_id": "queue-fixture", "reasoning_effort": "none", "permission_profile": "balanced"}, 201)
             for title in ("Live probe", "Live follow-up")]
         first = "/api/v1/projects/default/sessions/" + sessions[0]["id"]
+        if args.slow_replay:
+            seed = call("POST", first + "/runs", {"prompt": "REPLAY_OWNERSHIP_SEED"}, 202)
+            deadline = time.monotonic() + 5
+            while not call("GET", "/api/v1/runs/" + seed["id"])["terminal"]:
+                assert time.monotonic() < deadline, "Seed reply did not finish"
+                time.sleep(.1)
+            snapshot = call("GET", first + "/conversation?limit=4")
+            proxy.replay_paths = [first + f'/conversation?after={snapshot["next_cursor"]}&epoch={snapshot["epoch"]}&limit=4']
         call("PUT", first + "/draft", {"revision": 0, "text": "LIVE_PROBE_SAVED_DRAFT"})
         print(json.dumps({"urls": [f"http://127.0.0.1:{proxy.server_port}/#/projects/default/sessions/" + item["id"] for item in sessions],
             "proxy_port": proxy.server_port, "native_port": port, "stop_file": str(base / "stop")}), flush=True)
@@ -127,6 +139,7 @@ def main():
             time.sleep(.1)
         proof = {"reads": proxy.reads, "writes": proxy.writes, "websockets": proxy.websockets,
             "armed_at": proxy.armed_at, "model_calls": dict(Model.calls), "sessions": []}
+        if args.slow_replay: proof["seed_prompt"] = "REPLAY_OWNERSHIP_SEED"
         for item in sessions:
             path = "/api/v1/projects/default/sessions/" + item["id"]
             events = session_events(port, path)

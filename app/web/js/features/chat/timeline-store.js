@@ -24,6 +24,7 @@ export const timelineStore = createResourceStore({
 
 let generation = 0;
 let refreshVersion = 0;
+let refreshAbort = null;
 let pollTimer = 0;
 let pollDelay = FALLBACK_POLL_MS;
 let historyRequest = null;
@@ -67,7 +68,11 @@ async function readTimeline(path, signal = selectionAbort?.signal) {
   const cancel = () => recovery.dispose();
   signal?.addEventListener("abort", cancel, { once: true });
   if (paused || signal?.aborted) cancel();
-  try { return await recovery.request(signal => api.get(path, { signal })); }
+  try { return await recovery.request(signal => {
+    // Cancellation may win before the operation's microtask starts.
+    recovery.assertActive();
+    return api.get(path, { signal });
+  }); }
   finally { signal?.removeEventListener("abort", cancel); recovery.dispose(); }
 }
 
@@ -105,6 +110,14 @@ function stopTimer() {
   pollTimer = 0;
 }
 
+// A push, resubscription or newer refresh supersedes only incremental replay.
+// Older-message and turn-index reads keep their separate selection lifetime.
+function cancelRefresh() {
+  refreshVersion += 1;
+  refreshAbort?.abort();
+  refreshAbort = null;
+}
+
 function schedulePoll(token) {
   stopTimer();
   const current = timelineStore.get().data;
@@ -119,7 +132,10 @@ async function refreshTimeline(token = generation) {
   if (!current?.sessionId || current.initializing || token !== generation || paused) return;
   stopTimer();
   if (current.epoch) return refreshSnapshot(token);
-  const request = ++refreshVersion;
+  cancelRefresh();
+  const controller = new AbortController();
+  refreshAbort = controller;
+  const request = refreshVersion;
   const isCurrent = () => token === generation && request === refreshVersion;
   let cursor = current.cursor;
   let events = current.events;
@@ -131,6 +147,7 @@ async function refreshTimeline(token = generation) {
     for (let page = 0; page < MAX_PAGES_PER_REFRESH; page += 1) {
       const response = await readTimeline(
         `/projects/${current.projectId}/sessions/${current.sessionId}/events?after=${cursor}&limit=32`,
+        controller.signal,
       );
       if (!isCurrent()) return;
       const replay = response.data;
@@ -166,7 +183,7 @@ async function refreshTimeline(token = generation) {
       pollDelay = Math.min(pollDelay * 2, 15_000);
     }
   } finally {
-    if (isCurrent()) schedulePoll(token);
+    if (isCurrent()) { refreshAbort = null; schedulePoll(token); }
   }
 }
 
@@ -186,12 +203,15 @@ function snapshotData(current, page) {
 }
 
 async function refreshSnapshot(token) {
-  const request = ++refreshVersion;
+  cancelRefresh();
+  const controller = new AbortController();
+  refreshAbort = controller;
+  const request = refreshVersion;
   const isCurrent = () => token === generation && request === refreshVersion;
   try {
     for (let i = 0; i < MAX_PAGES_PER_REFRESH; ++i) {
       const current = timelineStore.get().data;
-      const page = await readConversation(current, `after=${current.cursor}&epoch=${current.epoch}&limit=4`);
+      const page = await readConversation(current, `after=${current.cursor}&epoch=${current.epoch}&limit=4`, controller.signal);
       if (!isCurrent()) return;
       if (page.delta && page.next_cursor < current.cursor) throw new Error("Conversation cursor moved backwards");
       timelineStore.setData(snapshotData(current, page));
@@ -203,7 +223,7 @@ async function refreshSnapshot(token) {
     if (!isCurrent() || error.name === "AbortError") return;
     timelineStore.setData({ ...timelineStore.get().data, syncing: false, syncError: error });
     pollDelay = Math.min(pollDelay * 2, 15_000);
-  } finally { if (isCurrent()) schedulePoll(token); }
+  } finally { if (isCurrent()) { refreshAbort = null; schedulePoll(token); } }
 }
 
 export function selectTimeline(projectId, sessionId) {
@@ -218,6 +238,7 @@ async function reloadTimeline(projectId, sessionId, force = false) {
   rememberTimeline();
   generation += 1;
   const token = generation;
+  cancelRefresh();
   selectionAbort?.abort();
   selectionAbort = new AbortController();
   historyRequest = indexRequest = null;
@@ -408,7 +429,7 @@ export function refreshSelectedTimeline() {
 export function clearTimeline() {
   rememberTimeline();
   generation += 1;
-  refreshVersion += 1;
+  cancelRefresh();
   stopTimer();
   selectionAbort?.abort();
   selectionAbort = null;
@@ -421,7 +442,7 @@ export function clearTimeline() {
 function subscribeLiveTimeline() {
   const current = timelineStore.get().data;
   if (!current?.sessionId) return;
-  refreshVersion += 1;
+  cancelRefresh();
   stopTimer();
   liveConnection.select(current.projectId, current.sessionId, () => timelineStore.get().data?.cursor ?? 0);
   if (current.syncing || current.syncError) schedulePoll(generation);
@@ -445,7 +466,7 @@ export function applyLiveTimeline(replay) {
   const merged = mergeTimelineEvents(current.events, additions);
   let historyLost = merged.cleared ? false : current.historyLost || Boolean(replay.history_lost);
   const events = merged.events;
-  refreshVersion += 1;
+  cancelRefresh();
   stopTimer();
   const turns = updateTurns(current, events);
   timelineStore.setData({ ...current, cursor: next, latestEventId: latest, historyLost, events, turns,
@@ -467,7 +488,7 @@ liveConnection.subscribe((event) => {
 
 function pauseTimelineReads() {
   paused = true;
-  refreshVersion += 1;
+  cancelRefresh();
   stopTimer(); selectionAbort?.abort();
   historyRequest = indexRequest = initialRequest = null;
   const current = timelineStore.get().data;
