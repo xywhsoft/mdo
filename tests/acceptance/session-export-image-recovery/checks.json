@@ -1,0 +1,18 @@
+{
+  "baseline_new_cases": {
+    "tests": 7,
+    "passed": 0,
+    "failed": 7
+  },
+  "fixed_related_checks": {
+    "tests": 27,
+    "passed": 27
+  },
+  "clean_frontend_contracts": 2,
+  "held_body_seconds": 35.03,
+  "partial_export_seconds": 30.01,
+  "clock_bridge": "Unix/monotonic offset sampled after the run; durations are approximate",
+  "followup_model_calls": 1,
+  "final_model_errors": 0,
+  "actual_download_landing_verified": false
+}

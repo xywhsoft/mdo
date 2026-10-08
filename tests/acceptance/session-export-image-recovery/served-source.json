@@ -1,0 +1,12 @@
+[
+  {
+    "path": "js/features/sessions/session-export-images.js",
+    "sha256": "7da9d7cdad151a043adcd8087da4b4de44c026aabd7846f5243dc831437d91d8",
+    "matches": true
+  },
+  {
+    "path": "js/api/request-recovery.js",
+    "sha256": "5d70df9f3c8cc077cfe06f27edf1b96b5c26540bb2c3146fd314be8df1e70be8",
+    "matches": true
+  }
+]

@@ -1,0 +1,52 @@
+[
+  {
+    "bytes": 484,
+    "capturedAt": 1791489426941,
+    "embeddedImageBytes": [
+      68
+    ],
+    "embeddedImageSha256": [
+      "2902cbd9e129e10d78f4f9ae32d4204703d945e0e13df8e22652257867356c69"
+    ],
+    "hasLongOriginalImageName": false,
+    "hasOriginalImageName": false,
+    "hasSyntheticPng": true,
+    "hasSyntheticPrompt": true,
+    "imagesIncomplete": false,
+    "markdownEmbeddedImages": 1,
+    "markdownImageReferences": 0,
+    "type": "text/markdown;charset=utf-8"
+  },
+  {
+    "bytes": 484,
+    "capturedAt": 1791489439702,
+    "embeddedImageBytes": [
+      68
+    ],
+    "embeddedImageSha256": [
+      "2902cbd9e129e10d78f4f9ae32d4204703d945e0e13df8e22652257867356c69"
+    ],
+    "hasLongOriginalImageName": false,
+    "hasOriginalImageName": false,
+    "hasSyntheticPng": true,
+    "hasSyntheticPrompt": true,
+    "imagesIncomplete": false,
+    "markdownEmbeddedImages": 1,
+    "markdownImageReferences": 0,
+    "type": "text/markdown;charset=utf-8"
+  },
+  {
+    "bytes": 431,
+    "capturedAt": 1791489488294,
+    "embeddedImageBytes": [],
+    "embeddedImageSha256": [],
+    "hasLongOriginalImageName": false,
+    "hasOriginalImageName": false,
+    "hasSyntheticPng": false,
+    "hasSyntheticPrompt": true,
+    "imagesIncomplete": true,
+    "markdownEmbeddedImages": 0,
+    "markdownImageReferences": 1,
+    "type": "text/markdown;charset=utf-8"
+  }
+]

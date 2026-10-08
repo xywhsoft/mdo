@@ -1,0 +1,6 @@
+{
+  "scriptId": "181",
+  "line": 194,
+  "column": 6483,
+  "fragment": "flowY)&&Wv(t.y,e.scrollTop,e.clientHeight,e.scrollHeight)||Xs(r.overflowX)&&Wv(t.x,e.scrollLeft,e.clientWidth,e.scrollWidth)}function Wv(e,t,n,r){return e<0?t>0:e>0&&t<r-n}var Gv,Kv,qv,Jv=o((()=>{Xc(),Gv=1,Kv=2,qv=16}));function Yv(e,t){return oc(n=>{let r=()=>{Zv(n,e,t),$v(n,e),Qv(n,e)};r();let i=new MutationObserver(r);return i.observe(n.documentElement,Wc),()=>{i.disconnect(),ty(n),n.getElementById(cy)?.remove();for(let e of n.querySelectorAll(`[${oy}]`))e.removeAttribute(oy)}})}function Xv(e,t){let n=new Set(ay(e));n.add(t),e.setAttribute(oy,Array.from(n).join(` `))}function Zv(e,t,n){let r=new Map;for(let i "
+}
