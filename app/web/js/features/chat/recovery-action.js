@@ -32,8 +32,10 @@ function closed(data, owner, inspection = false) {
 export async function runRecoveryAction({ kind, data, choices,
   id = clientActionId(), submitResume = resumeRecovery, submitAbandon = abandonRecovery,
   inspectRuns = options => api.get("/runs", options),
+  // Cancelling a confirmation must also release its runtime slot or remove
+  // its queued waiter, before the bounded read can try again.
   inspectRecovery = (owner, options) => withSessionRuntime(owner.project_id, owner.session_id,
-    () => api.get(`/projects/${resourceId(owner.project_id)}/sessions/${resourceId(owner.session_id)}/recovery`, options)),
+    () => api.get(`/projects/${resourceId(owner.project_id)}/sessions/${resourceId(owner.session_id)}/recovery`, options), options),
   epoch = stamp, token = currentPageWriteToken(), recoveryOptions } = {}) {
   if (!["resume", "abandon"].includes(kind)) throw new TypeError("Unknown recovery action");
   const recovery = createRequestRecovery(recoveryOptions), original = epoch();

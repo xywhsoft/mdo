@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { runRecoveryAction } from "../app/web/js/features/chat/recovery-action.js";
+import { withSessionRuntime } from "../app/web/js/state/session-runtime.js";
 
 const owner = { project_id: "default", session_id: "original", revision: 3,
   last_sequence: 7, resume_required: true };
@@ -134,4 +135,64 @@ test("target changes and host epochs prevent an older acknowledgement from apply
       error.name === "AbortError" : error.code === "write_token_conflict");
     assert.equal(reads, switched ? 0 : 1);
   }
+});
+
+test("default ending confirmation releases a timed-out runtime before its next read", async context => {
+  const env = environment(), data = { ...owner, session_id: "ending-read-deadline" };
+  const closed = { ...data, resume_required: false, revision: 4, last_sequence: 8 };
+  let release, reads = 0, posts = 0, firstSignal;
+  const reply = () => Response.json({ ok: true, data: closed });
+  context.after(async () => { release?.(reply()); await new Promise(resolve => setImmediate(resolve)); });
+  context.mock.method(globalThis, "fetch", async (_path, options) => {
+    if (++reads === 1) {
+      firstSignal = options.signal;
+      return new Promise(resolve => { release = resolve; });
+    }
+    return reply();
+  });
+  assert.deepEqual(await env.settle(action(env, { kind: "abandon", data,
+    submitAbandon: async () => { ++posts; throw lost(); },
+  })), closed);
+  assert.equal(posts, 1); assert.equal(reads, 2); assert.equal(env.elapsed(), 8500);
+  assert(firstSignal.aborted);
+  assert.equal(await withSessionRuntime(data.project_id, data.session_id, async () => "available"), "available");
+});
+
+test("leaving during default ending confirmation releases its runtime and ignores late data", async context => {
+  const env = environment(), data = { ...owner, session_id: "ending-read-pagehide" };
+  let release, reads = 0, entered = false;
+  context.after(async () => { release?.(Response.json({ ok: true, data: owner }));
+    await new Promise(resolve => setImmediate(resolve)); });
+  context.mock.method(globalThis, "fetch", async () => {
+    ++reads; return new Promise(resolve => { release = resolve; });
+  });
+  const pending = action(env, { kind: "abandon", data, submitAbandon: async () => { throw lost(); } });
+  await new Promise(resolve => setImmediate(resolve));
+  env.page.dispatchEvent(new Event("pagehide"));
+  await assert.rejects(pending, error => error.name === "AbortError" && error.recoveryActionUncertain);
+  const follower = withSessionRuntime(data.project_id, data.session_id, async () => { entered = true; });
+  await new Promise(resolve => setImmediate(resolve));
+  assert(entered, "page exit must not leave the confirmation owning this runtime");
+  await follower; assert.equal(reads, 1); assert.equal(env.timers.size, 0);
+});
+
+test("a cancelled ending confirmation waiting behind an owner never opens a ghost runtime", async context => {
+  const env = environment(), data = { ...owner, session_id: "ending-wait-cancel" };
+  let release, reads = 0;
+  const active = withSessionRuntime(data.project_id, data.session_id,
+    () => new Promise(resolve => { release = resolve; }));
+  await new Promise(resolve => setImmediate(resolve));
+  context.after(async () => { release(); await active; });
+  context.mock.method(globalThis, "fetch", async () => {
+    ++reads; return Response.json({ ok: true, data: { ...data, resume_required: false, revision: 4, last_sequence: 8 } });
+  });
+  const pending = action(env, { kind: "abandon", data, submitAbandon: async () => { throw lost(); } });
+  await new Promise(resolve => setImmediate(resolve));
+  env.page.dispatchEvent(new Event("pagehide"));
+  await assert.rejects(pending, error => error.name === "AbortError" && error.recoveryActionUncertain);
+  assert.equal(reads, 0);
+  release(); await active;
+  for (let step = 0; step < 3; ++step) await new Promise(resolve => setImmediate(resolve));
+  assert.equal(reads, 0, "a cancelled waiter must not inspect after its predecessor exits");
+  assert.equal(await withSessionRuntime(data.project_id, data.session_id, async () => "available"), "available");
 });
