@@ -35,6 +35,8 @@ cstr MdoEdition(void)
 {
 #if defined(__ANDROID__)
     str Text=xrtEnvGet("MDO_EDITION"); bool Full=Text&&!strcmp(Text,"full"); xrtFree(Text); return Full?"full":"lite";
+#elif defined(MDO_PRODUCT_EDITION)
+    return MDO_PRODUCT_EDITION;
 #else
     return "desktop";
 #endif
@@ -45,6 +47,10 @@ cstr MdoToolPlatform(void)
     return "android-arm64-v8a";
 #elif defined(_WIN32) || defined(_WIN64)
     return "windows-x86_64";
+#elif defined(__linux__) && defined(__x86_64__)
+    return "linux-x86_64";
+#elif defined(__linux__) && defined(__aarch64__)
+    return "linux-arm64";
 #else
     return "unsupported";
 #endif

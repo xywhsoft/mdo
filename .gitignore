@@ -49,3 +49,8 @@ tools/runtime/**
 !tools/dependencies/
 !tools/dependencies/README.md
 !tools/dependencies/*.bundle
+
+# Linux/server product builder and explicit service deployment template.
+!tools/build_linux.py
+!tools/service/
+!tools/service/**

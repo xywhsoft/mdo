@@ -31,6 +31,7 @@ void MdoPowerInhibitorEnd(MdoPowerInhibitor* Inhibitor)
 /* The bundled TCC SDK intentionally exposes only a small POSIX header set.
  * These stable libc ABI declarations keep the optional systemd adapter
  * available without a build-time libsystemd or full system header tree. */
+#include <dlfcn.h>
 extern int dup(int Descriptor);
 extern int close(int Descriptor);
 extern int fcntl(int Descriptor, int Command, ...);

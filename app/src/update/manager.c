@@ -308,7 +308,7 @@ bool MdoUpdateInit(void)
         g_MdoUpdate.Source = xrtStrDup(Source);
         snprintf(g_MdoUpdate.Status.Platform,sizeof(g_MdoUpdate.Status.Platform),"android-arm64-v8a");
     }
-#elif defined(_WIN32) || defined(_WIN64)
+#elif (defined(_WIN32) || defined(_WIN64)) && !defined(MDO_SERVER_BUILD)
     g_MdoUpdate.Source = xrtPathExecutable();
     xfile File = g_MdoUpdate.Source ? xrtOpen(g_MdoUpdate.Source,XFILE_READ) : NULL;
     char Tail[8]; size_t Got = 0;

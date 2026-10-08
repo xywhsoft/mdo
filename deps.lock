@@ -7,7 +7,7 @@
     "single_header_sha256": "1ea16b21f968d09e5084162f3919b7e6ae2412f9e13c3bbbdd4b322bcd5a26d2"
   },
   "xserver": {
-    "commit": "0b7e041b16f06bf1cd07833bb008c53bc19351ad",
+    "commit": "670deccc8fc9402ca89e5edd5d5c38d865996826",
     "version": "1.0.0",
     "required_extensions": [
       "xwork",
@@ -21,9 +21,9 @@
       }
     },
     "source_bundle": {
-      "path": "tools/dependencies/xs-conversation-recovery.bundle",
-      "sha256": "10f8f6b5b392eb448dfc2084a55867940841c9866933da63a218d26b0e377961",
-      "ref": "refs/heads/codex/mdo-compaction-style"
+      "path": "tools/dependencies/xs-linux-products.bundle",
+      "sha256": "6bf28855b90e9b50a10121ec13340d592bcd7c8985958298863e3946cba49ff1",
+      "ref": "refs/heads/codex/linux-products"
     }
   },
   "libraries": {

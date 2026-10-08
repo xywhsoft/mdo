@@ -9,6 +9,7 @@ import json
 import os
 import re
 import shlex
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -58,6 +59,17 @@ def git_head(root: Path) -> str | None:
             stderr=subprocess.DEVNULL,
         ).strip().lower()
     except (OSError, subprocess.CalledProcessError):
+        # Windows-created Git worktrees also build inside WSL. Resolve only
+        # their .git pointer; never change the worktree or global Git config.
+        pointer = root / ".git"
+        if os.name != "nt" and pointer.is_file():
+            value = pointer.read_text(encoding="utf-8").strip().removeprefix("gitdir: ")
+            if re.match(r"^[A-Za-z]:/", value):
+                mapped = "/mnt/" + value[0].lower() + value[2:]
+                try:
+                    return subprocess.check_output(["git", "--git-dir", mapped, "rev-parse", "HEAD"], text=True, stderr=subprocess.DEVNULL).strip().lower()
+                except (OSError, subprocess.CalledProcessError):
+                    pass
         return None
 
 
@@ -121,7 +133,7 @@ def find_xserver(explicit: Path | None, lock: dict) -> Path:
         if configured:
             candidates.append(Path(configured))
         candidates.extend((ROOT.parent / "xserver", ROOT.parent / "xserver-mdo-refactor",
-                           ROOT / ".build" / "implementation-xs"))
+                           ROOT / ".build" / "implementation-xs", ROOT / ".build/linux-xs"))
     checked: list[str] = []
     seen: set[Path] = set()
     for candidate in candidates:
@@ -236,7 +248,7 @@ def verify_dependencies(xserver: Path, lock: dict) -> None:
             )
         root = xserver / "lib" / name
         upstream = (root / "UPSTREAM.txt").read_text(encoding="utf-8")
-        if f"基线: xrt@{source_commit}" not in upstream:
+        if f"鍩虹嚎: xrt@{source_commit}" not in upstream:
             raise BuildError(
                 f"{name}/UPSTREAM.txt does not pin {source_commit}"
             )
@@ -429,32 +441,84 @@ def verify_host_receipt(host: Path, lock: dict, full_host: bool, *, icon: bool =
 
 
 def build(args: argparse.Namespace, xserver: Path, lock: dict) -> None:
+    edition = getattr(args, "edition", "gui")
+    libc = getattr(args, "libc", "glibc")
+    if os.name == "nt" and libc == "musl":
+        raise BuildError("musl targets Linux; use MinGW GCC on Windows")
+    if libc == "musl" and getattr(args, "sysroot", None) is None:
+        raise BuildError("musl builds require --sysroot; tools/build_linux.py prepares it automatically")
+    frontend = "none" if edition == "server" else "native"
     suffix = ".exe" if os.name == "nt" else ""
-    output = (args.output or ROOT / ("mdo" + suffix)).resolve()
+    output = (args.output or ROOT / (("mdo-server" if edition == "server" else "mdo") + suffix)).resolve()
     if not args.dry_run:
         output.parent.mkdir(parents=True, exist_ok=True)
-    host = ROOT / ".build" / "host" / ("xs" + suffix)
+    legacy = os.name == "nt" and edition == "gui"
+    host_dir = ROOT / ".build/host" if legacy else ROOT / ".build/host" / (("windows" if os.name == "nt" else "linux") + "-" + edition + "-" + libc)
+    host = host_dir / ("xs" + suffix)
     extensions = lock["xserver"].get("required_extensions")
     if not isinstance(extensions, list) or not all(isinstance(item, str) for item in extensions):
         raise BuildError("xserver.required_extensions must be a string array")
     if not args.skip_host_build:
+        os.environ["XS_BUILD_COMMIT"] = lock["xserver"]["commit"]
         run([
             sys.executable, "tools/build.py", *extensions,
-            "--build-dir", str(ROOT / ".build" / "xserver"),
+            "--build-dir", str(ROOT / ".build" / "xserver" / (edition + "-" + libc)),
             "--output", str(host),
             "--cc", args.cc,
+            "--frontend", frontend,
+            "--gui-cc", getattr(args, "gui_cc", "gcc"),
+            *(["--sysroot", str(args.sysroot), "--compile-extra", "-idirafter " + shlex.quote(str(args.sysroot / "include")), "--link-extra=-static"] if libc == "musl" else []),
             *host_profile_arguments(args.full_host),
             *(["--icon", str(ICON_PATH)] if os.name == "nt" else []),
         ], xserver, args.dry_run)
     elif not args.dry_run and not host.is_file():
         raise BuildError(f"--skip-host-build requested but {host} does not exist")
 
-    packer = host.with_name("xsw.exe") if os.name == "nt" else host
+    packer = host.with_name("xsw.exe") if os.name == "nt" and edition == "gui" else host
     if not args.dry_run and not packer.is_file():
         raise BuildError(f"pack host was not built: {packer}")
     if not args.dry_run:
         verify_host_receipt(packer, lock, args.full_host, icon=os.name == "nt")
-    run([str(packer), "pack", str(APP), "-o", str(output)], ROOT, args.dry_run)
+    if not args.dry_run:
+        receipt = load_object(host.with_name(host.name + ".build.json"))
+        if receipt.get("frontend") != frontend or (libc == "musl" and "-static" not in receipt.get("link_extra", "")):
+            raise BuildError("host frontend/libc does not match this product; rebuild the host")
+    package = ROOT / ".build/packages" / (("windows" if os.name == "nt" else "linux") + "-" + edition + "-" + libc)
+    if not args.dry_run:
+        # copytree overlays stale files, so pack only a fresh staging tree.
+        if not package.resolve().is_relative_to((ROOT / ".build/packages").resolve()):
+            raise BuildError("package staging directory escaped the build workspace")
+        if package.exists():
+            shutil.rmtree(package)
+        shutil.copytree(APP, package)
+        config = load_object(package / "xs.json")
+        for service in config["services"]:
+            if service.get("class") != "app":
+                continue
+            if edition == "server":
+                service.pop("window", None)
+                service["port"] = 5390
+            elif os.name != "nt":
+                service["window"]["profile_dir"]["subdir"] = "data/cache/webkit"
+        write_if_changed(package / "xs.json", (json.dumps(config, ensure_ascii=False, indent=2) + "\n").encode("utf-8"))
+        unity = package / "generated/mdo_unity.c"
+        unity.write_text(("#define MDO_SERVER_BUILD 1\n" if edition == "server" else "") + '#define MDO_PRODUCT_EDITION "' + ("server" if edition == "server" else "desktop") + '"\n' + unity.read_text(encoding="utf-8"), encoding="utf-8")
+    run([str(packer), "pack", str(package), "-o", str(output)], ROOT, args.dry_run)
+    if not args.dry_run:
+        digest = hashlib.sha256()
+        for path in sorted(package.rglob('*')):
+            if path.is_file():
+                digest.update(path.relative_to(package).as_posix().encode() + b'\0')
+                digest.update(hashlib.sha256(path.read_bytes()).digest())
+        product = {"schema_version": 1, "platform": "windows" if os.name == "nt" else "linux",
+                   "edition": edition, "libc": "mingw" if os.name == "nt" else libc,
+                   "xs_commit": lock['xserver']['commit'], "mdo_commit": git_head(ROOT),
+                   "packaged_app_sha256": digest.hexdigest(),
+                   "mdo_worktree_dirty": subprocess.run(["git", "diff", "--quiet"], cwd=ROOT, stderr=subprocess.DEVNULL).returncode != 0,
+                   "sha256": hashlib.sha256(output.read_bytes()).hexdigest(), "bytes": output.stat().st_size,
+                   "host": receipt}
+        receipt_path = output.with_name('build.json') if output.parent != ROOT else ROOT / '.build/product-receipts' / (output.name + '.json')
+        write_if_changed(receipt_path, (json.dumps(product, indent=2) + '\n').encode())
     print(f"[mdo] {'would build' if args.dry_run else 'built'} {output}", flush=True)
 
 
@@ -463,6 +527,10 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--xserver-root", type=Path,
                         help="xserver checkout at the exact revision in deps.lock")
     parser.add_argument("--output", type=Path, help="mdo executable path")
+    parser.add_argument("--edition", choices=("gui", "server"), default="gui")
+    parser.add_argument("--libc", choices=("glibc", "musl"), default="glibc", help="Linux libc (Windows uses MinGW)")
+    parser.add_argument("--sysroot", type=Path, help="musl target CRT to embed in the TCC VFS")
+    parser.add_argument("--gui-cc", default="gcc", help="glibc compiler for Linux GTK helper")
     parser.add_argument("--cc", default="gcc", help="C/C++ compiler used by xserver")
     parser.add_argument("--builtin-connection", type=Path,
                         help="obsolete compatibility argument; online provider keys are never bundled")

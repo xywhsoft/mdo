@@ -1,0 +1,17 @@
+[Unit]
+Description=mdo Agent service
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=mdo
+WorkingDirectory=/opt/mdo
+ExecStart=/opt/mdo/mdo-server --port 5390 -- --home /opt/mdo/mdo-home
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=45
+UMask=0077
+
+[Install]
+WantedBy=multi-user.target
