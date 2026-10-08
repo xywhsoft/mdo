@@ -1,0 +1,44 @@
+{
+  "source_commit": "35c52eedccb5acaa1f52d2ae5a110b5f27e7f9a6",
+  "native_xs_commit": "907744aac65e093a48a4a3192780dc36fd2fe430",
+  "workspace_changes_outside_this_stage_included": true,
+  "windows_packed_ui_verified": true,
+  "real_android_device_tested": false,
+  "stress_or_high_load_tests": false,
+  "artifacts": {
+    "windows": {
+      "path": ".build/conversation-acceptance/mdo-edit-final.exe",
+      "bytes": 4390720,
+      "sha256": "634af2ace9a978475fcfc0c75aa1ea558f0465467e463e8bd9c30e77bd506236"
+    },
+    "android_lite": {
+      "path": ".build/conversation-acceptance/mdo-edit-arm64-v8a.apk",
+      "bytes": 4019437,
+      "sha256": "3cba2d01e841bde8777b6d1b1429a9ff936d116da008a943fbbbe552d690f68e",
+      "app_xrtpack_sha256": "f61bd915b5ae6198eb80d0bedbb8af6ddb72dee8dc10470b8b15be4af2585364",
+      "native_library_sha256": "c709a4c1d26246dcdf7fb3043a1a27a324a56dd0529bb0f1dedd09a0fbfccc09",
+      "signature_v2": true,
+      "signature_v3": true,
+      "page_alignment_16k": true
+    },
+    "android_full": {
+      "path": ".build/conversation-acceptance/mdo-edit-full-arm64-v8a.apk",
+      "bytes": 60777294,
+      "sha256": "5b9c22a7c788a22b5a2630bdb6d661995e5e004a58b85c52f7633dfa50bfdd10",
+      "app_xrtpack_sha256": "f61bd915b5ae6198eb80d0bedbb8af6ddb72dee8dc10470b8b15be4af2585364",
+      "native_library_sha256": "c709a4c1d26246dcdf7fb3043a1a27a324a56dd0529bb0f1dedd09a0fbfccc09",
+      "signature_v2": true,
+      "signature_v3": true,
+      "page_alignment_16k": true
+    }
+  },
+  "build_environment_note": "The default WSL drvfs mount returned EIO; an independent verified D: mount was used for this build and removed afterward.",
+  "android_update_compatibility": {
+    "previous_candidate_certificate_sha256": "52ff6b1c7e1f6196cb266845a075d49b343bbe4d2330d45f434f898ce9756923",
+    "current_development_certificate_sha256": "2078ad9af690d14388e73f8b71b6fdebe9fde50ba8c60e8e9a87d1e968e65710",
+    "same_signer_as_previous_candidate": false,
+    "previous_private_key_found": false,
+    "release_or_device_update_ready": false,
+    "note": "The previous development keystore is absent. These new development-signed APKs are local build candidates, not replacement installers for the previous candidate."
+  }
+}

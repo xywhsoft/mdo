@@ -20,3 +20,7 @@ python tests/test_packed_message_edit_recovery.py --packed .build/conversation-a
 ```
 
 浏览器注入使用精确路径、Fetch 类型、Response 阶段，在捕获 200 后以 `ConnectionClosed` 丢弃响应；每个用例的拦截都已清除，临时页面和服务均已关闭。截图验证的是 Windows 打包页面；不代表 Android 真机验收，也未更新官网安装包。
+
+候选构建见 `builds.json`：Windows 验收实例已更新；精简、完整 ARM64 APK 的 v2/v3 签名与 16 KiB 对齐检查通过，两者应用包与 Windows VFS 内容完全一致。默认 WSL 挂载曾返回 EIO，本次使用独立验证的挂载完成构建，随后已卸载。
+
+构建检查在当前构建目录未找到旧开发签名文件；新候选 APK 的开发签名与上一批不同。因此它们不能直接覆盖上一批候选安装，尚不能作为设备更新或官网发布包。已检查本地构建目录和 Linux 用户目录，没有找到对应旧私钥；需恢复原签名文件或使用正式发布签名流程后再进行升级验证。没有卸载手机应用或变更线上签名关联。
