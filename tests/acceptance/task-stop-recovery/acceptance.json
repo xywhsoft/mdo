@@ -1,0 +1,76 @@
+{
+  "final": {
+    "disabled": null,
+    "focusTask": null
+  },
+  "notices": [
+    {
+      "text": "已请求停止任务 #1",
+      "tone": "neutral"
+    },
+    {
+      "text": "已请求停止任务 #2",
+      "tone": "neutral"
+    },
+    {
+      "text": "暂时无法确认任务是否已停止。请恢复连接后查看任务状态，再决定是否重试。",
+      "tone": "error"
+    }
+  ],
+  "pending": {
+    "disabled": "true",
+    "focusTask": "3",
+    "notices": [
+      {
+        "text": "已请求停止任务 #1",
+        "tone": "neutral"
+      },
+      {
+        "text": "已请求停止任务 #2",
+        "tone": "neutral"
+      }
+    ]
+  },
+  "proof": {
+    "faults": {
+      "before": {
+        "http_deletes": 2,
+        "native_deletes": 1,
+        "reads_after_delete": 1
+      },
+      "lost": {
+        "http_deletes": 1,
+        "native_deletes": 1,
+        "reads_after_delete": 1
+      },
+      "unconfirmed": {
+        "http_deletes": 1,
+        "native_deletes": 1,
+        "reads_after_delete": 5
+      }
+    },
+    "final_model_errors": 0,
+    "model_calls": {
+      "before": 2,
+      "lost": 2,
+      "unconfirmed": 2
+    },
+    "native_tasks": [
+      {
+        "id": 1,
+        "state": "cancelled",
+        "terminal": true
+      },
+      {
+        "id": 2,
+        "state": "cancelled",
+        "terminal": true
+      },
+      {
+        "id": 3,
+        "state": "cancelled",
+        "terminal": true
+      }
+    ]
+  }
+}

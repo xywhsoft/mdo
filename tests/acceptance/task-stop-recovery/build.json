@@ -1,0 +1,23 @@
+{
+  "source_base": "c79ddf0",
+  "packed_candidate": ".build/conversation-acceptance/mdo-task-stop-final.exe",
+  "bytes": 4439321,
+  "sha256": "f0eddbb39a6f87686a24373bf01501c75834839608baf51c81f50914a27741f2",
+  "xs_revision": "eeda3565e869e522e26c38a434a9576b598ec361",
+  "host_profile": "2829d871dac1a12a70503f9b6116adaa2aa9556a53ea139df60aaa81cbb7a19b",
+  "host_binary_sha256": "68aa94b7410c2af2cfd6dded4100d3d3ffde45a4b4ba73020b869fe99100aeb0",
+  "unrelated_worktree_changes_included": false,
+  "checks": {
+    "node_task_and_recovery_tests": 42,
+    "focused_frontend_contract_tests": 4,
+    "model_retry_runtime_cases": 25,
+    "packed_queue_interruption_regression": true,
+    "packed_summary_failure_cases": 3,
+    "browser_lost_stop_confirmation": true,
+    "browser_unaccepted_stop_retry": true,
+    "browser_confirmation_exhaustion_and_duplicate_click": true
+  },
+  "android_device_tested": false,
+  "daily_installation_replaced": false,
+  "website_release_updated": false
+}

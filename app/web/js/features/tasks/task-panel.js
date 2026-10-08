@@ -109,11 +109,13 @@ export function createTaskPanel({ container, detailContainer, store, detailStore
     pendingCancels.add(id);
     syncCancelButtons();
     try {
-      await cancelTask(item.id);
-      toast(t("task.stopRequested", { id: item.id }, `已请求停止任务 #${item.id}`));
+      const result = await cancelTask(item.id);
+      toast(result.terminal && !result.stop_requested
+        ? `${taskName(result)} · ${stateLabel(result.state)}`
+        : t("task.stopRequested", { id: item.id }, `已请求停止任务 #${item.id}`));
       onChanged?.();
     } catch (error) {
-      toast(errorMessage(error), "error");
+      if (error?.name !== "AbortError") toast(errorMessage(error), "error");
     } finally {
       pendingCancels.delete(id);
       syncCancelButtons();

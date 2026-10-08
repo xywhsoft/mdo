@@ -70,6 +70,8 @@
   "error.sessionEditConflict": "本次编辑与先前请求不一致。内容已保留，请刷新会话后重新选择消息。",
   "error.recoveryResumeUnconfirmed": "暂时无法确认任务是否已继续。请恢复连接后查看运行状态，再决定是否重试；已有对话内容会保留。",
   "error.recoveryAbandonUnconfirmed": "暂时无法确认本次回复是否已结束。请恢复连接后刷新会话；已有内容会保留。",
+  "error.taskStopUnconfirmed": "暂时无法确认任务是否已停止。请恢复连接后查看任务状态，再决定是否重试。",
+  "error.taskStopContextChanged": "任务已变化，停止操作没有继续。请刷新任务列表后重新选择。",
   "error.sessionEditUnconfirmed": "暂时无法确认编辑重发的结果。输入已保存；请恢复连接后查看会话，再继续发送。",
   "error.sessionEditDraftUnsaved": "编辑内容尚未保存，旧会话历史未修改。请保留输入并恢复连接后重试。",
   "app.name": "墨斗",

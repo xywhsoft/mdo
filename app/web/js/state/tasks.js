@@ -2,6 +2,7 @@ import { api } from "../api/client.js";
 import { createResourceStore } from "./store.js";
 import { validateAskAnswer } from "./asks.js";
 import { t } from "../i18n.js";
+import { runTaskStopAction } from "./task-stop-action.js";
 
 const OUTPUT_PAGE_BYTES = 32 * 1024;
 const OUTPUT_RETAINED_BYTES = 256 * 1024;
@@ -138,15 +139,17 @@ export function readArtifactPreview(artifact) {
 
 export async function cancelTask(value) {
   const id = taskId(value);
-  const response = await api.delete(`/tasks/${id}`);
+  const known = tasksStore.get().data?.items?.find(item => String(item.id) === id) ??
+    (taskDetailStore.get().data?.id === id ? taskDetailStore.get().data.detail : null);
+  const stopped = await runTaskStopAction({ id, task: known });
   // The acknowledged snapshot remains authoritative even if the subsequent
   // read fails. Do not make an accepted stop look available for resubmission.
   const list = tasksStore.get().data;
   if (list?.items) tasksStore.setData({ ...list,
-    items: list.items.map((item) => String(item.id) === id ? response.data : item) });
+    items: list.items.map((item) => String(item.id) === id ? stopped : item) });
   const detail = taskDetailStore.get().data;
-  if (detail?.id === id) taskDetailStore.setData({ ...detail, detail: response.data });
+  if (detail?.id === id) taskDetailStore.setData({ ...detail, detail: stopped });
   await loadTasks();
   if (selectedTaskId === id) await refreshSelectedTask();
-  return response.data;
+  return stopped;
 }

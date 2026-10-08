@@ -41,6 +41,12 @@ test("final model errors use the UI language and preserve unknown explanations",
       assert.equal(compaction.role, locale === "zh-CN" ? "上下文整理未完成" :
         locale === "ru-RU" ? "Сводка контекста не завершена" : "Context summary incomplete");
       assert.doesNotMatch(compaction.text, /missing_sections|0x00003f00/);
+      assert.match(errorMessage({ code: "task_stop_unconfirmed", message: "raw" }),
+        locale === "zh-CN" ? /无法确认任务是否已停止/ :
+          locale === "ru-RU" ? /подтвердить остановку/ : /stop could not be confirmed/);
+      assert.match(errorMessage({ code: "task_stop_context_changed", message: "raw" }),
+        locale === "zh-CN" ? /停止操作没有继续/ :
+          locale === "ru-RU" ? /отмена не продолжилась/ : /cancellation did not continue/);
       assert.equal(eventsToTimeline([{ kind: "error", event_id: 9,
         run_id: "b", model_error_kind: "future_kind", text: "Specific new cause" }])[0].text,
       "Specific new cause");
