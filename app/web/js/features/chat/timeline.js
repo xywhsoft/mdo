@@ -805,6 +805,7 @@ export function createTimelineView({ container, welcome, toBottom, store, sessio
   let pendingState = store.get();
   let frame = 0;
   let followTail = true;
+  const positions = new Map();
   let searchQuery = "";
   let revealFirstSearchMatch = false;
   let renderedSession = "";
@@ -915,6 +916,12 @@ export function createTimelineView({ container, welcome, toBottom, store, sessio
         }
       }
     } else {
+      if (renderedSession && renderedSession !== "/") {
+        positions.delete(renderedSession);
+        positions.set(renderedSession, { top: scroller.scrollTop, followTail,
+          expanded: new Map(expanded), previews: new Map(previewExpanded), scroll: new Map(previewScroll) });
+        while (positions.size > 8) positions.delete(positions.keys().next().value);
+      }
       expanded.clear();
       previewExpanded.clear();
       previewScroll.clear();
@@ -926,7 +933,13 @@ export function createTimelineView({ container, welcome, toBottom, store, sessio
       renderedSession = sessionKey;
       // A history position belongs to the previous session. New tasks start
       // at the welcome heading; existing sessions open on their latest turn.
-      followTail = true;
+      const position = data?.cached ? positions.get(sessionKey) : null;
+      followTail = position?.followTail ?? true;
+      if (position) {
+        for (const [key, value] of position.expanded) expanded.set(key, value);
+        for (const [key, value] of position.previews) previewExpanded.set(key, value);
+        for (const [key, value] of position.scroll) previewScroll.set(key, value);
+      }
     }
     const items = eventsToTimeline(data?.events ?? [], data?.historyLost,
       { showHistoryTruncations: false });
@@ -1018,6 +1031,7 @@ export function createTimelineView({ container, welcome, toBottom, store, sessio
       } else scroller.scrollTop = 0;
     } else if (followTail && !searchQuery) scroller.scrollTop = scroller.scrollHeight;
     else if (anchor?.isConnected) scroller.scrollTop += anchor.getBoundingClientRect().top - anchorTop;
+    else if (data?.cached && positions.has(sessionKey)) scroller.scrollTop = positions.get(sessionKey).top;
     updateBottomButton();
   }
 

@@ -1881,5 +1881,9 @@
   "model.errorTitle.requestLimit": "请求超出模型限制",
   "model.errorTitle.outputLimit": "工具调用未完成",
   "model.errorTitle.configuration": "模型配置不可用",
-  "model.errorTitle.temporary": "暂时无法继续"
+  "model.errorTitle.temporary": "暂时无法继续",
+  "sessionLoad.syncFailed": "同步暂未完成",
+  "sessionLoad.syncing": "正在同步对话…",
+  "sessionLoad.cached": "已显示保留的对话，正在检查最新内容。",
+  "sessionLoad.history": "正在读取最近的对话，较早历史将在向上滚动时加载。"
 }

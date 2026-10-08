@@ -1264,6 +1264,7 @@ export async function boot() {
     }
   });
   createSessionLoadNotice({ navigation, store: sessionDetailStore,
+    timeline: timelineStore, onRetryHistory: reloadSelectedTimeline,
     conversation: $(".conversation"), notice: $("#conversation-load"),
     heading: $("#conversation-load-title"),
     description: $("#conversation-load-description"),

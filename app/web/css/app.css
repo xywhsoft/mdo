@@ -619,6 +619,9 @@ select:focus-visible,
 
 .welcome[hidden] { display: none; }
 .conversation[data-session-load] .welcome { display: none; }
+.conversation-load[data-compact="true"] { position: sticky; top: 8px; z-index: 11; width: min(720px, calc(100% - 32px)); margin: 8px auto; padding: 10px 14px; gap: 4px; font-size: 12px; }
+.conversation-load[data-compact="true"] h2 { margin: 0; font-size: 12px; }
+.conversation-load[data-compact="true"] p { margin: 0; color: var(--muted); }
 .conversation-load { display: grid; justify-items: start; gap: 10px; width: min(520px, calc(100% - 40px)); margin: max(48px, 8vh) auto 28px; padding: 20px; border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--surface-raised); }
 .conversation-load[hidden], .conversation-load button[hidden] { display: none; }
 .conversation-load[data-state="error"] { border-color: color-mix(in srgb, var(--danger) 40%, var(--border)); }

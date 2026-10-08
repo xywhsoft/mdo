@@ -4,6 +4,8 @@ import { isTransientReadError } from "../../api/read-recovery.js";
 import { createResourceStore } from "../../state/store.js";
 import { mergeConversationTurns, summarizeConversationEvents } from "./conversation-history.js";
 import { t } from "../../i18n.js";
+import { targetState, subscribeTarget } from "../../api/target.js";
+import { createSessionCache } from "./session-cache.js";
 
 const MAX_PAGES_PER_REFRESH = 4;
 const FALLBACK_POLL_MS = 2500;
@@ -26,6 +28,21 @@ let historyRequest = null;
 let indexRequest = null;
 let selectionAbort = null;
 let initialRequest = null;
+const sessionCache = createSessionCache({ maxBytes:
+  globalThis.navigator?.userAgent?.includes("Android") ? 12 * 1024 * 1024 : 24 * 1024 * 1024 });
+function cacheKey(data) {
+  const target = targetState().selected;
+  return `${target ? `${target.owner}/${target.id}` : "local"}/${data.projectId}/${data.sessionId}`;
+}
+function rememberTimeline() {
+  const data = timelineStore.get().data;
+  if (data?.sessionId) sessionCache.put(cacheKey(data), data);
+}
+export function clearTimelineCache() { sessionCache.clear(); }
+subscribeTarget(state => {
+  if (state.runtimeChanged || ["remote_revoked", "connector_login_required", "connector_account_changed"].includes(state.error?.code))
+    clearTimelineCache();
+});
 
 // These are background reads, never mutation retries. Temporary transport or
 // service failures keep the last conversation visible and retry with a cap.
@@ -93,6 +110,7 @@ async function refreshTimeline(token = generation) {
     for (let page = 0; page < MAX_PAGES_PER_REFRESH; page += 1) {
       const response = await api.get(
         `/projects/${current.projectId}/sessions/${current.sessionId}/events?after=${cursor}&limit=32`,
+        { signal: selectionAbort?.signal },
       );
       if (!isCurrent()) return;
       const replay = response.data;
@@ -112,14 +130,17 @@ async function refreshTimeline(token = generation) {
     if (changed || timelineStore.get().status === "error") {
       const latest = timelineStore.get().data;
       events = mergeTimelineEvents(latest.events, events).events;
-      timelineStore.setData({ ...latest, cursor, latestEventId, historyLost, events,
+      timelineStore.setData({ ...latest, cursor, latestEventId, historyLost, events, syncing: false, syncError: null,
         turns: updateTurns(latest, events) });
       pollDelay = FALLBACK_POLL_MS;
     } else {
+      if (current.syncing) timelineStore.setData({ ...timelineStore.get().data, syncing: false, syncError: null });
       pollDelay = Math.min(Math.round(pollDelay * 1.45), 8000);
     }
   } catch (error) {
     if (!isCurrent()) return;
+    if (error.name === "AbortError") return;
+    if (current.syncing) timelineStore.setData({ ...timelineStore.get().data, syncing: false, syncError: error });
     if (error?.code !== "session_events_unavailable" && error?.code !== "session_not_found") {
       if (!isTransientTimelineError(error)) timelineStore.setError(error);
       pollDelay = Math.min(pollDelay * 2, 15_000);
@@ -137,7 +158,8 @@ export function selectTimeline(projectId, sessionId) {
   return reloadTimeline(project, session);
 }
 
-async function reloadTimeline(projectId, sessionId) {
+async function reloadTimeline(projectId, sessionId, force = false) {
+  rememberTimeline();
   generation += 1;
   const token = generation;
   selectionAbort?.abort();
@@ -147,6 +169,13 @@ async function reloadTimeline(projectId, sessionId) {
   liveConnection.select("", "");
   stopTimer();
   pollDelay = FALLBACK_POLL_MS;
+  const cached = force ? null : sessionCache.get(cacheKey({ projectId, sessionId }));
+  if (cached) {
+    timelineStore.setData({ ...cached, cached: true, syncing: true, syncError: null, loadingHistory: false, historyError: null });
+    await refreshTimeline(token);
+    if (token === generation) subscribeLiveTimeline();
+    return;
+  }
   timelineStore.setData({
     projectId,
     sessionId,
@@ -186,6 +215,7 @@ function loadInitialTimeline(token) {
     } catch (error) {
       if (token !== generation || error.name === "AbortError") return;
       if (isTransientTimelineError(error)) {
+        timelineStore.setData({ ...timelineStore.get().data, syncError: error });
         pollDelay = Math.min(pollDelay * 2, 15_000);
         schedulePoll(token);
       } else timelineStore.setError(error);
@@ -206,7 +236,7 @@ async function readHistoryRange(data, first, end, token) {
     const page = (await api.get(`${endpoint(data)}/events?after=${cursor}&limit=32`,
       { signal: selectionAbort?.signal })).data;
     if (token !== generation) return [];
-    const next = Number(page.next_cursor);
+      const next = Number(page.next_cursor);
     if (!Number.isSafeInteger(next) || next <= cursor)
       throw new Error(t("messageAction.historyChanged", {}, "消息已不在当前会话历史中，请刷新会话"));
     events.push(...(page.items ?? []).filter(event => event.event_id >= first && event.event_id <= end));
@@ -287,7 +317,7 @@ export async function revealConversationTurn(id) {
 export function reloadSelectedTimeline() {
   const current = timelineStore.get().data;
   if (!current?.sessionId) return Promise.resolve();
-  return reloadTimeline(current.projectId, current.sessionId);
+  return reloadTimeline(current.projectId, current.sessionId, true);
 }
 
 export function refreshSelectedTimeline() {
@@ -298,6 +328,7 @@ export function refreshSelectedTimeline() {
 }
 
 export function clearTimeline() {
+  rememberTimeline();
   generation += 1;
   refreshVersion += 1;
   stopTimer();

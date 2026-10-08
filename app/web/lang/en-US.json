@@ -1881,5 +1881,9 @@
   "model.errorTitle.requestLimit": "Request exceeds model limits",
   "model.errorTitle.outputLimit": "Tool call incomplete",
   "model.errorTitle.configuration": "Model settings unavailable",
-  "model.errorTitle.temporary": "Unable to continue for now"
+  "model.errorTitle.temporary": "Unable to continue for now",
+  "sessionLoad.syncFailed": "Sync is incomplete",
+  "sessionLoad.syncing": "Syncing conversation…",
+  "sessionLoad.cached": "Showing saved conversation while checking for updates.",
+  "sessionLoad.history": "Loading recent messages. Scroll up to load earlier history."
 }
