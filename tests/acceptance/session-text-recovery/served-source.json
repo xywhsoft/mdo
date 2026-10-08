@@ -1,0 +1,22 @@
+[
+  {
+    "path": "js/state/sessions.js",
+    "sha256": "33541297dbc6f8df652b2b5f5697dc6c5c5a7ebdebbc5894f290790d5bfdaa31",
+    "matches": true
+  },
+  {
+    "path": "js/features/chat/timeline.js",
+    "sha256": "1ce50edca23d14c8b587e96dc10fd3aa3fee496a08c9ed1aad10b1c512228fb0",
+    "matches": true
+  },
+  {
+    "path": "js/features/chat/tool-content.js",
+    "sha256": "d1d0e5ab003fc66d843e626109c6c535049065188d6bf713818e40daa7ade170",
+    "matches": true
+  },
+  {
+    "path": "js/api/request-recovery.js",
+    "sha256": "5d70df9f3c8cc077cfe06f27edf1b96b5c26540bb2c3146fd314be8df1e70be8",
+    "matches": true
+  }
+]

@@ -3,6 +3,7 @@ import { copyText } from "../../utils/clipboard.js";
 import { attachmentUrl } from "../../api/client.js";
 import { targetImage } from "../../api/target-image.js";
 import { readCompleteSessionEventText } from "../../state/sessions.js";
+import { createRequestRecovery } from "../../api/request-recovery.js";
 import { mountIcons } from "../../components/icons.js";
 import { renderMarkdown } from "./markdown.js";
 import { artifactPreviewNode } from "./artifact-preview.js";
@@ -439,7 +440,7 @@ export function eventsToTimeline(events, historyLost = false,
 }
 
 export async function resolveTimelineCopyText(item, owner,
-  readEventText = readCompleteSessionEventText) {
+  readEventText = readCompleteSessionEventText, { createRecovery = createRequestRecovery } = {}) {
   const visible = item.text ?? "";
   if (!item.textTruncated) return { text: visible, complete: true };
   const spans = item.copySpans;
@@ -447,6 +448,7 @@ export async function resolveTimelineCopyText(item, owner,
       spans.length === 0 || spans.length > 16) return { text: visible, complete: false };
   let result = "";
   let offset = 0;
+  const recovery = createRecovery();
   try {
     for (const span of spans) {
       if (!Number.isSafeInteger(span.eventId) || span.eventId < 1 ||
@@ -454,7 +456,7 @@ export async function resolveTimelineCopyText(item, owner,
           span.start < offset || span.end < span.start || span.end > visible.length)
         return { text: visible, complete: false };
       const full = await readEventText(owner.projectId, owner.sessionId,
-        span.eventId, span.kind, { endEventId: span.endEventId, epoch: span.epoch });
+        span.eventId, span.kind, { endEventId: span.endEventId, epoch: span.epoch, recovery });
       if (typeof full !== "string" || !full.startsWith(
         visible.slice(span.start, span.end)))
         return { text: visible, complete: false };
@@ -462,7 +464,10 @@ export async function resolveTimelineCopyText(item, owner,
       offset = span.end;
       if (result.length > 1048576) return { text: visible, complete: false };
     }
-  } catch { return { text: visible, complete: false }; }
+  } catch (error) {
+    if (error?.name === "AbortError") throw error;
+    return { text: visible, complete: false };
+  } finally { recovery.dispose(); }
   const complete = result + visible.slice(offset);
   return complete.length <= 1048576
     ? { text: complete, complete: true }
@@ -470,8 +475,8 @@ export async function resolveTimelineCopyText(item, owner,
 }
 
 export async function resolveTimelineActionText(item, owner,
-  readEventText = readCompleteSessionEventText) {
-  const resolved = await resolveTimelineCopyText(item, owner, readEventText);
+  readEventText = readCompleteSessionEventText, options) {
+  const resolved = await resolveTimelineCopyText(item, owner, readEventText, options);
   if (!resolved.complete) throw new Error(t("messageAction.fullTextUnavailable", {},
     "无法取回完整消息；当前会话历史没有改动，请刷新后重试。"));
   return resolved.text;
@@ -695,7 +700,10 @@ function timelineNode(item, handlers, projectId, sessionId, writable,
         paintText(text);
         partialNote?.remove();
         full.remove();
-      } catch (error) { toast(errorMessage(error), "error"); full.disabled = false; }
+      } catch (error) {
+        if (error?.name !== "AbortError") toast(errorMessage(error), "error");
+        full.disabled = false;
+      }
     });
     children.push(full);
   }
@@ -746,7 +754,9 @@ function timelineNode(item, handlers, projectId, sessionId, writable,
             ? t("timeline.messageCopied", {}, "消息已复制")
             : t("timeline.visibleMessageCopied", {}, "已复制可见部分"));
         }
-        catch { toast(t("timeline.messageCopyFailed", {}, "无法复制消息"), "error"); }
+        catch (error) {
+          if (error?.name !== "AbortError") toast(t("timeline.messageCopyFailed", {}, "无法复制消息"), "error");
+        }
         finally { copying = false; copy.setAttribute("aria-disabled", "false"); }
       });
       actions.append(copy);

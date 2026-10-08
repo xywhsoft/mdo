@@ -62,7 +62,7 @@ test("section copy reads only its original event, preserving raw arguments and v
     outputText:"output",outputEventId:11,outputTruncated:false};
   const raw='{"path":"two words","content":"full\\ntext"}';
   const full=await resolveToolSectionText(item,"input",owner, async (...args) => {
-    assert.deepEqual(args,["p","s",10,"tool_start"]);
+    assert.deepEqual(args.slice(0,4),["p","s",10,"tool_start"]);
     return raw;
   });
   assert.deepEqual(full,{text:raw,complete:true});

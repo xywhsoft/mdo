@@ -1,0 +1,18 @@
+{
+  "baseline_new_checks": {
+    "tests": 9,
+    "passed": 0,
+    "failed": 9
+  },
+  "fixed_related_checks": {
+    "tests": 65,
+    "passed": 65
+  },
+  "clean_frontend_contracts": 2,
+  "body_deadline_seconds": 60.0,
+  "held_body_attempts": 6,
+  "copy_handoff_sha256_matches": true,
+  "system_clipboard_readback_verified": false,
+  "actual_download_landing_verified": false,
+  "final_model_errors": 0
+}

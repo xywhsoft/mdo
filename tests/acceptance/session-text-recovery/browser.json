@@ -1,0 +1,42 @@
+[
+  {
+    "type": "clipboard",
+    "capturedAt": 1791490644235,
+    "bytes": 10435,
+    "sha256": "fc4f33f2cb319491c9d66ae8148c1e569c970df756e384d8393ed0cd33664513",
+    "hasLongReplyTail": true,
+    "accepted": true
+  },
+  {
+    "type": "text/markdown;charset=utf-8",
+    "bytes": 10627,
+    "capturedAt": 1791490662495,
+    "hasSyntheticPrompt": true,
+    "hasSyntheticPng": false,
+    "markdownImageReferences": 0,
+    "markdownEmbeddedImages": 0,
+    "embeddedImageBytes": [],
+    "embeddedImageSha256": [],
+    "hasOriginalImageName": false,
+    "hasLongOriginalImageName": false,
+    "imagesIncomplete": false,
+    "textIncomplete": false,
+    "hasLongReplyTail": true
+  },
+  {
+    "type": "text/markdown;charset=utf-8",
+    "bytes": 4346,
+    "capturedAt": 1791490777027,
+    "hasSyntheticPrompt": true,
+    "hasSyntheticPng": false,
+    "markdownImageReferences": 0,
+    "markdownEmbeddedImages": 0,
+    "embeddedImageBytes": [],
+    "embeddedImageSha256": [],
+    "hasOriginalImageName": false,
+    "hasLongOriginalImageName": false,
+    "imagesIncomplete": false,
+    "textIncomplete": true,
+    "hasLongReplyTail": false
+  }
+]

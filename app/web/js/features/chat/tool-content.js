@@ -2,6 +2,7 @@ import { element, toast } from "../../utils/dom.js";
 import { copyText } from "../../utils/clipboard.js";
 import { readCompleteSessionEventText } from "../../state/sessions.js";
 import { api, resourceId } from "../../api/client.js";
+import { createRequestRecovery } from "../../api/request-recovery.js";
 import { t } from "../../i18n.js";
 
 function argumentsObject(text) {
@@ -89,10 +90,11 @@ export function toolInputPreview(name, text, truncated = false) {
   return { kind: "edit", lines, omitted };
 }
 
-async function readToolArtifact(owner, eventId) {
+async function readToolArtifact(owner, eventId, recovery) {
   const path = `/projects/${resourceId(owner.projectId, "project")}` +
     `/sessions/${resourceId(owner.sessionId, "session")}/artifacts/${eventId}`;
-  const { data } = await api.get(`${path}?offset=0&limit=65536`);
+  const { data } = await recovery.request(signal =>
+    api.get(`${path}?offset=0&limit=65536`, { signal }));
   if (data?.eof !== true || !/^(text\/|application\/(json|xml|javascript))/.test(data.media_type || "")) return null;
   const bytes = Uint8Array.from(window.atob(data.data || ""), char => char.charCodeAt(0));
   if (bytes.length > 65536) return null;
@@ -100,22 +102,26 @@ async function readToolArtifact(owner, eventId) {
 }
 
 export async function resolveToolSectionText(item, part, owner, read = readCompleteSessionEventText,
-  readArtifact = readToolArtifact) {
+  readArtifact = readToolArtifact, { createRecovery = createRequestRecovery } = {}) {
   const text = item[`${part}Text`] ?? "";
   const artifact = part === "output" && Boolean(item.artifactId);
   if (!artifact && !item[`${part}Truncated`]) return { text, complete: true };
   const id = item[`${part}EventId`];
   if (!owner?.projectId || !owner?.sessionId || !Number.isSafeInteger(id) || id < 1)
     return { text, complete: false };
+  const recovery = createRecovery();
   try {
     // Output artifacts are bound to this session's immutable tool-done event.
     // Its inline text is a summary, so it is not a prefix of the artifact.
-    const full = artifact ? await readArtifact(owner, id)
+    const full = artifact ? await readArtifact(owner, id, recovery)
       : await read(owner.projectId, owner.sessionId, id,
-        part === "input" ? "tool_start" : "tool_done");
+        part === "input" ? "tool_start" : "tool_done", { recovery });
     if (typeof full === "string" && full.length <= 65536 && (artifact || full.startsWith(text)))
       return { text: full, complete: true };
-  } catch { /* Visible text remains useful when the original is unavailable. */ }
+  } catch (error) {
+    if (error?.name === "AbortError") throw error;
+    // Visible text remains useful when the original is unavailable.
+  } finally { recovery.dispose(); }
   return { text, complete: false };
 }
 
@@ -193,7 +199,13 @@ export function toolSectionNode(label, item, part, owner, actionRef, cache, onCo
     }).finally(() => { pending = null; more.removeAttribute("aria-disabled"); });
     return pending;
   }
-  more.addEventListener("click", () => { void load(); });
+  more.addEventListener("click", async () => {
+    try { await load(); }
+    catch (error) {
+      if (error?.name !== "AbortError") note.textContent = t("toolContent.fullUnavailable", {},
+        "完整内容暂不可用；可复制可见部分，较大结果请查看产物。");
+    }
+  });
   copy.addEventListener("click", async () => {
     if (copying) return;
     copying = true;
@@ -203,7 +215,9 @@ export function toolSectionNode(label, item, part, owner, actionRef, cache, onCo
       await copyText(result.text);
       toast(result.complete ? t("timeline.copied", {}, "已复制")
         : t("toolContent.partialCopied", {}, "已复制可见部分（内容截断）"));
-    } catch { toast(t("timeline.copyFailed", {}, "无法复制"), "error"); }
+    } catch (error) {
+      if (error?.name !== "AbortError") toast(t("timeline.copyFailed", {}, "无法复制"), "error");
+    }
     finally { copying = false; copy.removeAttribute("aria-disabled"); }
   });
   paint();

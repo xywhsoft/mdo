@@ -17,6 +17,22 @@ const frame = document.querySelector("#mdo");
 const output = document.querySelector("#result");
 const captures = [];
 frame.addEventListener("load", () => {
+  // Observe the actual browser clipboard handoff, preserving its implementation.
+  // This records the argument and acknowledgement, not system clipboard contents.
+  const clipboard = frame.contentWindow.navigator.clipboard;
+  if (clipboard?.writeText) {
+    const originalWrite = clipboard.writeText.bind(clipboard);
+    clipboard.writeText = async text => {
+      const result = await originalWrite(text);
+      const bytes = new TextEncoder().encode(text);
+      const hash = new Uint8Array(await crypto.subtle.digest("SHA-256", bytes));
+      captures.push({ type:"clipboard", capturedAt:Date.now(), bytes:bytes.length,
+        sha256:Array.from(hash, value => value.toString(16).padStart(2, "0")).join(""),
+        hasLongReplyTail:text.endsWith("MDO_LONG_REPLY_END"), accepted:true });
+      output.textContent = JSON.stringify(captures.slice(-4), null, 2);
+      return result;
+    };
+  }
   const urls = frame.contentWindow.URL;
   const original = urls.createObjectURL.bind(urls);
   // Observe only export data; preserve the native URL and actual download.
@@ -59,6 +75,8 @@ frame.addEventListener("load", () => {
           capture.hasOriginalImageName = text.includes('截图 "1" 100%\\.png');
           capture.hasLongOriginalImageName = text.includes("跨平台附件".repeat(40) + "\\.png");
           capture.imagesIncomplete = text.includes("部分图片未包含");
+          capture.textIncomplete = text.includes("部分事件正文未能完整导出");
+          capture.hasLongReplyTail = text.includes("MDO_LONG_REPLY_END");
         }
         if (document) {
           capture.keys = Object.keys(document);

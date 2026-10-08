@@ -4,6 +4,7 @@ import { withSessionRuntime } from "./session-runtime.js";
 import { t } from "../i18n.js";
 import { downloadSessionBackup } from "../api/backup-download.js";
 import { isTransientReadError } from "../api/read-recovery.js";
+import { createRequestRecovery } from "../api/request-recovery.js";
 
 const readRecovery = { recoverRead: isTransientReadError,
   retainDataOnError: isTransientReadError };
@@ -140,7 +141,14 @@ export function exportSession(session, options) {
 // The event list stays small. A copy action may fetch one original event on
 // demand, but must never accept a neighbouring event after journal compaction.
 export async function readCompleteSessionEventText(projectId, sessionId,
-  eventId, kind, { endEventId = eventId, epoch = "" } = {}) {
+  eventId, kind, { recovery, createRecovery = createRequestRecovery, ...options } = {}) {
+  const reader = recovery ?? createRecovery();
+  try { return await readCompleteEventText(projectId, sessionId, eventId, kind, options, reader); }
+  finally { if (!recovery) reader.dispose(); }
+}
+
+async function readCompleteEventText(projectId, sessionId,
+  eventId, kind, { endEventId = eventId, epoch = "" }, recovery) {
   if (!Number.isSafeInteger(eventId) || eventId < 1 || typeof kind !== "string")
     throw new TypeError("session event identity is invalid");
   const path = `${endpoint({ project_id: projectId, id: sessionId })}/events`;
@@ -149,7 +157,8 @@ export async function readCompleteSessionEventText(projectId, sessionId,
     if (!Number.isSafeInteger(endEventId) || endEventId - eventId > 4096 || !/^[0-9a-f]{64}$/.test(epoch)) return null;
     let cursor = eventId - 1, first = null, last = null, text = "";
     while (cursor < endEventId) {
-      const page = (await api.get(`${path}?after=${cursor}&limit=32${fence}`)).data;
+      const page = (await recovery.request(signal =>
+        api.get(`${path}?after=${cursor}&limit=32${fence}`, { signal }))).data;
       if (page.epoch !== epoch || !page.items?.length || page.next_cursor <= cursor) return null;
       for (const event of page.items) {
         if (event.event_id > endEventId) break;
@@ -158,7 +167,8 @@ export async function readCompleteSessionEventText(projectId, sessionId,
         if (event.kind !== kind || event.run_id !== first.run_id || event.agent_id !== first.agent_id ||
             event.agent_turn !== first.agent_turn || event.agent_depth !== first.agent_depth) continue;
         const part = event.text_truncated
-          ? await readCompleteSessionEventText(projectId, sessionId, event.event_id, kind, { epoch }) : event.text;
+          ? await readCompleteSessionEventText(projectId, sessionId, event.event_id, kind,
+            { epoch, recovery }) : event.text;
         if (typeof part !== "string" || text.length + part.length > 1048576) return null;
         text += part; last = event;
       }
@@ -166,7 +176,8 @@ export async function readCompleteSessionEventText(projectId, sessionId,
     }
     return last?.event_id === endEventId ? text : null;
   }
-  const data = (await api.get(`${path}?after=${eventId - 1}&limit=1&full_text=1${fence}`)).data;
+  const data = (await recovery.request(signal =>
+    api.get(`${path}?after=${eventId - 1}&limit=1&full_text=1${fence}`, { signal }))).data;
   const [event] = data?.items ?? [];
   if (data?.items?.length !== 1 || event?.event_id !== eventId ||
       event?.kind !== kind || event?.text_truncated !== false ||
@@ -181,14 +192,22 @@ const TRANSCRIPT_MAX_EVENTS = 4096;
 const TRANSCRIPT_MAX_FULL_TEXT_EVENTS = 64;
 const TRANSCRIPT_MAX_FULL_TEXT_BYTES = 2 * 1024 * 1024;
 
-export async function loadSessionTranscript(session) {
+export async function loadSessionTranscript(session, { createRecovery = createRequestRecovery } = {}) {
+  // Pages and complete bodies belong to one export, not one deadline per GET.
+  const recovery = createRecovery();
+  try { return await readSessionTranscript(session, recovery); }
+  finally { recovery.dispose(); }
+}
+
+async function readSessionTranscript(session, recovery) {
   let cursor = 0;
   let latestEventId = null;
   let historyLost = false;
   const events = [];
   const path = `${endpoint(session)}/events`;
   while (events.length < TRANSCRIPT_MAX_EVENTS) {
-    const replay = (await api.get(`${path}?after=${cursor}&limit=${TRANSCRIPT_PAGE_SIZE}`)).data;
+    const replay = (await recovery.request(signal =>
+      api.get(`${path}?after=${cursor}&limit=${TRANSCRIPT_PAGE_SIZE}`, { signal }))).data;
     const latest = Number(replay.latest_event_id);
     const next = Number(replay.next_cursor);
     if (!Number.isSafeInteger(latest) || !Number.isSafeInteger(next) ||
@@ -221,13 +240,16 @@ export async function loadSessionTranscript(session) {
     fullTextReads += 1;
     try {
       const full = await readCompleteSessionEventText(session.project_id,
-        session.id, Number(event.event_id), event.kind);
+        session.id, Number(event.event_id), event.kind, { recovery });
       if (full === null) continue;
       const bytes = new TextEncoder().encode(full).length;
       if (bytes > TRANSCRIPT_MAX_FULL_TEXT_BYTES - fullTextBytes) continue;
       fullTextBytes += bytes;
       events[index] = { ...event, text: full, text_truncated: false };
-    } catch { /* Preserve the visible preview and report an incomplete export. */ }
+    } catch (error) {
+      if (error?.name === "AbortError") throw error;
+      // Preserve the visible preview and report an incomplete export.
+    }
   }
   const textTruncated = events.some((event) => event.text_truncated &&
     event.kind !== "model_reasoning_delta");

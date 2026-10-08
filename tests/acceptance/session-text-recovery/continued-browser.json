@@ -1,0 +1,11 @@
+{
+  "fullBodyWasRestored": true,
+  "followup": "CONTINUED — 全文读取恢复后正常续聊",
+  "logs": [
+    {
+      "level": "error",
+      "message": "Uncaught TypeError: Failed to execute 'observe' on 'MutationObserver': parameter 1 is not of type 'Node'.",
+      "timestamp": "2026-10-08T20:14:51.287Z"
+    }
+  ]
+}
