@@ -1,0 +1,45 @@
+{
+  "command": "python tests/test_backup_import_runtime.py --host .build/host/xsw.exe --read-faults",
+  "exit_code": 0,
+  "raw_evidence_sha256": "70458c972c8fe211fb360251d8964481eadd23a4fbfafe614d8130251450a48c",
+  "results": [
+    {
+      "protocol": "HTTP",
+      "id": "b3bfb0bdb2e038ce9d930ed0b682876c",
+      "same_reviewed_identity": true,
+      "committed": true,
+      "terminal": true,
+      "apply_attempts": 1,
+      "read_attempts": 4,
+      "faults": [
+        "hung-body",
+        "503",
+        "503"
+      ],
+      "observation_errors": 0,
+      "source_unchanged": true,
+      "catalog_delta": 1,
+      "sidecars_and_payload_match": true,
+      "resident_identity_matches": true
+    },
+    {
+      "protocol": "TLS",
+      "id": "b17cd4ba443a41ea146cac29847b17f5",
+      "same_reviewed_identity": true,
+      "committed": true,
+      "terminal": true,
+      "apply_attempts": 1,
+      "read_attempts": 4,
+      "faults": [
+        "hung-body",
+        "503",
+        "503"
+      ],
+      "observation_errors": 0,
+      "source_unchanged": true,
+      "catalog_delta": 1,
+      "sidecars_and_payload_match": true,
+      "resident_identity_matches": true
+    }
+  ]
+}

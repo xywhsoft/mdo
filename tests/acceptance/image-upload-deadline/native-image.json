@@ -1,0 +1,31 @@
+{
+  "result": {
+    "schema_version": 2,
+    "id": "dddddddddddddddddddddddddddddddd",
+    "mime_type": "image/png",
+    "size": 136,
+    "created_at": 1791478449392996,
+    "file_name": "pixel.png"
+  },
+  "calls": [
+    {
+      "path": "/api/v1/project-purge-intent",
+      "method": "GET"
+    },
+    {
+      "path": "/api/v1/projects/default/sessions/V-OSKlHLyEtBQuBC4xmz7wQ7_TiRQMUv/attachments/dddddddddddddddddddddddddddddddd",
+      "method": "PUT"
+    },
+    {
+      "path": "/api/v1/projects/default/sessions/V-OSKlHLyEtBQuBC4xmz7wQ7_TiRQMUv/attachments/dddddddddddddddddddddddddddddddd/info",
+      "method": "GET"
+    }
+  ],
+  "held_body_ms": 31107,
+  "pending_writes": false,
+  "network_notices": 0,
+  "source_bytes_match": true,
+  "binary_count": 1,
+  "metadata_count": 1,
+  "model_runs": 0
+}

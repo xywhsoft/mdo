@@ -25,6 +25,24 @@ export function setApiWriteGuard(guard) {
   return () => { if (writeGuard === guard) writeGuard = null; };
 }
 
+function checkSignal(signal) {
+  if (signal?.aborted) throw new DOMException("Request cancelled", "AbortError");
+}
+
+// A cancelled adapter or body may never settle. Release the public request
+// and write tracking ourselves; late work cannot publish tokens or feedback.
+async function withSignal(signal, operation) {
+  if (!signal) return operation();
+  checkSignal(signal);
+  let cancel;
+  const cancelled = new Promise((_, reject) => {
+    cancel = () => reject(new DOMException("Request cancelled", "AbortError"));
+    signal.addEventListener("abort", cancel, { once: true });
+  });
+  try { return await Promise.race([operation(), cancelled]); }
+  finally { signal.removeEventListener("abort", cancel); }
+}
+
 function checkWrite(path, options) {
   const method = (options.method ?? "GET").toUpperCase();
   if (!["GET", "HEAD", "OPTIONS"].includes(method) && writeGuard &&
@@ -74,16 +92,19 @@ export function attachmentFileName(value) {
   return new TextEncoder().encode(value).length <= 1024 ? value : "";
 }
 
-async function readEnvelope(response, path = "", method = "GET") {
+async function readEnvelope(response, path = "", method = "GET", signal) {
+  checkSignal(signal);
   let envelope = null;
   try { envelope = await response.json(); }
   catch (error) {
+    checkSignal(signal);
     if (error?.name === "AbortError") throw error;
     if (error?.code) throw new ApiError(error.message, error);
     throw new ApiError("服务返回了无效响应", {
       status: response.status, code: "invalid_response",
     });
   }
+  checkSignal(signal);
   if (!response.ok || envelope?.ok !== true) {
     const error = new ApiError(envelope?.error?.message || `请求失败 (${response.status})`, {
       status: response.status,
@@ -110,9 +131,11 @@ async function readEnvelope(response, path = "", method = "GET") {
 }
 
 export async function apiRequest(path, options = {}) {
+  checkSignal(options.signal);
   checkWrite(path, options);
+  const send = () => withSignal(options.signal, () => sendJson(path, options));
   return !["GET", "HEAD", "OPTIONS"].includes((options.method ?? "GET").toUpperCase())
-    ? trackWrite(() => sendJson(path, options)) : sendJson(path, options);
+    ? trackWrite(send) : send();
 }
 
 async function sendJson(path, options) {
@@ -135,13 +158,14 @@ async function sendJson(path, options) {
       signal: options.signal,
     });
   } catch (error) {
+    checkSignal(options.signal);
     if (error?.name === "AbortError") throw error;
     if (error?.code) throw new ApiError(error.message, error);
     networkErrorHandler?.();
     throw new ApiError("无法连接本地 mdo 服务", { code: "network_error" });
   }
 
-  return readEnvelope(response, path, method);
+  return readEnvelope(response, path, method, options.signal);
 }
 
 async function uploadImage(projectId, sessionId, file, mime = file.type, options = {}) {
@@ -151,8 +175,10 @@ async function uploadImage(projectId, sessionId, file, mime = file.type, options
     `/sessions/${resourceId(sessionId, "session")}/attachments` +
     (options.uploadId ? `/${options.uploadId}` : "");
   const method = options.uploadId ? "PUT" : "POST";
+  checkSignal(options.signal);
   checkWrite(path, { method });
-  return trackWrite(() => sendImage(path, file, mime, method, options.signal));
+  return trackWrite(() => withSignal(options.signal,
+    () => sendImage(path, file, mime, method, options.signal)));
 }
 
 async function sendImage(path, file, mime, method, signal) {
@@ -175,12 +201,13 @@ async function sendImage(path, file, mime, method, signal) {
       signal,
     });
   } catch (error) {
+    checkSignal(signal);
     if (error?.name === "AbortError") throw error;
     if (error?.code) throw new ApiError(error.message, error);
     networkErrorHandler?.();
     throw new ApiError("无法连接本地 mdo 服务", { code: "network_error" });
   }
-  return (await readEnvelope(response)).data;
+  return (await readEnvelope(response, path, method, signal)).data;
 }
 
 function deleteImage(projectId, sessionId, id) {
@@ -217,8 +244,9 @@ export async function uploadBackupChunk(id, offset, chunk, options = {}) {
       !(chunk instanceof Uint8Array) || !chunk.byteLength || chunk.byteLength > 262144)
     throw new TypeError("Invalid backup chunk");
   const path = `/session-backups/uploads/${id}/chunks/${offset}`;
+  checkSignal(options.signal);
   checkWrite(path, { method: "PUT" });
-  return trackWrite(async () => {
+  return trackWrite(() => withSignal(options.signal, async () => {
     let response;
     try {
       response = await targetFetch(apiUrl(path), { method: "PUT", body: chunk,
@@ -226,11 +254,12 @@ export async function uploadBackupChunk(id, offset, chunk, options = {}) {
           ...(pageWriteToken ? { "X-Mdo-Write-Token": pageWriteToken } : {}) },
         cache: "no-store", credentials: "same-origin", redirect: "error", signal: options.signal });
     } catch (error) {
+      checkSignal(options.signal);
       if (error?.name === "AbortError") throw error;
       if (error?.code) throw new ApiError(error.message, error);
       networkErrorHandler?.();
       throw new ApiError("Cannot upload backup chunk", { code: "network_error" });
     }
-    return readEnvelope(response, path, "PUT");
-  });
+    return readEnvelope(response, path, "PUT", options.signal);
+  }));
 }

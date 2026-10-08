@@ -1,0 +1,20 @@
+{
+  "xs_commit": "3232f7b8efb02fdd6bf63a508ed1e69654d6759c",
+  "mdo_commit": "a44037e51a897c9315a6873a77e7202117fdcf68",
+  "mdo_worktree_dirty": true,
+  "packaged_app_sha256": "053d6c33844394673ef2c470a47dd9fb55ce9bbb2b38d49a286ec740a5fe3505",
+  "sha256": "848689fa64bfc6189f7115d3e6bbcaa3f1ddbec127d69e1bfda86c3f170d5071",
+  "bytes": 4457985,
+  "candidate": "D:\\GIT\\mdo\\.build\\conversation-acceptance\\image-upload-deadline-package\\mdo.exe",
+  "source_sha256": {
+    "app/web/js/api/client.js": "dc0858f7bf942975e3ccc67c0fd836e3c5d5d7046489d4f5e606455914249701",
+    "app/web/js/api/image-upload.js": "9192b95f30614a7ef6694a966bc54a50276b79a55b52c9ec62d01a4fefe18b30"
+  },
+  "host": {
+    "revision": "3232f7b8efb02fdd6bf63a508ed1e69654d6759c",
+    "profile_sha256": "2829d871dac1a12a70503f9b6116adaa2aa9556a53ea139df60aaa81cbb7a19b",
+    "binary_sha256": "8b53d6328e7689530de8b4fb55d5b3ae64d5189eff574b49533feb3e7872d9b1",
+    "binary_bytes": 3154944
+  },
+  "verification_scope": "isolated candidate build; production JS adapters and real native HTTP service; no native file-picker or Android claim"
+}

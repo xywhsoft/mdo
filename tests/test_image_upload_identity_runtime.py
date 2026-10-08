@@ -24,7 +24,7 @@ def png(red):
             chunk(b'IDAT', zlib.compress(pixels, 0)) + chunk(b'IEND', b''))
 
 
-def probe(host):
+def probe(host, frontend_evidence=None):
     with tempfile.TemporaryDirectory(prefix='mdo-upload-identity-') as temp:
         base = Path(temp); home = base / 'home'; port = free_port()
         config = write_site(base / 'site', port)
@@ -114,6 +114,23 @@ def probe(host):
             assert status == 200 and info['data']['id'] == identity
             status, _, raw = request(port, 'GET', '/api/v1/runs')
             assert status == 200 and json.loads(raw)['data']['runs_started'] == 0
+            if frontend_evidence:
+                third = session()
+                source, output = base / 'pixel.png', base / 'frontend-image.json'
+                source.write_bytes(image)
+                subprocess.run(['node', str(ROOT / 'tests/fixtures/image-upload-deadline-ui.mjs'),
+                    f'http://127.0.0.1:{port}/', third, str(source), str(output)],
+                    cwd=ROOT, timeout=70, check=True)
+                result = json.loads(output.read_text(encoding='utf-8'))
+                saved_directory = home / 'sessions/default' / third / 'attachments'
+                assert len(list(saved_directory.glob('*.bin'))) == 1
+                assert len(list(saved_directory.glob('*.json'))) == 1
+                assert (saved_directory / (result['result']['id'] + '.bin')).read_bytes() == image
+                status, _, raw = request(port, 'GET', '/api/v1/runs')
+                assert status == 200 and json.loads(raw)['data']['runs_started'] == 0
+                result.update(source_bytes_match=True, binary_count=1, metadata_count=1, model_runs=0)
+                frontend_evidence.parent.mkdir(parents=True, exist_ok=True)
+                frontend_evidence.write_text(json.dumps(result, indent=2) + '\n', encoding='utf-8')
             print('image upload identity runtime: PASS (replay, content/name conflicts, namespace, quota, restart; no model calls)')
         except BaseException:
             print((base / 'host.log').read_text(encoding='utf-8', errors='replace')[-3000:])
@@ -125,4 +142,7 @@ def probe(host):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--host', type=Path, default=ROOT / '.build/host/xs.exe')
-    probe(parser.parse_args().host.resolve())
+    parser.add_argument('--frontend-evidence', type=Path,
+        help='Also verify a held production upload body and save its checked results')
+    args = parser.parse_args()
+    probe(args.host.resolve(), args.frontend_evidence)

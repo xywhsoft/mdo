@@ -1,0 +1,51 @@
+{
+  "baseline": {
+    "exit_code": 1,
+    "counts": {
+      "tests": 13,
+      "pass": 0,
+      "fail": 13,
+      "cancelled": 0
+    }
+  },
+  "fixed": {
+    "exit_code": 0,
+    "counts": {
+      "tests": 13,
+      "pass": 13,
+      "fail": 0,
+      "cancelled": 0
+    }
+  },
+  "related": {
+    "exit_code": 0,
+    "files": [
+      "tests/test_image_upload_deadline.mjs",
+      "tests/test_api_abort_scope.mjs",
+      "tests/test_image_upload_recovery.mjs",
+      "tests/test_write_token.mjs",
+      "tests/test_backup_import_transport.mjs",
+      "tests/test_backup_import_controller.mjs",
+      "tests/test_backup_import_deadline.mjs",
+      "tests/test_prompt_queue_reads.mjs",
+      "tests/test_prompt_queue_writes.mjs",
+      "tests/test_recovery_action.mjs",
+      "tests/test_message_edit_recovery.mjs",
+      "tests/test_run_stop_controller.mjs",
+      "tests/test_runtime_read_recovery.mjs",
+      "tests/test_timeline_read_deadline.mjs",
+      "tests/test_live_connection.mjs"
+    ],
+    "counts": {
+      "tests": 137,
+      "pass": 137,
+      "fail": 0,
+      "cancelled": 0
+    }
+  },
+  "frontend_contracts": {
+    "passed": 4,
+    "failed": 0,
+    "source": "clean isolated baseline plus owned changes"
+  }
+}
