@@ -21,12 +21,16 @@ typedef struct MdoRunEntry {
     xcancel* Cancel;
     char* FinalText;
     bool Starting;
+    bool Finishing;
 } MdoRunEntry;
 
 typedef struct MdoRunCleanup {
     MdoSession* Session;
     MdoAgentRun* Run;
     xcancel* Cancel;
+    char Id[MDO_RUN_ID_CAPACITY];
+    xwork_run_state State;
+    bool Failed;
 } MdoRunCleanup;
 
 typedef struct MdoRunManagerState {
@@ -41,6 +45,7 @@ typedef struct MdoRunManagerState {
     size_t Capacity;
     size_t ActiveCount;
     size_t StartingCount;
+    size_t FinishingCount;
     MdoRunManagerOptions Options;
     uint64 RunsStarted;
     uint64 RunsCompleted;
@@ -194,7 +199,8 @@ static bool MdoRunsMakeRoomLocked(void)
     if ( g_MdoRuns.Count < g_MdoRuns.Options.MaxRetained ) return true;
     for ( i = 0u; i < g_MdoRuns.Count; ++i ) {
         MdoRunEntry* Entry = &g_MdoRuns.Entries[i];
-        if ( !Entry->Starting && Entry->Info.Terminal && Entry->Run == NULL &&
+        if ( !Entry->Starting && !Entry->Finishing &&
+             Entry->Info.Terminal && Entry->Run == NULL &&
              Entry->Session == NULL && Entry->Cancel == NULL ) {
             MdoRunsRemoveLocked(i);
             return true;
@@ -254,6 +260,30 @@ static void MdoRunsCleanup(MdoRunCleanup* Items, size_t Count,
         MdoAgentRunDestroy(Items[i].Run);
         MdoSessionRelease(Items[i].Session);
         xrtCancelDestroy(Items[i].Cancel);
+        if ( !RequestCancel ) {
+            size_t Index;
+            MdoRunEntry* Entry;
+            /* Completion also promises that the session can accept its next
+             * turn. Destruction can call other managers, so release outside
+             * our lock, then publish by ID (entries may move meanwhile).
+             * FinishingCount pins this manager through that whole interval. */
+            (void)xrtMutexLock(g_MdoRuns.Lock);
+            Index = MdoRunsFindLocked(Items[i].Id);
+            Entry = &g_MdoRuns.Entries[Index];
+            Entry->Info.State = Items[i].State;
+            Entry->Info.Terminal = true;
+            Entry->Finishing = false;
+            --g_MdoRuns.FinishingCount;
+            --g_MdoRuns.ActiveCount;
+            if ( g_MdoRuns.RunsCompleted != UINT64_MAX )
+                ++g_MdoRuns.RunsCompleted;
+            if ( Items[i].Failed && g_MdoRuns.RunsFailed != UINT64_MAX )
+                ++g_MdoRuns.RunsFailed;
+            if ( g_MdoRuns.Observer != NULL )
+                g_MdoRuns.Observer(g_MdoRuns.ObserverData);
+            (void)xrtCondBroadcast(g_MdoRuns.Changed);
+            (void)xrtMutexUnlock(g_MdoRuns.Lock);
+        }
     }
 }
 
@@ -306,11 +336,12 @@ bool MdoRunManagerPump(size_t* Completed, xwork_error* Error)
         xwork_run_result Result;
         xwork_error WaitError;
         xwork_result WaitResult;
-        if ( !Entry->Info.Terminal && MdoUpdateBlocked() ) {
+        if ( !Entry->Info.Terminal && !Entry->Finishing && MdoUpdateBlocked() ) {
             Entry->Info.CancelRequested = true;
             (void)xrtCancelRequest(Entry->Cancel);
         }
-        if ( Entry->Starting || Entry->Run == NULL || Entry->Info.Terminal )
+        if ( Entry->Starting || Entry->Finishing || Entry->Run == NULL ||
+             Entry->Info.Terminal )
             continue;
         memset(&AgentInfo, 0, sizeof(AgentInfo));
         AgentInfo.Size = sizeof(AgentInfo);
@@ -320,9 +351,12 @@ bool MdoRunManagerPump(size_t* Completed, xwork_error* Error)
             Ok = false;
             break;
         }
-        if ( Entry->Info.State != AgentInfo.Run.eState && g_MdoRuns.Observer != NULL )
-            g_MdoRuns.Observer(g_MdoRuns.ObserverData);
-        Entry->Info.State = AgentInfo.Run.eState;
+        if ( !MdoRunsTerminal(AgentInfo.Run.eState) ) {
+            if ( Entry->Info.State != AgentInfo.Run.eState &&
+                 g_MdoRuns.Observer != NULL )
+                g_MdoRuns.Observer(g_MdoRuns.ObserverData);
+            Entry->Info.State = AgentInfo.Run.eState;
+        }
         Entry->Info.Result = AgentInfo.Run.eResult;
         Entry->Info.CreatedMicroseconds = AgentInfo.Run.uCreatedUs;
         Entry->Info.StartedMicroseconds = AgentInfo.Run.uStartedUs;
@@ -333,7 +367,6 @@ bool MdoRunManagerPump(size_t* Completed, xwork_error* Error)
         xworkErrorInit(&WaitError);
         WaitResult = MdoAgentRunWait(Entry->Run, XRT_DEADLINE_NEVER,
             &Result, &WaitError);
-        Entry->Info.Terminal = true;
         Entry->Info.ErrorCode = WaitError.eCode;
         Entry->Info.Result = AgentInfo.Run.eResult;
         Entry->Info.AgentTurns = Result.uAgentTurns;
@@ -353,17 +386,17 @@ bool MdoRunManagerPump(size_t* Completed, xwork_error* Error)
         Cleanup[CleanupCount].Run = Entry->Run;
         Cleanup[CleanupCount].Session = Entry->Session;
         Cleanup[CleanupCount].Cancel = Entry->Cancel;
+        snprintf(Cleanup[CleanupCount].Id, sizeof(Cleanup[CleanupCount].Id),
+            "%s", Entry->Info.Id);
+        Cleanup[CleanupCount].State = AgentInfo.Run.eState;
+        Cleanup[CleanupCount].Failed = WaitResult != XWORK_RESULT_OK;
         ++CleanupCount;
+        Entry->Finishing = true;
+        ++g_MdoRuns.FinishingCount;
         Entry->Run = NULL;
         Entry->Session = NULL;
         Entry->Cancel = NULL;
-        if ( g_MdoRuns.ActiveCount != 0u ) --g_MdoRuns.ActiveCount;
-        if ( g_MdoRuns.RunsCompleted != UINT64_MAX )
-            ++g_MdoRuns.RunsCompleted;
-        if ( WaitResult != XWORK_RESULT_OK &&
-             g_MdoRuns.RunsFailed != UINT64_MAX ) ++g_MdoRuns.RunsFailed;
         ++CompletedValue;
-        if ( g_MdoRuns.Observer != NULL ) g_MdoRuns.Observer(g_MdoRuns.ObserverData);
     }
 unlock:
     (void)xrtMutexUnlock(g_MdoRuns.Lock);
@@ -480,7 +513,8 @@ void MdoRunManagerUnit(void)
         xrtThreadDestroy(Thread);
     }
     if ( g_MdoRuns.Lock != NULL && xrtMutexLock(g_MdoRuns.Lock) ) {
-        while ( g_MdoRuns.StartingCount != 0u &&
+        while ( (g_MdoRuns.StartingCount != 0u ||
+                 g_MdoRuns.FinishingCount != 0u) &&
                 g_MdoRuns.Changed != NULL )
             (void)xrtCondWait(g_MdoRuns.Changed, g_MdoRuns.Lock);
         Entries = g_MdoRuns.Entries;
@@ -760,7 +794,10 @@ publish:
         Entry->Info.StartedAt = xrtNow();
         if ( Entry->Info.State != AgentInfo.Run.eState && g_MdoRuns.Observer != NULL )
             g_MdoRuns.Observer(g_MdoRuns.ObserverData);
-        Entry->Info.State = AgentInfo.Run.eState;
+        /* Even a very fast model may finish before Start returns. Its
+         * terminal state becomes public only after the pump releases it. */
+        Entry->Info.State = MdoRunsTerminal(AgentInfo.Run.eState) ?
+            XWORK_RUN_RUNNING : AgentInfo.Run.eState;
         Entry->Info.Result = AgentInfo.Run.eResult;
         Entry->Info.Protocol = AgentInfo.Protocol;
         Entry->Info.Resume = AgentInfo.Run.bResume;
@@ -860,7 +897,8 @@ bool MdoRunCancel(const char* RunId, MdoRunInfo* Info,
             "interactive run was not found");
         return false;
     }
-    if ( !g_MdoRuns.Entries[Index].Info.Terminal ) {
+    if ( !g_MdoRuns.Entries[Index].Info.Terminal &&
+         !g_MdoRuns.Entries[Index].Finishing ) {
         g_MdoRuns.Entries[Index].Info.CancelRequested = true;
         Cancel = xrtCancelRef(g_MdoRuns.Entries[Index].Cancel);
     }

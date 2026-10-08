@@ -74,12 +74,12 @@ def main() -> int:
                     assert status == 200, response
                     if response["data"]["state"] not in ("queued", "starting", "running"):
                         assert response["data"]["state"] == "succeeded", response
-                        # Terminal UI state can precede runtime release. Do
-                        # not make this protocol probe race that separate
-                        # admission path when starting its second turn.
+                        # Completion promises immediate admission of the
+                        # next turn; no runtime-release polling workaround.
                         status, _, metadata = call("GET", path)
                         assert status == 200, metadata
-                        if not metadata["data"]["runtime_open"]: break
+                        assert metadata["data"]["runtime_open"] is False, metadata
+                        break
                     assert time.monotonic() < deadline, "loopback turn did not finish"
                     time.sleep(.05)
 

@@ -33,7 +33,8 @@ class RunManagerContractTests(unittest.TestCase):
         self.assertIn("MdoAgentRunDestroy(Items[i].Run);", self.source)
         self.assertIn("MdoSessionRelease(Items[i].Session);", self.source)
         self.assertIn("xrtCancelDestroy(Items[i].Cancel);", self.source)
-        self.assertIn("while ( g_MdoRuns.StartingCount != 0u", self.source)
+        self.assertIn("g_MdoRuns.StartingCount != 0u ||", self.source)
+        self.assertIn("g_MdoRuns.FinishingCount != 0u", self.source)
         self.assertIn("xrtCondBroadcast(g_MdoRuns.Changed)", self.source)
 
     def test_resume_rechecks_the_recovery_view_before_start(self) -> None:

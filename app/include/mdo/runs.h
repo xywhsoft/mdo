@@ -87,6 +87,8 @@ typedef struct MdoRunInfo {
     xwork_result Result;
     xwork_error_code ErrorCode;
     MdoModelProtocol Protocol;
+    /* Terminal state is published after releasing this run's live session,
+     * so a caller can immediately start another turn in the same session. */
     bool Terminal;
     bool CancelRequested;
     bool Resume;

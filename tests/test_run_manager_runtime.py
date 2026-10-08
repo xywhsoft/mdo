@@ -47,6 +47,9 @@ xwork_runtime *MdoBootstrapRuntime(void) { return NULL; }
 static bool UpdateRequired;
 bool MdoUpdateBlocked(void) { return UpdateRequired; }
 bool MdoUpdateInstalling(void) { return false; }
+/* Tool distribution is outside this run-owner probe. The production pack
+ * supplies this prompt hook from its distribution manager. */
+bool MdoToolPrompt(char** Prompt) { return Prompt != NULL && *Prompt != NULL; }
 
 typedef struct Owner {
     unsigned Refs;
