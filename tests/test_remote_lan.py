@@ -4,17 +4,68 @@ No public endpoint, model request, stress or high-load traffic.
 from pathlib import Path
 import argparse
 import json
+import os
+import shutil
+import subprocess
+import tempfile
 import time
 import uuid
-from test_remote_manager import run, WebSocket
+from test_remote_manager import run, WebSocket, PASSWORD
 from test_remote_bridge import Rpc
 from test_remote_live import LiveRpc
-from test_account_runtime import request
+from test_account_runtime import request, free_port, ROOT
 from remote_website_fixture import WEBSITE_HOST
 SITE = None
+HOST = None
 def setup(site, home):
     global SITE
     SITE = site
+
+def controller_logout_probe(offer, relay_hello, relay):
+    """A separate controller logs out while the target's account stays live."""
+    with tempfile.TemporaryDirectory(prefix="lan-controller-",dir=ROOT/".build") as raw:
+        directory=Path(raw); source=directory/"site"
+        shutil.copytree(SITE,source,ignore=shutil.ignore_patterns("mdo-home","test.log",".cache"))
+        port=free_port(); config=json.loads((source/"xs.json").read_text())
+        config["services"][0]["port"]=port; (source/"xs.json").write_text(json.dumps(config))
+        with (directory/"controller.log").open("wb") as log:
+            process=subprocess.Popen([str(HOST),str(source/"xs.json")],cwd=source,
+                env={**os.environ,"MDO_HOME":str(directory/"home")},stdout=log,stderr=log)
+            gateway=None
+            try:
+                end=time.monotonic()+12
+                while time.monotonic()<end:
+                    assert process.poll() is None,"controller host stopped"
+                    try:
+                        status,headers,_=request(port,"GET","/api/v1/bootstrap")
+                        if status==200: break
+                    except OSError: pass
+                    time.sleep(.05)
+                else: raise AssertionError("controller startup deadline")
+                token=headers["X-Mdo-Write-Token"]
+                assert request(port,"POST","/api/v1/account/login",{
+                    "identifier":"remote_manager_one","password":PASSWORD,"remember":False},
+                    {"X-Mdo-Write-Token":token})[0]==200
+                end=time.monotonic()+12
+                while time.monotonic()<end:
+                    account=json.loads(request(port,"GET","/api/v1/account")[2])["data"]
+                    if account["state"]=="signed_in" and not account["busy"]: break
+                    time.sleep(.05)
+                else: raise AssertionError("controller login deadline")
+                assert not json.loads(request(port,"GET","/api/v1/remote")[2])["data"]["allow_remote"]
+                gateway=WebSocket(port,{"Origin":f"http://127.0.0.1:{port}"},path="/api/v1/connector/direct",
+                    protocol=f"mdo.direct.v1, mdo.token.{token}")
+                gateway.send(1,json.dumps({**offer,"addresses":["127.0.0.1"]}).encode())
+                assert json.loads(gateway.recv()[1])["runtime_id"]==relay_hello["runtime_id"]
+                assert request(port,"POST","/api/v1/account/logout",{}, {"X-Mdo-Write-Token":token})[0]==200
+                try:
+                    opcode,_=gateway.recv(); assert opcode==8
+                except EOFError: pass
+                assert relay.json("GET","/api/v1/projects")[2]==200,"controller logout affected target"
+                print("PASS controller-local logout closes its LAN gateway while target and relay remain available")
+            finally:
+                if gateway: gateway.close()
+                process.terminate(); process.wait(timeout=5)
 def exercise(*, client, hello, app, device, call, bearer, website_port, clients):
     assert "direct" in hello, "target failed to create ephemeral LAN identity/listener"
     offer = {**hello["direct"], "addresses":["127.0.0.1"]}
@@ -86,6 +137,12 @@ def exercise(*, client, hello, app, device, call, bearer, website_port, clients)
         opcode,_=readonly.recv(); assert opcode == 8
     except EOFError: pass
     readonly.close(); clients.remove(readonly)
+    ticket,_=call(website_port,"POST","/api/v1/devices/ticket",{"device_id":device,"role":"controller","mode":"view"},bearer)
+    second=WebSocket(website_port,{"Origin":origin},path=ticket["data"]["path"],
+        protocol=ticket["data"]["protocol"]+", xadmin.ticket."+ticket["data"]["ticket"])
+    clients.append(second); second.recv(); second_hello=json.loads(second.recv()[1])
+    controller_logout_probe(second_hello["direct"],second_hello,relay)
+    second.close(); clients.remove(second)
     gateway.close(); clients.remove(gateway)
     assert relay.json("GET","/api/v1/projects")[2] == 200, "LAN failure disconnected relay"
     print("PASS standard-chain LAN TLS, invalid trust/grant, origin/token gate, one-use grant, HTTP/live/receipt route isolation, view scope, revoke and relay fallback")
@@ -94,4 +151,5 @@ def exercise(*, client, hello, app, device, call, bearer, website_port, clients)
 if __name__ == "__main__":
     parser=argparse.ArgumentParser(); parser.add_argument("--host",type=Path,default=Path(".build/host/xs.exe"))
     parser.add_argument("--website-host",type=Path,default=WEBSITE_HOST); args=parser.parse_args()
+    HOST=args.host.resolve()
     run(args.host.resolve(),args.website_host.resolve(),exercise,site_setup=setup)

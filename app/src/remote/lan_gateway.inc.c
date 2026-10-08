@@ -3,6 +3,7 @@
  * preserving TLS on the LAN without installing a machine/browser CA. */
 typedef struct MdoLanGateway {
     MdoRemoteSocket *Browser,*Target; MdoRemoteNet Net; XS_ServerInfo* Server; xcancel* Cancel; bool Opened;
+    MdoAccountLease Lease;
 } MdoLanGateway;
 static struct { xmutex* Lock; xtaskpool* Pool; xfuture* Futures[4]; xcancel* Stop; XS_ServerInfo* Server; bool Stopping; } g_MdoLanGateway;
 static bool MdoLanGatewayTarget(bool Binary, xbytesview Bytes, void* Data)
@@ -27,11 +28,11 @@ static bool MdoLanGatewayBrowser(bool Binary, xbytesview Bytes, void* Data)
         if (!MdoLanAddress(MdoLanText(xrtValueArrayGet(Addresses,i)))) goto done;
     Trust=xrtX509StoreCreate();
     if (!Trust || xrtX509StoreAdd(Trust,Der,Size)<0 || !MdoRemoteNetInit(&Gateway->Net,Gateway->Server->Engine,Trust)) goto done;
-    for (size_t i=0u;i<xrtValueCount(Addresses) && !Gateway->Target && !xrtCancelRequested(Gateway->Cancel);++i) {
+    for (size_t i=0u;i<xrtValueCount(Addresses) && !Gateway->Target && !xrtCancelRequested(Gateway->Lease.Cancel);++i) {
         char Offers[128]; snprintf(Offers,sizeof(Offers),MDO_LAN_PROTOCOL ", mdo.grant.%s",Token);
         MdoRemoteSocketConfig Config={MdoLanText(xrtValueArrayGet(Addresses,i)),(uint16)Port,true,"/mdo-lan","http://mdo.local",
             Offers,MDO_LAN_PROTOCOL,262123u}; uint16 Status=0u;
-        Gateway->Target=MdoRemoteSocketOpenTrusted(&Gateway->Net,&Config,Gateway->Cancel,&Status,"mdo-lan",1200000u);
+        Gateway->Target=MdoRemoteSocketOpenTrusted(&Gateway->Net,&Config,Gateway->Lease.Cancel,&Status,"mdo-lan",1200000u);
         xrtSecureZero(Offers,sizeof(Offers));
     }
     Ok=Gateway->Target!=NULL;
@@ -42,7 +43,11 @@ static xtaskoutcome MdoLanGatewayRun(xcancel* Cancel, ptr Data, xtaskvalue* Valu
 {
     (void)Cancel; (void)Value;
     MdoLanGateway* Gateway=Data; xdeadline Until=xrtDeadlineAfter(2000000u);
-    while (!xrtCancelRequested(Gateway->Cancel) && (Gateway->Opened || !xrtDeadlineExpired(Until)) &&
+    /* A retained browser WS cannot outlive the controller's local account.
+     * This is the existing native logout/account-switch cancellation authority;
+     * no token is sent on the LAN or added to the handshake. */
+    if (!MdoAccountAcquireService(Gateway->Cancel,&Gateway->Lease)) return XTASK_FAILED;
+    while (!xrtCancelRequested(Gateway->Lease.Cancel) && (Gateway->Opened || !xrtDeadlineExpired(Until)) &&
         MdoRemoteSocketPoll(Gateway->Browser,MdoLanGatewayBrowser,Gateway) &&
         (!Gateway->Target || MdoRemoteSocketPoll(Gateway->Target,MdoLanGatewayTarget,Gateway))) xrtSleep(5u);
     return XTASK_SUCCESS;
@@ -51,6 +56,7 @@ static void MdoLanGatewayDrop(ptr Value, ptr Data)
 {
     (void)Data; MdoLanGateway* Gateway=Value;
     MdoRemoteSocketDestroy(Gateway->Target); MdoRemoteSocketDestroy(Gateway->Browser); MdoRemoteNetUnit(&Gateway->Net);
+    MdoAccountRelease(&Gateway->Lease);
     xrtCancelDestroy(Gateway->Cancel); xsServerRelease(Gateway->Server); xrtFree(Gateway);
 }
 bool MdoLanGatewayInit(XS_ServerInfo* Server)
