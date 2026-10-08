@@ -8,10 +8,11 @@
 #include <string.h>
 /* Hosted POSIX ABI: filesystem structures/modes stay inside native xrt. */
 extern int fsync(int);
-static bool MdoUpdateLinuxCopy(cstr From,cstr To,uint32 Mode,bool Exclusive)
+static bool MdoUpdateLinuxCopy(cstr From,cstr To,uint32 Mode,bool Exclusive,bool* Created)
 {
     xfile Input=xrtOpen(From,XFILE_READ|XFILE_NOFOLLOW);
     xfile Output=xrtOpen(To,XFILE_WRITE|XFILE_CREATE|XFILE_NOFOLLOW|(Exclusive?XFILE_EXCLUSIVE:XFILE_TRUNCATE));
+    if(Created)*Created=Output!=NULL;
     bool Ok=Input&&Output;char Buffer[65536];size_t Count=0;
     while(Ok) {
         Ok=xrtRead(Input,Buffer,sizeof(Buffer),&Count);if(!Ok||!Count)break;
@@ -24,7 +25,7 @@ static bool MdoUpdateLinuxSame(const xfileinfo* A,const xfileinfo* B)
 {return (A->Available&B->Available&XFILE_INFO_IDENTITY)&&A->Device==B->Device&&A->Identity==B->Identity;}
 bool MdoUpdateLinuxInstall(cstr Source,cstr Hash)
 {
-    xfileinfo Original,Running;char Swap[4096],Actual[65];bool Ok=false,Published=false;
+    xfileinfo Original,Running;char Swap[4096],Actual[65];bool Ok=false,Published=false,OwnSwap=false;
     str Download=MdoHomeExternalPath("data/update/new.bin"),Backup=MdoHomeExternalPath("data/update/previous.bin");
     str Parent=xrtPathParent(Source);xroot Directory=NULL;
     if(!Download||!Backup||!Parent||!xrtPathStat(Source,false,&Original)||Original.Type!=XFILE_TYPE_FILE||
@@ -32,7 +33,7 @@ bool MdoUpdateLinuxInstall(cstr Source,cstr Hash)
     int n=snprintf(Swap,sizeof(Swap),"%s.mdo-update-%llu",Source,(unsigned long long)xrtClock());
     if(n<=0||(size_t)n>=sizeof(Swap))goto done;
     Directory=xrtRootOpen(Parent);if(!Directory)goto done;
-    if(!MdoUpdateLinuxCopy(Download,Swap,Original.Mode&0777,true))goto cleanup;
+    if(!MdoUpdateLinuxCopy(Download,Swap,Original.Mode&0777,true,&OwnSwap))goto cleanup;
     /* Verify the staged inode, then ensure its loader can run on this system. */
     if(!MdoUpdateFileHash(Swap,Actual,true)||strcmp(Actual,Hash))goto cleanup;
     const cstr Args[]={"--version"};xprocessconfig Config;xprocessrunoptions Options;xprocessresult Result={0};
@@ -41,7 +42,7 @@ bool MdoUpdateLinuxInstall(cstr Source,cstr Hash)
     bool Runnable=xrtProcessRun(&Config,&Options,&Result)&&Result.Wait==XWAIT_OK&&Result.Status.Code==0;
     xrtProcessResultUnit(&Result);if(!Runnable)goto cleanup;
     /* Keep a durable previous version inside Home, including on another disk. */
-    if(!MdoUpdateLinuxCopy(Source,Backup,Original.Mode&0777,false))goto cleanup;
+    if(!MdoUpdateLinuxCopy(Source,Backup,Original.Mode&0777,false,NULL))goto cleanup;
     xfileinfo Current;
     if(!xrtPathStat(Source,false,&Current)||!MdoUpdateLinuxSame(&Current,&Original))goto cleanup;
     if(!xrtPathRename(Swap,Source,true))goto cleanup;Published=true;
@@ -50,11 +51,11 @@ bool MdoUpdateLinuxInstall(cstr Source,cstr Hash)
 cleanup:
     if(!Ok&&Published) {
         /* The old process is still alive if restart was refused. */
-        if(MdoUpdateLinuxCopy(Backup,Swap,Original.Mode&0777,true)) {
+        if(MdoUpdateLinuxCopy(Backup,Swap,Original.Mode&0777,true,&OwnSwap)) {
             if(xrtPathRename(Swap,Source,true))fsync((int)xrtRootNative(Directory));
         }
     }
-    xrtFileDelete(Swap);
+    if(OwnSwap)xrtFileDelete(Swap);
 done:
     xrtRootClose(Directory);xrtFree(Parent);xrtFree(Download);xrtFree(Backup);return Ok;
 }
