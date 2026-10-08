@@ -33,6 +33,14 @@ test("final model errors use the UI language and preserve unknown explanations",
         locale === "zh-CN" ? /提供方/ : locale === "ru-RU" ? /поставщика/ : /upstream/);
       assert.match(errorMessage({ code: "model_service_configuration", message: "raw" }),
         locale === "zh-CN" ? /管理员/ : locale === "ru-RU" ? /администратору/ : /administrator/);
+      const compaction = eventsToTimeline([{ kind: "error", event_id: 10,
+        run_id: "compact", model_error_kind: "context_compaction",
+        text: "compaction summary failed; missing_sections=0x00003f00" }])[0];
+      assert.match(compaction.text, locale === "zh-CN" ? /原始对话仍保留/ :
+        locale === "ru-RU" ? /Исходный диалог сохранён/ : /original conversation is retained/);
+      assert.equal(compaction.role, locale === "zh-CN" ? "上下文整理未完成" :
+        locale === "ru-RU" ? "Сводка контекста не завершена" : "Context summary incomplete");
+      assert.doesNotMatch(compaction.text, /missing_sections|0x00003f00/);
       assert.equal(eventsToTimeline([{ kind: "error", event_id: 9,
         run_id: "b", model_error_kind: "future_kind", text: "Specific new cause" }])[0].text,
       "Specific new cause");

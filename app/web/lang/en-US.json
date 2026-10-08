@@ -1866,6 +1866,8 @@
   "model.error.model_changed": "The model price or configuration changed. Refresh the model list before continuing.",
   "model.error.model_unavailable": "This model is currently unavailable. Refresh the model list or choose another model.",
   "model.error.context_limit": "The request exceeds this model's context limit. Reduce the context or choose a model with a larger window.",
+  "model.error.context_compaction": "Context summarization could not be completed. The original conversation is retained; continue or switch models and retry.",
+  "model.errorTitle.compaction": "Context summary incomplete",
   "model.error.request_too_large": "The request exceeds the service's size limit. Reduce the context or attachments before continuing.",
   "model.error.rate_limited": "The model service is temporarily rate limiting requests. Your conversation is saved; continue later.",
   "model.error.timeout": "The model did not finish within the allowed time. Your conversation is saved; continue when the service recovers.",

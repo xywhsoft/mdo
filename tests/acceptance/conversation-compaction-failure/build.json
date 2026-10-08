@@ -1,0 +1,20 @@
+{
+  "source_base": "ca26d34762e9a88a4f8b05af3977eadf1e4d8a06",
+  "packed_candidate": ".build/conversation-acceptance/mdo-compaction-errors-final.exe",
+  "bytes": 4419665,
+  "sha256": "622d594f993d338bd96b83d3dca187f092e2dff1b95accd4ccd427df5c586c17",
+  "xs_revision": "eeda3565e869e522e26c38a434a9576b598ec361",
+  "host_profile": "8a35d04162302781601b4e8b8c173721bf0d92a6dedb7b1da0e3d6a39fac6d86",
+  "unrelated_worktree_changes_included": false,
+  "checks": {
+    "packed_summary_failure_cases": 3,
+    "packed_success_compaction_regression": true,
+    "native_event_replay_and_phase_isolation": true,
+    "node_model_errors_and_timeline_tests": 10,
+    "focused_frontend_contract_tests": 7,
+    "browser_friendly_error_and_continued_replies": true
+  },
+  "android_device_tested": false,
+  "daily_installation_replaced": false,
+  "website_release_updated": false
+}

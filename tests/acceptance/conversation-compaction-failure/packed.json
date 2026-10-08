@@ -1,0 +1,42 @@
+{
+  "passed": true,
+  "cases": [
+    {
+      "mode": "quality",
+      "kind": "context_compaction",
+      "expected_kind": "context_compaction",
+      "calls": {
+        "normal": 3,
+        "summary": 3
+      },
+      "final_errors": 1,
+      "resume_and_followup": true,
+      "restarted_before_resume": true
+    },
+    {
+      "mode": "quota",
+      "kind": "daily_token_limit",
+      "expected_kind": "daily_token_limit",
+      "calls": {
+        "normal": 3,
+        "summary": 2
+      },
+      "final_errors": 1,
+      "resume_and_followup": true,
+      "restarted_before_resume": false
+    },
+    {
+      "mode": "wait",
+      "kind": "",
+      "expected_kind": "",
+      "calls": {
+        "normal": 3,
+        "summary": 2
+      },
+      "final_errors": 0,
+      "resume_and_followup": true,
+      "restarted_before_resume": false,
+      "cancel_ms": 30
+    }
+  ]
+}

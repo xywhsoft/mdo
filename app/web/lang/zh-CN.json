@@ -1866,6 +1866,8 @@
   "model.error.model_changed": "模型价格或配置已更新。请刷新模型列表后继续。",
   "model.error.model_unavailable": "此模型当前不可用。请刷新模型列表，或选择其他模型。",
   "model.error.context_limit": "请求超出此模型的上下文上限。请减少上下文，或选择上下文更大的模型。",
+  "model.error.context_compaction": "上下文整理未能完成。原始对话仍保留，可继续运行或切换模型后重试。",
+  "model.errorTitle.compaction": "上下文整理未完成",
   "model.error.request_too_large": "请求超出服务的大小限制。请减少上下文或附件后继续。",
   "model.error.rate_limited": "模型服务暂时限流，稍后可继续。会话已保留。",
   "model.error.timeout": "模型未能在允许的时间内完成回复。会话已保留，服务恢复后可继续。",

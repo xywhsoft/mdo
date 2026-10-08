@@ -58,6 +58,10 @@ struct MdoSessionEventBridge {
     size_t PendingCount;
     bool PendingEmptyPrompt;
     char PendingQueueItemId[33];
+    /* Serialized under Lock. Child and unrelated run events cannot change
+     * the main summary phase; final classification survives journal replay. */
+    bool MainCompacting;
+    uint64 MainCompactionRunId;
 };
 
 struct MdoSessionEventTrimPlan {
@@ -197,6 +201,23 @@ static bool MdoEventsBoundedView(const char* Text, size_t Claimed,
     return xrtUtf8Valid(*View, NULL);
 }
 
+static void MdoEventsCompactionPhase(MdoSessionEventBridge* Bridge,
+    const xwork_event* Event)
+{
+    if ( Event->uAgentDepth != 0u ) return;
+    if ( Event->eKind == XWORK_EVENT_COMPACTION_START ) {
+        Bridge->MainCompacting = true;
+        Bridge->MainCompactionRunId = Event->uRunId;
+    } else if ( Event->eKind == XWORK_EVENT_AGENT_START ||
+                (Bridge->MainCompactionRunId == Event->uRunId &&
+                 (Event->eKind == XWORK_EVENT_COMPACTION_DONE ||
+                  Event->eKind == XWORK_EVENT_ERROR ||
+                  Event->eKind == XWORK_EVENT_AGENT_DONE)) ) {
+        Bridge->MainCompacting = false;
+        Bridge->MainCompactionRunId = 0u;
+    }
+}
+
 static char* MdoEventsRecord(const MdoSessionEventBridge* Bridge,
     uint64 EventId, const xwork_event* Event, const char* ModelId,
     uint64 ContextWindowTokens, size_t* Size)
@@ -291,8 +312,13 @@ static char* MdoEventsRecord(const MdoSessionEventBridge* Bridge,
         if (Event->sProviderCode)
             snprintf(Error.sProviderCode, sizeof(Error.sProviderCode), "%s",
                 Event->sProviderCode);
+        /* A provider's typed cause wins even during summarization. Otherwise
+         * use the actual operation phase, never parse diagnostic English. */
         const char* Kind = Error.eCode != XLLM_ERROR_NONE ?
-            MdoModelErrorKind(&Error) : "";
+            MdoModelErrorKind(&Error) :
+            Bridge->MainCompacting && Event->uAgentDepth == 0u &&
+            Bridge->MainCompactionRunId == Event->uRunId ?
+                "context_compaction" : "";
         if (!MdoEventsObjectString(Object, "model_error_kind", Kind, strlen(Kind)) ||
             !MdoEventsObjectTake(Object, "model_http_status", xrtValueUInt(Event->uHttpStatus)) ||
             !MdoEventsObjectTake(Object, "model_attempts", xrtValueUInt(Event->tDiagnostics.uAttemptCount)))
@@ -355,6 +381,7 @@ static bool MdoEventsAppend(MdoSessionEventBridge* Bridge,
             xrtStrViewN(Json, Size), Event->eKind != XWORK_EVENT_MODEL_TEXT_DELTA &&
                 Event->eKind != XWORK_EVENT_MODEL_REASONING_DELTA);
         ++Bridge->NextEventId;
+        MdoEventsCompactionPhase(Bridge, Event);
     }
     xrtFree(Json);
     return Ok;

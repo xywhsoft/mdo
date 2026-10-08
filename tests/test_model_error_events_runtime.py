@@ -42,6 +42,50 @@ void ServiceInit(XS_HostInfo* Host) {
     Good=MdoEventsParse(Bridge.ProjectId,Bridge.SessionId,xrtStrViewN(Json,Size),&Parsed);
     printf("ordinary=%u empty_kind=%u\n",Good,Parsed.Info.ModelErrorKind[0]==0);
     MdoEventsOwnedUnit(&Parsed); xrtFree(Json);
+
+    Event.eKind=XWORK_EVENT_COMPACTION_START; Event.uRunId=2u;
+    MdoEventsCompactionPhase(&Bridge,&Event);
+    Event.eKind=XWORK_EVENT_COMPACTION_DONE; Event.uAgentDepth=1u;
+    MdoEventsCompactionPhase(&Bridge,&Event);
+    Event.eKind=XWORK_EVENT_ERROR;
+    Json=MdoEventsRecord(&Bridge,3,&Event,"",0,&Size);
+    Good=MdoEventsParse(Bridge.ProjectId,Bridge.SessionId,xrtStrViewN(Json,Size),&Parsed);
+    printf("child_isolation=%u\n",Good && Parsed.Info.ModelErrorKind[0]==0 && Bridge.MainCompacting);
+    MdoEventsOwnedUnit(&Parsed); xrtFree(Json);
+    Event.uAgentDepth=0u; Event.uRunId=3u;
+    Json=MdoEventsRecord(&Bridge,4,&Event,"",0,&Size);
+    Good=MdoEventsParse(Bridge.ProjectId,Bridge.SessionId,xrtStrViewN(Json,Size),&Parsed);
+    MdoEventsCompactionPhase(&Bridge,&Event);
+    printf("unrelated_run=%u\n",Good && Parsed.Info.ModelErrorKind[0]==0 && Bridge.MainCompacting);
+    MdoEventsOwnedUnit(&Parsed); xrtFree(Json);
+    Event.uRunId=2u;
+    Json=MdoEventsRecord(&Bridge,5,&Event,"",0,&Size);
+    Good=MdoEventsParse(Bridge.ProjectId,Bridge.SessionId,xrtStrViewN(Json,Size),&Parsed);
+    printf("compaction=%u kind=%s\n",Good,Parsed.Info.ModelErrorKind);
+    MdoEventsOwnedUnit(&Parsed); xrtFree(Json);
+    Event.eModelErrorCode=XLLM_ERROR_RATE_LIMIT;
+    Event.sProviderCode="daily_token_limit"; Event.uHttpStatus=429u;
+    Json=MdoEventsRecord(&Bridge,6,&Event,"",0,&Size);
+    Good=MdoEventsParse(Bridge.ProjectId,Bridge.SessionId,xrtStrViewN(Json,Size),&Parsed);
+    printf("compaction_provider=%u kind=%s\n",Good,Parsed.Info.ModelErrorKind);
+    MdoEventsOwnedUnit(&Parsed); xrtFree(Json);
+    MdoEventsCompactionPhase(&Bridge,&Event);
+    Event.eModelErrorCode=XLLM_ERROR_NONE;
+    Event.sProviderCode=NULL; Event.uHttpStatus=0u;
+    Json=MdoEventsRecord(&Bridge,7,&Event,"",0,&Size);
+    Good=MdoEventsParse(Bridge.ProjectId,Bridge.SessionId,xrtStrViewN(Json,Size),&Parsed);
+    printf("closed_phase=%u\n",Good && Parsed.Info.ModelErrorKind[0]==0 && !Bridge.MainCompacting);
+    MdoEventsOwnedUnit(&Parsed); xrtFree(Json);
+    Event.eKind=XWORK_EVENT_COMPACTION_START;
+    MdoEventsCompactionPhase(&Bridge,&Event);
+    Event.eKind=XWORK_EVENT_AGENT_DONE;
+    MdoEventsCompactionPhase(&Bridge,&Event);
+    printf("cancelled_phase=%u\n",!Bridge.MainCompacting);
+    Event.eKind=XWORK_EVENT_COMPACTION_START;
+    MdoEventsCompactionPhase(&Bridge,&Event);
+    Event.eKind=XWORK_EVENT_AGENT_START;
+    MdoEventsCompactionPhase(&Bridge,&Event);
+    printf("reused_run=%u\n",!Bridge.MainCompacting);
     printf("probe_done=1\n");
 }
 '''
@@ -59,7 +103,11 @@ def main():
         output = run_probe(host, site, base / 'home')
         for expected in ('current=1 schema=6 kind=daily_token_limit status=429 attempts=1',
                          'legacy=1 schema=5 empty_kind=1',
-                         'missing_error_metadata_rejected=1', 'ordinary=1 empty_kind=1'):
+                         'missing_error_metadata_rejected=1', 'ordinary=1 empty_kind=1',
+                         'child_isolation=1', 'unrelated_run=1',
+                         'compaction=1 kind=context_compaction',
+                         'compaction_provider=1 kind=daily_token_limit', 'closed_phase=1',
+                         'cancelled_phase=1', 'reused_run=1'):
             assert expected in output, output
     print('Structured model error replay, old event compatibility and strict validation: PASS')
 

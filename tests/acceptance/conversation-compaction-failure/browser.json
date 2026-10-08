@@ -1,0 +1,9 @@
+{
+  "passed": true,
+  "oneFriendlyFinalError": true,
+  "originalConversationPreserved": true,
+  "subsequentReplies": 3,
+  "noInternalDiagnostic": true,
+  "composerEnabled": true,
+  "finalErrorVisible": true
+}

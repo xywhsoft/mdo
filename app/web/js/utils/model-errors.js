@@ -6,7 +6,7 @@ const kinds = new Set([
   "permission_denied", "account_restricted", "request_pending", "model_changed",
   "model_unavailable", "context_limit", "request_too_large", "rate_limited",
   "timeout", "network", "service_unavailable", "invalid_response", "invalid_request",
-  "output_limit",
+  "output_limit", "context_compaction",
   "service_quota_exceeded", "service_configuration",
 ]);
 
@@ -24,6 +24,7 @@ const titles = {
   account_restricted: "access", service_configuration: "access",
   request_pending: "pending", context_limit: "requestLimit",
   request_too_large: "requestLimit", output_limit: "outputLimit",
+  context_compaction: "compaction",
   model_changed: "configuration", model_unavailable: "configuration",
   invalid_request: "configuration",
 };
