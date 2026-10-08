@@ -1,0 +1,53 @@
+{
+  "proof": {
+    "native_tasks": [
+      {
+        "id": 1,
+        "owner_agent_id": 1,
+        "owner_run_id": 0,
+        "parent_task_id": 0,
+        "kind": "agent",
+        "state": "running",
+        "terminal": false,
+        "stop_requested": true,
+        "pending_questions": 0,
+        "revision": 2,
+        "created_at": 1791448083519963,
+        "started_at": 1791448083519963,
+        "ended_at": 0,
+        "scheduled_at": 0,
+        "exit_status_valid": false,
+        "exit_code": 0,
+        "exit_signal": 0,
+        "stop_reason": 0,
+        "notice_taken": false,
+        "owner_session": "",
+        "label": "hold",
+        "notify": "",
+        "schedule_id": "",
+        "schedule_generation": 0
+      }
+    ],
+    "child": {
+      "entered": true,
+      "cancel_observed": true
+    },
+    "faults": {
+      "secondary": {
+        "http_deletes": 1,
+        "native_deletes": 1,
+        "reads_after_delete": 0,
+        "held_list_reads": 1
+      }
+    },
+    "secondary_read_pending": true
+  },
+  "notices": [
+    {
+      "tone": "neutral",
+      "text": "已请求停止任务 #1"
+    }
+  ],
+  "disabled": null,
+  "ariaDisabled": "true"
+}

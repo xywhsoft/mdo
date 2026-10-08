@@ -1,0 +1,30 @@
+{
+  "source_base": "b5da436",
+  "packed_candidate": ".build/conversation-acceptance/mdo-task-state-final.exe",
+  "bytes": 4440377,
+  "sha256": "92a76f37630a14ca475877f6333004fc1fb3441644b135427a12e1508b7067fd",
+  "xs_revision": "0b7e041b16f06bf1cd07833bb008c53bc19351ad",
+  "xwork_version": "3.8.1",
+  "xwork_abi": 7,
+  "host_profile": "2829d871dac1a12a70503f9b6116adaa2aa9556a53ea139df60aaa81cbb7a19b",
+  "host_binary_sha256": "5f125504c3f2fbebf38ba65acf2e4355f3426a5840117b510a44436a314eb7bb",
+  "unrelated_worktree_changes_included": false,
+  "checks": {
+    "xwork_functional_assertions": 521,
+    "xwork_functional_failures": 0,
+    "xs_extension_tests": 36,
+    "xs_platform_skips": 1,
+    "node_task_checks": 25,
+    "focused_frontend_contract_checks": 4,
+    "build_contract_checks_passed": 12,
+    "build_contract_baseline_failure": "expected source manifest omits committed src/remote/lan.c",
+    "native_model_recovery_cases": 25,
+    "clean_source_bundle_restore": true,
+    "packed_child_stop_api": true,
+    "browser_nonterminal_stopping": true,
+    "browser_blocked_secondary_read": true
+  },
+  "android_device_tested": false,
+  "daily_installation_replaced": false,
+  "website_release_updated": false
+}

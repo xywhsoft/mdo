@@ -1,0 +1,11 @@
+{
+  "passed": true,
+  "model_calls": 3,
+  "interrupted_while_model_active": true,
+  "restored_queue_items": 2,
+  "restart_and_duplicate_start_did_not_replay": true,
+  "original_input_not_duplicated": true,
+  "explicit_resume_succeeded": true,
+  "queued_followup_succeeded": true,
+  "final_errors": 0
+}

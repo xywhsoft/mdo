@@ -84,9 +84,11 @@ static bool MdoApiTaskNoBody(const MdoApiContext* Context)
              (Head->Flags & (uint32)XHTTP1_TRANSFER_ENCODING) != 0u);
 }
 
-static bool MdoApiTaskStopRequested(const xwork_task_info* Info)
+static bool MdoApiTaskStopRequested(const xwork_task_snapshot* Snapshot,
+    const xwork_task_info* Info)
 {
-    return Info->eState == XWORK_TASK_CANCELLED ||
+    return xworkTaskSnapshotStopRequested(Snapshot, Info->uTaskId) ||
+        Info->eState == XWORK_TASK_CANCELLED ||
         (Info->eKind == XWORK_TASK_SCHEDULED &&
          !MdoApiTaskTerminal(Info->eState) &&
          MdoScheduleExecutorTaskCancellationRequested(Info->uTaskId));
@@ -152,7 +154,7 @@ static MdoApiTaskLookup MdoApiTaskLookupValue(xwork_runtime* Runtime,
     if ( !xworkTaskSnapshotFind(Snapshot, TaskId, &Info) ) {
         Lookup = MDO_API_TASK_LOOKUP_MISSING;
     } else {
-        *StopRequested = MdoApiTaskStopRequested(&Info);
+        *StopRequested = MdoApiTaskStopRequested(Snapshot, &Info);
         if ( !MdoApiTaskInfoValue(&Info, *StopRequested, Value,
                 PendingQuestions) ) {
             Lookup = MDO_API_TASK_LOOKUP_FAILED;
@@ -217,7 +219,7 @@ bool MdoApiTasksRoute(MdoApiContext* Context)
         xvalue* Item = NULL;
         xworkTaskInfoInit(&Info);
         Ok = xworkTaskSnapshotTaskAt(Snapshot, Index, &Info) &&
-            MdoApiTaskInfoValue(&Info, MdoApiTaskStopRequested(&Info), &Item, NULL) &&
+            MdoApiTaskInfoValue(&Info, MdoApiTaskStopRequested(Snapshot, &Info), &Item, NULL) &&
             MdoApiValueAppendTake(Items, &Item);
         xrtValueRelease(Item);
     }
