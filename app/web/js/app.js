@@ -2420,6 +2420,7 @@ export async function boot() {
   function scheduleTaskRefresh() {
     window.clearTimeout(tasksTimer);
     if (document.hidden) return;
+    if (["loading", "refreshing"].includes(tasksStore.get().status)) return;
     const active = (tasksStore.get().data?.items ?? []).some((item) => !item.terminal);
     tasksTimer = window.setTimeout(async () => {
       await loadTasks();

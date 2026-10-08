@@ -1143,6 +1143,7 @@
   "task.artifact.title": "Artifacts {count}",
   "task.list.loading": "Loading tasks…",
   "task.list.empty": "No background tasks",
+  "task.lastKnown": "Updates are temporarily unavailable. Showing the last task information received.",
   "decision.effectSeparator": ", ",
   "decision.unknownTool": "Unknown tool",
   "decision.noEffects": "No effects declared",

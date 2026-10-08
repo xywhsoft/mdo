@@ -1,0 +1,5 @@
+{
+  "draft": "手动重试不应丢失输入",
+  "errors": [],
+  "tasks": "C:\\Program Files\\Python312\\python.exe -u -c import sys; print('fixture ready', flush=True); sys.stdin.readline()Shell已停止2分钟前"
+}

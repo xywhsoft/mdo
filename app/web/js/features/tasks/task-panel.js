@@ -6,6 +6,7 @@ import {
 import { subscribeLocale, t } from "../../i18n.js";
 import { taskOwnerLocation } from "./task-owner.js";
 import { createTaskQuestions } from "./task-questions.js";
+import { isTransientReadError } from "../../api/read-recovery.js";
 
 const ACTIVE_STATES = new Set(["pending", "running"]);
 const STATE_LABELS = Object.freeze({
@@ -33,6 +34,11 @@ function kindLabel(value) {
 
 function taskName(item) {
   return item.label || t("task.fallback", { id: item.id }, `任务 #${item.id}`);
+}
+
+function lastKnownNotice() {
+  return element("div", { className: "resource-error", text: t("task.lastKnown", {},
+    "暂时无法更新，以下显示上次读取的任务信息。") });
 }
 
 function formatBytes(value) {
@@ -195,7 +201,9 @@ export function createTaskPanel({ container, detailContainer, store, detailStore
       if (view.panel) view.panel.scrollTop = view.panelScroll;
       return;
     }
-    if (detailState.status === "error") {
+    const retainedError = detailState.status === "error" && snapshot &&
+      isTransientReadError(detailState.error);
+    if (detailState.status === "error" && !retainedError) {
       const retry = element("button", { className: "task-detail-close",
         text: t("task.detail.retry", {}, "重试读取"),
         attrs: { type: "button", "data-task-focus": "retry" } });
@@ -223,6 +231,14 @@ export function createTaskPanel({ container, detailContainer, store, detailStore
         type: "button", "data-task-focus": "back" } });
     close.addEventListener("click", closeDetail);
     const headerActions = [close];
+    if (retainedError) {
+      const retry = element("button", { className: "task-detail-close",
+        text: t("task.detail.retry", {}, "重试读取"),
+        attrs: { type: "button", "data-task-focus": "retry" } });
+      retry.addEventListener("click", () => void refreshSelectedTask());
+      headerActions.push(retry);
+      detailBody.append(lastKnownNotice());
+    }
     if (ACTIVE_STATES.has(task.state)) {
       const stop = element("button", { className: "task-cancel",
         text: stopping(task) ? t("task.stopping", {}, "正在停止…") : t("task.stop", {}, "停止"), attrs: { type: "button",
@@ -288,9 +304,18 @@ export function createTaskPanel({ container, detailContainer, store, detailStore
     const items = [...(listState.data?.items ?? [])].reverse();
     clear(container);
     if (listState.status === "error") {
-      container.append(element("div", { className: "resource-error", text: errorMessage(listState.error) }));
-      restoreView(container, view, document.querySelector("#tasks-title"));
-      return;
+      if (items.length && isTransientReadError(listState.error)) {
+        const retry = element("button", { className: "task-detail-close",
+          text: t("task.detail.retry", {}, "重试读取"), attrs: {
+            type: "button", "data-task-focus": "retry-list" } });
+        retry.addEventListener("click", () => void loadTasks());
+        container.append(lastKnownNotice(), retry);
+      }
+      else {
+        container.append(element("div", { className: "resource-error", text: errorMessage(listState.error) }));
+        restoreView(container, view, document.querySelector("#tasks-title"));
+        return;
+      }
     }
     if (!items.length) {
       container.append(element("div", { className: "empty-state", text: listState.status === "loading"

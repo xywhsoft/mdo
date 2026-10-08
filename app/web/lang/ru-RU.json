@@ -1143,6 +1143,7 @@
   "task.artifact.title": "Артефакты · {count}",
   "task.list.loading": "Загрузка задач…",
   "task.list.empty": "Нет фоновых задач",
+  "task.lastKnown": "Обновления временно недоступны. Показаны последние полученные сведения о задачах.",
   "decision.effectSeparator": ", ",
   "decision.unknownTool": "Неизвестный инструмент",
   "decision.noEffects": "Воздействия не указаны",

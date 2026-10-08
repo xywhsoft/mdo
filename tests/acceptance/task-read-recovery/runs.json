@@ -1,0 +1,81 @@
+{
+  "recovered": {
+    "calls": {
+      "background": 2,
+      "\u4fdd\u7559\u8fd9\u6bb5\u5c1a\u672a\u53d1\u9001\u7684\u8f93\u5165": 1
+    },
+    "restarted": true,
+    "final_errors": 0,
+    "tasks": []
+  },
+  "exhausted": {
+    "calls": {
+      "background": 2
+    },
+    "restarted": false,
+    "final_errors": 0,
+    "tasks": [
+      {
+        "id": 1,
+        "owner_agent_id": 3,
+        "owner_run_id": 1,
+        "parent_task_id": 0,
+        "kind": "process",
+        "state": "cancelled",
+        "terminal": true,
+        "stop_requested": true,
+        "pending_questions": 0,
+        "revision": 3,
+        "created_at": 1791450200700744,
+        "started_at": 1791450200700744,
+        "ended_at": 1791450309899724,
+        "scheduled_at": 0,
+        "exit_status_valid": true,
+        "exit_code": 1,
+        "exit_signal": 0,
+        "stop_reason": 4,
+        "notice_taken": false,
+        "owner_session": "D:\\GIT\\mdo\\.build\\conversation-acceptance\\task-read-final\\home\\sessions\\default\\V-OSJ72MJ2Hpja6U-1EOzsSe8XPSOC71\\snapshot.json",
+        "label": "C:\\Program Files\\Python312\\python.exe -u -c import sys; print('fixture ready', flush=True); sys.stdin.readline()",
+        "notify": "task-read-qa",
+        "schedule_id": "",
+        "schedule_generation": 0
+      }
+    ]
+  },
+  "manual": {
+    "calls": {
+      "background": 2
+    },
+    "restarted": false,
+    "final_errors": 0,
+    "tasks": [
+      {
+        "id": 1,
+        "owner_agent_id": 3,
+        "owner_run_id": 1,
+        "parent_task_id": 0,
+        "kind": "process",
+        "state": "cancelled",
+        "terminal": true,
+        "stop_requested": true,
+        "pending_questions": 0,
+        "revision": 3,
+        "created_at": 1791450374526369,
+        "started_at": 1791450374526369,
+        "ended_at": 1791450496721301,
+        "scheduled_at": 0,
+        "exit_status_valid": true,
+        "exit_code": 1,
+        "exit_signal": 0,
+        "stop_reason": 4,
+        "notice_taken": false,
+        "owner_session": "D:\\GIT\\mdo\\.build\\conversation-acceptance\\task-read-manual\\home\\sessions\\default\\V-OSJ7gnZ4U-scjfPu7lacqR2wXuHIdF\\snapshot.json",
+        "label": "C:\\Program Files\\Python312\\python.exe -u -c import sys; print('fixture ready', flush=True); sys.stdin.readline()",
+        "notify": "task-read-qa",
+        "schedule_id": "",
+        "schedule_generation": 0
+      }
+    ]
+  }
+}

@@ -14,7 +14,8 @@ test("an accepted stop snapshot survives a failed task refresh", async () => {
     assert.equal(acknowledged.stop_requested, true);
     await new Promise(resolve => setImmediate(resolve));
     const state = tasksStore.get();
-    assert.equal(state.status, "error");
+    assert.equal(state.status, "refreshing");
+    assert.equal(state.error, null, "the secondary read recovers without undoing the acknowledgement");
     assert.equal(state.data.items[0].stop_requested, true);
     assert.equal(state.data.items[0].terminal, false);
     assert.equal(state.data.items[1].state, "succeeded");

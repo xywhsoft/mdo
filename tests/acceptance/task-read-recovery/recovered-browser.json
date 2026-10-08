@@ -1,0 +1,5 @@
+{
+  "draft": "保留这段尚未发送的输入",
+  "errors": [],
+  "tasks": "\n    \n      \n        后台任务\n        \n          \n        \n      \n      \n        C:\\Program Files\\Python312\\python.exe -u -c import sys; print('fixture ready', flush=True); sys.stdin.readline()Shell已停止58秒钟前\n        \n      \n    \n  "
+}

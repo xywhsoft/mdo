@@ -10,13 +10,15 @@ const flush = async () => { for (let i = 0; i < 12; ++i) await Promise.resolve()
 function fixture(initial = { models: [] }) {
   let time = 1000, next = 1;
   const timers = new Map();
+  const pageEvents = new EventTarget();
   const store = createResourceStore(initial, { recoverRead: isTransientReadError,
+    pageEvents,
     now: () => time, random: () => 0,
     setTimer(callback, delay) { const id = next++; timers.set(id, { callback, at: time + delay }); return id; },
     clearTimer(id) { timers.delete(id); },
   });
   const states = []; store.subscribe(state => states.push(state.status));
-  return { store, states, get elapsed() { return time - 1000; }, get pending() { return timers.size; },
+  return { store, states, pageEvents, get elapsed() { return time - 1000; }, get pending() { return timers.size; },
     async step() {
       const [id, timer] = [...timers].sort((a, b) => a[1].at - b[1].at)[0] ?? [];
       if (!timer) return false;
@@ -110,6 +112,34 @@ test("ordinary stores keep their original single-read failure behavior", async (
   const store = createResourceStore(); let calls = 0; const error = network();
   const state = await store.load(async () => { calls++; throw error; });
   assert.equal(calls, 1); assert.equal(state.status, "error"); assert.equal(state.error, error);
+});
+
+test("leaving a page cancels its queued recovery and returning resumes the interrupted read", async () => {
+  const env = fixture(); let calls = 0;
+  await env.store.load(async () => { if (++calls === 1) throw network(); return { models: ["restored"] }; });
+  env.pageEvents.dispatchEvent(new Event("pagehide"));
+  await env.drain();
+  await env.store.load(async () => { assert.fail("an unloaded page must not start another read"); });
+  assert.equal(calls, 1); assert.equal(env.pending, 0);
+  env.pageEvents.dispatchEvent(new Event("pageshow")); await flush();
+  assert.equal(calls, 2); assert.equal(env.store.get().status, "ready");
+  assert.deepEqual(env.store.get().data.models, ["restored"]);
+  assert.ok(!env.states.includes("error"));
+});
+
+test("leaving during an in-flight read aborts it without publishing a failure", async () => {
+  const env = fixture(); let signal;
+  const read = env.store.load(value => {
+    signal = value;
+    return new Promise((_resolve, reject) => value.addEventListener("abort", () =>
+      reject(new DOMException("cancelled", "AbortError")), { once: true }));
+  });
+  env.pageEvents.dispatchEvent(new Event("pagehide")); await read; await env.drain();
+  assert.equal(signal.aborted, true); assert.equal(env.pending, 0);
+  assert.ok(!env.states.includes("error"));
+  env.store.reset(); // Reset also prevents a suspended read from being resumed.
+  env.pageEvents.dispatchEvent(new Event("pageshow")); await flush();
+  assert.equal(env.pending, 0); assert.equal(env.store.get().status, "idle");
 });
 
 test("foreground recovery reads only an exhausted transient catalog through the real API", async () => {

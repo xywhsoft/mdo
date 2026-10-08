@@ -3,14 +3,16 @@ import { createResourceStore } from "./store.js";
 import { validateAskAnswer } from "./asks.js";
 import { t } from "../i18n.js";
 import { runTaskStopAction } from "./task-stop-action.js";
+import { isTransientReadError } from "../api/read-recovery.js";
 
 const OUTPUT_PAGE_BYTES = 32 * 1024;
 const OUTPUT_RETAINED_BYTES = 256 * 1024;
 const ARTIFACT_PREVIEW_BYTES = 64 * 1024;
 const STREAM_NAMES = Object.freeze(["stdout", "stderr", "result"]);
 
-export const tasksStore = createResourceStore({ total: 0, items: [] });
-export const taskDetailStore = createResourceStore();
+const readOptions = { recoverRead: isTransientReadError };
+export const tasksStore = createResourceStore({ total: 0, items: [] }, readOptions);
+export const taskDetailStore = createResourceStore(null, readOptions);
 export const artifactPreviewStore = createResourceStore();
 
 let selectedTaskId = "";
@@ -60,8 +62,10 @@ function mergeOutput(previous, page) {
 }
 
 export function loadTasks() {
-  return tasksStore.load(async () => {
-    const reply = await api.get("/tasks");
+  const state = tasksStore.get();
+  if (["loading", "refreshing"].includes(state.status)) return Promise.resolve(state);
+  return tasksStore.load(async signal => {
+    const reply = await api.get("/tasks", { signal });
     if (reply.data && typeof reply.data === "object") taskReadTokens.set(reply.data, reply.writeToken);
     return reply.data;
   });
@@ -89,17 +93,19 @@ export async function selectTask(value) {
 
 export function refreshSelectedTask() {
   if (!selectedTaskId) return Promise.resolve(taskDetailStore.get());
+  const state = taskDetailStore.get();
+  if (["loading", "refreshing"].includes(state.status)) return Promise.resolve(state);
   const id = selectedTaskId;
   const previous = taskDetailStore.get().data?.id === id ? taskDetailStore.get().data : null;
   const stdout = previous?.output?.streams?.stdout?.next ?? 0;
   const stderr = previous?.output?.streams?.stderr?.next ?? 0;
   const result = previous?.output?.streams?.result?.next ?? 0;
-  return taskDetailStore.load(async () => {
+  return taskDetailStore.load(async signal => {
     const [detail, output, artifacts, asks] = await Promise.all([
-      api.get(`/tasks/${id}`),
-      api.get(`/tasks/${id}/output?stdout=${stdout}&stderr=${stderr}&result=${result}&limit=${OUTPUT_PAGE_BYTES}`),
-      api.get("/artifacts"),
-      api.get(`/tasks/${id}/asks`),
+      api.get(`/tasks/${id}`, { signal }),
+      api.get(`/tasks/${id}/output?stdout=${stdout}&stderr=${stderr}&result=${result}&limit=${OUTPUT_PAGE_BYTES}`, { signal }),
+      api.get("/artifacts", { signal }),
+      api.get(`/tasks/${id}/asks`, { signal }),
     ]);
     if (!Array.isArray(asks.data?.items))
       throw new TypeError(t("ask.invalidResponse", {}, "询问响应无效"));

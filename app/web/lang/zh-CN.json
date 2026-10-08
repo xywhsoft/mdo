@@ -1143,6 +1143,7 @@
   "task.artifact.title": "产物 {count}",
   "task.list.loading": "正在载入任务…",
   "task.list.empty": "暂无后台任务",
+  "task.lastKnown": "暂时无法更新，以下显示上次读取的任务信息。",
   "decision.effectSeparator": "、",
   "decision.unknownTool": "未知工具",
   "decision.noEffects": "未声明影响",
