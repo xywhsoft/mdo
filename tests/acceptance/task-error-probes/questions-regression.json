@@ -1,0 +1,28 @@
+{
+  "passed": true,
+  "checks": {
+    "pollAndIme": true,
+    "localeKeepsEditor": true,
+    "scopedDraft": true,
+    "byteLimit": true,
+    "repeatGuard": true,
+    "acceptedRefreshFailure": true,
+    "noResubmit": true,
+    "recoveryReconciles": true,
+    "otherDraftKept": true,
+    "rightTask": true,
+    "noOverflow": true
+  },
+  "replies": [
+    {
+      "task": 1,
+      "ask": 11,
+      "answer": "保留草稿"
+    },
+    {
+      "task": 2,
+      "ask": 22,
+      "answer": "路线二"
+    }
+  ]
+}

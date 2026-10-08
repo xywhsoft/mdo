@@ -1,0 +1,13 @@
+{
+  "status": "error",
+  "retainedDetail": false,
+  "editorPresent": false,
+  "answerDraft": null,
+  "answerReadOnly": null,
+  "errorToasts": [],
+  "errors": [
+    "当前连接无权执行此操作，请检查连接权限。"
+  ],
+  "writes": 1,
+  "list": "回答中的后台任务计划任务停止等待你回答"
+}

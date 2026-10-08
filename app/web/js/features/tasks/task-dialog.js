@@ -34,7 +34,7 @@ export function createTaskDialog({ dialog, closeButton, navigation, fallbackFocu
       owner = routeKey(navigation.get());
       if (!dialog.open) dialog.showModal();
       closeButton.focus({ preventScroll: true });
-      void loadTasks();
+      void loadTasks({ retry: true });
     },
     destroy() {
       close();

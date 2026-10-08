@@ -1,0 +1,5 @@
+{
+  "draft": "",
+  "errorToasts": [],
+  "history": "18:02background查看思考与执行过程1 次工具调用Agent18:02The background task is ready.本轮 2 次模型调用 · 100 输入 / 40 输出 tokens · LLM <0.1 秒 · 工具和等待合计 <0.1 秒 · 2151.9 tok/s18:07网络恢复后继续对话Agent18:07The conversation can continue.50 输入 / 20 输出 tokens · LLM <0.1 秒 · 1641.5 tok/s"
+}

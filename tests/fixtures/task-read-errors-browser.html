@@ -11,6 +11,7 @@
 <button id="observe">检查当前状态</button>
 <button id="cold-list">首次载入列表</button>
 <button id="release-list">完成列表载入</button>
+<button id="answer-denied">回答后拒绝读取</button>
 <pre id="result"></pre>
 <section class="tasks-dialog-body">
   <div id="task-list"></div><div id="task-detail"></div>
@@ -29,6 +30,9 @@ let holdList = false, releaseList;
 const reply = data => Response.json({ ok: true, data });
 window.fetch = async (path, options = {}) => {
   if (String(path).startsWith("/lang/")) return originalFetch("/app/web" + path, options);
+  if (options.method === "PUT" && path === "/api/v1/tasks/1/asks/11") {
+    ++writes; return reply({ accepted: true });
+  }
   if (options.method !== "GET") { ++writes; throw new Error("Unexpected fixture write"); }
   if (path === "/api/v1/tasks") {
     if (holdList) await new Promise((resolve, reject) => {
@@ -55,6 +59,8 @@ function observe() {
     status: taskDetailStore.get().status,
     retainedDetail: Boolean(taskDetailStore.get().data),
     editorPresent: Boolean(editor), answerDraft: editor?.value ?? null,
+    answerReadOnly: editor?.readOnly ?? null,
+    errorToasts: [...document.querySelectorAll('.toast[data-tone="error"]')].map(node => node.textContent),
     errors: [...document.querySelectorAll("#task-detail .resource-error")].map(node => node.textContent),
     writes,
     list: document.querySelector("#task-list").textContent,
@@ -70,10 +76,10 @@ for (const [id, status, code, message] of [
   ["missing", 404, "task_not_found", "The requested task does not exist"],
 ]) document.querySelector("#" + id).addEventListener("click", async () => {
   refusal = { status, error: { code, message } };
-  await refreshSelectedTask(); observe();
+  await refreshSelectedTask({ retry: true }); observe();
 });
 document.querySelector("#restore").addEventListener("click", async () => {
-  refusal = null; await refreshSelectedTask(); observe();
+  refusal = null; await refreshSelectedTask({ retry: true }); observe();
 });
 document.querySelector("#observe").addEventListener("click", observe);
 document.querySelector("#cold-list").addEventListener("click", () => {
@@ -81,6 +87,9 @@ document.querySelector("#cold-list").addEventListener("click", () => {
 });
 document.querySelector("#release-list").addEventListener("click", () => {
   holdList = false; releaseList?.();
+});
+document.querySelector("#answer-denied").addEventListener("click", () => {
+  refusal = { status: 403, error: { code: "permission_denied", message: "Task detail access denied" } };
 });
 </script>
 </html>

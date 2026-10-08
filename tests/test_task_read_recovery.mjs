@@ -117,11 +117,36 @@ test("an unreadable detail loses stale questions until a fresh read succeeds", a
     await selectTask(9); assert.equal(taskDetailStore.get().data.asks.items.length, 1);
     refusal = 1; const denied = await refreshSelectedTask();
     assert.equal(denied.status, "error"); assert.equal(denied.data, null);
-    refusal = 2; const retry = refreshSelectedTask();
+    refusal = 2; const retry = refreshSelectedTask({ retry: true });
     assert.equal(taskDetailStore.get().status, "loading");
     assert.equal(taskDetailStore.get().data, null, "retry must not restore a denied snapshot before confirmation");
     release(); await retry;
     assert.equal(taskDetailStore.get().status, "ready");
     assert.equal(taskDetailStore.get().data.asks.items.length, 1);
   } finally { clearSelectedTask(); globalThis.fetch = original; globalThis.window = originalWindow; }
+});
+
+test("ordinary task refreshes keep final notices while explicit retry reads immediately", async () => {
+  const original = globalThis.fetch, originalWindow = globalThis.window;
+  globalThis.window = { atob: globalThis.atob };
+  const error = Object.assign(new Error("temporarily unavailable"), { status: 503, code: "tasks_unavailable" });
+  const paths = [];
+  globalThis.fetch = async path => {
+    paths.push(path);
+    return Response.json({ ok: true, data: path.includes("/output?")
+      ? { stdout: empty, stderr: empty, result: empty }
+      : path.endsWith("/asks") || path.endsWith("/artifacts") || path === "/api/v1/tasks"
+        ? { items: [], total: 0 } : { id: 9, state: "running", pending_questions: 0 } });
+  };
+  try {
+    await selectTask(9); paths.length = 0;
+    tasksStore.setError(error); taskDetailStore.setError(error);
+    await loadTasks(); await refreshSelectedTask(); await loadTasks();
+    assert.equal(paths.length, 0, "ordinary polling/live refreshes must respect the cooldown");
+    assert.equal(tasksStore.get().error, error); assert.equal(taskDetailStore.get().error, error);
+    await loadTasks({ retry: true }); await refreshSelectedTask({ retry: true });
+    assert.equal(paths.length, 5); assert.equal(tasksStore.get().status, "ready");
+    assert.equal(taskDetailStore.get().status, "ready");
+    assert(paths.every(path => path.startsWith("/api/v1/")));
+  } finally { clearSelectedTask(); tasksStore.reset(); globalThis.fetch = original; globalThis.window = originalWindow; }
 });

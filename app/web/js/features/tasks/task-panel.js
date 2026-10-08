@@ -87,9 +87,9 @@ export function createTaskPanel({ container, detailContainer, store, detailStore
   const detailHeader = element("div");
   const detailBody = element("div");
   const questions = createTaskQuestions({ onChanged: async () => {
-    const states = await Promise.all([loadTasks(), refreshSelectedTask()]);
-    const failed = states.find((state) => state.status === "error");
-    if (failed) throw failed.error;
+    // An accepted answer remains successful. These stores already own the
+    // eventual read notice; do not add a second "answer refresh failed" toast.
+    await Promise.all([loadTasks({ retry: true }), refreshSelectedTask({ retry: true })]);
     onChanged?.();
   } });
   detailContainer.append(detailHeader, questions.node, detailBody);
@@ -208,7 +208,7 @@ export function createTaskPanel({ container, detailContainer, store, detailStore
       const retry = element("button", { className: "task-detail-close",
         text: t("task.detail.retry", {}, "重试读取"),
         attrs: { type: "button", "data-task-focus": "retry" } });
-      retry.addEventListener("click", () => void refreshSelectedTask());
+      retry.addEventListener("click", () => void refreshSelectedTask({ retry: true }));
       const close = element("button", { className: "task-detail-close",
         text: t("task.backToList", {}, "返回任务列表"), attrs: {
           type: "button", "data-task-focus": "back" } });
@@ -236,7 +236,7 @@ export function createTaskPanel({ container, detailContainer, store, detailStore
       const retry = element("button", { className: "task-detail-close",
         text: t("task.detail.retry", {}, "重试读取"),
         attrs: { type: "button", "data-task-focus": "retry" } });
-      retry.addEventListener("click", () => void refreshSelectedTask());
+      retry.addEventListener("click", () => void refreshSelectedTask({ retry: true }));
       headerActions.push(retry);
       detailBody.append(lastKnownNotice());
     }
@@ -309,7 +309,7 @@ export function createTaskPanel({ container, detailContainer, store, detailStore
       const retry = element("button", { className: "task-detail-close",
         text: t("task.detail.retry", {}, "重试读取"), attrs: {
           type: "button", "data-task-focus": "retry-list" } });
-      retry.addEventListener("click", () => void loadTasks());
+      retry.addEventListener("click", () => void loadTasks({ retry: true }));
       container.append(retained ? lastKnownNotice() : element("div", {
         className: "resource-error", text: taskReadErrorMessage(listState.error) }), retry);
       if (!retained) {

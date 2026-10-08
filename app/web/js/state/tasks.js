@@ -63,14 +63,14 @@ function mergeOutput(previous, page) {
   return { complete: Boolean(page.complete), streams };
 }
 
-export function loadTasks() {
+export function loadTasks({ retry = false } = {}) {
   const state = tasksStore.get();
-  if (["loading", "refreshing"].includes(state.status)) return Promise.resolve(state);
+  if (tasksStore.isPending()) return Promise.resolve(state);
   return tasksStore.load(async signal => {
     const reply = await api.get("/tasks", { signal });
     if (reply.data && typeof reply.data === "object") taskReadTokens.set(reply.data, reply.writeToken);
     return reply.data;
-  });
+  }, { background: !retry });
 }
 
 export function selectedTask() {
@@ -90,13 +90,13 @@ export async function selectTask(value) {
     taskDetailStore.reset();
     artifactPreviewStore.reset();
   }
-  return refreshSelectedTask();
+  return refreshSelectedTask({ retry: true });
 }
 
-export function refreshSelectedTask() {
+export function refreshSelectedTask({ retry = false } = {}) {
   if (!selectedTaskId) return Promise.resolve(taskDetailStore.get());
   const state = taskDetailStore.get();
-  if (["loading", "refreshing"].includes(state.status)) return Promise.resolve(state);
+  if (taskDetailStore.isPending()) return Promise.resolve(state);
   const id = selectedTaskId;
   const previous = taskDetailStore.get().data?.id === id ? taskDetailStore.get().data : null;
   const stdout = previous?.output?.streams?.stdout?.next ?? 0;
@@ -120,7 +120,7 @@ export function refreshSelectedTask() {
     };
     taskReadTokens.set(data, detail.writeToken);
     return data;
-  });
+  }, { background: !retry });
 }
 
 export async function answerTaskAsk(value, askId, answer) {

@@ -1,0 +1,42 @@
+{
+  "calls": {
+    "background": 2,
+    "\u7f51\u7edc\u6062\u590d\u540e\u7ee7\u7eed\u5bf9\u8bdd": 1
+  },
+  "restarted": false,
+  "read_target": "questions",
+  "faults": {
+    "remaining": 0,
+    "failed_reads": 8,
+    "delete_requests": 1
+  },
+  "final_errors": 0,
+  "tasks": [
+    {
+      "id": 1,
+      "owner_agent_id": 3,
+      "owner_run_id": 1,
+      "parent_task_id": 0,
+      "kind": "process",
+      "state": "cancelled",
+      "terminal": true,
+      "stop_requested": true,
+      "pending_questions": 0,
+      "revision": 3,
+      "created_at": 1791453770855296,
+      "started_at": 1791453770855296,
+      "ended_at": 1791453837345990,
+      "scheduled_at": 0,
+      "exit_status_valid": true,
+      "exit_code": 1,
+      "exit_signal": 0,
+      "stop_reason": 4,
+      "notice_taken": false,
+      "owner_session": "D:\\GIT\\mdo\\.build\\conversation-acceptance\\task-probes-fixed\\home\\sessions\\default\\V-OSJKLYJRRSEZ_i-XLp_n1eNLLbA6Q9\\snapshot.json",
+      "label": "C:\\Program Files\\Python312\\python.exe -u -c import sys; print('fixture ready', flush=True); sys.stdin.readline()",
+      "notify": "task-read-qa",
+      "schedule_id": "",
+      "schedule_generation": 0
+    }
+  ]
+}

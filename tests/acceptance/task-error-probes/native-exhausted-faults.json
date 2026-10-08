@@ -1,0 +1,8 @@
+{
+  "faults": {
+    "remaining": 5,
+    "failed_reads": 7,
+    "delete_requests": 1
+  },
+  "time": 1791453900964
+}
