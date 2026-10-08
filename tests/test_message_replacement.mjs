@@ -163,3 +163,91 @@ test("failed background resend saves the old draft without touching visible UI",
     ["truncate", "visible-truncate", "start", "draft"]);
   assert.deepEqual(probe.events[3].slice(1), [updated, "offline", false]);
 });
+
+const quickRecovery = { now: () => 0, random: () => 0,
+  setTimer: fn => setImmediate(fn), clearTimer: clearImmediate };
+const networkFailure = () => Object.assign(new Error("lost acknowledgement"), { code: "network_error" });
+
+test("a lost cut acknowledgement repeats one guarded edit and starts just one run", async () => {
+  const requests = []; let saved = 0, accepted = 0;
+  const probe = harness({ recoveryOptions: quickRecovery, editId: "e".repeat(32),
+    preserveInput: async () => { ++saved; return true; },
+    truncate: async (value, through, source, options) => {
+      assert.equal(saved, 1, "input must be durable before the history cut");
+      requests.push([value.etag, through, source, options.editId]);
+      assert.ok(options.signal instanceof AbortSignal);
+      if (requests.length === 1) throw networkFailure();
+      return updated;
+    },
+    onAccepted() { ++accepted; },
+  });
+  await runMessageReplacement(probe.args);
+  assert.deepEqual(requests, Array(2).fill(['"source-v4"', 2, 17, "e".repeat(32)]));
+  assert.equal(accepted, 1);
+  assert.equal(probe.events.filter(([kind]) => kind === "start").length, 1);
+  assert.equal(probe.events.filter(([kind]) => kind === "visible-truncate").length, 1);
+});
+
+test("lost draft acknowledgements are read back before history changes", async () => {
+  const phases = [];
+  const probe = harness({ preserveInput: async () => { phases.push("PUT draft"); return false; },
+    confirmInput: async ({ signal }) => { assert.ok(signal instanceof AbortSignal);
+      phases.push("GET draft"); return true; },
+    truncate: async () => { phases.push("cut"); return updated; },
+  });
+  await runMessageReplacement(probe.args);
+  assert.deepEqual(phases, ["PUT draft", "GET draft", "cut"]);
+});
+
+test("an unsaved draft prevents any history cut and returns the input", async () => {
+  const failures = [];
+  const probe = harness({ preserveInput: async () => false, confirmInput: async () => false,
+    onPreserveFailure: (error, visible) => failures.push([error.code, visible]),
+  });
+  await assert.rejects(runMessageReplacement(probe.args), { code: "session_edit_draft_unsaved" });
+  assert.deepEqual(probe.events, []);
+  assert.deepEqual(failures, [["session_edit_draft_unsaved", true]]);
+});
+
+test("exhausted edit confirmation leaves the saved input and one accurate final failure", async () => {
+  let cuts = 0; const failures = [];
+  const probe = harness({ recoveryOptions: quickRecovery,
+    truncate: async () => { ++cuts; throw networkFailure(); },
+    onPreserveFailure: (error, visible) => failures.push([error.code, visible]),
+  });
+  await assert.rejects(runMessageReplacement(probe.args), error =>
+    error.code === "session_edit_unconfirmed" && error.cause.code === "network_error");
+  assert.equal(cuts, 6); assert.deepEqual(probe.events, []);
+  assert.deepEqual(failures, [["session_edit_unconfirmed", true]]);
+});
+
+test("changing routes while saving input cannot cut history", async () => {
+  const save = deferred(), failures = [];
+  const probe = harness({ preserveInput: () => save.promise,
+    onPreserveFailure: (_error, visible) => failures.push(visible),
+  });
+  const action = runMessageReplacement(probe.args);
+  await new Promise(resolve => setImmediate(resolve));
+  probe.switchRoute(); save.resolve(true);
+  await assert.rejects(action, /会话已切换/);
+  assert.deepEqual(probe.events, []); assert.deepEqual(failures, [false]);
+});
+
+test("leaving the page after a confirmed cut cannot start a hidden model run", async () => {
+  const page = new EventTarget();
+  const probe = harness({ recoveryOptions: { eventTarget: page },
+    onTruncated() { page.dispatchEvent(new Event("pagehide")); },
+  });
+  await assert.rejects(runMessageReplacement(probe.args), { name: "AbortError" });
+  assert.deepEqual(probe.events.map(([kind]) => kind), ["truncate"]);
+});
+
+test("a failed model start is never replayed by edit recovery", async () => {
+  let starts = 0;
+  const probe = harness({ recoveryOptions: quickRecovery,
+    startRun: async () => { ++starts; throw networkFailure(); },
+  });
+  await assert.rejects(runMessageReplacement(probe.args), { code: "network_error" });
+  assert.equal(starts, 1);
+  assert.deepEqual(probe.events.map(([kind]) => kind), ["truncate", "visible-truncate", "draft"]);
+});

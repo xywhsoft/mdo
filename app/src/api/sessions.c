@@ -9,6 +9,25 @@
 
 static xmutex* g_MdoApiSessionCreateLock;
 
+/* Short-lived replies for one exact history edit, within the current write
+ * epoch. Restart/purge fences and the original event/revision guards remain
+ * authoritative. No receipt files or general mutation retry API are needed. */
+#define MDO_API_EDIT_REPLIES 64u
+#define MDO_API_EDIT_REPLY_TTL_US 180000000u
+typedef struct MdoApiEditReply {
+    char Project[MDO_PROJECT_ID_CAPACITY];
+    char Session[MDO_SESSION_ID_CAPACITY];
+    char Id[33];
+    char WriteToken[MDO_API_WRITE_TOKEN_CAPACITY];
+    uint64 BaseRevision;
+    uint64 Revision;
+    uint64 ThroughSequence;
+    uint64 SourceEventId;
+    uint64 ExpiresAt;
+    int64 CreatedAt;
+} MdoApiEditReply;
+static MdoApiEditReply g_MdoApiEditReplies[MDO_API_EDIT_REPLIES];
+
 bool MdoApiSessionsInit(void)
 {
     if ( g_MdoApiSessionCreateLock != NULL ) return true;
@@ -21,6 +40,7 @@ void MdoApiSessionsUnit(void)
     if ( g_MdoApiSessionCreateLock != NULL )
         xrtMutexDestroy(g_MdoApiSessionCreateLock);
     g_MdoApiSessionCreateLock = NULL;
+    memset(g_MdoApiEditReplies, 0, sizeof(g_MdoApiEditReplies));
 }
 
 static bool MdoApiClientSessionIdValid(const char* Id)
@@ -995,6 +1015,10 @@ bool MdoApiSessionBackupRoute(MdoApiContext* Context)
     return Session != NULL ? MdoApiSessionBackupStart(Context, Session) : ReplyResult;
 }
 
+/* Keep response construction outside the cache mutex. Publish a completed
+ * result before sending its HTTP acknowledgement. */
+#include "message_edit.inc.c"
+
 static bool MdoApiSessionLedgerMutation(MdoApiContext* Context,
     bool Clear)
 {
@@ -1009,20 +1033,11 @@ static bool MdoApiSessionLedgerMutation(MdoApiContext* Context,
     size_t Present = 0u;
     bool ReplyResult;
     bool Ok;
+    char EditId[33] = { 0 };
 
-    Session = MdoApiSessionOpenActive(Context, true, &Info,
-        &ExpectedRevision, &ReplyResult);
-    if ( Session == NULL ) return ReplyResult;
-    if ( Clear ) {
-        if ( !MdoApiSessionNoBody(Context) ) {
-            MdoSessionRelease(Session);
-            return MdoApiReplyError(Context, 400u, "body_not_allowed",
-                "This session operation does not accept a body", NULL);
-        }
-    } else {
+    if ( !Clear ) {
         BodyStatus = MdoApiJsonBodyRead(Context, &Body);
         if ( BodyStatus != MDO_API_BODY_OK ) {
-            MdoSessionRelease(Session);
             return MdoApiReplyBodyError(Context, BodyStatus);
         }
         Ok = xrtValueType(Body.Value) == XVALUE_OBJECT &&
@@ -1032,15 +1047,29 @@ static bool MdoApiSessionLedgerMutation(MdoApiContext* Context,
                 &SourceEventId, &Present) &&
             (Present == 1u || (Present == 2u && SourceEventId != 0u &&
                 ThroughSequence != UINT64_MAX)) &&
+            MdoApiSessionString(Body.Value, "client_edit_id", EditId,
+                sizeof(EditId), false, &Present) &&
+            (EditId[0] == '\0' || (SourceEventId != 0u &&
+                MdoApiClientSessionIdValid(EditId))) &&
             Present == xrtValueCount(Body.Value);
         MdoApiJsonBodyUnit(&Body);
         if ( !Ok ) {
-            MdoSessionRelease(Session);
             return MdoApiReplyError(Context, 422u,
                 "session_truncate_invalid",
-                "Truncate requires through_sequence and an optional positive source_event_id",
+                "Truncate requires through_sequence, an optional positive source_event_id, and an optional client_edit_id for guarded edits",
                 NULL);
         }
+        if ( EditId[0] != '\0' )
+            return MdoApiSessionEditOnce(Context, ThroughSequence,
+                SourceEventId, EditId);
+    }
+    Session = MdoApiSessionOpenActive(Context, true, &Info,
+        &ExpectedRevision, &ReplyResult);
+    if ( Session == NULL ) return ReplyResult;
+    if ( Clear && !MdoApiSessionNoBody(Context) ) {
+        MdoSessionRelease(Session);
+        return MdoApiReplyError(Context, 400u, "body_not_allowed",
+            "This session operation does not accept a body", NULL);
     }
     memset(&Error, 0, sizeof(Error));
     if ( !Clear && SourceEventId != 0u ) {

@@ -1,0 +1,93 @@
+{
+  "baseline_source_commit": "8df7160",
+  "baseline_sha256": "abd920854571381a7927381808e6999269c10c70b52b68bab7bc7056b1264a80",
+  "browser_and_protocol_tested_sha256": "634af2ace9a978475fcfc0c75aa1ea558f0465467e463e8bd9c30e77bd506236",
+  "baseline": {
+    "draft_text": "",
+    "user_entries": 0,
+    "error_events": 0,
+    "calls": {
+      "EDIT_RESPONSE_LOSS_SOURCE": 1
+    }
+  },
+  "confirmed": {
+    "draft_text": "",
+    "user_entries": 0,
+    "error_events": 0,
+    "calls": {
+      "EDIT_FINAL_SOURCE": 1,
+      "EDIT_FINAL_RECOVERED": 1,
+      "EDIT_FINAL_UNCONFIRMED": 1,
+      "EDIT_FINAL_DRAFT_RECOVERED": 1
+    }
+  },
+  "browser": {
+    "edit": {
+      "fault": {
+        "method": "POST",
+        "status": 200
+      },
+      "requests": [
+        {
+          "method": "POST",
+          "id": "c65576013473712b1bd9a51eb31c0339",
+          "source": 1,
+          "through": 1
+        },
+        {
+          "method": "POST",
+          "id": "c65576013473712b1bd9a51eb31c0339",
+          "source": 1,
+          "through": 1
+        }
+      ]
+    },
+    "exhaustion": [
+      {
+        "status": 200,
+        "id": "0a1c8eccbc95a9dd51d9c0298fcf18f6",
+        "source": 7
+      },
+      {
+        "status": 200,
+        "id": "0a1c8eccbc95a9dd51d9c0298fcf18f6",
+        "source": 7
+      },
+      {
+        "status": 200,
+        "id": "0a1c8eccbc95a9dd51d9c0298fcf18f6",
+        "source": 7
+      },
+      {
+        "status": 200,
+        "id": "0a1c8eccbc95a9dd51d9c0298fcf18f6",
+        "source": 7
+      },
+      {
+        "status": 200,
+        "id": "0a1c8eccbc95a9dd51d9c0298fcf18f6",
+        "source": 7
+      },
+      {
+        "status": 200,
+        "id": "0a1c8eccbc95a9dd51d9c0298fcf18f6",
+        "source": 7
+      }
+    ],
+    "draft": {
+      "fault": {
+        "status": 200,
+        "method": "PUT"
+      },
+      "stagingWrites": 1,
+      "historyWrites": 1,
+      "truncated": false
+    }
+  },
+  "exhaustion_saved_input": "EDIT_FINAL_UNCONFIRMED",
+  "model_calls_before_manual_resume": {
+    "EDIT_FINAL_SOURCE": 1,
+    "EDIT_FINAL_RECOVERED": 1
+  },
+  "scope": "Isolated loopback model and disposable Home; no pressure tests; no Android device verification."
+}

@@ -290,6 +290,27 @@ editor retains text and attachment IDs after a failed commit, displays the
 localized error in the dialog, and only closes after successful submission.
 The subsequent run start remains a separate operation.
 
+The frontend also supplies a new 32-character lowercase hex `client_edit_id`
+for each edit/retry, together with the original source and original ETag. An
+acknowledgement lost in transit may be retried using exactly those same values.
+The server caches completed edit replies for 180 seconds within the current
+write epoch (64 slots, no eviction of unexpired replies). Replays read only
+metadata, retaining the committed revision and ETag without trimming files or
+opening an Agent again. Runtime presence reflects the current metadata read.
+An ID reused for different parameters returns `409 session_edit_conflict`;
+later session changes return `412 revision_conflict`. Restart/purge write
+fences still apply. Cache expiry never permits a second cut with an old ETag
+or removed source. A full cache returns `503` before modifying history.
+
+Before cutting history, the frontend saves the replacement text and images as
+a normal draft. A lost draft-save acknowledgement is confirmed by reads. Reads
+and the keyed cut share a 60-second recovery deadline, at most six attempts per
+operation and eight seconds per request; exponential backoff has jitter. Draft
+writes and model starts are not replayed by this recovery helper. Navigation
+before the cut prevents it; page exit cancels pending recovery. After an
+exhausted cut confirmation, the saved input remains available after refresh
+and one final localized message explains that the edit result is unconfirmed.
+
 ## Settings transactions
 
 `GET /settings` returns the effective, typed UI settings and the current

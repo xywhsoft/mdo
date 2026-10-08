@@ -76,8 +76,8 @@ export async function restoreSession(session) {
   return refreshAfter(await api.post(`${endpoint(session)}/restore`, undefined, { ifMatch: etag(session) }));
 }
 
-export async function loadSessionHistory(session) {
-  const response = await api.get(`${endpoint(session)}/history`);
+export async function loadSessionHistory(session, options = {}) {
+  const response = await api.get(`${endpoint(session)}/history`, options);
   return { ...response.data, etag: response.etag };
 }
 
@@ -95,14 +95,23 @@ export async function forkSession(session, input) {
   return { ...response.data, etag: response.etag };
 }
 
-export async function truncateSession(session, throughSequence, sourceEventId) {
+export async function truncateSession(session, throughSequence, sourceEventId, options = {}) {
   const body = { through_sequence: sequence(throughSequence) };
   if (sourceEventId !== undefined) {
     body.source_event_id = sequence(sourceEventId);
     if (!body.source_event_id) throw new TypeError("source event ID must be positive");
   }
-  return refreshAfter(await api.post(`${endpoint(session)}/truncate`, body,
-    { ifMatch: etag(session) }));
+  if (options.editId) {
+    if (!/^[0-9a-f]{32}$/.test(options.editId) || !body.source_event_id)
+      throw new TypeError("Guarded edit identity is invalid");
+    body.client_edit_id = options.editId;
+  }
+  const response = await api.post(`${endpoint(session)}/truncate`, body,
+    { ifMatch: etag(session), signal: options.signal });
+  // The acknowledged cut is enough to continue. A sidebar refresh must not
+  // delay the next run or convert a successful history edit into a timeout.
+  void loadSessions();
+  return { ...response.data, etag: response.etag };
 }
 
 export async function clearSession(session) {

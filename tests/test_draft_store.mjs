@@ -3,6 +3,34 @@ import test from "node:test";
 
 import { createDraftStore } from "../app/web/js/features/chat/draft-store.js";
 
+test("a lost saved-text acknowledgement is confirmed by one read without another draft write", async () => {
+  const originalWindow = globalThis.window, originalFetch = globalThis.fetch;
+  globalThis.window = { setTimeout, clearTimeout, addEventListener() {} };
+  const image = "a".repeat(32), key = "default/edit-input";
+  let saved = { revision: 1, text: "", attachments: [], submissions: [] };
+  let writes = 0;
+  globalThis.fetch = async (_path, options) => {
+    if (options.method === "GET") return Response.json({ ok: true, data: saved });
+    assert.equal(options.method, "PUT"); ++writes;
+    saved = { ...JSON.parse(options.body), revision: saved.revision + 1 };
+    throw Object.assign(new Error("draft saved but acknowledgement lost"), { code: "network_error" });
+  };
+  try {
+    const store = createDraftStore({ onRestore() {}, onError() {}, onSaved() {} });
+    store.select(key); assert.equal(await store.ensureLoaded(key), true);
+    store.edit(key, "replacement input", [image], true);
+    assert.equal(await store.flush(key), false);
+    assert.equal(store.isDraftDurable(key, "replacement input", [image]), false);
+    assert.equal(await store.refreshSessionSubmissions(key), true);
+    assert.equal(store.isDraftDurable(key, "replacement input", [image]), true);
+    assert.equal(store.isDraftDurable(key, "other input", [image]), false);
+    assert.equal(store.isDraftDurable(key, "replacement input", []), false);
+    assert.equal(writes, 1);
+  } finally {
+    globalThis.window = originalWindow; globalThis.fetch = originalFetch;
+  }
+});
+
 test("a lost remote submission response is reconciled by reads without repeating writes", async () => {
   const originalWindow = globalThis.window, originalFetch = globalThis.fetch;
   const id = "c".repeat(32);

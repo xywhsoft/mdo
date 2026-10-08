@@ -1,0 +1,13 @@
+{
+  "passed": true,
+  "checks": [
+    "invalid inputs, missing preconditions and source guards leave all session files unchanged",
+    "two replays return the original successful response without a second cut or revision change",
+    "changed replay parameters, a new ID with an old revision and a removed source are refused",
+    "a later session change invalidates cached replies; legacy guarded cuts still work",
+    "host restart fences the old page instead of replaying its writes",
+    "only the two explicitly started loopback model turns executed"
+  ],
+  "model_requests": 2,
+  "packed_sha256": "634af2ace9a978475fcfc0c75aa1ea558f0465467e463e8bd9c30e77bd506236"
+}

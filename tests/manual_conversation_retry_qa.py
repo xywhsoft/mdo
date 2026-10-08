@@ -60,6 +60,12 @@ class Model(BaseHTTPRequestHandler):
             self.markers.append({'prompt':prompt,'image_parts':images,
                 'user_messages':sum(row['role']=='user' for row in body['messages']),
                 'tool_results':sum(row['role']=='tool' for row in body['messages'])})
+            # Keep proof as each request arrives, even if the shell running
+            # this disposable fixture is later interrupted before finally.
+            for name, data in (('calls.json', self.calls), ('requests.json', self.markers)):
+                pending = self.workspace / (name + '.pending')
+                pending.write_text(json.dumps(data, indent=2), encoding='utf-8')
+                pending.replace(self.workspace / name)
         if prompt in ('quota','stop') or (prompt=='retry' and attempt<=2):
             self.send_response(429)
             self.send_header('Content-Type','application/json')

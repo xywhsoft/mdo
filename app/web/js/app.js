@@ -447,8 +447,8 @@ export async function boot() {
     try {
       const result = await runMessageReplacement({ session, sequence, sourceEventId, text,
         attachments, isCurrent: stillSelected,
-        validateBeforeTruncate: async () => {
-          if (!await draftStore.refreshSessionSubmissions(targetKey))
+        validateBeforeTruncate: async ({ signal }) => {
+          if (!await draftStore.refreshSessionSubmissions(targetKey, { signal }))
             throw new Error(t("composer.hintLoadingDraft", {}, "正在读取草稿，请稍候"));
           await promptQueue.select(selected.projectId, selected.sessionId);
           if (!stillSelected()) return;
@@ -456,6 +456,23 @@ export async function boot() {
           assertReplacementIdle(selected);
         },
         loadHistory: loadSessionHistory, truncate: truncateSession, startRun,
+        async preserveInput() {
+          draftStore.edit(targetKey, text, attachments, true);
+          return draftStore.flush(targetKey);
+        },
+        async confirmInput({ signal }) {
+          if (!await draftStore.refreshSessionSubmissions(targetKey, { signal }))
+            return false;
+          return draftStore.isDraftDurable(targetKey, text, attachments);
+        },
+        onPreserveFailure(_error, current) {
+          if (!current || (prompt.value.trim() && prompt.value !== text)) return;
+          prompt.value = text;
+          composerAttachments = [...attachments];
+          composerImages.set(attachments);
+          resizePrompt();
+          tokenMeter.refresh();
+        },
         onTruncated(updated) {
           // A committed edit/retry starts a new turn. An old history filter
           // must not hide its messages; cancelled or rejected edits keep it.
@@ -482,6 +499,7 @@ export async function boot() {
           setRun(activeRun);
           prompt.focus();
         },
+        onAccepted() { clearSubmittedComposer(targetKey, { text, attachments }); },
         onStarted(run) { monitorRun(run); },
       });
       void Promise.allSettled([...(stillSelected() ? [refreshSelectedTimeline()] : []),

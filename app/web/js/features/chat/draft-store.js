@@ -369,12 +369,12 @@ export function createDraftStore({ onRestore, onError, onSaved, onLoaded = () =>
     return combined;
   }
 
-  async function refreshSessionSubmissions(key) {
+  async function refreshSessionSubmissions(key, options = {}) {
     const current = entry(key);
     if (current.saving) await current.saving;
     if (!current.loaded) await load(key);
     if (!current.loaded) return false;
-    const response = await api.get(endpoint(key));
+    const response = await api.get(endpoint(key), options);
     applySessionResponse(key, response.data);
     return true;
   }
@@ -468,6 +468,12 @@ export function createDraftStore({ onRestore, onError, onSaved, onLoaded = () =>
     },
     clear(key) { edit(key, "", [], true); },
     isLoaded(key) { return entry(key).loaded; },
+    isDraftDurable(key, text, attachments) {
+      const current = entry(key);
+      return current.loaded && !current.dirty && !current.conflict &&
+        !current.saving && current.text === text &&
+        sameIds(current.attachments, attachments);
+    },
     async ensureLoaded(key) {
       await load(key);
       return entry(key).loaded;
