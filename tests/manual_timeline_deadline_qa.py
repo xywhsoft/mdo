@@ -5,6 +5,8 @@ model. No product QA injection. Open the first printed URL, check its seeded
 conversation and saved draft, then GET /__qa/timeline-arm/refresh. Leave the
 conversation idle through that delayed background read before sending the
 draft and a follow-up in the second task. Create the stop file to save proof.
+With --deny-cold, deny the first history snapshot until GET /__qa/timeline-allow;
+check the final notice, then retry it explicitly and send the saved draft.
 """
 import argparse
 from collections import Counter
@@ -24,6 +26,14 @@ from test_packed_queue_start_recovery import configure_model
 
 class Proxy(SlowProxy):
     def proxy(self):
+        if self.command == "GET" and self.path == "/__qa/timeline-allow":
+            with self.server.lock:
+                self.server.deny_cold = False; self.server.resources = set()
+            return self.reply(200, {"allowed": True})
+        if self.command == "GET" and self.path == self.server.cold_path and self.server.deny_cold:
+            with self.server.lock:
+                self.server.reads[self.path].append({"started": time.monotonic(), "held": False, "status": 403})
+            return self.reply(403, {"ok": False, "error": {"code": "permission_denied", "message": "QA history forbidden"}})
         if self.command == "GET" and self.path == "/__qa/timeline-arm/refresh":
             with self.server.lock:
                 self.server.resources = {self.server.refresh_path}
@@ -38,6 +48,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--packed", type=Path, required=True)
     parser.add_argument("--directory", type=Path, required=True)
+    parser.add_argument("--deny-cold", action="store_true")
     args = parser.parse_args(); base = args.directory.resolve()
     assert not base.exists(), "Choose a fresh isolated directory"
     base.mkdir(parents=True); native, port = site(base, "native", args.packed.resolve())
@@ -45,6 +56,7 @@ def main():
     proxy = ThreadingHTTPServer(("127.0.0.1", 0), Proxy)
     proxy.native = port; proxy.lock = threading.Lock(); proxy.phase = None; proxy.phases = []
     proxy.resources = set(); proxy.reads = {}; proxy.writes = []; proxy.refresh_path = ""
+    proxy.deny_cold = args.deny_cold; proxy.cold_path = ""
     proxy.stopped = threading.Event()
     threads = [threading.Thread(target=server.serve_forever, daemon=True) for server in (model, proxy)]
     for thread in threads: thread.start()
@@ -72,7 +84,8 @@ def main():
         snapshot = call("GET", first_path + "/conversation?limit=4")
         with proxy.lock:
             cold = first_path + "/conversation?limit=4"
-            proxy.resources = {cold}; proxy.reads = {cold: []}
+            proxy.cold_path = cold
+            proxy.resources = set() if args.deny_cold else {cold}; proxy.reads = {cold: []}
             proxy.refresh_path = first_path + f'/conversation?after={snapshot["next_cursor"]}&epoch={snapshot["epoch"]}&limit=4'
         print(json.dumps({"urls": [f"http://127.0.0.1:{proxy.server_port}/#/projects/default/sessions/" + item["id"] for item in sessions],
             "proxy_port": proxy.server_port, "native_port": port, "stop_file": str(base / "stop")}), flush=True)
@@ -83,6 +96,7 @@ def main():
         proof = {"reads": proxy.reads, "writes": proxy.writes,
             "model_calls": dict(Model.calls), "sessions": [], "websocket_unavailable": True,
             "seed_prompt": "TIMELINE_SEEDED_HISTORY"}
+        if args.deny_cold: proof["denied_cold_history"] = True
         for item in sessions:
             path = "/api/v1/projects/default/sessions/" + item["id"]
             events = session_events(port, path)

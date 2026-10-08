@@ -1,0 +1,292 @@
+{
+  "reads": {
+    "/api/v1/projects/default/sessions/V-OSKcd3rRSnnISLjq91TsSdWPPEe-BJ/conversation?limit=4": [
+      {
+        "started": 2491223.187,
+        "held": false,
+        "status": 403
+      }
+    ]
+  },
+  "writes": [
+    {
+      "method": "PATCH",
+      "path": "/api/v1/settings/settings",
+      "started": 2491223.234
+    },
+    {
+      "method": "PUT",
+      "path": "/api/v1/workspace-state",
+      "started": 2491223.343
+    },
+    {
+      "method": "PUT",
+      "path": "/api/v1/projects/default/sessions/V-OSKcd3rRSnnISLjq91TsSdWPPEe-BJ/draft",
+      "started": 2491272.109
+    },
+    {
+      "method": "PUT",
+      "path": "/api/v1/projects/default/sessions/V-OSKcd3rRSnnISLjq91TsSdWPPEe-BJ/draft",
+      "started": 2491272.156
+    },
+    {
+      "method": "PUT",
+      "path": "/api/v1/projects/default/sessions/V-OSKcd3rRSnnISLjq91TsSdWPPEe-BJ/draft/submissions/a5d86782b10b2d95c0cfc8e343929161",
+      "started": 2491272.171
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/projects/default/sessions/V-OSKcd3rRSnnISLjq91TsSdWPPEe-BJ/queue",
+      "started": 2491272.187
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/v1/projects/default/sessions/V-OSKcd3rRSnnISLjq91TsSdWPPEe-BJ/draft/submissions/a5d86782b10b2d95c0cfc8e343929161",
+      "started": 2491272.203
+    },
+    {
+      "method": "PUT",
+      "path": "/api/v1/projects/default/sessions/V-OSKcd3rRSnnISLjq91TsSdWPPEe-BJ/queue/a5d86782b10b2d95c0cfc8e343929161",
+      "started": 2491272.203
+    },
+    {
+      "method": "PUT",
+      "path": "/api/v1/projects/default/sessions/V-OSKcd3rRSnnISLjq91TsSdWPPEe-BJ/queue/a5d86782b10b2d95c0cfc8e343929161",
+      "started": 2491272.234
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/projects/default/sessions/V-OSKcd3rRSnnISLjq91TsSdWPPEe-BJ/runs",
+      "started": 2491272.234
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/v1/projects/default/sessions/V-OSKcd3rRSnnISLjq91TsSdWPPEe-BJ/queue/a5d86782b10b2d95c0cfc8e343929161",
+      "started": 2491272.265
+    },
+    {
+      "method": "PUT",
+      "path": "/api/v1/workspace-state",
+      "started": 2491279.703
+    },
+    {
+      "method": "PUT",
+      "path": "/api/v1/projects/default/sessions/V-OSKcd4hrKuQWEh54J2p9c_rLJum_m3/draft",
+      "started": 2491295.453
+    },
+    {
+      "method": "PUT",
+      "path": "/api/v1/projects/default/sessions/V-OSKcd4hrKuQWEh54J2p9c_rLJum_m3/draft",
+      "started": 2491295.5
+    },
+    {
+      "method": "PUT",
+      "path": "/api/v1/projects/default/sessions/V-OSKcd4hrKuQWEh54J2p9c_rLJum_m3/draft/submissions/97c311b0a6a5147c0f105d1ebeb7324c",
+      "started": 2491295.515
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/projects/default/sessions/V-OSKcd4hrKuQWEh54J2p9c_rLJum_m3/queue",
+      "started": 2491295.531
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/v1/projects/default/sessions/V-OSKcd4hrKuQWEh54J2p9c_rLJum_m3/draft/submissions/97c311b0a6a5147c0f105d1ebeb7324c",
+      "started": 2491295.546
+    },
+    {
+      "method": "PUT",
+      "path": "/api/v1/projects/default/sessions/V-OSKcd4hrKuQWEh54J2p9c_rLJum_m3/queue/97c311b0a6a5147c0f105d1ebeb7324c",
+      "started": 2491295.578
+    },
+    {
+      "method": "PUT",
+      "path": "/api/v1/projects/default/sessions/V-OSKcd4hrKuQWEh54J2p9c_rLJum_m3/queue/97c311b0a6a5147c0f105d1ebeb7324c",
+      "started": 2491295.593
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/projects/default/sessions/V-OSKcd4hrKuQWEh54J2p9c_rLJum_m3/runs",
+      "started": 2491295.609
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/v1/projects/default/sessions/V-OSKcd4hrKuQWEh54J2p9c_rLJum_m3/queue/97c311b0a6a5147c0f105d1ebeb7324c",
+      "started": 2491295.687
+    }
+  ],
+  "model_calls": {
+    "TIMELINE_SEEDED_HISTORY": 1,
+    "TIMELINE_SAVED_DRAFT": 1,
+    "HISTORY_NOTICE_FOLLOWUP": 1
+  },
+  "sessions": [
+    {
+      "id": "V-OSKcd3rRSnnISLjq91TsSdWPPEe-BJ",
+      "title": "Timeline deadline",
+      "user_inputs": [
+        "TIMELINE_SEEDED_HISTORY",
+        "TIMELINE_SAVED_DRAFT"
+      ],
+      "final_model_errors": 0,
+      "event_kinds": {
+        "agent_start": 2,
+        "model_start": 2,
+        "model_text_delta": 2,
+        "model_done": 2,
+        "agent_done": 2
+      },
+      "queue": {
+        "items": [],
+        "discard_images": []
+      },
+      "draft": {
+        "revision": 5,
+        "text": "",
+        "attachments": [],
+        "run_admission_uncertain": false,
+        "submission": null,
+        "submissions": []
+      }
+    },
+    {
+      "id": "V-OSKcd4hrKuQWEh54J2p9c_rLJum_m3",
+      "title": "Timeline follow-up",
+      "user_inputs": [
+        "HISTORY_NOTICE_FOLLOWUP"
+      ],
+      "final_model_errors": 0,
+      "event_kinds": {
+        "agent_start": 1,
+        "model_start": 1,
+        "model_text_delta": 1,
+        "model_done": 1,
+        "agent_done": 1
+      },
+      "queue": {
+        "items": [],
+        "discard_images": []
+      },
+      "draft": {
+        "revision": 4,
+        "text": "",
+        "attachments": [],
+        "run_admission_uncertain": false,
+        "submission": null,
+        "submissions": []
+      }
+    }
+  ],
+  "websocket_unavailable": true,
+  "seed_prompt": "TIMELINE_SEEDED_HISTORY",
+  "denied_cold_history": true,
+  "runs": {
+    "automatic": true,
+    "active_runs": 0,
+    "starting_runs": 0,
+    "retained_runs": 3,
+    "max_active": 8,
+    "max_retained": 64,
+    "runs_started": 3,
+    "runs_completed": 3,
+    "runs_failed": 0,
+    "items": [
+      {
+        "id": "run-V-OSKd2Ospx32kXo_jJRlvHtU-ovAYpL",
+        "project_id": "default",
+        "session_id": "V-OSKcd4hrKuQWEh54J2p9c_rLJum_m3",
+        "agent_run_id": 3,
+        "agent_id": "mdo.default",
+        "model_id": "queue-fixture",
+        "protocol": "openai-chat-completions",
+        "reasoning_effort": "none",
+        "state": "succeeded",
+        "result": "ok",
+        "error_code": "none",
+        "terminal": true,
+        "cancel_requested": false,
+        "resume": false,
+        "client_resume_id": "",
+        "created_at": 1791476239033177,
+        "started_at": 1791476239048773,
+        "ended_at": 1791476239168185,
+        "config_revision": 3,
+        "model_generation": 2,
+        "module_generation": 1,
+        "skill_generation": 1,
+        "memory_generation": 1,
+        "agent_turns": 1,
+        "model_calls": 1,
+        "tool_calls": 0,
+        "compactions": 0,
+        "final_text_available": true,
+        "final_text_truncated": false,
+        "final_text_bytes": 47
+      },
+      {
+        "id": "run-V-OSKcxp5A4myYuKi4RwCGf97iLeorEH",
+        "project_id": "default",
+        "session_id": "V-OSKcd3rRSnnISLjq91TsSdWPPEe-BJ",
+        "agent_run_id": 2,
+        "agent_id": "mdo.default",
+        "model_id": "queue-fixture",
+        "protocol": "openai-chat-completions",
+        "reasoning_effort": "none",
+        "state": "succeeded",
+        "result": "ok",
+        "error_code": "none",
+        "terminal": true,
+        "cancel_requested": false,
+        "resume": false,
+        "client_resume_id": "",
+        "created_at": 1791476215650474,
+        "started_at": 1791476215656708,
+        "ended_at": 1791476215683892,
+        "config_revision": 3,
+        "model_generation": 2,
+        "module_generation": 1,
+        "skill_generation": 1,
+        "memory_generation": 1,
+        "agent_turns": 1,
+        "model_calls": 1,
+        "tool_calls": 0,
+        "compactions": 0,
+        "final_text_available": true,
+        "final_text_truncated": false,
+        "final_text_bytes": 44
+      },
+      {
+        "id": "run-V-OSKcd5E4UGuBYb9jVV5_XwJugLQD6U",
+        "project_id": "default",
+        "session_id": "V-OSKcd3rRSnnISLjq91TsSdWPPEe-BJ",
+        "agent_run_id": 1,
+        "agent_id": "mdo.default",
+        "model_id": "queue-fixture",
+        "protocol": "openai-chat-completions",
+        "reasoning_effort": "none",
+        "state": "succeeded",
+        "result": "ok",
+        "error_code": "none",
+        "terminal": true,
+        "cancel_requested": false,
+        "resume": false,
+        "client_resume_id": "",
+        "created_at": 1791476128693332,
+        "started_at": 1791476128695964,
+        "ended_at": 1791476128753599,
+        "config_revision": 2,
+        "model_generation": 2,
+        "module_generation": 1,
+        "skill_generation": 1,
+        "memory_generation": 1,
+        "agent_turns": 1,
+        "model_calls": 1,
+        "tool_calls": 0,
+        "compactions": 0,
+        "final_text_available": true,
+        "final_text_truncated": false,
+        "final_text_bytes": 47
+      }
+    ]
+  }
+}

@@ -1911,5 +1911,6 @@
   "sessionList.readFailed": "Unable to read the session list for now. Check the connection and retry.",
   "sessionList.invalidResponse": "The session list response is invalid. Please read it again.",
   "sessionLoad.invalidDetail": "The session response does not match this task. Please read it again.",
-  "sessionLoad.detailUnavailable": "Unable to read task details for now. Check the connection and retry. Your conversation and draft are preserved."
+  "sessionLoad.detailUnavailable": "Unable to read task details for now. Check the connection and retry. Your conversation and draft are preserved.",
+  "sessionLoad.historyUnavailable": "Conversation history is temporarily unavailable. Check the connection and retry; visible messages and drafts will be kept."
 }

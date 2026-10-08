@@ -805,7 +805,8 @@ function timelineNode(item, handlers, projectId, sessionId, writable,
 }
 
 export function createTimelineView({ container, welcome, toBottom, store, sessionStore = null,
-  onFork, onEdit, onRetry, onSearchCount, onLoadOlder, onLoadIndex, onRevealTurn, onReload }) {
+  onFork, onEdit, onRetry, onSearchCount, onLoadOlder, onLoadIndex, onRevealTurn, onReload,
+  showReadError = true }) {
   const busySessions = new Set();
   const renderedRows = new Map();
   const handlers = {
@@ -1000,7 +1001,7 @@ export function createTimelineView({ container, welcome, toBottom, store, sessio
     welcome.hidden = Boolean(data?.sessionId &&
       (items.length > 0 || data?.events?.length > 0 || data?.initializing));
     const entries = [];
-    if (state.status === "error") {
+    if (state.status === "error" && showReadError) {
       entries.push({ item: { key: "load-error", kind: "error",
         role: t("timeline.loadError", {}, "无法读取时间线"),
         text: errorMessage(state.error), state: "failed", time: 0 } });
@@ -1015,7 +1016,7 @@ export function createTimelineView({ container, welcome, toBottom, store, sessio
     reconcileRows(entries, data?.projectId, data?.sessionId);
     if (historyButton) {
       const failedInitialLoad = state.status === "error" && data?.initializing;
-      historyButton.hidden = !data?.hasOlder && !failedInitialLoad;
+      historyButton.hidden = !data?.hasOlder && !(showReadError && failedInitialLoad);
       historyButton.disabled = Boolean(data?.loadingHistory);
       historyButton.textContent = data?.loadingHistory ? t("timeline.loadingOlder", {}, "正在加载更早对话…")
         : data?.historyError || failedInitialLoad ? t("timeline.retryOlder", {}, "加载失败，点击重试")

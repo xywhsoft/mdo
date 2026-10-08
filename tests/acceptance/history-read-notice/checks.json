@@ -1,0 +1,21 @@
+{
+  "baseline_error_cards": 1,
+  "fixed_error_cards": 0,
+  "fixed_retry_buttons": 1,
+  "old_retry_buttons": 0,
+  "precise_history_denial": true,
+  "saved_draft_preserved": true,
+  "retry_restores_composer_focus": true,
+  "history_denial_reads": 1,
+  "seed_inputs": 1,
+  "deliberate_browser_inputs": 2,
+  "model_calls": 3,
+  "successful_terminal_runs": 3,
+  "final_model_errors": 0,
+  "active_runs": 0,
+  "warning_error_logs": 0,
+  "node_tests_passed": 63,
+  "frontend_contracts_passed": 4,
+  "source_parity_files": 7,
+  "android_native_verified": false
+}

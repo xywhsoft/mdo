@@ -144,3 +144,58 @@ test("a final detail error stays visible with cached history and retries task me
     assert.doesNotMatch(description.textContent, /internal/);
   } finally { globalThis.window = originalWindow; }
 });
+
+function historyNotice(error, { cached = true, detailError = null } = {}) {
+  const route = { view: "workspace", projectId: "default", sessionId: "A" };
+  const detail = { project_id: "default", id: "A" };
+  let state = { status: detailError ? "error" : "ready", data: detail, error: detailError };
+  let history = { status: "ready", data: { projectId: "default", sessionId: "A",
+    initializing: !cached, syncing: false, events: cached ? [{ text: "Saved reply" }] : [], syncError: error } };
+  let listener, historyRetries = 0, revalidations = 0;
+  const notice = node(), description = node(), retry = node(), prompt = node();
+  createSessionLoadNotice({ navigation: { get: () => route, subscribe(callback) { callback(); },
+    revalidate() { revalidations++; } },
+    store: { get: () => state, subscribe(callback) { callback(); } },
+    timeline: { get: () => history, subscribe(callback) { listener = callback; callback(); } },
+    conversation: node(), notice, description, retry, prompt, heading: node(), sessionTitle: node(),
+    sessionSubtitle: node(), mobileTitle: node(), mobileMeta: node(),
+    onRetryHistory() { historyRetries++; history = { status: "ready", data: { ...history.data,
+      syncError: null, initializing: false, syncing: true } }; listener(); } });
+  return { notice, description, retry, prompt, counts: () => ({ historyRetries, revalidations }),
+    recover() { history = { status: "ready", data: { ...history.data, syncing: false, syncError: null } }; listener(); } };
+}
+
+test("exhausted history reads explain the failure instead of describing an ongoing check", () => {
+  const oldWindow = globalThis.window;
+  globalThis.window = { setTimeout: () => 1, clearTimeout() {} };
+  try {
+    const view = historyNotice(Object.assign(new Error("internal transport failure"), { code: "network_error" }));
+    assert.equal(view.notice.hidden, false); assert.equal(view.notice.role, "alert");
+    assert.match(view.description.textContent, /暂时无法读取.*对话/);
+    assert.doesNotMatch(view.description.textContent, /正在检查|internal/);
+    view.retry.click(); assert.deepEqual(view.counts(), { historyRetries: 1, revalidations: 0 });
+    assert.equal(view.notice.role, "status");
+    view.recover(); assert.equal(view.notice.hidden, true); assert.equal(view.prompt.focused, 1);
+  } finally { globalThis.window = oldWindow; }
+});
+
+test("a cold history denial shows its precise cause when task metadata is already present", () => {
+  const oldWindow = globalThis.window;
+  globalThis.window = { setTimeout: () => 1, clearTimeout() {} };
+  try {
+    const view = historyNotice(Object.assign(new Error("internal denial"), { code: "permission_denied", status: 403 }), { cached: false });
+    assert.equal(view.notice.hidden, false); assert.match(view.description.textContent, /无权/);
+    assert.doesNotMatch(view.description.textContent, /正在读取|internal/);
+  } finally { globalThis.window = oldWindow; }
+});
+
+test("task metadata errors retain priority over a simultaneous history failure", () => {
+  const oldWindow = globalThis.window;
+  globalThis.window = { setTimeout: () => 1, clearTimeout() {} };
+  try {
+    const view = historyNotice(Object.assign(new Error("history transport"), { code: "network_error" }),
+      { detailError: Object.assign(new Error("detail denial"), { code: "permission_denied", status: 403 }) });
+    assert.match(view.description.textContent, /无权/);
+    view.retry.click(); assert.deepEqual(view.counts(), { historyRetries: 0, revalidations: 1 });
+  } finally { globalThis.window = oldWindow; }
+});

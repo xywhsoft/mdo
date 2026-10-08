@@ -1,0 +1,52 @@
+{
+  "baseline": "44fdc41",
+  "xs_commit": "3232f7b8efb02fdd6bf63a508ed1e69654d6759c",
+  "candidate_sha256": "6f5ef2b6c415c2a17cbdca78fcff8e7d7343c0e387f5a65b13e07be97d53a53d",
+  "candidate_size": 4457256,
+  "product_qa_injection": false,
+  "resources": [
+    {
+      "path": "js/app.js",
+      "size": 127707,
+      "sha256": "58c4fb579ddea0b0f1448109c0c9bbb6e9c19781e806dff92dc0fdb62697a31f",
+      "served_matches_isolated_source": true
+    },
+    {
+      "path": "js/features/chat/timeline.js",
+      "size": 55418,
+      "sha256": "f7953b373b0e7b87bc3f7f7fdc5cd0de1dfff01edf13cabd49ce013d2889db1c",
+      "served_matches_isolated_source": true
+    },
+    {
+      "path": "js/features/shell/session-load-notice.js",
+      "size": 5373,
+      "sha256": "d85cc88a5ac4ac23fc817620c2e28c48a8c3cec845643ccbfdc49e28b463e8f6",
+      "served_matches_isolated_source": true
+    },
+    {
+      "path": "js/features/chat/timeline-store.js",
+      "size": 23188,
+      "sha256": "329960e5eda673501bc2d18ad549069cbf49cbe05b94aab8107fb59b69d81958",
+      "served_matches_isolated_source": true
+    },
+    {
+      "path": "lang/en-US.json",
+      "size": 128208,
+      "sha256": "f1a36e196a83b04d148d607b6d94a83f8e5b16182aa3d6a648625b312e4bd8a5",
+      "served_matches_isolated_source": true
+    },
+    {
+      "path": "lang/ru-RU.json",
+      "size": 195398,
+      "sha256": "cac901e9083b4237cf185a9522826bde418689943d7a55b7ced08827b8138202",
+      "served_matches_isolated_source": true
+    },
+    {
+      "path": "lang/zh-CN.json",
+      "size": 122597,
+      "sha256": "bf1202b8f7e0d489a7a5f917a8f013cf5d8e2729b7db566f1ad20b34c8b3f580",
+      "served_matches_isolated_source": true
+    }
+  ],
+  "unrelated_locale_changes_excluded": true
+}

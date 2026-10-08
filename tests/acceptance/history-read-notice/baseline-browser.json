@@ -1,0 +1,12 @@
+{
+  "time": 1791476044762,
+  "snapshot": "- link \"跳到对话\":\n  - /url: \"#timeline\"\n- complementary \"会话导航\":\n  - link \"墨斗主页\":\n    - /url: \"#/\"\n    - generic: 墨斗\n  - group \"通知 · 2\":\n    - button \"扩展工具包安装\":\n    - button \"登录账号\":\n  - button \"关闭会话导航\":\n  - button \"登录账号\":\n    - generic: ◉\n    - generic: 登录账号\n  - button \"本机\":\n    - generic: 本机\n    - generic: ▾\n  - button \"新建任务 Ctrl N\":\n    - generic: 新建任务\n    - generic: Ctrl N\n  - button \"计划任务\":\n    - generic: 计划任务\n  - searchbox \"搜索会话\"\n  - generic: /\n  - navigation \"会话\":\n    - region \"项目\":\n      - button \"折叠 项目\" [expanded]:\n        - generic: 项目\n      - button \"列表选项\":\n      - button \"添加项目\":\n      - paragraph: 添加项目，让任务按工作区分组。\n    - region \"任务\":\n      - button \"折叠 任务\" [expanded]:\n        - generic: 任务\n      - button \"在默认项目新建任务\":\n      - list:\n        - button \"Timeline follow-up 24秒钟前\":\n          - generic: Timeline follow-up\n          - time: 24秒钟前\n        - button \"Timeline follow-up 的操作\":\n        - button \"Timeline deadline 24秒钟前\":\n          - generic: Timeline deadline\n          - time: 24秒钟前\n        - button \"Timeline deadline 的操作\":\n  - button \"设置\":\n    - generic: 设置\n  - status:\n    - generic: 本地服务 0.1.0-dev\n  - button \"切换为深色主题\":\n- main \"Agent 工作区\":\n  - button \"切换项目，当前 默认项目\":\n    - generic: 默认项目\n    - generic: ▾\n  - generic: /\n  - heading \"Timeline deadline\" [level=1]\n  - paragraph: mdo.default · queue-fixture\n  - generic: 就绪\n  - button \"搜索当前会话\":\n  - button \"导出当前会话 Markdown\":\n  - button \"更多会话操作\":\n  - region \"当前会话\":\n    - alert:\n      - heading \"同步暂未完成\" [level=2]\n      - paragraph: 正在读取最近的对话，较早历史将在向上滚动时加载。\n      - button \"重试读取\"\n    - button \"加载失败，点击重试\"\n    - list:\n      - generic: 无法读取时间线\n      - time\n      - generic: 当前连接无权执行此操作，请检查连接权限。\n  - region \"发送消息\":\n    - generic: 向 Agent 描述任务\n    - textbox \"向 Agent 描述任务\" [active]:\n      - /placeholder: 向墨斗描述任务…\n      - text: TIMELINE_SAVED_DRAFT\n    - button \"添加图片\":\n    - button \"权限：询问\":\n    - generic \"按输入文本粗略估算\": 输入 ~5 tok\n    - button \"查看 token 用量\"\n    - button \"模型与思考深度：Queue fixture · 无思考\":\n      - generic: Queue fixture\n      - generic: 无思考\n    - generic: Enter 发送 · Shift Enter 换行\n    - button \"发送任务\":\n- separator \"调整会话导航宽度\"",
+  "dom": {
+    "errorCards": 1,
+    "notice": {
+      "hidden": false
+    },
+    "prompt": "TIMELINE_SAVED_DRAFT"
+  },
+  "text_evidence": "snapshot; evaluation text is not used"
+}

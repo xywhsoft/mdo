@@ -67,7 +67,9 @@ export function createSessionLoadNotice({ navigation, store, conversation,
       : t("sessionLoad.loadingTitle", {}, "正在载入任务…");
     const body = state.status === "error" ? isTransientReadError(state.error)
       ? t("sessionLoad.detailUnavailable", {}, "暂时无法读取任务信息，请检查连接后重试；会话记录和草稿会保留。")
-      : errorMessage(state.error) : hasDetail ? history?.data?.events?.length
+      : errorMessage(state.error) : historyError ? isTransientReadError(historyError)
+      ? t("sessionLoad.historyUnavailable", {}, "暂时无法读取对话记录，请检查连接后重试；已显示的对话和草稿会保留。")
+      : errorMessage(historyError) : hasDetail ? history?.data?.events?.length
       ? t("sessionLoad.cached", {}, "已显示保留的对话，正在检查最新内容。")
       : t("sessionLoad.history", {}, "正在读取最近的对话，较早历史将在向上滚动时加载。") : failed
       ? t("sessionLoad.failedDescription", {}, "请重试读取当前任务；会话记录和草稿不会被删除。")

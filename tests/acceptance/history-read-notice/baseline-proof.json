@@ -1,0 +1,122 @@
+{
+  "reads": {
+    "/api/v1/projects/default/sessions/V-OSKcC8anDvCjhh0AayceUbHGDrt8k6/conversation?limit=4": [
+      {
+        "started": 2491091.718,
+        "held": false,
+        "status": 403
+      }
+    ]
+  },
+  "writes": [
+    {
+      "method": "PATCH",
+      "path": "/api/v1/settings/settings",
+      "started": 2491091.765
+    },
+    {
+      "method": "PUT",
+      "path": "/api/v1/workspace-state",
+      "started": 2491091.875
+    }
+  ],
+  "model_calls": {
+    "TIMELINE_SEEDED_HISTORY": 1
+  },
+  "sessions": [
+    {
+      "id": "V-OSKcC8anDvCjhh0AayceUbHGDrt8k6",
+      "title": "Timeline deadline",
+      "user_inputs": [
+        "TIMELINE_SEEDED_HISTORY"
+      ],
+      "final_model_errors": 0,
+      "event_kinds": {
+        "agent_start": 1,
+        "model_start": 1,
+        "model_text_delta": 1,
+        "model_done": 1,
+        "agent_done": 1
+      },
+      "queue": {
+        "items": [],
+        "discard_images": []
+      },
+      "draft": {
+        "revision": 1,
+        "text": "TIMELINE_SAVED_DRAFT",
+        "attachments": [],
+        "run_admission_uncertain": false,
+        "submission": null,
+        "submissions": []
+      }
+    },
+    {
+      "id": "V-OSKcC9fmZR1Q7yN4BqvvW--wv6Q-xA",
+      "title": "Timeline follow-up",
+      "user_inputs": [],
+      "final_model_errors": 0,
+      "event_kinds": {},
+      "queue": {
+        "items": [],
+        "discard_images": []
+      },
+      "draft": {
+        "revision": 0,
+        "text": "",
+        "attachments": [],
+        "run_admission_uncertain": false,
+        "submission": null,
+        "submissions": []
+      }
+    }
+  ],
+  "websocket_unavailable": true,
+  "seed_prompt": "TIMELINE_SEEDED_HISTORY",
+  "denied_cold_history": true,
+  "runs": {
+    "automatic": true,
+    "active_runs": 0,
+    "starting_runs": 0,
+    "retained_runs": 1,
+    "max_active": 8,
+    "max_retained": 64,
+    "runs_started": 1,
+    "runs_completed": 1,
+    "runs_failed": 0,
+    "items": [
+      {
+        "id": "run-V-OSKcCAK4LxJMZyCi1p2FE-sU-nlyYl",
+        "project_id": "default",
+        "session_id": "V-OSKcC8anDvCjhh0AayceUbHGDrt8k6",
+        "agent_run_id": 1,
+        "agent_id": "mdo.default",
+        "model_id": "queue-fixture",
+        "protocol": "openai-chat-completions",
+        "reasoning_effort": "none",
+        "state": "succeeded",
+        "result": "ok",
+        "error_code": "none",
+        "terminal": true,
+        "cancel_requested": false,
+        "resume": false,
+        "client_resume_id": "",
+        "created_at": 1791476011586641,
+        "started_at": 1791476011588502,
+        "ended_at": 1791476011710813,
+        "config_revision": 2,
+        "model_generation": 2,
+        "module_generation": 1,
+        "skill_generation": 1,
+        "memory_generation": 1,
+        "agent_turns": 1,
+        "model_calls": 1,
+        "tool_calls": 0,
+        "compactions": 0,
+        "final_text_available": true,
+        "final_text_truncated": false,
+        "final_text_bytes": 47
+      }
+    ]
+  }
+}
