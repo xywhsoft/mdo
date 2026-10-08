@@ -24,6 +24,16 @@ from channel_e2e import WebSocket
 def run(host: Path, website_host: Path, exercise=None, native_hook='', native_routes='', site_setup=None, observe=None):
     port, website_port = free_port(), free_port()
     website = fixture(website_port,register_interval=0)
+    # The live site now ships device relay inside the one mdo plugin.
+    # Borrow code/config defaults only, never production data or secrets.
+    plugin_source = Path(r'D:\GIT\home\host\xywhsoft_ai\plugin\mdo')
+    unified = not (website/'plugin/device-relay').exists() and plugin_source.exists()
+    if unified:
+        shutil.copytree(plugin_source,website/'plugin/mdo')
+        for name in ('src','modules','include','route_http','plugin_sdk'):
+            shutil.copytree(plugin_source.parent.parent/name,website/name,dirs_exist_ok=True)
+        for name in ('main.c','route.h'):
+            shutil.copy2(plugin_source.parent.parent/name,website/name)
     (ROOT/'.build').mkdir(exist_ok=True)
     site = Path(tempfile.mkdtemp(prefix='remote-manager-',dir=ROOT/'.build'))
     shutil.copytree(ROOT/'app',site,dirs_exist_ok=True)
@@ -106,8 +116,11 @@ def run(host: Path, website_host: Path, exercise=None, native_hook='', native_ro
         web_process = launch(website,website_host); ready(website_port,'/admin/login',web_process)
         signed,head = call(website_port,'POST','/admin/login',{'username':USER,'password':client_hash(USER,PASSWORD)})
         assert signed['result']; admin = {'Cookie':head['Cookies']}
-        enabled,_ = call(website_port,'POST','/admin/plugin/enable',{'name':'device-relay'},admin)
-        assert enabled['result']
+        if unified:
+            enabled,_ = call(website_port,'POST','/admin/plugin/enable',{'name':'billing'},admin)
+            assert enabled['result'], enabled
+        enabled,_ = call(website_port,'POST','/admin/plugin/enable',{'name':'mdo' if unified else 'device-relay'},admin)
+        assert enabled['result'], enabled
         for username in ('remote_manager_one','remote_manager_two'):
             call(website_port,'POST','/api/v1/register',{'username':username,'password':PASSWORD},status=201)
         tokens,_ = call(website_port,'POST','/api/v1/login',{'identifier':'remote_manager_one','password':PASSWORD})
@@ -151,7 +164,7 @@ def run(host: Path, website_host: Path, exercise=None, native_hook='', native_ro
         assert action('/connector/devices',{'action':'refresh'})['stage'] == 'online'
         client.close(); clients.remove(client)
         # Reloading the relay is a transport interruption, not authorization.
-        reload,_ = call(website_port,'POST','/admin/plugin/reload',{'name':'device-relay'},admin)
+        reload,_ = call(website_port,'POST','/admin/plugin/reload',{'name':'mdo' if unified else 'device-relay'},admin)
         assert reload['result']
         until(lambda v: v['stage'] == 'online','relay reconnect')
         if observe: observe('reconnect',app)

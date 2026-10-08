@@ -4,7 +4,7 @@ const ID = /^[0-9a-f]{32}$/, SHA = /^[0-9a-f]{64}$/;
 const WINDOW = 65536, RESPONSE_LIMIT = 96 * 1024 * 1024;
 const encoder = new TextEncoder(), decoder = new TextDecoder("utf-8", { fatal: true });
 const allowedHeaders = new Set(["accept", "content-type", "if-match", "if-none-match",
-  "x-mdo-write-token", "x-mdo-file-name", "range"]);
+  "x-mdo-write-token", "x-mdo-file-name", "range", "accept-encoding"]);
 export function remoteError(code, message, details = null) {
   const error = new Error(message); error.name = "RemoteError"; error.code = code; error.details = details;
   return error;
@@ -45,6 +45,7 @@ export function createRemoteTransport({ socket = (...args) => new WebSocket(...a
   };
   function release(entry) {
     if (!requests.delete(entry.id)) return;
+    const queued = waiting.indexOf(entry); if (queued >= 0) waiting.splice(queued, 1);
     clearTimer(entry.timer); entry.signal?.removeEventListener("abort", entry.abort);
     entry.upload?.fill(0); entry.upload = null; entry.queue.length = 0;
     if (entry.admitted) admitted--;
@@ -101,7 +102,8 @@ export function createRemoteTransport({ socket = (...args) => new WebSocket(...a
     entry.sequence = entry.write ? ++sequence : 0;
     send({ type: "request", id: entry.id, runtime_id: entry.runtime, client_id: client,
       sequence: entry.sequence, method: entry.method, path: entry.path, headers: entry.headers,
-      bytes: entry.upload.length, sha256: digest(entry.upload) });
+      bytes: entry.upload.length, sha256: digest(entry.upload),
+      ...(hello.window_max ? {window_bytes: entry.window} : {}) });
   }
   function drain() {
     if (!hello || !connection) return;
@@ -129,7 +131,22 @@ export function createRemoteTransport({ socket = (...args) => new WebSocket(...a
       if (empty) entry.length = 0;
       const body = new ReadableStream({ start(controller) { entry.controller = controller; },
         pull() { entry.demand = true; pull(entry); }, cancel() { entry.abort(); } }, { highWaterMark: 0 });
-      entry.resolve(new Response(empty ? null : body, { status: value.status, headers }));
+      const coding = headers.get("Content-Encoding");
+      let decoded = body;
+      if (!empty && coding) {
+        if (coding !== "gzip" || typeof DecompressionStream !== "function")
+          throw remoteError("remote_protocol", "Unsupported response compression");
+        let bytes = 0;
+        decoded = body.pipeThrough(new DecompressionStream("gzip")).pipeThrough(new TransformStream({
+          transform(chunk, controller) {
+            bytes += chunk.length;
+            if (bytes > RESPONSE_LIMIT) throw remoteError("remote_protocol", "Decoded response exceeds limit");
+            controller.enqueue(chunk);
+          },
+        }));
+        headers.delete("Content-Encoding"); headers.delete("Content-Length");
+      }
+      entry.resolve(new Response(empty ? null : decoded, { status: value.status, headers }));
     } else if (value.type === "end") {
       if (!entry.controller || value.bytes !== entry.received || (entry.length !== null && value.bytes !== entry.length))
         throw remoteError("remote_protocol", "Incomplete remote response");
@@ -150,7 +167,7 @@ export function createRemoteTransport({ socket = (...args) => new WebSocket(...a
     const entry = requests.get(frame.id); if (!entry) return;
     if (!entry.controller || entry.ended || frame.offset !== entry.received ||
         frame.bytes.length > RESPONSE_LIMIT - entry.received ||
-        entry.received + frame.bytes.length - entry.consumed > WINDOW ||
+        entry.received + frame.bytes.length - entry.consumed > entry.window ||
         (entry.length !== null && frame.bytes.length > entry.length - entry.received))
       throw remoteError("remote_protocol", "Invalid remote response body");
     entry.received += frame.bytes.length; entry.queue.push(frame.bytes); pull(entry);
@@ -164,7 +181,9 @@ export function createRemoteTransport({ socket = (...args) => new WebSocket(...a
     if (!["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE"].includes(method)) throw new TypeError("Unsupported remote method");
     if (write && hello.mode !== "control") throw remoteError("read_only", "当前设备连接为只读模式");
     if (requests.size >= 64 || sequence === Number.MAX_SAFE_INTEGER) throw remoteError("remote_capacity", "Wait for remote operations to finish");
-    const headers = [...new Headers(options.headers)].map(pair => pair);
+    const headerValues = new Headers(options.headers);
+    if (!write && typeof DecompressionStream === "function") headerValues.set("Accept-Encoding", "gzip");
+    const headers = [...headerValues].map(pair => pair);
     if (headers.some(([name]) => !allowedHeaders.has(name))) throw new TypeError("Unsupported remote header");
     const body = options.body;
     let bytes;
@@ -179,6 +198,8 @@ export function createRemoteTransport({ socket = (...args) => new WebSocket(...a
     if (requests.size >= 64) { bytes.fill(0); throw remoteError("remote_capacity", "Wait for remote operations to finish"); }
     return new Promise((resolve, rejectPromise) => {
       const entry = { id: id(), method, path, headers, write, upload: bytes, queue: [],
+        window: hello.window_max || WINDOW,
+        priority: write ? 3 : path.includes("before=") ? 0 : /\/(conversation|bootstrap|project-purge-intent)(\?|$)/.test(path) ? 2 : 1,
         sent: 0, received: 0, consumed: 0, resolve, reject: rejectPromise, signal: options.signal };
       entry.abort = () => {
         if (!requests.has(entry.id)) return;
@@ -194,7 +215,9 @@ export function createRemoteTransport({ socket = (...args) => new WebSocket(...a
         const error = remoteError(entry.write && entry.admitted ? "remote_result_unconfirmed" : "remote_timeout", "Remote request deadline exceeded", receipt(entry));
         cancel(entry); reject(entry, error);
       }, 75000);
-      if (entry.signal?.aborted) entry.abort(); else { waiting.push(entry); drain(); }
+      if (entry.signal?.aborted) entry.abort(); else {
+        waiting.push(entry); waiting.sort((a,b) => b.priority - a.priority); drain();
+      }
     });
   }
   function liveSocket(token) {
@@ -275,7 +298,9 @@ export function createRemoteTransport({ socket = (...args) => new WebSocket(...a
                     value.mode === mode && ID.test(value.peer_id) && value.payload_limit === 262123) { relayReady = true; return; }
                 if (!relayReady || value.type !== "hello" || value.version !== 1 || !ID.test(value.runtime_id) || value.mode !== mode ||
                     value.upload_limit !== 8388608 || value.chunk_limit !== WINDOW || value.window_bytes !== WINDOW ||
-                    value.live !== true || value.live_limit !== 2097152) throw remoteError("remote_protocol", "Invalid target handshake");
+                    value.live !== true || value.live_limit !== 2097152 ||
+                    (value.window_max !== undefined && (!integer(value.window_max,262144) ||
+                      value.window_max < WINDOW || value.window_max % 16384))) throw remoteError("remote_protocol", "Invalid target handshake");
                 hello = Object.freeze(value); clearTimer(connectTimer); connectReject = null;
                 onState({ connected: true, hello }); resolve(hello); return;
               }

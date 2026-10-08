@@ -6,6 +6,7 @@ old 16 MiB eviction boundary, using the real xs/TCC API and a local model.
 from __future__ import annotations
 import argparse
 import hashlib
+import gzip
 import json
 import os
 from pathlib import Path
@@ -134,6 +135,16 @@ def probe(host: Path | None, packed: Path | None = None):
             assert all(e["node_id"] == f"{session}:{epoch}:{e['event_id']}" for e in compact)
             answer = next(e for e in compact if e["kind"] == "model_text_delta")
             assert answer["text_truncated"] and answer["aggregate_end_id"] == answer["event_id"] + 3
+            status, headers, wire = raw_request(port, "GET", path + "/conversation?limit=4",
+                headers={"Accept-Encoding":"gzip"})
+            assert status == 200 and headers.get("content-encoding") == "gzip", headers
+            decoded = json.loads(gzip.decompress(wire))["data"]
+            assert decoded["items_hash"] == snapshot["items_hash"]
+            assert len(wire) < len(snapshot["items_json"].encode()) // 2
+            print(f"history fixture: 4 turns, compact {len(snapshot['items_json'].encode())} bytes, gzip {len(wire)} bytes")
+            status, headers, wire = raw_request(port, "GET", path + "/conversation?limit=4",
+                headers={"Accept-Encoding":"gzip;q=0"})
+            assert status == 200 and "content-encoding" not in headers
             _, doc = request(port, "GET", path + f"/conversation?after=420&epoch={epoch}")
             assert doc["data"]["delta"] and json.loads(doc["data"]["items_json"]) == []
             _, doc = request(port, "GET", path + f"/conversation?before={snapshot['next_before']}&limit=4")

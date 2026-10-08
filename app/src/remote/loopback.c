@@ -16,7 +16,8 @@ static bool MdoRemoteHttpIn(xstrview Name, const char* const* Names, size_t Coun
 bool MdoRemoteHttpResponseField(xstrview Name)
 {
     static const char* const allowed[] = {"Content-Type","Content-Length","Content-Disposition","Cache-Control",
-        "ETag","Last-Modified","Content-Range","Accept-Ranges","X-Mdo-Write-Token","Retry-After","Allow"};
+        "ETag","Last-Modified","Content-Range","Accept-Ranges","X-Mdo-Write-Token","Retry-After","Allow",
+        "Content-Encoding","Vary"};
     return MdoRemoteHttpIn(Name,allowed,sizeof(allowed)/sizeof(allowed[0]));
 }
 static bool MdoRemoteHttpPath(xstrview Path, bool ReadOnly)
@@ -43,7 +44,7 @@ static bool MdoRemoteHttpPath(xstrview Path, bool ReadOnly)
 bool MdoRemoteHttpRequestValid(const MdoRemoteHttpRequest* Request)
 {
     static const char* const headers[] = {"Accept","Content-Type","If-Match","If-None-Match",
-        "X-Mdo-Write-Token","X-Mdo-File-Name","Range"};
+        "X-Mdo-Write-Token","X-Mdo-File-Name","Range","Accept-Encoding"};
     if (!Request || !Request->Method || !Request->Target || strlen(Request->Target) > 4096u ||
         strncmp(Request->Target,"/api/v1/",8u) || Request->HeaderCount > 16u ||
         (Request->HeaderCount && !Request->Headers) || Request->Body.Size > MDO_REMOTE_HTTP_BODY_MAX ||

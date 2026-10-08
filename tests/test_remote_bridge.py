@@ -57,7 +57,7 @@ class Rpc:
             return {'type':'chunk' if payload[4] == 2 else 'live_chunk','id':payload[5:21].hex(),
                 'offset':struct.unpack('!Q',payload[21:29])[0],'body':payload[29:]}
 
-    def begin(self, method, path, body=b'', headers=(), request_id=None, sequence=None, runtime=None, digest=None):
+    def begin(self, method, path, body=b'', headers=(), request_id=None, sequence=None, runtime=None, digest=None, window=None):
         write = method not in ('GET','HEAD')
         if sequence is None:
             if write: self.sequence += 1
@@ -65,6 +65,7 @@ class Rpc:
         value = {'type':'request','id':request_id or uuid.uuid4().hex,'runtime_id':runtime or self.hello['runtime_id'],
             'client_id':self.client,'sequence':sequence,'method':method,'path':path,'headers':list(headers),
             'bytes':len(body),'sha256':digest or hashlib.sha256(body).hexdigest()}
+        if window is not None: value['window_bytes'] = window
         self.send(value)
         return value
 
@@ -181,6 +182,10 @@ def exercise(*, client, hello, app, device, call, bearer, website_port, clients)
         assert value['type'] == 'chunk' and value['offset'] == len(file_bytes),value
         file_bytes += value['body']; rpc.send({'type':'download_ack','id':file_request['id'],'offset':len(file_bytes)})
     assert bytes(file_bytes) == bytes((i*7)&255 for i in range(257123))
+    assert hello['window_max'] == 262144
+    larger = rpc.begin('GET','/api/v1/test-bridge-file',window=hello['window_max'])
+    transfer = rpc.collect(larger,pause=True)
+    assert len(transfer['body']) == 257123, 'negotiated window completes without an ACK round trip'
     head,_ = rpc.call('HEAD','/api/v1/test-bridge-file'); assert head['head']['status'] == 200 and not head['body']
     # Trusted relay view role rejects mutations in native admission.
     ticket,_ = call(website_port,'POST','/api/v1/devices/ticket',{'device_id':device,'role':'controller','mode':'view'},bearer)

@@ -15,6 +15,7 @@
 #define MDO_BRIDGE_PACKETS 128u
 #define MDO_BRIDGE_CHUNK 65536u
 #define MDO_BRIDGE_WINDOW 65536u
+#define MDO_BRIDGE_WINDOW_MAX 262144u
 #define MDO_BRIDGE_BINARY_HEAD 29u
 #define MDO_BRIDGE_UPLOAD_US 120000000u
 #define MDO_BRIDGE_QUEUE_US 15000000u
@@ -45,6 +46,7 @@ typedef struct MdoBridgeRequest {
     MdoRemoteReceipt* Receipt;
     uint64 Serial, PeerGeneration, Until, Received, Sent, Acknowledged, LiveSequence;
     size_t Peer, Slot, Packets;
+    size_t Window;
     uint16 Status;
     size_t CommandCount;
     bool Completed, Live;
@@ -226,10 +228,14 @@ static bool MdoBridgeAdmit(MdoRemoteBridge* Bridge, size_t Peer, const xvalue* V
     cstr id = MdoAccountText(Value,"id",32u), runtime = MdoAccountText(Value,"runtime_id",32u);
     cstr client = MdoAccountText(Value,"client_id",32u), method = MdoAccountText(Value,"method",6u);
     cstr path = MdoAccountText(Value,"path",4096u), digest_text = MdoAccountText(Value,"sha256",64u);
-    uint64 sequence = 0u, bytes = 0u; uint8 digest[32], fingerprint[32];
+    uint64 sequence = 0u, bytes = 0u, window = MDO_BRIDGE_WINDOW; uint8 digest[32], fingerprint[32];
+    const xvalue* window_value = xrtValueObjectGet(Value,XRT_STR_LITERAL("window_bytes"));
     const xvalue* headers = xrtValueObjectGet(Value,XRT_STR_LITERAL("headers"));
     XS_FetchHeader fields[16]; MdoRemoteHttpRequest req = {0};
-    bool valid = xrtValueCount(Value) == 10u && MdoRemoteIdValid(id) && MdoRemoteIdValid(client) && MdoRemoteIdValid(runtime) &&
+    bool valid = xrtValueCount(Value) == (window_value ? 11u : 10u) &&
+        (!window_value || (MdoAccountGetUInt(window_value,&window) && window >= MDO_BRIDGE_WINDOW &&
+          window <= MDO_BRIDGE_WINDOW_MAX && window % 16384u == 0u)) &&
+        MdoRemoteIdValid(id) && MdoRemoteIdValid(client) && MdoRemoteIdValid(runtime) &&
         MdoAccountGetUInt(xrtValueObjectGet(Value,XRT_STR_LITERAL("sequence")),&sequence) &&
         MdoAccountGetUInt(xrtValueObjectGet(Value,XRT_STR_LITERAL("bytes")),&bytes) && bytes <= MDO_BRIDGE_UPLOAD &&
         MdoBridgeHex(digest_text,32u,digest) && xrtValueType(headers) == XVALUE_ARRAY && xrtValueCount(headers) <= 16u;
@@ -277,6 +283,7 @@ static bool MdoBridgeAdmit(MdoRemoteBridge* Bridge, size_t Peer, const xvalue* V
     }
     memset(request,0,sizeof(*request)); request->Bridge = Bridge;
     request->Peer = Peer; request->PeerGeneration = Bridge->Peers[Peer].Generation;
+    request->Window = (size_t)window;
     request->Slot = (size_t)(request-Bridge->Requests); request->Serial = ++Bridge->Serial;
     request->Receipt = receipt; strcpy(request->Id,id); strcpy(request->Method,method); strcpy(request->Path,path);
     memcpy(request->Digest,digest,32u); xrtSha256Init(&request->Hash);
@@ -421,7 +428,8 @@ static bool MdoBridgeWorkerQueue(MdoBridgeRequest* Request, bool Binary, xbytesv
     xrtMutexLock(bridge->Lock);
     while (MdoBridgeRequestLive(Request) && !xrtDeadlineExpired(until) &&
         (bridge->Bytes+Bytes.Size+MDO_REMOTE_RELAY_HEADER > MDO_BRIDGE_QUEUE || bridge->Packets >= MDO_BRIDGE_PACKETS ||
-        (BodyBytes && Request->Sent+BodyBytes-Request->Acknowledged > MDO_BRIDGE_WINDOW)))
+        (BodyBytes && Request->Sent+BodyBytes-Request->Acknowledged >
+          (Request->Live ? MDO_BRIDGE_WINDOW : Request->Window))))
         xrtCondWaitFor(bridge->Changed,bridge->Lock,100000u);
     bool ok = !xrtDeadlineExpired(until) && MdoBridgeQueue(bridge,Request->Peer,Request,Binary,Bytes);
     if (ok) Request->Sent += BodyBytes;
@@ -604,6 +612,7 @@ bool MdoRemoteBridgePeerOpen(MdoRemoteBridge* Bridge, cstr Peer, bool ReadOnly, 
             MdoAccountSetUInt(hello,"upload_limit",MDO_BRIDGE_UPLOAD) &&
             MdoAccountSetUInt(hello,"chunk_limit",MDO_BRIDGE_CHUNK) &&
             MdoAccountSetUInt(hello,"window_bytes",MDO_BRIDGE_WINDOW) && MdoAccountSetBool(hello,"live",true) &&
+            MdoAccountSetUInt(hello,"window_max",MDO_BRIDGE_WINDOW_MAX) &&
             MdoAccountSetUInt(hello,"live_limit",MDO_BRIDGE_LIVE_LIMIT);
         if (ok) ok = MdoBridgeValue(Bridge,slot,NULL,hello); else xrtValueRelease(hello);
         if (!ok) { peer->Active = false; xrtCancelRequest(peer->Cancel); }

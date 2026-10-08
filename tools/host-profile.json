@@ -10,6 +10,7 @@
     "CODEC_PERCENT",
     "COND",
     "CRYPTO_SHA256",
+    "DEFLATE",
     "DIR",
     "ENVIRONMENT",
     "FILE",

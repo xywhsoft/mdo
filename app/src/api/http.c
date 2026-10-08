@@ -23,13 +23,44 @@ static bool MdoApiConnectionSend(MdoApiContext* Context, const void* pData,
         xrtNetStreamSend(pRequest->tcp, pData, Size) == XNET_RESULT_OK;
 }
 
+/* Only bounded, successful history reads are compressed. Small live updates
+ * avoid codec overhead; xrt's gzip encoder is already part of the XS C SDK. */
+static bool MdoApiHistoryGzip(MdoApiContext* Context, uint16 Status, size_t Size)
+{
+    if (Status != 200u || Size < 32768u || Size > MDO_API_RESPONSE_MAX_BYTES ||
+        Context->Request->head->MethodCode != XHTTP_METHOD_GET) return false;
+    xstrview Path = Context->Target.Path;
+    const char* Suffixes[] = {"/conversation", "/events", "/turns"};
+    bool History = false;
+    for (size_t i = 0u; i < sizeof(Suffixes)/sizeof(Suffixes[0]); ++i) {
+        size_t Length = strlen(Suffixes[i]);
+        if (Path.Size >= Length && !memcmp(Path.Data+Path.Size-Length, Suffixes[i], Length)) History = true;
+    }
+    if (!History) return false;
+    const xhttpfield* Field = NULL;
+    if (xrtHttpFieldGetUnique(Context->Request->head->Fields, Context->Request->head->FieldCount,
+            XRT_STR_LITERAL("Accept-Encoding"), &Field) != XHTTP_NEXT_ITEM) return false;
+    xstrview Value = Field->Value;
+    for (size_t At = 0u; At < Value.Size;) {
+        size_t End = At;
+        while (End < Value.Size && Value.Data[End] != ',') ++End;
+        xstrview Coding = xrtStrTrim(xrtStrViewN(Value.Data+At, End-At));
+        /* A simple explicit offer is enough. Parameterized encodings are
+         * left uncompressed, including gzip;q=0 and ambiguous duplicates. */
+        if (xrtStrCaseEqual(Coding, XRT_STR_LITERAL("gzip"))) return true;
+        At = End + 1u;
+    }
+    return false;
+}
+
 static bool MdoApiReplyRaw(MdoApiContext* pContext, uint16 Status,
     const void* pBody, size_t BodySize, cstr Allow, cstr EntityTag,
     cstr ContentType, cstr ContentDisposition)
 {
     char Head[1536];
     char Length[32];
-    xhttpfield Fields[11];
+    xhttpfield Fields[13];
+    uint8* Compressed = NULL;
     char WriteToken[MDO_API_WRITE_TOKEN_CAPACITY];
     size_t FieldCount = 0u;
     size_t HeadSize = 0u;
@@ -38,6 +69,13 @@ static bool MdoApiReplyRaw(MdoApiContext* pContext, uint16 Status,
     if ( pContext == NULL || pContext->Request == NULL ||
          pContext->Request->head == NULL ||
          (pBody == NULL && BodySize != 0u) ) return false;
+    if (MdoApiHistoryGzip(pContext, Status, BodySize)) {
+        xdeflateconfig Config; size_t Size = 0u; xrtDeflateConfigInit(&Config);
+        Config.Format = XDEFLATE_GZIP; Config.Level = 1; Config.OutputLimit = BodySize * 9u / 10u;
+        Compressed = xrtDeflateAll((xbytesview){(const uint8*)pBody, BodySize}, &Config, &Size);
+        if (Compressed) { pBody = Compressed; BodySize = Size; }
+        else xrtClearError(); /* Incompressible data uses the original body. */
+    }
     (void)snprintf(Length, sizeof(Length), "%llu",
         (unsigned long long)BodySize);
     Fields[FieldCount++] = (xhttpfield){
@@ -48,6 +86,10 @@ static bool MdoApiReplyRaw(MdoApiContext* pContext, uint16 Status,
             "application/json; charset=utf-8") };
     Fields[FieldCount++] = (xhttpfield){
         XRT_STR_LITERAL("Cache-Control"), XRT_STR_LITERAL("no-store") };
+    if (Compressed) {
+        Fields[FieldCount++] = (xhttpfield){XRT_STR_LITERAL("Content-Encoding"), XRT_STR_LITERAL("gzip")};
+        Fields[FieldCount++] = (xhttpfield){XRT_STR_LITERAL("Vary"), XRT_STR_LITERAL("Accept-Encoding")};
+    }
     Fields[FieldCount++] = (xhttpfield){
         XRT_STR_LITERAL("X-Content-Type-Options"), XRT_STR_LITERAL("nosniff") };
     Fields[FieldCount++] = (xhttpfield){
@@ -75,12 +117,14 @@ static bool MdoApiReplyRaw(MdoApiContext* pContext, uint16 Status,
     if ( !xrtHttp1ResponseWrite(XHTTP_VERSION_1_1, Status, Reason,
             Fields, FieldCount, Head, sizeof(Head), &HeadSize) ||
          !MdoApiConnectionSend(pContext, Head, HeadSize) ) {
-        return false;
+        xrtFree(Compressed); return false;
     }
     if ( BodySize != 0u &&
          pContext->Request->head->MethodCode != XHTTP_METHOD_HEAD ) {
-        return MdoApiConnectionSend(pContext, pBody, BodySize);
+        bool Ok = MdoApiConnectionSend(pContext, pBody, BodySize);
+        xrtFree(Compressed); return Ok;
     }
+    xrtFree(Compressed);
     return true;
 }
 
