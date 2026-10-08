@@ -378,7 +378,9 @@ def main() -> int:
         assert '"url":"https://example.com/page#needle"' in output, output
         assert "open_resource=https://example.com/page\n" in output, output
         assert "open_resource=https://example.com/page#" not in output, output
-        assert '"published_at":"2026-10-04"' in output, output
+        result_files = list(site.rglob("*.md"))
+        assert any("Published: 2026-10-04" in file.read_text(encoding="utf-8")
+                   for file in result_files), output
         assert "request_contract_failed" not in output, output
         assert '"document_id":"doc-0000000000000001"' in output, output
         assert '"title":"Probe & Page"' in output, output

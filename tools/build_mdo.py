@@ -456,6 +456,8 @@ def build(args: argparse.Namespace, xserver: Path, lock: dict) -> None:
         output.parent.mkdir(parents=True, exist_ok=True)
     legacy = os.name == "nt" and edition == "gui"
     host_dir = ROOT / ".build/host" if legacy else ROOT / ".build/host" / (("windows" if os.name == "nt" else "linux") + "-" + edition + "-" + libc)
+    if getattr(args, "host_dir", None) is not None:
+        host_dir = args.host_dir.resolve()
     host = host_dir / ("xs" + suffix)
     extensions = lock["xserver"].get("required_extensions")
     if not isinstance(extensions, list) or not all(isinstance(item, str) for item in extensions):
@@ -464,7 +466,8 @@ def build(args: argparse.Namespace, xserver: Path, lock: dict) -> None:
         os.environ["XS_BUILD_COMMIT"] = lock["xserver"]["commit"]
         run([
             sys.executable, "tools/build.py", *extensions,
-            "--build-dir", str(ROOT / ".build" / "xserver" / (edition + "-" + libc)),
+            "--build-dir", str(host_dir / "objects" if getattr(args, "host_dir", None) is not None
+                               else ROOT / ".build" / "xserver" / (edition + "-" + libc)),
             "--output", str(host),
             "--cc", args.cc,
             "--frontend", frontend,
@@ -485,7 +488,8 @@ def build(args: argparse.Namespace, xserver: Path, lock: dict) -> None:
         receipt = load_object(host.with_name(host.name + ".build.json"))
         if receipt.get("frontend") != frontend or (libc == "musl" and "-static" not in receipt.get("link_extra", "")):
             raise BuildError("host frontend/libc does not match this product; rebuild the host")
-    package = ROOT / ".build/packages" / (("windows" if os.name == "nt" else "linux") + "-" + edition + "-" + libc)
+    package = ROOT / ".build/packages" / (output.stem + "-" + host_dir.name if getattr(args, "host_dir", None) is not None
+                                          else ("windows" if os.name == "nt" else "linux") + "-" + edition + "-" + libc)
     if not args.dry_run:
         # copytree overlays stale files, so pack only a fresh staging tree.
         if not package.resolve().is_relative_to((ROOT / ".build/packages").resolve()):
@@ -533,6 +537,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--xserver-root", type=Path,
                         help="xserver checkout at the exact revision in deps.lock")
     parser.add_argument("--output", type=Path, help="mdo executable path")
+    parser.add_argument("--host-dir", type=Path, help="isolated host output and object directory")
     parser.add_argument("--edition", choices=("gui", "server"), default="gui")
     parser.add_argument("--libc", choices=("glibc", "musl"), default="glibc", help="Linux libc (Windows uses MinGW)")
     parser.add_argument("--sysroot", type=Path, help="musl target CRT to embed in the TCC VFS")

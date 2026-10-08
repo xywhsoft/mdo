@@ -201,6 +201,7 @@ class BuildContractTests(unittest.TestCase):
             "src/runs/manager.c",
             "src/update/manager.c",
             "src/update/windows.c",
+            "src/update/linux.c",
             "src/bootstrap/bootstrap.c",
             "src/api/http.c",
             "src/api/distribution.c",

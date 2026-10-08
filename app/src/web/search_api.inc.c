@@ -150,9 +150,12 @@ acquire_account:
         xerrkind Kind = Cause != NULL ? xrtErrorKind(Cause) : XERR_IO;
         if ( (pContext->pCancel != NULL && xrtCancelRequested(pContext->pCancel)) || Kind == XERR_CANCELLED )
             Result = MdoWebFail(pError, XWORK_ERROR_CANCELLED, "Search request was cancelled");
-        else if ( Kind == XERR_TIMEOUT || (pContext->uDeadline != XRT_DEADLINE_NEVER &&
-                    xrtDeadlineExpired(pContext->uDeadline)) )
+        else if ( pContext->uDeadline != XRT_DEADLINE_NEVER &&
+                    xrtDeadlineExpired(pContext->uDeadline) )
             Result = MdoWebFail(pError, XWORK_ERROR_TIMEOUT, "Search request timed out");
+        else if ( Kind == XERR_TIMEOUT )
+            Result = MdoWebToolFail(pWriter, pError,
+                "Search service timed out. Report this error rather than repeatedly issuing the same query.");
         else Result = MdoWebToolFail(pWriter, pError, "Cannot reach the search service. Check your network connection.");
         goto done;
     }
@@ -201,6 +204,7 @@ acquire_account:
         if ( !MdoWebSearchApiItem(Results, xrtValueArrayGet(Items, i), Provider, Response.FetchedAt) )
             goto invalid_response;
     if ( !MdoWebObjectString(Output, "type", "web_search_results", 18u) ||
+         !MdoWebObjectString(Output, "query", Query.Data, Query.Size) ||
          !MdoWebObjectBool(Output, "untrusted", true) ||
          !MdoWebObjectString(Output, "source", Provider.Data, Provider.Size) ||
          !MdoWebObjectString(Output, "request_id", RequestId.Data, RequestId.Size) ||
@@ -213,7 +217,7 @@ acquire_account:
         Results = NULL;
         if ( !MdoWebObjectTake(Output, "results", Owned) ) goto memory_failed;
     }
-    if ( !MdoWebWriteValue(pWriter, Output, pError) ) { Result = XWORK_RESULT_LIMIT; goto done; }
+    if ( !MdoWebWriteFileResult(pContext, pWriter, Output, pError) ) { Result = XWORK_RESULT_ERROR; goto done; }
     Success = true;
     Result = XWORK_RESULT_OK;
     goto done;

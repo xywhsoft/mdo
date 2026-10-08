@@ -7,6 +7,7 @@ import base64
 import hashlib
 import json
 import os
+import re
 import shutil
 import tempfile
 from pathlib import Path
@@ -26,6 +27,11 @@ def run(host: Path) -> None:
         home = base / "portable-home"
         workspace.mkdir()
         shutil.copytree(ROOT / "app", site)
+        # Exercise the generic spill contract with a deliberately small host
+        # budget; the product's normal read page is now smaller than its cap.
+        runtime = site / "src/agents/runtime.c"
+        runtime.write_text(re.sub(r"DefinitionConfig\.iMaxInlineToolBytes\s*=\s*[^;]+;",
+            "DefinitionConfig.iMaxInlineToolBytes = 1024u;", runtime.read_text(encoding="utf-8")), encoding="utf-8")
         shutil.copy2(ROOT / "tests/fixtures/home-artifact.c", site / "home-artifact.c")
         (base / "outside.txt").write_bytes(b"outside fixture must stay unchanged")
         (site / "probe.c").write_text(

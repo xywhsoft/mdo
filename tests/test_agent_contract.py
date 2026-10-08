@@ -67,7 +67,7 @@ class AgentContractTests(unittest.TestCase):
     def test_dependency_lock_supports_independent_library_provenance(self) -> None:
         lock = json.loads((ROOT / "deps.lock").read_text(encoding="utf-8"))
         libraries = lock["libraries"]
-        self.assertEqual(libraries["xwork"]["version"], "3.8.0")
+        self.assertEqual(libraries["xwork"]["version"], "3.9.0")
         self.assertEqual(libraries["xwork"]["abi_version"], 7)
         self.assertNotEqual(
             libraries["xllm"]["source_commit"],

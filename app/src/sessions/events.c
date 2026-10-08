@@ -1377,7 +1377,11 @@ bool MdoSessionEventBridgeOnEvent(void* Value, const xwork_event* Event)
         xrtClearError();
     xrtMutexUnlock(Bridge->Lock);
     MdoSessionDataRelease(DataLease);
-    if ( !Ok ) return false;
+    if ( !Ok ) {
+        /* A failed durable sink is an IO error, not the user's Stop action. */
+        xrtSetErrorKind(XERR_IO);
+        return false;
+    }
     return Bridge->UserEvent == NULL ||
         Bridge->UserEvent(Bridge->UserEventData, Event);
 }
