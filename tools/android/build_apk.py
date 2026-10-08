@@ -105,6 +105,7 @@ def build(sdk: Path, java: Path, library: Path, pack: Path, output: Path,
         text = service.read_text().replace("PackageInstall.initialize(getApplicationContext());", "MdoRuntime.initialize(getApplicationContext());\n            PackageInstall.initialize(getApplicationContext());")
         service.write_text(text)
         shutil.copy2(MDO_ROOT / "tools/android/MdoRuntime.java", service.with_name("MdoRuntime.java"))
+        shutil.copy2(MDO_ROOT / "tools/android/MdoRuntimePaths.java", service.with_name("MdoRuntimePaths.java"))
         sources = sorted(overlay.rglob("*.java"))
         run([str(java / "bin" / ("javac" + suffix)), "-encoding", "UTF-8", "-source", "8", "-target", "8",
              "-classpath", str(android), "-d", str(classes), *map(str, sources)])

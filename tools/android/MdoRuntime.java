@@ -17,32 +17,33 @@ final class MdoRuntime {
             metadata = new JSONObject(bytes.toString("UTF-8"));
         }
         String nativeDir = context.getApplicationInfo().nativeLibraryDir;
-        File root = new File(context.getFilesDir(), "mdo-runtime/" + metadata.getInt("revision"));
-        if (!root.isDirectory() && !root.mkdirs()) throw new IOException("Cannot create runtime data");
+        File root = MdoRuntimePaths.root(context.getFilesDir(), metadata.getInt("revision"));
         JSONArray files = metadata.getJSONArray("files");
         for (int i = 0; i < files.length(); i++) {
             JSONObject item = files.getJSONObject(i);
-            File target = new File(root, item.getString("path"));
-            if (!target.getCanonicalPath().startsWith(root.getCanonicalPath() + "/")) throw new IOException("Invalid runtime path");
-            if (!target.getParentFile().isDirectory() && !target.getParentFile().mkdirs()) throw new IOException("Cannot create runtime directory");
-            if (item.has("native")) {
-                String source = new File(nativeDir, item.getString("native")).getAbsolutePath();
-                target.delete();
-                Os.symlink(source, target.getAbsolutePath());
-            } else {
-                MessageDigest digest = MessageDigest.getInstance("SHA-256");
-                File pending = new File(target.getPath() + ".pending");
-                try (InputStream input = context.getAssets().open("mdo-runtime/" + item.getString("path"));
-                     FileOutputStream output = new FileOutputStream(pending)) {
-                    byte[] buffer = new byte[65536]; int n;
-                    while ((n = input.read(buffer)) != -1) { digest.update(buffer, 0, n); output.write(buffer, 0, n); }
-                    output.getFD().sync();
+            File target = MdoRuntimePaths.target(root, item.getString("path"));
+            File pending = File.createTempFile(".mdo-runtime-", ".pending", target.getParentFile());
+            try {
+                if (item.has("native")) {
+                    File source = MdoRuntimePaths.nativeSource(new File(nativeDir), item.getString("native"));
+                    if (!pending.delete()) throw new IOException("Cannot prepare runtime link");
+                    Os.symlink(source.getAbsolutePath(), pending.getAbsolutePath());
+                } else {
+                    MessageDigest digest = MessageDigest.getInstance("SHA-256");
+                    try (InputStream input = context.getAssets().open("mdo-runtime/" + item.getString("path"));
+                         FileOutputStream output = new FileOutputStream(pending)) {
+                        byte[] buffer = new byte[65536]; int n;
+                        while ((n = input.read(buffer)) != -1) { digest.update(buffer, 0, n); output.write(buffer, 0, n); }
+                        output.getFD().sync();
+                    }
+                    StringBuilder hash = new StringBuilder();
+                    for (byte b : digest.digest()) hash.append(String.format("%02x", b & 255));
+                    if (!hash.toString().equals(item.getString("sha256"))) throw new IOException("Runtime data checksum mismatch");
                 }
-                StringBuilder hash = new StringBuilder();
-                for (byte b : digest.digest()) hash.append(String.format("%02x", b & 255));
-                if (!hash.toString().equals(item.getString("sha256"))) throw new IOException("Runtime data checksum mismatch");
-                if (!pending.renameTo(target)) throw new IOException("Cannot publish runtime data");
-            }
+                // POSIX rename atomically replaces both existing and dangling
+                // links. Never truncate a native tool by writing through its link.
+                Os.rename(pending.getAbsolutePath(), target.getAbsolutePath());
+            } finally { pending.delete(); }
         }
         Os.setenv("MDO_EDITION", metadata.getString("edition"), true);
         Os.setenv("MDO_BUILD_ID", metadata.getString("build_id"), true);

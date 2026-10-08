@@ -82,3 +82,15 @@ python D:\GIT\xserver-mdo-refactor\tools\android\setup.py --root .build\android-
 验证版的后端日志可通过 `adb shell run-as org.xleaves.mdo cat files/mdo-home/native.log`
 查看。签名、16 KB ZIP 对齐和 ELF 链接在构建时检查；Windows/Linux 的原有构建入口
 保持可用。底层宿主与 TCC 设计见 xs 的 `docs/android.md`。
+
+## 工具目录初始化与再次启动
+
+完整版工具通过软链接指向 PackageManager 安装的原生文件。路径检查只解析
+目标的父目录并确保它位于应用运行目录内；最后一个路径分量允许是工具软链接。
+每次启动使用同目录临时文件和原子 rename 更新数据及链接，覆盖升级后也会修复
+指向旧安装目录的失效链接。该过程不修改 `files/mdo-home/` 内的配置或会话。
+
+`python tests/test_android_runtime_paths.py --java-home <JDK目录>` 在 Linux/WSL
+真实软链接上验证首次初始化、再次启动、升级后的失效链接，以及路径越界拒绝。
+设备验收应覆盖安装完整版后连续关闭、重开，再覆盖升级并重新打开；不要卸载或
+清空应用数据来绕过启动问题。
