@@ -1,0 +1,425 @@
+{
+  "phases": [
+    {
+      "mode": "timeout",
+      "run_id": "run-V-OSKK4ZAhdeuCkEt_HwTktum6yk1ngh",
+      "held_reads": 1,
+      "run_reads": [
+        {
+          "run_id": "run-V-OSKK4ZAhdeuCkEt_HwTktum6yk1ngh",
+          "started": 2485936.312,
+          "captured": 2485936.328,
+          "captured_run": {
+            "id": "run-V-OSKK4ZAhdeuCkEt_HwTktum6yk1ngh",
+            "project_id": "default",
+            "session_id": "V-OSKJnd5MO7VqyiJwcNOyPJlAtrgCgx",
+            "agent_run_id": 1,
+            "agent_id": "mdo.default",
+            "model_id": "queue-fixture",
+            "protocol": "openai-chat-completions",
+            "reasoning_effort": "none",
+            "state": "running",
+            "result": "pending",
+            "error_code": "none",
+            "terminal": false,
+            "cancel_requested": false,
+            "resume": false,
+            "client_resume_id": "",
+            "created_at": 1791470879387346,
+            "started_at": 1791470879393072,
+            "ended_at": 0,
+            "config_revision": 3,
+            "model_generation": 2,
+            "module_generation": 1,
+            "skill_generation": 1,
+            "memory_generation": 1,
+            "agent_turns": 0,
+            "model_calls": 0,
+            "tool_calls": 0,
+            "compactions": 0,
+            "final_text_available": false,
+            "final_text_truncated": false,
+            "final_text_bytes": 0,
+            "final_text": null
+          },
+          "released": 2485948.343
+        },
+        {
+          "run_id": "run-V-OSKK4ZAhdeuCkEt_HwTktum6yk1ngh",
+          "started": 2485944.937
+        },
+        {
+          "run_id": "run-V-OSKK4ZAhdeuCkEt_HwTktum6yk1ngh",
+          "started": 2485947.453
+        },
+        {
+          "run_id": "run-V-OSKK4ZAhdeuCkEt_HwTktum6yk1ngh",
+          "started": 2485949.984
+        },
+        {
+          "run_id": "run-V-OSKK4ZAhdeuCkEt_HwTktum6yk1ngh",
+          "started": 2485952.515
+        },
+        {
+          "run_id": "run-V-OSKK4ZAhdeuCkEt_HwTktum6yk1ngh",
+          "started": 2485955.062
+        },
+        {
+          "run_id": "run-V-OSKK4ZAhdeuCkEt_HwTktum6yk1ngh",
+          "started": 2485957.593
+        },
+        {
+          "run_id": "run-V-OSKK4ZAhdeuCkEt_HwTktum6yk1ngh",
+          "started": 2485960.109
+        },
+        {
+          "run_id": "run-V-OSKK4ZAhdeuCkEt_HwTktum6yk1ngh",
+          "started": 2485962.671
+        }
+      ],
+      "list_failures": 5,
+      "run_posts": 1
+    },
+    {
+      "mode": "navigation",
+      "run_id": "run-V-OSKKQ_ecemHn67CR_CJvlCTgDnxSF-",
+      "held_reads": 1,
+      "run_reads": [
+        {
+          "run_id": "run-V-OSKKQ_ecemHn67CR_CJvlCTgDnxSF-",
+          "started": 2486028.687,
+          "captured": 2486028.687,
+          "captured_run": {
+            "id": "run-V-OSKKQ_ecemHn67CR_CJvlCTgDnxSF-",
+            "project_id": "default",
+            "session_id": "V-OSKJnd5MO7VqyiJwcNOyPJlAtrgCgx",
+            "agent_run_id": 2,
+            "agent_id": "mdo.default",
+            "model_id": "queue-fixture",
+            "protocol": "openai-chat-completions",
+            "reasoning_effort": "none",
+            "state": "running",
+            "result": "pending",
+            "error_code": "none",
+            "terminal": false,
+            "cancel_requested": false,
+            "resume": false,
+            "client_resume_id": "",
+            "created_at": 1791470971759238,
+            "started_at": 1791470971765036,
+            "ended_at": 0,
+            "config_revision": 3,
+            "model_generation": 2,
+            "module_generation": 1,
+            "skill_generation": 1,
+            "memory_generation": 1,
+            "agent_turns": 0,
+            "model_calls": 0,
+            "tool_calls": 0,
+            "compactions": 0,
+            "final_text_available": false,
+            "final_text_truncated": false,
+            "final_text_bytes": 0,
+            "final_text": null
+          },
+          "released": 2486040.687
+        },
+        {
+          "run_id": "run-V-OSKKQ_ecemHn67CR_CJvlCTgDnxSF-",
+          "started": 2486037.296
+        },
+        {
+          "run_id": "run-V-OSKKQ_ecemHn67CR_CJvlCTgDnxSF-",
+          "started": 2486039.843
+        },
+        {
+          "run_id": "run-V-OSKKQ_ecemHn67CR_CJvlCTgDnxSF-",
+          "started": 2486042.359
+        },
+        {
+          "run_id": "run-V-OSKKQ_ecemHn67CR_CJvlCTgDnxSF-",
+          "started": 2486044.89
+        },
+        {
+          "run_id": "run-V-OSKKQ_ecemHn67CR_CJvlCTgDnxSF-",
+          "started": 2486047.406
+        },
+        {
+          "run_id": "run-V-OSKKQ_ecemHn67CR_CJvlCTgDnxSF-",
+          "started": 2486049.937
+        },
+        {
+          "run_id": "run-V-OSKKQ_ecemHn67CR_CJvlCTgDnxSF-",
+          "started": 2486052.468
+        },
+        {
+          "run_id": "run-V-OSKKQ_ecemHn67CR_CJvlCTgDnxSF-",
+          "started": 2486055.0
+        }
+      ],
+      "list_failures": 5,
+      "run_posts": 1
+    },
+    {
+      "mode": "navigation",
+      "run_id": "run-V-OSKKjbR8_2gFGZQWt72mtUeY83VRKP",
+      "held_reads": 1,
+      "run_reads": [
+        {
+          "run_id": "run-V-OSKKjbR8_2gFGZQWt72mtUeY83VRKP",
+          "started": 2486112.687,
+          "captured": 2486112.687,
+          "captured_run": {
+            "id": "run-V-OSKKjbR8_2gFGZQWt72mtUeY83VRKP",
+            "project_id": "default",
+            "session_id": "V-OSKJnd5MO7VqyiJwcNOyPJlAtrgCgx",
+            "agent_run_id": 3,
+            "agent_id": "mdo.default",
+            "model_id": "queue-fixture",
+            "protocol": "openai-chat-completions",
+            "reasoning_effort": "none",
+            "state": "running",
+            "result": "pending",
+            "error_code": "none",
+            "terminal": false,
+            "cancel_requested": false,
+            "resume": false,
+            "client_resume_id": "",
+            "created_at": 1791471055761555,
+            "started_at": 1791471055767190,
+            "ended_at": 0,
+            "config_revision": 3,
+            "model_generation": 2,
+            "module_generation": 1,
+            "skill_generation": 1,
+            "memory_generation": 1,
+            "agent_turns": 0,
+            "model_calls": 0,
+            "tool_calls": 0,
+            "compactions": 0,
+            "final_text_available": false,
+            "final_text_truncated": false,
+            "final_text_bytes": 0,
+            "final_text": null
+          },
+          "released": 2486124.687
+        },
+        {
+          "run_id": "run-V-OSKKjbR8_2gFGZQWt72mtUeY83VRKP",
+          "started": 2486121.296
+        },
+        {
+          "run_id": "run-V-OSKKjbR8_2gFGZQWt72mtUeY83VRKP",
+          "started": 2486123.812
+        }
+      ],
+      "list_failures": 5,
+      "run_posts": 2
+    }
+  ],
+  "model_calls": {
+    "streaming": 1,
+    "stream-stop": 2,
+    "follow-up while original polling was delayed": 1
+  },
+  "sessions": [
+    {
+      "id": "V-OSKJnd5MO7VqyiJwcNOyPJlAtrgCgx",
+      "title": "Poll original",
+      "user_inputs": [
+        "streaming",
+        "stream-stop",
+        "stream-stop"
+      ],
+      "final_model_errors": 0,
+      "event_kinds": {
+        "agent_start": 3,
+        "model_start": 3,
+        "model_text_delta": 6,
+        "model_done": 3,
+        "agent_done": 3
+      },
+      "queue": {
+        "items": [],
+        "discard_images": []
+      },
+      "draft": {
+        "revision": 12,
+        "text": "",
+        "attachments": [],
+        "run_admission_uncertain": false,
+        "submission": null,
+        "submissions": []
+      }
+    },
+    {
+      "id": "V-OSKJndSLYrX2zCvaE8Oqlu6YTfkH3u",
+      "title": "Poll next session",
+      "user_inputs": [
+        "follow-up while original polling was delayed"
+      ],
+      "final_model_errors": 0,
+      "event_kinds": {
+        "agent_start": 1,
+        "model_start": 1,
+        "model_text_delta": 1,
+        "model_done": 1,
+        "agent_done": 1
+      },
+      "queue": {
+        "items": [],
+        "discard_images": []
+      },
+      "draft": {
+        "revision": 4,
+        "text": "",
+        "attachments": [],
+        "run_admission_uncertain": false,
+        "submission": null,
+        "submissions": []
+      }
+    }
+  ],
+  "websocket_unavailable": true,
+  "runs": {
+    "automatic": true,
+    "active_runs": 0,
+    "starting_runs": 0,
+    "retained_runs": 4,
+    "max_active": 8,
+    "max_retained": 64,
+    "runs_started": 4,
+    "runs_completed": 4,
+    "runs_failed": 0,
+    "items": [
+      {
+        "id": "run-V-OSKKzFpZlpjOAcrfFX_1wP7QOKIq20",
+        "project_id": "default",
+        "session_id": "V-OSKJndSLYrX2zCvaE8Oqlu6YTfkH3u",
+        "agent_run_id": 4,
+        "agent_id": "mdo.default",
+        "model_id": "queue-fixture",
+        "protocol": "openai-chat-completions",
+        "reasoning_effort": "none",
+        "state": "succeeded",
+        "result": "ok",
+        "error_code": "none",
+        "terminal": true,
+        "cancel_requested": false,
+        "resume": false,
+        "client_resume_id": "",
+        "created_at": 1791471121389127,
+        "started_at": 1791471121395483,
+        "ended_at": 1791471121436242,
+        "config_revision": 3,
+        "model_generation": 2,
+        "module_generation": 1,
+        "skill_generation": 1,
+        "memory_generation": 1,
+        "agent_turns": 1,
+        "model_calls": 1,
+        "tool_calls": 0,
+        "compactions": 0,
+        "final_text_available": true,
+        "final_text_truncated": false,
+        "final_text_bytes": 56
+      },
+      {
+        "id": "run-V-OSKKjbR8_2gFGZQWt72mtUeY83VRKP",
+        "project_id": "default",
+        "session_id": "V-OSKJnd5MO7VqyiJwcNOyPJlAtrgCgx",
+        "agent_run_id": 3,
+        "agent_id": "mdo.default",
+        "model_id": "queue-fixture",
+        "protocol": "openai-chat-completions",
+        "reasoning_effort": "none",
+        "state": "succeeded",
+        "result": "ok",
+        "error_code": "none",
+        "terminal": true,
+        "cancel_requested": false,
+        "resume": false,
+        "client_resume_id": "",
+        "created_at": 1791471055761555,
+        "started_at": 1791471055767190,
+        "ended_at": 1791471080870982,
+        "config_revision": 3,
+        "model_generation": 2,
+        "module_generation": 1,
+        "skill_generation": 1,
+        "memory_generation": 1,
+        "agent_turns": 1,
+        "model_calls": 1,
+        "tool_calls": 0,
+        "compactions": 0,
+        "final_text_available": true,
+        "final_text_truncated": false,
+        "final_text_bytes": 42
+      },
+      {
+        "id": "run-V-OSKKQ_ecemHn67CR_CJvlCTgDnxSF-",
+        "project_id": "default",
+        "session_id": "V-OSKJnd5MO7VqyiJwcNOyPJlAtrgCgx",
+        "agent_run_id": 2,
+        "agent_id": "mdo.default",
+        "model_id": "queue-fixture",
+        "protocol": "openai-chat-completions",
+        "reasoning_effort": "none",
+        "state": "succeeded",
+        "result": "ok",
+        "error_code": "none",
+        "terminal": true,
+        "cancel_requested": false,
+        "resume": false,
+        "client_resume_id": "",
+        "created_at": 1791470971759238,
+        "started_at": 1791470971765036,
+        "ended_at": 1791470997201226,
+        "config_revision": 3,
+        "model_generation": 2,
+        "module_generation": 1,
+        "skill_generation": 1,
+        "memory_generation": 1,
+        "agent_turns": 1,
+        "model_calls": 1,
+        "tool_calls": 0,
+        "compactions": 0,
+        "final_text_available": true,
+        "final_text_truncated": false,
+        "final_text_bytes": 42
+      },
+      {
+        "id": "run-V-OSKK4ZAhdeuCkEt_HwTktum6yk1ngh",
+        "project_id": "default",
+        "session_id": "V-OSKJnd5MO7VqyiJwcNOyPJlAtrgCgx",
+        "agent_run_id": 1,
+        "agent_id": "mdo.default",
+        "model_id": "queue-fixture",
+        "protocol": "openai-chat-completions",
+        "reasoning_effort": "none",
+        "state": "succeeded",
+        "result": "ok",
+        "error_code": "none",
+        "terminal": true,
+        "cancel_requested": false,
+        "resume": false,
+        "client_resume_id": "",
+        "created_at": 1791470879387346,
+        "started_at": 1791470879393072,
+        "ended_at": 1791470904449723,
+        "config_revision": 3,
+        "model_generation": 2,
+        "module_generation": 1,
+        "skill_generation": 1,
+        "memory_generation": 1,
+        "agent_turns": 1,
+        "model_calls": 1,
+        "tool_calls": 0,
+        "compactions": 0,
+        "final_text_available": true,
+        "final_text_truncated": false,
+        "final_text_bytes": 40
+      }
+    ]
+  }
+}

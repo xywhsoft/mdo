@@ -1,0 +1,17 @@
+{
+  "node_passed": 60,
+  "frontend_contracts_passed": 4,
+  "initial_read_to_next_seconds": 8.625,
+  "initial_hold_seconds": 12.031,
+  "final_runs": 4,
+  "active_runs": 0,
+  "final_model_errors": 0,
+  "model_calls_match_deliberate_inputs": true,
+  "browser_alerts": 0,
+  "browser_logs": [],
+  "native_inflight_navigation_cancellation_proven": false,
+  "baseline_unwired_scheduler": {
+    "adapter_checks_passed": 6,
+    "app_scheduler_checks_failed": 3
+  }
+}

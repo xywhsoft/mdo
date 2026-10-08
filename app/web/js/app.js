@@ -46,6 +46,7 @@ import { todoStore, selectTodo, clearTodo } from "./state/todo.js";
 import { createTimelineView } from "./features/chat/timeline.js";
 import { createQueueGate } from "./features/chat/queue-gate.js";
 import { createRunStopController, resolvesRunStopError } from "./features/chat/run-stop-controller.js";
+import { createRunPollRead } from "./features/chat/run-poll-read.js";
 import { createMessageEditDialog } from "./features/chat/message-edit-dialog.js";
 import { runMessageReplacement } from "./features/chat/message-replacement.js";
 import { createConversationSearch } from "./features/chat/conversation-search.js";
@@ -207,6 +208,8 @@ export async function boot() {
   let sessionWritable = true;
   let selectedSessionStatus = "active";
   let activeRun = null;
+  const runPollReads = createRunPollRead({ read: readRun });
+  const readRunForMonitor = owner => runPollReads.read(owner);
   const runStops = createRunStopController({ cancel: cancelRun, read: readRun,
     canWrite: () => !purgeRecovery.isPaused() && !localServiceReconnecting &&
       (!isRemoteTarget() || (targetState().connected && !targetState().runtimeChanged &&
@@ -1110,6 +1113,7 @@ export async function boot() {
   }
 
   function setRun(run) {
+    if (!run || terminalState(run) || activeRun?.id !== run.id) runPollReads.cancel();
     if (resolvesRunStopError(composerErrorState?.error, run)) hideComposerError();
     const wasActive = Boolean(activeRun);
     activeRun = run && !terminalState(run) ? run : null;
@@ -1410,11 +1414,12 @@ export async function boot() {
   runsStore.subscribe(() => { void promptQueue.flushUnusedImages(); });
 
   function scheduleRunPoll(delay = 2500) {
+    runPollReads.cancel();
     window.clearTimeout(runMonitor);
     runMonitor = 0;
-    if (document.hidden || liveConnection.isConnected()) return;
+    if (document.hidden || settingsActive || schedulesActive || liveConnection.isConnected()) return;
     runMonitor = window.setTimeout(async () => {
-      if (!activeRun || document.hidden || liveConnection.isConnected()) return;
+      if (!activeRun || document.hidden || settingsActive || schedulesActive || liveConnection.isConnected()) return;
       const runId = activeRun.id;
       const version = routeVersion;
       const key = selectedKey;
@@ -1426,8 +1431,9 @@ export async function boot() {
       };
       let responseApplied = false;
       try {
-        const run = await readRun(runId);
-        // Clearing the timer cannot cancel a read already in flight.
+        const run = await readRunForMonitor(activeRun);
+        // Cancellation releases the read; selection guards also fence later
+        // timeline and queue refreshes after its authoritative result.
         if (!stillPollingRun()) { resumeCurrentRun(); return; }
         const returnFocus = document.activeElement === stop;
         setRun(run);
@@ -1459,6 +1465,7 @@ export async function boot() {
         }
         if (stillPollingRun()) scheduleRunPoll();
       } catch (error) {
+        if (error?.name === "AbortError") return;
         if (!stillSelected() || (!responseApplied && !stillPollingRun()) ||
             (activeRun && activeRun.id !== runId)) {
           resumeCurrentRun();
@@ -1642,6 +1649,8 @@ export async function boot() {
     if (nextSignature !== routeSignature) {
       routeSignature = nextSignature;
       routeVersion += 1;
+      runPollReads.cancel();
+      window.clearTimeout(runMonitor); runMonitor = 0;
     }
     if (schedulesActive) {
       settingsWorkspace.hidden = true;
@@ -2521,6 +2530,7 @@ export async function boot() {
   liveConnection.subscribe((event) => {
     if (event.type === "changed") { scheduleLiveRefresh(); void notificationCenter.refresh(); }
     else if (event.type === "runtime_changed") {
+      runPollReads.cancel();
       runStops.clear();
       purgeRecovery.markWriteConflict(new ApiError("Service generation changed", {
         code: event.reason === "restart" ? "service_restarted" : "write_token_conflict",
@@ -2533,6 +2543,7 @@ export async function boot() {
       scheduleTaskRefresh(); scheduleRunsRefresh();
       scheduleSessionRefresh(); scheduleApprovalRefresh();
       if (event.connected) {
+        runPollReads.cancel();
         window.clearTimeout(runMonitor); runMonitor = 0;
         void loadBootstrap();
         void refreshSelectedTimeline();
@@ -2543,7 +2554,7 @@ export async function boot() {
   });
   liveConnection.pause(document.hidden);
   liveConnection.start(currentPageWriteToken());
-  window.addEventListener("pagehide", () => { runStops.dispose(); liveConnection.pause(true); });
+  window.addEventListener("pagehide", () => { runPollReads.cancel(); runStops.dispose(); liveConnection.pause(true); });
   window.addEventListener("pageshow", () => liveConnection.pause(document.hidden));
   approvalsStore.subscribe(scheduleApprovalRefresh);
   asksStore.subscribe(scheduleApprovalRefresh);
@@ -2554,6 +2565,8 @@ export async function boot() {
   document.addEventListener("visibilitychange", () => {
     liveConnection.pause(document.hidden);
     if (document.hidden) {
+      runPollReads.cancel();
+      window.clearTimeout(runMonitor); runMonitor = 0;
       window.clearTimeout(liveRefreshTimer); liveRefreshTimer = 0;
       window.clearTimeout(tasksTimer);
       window.clearTimeout(runsTimer);

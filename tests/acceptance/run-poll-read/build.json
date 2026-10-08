@@ -1,0 +1,30 @@
+{
+  "baseline": "2126c3b",
+  "artifact": "D:\\GIT\\mdo\\.build\\conversation-acceptance\\run-poll-package\\mdo.exe",
+  "sha256": "d960c8dc57fff8731c7d44a352a1deeb5aeaddcab7f1bf981e2d05a927750851",
+  "size": 4456081,
+  "served_files": [
+    {
+      "path": "js/app.js",
+      "sha256": "a6e023ef46467d48ed7dc58c12ad54a3d21c535719ecd729d7a8564412f78652",
+      "source_matches_served": true
+    },
+    {
+      "path": "js/features/chat/run-poll-read.js",
+      "sha256": "1551ba22a270cb1e96993cd7e17d1f5b45967248814a35145d82df12758cba26",
+      "source_matches_served": true
+    },
+    {
+      "path": "js/state/runs.js",
+      "sha256": "fd374949e525b5ffdbbabe262c60bb541f299bde36eeb68c18112a264644988b",
+      "source_matches_served": true
+    },
+    {
+      "path": "js/api/request-recovery.js",
+      "sha256": "c04db7d70ff5c308564345b33e5a0a0df3ad36245c4f7ce3bf85b1867ba90378",
+      "source_matches_served": true
+    }
+  ],
+  "qa_source_injection": false,
+  "xs_revision": "3232f7b8efb02fdd6bf63a508ed1e69654d6759c"
+}
