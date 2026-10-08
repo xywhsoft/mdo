@@ -1,0 +1,31 @@
+{
+  "node_tests": {
+    "passed": 92,
+    "failed": 0
+  },
+  "frontend_contracts": {
+    "passed": 4,
+    "failed": 0
+  },
+  "delayed_history_recovery": {
+    "cold": {
+      "reads": 2,
+      "next_read_seconds": 8.468,
+      "old_response_release_seconds": 12.015
+    },
+    "background": {
+      "reads": 17,
+      "next_read_seconds": 8.594,
+      "old_response_release_seconds": 12.0
+    }
+  },
+  "model_calls_once_each": true,
+  "seed_runs": 1,
+  "browser_inputs": 2,
+  "empty_queues_and_drafts": true,
+  "no_final_model_errors": true,
+  "no_active_runs": true,
+  "sampled_alerts": [],
+  "browser_warning_error_logs": [],
+  "scope": "isolated Windows packed app with loopback model; uncooperative transport and page/visibility cancellation proven in Node; no stress/high-load tests"
+}

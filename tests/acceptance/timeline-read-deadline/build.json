@@ -1,0 +1,33 @@
+{
+  "baseline": "5d4ce11",
+  "xs_commit": "3232f7b8efb02fdd6bf63a508ed1e69654d6759c",
+  "candidate_sha256": "430ee244ee72dbb1f91b8c513a9afb5dfc1854a9bbcc0266164abfa1f2b7a99c",
+  "candidate_size": 4456645,
+  "resources": [
+    {
+      "path": "js/features/chat/timeline-store.js",
+      "size": 22134,
+      "sha256": "2a3870114fd2f6466eddf547de90b344a080d15bb058f481167b304dbb540910",
+      "served_matches_isolated_source": true
+    },
+    {
+      "path": "js/api/request-recovery.js",
+      "size": 3016,
+      "sha256": "c04db7d70ff5c308564345b33e5a0a0df3ad36245c4f7ce3bf85b1867ba90378",
+      "served_matches_isolated_source": true
+    },
+    {
+      "path": "js/state/store.js",
+      "size": 6824,
+      "sha256": "a46f272224d242f622fc7751dcc55394f5a06692916edff9da5c5a361bf93bb5",
+      "served_matches_isolated_source": true
+    },
+    {
+      "path": "js/app.js",
+      "size": 127873,
+      "sha256": "3a8f22505c6f40ff888c4e71d078bec67a4ddcd2f903e55323fa0956a1e06a03",
+      "served_matches_isolated_source": true
+    }
+  ],
+  "product_qa_injection": false
+}

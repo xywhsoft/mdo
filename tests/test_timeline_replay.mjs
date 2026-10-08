@@ -1,12 +1,17 @@
 import assert from "node:assert/strict";
 import test, { after, beforeEach } from "node:test";
 
-const previous = { document: globalThis.document, window: globalThis.window };
+const previous = { document: globalThis.document, window: globalThis.window,
+  setTimeout: globalThis.setTimeout, clearTimeout: globalThis.clearTimeout };
 globalThis.document = Object.assign(new EventTarget(), { hidden: false });
 let timer = 0;
 const timers = new Map();
 globalThis.window = Object.assign(new EventTarget(), { clearTimeout(id) { timers.delete(id); },
   setTimeout(fn) { timers.set(++timer, fn); return timer; } });
+// Todo uses the shared resource store's default clock. Both clocks must be
+// controlled before importing it, so this check observes its actual retries.
+globalThis.setTimeout = window.setTimeout;
+globalThis.clearTimeout = window.clearTimeout;
 const { mergeTimelineEvents, timelineStore, refreshSelectedTimeline, clearTimeline } =
   await import("../app/web/js/features/chat/timeline-store.js");
 const { todoStore, selectTodo, clearTodo } = await import("../app/web/js/state/todo.js");
@@ -56,6 +61,7 @@ test("a delayed older replay cannot resurrect discarded events or rewind the cur
   context.mock.method(globalThis, "fetch", () => ++calls === 1
     ? new Promise(resolve => { finishOld = resolve; }) : Promise.resolve(reply([marker(4, 1), event(5)])));
   const older = refreshSelectedTimeline();
+  await flush();
   await refreshSelectedTimeline();
   finishOld(reply([event(3)]));
   await older;

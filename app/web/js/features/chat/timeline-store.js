@@ -1,6 +1,7 @@
 import { liveConnection } from "../../api/live.js";
 import { api, resourceId } from "../../api/client.js";
 import { isTransientReadError } from "../../api/read-recovery.js";
+import { createRequestRecovery } from "../../api/request-recovery.js";
 import { createResourceStore } from "../../state/store.js";
 import { mergeConversationTurns, summarizeConversationEvents } from "./conversation-history.js";
 import { t } from "../../i18n.js";
@@ -29,6 +30,7 @@ let historyRequest = null;
 let indexRequest = null;
 let selectionAbort = null;
 let initialRequest = null;
+let paused = false;
 let snapshotAvailable = true;
 const sessionCache = createSessionCache({ maxBytes:
   globalThis.navigator?.userAgent?.includes("Android") ? 12 * 1024 * 1024 : 24 * 1024 * 1024 });
@@ -52,6 +54,21 @@ export const isTransientTimelineError = isTransientReadError;
 
 function endpoint(data) {
   return `/projects/${data.projectId}/sessions/${data.sessionId}`;
+}
+
+// Each history GET owns a bounded wait, including response-body parsing.
+// Quiet retries only read; selection/page exit releases an uncooperative
+// transport too. Existing generation/cursor checks still fence late data.
+async function readTimeline(path, signal = selectionAbort?.signal) {
+  const recovery = createRequestRecovery({
+    setTimer: (...args) => window.setTimeout(...args),
+    clearTimer: id => window.clearTimeout(id),
+  });
+  const cancel = () => recovery.dispose();
+  signal?.addEventListener("abort", cancel, { once: true });
+  if (paused || signal?.aborted) cancel();
+  try { return await recovery.request(signal => api.get(path, { signal })); }
+  finally { signal?.removeEventListener("abort", cancel); recovery.dispose(); }
 }
 
 function updateTurns(data, events, additions = []) {
@@ -91,7 +108,7 @@ function stopTimer() {
 function schedulePoll(token) {
   stopTimer();
   const current = timelineStore.get().data;
-  if (token !== generation || document.hidden ||
+  if (token !== generation || paused || document.hidden ||
       (liveConnection.isConnected() && !current?.initializing && !current?.syncing && !current?.syncError)) return;
   pollTimer = window.setTimeout(() => current?.initializing
     ? loadInitialTimeline(token) : refreshTimeline(token), pollDelay);
@@ -99,7 +116,8 @@ function schedulePoll(token) {
 
 async function refreshTimeline(token = generation) {
   const current = timelineStore.get().data;
-  if (!current?.sessionId || current.initializing || token !== generation) return;
+  if (!current?.sessionId || current.initializing || token !== generation || paused) return;
+  stopTimer();
   if (current.epoch) return refreshSnapshot(token);
   const request = ++refreshVersion;
   const isCurrent = () => token === generation && request === refreshVersion;
@@ -111,9 +129,8 @@ async function refreshTimeline(token = generation) {
 
   try {
     for (let page = 0; page < MAX_PAGES_PER_REFRESH; page += 1) {
-      const response = await api.get(
+      const response = await readTimeline(
         `/projects/${current.projectId}/sessions/${current.sessionId}/events?after=${cursor}&limit=32`,
-        { signal: selectionAbort?.signal },
       );
       if (!isCurrent()) return;
       const replay = response.data;
@@ -154,7 +171,7 @@ async function refreshTimeline(token = generation) {
 }
 
 async function readConversation(data, query, signal = selectionAbort?.signal) {
-  const raw = (await api.get(`${endpoint(data)}/conversation?${query}`, { signal })).data;
+  const raw = (await readTimeline(`${endpoint(data)}/conversation?${query}`, signal)).data;
   return decodeConversationPage(raw, data);
 }
 
@@ -232,7 +249,7 @@ async function reloadTimeline(projectId, sessionId, force = false) {
 }
 
 function loadInitialTimeline(token) {
-  if (token !== generation) return Promise.resolve();
+  if (token !== generation || paused) return Promise.resolve();
   if (initialRequest) return initialRequest;
   const request = Promise.resolve().then(async () => {
     if (token !== generation) return;
@@ -251,8 +268,7 @@ function loadInitialTimeline(token) {
           snapshotAvailable = false;
         }
       }
-      const page = (await api.get(`${endpoint(current)}/turns?limit=64`,
-        { signal: selectionAbort.signal })).data;
+      const page = (await readTimeline(`${endpoint(current)}/turns?limit=64`)).data;
       if (token !== generation) return;
       const selected = page.items.slice(-4);
       const start = selected[0]?.first_event_id ?? Math.max(1, page.latest_event_id);
@@ -287,8 +303,7 @@ async function readHistoryRange(data, first, end, token) {
   let cursor = first - 1;
   const events = [];
   while (cursor < end && token === generation) {
-    const page = (await api.get(`${endpoint(data)}/events?after=${cursor}&limit=32${data.epoch ? `&epoch=${data.epoch}` : ""}`,
-      { signal: selectionAbort?.signal })).data;
+    const page = (await readTimeline(`${endpoint(data)}/events?after=${cursor}&limit=32${data.epoch ? `&epoch=${data.epoch}` : ""}`)).data;
     if (token !== generation) return [];
       const next = Number(page.next_cursor);
     if (!Number.isSafeInteger(next) || next <= cursor)
@@ -301,7 +316,7 @@ async function readHistoryRange(data, first, end, token) {
 
 export function loadOlderTimeline() {
   const data = timelineStore.get().data;
-  if (!data?.sessionId || !data.hasOlder || data.initializing) return Promise.resolve();
+  if (!data?.sessionId || !data.hasOlder || data.initializing || paused) return Promise.resolve();
   if (historyRequest) return historyRequest;
   const token = generation;
   timelineStore.setData({ ...data, loadingHistory: true, historyError: null });
@@ -317,8 +332,7 @@ export function loadOlderTimeline() {
           firstLoadedTurn: page.next_before || current.firstLoadedTurn, hasOlder: page.has_more, loadingHistory: false });
         return;
       }
-      const page = (await api.get(`${endpoint(data)}/turns?before=${data.firstLoadedTurn}&limit=4`,
-        { signal: selectionAbort?.signal })).data;
+      const page = (await readTimeline(`${endpoint(data)}/turns?before=${data.firstLoadedTurn}&limit=4`)).data;
       if (token !== generation) return;
       const events = page.items.length ? await readHistoryRange(data,
         page.items[0].first_event_id, data.firstLoadedTurn - 1, token) : [];
@@ -342,12 +356,11 @@ export function loadOlderTimeline() {
 
 export function loadOlderConversationIndex() {
   const data = timelineStore.get().data;
-  if (!data?.indexHasMore || indexRequest) return indexRequest ?? Promise.resolve();
+  if (!data?.indexHasMore || indexRequest || paused) return indexRequest ?? Promise.resolve();
   const token = generation;
   const request = (async () => {
     try {
-      const page = (await api.get(`${endpoint(data)}/turns?before=${data.indexBefore}&limit=64`,
-        { signal: selectionAbort?.signal })).data;
+      const page = (await readTimeline(`${endpoint(data)}/turns?before=${data.indexBefore}&limit=64`)).data;
       if (token !== generation) return;
       if (data.epoch && page.epoch !== data.epoch) { await reloadSelectedTimeline(); return; }
       const current = timelineStore.get().data;
@@ -366,7 +379,7 @@ export function loadOlderConversationIndex() {
 export async function revealConversationTurn(id) {
   const data = timelineStore.get().data;
   const turn = data?.turns?.find(item => item.first_event_id === id);
-  if (!turn) return;
+  if (!turn || paused) return;
   if (data.events.some(event => event.event_id === id)) return;
   const token = generation;
   const events = await readHistoryRange(data, id, turn.end_event_id, token);
@@ -398,6 +411,7 @@ export function clearTimeline() {
   refreshVersion += 1;
   stopTimer();
   selectionAbort?.abort();
+  selectionAbort = null;
   historyRequest = indexRequest = null;
   initialRequest = null;
   liveConnection.select("", "");
@@ -451,8 +465,22 @@ liveConnection.subscribe((event) => {
   }
 });
 
+function pauseTimelineReads() {
+  paused = true;
+  refreshVersion += 1;
+  stopTimer(); selectionAbort?.abort();
+  historyRequest = indexRequest = initialRequest = null;
+  const current = timelineStore.get().data;
+  if (current?.loadingHistory) timelineStore.setData({ ...current, loadingHistory: false });
+}
+function resumeTimelineReads() {
+  if (document.hidden) return;
+  if (paused) { paused = false; selectionAbort = new AbortController(); }
+  if (timelineStore.get().data?.initializing) void loadInitialTimeline(generation);
+  else if (!liveConnection.isConnected()) void refreshTimeline(generation);
+}
+window.addEventListener("pagehide", pauseTimelineReads);
+window.addEventListener("pageshow", resumeTimelineReads);
 document.addEventListener("visibilitychange", () => {
-  if (!document.hidden && timelineStore.get().data?.initializing) void loadInitialTimeline(generation);
-  else if (!document.hidden && !liveConnection.isConnected()) void refreshTimeline(generation);
-  else stopTimer();
+  if (document.hidden) pauseTimelineReads(); else resumeTimelineReads();
 });

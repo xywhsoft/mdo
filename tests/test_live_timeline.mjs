@@ -4,6 +4,20 @@ import test, { after, beforeEach } from "node:test";
 const previous = { window: globalThis.window, document: globalThis.document };
 const timers = new Map();
 let timerId = 0;
+const flush = () => new Promise(resolve => setImmediate(resolve));
+async function settleReads(operation) {
+  let finished = false;
+  const result = Promise.resolve(operation).finally(() => { finished = true; });
+  await flush();
+  // Drive the real quiet recovery budget; do not wait on wall-clock timers.
+  for (let i = 0; i < 16 && !finished; ++i) {
+    const [id, timer] = [...timers][0] ?? [];
+    assert(timer, "missing read recovery timer");
+    timers.delete(id); timer.fn(); await flush();
+  }
+  assert(finished, "timeline read failed to settle");
+  return result;
+}
 globalThis.window = Object.assign(new EventTarget(), {
   setTimeout(fn, delay) { timers.set(++timerId, { fn, delay }); return timerId; },
   clearTimeout(id) { timers.delete(id); },
@@ -35,12 +49,12 @@ test("temporary background read failures retain messages and back off without er
   const oldFetch = globalThis.fetch;
   globalThis.fetch = async () => { throw new TypeError("offline"); };
   try {
-    await refreshSelectedTimeline();
+    await settleReads(refreshSelectedTimeline());
     assert.equal(timelineStore.get().status, "ready");
     assert.equal(timelineStore.get().error, null);
     assert.equal(timelineStore.get().data.events[0].text, "part 1");
     const first = [...timers.values()].find(timer => timer.delay === 5000);
-    assert.ok(first); await first.fn();
+    assert.ok(first); await settleReads(first.fn());
     assert.ok([...timers.values()].some(timer => timer.delay === 10000));
   } finally { globalThis.fetch = oldFetch; }
 });
@@ -72,7 +86,7 @@ test(`cold timeline loading recovers ${code} and then restores its history`, asy
       : { items: path.includes("after=0") ? [event(1)] : [], next_cursor: 1, latest_event_id: 1 } });
   };
   try {
-    await selectTimeline("qa", "cold");
+    await settleReads(selectTimeline("qa", "cold"));
     assert.equal(timelineStore.get().status, "ready");
     assert.equal(timelineStore.get().data.initializing, true);
     const retry = [...timers.values()].find(timer => timer.delay === 5000);
@@ -104,6 +118,7 @@ test("a newer push prevents an in-flight HTTP fallback overwriting it", async ()
   globalThis.fetch = () => new Promise((done) => { resolve = done; });
   try {
     const request = refreshSelectedTimeline();
+    await flush();
     applyLiveTimeline(packet([event(2)]));
     resolve(Response.json({ ok: true, data: { items: [event(2, { text: "stale" })],
       next_cursor: 2, latest_event_id: 2 } }));

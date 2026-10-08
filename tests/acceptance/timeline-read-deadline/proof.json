@@ -1,0 +1,375 @@
+{
+  "reads": {
+    "/api/v1/projects/default/sessions/V-OSKUEapJLtsPRvijLzPaUDMPOwvKH0/conversation?limit=4": [
+      {
+        "started": 2488685.375,
+        "held": true,
+        "captured": 2488685.375,
+        "native_status": 200,
+        "released": 2488697.39
+      },
+      {
+        "started": 2488693.843,
+        "held": false
+      }
+    ],
+    "/api/v1/projects/default/sessions/V-OSKUEapJLtsPRvijLzPaUDMPOwvKH0/conversation?after=5&epoch=789caf7c33510ac89e19a5c55c31efb0affbc842760b73bc4fefacbde5e677c7&limit=4": [
+      {
+        "started": 2488741.671,
+        "held": true,
+        "captured": 2488741.671,
+        "native_status": 200,
+        "released": 2488753.671
+      },
+      {
+        "started": 2488750.265,
+        "held": false
+      },
+      {
+        "started": 2488752.796,
+        "held": false
+      },
+      {
+        "started": 2488755.328,
+        "held": false
+      },
+      {
+        "started": 2488757.843,
+        "held": false
+      },
+      {
+        "started": 2488760.375,
+        "held": false
+      },
+      {
+        "started": 2488762.906,
+        "held": false
+      },
+      {
+        "started": 2488765.421,
+        "held": false
+      },
+      {
+        "started": 2488767.937,
+        "held": false
+      },
+      {
+        "started": 2488770.453,
+        "held": false
+      },
+      {
+        "started": 2488772.984,
+        "held": false
+      },
+      {
+        "started": 2488775.5,
+        "held": false
+      },
+      {
+        "started": 2488778.015,
+        "held": false
+      },
+      {
+        "started": 2488780.531,
+        "held": false
+      },
+      {
+        "started": 2488783.046,
+        "held": false
+      },
+      {
+        "started": 2488785.562,
+        "held": false
+      },
+      {
+        "started": 2488787.453,
+        "held": false
+      }
+    ]
+  },
+  "writes": [
+    {
+      "method": "PATCH",
+      "path": "/api/v1/settings/settings",
+      "started": 2488685.39
+    },
+    {
+      "method": "PUT",
+      "path": "/api/v1/workspace-state",
+      "started": 2488685.484
+    },
+    {
+      "method": "PUT",
+      "path": "/api/v1/projects/default/sessions/V-OSKUEapJLtsPRvijLzPaUDMPOwvKH0/draft",
+      "started": 2488787.234
+    },
+    {
+      "method": "PUT",
+      "path": "/api/v1/projects/default/sessions/V-OSKUEapJLtsPRvijLzPaUDMPOwvKH0/draft",
+      "started": 2488787.281
+    },
+    {
+      "method": "PUT",
+      "path": "/api/v1/projects/default/sessions/V-OSKUEapJLtsPRvijLzPaUDMPOwvKH0/draft/submissions/172ed0f3e9dc14eb37a594a87bfde24e",
+      "started": 2488787.296
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/projects/default/sessions/V-OSKUEapJLtsPRvijLzPaUDMPOwvKH0/queue",
+      "started": 2488787.296
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/v1/projects/default/sessions/V-OSKUEapJLtsPRvijLzPaUDMPOwvKH0/draft/submissions/172ed0f3e9dc14eb37a594a87bfde24e",
+      "started": 2488787.343
+    },
+    {
+      "method": "PUT",
+      "path": "/api/v1/projects/default/sessions/V-OSKUEapJLtsPRvijLzPaUDMPOwvKH0/queue/172ed0f3e9dc14eb37a594a87bfde24e",
+      "started": 2488787.375
+    },
+    {
+      "method": "PUT",
+      "path": "/api/v1/projects/default/sessions/V-OSKUEapJLtsPRvijLzPaUDMPOwvKH0/queue/172ed0f3e9dc14eb37a594a87bfde24e",
+      "started": 2488787.39
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/projects/default/sessions/V-OSKUEapJLtsPRvijLzPaUDMPOwvKH0/runs",
+      "started": 2488787.406
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/v1/projects/default/sessions/V-OSKUEapJLtsPRvijLzPaUDMPOwvKH0/queue/172ed0f3e9dc14eb37a594a87bfde24e",
+      "started": 2488787.453
+    },
+    {
+      "method": "PUT",
+      "path": "/api/v1/workspace-state",
+      "started": 2488799.062
+    },
+    {
+      "method": "PUT",
+      "path": "/api/v1/projects/default/sessions/V-OSKUEbJzamiqhx6MoaHMBj8RTitfsE/draft",
+      "started": 2488810.64
+    },
+    {
+      "method": "PUT",
+      "path": "/api/v1/projects/default/sessions/V-OSKUEbJzamiqhx6MoaHMBj8RTitfsE/draft",
+      "started": 2488826.39
+    },
+    {
+      "method": "PUT",
+      "path": "/api/v1/projects/default/sessions/V-OSKUEbJzamiqhx6MoaHMBj8RTitfsE/draft",
+      "started": 2488826.406
+    },
+    {
+      "method": "PUT",
+      "path": "/api/v1/projects/default/sessions/V-OSKUEbJzamiqhx6MoaHMBj8RTitfsE/draft/submissions/ef6a42b88c9907caeae66eb50ffef6db",
+      "started": 2488826.421
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/projects/default/sessions/V-OSKUEbJzamiqhx6MoaHMBj8RTitfsE/queue",
+      "started": 2488826.421
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/v1/projects/default/sessions/V-OSKUEbJzamiqhx6MoaHMBj8RTitfsE/draft/submissions/ef6a42b88c9907caeae66eb50ffef6db",
+      "started": 2488826.453
+    },
+    {
+      "method": "PUT",
+      "path": "/api/v1/projects/default/sessions/V-OSKUEbJzamiqhx6MoaHMBj8RTitfsE/queue/ef6a42b88c9907caeae66eb50ffef6db",
+      "started": 2488826.484
+    },
+    {
+      "method": "PUT",
+      "path": "/api/v1/projects/default/sessions/V-OSKUEbJzamiqhx6MoaHMBj8RTitfsE/queue/ef6a42b88c9907caeae66eb50ffef6db",
+      "started": 2488826.5
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/projects/default/sessions/V-OSKUEbJzamiqhx6MoaHMBj8RTitfsE/runs",
+      "started": 2488826.515
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/v1/projects/default/sessions/V-OSKUEbJzamiqhx6MoaHMBj8RTitfsE/queue/ef6a42b88c9907caeae66eb50ffef6db",
+      "started": 2488826.546
+    }
+  ],
+  "model_calls": {
+    "TIMELINE_SEEDED_HISTORY": 1,
+    "TIMELINE_SAVED_DRAFT": 1,
+    "TIMELINE_FOLLOWUP": 1
+  },
+  "sessions": [
+    {
+      "id": "V-OSKUEapJLtsPRvijLzPaUDMPOwvKH0",
+      "title": "Timeline deadline",
+      "user_inputs": [
+        "TIMELINE_SEEDED_HISTORY",
+        "TIMELINE_SAVED_DRAFT"
+      ],
+      "final_model_errors": 0,
+      "event_kinds": {
+        "agent_start": 2,
+        "model_start": 2,
+        "model_text_delta": 2,
+        "model_done": 2,
+        "agent_done": 2
+      },
+      "queue": {
+        "items": [],
+        "discard_images": []
+      },
+      "draft": {
+        "revision": 5,
+        "text": "",
+        "attachments": [],
+        "run_admission_uncertain": false,
+        "submission": null,
+        "submissions": []
+      }
+    },
+    {
+      "id": "V-OSKUEbJzamiqhx6MoaHMBj8RTitfsE",
+      "title": "Timeline follow-up",
+      "user_inputs": [
+        "TIMELINE_FOLLOWUP"
+      ],
+      "final_model_errors": 0,
+      "event_kinds": {
+        "agent_start": 1,
+        "model_start": 1,
+        "model_text_delta": 1,
+        "model_done": 1,
+        "agent_done": 1
+      },
+      "queue": {
+        "items": [],
+        "discard_images": []
+      },
+      "draft": {
+        "revision": 5,
+        "text": "",
+        "attachments": [],
+        "run_admission_uncertain": false,
+        "submission": null,
+        "submissions": []
+      }
+    }
+  ],
+  "websocket_unavailable": true,
+  "seed_prompt": "TIMELINE_SEEDED_HISTORY",
+  "runs": {
+    "automatic": true,
+    "active_runs": 0,
+    "starting_runs": 0,
+    "retained_runs": 3,
+    "max_active": 8,
+    "max_retained": 64,
+    "runs_started": 3,
+    "runs_completed": 3,
+    "runs_failed": 0,
+    "items": [
+      {
+        "id": "run-V-OSKUqiK6vOcKhg4GjXYfZWzZ0N2m8A",
+        "project_id": "default",
+        "session_id": "V-OSKUEbJzamiqhx6MoaHMBj8RTitfsE",
+        "agent_run_id": 3,
+        "agent_id": "mdo.default",
+        "model_id": "queue-fixture",
+        "protocol": "openai-chat-completions",
+        "reasoning_effort": "none",
+        "state": "succeeded",
+        "result": "ok",
+        "error_code": "none",
+        "terminal": true,
+        "cancel_requested": false,
+        "resume": false,
+        "client_resume_id": "",
+        "created_at": 1791473769927800,
+        "started_at": 1791473769933560,
+        "ended_at": 1791473769959882,
+        "config_revision": 3,
+        "model_generation": 2,
+        "module_generation": 1,
+        "skill_generation": 1,
+        "memory_generation": 1,
+        "agent_turns": 1,
+        "model_calls": 1,
+        "tool_calls": 0,
+        "compactions": 0,
+        "final_text_available": true,
+        "final_text_truncated": false,
+        "final_text_bytes": 41
+      },
+      {
+        "id": "run-V-OSKUhOnE2eWGh_W6QpxFWBRxyoF-Py",
+        "project_id": "default",
+        "session_id": "V-OSKUEapJLtsPRvijLzPaUDMPOwvKH0",
+        "agent_run_id": 2,
+        "agent_id": "mdo.default",
+        "model_id": "queue-fixture",
+        "protocol": "openai-chat-completions",
+        "reasoning_effort": "none",
+        "state": "succeeded",
+        "result": "ok",
+        "error_code": "none",
+        "terminal": true,
+        "cancel_requested": false,
+        "resume": false,
+        "client_resume_id": "",
+        "created_at": 1791473730833642,
+        "started_at": 1791473730839469,
+        "ended_at": 1791473730866979,
+        "config_revision": 3,
+        "model_generation": 2,
+        "module_generation": 1,
+        "skill_generation": 1,
+        "memory_generation": 1,
+        "agent_turns": 1,
+        "model_calls": 1,
+        "tool_calls": 0,
+        "compactions": 0,
+        "final_text_available": true,
+        "final_text_truncated": false,
+        "final_text_bytes": 44
+      },
+      {
+        "id": "run-V-OSKUEbT5p2j25H6dOcCZ7E5ubWz5YC",
+        "project_id": "default",
+        "session_id": "V-OSKUEapJLtsPRvijLzPaUDMPOwvKH0",
+        "agent_run_id": 1,
+        "agent_id": "mdo.default",
+        "model_id": "queue-fixture",
+        "protocol": "openai-chat-completions",
+        "reasoning_effort": "none",
+        "state": "succeeded",
+        "result": "ok",
+        "error_code": "none",
+        "terminal": true,
+        "cancel_requested": false,
+        "resume": false,
+        "client_resume_id": "",
+        "created_at": 1791473605900395,
+        "started_at": 1791473605902172,
+        "ended_at": 1791473605956144,
+        "config_revision": 2,
+        "model_generation": 2,
+        "module_generation": 1,
+        "skill_generation": 1,
+        "memory_generation": 1,
+        "agent_turns": 1,
+        "model_calls": 1,
+        "tool_calls": 0,
+        "compactions": 0,
+        "final_text_available": true,
+        "final_text_truncated": false,
+        "final_text_bytes": 47
+      }
+    ]
+  }
+}

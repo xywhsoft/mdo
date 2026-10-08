@@ -3,6 +3,7 @@ import { createHash } from "node:crypto";
 import test, { beforeEach, after } from "node:test";
 const previous = { window: globalThis.window, document: globalThis.document, fetch: globalThis.fetch };
 const timers = new Map(); let timerId = 0;
+const flush = () => new Promise(resolve => setImmediate(resolve));
 globalThis.window = Object.assign(new EventTarget(), {
   setTimeout(fn, delay) { timers.set(++timerId, {fn, delay}); return timerId; },
   clearTimeout(id) { timers.delete(id); },
@@ -53,6 +54,7 @@ test("switching back paints cached content while a single delta request is pendi
   fetcher=()=>new Promise(done=>resolve=done);
   const pending=selectTimeline("qa","a");
   assert.equal(timelineStore.get().data.cached,true); assert.equal(timelineStore.get().data.events[0].text,"text 1");
+  await flush();
   resolve(reply(page([2],{delta:true}))); await pending;
   assert.deepEqual(timelineStore.get().data.events.map(e=>e.event_id),[1,2]);
   assert.equal(timelineStore.get().data.syncing,false);
@@ -69,6 +71,7 @@ test("an older history response preserves pushes that arrived while it was in fl
   await selectTimeline("qa","a"); let resolve;
   fetcher=()=>new Promise(done=>resolve=done);
   const pending=loadOlderTimeline();
+  await flush();
   applyLiveTimeline({type:"events",project_id:"qa",session_id:"a",epoch,items:[{event_id:9,kind:"model_text_delta",text:"live"}],next_cursor:9,latest_event_id:9});
   resolve(reply(page([5,6],{next_cursor:8,latest_event_id:8}))); await pending;
   assert.equal(timelineStore.get().data.cursor,9);

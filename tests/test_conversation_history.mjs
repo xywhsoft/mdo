@@ -4,7 +4,24 @@ import { conversationGroups, summarizeConversationEvents } from "../app/web/js/f
 import { eventsToTimeline } from "../app/web/js/features/chat/timeline.js";
 
 const previous = { window: globalThis.window, document: globalThis.document, fetch: globalThis.fetch };
-globalThis.window = { setTimeout: () => 1, clearTimeout() {} };
+let serial = 0;
+const timers = new Map();
+globalThis.window = Object.assign(new EventTarget(), {
+  setTimeout(fn) { timers.set(++serial, fn); return serial; },
+  clearTimeout(id) { timers.delete(id); },
+});
+const flush = () => new Promise(resolve => setImmediate(resolve));
+async function settleReads(operation) {
+  let finished = false;
+  const result = Promise.resolve(operation).finally(() => { finished = true; });
+  await flush();
+  for (let i = 0; i < 16 && !finished; ++i) {
+    const [id, callback] = [...timers][0] ?? [];
+    assert(callback, "missing history recovery timer");
+    timers.delete(id); callback(); await flush();
+  }
+  assert(finished, "history read failed to settle"); return result;
+}
 globalThis.document = Object.assign(new EventTarget(), { hidden: false });
 const { timelineStore, selectTimeline, loadOlderTimeline, revealConversationTurn,
   loadOlderConversationIndex, applyLiveTimeline, clearTimeline, clearTimelineCache } = await import("../app/web/js/features/chat/timeline-store.js");
@@ -35,7 +52,7 @@ function respond(url) {
   return reply({ items, next_cursor: items.at(-1)?.event_id ?? after, latest_event_id: 48 });
 }
 beforeEach(() => {
-  clearTimeline(); clearTimelineCache(); calls.length = 0;
+  clearTimeline(); clearTimelineCache(); timers.clear(); calls.length = 0;
   globalThis.fetch = async url => { calls.push(url); return respond(url); };
 });
 after(() => { clearTimeline(); Object.assign(globalThis, previous); });
@@ -86,7 +103,7 @@ test("jumping loads just the selected range and leaves live subscription history
 test("history failure preserves the conversation and permits an explicit retry", async () => {
   await selectTimeline("qa", "a");
   globalThis.fetch = async () => { throw new Error("offline"); };
-  await loadOlderTimeline();
+  await settleReads(loadOlderTimeline());
   assert.equal(timelineStore.get().data.loadingHistory, false);
   assert.equal(timelineStore.get().data.events.length, 16);
   assert.ok(timelineStore.get().data.historyError);
@@ -113,6 +130,7 @@ test("switching sessions rejects a late historical response even when transport 
   let finish;
   globalThis.fetch = url => new Promise(resolve => { finish = () => resolve(respond(url)); });
   const older = loadOlderTimeline();
+  await flush();
   clearTimeline(); finish(); await older;
   assert.equal(timelineStore.get().data.sessionId, "");
   assert.deepEqual(timelineStore.get().data.events, []);
