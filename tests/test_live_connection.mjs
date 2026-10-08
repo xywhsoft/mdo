@@ -3,6 +3,7 @@ import test from "node:test";
 import { createLiveConnection } from "../app/web/js/api/live.js";
 
 const token = `${"a".repeat(32)}-0`;
+const flush = () => new Promise(resolve => setImmediate(resolve));
 function fixture(options = {}) {
   const sockets = [], timers = new Map(), events = [];
   let timer = 0;
@@ -47,7 +48,7 @@ test("restart renews only the read socket and announces the stale page before co
   const f = fixture({ refreshToken: async () => { reads += 1; return fresh; } });
   f.live.start(token); f.sockets[0].message({ type: "ready", version: 1 });
   f.sockets[0].onclose(); f.fire(500);
-  await Promise.resolve(); await Promise.resolve();
+  await flush();
   assert.equal(reads, 1);
   assert.equal(f.sockets.length, 2);
   assert.deepEqual(f.sockets[1].protocols, ["mdo.live.v1", `mdo.token.${fresh}`]);
@@ -65,11 +66,11 @@ test("unreachable read-token probe backs off without opening stale sockets", asy
   } });
   f.live.start(token); f.sockets[0].message({ type: "ready", version: 1 });
   f.sockets[0].onclose(); f.fire(500);
-  await Promise.resolve(); await Promise.resolve();
+  await flush();
   assert.equal(f.sockets.length, 1);
   assert.deepEqual(f.events.at(-1), { type: "reachable", connected: false });
   reachable = true; f.fire(1000);
-  await Promise.resolve(); await Promise.resolve();
+  await flush();
   assert.equal(f.sockets.length, 2);
   assert.ok(!f.events.some(event => event.type === "runtime_changed"));
   f.live.stop();
@@ -82,7 +83,7 @@ test("an HTTP transport failure rechecks a seemingly open socket only once", asy
   assert.equal(f.live.isConnected(), false);
   assert.equal(f.sockets[0].closed, true);
   assert.deepEqual(f.events.at(-1), { type: "status", connected: false });
-  f.fire(500); await Promise.resolve(); await Promise.resolve();
+  f.fire(500); await flush();
   assert.equal(f.sockets.length, 2);
   f.live.stop();
 });
@@ -93,9 +94,10 @@ test("pause or stop invalidates delayed token probes and never reconnects in the
     const f = fixture({ refreshToken: () => new Promise(done => { resolve = done; }) });
     f.live.start(token); f.sockets[0].message({ type: "ready", version: 1 });
     f.sockets[0].onclose(); f.fire(500);
+    await flush();
     if (action === "pause") f.live.pause(true); else f.live.stop();
     resolve(`${"b".repeat(32)}-0`);
-    await Promise.resolve(); await Promise.resolve();
+    await flush();
     assert.equal(f.sockets.length, 1);
     assert.ok(!f.events.some(event => event.type === "runtime_changed"));
     f.live.stop();

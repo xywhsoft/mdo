@@ -1,0 +1,33 @@
+{
+  "baseline": "3bd9e8a",
+  "xs_commit": "3232f7b8efb02fdd6bf63a508ed1e69654d6759c",
+  "candidate_sha256": "ccbc87a3c577f9a9b7debd6464ae69b2e7bd6456d1d00b9ae7a14d306b065c04",
+  "candidate_size": 4456798,
+  "resources": [
+    {
+      "path": "js/api/live.js",
+      "size": 6835,
+      "sha256": "74c251d34c957c540a4ae2f1ab593761e0d3e9688db06414fd27edafe5cbc097",
+      "served_matches_isolated_source": true
+    },
+    {
+      "path": "js/api/request-recovery.js",
+      "size": 3016,
+      "sha256": "c04db7d70ff5c308564345b33e5a0a0df3ad36245c4f7ce3bf85b1867ba90378",
+      "served_matches_isolated_source": true
+    },
+    {
+      "path": "js/api/client.js",
+      "size": 9676,
+      "sha256": "6522f8e890432ad0d290b1adda8ba3564f07714a3aa85b725d5b8a688c3ed6b3",
+      "served_matches_isolated_source": true
+    },
+    {
+      "path": "js/app.js",
+      "size": 127873,
+      "sha256": "3a8f22505c6f40ff888c4e71d078bec67a4ddcd2f903e55323fa0956a1e06a03",
+      "served_matches_isolated_source": true
+    }
+  ],
+  "product_qa_injection": false
+}

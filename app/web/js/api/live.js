@@ -1,5 +1,6 @@
 import { targetLiveSocket } from "./target.js";
 import { api } from "./client.js";
+import { createRequestRecovery } from "./request-recovery.js";
 
 // One authenticated, same-origin connection per page. Commands remain HTTP;
 // this channel only subscribes to events and announces changed resources.
@@ -15,6 +16,7 @@ export function createLiveConnection({
   clearTimer = (id) => window.clearTimeout(id),
   random = Math.random,
   refreshToken = null,
+  createRecovery = () => createRequestRecovery({ setTimer, clearTimer, random, eventTarget: null }),
 } = {}) {
   const listeners = new Set();
   let connection = null;
@@ -36,6 +38,7 @@ export function createLiveConnection({
   }
   function close() {
     lifecycle += 1;
+    tokenCheck?.recovery.dispose();
     tokenCheck = null;
     clearTimer(retry); retry = 0;
     clearTimer(watchdog); watchdog = 0;
@@ -64,10 +67,15 @@ export function createLiveConnection({
   async function reconnectWithToken() {
     if (!refreshToken) { connect(); return; }
     if (!token || paused || connection || tokenCheck) return;
-    const check = { lifecycle };
+    const check = { lifecycle, recovery: createRecovery() };
     tokenCheck = check;
     try {
-      const value = await refreshToken();
+      // The reconnect loop owns backoff. Bound just one read here, including
+      // an adapter/body that ignores abort, and cancel it with this lifecycle.
+      const value = await check.recovery.request(signal => {
+        check.recovery.assertActive();
+        return refreshToken(signal);
+      }, { retry: false });
       if (check.lifecycle !== lifecycle || paused || !token) return;
       if (!/^[0-9a-f]{32}-(0|[1-9][0-9]{0,19})$/.test(value ?? ""))
         throw new Error("Invalid live token");
@@ -78,6 +86,9 @@ export function createLiveConnection({
         // stays fenced so old drafts/actions cannot run after a purge/restart.
         publish({ type: "runtime_changed", reason });
       }
+      // An observer may stop/pause or select another runtime while handling
+      // the changed token. That cancelled owner must not announce reachability.
+      if (check.lifecycle !== lifecycle || paused || !token) return;
       tokenCheck = null;
       publish({ type: "reachable", connected: true });
       connect();
@@ -87,6 +98,7 @@ export function createLiveConnection({
       publish({ type: "reachable", connected: false });
       reconnect();
     } finally {
+      check.recovery.dispose();
       if (tokenCheck === check) tokenCheck = null;
     }
   }
@@ -150,10 +162,7 @@ export function createLiveConnection({
 }
 
 export const liveConnection = createLiveConnection({
-  async refreshToken() {
-    const controller = new AbortController();
-    const timer = window.setTimeout(() => controller.abort(), 8000);
-    try { return (await api.get("/project-purge-intent", { signal: controller.signal })).writeToken; }
-    finally { window.clearTimeout(timer); }
+  async refreshToken(signal) {
+    return (await api.get("/project-purge-intent", { signal })).writeToken;
   },
 });

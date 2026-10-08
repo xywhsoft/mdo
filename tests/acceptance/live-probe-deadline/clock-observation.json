@@ -1,0 +1,38 @@
+{
+  "wall_ms": 1791474636267.3425,
+  "monotonic_seconds": 2489692.859,
+  "state": {
+    "reads": {
+      "/api/v1/project-purge-intent": [
+        {
+          "started": 2489635.546,
+          "held": true,
+          "captured": 2489635.546,
+          "native_status": 200,
+          "released": 2489647.546
+        },
+        {
+          "started": 2489644.703,
+          "held": false
+        }
+      ]
+    },
+    "writes": [
+      {
+        "method": "PATCH",
+        "path": "/api/v1/settings/settings",
+        "started": 2489602.062
+      },
+      {
+        "method": "PUT",
+        "path": "/api/v1/workspace-state",
+        "started": 2489602.203
+      },
+      {
+        "method": "PUT",
+        "path": "/api/v1/projects/default/sessions/V-OSKXf1grBI6VI7GrLBOB5Vaw6ASRdN/draft",
+        "started": 2489659.421
+      }
+    ]
+  }
+}

@@ -1,0 +1,289 @@
+{
+  "reads": {
+    "/api/v1/project-purge-intent": [
+      {
+        "started": 2489635.546,
+        "held": true,
+        "captured": 2489635.546,
+        "native_status": 200,
+        "released": 2489647.546
+      },
+      {
+        "started": 2489644.703,
+        "held": false
+      }
+    ]
+  },
+  "writes": [
+    {
+      "method": "PATCH",
+      "path": "/api/v1/settings/settings",
+      "started": 2489602.062
+    },
+    {
+      "method": "PUT",
+      "path": "/api/v1/workspace-state",
+      "started": 2489602.203
+    },
+    {
+      "method": "PUT",
+      "path": "/api/v1/projects/default/sessions/V-OSKXf1grBI6VI7GrLBOB5Vaw6ASRdN/draft",
+      "started": 2489659.421
+    },
+    {
+      "method": "PUT",
+      "path": "/api/v1/projects/default/sessions/V-OSKXf1grBI6VI7GrLBOB5Vaw6ASRdN/draft",
+      "started": 2489774.812
+    },
+    {
+      "method": "PUT",
+      "path": "/api/v1/projects/default/sessions/V-OSKXf1grBI6VI7GrLBOB5Vaw6ASRdN/draft",
+      "started": 2489774.859
+    },
+    {
+      "method": "PUT",
+      "path": "/api/v1/projects/default/sessions/V-OSKXf1grBI6VI7GrLBOB5Vaw6ASRdN/draft/submissions/6a398a1a36c753cb3ad36fd49955d592",
+      "started": 2489774.859
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/projects/default/sessions/V-OSKXf1grBI6VI7GrLBOB5Vaw6ASRdN/queue",
+      "started": 2489774.875
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/v1/projects/default/sessions/V-OSKXf1grBI6VI7GrLBOB5Vaw6ASRdN/draft/submissions/6a398a1a36c753cb3ad36fd49955d592",
+      "started": 2489774.89
+    },
+    {
+      "method": "PUT",
+      "path": "/api/v1/projects/default/sessions/V-OSKXf1grBI6VI7GrLBOB5Vaw6ASRdN/queue/6a398a1a36c753cb3ad36fd49955d592",
+      "started": 2489774.906
+    },
+    {
+      "method": "PUT",
+      "path": "/api/v1/projects/default/sessions/V-OSKXf1grBI6VI7GrLBOB5Vaw6ASRdN/queue/6a398a1a36c753cb3ad36fd49955d592",
+      "started": 2489774.921
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/projects/default/sessions/V-OSKXf1grBI6VI7GrLBOB5Vaw6ASRdN/runs",
+      "started": 2489774.937
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/v1/projects/default/sessions/V-OSKXf1grBI6VI7GrLBOB5Vaw6ASRdN/queue/6a398a1a36c753cb3ad36fd49955d592",
+      "started": 2489774.968
+    },
+    {
+      "method": "PUT",
+      "path": "/api/v1/workspace-state",
+      "started": 2489814.687
+    },
+    {
+      "method": "PUT",
+      "path": "/api/v1/projects/default/sessions/V-OSKXf2SlEHwvdI5N-02v_dN8IeuREO/draft",
+      "started": 2489829.031
+    },
+    {
+      "method": "PUT",
+      "path": "/api/v1/projects/default/sessions/V-OSKXf2SlEHwvdI5N-02v_dN8IeuREO/draft",
+      "started": 2489836.531
+    },
+    {
+      "method": "PUT",
+      "path": "/api/v1/projects/default/sessions/V-OSKXf2SlEHwvdI5N-02v_dN8IeuREO/draft",
+      "started": 2489836.562
+    },
+    {
+      "method": "PUT",
+      "path": "/api/v1/projects/default/sessions/V-OSKXf2SlEHwvdI5N-02v_dN8IeuREO/draft/submissions/87206d932a060ed72c523aea6c015025",
+      "started": 2489836.593
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/projects/default/sessions/V-OSKXf2SlEHwvdI5N-02v_dN8IeuREO/queue",
+      "started": 2489836.609
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/v1/projects/default/sessions/V-OSKXf2SlEHwvdI5N-02v_dN8IeuREO/draft/submissions/87206d932a060ed72c523aea6c015025",
+      "started": 2489836.625
+    },
+    {
+      "method": "PUT",
+      "path": "/api/v1/projects/default/sessions/V-OSKXf2SlEHwvdI5N-02v_dN8IeuREO/queue/87206d932a060ed72c523aea6c015025",
+      "started": 2489836.64
+    },
+    {
+      "method": "PUT",
+      "path": "/api/v1/projects/default/sessions/V-OSKXf2SlEHwvdI5N-02v_dN8IeuREO/queue/87206d932a060ed72c523aea6c015025",
+      "started": 2489836.671
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/projects/default/sessions/V-OSKXf2SlEHwvdI5N-02v_dN8IeuREO/runs",
+      "started": 2489836.687
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/v1/projects/default/sessions/V-OSKXf2SlEHwvdI5N-02v_dN8IeuREO/queue/87206d932a060ed72c523aea6c015025",
+      "started": 2489836.718
+    }
+  ],
+  "websockets": [
+    {
+      "started": 2489601.953,
+      "status": 101,
+      "upstream_bytes": 224,
+      "downstream_bytes": 512,
+      "opened": 2489601.953,
+      "closed": 2489634.984
+    },
+    {
+      "started": 2489644.703,
+      "status": 101,
+      "upstream_bytes": 1347,
+      "downstream_bytes": 10091,
+      "opened": 2489644.703
+    }
+  ],
+  "armed_at": 2489634.984,
+  "model_calls": {
+    "LIVE_PROBE_SAVED_DRAFT + LOCAL_DURING_RECONNECT": 1,
+    "LIVE_PROBE_FOLLOWUP": 1
+  },
+  "sessions": [
+    {
+      "id": "V-OSKXf1grBI6VI7GrLBOB5Vaw6ASRdN",
+      "title": "Live probe",
+      "user_inputs": [
+        "LIVE_PROBE_SAVED_DRAFT + LOCAL_DURING_RECONNECT"
+      ],
+      "final_model_errors": 0,
+      "event_kinds": {
+        "agent_start": 1,
+        "model_start": 1,
+        "model_text_delta": 1,
+        "model_done": 1,
+        "agent_done": 1
+      },
+      "queue": {
+        "items": [],
+        "discard_images": []
+      },
+      "draft": {
+        "revision": 6,
+        "text": "",
+        "attachments": [],
+        "run_admission_uncertain": false,
+        "submission": null,
+        "submissions": []
+      }
+    },
+    {
+      "id": "V-OSKXf2SlEHwvdI5N-02v_dN8IeuREO",
+      "title": "Live follow-up",
+      "user_inputs": [
+        "LIVE_PROBE_FOLLOWUP"
+      ],
+      "final_model_errors": 0,
+      "event_kinds": {
+        "agent_start": 1,
+        "model_start": 1,
+        "model_text_delta": 1,
+        "model_done": 1,
+        "agent_done": 1
+      },
+      "queue": {
+        "items": [],
+        "discard_images": []
+      },
+      "draft": {
+        "revision": 5,
+        "text": "",
+        "attachments": [],
+        "run_admission_uncertain": false,
+        "submission": null,
+        "submissions": []
+      }
+    }
+  ],
+  "runs": {
+    "automatic": true,
+    "active_runs": 0,
+    "starting_runs": 0,
+    "retained_runs": 2,
+    "max_active": 8,
+    "max_retained": 64,
+    "runs_started": 2,
+    "runs_completed": 2,
+    "runs_failed": 0,
+    "items": [
+      {
+        "id": "run-V-OSKYbZM98-WgVQNCxz58vNVfdPkWJq",
+        "project_id": "default",
+        "session_id": "V-OSKXf2SlEHwvdI5N-02v_dN8IeuREO",
+        "agent_run_id": 2,
+        "agent_id": "mdo.default",
+        "model_id": "queue-fixture",
+        "protocol": "openai-chat-completions",
+        "reasoning_effort": "none",
+        "state": "succeeded",
+        "result": "ok",
+        "error_code": "none",
+        "terminal": true,
+        "cancel_requested": false,
+        "resume": false,
+        "client_resume_id": "",
+        "created_at": 1791474780101788,
+        "started_at": 1791474780108273,
+        "ended_at": 1791474780164687,
+        "config_revision": 3,
+        "model_generation": 2,
+        "module_generation": 1,
+        "skill_generation": 1,
+        "memory_generation": 1,
+        "agent_turns": 1,
+        "model_calls": 1,
+        "tool_calls": 0,
+        "compactions": 0,
+        "final_text_available": true,
+        "final_text_truncated": false,
+        "final_text_bytes": 43
+      },
+      {
+        "id": "run-V-OSKYNq3IuJVblhMqzhx8KVM6Hcx-ia",
+        "project_id": "default",
+        "session_id": "V-OSKXf1grBI6VI7GrLBOB5Vaw6ASRdN",
+        "agent_run_id": 1,
+        "agent_id": "mdo.default",
+        "model_id": "queue-fixture",
+        "protocol": "openai-chat-completions",
+        "reasoning_effort": "none",
+        "state": "succeeded",
+        "result": "ok",
+        "error_code": "none",
+        "terminal": true,
+        "cancel_requested": false,
+        "resume": false,
+        "client_resume_id": "",
+        "created_at": 1791474718347575,
+        "started_at": 1791474718353861,
+        "ended_at": 1791474718394920,
+        "config_revision": 3,
+        "model_generation": 2,
+        "module_generation": 1,
+        "skill_generation": 1,
+        "memory_generation": 1,
+        "agent_turns": 1,
+        "model_calls": 1,
+        "tool_calls": 0,
+        "compactions": 0,
+        "final_text_available": true,
+        "final_text_truncated": false,
+        "final_text_bytes": 71
+      }
+    ]
+  }
+}
