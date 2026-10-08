@@ -16,13 +16,16 @@ from test_run_manager_runtime import ROOT, PROBE_SOURCE, write_site, run_probe
 HOOK = r'''
 static void ProbeDestroy(MdoAgentRun* Run);
 static bool ProbeGetInfo(MdoAgentRun* Run, MdoAgentRunInfo* Info);
+static bool ProbeStart(MdoAgentRun* Run, xwork_error* Error);
 static xwaitresult ProbeShutdownWait(xcond* Cond, xmutex* Lock);
 #define MdoAgentRunDestroy ProbeDestroy
 #define MdoAgentRunGetInfo ProbeGetInfo
+#define MdoAgentRunStart ProbeStart
 #define xrtCondWait ProbeShutdownWait
 #include "src/runs/manager.c"
 #undef xrtCondWait
 #undef MdoAgentRunGetInfo
+#undef MdoAgentRunStart
 #undef MdoAgentRunDestroy
 '''
 
@@ -71,6 +74,18 @@ static xatomic32 PauseCleanup;
 static xatomic32 ShutdownDone;
 static xatomic32 CleanupTimedOut;
 static xatomic32 FinishBeforeStartReturns;
+static xatomic32 RefuseStart;
+static xatomic32 StartDone;
+
+static bool ProbeStart(MdoAgentRun* Run, xwork_error* Error) {
+    if (xrtAtomic32Load(&RefuseStart, XMEMORY_ACQUIRE)) {
+        xworkErrorInit(Error);
+        Error->eCode = XWORK_ERROR_CONTEXT;
+        snprintf(Error->sMessage, sizeof(Error->sMessage), "fixture refuses run before execution");
+        return false;
+    }
+    return MdoAgentRunStart(Run, Error);
+}
 
 static bool ProbeGetInfo(MdoAgentRun* Run, MdoAgentRunInfo* Info) {
     bool ok = MdoAgentRunGetInfo(Run, Info);
@@ -130,6 +145,8 @@ static bool GatesInit(void) {
     xrtAtomic32Init(&ShutdownDone, 0u);
     xrtAtomic32Init(&CleanupTimedOut, 0u);
     xrtAtomic32Init(&FinishBeforeStartReturns, 1u);
+    xrtAtomic32Init(&RefuseStart, 0u);
+    xrtAtomic32Init(&StartDone, 0u);
     return CleanupEntered != NULL && CleanupRelease != NULL && ShutdownWaiting != NULL;
 }
 
@@ -201,6 +218,8 @@ static bool ShutdownBarrier(const MdoRunStartOptions* Start) {
     /* The old implementation frees the manager while this pump is paused.
      * Avoid that destructive baseline path; the completion check exposes it. */
     if (held) {
+        (void)ProbeGateReset(ShutdownWaiting);
+        xrtAtomic32Store(&ShutdownDone, 0u, XMEMORY_RELEASE);
         shutdown = xrtThreadCreate(ShutdownWorker, NULL, 0u);
         if (shutdown != NULL) {
             waiting = xrtEventWaitFor(ShutdownWaiting, UINT64_C(5000000)) == XWAIT_OK;
@@ -263,6 +282,53 @@ static bool EntryMovementBarrier(xwork_runtime* Runtime,
         (unsigned long long)status.RunsCompleted);
     return admitted && evicted && protected_entry && finished;
 }
+
+static int32 FailedStartWorker(ptr Data) {
+    MdoRunInfo info;
+    xwork_error error;
+    bool may_execute = false, started;
+    memset(&info, 0, sizeof(info)); info.Size = sizeof(info);
+    started = MdoRunStartWithOutcome((const MdoRunStartOptions*)Data, &info, &error, &may_execute);
+    printf("refused_start=started:%d code:%d may_execute:%d\n", started, (int)error.eCode, may_execute);
+    xrtAtomic32Store(&StartDone, 1u, XMEMORY_RELEASE);
+    return started ? 1 : 0;
+}
+
+static bool FailedStartBarrier(xwork_runtime* Runtime,
+    const MdoRunManagerOptions* Options, const MdoRunStartOptions* Start) {
+    xthread* starter;
+    xthread* shutdown = NULL;
+    MdoRunManagerStatus status;
+    xwork_error error;
+    bool entered, waiting = false, done_before_release = true;
+    MdoRunManagerUnit();
+    if (!MdoRunManagerInit(Runtime, Options, &error)) return false;
+    (void)ProbeGateReset(CleanupEntered); (void)ProbeGateReset(CleanupRelease);
+    (void)ProbeGateReset(ShutdownWaiting);
+    xrtAtomic32Store(&RefuseStart, 1u, XMEMORY_RELEASE);
+    xrtAtomic32Store(&PauseCleanup, 1u, XMEMORY_RELEASE);
+    xrtAtomic32Store(&ShutdownDone, 0u, XMEMORY_RELEASE);
+    starter = xrtThreadCreate(FailedStartWorker, (ptr)Start, 0u);
+    if (starter == NULL) return false;
+    entered = ProbeGateWaitFor(CleanupEntered, UINT64_C(5000000)) == XWAIT_OK;
+    memset(&status, 0, sizeof(status)); status.Size = sizeof(status);
+    (void)MdoRunManagerGetStatus(&status);
+    if (entered && status.StartingRuns == 1u) {
+        shutdown = xrtThreadCreate(ShutdownWorker, NULL, 0u);
+        if (shutdown != NULL) {
+            waiting = ProbeGateWaitFor(ShutdownWaiting, UINT64_C(5000000)) == XWAIT_OK;
+            done_before_release = xrtAtomic32Load(&ShutdownDone, XMEMORY_ACQUIRE) != 0u;
+        }
+    }
+    ReleaseCleanup(starter);
+    if (shutdown != NULL) { (void)xrtThreadWait(shutdown); xrtThreadDestroy(shutdown); }
+    printf("failed_start_held=starting:%zu active:%zu retained:%zu completed:%llu waiting:%d done_before_release:%d starter_done:%u\n",
+        status.StartingRuns, status.ActiveRuns, status.RetainedRuns,
+        (unsigned long long)status.RunsCompleted, waiting, done_before_release,
+        xrtAtomic32Load(&StartDone, XMEMORY_ACQUIRE));
+    xrtAtomic32Store(&RefuseStart, 0u, XMEMORY_RELEASE);
+    return entered && status.StartingRuns == 1u && waiting && !done_before_release;
+}
 '''
 
 
@@ -278,6 +344,7 @@ def probe_source() -> str:
         '    printf("fast_start=state:%d terminal:%d\\n", (int)first.State, first.Terminal);\n'
         '    printf("first_started=id:', 1)
     source = source.replace("    MdoRunManagerUnit();\n    printf(\"manager_unit=",
+        "    if (!FailedStartBarrier(runtime, &manager, &start)) goto done;\n"
         "    if (!EntryMovementBarrier(runtime, &manager, &create, &start)) goto done;\n"
         "    start.Prompt = \"shutdown cleanup prompt\";\n"
         "    (void)ShutdownBarrier(&start);\n"
@@ -308,6 +375,7 @@ def main() -> int:
         "cleanup_reentry=pump:1 completed:0 cancel:1 requested:0 premature_start:0 may_execute:0",
         "first_done=state:2 result:0 terminal:1 bytes:24 text:interactive-agent-result refs:2",
         "second_done=state:4 result:-2 terminal:1 cancel:1 refs:2",
+        "failed_start_held=starting:1 active:0 retained:0 completed:0 waiting:1 done_before_release:0 starter_done:1",
         "entry_movement=admitted:1 evicted:1 protected:1 finished:1 active:0 completed:3",
         "shutdown_held=waiting:1 done_before_release:0 done_after_release:1",
         "manager_unit=refs:1 balanced:1",

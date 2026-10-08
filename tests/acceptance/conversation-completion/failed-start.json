@@ -1,0 +1,40 @@
+{
+  "source_base_commit": "7fdef2b",
+  "baseline_reproduced": true,
+  "baseline": [
+    "refused_start=started:0 code:7 may_execute:1",
+    "failed_start_held=starting:0 active:0 retained:0 completed:0 waiting:0 done_before_release:1 starter_done:1",
+    "cleanup_timeout=0",
+    "probe_done=1"
+  ],
+  "fixed_passed": true,
+  "fixed": [
+    "refused_start=started:0 code:7 may_execute:1",
+    "failed_start_held=starting:1 active:0 retained:0 completed:0 waiting:1 done_before_release:0 starter_done:1",
+    "entry_movement=admitted:1 evicted:1 protected:1 finished:1 active:0 completed:3",
+    "shutdown_held=waiting:1 done_before_release:0 done_after_release:1",
+    "manager_unit=refs:1 balanced:1",
+    "cleanup_timeout=0",
+    "probe_done=1"
+  ],
+  "http": {
+    "passed": true,
+    "checks": [
+      "invalid inputs, missing preconditions and source guards leave all session files unchanged",
+      "two replays return the original successful response without a second cut or revision change",
+      "changed replay parameters, a new ID with an old revision and a removed source are refused",
+      "a later session change invalidates cached replies; legacy guarded cuts still work",
+      "host restart fences the old page instead of replaying its writes",
+      "only the two explicitly started loopback model turns executed"
+    ],
+    "model_requests": 2,
+    "packed_sha256": "6b0199b98b5b3af89f2fed668002c5f1516ef34dc0d2c5328ebf4611faad2c21"
+  },
+  "candidate": {
+    "path": ".build/conversation-acceptance/mdo-start-final.exe",
+    "bytes": 4391484,
+    "sha256": "6b0199b98b5b3af89f2fed668002c5f1516ef34dc0d2c5328ebf4611faad2c21"
+  },
+  "manager_sha256": "53fe676c7ee6d8a802bf27cbaf1e54807f199c2032a072d94f4a8c7aa8d7fe4c",
+  "scope": "Controlled synthetic model callback and a disposable loopback Home; no load tests, device installs or publishing."
+}

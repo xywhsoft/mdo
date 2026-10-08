@@ -566,6 +566,7 @@ bool MdoRunStartWithOutcome(const MdoRunStartOptions* Options,
     size_t Index;
     bool Ready = false;
     bool Published = false;
+    bool StartingOwned = false;
     bool Stopping = false;
     uint64 ImageRunId = 0u;
     if ( MayHaveExecuted != NULL ) *MayHaveExecuted = false;
@@ -667,6 +668,7 @@ bool MdoRunStartWithOutcome(const MdoRunStartOptions* Options,
     }
     Cancel = NULL;
     ++g_MdoRuns.StartingCount;
+    StartingOwned = true;
     Reserved = Entry->Info;
     (void)xrtMutexUnlock(g_MdoRuns.Lock);
 
@@ -815,6 +817,7 @@ publish:
         Session = NULL;
         Run = NULL;
         --g_MdoRuns.StartingCount;
+        StartingOwned = false;
         ++g_MdoRuns.ActiveCount;
         if ( g_MdoRuns.RunsStarted != UINT64_MAX ) ++g_MdoRuns.RunsStarted;
         Reserved = Entry->Info;
@@ -823,7 +826,6 @@ publish:
         Cancel = Entry->Cancel;
         Entry->Cancel = NULL;
         MdoRunsRemoveLocked(Index);
-        --g_MdoRuns.StartingCount;
         if ( Stopping )
             MdoRunsError(Error, XWORK_ERROR_CANCELLED,
                 "interactive run manager stopped while starting the run");
@@ -845,8 +847,6 @@ done:
                 Cancel = g_MdoRuns.Entries[Index].Cancel;
                 g_MdoRuns.Entries[Index].Cancel = NULL;
                 MdoRunsRemoveLocked(Index);
-                if ( g_MdoRuns.StartingCount != 0u )
-                    --g_MdoRuns.StartingCount;
                 if ( g_MdoRuns.Observer != NULL ) g_MdoRuns.Observer(g_MdoRuns.ObserverData);
                 (void)xrtCondBroadcast(g_MdoRuns.Changed);
             }
@@ -858,6 +858,17 @@ done:
         xrtCancelDestroy(Cancel);
     }
     xrtCancelDestroy(StartCancel);
+    if ( StartingOwned ) {
+        /* A failed start still owns its local run/session until destruction
+         * completes. Keep shutdown and active admission fenced through that
+         * cleanup, even after its unpublished registry entry is removed. */
+        (void)xrtMutexLock(g_MdoRuns.Lock);
+        --g_MdoRuns.StartingCount;
+        if ( g_MdoRuns.Observer != NULL )
+            g_MdoRuns.Observer(g_MdoRuns.ObserverData);
+        (void)xrtCondBroadcast(g_MdoRuns.Changed);
+        (void)xrtMutexUnlock(g_MdoRuns.Lock);
+    }
     return Published;
 
 unlock_reserve:

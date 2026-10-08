@@ -48,3 +48,17 @@ Windows 候选包 `.build/conversation-acceptance/mdo-run-final.exe` 为 4,391,2
 
 本阶段未安装或发布 APK；Android 签名沿用上一阶段记录的升级限制，
 真机功能检查仍未完成。本记录不代表压力测试或全部功能最终验收。
+
+## 启动失败收尾补充
+
+继续审查发现：启动失败会先移除未公开记录、减少启动计数，然后才释放
+局部运行和会话。关闭流程可能据此过早返回。可控探针包装一次 Agent
+Start 失败并暂停释放，在 `7fdef2b` 上复现 `starting:0`；修复后保持
+`starting:1`，关闭进入真实条件等待，释放后启动线程和关闭线程正常退出，
+owner 引用平衡。没有改变启动请求的执行不确定标记或增加启动重放。
+
+新增结果见 `failed-start.json`。此后 Windows 候选为
+`.build/conversation-acceptance/mdo-start-final.exe`，实际 HTTP/TCC 的两轮
+连续发送、历史编辑重放和重启围栏验证通过。上面的四轮浏览器截图及
+`acceptance.json` 对应先前的 `mdo-run-final.exe`，两个包的哈希分别记录。
+两批候选文件均保留，方便复核。
