@@ -1,0 +1,81 @@
+{
+  "source_base_commit": "624ab9c",
+  "baseline": {
+    "candidate": ".build/conversation-acceptance/mdo-start-final.exe",
+    "lost_resume_response_status": 202,
+    "model_started": true,
+    "observed_error": "无法连接本地服务，请确认 mdo 仍在运行。",
+    "evidence": "Live accessibility state captured the toast; the later baseline screenshot shows the resumed stream after the toast expired."
+  },
+  "candidate": {
+    "path": ".build/conversation-acceptance/mdo-recovery-ack-final.exe",
+    "bytes": 4394410,
+    "sha256": "ce25b72df7ffb41e91e75bd9816265bc4e90db2f95b351694dbaee929af9969b"
+  },
+  "browser_model_calls": {
+    "streaming": 2,
+    "stream-stop": 3
+  },
+  "browser_run_starts": 5,
+  "browser_run_ends": 5,
+  "browser_final_model_errors": 0,
+  "browser_requests": [
+    {
+      "prompt": "streaming",
+      "image_parts": 0,
+      "user_messages": 1,
+      "tool_results": 0
+    },
+    {
+      "prompt": "streaming",
+      "image_parts": 0,
+      "user_messages": 1,
+      "tool_results": 0
+    },
+    {
+      "prompt": "stream-stop",
+      "image_parts": 0,
+      "user_messages": 2,
+      "tool_results": 0
+    },
+    {
+      "prompt": "stream-stop",
+      "image_parts": 0,
+      "user_messages": 1,
+      "tool_results": 0
+    },
+    {
+      "prompt": "stream-stop",
+      "image_parts": 0,
+      "user_messages": 1,
+      "tool_results": 0
+    }
+  ],
+  "http": {
+    "passed": true,
+    "model_requests": 3,
+    "packed_sha256": "ce25b72df7ffb41e91e75bd9816265bc4e90db2f95b351694dbaee929af9969b",
+    "checks": [
+      "invalid correlation IDs do not change history or start a model",
+      "accepted resume has the same correlation in the reply, run detail and run list",
+      "a busy/stale recovery is refused without another model call",
+      "legacy resume without a client ID still works",
+      "ending advances a closed recovery boundary; repeating its old guard changes nothing",
+      "host restart fences the old page and preserves files"
+    ]
+  },
+  "edit_regression": {
+    "passed": true,
+    "checks": [
+      "invalid inputs, missing preconditions and source guards leave all session files unchanged",
+      "two replays return the original successful response without a second cut or revision change",
+      "changed replay parameters, a new ID with an old revision and a removed source are refused",
+      "a later session change invalidates cached replies; legacy guarded cuts still work",
+      "host restart fences the old page instead of replaying its writes",
+      "only the two explicitly started loopback model turns executed"
+    ],
+    "model_requests": 2,
+    "packed_sha256": "ce25b72df7ffb41e91e75bd9816265bc4e90db2f95b351694dbaee929af9969b"
+  },
+  "scope": "Disposable loopback model and portable Home. No paid model calls, stress tests, phone installation or public release."
+}

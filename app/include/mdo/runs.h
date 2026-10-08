@@ -50,6 +50,9 @@ typedef struct MdoRunStartOptions {
     /* Opaque recovery view token accepted by the user. Recomputed against
      * the exact Agent instance immediately before the resume starts. */
     const char* RecoveryToken;
+    /* Optional client correlation for one resume submission; read-only
+     * confirmation uses it, without automatically replaying the run. */
+    const char* ClientResumeId;
     const xwork_resume_options* ResumeOptions;
     /* Complete queue-bound profile, borrowed until start returns. Null for
      * ordinary starts and recovery. */
@@ -100,6 +103,7 @@ typedef struct MdoRunInfo {
     char AgentId[MDO_SESSION_IDENTITY_CAPACITY];
     char ModelId[MDO_SESSION_IDENTITY_CAPACITY];
     char ReasoningEffort[MDO_SESSION_REASONING_CAPACITY];
+    char ClientResumeId[33];
 } MdoRunInfo;
 
 typedef struct MdoRunManagerStatus {

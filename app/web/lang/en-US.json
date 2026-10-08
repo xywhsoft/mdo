@@ -68,6 +68,8 @@
   "error.sessionBackupUnavailable": "The backup service is temporarily unavailable. Your original session is retained; try again later.",
   "error.sessionMessageChanged": "The original message changed or was removed in another window. Keep your edit, refresh the conversation, and select the message again.",
   "error.sessionEditConflict": "This edit differs from the earlier request. Your input is retained; refresh the conversation and select the message again.",
+  "error.recoveryResumeUnconfirmed": "The resume could not be confirmed. Reconnect and check the run before deciding whether to retry. Existing conversation content is retained.",
+  "error.recoveryAbandonUnconfirmed": "The end of this response could not be confirmed. Reconnect and refresh the session. Existing content is retained.",
   "error.sessionEditUnconfirmed": "The edit result could not be confirmed yet. Your input is saved; reconnect and check the conversation before sending again.",
   "error.sessionEditDraftUnsaved": "Your edit has not been saved. The old history is unchanged. Keep your input and reconnect before trying again.",
   "app.name": "Mdo",

@@ -1,0 +1,41 @@
+{
+  "resume_lost_response": {
+    "posts": [
+      {
+        "method": "POST",
+        "status": 202,
+        "id": "c93243499991a18945f2f5d40e2300fd"
+      }
+    ],
+    "model_requests": 2,
+    "errors": 0
+  },
+  "end_lost_response": {
+    "posts": [
+      {
+        "method": "POST",
+        "status": 200
+      }
+    ],
+    "errors": 0,
+    "draft_preserved": true
+  },
+  "exhausted_confirmation": {
+    "posts": 1,
+    "blocked_before_server": true,
+    "id": "42a01ed598749a1d6fb3b849f53eb408",
+    "final_errors": [
+      {
+        "text": "暂时无法确认任务是否已继续。请恢复连接后查看运行状态，再决定是否重试；已有对话内容会保留。",
+        "tone": "error"
+      }
+    ],
+    "model_requests_added": 0
+  },
+  "explicit_continue": {
+    "posts": 1,
+    "status": 202,
+    "id": "4bc4cc0f73e869939e8318c8ca67c902",
+    "draft": "shi UNSENT_AFTER_UNCONFIRMEDu"
+  }
+}

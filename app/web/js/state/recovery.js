@@ -46,11 +46,13 @@ export function loadRecovery() {
   });
 }
 
-export async function resumeRecovery(data, choices) {
+export async function resumeRecovery(data, choices, options = {}) {
   const project = resourceId(data?.project_id, "project");
   const session = resourceId(data?.session_id, "session");
   const token = String(data?.recovery_token ?? "");
   if (!/^[0-9a-f]{64}$/.test(token)) throw new TypeError("recovery token is invalid");
+  if (options.clientResumeId && !/^[0-9a-f]{32}$/.test(options.clientResumeId))
+    throw new TypeError("resume correlation ID is invalid");
   const decisions = (data?.items ?? []).map((item) => {
     const action = choices.get(String(item.tool_call_id));
     if (!new Set(["retry", "record_uncertain"]).has(action)) {
@@ -61,14 +63,17 @@ export async function resumeRecovery(data, choices) {
     }
     return { tool_call_id: String(item.tool_call_id), action };
   });
-  return withSessionRuntime(project, session, async () =>
-    (await api.post(`/projects/${project}/sessions/${session}/resume`, {
+  return withSessionRuntime(project, session, async () => {
+    if (options.signal?.aborted) throw new DOMException("Recovery cancelled", "AbortError");
+    return (await api.post(`/projects/${project}/sessions/${session}/resume`, {
       recovery_token: token,
       decisions,
-    })).data);
+      ...(options.clientResumeId ? { client_resume_id: options.clientResumeId } : {}),
+    }, { signal: options.signal })).data;
+  });
 }
 
-export async function abandonRecovery(data) {
+export async function abandonRecovery(data, options = {}) {
   const project = resourceId(data?.project_id, "project");
   const session = resourceId(data?.session_id, "session");
   const revision = Number(data?.revision);
@@ -77,8 +82,10 @@ export async function abandonRecovery(data) {
       !Number.isSafeInteger(lastSequence) || lastSequence < 1 ||
       data?.resume_required !== true)
     throw new TypeError("only an unchanged interrupted response can be ended");
-  return withSessionRuntime(project, session, async () =>
-    (await api.post(`/projects/${project}/sessions/${session}/abandon`, {
+  return withSessionRuntime(project, session, async () => {
+    if (options.signal?.aborted) throw new DOMException("Recovery cancelled", "AbortError");
+    return (await api.post(`/projects/${project}/sessions/${session}/abandon`, {
       revision, last_sequence: lastSequence,
-    })).data);
+    }, { signal: options.signal })).data;
+  });
 }

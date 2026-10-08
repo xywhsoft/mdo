@@ -1,4 +1,5 @@
-import { abandonRecovery, loadRecovery, resumeRecovery } from "../../state/recovery.js";
+import { loadRecovery } from "../../state/recovery.js";
+import { runRecoveryAction } from "./recovery-action.js";
 import { clear, element, errorMessage, toast } from "../../utils/dom.js";
 import { subscribeLocale, t } from "../../i18n.js";
 import { renderToolPreview, renderToolArguments } from "../approvals/tool-preview.js";
@@ -20,13 +21,14 @@ export function createRecoveryDock({ container, summary, store, onResume, onAban
     let accepted = false;
     render();
     try {
-      const run = await resumeRecovery(operation.data, operation.choices);
+      const run = await runRecoveryAction({ kind: "resume", data: operation.data, choices: operation.choices });
       accepted = true;
       if (decisions.isCurrent(data)) toast(t("recovery.submitted", {}, "正在继续任务"));
       onResume?.(run, operation.data);
       if (decisions.isCurrent(data)) await loadRecovery();
     } catch (error) {
-      if (decisions.isCurrent(data)) {
+      accepted ||= error?.recoveryActionUncertain === true;
+      if (error?.name !== "AbortError" && decisions.isCurrent(data)) {
         toast(errorMessage(error), "error");
         if (error?.code === "recovery_state_conflict") await loadRecovery();
       }
@@ -42,7 +44,7 @@ export function createRecoveryDock({ container, summary, store, onResume, onAban
     let accepted = false;
     render();
     try {
-      await abandonRecovery(operation.data);
+      await runRecoveryAction({ kind: "abandon", data: operation.data });
       accepted = true;
       if (decisions.isCurrent(data)) {
         toast(t("recovery.abandoned", {}, "已结束本次回复，可以发送新消息"));
@@ -53,7 +55,8 @@ export function createRecoveryDock({ container, summary, store, onResume, onAban
       if (current?.project_id === data.project_id && current?.session_id === data.session_id)
         document.querySelector("#prompt")?.focus({ preventScroll: true });
     } catch (error) {
-      if (decisions.isCurrent(data)) {
+      accepted ||= error?.recoveryActionUncertain === true;
+      if (error?.name !== "AbortError" && decisions.isCurrent(data)) {
         toast(errorMessage(error), "error");
         if (error?.code === "recovery_state_conflict") await loadRecovery();
       }

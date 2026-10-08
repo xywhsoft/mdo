@@ -121,6 +121,16 @@ static bool MdoRunsPromptValid(const char* Prompt, bool AllowEmpty)
         xrtUtf8Valid(xrtStrViewN(Prompt, Size), NULL);
 }
 
+static bool MdoRunsClientResumeIdValid(const char* Id)
+{
+    size_t i;
+    if ( Id == NULL || strlen(Id) != 32u ) return false;
+    for ( i = 0u; i < 32u; ++i )
+        if ( !((Id[i] >= '0' && Id[i] <= '9') ||
+               (Id[i] >= 'a' && Id[i] <= 'f')) ) return false;
+    return true;
+}
+
 static bool MdoRunsRecoveryTokenValid(MdoAgentSession* Agent,
     const char* ExpectedToken, xwork_error* Error)
 {
@@ -600,6 +610,8 @@ bool MdoRunStartWithOutcome(const MdoRunStartOptions* Options,
          ((Options->QueueItemId == NULL) !=
           (Options->OnPrepared == NULL)) ||
          (Options->Resume && Options->ProfileModelId != NULL) ||
+         (Options->ClientResumeId != NULL && (!Options->Resume ||
+             !MdoRunsClientResumeIdValid(Options->ClientResumeId))) ||
          (Info != NULL && Info->Size < sizeof(*Info)) ) {
         MdoRunsError(Error, XWORK_ERROR_INVALID_ARGUMENT,
             "invalid interactive run start request");
@@ -623,6 +635,9 @@ bool MdoRunStartWithOutcome(const MdoRunStartOptions* Options,
     Reserved.CreatedAt = xrtNow();
     Reserved.CreatedMicroseconds = xrtClock();
     Reserved.Resume = Options->Resume;
+    if ( Options->ClientResumeId != NULL )
+        snprintf(Reserved.ClientResumeId, sizeof(Reserved.ClientResumeId),
+            "%s", Options->ClientResumeId);
     snprintf(Reserved.ProjectId, sizeof(Reserved.ProjectId), "%s",
         Options->ProjectId);
     snprintf(Reserved.SessionId, sizeof(Reserved.SessionId), "%s",

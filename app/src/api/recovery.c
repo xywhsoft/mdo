@@ -347,6 +347,9 @@ bool MdoApiSessionResumeRoute(MdoApiContext* Context)
     size_t Index;
     bool Valid;
     xwork_error Error;
+    char ClientResumeId[33] = {0};
+    const xvalue* ClientIdValue;
+    xstrview ClientId;
 
     if ( !MdoApiRecoveryPath(Context, Project, SessionId) )
         return MdoApiReplyError(Context, 400u, "invalid_session_path",
@@ -356,11 +359,21 @@ bool MdoApiSessionResumeRoute(MdoApiContext* Context)
         return MdoApiReplyBodyError(Context, BodyStatus);
     DecisionValues = xrtValueType(Body.Value) == XVALUE_OBJECT ?
         xrtValueObjectGet(Body.Value, XRT_STR_LITERAL("decisions")) : NULL;
+    ClientIdValue = xrtValueType(Body.Value) == XVALUE_OBJECT ?
+        xrtValueObjectGet(Body.Value, XRT_STR_LITERAL("client_resume_id")) : NULL;
     Valid = xrtValueType(Body.Value) == XVALUE_OBJECT &&
-        xrtValueCount(Body.Value) == 2u &&
+        xrtValueCount(Body.Value) == (ClientIdValue != NULL ? 3u : 2u) &&
         MdoApiRecoveryToken(Body.Value, RecoveryToken) &&
         DecisionValues != NULL &&
         xrtValueType(DecisionValues) == XVALUE_ARRAY;
+    if ( Valid && ClientIdValue != NULL ) {
+        Valid = xrtValueType(ClientIdValue) == XVALUE_STRING &&
+            xrtValueGetString(ClientIdValue, &ClientId) && ClientId.Size == 32u;
+        for ( Index = 0u; Valid && Index < ClientId.Size; ++Index )
+            if ( !((ClientId.Data[Index] >= '0' && ClientId.Data[Index] <= '9') ||
+                   (ClientId.Data[Index] >= 'a' && ClientId.Data[Index] <= 'f')) ) Valid = false;
+        if ( Valid ) memcpy(ClientResumeId, ClientId.Data, 32u);
+    }
     Count = Valid ? xrtValueCount(DecisionValues) : 0u;
     Valid = Valid && Count <= MDO_API_RECOVERY_CALL_MAX;
     for ( Index = 0u; Valid && Index < Count; ++Index ) {
@@ -387,6 +400,7 @@ bool MdoApiSessionResumeRoute(MdoApiContext* Context)
     Options.SessionId = SessionId;
     Options.Resume = true;
     Options.RecoveryToken = RecoveryToken;
+    Options.ClientResumeId = ClientIdValue != NULL ? ClientResumeId : NULL;
     Options.ResumeOptions = &ResumeOptions;
     memset(&Info, 0, sizeof(Info));
     Info.Size = sizeof(Info);
@@ -411,7 +425,8 @@ bool MdoApiSessionResumeRoute(MdoApiContext* Context)
              !MdoApiValueSetString(Data, "result", "pending") ||
              !MdoApiValueSetBool(Data, "terminal", false) ||
              !MdoApiValueSetBool(Data, "cancel_requested", false) ||
-             !MdoApiValueSetBool(Data, "resume", true) ) {
+             !MdoApiValueSetBool(Data, "resume", true) ||
+             !MdoApiValueSetString(Data, "client_resume_id", Info.ClientResumeId) ) {
             xrtValueRelease(Data);
             return MdoApiReplyError(Context, 500u,
                 "run_result_unavailable",

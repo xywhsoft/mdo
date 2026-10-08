@@ -51,6 +51,7 @@ static bool MdoApiRunValue(const MdoRunInfo* Info, const char* FinalText,
         MdoApiValueSetBool(Item, "terminal", Info->Terminal) &&
         MdoApiValueSetBool(Item, "cancel_requested", Info->CancelRequested) &&
         MdoApiValueSetBool(Item, "resume", Info->Resume) &&
+        MdoApiValueSetString(Item, "client_resume_id", Info->ClientResumeId) &&
         MdoApiValueSetInt(Item, "created_at", Info->CreatedAt) &&
         MdoApiValueSetInt(Item, "started_at", Info->StartedAt) &&
         MdoApiValueSetInt(Item, "ended_at", Info->EndedAt) &&
