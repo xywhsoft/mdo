@@ -1,5 +1,5 @@
-import { ApiError, api, attachmentUrl, resourceId } from "../../api/client.js";
-import { createRequestRecovery } from "../../api/request-recovery.js";
+import { api, attachmentUrl, resourceId } from "../../api/client.js";
+import { createPromptQueueTransport, queueResponse } from "./prompt-queue-transport.js";
 import { subscribeLocale, t } from "../../i18n.js";
 import { clear, element, errorMessage, toast } from "../../utils/dom.js";
 import { createUnusedImageCleanup } from "./unused-image-cleanup.js";
@@ -11,45 +11,13 @@ function sessionKey(projectId, sessionId) {
     ? `${resourceId(projectId, "project")}/${resourceId(sessionId, "session")}` : "";
 }
 
-function path(key, id = "") {
-  const [projectId, sessionId] = key.split("/");
-  return `/projects/${projectId}/sessions/${sessionId}/queue${id ? `/${id}` : ""}`;
-}
-
 function newId() {
   return Array.from(crypto.getRandomValues(new Uint8Array(16)),
     (byte) => byte.toString(16).padStart(2, "0")).join("");
 }
 
-function uncertainPost(error) {
-  return ["network_error", "invalid_response", "queue_unavailable",
-    "remote_result_unconfirmed"]
-    .includes(error?.code);
-}
-
-function sameProfile(a, b) {
-  return (!a && !b) || (a && b &&
-    a.model_id === b.model_id &&
-    a.reasoning_effort === b.reasoning_effort &&
-    a.permission_profile === b.permission_profile);
-}
-
-function queueResponse(response) {
-  const items = response?.data?.items;
-  const ids = new Set();
-  if (!Array.isArray(items) || items.length > 20 || items.some(item => {
-    if (typeof item?.id !== "string" || !/^[A-Za-z0-9_-][A-Za-z0-9._-]*$/.test(item.id) ||
-        ids.has(item.id) || typeof item.text !== "string" ||
-        !["pending", "staged", "sending"].includes(item.state) ||
-        typeof item.priority !== "boolean" || !Array.isArray(item.attachments) ||
-        item.attachments.some(id => typeof id !== "string" || !/^[0-9a-f]{32}$/.test(id))) return true;
-    ids.add(item.id); return false;
-  })) throw new ApiError("Invalid prompt queue response", { code: "invalid_response" });
-  return response;
-}
-
 export function createPromptQueue({ container, navigation, isRunActive, stagedEntries,
-  createRecovery = createRequestRecovery,
+  createRecovery, stamp,
   isProfileBusy = () => false,
   isRunReviewPending = () => false, isSessionWritable = () => true,
   isSessionRunActive = () => false, modelsStore,
@@ -60,6 +28,7 @@ export function createPromptQueue({ container, navigation, isRunActive, stagedEn
   const expanded = new Map();
   const busy = new Set();
   const actionBusy = new Set();
+  const transport = createPromptQueueTransport({ createRecovery, stamp });
   const unusedImages = createUnusedImageCleanup({
     deleteImage: api.deleteImage, isRunActive: isSessionRunActive,
   });
@@ -98,21 +67,13 @@ export function createPromptQueue({ container, navigation, isRunActive, stagedEn
     render();
   }
 
-  async function read(operation) {
-    const recovery = createRecovery();
-    try { return await recovery.request(operation); }
-    finally { recovery.dispose(); }
-  }
-
-  const readQueue = key => read(async signal => queueResponse(await api.get(path(key), { signal })));
-
   async function load(key, force = false) {
     if (!key) return;
     if (!force && queues.has(key)) return;
     if (loads.has(key)) return loads.get(key);
     const version = versions.get(key) ?? 0;
     const request = (async () => {
-      const response = await readQueue(key);
+      const response = await transport.readQueue(key);
       if ((versions.get(key) ?? 0) === version) {
         update(key, response);
         unusedImages.remember(key, response.data?.discard_images);
@@ -128,6 +89,7 @@ export function createPromptQueue({ container, navigation, isRunActive, stagedEn
       stage = false, profile = null } = {}) {
     const key = sessionKey(projectId, sessionId);
     if (!key || (!text.trim() && !attachments.length)) return null;
+    const origin = transport.stamp();
     await load(key);
     if ((queues.get(key) ?? []).length >= 20 &&
         !(queues.get(key) ?? []).some((item) => item.id === id)) return null;
@@ -135,46 +97,8 @@ export function createPromptQueue({ container, navigation, isRunActive, stagedEn
     if (stage) body.stage = true;
     if (profile) body.profile = profile;
     const keepalive = new TextEncoder().encode(JSON.stringify(body)).length <= 60 * 1024;
-    const reconcile = async () => {
-      const response = await readQueue(key);
-      update(key, response);
-      if ((response.data?.items ?? []).some((item) =>
-        item.id === body.id && item.text === body.text &&
-        item.priority === body.priority &&
-        JSON.stringify(item.attachments ?? []) ===
-          JSON.stringify(body.attachments) &&
-        sameProfile(item.profile, body.profile)))
-        return true;
-      return Boolean(await readReceipt(key, body.id));
-    };
-    try {
-      update(key, await api.post(path(key), body, { keepalive }));
-      return id;
-    } catch (error) {
-      if (!uncertainPost(error)) throw error;
-      try { if (await reconcile()) return id; }
-      catch { /* A different page may have consumed the item. */ }
-      error.queueAdmissionUncertain = true;
-      error.queueItemId = id;
-      throw error;
-    }
-  }
-
-  async function readReceipt(key, id) {
-    const expectedId = resourceId(id, "queue item");
-    try {
-      return await read(async signal => {
-        const receipt = (await api.get(path(key, expectedId), { signal })).data;
-        if (receipt?.id === expectedId && receipt.state === "starting") return null;
-        if (receipt?.id !== expectedId || receipt.state !== "accepted" ||
-            !/^run-[A-Za-z0-9_.-]+$/.test(receipt.run_id ?? ""))
-          throw new ApiError("Invalid prompt queue receipt", { code: "invalid_response" });
-        return receipt;
-      });
-    } catch (error) {
-      if (error?.status === 404 && error.code === "queue_receipt_not_found") return null;
-      throw error;
-    }
+    update(key, await transport.post(key, body, { keepalive, origin }));
+    return id;
   }
 
   function render() {
@@ -438,7 +362,7 @@ export function createPromptQueue({ container, navigation, isRunActive, stagedEn
     const key = selectedKey();
     if (!key) return;
     const removed = queues.get(key)?.find((entry) => entry.id === id);
-    update(key, await api.delete(path(key, id)));
+    update(key, await transport.remove(key, id));
     try { await onRemoved?.(key, removed); }
     finally { unusedImages.remember(key, removed?.attachments); }
   }
@@ -472,7 +396,7 @@ export function createPromptQueue({ container, navigation, isRunActive, stagedEn
         item.id === id) ?? null;
     },
     receipt(projectId, sessionId, id) {
-      return readReceipt(sessionKey(projectId, sessionId), id);
+      return transport.readReceipt(sessionKey(projectId, sessionId), id);
     },
     hasStaged(projectId, sessionId) {
       return queues.get(sessionKey(projectId, sessionId))?.some((item) =>
@@ -485,21 +409,8 @@ export function createPromptQueue({ container, navigation, isRunActive, stagedEn
     },
     async promote(projectId, sessionId, id) {
       const key = sessionKey(projectId, sessionId);
-      try {
-        update(key, await api.put(path(key, id), { state: "pending" }));
-        return true;
-      } catch (error) {
-        if (error?.code !== "queue_state_conflict" && !uncertainPost(error))
-          throw error;
-        try {
-          await load(key, true);
-          if (["pending", "sending"].includes(
-            queues.get(key)?.find((item) => item.id === id)?.state)) return true;
-        } catch { /* Keep the uncertain state for review. */ }
-        error.queueAdmissionUncertain = true;
-        error.queueItemId = id;
-        throw error;
-      }
+      update(key, await transport.promote(key, id));
+      return true;
     },
     peek(projectId, sessionId) {
       const key = sessionKey(projectId, sessionId);
@@ -507,15 +418,15 @@ export function createPromptQueue({ container, navigation, isRunActive, stagedEn
     },
     async markSending(projectId, sessionId, id) {
       const key = sessionKey(projectId, sessionId);
-      update(key, await api.put(path(key, id), { state: "sending" }));
+      update(key, await transport.markSending(key, id));
     },
     async retry(projectId, sessionId, id) {
       const key = sessionKey(projectId, sessionId);
-      update(key, await api.put(path(key, id), { state: "pending" }));
+      update(key, await transport.retry(key, id));
     },
     async remove(projectId, sessionId, id) {
       const key = sessionKey(projectId, sessionId);
-      update(key, await api.delete(path(key, id)));
+      update(key, await transport.remove(key, id));
       // Dispatch has transferred any images to the run and its history.
     },
     async exclusive(projectId, sessionId, callback) {

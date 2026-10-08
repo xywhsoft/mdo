@@ -94,14 +94,14 @@ test("page exit cancels a hung read and ignores its late queue", async context =
 test("old refresh cannot overwrite a queue mutation that finished first", async context => {
   const env = fixture(); let hold = false, release;
   context.mock.method(globalThis, "fetch", async (_path, options) => {
-    if (options.method === "POST") return ok({ items: [item("new")] });
-    return hold ? new Promise(resolve => { release = resolve; }) : ok({ items: [item()] });
+    if (options.method === "PUT") return ok({ items: [item()] });
+    return hold ? new Promise(resolve => { release = resolve; }) : ok({ items: [{ ...item(), state: "staged" }] });
   });
   await env.settle(env.queue.select("default", "one")); hold = true;
   const old = env.queue.select("default", "one"); await flush();
-  await env.queue.enqueue("default", "one", "new");
-  release(ok({ items: [item("old")] })); await env.settle(old);
-  assert.equal(env.queue.find("default", "one", id).text, "new");
+  await env.settle(env.queue.promote("default", "one", id));
+  release(ok({ items: [{ ...item(), state: "staged" }] })); await env.settle(old);
+  assert.equal(env.queue.find("default", "one", id).state, "pending");
 });
 
 test("malformed queue data cannot erase or replace the saved queue", async context => {

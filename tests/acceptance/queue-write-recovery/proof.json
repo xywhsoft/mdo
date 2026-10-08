@@ -1,0 +1,327 @@
+{
+  "proxy_phases": [
+    {
+      "mode": "queue-post",
+      "queue_posts": 1,
+      "queue_puts": 2,
+      "queue_deletes": 1,
+      "queue_write_records": [
+        {
+          "method": "POST",
+          "id": "72d2eb6ac04494fc57ea4367c9214b3c",
+          "state": null,
+          "started": 2481722.375,
+          "lose": true,
+          "delay": false,
+          "native_status": 201,
+          "native_completed": 2481722.406
+        },
+        {
+          "method": "PUT",
+          "id": "72d2eb6ac04494fc57ea4367c9214b3c",
+          "state": "pending",
+          "started": 2481724.109,
+          "lose": false,
+          "delay": false,
+          "native_status": 200,
+          "native_completed": 2481724.14
+        },
+        {
+          "method": "PUT",
+          "id": "72d2eb6ac04494fc57ea4367c9214b3c",
+          "state": "sending",
+          "started": 2481724.156,
+          "lose": false,
+          "delay": false,
+          "native_status": 200,
+          "native_completed": 2481724.171
+        },
+        {
+          "method": "DELETE",
+          "id": "72d2eb6ac04494fc57ea4367c9214b3c",
+          "state": null,
+          "started": 2481724.234,
+          "lose": false,
+          "delay": false,
+          "native_status": 200,
+          "native_completed": 2481724.25
+        }
+      ],
+      "run_posts": 1,
+      "native_run_accepts": 1,
+      "lost_responses": 1,
+      "delayed_responses": 0,
+      "recovery_failed": 0,
+      "receipt_failed": 0,
+      "receipt_reads": 0,
+      "queue_reads": 11,
+      "queue_failed": 2,
+      "delayed_reads": 0,
+      "recovery_left": 0,
+      "receipt_left": 0,
+      "queue_left": 0,
+      "queue_hold_left": 0,
+      "queue_delete_left": 0,
+      "armed": false
+    },
+    {
+      "mode": "queue-promote",
+      "queue_posts": 1,
+      "queue_puts": 2,
+      "queue_deletes": 1,
+      "queue_write_records": [
+        {
+          "method": "POST",
+          "id": "2ec53aa4ce3b3ec68941b947c964fe9c",
+          "state": null,
+          "started": 2481804.125,
+          "lose": false,
+          "delay": false,
+          "native_status": 201,
+          "native_completed": 2481804.14
+        },
+        {
+          "method": "PUT",
+          "id": "2ec53aa4ce3b3ec68941b947c964fe9c",
+          "state": "pending",
+          "started": 2481804.171,
+          "lose": false,
+          "delay": true,
+          "native_status": 200,
+          "native_completed": 2481804.171
+        },
+        {
+          "method": "PUT",
+          "id": "2ec53aa4ce3b3ec68941b947c964fe9c",
+          "state": "sending",
+          "started": 2481809.89,
+          "lose": false,
+          "delay": false,
+          "native_status": 200,
+          "native_completed": 2481809.921
+        },
+        {
+          "method": "DELETE",
+          "id": "2ec53aa4ce3b3ec68941b947c964fe9c",
+          "state": null,
+          "started": 2481809.984,
+          "lose": false,
+          "delay": false,
+          "native_status": 200,
+          "native_completed": 2481810.0
+        }
+      ],
+      "run_posts": 1,
+      "native_run_accepts": 1,
+      "lost_responses": 0,
+      "delayed_responses": 1,
+      "recovery_failed": 0,
+      "receipt_failed": 0,
+      "receipt_reads": 1,
+      "queue_reads": 12,
+      "queue_failed": 0,
+      "delayed_reads": 0,
+      "recovery_left": 0,
+      "receipt_left": 0,
+      "queue_left": 0,
+      "queue_hold_left": 0,
+      "queue_delete_left": 0,
+      "armed": false
+    },
+    {
+      "mode": "queue-sending",
+      "queue_posts": 2,
+      "queue_puts": 4,
+      "queue_deletes": 2,
+      "queue_write_records": [
+        {
+          "method": "POST",
+          "id": "67c7d01bdbde35d04beb47d5c4834405",
+          "state": null,
+          "started": 2481864.421,
+          "lose": false,
+          "delay": false,
+          "native_status": 201,
+          "native_completed": 2481864.421
+        },
+        {
+          "method": "PUT",
+          "id": "67c7d01bdbde35d04beb47d5c4834405",
+          "state": "pending",
+          "started": 2481864.437,
+          "lose": false,
+          "delay": false,
+          "native_status": 200,
+          "native_completed": 2481864.453
+        },
+        {
+          "method": "PUT",
+          "id": "67c7d01bdbde35d04beb47d5c4834405",
+          "state": "sending",
+          "started": 2481864.453,
+          "lose": false,
+          "delay": true,
+          "native_status": 200,
+          "native_completed": 2481864.484
+        },
+        {
+          "method": "DELETE",
+          "id": "67c7d01bdbde35d04beb47d5c4834405",
+          "state": null,
+          "started": 2481872.546,
+          "lose": true,
+          "delay": false,
+          "native_status": 200,
+          "native_completed": 2481872.562
+        },
+        {
+          "method": "POST",
+          "id": "2544ab1f5d724746512ece3e5fdf222f",
+          "state": null,
+          "started": 2481886.406,
+          "lose": false,
+          "delay": false,
+          "native_status": 201,
+          "native_completed": 2481886.437
+        },
+        {
+          "method": "PUT",
+          "id": "2544ab1f5d724746512ece3e5fdf222f",
+          "state": "pending",
+          "started": 2481886.453,
+          "lose": false,
+          "delay": false,
+          "native_status": 200,
+          "native_completed": 2481886.453
+        },
+        {
+          "method": "PUT",
+          "id": "2544ab1f5d724746512ece3e5fdf222f",
+          "state": "sending",
+          "started": 2481886.468,
+          "lose": false,
+          "delay": false,
+          "native_status": 200,
+          "native_completed": 2481886.484
+        },
+        {
+          "method": "DELETE",
+          "id": "2544ab1f5d724746512ece3e5fdf222f",
+          "state": null,
+          "started": 2481886.515,
+          "lose": false,
+          "delay": false,
+          "native_status": 200,
+          "native_completed": 2481886.531
+        }
+      ],
+      "run_posts": 2,
+      "native_run_accepts": 2,
+      "lost_responses": 1,
+      "delayed_responses": 1,
+      "recovery_failed": 0,
+      "receipt_failed": 0,
+      "receipt_reads": 0,
+      "queue_reads": 16,
+      "queue_failed": 2,
+      "delayed_reads": 0,
+      "recovery_left": 0,
+      "receipt_left": 0,
+      "queue_left": 0,
+      "queue_hold_left": 0,
+      "queue_delete_left": 0,
+      "armed": false
+    }
+  ],
+  "model_calls": {
+    "queue write lost acknowledgement: exact once": 1,
+    "queue promotion delayed acknowledgement: continue once": 1,
+    "sending delayed and cleanup lost: exact once": 1,
+    "follow-up after recovered queue cleanup": 1
+  },
+  "sessions": [
+    {
+      "id": "V-OSK48AiZtzuGAYPTxs29s_ukTgEppa",
+      "title": "Start queue-post",
+      "user_inputs": [
+        "queue write lost acknowledgement: exact once"
+      ],
+      "final_errors": 0,
+      "event_kinds": {
+        "agent_start": 1,
+        "model_start": 1,
+        "model_text_delta": 1,
+        "model_done": 1,
+        "agent_done": 1
+      },
+      "queue": {
+        "items": [],
+        "discard_images": []
+      },
+      "draft": {
+        "revision": 4,
+        "text": "",
+        "attachments": [],
+        "run_admission_uncertain": false,
+        "submission": null,
+        "submissions": []
+      }
+    },
+    {
+      "id": "V-OSK48CUakD7hOYZd7nxWGwND3JpN86",
+      "title": "Start queue-promote",
+      "user_inputs": [
+        "queue promotion delayed acknowledgement: continue once"
+      ],
+      "final_errors": 0,
+      "event_kinds": {
+        "agent_start": 1,
+        "model_start": 1,
+        "model_text_delta": 1,
+        "model_done": 1,
+        "agent_done": 1
+      },
+      "queue": {
+        "items": [],
+        "discard_images": []
+      },
+      "draft": {
+        "revision": 4,
+        "text": "",
+        "attachments": [],
+        "run_admission_uncertain": false,
+        "submission": null,
+        "submissions": []
+      }
+    },
+    {
+      "id": "V-OSK48Cqw5HNPVm_i_QtuDp_r_1g7hE",
+      "title": "Start queue-sending",
+      "user_inputs": [
+        "sending delayed and cleanup lost: exact once",
+        "follow-up after recovered queue cleanup"
+      ],
+      "final_errors": 0,
+      "event_kinds": {
+        "agent_start": 2,
+        "model_start": 2,
+        "model_text_delta": 2,
+        "model_done": 2,
+        "agent_done": 2
+      },
+      "queue": {
+        "items": [],
+        "discard_images": []
+      },
+      "draft": {
+        "revision": 8,
+        "text": "",
+        "attachments": [],
+        "run_admission_uncertain": false,
+        "submission": null,
+        "submissions": []
+      }
+    }
+  ],
+  "websocket_unavailable": true
+}

@@ -1,0 +1,32 @@
+{
+  "baseline_new_checks": {
+    "passed": 2,
+    "failed": 10
+  },
+  "current_node_checks": {
+    "passed": 54,
+    "failed": 0
+  },
+  "frontend_contracts_passed": 4,
+  "native_write_checks": [
+    {
+      "mode": "queue-post",
+      "messages": 1,
+      "one_write_per_id_and_state": true
+    },
+    {
+      "mode": "queue-promote",
+      "messages": 1,
+      "one_write_per_id_and_state": true
+    },
+    {
+      "mode": "queue-sending",
+      "messages": 2,
+      "one_write_per_id_and_state": true
+    }
+  ],
+  "model_calls": 4,
+  "final_model_errors": 0,
+  "browser_warnings_or_errors": 0,
+  "all_queues_and_submission_markers_cleared": true
+}
