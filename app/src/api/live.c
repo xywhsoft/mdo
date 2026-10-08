@@ -3,6 +3,7 @@
 
 #include "internal.h"
 #include "write_admission.h"
+#include "../remote/lan.h"
 #include "../sessions/internal.h"
 #include "../../include/mdo/approvals.h"
 #include "../../include/mdo/asks.h"
@@ -517,6 +518,15 @@ static bool MdoLiveAuthorized(MdoApiContext* Context)
          memcmp(Expected, Origin->Value.Data, Origin->Value.Size) != 0 ) return false;
     snprintf(Protocol, sizeof(Protocol), "mdo.token.%s", Token);
     return xrtWsProtocolsValid(Protocols->Value) && xrtWsProtocolsHas(Protocols->Value, xrtStrView(Protocol));
+}
+
+bool MdoApiDirectRoute(MdoApiContext* Context)
+{
+    if (!MdoLiveAuthorized(Context) || !MdoAccountHasSession())
+        return MdoApiReplyError(Context,403u,"direct_forbidden","Use this page's origin and token",NULL);
+    if (!MdoLanGatewayAccept(Context->Request))
+        return MdoApiReplyError(Context,503u,"direct_unavailable","Direct connection is unavailable",NULL);
+    Context->Takeover=true; return true;
 }
 
 bool MdoApiLiveRoute(MdoApiContext* Context)

@@ -22,9 +22,9 @@
 
 ## 分块和流控
 
-业务文本帧承载请求头、响应头、完成/错误、受理查询和事件控制。二进制帧采用 `MDP1`、种类字节、16 字节请求 ID、8 字节大端偏移和正文；每块不超过 64 KiB。上传偏移连续，每块确认后才继续；下载有 64 KiB 的未确认窗口。队列、并行请求、总上传内存和超时分别受限，心跳及其他请求不被单个文件堵塞。
+业务文本帧承载请求头、响应头、完成/错误、受理查询和事件控制。二进制帧采用 `MDP1`、种类字节、16 字节请求 ID、8 字节大端偏移和正文；每块不超过 64 KiB。上传偏移连续，每块确认后才继续；下载默认 64 KiB，新端在 hello 的 `window_max` 与请求的 `window_bytes` 中协商最高 256 KiB 窗口，以消费后确认保持流控。队列、并行请求、总上传内存和超时分别受限，心跳及其他请求不被单个文件堵塞。
 
-响应只转发允许的 HTTP 字段及解码后的正文。文件、图片和备份保持二进制；不使用 base64/巨大 JSON 包装。现有大备份上传 API 自身的分片机制继续复用。事件通过目标固定回环 `/api/v1/live` 订阅，携带目标令牌，连接断开后按已有 cursor 重放。
+响应只转发允许的 HTTP 字段及解码后的正文。历史 JSON 可协商 gzip，白名单转发 Content-Encoding/Vary；控制端解压一次并限制解压后长度。文件、图片和备份保持二进制；不使用 base64/巨大 JSON 包装。现有大备份上传 API 自身的分片机制继续复用。事件通过目标固定回环 `/api/v1/live` 订阅，携带目标令牌，连接断开后按已有 cursor 重放。
 
 HTTP 派发已接入。请求头为 `{type:"request",id,runtime_id,client_id,sequence,method,path,headers,bytes,sha256}`，`headers` 是二元素数组列表。无正文立即派发；有正文等待 `request_ready`，发送种类 1 的连续分块并等待 `upload_ack`。响应头为 `response`，正文为种类 2，控制端以 `download_ack` 确认已消费偏移；`end` 声明总长度。错误返回 `error` 及 `outcome`，不自动重试写入。`receipt` 查询携带运行代、控制端 ID、序号和请求 ID，只返回受理元数据。实时订阅单独协商，不能通过普通 HTTP 访问 live 路由。
 
@@ -38,4 +38,10 @@ HTTP 派发已接入。请求头为 `{type:"request",id,runtime_id,client_id,seq
 
 实时订阅已接入，hello 声明 `live:true` 和 2 MiB 单事件上限。`live_open` 携带 ID、运行代、目标页面 token；固定回环 WS 验证 token 后返回 `live_opened`。`live_send` 只传送不超过 4096 字节的原有订阅/pong 命令；每个 peer 一个 live 连接、最多 8 条待发命令，与 8 个 HTTP 请求槽独立。只读角色可以订阅，不能借此执行业务写入。
 
-每条事件先发 `live_event`（ID、递增事件序号、累计流偏移、长度、SHA-256），再发种类 3 的正文块，最后 `live_event_end`。`live_ack` 确认累计已接收偏移；偏移不在事件间归零，避免迟到确认放开下一事件的窗口。控制端完整校验后交给现有 live 事件处理器。`live_close` 取消该订阅，原生连接终止时返回 `live_closed`；重新订阅沿用原有会话 cursor。事件超限关闭订阅后可用目标 HTTP 读取，不回退本机。
+每条事件先发 `live_event`（ID、递增事件序号、累计流偏移、长度、SHA-256），再发种类 3 的正文块，最后 `live_event_end`。`live_ack` 确认累计已接收偏移；偏移不在事件间归零，避免迟到确认放开下一事件的窗口。控制端完整校验后交给现有 live 事件处理器。`live_close` 取消该订阅，显式取消不要求终止确认；其他原生连接终止时返回 `live_closed`。重新订阅沿用原有会话 cursor。事件超限关闭订阅后可用目标 HTTP 读取，不回退本机。
+
+## 局域网链路
+
+hello 可携带 `direct`，包含 `{version, port, peer_id, token, certificate, addresses}`。它只在通过认证的中继连接上传递，不进入业务状态存储。控制端在后台通过本机原生网关探测，核对 `direct_ready` 的运行代、peer 和权限；探测前后的中继请求保持可用。
+
+目标监听使用独立临时 CA 签发的服务端证书和单次 peer 握手令牌；网关执行标准 TLS 验证，拒绝非私网 IPv4 地址。直接通道使用同一套 MDP1 和受理记录，HTTP、live 和 receipt 各自固定到受理链路。断线不重放写入；授权中继断开时直连随之关闭。此版本不实现 WebRTC/DataChannel 或公网穿透。详细预算与验证边界见 [会话加载和远控性能](remote-performance.md)。

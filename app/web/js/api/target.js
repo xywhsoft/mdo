@@ -1,5 +1,5 @@
 import { createRemoteTransport, remoteError } from "./remote-transport.js";
-import { connectorTicket } from "./connector.js";
+import { connectorTicket, connectorDirectSocket } from "./connector.js";
 
 const KEY = "mdo.target.v1", ROUTES = "mdo.target.routes.v1";
 const listeners = new Set();
@@ -58,7 +58,7 @@ export function initializeTarget() {
   if (!selected || switching || stopped) return Promise.resolve();
   if (connecting) return connecting;
   if (transport?.state()) return Promise.resolve();
-  if (!transport) transport = createRemoteTransport({ onState(value) {
+  if (!transport) transport = createRemoteTransport({ directSocket: connectorDirectSocket, onState(value) {
     if (value.connected) {
       if (previousRuntime && previousRuntime !== value.hello.runtime_id) runtimeChanged = true;
       previousRuntime = value.hello.runtime_id;

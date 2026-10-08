@@ -41,6 +41,7 @@ static const MdoApiRoute g_MdoApiRoutes[] = {
       "GET, POST, OPTIONS", MdoApiRemoteRoute, false },
     { "/api/v1/connector/ticket", XHTTP_METHOD_POST, "POST, OPTIONS", MdoApiRemoteRoute, false },
     { "/api/v1/live", XHTTP_METHOD_GET, "GET, OPTIONS", MdoApiLiveRoute, false },
+    { "/api/v1/connector/direct", XHTTP_METHOD_GET, "GET, OPTIONS", MdoApiDirectRoute, false },
     { "/api/v1/update", XHTTP_METHOD_GET | XHTTP_METHOD_HEAD | XHTTP_METHOD_POST,
       "GET, HEAD, POST, OPTIONS", MdoApiUpdateRoute, false },
     { "/api/v1/update/download", XHTTP_METHOD_POST | XHTTP_METHOD_DELETE,

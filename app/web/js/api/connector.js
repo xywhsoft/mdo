@@ -3,6 +3,24 @@
 const endpoints = new Set(["/account", "/account/login", "/account/refresh", "/account/logout",
   "/connector/state", "/connector/devices", "/connector/ticket"]);
 let nonce = null;
+// TLS certificate/grant are delivered by the authenticated target, retained
+// only for this attempt. A native loopback gateway handles LAN TLS so WebView
+// never needs certificate exceptions, private-network CORS or a machine CA.
+export async function connectorDirectSocket(offer) {
+  if (!offer || offer.version !== 1 || !/^[0-9a-f]{32}$/.test(offer.peer_id) ||
+      !/^[0-9a-f]{64}$/.test(offer.token) || typeof offer.certificate !== "string" || offer.certificate.length > 1536 ||
+      !Number.isInteger(offer.port) || offer.port < 1 || offer.port > 65535 ||
+      !Array.isArray(offer.addresses) || !offer.addresses.length || offer.addresses.length > 4)
+    throw new Error("Invalid direct offer");
+  const startup = await read("/project-purge-intent");
+  const token = startup.response.headers.get("X-Mdo-Write-Token");
+  if (!/^[0-9a-f]{32}-(0|[1-9][0-9]{0,19})$/.test(token || "")) throw new Error("Invalid gateway token");
+  const url = new URL("/api/v1/connector/direct", location.href);
+  url.protocol = url.protocol === "https:" ? "wss:" : "ws:";
+  const socket = new WebSocket(url.href,["mdo.direct.v1",`mdo.token.${token}`]);
+  socket.onopen = () => socket.send(JSON.stringify(offer));
+  return socket;
+}
 async function read(path, options = {}) {
   const response = await fetch(`/api/v1${path}`, { ...options, cache: "no-store", credentials: "same-origin", redirect: "error" });
   const value = await response.json();

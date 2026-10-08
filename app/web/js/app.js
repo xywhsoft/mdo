@@ -1354,9 +1354,13 @@ export async function boot() {
   }
   bootstrapStore.subscribe(syncRuntimeLabel);
   let targetConnected = targetState().connected;
+  let targetRoute = targetState().route;
   subscribeTarget(state => {
     setRun(activeRun); syncRuntimeLabel();
     if (!isRemoteTarget()) return;
+    if (state.connected && targetConnected && targetRoute && state.route !== targetRoute)
+      liveConnection.recheck();
+    targetRoute = state.route;
     if (state.runtimeChanged) runStops.clear();
     if (state.connected && !targetConnected && !state.runtimeChanged) {
       if (composerError.dataset.code === "remote_offline") hideComposerError();

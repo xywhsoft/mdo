@@ -24,7 +24,11 @@ export function createDevices() {
     settingsTarget.hidden = !state.selected;
     settingsTarget.textContent = title + (readonly ? ` · ${copy("view", {}, "只读查看")}` : "");
     button.dataset.remote = String(Boolean(state.selected));
-    button.title = state.selected ? copy(state.connected ? "target" : "offline", { name }, `目标设备：${name}`) : copy("choose", {}, "选择设备");
+    const route = state.route === "lan" ? copy("lan", {}, "局域网直连") : copy("relay", {}, "服务器中转");
+    button.title = state.selected ? copy(state.connected ? "target" : "offline", { name }, `目标设备：${name}`) +
+      (state.connected ? ` · ${route}` : "") : copy("choose", {}, "选择设备");
+    button.dataset.route = state.selected && state.connected ? state.route || "relay" : "local";
+    if (state.selected && state.connected) settingsTarget.textContent += ` · ${route}`;
     banner.hidden = !state.selected || (state.connected && !state.runtimeChanged);
     banner.querySelector("p").textContent = copy("offline", { name }, `目标设备 ${name} 正在连接或已离线；操作不会转到本机。`) +
       (state.error ? ` ${errorMessage(state.error)}` : "");

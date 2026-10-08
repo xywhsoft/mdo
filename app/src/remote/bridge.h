@@ -7,6 +7,7 @@
 
 typedef struct MdoRemoteBridge MdoRemoteBridge;
 typedef bool (*MdoRemoteBridgeEmit)(xbytesview Envelope, void* Data);
+typedef xvalue* (*MdoRemoteBridgeOffer)(cstr Peer, bool ReadOnly, void* Data);
 
 /* One bridge per ServiceInit generation, retained across relay reconnects.
  * Peer/Input/Pump calls belong to the socket owner. HTTP workers own only
@@ -14,6 +15,8 @@ typedef bool (*MdoRemoteBridgeEmit)(xbytesview Envelope, void* Data);
 /* Net is borrowed until Destroy has joined all HTTP/live workers. */
 MdoRemoteBridge* MdoRemoteBridgeCreate(XS_ServerInfo* Server, MdoRemoteNet* Net);
 bool MdoRemoteBridgePeerOpen(MdoRemoteBridge* Bridge, cstr Peer, bool ReadOnly, xcancel* ConnectionCancel);
+void MdoRemoteBridgeDirect(MdoRemoteBridge* Bridge, MdoRemoteBridgeOffer Offer, void* Data);
+cstr MdoRemoteBridgeRuntime(MdoRemoteBridge* Bridge);
 void MdoRemoteBridgePeerClose(MdoRemoteBridge* Bridge, cstr Peer);
 void MdoRemoteBridgeDisconnect(MdoRemoteBridge* Bridge);
 bool MdoRemoteBridgeInput(MdoRemoteBridge* Bridge, cstr Peer, bool Binary, xbytesview Message);

@@ -34,6 +34,14 @@ bool MdoRemoteNetInit(MdoRemoteNet* Net, xnetengine* Engine, const xx509store* T
 void MdoRemoteNetUnit(MdoRemoteNet* Net); /* After all sockets are destroyed. */
 MdoRemoteSocket* MdoRemoteSocketOpen(MdoRemoteNet* Net,
     const MdoRemoteSocketConfig* Config, xcancel* Cancel, uint16* HttpStatus);
+MdoRemoteSocket* MdoRemoteSocketOpenTrusted(MdoRemoteNet* Net,
+    const MdoRemoteSocketConfig* Config, xcancel* Cancel, uint16* HttpStatus,
+    cstr VerifyName, uint64 Timeout);
+typedef bool (*MdoRemoteAcceptProc)(const xhttp1head* Head, void* Data);
+MdoRemoteSocket* MdoRemoteSocketAcceptTls(xtlsstream* Stream, xcancel* Cancel);
+MdoRemoteSocket* MdoRemoteSocketAcceptHttp(XS_HttpReq* Request, cstr Protocol, xcancel* Cancel);
+/* Nonblocking until a complete header arrives; 1=ready, 0=pending, -1=reject. */
+int MdoRemoteSocketUpgrade(MdoRemoteSocket* Socket, cstr Protocol, MdoRemoteAcceptProc Authorize, void* Data);
 bool MdoRemoteSocketSend(MdoRemoteSocket* Socket, bool Binary, xbytesview Data);
 /* Nonblocking when idle; bounded I/O while data is available. Messages borrow
  * Socket storage for the callback only. False is terminal; never reuse. */

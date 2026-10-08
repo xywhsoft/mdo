@@ -1475,6 +1475,8 @@
   "account.invalid_credentials": "Incorrect account or password. Please try again.",
   "account.login_rate_limited": "Too many sign-in attempts. Try again later.",
   "devices.local": "This device",
+  "devices.lan": "Direct LAN connection",
+  "devices.relay": "Server relay",
   "devices.choose": "Choose device",
   "devices.target": "Target: {name}",
   "devices.offline": "Target {name} is connecting or offline. Operations will not fall back to this device.",

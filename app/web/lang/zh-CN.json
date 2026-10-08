@@ -1475,6 +1475,8 @@
   "account.invalid_credentials": "账号或密码不正确，请重新输入。",
   "account.login_rate_limited": "登录尝试过于频繁，请稍后再试。",
   "devices.local": "本机",
+  "devices.lan": "局域网直连",
+  "devices.relay": "服务器中转",
   "devices.choose": "选择设备",
   "devices.target": "目标设备：{name}",
   "devices.offline": "目标设备 {name} 正在连接或已离线；操作不会转到本机。",

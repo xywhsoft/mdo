@@ -35,13 +35,14 @@ function unpack(buffer) {
 // consumed through ReadableStream; ACK follows consumption, not WS receipt.
 // Reconnect never retries a write. Only metadata is retained for receipt checks.
 export function createRemoteTransport({ socket = (...args) => new WebSocket(...args),
-  id = randomId, setTimer = setTimeout, clearTimer = clearTimeout, onState = () => {} } = {}) {
+  directSocket = null, id = randomId, setTimer = setTimeout, clearTimer = clearTimeout, onState = () => {} } = {}) {
   const client = id(), requests = new Map(), waiting = [], lives = new Map(), uncertain = new Map();
   let connection = null, hello = null, sequence = 0, admitted = 0, generation = 0;
   let connectReject = null, connectTimer = 0;
-  const send = value => {
-    if (connection?.readyState !== 1) throw remoteError("remote_offline", "目标设备连接已断开");
-    connection.send(typeof value === "string" || value instanceof Uint8Array ? value : JSON.stringify(value));
+  let direct = null, directReady = false, directTimer = 0;
+  const send = (value, route = connection) => {
+    if (route?.readyState !== 1) throw remoteError("remote_offline", "目标设备连接已断开");
+    route.send(typeof value === "string" || value instanceof Uint8Array ? value : JSON.stringify(value));
   };
   function release(entry) {
     if (!requests.delete(entry.id)) return;
@@ -65,11 +66,20 @@ export function createRemoteTransport({ socket = (...args) => new WebSocket(...a
   }
   function cancel(entry) {
     if (!entry.admitted || !hello) return;
-    try { send({ type: "cancel", id: entry.id }); }
-    catch (error) { disconnect(error); }
+    try { send({ type: "cancel", id: entry.id }, entry.socket); }
+    catch (error) { routeFailure(entry.socket, error); }
+  }
+  function routeFailure(route, error) {
+    if (route === direct && direct) loseDirect(route, error);
+    else if (route === connection && connection) disconnect(error);
+  }
+  function currentRoute() {
+    if (directReady && direct?.readyState !== 1) loseDirect(direct);
+    return directReady ? direct : connection;
   }
   function disconnect(error = remoteError("remote_offline", "目标设备离线，操作不会转到本机")) {
     const old = connection; connection = null; hello = null; generation++;
+    const oldDirect = direct; direct = null; directReady = false; clearTimer(directTimer); oldDirect?.close();
     clearTimer(connectTimer); connectReject?.(error); connectReject = null;
     for (const entry of [...requests.values()]) {
       let failure = error;
@@ -88,7 +98,8 @@ export function createRemoteTransport({ socket = (...args) => new WebSocket(...a
     if (entry.demand && entry.queue.length) {
       const bytes = entry.queue.shift(); entry.demand = false; entry.consumed += bytes.length;
       entry.controller.enqueue(bytes);
-      send({ type: "download_ack", id: entry.id, offset: entry.consumed });
+      try { send({ type: "download_ack", id: entry.id, offset: entry.consumed }, entry.socket); }
+      catch (error) { routeFailure(entry.socket, error); return; }
     }
     if (entry.ended && !entry.queue.length) { entry.controller.close(); release(entry); }
   }
@@ -99,26 +110,29 @@ export function createRemoteTransport({ socket = (...args) => new WebSocket(...a
       reject(entry, remoteError("remote_capacity", "Remote write sequence exhausted")); return;
     }
     entry.admitted = true; entry.runtime = hello.runtime_id; admitted++;
+    entry.socket = currentRoute();
     entry.sequence = entry.write ? ++sequence : 0;
     send({ type: "request", id: entry.id, runtime_id: entry.runtime, client_id: client,
       sequence: entry.sequence, method: entry.method, path: entry.path, headers: entry.headers,
       bytes: entry.upload.length, sha256: digest(entry.upload),
-      ...(hello.window_max ? {window_bytes: entry.window} : {}) });
+      ...(hello.window_max ? {window_bytes: entry.window} : {}) }, entry.socket);
   }
   function drain() {
     if (!hello || !connection) return;
-    try { while (admitted < 3 && waiting.length) admit(waiting.shift()); }
-    catch (error) { disconnect(error); }
+    while (hello && connection && admitted < 3 && waiting.length) {
+      const entry = waiting.shift();
+      try { admit(entry); } catch (error) { routeFailure(entry.socket, error); }
+    }
   }
   function upload(entry, offset) {
     if (!entry.upload || offset !== entry.sent) throw remoteError("remote_protocol", "Invalid upload acknowledgement");
     if (offset === entry.upload.length) { entry.upload.fill(0); entry.upload = null; return; }
     const end = Math.min(offset + hello.chunk_limit, entry.upload.length);
-    send(chunk(1, entry.id, offset, entry.upload.subarray(offset, end))); entry.sent = end;
+    send(chunk(1, entry.id, offset, entry.upload.subarray(offset, end)), entry.socket); entry.sent = end;
   }
-  function receive(value) {
+  function receive(value, route = connection) {
     const entry = requests.get(value.id);
-    if (!entry) return; // A cancelled request can already have queued frames.
+    if (!entry || entry.socket !== route) return; // Cancelled or another route's queued frames.
     if (value.type === "request_ready" || value.type === "upload_ack") upload(entry, value.offset);
     else if (value.type === "response") {
       if (entry.controller || !integer(value.status, 599) || value.status < 200 ||
@@ -162,9 +176,9 @@ export function createRemoteTransport({ socket = (...args) => new WebSocket(...a
       }
     } else throw remoteError("remote_protocol", "Unexpected remote response");
   }
-  function receiveBody(frame) {
-    if (frame.kind === 3) { lives.get(frame.id)?.body(frame); return; }
-    const entry = requests.get(frame.id); if (!entry) return;
+  function receiveBody(frame, route = connection) {
+    if (frame.kind === 3) { const live=lives.get(frame.id); if (live?.socket===route) live.body(frame); return; }
+    const entry = requests.get(frame.id); if (!entry || entry.socket !== route) return;
     if (!entry.controller || entry.ended || frame.offset !== entry.received ||
         frame.bytes.length > RESPONSE_LIMIT - entry.received ||
         entry.received + frame.bytes.length - entry.consumed > entry.window ||
@@ -222,16 +236,18 @@ export function createRemoteTransport({ socket = (...args) => new WebSocket(...a
   }
   function liveSocket(token) {
     const liveId = id(); let offset = 0, eventSequence = 0, event = null;
-    const current = { readyState: 0, onopen: null, onmessage: null, onerror: null, onclose: null,
+    const route = currentRoute();
+    const current = { socket: route, readyState: 0, onopen: null, onmessage: null, onerror: null, onclose: null,
       send(data) {
         if (current.readyState !== 1 || typeof data !== "string" || encoder.encode(data).length > 4096)
           throw remoteError("remote_live", "Live channel is unavailable");
-        send({ type: "live_send", id: liveId, data });
+        try { send({ type: "live_send", id: liveId, data }, route); }
+        catch (error) { routeFailure(route, error); throw error; }
       },
       close() {
         if (current.readyState >= 2) return;
         current.readyState = 3; lives.delete(liveId); event = null;
-        if (hello) { try { send({ type: "live_close", id: liveId }); } catch (error) { disconnect(error); } }
+        if (hello && route?.readyState === 1) { try { send({ type: "live_close", id: liveId }, route); } catch (error) { routeFailure(route, error); } }
       },
       fail(error) { current.close(); current.onclose?.({ code: error.code === "remote_revoked" ? 1008 : 1006 }); },
       text(value) {
@@ -253,13 +269,58 @@ export function createRemoteTransport({ socket = (...args) => new WebSocket(...a
           throw remoteError("remote_protocol", "Invalid live event body");
         event.data.set(frame.bytes, event.received); event.hash.update(frame.bytes);
         event.received += frame.bytes.length; offset += frame.bytes.length;
-        send({ type: "live_ack", id: liveId, offset });
+        send({ type: "live_ack", id: liveId, offset }, route);
       },
     };
     if (!hello?.live || lives.size) throw remoteError("remote_live", "Live subscription is unavailable");
     lives.set(liveId, current);
-    send({ type: "live_open", id: liveId, runtime_id: hello.runtime_id, token });
+    try { send({ type: "live_open", id: liveId, runtime_id: hello.runtime_id, token }, route); }
+    catch (error) { lives.delete(liveId); routeFailure(route, error); throw error; }
     return current;
+  }
+  function loseDirect(active, error = remoteError("remote_offline", "局域网连接中断，已使用服务器中转")) {
+    if (active !== direct) return;
+    direct = null; directReady = false; clearTimer(directTimer); active.close();
+    for (const entry of [...requests.values()]) if (entry.socket === active) {
+      let failure = error;
+      if (entry.write && entry.admitted) failure = remoteError("remote_result_unconfirmed",
+        "远程写入的结果尚未确认，请核对目标状态，勿重复提交", remember(entry));
+      reject(entry, failure);
+    }
+    for (const live of [...lives.values()]) if (live.socket === active) live.fail(error);
+    if (hello) onState({ connected: true, hello, route: "relay" });
+  }
+  async function probeDirect(offer, relay, token) {
+    let active;
+    try {
+      active = await directSocket(offer);
+      if (relay !== connection || token !== generation || !hello) { active.close(); return; }
+      direct = active; active.binaryType = "arraybuffer";
+      directTimer = setTimer(() => loseDirect(active), 6000);
+      active.onmessage = ({data}) => {
+        if (active !== direct) return;
+        try {
+          if (data instanceof ArrayBuffer) {
+            if (!directReady) throw remoteError("remote_protocol", "Body before direct authorization");
+            receiveBody(unpack(data), active); return;
+          }
+          if (typeof data !== "string" || encoder.encode(data).length > 262123)
+            throw remoteError("remote_protocol", "Invalid direct response");
+          const value = JSON.parse(data);
+          if (!directReady) {
+            if (value.type !== "direct_ready" || value.version !== 1 || value.runtime_id !== hello.runtime_id ||
+                value.mode !== hello.mode || value.peer_id !== offer.peer_id)
+              throw remoteError("remote_protocol", "Direct authority differs from selected target");
+            directReady = true; clearTimer(directTimer);
+            onState({ connected: true, hello, route: "lan" }); return;
+          }
+          const live = lives.get(value.id);
+          if (live?.socket === active) live.text(value); else receive(value, active);
+        } catch (error) { loseDirect(active, error); }
+      };
+      active.onerror = () => loseDirect(active);
+      active.onclose = () => loseDirect(active);
+    } catch { active?.close(); /* Relay is already usable; probing never blocks it. */ }
   }
   return {
     fetch: fetchTarget, liveSocket, close: disconnect,
@@ -268,9 +329,9 @@ export function createRemoteTransport({ socket = (...args) => new WebSocket(...a
       if (!hello || requests.has(meta.id) || !ID.test(meta.id) || !ID.test(meta.runtime_id) || meta.client_id !== client || !integer(meta.sequence) || !meta.sequence)
         return Promise.reject(remoteError("remote_receipt", "Receipt is unavailable"));
       return new Promise((resolve, rejectPromise) => {
-        const entry = { ...meta, query: true, queue: [], resolve, reject: rejectPromise };
+        const entry = { ...meta, query: true, queue: [], resolve, reject: rejectPromise, socket: currentRoute() };
         requests.set(meta.id, entry); entry.timer = setTimer(() => reject(entry, remoteError("remote_timeout", "Receipt deadline exceeded")), 5000);
-        try { send({ ...meta, type: "receipt" }); } catch (error) { disconnect(error); }
+        try { send({ ...meta, type: "receipt" }, entry.socket); } catch (error) { routeFailure(entry.socket, error); }
       });
     },
     connect({ origin, ticket, deviceId, mode = "control" }) {
@@ -301,10 +362,12 @@ export function createRemoteTransport({ socket = (...args) => new WebSocket(...a
                     value.live !== true || value.live_limit !== 2097152 ||
                     (value.window_max !== undefined && (!integer(value.window_max,262144) ||
                       value.window_max < WINDOW || value.window_max % 16384))) throw remoteError("remote_protocol", "Invalid target handshake");
+                const offer = value.direct; delete value.direct;
                 hello = Object.freeze(value); clearTimer(connectTimer); connectReject = null;
-                onState({ connected: true, hello }); resolve(hello); return;
+                onState({ connected: true, hello, route: "relay" }); resolve(hello);
+                if (offer && directSocket) void probeDirect(offer, active, generation); return;
               }
-              if (lives.has(value.id)) lives.get(value.id).text(value); else receive(value);
+              if (lives.has(value.id)) { const live=lives.get(value.id); if (live.socket===active) live.text(value); } else receive(value);
             } catch (error) { disconnect(remoteError("remote_protocol", error.message)); }
           };
           active.onerror = () => { if (active === connection) disconnect(); };

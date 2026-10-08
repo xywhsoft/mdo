@@ -69,6 +69,8 @@ struct MdoRemoteBridge {
     size_t Bytes, Packets, UploadBytes;
     uint64 Serial;
     bool Stopping;
+    MdoRemoteBridgeOffer Offer;
+    void* OfferData;
 };
 
 static int32 MdoBridgeHttpWorker(void* Data);
@@ -581,6 +583,10 @@ static int32 MdoBridgeLiveWorker(void* Data)
     return 0;
 }
 
+void MdoRemoteBridgeDirect(MdoRemoteBridge* Bridge, MdoRemoteBridgeOffer Offer, void* Data)
+{ if (Bridge) { Bridge->Offer=Offer; Bridge->OfferData=Data; } }
+cstr MdoRemoteBridgeRuntime(MdoRemoteBridge* Bridge) { return Bridge ? Bridge->Receipts.Runtime : ""; }
+
 MdoRemoteBridge* MdoRemoteBridgeCreate(XS_ServerInfo* Server, MdoRemoteNet* Net)
 {
     if (!Server || !Server->Engine || !Net || Net->Engine != Server->Engine) return NULL;
@@ -614,6 +620,10 @@ bool MdoRemoteBridgePeerOpen(MdoRemoteBridge* Bridge, cstr Peer, bool ReadOnly, 
             MdoAccountSetUInt(hello,"window_bytes",MDO_BRIDGE_WINDOW) && MdoAccountSetBool(hello,"live",true) &&
             MdoAccountSetUInt(hello,"window_max",MDO_BRIDGE_WINDOW_MAX) &&
             MdoAccountSetUInt(hello,"live_limit",MDO_BRIDGE_LIVE_LIMIT);
+        if (ok && Bridge->Offer) {
+            xvalue* offer = Bridge->Offer(Peer,ReadOnly,Bridge->OfferData);
+            if (offer && !xrtValueObjectSetNew(hello,XRT_STR_LITERAL("direct"),offer)) ok = false;
+        }
         if (ok) ok = MdoBridgeValue(Bridge,slot,NULL,hello); else xrtValueRelease(hello);
         if (!ok) { peer->Active = false; xrtCancelRequest(peer->Cancel); }
     }

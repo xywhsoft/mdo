@@ -656,8 +656,10 @@ function timelineNode(item, handlers, projectId, sessionId, writable,
       text: t("timeline.failed", {}, "失败") }), time);
   const body = element("div", { className: "timeline-body" +
     (item.kind === "assistant" ? " markdown-body" : "") });
-  if (item.kind === "assistant") {
-    body.append(renderMarkdown(item.text));
+  function paintText(text) {
+    clear(body);
+    if (item.kind !== "assistant") { body.textContent = text; return; }
+    body.append(renderMarkdown(text));
     for (const [index, button] of [...body.querySelectorAll(".md-code-head button")].entries())
       button.dataset.timelineAction = `${item.key}/code-${index}`;
     for (const [index, link] of [...body.querySelectorAll("a")].entries())
@@ -667,14 +669,15 @@ function timelineNode(item, handlers, projectId, sessionId, writable,
       image.dataset.imageRef = `timeline:${projectId}/${sessionId}/${item.key}/markdown/${index}`;
     }
   }
-  else body.textContent = item.text;
+  paintText(item.text);
   const children = [header, body];
-  if ((item.kind === "user" || item.kind === "assistant") &&
-      item.textTruncated) children.push(element("p", {
+  const partialNote = (item.kind === "user" || item.kind === "assistant") &&
+      item.textTruncated ? element("p", {
     className: "timeline-truncation-note",
     text: t("timeline.partialMessage", {},
       "消息内容有截断；复制时会尝试获取全文，无法获取时仅复制可见部分。"),
-  }));
+  }) : null;
+  if (partialNote) children.push(partialNote);
   if (item.artifactId) {
     const preview = artifactPreviewNode(projectId, sessionId,
       item.artifactEventId, `${item.key}/preview`, previewOpen, previewScroll);
@@ -689,8 +692,8 @@ function timelineNode(item, handlers, projectId, sessionId, writable,
       try {
         const text = await resolveTimelineActionText(item, owner);
         if (!body.isConnected) return;
-        clear(body);
-        if (item.kind === "assistant") body.append(renderMarkdown(text)); else body.textContent = text;
+        paintText(text);
+        partialNote?.remove();
         full.remove();
       } catch (error) { toast(errorMessage(error), "error"); full.disabled = false; }
     });

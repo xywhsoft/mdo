@@ -5,6 +5,7 @@
 #include "../../include/mdo/version.h"
 #include "service_client.h"
 #include "bridge.h"
+#include "lan.h"
 
 /* Only the connection worker owns a socket. The service worker handles slow
  * HTTPS operations independently, so listing devices cannot starve heartbeats.
@@ -121,6 +122,7 @@ bool MdoRemoteInit(XS_ServerInfo* Server)
         MdoRemoteUnit(); return false;
     }
     bool valid = MdoRemoteConfigLoad(&g_MdoRemote.Config);
+    if (!MdoLanGatewayInit(Server)) { MdoRemoteUnit(); return false; }
     g_MdoRemote.Stage = g_MdoRemote.Config.AllowRemote ? "connecting" : "disabled";
     g_MdoRemote.JobState = "idle";
     g_MdoRemote.Error = valid ? "" : "remote_config_invalid";
@@ -136,6 +138,7 @@ bool MdoRemoteInit(XS_ServerInfo* Server)
 }
 void MdoRemoteUnit(void)
 {
+    MdoLanGatewayUnit();
     if (g_MdoRemote.Lock) {
         xrtMutexLock(g_MdoRemote.Lock);
         g_MdoRemote.Stopping = true;
@@ -376,6 +379,7 @@ typedef struct MdoRemoteConnectionContext {
     xcancel* Cancel;
     uint64 Epoch;
     char Id[33];
+    MdoLan* Lan;
 } MdoRemoteConnectionContext;
 static bool MdoRemoteConnectionMessage(bool Binary, xbytesview Message, void* Data)
 {
@@ -410,12 +414,17 @@ static bool MdoRemoteConnectionMessage(bool Binary, xbytesview Message, void* Da
     } else if (ok && !strcmp(type,"peer_open")) {
         ok = MdoRemoteBridgePeerOpen(context->Bridge,peer,!strcmp(mode,"view"),context->Cancel);
     } else if (ok && !strcmp(type,"peer_close")) {
+        MdoLanPeerClose(context->Lan,peer);
         MdoRemoteBridgePeerClose(context->Bridge,peer);
     }
     xrtValueRelease(notice); return ok;
 }
 static bool MdoRemoteConnectionEmit(xbytesview Envelope, void* Data)
-{ return MdoRemoteSocketSend((MdoRemoteSocket*)Data,true,Envelope); }
+{
+    MdoRemoteConnectionContext* Context=Data; bool Handled=false;
+    if (!MdoLanEmit(Context->Lan,Envelope,&Handled)) return false;
+    return Handled || MdoRemoteSocketSend(Context->Socket,true,Envelope);
+}
 static void MdoRemoteBackgroundRenew(uint64* Token, uint64* Next)
 {
     uint64 now = xrtClock();
@@ -450,7 +459,7 @@ static int32 MdoRemoteConnectionWorker(void* Data)
         /* Only explicit remote availability opts into Android CPU execution.
          * Timed leases also expire if a worker fails to run or release on Unit. */
         MdoRemoteBackgroundRenew(&background,&next_background);
-        MdoAccountLease lease = {0}; MdoRemoteSocket* socket = NULL;
+        MdoAccountLease lease = {0}; MdoRemoteSocket* socket = NULL; MdoLan* lan=NULL;
         xvalue *body = NULL, *ticket = NULL; uint16 status = 0u, close_code = 0u;
         bool available = cancel && MdoAccountAcquireService(cancel,&lease);
         cstr off = NULL;
@@ -486,16 +495,18 @@ static int32 MdoRemoteConnectionWorker(void* Data)
         socket = MdoRemoteServiceConnect(&net,ticket,&lease,&status);
         MdoAccountSecretValueRelease(ticket); ticket = NULL;
         if (!socket) goto closed;
-        MdoRemoteConnectionContext context = {socket,bridge,lease.Cancel,epoch,""}; strcpy(context.Id,identity.Id);
+        lan=MdoLanCreate(&net,bridge,lease.Cancel);
+        MdoRemoteConnectionContext context = {socket,bridge,lease.Cancel,epoch,"",lan}; strcpy(context.Id,identity.Id);
         while (!xrtCancelRequested(lease.Cancel) && MdoRemoteServerLive() &&
             MdoRemoteSocketPoll(socket,MdoRemoteConnectionMessage,&context) &&
-            MdoRemoteBridgePump(bridge,MdoRemoteConnectionEmit,socket)) {
+            MdoLanPoll(lan) && MdoRemoteBridgePump(bridge,MdoRemoteConnectionEmit,&context)) {
             MdoRemoteBackgroundRenew(&background,&next_background);
             retry = 0u; xrtSleep(5u);
         }
         close_code = MdoRemoteSocketCloseCode(socket);
         if (close_code == 1008u && MdoRemoteSocketPeerClosed(socket)) off = "remote_revoked";
 closed:
+        MdoLanDestroy(lan);
         MdoRemoteBridgeDisconnect(bridge);
         if (bridge) (void)MdoRemoteBridgePump(bridge,NULL,NULL);
         xrtMutexLock(g_MdoRemote.Lock);
