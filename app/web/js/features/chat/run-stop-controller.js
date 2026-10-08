@@ -1,11 +1,21 @@
 import { isTransientReadError } from "../../api/read-recovery.js";
+import { ApiError } from "../../api/client.js";
+import { createRequestRecovery } from "../../api/request-recovery.js";
+
+// A later, authoritative state resolves only the error for that exact run.
+// Other conversation errors must remain visible.
+export function resolvesRunStopError(error, run) {
+  const owner = error?.runStopOwner;
+  return Boolean(owner && run?.id === owner.id && run.project_id === owner.project_id &&
+    run.session_id === owner.session_id && (run.terminal === true || run.cancel_requested === true));
+}
 
 // Cancellation is idempotent for one exact run. Keep that intent through a
 // connection loss, then inspect its acknowledgement before repeating DELETE.
 // This deliberately does not retry new runs, tools or other mutations.
 export function createRunStopController({ cancel, read, canWrite = () => true,
   onChange = () => {}, onAccepted = () => {}, onError = () => {},
-  setTimer = setTimeout, clearTimer = clearTimeout, random = Math.random }) {
+  setTimer = setTimeout, clearTimer = clearTimeout, random = Math.random, now = Date.now }) {
   const pending = new Map();
   let disposed = false;
   const current = entry => !disposed && pending.get(entry.owner.id) === entry;
@@ -15,7 +25,24 @@ export function createRunStopController({ cancel, read, canWrite = () => true,
   function remove(entry) {
     clearTimer(entry.timer);
     pending.delete(entry.owner.id);
+    entry.recovery?.dispose();
     onChange();
+  }
+  function waitForConnection(entry) {
+    clearTimer(entry.timer); entry.timer = 0;
+    entry.recovery?.dispose(); entry.recovery = null;
+    entry.inspect = true; entry.waitingConnection = true; entry.phase = "waiting";
+  }
+  function unconfirmed(entry, cause) {
+    const error = new ApiError("Stopping the run could not be confirmed", { code: "run_stop_unconfirmed" });
+    error.cause = cause; remove(entry); onError(error, entry.owner);
+  }
+  function request(entry, operation) {
+    return entry.recovery.request(signal => {
+      if (!current(entry) || !canWrite() || signal.aborted)
+        throw new DOMException("Stop request cancelled", "AbortError");
+      return operation(signal);
+    }, { retry: false });
   }
   function accept(entry, run) {
     remove(entry);
@@ -28,8 +55,15 @@ export function createRunStopController({ cancel, read, canWrite = () => true,
   async function attempt(entry) {
     if (!current(entry) || entry.busy) return;
     if (!canWrite()) {
-      entry.waitingConnection = true; entry.phase = "waiting";
+      waitForConnection(entry);
       onChange(); return;
+    }
+    // Known offline time waits for reconnect. Once connected, all reads,
+    // writes and backoff share one minute; each HTTP attempt has eight seconds.
+    if (!entry.recovery) {
+      entry.retries = 0;
+      entry.deadline = now() + 60000;
+      entry.recovery = createRequestRecovery({ now, random, setTimer, clearTimer, eventTarget: null });
     }
     clearTimer(entry.timer); entry.timer = 0;
     entry.busy = true; entry.waitingConnection = false;
@@ -37,14 +71,14 @@ export function createRunStopController({ cancel, read, canWrite = () => true,
     onChange();
     try {
       if (entry.inspect) {
-        const run = await read(entry.owner.id);
+        const run = await request(entry, signal => read(entry.owner.id, { signal }));
         if (!current(entry)) return;
         check(run, entry.owner);
         if (run.terminal || run.cancel_requested) { accept(entry, run); return; }
       }
       // A restart or target change can occur while the read is in flight.
-      if (!canWrite()) { entry.waitingConnection = true; return; }
-      const run = await cancel(entry.owner.id);
+      if (!canWrite()) { waitForConnection(entry); return; }
+      const run = await request(entry, signal => cancel(entry.owner.id, { signal }));
       if (!current(entry)) return;
       check(run, entry.owner);
       if (!run.terminal && !run.cancel_requested)
@@ -53,12 +87,15 @@ export function createRunStopController({ cancel, read, canWrite = () => true,
       accept(entry, run);
     } catch (error) {
       if (!current(entry)) return;
+      if (error?.name === "AbortError" && !canWrite()) { waitForConnection(entry); return; }
       if (isTransientReadError(error) ||
           ["remote_result_unconfirmed", "invalid_response"].includes(error?.code)) {
-        entry.inspect = true; entry.waitingConnection = !canWrite();
+        entry.inspect = true;
+        if (!canWrite()) { waitForConnection(entry); return; }
+        if (now() >= entry.deadline) { unconfirmed(entry, error); return; }
         const delay = Math.min(1000 * 2 ** Math.min(entry.retries++, 4), 15000);
         entry.timer = setTimer(() => { entry.timer = 0; void attempt(entry); },
-          delay + Math.floor(delay * .2 * random()));
+          Math.min(delay + Math.floor(delay * .2 * random()), entry.deadline - now()));
       } else { remove(entry); onError(error, entry.owner); }
     } finally {
       entry.busy = false;
@@ -69,8 +106,9 @@ export function createRunStopController({ cancel, read, canWrite = () => true,
     }
   }
   function clear() {
-    for (const entry of pending.values()) clearTimer(entry.timer);
+    const entries = [...pending.values()];
     pending.clear(); onChange();
+    for (const entry of entries) { clearTimer(entry.timer); entry.recovery?.dispose(); }
   }
   return Object.freeze({
     request(run, returnFocus = false) {

@@ -1,0 +1,209 @@
+{
+  "phases": [
+    {
+      "mode": "unconfirmed",
+      "run_id": "run-V-OSKFBvirrLGuqmwUBrY04BRkYe51pc",
+      "http_deletes": 1,
+      "native_deletes": 0,
+      "read_failures": 17,
+      "list_failures": 6,
+      "held_reads": 0,
+      "run_read_records": [
+        {
+          "started": 2484646.984
+        },
+        {
+          "started": 2484647.609
+        },
+        {
+          "started": 2484649.39
+        },
+        {
+          "started": 2484652.609
+        },
+        {
+          "started": 2484653.656
+        },
+        {
+          "started": 2484661.968
+        },
+        {
+          "started": 2484662.625
+        },
+        {
+          "started": 2484677.64
+        },
+        {
+          "started": 2484678.171
+        },
+        {
+          "started": 2484692.64
+        },
+        {
+          "started": 2484694.656
+        },
+        {
+          "started": 2484707.671
+        },
+        {
+          "started": 2484722.671
+        },
+        {
+          "started": 2484737.687
+        },
+        {
+          "started": 2484752.703
+        },
+        {
+          "started": 2484767.718
+        },
+        {
+          "started": 2484782.718
+        }
+      ],
+      "delete_started": 2484645.89
+    },
+    {
+      "mode": "normal",
+      "run_id": null,
+      "http_deletes": 0,
+      "native_deletes": 0,
+      "read_failures": 0,
+      "list_failures": 0,
+      "held_reads": 0,
+      "run_read_records": [],
+      "delete_started": null
+    }
+  ],
+  "model_calls": {
+    "stream-stop": 1,
+    "follow-up after stop status recovered": 1
+  },
+  "sessions": [
+    {
+      "id": "V-OSKEj8OWlLiv7Nw5gSwQSNLC9p9orm",
+      "title": "Stop slow",
+      "user_inputs": [],
+      "final_model_errors": 0,
+      "event_kinds": {},
+      "queue": {
+        "items": [],
+        "discard_images": []
+      },
+      "draft": {
+        "revision": 0,
+        "text": "",
+        "attachments": [],
+        "run_admission_uncertain": false,
+        "submission": null,
+        "submissions": []
+      }
+    },
+    {
+      "id": "V-OSKEj9RMjmrTZZtxmbXIt0a4TJ5E-F",
+      "title": "Stop unconfirmed",
+      "user_inputs": [
+        "stream-stop",
+        "follow-up after stop status recovered"
+      ],
+      "final_model_errors": 0,
+      "event_kinds": {
+        "agent_start": 2,
+        "model_start": 2,
+        "model_text_delta": 3,
+        "model_done": 2,
+        "agent_done": 2
+      },
+      "queue": {
+        "items": [],
+        "discard_images": []
+      },
+      "draft": {
+        "revision": 9,
+        "text": "",
+        "attachments": [],
+        "run_admission_uncertain": false,
+        "submission": null,
+        "submissions": []
+      }
+    }
+  ],
+  "websocket_unavailable": true,
+  "runs": {
+    "automatic": true,
+    "active_runs": 0,
+    "starting_runs": 0,
+    "retained_runs": 2,
+    "max_active": 8,
+    "max_retained": 64,
+    "runs_started": 2,
+    "runs_completed": 2,
+    "runs_failed": 0,
+    "items": [
+      {
+        "id": "run-V-OSKGn9l2IoNk9ki92H8GKRdr8x4L20",
+        "project_id": "default",
+        "session_id": "V-OSKEj9RMjmrTZZtxmbXIt0a4TJ5E-F",
+        "agent_run_id": 2,
+        "agent_id": "mdo.default",
+        "model_id": "queue-fixture",
+        "protocol": "openai-chat-completions",
+        "reasoning_effort": "none",
+        "state": "succeeded",
+        "result": "ok",
+        "error_code": "none",
+        "terminal": true,
+        "cancel_requested": false,
+        "resume": false,
+        "client_resume_id": "",
+        "created_at": 1791469996917805,
+        "started_at": 1791469996926127,
+        "ended_at": 1791469996976238,
+        "config_revision": 3,
+        "model_generation": 2,
+        "module_generation": 1,
+        "skill_generation": 1,
+        "memory_generation": 1,
+        "agent_turns": 1,
+        "model_calls": 1,
+        "tool_calls": 0,
+        "compactions": 0,
+        "final_text_available": true,
+        "final_text_truncated": false,
+        "final_text_bytes": 49
+      },
+      {
+        "id": "run-V-OSKFBvirrLGuqmwUBrY04BRkYe51pc",
+        "project_id": "default",
+        "session_id": "V-OSKEj9RMjmrTZZtxmbXIt0a4TJ5E-F",
+        "agent_run_id": 1,
+        "agent_id": "mdo.default",
+        "model_id": "queue-fixture",
+        "protocol": "openai-chat-completions",
+        "reasoning_effort": "none",
+        "state": "succeeded",
+        "result": "ok",
+        "error_code": "none",
+        "terminal": true,
+        "cancel_requested": false,
+        "resume": false,
+        "client_resume_id": "",
+        "created_at": 1791469568113527,
+        "started_at": 1791469568118905,
+        "ended_at": 1791469613209895,
+        "config_revision": 3,
+        "model_generation": 2,
+        "module_generation": 1,
+        "skill_generation": 1,
+        "memory_generation": 1,
+        "agent_turns": 1,
+        "model_calls": 1,
+        "tool_calls": 0,
+        "compactions": 0,
+        "final_text_available": true,
+        "final_text_truncated": false,
+        "final_text_bytes": 42
+      }
+    ]
+  }
+}

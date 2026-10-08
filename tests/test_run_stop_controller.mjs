@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { createRunStopController } from "../app/web/js/features/chat/run-stop-controller.js";
+import { createRunStopController, resolvesRunStopError } from "../app/web/js/features/chat/run-stop-controller.js";
+import { cancelRun, readRun } from "../app/web/js/state/runs.js";
 
 const active = { id: "run-a", project_id: "qa", session_id: "a",
   terminal: false, cancel_requested: false, state: "running" };
@@ -9,21 +10,22 @@ const failure = code => Object.assign(new Error(code), { code });
 const flush = () => new Promise(resolve => setImmediate(resolve));
 function fixture(options = {}) {
   const timers = new Map(), calls = [], accepted = [], errors = [];
-  let serial = 0, writable = true;
+  let serial = 0, time = 0, writable = true;
   const controller = createRunStopController({
     cancel: async id => { calls.push(["DELETE", id]); return stopped; },
     read: async id => { calls.push(["GET", id]); return active; },
     canWrite: () => writable,
     setTimer: (fn, delay) => { timers.set(++serial, { fn, delay }); return serial; },
-    clearTimer: id => timers.delete(id), random: () => 0,
+    clearTimer: id => timers.delete(id), random: () => 0, now: () => time,
     onAccepted: (run, owner) => accepted.push({ run, owner }),
     onError: (error, owner) => errors.push({ error, owner }),
     ...options,
   });
   return { controller, timers, calls, accepted, errors,
     writable: value => { writable = value; },
+    elapsed: () => time, advance: delay => { time += delay; },
     async tick() { const [id, timer] = timers.entries().next().value;
-      timers.delete(id); timer.fn(); await flush(); return timer.delay; } };
+      timers.delete(id); time += timer.delay; timer.fn(); await flush(); return timer.delay; } };
 }
 
 test("a normal stop is acknowledged once without waiting for secondary reads", async () => {
@@ -103,7 +105,7 @@ test("a generation change during inspection prevents late cancellation", async (
   const f = fixture({ read: () => new Promise(done => { resolve = done; }),
     cancel: async () => { deletes++; return stopped; } });
   f.writable(false); f.controller.request(active);
-  f.writable(true); f.controller.resume(); f.controller.clear();
+  f.writable(true); f.controller.resume(); await flush(); f.controller.clear();
   resolve(active); await flush();
   assert.equal(deletes, 0); assert.equal(f.accepted.length, 0);
 });
@@ -112,7 +114,7 @@ test("the write guard is checked again after reading the run", async () => {
   let resolve;
   const f = fixture({ read: () => new Promise(done => { resolve = done; }) });
   f.writable(false); f.controller.request(active);
-  f.writable(true); f.controller.resume(); f.writable(false);
+  f.writable(true); f.controller.resume(); await flush(); f.writable(false);
   resolve(active); await flush();
   assert.equal(f.calls.length, 0);
   assert.equal(f.controller.phase(active.id), "waiting");
@@ -122,7 +124,7 @@ test("the write guard is checked again after reading the run", async () => {
 test("an authoritative acknowledgement settles a pending intent and ignores its late response", async () => {
   let resolve;
   const f = fixture({ cancel: () => new Promise(done => { resolve = done; }) });
-  f.controller.request(active);
+  f.controller.request(active); await flush();
   f.controller.observe({ ...stopped, project_id: "other" });
   assert.equal(f.controller.has(active.id), true);
   f.controller.observe(stopped); resolve(stopped); await flush();
@@ -145,4 +147,136 @@ test("mismatched run responses never acknowledge or cancel another session", asy
   f.writable(true); f.controller.resume(); await flush();
   assert.equal(f.errors[0].error.code, "run_stop_invalid_response");
   assert.equal(f.accepted.length, 0); assert.equal(f.calls.length, 0);
+});
+
+test("a hung accepted stop times out and confirms the original run without another DELETE", async context => {
+  let deletes = 0, reads = 0, signal;
+  const f = fixture({ cancel: async (_id, options) => {
+    ++deletes; signal = options?.signal; return new Promise(() => {});
+  }, read: async () => { ++reads; return stopped; } });
+  context.after(() => f.controller.dispose());
+  f.controller.request(active); await flush();
+  assert.equal(f.timers.size, 1, "a hanging stop must have a request deadline");
+  assert.equal(await f.tick(), 8000); assert(signal.aborted);
+  assert.equal(await f.tick(), 1000);
+  assert.equal(deletes, 1); assert.equal(reads, 1);
+  assert.equal(f.accepted.length, 1); assert.equal(f.errors.length, 0); assert.equal(f.timers.size, 0);
+});
+
+test("a hung stop inspection releases its attempt and leaves another session usable", async context => {
+  let deletes = 0, reads = 0, signal;
+  const other = { ...active, id: "run-b", session_id: "b" };
+  const f = fixture({ cancel: async id => {
+    if (id === other.id) return { ...other, cancel_requested: true };
+    ++deletes; throw failure("network_error");
+  }, read: async (_id, options) => {
+    if (++reads === 1) { signal = options?.signal; return new Promise(() => {}); }
+    return stopped;
+  } });
+  context.after(() => f.controller.dispose());
+  f.controller.request(active); await flush(); assert.equal(await f.tick(), 1000);
+  f.controller.request(other); await flush();
+  assert.equal(f.accepted[0].run.id, other.id);
+  assert.equal(f.timers.size, 1, "a hanging inspection must have a deadline");
+  assert.equal(await f.tick(), 8000); assert(signal.aborted);
+  assert.equal(await f.tick(), 2000);
+  assert.equal(reads, 2); assert.equal(deletes, 1);
+  assert.equal(f.accepted[1].run.id, active.id); assert.equal(f.errors.length, 0);
+});
+
+test("unconfirmable stops produce one final uncertainty within a minute and permit explicit retry", async context => {
+  let deletes = 0;
+  const f = fixture({ cancel: async () => { ++deletes; throw failure("network_error"); },
+    read: async () => { throw failure("remote_timeout"); } });
+  context.after(() => f.controller.dispose());
+  f.controller.request(active); await flush();
+  for (let step = 0; f.controller.has(active.id) && step < 20; ++step) {
+    assert(f.timers.size, "confirmation is either scheduled or finished"); await f.tick();
+  }
+  assert.equal(f.controller.has(active.id), false, "a writable connection cannot retry forever");
+  assert.equal(f.elapsed(), 60000); assert.equal(f.errors.length, 1);
+  assert.equal(f.errors[0].error.code, "run_stop_unconfirmed");
+  assert.equal(deletes, 1); assert.equal(f.timers.size, 0);
+  f.controller.resume(); await flush(); assert.equal(f.errors.length, 1);
+  assert.equal(f.controller.request(active), true); await flush(); assert.equal(deletes, 2);
+});
+
+test("a known offline interval keeps the stop intent without consuming its connected budget", async context => {
+  let deletes = 0;
+  const f = fixture({ cancel: async () => { ++deletes; throw failure("network_error"); },
+    read: async () => stopped });
+  context.after(() => f.controller.dispose());
+  f.controller.request(active); await flush();
+  f.writable(false); f.advance(600000); await f.tick();
+  assert.equal(f.controller.phase(active.id), "waiting"); assert.equal(f.timers.size, 0);
+  assert.equal(f.errors.length, 0); assert.equal(f.controller.has(active.id), true);
+  f.writable(true); f.controller.resume(); await flush();
+  assert.equal(f.accepted.length, 1); assert.equal(deletes, 1); assert.equal(f.errors.length, 0);
+});
+
+test("authoritative observation aborts a hanging stop and ignores its late acknowledgement", async context => {
+  let signal, release;
+  const f = fixture({ cancel: async (_id, options) => {
+    signal = options?.signal; return new Promise(resolve => { release = resolve; });
+  } });
+  context.after(() => { release?.(stopped); f.controller.dispose(); });
+  f.controller.request(active); await flush(); f.controller.observe(stopped);
+  assert(signal?.aborted, "confirmed stops must release the outstanding HTTP request");
+  release(stopped); await flush();
+  assert.equal(f.accepted.length, 1); assert.equal(f.errors.length, 0); assert.equal(f.timers.size, 0);
+});
+
+test("clearing the target aborts a hanging inspection with no late write or error", async context => {
+  let signal, release, deletes = 0;
+  const f = fixture({ read: async (_id, options) => {
+    signal = options?.signal; return new Promise(resolve => { release = resolve; });
+  }, cancel: async () => { ++deletes; return stopped; } });
+  context.after(() => { release?.(active); f.controller.dispose(); });
+  f.writable(false); f.controller.request(active); f.writable(true); f.controller.resume(); await flush();
+  f.controller.clear(); assert(signal?.aborted);
+  release(active); await flush();
+  assert.equal(deletes, 0); assert.equal(f.accepted.length, 0); assert.equal(f.errors.length, 0);
+  assert.equal(f.timers.size, 0);
+});
+
+test("clearing before the first HTTP turn cannot send a queued stop", async () => {
+  const f = fixture(); f.controller.request(active); f.controller.clear(); await flush();
+  assert.equal(f.calls.length, 0); assert.equal(f.errors.length, 0); assert.equal(f.timers.size, 0);
+});
+
+test("connection loss before the first HTTP turn reconnects through an exact run inspection", async () => {
+  const f = fixture(); f.controller.request(active); f.writable(false); await flush();
+  assert.equal(f.calls.length, 0); assert.equal(f.controller.phase(active.id), "waiting");
+  f.writable(true); f.controller.resume(); await flush();
+  assert.deepEqual(f.calls, [["GET", active.id], ["DELETE", active.id]]);
+  assert.equal(f.accepted.length, 1); assert.equal(f.errors.length, 0); assert.equal(f.timers.size, 0);
+});
+
+test("run API adapters cancel the real read and DELETE transports when their signal aborts", async context => {
+  const releases = [];
+  context.after(() => { for (const release of releases) release(); });
+  for (const operation of [readRun, cancelRun]) {
+    const controller = new AbortController(); let signal;
+    context.mock.method(globalThis, "fetch", async (_path, options) => {
+      signal = options.signal;
+      return new Promise((resolve, reject) => {
+        releases.push(() => resolve(Response.json({ ok: true, data: stopped })));
+        signal?.addEventListener("abort", () => reject(new DOMException("Transport cancelled", "AbortError")), { once: true });
+      });
+    });
+    const request = operation(active.id, { signal: controller.signal });
+    await flush(); assert.equal(signal, controller.signal);
+    controller.abort(); await assert.rejects(request, { name: "AbortError" });
+    context.mock.restoreAll();
+  }
+});
+
+test("authoritative completion clears only the error belonging to the same run", () => {
+  const error = { code: "run_stop_unconfirmed", runStopOwner: active };
+  assert(resolvesRunStopError(error, stopped));
+  assert(resolvesRunStopError(error, { ...active, terminal: true, state: "succeeded" }));
+  for (const candidate of [active, null, { ...stopped, id: "run-b" },
+    { ...stopped, session_id: "b" }, { ...stopped, project_id: "other" },
+    { ...active, cancel_requested: "true" }]) assert.equal(resolvesRunStopError(error, candidate), false);
+  assert.equal(resolvesRunStopError({ code: "quota_exceeded" }, stopped), false);
 });

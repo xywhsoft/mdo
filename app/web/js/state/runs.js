@@ -66,12 +66,12 @@ export async function startRun(projectId, sessionId, prompt, attachments = [],
   } finally { recovery.dispose(); }
 }
 
-export async function readRun(runId) {
+export async function readRun(runId, options = {}) {
   const run = resourceId(runId, "run");
-  return (await api.get(`/runs/${run}`)).data;
+  return (await api.get(`/runs/${run}`, options)).data;
 }
 
-export async function cancelRun(runId) {
+export async function cancelRun(runId, options = {}) {
   const run = resourceId(runId, "run");
-  return (await api.delete(`/runs/${run}`)).data;
+  return (await api.delete(`/runs/${run}`, options)).data;
 }

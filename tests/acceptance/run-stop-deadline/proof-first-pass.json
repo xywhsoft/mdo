@@ -1,0 +1,268 @@
+{
+  "phases": [
+    {
+      "mode": "slow",
+      "run_id": "run-V-OSKBig8ZY3jQHtwB0-VClGSIMwzbuw",
+      "http_deletes": 1,
+      "native_deletes": 1,
+      "read_failures": 0,
+      "list_failures": 5,
+      "held_reads": 1,
+      "run_read_records": [
+        {
+          "started": 2483720.546
+        },
+        {
+          "started": 2483727.859
+        }
+      ],
+      "delete_started": 2483718.781,
+      "native_completed": 2483718.781
+    },
+    {
+      "mode": "unconfirmed",
+      "run_id": "run-V-OSKCLbiCKuHy1DGfezmrh6DKtTuTzc",
+      "http_deletes": 1,
+      "native_deletes": 0,
+      "read_failures": 17,
+      "list_failures": 6,
+      "held_reads": 0,
+      "run_read_records": [
+        {
+          "started": 2483880.437
+        },
+        {
+          "started": 2483881.281
+        },
+        {
+          "started": 2483883.703
+        },
+        {
+          "started": 2483885.453
+        },
+        {
+          "started": 2483888.468
+        },
+        {
+          "started": 2483895.484
+        },
+        {
+          "started": 2483897.406
+        },
+        {
+          "started": 2483910.5
+        },
+        {
+          "started": 2483912.812
+        },
+        {
+          "started": 2483925.515
+        },
+        {
+          "started": 2483928.5
+        },
+        {
+          "started": 2483940.531
+        },
+        {
+          "started": 2483955.546
+        },
+        {
+          "started": 2483970.546
+        },
+        {
+          "started": 2483985.562
+        },
+        {
+          "started": 2484000.562
+        },
+        {
+          "started": 2484015.578
+        }
+      ],
+      "delete_started": 2483880.203
+    },
+    {
+      "mode": "normal",
+      "run_id": null,
+      "http_deletes": 0,
+      "native_deletes": 0,
+      "read_failures": 0,
+      "list_failures": 0,
+      "held_reads": 0,
+      "run_read_records": [],
+      "delete_started": null
+    }
+  ],
+  "model_calls": {
+    "streaming": 1,
+    "continue after recovered stop": 1,
+    "stream-stop": 2
+  },
+  "sessions": [
+    {
+      "id": "V-OSKBSWk3pr7BwSLlhR40y4bjfvKgC7",
+      "title": "Stop slow",
+      "user_inputs": [
+        "streaming",
+        "continue after recovered stop"
+      ],
+      "final_model_errors": 0,
+      "event_kinds": {
+        "agent_start": 2,
+        "model_start": 2,
+        "model_text_delta": 2,
+        "agent_done": 2,
+        "model_done": 1
+      },
+      "queue": {
+        "items": [],
+        "discard_images": []
+      },
+      "draft": {
+        "revision": 9,
+        "text": "",
+        "attachments": [],
+        "run_admission_uncertain": false,
+        "submission": null,
+        "submissions": []
+      }
+    },
+    {
+      "id": "V-OSKBSX97iUP5HuLbMFGBViMm0dH_ls",
+      "title": "Stop unconfirmed",
+      "user_inputs": [
+        "stream-stop"
+      ],
+      "final_model_errors": 0,
+      "event_kinds": {
+        "agent_start": 1,
+        "model_start": 2,
+        "model_text_delta": 2,
+        "agent_done": 1
+      },
+      "queue": {
+        "items": [],
+        "discard_images": []
+      },
+      "draft": {
+        "revision": 5,
+        "text": "DRAFT_SURVIVES_FINAL_STOP_NOTICE",
+        "attachments": [],
+        "run_admission_uncertain": false,
+        "submission": null,
+        "submissions": []
+      }
+    }
+  ],
+  "websocket_unavailable": true,
+  "runs": {
+    "automatic": true,
+    "active_runs": 0,
+    "starting_runs": 0,
+    "retained_runs": 3,
+    "max_active": 8,
+    "max_retained": 64,
+    "runs_started": 3,
+    "runs_completed": 3,
+    "runs_failed": 2,
+    "items": [
+      {
+        "id": "run-V-OSKCLbiCKuHy1DGfezmrh6DKtTuTzc",
+        "project_id": "default",
+        "session_id": "V-OSKBSX97iUP5HuLbMFGBViMm0dH_ls",
+        "agent_run_id": 3,
+        "agent_id": "mdo.default",
+        "model_id": "queue-fixture",
+        "protocol": "openai-chat-completions",
+        "reasoning_effort": "none",
+        "state": "cancelled",
+        "result": "cancelled",
+        "error_code": "cancelled",
+        "terminal": true,
+        "cancel_requested": true,
+        "resume": false,
+        "client_resume_id": "",
+        "created_at": 1791468803438800,
+        "started_at": 1791468803444287,
+        "ended_at": 1791468984847772,
+        "config_revision": 3,
+        "model_generation": 2,
+        "module_generation": 1,
+        "skill_generation": 1,
+        "memory_generation": 1,
+        "agent_turns": 1,
+        "model_calls": 1,
+        "tool_calls": 0,
+        "compactions": 0,
+        "final_text_available": false,
+        "final_text_truncated": false,
+        "final_text_bytes": 0
+      },
+      {
+        "id": "run-V-OSKC4RFPLqLp2LAPbzmWdjejJLO8tA",
+        "project_id": "default",
+        "session_id": "V-OSKBSWk3pr7BwSLlhR40y4bjfvKgC7",
+        "agent_run_id": 2,
+        "agent_id": "mdo.default",
+        "model_id": "queue-fixture",
+        "protocol": "openai-chat-completions",
+        "reasoning_effort": "none",
+        "state": "succeeded",
+        "result": "ok",
+        "error_code": "none",
+        "terminal": true,
+        "cancel_requested": false,
+        "resume": false,
+        "client_resume_id": "",
+        "created_at": 1791468731384225,
+        "started_at": 1791468731389969,
+        "ended_at": 1791468731443860,
+        "config_revision": 3,
+        "model_generation": 2,
+        "module_generation": 1,
+        "skill_generation": 1,
+        "memory_generation": 1,
+        "agent_turns": 1,
+        "model_calls": 1,
+        "tool_calls": 0,
+        "compactions": 0,
+        "final_text_available": true,
+        "final_text_truncated": false,
+        "final_text_bytes": 41
+      },
+      {
+        "id": "run-V-OSKBig8ZY3jQHtwB0-VClGSIMwzbuw",
+        "project_id": "default",
+        "session_id": "V-OSKBSWk3pr7BwSLlhR40y4bjfvKgC7",
+        "agent_run_id": 1,
+        "agent_id": "mdo.default",
+        "model_id": "queue-fixture",
+        "protocol": "openai-chat-completions",
+        "reasoning_effort": "none",
+        "state": "cancelled",
+        "result": "cancelled",
+        "error_code": "cancelled",
+        "terminal": true,
+        "cancel_requested": true,
+        "resume": false,
+        "client_resume_id": "",
+        "created_at": 1791468635956799,
+        "started_at": 1791468635963131,
+        "ended_at": 1791468654946858,
+        "config_revision": 3,
+        "model_generation": 2,
+        "module_generation": 1,
+        "skill_generation": 1,
+        "memory_generation": 1,
+        "agent_turns": 1,
+        "model_calls": 1,
+        "tool_calls": 0,
+        "compactions": 0,
+        "final_text_available": false,
+        "final_text_truncated": false,
+        "final_text_bytes": 0
+      }
+    ]
+  }
+}

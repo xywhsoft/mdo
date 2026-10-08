@@ -151,6 +151,8 @@ const API_ERROR_COPY = Object.freeze({
     "暂时无法确认本次回复是否已结束。请恢复连接后刷新会话；已有内容会保留。"],
   task_stop_unconfirmed: ["error.taskStopUnconfirmed",
     "暂时无法确认任务是否已停止。请恢复连接后查看任务状态，再决定是否重试。"],
+  run_stop_unconfirmed: ["error.taskStopUnconfirmed",
+    "暂时无法确认任务是否已停止。请恢复连接后查看任务状态，再决定是否重试。"],
   task_stop_context_changed: ["error.taskStopContextChanged",
     "任务已变化，停止操作没有继续。请刷新任务列表后重新选择。"],
   task_not_found: ["error.taskNotFound", "该后台任务已不在当前服务中，请刷新任务列表。"],

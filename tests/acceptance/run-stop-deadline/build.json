@@ -1,0 +1,46 @@
+{
+  "baseline": "4a526a0",
+  "xs_revision": "3232f7b8efb02fdd6bf63a508ed1e69654d6759c",
+  "artifact": "D:\\GIT\\mdo\\.build\\conversation-acceptance\\run-stop-package-final\\mdo.exe",
+  "size": 4455240,
+  "sha256": "fb5f15a38aa90fe574debdd677139eaeb52f384ee4d4097eac4af88ac1c5a5d4",
+  "served_files": [
+    {
+      "path": "js/app.js",
+      "sha256": "7db4c173312deaa7fd325f9d1191ed02a11ece1487f20bbcc2bfff149a43f7dd",
+      "source_matches_served": true
+    },
+    {
+      "path": "js/features/chat/run-stop-controller.js",
+      "sha256": "c8de4f4e6d371d46cd51720815c498b746bd3dacd9f2c2d8f26ec92868752df1",
+      "source_matches_served": true
+    },
+    {
+      "path": "js/state/runs.js",
+      "sha256": "06938473f818ea39f7fa5938840ec89a732024a07b4ddc00341b49f3be407624",
+      "source_matches_served": true
+    },
+    {
+      "path": "js/utils/dom.js",
+      "sha256": "7e3b6afe4323861c9f0baeb4c4a502b6b69e120b4fc1ccbcca492299ec497ac6",
+      "source_matches_served": true
+    },
+    {
+      "path": "js/features/chat/recovery-action.js",
+      "sha256": "29b4c440f63e588ef8c358a7bee6783387cb581491dc22cb4df94f1d5e3af1db",
+      "source_matches_served": true
+    },
+    {
+      "path": "js/api/request-recovery.js",
+      "sha256": "c04db7d70ff5c308564345b33e5a0a0df3ad36245c4f7ce3bf85b1867ba90378",
+      "source_matches_served": true
+    }
+  ],
+  "qa_source_injection": false,
+  "unit_tests_passed": 51,
+  "frontend_contracts_passed": 4,
+  "baseline_stop_checks_before_notice_fix": {
+    "passed": 12,
+    "failed": 8
+  }
+}

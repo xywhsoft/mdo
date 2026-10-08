@@ -45,7 +45,7 @@ import { timelineStore, selectTimeline, clearTimeline, refreshSelectedTimeline, 
 import { todoStore, selectTodo, clearTodo } from "./state/todo.js";
 import { createTimelineView } from "./features/chat/timeline.js";
 import { createQueueGate } from "./features/chat/queue-gate.js";
-import { createRunStopController } from "./features/chat/run-stop-controller.js";
+import { createRunStopController, resolvesRunStopError } from "./features/chat/run-stop-controller.js";
 import { createMessageEditDialog } from "./features/chat/message-edit-dialog.js";
 import { runMessageReplacement } from "./features/chat/message-replacement.js";
 import { createConversationSearch } from "./features/chat/conversation-search.js";
@@ -216,6 +216,7 @@ export async function boot() {
     onError(error, owner) {
       if (error?.code === "run_stop_invalid_response")
         error = localComposerError("error.invalidResponse", "", error.code);
+      error.runStopOwner = owner;
       const route = navigation.get();
       if (route.projectId === owner.project_id && route.sessionId === owner.session_id)
         showComposerError(error);
@@ -1109,6 +1110,7 @@ export async function boot() {
   }
 
   function setRun(run) {
+    if (resolvesRunStopError(composerErrorState?.error, run)) hideComposerError();
     const wasActive = Boolean(activeRun);
     activeRun = run && !terminalState(run) ? run : null;
     if (wasActive !== Boolean(activeRun)) promptQueue.render();
