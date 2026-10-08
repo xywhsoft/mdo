@@ -1,4 +1,5 @@
 {
+  "model.error.request_configuration": "The saved model settings could not produce a valid request. Check the API endpoint, model capabilities, reasoning options and output limit.",
   "timeline.processRunning": "Execution progress",
   "timeline.processComplete": "View reasoning and execution",
   "timeline.processTools": "{count} tool calls",

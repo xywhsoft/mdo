@@ -7,7 +7,7 @@ const kinds = new Set([
   "model_unavailable", "context_limit", "request_too_large", "rate_limited",
   "timeout", "network", "service_unavailable", "invalid_response", "invalid_request",
   "output_limit", "context_compaction",
-  "service_quota_exceeded", "service_configuration",
+  "service_quota_exceeded", "service_configuration", "request_configuration",
 ]);
 
 // Classifications come from the server; unknown/older records retain their
@@ -26,7 +26,7 @@ const titles = {
   request_too_large: "requestLimit", output_limit: "outputLimit",
   context_compaction: "compaction",
   model_changed: "configuration", model_unavailable: "configuration",
-  invalid_request: "configuration",
+  invalid_request: "configuration", request_configuration: "configuration",
 };
 
 export function modelErrorTitle(kind, fallback) {

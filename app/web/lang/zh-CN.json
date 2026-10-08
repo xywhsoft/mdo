@@ -1,4 +1,5 @@
 {
+  "model.error.request_configuration": "本地模型配置无法生成有效请求。请检查接口地址、模型能力、思考强度及输出上限。",
   "timeline.processRunning": "执行过程",
   "timeline.processComplete": "查看思考与执行过程",
   "timeline.processTools": "{count} 次工具调用",

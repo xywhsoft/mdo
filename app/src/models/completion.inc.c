@@ -57,6 +57,10 @@ const char* MdoModelErrorKind(const xllm_error* Error)
     if (Error->eCode == XLLM_ERROR_PARSE || Error->eCode == XLLM_ERROR_PROTOCOL ||
         Error->eCode == XLLM_ERROR_INCOMPLETE_RESPONSE)
         return "invalid_response";
+    /* Local validation has no upstream status. Do not imply that the model
+     * service rejected a request which could not be prepared in this client. */
+    if (Error->eCode == XLLM_ERROR_INVALID_ARGUMENT && Error->iHttpStatus == 0)
+        return "request_configuration";
     if (Error->iHttpStatus == 400 || Error->iHttpStatus == 422 ||
         Error->eCode == XLLM_ERROR_INVALID_ARGUMENT) return "invalid_request";
     return "unknown";
@@ -109,6 +113,8 @@ const char* MdoModelErrorMessage(const xllm_error* Error)
         "The model reached its output limit before completing a tool call. Automatic recovery did not succeed; increase the output limit or ask for smaller steps. Your conversation is saved.";
     if (!strcmp(Kind, "invalid_request")) return
         "The model service rejected the request settings. Check the model, API protocol and supported options.";
+    if (!strcmp(Kind, "request_configuration")) return
+        "The saved model settings could not produce a valid request. Check the API endpoint, model capabilities, reasoning options and output limit.";
     if (!strcmp(Kind, "cancelled")) return "The model request was cancelled.";
     return Error && Error->sMessage[0] ? Error->sMessage :
         "The model request could not be completed. Your conversation is saved.";

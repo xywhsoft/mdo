@@ -58,11 +58,13 @@ void ServiceInit(XS_HostInfo* Host) {
         "membership","authentication","service-quota","service-config","invalid","exhausted","retry-after",
         "cancel","deadline","partial","hook-stop","partial-recover",
         "eof-protected","eof-recover","eof-exhausted",
-        "output-protected","output-recover","output-exhausted","malformed-recover","recovery-budget"};
+        "output-protected","output-recover","output-exhausted","malformed-recover","recovery-budget","local-invalid"};
     for (unsigned i=0;i<sizeof(Names)/sizeof(Names[0]);++i) {
         Observer O={0}; xllm_request Request; xllmRequestInit(&Request);
         xllmRequestAddTextMessage(&Request,XLLM_ROLE_USER,Names[i]);
         Request.uMaxOutputTokens=128u;
+        if (!strcmp(Names[i],"local-invalid")) Request.uMaxOutputTokens=UINT32_MAX;
+        uint32 OriginalOutputLimit=Request.uMaxOutputTokens;
         Request.bStream=!strncmp(Names[i],"partial",7) || !strncmp(Names[i],"eof",3) ||
             !strncmp(Names[i],"output",6) || !strncmp(Names[i],"malformed",9);
         xllm_stream_callbacks Stream={&O,Event};
@@ -84,7 +86,7 @@ void ServiceInit(XS_HostInfo* Host) {
             Names[i],Result,MdoModelErrorKind(&Error),Error.tDiagnostics.uAttemptCount,
             O.Retries,O.Deltas,Error.tDiagnostics.bRetryExhausted?1:0,
             (unsigned long long)((xrtClock()-Started)/1000u));
-        if (Request.iMessageCount!=1u || Request.uMaxOutputTokens!=128u || Request.uDeadline!=OriginalDeadline)
+        if (Request.iMessageCount!=1u || Request.uMaxOutputTokens!=OriginalOutputLimit || Request.uDeadline!=OriginalDeadline)
             printf("request_mutated=1\n");
         if (!strcmp(Names[i],"daily") && strstr(Error.sMessage,"00:00 Asia/Shanghai"))
             printf("daily_message=accurate\n");
@@ -250,10 +252,11 @@ def main():
                         'output-recover': (0, 'unknown', 2),
                         'output-exhausted': (-1, 'output_limit', 6),
                         'malformed-recover': (0, 'unknown', 2),
-                        'recovery-budget': (-2, 'timeout', 2)}
+                        'recovery-budget': (-2, 'timeout', 2),
+                        'local-invalid': (-1, 'request_configuration', 1)}
             for name, (result, kind, count) in expected.items():
                 assert f'case={name} result={result} kind={kind} attempts={count}' in output, output
-                assert Model.calls[name] == count, (name, Model.calls, output)
+                assert Model.calls[name] == (0 if name == 'local-invalid' else count), (name, Model.calls, output)
             assert 'case=exhausted result=-1 kind=service_unavailable attempts=6 retries=5' in output, output
             assert 'daily_message=accurate' in output, output
             assert 'response_attempts_mismatch' not in output, output

@@ -1,0 +1,29 @@
+case=transient result=0 kind=unknown attempts=3 retries=2 deltas=1 exhausted=0 ms=52
+case=network result=0 kind=unknown attempts=2 retries=1 deltas=1 exhausted=0 ms=33
+case=daily result=-1 kind=daily_token_limit attempts=1 retries=0 deltas=0 exhausted=0 ms=0
+daily_message=accurate
+case=balance result=-1 kind=insufficient_balance attempts=1 retries=0 deltas=0 exhausted=0 ms=0
+case=quota result=-1 kind=quota_exceeded attempts=1 retries=0 deltas=0 exhausted=0 ms=0
+case=membership result=-1 kind=membership_required attempts=1 retries=0 deltas=0 exhausted=0 ms=0
+case=authentication result=-1 kind=authentication_failed attempts=1 retries=0 deltas=0 exhausted=0 ms=0
+case=service-quota result=-1 kind=service_quota_exceeded attempts=1 retries=0 deltas=0 exhausted=0 ms=0
+case=service-config result=-1 kind=service_configuration attempts=1 retries=0 deltas=0 exhausted=0 ms=0
+case=invalid result=-1 kind=invalid_request attempts=1 retries=0 deltas=0 exhausted=0 ms=0
+case=exhausted result=-1 kind=service_unavailable attempts=6 retries=5 deltas=0 exhausted=1 ms=400
+case=retry-after result=0 kind=unknown attempts=2 retries=1 deltas=1 exhausted=0 ms=84
+case=cancel result=-3 kind=cancelled attempts=1 retries=1 deltas=0 exhausted=0 ms=0
+case=deadline result=-2 kind=timeout attempts=1 retries=1 deltas=0 exhausted=0 ms=211
+case=partial result=-1 kind=network attempts=1 retries=0 deltas=1 exhausted=0 ms=15
+case=hook-stop result=-3 kind=cancelled attempts=1 retries=0 deltas=0 exhausted=0 ms=1
+case=partial-recover result=0 kind=unknown attempts=2 retries=1 deltas=2 exhausted=0 ms=35
+case=eof-protected result=-1 kind=invalid_response attempts=1 retries=0 deltas=1 exhausted=0 ms=12
+case=eof-recover result=0 kind=unknown attempts=2 retries=1 deltas=2 exhausted=0 ms=18
+case=eof-exhausted result=-1 kind=invalid_response attempts=6 retries=5 deltas=6 exhausted=1 ms=413
+case=output-protected result=-1 kind=output_limit attempts=1 retries=0 deltas=0 exhausted=0 ms=1
+case=output-recover result=0 kind=unknown attempts=2 retries=1 deltas=1 exhausted=0 ms=15
+case=output-exhausted result=-1 kind=output_limit attempts=6 retries=5 deltas=0 exhausted=1 ms=385
+case=malformed-recover result=0 kind=unknown attempts=2 retries=1 deltas=1 exhausted=0 ms=14
+case=recovery-budget result=-2 kind=timeout attempts=2 retries=1 deltas=0 exhausted=1 ms=1203
+case=local-invalid result=-1 kind=request_configuration attempts=1 retries=0 deltas=0 exhausted=0 ms=0
+
+Model retry, business classification, deadline, cancellation and partial-output protection: PASS

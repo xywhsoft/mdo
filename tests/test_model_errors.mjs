@@ -25,6 +25,14 @@ test("final model errors use the UI language and preserve unknown explanations",
       assert.equal(duplicate.filter(i => i.kind === "error").length, 1);
       assert.equal(duplicate.find(i => i.kind === "error").role, expectedTitle);
       assert.match(errorMessage({ code: "model_daily_token_limit", message: "raw" }), pattern);
+      const localConfiguration = errorMessage({ code: "model_request_configuration", message: "raw" });
+      assert.match(localConfiguration, locale === "zh-CN" ? /本地模型配置/ :
+        locale === "ru-RU" ? /сохранённых настроек модели/ : /saved model settings/);
+      const localTimeline = eventsToTimeline([{ kind: "error", event_id: 4, run_id: "local-config",
+        model_error_kind: "request_configuration", model_http_status: 0, text: "raw" }])[0];
+      assert.equal(localTimeline.text, localConfiguration);
+      assert.equal(localTimeline.role, locale === "zh-CN" ? "模型配置不可用" :
+        locale === "ru-RU" ? "Настройки модели недоступны" : "Model settings unavailable");
       const limit = errorMessage({ code: "model_output_limit", message: "raw" });
       assert.notEqual(limit, "raw");
       assert.match(limit, locale === "zh-CN" ? /输出上限/ :

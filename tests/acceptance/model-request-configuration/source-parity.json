@@ -1,0 +1,18 @@
+[
+  {
+    "asset": "js/utils/model-errors.js",
+    "sha256": "28a9ac0dcfd5ab8d004a340f542794349644b5850607c95ffbc81acda4bce7b2"
+  },
+  {
+    "asset": "lang/zh-CN.json",
+    "sha256": "94f63d794833b69215769ee62e630b420e7c9a6ee83611cfaf43d366a6eec054"
+  },
+  {
+    "asset": "lang/en-US.json",
+    "sha256": "1e9f42a4abb46699708a8a97df5a09da1614db4a9329a323ace8bb673eac7fde"
+  },
+  {
+    "asset": "lang/ru-RU.json",
+    "sha256": "31eb8e5603d90c4c3e016fba94b436b53e1dba6cbb61461917e846e11956f64d"
+  }
+]
