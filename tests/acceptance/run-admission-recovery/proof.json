@@ -1,0 +1,137 @@
+{
+  "proxy_phases": [
+    {
+      "mode": "preflight",
+      "queue_posts": 1,
+      "run_posts": 1,
+      "native_run_accepts": 1,
+      "lost_responses": 0,
+      "delayed_responses": 0,
+      "recovery_failed": 2,
+      "receipt_failed": 0,
+      "receipt_reads": 0,
+      "recovery_left": 0,
+      "receipt_left": 0,
+      "armed": false
+    },
+    {
+      "mode": "lost",
+      "queue_posts": 1,
+      "run_posts": 1,
+      "native_run_accepts": 1,
+      "lost_responses": 1,
+      "delayed_responses": 0,
+      "recovery_failed": 0,
+      "receipt_failed": 2,
+      "receipt_reads": 3,
+      "recovery_left": 0,
+      "receipt_left": 0,
+      "armed": false
+    },
+    {
+      "mode": "slow",
+      "queue_posts": 2,
+      "run_posts": 2,
+      "native_run_accepts": 2,
+      "lost_responses": 0,
+      "delayed_responses": 1,
+      "recovery_failed": 0,
+      "receipt_failed": 0,
+      "receipt_reads": 1,
+      "recovery_left": 0,
+      "receipt_left": 0,
+      "armed": false
+    }
+  ],
+  "model_calls": {
+    "\u53d1\u9001\u524d\u68c0\u67e5\u81ea\u52a8\u6062\u590d \u2014 PREFLIGHT_1008": 1,
+    "\u542f\u52a8\u54cd\u5e94\u4e22\u5931\u4ecd\u53ea\u6267\u884c\u4e00\u6b21 \u2014 LOST_1008": 1,
+    "\u542f\u52a8\u56de\u590d\u8d85\u65f6\u540e\u81ea\u52a8\u786e\u8ba4 \u2014 SLOW_1008": 1,
+    "\u6062\u590d\u540e\u7ee7\u7eed\u5bf9\u8bdd \u2014 FOLLOWUP_1008": 1
+  },
+  "sessions": [
+    {
+      "id": "V-OSJs_n35tLchU8ydSHSZLM3_foVLFu",
+      "title": "Start preflight",
+      "user_inputs": [
+        "\u53d1\u9001\u524d\u68c0\u67e5\u81ea\u52a8\u6062\u590d \u2014 PREFLIGHT_1008"
+      ],
+      "final_errors": 0,
+      "event_kinds": {
+        "agent_start": 1,
+        "model_start": 1,
+        "model_text_delta": 1,
+        "model_done": 1,
+        "agent_done": 1
+      },
+      "queue": {
+        "items": [],
+        "discard_images": []
+      },
+      "draft": {
+        "revision": 4,
+        "text": "",
+        "attachments": [],
+        "run_admission_uncertain": false,
+        "submission": null,
+        "submissions": []
+      }
+    },
+    {
+      "id": "V-OSJs_o1kzLuT72oVCbK2SG98snJw2y",
+      "title": "Start lost",
+      "user_inputs": [
+        "\u542f\u52a8\u54cd\u5e94\u4e22\u5931\u4ecd\u53ea\u6267\u884c\u4e00\u6b21 \u2014 LOST_1008"
+      ],
+      "final_errors": 0,
+      "event_kinds": {
+        "agent_start": 1,
+        "model_start": 1,
+        "model_text_delta": 1,
+        "model_done": 1,
+        "agent_done": 1
+      },
+      "queue": {
+        "items": [],
+        "discard_images": []
+      },
+      "draft": {
+        "revision": 4,
+        "text": "",
+        "attachments": [],
+        "run_admission_uncertain": false,
+        "submission": null,
+        "submissions": []
+      }
+    },
+    {
+      "id": "V-OSJs_oG8RZNcgC8lG2VMLsig8FRxUn",
+      "title": "Start slow",
+      "user_inputs": [
+        "\u542f\u52a8\u56de\u590d\u8d85\u65f6\u540e\u81ea\u52a8\u786e\u8ba4 \u2014 SLOW_1008",
+        "\u6062\u590d\u540e\u7ee7\u7eed\u5bf9\u8bdd \u2014 FOLLOWUP_1008"
+      ],
+      "final_errors": 0,
+      "event_kinds": {
+        "agent_start": 2,
+        "model_start": 2,
+        "model_text_delta": 2,
+        "model_done": 2,
+        "agent_done": 2
+      },
+      "queue": {
+        "items": [],
+        "discard_images": []
+      },
+      "draft": {
+        "revision": 8,
+        "text": "",
+        "attachments": [],
+        "run_admission_uncertain": false,
+        "submission": null,
+        "submissions": []
+      }
+    }
+  ],
+  "websocket_unavailable": true
+}

@@ -1,0 +1,37 @@
+{
+  "baseline": "91da9a7",
+  "xs_revision": "858a6ad1dde41dd43b6fd7028a8d2303ebc6f696",
+  "artifact": "D:\\GIT\\mdo\\.build\\conversation-acceptance\\mdo-run-admission-recovery.exe",
+  "size": 4449166,
+  "sha256": "5b4c4f9b0e97d855084df1fb8f48634396535390d174f7399e3518e3e74d7680",
+  "served_files": [
+    {
+      "path": "js/api/request-recovery.js",
+      "sha256": "5146b2af221a7196161660aa071abc9cc33a2155cfc51e2b7984667e49a67a14",
+      "source_matches_served": true
+    },
+    {
+      "path": "js/state/session-runtime.js",
+      "sha256": "1f41495429f43c0eb15d0193300cff5ce9dcad3c96d6df3cb2d52b6d2dbe9e56",
+      "source_matches_served": true
+    },
+    {
+      "path": "js/state/recovery.js",
+      "sha256": "7131d9949188b51929ac1a0ebc3fd667844109f52f8b847b7c778c6b9a161bcc",
+      "source_matches_served": true
+    },
+    {
+      "path": "js/state/runs.js",
+      "sha256": "b720f949b1d615aa9be8cc19aa5a92f3c081f02b54c52eace59fb9f26db091e2",
+      "source_matches_served": true
+    },
+    {
+      "path": "js/features/chat/recovery-dock.js",
+      "sha256": "275e716f3b5c17631d946b648fbc34d4420d9bc87e03ab2b2220475e47eaff2b",
+      "source_matches_served": true
+    }
+  ],
+  "qa_source_injection": false,
+  "unit_tests_passed": 94,
+  "frontend_contracts_passed": 4
+}

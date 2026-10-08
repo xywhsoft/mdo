@@ -25,12 +25,12 @@ export function createRecoveryDock({ container, summary, store, onResume, onAban
       accepted = true;
       if (decisions.isCurrent(data)) toast(t("recovery.submitted", {}, "正在继续任务"));
       onResume?.(run, operation.data);
-      if (decisions.isCurrent(data)) await loadRecovery();
+      if (decisions.isCurrent(data)) await loadRecovery({ retry: true });
     } catch (error) {
       accepted ||= error?.recoveryActionUncertain === true;
       if (error?.name !== "AbortError" && decisions.isCurrent(data)) {
         toast(errorMessage(error), "error");
-        if (error?.code === "recovery_state_conflict") await loadRecovery();
+        if (error?.code === "recovery_state_conflict") await loadRecovery({ retry: true });
       }
     } finally {
       decisions.finish(operation, accepted);
@@ -48,7 +48,7 @@ export function createRecoveryDock({ container, summary, store, onResume, onAban
       accepted = true;
       if (decisions.isCurrent(data)) {
         toast(t("recovery.abandoned", {}, "已结束本次回复，可以发送新消息"));
-        await loadRecovery();
+        await loadRecovery({ retry: true });
       }
       await onAbandon?.(operation.data);
       const current = store.get().data;
@@ -58,7 +58,7 @@ export function createRecoveryDock({ container, summary, store, onResume, onAban
       accepted ||= error?.recoveryActionUncertain === true;
       if (error?.name !== "AbortError" && decisions.isCurrent(data)) {
         toast(errorMessage(error), "error");
-        if (error?.code === "recovery_state_conflict") await loadRecovery();
+        if (error?.code === "recovery_state_conflict") await loadRecovery({ retry: true });
       }
     } finally {
       decisions.finish(operation, accepted);
@@ -141,7 +141,7 @@ export function createRecoveryDock({ container, summary, store, onResume, onAban
       container.append(element("div", { className: "resource-error", text: errorMessage(state.error) }));
       const retry = element("button", { className: "secondary-button",
         text: t("task.detail.retry", {}, "重试读取"), attrs: { type: "button" } });
-      retry.addEventListener("click", () => void loadRecovery());
+      retry.addEventListener("click", () => void loadRecovery({ retry: true }));
       container.append(retry);
       restoreFocus(focused);
       return;

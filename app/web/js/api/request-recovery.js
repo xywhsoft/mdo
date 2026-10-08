@@ -41,12 +41,13 @@ export function createRequestRecovery({ now = Date.now, random = Math.random,
   return Object.freeze({
     dispose,
     assertActive,
-    async request(operation, { retry = true, mutation = false } = {}) {
+    async request(operation, { retry = true, mutation = false,
+      retryable = isTransientReadError } = {}) {
       for (let count = 1; ; ++count) {
         try { return await attempt(operation); }
         catch (error) {
           if (stopped || error?.name === "AbortError") throw error;
-          const transient = isTransientReadError(error) || (mutation &&
+          const transient = retryable(error) || (mutation &&
             ["remote_result_unconfirmed", "invalid_response"].includes(error?.code));
           const base = Math.min(500 * 2 ** (count - 1), 8000);
           const delay = base + Math.floor(base * .2 * random());
