@@ -1,0 +1,7 @@
+{
+  "candidate_sha256": "848689fa64bfc6189f7115d3e6bbcaa3f1ddbec127d69e1bfda86c3f170d5071",
+  "source_sha256": {
+    "app/web/js/api/client.js": "dc0858f7bf942975e3ccc67c0fd836e3c5d5d7046489d4f5e606455914249701",
+    "app/web/js/api/image-upload.js": "9192b95f30614a7ef6694a966bc54a50276b79a55b52c9ec62d01a4fefe18b30"
+  }
+}

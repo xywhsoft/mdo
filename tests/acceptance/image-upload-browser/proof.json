@@ -1,0 +1,168 @@
+{
+  "uploads": [
+    {
+      "path": "/api/v1/projects/default/sessions/V-OSKnqnxF1rW50Ia6dpyOcDqxrKyNir/attachments/5e4216ea677c48fd8fa4082d19c5ab70",
+      "saved_at": 2494446.64,
+      "status": 201,
+      "bytes": 15254,
+      "sha256": "c44ad1ad286fbbce7b20e7c9e2941b077594eab5acf96d6c5ca116ced2e25047",
+      "released_at": 2494489.656
+    }
+  ],
+  "confirmations": [
+    {
+      "path": "/api/v1/projects/default/sessions/V-OSKnqnxF1rW50Ia6dpyOcDqxrKyNir/attachments/5e4216ea677c48fd8fa4082d19c5ab70/info",
+      "at": 2494477.765,
+      "fault": true
+    },
+    {
+      "path": "/api/v1/projects/default/sessions/V-OSKnqnxF1rW50Ia6dpyOcDqxrKyNir/attachments/5e4216ea677c48fd8fa4082d19c5ab70/info",
+      "at": 2494479.937,
+      "fault": true
+    },
+    {
+      "path": "/api/v1/projects/default/sessions/V-OSKnqnxF1rW50Ia6dpyOcDqxrKyNir/attachments/5e4216ea677c48fd8fa4082d19c5ab70/info",
+      "at": 2494484.406,
+      "fault": false
+    },
+    {
+      "path": "/api/v1/projects/default/sessions/V-OSKnqnxF1rW50Ia6dpyOcDqxrKyNir/attachments/5e4216ea677c48fd8fa4082d19c5ab70/info",
+      "at": 2494794.421,
+      "fault": false
+    }
+  ],
+  "websockets": [
+    {
+      "started": 2494421.968,
+      "status": 101,
+      "upstream_bytes": 911,
+      "downstream_bytes": 7551,
+      "opened": 2494421.968,
+      "closed": 2494793.828
+    },
+    {
+      "started": 2494794.343,
+      "status": 101,
+      "upstream_bytes": 204,
+      "downstream_bytes": 458,
+      "opened": 2494794.343
+    }
+  ],
+  "model_calls": [
+    {
+      "text": "IMAGE_RECOVERY_TYPED_WHILE_UPLOADING\n\u8bf7\u786e\u8ba4\u9644\u4ef6\uff0c\u5e76\u7ee7\u7eed\u5bf9\u8bdd\u3002",
+      "images": [
+        "c44ad1ad286fbbce7b20e7c9e2941b077594eab5acf96d6c5ca116ced2e25047"
+      ]
+    },
+    {
+      "text": "IMAGE_RECOVERY_FOLLOW_UP",
+      "images": []
+    }
+  ],
+  "user_inputs": [
+    "IMAGE_RECOVERY_TYPED_WHILE_UPLOADING\n\u8bf7\u786e\u8ba4\u9644\u4ef6\uff0c\u5e76\u7ee7\u7eed\u5bf9\u8bdd\u3002",
+    "IMAGE_RECOVERY_FOLLOW_UP"
+  ],
+  "final_model_errors": 0,
+  "event_kinds": {
+    "agent_start": 2,
+    "model_start": 2,
+    "model_text_delta": 2,
+    "model_done": 2,
+    "agent_done": 2
+  },
+  "attachment_files": {
+    "5e4216ea677c48fd8fa4082d19c5ab70.bin": "c44ad1ad286fbbce7b20e7c9e2941b077594eab5acf96d6c5ca116ced2e25047",
+    "5e4216ea677c48fd8fa4082d19c5ab70.json": "5cfb1f32aef00eef62ae6ff20da4be14cbae5ec7f432117a04c550819d0a4317"
+  },
+  "queue": {
+    "items": [],
+    "discard_images": []
+  },
+  "draft": {
+    "revision": 14,
+    "text": "UPLOAD_RECOVERY_UNSENT\n\u4e2d\u6587\u8349\u7a3f",
+    "attachments": [],
+    "run_admission_uncertain": false,
+    "submission": null,
+    "submissions": []
+  },
+  "runs": {
+    "automatic": true,
+    "active_runs": 0,
+    "starting_runs": 0,
+    "retained_runs": 2,
+    "max_active": 8,
+    "max_retained": 64,
+    "runs_started": 2,
+    "runs_completed": 2,
+    "runs_failed": 0,
+    "items": [
+      {
+        "id": "run-V-OSKpeBSSNLHKh7Bn871pbaTS-kcIyo",
+        "project_id": "default",
+        "session_id": "V-OSKnqnxF1rW50Ia6dpyOcDqxrKyNir",
+        "agent_run_id": 2,
+        "agent_id": "mdo.default",
+        "model_id": "queue-fixture",
+        "protocol": "openai-chat-completions",
+        "reasoning_effort": "none",
+        "state": "succeeded",
+        "result": "ok",
+        "error_code": "none",
+        "terminal": true,
+        "cancel_requested": false,
+        "resume": false,
+        "client_resume_id": "",
+        "created_at": 1791479622956495,
+        "started_at": 1791479622974324,
+        "ended_at": 1791479623077521,
+        "config_revision": 4,
+        "model_generation": 3,
+        "module_generation": 1,
+        "skill_generation": 1,
+        "memory_generation": 1,
+        "agent_turns": 1,
+        "model_calls": 1,
+        "tool_calls": 0,
+        "compactions": 0,
+        "final_text_available": true,
+        "final_text_truncated": false,
+        "final_text_bytes": 56
+      },
+      {
+        "id": "run-V-OSKp_ngZeYf1JgvmVRqrPFklu7RdX7",
+        "project_id": "default",
+        "session_id": "V-OSKnqnxF1rW50Ia6dpyOcDqxrKyNir",
+        "agent_run_id": 1,
+        "agent_id": "mdo.default",
+        "model_id": "queue-fixture",
+        "protocol": "openai-chat-completions",
+        "reasoning_effort": "none",
+        "state": "succeeded",
+        "result": "ok",
+        "error_code": "none",
+        "terminal": true,
+        "cancel_requested": false,
+        "resume": false,
+        "client_resume_id": "",
+        "created_at": 1791479604556356,
+        "started_at": 1791479604562557,
+        "ended_at": 1791479604634804,
+        "config_revision": 4,
+        "model_generation": 3,
+        "module_generation": 1,
+        "skill_generation": 1,
+        "memory_generation": 1,
+        "agent_turns": 1,
+        "model_calls": 1,
+        "tool_calls": 0,
+        "compactions": 0,
+        "final_text_available": true,
+        "final_text_truncated": false,
+        "final_text_bytes": 105
+      }
+    ]
+  }
+}

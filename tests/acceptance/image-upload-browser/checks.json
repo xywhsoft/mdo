@@ -1,0 +1,19 @@
+{
+  "image_put_attempts": 1,
+  "metadata_503_count": 2,
+  "confirmed_before_old_body_delivery": true,
+  "first_confirmation_delay_seconds": 31.125,
+  "image_confirmation_seconds": 37.766,
+  "image_original_count": 1,
+  "model_calls": 3,
+  "successful_user_turns": 3,
+  "final_model_errors": 0,
+  "image_hash_matches_uploaded_file_and_model": true,
+  "restart_preserves_history_and_draft": true,
+  "restart_draft_send_succeeded": true,
+  "draft_and_queue_empty_after_final_send": true,
+  "send_enabled_and_prompt_focused": true,
+  "input_duplicate_cause_resolved": false,
+  "source_parity_files": 2,
+  "android_native_verified": false
+}

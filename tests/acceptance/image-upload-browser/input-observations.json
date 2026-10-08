@@ -1,0 +1,81 @@
+{
+  "initial_duplicate_observed_before_logging": true,
+  "initial_screenshot": "upload-typing.png",
+  "initial_cause_resolved": false,
+  "events": [
+    {
+      "kind": "MDO_INPUT_QA",
+      "at": 1791479532604.917,
+      "type": "input",
+      "trusted": false,
+      "composing": false,
+      "inputType": "",
+      "data": null,
+      "value": "INPUT_DRIVER_ONCE",
+      "start": 17,
+      "end": 17
+    },
+    {
+      "kind": "MDO_INPUT_QA",
+      "at": 1791479541253.65,
+      "type": "input",
+      "trusted": false,
+      "composing": false,
+      "inputType": "",
+      "data": null,
+      "value": "\u5355\u6b21\u8f93\u5165\u6d4b\u8bd5",
+      "start": 6,
+      "end": 6
+    },
+    {
+      "kind": "MDO_INPUT_QA",
+      "at": 1791479571149.411,
+      "type": "input",
+      "trusted": false,
+      "composing": false,
+      "inputType": "",
+      "data": null,
+      "value": "IMAGE_RECOVERY_TYPED_WHILE_UPLOADING\n\u8bf7\u786e\u8ba4\u9644\u4ef6\uff0c\u5e76\u7ee7\u7eed\u5bf9\u8bdd\u3002",
+      "start": 49,
+      "end": 49
+    },
+    {
+      "kind": "MDO_INPUT_SETTER",
+      "at": 1791479604464.695,
+      "old": "IMAGE_RECOVERY_TYPED_WHILE_UPLOADING\n\u8bf7\u786e\u8ba4\u9644\u4ef6\uff0c\u5e76\u7ee7\u7eed\u5bf9\u8bdd\u3002",
+      "next": "",
+      "stack": "Error\n    at HTMLTextAreaElement.set (<anonymous>:1:686)\n    at clearSubmittedComposer (http://127.0.0.1:49429/js/app.js:2021:18)\n    at onPersisted (http://127.0.0.1:49429/js/app.js:819:7)\n    at acknowledge (http://127.0.0.1:49429/js/features/chat/submission-controller.js:36:5)\n    at Object.submit (http://127.0.0.1:49429/js/features/chat/submission-controller.js:253:7)\n    at async submitExistingSession (http://127.0.0.1:49429/js/app.js:2034:7)\n    at async submitPrompt (http://127.0.0.1:49429/js/app.js:2089:7)"
+    },
+    {
+      "kind": "MDO_INPUT_QA",
+      "at": 1791479622713.213,
+      "type": "input",
+      "trusted": false,
+      "composing": false,
+      "inputType": "",
+      "data": null,
+      "value": "IMAGE_RECOVERY_FOLLOW_UP",
+      "start": 24,
+      "end": 24
+    },
+    {
+      "kind": "MDO_INPUT_SETTER",
+      "at": 1791479622807.725,
+      "old": "IMAGE_RECOVERY_FOLLOW_UP",
+      "next": "",
+      "stack": "Error\n    at HTMLTextAreaElement.set (<anonymous>:1:686)\n    at clearSubmittedComposer (http://127.0.0.1:49429/js/app.js:2021:18)\n    at onPersisted (http://127.0.0.1:49429/js/app.js:819:7)\n    at acknowledge (http://127.0.0.1:49429/js/features/chat/submission-controller.js:36:5)\n    at Object.submit (http://127.0.0.1:49429/js/features/chat/submission-controller.js:253:7)\n    at async submitExistingSession (http://127.0.0.1:49429/js/app.js:2034:7)\n    at async submitPrompt (http://127.0.0.1:49429/js/app.js:2089:7)"
+    },
+    {
+      "kind": "MDO_INPUT_QA",
+      "at": 1791479690846.427,
+      "type": "input",
+      "trusted": false,
+      "composing": false,
+      "inputType": "",
+      "data": null,
+      "value": "UPLOAD_RECOVERY_UNSENT\n\u4e2d\u6587\u8349\u7a3f",
+      "start": 27,
+      "end": 27
+    }
+  ]
+}

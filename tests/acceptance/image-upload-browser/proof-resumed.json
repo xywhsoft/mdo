@@ -1,0 +1,102 @@
+{
+  "resumed": true,
+  "session_id": "V-OSKnqnxF1rW50Ia6dpyOcDqxrKyNir",
+  "uploads": [],
+  "confirmations": [
+    {
+      "path": "/api/v1/projects/default/sessions/V-OSKnqnxF1rW50Ia6dpyOcDqxrKyNir/attachments/5e4216ea677c48fd8fa4082d19c5ab70/info",
+      "at": 2494947.984,
+      "fault": false
+    }
+  ],
+  "websockets": [
+    {
+      "started": 2494947.89,
+      "status": 101,
+      "upstream_bytes": 397,
+      "downstream_bytes": 4075,
+      "opened": 2494947.89,
+      "closed": 2495021.281
+    }
+  ],
+  "model_calls": [
+    {
+      "text": "UPLOAD_RECOVERY_UNSENT\n\u4e2d\u6587\u8349\u7a3f",
+      "images": []
+    }
+  ],
+  "user_inputs": [
+    "IMAGE_RECOVERY_TYPED_WHILE_UPLOADING\n\u8bf7\u786e\u8ba4\u9644\u4ef6\uff0c\u5e76\u7ee7\u7eed\u5bf9\u8bdd\u3002",
+    "IMAGE_RECOVERY_FOLLOW_UP",
+    "UPLOAD_RECOVERY_UNSENT\n\u4e2d\u6587\u8349\u7a3f"
+  ],
+  "final_model_errors": 0,
+  "event_kinds": {
+    "agent_start": 3,
+    "model_start": 3,
+    "model_text_delta": 3,
+    "model_done": 3,
+    "agent_done": 3
+  },
+  "attachment_files": {
+    "5e4216ea677c48fd8fa4082d19c5ab70.bin": "c44ad1ad286fbbce7b20e7c9e2941b077594eab5acf96d6c5ca116ced2e25047",
+    "5e4216ea677c48fd8fa4082d19c5ab70.json": "5cfb1f32aef00eef62ae6ff20da4be14cbae5ec7f432117a04c550819d0a4317"
+  },
+  "queue": {
+    "items": [],
+    "discard_images": []
+  },
+  "draft": {
+    "revision": 18,
+    "text": "",
+    "attachments": [],
+    "run_admission_uncertain": false,
+    "submission": null,
+    "submissions": []
+  },
+  "runs": {
+    "automatic": true,
+    "active_runs": 0,
+    "starting_runs": 0,
+    "retained_runs": 1,
+    "max_active": 8,
+    "max_retained": 64,
+    "runs_started": 1,
+    "runs_completed": 1,
+    "runs_failed": 0,
+    "items": [
+      {
+        "id": "run-V-OSKqmF0QDWH_Q8TS6hxgtIygdCuQ4s",
+        "project_id": "default",
+        "session_id": "V-OSKnqnxF1rW50Ia6dpyOcDqxrKyNir",
+        "agent_run_id": 1,
+        "agent_id": "mdo.default",
+        "model_id": "queue-fixture",
+        "protocol": "openai-chat-completions",
+        "reasoning_effort": "none",
+        "state": "succeeded",
+        "result": "ok",
+        "error_code": "none",
+        "terminal": true,
+        "cancel_requested": false,
+        "resume": false,
+        "client_resume_id": "",
+        "created_at": 1791479925179820,
+        "started_at": 1791479925186493,
+        "ended_at": 1791479925238115,
+        "config_revision": 2,
+        "model_generation": 2,
+        "module_generation": 1,
+        "skill_generation": 1,
+        "memory_generation": 1,
+        "agent_turns": 1,
+        "model_calls": 1,
+        "tool_calls": 0,
+        "compactions": 0,
+        "final_text_available": true,
+        "final_text_truncated": false,
+        "final_text_bytes": 67
+      }
+    ]
+  }
+}

@@ -1,0 +1,8 @@
+{
+  "composerError": "",
+  "displayedReplyCount": 3,
+  "focus": "prompt",
+  "sendEnabled": true,
+  "timelineText": "01:13\nIMAGE_RECOVERY_TYPED_WHILE_UPLOADING\n请确认附件，并继续对话。\nsmoke_window.png\nAgent\n01:13\n\nIMAGE_CONFIRMED — IMAGE_RECOVERY_TYPED_WHILE_UPLOADING 请确认附件，并继续对话。 · images=1\n\n80 输入 / 20 输出 tokens · LLM <0.1 秒 · 939.1 tok/s\n01:13\nIMAGE_RECOVERY_FOLLOW_UP\nAgent\n01:13\n\nIMAGE_CONFIRMED — IMAGE_RECOVERY_FOLLOW_UP · images=0\n\n80 输入 / 20 输出 tokens · LLM <0.1 秒 · 585.5 tok/s\n01:18\nUPLOAD_RECOVERY_UNSENT\n中文草稿\nAgent\n01:18\n\nIMAGE_CONFIRMED — UPLOAD_RECOVERY_UNSENT 中文草稿 · images=0\n\n80 输入 / 20 输出 tokens · LLM <0.1 秒 · 1279.0 tok/s",
+  "value": ""
+}
