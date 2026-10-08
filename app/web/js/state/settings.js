@@ -43,15 +43,23 @@ export function createSettingsState({
         // One optional, revisioned initialization per load. If its reply or
         // the following read is lost, subsequent attempts only read settings.
         initializationAttempted = true;
+        let initializationAccepted = false;
         try {
           await client.patch("/settings/settings", documentFor({ locale: resolveLanguage() }),
             { ifMatch: settings.etag, signal });
+          initializationAccepted = true;
         } catch (error) {
           if (![409, 412].includes(error?.status) && error?.name !== "AbortError" &&
               !isTransientReadError(error))
             console.warn("Initial language preference could not be saved", error);
         }
-        settings = await readSettings(signal);
+        try {
+          settings = await readSettings(signal);
+        } catch (error) {
+          if (signal?.aborted || !initializationAccepted || !isTransientReadError(error)) throw error;
+          // An accepted language initialization can use the readable snapshot
+          // while its echo is offline. An uncertain write still needs recovery.
+        }
       }
       return settings.locale === "auto"
         ? { ...settings, locale: resolveLanguage() } : settings;
