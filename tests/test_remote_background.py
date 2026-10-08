@@ -3,6 +3,7 @@ import argparse
 from pathlib import Path
 import time
 from test_remote_manager import run, ROOT, XADMIN
+from remote_website_fixture import WEBSITE_HOST
 
 FAKE = r'''
 #include <xsbase.h>
@@ -58,7 +59,7 @@ def observe(stage, app):
 if __name__ == '__main__':
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--host',type=Path,default=ROOT/'.build/host/xs.exe')
-    parser.add_argument('--website-host',type=Path,default=XADMIN/'xs.exe')
+    parser.add_argument('--website-host',type=Path,default=WEBSITE_HOST)
     args=parser.parse_args()
     run(args.host.resolve(),args.website_host.resolve(),native_hook=HOOK,
         native_routes=' {"/api/v1/test-background-state",XHTTP_METHOD_GET,"GET",TestCpuState,false},',

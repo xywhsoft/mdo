@@ -1,0 +1,50 @@
+{
+  "source_head": "a6a28dea1ea6b7fa82122fa64a75a3a4abcf1ee9",
+  "scope": "Native xs/TCC source probes and an isolated unified mdo website; loopback model/service only. No phone, original account writes, paid calls, load or release.",
+  "client_host": {
+    "path": ".build\\host\\xs.exe",
+    "bytes": 3146752,
+    "sha256": "cb5a8c3abd4c52d0b60fc2d07868551fc6211b0c5dcd90aebc3a8bf72e0ccfad"
+  },
+  "website_host": {
+    "path": "..\\home\\xs.exe",
+    "bytes": 6989824,
+    "sha256": "c88300224e3e56f6ada6623313e6b1cc88d7851f869b2d1055057ccd5475c0e1"
+  },
+  "search_packed_candidate": {
+    "path": ".build\\conversation-acceptance\\mdo-recovery-ack-final.exe",
+    "bytes": 4394410,
+    "sha256": "ce25b72df7ffb41e91e75bd9816265bc4e90db2f95b351694dbaee929af9969b"
+  },
+  "checks": {
+    "test_remote_service_runtime.py": "PASS encrypted identity, registration, listing, tickets, relay, revoke/reactivation and logout cancellation",
+    "test_remote_manager.py": "PASS nonblocking jobs, reconnect without registration, native Unit, account isolation/logout",
+    "test_remote_bridge.py": "PASS project and session writes, binary attachments, offset/digest, scope, readonly role, lost-write receipt and runtime change",
+    "test_remote_live.py": "PASS stream cursor resume, exact HTTP parity, ask and approval over relay",
+    "test_remote_reload.py": "PASS full TCC generation unload joins old channels; new nonce/runtime and retained endpoint",
+    "test_remote_background.py": "PASS CPU lease acquisition, renewal and release on Unit, disable, account switch and logout",
+    "test_remote_websocket.py": "PASS 16 bounded WS/WSS protocol cases and two quiet keepalive connections",
+    "test_remote_loopback.py": "PASS actual route reuse, response validation, streaming and cancellation",
+    "test_remote_transport.mjs": "PASS frontend transport group",
+    "test_search_packed.py": "PASS login-gated preference and legacy settings removal",
+    "test_search_api_runtime.py": "PASS POST/auth, UTF-8, result parsing, empty/error/redirect handling and limits"
+  },
+  "live_model": {
+    "model": "remote-fixture",
+    "agent_runs": 3,
+    "model_done_events": 5,
+    "successful_run_ends": 3,
+    "final_model_errors": 0,
+    "tool_completions": 2,
+    "scope": "One stream run, one ask run, one intentionally denied permission run, all completed."
+  },
+  "test_fixes": [
+    "Shared website fixture activates only the current unified mdo plugin with the matching website host.",
+    "WebSocket fixture preserves quoted includes and imports its private test CA through the compact host PEM API, with trust and hostname checks enabled.",
+    "Live model is created with normal settings API nonce/ETag; obsolete built-in anonymous endpoint overrides removed."
+  ],
+  "limitations": [
+    "Android hardware, clipboard contents and actual Markdown download-to-disk remain unconfirmed.",
+    "Source probes validate the current checkout; they do not claim the earlier packed candidate contains later history/remote changes."
+  ]
+}

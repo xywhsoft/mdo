@@ -18,8 +18,9 @@ import time
 
 from test_account_runtime import ROOT, XADMIN, free_port, request
 sys.path.insert(0,str(XADMIN/'tests'))
-from smoke import fixture, USER, PASSWORD, client_hash
+from smoke import PASSWORD
 from channel_e2e import WebSocket
+from remote_website_fixture import remote_website_fixture, WEBSITE_HOST
 
 HOOK = r'''
 static bool RemoteTestQuery(xstrview query, cstr text) { return xrtStrEqual(query,xrtStrView(text)); }
@@ -165,10 +166,13 @@ static bool RemoteTestRoute(MdoApiContext* c) {
 '''
 
 
-def run(host):
-    app_port,website_port = free_port(),free_port()
+def run(host, website_host):
+    # Devices now belong to the unified mdo plugin, not xadmin's generic
+    # plugin catalogue. Reuse its isolated activation fixture; never enable
+    # plugins or register test accounts in the maintained website directory.
+    website, website_port, admin_user, admin_password = remote_website_fixture()
+    app_port = free_port()
     origin = f'http://127.0.0.1:{website_port}'
-    website = fixture(website_port,register_interval=0)
     processes,logs,clients = [],[],[]
 
     def launch(site,executable,home=None):
@@ -207,12 +211,9 @@ def run(host):
         raise AssertionError(value)
 
     try:
-        web_process = launch(website,XADMIN/'xs.exe'); wait(website_port,'/admin/login',web_process)
-        login,head = call(website_port,'POST','/admin/login',{'username':USER,'password':client_hash(USER,PASSWORD)})
+        web_process = launch(website,website_host); wait(website_port,'/admin/login',web_process)
+        login,head = call(website_port,'POST','/admin/login',{'username':admin_user,'password':admin_password})
         assert login['result']
-        admin = head['Cookies']
-        enabled,_ = call(website_port,'POST','/admin/plugin/enable',{'name':'device-relay'},{'Cookie':admin})
-        assert enabled['result']
         call(website_port,'POST','/api/v1/register',{'username':'remote_native_test','password':PASSWORD},status=201)
         tokens,_ = call(website_port,'POST','/api/v1/login',{'identifier':'remote_native_test','password':PASSWORD})
         bearer = {'Authorization':'Bearer '+tokens['data']['access_token']}
@@ -286,4 +287,7 @@ def run(host):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--host',type=Path,default=ROOT/'.build/host/xs.exe')
-    run(parser.parse_args().host.resolve())
+    parser.add_argument('--website-host',type=Path,default=WEBSITE_HOST,
+        help='Host matching the unified website plugin SDK, independent of the client host')
+    args = parser.parse_args()
+    run(args.host.resolve(),args.website_host.resolve())

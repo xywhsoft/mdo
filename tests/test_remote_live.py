@@ -15,6 +15,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 from test_remote_bridge import Rpc
 from test_remote_manager import run, ROOT, XADMIN
+from remote_website_fixture import WEBSITE_HOST
 
 
 class Model(BaseHTTPRequestHandler):
@@ -37,9 +38,9 @@ class Model(BaseHTTPRequestHandler):
         else: output = [{'reasoning_content':'Remote delivery.'}] + [{'content':f'part-{i} '} for i in range(12)]
         frames = []
         for delta in [{'role':'assistant'}]+output:
-            frames.append(('data: '+json.dumps({'id':'remote-test','model':'ornith-1.5-35b',
+            frames.append(('data: '+json.dumps({'id':'remote-test','model':'remote-fixture',
                 'choices':[{'index':0,'delta':delta,'finish_reason':None}]})+'\n\n').encode())
-        frames.append(('data: '+json.dumps({'id':'remote-test','model':'ornith-1.5-35b',
+        frames.append(('data: '+json.dumps({'id':'remote-test','model':'remote-fixture',
             'choices':[{'index':0,'delta':{},'finish_reason':finish}],
             'usage':{'prompt_tokens':100,'completion_tokens':20,'total_tokens':120}})+'\n\n').encode())
         frames.append(b'data: [DONE]\n\n')
@@ -130,9 +131,28 @@ def exercise(*, client, hello, app, device, call, bearer, website_port, clients)
         assert status in (200,201,202),value
         return value['data']
 
+    # Use the normal model settings API, including its nonce and revision.
+    # Built-in account models must not gain anonymous or environment bypasses
+    # just to make a local transport fixture pass.
+    value,model_headers,status,_ = rpc.json('GET','/api/v1/models/config')
+    assert status == 200,value
+    config = value['data']; config.pop('runtime_override',None)
+    provider = json.loads(json.dumps(config['providers'][0]))
+    provider.update(id='remote-fixture',name='Remote loopback fixture',builtin=False,
+        editable=True,removable=True,endpoints={'chat_completions':os.environ['MDO_REMOTE_FIXTURE_URL']},
+        credential={'secret_ref':'env:MDO_REMOTE_FIXTURE_KEY'})
+    item = json.loads(json.dumps(config['items'][0]))
+    item.update(id='remote-fixture',name='Remote loopback fixture',provider='remote-fixture',
+        builtin=False,free=False,editable=True,removable=True,
+        protocols=['openai-chat-completions'],default_protocol='openai-chat-completions')
+    config['providers'].append(provider); config['items'].append(item)
+    value,_,status,_ = rpc.json('PUT','/api/v1/settings/models',{'schema_version':1,'patch':config},
+        [['X-Mdo-Write-Token',token],['If-Match',model_headers['ETag']]])
+    assert status == 200,value
+
     def session(permission='read-only'):
         return json_call('POST','/api/v1/sessions',{'project_id':'default','title':'Remote live',
-            'agent_id':'mdo.default','model_id':'ornith-1.5-35b','protocol':'openai-chat-completions',
+            'agent_id':'mdo.default','model_id':'remote-fixture','protocol':'openai-chat-completions',
             'reasoning_effort':'medium','permission_profile':permission,'max_output_tokens':1024})['id']
 
     sid = session(); path = f'/api/v1/projects/default/sessions/{sid}'
@@ -211,13 +231,12 @@ static bool RemoteLiveTestReady(MdoLiveClient* Client) {
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--host',type=Path,default=ROOT/'.build/host/xs.exe')
-    parser.add_argument('--website-host',type=Path,default=XADMIN/'xs.exe')
+    parser.add_argument('--website-host',type=Path,default=WEBSITE_HOST)
     args = parser.parse_args()
     model = ThreadingHTTPServer(('127.0.0.1',0),Model)
     thread = threading.Thread(target=model.serve_forever,daemon=True); thread.start()
     endpoint = f'http://127.0.0.1:{model.server_port}/v1'
-    names = {'MDO_ORNITH_API_KEY':'remote-test-key','MDO_ORNITH_CHAT_COMPLETIONS_URL':endpoint,
-        'MDO_ORNITH_RESPONSES_URL':endpoint,'MDO_ORNITH_ANTHROPIC_URL':'https://example.invalid'}
+    names = {'MDO_REMOTE_FIXTURE_KEY':'loopback-model-only','MDO_REMOTE_FIXTURE_URL':endpoint}
     saved = {name:os.environ.get(name) for name in names}; os.environ.update(names)
     try: run(args.host.resolve(),args.website_host.resolve(),exercise,site_setup=setup)
     finally:

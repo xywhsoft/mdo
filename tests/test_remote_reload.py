@@ -2,6 +2,7 @@
 import argparse,json,socket,time
 from pathlib import Path
 from test_remote_manager import run,ROOT,XADMIN,PASSWORD
+from remote_website_fixture import WEBSITE_HOST
 from test_remote_live import LiveRpc,setup
 from channel_e2e import WebSocket
 
@@ -95,6 +96,6 @@ def exercise(*,client,hello,app,device,call,bearer,website_port,clients):
 if __name__=='__main__':
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--host',type=Path,default=ROOT/'.build/host/xs.exe')
-    parser.add_argument('--website-host',type=Path,default=XADMIN/'xs.exe')
+    parser.add_argument('--website-host',type=Path,default=WEBSITE_HOST)
     args=parser.parse_args()
     run(args.host.resolve(),args.website_host.resolve(),exercise,native_hook=HOOK,native_routes=ROUTE,site_setup=setup)

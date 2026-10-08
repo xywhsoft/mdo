@@ -12,7 +12,6 @@ import hashlib
 import json
 import os
 from pathlib import Path
-import shutil
 import socket
 import socketserver
 import ssl
@@ -21,6 +20,7 @@ import subprocess
 import tempfile
 import threading
 import time
+from runtime_sources import copy_app_source
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -28,7 +28,8 @@ FIXTURE = r'''
 #include <xsbase.h>
 #include <stdio.h>
 #include <string.h>
-#include "remote/websocket.c"
+#include "src/storage/home.c"
+#include "src/remote/websocket.c"
 static xthread *Worker, *Canceller;
 static xcancel* Stop;
 static unsigned Messages;
@@ -52,7 +53,9 @@ static int32 CancelSoon(void* unused) {
 static int32 Run(void* data) {
     XS_ServerInfo* server = (XS_ServerInfo*)data;
     MdoRemoteNet net = {0}; xx509store* store = xrtX509StoreCreate();
-    bool initialized = store && xrtX509StoreAddFile(store,TEST_CA,NULL) &&
+    /* The compact host intentionally omits the optional file importer. Import
+     * the same private test CA with its exported PEM API; verification stays on. */
+    bool initialized = store && xrtX509StoreAddPem(store,TEST_CA_PEM,sizeof(TEST_CA_PEM)-1u,NULL) &&
         MdoRemoteNetInit(&net,server->Engine,store);
     xrtX509StoreFree(store);
     MdoRemoteSocketConfig config = {TEST_HOST,TEST_PORT,TEST_SECURE,"/connect",TEST_ORIGIN,
@@ -248,7 +251,11 @@ def run(host, keepalive=False):
     (ROOT/'.build').mkdir(exist_ok=True)
     site = Path(tempfile.mkdtemp(prefix='remote-ws-',dir=ROOT/'.build'))
     certificates(site)
-    shutil.copytree(ROOT/'app/src/remote',site/'remote')
+    # Preserve production-relative includes, including the transfer helper's
+    # Home declarations. The quoted dependency walker follows real files only;
+    # it cannot replace a transport implementation or SDK with test stubs.
+    copy_app_source('src/storage/home.c',site)
+    copy_app_source('src/remote/websocket.c',site)
     cases = [('echo',False),('echo',True),('invalid-utf8',True),('masked-server',False),
              ('oversize',False),('fragment-oversize',True),('bad-accept',True),('bad-protocol',False),
              ('missing-protocol',True),('untrusted',True),('bad-host',True),
@@ -269,7 +276,7 @@ def run(host, keepalive=False):
                 other = site/'other'; other.mkdir(exist_ok=True); certificates(other); trust = other/'ca.pem'
             # Both are loopback; only 127.0.0.1 appears in the certificate SAN.
             targethost = peer.server_address[0]
-            defines = {'TEST_CA':str(trust).replace('\\','/'),'TEST_HOST':targethost,
+            defines = {'TEST_CA_PEM':trust.read_text(encoding='ascii'),'TEST_HOST':targethost,
                        'TEST_PORT':peer.server_address[1], 'TEST_SECURE':secure,
                        'TEST_ORIGIN':peer.origin,'TEST_RESULT':str(result).replace('\\','/'),
                        'TEST_CANCEL_OPEN':mode == 'cancel-open','TEST_CANCEL_POLL':mode == 'cancel-poll',
