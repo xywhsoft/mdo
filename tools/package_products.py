@@ -15,6 +15,7 @@ ROOT = Path(__file__).resolve().parent.parent
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--dist', type=Path, default=ROOT / 'dist')
+    parser.add_argument('--platform', choices=('all','linux','windows'), default='all')
     args = parser.parse_args()
     root = args.dist.resolve()
     packages = root / 'packages'; packages.mkdir(parents=True, exist_ok=True)
@@ -23,6 +24,8 @@ def main():
     for directory in sorted(root.iterdir()):
         if not directory.is_dir() or directory.is_symlink() or not re.fullmatch(
                 r'(linux-(x86_64|arm64)-(glibc|musl)|windows-x86_64)-(gui|server)', directory.name):
+            continue
+        if args.platform != 'all' and not directory.name.startswith(args.platform+'-'):
             continue
         receipt = json.loads((directory / 'build.json').read_text(encoding='utf-8'))
         name = ('mdo-server' if receipt['edition'] == 'server' else 'mdo') + ('.exe' if receipt['platform'] == 'windows' else '')
