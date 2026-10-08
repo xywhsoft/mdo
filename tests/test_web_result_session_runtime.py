@@ -33,6 +33,7 @@ def run(host: Path) -> None:
         with tempfile.TemporaryDirectory(prefix="web-result-session-", dir=ROOT / ".build") as raw:
             base = Path(raw); site = base / "site"; home = base / "home"; workspace = base / "project"
             workspace.mkdir(); shutil.copytree(ROOT / "app", site)
+            (workspace / "input.txt").write_text("bounded recovery fixture", encoding="utf-8")
             shutil.copy2(ROOT / "tests/fixtures/web-result-session.c", site / "web-result-session.c")
             (site / "probe.c").write_text('#define MDO_ACCOUNT_SERVICE_ORIGIN ' + json.dumps(f"http://127.0.0.1:{server.server_port}") + '\n'
                 '#define WEB_SESSION_WORKSPACE ' + json.dumps(str(workspace.resolve())) + '\n'
@@ -59,6 +60,11 @@ def run(host: Path) -> None:
                 assert len(artifacts) == 1 and len(artifacts[0].read_bytes()) > 12000
                 receipts = list((session / "artifacts/completed").glob("*.json"))
                 assert len(receipts) == 1
+                for session_id, automatic in (("read-stop-session", False), ("read-io-session", True)):
+                    status, reply = request(port, "GET", f"/api/v1/projects/default/sessions/{session_id}/recovery")
+                    data = reply["data"]
+                    assert status == 200 and data["resume_required"] and data["automatic_resume"] is automatic, reply
+                    assert len(data["items"]) == 1 and data["items"][0]["automatic_retry_safe"], data
             finally: stop_host(process)
     finally:
         server.shutdown(); server.server_close(); thread.join(timeout=2)

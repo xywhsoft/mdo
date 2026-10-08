@@ -57,6 +57,7 @@ def main():
             assert status==202,(status,value)
             wait_for(lambda:calls()==1);cancel(value['data']['id'])
             original=recovery();assert original['resume_required'] and original['items']==[]
+            assert original['automatic_resume'] is False, original
             body={'recovery_token':original['recovery_token'],'decisions':[],'client_resume_id':'a'*32}
             before=files()
             for bad in ('','A'*32,'short',None,32):

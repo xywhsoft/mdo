@@ -5,31 +5,41 @@ import { subscribeLocale, t } from "../../i18n.js";
 import { renderToolPreview, renderToolArguments } from "../approvals/tool-preview.js";
 import { createRecoveryDecisions, defaultRecoveryAction } from "../approvals/recovery-decisions.js";
 import { isTransientReadError } from "../../api/read-recovery.js";
+import { createAutomaticRecovery } from "./automatic-recovery.js";
 
-export function createRecoveryDock({ container, summary, store, onResume, onAbandon }) {
+export function createRecoveryDock({ container, summary, store, onResume, onAbandon, canAutoResume }) {
   let state = store.get();
   const decisions = createRecoveryDecisions();
   const argumentsOpen = new Map();
+  const automatic = createAutomaticRecovery();
+  let automaticFailure = "";
+  let failureOwner = "";
 
   function choose(data, item, action) {
     if (decisions.choose(data, item.tool_call_id, action)) render();
   }
 
-  async function submitRecovery(data) {
+  async function submitRecovery(data, auto = false) {
+    if (auto && !canAutoResume?.(data)) return;
     const operation = decisions.begin(data);
     if (!operation) return;
+    automaticFailure = "";
     let accepted = false;
     render();
     try {
       const run = await runRecoveryAction({ kind: "resume", data: operation.data, choices: operation.choices });
       accepted = true;
-      if (decisions.isCurrent(data)) toast(t("recovery.submitted", {}, "正在继续任务"));
+      if (!auto && decisions.isCurrent(data)) toast(t("recovery.submitted", {}, "正在继续任务"));
       onResume?.(run, operation.data);
       if (decisions.isCurrent(data)) await loadRecovery({ retry: true });
     } catch (error) {
       accepted ||= error?.recoveryActionUncertain === true;
       if (error?.name !== "AbortError" && decisions.isCurrent(data)) {
-        toast(errorMessage(error), "error");
+        if (auto) {
+          automaticFailure = errorMessage(error);
+          failureOwner = `${data.project_id}/${data.session_id}`;
+        }
+        else toast(errorMessage(error), "error");
         if (error?.code === "recovery_state_conflict") await loadRecovery({ retry: true });
       }
     } finally {
@@ -168,6 +178,14 @@ export function createRecoveryDock({ container, summary, store, onResume, onAban
       (defaultRecoveryAction(item) === "retry" ? safeCalls : uncertainCalls).push(item);
     summary.textContent = t(uncertainCalls.length ? "recovery.pendingSummary" :
       safeCalls.length ? "recovery.safeSummary" : "recovery.noPendingCalls", { count: items.length });
+    if (automaticFailure && failureOwner === `${data.project_id}/${data.session_id}` &&
+        safeCalls.length && !uncertainCalls.length)
+      container.append(element("p", { className: "resource-error", text: automaticFailure }));
+    if (state.status === "ready" && !decisions.isBusy(data) &&
+        automatic.claim(data, canAutoResume?.(data))) {
+      automaticFailure = "";
+      queueMicrotask(() => void submitRecovery(data, true));
+    }
     for (const item of uncertainCalls) container.append(renderCard(data, item));
     if (safeCalls.length && uncertainCalls.length) container.append(element("p", {
       className: "interaction-hint", text: t("recovery.safeSummary", { count: safeCalls.length }),

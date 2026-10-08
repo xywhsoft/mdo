@@ -1,6 +1,7 @@
 /* Real session, xwork batch executor, model ledger and persistent UI events. */
 static unsigned g_WebSessionCalls;
 static bool g_WebSessionBudget = true;
+static bool g_WebRecoveryIo;
 
 static char* WebSessionCopy(const char* Text)
 {
@@ -55,6 +56,37 @@ failed:
     xllmResponseDestroy(Reply); return XLLM_RESULT_ERROR;
 }
 
+static bool WebRecoveryEvent(void* Data, const xwork_event* Event)
+{
+    (void)Data;
+    if (Event->eKind == XWORK_EVENT_TOOL_START) {
+        if (g_WebRecoveryIo) xrtSetErrorKind(XERR_IO);
+        return false;
+    }
+    return true;
+}
+
+static xllm_result WebRecoveryModel(void* Data, const xllm_request* Request,
+    const xllm_stream_callbacks* Callbacks, xllm_response** Response, xllm_error* Error)
+{
+    xllm_response* Reply;
+    (void)Data; (void)Request; (void)Callbacks; (void)Error;
+    Reply = (xllm_response*)calloc(1u, sizeof(*Reply));
+    if (!Reply) return XLLM_RESULT_ERROR;
+    Reply->sContent = WebSessionCopy(""); Reply->sModel = WebSessionCopy("local-recovery");
+    Reply->sFinishReason = WebSessionCopy("tool_calls"); Reply->eFinish = XLLM_FINISH_TOOL_CALLS;
+    Reply->pToolCalls = (xllm_tool_call*)calloc(1u, sizeof(xllm_tool_call));
+    if (!Reply->sContent || !Reply->sModel || !Reply->sFinishReason || !Reply->pToolCalls) goto failed;
+    Reply->iToolCallCount = 1u;
+    Reply->pToolCalls[0].sId = WebSessionCopy("interrupted-read");
+    Reply->pToolCalls[0].sName = WebSessionCopy("read");
+    Reply->pToolCalls[0].sArgumentsJson = WebSessionCopy("{\"path\":\"input.txt\"}");
+    if (!Reply->pToolCalls[0].sId || !Reply->pToolCalls[0].sName || !Reply->pToolCalls[0].sArgumentsJson) goto failed;
+    *Response = Reply; return XLLM_RESULT_OK;
+failed:
+    xllmResponseDestroy(Reply); *Response = NULL; return XLLM_RESULT_ERROR;
+}
+
 void ServiceInit(XS_HostInfo* Host)
 {
     MdoSessionCreateOptions Create;
@@ -85,6 +117,20 @@ void ServiceInit(XS_HostInfo* Host)
     if (!Run || !MdoAgentRunStart(Run, &Error) ||
         MdoAgentRunWait(Run, xrtDeadlineAfter(5000000u), &Result, &Error) != XWORK_RESULT_OK ||
         g_WebSessionCalls != 3u || !g_WebSessionBudget) goto done;
+    for (unsigned Mode = 0u; Mode < 2u; ++Mode) {
+        xworkRunResultUnit(&Result); MdoAgentRunDestroy(Run); Run = NULL;
+        MdoAgentSessionRelease(Agent); Agent = NULL; MdoSessionRelease(Session); Session = NULL;
+        g_WebRecoveryIo = Mode != 0u;
+        Create.RequestedId = Mode ? "read-io-session" : "read-stop-session";
+        Create.Agent.OnModelComplete = WebRecoveryModel; Create.Agent.OnEvent = WebRecoveryEvent;
+        Session = MdoSessionCreate(&Create, &Error);
+        Agent = Session ? MdoSessionAgentRef(Session) : NULL;
+        Run = Agent ? MdoAgentRunCreate(Agent, &Options, &Error) : NULL;
+        if (!Run || !MdoAgentRunStart(Run, &Error)) goto done;
+        xwork_result Outcome = MdoAgentRunWait(Run, xrtDeadlineAfter(5000000u), &Result, &Error);
+        if (Mode ? (Outcome != XWORK_RESULT_ERROR || Error.eCode != XWORK_ERROR_IO)
+                 : Outcome != XWORK_RESULT_CANCELLED) goto done;
+    }
     Ok = true;
 done:
     printf("web_session_ok=%d calls=%u error=%d:%s\n", Ok, g_WebSessionCalls, Error.eCode, Error.sMessage);

@@ -1562,7 +1562,7 @@
   "interaction.ask.hint": "选择下方选项，或输入你的回答；提交后会继续当前任务。",
   "recovery.unknownResult": "此操作可能已经完成。默认不重复执行，并将结果尚未确认的情况告知 Agent。",
   "recovery.pendingSummary": "有 {count} 项操作未收到完整结果。为避免重复执行，默认保留现状后继续。",
-  "recovery.safeSummary": "继续任务时，将重新读取 {count} 项只读信息，无需逐项确认。",
+  "recovery.safeSummary": "继续任务时，将复用已保存的结果，或重新读取 {count} 项信息，无需逐项确认。",
   "recovery.continuing": "正在继续…",
   "recovery.syncing": "请求已提交，正在同步运行状态…",
   "interaction.ask.freeHint": "输入你的回答；提交后会继续当前任务。",

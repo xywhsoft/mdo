@@ -125,6 +125,41 @@ static bool MdoApiRecoveryItemValue(const xwork_recovery_call_info* Info,
     return true;
 }
 
+/* Absence of a terminal event is positive evidence of an interrupted runtime,
+ * not of a user stop. A recorded stop or ordinary model error remains manual. */
+static bool MdoApiRecoveryMayContinue(const MdoSessionInfo* Session, bool MeteredSearch)
+{
+    MdoConversationPageInfo Page;
+    MdoSessionEventSnapshot* Events;
+    xwork_error Error;
+    uint64 Run = 0u;
+    bool Started = false, Done = false, Failed = false, PersistenceFailed = false;
+    size_t Index;
+    memset(&Page, 0, sizeof(Page)); xworkErrorInit(&Error);
+    Events = MdoSessionConversationPage(Session->ProjectId, Session->Id,
+        0u, 0u, NULL, 1u, &Page, &Error);
+    if (!Events) { xrtClearError(); return false; }
+    for (Index = 0u; Index < MdoSessionEventSnapshotCount(Events); ++Index) {
+        MdoSessionEventInfo Event;
+        memset(&Event, 0, sizeof(Event)); Event.Size = sizeof(Event);
+        if (!MdoSessionEventSnapshotAt(Events, Index, &Event) || Event.AgentDepth != 0u) continue;
+        if (Event.Kind == XWORK_EVENT_AGENT_START) {
+            Run = Event.RunId; Started = true; Done = Failed = PersistenceFailed = false;
+        } else if (Started && Event.RunId == Run) {
+            if (Event.Kind == XWORK_EVENT_AGENT_DONE) Done = true;
+            if (Event.Kind == XWORK_EVENT_ERROR) {
+                Failed = true;
+                PersistenceFailed = Event.Text && strstr(Event.Text, "session event persistence failed") != NULL;
+            }
+        }
+    }
+    MdoSessionEventSnapshotRelease(Events);
+    /* A paid request lost before its receipt is not provably unbilled. Until
+     * the service supports idempotency, ask for one Continue click in that
+     * ambiguous crash window rather than automatically resubmitting it. */
+    return Started && ((!Done && !Failed && !MeteredSearch) || PersistenceFailed);
+}
+
 static bool MdoApiRecoveryReply(MdoApiContext* Context,
     const MdoSessionInfo* SessionInfo, xwork_recovery_snapshot* Snapshot,
     bool ResumeRequired, uint64 LastSequence)
@@ -136,6 +171,8 @@ static bool MdoApiRecoveryReply(MdoApiContext* Context,
     uint64 CatalogGeneration = 0u;
     char RecoveryToken[MDO_AGENT_RECOVERY_TOKEN_CAPACITY];
     size_t Index;
+    bool AllRead = Count != 0u;
+    bool MeteredSearch = false;
     bool Ok = Data != NULL && Items != NULL &&
         Count <= MDO_API_RECOVERY_CALL_MAX &&
         MdoAgentRecoverySnapshotToken(Snapshot, ResumeRequired, LastSequence,
@@ -154,6 +191,8 @@ static bool MdoApiRecoveryReply(MdoApiContext* Context,
             Info.sToolCallId != NULL && Info.sToolName != NULL &&
             Info.sArgumentsJson != NULL;
         if ( !Ok ) break;
+        AllRead = AllRead && Info.bToolAvailable && Info.bAutomaticRetrySafe;
+        MeteredSearch = MeteredSearch || strcmp(Info.sToolName, "web_search") == 0;
         CallIdSize = strlen(Info.sToolCallId);
         ToolSize = strlen(Info.sToolName);
         ArgumentSize = strlen(Info.sArgumentsJson);
@@ -182,6 +221,8 @@ static bool MdoApiRecoveryReply(MdoApiContext* Context,
         MdoApiValueSetUInt(Data, "catalog_generation", CatalogGeneration) &&
         MdoApiValueSetString(Data, "recovery_token", RecoveryToken) &&
         MdoApiValueSetBool(Data, "resume_required", ResumeRequired) &&
+        MdoApiValueSetBool(Data, "automatic_resume", ResumeRequired && AllRead &&
+            MdoApiRecoveryMayContinue(SessionInfo, MeteredSearch)) &&
         MdoApiValueSetUInt(Data, "total", Count) &&
         MdoApiValueSetTake(Data, "items", &Items);
     xrtValueRelease(Items);

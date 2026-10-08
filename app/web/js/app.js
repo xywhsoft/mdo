@@ -1022,6 +1022,8 @@ export async function boot() {
   createRecoveryDock({
     ...conversationDocks.recovery,
     store: recoveryStore,
+    canAutoResume: data => !activeRun && !submittingCurrent() &&
+      recoveryMatchesWorkspace(data, navigation.get()),
     onResume: (run, owner) => {
       const ownsView = recoveryMatchesWorkspace(owner, navigation.get());
       if (ownsView) {

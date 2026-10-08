@@ -1562,7 +1562,7 @@
   "interaction.ask.hint": "Choose an option or enter your answer. The task continues after you submit.",
   "recovery.unknownResult": "This operation may have completed. By default it will not run again; the Agent will be told its result is unknown.",
   "recovery.pendingSummary": "{count} operations have no confirmed result. By default, continue without repeating changes.",
-  "recovery.safeSummary": "When you continue, {count} read-only operations will run again without individual confirmation.",
+  "recovery.safeSummary": "Continue to reuse saved results or repeat {count} read operations without individual confirmation.",
   "recovery.continuing": "Continuing…",
   "recovery.syncing": "Request submitted. Syncing run status…",
   "interaction.ask.freeHint": "Enter your answer. The task continues after you submit.",
