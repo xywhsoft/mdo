@@ -1,0 +1,10 @@
+{
+  "passed": true,
+  "session_id": "f855fb6a4ce5214f3f6f67a48aee1ccd",
+  "model_requests": 1,
+  "successful_replies": 1,
+  "final_model_errors": 0,
+  "project_conflict_toast_observed": false,
+  "ui_verification": "CUA first-send snapshot and completed reply",
+  "scope": "isolated packed application, loopback model"
+}

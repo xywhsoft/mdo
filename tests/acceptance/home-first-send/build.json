@@ -1,0 +1,8 @@
+{
+  "passed": true,
+  "bytes": 4419366,
+  "packed_sha256": "ddb8783de2c5184e7b1cf8c0e56e6d43835c5e383b3b56c131ca375245bb67bb",
+  "navigation_sha256": "10fc859b9c168694d7594b66959599f1cd8a411eab227996e44ba266f5716384",
+  "embedded_navigation_source_match": true,
+  "node_tests": 20
+}

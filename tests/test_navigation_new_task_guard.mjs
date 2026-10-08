@@ -23,6 +23,15 @@ test("a pending new task keeps new-task routes in its owning project", async () 
     let redirects = 0;
     navigation.setNewTaskGuard(() => pending, () => { redirects += 1; });
 
+    // The home route has no explicit project. Saving its first task assigns
+    // the default owner; canonicalizing that route is not a project conflict.
+    location.hash = "#/";
+    navigation.revalidate();
+    assert.deepEqual([navigation.get().projectId, location.hash],
+      ["default", "#/projects/default/new"]);
+    assert.equal(redirects, 0);
+    replacements.length = 0;
+
     navigation.newTask("other");
     assert.deepEqual([navigation.get().projectId, location.hash],
       ["default", "#/projects/default/new"]);
@@ -49,6 +58,12 @@ test("a pending new task keeps new-task routes in its owning project", async () 
     pending = null;
     navigation.newTask("other");
     assert.equal(navigation.get().projectId, "other");
+    assert.equal(location.hash, "#/projects/other/new");
+    assert.equal(redirects, 2);
+
+    pending = "other";
+    location.hash = "#/";
+    navigation.revalidate();
     assert.equal(location.hash, "#/projects/other/new");
     assert.equal(redirects, 2);
   } finally {

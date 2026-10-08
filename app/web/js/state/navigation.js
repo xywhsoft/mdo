@@ -52,7 +52,9 @@ function publish({ refresh = false } = {}) {
       // A single portable new-task draft belongs to its original project.
       // Replace the attempted route so Back cannot revisit a false owner.
       history.replaceState(history.state, "", `#/projects/${projectId}/new`);
-      newTaskGuard.onRedirect?.(projectId);
+      // The home route has no requested project. Assigning its journal owner
+      // is ordinary first-send navigation, not an attempted project switch.
+      if (next.projectId) newTaskGuard.onRedirect?.(projectId);
       next = { ...next, projectId };
     }
   }
