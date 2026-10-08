@@ -54,3 +54,4 @@ tools/runtime/**
 !tools/build_linux.py
 !tools/service/
 !tools/service/**
+!tools/package_products.py

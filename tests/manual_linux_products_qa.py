@@ -6,6 +6,7 @@ Windows service executable. Each invocation owns an isolated temporary Home.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import http.client
 import json
 import os
@@ -112,7 +113,7 @@ def main() -> int:
         status, _, projects = request(port, "GET", "/api/v1/projects")
         assert status == 200 and any(item["id"] == project_id for item in projects["data"]["items"]), projects
         stop(process); process = None
-        receipt = {"passed": True, "binary": str(binary), "home": str(home),
+        receipt = {"passed": True, "binary": str(binary), "binary_sha256": hashlib.sha256(local.read_bytes()).hexdigest(), "home": str(home),
                    "checks": ["packed TCC startup", "bootstrap/write token", "projects API", "project persistence", "SIGTERM/console stop", "restart"],
                    "log": str(log_path)}
         if args.output:

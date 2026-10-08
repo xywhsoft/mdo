@@ -1,5 +1,6 @@
 """Exercise TCC's shared static libc boundary with the xs acceptance fixture."""
 import argparse
+import hashlib
 import json
 from pathlib import Path
 import shutil
@@ -41,7 +42,7 @@ def main():
                 process.send_signal(signal.SIGTERM)
             process.wait(timeout=30)
         assert process.returncode == 0, log_path.read_text(encoding='utf-8', errors='replace')
-    result = {'passed': True, 'host': str(args.host), 'log': str(log_path),
+    result = {'passed': True, 'host': str(args.host), 'binary_sha256': hashlib.sha256(binary.read_bytes()).hexdigest(), 'log': str(log_path),
               'checks': ['TCC stdio', 'host errno', 'clock', 'environment', 'pthread/shared allocation', 'normal stop']}
     if args.output:
         args.output.write_text(json.dumps(result, indent=2) + '\n', encoding='utf-8')

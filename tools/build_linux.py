@@ -120,6 +120,8 @@ def main(argv: list[str] | None = None) -> int:
                 command.append("--dry-run")
             build_mdo.run(command, ROOT, args.dry_run)
             return 0
+        if sys.platform != 'linux':
+            raise build_mdo.BuildError('Linux products require a Linux build environment')
         machine = platform.machine()
         architecture = {"x86_64": "x86_64", "aarch64": "arm64"}.get(machine)
         if architecture is None:

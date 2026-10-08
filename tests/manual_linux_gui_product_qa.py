@@ -1,5 +1,6 @@
 """Open the packaged Linux GUI with its real frontend on an isolated X server."""
 import argparse
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -114,7 +115,8 @@ def main():
         x11.XCloseDisplay.argtypes = [ctypes.c_void_p]; x11.XCloseDisplay(display)
         process.wait(timeout=30)
         assert process.returncode == 0, log_path.read_text(errors="replace")
-        result = {"passed": True, "binary": str(args.binary), "home": str(home),
+        result = {"passed": True, "binary": str(args.binary), "binary_sha256": hashlib.sha256(binary.read_bytes()).hexdigest(),
+                  "helper_sha256": hashlib.sha256(helpers[0].read_bytes()).hexdigest(), "home": str(home),
                   "checks": ["packed native startup", "real frontend screenshot", "portable window cache", "native window close stops service"],
                   "log": str(log_path)}
         if args.output:

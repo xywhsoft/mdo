@@ -6,6 +6,7 @@ ARM64 设备测试。Windows 使用 MinGW GCC；musl 是 Linux 的 libc，不适
 
 ## 构建
 
+以下构建命令均从 mdo 源码根目录执行。
 Linux 安装 Python 3、Git、GCC、binutils、musl-tools、pkg-config。GUI 构建还需要
 GTK 3 和 WebKitGTK 4.1 开发包。例如 Debian：
 
@@ -25,6 +26,8 @@ python tools/build_mdo.py --edition server --cc gcc --output dist/windows-x86_64
 `--sysroot` 可指定包含 `include/` 和 `lib/libc.a` 的目标 musl 环境。
 构建脚本会核对 deps.lock，自动生成 TCC 的目标 CRT 资源，不依赖开发机上的
 绝对 SDK 路径。每个版本独立存放宿主、对象、应用暂存和产物，防止混用。
+构建后运行 `python3 tools/package_products.py` 生成压缩包及 SHA-256 清单。
+压缩包内仅有程序及 `mdo-home`；说明、构建记录和服务模板在 `mdo-home/docs`。
 
 默认输出：
 

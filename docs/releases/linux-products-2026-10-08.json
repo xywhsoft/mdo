@@ -1,0 +1,60 @@
+{
+  "schema_version": 1,
+  "xs_commit": "858a6ad1dde41dd43b6fd7028a8d2303ebc6f696",
+  "products": [
+    {
+      "product": "linux-x86_64-glibc-gui",
+      "binary": "linux-x86_64-glibc-gui/mdo",
+      "binary_bytes": 3967465,
+      "binary_sha256": "a5bd1ae9c7555a125be7a1e9f6d1a49f6a561f89a23e8b83dadcb695a1ded0e8",
+      "archive": "packages/linux-x86_64-glibc-gui.tar.gz",
+      "archive_bytes": 2741616,
+      "archive_sha256": "4821fe1db2b3a13608110810008241505f2eb55b29c3ff7fe46ff52bc4830bd3"
+    },
+    {
+      "product": "linux-x86_64-glibc-server",
+      "binary": "linux-x86_64-glibc-server/mdo-server",
+      "binary_bytes": 3938560,
+      "binary_sha256": "06acc466b48d4b8cf78c9411ecc77ee6b5b6d9b335e4e550ac446a556027529e",
+      "archive": "packages/linux-x86_64-glibc-server.tar.gz",
+      "archive_bytes": 2732516,
+      "archive_sha256": "7ee63480485840eb9245e0ef3df2be1c549e1fd0c55b2eeccf1df9b11ad0853f"
+    },
+    {
+      "product": "linux-x86_64-musl-gui",
+      "binary": "linux-x86_64-musl-gui/mdo",
+      "binary_bytes": 6079297,
+      "binary_sha256": "e6b9d310ffdb2a1e8f54d5895909a2dc2f347f1f199c8286e7fd96a5993e9e89",
+      "archive": "packages/linux-x86_64-musl-gui.tar.gz",
+      "archive_bytes": 4783363,
+      "archive_sha256": "bc12dfcb155d858709b835880eaa735df2b79262911304a1da84d1aa28ede6d7"
+    },
+    {
+      "product": "linux-x86_64-musl-server",
+      "binary": "linux-x86_64-musl-server/mdo-server",
+      "binary_bytes": 6050456,
+      "binary_sha256": "4fab1a51254bb81c3dda2ec1397c3163c8fc56c0a7b0ba3fdbb9324a64daaaa7",
+      "archive": "packages/linux-x86_64-musl-server.tar.gz",
+      "archive_bytes": 4771528,
+      "archive_sha256": "08dc33730a218d2abf5899276ff08b59a773337d3c1944727d8a1355851788c6"
+    },
+    {
+      "product": "windows-x86_64-gui",
+      "binary": "windows-x86_64-gui/mdo.exe",
+      "binary_bytes": 4453342,
+      "binary_sha256": "4997ae80ac5249f31aad23cab24fa479655867027a0f289e98764834ca4e4f9a",
+      "archive": "packages/windows-x86_64-gui.zip",
+      "archive_bytes": 3158383,
+      "archive_sha256": "de91e68d8393700763a82b5ba8d94c406b845797375ba3d753b08d668fd5506a"
+    },
+    {
+      "product": "windows-x86_64-server",
+      "binary": "windows-x86_64-server/mdo-server.exe",
+      "binary_bytes": 4259124,
+      "binary_sha256": "21e5abe945fa37c2762c3891a3f6f094a5f67a933a55003a62e7d84f39a7ee0f",
+      "archive": "packages/windows-x86_64-server.zip",
+      "archive_bytes": 3077980,
+      "archive_sha256": "b42a3b0c0473f713f45f11cff56251905acf610a988c5f6db1052a4885ee831c"
+    }
+  ]
+}
