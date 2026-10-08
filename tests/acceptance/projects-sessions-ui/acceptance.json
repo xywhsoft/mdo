@@ -1,0 +1,80 @@
+{
+  "candidate": {
+    "path": ".build\\conversation-acceptance\\mdo-recovery-ack-final.exe",
+    "bytes": 4394410,
+    "sha256": "ce25b72df7ffb41e91e75bd9816265bc4e90db2f95b351694dbaee929af9969b"
+  },
+  "native_checks": {
+    "project_binding_runtime": "PASS, 60 checks and 6 publication callbacks",
+    "session_runtime": "PASS",
+    "backup_export_runtime": "PASS, HTTP and own-certificate TLS complete backup transfer and readback",
+    "node_tests": 28
+  },
+  "ui_checks": [
+    "project folder picker and defaults",
+    "project-scoped new-task drafts",
+    "rename and pin",
+    "archive/unarchive",
+    "trash/restore",
+    "title filtering",
+    "project changes affect only new sessions",
+    "restart fence and explicit page reload",
+    "saved history and three independent drafts survive restart",
+    "continuation after restart"
+  ],
+  "project": {
+    "id": "alpha",
+    "name": "项目验收 Beta",
+    "revision": 2
+  },
+  "bindings": {
+    "existing_session": "DISPOSABLE_FIXTURE\\workspace-alpha",
+    "new_session": "DISPOSABLE_FIXTURE\\workspace-beta"
+  },
+  "drafts": {
+    "default_session": "DEFAULT_DRAFT_KEEP",
+    "alpha_session": "ALPHA_SESSION_DRAFT_KEEP",
+    "default_new_task": "DEFAULT_NEW_DRAFT_KEEP"
+  },
+  "model_calls": {
+    "continue": 1,
+    "project-alpha-proof": 1,
+    "project-beta-proof": 1,
+    "project-alpha-after-restart": 1
+  },
+  "requests": [
+    {
+      "prompt": "continue",
+      "image_parts": 0,
+      "user_messages": 1,
+      "tool_results": 0
+    },
+    {
+      "prompt": "project-alpha-proof",
+      "image_parts": 0,
+      "user_messages": 1,
+      "tool_results": 0
+    },
+    {
+      "prompt": "project-beta-proof",
+      "image_parts": 0,
+      "user_messages": 1,
+      "tool_results": 0
+    },
+    {
+      "prompt": "project-alpha-after-restart",
+      "image_parts": 0,
+      "user_messages": 2,
+      "tool_results": 0
+    }
+  ],
+  "completed_runs": 4,
+  "final_model_errors": 0,
+  "console_errors": 0,
+  "limitations": [
+    "No phone test or release.",
+    "Clipboard remains unconfirmed.",
+    "Markdown serialization is tested, but the browser did not report a saved download; actual disk output is unconfirmed."
+  ],
+  "scope": "All writes confined to a disposable Home/workspace. Loopback model only; no stress/high-load work."
+}
