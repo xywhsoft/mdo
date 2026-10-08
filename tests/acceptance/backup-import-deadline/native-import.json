@@ -1,0 +1,534 @@
+{
+  "results": [
+    {
+      "protocol": "HTTP",
+      "frontend": {
+        "result": {
+          "id": "84ebf331e540cd07faeef7cba763d16c",
+          "session_id": "84ebf331e540cd07faeef7cba763d16c",
+          "project_id": "restore-target",
+          "source_session_id": "V-OSKhj7FGKWYW0c5e8KnVMRphMLyXbP",
+          "source_sha256": "014758273608c454a62e068e0dca1475dd456bd6ae72889ed16f1d09f9f84cf4",
+          "project_revision": 1,
+          "project_created_at": 1791477496160467,
+          "restored_at": 1791477496930156,
+          "state": "committed",
+          "accepted": true,
+          "committed": true,
+          "restart_required": false,
+          "terminal": true,
+          "cleanup_pending": false,
+          "phase": "done",
+          "preview_id": "2c603e12b4158f972f011c1d13e4094d",
+          "workspace_root": "\\\\?\\C:\\Users\\Administrator\\.codex\\worktrees\\conversation-backup-recheck-qa\\mdo\\.build\\backup-import-6dt7_ghl\\workspace-中文",
+          "source_title": "Restore source 中文",
+          "source_project_id": "default",
+          "source_workspace_root": "C:\\Users\\Administrator\\.codex\\worktrees\\conversation-backup-recheck-qa\\mdo\\.build\\backup-import-6dt7_ghl\\home\\workspace",
+          "source_model_id": "backup-vision-fixture",
+          "source_agent_id": "mdo.default",
+          "source_protocol": "openai-responses",
+          "source_captured_at": 1791477496373463,
+          "unverified_history_references": 0,
+          "file_count": 6,
+          "total_bytes": 2113584,
+          "created_at": 1791477496930156,
+          "started_at": 1791477496953715,
+          "ended_at": 1791477497078314,
+          "worker_finished": true,
+          "cancel_requested": false,
+          "catalog_generation": 11,
+          "error_code": 0,
+          "message": ""
+        },
+        "reviewed": {
+          "id": "84ebf331e540cd07faeef7cba763d16c",
+          "session_id": "84ebf331e540cd07faeef7cba763d16c",
+          "project_id": "restore-target",
+          "source_session_id": "V-OSKhj7FGKWYW0c5e8KnVMRphMLyXbP",
+          "source_sha256": "014758273608c454a62e068e0dca1475dd456bd6ae72889ed16f1d09f9f84cf4",
+          "project_revision": 1,
+          "project_created_at": 1791477496160467,
+          "restored_at": 1791477496930156,
+          "state": "review",
+          "accepted": false,
+          "committed": false,
+          "restart_required": false,
+          "terminal": false,
+          "cleanup_pending": false,
+          "phase": "review",
+          "preview_id": "2c603e12b4158f972f011c1d13e4094d",
+          "workspace_root": "\\\\?\\C:\\Users\\Administrator\\.codex\\worktrees\\conversation-backup-recheck-qa\\mdo\\.build\\backup-import-6dt7_ghl\\workspace-中文",
+          "source_title": "Restore source 中文",
+          "source_project_id": "default",
+          "source_workspace_root": "C:\\Users\\Administrator\\.codex\\worktrees\\conversation-backup-recheck-qa\\mdo\\.build\\backup-import-6dt7_ghl\\home\\workspace",
+          "source_model_id": "backup-vision-fixture",
+          "source_agent_id": "mdo.default",
+          "source_protocol": "openai-responses",
+          "source_captured_at": 1791477496373463,
+          "unverified_history_references": 0,
+          "file_count": 6,
+          "total_bytes": 2113584,
+          "created_at": 1791477496930156,
+          "started_at": 0,
+          "ended_at": 0,
+          "worker_finished": false,
+          "cancel_requested": false,
+          "catalog_generation": 0,
+          "error_code": 0,
+          "message": ""
+        },
+        "calls": [
+          {
+            "path": "/api/v1/project-purge-intent",
+            "method": "GET"
+          },
+          {
+            "path": "/api/v1/session-backups/uploads",
+            "method": "POST"
+          },
+          {
+            "path": "/api/v1/session-backups/uploads/f9c1912b85556930162497977f13fc63/chunks/0",
+            "method": "PUT"
+          },
+          {
+            "path": "/api/v1/session-backups/uploads/f9c1912b85556930162497977f13fc63/chunks/262144",
+            "method": "PUT"
+          },
+          {
+            "path": "/api/v1/session-backups/uploads/f9c1912b85556930162497977f13fc63/chunks/524288",
+            "method": "PUT"
+          },
+          {
+            "path": "/api/v1/session-backups/uploads/f9c1912b85556930162497977f13fc63/chunks/786432",
+            "method": "PUT"
+          },
+          {
+            "path": "/api/v1/session-backups/uploads/f9c1912b85556930162497977f13fc63/chunks/1048576",
+            "method": "PUT"
+          },
+          {
+            "path": "/api/v1/session-backups/uploads/f9c1912b85556930162497977f13fc63/chunks/1310720",
+            "method": "PUT"
+          },
+          {
+            "path": "/api/v1/session-backups/uploads/f9c1912b85556930162497977f13fc63/chunks/1572864",
+            "method": "PUT"
+          },
+          {
+            "path": "/api/v1/session-backups/uploads/f9c1912b85556930162497977f13fc63/chunks/1835008",
+            "method": "PUT"
+          },
+          {
+            "path": "/api/v1/session-backups/uploads/f9c1912b85556930162497977f13fc63/chunks/2097152",
+            "method": "PUT"
+          },
+          {
+            "path": "/api/v1/session-backups/uploads/f9c1912b85556930162497977f13fc63/chunks/2359296",
+            "method": "PUT"
+          },
+          {
+            "path": "/api/v1/session-backups/uploads/f9c1912b85556930162497977f13fc63/chunks/2621440",
+            "method": "PUT"
+          },
+          {
+            "path": "/api/v1/session-backups/uploads/f9c1912b85556930162497977f13fc63/seal",
+            "method": "POST"
+          },
+          {
+            "path": "/api/v1/session-backups/uploads/f9c1912b85556930162497977f13fc63/preview",
+            "method": "POST"
+          },
+          {
+            "path": "/api/v1/session-backups/previews/2c603e12b4158f972f011c1d13e4094d",
+            "method": "GET"
+          },
+          {
+            "path": "/api/v1/session-backups/previews/2c603e12b4158f972f011c1d13e4094d",
+            "method": "GET"
+          },
+          {
+            "path": "/api/v1/session-backups/previews/2c603e12b4158f972f011c1d13e4094d/restore-review",
+            "method": "POST"
+          },
+          {
+            "path": "/api/v1/session-backups/restores/84ebf331e540cd07faeef7cba763d16c/apply",
+            "method": "POST"
+          },
+          {
+            "path": "/api/v1/session-backups/restores/84ebf331e540cd07faeef7cba763d16c",
+            "method": "GET"
+          },
+          {
+            "path": "/api/v1/session-backups/restores/84ebf331e540cd07faeef7cba763d16c",
+            "method": "GET"
+          },
+          {
+            "path": "/api/v1/session-backups/restores/84ebf331e540cd07faeef7cba763d16c",
+            "method": "GET"
+          },
+          {
+            "path": "/api/v1/session-backups/restores/84ebf331e540cd07faeef7cba763d16c",
+            "method": "GET"
+          }
+        ],
+        "phases": [
+          "choose",
+          "hashing",
+          "hashing",
+          "hashing",
+          "hashing",
+          "hashing",
+          "hashing",
+          "hashing",
+          "hashing",
+          "hashing",
+          "hashing",
+          "hashing",
+          "hashing",
+          "hashing",
+          "hashing",
+          "uploading",
+          "uploading",
+          "uploading",
+          "uploading",
+          "uploading",
+          "uploading",
+          "uploading",
+          "uploading",
+          "uploading",
+          "uploading",
+          "uploading",
+          "inspecting",
+          "inspecting",
+          "inspecting",
+          "inspecting",
+          "preview",
+          "preview",
+          "reviewing",
+          "review",
+          "review",
+          "restoring",
+          "restoring",
+          "unknown",
+          "unknown",
+          "unknown",
+          "resolving",
+          "committed",
+          "committed"
+        ],
+        "href": "http://127.0.0.1:63081/?keep=1&mdoRestore=84ebf331e540cd07faeef7cba763d16c&mdoRestoreProject=restore-target&mdoRestoreSha=014758273608c454a62e068e0dca1475dd456bd6ae72889ed16f1d09f9f84cf4#/projects/default/new",
+        "observations": [
+          {
+            "phase": "unknown",
+            "busy": false,
+            "error": null
+          },
+          {
+            "phase": "resolving",
+            "busy": true,
+            "error": null
+          },
+          {
+            "phase": "committed",
+            "busy": true,
+            "error": null
+          },
+          {
+            "phase": "committed",
+            "busy": false,
+            "error": null
+          }
+        ],
+        "faults": [
+          {
+            "kind": "hung-body",
+            "at": 1791477496978,
+            "path": "/api/v1/session-backups/restores/84ebf331e540cd07faeef7cba763d16c",
+            "aborted": true
+          },
+          {
+            "kind": "503",
+            "at": 1791477507487,
+            "path": "/api/v1/session-backups/restores/84ebf331e540cd07faeef7cba763d16c",
+            "aborted": false
+          },
+          {
+            "kind": "503",
+            "at": 1791477508679,
+            "path": "/api/v1/session-backups/restores/84ebf331e540cd07faeef7cba763d16c",
+            "aborted": false
+          }
+        ]
+      },
+      "source_unchanged": true,
+      "catalog_delta": 1,
+      "sidecars_and_payload_match": true,
+      "resident_identity_matches": true
+    },
+    {
+      "protocol": "TLS",
+      "frontend": {
+        "result": {
+          "id": "6cecb9a2eb2d9f9250d5885b70f338a6",
+          "session_id": "6cecb9a2eb2d9f9250d5885b70f338a6",
+          "project_id": "restore-target",
+          "source_session_id": "V-OSKhnKGgUCGw4sp2iy8pMBKlIfcZIz",
+          "source_sha256": "a96eee2d0d71dca74a262a9be9307793249b65077d3c86f1081844f5f3eb3f75",
+          "project_revision": 1,
+          "project_created_at": 1791477513769694,
+          "restored_at": 1791477514704981,
+          "state": "committed",
+          "accepted": true,
+          "committed": true,
+          "restart_required": false,
+          "terminal": true,
+          "cleanup_pending": false,
+          "phase": "done",
+          "preview_id": "d062fee7a1ab8480f53604e003cb5669",
+          "workspace_root": "\\\\?\\C:\\Users\\Administrator\\.codex\\worktrees\\conversation-backup-recheck-qa\\mdo\\.build\\backup-import-x57299vr\\workspace-中文",
+          "source_title": "Restore source 中文",
+          "source_project_id": "default",
+          "source_workspace_root": "C:\\Users\\Administrator\\.codex\\worktrees\\conversation-backup-recheck-qa\\mdo\\.build\\backup-import-x57299vr\\home\\workspace",
+          "source_model_id": "backup-vision-fixture",
+          "source_agent_id": "mdo.default",
+          "source_protocol": "openai-responses",
+          "source_captured_at": 1791477514052588,
+          "unverified_history_references": 0,
+          "file_count": 6,
+          "total_bytes": 2113584,
+          "created_at": 1791477514704981,
+          "started_at": 1791477514728637,
+          "ended_at": 1791477514824725,
+          "worker_finished": true,
+          "cancel_requested": false,
+          "catalog_generation": 11,
+          "error_code": 0,
+          "message": ""
+        },
+        "reviewed": {
+          "id": "6cecb9a2eb2d9f9250d5885b70f338a6",
+          "session_id": "6cecb9a2eb2d9f9250d5885b70f338a6",
+          "project_id": "restore-target",
+          "source_session_id": "V-OSKhnKGgUCGw4sp2iy8pMBKlIfcZIz",
+          "source_sha256": "a96eee2d0d71dca74a262a9be9307793249b65077d3c86f1081844f5f3eb3f75",
+          "project_revision": 1,
+          "project_created_at": 1791477513769694,
+          "restored_at": 1791477514704981,
+          "state": "review",
+          "accepted": false,
+          "committed": false,
+          "restart_required": false,
+          "terminal": false,
+          "cleanup_pending": false,
+          "phase": "review",
+          "preview_id": "d062fee7a1ab8480f53604e003cb5669",
+          "workspace_root": "\\\\?\\C:\\Users\\Administrator\\.codex\\worktrees\\conversation-backup-recheck-qa\\mdo\\.build\\backup-import-x57299vr\\workspace-中文",
+          "source_title": "Restore source 中文",
+          "source_project_id": "default",
+          "source_workspace_root": "C:\\Users\\Administrator\\.codex\\worktrees\\conversation-backup-recheck-qa\\mdo\\.build\\backup-import-x57299vr\\home\\workspace",
+          "source_model_id": "backup-vision-fixture",
+          "source_agent_id": "mdo.default",
+          "source_protocol": "openai-responses",
+          "source_captured_at": 1791477514052588,
+          "unverified_history_references": 0,
+          "file_count": 6,
+          "total_bytes": 2113584,
+          "created_at": 1791477514704981,
+          "started_at": 0,
+          "ended_at": 0,
+          "worker_finished": false,
+          "cancel_requested": false,
+          "catalog_generation": 0,
+          "error_code": 0,
+          "message": ""
+        },
+        "calls": [
+          {
+            "path": "/api/v1/project-purge-intent",
+            "method": "GET"
+          },
+          {
+            "path": "/api/v1/session-backups/uploads",
+            "method": "POST"
+          },
+          {
+            "path": "/api/v1/session-backups/uploads/373f9131aaaf93a63a2868881f114bef/chunks/0",
+            "method": "PUT"
+          },
+          {
+            "path": "/api/v1/session-backups/uploads/373f9131aaaf93a63a2868881f114bef/chunks/262144",
+            "method": "PUT"
+          },
+          {
+            "path": "/api/v1/session-backups/uploads/373f9131aaaf93a63a2868881f114bef/chunks/524288",
+            "method": "PUT"
+          },
+          {
+            "path": "/api/v1/session-backups/uploads/373f9131aaaf93a63a2868881f114bef/chunks/786432",
+            "method": "PUT"
+          },
+          {
+            "path": "/api/v1/session-backups/uploads/373f9131aaaf93a63a2868881f114bef/chunks/1048576",
+            "method": "PUT"
+          },
+          {
+            "path": "/api/v1/session-backups/uploads/373f9131aaaf93a63a2868881f114bef/chunks/1310720",
+            "method": "PUT"
+          },
+          {
+            "path": "/api/v1/session-backups/uploads/373f9131aaaf93a63a2868881f114bef/chunks/1572864",
+            "method": "PUT"
+          },
+          {
+            "path": "/api/v1/session-backups/uploads/373f9131aaaf93a63a2868881f114bef/chunks/1835008",
+            "method": "PUT"
+          },
+          {
+            "path": "/api/v1/session-backups/uploads/373f9131aaaf93a63a2868881f114bef/chunks/2097152",
+            "method": "PUT"
+          },
+          {
+            "path": "/api/v1/session-backups/uploads/373f9131aaaf93a63a2868881f114bef/chunks/2359296",
+            "method": "PUT"
+          },
+          {
+            "path": "/api/v1/session-backups/uploads/373f9131aaaf93a63a2868881f114bef/chunks/2621440",
+            "method": "PUT"
+          },
+          {
+            "path": "/api/v1/session-backups/uploads/373f9131aaaf93a63a2868881f114bef/seal",
+            "method": "POST"
+          },
+          {
+            "path": "/api/v1/session-backups/uploads/373f9131aaaf93a63a2868881f114bef/preview",
+            "method": "POST"
+          },
+          {
+            "path": "/api/v1/session-backups/previews/d062fee7a1ab8480f53604e003cb5669",
+            "method": "GET"
+          },
+          {
+            "path": "/api/v1/session-backups/previews/d062fee7a1ab8480f53604e003cb5669",
+            "method": "GET"
+          },
+          {
+            "path": "/api/v1/session-backups/previews/d062fee7a1ab8480f53604e003cb5669/restore-review",
+            "method": "POST"
+          },
+          {
+            "path": "/api/v1/session-backups/restores/6cecb9a2eb2d9f9250d5885b70f338a6/apply",
+            "method": "POST"
+          },
+          {
+            "path": "/api/v1/session-backups/restores/6cecb9a2eb2d9f9250d5885b70f338a6",
+            "method": "GET"
+          },
+          {
+            "path": "/api/v1/session-backups/restores/6cecb9a2eb2d9f9250d5885b70f338a6",
+            "method": "GET"
+          },
+          {
+            "path": "/api/v1/session-backups/restores/6cecb9a2eb2d9f9250d5885b70f338a6",
+            "method": "GET"
+          },
+          {
+            "path": "/api/v1/session-backups/restores/6cecb9a2eb2d9f9250d5885b70f338a6",
+            "method": "GET"
+          }
+        ],
+        "phases": [
+          "choose",
+          "hashing",
+          "hashing",
+          "hashing",
+          "hashing",
+          "hashing",
+          "hashing",
+          "hashing",
+          "hashing",
+          "hashing",
+          "hashing",
+          "hashing",
+          "hashing",
+          "hashing",
+          "hashing",
+          "uploading",
+          "uploading",
+          "uploading",
+          "uploading",
+          "uploading",
+          "uploading",
+          "uploading",
+          "uploading",
+          "uploading",
+          "uploading",
+          "uploading",
+          "inspecting",
+          "inspecting",
+          "inspecting",
+          "inspecting",
+          "preview",
+          "preview",
+          "reviewing",
+          "review",
+          "review",
+          "restoring",
+          "restoring",
+          "unknown",
+          "unknown",
+          "unknown",
+          "resolving",
+          "committed",
+          "committed"
+        ],
+        "href": "https://127.0.0.1:63137/?keep=1&mdoRestore=6cecb9a2eb2d9f9250d5885b70f338a6&mdoRestoreProject=restore-target&mdoRestoreSha=a96eee2d0d71dca74a262a9be9307793249b65077d3c86f1081844f5f3eb3f75#/projects/default/new",
+        "observations": [
+          {
+            "phase": "unknown",
+            "busy": false,
+            "error": null
+          },
+          {
+            "phase": "resolving",
+            "busy": true,
+            "error": null
+          },
+          {
+            "phase": "committed",
+            "busy": true,
+            "error": null
+          },
+          {
+            "phase": "committed",
+            "busy": false,
+            "error": null
+          }
+        ],
+        "faults": [
+          {
+            "kind": "hung-body",
+            "at": 1791477514737,
+            "path": "/api/v1/session-backups/restores/6cecb9a2eb2d9f9250d5885b70f338a6",
+            "aborted": true
+          },
+          {
+            "kind": "503",
+            "at": 1791477525345,
+            "path": "/api/v1/session-backups/restores/6cecb9a2eb2d9f9250d5885b70f338a6",
+            "aborted": false
+          },
+          {
+            "kind": "503",
+            "at": 1791477526560,
+            "path": "/api/v1/session-backups/restores/6cecb9a2eb2d9f9250d5885b70f338a6",
+            "aborted": false
+          }
+        ]
+      },
+      "source_unchanged": true,
+      "catalog_delta": 1,
+      "sidecars_and_payload_match": true,
+      "resident_identity_matches": true
+    }
+  ]
+}

@@ -1,0 +1,20 @@
+{
+  "xs_commit": "3232f7b8efb02fdd6bf63a508ed1e69654d6759c",
+  "mdo_commit": "47f2a49b026336bbe7c52d8f62b086d564885af7",
+  "mdo_worktree_dirty": true,
+  "packaged_app_sha256": "f5bcd0a353581cda699370910ec0aabb6e3a142455931b0c7a5b6ea114557b22",
+  "sha256": "b8abf4bc7dc00d34a9a77f73fdb7bbceb82631b663d3813baac415d6e27f203f",
+  "bytes": 4457589,
+  "candidate": "D:\\GIT\\mdo\\.build\\conversation-acceptance\\backup-import-deadline-package\\mdo.exe",
+  "source_sha256": {
+    "app/web/js/api/request-recovery.js": "d8d6c236a532260d22ad2ab650306e354ef754f6828e0b64fa609064473e9d1c",
+    "app/web/js/features/sessions/backup-import-controller.js": "2dc9717dc84adb848800154a47779fb7ac200f9868081f605fc49f47c3120524"
+  },
+  "verification_scope": "candidate built from isolated baseline plus owned changes; import integration executed production JS and real native HTTP/TLS service, not native file chooser",
+  "host": {
+    "revision": "3232f7b8efb02fdd6bf63a508ed1e69654d6759c",
+    "profile_sha256": "2829d871dac1a12a70503f9b6116adaa2aa9556a53ea139df60aaa81cbb7a19b",
+    "binary_sha256": "8b53d6328e7689530de8b4fb55d5b3ae64d5189eff574b49533feb3e7872d9b1",
+    "binary_bytes": 3154944
+  }
+}

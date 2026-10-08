@@ -1,0 +1,18 @@
+{
+  "baseline": {
+    "exit_code": 1,
+    "tests": {
+      "tests": 9,
+      "pass": 0,
+      "fail": 9
+    }
+  },
+  "fixed": {
+    "exit_code": 0,
+    "tests": {
+      "tests": 9,
+      "pass": 9,
+      "fail": 0
+    }
+  }
+}

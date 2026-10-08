@@ -157,7 +157,10 @@ test("obsolete upload completion after explicit cancellation cannot install a pr
   let complete, late;
   const ctx = setup({ upload(file, options) { late = options;
     return new Promise((resolve) => { complete = resolve; }); } });
-  const upload = ctx.controller.choose({}); await ctx.controller.cancel();
+  const upload = ctx.controller.choose({});
+  // Wait for the transport to start; a separate check covers cancellation
+  // before its microtask, which must now send no upload at all.
+  await new Promise(resolve => setImmediate(resolve)); await ctx.controller.cancel();
   assert.equal(late.signal.aborted, true);
   late.onIdentity({ id, sha256 }); late.onProgress({ phase: "uploading" }); complete({ id, sha256 });
   await upload;

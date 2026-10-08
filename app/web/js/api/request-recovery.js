@@ -3,13 +3,18 @@ import { isTransientReadError } from "./read-recovery.js";
 
 // Only reads and an explicitly keyed, guarded mutation may be repeated.
 // New runs and draft writes use retry:false. All phases share
-// one minute; leaving the page cancels both the request and its backoff wait.
+// one minute by default; leaving the page cancels requests and backoff waits.
+// Larger file transfers can keep their existing deadline and error category.
 export function createRequestRecovery({ now = Date.now, random = Math.random,
-  setTimer = setTimeout, clearTimer = clearTimeout, eventTarget = globalThis.window } = {}) {
-  const deadline = now() + 60000;
+  setTimer = setTimeout, clearTimer = clearTimeout, eventTarget = globalThis.window,
+  requestMs = 8000, recoveryMs = 60000,
+  timeoutError = () => new ApiError("Request timed out", { code: "network_error" }) } = {}) {
+  if (!Number.isFinite(requestMs) || requestMs <= 0 || !Number.isFinite(recoveryMs) || recoveryMs <= 0 ||
+      typeof timeoutError !== "function") throw new TypeError("Invalid request recovery limits");
+  const deadline = now() + recoveryMs;
   let stopped = false, cancelPending = null;
   const aborted = () => new DOMException("Request cancelled", "AbortError");
-  const timeout = () => new ApiError("Request timed out", { code: "network_error" });
+  const timeout = timeoutError;
   function assertActive() { if (stopped) throw aborted(); }
   function dispose() { stopped = true; cancelPending?.(); eventTarget?.removeEventListener("pagehide", dispose); }
   eventTarget?.addEventListener("pagehide", dispose, { once: true });
@@ -23,10 +28,14 @@ export function createRequestRecovery({ now = Date.now, random = Math.random,
       // listener must not turn a retryable timeout into user cancellation.
       cancelPending = () => { reject(aborted()); controller.abort(); };
       timer = setTimer(() => { reject(timeout()); controller.abort(); },
-        Math.min(8000, deadline - now()));
+        Math.min(requestMs, deadline - now()));
     });
     try {
-      const result = await Promise.race([Promise.resolve().then(() => operation(controller.signal)), limit]);
+      const result = await Promise.race([Promise.resolve().then(() => {
+        assertActive();
+        if (controller.signal.aborted) throw timeout();
+        return operation(controller.signal);
+      }), limit]);
       assertActive();
       return result;
     }

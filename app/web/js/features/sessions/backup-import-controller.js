@@ -1,5 +1,7 @@
 import { backupImportApi } from "../../api/backup-import.js";
 import { ApiError } from "../../api/client.js";
+import { createRequestRecovery } from "../../api/request-recovery.js";
+import { isTransientReadError } from "../../api/read-recovery.js";
 
 const requestId = /^[0-9a-f]{32}$/, digest = /^[0-9a-f]{64}$/;
 const projectId = /^[A-Za-z0-9_-][A-Za-z0-9._-]*$/;
@@ -63,27 +65,35 @@ export function createBackupImportController({ transport = backupImportApi,
       value.state === "review" ? "review" : value.state === "not_accepted" ? "failed" : "restoring";
     publish({ restore: value, phase });
   }
-  async function call(method, args, signal) {
-    const controller = new AbortController();
-    const abort = () => controller.abort();
+  async function call(method, args, signal, { timeoutMs = requestMs, budgetMs = observationMs,
+    transportOptions = {} } = {}) {
+    const retry = ["current", "previews", "readPreview", "read"].includes(method);
+    const timeoutCode = method === "upload" ? "backup_upload_timeout" : "restore_observation_timeout";
+    const recovery = createRequestRecovery({ requestMs: timeoutMs, recoveryMs: retry ? budgetMs : timeoutMs,
+      timeoutError: () => failure(timeoutCode) });
+    const abort = () => recovery.dispose();
     signal.addEventListener("abort", abort, { once: true });
     if (signal.aborted) abort();
-    const timer = setTimeout(abort, requestMs);
-    try { return await transport[method](...args, { signal: controller.signal }); }
-    catch (error) {
-      if (controller.signal.aborted && !signal.aborted) throw failure("restore_observation_timeout");
-      throw error;
-    } finally { clearTimeout(timer); signal.removeEventListener("abort", abort); }
+    // Only observations retry. Upload/apply/cancel keep their original identity
+    // and one attempt, even if the reply is lost or ignores cancellation.
+    try { return await recovery.request(signal => transport[method](...args, { ...transportOptions, signal }),
+      { retry, retryable: error => error?.code === timeoutCode || isTransientReadError(error) }); }
+    finally { recovery.dispose(); signal.removeEventListener("abort", abort); }
   }
-  function delay(signal) {
+  function delay(signal, ms = pollMs) {
     return new Promise((resolve, reject) => {
       const end = () => { signal.removeEventListener("abort", abort); resolve(); };
-      const timer = setTimeout(end, pollMs);
+      const timer = setTimeout(end, ms);
       const abort = () => { clearTimeout(timer); signal.removeEventListener("abort", abort);
         reject(new DOMException("Cancelled", "AbortError")); };
       signal.addEventListener("abort", abort, { once: true });
       if (signal.aborted) abort();
     });
+  }
+  function remaining(until) {
+    const budgetMs = until - Date.now();
+    if (budgetMs <= 0) throw failure("restore_observation_timeout");
+    return { budgetMs, timeoutMs: Math.min(requestMs, budgetMs) };
   }
   async function run(phase, work, interrupt = false) {
     if (destroyed || (state.busy && !interrupt)) return;
@@ -107,19 +117,20 @@ export function createBackupImportController({ transport = backupImportApi,
         publish({ phase: "preview" }); return;
       }
       if (Date.now() >= until) throw failure("restore_observation_timeout");
-      await delay(signal); value = await call("readPreview", [value.id], signal);
+      await delay(signal, Math.min(pollMs, until - Date.now()));
+      value = await call("readPreview", [value.id], signal, remaining(until));
     }
   }
   async function observeRestore(signal, current, initial) {
     const until = Date.now() + observationMs;
     let value = initial;
     while (current()) {
-      value ||= await call("read", [state.restore.id], signal);
+      value ||= await call("read", [state.restore.id], signal, remaining(until));
       if (!current()) return;
       acceptResult(value);
       if (value.terminal || ["review", "not_accepted"].includes(value.state)) return;
       if (Date.now() >= until) throw failure("restore_observation_timeout");
-      await delay(signal); value = null;
+      await delay(signal, Math.min(pollMs, until - Date.now())); value = null;
     }
   }
   async function discover(signal, current) {
@@ -158,9 +169,9 @@ export function createBackupImportController({ transport = backupImportApi,
       if (state.phase !== "choose" || state.restore || state.preview || state.upload) return Promise.resolve();
       return run("hashing", async (signal, current) => {
         publish({ fileName: file?.name || "" });
-        const upload = await transport.upload(file, { signal,
+        const upload = await call("upload", [file], signal, { timeoutMs: 120000, transportOptions: {
           onIdentity(value) { if (current()) publish({ upload: value }); },
-          onProgress(progress) { if (current()) publish({ progress, phase: progress.phase }); } });
+          onProgress(progress) { if (current()) publish({ progress, phase: progress.phase }); } } });
         if (!current()) return;
         publish({ upload, phase: "inspecting", progress: null });
         // A lost preview POST response is recovered by discovery, not by
