@@ -76,7 +76,7 @@ def git_head(root: Path) -> str | None:
 def restore_bundled_xserver(candidates: list[Path], lock: dict) -> Path | None:
     """Restore a locked compatibility commit without changing any user checkout.
 
-    The small Git bundle carries only the conversation repair commits; the
+    The small Git bundle carries the compatible xs platform/repair commits; the
     normal xs repository supplies their historical base. It also lets a fresh
     machine build before the compatible branch is published upstream.
     """

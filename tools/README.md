@@ -34,3 +34,5 @@ Windows 常用工具及 Python 支持通过“设置 → 常规 → 扩展工具
 通知、打包与网站发布流程见 `docs/distribution.md`；网站插件只维护在 home 仓库
 对应 vhost。来源哈希、构建方法与此前真机 Shell 验证见 runtime 文档。这里不存放
 模型凭据或用户会话数据。
+
+Linux 四种产物使用 `build_linux.py` 构建；Windows 服务版使用 `build_mdo.py --edition server`。依赖安装、链接方式及运行说明见[平台构建说明](../docs/linux.md)。

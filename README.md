@@ -99,3 +99,5 @@ mdo.exe -- --home D:\Portable\mdo-home
 旧版可执行文件旁 `data/` 与用户目录 `.mdo/` 只能通过设置页中的显式预览、
 二次确认和原子导入迁移；目标 Home 不允许已存在，旧目录始终保留。转换规则、
 不支持项、失败清理和回退方式见[旧数据迁移说明](docs/legacy-migration.md)。
+
+Linux GUI、glibc 服务版、musl 静态服务版，以及 Windows 服务版的构建和运行见[平台构建说明](docs/linux.md)。

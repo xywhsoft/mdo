@@ -7,7 +7,7 @@
     "single_header_sha256": "1ea16b21f968d09e5084162f3919b7e6ae2412f9e13c3bbbdd4b322bcd5a26d2"
   },
   "xserver": {
-    "commit": "670deccc8fc9402ca89e5edd5d5c38d865996826",
+    "commit": "858a6ad1dde41dd43b6fd7028a8d2303ebc6f696",
     "version": "1.0.0",
     "required_extensions": [
       "xwork",
@@ -22,7 +22,7 @@
     },
     "source_bundle": {
       "path": "tools/dependencies/xs-linux-products.bundle",
-      "sha256": "6bf28855b90e9b50a10121ec13340d592bcd7c8985958298863e3946cba49ff1",
+      "sha256": "d1dc5d3cae6dde733e521202b7c0bfbff5889c7a8bd2dc1b01ce21ab7758db17",
       "ref": "refs/heads/codex/linux-products"
     }
   },
