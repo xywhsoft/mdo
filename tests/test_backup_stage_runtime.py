@@ -140,6 +140,19 @@ class Probe(DecodeProbe):
                     if p.is_file() and p != self.home / ".mdo.lock"}
 
         before = inventory()
+        def assert_home_unchanged(phase):
+            after = inventory()
+            if after == before:
+                return
+            def facts(data):
+                return {"bytes": len(data), "sha256": hashlib.sha256(data).hexdigest()}
+            changes = {
+                "added": {name: facts(after[name]) for name in sorted(after.keys() - before.keys())},
+                "removed": {name: facts(before[name]) for name in sorted(before.keys() - after.keys())},
+                "changed": {name: {"before": facts(before[name]), "after": facts(after[name])}
+                            for name in sorted(before.keys() & after.keys()) if before[name] != after[name]},
+            }
+            raise AssertionError("source Home changed after " + phase + ": " + json.dumps(changes, sort_keys=True))
         result = self.prepare(source)
         assert result["ok"] and result["verified"] and result["source_id"] == session, result
         assert result["publication_identity"], result
@@ -230,10 +243,13 @@ class Probe(DecodeProbe):
         result = self.prepare(bad)
         self.settle_failed_stage(result)
         assert self.prepare(source)["verified"] and self.fixture("discard")["ok"]
+        assert_home_unchanged("private staging and refusal checks")
         self.check_projections(source, expected)
+        assert_home_unchanged("projection reconciliation")
         self.check_restore(source, expected)
+        assert_home_unchanged("private restore preparation")
         self.check_input_review(source, expected)
-        assert inventory() == before  # no source Home, queue, model or catalog writes
+        assert_home_unchanged("input review")  # no source Home, queue, model or catalog writes
         self.check_home_publication(source, expected, before)
 
     def check_home_publication(self, source, expected, before):
