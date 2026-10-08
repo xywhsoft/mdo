@@ -1,0 +1,13 @@
+{
+  "passed": true,
+  "model_requests": 3,
+  "packed_sha256": "267beb6e4a5681908d3d82bfa06ef5f3ee62e09bd77db2c26cc36c73b84ca17a",
+  "checks": [
+    "invalid correlation IDs do not change history or start a model",
+    "accepted resume has the same correlation in the reply, run detail and run list",
+    "a busy/stale recovery is refused without another model call",
+    "legacy resume without a client ID still works",
+    "ending advances a closed recovery boundary; repeating its old guard changes nothing",
+    "host restart fences the old page and preserves files"
+  ]
+}

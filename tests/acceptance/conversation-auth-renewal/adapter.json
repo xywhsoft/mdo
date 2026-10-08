@@ -1,0 +1,79 @@
+{
+  "passed": true,
+  "cases": {
+    "renew": [
+      0,
+      "unknown",
+      2
+    ],
+    "expired-again": [
+      -1,
+      "login_required",
+      2
+    ],
+    "backoff-expiry": [
+      0,
+      "unknown",
+      2
+    ],
+    "business": [
+      -1,
+      "service_configuration",
+      1
+    ],
+    "budget": [
+      -1,
+      "login_required",
+      6
+    ],
+    "cancel": [
+      -3,
+      "cancelled",
+      1
+    ],
+    "deadline": [
+      -2,
+      "timeout",
+      1
+    ],
+    "partial": [
+      -1,
+      "network",
+      1
+    ],
+    "hook-stop": [
+      -1,
+      "login_required",
+      1
+    ],
+    "preexpired": [
+      -2,
+      "timeout",
+      0
+    ],
+    "cancelled": [
+      -3,
+      "cancelled",
+      0
+    ],
+    "nullable-error": [
+      0,
+      "unknown",
+      2
+    ]
+  },
+  "http_requests": {
+    "renew": 2,
+    "expired-again": 2,
+    "backoff-expiry": 2,
+    "business": 1,
+    "budget": 6,
+    "cancel": 1,
+    "deadline": 1,
+    "partial": 1,
+    "hook-stop": 1,
+    "nullable-error": 2
+  },
+  "output": "case=renew result=0 kind=unknown attempts=2 acquired=3 released=3 deltas=1 retries=1 ms=34\ncase=expired-again result=-1 kind=login_required attempts=2 acquired=3 released=3 deltas=0 retries=1 ms=42\ncase=backoff-expiry result=0 kind=unknown attempts=2 acquired=3 released=3 deltas=1 retries=1 ms=45\ncase=business result=-1 kind=service_configuration attempts=1 acquired=2 released=2 deltas=0 retries=0 ms=15\ncase=budget result=-1 kind=login_required attempts=6 acquired=7 released=7 deltas=0 retries=5 ms=518\ncase=cancel result=-3 kind=cancelled attempts=1 acquired=2 released=2 deltas=0 retries=0 ms=15\ncase=deadline result=-2 kind=timeout attempts=1 acquired=2 released=2 deltas=0 retries=1 ms=107\ncase=partial result=-1 kind=network attempts=1 acquired=2 released=2 deltas=1 retries=0 ms=15\ncase=hook-stop result=-1 kind=login_required attempts=1 acquired=2 released=2 deltas=0 retries=1 ms=15\ncase=preexpired result=-2 kind=timeout attempts=0 acquired=0 released=0 deltas=0 retries=0 ms=0\ncase=cancelled result=-3 kind=cancelled attempts=0 acquired=0 released=0 deltas=0 retries=0 ms=0\ncase=nullable-error result=0 kind=unknown attempts=0 acquired=3 released=3 deltas=1 retries=1 ms=45\n",
+  "scope": "loopback HTTP, real product completion, simulated authority; no website or private credentials"
+}

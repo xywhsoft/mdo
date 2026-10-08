@@ -177,9 +177,15 @@ static uint32 MdoModelsRetryDelay(uint32 Attempt, uint32 RetryAfter,
     return Delay > UINT32_MAX ? UINT32_MAX : (uint32)Delay;
 }
 
+/* Online attempts can replace credentials while sharing the same retry and
+ * recovery budget. The adapter retains its client until the next attempt, so
+ * retry hooks never receive an already destroyed client. */
+typedef xllm_result (*MdoModelsAttemptFn)(void*, xllm_client**,
+    const xllm_request*, const xllm_stream_callbacks*, xllm_response**, xllm_error*);
+
 static xllm_result MdoModelsComplete(xllm_client* Client, const xllm_request* Request,
     const xllm_stream_callbacks* Callbacks, xllm_response** Response,
-    xllm_error* OutError, bool Restartable)
+    xllm_error* OutError, bool Restartable, MdoModelsAttemptFn Complete, void* Data)
 {
     xllm_error Error;
     xllm_result Result = XLLM_RESULT_ERROR;
@@ -190,12 +196,13 @@ static xllm_result MdoModelsComplete(xllm_client* Client, const xllm_request* Re
     uint32 Attempt = 0u;
     uint32 AttemptsMade = 0u;
     bool Retryable = false;
+    bool AuthenticationRetried = false;
     xllm_request RepairRequest = {0};
     xllm_message* RepairMessages = NULL;
     const xllm_request* ActiveRequest = Request;
     if (Response) *Response = NULL;
     xllmErrorInit(&Error);
-    if (!Client || !Request || !Response) {
+    if ((!Client && !Complete) || !Request || !Response) {
         Error.eCode = XLLM_ERROR_INVALID_ARGUMENT;
         goto done;
     }
@@ -217,8 +224,14 @@ static xllm_result MdoModelsComplete(xllm_client* Client, const xllm_request* Re
         Result = MdoModelsScope(Request, &Error);
         if (Result != XLLM_RESULT_OK) { Retryable = false; break; }
         ++AttemptsMade;
-        Result = xllmClientComplete(Client, &AttemptRequest, Callbacks ? &Stream : NULL,
-            Response, &Error);
+        Result = Complete ? Complete(Data, &Client, &AttemptRequest,
+            Callbacks ? &Stream : NULL, Response, &Error) :
+            xllmClientComplete(Client, &AttemptRequest, Callbacks ? &Stream : NULL,
+                Response, &Error);
+        /* Waiting for credentials can end before transport starts. Do not
+         * report that wait as another model request. */
+        if (Complete && Result != XLLM_RESULT_OK && !Error.tDiagnostics.uAttemptCount)
+            --AttemptsMade;
         if (Result == XLLM_RESULT_OK) break;
         if (MdoModelsScope(Request, &Error) != XLLM_RESULT_OK) {
             Retryable = false;
@@ -228,14 +241,24 @@ static xllm_result MdoModelsComplete(xllm_client* Client, const xllm_request* Re
         }
         /* Invalid streamed drafts are also replaceable at the Agent boundary:
          * no tools execute until a valid complete response is returned. */
-        Retryable = (MdoModelsRetryable(&Error) || (Restartable &&
+        /* Only a definite online authentication rejection before delivery may
+         * trigger one renewal. Business errors and delivered content remain
+         * protected, including for replaceable Agent streams. */
+        bool RenewAuthentication = Complete && !AuthenticationRetried &&
+            Error.iHttpStatus == 401 &&
+            !strcmp(MdoModelErrorKind(&Error), "login_required") && !*Response &&
+            !Error.tDiagnostics.bModelDataDelivered &&
+            !xrtAtomic32Load(&Guard.Delivered, XMEMORY_ACQUIRE) &&
+            !xrtAtomic32Load(&Guard.Stopped, XMEMORY_ACQUIRE);
+        Retryable = RenewAuthentication || ((MdoModelsRetryable(&Error) || (Restartable &&
             (!strcmp(MdoModelErrorKind(&Error), "invalid_response") ||
              Error.eCode == XLLM_ERROR_OUTPUT_LIMIT))) &&
             !*Response && (Restartable ||
             (!Error.tDiagnostics.bModelDataDelivered &&
              !xrtAtomic32Load(&Guard.Delivered, XMEMORY_ACQUIRE))) &&
-            !xrtAtomic32Load(&Guard.Stopped, XMEMORY_ACQUIRE);
+            !xrtAtomic32Load(&Guard.Stopped, XMEMORY_ACQUIRE));
         if (!Retryable || Attempt == MDO_MODEL_MAX_ATTEMPTS) break;
+        if (RenewAuthentication) AuthenticationRetried = true;
         if (Error.eCode == XLLM_ERROR_OUTPUT_LIMIT && !RepairMessages) {
             /* Add one ephemeral instruction to a borrowed message overlay.
              * Keep the user's token limit and persisted history unchanged;
@@ -325,11 +348,11 @@ done:
 xllm_result MdoModelComplete(xllm_client* Client, const xllm_request* Request,
     const xllm_stream_callbacks* Callbacks, xllm_response** Response, xllm_error* Error)
 {
-    return MdoModelsComplete(Client, Request, Callbacks, Response, Error, false);
+    return MdoModelsComplete(Client, Request, Callbacks, Response, Error, false, NULL, NULL);
 }
 
 xllm_result MdoModelCompleteRestartable(xllm_client* Client, const xllm_request* Request,
     const xllm_stream_callbacks* Callbacks, xllm_response** Response, xllm_error* Error)
 {
-    return MdoModelsComplete(Client, Request, Callbacks, Response, Error, true);
+    return MdoModelsComplete(Client, Request, Callbacks, Response, Error, true, NULL, NULL);
 }

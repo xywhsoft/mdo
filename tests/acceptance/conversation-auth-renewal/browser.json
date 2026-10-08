@@ -1,0 +1,22 @@
+{
+  "model_requests": 4,
+  "token_refreshes": {
+    "account-renew": 1
+  },
+  "session_id": "a3fef9760a914e74b8424fc172598849",
+  "final_model_errors": 0,
+  "model_starts": 2,
+  "completed_turns": 2,
+  "event_kinds": [
+    0,
+    1,
+    2,
+    4,
+    10,
+    0,
+    1,
+    2,
+    4,
+    10
+  ]
+}

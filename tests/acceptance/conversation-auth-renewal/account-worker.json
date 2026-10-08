@@ -1,0 +1,18 @@
+{
+  "passed": true,
+  "model_requests": {
+    "account-renew": 2,
+    "account-deadline": 1,
+    "account-logout": 1,
+    "account-switch": 1,
+    "account-business": 1
+  },
+  "token_refreshes": {
+    "account-renew": 1,
+    "account-deadline": 1,
+    "account-logout": 1,
+    "account-switch": 1
+  },
+  "output": "case=account-renew result=0 kind=unknown attempts=2 acquirers=0 ms=47\ncase=account-deadline result=-2 kind=timeout attempts=1 acquirers=0 ms=110\ncase=account-logout result=-3 kind=cancelled attempts=1 acquirers=0 ms=79\ncase=account-switch result=-3 kind=cancelled attempts=1 acquirers=0 ms=85\ncase=account-business result=-1 kind=service_configuration attempts=1 acquirers=0 ms=16\n",
+  "scope": "real account worker, controlled identity, no xadmin or public data"
+}

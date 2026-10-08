@@ -45,16 +45,30 @@ static xvalue* MdoAccountAllowance(const xvalue* Data,uint64 Id)
     if(!Ok){xrtValueRelease(Out);return NULL;}return Out;
 }
 
-static bool MdoAccountModelAccess(xcancel* Cancel,MdoModelOnlineAccess* Access)
+static bool MdoAccountModelAccess(xcancel* Cancel,uint64 Deadline,MdoModelOnlineAccess* Access)
 {
     MdoAccountLease* Lease=xrtCalloc(1,sizeof(*Lease));if(!Lease||!g_MdoAccount.Initialized){xrtFree(Lease);return false;}
     uint64 Until=xrtDeadlineAfter(30000000);bool Ok=false;
+    if(Deadline!=XRT_DEADLINE_NEVER&&Deadline<Until)Until=Deadline;
     xrtMutexLock(g_MdoAccount.Lock);++g_MdoAccount.Acquirers;
     while(!g_MdoAccount.Stopping&&!xrtDeadlineExpired(Until)&&(!Cancel||!xrtCancelRequested(Cancel))){
         if(MdoAccountLeaseLocked(Cancel,Lease)){Ok=true;break;}
-        MdoAccountRelease(Lease);
-        if(!g_MdoAccount.Tokens.Refresh[0]||!MdoAccountQueueLocked(MDO_ACCOUNT_WORK_REFRESH))break;
-        xrtCondWaitFor(g_MdoAccount.Changed,g_MdoAccount.Lock,100000);
+        /* Unwatch may wait for a cancellation callback. A partially created
+         * lease is cleaned up after unlocking, never inside the account lock. */
+        if(Lease->AccessToken||Lease->Cancel||Lease->Watch)break;
+        /* Switching during rotation discards the old refresh. Wait for the
+         * pending login to settle so its session cancellation reaches the
+         * pinned caller, rather than reporting a spurious login failure. */
+        bool LoginPending=g_MdoAccount.Work.Kind==MDO_ACCOUNT_WORK_PASSWORD||
+            g_MdoAccount.Work.Kind==MDO_ACCOUNT_WORK_EXCHANGE||
+            (g_MdoAccount.Busy&&(g_MdoAccount.BusyKind==MDO_ACCOUNT_WORK_PASSWORD||
+                g_MdoAccount.BusyKind==MDO_ACCOUNT_WORK_EXCHANGE));
+        if(!LoginPending&&(!g_MdoAccount.Tokens.Refresh[0]||
+            !MdoAccountQueueLocked(MDO_ACCOUNT_WORK_REFRESH)))break;
+        uint64 Now=xrtClock();
+        if(Now>=Until)break;
+        uint64 Wait=Until-Now;
+        xrtCondWaitFor(g_MdoAccount.Changed,g_MdoAccount.Lock,Wait<100000u?Wait:100000u);
     }
     --g_MdoAccount.Acquirers;xrtCondBroadcast(g_MdoAccount.Changed);xrtMutexUnlock(g_MdoAccount.Lock);
     if(!Ok){MdoAccountRelease(Lease);xrtFree(Lease);return false;}

@@ -89,7 +89,8 @@ typedef struct MdoModelClientInfo {
 typedef struct MdoModelOnlineAccess { const char* Token; xcancel* Cancel; void* Handle; } MdoModelOnlineAccess;
 typedef struct MdoModelOnlineAuthority {
     const char* Origin;
-    bool (*Acquire)(xcancel*,MdoModelOnlineAccess*);
+    /* Deadline bounds credential renewal as well as the HTTP request. */
+    bool (*Acquire)(xcancel*,uint64 Deadline,MdoModelOnlineAccess*);
     void (*Release)(MdoModelOnlineAccess*,int);
 } MdoModelOnlineAuthority;
 void MdoModelManagerSetOnlineAuthority(const MdoModelOnlineAuthority* Authority);

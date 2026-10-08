@@ -22,20 +22,75 @@ bool MdoModelIsOnline(const MdoModelCatalog* Catalog,const char* ModelId)
 xllm_client* MdoModelClientCreate(const MdoModelCatalog* Catalog,const MdoModelClientOptions* Options,MdoModelClientInfo* Info,xllm_error* Error)
 {return MdoModelClientCreateAuth(Catalog,Options,Info,Error,NULL);}
 
-/* Fresh access on each turn avoids keeping a fifteen-minute bearer in a
- * long-lived Agent client. Logout/account switch cancels the active call. */
+typedef struct MdoModelsOnlineCall {
+    const MdoModelCatalog* Catalog;
+    const MdoModelClientOptions* Options;
+    MdoModelOnlineAuthority Authority;
+    xllm_client* Client;
+} MdoModelsOnlineCall;
+
+static void MdoModelsLoginRequired(xllm_error* Error)
+{
+    MdoModelsProfileError(Error,"Sign in to use online models, or wait for login renewal");
+    Error->eCode=XLLM_ERROR_AUTH;
+    snprintf(Error->sProviderCode,sizeof(Error->sProviderCode),"%s","login_required");
+}
+
+/* Acquire a fresh bearer for every HTTP attempt, including after backoff.
+ * The enclosing call keeps its first account lease alive: this cancel parent
+ * prevents a retry from acquiring a different account after logout/switch. */
+static xllm_result MdoModelsOnlineAttempt(void* Data,xllm_client** Client,
+    const xllm_request* Request,const xllm_stream_callbacks* Callbacks,
+    xllm_response** Response,xllm_error* Error)
+{
+    MdoModelsOnlineCall* Call=Data;
+    MdoModelOnlineAccess Access={0};xllm_result Result=XLLM_RESULT_ERROR;
+    xllmErrorInit(Error);
+    xllmClientDestroy(Call->Client);Call->Client=NULL;*Client=NULL;
+    if(!Call->Authority.Acquire(Request->pCancel,Request->uDeadline,&Access)){
+        Result=MdoModelsScope(Request,Error);
+        if(Result==XLLM_RESULT_OK){MdoModelsLoginRequired(Error);Result=XLLM_RESULT_ERROR;}
+        return Result;
+    }
+    Call->Client=MdoModelClientCreateAuth(Call->Catalog,Call->Options,NULL,Error,Access.Token);
+    *Client=Call->Client;
+    if(Call->Client){
+        xllm_request Borrowed=*Request;Borrowed.pCancel=Access.Cancel;
+        Result=xllmClientComplete(Call->Client,&Borrowed,Callbacks,Response,Error);
+        if(Error->iHttpStatus==401 &&
+            !strcmp(MdoModelErrorKind(Error),"authentication_failed")){
+            /* Online account authentication is distinct from a user-entered
+             * provider key. Preserve status/diagnostics and business codes. */
+            snprintf(Error->sProviderCode,sizeof(Error->sProviderCode),"%s","login_required");
+        }
+    }
+    /* A specific provider/business error can also carry HTTP 401. It does not
+     * invalidate the member bearer or justify rotating the login session. */
+    int Status=Error->iHttpStatus;
+    if(Status==401&&strcmp(MdoModelErrorKind(Error),"login_required"))Status=0;
+    Call->Authority.Release(&Access,Status);
+    return Result;
+}
+
+/* The account lease covers renewal, all attempts, and request cancellation.
+ * Generation retries use the same six-attempt and recovery-time budget as
+ * configured providers, rather than nesting a second completion loop. */
 xllm_result MdoModelOnlineComplete(const MdoModelCatalog* Catalog,const MdoModelClientOptions* Options,
     const xllm_request* Request,const xllm_stream_callbacks* Callbacks,xllm_response** Response,xllm_error* Error)
 {
     if(Response)*Response=NULL;
-    MdoModelOnlineAccess Access={0};xllm_result Result=XLLM_RESULT_ERROR;xllm_client* Client=NULL;
+    xllm_error LocalError;if(!Error)Error=&LocalError;xllmErrorInit(Error);
+    MdoModelOnlineAccess Pinned={0};xllm_result Result=XLLM_RESULT_ERROR;
+    MdoModelsOnlineCall Call={Catalog,Options,g_MdoModelsOnline,NULL};
     if(!Request||!Response||!Options||!g_MdoModelsOnline.Acquire||!g_MdoModelsOnline.Release)return Result;
-    if(!g_MdoModelsOnline.Acquire(Request->pCancel,&Access)){
-        MdoModelsProfileError(Error,"Sign in to use online models, or wait for login renewal");
-        if(Error){Error->eCode=XLLM_ERROR_AUTH;snprintf(Error->sProviderCode,sizeof(Error->sProviderCode),"%s","login_required");}return Result;}
-    Client=MdoModelClientCreateAuth(Catalog,Options,NULL,Error,Access.Token);
-    if(Client){
-        xllm_request Borrowed=*Request;Borrowed.pCancel=Access.Cancel;
+    Result=MdoModelsScope(Request,Error);if(Result!=XLLM_RESULT_OK)return Result;
+    if(!Call.Authority.Acquire(Request->pCancel,Request->uDeadline,&Pinned)){
+        Result=MdoModelsScope(Request,Error);
+        if(Result==XLLM_RESULT_OK){MdoModelsLoginRequired(Error);Result=XLLM_RESULT_ERROR;}
+        return Result;
+    }
+    {
+        xllm_request Borrowed=*Request;Borrowed.pCancel=Pinned.Cancel;
         xllm_model_profile Profile;char* ExtraJson=NULL;bool Ready=true;
         Ready=MdoModelCatalogProfile(Catalog,Options->ModelId,Options->Protocol,&Profile,Error);
         if(Ready&&Profile.eProvider==XLLM_PROVIDER_GLM){
@@ -54,10 +109,12 @@ xllm_result MdoModelOnlineComplete(const MdoModelCatalog* Catalog,const MdoModel
                 if(!Ready)MdoModelsProfileError(Error,"cannot prepare GLM reasoning controls");
             }
         }
-        if(Ready)Result=Options->RestartableStream?
-            MdoModelCompleteRestartable(Client,&Borrowed,Callbacks,Response,Error):
-            MdoModelComplete(Client,&Borrowed,Callbacks,Response,Error);
-        xrtFree(ExtraJson);xllmClientDestroy(Client);
+        if(Ready)Result=MdoModelsComplete(NULL,&Borrowed,Callbacks,Response,Error,
+            Options->RestartableStream,MdoModelsOnlineAttempt,&Call);
+        else Result=XLLM_RESULT_ERROR;
+        xrtFree(ExtraJson);xllmClientDestroy(Call.Client);
     }
-    g_MdoModelsOnline.Release(&Access,Error?Error->iHttpStatus:0);return Result;
+    /* The per-attempt lease already reports authentication failures. Releasing
+     * the pinned lease must not schedule a second renewal for the same reply. */
+    Call.Authority.Release(&Pinned,0);return Result;
 }
