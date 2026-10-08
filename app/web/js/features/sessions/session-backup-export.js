@@ -1,17 +1,10 @@
 import { exportSession } from "../../state/sessions.js";
 import { subscribeLocale, t } from "../../i18n.js";
 import { errorMessage, toast } from "../../utils/dom.js";
+import { saveBlobFile } from "../../utils/file-download.js";
 
 export function saveBackupFile(file) {
-  const url = URL.createObjectURL(file.blob);
-  try {
-    const link = document.createElement("a");
-    link.href = url; link.download = file.filename;
-    document.body.append(link); link.click(); link.remove();
-  } finally {
-    // Give the browser download time to adopt its own reference to the Blob.
-    window.setTimeout(() => URL.revokeObjectURL(url), 60000);
-  }
+  saveBlobFile(file);
 }
 
 export function createSessionBackupExport({ dialog, download = exportSession,

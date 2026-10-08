@@ -1,9 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { createSessionBackupExport } from "../app/web/js/features/sessions/session-backup-export.js";
+import { createSessionBackupExport, saveBackupFile } from "../app/web/js/features/sessions/session-backup-export.js";
+import { ANDROID_EXPORT_MAX_BYTES } from "../app/web/js/utils/file-download.js";
 import { ApiError } from "../app/web/js/api/client.js";
 
-function setup() {
+function setup({ save } = {}) {
   const nodes = {}, closed = [], calls = [], saved = [], notices = [];
   let focused = "";
   for (const name of ["title", "scope", "status", "error", "cancel", "close", "retry", "progress"]) {
@@ -21,13 +22,31 @@ function setup() {
   globalThis.document = { activeElement: opener };
   const view = createSessionBackupExport({ dialog, download(session, options) {
     return new Promise((resolve, reject) => calls.push({ session, options, resolve, reject }));
-  }, save(file) { saved.push(file); }, notify(message) { notices.push(message); } });
+  }, save: save ?? ((file) => { saved.push(file); }), notify(message) { notices.push(message); } });
   return { view, dialog, nodes, calls, saved, notices, focus: () => focused,
     closeEvents() { while (closed.length) closed.shift()(); },
     finish() { view.destroy(); globalThis.document = previous; } };
 }
 const session = { project_id: "p", id: "a", title: "Original" };
 const tick = async () => { await Promise.resolve(); await Promise.resolve(); };
+
+test("an Android limit refusal preserves the dialog and session without a success notice", async () => {
+  const previous = globalThis.XsExport;
+  globalThis.XsExport = { save() { assert.fail("An oversized export must never enter the native bridge"); } };
+  const ctx = setup({ save: saveBackupFile });
+  try {
+    ctx.view.open(session);
+    ctx.calls[0].resolve({ filename: "large.json", blob: { size: ANDROID_EXPORT_MAX_BYTES + 1 } });
+    await tick();
+    assert.equal(ctx.dialog.open, true); assert.equal(ctx.nodes.error.hidden, false);
+    assert.match(ctx.nodes.error.textContent, /8 MiB/); assert.match(ctx.nodes.error.textContent, /仍保留/);
+    assert.equal(ctx.nodes.retry.hidden, false); assert.equal(ctx.notices.length, 0);
+    assert.equal(ctx.focus(), "error"); assert.equal(ctx.calls.length, 1);
+    assert.equal(ctx.calls[0].session.id, session.id);
+  } finally { ctx.finish();
+    if (previous === undefined) delete globalThis.XsExport; else globalThis.XsExport = previous;
+  }
+});
 
 test("duplicate actions and caller mutations cannot switch an active export owner", async () => {
   const ctx = setup(), owner = { ...session };

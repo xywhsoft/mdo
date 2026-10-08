@@ -7,6 +7,7 @@ import { loadResource } from "../../state/resources.js";
 import { makeStorePackage, STORE_KINDS, STORE_PLATFORMS, containsCode, resourceReferences, receiptKey, packageFields } from "./store-formats.js";
 import { createStoreDraft } from "./store-draft.js";
 import { renderSourceMarkdown } from "../../utils/source-markdown.js";
+import { saveBlobFile } from "../../utils/file-download.js";
 
 const text = (key, fallback, args = {}) => t(`store.${key}`, args, fallback);
 const kindName = kind => ({ agents: "Agent", subagents: "SubAgent", tools: text("tools", "工具"),
@@ -256,8 +257,9 @@ export function createStorePanel() {
       });
       const exportButton = button(text("export", "导出插件包"), async () => {
         exportButton.disabled = true;
-        try { if (!form.reportValidity()) return;const p = await build();const url = URL.createObjectURL(new Blob([JSON.stringify(p, null, 2)], { type: "application/json" }));
-          const a = element("a", { attrs: { href: url, download: `${p.manifest.slug}-${p.manifest.version}.mdo-extension.json` } });a.click();setTimeout(() => URL.revokeObjectURL(url), 1000);
+        try { if (!form.reportValidity()) return;const p = await build();
+          saveBlobFile({ blob: new Blob([JSON.stringify(p, null, 2)], { type: "application/json" }),
+            filename: `${p.manifest.slug}-${p.manifest.version}.mdo-extension.json` });
         } catch (e) { message.textContent = publicationMessage(e); }finally { exportButton.disabled = false; }
       });
       const submit = element("button", { text: text("submit", "提交审核"), className: "primary-button", attrs: { type: "submit" } });

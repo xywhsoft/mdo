@@ -1,0 +1,37 @@
+{
+  "date": "2026-10-08",
+  "kind": "real browser, simulated Android bridge",
+  "dialogOpen": true,
+  "finalLocale": "ru-RU",
+  "focusedError": true,
+  "original": "原会话内容：输入、回复和未发送草稿仍保留。",
+  "record": {
+    "bridgeClicks": [
+      {
+        "bytes": 13,
+        "connected": true,
+        "filename": "技能包.mdo-extension.json",
+        "text": "mdo export QA"
+      }
+    ],
+    "exportRequests": [
+      "original-session",
+      "original-session",
+      "original-session"
+    ],
+    "successNotices": []
+  },
+  "verifiedLocales": [
+    "zh-CN",
+    "en-US",
+    "ru-RU"
+  ],
+  "consoleErrors": [],
+  "nodeChecks": 26,
+  "frontendContractChecks": 20,
+  "limitations": [
+    "No real Android file picker or saved-file verification",
+    "Oversized fixture supplies size metadata instead of allocating a large file",
+    "No new packaged executable or APK built in this stage"
+  ]
+}

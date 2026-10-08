@@ -7,6 +7,7 @@ import { loadAgents } from "../../state/catalogs.js";
 import { refreshMcp, disconnectMcp, reloadCatalog } from "../../state/resources.js";
 import { EXTENSION_KINDS, portableId, promptFields, editPrompt, newMcp, prepareMcpCredentials, mcpImportDocuments, bytesToBase64 } from "./extension-formats.js";
 import { resourceOwner, receiptKey } from "./store-formats.js";
+import { saveBlobFile } from "../../utils/file-download.js";
 
 const label = (key, fallback, args = {}) => t(`ecosystem.${key}`, args, fallback);
 const title = kind => ({ agents: "Agent", tools: label("toolTitle", "工具"), subagents: "SubAgent", skills: "Skill", mcp: "MCP", commands: label("commands", "命令") })[kind];
@@ -21,9 +22,7 @@ function button(text, handler, primary = false) {
   node.addEventListener("click", () => { void handler(); }); return node;
 }
 function download(name, value) {
-  const url = URL.createObjectURL(new Blob([value], { type: "application/octet-stream" }));
-  const link = element("a", { attrs: { href: url, download: name } });
-  document.body.append(link); link.click(); link.remove(); window.setTimeout(() => URL.revokeObjectURL(url), 30000);
+  saveBlobFile({ blob: new Blob([value], { type: "application/octet-stream" }), filename: name });
 }
 function inputField(form, name, text, value = "", { area = false, type = "text", hint = "" } = {}) {
   const control = element(area ? "textarea" : "input", { attrs: { name, type: area ? null : type,

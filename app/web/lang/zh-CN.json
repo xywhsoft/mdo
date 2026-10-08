@@ -1364,6 +1364,7 @@
   "error.backupDownloadChecksum": "备份校验和不一致，没有生成下载文件，请重新导出。",
   "error.backupDownloadTimeout": "备份整理或下载超时，没有生成下载文件，请稍后重试。",
   "error.backupDownloadFailed": "备份下载失败，原会话仍保留，请稍后重试。",
+  "error.exportPlatformLimit": "此文件超过安卓版 8 MiB 的导出上限。原内容仍保留，请在桌面或浏览器中导出。",
   "action.importJson": "导入会话备份",
   "backupImport.title": "导入会话备份",
   "backupImport.scope": "选择完整 JSON 备份，先校验内容，再确认目标工作区。最多 96 MiB。",

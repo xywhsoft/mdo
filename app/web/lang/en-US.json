@@ -1364,6 +1364,7 @@
   "error.backupDownloadChecksum": "The backup checksum does not match. No download was created. Retry the export.",
   "error.backupDownloadTimeout": "Preparing or downloading the backup timed out. No download was created. Try again later.",
   "error.backupDownloadFailed": "The backup download failed. The original session is preserved. Try again later.",
+  "error.exportPlatformLimit": "This file exceeds the Android app's 8 MiB export limit. Your content is preserved; export it from a desktop or browser.",
   "action.importJson": "Import session backup",
   "backupImport.title": "Import session backup",
   "backupImport.scope": "Choose a complete JSON backup, inspect its content, then confirm the destination workspace. Maximum 96 MiB.",

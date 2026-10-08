@@ -100,6 +100,7 @@ const API_ERROR_COPY = Object.freeze({
   backup_download_checksum: ["error.backupDownloadChecksum", "备份校验和不一致，没有生成下载文件，请重新导出。"],
   backup_download_timeout: ["error.backupDownloadTimeout", "备份整理或下载超时，没有生成下载文件，请稍后重试。"],
   backup_download_failed: ["error.backupDownloadFailed", "备份下载失败，原会话仍保留，请稍后重试。"],
+  export_platform_limit: ["error.exportPlatformLimit", "此文件超过安卓版 8 MiB 的导出上限。原内容仍保留，请在桌面或浏览器中导出。"],
   backup_upload_invalid: ["error.backupUploadInvalid", "备份上传信息或分段格式无效，请重新选择原始备份文件。"],
   backup_upload_limit: ["error.backupUploadLimit", "备份文件最多 96 MiB，每个上传分段最多 256 KiB。"],
   backup_upload_busy: ["error.backupUploadBusy", "另一个备份正在上传或校验，请结束后重试。"],

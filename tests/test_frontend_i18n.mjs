@@ -46,6 +46,7 @@ const localizedApiErrors = [
   ["backup_download_checksum", "error.backupDownloadChecksum"],
   ["backup_download_timeout", "error.backupDownloadTimeout"],
   ["backup_download_failed", "error.backupDownloadFailed"],
+  ["export_platform_limit", "error.exportPlatformLimit"],
   ["backup_upload_invalid", "error.backupUploadInvalid"],
   ["backup_upload_limit", "error.backupUploadLimit"],
   ["backup_upload_busy", "error.backupUploadBusy"],
