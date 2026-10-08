@@ -217,7 +217,7 @@ static bool MdoDistInstall(cstr Id)
         char RevisionKey[32]; snprintf(RevisionKey,sizeof(RevisionKey),"%s_revision",Id);
         MdoDistRetire(Active,Id);
         xrtValueObjectSetNew(Active,xrtStrView(RevisionKey),xrtValueUInt(MdoDistNumber(Package,"revision")));
-        MdoDistSet(Active,Id,Target);MdoDistProgress(0,1,"probing"); xvalue* Tools=MdoDistDetect(Active); size_t Required=!strcmp(Id,"core")?6:1,Found=0;
+        MdoDistSet(Active,Id,Target);MdoDistProgress(0,1,"probing"); xvalue* Tools=MdoDistDetect(Active); size_t Required=!strcmp(Id,"core")?(!strncmp(MdoToolPlatform(),"linux-",6)?9:6):1,Found=0;
         for(size_t i=0;i<xrtValueCount(Tools);i++)if((!strcmp(Id,"python"))==(!strcmp(MdoDistText(xrtValueArrayGet(Tools,i),"id"),"python")))Found++;
         xrtValueObjectSetNew(Active,XRT_STR_LITERAL("capability_revision"),xrtValueUInt(MdoDistNumber(Active,"capability_revision")+1));
         Ok=Found>=Required && !xrtCancelRequested(g_MdoDistribution.Operation) && MdoDistSave("data/toolpacks/active.json",Active);
