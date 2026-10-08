@@ -1,0 +1,199 @@
+{
+  "candidate": {
+    "path": ".build/conversation-acceptance/mdo-recovery-ack-final.exe",
+    "bytes": 4394410,
+    "sha256": "ce25b72df7ffb41e91e75bd9816265bc4e90db2f95b351694dbaee929af9969b"
+  },
+  "account_runtime": {
+    "passed": true,
+    "scope": "Isolated real xadmin/native application, not the online account database.",
+    "checks": [
+      "password login",
+      "browser PKCE exchange and callback validation",
+      "remembered encrypted persistence and temporary login",
+      "restart and renewal",
+      "failed account-switch preservation",
+      "successful switch and lease cancellation",
+      "logout and independent browser session",
+      "search login gating"
+    ]
+  },
+  "account_display": {
+    "passed": true,
+    "node_test_files": [
+      "test_account_allowance.mjs",
+      "test_account_balance.mjs"
+    ],
+    "tests": 2,
+    "checks": [
+      "weighted shared token pool",
+      "VIP expiry and unlimited model quota",
+      "stale quota values",
+      "cash and credit reservations",
+      "CNY formatting and unavailable balance"
+    ]
+  },
+  "http_mcp": {
+    "endpoint": "https://mcp.deepwiki.com/mcp",
+    "protocol": "2025-11-25",
+    "public_repository": "modelcontextprotocol/python-sdk",
+    "probe": {
+      "operation": {
+        "id": "op-35c70f14aa03a583cb4ee1cc",
+        "sequence": 1,
+        "kind": "mcp_refresh",
+        "state": "succeeded",
+        "created_at": 1791432389221838,
+        "started_at": 1791432389221863,
+        "ended_at": 1791432390914044,
+        "terminal": true,
+        "cancel_requested": false,
+        "target": "deepwiki",
+        "message": "MCP server connected and tool discovery completed",
+        "result": {
+          "catalog_generation": 2,
+          "schema_generation": 1,
+          "discovered_tools": 3,
+          "requests_completed": 2,
+          "server_state": "ready",
+          "enabled": true,
+          "connected": true,
+          "tools_discovered": true
+        }
+      },
+      "server": {
+        "id": "deepwiki",
+        "valid": true,
+        "error": "",
+        "connected": true,
+        "tool_count": 3
+      },
+      "scope": "initialize and tools/list at a documented public endpoint; no user workspace, credentials or model requests sent"
+    },
+    "model_calls": 4,
+    "tool_calls": [
+      {
+        "name": "tool_search",
+        "success": true,
+        "result_characters": 133,
+        "result_sha256": "ed92b9aa66bfc62352a73371c1583b70dbc47040958ac56e5e3107c9a9109b8e"
+      },
+      {
+        "name": "tool_load",
+        "success": true,
+        "result_characters": 270,
+        "result_sha256": "4c60c49767b3e2cc445c2e13d81e3e2eda8e7100208d2d98da70f6b682cd57ad"
+      },
+      {
+        "name": "mcp__deepwiki__read_wiki_structure",
+        "success": true,
+        "result_characters": 3775,
+        "result_sha256": "d215d9dc6b9255509393bbf26f332a58d08548f64f2d7711d1338ba568a27249"
+      }
+    ],
+    "final_model_errors": 0,
+    "console_errors": 0,
+    "requests": [
+      {
+        "step": 1,
+        "tool_names": [
+          "skill",
+          "mdo.todo",
+          "read",
+          "ls",
+          "glob",
+          "grep",
+          "write",
+          "edit",
+          "spawn",
+          "poll",
+          "wait",
+          "stdin",
+          "stop",
+          "exec",
+          "tool_search",
+          "tool_load",
+          "ask_user"
+        ],
+        "tool_results": 0,
+        "user_messages": 1
+      },
+      {
+        "step": 2,
+        "tool_names": [
+          "skill",
+          "mdo.todo",
+          "read",
+          "ls",
+          "glob",
+          "grep",
+          "write",
+          "edit",
+          "spawn",
+          "poll",
+          "wait",
+          "stdin",
+          "stop",
+          "exec",
+          "tool_search",
+          "tool_load",
+          "ask_user"
+        ],
+        "tool_results": 1,
+        "user_messages": 1
+      },
+      {
+        "step": 3,
+        "tool_names": [
+          "skill",
+          "mdo.todo",
+          "read",
+          "ls",
+          "glob",
+          "grep",
+          "write",
+          "edit",
+          "spawn",
+          "poll",
+          "wait",
+          "stdin",
+          "stop",
+          "exec",
+          "tool_search",
+          "tool_load",
+          "ask_user",
+          "mcp__deepwiki__read_wiki_structure"
+        ],
+        "tool_results": 2,
+        "user_messages": 1
+      },
+      {
+        "step": 4,
+        "tool_names": [
+          "skill",
+          "mdo.todo",
+          "read",
+          "ls",
+          "glob",
+          "grep",
+          "write",
+          "edit",
+          "spawn",
+          "poll",
+          "wait",
+          "stdin",
+          "stop",
+          "exec",
+          "tool_search",
+          "tool_load",
+          "ask_user",
+          "mcp__deepwiki__read_wiki_structure"
+        ],
+        "tool_results": 3,
+        "user_messages": 1
+      }
+    ],
+    "approval": "Three normal one-shot approvals in balanced mode. No permanent grants."
+  },
+  "scope": "Model calls and private state stayed in loopback fixtures. The external MCP received protocol metadata and one static public repository name. No credentials or user workspace contents, paid models, stress tests, phone install or public deployment."
+}
