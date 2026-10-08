@@ -1,6 +1,6 @@
 """Full packed page, real WebSocket and tasks, with bounded read failures.
 
-The failure seam only returns 503 from task-list reads after an armed stop.
+The failure seam only returns 503 from the chosen reads after an armed stop.
 The ordinary model and spawn tool create the task; nothing fabricates state.
 Create the printed stop file to clean up, or restart file to reboot once.
 """
@@ -30,29 +30,32 @@ static bool TaskReadProbe(XS_HttpReq* Request)
     xstrview Target = Request->head->Target;
     const char* Arm = "/api/v1/qa-task-arm";
     const char* Proof = "/api/v1/qa-task-proof";
+    const char* Release = "/api/v1/qa-task-release";
     bool IsGet = Request->head->MethodCode == XHTTP_METHOD_GET;
     bool IsArm = IsGet && Target.Size == strlen(Arm) && memcmp(Target.Data, Arm, Target.Size) == 0;
     bool IsProof = IsGet && Target.Size == strlen(Proof) && memcmp(Target.Data, Proof, Target.Size) == 0;
-    bool IsList = IsGet && Target.Size == 13u && memcmp(Target.Data, "/api/v1/tasks", 13u) == 0;
+    bool IsRelease = IsGet && Target.Size == strlen(Release) && memcmp(Target.Data, Release, Target.Size) == 0;
+    bool IsRead = IsGet && Target.Size == strlen(QA_READ_PATH) &&
+        memcmp(Target.Data, QA_READ_PATH, Target.Size) == 0;
     bool IsStop = Request->head->MethodCode == XHTTP_METHOD_DELETE && Target.Size > 14u &&
         memcmp(Target.Data, "/api/v1/tasks/", 14u) == 0;
     bool Fail = false;
     xrtMutexLock(g_TaskReadProbeLock);
     if (IsArm) g_TaskReadProbeArm = 1u;
+    if (IsRelease) g_TaskReadProbeLeft = 0u;
     if (IsStop) ++g_TaskReadProbeStops;
     if (IsStop && g_TaskReadProbeArm) {
         g_TaskReadProbeArm = 0u; g_TaskReadProbeLeft = QA_READ_FAILURES;
     }
-    if (IsList && g_TaskReadProbeLeft) {
+    if (IsRead && g_TaskReadProbeLeft) {
         --g_TaskReadProbeLeft; ++g_TaskReadProbeFailures; Fail = true;
     }
     unsigned Left = g_TaskReadProbeLeft, Failures = g_TaskReadProbeFailures, Stops = g_TaskReadProbeStops;
     xrtMutexUnlock(g_TaskReadProbeLock);
-    if (!IsArm && !IsProof && !Fail) return false;
+    if (!IsArm && !IsProof && !IsRelease && !Fail) return false;
     MdoApiContext Context = {0}; Context.Request = Request;
     MdoApiRequestId(Context.RequestId);
-    if (Fail) MdoApiReplyError(&Context, 503u, "tasks_unavailable",
-        "Task list refresh temporarily unavailable", NULL);
+    if (Fail) MdoApiReplyError(&Context, 503u, QA_READ_CODE, QA_READ_MESSAGE, NULL);
     else {
         xvalue* Data = xrtValueObject();
         MdoApiValueSetUInt(Data, "remaining", Left);
@@ -95,7 +98,7 @@ class Model(BaseHTTPRequestHandler):
         self.wfile.write(raw)
 
 
-def fixture(base: Path, host: Path, failures: int) -> Path:
+def fixture(base: Path, host: Path, failures: int, read_target: str) -> Path:
     app = base / "app"
     shutil.copytree(ROOT / "app", app)
     service = app / "src/bootstrap/service.c"
@@ -105,7 +108,13 @@ def fixture(base: Path, host: Path, failures: int) -> Path:
     unit = "    MdoRemoteUnit();\n"
     route = "    return MdoApiRequest(pRequest);\n"
     assert all(text.count(marker) == 1 for marker in (declaration, init, unit, route))
-    text = text.replace(declaration, SEAM.replace("QA_READ_FAILURES", str(failures) + "u") + declaration)
+    paths = {"list": ("/api/v1/tasks", "tasks_unavailable", "Task list refresh temporarily unavailable"),
+        "questions": ("/api/v1/tasks/1/asks", "asks_unavailable", "Task questions could not be read")}
+    path, code, message = paths[read_target]
+    seam = SEAM.replace("QA_READ_FAILURES", str(failures) + "u")
+    for marker, value in (("QA_READ_PATH", path), ("QA_READ_CODE", code), ("QA_READ_MESSAGE", message)):
+        seam = seam.replace(marker, json.dumps(value))
+    text = text.replace(declaration, seam + declaration)
     text = text.replace(init, init + "    g_TaskReadProbeLock = xrtMutexCreate();\n")
     text = text.replace(unit, unit + "    xrtMutexDestroy(g_TaskReadProbeLock);\n")
     text = text.replace(route, "    if (TaskReadProbe(pRequest)) return XS_OK;\n" + route)
@@ -120,12 +129,13 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--host", type=Path, required=True)
     parser.add_argument("--directory", type=Path, required=True)
-    parser.add_argument("--failures", type=int, choices=(2, 6), default=2)
+    parser.add_argument("--failures", type=int, choices=(2, 6, 12), default=2)
+    parser.add_argument("--read-target", choices=("list", "questions"), default="list")
     args = parser.parse_args()
     base = args.directory.resolve()
     assert not base.exists(), "Choose a fresh isolated fixture directory"
     base.mkdir(parents=True)
-    packed = fixture(base, args.host.resolve(), args.failures)
+    packed = fixture(base, args.host.resolve(), args.failures, args.read_target)
     native, port = site(base, "native", packed)
     model = ThreadingHTTPServer(("127.0.0.1", 0), Model)
     worker = threading.Thread(target=model.serve_forever, daemon=True)
@@ -169,6 +179,7 @@ def main():
                 print("restarted=1", flush=True)
             time.sleep(.1)
         proof = {"calls": dict(Model.calls), "restarted": restarted,
+            "read_target": args.read_target, "faults": call("GET", "/api/v1/qa-task-proof"),
             "final_errors": sum(e["kind"] == "error" for path in sessions for e in session_events(port, path)),
             "tasks": call("GET", "/api/v1/tasks")["items"]}
         (base / "proof.json").write_text(json.dumps(proof, indent=2), encoding="utf-8")

@@ -1,0 +1,10 @@
+{
+  "status": "error",
+  "retainedDetail": false,
+  "editorPresent": false,
+  "answerDraft": null,
+  "errors": [
+    "该后台任务已不在当前服务中，请刷新任务列表。"
+  ],
+  "writes": 0
+}

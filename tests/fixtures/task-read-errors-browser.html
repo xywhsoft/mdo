@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="zh-CN">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>mdo task read error interaction probe</title>
+<link rel="stylesheet" href="/app/web/css/app.css">
+<style>body { padding: 20px; overflow: auto; } #result { white-space: pre-wrap; }</style>
+<button id="denied">拒绝读取</button>
+<button id="missing">任务已不存在</button>
+<button id="restore">恢复读取</button>
+<button id="observe">检查当前状态</button>
+<button id="cold-list">首次载入列表</button>
+<button id="release-list">完成列表载入</button>
+<pre id="result"></pre>
+<section class="tasks-dialog-body">
+  <div id="task-list"></div><div id="task-detail"></div>
+</section>
+<script type="module">
+import { loadLocale } from "/app/web/js/i18n.js";
+import { createTaskPanel } from "/app/web/js/features/tasks/task-panel.js";
+import { tasksStore, taskDetailStore, artifactPreviewStore, loadTasks,
+  selectTask, refreshSelectedTask } from "/app/web/js/state/tasks.js";
+const originalFetch = window.fetch.bind(window);
+const task = { id: 1, state: "running", terminal: false, kind: "scheduled",
+  pending_questions: 1, label: "回答中的后台任务" };
+let refusal = null;
+let writes = 0;
+let holdList = false, releaseList;
+const reply = data => Response.json({ ok: true, data });
+window.fetch = async (path, options = {}) => {
+  if (String(path).startsWith("/lang/")) return originalFetch("/app/web" + path, options);
+  if (options.method !== "GET") { ++writes; throw new Error("Unexpected fixture write"); }
+  if (path === "/api/v1/tasks") {
+    if (holdList) await new Promise((resolve, reject) => {
+      releaseList = resolve;
+      options.signal?.addEventListener("abort", () => reject(new DOMException("cancelled", "AbortError")), { once: true });
+    });
+    return reply({ items: [task], total: 1 });
+  }
+  if (path === "/api/v1/tasks/1") return refusal ? Response.json({ ok: false,
+    error: refusal.error }, { status: refusal.status }) : reply(task);
+  if (path === "/api/v1/tasks/1/asks") return reply({ items: [{ id: 11,
+    question: "请选择下一步", options: ["继续", "暂停"] }], total: 1 });
+  if (path === "/api/v1/artifacts") return reply({ items: [] });
+  if (String(path).startsWith("/api/v1/tasks/1/output?")) {
+    const empty = { data: "", start: 0, next: 0, dropped: false };
+    return reply({ complete: false, stdout: { ...empty, data: btoa("saved output"), next: 12 },
+      stderr: empty, result: empty });
+  }
+  throw new Error(`Unexpected fixture read: ${path}`);
+};
+function observe() {
+  const editor = document.querySelector(".ask-dock-input");
+  document.querySelector("#result").textContent = JSON.stringify({
+    status: taskDetailStore.get().status,
+    retainedDetail: Boolean(taskDetailStore.get().data),
+    editorPresent: Boolean(editor), answerDraft: editor?.value ?? null,
+    errors: [...document.querySelectorAll("#task-detail .resource-error")].map(node => node.textContent),
+    writes,
+    list: document.querySelector("#task-list").textContent,
+  }, null, 2);
+}
+await loadLocale("zh-CN");
+createTaskPanel({ container: document.querySelector("#task-list"),
+  detailContainer: document.querySelector("#task-detail"),
+  store: tasksStore, detailStore: taskDetailStore, previewStore: artifactPreviewStore });
+await loadTasks(); await selectTask(1); observe();
+for (const [id, status, code, message] of [
+  ["denied", 403, "permission_denied", "Task detail access denied"],
+  ["missing", 404, "task_not_found", "The requested task does not exist"],
+]) document.querySelector("#" + id).addEventListener("click", async () => {
+  refusal = { status, error: { code, message } };
+  await refreshSelectedTask(); observe();
+});
+document.querySelector("#restore").addEventListener("click", async () => {
+  refusal = null; await refreshSelectedTask(); observe();
+});
+document.querySelector("#observe").addEventListener("click", observe);
+document.querySelector("#cold-list").addEventListener("click", () => {
+  holdList = true; tasksStore.reset(); void loadTasks().then(observe); observe();
+});
+document.querySelector("#release-list").addEventListener("click", () => {
+  holdList = false; releaseList?.();
+});
+</script>
+</html>

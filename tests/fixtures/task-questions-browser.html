@@ -32,6 +32,7 @@ let acknowledge, failDetail = false;
 const reply = (data) => Response.json({ ok: true, data });
 window.fetch = async (input, options = {}) => {
   const path = String(input);
+  if (path.startsWith("/lang/")) return originalFetch("/app/web" + path, options);
   if (path === "/api/v1/tasks") return reply({ total: 2, items: [...tasks.values()] });
   if (path === "/api/v1/artifacts") return reply({ items: [] });
   const match = path.match(/^\/api\/v1\/tasks\/(\d+)(.*)$/);
@@ -100,14 +101,14 @@ try {
   await until(() => Boolean(acknowledge));
   checks.repeatGuard = replies.length === 1 && answering.readOnly && document.activeElement === answering;
   acknowledge();
-  await until(() => taskDetailStore.get().status === "error");
+  await until(() => taskDetailStore.get().status === "refreshing" && answering.readOnly);
   checks.acceptedRefreshFailure = input() === answering && answering.readOnly &&
-    document.querySelector(".ask-dock-validation").textContent.includes("已提交");
+    document.querySelector(".ask-dock-validation").textContent.includes("已提交") &&
+    !document.querySelector("#task-detail .resource-error");
   submit().click(); await tick();
   checks.noResubmit = replies.length === 1;
-  document.querySelector('[data-task-focus="retry"]').click();
   await until(() => taskDetailStore.get().status === "ready");
-  checks.retryReconciles = !input() &&
+  checks.recoveryReconciles = !input() &&
     document.activeElement?.dataset.taskFocus === "back";
   await selectTask(2);
   checks.otherDraftKept = input().value === "第二项草稿";

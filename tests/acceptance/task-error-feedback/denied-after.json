@@ -1,0 +1,10 @@
+{
+  "status": "error",
+  "retainedDetail": false,
+  "editorPresent": false,
+  "answerDraft": null,
+  "errors": [
+    "当前连接无权执行此操作，请检查连接权限。"
+  ],
+  "writes": 0
+}

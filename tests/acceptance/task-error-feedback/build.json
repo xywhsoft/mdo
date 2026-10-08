@@ -1,0 +1,27 @@
+{
+  "source_base": "206d3d2",
+  "candidate": "D:\\GIT\\mdo\\.build\\conversation-acceptance\\mdo-task-errors-final.exe",
+  "bytes": 4442107,
+  "sha256": "7041e308648696cb320cae53ff1f4f4c4dd33915832f96e66ba1c871fe6d9930",
+  "xs_revision": "0b7e041b16f06bf1cd07833bb008c53bc19351ad",
+  "host_profile": "2829d871dac1a12a70503f9b6116adaa2aa9556a53ea139df60aaa81cbb7a19b",
+  "host_reused": true,
+  "native_sources_changed": false,
+  "unrelated_worktree_changes_included": false,
+  "packed_files_verified": {
+    "js/state/store.js": "6e5eb8ffd128fd4a239bd8c4d433c9f5baa26410361732382bb76c3c58cc0d49",
+    "js/state/tasks.js": "96e350e4654063772b5e4813e8fa22111b63b5bc96a6d3568fbea82b2c275465",
+    "js/utils/dom.js": "a7b3a57ff9053841a99476b05b136d1faf6d539565566ce0154140a19b890058",
+    "js/features/tasks/task-panel.js": "ab02d6f54625c1b70c1bf7f2ea6019cb740fb541f09cce26b64de1443c40badc",
+    "js/features/tasks/read-errors.js": "851f3a5913f99acd2f5fc26e5893d2ee4e1b31659814a71cef17020cd841e374",
+    "lang/zh-CN.json": "88253a58b7320bf3cc54fc1a957cb1d056eb3eb484c0e78d2d866c8f895526b6",
+    "lang/en-US.json": "2c1d922690ffd8a7d9c1d69f6d3dcf8217ab1bb79128afce9ec56fe01b515df1",
+    "lang/ru-RU.json": "ee42d99519e558fbac584eea5b1aa33a57b29af325cb1f54126856fcb9d67a5a"
+  },
+  "node_passed": 56,
+  "question_component_checks": 11,
+  "focused_frontend_contract_passed": 3,
+  "android_device_tested": false,
+  "daily_installation_replaced": false,
+  "website_release_updated": false
+}

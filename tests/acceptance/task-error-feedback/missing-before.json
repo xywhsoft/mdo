@@ -1,0 +1,10 @@
+{
+  "status": "error",
+  "retainedDetail": true,
+  "editorPresent": true,
+  "answerDraft": "保留未提交的回答",
+  "errors": [
+    "The requested task does not exist"
+  ],
+  "writes": 0
+}

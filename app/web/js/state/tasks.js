@@ -10,7 +10,9 @@ const OUTPUT_RETAINED_BYTES = 256 * 1024;
 const ARTIFACT_PREVIEW_BYTES = 64 * 1024;
 const STREAM_NAMES = Object.freeze(["stdout", "stderr", "result"]);
 
-const readOptions = { recoverRead: isTransientReadError };
+// Temporary reads keep known progress; a permanent refusal or missing task
+// must not leave its old questions/output usable during a later retry.
+const readOptions = { recoverRead: isTransientReadError, retainDataOnError: isTransientReadError };
 export const tasksStore = createResourceStore({ total: 0, items: [] }, readOptions);
 export const taskDetailStore = createResourceStore(null, readOptions);
 export const artifactPreviewStore = createResourceStore();

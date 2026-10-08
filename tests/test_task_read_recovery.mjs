@@ -84,12 +84,44 @@ test("clearing the selected task cancels its queued read recovery", async () => 
 test("permanent task read refusal stays precise and has no automatic retry", async () => {
   const original = globalThis.fetch;
   let reads = 0;
+  tasksStore.setData({ total: 1, items: [{ id: 9, state: "running" }] });
   globalThis.fetch = async () => { ++reads; return Response.json({ ok: false, error: {
     code: "permission_denied", message: "Task access denied" } }, { status: 403 }); };
   try {
     const result = await loadTasks();
     assert.equal(result.status, "error"); assert.equal(result.error.code, "permission_denied");
+    assert.deepEqual(result.data.items, [], "denied reads must not retain a usable task snapshot");
+    assert.equal(result.updatedAt, 0, "the discarded snapshot must not appear freshly read");
     await new Promise(resolve => setTimeout(resolve, 650));
     assert.equal(reads, 1);
   } finally { tasksStore.reset(); globalThis.fetch = original; }
+});
+
+test("an unreadable detail loses stale questions until a fresh read succeeds", async () => {
+  const original = globalThis.fetch, originalWindow = globalThis.window;
+  globalThis.window = { atob: globalThis.atob };
+  let refusal = 0, release;
+  globalThis.fetch = async path => {
+    if (path === "/api/v1/tasks/9" && refusal) {
+      if (refusal === 1) return Response.json({ ok: false,
+        error: { code: "permission_denied", message: "denied" } }, { status: 403 });
+      await new Promise(resolve => { release = resolve; });
+    }
+    return Response.json({ ok: true, data: path.includes("/output?")
+      ? { stdout: empty, stderr: empty, result: empty }
+      : path.endsWith("/asks") ? { items: [{ id: 11, question: "Continue?" }] }
+      : path.endsWith("/artifacts") ? { items: [] }
+      : { id: 9, state: "running", pending_questions: 1 } });
+  };
+  try {
+    await selectTask(9); assert.equal(taskDetailStore.get().data.asks.items.length, 1);
+    refusal = 1; const denied = await refreshSelectedTask();
+    assert.equal(denied.status, "error"); assert.equal(denied.data, null);
+    refusal = 2; const retry = refreshSelectedTask();
+    assert.equal(taskDetailStore.get().status, "loading");
+    assert.equal(taskDetailStore.get().data, null, "retry must not restore a denied snapshot before confirmation");
+    release(); await retry;
+    assert.equal(taskDetailStore.get().status, "ready");
+    assert.equal(taskDetailStore.get().data.asks.items.length, 1);
+  } finally { clearSelectedTask(); globalThis.fetch = original; globalThis.window = originalWindow; }
 });

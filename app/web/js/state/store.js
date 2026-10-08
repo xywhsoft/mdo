@@ -3,6 +3,7 @@
 // Ordinary stores, including settings operations that can write, never retry.
 export function createResourceStore(initialData = null, {
   recoverRead = null, now = Date.now, random = Math.random,
+  retainDataOnError = null,
   setTimer = setTimeout, clearTimer = clearTimeout,
   pageEvents = globalThis.window,
 } = {}) {
@@ -84,7 +85,10 @@ export function createResourceStore(initialData = null, {
           return state;
         }
       }
-      return publish({ status: "error", error });
+      const discard = retainDataOnError?.(error) === false;
+      return publish({ status: "error", error,
+        data: discard ? initialData : state.data,
+        updatedAt: discard ? 0 : state.updatedAt });
     } finally {
       clearTimer(timer);
       // A parallel read may fail before its siblings settle. Abort only this

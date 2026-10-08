@@ -7,6 +7,7 @@ import { subscribeLocale, t } from "../../i18n.js";
 import { taskOwnerLocation } from "./task-owner.js";
 import { createTaskQuestions } from "./task-questions.js";
 import { isTransientReadError } from "../../api/read-recovery.js";
+import { taskReadErrorMessage } from "./read-errors.js";
 
 const ACTIVE_STATES = new Set(["pending", "running"]);
 const STATE_LABELS = Object.freeze({
@@ -194,7 +195,7 @@ export function createTaskPanel({ container, detailContainer, store, detailStore
     const snapshot = detailState.data?.id === selected ? detailState.data : null;
     questions.sync(selected, snapshot && ACTIVE_STATES.has(snapshot.detail.state)
       && !stopping(snapshot.detail) ? snapshot.asks?.items ?? [] : [],
-      detailState.status === "ready" || !selected);
+      detailState.status === "ready" || !selected || detailState.error?.code === "task_not_found");
     if (!selected) {
       if (view.focus && priorTaskId) container.querySelector(
         `[data-task-focus="open/${priorTaskId}"]`)?.focus({ preventScroll: true });
@@ -213,7 +214,7 @@ export function createTaskPanel({ container, detailContainer, store, detailStore
           type: "button", "data-task-focus": "back" } });
       close.addEventListener("click", closeDetail);
       detailHeader.append(element("div", { className: "task-detail-actions" }, [close, retry]));
-      detailBody.append(element("div", { className: "resource-error", text: errorMessage(detailState.error) }));
+      detailBody.append(element("div", { className: "resource-error", text: taskReadErrorMessage(detailState.error) }));
       restoreView(detailContainer, view, retry);
       return;
     }
@@ -304,21 +305,22 @@ export function createTaskPanel({ container, detailContainer, store, detailStore
     const items = [...(listState.data?.items ?? [])].reverse();
     clear(container);
     if (listState.status === "error") {
-      if (items.length && isTransientReadError(listState.error)) {
-        const retry = element("button", { className: "task-detail-close",
-          text: t("task.detail.retry", {}, "重试读取"), attrs: {
-            type: "button", "data-task-focus": "retry-list" } });
-        retry.addEventListener("click", () => void loadTasks());
-        container.append(lastKnownNotice(), retry);
-      }
-      else {
-        container.append(element("div", { className: "resource-error", text: errorMessage(listState.error) }));
+      const retained = items.length && isTransientReadError(listState.error);
+      const retry = element("button", { className: "task-detail-close",
+        text: t("task.detail.retry", {}, "重试读取"), attrs: {
+          type: "button", "data-task-focus": "retry-list" } });
+      retry.addEventListener("click", () => void loadTasks());
+      container.append(retained ? lastKnownNotice() : element("div", {
+        className: "resource-error", text: taskReadErrorMessage(listState.error) }), retry);
+      if (!retained) {
         restoreView(container, view, document.querySelector("#tasks-title"));
         return;
       }
     }
     if (!items.length) {
-      container.append(element("div", { className: "empty-state", text: listState.status === "loading"
+      const loading = listState.status === "loading" ||
+        (listState.status === "refreshing" && !listState.updatedAt);
+      container.append(element("div", { className: "empty-state", text: loading
         ? t("task.list.loading", {}, "正在载入任务…")
         : t("task.list.empty", {}, "暂无后台任务") }));
       restoreView(container, view, document.querySelector("#tasks-title"));

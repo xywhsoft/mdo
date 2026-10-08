@@ -1,0 +1,10 @@
+{
+  "status": "error",
+  "retainedDetail": true,
+  "editorPresent": true,
+  "answerDraft": "保留未提交的回答",
+  "errors": [
+    "Task detail access denied"
+  ],
+  "writes": 0
+}

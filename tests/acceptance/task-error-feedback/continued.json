@@ -1,0 +1,5 @@
+{
+  "draft": "",
+  "history": "17:38background查看思考与执行过程1 次工具调用Agent17:38The background task is ready.本轮 2 次模型调用 · 100 输入 / 40 输出 tokens · LLM <0.1 秒 · 工具和等待合计 <0.1 秒 · 2093.7 tok/s17:41读取询问失败不代表回答提交失败Agent17:41The conversation can continue.50 输入 / 20 输出 tokens · LLM <0.1 秒 · 1818.3 tok/s",
+  "toasts": []
+}

@@ -1,0 +1,35 @@
+{
+  "calls": {
+    "background": 2
+  },
+  "restarted": false,
+  "final_errors": 0,
+  "tasks": [
+    {
+      "id": 1,
+      "owner_agent_id": 3,
+      "owner_run_id": 1,
+      "parent_task_id": 0,
+      "kind": "process",
+      "state": "cancelled",
+      "terminal": true,
+      "stop_requested": true,
+      "pending_questions": 0,
+      "revision": 3,
+      "created_at": 1791451413189788,
+      "started_at": 1791451413189788,
+      "ended_at": 1791451455577454,
+      "scheduled_at": 0,
+      "exit_status_valid": true,
+      "exit_code": 1,
+      "exit_signal": 0,
+      "stop_reason": 4,
+      "notice_taken": false,
+      "owner_session": "D:\\GIT\\mdo\\.build\\conversation-acceptance\\task-errors-baseline\\home\\sessions\\default\\V-OSJBZRm7JcLo4cYyzs7fRxdIn8PKmj\\snapshot.json",
+      "label": "C:\\Program Files\\Python312\\python.exe -u -c import sys; print('fixture ready', flush=True); sys.stdin.readline()",
+      "notify": "task-read-qa",
+      "schedule_id": "",
+      "schedule_generation": 0
+    }
+  ]
+}
