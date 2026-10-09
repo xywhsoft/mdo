@@ -1,0 +1,20 @@
+{
+  "passed": true,
+  "mdo_commit": "95066ef94a929de3e834a480a186931f1c8bb65f",
+  "sha256": "a1f8da520a0f2c40dfc6cc0215bfc28bc0a36a45feee7e5e9f83a05c1e7b0dee",
+  "bytes": 4539892,
+  "model_requests": 5,
+  "external_provider_requests": 0,
+  "old_epoch": "091618f56d5d5e265590bbd89124368cf7a31f4a573132d6a8711fa137a86b85",
+  "new_epoch": "a21142f9a0b6f315698585c4d464a78667efc2b92b958c250a8bc535eed175bb",
+  "late_response_peer_closed": true,
+  "native_final_errors": 0,
+  "navigation_component_final_denials": 1,
+  "embedded_sources": {
+    "web/js/features/chat/timeline-store.js": "3552fb76e89d9ff4ebabed545a643f64e9538aee695809425c7b16069f7e0fee",
+    "web/js/features/chat/conversation-navigation.js": "88da9dc39e7a69c807d50cca0ea09b68ec2ce524bd03c1f0a2079b82cc9b5a62"
+  },
+  "packed_full_page": true,
+  "android_device_tested": false,
+  "daily_app_overwritten": false
+}
