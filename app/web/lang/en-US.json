@@ -1339,6 +1339,7 @@
   "resource.reloadFailed": "Catalog refresh failed",
   "startup.readFailed": "Could not read the last session. Using the current session list.",
   "startup.saveFailed": "Could not save the last session. A different task may open next time.",
+  "startup.saveUnconfirmed": "The last session save could not be confirmed. This conversation is unaffected; a different task may open next time.",
   "startup.untitled": "Untitled task",
   "sessionLoad.loadingTitle": "Loading task…",
   "sessionLoad.loadingDescription": "Reading the conversation record.",

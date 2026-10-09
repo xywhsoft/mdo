@@ -1,0 +1,90 @@
+- link "跳到对话":
+  - /url: "#timeline"
+- complementary "会话导航":
+  - link "墨斗主页":
+    - /url: "#/"
+    - generic: 墨斗
+  - group "通知 · 2":
+    - button "扩展工具包安装":
+    - button "登录账号":
+  - button "关闭会话导航":
+  - button "登录账号":
+    - generic: ◉
+    - generic: 登录账号
+  - button "本机":
+    - generic: 本机
+    - generic: ▾
+  - button "新建任务 Ctrl N":
+    - generic: 新建任务
+    - generic: Ctrl N
+  - button "计划任务":
+    - generic: 计划任务
+  - searchbox "搜索会话"
+  - generic: /
+  - navigation "会话":
+    - region "项目":
+      - button "折叠 项目" [expanded]:
+        - generic: 项目
+      - button "列表选项":
+      - button "添加项目":
+      - paragraph: 添加项目，让任务按工作区分组。
+    - region "任务":
+      - button "折叠 任务" [expanded]:
+        - generic: 任务
+      - button "在默认项目新建任务":
+      - list:
+        - button "Catalog recent task 18分钟前":
+          - generic: Catalog recent task
+          - time: 18分钟前
+        - button "Catalog recent task 的操作":
+        - button "Service read recovery 18分钟前":
+          - generic: Service read recovery
+          - time: 18分钟前
+        - button "Service read recovery 的操作":
+  - button "设置":
+    - generic: 设置
+  - status:
+    - generic: 本地服务 0.1.0-dev
+  - button "切换为深色主题":
+- main "Agent 工作区":
+  - button "切换项目，当前 默认项目":
+    - generic: 默认项目
+    - generic: ▾
+  - generic: /
+  - heading "Service read recovery" [level=1]
+  - paragraph: mdo.default · queue-fixture
+  - generic: 就绪
+  - button "搜索当前会话":
+  - button "导出当前会话 Markdown":
+  - button "更多会话操作":
+  - region "当前会话":
+    - heading "今天要做什么？" [level=2]
+    - paragraph: 描述一个目标。墨斗会分析代码、调用工具，并把过程留在可恢复的会话中。
+    - generic "任务示例":
+      - button "分析当前项目 技术栈、目录结构与改进建议":
+        - strong: 分析当前项目
+        - generic: 技术栈、目录结构与改进建议
+      - button "跑测试并修复失败 定位失败、修复并复测":
+        - strong: 跑测试并修复失败
+        - generic: 定位失败、修复并复测
+      - button "做一个小工具 先明确需求，再交互式开发":
+        - strong: 做一个小工具
+        - generic: 先明确需求，再交互式开发
+      - button "建个定时任务 日报、巡检与周期整理":
+        - strong: 建个定时任务
+        - generic: 日报、巡检与周期整理
+  - region "发送消息":
+    - generic: 向 Agent 描述任务
+    - textbox "向 Agent 描述任务" [active]:
+      - /placeholder: 向墨斗描述任务…
+      - text: SERVICE_READ_SAVED_DRAFT
+    - button "添加图片":
+    - button "权限：询问":
+    - generic "按输入文本粗略估算": 输入 ~6 tok
+    - button "查看 token 用量"
+    - button "模型与思考深度：Queue fixture · 无思考":
+      - generic: Queue fixture
+      - generic: 无思考
+    - generic: Enter 发送 · Shift Enter 换行
+    - button "发送任务":
+- separator "调整会话导航宽度"

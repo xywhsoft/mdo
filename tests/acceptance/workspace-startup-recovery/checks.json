@@ -1,0 +1,43 @@
+{
+  "baseline": {
+    "tests": 11,
+    "failed": 9,
+    "passed": 2,
+    "additional_later_checks": 3
+  },
+  "related_node": 52,
+  "clean_frontend_contracts": 2,
+  "served_source_files": 4,
+  "faults_503_by_phase": [
+    2,
+    2,
+    6,
+    2,
+    2,
+    6,
+    0
+  ],
+  "selection_puts_by_phase": [
+    0,
+    0,
+    0,
+    1,
+    1,
+    1,
+    0
+  ],
+  "final_read_notices": 1,
+  "final_save_confirmation_notices": 1,
+  "held_write_confirmation_before_reply": true,
+  "held_write_confirmation_seconds_after_put": 9.719,
+  "held_write_reply_seconds_after_put": 12.0,
+  "fallback_preserved_saved_choice": true,
+  "slow_restore_preserved_user_choice_and_draft": true,
+  "actual_model_calls": 3,
+  "final_model_errors": 0,
+  "restart_preserved_original_history_and_draft": true,
+  "manual_changed_selection_persisted": true,
+  "homepage_restored_new_selection": true,
+  "browser_warn_or_error_after_restart": 0,
+  "scope": "isolated Windows packed copy and in-app browser; no stress, Android or native input claim"
+}

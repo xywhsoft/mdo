@@ -1,0 +1,205 @@
+TAP version 13
+# Subtest: saved selection and candidate share quiet read recovery
+not ok 1 - saved selection and candidate share quiet read recovery
+  ---
+  duration_ms: 22.4343
+  type: 'test'
+  location: 'D:\\GIT\\mdo\\tests\\test_workspace_startup_recovery.mjs:67:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly equal:
+
+    1 !== 3
+
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: 3
+  actual: 1
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///D:/GIT/mdo/tests/test_workspace_startup_recovery.mjs:74:12)
+    async Test.run (node:internal/test_runner/test:1389:7)
+    async startSubtestAfterBootstrap (node:internal/test_runner/harness:387:3)
+  ...
+# Subtest: an explicit task never reports obsolete startup read failures
+not ok 2 - an explicit task never reports obsolete startup read failures
+  ---
+  duration_ms: 3.714
+  type: 'test'
+  location: 'D:\\GIT\\mdo\\tests\\test_workspace_startup_recovery.mjs:80:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly equal:
+
+    1 !== 6
+
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: 6
+  actual: 1
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///D:/GIT/mdo/tests/test_workspace_startup_recovery.mjs:85:12)
+    async Test.run (node:internal/test_runner/test:1389:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:960:7)
+  ...
+# Subtest: exhausted startup reads give one final notice and usable catalog fallback
+not ok 3 - exhausted startup reads give one final notice and usable catalog fallback
+  ---
+  duration_ms: 0.8357
+  type: 'test'
+  location: 'D:\\GIT\\mdo\\tests\\test_workspace_startup_recovery.mjs:90:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly equal:
+
+    1 !== 6
+
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: 6
+  actual: 1
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///D:/GIT/mdo/tests/test_workspace_startup_recovery.mjs:94:12)
+    async Test.run (node:internal/test_runner/test:1389:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:960:7)
+  ...
+# Subtest: a deleted saved task uses the catalog without a network error
+ok 4 - a deleted saved task uses the catalog without a network error
+  ---
+  duration_ms: 1.1683
+  type: 'test'
+  ...
+# Subtest: a mismatched candidate cannot restore a different task under the saved identity
+not ok 5 - a mismatched candidate cannot restore a different task under the saved identity
+  ---
+  duration_ms: 0.8826
+  type: 'test'
+  location: 'D:\\GIT\\mdo\\tests\\test_workspace_startup_recovery.mjs:106:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly equal:
+
+    'foreign' !== 'other'
+
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: 'other'
+  actual: 'foreign'
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///D:/GIT/mdo/tests/test_workspace_startup_recovery.mjs:109:32)
+    async Test.run (node:internal/test_runner/test:1389:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:960:7)
+  ...
+# Subtest: user intent wins during backoff and suppresses obsolete failures
+not ok 6 - user intent wins during backoff and suppresses obsolete failures
+  ---
+  duration_ms: 3.0913
+  type: 'test'
+  location: 'D:\\GIT\\mdo\\tests\\test_workspace_startup_recovery.mjs:113:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly equal:
+
+    1 !== 0
+
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: 0
+  actual: 1
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///D:/GIT/mdo/tests/test_workspace_startup_recovery.mjs:119:66)
+    async Test.run (node:internal/test_runner/test:1389:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:960:7)
+  ...
+# Subtest: page departure settles an adapter that ignores abort without navigation or feedback
+not ok 7 - page departure settles an adapter that ignores abort without navigation or feedback
+  ---
+  duration_ms: 1561.1242
+  type: 'test'
+  location: 'D:\\GIT\\mdo\\tests\\test_workspace_startup_recovery.mjs:123:1'
+  failureType: 'testCodeFailure'
+  error: 'Expected finite recovery did not settle'
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  operator: 'fail'
+  stack: |-
+    until (file:///D:/GIT/mdo/tests/test_workspace_startup_recovery.mjs:14:10)
+    async TestContext.<anonymous> (file:///D:/GIT/mdo/tests/test_workspace_startup_recovery.mjs:128:5)
+    async Test.run (node:internal/test_runner/test:1389:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:960:7)
+  ...
+# Subtest: a lost accepted save is confirmed by quiet reads without another PUT
+not ok 8 - a lost accepted save is confirmed by quiet reads without another PUT
+  ---
+  duration_ms: 1566.9144
+  type: 'test'
+  location: 'D:\\GIT\\mdo\\tests\\test_workspace_startup_recovery.mjs:134:1'
+  failureType: 'testCodeFailure'
+  error: 'Expected finite recovery did not settle'
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  operator: 'fail'
+  stack: |-
+    until (file:///D:/GIT/mdo/tests/test_workspace_startup_recovery.mjs:14:10)
+    async TestContext.<anonymous> (file:///D:/GIT/mdo/tests/test_workspace_startup_recovery.mjs:140:21)
+    async Test.run (node:internal/test_runner/test:1389:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:960:7)
+  ...
+# Subtest: a hung accepted save reaches bounded read confirmation
+not ok 9 - a hung accepted save reaches bounded read confirmation
+  ---
+  duration_ms: 1566.6677
+  type: 'test'
+  location: 'D:\\GIT\\mdo\\tests\\test_workspace_startup_recovery.mjs:147:1'
+  failureType: 'testCodeFailure'
+  error: 'Expected finite recovery did not settle'
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  operator: 'fail'
+  stack: |-
+    until (file:///D:/GIT/mdo/tests/test_workspace_startup_recovery.mjs:14:10)
+    async TestContext.<anonymous> (file:///D:/GIT/mdo/tests/test_workspace_startup_recovery.mjs:151:21)
+    async Test.run (node:internal/test_runner/test:1389:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:960:7)
+  ...
+# Subtest: a failed unconfirmed save reports once and is not replayed by writable notifications
+not ok 10 - a failed unconfirmed save reports once and is not replayed by writable notifications
+  ---
+  duration_ms: 16.2839
+  type: 'test'
+  location: 'D:\\GIT\\mdo\\tests\\test_workspace_startup_recovery.mjs:157:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly equal:
+
+    2 !== 1
+
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: 1
+  actual: 2
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///D:/GIT/mdo/tests/test_workspace_startup_recovery.mjs:165:12)
+    async Test.run (node:internal/test_runner/test:1389:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:960:7)
+  ...
+# Subtest: a newer destination survives slow acceptance of the previous save
+ok 11 - a newer destination survives slow acceptance of the previous save
+  ---
+  duration_ms: 29.7477
+  type: 'test'
+  ...
+1..11
+# tests 11
+# suites 0
+# pass 2
+# fail 9
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 4849.5234

@@ -1,0 +1,1965 @@
+[
+  {
+    "stored": {
+      "project_id": "default",
+      "session_id": "V-OSN8zeLfRTvpuWDHwjTvyWObgIER-A"
+    },
+    "saved": {
+      "project_id": "default",
+      "session_id": "V-OSN8zeLfRTvpuWDHwjTvyWObgIER-A"
+    },
+    "other": {
+      "project_id": "default",
+      "session_id": "V-OSN92wm-D3jPopfocxFD2rSl3yynRL"
+    },
+    "tasks": [
+      {
+        "project_id": "default",
+        "session_id": "V-OSN8zeLfRTvpuWDHwjTvyWObgIER-A",
+        "inputs": [],
+        "errors": 0,
+        "event_kinds": {},
+        "draft": {
+          "revision": 1,
+          "text": "SERVICE_READ_SAVED_DRAFT",
+          "attachments": [],
+          "run_admission_uncertain": false,
+          "submission": null,
+          "submissions": []
+        }
+      },
+      {
+        "project_id": "default",
+        "session_id": "V-OSN92wm-D3jPopfocxFD2rSl3yynRL",
+        "inputs": [],
+        "errors": 0,
+        "event_kinds": {},
+        "draft": {
+          "revision": 0,
+          "text": "",
+          "attachments": [],
+          "run_admission_uncertain": false,
+          "submission": null,
+          "submissions": []
+        }
+      }
+    ],
+    "sources": {
+      "js/features/shell/workspace-startup.js": "d515141a19fc7979de1d14b35c4617a85368e0dbdc79578fad2a6127cff6929a",
+      "lang/zh-CN.json": "3f3603a029842910a3d35c6ad17e33095a886f9a170c6be11bb1f2615871e32e",
+      "lang/en-US.json": "097126bd1702c11736eed4dd9be7c6f2e266131a97cad6c10a87915b0e826c22",
+      "lang/ru-RU.json": "7770b0e54ead384fa3cecd74ff775532bca3ca5ec0051f5d411b69b4a3e5e9a1"
+    },
+    "phases": [
+      {
+        "mode": "initial",
+        "reads": [
+          {
+            "path": "/api/v1/workspace-state",
+            "started": 0.547,
+            "fault": "503",
+            "status": 503,
+            "ended": 0.547
+          },
+          {
+            "path": "/api/v1/workspace-state",
+            "started": 1.11,
+            "fault": "503",
+            "status": 503,
+            "ended": 1.11
+          },
+          {
+            "path": "/api/v1/workspace-state",
+            "started": 2.282,
+            "fault": null,
+            "status": 200,
+            "ended": 2.282
+          },
+          {
+            "path": "/api/v1/projects/default/sessions/V-OSN8zeLfRTvpuWDHwjTvyWObgIER-A",
+            "started": 2.297,
+            "fault": null,
+            "status": 200,
+            "ended": 2.297
+          },
+          {
+            "path": "/api/v1/projects/default/sessions/V-OSN8zeLfRTvpuWDHwjTvyWObgIER-A",
+            "started": 2.313,
+            "fault": null,
+            "status": 200,
+            "ended": 2.313
+          }
+        ],
+        "writes": [],
+        "left": 0,
+        "accepted": false
+      },
+      {
+        "mode": "detail",
+        "reads": [
+          {
+            "path": "/api/v1/workspace-state",
+            "started": 0.359,
+            "fault": null,
+            "status": 200,
+            "ended": 0.359
+          },
+          {
+            "path": "/api/v1/projects/default/sessions/V-OSN8zeLfRTvpuWDHwjTvyWObgIER-A",
+            "started": 0.375,
+            "fault": "503",
+            "status": 503,
+            "ended": 0.375
+          },
+          {
+            "path": "/api/v1/projects/default/sessions/V-OSN8zeLfRTvpuWDHwjTvyWObgIER-A",
+            "started": 0.906,
+            "fault": "503",
+            "status": 503,
+            "ended": 0.906
+          },
+          {
+            "path": "/api/v1/projects/default/sessions/V-OSN8zeLfRTvpuWDHwjTvyWObgIER-A",
+            "started": 1.984,
+            "fault": null,
+            "status": 200,
+            "ended": 1.984
+          },
+          {
+            "path": "/api/v1/projects/default/sessions/V-OSN8zeLfRTvpuWDHwjTvyWObgIER-A",
+            "started": 2.0,
+            "fault": null,
+            "status": 200,
+            "ended": 2.015
+          }
+        ],
+        "writes": [],
+        "left": 0,
+        "accepted": false
+      }
+    ]
+  },
+  {
+    "stored": {
+      "project_id": "default",
+      "session_id": "V-OSN8zeLfRTvpuWDHwjTvyWObgIER-A"
+    },
+    "saved": {
+      "project_id": "default",
+      "session_id": "V-OSN8zeLfRTvpuWDHwjTvyWObgIER-A"
+    },
+    "other": {
+      "project_id": "default",
+      "session_id": "V-OSN92wm-D3jPopfocxFD2rSl3yynRL"
+    },
+    "tasks": [
+      {
+        "project_id": "default",
+        "session_id": "V-OSN8zeLfRTvpuWDHwjTvyWObgIER-A",
+        "inputs": [],
+        "errors": 0,
+        "event_kinds": {},
+        "draft": {
+          "revision": 1,
+          "text": "SERVICE_READ_SAVED_DRAFT",
+          "attachments": [],
+          "run_admission_uncertain": false,
+          "submission": null,
+          "submissions": []
+        }
+      },
+      {
+        "project_id": "default",
+        "session_id": "V-OSN92wm-D3jPopfocxFD2rSl3yynRL",
+        "inputs": [],
+        "errors": 0,
+        "event_kinds": {},
+        "draft": {
+          "revision": 0,
+          "text": "",
+          "attachments": [],
+          "run_admission_uncertain": false,
+          "submission": null,
+          "submissions": []
+        }
+      }
+    ],
+    "sources": {
+      "js/features/shell/workspace-startup.js": "d515141a19fc7979de1d14b35c4617a85368e0dbdc79578fad2a6127cff6929a",
+      "lang/zh-CN.json": "3f3603a029842910a3d35c6ad17e33095a886f9a170c6be11bb1f2615871e32e",
+      "lang/en-US.json": "097126bd1702c11736eed4dd9be7c6f2e266131a97cad6c10a87915b0e826c22",
+      "lang/ru-RU.json": "7770b0e54ead384fa3cecd74ff775532bca3ca5ec0051f5d411b69b4a3e5e9a1"
+    },
+    "phases": [
+      {
+        "mode": "initial",
+        "reads": [
+          {
+            "path": "/api/v1/workspace-state",
+            "started": 0.547,
+            "fault": "503",
+            "status": 503,
+            "ended": 0.547
+          },
+          {
+            "path": "/api/v1/workspace-state",
+            "started": 1.11,
+            "fault": "503",
+            "status": 503,
+            "ended": 1.11
+          },
+          {
+            "path": "/api/v1/workspace-state",
+            "started": 2.282,
+            "fault": null,
+            "status": 200,
+            "ended": 2.282
+          },
+          {
+            "path": "/api/v1/projects/default/sessions/V-OSN8zeLfRTvpuWDHwjTvyWObgIER-A",
+            "started": 2.297,
+            "fault": null,
+            "status": 200,
+            "ended": 2.297
+          },
+          {
+            "path": "/api/v1/projects/default/sessions/V-OSN8zeLfRTvpuWDHwjTvyWObgIER-A",
+            "started": 2.313,
+            "fault": null,
+            "status": 200,
+            "ended": 2.313
+          }
+        ],
+        "writes": [],
+        "left": 0,
+        "accepted": false
+      },
+      {
+        "mode": "detail",
+        "reads": [
+          {
+            "path": "/api/v1/workspace-state",
+            "started": 0.359,
+            "fault": null,
+            "status": 200,
+            "ended": 0.359
+          },
+          {
+            "path": "/api/v1/projects/default/sessions/V-OSN8zeLfRTvpuWDHwjTvyWObgIER-A",
+            "started": 0.375,
+            "fault": "503",
+            "status": 503,
+            "ended": 0.375
+          },
+          {
+            "path": "/api/v1/projects/default/sessions/V-OSN8zeLfRTvpuWDHwjTvyWObgIER-A",
+            "started": 0.906,
+            "fault": "503",
+            "status": 503,
+            "ended": 0.906
+          },
+          {
+            "path": "/api/v1/projects/default/sessions/V-OSN8zeLfRTvpuWDHwjTvyWObgIER-A",
+            "started": 1.984,
+            "fault": null,
+            "status": 200,
+            "ended": 1.984
+          },
+          {
+            "path": "/api/v1/projects/default/sessions/V-OSN8zeLfRTvpuWDHwjTvyWObgIER-A",
+            "started": 2.0,
+            "fault": null,
+            "status": 200,
+            "ended": 2.015
+          }
+        ],
+        "writes": [],
+        "left": 0,
+        "accepted": false
+      },
+      {
+        "mode": "exhaust",
+        "reads": [
+          {
+            "path": "/api/v1/workspace-state",
+            "started": 0.391,
+            "fault": "503",
+            "status": 503,
+            "ended": 0.391
+          },
+          {
+            "path": "/api/v1/workspace-state",
+            "started": 1.0,
+            "fault": "503",
+            "status": 503,
+            "ended": 1.0
+          },
+          {
+            "path": "/api/v1/workspace-state",
+            "started": 2.156,
+            "fault": "503",
+            "status": 503,
+            "ended": 2.156
+          },
+          {
+            "path": "/api/v1/workspace-state",
+            "started": 4.422,
+            "fault": "503",
+            "status": 503,
+            "ended": 4.422
+          },
+          {
+            "path": "/api/v1/workspace-state",
+            "started": 8.812,
+            "fault": "503",
+            "status": 503,
+            "ended": 8.812
+          },
+          {
+            "path": "/api/v1/workspace-state",
+            "started": 17.203,
+            "fault": "503",
+            "status": 503,
+            "ended": 17.203
+          }
+        ],
+        "writes": [],
+        "left": 0,
+        "accepted": false
+      }
+    ]
+  },
+  {
+    "stored": {
+      "project_id": "default",
+      "session_id": "V-OSN92wm-D3jPopfocxFD2rSl3yynRL"
+    },
+    "saved": {
+      "project_id": "default",
+      "session_id": "V-OSN8zeLfRTvpuWDHwjTvyWObgIER-A"
+    },
+    "other": {
+      "project_id": "default",
+      "session_id": "V-OSN92wm-D3jPopfocxFD2rSl3yynRL"
+    },
+    "tasks": [
+      {
+        "project_id": "default",
+        "session_id": "V-OSN8zeLfRTvpuWDHwjTvyWObgIER-A",
+        "inputs": [],
+        "errors": 0,
+        "event_kinds": {},
+        "draft": {
+          "revision": 1,
+          "text": "SERVICE_READ_SAVED_DRAFT",
+          "attachments": [],
+          "run_admission_uncertain": false,
+          "submission": null,
+          "submissions": []
+        }
+      },
+      {
+        "project_id": "default",
+        "session_id": "V-OSN92wm-D3jPopfocxFD2rSl3yynRL",
+        "inputs": [],
+        "errors": 0,
+        "event_kinds": {},
+        "draft": {
+          "revision": 0,
+          "text": "",
+          "attachments": [],
+          "run_admission_uncertain": false,
+          "submission": null,
+          "submissions": []
+        }
+      }
+    ],
+    "sources": {
+      "js/features/shell/workspace-startup.js": "d515141a19fc7979de1d14b35c4617a85368e0dbdc79578fad2a6127cff6929a",
+      "lang/zh-CN.json": "3f3603a029842910a3d35c6ad17e33095a886f9a170c6be11bb1f2615871e32e",
+      "lang/en-US.json": "097126bd1702c11736eed4dd9be7c6f2e266131a97cad6c10a87915b0e826c22",
+      "lang/ru-RU.json": "7770b0e54ead384fa3cecd74ff775532bca3ca5ec0051f5d411b69b4a3e5e9a1"
+    },
+    "phases": [
+      {
+        "mode": "initial",
+        "reads": [
+          {
+            "path": "/api/v1/workspace-state",
+            "started": 0.547,
+            "fault": "503",
+            "status": 503,
+            "ended": 0.547
+          },
+          {
+            "path": "/api/v1/workspace-state",
+            "started": 1.11,
+            "fault": "503",
+            "status": 503,
+            "ended": 1.11
+          },
+          {
+            "path": "/api/v1/workspace-state",
+            "started": 2.282,
+            "fault": null,
+            "status": 200,
+            "ended": 2.282
+          },
+          {
+            "path": "/api/v1/projects/default/sessions/V-OSN8zeLfRTvpuWDHwjTvyWObgIER-A",
+            "started": 2.297,
+            "fault": null,
+            "status": 200,
+            "ended": 2.297
+          },
+          {
+            "path": "/api/v1/projects/default/sessions/V-OSN8zeLfRTvpuWDHwjTvyWObgIER-A",
+            "started": 2.313,
+            "fault": null,
+            "status": 200,
+            "ended": 2.313
+          }
+        ],
+        "writes": [],
+        "left": 0,
+        "accepted": false
+      },
+      {
+        "mode": "detail",
+        "reads": [
+          {
+            "path": "/api/v1/workspace-state",
+            "started": 0.359,
+            "fault": null,
+            "status": 200,
+            "ended": 0.359
+          },
+          {
+            "path": "/api/v1/projects/default/sessions/V-OSN8zeLfRTvpuWDHwjTvyWObgIER-A",
+            "started": 0.375,
+            "fault": "503",
+            "status": 503,
+            "ended": 0.375
+          },
+          {
+            "path": "/api/v1/projects/default/sessions/V-OSN8zeLfRTvpuWDHwjTvyWObgIER-A",
+            "started": 0.906,
+            "fault": "503",
+            "status": 503,
+            "ended": 0.906
+          },
+          {
+            "path": "/api/v1/projects/default/sessions/V-OSN8zeLfRTvpuWDHwjTvyWObgIER-A",
+            "started": 1.984,
+            "fault": null,
+            "status": 200,
+            "ended": 1.984
+          },
+          {
+            "path": "/api/v1/projects/default/sessions/V-OSN8zeLfRTvpuWDHwjTvyWObgIER-A",
+            "started": 2.0,
+            "fault": null,
+            "status": 200,
+            "ended": 2.015
+          }
+        ],
+        "writes": [],
+        "left": 0,
+        "accepted": false
+      },
+      {
+        "mode": "exhaust",
+        "reads": [
+          {
+            "path": "/api/v1/workspace-state",
+            "started": 0.391,
+            "fault": "503",
+            "status": 503,
+            "ended": 0.391
+          },
+          {
+            "path": "/api/v1/workspace-state",
+            "started": 1.0,
+            "fault": "503",
+            "status": 503,
+            "ended": 1.0
+          },
+          {
+            "path": "/api/v1/workspace-state",
+            "started": 2.156,
+            "fault": "503",
+            "status": 503,
+            "ended": 2.156
+          },
+          {
+            "path": "/api/v1/workspace-state",
+            "started": 4.422,
+            "fault": "503",
+            "status": 503,
+            "ended": 4.422
+          },
+          {
+            "path": "/api/v1/workspace-state",
+            "started": 8.812,
+            "fault": "503",
+            "status": 503,
+            "ended": 8.812
+          },
+          {
+            "path": "/api/v1/workspace-state",
+            "started": 17.203,
+            "fault": "503",
+            "status": 503,
+            "ended": 17.203
+          }
+        ],
+        "writes": [],
+        "left": 0,
+        "accepted": false
+      },
+      {
+        "mode": "lost",
+        "reads": [
+          {
+            "path": "/api/v1/workspace-state",
+            "started": 0.36,
+            "fault": null,
+            "status": 200,
+            "ended": 0.36
+          },
+          {
+            "path": "/api/v1/workspace-state",
+            "started": 0.422,
+            "fault": "503",
+            "status": 503,
+            "ended": 0.422
+          },
+          {
+            "path": "/api/v1/workspace-state",
+            "started": 0.985,
+            "fault": "503",
+            "status": 503,
+            "ended": 0.985
+          },
+          {
+            "path": "/api/v1/workspace-state",
+            "started": 2.188,
+            "fault": null,
+            "status": 200,
+            "ended": 2.203
+          }
+        ],
+        "writes": [
+          {
+            "started": 0.407,
+            "body": {
+              "project_id": "default",
+              "session_id": "V-OSN92wm-D3jPopfocxFD2rSl3yynRL"
+            },
+            "native_status": 200,
+            "reply": "lost",
+            "ended": 0.407
+          }
+        ],
+        "left": 0,
+        "accepted": true
+      }
+    ]
+  },
+  {
+    "stored": {
+      "project_id": "default",
+      "session_id": "V-OSN92wm-D3jPopfocxFD2rSl3yynRL"
+    },
+    "saved": {
+      "project_id": "default",
+      "session_id": "V-OSN8zeLfRTvpuWDHwjTvyWObgIER-A"
+    },
+    "other": {
+      "project_id": "default",
+      "session_id": "V-OSN92wm-D3jPopfocxFD2rSl3yynRL"
+    },
+    "tasks": [
+      {
+        "project_id": "default",
+        "session_id": "V-OSN8zeLfRTvpuWDHwjTvyWObgIER-A",
+        "inputs": [],
+        "errors": 0,
+        "event_kinds": {},
+        "draft": {
+          "revision": 1,
+          "text": "SERVICE_READ_SAVED_DRAFT",
+          "attachments": [],
+          "run_admission_uncertain": false,
+          "submission": null,
+          "submissions": []
+        }
+      },
+      {
+        "project_id": "default",
+        "session_id": "V-OSN92wm-D3jPopfocxFD2rSl3yynRL",
+        "inputs": [
+          "WORKSPACE_SAVE_CONFIRMED"
+        ],
+        "errors": 0,
+        "event_kinds": {
+          "agent_start": 1,
+          "model_start": 1,
+          "model_text_delta": 1,
+          "model_done": 1,
+          "agent_done": 1
+        },
+        "draft": {
+          "revision": 4,
+          "text": "",
+          "attachments": [],
+          "run_admission_uncertain": false,
+          "submission": null,
+          "submissions": []
+        }
+      }
+    ],
+    "sources": {
+      "js/features/shell/workspace-startup.js": "d515141a19fc7979de1d14b35c4617a85368e0dbdc79578fad2a6127cff6929a",
+      "lang/zh-CN.json": "3f3603a029842910a3d35c6ad17e33095a886f9a170c6be11bb1f2615871e32e",
+      "lang/en-US.json": "097126bd1702c11736eed4dd9be7c6f2e266131a97cad6c10a87915b0e826c22",
+      "lang/ru-RU.json": "7770b0e54ead384fa3cecd74ff775532bca3ca5ec0051f5d411b69b4a3e5e9a1"
+    },
+    "phases": [
+      {
+        "mode": "initial",
+        "reads": [
+          {
+            "path": "/api/v1/workspace-state",
+            "started": 0.547,
+            "fault": "503",
+            "status": 503,
+            "ended": 0.547
+          },
+          {
+            "path": "/api/v1/workspace-state",
+            "started": 1.11,
+            "fault": "503",
+            "status": 503,
+            "ended": 1.11
+          },
+          {
+            "path": "/api/v1/workspace-state",
+            "started": 2.282,
+            "fault": null,
+            "status": 200,
+            "ended": 2.282
+          },
+          {
+            "path": "/api/v1/projects/default/sessions/V-OSN8zeLfRTvpuWDHwjTvyWObgIER-A",
+            "started": 2.297,
+            "fault": null,
+            "status": 200,
+            "ended": 2.297
+          },
+          {
+            "path": "/api/v1/projects/default/sessions/V-OSN8zeLfRTvpuWDHwjTvyWObgIER-A",
+            "started": 2.313,
+            "fault": null,
+            "status": 200,
+            "ended": 2.313
+          }
+        ],
+        "writes": [],
+        "left": 0,
+        "accepted": false
+      },
+      {
+        "mode": "detail",
+        "reads": [
+          {
+            "path": "/api/v1/workspace-state",
+            "started": 0.359,
+            "fault": null,
+            "status": 200,
+            "ended": 0.359
+          },
+          {
+            "path": "/api/v1/projects/default/sessions/V-OSN8zeLfRTvpuWDHwjTvyWObgIER-A",
+            "started": 0.375,
+            "fault": "503",
+            "status": 503,
+            "ended": 0.375
+          },
+          {
+            "path": "/api/v1/projects/default/sessions/V-OSN8zeLfRTvpuWDHwjTvyWObgIER-A",
+            "started": 0.906,
+            "fault": "503",
+            "status": 503,
+            "ended": 0.906
+          },
+          {
+            "path": "/api/v1/projects/default/sessions/V-OSN8zeLfRTvpuWDHwjTvyWObgIER-A",
+            "started": 1.984,
+            "fault": null,
+            "status": 200,
+            "ended": 1.984
+          },
+          {
+            "path": "/api/v1/projects/default/sessions/V-OSN8zeLfRTvpuWDHwjTvyWObgIER-A",
+            "started": 2.0,
+            "fault": null,
+            "status": 200,
+            "ended": 2.015
+          }
+        ],
+        "writes": [],
+        "left": 0,
+        "accepted": false
+      },
+      {
+        "mode": "exhaust",
+        "reads": [
+          {
+            "path": "/api/v1/workspace-state",
+            "started": 0.391,
+            "fault": "503",
+            "status": 503,
+            "ended": 0.391
+          },
+          {
+            "path": "/api/v1/workspace-state",
+            "started": 1.0,
+            "fault": "503",
+            "status": 503,
+            "ended": 1.0
+          },
+          {
+            "path": "/api/v1/workspace-state",
+            "started": 2.156,
+            "fault": "503",
+            "status": 503,
+            "ended": 2.156
+          },
+          {
+            "path": "/api/v1/workspace-state",
+            "started": 4.422,
+            "fault": "503",
+            "status": 503,
+            "ended": 4.422
+          },
+          {
+            "path": "/api/v1/workspace-state",
+            "started": 8.812,
+            "fault": "503",
+            "status": 503,
+            "ended": 8.812
+          },
+          {
+            "path": "/api/v1/workspace-state",
+            "started": 17.203,
+            "fault": "503",
+            "status": 503,
+            "ended": 17.203
+          }
+        ],
+        "writes": [],
+        "left": 0,
+        "accepted": false
+      },
+      {
+        "mode": "lost",
+        "reads": [
+          {
+            "path": "/api/v1/workspace-state",
+            "started": 0.36,
+            "fault": null,
+            "status": 200,
+            "ended": 0.36
+          },
+          {
+            "path": "/api/v1/workspace-state",
+            "started": 0.422,
+            "fault": "503",
+            "status": 503,
+            "ended": 0.422
+          },
+          {
+            "path": "/api/v1/workspace-state",
+            "started": 0.985,
+            "fault": "503",
+            "status": 503,
+            "ended": 0.985
+          },
+          {
+            "path": "/api/v1/workspace-state",
+            "started": 2.188,
+            "fault": null,
+            "status": 200,
+            "ended": 2.203
+          }
+        ],
+        "writes": [
+          {
+            "started": 0.407,
+            "body": {
+              "project_id": "default",
+              "session_id": "V-OSN92wm-D3jPopfocxFD2rSl3yynRL"
+            },
+            "native_status": 200,
+            "reply": "lost",
+            "ended": 0.407
+          }
+        ],
+        "left": 0,
+        "accepted": true
+      },
+      {
+        "mode": "hold-write",
+        "reads": [
+          {
+            "path": "/api/v1/workspace-state",
+            "started": 0.343,
+            "fault": null,
+            "status": 200,
+            "ended": 0.343
+          },
+          {
+            "path": "/api/v1/workspace-state",
+            "started": 8.39,
+            "fault": "503",
+            "status": 503,
+            "ended": 8.39
+          },
+          {
+            "path": "/api/v1/workspace-state",
+            "started": 8.922,
+            "fault": "503",
+            "status": 503,
+            "ended": 8.922
+          },
+          {
+            "path": "/api/v1/workspace-state",
+            "started": 10.109,
+            "fault": null,
+            "status": 200,
+            "ended": 10.109
+          }
+        ],
+        "writes": [
+          {
+            "started": 0.39,
+            "body": {
+              "project_id": "default",
+              "session_id": "V-OSN92wm-D3jPopfocxFD2rSl3yynRL"
+            },
+            "native_status": 200,
+            "reply": "held",
+            "ended": 12.39
+          }
+        ],
+        "left": 0,
+        "accepted": true
+      }
+    ]
+  },
+  {
+    "stored": {
+      "project_id": "default",
+      "session_id": "V-OSN92wm-D3jPopfocxFD2rSl3yynRL"
+    },
+    "saved": {
+      "project_id": "default",
+      "session_id": "V-OSN8zeLfRTvpuWDHwjTvyWObgIER-A"
+    },
+    "other": {
+      "project_id": "default",
+      "session_id": "V-OSN92wm-D3jPopfocxFD2rSl3yynRL"
+    },
+    "tasks": [
+      {
+        "project_id": "default",
+        "session_id": "V-OSN8zeLfRTvpuWDHwjTvyWObgIER-A",
+        "inputs": [],
+        "errors": 0,
+        "event_kinds": {},
+        "draft": {
+          "revision": 1,
+          "text": "SERVICE_READ_SAVED_DRAFT",
+          "attachments": [],
+          "run_admission_uncertain": false,
+          "submission": null,
+          "submissions": []
+        }
+      },
+      {
+        "project_id": "default",
+        "session_id": "V-OSN92wm-D3jPopfocxFD2rSl3yynRL",
+        "inputs": [
+          "WORKSPACE_SAVE_CONFIRMED"
+        ],
+        "errors": 0,
+        "event_kinds": {
+          "agent_start": 1,
+          "model_start": 1,
+          "model_text_delta": 1,
+          "model_done": 1,
+          "agent_done": 1
+        },
+        "draft": {
+          "revision": 4,
+          "text": "",
+          "attachments": [],
+          "run_admission_uncertain": false,
+          "submission": null,
+          "submissions": []
+        }
+      }
+    ],
+    "sources": {
+      "js/features/shell/workspace-startup.js": "d515141a19fc7979de1d14b35c4617a85368e0dbdc79578fad2a6127cff6929a",
+      "lang/zh-CN.json": "3f3603a029842910a3d35c6ad17e33095a886f9a170c6be11bb1f2615871e32e",
+      "lang/en-US.json": "097126bd1702c11736eed4dd9be7c6f2e266131a97cad6c10a87915b0e826c22",
+      "lang/ru-RU.json": "7770b0e54ead384fa3cecd74ff775532bca3ca5ec0051f5d411b69b4a3e5e9a1"
+    },
+    "phases": [
+      {
+        "mode": "initial",
+        "reads": [
+          {
+            "path": "/api/v1/workspace-state",
+            "started": 0.547,
+            "fault": "503",
+            "status": 503,
+            "ended": 0.547
+          },
+          {
+            "path": "/api/v1/workspace-state",
+            "started": 1.11,
+            "fault": "503",
+            "status": 503,
+            "ended": 1.11
+          },
+          {
+            "path": "/api/v1/workspace-state",
+            "started": 2.282,
+            "fault": null,
+            "status": 200,
+            "ended": 2.282
+          },
+          {
+            "path": "/api/v1/projects/default/sessions/V-OSN8zeLfRTvpuWDHwjTvyWObgIER-A",
+            "started": 2.297,
+            "fault": null,
+            "status": 200,
+            "ended": 2.297
+          },
+          {
+            "path": "/api/v1/projects/default/sessions/V-OSN8zeLfRTvpuWDHwjTvyWObgIER-A",
+            "started": 2.313,
+            "fault": null,
+            "status": 200,
+            "ended": 2.313
+          }
+        ],
+        "writes": [],
+        "left": 0,
+        "accepted": false
+      },
+      {
+        "mode": "detail",
+        "reads": [
+          {
+            "path": "/api/v1/workspace-state",
+            "started": 0.359,
+            "fault": null,
+            "status": 200,
+            "ended": 0.359
+          },
+          {
+            "path": "/api/v1/projects/default/sessions/V-OSN8zeLfRTvpuWDHwjTvyWObgIER-A",
+            "started": 0.375,
+            "fault": "503",
+            "status": 503,
+            "ended": 0.375
+          },
+          {
+            "path": "/api/v1/projects/default/sessions/V-OSN8zeLfRTvpuWDHwjTvyWObgIER-A",
+            "started": 0.906,
+            "fault": "503",
+            "status": 503,
+            "ended": 0.906
+          },
+          {
+            "path": "/api/v1/projects/default/sessions/V-OSN8zeLfRTvpuWDHwjTvyWObgIER-A",
+            "started": 1.984,
+            "fault": null,
+            "status": 200,
+            "ended": 1.984
+          },
+          {
+            "path": "/api/v1/projects/default/sessions/V-OSN8zeLfRTvpuWDHwjTvyWObgIER-A",
+            "started": 2.0,
+            "fault": null,
+            "status": 200,
+            "ended": 2.015
+          }
+        ],
+        "writes": [],
+        "left": 0,
+        "accepted": false
+      },
+      {
+        "mode": "exhaust",
+        "reads": [
+          {
+            "path": "/api/v1/workspace-state",
+            "started": 0.391,
+            "fault": "503",
+            "status": 503,
+            "ended": 0.391
+          },
+          {
+            "path": "/api/v1/workspace-state",
+            "started": 1.0,
+            "fault": "503",
+            "status": 503,
+            "ended": 1.0
+          },
+          {
+            "path": "/api/v1/workspace-state",
+            "started": 2.156,
+            "fault": "503",
+            "status": 503,
+            "ended": 2.156
+          },
+          {
+            "path": "/api/v1/workspace-state",
+            "started": 4.422,
+            "fault": "503",
+            "status": 503,
+            "ended": 4.422
+          },
+          {
+            "path": "/api/v1/workspace-state",
+            "started": 8.812,
+            "fault": "503",
+            "status": 503,
+            "ended": 8.812
+          },
+          {
+            "path": "/api/v1/workspace-state",
+            "started": 17.203,
+            "fault": "503",
+            "status": 503,
+            "ended": 17.203
+          }
+        ],
+        "writes": [],
+        "left": 0,
+        "accepted": false
+      },
+      {
+        "mode": "lost",
+        "reads": [
+          {
+            "path": "/api/v1/workspace-state",
+            "started": 0.36,
+            "fault": null,
+            "status": 200,
+            "ended": 0.36
+          },
+          {
+            "path": "/api/v1/workspace-state",
+            "started": 0.422,
+            "fault": "503",
+            "status": 503,
+            "ended": 0.422
+          },
+          {
+            "path": "/api/v1/workspace-state",
+            "started": 0.985,
+            "fault": "503",
+            "status": 503,
+            "ended": 0.985
+          },
+          {
+            "path": "/api/v1/workspace-state",
+            "started": 2.188,
+            "fault": null,
+            "status": 200,
+            "ended": 2.203
+          }
+        ],
+        "writes": [
+          {
+            "started": 0.407,
+            "body": {
+              "project_id": "default",
+              "session_id": "V-OSN92wm-D3jPopfocxFD2rSl3yynRL"
+            },
+            "native_status": 200,
+            "reply": "lost",
+            "ended": 0.407
+          }
+        ],
+        "left": 0,
+        "accepted": true
+      },
+      {
+        "mode": "hold-write",
+        "reads": [
+          {
+            "path": "/api/v1/workspace-state",
+            "started": 0.343,
+            "fault": null,
+            "status": 200,
+            "ended": 0.343
+          },
+          {
+            "path": "/api/v1/workspace-state",
+            "started": 8.39,
+            "fault": "503",
+            "status": 503,
+            "ended": 8.39
+          },
+          {
+            "path": "/api/v1/workspace-state",
+            "started": 8.922,
+            "fault": "503",
+            "status": 503,
+            "ended": 8.922
+          },
+          {
+            "path": "/api/v1/workspace-state",
+            "started": 10.109,
+            "fault": null,
+            "status": 200,
+            "ended": 10.109
+          }
+        ],
+        "writes": [
+          {
+            "started": 0.39,
+            "body": {
+              "project_id": "default",
+              "session_id": "V-OSN92wm-D3jPopfocxFD2rSl3yynRL"
+            },
+            "native_status": 200,
+            "reply": "held",
+            "ended": 12.39
+          }
+        ],
+        "left": 0,
+        "accepted": true
+      },
+      {
+        "mode": "exhaust-write",
+        "reads": [
+          {
+            "path": "/api/v1/workspace-state",
+            "started": 0.329,
+            "fault": null,
+            "status": 200,
+            "ended": 0.329
+          },
+          {
+            "path": "/api/v1/workspace-state",
+            "started": 0.391,
+            "fault": "503",
+            "status": 503,
+            "ended": 0.391
+          },
+          {
+            "path": "/api/v1/workspace-state",
+            "started": 0.985,
+            "fault": "503",
+            "status": 503,
+            "ended": 0.985
+          },
+          {
+            "path": "/api/v1/workspace-state",
+            "started": 2.141,
+            "fault": "503",
+            "status": 503,
+            "ended": 2.141
+          },
+          {
+            "path": "/api/v1/workspace-state",
+            "started": 4.454,
+            "fault": "503",
+            "status": 503,
+            "ended": 4.454
+          },
+          {
+            "path": "/api/v1/workspace-state",
+            "started": 8.735,
+            "fault": "503",
+            "status": 503,
+            "ended": 8.735
+          },
+          {
+            "path": "/api/v1/workspace-state",
+            "started": 17.985,
+            "fault": "503",
+            "status": 503,
+            "ended": 17.985
+          }
+        ],
+        "writes": [
+          {
+            "started": 0.36,
+            "body": {
+              "project_id": "default",
+              "session_id": "V-OSN92wm-D3jPopfocxFD2rSl3yynRL"
+            },
+            "native_status": 200,
+            "reply": "lost",
+            "ended": 0.36
+          }
+        ],
+        "left": 0,
+        "accepted": true
+      }
+    ]
+  },
+  {
+    "stored": {
+      "project_id": "default",
+      "session_id": "V-OSN92wm-D3jPopfocxFD2rSl3yynRL"
+    },
+    "saved": {
+      "project_id": "default",
+      "session_id": "V-OSN8zeLfRTvpuWDHwjTvyWObgIER-A"
+    },
+    "other": {
+      "project_id": "default",
+      "session_id": "V-OSN92wm-D3jPopfocxFD2rSl3yynRL"
+    },
+    "tasks": [
+      {
+        "project_id": "default",
+        "session_id": "V-OSN8zeLfRTvpuWDHwjTvyWObgIER-A",
+        "inputs": [],
+        "errors": 0,
+        "event_kinds": {},
+        "draft": {
+          "revision": 1,
+          "text": "SERVICE_READ_SAVED_DRAFT",
+          "attachments": [],
+          "run_admission_uncertain": false,
+          "submission": null,
+          "submissions": []
+        }
+      },
+      {
+        "project_id": "default",
+        "session_id": "V-OSN92wm-D3jPopfocxFD2rSl3yynRL",
+        "inputs": [
+          "WORKSPACE_SAVE_CONFIRMED",
+          "WORKSPACE_UNCONFIRMED_CONTINUE"
+        ],
+        "errors": 0,
+        "event_kinds": {
+          "agent_start": 2,
+          "model_start": 2,
+          "model_text_delta": 2,
+          "model_done": 2,
+          "agent_done": 2
+        },
+        "draft": {
+          "revision": 9,
+          "text": "",
+          "attachments": [],
+          "run_admission_uncertain": false,
+          "submission": null,
+          "submissions": []
+        }
+      }
+    ],
+    "sources": {
+      "js/features/shell/workspace-startup.js": "d515141a19fc7979de1d14b35c4617a85368e0dbdc79578fad2a6127cff6929a",
+      "lang/zh-CN.json": "3f3603a029842910a3d35c6ad17e33095a886f9a170c6be11bb1f2615871e32e",
+      "lang/en-US.json": "097126bd1702c11736eed4dd9be7c6f2e266131a97cad6c10a87915b0e826c22",
+      "lang/ru-RU.json": "7770b0e54ead384fa3cecd74ff775532bca3ca5ec0051f5d411b69b4a3e5e9a1"
+    },
+    "phases": [
+      {
+        "mode": "initial",
+        "reads": [
+          {
+            "path": "/api/v1/workspace-state",
+            "started": 0.547,
+            "fault": "503",
+            "status": 503,
+            "ended": 0.547
+          },
+          {
+            "path": "/api/v1/workspace-state",
+            "started": 1.11,
+            "fault": "503",
+            "status": 503,
+            "ended": 1.11
+          },
+          {
+            "path": "/api/v1/workspace-state",
+            "started": 2.282,
+            "fault": null,
+            "status": 200,
+            "ended": 2.282
+          },
+          {
+            "path": "/api/v1/projects/default/sessions/V-OSN8zeLfRTvpuWDHwjTvyWObgIER-A",
+            "started": 2.297,
+            "fault": null,
+            "status": 200,
+            "ended": 2.297
+          },
+          {
+            "path": "/api/v1/projects/default/sessions/V-OSN8zeLfRTvpuWDHwjTvyWObgIER-A",
+            "started": 2.313,
+            "fault": null,
+            "status": 200,
+            "ended": 2.313
+          }
+        ],
+        "writes": [],
+        "left": 0,
+        "accepted": false
+      },
+      {
+        "mode": "detail",
+        "reads": [
+          {
+            "path": "/api/v1/workspace-state",
+            "started": 0.359,
+            "fault": null,
+            "status": 200,
+            "ended": 0.359
+          },
+          {
+            "path": "/api/v1/projects/default/sessions/V-OSN8zeLfRTvpuWDHwjTvyWObgIER-A",
+            "started": 0.375,
+            "fault": "503",
+            "status": 503,
+            "ended": 0.375
+          },
+          {
+            "path": "/api/v1/projects/default/sessions/V-OSN8zeLfRTvpuWDHwjTvyWObgIER-A",
+            "started": 0.906,
+            "fault": "503",
+            "status": 503,
+            "ended": 0.906
+          },
+          {
+            "path": "/api/v1/projects/default/sessions/V-OSN8zeLfRTvpuWDHwjTvyWObgIER-A",
+            "started": 1.984,
+            "fault": null,
+            "status": 200,
+            "ended": 1.984
+          },
+          {
+            "path": "/api/v1/projects/default/sessions/V-OSN8zeLfRTvpuWDHwjTvyWObgIER-A",
+            "started": 2.0,
+            "fault": null,
+            "status": 200,
+            "ended": 2.015
+          }
+        ],
+        "writes": [],
+        "left": 0,
+        "accepted": false
+      },
+      {
+        "mode": "exhaust",
+        "reads": [
+          {
+            "path": "/api/v1/workspace-state",
+            "started": 0.391,
+            "fault": "503",
+            "status": 503,
+            "ended": 0.391
+          },
+          {
+            "path": "/api/v1/workspace-state",
+            "started": 1.0,
+            "fault": "503",
+            "status": 503,
+            "ended": 1.0
+          },
+          {
+            "path": "/api/v1/workspace-state",
+            "started": 2.156,
+            "fault": "503",
+            "status": 503,
+            "ended": 2.156
+          },
+          {
+            "path": "/api/v1/workspace-state",
+            "started": 4.422,
+            "fault": "503",
+            "status": 503,
+            "ended": 4.422
+          },
+          {
+            "path": "/api/v1/workspace-state",
+            "started": 8.812,
+            "fault": "503",
+            "status": 503,
+            "ended": 8.812
+          },
+          {
+            "path": "/api/v1/workspace-state",
+            "started": 17.203,
+            "fault": "503",
+            "status": 503,
+            "ended": 17.203
+          }
+        ],
+        "writes": [],
+        "left": 0,
+        "accepted": false
+      },
+      {
+        "mode": "lost",
+        "reads": [
+          {
+            "path": "/api/v1/workspace-state",
+            "started": 0.36,
+            "fault": null,
+            "status": 200,
+            "ended": 0.36
+          },
+          {
+            "path": "/api/v1/workspace-state",
+            "started": 0.422,
+            "fault": "503",
+            "status": 503,
+            "ended": 0.422
+          },
+          {
+            "path": "/api/v1/workspace-state",
+            "started": 0.985,
+            "fault": "503",
+            "status": 503,
+            "ended": 0.985
+          },
+          {
+            "path": "/api/v1/workspace-state",
+            "started": 2.188,
+            "fault": null,
+            "status": 200,
+            "ended": 2.203
+          }
+        ],
+        "writes": [
+          {
+            "started": 0.407,
+            "body": {
+              "project_id": "default",
+              "session_id": "V-OSN92wm-D3jPopfocxFD2rSl3yynRL"
+            },
+            "native_status": 200,
+            "reply": "lost",
+            "ended": 0.407
+          }
+        ],
+        "left": 0,
+        "accepted": true
+      },
+      {
+        "mode": "hold-write",
+        "reads": [
+          {
+            "path": "/api/v1/workspace-state",
+            "started": 0.343,
+            "fault": null,
+            "status": 200,
+            "ended": 0.343
+          },
+          {
+            "path": "/api/v1/workspace-state",
+            "started": 8.39,
+            "fault": "503",
+            "status": 503,
+            "ended": 8.39
+          },
+          {
+            "path": "/api/v1/workspace-state",
+            "started": 8.922,
+            "fault": "503",
+            "status": 503,
+            "ended": 8.922
+          },
+          {
+            "path": "/api/v1/workspace-state",
+            "started": 10.109,
+            "fault": null,
+            "status": 200,
+            "ended": 10.109
+          }
+        ],
+        "writes": [
+          {
+            "started": 0.39,
+            "body": {
+              "project_id": "default",
+              "session_id": "V-OSN92wm-D3jPopfocxFD2rSl3yynRL"
+            },
+            "native_status": 200,
+            "reply": "held",
+            "ended": 12.39
+          }
+        ],
+        "left": 0,
+        "accepted": true
+      },
+      {
+        "mode": "exhaust-write",
+        "reads": [
+          {
+            "path": "/api/v1/workspace-state",
+            "started": 0.329,
+            "fault": null,
+            "status": 200,
+            "ended": 0.329
+          },
+          {
+            "path": "/api/v1/workspace-state",
+            "started": 0.391,
+            "fault": "503",
+            "status": 503,
+            "ended": 0.391
+          },
+          {
+            "path": "/api/v1/workspace-state",
+            "started": 0.985,
+            "fault": "503",
+            "status": 503,
+            "ended": 0.985
+          },
+          {
+            "path": "/api/v1/workspace-state",
+            "started": 2.141,
+            "fault": "503",
+            "status": 503,
+            "ended": 2.141
+          },
+          {
+            "path": "/api/v1/workspace-state",
+            "started": 4.454,
+            "fault": "503",
+            "status": 503,
+            "ended": 4.454
+          },
+          {
+            "path": "/api/v1/workspace-state",
+            "started": 8.735,
+            "fault": "503",
+            "status": 503,
+            "ended": 8.735
+          },
+          {
+            "path": "/api/v1/workspace-state",
+            "started": 17.985,
+            "fault": "503",
+            "status": 503,
+            "ended": 17.985
+          }
+        ],
+        "writes": [
+          {
+            "started": 0.36,
+            "body": {
+              "project_id": "default",
+              "session_id": "V-OSN92wm-D3jPopfocxFD2rSl3yynRL"
+            },
+            "native_status": 200,
+            "reply": "lost",
+            "ended": 0.36
+          }
+        ],
+        "left": 0,
+        "accepted": true
+      }
+    ]
+  },
+  {
+    "stored": {
+      "project_id": "default",
+      "session_id": "V-OSN8zeLfRTvpuWDHwjTvyWObgIER-A"
+    },
+    "saved": {
+      "project_id": "default",
+      "session_id": "V-OSN8zeLfRTvpuWDHwjTvyWObgIER-A"
+    },
+    "other": {
+      "project_id": "default",
+      "session_id": "V-OSN92wm-D3jPopfocxFD2rSl3yynRL"
+    },
+    "tasks": [
+      {
+        "project_id": "default",
+        "session_id": "V-OSN8zeLfRTvpuWDHwjTvyWObgIER-A",
+        "inputs": [],
+        "errors": 0,
+        "event_kinds": {},
+        "draft": {
+          "revision": 1,
+          "text": "SERVICE_READ_SAVED_DRAFT",
+          "attachments": [],
+          "run_admission_uncertain": false,
+          "submission": null,
+          "submissions": []
+        }
+      },
+      {
+        "project_id": "default",
+        "session_id": "V-OSN92wm-D3jPopfocxFD2rSl3yynRL",
+        "inputs": [
+          "WORKSPACE_SAVE_CONFIRMED",
+          "WORKSPACE_UNCONFIRMED_CONTINUE"
+        ],
+        "errors": 0,
+        "event_kinds": {
+          "agent_start": 2,
+          "model_start": 2,
+          "model_text_delta": 2,
+          "model_done": 2,
+          "agent_done": 2
+        },
+        "draft": {
+          "revision": 9,
+          "text": "",
+          "attachments": [],
+          "run_admission_uncertain": false,
+          "submission": null,
+          "submissions": []
+        }
+      }
+    ],
+    "sources": {
+      "js/features/shell/workspace-startup.js": "d515141a19fc7979de1d14b35c4617a85368e0dbdc79578fad2a6127cff6929a",
+      "lang/zh-CN.json": "3f3603a029842910a3d35c6ad17e33095a886f9a170c6be11bb1f2615871e32e",
+      "lang/en-US.json": "097126bd1702c11736eed4dd9be7c6f2e266131a97cad6c10a87915b0e826c22",
+      "lang/ru-RU.json": "7770b0e54ead384fa3cecd74ff775532bca3ca5ec0051f5d411b69b4a3e5e9a1"
+    },
+    "phases": [
+      {
+        "mode": "initial",
+        "reads": [
+          {
+            "path": "/api/v1/workspace-state",
+            "started": 0.547,
+            "fault": "503",
+            "status": 503,
+            "ended": 0.547
+          },
+          {
+            "path": "/api/v1/workspace-state",
+            "started": 1.11,
+            "fault": "503",
+            "status": 503,
+            "ended": 1.11
+          },
+          {
+            "path": "/api/v1/workspace-state",
+            "started": 2.282,
+            "fault": null,
+            "status": 200,
+            "ended": 2.282
+          },
+          {
+            "path": "/api/v1/projects/default/sessions/V-OSN8zeLfRTvpuWDHwjTvyWObgIER-A",
+            "started": 2.297,
+            "fault": null,
+            "status": 200,
+            "ended": 2.297
+          },
+          {
+            "path": "/api/v1/projects/default/sessions/V-OSN8zeLfRTvpuWDHwjTvyWObgIER-A",
+            "started": 2.313,
+            "fault": null,
+            "status": 200,
+            "ended": 2.313
+          }
+        ],
+        "writes": [],
+        "left": 0,
+        "accepted": false
+      },
+      {
+        "mode": "detail",
+        "reads": [
+          {
+            "path": "/api/v1/workspace-state",
+            "started": 0.359,
+            "fault": null,
+            "status": 200,
+            "ended": 0.359
+          },
+          {
+            "path": "/api/v1/projects/default/sessions/V-OSN8zeLfRTvpuWDHwjTvyWObgIER-A",
+            "started": 0.375,
+            "fault": "503",
+            "status": 503,
+            "ended": 0.375
+          },
+          {
+            "path": "/api/v1/projects/default/sessions/V-OSN8zeLfRTvpuWDHwjTvyWObgIER-A",
+            "started": 0.906,
+            "fault": "503",
+            "status": 503,
+            "ended": 0.906
+          },
+          {
+            "path": "/api/v1/projects/default/sessions/V-OSN8zeLfRTvpuWDHwjTvyWObgIER-A",
+            "started": 1.984,
+            "fault": null,
+            "status": 200,
+            "ended": 1.984
+          },
+          {
+            "path": "/api/v1/projects/default/sessions/V-OSN8zeLfRTvpuWDHwjTvyWObgIER-A",
+            "started": 2.0,
+            "fault": null,
+            "status": 200,
+            "ended": 2.015
+          }
+        ],
+        "writes": [],
+        "left": 0,
+        "accepted": false
+      },
+      {
+        "mode": "exhaust",
+        "reads": [
+          {
+            "path": "/api/v1/workspace-state",
+            "started": 0.391,
+            "fault": "503",
+            "status": 503,
+            "ended": 0.391
+          },
+          {
+            "path": "/api/v1/workspace-state",
+            "started": 1.0,
+            "fault": "503",
+            "status": 503,
+            "ended": 1.0
+          },
+          {
+            "path": "/api/v1/workspace-state",
+            "started": 2.156,
+            "fault": "503",
+            "status": 503,
+            "ended": 2.156
+          },
+          {
+            "path": "/api/v1/workspace-state",
+            "started": 4.422,
+            "fault": "503",
+            "status": 503,
+            "ended": 4.422
+          },
+          {
+            "path": "/api/v1/workspace-state",
+            "started": 8.812,
+            "fault": "503",
+            "status": 503,
+            "ended": 8.812
+          },
+          {
+            "path": "/api/v1/workspace-state",
+            "started": 17.203,
+            "fault": "503",
+            "status": 503,
+            "ended": 17.203
+          }
+        ],
+        "writes": [],
+        "left": 0,
+        "accepted": false
+      },
+      {
+        "mode": "lost",
+        "reads": [
+          {
+            "path": "/api/v1/workspace-state",
+            "started": 0.36,
+            "fault": null,
+            "status": 200,
+            "ended": 0.36
+          },
+          {
+            "path": "/api/v1/workspace-state",
+            "started": 0.422,
+            "fault": "503",
+            "status": 503,
+            "ended": 0.422
+          },
+          {
+            "path": "/api/v1/workspace-state",
+            "started": 0.985,
+            "fault": "503",
+            "status": 503,
+            "ended": 0.985
+          },
+          {
+            "path": "/api/v1/workspace-state",
+            "started": 2.188,
+            "fault": null,
+            "status": 200,
+            "ended": 2.203
+          }
+        ],
+        "writes": [
+          {
+            "started": 0.407,
+            "body": {
+              "project_id": "default",
+              "session_id": "V-OSN92wm-D3jPopfocxFD2rSl3yynRL"
+            },
+            "native_status": 200,
+            "reply": "lost",
+            "ended": 0.407
+          }
+        ],
+        "left": 0,
+        "accepted": true
+      },
+      {
+        "mode": "hold-write",
+        "reads": [
+          {
+            "path": "/api/v1/workspace-state",
+            "started": 0.343,
+            "fault": null,
+            "status": 200,
+            "ended": 0.343
+          },
+          {
+            "path": "/api/v1/workspace-state",
+            "started": 8.39,
+            "fault": "503",
+            "status": 503,
+            "ended": 8.39
+          },
+          {
+            "path": "/api/v1/workspace-state",
+            "started": 8.922,
+            "fault": "503",
+            "status": 503,
+            "ended": 8.922
+          },
+          {
+            "path": "/api/v1/workspace-state",
+            "started": 10.109,
+            "fault": null,
+            "status": 200,
+            "ended": 10.109
+          }
+        ],
+        "writes": [
+          {
+            "started": 0.39,
+            "body": {
+              "project_id": "default",
+              "session_id": "V-OSN92wm-D3jPopfocxFD2rSl3yynRL"
+            },
+            "native_status": 200,
+            "reply": "held",
+            "ended": 12.39
+          }
+        ],
+        "left": 0,
+        "accepted": true
+      },
+      {
+        "mode": "exhaust-write",
+        "reads": [
+          {
+            "path": "/api/v1/workspace-state",
+            "started": 0.329,
+            "fault": null,
+            "status": 200,
+            "ended": 0.329
+          },
+          {
+            "path": "/api/v1/workspace-state",
+            "started": 0.391,
+            "fault": "503",
+            "status": 503,
+            "ended": 0.391
+          },
+          {
+            "path": "/api/v1/workspace-state",
+            "started": 0.985,
+            "fault": "503",
+            "status": 503,
+            "ended": 0.985
+          },
+          {
+            "path": "/api/v1/workspace-state",
+            "started": 2.141,
+            "fault": "503",
+            "status": 503,
+            "ended": 2.141
+          },
+          {
+            "path": "/api/v1/workspace-state",
+            "started": 4.454,
+            "fault": "503",
+            "status": 503,
+            "ended": 4.454
+          },
+          {
+            "path": "/api/v1/workspace-state",
+            "started": 8.735,
+            "fault": "503",
+            "status": 503,
+            "ended": 8.735
+          },
+          {
+            "path": "/api/v1/workspace-state",
+            "started": 17.985,
+            "fault": "503",
+            "status": 503,
+            "ended": 17.985
+          }
+        ],
+        "writes": [
+          {
+            "started": 0.36,
+            "body": {
+              "project_id": "default",
+              "session_id": "V-OSN92wm-D3jPopfocxFD2rSl3yynRL"
+            },
+            "native_status": 200,
+            "reply": "lost",
+            "ended": 0.36
+          }
+        ],
+        "left": 0,
+        "accepted": true
+      },
+      {
+        "mode": "hold-read",
+        "reads": [
+          {
+            "path": "/api/v1/workspace-state",
+            "started": 0.328,
+            "fault": "hold",
+            "status": 200,
+            "ended": 12.328
+          },
+          {
+            "path": "/api/v1/workspace-state",
+            "started": 8.859,
+            "fault": null,
+            "status": 200,
+            "ended": 8.859
+          }
+        ],
+        "writes": [],
+        "left": 0,
+        "accepted": false
+      }
+    ]
+  }
+]

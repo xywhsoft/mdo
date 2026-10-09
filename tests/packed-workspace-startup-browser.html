@@ -1,0 +1,55 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Workspace startup recovery QA</title>
+<style>
+body { margin:0; background:#202020; color:#ddd; font:13px system-ui }
+header { display:flex; flex-wrap:wrap; gap:5px; padding:5px }
+button { padding:5px } iframe { width:100%; height:calc(100vh - 110px); border:0 }
+#summary { margin:3px 8px; white-space:pre-wrap }
+</style>
+<header>
+  <button data-mode="initial">上次位置两次 503</button>
+  <button data-mode="detail">上次会话详情两次 503</button>
+  <button data-mode="exhaust">上次位置六次 503</button>
+  <button data-mode="lost">保存已成功，回复丢失</button>
+  <button data-mode="hold-write">保存已成功，回复暂扣 12 秒</button>
+  <button data-mode="exhaust-write">保存结果暂时无法确认</button>
+  <button data-mode="hold-read">启动位置正文暂扣 12 秒</button>
+</header>
+<pre id="summary">只观察真实工作台；不合成键盘、组合输入或生命周期事件。</pre>
+<script type="application/json" id="observations">[]</script>
+<iframe id="mdo" title="Actual packed mdo"></iframe>
+<script>
+const frame = document.querySelector('#mdo'), records = [], started = performance.now();
+let phase = '', last = '', timer;
+const errors = [], seen = new WeakSet();
+function observe() {
+  const doc = frame.contentDocument, prompt = doc?.querySelector('#prompt');
+  if (!prompt) return;
+  for (const node of doc.querySelectorAll('#toast-region [data-tone="error"]'))
+    if (!seen.has(node)) { seen.add(node); errors.push({ phase, text:node.textContent }); }
+  const state = { phase, route:frame.contentWindow.location.hash,
+    title:doc.querySelector('#session-title')?.textContent,
+    inputLength:prompt.value.length, inputDisabled:prompt.disabled,
+    sendDisabled:doc.querySelector('#send')?.disabled,
+    startupDialog:doc.querySelector('#startup-choice-dialog')?.open,
+    notice:doc.querySelector('#project-purge-notice')?.hidden ? '' :
+      doc.querySelector('#project-purge-notice')?.textContent.trim(),
+    errors:errors.slice() };
+  const serialized = JSON.stringify(state);
+  if (serialized !== last) {
+    records.push({ seconds:Math.round((performance.now()-started)/100)/10, ...state });
+    last = serialized;
+    document.querySelector('#observations').textContent = JSON.stringify(records);
+    document.querySelector('#summary').textContent = serialized;
+  }
+}
+frame.addEventListener('load', () => { clearInterval(timer); timer=setInterval(observe,100); observe(); });
+for (const button of document.querySelectorAll('[data-mode]')) button.addEventListener('click', async () => {
+  phase = button.dataset.mode;
+  const data = await (await fetch('/__qa/workspace-arm/' + phase)).json();
+  const route = ['lost','hold-write','exhaust-write'].includes(phase) ? data.other_route : '';
+  frame.src = '/?qa_reload=' + Date.now() + route;
+});
+window.addEventListener('pagehide', () => clearInterval(timer));
+</script>

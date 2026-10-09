@@ -1339,6 +1339,7 @@
   "resource.reloadFailed": "目录刷新失败",
   "startup.readFailed": "无法读取上次会话，将使用当前会话列表。",
   "startup.saveFailed": "无法保存上次会话；下次启动可能打开其他任务。",
+  "startup.saveUnconfirmed": "尚无法确认上次会话已保存；当前对话不受影响，下次启动可能打开其他任务。",
   "startup.untitled": "未命名任务",
   "sessionLoad.loadingTitle": "正在载入任务…",
   "sessionLoad.loadingDescription": "正在读取会话记录。",

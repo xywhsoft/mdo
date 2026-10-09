@@ -1,0 +1,10 @@
+{
+  "expected_length": 30,
+  "actual_length": 60,
+  "expected_sha256": "eb67d1cada565dc20d7f060060e5a69735ac658867ee29e1706536fe8da450f9",
+  "actual_sha256": "9ef2e4bf60b3c77c1f8f1c64d93f3acca8d467c1e9bd853ef903e20963f24014",
+  "exact_double": true,
+  "sent_before_correction": false,
+  "source_determined": false,
+  "note": "No input event trace in this attempt; exact input was checked before any send."
+}

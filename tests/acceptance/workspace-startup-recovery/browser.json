@@ -1,0 +1,660 @@
+{
+  "observations": [
+    {
+      "seconds": 6.7,
+      "phase": "initial",
+      "route": "",
+      "title": "新任务",
+      "inputLength": 0,
+      "inputDisabled": false,
+      "sendDisabled": false,
+      "startupDialog": false,
+      "notice": "",
+      "errors": []
+    },
+    {
+      "seconds": 7,
+      "phase": "initial",
+      "route": "",
+      "title": "shell.newTask",
+      "inputLength": 0,
+      "inputDisabled": true,
+      "sendDisabled": true,
+      "startupDialog": false,
+      "notice": "purgeRecovery.checkingServicedevices.retry",
+      "errors": []
+    },
+    {
+      "seconds": 7.1,
+      "phase": "initial",
+      "route": "",
+      "title": "新建任务",
+      "inputLength": 0,
+      "inputDisabled": false,
+      "sendDisabled": true,
+      "startupDialog": false,
+      "notice": "",
+      "errors": []
+    },
+    {
+      "seconds": 7.2,
+      "phase": "initial",
+      "route": "",
+      "title": "新建任务",
+      "inputLength": 0,
+      "inputDisabled": false,
+      "sendDisabled": false,
+      "startupDialog": false,
+      "notice": "",
+      "errors": []
+    },
+    {
+      "seconds": 8.9,
+      "phase": "initial",
+      "route": "#/projects/default/sessions/V-OSN8zeLfRTvpuWDHwjTvyWObgIER-A",
+      "title": "Service read recovery",
+      "inputLength": 24,
+      "inputDisabled": false,
+      "sendDisabled": false,
+      "startupDialog": false,
+      "notice": "",
+      "errors": []
+    },
+    {
+      "seconds": 36.2,
+      "phase": "detail",
+      "route": "",
+      "title": "新任务",
+      "inputLength": 0,
+      "inputDisabled": false,
+      "sendDisabled": false,
+      "startupDialog": false,
+      "notice": "",
+      "errors": []
+    },
+    {
+      "seconds": 36.5,
+      "phase": "detail",
+      "route": "",
+      "title": "新建任务",
+      "inputLength": 0,
+      "inputDisabled": true,
+      "sendDisabled": true,
+      "startupDialog": false,
+      "notice": "正在检查服务状态…重新连接",
+      "errors": []
+    },
+    {
+      "seconds": 36.6,
+      "phase": "detail",
+      "route": "",
+      "title": "新建任务",
+      "inputLength": 0,
+      "inputDisabled": false,
+      "sendDisabled": false,
+      "startupDialog": false,
+      "notice": "",
+      "errors": []
+    },
+    {
+      "seconds": 38.2,
+      "phase": "detail",
+      "route": "#/projects/default/sessions/V-OSN8zeLfRTvpuWDHwjTvyWObgIER-A",
+      "title": "Service read recovery",
+      "inputLength": 24,
+      "inputDisabled": false,
+      "sendDisabled": false,
+      "startupDialog": false,
+      "notice": "",
+      "errors": []
+    },
+    {
+      "seconds": 54.6,
+      "phase": "exhaust",
+      "route": "",
+      "title": "新任务",
+      "inputLength": 0,
+      "inputDisabled": false,
+      "sendDisabled": false,
+      "startupDialog": false,
+      "notice": "",
+      "errors": []
+    },
+    {
+      "seconds": 55,
+      "phase": "exhaust",
+      "route": "",
+      "title": "新建任务",
+      "inputLength": 0,
+      "inputDisabled": false,
+      "sendDisabled": true,
+      "startupDialog": false,
+      "notice": "",
+      "errors": []
+    },
+    {
+      "seconds": 55,
+      "phase": "exhaust",
+      "route": "",
+      "title": "新建任务",
+      "inputLength": 0,
+      "inputDisabled": false,
+      "sendDisabled": false,
+      "startupDialog": false,
+      "notice": "",
+      "errors": []
+    },
+    {
+      "seconds": 71.8,
+      "phase": "exhaust",
+      "route": "#/projects/default/sessions/V-OSN92wm-D3jPopfocxFD2rSl3yynRL",
+      "title": "Catalog recent task",
+      "inputLength": 0,
+      "inputDisabled": false,
+      "sendDisabled": false,
+      "startupDialog": false,
+      "notice": "",
+      "errors": [
+        {
+          "phase": "exhaust",
+          "text": "无法读取上次会话，将使用当前会话列表。"
+        }
+      ]
+    },
+    {
+      "seconds": 124.8,
+      "phase": "lost",
+      "route": "#/projects/default/sessions/V-OSN92wm-D3jPopfocxFD2rSl3yynRL",
+      "title": "新任务",
+      "inputLength": 0,
+      "inputDisabled": false,
+      "sendDisabled": false,
+      "startupDialog": false,
+      "notice": "",
+      "errors": [
+        {
+          "phase": "exhaust",
+          "text": "无法读取上次会话，将使用当前会话列表。"
+        }
+      ]
+    },
+    {
+      "seconds": 125.2,
+      "phase": "lost",
+      "route": "#/projects/default/sessions/V-OSN92wm-D3jPopfocxFD2rSl3yynRL",
+      "title": "Catalog recent task",
+      "inputLength": 0,
+      "inputDisabled": false,
+      "sendDisabled": true,
+      "startupDialog": false,
+      "notice": "",
+      "errors": [
+        {
+          "phase": "exhaust",
+          "text": "无法读取上次会话，将使用当前会话列表。"
+        }
+      ]
+    },
+    {
+      "seconds": 125.2,
+      "phase": "lost",
+      "route": "#/projects/default/sessions/V-OSN92wm-D3jPopfocxFD2rSl3yynRL",
+      "title": "Catalog recent task",
+      "inputLength": 0,
+      "inputDisabled": false,
+      "sendDisabled": false,
+      "startupDialog": false,
+      "notice": "",
+      "errors": [
+        {
+          "phase": "exhaust",
+          "text": "无法读取上次会话，将使用当前会话列表。"
+        }
+      ]
+    },
+    {
+      "seconds": 199.6,
+      "phase": "lost",
+      "route": "#/projects/default/sessions/V-OSN92wm-D3jPopfocxFD2rSl3yynRL",
+      "title": "Catalog recent task",
+      "inputLength": 24,
+      "inputDisabled": false,
+      "sendDisabled": false,
+      "startupDialog": false,
+      "notice": "",
+      "errors": [
+        {
+          "phase": "exhaust",
+          "text": "无法读取上次会话，将使用当前会话列表。"
+        }
+      ]
+    },
+    {
+      "seconds": 199.8,
+      "phase": "lost",
+      "route": "#/projects/default/sessions/V-OSN92wm-D3jPopfocxFD2rSl3yynRL",
+      "title": "Catalog recent task",
+      "inputLength": 0,
+      "inputDisabled": false,
+      "sendDisabled": false,
+      "startupDialog": false,
+      "notice": "",
+      "errors": [
+        {
+          "phase": "exhaust",
+          "text": "无法读取上次会话，将使用当前会话列表。"
+        }
+      ]
+    },
+    {
+      "seconds": 200,
+      "phase": "hold-write",
+      "route": "#/projects/default/sessions/V-OSN92wm-D3jPopfocxFD2rSl3yynRL",
+      "title": "Catalog recent task",
+      "inputLength": 0,
+      "inputDisabled": false,
+      "sendDisabled": false,
+      "startupDialog": false,
+      "notice": "",
+      "errors": [
+        {
+          "phase": "exhaust",
+          "text": "无法读取上次会话，将使用当前会话列表。"
+        }
+      ]
+    },
+    {
+      "seconds": 200.1,
+      "phase": "hold-write",
+      "route": "#/projects/default/sessions/V-OSN92wm-D3jPopfocxFD2rSl3yynRL",
+      "title": "新任务",
+      "inputLength": 0,
+      "inputDisabled": false,
+      "sendDisabled": false,
+      "startupDialog": false,
+      "notice": "",
+      "errors": [
+        {
+          "phase": "exhaust",
+          "text": "无法读取上次会话，将使用当前会话列表。"
+        }
+      ]
+    },
+    {
+      "seconds": 200.3,
+      "phase": "hold-write",
+      "route": "#/projects/default/sessions/V-OSN92wm-D3jPopfocxFD2rSl3yynRL",
+      "title": "正在载入任务…",
+      "inputLength": 0,
+      "inputDisabled": true,
+      "sendDisabled": true,
+      "startupDialog": false,
+      "notice": "purgeRecovery.checkingServicedevices.retry",
+      "errors": [
+        {
+          "phase": "exhaust",
+          "text": "无法读取上次会话，将使用当前会话列表。"
+        }
+      ]
+    },
+    {
+      "seconds": 200.4,
+      "phase": "hold-write",
+      "route": "#/projects/default/sessions/V-OSN92wm-D3jPopfocxFD2rSl3yynRL",
+      "title": "Catalog recent task",
+      "inputLength": 0,
+      "inputDisabled": false,
+      "sendDisabled": true,
+      "startupDialog": false,
+      "notice": "",
+      "errors": [
+        {
+          "phase": "exhaust",
+          "text": "无法读取上次会话，将使用当前会话列表。"
+        }
+      ]
+    },
+    {
+      "seconds": 200.5,
+      "phase": "hold-write",
+      "route": "#/projects/default/sessions/V-OSN92wm-D3jPopfocxFD2rSl3yynRL",
+      "title": "Catalog recent task",
+      "inputLength": 0,
+      "inputDisabled": false,
+      "sendDisabled": false,
+      "startupDialog": false,
+      "notice": "",
+      "errors": [
+        {
+          "phase": "exhaust",
+          "text": "无法读取上次会话，将使用当前会话列表。"
+        }
+      ]
+    },
+    {
+      "seconds": 260.6,
+      "phase": "exhaust-write",
+      "route": "#/projects/default/sessions/V-OSN92wm-D3jPopfocxFD2rSl3yynRL",
+      "title": "新任务",
+      "inputLength": 0,
+      "inputDisabled": false,
+      "sendDisabled": false,
+      "startupDialog": false,
+      "notice": "",
+      "errors": [
+        {
+          "phase": "exhaust",
+          "text": "无法读取上次会话，将使用当前会话列表。"
+        }
+      ]
+    },
+    {
+      "seconds": 260.9,
+      "phase": "exhaust-write",
+      "route": "#/projects/default/sessions/V-OSN92wm-D3jPopfocxFD2rSl3yynRL",
+      "title": "正在载入任务…",
+      "inputLength": 0,
+      "inputDisabled": true,
+      "sendDisabled": true,
+      "startupDialog": false,
+      "notice": "",
+      "errors": [
+        {
+          "phase": "exhaust",
+          "text": "无法读取上次会话，将使用当前会话列表。"
+        }
+      ]
+    },
+    {
+      "seconds": 261,
+      "phase": "exhaust-write",
+      "route": "#/projects/default/sessions/V-OSN92wm-D3jPopfocxFD2rSl3yynRL",
+      "title": "Catalog recent task",
+      "inputLength": 0,
+      "inputDisabled": false,
+      "sendDisabled": false,
+      "startupDialog": false,
+      "notice": "",
+      "errors": [
+        {
+          "phase": "exhaust",
+          "text": "无法读取上次会话，将使用当前会话列表。"
+        }
+      ]
+    },
+    {
+      "seconds": 278.6,
+      "phase": "exhaust-write",
+      "route": "#/projects/default/sessions/V-OSN92wm-D3jPopfocxFD2rSl3yynRL",
+      "title": "Catalog recent task",
+      "inputLength": 0,
+      "inputDisabled": false,
+      "sendDisabled": false,
+      "startupDialog": false,
+      "notice": "",
+      "errors": [
+        {
+          "phase": "exhaust",
+          "text": "无法读取上次会话，将使用当前会话列表。"
+        },
+        {
+          "phase": "exhaust-write",
+          "text": "尚无法确认上次会话已保存；当前对话不受影响，下次启动可能打开其他任务。"
+        }
+      ]
+    },
+    {
+      "seconds": 360.4,
+      "phase": "exhaust-write",
+      "route": "#/projects/default/sessions/V-OSN92wm-D3jPopfocxFD2rSl3yynRL",
+      "title": "Catalog recent task",
+      "inputLength": 60,
+      "inputDisabled": false,
+      "sendDisabled": false,
+      "startupDialog": false,
+      "notice": "",
+      "errors": [
+        {
+          "phase": "exhaust",
+          "text": "无法读取上次会话，将使用当前会话列表。"
+        },
+        {
+          "phase": "exhaust-write",
+          "text": "尚无法确认上次会话已保存；当前对话不受影响，下次启动可能打开其他任务。"
+        }
+      ]
+    },
+    {
+      "seconds": 446.3,
+      "phase": "exhaust-write",
+      "route": "#/projects/default/sessions/V-OSN92wm-D3jPopfocxFD2rSl3yynRL",
+      "title": "Catalog recent task",
+      "inputLength": 0,
+      "inputDisabled": false,
+      "sendDisabled": false,
+      "startupDialog": false,
+      "notice": "",
+      "errors": [
+        {
+          "phase": "exhaust",
+          "text": "无法读取上次会话，将使用当前会话列表。"
+        },
+        {
+          "phase": "exhaust-write",
+          "text": "尚无法确认上次会话已保存；当前对话不受影响，下次启动可能打开其他任务。"
+        }
+      ]
+    },
+    {
+      "seconds": 446.4,
+      "phase": "exhaust-write",
+      "route": "#/projects/default/sessions/V-OSN92wm-D3jPopfocxFD2rSl3yynRL",
+      "title": "Catalog recent task",
+      "inputLength": 30,
+      "inputDisabled": false,
+      "sendDisabled": false,
+      "startupDialog": false,
+      "notice": "",
+      "errors": [
+        {
+          "phase": "exhaust",
+          "text": "无法读取上次会话，将使用当前会话列表。"
+        },
+        {
+          "phase": "exhaust-write",
+          "text": "尚无法确认上次会话已保存；当前对话不受影响，下次启动可能打开其他任务。"
+        }
+      ]
+    },
+    {
+      "seconds": 446.5,
+      "phase": "exhaust-write",
+      "route": "#/projects/default/sessions/V-OSN92wm-D3jPopfocxFD2rSl3yynRL",
+      "title": "Catalog recent task",
+      "inputLength": 0,
+      "inputDisabled": false,
+      "sendDisabled": true,
+      "startupDialog": false,
+      "notice": "",
+      "errors": [
+        {
+          "phase": "exhaust",
+          "text": "无法读取上次会话，将使用当前会话列表。"
+        },
+        {
+          "phase": "exhaust-write",
+          "text": "尚无法确认上次会话已保存；当前对话不受影响，下次启动可能打开其他任务。"
+        }
+      ]
+    },
+    {
+      "seconds": 446.6,
+      "phase": "exhaust-write",
+      "route": "#/projects/default/sessions/V-OSN92wm-D3jPopfocxFD2rSl3yynRL",
+      "title": "Catalog recent task",
+      "inputLength": 0,
+      "inputDisabled": false,
+      "sendDisabled": false,
+      "startupDialog": false,
+      "notice": "",
+      "errors": [
+        {
+          "phase": "exhaust",
+          "text": "无法读取上次会话，将使用当前会话列表。"
+        },
+        {
+          "phase": "exhaust-write",
+          "text": "尚无法确认上次会话已保存；当前对话不受影响，下次启动可能打开其他任务。"
+        }
+      ]
+    },
+    {
+      "seconds": 470.5,
+      "phase": "hold-read",
+      "route": "#/projects/default/sessions/V-OSN92wm-D3jPopfocxFD2rSl3yynRL",
+      "title": "Catalog recent task",
+      "inputLength": 0,
+      "inputDisabled": false,
+      "sendDisabled": false,
+      "startupDialog": false,
+      "notice": "",
+      "errors": [
+        {
+          "phase": "exhaust",
+          "text": "无法读取上次会话，将使用当前会话列表。"
+        },
+        {
+          "phase": "exhaust-write",
+          "text": "尚无法确认上次会话已保存；当前对话不受影响，下次启动可能打开其他任务。"
+        }
+      ]
+    },
+    {
+      "seconds": 470.5,
+      "phase": "hold-read",
+      "route": "",
+      "title": "新任务",
+      "inputLength": 0,
+      "inputDisabled": false,
+      "sendDisabled": false,
+      "startupDialog": false,
+      "notice": "",
+      "errors": [
+        {
+          "phase": "exhaust",
+          "text": "无法读取上次会话，将使用当前会话列表。"
+        },
+        {
+          "phase": "exhaust-write",
+          "text": "尚无法确认上次会话已保存；当前对话不受影响，下次启动可能打开其他任务。"
+        }
+      ]
+    },
+    {
+      "seconds": 470.8,
+      "phase": "hold-read",
+      "route": "",
+      "title": "shell.newTask",
+      "inputLength": 0,
+      "inputDisabled": true,
+      "sendDisabled": true,
+      "startupDialog": false,
+      "notice": "purgeRecovery.checkingServicedevices.retry",
+      "errors": [
+        {
+          "phase": "exhaust",
+          "text": "无法读取上次会话，将使用当前会话列表。"
+        },
+        {
+          "phase": "exhaust-write",
+          "text": "尚无法确认上次会话已保存；当前对话不受影响，下次启动可能打开其他任务。"
+        }
+      ]
+    },
+    {
+      "seconds": 470.8,
+      "phase": "hold-read",
+      "route": "",
+      "title": "新建任务",
+      "inputLength": 0,
+      "inputDisabled": false,
+      "sendDisabled": true,
+      "startupDialog": false,
+      "notice": "",
+      "errors": [
+        {
+          "phase": "exhaust",
+          "text": "无法读取上次会话，将使用当前会话列表。"
+        },
+        {
+          "phase": "exhaust-write",
+          "text": "尚无法确认上次会话已保存；当前对话不受影响，下次启动可能打开其他任务。"
+        }
+      ]
+    },
+    {
+      "seconds": 470.9,
+      "phase": "hold-read",
+      "route": "",
+      "title": "新建任务",
+      "inputLength": 0,
+      "inputDisabled": false,
+      "sendDisabled": false,
+      "startupDialog": false,
+      "notice": "",
+      "errors": [
+        {
+          "phase": "exhaust",
+          "text": "无法读取上次会话，将使用当前会话列表。"
+        },
+        {
+          "phase": "exhaust-write",
+          "text": "尚无法确认上次会话已保存；当前对话不受影响，下次启动可能打开其他任务。"
+        }
+      ]
+    },
+    {
+      "seconds": 473.6,
+      "phase": "hold-read",
+      "route": "#/projects/default/new",
+      "title": "新建任务",
+      "inputLength": 0,
+      "inputDisabled": false,
+      "sendDisabled": false,
+      "startupDialog": false,
+      "notice": "",
+      "errors": [
+        {
+          "phase": "exhaust",
+          "text": "无法读取上次会话，将使用当前会话列表。"
+        },
+        {
+          "phase": "exhaust-write",
+          "text": "尚无法确认上次会话已保存；当前对话不受影响，下次启动可能打开其他任务。"
+        }
+      ]
+    },
+    {
+      "seconds": 476.6,
+      "phase": "hold-read",
+      "route": "#/projects/default/new",
+      "title": "新建任务",
+      "inputLength": 25,
+      "inputDisabled": false,
+      "sendDisabled": false,
+      "startupDialog": false,
+      "notice": "",
+      "errors": [
+        {
+          "phase": "exhaust",
+          "text": "无法读取上次会话，将使用当前会话列表。"
+        },
+        {
+          "phase": "exhaust-write",
+          "text": "尚无法确认上次会话已保存；当前对话不受影响，下次启动可能打开其他任务。"
+        }
+      ]
+    }
+  ],
+  "draft": "STARTUP_USER_CHOICE_DRAFT"
+}

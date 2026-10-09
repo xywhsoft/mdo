@@ -1,0 +1,67 @@
+{
+  "before": {
+    "stored": {
+      "project_id": "default",
+      "session_id": "V-OSN8zeLfRTvpuWDHwjTvyWObgIER-A"
+    },
+    "draft": {
+      "revision": 1,
+      "text": "STARTUP_USER_CHOICE_DRAFT",
+      "attachments": [],
+      "run_admission_uncertain": false,
+      "submission": null,
+      "submissions": []
+    }
+  },
+  "after": {
+    "stored": {
+      "project_id": "default",
+      "session_id": "V-OSN92wm-D3jPopfocxFD2rSl3yynRL"
+    },
+    "draft": {
+      "revision": 1,
+      "text": "STARTUP_USER_CHOICE_DRAFT",
+      "attachments": [],
+      "run_admission_uncertain": false,
+      "submission": null,
+      "submissions": []
+    },
+    "tasks": [
+      {
+        "project_id": "default",
+        "session_id": "V-OSN8zeLfRTvpuWDHwjTvyWObgIER-A",
+        "inputs": [],
+        "errors": 0,
+        "draft": {
+          "revision": 1,
+          "text": "SERVICE_READ_SAVED_DRAFT",
+          "attachments": [],
+          "run_admission_uncertain": false,
+          "submission": null,
+          "submissions": []
+        }
+      },
+      {
+        "project_id": "default",
+        "session_id": "V-OSN92wm-D3jPopfocxFD2rSl3yynRL",
+        "inputs": [
+          "WORKSPACE_SAVE_CONFIRMED",
+          "WORKSPACE_UNCONFIRMED_CONTINUE",
+          "WORKSPACE_RESTART_CONTINUE"
+        ],
+        "errors": 0,
+        "draft": {
+          "revision": 14,
+          "text": "",
+          "attachments": [],
+          "run_admission_uncertain": false,
+          "submission": null,
+          "submissions": []
+        }
+      }
+    ]
+  },
+  "model_calls": {
+    "WORKSPACE_RESTART_CONTINUE": 1
+  }
+}

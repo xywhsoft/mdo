@@ -1,0 +1,322 @@
+TAP version 13
+# Subtest: the first lost catalog read settles startup, then restores in the background
+ok 1 - the first lost catalog read settles startup, then restores in the background
+  ---
+  duration_ms: 1.7469
+  type: 'test'
+  ...
+# Subtest: exhaustion uses exponential waits and publishes one final error
+ok 2 - exhaustion uses exponential waits and publishes one final error
+  ---
+  duration_ms: 0.896
+  type: 'test'
+  ...
+# Subtest: six aborted reads and waits cannot exceed the shared minute deadline
+ok 3 - six aborted reads and waits cannot exceed the shared minute deadline
+  ---
+  duration_ms: 1.2466
+  type: 'test'
+  ...
+# Subtest: permanent access failures stay visible and are never retried
+ok 4 - permanent access failures stay visible and are never retried
+  ---
+  duration_ms: 0.2082
+  type: 'test'
+  ...
+# Subtest: an explicit newer read cancels the old retry and keeps the new result
+ok 5 - an explicit newer read cancels the old retry and keeps the new result
+  ---
+  duration_ms: 0.2612
+  type: 'test'
+  ...
+# Subtest: a stale in-flight response cannot replace a newer catalog
+ok 6 - a stale in-flight response cannot replace a newer catalog
+  ---
+  duration_ms: 0.2875
+  type: 'test'
+  ...
+# Subtest: reset and authoritative data cancel any scheduled recovery
+ok 7 - reset and authoritative data cancel any scheduled recovery
+  ---
+  duration_ms: 0.4316
+  type: 'test'
+  ...
+# Subtest: a temporary refresh failure keeps the previously loaded catalog
+ok 8 - a temporary refresh failure keeps the previously loaded catalog
+  ---
+  duration_ms: 0.2716
+  type: 'test'
+  ...
+# Subtest: ordinary stores keep their original single-read failure behavior
+ok 9 - ordinary stores keep their original single-read failure behavior
+  ---
+  duration_ms: 0.186
+  type: 'test'
+  ...
+# Subtest: leaving a page cancels its queued recovery and returning resumes the interrupted read
+ok 10 - leaving a page cancels its queued recovery and returning resumes the interrupted read
+  ---
+  duration_ms: 1.1594
+  type: 'test'
+  ...
+# Subtest: leaving during an in-flight read aborts it without publishing a failure
+ok 11 - leaving during an in-flight read aborts it without publishing a failure
+  ---
+  duration_ms: 0.472
+  type: 'test'
+  ...
+# Subtest: foreground recovery reads only an exhausted transient catalog through the real API
+ok 12 - foreground recovery reads only an exhausted transient catalog through the real API
+  ---
+  duration_ms: 27.6494
+  type: 'test'
+  ...
+# Subtest: composition belongs to its editor and another field's end cannot release it
+ok 13 - composition belongs to its editor and another field's end cannot release it
+  ---
+  duration_ms: 1.2546
+  type: 'test'
+  ...
+# Subtest: editor blur clears only its own unfinished composition
+ok 14 - editor blur clears only its own unfinished composition
+  ---
+  duration_ms: 0.2329
+  type: 'test'
+  ...
+# Subtest: losing the owner window clears composition when the same field is revisited
+ok 15 - losing the owner window clears composition when the same field is revisited
+  ---
+  duration_ms: 0.2592
+  type: 'test'
+  ...
+# Subtest: disposing a component clears its state and removes composition listeners
+ok 16 - disposing a component clears its state and removes composition listeners
+  ---
+  duration_ms: 0.1529
+  type: 'test'
+  ...
+# Subtest: background transport failures never imply an unfinished reply
+ok 17 - background transport failures never imply an unfinished reply
+  ---
+  duration_ms: 0.9629
+  type: 'test'
+  ...
+# Subtest: an actual remote read deadline is recoverable while an admitted write remains uncertain
+ok 18 - an actual remote read deadline is recoverable while an admitted write remains uncertain
+  ---
+  duration_ms: 32.1996
+  type: 'test'
+  ...
+# Subtest: a known interrupted response stays visible while its current inspection is offline
+ok 19 - a known interrupted response stays visible while its current inspection is offline
+  ---
+  duration_ms: 0.1466
+  type: 'test'
+  ...
+# Subtest: HTTP network detection signals recovery without replaying the original mutation
+ok 20 - HTTP network detection signals recovery without replaying the original mutation
+  ---
+  duration_ms: 3.2916
+  type: 'test'
+  ...
+# Subtest: background inspections preserve known state and coalesce during quiet recovery
+ok 21 - background inspections preserve known state and coalesce during quiet recovery
+  ---
+  duration_ms: 29.8774
+  type: 'test'
+  ...
+# Subtest: exhaustion retains an actual interrupted response and only explicit retry bypasses cooldown
+ok 22 - exhaustion retains an actual interrupted response and only explicit retry bypasses cooldown
+  ---
+  duration_ms: 5.2798
+  type: 'test'
+  ...
+# Subtest: switching inspection scope cancels an uncooperative transport and rejects its late data
+ok 23 - switching inspection scope cancels an uncooperative transport and rejects its late data
+  ---
+  duration_ms: 2.1509
+  type: 'test'
+  ...
+# Subtest: an attempt deadline works even when fetch does not observe AbortSignal
+ok 24 - an attempt deadline works even when fetch does not observe AbortSignal
+  ---
+  duration_ms: 2.3751
+  type: 'test'
+  ...
+# Subtest: a busy runtime is unavailable for inspection and is not replayed as a transport failure
+ok 25 - a busy runtime is unavailable for inspection and is not replayed as a transport failure
+  ---
+  duration_ms: 0.6332
+  type: 'test'
+  ...
+# Subtest: permanent and malformed inspections discard stale decisions without automatic retry
+ok 26 - permanent and malformed inspections discard stale decisions without automatic retry
+  ---
+  duration_ms: 0.8007
+  type: 'test'
+  ...
+# Subtest: pointer-selected session focuses only after its detail is ready
+ok 27 - pointer-selected session focuses only after its detail is ready
+  ---
+  duration_ms: 1.4
+  type: 'test'
+  ...
+# Subtest: startup fallback yields to input, composition, pointer and meaningful keyboard intent
+ok 28 - startup fallback yields to input, composition, pointer and meaningful keyboard intent
+  ---
+  duration_ms: 1.3683
+  type: 'test'
+  ...
+# Subtest: modifiers and data refresh do not claim startup; a route change does and teardown removes listeners
+ok 29 - modifiers and data refresh do not claim startup; a route change does and teardown removes listeners
+  ---
+  duration_ms: 0.295
+  type: 'test'
+  ...
+# Subtest: continuity verification defers selection saves and resumes only the latest destination
+ok 30 - continuity verification defers selection saves and resumes only the latest destination
+  ---
+  duration_ms: 32.7462
+  type: 'test'
+  ...
+# Subtest: read-only or unavailable targets browse sessions without persisting selection
+ok 31 - read-only or unavailable targets browse sessions without persisting selection
+  ---
+  duration_ms: 1.389
+  type: 'test'
+  ...
+# Subtest: startup focuses a ready composer without stealing focus after navigation
+ok 32 - startup focuses a ready composer without stealing focus after navigation
+  ---
+  duration_ms: 2.6985
+  type: 'test'
+  ...
+# Subtest: late saved selection never overrides a newer route in any startup mode
+ok 33 - late saved selection never overrides a newer route in any startup mode
+  ---
+  duration_ms: 1.5475
+  type: 'test'
+  ...
+# Subtest: typing or opening a drawer during a candidate read cancels fallback without a route change
+ok 34 - typing or opening a drawer during a candidate read cancels fallback without a route change
+  ---
+  duration_ms: 2.9194
+  type: 'test'
+  ...
+# Subtest: restoring a session does not steal focus from a control used while its detail loads
+ok 35 - restoring a session does not steal focus from a control used while its detail loads
+  ---
+  duration_ms: 0.7697
+  type: 'test'
+  ...
+# Subtest: an explicit session URL focuses after loading without stealing a newer focus
+ok 36 - an explicit session URL focuses after loading without stealing a newer focus
+  ---
+  duration_ms: 0.8346
+  type: 'test'
+  ...
+# Subtest: an explicit session opens before the saved selection responds
+ok 37 - an explicit session opens before the saved selection responds
+  ---
+  duration_ms: 1.2713
+  type: 'test'
+  ...
+# Subtest: last startup resumes a live session before an idle saved session
+ok 38 - last startup resumes a live session before an idle saved session
+  ---
+  duration_ms: 1.4708
+  type: 'test'
+  ...
+# Subtest: saved selection and candidate share quiet read recovery
+ok 39 - saved selection and candidate share quiet read recovery
+  ---
+  duration_ms: 91.5712
+  type: 'test'
+  ...
+# Subtest: an explicit task never reports obsolete startup read failures
+ok 40 - an explicit task never reports obsolete startup read failures
+  ---
+  duration_ms: 91.0554
+  type: 'test'
+  ...
+# Subtest: exhausted startup reads give one final notice and usable catalog fallback
+ok 41 - exhausted startup reads give one final notice and usable catalog fallback
+  ---
+  duration_ms: 78.2806
+  type: 'test'
+  ...
+# Subtest: an unreadable startup fallback preserves the original saved choice until user navigation
+ok 42 - an unreadable startup fallback preserves the original saved choice until user navigation
+  ---
+  duration_ms: 93.4133
+  type: 'test'
+  ...
+# Subtest: a deleted saved task uses the catalog without a network error
+ok 43 - a deleted saved task uses the catalog without a network error
+  ---
+  duration_ms: 78.5323
+  type: 'test'
+  ...
+# Subtest: a mismatched candidate cannot restore a different task under the saved identity
+ok 44 - a mismatched candidate cannot restore a different task under the saved identity
+  ---
+  duration_ms: 0.9973
+  type: 'test'
+  ...
+# Subtest: user intent wins during backoff and suppresses obsolete failures
+ok 45 - user intent wins during backoff and suppresses obsolete failures
+  ---
+  duration_ms: 77.4929
+  type: 'test'
+  ...
+# Subtest: page departure settles an adapter that ignores abort without navigation or feedback
+ok 46 - page departure settles an adapter that ignores abort without navigation or feedback
+  ---
+  duration_ms: 15.5207
+  type: 'test'
+  ...
+# Subtest: a lost accepted save is confirmed by quiet reads without another PUT
+ok 47 - a lost accepted save is confirmed by quiet reads without another PUT
+  ---
+  duration_ms: 47.006
+  type: 'test'
+  ...
+# Subtest: a hung accepted save reaches bounded read confirmation
+ok 48 - a hung accepted save reaches bounded read confirmation
+  ---
+  duration_ms: 31.1968
+  type: 'test'
+  ...
+# Subtest: a failed unconfirmed save reports once and is not replayed by writable notifications
+ok 49 - a failed unconfirmed save reports once and is not replayed by writable notifications
+  ---
+  duration_ms: 93.7701
+  type: 'test'
+  ...
+# Subtest: a newer destination survives slow acceptance of the previous save
+ok 50 - a newer destination survives slow acceptance of the previous save
+  ---
+  duration_ms: 30.114
+  type: 'test'
+  ...
+# Subtest: a malformed saved selection cannot be replaced by an automatic fallback
+ok 51 - a malformed saved selection cannot be replaced by an automatic fallback
+  ---
+  duration_ms: 0.927
+  type: 'test'
+  ...
+# Subtest: page departure cancels an uncertain save and cannot replay or report it
+ok 52 - page departure cancels an uncertain save and cannot replay or report it
+  ---
+  duration_ms: 45.7713
+  type: 'test'
+  ...
+1..52
+# tests 52
+# suites 0
+# pass 52
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 1302.1032
