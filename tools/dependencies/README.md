@@ -27,3 +27,10 @@ place. Explicit `--xserver` paths still require the exact locked revision.
 After mdo moves to the latest xrt wait API, remove this compatibility bundle and
 lock the regular upstream xs revision. Until then, the bundle lets another
 machine reproduce the build without an unpublished local branch.
+
+The locked fetch request also supports a v3 final-response-header callback.
+The response layout is unchanged; genuine v1/v2 request prefixes remain valid.
+The callback exposes borrowed views only after a complete fetch, preserving
+Retry-After without making xhttp response types part of the SDK contract.
+Premature response EOF has a distinct SDK error code, so mdo can recover safe
+page reads without retrying malformed HTTP or replaying billed search POSTs.

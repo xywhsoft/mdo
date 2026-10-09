@@ -64,6 +64,7 @@
     "THREAD",
     "TIME",
     "TIME_LOCAL",
+    "TIME_TEXT",
     "TLS",
     "TLS_CLIENT",
     "TLS_CONTEXT",

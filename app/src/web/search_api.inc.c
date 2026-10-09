@@ -143,7 +143,7 @@ acquire_account:
     Headers[3] = (XS_FetchHeader){ "Authorization", Authorization };
     Attempted = true;
     if ( !MdoWebFetchRequest(State, &FetchContext, MdoAccountSearchEndpoint(),
-            Headers, 4u, true, Body, BodySize, &Response) ) {
+            Headers, 4u, true, Body, BodySize, &Response, NULL) ) {
         /* Transport diagnostics may contain headers. Never reflect them into
          * a model-visible result containing an account credential. */
         const xerror* Cause = xrtGetError();

@@ -388,10 +388,10 @@ def main() -> int:
         assert '"type":"web_find_results"' in output, output
         assert '"matches":[{"offset":' in output, output
         assert "execute_web_open=infra:1 success:0" in output, output
-        assert "deterministic transport failure" in output, output
+        assert "after bounded automatic retries" in output, output
         assert "reload=1" in output, output
         assert "snapshot=generation:2 enabled:1 docs:1/16 completed:2 failed:1" in output, output
-        assert "probe=fetches:3 public:2 secret:1 permissions:5 resources:5" in output, output
+        assert "probe=fetches:6 public:5 secret:1 permissions:5 resources:5" in output, output
         assert "probe_done=1" in output, output
     print("PASS bounded Web search/open/find runtime")
     return 0

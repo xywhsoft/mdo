@@ -649,11 +649,13 @@ static bool MdoWebWriteValue(xwork_tool_result_writer* pWriter,
     return Ok;
 }
 
+#include "fetch_recovery.inc.c"
+
 static bool MdoWebFetchRequest(MdoWebState* pState,
     const xwork_tool_context* pContext, const char* Url,
     const XS_FetchHeader* pHeaders, size_t HeaderCount,
     bool SearchService, const char* Body, size_t BodySize,
-    XS_FetchResponse* pResponse)
+    XS_FetchResponse* pResponse, uint64* pRetryAfter)
 {
     XS_FetchRequest Request;
     uint64 Timeout = (uint64)pState->Settings.TimeoutMilliseconds * 1000u;
@@ -685,6 +687,8 @@ static bool MdoWebFetchRequest(MdoWebState* pState,
     if ( !pState->Settings.AllowPrivateNetworks && !SearchService )
         Request.Flags |= XS_FETCH_PUBLIC_ADDRESSES_ONLY;
     Request.Cancel = pContext->pCancel;
+    Request.OnResponseHeader = pRetryAfter != NULL ? MdoWebRetryAfterHeader : NULL;
+    Request.ResponseHeaderData = pRetryAfter;
     return pState->Transport.Fetch(pState->Transport.Context,
         &Request, pResponse);
 }
@@ -752,6 +756,7 @@ static xwork_result MdoWebOpenExecute(void* pUserData,
     XS_FetchHeader Headers[2];
     XS_FetchResponse Response;
     MdoWebDocument Document;
+    MdoWebRecovery Recovery;
     bool FetchOk = false;
     xwork_result Result = XWORK_RESULT_ERROR;
     memset(&Response, 0, sizeof(Response));
@@ -778,13 +783,12 @@ static xwork_result MdoWebOpenExecute(void* pUserData,
     Headers[0].Name = "Accept";
     Headers[0].Value = "text/html,application/xhtml+xml,application/json,text/plain;q=0.9,*/*;q=0.1";
     Headers[1].Name = "User-Agent"; Headers[1].Value = "mdo/1 web_open";
-    FetchOk = MdoWebFetchRequest(pState, pContext, Url, Headers, 2u, false, NULL, 0u, &Response);
-    MdoWebRequestFinished(pState, FetchOk);
-    if ( !FetchOk ) { Result = MdoWebXrtFailure(pWriter, pError, pContext,
-        "web_open request failed"); goto done; }
-    if ( Response.Status < 200u || Response.Status >= 300u ) {
-        Result = MdoWebToolFail(pWriter, pError,
-            "web_open returned a non-success status");
+    FetchOk = MdoWebFetchPage(pState, pContext, Url, Headers, 2u, &Response, &Recovery);
+    MdoWebRequestFinished(pState, FetchOk && !Recovery.Cancelled &&
+        Response.Status >= 200u && Response.Status < 300u);
+    if ( !FetchOk || Recovery.Cancelled || Response.Status < 200u || Response.Status >= 300u ||
+         (pContext->uDeadline != XRT_DEADLINE_NEVER && xrtDeadlineExpired(pContext->uDeadline)) ) {
+        Result = MdoWebPageFailure(pWriter, pError, pContext, FetchOk, &Response, &Recovery);
         goto done;
     }
     if ( !MdoWebTextContentType(Response.ContentType) ) {

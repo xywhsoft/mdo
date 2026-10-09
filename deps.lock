@@ -7,7 +7,7 @@
     "single_header_sha256": "1ea16b21f968d09e5084162f3919b7e6ae2412f9e13c3bbbdd4b322bcd5a26d2"
   },
   "xserver": {
-    "commit": "a57d24e9f86bd21355225ef51280951f95a5ea1b",
+    "commit": "b9f344731531655a7d6e651a1475faf4ee294c9e",
     "version": "1.0.0",
     "required_extensions": [
       "xwork",
@@ -22,7 +22,7 @@
     },
     "source_bundle": {
       "path": "tools/dependencies/xs-linux-products.bundle",
-      "sha256": "e5152e0fe551317b3c67fcece61c846a9aabda073f9c1a720ca925204264d063",
+      "sha256": "474fdd1b429eac4f9262d18cecc1777c46a017f38da04fc3b1f3204589d86dac",
       "ref": "refs/heads/codex/linux-glibc-baseline"
     }
   },
