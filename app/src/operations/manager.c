@@ -308,7 +308,11 @@ static xtaskoutcome MdoOperationRun(xcancel* Cancel, ptr Data,
             MdoOperationError("MCP refresh target does not exist");
             return XTASK_FAILED;
         }
-        Timeout = (uint64)Server.RequestTimeoutMilliseconds * 1000u;
+        /* A cold server initializes before tools/list. Its startup allowance
+         * must survive a shorter per-request limit; xwork still enforces each
+         * phase's own limit and this shared scope bounds the whole operation. */
+        Timeout = ((uint64)Server.StartupTimeoutMilliseconds +
+            (uint64)Server.RequestTimeoutMilliseconds) * 1000u;
         MdoMcpCatalogRelease(Catalog);
         Ok = MdoMcpManagerRefresh(Job->Target, Cancel,
             xrtDeadlineAfter(Timeout), &Error);

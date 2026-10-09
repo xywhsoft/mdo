@@ -84,6 +84,7 @@ bool MdoMcpCatalogFind(const MdoMcpCatalog* catalog, const char* id,
     if (strcmp(id, "mock") != 0 || info == NULL ||
         info->Size < sizeof(*info)) return false;
     info->Id = "mock";
+    info->StartupTimeoutMilliseconds = 2000u;
     info->RequestTimeoutMilliseconds = 1000u;
     return true;
 }
@@ -103,9 +104,16 @@ bool MdoMcpManagerGetStatus(const char* id, MdoMcpServerStatus* status) {
 }
 bool MdoMcpManagerRefresh(const char* id, xcancel* cancel, uint64 deadline,
     xwork_error* error) {
-    (void)deadline;
     if (strcmp(id, "mock") != 0 || xrtCancelRequested(cancel)) return false;
     xrtAtomic32FetchAdd(&McpCalls, 1u, XMEMORY_RELAXED);
+    /* Initialization and discovery have independent limits. The operation's
+     * total scope must not clip the larger initialization timeout. */
+    if (xrtDeadlineRemaining(deadline) < 2500000u ||
+        xrtDeadlineRemaining(deadline) > 3000000u) {
+        error->eCode = XWORK_ERROR_TIMEOUT;
+        snprintf(error->sMessage, sizeof(error->sMessage), "startup budget was clipped");
+        return false;
+    }
     if (xrtAtomic32Load(&FailMcp, XMEMORY_ACQUIRE) != 0u) {
         xrtAtomic32Store(&FailMcp, 0u, XMEMORY_RELEASE);
         error->eCode = XWORK_ERROR_IO;
