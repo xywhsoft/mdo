@@ -1,0 +1,81 @@
+Browser tab: 33, Title: "墨斗", URL: "http://localhost:50636/#/projects/default/sessions/V-OSPvav6EqLTdyxgYhQuxEIHhl7JUHg".
+0 AXWebArea 墨斗, URL: localhost:50636/#/projects/default/sessions/V-OSPvav6EqLTdyxgYhQuxEIHhl7JUHg
+	1 link Description: 跳到对话, Value: localhost:50636/#timeline
+	2 container app-shell
+		3 container Description: 会话导航, ID: sidebar
+			4 link Description: 墨斗主页, Value: localhost:50636/#/
+			5 container 通知 · 2
+				6 pop up button 扩展工具包安装
+				7 pop up button 登录账号
+			8 button Description: 关闭会话导航, ID: close-sidebar
+			9 button 登录账号, ID: open-account
+			10 pop up button 本机, Help: 选择设备, ID: open-devices
+			11 checkbox 新建任务 Ctrl N, Value: 0, ID: new-session
+				12 text 新建任务
+				13 text Ctrl N
+			14 checkbox 计划任务, Value: 0, ID: open-schedules
+			15 container 会话
+				16 container session-list
+					17 container 项目
+						18 button (expanded) Description: 折叠 项目, Secondary Actions: Collapse
+						19 pop up button (collapsed) Description: 列表选项, Secondary Actions: Expand
+						20 button 添加项目
+						60 text 添加项目，让任务按工作区分组。
+					21 container 任务
+						22 button (expanded) Description: 折叠 任务, Secondary Actions: Collapse
+						23 button 在默认项目新建任务
+						24 content list
+							25 container
+								26 button 对话恢复浏览器验收 18分钟前, Help: 对话恢复浏览器验收 default · conversation-fixture
+									61 text 对话恢复浏览器验收
+									66 text 18分钟前
+								27 pop up button (collapsed) Description: 对话恢复浏览器验收 的操作, Secondary Actions: Expand
+			67 text 本地服务 0.1.0
+			29 pop up button (collapsed) Description: 搜索会话, Help: 搜索会话（/）, ID: open-session-search, Secondary Actions: Expand
+			30 button Description: 切换为深色主题, ID: toggle-theme
+			31 button Description: 设置, ID: open-settings
+		32 container Agent 工作区
+			33 container
+				34 pop up button (collapsed) Description: 切换项目，当前 默认项目, ID: header-project-switch, Secondary Actions: Expand
+					35 text 默认项目
+				36 heading 对话恢复浏览器验收, Value: 1, ID: session-title
+					64 text 对话恢复浏览器验收
+				65 text mdo.default · conversation-fixture
+				68 text 就绪
+				40 button (collapsed) Description: 搜索当前会话, ID: open-find, Secondary Actions: Expand
+				41 button Description: 导出当前会话 Markdown, Help: 导出当前会话 Markdown（Ctrl/⌘+E）, ID: export-session
+				42 pop up button (collapsed) Description: 更多会话操作, ID: session-actions, Secondary Actions: Expand
+			43 container 当前会话
+				69 content list timeline
+					70 container
+						71 text 01:49
+						72 text RESOURCE_OPERATION_FOLLOWUP
+						73 button Description: 复制消息, Help: 复制
+						74 button Description: 编辑此消息并重新发送, Help: 编辑
+					75 container
+						76 text Agent
+						77 text 01:49
+						78 text FIXTURE_OK: RESOURCE_OPERATION_FOLLOWUP
+						79 button Description: 复制消息, Help: 复制
+						80 button Description: 从此回复分叉会话, Help: 分叉
+						81 button Description: 重试此回合, Help: 重试
+						82 text 10 输入 / 4 输出 tokens · LLM <0.1 秒 · 94.0 tok/s
+			44 container 发送消息
+				45 container composer
+					46 text 向 Agent 描述任务
+					47 text entry area (settable) 向 Agent 描述任务, ID: prompt
+					48 container composer-profile-controls
+						49 button Description: 添加图片, Help: 添加图片（PNG、JPEG、WebP）, ID: composer-attach
+						50 pop up button (collapsed) Description: 权限：只读, Help: 只读, ID: composer-permission-trigger, Secondary Actions: Expand
+						51 container
+							53 button (collapsed) Description: 查看 token 用量, Help: 上次 Conversation fixture 输入 10 / 上下文上限 240,128 tokens, ID: context-meter-trigger, Secondary Actions: Expand
+							54 pop up button (collapsed) Description: 模型与思考深度：Conversation fixture · 无思考, Help: Conversation fixture · 无思考, ID: composer-model-trigger, Secondary Actions: Expand
+								83 text Conversation fixture
+								84 text 无思考
+							85 text Enter 发送 · Shift Enter 换行
+							58 button Description: 发送任务, ID: send
+			86 container 对话历史导航
+				87 button RESOURCE_OPERATION_FOLLOWUP
+		59 splitter Description: 调整会话导航宽度, Value: 272, ID: sidebar-resize
+
+The focused UI element is 47 text entry area (settable) 向 Agent 描述任务, ID: prompt

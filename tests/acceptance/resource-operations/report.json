@@ -1,0 +1,24 @@
+{
+  "passed": true,
+  "mdo_commit": "3940904af65f4804c352d4ecda895d87a452e722",
+  "sha256": "27e93a6f4c8968566c41b50be544249eb603de665c88440ceecade1ec25ffa13",
+  "bytes": 4546409,
+  "embedded_sources": {
+    "web/js/state/resource-operation.js": "50af7ea0a750603978593ce87e178f25d229be72462340d166d2895d5bf3d3d1",
+    "web/js/state/resources.js": "087836396ee61dc522c2be7b52894351fcb5572fa3ff6472d5120c871c3007ac",
+    "web/js/features/settings/extension-panels.js": "597e50cb7b8408f0c9ddcaf26f9b61155d4801eac80fa9c91d0f89b21b5c6bc1",
+    "web/js/features/settings/resource-panels.js": "c5e17fd28d1036e864edadcc92623d292d18292445a3e0a5e5f652cee08d2053",
+    "web/css/extensions.css": "47cd5bdaabc2c356b82d82226d5cc85c755a3cd2c441738db7e7a17f4547d040",
+    "web/lang/zh-CN.json": "ac7f3d275c4eb90e52e9f1f51874eb7e1ace6f1c1ca10b85002d844cf856980c",
+    "web/lang/en-US.json": "4ab2a45a3175ceeb2145830ab87eafed0cc6269ce42f8af58adc2ffa45f14798",
+    "web/lang/ru-RU.json": "b944cfb72f4b26390f29c1c6f4d39824e6a2004e32f68b3e8004228e3e23986f"
+  },
+  "native_jobs_started": 5,
+  "page_model_requests": 1,
+  "native_extension_model_requests": 16,
+  "final_model_errors": 0,
+  "external_provider_requests": 0,
+  "android_device_tested": false,
+  "daily_app_overwritten": false,
+  "native_confirm_automation_verified": false
+}

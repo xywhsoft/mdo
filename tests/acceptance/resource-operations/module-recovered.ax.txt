@@ -1,0 +1,50 @@
+Browser tab: 31, Title: "墨斗", URL: "http://127.0.0.1:50636/#/settings/extensions".
+0 AXWebArea 墨斗, URL: 127.0.0.1:50636/#/settings/extensions
+	1 link Description: 跳到设置内容, Value: 127.0.0.1:50636/#settings-content
+	2 container Agent 工作区
+		3 container C 模块, ID: settings-workspace
+			4 container
+				5 button Description: 返回 Agent 工作区, ID: close-settings
+				6 heading C 模块, Value: 1, ID: settings-title
+					31 text C 模块
+				8 pop up button Description: 查看快捷键, ID: open-shortcuts
+			9 container 设置分类
+				10 text 基础设置
+				11 button 常规
+				12 button Agent 行为
+				13 button 模型管理
+				14 button 记忆管理
+				15 button 网络
+				16 button 诊断与存储
+				17 text 扩展能力
+				18 button Agent
+				19 button 扩展中心
+				20 button SubAgent
+				21 button 工具
+				22 button Skill
+				23 button MCP
+				24 button 命令
+				25 button C 模块
+				26 button 扩展工具包
+				27 button 权限
+				28 text 账号与统计
+				29 button 账号
+				30 button 远程控制
+			32 container
+				33 heading C 模块, Value: 2
+					34 text C 模块
+				35 text 查看和重新编译高级 C 模块；Agent、SubAgent、工具等在各自的管理页配置。
+				36 container settings-extensions-list
+					37 heading MODULE, Value: 3
+						38 text MODULE
+					39 button 重新编译
+					40 container
+						41 heading MDO Default Agent, Value: 3
+							42 text MDO Default Agent
+						43 text mdo 内置的默认 Agent 配置。 1.0.0 内置 0 个工具 1 个 Agent
+					44 container
+						45 heading Built-in Plan Tool, Value: 3
+							46 text Built-in Plan Tool
+						47 text 向会话停靠区发布精简的计划快照。 1.0.0 内置 1 个工具 0 个 Agent
+
+The focused UI element is 39 button 重新编译

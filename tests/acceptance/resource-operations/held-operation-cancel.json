@@ -1,0 +1,36 @@
+{
+  "phase": "operation-cancel",
+  "path": "/api/v1/operations/op-d4ad9a8d402ad5d6ac1bf3e8",
+  "attempt": 1,
+  "started": 80527.906,
+  "status": 200,
+  "response": {
+    "schema_version": 1,
+    "ok": true,
+    "request_id": "mdo-b3b740b7a78095dde91d39c1",
+    "data": {
+      "id": "op-d4ad9a8d402ad5d6ac1bf3e8",
+      "sequence": 2,
+      "kind": "mcp_refresh",
+      "state": "succeeded",
+      "created_at": 1791567724969656,
+      "started_at": 1791567724969671,
+      "ended_at": 1791567724986466,
+      "terminal": true,
+      "cancel_requested": false,
+      "target": "local",
+      "message": "MCP server connected and tool discovery completed",
+      "result": {
+        "catalog_generation": 3,
+        "schema_generation": 2,
+        "discovered_tools": 1,
+        "requests_completed": 3,
+        "server_state": "ready",
+        "enabled": true,
+        "connected": true,
+        "tools_discovered": true
+      }
+    }
+  },
+  "held": true
+}

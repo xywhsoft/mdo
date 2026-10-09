@@ -1,0 +1,16 @@
+{"phase": "operation-retry", "path": "/api/v1/operations/op-14c1b05b9528954d4866621e", "attempt": 1, "started": 80506.859, "status": 503}
+{"phase": "operation-retry", "path": "/api/v1/operations/op-14c1b05b9528954d4866621e", "attempt": 2, "started": 80507.64, "status": 503}
+{"phase": "operation-retry", "path": "/api/v1/operations/op-14c1b05b9528954d4866621e", "attempt": 3, "started": 80509.062, "forwarded": true}
+{"phase": "operation-cancel", "path": "/api/v1/operations/op-d4ad9a8d402ad5d6ac1bf3e8", "attempt": 1, "started": 80527.906, "status": 200, "response": {"schema_version": 1, "ok": true, "request_id": "mdo-b3b740b7a78095dde91d39c1", "data": {"id": "op-d4ad9a8d402ad5d6ac1bf3e8", "sequence": 2, "kind": "mcp_refresh", "state": "succeeded", "created_at": 1791567724969656, "started_at": 1791567724969671, "ended_at": 1791567724986466, "terminal": true, "cancel_requested": false, "target": "local", "message": "MCP server connected and tool discovery completed", "result": {"catalog_generation": 3, "schema_generation": 2, "discovered_tools": 1, "requests_completed": 3, "server_state": "ready", "enabled": true, "connected": true, "tools_discovered": true}}}, "held": true, "peer_closed": true}
+{"phase": "operation-recheck-after-cancel", "path": "/api/v1/operations/op-d4ad9a8d402ad5d6ac1bf3e8", "attempt": 1, "started": 80557.218, "forwarded": true}
+{"phase": "operation-exhausted", "path": "/api/v1/operations/op-767d254678e34f9d6ab7faee", "attempt": 1, "started": 80569.312, "status": 503}
+{"phase": "operation-exhausted", "path": "/api/v1/operations/op-767d254678e34f9d6ab7faee", "attempt": 2, "started": 80570.109, "status": 503}
+{"phase": "operation-exhausted", "path": "/api/v1/operations/op-767d254678e34f9d6ab7faee", "attempt": 3, "started": 80571.421, "status": 503}
+{"phase": "operation-exhausted", "path": "/api/v1/operations/op-767d254678e34f9d6ab7faee", "attempt": 4, "started": 80573.796, "status": 503}
+{"phase": "operation-exhausted", "path": "/api/v1/operations/op-767d254678e34f9d6ab7faee", "attempt": 5, "started": 80578.453, "status": 503}
+{"phase": "operation-exhausted", "path": "/api/v1/operations/op-767d254678e34f9d6ab7faee", "attempt": 6, "started": 80588.078, "status": 503}
+{"phase": "operation-exhausted", "path": "/api/v1/operations/op-767d254678e34f9d6ab7faee", "attempt": 7, "started": 80608.25, "forwarded": true}
+{"phase": "operation-native-failure", "path": "/api/v1/operations/op-378c69ade2427a876c6977ec", "attempt": 1, "started": 80620.078, "forwarded": true}
+{"phase": "module-retry", "path": "/api/v1/operations/op-0a91e7263b32f76e5ceafa2d", "attempt": 1, "started": 80649.531, "status": 503}
+{"phase": "module-retry", "path": "/api/v1/operations/op-0a91e7263b32f76e5ceafa2d", "attempt": 2, "started": 80650.343, "status": 503}
+{"phase": "module-retry", "path": "/api/v1/operations/op-0a91e7263b32f76e5ceafa2d", "attempt": 3, "started": 80651.75, "forwarded": true}

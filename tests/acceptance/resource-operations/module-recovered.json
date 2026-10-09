@@ -1,0 +1,7 @@
+{
+  "body": "跳到设置内容\nC 模块\n查看快捷键\n\n基础设置\n\n常规 Agent 行为 模型管理 记忆管理 网络 诊断与存储\n\n扩展能力\n\nAgent 扩展中心 SubAgent 工具 Skill MCP 命令 C 模块 扩展工具包 权限\n\n账号与统计\n\n账号 远程控制\nC 模块\n\n查看和重新编译高级 C 模块；Agent、SubAgent、工具等在各自的管理页配置。\n\nMODULE\n重新编译\nMDO Default Agent\n\nmdo 内置的默认 Agent 配置。\n\n1.0.0\n内置\n0 个工具\n1 个 Agent\nBuilt-in Plan Tool\n\n向会话停靠区发布精简的计划快照。\n\n1.0.0\n内置\n1 个工具\n0 个 Agent",
+  "draft": "RESOURCE_OPERATION_FOLLOWUP",
+  "errors": [],
+  "recheck": [],
+  "url": "http://127.0.0.1:50636/#/settings/extensions"
+}

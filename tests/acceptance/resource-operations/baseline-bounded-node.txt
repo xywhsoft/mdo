@@ -1,0 +1,174 @@
+✖ accepted MCP operation quietly survives two 503 reads without another POST (32.4658ms)
+✖ already terminal failures and cancellations are never reported as success (1.9852ms)
+✖ a different operation ID or server cannot satisfy the original request (1.607ms)
+✖ catalog reload returns the confirmed terminal result rather than its queued snapshot (2.4678ms)
+✖ normal pending states use progressively slower polls and preserve one accepted ID (2.6112ms)
+✖ cancellation releases an abort-ignoring body without cancelling the native operation (1504.7557ms)
+✖ page exit cancels a retry wait without another request (1.6186ms)
+(node:19916) PromiseRejectionHandledWarning: Promise rejection was handled asynchronously (rejection id: 1)
+(Use `node.EXE --trace-warnings ...` to show where the warning was created)
+✖ hanging status bodies end within the shared minute as unconfirmed, not failed (10.1253ms)
+✔ an unaccepted failing POST is never automatically replayed (0.8632ms)
+✖ target changes while accepting an operation cannot read a different device (0.6908ms)
+ℹ tests 10
+ℹ suites 0
+ℹ pass 1
+ℹ fail 8
+ℹ cancelled 1
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 1625.6969
+
+✖ failing tests:
+
+test at tests\test_resource_operation.mjs:12:29
+✖ accepted MCP operation quietly survives two 503 reads without another POST (32.4658ms)
+  Error [ApiError]: temporary
+      at readEnvelope (file:///D:/GIT/mdo/app/web/js/api/client.js:113:19)
+      at async awaitOperation (file:///D:/GIT/mdo/app/web/js/state/resources.js:60:16) {
+    status: 503,
+    code: 'service_unavailable',
+    requestId: '',
+    details: null
+  }
+
+test at tests\test_resource_operation.mjs:12:29
+✖ already terminal failures and cancellations are never reported as success (1.9852ms)
+  AssertionError [ERR_ASSERTION]: Missing expected rejection.
+      at async TestContext.<anonymous> (file:///D:/GIT/mdo/tests/test_resource_operation.mjs:56:3)
+      at async Test.run (node:internal/test_runner/test:1389:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:960:7) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: undefined,
+    expected: { code: 'resource_operation_failed' },
+    operator: 'rejects',
+    diff: 'simple'
+  }
+
+test at tests\test_resource_operation.mjs:12:29
+✖ a different operation ID or server cannot satisfy the original request (1.607ms)
+  AssertionError [ERR_ASSERTION]: Missing expected rejection.
+      at async TestContext.<anonymous> (file:///D:/GIT/mdo/tests/test_resource_operation.mjs:64:3)
+      at async Test.run (node:internal/test_runner/test:1389:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:960:7) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: undefined,
+    expected: { code: 'resource_operation_invalid' },
+    operator: 'rejects',
+    diff: 'simple'
+  }
+
+test at tests\test_resource_operation.mjs:12:29
+✖ catalog reload returns the confirmed terminal result rather than its queued snapshot (2.4678ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:
+  + actual - expected
+  
+    {
+      id: 'job-1',
+      kind: 'module_reload',
+      message: '',
+  +   state: 'running',
+  -   state: 'succeeded',
+      target: '',
+  +   terminal: false
+  -   terminal: true
+    }
+  
+      at TestContext.<anonymous> (file:///D:/GIT/mdo/tests/test_resource_operation.mjs:72:10)
+      at async Test.run (node:internal/test_runner/test:1389:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:960:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: { id: 'job-1', kind: 'module_reload', target: '', state: 'running', terminal: false, message: '' },
+    expected: { id: 'job-1', kind: 'module_reload', target: '', state: 'succeeded', terminal: true, message: '' },
+    operator: 'deepStrictEqual',
+    diff: 'simple'
+  }
+
+test at tests\test_resource_operation.mjs:12:29
+✖ normal pending states use progressively slower polls and preserve one accepted ID (2.6112ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:
+  + actual - expected
+  
+    [
+      250,
+  +   500,
+      750,
+  -   1750
+    ]
+  
+      at TestContext.<anonymous> (file:///D:/GIT/mdo/tests/test_resource_operation.mjs:79:10)
+      at async Test.run (node:internal/test_runner/test:1389:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:960:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: [ 250, 500, 750 ],
+    expected: [ 250, 750, 1750 ],
+    operator: 'deepStrictEqual',
+    diff: 'simple'
+  }
+
+test at tests\test_resource_operation.mjs:12:29
+✖ cancellation releases an abort-ignoring body without cancelling the native operation (1504.7557ms)
+  'test timed out after 1500ms'
+
+test at tests\test_resource_operation.mjs:12:29
+✖ page exit cancels a retry wait without another request (1.6186ms)
+  [AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:
+  + actual - expected
+  
+    Comparison {
+  +   name: 'ApiError'
+  -   name: 'AbortError'
+    }
+  ] {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: ApiError: temporary
+        at readEnvelope (file:///D:/GIT/mdo/app/web/js/api/client.js:113:19)
+        at async awaitOperation (file:///D:/GIT/mdo/app/web/js/state/resources.js:60:16)
+        at async waitForActual (node:assert:646:5)
+        at async strict.rejects (node:assert:769:25),
+    expected: { name: 'AbortError' },
+    operator: 'rejects',
+    diff: 'simple'
+  }
+
+test at tests\test_resource_operation.mjs:12:29
+✖ hanging status bodies end within the shared minute as unconfirmed, not failed (10.1253ms)
+  AssertionError [ERR_ASSERTION]: The validation function is expected to return "true". Received false
+  
+  Caught error:
+  
+  AssertionError [ERR_ASSERTION]: pending observations must own a finite deadline
+      at async TestContext.<anonymous> (file:///D:/GIT/mdo/tests/test_resource_operation.mjs:106:3)
+      at async Test.run (node:internal/test_runner/test:1389:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:960:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: AssertionError [ERR_ASSERTION]: pending observations must own a finite deadline
+        at Object.settle (file:///D:/GIT/mdo/tests/test_resource_operation.mjs:28:16)
+        at async waitForActual (node:assert:646:5)
+        at async strict.rejects (node:assert:769:25)
+        at async TestContext.<anonymous> (file:///D:/GIT/mdo/tests/test_resource_operation.mjs:106:3)
+        at async Test.run (node:internal/test_runner/test:1389:7)
+        at async Test.processPendingSubtests (node:internal/test_runner/test:960:7),
+    operator: 'rejects',
+    diff: 'simple'
+  }
+
+test at tests\test_resource_operation.mjs:12:29
+✖ target changes while accepting an operation cannot read a different device (0.6908ms)
+  AssertionError [ERR_ASSERTION]: Missing expected rejection (AbortError).
+      at async TestContext.<anonymous> (file:///D:/GIT/mdo/tests/test_resource_operation.mjs:119:3)
+      at async Test.run (node:internal/test_runner/test:1389:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:960:7) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: undefined,
+    expected: { name: 'AbortError' },
+    operator: 'rejects',
+    diff: 'simple'
+  }

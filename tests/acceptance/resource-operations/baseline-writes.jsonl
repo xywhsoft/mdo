@@ -1,0 +1,5 @@
+{"method": "PUT", "path": "/api/v1/extensions/mcp/local", "status": 200, "started": 80141.031}
+{"method": "PUT", "path": "/api/v1/extensions/mcp/missing", "status": 200, "started": 80141.031}
+{"method": "PUT", "path": "/api/v1/workspace-state", "status": 200, "started": 80148.875}
+{"method": "PATCH", "path": "/api/v1/settings/settings", "status": 200, "started": 80148.875}
+{"method": "POST", "path": "/api/v1/mcp/local/refresh", "status": 202, "started": 80444.218}

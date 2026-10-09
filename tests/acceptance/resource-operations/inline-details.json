@@ -1,0 +1,33 @@
+{
+  "adjacent": true,
+  "describedby": "extension-field-error",
+  "fields": [
+    {
+      "name": "prompt",
+      "value": "RESOURCE_OPERATION_FOLLOWUP"
+    },
+    {
+      "name": "name",
+      "value": ""
+    },
+    {
+      "name": "extension_id",
+      "value": "qa-inline-hint"
+    },
+    {
+      "name": "name",
+      "value": "Inline hint acceptance"
+    },
+    {
+      "name": "prompt",
+      "value": "Inspect files and return a concise result."
+    }
+  ],
+  "focus": "description",
+  "hint": "请填写说明。",
+  "hintCount": 1,
+  "invalid": "true",
+  "role": "alert",
+  "status": "",
+  "visible": true
+}

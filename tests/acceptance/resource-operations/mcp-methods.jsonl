@@ -1,0 +1,5 @@
+{"method": "initialize", "params": {"protocolVersion": "2025-11-25", "capabilities": {}, "clientInfo": {"name": "xwork", "version": "3.10.0"}}}
+{"method": "notifications/initialized", "params": {}}
+{"method": "tools/list", "params": {}}
+{"method": "tools/list", "params": {}}
+{"method": "tools/list", "params": {}}

@@ -1,0 +1,127 @@
+Browser tab: 31, Title: "墨斗", URL: "http://127.0.0.1:50636/#/settings/subagents".
+0 AXWebArea 墨斗, URL: 127.0.0.1:50636/#/settings/subagents
+	1 container 新建 SubAgent
+		2 heading 新建 SubAgent, Value: 2, ID: extension-editor-title
+			3 text 新建 SubAgent
+		4 button 取消
+		5 container
+			6 text 文件 ID · 必填
+			7 text field (settable) 文件 ID · 必填 小写字母、数字、点、短横线或下划线；创建后不改名。, Value: qa-inline-hint
+			8 text 小写字母、数字、点、短横线或下划线；创建后不改名。
+		9 button 表单
+		10 button 源文件
+		11 container
+			12 text 名称 · 必填
+			13 text field (settable) 名称 · 必填, Value: Inline hint acceptance
+			14 text 说明 · 必填
+			15 text field (settable) 说明 · 必填
+			123 text 请填写说明。
+			16 text 模型
+			17 text field (settable) 模型 inherit 跟随主 Agent；或填写模型 ID。, Value: inherit
+			18 text inherit 跟随主 Agent；或填写模型 ID。
+			19 text 思考强度（可选）
+			20 text field (settable) 思考强度（可选）
+			21 container 工具（可选）
+				22 text 工具（可选）
+				23 container
+					24 checkbox (settable, integer) Description: 继承全部可用工具, Value: 1
+					25 text 继承全部可用工具
+				26 text 勾选范围会与登录状态、功能设置、任务权限取交集；子 Agent 也受父任务限制。
+				27 search text field (settable) 筛选工具
+				28 container
+					29 container Read workspace text and images
+						30 checkbox (disabled, settable, integer) Description: read 可用（仍受任务权限限制）, Value: 0
+						31 text read
+						32 text 可用（仍受任务权限限制）
+					33 container List workspace directories
+						34 checkbox (disabled, settable, integer) Description: ls 可用（仍受任务权限限制）, Value: 0
+						35 text ls
+						36 text 可用（仍受任务权限限制）
+					37 container Find files by path pattern
+						38 checkbox (disabled, settable, integer) Description: glob 可用（仍受任务权限限制）, Value: 0
+						39 text glob
+						40 text 可用（仍受任务权限限制）
+					41 container Search text in workspace files
+						42 checkbox (disabled, settable, integer) Description: grep 可用（仍受任务权限限制）, Value: 0
+						43 text grep
+						44 text 可用（仍受任务权限限制）
+					45 container Create, overwrite or append files
+						46 checkbox (disabled, settable, integer) Description: write 可用（仍受任务权限限制）, Value: 0
+						47 text write
+						48 text 可用（仍受任务权限限制）
+					49 container Apply exact text edits
+						50 checkbox (disabled, settable, integer) Description: edit 可用（仍受任务权限限制）, Value: 0
+						51 text edit
+						52 text 可用（仍受任务权限限制）
+					53 container Run a command to completion
+						54 checkbox (disabled, settable, integer) Description: exec 可用（仍受任务权限限制）, Value: 0
+						55 text exec
+						56 text 可用（仍受任务权限限制）
+					57 container Start a background process task
+						58 checkbox (disabled, settable, integer) Description: spawn 可用（仍受任务权限限制）, Value: 0
+						59 text spawn
+						60 text 可用（仍受任务权限限制）
+					61 container Read task output and state
+						62 checkbox (disabled, settable, integer) Description: poll 可用（仍受任务权限限制）, Value: 0
+						63 text poll
+						64 text 可用（仍受任务权限限制）
+					65 container Wait for background tasks
+						66 checkbox (disabled, settable, integer) Description: wait 可用（仍受任务权限限制）, Value: 0
+						67 text wait
+						68 text 可用（仍受任务权限限制）
+					69 container Write to a process task's input
+						70 checkbox (disabled, settable, integer) Description: stdin 可用（仍受任务权限限制）, Value: 0
+						71 text stdin
+						72 text 可用（仍受任务权限限制）
+					73 container Stop a process or SubAgent task
+						74 checkbox (disabled, settable, integer) Description: stop 可用（仍受任务权限限制）, Value: 0
+						75 text stop
+						76 text 可用（仍受任务权限限制）
+					77 container Ask the user a question
+						78 checkbox (disabled, settable, integer) Description: ask_user 可用（仍受任务权限限制）, Value: 0
+						79 text ask_user
+						80 text 可用（仍受任务权限限制）
+					81 container Update the conversation task plan
+						82 checkbox (disabled, settable, integer) Description: mdo.todo 可用（仍受任务权限限制）, Value: 0
+						83 text mdo.todo
+						84 text 可用（仍受任务权限限制）
+					85 container Discover and read installed Skills
+						86 checkbox (disabled, settable, integer) Description: skill 可用（仍受任务权限限制）, Value: 0
+						87 text skill
+						88 text 可用（仍受任务权限限制）
+					89 container Delegate to an enabled SubAgent
+						90 checkbox (disabled, settable, integer) Description: agent 尚未启用 SubAgent, Value: 0
+						91 text agent
+						92 text 尚未启用 SubAgent
+					93 container Search the web through the account service
+						94 checkbox (disabled, settable, integer) Description: web_search 会员 登录账号后可用, Value: 0
+						95 text web_search
+						96 text 会员
+						97 text 登录账号后可用
+					98 container Read a public web page
+						99 checkbox (disabled, settable, integer) Description: web_open 会员 登录账号后可用, Value: 0
+						100 text web_open
+						101 text 会员
+						102 text 登录账号后可用
+					103 container Find text in an opened web page
+						104 checkbox (disabled, settable, integer) Description: web_find 会员 登录账号后可用, Value: 0
+						105 text web_find
+						106 text 会员
+						107 text 登录账号后可用
+					108 container Discover connected MCP tools
+						109 checkbox (disabled, settable, integer) Description: tool_search 可用（仍受任务权限限制）, Value: 0
+						110 text tool_search
+						111 text 可用（仍受任务权限限制）
+					112 container Load an MCP tool on demand
+						113 checkbox (disabled, settable, integer) Description: tool_load 可用（仍受任务权限限制）, Value: 0
+						114 text tool_load
+						115 text 可用（仍受任务权限限制）
+			116 text 只读任务
+			117 checkbox (settable, integer) Description: 只读任务, Value: 0
+			118 text 允许再次委派
+			119 checkbox (settable, integer) Description: 允许再次委派, Value: 0
+			120 text 指令 · 必填
+			121 text entry area (settable) 指令 · 必填, Value: Inspect files and return a concise result.
+		122 button 保存
+
+The focused UI element is 15 text field (settable) 说明 · 必填

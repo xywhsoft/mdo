@@ -1,0 +1,139 @@
+{
+  "/api/v1/operations/op-14c1b05b9528954d4866621e": {
+    "schema_version": 1,
+    "ok": true,
+    "request_id": "mdo-831b4b1aa10269dd30075983",
+    "data": {
+      "id": "op-14c1b05b9528954d4866621e",
+      "sequence": 1,
+      "kind": "mcp_refresh",
+      "state": "succeeded",
+      "created_at": 1791567703916602,
+      "started_at": 1791567703916616,
+      "ended_at": 1791567703997358,
+      "terminal": true,
+      "cancel_requested": false,
+      "target": "local",
+      "message": "MCP server connected and tool discovery completed",
+      "result": {
+        "catalog_generation": 3,
+        "schema_generation": 1,
+        "discovered_tools": 1,
+        "requests_completed": 2,
+        "server_state": "ready",
+        "enabled": true,
+        "connected": true,
+        "tools_discovered": true
+      }
+    }
+  },
+  "/api/v1/operations/op-d4ad9a8d402ad5d6ac1bf3e8": {
+    "schema_version": 1,
+    "ok": true,
+    "request_id": "mdo-58e80b1321815a0a039b3d46",
+    "data": {
+      "id": "op-d4ad9a8d402ad5d6ac1bf3e8",
+      "sequence": 2,
+      "kind": "mcp_refresh",
+      "state": "succeeded",
+      "created_at": 1791567724969656,
+      "started_at": 1791567724969671,
+      "ended_at": 1791567724986466,
+      "terminal": true,
+      "cancel_requested": false,
+      "target": "local",
+      "message": "MCP server connected and tool discovery completed",
+      "result": {
+        "catalog_generation": 3,
+        "schema_generation": 2,
+        "discovered_tools": 1,
+        "requests_completed": 3,
+        "server_state": "ready",
+        "enabled": true,
+        "connected": true,
+        "tools_discovered": true
+      }
+    }
+  },
+  "/api/v1/operations/op-767d254678e34f9d6ab7faee": {
+    "schema_version": 1,
+    "ok": true,
+    "request_id": "mdo-d3fae3d6ec24c54c37e347fa",
+    "data": {
+      "id": "op-767d254678e34f9d6ab7faee",
+      "sequence": 3,
+      "kind": "mcp_refresh",
+      "state": "succeeded",
+      "created_at": 1791567766361296,
+      "started_at": 1791567766361310,
+      "ended_at": 1791567766381214,
+      "terminal": true,
+      "cancel_requested": false,
+      "target": "local",
+      "message": "MCP server connected and tool discovery completed",
+      "result": {
+        "catalog_generation": 3,
+        "schema_generation": 3,
+        "discovered_tools": 1,
+        "requests_completed": 4,
+        "server_state": "ready",
+        "enabled": true,
+        "connected": true,
+        "tools_discovered": true
+      }
+    }
+  },
+  "/api/v1/operations/op-378c69ade2427a876c6977ec": {
+    "schema_version": 1,
+    "ok": true,
+    "request_id": "mdo-5d4696fa0e7e174c7314168f",
+    "data": {
+      "id": "op-378c69ade2427a876c6977ec",
+      "sequence": 4,
+      "kind": "mcp_refresh",
+      "state": "failed",
+      "created_at": 1791567817134631,
+      "started_at": 1791567817134652,
+      "ended_at": 1791567817136356,
+      "terminal": true,
+      "cancel_requested": false,
+      "target": "missing",
+      "message": "MCP refresh failed; the server remains available for retry",
+      "result": {
+        "catalog_generation": 3,
+        "schema_generation": 0,
+        "discovered_tools": 0,
+        "requests_completed": 0,
+        "server_state": "failed",
+        "enabled": true,
+        "connected": false,
+        "tools_discovered": false
+      }
+    }
+  },
+  "/api/v1/operations/op-0a91e7263b32f76e5ceafa2d": {
+    "schema_version": 1,
+    "ok": true,
+    "request_id": "mdo-48bc060f6c5edb287cad7f36",
+    "data": {
+      "id": "op-0a91e7263b32f76e5ceafa2d",
+      "sequence": 5,
+      "kind": "module_reload",
+      "state": "succeeded",
+      "created_at": 1791567846587110,
+      "started_at": 1791567846587124,
+      "ended_at": 1791567846596088,
+      "terminal": true,
+      "cancel_requested": false,
+      "target": "",
+      "message": "Module catalog reloaded",
+      "result": {
+        "catalog_generation": 2,
+        "modules": 3,
+        "tools": 1,
+        "agents": 1,
+        "diagnostics": 0
+      }
+    }
+  }
+}

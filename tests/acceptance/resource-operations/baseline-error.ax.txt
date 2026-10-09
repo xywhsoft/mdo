@@ -1,0 +1,63 @@
+Browser tab: 30, Title: "墨斗", URL: "http://127.0.0.1:50628/#/settings/mcp".
+0 AXWebArea 墨斗, URL: 127.0.0.1:50628/#/settings/mcp
+	1 link Description: 跳到设置内容, Value: 127.0.0.1:50628/#settings-content
+	2 container Agent 工作区
+		3 container MCP, ID: settings-workspace
+			4 container
+				5 button Description: 返回 Agent 工作区, ID: close-settings
+				6 heading MCP, Value: 1, ID: settings-title
+					32 text MCP
+				9 pop up button Description: 查看快捷键, ID: open-shortcuts
+			10 container 设置分类
+				11 text 基础设置
+				12 button 常规
+				13 button Agent 行为
+				14 button 模型管理
+				15 button 记忆管理
+				16 button 网络
+				17 button 诊断与存储
+				18 text 扩展能力
+				19 button Agent
+				20 button 扩展中心
+				21 button SubAgent
+				22 button 工具
+				23 button Skill
+				24 button MCP
+				25 button 命令
+				26 button C 模块
+				27 button 扩展工具包
+				28 button 权限
+				29 text 账号与统计
+				30 button 账号
+				31 button 远程控制
+			33 container
+				34 heading MCP, Value: 2
+					35 text MCP
+				36 button 新建
+				37 button 导入
+				38 button 刷新
+				39 search text field (settable) 按名称或说明筛选
+				40 text 保存配置不会启动程序。测试连接或模型调用时才建立连接；HTTP 使用 HTTPS。 Temporary extension read unavailable
+				41 heading local, Value: 3
+					42 text local
+				43 text Disposable local MCP acceptance
+				44 text mcp/local.json
+				45 text 已启用 就绪 1 个工具
+				46 button 编辑
+				47 button 停用
+				48 button 导出
+				49 button 测试连接
+				50 button 断开
+				51 button 删除
+				52 heading missing, Value: 3
+					53 text missing
+				54 text Disposable local MCP acceptance
+				55 text mcp/missing.json
+				56 text 已启用 未连接 0 个工具
+				57 button 编辑
+				58 button 停用
+				59 button 导出
+				60 button 测试连接
+				61 button 删除
+
+The focused UI element is 0 AXWebArea 墨斗, URL: 127.0.0.1:50628/#/settings/mcp
