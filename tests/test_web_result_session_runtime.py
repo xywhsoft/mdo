@@ -6,6 +6,7 @@ import json
 import os
 from pathlib import Path
 import shutil
+import socket
 import tempfile
 import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -14,12 +15,13 @@ from test_interrupt_runtime import free_port, start_host, stop_host, request
 from test_web_runtime import ROOT
 
 def run(host: Path, *, page_recovery: bool = False, page_denied: bool = False,
-        search_recovery: bool = False, search_denied: bool = False,
+        search_recovery: bool = False, search_denied: bool = False, search_lost: bool = False,
         output_file: Path | None = None) -> None:
     denied = page_denied or search_denied
     class Handler(BaseHTTPRequestHandler):
         calls = 0
         page_calls = 0
+        key = None
         def log_message(self, *_): pass
         def do_GET(self):
             if self.path != "/page":
@@ -35,6 +37,8 @@ def run(host: Path, *, page_recovery: bool = False, page_denied: bool = False,
             assert self.path == "/api/v1/search/requests"
             assert self.headers.get("Authorization") == "Bearer probe-secret"
             args = json.loads(self.rfile.read(int(self.headers["Content-Length"]))); Handler.calls += 1
+            if Handler.key is None: Handler.key = args["request_id"]
+            assert Handler.key == args["request_id"]
             if search_denied or (search_recovery and Handler.calls <= 2):
                 body=json.dumps({'code':429,'message':'HOSTILE_SECRET_BODY','data':{'error':{
                     'code':'daily_limit' if search_denied else 'server_busy',
@@ -47,6 +51,9 @@ def run(host: Path, *, page_recovery: bool = False, page_denied: bool = False,
                 "truncated": False, "count": 10, "results": [{"title": f"搜索 Пример 🌍 {i}",
                     "url": f"https://example.com/{i}", "snippet": "搜索я🌍" * 120,
                     "site": "example.com", "published_at": "2026-10-09"} for i in range(10)]}}, ensure_ascii=False).encode()
+            if search_lost and Handler.calls == 1:
+                self.connection.shutdown(socket.SHUT_RDWR); self.connection.close()
+                self.close_connection = True; return
             self.send_response(200); self.send_header("Content-Length", str(len(body)))
             self.end_headers(); self.wfile.write(body)
     server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
@@ -93,7 +100,7 @@ def run(host: Path, *, page_recovery: bool = False, page_denied: bool = False,
                 process = start_host(host, config, home, os.environ.copy(), log, port)
                 output = log.read_text(encoding="utf-8", errors="replace")
                 assert "web_session_ok=1" in output, output
-                assert Handler.calls == (0 if page_recovery or page_denied else 3 if search_recovery else 1), Handler.calls
+                assert Handler.calls == (0 if page_recovery or page_denied else 3 if search_recovery else 2 if search_lost else 1), Handler.calls
                 assert 'HOSTILE_SECRET_BODY' not in output, output
                 if page_recovery or page_denied:
                     assert Handler.page_calls == (1 if page_denied else 3), Handler.page_calls
@@ -121,7 +128,7 @@ def run(host: Path, *, page_recovery: bool = False, page_denied: bool = False,
                 if output_file:
                     output_file.parent.mkdir(parents=True, exist_ok=True)
                     output_file.write_text(json.dumps({
-                        "mode": "search_quota" if search_denied else "search_recovery" if search_recovery else
+                        "mode": "search_quota" if search_denied else "search_lost" if search_lost else "search_recovery" if search_recovery else
                             "denied" if page_denied else "page_recovery" if page_recovery else "search",
                         "page_requests": Handler.page_calls, "search_requests": Handler.calls,
                         "tool_completions": [{"kind": e["kind"], "success": e["success"]} for e in done],
@@ -133,6 +140,7 @@ def run(host: Path, *, page_recovery: bool = False, page_denied: bool = False,
     finally:
         server.shutdown(); server.server_close(); thread.join(timeout=2)
     print("PASS search quota returned once; agent continued and completed" if search_denied else
+          "PASS lost search response recovered silently; one completion/artifact; agent completed" if search_lost else
           "PASS search quietly recovered; one result; agent completed" if search_recovery else
           "PASS denied page returned once; agent continued and completed" if page_denied else
           "PASS real page retry/read/model ledger/one completion/no intermediate failures" if page_recovery else
@@ -145,8 +153,9 @@ if __name__ == "__main__":
     modes.add_argument("--page-denied", action="store_true")
     modes.add_argument("--search-recovery", action="store_true")
     modes.add_argument("--search-denied", action="store_true")
+    modes.add_argument("--search-lost", action="store_true")
     parser.add_argument("--output", type=Path)
     args = parser.parse_args()
     run(args.host.resolve(), page_recovery=args.page_recovery, page_denied=args.page_denied,
-        search_recovery=args.search_recovery, search_denied=args.search_denied,
+        search_recovery=args.search_recovery, search_denied=args.search_denied, search_lost=args.search_lost,
         output_file=args.output)

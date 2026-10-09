@@ -26,6 +26,9 @@ def scenario(ctx):
     class Handler(BaseHTTPRequestHandler):
         mode=''; requests=[]; restarted_dispatches=0
         def log_message(self,*_):pass
+        def handle(self):
+            try:super().handle()
+            except ConnectionResetError:pass  # Native client may close its idle connection.
         def reply(self,status,body):
             self.send_response(status)
             self.send_header('Content-Type','application/json')
