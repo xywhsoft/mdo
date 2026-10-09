@@ -1,0 +1,176 @@
+<!doctype html>
+<html lang="zh-CN">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Session search interaction probe</title>
+<link rel="stylesheet" href="/app/web/css/app.css">
+<div class="app-shell" id="app-shell" data-sidebar="open"><main class="workspace"><textarea id="prompt">Keep this draft</textarea></main></div>
+<script type="module">
+import { createSessionSearch } from '/app/web/js/features/sessions/session-search.js';
+import { createKeyboardShortcuts } from '/app/web/js/features/shell/keyboard-shortcuts.js';
+import { createResourceStore } from '/app/web/js/state/store.js';
+import { mountIcons } from '/app/web/js/components/icons.js';
+import { loadLocale } from '/app/web/js/i18n.js';
+import { trackMobileViewport } from '/app/web/js/features/shell/mobile-viewport.js';
+
+const originalFetch = window.fetch.bind(window);
+window.fetch = (url, options) => originalFetch(typeof url === 'string' && url.startsWith('/lang/')
+  ? '/app/web' + url : url, options);
+// Use the production markup as well as the production controller and CSS.
+const markup = new DOMParser().parseFromString(await (await fetch('/app/web/index.html')).text(), 'text/html');
+await Promise.all([...markup.querySelectorAll('link[rel="stylesheet"]')]
+  .filter(link => link.getAttribute('href') !== '/css/app.css').map(source => new Promise(resolve => {
+    const link = document.createElement('link'); link.rel = 'stylesheet';
+    link.href = '/app/web' + source.getAttribute('href'); link.onload = resolve; link.onerror = resolve;
+    document.head.append(link);
+  })));
+const shell = document.querySelector('#app-shell');
+const sidebar = markup.querySelector('#sidebar');
+shell.prepend(sidebar);
+sidebar.inert = false;
+for (const image of sidebar.querySelectorAll('img[src^="/"]'))
+  image.src = '/app/web' + image.getAttribute('src');
+document.body.append(markup.querySelector('#session-search-dialog'));
+const help = document.createElement('dialog');
+document.body.append(help);
+const input = document.querySelector('#session-search');
+const dialog = document.querySelector('#session-search-dialog');
+const button = document.querySelector('#open-session-search');
+const list = document.querySelector('#session-search-results');
+const prompt = document.querySelector('#prompt');
+const locale = new URLSearchParams(location.search).get('locale') || 'zh-CN';
+document.documentElement.dataset.theme = new URLSearchParams(location.search).get('theme') || 'dark';
+await loadLocale(locale);
+mountIcons();
+const projects = createResourceStore({ items: [{ id: 'alpha', name: 'Alpha project' }] });
+const sessions = Array.from({ length: 85 }, (_, index) => ({
+  id: String(index), project_id: index % 2 ? 'alpha' : 'default',
+  title: index === 0 ? '<img src=x onerror=alert(1)>' : `Task ${index}`,
+  status: 'active', agent_id: index === 84 ? 'reviewer' : 'default',
+  updated_at: (Date.now() - index * 60000) * 1000,
+}));
+const store = createResourceStore({ items: [] });
+store.setData({ items: sessions });
+let selected = null, stopped = 0, retries = 0;
+const search = createSessionSearch({ dialog, button, store, projectsStore: projects,
+  fallbackFocus: () => prompt,
+  onSelect: session => { selected = session; prompt.focus(); },
+  onRetry: () => { retries++; store.setData({ items: sessions }); } });
+window.qaControls = { search, counters: () => ({ stopped, retries, selected: selected?.id }) };
+createKeyboardShortcuts({ dialog: help,
+  navigation: { get: () => ({ view: 'workspace', sessionId: 'running' }) },
+  search: { isOpen: () => false }, onNew() {}, onExport() {}, onSettings() {}, onToggleTheme() {},
+  onSessionSearch: search.open, onStop: () => { stopped++; }, isRunning: () => true,
+  isDrawerOpen: () => false, closeDrawers() {} });
+// Simulate both Android keyboard modes: a reduced or a panned visual viewport.
+const viewport = new EventTarget();
+Object.assign(viewport, { height: innerHeight, offsetTop: 0, scale: 1 });
+const view = new EventTarget();
+Object.assign(view, { innerHeight, visualViewport: viewport });
+trackMobileViewport(shell, matchMedia('(max-width: 760px)'), view);
+const checks = [];
+function check(name, passed) { checks.push({ name, passed: !!passed }); if (!passed) throw Error(name); }
+function key(target, value, fields = {}) {
+  const event = new KeyboardEvent('keydown', { key: value, bubbles: true, cancelable: true, ...fields });
+  target.dispatchEvent(event);
+  return event;
+}
+function query(value) { input.value = value; input.dispatchEvent(new Event('input', { bubbles: true })); }
+function options() { return [...list.querySelectorAll('[role="option"]')]; }
+function pause() { return new Promise(resolve => setTimeout(resolve, 30)); }
+async function run() {
+  try {
+    prompt.focus();
+    key(prompt, '/');
+    check('slash remains normal text input', !dialog.open);
+    button.focus();
+    key(button, '/');
+    check('slash opens search and focuses input', dialog.open && document.activeElement === input);
+    check('recent results are bounded', options().length === 40 && !document.querySelector('#more-session-search').hidden);
+    check('titles render as text', options()[0].textContent.includes('<img') && !list.querySelector('img'));
+    query('reviewer');
+    check('agent metadata matches', options().length === 1 && options()[0].textContent.includes('Task 84'));
+    query('ALPHA PROJECT');
+    check('project names match', options().length === 40);
+    query('Task 8');
+    check('title matching reaches older cached sessions', options().length === 6);
+    const first = input.getAttribute('aria-activedescendant');
+    key(input, 'ArrowDown');
+    const active = input.getAttribute('aria-activedescendant');
+    check('arrow keys change selection', active !== first);
+    const retained = options()[0];
+    list.scrollTop = 20;
+    store.setData({ items: [...sessions] });
+    check('catalog refresh retains nodes and selection', options()[0] === retained && input.getAttribute('aria-activedescendant') === active);
+    input.dispatchEvent(new CompositionEvent('compositionstart', { bubbles: true }));
+    key(input, 'Enter'); key(input, 'Escape');
+    check('IME candidate keys do not select or dismiss', dialog.open && selected === null);
+    input.dispatchEvent(new CompositionEvent('compositionend', { bubbles: true }));
+    key(input, 'Enter', { keyCode: 229 });
+    check('WebView IME 229 does not select', dialog.open && selected === null);
+    key(input, 'Escape');
+    await pause();
+    check('Escape closes without stopping the run', !dialog.open && stopped === 0);
+    check('close restores focus and draft', document.activeElement === button && prompt.value === 'Keep this draft');
+    search.open();
+    check('reopen selects the previous query', input.value === 'Task 8' && input.selectionStart === 0 && input.selectionEnd === input.value.length);
+    query('Task 84');
+    key(input, 'Enter');
+    await pause();
+    check('Enter selects the matched conversation once', !dialog.open && selected?.id === '84' && document.activeElement === prompt);
+    search.open(); query('no such task');
+    check('empty results clear the active descendant', options().length === 0 && !input.hasAttribute('aria-activedescendant'));
+    key(input, 'Enter');
+    check('Enter without a result keeps search open', dialog.open);
+    query('');
+    document.querySelector('#more-session-search').click();
+    check('show more uses cached results', options().length === 80 && retries === 0);
+    store.setError(Error('offline'));
+    check('read failure retains searchable cached data', options().length === 80 && !document.querySelector('#retry-session-search').hidden);
+    document.querySelector('#retry-session-search').click();
+    check('explicit retry recovers', retries === 1 && document.querySelector('#retry-session-search').hidden);
+    query('Task 84');
+    store.setData({ items: sessions.filter(session => session.id !== '84') });
+    key(input, 'Enter');
+    check('removed results cannot be opened', dialog.open && options().length === 0);
+    search.close(); search.open();
+    await pause();
+    check('queued close event cannot corrupt a new open', dialog.open && button.getAttribute('aria-expanded') === 'true');
+    search.close();
+    help.showModal(); search.open();
+    check('another modal prevents layered search', !dialog.open);
+    help.close(); await pause();
+    store.reset(); search.open();
+    check('initial read has one retry path', retries === 2);
+    query('');
+    Object.assign(viewport, { height: innerWidth <= 760 ? 350 : innerHeight, offsetTop: 0 });
+    viewport.dispatchEvent(new Event('resize'));
+    await pause();
+    let bounds = dialog.getBoundingClientRect();
+    check('dialog remains inside the available viewport', bounds.top >= 0 && bounds.bottom <= viewport.height + 1 && bounds.left >= 0 && bounds.right <= innerWidth + 1);
+    if (innerWidth <= 760) {
+      viewport.offsetTop = innerHeight - viewport.height;
+      viewport.dispatchEvent(new Event('scroll'));
+      await pause();
+      bounds = dialog.getBoundingClientRect();
+      check('panned visual viewport keeps search visible', bounds.top >= viewport.offsetTop && bounds.bottom <= viewport.offsetTop + viewport.height + 1);
+      viewport.offsetTop = 0;
+      viewport.dispatchEvent(new Event('scroll'));
+    }
+    const footer = document.querySelector('.sidebar-status-row');
+    check('search precedes theme and settings', button.nextElementSibling.id === 'toggle-theme' && button.nextElementSibling.nextElementSibling.id === 'open-settings');
+    check('search row is removed from the sidebar', !sidebar.querySelector('#session-search') && !sidebar.querySelector('.search-box'));
+    check('footer has no horizontal overflow', footer.scrollWidth <= footer.clientWidth + 1);
+    check('dialog has no horizontal overflow', dialog.scrollWidth <= dialog.clientWidth + 1);
+    window.qaResult = { passed: true, locale, checks };
+  } catch (error) {
+    window.qaResult = { passed: false, locale, error: String(error), checks };
+  }
+}
+await run();
+const report = document.createElement('script');
+report.type = 'application/json'; report.id = 'qa-result';
+report.textContent = JSON.stringify(window.qaResult);
+document.body.append(report);
+</script>
+</html>

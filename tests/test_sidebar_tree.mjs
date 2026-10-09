@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { sidebarGroups, sidebarWindow, recentSessions } from "../app/web/js/features/sessions/sidebar-tree.js";
+import { sidebarGroups, sidebarWindow, recentSessions, matchingSessions } from "../app/web/js/features/sessions/sidebar-tree.js";
 
 const session = (id, project_id = "default", changes = {}) => ({ id, project_id,
   title: id, status: "active", pinned: false, updated_at: 1, ...changes });
@@ -44,6 +44,30 @@ test("search filters empty projects and matches localized default project names"
   assert.equal(found.tasks.length, 0);
   assert.equal(sidebarGroups({ sessions, projects, query: "默认项目", defaultProjectName: "默认项目" }).tasks[0].id, "free");
   assert.equal(sidebarGroups({ sessions, projects, query: "missing" }).total, 0);
+});
+
+test("dialog search shares title, project and agent matching without changing the catalog", () => {
+  const sessions = [session("old", "alpha", { title: "Read code", updated_at: 1 }),
+    session("new", "alpha", { title: "Release APK", agent_id: "reviewer", updated_at: 3 }),
+    session("plain", "default", { updated_at: 2 }),
+    session("archived", "alpha", { title: "Release APK", status: "archived", updated_at: 4 })];
+  const before = structuredClone({ sessions, projects });
+  const search = query => matchingSessions({ sessions, projects, query,
+    defaultProjectName: "默认项目" }).map(item => item.id);
+  assert.deepEqual(search(" release apk "), ["new"]);
+  assert.deepEqual(search("ALPHA"), ["new", "old"]);
+  assert.deepEqual(search("reviewer"), ["new"]);
+  assert.deepEqual(search("默认项目"), ["plain"]);
+  assert.deepEqual(search(""), ["new", "plain", "old"]);
+  assert.deepEqual({ sessions, projects }, before);
+});
+
+test("search resolves orphaned projects and respects the selected session status", () => {
+  const sessions = [session("saved", "removed"),
+    session("older", "removed", { status: "archived" })];
+  assert.deepEqual(matchingSessions({ sessions, query: "removed", status: "archived" })
+    .map(item => item.id), ["older"]);
+  assert.equal(matchingSessions({ sessions, query: "missing" }).length, 0);
 });
 
 test("project sorting uses activity or names without changing catalog data", () => {

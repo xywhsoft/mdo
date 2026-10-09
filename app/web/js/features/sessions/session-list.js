@@ -28,7 +28,7 @@ function activityText(activity) {
   return "";
 }
 
-export function createSessionList({ container, count, filter, searchInput, store, projectsStore, runsStore,
+export function createSessionList({ container, count, filter, searchButton, store, projectsStore, runsStore,
   navigation, onSelect, onAction, onNewInProject, onAddProject,
   onRefreshProjects, onProjectAction, onRetrySessions }) {
   let query = "";
@@ -68,7 +68,7 @@ export function createSessionList({ container, count, filter, searchInput, store
       const hadFocus = readNotice.contains(document.activeElement);
       readNotice.remove();
       if (hadFocus) (container.querySelector('.session-item[aria-current="page"]') ??
-        searchInput ?? filter).focus({ preventScroll: true });
+        searchButton ?? filter).focus({ preventScroll: true });
       return;
     }
     readMessage.textContent = isTransientReadError(readError)
@@ -474,7 +474,7 @@ export function createSessionList({ container, count, filter, searchInput, store
     syncIndicators();
     if (retainedReadFocus && !restoredFocus)
       (readNotice.isConnected ? readRetry :
-        container.querySelector('.session-item[aria-current="page"]') ?? searchInput ?? filter)
+        container.querySelector('.session-item[aria-current="page"]') ?? searchButton ?? filter)
         .focus({ preventScroll: true });
   }
 
@@ -522,13 +522,6 @@ export function createSessionList({ container, count, filter, searchInput, store
     return [...container.querySelectorAll(".session-item")]
       .filter((button) => button.getClientRects().length);
   }
-  function onSearchKeyDown(event) {
-    if (event.key !== "ArrowDown" || isImeKey(event)) return;
-    const first = sessionButtons()[0];
-    if (!first) return;
-    event.preventDefault();
-    first.focus();
-  }
   function onSessionKeyDown(event) {
     if (event.defaultPrevented || isImeKey(event) || event.altKey ||
         event.ctrlKey || event.metaKey ||
@@ -549,11 +542,10 @@ export function createSessionList({ container, count, filter, searchInput, store
       buttons[(index + 1) % buttons.length].focus();
     } else if (event.key === "ArrowUp") {
       event.preventDefault();
-      if (index === 0) (searchInput ?? filter).focus();
+      if (index === 0) (searchButton ?? filter).focus();
       else buttons[index - 1].focus();
     }
   }
-  searchInput?.addEventListener("keydown", onSearchKeyDown);
   container.addEventListener("keydown", onSessionKeyDown);
   container.addEventListener("scroll", onListScroll);
   sidebar?.addEventListener("scroll", onSidebarScroll);
@@ -636,7 +628,6 @@ export function createSessionList({ container, count, filter, searchInput, store
     setUnread(keys) { unread = new Set(keys); syncIndicators(); },
     focusProjects(projectId) {
       status = "active"; filter.value = status; query = "";
-      if (searchInput) searchInput.value = "";
       openMenu = "";
       collapsed.delete("section:projects");
       if (projectId) collapsed.delete(`project:${projectId}`);
@@ -654,7 +645,6 @@ export function createSessionList({ container, count, filter, searchInput, store
       unsubscribeRuns?.();
       filter.removeEventListener("change", onFilterChange);
       openMenuNode?.remove();
-      searchInput?.removeEventListener("keydown", onSearchKeyDown);
       container.removeEventListener("keydown", onSessionKeyDown);
       container.removeEventListener("scroll", onListScroll);
       sidebar?.removeEventListener("scroll", onSidebarScroll);

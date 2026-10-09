@@ -31,6 +31,7 @@ import { asksStore, selectAsks, clearAsks, refreshSelectedAsks } from "./state/a
 import { recoveryStore, selectRecovery, loadRecovery, readRecovery } from "./state/recovery.js";
 import { navigation } from "./state/navigation.js";
 import { createSessionList } from "./features/sessions/session-list.js";
+import { createSessionSearch } from "./features/sessions/session-search.js";
 import { createSessionActionMenu } from "./features/sessions/session-action-menu.js";
 import { rememberSessionActionFocus } from "./features/sessions/session-action-focus.js";
 import { sessionActionDialogCopy, sessionActionToast, sessionForkTitle } from "./features/sessions/session-actions.js";
@@ -314,7 +315,7 @@ export async function boot() {
   const sessionList = createSessionList({
     container: $("#session-list"),
     count: $("#session-count"),
-    searchInput: $("#session-search"),
+    searchButton: $("#open-session-search"),
     store: sessionsStore,
     projectsStore, runsStore,
     filter: $("#session-status-filter"),
@@ -348,6 +349,23 @@ export async function boot() {
       }
     },
     onNewInProject: switchToProject,
+  });
+  const sessionSearch = createSessionSearch({
+    dialog: $("#session-search-dialog"), button: $("#open-session-search"),
+    store: sessionsStore, projectsStore,
+    getStatus: () => $("#session-status-filter").value,
+    fallbackFocus: () => prompt,
+    onRetry: () => loadSessions({ retry: true }),
+    onSelect(session) {
+      cancelSessionComposerFocus();
+      navigation.select(session.project_id, session.id);
+      closeDrawers();
+      cancelSessionComposerFocus = focusSessionComposerAfterNavigation({
+        navigation, sessionDetailStore, prompt,
+        projectId: session.project_id, sessionId: session.id,
+        origin: document.activeElement,
+      });
+    },
   });
   const actionMenus = [
     ["#session-action-control", "#session-actions", "#session-header-menu"],
@@ -393,7 +411,6 @@ export async function boot() {
     mobileProjectSwitcher.close();
   });
   function showActiveSessions() {
-    $("#session-search").value = "";
     sessionList.showActive();
   }
   function manageSidebarProjects(projectId) {
@@ -401,7 +418,6 @@ export async function boot() {
     setSidebar(true, { focus: false });
     sessionList.focusProjects(projectId);
   }
-  $("#session-search").addEventListener("input", (event) => sessionList.setQuery(event.target.value));
   createComposerProject({ select: $("#composer-project"), row: $("#composer-project-row"),
     prompt, navigation, projectsStore, sessionsStore });
 
@@ -2446,10 +2462,7 @@ export async function boot() {
     onSettings: (open) => open ? navigation.openSettings("general")
       : $("#close-settings").click(),
     onToggleTheme: toggleTheme,
-    onSessionSearch: () => {
-      if (shell.dataset.sidebar !== "open") setSidebar(true);
-      $("#session-search").focus();
-    },
+    onSessionSearch: () => sessionSearch.open(),
     onStop: () => stop.click(), isRunning: () => Boolean(activeRun),
     isDrawerOpen: () => mobileLayout.matches && shell.dataset.sidebar === "open",
     closeDrawers,

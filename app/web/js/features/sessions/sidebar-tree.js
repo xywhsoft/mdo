@@ -6,15 +6,25 @@ export function recentSessions(sessions) {
     `${a.project_id}/${a.id}`.localeCompare(`${b.project_id}/${b.id}`));
 }
 
+// Both sidebar filtering and the search dialog use catalog metadata only.
+// Searching never loads conversation bodies or mixes in another device's data.
+export function matchingSessions({ sessions = [], projects = [], status = "active",
+  query = "", locale = "zh-CN", defaultProjectName = "default" }) {
+  const catalog = new Map(projects.map((project) => [project.id, project]));
+  const needle = query.trim().toLocaleLowerCase(locale);
+  const matches = (value) => String(value || "").toLocaleLowerCase(locale).includes(needle);
+  return recentSessions(sessions).filter((session) =>
+    (status === "all" || session.status === status) && (!needle || matches(
+      `${session.title} ${session.project_id} ${session.project_id === "default" ? defaultProjectName :
+        catalog.get(session.project_id)?.name || ""} ${session.agent_id}`)));
+}
+
 export function sidebarGroups({ sessions = [], projects = [], status = "active",
   query = "", locale = "zh-CN", projectSort = "name", defaultProjectName = "default" }) {
   const catalog = new Map(projects.map((project) => [project.id, project]));
   const needle = query.trim().toLocaleLowerCase(locale);
   const matches = (value) => String(value || "").toLocaleLowerCase(locale).includes(needle);
-  const visible = recentSessions(sessions).filter((session) =>
-    (status === "all" || session.status === status) && (!needle || matches(
-      `${session.title} ${session.project_id} ${session.project_id === "default" ? defaultProjectName :
-        catalog.get(session.project_id)?.name || ""} ${session.agent_id}`)));
+  const visible = matchingSessions({ sessions, projects, status, query, locale, defaultProjectName });
   const pinned = visible.filter((session) => session.status === "active" && session.pinned);
   const ordinary = visible.filter((session) => session.status !== "active" || !session.pinned);
   // A pinned task still contributes to its project's recent activity.

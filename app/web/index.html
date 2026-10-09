@@ -89,12 +89,6 @@
         <span data-i18n="shell.schedules">计划任务</span>
       </button>
 
-      <label class="search-box" for="session-search">
-        <span class="icon" data-icon="search" aria-hidden="true"></span>
-        <input id="session-search" type="search" autocomplete="off" placeholder="搜索会话" data-i18n-placeholder="shell.searchSessions" aria-label="搜索会话" data-i18n-aria-label="shell.searchSessions">
-        <kbd>/</kbd>
-      </label>
-
       <nav class="session-navigation" aria-label="会话列表" data-i18n-aria-label="shell.sessions">
         <div class="nav-section-heading" hidden>
           <span data-i18n="shell.sessions">会话</span>
@@ -118,6 +112,9 @@
             <span class="status-dot" aria-hidden="true"></span>
             <span id="runtime-label">正在连接本地服务…</span>
           </div>
+          <button class="icon-button" id="open-session-search" type="button" aria-label="搜索会话" data-i18n-aria-label="shell.searchSessions" title="搜索会话（/）" data-i18n-title="sessionSearch.open" aria-haspopup="dialog" aria-controls="session-search-dialog" aria-expanded="false">
+            <span class="icon" data-icon="search" aria-hidden="true"></span>
+          </button>
           <button class="icon-button" id="toggle-theme" type="button" aria-label="切换主题" title="切换主题">
             <span class="icon" data-icon="theme" aria-hidden="true"></span>
           </button>
@@ -835,6 +832,23 @@
         <button class="primary-button" type="submit" data-i18n="messageEdit.resend">保存并重新发送</button>
       </footer>
     </form>
+  </dialog>
+
+  <dialog class="app-dialog session-search-dialog" id="session-search-dialog" aria-labelledby="session-search-title">
+    <div class="session-search-card">
+      <header class="session-search-heading">
+        <h2 id="session-search-title" data-i18n="shell.searchSessions">搜索会话</h2>
+        <button class="icon-button" id="close-session-search" type="button" aria-label="关闭搜索" data-i18n-aria-label="sessionSearch.close" title="关闭搜索" data-i18n-title="sessionSearch.close"><span class="icon" data-icon="close" aria-hidden="true"></span></button>
+      </header>
+      <div class="session-search-field">
+        <span class="icon" data-icon="search" aria-hidden="true"></span>
+        <input id="session-search" type="search" role="combobox" aria-autocomplete="list" aria-controls="session-search-results" aria-expanded="false" autocomplete="off" spellcheck="false" enterkeyhint="go" placeholder="搜索会话标题、项目或 Agent" data-i18n-placeholder="sessionSearch.placeholder" aria-label="搜索会话" data-i18n-aria-label="shell.searchSessions">
+      </div>
+      <div class="session-search-feedback"><span id="session-search-status" role="status"></span><button class="text-button" id="retry-session-search" type="button" data-i18n="sessionLoad.retry" hidden>重试读取</button></div>
+      <div class="session-search-results" id="session-search-results" role="listbox" aria-label="会话" data-i18n-aria-label="shell.sessions"></div>
+      <button class="text-button session-search-more" id="more-session-search" type="button" data-i18n="sessionSearch.more" hidden>显示更多</button>
+      <footer class="session-search-hint" data-i18n="sessionSearch.keyboard">↑↓ 选择 · Enter 打开 · Esc 关闭</footer>
+    </div>
   </dialog>
 
   <dialog class="image-preview-dialog" id="image-preview" aria-label="图片预览" data-i18n-aria-label="image.previewTitle">
