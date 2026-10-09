@@ -1,0 +1,111 @@
+<!doctype html>
+<html lang="zh-CN" data-theme="dark">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>mdo reply visibility regression</title>
+<link rel="stylesheet" href="/app/web/css/app.css">
+<style>
+  body { margin: 16px; background: var(--bg); color: var(--ink); }
+  .conversation { height: 70vh; width: min(820px, 100%); overflow: auto; }
+  #result { display: block; white-space: pre-wrap; }
+</style>
+<button id="probe" type="button">检查正文和展开状态</button>
+<output id="result" role="status">准备中</output>
+<div class="conversation"><p id="welcome"></p><ol id="timeline"></ol></div>
+<button id="to-bottom" type="button" hidden>回到底部</button>
+<div id="toast-region"></div>
+<script type="module">
+import { createTimelineView } from "/app/web/js/features/chat/timeline.js";
+import { createResourceStore } from "/app/web/js/state/store.js";
+
+const result = document.querySelector("#result");
+const container = document.querySelector("#timeline");
+const store = createResourceStore();
+const base = { schema_version: 6, run_id: 1, agent_depth: 0, agent_turn: 1 };
+const e = (event_id, kind, extra = {}) => ({ ...base, event_id, kind,
+  time: event_id * 1000000, ...extra });
+let events = [e(1, "agent_start", { user_message_sequence: 1, text: "搜集模型资料" }),
+  e(2, "model_reasoning_delta", { text: "读取来源" }),
+  e(3, "model_text_delta", { text: "核心调研摘要：这是应始终保留的正文。" }),
+  e(4, "model_done", { success: true }),
+  e(5, "model_reasoning_delta", { agent_turn: 2, text: "验证文档" }),
+  e(6, "tool_start", { agent_turn: 2, tool_call_id: "verify", tool_name: "exec", text: "verify report" })];
+createTimelineView({ container, welcome: document.querySelector("#welcome"),
+  toBottom: document.querySelector("#to-bottom"), store, onFork() {}, onEdit() {}, onRetry() {} });
+const paint = async () => { await new Promise(requestAnimationFrame); await new Promise(requestAnimationFrame); };
+const publish = async () => { store.setData({ projectId: "qa", sessionId: "reply-visibility", events }); await paint(); };
+const rootReplies = () => [...container.children].filter(node => node.dataset.kind === "assistant");
+const processes = () => [...container.querySelectorAll("details.conversation-process")];
+const finish = async () => {
+  events = [...events, e(7, "tool_done", { agent_turn: 2, tool_call_id: "verify", success: true, text: "OK" }),
+    e(8, "model_done", { agent_turn: 2, success: true }),
+    e(9, "model_text_delta", { agent_turn: 3, text: "验证通过，记忆已整理。" }),
+    e(10, "agent_done", { agent_turn: 3, success: true })];
+  await publish();
+};
+
+// The optional local replay file contains only diagnostic display events;
+// it never changes the original portable session.
+if (new URL(location.href).searchParams.has("replay")) {
+  events = await (await fetch("/strata-events.json")).json();
+  await publish();
+  const replies = rootReplies();
+  const report = replies.find(node => node.textContent.includes("信息搜集完成。"));
+  const passed = Boolean(report) && !report.closest("details") &&
+    replies.at(-1).textContent.includes("验证通过");
+  result.dataset.passed = String(passed);
+  result.textContent = JSON.stringify({ passed, visibleReplies: replies.length,
+    reportVisible: Boolean(report), reportFolded: Boolean(report?.closest("details")) }, null, 2);
+  report?.scrollIntoView({ block: "start" });
+  document.querySelector("#probe").hidden = true;
+} else {
+  await publish();
+  result.textContent = "准备完成";
+  document.querySelector("#probe").addEventListener("click", async () => {
+    const initial = rootReplies()[0];
+    const manualKey = processes()[0].dataset.timelineKey;
+    processes()[0].querySelector("summary").click();
+    await paint();
+    await finish();
+    const manualKept = processes().find(node => node.dataset.timelineKey === manualKey)?.open === true;
+    const automaticClosed = processes().at(-1).open === false;
+    const reportKept = rootReplies()[0] === initial && initial.textContent.includes("核心调研摘要");
+    await publish();
+    const refreshKept = processes().find(node => node.dataset.timelineKey === manualKey)?.open === true;
+    // Resume without a new user input; the earlier answer must remain a root row.
+    events = [...events, e(11, "agent_start", { run_id: 2, user_message_sequence: 0 }),
+      e(12, "model_text_delta", { run_id: 2, text: "恢复后的补充正文" }),
+      e(13, "agent_done", { run_id: 2, success: true })];
+    await publish();
+    const resumedReplies = rootReplies().length === 3 && rootReplies()[0] === initial;
+    const pausedAuto = processes().at(-1);
+    pausedAuto.querySelector("summary").click();
+    await paint();
+    await publish();
+    const manualAfterFinish = processes().at(-1).open === true;
+    // Reopen the same historical events in a fresh view, as on page reload.
+    const historyContainer = document.createElement("ol");
+    const historyWelcome = document.createElement("p");
+    const historyBottom = document.createElement("button");
+    const historyScroller = document.createElement("div");
+    historyScroller.className = "conversation";
+    historyScroller.append(historyWelcome, historyContainer, historyBottom);
+    document.body.append(historyScroller);
+    const historyStore = createResourceStore();
+    const historyView = createTimelineView({ container: historyContainer, welcome: historyWelcome,
+      toBottom: historyBottom, store: historyStore, onFork() {}, onEdit() {}, onRetry() {} });
+    historyStore.setData({ projectId: "qa", sessionId: "reply-visibility", events });
+    await paint();
+    const reopenedReplies = [...historyContainer.children].filter(node => node.dataset.kind === "assistant").length === 3;
+    const reopenedProcessesClosed = [...historyContainer.querySelectorAll("details.conversation-process")].every(node => !node.open);
+    historyView.destroy(); historyScroller.remove();
+    const passed = manualKept && automaticClosed && reportKept && refreshKept &&
+      resumedReplies && manualAfterFinish && reopenedReplies && reopenedProcessesClosed;
+    result.dataset.passed = String(passed);
+    result.textContent = JSON.stringify({ passed, manualKept, automaticClosed, reportKept,
+      refreshKept, resumedReplies, manualAfterFinish, reopenedReplies, reopenedProcessesClosed }, null, 2);
+    document.querySelector("#probe").disabled = true;
+  });
+}
+</script>
+</html>

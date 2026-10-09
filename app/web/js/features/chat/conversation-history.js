@@ -42,22 +42,30 @@ export function conversationGroups(items) {
   for (const item of items) {
     if (item.kind === "user") {
       turn = { key: `turn-${item.sourceEventId}`, firstEventId: item.sourceEventId,
-        user: item, process: [], answer: null, state: "running" };
+        user: item, entries: [], state: item.turnState ?? "running" };
       groups.push(turn);
     } else if (!turn) groups.push({ key: item.key, standalone: item });
-    else turn.process.push(item);
+    else {
+      if (!(item.agentDepth > 0)) turn.state = item.turnState ?? "running";
+      // Normal main-Agent text is public conversation, even when tools or
+      // another reply follow it. Only explicit execution records are folded.
+      if (item.agentDepth > 0 || ["reasoning", "tool", "task"].includes(item.kind)) {
+        let process = turn.entries.at(-1);
+        if (process?.kind !== "process") {
+          process = { key: `process-${turn.firstEventId}-${item.key}`,
+            kind: "process", items: [], state: "running" };
+          turn.entries.push(process);
+        }
+        process.items.push(item);
+      } else turn.entries.push(item);
+    }
   }
   for (const group of groups) {
     if (group.standalone) continue;
-    // The final main-Agent answer alone stays outside the process disclosure.
-    // Intermediate model answers and all sub-Agent work remain expandable.
-    const answers = group.process.filter(item => item.kind === "assistant" && !(item.agentDepth > 0));
-    group.answer = answers.at(-1) ?? group.process.filter(item => item.kind === "error" &&
-      !(item.agentDepth > 0)).at(-1) ?? null;
-    if (group.answer) {
-      group.process = group.process.filter(item => item !== group.answer);
-      group.state = group.answer.turnState ?? "running";
-    } else group.state = group.user.turnState ?? "running";
+    for (const entry of group.entries) {
+      if (entry.kind === "process") entry.state = group.state === "running" &&
+        entry.items.some(item => item.state === "running") ? "running" : "done";
+    }
   }
   return groups;
 }

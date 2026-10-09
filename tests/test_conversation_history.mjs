@@ -150,7 +150,7 @@ test("a clear during historical loading removes obsolete records and summaries",
   assert.equal(timelineStore.get().data.hasOlder, false);
 });
 
-test("terminal grouping keeps the final reply separate and preserves reasoning, tools and intermediate answers", () => {
+test("all main replies stay visible between chronologically folded execution blocks", () => {
   const events = [e(1, "agent_start", { user_message_sequence: 1, text: "Question" }),
     e(2, "model_reasoning_delta", { agent_turn: 1, text: "Thought" }),
     e(3, "model_text_delta", { agent_turn: 1, text: "Let me inspect" }),
@@ -161,10 +161,40 @@ test("terminal grouping keeps the final reply separate and preserves reasoning, 
     e(8, "agent_done", { success: true })];
   const [group] = conversationGroups(eventsToTimeline(events));
   assert.equal(group.state, "done");
-  assert.equal(group.answer.text, "Final answer");
-  assert.deepEqual(group.process.map(item => item.kind), ["reasoning", "assistant", "tool"]);
-  assert.equal(group.process[0].text, "Thought");
-  assert.equal(group.process[2].outputText, "Data");
+  assert.deepEqual(group.entries.map(item => item.kind), ["process", "assistant", "process", "assistant"]);
+  assert.equal(group.entries[0].items[0].text, "Thought");
+  assert.equal(group.entries[1].text, "Let me inspect");
+  assert.equal(group.entries[2].items[0].outputText, "Data");
+  assert.equal(group.entries[3].text, "Final answer");
+  assert.ok(group.entries.filter(item => item.kind === "process").every(item => item.state === "done"));
+});
+
+test("a report cannot be hidden by later file verification or memory housekeeping", () => {
+  const events = [e(1, "agent_start", { user_message_sequence: 1 }),
+    e(2, "model_text_delta", { agent_turn: 1, text: "Complete research report" }),
+    e(3, "model_done", { agent_turn: 1, success: true }),
+    e(4, "model_reasoning_delta", { agent_turn: 2, text: "Verify the saved file" }),
+    e(5, "tool_start", { agent_turn: 2, tool_call_id: "check", tool_name: "exec" }),
+    e(6, "tool_done", { agent_turn: 2, tool_call_id: "check", success: true }),
+    e(7, "model_text_delta", { agent_turn: 3, text: "Files verified; memory updated" }),
+    e(8, "agent_done", { success: true })];
+  const [group] = conversationGroups(eventsToTimeline(events));
+  assert.deepEqual(group.entries.map(item => item.kind), ["assistant", "process", "assistant"]);
+  assert.equal(group.entries[0].text, "Complete research report");
+  assert.deepEqual(group.entries[1].items.map(item => item.kind), ["reasoning", "tool"]);
+  assert.equal(group.entries[2].text, "Files verified; memory updated");
+});
+
+test("main errors remain visible and subagent text stays in its execution block", () => {
+  const events = [e(1, "agent_start", { user_message_sequence: 1 }),
+    e(2, "model_text_delta", { text: "Useful partial answer" }),
+    e(3, "model_text_delta", { run_id: 2, agent_depth: 1, text: "Child working notes" }),
+    e(4, "error", { text: "Main operation failed" })];
+  const [group] = conversationGroups(eventsToTimeline(events));
+  assert.deepEqual(group.entries.map(item => item.kind), ["assistant", "process", "error"]);
+  assert.equal(group.entries[0].text, "Useful partial answer");
+  assert.equal(group.entries[1].items[0].text, "Child working notes");
+  assert.equal(group.state, "failed");
 });
 
 test("model completion alone cannot collapse a turn still awaiting a tool or further model call", () => {
@@ -183,5 +213,7 @@ test("resuming without a new user input summarizes only the last run's answer ev
     e(6, "agent_done", { run_id: 2, success: true })];
   assert.equal(summarizeConversationEvents(events).length, 1);
   assert.equal(summarizeConversationEvents(events)[0].answer, "Continuation");
-  assert.equal(conversationGroups(eventsToTimeline(events))[0].answer.text, "Continuation");
+  const replies = conversationGroups(eventsToTimeline(events))[0].entries
+    .filter(item => item.kind === "assistant");
+  assert.deepEqual(replies.map(item => item.text), ["Earlier partial answer", "Continuation"]);
 });

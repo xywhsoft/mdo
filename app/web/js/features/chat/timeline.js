@@ -844,6 +844,7 @@ export function createTimelineView({ container, welcome, toBottom, store, sessio
   const previewScroll = new Map();
   const toolTextCache = new Map();
   const processStates = new Map();
+  const manualProcesses = new Set();
   const scroller = container.closest(".conversation");
   const historyButton = onLoadOlder ? element("button", { className: "conversation-history-load",
     attrs: { type: "button" } }) : null;
@@ -876,7 +877,9 @@ export function createTimelineView({ container, welcome, toBottom, store, sessio
     let cursor = container.firstChild;
     for (const { item, writable } of entries) {
       retained.add(item.key);
-      const signature = JSON.stringify([item, writable]);
+      // Run completion affects process defaults, not already settled body rows.
+      const { turnState, ...renderedItem } = item;
+      const signature = JSON.stringify([renderedItem, writable]);
       let row = renderedRows.get(item.key);
       if (!row || row.signature !== signature) {
         const node = timelineNode(item, handlers, projectId,
@@ -949,7 +952,8 @@ export function createTimelineView({ container, welcome, toBottom, store, sessio
       if (renderedSession && renderedSession !== "/") {
         positions.delete(renderedSession);
         positions.set(renderedSession, { top: scroller.scrollTop, followTail,
-          expanded: new Map(expanded), previews: new Map(previewExpanded), scroll: new Map(previewScroll) });
+          expanded: new Map(expanded), manualProcesses: new Set(manualProcesses),
+          previews: new Map(previewExpanded), scroll: new Map(previewScroll) });
         while (positions.size > 8) positions.delete(positions.keys().next().value);
       }
       expanded.clear();
@@ -957,6 +961,7 @@ export function createTimelineView({ container, welcome, toBottom, store, sessio
       previewScroll.clear();
       toolTextCache.clear();
       processStates.clear();
+      manualProcesses.clear();
       jumpVersion += 1;
       renderedRows.clear();
       clear(container);
@@ -967,6 +972,7 @@ export function createTimelineView({ container, welcome, toBottom, store, sessio
       followTail = position?.followTail ?? true;
       if (position) {
         for (const [key, value] of position.expanded) expanded.set(key, value);
+        for (const key of position.manualProcesses) manualProcesses.add(key);
         for (const [key, value] of position.previews) previewExpanded.set(key, value);
         for (const [key, value] of position.scroll) previewScroll.set(key, value);
       }
@@ -984,19 +990,22 @@ export function createTimelineView({ container, welcome, toBottom, store, sessio
         kind: "history-more", turnId: skipped.at(-1).first_event_id });
       previousTurn = group.firstEventId;
       projected.push(group.user);
-      if (group.process.length) {
-        const key = `process-${group.firstEventId}`;
-        if (processStates.has(key) && processStates.get(key) !== group.state)
-          expanded.set(key, group.state === "running");
-        processStates.set(key, group.state);
-        projected.push({ key, kind: "process", items: group.process, state: group.state });
+      for (const entry of group.entries) {
+        if (entry.kind === "process") {
+          if (!manualProcesses.has(entry.key) && processStates.has(entry.key) &&
+              processStates.get(entry.key) !== entry.state)
+            expanded.set(entry.key, entry.state === "running");
+          processStates.set(entry.key, entry.state);
+        }
+        projected.push(entry);
       }
-      if (group.answer) projected.push(group.answer);
     }
     const foldKeys = new Set([...items.filter((item) =>
       item.kind === "reasoning" || item.kind === "tool").map((item) => item.key),
       ...projected.filter(item => item.kind === "process").map(item => item.key)]);
     for (const key of expanded.keys()) if (!foldKeys.has(key)) expanded.delete(key);
+    for (const key of manualProcesses) if (!foldKeys.has(key)) manualProcesses.delete(key);
+    for (const key of processStates.keys()) if (!foldKeys.has(key)) processStates.delete(key);
     const previewKeys = new Set(items.filter((item) => item.artifactId)
       .map((item) => `${item.key}/preview`));
     for (const key of previewExpanded.keys())
@@ -1070,6 +1079,18 @@ export function createTimelineView({ container, welcome, toBottom, store, sessio
     if (!frame) frame = requestAnimationFrame(render);
   }
 
+  // Summary activation covers mouse, touch and keyboard. Mark the user's
+  // choice before its default toggle so a concurrent terminal update keeps it.
+  function rememberProcessToggle(event) {
+    const summary = event.target.closest?.("summary");
+    const details = summary?.parentElement;
+    if (!details?.classList.contains("conversation-process")) return;
+    const key = details.dataset.timelineKey;
+    manualProcesses.add(key);
+    expanded.set(key, !details.open);
+  }
+  container.addEventListener("click", rememberProcessToggle);
+
   scroller.addEventListener("scroll", () => {
     followTail = scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight < 100;
     updateBottomButton();
@@ -1112,6 +1133,7 @@ export function createTimelineView({ container, welcome, toBottom, store, sessio
       queueRender(store.get());
     },
     destroy() {
+      container.removeEventListener("click", rememberProcessToggle);
       unsubscribe(); unsubscribeSession?.(); unsubscribeLocale();
       historyNavigation?.destroy(); historyButton?.remove();
       if (frame) cancelAnimationFrame(frame);
