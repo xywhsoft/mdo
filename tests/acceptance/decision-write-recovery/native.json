@@ -1,0 +1,46 @@
+{
+  "baseline_commit": null,
+  "cases": [
+    {
+      "kind": "cache_boundaries",
+      "checks": 151,
+      "ttl": true,
+      "capacity": true,
+      "invalid_inputs": true,
+      "epoch": true,
+      "reset": true
+    },
+    {
+      "kind": "concurrent_same_answer",
+      "statuses": [
+        200,
+        200
+      ]
+    },
+    {
+      "kind": "interactive_replay_after_completion",
+      "answer": true,
+      "approval": true,
+      "conflict": true,
+      "model_requests": 3,
+      "tool_completions": 2,
+      "exec_invocations": 1,
+      "final_errors": 0
+    },
+    {
+      "kind": "task_answer_replay_after_completion",
+      "replayed": true,
+      "conflict": true
+    },
+    {
+      "kind": "cancelled_question",
+      "falsely_acknowledged": false
+    },
+    {
+      "kind": "restart",
+      "old_token_rejected": true,
+      "receipt_cleared": true
+    }
+  ],
+  "passed": true
+}

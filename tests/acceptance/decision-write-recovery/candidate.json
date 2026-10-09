@@ -1,0 +1,75 @@
+{
+  "mdo_commit": "b0a7722fb84175971a4929f7fea2cb4c1767d553",
+  "xs_commit": "f47b0de5037f458f6289483d1323dee417d99434",
+  "mdo_worktree_dirty": false,
+  "sha256": "8e17dd7327ad61a7083a2e375c0245cdf0774773b42879f7470f68aca67f0301",
+  "bytes": 4525060,
+  "packaged_app_sha256": "e974418b61800a1de37d03923fbd1acc3c9814a3fcccefc193ae4dda2d558119",
+  "pack_sha256": "5a03a99e54b5a2459a66c690792fe5cdd1bfa766ce278cb70fbb947545df2814",
+  "sources": {
+    "src/api/decision_cache.c": {
+      "sha256": "c9379c9dd58e4c9c4aa0230081e3ae9effbecad0bcb0b7a74c82ad9b0e22472a",
+      "matches": true
+    },
+    "src/api/decision_cache.h": {
+      "sha256": "ade2a56ad6da930ba4730cc4d5bf4939b5fcd3fe82538a91369c693143fd4bfa",
+      "matches": true
+    },
+    "src/api/asks.c": {
+      "sha256": "1f3241b3c32333a4c6bf5ce85a0b6a30a0f58315d233fcb712f389f6d25be818",
+      "matches": true
+    },
+    "src/api/approvals.c": {
+      "sha256": "8f02b09d9c9ca87b86ffe36f14a11f45096c5fb6278e8752cd2c29a284e21bb2",
+      "matches": true
+    },
+    "src/api/router.c": {
+      "sha256": "80268fdb3c7f964c0077789ef1427a5c718e69e0897c619154ea2d712848b668",
+      "matches": true
+    },
+    "web/js/state/decision-action.js": {
+      "sha256": "ab35f6468a16f8d29bf4f67d727e8afe602672ecae92588419386dab353600f8",
+      "matches": true
+    },
+    "web/js/state/asks.js": {
+      "sha256": "1559ae9a61b06098750861c23e233e86953dadacd2b24e830e1ae6ac770aa2ab",
+      "matches": true
+    },
+    "web/js/state/tasks.js": {
+      "sha256": "bbc2bf9a2a2fb31930e801ce82d90d2a89d7f07253b981dab22861a1c91f68e7",
+      "matches": true
+    },
+    "web/js/state/approvals.js": {
+      "sha256": "ac18fd47e2c755583fd55d3ada49b183c0878f481ed270fcf8a4e3d2bec90381",
+      "matches": true
+    },
+    "web/js/features/asks/ask-card.js": {
+      "sha256": "39ddb0c7bf4d2a54408ab629fc87d4b2b1147c67b8c50c352c51389807e96707",
+      "matches": true
+    },
+    "web/js/features/chat/conversation-docks.js": {
+      "sha256": "abce4d69277cfce760cdec99deed208bfdd340b7feb1413ada0c8b748084ee5c",
+      "matches": true
+    },
+    "web/js/utils/dom.js": {
+      "sha256": "ec9e71a14ac49d695bef9abb9666887c65d47371d95d2806e22979b3febe3933",
+      "matches": true
+    },
+    "web/lang/en-US.json": {
+      "sha256": "aef335d6e11194a3cca10cd1e84555f7ff4cc4e7cd974dab4fc235e4accf49a8",
+      "matches": true
+    },
+    "web/lang/ru-RU.json": {
+      "sha256": "07cc8b57e001f49ab77ecffb8452b123a560dc4701d4aeebe659bbe5cfc7595d",
+      "matches": true
+    },
+    "web/lang/zh-CN.json": {
+      "sha256": "1e91309d39c1dccd5e84f4abe42df50374cd8770bb979cb1a4e598203e0ed5b6",
+      "matches": true
+    }
+  },
+  "passed": true,
+  "daily_app_overwritten": false,
+  "android_device_tested": false,
+  "external_provider_tested": false
+}

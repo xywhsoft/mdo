@@ -1,0 +1,438 @@
+{
+  "model_calls": {
+    "interactive-decision": 3,
+    "blocked-decision": 2,
+    "\u6062\u590d\u540e\u7684\u6b63\u5e38\u7eed\u804a": 2
+  },
+  "transport": [
+    {
+      "path": "/api/v1/projects/default/sessions/V-OSOODx16pJ8tSqSQbq-AhSkefH6Y9H/asks/1",
+      "attempt": 1,
+      "body": {
+        "answer": "Continue"
+      },
+      "native_status": 200,
+      "status": 200,
+      "seconds": 35.094,
+      "fault": "drop_ack"
+    },
+    {
+      "path": "/api/v1/projects/default/sessions/V-OSOODx16pJ8tSqSQbq-AhSkefH6Y9H/asks/1",
+      "attempt": 2,
+      "body": {
+        "answer": "Continue"
+      },
+      "native_status": 200,
+      "status": 200,
+      "seconds": 35.656,
+      "fault": null
+    },
+    {
+      "path": "/api/v1/approvals/2",
+      "attempt": 1,
+      "body": {
+        "decision": "allow"
+      },
+      "native_status": 200,
+      "status": 200,
+      "seconds": 66.594,
+      "fault": "stall_body"
+    },
+    {
+      "path": "/api/v1/approvals/2",
+      "attempt": 2,
+      "body": {
+        "decision": "allow"
+      },
+      "native_status": 200,
+      "status": 200,
+      "seconds": 75.187,
+      "fault": null
+    },
+    {
+      "path": "/api/v1/projects/default/sessions/V-OSOODx16pJ8tSqSQbq-AhSkefH6Y9H/asks/2",
+      "attempt": 1,
+      "body": {
+        "answer": "\u4fdd\u7559\u8fd9\u4e2a\u56de\u7b54\u4f9b\u91cd\u8bd5"
+      },
+      "native_status": null,
+      "status": 503,
+      "seconds": 108.469,
+      "fault": "refusal"
+    },
+    {
+      "path": "/api/v1/projects/default/sessions/V-OSOODx16pJ8tSqSQbq-AhSkefH6Y9H/asks/2",
+      "attempt": 2,
+      "body": {
+        "answer": "\u4fdd\u7559\u8fd9\u4e2a\u56de\u7b54\u4f9b\u91cd\u8bd5"
+      },
+      "native_status": null,
+      "status": 503,
+      "seconds": 109.078,
+      "fault": "refusal"
+    },
+    {
+      "path": "/api/v1/projects/default/sessions/V-OSOODx16pJ8tSqSQbq-AhSkefH6Y9H/asks/2",
+      "attempt": 3,
+      "body": {
+        "answer": "\u4fdd\u7559\u8fd9\u4e2a\u56de\u7b54\u4f9b\u91cd\u8bd5"
+      },
+      "native_status": null,
+      "status": 503,
+      "seconds": 110.219,
+      "fault": "refusal"
+    },
+    {
+      "path": "/api/v1/projects/default/sessions/V-OSOODx16pJ8tSqSQbq-AhSkefH6Y9H/asks/2",
+      "attempt": 4,
+      "body": {
+        "answer": "\u4fdd\u7559\u8fd9\u4e2a\u56de\u7b54\u4f9b\u91cd\u8bd5"
+      },
+      "native_status": null,
+      "status": 503,
+      "seconds": 112.531,
+      "fault": "refusal"
+    },
+    {
+      "path": "/api/v1/projects/default/sessions/V-OSOODx16pJ8tSqSQbq-AhSkefH6Y9H/asks/2",
+      "attempt": 5,
+      "body": {
+        "answer": "\u4fdd\u7559\u8fd9\u4e2a\u56de\u7b54\u4f9b\u91cd\u8bd5"
+      },
+      "native_status": null,
+      "status": 503,
+      "seconds": 117.203,
+      "fault": "refusal"
+    },
+    {
+      "path": "/api/v1/projects/default/sessions/V-OSOODx16pJ8tSqSQbq-AhSkefH6Y9H/asks/2",
+      "attempt": 6,
+      "body": {
+        "answer": "\u4fdd\u7559\u8fd9\u4e2a\u56de\u7b54\u4f9b\u91cd\u8bd5"
+      },
+      "native_status": null,
+      "status": 503,
+      "seconds": 125.219,
+      "fault": "refusal"
+    },
+    {
+      "path": "/api/v1/projects/default/sessions/V-OSOODx16pJ8tSqSQbq-AhSkefH6Y9H/asks/2",
+      "attempt": 7,
+      "body": {
+        "answer": "\u4fdd\u7559\u8fd9\u4e2a\u56de\u7b54\u4f9b\u91cd\u8bd5"
+      },
+      "native_status": null,
+      "status": 503,
+      "seconds": 165.359,
+      "fault": "refusal"
+    },
+    {
+      "path": "/api/v1/projects/default/sessions/V-OSOODx16pJ8tSqSQbq-AhSkefH6Y9H/asks/2",
+      "attempt": 8,
+      "body": {
+        "answer": "\u4fdd\u7559\u8fd9\u4e2a\u56de\u7b54\u4f9b\u91cd\u8bd5"
+      },
+      "native_status": null,
+      "status": 503,
+      "seconds": 165.875,
+      "fault": "refusal"
+    },
+    {
+      "path": "/api/v1/projects/default/sessions/V-OSOODx16pJ8tSqSQbq-AhSkefH6Y9H/asks/2",
+      "attempt": 9,
+      "body": {
+        "answer": "\u4fdd\u7559\u8fd9\u4e2a\u56de\u7b54\u4f9b\u91cd\u8bd5"
+      },
+      "native_status": null,
+      "status": 503,
+      "seconds": 166.953,
+      "fault": "refusal"
+    },
+    {
+      "path": "/api/v1/projects/default/sessions/V-OSOODx16pJ8tSqSQbq-AhSkefH6Y9H/asks/2",
+      "attempt": 10,
+      "body": {
+        "answer": "\u4fdd\u7559\u8fd9\u4e2a\u56de\u7b54\u4f9b\u91cd\u8bd5"
+      },
+      "native_status": null,
+      "status": 503,
+      "seconds": 168.969,
+      "fault": "refusal"
+    },
+    {
+      "path": "/api/v1/projects/default/sessions/V-OSOODx16pJ8tSqSQbq-AhSkefH6Y9H/asks/2",
+      "attempt": 11,
+      "body": {
+        "answer": "\u4fdd\u7559\u8fd9\u4e2a\u56de\u7b54\u4f9b\u91cd\u8bd5"
+      },
+      "native_status": null,
+      "status": 503,
+      "seconds": 173.391,
+      "fault": "refusal"
+    },
+    {
+      "path": "/api/v1/projects/default/sessions/V-OSOODx16pJ8tSqSQbq-AhSkefH6Y9H/asks/2",
+      "attempt": 12,
+      "body": {
+        "answer": "\u4fdd\u7559\u8fd9\u4e2a\u56de\u7b54\u4f9b\u91cd\u8bd5"
+      },
+      "native_status": null,
+      "status": 503,
+      "seconds": 182.391,
+      "fault": "refusal"
+    },
+    {
+      "path": "/api/v1/projects/default/sessions/V-OSOODx16pJ8tSqSQbq-AhSkefH6Y9H/asks/2",
+      "attempt": 13,
+      "body": {
+        "answer": "\u4fdd\u7559\u8fd9\u4e2a\u56de\u7b54\u4f9b\u91cd\u8bd5"
+      },
+      "native_status": null,
+      "status": 503,
+      "seconds": 237.484,
+      "fault": "refusal"
+    },
+    {
+      "path": "/api/v1/projects/default/sessions/V-OSOODx16pJ8tSqSQbq-AhSkefH6Y9H/asks/2",
+      "attempt": 14,
+      "body": {
+        "answer": "\u4fdd\u7559\u8fd9\u4e2a\u56de\u7b54\u4f9b\u91cd\u8bd5"
+      },
+      "native_status": null,
+      "status": 503,
+      "seconds": 238.0,
+      "fault": "refusal"
+    },
+    {
+      "path": "/api/v1/projects/default/sessions/V-OSOODx16pJ8tSqSQbq-AhSkefH6Y9H/asks/2",
+      "attempt": 15,
+      "body": {
+        "answer": "\u4fdd\u7559\u8fd9\u4e2a\u56de\u7b54\u4f9b\u91cd\u8bd5"
+      },
+      "native_status": null,
+      "status": 503,
+      "seconds": 239.062,
+      "fault": "refusal"
+    },
+    {
+      "path": "/api/v1/projects/default/sessions/V-OSOODx16pJ8tSqSQbq-AhSkefH6Y9H/asks/2",
+      "attempt": 16,
+      "body": {
+        "answer": "\u4fdd\u7559\u8fd9\u4e2a\u56de\u7b54\u4f9b\u91cd\u8bd5"
+      },
+      "native_status": null,
+      "status": 503,
+      "seconds": 241.469,
+      "fault": "refusal"
+    },
+    {
+      "path": "/api/v1/projects/default/sessions/V-OSOODx16pJ8tSqSQbq-AhSkefH6Y9H/asks/2",
+      "attempt": 17,
+      "body": {
+        "answer": "\u4fdd\u7559\u8fd9\u4e2a\u56de\u7b54\u4f9b\u91cd\u8bd5"
+      },
+      "native_status": null,
+      "status": 503,
+      "seconds": 245.672,
+      "fault": "refusal"
+    },
+    {
+      "path": "/api/v1/projects/default/sessions/V-OSOODx16pJ8tSqSQbq-AhSkefH6Y9H/asks/2",
+      "attempt": 18,
+      "body": {
+        "answer": "\u4fdd\u7559\u8fd9\u4e2a\u56de\u7b54\u4f9b\u91cd\u8bd5"
+      },
+      "native_status": null,
+      "status": 503,
+      "seconds": 255.078,
+      "fault": "refusal"
+    },
+    {
+      "path": "/api/v1/projects/default/sessions/V-OSOODx16pJ8tSqSQbq-AhSkefH6Y9H/asks/2",
+      "attempt": 19,
+      "body": {
+        "answer": "\u4fdd\u7559\u8fd9\u4e2a\u56de\u7b54\u4f9b\u91cd\u8bd5"
+      },
+      "native_status": 200,
+      "status": 200,
+      "seconds": 273.359,
+      "fault": null
+    },
+    {
+      "path": "/api/v1/projects/default/sessions/V-OSOODx16pJ8tSqSQbq-AhSkefH6Y9H/asks/3",
+      "attempt": 1,
+      "body": {
+        "answer": "Continue"
+      },
+      "native_status": 200,
+      "status": 200,
+      "seconds": 288.641,
+      "fault": "drop_ack"
+    },
+    {
+      "path": "/api/v1/projects/default/sessions/V-OSOODx16pJ8tSqSQbq-AhSkefH6Y9H/asks/3",
+      "attempt": 2,
+      "body": {
+        "answer": "Continue"
+      },
+      "native_status": 200,
+      "status": 200,
+      "seconds": 289.219,
+      "fault": null
+    }
+  ],
+  "exec_invocations": 1,
+  "final_errors": 0,
+  "event_kinds": {
+    "agent_start": 3,
+    "model_start": 7,
+    "model_text_delta": 7,
+    "model_done": 7,
+    "tool_start": 4,
+    "tool_done": 4,
+    "agent_done": 3
+  },
+  "tool_results": [
+    {
+      "schema_version": 6,
+      "event_id": 6,
+      "aggregate_end_id": 0,
+      "source_event_id": 6,
+      "time": 1791540746534263,
+      "kind": "tool_done",
+      "kind_code": 6,
+      "terminal": false,
+      "success": true,
+      "agent_id": 4,
+      "run_id": 1,
+      "parent_run_id": 0,
+      "task_id": 0,
+      "artifact_id": 0,
+      "agent_turn": 2,
+      "user_message_sequence": 0,
+      "agent_depth": 0,
+      "effects": 1,
+      "effect_applied": true,
+      "text_truncated": false,
+      "original_text_bytes": 8,
+      "text": "Continue",
+      "tool_name": "ask_user",
+      "tool_call_id": "decision-1",
+      "artifact_path": "",
+      "model": "",
+      "model_id": "",
+      "context_window_tokens": 0,
+      "task_state": 0,
+      "task_revision": 0,
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "total_tokens": 0
+    },
+    {
+      "schema_version": 6,
+      "event_id": 11,
+      "aggregate_end_id": 0,
+      "source_event_id": 11,
+      "time": 1791540778087587,
+      "kind": "tool_done",
+      "kind_code": 6,
+      "terminal": false,
+      "success": true,
+      "agent_id": 4,
+      "run_id": 1,
+      "parent_run_id": 0,
+      "task_id": 0,
+      "artifact_id": 0,
+      "agent_turn": 3,
+      "user_message_sequence": 0,
+      "agent_depth": 0,
+      "effects": 4,
+      "effect_applied": true,
+      "text_truncated": false,
+      "original_text_bytes": 342,
+      "text": "$ C:\\Program Files\\Python312\\python.exe -c from pathlib import Path; p=Path('D:\\\\GIT\\\\mdo\\\\.build\\\\conversation-acceptance\\\\decision-write\\\\browser-1\\\\executions.txt'); p.write_text((p.read_text() if p.exists() else '')+'once\\n'); print('DECISION_VERIFIED')\nexit_code: 0\nexit_expected: true\nduration_ms: 56\n--- stdout ---\nDECISION_VERIFIED\r\n\n",
+      "tool_name": "exec",
+      "tool_call_id": "decision-2",
+      "artifact_path": "",
+      "model": "",
+      "model_id": "",
+      "context_window_tokens": 0,
+      "task_state": 0,
+      "task_revision": 0,
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "total_tokens": 0
+    },
+    {
+      "schema_version": 6,
+      "event_id": 21,
+      "aggregate_end_id": 0,
+      "source_event_id": 21,
+      "time": 1791540984795480,
+      "kind": "tool_done",
+      "kind_code": 6,
+      "terminal": false,
+      "success": true,
+      "agent_id": 10,
+      "run_id": 2,
+      "parent_run_id": 0,
+      "task_id": 0,
+      "artifact_id": 0,
+      "agent_turn": 5,
+      "user_message_sequence": 0,
+      "agent_depth": 0,
+      "effects": 1,
+      "effect_applied": true,
+      "text_truncated": false,
+      "original_text_bytes": 27,
+      "text": "\u4fdd\u7559\u8fd9\u4e2a\u56de\u7b54\u4f9b\u91cd\u8bd5",
+      "tool_name": "ask_user",
+      "tool_call_id": "decision-1",
+      "artifact_path": "",
+      "model": "",
+      "model_id": "",
+      "context_window_tokens": 0,
+      "task_state": 0,
+      "task_revision": 0,
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "total_tokens": 0
+    },
+    {
+      "schema_version": 6,
+      "event_id": 31,
+      "aggregate_end_id": 0,
+      "source_event_id": 31,
+      "time": 1791541000085677,
+      "kind": "tool_done",
+      "kind_code": 6,
+      "terminal": false,
+      "success": true,
+      "agent_id": 13,
+      "run_id": 3,
+      "parent_run_id": 0,
+      "task_id": 0,
+      "artifact_id": 0,
+      "agent_turn": 7,
+      "user_message_sequence": 0,
+      "agent_depth": 0,
+      "effects": 1,
+      "effect_applied": true,
+      "text_truncated": false,
+      "original_text_bytes": 8,
+      "text": "Continue",
+      "tool_name": "ask_user",
+      "tool_call_id": "decision-1",
+      "artifact_path": "",
+      "model": "",
+      "model_id": "",
+      "context_window_tokens": 0,
+      "task_state": 0,
+      "task_revision": 0,
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "total_tokens": 0
+    }
+  ],
+  "user_inputs": []
+}

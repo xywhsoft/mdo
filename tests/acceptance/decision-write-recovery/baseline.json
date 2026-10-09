@@ -1,0 +1,14 @@
+{
+  "baseline_commit": "a05ecc2f",
+  "cases": [
+    {
+      "kind": "concurrent_same_answer",
+      "statuses": [
+        200,
+        404
+      ]
+    }
+  ],
+  "passed": false,
+  "failure": "[(200, {'schema_version': 1, 'ok': True, 'request_id': 'mdo-b0aeae8f236c515be48a44d3', 'data': {'id': 1, 'answer': 'Continue'}}), (404, {'schema_version': 1, 'ok': False, 'request_id': 'mdo-45a9d459107e711566c14155', 'error': {'code': 'ask_not_found', 'message': 'The question is no longer pending'}})]"
+}
