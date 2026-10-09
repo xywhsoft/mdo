@@ -1,0 +1,14 @@
+{
+  "lost": {
+    "actual_client_processes": 2,
+    "http_requests": 2,
+    "provider_dispatches": 2,
+    "quota": 2,
+    "tool_success": true,
+    "tool_completions": 1,
+    "agent_completed": true,
+    "same_id": false,
+    "artifacts": 1,
+    "body_sha256": "783b2f59891ae51111fe9db660a87a1cd697867b22eb50c66fe18dd907c21fc8"
+  }
+}

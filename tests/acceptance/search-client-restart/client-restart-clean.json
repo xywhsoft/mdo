@@ -1,0 +1,93 @@
+{
+  "lost": {
+    "actual_client_processes": 2,
+    "http_requests": 2,
+    "provider_dispatches": 1,
+    "quota": 1,
+    "tool_success": true,
+    "tool_completions": 1,
+    "agent_completed": true,
+    "same_id": true,
+    "user_prompt_preserved_once": true,
+    "artifacts": 1,
+    "body_sha256": "9ceae5a2a903b0b2ce38bf99b58b74bc60914ed65fcd5fce783d7fd2b4361bae"
+  },
+  "before_submission": {
+    "actual_client_processes": 2,
+    "http_requests": 2,
+    "provider_dispatches": 1,
+    "quota": 1,
+    "tool_success": true,
+    "tool_completions": 1,
+    "agent_completed": true,
+    "same_id": true,
+    "user_prompt_preserved_once": true,
+    "artifacts": 1,
+    "body_sha256": "3cd0d4dd504d1e9ea7729ef7eace354f225eac88822d8c4e8218530694cbfd70"
+  },
+  "legacy": {
+    "actual_client_processes": 2,
+    "http_requests": 3,
+    "provider_dispatches": 1,
+    "quota": 1,
+    "tool_success": false,
+    "tool_completions": 1,
+    "agent_completed": true,
+    "same_id": true,
+    "user_prompt_preserved_once": true,
+    "artifacts": 0,
+    "body_sha256": "1fb0b4b264b82e2b07e350e23556daf0b4342ac14eec6c279c739b5d6c8b75e0"
+  },
+  "account_changed": {
+    "actual_client_processes": 2,
+    "http_requests": 1,
+    "provider_dispatches": 1,
+    "quota": 1,
+    "tool_success": false,
+    "tool_completions": 1,
+    "agent_completed": true,
+    "same_id": true,
+    "user_prompt_preserved_once": true,
+    "artifacts": 0,
+    "body_sha256": "a228c7a0972c2b52a47f06505ed73337623e2cb59a99e8b725dbcf0a4e28737a"
+  },
+  "expired": {
+    "actual_client_processes": 2,
+    "http_requests": 1,
+    "provider_dispatches": 1,
+    "quota": 1,
+    "tool_success": false,
+    "tool_completions": 1,
+    "agent_completed": true,
+    "same_id": true,
+    "user_prompt_preserved_once": true,
+    "artifacts": 0,
+    "body_sha256": "0c0680c3b80d63427a8343d16a4721feff37d078333ea3acbeb2eda82cc2b0ef"
+  },
+  "future_clock": {
+    "actual_client_processes": 2,
+    "http_requests": 1,
+    "provider_dispatches": 1,
+    "quota": 1,
+    "tool_success": false,
+    "tool_completions": 1,
+    "agent_completed": true,
+    "same_id": true,
+    "user_prompt_preserved_once": true,
+    "artifacts": 0,
+    "body_sha256": "57daa168a1f062793285d32bb139e2637f25ce1ef7ae10219f06091ad109aadc"
+  },
+  "corrupt": {
+    "actual_client_processes": 2,
+    "http_requests": 1,
+    "provider_dispatches": 1,
+    "quota": 1,
+    "tool_success": false,
+    "tool_completions": 1,
+    "agent_completed": true,
+    "same_id": true,
+    "user_prompt_preserved_once": true,
+    "artifacts": 0,
+    "body_sha256": "edb0081be456ccef837319ac8ed57504f7a4dac5a001a2bee6d94bff71e72e8a"
+  }
+}

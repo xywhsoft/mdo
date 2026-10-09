@@ -1,0 +1,13 @@
+{
+  "mode": "search_quota",
+  "page_requests": 0,
+  "search_requests": 1,
+  "tool_completions": [
+    {
+      "kind": 6,
+      "success": false
+    }
+  ],
+  "agent_completed_successfully": true,
+  "artifacts": []
+}

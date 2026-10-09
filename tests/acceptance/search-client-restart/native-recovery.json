@@ -1,0 +1,127 @@
+{
+  "busy": {
+    "success": true,
+    "posts": 3,
+    "elapsed_ms": 1782
+  },
+  "workers": {
+    "success": true,
+    "posts": 2,
+    "elapsed_ms": 608
+  },
+  "budget": {
+    "success": true,
+    "posts": 2,
+    "elapsed_ms": 565
+  },
+  "business": {
+    "success": true,
+    "posts": 2,
+    "elapsed_ms": 627
+  },
+  "retry_header": {
+    "success": true,
+    "posts": 2,
+    "elapsed_ms": 2118
+  },
+  "minute_long": {
+    "success": false,
+    "posts": 1,
+    "elapsed_ms": 5
+  },
+  "daily": {
+    "success": false,
+    "posts": 1,
+    "elapsed_ms": 4
+  },
+  "global": {
+    "success": false,
+    "posts": 1,
+    "elapsed_ms": 4
+  },
+  "provider_auth": {
+    "success": false,
+    "posts": 1,
+    "elapsed_ms": 4
+  },
+  "provider_limit": {
+    "success": false,
+    "posts": 1,
+    "elapsed_ms": 4
+  },
+  "database": {
+    "success": false,
+    "posts": 1,
+    "elapsed_ms": 4
+  },
+  "unknown": {
+    "success": false,
+    "posts": 1,
+    "elapsed_ms": 4
+  },
+  "sent": {
+    "success": false,
+    "posts": 1,
+    "elapsed_ms": 3
+  },
+  "unsafe": {
+    "success": false,
+    "posts": 1,
+    "elapsed_ms": 4
+  },
+  "bad_bool": {
+    "success": false,
+    "posts": 1,
+    "elapsed_ms": 4
+  },
+  "missing": {
+    "success": false,
+    "posts": 1,
+    "elapsed_ms": 3
+  },
+  "negative": {
+    "success": false,
+    "posts": 1,
+    "elapsed_ms": 3
+  },
+  "overflow": {
+    "success": false,
+    "posts": 1,
+    "elapsed_ms": 4
+  },
+  "mismatch": {
+    "success": false,
+    "posts": 1,
+    "elapsed_ms": 4
+  },
+  "auth_mismatch": {
+    "success": false,
+    "posts": 1,
+    "elapsed_ms": 3
+  },
+  "disconnect": {
+    "success": false,
+    "posts": 6,
+    "elapsed_ms": 17013
+  },
+  "malformed_http": {
+    "success": false,
+    "posts": 1,
+    "elapsed_ms": 4
+  },
+  "short": {
+    "success": false,
+    "posts": 1,
+    "elapsed_ms": 4
+  },
+  "cancel": {
+    "success": false,
+    "posts": 1,
+    "elapsed_ms": 125
+  },
+  "exhausted": {
+    "success": false,
+    "posts": 6,
+    "elapsed_ms": 16263
+  }
+}

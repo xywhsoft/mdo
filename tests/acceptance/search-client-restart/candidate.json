@@ -1,0 +1,14 @@
+{
+  "source_commit": "3a4d54c57f3a799a4ce7d4e5504bc29753fc7436",
+  "test_source_commit": "a1643ce70548cbf22be9bbf10c715484d6c6494a",
+  "xs_commit": "9a0f5f6fa7b4aec52945985d607b5f09237b1035",
+  "xwork_commit": "90e4dc0f41bf6dddab829d6ce2f744aded5b23dc",
+  "xs_sha256": "c5b28c115ce3d997a110917a21b660d80fd01851393818838bfe3e05d50a452b",
+  "host_profile_sha256": "893b7863bf7768b125dfa9ca8af27550f8fdddccca70070fcfc5d8aac4a5bc04",
+  "candidate_bytes": 4515427,
+  "candidate_sha256": "6a35360dc79af5c87fa3c0592b9794ebd130536f548e354a41a39cca4fbebe20",
+  "source_files_equal_to_pack": {
+    "src/web/search_api.inc.c": "033617580c8d109e141f198a595b2c9e9e7d29b5259fec24e4329ecf9efba8c3",
+    "include/mdo/web.h": "fa1cf8e0830c14ee26579755c99939c82b526f7fbca484959755ab1661fa86c8"
+  }
+}

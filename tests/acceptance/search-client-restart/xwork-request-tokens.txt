@@ -1,0 +1,19 @@
+  request identity fixture creates isolated roots                PASS
+  request fixture declares recoverable read contract             PASS
+  first callback commits request identity before interruption    PASS
+  same unfinished callback reuses one committed request identity PASS
+  rebuilt runtime restores callback descriptor                   PASS
+  reopened store and new agent recover unfinished request without completion receipt PASS
+  different account or service cannot replace an unfinished request identity PASS
+  new arguments create a distinct operation identity             PASS
+  same model call ID in another turn creates a distinct operation PASS
+  request fixture resolves its persisted record                  PASS
+  fixture damages only the known request record                  PASS
+  damaged identity does not silently generate a new paid request PASS
+  publication failure returns no usable request identity         PASS
+  failed publication did not retain an orphan committed token    PASS
+  non-replacing publication adopts the complete winning identity PASS
+  scope controls are rejected before creating files              PASS
+  request storage is accessible only through a live callback     PASS
+  callbacks without a host store receive fresh nonpersistent identities PASS
+request tokens: PASS (0 failures)

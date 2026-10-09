@@ -1,0 +1,35 @@
+{
+  "xwork": {
+    "commit": "90e4dc0f41bf6dddab829d6ce2f744aded5b23dc",
+    "strict_compiler_flags": [
+      "-std=c11",
+      "-Wall",
+      "-Wextra",
+      "-Werror",
+      "-O2"
+    ],
+    "checks": 18,
+    "failures": 0,
+    "bridge_core": "locked xs 153315a generated xhttp/xrt, including RootRenameNoReplace"
+  },
+  "xserver": {
+    "commit": "9a0f5f6fa7b4aec52945985d607b5f09237b1035",
+    "production_files_equal_to_upstream": 23,
+    "extension_tests": 36,
+    "skipped": 1,
+    "tcc_exported_xwork_symbols": 178,
+    "source_bundle_verified": true
+  },
+  "mdo": {
+    "feature_commit": "3a4d54c57f3a799a4ce7d4e5504bc29753fc7436",
+    "test_commit": "a1643ce70548cbf22be9bbf10c715484d6c6494a",
+    "build_contract_tests": 16,
+    "packed_search_preference_and_startup": "PASS"
+  },
+  "external_model_or_search_service_tested": false,
+  "real_browser_tested": false,
+  "android_tested": false,
+  "release_or_deploy_in_this_phase": false,
+  "stress_or_load_tested": false,
+  "test_source_commit": "a1643ce70548cbf22be9bbf10c715484d6c6494a"
+}
