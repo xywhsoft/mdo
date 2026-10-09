@@ -1,0 +1,6 @@
+{
+  "baseline_client_commit": "424ffa61",
+  "baseline_expected_lost_reply_failure": true,
+  "provider_dispatches": 1,
+  "quota": 1
+}

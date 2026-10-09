@@ -1,0 +1,82 @@
+{
+  "lost": {
+    "success": true,
+    "http_requests": 2,
+    "provider_dispatches": 1,
+    "quota": 1,
+    "one_final_tool_result": true,
+    "same_body": true
+  },
+  "truncated": {
+    "success": true,
+    "http_requests": 2,
+    "provider_dispatches": 1,
+    "quota": 1,
+    "one_final_tool_result": true,
+    "same_body": true
+  },
+  "gateway": {
+    "success": true,
+    "http_requests": 2,
+    "provider_dispatches": 1,
+    "quota": 1,
+    "one_final_tool_result": true,
+    "same_body": true
+  },
+  "pending": {
+    "success": true,
+    "http_requests": 3,
+    "provider_dispatches": 1,
+    "quota": 1,
+    "one_final_tool_result": true,
+    "same_body": true
+  },
+  "restart": {
+    "success": true,
+    "http_requests": 2,
+    "provider_dispatches": 1,
+    "quota": 1,
+    "one_final_tool_result": true,
+    "same_body": true
+  },
+  "no_fallback_after_lost": {
+    "success": false,
+    "http_requests": 2,
+    "provider_dispatches": 1,
+    "quota": 1,
+    "one_final_tool_result": true,
+    "same_body": true
+  },
+  "legacy_disconnect": {
+    "success": false,
+    "http_requests": 2,
+    "provider_dispatches": 1,
+    "quota": 1,
+    "one_final_tool_result": true,
+    "same_body": false
+  },
+  "pending_mismatch": {
+    "success": false,
+    "http_requests": 1,
+    "provider_dispatches": 0,
+    "quota": 0,
+    "one_final_tool_result": true,
+    "same_body": true
+  },
+  "result_mismatch": {
+    "success": false,
+    "http_requests": 1,
+    "provider_dispatches": 1,
+    "quota": 1,
+    "one_final_tool_result": true,
+    "same_body": true
+  },
+  "fallback_limit": {
+    "success": false,
+    "http_requests": 6,
+    "provider_dispatches": 0,
+    "quota": 0,
+    "one_final_tool_result": true,
+    "same_body": true
+  }
+}

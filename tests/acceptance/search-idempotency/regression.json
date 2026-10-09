@@ -1,0 +1,26 @@
+{
+  "client_implementation_commit": "66d65df5e8eb94a6ef616161eb75bc14fc8eab5f",
+  "clean_tests_commit": "efd23d056cf2194c236db169e0c6084605afd790",
+  "passed": [
+    "test_search_api_runtime.py",
+    "test_search_recovery.py: 25 clean native scenarios",
+    "test_search_receipts.py: 11 server scenarios",
+    "test_search_lost_response.py: 10 proxy scenarios",
+    "test_web_result_session_runtime.py --search-lost",
+    "test_web_result_session_runtime.py --search-recovery",
+    "test_web_result_session_runtime.py --search-denied",
+    "test_search_xadmin_integration.py: 9 simulated provider dispatches/exact quota",
+    "test_web_open_recovery.py: 20 native scenarios",
+    "test_web_runtime.py",
+    "test_web_result_files_runtime.py: artifacts/read-only/UTF-8/completed receipts",
+    "test_search_packed.py",
+    "test_web_contract.py: 4 contracts"
+  ],
+  "external_model_used": false,
+  "browser_ui_verified": false,
+  "android_verified": false,
+  "stress_or_high_load_tests": false,
+  "daily_release_changed_by_this_stage": false,
+  "website_deployed_by_this_stage": false,
+  "client_request_id_persisted_across_process_restart": false
+}

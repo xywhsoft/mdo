@@ -1,0 +1,91 @@
+{
+  "requests": [
+    {
+      "query": "hello",
+      "posts": 1,
+      "provider_dispatches": 0,
+      "success": false
+    },
+    {
+      "query": "hello",
+      "posts": 1,
+      "provider_dispatches": 0,
+      "success": false
+    },
+    {
+      "query": "hello",
+      "posts": 1,
+      "provider_dispatches": 1,
+      "success": true
+    },
+    {
+      "query": "hello",
+      "posts": 1,
+      "provider_dispatches": 1,
+      "success": true
+    },
+    {
+      "query": "upstream401",
+      "posts": 1,
+      "provider_dispatches": 1,
+      "success": false
+    },
+    {
+      "query": "upstream429",
+      "posts": 1,
+      "provider_dispatches": 1,
+      "success": false
+    },
+    {
+      "query": "malformed",
+      "posts": 1,
+      "provider_dispatches": 1,
+      "success": false
+    },
+    {
+      "query": "transport",
+      "posts": 1,
+      "provider_dispatches": 1,
+      "success": false
+    },
+    {
+      "query": "hello",
+      "posts": 2,
+      "provider_dispatches": 1,
+      "success": true
+    },
+    {
+      "query": "hello",
+      "posts": 2,
+      "provider_dispatches": 1,
+      "success": true
+    },
+    {
+      "query": "hello",
+      "posts": 1,
+      "provider_dispatches": 0,
+      "success": false
+    },
+    {
+      "query": "hello",
+      "posts": 1,
+      "provider_dispatches": 0,
+      "success": false
+    }
+  ],
+  "contact_required": 0,
+  "provider_unconfigured": 0,
+  "bocha": 1,
+  "zai": 1,
+  "upstream401": 1,
+  "upstream429": 1,
+  "malformed": 1,
+  "transport": 1,
+  "server_busy": 0,
+  "member_busy_recovered": 1,
+  "budget_busy_recovered": 1,
+  "daily_limit": 0,
+  "global_daily_limit": 0,
+  "minute_limit": 0,
+  "provider_dispatches": 9
+}

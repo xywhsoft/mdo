@@ -1,0 +1,52 @@
+{
+  "same_body_replay": {
+    "dispatches": 1,
+    "quota": 1,
+    "same_response": true
+  },
+  "conflict_or_invalid": {
+    "new_dispatches": 0
+  },
+  "member_isolation": {
+    "other_dispatches": 1,
+    "other_quota": 1
+  },
+  "cached_provider_failure": {
+    "dispatches": 1,
+    "quota": 1,
+    "same_response": true
+  },
+  "parallel_same_key": {
+    "dispatches": 1,
+    "quota": 1,
+    "pending_then_same_result": true
+  },
+  "rejected_reservation": {
+    "orphan_receipts": 0,
+    "later_dispatches": 1,
+    "later_quota": 1
+  },
+  "restart_completed": {
+    "dispatches": 0,
+    "same_response": true
+  },
+  "restart_uncertain": {
+    "dispatches": 0,
+    "reason": "request_uncertain"
+  },
+  "expired_result": {
+    "dispatches": 0,
+    "quota": 0
+  },
+  "bounded_cleanup": {
+    "pending_bytes_released": true,
+    "expired_key_retained": true
+  },
+  "pool_capacity_metadata": {
+    "rejected_dispatches": 0,
+    "rejected_quota": 0,
+    "after_expiry_dispatches": 1,
+    "after_expiry_quota": 1,
+    "old_keys_retained": true
+  }
+}
