@@ -1,0 +1,167 @@
+{
+  "input": "",
+  "observations": [
+    {
+      "seconds": 0.2,
+      "inputLength": 0,
+      "inputDisabled": false,
+      "sendDisabled": false,
+      "notice": "",
+      "dialog": "",
+      "hint": "Enter 发送 · Shift Enter 换行",
+      "errors": []
+    },
+    {
+      "seconds": 0.5,
+      "inputLength": 0,
+      "inputDisabled": true,
+      "sendDisabled": true,
+      "notice": "purgeRecovery.checkingServicedevices.retry",
+      "dialog": "",
+      "hint": "purgeRecovery.checkingService",
+      "errors": []
+    },
+    {
+      "seconds": 0.6,
+      "inputLength": 25,
+      "inputDisabled": false,
+      "sendDisabled": true,
+      "notice": "正在检查服务状态…重新连接",
+      "dialog": "",
+      "hint": "正在检查服务状态…",
+      "errors": []
+    },
+    {
+      "seconds": 0.7,
+      "inputLength": 26,
+      "inputDisabled": false,
+      "sendDisabled": true,
+      "notice": "正在检查服务状态…重新连接",
+      "dialog": "",
+      "hint": "正在检查服务状态…",
+      "errors": []
+    },
+    {
+      "seconds": 1.5,
+      "inputLength": 25,
+      "inputDisabled": false,
+      "sendDisabled": true,
+      "notice": "正在检查服务状态…重新连接",
+      "dialog": "",
+      "hint": "正在检查服务状态…",
+      "errors": []
+    },
+    {
+      "seconds": 9.1,
+      "inputLength": 25,
+      "inputDisabled": false,
+      "sendDisabled": false,
+      "notice": "",
+      "dialog": "",
+      "hint": "Enter 发送 · Shift Enter 换行",
+      "errors": []
+    },
+    {
+      "seconds": 64.1,
+      "inputLength": 24,
+      "inputDisabled": false,
+      "sendDisabled": false,
+      "notice": "",
+      "dialog": "",
+      "hint": "Enter 发送 · Shift Enter 换行",
+      "errors": []
+    },
+    {
+      "seconds": 103.4,
+      "inputLength": 15,
+      "inputDisabled": false,
+      "sendDisabled": false,
+      "notice": "",
+      "dialog": "",
+      "hint": "Enter 发送 · Shift Enter 换行",
+      "errors": []
+    },
+    {
+      "seconds": 113.2,
+      "inputLength": 0,
+      "inputDisabled": false,
+      "sendDisabled": false,
+      "notice": "",
+      "dialog": "",
+      "hint": "Enter 发送 · Shift Enter 换行",
+      "errors": []
+    },
+    {
+      "seconds": 113.5,
+      "inputLength": 0,
+      "inputDisabled": false,
+      "sendDisabled": true,
+      "notice": "正在检查服务状态…重新连接",
+      "dialog": "",
+      "hint": "正在检查服务状态…",
+      "errors": []
+    },
+    {
+      "seconds": 113.6,
+      "inputLength": 15,
+      "inputDisabled": false,
+      "sendDisabled": false,
+      "notice": "",
+      "dialog": "",
+      "hint": "Enter 发送 · Shift Enter 换行",
+      "errors": []
+    },
+    {
+      "seconds": 128.2,
+      "inputLength": 22,
+      "inputDisabled": false,
+      "sendDisabled": false,
+      "notice": "",
+      "dialog": "",
+      "hint": "Enter 发送 · Shift Enter 换行",
+      "errors": []
+    },
+    {
+      "seconds": 128.3,
+      "inputLength": 22,
+      "inputDisabled": false,
+      "sendDisabled": false,
+      "notice": "",
+      "dialog": "",
+      "hint": "正在保存发送意图 · 可继续编辑下一条",
+      "errors": []
+    },
+    {
+      "seconds": 128.4,
+      "inputLength": 0,
+      "inputDisabled": false,
+      "sendDisabled": true,
+      "notice": "",
+      "dialog": "",
+      "hint": "正在保存发送意图 · 可继续编辑下一条",
+      "errors": []
+    },
+    {
+      "seconds": 128.5,
+      "inputLength": 0,
+      "inputDisabled": false,
+      "sendDisabled": false,
+      "notice": "",
+      "dialog": "",
+      "hint": "Enter 排队 · Ctrl Enter 中断并发送",
+      "errors": []
+    },
+    {
+      "seconds": 128.7,
+      "inputLength": 0,
+      "inputDisabled": false,
+      "sendDisabled": false,
+      "notice": "",
+      "dialog": "",
+      "hint": "Enter 发送 · Shift Enter 换行",
+      "errors": []
+    }
+  ],
+  "reply": "11:55\nINPUT_ORIGIN_CONFIRMED\nAgent\n11:55\n\nADMISSION_CONFIRMED — INPUT_ORIGIN_CONFIRMED\n\n50 输入 / 20 输出 tokens · LLM <0.1 秒 · 1331.8 tok/s",
+  "logs": []
+}

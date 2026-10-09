@@ -1,0 +1,226 @@
+{
+  "phases": [
+    {
+      "mode": "hold",
+      "started": 30827.89,
+      "reads": [
+        {
+          "started": 30828.25,
+          "fault": "hold",
+          "status": 200,
+          "sha256": "16bbef1de4f5ff80994ceffea2ac50c0ae74d5847e9b4a0f3e80719fbf5be914",
+          "ended": 30840.265
+        },
+        {
+          "started": 30836.828,
+          "fault": null,
+          "status": 200,
+          "sha256": "8fafcaea6f5866d24e30a15c0f67c461d48d549cd136a5723dcd40977a0ee089",
+          "ended": 30836.828
+        },
+        {
+          "started": 30941.265,
+          "fault": null,
+          "status": 200,
+          "sha256": "4820a45c5ff43f6bffa459992bfb21b5995f5ea64e7adc807fb3cfa95bb73bf1",
+          "ended": 30941.265
+        }
+      ],
+      "left": 0
+    }
+  ],
+  "reads": [
+    {
+      "started": 30828.25,
+      "fault": "hold",
+      "status": 200,
+      "sha256": "16bbef1de4f5ff80994ceffea2ac50c0ae74d5847e9b4a0f3e80719fbf5be914",
+      "ended": 30840.265
+    },
+    {
+      "started": 30836.828,
+      "fault": null,
+      "status": 200,
+      "sha256": "8fafcaea6f5866d24e30a15c0f67c461d48d549cd136a5723dcd40977a0ee089",
+      "ended": 30836.828
+    },
+    {
+      "started": 30941.265,
+      "fault": null,
+      "status": 200,
+      "sha256": "4820a45c5ff43f6bffa459992bfb21b5995f5ea64e7adc807fb3cfa95bb73bf1",
+      "ended": 30941.265
+    }
+  ],
+  "writes": [
+    {
+      "method": "PUT",
+      "path": "/api/v1/workspace-state",
+      "started": 30836.828
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/v1/settings/settings",
+      "started": 30836.843
+    },
+    {
+      "method": "PUT",
+      "path": "/api/v1/projects/default/sessions/V-OSN3doRudWo19ocPKyQ8gyYAu81Xc_/draft",
+      "started": 30837.156
+    },
+    {
+      "method": "PUT",
+      "path": "/api/v1/projects/default/sessions/V-OSN3doRudWo19ocPKyQ8gyYAu81Xc_/draft",
+      "started": 30892.156
+    },
+    {
+      "method": "PUT",
+      "path": "/api/v1/projects/default/sessions/V-OSN3doRudWo19ocPKyQ8gyYAu81Xc_/draft",
+      "started": 30931.406
+    },
+    {
+      "method": "PUT",
+      "path": "/api/v1/projects/default/sessions/V-OSN3doRudWo19ocPKyQ8gyYAu81Xc_/draft",
+      "started": 30956.109
+    },
+    {
+      "method": "PUT",
+      "path": "/api/v1/projects/default/sessions/V-OSN3doRudWo19ocPKyQ8gyYAu81Xc_/draft",
+      "started": 30956.14
+    },
+    {
+      "method": "PUT",
+      "path": "/api/v1/projects/default/sessions/V-OSN3doRudWo19ocPKyQ8gyYAu81Xc_/draft/submissions/424ff5cb78348862fcf478816530943c",
+      "started": 30956.156
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/projects/default/sessions/V-OSN3doRudWo19ocPKyQ8gyYAu81Xc_/queue",
+      "started": 30956.156
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/v1/projects/default/sessions/V-OSN3doRudWo19ocPKyQ8gyYAu81Xc_/draft/submissions/424ff5cb78348862fcf478816530943c",
+      "started": 30956.171
+    },
+    {
+      "method": "PUT",
+      "path": "/api/v1/projects/default/sessions/V-OSN3doRudWo19ocPKyQ8gyYAu81Xc_/queue/424ff5cb78348862fcf478816530943c",
+      "started": 30956.187
+    },
+    {
+      "method": "PUT",
+      "path": "/api/v1/projects/default/sessions/V-OSN3doRudWo19ocPKyQ8gyYAu81Xc_/queue/424ff5cb78348862fcf478816530943c",
+      "started": 30956.218
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/projects/default/sessions/V-OSN3doRudWo19ocPKyQ8gyYAu81Xc_/runs",
+      "started": 30956.218
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/v1/projects/default/sessions/V-OSN3doRudWo19ocPKyQ8gyYAu81Xc_/queue/424ff5cb78348862fcf478816530943c",
+      "started": 30956.25
+    }
+  ],
+  "websockets": [
+    {
+      "started": 30836.828,
+      "status": 101,
+      "upstream_bytes": 353,
+      "downstream_bytes": 620,
+      "opened": 30836.828,
+      "closed": 30940.937
+    },
+    {
+      "started": 30941.375,
+      "status": 101,
+      "upstream_bytes": 698,
+      "downstream_bytes": 6468,
+      "opened": 30941.375,
+      "closed": 31062.203
+    }
+  ],
+  "model_calls": {
+    "INPUT_ORIGIN_CONFIRMED": 1
+  },
+  "served_sources": {
+    "js/app.js": "99b5d1be69eef403a0a34adc62664d3a0e58f394e196d1a401726b245d6f4756",
+    "js/features/settings/project-purge-recovery.js": "6352ceebecfe6a788428af670e39c1118ca100a7e67b4c5ff78e48ee1de911a4",
+    "js/features/projects/project-purge-recovery-panel.js": "7c6aadef9924a6959f852b4b8d628431b22ae41eeff636dd1ef5c18ecf722c97",
+    "js/api/request-recovery.js": "5d70df9f3c8cc077cfe06f27edf1b96b5c26540bb2c3146fd314be8df1e70be8",
+    "js/features/shell/workspace-startup.js": "1c201d38865cd8a60de7fc04d38f2eca6bc13d3898fd39637e23c70c87432388",
+    "lang/zh-CN.json": "3314c0b3372e9db6ddf370d0a322938c9ed66e06ddd95a7ef90b4df275b80c12",
+    "lang/en-US.json": "31c5888359da5aa0d17ac691be91165c7067e7787cf66bd3bbf64943b77a17a8",
+    "lang/ru-RU.json": "d08ac18626a3739a5bca997bd31d6976325a7cb8f701e9b010d89fe67e7d13ed"
+  },
+  "user_inputs": [
+    "INPUT_ORIGIN_CONFIRMED"
+  ],
+  "final_model_errors": 0,
+  "event_kinds": {
+    "agent_start": 1,
+    "model_start": 1,
+    "model_text_delta": 1,
+    "model_done": 1,
+    "agent_done": 1
+  },
+  "draft": {
+    "revision": 8,
+    "text": "",
+    "attachments": [],
+    "run_admission_uncertain": false,
+    "submission": null,
+    "submissions": []
+  },
+  "queue": {
+    "items": [],
+    "discard_images": []
+  },
+  "runs": {
+    "automatic": true,
+    "active_runs": 0,
+    "starting_runs": 0,
+    "retained_runs": 1,
+    "max_active": 8,
+    "max_retained": 64,
+    "runs_started": 1,
+    "runs_completed": 1,
+    "runs_failed": 0,
+    "items": [
+      {
+        "id": "run-V-OSN4BajEQGz6Dh-m61KWryFSa7MQ9W",
+        "project_id": "default",
+        "session_id": "V-OSN3doRudWo19ocPKyQ8gyYAu81Xc_",
+        "agent_run_id": 1,
+        "agent_id": "mdo.default",
+        "model_id": "queue-fixture",
+        "protocol": "openai-chat-completions",
+        "reasoning_effort": "none",
+        "state": "succeeded",
+        "result": "ok",
+        "error_code": "none",
+        "terminal": true,
+        "cancel_requested": false,
+        "resume": false,
+        "client_resume_id": "",
+        "created_at": 1791518153555181,
+        "started_at": 1791518153563003,
+        "ended_at": 1791518153617865,
+        "config_revision": 3,
+        "model_generation": 2,
+        "module_generation": 1,
+        "skill_generation": 1,
+        "memory_generation": 1,
+        "agent_turns": 1,
+        "model_calls": 1,
+        "tool_calls": 0,
+        "compactions": 0,
+        "final_text_available": true,
+        "final_text_truncated": false,
+        "final_text_bytes": 46
+      }
+    ]
+  }
+}
