@@ -10,7 +10,9 @@ import os
 import sys
 
 ROOT = Path(__file__).resolve().parents[1]
-HOME = ROOT.parent / 'home'
+# Managed worktrees need not sit beside the website repository. An explicit
+# fixture-only path keeps clean-source acceptance independent of checkout layout.
+HOME = Path(os.environ.get('MDO_TEST_WEBSITE_REPO', str(ROOT.parent / 'home'))).resolve()
 WEBSITE_HOST = Path(os.environ.get('XS_TEST_EXE',str(HOME/'xs.exe')))
 sys.path.insert(0,str(HOME/'tests'))
 from test_mdo_delivery import fixture
