@@ -1171,6 +1171,9 @@ MdoSession* MdoSessionFork(MdoSession* Source,
     if ( !g_MdoSessions.Initialized || Source == NULL ||
          Options->Size < sizeof(*Options) ||
          Options->Runtime.Size < sizeof(Options->Runtime) ||
+         (Options->RequestedId != NULL &&
+          !MdoSessionsIdValid(Options->RequestedId,
+            MDO_SESSION_ID_CAPACITY)) ||
          (Options->Title != NULL &&
           !MdoSessionsTextValid(Options->Title,
             MDO_SESSION_TITLE_CAPACITY, true)) ||
@@ -1198,7 +1201,8 @@ MdoSession* MdoSessionFork(MdoSession* Source,
     snprintf(ProjectId, sizeof(ProjectId), "%s", Source->Info.ProjectId);
     snprintf(Title, sizeof(Title), "%s", Options->Title != NULL ?
         Options->Title : Source->Info.Title);
-    SessionId = xrtXidMakeString();
+    SessionId = Options->RequestedId != NULL ?
+        xrtStrDup(Options->RequestedId) : xrtXidMakeString();
     if ( SessionId == NULL ||
          !MdoSessionsIdValid(SessionId, MDO_SESSION_ID_CAPACITY) ||
          !MdoSessionsDirectory(DirectoryPath, ProjectId, SessionId) ||

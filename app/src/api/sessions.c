@@ -1121,40 +1121,109 @@ bool MdoApiSessionForkRoute(MdoApiContext* Context)
     MdoSession* Fork;
     xwork_error Error;
     char Title[MDO_SESSION_TITLE_CAPACITY] = { 0 };
+    char ClientSessionId[MDO_SESSION_ID_CAPACITY] = { 0 };
+    char Project[MDO_PROJECT_ID_CAPACITY];
+    char SessionId[MDO_SESSION_ID_CAPACITY];
+    char Directory[MDO_SESSION_PATH_CAPACITY];
+    MdoApiSessionPreconditionStatus Precondition;
     uint64 ExpectedRevision;
     size_t Present = 0u;
     bool ReplyResult;
     bool Valid;
+    bool MatchesSession = false;
+    bool Locked = false;
+    bool Exists = false;
+    bool Replayed = false;
 
-    Source = MdoApiSessionOpenActive(Context, true, &SourceInfo,
-        &ExpectedRevision, &ReplyResult);
-    if ( Source == NULL ) return ReplyResult;
+    if ( !MdoApiSessionPath(Context, Project, SessionId) )
+        return MdoApiReplyError(Context, 400u, "invalid_session_path",
+            "The project or session ID is invalid", NULL);
+    Precondition = MdoApiSessionExpectedRevision(Context, SessionId,
+        &ExpectedRevision, &MatchesSession);
+    if ( Precondition == MDO_API_SESSION_PRECONDITION_MISSING )
+        return MdoApiReplyError(Context, 428u, "precondition_required",
+            "If-Match must contain the current session ETag", NULL);
+    if ( Precondition != MDO_API_SESSION_PRECONDITION_OK )
+        return MdoApiReplyError(Context, 400u, "invalid_precondition",
+            "If-Match must use the form \"mdo-session-ID-N\"", NULL);
+    if ( !MatchesSession )
+        return MdoApiReplyError(Context, 412u, "revision_conflict",
+            "The precondition belongs to another session", NULL);
     BodyStatus = MdoApiJsonBodyRead(Context, &Body);
-    if ( BodyStatus != MDO_API_BODY_OK ) {
-        MdoSessionRelease(Source);
+    if ( BodyStatus != MDO_API_BODY_OK )
         return MdoApiReplyBodyError(Context, BodyStatus);
-    }
     MdoSessionForkOptionsInit(&Options);
     Valid = xrtValueType(Body.Value) == XVALUE_OBJECT &&
         MdoApiSessionString(Body.Value, "title", Title,
             sizeof(Title), false, &Present) &&
         MdoApiSessionUInt64(Body.Value, "through_sequence",
             &Options.ThroughSequence, &Present) &&
-        Present == xrtValueCount(Body.Value);
+        MdoApiSessionString(Body.Value, "client_session_id",
+            ClientSessionId, sizeof(ClientSessionId), false, &Present) &&
+        Present == xrtValueCount(Body.Value) &&
+        (ClientSessionId[0] == '\0' ||
+         (MdoApiClientSessionIdValid(ClientSessionId) &&
+          Options.ThroughSequence != UINT64_MAX));
     MdoApiJsonBodyUnit(&Body);
     if ( !Valid ) {
-        MdoSessionRelease(Source);
         return MdoApiReplyError(Context, 422u, "session_fork_invalid",
-            "Fork accepts only a valid title and through_sequence", NULL);
+            "Fork accepts title, through_sequence and an optional client_session_id", NULL);
     }
     Options.Title = Title[0] != '\0' ? Title : NULL;
+    Options.RequestedId = ClientSessionId[0] != '\0' ? ClientSessionId : NULL;
     memset(&Error, 0, sizeof(Error));
+    memset(&ForkInfo, 0, sizeof(ForkInfo)); ForkInfo.Size = sizeof(ForkInfo);
+    /* Reserve the same namespace as ordinary client-created sessions. An
+     * existing directory is never removed or reused, including incomplete
+     * forks after a crash. A replay only reads the exact child; it need not
+     * open a source that has since changed, started running or been archived. */
+    if ( Options.RequestedId != NULL ) {
+        int Written = snprintf(Directory, sizeof(Directory),
+            "sessions/%s/%s", Project, ClientSessionId);
+        if ( Written <= 0 || (size_t)Written >= sizeof(Directory) ||
+             g_MdoApiSessionCreateLock == NULL ||
+             !xrtMutexLock(g_MdoApiSessionCreateLock) )
+            return MdoApiReplyError(Context, 503u,
+                "session_service_unavailable", "The session create lock is unavailable", NULL);
+        Locked = true;
+        if ( !MdoHomeExternalStat(Directory, &Exists, NULL) ) {
+            xrtMutexUnlock(g_MdoApiSessionCreateLock);
+            return MdoApiReplyError(Context, 503u, "session_service_unavailable",
+                "The requested fork could not be inspected", NULL);
+        }
+    }
+    if ( Exists ) {
+        Fork = MdoSessionLoad(Project, ClientSessionId, &Error);
+        if ( Fork == NULL ) {
+            xrtMutexUnlock(g_MdoApiSessionCreateLock);
+            return MdoApiReplyError(Context, 409u, "session_fork_incomplete",
+                "The requested fork directory needs inspection", NULL);
+        }
+        Replayed = MdoSessionGetInfo(Fork, &ForkInfo) &&
+            strcmp(ForkInfo.Id, ClientSessionId) == 0 &&
+            strcmp(ForkInfo.ProjectId, Project) == 0 &&
+            strcmp(ForkInfo.ParentSessionId, SessionId) == 0 &&
+            ForkInfo.ForkedThroughSequence == Options.ThroughSequence &&
+            (Options.Title == NULL || strcmp(ForkInfo.Title, Options.Title) == 0);
+        MdoSessionRelease(Fork);
+        xrtMutexUnlock(g_MdoApiSessionCreateLock);
+        if ( !Replayed )
+            return MdoApiReplyError(Context, 409u, "session_fork_conflict",
+                "The requested ID belongs to another fork", NULL);
+        return MdoApiSessionReply(Context, 200u, &ForkInfo);
+    }
+    Source = MdoApiSessionOpenActive(Context, true, &SourceInfo,
+        &ExpectedRevision, &ReplyResult);
+    if ( Source == NULL ) {
+        if ( Locked ) xrtMutexUnlock(g_MdoApiSessionCreateLock);
+        return ReplyResult;
+    }
     Fork = MdoSessionFork(Source, &Options, &Error);
     MdoSessionRelease(Source);
+    if ( Locked ) xrtMutexUnlock(g_MdoApiSessionCreateLock);
     if ( Fork == NULL )
         return MdoApiSessionMutationFailure(Context, SourceInfo.ProjectId,
             SourceInfo.Id, ExpectedRevision, &Error);
-    memset(&ForkInfo, 0, sizeof(ForkInfo)); ForkInfo.Size = sizeof(ForkInfo);
     if ( !MdoSessionGetInfo(Fork, &ForkInfo) ) {
         MdoSessionRelease(Fork);
         return MdoApiReplyError(Context, 500u,

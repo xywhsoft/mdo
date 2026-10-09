@@ -5,6 +5,7 @@ import { t } from "../i18n.js";
 import { downloadSessionBackup } from "../api/backup-download.js";
 import { isTransientReadError } from "../api/read-recovery.js";
 import { createRequestRecovery } from "../api/request-recovery.js";
+import { runSessionFork } from "./session-fork.js";
 
 const readRecovery = { recoverRead: isTransientReadError,
   retainDataOnError: isTransientReadError };
@@ -125,12 +126,10 @@ function sequence(value) {
   return number;
 }
 
-export async function forkSession(session, input) {
-  const body = { through_sequence: sequence(input.through_sequence) };
-  if (input.title) body.title = input.title;
-  const response = await api.post(`${endpoint(session)}/fork`, body, { ifMatch: etag(session) });
+export async function forkSession(session, input, options) {
+  const result = await runSessionFork(session, input, options);
   void loadSessions({ retry: true });
-  return { ...response.data, etag: response.etag };
+  return result;
 }
 
 export async function truncateSession(session, throughSequence, sourceEventId, options = {}) {

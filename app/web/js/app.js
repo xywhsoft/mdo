@@ -554,6 +554,24 @@ export async function boot() {
   }
 
   const sessionHistoryRead = createSessionHistoryRead({ navigation, readHistory: loadSessionHistory });
+  let pendingForkController = null;
+  async function forkWithNavigation(session, input, isCurrent = () => true) {
+    pendingForkController?.abort();
+    const controller = new AbortController(), original = JSON.stringify(navigation.get());
+    pendingForkController = controller;
+    const unsubscribe = navigation.subscribe(() => {
+      if (JSON.stringify(navigation.get()) !== original || !isCurrent()) controller.abort();
+    });
+    try {
+      const result = await forkSession(session, input, { signal: controller.signal });
+      if (controller.signal.aborted || JSON.stringify(navigation.get()) !== original || !isCurrent())
+        throw new DOMException("Fork cancelled", "AbortError");
+      return result;
+    } finally {
+      unsubscribe();
+      if (pendingForkController === controller) pendingForkController = null;
+    }
+  }
   let conversationSearch;
   function isCurrentMessageOwner(owner, version = routeVersion) {
     const route = navigation.get();
@@ -590,10 +608,10 @@ export async function boot() {
       if (!Number.isSafeInteger(boundary) || boundary < 0 ||
           boundary > history.last_sequence)
         throw new Error(t("sessionAction.forkHistoryChanged", {}, "此回复已不在当前会话历史中，请刷新会话"));
-      const fork = await forkSession({ ...session, etag: history.etag, revision: history.revision }, {
+      const fork = await forkWithNavigation({ ...session, etag: history.etag, revision: history.revision }, {
         title: sessionForkTitle(session),
         through_sequence: boundary,
-      });
+      }, () => isCurrentMessageOwner(owner, version));
       if (isCurrentMessageOwner(owner, version)) {
         pendingForkComposerFocus = `${fork.project_id}/${fork.id}`;
         navigation.select(fork.project_id, fork.id);
@@ -2210,6 +2228,7 @@ export async function boot() {
 
   actionDialog.addEventListener("close", () => {
     if (actionDialog.open) return;
+    pendingForkController?.abort();
     const restore = restoreSessionActionFocus;
     restoreSessionActionFocus = null;
     restore?.();
@@ -2252,7 +2271,7 @@ export async function boot() {
     else if (action === "trash") updated = await trashSession(session);
     else if (action === "restore") updated = await restoreSession(session);
     else if (action === "fork") {
-      updated = await forkSession(session, { title, through_sequence: actionForm.elements.through_sequence.value });
+      updated = await forkWithNavigation(session, { title, through_sequence: actionForm.elements.through_sequence.value });
       navigation.select(updated.project_id, updated.id);
     } else if (action === "truncate") updated = await truncateSession(session, actionForm.elements.through_sequence.value);
     else if (action === "clear") updated = await clearSession(session);
@@ -2338,6 +2357,7 @@ export async function boot() {
         focusForkComposerWhenReady();
       }
     } catch (error) {
+      if (error?.name === "AbortError") return;
       actionError.textContent = errorMessage(error);
       actionError.hidden = false;
       actionError.focus();

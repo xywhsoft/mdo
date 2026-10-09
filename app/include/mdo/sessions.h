@@ -74,6 +74,7 @@ typedef struct MdoSessionForkOptions {
     const char* Title;           /* NULL inherits the source title. */
     uint64 ThroughSequence;      /* UINT64_MAX selects the retained tail. */
     MdoSessionRuntimeOptions Runtime;
+    const char* RequestedId;     /* NULL generates an ID; never overwrite one. */
 } MdoSessionForkOptions;
 
 typedef struct MdoSessionInfo {
