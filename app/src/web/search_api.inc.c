@@ -1,7 +1,7 @@
 /* xadmin is the only search protocol. Provider credentials stay on its server;
  * this client sends a member access token only to its account service.
- * Only explicit pre-dispatch rejections can be retried; ambiguous/billable
- * attempts and redirects are never replayed or forwarded elsewhere. */
+ * One opaque ID is reused on the dedicated durable endpoint. A legacy service
+ * is used only after a definitive route 404 and never blindly replayed. */
 #define MDO_WEB_SEARCH_MAX_RESULTS 10u
 #define MDO_WEB_SEARCH_TOKEN_REF "account:search-access-token"
 
@@ -113,6 +113,12 @@ static xwork_result MdoWebSearchExecute(void* pUserData,
     uint64 End = XRT_DEADLINE_NEVER;
     uint64 Jitter = xrtClock() ^ (uint64)(uintptr_t)pContext;
     uint32 Attempts = 0u;
+    bool Registered = true;
+    bool UncertainSubmission = false;
+    char RequestKey[33] = {0}, Endpoint[1024];
+    bool AccountAcquired = false;
+    uint64 MemberId = 0u;
+    xwork_tool_context AccountContext;
     if ( !Jitter ) Jitter = 1u;
     xwork_result Result = XWORK_RESULT_ERROR;
     memset(&Response, 0, sizeof(Response));
@@ -130,13 +136,31 @@ static xwork_result MdoWebSearchExecute(void* pUserData,
         Result = MdoWebToolFail(pWriter, pError, "web_search count must be an integer from 1 to 10");
         goto done;
     }
+    unsigned char Random[16];
+    if ( !xrtSecureRandom(Random,sizeof(Random)) ) {
+        Result=MdoWebToolFail(pWriter,pError,"Cannot create a safe search request ID. No search was submitted.");goto done;
+    }
+    for (i=0u;i<sizeof(Random);++i) snprintf(RequestKey+i*2u,3u,"%02x",Random[i]);
+    xrtSecureZero(Random,sizeof(Random));
+    if ( !MdoWebObjectString(Arguments,"request_id",RequestKey,32u) ) goto memory_failed;
+    if (snprintf(Endpoint,sizeof(Endpoint),"%s/requests",MdoAccountSearchEndpoint()) >= (int)sizeof(Endpoint)) {
+        Result=MdoWebToolFail(pWriter,pError,"Search service address exceeds the supported size.");goto done;
+    }
 acquire_account:
-    if (!MdoAccountAcquire(Query.Data, pContext, &Lease)) {
+    /* Initial sign-in may wait for the user. A renewal during recovery shares
+     * the same remaining deadline instead of starting a new waiting budget. */
+    AccountContext = *pContext;
+    if (End != XRT_DEADLINE_NEVER) AccountContext.uDeadline = End;
+    if (!MdoAccountAcquire(Query.Data, &AccountContext, &Lease)) {
         Result = MdoWebToolFail(pWriter, pError,
             "Search needs an account login. The login wait was skipped, cancelled or expired; no search was sent. Do not retry until the user signs in.");
         goto done;
     }
     Token = Lease.AccessToken;
+    if (AccountAcquired && MemberId!=Lease.MemberId) {
+        Result=MdoWebFail(pError,XWORK_ERROR_CANCELLED,"Account changed while recovering search; no request was sent for the new account.");goto done;
+    }
+    MemberId=Lease.MemberId;AccountAcquired=true;
     FetchContext = *pContext;
     if (Lease.Cancel) FetchContext.pCancel = Lease.Cancel;
     if ( End == XRT_DEADLINE_NEVER ) {
@@ -160,11 +184,21 @@ fetch_search:
     uint64 RetryAfter = 0u;
     ++Attempts;
     Attempted = true;
-    if ( !MdoWebFetchRequest(State, &FetchContext, MdoAccountSearchEndpoint(),
+    if ( !MdoWebFetchRequest(State, &FetchContext, Registered?Endpoint:MdoAccountSearchEndpoint(),
             Headers, 4u, true, Body, BodySize, &Response, &RetryAfter) ) {
         /* Transport diagnostics may contain headers. Never reflect them into
          * a model-visible result containing an account credential. */
         xerrkind Kind = MdoWebTransportKind();
+        if (Registered) UncertainSubmission=true;
+        uint64 Delay=MdoWebRecoveryDelay(Attempts,&Jitter,0u);
+        if (Registered && MdoWebTransientTransport() && Attempts<MDO_WEB_SEARCH_MAX_ATTEMPTS &&
+            Delay<xrtDeadlineRemaining(End) && !(FetchContext.pCancel && xrtCancelRequested(FetchContext.pCancel))) {
+            if (MdoWebRecoveryWait(&FetchContext,End,Delay)) {
+                State->Transport.ResponseUnit(State->Transport.Context,&Response);
+                memset(&Response,0,sizeof(Response));xrtClearError();goto fetch_search;
+            }
+            Kind=FetchContext.pCancel && xrtCancelRequested(FetchContext.pCancel)?XERR_CANCELLED:Kind;
+        }
         if ( (pContext->pCancel != NULL && xrtCancelRequested(pContext->pCancel)) || Kind == XERR_CANCELLED )
             Result = MdoWebFail(pError, XWORK_ERROR_CANCELLED, "Search request was cancelled");
         else if ( pContext->uDeadline != XRT_DEADLINE_NEVER &&
@@ -178,11 +212,24 @@ fetch_search:
             Result = MdoWebToolFail(pWriter, pError, "Search service response exceeded the configured size limit. Contact its administrator.");
         else if ( Kind == XERR_PROTOCOL )
             Result = MdoWebToolFail(pWriter, pError, "Search connection or response failed protocol validation. Submission could not be confirmed; no automatic replay was sent.");
+        else if ( Registered )
+            Result = MdoWebToolFail(pWriter,pError,"Search result could not be recovered within automatic recovery limits. The service may still hold this request's result; no new request ID was submitted. Try again later.");
         else if ( Kind == XERR_TIMEOUT )
             Result = MdoWebToolFail(pWriter, pError,
                 "Search service timed out. Submission could not be confirmed; no automatic replay was sent to avoid spending the quota twice. Try again later.");
         else Result = MdoWebToolFail(pWriter, pError, "Cannot reach the search service. Submission could not be confirmed; check your connection before trying again.");
         goto done;
+    }
+    if (Registered && Response.Status==404u && !UncertainSubmission &&
+        Attempts<MDO_WEB_SEARCH_MAX_ATTEMPTS && !xrtDeadlineExpired(End)) {
+        /* A POST to this dedicated route creates a receipt. A definitive route
+         * miss alone permits a legacy POST; transport failures never do. */
+        Registered=false;
+        if (!xrtValueObjectRemove(Arguments,xrtStrView("request_id"))) goto memory_failed;
+        xrtFree(Body);Body=xrtJsonStringify(Arguments,false,&BodySize);
+        if (!Body) goto memory_failed;
+        State->Transport.ResponseUnit(State->Transport.Context,&Response);
+        memset(&Response,0,sizeof(Response));xrtClearError();goto fetch_search;
     }
     if (Response.Status == 401 && !Renewed && Attempts < MDO_WEB_SEARCH_MAX_ATTEMPTS && MdoAccountRejectAccess(&Lease)) {
         Renewed = true;
@@ -198,7 +245,11 @@ fetch_search:
         bool RetrySafe = false;
         uint64 Minimum = 0u;
         const MdoWebSearchError* Reason = ValidEnvelope ?
-            MdoWebSearchReason(Envelope,Response.Status,Code,&RetrySafe,&Minimum) : NULL;
+            MdoWebSearchReason(Envelope,Response.Status,Code,Registered?RequestKey:NULL,&RetrySafe,&Minimum) : NULL;
+        if (Registered && !ValidEnvelope && MdoWebTransientStatus(Response.Status)) {
+            RetrySafe=true;UncertainSubmission=true;
+        }
+        if (Reason && strcmp(Reason->Code,"request_pending")==0) UncertainSubmission=true;
         uint64 Delay = MdoWebRecoveryDelay(Attempts, &Jitter, Minimum > RetryAfter ? Minimum : RetryAfter);
         bool WaitFits = Delay < xrtDeadlineRemaining(End);
         if ( RetrySafe && Attempts < MDO_WEB_SEARCH_MAX_ATTEMPTS && WaitFits ) {
@@ -238,6 +289,7 @@ fetch_search:
          !xrtValueGetBool(xrtValueObjectGet(Data, xrtStrView("truncated")), &Truncated) ) goto invalid_response;
     for ( i = 0u; i < RequestId.Size; ++i )
         if ( !isxdigit((unsigned char)RequestId.Data[i]) ) goto invalid_response;
+    if (Registered && memcmp(RequestId.Data,RequestKey,32u)!=0) goto invalid_response;
     Output = xrtValueObject();
     Results = xrtValueArray();
     if ( Output == NULL || Results == NULL ) goto memory_failed;

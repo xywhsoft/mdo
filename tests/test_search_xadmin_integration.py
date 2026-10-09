@@ -22,7 +22,7 @@ from test_mdo_delivery import request
 from test_search_api_runtime import invoke, web
 
 
-def run(host: Path, website_host: Path) -> dict:
+def run(host: Path, website_host: Path, scenario=None) -> dict:
     site, port, admin_user, admin_password = remote_website_fixture()
     origin = f"http://127.0.0.1:{port}"
     (site/'tests').mkdir()
@@ -45,6 +45,22 @@ def run(host: Path, website_host: Path) -> dict:
         value = call('GET','/__test/search-state')[0]
         assert not value['contract_failed'],value
         return value
+
+    def restart():
+        nonlocal process
+        process.terminate()
+        try:process.wait(5)
+        except subprocess.TimeoutExpired:process.kill();process.wait(5)
+        process=subprocess.Popen([str(website_host.resolve()),str(site/'xs.json')],cwd=site,
+            env=env,stdout=log,stderr=log,creationflags=subprocess.CREATE_NO_WINDOW if os.name=='nt' else 0)
+        end=time.monotonic()+35
+        while time.monotonic()<end:
+            assert process.poll() is None,'website fixture exited after restart'
+            try:
+                state();return
+            except OSError:pass
+            time.sleep(.1)
+        raise AssertionError('website restart timed out')
 
     records = {'requests':[]}
 
@@ -120,6 +136,8 @@ def run(host: Path, website_host: Path) -> dict:
             headers={'Origin':origin,'X-CSRF-Token':credentials['data']['csrf_token']})
         dbpath=site/'db/plugin/web-search/plugin.db'
         assert dbpath.is_file(),list((site/'db').rglob('*.db'))
+        if scenario:
+            return scenario(locals())
         for provider in ('bocha','zai'):
             policy(default_provider=provider)
             records[provider]=probe('hello',True,f'"source":"{provider}"')
@@ -132,10 +150,11 @@ def run(host: Path, website_host: Path) -> dict:
         # Two controlled overlapping requests exercise one busy account, not load.
         policy(max_concurrent=1)
         with ThreadPoolExecutor(max_workers=1) as pool:
+            previous_entered=state()['entered_count']
             slow=pool.submit(call,'POST','/api/v1/search',{'query':'slow','count':2},headers=bearer)
             end=time.monotonic()+2
-            while not state()['entered'] and time.monotonic()<end:time.sleep(.02)
-            assert state()['entered']
+            while state()['entered_count']==previous_entered and time.monotonic()<end:time.sleep(.02)
+            assert state()['entered_count']>previous_entered
             blocked,_=call('POST','/api/v1/search',{'query':'hello'},headers=other_bearer,expected=429)
             assert blocked['data']['error']['code']=='server_busy' and not blocked['data']['error']['dispatched']
             other_usage,_=call('GET','/api/v1/search/usage',headers=other_bearer)

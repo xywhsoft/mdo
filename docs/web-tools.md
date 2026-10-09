@@ -36,7 +36,11 @@ Agent 目录会看到三个独立工具：
 使用原生账号管理器的服务来源 `https://ai.xywhsoft.com`。旧配置中的 `web.search`
 在读取和导入时移除，不会仅为启动而写入 Home。下次正常保存配置会写入清理后的 patch。
 
-`web_search` 向账号服务发送 `POST /api/v1/search`，正文为 `{ "query": "...", "count": 5 }`，
+`web_search` 优先向账号服务发送 `POST /api/v1/search/requests`，正文为
+`{ "query": "...", "count": 5, "request_id": "32 位随机小写十六进制" }`。
+编号由原生工具生成，在同一次工具执行、重试和账号续期中保持不变，不加入模型工具参数。
+仅首次确定新路由返回 404，且此前未出现提交不确定时，才回退到旧 `/api/v1/search`，
+并移除编号；兼容回退仍受总次数和期限限制。
 count 可省略，由服务端决定默认结果数；显式 count 允许 1–10，服务端可进一步限制。
 接收 xadmin 的 `{ code: 0, data: { provider, request_id, count, truncated, results } }`，
 结果保留 title、url、snippet、site、published_at 和 fetched_at，空数组为成功。
@@ -57,12 +61,28 @@ count 可省略，由服务端决定默认结果数；显式 count 允许 1–10
 
 日额度与全站日额度耗尽、联系方式验证、平台未配置、平台鉴权和平台限流各有
 独立最终说明。未知或不一致封装只按状态给出保守提示，不假设 503 必然是缺 key。
-网络断开、超时或已经提交平台的失败不自动重放 POST，避免重复消耗额度；
-平台失败也不会被当作会员登录失效。原始服务和上游错误正文不回显。
+新接口将会员 ID、编号及精确请求正文哈希组成持久记录，记录与额度同一事务预留。
+完成结果和已提交平台的固定失败先保存再回复，后续同编号请求只重取结果，
+不再调用平台或扣额度。因此断连、提前 EOF、临时网关错误可以安静退避重取；
+`request_pending` 必须携带相同编号才能继续等待。冲突、过期、结果未保存或
+永久协议失败各给一条准确最终说明，不改用新编号掩盖失败。
+已提交平台的失败只重取原失败，旧接口的未知传输结果仍不自动重放。
+平台失败不会被当作会员登录失效；原始服务和上游错误正文不回显。
+
+网站记录键保留 24 小时，规范化结果最多保留十分钟；32 MiB 的逻辑正文池
+为每个处理中请求预留 1 MiB，容量紧张只清除两分钟前已完成的正文，保留键。
+过期的处理中记录释放预留，但不再执行；未知提交宁可诚实说明，不能重复收费。
+正文精确匹配，字段重排也视为冲突；切换账号终止当前恢复，绝不借用新账号重试。
+目前编号只覆盖一次原生工具执行，尚未持久化到客户端未完成工具记录，
+不能据此宣称 mdo 进程重启后的工具重新执行也已去重。
 
 联调测试：`python tests/test_search_api_runtime.py` 使用本地模拟 HTTP 服务，不消耗平台额度；
 `python tests/test_search_recovery.py --host <兼容 xs>` 验证有限退避、等待、取消和
-不可重放情况；`python tests/test_search_xadmin_integration.py --host <兼容 xs>`
+不可重放情况；`python tests/test_search_receipts.py --host <兼容 xs>` 检查
+同键、正文冲突、账号隔离、并发、重启、过期和逻辑容量边界；
+`python tests/test_search_lost_response.py --host <兼容 xs>` 通过真实插件与本地故障代理
+检查响应丢失、截断、网关错误、处理中断连、重启恢复及回退边界；
+`python tests/test_search_xadmin_integration.py --host <兼容 xs>`
 使用 home 的统一 mdo 插件隔离副本、真实 JWT 和上游模拟传输，核查准确原因、
 提交次数及额度事务。网站宿主默认 home/xs.exe，可用 `--website-host` 单独指定。
 

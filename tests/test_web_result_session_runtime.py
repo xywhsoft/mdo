@@ -32,9 +32,9 @@ def run(host: Path, *, page_recovery: bool = False, page_denied: bool = False,
             self.send_header("Content-Length", str(len(body)))
             self.end_headers(); self.wfile.write(body)
         def do_POST(self):
-            assert self.path == "/api/v1/search"
+            assert self.path == "/api/v1/search/requests"
             assert self.headers.get("Authorization") == "Bearer probe-secret"
-            self.rfile.read(int(self.headers["Content-Length"])); Handler.calls += 1
+            args = json.loads(self.rfile.read(int(self.headers["Content-Length"]))); Handler.calls += 1
             if search_denied or (search_recovery and Handler.calls <= 2):
                 body=json.dumps({'code':429,'message':'HOSTILE_SECRET_BODY','data':{'error':{
                     'code':'daily_limit' if search_denied else 'server_busy',
@@ -43,7 +43,7 @@ def run(host: Path, *, page_recovery: bool = False, page_denied: bool = False,
                 self.send_response(429);self.send_header('Content-Length',str(len(body)))
                 self.end_headers();self.wfile.write(body);return
             body = json.dumps({"code": 0, "message": "", "data": {
-                "provider": "bocha", "request_id": "0123456789abcdef0123456789abcdef",
+                "provider": "bocha", "request_id": args["request_id"],
                 "truncated": False, "count": 10, "results": [{"title": f"搜索 Пример 🌍 {i}",
                     "url": f"https://example.com/{i}", "snippet": "搜索я🌍" * 120,
                     "site": "example.com", "published_at": "2026-10-09"} for i in range(10)]}}, ensure_ascii=False).encode()

@@ -35,16 +35,18 @@ class Handler(BaseHTTPRequestHandler):
         pass
 
     def do_POST(self) -> None:
-        assert self.path == "/api/v1/search", self.path
+        assert self.path in ("/api/v1/search", "/api/v1/search/requests"), self.path
         assert self.headers.get("Authorization") == "Bearer probe-secret"
         assert self.headers.get("Content-Type") == "application/json"
         assert self.headers.get("Accept") == "application/json"
         args = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
-        assert set(args) <= {"query", "count"}, args
+        assert set(args) <= {"query", "count", "request_id"}, args
         self.calls.append(args)
         query = args["query"]
         status = int(query[6:]) if query.startswith("status") else 200
         response = envelope(query)
+        if "request_id" in args:
+            response["data"]["request_id"] = args["request_id"]
         if query == "business403":
             response = {"code": 403, "message": "probe-secret must never echo"}
         if query == "badcount":
@@ -73,7 +75,7 @@ class Handler(BaseHTTPRequestHandler):
         body = (b"<html>login required probe-secret</html>" if query == "html"
                 else json.dumps(response, ensure_ascii=False).encode())
         if status != 200:
-            body = b'{"message":"probe-secret must never echo"}'
+            body = json.dumps({"code": status, "message": "probe-secret must never echo"}).encode()
         self.send_response(status)
         if status == 302:
             self.send_header("Location", "/credential-leak")
@@ -127,7 +129,13 @@ static bool Fetch(void* data, const XS_FetchRequest* request, XS_FetchResponse* 
         if (!clean) { printf("legacy_search_retained=1\n"); goto done; }
     }
 ''')
-    text = text[:a] + ''.join(calls) + '    printf("probe_done=1\\n");\n' + text[b:]
+    summary = r'''
+    memset(&snapshot, 0, sizeof(snapshot)); snapshot.Size = sizeof(snapshot);
+    if (MdoWebManagerGetSnapshot(&snapshot))
+        printf("summary=permissions:%u completed:%llu failed:%llu\n", probe.Permissions,
+            (unsigned long long)snapshot.RequestsCompleted, (unsigned long long)snapshot.RequestsFailed);
+'''
+    text = text[:a] + ''.join(calls) + summary + '    printf("probe_done=1\\n");\n' + text[b:]
     # Avoid an unused helper in strict source checks.
     a = text.index('static unsigned char *Copy(')
     b = text.index('static bool Fetch(', a)
@@ -135,15 +143,18 @@ static bool Fetch(void* data, const XS_FetchRequest* request, XS_FetchResponse* 
 
 
 def invoke(host: Path, endpoint: str, cases: list[tuple[str, bool]],
-           token: str | None = "probe-secret", *, external: bool = False) -> str:
+           token: str | None = "probe-secret", *, external: bool = False,
+           deadline_us: int = 5_000_000) -> str:
     with tempfile.TemporaryDirectory(prefix="search-api-", dir=web.ROOT / ".build") as raw:
         base = Path(raw)
         web.write_site(base / "site")
         url = urlsplit(endpoint)
         assert url.scheme in ('http', 'https') and url.path == '/api/v1/search' and not url.query and not url.fragment and not url.username
         origin = url.scheme+'://'+url.netloc
-        (base / "site/probe.c").write_text('#define MDO_ACCOUNT_SERVICE_ORIGIN '+json.dumps(origin)+'\n'+source(cases, external=external), encoding="utf-8")
-        output = web.run_probe(host.resolve(), base / "site", base / "home", token)
+        text = source(cases, external=external).replace('xrtDeadlineAfter(5000000u)', f'xrtDeadlineAfter({deadline_us}u)')
+        (base / "site/probe.c").write_text('#define MDO_ACCOUNT_SERVICE_ORIGIN '+json.dumps(origin)+'\n'+text, encoding="utf-8")
+        output = web.run_probe(host.resolve(), base / "site", base / "home", token,
+                               wait_timeout=max(15, deadline_us / 1_000_000 + 5))
         assert "probe_done=1" in output, output
         assert "case_failed=" not in output and "init_error=" not in output, output
         assert "request_contract_failed=" not in output and "legacy_search_migration_failed=" not in output and "legacy_search_retained=" not in output, output
@@ -183,7 +194,8 @@ def main() -> None:
             '{"query":"   "}', '{"query":"line\\nbreak"}', '{"query":"ok","count":11}',
             '{"query":"ok","provider":"bocha"}', '{"query":"ok","count":true}')]
         output = invoke(args.host, endpoint, cases)
-        assert len(Handler.calls) == len(queries + failures), Handler.calls
+        # A definitive missing new route falls back once to the legacy route.
+        assert len(Handler.calls) == len(queries + failures) + 1, Handler.calls
         for marker in ('"source":"zai"', '"results":[]', '"truncated":true', '"count":1',
                        'valid account login', 'verification requirements', 'limited this request',
                        'temporarily unavailable', 'invalid xadmin response',

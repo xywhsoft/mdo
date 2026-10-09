@@ -51,7 +51,9 @@ def run(host: Path, envelopes: list[dict], *, ephemeral: bool = False) -> None:
         def do_POST(self):
             assert self.headers.get("Authorization") == "Bearer probe-secret"
             args = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
-            response = envelopes[int(args["query"].split("-")[-1])]
+            assert self.path == "/api/v1/search/requests"
+            response = json.loads(json.dumps(envelopes[int(args["query"].split("-")[-1])]))
+            response["data"]["request_id"] = args["request_id"]
             Handler.calls += 1
             body = json.dumps(response, ensure_ascii=False).encode()
             self.send_response(200); self.send_header("Content-Length", str(len(body)))

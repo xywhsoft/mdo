@@ -1,6 +1,6 @@
 /* Only the account service's bounded, known rejection envelope can authorize
- * replay of a billed POST. Unknown/contradictory reasons, transport failure and
- * any provider dispatch remain single attempts. Never echo upstream prose. */
+ * replay of the legacy POST. Registered request lookups can also recover a
+ * lost response without submitting again. Never echo upstream prose. */
 #define MDO_WEB_SEARCH_MAX_ATTEMPTS 6u
 #define MDO_WEB_SEARCH_RECOVERY_US UINT64_C(60000000)
 typedef struct MdoWebSearchError {
@@ -26,7 +26,13 @@ static const MdoWebSearchError g_MdoWebSearchErrors[] = {
     {"provider_rate_limited",502,"Search provider rate limit reached. Wait before searching again.",false},
     {"provider_unavailable",502,"Search provider is temporarily unavailable. Try again later.",false},
     {"provider_timeout",504,"Search provider timed out. Submission may have consumed an attempt; try again later.",false},
-    {"provider_invalid_response",502,"Search provider returned an invalid response. Contact the service administrator.",false}
+    {"provider_invalid_response",502,"Search provider returned an invalid response. Contact the service administrator.",false},
+    {"request_pending",429,"Search is already registered; wait for its existing result.",true},
+    {"request_conflict",409,"Search request ID conflicts with a different request body. No new search was submitted.",false},
+    {"request_uncertain",502,"Search was reserved but no result was saved. It will not be automatically submitted again; try a fresh search later if needed.",false},
+    {"request_expired",410,"The saved search result has expired. Start a fresh search if needed.",false},
+    {"receipt_busy",503,"Search result cache is temporarily full. Try again later.",true},
+    {"receipt_unavailable",503,"Search result storage is unavailable. Contact the service administrator.",false}
 };
 
 static xvalue* MdoWebSearchEnvelope(MdoWebState* State, const XS_FetchResponse* Response)
@@ -41,7 +47,7 @@ static xvalue* MdoWebSearchEnvelope(MdoWebState* State, const XS_FetchResponse* 
 }
 
 static const MdoWebSearchError* MdoWebSearchReason(const xvalue* Envelope,
-    uint64 Status, uint64 Code, bool* RetrySafe, uint64* Minimum)
+    uint64 Status, uint64 Code, const char* RequestId, bool* RetrySafe, uint64* Minimum)
 {
     *RetrySafe = false; *Minimum = 0u;
     if ( Code < 400u || (Status != 200u && Code != Status) ) return NULL;
@@ -59,7 +65,11 @@ static const MdoWebSearchError* MdoWebSearchReason(const xvalue* Envelope,
         const MdoWebSearchError* Reason = &g_MdoWebSearchErrors[i];
         if ( Reason->Status != Code || strlen(Reason->Code) != Name.Size ||
              memcmp(Reason->Code, Name.Data, Name.Size) != 0 ) continue;
-        *RetrySafe = Reason->RetrySafe && Safe && !Dispatched;
+        bool Pending=strcmp(Reason->Code,"request_pending")==0;
+        xstrview SavedId;
+        bool SameRequest=RequestId && MdoWebString(xrtValueObjectGet(Data,xrtStrView("request_id")),32u,32u,&SavedId) &&
+            memcmp(RequestId,SavedId.Data,32u)==0;
+        *RetrySafe = Reason->RetrySafe && Safe && (Pending ? Dispatched && SameRequest : !Dispatched);
         *Minimum = Milliseconds * 1000u;
         return Reason;
     }

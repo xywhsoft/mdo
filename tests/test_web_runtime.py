@@ -71,6 +71,7 @@ static bool Fetch(void *data, const XS_FetchRequest *request,
     const char *body;
     const char *content_type;
     const char *final_url;
+    char *owned_body = NULL;
     ++probe->Fetches;
     if ((request->Flags & XS_FETCH_PUBLIC_ADDRESSES_ONLY) != 0u)
         ++probe->PublicOnly;
@@ -78,13 +79,22 @@ static bool Fetch(void *data, const XS_FetchRequest *request,
         if (strcmp(request->Headers[i].Name, "Authorization") == 0 &&
             strcmp(request->Headers[i].Value, "Bearer probe-secret") == 0)
             ++probe->SawSecret;
-    if (strcmp(request->Url, "https://ai.xywhsoft.com/api/v1/search") == 0) {
+    if (strcmp(request->Url, "https://ai.xywhsoft.com/api/v1/search/requests") == 0) {
+        xvalue *arguments = xrtJsonParse(xrtStrViewN(request->Body, request->BodySize));
+        xstrview query, id;
+        uint64 count;
         if (strcmp(request->Method, "POST") != 0 || request->Body == NULL ||
-            request->BodySize != strlen("{\"query\":\"alpha beta\",\"count\":2}") ||
-            memcmp(request->Body, "{\"query\":\"alpha beta\",\"count\":2}", request->BodySize) != 0 ||
+            !MdoWebString(xrtValueObjectGet(arguments, xrtStrView("query")), 10u, 10u, &query) ||
+            memcmp(query.Data, "alpha beta", 10u) != 0 ||
+            !MdoWebUnsigned(xrtValueObjectGet(arguments, xrtStrView("count")), &count) || count != 2u ||
+            !MdoWebString(xrtValueObjectGet(arguments, xrtStrView("request_id")), 32u, 32u, &id) ||
             (request->Flags & XS_FETCH_FOLLOW_REDIRECTS) != 0u || request->MaxRedirects != 0u)
             printf("request_contract_failed=1\n");
-        body = search; content_type = "application/json";
+        xvalue *result = xrtJsonParse(xrtStrView(search));
+        MdoWebObjectString(xrtValueObjectGet(result, xrtStrView("data")), "request_id", id.Data, id.Size);
+        owned_body = xrtJsonStringify(result, false, NULL);
+        xrtValueRelease(result); xrtValueRelease(arguments);
+        body = owned_body; content_type = "application/json";
         final_url = request->Url;
     } else if (strcmp(request->Url, "https://example.com/page") == 0) {
         body = page; content_type = "Text/HTML; charset=utf-8";
@@ -102,6 +112,7 @@ static bool Fetch(void *data, const XS_FetchRequest *request,
     response->FinalUrl = xrtStrDup(final_url);
     response->ContentType = xrtStrDup(content_type);
     response->Body = Copy(body, &response->BodySize);
+    xrtFree(owned_body);
     response->FetchedAt = 1700000000000000LL + probe->Fetches;
     return response->FinalUrl != NULL && response->ContentType != NULL &&
         response->Body != NULL;

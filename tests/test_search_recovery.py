@@ -38,7 +38,7 @@ CASES = [
     ('overflow','member_busy',429,99,False,1),
     ('mismatch','member_busy',503,99,False,1),
     ('auth_mismatch','server_busy',401,99,False,1),
-    ('disconnect','server_busy',503,99,False,1),
+    ('disconnect','server_busy',503,99,False,6),
     ('malformed_http','server_busy',503,99,False,1),
     ('short','server_busy',429,99,False,1),
     ('cancel','server_busy',429,99,False,1),
@@ -46,12 +46,15 @@ CASES = [
 ]
 class Handler(BaseHTTPRequestHandler):
     calls: dict[str,list[float]] = {}
+    keys: dict[str,str] = {}
     def log_message(self,*_):pass
     def do_POST(self):
-        assert self.path=='/api/v1/search'
+        assert self.path=='/api/v1/search/requests'
         assert self.headers['Authorization']=='Bearer probe-secret'
         args=json.loads(self.rfile.read(int(self.headers['Content-Length'])))
         name=args['query']; case=next(c for c in CASES if c[0]==name)
+        assert re.fullmatch('[0-9a-f]{32}',args['request_id'])
+        assert Handler.keys.setdefault(name,args['request_id'])==args['request_id']
         calls=self.calls.setdefault(name,[]);calls.append(time.monotonic())
         if name=='disconnect':
             self.connection.shutdown(socket.SHUT_RDWR);self.connection.close();self.close_connection=True;return
@@ -59,6 +62,7 @@ class Handler(BaseHTTPRequestHandler):
             self.connection.sendall(b'HTTP/1.1 invalid\r\n\r\n');self.close_connection=True;return
         _,reason,status,failures,_,_=case
         result=envelope(name)
+        result['data']['request_id']=args['request_id']
         if len(calls)<=failures:
             code=429 if reason in ('member_busy','server_busy','minute_limit','daily_limit','global_daily_limit','future_error') else status
             error={'code':reason,'retry_safe':True,'dispatched':False,'retry_after_ms':100}
