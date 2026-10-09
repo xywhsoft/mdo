@@ -1,0 +1,49 @@
+{
+  "baseline": false,
+  "cases": [
+    {
+      "case": "repeat_same_child",
+      "statuses": [
+        201,
+        200
+      ],
+      "id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    },
+    {
+      "case": "different_title_or_boundary_rejected",
+      "status": 409
+    },
+    {
+      "case": "invalid_identity_tail_or_owner_rejected",
+      "statuses": [
+        422,
+        412
+      ]
+    },
+    {
+      "case": "ordinary_and_incomplete_directories_untouched",
+      "status": 409
+    },
+    {
+      "case": "two_matching_submits_one_child",
+      "statuses": [
+        201,
+        200
+      ]
+    },
+    {
+      "case": "replay_reads_changed_or_archived_source_child_without_new_fork",
+      "status": 200
+    },
+    {
+      "case": "restart_replay_and_old_write_fence",
+      "statuses": [
+        412,
+        200
+      ]
+    }
+  ],
+  "source_snapshot_unchanged": true,
+  "model_calls": 1,
+  "passed": true
+}

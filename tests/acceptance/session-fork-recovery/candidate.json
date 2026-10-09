@@ -1,0 +1,55 @@
+{
+  "mdo_commit": "f6f23df3146c8f4615595c56d5520d28633a0410",
+  "xs_commit": "f47b0de5037f458f6289483d1323dee417d99434",
+  "mdo_worktree_dirty": false,
+  "sha256": "34ed5978cb00b3ebadf8fe636495a8addc56d6c4574ea2142e4f0f05f3582a5e",
+  "bytes": 4529636,
+  "packaged_app_sha256": "f477499d13a4b0cbc65d55185b86c4ad8de29c0a4b188deca76d613d14a4117f",
+  "pack_sha256": "208ab2950f2ef3f1b2b3445882731879ee16265a8fba9802ad27b3cdc8dfd9f0",
+  "sources": {
+    "include/mdo/sessions.h": {
+      "sha256": "a8ca8de29955f98772a86ff7a3bede29f39a3fa943c6b0163c8ab169b4ec8f46",
+      "matches": true
+    },
+    "src/sessions/manager.c": {
+      "sha256": "9a5cc8bf727faeabc3744553fc4f850e8ee6b7371d5a393f0e687e63a04f3bfd",
+      "matches": true
+    },
+    "src/api/sessions.c": {
+      "sha256": "e6ecd051eab17314893219c4a2e874a071c52cafc018354960e1d607e10cceaf",
+      "matches": true
+    },
+    "web/js/state/session-fork.js": {
+      "sha256": "81185223734ff1b887d644f985a6b4b94250ed5c598da26d567471a87fa226dd",
+      "matches": true
+    },
+    "web/js/state/sessions.js": {
+      "sha256": "3d07cef4d5360c447c7ee81f399c16504d5614b842d82af0df7ecf161b6fb15a",
+      "matches": true
+    },
+    "web/js/app.js": {
+      "sha256": "e7806ef09ce2dbd4cff410e98e88ed7de2d0ccb4686ed90a96d588006ebf2b56",
+      "matches": true
+    },
+    "web/js/utils/dom.js": {
+      "sha256": "8022398c8eb877fe9698791682374e8fc3e9bcdce3317bb8e9936cac1b27deb9",
+      "matches": true
+    },
+    "web/lang/zh-CN.json": {
+      "sha256": "669de13da4807fbcd5dff4ecfd0afbbdde6eea974cf8f9e498c7bc0356464ba1",
+      "matches": true
+    },
+    "web/lang/en-US.json": {
+      "sha256": "a0bf340dce23104b440bae796d4f0e757c9c88528a4ace21ab6f0fc51f9c1c4f",
+      "matches": true
+    },
+    "web/lang/ru-RU.json": {
+      "sha256": "3672afa60fa78e5e569a6e653c6415e58d7d5e2220b156e7b1a49961904927b1",
+      "matches": true
+    }
+  },
+  "passed": true,
+  "daily_app_overwritten": false,
+  "android_device_tested": false,
+  "external_provider_tested": false
+}

@@ -1,0 +1,49 @@
+{
+  "recovery": {
+    "source_draft": "Fork ACK draft must stay.",
+    "intermediate_error_visible": false
+  },
+  "cancel_before_sidebar_fix": {
+    "draft": "Keep draft when fork confirmation is cancelled.",
+    "notices": [],
+    "openDialogs": 0,
+    "url": "http://127.0.0.1:64270/#/projects/default/sessions/V-OSOaKFfJiEWkpCSH_07JffsN6qj7-2"
+  },
+  "cancel_after_sidebar_fix": {
+    "branchVisible": true,
+    "draft": "Keep draft when fork confirmation is cancelled.",
+    "notices": [],
+    "openDialogs": 0,
+    "source_url": "http://127.0.0.1:49547/#/projects/default/sessions/V-OSOc6Z1-gR151Ffw8oZ02c06xLzldr"
+  },
+  "refusal": {
+    "intermediate": {
+      "draft": "Retain the draft after a final fork refusal.",
+      "notices": []
+    },
+    "first_final_notice_seen": true,
+    "second_final": {
+      "branchVisible": true,
+      "draft": "Retain the draft after a final fork refusal.",
+      "forkButtonEnabled": true,
+      "notices": [
+        "分支创建结果暂未确认。请重试，或在会话列表查看分支。"
+      ]
+    },
+    "source_draft_after_continuation": "Retain the draft after a final fork refusal.",
+    "continuation": {
+      "messages": [
+        "19:20Seed the history recovery check.Agent19:20Ready to continue.10 输入 / 5 输出 tokens · LLM <0.1 秒 · 580.9 tok/s19:22Continue after the recovered final fork notice.Agent19:22Ready to continue.10 输入 / 5 输出 tokens · LLM <0.1 秒 · 486.1 tok/s"
+      ],
+      "notices": []
+    }
+  },
+  "route_cancel": {
+    "heading": "设置",
+    "notices": [],
+    "openDialogs": 0,
+    "settings_url": "http://127.0.0.1:52237/#/settings/general",
+    "source_draft": "Keep route-change draft.",
+    "recovered_url": "http://127.0.0.1:52237/#/projects/default/sessions/a654f2d2793c601186d29b355aa35af8"
+  }
+}

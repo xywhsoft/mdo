@@ -1,0 +1,12 @@
+{
+  "mdo_commit": "db951364bf4304c999c7446011ed8f751a0fd558",
+  "xs_commit": "f47b0de5037f458f6289483d1323dee417d99434",
+  "mdo_worktree_dirty": false,
+  "sha256": "7dfdf1a3796c8ce8aae721cbdca0d7a8008acd662cf689b94aebc6e47084c8aa",
+  "bytes": 4529570,
+  "packaged_app_sha256": "3b0a2fef6af15bbfd81de2bdccd5cfe5d4642b9cb601caa9fc80033e4638023e",
+  "ui_records": [
+    "drop.json",
+    "cancel-before-sidebar.json"
+  ]
+}

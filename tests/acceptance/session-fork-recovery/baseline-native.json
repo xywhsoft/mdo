@@ -1,0 +1,15 @@
+{
+  "baseline": true,
+  "cases": [
+    {
+      "case": "same_legacy_post_creates_two_children",
+      "ids": [
+        "V-OSOZy9Ffgs7L8OvdAZ2EOpflnCHL_F",
+        "V-OSOZy9hSm6tnT3VU8xdXJEtesBTJAb"
+      ]
+    }
+  ],
+  "source_snapshot_unchanged": true,
+  "model_calls": 1,
+  "passed": true
+}

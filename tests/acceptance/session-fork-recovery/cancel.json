@@ -1,0 +1,280 @@
+{
+  "mode": "fork_hold",
+  "source_id": "V-OSOc6Z1-gR151Ffw8oZ02c06xLzldr",
+  "other_id": "V-OSOc6Zs_LI3tXjpF_W8k7H1HZk5pCU",
+  "model_calls": 1,
+  "transport": [
+    {
+      "method": "GET",
+      "path": "/api/v1/projects/default/sessions/V-OSOc6Z1-gR151Ffw8oZ02c06xLzldr/history",
+      "attempt": 1,
+      "status": 200,
+      "seconds": 37.531,
+      "fault": null,
+      "response": {
+        "schema_version": 1,
+        "ok": true,
+        "request_id": "mdo-0f48b3b52a14db38fc7b1a00",
+        "data": {
+          "project_id": "default",
+          "session_id": "V-OSOc6Z1-gR151Ffw8oZ02c06xLzldr",
+          "revision": 1,
+          "last_sequence": 3
+        }
+      },
+      "kind": "history",
+      "finished_seconds": 37.531
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/projects/default/sessions/V-OSOc6Z1-gR151Ffw8oZ02c06xLzldr/fork",
+      "attempt": 1,
+      "status": 201,
+      "seconds": 47.062,
+      "fault": "stall_body",
+      "response": {
+        "schema_version": 1,
+        "ok": true,
+        "request_id": "mdo-c13235396565ae42b24dbc48",
+        "data": {
+          "id": "9ab484f61417c76785e6abd322117676",
+          "project_id": "default",
+          "parent_session_id": "V-OSOc6Z1-gR151Ffw8oZ02c06xLzldr",
+          "title": "History recovery source\uff08\u5206\u652f\uff09",
+          "agent_id": "mdo.default",
+          "model_id": "queue-fixture",
+          "protocol": "openai-chat-completions",
+          "reasoning_effort": "none",
+          "permission_profile": "balanced",
+          "workspace_root": "D:\\GIT\\mdo\\.build\\conversation-acceptance\\fork-recovery\\ui-hold-final",
+          "status": "active",
+          "revision": 1,
+          "created_at": 1791544754667937,
+          "updated_at": 1791544754667937,
+          "pinned": false,
+          "runtime_open": true,
+          "config_revision": 2,
+          "model_generation": 2,
+          "module_generation": 1,
+          "skill_generation": 1,
+          "max_output_tokens": 16384,
+          "forked_through_sequence": 3
+        }
+      },
+      "kind": "fork",
+      "body": {
+        "through_sequence": 3,
+        "client_session_id": "9ab484f61417c76785e6abd322117676",
+        "title": "History recovery source\uff08\u5206\u652f\uff09"
+      },
+      "finished_seconds": 55.984
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/projects/default/sessions/V-OSOc6Z1-gR151Ffw8oZ02c06xLzldr/history",
+      "attempt": 2,
+      "status": 200,
+      "seconds": 83.422,
+      "fault": null,
+      "response": {
+        "schema_version": 1,
+        "ok": true,
+        "request_id": "mdo-fab0a0cae5eecff2924b4a53",
+        "data": {
+          "project_id": "default",
+          "session_id": "V-OSOc6Z1-gR151Ffw8oZ02c06xLzldr",
+          "revision": 1,
+          "last_sequence": 3
+        }
+      },
+      "kind": "history",
+      "finished_seconds": 83.422
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/projects/default/sessions/9ab484f61417c76785e6abd322117676",
+      "attempt": 1,
+      "status": 200,
+      "seconds": 83.75,
+      "fault": null,
+      "response": {
+        "schema_version": 1,
+        "ok": true,
+        "request_id": "mdo-1e88391daaceb30c16f2ff4e",
+        "data": {
+          "id": "9ab484f61417c76785e6abd322117676",
+          "project_id": "default",
+          "parent_session_id": "V-OSOc6Z1-gR151Ffw8oZ02c06xLzldr",
+          "title": "History recovery source\uff08\u5206\u652f\uff09",
+          "agent_id": "mdo.default",
+          "model_id": "queue-fixture",
+          "protocol": "openai-chat-completions",
+          "reasoning_effort": "none",
+          "permission_profile": "balanced",
+          "workspace_root": "D:\\GIT\\mdo\\.build\\conversation-acceptance\\fork-recovery\\ui-hold-final",
+          "status": "active",
+          "revision": 1,
+          "created_at": 1791544754667937,
+          "updated_at": 1791544754667937,
+          "pinned": false,
+          "runtime_open": false,
+          "config_revision": 2,
+          "model_generation": 2,
+          "module_generation": 1,
+          "skill_generation": 1,
+          "max_output_tokens": 16384,
+          "forked_through_sequence": 3
+        }
+      },
+      "kind": "child_read",
+      "finished_seconds": 83.75
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/projects/default/sessions/9ab484f61417c76785e6abd322117676",
+      "attempt": 2,
+      "status": 200,
+      "seconds": 83.781,
+      "fault": null,
+      "response": {
+        "schema_version": 1,
+        "ok": true,
+        "request_id": "mdo-2ec2f58ee410d50118391fd2",
+        "data": {
+          "id": "9ab484f61417c76785e6abd322117676",
+          "project_id": "default",
+          "parent_session_id": "V-OSOc6Z1-gR151Ffw8oZ02c06xLzldr",
+          "title": "History recovery source\uff08\u5206\u652f\uff09",
+          "agent_id": "mdo.default",
+          "model_id": "queue-fixture",
+          "protocol": "openai-chat-completions",
+          "reasoning_effort": "none",
+          "permission_profile": "balanced",
+          "workspace_root": "D:\\GIT\\mdo\\.build\\conversation-acceptance\\fork-recovery\\ui-hold-final",
+          "status": "active",
+          "revision": 1,
+          "created_at": 1791544754667937,
+          "updated_at": 1791544754667937,
+          "pinned": false,
+          "runtime_open": false,
+          "config_revision": 2,
+          "model_generation": 2,
+          "module_generation": 1,
+          "skill_generation": 1,
+          "max_output_tokens": 16384,
+          "forked_through_sequence": 3
+        }
+      },
+      "kind": "child_read",
+      "finished_seconds": 83.781
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/projects/default/sessions/9ab484f61417c76785e6abd322117676",
+      "attempt": 3,
+      "status": 200,
+      "seconds": 83.781,
+      "fault": null,
+      "response": {
+        "schema_version": 1,
+        "ok": true,
+        "request_id": "mdo-1a3886dc51cecf1605a2cf8f",
+        "data": {
+          "id": "9ab484f61417c76785e6abd322117676",
+          "project_id": "default",
+          "parent_session_id": "V-OSOc6Z1-gR151Ffw8oZ02c06xLzldr",
+          "title": "History recovery source\uff08\u5206\u652f\uff09",
+          "agent_id": "mdo.default",
+          "model_id": "queue-fixture",
+          "protocol": "openai-chat-completions",
+          "reasoning_effort": "none",
+          "permission_profile": "balanced",
+          "workspace_root": "D:\\GIT\\mdo\\.build\\conversation-acceptance\\fork-recovery\\ui-hold-final",
+          "status": "active",
+          "revision": 1,
+          "created_at": 1791544754667937,
+          "updated_at": 1791544754667937,
+          "pinned": false,
+          "runtime_open": false,
+          "config_revision": 2,
+          "model_generation": 2,
+          "module_generation": 1,
+          "skill_generation": 1,
+          "max_output_tokens": 16384,
+          "forked_through_sequence": 3
+        }
+      },
+      "kind": "child_read",
+      "finished_seconds": 83.781
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/projects/default/sessions/9ab484f61417c76785e6abd322117676",
+      "attempt": 4,
+      "status": 200,
+      "seconds": 91.719,
+      "fault": null,
+      "response": {
+        "schema_version": 1,
+        "ok": true,
+        "request_id": "mdo-2357d17ace5bdecd55796035",
+        "data": {
+          "id": "9ab484f61417c76785e6abd322117676",
+          "project_id": "default",
+          "parent_session_id": "V-OSOc6Z1-gR151Ffw8oZ02c06xLzldr",
+          "title": "History recovery source\uff08\u5206\u652f\uff09",
+          "agent_id": "mdo.default",
+          "model_id": "queue-fixture",
+          "protocol": "openai-chat-completions",
+          "reasoning_effort": "none",
+          "permission_profile": "balanced",
+          "workspace_root": "D:\\GIT\\mdo\\.build\\conversation-acceptance\\fork-recovery\\ui-hold-final",
+          "status": "active",
+          "revision": 1,
+          "created_at": 1791544754667937,
+          "updated_at": 1791544754667937,
+          "pinned": false,
+          "runtime_open": false,
+          "config_revision": 2,
+          "model_generation": 2,
+          "module_generation": 1,
+          "skill_generation": 1,
+          "max_output_tokens": 16384,
+          "forked_through_sequence": 3
+        }
+      },
+      "kind": "child_read",
+      "finished_seconds": 91.719
+    }
+  ],
+  "forks": [
+    {
+      "id": "9ab484f61417c76785e6abd322117676",
+      "project_id": "default",
+      "parent_session_id": "V-OSOc6Z1-gR151Ffw8oZ02c06xLzldr",
+      "title": "History recovery source\uff08\u5206\u652f\uff09",
+      "agent_id": "mdo.default",
+      "model_id": "queue-fixture",
+      "protocol": "openai-chat-completions",
+      "reasoning_effort": "none",
+      "workspace_root": "D:\\GIT\\mdo\\.build\\conversation-acceptance\\fork-recovery\\ui-hold-final",
+      "status": "active",
+      "revision": 1,
+      "created_at": 1791544754667937,
+      "updated_at": 1791544754667937,
+      "pinned": false,
+      "runtime_open": false,
+      "max_output_tokens": 16384,
+      "forked_through_sequence": 3
+    }
+  ],
+  "source_snapshot_unchanged": true,
+  "final_errors": 0,
+  "event_kinds": {
+    "agent_start": 2,
+    "model_start": 2,
+    "model_text_delta": 2,
+    "model_done": 2,
+    "agent_done": 2
+  }
+}
