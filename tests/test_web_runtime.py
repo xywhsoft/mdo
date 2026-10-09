@@ -313,7 +313,7 @@ def write_site(site: Path) -> None:
     }), encoding="utf-8")
 
 
-def run_probe(host: Path, site: Path, home: Path, token: str | None = "probe-secret") -> str:
+def run_probe(host: Path, site: Path, home: Path, token: str | None = "probe-secret", *, wait_timeout: float = 15.0) -> str:
     environment = os.environ.copy()
     environment.pop("MDO_TEST_SEARCH_ACCESS_TOKEN", None)
     # An obsolete environment token must not bypass production login.
@@ -341,7 +341,7 @@ def run_probe(host: Path, site: Path, home: Path, token: str | None = "probe-sec
 
     reader = threading.Thread(target=read_output, daemon=True)
     reader.start()
-    done.wait(timeout=15.0)
+    done.wait(timeout=wait_timeout)
     if process.poll() is None:
         process.terminate()
         try:

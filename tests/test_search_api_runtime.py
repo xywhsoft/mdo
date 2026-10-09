@@ -105,8 +105,10 @@ static bool Fetch(void* data, const XS_FetchRequest* request, XS_FetchResponse* 
     calls = []
     for index, (arguments, success) in enumerate(cases):
         literal = json.dumps(arguments, ensure_ascii=False)
-        calls.append(f'    if (Execute(agent, "web_search", {literal}, &search) != {str(success).lower()}) '
+        calls.append(f'    unsigned before_{index} = probe.Fetches;\n'
+                     f'    if (Execute(agent, "web_search", {literal}, &search) != {str(success).lower()}) '
                      f'{{ printf("case_failed={index}\\n"); goto done; }}\n'
+                     f'    printf("case_fetches={index}:%u\\n", probe.Fetches - before_{index});\n'
                      '    xrtFree(search); search = NULL;\n')
     # Obsolete standalone search options are ignored during import.
     if not external:
@@ -183,8 +185,8 @@ def main() -> None:
         output = invoke(args.host, endpoint, cases)
         assert len(Handler.calls) == len(queries + failures), Handler.calls
         for marker in ('"source":"zai"', '"results":[]', '"truncated":true', '"count":1',
-                       'valid account login', 'phone/email verification', 'quota or concurrency',
-                       'configure its API key', 'invalid xadmin response',
+                       'valid account login', 'verification requirements', 'limited this request',
+                       'temporarily unavailable', 'invalid xadmin response',
                        'https://example.com/share.html#song', 'http://example.com/share.html#song'):
             assert marker in output, output
         before = len(Handler.calls)

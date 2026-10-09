@@ -1,6 +1,7 @@
 /* xadmin is the only search protocol. Provider credentials stay on its server;
  * this client sends a member access token only to its account service.
- * No retry or redirect can duplicate billed searches or forward credentials. */
+ * Only explicit pre-dispatch rejections can be retried; ambiguous/billable
+ * attempts and redirects are never replayed or forwarded elsewhere. */
 #define MDO_WEB_SEARCH_MAX_RESULTS 10u
 #define MDO_WEB_SEARCH_TOKEN_REF "account:search-access-token"
 
@@ -22,16 +23,18 @@ static const char* MdoWebSearchServiceError(uint64 Status)
     switch ( Status ) {
     case 400u: return "Search API rejected the request; check its query and result limit. Do not repeat the same request.";
     case 401u: return "Search requires a valid account login. Sign in again; repeating this query cannot renew the login.";
-    case 403u: return "Search account access was denied. Complete the phone/email verification required by the service.";
-    case 404u: return "Search service is unavailable. Its administrator must enable the search plugin.";
+    case 403u: return "Search account access was denied. Check the account's permissions or verification requirements.";
+    case 404u: return "Search API was not found at the account service. Contact its administrator.";
     case 405u: return "Search service does not accept this request. Contact its administrator.";
-    case 429u: return "Search quota or concurrency limit reached. Try later; do not repeatedly retry.";
+    case 429u: return "Search service limited this request without specifying the reason. Wait before searching again; no automatic retry was sent.";
     case 502u: return "Search provider is unavailable or returned an invalid response. Try later.";
-    case 503u: return "Search service is not ready. Its administrator must enable a provider and configure its API key.";
+    case 503u: return "Search service is temporarily unavailable. Try later or contact its administrator.";
     case 504u: return "Search service timed out waiting for its provider. Try later.";
     default: return "Search API returned an unsuccessful response. Check the service; no search results were established.";
     }
 }
+
+#include "search_errors.inc.c"
 
 static bool MdoWebSearchOptionalText(const xvalue* Item, const char* Key,
     size_t Limit, xstrview* Text)
@@ -107,7 +110,10 @@ static xwork_result MdoWebSearchExecute(void* pUserData,
     char* Authorization = NULL;
     XS_FetchHeader Headers[4];
     XS_FetchResponse Response;
-    xjsonreadconfig JsonConfig;
+    uint64 End = XRT_DEADLINE_NEVER;
+    uint64 Jitter = xrtClock() ^ (uint64)(uintptr_t)pContext;
+    uint32 Attempts = 0u;
+    if ( !Jitter ) Jitter = 1u;
     xwork_result Result = XWORK_RESULT_ERROR;
     memset(&Response, 0, sizeof(Response));
     if ( !MdoWebArguments(ArgumentsJson, &Arguments) ||
@@ -133,6 +139,11 @@ acquire_account:
     Token = Lease.AccessToken;
     FetchContext = *pContext;
     if (Lease.Cancel) FetchContext.pCancel = Lease.Cancel;
+    if ( End == XRT_DEADLINE_NEVER ) {
+        End = xrtDeadlineAfter(MDO_WEB_SEARCH_RECOVERY_US);
+        if ( pContext->uDeadline != XRT_DEADLINE_NEVER && pContext->uDeadline < End ) End = pContext->uDeadline;
+    }
+    FetchContext.uDeadline = End;
     Authorization = (char*)xrtMalloc(strlen(Token) + 8u);
     if (!Body) Body = xrtJsonStringify(Arguments, false, &BodySize);
     if ( Authorization == NULL || Body == NULL ) goto memory_failed;
@@ -141,50 +152,80 @@ acquire_account:
     Headers[1] = (XS_FetchHeader){ "Content-Type", "application/json" };
     Headers[2] = (XS_FetchHeader){ "User-Agent", "mdo/1 web_search" };
     Headers[3] = (XS_FetchHeader){ "Authorization", Authorization };
+fetch_search:
+    if ( (FetchContext.pCancel && xrtCancelRequested(FetchContext.pCancel)) ||
+         (pContext->pCancel && xrtCancelRequested(pContext->pCancel)) ) {
+        Result = MdoWebFail(pError, XWORK_ERROR_CANCELLED, "Search request was cancelled"); goto done;
+    }
+    uint64 RetryAfter = 0u;
+    ++Attempts;
     Attempted = true;
     if ( !MdoWebFetchRequest(State, &FetchContext, MdoAccountSearchEndpoint(),
-            Headers, 4u, true, Body, BodySize, &Response, NULL) ) {
+            Headers, 4u, true, Body, BodySize, &Response, &RetryAfter) ) {
         /* Transport diagnostics may contain headers. Never reflect them into
          * a model-visible result containing an account credential. */
-        const xerror* Cause = xrtGetError();
-        xerrkind Kind = Cause != NULL ? xrtErrorKind(Cause) : XERR_IO;
+        xerrkind Kind = MdoWebTransportKind();
         if ( (pContext->pCancel != NULL && xrtCancelRequested(pContext->pCancel)) || Kind == XERR_CANCELLED )
             Result = MdoWebFail(pError, XWORK_ERROR_CANCELLED, "Search request was cancelled");
         else if ( pContext->uDeadline != XRT_DEADLINE_NEVER &&
                     xrtDeadlineExpired(pContext->uDeadline) )
             Result = MdoWebFail(pError, XWORK_ERROR_TIMEOUT, "Search request timed out");
+        else if ( Kind == XERR_MEMORY )
+            Result = MdoWebFail(pError, XWORK_ERROR_OUT_OF_MEMORY, "Cannot allocate search request or response");
+        else if ( Kind == XERR_PERMISSION )
+            Result = MdoWebToolFail(pWriter, pError, "Network or certificate policy denied the search service connection. Check the service certificate or network policy.");
+        else if ( Kind == XERR_RANGE )
+            Result = MdoWebToolFail(pWriter, pError, "Search service response exceeded the configured size limit. Contact its administrator.");
+        else if ( Kind == XERR_PROTOCOL )
+            Result = MdoWebToolFail(pWriter, pError, "Search connection or response failed protocol validation. Submission could not be confirmed; no automatic replay was sent.");
         else if ( Kind == XERR_TIMEOUT )
             Result = MdoWebToolFail(pWriter, pError,
-                "Search service timed out. Report this error rather than repeatedly issuing the same query.");
-        else Result = MdoWebToolFail(pWriter, pError, "Cannot reach the search service. Check your network connection.");
+                "Search service timed out. Submission could not be confirmed; no automatic replay was sent to avoid spending the quota twice. Try again later.");
+        else Result = MdoWebToolFail(pWriter, pError, "Cannot reach the search service. Submission could not be confirmed; check your connection before trying again.");
         goto done;
     }
-    if (Response.Status == 401 && !Renewed && MdoAccountRejectAccess(&Lease)) {
+    if (Response.Status == 401 && !Renewed && Attempts < MDO_WEB_SEARCH_MAX_ATTEMPTS && MdoAccountRejectAccess(&Lease)) {
         Renewed = true;
         State->Transport.ResponseUnit(State->Transport.Context, &Response);
         memset(&Response, 0, sizeof(Response));
         MdoSecretRelease(&Authorization); MdoAccountRelease(&Lease); Token = NULL;
         goto acquire_account;
     }
+    Envelope = MdoWebSearchEnvelope(State, &Response);
+    bool ValidEnvelope = Envelope && xrtValueType(Envelope) == XVALUE_OBJECT &&
+        MdoWebUnsigned(xrtValueObjectGet(Envelope, xrtStrView("code")), &Code);
+    if ( Response.Status != 200u || (ValidEnvelope && Code != 0u) ) {
+        bool RetrySafe = false;
+        uint64 Minimum = 0u;
+        const MdoWebSearchError* Reason = ValidEnvelope ?
+            MdoWebSearchReason(Envelope,Response.Status,Code,&RetrySafe,&Minimum) : NULL;
+        uint64 Delay = MdoWebRecoveryDelay(Attempts, &Jitter, Minimum > RetryAfter ? Minimum : RetryAfter);
+        bool WaitFits = Delay < xrtDeadlineRemaining(End);
+        if ( RetrySafe && Attempts < MDO_WEB_SEARCH_MAX_ATTEMPTS && WaitFits ) {
+            if ( !MdoWebRecoveryWait(&FetchContext,End,Delay) ) {
+                if (FetchContext.pCancel && xrtCancelRequested(FetchContext.pCancel))
+                    Result = MdoWebFail(pError,XWORK_ERROR_CANCELLED,"Search request was cancelled");
+                else if (pContext->uDeadline != XRT_DEADLINE_NEVER && xrtDeadlineExpired(pContext->uDeadline))
+                    Result = MdoWebFail(pError,XWORK_ERROR_TIMEOUT,"Search recovery exceeded the task deadline");
+                else Result = MdoWebToolFail(pWriter,pError,"Search service is still busy. Automatic recovery time was exhausted; try again later.");
+                goto done;
+            }
+            xrtValueRelease(Envelope); Envelope = NULL;
+            State->Transport.ResponseUnit(State->Transport.Context,&Response);
+            memset(&Response,0,sizeof(Response)); xrtClearError();
+            goto fetch_search;
+        }
+        if (Lease.Managed) MdoAccountSearchStatus((uint16)(Response.Status == 200u && Code >= 400u && Code <= 599u ? Code : Response.Status));
+        char Message[768];
+        snprintf(Message,sizeof(Message),"%s%s",Reason ? Reason->Message :
+            MdoWebSearchServiceError(Response.Status == 200u ? Code : Response.Status),
+            RetrySafe ? (WaitFits ? " Automatic recovery limits were reached; do not repeatedly issue the same query." :
+            " The required wait exceeds this call's remaining time; no early retry was sent.") : "");
+        Result = MdoWebToolFail(pWriter,pError,Message);
+        goto done;
+    }
+    if ( !ValidEnvelope ) goto invalid_response;
     if (Lease.Managed) MdoAccountSearchStatus(Response.Status);
-    if ( Response.Status != 200u ) {
-        Result = MdoWebToolFail(pWriter, pError, MdoWebSearchServiceError(Response.Status));
-        goto done;
-    }
-    xrtJsonReadConfigInit(&JsonConfig);
-    JsonConfig.MaxInputBytes = State->Settings.MaxResponseBytes;
-    JsonConfig.MaxDepth = 8u;
-    JsonConfig.MaxValues = 512u;
-    JsonConfig.MaxContainerItems = 64u;
-    if ( Response.Body == NULL || !xrtUtf8Valid(
-            (xstrview){ (const char*)Response.Body, Response.BodySize }, NULL) ) goto invalid_response;
-    Envelope = xrtJsonRead((xstrview){ (const char*)Response.Body, Response.BodySize }, &JsonConfig);
-    if ( Envelope == NULL || xrtValueType(Envelope) != XVALUE_OBJECT ||
-         !MdoWebUnsigned(xrtValueObjectGet(Envelope, xrtStrView("code")), &Code) ) goto invalid_response;
-    if ( Code != 0u ) {
-        Result = MdoWebToolFail(pWriter, pError, MdoWebSearchServiceError(Code));
-        goto done;
-    }
     Data = xrtValueObjectGet(Envelope, xrtStrView("data"));
     Items = Data != NULL ? xrtValueObjectGet(Data, xrtStrView("results")) : NULL;
     if ( Data == NULL || xrtValueType(Data) != XVALUE_OBJECT ||

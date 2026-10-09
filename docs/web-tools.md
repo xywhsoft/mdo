@@ -48,14 +48,23 @@ count 可省略，由服务端决定默认结果数；显式 count 允许 1–10
 工具参数和模型都不能提供令牌。旧 `MDO_SEARCH_ACCESS_TOKEN` 环境变量不再生效。
 账号的加密保存、刷新、切换、独立退出和等待逻辑见 `account-login.md`。
 
-搜索请求禁止重定向，只有明确的 401 才尝试一次账号刷新；网络断开或超时不自动
-重试，避免重复计费。普通网页仍使用独立的访问策略。401 提示重新登录，403 提示
-完成服务要求的联系方式验证，429 提示配额/并发限制，503 提示管理员启用平台并
-设置 key，502/504 提示上游失败/超时。原始上游错误正文不回显。
+搜索请求禁止重定向，明确的 401 允许一次账号刷新。账号服务的新错误封装在
+`data.error` 返回固定 `code`、`retry_safe`、`dispatched`、`retry_after_ms`。
+只有已知的提交前忙碌、分钟限流、数据库锁或工作线程不可用，且明确
+`retry_safe:true` / `dispatched:false` 时，才在一次工具调用内指数退避。
+最多六次请求，共享一分钟与调用者的较短期限；遵守正文及 Retry-After 的较大
+最小等待时间，等待可取消。中间尝试不产生模型工具结果、产物或账号错误通知。
+
+日额度与全站日额度耗尽、联系方式验证、平台未配置、平台鉴权和平台限流各有
+独立最终说明。未知或不一致封装只按状态给出保守提示，不假设 503 必然是缺 key。
+网络断开、超时或已经提交平台的失败不自动重放 POST，避免重复消耗额度；
+平台失败也不会被当作会员登录失效。原始服务和上游错误正文不回显。
 
 联调测试：`python tests/test_search_api_runtime.py` 使用本地模拟 HTTP 服务，不消耗平台额度；
-`python tests/test_search_xadmin_integration.py --xadmin-root D:\GIT\x-admin` 使用独立 xadmin
-测试实例、真实登录 JWT 和上游模拟传输，覆盖客户端到插件的完整调用链。
+`python tests/test_search_recovery.py --host <兼容 xs>` 验证有限退避、等待、取消和
+不可重放情况；`python tests/test_search_xadmin_integration.py --host <兼容 xs>`
+使用 home 的统一 mdo 插件隔离副本、真实 JWT 和上游模拟传输，核查准确原因、
+提交次数及额度事务。网站宿主默认 home/xs.exe，可用 `--website-host` 单独指定。
 
 ## 网络与资源边界
 

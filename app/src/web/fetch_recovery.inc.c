@@ -86,6 +86,30 @@ typedef struct MdoWebRecovery {
     bool Cancelled;
 } MdoWebRecovery;
 
+static uint64 MdoWebRecoveryDelay(uint32 Attempt, uint64* Jitter, uint64 Minimum)
+{
+    uint64 Delay = UINT64_C(500000) << (Attempt - 1u);
+    if ( Delay > 8000000u ) Delay = 8000000u;
+    *Jitter ^= *Jitter << 13u; *Jitter ^= *Jitter >> 7u; *Jitter ^= *Jitter << 17u;
+    Delay += *Jitter % (Delay / 4u + 1u);
+    if ( Delay > 8000000u ) Delay = 8000000u;
+    return Delay < Minimum ? Minimum : Delay;
+}
+
+static bool MdoWebRecoveryWait(const xwork_tool_context* Context, uint64 End,
+    uint64 Delay)
+{
+    uint64 WaitEnd = xrtClock() + Delay;
+    xerror* Saved = xrtTakeError();
+    while ( !xrtDeadlineExpired(WaitEnd) && !xrtDeadlineExpired(End) ) {
+        if ( Context->pCancel && xrtCancelRequested(Context->pCancel) ) break;
+        uint64 Left = xrtDeadlineRemaining(WaitEnd);
+        xrtSleep(Left > 20000u ? 20u : (uint32)((Left + 999u) / 1000u));
+    }
+    if ( Saved ) xrtSetErrorTake(Saved);
+    return !(Context->pCancel && xrtCancelRequested(Context->pCancel)) && !xrtDeadlineExpired(End);
+}
+
 static bool MdoWebFetchPage(MdoWebState* State, const xwork_tool_context* Context,
     const char* Url, const XS_FetchHeader* Headers, size_t HeaderCount,
     XS_FetchResponse* Response, MdoWebRecovery* Recovery)
@@ -121,29 +145,17 @@ static bool MdoWebFetchPage(MdoWebState* State, const xwork_tool_context* Contex
                   !MdoWebTransientTransport() ) break;
         Recovery->Exhausted = true;
         if ( Count == MDO_WEB_OPEN_MAX_ATTEMPTS ) break;
-        uint64 Delay = UINT64_C(500000) << (Count - 1u);
-        if ( Delay > 8000000u ) Delay = 8000000u;
-        Jitter ^= Jitter << 13u; Jitter ^= Jitter >> 7u; Jitter ^= Jitter << 17u;
-        Delay += Jitter % (Delay / 4u + 1u);
-        if ( Delay > 8000000u ) Delay = 8000000u;
-        if ( Delay < RetryAfter ) Delay = RetryAfter;
+        uint64 Delay = MdoWebRecoveryDelay(Count, &Jitter, RetryAfter);
         uint64 Remaining = xrtDeadlineRemaining(End);
         if ( Delay >= Remaining ) {
             Recovery->WaitExceedsBudget = true; break;
         }
-        uint64 WaitEnd = xrtClock() + Delay;
         /* Preserve the final failure while cleanup/sleep may replace the
          * thread-local error. Every abandoned response is released once. */
-        xerror* Saved = xrtTakeError();
-        while ( !xrtDeadlineExpired(WaitEnd) && !xrtDeadlineExpired(End) ) {
-            if ( Context->pCancel && xrtCancelRequested(Context->pCancel) ) {
-                Recovery->Cancelled = true; break;
-            }
-            uint64 Left = xrtDeadlineRemaining(WaitEnd);
-            xrtSleep(Left > 20000u ? 20u : (uint32)((Left + 999u) / 1000u));
+        if ( !MdoWebRecoveryWait(Context, End, Delay) ) {
+            Recovery->Cancelled = Context->pCancel && xrtCancelRequested(Context->pCancel);
+            break;
         }
-        if ( Saved ) xrtSetErrorTake(Saved);
-        if ( Recovery->Cancelled || xrtDeadlineExpired(End) ) break;
     }
     return Ok;
 }
