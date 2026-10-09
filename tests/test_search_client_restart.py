@@ -63,7 +63,10 @@ def scenario(ctx, baseline=False):
     server=ThreadingHTTPServer(('127.0.0.1',0),Handler)
     thread=threading.Thread(target=server.serve_forever,daemon=True);thread.start()
     try:
-        with tempfile.TemporaryDirectory(prefix='search-client-restart-',dir=web.ROOT/'.build') as raw:
+        # Long managed checkout names can exceed Python's legacy Windows path
+        # limit when the 64-byte record key is appended. The owned temporary
+        # fixture is disposable and must also work from those clean checkouts.
+        with tempfile.TemporaryDirectory(prefix='mdo-search-restart-') as raw:
             base=Path(raw);site=base/'site';workspace=base/'project';workspace.mkdir()
             shutil.copytree(web.ROOT/'app',site)
             if baseline:
