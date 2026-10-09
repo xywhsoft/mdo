@@ -1,0 +1,265 @@
+{
+  "schema_version": 1,
+  "generated_at": "2026-10-09T06:14:54.534386+00:00",
+  "version_name": "0.1.0-dev",
+  "source_head_at_recording": "3b852b7d1849b7c06f73e41dd0cf1d42dda2194d",
+  "includes_uncommitted_application_changes": true,
+  "application_source_sha256": "e63759338a5b671048beae6a1f3b9fff3e70ff651267bd76ec62db2b7e60599b",
+  "common_application_files": 414,
+  "xrt_commit": "6040abda647bd947bd561cd185f37a3751f122f4",
+  "xs_commit": "153315a092b8c37d9d79f090122f81ed2bcc139d",
+  "host_profile_sha256": "7211b5374543682c5b5833fe96dac27c8261a966d77650e6f1e1b14510f2e695",
+  "toolpack_revision": 2,
+  "products": [
+    {
+      "filename": "mdo.exe",
+      "platform": "windows",
+      "architecture": "x86_64",
+      "edition": "gui",
+      "libc": "mingw",
+      "build_id": 30000047,
+      "bytes": 4510545,
+      "sha256": "90873258d0164f8d4e94ece3734d02c454cd4ad5a4e1220e45570a2c1be9d013",
+      "xs_commit": "153315a092b8c37d9d79f090122f81ed2bcc139d",
+      "packaged_app_sha256": "7409e9e34d76c7995ee64a027323f1c7770b6408b5ea90974b8760ae7ee554c3",
+      "app_files": 418,
+      "host_sha256": "75cdf12c877cbe44b5caab3a8cba31fa60ce07178ae282eb7c8d71e05c9fa55f",
+      "label": "Windows App",
+      "verification": {
+        "packed_archive": true,
+        "startup": true,
+        "checks": [
+          "single-file GUI startup",
+          "bootstrap/write token",
+          "portable WebView2 profile",
+          "auto-close with clean exit"
+        ]
+      }
+    },
+    {
+      "filename": "mdo-server.exe",
+      "platform": "windows",
+      "architecture": "x86_64",
+      "edition": "server",
+      "libc": "mingw",
+      "build_id": 30000047,
+      "bytes": 4316325,
+      "sha256": "c5eea8ac1cf24bdf07d2c6bf9bc78808ecb1886fa8f1a604f650a4747122c192",
+      "xs_commit": "153315a092b8c37d9d79f090122f81ed2bcc139d",
+      "packaged_app_sha256": "5f683a3ffe10ec796526951f2612ae07ef54c2a226c7bc4a6ac2bbb95d73b933",
+      "app_files": 418,
+      "host_sha256": "9d4db9a1d9d37ac0c5d22a850c90b5432c7586741187216d0c894c860eba60a5",
+      "label": "Windows 服务",
+      "verification": {
+        "packed_archive": true,
+        "startup": true,
+        "checks": [
+          "packed TCC startup",
+          "bootstrap/write token",
+          "projects API",
+          "project persistence",
+          "SIGTERM/console stop",
+          "restart"
+        ]
+      }
+    },
+    {
+      "filename": "mdo-linux-x86_64-glibc",
+      "platform": "linux",
+      "architecture": "x86_64",
+      "edition": "gui",
+      "libc": "glibc",
+      "build_id": 30000048,
+      "bytes": 4057372,
+      "sha256": "000e244369e9e08748d11b84672173ab2424f26698cb706f8b1fb145c88a6e1d",
+      "xs_commit": "153315a092b8c37d9d79f090122f81ed2bcc139d",
+      "packaged_app_sha256": "d0c0e0e318eba90d2c97c9b1ff0af5ea19fb6d728293b5ce3593555632dd94bc",
+      "app_files": 418,
+      "host_sha256": "7fb09ede20d1d8ef145c7b7399ca7f0a0dab7697d4dc5222b132000daaf6af32",
+      "static_core": false,
+      "elf_needed": [
+        "libdl.so.2",
+        "libpthread.so.0",
+        "libm.so.6",
+        "libc.so.6"
+      ],
+      "glibc_required": "2.28",
+      "gui_runtime": "GTK3 + WebKitGTK 4.1 or 4.0 (>= 2.30)",
+      "label": "Linux glibc App",
+      "verification": {
+        "packed_archive": true,
+        "startup": true,
+        "checks": [
+          "packed TCC startup",
+          "bootstrap/write token",
+          "projects API",
+          "project persistence",
+          "SIGTERM/console stop",
+          "restart"
+        ],
+        "native_gui": true
+      }
+    },
+    {
+      "filename": "mdo-server-linux-x86_64-glibc",
+      "platform": "linux",
+      "architecture": "x86_64",
+      "edition": "server",
+      "libc": "glibc",
+      "build_id": 30000049,
+      "bytes": 4028465,
+      "sha256": "1c4d81ccb9fedd0aeeaad2752b2daae7aafa0fdff4e25fab0e7853d833efe5a8",
+      "xs_commit": "153315a092b8c37d9d79f090122f81ed2bcc139d",
+      "packaged_app_sha256": "36916a1eabf516173b2bc65506c322a269bf45682a6391333e9d057bb09a4d70",
+      "app_files": 418,
+      "host_sha256": "6d40fd5323605afbed11e52849070a4cbf975c899faaedbdae6b0095deac226f",
+      "static_core": false,
+      "elf_needed": [
+        "libdl.so.2",
+        "libpthread.so.0",
+        "libm.so.6",
+        "libc.so.6"
+      ],
+      "glibc_required": "2.28",
+      "gui_runtime": null,
+      "label": "Linux glibc 服务",
+      "verification": {
+        "packed_archive": true,
+        "startup": true,
+        "checks": [
+          "packed TCC startup",
+          "bootstrap/write token",
+          "projects API",
+          "project persistence",
+          "SIGTERM/console stop",
+          "restart"
+        ]
+      }
+    },
+    {
+      "filename": "mdo-linux-x86_64-musl",
+      "platform": "linux",
+      "architecture": "x86_64",
+      "edition": "gui",
+      "libc": "musl",
+      "build_id": 30000050,
+      "bytes": 5899027,
+      "sha256": "ce7f4234cad63e0992d40afd785ad339671e7abe08b4f9600d667f702997975d",
+      "xs_commit": "153315a092b8c37d9d79f090122f81ed2bcc139d",
+      "packaged_app_sha256": "3db41a25ad03a50b6e1269fa7e2904a89b6afb2c9f12780437fae8cc44bd55d0",
+      "app_files": 418,
+      "host_sha256": "60ca2708bbad979b674d72d53b4ea8cf4b76e69426d21d168cd6f1f223de710b",
+      "static_core": true,
+      "elf_needed": [],
+      "glibc_required": null,
+      "gui_runtime": "GTK3 + WebKitGTK 4.1 or 4.0 (>= 2.30)",
+      "label": "Linux musl App",
+      "verification": {
+        "packed_archive": true,
+        "startup": true,
+        "checks": [
+          "packed TCC startup",
+          "bootstrap/write token",
+          "projects API",
+          "project persistence",
+          "SIGTERM/console stop",
+          "restart"
+        ],
+        "native_gui": true
+      }
+    },
+    {
+      "filename": "mdo-server-linux-x86_64-musl",
+      "platform": "linux",
+      "architecture": "x86_64",
+      "edition": "server",
+      "libc": "musl",
+      "build_id": 30000051,
+      "bytes": 5870185,
+      "sha256": "d81f8600f3b8ee6cd1d55a089e41663ffaeaaebb29d0d2746884ce17fc09a2d3",
+      "xs_commit": "153315a092b8c37d9d79f090122f81ed2bcc139d",
+      "packaged_app_sha256": "e47d51ed9b7c0994cadcb3776256300a5c99d47d99d687b7431328ca444d7613",
+      "app_files": 418,
+      "host_sha256": "5aad25079b79c0d757b50d31b2adcc526172c7776f81c64c16605147f27d8cab",
+      "static_core": true,
+      "elf_needed": [],
+      "glibc_required": null,
+      "gui_runtime": null,
+      "label": "Linux musl 服务",
+      "verification": {
+        "packed_archive": true,
+        "startup": true,
+        "checks": [
+          "packed TCC startup",
+          "bootstrap/write token",
+          "projects API",
+          "project persistence",
+          "SIGTERM/console stop",
+          "restart"
+        ]
+      }
+    },
+    {
+      "filename": "mdo-arm64-v8a.apk",
+      "build_id": 30000052,
+      "signature_sha256": "f91d4271ee0b3a959699fd80e735232ca47852326000e2dc1464fddf2970183e",
+      "native_files": 1,
+      "runtime_mappings": 0,
+      "bytes": 4138221,
+      "sha256": "bbb9ab14249a85e9de2f4cb02705645b91860eb3cd3fa78dd6e5c171f3e1f84a",
+      "app_pack_sha256": "5e7e3219bfedadc26dba92a739dcff4900c4a5164243332b44eb9ec2a5ee89c5",
+      "label": "Android App（精简）",
+      "xs_commit": "153315a092b8c37d9d79f090122f81ed2bcc139d",
+      "platform": "android",
+      "architecture": "arm64-v8a",
+      "edition": "lite",
+      "libc": "bionic",
+      "app_files": 418,
+      "verification": {
+        "packed_archive": true,
+        "apk_structure": true,
+        "checks": [
+          "version/edition",
+          "ZIP CRC",
+          "v2/v3 signature",
+          "16 KiB ZIP/ELF alignment",
+          "ARM64 ABI",
+          "native dependency closure",
+          "runtime content mapping"
+        ],
+        "device_tested": false
+      }
+    },
+    {
+      "filename": "mdo-full-arm64-v8a.apk",
+      "build_id": 30000053,
+      "signature_sha256": "f91d4271ee0b3a959699fd80e735232ca47852326000e2dc1464fddf2970183e",
+      "native_files": 75,
+      "runtime_mappings": 125,
+      "bytes": 60891982,
+      "sha256": "21e38c0fe23c61ba916d30ee7ee829bba3db5d6b189301075f838ef7185f5102",
+      "app_pack_sha256": "5e7e3219bfedadc26dba92a739dcff4900c4a5164243332b44eb9ec2a5ee89c5",
+      "label": "Android Full App",
+      "xs_commit": "153315a092b8c37d9d79f090122f81ed2bcc139d",
+      "platform": "android",
+      "architecture": "arm64-v8a",
+      "edition": "full",
+      "libc": "bionic",
+      "app_files": 418,
+      "verification": {
+        "packed_archive": true,
+        "apk_structure": true,
+        "checks": [
+          "version/edition",
+          "ZIP CRC",
+          "v2/v3 signature",
+          "16 KiB ZIP/ELF alignment",
+          "ARM64 ABI",
+          "native dependency closure",
+          "runtime content mapping"
+        ],
+        "device_tested": false
+      }
+    }
+  ]
+}

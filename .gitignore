@@ -3,6 +3,10 @@ data/
 mdo-home/
 
 # 构建产物与二进制
+/mdo-linux-x86_64-glibc
+/mdo-linux-x86_64-musl
+/mdo-server-linux-x86_64-glibc
+/mdo-server-linux-x86_64-musl
 *.exe
 *.apk
 *.log
